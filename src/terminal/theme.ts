@@ -66,3 +66,20 @@ export const themes: Record<ThemeMode, ITheme> = {
   dark: darkTheme,
   light: lightTheme,
 };
+
+// #RRGGBB 의 상대 휘도(BT.709, r/g/b 를 [0,1] 로). Claude Code 의 OSC 11 감지와 동일식.
+export function luminance(hex: string): number {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if (!m) return 0;
+  const r = parseInt(m[1], 16) / 255;
+  const g = parseInt(m[2], 16) / 255;
+  const b = parseInt(m[3], 16) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+// 임의 배경색 → 밝기로 라이트/다크 팔레트를 고르고 background 만 그 색으로 덮는다.
+// (글자/ANSI 는 가독성 위해 팔레트 유지, 배경만 사용자 지정.)
+export function themeForBg(hex: string): ITheme {
+  const base = luminance(hex) > 0.5 ? lightTheme : darkTheme;
+  return { ...base, background: hex };
+}

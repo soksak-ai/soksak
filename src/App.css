@@ -38,6 +38,29 @@ body,
   user-select: none;
 }
 
+.bg-picker {
+  width: 20px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid rgba(127, 127, 127, 0.45);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 0.15s ease;
+}
+.bg-picker:hover {
+  opacity: 1;
+}
+/* 기본 color input 의 내부 여백/테두리 제거(작은 스와치로) */
+.bg-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.bg-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 3px;
+}
+
 .theme-toggle {
   width: 22px;
   height: 20px;

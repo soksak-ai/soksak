@@ -1,32 +1,43 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TerminalView } from "./components/TerminalView";
-import { backgrounds, themes, type ThemeMode } from "./terminal/theme";
+import { backgrounds, luminance, themeForBg } from "./terminal/theme";
 import "./App.css";
 
 function App() {
-  const [mode, setMode] = useState<ThemeMode>("dark");
+  // 배경색이 단일 소스. 토글은 프리셋, 색상 피커는 임의 색. 글자색은 밝기로 자동 선택.
+  const [bg, setBg] = useState<string>(backgrounds.dark);
+  const isDark = luminance(bg) <= 0.5;
+  const theme = useMemo(() => themeForBg(bg), [bg]);
 
-  // 배경은 CSS --bg 단일 소스 — 모드에 따라 한 곳만 바꾸면 그리드(투명)·잔여 모두 따라온다.
+  // CSS --bg(그리드 잔여)·xterm theme.background(그리드)·OSC 11 응답이 모두 이 색을 따른다.
   useEffect(() => {
-    document.documentElement.style.setProperty("--bg", backgrounds[mode]);
-  }, [mode]);
+    document.documentElement.style.setProperty("--bg", bg);
+  }, [bg]);
 
   return (
-    <div className="app-root" data-theme={mode}>
+    <div className="app-root">
       {/* 오버레이 타이틀바: macOS 신호등(좌측)과 같은 라인. 드래그로 창 이동. */}
       <div className="titlebar" data-tauri-drag-region>
+        <input
+          type="color"
+          className="bg-picker"
+          value={bg}
+          title="배경색 지정"
+          aria-label="배경색"
+          onChange={(e) => setBg(e.target.value)}
+        />
         <button
           type="button"
           className="theme-toggle"
-          title={mode === "dark" ? "라이트 모드로" : "다크 모드로"}
-          aria-label="테마 전환"
-          onClick={() => setMode((m) => (m === "dark" ? "light" : "dark"))}
+          title={isDark ? "라이트 프리셋" : "다크 프리셋"}
+          aria-label="다크/라이트 전환"
+          onClick={() => setBg(isDark ? backgrounds.light : backgrounds.dark)}
         >
-          {mode === "dark" ? "☀" : "☾"}
+          {isDark ? "☀" : "☾"}
         </button>
       </div>
       <div className="terminal-wrap">
-        <TerminalView theme={themes[mode]} />
+        <TerminalView theme={theme} />
       </div>
     </div>
   );
