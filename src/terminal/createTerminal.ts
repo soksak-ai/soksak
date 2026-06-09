@@ -60,6 +60,7 @@ export async function createTerminal(
     cursorStyle: "block",
     drawBoldTextInBrightColors: true,
     minimumContrastRatio: 1,
+    allowTransparency: true,
     theme: darkTheme,
   });
 

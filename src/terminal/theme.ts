@@ -4,7 +4,9 @@ import type { ITheme } from "@xterm/xterm";
 // editor getXtermTheme 구조를 따른다(테마 토글은 Phase 4 에서 확장).
 export const darkTheme: ITheme = {
   foreground: "#cccccc",
-  background: "#1e1e1e",
+  // 투명 — 실제 배경은 CSS --bg 하나로 통일(그리드/잔여 색 불일치 방지).
+  // allowTransparency: true 와 함께 동작.
+  background: "rgba(0, 0, 0, 0)",
   cursor: "#ffffff",
   cursorAccent: "#1e1e1e",
   selectionBackground: "#264f78",
