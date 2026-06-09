@@ -7,6 +7,7 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 import "@xterm/xterm/css/xterm.css";
 
 import { WebkitImeAddon } from "../vendor/xterm-addon-webkit-ime";
+import { setupShellIntegration } from "./shellIntegration";
 import { darkTheme } from "./theme";
 
 // editor FlowControlConstants.CharCountAckSize 와 동일.
@@ -25,6 +26,8 @@ export interface TerminalHandle {
   /** 컨테이너 크기에 맞춰 fit 후 PTY 에 크기 전파. */
   fit: () => void;
   focus: () => void;
+  /** 현재 작업 디렉토리(셸 통합 OSC 7/633;P). 미확인 시 undefined. */
+  getCwd: () => string | undefined;
   /** 라이트/다크 등 테마 교체(그리드 fg/ANSI 색). 배경은 CSS --bg 가 담당. */
   setTheme: (theme: ITheme) => void;
   dispose: () => void;
@@ -151,6 +154,9 @@ export async function createTerminal(
     return true;
   });
 
+  // 셸 통합(OSC 133/633/7): 명령 데코레이션 + cwd 추적.
+  const shellIntegration = setupShellIntegration(term);
+
   // WKWebView(Tauri/Safari) 한글·CJK IME 보정.
   // WebKit은 marked-text 상태에 따라 IME 입력을 비표준 경로(insertReplacementText,
   // compositionend 없음)로 흘려보내 xterm이 부분 자모를 떨어뜨린다. 이 애드온이
@@ -231,6 +237,7 @@ export async function createTerminal(
     resizeObserver.disconnect();
     dprCleanup?.();
     dataSub.dispose();
+    shellIntegration.dispose();
     if (termId !== 0) {
       invoke("close_terminal", { id: termId }).catch(() => {});
     }
@@ -243,6 +250,7 @@ export async function createTerminal(
     id: () => termId,
     fit: doResize,
     focus: () => term.focus(),
+    getCwd: () => shellIntegration.getCwd(),
     setTheme: (theme: ITheme) => {
       term.options.theme = theme;
       // 테마 변경 시 텍스처 아틀라스를 비워 글리프 캐시(색 포함)를 완전 갱신한다.
