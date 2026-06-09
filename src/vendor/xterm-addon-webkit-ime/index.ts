@@ -344,6 +344,24 @@ export class WebkitImeAddon implements ITerminalAddon {
       return;
     }
 
+    // GUARD 6: a bare modifier keydown (Shift / Control / Alt / Meta / CapsLock /
+    // AltGraph) does NOT end a composition — it is held to form the next jamo,
+    // e.g. Shift+ㅅ → ㅆ for the double consonant in "있". Without this, the Shift
+    // keydown falls into the "any other key flushes" branch below and prematurely
+    // commits the pending syllable: typing "있" (이 + ㅆ) flushed "이" on the Shift
+    // press, then composed "있" fresh — producing "이있" (likewise 갔→가갔,
+    // 했→해했). Modifier-only keys must be ignored entirely here.
+    if (
+      e.key === "Shift" ||
+      e.key === "Control" ||
+      e.key === "Alt" ||
+      e.key === "Meta" ||
+      e.key === "CapsLock" ||
+      e.key === "AltGraph"
+    ) {
+      return;
+    }
+
     // Any other key ends a non-standard composition: flush it, then let xterm
     // handle the key normally (no preventDefault) so it reaches onData. Mark the
     // flush as keydown-originated so GUARD 3 arms for the delayed commit.
