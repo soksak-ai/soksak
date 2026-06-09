@@ -134,6 +134,23 @@ export async function createTerminal(
     }
   };
 
+  // OSC 11 (배경색 질의 응답): 앱이 `ESC ] 11 ; ?` 로 물으면 현재 테마 배경색을
+  // XParseColor 형식(rgb:RRRR/GGGG/BBBB)으로 응답한다. Claude Code 등 'auto' 테마
+  // 앱이 우리 라이트/다크 모드를 감지/추종한다(systemThemeWatcher 가 폴링). 토글 시
+  // term.options.theme.background 가 바뀌므로 응답도 따라 바뀐다.
+  term.parser.registerOscHandler(11, (data) => {
+    if (data !== "?") {
+      return false; // 색 설정 등은 xterm 기본 처리에 위임
+    }
+    const bg = (term.options.theme?.background as string | undefined) ?? "#1e1e1e";
+    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg);
+    if (m) {
+      const c = (h: string) => `${h}${h}`; // 8bit → 16bit (예: 1e → 1e1e)
+      writeToPty(`\x1b]11;rgb:${c(m[1])}/${c(m[2])}/${c(m[3])}\x1b\\`);
+    }
+    return true;
+  });
+
   // WKWebView(Tauri/Safari) 한글·CJK IME 보정.
   // WebKit은 marked-text 상태에 따라 IME 입력을 비표준 경로(insertReplacementText,
   // compositionend 없음)로 흘려보내 xterm이 부분 자모를 떨어뜨린다. 이 애드온이
