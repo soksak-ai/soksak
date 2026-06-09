@@ -39,6 +39,7 @@ export function getHost(paneId: string): HTMLDivElement {
 
   const div = document.createElement("div");
   div.className = "pane-host";
+  div.dataset.paneId = paneId; // 파일 드롭 위치 → pane 역추적용.
   div.style.width = "100%";
   div.style.height = "100%";
 
@@ -90,6 +91,11 @@ export function setThemeAll(theme: ITheme): void {
       host.pendingTheme = theme; // 준비 전이면 생성 직후 적용.
     }
   }
+}
+
+/** pane 으로 텍스트 붙여넣기(파일 드래그 경로 주입). 핸들 준비 전이면 무시. */
+export function pasteToHost(paneId: string, text: string): void {
+  hosts.get(paneId)?.handle?.paste(text);
 }
 
 /** pane 에 포커스 + fit. 핸들이 아직 없으면 준비 직후 적용되도록 플래그를 남긴다. */

@@ -1,13 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { PaneTree } from "./components/PaneTree";
 import { collectLeafIds, useSessions } from "./state/sessions";
 import {
   disposeHost,
+  pasteToHost,
   setThemeAll,
   setThemeProvider,
 } from "./terminal/paneHosts";
 import { backgrounds, luminance, themeForBg } from "./terminal/theme";
 import "./App.css";
+
+// 파일 경로를 셸·Claude Code 양쪽에서 안전하게: 영숫자와 안전문자 외에는 백슬래시
+// 이스케이프(공백 포함). 결과가 ...img.png 처럼 따옴표 없이 확장자로 끝나 Claude Code
+// 의 이미지 확장자 정규식과 셸 둘 다에 맞는다.
+const shellEscape = (p: string) => p.replace(/[^A-Za-z0-9_./@%+:,=-]/g, "\\$&");
 
 function App() {
   // 배경색이 단일 소스. 토글은 프리셋, 색상 피커는 임의 색. 글자색은 밝기로 자동 선택.
@@ -82,6 +89,30 @@ function App() {
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [splitPane, closePane]);
+
+  // 파일 드래그&드롭: Tauri 가 OS 파일 드롭을 가로채 경로를 준다(웹뷰 HTML drop 은
+  // 억제됨). 드롭 위치(물리 px) 아래의 pane-host 를 찾아 그 터미널에 이스케이프 경로를
+  // 붙여넣는다. Claude Code 는 .png/.jpg/... 확장자를 감지해 이미지를 읽는다.
+  useEffect(() => {
+    const unlisten = getCurrentWebview().onDragDropEvent((event) => {
+      if (event.payload.type !== "drop") return;
+      const { paths, position } = event.payload;
+      if (!paths || paths.length === 0) return;
+      const dpr = window.devicePixelRatio || 1;
+      const el = document.elementFromPoint(position.x / dpr, position.y / dpr);
+      let paneId = el?.closest<HTMLElement>(".pane-host")?.dataset.paneId;
+      if (!paneId) {
+        // 폴백: 활성 탭의 포커스된 pane.
+        const s = useSessions.getState();
+        paneId = s.tabs.find((t) => t.id === s.activeId)?.focusedPaneId;
+      }
+      if (!paneId) return;
+      pasteToHost(paneId, paths.map(shellEscape).join(" "));
+    });
+    return () => {
+      unlisten.then((off) => off()).catch(() => {});
+    };
+  }, []);
 
   const commitRename = (id: string, raw: string, fallback: string) => {
     renameTab(id, raw.trim() || fallback);

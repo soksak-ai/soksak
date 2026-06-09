@@ -1,6 +1,7 @@
 mod pty;
 
 use pty::PtyManager;
+use tauri::Manager;
 
 // IME 진단: dev(debug) 빌드에서만 로깅. 릴리즈 빌드에서는 no-op.
 #[tauri::command]
@@ -24,6 +25,12 @@ pub fn run() {
             pty::close_terminal,
             ime_debug,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // 종료 요청 시 모든 PTY 자식 프로세스를 정리(좀비 방지).
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                app_handle.state::<PtyManager>().kill_all();
+            }
+        });
 }

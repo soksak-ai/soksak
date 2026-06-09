@@ -4,6 +4,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { invoke, Channel } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import "@xterm/xterm/css/xterm.css";
 
 import { WebkitImeAddon } from "../vendor/xterm-addon-webkit-ime";
@@ -30,6 +31,8 @@ export interface TerminalHandle {
   getCwd: () => string | undefined;
   /** 라이트/다크 등 테마 교체(그리드 fg/ANSI 색). 배경은 CSS --bg 가 담당. */
   setTheme: (theme: ITheme) => void;
+  /** 텍스트를 PTY 로 붙여넣기(bracketed paste 모드면 자동 래핑). 파일 드래그 경로 주입용. */
+  paste: (text: string) => void;
   dispose: () => void;
 }
 
@@ -71,7 +74,12 @@ export async function createTerminal(
 
   term.loadAddon(new Unicode11Addon());
   term.unicode.activeVersion = "11";
-  term.loadAddon(new WebLinksAddon());
+  // 링크 클릭은 웹뷰 안에서 열지 말고 OS 기본 브라우저로 연다(opener 플러그인).
+  term.loadAddon(
+    new WebLinksAddon((_event, uri) => {
+      openUrl(uri).catch(() => {});
+    }),
+  );
   term.loadAddon(new ClipboardAddon());
 
   term.open(container);
@@ -168,6 +176,27 @@ export async function createTerminal(
   const ime = new WebkitImeAddon({ onData: writeToPty, onDebug: imeDebug });
   term.loadAddon(ime as unknown as Parameters<Terminal["loadAddon"]>[0]);
 
+  // 이미지 붙여넣기(⌘V): 클립보드에 이미지만 있고 텍스트가 없으면, TUI 앱(Claude Code
+  // 등)이 OS 클립보드를 직접 읽도록 "빈 bracketed paste"(ESC[200~ ESC[201~)만 보낸다.
+  // Claude Code 는 macOS 에서 빈 paste 를 신호로 osascript 로 클립보드 이미지를 읽는다.
+  // bracketed paste 모드가 꺼진 셸 프롬프트에서는 보낼 게 없으므로 xterm 기본(무동작)에 맡긴다.
+  const onPaste = (e: ClipboardEvent) => {
+    const dt = e.clipboardData;
+    if (!dt) return;
+    const items = Array.from(dt.items ?? []);
+    const files = Array.from(dt.files ?? []);
+    const hasImage =
+      items.some((it) => it.kind === "file" && it.type.startsWith("image/")) ||
+      files.some((f) => f.type.startsWith("image/"));
+    const text = dt.getData("text/plain");
+    if (hasImage && !text && term.modes.bracketedPasteMode) {
+      e.preventDefault();
+      e.stopPropagation();
+      writeToPty("\x1b[200~\x1b[201~");
+    }
+  };
+  container.addEventListener("paste", onPaste, true);
+
   const onOutput = new Channel<ArrayBuffer>();
   onOutput.onmessage = (message) => {
     const bytes = new Uint8Array(message);
@@ -238,6 +267,7 @@ export async function createTerminal(
   armDprListener();
 
   const dispose = () => {
+    container.removeEventListener("paste", onPaste, true);
     resizeObserver.disconnect();
     dprCleanup?.();
     dataSub.dispose();
@@ -260,6 +290,7 @@ export async function createTerminal(
       // 테마 변경 시 텍스처 아틀라스를 비워 글리프 캐시(색 포함)를 완전 갱신한다.
       webgl?.clearTextureAtlas();
     },
+    paste: (text: string) => term.paste(text),
     dispose,
   };
 }

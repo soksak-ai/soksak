@@ -35,6 +35,23 @@ pub struct PtyManager {
     next_id: Mutex<u32>,
 }
 
+impl PtyManager {
+    // 앱 종료 시 호출: 모든 세션의 자식 프로세스를 kill 하고 reader 를 깨워 정리한다.
+    // 호출하지 않으면 종료가 force-quit 등으로 일어날 때 셸/자식이 좀비로 남을 수 있다.
+    pub fn kill_all(&self) {
+        if let Ok(mut sessions) = self.sessions.lock() {
+            for (_, mut session) in sessions.drain() {
+                let (lock, cvar) = &*session.flow;
+                if let Ok(mut st) = lock.lock() {
+                    st.paused = false;
+                    cvar.notify_all();
+                }
+                let _ = session.child.kill();
+            }
+        }
+    }
+}
+
 fn default_shell() -> String {
     if cfg!(windows) {
         std::env::var("COMSPEC").unwrap_or_else(|_| "powershell.exe".to_string())

@@ -46,10 +46,13 @@ body,
   gap: 4px;
   flex: 1 1 auto;
   min-width: 0;
-  overflow-x: auto;
+  /* visible: 닫기 팝오버가 탭 박스 밖(상단)으로 삐져나올 수 있게. overflow-x:auto 면
+     세로도 함께 클리핑돼 팝오버가 잘린다. (탭이 많아질 때의 가로 스크롤은 추후 처리.) */
+  overflow: visible;
 }
 
 .tab {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -82,18 +85,41 @@ body,
   outline: none;
 }
 
+/* 닫기 버튼: 인라인 공간을 차지하지 않는다. 기본 숨김, 탭 호버 시에만 탭 박스 밖
+   상단 우측 모서리로 삐져나와 떠오른다(둥근 배경 + 그림자로 팝오버처럼). */
 .tab-close {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  z-index: 10;
+  width: 15px;
+  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font-size: 13px;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+  font-size: 11px;
   line-height: 1;
-  padding: 0 1px;
-  opacity: 0.6;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.6);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+}
+.tab:hover .tab-close {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
 }
 .tab-close:hover {
-  opacity: 1;
+  background: #f14c4c;
+  color: #fff;
 }
 .tab-add {
   border: none;
