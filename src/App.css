@@ -173,6 +173,59 @@ body,
   inset: 0;
 }
 
+/* pane 레이아웃: PanelGroup/Panel 이 탭 영역을 가득 채우고, 각 leaf 가 그 안에서
+   터미널을 100% 로 띄운다. */
+.pane-group {
+  width: 100%;
+  height: 100%;
+}
+.pane-panel {
+  overflow: hidden;
+}
+.pane-leaf {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+/* 레지스트리 소유 호스트 div(이 안에 xterm 이 attach). 마운트 포인트를 가득 채운다. */
+.pane-host {
+  width: 100%;
+  height: 100%;
+}
+/* 포커스된 pane(활성 탭일 때) 1px inset 윤곽. var(--fg) 저투명. */
+.pane-leaf.focused::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  outline: 1px solid var(--fg);
+  outline-offset: -1px;
+  opacity: 0.22;
+  z-index: 2;
+}
+
+/* 얇은 4px 드래그 가능한 분할선. hover/active 시 미세한 색 강조.
+   라이브러리가 flexBasis:auto, flexGrow/Shrink:0, cursor 를 inline 으로 설정하므로
+   크기는 width/height 로(flex shorthand 는 inline 에 밀린다), 상태는 data-separator 로. */
+.pane-resize-handle {
+  background: rgba(127, 127, 127, 0.18);
+  transition: background 0.12s ease;
+}
+.pane-resize-handle.horizontal {
+  width: 4px;
+  align-self: stretch;
+}
+.pane-resize-handle.vertical {
+  height: 4px;
+  align-self: stretch;
+}
+.pane-resize-handle:hover,
+.pane-resize-handle[data-separator="active"],
+.pane-resize-handle[data-separator="focus"] {
+  background: rgba(127, 127, 127, 0.45);
+}
+
 .terminal-view {
   width: 100%;
   height: 100%;

@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { TerminalView } from "./components/TerminalView";
-import { useSessions } from "./state/sessions";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { PaneTree } from "./components/PaneTree";
+import { collectLeafIds, useSessions } from "./state/sessions";
+import {
+  disposeHost,
+  setThemeAll,
+  setThemeProvider,
+} from "./terminal/paneHosts";
 import { backgrounds, luminance, themeForBg } from "./terminal/theme";
 import "./App.css";
 
@@ -18,9 +23,65 @@ function App() {
     root.setProperty("--fg", isDark ? "#e6e6e6" : "#1a1a1a");
   }, [bg, isDark]);
 
-  const { tabs, activeId, addTab, closeTab, setActive, renameTab } =
-    useSessions();
+  const {
+    tabs,
+    activeId,
+    addTab,
+    closeTab,
+    setActive,
+    renameTab,
+    splitPane,
+    closePane,
+  } = useSessions();
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // 새 호스트의 최초 createTerminal 이 현재 테마로 생성되도록 provider 등록.
+  // ref 로 최신 theme 을 읽어 재등록 없이 항상 현재값을 제공한다.
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+  useEffect(() => {
+    setThemeProvider(() => themeRef.current);
+  }, []);
+
+  // 테마 변경 시 살아있는 모든 터미널에 라이브 적용(호스트가 터미널을 소유).
+  useEffect(() => {
+    setThemeAll(theme);
+  }, [theme]);
+
+  // 호스트 폐기 diff: 모든 탭 레이아웃의 leaf id 집합을 추적해, 사라진 paneId 만
+  // disposeHost 한다(pane 닫기·탭 닫기 모두 여기서 처리). 재렌더로는 폐기되지 않음.
+  const liveLeavesRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const current = new Set<string>();
+    for (const t of tabs) collectLeafIds(t.layout, []).forEach((id) => current.add(id));
+    for (const id of liveLeavesRef.current) {
+      if (!current.has(id)) disposeHost(id);
+    }
+    liveLeavesRef.current = current;
+  }, [tabs]);
+
+  // 키보드 단축키(캡처 단계 → xterm 보다 먼저 가로챈다).
+  // Cmd+D: 좌우 분할(열, dir "row") / Cmd+Shift+D: 상하 분할(행, dir "col")
+  // Cmd+W: 활성 탭의 포커스된 pane 닫기(탭 자체는 닫지 않음).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.metaKey) return;
+      const key = e.key.toLowerCase();
+      // 최신 store 스냅샷에서 활성 탭/포커스 pane 을 읽는다.
+      const s = useSessions.getState();
+      const tab = s.tabs.find((t) => t.id === s.activeId);
+      if (!tab) return;
+      if (key === "d") {
+        e.preventDefault();
+        splitPane(tab.id, tab.focusedPaneId, e.shiftKey ? "col" : "row");
+      } else if (key === "w" && !e.shiftKey) {
+        e.preventDefault();
+        closePane(tab.id, tab.focusedPaneId);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [splitPane, closePane]);
 
   const commitRename = (id: string, raw: string, fallback: string) => {
     renameTab(id, raw.trim() || fallback);
@@ -115,7 +176,12 @@ function App() {
               zIndex: t.id === activeId ? 1 : 0,
             }}
           >
-            <TerminalView theme={theme} active={t.id === activeId} />
+            <PaneTree
+              node={t.layout}
+              tabId={t.id}
+              activeTab={t.id === activeId}
+              focusedPaneId={t.focusedPaneId}
+            />
           </div>
         ))}
       </div>
