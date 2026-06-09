@@ -2,10 +2,13 @@ mod pty;
 
 use pty::PtyManager;
 
-// DEV 진단: IME 이벤트/PTY 전송을 dev 로그로 보낸다.
+// IME 진단: dev(debug) 빌드에서만 로깅. 릴리즈 빌드에서는 no-op.
 #[tauri::command]
 fn ime_debug(message: String) {
+    #[cfg(debug_assertions)]
     eprintln!("[IME] {message}");
+    #[cfg(not(debug_assertions))]
+    let _ = message;
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
