@@ -1,5 +1,6 @@
 :root {
   --bg: #1e1e1e;
+  --fg: #e6e6e6;
 }
 
 * {
@@ -63,7 +64,7 @@ body,
 }
 .tab.active {
   background: rgba(127, 127, 127, 0.28);
-  color: inherit;
+  color: var(--fg);
 }
 .tab:hover {
   background: rgba(127, 127, 127, 0.22);
@@ -75,7 +76,7 @@ body,
   border: 1px solid rgba(127, 127, 127, 0.6);
   border-radius: 3px;
   background: var(--bg);
-  color: inherit;
+  color: var(--fg);
   font-size: 12px;
   font-family: inherit;
   outline: none;

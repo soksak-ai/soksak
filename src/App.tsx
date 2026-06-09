@@ -11,9 +11,12 @@ function App() {
   const theme = useMemo(() => themeForBg(bg), [bg]);
 
   // CSS --bg(그리드 잔여)·xterm theme.background(그리드)·OSC 11 응답이 모두 이 색을 따른다.
+  // --fg 는 타이틀바/탭 chrome 텍스트용(배경 밝기에 따라 대비색).
   useEffect(() => {
-    document.documentElement.style.setProperty("--bg", bg);
-  }, [bg]);
+    const root = document.documentElement.style;
+    root.setProperty("--bg", bg);
+    root.setProperty("--fg", isDark ? "#e6e6e6" : "#1a1a1a");
+  }, [bg, isDark]);
 
   const { tabs, activeId, addTab, closeTab, setActive, renameTab } =
     useSessions();
