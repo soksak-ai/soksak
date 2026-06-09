@@ -355,6 +355,9 @@ export class WebkitImeAddon implements ITerminalAddon {
   };
 
   private _onBeforeinput = (e: InputEvent): void => {
+    this._opts.onDebug?.(
+      `BEFOREINPUT type=${e.inputType} data=${JSON.stringify(e.data)} composing=${this._composing} pending=${JSON.stringify(this._pending)} expectEcho=${JSON.stringify(this._expectEcho)}`,
+    );
     // GUARD 2: record the incoming single Hangul char so shouldSkip can suppress
     // the matching xterm textarea-poll onData that fires between this beforeinput
     // and the following input event. Only IME writes (insertText /
@@ -477,6 +480,9 @@ export class WebkitImeAddon implements ITerminalAddon {
     this._pending = "";
     this._hide();
     if (text) {
+      this._opts.onDebug?.(
+        `FLUSH ${JSON.stringify(text)} fromKeydown=${this._flushingFromKeydown}`,
+      );
       // GUARD 3: only a keydown-originated flush (a non-IME terminator key) is
       // followed by a delayed commit. A standard-path flush from _onInput is
       // already followed by correct input processing, so it must not arm.

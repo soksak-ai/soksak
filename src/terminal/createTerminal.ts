@@ -94,6 +94,9 @@ export async function createTerminal(
   let ackPending = 0;
 
   const writeToPty = (data: string) => {
+    invoke("ime_debug", { message: `PTY <- ${JSON.stringify(data)}` }).catch(
+      () => {},
+    ); // DEV 진단
     if (termId !== 0) {
       invoke("write_terminal", { id: termId, data }).catch(() => {});
     }
@@ -103,7 +106,10 @@ export async function createTerminal(
   // WebKit은 marked-text 상태에 따라 IME 입력을 비표준 경로(insertReplacementText,
   // compositionend 없음)로 흘려보내 xterm이 부분 자모를 떨어뜨린다. 이 애드온이
   // 비표준 경로를 가로채 조합 미리보기를 그리고, 완성 글자만 PTY로 보낸다.
-  const ime = new WebkitImeAddon({ onData: writeToPty });
+  const ime = new WebkitImeAddon({
+    onData: writeToPty,
+    onDebug: (m) => invoke("ime_debug", { message: m }).catch(() => {}), // DEV 진단
+  });
   term.loadAddon(ime as unknown as Parameters<Terminal["loadAddon"]>[0]);
 
   const onOutput = new Channel<ArrayBuffer>();
@@ -129,7 +135,11 @@ export async function createTerminal(
 
   // 입력: xterm → PTY. IME 조합 중 누출되는 부분 자모는 shouldSkip 으로 거른다.
   const dataSub = term.onData((data) => {
-    if (!ime.shouldSkip(data)) {
+    const skip = ime.shouldSkip(data);
+    invoke("ime_debug", {
+      message: `TERM.onData ${JSON.stringify(data)} skip=${skip}`,
+    }).catch(() => {}); // DEV 진단
+    if (!skip) {
       writeToPty(data);
     }
   });
