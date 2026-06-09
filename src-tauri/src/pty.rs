@@ -43,6 +43,56 @@ fn default_shell() -> String {
     }
 }
 
+// 셸 통합 스크립트를 바이너리에 임베드.
+const ZSH_INTEGRATION: &str = include_str!("../scripts/shell-integration.zsh");
+
+// zsh 일 때 OSC 133/7 셸 통합을 주입한다. 임시 ZDOTDIR 에 .zshenv/.zshrc 를 써서
+// 사용자 원본 설정을 먼저 source 한 뒤 통합 스크립트를 로드한다(사용자 설정 보존).
+// 실패해도 통합만 빠질 뿐 셸은 정상 동작하므로 에러를 전파하지 않는다.
+fn setup_zsh_integration(cmd: &mut CommandBuilder, shell: &str) {
+    let is_zsh = std::path::Path::new(shell)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| n == "zsh")
+        .unwrap_or(false);
+    if !is_zsh {
+        return;
+    }
+
+    let dir = std::env::temp_dir().join("vsterm-zdotdir");
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let integ = dir.join("shell-integration.zsh");
+    if std::fs::write(&integ, ZSH_INTEGRATION).is_err() {
+        return;
+    }
+
+    let orig = std::env::var("ZDOTDIR")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| std::env::var("HOME").ok())
+        .unwrap_or_default();
+
+    let zshenv = "[[ -f \"$VSTERM_ORIG_ZDOTDIR/.zshenv\" ]] && \
+         source \"$VSTERM_ORIG_ZDOTDIR/.zshenv\"\n";
+    let zshrc = format!(
+        "[[ -f \"$VSTERM_ORIG_ZDOTDIR/.zshrc\" ]] && \
+         source \"$VSTERM_ORIG_ZDOTDIR/.zshrc\"\n\
+         ZDOTDIR=\"$VSTERM_ORIG_ZDOTDIR\"\n\
+         source {:?}\n",
+        integ.to_string_lossy()
+    );
+    if std::fs::write(dir.join(".zshenv"), zshenv).is_err()
+        || std::fs::write(dir.join(".zshrc"), zshrc).is_err()
+    {
+        return;
+    }
+
+    cmd.env("VSTERM_ORIG_ZDOTDIR", orig);
+    cmd.env("ZDOTDIR", dir.to_string_lossy().to_string());
+}
+
 #[tauri::command]
 pub fn spawn_terminal(
     cols: u16,
@@ -62,12 +112,14 @@ pub fn spawn_terminal(
         })
         .map_err(|e| e.to_string())?;
 
-    let mut cmd = CommandBuilder::new(shell.unwrap_or_else(default_shell));
+    let shell = shell.unwrap_or_else(default_shell);
+    let mut cmd = CommandBuilder::new(shell.clone());
     if let Some(cwd) = cwd {
         cmd.cwd(cwd);
     }
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
+    setup_zsh_integration(&mut cmd, &shell);
 
     let child = pair
         .slave
