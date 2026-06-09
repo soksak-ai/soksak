@@ -24,7 +24,7 @@ function App() {
           value={bg}
           title="배경색 지정"
           aria-label="배경색"
-          onChange={(e) => setBg(e.target.value)}
+          onInput={(e) => setBg((e.target as HTMLInputElement).value)}
         />
         <button
           type="button"

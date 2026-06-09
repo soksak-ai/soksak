@@ -245,6 +245,8 @@ export async function createTerminal(
     focus: () => term.focus(),
     setTheme: (theme: ITheme) => {
       term.options.theme = theme;
+      // 테마 변경 시 텍스처 아틀라스를 비워 글리프 캐시(색 포함)를 완전 갱신한다.
+      webgl?.clearTextureAtlas();
     },
     dispose,
   };
