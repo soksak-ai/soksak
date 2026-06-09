@@ -1,5 +1,4 @@
 import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { ClipboardAddon } from "@xterm/addon-clipboard";
@@ -64,8 +63,6 @@ export async function createTerminal(
     theme: darkTheme,
   });
 
-  const fitAddon = new FitAddon();
-  term.loadAddon(fitAddon);
   term.loadAddon(new Unicode11Addon());
   term.unicode.activeVersion = "11";
   term.loadAddon(new WebLinksAddon());
@@ -88,7 +85,34 @@ export async function createTerminal(
     webgl = undefined;
   }
 
-  fitAddon.fit();
+  // 직접 fit: 컨테이너 전체 크기로 행/열 계산. FitAddon 은 스크롤바용 14px 를 가용
+  // 너비에서 빼서 우측에 갭을 만들지만(설치된 0.11.0 기준 overviewRuler?.width || 14),
+  // 여기선 container.clientWidth/Height 를 그대로 floor 해 잔여를 1셀 미만으로 최소화한다.
+  // 스크롤백 히스토리는 그대로 유지된다. 셀 치수는 렌더 서비스에서 읽는다.
+  const fitTerminal = () => {
+    const core = (term as unknown as { _core?: any })._core;
+    const cell = core?._renderService?.dimensions?.css?.cell;
+    if (!cell?.width || !cell?.height) {
+      return;
+    }
+    const cols = Math.max(2, Math.floor(container.clientWidth / cell.width));
+    const rows = Math.max(1, Math.floor(container.clientHeight / cell.height));
+    if (cols !== term.cols || rows !== term.rows) {
+      // FitAddon 과 동일하게 리사이즈 전 렌더 캐시를 비운다(잔상/글리프 캐시 방지).
+      core._renderService?.clear?.();
+      term.resize(cols, rows);
+    }
+  };
+
+  fitTerminal();
+  // 레이아웃이 완전히 적용된 뒤 한 번 더(초기 측정 오차 보정).
+  requestAnimationFrame(() => {
+    try {
+      fitTerminal();
+    } catch {
+      /* 컨테이너가 아직 0 크기일 때 등 무시 */
+    }
+  });
 
   let termId = 0;
   let ackPending = 0;
@@ -150,7 +174,7 @@ export async function createTerminal(
   // 리사이즈: fit 후 PTY cols/rows 동기화
   const doResize = () => {
     try {
-      fitAddon.fit();
+      fitTerminal();
     } catch {
       /* 컨테이너가 0 크기일 때 등 무시 */
     }
