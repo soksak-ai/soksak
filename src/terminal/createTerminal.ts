@@ -140,6 +140,9 @@ export async function createTerminal(
     const skip = ime.shouldSkip(data);
     imeDebug?.(`TERM.onData ${JSON.stringify(data)} skip=${skip}`);
     if (!skip) {
+      // 조합 중 외부 입력(구두점/ASCII 등)이 들어오면 pending 음절을 먼저 PTY로
+      // 보내 순서를 보장한다(자+. → 자. , 하+? → 하?).
+      ime.flushPending();
       writeToPty(data);
     }
   });

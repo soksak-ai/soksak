@@ -238,6 +238,22 @@ export class WebkitImeAddon implements ITerminalAddon {
     return this._composing && data.length === 1 && isHangul(data);
   }
 
+  /**
+   * Commit any pending non-standard syllable immediately. Call this from
+   * terminal.onData BEFORE forwarding a non-skipped chunk to the pty so the
+   * composed syllable is ordered ahead of the following external input.
+   *
+   * GUARD 7: WKWebView routes a non-Hangul key pressed mid-composition (`.`,
+   * `?`, `!`, punctuation, ASCII, paste) to the pty via xterm's textarea-poll
+   * onData, which fires BEFORE the addon's keydown flush — so the char landed
+   * before the pending syllable ("자" + "." → ".자", "하" + "?" → "?하"). Flushing
+   * here, on the same onData path that writes the char, guarantees correct order.
+   * No-op when nothing is pending.
+   */
+  public flushPending(): void {
+    this._flush();
+  }
+
   private _customKey = (ev: KeyboardEvent): boolean => {
     if (ev.type === "keydown" && (ev.keyCode === 229 || ev.isComposing)) {
       return false; // block xterm's keydown processing for IME keys
