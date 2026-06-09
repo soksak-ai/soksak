@@ -242,6 +242,29 @@ export class WebkitImeAddon implements ITerminalAddon {
     if (ev.type === "keydown" && (ev.keyCode === 229 || ev.isComposing)) {
       return false; // block xterm's keydown processing for IME keys
     }
+    // GUARD 5 (companion): while a syllable is pending, the terminator / control
+    // keys are owned by _onKeydown, which flushes the syllable and emits the
+    // control char itself. WKWebView delivers these keys with isComposing=FALSE,
+    // so the check above does NOT block them — without this, xterm ALSO processes
+    // the key and emits a premature control char. For Enter that means a \r is
+    // sent BEFORE the pending syllable is flushed, executing the already-flushed
+    // previous syllable: "한글"+Enter splits into "한"⏎ "글"⏎. Block xterm here so
+    // only _onKeydown emits the terminator.
+    if (ev.type === "keydown" && this._pending !== "") {
+      if (ev.key === "Enter" || ev.key === "Tab" || ev.key === "Escape") {
+        return false;
+      }
+      if (
+        ev.ctrlKey &&
+        !ev.metaKey &&
+        !ev.altKey &&
+        ev.key.length === 1 &&
+        ev.key >= "a" &&
+        ev.key <= "z"
+      ) {
+        return false;
+      }
+    }
     // GUARD 4: while a syllable is being composed (_pending is non-empty),
     // Backspace belongs entirely to the IME. Return false so xterm never
     // synthesizes \x7f (DEL) via onData — otherwise the pty deletes the already
