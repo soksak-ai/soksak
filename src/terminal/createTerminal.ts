@@ -96,6 +96,10 @@ export async function createTerminal(
   // 여기선 container.clientWidth/Height 를 그대로 floor 해 잔여를 1셀 미만으로 최소화한다.
   // 스크롤백 히스토리는 그대로 유지된다. 셀 치수는 렌더 서비스에서 읽는다.
   const fitTerminal = () => {
+    // 숨겨진 탭(display:none)은 0 크기 → fit 하면 2열로 줄어드니 건너뛴다.
+    if (container.clientWidth === 0 || container.clientHeight === 0) {
+      return;
+    }
     const core = (term as unknown as { _core?: any })._core;
     const cell = core?._renderService?.dimensions?.css?.cell;
     if (!cell?.width || !cell?.height) {

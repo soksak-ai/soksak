@@ -25,17 +25,94 @@ body,
   flex-direction: column;
 }
 
-/* 오버레이 타이틀바: macOS 신호등(좌측)과 같은 라인. 드래그로 창 이동.
-   좌측 ~78px 는 신호등이 덮으므로 토글은 우측 정렬. */
+/* 오버레이 타이틀바: macOS 신호등(좌측)과 같은 라인. 빈 영역 드래그로 창 이동.
+   좌측 ~78px 는 신호등이 덮으므로 padding-left 로 비워둔다. */
 .titlebar {
-  flex: 0 0 28px;
-  height: 28px;
+  flex: 0 0 34px;
+  height: 34px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding: 0 10px;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 0 82px;
   -webkit-user-select: none;
   user-select: none;
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: rgba(127, 127, 127, 0.95);
+  background: rgba(127, 127, 127, 0.12);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab.active {
+  background: rgba(127, 127, 127, 0.28);
+  color: inherit;
+}
+.tab:hover {
+  background: rgba(127, 127, 127, 0.22);
+}
+.tab-rename {
+  width: 72px;
+  height: 18px;
+  padding: 0 2px;
+  border: 1px solid rgba(127, 127, 127, 0.6);
+  border-radius: 3px;
+  background: var(--bg);
+  color: inherit;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+
+.tab-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 1px;
+  opacity: 0.6;
+}
+.tab-close:hover {
+  opacity: 1;
+}
+.tab-add {
+  border: none;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 6px;
+  border-radius: 5px;
+}
+.tab-add:hover {
+  background: rgba(127, 127, 127, 0.18);
+}
+
+.titlebar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .bg-picker {
@@ -84,10 +161,15 @@ body,
   background: rgba(127, 127, 127, 0.18);
 }
 
-.terminal-wrap {
+.terminal-stack {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+}
+.terminal-pane {
+  position: absolute;
+  inset: 0;
 }
 
 .terminal-view {
