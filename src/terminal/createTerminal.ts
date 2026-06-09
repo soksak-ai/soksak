@@ -1,4 +1,4 @@
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type ITheme } from "@xterm/xterm";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { ClipboardAddon } from "@xterm/addon-clipboard";
@@ -15,6 +15,7 @@ const FLOW_ACK_SIZE = 5000;
 export interface CreateTerminalOptions {
   cwd?: string;
   shell?: string;
+  theme?: ITheme;
 }
 
 export interface TerminalHandle {
@@ -24,6 +25,8 @@ export interface TerminalHandle {
   /** 컨테이너 크기에 맞춰 fit 후 PTY 에 크기 전파. */
   fit: () => void;
   focus: () => void;
+  /** 라이트/다크 등 테마 교체(그리드 fg/ANSI 색). 배경은 CSS --bg 가 담당. */
+  setTheme: (theme: ITheme) => void;
   dispose: () => void;
 }
 
@@ -60,8 +63,7 @@ export async function createTerminal(
     cursorStyle: "block",
     drawBoldTextInBrightColors: true,
     minimumContrastRatio: 1,
-    allowTransparency: true,
-    theme: darkTheme,
+    theme: options.theme ?? darkTheme,
   });
 
   term.loadAddon(new Unicode11Addon());
@@ -224,6 +226,9 @@ export async function createTerminal(
     id: () => termId,
     fit: doResize,
     focus: () => term.focus(),
+    setTheme: (theme: ITheme) => {
+      term.options.theme = theme;
+    },
     dispose,
   };
 }
