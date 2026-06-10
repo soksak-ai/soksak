@@ -4,6 +4,7 @@ import { create } from "zustand";
 
 export type Language = "ko" | "en";
 export type CursorStyle = "block" | "bar" | "underline";
+export type TabPosition = "top" | "left";
 
 export interface TerminalSettings {
   fontFamily: string;
@@ -15,7 +16,10 @@ export interface TerminalSettings {
 
 interface SettingsState extends TerminalSettings {
   language: Language;
+  // 프로젝트(최상단) 탭 위치. left 면 사이드바 왼쪽 세로 레일.
+  projectTabPosition: TabPosition;
   setLanguage: (l: Language) => void;
+  setProjectTabPosition: (p: TabPosition) => void;
   setFontFamily: (v: string) => void;
   setFontSize: (v: number) => void;
   setCursorBlink: (v: boolean) => void;
@@ -25,6 +29,7 @@ interface SettingsState extends TerminalSettings {
 
 const DEFAULTS = {
   language: "ko" as Language,
+  projectTabPosition: "top" as TabPosition,
   fontFamily:
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
   fontSize: 13,
@@ -63,6 +68,7 @@ export const useSettings = create<SettingsState>((set, get) => {
       KEY,
       JSON.stringify({
         language: s.language,
+        projectTabPosition: s.projectTabPosition,
         ...terminalSettingsOf(s),
       }),
     );
@@ -71,6 +77,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     ...load(),
     setLanguage: (language) => {
       set({ language });
+      save();
+    },
+    setProjectTabPosition: (projectTabPosition) => {
+      set({ projectTabPosition });
       save();
     },
     setFontFamily: (fontFamily) => {

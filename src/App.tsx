@@ -50,6 +50,7 @@ function cwdPaneOf(project: ProjectTab): string | undefined {
 function App() {
   const t = useT();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const projectTabPosition = useSettings((s) => s.projectTabPosition);
 
   // 터미널 외형 설정(폰트/커서/스크롤백). 개별 필드 구독 → 객체는 memo 로 안정화.
   const fontFamily = useSettings((s) => s.fontFamily);
@@ -249,61 +250,73 @@ function App() {
     setEditingId(null);
   };
 
+  // 프로젝트 탭 목록(상단 가로 / 좌측 세로 양쪽에서 같은 마크업 재사용).
+  const projectTabsList = (
+    <>
+      {tabs.map((proj) => (
+        <div
+          key={proj.id}
+          className={`tab${proj.id === activeId ? " active" : ""}`}
+          onClick={() => setActive(proj.id)}
+          onDoubleClick={() => setEditingId(proj.id)}
+        >
+          {editingId === proj.id ? (
+            <input
+              className="tab-rename"
+              defaultValue={proj.title}
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+              onBlur={(e) => commitRename(proj.id, e.target.value, proj.title)}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") {
+                  commitRename(proj.id, e.currentTarget.value, proj.title);
+                } else if (e.key === "Escape") {
+                  setEditingId(null);
+                }
+              }}
+            />
+          ) : (
+            <span className="tab-title">{proj.title}</span>
+          )}
+          {tabs.length > 1 && (
+            <button
+              type="button"
+              className="tab-close"
+              title={t("project.close")}
+              onClick={(e) => {
+                e.stopPropagation();
+                closeTab(proj.id);
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        className="tab-add"
+        title={t("project.new")}
+        onClick={() => setNewProjectOpen(true)}
+      >
+        +
+      </button>
+    </>
+  );
+
   return (
     <div className="app-root">
       {/* 오버레이 타이틀바: 프로젝트 탭. 빈 영역 드래그로 창 이동. */}
       <div className="titlebar" data-tauri-drag-region>
-        <div className="tabs" data-tauri-drag-region>
-          {tabs.map((proj) => (
-            <div
-              key={proj.id}
-              className={`tab${proj.id === activeId ? " active" : ""}`}
-              onClick={() => setActive(proj.id)}
-              onDoubleClick={() => setEditingId(proj.id)}
-            >
-              {editingId === proj.id ? (
-                <input
-                  className="tab-rename"
-                  defaultValue={proj.title}
-                  autoFocus
-                  onClick={(e) => e.stopPropagation()}
-                  onBlur={(e) => commitRename(proj.id, e.target.value, proj.title)}
-                  onKeyDown={(e) => {
-                    e.stopPropagation();
-                    if (e.key === "Enter") {
-                      commitRename(proj.id, e.currentTarget.value, proj.title);
-                    } else if (e.key === "Escape") {
-                      setEditingId(null);
-                    }
-                  }}
-                />
-              ) : (
-                <span className="tab-title">{proj.title}</span>
-              )}
-              {tabs.length > 1 && (
-                <button
-                  type="button"
-                  className="tab-close"
-                  title={t("project.close")}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTab(proj.id);
-                  }}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
-          <button
-            type="button"
-            className="tab-add"
-            title={t("project.new")}
-            onClick={() => setNewProjectOpen(true)}
-          >
-            +
-          </button>
-        </div>
+        {projectTabPosition === "top" ? (
+          <div className="tabs" data-tauri-drag-region>
+            {projectTabsList}
+          </div>
+        ) : (
+          /* 좌측 모드: 타이틀바엔 탭 없이 드래그 영역만(탭은 좌측 레일로). */
+          <div className="tabs" data-tauri-drag-region />
+        )}
         <div className="titlebar-right">
           {/* HMR 개발 빌드에서만 표시(릴리스 빌드는 import.meta.env.DEV=false). dev↔릴리스 구분. */}
           {import.meta.env.DEV && <span className="dev-badge">DEV</span>}
@@ -350,8 +363,13 @@ function App() {
         <NewProjectModal onClose={() => setNewProjectOpen(false)} />
       )}
 
-      {/* 모든 프로젝트를 마운트해 세션 유지(비활성은 visibility 로 숨김). */}
-      <div className="terminal-stack">
+      {/* 본문: 좌측 모드면 세로 프로젝트 레일 + 콘텐츠 행. */}
+      <div className={`app-body${projectTabPosition === "left" ? " with-rail" : ""}`}>
+        {projectTabPosition === "left" && (
+          <div className="project-rail">{projectTabsList}</div>
+        )}
+        {/* 모든 프로젝트를 마운트해 세션 유지(비활성은 visibility 로 숨김). */}
+        <div className="terminal-stack">
         {tabs.map((project) => {
           const isActiveProject = project.id === activeId;
           return (
@@ -422,6 +440,7 @@ function App() {
             </div>
           );
         })}
+        </div>
       </div>
     </div>
   );

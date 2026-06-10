@@ -1,5 +1,10 @@
 import { useEffect } from "react";
-import { useSettings, type CursorStyle, type Language } from "../state/settings";
+import {
+  useSettings,
+  type CursorStyle,
+  type Language,
+  type TabPosition,
+} from "../state/settings";
 import { useT } from "../i18n";
 
 // 설정 패널(모달): 언어 + 폰트(글꼴/크기) + 커서(깜빡임/모양) + 스크롤백.
@@ -45,6 +50,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             >
               <option value="ko">한국어</option>
               <option value="en">English</option>
+            </select>
+          </div>
+
+          <div className="settings-row">
+            <label>{t("settings.tabPosition")}</label>
+            <select
+              value={s.projectTabPosition}
+              onChange={(e) =>
+                s.setProjectTabPosition(e.target.value as TabPosition)
+              }
+            >
+              <option value="top">{t("position.top")}</option>
+              <option value="left">{t("position.left")}</option>
             </select>
           </div>
 
