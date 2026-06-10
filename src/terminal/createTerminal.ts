@@ -34,6 +34,8 @@ export interface TerminalHandle {
   getCwd: () => string | undefined;
   /** cwd 변경 구독(이벤트 기반). 반환=해지. */
   onCwdChange: (cb: (cwd: string) => void) => () => void;
+  /** 명령 종료 구독(git 상태 등 갱신 트리거). 반환=해지. */
+  onCommandFinished: (cb: () => void) => () => void;
   /** 라이트/다크 등 테마 교체(그리드 fg/ANSI 색). 배경은 CSS --bg 가 담당. */
   setTheme: (theme: ITheme) => void;
   /** 텍스트를 PTY 로 붙여넣기(bracketed paste 모드면 자동 래핑). 파일 드래그 경로 주입용. */
@@ -295,6 +297,7 @@ export async function createTerminal(
     focus: () => term.focus(),
     getCwd: () => shellIntegration.getCwd(),
     onCwdChange: (cb) => shellIntegration.onCwdChange(cb),
+    onCommandFinished: (cb) => shellIntegration.onCommandFinished(cb),
     setTheme: (theme: ITheme) => {
       term.options.theme = theme;
       // 테마 변경 시 텍스처 아틀라스를 비워 글리프 캐시(색 포함)를 완전 갱신한다.

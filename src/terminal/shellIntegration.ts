@@ -10,6 +10,8 @@ export interface ShellIntegration {
   getCwd: () => string | undefined;
   /** cwd 변경 구독(이벤트 기반, 폴링 금지). 값이 실제로 바뀔 때만 통지. 반환=해지. */
   onCwdChange: (cb: (cwd: string) => void) => () => void;
+  /** 명령 종료(OSC 133/633 D) 구독. git 상태 등 갱신 트리거용. 반환=해지. */
+  onCommandFinished: (cb: () => void) => () => void;
   dispose: () => void;
 }
 
@@ -30,16 +32,21 @@ export function setupShellIntegration(term: Terminal): ShellIntegration {
     for (const cb of cwdListeners) cb(next);
   };
 
+  // 명령 종료 구독자(D 마다 통지).
+  const cmdListeners = new Set<() => void>();
+
   const markPromptStart = () => {
     // 같은 명령에서 A 가 여러 번 와도 최신 줄만 추적.
     promptMarker = term.registerMarker(0) ?? undefined;
   };
 
   const finishCommand = (exitRaw: string | undefined) => {
-    if (!promptMarker) return;
-    const exit = Number.parseInt(exitRaw ?? "0", 10);
-    decorate(term, promptMarker, Number.isFinite(exit) ? exit : 0);
-    promptMarker = undefined;
+    if (promptMarker) {
+      const exit = Number.parseInt(exitRaw ?? "0", 10);
+      decorate(term, promptMarker, Number.isFinite(exit) ? exit : 0);
+      promptMarker = undefined;
+    }
+    for (const cb of cmdListeners) cb();
   };
 
   const setCwdFromUri = (uri: string) => {
@@ -102,10 +109,15 @@ export function setupShellIntegration(term: Terminal): ShellIntegration {
       cwdListeners.add(cb);
       return () => cwdListeners.delete(cb);
     },
+    onCommandFinished: (cb) => {
+      cmdListeners.add(cb);
+      return () => cmdListeners.delete(cb);
+    },
     dispose: () => {
       promptMarker?.dispose();
       disposers.forEach((d) => d());
       cwdListeners.clear();
+      cmdListeners.clear();
     },
   };
 }

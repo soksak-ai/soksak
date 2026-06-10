@@ -14,7 +14,11 @@ import {
   type GitStatusEntry,
   type TreeThemeInput,
 } from "@pierre/trees";
-import { getCwdOfHost, subscribeCwd } from "../terminal/paneHosts";
+import {
+  getCwdOfHost,
+  subscribeCommandFinished,
+  subscribeCwd,
+} from "../terminal/paneHosts";
 import { useT } from "../i18n";
 
 // 사이드바 파일 트리: 추적 대상 pane 터미널의 cwd 를 @pierre/trees 로 렌더한다.
@@ -115,11 +119,18 @@ export function FileTreeSidebar({
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [gitStatus, setGitStatus] = useState<GitStatusEntry[]>([]);
+  // 명령 종료 시 git 상태만 갱신(재리스팅 X → 트리 펼침 상태 유지). 이벤트 기반.
+  const [gitNonce, setGitNonce] = useState(0);
 
   // cwd 이벤트 구독(폴링 없음). paneId 가 바뀌면 재구독 + 현재값 반영.
   useEffect(() => {
     setCwd(getCwdOfHost(paneId));
     return subscribeCwd(paneId, setCwd);
+  }, [paneId]);
+
+  // 명령 종료(OSC 133/633 D) 구독 → git 상태 갱신 트리거(폴링 없음).
+  useEffect(() => {
+    return subscribeCommandFinished(paneId, () => setGitNonce((n) => n + 1));
   }, [paneId]);
 
   // cwd(또는 새로고침) → 디렉토리 리스팅. cwd 미확인이면 path=null → Rust 가 HOME 사용.
@@ -158,7 +169,7 @@ export function FileTreeSidebar({
     return () => {
       cancelled = true;
     };
-  }, [listing?.root, nonce]);
+  }, [listing?.root, nonce, gitNonce]);
 
   return (
     <div className="ft-sidebar">

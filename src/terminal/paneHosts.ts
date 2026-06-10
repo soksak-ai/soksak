@@ -28,6 +28,9 @@ const hosts = new Map<string, PaneHost>();
 // 통로. 호스트의 터미널이 준비되면 handle.onCwdChange 를 이 셋으로 브리지한다.
 const cwdSubs = new Map<string, Set<(cwd: string) => void>>();
 
+// paneId 별 명령 종료 구독자(git 상태 등 갱신 트리거). 위와 동일한 브리지 구조.
+const cmdSubs = new Map<string, Set<() => void>>();
+
 // App 이 등록하는 "현재 테마" getter. 새 호스트의 최초 createTerminal 에 쓰인다.
 let themeProvider: () => ITheme | undefined = () => undefined;
 
@@ -99,6 +102,10 @@ export function getHost(paneId: string): HTMLDivElement {
       handle.onCwdChange((c) => cwdSubs.get(paneId)?.forEach((cb) => cb(c)));
       const cwd = handle.getCwd();
       if (cwd) cwdSubs.get(paneId)?.forEach((cb) => cb(cwd));
+      // 명령 종료 이벤트 브리지.
+      handle.onCommandFinished(() =>
+        cmdSubs.get(paneId)?.forEach((cb) => cb()),
+      );
     })
     .catch((e) => {
       console.error(`createTerminal failed for pane ${paneId}:`, e);
@@ -113,6 +120,7 @@ export function disposeHost(paneId: string): void {
   if (!host) return;
   hosts.delete(paneId);
   cwdSubs.delete(paneId);
+  cmdSubs.delete(paneId);
   host.handle?.dispose();
   host.div.remove();
 }
@@ -155,6 +163,22 @@ export function subscribeCwd(
   set.add(cb);
   const cur = hosts.get(paneId)?.handle?.getCwd();
   if (cur) cb(cur);
+  return () => {
+    set?.delete(cb);
+  };
+}
+
+/** pane 의 명령 종료(OSC 133/633 D)를 구독(폴링 없음). 반환=해지. */
+export function subscribeCommandFinished(
+  paneId: string,
+  cb: () => void,
+): () => void {
+  let set = cmdSubs.get(paneId);
+  if (!set) {
+    set = new Set();
+    cmdSubs.set(paneId, set);
+  }
+  set.add(cb);
   return () => {
     set?.delete(cb);
   };
