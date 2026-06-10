@@ -1,26 +1,24 @@
 // 사이드바 파일 트리(@pierre/trees)용 디렉토리 리스팅.
-// 주어진 경로(없으면 HOME) 아래를 .gitignore 를 존중해(ripgrep 의 ignore 크레이트) 훑어
-// root 상대 파일 경로('/' 구분)를 반환한다. .git 과 gitignore 대상(node_modules/.cache/
-// target/dist 등)은 자동 제외 → 거대 캐시 디렉토리가 목록을 잠식하지 않는다.
-// (트리 모양은 라이브러리가 경로 목록에서 추론하므로 파일 경로만 주면 된다.)
+// 한 디렉토리의 "직속 자식"만(재귀 X) 돌려준다 → lazy loading. 거대 디렉토리(Library,
+// .cache 등)도 펼치기 전엔 한 read_dir 만 하므로 폭주하지 않는다(프론트가 펼침 시 그 폴더를
+// 다시 요청). 모든 항목 표시(editor 처럼 gitignore 로 숨기지 않음 — 거대 폴더는 접힌 채).
 
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
-use ignore::WalkBuilder;
 use serde::Serialize;
 
-// gitignore 존중으로 트리가 작아지므로 캡은 안전 백스톱(거대 비-git 디렉토리 대비)으로만.
-const MAX_ENTRIES: usize = 50_000;
+#[derive(Serialize)]
+pub struct ChildListing {
+    // 실제로 해석된 절대경로(path 가 None 이면 HOME).
+    root: String,
+    children: Vec<Child>,
+}
 
 #[derive(Serialize)]
-pub struct DirListing {
-    // 실제로 해석된 루트 절대경로(path 가 None 이면 HOME).
-    root: String,
-    // root 기준 상대 파일 경로 목록('/' 구분).
-    paths: Vec<String>,
-    // MAX_ENTRIES 에 걸려 일부만 담겼는지.
-    truncated: bool,
+pub struct Child {
+    name: String,
+    dir: bool,
 }
 
 fn home_dir() -> PathBuf {
@@ -145,8 +143,9 @@ pub fn read_file_base64(path: String) -> Result<FileData, String> {
     })
 }
 
+// 한 디렉토리의 직속 자식만(재귀 X). path 가 None/빈값이면 HOME. lazy 트리의 단위.
 #[tauri::command]
-pub fn list_dir(path: Option<String>) -> Result<DirListing, String> {
+pub fn list_children(path: Option<String>) -> Result<ChildListing, String> {
     let root: PathBuf = match path {
         Some(p) if !p.is_empty() => PathBuf::from(p),
         _ => home_dir(),
@@ -156,43 +155,31 @@ pub fn list_dir(path: Option<String>) -> Result<DirListing, String> {
         return Err(format!("디렉토리가 아님: {}", root.to_string_lossy()));
     }
 
-    // ignore 크레이트로 .gitignore(+상위/글로벌/.git/info/exclude)를 존중해 훑는다.
-    // gitignore 대상(.cache/node_modules/target/dist 등)은 진입조차 안 하므로 거대 캐시가
-    // 목록을 잠식하지 않는다. .git 디렉토리는 명시적으로 진입 차단. 닷파일은 표시(hidden=false).
-    let mut paths = Vec::new();
-    let walker = WalkBuilder::new(&root)
-        .hidden(false)
-        .git_ignore(true)
-        .git_global(true)
-        .git_exclude(true)
-        .parents(true)
-        .filter_entry(|e| e.file_name() != ".git")
-        .build();
-
-    for result in walker {
-        if paths.len() >= MAX_ENTRIES {
-            break;
-        }
-        let entry = match result {
+    let mut children = Vec::new();
+    for entry in std::fs::read_dir(&root).map_err(|e| e.to_string())? {
+        let entry = match entry {
             Ok(e) => e,
             Err(_) => continue,
         };
-        if entry.depth() == 0 {
-            continue; // root 자신
-        }
-        // 파일만 root 상대경로로(디렉토리는 트리가 경로에서 추론).
-        if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
-            if let Ok(rel) = entry.path().strip_prefix(&root) {
-                paths.push(rel.to_string_lossy().replace('\\', "/"));
-            }
-        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        // 심볼릭 링크는 가리키는 대상의 종류로 판정(디렉토리 링크도 펼칠 수 있게).
+        let dir = entry
+            .path()
+            .metadata()
+            .map(|m| m.is_dir())
+            .unwrap_or(false);
+        children.push(Child { name, dir });
     }
+    // 폴더 먼저, 그 다음 이름순(대소문자 무시).
+    children.sort_by(|a, b| {
+        b.dir
+            .cmp(&a.dir)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
 
-    let truncated = paths.len() >= MAX_ENTRIES;
-    Ok(DirListing {
+    Ok(ChildListing {
         root: root.to_string_lossy().to_string(),
-        paths,
-        truncated,
+        children,
     })
 }
 

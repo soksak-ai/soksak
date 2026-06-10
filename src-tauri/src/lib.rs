@@ -24,7 +24,7 @@ pub fn run() {
             pty::resize_terminal,
             pty::ack_terminal,
             pty::close_terminal,
-            fs::list_dir,
+            fs::list_children,
             fs::read_text_file,
             fs::read_file_base64,
             fs::git_status,
