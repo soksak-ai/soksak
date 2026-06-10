@@ -50,6 +50,15 @@ body,
   height: 100%;
   overflow: hidden;
   background: var(--bg);
+  /* 앱 UI 폰트 = 설정의 글꼴(--app-font). 미설정 시 기본 모노 스택. */
+  font-family: var(
+    --app-font,
+    "JetBrains Mono",
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace
+  );
 }
 
 .app-root {

@@ -94,7 +94,9 @@ function App() {
     const root = document.documentElement.style;
     root.setProperty("--bg", bg);
     root.setProperty("--fg", fg);
-  }, [bg, fg]);
+    // 앱 UI(body) 폰트도 설정의 글꼴을 따른다(터미널 xterm 은 옵션으로 별도 적용).
+    root.setProperty("--app-font", fontFamily);
+  }, [bg, fg, fontFamily]);
 
   const {
     tabs,
