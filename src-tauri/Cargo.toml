@@ -1,5 +1,7 @@
 [package]
-name = "soksak"
+# 기본(개발) 정체성. HMR(번들 안 됨)은 이 바이너리명이 독에 그대로 뜬다 → soksak-dev.
+# 릴리스/디버그 번들은 빌드 시 --config 로 productName 을 soksak / soksak-debug 로 푼다.
+name = "soksak-dev"
 version = "0.0.1"
 description = "soksak terminal"
 authors = ["you"]

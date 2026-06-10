@@ -246,6 +246,8 @@ function App() {
           </button>
         </div>
         <div className="titlebar-right">
+          {/* HMR 개발 빌드에서만 표시(릴리스 빌드는 import.meta.env.DEV=false). dev↔릴리스 구분. */}
+          {import.meta.env.DEV && <span className="dev-badge">DEV</span>}
           <button
             type="button"
             className={`sidebar-toggle${activeProject?.sidebarOpen ? " active" : ""}`}

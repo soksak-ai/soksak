@@ -176,6 +176,19 @@ body,
   flex: 0 0 auto;
 }
 
+/* HMR 개발 빌드 표시 배지(릴리스엔 안 보임). dev↔릴리스 구분. */
+.dev-badge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #0a3d20;
+  background: #2ec07a;
+  padding: 1px 6px;
+  border-radius: 4px;
+  user-select: none;
+}
+
 .bg-picker {
   width: 20px;
   height: 18px;

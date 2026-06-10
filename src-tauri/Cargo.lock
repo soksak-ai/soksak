@@ -3216,7 +3216,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "soksak"
+name = "soksak-dev"
 version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
