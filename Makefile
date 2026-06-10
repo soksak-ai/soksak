@@ -18,7 +18,7 @@ DEBUG_APP   := src-tauri/target/debug/bundle/macos/soksak-debug.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install dev build build-debug run run-debug typecheck check verify clean stop
+.PHONY: help install icons dev build build-debug run run-debug typecheck check verify clean stop
 
 help: ## 사용 가능한 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -26,6 +26,15 @@ help: ## 사용 가능한 명령 목록
 
 install: ## 의존성 설치(멱등)
 	$(PNPM) install
+
+icons: ## dev(녹색)/debug(주황) 아이콘을 기본 아이콘에서 재생성(멱등)
+	@command -v magick >/dev/null || { echo "ImageMagick(magick) 필요"; exit 1; }
+	magick src-tauri/icons/icon.png -fill '#2ec07a' -colorize 42% /tmp/soksak-icon-dev.png
+	$(PNPM) tauri icon /tmp/soksak-icon-dev.png --output src-tauri/icons-dev
+	magick src-tauri/icons/icon.png -fill '#ff8c1a' -colorize 45% /tmp/soksak-icon-debug.png
+	$(PNPM) tauri icon /tmp/soksak-icon-debug.png --output src-tauri/icons-debug
+	@rm -f /tmp/soksak-icon-dev.png /tmp/soksak-icon-debug.png
+	@echo "아이콘 재생성 완료: icons-dev(녹색), icons-debug(주황)"
 
 dev: ## 개발 서버(HMR). 독 이름 "soksak-dev" + DEV 배지
 	$(PNPM) tauri dev
