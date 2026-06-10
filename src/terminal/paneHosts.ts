@@ -22,6 +22,10 @@ interface PaneHost {
 
 const hosts = new Map<string, PaneHost>();
 
+// paneId 별 cwd 변경 구독자(호스트 존재와 독립). 사이드바가 폴링 없이 cwd 를 따라가는
+// 통로. 호스트의 터미널이 준비되면 handle.onCwdChange 를 이 셋으로 브리지한다.
+const cwdSubs = new Map<string, Set<(cwd: string) => void>>();
+
 // App 이 등록하는 "현재 테마" getter. 새 호스트의 최초 createTerminal 에 쓰인다.
 let themeProvider: () => ITheme | undefined = () => undefined;
 
@@ -65,6 +69,10 @@ export function getHost(paneId: string): HTMLDivElement {
         handle.focus();
         handle.fit();
       }
+      // cwd 이벤트를 paneId 구독 셋으로 브리지 + 현재값 즉시 통지.
+      handle.onCwdChange((c) => cwdSubs.get(paneId)?.forEach((cb) => cb(c)));
+      const cwd = handle.getCwd();
+      if (cwd) cwdSubs.get(paneId)?.forEach((cb) => cb(cwd));
     })
     .catch((e) => {
       console.error(`createTerminal failed for pane ${paneId}:`, e);
@@ -78,6 +86,7 @@ export function disposeHost(paneId: string): void {
   const host = hosts.get(paneId);
   if (!host) return;
   hosts.delete(paneId);
+  cwdSubs.delete(paneId);
   host.handle?.dispose();
   host.div.remove();
 }
@@ -96,6 +105,33 @@ export function setThemeAll(theme: ITheme): void {
 /** pane 으로 텍스트 붙여넣기(파일 드래그 경로 주입). 핸들 준비 전이면 무시. */
 export function pasteToHost(paneId: string, text: string): void {
   hosts.get(paneId)?.handle?.paste(text);
+}
+
+/** pane 터미널의 현재 작업 디렉토리(셸 통합 OSC 7/633;P). 미확인이면 undefined. */
+export function getCwdOfHost(paneId: string): string | undefined {
+  return hosts.get(paneId)?.handle?.getCwd();
+}
+
+/**
+ * pane 의 cwd 변경을 구독(폴링 없음). 등록 즉시 현재값이 있으면 한 번 호출하고,
+ * 이후 OSC 7/633;P 로 cwd 가 바뀔 때마다 호출한다. 반환=해지 함수.
+ * 핸들이 아직 준비 전이어도 안전 — 준비되면 getHost 가 현재값을 통지한다.
+ */
+export function subscribeCwd(
+  paneId: string,
+  cb: (cwd: string) => void,
+): () => void {
+  let set = cwdSubs.get(paneId);
+  if (!set) {
+    set = new Set();
+    cwdSubs.set(paneId, set);
+  }
+  set.add(cb);
+  const cur = hosts.get(paneId)?.handle?.getCwd();
+  if (cur) cb(cur);
+  return () => {
+    set?.delete(cb);
+  };
 }
 
 /** pane 에 포커스 + fit. 핸들이 아직 없으면 준비 직후 적용되도록 플래그를 남긴다. */

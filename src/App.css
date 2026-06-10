@@ -7,6 +7,40 @@
   box-sizing: border-box;
 }
 
+/* 스크롤바: 얇고 배경색과 흡사하게(전역). 트랙은 투명(=배경), 썸은 아주 옅은 회색.
+   -webkit-appearance:none 이 없으면 macOS 네이티브 오버레이(굵은 흰 막대)가 그대로
+   떠 커스텀 스타일이 무시된다 — 반드시 꺼야 한다.
+   파일트리는 shadow DOM 이라 닿지 않으므로 라이브러리 unsafeCSS 로 별도 주입. */
+::-webkit-scrollbar {
+  -webkit-appearance: none;
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(127, 127, 127, 0.22);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(127, 127, 127, 0.42);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 탭 줄(프로젝트/뷰 탭): 네이티브 오버레이 막대를 확실히 제거. macOS 오버레이
+   스크롤바는 두께 스타일이 무시되므로 display:none 으로 숨기고 트랙패드/휠로 스크롤. */
+.tabs,
+.view-tabs {
+  scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar,
+.view-tabs::-webkit-scrollbar {
+  display: none;
+}
+
 html,
 body,
 #root {
@@ -165,6 +199,34 @@ body,
   border-radius: 3px;
 }
 
+.sidebar-toggle {
+  width: 22px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  opacity: 0.6;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
+}
+.sidebar-toggle:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.18);
+}
+.sidebar-toggle.active {
+  opacity: 1;
+  color: var(--fg);
+  background: rgba(127, 127, 127, 0.28);
+}
+
 .theme-toggle {
   width: 22px;
   height: 20px;
@@ -197,6 +259,341 @@ body,
 .terminal-pane {
   position: absolute;
   inset: 0;
+  display: flex;
+  flex-direction: row;
+}
+/* 좌측 파일 트리 사이드바. 폭만 토글(0 ↔ SIDEBAR_W), 닫혀도 언마운트하지 않아
+   트리 상태(펼침/스크롤)가 유지된다. overflow hidden 으로 접을 때 깔끔히 잘린다. */
+.sidebar {
+  flex: 0 0 auto;
+  height: 100%;
+  overflow: hidden;
+  border-right: 1px solid rgba(127, 127, 127, 0.18);
+  background: var(--bg);
+}
+.ft-sidebar {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ft-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  height: 26px;
+  padding: 0 6px 0 10px;
+  font-size: 11px;
+  color: var(--fg);
+  opacity: 0.85;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.12);
+}
+.ft-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.ft-refresh {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.ft-refresh:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.18);
+}
+.ft-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.ft-body .ft {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.ft-msg {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--fg);
+  opacity: 0.6;
+}
+/* 사이드바-터미널 경계 드래그 핸들. 평소 투명, hover/drag 시 강조. */
+.sidebar-resizer {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 100%;
+  margin-left: -1px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.12s ease;
+  z-index: 3;
+}
+.sidebar-resizer:hover,
+.sidebar-resizer:active {
+  background: rgba(127, 127, 127, 0.4);
+}
+
+/* 콘텐츠 영역: 남은 가로폭. 상단 뷰 탭 + 뷰 본문(세로). */
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 콘텐츠 뷰 탭 줄(터미널/파일 전환) + 커스텀 가로 스크롤바 래퍼. */
+.view-tabs-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+.view-tabs {
+  height: 30px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 0 6px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.14);
+}
+/* 커스텀 3px 가로 스크롤바: 네이티브 오버레이는 숨기고(전역 display:none) 여기서 그린다.
+   배경에 동화되는 옅은 회색. ViewTabs 가 위치/폭을 동기화. */
+.view-scrollbar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  pointer-events: none;
+}
+.view-scrollbar-thumb {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(127, 127, 127, 0.22);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.view-scrollbar-thumb:hover {
+  background: rgba(127, 127, 127, 0.4);
+}
+.view-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px 6px 0 0;
+  font-size: 12px;
+  color: rgba(127, 127, 127, 0.9);
+  background: rgba(127, 127, 127, 0.08);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.view-tab.active {
+  background: rgba(127, 127, 127, 0.22);
+  color: var(--fg);
+}
+.view-tab:hover {
+  background: rgba(127, 127, 127, 0.16);
+}
+.view-tab.active:hover {
+  background: rgba(127, 127, 127, 0.26);
+}
+.view-tab-icon {
+  font-size: 10px;
+  opacity: 0.75;
+}
+.view-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.view-tab-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.55;
+  border-radius: 3px;
+}
+.view-tab-close:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.3);
+}
+.view-add {
+  align-self: center;
+  border: none;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 8px;
+  border-radius: 5px;
+}
+.view-add:hover {
+  background: rgba(127, 127, 127, 0.16);
+}
+
+/* 뷰 본문: 모든 뷰를 겹쳐 마운트(세션/에디터 유지), 활성만 표시. */
+.view-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.view-pane {
+  position: absolute;
+  inset: 0;
+}
+
+/* 파일 뷰어. */
+.file-viewer {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+}
+.fv-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.14);
+}
+.fv-modes {
+  display: flex;
+  gap: 2px;
+}
+.fv-mode {
+  border: none;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 5px;
+}
+.fv-mode.active {
+  background: rgba(127, 127, 127, 0.24);
+  color: var(--fg);
+}
+.fv-mode:hover {
+  background: rgba(127, 127, 127, 0.16);
+}
+.fv-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+/* 코드 뷰: 잘림 배너(선택) + CodeMirror 가 남은 높이 채움. */
+.fv-code {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.fv-banner {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  font-size: 11px;
+  color: var(--fg);
+  opacity: 0.85;
+  background: rgba(127, 127, 127, 0.16);
+  border-bottom: 1px solid rgba(127, 127, 127, 0.18);
+}
+.fv-code .fv-cm {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.fv-cm,
+.fv-cm .cm-editor {
+  height: 100%;
+}
+.fv-cm .cm-editor {
+  font-size: 13px;
+}
+.fv-msg {
+  padding: 16px;
+  font-size: 13px;
+  color: var(--fg);
+  opacity: 0.7;
+  line-height: 1.6;
+}
+.fv-msg-sub {
+  opacity: 0.5;
+  font-size: 11px;
+}
+.fv-image-wrap,
+.fv-audio-wrap {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 16px;
+}
+.fv-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.fv-embed,
+.fv-media {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.fv-media {
+  object-fit: contain;
+  background: #000;
+}
+.fv-markdown {
+  height: 100%;
+  overflow: auto;
+  padding: 20px 28px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--fg);
+}
+.fv-markdown h1,
+.fv-markdown h2,
+.fv-markdown h3 {
+  font-weight: 600;
+  margin: 0.8em 0 0.4em;
+}
+.fv-markdown pre {
+  background: rgba(127, 127, 127, 0.14);
+  padding: 12px;
+  border-radius: 6px;
+  overflow: auto;
+}
+.fv-markdown code {
+  font-family: monospace;
+  font-size: 0.92em;
+}
+.fv-markdown a {
+  color: #4ea1ff;
 }
 
 /* pane 레이아웃: PanelGroup/Panel 이 탭 영역을 가득 채우고, 각 leaf 가 그 안에서

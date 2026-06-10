@@ -5,31 +5,30 @@ import { focusHost, getHost } from "../terminal/paneHosts";
 
 interface PaneTreeProps {
   node: PaneNode;
-  tabId: string;
-  /** 이 탭이 활성 탭인가(포커스/지표 표시 조건). */
-  activeTab: boolean;
+  projectId: string;
+  viewId: string;
+  /** 이 터미널 뷰가 화면에 보이는가(프로젝트 활성 && 뷰 활성). 포커스/지표 조건. */
+  active: boolean;
   focusedPaneId: string;
 }
 
 // pane 트리를 재귀 렌더. leaf 는 마운트 포인트 div(터미널은 paneHosts 레지스트리가
-// 소유), split 은 react-resizable-panels Group.
-//
-// 핵심: leaf 가 분할/닫기/탭전환으로 트리의 다른 위치(Group 내부 깊은 곳)로 옮겨가도
-// React 가 만드는 것은 빈 마운트 포인트 div 뿐이다. 실제 터미널 호스트 div 는
-// 레지스트리에 캐시돼 파괴되지 않고, appendChild 로 현재 슬롯으로 이동한다 →
-// xterm canvas·WebGL·PTY 세션 보존.
+// 소유), split 은 react-resizable-panels Group. leaf 가 분할/닫기/탭전환으로 이동해도
+// React 가 만드는 건 빈 마운트 포인트뿐 — 호스트 div 는 appendChild 로 이동해 세션 보존.
 export function PaneTree({
   node,
-  tabId,
-  activeTab,
+  projectId,
+  viewId,
+  active,
   focusedPaneId,
 }: PaneTreeProps) {
   if (node.type === "leaf") {
     return (
       <PaneLeaf
         paneId={node.id}
-        tabId={tabId}
-        focused={activeTab && node.id === focusedPaneId}
+        projectId={projectId}
+        viewId={viewId}
+        focused={active && node.id === focusedPaneId}
       />
     );
   }
@@ -45,8 +44,9 @@ export function PaneTree({
           <Panel minSize="10%" className="pane-panel">
             <PaneTree
               node={child}
-              tabId={tabId}
-              activeTab={activeTab}
+              projectId={projectId}
+              viewId={viewId}
+              active={active}
               focusedPaneId={focusedPaneId}
             />
           </Panel>
@@ -58,16 +58,16 @@ export function PaneTree({
 
 interface PaneLeafProps {
   paneId: string;
-  tabId: string;
+  projectId: string;
+  viewId: string;
   focused: boolean;
 }
 
-function PaneLeaf({ paneId, tabId, focused }: PaneLeafProps) {
+function PaneLeaf({ paneId, projectId, viewId, focused }: PaneLeafProps) {
   const setFocusedPane = useSessions((s) => s.setFocusedPane);
   const mountRef = useRef<HTMLDivElement | null>(null);
 
-  // 마운트 포인트 ref 콜백: 호스트 div 를 이 슬롯으로 (재)이동.
-  // appendChild 는 이미 자식이면 no-op 이동이라 매 렌더마다 호출해도 안전(idempotent).
+  // 마운트 포인트 ref 콜백: 호스트 div 를 이 슬롯으로 (재)이동. appendChild 는 idempotent.
   const attach = useCallback(
     (el: HTMLDivElement | null) => {
       mountRef.current = el;
@@ -84,12 +84,12 @@ function PaneLeaf({ paneId, tabId, focused }: PaneLeafProps) {
     if (el) {
       const host = getHost(paneId);
       if (host.parentElement !== el) {
-        el.appendChild(host); // 부모가 바뀌면 이동(부모 변경 → ResizeObserver 발화).
+        el.appendChild(host);
       }
     }
   });
 
-  // 활성 탭의 포커스된 pane 이면 터미널에 포커스 + fit.
+  // 보이는 뷰의 포커스된 pane 이면 터미널에 포커스 + fit.
   useEffect(() => {
     if (focused) focusHost(paneId);
   }, [focused, paneId]);
@@ -98,8 +98,8 @@ function PaneLeaf({ paneId, tabId, focused }: PaneLeafProps) {
     <div
       ref={attach}
       className={`pane-leaf${focused ? " focused" : ""}`}
-      onMouseDownCapture={() => setFocusedPane(tabId, paneId)}
-      onFocusCapture={() => setFocusedPane(tabId, paneId)}
+      onMouseDownCapture={() => setFocusedPane(projectId, viewId, paneId)}
+      onFocusCapture={() => setFocusedPane(projectId, viewId, paneId)}
     />
   );
 }

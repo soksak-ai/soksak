@@ -1,3 +1,4 @@
+mod fs;
 mod pty;
 
 use pty::PtyManager;
@@ -23,6 +24,9 @@ pub fn run() {
             pty::resize_terminal,
             pty::ack_terminal,
             pty::close_terminal,
+            fs::list_dir,
+            fs::read_text_file,
+            fs::read_file_base64,
             ime_debug,
         ])
         .build(tauri::generate_context!())

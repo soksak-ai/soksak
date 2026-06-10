@@ -1,40 +1,93 @@
 import { create } from "zustand";
 
-// 탭 세션 상태. 각 탭은 재귀적 PANE 레이아웃을 가진다. leaf 하나가 독립 셸(PTY)
-// 하나에 대응한다. 비활성 탭은 언마운트하지 않고 숨겨 세션을 유지한다.
+// 2단 구조:
+//   - 최상단 탭 = 프로젝트(ProjectTab): 자체 사이드바(파일트리) + 콘텐츠 영역
+//   - 콘텐츠 영역 = 뷰 탭(View): 여러 터미널 뷰(각자 PaneTree 분할) + 파일 뷰
+// 비활성 프로젝트/뷰는 언마운트하지 않고 숨겨 세션(PTY/에디터)을 유지한다.
 
 // 재귀 pane 트리. leaf = 터미널 하나, split = 자식들의 행/열 묶음.
 export type PaneNode =
   | { type: "leaf"; id: string }
   | { type: "split"; dir: "row" | "col"; children: PaneNode[] };
 
-export interface TabState {
+// 콘텐츠 뷰: 터미널(분할 가능) 또는 파일(CodeMirror/프리뷰).
+export type View =
+  | {
+      id: string;
+      kind: "terminal";
+      title: string;
+      layout: PaneNode;
+      focusedPaneId: string;
+    }
+  | {
+      id: string;
+      kind: "file";
+      title: string;
+      path: string; // 절대 경로
+      mode: "code" | "preview";
+    };
+
+export interface ProjectTab {
   id: string;
   title: string;
-  layout: PaneNode;
-  focusedPaneId: string;
+  sidebarOpen: boolean;
+  views: View[];
+  activeViewId: string;
 }
 
 interface SessionsStore {
-  tabs: TabState[];
+  tabs: ProjectTab[]; // 프로젝트들
   activeId: string;
+
+  // 프로젝트 레벨
   addTab: () => void;
   closeTab: (id: string) => void;
   setActive: (id: string) => void;
   renameTab: (id: string, title: string) => void;
-  splitPane: (tabId: string, paneId: string, dir: "row" | "col") => void;
-  closePane: (tabId: string, paneId: string) => void;
-  setFocusedPane: (tabId: string, paneId: string) => void;
+  toggleSidebar: (id: string) => void;
+
+  // 콘텐츠 뷰 레벨
+  addTerminalView: (projectId: string) => void;
+  openFileView: (projectId: string, path: string) => void;
+  closeView: (projectId: string, viewId: string) => void;
+  setActiveView: (projectId: string, viewId: string) => void;
+  setFileMode: (projectId: string, viewId: string, mode: "code" | "preview") => void;
+
+  // pane 레벨(특정 터미널 뷰 안에서)
+  splitPane: (
+    projectId: string,
+    viewId: string,
+    paneId: string,
+    dir: "row" | "col",
+  ) => void;
+  closePane: (projectId: string, viewId: string, paneId: string) => void;
+  setFocusedPane: (projectId: string, viewId: string, paneId: string) => void;
 }
 
-let nextTabId = 2; // 첫 탭은 t1
+let nextProjectId = 2; // 첫 프로젝트는 t1
+let nextViewId = 2; // 첫 뷰는 v1
 let nextPaneId = 2; // 첫 pane 은 p1
 
+const newViewId = () => `v${nextViewId++}`;
 const newPaneId = () => `p${nextPaneId++}`;
 
 const leaf = (id: string): PaneNode => ({ type: "leaf", id });
 
-// 트리에서 leaf id 를 모두 수집(포커스 복구·전체 마운트용·호스트 폐기 diff용).
+const baseName = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
+
+// 새 터미널 뷰(빈 단일 pane).
+function newTerminalView(): View {
+  const paneId = newPaneId();
+  return {
+    id: newViewId(),
+    kind: "terminal",
+    title: "터미널",
+    layout: leaf(paneId),
+    focusedPaneId: paneId,
+  };
+}
+
+// 트리에서 leaf id 를 모두 수집.
 export function collectLeafIds(node: PaneNode, acc: string[] = []): string[] {
   if (node.type === "leaf") {
     acc.push(node.id);
@@ -44,8 +97,19 @@ export function collectLeafIds(node: PaneNode, acc: string[] = []): string[] {
   return acc;
 }
 
+// 모든 프로젝트·모든 터미널 뷰의 pane leaf id 를 수집(호스트 폐기 diff 용).
+export function collectAllLeafIds(tabs: ProjectTab[]): string[] {
+  const acc: string[] = [];
+  for (const t of tabs) {
+    for (const v of t.views) {
+      if (v.kind === "terminal") collectLeafIds(v.layout, acc);
+    }
+  }
+  return acc;
+}
+
 // leaf paneId 를 split{dir,[해당 leaf, 새 leaf]} 로 교체. 부모가 이미 같은 dir 인
-// split 이면 그 자리에 새 leaf 를 이어 붙인다(중첩 회피, 선택적 최적화).
+// split 이면 그 자리에 새 leaf 를 이어 붙인다(중첩 회피).
 function splitInTree(
   node: PaneNode,
   paneId: string,
@@ -56,7 +120,6 @@ function splitInTree(
     if (node.id !== paneId) return node;
     return { type: "split", dir, children: [leaf(paneId), leaf(newId)] };
   }
-  // split: 같은 dir 이고 직속 자식 leaf 가 대상이면 그 옆에 새 leaf 삽입.
   if (node.dir === dir) {
     const idx = node.children.findIndex(
       (c) => c.type === "leaf" && c.id === paneId,
@@ -73,8 +136,7 @@ function splitInTree(
   };
 }
 
-// leaf paneId 를 제거. 자식이 하나만 남는 split 은 그 자식으로 붕괴시킨다.
-// 대상이 발견되지 않으면 원본을 그대로 반환. 루트가 leaf 자기 자신이면 null.
+// leaf paneId 를 제거. 자식이 하나만 남는 split 은 그 자식으로 붕괴. 루트가 자기 자신이면 null.
 function removeInTree(node: PaneNode, paneId: string): PaneNode | null {
   if (node.type === "leaf") {
     return node.id === paneId ? null : node;
@@ -85,26 +147,52 @@ function removeInTree(node: PaneNode, paneId: string): PaneNode | null {
     if (r !== null) children.push(r);
   }
   if (children.length === 0) return null;
-  if (children.length === 1) return children[0]; // 단일 자식 split 붕괴
+  if (children.length === 1) return children[0];
   return { ...node, children };
 }
 
+// 한 프로젝트의 views 를 변환하는 헬퍼(다른 프로젝트는 그대로).
+function mapProject(
+  tabs: ProjectTab[],
+  projectId: string,
+  fn: (t: ProjectTab) => ProjectTab,
+): ProjectTab[] {
+  return tabs.map((t) => (t.id === projectId ? fn(t) : t));
+}
+
+// 한 뷰를 변환(뷰 종류 보존).
+function mapView(views: View[], viewId: string, fn: (v: View) => View): View[] {
+  return views.map((v) => (v.id === viewId ? fn(v) : v));
+}
+
+function firstProject(): ProjectTab {
+  const v = newTerminalView();
+  return {
+    id: "t1",
+    title: "1",
+    sidebarOpen: true,
+    views: [v],
+    activeViewId: v.id,
+  };
+}
+
 export const useSessions = create<SessionsStore>((set) => ({
-  tabs: [{ id: "t1", title: "1", layout: leaf("p1"), focusedPaneId: "p1" }],
+  tabs: [firstProject()],
   activeId: "t1",
 
   addTab: () =>
     set((s) => {
-      const id = `t${nextTabId++}`;
-      const paneId = newPaneId();
+      const id = `t${nextProjectId++}`;
+      const v = newTerminalView();
       return {
         tabs: [
           ...s.tabs,
           {
             id,
             title: String(s.tabs.length + 1),
-            layout: leaf(paneId),
-            focusedPaneId: paneId,
+            sidebarOpen: true,
+            views: [v],
+            activeViewId: v.id,
           },
         ],
         activeId: id,
@@ -113,12 +201,11 @@ export const useSessions = create<SessionsStore>((set) => ({
 
   closeTab: (id) =>
     set((s) => {
-      if (s.tabs.length <= 1) return s; // 마지막 탭은 닫지 않음
+      if (s.tabs.length <= 1) return s; // 마지막 프로젝트는 닫지 않음
       const idx = s.tabs.findIndex((t) => t.id === id);
       const tabs = s.tabs.filter((t) => t.id !== id);
       let activeId = s.activeId;
       if (activeId === id) {
-        // 닫힌 탭이 활성이면 인접 탭으로 이동.
         activeId = (tabs[idx] ?? tabs[idx - 1] ?? tabs[0]).id;
       }
       return { tabs, activeId };
@@ -131,42 +218,114 @@ export const useSessions = create<SessionsStore>((set) => ({
       tabs: s.tabs.map((t) => (t.id === id ? { ...t, title } : t)),
     })),
 
-  splitPane: (tabId, paneId, dir) =>
-    set((s) => {
-      const newId = newPaneId();
-      return {
-        tabs: s.tabs.map((t) =>
-          t.id === tabId
-            ? {
-                ...t,
-                layout: splitInTree(t.layout, paneId, dir, newId),
-                focusedPaneId: newId,
-              }
-            : t,
-        ),
-      };
-    }),
-
-  closePane: (tabId, paneId) =>
+  toggleSidebar: (id) =>
     set((s) => ({
-      tabs: s.tabs.map((t) => {
-        if (t.id !== tabId) return t;
-        // 마지막 pane 은 닫지 않음(탭당 최소 1개 유지).
-        if (collectLeafIds(t.layout).length <= 1) return t;
-        const next = removeInTree(t.layout, paneId);
-        if (next === null) return t; // 방어: 전부 제거되면 무시
-        const remaining = collectLeafIds(next);
-        const focusedPaneId = remaining.includes(t.focusedPaneId)
-          ? t.focusedPaneId
-          : remaining[0];
-        return { ...t, layout: next, focusedPaneId };
+      tabs: s.tabs.map((t) =>
+        t.id === id ? { ...t, sidebarOpen: !t.sidebarOpen } : t,
+      ),
+    })),
+
+  addTerminalView: (projectId) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) => {
+        const v = newTerminalView();
+        return { ...t, views: [...t.views, v], activeViewId: v.id };
       }),
     })),
 
-  setFocusedPane: (tabId, paneId) =>
+  openFileView: (projectId, path) =>
     set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === tabId ? { ...t, focusedPaneId: paneId } : t,
-      ),
+      tabs: mapProject(s.tabs, projectId, (t) => {
+        // 이미 열린 같은 파일이면 그 뷰를 활성화(재사용).
+        const existing = t.views.find(
+          (v) => v.kind === "file" && v.path === path,
+        );
+        if (existing) return { ...t, activeViewId: existing.id };
+        const v: View = {
+          id: newViewId(),
+          kind: "file",
+          title: baseName(path),
+          path,
+          mode: "code",
+        };
+        return { ...t, views: [...t.views, v], activeViewId: v.id };
+      }),
+    })),
+
+  closeView: (projectId, viewId) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) => {
+        if (t.views.length <= 1) return t; // 최소 1개 뷰 유지
+        const idx = t.views.findIndex((v) => v.id === viewId);
+        if (idx === -1) return t;
+        const views = t.views.filter((v) => v.id !== viewId);
+        let activeViewId = t.activeViewId;
+        if (activeViewId === viewId) {
+          activeViewId = (views[idx] ?? views[idx - 1] ?? views[0]).id;
+        }
+        return { ...t, views, activeViewId };
+      }),
+    })),
+
+  setActiveView: (projectId, viewId) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) => ({
+        ...t,
+        activeViewId: viewId,
+      })),
+    })),
+
+  setFileMode: (projectId, viewId, mode) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) => ({
+        ...t,
+        views: mapView(t.views, viewId, (v) =>
+          v.kind === "file" ? { ...v, mode } : v,
+        ),
+      })),
+    })),
+
+  splitPane: (projectId, viewId, paneId, dir) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) => ({
+        ...t,
+        views: mapView(t.views, viewId, (v) => {
+          if (v.kind !== "terminal") return v;
+          const newId = newPaneId();
+          return {
+            ...v,
+            layout: splitInTree(v.layout, paneId, dir, newId),
+            focusedPaneId: newId,
+          };
+        }),
+      })),
+    })),
+
+  closePane: (projectId, viewId, paneId) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) => ({
+        ...t,
+        views: mapView(t.views, viewId, (v) => {
+          if (v.kind !== "terminal") return v;
+          if (collectLeafIds(v.layout).length <= 1) return v; // 마지막 pane 유지
+          const next = removeInTree(v.layout, paneId);
+          if (next === null) return v;
+          const remaining = collectLeafIds(next);
+          const focusedPaneId = remaining.includes(v.focusedPaneId)
+            ? v.focusedPaneId
+            : remaining[0];
+          return { ...v, layout: next, focusedPaneId };
+        }),
+      })),
+    })),
+
+  setFocusedPane: (projectId, viewId, paneId) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) => ({
+        ...t,
+        views: mapView(t.views, viewId, (v) =>
+          v.kind === "terminal" ? { ...v, focusedPaneId: paneId } : v,
+        ),
+      })),
     })),
 }));

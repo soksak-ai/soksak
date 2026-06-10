@@ -8,6 +8,8 @@ import type { IMarker, Terminal } from "@xterm/xterm";
 export interface ShellIntegration {
   /** 현재 작업 디렉토리(OSC 7 / 633;P 로 갱신). 미확인 시 undefined. */
   getCwd: () => string | undefined;
+  /** cwd 변경 구독(이벤트 기반, 폴링 금지). 값이 실제로 바뀔 때만 통지. 반환=해지. */
+  onCwdChange: (cb: (cwd: string) => void) => () => void;
   dispose: () => void;
 }
 
@@ -19,6 +21,14 @@ export function setupShellIntegration(term: Terminal): ShellIntegration {
   // 현재 명령의 프롬프트 줄 마커(A 에서 생성, D 에서 데코레이션 후 해제).
   let promptMarker: IMarker | undefined;
   const disposers: Array<() => void> = [];
+
+  // cwd 변경 구독자. setCwd 를 단일 통로로 두고 실제 변경 시에만 통지.
+  const cwdListeners = new Set<(cwd: string) => void>();
+  const setCwd = (next: string) => {
+    if (!next || next === cwd) return;
+    cwd = next;
+    for (const cb of cwdListeners) cb(next);
+  };
 
   const markPromptStart = () => {
     // 같은 명령에서 A 가 여러 번 와도 최신 줄만 추적.
@@ -36,11 +46,13 @@ export function setupShellIntegration(term: Terminal): ShellIntegration {
     // file://host/path → path
     const m = /^file:\/\/[^/]*(\/.*)$/.exec(uri);
     if (!m) return;
+    let path: string;
     try {
-      cwd = decodeURIComponent(m[1]);
+      path = decodeURIComponent(m[1]);
     } catch {
-      cwd = m[1];
+      path = m[1];
     }
+    setCwd(path);
   };
 
   // OSC 133 (표준 semantic prompt): A 프롬프트시작 / D;exit 명령종료.
@@ -70,7 +82,7 @@ export function setupShellIntegration(term: Terminal): ShellIntegration {
         finishCommand(rest);
       } else if (cmd === "P") {
         const m = /Cwd=([^;]*)/.exec(rest);
-        if (m) cwd = m[1];
+        if (m) setCwd(m[1]);
       }
       return true;
     }).dispose,
@@ -86,9 +98,14 @@ export function setupShellIntegration(term: Terminal): ShellIntegration {
 
   return {
     getCwd: () => cwd,
+    onCwdChange: (cb) => {
+      cwdListeners.add(cb);
+      return () => cwdListeners.delete(cb);
+    },
     dispose: () => {
       promptMarker?.dispose();
       disposers.forEach((d) => d());
+      cwdListeners.clear();
     },
   };
 }

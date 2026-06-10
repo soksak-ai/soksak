@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import type { TreeThemeInput } from "@pierre/trees";
+import { FileTreeSidebar } from "./components/FileTreeSidebar";
+import { FileViewer } from "./components/FileViewer";
 import { PaneTree } from "./components/PaneTree";
-import { collectLeafIds, useSessions } from "./state/sessions";
+import { ViewTabs } from "./components/ViewTabs";
+import {
+  collectAllLeafIds,
+  collectLeafIds,
+  useSessions,
+  type ProjectTab,
+} from "./state/sessions";
 import {
   disposeHost,
   pasteToHost,
@@ -16,19 +25,40 @@ import "./App.css";
 // 의 이미지 확장자 정규식과 셸 둘 다에 맞는다.
 const shellEscape = (p: string) => p.replace(/[^A-Za-z0-9_./@%+:,=-]/g, "\\$&");
 
+// 좌측 사이드바(파일 트리) 폭 범위(CSS px). 실제 폭은 드래그로 조절(전역, localStorage 영속).
+const SIDEBAR_MIN = 160;
+const SIDEBAR_MAX = 640;
+const SIDEBAR_DEFAULT = 320;
+
+// 프로젝트의 사이드바가 따라갈 터미널 pane(= 현재 작업 디렉토리 출처).
+// 활성 뷰가 터미널이면 그 포커스 pane, 파일이면 첫 터미널 뷰의 포커스 pane.
+function cwdPaneOf(project: ProjectTab): string | undefined {
+  const active = project.views.find((v) => v.id === project.activeViewId);
+  if (active && active.kind === "terminal") return active.focusedPaneId;
+  const term = project.views.find((v) => v.kind === "terminal");
+  return term && term.kind === "terminal" ? term.focusedPaneId : undefined;
+}
+
 function App() {
   // 배경색이 단일 소스. 토글은 프리셋, 색상 피커는 임의 색. 글자색은 밝기로 자동 선택.
   const [bg, setBg] = useState<string>(backgrounds.dark);
   const isDark = luminance(bg) <= 0.5;
+  const fg = isDark ? "#e6e6e6" : "#1a1a1a";
   const theme = useMemo(() => themeForBg(bg), [bg]);
+
+  // 파일트리(@pierre/trees) 테마: 앱 배경/글자색을 따라가도록.
+  const treeTheme = useMemo<TreeThemeInput>(
+    () => ({ type: isDark ? "dark" : "light", bg, fg }),
+    [isDark, bg, fg],
+  );
 
   // CSS --bg(그리드 잔여)·xterm theme.background(그리드)·OSC 11 응답이 모두 이 색을 따른다.
   // --fg 는 타이틀바/탭 chrome 텍스트용(배경 밝기에 따라 대비색).
   useEffect(() => {
     const root = document.documentElement.style;
     root.setProperty("--bg", bg);
-    root.setProperty("--fg", isDark ? "#e6e6e6" : "#1a1a1a");
-  }, [bg, isDark]);
+    root.setProperty("--fg", fg);
+  }, [bg, fg]);
 
   const {
     tabs,
@@ -37,62 +67,108 @@ function App() {
     closeTab,
     setActive,
     renameTab,
+    toggleSidebar,
+    addTerminalView,
+    openFileView,
+    closeView,
+    setFileMode,
     splitPane,
     closePane,
   } = useSessions();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const activeProject = tabs.find((t) => t.id === activeId);
+
+  // 사이드바 폭(전역). 경계 드래그로 조절, localStorage 에 영속.
+  const [sidebarW, setSidebarW] = useState<number>(() => {
+    const v = Number(localStorage.getItem("sidebarW"));
+    return v >= SIDEBAR_MIN && v <= SIDEBAR_MAX ? v : SIDEBAR_DEFAULT;
+  });
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = sidebarW;
+    const onMove = (ev: MouseEvent) => {
+      const w = Math.min(
+        SIDEBAR_MAX,
+        Math.max(SIDEBAR_MIN, startW + (ev.clientX - startX)),
+      );
+      setSidebarW(w);
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setSidebarW((w) => {
+        localStorage.setItem("sidebarW", String(w));
+        return w;
+      });
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
 
   // 새 호스트의 최초 createTerminal 이 현재 테마로 생성되도록 provider 등록.
-  // ref 로 최신 theme 을 읽어 재등록 없이 항상 현재값을 제공한다.
   const themeRef = useRef(theme);
   themeRef.current = theme;
   useEffect(() => {
     setThemeProvider(() => themeRef.current);
   }, []);
 
-  // 테마 변경 시 살아있는 모든 터미널에 라이브 적용(호스트가 터미널을 소유).
+  // 테마 변경 시 살아있는 모든 터미널에 라이브 적용.
   useEffect(() => {
     setThemeAll(theme);
   }, [theme]);
 
-  // 호스트 폐기 diff: 모든 탭 레이아웃의 leaf id 집합을 추적해, 사라진 paneId 만
-  // disposeHost 한다(pane 닫기·탭 닫기 모두 여기서 처리). 재렌더로는 폐기되지 않음.
+  // 호스트 폐기 diff: 모든 프로젝트·터미널 뷰의 leaf id 집합을 추적해, 사라진 paneId 만
+  // disposeHost(뷰/탭 닫기·pane 닫기 모두 여기서). 재렌더로는 폐기되지 않음.
   const liveLeavesRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const current = new Set<string>();
-    for (const t of tabs) collectLeafIds(t.layout, []).forEach((id) => current.add(id));
+    const current = new Set(collectAllLeafIds(tabs));
     for (const id of liveLeavesRef.current) {
       if (!current.has(id)) disposeHost(id);
     }
     liveLeavesRef.current = current;
   }, [tabs]);
 
-  // 키보드 단축키(캡처 단계 → xterm 보다 먼저 가로챈다).
-  // Cmd+D: 좌우 분할(열, dir "row") / Cmd+Shift+D: 상하 분할(행, dir "col")
-  // Cmd+W: 활성 탭의 포커스된 pane 닫기(탭 자체는 닫지 않음).
+  // 키보드 단축키(캡처 단계 → xterm 보다 먼저). 활성 프로젝트의 활성 뷰 기준.
+  // ⌘D 좌우분할 / ⌘⇧D 상하분할 / ⌘W pane→뷰 닫기 / ⌘T 새 터미널 / ⌘B 사이드바.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!e.metaKey) return;
       const key = e.key.toLowerCase();
-      // 최신 store 스냅샷에서 활성 탭/포커스 pane 을 읽는다.
       const s = useSessions.getState();
-      const tab = s.tabs.find((t) => t.id === s.activeId);
-      if (!tab) return;
+      const project = s.tabs.find((t) => t.id === s.activeId);
+      if (!project) return;
+      const view = project.views.find((v) => v.id === project.activeViewId);
       if (key === "d") {
-        e.preventDefault();
-        splitPane(tab.id, tab.focusedPaneId, e.shiftKey ? "col" : "row");
+        if (view && view.kind === "terminal") {
+          e.preventDefault();
+          splitPane(project.id, view.id, view.focusedPaneId, e.shiftKey ? "col" : "row");
+        }
       } else if (key === "w" && !e.shiftKey) {
         e.preventDefault();
-        closePane(tab.id, tab.focusedPaneId);
+        if (view && view.kind === "terminal" && collectLeafIds(view.layout).length > 1) {
+          closePane(project.id, view.id, view.focusedPaneId);
+        } else {
+          closeView(project.id, project.activeViewId);
+        }
+      } else if (key === "t" && !e.shiftKey) {
+        e.preventDefault();
+        addTerminalView(project.id);
+      } else if (key === "b" && !e.shiftKey) {
+        e.preventDefault();
+        toggleSidebar(project.id);
       }
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [splitPane, closePane]);
+  }, [splitPane, closePane, closeView, addTerminalView, toggleSidebar]);
 
-  // 파일 드래그&드롭: Tauri 가 OS 파일 드롭을 가로채 경로를 준다(웹뷰 HTML drop 은
-  // 억제됨). 드롭 위치(물리 px) 아래의 pane-host 를 찾아 그 터미널에 이스케이프 경로를
-  // 붙여넣는다. Claude Code 는 .png/.jpg/... 확장자를 감지해 이미지를 읽는다.
+  // 파일 드래그&드롭: 드롭 위치 아래의 pane-host(터미널)에 이스케이프 경로를 붙여넣는다.
+  // pane 이 아니면 활성 프로젝트의 터미널 pane 으로 폴백.
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {
       if (event.payload.type !== "drop") return;
@@ -102,9 +178,9 @@ function App() {
       const el = document.elementFromPoint(position.x / dpr, position.y / dpr);
       let paneId = el?.closest<HTMLElement>(".pane-host")?.dataset.paneId;
       if (!paneId) {
-        // 폴백: 활성 탭의 포커스된 pane.
         const s = useSessions.getState();
-        paneId = s.tabs.find((t) => t.id === s.activeId)?.focusedPaneId;
+        const proj = s.tabs.find((t) => t.id === s.activeId);
+        paneId = proj ? cwdPaneOf(proj) : undefined;
       }
       if (!paneId) return;
       pasteToHost(paneId, paths.map(shellEscape).join(" "));
@@ -121,7 +197,7 @@ function App() {
 
   return (
     <div className="app-root">
-      {/* 오버레이 타이틀바: macOS 신호등(좌측)과 같은 라인. 빈 영역 드래그로 창 이동. */}
+      {/* 오버레이 타이틀바: 프로젝트 탭. 빈 영역 드래그로 창 이동. */}
       <div className="titlebar" data-tauri-drag-region>
         <div className="tabs" data-tauri-drag-region>
           {tabs.map((t) => (
@@ -154,7 +230,7 @@ function App() {
                 <button
                   type="button"
                   className="tab-close"
-                  title="탭 닫기"
+                  title="프로젝트 닫기"
                   onClick={(e) => {
                     e.stopPropagation();
                     closeTab(t.id);
@@ -165,16 +241,20 @@ function App() {
               )}
             </div>
           ))}
-          <button
-            type="button"
-            className="tab-add"
-            title="새 탭"
-            onClick={addTab}
-          >
+          <button type="button" className="tab-add" title="새 프로젝트" onClick={addTab}>
             +
           </button>
         </div>
         <div className="titlebar-right">
+          <button
+            type="button"
+            className={`sidebar-toggle${activeProject?.sidebarOpen ? " active" : ""}`}
+            title="사이드바 토글 (⌘B)"
+            aria-label="사이드바 토글"
+            onClick={() => activeProject && toggleSidebar(activeProject.id)}
+          >
+            ◧
+          </button>
           <input
             type="color"
             className="bg-picker"
@@ -195,26 +275,78 @@ function App() {
         </div>
       </div>
 
-      {/* 모든 탭을 마운트해 세션을 유지. display:none 은 WebGL 컨텍스트를 잃어
-          리셋되므로, visibility 로 숨겨 크기·컨텍스트를 보존한다(겹쳐 쌓되 활성만 표시). */}
+      {/* 모든 프로젝트를 마운트해 세션 유지(비활성은 visibility 로 숨김). */}
       <div className="terminal-stack">
-        {tabs.map((t) => (
-          <div
-            key={t.id}
-            className="terminal-pane"
-            style={{
-              visibility: t.id === activeId ? "visible" : "hidden",
-              zIndex: t.id === activeId ? 1 : 0,
-            }}
-          >
-            <PaneTree
-              node={t.layout}
-              tabId={t.id}
-              activeTab={t.id === activeId}
-              focusedPaneId={t.focusedPaneId}
-            />
-          </div>
-        ))}
+        {tabs.map((project) => {
+          const isActiveProject = project.id === activeId;
+          return (
+            <div
+              key={project.id}
+              className="terminal-pane"
+              style={{
+                visibility: isActiveProject ? "visible" : "hidden",
+                zIndex: isActiveProject ? 1 : 0,
+              }}
+            >
+              {/* 좌측 파일 트리 사이드바. 닫히면 width 0(언마운트 X → 상태 유지). */}
+              <div
+                className="sidebar"
+                style={{ width: project.sidebarOpen ? sidebarW : 0 }}
+              >
+                <FileTreeSidebar
+                  paneId={cwdPaneOf(project) ?? ""}
+                  onOpenFile={(p) => openFileView(project.id, p)}
+                  theme={treeTheme}
+                />
+              </div>
+              {project.sidebarOpen && (
+                <div
+                  className="sidebar-resizer"
+                  onMouseDown={startResize}
+                  title="사이드바 폭 조절"
+                />
+              )}
+
+              {/* 콘텐츠 영역: 상단 뷰 탭 + 뷰 본문(터미널/파일). */}
+              <div className="content">
+                <ViewTabs project={project} />
+
+                <div className="view-body">
+                  {project.views.map((v) => {
+                    const isActiveView = v.id === project.activeViewId;
+                    return (
+                      <div
+                        key={v.id}
+                        className="view-pane"
+                        style={{
+                          visibility: isActiveView ? "visible" : "hidden",
+                          zIndex: isActiveView ? 1 : 0,
+                        }}
+                      >
+                        {v.kind === "terminal" ? (
+                          <PaneTree
+                            node={v.layout}
+                            projectId={project.id}
+                            viewId={v.id}
+                            active={isActiveProject && isActiveView}
+                            focusedPaneId={v.focusedPaneId}
+                          />
+                        ) : (
+                          <FileViewer
+                            path={v.path}
+                            mode={v.mode}
+                            isDark={isDark}
+                            onMode={(m) => setFileMode(project.id, v.id, m)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
