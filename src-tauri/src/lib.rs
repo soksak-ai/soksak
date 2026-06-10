@@ -27,6 +27,7 @@ pub fn run() {
             fs::list_dir,
             fs::read_text_file,
             fs::read_file_base64,
+            fs::git_status,
             ime_debug,
         ])
         .build(tauri::generate_context!())

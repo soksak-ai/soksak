@@ -11,6 +11,7 @@ import { FileTree, useFileTree } from "@pierre/trees/react";
 import {
   prepareFileTreeInput,
   themeToTreeStyles,
+  type GitStatusEntry,
   type TreeThemeInput,
 } from "@pierre/trees";
 import { getCwdOfHost, subscribeCwd } from "../terminal/paneHosts";
@@ -44,11 +45,13 @@ function TreeView({
   root,
   onOpenFile,
   theme,
+  gitStatus,
 }: {
   paths: string[];
   root: string;
   onOpenFile: (absPath: string) => void;
   theme: TreeThemeInput;
+  gitStatus: GitStatusEntry[];
 }) {
   const fileSet = useMemo(() => new Set(paths), [paths]);
   // docs 권장: scalable 트리는 raw paths 대신 prepareFileTreeInput(미리 shaping)으로.
@@ -85,6 +88,13 @@ function TreeView({
     unsafeCSS: TREE_SCROLLBAR_CSS,
     density: "compact", // 행 간격 축소
   });
+
+  // git 상태 데코레이션(수정/추가/삭제/추적안됨). 변경 시 라이브 적용. 폴더는 라이브러리가
+  // 자식 변경을 자동 반영.
+  useEffect(() => {
+    model.setGitStatus(gitStatus);
+  }, [model, gitStatus]);
+
   return <FileTree className="ft" style={themeStyles} model={model} />;
 }
 
@@ -104,6 +114,7 @@ export function FileTreeSidebar({
   const [nonce, setNonce] = useState(0);
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gitStatus, setGitStatus] = useState<GitStatusEntry[]>([]);
 
   // cwd 이벤트 구독(폴링 없음). paneId 가 바뀌면 재구독 + 현재값 반영.
   useEffect(() => {
@@ -128,6 +139,26 @@ export function FileTreeSidebar({
       cancelled = true;
     };
   }, [cwd, nonce]);
+
+  // 리스팅 루트의 git 상태(데코레이션). git repo 가 아니면 빈 목록. cwd/새로고침 시 갱신.
+  useEffect(() => {
+    const root = listing?.root;
+    if (!root) {
+      setGitStatus([]);
+      return;
+    }
+    let cancelled = false;
+    invoke<GitStatusEntry[]>("git_status", { path: root })
+      .then((s) => {
+        if (!cancelled) setGitStatus(s);
+      })
+      .catch(() => {
+        if (!cancelled) setGitStatus([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [listing?.root, nonce]);
 
   return (
     <div className="ft-sidebar">
@@ -155,6 +186,7 @@ export function FileTreeSidebar({
             root={listing.root}
             onOpenFile={onOpenFile}
             theme={theme}
+            gitStatus={gitStatus}
           />
         ) : (
           <div className="ft-msg">{t("common.loading")}</div>
