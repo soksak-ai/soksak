@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "vsterm-tauri",
+  "productName": "soksak",
   "version": "0.0.1",
-  "identifier": "com.vsterm.app",
+  "identifier": "com.soksak.app",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "vsterm-tauri",
+        "title": "soksak",
         "width": 800,
         "height": 600,
         "titleBarStyle": "Overlay",

@@ -17,6 +17,15 @@ fn ime_debug(message: String) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            // 개발 빌드(debug)는 창 제목에 dev 를 붙여 릴리스와 구분(독 아이콘은 dev 설정의
+            // 별도 아이콘 세트로 분리). 릴리스는 설정의 "soksak" 제목 유지.
+            #[cfg(debug_assertions)]
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.set_title("soksak dev");
+            }
+            Ok(())
+        })
         .manage(PtyManager::default())
         .invoke_handler(tauri::generate_handler![
             pty::spawn_terminal,
