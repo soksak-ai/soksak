@@ -8,6 +8,7 @@ import {
 } from "@uiw/codemirror-extensions-langs";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
+import { useT } from "../i18n";
 
 // 파일 뷰어: 확장자로 렌더 전략을 정한다.
 //   - text      : CodeMirror (코드)
@@ -86,6 +87,7 @@ export interface FileViewerProps {
 }
 
 export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
+  const t = useT();
   const strat = strategyFor(path);
   const previewable = strat === "markdown" || strat === "svg";
   const needsText = strat === "text" || strat === "markdown" || strat === "svg";
@@ -185,20 +187,20 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
     if (error) {
       return (
         <div className="fv-msg">
-          미리보기를 지원하지 않는 파일입니다.
+          {t("viewer.unsupported")}
           <br />
           <span className="fv-msg-sub">{error}</span>
         </div>
       );
     }
-    if (text == null) return <div className="fv-msg">로딩…</div>;
+    if (text == null) return <div className="fv-msg">{t("common.loading")}</div>;
     return (
       <div className="fv-code">
         {info && (isLarge || info.truncated) && (
           <div className="fv-banner">
-            {isLarge && `큰 파일 (${fmtBytes(info.total)}) — 구문 강조 비활성화`}
+            {isLarge && t("viewer.largeFile", { size: fmtBytes(info.total) })}
             {info.truncated &&
-              `${isLarge ? " · " : ""}처음 ${fmtBytes(info.read)}만 로드 (메모리 보호)`}
+              `${isLarge ? " · " : ""}${t("viewer.truncated", { read: fmtBytes(info.read) })}`}
           </div>
         )}
         <CodeMirror
@@ -224,13 +226,13 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
     if (binError) {
       return (
         <div className="fv-msg">
-          미리보기를 불러올 수 없습니다.
+          {t("viewer.binFail")}
           <br />
           <span className="fv-msg-sub">{binError}</span>
         </div>
       );
     }
-    if (!binUrl) return <div className="fv-msg">로딩…</div>;
+    if (!binUrl) return <div className="fv-msg">{t("common.loading")}</div>;
     return render(binUrl);
   };
 
@@ -243,7 +245,7 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
         return svgUrl ? (
           <ImagePreview url={svgUrl} />
         ) : (
-          <div className="fv-msg">로딩…</div>
+          <div className="fv-msg">{t("common.loading")}</div>
         );
       case "markdown":
         return mode === "preview" ? (
@@ -285,14 +287,14 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
               className={`fv-mode${mode === "code" ? " active" : ""}`}
               onClick={() => onMode("code")}
             >
-              코드
+              {t("viewer.code")}
             </button>
             <button
               type="button"
               className={`fv-mode${mode === "preview" ? " active" : ""}`}
               onClick={() => onMode("preview")}
             >
-              프리뷰
+              {t("viewer.preview")}
             </button>
           </div>
         </div>
@@ -303,9 +305,10 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
 }
 
 function ImagePreview({ url }: { url: string }) {
+  const t = useT();
   const [failed, setFailed] = useState(false);
   if (failed) {
-    return <div className="fv-msg">이미지를 불러올 수 없습니다.</div>;
+    return <div className="fv-msg">{t("viewer.imgFail")}</div>;
   }
   return (
     <div className="fv-image-wrap">

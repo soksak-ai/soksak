@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import { themeToTreeStyles, type TreeThemeInput } from "@pierre/trees";
 import { getCwdOfHost, subscribeCwd } from "../terminal/paneHosts";
+import { useT } from "../i18n";
 
 // 사이드바 파일 트리: 추적 대상 pane 터미널의 cwd 를 @pierre/trees 로 렌더한다.
 // cwd 는 OSC 7 이벤트로 따라가고(폴링 없음), Rust list_dir 가 파일 경로 목록을 준다.
@@ -90,6 +91,7 @@ export function FileTreeSidebar({
   onOpenFile: (absPath: string) => void;
   theme: TreeThemeInput;
 }) {
+  const t = useT();
   const [cwd, setCwd] = useState<string | undefined>(() =>
     getCwdOfHost(paneId),
   );
@@ -130,8 +132,8 @@ export function FileTreeSidebar({
         <button
           type="button"
           className="ft-refresh"
-          title="새로고침"
-          aria-label="파일 트리 새로고침"
+          title={t("common.refresh")}
+          aria-label={t("tree.refreshAria")}
           onClick={() => setNonce((n) => n + 1)}
         >
           ⟳
@@ -149,7 +151,7 @@ export function FileTreeSidebar({
             theme={theme}
           />
         ) : (
-          <div className="ft-msg">로딩…</div>
+          <div className="ft-msg">{t("common.loading")}</div>
         )}
       </div>
     </div>

@@ -3,6 +3,7 @@ import {
   createTerminal,
   type TerminalHandle,
 } from "./createTerminal";
+import type { TerminalSettings } from "../state/settings";
 
 // pane별 호스트 레지스트리. 핵심 불변식: paneId 하나당 호스트 <div> 와 터미널
 // (PTY 세션)은 정확히 한 번 생성되고, pane 이 영구히 닫힐 때까지 재사용된다.
@@ -15,9 +16,10 @@ interface PaneHost {
   div: HTMLDivElement;
   // 터미널 생성은 비동기 → 핸들은 준비되면 채워진다(div 는 즉시 존재).
   handle: TerminalHandle | null;
-  // 핸들 준비 전 들어온 fit/focus/theme 요청을 준비 직후 적용하기 위한 플래그.
+  // 핸들 준비 전 들어온 fit/focus/theme/설정 요청을 준비 직후 적용하기 위한 플래그.
   pendingFocus: boolean;
   pendingTheme: ITheme | null;
+  pendingSettings: TerminalSettings | null;
 }
 
 const hosts = new Map<string, PaneHost>();
@@ -31,6 +33,24 @@ let themeProvider: () => ITheme | undefined = () => undefined;
 
 export function setThemeProvider(fn: () => ITheme | undefined): void {
   themeProvider = fn;
+}
+
+// App 이 등록하는 "현재 터미널 설정" getter. 새 호스트의 최초 createTerminal 에 쓰인다.
+let terminalSettingsProvider: () => TerminalSettings | undefined = () =>
+  undefined;
+
+export function setTerminalSettingsProvider(
+  fn: () => TerminalSettings | undefined,
+): void {
+  terminalSettingsProvider = fn;
+}
+
+// 살아있는 모든 터미널에 설정 라이브 적용(설정 변경 시). 준비 전이면 pending 으로.
+export function applyTerminalSettingsAll(settings: TerminalSettings): void {
+  for (const host of hosts.values()) {
+    if (host.handle) host.handle.applySettings(settings);
+    else host.pendingSettings = settings;
+  }
 }
 
 /**
@@ -52,11 +72,16 @@ export function getHost(paneId: string): HTMLDivElement {
     handle: null,
     pendingFocus: false,
     pendingTheme: null,
+    pendingSettings: null,
   };
   hosts.set(paneId, host);
 
   const theme = themeProvider();
-  createTerminal(div, theme ? { theme } : {})
+  const settings = terminalSettingsProvider();
+  createTerminal(div, {
+    ...(theme ? { theme } : {}),
+    ...(settings ? { settings } : {}),
+  })
     .then((handle) => {
       // 생성 도중 pane 이 닫혔다면 즉시 폐기.
       if (!hosts.has(paneId)) {
@@ -65,6 +90,7 @@ export function getHost(paneId: string): HTMLDivElement {
       }
       host.handle = handle;
       if (host.pendingTheme) handle.setTheme(host.pendingTheme);
+      if (host.pendingSettings) handle.applySettings(host.pendingSettings);
       if (host.pendingFocus) {
         handle.focus();
         handle.fit();

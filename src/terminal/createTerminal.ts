@@ -10,6 +10,7 @@ import "@xterm/xterm/css/xterm.css";
 import { WebkitImeAddon } from "../vendor/xterm-addon-webkit-ime";
 import { setupShellIntegration } from "./shellIntegration";
 import { darkTheme } from "./theme";
+import type { TerminalSettings } from "../state/settings";
 
 // editor FlowControlConstants.CharCountAckSize 와 동일.
 const FLOW_ACK_SIZE = 5000;
@@ -18,6 +19,8 @@ export interface CreateTerminalOptions {
   cwd?: string;
   shell?: string;
   theme?: ITheme;
+  /** 폰트/커서/스크롤백 등 사용자 설정. 미지정 시 기본값. */
+  settings?: TerminalSettings;
 }
 
 export interface TerminalHandle {
@@ -35,6 +38,8 @@ export interface TerminalHandle {
   setTheme: (theme: ITheme) => void;
   /** 텍스트를 PTY 로 붙여넣기(bracketed paste 모드면 자동 래핑). 파일 드래그 경로 주입용. */
   paste: (text: string) => void;
+  /** 폰트/커서/스크롤백 설정을 라이브 적용(폰트 크기 변경 시 재fit). */
+  applySettings: (settings: TerminalSettings) => void;
   dispose: () => void;
 }
 
@@ -59,16 +64,18 @@ export async function createTerminal(
     }
   }
 
+  const s = options.settings;
   const term = new Terminal({
     allowProposedApi: true,
     fontFamily:
+      s?.fontFamily ??
       '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
-    fontSize: 13,
+    fontSize: s?.fontSize ?? 13,
     lineHeight: 1.0,
     letterSpacing: 0,
-    scrollback: 10000,
-    cursorBlink: true,
-    cursorStyle: "block",
+    scrollback: s?.scrollback ?? 10000,
+    cursorBlink: s?.cursorBlink ?? true,
+    cursorStyle: s?.cursorStyle ?? "block",
     drawBoldTextInBrightColors: true,
     minimumContrastRatio: 1,
     theme: options.theme ?? darkTheme,
@@ -294,6 +301,15 @@ export async function createTerminal(
       webgl?.clearTextureAtlas();
     },
     paste: (text: string) => term.paste(text),
+    applySettings: (next: TerminalSettings) => {
+      term.options.fontFamily = next.fontFamily;
+      term.options.fontSize = next.fontSize;
+      term.options.cursorBlink = next.cursorBlink;
+      term.options.cursorStyle = next.cursorStyle;
+      term.options.scrollback = next.scrollback;
+      webgl?.clearTextureAtlas();
+      doResize(); // 폰트 크기 변경 → 셀 치수 변화 → 재fit + PTY resize
+    },
     dispose,
   };
 }

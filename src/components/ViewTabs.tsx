@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSessions, type ProjectTab } from "../state/sessions";
+import { useT } from "../i18n";
 
 // 콘텐츠 영역 상단의 뷰 탭 줄(터미널/파일 전환) + 커스텀 가로 스크롤바.
 //
@@ -8,6 +9,7 @@ import { useSessions, type ProjectTab } from "../state/sessions";
 // 커스텀 썸을 직접 그려 위치를 동기화하고 드래그도 처리한다 — 배경색에 동화되는 옅은 회색.
 
 export function ViewTabs({ project }: { project: ProjectTab }) {
+  const t = useT();
   const setActiveView = useSessions((s) => s.setActiveView);
   const closeView = useSessions((s) => s.closeView);
   const addTerminalView = useSessions((s) => s.addTerminalView);
@@ -78,17 +80,19 @@ export function ViewTabs({ project }: { project: ProjectTab }) {
             key={v.id}
             className={`view-tab${v.id === project.activeViewId ? " active" : ""}`}
             onClick={() => setActiveView(project.id, v.id)}
-            title={v.kind === "file" ? v.path : v.title}
+            title={v.kind === "file" ? v.path : t("view.terminal")}
           >
             <span className="view-tab-icon">
               {v.kind === "terminal" ? "›_" : "▤"}
             </span>
-            <span className="view-tab-title">{v.title}</span>
+            <span className="view-tab-title">
+              {v.kind === "terminal" ? t("view.terminal") : v.title}
+            </span>
             {project.views.length > 1 && (
               <button
                 type="button"
                 className="view-tab-close"
-                title="탭 닫기 (⌘W)"
+                title={t("view.close")}
                 onClick={(e) => {
                   e.stopPropagation();
                   closeView(project.id, v.id);
@@ -102,7 +106,7 @@ export function ViewTabs({ project }: { project: ProjectTab }) {
         <button
           type="button"
           className="view-add"
-          title="새 터미널 (⌘T)"
+          title={t("view.newTerminal")}
           onClick={() => addTerminalView(project.id)}
         >
           +

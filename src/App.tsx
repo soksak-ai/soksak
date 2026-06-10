@@ -4,16 +4,21 @@ import type { TreeThemeInput } from "@pierre/trees";
 import { FileTreeSidebar } from "./components/FileTreeSidebar";
 import { FileViewer } from "./components/FileViewer";
 import { PaneTree } from "./components/PaneTree";
+import { SettingsModal } from "./components/SettingsModal";
 import { ViewTabs } from "./components/ViewTabs";
+import { useT } from "./i18n";
 import {
   collectAllLeafIds,
   collectLeafIds,
   useSessions,
   type ProjectTab,
 } from "./state/sessions";
+import { terminalSettingsOf, useSettings } from "./state/settings";
 import {
+  applyTerminalSettingsAll,
   disposeHost,
   pasteToHost,
+  setTerminalSettingsProvider,
   setThemeAll,
   setThemeProvider,
 } from "./terminal/paneHosts";
@@ -40,6 +45,37 @@ function cwdPaneOf(project: ProjectTab): string | undefined {
 }
 
 function App() {
+  const t = useT();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // 터미널 외형 설정(폰트/커서/스크롤백). 개별 필드 구독 → 객체는 memo 로 안정화.
+  const fontFamily = useSettings((s) => s.fontFamily);
+  const fontSize = useSettings((s) => s.fontSize);
+  const cursorBlink = useSettings((s) => s.cursorBlink);
+  const cursorStyle = useSettings((s) => s.cursorStyle);
+  const scrollback = useSettings((s) => s.scrollback);
+  const termSettings = useMemo(
+    () =>
+      terminalSettingsOf({
+        fontFamily,
+        fontSize,
+        cursorBlink,
+        cursorStyle,
+        scrollback,
+      }),
+    [fontFamily, fontSize, cursorBlink, cursorStyle, scrollback],
+  );
+  // 새 터미널이 현재 설정으로 생성되도록 provider 등록(ref 로 최신값 제공).
+  const termSettingsRef = useRef(termSettings);
+  termSettingsRef.current = termSettings;
+  useEffect(() => {
+    setTerminalSettingsProvider(() => termSettingsRef.current);
+  }, []);
+  // 설정 변경 시 살아있는 모든 터미널에 라이브 적용.
+  useEffect(() => {
+    applyTerminalSettingsAll(termSettings);
+  }, [termSettings]);
+
   // 배경색이 단일 소스. 토글은 프리셋, 색상 피커는 임의 색. 글자색은 밝기로 자동 선택.
   const [bg, setBg] = useState<string>(backgrounds.dark);
   const isDark = luminance(bg) <= 0.5;
@@ -200,40 +236,40 @@ function App() {
       {/* 오버레이 타이틀바: 프로젝트 탭. 빈 영역 드래그로 창 이동. */}
       <div className="titlebar" data-tauri-drag-region>
         <div className="tabs" data-tauri-drag-region>
-          {tabs.map((t) => (
+          {tabs.map((proj) => (
             <div
-              key={t.id}
-              className={`tab${t.id === activeId ? " active" : ""}`}
-              onClick={() => setActive(t.id)}
-              onDoubleClick={() => setEditingId(t.id)}
+              key={proj.id}
+              className={`tab${proj.id === activeId ? " active" : ""}`}
+              onClick={() => setActive(proj.id)}
+              onDoubleClick={() => setEditingId(proj.id)}
             >
-              {editingId === t.id ? (
+              {editingId === proj.id ? (
                 <input
                   className="tab-rename"
-                  defaultValue={t.title}
+                  defaultValue={proj.title}
                   autoFocus
                   onClick={(e) => e.stopPropagation()}
-                  onBlur={(e) => commitRename(t.id, e.target.value, t.title)}
+                  onBlur={(e) => commitRename(proj.id, e.target.value, proj.title)}
                   onKeyDown={(e) => {
                     e.stopPropagation();
                     if (e.key === "Enter") {
-                      commitRename(t.id, e.currentTarget.value, t.title);
+                      commitRename(proj.id, e.currentTarget.value, proj.title);
                     } else if (e.key === "Escape") {
                       setEditingId(null);
                     }
                   }}
                 />
               ) : (
-                <span className="tab-title">{t.title}</span>
+                <span className="tab-title">{proj.title}</span>
               )}
               {tabs.length > 1 && (
                 <button
                   type="button"
                   className="tab-close"
-                  title="프로젝트 닫기"
+                  title={t("project.close")}
                   onClick={(e) => {
                     e.stopPropagation();
-                    closeTab(t.id);
+                    closeTab(proj.id);
                   }}
                 >
                   ×
@@ -241,7 +277,12 @@ function App() {
               )}
             </div>
           ))}
-          <button type="button" className="tab-add" title="새 프로젝트" onClick={addTab}>
+          <button
+            type="button"
+            className="tab-add"
+            title={t("project.new")}
+            onClick={addTab}
+          >
             +
           </button>
         </div>
@@ -251,8 +292,8 @@ function App() {
           <button
             type="button"
             className={`sidebar-toggle${activeProject?.sidebarOpen ? " active" : ""}`}
-            title="사이드바 토글 (⌘B)"
-            aria-label="사이드바 토글"
+            title={t("sidebar.toggle")}
+            aria-label={t("sidebar.toggle")}
             onClick={() => activeProject && toggleSidebar(activeProject.id)}
           >
             ◧
@@ -261,21 +302,32 @@ function App() {
             type="color"
             className="bg-picker"
             value={bg}
-            title="배경색 지정"
-            aria-label="배경색"
+            title={t("bg.title")}
+            aria-label={t("bg.aria")}
             onInput={(e) => setBg((e.target as HTMLInputElement).value)}
           />
           <button
             type="button"
             className="theme-toggle"
-            title={isDark ? "라이트 프리셋" : "다크 프리셋"}
-            aria-label="다크/라이트 전환"
+            title={isDark ? t("theme.lightPreset") : t("theme.darkPreset")}
+            aria-label={t("theme.toggle")}
             onClick={() => setBg(isDark ? backgrounds.light : backgrounds.dark)}
           >
             {isDark ? "☀" : "☾"}
           </button>
+          <button
+            type="button"
+            className="settings-toggle"
+            title={t("settings.open")}
+            aria-label={t("settings.open")}
+            onClick={() => setSettingsOpen(true)}
+          >
+            ⚙
+          </button>
         </div>
       </div>
+
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
 
       {/* 모든 프로젝트를 마운트해 세션 유지(비활성은 visibility 로 숨김). */}
       <div className="terminal-stack">
