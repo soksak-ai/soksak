@@ -70,9 +70,10 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
     }
 }
 
-// 한 번에 읽어 프론트로 보낼 텍스트 상한. 파일 크기로 막지 않는다 — 이보다 크면 앞부분만
-// 읽고 truncated 로 알린다(거대 파일을 webview/IPC 로 통째 보내 멈추는 것 방지).
-const TEXT_READ_LIMIT: u64 = 32_000_000;
+// 텍스트 로드 상한. editor 의 LARGE_FILE_HEAP_OPERATION_THRESHOLD(256MiB, ~512MB 메모리)와
+// 같은 숫자. editor 처럼 크기로 "열기"를 막지 않고 전체를 보되, 이 안전 상한을 넘으면
+// 앞부분만 읽고 truncated 로 알린다(webview/IPC OOM 방지).
+const TEXT_READ_LIMIT: u64 = 256 * 1024 * 1024;
 
 #[derive(Serialize)]
 pub struct TextData {
@@ -80,6 +81,8 @@ pub struct TextData {
     truncated: bool,
     read_bytes: u64,
     total_bytes: u64,
+    // 읽은 구간의 줄 수(editor 의 30만 줄 토큰화 임계 판단용). Rust 에서 세 효율적.
+    line_count: u64,
 }
 
 // 파일을 텍스트로 읽는다. 큰 파일은 앞 TEXT_READ_LIMIT 바이트만(truncated=true). 바이너리는
@@ -101,12 +104,14 @@ pub fn read_text_file(path: String) -> Result<TextData, String> {
         return Err("바이너리 파일".to_string());
     }
     let read_bytes = buf.len() as u64;
+    let line_count = buf.iter().filter(|&&b| b == b'\n').count() as u64;
     Ok(TextData {
         // 잘린 멀티바이트 문자/드문 비 UTF-8 바이트는 lossy 로 안전 처리.
         content: String::from_utf8_lossy(&buf).into_owned(),
         truncated: total > read_bytes,
         read_bytes,
         total_bytes: total,
+        line_count,
     })
 }
 

@@ -97,9 +97,12 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
 
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [trunc, setTrunc] = useState<{ read: number; total: number } | null>(
-    null,
-  );
+  const [info, setInfo] = useState<{
+    read: number;
+    total: number;
+    truncated: boolean;
+    lines: number;
+  } | null>(null);
   const [binUrl, setBinUrl] = useState<string | null>(null);
   const [binError, setBinError] = useState<string | null>(null);
 
@@ -108,17 +111,23 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
     let cancelled = false;
     setText(null);
     setError(null);
-    setTrunc(null);
+    setInfo(null);
     invoke<{
       content: string;
       truncated: boolean;
       read_bytes: number;
       total_bytes: number;
+      line_count: number;
     }>("read_text_file", { path })
       .then((d) => {
         if (cancelled) return;
         setText(d.content);
-        setTrunc(d.truncated ? { read: d.read_bytes, total: d.total_bytes } : null);
+        setInfo({
+          read: d.read_bytes,
+          total: d.total_bytes,
+          truncated: d.truncated,
+          lines: d.line_count,
+        });
       })
       .catch((e) => {
         if (!cancelled) setError(String(e));
@@ -127,6 +136,11 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
       cancelled = true;
     };
   }, [path, needsText]);
+
+  // editor 의 isTooLargeForTokenization 과 동일: 20MiB 초과 또는 30만 줄 초과면
+  // 구문 강조/폴딩을 끈다(Lezer 전체 파싱 폭주 방지).
+  const isLarge =
+    info != null && (info.total > 20 * 1024 * 1024 || info.lines > 300_000);
 
   // 바이너리 프리뷰: Rust 가 base64 + MIME 로 읽어주면 data URL 로 렌더(asset 프로토콜 X).
   useEffect(() => {
@@ -156,9 +170,10 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
   );
 
   const cmExtensions = useMemo(() => {
+    if (isLarge) return []; // 큰 파일은 강조 비활성화
     const ext = languageExtensionFor(path);
     return ext ? [ext] : [];
-  }, [path]);
+  }, [path, isLarge]);
 
   const markdownHtml = useMemo(() => {
     if (strat !== "markdown" || text == null) return "";
@@ -179,10 +194,11 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
     if (text == null) return <div className="fv-msg">로딩…</div>;
     return (
       <div className="fv-code">
-        {trunc && (
+        {info && (isLarge || info.truncated) && (
           <div className="fv-banner">
-            큰 파일 — 처음 {fmtBytes(trunc.read)}만 표시 (전체{" "}
-            {fmtBytes(trunc.total)}). 읽기 전용.
+            {isLarge && `큰 파일 (${fmtBytes(info.total)}) — 구문 강조 비활성화`}
+            {info.truncated &&
+              `${isLarge ? " · " : ""}처음 ${fmtBytes(info.read)}만 로드 (메모리 보호)`}
           </div>
         )}
         <CodeMirror
@@ -194,7 +210,7 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
           editable={false}
           basicSetup={{
             lineNumbers: true,
-            foldGutter: true,
+            foldGutter: !isLarge,
             highlightActiveLine: false,
             highlightActiveLineGutter: false,
           }}
