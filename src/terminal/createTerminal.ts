@@ -21,6 +21,8 @@ export interface CreateTerminalOptions {
   theme?: ITheme;
   /** 폰트/커서/스크롤백 등 사용자 설정. 미지정 시 기본값. */
   settings?: TerminalSettings;
+  /** spawn 직후 PTY 로 자동 실행할 명령(예: claude/codex). 첫 pane 에서만. */
+  initialCommand?: string;
 }
 
 export interface TerminalHandle {
@@ -228,6 +230,11 @@ export async function createTerminal(
     shell: options.shell ?? null,
     onOutput,
   });
+
+  // 첫 프로그램 자동 실행(claude/codex). 셸 프롬프트가 뜨면 PTY 가 버퍼한 입력을 처리한다.
+  if (options.initialCommand) {
+    writeToPty(`${options.initialCommand}\r`);
+  }
 
   // 입력: xterm → PTY. IME 조합 중 누출되는 부분 자모는 shouldSkip 으로 거른다.
   const dataSub = term.onData((data) => {

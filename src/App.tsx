@@ -3,6 +3,7 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { TreeThemeInput } from "@pierre/trees";
 import { FileTreeSidebar } from "./components/FileTreeSidebar";
 import { FileViewer } from "./components/FileViewer";
+import { NewProjectModal } from "./components/NewProjectModal";
 import { PaneTree } from "./components/PaneTree";
 import { SettingsModal } from "./components/SettingsModal";
 import { ViewTabs } from "./components/ViewTabs";
@@ -10,6 +11,7 @@ import { useT } from "./i18n";
 import {
   collectAllLeafIds,
   collectLeafIds,
+  projectOfPane,
   useSessions,
   type ProjectTab,
 } from "./state/sessions";
@@ -18,6 +20,7 @@ import {
   applyTerminalSettingsAll,
   disposeHost,
   pasteToHost,
+  setSpawnOptionsProvider,
   setTerminalSettingsProvider,
   setThemeAll,
   setThemeProvider,
@@ -101,7 +104,6 @@ function App() {
   const {
     tabs,
     activeId,
-    addTab,
     closeTab,
     setActive,
     renameTab,
@@ -114,7 +116,21 @@ function App() {
     closePane,
   } = useSessions();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
   const activeProject = tabs.find((t) => t.id === activeId);
+
+  // pane 별 spawn 옵션(프로젝트 root → cwd, 첫 pane → 프로그램 자동 실행) 등록.
+  useEffect(() => {
+    setSpawnOptionsProvider((paneId) => {
+      const proj = projectOfPane(useSessions.getState().tabs, paneId);
+      if (!proj) return {};
+      const initialCommand =
+        paneId === proj.initialPaneId && proj.program !== "terminal"
+          ? proj.program
+          : undefined;
+      return { cwd: proj.root, initialCommand };
+    });
+  }, []);
 
   // 사이드바 폭(전역). 경계 드래그로 조절, localStorage 에 영속.
   const [sidebarW, setSidebarW] = useState<number>(() => {
@@ -283,7 +299,7 @@ function App() {
             type="button"
             className="tab-add"
             title={t("project.new")}
-            onClick={addTab}
+            onClick={() => setNewProjectOpen(true)}
           >
             +
           </button>
@@ -330,6 +346,9 @@ function App() {
       </div>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {newProjectOpen && (
+        <NewProjectModal onClose={() => setNewProjectOpen(false)} />
+      )}
 
       {/* 모든 프로젝트를 마운트해 세션 유지(비활성은 visibility 로 숨김). */}
       <div className="terminal-stack">

@@ -27,12 +27,27 @@ export type View =
       mode: "code" | "preview";
     };
 
+// 프로젝트가 처음 열 때 띄우는 프로그램.
+export type Program = "terminal" | "claude" | "codex";
+
 export interface ProjectTab {
   id: string;
-  title: string;
+  title: string; // 별칭
   sidebarOpen: boolean;
   views: View[];
   activeViewId: string;
+  // 프로젝트 루트 디렉토리(터미널 시작 위치). 미지정이면 앱 실행 디렉토리.
+  root?: string;
+  // 첫 프로그램(첫 pane 에서 자동 실행). terminal 이면 셸만.
+  program: Program;
+  // 프로그램을 실행할 최초 pane id(이 pane 만 program 자동 실행).
+  initialPaneId: string;
+}
+
+export interface NewProjectOpts {
+  alias: string;
+  root?: string;
+  program: Program;
 }
 
 interface SessionsStore {
@@ -40,7 +55,7 @@ interface SessionsStore {
   activeId: string;
 
   // 프로젝트 레벨
-  addTab: () => void;
+  addProject: (opts: NewProjectOpts) => void;
   closeTab: (id: string) => void;
   setActive: (id: string) => void;
   renameTab: (id: string, title: string) => void;
@@ -108,6 +123,21 @@ export function collectAllLeafIds(tabs: ProjectTab[]): string[] {
   return acc;
 }
 
+// paneId 가 속한 프로젝트(spawn 옵션 root/program 결정용).
+export function projectOfPane(
+  tabs: ProjectTab[],
+  paneId: string,
+): ProjectTab | undefined {
+  for (const t of tabs) {
+    for (const v of t.views) {
+      if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
+        return t;
+      }
+    }
+  }
+  return undefined;
+}
+
 // leaf paneId 를 split{dir,[해당 leaf, 새 leaf]} 로 교체. 부모가 이미 같은 dir 인
 // split 이면 그 자리에 새 leaf 를 이어 붙인다(중첩 회피).
 function splitInTree(
@@ -173,6 +203,8 @@ function firstProject(): ProjectTab {
     sidebarOpen: true,
     views: [v],
     activeViewId: v.id,
+    program: "terminal",
+    initialPaneId: v.kind === "terminal" ? v.focusedPaneId : "",
   };
 }
 
@@ -180,19 +212,25 @@ export const useSessions = create<SessionsStore>((set) => ({
   tabs: [firstProject()],
   activeId: "t1",
 
-  addTab: () =>
+  addProject: (opts) =>
     set((s) => {
       const id = `t${nextProjectId++}`;
       const v = newTerminalView();
+      const alias =
+        opts.alias.trim() ||
+        (opts.root ? baseName(opts.root) : String(s.tabs.length + 1));
       return {
         tabs: [
           ...s.tabs,
           {
             id,
-            title: String(s.tabs.length + 1),
+            title: alias,
             sidebarOpen: true,
             views: [v],
             activeViewId: v.id,
+            root: opts.root,
+            program: opts.program,
+            initialPaneId: v.kind === "terminal" ? v.focusedPaneId : "",
           },
         ],
         activeId: id,

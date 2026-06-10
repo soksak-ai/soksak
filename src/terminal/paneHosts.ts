@@ -48,6 +48,18 @@ export function setTerminalSettingsProvider(
   terminalSettingsProvider = fn;
 }
 
+// App 이 등록하는 pane 별 spawn 옵션 getter(프로젝트 root → cwd, 첫 pane → initialCommand).
+let spawnOptionsProvider: (paneId: string) => {
+  cwd?: string;
+  initialCommand?: string;
+} = () => ({});
+
+export function setSpawnOptionsProvider(
+  fn: (paneId: string) => { cwd?: string; initialCommand?: string },
+): void {
+  spawnOptionsProvider = fn;
+}
+
 // 살아있는 모든 터미널에 설정 라이브 적용(설정 변경 시). 준비 전이면 pending 으로.
 export function applyTerminalSettingsAll(settings: TerminalSettings): void {
   for (const host of hosts.values()) {
@@ -81,9 +93,12 @@ export function getHost(paneId: string): HTMLDivElement {
 
   const theme = themeProvider();
   const settings = terminalSettingsProvider();
+  const spawn = spawnOptionsProvider(paneId);
   createTerminal(div, {
     ...(theme ? { theme } : {}),
     ...(settings ? { settings } : {}),
+    ...(spawn.cwd ? { cwd: spawn.cwd } : {}),
+    ...(spawn.initialCommand ? { initialCommand: spawn.initialCommand } : {}),
   })
     .then((handle) => {
       // 생성 도중 pane 이 닫혔다면 즉시 폐기.
