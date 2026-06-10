@@ -1,14 +1,17 @@
 // 사이드바 파일 트리(@pierre/trees)용 디렉토리 리스팅.
-// 주어진 경로(없으면 HOME) 아래를 재귀적으로 훑어 root 상대 파일 경로('/' 구분)를
-// 반환한다. .git / node_modules 는 건너뛰고, 폭주 방지로 총 개수를 캡한다.
+// 주어진 경로(없으면 HOME) 아래를 .gitignore 를 존중해(ripgrep 의 ignore 크레이트) 훑어
+// root 상대 파일 경로('/' 구분)를 반환한다. .git 과 gitignore 대상(node_modules/.cache/
+// target/dist 등)은 자동 제외 → 거대 캐시 디렉토리가 목록을 잠식하지 않는다.
 // (트리 모양은 라이브러리가 경로 목록에서 추론하므로 파일 경로만 주면 된다.)
 
 use std::path::{Path, PathBuf};
 
 use base64::Engine;
+use ignore::WalkBuilder;
 use serde::Serialize;
 
-const MAX_ENTRIES: usize = 8000;
+// gitignore 존중으로 트리가 작아지므로 캡은 안전 백스톱(거대 비-git 디렉토리 대비)으로만.
+const MAX_ENTRIES: usize = 50_000;
 
 #[derive(Serialize)]
 pub struct DirListing {
@@ -32,41 +35,6 @@ fn home_dir() -> PathBuf {
         std::env::var("HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("."))
-    }
-}
-
-fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
-    if out.len() >= MAX_ENTRIES {
-        return;
-    }
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-    let mut items: Vec<_> = entries.flatten().collect();
-    items.sort_by_key(|e| e.file_name());
-    for entry in items {
-        if out.len() >= MAX_ENTRIES {
-            return;
-        }
-        let ft = match entry.file_type() {
-            Ok(f) => f,
-            Err(_) => continue,
-        };
-        let path = entry.path();
-        if ft.is_dir() {
-            let name = entry.file_name();
-            let name = name.to_string_lossy();
-            if name == ".git" || name == "node_modules" {
-                continue;
-            }
-            walk(root, &path, out);
-        } else if ft.is_file() {
-            if let Ok(rel) = path.strip_prefix(root) {
-                out.push(rel.to_string_lossy().replace('\\', "/"));
-            }
-        }
-        // 심볼릭 링크(파일/디렉토리 어느 쪽도 아닌 것으로 분류)는 순환 방지로 건너뜀.
     }
 }
 
@@ -187,8 +155,39 @@ pub fn list_dir(path: Option<String>) -> Result<DirListing, String> {
     if !root.is_dir() {
         return Err(format!("디렉토리가 아님: {}", root.to_string_lossy()));
     }
+
+    // ignore 크레이트로 .gitignore(+상위/글로벌/.git/info/exclude)를 존중해 훑는다.
+    // gitignore 대상(.cache/node_modules/target/dist 등)은 진입조차 안 하므로 거대 캐시가
+    // 목록을 잠식하지 않는다. .git 디렉토리는 명시적으로 진입 차단. 닷파일은 표시(hidden=false).
     let mut paths = Vec::new();
-    walk(&root, &root, &mut paths);
+    let walker = WalkBuilder::new(&root)
+        .hidden(false)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true)
+        .parents(true)
+        .filter_entry(|e| e.file_name() != ".git")
+        .build();
+
+    for result in walker {
+        if paths.len() >= MAX_ENTRIES {
+            break;
+        }
+        let entry = match result {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        if entry.depth() == 0 {
+            continue; // root 자신
+        }
+        // 파일만 root 상대경로로(디렉토리는 트리가 경로에서 추론).
+        if entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
+            if let Ok(rel) = entry.path().strip_prefix(&root) {
+                paths.push(rel.to_string_lossy().replace('\\', "/"));
+            }
+        }
+    }
+
     let truncated = paths.len() >= MAX_ENTRIES;
     Ok(DirListing {
         root: root.to_string_lossy().to_string(),

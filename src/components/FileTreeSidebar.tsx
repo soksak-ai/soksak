@@ -8,7 +8,11 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FileTree, useFileTree } from "@pierre/trees/react";
-import { themeToTreeStyles, type TreeThemeInput } from "@pierre/trees";
+import {
+  prepareFileTreeInput,
+  themeToTreeStyles,
+  type TreeThemeInput,
+} from "@pierre/trees";
 import { getCwdOfHost, subscribeCwd } from "../terminal/paneHosts";
 import { useT } from "../i18n";
 
@@ -47,6 +51,8 @@ function TreeView({
   theme: TreeThemeInput;
 }) {
   const fileSet = useMemo(() => new Set(paths), [paths]);
+  // docs 권장: scalable 트리는 raw paths 대신 prepareFileTreeInput(미리 shaping)으로.
+  const preparedInput = useMemo(() => prepareFileTreeInput(paths), [paths]);
   // 앱 테마 → 트리 CSS 변수(--trees-theme-*). 호스트 inline style 로 shadow DOM 에 전달.
   const themeStyles = useMemo(
     () => themeToTreeStyles(theme) as CSSProperties,
@@ -74,7 +80,7 @@ function TreeView({
   }, []);
 
   const { model } = useFileTree({
-    paths,
+    preparedInput,
     onSelectionChange,
     unsafeCSS: TREE_SCROLLBAR_CSS,
     density: "compact", // 행 간격 축소
