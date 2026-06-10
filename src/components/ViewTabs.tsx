@@ -51,6 +51,25 @@ export function ViewTabs({ project }: { project: ProjectTab }) {
     recompute();
   }, [project.views.length]);
 
+  // 활성 탭이 보이도록 자동 스크롤: 가능하면 중앙, 양 끝이라 중앙이 안 되면 끝으로(클램프).
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const active = el.querySelector<HTMLElement>(".view-tab.active");
+    if (!active) return;
+    const elRect = el.getBoundingClientRect();
+    const aRect = active.getBoundingClientRect();
+    // 활성 탭 중심의 콘텐츠 기준 좌표 → 뷰포트 중앙에 오도록 목표 scrollLeft 계산.
+    const centerInContent =
+      aRect.left - elRect.left + el.scrollLeft + aRect.width / 2;
+    const target = centerInContent - el.clientWidth / 2;
+    const max = el.scrollWidth - el.clientWidth;
+    el.scrollTo({
+      left: Math.max(0, Math.min(max, target)),
+      behavior: "smooth",
+    });
+  }, [project.activeViewId, project.views.length]);
+
   // 썸 드래그 → scrollLeft 매핑.
   const onThumbDown = (e: React.MouseEvent) => {
     e.preventDefault();
