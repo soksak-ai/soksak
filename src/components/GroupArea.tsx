@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { FileViewer } from "./FileViewer";
+import { GroupStatusBar } from "./GroupStatusBar";
 import { PaneTree } from "./PaneTree";
 import { ViewTabs } from "./ViewTabs";
+import { useT } from "../i18n";
 import {
   type DropZone,
   type GroupNode,
@@ -11,11 +13,14 @@ import {
   useSessions,
 } from "../state/sessions";
 
-// 콘텐츠 영역을 editor 에디터 그룹처럼 렌더. 핵심 원칙: 본문(터미널/에디터)을 그룹 트리
-// 구조와 분리해 viewId 로 키된 "영속 본문 레이어"에 둔다. 그룹 chrome(탭바·드롭존)과
-// 본문이 별개 레이어이므로, 분할/이동/리사이즈로 트리가 바뀌어도 본문의 React 정체성이
-// 유지되어 remount 가 일어나지 않는다 → 터미널 PTY·xterm, 에디터 undo/커서/스크롤까지
-// 완전 보존된다(우회 캐시 불필요). 각 그룹·본문은 트리에서 계산한 사각형(%)으로 배치.
+// 콘텐츠 영역을 에디터 그룹으로 렌더. 핵심 원칙 둘:
+// 1) 본문(터미널/에디터)을 그룹 트리 구조와 분리해 viewId 로 키된 "영속 본문 레이어"에
+//    둔다 → 분할/이동/리사이즈로 트리가 바뀌어도 remount 없음(세션·에디터 완전 보존).
+// 2) 드래그는 HTML5 DnD 가 아니라 포인터(mousedown/move/up)로 한다 — Tauri 네이티브
+//    파일 drag-drop 과 충돌하지 않고(그건 외부 파일 전용) 실제로 동작하며, 드롭존·
+//    인디케이터를 우리가 완전히 제어한다.
+//
+// 각 그룹 = [타이틀바(드래그=그룹 이동)] [탭바(탭 드래그=뷰 이동)] [본문] [스테이터스바].
 
 type Rect = { left: number; top: number; width: number; height: number }; // %
 interface Cell {
@@ -27,11 +32,15 @@ interface Divider {
   dir: "row" | "col";
   index: number;
   rect: Rect;
-  spanPct: number; // split 이 dir 축으로 차지하는 컨테이너 비율(%)
+  spanPct: number;
   sizes: number[];
 }
 
-const TAB_BAR_PX = 32; // 탭 바 높이(본문 오프셋·드롭존 판정 기준). CSS .view-tabs-wrap 와 일치.
+const TITLE_PX = 22; // 타이틀바
+const TAB_PX = 28; // 탭바
+const STATUS_PX = 20; // 스테이터스바
+const CHROME_TOP = TITLE_PX + TAB_PX; // 본문 상단 오프셋
+const DRAG_THRESHOLD = 5; // 이 픽셀 이상 움직여야 드래그로 간주(아니면 클릭)
 
 function computeLayout(node: GroupNode): { cells: Cell[]; dividers: Divider[] } {
   const cells: Cell[] = [];
@@ -81,25 +90,10 @@ function computeLayout(node: GroupNode): { cells: Cell[]; dividers: Divider[] } 
   return { cells, dividers };
 }
 
-// 커서 위치 → 드롭 zone. 탭 바 영역은 center(그룹으로 이동), 본문은 가장자리 1/4 분할.
-function zoneFromEvent(e: React.DragEvent, el: HTMLElement): DropZone {
-  const r = el.getBoundingClientRect();
-  const yTop = e.clientY - r.top;
-  if (yTop < TAB_BAR_PX) return "center";
-  const px = (e.clientX - r.left) / r.width;
-  const py = (e.clientY - (r.top + TAB_BAR_PX)) / (r.height - TAB_BAR_PX);
-  const edge = 0.25;
-  if (px > edge && px < 1 - edge && py > edge && py < 1 - edge) return "center";
-  const dl = px;
-  const dr = 1 - px;
-  const dt = py;
-  const db = 1 - py;
-  const m = Math.min(dl, dr, dt, db);
-  if (m === dl) return "left";
-  if (m === dr) return "right";
-  if (m === dt) return "top";
-  return "bottom";
-}
+const titleOf = (
+  v: View | undefined,
+  term: string,
+): string => (v ? (v.kind === "terminal" ? term : v.title) : "");
 
 export function GroupArea({
   project,
@@ -110,14 +104,15 @@ export function GroupArea({
   isActiveProject: boolean;
   isDark: boolean;
 }) {
+  const t = useT();
   const setActiveGroup = useSessions((s) => s.setActiveGroup);
+  const setActiveView = useSessions((s) => s.setActiveView);
   const setFileMode = useSessions((s) => s.setFileMode);
   const moveViewToGroup = useSessions((s) => s.moveViewToGroup);
   const moveGroupToGroup = useSessions((s) => s.moveGroupToGroup);
   const resizeSplit = useSessions((s) => s.resizeSplit);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  // 드래그 중인 대상: 탭(뷰 하나) 또는 타이틀바(그룹 전체).
   const [drag, setDrag] = useState<{ kind: "view" | "group"; id: string } | null>(
     null,
   );
@@ -130,10 +125,91 @@ export function GroupArea({
     [project.layout],
   );
 
-  // 본문 슬롯(viewId 키, 영속). 그룹의 rect 에서 탭바 높이만큼 내려 배치.
-  const bodySlots: { view: View; group: ViewGroup; rect: Rect }[] = cells.flatMap(
-    ({ group, rect }) => group.views.map((view) => ({ view, group, rect })),
-  );
+  // 포인터 좌표 → 어느 셀의 어느 zone 인지. 타이틀/탭/스테이터스 영역은 center(이동),
+  // 본문 가장자리 ¼ 는 해당 방향 분할.
+  const hitTest = (clientX: number, clientY: number) => {
+    const cont = containerRef.current;
+    if (!cont) return null;
+    const r = cont.getBoundingClientRect();
+    const xPct = ((clientX - r.left) / r.width) * 100;
+    const yPct = ((clientY - r.top) / r.height) * 100;
+    const cell = cells.find(
+      (c) =>
+        xPct >= c.rect.left &&
+        xPct <= c.rect.left + c.rect.width &&
+        yPct >= c.rect.top &&
+        yPct <= c.rect.top + c.rect.height,
+    );
+    if (!cell) return null;
+    const cellTopPx = r.top + (cell.rect.top / 100) * r.height;
+    const cellHpx = (cell.rect.height / 100) * r.height;
+    const cellLeftPx = r.left + (cell.rect.left / 100) * r.width;
+    const cellWpx = (cell.rect.width / 100) * r.width;
+    const localY = clientY - cellTopPx;
+    const bodyTop = CHROME_TOP;
+    const bodyBottom = cellHpx - STATUS_PX;
+    if (localY < bodyTop || localY > bodyBottom || bodyBottom <= bodyTop) {
+      return { groupId: cell.group.id, zone: "center" as DropZone };
+    }
+    const px = (clientX - cellLeftPx) / cellWpx;
+    const py = (localY - bodyTop) / (bodyBottom - bodyTop);
+    const edge = 0.25;
+    if (px > edge && px < 1 - edge && py > edge && py < 1 - edge) {
+      return { groupId: cell.group.id, zone: "center" as DropZone };
+    }
+    const dl = px;
+    const dr = 1 - px;
+    const dt = py;
+    const db = 1 - py;
+    const m = Math.min(dl, dr, dt, db);
+    const zone: DropZone =
+      m === dl ? "left" : m === dr ? "right" : m === dt ? "top" : "bottom";
+    return { groupId: cell.group.id, zone };
+  };
+
+  // 포인터 드래그 시작(타이틀바=그룹, 탭=뷰). 임계 이상 움직이면 드래그, 아니면 클릭(전환).
+  const startDrag =
+    (kind: "view" | "group", id: string) => (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
+      const startX = e.clientX;
+      const startY = e.clientY;
+      let moved = false;
+      const onMove = (ev: MouseEvent) => {
+        if (!moved) {
+          if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < DRAG_THRESHOLD)
+            return;
+          moved = true;
+          setDrag({ kind, id });
+          document.body.style.userSelect = "none";
+          document.body.style.cursor = "grabbing";
+        }
+        setHover(hitTest(ev.clientX, ev.clientY));
+      };
+      const onUp = (ev: MouseEvent) => {
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+        document.body.style.userSelect = "";
+        document.body.style.cursor = "";
+        if (moved) {
+          const target = hitTest(ev.clientX, ev.clientY);
+          if (target) {
+            if (kind === "view") {
+              moveViewToGroup(project.id, id, target.groupId, target.zone);
+            } else {
+              moveGroupToGroup(project.id, id, target.groupId, target.zone);
+            }
+          }
+        } else if (kind === "view") {
+          setActiveView(project.id, id); // 클릭 = 탭 전환
+        } else {
+          setActiveGroup(project.id, id); // 클릭 = 그룹 활성
+        }
+        setDrag(null);
+        setHover(null);
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    };
 
   const onDividerDown = (d: Divider) => (e: React.MouseEvent) => {
     e.preventDefault();
@@ -171,75 +247,102 @@ export function GroupArea({
     document.body.style.userSelect = "none";
   };
 
-  const endDrag = () => {
-    setDrag(null);
-    setHover(null);
-  };
+  const hoverCell = hover && cells.find((c) => c.group.id === hover.groupId);
 
   return (
     <div className="egroup-area" ref={containerRef}>
       {/* ── 영속 본문 레이어: viewId 키 → 이동해도 remount 없음 ── */}
-      {bodySlots.map(({ view, group, rect }) => {
-        const isActiveView = view.id === group.activeViewId;
-        return (
-          <div
-            key={view.id}
-            className="egroup-body-slot"
-            style={{
-              left: `${rect.left}%`,
-              top: `calc(${rect.top}% + ${TAB_BAR_PX}px)`,
-              width: `${rect.width}%`,
-              height: `calc(${rect.height}% - ${TAB_BAR_PX}px)`,
-              visibility: isActiveView ? "visible" : "hidden",
-              zIndex: isActiveView ? 1 : 0,
-            }}
-            onMouseDownCapture={() => setActiveGroup(project.id, group.id)}
-          >
-            {view.kind === "terminal" ? (
-              <PaneTree
-                node={view.layout}
-                projectId={project.id}
-                viewId={view.id}
-                active={isActiveProject && isActiveView}
-                focusedPaneId={view.focusedPaneId}
-              />
-            ) : (
-              <FileViewer
-                path={view.path}
-                mode={view.mode}
-                isDark={isDark}
-                projectId={project.id}
-                viewId={view.id}
-                onMode={(m) => setFileMode(project.id, view.id, m)}
-              />
-            )}
-          </div>
-        );
-      })}
+      {cells.flatMap(({ group, rect }) =>
+        group.views.map((view) => {
+          const isActiveView = view.id === group.activeViewId;
+          return (
+            <div
+              key={view.id}
+              className="egroup-body-slot"
+              style={{
+                left: `${rect.left}%`,
+                top: `calc(${rect.top}% + ${CHROME_TOP}px)`,
+                width: `${rect.width}%`,
+                height: `calc(${rect.height}% - ${CHROME_TOP + STATUS_PX}px)`,
+                visibility: isActiveView ? "visible" : "hidden",
+                zIndex: isActiveView ? 1 : 0,
+              }}
+              onMouseDownCapture={() => setActiveGroup(project.id, group.id)}
+            >
+              {view.kind === "terminal" ? (
+                <PaneTree
+                  node={view.layout}
+                  projectId={project.id}
+                  viewId={view.id}
+                  active={isActiveProject && isActiveView}
+                  focusedPaneId={view.focusedPaneId}
+                />
+              ) : (
+                <FileViewer
+                  path={view.path}
+                  mode={view.mode}
+                  isDark={isDark}
+                  projectId={project.id}
+                  viewId={view.id}
+                  onMode={(m) => setFileMode(project.id, view.id, m)}
+                />
+              )}
+            </div>
+          );
+        }),
+      )}
 
-      {/* ── 그룹 chrome 레이어: 탭 바(셀 상단 스트립) ── */}
+      {/* ── 그룹 chrome: 타이틀바 / 탭바 / 스테이터스바 ── */}
       {cells.map(({ group, rect }) => {
         const isActiveGroup = group.id === project.activeGroupId;
+        const active = group.views.find((v) => v.id === group.activeViewId);
         return (
-          <div
-            key={`tabs-${group.id}`}
-            className={`egroup-tabs${isActiveGroup ? " active" : ""}`}
-            style={{
-              left: `${rect.left}%`,
-              top: `${rect.top}%`,
-              width: `${rect.width}%`,
-              height: TAB_BAR_PX,
-            }}
-          >
-            <ViewTabs
-              projectId={project.id}
-              group={group}
-              onViewDragStart={(viewId) => setDrag({ kind: "view", id: viewId })}
-              onGroupDragStart={(groupId) =>
-                setDrag({ kind: "group", id: groupId })
-              }
-              onDragEnd={endDrag}
-            />
+          <div key={`chrome-${group.id}`}>
+            {/* 타이틀바 = 그룹 드래그 핸들 */}
+            <div
+              className={`egroup-title${isActiveGroup ? " active" : ""}`}
+              style={{
+                left: `${rect.left}%`,
+                top: `${rect.top}%`,
+                width: `${rect.width}%`,
+                height: TITLE_PX,
+              }}
+              title={t("group.move")}
+              onMouseDown={startDrag("group", group.id)}
+            >
+              <span className="egt-icon">
+                {active?.kind === "terminal" ? "›_" : "▤"}
+              </span>
+              <span className="egt-name">{titleOf(active, t("view.terminal"))}</span>
+            </div>
+            {/* 탭바 */}
+            <div
+              className="egroup-tabs"
+              style={{
+                left: `${rect.left}%`,
+                top: `calc(${rect.top}% + ${TITLE_PX}px)`,
+                width: `${rect.width}%`,
+                height: TAB_PX,
+              }}
+            >
+              <ViewTabs
+                projectId={project.id}
+                group={group}
+                onTabPointerDown={(viewId, e) => startDrag("view", viewId)(e)}
+              />
+            </div>
+            {/* 스테이터스바(셀 하단) */}
+            <div
+              className="egroup-status-wrap"
+              style={{
+                left: `${rect.left}%`,
+                top: `calc(${rect.top + rect.height}% - ${STATUS_PX}px)`,
+                width: `${rect.width}%`,
+                height: STATUS_PX,
+              }}
+            >
+              <GroupStatusBar group={group} />
+            </div>
           </div>
         );
       })}
@@ -266,42 +369,20 @@ export function GroupArea({
         />
       ))}
 
-      {/* ── 드롭 오버레이 레이어: 드래그 중에만(평소엔 본문이 포인터 받음) ── */}
-      {drag &&
-        cells.map(({ group, rect }) => (
-          <div
-            key={`drop-${group.id}`}
-            className="drop-target"
-            style={{
-              left: `${rect.left}%`,
-              top: `${rect.top}%`,
-              width: `${rect.width}%`,
-              height: `${rect.height}%`,
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "move";
-              setHover({
-                groupId: group.id,
-                zone: zoneFromEvent(e, e.currentTarget),
-              });
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              const zone = zoneFromEvent(e, e.currentTarget);
-              if (drag.kind === "view") {
-                moveViewToGroup(project.id, drag.id, group.id, zone);
-              } else {
-                moveGroupToGroup(project.id, drag.id, group.id, zone);
-              }
-              endDrag();
-            }}
-          >
-            {hover && hover.groupId === group.id && (
-              <div className={`drop-ind ${hover.zone}`} />
-            )}
-          </div>
-        ))}
+      {/* ── 드롭 인디케이터(드래그 중, 시각용) ── */}
+      {drag && hover && hoverCell && (
+        <div
+          className="drop-ind-wrap"
+          style={{
+            left: `${hoverCell.rect.left}%`,
+            top: `calc(${hoverCell.rect.top}% + ${CHROME_TOP}px)`,
+            width: `${hoverCell.rect.width}%`,
+            height: `calc(${hoverCell.rect.height}% - ${CHROME_TOP + STATUS_PX}px)`,
+          }}
+        >
+          <div className={`drop-ind ${hover.zone}`} />
+        </div>
+      )}
     </div>
   );
 }

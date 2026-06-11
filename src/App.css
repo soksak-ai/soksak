@@ -608,15 +608,70 @@ body,
   position: absolute;
   overflow: hidden;
 }
-/* 그룹 탭 바 스트립(셀 상단). 높이는 인라인(TAB_BAR_PX)과 일치. */
+/* 그룹 타이틀바(셀 최상단) = 그룹 드래그 핸들. 활성 그룹은 파란 강조선. */
+.egroup-title {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  overflow: hidden;
+  background: rgba(127, 127, 127, 0.06);
+  border-bottom: 1px solid rgba(127, 127, 127, 0.1);
+  cursor: grab;
+  font-size: 11px;
+  color: rgba(127, 127, 127, 0.9);
+  user-select: none;
+}
+.egroup-title:active {
+  cursor: grabbing;
+}
+.egroup-title.active {
+  color: var(--fg);
+  box-shadow: inset 0 2px 0 rgba(55, 148, 255, 0.8);
+}
+.egt-icon {
+  font-size: 10px;
+  opacity: 0.7;
+}
+.egt-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 그룹 탭 바 스트립(타이틀바 아래). 높이는 인라인(TAB_PX)과 일치. */
 .egroup-tabs {
   position: absolute;
   overflow: hidden;
   z-index: 2;
 }
-/* 활성 그룹 탭 바: 아래쪽 파란 강조선. */
-.egroup-tabs.active .view-tabs {
-  box-shadow: inset 0 -2px 0 rgba(55, 148, 255, 0.7);
+/* 그룹 스테이터스바(셀 하단). */
+.egroup-status-wrap {
+  position: absolute;
+  z-index: 2;
+  overflow: hidden;
+}
+.egroup-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 100%;
+  padding: 0 10px;
+  background: rgba(127, 127, 127, 0.08);
+  border-top: 1px solid rgba(127, 127, 127, 0.1);
+  font-size: 11px;
+  color: rgba(127, 127, 127, 0.85);
+}
+.egs-left {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.egs-right {
+  flex: 0 0 auto;
+  opacity: 0.8;
 }
 /* 그룹 사이 리사이저(절대 배치). 얇은 선 + 드래그 히트영역. */
 .egroup-divider {
@@ -637,10 +692,11 @@ body,
 .egroup-divider:hover {
   background: rgba(55, 148, 255, 0.4);
 }
-/* 드롭 오버레이(드래그 중에만). 본문 위에서 dragover 수신. */
-.drop-target {
+/* 드롭 인디케이터(포인터 드래그 중 시각용, 본문 영역 위). 이벤트는 받지 않음. */
+.drop-ind-wrap {
   position: absolute;
   z-index: 10;
+  pointer-events: none;
 }
 .drop-ind {
   position: absolute;
@@ -676,38 +732,15 @@ body,
   height: 50%;
 }
 
-/* 콘텐츠 뷰 탭 줄(터미널/파일 전환) + 그룹 타이틀 핸들 + 커스텀 가로 스크롤바 래퍼. */
+/* 콘텐츠 뷰 탭 줄(터미널/파일 전환) + 커스텀 가로 스크롤바 래퍼. */
 .view-tabs-wrap {
   position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  align-items: stretch;
   background: var(--bg);
   border-bottom: 1px solid rgba(127, 127, 127, 0.14);
 }
-/* 그룹 타이틀 핸들(그립): 드래그하면 그룹 전체 이동/분할. */
-.view-group-grip {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  cursor: grab;
-  color: rgba(127, 127, 127, 0.7);
-  font-size: 12px;
-  letter-spacing: -1px;
-}
-.view-group-grip:hover {
-  color: var(--fg);
-  background: rgba(127, 127, 127, 0.16);
-}
-.view-group-grip:active {
-  cursor: grabbing;
-}
 .view-tabs {
-  flex: 1 1 auto;
-  min-width: 0;
   height: 100%;
   display: flex;
   align-items: flex-end;

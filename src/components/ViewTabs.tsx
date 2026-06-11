@@ -2,25 +2,21 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSessions, type ViewGroup } from "../state/sessions";
 import { useT } from "../i18n";
 
-// 한 에디터 그룹의 탭 바(터미널/파일 전환 + 드래그 분할 소스). 가로 모드 전용.
-// 네이티브 오버레이 스크롤바를 숨기고 3px 커스텀 썸을 그린다(WKWebView 가 두께/색을
-// 못 바꾸므로). 탭은 draggable — 다른 그룹의 가장자리/중앙에 드롭하면 분할/이동.
+// 한 에디터 그룹의 탭 바(터미널/파일 전환 + 뷰 드래그 소스). 드래그는 HTML5 DnD 가 아니라
+// 포인터(mousedown)로 시작한다(Tauri 네이티브 파일 drag-drop 과 충돌 회피 + 실제 동작).
+// 탭 클릭(이동 없이 떼면)=전환, 끌면=그 뷰 이동 — 판정은 GroupArea 가 한다.
+// 가로 오버플로는 네이티브 오버레이 스크롤바를 숨기고 3px 커스텀 썸을 그린다.
 
 export function ViewTabs({
   projectId,
   group,
-  onViewDragStart,
-  onGroupDragStart,
-  onDragEnd,
+  onTabPointerDown,
 }: {
   projectId: string;
   group: ViewGroup;
-  onViewDragStart: (viewId: string) => void;
-  onGroupDragStart: (groupId: string) => void;
-  onDragEnd: () => void;
+  onTabPointerDown: (viewId: string, e: React.MouseEvent) => void;
 }) {
   const t = useT();
-  const setActiveView = useSessions((s) => s.setActiveView);
   const closeView = useSessions((s) => s.closeView);
   const addTerminalView = useSessions((s) => s.addTerminalView);
 
@@ -62,7 +58,6 @@ export function ViewTabs({
     recompute();
   }, [group.views.length]);
 
-  // 활성 탭을 보이도록 자동 스크롤(가능하면 중앙).
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -78,6 +73,7 @@ export function ViewTabs({
 
   const onThumbDown = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     const el = scrollRef.current;
     if (!el) return;
     const startX = e.clientX;
@@ -98,33 +94,12 @@ export function ViewTabs({
 
   return (
     <div className="view-tabs-wrap">
-      {/* 타이틀 핸들: 드래그하면 그룹 전체(모든 탭)가 이동/분할된다. */}
-      <div
-        className="view-group-grip"
-        draggable
-        title={t("group.move")}
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = "move";
-          e.dataTransfer.setData("text/x-group-id", group.id);
-          onGroupDragStart(group.id);
-        }}
-        onDragEnd={onDragEnd}
-      >
-        ⠿
-      </div>
       <div className="view-tabs" ref={scrollRef}>
         {group.views.map((v) => (
           <div
             key={v.id}
             className={`view-tab${v.id === group.activeViewId ? " active" : ""}`}
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.effectAllowed = "move";
-              e.dataTransfer.setData("text/x-view-id", v.id);
-              onViewDragStart(v.id);
-            }}
-            onDragEnd={onDragEnd}
-            onClick={() => setActiveView(projectId, v.id)}
+            onMouseDown={(e) => onTabPointerDown(v.id, e)}
             title={v.kind === "file" ? v.path : t("view.terminal")}
           >
             <span className="view-tab-icon">
@@ -142,6 +117,7 @@ export function ViewTabs({
               type="button"
               className="view-tab-close"
               title={t("view.close")}
+              onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 closeView(projectId, v.id);
@@ -155,6 +131,7 @@ export function ViewTabs({
           type="button"
           className="view-add"
           title={t("view.newTerminal")}
+          onMouseDown={(e) => e.stopPropagation()}
           onClick={() => addTerminalView(projectId, group.id)}
         >
           +
