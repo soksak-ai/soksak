@@ -21,6 +21,8 @@ export type View =
       title: string;
       layout: PaneNode;
       focusedPaneId: string;
+      // 이 pane 의 셸이 뜨면 1회 자동 실행할 프로그램(claude/codex 뷰).
+      autorun?: { paneId: string; program: "claude" | "codex" };
     }
   | {
       id: string;
@@ -65,6 +67,7 @@ export type Program = "terminal" | "claude" | "codex" | "browser";
 export const BROWSER_HOME = "https://www.google.com";
 
 // 컨텐츠 탭: 한 프로젝트 안의 독립 콘텐츠 영역(분할 그리드). 프로젝트당 여러 개 + 전환.
+// 프로그램 자동 실행은 터미널 뷰의 autorun 이 담당(뷰 단위로 일반화).
 export interface ContentArea {
   id: string;
   title: string; // 1,2,3,… (이름변경 가능)
@@ -72,8 +75,6 @@ export interface ContentArea {
   program: Program;
   layout: GroupNode; // 그룹(분할) 트리
   activeGroupId: string;
-  // 프로그램 자동 실행 pane(터미널형 프로그램일 때 첫 pane 에서 1회).
-  initialPaneId: string;
 }
 
 export interface ProjectTab {
@@ -117,8 +118,12 @@ interface SessionsStore {
   setActiveContent: (projectId: string, contentId: string) => void;
   renameContent: (projectId: string, contentId: string, title: string) => void;
 
-  // 콘텐츠 뷰/그룹 레벨
-  addTerminalView: (projectId: string, groupId?: string) => void;
+  // 콘텐츠 뷰/그룹 레벨. 그룹에 프로그램별 새 뷰 탭(터미널/claude/codex/브라우저).
+  addViewToGroup: (
+    projectId: string,
+    program: Program,
+    groupId?: string,
+  ) => void;
   openFileView: (projectId: string, path: string) => void;
   closeView: (projectId: string, viewId: string) => void;
   setActiveView: (projectId: string, viewId: string) => void;
@@ -178,15 +183,20 @@ const leaf = (id: string): PaneNode => ({ type: "leaf", id });
 
 const baseName = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
-// 새 터미널 뷰(빈 단일 pane).
-function newTerminalView(): View {
+// 새 터미널 뷰(빈 단일 pane). claude/codex 면 그 pane 에서 1회 자동 실행.
+function newTerminalView(program?: Program): View {
   const paneId = newPaneId();
+  const autorun =
+    program === "claude" || program === "codex"
+      ? { paneId, program }
+      : undefined;
   return {
     id: newViewId(),
     kind: "terminal",
     title: "터미널",
     layout: leaf(paneId),
     focusedPaneId: paneId,
+    ...(autorun ? { autorun } : {}),
   };
 }
 
@@ -204,18 +214,20 @@ function newBrowserView(): View {
   };
 }
 
-// 새 컨텐츠 영역(단일 그룹 + 첫 화면 뷰). 터미널형이면 첫 pane 에서 프로그램 자동 실행,
-// 브라우저면 브라우저 뷰로 시작.
+// 프로그램에 맞는 새 뷰(브라우저 → 브라우저 뷰, 그 외 → 터미널 뷰[+autorun]).
+function newViewFor(program: Program): View {
+  return program === "browser" ? newBrowserView() : newTerminalView(program);
+}
+
+// 새 컨텐츠 영역(단일 그룹 + 첫 화면 뷰).
 function makeContent(title: string, program: Program): ContentArea {
-  const v = program === "browser" ? newBrowserView() : newTerminalView();
-  const g = makeGroup(v);
+  const g = makeGroup(newViewFor(program));
   return {
     id: newContentId(),
     title,
     program,
     layout: { type: "leaf", group: g },
     activeGroupId: g.id,
-    initialPaneId: v.kind === "terminal" ? v.focusedPaneId : "",
   };
 }
 
@@ -431,8 +443,7 @@ export function collectAllLeafIds(tabs: ProjectTab[]): string[] {
   return acc;
 }
 
-// paneId 의 spawn 정보: cwd=프로젝트 root, program=그 컨텐츠의 첫 pane 일 때만 자동 실행
-// (컨텐츠 생성 시 확정된 content.program — claude/codex 만 명령 실행 대상).
+// paneId 의 spawn 정보: cwd=프로젝트 root, program=그 pane 이 뷰의 autorun 대상일 때만.
 export function paneSpawnInfo(
   tabs: ProjectTab[],
   paneId: string,
@@ -441,11 +452,10 @@ export function paneSpawnInfo(
     for (const c of t.contents) {
       for (const v of allViews(c.layout)) {
         if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
-          const isInitial = paneId === c.initialPaneId;
-          const runnable = c.program === "claude" || c.program === "codex";
           return {
             cwd: t.root,
-            program: isInitial && runnable ? c.program : undefined,
+            program:
+              v.autorun?.paneId === paneId ? v.autorun.program : undefined,
           };
         }
       }
@@ -664,12 +674,12 @@ export const useSessions = create<SessionsStore>((set) => ({
       ),
     })),
 
-  addTerminalView: (projectId, groupId) =>
+  addViewToGroup: (projectId, program, groupId) =>
     set((s) => ({
       tabs: mapProject(s.tabs, projectId, (t) =>
         mapActiveContent(t, (c) => {
           const target = groupId ?? c.activeGroupId;
-          const v = newTerminalView();
+          const v = newViewFor(program);
           return {
             ...c,
             layout: mapGroupNode(c.layout, target, (g) => ({

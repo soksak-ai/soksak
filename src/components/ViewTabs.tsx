@@ -1,5 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useSessions, type ViewGroup } from "../state/sessions";
+import { ProgramMenu } from "./ProgramMenu";
+import {
+  useSessions,
+  type Program,
+  type ViewGroup,
+} from "../state/sessions";
 import { useT } from "../i18n";
 
 // 한 에디터 그룹의 탭 바(터미널/파일 전환 + 뷰 드래그 소스). 드래그는 HTML5 DnD 가 아니라
@@ -18,7 +23,11 @@ export function ViewTabs({
 }) {
   const t = useT();
   const closeView = useSessions((s) => s.closeView);
-  const addTerminalView = useSessions((s) => s.addTerminalView);
+  const addViewToGroup = useSessions((s) => s.addViewToGroup);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(
+    null,
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ left: number; width: number } | null>(
@@ -134,15 +143,33 @@ export function ViewTabs({
           </div>
         ))}
         <button
+          ref={addBtnRef}
           type="button"
           className="view-add"
-          title={t("view.newTerminal")}
+          title={t("content.new")}
           onMouseDown={(e) => e.stopPropagation()}
-          onClick={() => addTerminalView(projectId, group.id)}
+          onClick={() => {
+            if (menuPos) {
+              setMenuPos(null);
+              return;
+            }
+            const r = addBtnRef.current?.getBoundingClientRect();
+            if (r) setMenuPos({ left: r.left, top: r.bottom + 2 });
+          }}
         >
           +
         </button>
       </div>
+      {menuPos && (
+        <ProgramMenu
+          pos={menuPos}
+          onPick={(program: Program) => {
+            addViewToGroup(projectId, program, group.id);
+            setMenuPos(null);
+          }}
+          onClose={() => setMenuPos(null)}
+        />
+      )}
       {thumb && (
         <div className="view-scrollbar">
           <div

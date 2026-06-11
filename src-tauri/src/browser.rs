@@ -31,15 +31,18 @@ pub fn browser_open(
     let nav_app = app.clone();
     let nav_label = label.clone();
     let builder = tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(parsed))
-        // 링크 클릭 등 모든 네비게이션을 프론트로 통지(URL 바 동기화, 폴링 없음).
+        // 링크 클릭 등 네비게이션을 프론트로 통지(URL 바 동기화, 폴링 없음).
+        // about:blank 는 WKWebView 초기화 과정의 중간 단계 — URL 상태를 덮어쓰지 않게 제외.
         .on_navigation(move |url| {
-            let _ = nav_app.emit(
-                "browser-nav",
-                NavPayload {
-                    label: nav_label.clone(),
-                    url: url.to_string(),
-                },
-            );
+            if url.as_str() != "about:blank" {
+                let _ = nav_app.emit(
+                    "browser-nav",
+                    NavPayload {
+                        label: nav_label.clone(),
+                        url: url.to_string(),
+                    },
+                );
+            }
             true // 허용
         });
     window
@@ -96,6 +99,8 @@ pub fn browser_visible(app: AppHandle, label: String, visible: bool) -> Result<(
     if let Some(wv) = app.get_webview(&label) {
         if visible {
             wv.show().map_err(|e| e.to_string())?;
+            // hide→show 후 첫 클릭이 무시되지 않게 포커스 복구.
+            let _ = wv.set_focus();
         } else {
             wv.hide().map_err(|e| e.to_string())?;
         }

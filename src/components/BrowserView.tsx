@@ -144,19 +144,12 @@ export function BrowserView({
   })();
 
   // 즐겨찾기 드롭다운: 열린 동안 webview 숨김(네이티브 레이어가 메뉴를 가리므로).
-  const toggleBmMenu = () => {
-    setBmOpen((o) => {
-      if (o) releaseBrowser();
-      else suppressBrowser();
-      return !o;
-    });
-  };
-  const closeBmMenu = () => {
-    setBmOpen((o) => {
-      if (o) releaseBrowser();
-      return false;
-    });
-  };
+  // suppress/release 를 effect 로 묶어 언마운트 시에도 누수가 없다.
+  useEffect(() => {
+    if (!bmOpen) return;
+    suppressBrowser();
+    return () => releaseBrowser();
+  }, [bmOpen, suppressBrowser, releaseBrowser]);
 
   return (
     <div className="browser-view">
@@ -217,7 +210,7 @@ export function BrowserView({
           type="button"
           className={`bv-btn${bmOpen ? " on" : ""}`}
           title={t("browser.bookmarks")}
-          onClick={toggleBmMenu}
+          onClick={() => setBmOpen((o) => !o)}
         >
           ☰
         </button>
@@ -234,7 +227,7 @@ export function BrowserView({
               title={b.url}
               onClick={() => {
                 navigate(b.url);
-                closeBmMenu();
+                setBmOpen(false);
               }}
             >
               <span className="bv-bm-title">{b.title}</span>

@@ -157,7 +157,7 @@ function App() {
     setActive,
     renameTab,
     toggleSidebar,
-    addTerminalView,
+    addViewToGroup,
     splitNewTerminal,
     openFileView,
     closeView,
@@ -246,7 +246,7 @@ function App() {
         e.preventDefault();
         // title 모드: 새 터미널 = 새 패널(분할). tabs 모드: 새 탭.
         if (useSettings.getState().splitHeaderMode === "tabs" || !grp) {
-          addTerminalView(project.id);
+          addViewToGroup(project.id, "terminal");
         } else {
           splitNewTerminal(project.id, grp.id, "right");
         }
@@ -261,7 +261,7 @@ function App() {
     splitPane,
     closePane,
     closeView,
-    addTerminalView,
+    addViewToGroup,
     splitNewTerminal,
     toggleSidebar,
   ]);
