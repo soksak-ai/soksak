@@ -592,63 +592,105 @@ body,
 
 /* 콘텐츠 영역: 남은 가로폭. 상단 뷰 탭 + 뷰 본문(세로). */
 .content {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
-  display: flex;
-  flex-direction: column;
 }
-/* 좌측 콘텐츠 탭 모드: 행 배치([세로 탭][resizer][본문]). */
-.content.vtab-left {
-  flex-direction: row;
+
+/* ── 에디터 그룹 영역(드래그 분할) ── */
+.egroup-area {
+  position: absolute;
+  inset: 0;
 }
-.vtab-strip {
-  flex: 0 0 auto;
-  height: 100%;
+/* 영속 본문 슬롯: viewId 키로 이동해도 remount 없음. rect 는 인라인 스타일로. */
+.egroup-body-slot {
+  position: absolute;
   overflow: hidden;
 }
-.vtab-resizer {
-  flex: 0 0 auto;
-  width: 5px;
-  cursor: col-resize;
+/* 그룹 탭 바 스트립(셀 상단). 높이는 인라인(TAB_BAR_PX)과 일치. */
+.egroup-tabs {
+  position: absolute;
+  overflow: hidden;
+  z-index: 2;
+}
+/* 활성 그룹 탭 바: 아래쪽 파란 강조선. */
+.egroup-tabs.active .view-tabs {
+  box-shadow: inset 0 -2px 0 rgba(55, 148, 255, 0.7);
+}
+/* 그룹 사이 리사이저(절대 배치). 얇은 선 + 드래그 히트영역. */
+.egroup-divider {
+  position: absolute;
+  z-index: 4;
   background: transparent;
-  border-left: 1px solid rgba(127, 127, 127, 0.14);
-  transition: background 0.12s ease;
 }
-.vtab-resizer:hover,
-.vtab-resizer:active {
-  background: rgba(127, 127, 127, 0.4);
+.egroup-divider.row {
+  width: 6px;
+  transform: translateX(-3px);
+  cursor: col-resize;
 }
-/* 세로 뷰 탭: 컬럼, 전역 얇은 스크롤바 사용(가로 커스텀 썸은 미사용). */
-.view-tabs.vertical {
-  width: 100%;
+.egroup-divider.col {
+  height: 6px;
+  transform: translateY(-3px);
+  cursor: row-resize;
+}
+.egroup-divider:hover {
+  background: rgba(55, 148, 255, 0.4);
+}
+/* 드롭 오버레이(드래그 중에만). 본문 위에서 dragover 수신. */
+.drop-target {
+  position: absolute;
+  z-index: 10;
+}
+.drop-ind {
+  position: absolute;
+  background: rgba(55, 148, 255, 0.26);
+  border: 1px solid rgba(55, 148, 255, 0.85);
+  pointer-events: none;
+}
+.drop-ind.center {
+  inset: 0;
+}
+.drop-ind.left {
+  left: 0;
+  top: 0;
+  width: 50%;
   height: 100%;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 3px;
-  padding: 8px 6px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  border-bottom: none;
 }
-.view-tabs.vertical .view-tab {
+.drop-ind.right {
+  right: 0;
+  top: 0;
+  width: 50%;
+  height: 100%;
+}
+.drop-ind.top {
+  left: 0;
+  top: 0;
   width: 100%;
-  border-radius: 5px;
+  height: 50%;
+}
+.drop-ind.bottom {
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 50%;
 }
 
 /* 콘텐츠 뷰 탭 줄(터미널/파일 전환) + 커스텀 가로 스크롤바 래퍼. */
 .view-tabs-wrap {
   position: relative;
-  flex: 0 0 auto;
+  width: 100%;
+  height: 100%;
 }
 .view-tabs {
-  height: 30px;
+  height: 100%;
   display: flex;
   align-items: flex-end;
   gap: 2px;
   padding: 0 6px;
   overflow-x: auto;
   border-bottom: 1px solid rgba(127, 127, 127, 0.14);
+  background: var(--bg);
 }
 /* 커스텀 3px 가로 스크롤바: 네이티브 오버레이는 숨기고(전역 display:none) 여기서 그린다.
    배경에 동화되는 옅은 회색. ViewTabs 가 위치/폭을 동기화. */
@@ -738,17 +780,6 @@ body,
 }
 .view-add:hover {
   background: rgba(127, 127, 127, 0.16);
-}
-
-/* 뷰 본문: 모든 뷰를 겹쳐 마운트(세션/에디터 유지), 활성만 표시. */
-.view-body {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.view-pane {
-  position: absolute;
-  inset: 0;
 }
 
 /* 파일 뷰어. */

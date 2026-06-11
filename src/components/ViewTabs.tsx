@@ -1,17 +1,21 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useSessions, type ProjectTab } from "../state/sessions";
+import { useSessions, type ViewGroup } from "../state/sessions";
 import { useT } from "../i18n";
 
-// 콘텐츠 영역 뷰 탭(터미널/파일 전환). 상단(가로) 또는 좌측(세로) 모드.
-// 가로 모드는 네이티브 오버레이 스크롤바를 숨기고 3px 커스텀 썸을 그린다(WKWebView 가
-// 두께/색을 못 바꾸므로). 세로 모드는 전역 얇은 스크롤바 사용.
+// 한 에디터 그룹의 탭 바(터미널/파일 전환 + 드래그 분할 소스). 가로 모드 전용.
+// 네이티브 오버레이 스크롤바를 숨기고 3px 커스텀 썸을 그린다(WKWebView 가 두께/색을
+// 못 바꾸므로). 탭은 draggable — 다른 그룹의 가장자리/중앙에 드롭하면 분할/이동.
 
 export function ViewTabs({
-  project,
-  vertical = false,
+  projectId,
+  group,
+  onTabDragStart,
+  onTabDragEnd,
 }: {
-  project: ProjectTab;
-  vertical?: boolean;
+  projectId: string;
+  group: ViewGroup;
+  onTabDragStart: (viewId: string) => void;
+  onTabDragEnd: () => void;
 }) {
   const t = useT();
   const setActiveView = useSessions((s) => s.setActiveView);
@@ -23,10 +27,9 @@ export function ViewTabs({
     null,
   );
 
-  // 가로 커스텀 스크롤바 썸 위치 계산(세로 모드면 사용 안 함).
   const recompute = () => {
     const el = scrollRef.current;
-    if (!el || vertical) {
+    if (!el) {
       setThumb(null);
       return;
     }
@@ -42,7 +45,7 @@ export function ViewTabs({
 
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el || vertical) return;
+    if (!el) return;
     const onScroll = () => recompute();
     el.addEventListener("scroll", onScroll, { passive: true });
     const ro = new ResizeObserver(recompute);
@@ -51,15 +54,13 @@ export function ViewTabs({
       el.removeEventListener("scroll", onScroll);
       ro.disconnect();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vertical]);
+  }, []);
 
   useLayoutEffect(() => {
     recompute();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.views.length, vertical]);
+  }, [group.views.length]);
 
-  // 활성 탭을 보이도록 자동 스크롤(가능하면 중앙, 끝이면 클램프). 양 방향.
+  // 활성 탭을 보이도록 자동 스크롤(가능하면 중앙).
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
@@ -67,18 +68,11 @@ export function ViewTabs({
     if (!active) return;
     const elR = el.getBoundingClientRect();
     const aR = active.getBoundingClientRect();
-    if (vertical) {
-      const center = aR.top - elR.top + el.scrollTop + aR.height / 2;
-      const target = center - el.clientHeight / 2;
-      const max = el.scrollHeight - el.clientHeight;
-      el.scrollTo({ top: Math.max(0, Math.min(max, target)), behavior: "smooth" });
-    } else {
-      const center = aR.left - elR.left + el.scrollLeft + aR.width / 2;
-      const target = center - el.clientWidth / 2;
-      const max = el.scrollWidth - el.clientWidth;
-      el.scrollTo({ left: Math.max(0, Math.min(max, target)), behavior: "smooth" });
-    }
-  }, [project.activeViewId, project.views.length, vertical]);
+    const center = aR.left - elR.left + el.scrollLeft + aR.width / 2;
+    const target = center - el.clientWidth / 2;
+    const max = el.scrollWidth - el.clientWidth;
+    el.scrollTo({ left: Math.max(0, Math.min(max, target)), behavior: "smooth" });
+  }, [group.activeViewId, group.views.length]);
 
   const onThumbDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -100,64 +94,55 @@ export function ViewTabs({
     document.body.style.userSelect = "none";
   };
 
-  const tabEls = (
-    <>
-      {project.views.map((v) => (
-        <div
-          key={v.id}
-          className={`view-tab${v.id === project.activeViewId ? " active" : ""}`}
-          onClick={() => setActiveView(project.id, v.id)}
-          title={v.kind === "file" ? v.path : t("view.terminal")}
-        >
-          <span className="view-tab-icon">
-            {v.kind === "terminal" ? "›_" : "▤"}
-          </span>
-          <span className="view-tab-title">
-            {v.kind === "terminal" ? t("view.terminal") : v.title}
-          </span>
-          {v.kind === "file" && v.dirty && (
-            <span className="view-tab-dirty" title={t("viewer.unsaved")}>
-              ●
+  return (
+    <div className="view-tabs-wrap">
+      <div className="view-tabs" ref={scrollRef}>
+        {group.views.map((v) => (
+          <div
+            key={v.id}
+            className={`view-tab${v.id === group.activeViewId ? " active" : ""}`}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = "move";
+              e.dataTransfer.setData("text/x-view-id", v.id);
+              onTabDragStart(v.id);
+            }}
+            onDragEnd={onTabDragEnd}
+            onClick={() => setActiveView(projectId, v.id)}
+            title={v.kind === "file" ? v.path : t("view.terminal")}
+          >
+            <span className="view-tab-icon">
+              {v.kind === "terminal" ? "›_" : "▤"}
             </span>
-          )}
-          {project.views.length > 1 && (
+            <span className="view-tab-title">
+              {v.kind === "terminal" ? t("view.terminal") : v.title}
+            </span>
+            {v.kind === "file" && v.dirty && (
+              <span className="view-tab-dirty" title={t("viewer.unsaved")}>
+                ●
+              </span>
+            )}
             <button
               type="button"
               className="view-tab-close"
               title={t("view.close")}
               onClick={(e) => {
                 e.stopPropagation();
-                closeView(project.id, v.id);
+                closeView(projectId, v.id);
               }}
             >
               ×
             </button>
-          )}
-        </div>
-      ))}
-      <button
-        type="button"
-        className="view-add"
-        title={t("view.newTerminal")}
-        onClick={() => addTerminalView(project.id)}
-      >
-        +
-      </button>
-    </>
-  );
-
-  if (vertical) {
-    return (
-      <div className="view-tabs vertical" ref={scrollRef}>
-        {tabEls}
-      </div>
-    );
-  }
-
-  return (
-    <div className="view-tabs-wrap">
-      <div className="view-tabs" ref={scrollRef}>
-        {tabEls}
+          </div>
+        ))}
+        <button
+          type="button"
+          className="view-add"
+          title={t("view.newTerminal")}
+          onClick={() => addTerminalView(projectId, group.id)}
+        >
+          +
+        </button>
       </div>
       {thumb && (
         <div className="view-scrollbar">

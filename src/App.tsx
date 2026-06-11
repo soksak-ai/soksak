@@ -2,13 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { TreeThemeInput } from "@pierre/trees";
 import { FileTreeSidebar } from "./components/FileTreeSidebar";
-import { FileViewer } from "./components/FileViewer";
+import { GroupArea } from "./components/GroupArea";
 import { NewProjectModal } from "./components/NewProjectModal";
-import { PaneTree } from "./components/PaneTree";
 import { SettingsModal } from "./components/SettingsModal";
-import { ViewTabs } from "./components/ViewTabs";
 import { useT } from "./i18n";
 import {
+  allGroups,
   collectAllLeafIds,
   collectLeafIds,
   projectOfPane,
@@ -41,10 +40,6 @@ const SIDEBAR_DEFAULT = 320;
 const RAIL_MIN = 90;
 const RAIL_MAX = 360;
 const RAIL_DEFAULT = 150;
-// 좌측 콘텐츠(뷰) 탭 스트립 폭.
-const VTAB_MIN = 90;
-const VTAB_MAX = 360;
-const VTAB_DEFAULT = 160;
 
 // 드래그로 폭을 조절하는 패널 공용 훅(localStorage 영속). 모두 좌측 패널이라 우측
 // 핸들을 오른쪽으로 끌면 폭이 는다(delta = clientX - 시작X).
@@ -78,19 +73,27 @@ function useResizableWidth(key: string, def: number, min: number, max: number) {
 }
 
 // 프로젝트의 사이드바가 따라갈 터미널 pane(= 현재 작업 디렉토리 출처).
-// 활성 뷰가 터미널이면 그 포커스 pane, 파일이면 첫 터미널 뷰의 포커스 pane.
+// 활성 그룹의 활성 뷰가 터미널이면 그 포커스 pane, 아니면 아무 터미널 뷰의 포커스 pane.
 function cwdPaneOf(project: ProjectTab): string | undefined {
-  const active = project.views.find((v) => v.id === project.activeViewId);
+  const groups = allGroups(project.layout);
+  const activeGroup =
+    groups.find((g) => g.id === project.activeGroupId) ?? groups[0];
+  const active = activeGroup?.views.find(
+    (v) => v.id === activeGroup.activeViewId,
+  );
   if (active && active.kind === "terminal") return active.focusedPaneId;
-  const term = project.views.find((v) => v.kind === "terminal");
-  return term && term.kind === "terminal" ? term.focusedPaneId : undefined;
+  for (const g of groups) {
+    for (const v of g.views) {
+      if (v.kind === "terminal") return v.focusedPaneId;
+    }
+  }
+  return undefined;
 }
 
 function App() {
   const t = useT();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const projectTabPosition = useSettings((s) => s.projectTabPosition);
-  const viewTabPosition = useSettings((s) => s.viewTabPosition);
 
   // 터미널 외형 설정(폰트/커서/스크롤백). 개별 필드 구독 → 객체는 memo 로 안정화.
   const fontFamily = useSettings((s) => s.fontFamily);
@@ -152,7 +155,6 @@ function App() {
     addTerminalView,
     openFileView,
     closeView,
-    setFileMode,
     splitPane,
     closePane,
   } = useSessions();
@@ -185,12 +187,6 @@ function App() {
     RAIL_DEFAULT,
     RAIL_MIN,
     RAIL_MAX,
-  );
-  const [viewTabW, startViewTabResize] = useResizableWidth(
-    "viewTabW",
-    VTAB_DEFAULT,
-    VTAB_MIN,
-    VTAB_MAX,
   );
 
   // 새 호스트의 최초 createTerminal 이 현재 테마로 생성되도록 provider 등록.
@@ -225,7 +221,10 @@ function App() {
       const s = useSessions.getState();
       const project = s.tabs.find((t) => t.id === s.activeId);
       if (!project) return;
-      const view = project.views.find((v) => v.id === project.activeViewId);
+      const groups = allGroups(project.layout);
+      const grp =
+        groups.find((g) => g.id === project.activeGroupId) ?? groups[0];
+      const view = grp?.views.find((v) => v.id === grp.activeViewId);
       if (key === "d") {
         if (view && view.kind === "terminal") {
           e.preventDefault();
@@ -235,8 +234,8 @@ function App() {
         e.preventDefault();
         if (view && view.kind === "terminal" && collectLeafIds(view.layout).length > 1) {
           closePane(project.id, view.id, view.focusedPaneId);
-        } else {
-          closeView(project.id, project.activeViewId);
+        } else if (view) {
+          closeView(project.id, view.id);
         }
       } else if (key === "t" && !e.shiftKey) {
         e.preventDefault();
@@ -437,59 +436,13 @@ function App() {
                 />
               )}
 
-              {/* 콘텐츠 영역: 뷰 탭(상단 가로 / 좌측 세로) + 뷰 본문(터미널/파일). */}
-              <div
-                className={`content${viewTabPosition === "left" ? " vtab-left" : ""}`}
-              >
-                {viewTabPosition === "left" ? (
-                  <>
-                    <div className="vtab-strip" style={{ width: viewTabW }}>
-                      <ViewTabs project={project} vertical />
-                    </div>
-                    <div
-                      className="vtab-resizer"
-                      onMouseDown={startViewTabResize}
-                      title={t("sidebar.resize")}
-                    />
-                  </>
-                ) : (
-                  <ViewTabs project={project} />
-                )}
-
-                <div className="view-body">
-                  {project.views.map((v) => {
-                    const isActiveView = v.id === project.activeViewId;
-                    return (
-                      <div
-                        key={v.id}
-                        className="view-pane"
-                        style={{
-                          visibility: isActiveView ? "visible" : "hidden",
-                          zIndex: isActiveView ? 1 : 0,
-                        }}
-                      >
-                        {v.kind === "terminal" ? (
-                          <PaneTree
-                            node={v.layout}
-                            projectId={project.id}
-                            viewId={v.id}
-                            active={isActiveProject && isActiveView}
-                            focusedPaneId={v.focusedPaneId}
-                          />
-                        ) : (
-                          <FileViewer
-                            path={v.path}
-                            mode={v.mode}
-                            isDark={isDark}
-                            projectId={project.id}
-                            viewId={v.id}
-                            onMode={(m) => setFileMode(project.id, v.id, m)}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+              {/* 콘텐츠 영역: 에디터 그룹 트리(드래그 분할/이동). */}
+              <div className="content">
+                <GroupArea
+                  project={project}
+                  isActiveProject={isActiveProject}
+                  isDark={isDark}
+                />
               </div>
             </div>
           );
