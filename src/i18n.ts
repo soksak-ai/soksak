@@ -40,6 +40,9 @@ const ko = {
   "viewer.imgFail": "이미지를 불러올 수 없습니다.",
   "viewer.largeFile": "큰 파일 ({size}) — 구문 강조 비활성화",
   "viewer.truncated": "처음 {read}만 로드 (메모리 보호)",
+  "viewer.unsaved": "저장 안 됨 · ⌘S",
+  "viewer.saving": "저장 중…",
+  "viewer.saveFailed": "저장 실패: {err}",
 
   "settings.title": "설정",
   "settings.language": "언어",
@@ -99,6 +102,9 @@ const en: Record<MsgKey, string> = {
   "viewer.imgFail": "Couldn't load the image.",
   "viewer.largeFile": "Large file ({size}) — syntax highlighting off",
   "viewer.truncated": "Loaded first {read} (memory guard)",
+  "viewer.unsaved": "Unsaved · ⌘S",
+  "viewer.saving": "Saving…",
+  "viewer.saveFailed": "Save failed: {err}",
 
   "settings.title": "Settings",
   "settings.language": "Language",

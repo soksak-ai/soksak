@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { FileTree, useFileTree } from "@pierre/trees/react";
 import {
   themeToTreeStyles,
@@ -72,6 +73,10 @@ function LazyTree({
   // 로드된 디렉토리 rel 경로("" = 루트), 알려진 디렉토리 rel 경로(placeholder 추가됨).
   const loaded = useRef<Set<string>>(new Set());
   const knownDirs = useRef<Set<string>>(new Set());
+  // 로드된 디렉토리별 현재 자식 이름 집합(워처 증분 reconcile 의 diff 기준).
+  const childrenByDir = useRef<Map<string, Set<string>>>(new Map());
+  // 감시 중인 절대경로(언마운트 시 일괄 해제용).
+  const watchedAbs = useRef<Set<string>>(new Set());
   const modelRef = useRef<ReturnType<typeof useFileTree>["model"] | null>(null);
   const rootRef = useRef(rootAbs);
   rootRef.current = rootAbs;
@@ -98,13 +103,36 @@ function LazyTree({
       onSelectionChange,
       unsafeCSS: TREE_SCROLLBAR_CSS,
       density: "compact" as const,
+      // 단일 자식 폴더 체인을 한 줄로 합치지 않는다(lazy placeholder 와 충돌 + 사용자가
+      // 보고한 "일렬로 펼쳐지며 위로 올라가는" 버그 방지).
+      flattenEmptyDirectories: false,
     }),
     [onSelectionChange],
   );
   const { model } = useFileTree(options);
   modelRef.current = model;
 
-  // rel 디렉토리의 자식들을 트리에 반영(placeholder 제거 + 실제 자식 추가).
+  // rel("") → 절대경로.
+  const absOf = useCallback(
+    (rel: string) =>
+      rel === ""
+        ? rootRef.current.replace(/\/+$/, "")
+        : `${rootRef.current.replace(/\/+$/, "")}/${rel}`,
+    [],
+  );
+
+  // rel 디렉토리를 OS 워처에 등록(폴링 없이 외부 변경 감지). 중복은 Rust 가 무시.
+  const watchDir = useCallback(
+    (rel: string) => {
+      const abs = absOf(rel);
+      if (watchedAbs.current.has(abs)) return;
+      watchedAbs.current.add(abs);
+      invoke("watch_dir", { path: abs }).catch(() => {});
+    },
+    [absOf],
+  );
+
+  // rel 디렉토리의 자식들을 트리에 반영(placeholder 제거 + 실제 자식 추가). 최초 로드용.
   const applyChildren = useCallback(
     (rel: string, children: Child[]) => {
       const ops: FileTreeBatchOperation[] = [];
@@ -122,9 +150,66 @@ function LazyTree({
         }
       }
       loaded.current.add(rel);
+      childrenByDir.current.set(rel, new Set(children.map((c) => c.name)));
+      if (ops.length) model.batch(ops);
+      watchDir(rel);
+    },
+    [model, watchDir],
+  );
+
+  // 워처 이벤트 → 해당 디렉토리만 다시 list 해 증분 반영(추가/삭제만, 펼침 상태 유지).
+  const reconcile = useCallback(
+    (rel: string, children: Child[]) => {
+      const prev = childrenByDir.current.get(rel);
+      if (!prev) {
+        applyChildren(rel, children);
+        return;
+      }
+      const next = new Set(children.map((c) => c.name));
+      const ops: FileTreeBatchOperation[] = [];
+      const wasEmpty = prev.size === 0;
+      const nowEmpty = next.size === 0;
+      // 빈→비어있지않음: placeholder 제거. 비어있지않음→빈: placeholder 복원.
+      if (rel !== "" && wasEmpty && !nowEmpty) {
+        ops.push({ type: "remove", path: `${rel}/${PH}` });
+      }
+      // 추가된 항목.
+      for (const c of children) {
+        if (prev.has(c.name)) continue;
+        const p = rel === "" ? c.name : `${rel}/${c.name}`;
+        if (c.dir) {
+          ops.push({ type: "add", path: `${p}/${PH}` });
+          knownDirs.current.add(p);
+        } else {
+          ops.push({ type: "add", path: p });
+        }
+      }
+      // 삭제된 항목(서브트리 + 관련 ref/워처 정리).
+      for (const name of prev) {
+        if (next.has(name)) continue;
+        const p = rel === "" ? name : `${rel}/${name}`;
+        ops.push({ type: "remove", path: p });
+        const isPrefix = (x: string) => x === p || x.startsWith(`${p}/`);
+        for (const s of [...loaded.current]) if (isPrefix(s)) loaded.current.delete(s);
+        for (const s of [...knownDirs.current])
+          if (isPrefix(s)) knownDirs.current.delete(s);
+        for (const k of [...childrenByDir.current.keys()])
+          if (isPrefix(k)) childrenByDir.current.delete(k);
+        for (const abs of [...watchedAbs.current]) {
+          const pAbs = absOf(p);
+          if (abs === pAbs || abs.startsWith(`${pAbs}/`)) {
+            watchedAbs.current.delete(abs);
+            invoke("unwatch_dir", { path: abs }).catch(() => {});
+          }
+        }
+      }
+      if (rel !== "" && !wasEmpty && nowEmpty) {
+        ops.push({ type: "add", path: `${rel}/${PH}` });
+      }
+      childrenByDir.current.set(rel, next);
       if (ops.length) model.batch(ops);
     },
-    [model],
+    [applyChildren, absOf, model],
   );
 
   // rel 디렉토리를 fetch 해서 반영(미로드 시). 펼침 감지에서 호출.
@@ -164,6 +249,37 @@ function LazyTree({
   useEffect(() => {
     model.setGitStatus(gitStatus);
   }, [model, gitStatus]);
+
+  // 외부 변경(다른 프로그램의 파일 추가/삭제) 라이브 반영. 워처가 보낸 디렉토리 절대경로를
+  // rel 로 바꿔, 로드된 디렉토리면 다시 list 후 reconcile. 폴링 없음(OS 이벤트 기반).
+  useEffect(() => {
+    const root = rootRef.current.replace(/\/+$/, "");
+    const un = listen<string>("fs-change", (e) => {
+      const absDir = e.payload.replace(/\/+$/, "");
+      let rel: string;
+      if (absDir === root) rel = "";
+      else if (absDir.startsWith(`${root}/`))
+        rel = absDir.slice(root.length + 1);
+      else return; // 이 트리 밖
+      if (!loaded.current.has(rel)) return; // 미로드(안 펼친) 디렉토리는 무시
+      invoke<Listing>("list_children", { path: absDir })
+        .then((l) => reconcile(rel, l.children))
+        .catch(() => {});
+    });
+    return () => {
+      void un.then((f) => f());
+    };
+  }, [reconcile]);
+
+  // 언마운트(프로젝트 닫힘/루트 변경) 시 이 트리가 건 모든 워처 해제.
+  useEffect(() => {
+    const watched = watchedAbs.current;
+    return () => {
+      for (const abs of watched)
+        invoke("unwatch_dir", { path: abs }).catch(() => {});
+      watched.clear();
+    };
+  }, []);
 
   return <FileTree className="ft" style={themeStyles} model={model} />;
 }

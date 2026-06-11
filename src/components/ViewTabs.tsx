@@ -115,6 +115,11 @@ export function ViewTabs({
           <span className="view-tab-title">
             {v.kind === "terminal" ? t("view.terminal") : v.title}
           </span>
+          {v.kind === "file" && v.dirty && (
+            <span className="view-tab-dirty" title={t("viewer.unsaved")}>
+              ●
+            </span>
+          )}
           {project.views.length > 1 && (
             <button
               type="button"

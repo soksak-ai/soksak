@@ -25,6 +25,7 @@ export type View =
       title: string;
       path: string; // 절대 경로
       mode: "code" | "preview";
+      dirty?: boolean; // 편집 후 미저장
     };
 
 // 프로젝트가 처음 열 때 띄우는 프로그램.
@@ -67,6 +68,7 @@ interface SessionsStore {
   closeView: (projectId: string, viewId: string) => void;
   setActiveView: (projectId: string, viewId: string) => void;
   setFileMode: (projectId: string, viewId: string, mode: "code" | "preview") => void;
+  setFileDirty: (projectId: string, viewId: string, dirty: boolean) => void;
 
   // pane 레벨(특정 터미널 뷰 안에서)
   splitPane: (
@@ -319,6 +321,16 @@ export const useSessions = create<SessionsStore>((set) => ({
         ...t,
         views: mapView(t.views, viewId, (v) =>
           v.kind === "file" ? { ...v, mode } : v,
+        ),
+      })),
+    })),
+
+  setFileDirty: (projectId, viewId, dirty) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) => ({
+        ...t,
+        views: mapView(t.views, viewId, (v) =>
+          v.kind === "file" ? { ...v, dirty } : v,
         ),
       })),
     })),

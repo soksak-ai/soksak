@@ -481,6 +481,8 @@ function App() {
                             path={v.path}
                             mode={v.mode}
                             isDark={isDark}
+                            projectId={project.id}
+                            viewId={v.id}
                             onMode={(m) => setFileMode(project.id, v.id, m)}
                           />
                         )}

@@ -704,6 +704,12 @@ body,
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.view-tab-dirty {
+  color: #c0a020;
+  font-size: 9px;
+  line-height: 1;
+  padding: 0 1px;
+}
 .view-tab-close {
   border: none;
   background: transparent;
@@ -802,6 +808,12 @@ body,
   opacity: 0.85;
   background: rgba(127, 127, 127, 0.16);
   border-bottom: 1px solid rgba(127, 127, 127, 0.18);
+}
+.fv-banner-dirty {
+  color: #c0a020;
+}
+.fv-banner-err {
+  color: #e06c6c;
 }
 .fv-code .fv-cm {
   flex: 1 1 auto;

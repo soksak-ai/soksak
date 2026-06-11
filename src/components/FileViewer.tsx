@@ -1,4 +1,12 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import CodeMirror from "@uiw/react-codemirror";
 import {
@@ -9,6 +17,7 @@ import {
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useT } from "../i18n";
+import { useSessions } from "../state/sessions";
 
 // 파일 뷰어: 확장자로 렌더 전략을 정한다.
 //   - text      : CodeMirror (코드)
@@ -83,11 +92,21 @@ export interface FileViewerProps {
   path: string;
   mode: "code" | "preview";
   isDark: boolean;
+  projectId: string;
+  viewId: string;
   onMode: (mode: "code" | "preview") => void;
 }
 
-export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
+export function FileViewer({
+  path,
+  mode,
+  isDark,
+  projectId,
+  viewId,
+  onMode,
+}: FileViewerProps) {
   const t = useT();
+  const setFileDirty = useSessions((s) => s.setFileDirty);
   const strat = strategyFor(path);
   const previewable = strat === "markdown" || strat === "svg";
   const needsText = strat === "text" || strat === "markdown" || strat === "svg";
@@ -107,6 +126,9 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
   } | null>(null);
   const [binUrl, setBinUrl] = useState<string | null>(null);
   const [binError, setBinError] = useState<string | null>(null);
+  // 디스크에 저장된 마지막 내용(dirty 판정 기준). 편집 내용(text)과 다르면 미저장.
+  const savedRef = useRef<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!needsText) return;
@@ -124,6 +146,8 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
       .then((d) => {
         if (cancelled) return;
         setText(d.content);
+        savedRef.current = d.content;
+        setFileDirty(projectId, viewId, false);
         setInfo({
           read: d.read_bytes,
           total: d.total_bytes,
@@ -137,7 +161,7 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
     return () => {
       cancelled = true;
     };
-  }, [path, needsText]);
+  }, [path, needsText, projectId, viewId, setFileDirty]);
 
   // editor 의 isTooLargeForTokenization 과 동일: 20MiB 초과 또는 30만 줄 초과면
   // 구문 강조/폴딩을 끈다(Lezer 전체 파싱 폭주 방지).
@@ -183,6 +207,47 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
     return DOMPurify.sanitize(raw);
   }, [strat, text]);
 
+  // 잘린(truncated) 파일은 앞부분만 읽었으므로 저장하면 나머지가 날아간다 → 편집 금지.
+  // 바이너리/프리뷰 전용도 편집 불가. 그 외 텍스트 계열만 편집 가능.
+  const editable = needsText && info != null && !info.truncated;
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const onChange = useCallback(
+    (v: string) => {
+      setText(v);
+      setFileDirty(projectId, viewId, v !== savedRef.current);
+    },
+    [projectId, viewId, setFileDirty],
+  );
+
+  const save = useCallback(async () => {
+    if (!editable || text == null || saving || text === savedRef.current) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await invoke("write_text_file", { path, content: text });
+      savedRef.current = text;
+      setFileDirty(projectId, viewId, false);
+    } catch (e) {
+      setSaveError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }, [editable, text, saving, path, projectId, viewId, setFileDirty]);
+
+  // ⌘S/Ctrl+S 저장. 캡처 단계에서 가로채 CodeMirror/브라우저 기본동작보다 먼저 처리.
+  const onKeyDownSave = useCallback(
+    (e: ReactKeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        void save();
+      }
+    },
+    [save],
+  );
+
+  const dirty = editable && text != null && text !== savedRef.current;
+
   const codeBody = () => {
     if (error) {
       return (
@@ -195,26 +260,39 @@ export function FileViewer({ path, mode, isDark, onMode }: FileViewerProps) {
     }
     if (text == null) return <div className="fv-msg">{t("common.loading")}</div>;
     return (
-      <div className="fv-code">
-        {info && (isLarge || info.truncated) && (
+      <div className="fv-code" onKeyDownCapture={onKeyDownSave}>
+        {(info && (isLarge || info.truncated)) || saveError || dirty ? (
           <div className="fv-banner">
-            {isLarge && t("viewer.largeFile", { size: fmtBytes(info.total) })}
-            {info.truncated &&
+            {isLarge && t("viewer.largeFile", { size: fmtBytes(info!.total) })}
+            {info?.truncated &&
               `${isLarge ? " · " : ""}${t("viewer.truncated", { read: fmtBytes(info.read) })}`}
+            {saveError && (
+              <span className="fv-banner-err">
+                {(isLarge || info?.truncated ? " · " : "") +
+                  t("viewer.saveFailed", { err: saveError })}
+              </span>
+            )}
+            {dirty && !saveError && (
+              <span className="fv-banner-dirty">
+                {(isLarge || info?.truncated ? " · " : "") +
+                  (saving ? t("viewer.saving") : t("viewer.unsaved"))}
+              </span>
+            )}
           </div>
-        )}
+        ) : null}
         <CodeMirror
           className="fv-cm"
           value={text}
           height="100%"
           theme={isDark ? "dark" : "light"}
           extensions={cmExtensions}
-          editable={false}
+          editable={editable}
+          onChange={editable ? onChange : undefined}
           basicSetup={{
             lineNumbers: true,
             foldGutter: !isLarge,
-            highlightActiveLine: false,
-            highlightActiveLineGutter: false,
+            highlightActiveLine: editable,
+            highlightActiveLineGutter: editable,
           }}
         />
       </div>
