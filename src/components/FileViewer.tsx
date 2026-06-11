@@ -8,7 +8,8 @@ import {
   useState,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { EditorView } from "@uiw/react-codemirror";
+import { search } from "@codemirror/search";
 import {
   langNames,
   loadLanguage,
@@ -18,6 +19,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useT } from "../i18n";
 import { useSessions } from "../state/sessions";
+import { EditorFind } from "./EditorFind";
 
 // 파일 뷰어: 확장자로 렌더 전략을 정한다.
 //   - text      : CodeMirror (코드)
@@ -129,6 +131,11 @@ export function FileViewer({
   // 디스크에 저장된 마지막 내용(dirty 판정 기준). 편집 내용(text)과 다르면 미저장.
   const savedRef = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // editor 스타일 찾기/바꾸기 위젯 상태.
+  const [cmView, setCmView] = useState<EditorView | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findReplace, setFindReplace] = useState(false);
+  const [findFocus, setFindFocus] = useState(0); // ⌘F 재요청 시 포커스 신호
 
   useEffect(() => {
     if (!needsText) return;
@@ -196,9 +203,14 @@ export function FileViewer({
   );
 
   const cmExtensions = useMemo(() => {
-    if (isLarge) return []; // 큰 파일은 강조 비활성화
-    const ext = languageExtensionFor(path);
-    return ext ? [ext] : [];
+    // search(): editor 스타일 찾기 위젯이 쓰는 검색 상태/하이라이트. 큰 파일도 포함
+    // (가벼움 — 보이는 매치만 강조). 구문 강조 언어 확장은 큰 파일에서만 제외.
+    const exts = [search()];
+    if (!isLarge) {
+      const ext = languageExtensionFor(path);
+      if (ext) exts.push(ext);
+    }
+    return exts;
   }, [path, isLarge]);
 
   const markdownHtml = useMemo(() => {
@@ -235,14 +247,27 @@ export function FileViewer({
     }
   }, [editable, text, saving, path, projectId, viewId, setFileDirty]);
 
-  // ⌘S/Ctrl+S 저장. CodeMirror 는 "디스크 저장" 기능이 없고(에디터 위젯일 뿐 파일시스템
-  // 접근 불가) 기본 keymap 에 ⌘S 바인딩도 없다 → 저장은 우리가 write_text_file(Rust)로
-  // 구현할 수밖에 없다. 캡처 단계에서 받아 WebView 기본동작(페이지 저장)만 막는다.
-  const onKeyDownSave = useCallback(
+  // 단축키(캡처 단계 — CodeMirror/WebView 기본동작보다 먼저). 물리 키(e.code)로 판정해
+  // 키보드 레이아웃/Option 합성문자(⌥f→"ƒ")에 영향받지 않게 한다.
+  //   ⌘S 저장 — CodeMirror 엔 디스크 저장 기능이 없어 write_text_file(Rust)로 직접 구현.
+  //   ⌘F 찾기 / ⌘⌥F·⌘H 바꾸기 — editor 스타일 위젯 토글.
+  const onKeyDown = useCallback(
     (e: ReactKeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.code === "KeyS") {
         e.preventDefault();
         void save();
+      } else if (e.code === "KeyF" && !e.altKey) {
+        e.preventDefault();
+        setFindReplace(false);
+        setFindOpen(true);
+        setFindFocus((n) => n + 1);
+      } else if ((e.code === "KeyF" && e.altKey) || e.code === "KeyH") {
+        e.preventDefault();
+        setFindReplace(true);
+        setFindOpen(true);
+        setFindFocus((n) => n + 1);
       }
     },
     [save],
@@ -262,7 +287,16 @@ export function FileViewer({
     }
     if (text == null) return <div className="fv-msg">{t("common.loading")}</div>;
     return (
-      <div className="fv-code" onKeyDownCapture={onKeyDownSave}>
+      <div className="fv-code" onKeyDownCapture={onKeyDown}>
+        <EditorFind
+          view={cmView}
+          open={findOpen}
+          replaceMode={findReplace}
+          editable={editable}
+          focusSignal={findFocus}
+          onClose={() => setFindOpen(false)}
+          t={t}
+        />
         {(info && (isLarge || info.truncated)) || saveError || dirty ? (
           <div className="fv-banner">
             {isLarge && t("viewer.largeFile", { size: fmtBytes(info!.total) })}
@@ -290,11 +324,14 @@ export function FileViewer({
           extensions={cmExtensions}
           editable={editable}
           onChange={editable ? onChange : undefined}
+          onCreateEditor={(v) => setCmView(v)}
           basicSetup={{
             lineNumbers: true,
             foldGutter: !isLarge,
             highlightActiveLine: editable,
             highlightActiveLineGutter: editable,
+            // 기본 ⌘F 검색 패널 비활성화 — 우리 editor 스타일 위젯이 ⌘F 를 처리.
+            searchKeymap: false,
           }}
         />
       </div>
