@@ -494,10 +494,15 @@ function App() {
                 zIndex: isActiveProject ? 1 : 0,
               }}
             >
-              {/* 좌측 파일 트리 사이드바. 닫히면 width 0(언마운트 X → 상태 유지). */}
+              {/* 좌측 파일 트리 사이드바. 닫히면 width 0(언마운트 X → 상태 유지).
+                  닫힐 때 우측 보더도 함께 제거 — 0폭이어도 보더는 1px 선으로 남아
+                  사이드바 밖에 보더가 걸린 것처럼 보이기 때문. */}
               <div
                 className="sidebar"
-                style={{ width: project.sidebarOpen ? sidebarW : 0 }}
+                style={{
+                  width: project.sidebarOpen ? sidebarW : 0,
+                  borderRightWidth: project.sidebarOpen ? 1 : 0,
+                }}
               >
                 <FileTreeSidebar
                   paneId={cwdPaneOf(project) ?? ""}
