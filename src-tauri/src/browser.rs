@@ -3,8 +3,13 @@
 // 이전/이후는 history.back()/forward() eval, URL 변화는 on_navigation 으로 프론트에
 // emit(폴링 없음). 위치/크기는 프론트 레이아웃(slot rect)을 따라 browser_bounds 로 동기화.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Url, WebviewUrl};
+use tauri::{
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Url, WebviewUrl,
+    WebviewWindowBuilder,
+};
 
 #[derive(Clone, Serialize)]
 struct NavPayload {
@@ -12,20 +17,58 @@ struct NavPayload {
     url: String,
 }
 
-// 새 창 요청(target=_blank / window.open)을 같은 패널에서 연다. 외부 페이지가 Tauri 의
-// opener IPC(외부 webview 에 권한 없음 → Unhandled Rejection)로 위임되는 것을 차단하고,
-// 단일 패널 브라우저답게 현재 패널에서 네비게이션한다.
-const SAME_PANEL_NAV: &str = r#"
+static POPUP_SEQ: AtomicUsize = AtomicUsize::new(1);
+const POPUP_MARKER_HOST: &str = "soksak-popup.invalid";
+
+// 새 창 요청(target=_blank / window.open)을 마커 네비게이션으로 바꾼다. 외부 페이지는
+// Tauri IPC 권한이 없으므로(주면 보안 구멍) "네비게이션" 자체를 채널로 쓴다 —
+// on_navigation 이 마커를 감지해 차단하고 내장 브라우저 새 창(독립 OS 윈도우)을 연다.
+const NEW_WINDOW_NAV: &str = r#"
 (function () {
-  var nav = function (u) { try { if (u) location.href = u; } catch (_) {} };
-  window.open = function (u) { nav(u); return null; };
+  var pop = function (u) {
+    try {
+      if (u) location.href = "https://soksak-popup.invalid/?u=" + encodeURIComponent(u);
+    } catch (_) {}
+  };
+  window.open = function (u) { pop(u); return null; };
   document.addEventListener("click", function (e) {
     var t = e.target;
     var a = t && t.closest ? t.closest('a[target="_blank"]') : null;
-    if (a && a.href) { e.preventDefault(); nav(a.href); }
+    if (a && a.href) { e.preventDefault(); pop(a.href); }
   }, true);
 })();
 "#;
+
+// 마커 네비게이션이면 새 창으로 열 대상 URL 을 추출(query_pairs 가 percent-decode).
+fn popup_target(url: &Url) -> Option<Url> {
+    if url.host_str() != Some(POPUP_MARKER_HOST) {
+        return None;
+    }
+    let u = url.query_pairs().find(|(k, _)| k == "u")?.1.into_owned();
+    Url::parse(&u).ok()
+}
+
+// 내장 브라우저 새 창(독립 OS 윈도우). 새 창 안의 _blank 도 다시 새 창(재귀).
+fn open_popup(app: &AppHandle, url: Url) {
+    let label = format!("popup-{}", POPUP_SEQ.fetch_add(1, Ordering::Relaxed));
+    let title = url.host_str().unwrap_or("browser").to_string();
+    let nav_app = app.clone();
+    let result = WebviewWindowBuilder::new(app, &label, WebviewUrl::External(url))
+        .title(title)
+        .inner_size(1100.0, 800.0)
+        .initialization_script(NEW_WINDOW_NAV)
+        .on_navigation(move |u| {
+            if let Some(target) = popup_target(u) {
+                open_popup(&nav_app, target);
+                return false;
+            }
+            true
+        })
+        .build();
+    if let Err(e) = result {
+        eprintln!("popup 창 생성 실패: {e}");
+    }
+}
 
 // child webview 생성(이미 있으면 무시). label = "b-<viewId>".
 #[tauri::command]
@@ -46,10 +89,15 @@ pub fn browser_open(
     let nav_app = app.clone();
     let nav_label = label.clone();
     let builder = tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(parsed))
-        .initialization_script(SAME_PANEL_NAV)
+        .initialization_script(NEW_WINDOW_NAV)
         // 링크 클릭 등 네비게이션을 프론트로 통지(URL 바 동기화, 폴링 없음).
         // about:blank 는 WKWebView 초기화 과정의 중간 단계 — URL 상태를 덮어쓰지 않게 제외.
+        // 새 창 마커는 차단하고 내장 브라우저 새 창으로.
         .on_navigation(move |url| {
+            if let Some(target) = popup_target(url) {
+                open_popup(&nav_app, target);
+                return false;
+            }
             if url.as_str() != "about:blank" {
                 let _ = nav_app.emit(
                     "browser-nav",
