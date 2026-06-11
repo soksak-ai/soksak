@@ -162,12 +162,17 @@ pub fn list_children(path: Option<String>) -> Result<ChildListing, String> {
             Err(_) => continue,
         };
         let name = entry.file_name().to_string_lossy().to_string();
-        // 심볼릭 링크는 가리키는 대상의 종류로 판정(디렉토리 링크도 펼칠 수 있게).
-        let dir = entry
-            .path()
-            .metadata()
-            .map(|m| m.is_dir())
-            .unwrap_or(false);
+        // dirent 의 file_type 사용(stat 없음) → 보호 폴더(다운로드/데스크탑/문서)를 건드리지
+        // 않아 TCC 프롬프트가 불필요하게 뜨지 않는다. 심링크만 대상 종류 확인차 stat.
+        let dir = match entry.file_type() {
+            Ok(ft) if ft.is_symlink() => entry
+                .path()
+                .metadata()
+                .map(|m| m.is_dir())
+                .unwrap_or(false),
+            Ok(ft) => ft.is_dir(),
+            Err(_) => false,
+        };
         children.push(Child { name, dir });
     }
     // 폴더 먼저, 그 다음 이름순(대소문자 무시).
