@@ -15,6 +15,8 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
   const [root, setRoot] = useState<string | undefined>(undefined);
   // "" = 기본값(전역 설정 defaultProgram 따름). 지정하면 프로젝트 설정이 우선.
   const [program, setProgram] = useState<Program | "">("");
+  // "" = 기본값(전역 설정 shell → $SHELL).
+  const [shell, setShell] = useState("");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -34,7 +36,12 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
 
   const folderName = baseName(root);
   const create = () => {
-    addProject({ alias, root, program: program || undefined });
+    addProject({
+      alias,
+      root,
+      program: program || undefined,
+      shell: shell.trim() || undefined,
+    });
     onClose();
   };
 
@@ -84,6 +91,24 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
               <option value="codex">Codex</option>
               <option value="browser">{t("program.browser")}</option>
             </select>
+          </div>
+
+          <div className="settings-row">
+            <label>{t("settings.shell")}</label>
+            <input
+              type="text"
+              list="np-shell-options"
+              value={shell}
+              placeholder={t("shell.default")}
+              onChange={(e) => setShell(e.target.value)}
+            />
+            <datalist id="np-shell-options">
+              <option value="/bin/zsh" />
+              <option value="/bin/bash" />
+              <option value="/bin/sh" />
+              <option value="/opt/homebrew/bin/fish" />
+              <option value="/opt/homebrew/bin/nu" />
+            </datalist>
           </div>
 
           <div className="np-actions">

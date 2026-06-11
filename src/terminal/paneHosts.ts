@@ -48,14 +48,19 @@ export function setTerminalSettingsProvider(
   terminalSettingsProvider = fn;
 }
 
-// App 이 등록하는 pane 별 spawn 옵션 getter(프로젝트 root → cwd, 첫 pane → initialCommand).
+// App 이 등록하는 pane 별 spawn 옵션 getter(프로젝트 root → cwd, 셸, 첫 pane → initialCommand).
 let spawnOptionsProvider: (paneId: string) => {
   cwd?: string;
+  shell?: string;
   initialCommand?: string;
 } = () => ({});
 
 export function setSpawnOptionsProvider(
-  fn: (paneId: string) => { cwd?: string; initialCommand?: string },
+  fn: (paneId: string) => {
+    cwd?: string;
+    shell?: string;
+    initialCommand?: string;
+  },
 ): void {
   spawnOptionsProvider = fn;
 }
@@ -98,6 +103,7 @@ export function getHost(paneId: string): HTMLDivElement {
     ...(theme ? { theme } : {}),
     ...(settings ? { settings } : {}),
     ...(spawn.cwd ? { cwd: spawn.cwd } : {}),
+    ...(spawn.shell ? { shell: spawn.shell } : {}),
     ...(spawn.initialCommand ? { initialCommand: spawn.initialCommand } : {}),
     paneId,
   })

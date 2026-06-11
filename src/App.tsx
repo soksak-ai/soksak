@@ -175,7 +175,7 @@ function App() {
   useEffect(() => {
     setSpawnOptionsProvider((paneId) => {
       const info = paneSpawnInfo(useSessions.getState().tabs, paneId);
-      return { cwd: info.cwd, initialCommand: info.program };
+      return { cwd: info.cwd, shell: info.shell, initialCommand: info.program };
     });
   }, []);
 
@@ -256,6 +256,18 @@ function App() {
       } else if (key === "b" && !e.shiftKey) {
         e.preventDefault();
         toggleSidebar(project.id);
+      } else if (key === "=" || key === "+") {
+        // ⌘+ 글자 크게 / ⌘- 작게 / ⌘0 기본(13). 터미널·UI 폰트 모두 설정을 따른다.
+        e.preventDefault();
+        const st = useSettings.getState();
+        st.setFontSize(st.fontSize + 1);
+      } else if (key === "-") {
+        e.preventDefault();
+        const st = useSettings.getState();
+        st.setFontSize(st.fontSize - 1);
+      } else if (key === "0") {
+        e.preventDefault();
+        useSettings.getState().setFontSize(13);
       }
     };
     window.addEventListener("keydown", onKeyDown, true);

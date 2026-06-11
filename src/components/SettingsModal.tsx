@@ -93,6 +93,24 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <option value="browser">{t("program.browser")}</option>
             </select>
           </div>
+          <div className="settings-row">
+            <label>{t("settings.shell")}</label>
+            {/* 콤보(datalist): 흔한 셸은 목록에서, 그 외 경로는 직접 입력. */}
+            <input
+              type="text"
+              list="shell-options"
+              value={s.shell}
+              placeholder={t("shell.default")}
+              onChange={(e) => s.setShell(e.target.value.trim())}
+            />
+            <datalist id="shell-options">
+              <option value="/bin/zsh" />
+              <option value="/bin/bash" />
+              <option value="/bin/sh" />
+              <option value="/opt/homebrew/bin/fish" />
+              <option value="/opt/homebrew/bin/nu" />
+            </datalist>
+          </div>
 
           <div className="settings-section">{t("settings.font")}</div>
           <div className="settings-row">

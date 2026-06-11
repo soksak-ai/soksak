@@ -27,10 +27,13 @@ interface SettingsState extends TerminalSettings {
   splitHeaderMode: SplitHeaderMode;
   // 첫 화면(새 컨텐츠 기본 프로그램). 프로젝트 설정이 있으면 그것이 우선.
   defaultProgram: DefaultProgram;
+  // 터미널 셸 경로("" = 시스템 기본 $SHELL). 프로젝트 설정이 있으면 그것이 우선.
+  shell: string;
   setLanguage: (l: Language) => void;
   setProjectTabPosition: (p: TabPosition) => void;
   setSplitHeaderMode: (m: SplitHeaderMode) => void;
   setDefaultProgram: (p: DefaultProgram) => void;
+  setShell: (s: string) => void;
   setFontFamily: (v: string) => void;
   setFontSize: (v: number) => void;
   setCursorBlink: (v: boolean) => void;
@@ -43,6 +46,7 @@ const DEFAULTS = {
   projectTabPosition: "top" as TabPosition,
   splitHeaderMode: "title" as SplitHeaderMode,
   defaultProgram: "terminal" as DefaultProgram,
+  shell: "",
   fontFamily:
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
   fontSize: 13,
@@ -84,6 +88,7 @@ export const useSettings = create<SettingsState>((set, get) => {
         projectTabPosition: s.projectTabPosition,
         splitHeaderMode: s.splitHeaderMode,
         defaultProgram: s.defaultProgram,
+        shell: s.shell,
         ...terminalSettingsOf(s),
       }),
     );
@@ -104,6 +109,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setDefaultProgram: (defaultProgram) => {
       set({ defaultProgram });
+      save();
+    },
+    setShell: (shell) => {
+      set({ shell });
       save();
     },
     setFontFamily: (fontFamily) => {

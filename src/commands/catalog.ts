@@ -397,11 +397,12 @@ export function registerCatalog(): void {
   });
 
   register("project.create", {
-    description: "새 프로젝트(루트 폴더 + 첫 화면 프로그램)",
+    description: "새 프로젝트(루트 폴더 + 첫 화면 프로그램 + 셸)",
     params: {
       root: { type: "string", description: "프로젝트 루트 디렉토리(절대경로)" },
       alias: { type: "string", description: "탭 별칭(생략=폴더명)" },
       program: { ...P.program, description: "첫 화면(생략=전역 설정)" },
+      shell: { type: "string", description: "터미널 셸 경로(생략=전역 설정→$SHELL)" },
     },
     returns: "{ projectId, contentId, groupId, viewId, paneId? }",
     examples: ['sok project.create \'{"root":"/Users/me/work","program":"claude"}\''],
@@ -410,6 +411,7 @@ export function registerCatalog(): void {
         alias: (p.alias as string) ?? "",
         root: p.root as string | undefined,
         program: p.program as Program | undefined,
+        shell: p.shell as string | undefined,
       }),
   });
 
@@ -1295,6 +1297,7 @@ export function registerCatalog(): void {
     "projectTabPosition",
     "splitHeaderMode",
     "defaultProgram",
+    "shell",
     "fontFamily",
     "fontSize",
     "cursorBlink",
@@ -1314,6 +1317,7 @@ export function registerCatalog(): void {
         projectTabPosition: s.projectTabPosition,
         splitHeaderMode: s.splitHeaderMode,
         defaultProgram: s.defaultProgram,
+        shell: s.shell,
         fontFamily: s.fontFamily,
         fontSize: s.fontSize,
         cursorBlink: s.cursorBlink,
@@ -1372,6 +1376,10 @@ export function registerCatalog(): void {
           if (v !== "terminal" && v !== "claude" && v !== "codex" && v !== "browser")
             return bad("terminal|claude|codex|browser");
           s.setDefaultProgram(v);
+          break;
+        case "shell":
+          if (typeof v !== "string") return bad("string(셸 경로, ''=기본)");
+          s.setShell(v);
           break;
         case "fontFamily":
           if (typeof v !== "string") return bad("string");

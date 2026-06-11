@@ -113,6 +113,8 @@ export interface ProjectTab {
   root?: string;
   // 프로젝트의 첫 화면(미지정이면 전역 설정 defaultProgram 사용 — 프로젝트 설정이 우선).
   program?: Program;
+  // 프로젝트의 터미널 셸(미지정이면 전역 설정 shell → 시스템 $SHELL).
+  shell?: string;
   // 컨텐츠 탭들 + 활성.
   contents: ContentArea[];
   activeContentId: string;
@@ -122,6 +124,7 @@ export interface NewProjectOpts {
   alias: string;
   root?: string;
   program?: Program; // undefined = 전역 설정 따름
+  shell?: string; // undefined = 전역 설정 따름
 }
 
 // 첫 화면 결정: 명시 선택 > 프로젝트 설정 > 전역 설정.
@@ -542,17 +545,20 @@ export function collectAllLeafIds(tabs: ProjectTab[]): string[] {
   return acc;
 }
 
-// paneId 의 spawn 정보: cwd=프로젝트 root, program=그 pane 이 뷰의 autorun 대상일 때만.
+// paneId 의 spawn 정보: cwd=프로젝트 root, shell=프로젝트>전역 설정,
+// program=그 pane 이 뷰의 autorun 대상일 때만.
 export function paneSpawnInfo(
   tabs: ProjectTab[],
   paneId: string,
-): { cwd?: string; program?: Program } {
+): { cwd?: string; shell?: string; program?: Program } {
   for (const t of tabs) {
     for (const c of t.contents) {
       for (const v of allViews(c.layout)) {
         if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
+          const shell = t.shell || useSettings.getState().shell || undefined;
           return {
             cwd: t.root,
+            shell,
             program:
               v.autorun?.paneId === paneId ? v.autorun.program : undefined,
           };
@@ -686,6 +692,7 @@ function makeProject(
     sidebarOpen: true,
     root: opts.root,
     program: opts.program,
+    shell: opts.shell,
     contents: [c],
     activeContentId: c.id,
   };
