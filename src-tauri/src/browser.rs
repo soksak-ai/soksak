@@ -12,6 +12,21 @@ struct NavPayload {
     url: String,
 }
 
+// 새 창 요청(target=_blank / window.open)을 같은 패널에서 연다. 외부 페이지가 Tauri 의
+// opener IPC(외부 webview 에 권한 없음 → Unhandled Rejection)로 위임되는 것을 차단하고,
+// 단일 패널 브라우저답게 현재 패널에서 네비게이션한다.
+const SAME_PANEL_NAV: &str = r#"
+(function () {
+  var nav = function (u) { try { if (u) location.href = u; } catch (_) {} };
+  window.open = function (u) { nav(u); return null; };
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    var a = t && t.closest ? t.closest('a[target="_blank"]') : null;
+    if (a && a.href) { e.preventDefault(); nav(a.href); }
+  }, true);
+})();
+"#;
+
 // child webview 생성(이미 있으면 무시). label = "b-<viewId>".
 #[tauri::command]
 pub fn browser_open(
@@ -31,6 +46,7 @@ pub fn browser_open(
     let nav_app = app.clone();
     let nav_label = label.clone();
     let builder = tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(parsed))
+        .initialization_script(SAME_PANEL_NAV)
         // 링크 클릭 등 네비게이션을 프론트로 통지(URL 바 동기화, 폴링 없음).
         // about:blank 는 WKWebView 초기화 과정의 중간 단계 — URL 상태를 덮어쓰지 않게 제외.
         .on_navigation(move |url| {
