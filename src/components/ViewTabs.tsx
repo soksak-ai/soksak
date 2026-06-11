@@ -9,13 +9,15 @@ import { useT } from "../i18n";
 export function ViewTabs({
   projectId,
   group,
-  onTabDragStart,
-  onTabDragEnd,
+  onViewDragStart,
+  onGroupDragStart,
+  onDragEnd,
 }: {
   projectId: string;
   group: ViewGroup;
-  onTabDragStart: (viewId: string) => void;
-  onTabDragEnd: () => void;
+  onViewDragStart: (viewId: string) => void;
+  onGroupDragStart: (groupId: string) => void;
+  onDragEnd: () => void;
 }) {
   const t = useT();
   const setActiveView = useSessions((s) => s.setActiveView);
@@ -96,6 +98,20 @@ export function ViewTabs({
 
   return (
     <div className="view-tabs-wrap">
+      {/* 타이틀 핸들: 드래그하면 그룹 전체(모든 탭)가 이동/분할된다. */}
+      <div
+        className="view-group-grip"
+        draggable
+        title={t("group.move")}
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData("text/x-group-id", group.id);
+          onGroupDragStart(group.id);
+        }}
+        onDragEnd={onDragEnd}
+      >
+        ⠿
+      </div>
       <div className="view-tabs" ref={scrollRef}>
         {group.views.map((v) => (
           <div
@@ -105,9 +121,9 @@ export function ViewTabs({
             onDragStart={(e) => {
               e.dataTransfer.effectAllowed = "move";
               e.dataTransfer.setData("text/x-view-id", v.id);
-              onTabDragStart(v.id);
+              onViewDragStart(v.id);
             }}
-            onDragEnd={onTabDragEnd}
+            onDragEnd={onDragEnd}
             onClick={() => setActiveView(projectId, v.id)}
             title={v.kind === "file" ? v.path : t("view.terminal")}
           >

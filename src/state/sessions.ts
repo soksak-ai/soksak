@@ -100,6 +100,13 @@ interface SessionsStore {
     targetGroupId: string,
     zone: DropZone,
   ) => void;
+  // 그룹 전체(타이틀바 드래그)를 targetGroup 의 zone 위치로.
+  moveGroupToGroup: (
+    projectId: string,
+    sourceGroupId: string,
+    targetGroupId: string,
+    zone: DropZone,
+  ) => void;
   // 분할 비율 조절(리사이저 드래그).
   resizeSplit: (projectId: string, splitId: string, sizes: number[]) => void;
 
@@ -168,6 +175,10 @@ function findGroupOfView(
 
 function hasGroup(node: GroupNode, groupId: string): boolean {
   return allGroups(node).some((g) => g.id === groupId);
+}
+
+function findGroup(node: GroupNode, groupId: string): ViewGroup | undefined {
+  return allGroups(node).find((g) => g.id === groupId);
 }
 
 // 특정 그룹의 ViewGroup 을 변환.
@@ -249,6 +260,32 @@ function removeView(
   const children: GroupNode[] = [];
   for (const c of node.children) {
     const r = removeView(c, viewId);
+    if (r.removed) removed = r.removed;
+    if (r.tree !== null) children.push(r.tree);
+  }
+  if (children.length === 0) return { tree: null, removed };
+  if (children.length === 1) return { tree: children[0], removed };
+  const sizes =
+    children.length === node.children.length
+      ? node.sizes
+      : equalSizes(children.length);
+  return { tree: { ...node, children, sizes }, removed };
+}
+
+// 그룹(leaf) 하나를 통째로 제거. 빈 split 붕괴는 removeView 와 동일.
+function removeGroup(
+  node: GroupNode,
+  groupId: string,
+): { tree: GroupNode | null; removed: ViewGroup | null } {
+  if (node.type === "leaf") {
+    return node.group.id === groupId
+      ? { tree: null, removed: node.group }
+      : { tree: node, removed: null };
+  }
+  let removed: ViewGroup | null = null;
+  const children: GroupNode[] = [];
+  for (const c of node.children) {
+    const r = removeGroup(c, groupId);
     if (r.removed) removed = r.removed;
     if (r.tree !== null) children.push(r.tree);
   }
@@ -607,6 +644,37 @@ export const useSessions = create<SessionsStore>((set) => ({
           ...t,
           layout: splitAtGroup(tree, targetGroupId, zone, fresh),
           activeGroupId: fresh.id,
+        });
+      }),
+    })),
+
+  moveGroupToGroup: (projectId, sourceGroupId, targetGroupId, zone) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) => {
+        if (sourceGroupId === targetGroupId) return t;
+        if (allGroups(t.layout).length <= 1) return t; // 유일 그룹은 이동 불가
+        const source = findGroup(t.layout, sourceGroupId);
+        if (!source) return t;
+        const { tree } = removeGroup(t.layout, sourceGroupId);
+        if (!tree || !hasGroup(tree, targetGroupId)) return t;
+
+        if (zone === "center") {
+          // target 으로 source 의 모든 탭을 병합(그룹 합치기).
+          return normalizeActiveGroup({
+            ...t,
+            layout: mapGroupNode(tree, targetGroupId, (g) => ({
+              ...g,
+              views: [...g.views, ...source.views],
+              activeViewId: source.activeViewId,
+            })),
+            activeGroupId: targetGroupId,
+          });
+        }
+        // 그룹 통째로 target 옆에 재배치(같은 id·뷰 유지 → 본문 remount 없음).
+        return normalizeActiveGroup({
+          ...t,
+          layout: splitAtGroup(tree, targetGroupId, zone, source),
+          activeGroupId: source.id,
         });
       }),
     })),

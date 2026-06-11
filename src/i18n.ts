@@ -30,6 +30,7 @@ const ko = {
   "view.terminal": "터미널",
   "view.close": "탭 닫기 (⌘W)",
   "view.newTerminal": "새 터미널 (⌘T)",
+  "group.move": "드래그해서 이 그룹 전체를 이동/분할",
 
   "tree.refreshAria": "파일 트리 새로고침",
 
@@ -104,6 +105,7 @@ const en: Record<MsgKey, string> = {
   "view.terminal": "Terminal",
   "view.close": "Close tab (⌘W)",
   "view.newTerminal": "New terminal (⌘T)",
+  "group.move": "Drag to move/split this whole group",
 
   "tree.refreshAria": "Refresh file tree",
 

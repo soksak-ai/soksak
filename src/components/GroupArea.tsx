@@ -113,10 +113,14 @@ export function GroupArea({
   const setActiveGroup = useSessions((s) => s.setActiveGroup);
   const setFileMode = useSessions((s) => s.setFileMode);
   const moveViewToGroup = useSessions((s) => s.moveViewToGroup);
+  const moveGroupToGroup = useSessions((s) => s.moveGroupToGroup);
   const resizeSplit = useSessions((s) => s.resizeSplit);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dragViewId, setDragViewId] = useState<string | null>(null);
+  // 드래그 중인 대상: 탭(뷰 하나) 또는 타이틀바(그룹 전체).
+  const [drag, setDrag] = useState<{ kind: "view" | "group"; id: string } | null>(
+    null,
+  );
   const [hover, setHover] = useState<{ groupId: string; zone: DropZone } | null>(
     null,
   );
@@ -168,7 +172,7 @@ export function GroupArea({
   };
 
   const endDrag = () => {
-    setDragViewId(null);
+    setDrag(null);
     setHover(null);
   };
 
@@ -230,8 +234,11 @@ export function GroupArea({
             <ViewTabs
               projectId={project.id}
               group={group}
-              onTabDragStart={setDragViewId}
-              onTabDragEnd={endDrag}
+              onViewDragStart={(viewId) => setDrag({ kind: "view", id: viewId })}
+              onGroupDragStart={(groupId) =>
+                setDrag({ kind: "group", id: groupId })
+              }
+              onDragEnd={endDrag}
             />
           </div>
         );
@@ -260,7 +267,7 @@ export function GroupArea({
       ))}
 
       {/* ── 드롭 오버레이 레이어: 드래그 중에만(평소엔 본문이 포인터 받음) ── */}
-      {dragViewId &&
+      {drag &&
         cells.map(({ group, rect }) => (
           <div
             key={`drop-${group.id}`}
@@ -282,8 +289,11 @@ export function GroupArea({
             onDrop={(e) => {
               e.preventDefault();
               const zone = zoneFromEvent(e, e.currentTarget);
-              if (dragViewId)
-                moveViewToGroup(project.id, dragViewId, group.id, zone);
+              if (drag.kind === "view") {
+                moveViewToGroup(project.id, drag.id, group.id, zone);
+              } else {
+                moveGroupToGroup(project.id, drag.id, group.id, zone);
+              }
               endDrag();
             }}
           >
