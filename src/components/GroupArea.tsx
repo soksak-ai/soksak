@@ -136,6 +136,7 @@ export function GroupArea({
     clientX: number,
     clientY: number,
     sourceGroupId?: string,
+    selfCenterOnly = true,
   ) => {
     const cont = containerRef.current;
     if (!cont) return null;
@@ -150,8 +151,9 @@ export function GroupArea({
         yPct <= c.rect.top + c.rect.height,
     );
     if (!cell) return null;
-    // 자기 출발 그룹 위에선 항상 전체(center) — 가장자리 분할 존을 띄우지 않는다.
-    if (cell.group.id === sourceGroupId) {
+    // 자기 출발 그룹 위: 그룹 드래그나 단일-뷰 탭은 항상 center(분할 무의미). 다중-뷰
+    // 그룹의 탭 드래그는 본문 가장자리에 떨어뜨려 그 탭만 새 패널로 분리할 수 있게 통과.
+    if (cell.group.id === sourceGroupId && selfCenterOnly) {
       return { groupId: cell.group.id, zone: "center" as DropZone };
     }
     const cellTopPx = r.top + (cell.rect.top / 100) * r.height;
@@ -187,10 +189,14 @@ export function GroupArea({
       const startX = e.clientX;
       const startY = e.clientY;
       // 드래그 출발 그룹(자기 영역 판정용): group=그 그룹, view=그 뷰가 속한 그룹.
-      const sourceGroupId =
+      const sourceGroup =
         kind === "group"
-          ? id
-          : cells.find((c) => c.group.views.some((v) => v.id === id))?.group.id;
+          ? cells.find((c) => c.group.id === id)?.group
+          : cells.find((c) => c.group.views.some((v) => v.id === id))?.group;
+      const sourceGroupId = sourceGroup?.id;
+      // 다중-뷰 그룹의 탭 드래그만 자기 영역 가장자리 분할 허용(탭 분리).
+      const selfCenterOnly =
+        kind === "group" || !sourceGroup || sourceGroup.views.length <= 1;
       let moved = false;
       const onMove = (ev: MouseEvent) => {
         if (!moved) {
@@ -201,7 +207,7 @@ export function GroupArea({
           document.body.style.userSelect = "none";
           document.body.style.cursor = "grabbing";
         }
-        setHover(hitTest(ev.clientX, ev.clientY, sourceGroupId));
+        setHover(hitTest(ev.clientX, ev.clientY, sourceGroupId, selfCenterOnly));
       };
       const onUp = (ev: MouseEvent) => {
         window.removeEventListener("mousemove", onMove);
@@ -209,7 +215,12 @@ export function GroupArea({
         document.body.style.userSelect = "";
         document.body.style.cursor = "";
         if (moved) {
-          const target = hitTest(ev.clientX, ev.clientY, sourceGroupId);
+          const target = hitTest(
+            ev.clientX,
+            ev.clientY,
+            sourceGroupId,
+            selfCenterOnly,
+          );
           if (target) {
             if (kind === "view") {
               moveViewToGroup(projectId, id, target.groupId, target.zone);
