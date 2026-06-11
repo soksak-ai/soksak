@@ -1,3 +1,6 @@
+[workspace]
+members = ["cli"]
+
 [package]
 # 기본(개발) 정체성. HMR(번들 안 됨)은 이 바이너리명이 독에 그대로 뜬다 → soksak-dev.
 # 릴리스/디버그 번들은 빌드 시 --config 로 productName 을 soksak / soksak-debug 로 푼다.
@@ -31,4 +34,12 @@ tauri-plugin-dialog = "2.7.1"
 # 파일 트리 라이브 갱신용 파일시스템 워처(macOS=FSEvents, Linux=inotify, Win=ReadDirectoryChangesW).
 # 폴링 없이 OS 네이티브 이벤트. debouncer-mini 로 변경 폭주를 묶는다.
 notify-debouncer-mini = "0.6"
+
+# browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
+# wry 의존 트리와 동일 버전 사용.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-web-kit = { version = "0.3", features = ["block2"] }
+block2 = "0.6"
 

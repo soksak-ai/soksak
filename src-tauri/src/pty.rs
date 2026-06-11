@@ -116,6 +116,7 @@ pub fn spawn_terminal(
     rows: u16,
     cwd: Option<String>,
     shell: Option<String>,
+    pane_id: Option<String>,
     on_output: Channel<InvokeResponseBody>,
     manager: State<'_, PtyManager>,
 ) -> Result<u32, String> {
@@ -136,6 +137,14 @@ pub fn spawn_terminal(
     }
     cmd.env("TERM", "xterm-256color");
     cmd.env("COLORTERM", "truecolor");
+    // AI 명령 인터페이스 컨텍스트(tmux 의 $TMUX_PANE 모델): 셸 안의 도구가 자기 pane 과
+    // 제어 소켓을 알 수 있게 주입 — sok CLI 가 이걸로 "내 위치" 기본 타기팅을 한다.
+    if let Some(pane) = &pane_id {
+        cmd.env("SOKSAK_PANE", pane);
+    }
+    if let Some(sock) = crate::ipc::socket_path() {
+        cmd.env("SOKSAK_SOCKET", sock);
+    }
     setup_zsh_integration(&mut cmd, &shell);
 
     let child = pair

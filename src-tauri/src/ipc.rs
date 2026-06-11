@@ -1,0 +1,178 @@
+// AI 명령 인터페이스의 전송 계층: Unix Domain Socket JSON-RPC 서버 + 프론트 브리지.
+// kitty remote control 과 동일 모델 — 소켓 한 줄(JSON) 요청 → 한 줄(JSON) 응답.
+//   요청: {"id":<any>, "method":"panel.split", "params":{...}, "pane":"p3"}
+//   응답: {"ok":true, ...} | {"ok":false, "code":"...", "message":"..."} (+ id echo)
+// 명령 실행은 프론트 Command Registry 가 담당: Rust 는 emit("cmd-request") 로 전달하고
+// 프론트가 invoke(cmd_result) 로 회신한다(요청 seq 매칭, 타임아웃 10s). 폴링 없음.
+
+use std::collections::HashMap;
+use std::io::{BufRead, BufReader, Write};
+use std::os::unix::fs::PermissionsExt;
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{mpsc, Mutex, OnceLock};
+use std::time::Duration;
+
+use serde::Deserialize;
+use serde_json::{json, Value};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+// PTY 가 SOKSAK_SOCKET 으로 주입할 소켓 경로(서버 기동 시 1회 설정).
+static SOCKET_PATH: OnceLock<String> = OnceLock::new();
+
+pub fn socket_path() -> Option<&'static str> {
+    SOCKET_PATH.get().map(|s| s.as_str())
+}
+
+#[derive(Default)]
+pub struct CmdBridge {
+    // 요청 seq → 응답 채널. 프론트의 cmd_result 가 채운다.
+    pending: Mutex<HashMap<u64, mpsc::SyncSender<Value>>>,
+}
+
+static SEQ: AtomicU64 = AtomicU64::new(1);
+
+#[derive(Debug, Deserialize)]
+struct Request {
+    // 클라이언트 상관 id(있으면 응답에 echo).
+    id: Option<Value>,
+    method: String,
+    #[serde(default)]
+    params: Value,
+    pane: Option<String>,
+}
+
+fn parse_request(line: &str) -> Result<Request, String> {
+    serde_json::from_str::<Request>(line).map_err(|e| format!("JSON 파싱 실패: {e}"))
+}
+
+fn error_reply(code: &str, message: &str) -> Value {
+    json!({ "ok": false, "code": code, "message": message })
+}
+
+// 소켓 서버 기동. 잔존 소켓이 살아 있으면(다른 인스턴스) 에러, 죽었으면 제거 후 재바인드.
+pub fn start(app: AppHandle) -> Result<String, String> {
+    let home = std::env::var("HOME").map_err(|e| format!("HOME 없음: {e}"))?;
+    let dir = format!("{home}/.soksak");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let identifier = app.config().identifier.clone();
+    let path = format!("{dir}/{identifier}.sock");
+
+    if std::path::Path::new(&path).exists() {
+        if UnixStream::connect(&path).is_ok() {
+            return Err(format!("이미 실행 중인 인스턴스가 소켓을 사용 중: {path}"));
+        }
+        let _ = std::fs::remove_file(&path); // 죽은 소켓 정리
+    }
+    let listener = UnixListener::bind(&path).map_err(|e| e.to_string())?;
+    // 로컬 사용자 전용(0600).
+    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    let _ = SOCKET_PATH.set(path.clone());
+
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(stream) = stream else { continue };
+            let app = app.clone();
+            std::thread::spawn(move || handle_conn(app, stream));
+        }
+    });
+    Ok(path)
+}
+
+// 앱 종료 시 소켓 파일 정리(다음 기동의 죽은-소켓 처리와 이중 안전).
+pub fn cleanup() {
+    if let Some(path) = SOCKET_PATH.get() {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+fn handle_conn(app: AppHandle, stream: UnixStream) {
+    let Ok(read_half) = stream.try_clone() else { return };
+    let reader = BufReader::new(read_half);
+    let mut writer = stream;
+    for line in reader.lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let reply = match parse_request(&line) {
+            Err(msg) => error_reply("INVALID_PARAMS", &msg),
+            Ok(req) => dispatch(&app, req),
+        };
+        if writeln!(writer, "{reply}").is_err() {
+            break;
+        }
+    }
+}
+
+// 요청을 프론트 registry 로 전달하고 응답을 기다린다.
+fn dispatch(app: &AppHandle, req: Request) -> Value {
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let (tx, rx) = mpsc::sync_channel::<Value>(1);
+    let bridge = app.state::<CmdBridge>();
+    bridge.pending.lock().unwrap().insert(seq, tx);
+
+    let payload = json!({
+        "id": seq,
+        "method": req.method,
+        "params": req.params,
+        "pane": req.pane,
+    });
+    if app.emit("cmd-request", payload).is_err() {
+        bridge.pending.lock().unwrap().remove(&seq);
+        return error_reply("INTERNAL", "프론트로 요청 전달 실패");
+    }
+
+    let result = rx.recv_timeout(Duration::from_secs(10));
+    bridge.pending.lock().unwrap().remove(&seq);
+    let mut out = match result {
+        Ok(v) => v,
+        Err(_) => error_reply("TIMEOUT", "응답 시간 초과(앱 UI 미응답?)"),
+    };
+    if let (Some(cid), Some(obj)) = (req.id, out.as_object_mut()) {
+        obj.insert("id".into(), cid);
+    }
+    out
+}
+
+// 프론트 executor 의 회신(요청 seq 매칭).
+#[tauri::command]
+pub fn cmd_result(bridge: State<CmdBridge>, id: u64, result: Value) {
+    if let Some(tx) = bridge.pending.lock().unwrap().remove(&id) {
+        let _ = tx.try_send(result);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_full_request() {
+        let r = parse_request(
+            r#"{"id":7,"method":"panel.split","params":{"side":"right"},"pane":"p3"}"#,
+        )
+        .unwrap();
+        assert_eq!(r.method, "panel.split");
+        assert_eq!(r.id, Some(json!(7)));
+        assert_eq!(r.pane.as_deref(), Some("p3"));
+        assert_eq!(r.params["side"], "right");
+    }
+
+    #[test]
+    fn parses_minimal_request_with_defaults() {
+        let r = parse_request(r#"{"method":"state.tree"}"#).unwrap();
+        assert_eq!(r.method, "state.tree");
+        assert!(r.id.is_none());
+        assert!(r.pane.is_none());
+        assert!(r.params.is_null());
+    }
+
+    #[test]
+    fn rejects_invalid_json_with_structured_error() {
+        let msg = parse_request("not json").unwrap_err();
+        let reply = error_reply("INVALID_PARAMS", &msg);
+        assert_eq!(reply["ok"], false);
+        assert_eq!(reply["code"], "INVALID_PARAMS");
+    }
+}

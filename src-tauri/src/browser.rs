@@ -180,3 +180,78 @@ pub fn browser_close(app: AppHandle, label: String) -> Result<(), String> {
     }
     Ok(())
 }
+
+// 내장 브라우저 새 창을 명령으로 직접 열기(browser.open where=window).
+#[tauri::command]
+pub fn browser_open_window(app: AppHandle, url: String) -> Result<(), String> {
+    let parsed = Url::parse(&url).map_err(|e| e.to_string())?;
+    open_popup(&app, parsed);
+    Ok(())
+}
+
+// 브라우저 페이지에서 JS 를 실행하고 "결과를 반환"한다 — AI 의 DOM 제어 통로.
+// WKWebView callAsyncJavaScript(async/await 지원) + completion handler 네이티브 콜백:
+// 외부 페이지 CSP/IPC 권한과 무관, 폴링 없음. js 는 async 함수 본문으로 실행되며
+// (호출측 래퍼가 JSON.stringify 로 감싼) 문자열을 반환해야 한다.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub async fn browser_eval(app: AppHandle, label: String, js: String) -> Result<String, String> {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let wv = app
+        .get_webview(&label)
+        .ok_or_else(|| format!("webview 없음: {label}"))?;
+    let (tx, rx) = mpsc::sync_channel::<Result<String, String>>(1);
+
+    wv.with_webview(move |pw| {
+        use block2::RcBlock;
+        use objc2::runtime::AnyObject;
+        use objc2::MainThreadMarker;
+        use objc2_foundation::{NSError, NSString};
+        use objc2_web_kit::{WKContentWorld, WKWebView};
+
+        // with_webview 클로저는 메인 스레드에서 실행된다(tauri 보장).
+        unsafe {
+            let wk = &*(pw.inner() as *const WKWebView);
+            let mtm = MainThreadMarker::new_unchecked();
+            let world = WKContentWorld::pageWorld(mtm);
+            let body = NSString::from_str(&js);
+            let tx = tx.clone();
+            let block = RcBlock::new(move |result: *mut AnyObject, error: *mut NSError| {
+                let outcome = if !error.is_null() {
+                    Err((*error).localizedDescription().to_string())
+                } else if result.is_null() {
+                    Ok("null".to_string())
+                } else {
+                    match (*result).downcast_ref::<NSString>() {
+                        Some(s) => Ok(s.to_string()),
+                        None => Err("eval 결과가 문자열이 아님(JSON.stringify 필요)".into()),
+                    }
+                };
+                let _ = tx.try_send(outcome);
+            });
+            wk.callAsyncJavaScript_arguments_inFrame_inContentWorld_completionHandler(
+                &body,
+                None,
+                None,
+                &world,
+                Some(&block),
+            );
+        }
+    })
+    .map_err(|e| e.to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        rx.recv_timeout(Duration::from_secs(15))
+            .map_err(|_| "eval 시간 초과".to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub async fn browser_eval(_app: AppHandle, _label: String, _js: String) -> Result<String, String> {
+    Err("browser_eval 은 현재 macOS 전용".into())
+}

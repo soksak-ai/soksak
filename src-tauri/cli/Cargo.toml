@@ -1,0 +1,13 @@
+# sok — soksak 원격 제어 CLI. 앱 크레이트와 분리된 워크스페이스 멤버
+# (같은 패키지의 [[bin]] 으로 두면 tauri 번들러가 메인 바이너리를 오인한다).
+[package]
+name = "sok"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sok"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
