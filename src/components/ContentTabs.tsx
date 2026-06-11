@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useSessions, type Program, type ProjectTab } from "../state/sessions";
 import { useUi } from "../state/ui";
 import { useT } from "../i18n";
@@ -17,6 +17,12 @@ export function ContentTabs({ project }: { project: ProjectTab }) {
   const releaseBrowser = useUi((s) => s.releaseBrowser);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // 메뉴는 fixed 로 띄운다 — 탭 바의 overflow-x:auto 가 absolute 드롭다운을 클리핑하므로.
+  const addBtnRef = useRef<HTMLButtonElement>(null);
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number }>({
+    left: 0,
+    top: 0,
+  });
 
   const commit = (id: string, raw: string, fallback: string) => {
     renameContent(project.id, id, raw.trim() || fallback);
@@ -25,6 +31,10 @@ export function ContentTabs({ project }: { project: ProjectTab }) {
 
   // 메뉴는 DOM 오버레이 — 아래 브라우저 webview 에 가리지 않게 열린 동안 숨김.
   const setMenu = (open: boolean) => {
+    if (open) {
+      const r = addBtnRef.current?.getBoundingClientRect();
+      if (r) setMenuPos({ left: r.left, top: r.bottom + 2 });
+    }
     setMenuOpen((cur) => {
       if (cur === open) return cur;
       if (open) suppressBrowser();
@@ -82,6 +92,7 @@ export function ContentTabs({ project }: { project: ProjectTab }) {
       ))}
       <div className="ctab-add-wrap">
         <button
+          ref={addBtnRef}
           type="button"
           className="ctab-add"
           title={t("content.new")}
@@ -90,7 +101,11 @@ export function ContentTabs({ project }: { project: ProjectTab }) {
           +
         </button>
         {menuOpen && (
-          <div className="ctab-menu" onMouseLeave={() => setMenu(false)}>
+          <div
+            className="ctab-menu"
+            style={{ left: menuPos.left, top: menuPos.top }}
+            onMouseLeave={() => setMenu(false)}
+          >
             <div className="ctab-menu-item" onClick={() => pick("terminal")}>
               {t("program.terminal")}
             </div>

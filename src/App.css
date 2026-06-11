@@ -688,12 +688,11 @@ body,
 .ctab-add:hover {
   background: rgba(127, 127, 127, 0.16);
 }
-/* + 메뉴: 터미널 / 인공지능(호버 서브메뉴) / 브라우저. */
+/* + 메뉴: 터미널 / 인공지능(호버 서브메뉴) / 브라우저.
+   fixed — 탭 바의 overflow 클리핑/스태킹과 무관하게 항상 위에 뜬다(좌표는 JS 가 지정). */
 .ctab-menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 50;
+  position: fixed;
+  z-index: 1000;
   min-width: 130px;
   padding: 4px;
   background: var(--bg);
