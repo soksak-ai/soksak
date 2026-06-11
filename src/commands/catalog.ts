@@ -29,7 +29,7 @@ import {
   sendInputToHost,
 } from "../terminal/paneHosts";
 import { computeLayout } from "../components/GroupArea";
-import { saveFileView } from "./fileViewBridge";
+import { getFileView, saveFileView } from "./fileViewBridge";
 import { catalogJson, register, type CommandContext } from "./registry";
 
 // ── 공통 에러/헬퍼 ───────────────────────────────────────────────────────────
@@ -1278,6 +1278,60 @@ export function registerCatalog(): void {
     },
   });
 
+  const FIND_OPTS = {
+    caseSensitive: { type: "boolean", description: "대소문자 구분", default: false },
+    regexp: { type: "boolean", description: "정규식 사용", default: false },
+    wholeWord: { type: "boolean", description: "단어 단위 일치", default: false },
+  } satisfies Record<string, import("./registry").ParamSpec>;
+
+  register("editor.find", {
+    description: "에디터 뷰에서 찾기(하이라이트 + 첫 매치 선택). 매치 수 반환",
+    params: {
+      view: { ...P.view, required: true },
+      query: { type: "string", description: "찾을 문자열/패턴", required: true },
+      ...FIND_OPTS,
+    },
+    returns: "{ matches }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok editor.find \'{"view":"v4","query":"TODO"}\''],
+    handler: (p) => {
+      const api = getFileView(p.view as string);
+      if (!api) return notFound(`열려 있는 에디터 뷰 없음: ${p.view}`);
+      return api.find(p.query as string, {
+        caseSensitive: p.caseSensitive as boolean,
+        regexp: p.regexp as boolean,
+        wholeWord: p.wholeWord as boolean,
+      });
+    },
+  });
+
+  register("editor.replace", {
+    description:
+      "에디터 뷰에서 바꾸기(all=true 전체, 아니면 1건). 치환 수 반환 — 저장은 editor.save",
+    params: {
+      view: { ...P.view, required: true },
+      query: { type: "string", description: "찾을 문자열/패턴", required: true },
+      replacement: { type: "string", description: "바꿀 문자열", required: true },
+      all: { type: "boolean", description: "모두 바꾸기", default: true },
+      ...FIND_OPTS,
+    },
+    returns: "{ replaced }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: [
+      'sok editor.replace \'{"view":"v4","query":"foo","replacement":"bar"}\'',
+    ],
+    handler: (p) => {
+      const api = getFileView(p.view as string);
+      if (!api) return notFound(`열려 있는 에디터 뷰 없음: ${p.view}`);
+      return api.replace(p.query as string, p.replacement as string, {
+        caseSensitive: p.caseSensitive as boolean,
+        regexp: p.regexp as boolean,
+        wholeWord: p.wholeWord as boolean,
+        all: p.all as boolean,
+      });
+    },
+  });
+
   register("editor.close", {
     description: "에디터 뷰 닫기(view.close 와 동일)",
     params: { view: { ...P.view, required: true } },
@@ -1288,6 +1342,45 @@ export function registerCatalog(): void {
       const loc = locateView(p.view as string);
       if (!loc) return notFound(`뷰 없음: ${p.view}`);
       return S().closeView(loc.project.id, p.view as string);
+    },
+  });
+
+  // ----- explorer(파일 탐색기) -----
+  register("explorer.list", {
+    description:
+      "디렉토리 직속 자식 나열(파일트리와 동일한 뷰). path 생략=프로젝트 root(없으면 HOME)",
+    params: {
+      project: P.project,
+      path: { type: "string", description: "디렉토리 절대경로" },
+    },
+    returns: "{ root, children: [{name,dir}] }",
+    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
+    examples: ["sok explorer.list", 'sok explorer.list \'{"path":"/tmp"}\''],
+    handler: async (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      const path = (p.path as string) ?? t?.root ?? null;
+      return await invoke<{ root: string; children: object[] }>(
+        "list_children",
+        { path },
+      );
+    },
+  });
+
+  register("explorer.git", {
+    description: "디렉토리의 git 변경 상태(파일트리 데코레이션과 동일)",
+    params: {
+      project: P.project,
+      path: { type: "string", description: "git repo 디렉토리(생략=프로젝트 root)" },
+    },
+    returns: "{ entries: [{path,status}] } — repo 아니면 빈 목록",
+    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
+    examples: ["sok explorer.git"],
+    handler: async (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      const path = (p.path as string) ?? t?.root;
+      if (!path) return notFound("path 또는 프로젝트 root 필요");
+      const entries = await invoke<object[]>("git_status", { path });
+      return { entries };
     },
   });
 

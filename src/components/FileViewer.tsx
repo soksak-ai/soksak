@@ -9,7 +9,14 @@ import {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import CodeMirror, { EditorView } from "@uiw/react-codemirror";
-import { search } from "@codemirror/search";
+import {
+  findNext,
+  replaceAll,
+  replaceNext,
+  search,
+  SearchQuery,
+  setSearchQuery,
+} from "@codemirror/search";
 import {
   langNames,
   loadLanguage,
@@ -255,11 +262,59 @@ export function FileViewer({
     }
   }, [editable, text, saving, path, projectId, viewId, setFileDirty]);
 
-  // editor.save 명령 브리지(최신 save 를 ref 로 노출 — 등록은 viewId 당 1회).
+  // editor.* 명령 브리지(최신 함수를 ref 로 노출 — 등록은 viewId 당 1회).
+  // find/replace 는 @codemirror/search 의 검색 상태를 프로그램으로 구동한다(찾기
+  // 위젯과 같은 엔진 — 하이라이트도 동일하게 표시됨).
   const saveRef = useRef(save);
   saveRef.current = save;
+  const cmViewRef = useRef<EditorView | null>(null);
+  cmViewRef.current = cmView;
+  const editableRef = useRef(editable);
+  editableRef.current = editable;
   useEffect(
-    () => registerFileView(viewId, { save: () => saveRef.current() }),
+    () =>
+      registerFileView(viewId, {
+        save: () => saveRef.current(),
+        find: (query, opts) => {
+          const v = cmViewRef.current;
+          if (!v) return { matches: 0 };
+          const q = new SearchQuery({
+            search: query,
+            caseSensitive: opts.caseSensitive ?? false,
+            regexp: opts.regexp ?? false,
+            wholeWord: opts.wholeWord ?? false,
+          });
+          v.dispatch({ effects: setSearchQuery.of(q) });
+          let matches = 0;
+          const it = q.getCursor(v.state);
+          while (!it.next().done) matches++;
+          if (matches > 0) findNext(v); // 첫 매치 선택 + 스크롤
+          return { matches };
+        },
+        replace: (query, replacement, opts) => {
+          const v = cmViewRef.current;
+          if (!v || !editableRef.current) return { replaced: 0 };
+          const q = new SearchQuery({
+            search: query,
+            replace: replacement,
+            caseSensitive: opts.caseSensitive ?? false,
+            regexp: opts.regexp ?? false,
+            wholeWord: opts.wholeWord ?? false,
+          });
+          v.dispatch({ effects: setSearchQuery.of(q) });
+          let matches = 0;
+          const it = q.getCursor(v.state);
+          while (!it.next().done) matches++;
+          if (matches === 0) return { replaced: 0 };
+          if (opts.all) {
+            replaceAll(v);
+            return { replaced: matches };
+          }
+          findNext(v);
+          replaceNext(v);
+          return { replaced: 1 };
+        },
+      }),
     [viewId],
   );
 
