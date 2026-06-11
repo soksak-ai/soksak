@@ -1155,6 +1155,16 @@ body,
 .fv-cm .cm-editor {
   font-size: 13px;
 }
+/* 에디터 배경을 앱 배경색(설정)에 맞춘다 — @uiw 프리셋 테마의 고정 배경을 덮어쓴다.
+   구문 강조 글자색은 테마(밝기 매칭) 그대로 두고 배경/거터만 var(--bg)로. */
+.fv-cm .cm-editor,
+.fv-cm .cm-gutters {
+  background-color: var(--bg);
+}
+.fv-cm .cm-activeLine,
+.fv-cm .cm-activeLineGutter {
+  background-color: rgba(127, 127, 127, 0.08);
+}
 .fv-msg {
   padding: 16px;
   font-size: 13px;
