@@ -36,6 +36,7 @@ fn main() -> ExitCode {
         },
         Some("docs") => run_docs(),
         Some("skill") => run_skill(&args[1..]),
+        Some("mcp") => run_mcp(),
         Some(method) => {
             let params = match args.get(1) {
                 None => Value::Null,
@@ -229,6 +230,134 @@ fn run_docs() -> ExitCode {
             ExitCode::SUCCESS
         }
     }
+}
+
+// ── MCP stdio 서버 (Model Context Protocol 2024-11-05) ──────────────────────
+// `sok mcp` — stdin/stdout JSON-RPC 로 MCP 클라이언트(claude 등)에 soksak 전 기능을
+// tool 로 노출한다. tool 목록은 앱 registry(state.commands)에서 동적 생성(단일 진실).
+// MCP tool 이름은 [a-zA-Z0-9_-] 만 허용 → 명령 이름의 "." 을 "_" 로 양방향 치환.
+// 직접 구현 사유: 카탈로그가 런타임 동적이라 정적 매크로 SDK 보다 소형 핸들러가
+// 정확하고, 추가 의존성이 없다(프로토콜은 newline-delimited JSON-RPC 2.0).
+
+fn mcp_input_schema(params: &Value) -> Value {
+    let mut props = serde_json::Map::new();
+    let mut required: Vec<String> = Vec::new();
+    if let Some(obj) = params.as_object() {
+        for (k, p) in obj {
+            let desc = p["description"].as_str().unwrap_or("");
+            let mut schema = match p["type"].as_str().unwrap_or("string") {
+                "number" => json!({"type": "number"}),
+                "boolean" => json!({"type": "boolean"}),
+                "string[]" => json!({"type": "array", "items": {"type": "string"}}),
+                "number[]" => json!({"type": "array", "items": {"type": "number"}}),
+                "json" => json!({}),
+                _ => json!({"type": "string"}),
+            };
+            if let Some(o) = schema.as_object_mut() {
+                o.insert("description".into(), json!(desc));
+                if let Some(e) = p.get("enum") {
+                    if !e.is_null() {
+                        o.insert("enum".into(), e.clone());
+                    }
+                }
+            }
+            props.insert(k.clone(), schema);
+            if p["required"].as_bool().unwrap_or(false) {
+                required.push(k.clone());
+            }
+        }
+    }
+    json!({"type": "object", "properties": props, "required": required})
+}
+
+fn mcp_reply(id: &Value, result: Value) {
+    println!(
+        "{}",
+        json!({"jsonrpc": "2.0", "id": id, "result": result})
+    );
+    use std::io::Write as _;
+    let _ = std::io::stdout().flush();
+}
+
+fn mcp_error(id: &Value, code: i64, message: &str) {
+    println!(
+        "{}",
+        json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
+    );
+    use std::io::Write as _;
+    let _ = std::io::stdout().flush();
+}
+
+fn run_mcp() -> ExitCode {
+    let stdin = std::io::stdin();
+    for line in stdin.lock().lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let Ok(msg) = serde_json::from_str::<Value>(&line) else {
+            continue; // 파싱 불가 라인은 무시(스펙: 응답 불가)
+        };
+        let id = msg.get("id").cloned();
+        let method = msg["method"].as_str().unwrap_or("");
+        match (method, id) {
+            ("initialize", Some(id)) => {
+                let ver = msg["params"]["protocolVersion"]
+                    .as_str()
+                    .unwrap_or("2024-11-05")
+                    .to_string();
+                mcp_reply(
+                    &id,
+                    json!({
+                        "protocolVersion": ver,
+                        "capabilities": {"tools": {}},
+                        "serverInfo": {"name": "soksak", "version": env!("CARGO_PKG_VERSION")},
+                    }),
+                );
+            }
+            ("ping", Some(id)) => mcp_reply(&id, json!({})),
+            ("tools/list", Some(id)) => match fetch_commands() {
+                Err(e) => mcp_error(&id, -32000, &e),
+                Ok(cmds) => {
+                    let tools: Vec<Value> = cmds
+                        .iter()
+                        .map(|c| {
+                            let name = c["name"].as_str().unwrap_or("").replace('.', "_");
+                            json!({
+                                "name": name,
+                                "description": c["description"].as_str().unwrap_or(""),
+                                "inputSchema": mcp_input_schema(&c["params"]),
+                            })
+                        })
+                        .collect();
+                    mcp_reply(&id, json!({"tools": tools}));
+                }
+            },
+            ("tools/call", Some(id)) => {
+                let name = msg["params"]["name"].as_str().unwrap_or("");
+                let method = name.replace('_', ".");
+                let args = msg["params"]["arguments"].clone();
+                match request(&method, args) {
+                    Err(e) => mcp_error(&id, -32000, &e),
+                    Ok(v) => {
+                        let ok = v.get("ok").and_then(Value::as_bool).unwrap_or(false);
+                        let text =
+                            serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string());
+                        mcp_reply(
+                            &id,
+                            json!({
+                                "content": [{"type": "text", "text": text}],
+                                "isError": !ok,
+                            }),
+                        );
+                    }
+                }
+            }
+            (_, None) => {} // notification(initialized 등) — 무응답
+            (_, Some(id)) => mcp_error(&id, -32601, &format!("지원하지 않는 메서드: {method}")),
+        }
+    }
+    ExitCode::SUCCESS
 }
 
 // ── 스킬 설치(Claude/Gemini/Codex) ───────────────────────────────────────────
