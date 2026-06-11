@@ -25,8 +25,8 @@ import {
 //
 // 각 그룹 = [타이틀바(드래그=그룹 이동)] [탭바(탭 드래그=뷰 이동)] [본문] [스테이터스바].
 
-type Rect = { left: number; top: number; width: number; height: number }; // %
-interface Cell {
+export type Rect = { left: number; top: number; width: number; height: number }; // %
+export interface Cell {
   group: ViewGroup;
   rect: Rect;
 }
@@ -44,7 +44,10 @@ const STATUS_PX = 20; // 스테이터스바
 const CHROME_TOP = HEADER_PX; // 본문 상단 오프셋
 const DRAG_THRESHOLD = 5; // 이 픽셀 이상 움직여야 드래그로 간주(아니면 클릭)
 
-function computeLayout(node: GroupNode): { cells: Cell[]; dividers: Divider[] } {
+export function computeLayout(node: GroupNode): {
+  cells: Cell[];
+  dividers: Divider[];
+} {
   const cells: Cell[] = [];
   const dividers: Divider[] = [];
   const walk = (n: GroupNode, r: Rect) => {

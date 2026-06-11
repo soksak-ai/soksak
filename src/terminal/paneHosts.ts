@@ -99,6 +99,7 @@ export function getHost(paneId: string): HTMLDivElement {
     ...(settings ? { settings } : {}),
     ...(spawn.cwd ? { cwd: spawn.cwd } : {}),
     ...(spawn.initialCommand ? { initialCommand: spawn.initialCommand } : {}),
+    paneId,
   })
     .then((handle) => {
       // 생성 도중 pane 이 닫혔다면 즉시 폐기.
@@ -154,6 +155,22 @@ export function setThemeAll(theme: ITheme): void {
 /** pane 으로 텍스트 붙여넣기(파일 드래그 경로 주입). 핸들 준비 전이면 무시. */
 export function pasteToHost(paneId: string, text: string): void {
   hosts.get(paneId)?.handle?.paste(text);
+}
+
+/** pane 의 PTY 에 raw 입력 주입(TUI 키 조작). 준비 전이면 false. */
+export function sendInputToHost(paneId: string, data: string): boolean {
+  const h = hosts.get(paneId)?.handle;
+  if (!h) return false;
+  h.sendInput(data);
+  return true;
+}
+
+/** pane 의 화면+스크롤백 텍스트(끝에서 lines 줄). 준비 전이면 undefined. */
+export function readHostBuffer(
+  paneId: string,
+  lines?: number,
+): string | undefined {
+  return hosts.get(paneId)?.handle?.readBuffer(lines);
 }
 
 /** pane 터미널의 현재 작업 디렉토리(셸 통합 OSC 7/633;P). 미확인이면 undefined. */

@@ -19,6 +19,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { useT } from "../i18n";
 import { useSessions } from "../state/sessions";
+import { registerFileView } from "../commands/fileViewBridge";
 import { EditorFind } from "./EditorFind";
 
 // 파일 뷰어: 확장자로 렌더 전략을 정한다.
@@ -232,20 +233,35 @@ export function FileViewer({
     [projectId, viewId, setFileDirty],
   );
 
-  const save = useCallback(async () => {
-    if (!editable || text == null || saving || text === savedRef.current) return;
+  const save = useCallback(async (): Promise<{
+    saved: boolean;
+    reason?: string;
+  }> => {
+    if (!editable) return { saved: false, reason: "읽기 전용 뷰" };
+    if (text == null || saving) return { saved: false, reason: "저장 불가 상태" };
+    if (text === savedRef.current) return { saved: true, reason: "변경 없음" };
     setSaving(true);
     setSaveError(null);
     try {
       await invoke("write_text_file", { path, content: text });
       savedRef.current = text;
       setFileDirty(projectId, viewId, false);
+      return { saved: true };
     } catch (e) {
       setSaveError(String(e));
+      return { saved: false, reason: String(e) };
     } finally {
       setSaving(false);
     }
   }, [editable, text, saving, path, projectId, viewId, setFileDirty]);
+
+  // editor.save 명령 브리지(최신 save 를 ref 로 노출 — 등록은 viewId 당 1회).
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(
+    () => registerFileView(viewId, { save: () => saveRef.current() }),
+    [viewId],
+  );
 
   // 단축키(캡처 단계 — CodeMirror/WebView 기본동작보다 먼저). 물리 키(e.code)로 판정해
   // 키보드 레이아웃/Option 합성문자(⌥f→"ƒ")에 영향받지 않게 한다.

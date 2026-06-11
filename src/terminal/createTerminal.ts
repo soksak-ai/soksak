@@ -23,6 +23,8 @@ export interface CreateTerminalOptions {
   settings?: TerminalSettings;
   /** spawn 직후 PTY 로 자동 실행할 명령(예: claude/codex). 첫 pane 에서만. */
   initialCommand?: string;
+  /** 이 터미널의 pane id — 셸에 SOKSAK_PANE 으로 주입(sok CLI 컨텍스트 타기팅). */
+  paneId?: string;
 }
 
 export interface TerminalHandle {
@@ -42,6 +44,10 @@ export interface TerminalHandle {
   setTheme: (theme: ITheme) => void;
   /** 텍스트를 PTY 로 붙여넣기(bracketed paste 모드면 자동 래핑). 파일 드래그 경로 주입용. */
   paste: (text: string) => void;
+  /** raw 바이트를 PTY 에 그대로 쓴다(키 주입 — TUI 조작용: \r, \x1b[A, ^C 등). */
+  sendInput: (data: string) => void;
+  /** 화면+스크롤백 텍스트 직렬화(끝에서 lines 줄, 기본 전체 뷰포트+스크롤백). AI 의 눈. */
+  readBuffer: (lines?: number) => string;
   /** 폰트/커서/스크롤백 설정을 라이브 적용(폰트 크기 변경 시 재fit). */
   applySettings: (settings: TerminalSettings) => void;
   dispose: () => void;
@@ -228,6 +234,7 @@ export async function createTerminal(
     rows: term.rows,
     cwd: options.cwd ?? null,
     shell: options.shell ?? null,
+    paneId: options.paneId ?? null,
     onOutput,
   });
 
@@ -311,6 +318,20 @@ export async function createTerminal(
       webgl?.clearTextureAtlas();
     },
     paste: (text: string) => term.paste(text),
+    sendInput: (data: string) => writeToPty(data),
+    readBuffer: (lines?: number) => {
+      // 활성 버퍼(일반=스크롤백 포함, TUI alternate=현재 화면)를 줄 텍스트로 직렬화.
+      // "끝에서 N줄"은 내용이 있는 마지막 줄 기준 — 커서 아래의 빈 뷰포트 줄은 제외.
+      const buf = term.buffer.active;
+      const line = (i: number) => buf.getLine(i)?.translateToString(true) ?? "";
+      let end = buf.length - 1;
+      while (end >= 0 && line(end) === "") end--;
+      if (end < 0) return "";
+      const want = lines && lines > 0 ? Math.min(lines, end + 1) : end + 1;
+      const out: string[] = [];
+      for (let i = end + 1 - want; i <= end; i++) out.push(line(i));
+      return out.join("\n");
+    },
     applySettings: (next: TerminalSettings) => {
       term.options.fontFamily = next.fontFamily;
       term.options.fontSize = next.fontSize;

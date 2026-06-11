@@ -171,7 +171,13 @@ interface SessionsStore {
     projectId: string,
     program: Program,
     groupId?: string,
+    opts?: { url?: string },
   ) => CmdResult<{ groupId: string } & NewViewIds>;
+  // 그룹(패널) 통째 닫기 — 안의 모든 뷰 제거(마지막 그룹이면 거부).
+  closeGroup: (
+    projectId: string,
+    groupId: string,
+  ) => CmdResult<{ activeGroupId: string }>;
   openFileView: (
     projectId: string,
     path: string,
@@ -275,19 +281,21 @@ function makeGroup(view: View): ViewGroup {
   return { id: newGroupId(), views: [view], activeViewId: view.id };
 }
 
-// 새 브라우저 뷰.
-function newBrowserView(): View {
+// 새 브라우저 뷰(url 미지정 시 홈).
+function newBrowserView(url?: string): View {
   return {
     id: newViewId(),
     kind: "browser",
     title: "브라우저",
-    url: BROWSER_HOME,
+    url: url ?? BROWSER_HOME,
   };
 }
 
 // 프로그램에 맞는 새 뷰(브라우저 → 브라우저 뷰, 그 외 → 터미널 뷰[+autorun]).
-function newViewFor(program: Program): View {
-  return program === "browser" ? newBrowserView() : newTerminalView(program);
+function newViewFor(program: Program, opts?: { url?: string }): View {
+  return program === "browser"
+    ? newBrowserView(opts?.url)
+    : newTerminalView(program);
 }
 
 // 뷰의 새 id 묶음(터미널이면 paneId 포함) — 생성 명령 응답용.
@@ -853,7 +861,7 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     return r;
   },
 
-  addViewToGroup: (projectId, program, groupId) => {
+  addViewToGroup: (projectId, program, groupId, opts) => {
     let r: CmdResult<{ groupId: string } & NewViewIds> = noProject(projectId);
     set((s) => {
       const t = s.tabs.find((x) => x.id === projectId);
@@ -867,7 +875,7 @@ export const useSessions = create<SessionsStore>((set, get) => ({
         return s;
       }
       const target = groupId ?? content.activeGroupId;
-      const v = newViewFor(program);
+      const v = newViewFor(program, opts);
       r = ok({ groupId: target, ...idsOfView(v) });
       return {
         tabs: mapProject(s.tabs, projectId, (x) =>
@@ -1157,6 +1165,33 @@ export const useSessions = create<SessionsStore>((set, get) => ({
               activeGroupId: fresh.id,
             }),
           ),
+        ),
+      };
+    });
+    return r;
+  },
+
+  closeGroup: (projectId, groupId) => {
+    let r: CmdResult<{ activeGroupId: string }> = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = contentOfGroup(t, groupId);
+      if (!content) {
+        r = err("TARGET_NOT_FOUND", `그룹 없음: ${groupId}`);
+        return s;
+      }
+      if (allGroups(content.layout).length <= 1) {
+        r = err("LAST_ITEM", "컨텐츠의 마지막 패널은 닫을 수 없음(컨텐츠 닫기를 사용)");
+        return s;
+      }
+      const { tree } = removeGroup(content.layout, groupId);
+      if (!tree) return s;
+      const next = normalizeActiveGroupC({ ...content, layout: tree });
+      r = ok({ activeGroupId: next.activeGroupId });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, content.id, () => next),
         ),
       };
     });

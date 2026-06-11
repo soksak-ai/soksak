@@ -16,6 +16,7 @@ import {
   type ProjectTab,
 } from "./state/sessions";
 import { terminalSettingsOf, useSettings } from "./state/settings";
+import { useUi } from "./state/ui";
 import {
   applyTerminalSettingsAll,
   disposeHost,
@@ -128,8 +129,10 @@ function App() {
     applyTerminalSettingsAll(termSettings);
   }, [termSettings]);
 
-  // 배경색이 단일 소스. 토글은 프리셋, 색상 피커는 임의 색. 글자색은 밝기로 자동 선택.
-  const [bg, setBg] = useState<string>(backgrounds.dark);
+  // 배경색이 단일 소스(useUi.bg — UI/터미널/명령 theme.set 공용). 토글은 프리셋,
+  // 색상 피커는 임의 색. 글자색은 밝기로 자동 선택.
+  const bg = useUi((s) => s.bg);
+  const setBg = useUi((s) => s.setBg);
   const isDark = luminance(bg) <= 0.5;
   const fg = isDark ? "#e6e6e6" : "#1a1a1a";
   const theme = useMemo(() => themeForBg(bg), [bg]);
