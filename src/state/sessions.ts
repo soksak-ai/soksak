@@ -2,11 +2,37 @@ import { create } from "zustand";
 import { useSettings } from "./settings";
 
 // 3단 구조:
-//   - 최상단 탭 = 프로젝트(ProjectTab): 자체 사이드바(파일트리) + 콘텐츠 영역
-//   - 콘텐츠 영역 = 그룹 트리(GroupNode): editor 에디터 그룹처럼 좌/우/상/하 재귀 분할.
-//       각 leaf = ViewGroup(자체 탭바 + 활성 뷰). 탭을 드래그해 분할/이동.
-//   - 뷰(View) = 터미널(내부 PaneTree 분할 가능) 또는 파일.
-// 비활성 프로젝트/뷰는 언마운트하지 않고 숨겨 세션(PTY/에디터)을 유지한다.
+//   - 최상단 탭 = 프로젝트(ProjectTab): 자체 사이드바(파일트리) + 컨텐츠 탭들
+//   - 컨텐츠(ContentArea) = 그룹 트리(GroupNode): 에디터 그룹처럼 좌/우/상/하 재귀 분할.
+//       각 leaf = ViewGroup(자체 헤더 + 활성 뷰). 드래그/명령으로 분할·이동·병합.
+//   - 뷰(View) = 터미널(내부 PaneTree 분할 가능) / 파일 / 브라우저.
+// 비활성 프로젝트/컨텐츠/뷰는 언마운트하지 않고 숨겨 세션(PTY/에디터/웹뷰)을 유지한다.
+//
+// 설계 원칙(AI 명령 인터페이스의 기초):
+//   - 모든 변이 액션은 CmdResult 를 반환한다 — 생성된 id/변경 후 상태(검증 가능).
+//   - 조용한 실패 금지 — 수행 불가는 구조화 에러({code, message}).
+//   - 대상 지정은 활성 컨텐츠 한정이 아니라 프로젝트 전체에서 검색(임의 위치 타기팅).
+//   - 요청 의도가 이미 충족된 상태면 idempotent 성공(ok)으로 처리.
+
+// ── 결과 타입 ────────────────────────────────────────────────────────────────
+
+export type CmdErrCode = "TARGET_NOT_FOUND" | "LAST_ITEM" | "INVALID_PARAMS";
+
+export type CmdErr = { ok: false; code: CmdErrCode; message: string };
+export type CmdOk<T extends object = object> = { ok: true } & T;
+export type CmdResult<T extends object = object> = CmdOk<T> | CmdErr;
+
+export const ok = <T extends object>(data: T): CmdOk<T> => ({
+  ok: true,
+  ...data,
+});
+export const err = (code: CmdErrCode, message: string): CmdErr => ({
+  ok: false,
+  code,
+  message,
+});
+
+// ── 모델 타입 ────────────────────────────────────────────────────────────────
 
 // 재귀 pane 트리. leaf = 터미널 하나, split = 자식들의 행/열 묶음.
 export type PaneNode =
@@ -60,6 +86,8 @@ export type GroupNode =
 // 드롭 위치(드래그 분할 방향). center=이동, 나머지=해당 방향으로 분할.
 export type DropZone = "center" | "left" | "right" | "top" | "bottom";
 
+export type Side = "left" | "right" | "top" | "bottom";
+
 // 컨텐츠가 처음 열 때 띄우는 프로그램(첫 화면).
 export type Program = "terminal" | "claude" | "codex" | "browser";
 
@@ -101,59 +129,94 @@ function effectiveProgram(explicit?: Program, project?: Program): Program {
   return explicit ?? project ?? useSettings.getState().defaultProgram;
 }
 
+// ── 액션 결과 형태 ──────────────────────────────────────────────────────────
+
+// 새 뷰 생성 결과(터미널이면 paneId 포함).
+export interface NewViewIds {
+  viewId: string;
+  paneId?: string;
+}
+
 interface SessionsStore {
   tabs: ProjectTab[]; // 프로젝트들
   activeId: string;
 
   // 프로젝트 레벨
-  addProject: (opts: NewProjectOpts) => void;
-  closeTab: (id: string) => void;
-  setActive: (id: string) => void;
-  renameTab: (id: string, title: string) => void;
-  toggleSidebar: (id: string) => void;
+  addProject: (
+    opts: NewProjectOpts,
+  ) => CmdResult<{ projectId: string; contentId: string; groupId: string } & NewViewIds>;
+  closeTab: (id: string) => CmdResult<{ activeProjectId: string }>;
+  setActive: (id: string) => CmdResult;
+  renameTab: (id: string, title: string) => CmdResult;
+  toggleSidebar: (id: string) => CmdResult<{ sidebarOpen: boolean }>;
 
   // 컨텐츠 탭 레벨. program 명시 시 그 프로그램으로(+메뉴), 아니면 프로젝트>전역 설정.
-  addContent: (projectId: string, program?: Program) => void;
-  closeContent: (projectId: string, contentId: string) => void;
-  setActiveContent: (projectId: string, contentId: string) => void;
-  renameContent: (projectId: string, contentId: string, title: string) => void;
+  addContent: (
+    projectId: string,
+    program?: Program,
+  ) => CmdResult<{ contentId: string; groupId: string } & NewViewIds>;
+  closeContent: (
+    projectId: string,
+    contentId: string,
+  ) => CmdResult<{ activeContentId: string }>;
+  setActiveContent: (projectId: string, contentId: string) => CmdResult;
+  renameContent: (
+    projectId: string,
+    contentId: string,
+    title: string,
+  ) => CmdResult;
 
   // 콘텐츠 뷰/그룹 레벨. 그룹에 프로그램별 새 뷰 탭(터미널/claude/codex/브라우저).
   addViewToGroup: (
     projectId: string,
     program: Program,
     groupId?: string,
-  ) => void;
-  openFileView: (projectId: string, path: string) => void;
-  closeView: (projectId: string, viewId: string) => void;
-  setActiveView: (projectId: string, viewId: string) => void;
-  setActiveGroup: (projectId: string, groupId: string) => void;
-  setFileMode: (projectId: string, viewId: string, mode: "code" | "preview") => void;
-  setFileDirty: (projectId: string, viewId: string, dirty: boolean) => void;
+  ) => CmdResult<{ groupId: string } & NewViewIds>;
+  openFileView: (
+    projectId: string,
+    path: string,
+  ) => CmdResult<{ viewId: string; groupId: string; existing: boolean }>;
+  closeView: (
+    projectId: string,
+    viewId: string,
+  ) => CmdResult<{ activeGroupId: string; activeViewId: string }>;
+  setActiveView: (projectId: string, viewId: string) => CmdResult;
+  setActiveGroup: (projectId: string, groupId: string) => CmdResult;
+  setFileMode: (
+    projectId: string,
+    viewId: string,
+    mode: "code" | "preview",
+  ) => CmdResult;
+  setFileDirty: (projectId: string, viewId: string, dirty: boolean) => CmdResult;
   // 브라우저 뷰 URL 동기화(네비게이션 이벤트/URL 바 입력).
-  setBrowserUrl: (projectId: string, viewId: string, url: string) => void;
-  // 드래그 분할/이동: viewId 를 targetGroup 의 zone 위치로.
+  setBrowserUrl: (projectId: string, viewId: string, url: string) => CmdResult;
+  // 드래그/명령 분할·이동: viewId 를 targetGroup 의 zone 위치로.
   moveViewToGroup: (
     projectId: string,
     viewId: string,
     targetGroupId: string,
     zone: DropZone,
-  ) => void;
-  // 그룹 전체(타이틀바 드래그)를 targetGroup 의 zone 위치로.
+  ) => CmdResult<{ groupId: string }>;
+  // 그룹 전체(타이틀바 드래그/명령)를 targetGroup 의 zone 위치로. center=병합.
   moveGroupToGroup: (
     projectId: string,
     sourceGroupId: string,
     targetGroupId: string,
     zone: DropZone,
-  ) => void;
-  // 분할 비율 조절(리사이저 드래그).
-  resizeSplit: (projectId: string, splitId: string, sizes: number[]) => void;
-  // targetGroup 옆에 새 터미널 그룹을 분할 생성(split 버튼 / title 모드 ⌘T).
-  splitNewTerminal: (
+  ) => CmdResult<{ groupId: string }>;
+  // 분할 비율 조절(리사이저 드래그/명령).
+  resizeSplit: (
+    projectId: string,
+    splitId: string,
+    sizes: number[],
+  ) => CmdResult;
+  // targetGroup 옆에 새 뷰 그룹을 분할 생성(split 버튼 / title 모드 ⌘T / 명령).
+  splitWithNewView: (
     projectId: string,
     targetGroupId: string,
-    side: "left" | "right" | "top" | "bottom",
-  ) => void;
+    side: Side,
+    program?: Program,
+  ) => CmdResult<{ groupId: string } & NewViewIds>;
 
   // pane 레벨(특정 터미널 뷰 안에서)
   splitPane: (
@@ -161,9 +224,17 @@ interface SessionsStore {
     viewId: string,
     paneId: string,
     dir: "row" | "col",
-  ) => void;
-  closePane: (projectId: string, viewId: string, paneId: string) => void;
-  setFocusedPane: (projectId: string, viewId: string, paneId: string) => void;
+  ) => CmdResult<{ paneId: string }>;
+  closePane: (
+    projectId: string,
+    viewId: string,
+    paneId: string,
+  ) => CmdResult<{ focusedPaneId: string }>;
+  setFocusedPane: (
+    projectId: string,
+    viewId: string,
+    paneId: string,
+  ) => CmdResult;
 }
 
 let nextProjectId = 2; // 첫 프로젝트는 t1
@@ -217,6 +288,13 @@ function newBrowserView(): View {
 // 프로그램에 맞는 새 뷰(브라우저 → 브라우저 뷰, 그 외 → 터미널 뷰[+autorun]).
 function newViewFor(program: Program): View {
   return program === "browser" ? newBrowserView() : newTerminalView(program);
+}
+
+// 뷰의 새 id 묶음(터미널이면 paneId 포함) — 생성 명령 응답용.
+function idsOfView(v: View): NewViewIds {
+  return v.kind === "terminal"
+    ? { viewId: v.id, paneId: v.focusedPaneId }
+    : { viewId: v.id };
 }
 
 // 새 컨텐츠 영역(단일 그룹 + 첫 화면 뷰).
@@ -299,7 +377,13 @@ function mapViewNode(
   };
 }
 
-// split 노드 sizes 변환.
+// split 노드 sizes 변환. 적용했으면 true.
+function findSplit(node: GroupNode, splitId: string): boolean {
+  if (node.type === "leaf") return false;
+  if (node.id === splitId) return true;
+  return node.children.some((c) => findSplit(c, splitId));
+}
+
 function mapSplitNode(
   node: GroupNode,
   splitId: string,
@@ -377,11 +461,12 @@ function removeGroup(
   return { tree: { ...node, children, sizes }, removed };
 }
 
-// targetGroup 을 newGroup 과 분할(side 방향). 이미 같은 방향 split 의 직속 자식이면 형제로 삽입.
+// targetGroup 을 fresh 그룹과 분할(side 방향). 이미 같은 방향 split 의 직속 자식이면
+// 형제로 삽입(중첩 회피).
 function splitAtGroup(
   node: GroupNode,
   targetGroupId: string,
-  side: "left" | "right" | "top" | "bottom",
+  side: Side,
   fresh: ViewGroup,
 ): GroupNode {
   const dir: "row" | "col" =
@@ -392,7 +477,13 @@ function splitAtGroup(
     const target: GroupNode = { type: "leaf", group: node.group };
     const freshNode: GroupNode = { type: "leaf", group: fresh };
     const children = before ? [freshNode, target] : [target, freshNode];
-    return { type: "split", id: newSplitId(), dir, children, sizes: equalSizes(2) };
+    return {
+      type: "split",
+      id: newSplitId(),
+      dir,
+      children,
+      sizes: equalSizes(2),
+    };
   }
   if (node.dir === dir) {
     const idx = node.children.findIndex(
@@ -504,7 +595,7 @@ function removeInTree(node: PaneNode, paneId: string): PaneNode | null {
   return { ...node, children };
 }
 
-// ── 공용 ─────────────────────────────────────────────────────────────────────
+// ── 검색/변환 헬퍼 ───────────────────────────────────────────────────────────
 
 function mapProject(
   tabs: ProjectTab[],
@@ -518,15 +609,21 @@ function activeContentOf(t: ProjectTab): ContentArea | undefined {
   return t.contents.find((c) => c.id === t.activeContentId);
 }
 
-// 활성 컨텐츠 영역을 변환(그룹/뷰/분할 액션은 활성 컨텐츠 대상).
-function mapActiveContent(
+// 그룹/뷰가 속한 컨텐츠를 프로젝트 전체에서 검색(임의 위치 타기팅).
+function contentOfGroup(
   t: ProjectTab,
-  fn: (c: ContentArea) => ContentArea,
-): ProjectTab {
-  return {
-    ...t,
-    contents: t.contents.map((c) => (c.id === t.activeContentId ? fn(c) : c)),
-  };
+  groupId: string,
+): ContentArea | undefined {
+  return t.contents.find((c) => hasGroup(c.layout, groupId));
+}
+
+function contentOfView(
+  t: ProjectTab,
+  viewId: string,
+): ContentArea | undefined {
+  return t.contents.find((c) =>
+    allViews(c.layout).some((v) => v.id === viewId),
+  );
 }
 
 function mapContent(
@@ -567,7 +664,11 @@ function firstProject(): ProjectTab {
   };
 }
 
-function makeProject(id: string, opts: NewProjectOpts, index: number): ProjectTab {
+function makeProject(
+  id: string,
+  opts: NewProjectOpts,
+  index: number,
+): ProjectTab {
   const c = makeContent("1", effectiveProgram(undefined, opts.program));
   const alias =
     opts.alias.trim() || (opts.root ? baseName(opts.root) : String(index));
@@ -582,105 +683,195 @@ function makeProject(id: string, opts: NewProjectOpts, index: number): ProjectTa
   };
 }
 
-export const useSessions = create<SessionsStore>((set) => ({
+// 자주 쓰는 에러.
+const noProject = (id: string): CmdErr =>
+  err("TARGET_NOT_FOUND", `프로젝트 없음: ${id}`);
+
+export const useSessions = create<SessionsStore>((set, get) => ({
   tabs: [firstProject()],
   activeId: "t1",
 
-  addProject: (opts) =>
-    set((s) => {
-      const id = `t${nextProjectId++}`;
-      return {
-        tabs: [...s.tabs, makeProject(id, opts, s.tabs.length + 1)],
-        activeId: id,
-      };
-    }),
+  addProject: (opts) => {
+    const id = `t${nextProjectId++}`;
+    const t = makeProject(id, opts, get().tabs.length + 1);
+    set((s) => ({ tabs: [...s.tabs, t], activeId: id }));
+    const c = t.contents[0];
+    const g = allGroups(c.layout)[0];
+    return ok({
+      projectId: id,
+      contentId: c.id,
+      groupId: g.id,
+      ...idsOfView(g.views[0]),
+    });
+  },
 
-  closeTab: (id) =>
+  closeTab: (id) => {
+    let r: CmdResult<{ activeProjectId: string }> = noProject(id);
     set((s) => {
-      if (s.tabs.length <= 1) return s; // 마지막 프로젝트는 닫지 않음
+      if (!s.tabs.some((t) => t.id === id)) return s;
+      if (s.tabs.length <= 1) {
+        r = err("LAST_ITEM", "마지막 프로젝트는 닫을 수 없음");
+        return s;
+      }
       const idx = s.tabs.findIndex((t) => t.id === id);
       const tabs = s.tabs.filter((t) => t.id !== id);
       let activeId = s.activeId;
       if (activeId === id) {
         activeId = (tabs[idx] ?? tabs[idx - 1] ?? tabs[0]).id;
       }
+      r = ok({ activeProjectId: activeId });
       return { tabs, activeId };
-    }),
+    });
+    return r;
+  },
 
-  setActive: (id) => set({ activeId: id }),
-
-  renameTab: (id, title) =>
-    set((s) => ({
-      tabs: s.tabs.map((t) => (t.id === id ? { ...t, title } : t)),
-    })),
-
-  toggleSidebar: (id) =>
-    set((s) => ({
-      tabs: s.tabs.map((t) =>
-        t.id === id ? { ...t, sidebarOpen: !t.sidebarOpen } : t,
-      ),
-    })),
-
-  addContent: (projectId, program) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => {
-        const nextNum =
-          Math.max(0, ...t.contents.map((c) => parseInt(c.title, 10) || 0)) + 1;
-        const c = makeContent(
-          String(nextNum),
-          effectiveProgram(program, t.program),
-        );
-        return { ...t, contents: [...t.contents, c], activeContentId: c.id };
-      }),
-    })),
-
-  closeContent: (projectId, contentId) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => {
-        if (t.contents.length <= 1) return t; // 최소 1개 컨텐츠 유지
-        const idx = t.contents.findIndex((c) => c.id === contentId);
-        if (idx === -1) return t;
-        const contents = t.contents.filter((c) => c.id !== contentId);
-        let activeContentId = t.activeContentId;
-        if (activeContentId === contentId) {
-          activeContentId = (contents[idx] ?? contents[idx - 1] ?? contents[0]).id;
-        }
-        return { ...t, contents, activeContentId };
-      }),
-    })),
-
-  setActiveContent: (projectId, contentId) =>
+  setActive: (id) => {
+    let r: CmdResult = noProject(id);
     set((s) => {
-      const proj = s.tabs.find((t) => t.id === projectId);
-      if (
-        !proj ||
-        proj.activeContentId === contentId ||
-        !proj.contents.some((c) => c.id === contentId)
-      ) {
+      if (!s.tabs.some((t) => t.id === id)) return s;
+      r = ok({});
+      return s.activeId === id ? s : { activeId: id };
+    });
+    return r;
+  },
+
+  renameTab: (id, title) => {
+    let r: CmdResult = noProject(id);
+    set((s) => {
+      if (!s.tabs.some((t) => t.id === id)) return s;
+      r = ok({});
+      return { tabs: s.tabs.map((t) => (t.id === id ? { ...t, title } : t)) };
+    });
+    return r;
+  },
+
+  toggleSidebar: (id) => {
+    let r: CmdResult<{ sidebarOpen: boolean }> = noProject(id);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === id);
+      if (!t) return s;
+      r = ok({ sidebarOpen: !t.sidebarOpen });
+      return {
+        tabs: s.tabs.map((x) =>
+          x.id === id ? { ...x, sidebarOpen: !x.sidebarOpen } : x,
+        ),
+      };
+    });
+    return r;
+  },
+
+  addContent: (projectId, program) => {
+    let r: CmdResult<{ contentId: string; groupId: string } & NewViewIds> =
+      noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const nextNum =
+        Math.max(0, ...t.contents.map((c) => parseInt(c.title, 10) || 0)) + 1;
+      const c = makeContent(String(nextNum), effectiveProgram(program, t.program));
+      const g = allGroups(c.layout)[0];
+      r = ok({ contentId: c.id, groupId: g.id, ...idsOfView(g.views[0]) });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) => ({
+          ...x,
+          contents: [...x.contents, c],
+          activeContentId: c.id,
+        })),
+      };
+    });
+    return r;
+  },
+
+  closeContent: (projectId, contentId) => {
+    let r: CmdResult<{ activeContentId: string }> = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const idx = t.contents.findIndex((c) => c.id === contentId);
+      if (idx === -1) {
+        r = err("TARGET_NOT_FOUND", `컨텐츠 없음: ${contentId}`);
         return s;
       }
+      if (t.contents.length <= 1) {
+        r = err("LAST_ITEM", "마지막 컨텐츠는 닫을 수 없음");
+        return s;
+      }
+      const contents = t.contents.filter((c) => c.id !== contentId);
+      let activeContentId = t.activeContentId;
+      if (activeContentId === contentId) {
+        activeContentId = (contents[idx] ?? contents[idx - 1] ?? contents[0]).id;
+      }
+      r = ok({ activeContentId });
       return {
-        tabs: mapProject(s.tabs, projectId, (t) => ({
-          ...t,
+        tabs: mapProject(s.tabs, projectId, (x) => ({
+          ...x,
+          contents,
+          activeContentId,
+        })),
+      };
+    });
+    return r;
+  },
+
+  setActiveContent: (projectId, contentId) => {
+    let r: CmdResult = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      if (!t.contents.some((c) => c.id === contentId)) {
+        r = err("TARGET_NOT_FOUND", `컨텐츠 없음: ${contentId}`);
+        return s;
+      }
+      r = ok({});
+      if (t.activeContentId === contentId) return s; // 이미 활성(불필요 재렌더 방지)
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) => ({
+          ...x,
           activeContentId: contentId,
         })),
       };
-    }),
+    });
+    return r;
+  },
 
-  renameContent: (projectId, contentId, title) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapContent(t, contentId, (c) => ({ ...c, title })),
-      ),
-    })),
+  renameContent: (projectId, contentId, title) => {
+    let r: CmdResult = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      if (!t.contents.some((c) => c.id === contentId)) {
+        r = err("TARGET_NOT_FOUND", `컨텐츠 없음: ${contentId}`);
+        return s;
+      }
+      r = ok({});
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, contentId, (c) => ({ ...c, title })),
+        ),
+      };
+    });
+    return r;
+  },
 
-  addViewToGroup: (projectId, program, groupId) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapActiveContent(t, (c) => {
-          const target = groupId ?? c.activeGroupId;
-          const v = newViewFor(program);
-          return {
+  addViewToGroup: (projectId, program, groupId) => {
+    let r: CmdResult<{ groupId: string } & NewViewIds> = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      // 대상 그룹: 명시 id(전체 컨텐츠에서 검색) 또는 활성 컨텐츠의 활성 그룹.
+      const content = groupId
+        ? contentOfGroup(t, groupId)
+        : activeContentOf(t);
+      if (!content) {
+        r = err("TARGET_NOT_FOUND", `그룹 없음: ${groupId ?? "(활성)"}`);
+        return s;
+      }
+      const target = groupId ?? content.activeGroupId;
+      const v = newViewFor(program);
+      r = ok({ groupId: target, ...idsOfView(v) });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, content.id, (c) => ({
             ...c,
             layout: mapGroupNode(c.layout, target, (g) => ({
               ...g,
@@ -688,257 +879,496 @@ export const useSessions = create<SessionsStore>((set) => ({
               activeViewId: v.id,
             })),
             activeGroupId: target,
-          };
-        }),
-      ),
-    })),
+          })),
+        ),
+      };
+    });
+    return r;
+  },
 
-  openFileView: (projectId, path) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapActiveContent(t, (c) => {
-          // 이미 열린 같은 파일이면 그 그룹/뷰를 활성화(재사용).
-          const existing = allViews(c.layout).find(
-            (v) => v.kind === "file" && v.path === path,
-          );
-          if (existing) {
-            const grp = findGroupOfView(c.layout, existing.id);
-            if (!grp) return c;
-            return {
+  openFileView: (projectId, path) => {
+    let r: CmdResult<{ viewId: string; groupId: string; existing: boolean }> =
+      noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = activeContentOf(t);
+      if (!content) return s;
+      // 이미 열린 같은 파일이면 그 그룹/뷰를 활성화(재사용).
+      const existing = allViews(content.layout).find(
+        (v) => v.kind === "file" && v.path === path,
+      );
+      if (existing) {
+        const grp = findGroupOfView(content.layout, existing.id);
+        if (!grp) return s;
+        r = ok({ viewId: existing.id, groupId: grp.id, existing: true });
+        return {
+          tabs: mapProject(s.tabs, projectId, (x) =>
+            mapContent(x, content.id, (c) => ({
               ...c,
               layout: mapGroupNode(c.layout, grp.id, (g) => ({
                 ...g,
                 activeViewId: existing.id,
               })),
               activeGroupId: grp.id,
-            };
-          }
-          const v: View = {
-            id: newViewId(),
-            kind: "file",
-            title: baseName(path),
-            path,
-            mode: "code",
-          };
-          return {
+            })),
+          ),
+        };
+      }
+      const v: View = {
+        id: newViewId(),
+        kind: "file",
+        title: baseName(path),
+        path,
+        mode: "code",
+      };
+      r = ok({ viewId: v.id, groupId: content.activeGroupId, existing: false });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, content.id, (c) => ({
             ...c,
             layout: mapGroupNode(c.layout, c.activeGroupId, (g) => ({
               ...g,
               views: [...g.views, v],
               activeViewId: v.id,
             })),
-          };
-        }),
-      ),
-    })),
+          })),
+        ),
+      };
+    });
+    return r;
+  },
 
-  closeView: (projectId, viewId) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapActiveContent(t, (c) => {
-          if (allViews(c.layout).length <= 1) return c; // 최소 1개 뷰 유지
-          const { tree } = removeView(c.layout, viewId);
-          if (!tree) return c;
-          return normalizeActiveGroupC({ ...c, layout: tree });
-        }),
-      ),
-    })),
+  closeView: (projectId, viewId) => {
+    let r: CmdResult<{ activeGroupId: string; activeViewId: string }> =
+      noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = contentOfView(t, viewId);
+      if (!content) {
+        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
+        return s;
+      }
+      if (allViews(content.layout).length <= 1) {
+        r = err("LAST_ITEM", "컨텐츠의 마지막 뷰는 닫을 수 없음");
+        return s;
+      }
+      const { tree } = removeView(content.layout, viewId);
+      if (!tree) return s;
+      const next = normalizeActiveGroupC({ ...content, layout: tree });
+      const activeGroup = findGroup(next.layout, next.activeGroupId);
+      r = ok({
+        activeGroupId: next.activeGroupId,
+        activeViewId: activeGroup?.activeViewId ?? "",
+      });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, content.id, () => next),
+        ),
+      };
+    });
+    return r;
+  },
 
-  setActiveView: (projectId, viewId) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapActiveContent(t, (c) => {
-          const grp = findGroupOfView(c.layout, viewId);
-          if (!grp) return c;
-          return {
+  setActiveView: (projectId, viewId) => {
+    let r: CmdResult = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = contentOfView(t, viewId);
+      if (!content) {
+        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
+        return s;
+      }
+      const grp = findGroupOfView(content.layout, viewId);
+      if (!grp) return s;
+      r = ok({});
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, content.id, (c) => ({
             ...c,
             layout: mapGroupNode(c.layout, grp.id, (g) => ({
               ...g,
               activeViewId: viewId,
             })),
             activeGroupId: grp.id,
-          };
-        }),
-      ),
-    })),
+          })),
+        ),
+      };
+    });
+    return r;
+  },
 
-  setActiveGroup: (projectId, groupId) =>
+  setActiveGroup: (projectId, groupId) => {
+    let r: CmdResult = noProject(projectId);
     set((s) => {
-      const proj = s.tabs.find((t) => t.id === projectId);
-      const c = proj ? activeContentOf(proj) : undefined;
-      // 이미 활성 그룹이면 상태 변경 없음(본문 클릭마다 불필요한 재렌더 방지).
-      if (!proj || !c || c.activeGroupId === groupId || !hasGroup(c.layout, groupId)) {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = contentOfGroup(t, groupId);
+      if (!content) {
+        r = err("TARGET_NOT_FOUND", `그룹 없음: ${groupId}`);
+        return s;
+      }
+      r = ok({});
+      // 이미 활성이면 상태 변경 없음(본문 클릭마다 불필요한 재렌더 방지).
+      if (
+        content.id === t.activeContentId &&
+        content.activeGroupId === groupId
+      ) {
         return s;
       }
       return {
-        tabs: mapProject(s.tabs, projectId, (t) =>
-          mapActiveContent(t, (ct) => ({ ...ct, activeGroupId: groupId })),
+        tabs: mapProject(s.tabs, projectId, (x) => ({
+          ...mapContent(x, content.id, (c) => ({
+            ...c,
+            activeGroupId: groupId,
+          })),
+          activeContentId: content.id,
+        })),
+      };
+    });
+    return r;
+  },
+
+  setFileMode: (projectId, viewId, mode) => {
+    let r: CmdResult = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      if (!contentOfView(t, viewId)) {
+        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
+        return s;
+      }
+      r = ok({});
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapViewEverywhere(x, viewId, (v) =>
+            v.kind === "file" ? { ...v, mode } : v,
+          ),
         ),
       };
-    }),
+    });
+    return r;
+  },
 
-  setFileMode: (projectId, viewId, mode) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapViewEverywhere(t, viewId, (v) =>
-          v.kind === "file" ? { ...v, mode } : v,
+  setFileDirty: (projectId, viewId, dirty) => {
+    let r: CmdResult = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      if (!contentOfView(t, viewId)) {
+        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
+        return s;
+      }
+      r = ok({});
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapViewEverywhere(x, viewId, (v) =>
+            v.kind === "file" ? { ...v, dirty } : v,
+          ),
         ),
-      ),
-    })),
+      };
+    });
+    return r;
+  },
 
-  setFileDirty: (projectId, viewId, dirty) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapViewEverywhere(t, viewId, (v) =>
-          v.kind === "file" ? { ...v, dirty } : v,
+  setBrowserUrl: (projectId, viewId, url) => {
+    let r: CmdResult = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      if (!contentOfView(t, viewId)) {
+        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
+        return s;
+      }
+      r = ok({});
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapViewEverywhere(x, viewId, (v) =>
+            v.kind === "browser" ? { ...v, url } : v,
+          ),
         ),
-      ),
-    })),
+      };
+    });
+    return r;
+  },
 
-  setBrowserUrl: (projectId, viewId, url) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapViewEverywhere(t, viewId, (v) =>
-          v.kind === "browser" ? { ...v, url } : v,
-        ),
-      ),
-    })),
+  moveViewToGroup: (projectId, viewId, targetGroupId, zone) => {
+    let r: CmdResult<{ groupId: string }> = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = contentOfView(t, viewId);
+      if (!content) {
+        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
+        return s;
+      }
+      // 같은 컨텐츠 안의 대상 그룹만 허용(컨텐츠 간 이동은 별도 개념).
+      if (!hasGroup(content.layout, targetGroupId)) {
+        r = err("TARGET_NOT_FOUND", `대상 그룹 없음(같은 컨텐츠 내): ${targetGroupId}`);
+        return s;
+      }
+      const src = findGroupOfView(content.layout, viewId);
+      if (!src) return s;
+      const view = src.views.find((v) => v.id === viewId);
+      if (!view) return s;
 
-  moveViewToGroup: (projectId, viewId, targetGroupId, zone) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapActiveContent(t, (c) => {
-          const src = findGroupOfView(c.layout, viewId);
-          if (!src) return c;
-          const view = src.views.find((v) => v.id === viewId);
-          if (!view) return c;
+      if (zone === "center") {
+        if (src.id === targetGroupId) {
+          r = ok({ groupId: targetGroupId }); // 이미 그 그룹 — idempotent
+          return s;
+        }
+        const { tree } = removeView(content.layout, viewId);
+        if (!tree || !hasGroup(tree, targetGroupId)) return s;
+        r = ok({ groupId: targetGroupId });
+        return {
+          tabs: mapProject(s.tabs, projectId, (x) =>
+            mapContent(x, content.id, (c) =>
+              normalizeActiveGroupC({
+                ...c,
+                layout: mapGroupNode(tree, targetGroupId, (g) => ({
+                  ...g,
+                  views: [...g.views, view],
+                  activeViewId: view.id,
+                })),
+                activeGroupId: targetGroupId,
+              }),
+            ),
+          ),
+        };
+      }
 
-          if (zone === "center") {
-            if (src.id === targetGroupId) return c; // 같은 그룹 → 무시
-            const { tree } = removeView(c.layout, viewId);
-            if (!tree || !hasGroup(tree, targetGroupId)) return c;
-            return normalizeActiveGroupC({
+      // 분할: src 에서 떼고 target 옆에 새 그룹으로.
+      if (allViews(content.layout).length <= 1) {
+        r = err("LAST_ITEM", "유일한 뷰는 분할할 수 없음");
+        return s;
+      }
+      const { tree } = removeView(content.layout, viewId);
+      if (!tree || !hasGroup(tree, targetGroupId)) return s;
+      const fresh = makeGroup(view);
+      r = ok({ groupId: fresh.id });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, content.id, (c) =>
+            normalizeActiveGroupC({
               ...c,
-              layout: mapGroupNode(tree, targetGroupId, (g) => ({
-                ...g,
-                views: [...g.views, view],
-                activeViewId: view.id,
-              })),
-              activeGroupId: targetGroupId,
-            });
-          }
-
-          // 분할: src 에서 떼고 target 옆에 새 그룹으로.
-          if (allViews(c.layout).length <= 1) return c; // 유일 뷰는 분할 불가
-          const { tree } = removeView(c.layout, viewId);
-          if (!tree || !hasGroup(tree, targetGroupId)) return c;
-          const fresh = makeGroup(view);
-          return normalizeActiveGroupC({
-            ...c,
-            layout: splitAtGroup(tree, targetGroupId, zone, fresh),
-            activeGroupId: fresh.id,
-          });
-        }),
-      ),
-    })),
-
-  moveGroupToGroup: (projectId, sourceGroupId, targetGroupId, zone) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapActiveContent(t, (c) => {
-          if (sourceGroupId === targetGroupId) return c;
-          if (allGroups(c.layout).length <= 1) return c; // 유일 그룹은 이동 불가
-          const source = findGroup(c.layout, sourceGroupId);
-          if (!source) return c;
-          const { tree } = removeGroup(c.layout, sourceGroupId);
-          if (!tree || !hasGroup(tree, targetGroupId)) return c;
-
-          if (zone === "center") {
-            // target 으로 source 의 모든 탭을 병합(그룹 합치기).
-            return normalizeActiveGroupC({
-              ...c,
-              layout: mapGroupNode(tree, targetGroupId, (g) => ({
-                ...g,
-                views: [...g.views, ...source.views],
-                activeViewId: source.activeViewId,
-              })),
-              activeGroupId: targetGroupId,
-            });
-          }
-          // 그룹 통째로 target 옆에 재배치(같은 id·뷰 유지 → 본문 remount 없음).
-          return normalizeActiveGroupC({
-            ...c,
-            layout: splitAtGroup(tree, targetGroupId, zone, source),
-            activeGroupId: source.id,
-          });
-        }),
-      ),
-    })),
-
-  resizeSplit: (projectId, splitId, sizes) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapActiveContent(t, (c) => ({
-          ...c,
-          layout: mapSplitNode(c.layout, splitId, sizes),
-        })),
-      ),
-    })),
-
-  splitNewTerminal: (projectId, targetGroupId, side) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapActiveContent(t, (c) => {
-          if (!hasGroup(c.layout, targetGroupId)) return c;
-          const v = newTerminalView();
-          const fresh = makeGroup(v);
-          return normalizeActiveGroupC({
-            ...c,
-            layout: splitAtGroup(c.layout, targetGroupId, side, fresh),
-            activeGroupId: fresh.id,
-          });
-        }),
-      ),
-    })),
-
-  splitPane: (projectId, viewId, paneId, dir) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapViewEverywhere(t, viewId, (v) => {
-          if (v.kind !== "terminal") return v;
-          const newId = newPaneId();
-          return {
-            ...v,
-            layout: splitInTree(v.layout, paneId, dir, newId),
-            focusedPaneId: newId,
-          };
-        }),
-      ),
-    })),
-
-  closePane: (projectId, viewId, paneId) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapViewEverywhere(t, viewId, (v) => {
-          if (v.kind !== "terminal") return v;
-          if (collectLeafIds(v.layout).length <= 1) return v;
-          const next = removeInTree(v.layout, paneId);
-          if (next === null) return v;
-          const remaining = collectLeafIds(next);
-          const focusedPaneId = remaining.includes(v.focusedPaneId)
-            ? v.focusedPaneId
-            : remaining[0];
-          return { ...v, layout: next, focusedPaneId };
-        }),
-      ),
-    })),
-
-  setFocusedPane: (projectId, viewId, paneId) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) =>
-        mapViewEverywhere(t, viewId, (v) =>
-          v.kind === "terminal" ? { ...v, focusedPaneId: paneId } : v,
+              layout: splitAtGroup(tree, targetGroupId, zone, fresh),
+              activeGroupId: fresh.id,
+            }),
+          ),
         ),
-      ),
-    })),
+      };
+    });
+    return r;
+  },
+
+  moveGroupToGroup: (projectId, sourceGroupId, targetGroupId, zone) => {
+    let r: CmdResult<{ groupId: string }> = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = contentOfGroup(t, sourceGroupId);
+      if (!content) {
+        r = err("TARGET_NOT_FOUND", `그룹 없음: ${sourceGroupId}`);
+        return s;
+      }
+      if (sourceGroupId === targetGroupId) {
+        r = ok({ groupId: targetGroupId }); // idempotent
+        return s;
+      }
+      if (!hasGroup(content.layout, targetGroupId)) {
+        r = err("TARGET_NOT_FOUND", `대상 그룹 없음(같은 컨텐츠 내): ${targetGroupId}`);
+        return s;
+      }
+      if (allGroups(content.layout).length <= 1) {
+        r = err("LAST_ITEM", "유일한 그룹은 이동할 수 없음");
+        return s;
+      }
+      const source = findGroup(content.layout, sourceGroupId);
+      if (!source) return s;
+      const { tree } = removeGroup(content.layout, sourceGroupId);
+      if (!tree || !hasGroup(tree, targetGroupId)) return s;
+
+      if (zone === "center") {
+        // target 으로 source 의 모든 탭을 병합(그룹 합치기).
+        r = ok({ groupId: targetGroupId });
+        return {
+          tabs: mapProject(s.tabs, projectId, (x) =>
+            mapContent(x, content.id, (c) =>
+              normalizeActiveGroupC({
+                ...c,
+                layout: mapGroupNode(tree, targetGroupId, (g) => ({
+                  ...g,
+                  views: [...g.views, ...source.views],
+                  activeViewId: source.activeViewId,
+                })),
+                activeGroupId: targetGroupId,
+              }),
+            ),
+          ),
+        };
+      }
+      // 그룹 통째로 target 옆에 재배치(같은 id·뷰 유지 → 본문 remount 없음).
+      r = ok({ groupId: source.id });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, content.id, (c) =>
+            normalizeActiveGroupC({
+              ...c,
+              layout: splitAtGroup(tree, targetGroupId, zone, source),
+              activeGroupId: source.id,
+            }),
+          ),
+        ),
+      };
+    });
+    return r;
+  },
+
+  resizeSplit: (projectId, splitId, sizes) => {
+    let r: CmdResult = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = t.contents.find((c) => findSplit(c.layout, splitId));
+      if (!content) {
+        r = err("TARGET_NOT_FOUND", `분할 없음: ${splitId}`);
+        return s;
+      }
+      r = ok({});
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, content.id, (c) => ({
+            ...c,
+            layout: mapSplitNode(c.layout, splitId, sizes),
+          })),
+        ),
+      };
+    });
+    return r;
+  },
+
+  splitWithNewView: (projectId, targetGroupId, side, program) => {
+    let r: CmdResult<{ groupId: string } & NewViewIds> = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = contentOfGroup(t, targetGroupId);
+      if (!content) {
+        r = err("TARGET_NOT_FOUND", `그룹 없음: ${targetGroupId}`);
+        return s;
+      }
+      const v = newViewFor(program ?? "terminal");
+      const fresh = makeGroup(v);
+      r = ok({ groupId: fresh.id, ...idsOfView(v) });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, content.id, (c) =>
+            normalizeActiveGroupC({
+              ...c,
+              layout: splitAtGroup(c.layout, targetGroupId, side, fresh),
+              activeGroupId: fresh.id,
+            }),
+          ),
+        ),
+      };
+    });
+    return r;
+  },
+
+  splitPane: (projectId, viewId, paneId, dir) => {
+    let r: CmdResult<{ paneId: string }> = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = contentOfView(t, viewId);
+      const view = content
+        ? allViews(content.layout).find((v) => v.id === viewId)
+        : undefined;
+      if (!view || view.kind !== "terminal") {
+        r = err("TARGET_NOT_FOUND", `터미널 뷰 없음: ${viewId}`);
+        return s;
+      }
+      if (!collectLeafIds(view.layout).includes(paneId)) {
+        r = err("TARGET_NOT_FOUND", `pane 없음: ${paneId}`);
+        return s;
+      }
+      const newId = newPaneId();
+      r = ok({ paneId: newId });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapViewEverywhere(x, viewId, (v) => {
+            if (v.kind !== "terminal") return v;
+            return {
+              ...v,
+              layout: splitInTree(v.layout, paneId, dir, newId),
+              focusedPaneId: newId,
+            };
+          }),
+        ),
+      };
+    });
+    return r;
+  },
+
+  closePane: (projectId, viewId, paneId) => {
+    let r: CmdResult<{ focusedPaneId: string }> = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = contentOfView(t, viewId);
+      const view = content
+        ? allViews(content.layout).find((v) => v.id === viewId)
+        : undefined;
+      if (!view || view.kind !== "terminal") {
+        r = err("TARGET_NOT_FOUND", `터미널 뷰 없음: ${viewId}`);
+        return s;
+      }
+      if (!collectLeafIds(view.layout).includes(paneId)) {
+        r = err("TARGET_NOT_FOUND", `pane 없음: ${paneId}`);
+        return s;
+      }
+      if (collectLeafIds(view.layout).length <= 1) {
+        r = err("LAST_ITEM", "마지막 pane 은 닫을 수 없음(뷰 닫기를 사용)");
+        return s;
+      }
+      const next = removeInTree(view.layout, paneId);
+      if (next === null) return s;
+      const remaining = collectLeafIds(next);
+      const focusedPaneId = remaining.includes(view.focusedPaneId)
+        ? view.focusedPaneId
+        : remaining[0];
+      r = ok({ focusedPaneId });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapViewEverywhere(x, viewId, (v) =>
+            v.kind === "terminal" ? { ...v, layout: next, focusedPaneId } : v,
+          ),
+        ),
+      };
+    });
+    return r;
+  },
+
+  setFocusedPane: (projectId, viewId, paneId) => {
+    let r: CmdResult = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      if (!contentOfView(t, viewId)) {
+        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
+        return s;
+      }
+      r = ok({});
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapViewEverywhere(x, viewId, (v) =>
+            v.kind === "terminal" ? { ...v, focusedPaneId: paneId } : v,
+          ),
+        ),
+      };
+    });
+    return r;
+  },
 }));

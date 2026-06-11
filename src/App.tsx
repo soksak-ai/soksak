@@ -158,7 +158,7 @@ function App() {
     renameTab,
     toggleSidebar,
     addViewToGroup,
-    splitNewTerminal,
+    splitWithNewView,
     openFileView,
     closeView,
     splitPane,
@@ -248,7 +248,7 @@ function App() {
         if (useSettings.getState().splitHeaderMode === "tabs" || !grp) {
           addViewToGroup(project.id, "terminal");
         } else {
-          splitNewTerminal(project.id, grp.id, "right");
+          splitWithNewView(project.id, grp.id, "right");
         }
       } else if (key === "b" && !e.shiftKey) {
         e.preventDefault();
@@ -262,7 +262,7 @@ function App() {
     closePane,
     closeView,
     addViewToGroup,
-    splitNewTerminal,
+    splitWithNewView,
     toggleSidebar,
   ]);
 

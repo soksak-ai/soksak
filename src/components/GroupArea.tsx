@@ -117,7 +117,7 @@ export function GroupArea({
   const moveViewToGroup = useSessions((s) => s.moveViewToGroup);
   const moveGroupToGroup = useSessions((s) => s.moveGroupToGroup);
   const resizeSplit = useSessions((s) => s.resizeSplit);
-  const splitNewTerminal = useSessions((s) => s.splitNewTerminal);
+  const splitWithNewView = useSessions((s) => s.splitWithNewView);
   const suppressBrowser = useUi((s) => s.suppressBrowser);
   const releaseBrowser = useUi((s) => s.releaseBrowser);
 
@@ -386,7 +386,7 @@ export function GroupArea({
                   className="egt-btn"
                   title={t("group.split")}
                   onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => splitNewTerminal(projectId, group.id, "right")}
+                  onClick={() => splitWithNewView(projectId, group.id, "right")}
                 >
                   ⊟
                 </button>
