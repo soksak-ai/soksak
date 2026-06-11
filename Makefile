@@ -18,7 +18,7 @@ DEBUG_APP   := src-tauri/target/debug/bundle/macos/soksak-debug.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install icons dev build build-debug run run-debug typecheck check verify clean stop
+.PHONY: help install icons dev build build-debug run run-debug typecheck check test verify clean stop cli install-cli docs
 
 help: ## 사용 가능한 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -53,13 +53,29 @@ run-debug: ## 디버그 soksak-debug.app 실행(새 인스턴스)
 	@test -d "$(DEBUG_APP)" || { echo "먼저 'make build-debug' 를 실행하세요."; exit 1; }
 	open -n "$(DEBUG_APP)"
 
+cli: ## sok CLI 빌드(릴리스)
+	cd src-tauri && cargo build --release -p sok
+
+install-cli: cli ## sok 를 /usr/local/bin 에 링크(멱등)
+	@mkdir -p /usr/local/bin 2>/dev/null || true
+	ln -sf "$(abspath src-tauri/target/release/sok)" /usr/local/bin/sok
+	@echo "설치 완료: /usr/local/bin/sok → src-tauri/target/release/sok"
+
+docs: ## 명령 레퍼런스 생성(docs/COMMANDS.md — 앱이 실행 중이어야 함)
+	@mkdir -p docs
+	src-tauri/target/release/sok docs > docs/COMMANDS.md
+	@echo "생성: docs/COMMANDS.md"
+
 typecheck: ## 프론트엔드 타입 체크(tsc)
 	$(PNPM) exec tsc --noEmit
 
 check: ## Rust 컴파일 체크(cargo check)
 	cd src-tauri && cargo check
 
-verify: typecheck check ## 타입체크 + Rust 체크(커밋 전 검증)
+test: ## Rust 단위 테스트
+	cd src-tauri && cargo test --lib
+
+verify: typecheck check test ## 타입체크 + Rust 체크 + 테스트(커밋 전 검증)
 
 clean: ## 빌드 산출물 제거(dist, 번들)
 	rm -rf dist src-tauri/target/release/bundle src-tauri/target/debug/bundle
