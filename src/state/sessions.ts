@@ -91,8 +91,10 @@ export type Side = "left" | "right" | "top" | "bottom";
 // 컨텐츠가 처음 열 때 띄우는 프로그램(첫 화면).
 export type Program = "terminal" | "claude" | "codex" | "browser";
 
-// 브라우저 뷰 기본 시작 페이지.
-export const BROWSER_HOME = "https://www.google.com";
+// 브라우저 뷰 기본 시작 페이지(설정 homeUrl).
+export function browserHome(): string {
+  return useSettings.getState().homeUrl;
+}
 
 // 컨텐츠 탭: 한 프로젝트 안의 독립 콘텐츠 영역(분할 그리드). 프로젝트당 여러 개 + 전환.
 // 프로그램 자동 실행은 터미널 뷰의 autorun 이 담당(뷰 단위로 일반화).
@@ -199,6 +201,11 @@ interface SessionsStore {
   setFileDirty: (projectId: string, viewId: string, dirty: boolean) => CmdResult;
   // 브라우저 뷰 URL 동기화(네비게이션 이벤트/URL 바 입력).
   setBrowserUrl: (projectId: string, viewId: string, url: string) => CmdResult;
+  setBrowserTitle: (
+    projectId: string,
+    viewId: string,
+    title: string,
+  ) => CmdResult;
   // 드래그/명령 분할·이동: viewId 를 targetGroup 의 zone 위치로.
   moveViewToGroup: (
     projectId: string,
@@ -290,7 +297,7 @@ function newBrowserView(url?: string): View {
     id: newViewId(),
     kind: "browser",
     title: "브라우저",
-    url: url ?? BROWSER_HOME,
+    url: url ?? browserHome(),
   };
 }
 
@@ -1102,6 +1109,30 @@ export const useSessions = create<SessionsStore>((set, get) => ({
         tabs: mapProject(s.tabs, projectId, (x) =>
           mapViewEverywhere(x, viewId, (v) =>
             v.kind === "browser" ? { ...v, url } : v,
+          ),
+        ),
+      };
+    });
+    return r;
+  },
+
+  // 브라우저 뷰의 탭/타이틀 제목(문서 <title>). 빈 문자열은 무시.
+  setBrowserTitle: (projectId, viewId, title) => {
+    const trimmed = title.trim();
+    let r: CmdResult = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      if (!contentOfView(t, viewId)) {
+        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
+        return s;
+      }
+      r = ok({});
+      if (!trimmed) return s;
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapViewEverywhere(x, viewId, (v) =>
+            v.kind === "browser" ? { ...v, title: trimmed } : v,
           ),
         ),
       };

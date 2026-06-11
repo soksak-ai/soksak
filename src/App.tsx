@@ -39,9 +39,10 @@ const SIDEBAR_MIN = 160;
 const SIDEBAR_MAX = 640;
 const SIDEBAR_DEFAULT = 320;
 // 좌측 프로젝트 레일 폭.
-const RAIL_MIN = 90;
-const RAIL_MAX = 360;
-const RAIL_DEFAULT = 150;
+// 레퍼런스(soksak_final): 프로젝트 레일 기본 54px, 드래그 44–110px.
+const RAIL_MIN = 44;
+const RAIL_MAX = 110;
+const RAIL_DEFAULT = 54;
 
 // 드래그로 폭을 조절하는 패널 공용 훅(localStorage 영속). 모두 좌측 패널이라 우측
 // 핸들을 오른쪽으로 끌면 폭이 는다(delta = clientX - 시작X).
@@ -100,6 +101,7 @@ function App() {
   const t = useT();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const projectTabPosition = useSettings((s) => s.projectTabPosition);
+  const contentTabPosition = useSettings((s) => s.contentTabPosition);
 
   // 터미널 외형 설정(폰트/커서/스크롤백). 개별 필드 구독 → 객체는 memo 로 안정화.
   const fontFamily = useSettings((s) => s.fontFamily);
@@ -367,6 +369,54 @@ function App() {
     </>
   );
 
+  // 좌측 레일(54px): 라벨 대신 34px 번호 칩(레퍼런스). 더블클릭=이름변경, 우클릭=닫기.
+  const projectRailList = (
+    <>
+      {tabs.map((proj, i) =>
+        editingId === proj.id ? (
+          <input
+            key={proj.id}
+            className="rail-rename"
+            defaultValue={proj.title}
+            autoFocus
+            onClick={(e) => e.stopPropagation()}
+            onBlur={(e) => commitRename(proj.id, e.target.value, proj.title)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Enter") {
+                commitRename(proj.id, e.currentTarget.value, proj.title);
+              } else if (e.key === "Escape") {
+                setEditingId(null);
+              }
+            }}
+          />
+        ) : (
+          <div
+            key={proj.id}
+            className={`rail-chip${proj.id === activeId ? " active" : ""}`}
+            title={proj.title}
+            onClick={() => setActive(proj.id)}
+            onDoubleClick={() => setEditingId(proj.id)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              if (tabs.length > 1) closeTab(proj.id);
+            }}
+          >
+            {i + 1}
+          </div>
+        ),
+      )}
+      <button
+        type="button"
+        className="rail-add"
+        title={t("project.new")}
+        onClick={() => setNewProjectOpen(true)}
+      >
+        +
+      </button>
+    </>
+  );
+
   return (
     <div className="app-root">
       {/* 오버레이 타이틀바: 프로젝트 탭. 빈 영역 드래그로 창 이동. */}
@@ -422,7 +472,7 @@ function App() {
         {projectTabPosition === "left" && (
           <>
             <div className="project-rail" style={{ width: railW }}>
-              {projectTabsList}
+              {projectRailList}
             </div>
             <div
               className="project-rail-resizer"
@@ -463,9 +513,15 @@ function App() {
                 />
               )}
 
-              {/* 콘텐츠 영역: 컨텐츠 탭 바 + 각 컨텐츠의 에디터 그룹 그리드. */}
-              <div className="content">
-                <ContentTabs project={project} />
+              {/* 콘텐츠 영역: 컨텐츠 탭 바 + 각 컨텐츠의 에디터 그룹 그리드.
+                  탭 위치 left 면 가로(행)로 배치해 좌측 세로 스트립 + 본문. */}
+              <div
+                className={`content${contentTabPosition === "left" ? " ctabs-left" : ""}`}
+              >
+                <ContentTabs
+                  project={project}
+                  vertical={contentTabPosition === "left"}
+                />
                 <div className="content-body">
                   {project.contents.map((c) => {
                     const isActiveContent = c.id === project.activeContentId;

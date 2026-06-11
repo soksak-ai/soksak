@@ -23,6 +23,8 @@ export interface CommandSpec {
   errors?: readonly (CmdErrCode | "INTERNAL" | "TIMEOUT")[];
   // CLI 사용 예시(매뉴얼용).
   examples?: readonly string[];
+  // 위험 분류(원격/AI 호출 권한 게이트 대상): destructive=닫기·제거, inject=입력 주입.
+  danger?: "destructive" | "inject";
   handler: (
     params: Record<string, unknown>,
     ctx: CommandContext,
@@ -30,13 +32,31 @@ export interface CommandSpec {
 }
 
 // 호출자 컨텍스트: 터미널에서 호출하면 그 pane(PTY env SOKSAK_PANE → 소켓 요청 메타).
+// remote=소켓 경유(AI/CLI) — 권한 게이트는 remote 호출에만 적용(UI 는 사람).
 export interface CommandContext {
   pane?: string;
+  remote?: boolean;
+}
+
+// 권한 게이트 콜백(설정 store 를 registry 가 직접 알지 않게 주입).
+// danger 분류에 대해 허용 여부를 돌려준다.
+let permissionGate: (danger: "destructive" | "inject") => boolean = () => true;
+
+export function setPermissionGate(
+  fn: (danger: "destructive" | "inject") => boolean,
+): void {
+  permissionGate = fn;
 }
 
 export type CommandError = {
   ok: false;
-  code: CmdErrCode | "INTERNAL" | "TIMEOUT" | "UNKNOWN_COMMAND" | "INVALID_PARAMS";
+  code:
+    | CmdErrCode
+    | "INTERNAL"
+    | "TIMEOUT"
+    | "UNKNOWN_COMMAND"
+    | "INVALID_PARAMS"
+    | "PERMISSION_DENIED";
   message: string;
 };
 export type CommandOutcome = ({ ok: true } & object) | CommandError;
@@ -125,6 +145,14 @@ export async function execute(
   }
   const invalid = validate(spec, params);
   if (invalid) return { ok: false, code: "INVALID_PARAMS", message: invalid };
+  // 권한 게이트: 원격(AI/CLI) 호출에서 위험 명령은 정책 확인. UI(사람) 호출은 면제.
+  if (ctx.remote && spec.danger && !permissionGate(spec.danger)) {
+    return {
+      ok: false,
+      code: "PERMISSION_DENIED",
+      message: `차단된 ${spec.danger} 명령: ${name}(설정 → 권한에서 허용)`,
+    };
+  }
   try {
     // 기본값 채움.
     const filled: Record<string, unknown> = { ...params };

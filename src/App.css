@@ -567,6 +567,8 @@ body,
   display: block;
   width: 100%;
   height: 100%;
+  /* 라이브러리 기본 인라인 패딩(16px)이 좌측 공백으로 보임 → 축소. */
+  --trees-padding-inline-override: 6px;
 }
 .ft-msg {
   padding: 10px;
@@ -688,7 +690,7 @@ body,
 .ctab-add:hover {
   background: rgba(127, 127, 127, 0.16);
 }
-/* + 메뉴: 터미널 / 인공지능(호버 서브메뉴) / 브라우저.
+/* + 메뉴: 터미널 / 에이전트(호버 서브메뉴) / 브라우저.
    fixed — 탭 바의 overflow 클리핑/스태킹과 무관하게 항상 위에 뜬다(좌표는 JS 가 지정). */
 .ctab-menu {
   position: fixed;
@@ -1394,17 +1396,8 @@ body,
   width: 100%;
   height: 100%;
 }
-/* 포커스된 pane(활성 탭일 때) 1px inset 윤곽. var(--fg) 저투명. */
-.pane-leaf.focused::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  outline: 1px solid var(--fg);
-  outline-offset: -1px;
-  opacity: 0.22;
-  z-index: 2;
-}
+/* 포커스 pane 표시는 헤더 액센트(.egroup-title.active)로만 한다. 과거의 전면 1px
+   윤곽선은 단일 터미널을 감싸는 보더처럼 보여 제거(레퍼런스도 전면 윤곽 없음). */
 
 /* 얇은 4px 드래그 가능한 분할선. hover/active 시 미세한 색 강조.
    라이브러리가 flexBasis:auto, flexGrow/Shrink:0, cursor 를 inline 으로 설정하므로
@@ -1449,106 +1442,223 @@ body,
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   테마 토큰 소비 레이어 (soksak-theme-spec v1)
-   - 색: 엔진이 채우는 CSS 변수(--bg --card --side --inset --fg --fg2 --fg3
-     --bd --acc --accbg --ok --shadow --glow --scan --pane-pad)만 사용한다.
-   - 구조: :root 의 data-*(titlebar/tab-bar/tab-shape/pane-style/status-bg/
-     divider/chrome-font) 변형으로 모양을 바꾼다. raw 색·모양 하드코딩 금지.
+   테마 토큰 소비 레이어 — 디자인 레퍼런스(soksak_final) SKIN 매핑.
+   색은 엔진이 채우는 CSS 변수만, 모양은 :root data-* 변형만 사용한다.
+   tabShape 별 워크스페이스 탭(wsA/wsI)·패널 탭(pt) 스타일은 레퍼런스 값 그대로.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── 타이틀바 ── */
+/* ── 타이틀바(44px) ── */
 .titlebar {
+  flex: 0 0 44px;
+  height: 44px;
+  gap: 10px;
+  padding: 0 14px 0 82px;
+  border-bottom: 1px solid var(--bd);
   background: var(--side);
 }
 :root[data-titlebar="gradient"] .titlebar {
-  background: linear-gradient(120deg, var(--accbg), transparent 65%), var(--side);
+  background: linear-gradient(180deg, var(--accbg), transparent);
 }
 :root[data-titlebar="transparent"] .titlebar {
   background: transparent;
 }
 
-/* ── 탭 바 배경(컨텐츠/뷰 탭 줄) ── */
-.content-tabs,
+/* ── 워크스페이스(컨텐츠) 탭 바(38px) ── */
+.content-tabs {
+  height: 38px;
+  padding: 0 10px;
+  gap: 6px;
+  align-items: center;
+  background: var(--side);
+  border-bottom-color: var(--bd);
+}
+:root[data-tab-bar="transparent"] .content-tabs {
+  background: transparent;
+}
 .view-tabs-wrap {
   background: var(--side);
   border-bottom-color: var(--bd);
 }
-:root[data-tab-bar="transparent"] .content-tabs,
 :root[data-tab-bar="transparent"] .view-tabs-wrap {
   background: transparent;
 }
 
-/* ── 탭 3종(프로젝트 .tab / 컨텐츠 .ctab / 뷰 .view-tab) — card=활성 탭 ── */
+/* ── 워크스페이스급 탭(.tab 프로젝트 / .ctab 컨텐츠) — SKIN wsA/wsI ── */
 .tab,
-.ctab,
-.view-tab {
+.ctab {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 13px;
   background: transparent;
+  border: 1px solid transparent;
   color: var(--fg2);
 }
 .tab:hover,
-.ctab:hover,
-.view-tab:hover {
+.ctab:hover {
   background: var(--inset);
 }
 .tab.active,
-.ctab.active,
-.view-tab.active {
+.ctab.active {
+  font-weight: 600;
   background: var(--card);
+  border-color: var(--bd);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   color: var(--fg);
-  box-shadow: 0 1px 3px var(--shadow);
 }
-.tab.active:hover,
-.ctab.active:hover,
-.view-tab.active:hover {
-  background: var(--card);
-}
-
-/* tabShape 변형 */
+/* pill (Midnight) */
 :root[data-tab-shape="pill"] .tab,
-:root[data-tab-shape="pill"] .ctab,
-:root[data-tab-shape="pill"] .view-tab {
-  border-radius: 999px;
-}
-:root[data-tab-shape="round"] .tab,
-:root[data-tab-shape="round"] .ctab,
-:root[data-tab-shape="round"] .view-tab {
+:root[data-tab-shape="pill"] .ctab {
+  height: 28px;
   border-radius: 8px;
 }
+:root[data-tab-shape="pill"] .tab.active,
+:root[data-tab-shape="pill"] .ctab.active {
+  background: var(--inset);
+  border-color: var(--bd);
+  box-shadow: none;
+}
+/* underline (Bare) */
 :root[data-tab-shape="underline"] .tab,
-:root[data-tab-shape="underline"] .ctab,
-:root[data-tab-shape="underline"] .view-tab {
+:root[data-tab-shape="underline"] .ctab {
+  height: 100%;
+  padding: 0 3px;
   border-radius: 0;
-  border-bottom: 2px solid transparent;
+  font-size: 12.5px;
+  border: none;
+  border-bottom: 1.5px solid transparent;
+}
+:root[data-tab-shape="underline"] .tab:hover,
+:root[data-tab-shape="underline"] .ctab:hover {
+  background: transparent;
+  color: var(--fg);
 }
 :root[data-tab-shape="underline"] .tab.active,
-:root[data-tab-shape="underline"] .ctab.active,
-:root[data-tab-shape="underline"] .view-tab.active {
+:root[data-tab-shape="underline"] .ctab.active {
   background: transparent;
   box-shadow: none;
-  border-bottom-color: var(--acc);
+  border-bottom-color: var(--fg);
+}
+/* inverse (Phosphor) */
+:root[data-tab-shape="inverse"] .tab,
+:root[data-tab-shape="inverse"] .ctab {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 0;
+  font-size: 12.5px;
+  border: none;
 }
 :root[data-tab-shape="inverse"] .tab.active,
-:root[data-tab-shape="inverse"] .ctab.active,
-:root[data-tab-shape="inverse"] .view-tab.active {
+:root[data-tab-shape="inverse"] .ctab.active {
+  font-weight: 700;
   background: var(--acc);
   color: var(--bg);
   box-shadow: none;
 }
+/* round (Paper) */
+:root[data-tab-shape="round"] .tab,
+:root[data-tab-shape="round"] .ctab {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 99px;
+}
+:root[data-tab-shape="round"] .tab.active,
+:root[data-tab-shape="round"] .ctab.active {
+  background: var(--card);
+  border-color: var(--bd);
+  box-shadow: 0 1px 3px rgba(80, 65, 40, 0.08);
+}
 
-/* ── 분할 패널 헤더(타이틀바 모드)/스테이터스바 ── */
+/* ── 패널(뷰) 탭(32px 바) — SKIN pt ── */
+.view-tabs {
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+}
+.view-tab {
+  height: 22px;
+  padding: 0 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg2);
+}
+.view-tab:hover {
+  background: var(--inset);
+}
+.view-tab.active {
+  font-weight: 600;
+  background: var(--card);
+  border-color: var(--bd);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  color: var(--fg);
+}
+.view-tab.active:hover {
+  background: var(--card);
+}
+:root[data-tab-shape="pill"] .view-tab {
+  height: 24px;
+  border-radius: 7px;
+}
+:root[data-tab-shape="pill"] .view-tab.active {
+  background: var(--inset);
+  border-color: var(--bd);
+  box-shadow: none;
+}
+:root[data-tab-shape="underline"] .view-tab {
+  padding: 0 4px;
+  border-radius: 0;
+  font-size: 11.5px;
+  border: none;
+}
+:root[data-tab-shape="underline"] .view-tab.active {
+  background: transparent;
+  box-shadow: none;
+  color: var(--fg);
+}
+:root[data-tab-shape="inverse"] .view-tab {
+  height: 21px;
+  padding: 0 10px;
+  border-radius: 0;
+  font-size: 11.5px;
+  border: none;
+}
+:root[data-tab-shape="inverse"] .view-tab.active {
+  font-weight: 700;
+  background: var(--inset);
+  box-shadow: none;
+  color: var(--fg);
+}
+:root[data-tab-shape="round"] .view-tab {
+  height: 23px;
+  padding: 0 13px;
+  border-radius: 99px;
+}
+:root[data-tab-shape="round"] .view-tab.active {
+  background: var(--accbg);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--acc);
+}
+
+/* ── 분할 패널 헤더(타이틀바 모드)·스테이터스바 ── */
 .egroup-title {
   background: var(--side);
   border-bottom-color: var(--bd);
   color: var(--fg2);
+  font-size: 12px;
 }
 .egroup-title.active {
   color: var(--fg);
   box-shadow: inset 0 2px 0 var(--acc);
 }
 .egroup-status {
+  font-size: 11.5px;
+  padding: 0 12px;
   background: var(--side);
   border-top-color: var(--bd);
-  color: var(--fg2);
+  color: var(--fg3);
 }
 :root[data-status-bg="inset"] .egroup-status {
   background: var(--inset);
@@ -1557,23 +1667,68 @@ body,
   background: transparent;
 }
 
-/* ── 패널 처리(paneStyle): card=라운드 보더, floating=카드+그림자 ── */
-.content-body {
-  padding: var(--pane-pad, 0);
+/* ── 패널 처리(paneStyle, 레퍼런스 SKIN.pane): 패널 전체를 단일 카드 하나로.
+   백킹 카드(.egroup-card)가 유일한 보더/배경/라운드. 내부 chrome(타이틀/탭/본문/
+   상태)은 투명·무보더 → 상하좌우 이음새(이중선) 제거. flat 은 카드 없음(투명). ── */
+/* 백킹 카드(z:0): --card 배경 + 라운드 + (floating)그림자. 보더는 여기 두지 않는다
+   (불투명 터미널이 덮어 좌우/하단이 사라지므로). flat 은 배경 없음(투명). */
+.egroup-card {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+:root[data-pane-style="card"] .egroup-card,
+:root[data-pane-style="floating"] .egroup-card {
+  background: var(--card);
+  border-radius: 11px;
+  overflow: hidden;
+}
+:root[data-pane-style="floating"] .egroup-card {
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+/* 전경 프레임(z:5): 카드의 유일한 보더. 터미널/chrome 위에 얹혀 4면 모두 1px 1줄
+   보장. pointer-events:none 으로 클릭 통과. flat 은 프레임 없음. */
+.egroup-frame {
+  position: absolute;
+  pointer-events: none;
+  z-index: 5;
+}
+:root[data-pane-style="card"] .egroup-frame {
+  border: 1px solid var(--bd);
+  border-radius: 11px;
+}
+:root[data-pane-style="floating"] .egroup-frame {
+  border: 1px solid var(--bd);
+  border-radius: 14px;
+}
+
+/* 카드/플로팅: chrome(타이틀/탭/상태) 은 투명(카드 --card 가 비침), 본문 body-slot
+   은 터미널 배경 --bg 로 채운다 — 터미널 fit 잔여(1셀 미만)가 --card 로 비쳐
+   "100% 높이 안 참"처럼 보이던 문제 제거. 내부 구분선 없음(외곽 프레임 1줄만). */
+:root[data-pane-style="card"] .egroup-title,
+:root[data-pane-style="card"] .egroup-tabs,
+:root[data-pane-style="card"] .egroup-status,
+:root[data-pane-style="floating"] .egroup-title,
+:root[data-pane-style="floating"] .egroup-tabs,
+:root[data-pane-style="floating"] .egroup-status {
+  background: transparent;
+  border: none;
 }
 :root[data-pane-style="card"] .egroup-body-slot,
 :root[data-pane-style="floating"] .egroup-body-slot {
-  border: 1px solid var(--bd);
-  border-radius: 8px;
+  background: var(--bg);
+  border: none;
 }
-:root[data-pane-style="floating"] .egroup-body-slot {
-  box-shadow: 0 8px 24px var(--shadow);
+:root[data-pane-style="card"] .egroup-tabs .view-tabs-wrap,
+:root[data-pane-style="floating"] .egroup-tabs .view-tabs-wrap {
+  background: transparent;
 }
 
 /* ── 떠 있는 표면(card): 메뉴/모달/찾기 위젯 ── */
 .ctab-menu,
 .ctab-submenu,
-.settings-modal,
 .cm-find {
   background: var(--card);
   border-color: var(--bd);
@@ -1586,8 +1741,6 @@ body,
 .bv-url,
 .tab-rename,
 .ctab-rename,
-.settings-modal input,
-.settings-modal select,
 .cmf-input {
   background: var(--inset);
   color: var(--fg);
@@ -1612,14 +1765,15 @@ body,
   border-color: var(--acc);
 }
 
-/* ── 크롬 폰트(font: mono) ── */
+/* ── 크롬 폰트(font: mono → JetBrains Mono, 레퍼런스 fontFam) ── */
 :root[data-chrome-font="mono"] .titlebar,
 :root[data-chrome-font="mono"] .content-tabs,
 :root[data-chrome-font="mono"] .view-tabs-wrap,
 :root[data-chrome-font="mono"] .egroup-title,
 :root[data-chrome-font="mono"] .egroup-status,
-:root[data-chrome-font="mono"] .ctab-menu {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+:root[data-chrome-font="mono"] .ctab-menu,
+:root[data-chrome-font="mono"] .ft-sidebar {
+  font-family: "JetBrains Mono", monospace;
 }
 
 /* ── 효과: 글로우(크롬 텍스트) + 스캔라인 오버레이 ── */
@@ -1642,4 +1796,337 @@ body::after {
     rgba(0, 0, 0, 0.55) 0 1px,
     transparent 1px 3px
   );
+}
+
+/* ── 드래그 가능 모달(레퍼런스: 카드 520/460px, 헤더 ⠿ 그립) ── */
+.dmodal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  z-index: 300;
+}
+.dmodal-card {
+  position: absolute;
+  left: 50%;
+  top: 48px;
+  transform: translateX(-50%);
+  width: 520px;
+  max-height: calc(100% - 64px);
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  color: var(--fg);
+}
+.dmodal-project {
+  width: 460px;
+  top: 120px;
+}
+.dmodal-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bd);
+  cursor: grab;
+  background: var(--side);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.dmodal-head:active {
+  cursor: grabbing;
+}
+.dmodal-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.dmodal-spacer {
+  flex: 1;
+}
+.dmodal-grip {
+  color: var(--fg3);
+  letter-spacing: 2px;
+  font-size: 11px;
+}
+.dmodal-plus {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1px dashed var(--fg3);
+  color: var(--fg2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.dmodal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--fg3);
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 5px;
+}
+.dmodal-close:hover {
+  background: var(--inset);
+  color: var(--fg);
+}
+.dmodal-body {
+  padding: 14px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  font-size: 13px;
+  overflow-y: auto;
+}
+.dsec {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--fg3);
+  padding-top: 4px;
+}
+.dsec:first-child {
+  padding-top: 0;
+}
+.drow {
+  display: flex;
+  align-items: center;
+}
+.drow-label {
+  width: 130px;
+  color: var(--fg2);
+  flex: 0 0 auto;
+}
+.drow > .dctl,
+.drow > .dstepper {
+  margin-left: auto;
+}
+.dctl {
+  display: flex;
+  align-items: center;
+  min-width: 170px;
+  max-width: 240px;
+  background: var(--inset);
+  border: 1px solid var(--bd);
+  border-radius: 7px;
+  padding: 6px 11px;
+  font-size: 12.5px;
+  color: var(--fg);
+  font-family: inherit;
+  outline: none;
+}
+select.dctl {
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--fg3) 50%),
+    linear-gradient(135deg, var(--fg3) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 55%,
+    calc(100% - 11px) 55%;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+.dctl-mono {
+  font:
+    12px "JetBrains Mono",
+    monospace;
+}
+.dctl-btn {
+  cursor: pointer;
+  justify-content: center;
+}
+.dctl-btn:hover {
+  border-color: var(--fg3);
+}
+.dctl:focus {
+  border-color: var(--acc);
+}
+.dstepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--inset);
+  border: 1px solid var(--bd);
+  border-radius: 7px;
+  padding: 6px 11px;
+  font-size: 12.5px;
+}
+.dstep-btn {
+  color: var(--fg3);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.dstep-btn:hover {
+  color: var(--fg);
+}
+.dpath {
+  font:
+    11px "JetBrains Mono",
+    monospace;
+  color: var(--fg3);
+  word-break: break-all;
+  padding-left: 130px;
+}
+.dmodal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+.dbtn {
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--bd);
+  background: var(--inset);
+  color: var(--fg);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.dbtn-acc {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+/* 테마 그리드(레퍼런스: 86px 셀, 스와치 34px + acc 점, 활성 = acc 보더) */
+.th-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+  gap: 7px;
+}
+.th-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 9px;
+  border: 1.5px solid var(--bd);
+  cursor: pointer;
+}
+.th-cell.active {
+  border-color: var(--acc);
+}
+.th-swatch {
+  display: block;
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  position: relative;
+  overflow: hidden;
+}
+.th-swatch-side {
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  bottom: 5px;
+  width: 34%;
+  border-radius: 3px;
+}
+.th-swatch-dot {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.th-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ── 프로젝트 레일(레퍼런스 54px): 34px 번호 칩 + 점선 + ── */
+.project-rail {
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+}
+.rail-chip {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  background: var(--card);
+  border: 1px solid var(--bd);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 13px "JetBrains Mono", monospace;
+  color: var(--fg2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+}
+.rail-chip:hover {
+  border-color: var(--fg3);
+}
+.rail-chip.active {
+  border-color: var(--acc);
+  color: var(--fg);
+  box-shadow: 0 0 0 1px var(--acc);
+}
+.rail-add {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  background: none;
+  border: 1px dashed var(--bd);
+  color: var(--fg3);
+  font-size: 15px;
+  cursor: pointer;
+}
+.rail-add:hover {
+  color: var(--fg2);
+  border-color: var(--fg3);
+}
+.rail-rename {
+  width: 38px;
+  height: 34px;
+  flex: 0 0 auto;
+  text-align: center;
+  border-radius: 9px;
+  border: 1px solid var(--acc);
+  background: var(--inset);
+  color: var(--fg);
+  font: 600 12px "JetBrains Mono", monospace;
+  outline: none;
+}
+
+/* ── 컨텐츠 탭 좌측 모드: content 를 행으로, 탭을 세로 스트립(레퍼런스 138px) ── */
+.content.ctabs-left {
+  flex-direction: row;
+}
+.content-tabs.vertical {
+  flex-direction: column;
+  align-items: stretch;
+  width: 138px;
+  flex: 0 0 auto;
+  height: auto;
+  border-right: 1px solid var(--bd);
+  border-bottom: none;
+  padding: 8px 8px;
+  gap: 4px;
+  overflow-y: auto;
+}
+.content-tabs.vertical .ctab {
+  width: 100%;
+  justify-content: flex-start;
+}
+.content-tabs.vertical .ctab-add {
+  width: 100%;
+}
+.content.ctabs-left .content-body {
+  flex: 1 1 auto;
+  min-width: 0;
 }

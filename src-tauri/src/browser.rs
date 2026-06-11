@@ -17,6 +17,34 @@ struct NavPayload {
     url: String,
 }
 
+#[derive(Clone, Serialize)]
+struct TitlePayload {
+    label: String,
+    title: String,
+}
+
+// 페이지 로드 완료 시 WKWebView.title(문서 <title>)을 네이티브로 읽어 프론트로 emit.
+// IPC/eval 없이 KVO 와 동일 원천(WKWebView.title) — 폴링 없음. 빈 제목은 보내지 않아
+// 프론트가 호스트명 폴백을 유지한다.
+#[cfg(target_os = "macos")]
+fn emit_page_title<R: tauri::Runtime>(webview: &tauri::Webview<R>, label: &str) {
+    let app = webview.app_handle().clone();
+    let label = label.to_string();
+    let _ = webview.with_webview(move |pw| unsafe {
+        use objc2_web_kit::WKWebView;
+        let wk = &*(pw.inner() as *const WKWebView);
+        if let Some(t) = wk.title() {
+            let title = t.to_string();
+            if !title.is_empty() {
+                let _ = app.emit("browser-title", TitlePayload { label, title });
+            }
+        }
+    });
+}
+
+#[cfg(not(target_os = "macos"))]
+fn emit_page_title<R: tauri::Runtime>(_webview: &tauri::Webview<R>, _label: &str) {}
+
 static POPUP_SEQ: AtomicUsize = AtomicUsize::new(1);
 const POPUP_MARKER_HOST: &str = "soksak-popup.invalid";
 
@@ -108,6 +136,12 @@ pub fn browser_open(
                 );
             }
             true // 허용
+        })
+        // 로드 완료 시 문서 <title> 을 읽어 탭/타이틀바 제목으로 emit.
+        .on_page_load(move |webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Finished {
+                emit_page_title(&webview, webview.label());
+            }
         });
     window
         .add_child(

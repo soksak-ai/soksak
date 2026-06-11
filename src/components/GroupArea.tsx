@@ -6,6 +6,7 @@ import { PaneTree } from "./PaneTree";
 import { ViewTabs } from "./ViewTabs";
 import { useT } from "../i18n";
 import { useSettings } from "../state/settings";
+import { useTheme } from "../state/theme";
 import { useUi } from "../state/ui";
 import {
   type ContentArea,
@@ -39,10 +40,13 @@ interface Divider {
   sizes: number[];
 }
 
-const HEADER_PX = 30; // 헤더(타이틀바 또는 탭바) 한 줄
-const STATUS_PX = 20; // 스테이터스바
+const HEADER_PX = 32; // 헤더(타이틀바 또는 탭바) 한 줄 — 레퍼런스 패널 탭바 32px
+const STATUS_PX = 24; // 스테이터스바 — 레퍼런스 24px
 const CHROME_TOP = HEADER_PX; // 본문 상단 오프셋
 const DRAG_THRESHOLD = 5; // 이 픽셀 이상 움직여야 드래그로 간주(아니면 클릭)
+
+// paneStyle 토큰별 패널 간격(절반값 — 이웃 간 합산 10/12px, 레퍼런스 divider 실폭).
+const PANE_INSET: Record<string, number> = { flat: 0, card: 5, floating: 6 };
 
 export function computeLayout(node: GroupNode): {
   cells: Cell[];
@@ -113,6 +117,9 @@ export function GroupArea({
 }) {
   const t = useT();
   const splitHeaderMode = useSettings((s) => s.splitHeaderMode);
+  // 구조 토큰 소비: paneStyle 에 따라 패널 간격(카드/플로팅은 실폭 디바이더).
+  const paneStyle = useTheme((s) => s.spec.chrome.paneStyle);
+  const inset = PANE_INSET[paneStyle] ?? 0;
   const setActiveGroup = useSessions((s) => s.setActiveGroup);
   const setActiveView = useSessions((s) => s.setActiveView);
   const setFileMode = useSessions((s) => s.setFileMode);
@@ -290,6 +297,38 @@ export function GroupArea({
 
   return (
     <div className="egroup-area" ref={containerRef}>
+      {/* ── 백킹 카드 레이어(레퍼런스 SKIN.pane): 패널 전체(타이틀+본문+상태)를
+          overflow:hidden 단일 카드 하나로 감싼다. card/floating 만 보더·배경,
+          flat 은 투명. 가장 아래(맨 먼저 렌더)에 깔려 본문/chrome 이 위에 얹힌다. */}
+      {cells.map(({ group, rect }) => (
+        <div
+          key={`card-${group.id}`}
+          className="egroup-card"
+          style={{
+            left: `calc(${rect.left}% + ${inset}px)`,
+            top: `calc(${rect.top}% + ${inset}px)`,
+            width: `calc(${rect.width}% - ${inset * 2}px)`,
+            height: `calc(${rect.height}% - ${inset * 2}px)`,
+          }}
+        />
+      ))}
+
+      {/* ── 전경 프레임 레이어: 카드 보더(1px) 를 모든 것 위에(터미널 포함) 그린다.
+          백킹 카드 보더는 불투명 터미널에 가려 좌우/하단이 사라지므로, 보더만 분리해
+          오버레이로 띄운다(pointer-events:none). 4면 단일 1px 프레임 보장. ── */}
+      {cells.map(({ group, rect }) => (
+        <div
+          key={`frame-${group.id}`}
+          className="egroup-frame"
+          style={{
+            left: `calc(${rect.left}% + ${inset}px)`,
+            top: `calc(${rect.top}% + ${inset}px)`,
+            width: `calc(${rect.width}% - ${inset * 2}px)`,
+            height: `calc(${rect.height}% - ${inset * 2}px)`,
+          }}
+        />
+      ))}
+
       {/* ── 영속 본문 레이어: viewId 키 → 이동해도 remount 없음 ── */}
       {cells.flatMap(({ group, rect }) =>
         group.views.map((view) => {
@@ -299,10 +338,10 @@ export function GroupArea({
               key={view.id}
               className="egroup-body-slot"
               style={{
-                left: `${rect.left}%`,
-                top: `calc(${rect.top}% + ${CHROME_TOP}px)`,
-                width: `${rect.width}%`,
-                height: `calc(${rect.height}% - ${CHROME_TOP + STATUS_PX}px)`,
+                left: `calc(${rect.left}% + ${inset}px)`,
+                top: `calc(${rect.top}% + ${inset + CHROME_TOP}px)`,
+                width: `calc(${rect.width}% - ${inset * 2}px)`,
+                height: `calc(${rect.height}% - ${inset * 2 + CHROME_TOP + STATUS_PX}px)`,
                 visibility: isActiveView ? "visible" : "hidden",
                 zIndex: isActiveView ? 1 : 0,
               }}
@@ -349,9 +388,9 @@ export function GroupArea({
               <div
                 className="egroup-tabs"
                 style={{
-                  left: `${rect.left}%`,
-                  top: `${rect.top}%`,
-                  width: `${rect.width}%`,
+                  left: `calc(${rect.left}% + ${inset}px)`,
+                  top: `calc(${rect.top}% + ${inset}px)`,
+                  width: `calc(${rect.width}% - ${inset * 2}px)`,
                   height: HEADER_PX,
                 }}
               >
@@ -366,9 +405,9 @@ export function GroupArea({
               <div
                 className={`egroup-title${isActiveGroup ? " active" : ""}`}
                 style={{
-                  left: `${rect.left}%`,
-                  top: `${rect.top}%`,
-                  width: `${rect.width}%`,
+                  left: `calc(${rect.left}% + ${inset}px)`,
+                  top: `calc(${rect.top}% + ${inset}px)`,
+                  width: `calc(${rect.width}% - ${inset * 2}px)`,
                   height: HEADER_PX,
                 }}
                 title={t("group.move")}
@@ -408,9 +447,9 @@ export function GroupArea({
             <div
               className="egroup-status-wrap"
               style={{
-                left: `${rect.left}%`,
-                top: `calc(${rect.top + rect.height}% - ${STATUS_PX}px)`,
-                width: `${rect.width}%`,
+                left: `calc(${rect.left}% + ${inset}px)`,
+                top: `calc(${rect.top + rect.height}% - ${STATUS_PX + inset}px)`,
+                width: `calc(${rect.width}% - ${inset * 2}px)`,
                 height: STATUS_PX,
               }}
             >

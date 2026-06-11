@@ -3,7 +3,7 @@ import type { Program } from "../state/sessions";
 import { useUi } from "../state/ui";
 import { useT } from "../i18n";
 
-// 프로그램 선택 메뉴(터미널 / 인공지능▸Claude·Codex / 브라우저). 컨텐츠 + 와 분할 탭바
+// 프로그램 선택 메뉴(터미널 / 에이전트▸Claude·Codex / 브라우저). 컨텐츠 + 와 분할 탭바
 // + 가 동일하게 사용. fixed — overflow 클리핑/스태킹과 무관하게 항상 위(좌표는 호출측).
 // 떠 있는 동안 브라우저 webview 를 숨긴다(네이티브 레이어가 DOM 메뉴를 가리므로) —
 // suppress/release 는 마운트/언마운트에 묶어 누수가 없다.

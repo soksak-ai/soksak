@@ -66,7 +66,15 @@ function LazyTree({
   gitStatus: GitStatusEntry[];
 }) {
   const themeStyles = useMemo(
-    () => themeToTreeStyles(theme) as CSSProperties,
+    () =>
+      ({
+        ...(themeToTreeStyles(theme) as CSSProperties),
+        // 라이브러리 기본 인라인 패딩(16px)·행 좌우 패딩이 좌측 공백으로 보임 →
+        // 인라인 style 로 직접 축소(커스텀 엘리먼트라 인라인이 확실). 변수는 shadow
+        // 로 상속되어 내부 var(--trees-padding-inline-override, …) 가 읽는다.
+        "--trees-padding-inline-override": "2px",
+        "--trees-item-padding-x-override": "2px",
+      }) as CSSProperties,
     [theme],
   );
 

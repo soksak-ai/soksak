@@ -1,6 +1,7 @@
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { startExecutor } from "./commands/executor";
+import "./assets/fonts.css";
 
 // AI 명령 인터페이스: 카탈로그 등록 + 소켓 요청 실행기(앱 수명 동안 1회).
 startExecutor();

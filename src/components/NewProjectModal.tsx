@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useSessions, type Program } from "../state/sessions";
 import { useT } from "../i18n";
+import { useDraggableModal } from "./modalDrag";
 
-// 프로젝트 생성 모달: 폴더 선택 + 별칭(비면 폴더명) + 첫 프로그램(터미널/claude/codex).
+// 새 프로젝트 모달 — 디자인 레퍼런스(soksak_final): 드래그 가능한 460px 카드,
+// 헤더(+ 아이콘·⠿·✕), 행 레이아웃. 폴더 + 별칭(비면 폴더명) + 첫 프로그램 + 셸.
 
 const baseName = (p?: string) =>
   p ? (p.split("/").filter(Boolean).pop() ?? p) : "";
@@ -13,10 +15,10 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
   const addProject = useSessions((s) => s.addProject);
   const [alias, setAlias] = useState("");
   const [root, setRoot] = useState<string | undefined>(undefined);
-  // "" = 기본값(전역 설정 defaultProgram 따름). 지정하면 프로젝트 설정이 우선.
+  // "" = 기본값(전역 설정 따름). 지정하면 프로젝트 설정이 우선.
   const [program, setProgram] = useState<Program | "">("");
-  // "" = 기본값(전역 설정 shell → $SHELL).
   const [shell, setShell] = useState("");
+  const { cardRef, cardStyle, onHeaderDown } = useDraggableModal();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -46,32 +48,36 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="settings-overlay" onMouseDown={onClose}>
-      <div className="settings-modal" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="settings-header">
-          <span className="settings-title">{t("project.newTitle")}</span>
-          <button
-            type="button"
-            className="settings-close"
-            onClick={onClose}
-            title={t("common.cancel")}
-          >
-            ×
+    <div className="dmodal-overlay" onMouseDown={onClose}>
+      <div
+        ref={cardRef}
+        className="dmodal-card dmodal-project"
+        style={cardStyle}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="dmodal-head" onMouseDown={onHeaderDown}>
+          <span className="dmodal-plus">+</span>
+          <span className="dmodal-title">{t("project.newTitle")}</span>
+          <span className="dmodal-spacer" />
+          <span className="dmodal-grip">⠿</span>
+          <button type="button" className="dmodal-close" onClick={onClose}>
+            ✕
           </button>
         </div>
 
-        <div className="settings-body">
-          <div className="settings-row">
-            <label>{t("project.folder")}</label>
-            <button type="button" className="np-folder" onClick={pickFolder}>
+        <div className="dmodal-body">
+          <div className="drow">
+            <span className="drow-label">{t("project.folder")}</span>
+            <button type="button" className="dctl dctl-btn" onClick={pickFolder}>
               {root ? folderName : t("project.pickFolder")}
             </button>
           </div>
-          {root && <div className="np-path">{root}</div>}
+          {root && <div className="dpath">{root}</div>}
 
-          <div className="settings-row">
-            <label>{t("project.alias")}</label>
+          <div className="drow">
+            <span className="drow-label">{t("project.alias")}</span>
             <input
+              className="dctl"
               type="text"
               value={alias}
               placeholder={folderName || t("project.aliasPh")}
@@ -79,9 +85,10 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
             />
           </div>
 
-          <div className="settings-row">
-            <label>{t("project.program")}</label>
+          <div className="drow">
+            <span className="drow-label">{t("project.program")}</span>
             <select
+              className="dctl"
               value={program}
               onChange={(e) => setProgram(e.target.value as Program | "")}
             >
@@ -93,9 +100,10 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
             </select>
           </div>
 
-          <div className="settings-row">
-            <label>{t("settings.shell")}</label>
+          <div className="drow">
+            <span className="drow-label">{t("settings.shell")}</span>
             <input
+              className="dctl dctl-mono"
               type="text"
               list="np-shell-options"
               value={shell}
@@ -111,11 +119,11 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
             </datalist>
           </div>
 
-          <div className="np-actions">
-            <button type="button" className="np-cancel" onClick={onClose}>
+          <div className="dmodal-actions">
+            <button type="button" className="dbtn" onClick={onClose}>
               {t("common.cancel")}
             </button>
-            <button type="button" className="np-create" onClick={create}>
+            <button type="button" className="dbtn dbtn-acc" onClick={create}>
               {t("project.create")}
             </button>
           </div>

@@ -41,5 +41,7 @@ notify-debouncer-mini = "0.6"
 objc2 = "0.6"
 objc2-foundation = "0.3"
 objc2-web-kit = { version = "0.3", features = ["block2"] }
+# 신호등(트래픽 라이트) 44px 타이틀바 중앙 재배치 — wry inset_traffic_lights 로직 복제.
+objc2-app-kit = "0.3"
 block2 = "0.6"
 

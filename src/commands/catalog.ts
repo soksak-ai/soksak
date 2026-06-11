@@ -9,7 +9,7 @@ import {
   allGroups,
   collectLeafIds,
   useSessions,
-  BROWSER_HOME,
+  browserHome,
   type ContentArea,
   type DropZone,
   type GroupNode,
@@ -416,6 +416,7 @@ export function registerCatalog(): void {
   });
 
   register("project.close", {
+    danger: "destructive",
     description: "프로젝트 닫기(마지막 프로젝트는 거부)",
     params: { project: { ...P.project, required: true } },
     returns: "{ activeProjectId }",
@@ -493,6 +494,7 @@ export function registerCatalog(): void {
   });
 
   register("content.close", {
+    danger: "destructive",
     description: "컨텐츠 탭 닫기(마지막 컨텐츠는 거부)",
     params: {
       project: P.project,
@@ -634,6 +636,7 @@ export function registerCatalog(): void {
   });
 
   register("panel.close", {
+    danger: "destructive",
     description: "패널 닫기(안의 모든 탭 제거, 마지막 패널은 거부)",
     params: { group: { ...P.group, required: true } },
     returns: "{ activeGroupId }",
@@ -727,6 +730,7 @@ export function registerCatalog(): void {
   });
 
   register("view.close", {
+    danger: "destructive",
     description: "뷰(탭) 닫기 — 패널의 마지막 뷰면 패널도 정리(컨텐츠 마지막 뷰는 거부)",
     params: { view: { ...P.view, required: true } },
     returns: "{ activeGroupId, activeViewId }",
@@ -817,6 +821,7 @@ export function registerCatalog(): void {
   });
 
   register("pane.close", {
+    danger: "destructive",
     description: "터미널 pane 닫기(마지막 pane 은 거부 — view.close 사용)",
     params: { pane: { ...P.pane, required: true } },
     returns: "{ focusedPaneId }",
@@ -865,6 +870,7 @@ export function registerCatalog(): void {
   });
 
   register("term.send", {
+    danger: "inject",
     description:
       "터미널에 raw 키 입력 주입(TUI 조작). JSON 이스케이프로 제어키 전달: \\r=Enter, \\u0003=^C, \\u001b[A=↑",
     params: {
@@ -884,6 +890,7 @@ export function registerCatalog(): void {
   });
 
   register("term.exec", {
+    danger: "inject",
     description: "터미널에서 명령 실행(text + Enter). 결과는 term.read 로 확인",
     params: {
       pane: P.pane,
@@ -918,7 +925,7 @@ export function registerCatalog(): void {
   register("browser.open", {
     description: "브라우저 열기 — 패널 탭(where=panel) 또는 독립 OS 창(where=window)",
     params: {
-      url: { type: "string", description: "시작 URL", default: BROWSER_HOME },
+      url: { type: "string", description: "시작 URL(생략=설정 homeUrl)" },
       where: {
         type: "string",
         description: "여는 위치",
@@ -931,15 +938,14 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
     examples: ['sok browser.open \'{"url":"https://example.com"}\''],
     handler: async (p, ctx) => {
+      const url = (p.url as string) ?? browserHome();
       if (p.where === "window") {
-        await invoke("browser_open_window", { url: p.url as string });
+        await invoke("browser_open_window", { url });
         return {};
       }
       const loc = resolveGroup(p, ctx);
       if (!loc) return notFound("패널 없음");
-      return S().addViewToGroup(loc.project.id, "browser", loc.group.id, {
-        url: p.url as string,
-      });
+      return S().addViewToGroup(loc.project.id, "browser", loc.group.id, { url });
     },
   });
 
@@ -1010,6 +1016,7 @@ export function registerCatalog(): void {
   });
 
   register("browser.eval", {
+    danger: "inject",
     description:
       "브라우저 페이지에서 임의 JS 실행(async 가능, return 값이 JSON 으로 반환됨)",
     params: {
@@ -1105,6 +1112,7 @@ export function registerCatalog(): void {
   });
 
   register("browser.dom.click", {
+    danger: "inject",
     description: "selector 첫 매칭 요소 클릭",
     params: {
       view: P.view,
@@ -1123,6 +1131,7 @@ export function registerCatalog(): void {
   });
 
   register("browser.dom.fill", {
+    danger: "inject",
     description: "입력 요소에 값 채우기(input/change 이벤트 발화 — React 폼 호환)",
     params: {
       view: P.view,
@@ -1150,6 +1159,7 @@ export function registerCatalog(): void {
   });
 
   register("browser.dom.submit", {
+    danger: "inject",
     description: "폼 제출(selector=form 또는 폼 내부 요소)",
     params: {
       view: P.view,
@@ -1391,6 +1401,7 @@ export function registerCatalog(): void {
     "splitHeaderMode",
     "defaultProgram",
     "shell",
+    "homeUrl",
     "fontFamily",
     "fontSize",
     "cursorBlink",
@@ -1411,6 +1422,7 @@ export function registerCatalog(): void {
         splitHeaderMode: s.splitHeaderMode,
         defaultProgram: s.defaultProgram,
         shell: s.shell,
+        homeUrl: s.homeUrl,
         fontFamily: s.fontFamily,
         fontSize: s.fontSize,
         cursorBlink: s.cursorBlink,
@@ -1474,6 +1486,10 @@ export function registerCatalog(): void {
         case "shell":
           if (typeof v !== "string") return bad("string(셸 경로, ''=기본)");
           s.setShell(v);
+          break;
+        case "homeUrl":
+          if (typeof v !== "string") return bad("string(URL)");
+          s.setHomeUrl(v);
           break;
         case "fontFamily":
           if (typeof v !== "string") return bad("string");

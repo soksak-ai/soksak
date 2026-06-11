@@ -2,6 +2,8 @@ mod browser;
 mod fs;
 pub mod ipc;
 mod pty;
+#[cfg(target_os = "macos")]
+mod titlebar;
 mod watcher;
 
 use ipc::CmdBridge;
@@ -33,6 +35,11 @@ pub fn run() {
             // AI 명령 인터페이스 소켓 서버(sok CLI/MCP 의 통로).
             if let Err(e) = ipc::start(app.handle().clone()) {
                 eprintln!("[ipc] 소켓 서버 기동 실패: {e}");
+            }
+            // 신호등을 44px 커스텀 타이틀바 상하 중앙으로(x=19 좌측 인셋).
+            #[cfg(target_os = "macos")]
+            if let Some(win) = app.get_webview_window("main") {
+                titlebar::center_traffic_lights(&win, 44.0, 19.0);
             }
             Ok(())
         })

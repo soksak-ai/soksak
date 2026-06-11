@@ -33,6 +33,7 @@ export function BrowserView({
   const t = useT();
   const label = `b-${viewId}`;
   const setBrowserUrl = useSessions((s) => s.setBrowserUrl);
+  const setBrowserTitle = useSessions((s) => s.setBrowserTitle);
   const suppressed = useUi((s) => s.browserSuppress > 0);
   const suppressBrowser = useUi((s) => s.suppressBrowser);
   const releaseBrowser = useUi((s) => s.releaseBrowser);
@@ -116,7 +117,7 @@ export function BrowserView({
     );
   }, [label, effectiveVisible]);
 
-  // 네비게이션(링크 클릭 포함) → URL 상태/탭 제목 동기화.
+  // 네비게이션(링크 클릭 포함) → URL 상태 동기화.
   useEffect(() => {
     const un = listen<{ label: string; url: string }>("browser-nav", (e) => {
       if (e.payload.label === label) {
@@ -127,6 +128,21 @@ export function BrowserView({
       void un.then((f) => f());
     };
   }, [label, projectId, viewId, setBrowserUrl]);
+
+  // 로드 완료 시 문서 <title> → 탭/타이틀바 제목.
+  useEffect(() => {
+    const un = listen<{ label: string; title: string }>(
+      "browser-title",
+      (e) => {
+        if (e.payload.label === label) {
+          setBrowserTitle(projectId, viewId, e.payload.title);
+        }
+      },
+    );
+    return () => {
+      void un.then((f) => f());
+    };
+  }, [label, projectId, viewId, setBrowserTitle]);
 
   const navigate = (raw: string) => {
     const u = normalizeUrl(raw);
