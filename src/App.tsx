@@ -16,7 +16,7 @@ import {
   type ProjectTab,
 } from "./state/sessions";
 import { terminalSettingsOf, useSettings } from "./state/settings";
-import { useUi } from "./state/ui";
+import { useTheme } from "./state/theme";
 import {
   applyTerminalSettingsAll,
   disposeHost,
@@ -26,7 +26,7 @@ import {
   setThemeAll,
   setThemeProvider,
 } from "./terminal/paneHosts";
-import { backgrounds, luminance, themeForBg } from "./terminal/theme";
+import { themeForBg } from "./terminal/theme";
 import "./App.css";
 
 // 파일 경로를 셸·Claude Code 양쪽에서 안전하게: 영숫자와 안전문자 외에는 백슬래시
@@ -129,13 +129,21 @@ function App() {
     applyTerminalSettingsAll(termSettings);
   }, [termSettings]);
 
-  // 배경색이 단일 소스(useUi.bg — UI/터미널/명령 theme.set 공용). 토글은 프리셋,
-  // 색상 피커는 임의 색. 글자색은 밝기로 자동 선택.
-  const bg = useUi((s) => s.bg);
-  const setBg = useUi((s) => s.setBg);
-  const isDark = luminance(bg) <= 0.5;
-  const fg = isDark ? "#e6e6e6" : "#1a1a1a";
+  // 테마 시스템(토큰 슬롯)이 단일 소스 — CSS 변수/구조 속성은 테마 엔진이 적용한다.
+  // 여기서는 파생값(xterm 팔레트, 파일트리 테마)만 토큰에서 유도한다.
+  const themeColors = useTheme((s) => s.colors);
+  const effectiveMode = useTheme((s) => s.effectiveMode);
+  const toggleMode = useTheme((s) => s.toggleMode);
+  const reloadThemes = useTheme((s) => s.reload);
+  const bg = themeColors.bg;
+  const fg = themeColors.fg;
+  const isDark = effectiveMode === "dark";
   const theme = useMemo(() => themeForBg(bg), [bg]);
+
+  // 시작 시 외부 테마(~/.soksak/themes) 1회 스캔.
+  useEffect(() => {
+    reloadThemes().catch((e) => console.error("테마 스캔 실패:", e));
+  }, [reloadThemes]);
 
   // 파일트리(@pierre/trees) 테마: 앱 배경/글자색을 따라가도록.
   const treeTheme = useMemo<TreeThemeInput>(
@@ -143,15 +151,10 @@ function App() {
     [isDark, bg, fg],
   );
 
-  // CSS --bg(그리드 잔여)·xterm theme.background(그리드)·OSC 11 응답이 모두 이 색을 따른다.
-  // --fg 는 타이틀바/탭 chrome 텍스트용(배경 밝기에 따라 대비색).
+  // 앱 UI(body) 폰트는 설정의 글꼴을 따른다(터미널 xterm 은 옵션으로 별도 적용).
   useEffect(() => {
-    const root = document.documentElement.style;
-    root.setProperty("--bg", bg);
-    root.setProperty("--fg", fg);
-    // 앱 UI(body) 폰트도 설정의 글꼴을 따른다(터미널 xterm 은 옵션으로 별도 적용).
-    root.setProperty("--app-font", fontFamily);
-  }, [bg, fg, fontFamily]);
+    document.documentElement.style.setProperty("--app-font", fontFamily);
+  }, [fontFamily]);
 
   const {
     tabs,
@@ -388,20 +391,12 @@ function App() {
           >
             ◧
           </button>
-          <input
-            type="color"
-            className="bg-picker"
-            value={bg}
-            title={t("bg.title")}
-            aria-label={t("bg.aria")}
-            onInput={(e) => setBg((e.target as HTMLInputElement).value)}
-          />
           <button
             type="button"
             className="theme-toggle"
             title={isDark ? t("theme.lightPreset") : t("theme.darkPreset")}
             aria-label={t("theme.toggle")}
-            onClick={() => setBg(isDark ? backgrounds.light : backgrounds.dark)}
+            onClick={toggleMode}
           >
             {isDark ? "☀" : "☾"}
           </button>

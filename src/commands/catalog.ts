@@ -21,7 +21,7 @@ import {
 } from "../state/sessions";
 import { useSettings } from "../state/settings";
 import { useBookmarks } from "../state/bookmarks";
-import { useUi } from "../state/ui";
+import { useTheme } from "../state/theme";
 import {
   focusHost,
   getCwdOfHost,
@@ -1416,7 +1416,8 @@ export function registerCatalog(): void {
         cursorBlink: s.cursorBlink,
         cursorStyle: s.cursorStyle,
         scrollback: s.scrollback,
-        bg: useUi.getState().bg,
+        theme: useTheme.getState().current,
+        themeMode: useTheme.getState().effectiveMode,
       };
     },
   });
@@ -1500,25 +1501,72 @@ export function registerCatalog(): void {
     },
   });
 
-  register("theme.set", {
-    description: "배경색 변경(터미널/에디터/UI 전체가 따름. 글자색은 밝기로 자동)",
-    params: {
-      bg: { type: "string", description: "배경색(#rrggbb)", required: true },
+  register("theme.list", {
+    description:
+      "사용 가능한 테마 목록(내장 + ~/.soksak/themes 외부) + 검증 실패 파일과 사유",
+    params: {},
+    returns: "{ current, mode, themes:[{name,defaultMode,modes,source,warnings}], rejected }",
+    examples: ["sok theme.list"],
+    handler: () => {
+      const s = useTheme.getState();
+      return {
+        current: s.current,
+        mode: s.effectiveMode,
+        themes: Object.values(s.themes).map((th) => ({
+          name: th.name,
+          defaultMode: th.defaultMode,
+          modes: th.colorsAlt ? ["light", "dark"] : [th.defaultMode],
+          source: th.source,
+          warnings: s.warnings[th.name] ?? [],
+        })),
+        rejected: s.rejected,
+      };
     },
-    returns: "{ bg }",
-    errors: ["INVALID_PARAMS"],
-    examples: ['sok theme.set \'{"bg":"#1e2030"}\''],
+  });
+
+  register("theme.apply", {
+    description: "테마 적용(토큰 슬롯 전체 교체). mode 생략=현재 모드 유지",
+    params: {
+      name: { type: "string", description: "테마 이름(theme.list)", required: true },
+      mode: { type: "string", description: "모드", enum: ["light", "dark"] },
+    },
+    returns: "{ name, mode }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok theme.apply \'{"name":"Paper"}\'', 'sok theme.apply \'{"name":"Midnight","mode":"light"}\''],
     handler: (p) => {
-      const bg = p.bg as string;
-      if (!/^#[0-9a-fA-F]{6}$/.test(bg)) {
-        return {
-          ok: false as const,
-          code: "INVALID_PARAMS" as const,
-          message: "bg 는 #rrggbb 형식",
-        };
-      }
-      useUi.getState().setBg(bg);
-      return { bg };
+      const s = useTheme.getState();
+      const ok2 = s.apply(p.name as string, p.mode as "light" | "dark" | undefined);
+      if (!ok2) return notFound(`테마 없음: ${p.name}`);
+      const cur = useTheme.getState();
+      return { name: cur.current, mode: cur.effectiveMode };
+    },
+  });
+
+  register("theme.reload", {
+    description: "외부 테마 디렉토리(~/.soksak/themes) 재스캔 + 현재 테마 재적용",
+    params: {},
+    returns: "{ count, rejected }",
+    examples: ["sok theme.reload"],
+    handler: async () => {
+      await useTheme.getState().reload();
+      const s = useTheme.getState();
+      return { count: Object.keys(s.themes).length, rejected: s.rejected };
+    },
+  });
+
+  register("theme.install", {
+    description: "테마 JSON 파일을 ~/.soksak/themes 에 설치(검증 통과 시 즉시 사용 가능)",
+    params: {
+      path: { type: "string", description: "테마 .json 절대경로", required: true },
+    },
+    returns: "{ installed(설치 경로), rejected? }",
+    errors: ["INTERNAL"],
+    examples: ['sok theme.install \'{"path":"/tmp/dracula.json"}\''],
+    handler: async (p) => {
+      const installed = await useTheme.getState().install(p.path as string);
+      const s = useTheme.getState();
+      const reject = s.rejected.find((r) => r.file === installed);
+      return reject ? { installed, rejected: reject.errors } : { installed };
     },
   });
 }

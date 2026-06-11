@@ -218,6 +218,61 @@ pub fn list_children(path: Option<String>) -> Result<ChildListing, String> {
     })
 }
 
+// ── 외부 테마(플러그인 모델) ─────────────────────────────────────────────────
+// 테마는 외부에서 만들어져 ~/.soksak/themes/*.json 으로 들어온다. 검증은 프론트
+// 테마 엔진(단일 진실)이 담당 — 여기는 파일 입출력만.
+
+fn themes_dir() -> Result<PathBuf, String> {
+    let home = std::env::var("HOME").map_err(|e| format!("HOME 없음: {e}"))?;
+    let dir = PathBuf::from(home).join(".soksak").join("themes");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
+
+#[derive(Serialize)]
+pub struct ThemeFile {
+    file: String,
+    content: String,
+}
+
+// 외부 테마 디렉토리의 *.json 전부(내용 포함).
+#[tauri::command]
+pub fn themes_scan() -> Result<Vec<ThemeFile>, String> {
+    let dir = themes_dir()?;
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(&dir).map_err(|e| e.to_string())? {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e == "json") {
+            if let Ok(content) = std::fs::read_to_string(&path) {
+                out.push(ThemeFile {
+                    file: path.to_string_lossy().to_string(),
+                    content,
+                });
+            }
+        }
+    }
+    out.sort_by(|a, b| a.file.cmp(&b.file));
+    Ok(out)
+}
+
+// 테마 파일 설치(외부 경로 → ~/.soksak/themes/). 동명 파일은 덮어쓴다(갱신).
+#[tauri::command]
+pub fn theme_install(path: String) -> Result<String, String> {
+    let src = PathBuf::from(&path);
+    if src.extension().is_none_or(|e| e != "json") {
+        return Err("테마 파일은 .json 이어야 함".into());
+    }
+    let name = src
+        .file_name()
+        .ok_or("파일명 없음")?
+        .to_string_lossy()
+        .to_string();
+    let dst = themes_dir()?.join(&name);
+    std::fs::copy(&src, &dst).map_err(|e| e.to_string())?;
+    Ok(dst.to_string_lossy().to_string())
+}
+
 // 파일 트리 git 상태 데코레이션용. @pierre/trees 의 GitStatus 와 동일한 문자열.
 #[derive(Serialize)]
 pub struct GitEntry {

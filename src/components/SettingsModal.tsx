@@ -8,6 +8,7 @@ import {
   type TabPosition,
 } from "../state/settings";
 import { useT } from "../i18n";
+import { useTheme } from "../state/theme";
 
 // 설정 패널(모달): 언어 + 폰트(글꼴/크기) + 커서(깜빡임/모양) + 스크롤백.
 // 값 변경은 즉시 스토어에 반영되고(localStorage 영속), 터미널에도 라이브 적용된다.
@@ -15,6 +16,9 @@ import { useT } from "../i18n";
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const t = useT();
   const s = useSettings();
+  const themes = useTheme((x) => x.themes);
+  const themeName = useTheme((x) => x.current);
+  const applyTheme = useTheme((x) => x.apply);
 
   // Esc 로 닫기.
   useEffect(() => {
@@ -91,6 +95,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <option value="claude">Claude</option>
               <option value="codex">Codex</option>
               <option value="browser">{t("program.browser")}</option>
+            </select>
+          </div>
+          <div className="settings-row">
+            <label>{t("settings.theme")}</label>
+            <select
+              value={themeName}
+              onChange={(e) => applyTheme(e.target.value)}
+            >
+              {Object.values(themes).map((th) => (
+                <option key={th.name} value={th.name}>
+                  {th.name}
+                  {th.source !== "builtin" ? ` (${t("theme.external")})` : ""}
+                </option>
+              ))}
             </select>
           </div>
           <div className="settings-row">

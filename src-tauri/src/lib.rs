@@ -47,6 +47,8 @@ pub fn run() {
             fs::write_text_file,
             fs::read_file_base64,
             fs::git_status,
+            fs::themes_scan,
+            fs::theme_install,
             watcher::watch_dir,
             watcher::unwatch_dir,
             browser::browser_open,

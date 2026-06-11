@@ -1447,3 +1447,199 @@ body,
   background-color: var(--bg) !important;
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   테마 토큰 소비 레이어 (soksak-theme-spec v1)
+   - 색: 엔진이 채우는 CSS 변수(--bg --card --side --inset --fg --fg2 --fg3
+     --bd --acc --accbg --ok --shadow --glow --scan --pane-pad)만 사용한다.
+   - 구조: :root 의 data-*(titlebar/tab-bar/tab-shape/pane-style/status-bg/
+     divider/chrome-font) 변형으로 모양을 바꾼다. raw 색·모양 하드코딩 금지.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 타이틀바 ── */
+.titlebar {
+  background: var(--side);
+}
+:root[data-titlebar="gradient"] .titlebar {
+  background: linear-gradient(120deg, var(--accbg), transparent 65%), var(--side);
+}
+:root[data-titlebar="transparent"] .titlebar {
+  background: transparent;
+}
+
+/* ── 탭 바 배경(컨텐츠/뷰 탭 줄) ── */
+.content-tabs,
+.view-tabs-wrap {
+  background: var(--side);
+  border-bottom-color: var(--bd);
+}
+:root[data-tab-bar="transparent"] .content-tabs,
+:root[data-tab-bar="transparent"] .view-tabs-wrap {
+  background: transparent;
+}
+
+/* ── 탭 3종(프로젝트 .tab / 컨텐츠 .ctab / 뷰 .view-tab) — card=활성 탭 ── */
+.tab,
+.ctab,
+.view-tab {
+  background: transparent;
+  color: var(--fg2);
+}
+.tab:hover,
+.ctab:hover,
+.view-tab:hover {
+  background: var(--inset);
+}
+.tab.active,
+.ctab.active,
+.view-tab.active {
+  background: var(--card);
+  color: var(--fg);
+  box-shadow: 0 1px 3px var(--shadow);
+}
+.tab.active:hover,
+.ctab.active:hover,
+.view-tab.active:hover {
+  background: var(--card);
+}
+
+/* tabShape 변형 */
+:root[data-tab-shape="pill"] .tab,
+:root[data-tab-shape="pill"] .ctab,
+:root[data-tab-shape="pill"] .view-tab {
+  border-radius: 999px;
+}
+:root[data-tab-shape="round"] .tab,
+:root[data-tab-shape="round"] .ctab,
+:root[data-tab-shape="round"] .view-tab {
+  border-radius: 8px;
+}
+:root[data-tab-shape="underline"] .tab,
+:root[data-tab-shape="underline"] .ctab,
+:root[data-tab-shape="underline"] .view-tab {
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+}
+:root[data-tab-shape="underline"] .tab.active,
+:root[data-tab-shape="underline"] .ctab.active,
+:root[data-tab-shape="underline"] .view-tab.active {
+  background: transparent;
+  box-shadow: none;
+  border-bottom-color: var(--acc);
+}
+:root[data-tab-shape="inverse"] .tab.active,
+:root[data-tab-shape="inverse"] .ctab.active,
+:root[data-tab-shape="inverse"] .view-tab.active {
+  background: var(--acc);
+  color: var(--bg);
+  box-shadow: none;
+}
+
+/* ── 분할 패널 헤더(타이틀바 모드)/스테이터스바 ── */
+.egroup-title {
+  background: var(--side);
+  border-bottom-color: var(--bd);
+  color: var(--fg2);
+}
+.egroup-title.active {
+  color: var(--fg);
+  box-shadow: inset 0 2px 0 var(--acc);
+}
+.egroup-status {
+  background: var(--side);
+  border-top-color: var(--bd);
+  color: var(--fg2);
+}
+:root[data-status-bg="inset"] .egroup-status {
+  background: var(--inset);
+}
+:root[data-status-bg="transparent"] .egroup-status {
+  background: transparent;
+}
+
+/* ── 패널 처리(paneStyle): card=라운드 보더, floating=카드+그림자 ── */
+.content-body {
+  padding: var(--pane-pad, 0);
+}
+:root[data-pane-style="card"] .egroup-body-slot,
+:root[data-pane-style="floating"] .egroup-body-slot {
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+}
+:root[data-pane-style="floating"] .egroup-body-slot {
+  box-shadow: 0 8px 24px var(--shadow);
+}
+
+/* ── 떠 있는 표면(card): 메뉴/모달/찾기 위젯 ── */
+.ctab-menu,
+.ctab-submenu,
+.settings-modal,
+.cm-find {
+  background: var(--card);
+  border-color: var(--bd);
+}
+.bv-bm-list {
+  background: var(--card);
+}
+
+/* ── 눌린 표면(inset): 입력류 ── */
+.bv-url,
+.tab-rename,
+.ctab-rename,
+.settings-modal input,
+.settings-modal select,
+.cmf-input {
+  background: var(--inset);
+  color: var(--fg);
+  border-color: var(--bd);
+}
+
+/* ── 사이드 영역 ── */
+.project-rail {
+  background: var(--side);
+}
+
+/* ── 액센트 일관화 ── */
+.cmf-input:focus,
+.bv-url:focus {
+  border-color: var(--acc);
+}
+.egroup-divider:hover {
+  background: var(--accbg);
+}
+.drop-ind {
+  background: var(--accbg);
+  border-color: var(--acc);
+}
+
+/* ── 크롬 폰트(font: mono) ── */
+:root[data-chrome-font="mono"] .titlebar,
+:root[data-chrome-font="mono"] .content-tabs,
+:root[data-chrome-font="mono"] .view-tabs-wrap,
+:root[data-chrome-font="mono"] .egroup-title,
+:root[data-chrome-font="mono"] .egroup-status,
+:root[data-chrome-font="mono"] .ctab-menu {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* ── 효과: 글로우(크롬 텍스트) + 스캔라인 오버레이 ── */
+.titlebar,
+.content-tabs,
+.view-tabs-wrap,
+.egroup-title,
+.egroup-status {
+  text-shadow: var(--glow, none);
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9000;
+  opacity: var(--scan, 0);
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.55) 0 1px,
+    transparent 1px 3px
+  );
+}
