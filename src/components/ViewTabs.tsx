@@ -2,13 +2,17 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSessions, type ProjectTab } from "../state/sessions";
 import { useT } from "../i18n";
 
-// 콘텐츠 영역 상단의 뷰 탭 줄(터미널/파일 전환) + 커스텀 가로 스크롤바.
-//
-// WKWebView(macOS)의 네이티브 오버레이 스크롤바는 ::-webkit-scrollbar 로 두께/색을
-// 바꿀 수 없다(굵은 흰 막대 그대로). 그래서 네이티브는 숨기고(전역 CSS), 여기서 3px
-// 커스텀 썸을 직접 그려 위치를 동기화하고 드래그도 처리한다 — 배경색에 동화되는 옅은 회색.
+// 콘텐츠 영역 뷰 탭(터미널/파일 전환). 상단(가로) 또는 좌측(세로) 모드.
+// 가로 모드는 네이티브 오버레이 스크롤바를 숨기고 3px 커스텀 썸을 그린다(WKWebView 가
+// 두께/색을 못 바꾸므로). 세로 모드는 전역 얇은 스크롤바 사용.
 
-export function ViewTabs({ project }: { project: ProjectTab }) {
+export function ViewTabs({
+  project,
+  vertical = false,
+}: {
+  project: ProjectTab;
+  vertical?: boolean;
+}) {
   const t = useT();
   const setActiveView = useSessions((s) => s.setActiveView);
   const closeView = useSessions((s) => s.closeView);
@@ -19,12 +23,16 @@ export function ViewTabs({ project }: { project: ProjectTab }) {
     null,
   );
 
+  // 가로 커스텀 스크롤바 썸 위치 계산(세로 모드면 사용 안 함).
   const recompute = () => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || vertical) {
+      setThumb(null);
+      return;
+    }
     const { scrollLeft, scrollWidth, clientWidth } = el;
     if (scrollWidth <= clientWidth + 1) {
-      setThumb(null); // 넘치지 않으면 스크롤바 없음
+      setThumb(null);
       return;
     }
     const width = (clientWidth / scrollWidth) * clientWidth;
@@ -32,10 +40,9 @@ export function ViewTabs({ project }: { project: ProjectTab }) {
     setThumb({ left, width });
   };
 
-  // 스크롤/리사이즈에 동기화.
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || vertical) return;
     const onScroll = () => recompute();
     el.addEventListener("scroll", onScroll, { passive: true });
     const ro = new ResizeObserver(recompute);
@@ -44,33 +51,35 @@ export function ViewTabs({ project }: { project: ProjectTab }) {
       el.removeEventListener("scroll", onScroll);
       ro.disconnect();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vertical]);
 
-  // 탭 개수가 바뀌면(scrollWidth 변화) 재계산 — ResizeObserver 는 콘텐츠 변화로는 안 뜬다.
   useLayoutEffect(() => {
     recompute();
-  }, [project.views.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.views.length, vertical]);
 
-  // 활성 탭이 보이도록 자동 스크롤: 가능하면 중앙, 양 끝이라 중앙이 안 되면 끝으로(클램프).
+  // 활성 탭을 보이도록 자동 스크롤(가능하면 중앙, 끝이면 클램프). 양 방향.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const active = el.querySelector<HTMLElement>(".view-tab.active");
     if (!active) return;
-    const elRect = el.getBoundingClientRect();
-    const aRect = active.getBoundingClientRect();
-    // 활성 탭 중심의 콘텐츠 기준 좌표 → 뷰포트 중앙에 오도록 목표 scrollLeft 계산.
-    const centerInContent =
-      aRect.left - elRect.left + el.scrollLeft + aRect.width / 2;
-    const target = centerInContent - el.clientWidth / 2;
-    const max = el.scrollWidth - el.clientWidth;
-    el.scrollTo({
-      left: Math.max(0, Math.min(max, target)),
-      behavior: "smooth",
-    });
-  }, [project.activeViewId, project.views.length]);
+    const elR = el.getBoundingClientRect();
+    const aR = active.getBoundingClientRect();
+    if (vertical) {
+      const center = aR.top - elR.top + el.scrollTop + aR.height / 2;
+      const target = center - el.clientHeight / 2;
+      const max = el.scrollHeight - el.clientHeight;
+      el.scrollTo({ top: Math.max(0, Math.min(max, target)), behavior: "smooth" });
+    } else {
+      const center = aR.left - elR.left + el.scrollLeft + aR.width / 2;
+      const target = center - el.clientWidth / 2;
+      const max = el.scrollWidth - el.clientWidth;
+      el.scrollTo({ left: Math.max(0, Math.min(max, target)), behavior: "smooth" });
+    }
+  }, [project.activeViewId, project.views.length, vertical]);
 
-  // 썸 드래그 → scrollLeft 매핑.
   const onThumbDown = (e: React.MouseEvent) => {
     e.preventDefault();
     const el = scrollRef.current;
@@ -91,45 +100,59 @@ export function ViewTabs({ project }: { project: ProjectTab }) {
     document.body.style.userSelect = "none";
   };
 
+  const tabEls = (
+    <>
+      {project.views.map((v) => (
+        <div
+          key={v.id}
+          className={`view-tab${v.id === project.activeViewId ? " active" : ""}`}
+          onClick={() => setActiveView(project.id, v.id)}
+          title={v.kind === "file" ? v.path : t("view.terminal")}
+        >
+          <span className="view-tab-icon">
+            {v.kind === "terminal" ? "›_" : "▤"}
+          </span>
+          <span className="view-tab-title">
+            {v.kind === "terminal" ? t("view.terminal") : v.title}
+          </span>
+          {project.views.length > 1 && (
+            <button
+              type="button"
+              className="view-tab-close"
+              title={t("view.close")}
+              onClick={(e) => {
+                e.stopPropagation();
+                closeView(project.id, v.id);
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        className="view-add"
+        title={t("view.newTerminal")}
+        onClick={() => addTerminalView(project.id)}
+      >
+        +
+      </button>
+    </>
+  );
+
+  if (vertical) {
+    return (
+      <div className="view-tabs vertical" ref={scrollRef}>
+        {tabEls}
+      </div>
+    );
+  }
+
   return (
     <div className="view-tabs-wrap">
       <div className="view-tabs" ref={scrollRef}>
-        {project.views.map((v) => (
-          <div
-            key={v.id}
-            className={`view-tab${v.id === project.activeViewId ? " active" : ""}`}
-            onClick={() => setActiveView(project.id, v.id)}
-            title={v.kind === "file" ? v.path : t("view.terminal")}
-          >
-            <span className="view-tab-icon">
-              {v.kind === "terminal" ? "›_" : "▤"}
-            </span>
-            <span className="view-tab-title">
-              {v.kind === "terminal" ? t("view.terminal") : v.title}
-            </span>
-            {project.views.length > 1 && (
-              <button
-                type="button"
-                className="view-tab-close"
-                title={t("view.close")}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closeView(project.id, v.id);
-                }}
-              >
-                ×
-              </button>
-            )}
-          </div>
-        ))}
-        <button
-          type="button"
-          className="view-add"
-          title={t("view.newTerminal")}
-          onClick={() => addTerminalView(project.id)}
-        >
-          +
-        </button>
+        {tabEls}
       </div>
       {thumb && (
         <div className="view-scrollbar">

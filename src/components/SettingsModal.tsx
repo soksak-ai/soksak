@@ -54,11 +54,23 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="settings-row">
-            <label>{t("settings.tabPosition")}</label>
+            <label>{t("settings.projectTabPos")}</label>
             <select
               value={s.projectTabPosition}
               onChange={(e) =>
                 s.setProjectTabPosition(e.target.value as TabPosition)
+              }
+            >
+              <option value="top">{t("position.top")}</option>
+              <option value="left">{t("position.left")}</option>
+            </select>
+          </div>
+          <div className="settings-row">
+            <label>{t("settings.viewTabPos")}</label>
+            <select
+              value={s.viewTabPosition}
+              onChange={(e) =>
+                s.setViewTabPosition(e.target.value as TabPosition)
               }
             >
               <option value="top">{t("position.top")}</option>

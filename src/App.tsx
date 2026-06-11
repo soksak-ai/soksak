@@ -37,6 +37,45 @@ const shellEscape = (p: string) => p.replace(/[^A-Za-z0-9_./@%+:,=-]/g, "\\$&");
 const SIDEBAR_MIN = 160;
 const SIDEBAR_MAX = 640;
 const SIDEBAR_DEFAULT = 320;
+// 좌측 프로젝트 레일 폭.
+const RAIL_MIN = 90;
+const RAIL_MAX = 360;
+const RAIL_DEFAULT = 150;
+// 좌측 콘텐츠(뷰) 탭 스트립 폭.
+const VTAB_MIN = 90;
+const VTAB_MAX = 360;
+const VTAB_DEFAULT = 160;
+
+// 드래그로 폭을 조절하는 패널 공용 훅(localStorage 영속). 모두 좌측 패널이라 우측
+// 핸들을 오른쪽으로 끌면 폭이 는다(delta = clientX - 시작X).
+function useResizableWidth(key: string, def: number, min: number, max: number) {
+  const [w, setW] = useState<number>(() => {
+    const v = Number(localStorage.getItem(key));
+    return v >= min && v <= max ? v : def;
+  });
+  const begin = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = w;
+    const onMove = (ev: MouseEvent) =>
+      setW(Math.min(max, Math.max(min, startW + (ev.clientX - startX))));
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setW((cur) => {
+        localStorage.setItem(key, String(cur));
+        return cur;
+      });
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  };
+  return [w, begin] as const;
+}
 
 // 프로젝트의 사이드바가 따라갈 터미널 pane(= 현재 작업 디렉토리 출처).
 // 활성 뷰가 터미널이면 그 포커스 pane, 파일이면 첫 터미널 뷰의 포커스 pane.
@@ -51,6 +90,7 @@ function App() {
   const t = useT();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const projectTabPosition = useSettings((s) => s.projectTabPosition);
+  const viewTabPosition = useSettings((s) => s.viewTabPosition);
 
   // 터미널 외형 설정(폰트/커서/스크롤백). 개별 필드 구독 → 객체는 memo 로 안정화.
   const fontFamily = useSettings((s) => s.fontFamily);
@@ -133,37 +173,25 @@ function App() {
     });
   }, []);
 
-  // 사이드바 폭(전역). 경계 드래그로 조절, localStorage 에 영속.
-  const [sidebarW, setSidebarW] = useState<number>(() => {
-    const v = Number(localStorage.getItem("sidebarW"));
-    return v >= SIDEBAR_MIN && v <= SIDEBAR_MAX ? v : SIDEBAR_DEFAULT;
-  });
-  const startResize = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startW = sidebarW;
-    const onMove = (ev: MouseEvent) => {
-      const w = Math.min(
-        SIDEBAR_MAX,
-        Math.max(SIDEBAR_MIN, startW + (ev.clientX - startX)),
-      );
-      setSidebarW(w);
-    };
-    const onUp = () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-      setSidebarW((w) => {
-        localStorage.setItem("sidebarW", String(w));
-        return w;
-      });
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  };
+  // 드래그로 조절되는 패널 폭들(전역, localStorage 영속).
+  const [sidebarW, startResize] = useResizableWidth(
+    "sidebarW",
+    SIDEBAR_DEFAULT,
+    SIDEBAR_MIN,
+    SIDEBAR_MAX,
+  );
+  const [railW, startRailResize] = useResizableWidth(
+    "railW",
+    RAIL_DEFAULT,
+    RAIL_MIN,
+    RAIL_MAX,
+  );
+  const [viewTabW, startViewTabResize] = useResizableWidth(
+    "viewTabW",
+    VTAB_DEFAULT,
+    VTAB_MIN,
+    VTAB_MAX,
+  );
 
   // 새 호스트의 최초 createTerminal 이 현재 테마로 생성되도록 provider 등록.
   const themeRef = useRef(theme);
@@ -366,7 +394,16 @@ function App() {
       {/* 본문: 좌측 모드면 세로 프로젝트 레일 + 콘텐츠 행. */}
       <div className={`app-body${projectTabPosition === "left" ? " with-rail" : ""}`}>
         {projectTabPosition === "left" && (
-          <div className="project-rail">{projectTabsList}</div>
+          <>
+            <div className="project-rail" style={{ width: railW }}>
+              {projectTabsList}
+            </div>
+            <div
+              className="project-rail-resizer"
+              onMouseDown={startRailResize}
+              title={t("sidebar.resize")}
+            />
+          </>
         )}
         {/* 모든 프로젝트를 마운트해 세션 유지(비활성은 visibility 로 숨김). */}
         <div className="terminal-stack">
@@ -400,9 +437,24 @@ function App() {
                 />
               )}
 
-              {/* 콘텐츠 영역: 상단 뷰 탭 + 뷰 본문(터미널/파일). */}
-              <div className="content">
-                <ViewTabs project={project} />
+              {/* 콘텐츠 영역: 뷰 탭(상단 가로 / 좌측 세로) + 뷰 본문(터미널/파일). */}
+              <div
+                className={`content${viewTabPosition === "left" ? " vtab-left" : ""}`}
+              >
+                {viewTabPosition === "left" ? (
+                  <>
+                    <div className="vtab-strip" style={{ width: viewTabW }}>
+                      <ViewTabs project={project} vertical />
+                    </div>
+                    <div
+                      className="vtab-resizer"
+                      onMouseDown={startViewTabResize}
+                      title={t("sidebar.resize")}
+                    />
+                  </>
+                ) : (
+                  <ViewTabs project={project} />
+                )}
 
                 <div className="view-body">
                   {project.views.map((v) => {

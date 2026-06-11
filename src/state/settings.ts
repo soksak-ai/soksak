@@ -18,8 +18,11 @@ interface SettingsState extends TerminalSettings {
   language: Language;
   // 프로젝트(최상단) 탭 위치. left 면 사이드바 왼쪽 세로 레일.
   projectTabPosition: TabPosition;
+  // 콘텐츠(뷰) 탭 위치. left 면 콘텐츠 영역 좌측 세로 스트립.
+  viewTabPosition: TabPosition;
   setLanguage: (l: Language) => void;
   setProjectTabPosition: (p: TabPosition) => void;
+  setViewTabPosition: (p: TabPosition) => void;
   setFontFamily: (v: string) => void;
   setFontSize: (v: number) => void;
   setCursorBlink: (v: boolean) => void;
@@ -30,6 +33,7 @@ interface SettingsState extends TerminalSettings {
 const DEFAULTS = {
   language: "ko" as Language,
   projectTabPosition: "top" as TabPosition,
+  viewTabPosition: "top" as TabPosition,
   fontFamily:
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
   fontSize: 13,
@@ -69,6 +73,7 @@ export const useSettings = create<SettingsState>((set, get) => {
       JSON.stringify({
         language: s.language,
         projectTabPosition: s.projectTabPosition,
+        viewTabPosition: s.viewTabPosition,
         ...terminalSettingsOf(s),
       }),
     );
@@ -81,6 +86,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setProjectTabPosition: (projectTabPosition) => {
       set({ projectTabPosition });
+      save();
+    },
+    setViewTabPosition: (viewTabPosition) => {
+      set({ viewTabPosition });
       save();
     },
     setFontFamily: (fontFamily) => {

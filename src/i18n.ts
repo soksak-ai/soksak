@@ -43,7 +43,8 @@ const ko = {
 
   "settings.title": "설정",
   "settings.language": "언어",
-  "settings.tabPosition": "탭 위치",
+  "settings.projectTabPos": "프로젝트 탭 위치",
+  "settings.viewTabPos": "콘텐츠 탭 위치",
   "position.top": "상단",
   "position.left": "좌측",
   "settings.font": "폰트",
@@ -101,7 +102,8 @@ const en: Record<MsgKey, string> = {
 
   "settings.title": "Settings",
   "settings.language": "Language",
-  "settings.tabPosition": "Tab position",
+  "settings.projectTabPos": "Project tabs",
+  "settings.viewTabPos": "Content tabs",
   "position.top": "Top",
   "position.left": "Left",
   "settings.font": "Font",
