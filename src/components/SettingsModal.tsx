@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import {
   useSettings,
   type CursorStyle,
+  type DefaultProgram,
   type Language,
   type SplitHeaderMode,
   type TabPosition,
@@ -76,6 +77,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             >
               <option value="title">{t("splitHeader.title")}</option>
               <option value="tabs">{t("splitHeader.tabs")}</option>
+            </select>
+          </div>
+          <div className="settings-row">
+            <label>{t("settings.defaultProgram")}</label>
+            <select
+              value={s.defaultProgram}
+              onChange={(e) =>
+                s.setDefaultProgram(e.target.value as DefaultProgram)
+              }
+            >
+              <option value="terminal">{t("program.terminal")}</option>
+              <option value="claude">Claude</option>
+              <option value="codex">Codex</option>
+              <option value="browser">{t("program.browser")}</option>
             </select>
           </div>
 

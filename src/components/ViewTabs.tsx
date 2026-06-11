@@ -100,10 +100,16 @@ export function ViewTabs({
             key={v.id}
             className={`view-tab${v.id === group.activeViewId ? " active" : ""}`}
             onMouseDown={(e) => onTabPointerDown(v.id, e)}
-            title={v.kind === "file" ? v.path : t("view.terminal")}
+            title={
+              v.kind === "file"
+                ? v.path
+                : v.kind === "browser"
+                  ? v.url
+                  : t("view.terminal")
+            }
           >
             <span className="view-tab-icon">
-              {v.kind === "terminal" ? "›_" : "▤"}
+              {v.kind === "terminal" ? "›_" : v.kind === "file" ? "▤" : "◍"}
             </span>
             <span className="view-tab-title">
               {v.kind === "terminal" ? t("view.terminal") : v.title}

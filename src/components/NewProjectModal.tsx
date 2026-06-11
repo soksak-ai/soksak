@@ -13,7 +13,8 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
   const addProject = useSessions((s) => s.addProject);
   const [alias, setAlias] = useState("");
   const [root, setRoot] = useState<string | undefined>(undefined);
-  const [program, setProgram] = useState<Program>("terminal");
+  // "" = 기본값(전역 설정 defaultProgram 따름). 지정하면 프로젝트 설정이 우선.
+  const [program, setProgram] = useState<Program | "">("");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -33,7 +34,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
 
   const folderName = baseName(root);
   const create = () => {
-    addProject({ alias, root, program });
+    addProject({ alias, root, program: program || undefined });
     onClose();
   };
 
@@ -75,11 +76,13 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
             <label>{t("project.program")}</label>
             <select
               value={program}
-              onChange={(e) => setProgram(e.target.value as Program)}
+              onChange={(e) => setProgram(e.target.value as Program | "")}
             >
+              <option value="">{t("program.default")}</option>
               <option value="terminal">{t("program.terminal")}</option>
               <option value="claude">Claude</option>
               <option value="codex">Codex</option>
+              <option value="browser">{t("program.browser")}</option>
             </select>
           </div>
 

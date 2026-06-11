@@ -1,10 +1,12 @@
 import { useMemo, useRef, useState } from "react";
+import { BrowserView } from "./BrowserView";
 import { FileViewer } from "./FileViewer";
 import { GroupStatusBar } from "./GroupStatusBar";
 import { PaneTree } from "./PaneTree";
 import { ViewTabs } from "./ViewTabs";
 import { useT } from "../i18n";
 import { useSettings } from "../state/settings";
+import { useUi } from "../state/ui";
 import {
   type ContentArea,
   type DropZone,
@@ -116,6 +118,8 @@ export function GroupArea({
   const moveGroupToGroup = useSessions((s) => s.moveGroupToGroup);
   const resizeSplit = useSessions((s) => s.resizeSplit);
   const splitNewTerminal = useSessions((s) => s.splitNewTerminal);
+  const suppressBrowser = useUi((s) => s.suppressBrowser);
+  const releaseBrowser = useUi((s) => s.releaseBrowser);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ kind: "view" | "group"; id: string } | null>(
@@ -204,6 +208,8 @@ export function GroupArea({
             return;
           moved = true;
           setDrag({ kind, id });
+          // 드롭 인디케이터는 DOM — 네이티브 브라우저 webview 에 가리므로 잠시 숨김.
+          suppressBrowser();
           document.body.style.userSelect = "none";
           document.body.style.cursor = "grabbing";
         }
@@ -215,6 +221,7 @@ export function GroupArea({
         document.body.style.userSelect = "";
         document.body.style.cursor = "";
         if (moved) {
+          releaseBrowser();
           const target = hitTest(
             ev.clientX,
             ev.clientY,
@@ -306,7 +313,7 @@ export function GroupArea({
                   active={isActiveProject && isActiveView}
                   focusedPaneId={view.focusedPaneId}
                 />
-              ) : (
+              ) : view.kind === "file" ? (
                 <FileViewer
                   path={view.path}
                   mode={view.mode}
@@ -314,6 +321,13 @@ export function GroupArea({
                   projectId={projectId}
                   viewId={view.id}
                   onMode={(m) => setFileMode(projectId, view.id, m)}
+                />
+              ) : (
+                <BrowserView
+                  projectId={projectId}
+                  viewId={view.id}
+                  url={view.url}
+                  visible={isActiveProject && isActiveView}
                 />
               )}
             </div>
@@ -358,7 +372,11 @@ export function GroupArea({
                 onMouseDown={startDrag("group", group.id)}
               >
                 <span className="egt-icon">
-                  {active?.kind === "terminal" ? "›_" : "▤"}
+                  {active?.kind === "terminal"
+                    ? "›_"
+                    : active?.kind === "file"
+                      ? "▤"
+                      : "◍"}
                 </span>
                 <span className="egt-name">
                   {titleOf(active, t("view.terminal"))}

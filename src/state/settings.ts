@@ -7,6 +7,9 @@ export type CursorStyle = "block" | "bar" | "underline";
 export type TabPosition = "top" | "left";
 // 분할 패널 헤더: 제목표시줄(단일 뷰) 또는 탭(여러 뷰 + +).
 export type SplitHeaderMode = "title" | "tabs";
+// 첫 화면 프로그램(새 컨텐츠/프로젝트 기본). sessions 의 Program 과 동일 값 집합 —
+// settings → sessions 단방향 import 를 지키기 위해 여기서 독립 정의.
+export type DefaultProgram = "terminal" | "claude" | "codex" | "browser";
 
 export interface TerminalSettings {
   fontFamily: string;
@@ -22,9 +25,12 @@ interface SettingsState extends TerminalSettings {
   projectTabPosition: TabPosition;
   // 분할 패널 헤더 모드(기본 title).
   splitHeaderMode: SplitHeaderMode;
+  // 첫 화면(새 컨텐츠 기본 프로그램). 프로젝트 설정이 있으면 그것이 우선.
+  defaultProgram: DefaultProgram;
   setLanguage: (l: Language) => void;
   setProjectTabPosition: (p: TabPosition) => void;
   setSplitHeaderMode: (m: SplitHeaderMode) => void;
+  setDefaultProgram: (p: DefaultProgram) => void;
   setFontFamily: (v: string) => void;
   setFontSize: (v: number) => void;
   setCursorBlink: (v: boolean) => void;
@@ -36,6 +42,7 @@ const DEFAULTS = {
   language: "ko" as Language,
   projectTabPosition: "top" as TabPosition,
   splitHeaderMode: "title" as SplitHeaderMode,
+  defaultProgram: "terminal" as DefaultProgram,
   fontFamily:
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
   fontSize: 13,
@@ -76,6 +83,7 @@ export const useSettings = create<SettingsState>((set, get) => {
         language: s.language,
         projectTabPosition: s.projectTabPosition,
         splitHeaderMode: s.splitHeaderMode,
+        defaultProgram: s.defaultProgram,
         ...terminalSettingsOf(s),
       }),
     );
@@ -92,6 +100,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setSplitHeaderMode: (splitHeaderMode) => {
       set({ splitHeaderMode });
+      save();
+    },
+    setDefaultProgram: (defaultProgram) => {
+      set({ defaultProgram });
       save();
     },
     setFontFamily: (fontFamily) => {

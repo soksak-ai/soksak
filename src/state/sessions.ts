@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useSettings } from "./settings";
 
 // 3단 구조:
 //   - 최상단 탭 = 프로젝트(ProjectTab): 자체 사이드바(파일트리) + 콘텐츠 영역
@@ -12,7 +13,7 @@ export type PaneNode =
   | { type: "leaf"; id: string }
   | { type: "split"; dir: "row" | "col"; children: PaneNode[] };
 
-// 콘텐츠 뷰: 터미널(분할 가능) 또는 파일(CodeMirror/프리뷰).
+// 콘텐츠 뷰: 터미널(분할 가능), 파일(CodeMirror/프리뷰), 브라우저(child webview).
 export type View =
   | {
       id: string;
@@ -28,6 +29,12 @@ export type View =
       path: string; // 절대 경로
       mode: "code" | "preview";
       dirty?: boolean; // 편집 후 미저장
+    }
+  | {
+      id: string;
+      kind: "browser";
+      title: string;
+      url: string;
     };
 
 // 에디터 그룹: 탭(뷰) 묶음 + 활성 뷰. 그룹 트리의 leaf.
@@ -51,16 +58,21 @@ export type GroupNode =
 // 드롭 위치(드래그 분할 방향). center=이동, 나머지=해당 방향으로 분할.
 export type DropZone = "center" | "left" | "right" | "top" | "bottom";
 
-// 프로젝트가 처음 열 때 띄우는 프로그램.
-export type Program = "terminal" | "claude" | "codex";
+// 컨텐츠가 처음 열 때 띄우는 프로그램(첫 화면).
+export type Program = "terminal" | "claude" | "codex" | "browser";
+
+// 브라우저 뷰 기본 시작 페이지.
+export const BROWSER_HOME = "https://www.google.com";
 
 // 컨텐츠 탭: 한 프로젝트 안의 독립 콘텐츠 영역(분할 그리드). 프로젝트당 여러 개 + 전환.
 export interface ContentArea {
   id: string;
   title: string; // 1,2,3,… (이름변경 가능)
+  // 이 컨텐츠의 첫 화면 프로그램(생성 시 확정: 명시 선택 > 프로젝트 설정 > 전역 설정).
+  program: Program;
   layout: GroupNode; // 그룹(분할) 트리
   activeGroupId: string;
-  // 이 컨텐츠의 프로그램 자동 실행 pane(컨텐츠마다 첫 pane 에서 1회).
+  // 프로그램 자동 실행 pane(터미널형 프로그램일 때 첫 pane 에서 1회).
   initialPaneId: string;
 }
 
@@ -70,8 +82,8 @@ export interface ProjectTab {
   sidebarOpen: boolean;
   // 프로젝트 루트 디렉토리(터미널 시작 위치). 미지정이면 앱 실행 디렉토리.
   root?: string;
-  // 첫 프로그램(컨텐츠마다 첫 pane 에서 자동 실행). terminal 이면 셸만.
-  program: Program;
+  // 프로젝트의 첫 화면(미지정이면 전역 설정 defaultProgram 사용 — 프로젝트 설정이 우선).
+  program?: Program;
   // 컨텐츠 탭들 + 활성.
   contents: ContentArea[];
   activeContentId: string;
@@ -80,7 +92,12 @@ export interface ProjectTab {
 export interface NewProjectOpts {
   alias: string;
   root?: string;
-  program: Program;
+  program?: Program; // undefined = 전역 설정 따름
+}
+
+// 첫 화면 결정: 명시 선택 > 프로젝트 설정 > 전역 설정.
+function effectiveProgram(explicit?: Program, project?: Program): Program {
+  return explicit ?? project ?? useSettings.getState().defaultProgram;
 }
 
 interface SessionsStore {
@@ -94,8 +111,8 @@ interface SessionsStore {
   renameTab: (id: string, title: string) => void;
   toggleSidebar: (id: string) => void;
 
-  // 컨텐츠 탭 레벨
-  addContent: (projectId: string) => void;
+  // 컨텐츠 탭 레벨. program 명시 시 그 프로그램으로(+메뉴), 아니면 프로젝트>전역 설정.
+  addContent: (projectId: string, program?: Program) => void;
   closeContent: (projectId: string, contentId: string) => void;
   setActiveContent: (projectId: string, contentId: string) => void;
   renameContent: (projectId: string, contentId: string, title: string) => void;
@@ -108,6 +125,8 @@ interface SessionsStore {
   setActiveGroup: (projectId: string, groupId: string) => void;
   setFileMode: (projectId: string, viewId: string, mode: "code" | "preview") => void;
   setFileDirty: (projectId: string, viewId: string, dirty: boolean) => void;
+  // 브라우저 뷰 URL 동기화(네비게이션 이벤트/URL 바 입력).
+  setBrowserUrl: (projectId: string, viewId: string, url: string) => void;
   // 드래그 분할/이동: viewId 를 targetGroup 의 zone 위치로.
   moveViewToGroup: (
     projectId: string,
@@ -175,13 +194,25 @@ function makeGroup(view: View): ViewGroup {
   return { id: newGroupId(), views: [view], activeViewId: view.id };
 }
 
-// 새 컨텐츠 영역(단일 그룹 + 단일 터미널 뷰). 첫 pane 에서 프로그램 자동 실행.
-function makeContent(title: string): ContentArea {
-  const v = newTerminalView();
+// 새 브라우저 뷰.
+function newBrowserView(): View {
+  return {
+    id: newViewId(),
+    kind: "browser",
+    title: "브라우저",
+    url: BROWSER_HOME,
+  };
+}
+
+// 새 컨텐츠 영역(단일 그룹 + 첫 화면 뷰). 터미널형이면 첫 pane 에서 프로그램 자동 실행,
+// 브라우저면 브라우저 뷰로 시작.
+function makeContent(title: string, program: Program): ContentArea {
+  const v = program === "browser" ? newBrowserView() : newTerminalView();
   const g = makeGroup(v);
   return {
     id: newContentId(),
     title,
+    program,
     layout: { type: "leaf", group: g },
     activeGroupId: g.id,
     initialPaneId: v.kind === "terminal" ? v.focusedPaneId : "",
@@ -400,7 +431,8 @@ export function collectAllLeafIds(tabs: ProjectTab[]): string[] {
   return acc;
 }
 
-// paneId 의 spawn 정보: cwd=프로젝트 root, program=그 컨텐츠의 첫 pane 일 때만 자동 실행.
+// paneId 의 spawn 정보: cwd=프로젝트 root, program=그 컨텐츠의 첫 pane 일 때만 자동 실행
+// (컨텐츠 생성 시 확정된 content.program — claude/codex 만 명령 실행 대상).
 export function paneSpawnInfo(
   tabs: ProjectTab[],
   paneId: string,
@@ -410,10 +442,10 @@ export function paneSpawnInfo(
       for (const v of allViews(c.layout)) {
         if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
           const isInitial = paneId === c.initialPaneId;
+          const runnable = c.program === "claude" || c.program === "codex";
           return {
             cwd: t.root,
-            program:
-              isInitial && t.program !== "terminal" ? t.program : undefined,
+            program: isInitial && runnable ? c.program : undefined,
           };
         }
       }
@@ -514,7 +546,7 @@ function mapViewEverywhere(
 }
 
 function firstProject(): ProjectTab {
-  const c = makeContent("1");
+  const c = makeContent("1", "terminal");
   return {
     id: "t1",
     title: "1",
@@ -526,7 +558,7 @@ function firstProject(): ProjectTab {
 }
 
 function makeProject(id: string, opts: NewProjectOpts, index: number): ProjectTab {
-  const c = makeContent("1");
+  const c = makeContent("1", effectiveProgram(undefined, opts.program));
   const alias =
     opts.alias.trim() || (opts.root ? baseName(opts.root) : String(index));
   return {
@@ -579,12 +611,15 @@ export const useSessions = create<SessionsStore>((set) => ({
       ),
     })),
 
-  addContent: (projectId) =>
+  addContent: (projectId, program) =>
     set((s) => ({
       tabs: mapProject(s.tabs, projectId, (t) => {
         const nextNum =
           Math.max(0, ...t.contents.map((c) => parseInt(c.title, 10) || 0)) + 1;
-        const c = makeContent(String(nextNum));
+        const c = makeContent(
+          String(nextNum),
+          effectiveProgram(program, t.program),
+        );
         return { ...t, contents: [...t.contents, c], activeContentId: c.id };
       }),
     })),
@@ -746,6 +781,15 @@ export const useSessions = create<SessionsStore>((set) => ({
       tabs: mapProject(s.tabs, projectId, (t) =>
         mapViewEverywhere(t, viewId, (v) =>
           v.kind === "file" ? { ...v, dirty } : v,
+        ),
+      ),
+    })),
+
+  setBrowserUrl: (projectId, viewId, url) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapViewEverywhere(t, viewId, (v) =>
+          v.kind === "browser" ? { ...v, url } : v,
         ),
       ),
     })),

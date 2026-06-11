@@ -1,3 +1,4 @@
+mod browser;
 mod fs;
 mod pty;
 mod watcher;
@@ -41,6 +42,12 @@ pub fn run() {
             fs::git_status,
             watcher::watch_dir,
             watcher::unwatch_dir,
+            browser::browser_open,
+            browser::browser_bounds,
+            browser::browser_navigate,
+            browser::browser_history,
+            browser::browser_visible,
+            browser::browser_close,
             ime_debug,
         ])
         .build(tauri::generate_context!())

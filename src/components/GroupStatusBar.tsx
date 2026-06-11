@@ -39,6 +39,18 @@ function FileStatus({ view }: { view: Extract<View, { kind: "file" }> }) {
   );
 }
 
+function BrowserStatus({ view }: { view: Extract<View, { kind: "browser" }> }) {
+  const t = useT();
+  return (
+    <>
+      <span className="egs-left" title={view.url}>
+        {view.url}
+      </span>
+      <span className="egs-right">{t("program.browser")}</span>
+    </>
+  );
+}
+
 export function GroupStatusBar({ group }: { group: ViewGroup }) {
   const active = group.views.find((v) => v.id === group.activeViewId);
   return (
@@ -47,6 +59,8 @@ export function GroupStatusBar({ group }: { group: ViewGroup }) {
         <TerminalStatus paneId={active.focusedPaneId} />
       ) : active?.kind === "file" ? (
         <FileStatus view={active} />
+      ) : active?.kind === "browser" ? (
+        <BrowserStatus view={active} />
       ) : null}
     </div>
   );
