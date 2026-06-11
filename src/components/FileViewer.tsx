@@ -235,7 +235,9 @@ export function FileViewer({
     }
   }, [editable, text, saving, path, projectId, viewId, setFileDirty]);
 
-  // ⌘S/Ctrl+S 저장. 캡처 단계에서 가로채 CodeMirror/브라우저 기본동작보다 먼저 처리.
+  // ⌘S/Ctrl+S 저장. CodeMirror 는 "디스크 저장" 기능이 없고(에디터 위젯일 뿐 파일시스템
+  // 접근 불가) 기본 keymap 에 ⌘S 바인딩도 없다 → 저장은 우리가 write_text_file(Rust)로
+  // 구현할 수밖에 없다. 캡처 단계에서 받아 WebView 기본동작(페이지 저장)만 막는다.
   const onKeyDownSave = useCallback(
     (e: ReactKeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === "s" || e.key === "S")) {

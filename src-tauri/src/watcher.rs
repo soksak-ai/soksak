@@ -84,3 +84,98 @@ pub fn unwatch_dir(state: State<FsWatcher>, path: String) -> Result<(), String> 
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::Instant;
+
+    // 비재귀 감시가 "새 파일 생성"을 잡아 부모 디렉토리를 보고하는지(= fs-change 가
+    // emit 될 디렉토리) 실제 파일시스템에서 검증. 워처 콜백의 부모추출 로직과 동일.
+    #[test]
+    fn non_recursive_watch_detects_new_file() {
+        let dir = std::env::temp_dir().join(format!(
+            "soksak-watch-new-{}-{}",
+            std::process::id(),
+            Instant::now().elapsed().as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        // FSEvents 는 realpath 로 보고 → temp(/var→/private/var 심링크)와 맞추려 canonicalize.
+        let dir = dir.canonicalize().unwrap();
+
+        let (tx, rx) = mpsc::channel::<String>();
+        let mut debouncer = new_debouncer(
+            Duration::from_millis(100),
+            move |res: DebounceEventResult| {
+                if let Ok(events) = res {
+                    for ev in events {
+                        if let Some(p) = ev.path.parent() {
+                            let _ = tx.send(p.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            },
+        )
+        .unwrap();
+        debouncer
+            .watcher()
+            .watch(&dir, RecursiveMode::NonRecursive)
+            .unwrap();
+
+        std::thread::sleep(Duration::from_millis(300)); // 워처 무장 대기
+        std::fs::write(dir.join("new_file.txt"), b"hello").unwrap();
+
+        let got = rx
+            .recv_timeout(Duration::from_secs(8))
+            .expect("워처가 새 파일 이벤트를 보고하지 않음");
+        assert_eq!(got, dir.to_string_lossy(), "보고된 부모 디렉토리가 감시 대상과 일치");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // 기존 파일 내용 갱신(쓰기)도 감지하는지 검증(사용자 시나리오: scriptgen 의 result.json 갱신).
+    #[test]
+    fn non_recursive_watch_detects_modify() {
+        let dir = std::env::temp_dir().join(format!(
+            "soksak-watch-mod-{}-{}",
+            std::process::id(),
+            Instant::now().elapsed().as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = dir.canonicalize().unwrap();
+        let file = dir.join("result.json");
+        std::fs::write(&file, b"{}").unwrap();
+
+        let (tx, rx) = mpsc::channel::<String>();
+        let mut debouncer = new_debouncer(
+            Duration::from_millis(100),
+            move |res: DebounceEventResult| {
+                if let Ok(events) = res {
+                    for ev in events {
+                        if let Some(p) = ev.path.parent() {
+                            let _ = tx.send(p.to_string_lossy().to_string());
+                        }
+                    }
+                }
+            },
+        )
+        .unwrap();
+        debouncer
+            .watcher()
+            .watch(&dir, RecursiveMode::NonRecursive)
+            .unwrap();
+
+        std::thread::sleep(Duration::from_millis(300));
+        std::fs::write(&file, b"{\"changed\":true}").unwrap();
+
+        let got = rx
+            .recv_timeout(Duration::from_secs(8))
+            .expect("워처가 파일 갱신 이벤트를 보고하지 않음");
+        assert_eq!(got, dir.to_string_lossy());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

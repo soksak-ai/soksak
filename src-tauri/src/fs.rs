@@ -149,6 +149,30 @@ pub fn write_text_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, content).map_err(|e| e.to_string())
 }
 
+#[cfg(test)]
+mod write_tests {
+    use super::*;
+
+    // 저장(쓰기)이 디스크에 정확히 반영되고, 재저장 시 덮어쓰는지 검증.
+    #[test]
+    fn write_text_file_roundtrip_and_overwrite() {
+        let dir = std::env::temp_dir().join(format!("soksak-write-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("edit.txt");
+        let fp = f.to_string_lossy().to_string();
+
+        write_text_file(fp.clone(), "first\nedit".into()).unwrap();
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "first\nedit");
+
+        // 재저장(편집 후 ⌘S 재호출 시나리오) → 이전 내용 완전 대체.
+        write_text_file(fp, "replaced".into()).unwrap();
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "replaced");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
 // 한 디렉토리의 직속 자식만(재귀 X). path 가 None/빈값이면 HOME. lazy 트리의 단위.
 #[tauri::command]
 pub fn list_children(path: Option<String>) -> Result<ChildListing, String> {
