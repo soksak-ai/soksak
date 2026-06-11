@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { TreeThemeInput } from "@pierre/trees";
 import { FileTreeSidebar } from "./components/FileTreeSidebar";
+import { ContentTabs } from "./components/ContentTabs";
 import { GroupArea } from "./components/GroupArea";
 import { NewProjectModal } from "./components/NewProjectModal";
 import { SettingsModal } from "./components/SettingsModal";
@@ -10,7 +11,7 @@ import {
   allGroups,
   collectAllLeafIds,
   collectLeafIds,
-  projectOfPane,
+  paneSpawnInfo,
   useSessions,
   type ProjectTab,
 } from "./state/sessions";
@@ -75,9 +76,13 @@ function useResizableWidth(key: string, def: number, min: number, max: number) {
 // 프로젝트의 사이드바가 따라갈 터미널 pane(= 현재 작업 디렉토리 출처).
 // 활성 그룹의 활성 뷰가 터미널이면 그 포커스 pane, 아니면 아무 터미널 뷰의 포커스 pane.
 function cwdPaneOf(project: ProjectTab): string | undefined {
-  const groups = allGroups(project.layout);
+  const content =
+    project.contents.find((c) => c.id === project.activeContentId) ??
+    project.contents[0];
+  if (!content) return undefined;
+  const groups = allGroups(content.layout);
   const activeGroup =
-    groups.find((g) => g.id === project.activeGroupId) ?? groups[0];
+    groups.find((g) => g.id === content.activeGroupId) ?? groups[0];
   const active = activeGroup?.views.find(
     (v) => v.id === activeGroup.activeViewId,
   );
@@ -153,6 +158,7 @@ function App() {
     renameTab,
     toggleSidebar,
     addTerminalView,
+    splitNewTerminal,
     openFileView,
     closeView,
     splitPane,
@@ -165,13 +171,8 @@ function App() {
   // pane 별 spawn 옵션(프로젝트 root → cwd, 첫 pane → 프로그램 자동 실행) 등록.
   useEffect(() => {
     setSpawnOptionsProvider((paneId) => {
-      const proj = projectOfPane(useSessions.getState().tabs, paneId);
-      if (!proj) return {};
-      const initialCommand =
-        paneId === proj.initialPaneId && proj.program !== "terminal"
-          ? proj.program
-          : undefined;
-      return { cwd: proj.root, initialCommand };
+      const info = paneSpawnInfo(useSessions.getState().tabs, paneId);
+      return { cwd: info.cwd, initialCommand: info.program };
     });
   }, []);
 
@@ -221,9 +222,13 @@ function App() {
       const s = useSessions.getState();
       const project = s.tabs.find((t) => t.id === s.activeId);
       if (!project) return;
-      const groups = allGroups(project.layout);
+      const content =
+        project.contents.find((c) => c.id === project.activeContentId) ??
+        project.contents[0];
+      if (!content) return;
+      const groups = allGroups(content.layout);
       const grp =
-        groups.find((g) => g.id === project.activeGroupId) ?? groups[0];
+        groups.find((g) => g.id === content.activeGroupId) ?? groups[0];
       const view = grp?.views.find((v) => v.id === grp.activeViewId);
       if (key === "d") {
         if (view && view.kind === "terminal") {
@@ -239,7 +244,12 @@ function App() {
         }
       } else if (key === "t" && !e.shiftKey) {
         e.preventDefault();
-        addTerminalView(project.id);
+        // title 모드: 새 터미널 = 새 패널(분할). tabs 모드: 새 탭.
+        if (useSettings.getState().splitHeaderMode === "tabs" || !grp) {
+          addTerminalView(project.id);
+        } else {
+          splitNewTerminal(project.id, grp.id, "right");
+        }
       } else if (key === "b" && !e.shiftKey) {
         e.preventDefault();
         toggleSidebar(project.id);
@@ -247,7 +257,14 @@ function App() {
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [splitPane, closePane, closeView, addTerminalView, toggleSidebar]);
+  }, [
+    splitPane,
+    closePane,
+    closeView,
+    addTerminalView,
+    splitNewTerminal,
+    toggleSidebar,
+  ]);
 
   // 파일 드래그&드롭: 드롭 위치 아래의 pane-host(터미널)에 이스케이프 경로를 붙여넣는다.
   // pane 이 아니면 활성 프로젝트의 터미널 pane 으로 폴백.
@@ -436,13 +453,31 @@ function App() {
                 />
               )}
 
-              {/* 콘텐츠 영역: 에디터 그룹 트리(드래그 분할/이동). */}
+              {/* 콘텐츠 영역: 컨텐츠 탭 바 + 각 컨텐츠의 에디터 그룹 그리드. */}
               <div className="content">
-                <GroupArea
-                  project={project}
-                  isActiveProject={isActiveProject}
-                  isDark={isDark}
-                />
+                <ContentTabs project={project} />
+                <div className="content-body">
+                  {project.contents.map((c) => {
+                    const isActiveContent = c.id === project.activeContentId;
+                    return (
+                      <div
+                        key={c.id}
+                        className="content-pane"
+                        style={{
+                          visibility: isActiveContent ? "visible" : "hidden",
+                          zIndex: isActiveContent ? 1 : 0,
+                        }}
+                      >
+                        <GroupArea
+                          content={c}
+                          projectId={project.id}
+                          isActiveProject={isActiveProject && isActiveContent}
+                          isDark={isDark}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           );

@@ -4,10 +4,11 @@ import { GroupStatusBar } from "./GroupStatusBar";
 import { PaneTree } from "./PaneTree";
 import { ViewTabs } from "./ViewTabs";
 import { useT } from "../i18n";
+import { useSettings } from "../state/settings";
 import {
+  type ContentArea,
   type DropZone,
   type GroupNode,
-  type ProjectTab,
   type View,
   type ViewGroup,
   useSessions,
@@ -36,10 +37,9 @@ interface Divider {
   sizes: number[];
 }
 
-const TITLE_PX = 22; // 타이틀바
-const TAB_PX = 28; // 탭바
+const HEADER_PX = 30; // 헤더(타이틀바 또는 탭바) 한 줄
 const STATUS_PX = 20; // 스테이터스바
-const CHROME_TOP = TITLE_PX + TAB_PX; // 본문 상단 오프셋
+const CHROME_TOP = HEADER_PX; // 본문 상단 오프셋
 const DRAG_THRESHOLD = 5; // 이 픽셀 이상 움직여야 드래그로 간주(아니면 클릭)
 
 function computeLayout(node: GroupNode): { cells: Cell[]; dividers: Divider[] } {
@@ -96,21 +96,26 @@ const titleOf = (
 ): string => (v ? (v.kind === "terminal" ? term : v.title) : "");
 
 export function GroupArea({
-  project,
+  content,
+  projectId,
   isActiveProject,
   isDark,
 }: {
-  project: ProjectTab;
+  content: ContentArea;
+  projectId: string;
   isActiveProject: boolean;
   isDark: boolean;
 }) {
   const t = useT();
+  const splitHeaderMode = useSettings((s) => s.splitHeaderMode);
   const setActiveGroup = useSessions((s) => s.setActiveGroup);
   const setActiveView = useSessions((s) => s.setActiveView);
   const setFileMode = useSessions((s) => s.setFileMode);
+  const closeView = useSessions((s) => s.closeView);
   const moveViewToGroup = useSessions((s) => s.moveViewToGroup);
   const moveGroupToGroup = useSessions((s) => s.moveGroupToGroup);
   const resizeSplit = useSessions((s) => s.resizeSplit);
+  const splitNewTerminal = useSessions((s) => s.splitNewTerminal);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ kind: "view" | "group"; id: string } | null>(
@@ -121,13 +126,17 @@ export function GroupArea({
   );
 
   const { cells, dividers } = useMemo(
-    () => computeLayout(project.layout),
-    [project.layout],
+    () => computeLayout(content.layout),
+    [content.layout],
   );
 
   // 포인터 좌표 → 어느 셀의 어느 zone 인지. 타이틀/탭/스테이터스 영역은 center(이동),
   // 본문 가장자리 ¼ 는 해당 방향 분할.
-  const hitTest = (clientX: number, clientY: number) => {
+  const hitTest = (
+    clientX: number,
+    clientY: number,
+    sourceGroupId?: string,
+  ) => {
     const cont = containerRef.current;
     if (!cont) return null;
     const r = cont.getBoundingClientRect();
@@ -141,6 +150,10 @@ export function GroupArea({
         yPct <= c.rect.top + c.rect.height,
     );
     if (!cell) return null;
+    // 자기 출발 그룹 위에선 항상 전체(center) — 가장자리 분할 존을 띄우지 않는다.
+    if (cell.group.id === sourceGroupId) {
+      return { groupId: cell.group.id, zone: "center" as DropZone };
+    }
     const cellTopPx = r.top + (cell.rect.top / 100) * r.height;
     const cellHpx = (cell.rect.height / 100) * r.height;
     const cellLeftPx = r.left + (cell.rect.left / 100) * r.width;
@@ -173,6 +186,11 @@ export function GroupArea({
       if (e.button !== 0) return;
       const startX = e.clientX;
       const startY = e.clientY;
+      // 드래그 출발 그룹(자기 영역 판정용): group=그 그룹, view=그 뷰가 속한 그룹.
+      const sourceGroupId =
+        kind === "group"
+          ? id
+          : cells.find((c) => c.group.views.some((v) => v.id === id))?.group.id;
       let moved = false;
       const onMove = (ev: MouseEvent) => {
         if (!moved) {
@@ -183,7 +201,7 @@ export function GroupArea({
           document.body.style.userSelect = "none";
           document.body.style.cursor = "grabbing";
         }
-        setHover(hitTest(ev.clientX, ev.clientY));
+        setHover(hitTest(ev.clientX, ev.clientY, sourceGroupId));
       };
       const onUp = (ev: MouseEvent) => {
         window.removeEventListener("mousemove", onMove);
@@ -191,18 +209,18 @@ export function GroupArea({
         document.body.style.userSelect = "";
         document.body.style.cursor = "";
         if (moved) {
-          const target = hitTest(ev.clientX, ev.clientY);
+          const target = hitTest(ev.clientX, ev.clientY, sourceGroupId);
           if (target) {
             if (kind === "view") {
-              moveViewToGroup(project.id, id, target.groupId, target.zone);
+              moveViewToGroup(projectId, id, target.groupId, target.zone);
             } else {
-              moveGroupToGroup(project.id, id, target.groupId, target.zone);
+              moveGroupToGroup(projectId, id, target.groupId, target.zone);
             }
           }
         } else if (kind === "view") {
-          setActiveView(project.id, id); // 클릭 = 탭 전환
+          setActiveView(projectId, id); // 클릭 = 탭 전환
         } else {
-          setActiveGroup(project.id, id); // 클릭 = 그룹 활성
+          setActiveGroup(projectId, id); // 클릭 = 그룹 활성
         }
         setDrag(null);
         setHover(null);
@@ -233,7 +251,7 @@ export function GroupArea({
       const sizes = [...startSizes];
       sizes[i] = startSizes[i] + delta;
       sizes[i + 1] = startSizes[i + 1] - delta;
-      resizeSplit(project.id, d.splitId, sizes);
+      resizeSplit(projectId, d.splitId, sizes);
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
@@ -267,12 +285,12 @@ export function GroupArea({
                 visibility: isActiveView ? "visible" : "hidden",
                 zIndex: isActiveView ? 1 : 0,
               }}
-              onMouseDownCapture={() => setActiveGroup(project.id, group.id)}
+              onMouseDownCapture={() => setActiveGroup(projectId, group.id)}
             >
               {view.kind === "terminal" ? (
                 <PaneTree
                   node={view.layout}
-                  projectId={project.id}
+                  projectId={projectId}
                   viewId={view.id}
                   active={isActiveProject && isActiveView}
                   focusedPaneId={view.focusedPaneId}
@@ -282,9 +300,9 @@ export function GroupArea({
                   path={view.path}
                   mode={view.mode}
                   isDark={isDark}
-                  projectId={project.id}
+                  projectId={projectId}
                   viewId={view.id}
-                  onMode={(m) => setFileMode(project.id, view.id, m)}
+                  onMode={(m) => setFileMode(projectId, view.id, m)}
                 />
               )}
             </div>
@@ -292,45 +310,68 @@ export function GroupArea({
         }),
       )}
 
-      {/* ── 그룹 chrome: 타이틀바 / 탭바 / 스테이터스바 ── */}
+      {/* ── 그룹 chrome: 헤더(모드별 타이틀바/탭바) + 스테이터스바 ── */}
       {cells.map(({ group, rect }) => {
-        const isActiveGroup = group.id === project.activeGroupId;
+        const isActiveGroup = group.id === content.activeGroupId;
         const active = group.views.find((v) => v.id === group.activeViewId);
         return (
           <div key={`chrome-${group.id}`}>
-            {/* 타이틀바 = 그룹 드래그 핸들 */}
-            <div
-              className={`egroup-title${isActiveGroup ? " active" : ""}`}
-              style={{
-                left: `${rect.left}%`,
-                top: `${rect.top}%`,
-                width: `${rect.width}%`,
-                height: TITLE_PX,
-              }}
-              title={t("group.move")}
-              onMouseDown={startDrag("group", group.id)}
-            >
-              <span className="egt-icon">
-                {active?.kind === "terminal" ? "›_" : "▤"}
-              </span>
-              <span className="egt-name">{titleOf(active, t("view.terminal"))}</span>
-            </div>
-            {/* 탭바 */}
-            <div
-              className="egroup-tabs"
-              style={{
-                left: `${rect.left}%`,
-                top: `calc(${rect.top}% + ${TITLE_PX}px)`,
-                width: `${rect.width}%`,
-                height: TAB_PX,
-              }}
-            >
-              <ViewTabs
-                projectId={project.id}
-                group={group}
-                onTabPointerDown={(viewId, e) => startDrag("view", viewId)(e)}
-              />
-            </div>
+            {splitHeaderMode === "tabs" ? (
+              /* 탭 모드: 탭바(탭 드래그=뷰 이동, +=새 탭) */
+              <div
+                className="egroup-tabs"
+                style={{
+                  left: `${rect.left}%`,
+                  top: `${rect.top}%`,
+                  width: `${rect.width}%`,
+                  height: HEADER_PX,
+                }}
+              >
+                <ViewTabs
+                  projectId={projectId}
+                  group={group}
+                  onTabPointerDown={(viewId, e) => startDrag("view", viewId)(e)}
+                />
+              </div>
+            ) : (
+              /* 기본 title 모드: 타이틀바(바 전체=그룹 드래그 핸들) + 분할/닫기 버튼 */
+              <div
+                className={`egroup-title${isActiveGroup ? " active" : ""}`}
+                style={{
+                  left: `${rect.left}%`,
+                  top: `${rect.top}%`,
+                  width: `${rect.width}%`,
+                  height: HEADER_PX,
+                }}
+                title={t("group.move")}
+                onMouseDown={startDrag("group", group.id)}
+              >
+                <span className="egt-icon">
+                  {active?.kind === "terminal" ? "›_" : "▤"}
+                </span>
+                <span className="egt-name">
+                  {titleOf(active, t("view.terminal"))}
+                </span>
+                <button
+                  type="button"
+                  className="egt-btn"
+                  title={t("group.split")}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => splitNewTerminal(projectId, group.id, "right")}
+                >
+                  ⊟
+                </button>
+                <button
+                  type="button"
+                  className="egt-btn"
+                  title={t("view.close")}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => closeView(projectId, group.activeViewId)}
+                >
+                  ×
+                </button>
+              </div>
+            )}
             {/* 스테이터스바(셀 하단) */}
             <div
               className="egroup-status-wrap"

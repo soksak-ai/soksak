@@ -27,10 +27,13 @@ const ko = {
   "theme.toggle": "다크/라이트 전환",
   "settings.open": "설정",
 
+  "content.new": "새 컨텐츠",
+  "content.close": "컨텐츠 닫기",
   "view.terminal": "터미널",
   "view.close": "탭 닫기 (⌘W)",
   "view.newTerminal": "새 터미널 (⌘T)",
-  "group.move": "드래그해서 이 그룹 전체를 이동/분할",
+  "group.move": "드래그해서 이 패널 전체를 이동/분할",
+  "group.split": "오른쪽으로 분할(새 터미널)",
 
   "tree.refreshAria": "파일 트리 새로고침",
 
@@ -61,6 +64,9 @@ const ko = {
   "settings.title": "설정",
   "settings.language": "언어",
   "settings.projectTabPos": "프로젝트 탭 위치",
+  "settings.splitHeader": "분할 패널 헤더",
+  "splitHeader.title": "제목표시줄",
+  "splitHeader.tabs": "탭",
   "position.top": "상단",
   "position.left": "좌측",
   "settings.font": "폰트",
@@ -102,10 +108,13 @@ const en: Record<MsgKey, string> = {
   "theme.toggle": "Toggle light/dark",
   "settings.open": "Settings",
 
+  "content.new": "New content",
+  "content.close": "Close content",
   "view.terminal": "Terminal",
   "view.close": "Close tab (⌘W)",
   "view.newTerminal": "New terminal (⌘T)",
-  "group.move": "Drag to move/split this whole group",
+  "group.move": "Drag to move/split this whole panel",
+  "group.split": "Split right (new terminal)",
 
   "tree.refreshAria": "Refresh file tree",
 
@@ -136,6 +145,9 @@ const en: Record<MsgKey, string> = {
   "settings.title": "Settings",
   "settings.language": "Language",
   "settings.projectTabPos": "Project tabs",
+  "settings.splitHeader": "Split panel header",
+  "splitHeader.title": "Title bar",
+  "splitHeader.tabs": "Tabs",
   "position.top": "Top",
   "position.left": "Left",
   "settings.font": "Font",

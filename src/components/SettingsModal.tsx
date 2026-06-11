@@ -3,6 +3,7 @@ import {
   useSettings,
   type CursorStyle,
   type Language,
+  type SplitHeaderMode,
   type TabPosition,
 } from "../state/settings";
 import { useT } from "../i18n";
@@ -63,6 +64,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             >
               <option value="top">{t("position.top")}</option>
               <option value="left">{t("position.left")}</option>
+            </select>
+          </div>
+          <div className="settings-row">
+            <label>{t("settings.splitHeader")}</label>
+            <select
+              value={s.splitHeaderMode}
+              onChange={(e) =>
+                s.setSplitHeaderMode(e.target.value as SplitHeaderMode)
+              }
+            >
+              <option value="title">{t("splitHeader.title")}</option>
+              <option value="tabs">{t("splitHeader.tabs")}</option>
             </select>
           </div>
 

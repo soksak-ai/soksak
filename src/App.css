@@ -592,10 +592,98 @@ body,
 
 /* 콘텐츠 영역: 남은 가로폭. 상단 뷰 탭 + 뷰 본문(세로). */
 .content {
-  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.content-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.content-pane {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── 컨텐츠 탭 바(3단의 가운데) ── */
+.content-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 30px;
+  padding: 0 6px;
+  background: var(--bg);
+  border-bottom: 1px solid rgba(127, 127, 127, 0.18);
+  overflow-x: auto;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.ctab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px 6px 0 0;
+  font-size: 12px;
+  color: rgba(127, 127, 127, 0.9);
+  background: rgba(127, 127, 127, 0.1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ctab.active {
+  background: rgba(127, 127, 127, 0.24);
+  color: var(--fg);
+}
+.ctab:hover {
+  background: rgba(127, 127, 127, 0.18);
+}
+.ctab-title {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ctab-rename {
+  width: 80px;
+  background: var(--bg);
+  border: 1px solid rgba(127, 127, 127, 0.4);
+  border-radius: 3px;
+  color: var(--fg);
+  font: inherit;
+  padding: 0 4px;
+}
+.ctab-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.55;
+  border-radius: 3px;
+}
+.ctab-close:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.3);
+}
+.ctab-add {
+  align-self: center;
+  border: none;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 8px;
+  border-radius: 5px;
+}
+.ctab-add:hover {
+  background: rgba(127, 127, 127, 0.16);
 }
 
 /* ── 에디터 그룹 영역(드래그 분할) ── */
@@ -637,9 +725,27 @@ body,
   opacity: 0.7;
 }
 .egt-name {
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* 타이틀바 우측 버튼(분할/닫기). */
+.egt-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 4px;
+  opacity: 0.55;
+  border-radius: 3px;
+}
+.egt-btn:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.3);
 }
 /* 그룹 탭 바 스트립(타이틀바 아래). 높이는 인라인(TAB_PX)과 일치. */
 .egroup-tabs {

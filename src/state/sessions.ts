@@ -54,18 +54,27 @@ export type DropZone = "center" | "left" | "right" | "top" | "bottom";
 // 프로젝트가 처음 열 때 띄우는 프로그램.
 export type Program = "terminal" | "claude" | "codex";
 
+// 컨텐츠 탭: 한 프로젝트 안의 독립 콘텐츠 영역(분할 그리드). 프로젝트당 여러 개 + 전환.
+export interface ContentArea {
+  id: string;
+  title: string; // 1,2,3,… (이름변경 가능)
+  layout: GroupNode; // 그룹(분할) 트리
+  activeGroupId: string;
+  // 이 컨텐츠의 프로그램 자동 실행 pane(컨텐츠마다 첫 pane 에서 1회).
+  initialPaneId: string;
+}
+
 export interface ProjectTab {
   id: string;
   title: string; // 별칭
   sidebarOpen: boolean;
-  layout: GroupNode; // 그룹 트리
-  activeGroupId: string;
   // 프로젝트 루트 디렉토리(터미널 시작 위치). 미지정이면 앱 실행 디렉토리.
   root?: string;
-  // 첫 프로그램(첫 pane 에서 자동 실행). terminal 이면 셸만.
+  // 첫 프로그램(컨텐츠마다 첫 pane 에서 자동 실행). terminal 이면 셸만.
   program: Program;
-  // 프로그램을 실행할 최초 pane id(이 pane 만 program 자동 실행).
-  initialPaneId: string;
+  // 컨텐츠 탭들 + 활성.
+  contents: ContentArea[];
+  activeContentId: string;
 }
 
 export interface NewProjectOpts {
@@ -84,6 +93,12 @@ interface SessionsStore {
   setActive: (id: string) => void;
   renameTab: (id: string, title: string) => void;
   toggleSidebar: (id: string) => void;
+
+  // 컨텐츠 탭 레벨
+  addContent: (projectId: string) => void;
+  closeContent: (projectId: string, contentId: string) => void;
+  setActiveContent: (projectId: string, contentId: string) => void;
+  renameContent: (projectId: string, contentId: string, title: string) => void;
 
   // 콘텐츠 뷰/그룹 레벨
   addTerminalView: (projectId: string, groupId?: string) => void;
@@ -109,6 +124,12 @@ interface SessionsStore {
   ) => void;
   // 분할 비율 조절(리사이저 드래그).
   resizeSplit: (projectId: string, splitId: string, sizes: number[]) => void;
+  // targetGroup 옆에 새 터미널 그룹을 분할 생성(split 버튼 / title 모드 ⌘T).
+  splitNewTerminal: (
+    projectId: string,
+    targetGroupId: string,
+    side: "left" | "right" | "top" | "bottom",
+  ) => void;
 
   // pane 레벨(특정 터미널 뷰 안에서)
   splitPane: (
@@ -126,11 +147,13 @@ let nextViewId = 2; // 첫 뷰는 v1
 let nextPaneId = 2; // 첫 pane 은 p1
 let nextGroupId = 2; // 첫 그룹은 g1
 let nextSplitId = 1;
+let nextContentId = 2; // 첫 컨텐츠는 c1
 
 const newViewId = () => `v${nextViewId++}`;
 const newPaneId = () => `p${nextPaneId++}`;
 const newGroupId = () => `g${nextGroupId++}`;
 const newSplitId = () => `s${nextSplitId++}`;
+const newContentId = () => `c${nextContentId++}`;
 
 const leaf = (id: string): PaneNode => ({ type: "leaf", id });
 
@@ -150,6 +173,19 @@ function newTerminalView(): View {
 
 function makeGroup(view: View): ViewGroup {
   return { id: newGroupId(), views: [view], activeViewId: view.id };
+}
+
+// 새 컨텐츠 영역(단일 그룹 + 단일 터미널 뷰). 첫 pane 에서 프로그램 자동 실행.
+function makeContent(title: string): ContentArea {
+  const v = newTerminalView();
+  const g = makeGroup(v);
+  return {
+    id: newContentId(),
+    title,
+    layout: { type: "leaf", group: g },
+    activeGroupId: g.id,
+    initialPaneId: v.kind === "terminal" ? v.focusedPaneId : "",
+  };
 }
 
 const equalSizes = (n: number): number[] => Array(n).fill(1 / n);
@@ -337,10 +373,10 @@ function splitAtGroup(
 }
 
 // 활성 그룹이 사라졌으면 첫 그룹으로 보정.
-function normalizeActiveGroup(t: ProjectTab): ProjectTab {
-  const groups = allGroups(t.layout);
-  if (groups.some((g) => g.id === t.activeGroupId)) return t;
-  return { ...t, activeGroupId: groups[0]?.id ?? t.activeGroupId };
+function normalizeActiveGroupC(c: ContentArea): ContentArea {
+  const groups = allGroups(c.layout);
+  if (groups.some((g) => g.id === c.activeGroupId)) return c;
+  return { ...c, activeGroupId: groups[0]?.id ?? c.activeGroupId };
 }
 
 // ── pane 트리 헬퍼(터미널 뷰 내부) ────────────────────────────────────────────
@@ -351,30 +387,39 @@ export function collectLeafIds(node: PaneNode, acc: string[] = []): string[] {
   return acc;
 }
 
-// 모든 프로젝트·모든 터미널 뷰의 pane leaf id 를 수집(호스트 폐기 diff 용).
+// 모든 프로젝트·모든 컨텐츠·모든 터미널 뷰의 pane leaf id 를 수집(호스트 폐기 diff 용).
 export function collectAllLeafIds(tabs: ProjectTab[]): string[] {
   const acc: string[] = [];
   for (const t of tabs) {
-    for (const v of allViews(t.layout)) {
-      if (v.kind === "terminal") collectLeafIds(v.layout, acc);
+    for (const c of t.contents) {
+      for (const v of allViews(c.layout)) {
+        if (v.kind === "terminal") collectLeafIds(v.layout, acc);
+      }
     }
   }
   return acc;
 }
 
-// paneId 가 속한 프로젝트(spawn 옵션 root/program 결정용).
-export function projectOfPane(
+// paneId 의 spawn 정보: cwd=프로젝트 root, program=그 컨텐츠의 첫 pane 일 때만 자동 실행.
+export function paneSpawnInfo(
   tabs: ProjectTab[],
   paneId: string,
-): ProjectTab | undefined {
+): { cwd?: string; program?: Program } {
   for (const t of tabs) {
-    for (const v of allViews(t.layout)) {
-      if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
-        return t;
+    for (const c of t.contents) {
+      for (const v of allViews(c.layout)) {
+        if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
+          const isInitial = paneId === c.initialPaneId;
+          return {
+            cwd: t.root,
+            program:
+              isInitial && t.program !== "terminal" ? t.program : undefined,
+          };
+        }
       }
     }
   }
-  return undefined;
+  return {};
 }
 
 function splitInTree(
@@ -427,34 +472,71 @@ function mapProject(
   return tabs.map((t) => (t.id === projectId ? fn(t) : t));
 }
 
+function activeContentOf(t: ProjectTab): ContentArea | undefined {
+  return t.contents.find((c) => c.id === t.activeContentId);
+}
+
+// 활성 컨텐츠 영역을 변환(그룹/뷰/분할 액션은 활성 컨텐츠 대상).
+function mapActiveContent(
+  t: ProjectTab,
+  fn: (c: ContentArea) => ContentArea,
+): ProjectTab {
+  return {
+    ...t,
+    contents: t.contents.map((c) => (c.id === t.activeContentId ? fn(c) : c)),
+  };
+}
+
+function mapContent(
+  t: ProjectTab,
+  contentId: string,
+  fn: (c: ContentArea) => ContentArea,
+): ProjectTab {
+  return {
+    ...t,
+    contents: t.contents.map((c) => (c.id === contentId ? fn(c) : c)),
+  };
+}
+
+// 뷰를 어느 컨텐츠에 있든 변환(숨은 컨텐츠의 마운트된 뷰도 대상 — dirty/mode/focus 등).
+function mapViewEverywhere(
+  t: ProjectTab,
+  viewId: string,
+  fn: (v: View) => View,
+): ProjectTab {
+  return {
+    ...t,
+    contents: t.contents.map((c) => ({
+      ...c,
+      layout: mapViewNode(c.layout, viewId, fn),
+    })),
+  };
+}
+
 function firstProject(): ProjectTab {
-  const v = newTerminalView();
-  const g = makeGroup(v);
+  const c = makeContent("1");
   return {
     id: "t1",
     title: "1",
     sidebarOpen: true,
-    layout: { type: "leaf", group: g },
-    activeGroupId: g.id,
     program: "terminal",
-    initialPaneId: v.kind === "terminal" ? v.focusedPaneId : "",
+    contents: [c],
+    activeContentId: c.id,
   };
 }
 
 function makeProject(id: string, opts: NewProjectOpts, index: number): ProjectTab {
-  const v = newTerminalView();
-  const g = makeGroup(v);
+  const c = makeContent("1");
   const alias =
     opts.alias.trim() || (opts.root ? baseName(opts.root) : String(index));
   return {
     id,
     title: alias,
     sidebarOpen: true,
-    layout: { type: "leaf", group: g },
-    activeGroupId: g.id,
     root: opts.root,
     program: opts.program,
-    initialPaneId: v.kind === "terminal" ? v.focusedPaneId : "",
+    contents: [c],
+    activeContentId: c.id,
   };
 }
 
@@ -497,201 +579,278 @@ export const useSessions = create<SessionsStore>((set) => ({
       ),
     })),
 
-  addTerminalView: (projectId, groupId) =>
+  addContent: (projectId) =>
     set((s) => ({
       tabs: mapProject(s.tabs, projectId, (t) => {
-        const target = groupId ?? t.activeGroupId;
-        const v = newTerminalView();
-        return {
-          ...t,
-          layout: mapGroupNode(t.layout, target, (g) => ({
-            ...g,
-            views: [...g.views, v],
-            activeViewId: v.id,
-          })),
-          activeGroupId: target,
-        };
+        const nextNum =
+          Math.max(0, ...t.contents.map((c) => parseInt(c.title, 10) || 0)) + 1;
+        const c = makeContent(String(nextNum));
+        return { ...t, contents: [...t.contents, c], activeContentId: c.id };
       }),
     })),
 
-  openFileView: (projectId, path) =>
+  closeContent: (projectId, contentId) =>
     set((s) => ({
       tabs: mapProject(s.tabs, projectId, (t) => {
-        // 이미 열린 같은 파일이면 그 그룹/뷰를 활성화(재사용).
-        const existing = allViews(t.layout).find(
-          (v) => v.kind === "file" && v.path === path,
-        );
-        if (existing) {
-          const grp = findGroupOfView(t.layout, existing.id);
-          if (!grp) return t;
-          return {
-            ...t,
-            layout: mapGroupNode(t.layout, grp.id, (g) => ({
-              ...g,
-              activeViewId: existing.id,
-            })),
-            activeGroupId: grp.id,
-          };
+        if (t.contents.length <= 1) return t; // 최소 1개 컨텐츠 유지
+        const idx = t.contents.findIndex((c) => c.id === contentId);
+        if (idx === -1) return t;
+        const contents = t.contents.filter((c) => c.id !== contentId);
+        let activeContentId = t.activeContentId;
+        if (activeContentId === contentId) {
+          activeContentId = (contents[idx] ?? contents[idx - 1] ?? contents[0]).id;
         }
-        const v: View = {
-          id: newViewId(),
-          kind: "file",
-          title: baseName(path),
-          path,
-          mode: "code",
-        };
-        return {
-          ...t,
-          layout: mapGroupNode(t.layout, t.activeGroupId, (g) => ({
-            ...g,
-            views: [...g.views, v],
-            activeViewId: v.id,
-          })),
-        };
+        return { ...t, contents, activeContentId };
       }),
     })),
 
-  closeView: (projectId, viewId) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => {
-        if (allViews(t.layout).length <= 1) return t; // 최소 1개 뷰 유지
-        const { tree } = removeView(t.layout, viewId);
-        if (!tree) return t;
-        return normalizeActiveGroup({ ...t, layout: tree });
-      }),
-    })),
-
-  setActiveView: (projectId, viewId) =>
-    set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => {
-        const grp = findGroupOfView(t.layout, viewId);
-        if (!grp) return t;
-        return {
-          ...t,
-          layout: mapGroupNode(t.layout, grp.id, (g) => ({
-            ...g,
-            activeViewId: viewId,
-          })),
-          activeGroupId: grp.id,
-        };
-      }),
-    })),
-
-  setActiveGroup: (projectId, groupId) =>
+  setActiveContent: (projectId, contentId) =>
     set((s) => {
       const proj = s.tabs.find((t) => t.id === projectId);
-      // 이미 활성 그룹이면 상태 변경 없음(본문 클릭마다 불필요한 재렌더 방지).
-      if (!proj || proj.activeGroupId === groupId || !hasGroup(proj.layout, groupId)) {
+      if (
+        !proj ||
+        proj.activeContentId === contentId ||
+        !proj.contents.some((c) => c.id === contentId)
+      ) {
         return s;
       }
       return {
         tabs: mapProject(s.tabs, projectId, (t) => ({
           ...t,
-          activeGroupId: groupId,
+          activeContentId: contentId,
         })),
+      };
+    }),
+
+  renameContent: (projectId, contentId, title) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapContent(t, contentId, (c) => ({ ...c, title })),
+      ),
+    })),
+
+  addTerminalView: (projectId, groupId) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapActiveContent(t, (c) => {
+          const target = groupId ?? c.activeGroupId;
+          const v = newTerminalView();
+          return {
+            ...c,
+            layout: mapGroupNode(c.layout, target, (g) => ({
+              ...g,
+              views: [...g.views, v],
+              activeViewId: v.id,
+            })),
+            activeGroupId: target,
+          };
+        }),
+      ),
+    })),
+
+  openFileView: (projectId, path) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapActiveContent(t, (c) => {
+          // 이미 열린 같은 파일이면 그 그룹/뷰를 활성화(재사용).
+          const existing = allViews(c.layout).find(
+            (v) => v.kind === "file" && v.path === path,
+          );
+          if (existing) {
+            const grp = findGroupOfView(c.layout, existing.id);
+            if (!grp) return c;
+            return {
+              ...c,
+              layout: mapGroupNode(c.layout, grp.id, (g) => ({
+                ...g,
+                activeViewId: existing.id,
+              })),
+              activeGroupId: grp.id,
+            };
+          }
+          const v: View = {
+            id: newViewId(),
+            kind: "file",
+            title: baseName(path),
+            path,
+            mode: "code",
+          };
+          return {
+            ...c,
+            layout: mapGroupNode(c.layout, c.activeGroupId, (g) => ({
+              ...g,
+              views: [...g.views, v],
+              activeViewId: v.id,
+            })),
+          };
+        }),
+      ),
+    })),
+
+  closeView: (projectId, viewId) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapActiveContent(t, (c) => {
+          if (allViews(c.layout).length <= 1) return c; // 최소 1개 뷰 유지
+          const { tree } = removeView(c.layout, viewId);
+          if (!tree) return c;
+          return normalizeActiveGroupC({ ...c, layout: tree });
+        }),
+      ),
+    })),
+
+  setActiveView: (projectId, viewId) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapActiveContent(t, (c) => {
+          const grp = findGroupOfView(c.layout, viewId);
+          if (!grp) return c;
+          return {
+            ...c,
+            layout: mapGroupNode(c.layout, grp.id, (g) => ({
+              ...g,
+              activeViewId: viewId,
+            })),
+            activeGroupId: grp.id,
+          };
+        }),
+      ),
+    })),
+
+  setActiveGroup: (projectId, groupId) =>
+    set((s) => {
+      const proj = s.tabs.find((t) => t.id === projectId);
+      const c = proj ? activeContentOf(proj) : undefined;
+      // 이미 활성 그룹이면 상태 변경 없음(본문 클릭마다 불필요한 재렌더 방지).
+      if (!proj || !c || c.activeGroupId === groupId || !hasGroup(c.layout, groupId)) {
+        return s;
+      }
+      return {
+        tabs: mapProject(s.tabs, projectId, (t) =>
+          mapActiveContent(t, (ct) => ({ ...ct, activeGroupId: groupId })),
+        ),
       };
     }),
 
   setFileMode: (projectId, viewId, mode) =>
     set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => ({
-        ...t,
-        layout: mapViewNode(t.layout, viewId, (v) =>
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapViewEverywhere(t, viewId, (v) =>
           v.kind === "file" ? { ...v, mode } : v,
         ),
-      })),
+      ),
     })),
 
   setFileDirty: (projectId, viewId, dirty) =>
     set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => ({
-        ...t,
-        layout: mapViewNode(t.layout, viewId, (v) =>
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapViewEverywhere(t, viewId, (v) =>
           v.kind === "file" ? { ...v, dirty } : v,
         ),
-      })),
+      ),
     })),
 
   moveViewToGroup: (projectId, viewId, targetGroupId, zone) =>
     set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => {
-        const src = findGroupOfView(t.layout, viewId);
-        if (!src) return t;
-        const view = src.views.find((v) => v.id === viewId);
-        if (!view) return t;
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapActiveContent(t, (c) => {
+          const src = findGroupOfView(c.layout, viewId);
+          if (!src) return c;
+          const view = src.views.find((v) => v.id === viewId);
+          if (!view) return c;
 
-        if (zone === "center") {
-          if (src.id === targetGroupId) return t; // 같은 그룹 → 무시
-          const { tree } = removeView(t.layout, viewId);
-          if (!tree || !hasGroup(tree, targetGroupId)) return t;
-          return normalizeActiveGroup({
-            ...t,
-            layout: mapGroupNode(tree, targetGroupId, (g) => ({
-              ...g,
-              views: [...g.views, view],
-              activeViewId: view.id,
-            })),
-            activeGroupId: targetGroupId,
+          if (zone === "center") {
+            if (src.id === targetGroupId) return c; // 같은 그룹 → 무시
+            const { tree } = removeView(c.layout, viewId);
+            if (!tree || !hasGroup(tree, targetGroupId)) return c;
+            return normalizeActiveGroupC({
+              ...c,
+              layout: mapGroupNode(tree, targetGroupId, (g) => ({
+                ...g,
+                views: [...g.views, view],
+                activeViewId: view.id,
+              })),
+              activeGroupId: targetGroupId,
+            });
+          }
+
+          // 분할: src 에서 떼고 target 옆에 새 그룹으로.
+          if (allViews(c.layout).length <= 1) return c; // 유일 뷰는 분할 불가
+          const { tree } = removeView(c.layout, viewId);
+          if (!tree || !hasGroup(tree, targetGroupId)) return c;
+          const fresh = makeGroup(view);
+          return normalizeActiveGroupC({
+            ...c,
+            layout: splitAtGroup(tree, targetGroupId, zone, fresh),
+            activeGroupId: fresh.id,
           });
-        }
-
-        // 분할: src 에서 떼고 target 옆에 새 그룹으로.
-        if (allViews(t.layout).length <= 1) return t; // 유일 뷰는 분할 불가
-        const { tree } = removeView(t.layout, viewId);
-        if (!tree || !hasGroup(tree, targetGroupId)) return t; // target 이 사라졌으면 무시
-        const fresh = makeGroup(view);
-        return normalizeActiveGroup({
-          ...t,
-          layout: splitAtGroup(tree, targetGroupId, zone, fresh),
-          activeGroupId: fresh.id,
-        });
-      }),
+        }),
+      ),
     })),
 
   moveGroupToGroup: (projectId, sourceGroupId, targetGroupId, zone) =>
     set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => {
-        if (sourceGroupId === targetGroupId) return t;
-        if (allGroups(t.layout).length <= 1) return t; // 유일 그룹은 이동 불가
-        const source = findGroup(t.layout, sourceGroupId);
-        if (!source) return t;
-        const { tree } = removeGroup(t.layout, sourceGroupId);
-        if (!tree || !hasGroup(tree, targetGroupId)) return t;
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapActiveContent(t, (c) => {
+          if (sourceGroupId === targetGroupId) return c;
+          if (allGroups(c.layout).length <= 1) return c; // 유일 그룹은 이동 불가
+          const source = findGroup(c.layout, sourceGroupId);
+          if (!source) return c;
+          const { tree } = removeGroup(c.layout, sourceGroupId);
+          if (!tree || !hasGroup(tree, targetGroupId)) return c;
 
-        if (zone === "center") {
-          // target 으로 source 의 모든 탭을 병합(그룹 합치기).
-          return normalizeActiveGroup({
-            ...t,
-            layout: mapGroupNode(tree, targetGroupId, (g) => ({
-              ...g,
-              views: [...g.views, ...source.views],
-              activeViewId: source.activeViewId,
-            })),
-            activeGroupId: targetGroupId,
+          if (zone === "center") {
+            // target 으로 source 의 모든 탭을 병합(그룹 합치기).
+            return normalizeActiveGroupC({
+              ...c,
+              layout: mapGroupNode(tree, targetGroupId, (g) => ({
+                ...g,
+                views: [...g.views, ...source.views],
+                activeViewId: source.activeViewId,
+              })),
+              activeGroupId: targetGroupId,
+            });
+          }
+          // 그룹 통째로 target 옆에 재배치(같은 id·뷰 유지 → 본문 remount 없음).
+          return normalizeActiveGroupC({
+            ...c,
+            layout: splitAtGroup(tree, targetGroupId, zone, source),
+            activeGroupId: source.id,
           });
-        }
-        // 그룹 통째로 target 옆에 재배치(같은 id·뷰 유지 → 본문 remount 없음).
-        return normalizeActiveGroup({
-          ...t,
-          layout: splitAtGroup(tree, targetGroupId, zone, source),
-          activeGroupId: source.id,
-        });
-      }),
+        }),
+      ),
     })),
 
   resizeSplit: (projectId, splitId, sizes) =>
     set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => ({
-        ...t,
-        layout: mapSplitNode(t.layout, splitId, sizes),
-      })),
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapActiveContent(t, (c) => ({
+          ...c,
+          layout: mapSplitNode(c.layout, splitId, sizes),
+        })),
+      ),
+    })),
+
+  splitNewTerminal: (projectId, targetGroupId, side) =>
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapActiveContent(t, (c) => {
+          if (!hasGroup(c.layout, targetGroupId)) return c;
+          const v = newTerminalView();
+          const fresh = makeGroup(v);
+          return normalizeActiveGroupC({
+            ...c,
+            layout: splitAtGroup(c.layout, targetGroupId, side, fresh),
+            activeGroupId: fresh.id,
+          });
+        }),
+      ),
     })),
 
   splitPane: (projectId, viewId, paneId, dir) =>
     set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => ({
-        ...t,
-        layout: mapViewNode(t.layout, viewId, (v) => {
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapViewEverywhere(t, viewId, (v) => {
           if (v.kind !== "terminal") return v;
           const newId = newPaneId();
           return {
@@ -700,14 +859,13 @@ export const useSessions = create<SessionsStore>((set) => ({
             focusedPaneId: newId,
           };
         }),
-      })),
+      ),
     })),
 
   closePane: (projectId, viewId, paneId) =>
     set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => ({
-        ...t,
-        layout: mapViewNode(t.layout, viewId, (v) => {
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapViewEverywhere(t, viewId, (v) => {
           if (v.kind !== "terminal") return v;
           if (collectLeafIds(v.layout).length <= 1) return v;
           const next = removeInTree(v.layout, paneId);
@@ -718,16 +876,15 @@ export const useSessions = create<SessionsStore>((set) => ({
             : remaining[0];
           return { ...v, layout: next, focusedPaneId };
         }),
-      })),
+      ),
     })),
 
   setFocusedPane: (projectId, viewId, paneId) =>
     set((s) => ({
-      tabs: mapProject(s.tabs, projectId, (t) => ({
-        ...t,
-        layout: mapViewNode(t.layout, viewId, (v) =>
+      tabs: mapProject(s.tabs, projectId, (t) =>
+        mapViewEverywhere(t, viewId, (v) =>
           v.kind === "terminal" ? { ...v, focusedPaneId: paneId } : v,
         ),
-      })),
+      ),
     })),
 }));

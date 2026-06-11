@@ -5,6 +5,8 @@ import { create } from "zustand";
 export type Language = "ko" | "en";
 export type CursorStyle = "block" | "bar" | "underline";
 export type TabPosition = "top" | "left";
+// 분할 패널 헤더: 제목표시줄(단일 뷰) 또는 탭(여러 뷰 + +).
+export type SplitHeaderMode = "title" | "tabs";
 
 export interface TerminalSettings {
   fontFamily: string;
@@ -18,8 +20,11 @@ interface SettingsState extends TerminalSettings {
   language: Language;
   // 프로젝트(최상단) 탭 위치. left 면 사이드바 왼쪽 세로 레일.
   projectTabPosition: TabPosition;
+  // 분할 패널 헤더 모드(기본 title).
+  splitHeaderMode: SplitHeaderMode;
   setLanguage: (l: Language) => void;
   setProjectTabPosition: (p: TabPosition) => void;
+  setSplitHeaderMode: (m: SplitHeaderMode) => void;
   setFontFamily: (v: string) => void;
   setFontSize: (v: number) => void;
   setCursorBlink: (v: boolean) => void;
@@ -30,6 +35,7 @@ interface SettingsState extends TerminalSettings {
 const DEFAULTS = {
   language: "ko" as Language,
   projectTabPosition: "top" as TabPosition,
+  splitHeaderMode: "title" as SplitHeaderMode,
   fontFamily:
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
   fontSize: 13,
@@ -69,6 +75,7 @@ export const useSettings = create<SettingsState>((set, get) => {
       JSON.stringify({
         language: s.language,
         projectTabPosition: s.projectTabPosition,
+        splitHeaderMode: s.splitHeaderMode,
         ...terminalSettingsOf(s),
       }),
     );
@@ -81,6 +88,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setProjectTabPosition: (projectTabPosition) => {
       set({ projectTabPosition });
+      save();
+    },
+    setSplitHeaderMode: (splitHeaderMode) => {
+      set({ splitHeaderMode });
       save();
     },
     setFontFamily: (fontFamily) => {
