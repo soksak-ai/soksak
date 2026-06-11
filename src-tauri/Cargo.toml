@@ -27,4 +27,7 @@ serde_json = "1"
 portable-pty = "0.9"
 base64 = "0.22"
 tauri-plugin-dialog = "2.7.1"
+# 파일 트리 라이브 갱신용 파일시스템 워처(macOS=FSEvents, Linux=inotify, Win=ReadDirectoryChangesW).
+# 폴링 없이 OS 네이티브 이벤트. debouncer-mini 로 변경 폭주를 묶는다.
+notify-debouncer-mini = "0.6"
 

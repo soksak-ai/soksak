@@ -143,6 +143,12 @@ pub fn read_file_base64(path: String) -> Result<FileData, String> {
     })
 }
 
+// 파일 저장(에디터 편집 내용). 텍스트를 그대로 덮어쓴다.
+#[tauri::command]
+pub fn write_text_file(path: String, content: String) -> Result<(), String> {
+    std::fs::write(&path, content).map_err(|e| e.to_string())
+}
+
 // 한 디렉토리의 직속 자식만(재귀 X). path 가 None/빈값이면 HOME. lazy 트리의 단위.
 #[tauri::command]
 pub fn list_children(path: Option<String>) -> Result<ChildListing, String> {

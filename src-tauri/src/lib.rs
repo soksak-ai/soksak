@@ -1,8 +1,10 @@
 mod fs;
 mod pty;
+mod watcher;
 
 use pty::PtyManager;
 use tauri::Manager;
+use watcher::FsWatcher;
 
 // IME 진단: dev(debug) 빌드에서만 로깅. 릴리즈 빌드에서는 no-op.
 #[tauri::command]
@@ -19,6 +21,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(PtyManager::default())
+        .manage(FsWatcher::default())
+        .setup(|app| {
+            // 파일 워처 1회 초기화(이벤트 콜백에 앱 핸들 주입).
+            let handle = app.handle().clone();
+            app.state::<FsWatcher>().init(handle);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             pty::spawn_terminal,
             pty::write_terminal,
@@ -27,8 +36,11 @@ pub fn run() {
             pty::close_terminal,
             fs::list_children,
             fs::read_text_file,
+            fs::write_text_file,
             fs::read_file_base64,
             fs::git_status,
+            watcher::watch_dir,
+            watcher::unwatch_dir,
             ime_debug,
         ])
         .build(tauri::generate_context!())
