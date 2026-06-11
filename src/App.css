@@ -622,6 +622,7 @@ body,
   cursor: grab;
   font-size: 11px;
   color: rgba(127, 127, 127, 0.9);
+  -webkit-user-select: none;
   user-select: none;
 }
 .egroup-title:active {
@@ -645,12 +646,16 @@ body,
   position: absolute;
   overflow: hidden;
   z-index: 2;
+  -webkit-user-select: none;
+  user-select: none;
 }
 /* 그룹 스테이터스바(셀 하단). */
 .egroup-status-wrap {
   position: absolute;
   z-index: 2;
   overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .egroup-status {
   display: flex;
