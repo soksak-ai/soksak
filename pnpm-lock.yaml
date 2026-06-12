@@ -8,9 +8,18 @@ importers:
 
   .:
     dependencies:
+      '@codemirror/language':
+        specifier: ^6.12.3
+        version: 6.12.3
       '@codemirror/search':
         specifier: 6.7.0
         version: 6.7.0
+      '@codemirror/state':
+        specifier: ^6.6.0
+        version: 6.6.0
+      '@codemirror/view':
+        specifier: ^6.43.1
+        version: 6.43.1
       '@pierre/trees':
         specifier: 1.0.0-beta.4
         version: 1.0.0-beta.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)

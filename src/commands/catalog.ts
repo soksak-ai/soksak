@@ -31,6 +31,8 @@ import {
 import { computeLayout } from "../components/GroupArea";
 import { getFileView, saveFileView } from "./fileViewBridge";
 import { catalogJson, register, type CommandContext } from "./registry";
+import { registerGitCatalog } from "./catalogGit";
+import { registerPluginCatalog } from "./catalogPlugins";
 
 // ── 공통 에러/헬퍼 ───────────────────────────────────────────────────────────
 
@@ -1585,4 +1587,8 @@ export function registerCatalog(): void {
       return reject ? { installed, rejected: reject.errors } : { installed };
     },
   });
+
+  // ----- 분권 카탈로그(파일 분리 — 단일 진실은 동일 registry) -----
+  registerGitCatalog();
+  registerPluginCatalog();
 }

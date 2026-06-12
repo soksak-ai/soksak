@@ -18,6 +18,10 @@ interface FileViewApi {
     replacement: string,
     opts: FindOptions & { all?: boolean },
   ) => { replaced: number };
+  // 버퍼 읽기/통째 치환(undo 1회 보존) — 플러그인 editor API/포매터 통로.
+  // 코드 편집 뷰가 아니면(프리뷰/미디어) 미구현일 수 있다.
+  getText?: () => string;
+  setText?: (text: string) => boolean;
 }
 
 const views = new Map<string, FileViewApi>();

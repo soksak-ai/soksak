@@ -16,7 +16,12 @@ import { useSettings } from "./settings";
 
 // ── 결과 타입 ────────────────────────────────────────────────────────────────
 
-export type CmdErrCode = "TARGET_NOT_FOUND" | "LAST_ITEM" | "INVALID_PARAMS";
+export type CmdErrCode =
+  | "TARGET_NOT_FOUND"
+  | "LAST_ITEM"
+  | "INVALID_PARAMS"
+  // 플러그인 활성화에 사용자 동의가 필요(원격 enable 거부 — 플러그인 스펙 §0-5).
+  | "CONSENT_REQUIRED";
 
 export type CmdErr = { ok: false; code: CmdErrCode; message: string };
 export type CmdOk<T extends object = object> = { ok: true } & T;
