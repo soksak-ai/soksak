@@ -147,7 +147,10 @@ unsafe fn apply_inset(window: &NSWindow, x: f64, y: f64) {
     }
 
     // 비활성 위젯의 backdrop 합성 복원 — 버튼 뒤 불투명 백킹(§상단 주석).
-    ensure_backing(&container, bar_width, bar_height);
+    // 활성 상태에선 숨긴다: 점이 불투명 컬러라 백킹이 불필요하고, 테마 전환
+    // (DOM 즉시 반영) 때 네이티브 패치만 따로 노는 이질감을 없앤다 — 백킹은
+    // 비활성(점이 backdrop 합성으로 그려지는 상태)에서만 보인다.
+    ensure_backing(&container, bar_width, bar_height, window.isKeyWindow());
 
     // AppKit 이 비활성 전환에서 깎는 가시성 속성 복원.
     container.setHidden(false);
@@ -162,10 +165,11 @@ unsafe fn apply_inset(window: &NSWindow, x: f64, y: f64) {
 }
 
 // 버튼 클러스터 뒤(컨테이너 전면적)에 불투명 백킹 NSBox 를 깐다(버튼들보다 아래).
-// 멱등: 컨테이너의 기존 NSBox(우리만 넣는다)를 찾아 프레임/색만 갱신. 색 미동기화
-// 시 시스템 windowBackgroundColor(라이트/다크 자동) 폴백.
+// 멱등: 컨테이너의 기존 NSBox(우리만 넣는다)를 찾아 프레임/색/표시만 갱신.
+// 색 미동기화 시 시스템 windowBackgroundColor(라이트/다크 자동) 폴백.
+// is_key=true(활성)면 숨김 — 백킹은 비활성 합성 복원 전용.
 #[cfg(target_os = "macos")]
-unsafe fn ensure_backing(container: &NSView, width: f64, height: f64) {
+unsafe fn ensure_backing(container: &NSView, width: f64, height: f64, is_key: bool) {
     use objc2::{MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{NSBox, NSBoxType, NSColor, NSTitlePosition};
     use objc2_foundation::{NSPoint, NSRect, NSSize};
@@ -181,6 +185,7 @@ unsafe fn ensure_backing(container: &NSView, width: f64, height: f64) {
         if let Ok(bx) = sub.downcast::<NSBox>() {
             bx.setFrame(frame);
             bx.setFillColor(&color);
+            bx.setHidden(is_key);
             // 버튼이 항상 백킹 위에 오도록 백킹은 최하단 유지.
             if let Some(parent) = bx.superview() {
                 parent.addSubview_positioned_relativeTo(&bx, NSWindowOrderingMode::Below, None);
@@ -197,6 +202,7 @@ unsafe fn ensure_backing(container: &NSView, width: f64, height: f64) {
     bx.setBorderWidth(0.0);
     bx.setTitlePosition(NSTitlePosition::NoTitle);
     bx.setFillColor(&color);
+    bx.setHidden(is_key);
     container.addSubview_positioned_relativeTo(&bx, NSWindowOrderingMode::Below, None);
 }
 
