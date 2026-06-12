@@ -167,6 +167,12 @@ const ko = {
   "plugin.consent.prog.run": "터미널에서 자동 실행:",
   "plugin.consent.prog.bareTerminal": "맨 터미널을 연다(명령 실행 없음)",
   "plugin.consent.prog.install": "미설치 시 설치 실행:",
+  "plugin.contrib.program": "+ 메뉴:",
+  "plugin.contrib.view": "화면:",
+  "plugin.contrib.command": "명령",
+  "plugin.contrib.formatter": "포매터:",
+  "plugin.contrib.language": "문법",
+  "plugin.contrib.iconSet": "아이콘:",
   "perm.programs.menuOnly":
     "새 탭(+) 메뉴에 프로그램을 추가합니다. 명령 실행은 없습니다.",
   "perm.programs.run":
@@ -341,6 +347,12 @@ const en: Record<MsgKey, string> = {
   "plugin.consent.prog.run": "auto-runs in terminal:",
   "plugin.consent.prog.bareTerminal": "opens a bare terminal (no command run)",
   "plugin.consent.prog.install": "runs installer if missing:",
+  "plugin.contrib.program": "+ menu:",
+  "plugin.contrib.view": "View:",
+  "plugin.contrib.command": "Commands",
+  "plugin.contrib.formatter": "Formatter:",
+  "plugin.contrib.language": "Languages",
+  "plugin.contrib.iconSet": "Icons:",
   "perm.programs.menuOnly":
     "Adds programs to the new-tab (+) menu. No commands are run.",
   "perm.programs.run":

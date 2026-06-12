@@ -2539,6 +2539,20 @@ select.dctl {
   word-break: keep-all;
   overflow-wrap: break-word;
 }
+/* 역할 칩 — 검증된 선언(contributes) 파생. 폐곡선 위젯 윤곽(B8 분류). */
+.plugin-row-contribs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.plugin-contrib-chip {
+  border: 1px solid var(--bd-soft);
+  border-radius: 99px;
+  padding: 1px 8px;
+  font-size: 10.5px;
+  color: var(--fg3);
+  white-space: nowrap;
+}
 .plugin-row-err {
   color: #e5534b;
   font-size: 11px;

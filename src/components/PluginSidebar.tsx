@@ -249,6 +249,58 @@ function PluginManagerPanel() {
             </span>
           </div>
           <div className="plugin-row-desc">{p.manifest.description}</div>
+          {/* 역할 칩 — 검증된 선언(contributes)에서 기계적 파생(산문 카테고리
+              금지: 자유 메타데이터는 검증 불가). 무엇을 추가하는지(메뉴 항목/
+              화면/명령/포매터/문법/아이콘)가 한눈에. */}
+          {(() => {
+            const c = p.manifest.contributes;
+            const chips: { key: string; text: string }[] = [];
+            for (const pr of c.programs) {
+              chips.push({
+                key: `prog:${pr.id}`,
+                text: `${t("plugin.contrib.program")} ${pr.path ? `${pr.path} ▸ ` : ""}${pr.title}`,
+              });
+            }
+            for (const v of c.views) {
+              chips.push({
+                key: `view:${v.id}`,
+                text: `${t("plugin.contrib.view")} ${v.title}`,
+              });
+            }
+            if (c.commands.length > 0) {
+              chips.push({
+                key: "cmds",
+                text: `${t("plugin.contrib.command")} ${c.commands.length}`,
+              });
+            }
+            for (const f of c.formatters) {
+              chips.push({
+                key: `fmt:${f.id}`,
+                text: `${t("plugin.contrib.formatter")} ${f.title}`,
+              });
+            }
+            if (c.languages.length > 0) {
+              chips.push({
+                key: "langs",
+                text: `${t("plugin.contrib.language")} ${c.languages.length}`,
+              });
+            }
+            for (const s of c.iconSets) {
+              chips.push({
+                key: `icons:${s.id}`,
+                text: `${t("plugin.contrib.iconSet")} ${s.title}`,
+              });
+            }
+            return chips.length > 0 ? (
+              <div className="plugin-row-contribs">
+                {chips.map((ch) => (
+                  <span key={ch.key} className="plugin-contrib-chip">
+                    {ch.text}
+                  </span>
+                ))}
+              </div>
+            ) : null;
+          })()}
           {p.error && <div className="plugin-row-err">{p.error}</div>}
           <div className="plugin-row-actions">
             {p.status === "enabled" ? (
