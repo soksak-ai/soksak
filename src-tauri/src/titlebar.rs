@@ -146,11 +146,14 @@ unsafe fn apply_inset(window: &NSWindow, x: f64, y: f64) {
         );
     }
 
-    // 비활성 위젯의 backdrop 합성 복원 — 버튼 뒤 불투명 백킹(§상단 주석).
-    // 활성 상태에선 숨긴다: 점이 불투명 컬러라 백킹이 불필요하고, 테마 전환
-    // (DOM 즉시 반영) 때 네이티브 패치만 따로 노는 이질감을 없앤다 — 백킹은
-    // 비활성(점이 backdrop 합성으로 그려지는 상태)에서만 보인다.
-    ensure_backing(&container, bar_width, bar_height, window.isKeyWindow());
+    // 비활성 위젯의 backdrop 합성 복원 — 점 모양 그대로의 원형 백킹 3개(§상단 주석).
+    // 직사각 패치는 점 밖으로 노출돼 테마와 어긋난 띠가 보였다 — 버튼 프레임과
+    // 동일한 원만 깔면 점 뒤에 완전히 숨는다. 활성 상태에선 숨김(점이 불투명
+    // 컬러라 불필요 + 테마 전환 때 네이티브 패치만 따로 노는 이질감 제거).
+    ensure_backing(
+        [&close, &miniaturize, &zoom],
+        window.isKeyWindow(),
+    );
 
     // AppKit 이 비활성 전환에서 깎는 가시성 속성 복원.
     container.setHidden(false);
@@ -164,46 +167,56 @@ unsafe fn apply_inset(window: &NSWindow, x: f64, y: f64) {
     }
 }
 
-// 버튼 클러스터 뒤(컨테이너 전면적)에 불투명 백킹 NSBox 를 깐다(버튼들보다 아래).
-// 멱등: 컨테이너의 기존 NSBox(우리만 넣는다)를 찾아 프레임/색/표시만 갱신.
+// 버튼마다 그 프레임과 동일한 원형 백킹(NSBox, cornerRadius=½)을 바로 아래에 깐다.
+// 점 밖으로 새는 픽셀이 없어 테마와의 색 차가 드러나지 않는다. 멱등: 버튼들의
+// superview 에 NSBox 를 넣는 건 우리뿐 — 기존 것을 수거해 재사용.
 // 색 미동기화 시 시스템 windowBackgroundColor(라이트/다크 자동) 폴백.
 // is_key=true(활성)면 숨김 — 백킹은 비활성 합성 복원 전용.
 #[cfg(target_os = "macos")]
-unsafe fn ensure_backing(container: &NSView, width: f64, height: f64, is_key: bool) {
-    use objc2::{MainThreadMarker, MainThreadOnly};
+unsafe fn ensure_backing(buttons: [&NSView; 3], is_key: bool) {
+    use objc2::{rc::Retained, MainThreadMarker, MainThreadOnly};
     use objc2_app_kit::{NSBox, NSBoxType, NSColor, NSTitlePosition};
-    use objc2_foundation::{NSPoint, NSRect, NSSize};
 
-    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(width, height));
+    let Some(sv) = buttons[0].superview() else {
+        return;
+    };
     let color = match *BACKING_COLOR.lock().unwrap() {
         Some((r, g, b)) => NSColor::colorWithSRGBRed_green_blue_alpha(r, g, b, 1.0),
         None => NSColor::windowBackgroundColor(),
     };
 
-    for sub in container.subviews().iter() {
-        // 이 컨테이너에 NSBox 를 넣는 건 우리뿐 — 클래스로 판별(멱등 갱신).
-        if let Ok(bx) = sub.downcast::<NSBox>() {
-            bx.setFrame(frame);
-            bx.setFillColor(&color);
-            bx.setHidden(is_key);
-            // 버튼이 항상 백킹 위에 오도록 백킹은 최하단 유지.
-            if let Some(parent) = bx.superview() {
-                parent.addSubview_positioned_relativeTo(&bx, NSWindowOrderingMode::Below, None);
+    let mut existing: Vec<Retained<NSBox>> = sv
+        .subviews()
+        .iter()
+        .filter_map(|s| s.downcast::<NSBox>().ok())
+        .collect();
+
+    for button in buttons {
+        let frame = NSView::frame(button);
+        let bx = match existing.pop() {
+            Some(b) => b,
+            None => {
+                let Some(mtm) = MainThreadMarker::new() else {
+                    return;
+                };
+                let b = NSBox::initWithFrame(NSBox::alloc(mtm), frame);
+                b.setBoxType(NSBoxType::Custom);
+                b.setBorderWidth(0.0);
+                b.setTitlePosition(NSTitlePosition::NoTitle);
+                sv.addSubview_positioned_relativeTo(&b, NSWindowOrderingMode::Below, None);
+                b
             }
-            return;
+        };
+        bx.setFrame(frame);
+        // 짧은 변 기준 ½ 반경 — 버튼 프레임(14×16)에서 사실상 원/캡슐.
+        bx.setCornerRadius(frame.size.width.min(frame.size.height) / 2.0);
+        bx.setFillColor(&color);
+        bx.setHidden(is_key);
+        // 버튼이 항상 백킹 위에 오도록 백킹은 최하단 유지.
+        if let Some(parent) = bx.superview() {
+            parent.addSubview_positioned_relativeTo(&bx, NSWindowOrderingMode::Below, None);
         }
     }
-
-    let Some(mtm) = MainThreadMarker::new() else {
-        return;
-    };
-    let bx = NSBox::initWithFrame(NSBox::alloc(mtm), frame);
-    bx.setBoxType(NSBoxType::Custom);
-    bx.setBorderWidth(0.0);
-    bx.setTitlePosition(NSTitlePosition::NoTitle);
-    bx.setFillColor(&color);
-    bx.setHidden(is_key);
-    container.addSubview_positioned_relativeTo(&bx, NSWindowOrderingMode::Below, None);
 }
 
 // ── 계측(디버그 빌드 전용) ───────────────────────────────────────────────────
