@@ -54,6 +54,9 @@ interface SettingsState extends TerminalSettings {
   iconBox: boolean;
   // 포커스 그룹 표시 스타일(그룹 2개 이상일 때 활성 그룹에 표시).
   focusIndicator: FocusIndicator;
+  // 앱 첫 오픈 시 가리킬 기본 프로젝트 루트("" = 자동 project1). 프로젝트
+  // 설정의 "기본 프로젝트" 체크박스가 저장 — 부트(main.tsx)가 소비.
+  defaultProjectRoot: string;
   setLanguage: (l: Language) => void;
   setProjectTabPosition: (p: TabPosition) => void;
   setContentTabPosition: (p: TabPosition) => void;
@@ -66,6 +69,7 @@ interface SettingsState extends TerminalSettings {
   setIconSet: (id: string) => void;
   setIconBox: (v: boolean) => void;
   setFocusIndicator: (v: FocusIndicator) => void;
+  setDefaultProjectRoot: (root: string) => void;
   setFontFamily: (v: string) => void;
   setFontSize: (v: number) => void;
   setCursorBlink: (v: boolean) => void;
@@ -87,6 +91,7 @@ const DEFAULTS = {
   iconSet: "lucide",
   iconBox: false,
   focusIndicator: "outline" as FocusIndicator,
+  defaultProjectRoot: "",
   fontFamily:
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
   fontSize: 13,
@@ -138,6 +143,7 @@ export const useSettings = create<SettingsState>((set, get) => {
         iconSet: s.iconSet,
         iconBox: s.iconBox,
         focusIndicator: s.focusIndicator,
+        defaultProjectRoot: s.defaultProjectRoot,
         ...terminalSettingsOf(s),
       }),
     );
@@ -190,6 +196,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setFocusIndicator: (focusIndicator) => {
       set({ focusIndicator });
+      save();
+    },
+    setDefaultProjectRoot: (defaultProjectRoot) => {
+      set({ defaultProjectRoot });
       save();
     },
     setFontFamily: (fontFamily) => {

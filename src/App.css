@@ -2044,6 +2044,18 @@ select.dctl {
 .dpath-err {
   color: var(--danger);
 }
+/* 모달 행 체크박스(라벨 포함) — dctl 자리에서 좌측 정렬 */
+.dctl-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg2);
+}
 /* 모달 행의 세그먼트 선택(자동/직접 등) — dctl 폭을 둘이 나눠 가진다 */
 .dseg {
   flex: 1;

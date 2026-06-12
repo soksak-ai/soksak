@@ -4,6 +4,7 @@ import { ProgramOptions } from "./ProgramOptions";
 import { useEffect, useState } from "react";
 import { isComposingEnter } from "../lib/imeKeys";
 import { useSessions, type Program } from "../state/sessions";
+import { useSettings } from "../state/settings";
 import { useSuppressBrowser } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
@@ -36,6 +37,8 @@ export function ProjectSettingsModal({
   const project = useSessions((s) => s.tabs.find((x) => x.id === projectId));
   const updateProject = useSessions((s) => s.updateProject);
   const setProjectColor = useSessions((s) => s.setProjectColor);
+  const defaultProjectRoot = useSettings((s) => s.defaultProjectRoot);
+  const setDefaultProjectRoot = useSettings((s) => s.setDefaultProjectRoot);
   const [name, setName] = useState(project?.title ?? "");
   const [program, setProgram] = useState<Program | "">(project?.program ?? "");
   const [shell, setShell] = useState(project?.shell ?? "");
@@ -111,6 +114,22 @@ export function ProjectSettingsModal({
                 if (e.key === "Enter") save();
               }}
             />
+          </div>
+
+          {/* 기본 프로젝트 — 앱 첫 오픈 시 이 프로젝트(루트)로 시작.
+              설정 영속(defaultProjectRoot) — 부트(main.tsx)가 소비. 즉시 적용. */}
+          <div className="drow">
+            <span className="drow-label">{t("project.default")}</span>
+            <label className="dctl dctl-check">
+              <input
+                type="checkbox"
+                checked={defaultProjectRoot === project.root}
+                onChange={(e) =>
+                  setDefaultProjectRoot(e.target.checked ? project.root : "")
+                }
+              />
+              <span>{t("project.defaultHint")}</span>
+            </label>
           </div>
 
           <div className="drow">
