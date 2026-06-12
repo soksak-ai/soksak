@@ -230,7 +230,7 @@ sok browser.navigate '{"url":"https://news.ycombinator.com"}'
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `group` | string |  | 대상 패널(그룹) id(생략=호출 컨텍스트의 패널) |
-| `url` | string |  | 시작 URL [기본 "https://www.google.com"] |
+| `url` | string |  | 시작 URL(생략=설정 homeUrl) |
 | `where` | string |  | 여는 위치 (panel|window) [기본 "panel"] |
 
 **반환**: panel: { groupId, viewId } / window: {}
@@ -350,6 +350,41 @@ sok content.rename '{"content":"c1","title":"빌드"}'
 sok editor.close '{"view":"v4"}'
 ```
 
+## `editor.find`
+
+에디터 뷰에서 찾기(하이라이트 + 첫 매치 선택). 매치 수 반환
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `caseSensitive` | boolean |  | 대소문자 구분 [기본 false] |
+| `query` | string | ✓ | 찾을 문자열/패턴 |
+| `regexp` | boolean |  | 정규식 사용 [기본 false] |
+| `view` | string | ✓ | 대상 뷰 id(생략=호출 컨텍스트의 뷰) |
+| `wholeWord` | boolean |  | 단어 단위 일치 [기본 false] |
+
+**반환**: { matches }
+**에러**: TARGET_NOT_FOUND
+
+```bash
+sok editor.find '{"view":"v4","query":"TODO"}'
+```
+
+## `editor.format`
+
+파일 뷰를 등록된 플러그인 포매터로 정리(⇧⌥F). 포매터는 contributes.formatters 선언 + registerFormatter 바인딩
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `view` | string |  | 파일 뷰 id(생략 시 활성 체인) |
+
+**반환**: { formatted, changed, formatter }
+**에러**: TARGET_NOT_FOUND, INVALID_PARAMS, INTERNAL
+
+```bash
+sok editor.format
+sok editor.format '{"view":"v12"}'
+```
+
 ## `editor.open`
 
 파일을 에디터 뷰로 열기(이미 열려 있으면 그 탭 활성화)
@@ -366,6 +401,27 @@ sok editor.close '{"view":"v4"}'
 sok editor.open '{"path":"/Users/me/work/src/main.rs"}'
 ```
 
+## `editor.replace`
+
+에디터 뷰에서 바꾸기(all=true 전체, 아니면 1건). 치환 수 반환 — 저장은 editor.save
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `all` | boolean |  | 모두 바꾸기 [기본 true] |
+| `caseSensitive` | boolean |  | 대소문자 구분 [기본 false] |
+| `query` | string | ✓ | 찾을 문자열/패턴 |
+| `regexp` | boolean |  | 정규식 사용 [기본 false] |
+| `replacement` | string | ✓ | 바꿀 문자열 |
+| `view` | string | ✓ | 대상 뷰 id(생략=호출 컨텍스트의 뷰) |
+| `wholeWord` | boolean |  | 단어 단위 일치 [기본 false] |
+
+**반환**: { replaced }
+**에러**: TARGET_NOT_FOUND
+
+```bash
+sok editor.replace '{"view":"v4","query":"foo","replacement":"bar"}'
+```
+
 ## `editor.save`
 
 에디터 뷰 저장(⌘S 와 동일)
@@ -379,6 +435,92 @@ sok editor.open '{"path":"/Users/me/work/src/main.rs"}'
 
 ```bash
 sok editor.save '{"view":"v4"}'
+```
+
+## `explorer.git`
+
+디렉토리의 git 변경 상태(파일트리 데코레이션과 동일)
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `path` | string |  | git repo 디렉토리(생략=프로젝트 root) |
+| `project` | string |  | 대상 프로젝트 id(생략=호출 컨텍스트의 프로젝트) |
+
+**반환**: { entries: [{path,status}] } — repo 아니면 빈 목록
+**에러**: TARGET_NOT_FOUND, INTERNAL
+
+```bash
+sok explorer.git
+```
+
+## `explorer.list`
+
+디렉토리 직속 자식 나열(파일트리와 동일한 뷰). path 생략=프로젝트 root(없으면 HOME)
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `path` | string |  | 디렉토리 절대경로 |
+| `project` | string |  | 대상 프로젝트 id(생략=호출 컨텍스트의 프로젝트) |
+
+**반환**: { root, children: [{name,dir}] }
+**에러**: TARGET_NOT_FOUND, INTERNAL
+
+```bash
+sok explorer.list
+sok explorer.list '{"path":"/tmp"}'
+```
+
+## `git.diff`
+
+unified diff 원문 — 기본 작업트리, staged=true 면 index, commit 지정 시 그 커밋의 패치
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `commit` | string |  | 커밋 해시/HEAD 참조 |
+| `file` | string |  | 특정 파일로 한정(저장소 상대경로) |
+| `path` | string |  | 저장소 경로(생략 시 활성 프로젝트 루트) |
+| `staged` | boolean |  | index(staged) diff [기본 false] |
+
+**반환**: { diff: string }
+**에러**: TARGET_NOT_FOUND, INTERNAL
+
+```bash
+sok git.diff
+sok git.diff '{"file":"src/main.ts","staged":true}'
+```
+
+## `git.log`
+
+커밋 이력(최신순). limit 기본 50/최대 500, skip 으로 페이지네이션
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `limit` | number |  | 최대 건수(기본 50, 상한 500) |
+| `path` | string |  | 저장소 경로(생략 시 활성 프로젝트 루트) |
+| `skip` | number |  | 건너뛸 건수(페이지네이션) |
+
+**반환**: { commits: [{hash, short, author, date, subject}] }
+**에러**: TARGET_NOT_FOUND, INTERNAL
+
+```bash
+sok git.log
+sok git.log '{"limit":10,"skip":10}'
+```
+
+## `git.show`
+
+커밋 1개 상세 — 메타 + 변경 파일 목록 + 패치 전문
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `commit` | string | ✓ | 커밋 해시(4~40 hex) 또는 HEAD/HEAD~N/HEAD^ |
+| `path` | string |  | 저장소 경로(생략 시 활성 프로젝트 루트) |
+
+**반환**: { meta, files: [{status, path}], patch }
+**에러**: TARGET_NOT_FOUND, INTERNAL
+
+```bash
+sok git.show '{"commit":"HEAD"}'
 ```
 
 ## `pane.close`
@@ -560,6 +702,152 @@ sok panel.split '{"side":"right"}'
 sok panel.split '{"side":"bottom","program":"browser"}'
 ```
 
+## `plugin.dev.load`
+
+개발 모드 — 임의 디렉토리의 플러그인을 설치 없이 적재(활성화는 별도 enable + 동의)
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `path` | string | ✓ | 플러그인 디렉토리 절대경로 |
+
+**반환**: { id, dir }
+**에러**: TARGET_NOT_FOUND, INVALID_PARAMS
+
+```bash
+sok plugin.dev.load '{"path":"/path/to/my-plugin"}'
+```
+
+## `plugin.disable`
+
+플러그인 비활성화 — 등록한 명령/뷰/확장 전부 회수(§0-4)
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `id` | string | ✓ | 플러그인 id |
+
+**반환**: { id, status }
+**에러**: TARGET_NOT_FOUND
+
+```bash
+sok plugin.disable '{"id":"soksak-memo"}'
+```
+
+## `plugin.enable`
+
+플러그인 활성화(코드 실행 개시). 기록된 사용자 동의가 없으면 CONSENT_REQUIRED — 동의는 UI 에서만
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `id` | string | ✓ | 플러그인 id |
+
+**반환**: { id, status }
+**에러**: TARGET_NOT_FOUND, CONSENT_REQUIRED, INTERNAL
+
+```bash
+sok plugin.enable '{"id":"soksak-memo"}'
+```
+
+## `plugin.install`
+
+git 소스에서 플러그인 설치(~/.soksak/plugins/<id>) — "user/repo" 단축형, URL, 로컬 경로
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `ref` | string |  | 브랜치/태그/커밋 핀 |
+| `source` | string | ✓ | GitHub "user/repo" | git URL | 로컬 경로 |
+
+**반환**: { id, dir }
+**에러**: INVALID_PARAMS, INTERNAL
+
+```bash
+sok plugin.install '{"source":"user/soksak-memo"}'
+sok plugin.install '{"source":"/path/to/repo","ref":"v1.0.0"}'
+```
+
+## `plugin.list`
+
+플러그인 전체 상태 — 설치/dev 목록(status 포함) + 검증 거부(rejected) 사유
+
+**반환**: { plugins: [{id, name, version, status, permissions, …}], rejected }
+
+```bash
+sok plugin.list
+```
+
+## `plugin.reload`
+
+플러그인 전체 재적재 — 디렉토리 재스캔 + 활성(동의 유효) 플러그인 재활성화
+
+**반환**: { count, rejected }
+
+```bash
+sok plugin.reload
+```
+
+## `plugin.remove`
+
+플러그인 제거(디렉토리째). 전용 저장소(plugins-data)는 보존
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `id` | string | ✓ | 플러그인 id |
+
+**반환**: { id }
+**에러**: TARGET_NOT_FOUND, INTERNAL
+
+```bash
+sok plugin.remove '{"id":"soksak-memo"}'
+```
+
+## `plugin.update`
+
+설치된 플러그인 갱신(git pull --ff-only). 갱신 후 재동의 필요
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `id` | string | ✓ | 플러그인 id |
+
+**반환**: { id, version }
+**에러**: TARGET_NOT_FOUND, INVALID_PARAMS, INTERNAL
+
+```bash
+sok plugin.update '{"id":"soksak-memo"}'
+```
+
+## `plugin.view.close`
+
+플러그인 뷰 닫기 — 사이드바 배치는 선택 해제(파일 트리/관리로 복귀)
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `project` | string |  | 프로젝트 id(생략 시 활성) |
+| `view` | string | ✓ | 뷰 전역 키 "<pluginId>.<viewId>" |
+
+**반환**: { view, closed: [배치 목록] }
+**에러**: TARGET_NOT_FOUND
+
+```bash
+sok plugin.view.close '{"view":"soksak-memo.panel"}'
+```
+
+## `plugin.view.open`
+
+플러그인 뷰 열기 — placement 생략 시 매니페스트 기본 배치. 뷰 구현과 배치는 직교(스펙 §0-6)
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `placement` | string |  | 배치(생략 시 뷰의 defaultPlacement) (sidebar-right|sidebar-left|content) |
+| `project` | string |  | 프로젝트 id(생략 시 활성) |
+| `view` | string | ✓ | 뷰 전역 키 "<pluginId>.<viewId>" |
+
+**반환**: { view, placement, projectId }
+**에러**: TARGET_NOT_FOUND, INVALID_PARAMS
+
+```bash
+sok plugin.view.open '{"view":"soksak-memo.panel"}'
+sok plugin.view.open '{"view":"soksak-git-diff.view","placement":"content"}'
+```
+
 ## `project.activate`
 
 프로젝트 전환
@@ -592,13 +880,14 @@ sok project.close '{"project":"t2"}'
 
 ## `project.create`
 
-새 프로젝트(루트 폴더 + 첫 화면 프로그램)
+새 프로젝트(루트 폴더 + 첫 화면 프로그램 + 셸)
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `alias` | string |  | 탭 별칭(생략=폴더명) |
 | `program` | string |  | 첫 화면(생략=전역 설정) (terminal|claude|codex|browser) |
 | `root` | string |  | 프로젝트 루트 디렉토리(절대경로) |
+| `shell` | string |  | 터미널 셸 경로(생략=전역 설정→$SHELL) |
 
 **반환**: { projectId, contentId, groupId, viewId, paneId? }
 
@@ -651,7 +940,7 @@ sok project.sidebar.toggle
 
 앱 설정 전체 조회
 
-**반환**: { language, projectTabPosition, splitHeaderMode, defaultProgram, fontFamily, fontSize, cursorBlink, cursorStyle, scrollback, bg }
+**반환**: { language, projectTabPosition, splitHeaderMode, defaultProgram, shell, homeUrl, fontFamily, fontSize, cursorBlink, cursorStyle, scrollback, bg }
 
 ```bash
 sok settings.get
@@ -659,11 +948,11 @@ sok settings.get
 
 ## `settings.set`
 
-설정 변경. key: language|projectTabPosition|splitHeaderMode|defaultProgram|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback
+설정 변경. key: language|projectTabPosition|splitHeaderMode|defaultProgram|shell|homeUrl|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `key` | string | ✓ | 설정 키 (language|projectTabPosition|splitHeaderMode|defaultProgram|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback) |
+| `key` | string | ✓ | 설정 키 (language|projectTabPosition|splitHeaderMode|defaultProgram|shell|homeUrl|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback) |
 | `value` | json | ✓ | 값 — language:ko|en, projectTabPosition:top|left, splitHeaderMode:title|tabs, defaultProgram:terminal|claude|codex|browser, fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number |
 
 **반환**: { key, value }
@@ -774,19 +1063,56 @@ sok term.send '{"text":"ls\r"}'
 sok term.send '{"text":"\u0003"}'
 ```
 
-## `theme.set`
+## `theme.apply`
 
-배경색 변경(터미널/에디터/UI 전체가 따름. 글자색은 밝기로 자동)
+테마 적용(토큰 슬롯 전체 교체). mode 생략=현재 모드 유지
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `bg` | string | ✓ | 배경색(#rrggbb) |
+| `mode` | string |  | 모드 (light|dark) |
+| `name` | string | ✓ | 테마 이름(theme.list) |
 
-**반환**: { bg }
-**에러**: INVALID_PARAMS
+**반환**: { name, mode }
+**에러**: TARGET_NOT_FOUND
 
 ```bash
-sok theme.set '{"bg":"#1e2030"}'
+sok theme.apply '{"name":"Paper"}'
+sok theme.apply '{"name":"Midnight","mode":"light"}'
+```
+
+## `theme.install`
+
+테마 JSON 파일을 ~/.soksak/themes 에 설치(검증 통과 시 즉시 사용 가능)
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `path` | string | ✓ | 테마 .json 절대경로 |
+
+**반환**: { installed(설치 경로), rejected? }
+**에러**: INTERNAL
+
+```bash
+sok theme.install '{"path":"/tmp/dracula.json"}'
+```
+
+## `theme.list`
+
+사용 가능한 테마 목록(내장 + ~/.soksak/themes 외부) + 검증 실패 파일과 사유
+
+**반환**: { current, mode, themes:[{name,defaultMode,modes,source,warnings}], rejected }
+
+```bash
+sok theme.list
+```
+
+## `theme.reload`
+
+외부 테마 디렉토리(~/.soksak/themes) 재스캔 + 현재 테마 재적용
+
+**반환**: { count, rejected }
+
+```bash
+sok theme.reload
 ```
 
 ## `view.activate`
