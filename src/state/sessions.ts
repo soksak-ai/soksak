@@ -116,6 +116,11 @@ export interface ProjectTab {
   id: string;
   title: string; // 별칭
   sidebarOpen: boolean;
+  // 우측 플러그인 사이드바: 열림 + 활성 뷰("<pluginId>.<viewId>" | "manager" | null).
+  rightOpen: boolean;
+  rightView: string | null;
+  // 좌측 사이드바 활성 탭: "files"(파일 트리) 또는 플러그인 뷰 전역 키(좌측 호스팅).
+  leftTab: string;
   // 프로젝트 루트 디렉토리(터미널 시작 위치). 미지정이면 앱 실행 디렉토리.
   root?: string;
   // 프로젝트의 첫 화면(미지정이면 전역 설정 defaultProgram 사용 — 프로젝트 설정이 우선).
@@ -159,6 +164,16 @@ interface SessionsStore {
   setActive: (id: string) => CmdResult;
   renameTab: (id: string, title: string) => CmdResult;
   toggleSidebar: (id: string) => CmdResult<{ sidebarOpen: boolean }>;
+  // 우측 플러그인 사이드바. open 명시 시 그 상태로(멱등), 생략 시 토글.
+  toggleRightSidebar: (
+    id: string,
+    open?: boolean,
+  ) => CmdResult<{ rightOpen: boolean }>;
+  setRightView: (
+    id: string,
+    view: string | null,
+  ) => CmdResult<{ rightView: string | null }>;
+  setLeftTab: (id: string, tab: string) => CmdResult<{ leftTab: string }>;
 
   // 컨텐츠 탭 레벨. program 명시 시 그 프로그램으로(+메뉴), 아니면 프로젝트>전역 설정.
   addContent: (
@@ -684,6 +699,9 @@ function firstProject(): ProjectTab {
     id: "t1",
     title: "1",
     sidebarOpen: true,
+    rightOpen: false,
+    rightView: null,
+    leftTab: "files",
     program: "terminal",
     contents: [c],
     activeContentId: c.id,
@@ -702,6 +720,9 @@ function makeProject(
     id,
     title: alias,
     sidebarOpen: true,
+    rightOpen: false,
+    rightView: null,
+    leftTab: "files",
     root: opts.root,
     program: opts.program,
     shell: opts.shell,
@@ -782,6 +803,49 @@ export const useSessions = create<SessionsStore>((set, get) => ({
         tabs: s.tabs.map((x) =>
           x.id === id ? { ...x, sidebarOpen: !x.sidebarOpen } : x,
         ),
+      };
+    });
+    return r;
+  },
+
+  toggleRightSidebar: (id, open) => {
+    let r: CmdResult<{ rightOpen: boolean }> = noProject(id);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === id);
+      if (!t) return s;
+      const rightOpen = open ?? !t.rightOpen;
+      r = ok({ rightOpen });
+      if (rightOpen === t.rightOpen) return s; // 멱등
+      return {
+        tabs: s.tabs.map((x) => (x.id === id ? { ...x, rightOpen } : x)),
+      };
+    });
+    return r;
+  },
+
+  setRightView: (id, view) => {
+    let r: CmdResult<{ rightView: string | null }> = noProject(id);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === id);
+      if (!t) return s;
+      r = ok({ rightView: view });
+      if (t.rightView === view) return s;
+      return {
+        tabs: s.tabs.map((x) => (x.id === id ? { ...x, rightView: view } : x)),
+      };
+    });
+    return r;
+  },
+
+  setLeftTab: (id, tab) => {
+    let r: CmdResult<{ leftTab: string }> = noProject(id);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === id);
+      if (!t) return s;
+      r = ok({ leftTab: tab });
+      if (t.leftTab === tab) return s;
+      return {
+        tabs: s.tabs.map((x) => (x.id === id ? { ...x, leftTab: tab } : x)),
       };
     });
     return r;

@@ -4,7 +4,21 @@
 // plugin.view.* 배치 명령은 M_P5(우측 사이드바)에서 등록된다.
 
 import { usePlugins, type PluginRuntime } from "../state/plugins";
+import { useSessions } from "../state/sessions";
+import { getRegisteredView } from "../plugins/viewRegistry";
+import { VIEW_PLACEMENTS, type ViewPlacement } from "../plugins/spec";
 import { register } from "./registry";
+
+const notFound = (what: string) => ({
+  ok: false as const,
+  code: "TARGET_NOT_FOUND" as const,
+  message: what,
+});
+const invalid = (what: string) => ({
+  ok: false as const,
+  code: "INVALID_PARAMS" as const,
+  message: what,
+});
 
 // plugin.list 응답 항목(직렬화 가능 — 핸들러/모듈 비포함).
 function serializeRuntime(p: PluginRuntime) {
@@ -127,6 +141,92 @@ export function registerPluginCatalog(): void {
         count: Object.keys(s.plugins).length,
         rejected: s.rejected,
       };
+    },
+  });
+
+  register("plugin.view.open", {
+    description:
+      "플러그인 뷰 열기 — placement 생략 시 매니페스트 기본 배치. 뷰 구현과 배치는 직교(스펙 §0-6)",
+    params: {
+      view: {
+        type: "string",
+        description: '뷰 전역 키 "<pluginId>.<viewId>"',
+        required: true,
+      },
+      placement: {
+        type: "string",
+        description: "배치(생략 시 뷰의 defaultPlacement)",
+        enum: VIEW_PLACEMENTS,
+      },
+      project: { type: "string", description: "프로젝트 id(생략 시 활성)" },
+    },
+    returns: "{ view, placement, projectId }",
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      'sok plugin.view.open \'{"view":"soksak-memo.panel"}\'',
+      'sok plugin.view.open \'{"view":"soksak-git-diff.view","placement":"content"}\'',
+    ],
+    handler: (p) => {
+      const s = useSessions.getState();
+      const projectId = (p.project as string | undefined) ?? s.activeId;
+      const project = s.tabs.find((t) => t.id === projectId);
+      if (!project) return notFound(`프로젝트 없음: ${projectId}`);
+      const key = p.view as string;
+      const reg = getRegisteredView(key);
+      if (!reg) {
+        return notFound(`등록된 뷰 없음(플러그인 활성화 필요): ${key}`);
+      }
+      const placement =
+        (p.placement as ViewPlacement | undefined) ?? reg.decl.defaultPlacement;
+      if (!reg.decl.placements.includes(placement)) {
+        return invalid(
+          `뷰 "${key}" 는 ${placement} 배치를 지원하지 않음(지원: ${reg.decl.placements.join(", ")})`,
+        );
+      }
+      if (placement === "sidebar-right") {
+        s.toggleRightSidebar(projectId, true);
+        s.setRightView(projectId, key);
+        return { view: key, placement, projectId };
+      }
+      if (placement === "sidebar-left") {
+        if (!project.sidebarOpen) s.toggleSidebar(projectId);
+        s.setLeftTab(projectId, key);
+        return { view: key, placement, projectId };
+      }
+      // content 배치는 M_P6(View "plugin" variant)에서 연결된다.
+      return invalid("content 배치는 아직 연결되지 않음(다음 단계 M_P6)");
+    },
+  });
+
+  register("plugin.view.close", {
+    description: "플러그인 뷰 닫기 — 사이드바 배치는 선택 해제(파일 트리/관리로 복귀)",
+    params: {
+      view: {
+        type: "string",
+        description: '뷰 전역 키 "<pluginId>.<viewId>"',
+        required: true,
+      },
+      project: { type: "string", description: "프로젝트 id(생략 시 활성)" },
+    },
+    returns: "{ view, closed: [배치 목록] }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok plugin.view.close \'{"view":"soksak-memo.panel"}\''],
+    handler: (p) => {
+      const s = useSessions.getState();
+      const projectId = (p.project as string | undefined) ?? s.activeId;
+      const project = s.tabs.find((t) => t.id === projectId);
+      if (!project) return notFound(`프로젝트 없음: ${projectId}`);
+      const key = p.view as string;
+      const closed: string[] = [];
+      if (project.rightView === key) {
+        s.setRightView(projectId, null);
+        closed.push("sidebar-right");
+      }
+      if (project.leftTab === key) {
+        s.setLeftTab(projectId, "files");
+        closed.push("sidebar-left");
+      }
+      return { view: key, closed };
     },
   });
 

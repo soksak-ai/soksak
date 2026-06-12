@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { TreeThemeInput } from "@pierre/trees";
 import { FileTreeSidebar } from "./components/FileTreeSidebar";
+import { PluginSidebar } from "./components/PluginSidebar";
 import { ContentTabs } from "./components/ContentTabs";
 import { GroupArea } from "./components/GroupArea";
 import { NewProjectModal } from "./components/NewProjectModal";
@@ -38,15 +39,25 @@ const shellEscape = (p: string) => p.replace(/[^A-Za-z0-9_./@%+:,=-]/g, "\\$&");
 const SIDEBAR_MIN = 160;
 const SIDEBAR_MAX = 640;
 const SIDEBAR_DEFAULT = 320;
+// 우측 플러그인 사이드바 폭 범위.
+const RIGHT_MIN = 200;
+const RIGHT_MAX = 640;
+const RIGHT_DEFAULT = 300;
 // 좌측 프로젝트 레일 폭.
 // 레퍼런스(soksak_final): 프로젝트 레일 기본 54px, 드래그 44–110px.
 const RAIL_MIN = 44;
 const RAIL_MAX = 110;
 const RAIL_DEFAULT = 54;
 
-// 드래그로 폭을 조절하는 패널 공용 훅(localStorage 영속). 모두 좌측 패널이라 우측
-// 핸들을 오른쪽으로 끌면 폭이 는다(delta = clientX - 시작X).
-function useResizableWidth(key: string, def: number, min: number, max: number) {
+// 드래그로 폭을 조절하는 패널 공용 훅(localStorage 영속). dir = 패널이 붙은 쪽:
+// left(기본) 는 우측 핸들을 오른쪽으로 끌면 폭이 늘고, right 는 좌측 핸들이라 부호 반전.
+function useResizableWidth(
+  key: string,
+  def: number,
+  min: number,
+  max: number,
+  dir: "left" | "right" = "left",
+) {
   const [w, setW] = useState<number>(() => {
     const v = Number(localStorage.getItem(key));
     return v >= min && v <= max ? v : def;
@@ -55,8 +66,11 @@ function useResizableWidth(key: string, def: number, min: number, max: number) {
     e.preventDefault();
     const startX = e.clientX;
     const startW = w;
+    const sign = dir === "left" ? 1 : -1;
     const onMove = (ev: MouseEvent) =>
-      setW(Math.min(max, Math.max(min, startW + (ev.clientX - startX))));
+      setW(
+        Math.min(max, Math.max(min, startW + sign * (ev.clientX - startX))),
+      );
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
@@ -165,6 +179,7 @@ function App() {
     setActive,
     renameTab,
     toggleSidebar,
+    toggleRightSidebar,
     addViewToGroup,
     splitWithNewView,
     openFileView,
@@ -196,6 +211,13 @@ function App() {
     RAIL_DEFAULT,
     RAIL_MIN,
     RAIL_MAX,
+  );
+  const [rightW, startRightResize] = useResizableWidth(
+    "rightSidebarW",
+    RIGHT_DEFAULT,
+    RIGHT_MIN,
+    RIGHT_MAX,
+    "right",
   );
 
   // 새 호스트의 최초 createTerminal 이 현재 테마로 생성되도록 provider 등록.
@@ -234,6 +256,12 @@ function App() {
         project.contents.find((c) => c.id === project.activeContentId) ??
         project.contents[0];
       if (!content) return;
+      // ⌥⌘B 우측 플러그인 사이드바. ⌥ 조합은 e.key 가 합성문자("∫")라 e.code 로 판정.
+      if (e.altKey && !e.shiftKey && e.code === "KeyB") {
+        e.preventDefault();
+        toggleRightSidebar(project.id);
+        return;
+      }
       const groups = allGroups(content.layout);
       const grp =
         groups.find((g) => g.id === content.activeGroupId) ?? groups[0];
@@ -284,6 +312,7 @@ function App() {
     addViewToGroup,
     splitWithNewView,
     toggleSidebar,
+    toggleRightSidebar,
   ]);
 
   // 파일 드래그&드롭: 드롭 위치 아래의 pane-host(터미널)에 이스케이프 경로를 붙여넣는다.
@@ -443,6 +472,17 @@ function App() {
           </button>
           <button
             type="button"
+            className={`sidebar-toggle${activeProject?.rightOpen ? " active" : ""}`}
+            title={t("plugin.sidebar.toggle")}
+            aria-label={t("plugin.sidebar.toggle")}
+            onClick={() =>
+              activeProject && toggleRightSidebar(activeProject.id)
+            }
+          >
+            ◨
+          </button>
+          <button
+            type="button"
             className="theme-toggle"
             title={isDark ? t("theme.lightPreset") : t("theme.darkPreset")}
             aria-label={t("theme.toggle")}
@@ -549,6 +589,24 @@ function App() {
                     );
                   })}
                 </div>
+              </div>
+
+              {/* 우측 플러그인 사이드바(⌥⌘B). 닫히면 width 0(언마운트 X — keep-alive). */}
+              {project.rightOpen && (
+                <div
+                  className="sidebar-right-resizer"
+                  onMouseDown={startRightResize}
+                  title={t("plugin.sidebar.resize")}
+                />
+              )}
+              <div
+                className="sidebar-right"
+                style={{
+                  width: project.rightOpen ? rightW : 0,
+                  borderLeftWidth: project.rightOpen ? 1 : 0,
+                }}
+              >
+                <PluginSidebar project={project} />
               </div>
             </div>
           );
