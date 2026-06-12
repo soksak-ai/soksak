@@ -6,6 +6,7 @@ import { Icon } from "../ui/icons/Icon";
 import { listen } from "@tauri-apps/api/event";
 import { useBookmarks } from "../state/bookmarks";
 import { useSessions } from "../state/sessions";
+import { useTheme } from "../state/theme";
 import { useSuppressBrowser, useUi } from "../state/ui";
 import { useT } from "../i18n";
 
@@ -87,6 +88,15 @@ function BrowserViewImpl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [label]);
 
+  // §B5 프레임 예산(네이티브): child webview 는 DOM 오버레이(z:5 프레임) 위에
+  // 그려지므로 외곽 접변(좌/우)의 1px 을 bounds 로 지불한다 — 안 하면 패널
+  // 좌우 프레임 보더가 webview 에 덮여 사라진다. 상/하단은 DOM 크롬(bv-bar/
+  // 스테이터스바)이 사이에 있어 비접변. flat 은 프레임 무 → 0.
+  // 알려진 한계: 카드 라운드 모서리는 사각 webview 라 미세 노출 — v1 수용.
+  const paneStyle = useTheme((s) => s.spec.chrome.paneStyle);
+  const frameInsetRef = useRef(0);
+  frameInsetRef.current = paneStyle === "flat" ? 0 : 1;
+
   // 본문 영역 rect 를 webview 에 동기화 — 같은 rect 면 skip.
   // 측정(gBCR=강제 레이아웃)과 IPC(wry set_position/set_size)는 rAF 로 합쳐
   // 프레임당 1회 상한(원칙 4·5) — 렌더 동기 강제 레이아웃 금지.
@@ -96,19 +106,25 @@ function BrowserViewImpl({
         const el = areaRef.current;
         if (!el || !openedRef.current) return;
         const r = el.getBoundingClientRect();
-        const key = `${r.left},${r.top},${r.width},${r.height}`;
+        const inset = frameInsetRef.current;
+        const key = `${r.left},${r.top},${r.width},${r.height},${inset}`;
         if (key === lastRectRef.current) return;
         lastRectRef.current = key;
         invoke("browser_bounds", {
           label,
-          x: r.left,
+          x: r.left + inset,
           y: r.top,
-          w: Math.max(1, r.width),
+          w: Math.max(1, r.width - inset * 2),
           h: Math.max(1, r.height),
         }).catch(() => {});
       }),
     [label],
   );
+  // inset 변화(테마 paneStyle 전환)도 재동기화 구동원 — rect key 에 inset 이
+  // 포함돼 동일 rect skip 에 걸리지 않는다.
+  useEffect(() => {
+    syncBounds();
+  }, [paneStyle, syncBounds]);
   // 구동원 3개가 전부다(매 렌더 effect 금지 — memo 경계와 양립 불가):
   //   1) ResizeObserver — 크기 변화(분할/사이드바/창 리사이즈)
   //   2) sessions transient 구독 — 위치만 바뀌는 레이아웃 이동(동일 크기 그룹 간

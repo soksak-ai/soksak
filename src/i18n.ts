@@ -63,6 +63,7 @@ const ko = {
   "group.split": "오른쪽으로 분할(새 터미널)",
 
   "tree.refreshAria": "파일 트리 새로고침",
+  "tree.watchDegraded": "워처가 이 위치를 감시하지 못함 — 수동 새로고침",
 
   "viewer.unsupported": "미리보기를 지원하지 않는 파일입니다.",
   "viewer.code": "코드",
@@ -209,6 +210,7 @@ const en: Record<MsgKey, string> = {
   "group.split": "Split right (new terminal)",
 
   "tree.refreshAria": "Refresh file tree",
+  "tree.watchDegraded": "Watcher cannot observe this location — manual refresh",
 
   "viewer.unsupported": "This file type can't be previewed.",
   "viewer.code": "Code",

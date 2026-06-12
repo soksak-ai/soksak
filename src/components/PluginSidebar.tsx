@@ -220,7 +220,8 @@ function PluginManagerPanel() {
       </div>
       {msg && <div className="plugin-msg">{msg}</div>}
 
-      <div className="dsec">
+      {/* §B7 — 텍스트+아이콘 행은 flex/center 컨테이너가 정렬 소유. */}
+      <div className="dsec dsec-row">
         {t("plugin.installed.section")}
         <button
           type="button"

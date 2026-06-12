@@ -60,12 +60,15 @@ function LazyTree({
   onOpenFile,
   theme,
   gitStatus,
+  onWatchDegraded,
 }: {
   rootAbs: string;
   initialChildren: Child[];
   onOpenFile: (absPath: string) => void;
   theme: TreeThemeInput;
   gitStatus: GitStatusEntry[];
+  // 워처 등록 실패(권한/네트워크 볼륨 등 FSEvents 한계) 보고 — 침묵 실패 금지.
+  onWatchDegraded: () => void;
 }) {
   const themeStyles = useMemo(
     () =>
@@ -136,12 +139,15 @@ function LazyTree({
   );
 
   // rel 디렉토리를 OS 워처에 등록(폴링 없이 외부 변경 감지). 중복은 Rust 가 무시.
+  // 실패는 삼키지 않고 보고 — 부모가 수동 새로고침 안전망(⟳)을 그때만 노출한다.
+  const degradedRef = useRef(onWatchDegraded);
+  degradedRef.current = onWatchDegraded;
   const watchDir = useCallback(
     (rel: string) => {
       const abs = absOf(rel);
       if (watchedAbs.current.has(abs)) return;
       watchedAbs.current.add(abs);
-      invoke("watch_dir", { path: abs }).catch(() => {});
+      invoke("watch_dir", { path: abs }).catch(() => degradedRef.current());
     },
     [absOf],
   );
@@ -315,6 +321,9 @@ function FileTreeSidebarImpl({
   const [listing, setListing] = useState<Listing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [gitStatus, setGitStatus] = useState<GitStatusEntry[]>([]);
+  // 워처 등록 실패가 보고된 상태 — 이때만 수동 새로고침(⟳)을 노출한다(크러치의
+  // 상시 노출 금지: 정상 환경에선 워처가 단일 진실). 루트가 바뀌면 재평가.
+  const [watchDegraded, setWatchDegraded] = useState(false);
   // 명령 종료 시 git 상태만 갱신(재리스팅 X → 트리 펼침 상태 유지). 이벤트 기반.
   const [gitNonce, setGitNonce] = useState(0);
 
@@ -323,6 +332,11 @@ function FileTreeSidebarImpl({
     setCwd(getCwdOfHost(paneId));
     return subscribeCwd(paneId, setCwd);
   }, [paneId]);
+
+  // 루트 변경 시 워처 열화 상태 재평가(새 위치는 정상일 수 있다).
+  useEffect(() => {
+    setWatchDegraded(false);
+  }, [listing?.root]);
 
   // 명령 종료(OSC 133/633 D) 구독 → git 상태 갱신 트리거(폴링 없음).
   useEffect(() => {
@@ -392,15 +406,19 @@ function FileTreeSidebarImpl({
         <span className="ft-title" title={listing?.root}>
           {baseName(listing?.root) ?? "…"}
         </span>
-        <button
-          type="button"
-          className="icon-btn ft-refresh"
-          title={t("common.refresh")}
-          aria-label={t("tree.refreshAria")}
-          onClick={() => setNonce((n) => n + 1)}
-        >
-          <Icon name="refresh" />
-        </button>
+        {/* 워처가 이 위치를 감시하지 못할 때만 노출되는 안전망 — 정상 환경에선
+            워처(FSEvents)가 단일 진실이라 수동 새로고침은 존재하지 않는다. */}
+        {watchDegraded && (
+          <button
+            type="button"
+            className="icon-btn ft-refresh"
+            title={t("tree.watchDegraded")}
+            aria-label={t("tree.refreshAria")}
+            onClick={() => setNonce((n) => n + 1)}
+          >
+            <Icon name="refresh" />
+          </button>
+        )}
       </div>
       <div className="ft-body">
         {error ? (
@@ -413,6 +431,7 @@ function FileTreeSidebarImpl({
             onOpenFile={onOpenFile}
             theme={theme}
             gitStatus={gitStatus}
+            onWatchDegraded={() => setWatchDegraded(true)}
           />
         ) : (
           <div className="ft-msg">{t("common.loading")}</div>

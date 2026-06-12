@@ -2485,8 +2485,15 @@ select.dctl {
   font-size: 11.5px;
   word-break: break-all;
 }
+/* §B7 — 행 정렬은 flex 컨테이너(.dsec-row)가 소유: 베이스라인 얹기 금지. */
+.dsec-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .plugin-reload {
-  margin-left: 6px;
+  display: flex;
+  align-items: center;
   border: none;
   background: transparent;
   color: var(--fg3);
