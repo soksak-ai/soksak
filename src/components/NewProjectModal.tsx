@@ -144,13 +144,15 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setId(e.target.value)}
             />
           </div>
-          <div className={`dpath${idValue && idInvalid ? " dpath-err" : ""}`}>
-            {idValue && idInvalid
-              ? t("project.idInvalid")
-              : mode === "auto"
-                ? t("project.idHint", { id: idValue || "<id>" })
-                : t("project.idAsAlias")}
-          </div>
+          {/* 힌트는 실질 정보만: 형식 위반 에러, 자동 모드의 생성 경로.
+              직접 선택 모드의 정상 상태는 힌트 없음(설명 과잉 = 노이즈). */}
+          {(idInvalid && idValue) || mode === "auto" ? (
+            <div className={`dpath${idValue && idInvalid ? " dpath-err" : ""}`}>
+              {idValue && idInvalid
+                ? t("project.idInvalid")
+                : t("project.idHint", { id: idValue || "<id>" })}
+            </div>
+          ) : null}
 
           <div className="drow">
             <span className="drow-label">{t("project.program")}</span>
