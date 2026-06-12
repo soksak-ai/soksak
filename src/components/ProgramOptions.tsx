@@ -1,5 +1,5 @@
 import { useProgramRegistry } from "../plugins/programRegistry";
-import { useT } from "../i18n";
+import { localize, useT } from "../i18n";
 
 // 프로그램 선택 <option> 목록의 단일진실 — 설정/새 프로젝트/프로젝트 설정이
 // 공유한다. 항목은 100% 플러그인 등록분(내장 없음 §2.6, 그룹은 optgroup).
@@ -14,8 +14,9 @@ export function ProgramOptions({ current }: { current?: string }) {
   const flat = order.filter((id) => !programs[id]?.decl.path);
   const groups = new Map<string, string[]>();
   for (const id of order) {
-    const g = programs[id]?.decl.path;
-    if (!g) continue;
+    const path = programs[id]?.decl.path;
+    if (!path) continue;
+    const g = localize(path);
     groups.set(g, [...(groups.get(g) ?? []), id]);
   }
   const known = new Set(order);
@@ -24,14 +25,14 @@ export function ProgramOptions({ current }: { current?: string }) {
     <>
       {flat.map((id) => (
         <option key={id} value={id}>
-          {programs[id].decl.title}
+          {localize(programs[id].decl.title)}
         </option>
       ))}
       {[...groups.entries()].map(([g, ids]) => (
         <optgroup key={g} label={g}>
           {ids.map((id) => (
             <option key={id} value={id}>
-              {programs[id].decl.title}
+              {localize(programs[id].decl.title)}
             </option>
           ))}
         </optgroup>

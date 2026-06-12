@@ -1,9 +1,15 @@
 {
   "spec": "soksak-plugin-spec@1",
   "id": "soksak-terminal",
-  "name": "터미널",
-  "version": "1.1.0",
-  "description": "새 탭(+) 메뉴에 터미널을 추가",
+  "name": {
+    "ko": "터미널",
+    "en": "Terminal"
+  },
+  "version": "1.2.0",
+  "description": {
+    "ko": "새 탭(+) 메뉴에 터미널을 추가",
+    "en": "Adds Terminal to the new-tab (+) menu"
+  },
   "entry": "main.js",
   "permissions": [
     "programs"
@@ -12,7 +18,10 @@
     "programs": [
       {
         "id": "terminal",
-        "title": "터미널",
+        "title": {
+          "ko": "터미널",
+          "en": "Terminal"
+        },
         "kind": "terminal"
       }
     ]

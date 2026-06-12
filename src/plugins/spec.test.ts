@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseManifest,
   pluginCommandName,
+  resolveText,
   qualifiedViewId,
   semverGte,
   SPEC_VERSION,
@@ -398,5 +399,47 @@ describe("parseManifest — programs 기여(§2.6)", () => {
       }),
     );
     expect(errs.some((e) => e.includes("중복"))).toBe(true);
+  });
+});
+
+describe("LocalizedText — 플러그인 텍스트 다국어(§3.5)", () => {
+  it("string 단일형은 그대로 유효(후방호환)", () => {
+    const { validation } = parseManifest(base(), "demo");
+    expect(validation.ok).toBe(true);
+  });
+
+  it("name/description/기여 title 에 언어 맵 수용", () => {
+    const { manifest, validation } = parseManifest(
+      base({
+        name: { ko: "터미널", en: "Terminal" },
+        description: { ko: "설명", en: "Description" },
+        permissions: ["programs"],
+        contributes: {
+          programs: [
+            {
+              id: "t",
+              title: { ko: "터미널", en: "Terminal" },
+              path: { ko: "에이전트", en: "Agents" },
+              kind: "terminal",
+            },
+          ],
+        },
+      }),
+      "demo",
+    );
+    expect(validation.errors).toEqual([]);
+    expect(manifest?.name).toEqual({ ko: "터미널", en: "Terminal" });
+  });
+
+  it("빈 맵/빈 값/불량 언어 키 → 거부", () => {
+    expect(errorsOf(base({ name: {} })).length).toBeGreaterThan(0);
+    expect(errorsOf(base({ name: { ko: " " } })).length).toBeGreaterThan(0);
+    expect(errorsOf(base({ name: { KOREAN: "x" } })).length).toBeGreaterThan(0);
+  });
+
+  it("resolveText: 현재 언어 → 첫 선언 폴백", () => {
+    expect(resolveText("터미널", "en")).toBe("터미널");
+    expect(resolveText({ ko: "터미널", en: "Terminal" }, "en")).toBe("Terminal");
+    expect(resolveText({ ko: "터미널", en: "Terminal" }, "ja")).toBe("터미널");
   });
 });

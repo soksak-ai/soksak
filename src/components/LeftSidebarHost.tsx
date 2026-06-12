@@ -11,7 +11,7 @@ import {
   viewsForPlacement,
 } from "../plugins/viewRegistry";
 import { useSessions, type ProjectTab } from "../state/sessions";
-import { useT } from "../i18n";
+import { localize, useT } from "../i18n";
 
 const FILES = "files";
 
@@ -67,10 +67,10 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
               key={key}
               type="button"
               className={`left-host-tab${leftTab === key ? " active" : ""}`}
-              title={view.decl.title}
+              title={localize(view.decl.title)}
               onClick={() => setLeftTab(project.id, key)}
             >
-              {view.decl.icon} {view.decl.title}
+              {view.decl.icon} {localize(view.decl.title)}
             </button>
           ))}
         </div>

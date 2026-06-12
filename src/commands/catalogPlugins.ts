@@ -7,6 +7,7 @@ import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { allGroups, useSessions, type View } from "../state/sessions";
 import { getRegisteredView } from "../plugins/viewRegistry";
 import { listPrograms } from "../plugins/programRegistry";
+import { localize } from "../i18n";
 import { formatterFor } from "../plugins/editorRegistry";
 import { VIEW_PLACEMENTS, type ViewPlacement } from "../plugins/spec";
 import { getFileView } from "./fileViewBridge";
@@ -252,7 +253,7 @@ export function registerPluginCatalog(): void {
         projectId,
         reg.pluginId,
         reg.decl.id,
-        reg.decl.title,
+        localize(reg.decl.title),
       );
       if (!r.ok) return r;
       return {

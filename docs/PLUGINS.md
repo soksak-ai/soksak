@@ -99,7 +99,7 @@ sok plugin.reload
 |---|---|---|
 | `spec` | ✓ | `"soksak-plugin-spec@1"` 고정 |
 | `id` | ✓ | `^[a-z0-9][a-z0-9-]*$` + 설치 디렉토리명과 일치 |
-| `name` / `description` | ✓ | 표시명 / 한 줄 설명 |
+| `name` / `description` | ✓ | 표시명 / 한 줄 설명 — 문자열 또는 언어 맵 `{"ko": …, "en": …}`(§3.5, 현재 언어 resolve·첫 값 폴백) |
 | `version` | ✓ | semver(`major.minor.patch`) |
 | `author` | | 표시용 |
 | `entry` | | 기본 `main.js`. 내부 상대경로만(`..` 금지) |
@@ -109,7 +109,11 @@ sok plugin.reload
 | `contributes.commands[]` | | `{name, title}` — `"commands"` 권한 필요. 등록명은 `plugin.<id>.<name>` |
 | `contributes.formatters[]` | | `{id, title, languages[]}` — `"editor"` 권한 필요. languages = 확장자(점 없이) |
 | `contributes.languages[]` | | `{ext, lang}` — `"editor"` 권한 필요. **선언만으로 자동 적용**(코드 불필요) |
-| `contributes.programs[]` | | `{id, title, path?}` — `"programs"` 권한 필요. id 는 전역 평탄, path 는 "/" 구분 메뉴 카테고리(다단) |
+| `contributes.programs[]` | | `{id, title, path?, kind, command?, url?, ensure?}` — `"programs"` 권한 필요. id 는 전역 평탄, path 는 "/" 구분 메뉴 카테고리(다단) |
+
+기여 `title`/프로그램 `path` 도 전부 문자열 또는 언어 맵(§3.5). 뷰 내부 텍스트의
+다국어는 플러그인 소유 — `app.locale()`(권한 불요)로 현재 언어를 읽고
+`locale.changed` 이벤트로 변경을 구독한다.
 
 알 수 없는 키/권한/배치는 전부 거부된다(오타 조기 발견). `contributes` 에 선언하지 않은
 명령/뷰/포매터를 코드에서 바인딩하면 activate 시 예외가 난다 — **매니페스트가 선언의 단일진실**.

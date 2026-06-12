@@ -115,6 +115,68 @@ export const PERMISSION_INFO: Record<
   },
 };
 
+// ── §3.5 플러그인 텍스트 다국어 ──────────────────────────────────────────────
+// 텍스트 소유권: 호스트 화면 텍스트 = 호스트 i18n, 플러그인 텍스트 = 플러그인
+// 소유. 매니페스트의 사용자-노출 문자열(name/description/기여 title/프로그램
+// path)은 단일 문자열 또는 언어 맵 — 호스트가 현재 언어로 resolve 한다.
+// 뷰 내부 텍스트는 플러그인 코드 소유 — 호스트는 app.locale 과 locale.changed
+// 이벤트(권한 불요 컨텍스트)만 제공한다.
+
+export type LocalizedText = string | Record<string, string>;
+
+const LANG_KEY_RE = /^[a-z]{2}(-[A-Za-z0-9]{2,8})*$/;
+
+// 현재 언어로 resolve — 정확 일치 없으면 선언된 첫 값 폴백(언어 누락이 표시
+// 공백이 되지 않게). string 단일형은 그대로.
+export function resolveText(t: LocalizedText, lang: string): string {
+  if (typeof t === "string") return t;
+  if (t[lang] !== undefined) return t[lang];
+  const first = Object.values(t)[0];
+  return first ?? "";
+}
+
+function validateLocalizedText(
+  v: unknown,
+  label: string,
+  errors: string[],
+): v is LocalizedText {
+  if (typeof v === "string") {
+    if (!v.trim()) {
+      errors.push(`${label}: 비공백 문자열 필수`);
+      return false;
+    }
+    return true;
+  }
+  if (!isRecord(v)) {
+    errors.push(`${label}: 문자열 또는 언어 맵({ko: …, en: …})이어야 함`);
+    return false;
+  }
+  const entries = Object.entries(v);
+  if (entries.length === 0) {
+    errors.push(`${label}: 언어 맵은 최소 1개 언어 필요`);
+    return false;
+  }
+  for (const [k, val] of entries) {
+    if (!LANG_KEY_RE.test(k)) {
+      errors.push(`${label}: 언어 키 형식 위반("${k}" — 예: ko, en, zh-Hans)`);
+      return false;
+    }
+    if (typeof val !== "string" || !val.trim()) {
+      errors.push(`${label}.${k}: 비공백 문자열 필수`);
+      return false;
+    }
+  }
+  return true;
+}
+
+// 정규화(trim) — string 은 trim, 맵은 값 trim.
+function normalizeText(t: LocalizedText): LocalizedText {
+  if (typeof t === "string") return t.trim();
+  return Object.fromEntries(
+    Object.entries(t).map(([k, v]) => [k, v.trim()]),
+  );
+}
+
 // ── §2 뷰 배치 ───────────────────────────────────────────────────────────────
 // 뷰 구현(provider)과 배치는 직교(§0-6). placements = 지원 배치, 기본 우측 사이드바.
 
@@ -128,7 +190,7 @@ export const VIEW_PLACEMENTS: readonly ViewPlacement[] = [
 
 export interface ContributedView {
   id: string; // 플러그인 내 고유. 전역 키는 "<pluginId>.<id>"
-  title: string;
+  title: LocalizedText;
   icon: string; // 아이콘 레일용 짧은 글리프(문자 1~2개/이모지). v1 은 SVG 미지원
   placements: ViewPlacement[]; // 파싱 시 기본 ["sidebar-right"] 로 채움
   defaultPlacement: ViewPlacement; // 파싱 시 placements[0] 으로 채움
@@ -136,12 +198,12 @@ export interface ContributedView {
 
 export interface ContributedCommand {
   name: string; // 등록명은 plugin.<pluginId>.<name> — 선언 외 등록은 거부됨
-  title: string;
+  title: LocalizedText;
 }
 
 export interface ContributedFormatter {
   id: string;
-  title: string;
+  title: LocalizedText;
   languages: string[]; // 확장자 목록(점 없이): ["json","ts",…]
 }
 
@@ -152,7 +214,7 @@ export interface ContributedLanguage {
 
 export interface ContributedIconSet {
   id: string; // 플러그인 내 고유. 전역 키는 "<pluginId>.<id>"
-  title: string; // 설정 드롭다운 표시 이름
+  title: LocalizedText; // 설정 드롭다운 표시 이름
 }
 
 // ── §2.6 프로그램 ────────────────────────────────────────────────────────────
@@ -178,10 +240,10 @@ export const PROGRAM_PLATFORMS: readonly ProgramPlatform[] = [
 
 export interface ContributedProgram {
   id: string; // 전역 프로그램 id(평탄). ^[a-z0-9][a-z0-9-]*$
-  title: string; // 메뉴 표시명
+  title: LocalizedText; // 메뉴 표시명
   // 메뉴 카테고리 경로 — "/" 구분으로 뎁스 지정(예: "에이전트", "에이전트/실험").
-  // 같은 경로끼리 서브메뉴로 묶인다(플러그인 간 병합). 생략 = 최상위.
-  path?: string;
+  // 같은 경로끼리 서브메뉴로 묶인다(플러그인 간 병합 — 표시 언어 기준).
+  path?: LocalizedText;
   // 동작: terminal = 터미널 뷰(+command 자동 실행), browser = 브라우저 뷰(+url).
   kind: "terminal" | "browser";
   command?: string; // kind=terminal 한정: 자동 실행할 셸 명령(생략 = 맨 터미널)
@@ -207,9 +269,9 @@ export const DEFAULT_ENTRY = "main.js";
 export interface PluginManifest {
   spec: typeof SPEC_VERSION; // 필수 — 불일치 시 거부
   id: string; // ^[a-z0-9][a-z0-9-]*$ + 설치 디렉토리명과 일치 강제
-  name: string;
+  name: LocalizedText;
   version: string; // semver(major.minor.patch)
-  description: string;
+  description: LocalizedText;
   author?: string;
   entry: string; // 파싱 시 기본 main.js 로 채움. 디렉토리 내부 상대경로만
   minAppVersion?: string;
@@ -370,11 +432,11 @@ export function parseManifest(
   } else if (raw.id !== dirName) {
     errors.push(`id: 설치 디렉토리명("${dirName}")과 일치해야 함`);
   }
-  if (!isNonEmptyString(raw.name)) errors.push("name: 필수");
+  validateLocalizedText(raw.name, "name", errors);
   if (!isNonEmptyString(raw.version) || !SEMVER_RE.test(raw.version)) {
     errors.push("version: semver(major.minor.patch) 필수");
   }
-  if (!isNonEmptyString(raw.description)) errors.push("description: 필수");
+  validateLocalizedText(raw.description, "description", errors);
   if (raw.author !== undefined && !isNonEmptyString(raw.author)) {
     errors.push("author: 문자열이어야 함");
   }
@@ -448,7 +510,8 @@ export function parseManifest(
             errs.push("contributes.views: id 는 ^[a-z0-9][a-z0-9-]*$");
             return null;
           }
-          if (!isNonEmptyString(v.title) || !isNonEmptyString(v.icon)) return null;
+          if (!validateLocalizedText(v.title, "contributes.views.title", errs)) return null;
+          if (!isNonEmptyString(v.icon)) return null;
           let placements: ViewPlacement[] = ["sidebar-right"];
           if (v.placements !== undefined) {
             if (
@@ -477,7 +540,7 @@ export function parseManifest(
           }
           return {
             id: v.id.trim(),
-            title: (v.title as string).trim(),
+            title: normalizeText(v.title as LocalizedText),
             icon: (v.icon as string).trim(),
             placements,
             defaultPlacement,
@@ -499,8 +562,12 @@ export function parseManifest(
             );
             return null;
           }
-          if (!isNonEmptyString(v.title)) return null;
-          return { name: v.name.trim(), title: (v.title as string).trim() };
+          if (!validateLocalizedText(v.title, "contributes.commands.title", errs))
+            return null;
+          return {
+            name: v.name.trim(),
+            title: normalizeText(v.title as LocalizedText),
+          };
         },
       }, errors);
       checkDuplicates(commands.map((v) => v.name), "contributes.commands.name", errors);
@@ -516,7 +583,8 @@ export function parseManifest(
             errs.push("contributes.formatters: id 는 ^[a-z0-9][a-z0-9-]*$");
             return null;
           }
-          if (!isNonEmptyString(v.title)) return null;
+          if (!validateLocalizedText(v.title, "contributes.formatters.title", errs))
+            return null;
           if (
             !Array.isArray(v.languages) ||
             v.languages.length === 0 ||
@@ -529,7 +597,7 @@ export function parseManifest(
           }
           return {
             id: v.id.trim(),
-            title: (v.title as string).trim(),
+            title: normalizeText(v.title as LocalizedText),
             languages: v.languages as string[],
           };
         },
@@ -564,8 +632,12 @@ export function parseManifest(
             errs.push("contributes.iconSets: id 는 ^[a-z0-9][a-z0-9-]*$");
             return null;
           }
-          if (!isNonEmptyString(v.title)) return null;
-          return { id: v.id.trim(), title: (v.title as string).trim() };
+          if (!validateLocalizedText(v.title, "contributes.iconSets.title", errs))
+            return null;
+          return {
+            id: v.id.trim(),
+            title: normalizeText(v.title as LocalizedText),
+          };
         },
       }, errors);
       checkDuplicates(iconSets.map((v) => v.id), "contributes.iconSets.id", errors);
@@ -583,24 +655,49 @@ export function parseManifest(
             return null;
           }
           const id = v.id.trim();
-          if (!isNonEmptyString(v.title)) return null;
+          if (
+            !validateLocalizedText(
+              v.title,
+              `contributes.programs["${id}"].title`,
+              errs,
+            )
+          ) {
+            return null;
+          }
           if (v.kind !== "terminal" && v.kind !== "browser") {
             errs.push(`contributes.programs["${id}"].kind: terminal|browser`);
             return null;
           }
           const kind = v.kind;
-          let path: string | undefined;
+          let path: LocalizedText | undefined;
           if (v.path !== undefined) {
             if (
-              !isNonEmptyString(v.path) ||
-              programPathSegments(v.path).some((s) => !s)
+              !validateLocalizedText(
+                v.path,
+                `contributes.programs["${id}"].path`,
+                errs,
+              )
             ) {
+              return null;
+            }
+            const pathText = v.path as LocalizedText;
+            const values =
+              typeof pathText === "string" ? [pathText] : Object.values(pathText);
+            if (values.some((p) => programPathSegments(p).some((seg) => !seg))) {
               errs.push(
                 `contributes.programs["${id}"].path: "/" 구분 카테고리 경로(빈 세그먼트 금지)`,
               );
               return null;
             }
-            path = programPathSegments(v.path).join("/");
+            path =
+              typeof pathText === "string"
+                ? programPathSegments(pathText).join("/")
+                : Object.fromEntries(
+                    Object.entries(pathText).map(([k, val]) => [
+                      k,
+                      programPathSegments(val).join("/"),
+                    ]),
+                  );
           }
           // kind 정합: 동의 화면이 보여줄 동작 선언이 모호하면 거부.
           if (v.command !== undefined) {
@@ -668,7 +765,7 @@ export function parseManifest(
           }
           return {
             id,
-            title: (v.title as string).trim(),
+            title: normalizeText(v.title as LocalizedText),
             kind,
             ...(path !== undefined ? { path } : {}),
             ...(v.command !== undefined ? { command: (v.command as string).trim() } : {}),
@@ -689,9 +786,9 @@ export function parseManifest(
     manifest: {
       spec: SPEC_VERSION,
       id: (raw.id as string).trim(),
-      name: (raw.name as string).trim(),
+      name: normalizeText(raw.name as LocalizedText),
       version: (raw.version as string).trim(),
-      description: (raw.description as string).trim(),
+      description: normalizeText(raw.description as LocalizedText),
       author: raw.author !== undefined ? (raw.author as string).trim() : undefined,
       entry,
       minAppVersion:

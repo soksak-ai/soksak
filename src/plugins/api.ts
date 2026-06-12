@@ -31,6 +31,8 @@ import {
   type PluginPermission,
   type ViewPlacement,
 } from "./spec";
+import { localize } from "../i18n";
+import { useSettings } from "../state/settings";
 import type { Extension } from "@codemirror/state";
 import * as cmView from "@codemirror/view";
 import * as cmState from "@codemirror/state";
@@ -72,6 +74,8 @@ export interface PluginCommandSpec {
 export interface SoksakPluginApi {
   appVersion: string;
   pluginId: string;
+  // 호스트 표시 언어(권한 불요 컨텍스트 §3.5) — 변경은 locale.changed 이벤트.
+  locale: () => string;
   commands?: {
     execute: (
       name: string,
@@ -241,6 +245,7 @@ export function buildPluginApi(
   const api: SoksakPluginApi = {
     appVersion: deps.appVersion,
     pluginId: id,
+    locale: () => useSettings.getState().language,
 
     events: {
       on: (event, fn) => tracker.add(deps.on(event, fn)),
@@ -323,7 +328,7 @@ export function buildPluginApi(
             const globalId = qualifiedViewId(id, setId);
             useIconRegistry.getState().register({
               id: globalId,
-              name: decl.title,
+              name: localize(decl.title),
               data: data as IconSetData,
             });
             return tracker.wrap(() =>
@@ -357,7 +362,7 @@ export function buildPluginApi(
               useEditorRegistry.getState().registerFormatter({
                 pluginId: id,
                 id: decl.id,
-                title: decl.title,
+                title: localize(decl.title),
                 languages: decl.languages,
                 format: reg.format,
               }),

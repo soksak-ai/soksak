@@ -7,6 +7,7 @@
 import { rafThrottle } from "../lib/rafThrottle";
 import { allGroups, collectLeafIds, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
+import { useSettings } from "../state/settings";
 import { useBookmarks, type Bookmark } from "../state/bookmarks";
 import { subscribeAnyCommandFinished } from "../terminal/paneHosts";
 
@@ -28,6 +29,8 @@ export interface PluginEventMap {
   "file.closed": { projectId: string; viewId: string; path: string };
   "file.saved": { projectId: string; viewId: string; path: string };
   "theme.changed": { name: string; mode: "light" | "dark" };
+  // 호스트 표시 언어 변경 — 플러그인 자체 i18n(뷰 내부 텍스트)의 갱신 신호.
+  "locale.changed": { language: string };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   // 터미널 명령 종료(OSC 133/633 셸 통합 탐지 — 폴링 없음). git 뷰 등의 자동
   // 갱신 트리거. projectId 는 pane 의 소속 프로젝트(못 찾으면 null).
@@ -41,6 +44,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "file.closed",
   "file.saved",
   "theme.changed",
+  "locale.changed",
   "bookmarks.changed",
   "command.finished",
 ];
@@ -198,6 +202,14 @@ export function startPluginHooks(): void {
     ) {
       prevTheme = { name: state.current, mode: state.effectiveMode };
       emitPluginEvent("theme.changed", prevTheme);
+    }
+  });
+
+  let prevLanguage = useSettings.getState().language;
+  useSettings.subscribe((state) => {
+    if (state.language !== prevLanguage) {
+      prevLanguage = state.language;
+      emitPluginEvent("locale.changed", { language: state.language });
     }
   });
 

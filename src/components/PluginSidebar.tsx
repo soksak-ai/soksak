@@ -15,7 +15,7 @@ import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { useSessions, type ProjectTab } from "../state/sessions";
 import { PluginViewHost } from "./PluginViewHost";
 import { PluginConsentModal } from "./PluginConsentModal";
-import { useT } from "../i18n";
+import { localize, useT } from "../i18n";
 
 const MANAGER = "manager"; // 예약 키 — 뷰 전역 키는 항상 점을 포함하므로 충돌 없음.
 
@@ -51,10 +51,14 @@ export const PluginSidebar = memo(function PluginSidebar({
     sidebarViews.some((v) => v.key === k),
   );
 
+  const activeTitleRaw = sidebarViews.find((v) => v.key === rightView)?.view
+    .decl.title;
   const activeTitle =
     rightView === MANAGER
       ? t("plugin.manager")
-      : sidebarViews.find((v) => v.key === rightView)?.view.decl.title ?? "";
+      : activeTitleRaw
+        ? localize(activeTitleRaw)
+        : "";
 
   return (
     <div className="plugin-side">
@@ -64,7 +68,7 @@ export const PluginSidebar = memo(function PluginSidebar({
             key={key}
             type="button"
             className={`icon-btn icon-btn--boxed plugin-rail-btn${rightView === key ? " active" : ""}`}
-            title={view.decl.title}
+            title={localize(view.decl.title)}
             onClick={() => setRightView(project.id, key)}
           >
             {/* 플러그인 아이콘 = 매니페스트 선언 문자열(외부 계약) — 그대로 표시 */}
@@ -241,14 +245,14 @@ function PluginManagerPanel() {
       {list.map((p) => (
         <div key={p.manifest.id} className="plugin-row">
           <div className="plugin-row-title">
-            <span className="plugin-row-name">{p.manifest.name}</span>
+            <span className="plugin-row-name">{localize(p.manifest.name)}</span>
             <span className="plugin-row-ver">v{p.manifest.version}</span>
             {p.source === "dev" && <span className="plugin-badge dev">dev</span>}
             <span className={`plugin-badge ${statusKey(p)}`}>
               {t(`plugin.status.${statusKey(p)}`)}
             </span>
           </div>
-          <div className="plugin-row-desc">{p.manifest.description}</div>
+          <div className="plugin-row-desc">{localize(p.manifest.description)}</div>
           {/* 역할 칩 — 검증된 선언(contributes)에서 기계적 파생(산문 카테고리
               금지: 자유 메타데이터는 검증 불가). 무엇을 추가하는지(메뉴 항목/
               화면/명령/포매터/문법/아이콘)가 한눈에. */}
@@ -258,13 +262,13 @@ function PluginManagerPanel() {
             for (const pr of c.programs) {
               chips.push({
                 key: `prog:${pr.id}`,
-                text: `${t("plugin.contrib.program")} ${pr.path ? `${pr.path} ▸ ` : ""}${pr.title}`,
+                text: `${t("plugin.contrib.program")} ${pr.path ? `${localize(pr.path)} ▸ ` : ""}${localize(pr.title)}`,
               });
             }
             for (const v of c.views) {
               chips.push({
                 key: `view:${v.id}`,
-                text: `${t("plugin.contrib.view")} ${v.title}`,
+                text: `${t("plugin.contrib.view")} ${localize(v.title)}`,
               });
             }
             if (c.commands.length > 0) {
@@ -276,7 +280,7 @@ function PluginManagerPanel() {
             for (const f of c.formatters) {
               chips.push({
                 key: `fmt:${f.id}`,
-                text: `${t("plugin.contrib.formatter")} ${f.title}`,
+                text: `${t("plugin.contrib.formatter")} ${localize(f.title)}`,
               });
             }
             if (c.languages.length > 0) {
@@ -288,7 +292,7 @@ function PluginManagerPanel() {
             for (const s of c.iconSets) {
               chips.push({
                 key: `icons:${s.id}`,
-                text: `${t("plugin.contrib.iconSet")} ${s.title}`,
+                text: `${t("plugin.contrib.iconSet")} ${localize(s.title)}`,
               });
             }
             return chips.length > 0 ? (

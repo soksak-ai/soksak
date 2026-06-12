@@ -5,7 +5,7 @@ import { useProgramRegistry } from "../plugins/programRegistry";
 import { programPathSegments } from "../plugins/spec";
 import { useSuppressBrowser } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
-import { useT } from "../i18n";
+import { localize, useT } from "../i18n";
 
 // 프로그램 선택 메뉴 — 항목은 100% 플러그인 등록분(programRegistry, 내장 없음
 // §2.6). path("/" 구분 카테고리 경로)가 같은 항목은 다단 서브메뉴 트리로
@@ -122,8 +122,8 @@ export function ProgramMenu({
     if (!p) continue;
     insert(
       root,
-      p.decl.path ? programPathSegments(p.decl.path) : [],
-      { id, title: p.decl.title },
+      p.decl.path ? programPathSegments(localize(p.decl.path)) : [],
+      { id, title: localize(p.decl.title) },
     );
   }
 

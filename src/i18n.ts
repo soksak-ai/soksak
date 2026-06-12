@@ -1,5 +1,14 @@
 import { useCallback } from "react";
 import { useSettings } from "./state/settings";
+import { resolveText, type LocalizedText } from "./plugins/spec";
+
+// 플러그인 텍스트(매니페스트 LocalizedText §3.5)를 현재 언어로 resolve.
+// 호스트 i18n(키 테이블)과 별개 — 플러그인 텍스트의 소유자는 플러그인이고,
+// 호스트는 현재 언어로 골라줄 뿐이다. 언어 변경 리렌더는 소비 컴포넌트의
+// useT()/언어 구독이 담당(이 함수는 호출 시점 최신값을 읽는 순수 게터).
+export function localize(t: LocalizedText): string {
+  return resolveText(t, useSettings.getState().language);
+}
 
 // 간단한 i18n: 메시지 키 → 한/영. useT() 가 현재 언어로 번역 함수를 돌려준다.
 // {name} 형태 플레이스홀더는 params 로 치환.

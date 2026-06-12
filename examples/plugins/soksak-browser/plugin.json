@@ -1,9 +1,15 @@
 {
   "spec": "soksak-plugin-spec@1",
   "id": "soksak-browser",
-  "name": "브라우저",
-  "version": "1.1.0",
-  "description": "새 탭(+) 메뉴에 브라우저를 추가 — 시작 페이지는 설정의 시작 URL",
+  "name": {
+    "ko": "브라우저",
+    "en": "Browser"
+  },
+  "version": "1.2.0",
+  "description": {
+    "ko": "새 탭(+) 메뉴에 브라우저를 추가 — 시작 페이지는 설정의 시작 URL",
+    "en": "Adds Browser to the new-tab (+) menu — opens the start URL from settings"
+  },
   "entry": "main.js",
   "permissions": [
     "programs"
@@ -12,7 +18,10 @@
     "programs": [
       {
         "id": "browser",
-        "title": "브라우저",
+        "title": {
+          "ko": "브라우저",
+          "en": "Browser"
+        },
         "kind": "browser"
       }
     ]

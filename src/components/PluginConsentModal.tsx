@@ -13,14 +13,15 @@ import { detectPlatform } from "../plugins/programRegistry";
 import type { PluginRuntime } from "../state/plugins";
 import { useSuppressBrowser } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
-import { useT } from "../i18n";
+import { localize, useT } from "../i18n";
 
 // 프로그램 선언 → 동의 화면 한 줄 요약(명령은 원문 그대로 — 산문 가공 금지).
 function programSummary(
   p: ContributedProgram,
   t: ReturnType<typeof useT>,
 ): { text: string; cmds: string[] } {
-  const where = p.path ? `${p.path} ▸ ${p.title}` : p.title;
+  const title = localize(p.title);
+  const where = p.path ? `${localize(p.path)} ▸ ${title}` : title;
   if (p.kind === "browser") {
     return {
       text: `${where} — ${t("plugin.consent.prog.browser")}${p.url ? `: ${p.url}` : ""}`,
@@ -76,7 +77,7 @@ export function PluginConsentModal({
       >
         <div className="dmodal-head">
           <span className="dmodal-title">
-            {t("plugin.consent.title", { name: m.name })}
+            {t("plugin.consent.title", { name: localize(m.name) })}
           </span>
           <span className="dmodal-spacer" />
           <button
@@ -92,7 +93,7 @@ export function PluginConsentModal({
             {m.id} · v{m.version}
             {m.author ? ` · ${m.author}` : ""}
           </div>
-          <div className="plugin-consent-desc">{m.description}</div>
+          <div className="plugin-consent-desc">{localize(m.description)}</div>
 
           <div className="dsec">{t("plugin.consent.permissions")}</div>
           {m.permissions.length === 0 ? (
@@ -158,19 +159,19 @@ export function PluginConsentModal({
             for (const v of c.views) {
               rows.push({
                 key: `view:${v.id}`,
-                text: `${t("plugin.consent.kind.view")} — ${v.title} (${v.placements.join(", ")})`,
+                text: `${t("plugin.consent.kind.view")} — ${localize(v.title)} (${v.placements.join(", ")})`,
               });
             }
             for (const cmd of c.commands) {
               rows.push({
                 key: `cmd:${cmd.name}`,
-                text: `${t("plugin.consent.kind.command")} — ${pluginCommandName(m.id, cmd.name)}: ${cmd.title}`,
+                text: `${t("plugin.consent.kind.command")} — ${pluginCommandName(m.id, cmd.name)}: ${localize(cmd.title)}`,
               });
             }
             for (const f of c.formatters) {
               rows.push({
                 key: `fmt:${f.id}`,
-                text: `${t("plugin.consent.kind.formatter")} — ${f.title} (.${f.languages.join(" .")})`,
+                text: `${t("plugin.consent.kind.formatter")} — ${localize(f.title)} (.${f.languages.join(" .")})`,
               });
             }
             for (const l of c.languages) {
@@ -182,7 +183,7 @@ export function PluginConsentModal({
             for (const s of c.iconSets) {
               rows.push({
                 key: `icons:${s.id}`,
-                text: `${t("plugin.consent.kind.iconSet")} — ${s.title}`,
+                text: `${t("plugin.consent.kind.iconSet")} — ${localize(s.title)}`,
               });
             }
             return rows.length === 0 ? (
