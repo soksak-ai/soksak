@@ -47,7 +47,8 @@ pub fn git_init_if_missing(path: String) -> Result<bool, String> {
     if dir.join(".git").exists() {
         return Ok(false);
     }
-    run_git(&path, &["init"])?;
+    // 초기 브랜치는 main(사용자 규칙 — master 금지).
+    run_git(&path, &["init", "-b", "main"])?;
     Ok(true)
 }
 
