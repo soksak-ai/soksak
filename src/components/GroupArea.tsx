@@ -305,6 +305,15 @@ export const GroupArea = memo(function GroupArea({
     [startDrag],
   );
 
+  // 더블클릭 = 인접 두 영역을 정확히 반반으로(합 보존 — 다른 형제 비율 불변).
+  const onDividerDoubleClick = (d: Divider) => () => {
+    const sizes = [...d.sizes];
+    const half = (sizes[d.index] + sizes[d.index + 1]) / 2;
+    sizes[d.index] = half;
+    sizes[d.index + 1] = half;
+    resizeSplit(projectId, d.splitId, sizes);
+  };
+
   const onDividerDown = (d: Divider) => (e: React.MouseEvent) => {
     e.preventDefault();
     const cont = containerRef.current;
@@ -526,6 +535,8 @@ export const GroupArea = memo(function GroupArea({
                 }
           }
           onMouseDown={onDividerDown(d)}
+          onDoubleClick={onDividerDoubleClick(d)}
+          title={t("divider.equalize")}
         />
       ))}
 

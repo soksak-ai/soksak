@@ -61,6 +61,7 @@ const ko = {
   "view.newTerminal": "새 터미널 (⌘T)",
   "group.move": "드래그해서 이 패널 전체를 이동/분할",
   "group.split": "오른쪽으로 분할(새 터미널)",
+  "divider.equalize": "드래그: 크기 조절 · 더블클릭: 반반",
 
   "tree.refreshAria": "파일 트리 새로고침",
   "tree.watchDegraded": "워처가 이 위치를 감시하지 못함 — 수동 새로고침",
@@ -208,6 +209,7 @@ const en: Record<MsgKey, string> = {
   "view.newTerminal": "New terminal (⌘T)",
   "group.move": "Drag to move/split this whole panel",
   "group.split": "Split right (new terminal)",
+  "divider.equalize": "Drag: resize · Double-click: split evenly",
 
   "tree.refreshAria": "Refresh file tree",
   "tree.watchDegraded": "Watcher cannot observe this location — manual refresh",

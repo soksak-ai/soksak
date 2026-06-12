@@ -52,6 +52,27 @@ interface Location {
 }
 
 // paneId 가 속한 위치를 전 프로젝트에서 검색.
+// splitId 로 분할 노드를 프로젝트 전체에서 검색(panel.equalize 의 현재 비율 조회용).
+function findSplitNode(
+  t: ProjectTab,
+  splitId: string,
+): Extract<GroupNode, { type: "split" }> | null {
+  const walk = (n: GroupNode): Extract<GroupNode, { type: "split" }> | null => {
+    if (n.type === "leaf") return null;
+    if (n.id === splitId) return n;
+    for (const c of n.children) {
+      const r = walk(c);
+      if (r) return r;
+    }
+    return null;
+  };
+  for (const c of t.contents) {
+    const r = walk(c.layout);
+    if (r) return r;
+  }
+  return null;
+}
+
 function locatePane(paneId: string): Location | null {
   const s = useSessions.getState();
   for (const project of s.tabs) {
@@ -804,6 +825,49 @@ export function registerCatalog(): void {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
       return S().resizeSplit(t.id, p.split as string, p.sizes as number[]);
+    },
+  });
+
+  register("panel.equalize", {
+    description:
+      "분할 균등화 — index 지정 시 그 분할선의 인접 두 영역을 반반(분할선 더블클릭과 동일), 생략 시 전체 자식을 1/n 균등",
+    params: {
+      project: P.project,
+      split: { type: "string", description: "분할 노드 id(예: s1)", required: true },
+      index: {
+        type: "number",
+        description: "분할선 번호(0=첫 경계). 생략=전체 균등",
+      },
+    },
+    returns: "{ sizes }",
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      'sok panel.equalize \'{"split":"s1"}\'',
+      'sok panel.equalize \'{"split":"s1","index":0}\'',
+    ],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound("프로젝트 없음");
+      const node = findSplitNode(t, p.split as string);
+      if (!node) return notFound(`분할 없음: ${p.split}`);
+      const sizes = [...node.sizes];
+      const idx = p.index as number | undefined;
+      if (idx === undefined) {
+        sizes.fill(1 / sizes.length);
+      } else {
+        if (idx < 0 || idx >= sizes.length - 1) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: `index 범위: 0..${sizes.length - 2}`,
+          };
+        }
+        const half = (sizes[idx] + sizes[idx + 1]) / 2;
+        sizes[idx] = half;
+        sizes[idx + 1] = half;
+      }
+      const r = S().resizeSplit(t.id, p.split as string, sizes);
+      return r.ok ? { sizes } : r;
     },
   });
 
