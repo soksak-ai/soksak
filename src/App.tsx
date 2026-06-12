@@ -18,7 +18,6 @@ import {
   allGroups,
   collectAllLeafIds,
   collectLeafIds,
-  paneSpawnInfo,
   useSessions,
   type ProjectTab,
 } from "./state/sessions";
@@ -32,7 +31,6 @@ import {
   applyTerminalSettingsAll,
   disposeHost,
   pasteToHost,
-  setSpawnOptionsProvider,
   setTerminalSettingsProvider,
   setThemeAll,
   setThemeProvider,
@@ -360,13 +358,9 @@ function App() {
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const activeProject = tabs.find((t) => t.id === activeId);
 
-  // pane 별 spawn 옵션(프로젝트 root → cwd, 첫 pane → 프로그램 자동 실행) 등록.
-  useEffect(() => {
-    setSpawnOptionsProvider((paneId) => {
-      const info = paneSpawnInfo(useSessions.getState().tabs, paneId);
-      return { cwd: info.cwd, shell: info.shell, initialCommand: info.command };
-    });
-  }, []);
+  // spawn 옵션 provider 는 main.tsx 부트(렌더 전)가 등록한다 — effect(마운트
+  // 후)는 자식 PaneLeaf ref 의 첫 spawn 보다 늦어 첫 터미널이 cwd 없이(홈)
+  // 시작하던 잠복 버그의 원인이었다.
 
   // 드래그로 조절되는 패널 폭들(전역, localStorage 영속).
   const [sidebarW, startResize] = useResizableWidth(

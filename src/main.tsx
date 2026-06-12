@@ -3,9 +3,19 @@ import App from "./App";
 import { startExecutor } from "./commands/executor";
 import { startBrowserGc } from "./lib/browserGc";
 import { initPluginHost } from "./plugins/host";
-import { ensureDefaultWorkspace } from "./lib/workspace";
-import { useSessions } from "./state/sessions";
+import { ensureDefaultWorkspace, validateProjectRoot } from "./lib/workspace";
+import { paneSpawnInfo, useSessions } from "./state/sessions";
+import { useSettings } from "./state/settings";
+import { setSpawnOptionsProvider } from "./terminal/paneHosts";
 import "./assets/fonts.css";
+
+// pane 별 spawn 옵션(프로젝트 root → cwd, 셸, 첫 pane → 자동 실행 명령) —
+// 렌더 전 등록이 규칙이다: 첫 렌더 커밋 중 PaneLeaf ref 가 즉시 spawn 하므로
+// effect(마운트 후) 등록은 첫 터미널을 cwd 없이(홈) 시작시킨다(실측 사고).
+setSpawnOptionsProvider((paneId) => {
+  const info = paneSpawnInfo(useSessions.getState().tabs, paneId);
+  return { cwd: info.cwd, shell: info.shell, initialCommand: info.command };
+});
 
 // AI 명령 인터페이스: 카탈로그 등록 + 소켓 요청 실행기(앱 수명 동안 1회).
 startExecutor();
@@ -25,7 +35,18 @@ async function boot(): Promise<void> {
     console.error("플러그인 호스트 초기화 실패:", e);
   }
   try {
-    const root = await ensureDefaultWorkspace("project1");
+    // 사용자가 지정한 기본 프로젝트(설정 영속)가 있으면 그 루트로 시작 —
+    // 무효(삭제됨/홈 등)면 사유를 콘솔에 남기고 project1 로 폴백.
+    let root: string | null = null;
+    const preferred = useSettings.getState().defaultProjectRoot;
+    if (preferred) {
+      try {
+        root = await validateProjectRoot(preferred);
+      } catch (e) {
+        console.error("기본 프로젝트 루트 무효 — project1 폴백:", e);
+      }
+    }
+    root ??= await ensureDefaultWorkspace("project1");
     useSessions.getState().bootstrapFirstProject(root);
   } catch (e) {
     console.error("기본 프로젝트 루트 준비 실패:", e);

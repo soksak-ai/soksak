@@ -789,7 +789,9 @@ export const useSessions = create<SessionsStore>((set, get) => ({
 
   bootstrapFirstProject: (root) => {
     if (get().tabs.length > 0) return; // 멱등 — 부트 1회 전용
-    const t = makeProject("t1", { alias: "P1", root });
+    // 자동 project1 은 "P1", 사용자 지정 기본 프로젝트는 폴더명이 표시명.
+    const alias = baseName(root) === "project1" ? "P1" : "";
+    const t = makeProject("t1", { alias, root });
     set({ tabs: [t], activeId: "t1" });
   },
 
