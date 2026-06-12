@@ -685,7 +685,6 @@ body,
 }
 .egroup-title.active {
   color: var(--fg);
-  box-shadow: inset 0 2px 0 rgba(55, 148, 255, 0.8);
 }
 .egt-icon {
   font-size: 10px;
@@ -1333,8 +1332,9 @@ body,
   width: 100%;
   height: 100%;
 }
-/* 포커스 pane 표시는 헤더 액센트(.egroup-title.active)로만 한다. 과거의 전면 1px
-   윤곽선은 단일 터미널을 감싸는 보더처럼 보여 제거(레퍼런스도 전면 윤곽 없음). */
+/* 포커스 표시의 단일 소유자는 프레임(.egroup-frame.focus — 설정 focusIndicator).
+   과거의 헤더 인셋 섀도(.egroup-title.active box-shadow)·전면 1px 윤곽선은 이중
+   표시라 제거 — 최대화 헤더에 상단 빨간 줄로 새던 사고의 원인. */
 
 /* 얇은 4px 드래그 가능한 분할선. hover/active 시 미세한 색 강조.
    라이브러리가 flexBasis:auto, flexGrow/Shrink:0, cursor 를 inline 으로 설정하므로
@@ -1612,7 +1612,6 @@ body,
 }
 .egroup-title.active {
   color: var(--fg);
-  box-shadow: inset 0 2px 0 var(--acc);
 }
 .egroup-status {
   font-size: 11.5px;
