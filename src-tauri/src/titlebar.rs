@@ -124,60 +124,24 @@ unsafe fn apply_inset(window: &NSWindow, x: f64, y: f64) {
         return;
     };
 
+    // tao-0.35.3 inset_traffic_lights 산식 그대로(높이/세로 위치만) — 폭/순서/
+    // 가시성 조작은 절제 실험으로 하중이 없음이 확인돼 제거됨.
     let close_rect = NSView::frame(&close);
     let space = NSView::frame(&miniaturize).origin.x - close_rect.origin.x;
     let bar_height = close_rect.size.height + y;
-    // 폭 = 버튼 클러스터(x + 간격×2 + 버튼폭)에 우측 여백 8 — 전폭 확장 금지
-    // (전폭은 우측 타이틀바 DOM 버튼 클릭을 가로채는 회귀를 만든다).
-    let bar_width = x + space * 2.0 + close_rect.size.width + 8.0;
     let mut bar_rect = NSView::frame(&container);
-    bar_rect.origin.x = 0.0;
     bar_rect.origin.y = window.frame().size.height - bar_height;
     bar_rect.size.height = bar_height;
-    bar_rect.size.width = bar_width;
     container.setFrame(bar_rect);
 
-    // 비활성 합성에서 webview 레이어에 덮이지 않도록 형제 최상단으로.
-    if let Some(theme_frame) = container.superview() {
-        theme_frame.addSubview_positioned_relativeTo(
-            &container,
-            NSWindowOrderingMode::Above,
-            None,
-        );
-    }
-
-    // AppKit 타이틀바 배경 숨김: NSTitlebarView 안의 NSVisualEffectView(vibrancy,
-    // 전면적 74×36)와 컨테이너의 _NSTitlebarDecorationView 가 — 컨테이너를 webview
-    // 위로 올린 탓에 — 테마와 무관한 흰 캡슐로 항상 드러난다(계측: sv.0/ctr.1).
-    // 버튼과 우리 원형 백킹만 남긴다. AppKit 이 되살리면 옵저버 재적용이 다시 숨김.
-    if let Some(sv) = close.superview() {
-        for sub in sv.subviews().iter() {
-            if format!("{:?}", sub.class()).contains("NSVisualEffectView") {
-                sub.setHidden(true);
-            }
-        }
-    }
-    for sub in container.subviews().iter() {
-        if format!("{:?}", sub.class()).contains("TitlebarDecorationView") {
-            sub.setHidden(true);
-        }
-    }
-
     // 비활성 위젯의 backdrop 합성 복원 — 점 모양 그대로의 원형 백킹 3개(§상단 주석).
-    // 직사각 패치는 점 밖으로 노출돼 테마와 어긋난 띠가 보였다 — 버튼 프레임과
-    // 동일한 원만 깔면 점 뒤에 완전히 숨는다. 활성 상태에선 숨김(점이 불투명
-    // 컬러라 불필요 + 테마 전환 때 네이티브 패치만 따로 노는 이질감 제거).
+    // 활성 상태에선 숨김(점이 불투명 컬러라 불필요 + 테마 전환 이질감 제거).
     ensure_backing(
         [&close, &miniaturize, &zoom],
         window.isKeyWindow(),
     );
 
-    // AppKit 이 비활성 전환에서 깎는 가시성 속성 복원.
-    container.setHidden(false);
-    container.setAlphaValue(1.0);
     for (i, button) in [close, miniaturize, zoom].into_iter().enumerate() {
-        button.setHidden(false);
-        button.setAlphaValue(1.0);
         let mut rect = NSView::frame(&button);
         rect.origin.x = x + (i as f64 * space);
         button.setFrameOrigin(rect.origin);
