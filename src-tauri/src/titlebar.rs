@@ -1,31 +1,37 @@
-// macOS 신호등(트래픽 라이트) — unstable(child webview) 경로의 위치/가시성 보정.
+// macOS 신호등(트래픽 라이트) — webview 앱이라는 경계 때문에 생기는, 누구의
+// 책임도 아닌 문제 두 가지에 대한 최소 보정. 위치의 단일 진실은 tauri.conf.json
+// trafficLightPosition 이고, 이 모듈은 그것을 "유지"시키는 역할만 한다.
 //
-// 위치의 단일 진실은 tauri.conf.json trafficLightPosition. 문제 두 겹:
-//   1) 재적용 루프 부재(tauri#14072): 정상 경로에선 wry(WryWebViewParent.drawRect)가
-//      매 redraw 마다 inset 을 재적용하지만, unstable(child webview) 경로에선 그
-//      루프가 설치되지 않는다 → 키 상태 전환 때 AppKit 재배치를 덮어쓸 주체가 없다.
-//   2) 비활성 합성 순서: 비활성 전환 시 버튼이 배경(out-of-process WKWebView 레이어)
-//      에 덮여 사실상 보이지 않게 된다(실측: 중심색이 배경과 Δ2~3).
+// 문제 1 — 위치 풀림(tauri#14072, 업스트림 버그):
+//   정상 경로에선 wry(WryWebViewParent.drawRect)가 매 redraw 마다 inset 을
+//   재적용하지만, unstable(child webview) 경로에선 창의 trafficLightPosition 이
+//   자식 webview attributes 로 전파되지 않아 그 루프가 설치되지 않는다 → 키 상태
+//   전환/리사이즈/전체화면 해제 때 AppKit 표준 재배치를 덮어쓸 주체가 없다.
+//   치료: NSNotificationCenter 옵저버(becomeKey/resignKey/becomeMain/resignMain/
+//   resize/exitFullScreen)에서 tao-0.35.3 inset_traffic_lights 와 동일 산식을
+//   "동기" 재적용. (슬립 지연 재적용은 AppKit 후속 패스와 경쟁 — 폐기.)
+//   업스트림이 #14072 를 고치면 이 재적용은 삭제 가능.
 //
-// 치료:
-//   - NSNotificationCenter 옵저버(becomeKey/resignKey/becomeMain/resignMain/
-//     resize/exitFullScreen)에서 "동기" 재적용 — 슬립 기반 지연 재적용은 AppKit
-//     후속 패스와의 경쟁이라 폐기.
-//   - 버튼 컨테이너(NSTitlebarContainerView)를 버튼 클러스터 폭으로 줄이고 형제
-//     최상단으로 재배열 — 비활성에서도 webview 위에 합성된다. 전폭 확장이 아니라
-//     우측 타이틀바 DOM 버튼 클릭을 가로채지 않는다(이전 회귀의 원인 차단).
+// 문제 2 — 비활성 유령(Apple 동작, 고칠 주체 없음):
+//   비활성 회색 점은 backdrop 합성(뒤 픽셀 샘플링)으로 그려지는데, 뒤가
+//   out-of-process WKWebView 레이어라 샘플링이 실패해 배경과 Δ2~3 의 유령이 된다.
+//   계측으로 뷰 상태(hidden/alpha/frame/z)는 전부 정상임을 확인 — 그리기 단계 문제.
+//   네이티브 앱의 전제(샘플링 가능한 backdrop) 밖이라 Apple 도 tauri 도 안 고친다.
+//   치료: 버튼 프레임과 동일한 원형 백킹(테마색, 활성 시 숨김)을 점 바로 뒤에 공급.
 //
-// 계측(디버그 빌드): 각 전환의 전/후 상태를 /tmp/soksak-titlebar.log 에 기록.
+// 절제 실험 기록(2026-06-12): 컨테이너 재배열·vibrancy/장식 뷰 숨김·폭 축소·
+// hidden/alpha 복원은 전부 하중 없음이 실측돼 제거됨 — 유령은 "덮임"이 아니었고,
+// 흰 캡슐은 재배열(자기 개입)이 노출시킨 것이었다. 이 모듈에 보정을 추가할 땐
+// 반드시 빼고도 실측(활성/비활성 캡처 + 디버그 덤프)으로 하중을 증명할 것.
+//
+// 계측(디버그 빌드): 각 전환의 전/후 상태를 /tmp/soksak-titlebar.log 에 기록 —
+// macOS 메이저 업데이트 후 회귀 진단의 1차 도구.
 
 #[cfg(target_os = "macos")]
 use objc2_app_kit::{NSView, NSWindow, NSWindowButton, NSWindowOrderingMode};
 
-// 비활성(회색) 위젯은 backdrop 합성으로 그려지는데, 배경이 out-of-process
-// WKWebView 레이어면 샘플링이 실패해 유령(배경과 Δ2~3)이 된다 — 계측으로 뷰
-// 상태(hidden/alpha/frame/z)는 전부 정상임을 확인, 그리기 단계의 문제.
-// 버튼 뒤에만 불투명 테마색 백킹을 깔아 표준 합성을 복원한다.
-// 색은 프런트 테마 엔진이 titlebar_backing 명령으로 동기화(미동기화 시 시스템
-// windowBackgroundColor 폴백 — 항상 백킹은 존재한다).
+// 백킹 색(문제 2 — 머리말 참조). 프런트 테마 엔진이 titlebar_backing 으로 동기화,
+// 미동기화 시 ensure_backing 이 시스템 windowBackgroundColor 로 폴백.
 #[cfg(target_os = "macos")]
 static BACKING_COLOR: std::sync::Mutex<Option<(f64, f64, f64)>> = std::sync::Mutex::new(None);
 
@@ -110,7 +116,7 @@ unsafe fn install_observers(ns_window_ptr: *mut std::ffi::c_void, x: f64, y: f64
     }
 }
 
-// tao-0.35.3 inset_traffic_lights 산식 + 컨테이너 폭 축소 + 최상단 재배열.
+// 위치 재적용(문제 1) + 원형 백킹 갱신(문제 2) — 통지마다 멱등 실행되는 단일 진입점.
 #[cfg(target_os = "macos")]
 unsafe fn apply_inset(window: &NSWindow, x: f64, y: f64) {
     let (Some(close), Some(miniaturize), Some(zoom)) = (
