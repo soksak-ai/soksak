@@ -9,6 +9,16 @@ import { invoke } from "@tauri-apps/api/core";
 
 export const PROJECT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 
+// 임의 문자열(폴더명 등) → id 후보 슬러그화. 비호환 문자는 하이픈으로,
+// 연속·양끝 하이픈 정리. 결과가 비면 ""(사용자 입력 요구가 정직).
+export function slugifyId(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 // ~/soksak/<id> 생성(멱등) 후 절대경로 반환. id 검증은 Rust 가 재확인한다.
 export function ensureDefaultWorkspace(id: string): Promise<string> {
   return invoke<string>("ensure_workspace_dir", { id });

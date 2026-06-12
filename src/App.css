@@ -2041,6 +2041,27 @@ select.dctl {
   word-break: break-all;
   padding-left: 130px;
 }
+.dpath-err {
+  color: var(--danger);
+}
+/* 모달 행의 세그먼트 선택(자동/직접 등) — dctl 폭을 둘이 나눠 가진다 */
+.dseg {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.dseg-btn {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dseg-btn.active {
+  border-color: var(--acc);
+  color: var(--fg);
+}
 .dmodal-actions {
   display: flex;
   justify-content: flex-end;

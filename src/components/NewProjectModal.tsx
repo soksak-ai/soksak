@@ -6,22 +6,33 @@ import { useSuppressBrowser } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 import { useDraggableModal } from "./modalDrag";
-import { ensureDefaultWorkspace, PROJECT_ID_RE } from "../lib/workspace";
+import {
+  ensureDefaultWorkspace,
+  PROJECT_ID_RE,
+  slugifyId,
+} from "../lib/workspace";
 
 // 새 프로젝트 모달 — 디자인 레퍼런스(soksak_final): 드래그 가능한 460px 카드,
-// 헤더(+ 아이콘·⠿·✕), 행 레이아웃. 폴더 + 별칭(비면 폴더명) + 첫 프로그램 + 셸.
-// 폴더 미지정 모드: 이름이 디렉토리명 계약이 되므로 자유 별칭이 아니라
-// id(영문 슬러그) 필수 — ~/soksak/<id> 를 생성해 루트로 쓴다(workspace.ts).
+// 헤더(+ 아이콘·⠿·✕), 행 레이아웃.
+//
+// 폴더는 명시 선택이다(암묵 모드 금지 — 사용자 결정):
+//   자동 지정 = ~/soksak/<id> 생성·사용 — 프로젝트 id 직접 입력 필수.
+//   직접 선택 = 폴더 picker — 폴더명을 슬러그화해 id 자동 입력(수정 가능).
+// 프로젝트 id 는 모드 무관 단일 규칙(영문 슬러그) — 디렉토리명 계약이자 탭의
+// 초기 표시명. 한글 등 자유 표시명은 생성 후 프로젝트 설정(별칭)에서 변경.
 
 const baseName = (p?: string) =>
   p ? (p.split("/").filter(Boolean).pop() ?? p) : "";
+
+type FolderMode = "auto" | "manual";
 
 export function NewProjectModal({ onClose }: { onClose: () => void }) {
   const t = useT();
   // 네이티브 브라우저 웹뷰는 항상 DOM 위 — 모달이 떠 있는 동안 숨긴다.
   useSuppressBrowser();
   const addProject = useSessions((s) => s.addProject);
-  const [alias, setAlias] = useState("");
+  const [mode, setMode] = useState<FolderMode>("auto");
+  const [id, setId] = useState("");
   const [root, setRoot] = useState<string | undefined>(undefined);
   // "" = 기본값(전역 설정 따름). 지정하면 프로젝트 설정이 우선.
   const [program, setProgram] = useState<Program | "">("");
@@ -41,24 +52,27 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
 
   const pickFolder = async () => {
     const sel = await open({ directory: true, multiple: false });
-    if (typeof sel === "string") setRoot(sel);
+    if (typeof sel === "string") {
+      setMode("manual");
+      setRoot(sel);
+      // 폴더명 → id 자동 입력(슬러그화). 이후 수정 가능.
+      setId(slugifyId(baseName(sel)));
+    }
   };
 
-  const folderName = baseName(root);
-  // 폴더 미지정 = id 모드: 입력값이 ~/soksak/<id> 디렉토리명이 된다.
-  const idMode = !root;
-  const idValue = alias.trim();
-  const idInvalid = idMode && (!idValue || !PROJECT_ID_RE.test(idValue));
+  const idValue = id.trim();
+  const idInvalid = !idValue || !PROJECT_ID_RE.test(idValue);
+  // 자동 = id 만 있으면 됨. 직접 = 폴더까지 골라야 함.
+  const createDisabled = idInvalid || (mode === "manual" && !root);
+
   const create = async () => {
-    let finalRoot = root;
-    if (idMode) {
-      if (idInvalid) return; // 버튼 disabled 와 이중 방어
-      finalRoot = await ensureDefaultWorkspace(idValue);
-    }
+    if (createDisabled) return; // 버튼 disabled 와 이중 방어
+    const finalRoot =
+      mode === "auto" ? await ensureDefaultWorkspace(idValue) : root;
     // 루트 초기화 정책(git init 등)은 코어가 아니라 project.created 이벤트를
     // 구독하는 플러그인 소유(soksak-git-init) — 여기선 생성만.
     addProject({
-      alias: idMode ? idValue : alias,
+      alias: idValue,
       root: finalRoot,
       program: program || undefined,
       shell: shell.trim() || undefined,
@@ -95,31 +109,48 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
         <div className="dmodal-body">
           <div className="drow">
             <span className="drow-label">{t("project.folder")}</span>
-            <button type="button" className="dctl dctl-btn" onClick={pickFolder}>
-              {root ? folderName : t("project.pickFolder")}
-            </button>
+            <div className="dseg">
+              <button
+                type="button"
+                className={`dbtn dseg-btn${mode === "auto" ? " active" : ""}`}
+                onClick={() => {
+                  setMode("auto");
+                  setRoot(undefined);
+                }}
+              >
+                {t("project.folderAuto")}
+              </button>
+              <button
+                type="button"
+                className={`dbtn dseg-btn${mode === "manual" ? " active" : ""}`}
+                onClick={pickFolder}
+              >
+                {root ? baseName(root) : t("project.pickFolder")}
+              </button>
+            </div>
           </div>
-          {root && <div className="dpath">{root}</div>}
+          {mode === "manual" && root && <div className="dpath">{root}</div>}
+          {mode === "manual" && !root && (
+            <div className="dpath dpath-err">{t("project.folderRequired")}</div>
+          )}
 
           <div className="drow">
-            <span className="drow-label">
-              {idMode ? t("project.id") : t("project.alias")}
-            </span>
+            <span className="drow-label">{t("project.id")}</span>
             <input
               className="dctl"
               type="text"
-              value={alias}
-              placeholder={idMode ? t("project.idPh") : folderName}
-              onChange={(e) => setAlias(e.target.value)}
+              value={id}
+              placeholder={t("project.idPh")}
+              onChange={(e) => setId(e.target.value)}
             />
           </div>
-          {idMode && (
-            <div className={`dpath${idValue && idInvalid ? " dpath-err" : ""}`}>
-              {idValue && idInvalid
-                ? t("project.idInvalid")
-                : t("project.idHint", { id: idValue || "<id>" })}
-            </div>
-          )}
+          <div className={`dpath${idValue && idInvalid ? " dpath-err" : ""}`}>
+            {idValue && idInvalid
+              ? t("project.idInvalid")
+              : mode === "auto"
+                ? t("project.idHint", { id: idValue || "<id>" })
+                : t("project.idAsAlias")}
+          </div>
 
           <div className="drow">
             <span className="drow-label">{t("project.program")}</span>
@@ -159,7 +190,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               className="dbtn dbtn-acc"
-              disabled={idInvalid}
+              disabled={createDisabled}
               onClick={create}
             >
               {t("project.create")}
