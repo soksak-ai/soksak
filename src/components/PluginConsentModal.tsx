@@ -11,7 +11,7 @@ import {
 } from "../plugins/spec";
 import { detectPlatform } from "../plugins/programRegistry";
 import type { PluginRuntime } from "../state/plugins";
-import { useSuppressBrowser } from "../state/ui";
+import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { localize, useT } from "../i18n";
 
@@ -54,8 +54,8 @@ export function PluginConsentModal({
   onClose: () => void;
 }) {
   const t = useT();
-  // 네이티브 브라우저 웹뷰는 항상 DOM 위 — 모달이 떠 있는 동안 숨긴다.
-  useSuppressBrowser();
+  // 오버레이 등록 — 모달이 떠 있는 동안 브라우저 홀의 마우스 통과를 차단한다.
+  useOverlayActive();
   const m = plugin.manifest;
 
   useEffect(() => {

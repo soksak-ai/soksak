@@ -6,14 +6,13 @@ import { Icon } from "../ui/icons/Icon";
 import { listen } from "@tauri-apps/api/event";
 import { useBookmarks } from "../state/bookmarks";
 import { useSessions } from "../state/sessions";
-import { useTheme } from "../state/theme";
-import { useSuppressBrowser, useUi } from "../state/ui";
 import { useT } from "../i18n";
 
 // 브라우저 패널: 메인 창 안의 Tauri child webview(WKWebView)를 이 슬롯의 본문 영역에
 // 정렬해 임베드한다(iframe 아님 — 프레이밍 차단 없는 실제 브라우저). 링크 클릭은 webview
 // 기본 동작, 이전/이후는 세션 히스토리, URL 변화는 on_navigation 이벤트(폴링 없음).
-// DOM 오버레이(드롭 인디케이터/메뉴)가 떠 있는 동안은 useUi.browserSuppress 로 숨긴다.
+// 레이어 원칙(browser.rs 머리말): webview 는 DOM "아래"에 있고 .bv-area(홀)가 투명해
+// 비친다 — DOM 오버레이가 떠도 숨기지 않는다(입력 게이트는 state/ui.ts 오버레이 카운터).
 
 // 입력을 URL 로 정규화: 스킴 없으면 https://, 공백/점없음은 구글 검색.
 function normalizeUrl(input: string): string {
@@ -38,7 +37,6 @@ function BrowserViewImpl({
   const label = `b-${viewId}`;
   const setBrowserUrl = useSessions((s) => s.setBrowserUrl);
   const setBrowserTitle = useSessions((s) => s.setBrowserTitle);
-  const suppressed = useUi((s) => s.browserSuppress > 0);
   const bookmarks = useBookmarks((s) => s.list);
   const toggleBookmark = useBookmarks((s) => s.toggle);
 
@@ -88,32 +86,23 @@ function BrowserViewImpl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [label]);
 
-  // §B5 프레임 예산(네이티브): child webview 는 DOM 오버레이(z:5 프레임) 위에
-  // 그려지므로 외곽 접변(좌/우)의 1px 을 bounds 로 지불한다 — 안 하면 패널
-  // 좌우 프레임 보더가 webview 에 덮여 사라진다. 상/하단은 DOM 크롬(bv-bar/
-  // 스테이터스바)이 사이에 있어 비접변. flat 은 프레임 무 → 0.
-  // 알려진 한계: 카드 라운드 모서리는 사각 webview 라 미세 노출 — v1 수용.
-  const paneStyle = useTheme((s) => s.spec.chrome.paneStyle);
-  const frameInsetRef = useRef(0);
-  frameInsetRef.current = paneStyle === "flat" ? 0 : 1;
-
   // 본문 영역 rect 를 webview 에 동기화 — 같은 rect 면 skip.
   // 측정(gBCR=강제 레이아웃)과 IPC(wry set_position/set_size)는 rAF 로 합쳐
   // 프레임당 1회 상한(원칙 4·5) — 렌더 동기 강제 레이아웃 금지.
+  // (§B5 의 네이티브 1px 예산은 레이어 역전으로 소멸 — 프레임 보더는 이제
+  //  DOM 이 webview "위"에 그린다. 정수 스냅은 홀-네이티브 정렬용으로 유지.)
   const syncBounds = useMemo(
     () =>
       rafThrottle(() => {
         const el = areaRef.current;
         if (!el || !openedRef.current) return;
         const r = el.getBoundingClientRect();
-        const inset = frameInsetRef.current;
-        // §B5 + 정수 스냅: rect 가 소수(예: x 819.5, w 577.5)면 네이티브 측
-        // 반올림이 우측 1px 을 도로 먹어 프레임 보더를 덮는다(캡처 실측으로
-        // 확인된 사고). ceil/floor 보수 스냅으로 webview 가 보더 예산을 절대
-        // 침범하지 못하게 한다.
-        const x = Math.ceil(r.left + inset);
+        // 정수 스냅: rect 가 소수(예: x 819.5)면 네이티브 측 반올림이 홀(CSS
+        // 투명 영역)과 webview 를 1px 어긋나게 한다 — 보수 스냅(ceil/floor)으로
+        // webview 가 홀을 절대 넘지 못하게 한다(캡처 실측으로 확인된 사고).
+        const x = Math.ceil(r.left);
         const y = Math.ceil(r.top);
-        const w = Math.max(1, Math.floor(r.right - inset) - x);
+        const w = Math.max(1, Math.floor(r.right) - x);
         const h = Math.max(1, Math.floor(r.bottom) - y);
         const key = `${x},${y},${w},${h}`;
         if (key === lastRectRef.current) return;
@@ -122,11 +111,6 @@ function BrowserViewImpl({
       }),
     [label],
   );
-  // inset 변화(테마 paneStyle 전환)도 재동기화 구동원 — rect key 에 inset 이
-  // 포함돼 동일 rect skip 에 걸리지 않는다.
-  useEffect(() => {
-    syncBounds();
-  }, [paneStyle, syncBounds]);
   // 구동원 3개가 전부다(매 렌더 effect 금지 — memo 경계와 양립 불가):
   //   1) ResizeObserver — 크기 변화(분할/사이드바/창 리사이즈)
   //   2) sessions transient 구독 — 위치만 바뀌는 레이아웃 이동(동일 크기 그룹 간
@@ -150,13 +134,11 @@ function BrowserViewImpl({
     };
   }, [syncBounds]);
 
-  // 표시/숨김: 뷰 활성 여부 + 전역 오버레이 suppress.
-  const effectiveVisible = visible && !suppressed && !bmOpen;
+  // 표시/숨김: 뷰 활성 여부만(탭 전환/최대화의 숨김 슬롯). 오버레이/즐겨찾기는
+  // 숨김 사유가 아니다 — DOM 이 webview 위에 그려진다(레이어 원칙).
   useEffect(() => {
-    invoke("browser_visible", { label, visible: effectiveVisible }).catch(
-      () => {},
-    );
-  }, [label, effectiveVisible]);
+    invoke("browser_visible", { label, visible }).catch(() => {});
+  }, [label, visible]);
 
   // 네비게이션(링크 클릭 포함) → URL 상태 동기화.
   useEffect(() => {
@@ -199,9 +181,6 @@ function BrowserViewImpl({
       return url;
     }
   })();
-
-  // 즐겨찾기 드롭다운: 열린 동안 webview 숨김(네이티브 레이어가 메뉴를 가리므로).
-  useSuppressBrowser(bmOpen);
 
   return (
     <div className="browser-view">

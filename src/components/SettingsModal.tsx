@@ -10,7 +10,7 @@ import {
 } from "../state/settings";
 import { useTheme } from "../state/theme";
 import { ProgramOptions } from "./ProgramOptions";
-import { useSuppressBrowser } from "../state/ui";
+import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useIconRegistry } from "../ui/icons/registry";
 import { useT } from "../i18n";
@@ -54,8 +54,8 @@ function Stepper({
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const t = useT();
-  // 네이티브 브라우저 웹뷰는 항상 DOM 위 — 모달이 떠 있는 동안 숨긴다.
-  useSuppressBrowser();
+  // 오버레이 등록 — 모달이 떠 있는 동안 브라우저 홀의 마우스 통과를 차단한다.
+  useOverlayActive();
   // 전체 구독 예외(원칙 1 의 의도 내): 이 모달은 settings 의 거의 모든 필드를
   // 렌더하고, 열려 있는 동안만 마운트된다(App 의 settingsOpen 게이트).
   const s = useSettings();

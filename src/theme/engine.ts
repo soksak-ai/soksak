@@ -234,6 +234,15 @@ export function colorsForMode(
 
 // ── 적용(슬롯 → CSS 변수/속성) ───────────────────────────────────────────────
 
+// 네이티브 창 배경 = 테마 bg(레이어 원칙, src-tauri/browser.rs 머리말): 루트 DOM
+// 배경은 투명(App.css)이라 미도장 영역의 색을 창 배경이 책임진다 — 테마와 항상
+// 일치해야 한다. Tauri 런타임 밖(테스트 jsdom)에서는 조용히 무시.
+function syncWindowBackground(bg: string): void {
+  void import("@tauri-apps/api/core")
+    .then(({ invoke }) => invoke("window_set_background", { color: bg }))
+    .catch(() => {});
+}
+
 export function applyThemeToDom(theme: ThemeSpec, mode: ThemeMode): ThemeMode {
   const { colors, mode: effective } = colorsForMode(theme, mode);
   const root = document.documentElement;
@@ -241,6 +250,7 @@ export function applyThemeToDom(theme: ThemeSpec, mode: ThemeMode): ThemeMode {
   for (const slot of COLOR_SLOTS) {
     s.setProperty(`--${slot}`, colors[slot]);
   }
+  syncWindowBackground(colors.bg);
   s.setProperty("--glow", theme.effects.glow ?? "none");
   s.setProperty("--scan", String(theme.effects.scanlines));
   s.setProperty("--amb", theme.effects.amb ?? colors.acc);

@@ -108,8 +108,35 @@ rect 를 찍어 형제 박스의 y/h 일치와 여백 대칭을 숫자로 확인
 ## B5. 프레임 예산
 
 프레임은 오버레이이므로 외곽 접변 요소가 그 변의 1px 을 자기 예산으로 지불한다:
-DOM 크롬 밴드는 패딩으로(card/floating), **네이티브 child webview 는 DOM 위에
-그려지므로 bounds inset 으로**(브라우저 패널 좌우 1px).
+DOM 크롬 밴드는 패딩으로(card/floating). 네이티브 child webview 의 1px 예산은
+레이어 원칙(L, 아래)으로 소멸 — DOM 이 webview 위에 그려지므로 프레임 보더는
+항상 보인다. 홀-네이티브 정렬의 정수 스냅(소수 rect 금지)만 유지한다.
+
+---
+
+# L. 레이어 원칙 — DOM 이 항상 최상위다
+
+네이티브 child webview(브라우저 패널)는 OS 뷰 계층에서 메인 webview 의 DOM 과
+z-순서를 다툰다. Tauri 의 기본(add_child = 최상위)을 따르면 모든 DOM 오버레이
+(모달/메뉴/드롭 인디케이터/포커스 표시)가 webview 아래 깔린다 — 과거에는 이를
+"오버레이 동안 브라우저 숨김(suppress)"으로 우회했다. 현재 구조는 역전이다
+(`src-tauri/src/browser.rs` 머리말, mod layer):
+
+1. **z-순서 역전**: child webview 는 생성 직후 메인 webview "아래"로 내린다.
+2. **투명 홀**: 메인 webview 는 자체 배경을 칠하지 않고(drawsBackground=false),
+   루트 CSS 체인은 투명, 표면은 각자 불투명 배경을 소유한다. 브라우저 슬롯
+   (`.bv-area`)만 투명 = 홀 — 아래 webview 가 비친다. 미도장 영역의 색은
+   네이티브 창 배경(`window_set_background`, 테마 엔진이 bg 와 동기)이 칠한다.
+3. **hitTest 위임**: 홀 안 마우스는 네이티브 hitTest 가 아래 webview 로 위임
+   한다. 홀의 단일 진실 = "보이는 child webview 의 frame" 그 자체(레지스트리
+   없음). 오버레이가 떠 있는 동안(`useOverlayActive` 카운터)은 위임을 차단해
+   "바깥 클릭=닫기"가 성립한다 — 브라우저는 보이되 비활성(모달의 본래 의미).
+
+따름정리: ① 모든 DOM 레이어는 브라우저 위에 그려진다 — 숨김(suppress) 금지.
+② 루트/조상 체인에 불투명 배경을 되돌리면 홀이 막힌다(App.css 머리말). ③ 활성
+뷰가 브라우저인 셀은 본문 영역에 배경을 칠하지 않는다(`.cell-hole`). ④ 네이티브
+클래스 정체성은 절대 바꾸지 않는다 — isa-swizzle 은 AppKit design-property
+조회(NSDP)에서 SIGABRT(실측: select 팝업 크래시). 메서드 스위즐만 허용.
 
 ## B6. 경계 도구는 선을 소유하지 않는다
 

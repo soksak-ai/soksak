@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import type { Program } from "../state/sessions";
 import { useProgramRegistry } from "../plugins/programRegistry";
 import { programPathSegments } from "../plugins/spec";
-import { useSuppressBrowser } from "../state/ui";
+import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { localize, useT } from "../i18n";
 
@@ -90,7 +90,7 @@ export function ProgramMenu({
   onClose: () => void;
 }) {
   const t = useT();
-  useSuppressBrowser();
+  useOverlayActive();
   const menuRef = useRef<HTMLDivElement>(null);
   // 등록/해제 신호 구독 — 플러그인 활성 전환이 열린 메뉴에도 반영된다.
   useProgramRegistry((s) => s.version);

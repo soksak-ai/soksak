@@ -163,8 +163,8 @@ export const GroupArea = memo(function GroupArea({
   const moveGroupToGroup = useSessions((s) => s.moveGroupToGroup);
   const resizeSplit = useSessions((s) => s.resizeSplit);
   const splitWithNewView = useSessions((s) => s.splitWithNewView);
-  const suppressBrowser = useUi((s) => s.suppressBrowser);
-  const releaseBrowser = useUi((s) => s.releaseBrowser);
+  const pushOverlay = useUi((s) => s.pushOverlay);
+  const popOverlay = useUi((s) => s.popOverlay);
   // 플러그인 뷰(콘텐츠 배치) 호스트에 넘길 프로젝트 루트.
   const projectRoot = useSessions(
     (s) => s.tabs.find((x) => x.id === projectId)?.root ?? null,
@@ -290,8 +290,8 @@ export const GroupArea = memo(function GroupArea({
           moved = true;
           rect = containerRef.current?.getBoundingClientRect() ?? null;
           setDrag({ kind, id });
-          // 드롭 인디케이터는 DOM — 네이티브 브라우저 webview 에 가리므로 잠시 숨김.
-          suppressBrowser();
+          // 드래그 = 오버레이(드롭 인디케이터가 브라우저 홀 위에도 그려진다).
+          pushOverlay();
           document.body.style.userSelect = "none";
           document.body.style.cursor = "grabbing";
         }
@@ -304,7 +304,7 @@ export const GroupArea = memo(function GroupArea({
         document.body.style.userSelect = "";
         document.body.style.cursor = "";
         if (moved) {
-          releaseBrowser();
+          popOverlay();
           const target = rect
             ? hitTest(ev.clientX, ev.clientY, rect, sourceGroupId, selfCenterOnly)
             : null;
@@ -339,8 +339,8 @@ export const GroupArea = memo(function GroupArea({
       setActiveView,
       setActiveGroup,
       focusGroupPane,
-      suppressBrowser,
-      releaseBrowser,
+      pushOverlay,
+      popOverlay,
     ],
   );
 
@@ -436,10 +436,14 @@ export const GroupArea = memo(function GroupArea({
       {displayCells.map(({ group, rect }) => {
         const isActiveGroup = group.id === content.activeGroupId;
         const active = group.views.find((v) => v.id === group.activeViewId);
+        // 홀 셀(레이어 원칙): 활성 뷰가 브라우저면 본문 영역에 배경을 칠하면
+        // 안 된다 — 아래 child webview 가 비쳐야 한다. CSS 가 헤더/상태바
+        // 밴드만 칠하도록 클래스로 표시(card/floating 스타일에서 소비).
+        const holeCell = active?.kind === "browser";
         return (
           <div
             key={`cell-${group.id}`}
-            className="egroup-cell"
+            className={`egroup-cell${holeCell ? " cell-hole" : ""}`}
             style={cellVars(rect)}
           >
             {maxCell ? (

@@ -32,6 +32,22 @@ fn window_activate(window: tauri::WebviewWindow) {
     let _ = window;
 }
 
+// 네이티브 창 배경 = 테마 bg 단일화(레이어 원칙, browser.rs 머리말 참조): 루트
+// DOM 배경은 투명이고 창 배경이 그 아래를 칠한다 — 미도장 영역(홀 정렬 순간 등)
+// 의 색이 테마와 항상 일치한다. 테마 엔진(theme/engine.ts)이 적용 시점마다 호출.
+#[tauri::command]
+fn window_set_background(window: tauri::Window, color: String) -> Result<(), String> {
+    let hex = color.trim().trim_start_matches('#');
+    if hex.len() != 6 {
+        return Err(format!("hex 색상(#rrggbb)이 아님: {color}"));
+    }
+    let parse = |s: &str| u8::from_str_radix(s, 16).map_err(|e| e.to_string());
+    let (r, g, b) = (parse(&hex[0..2])?, parse(&hex[2..4])?, parse(&hex[4..6])?);
+    window
+        .set_background_color(Some(tauri::window::Color(r, g, b, 255)))
+        .map_err(|e| e.to_string())
+}
+
 // IME 진단: dev(debug) 빌드에서만 로깅. 릴리즈 빌드에서는 no-op.
 #[tauri::command]
 fn ime_debug(message: String) {
@@ -74,6 +90,8 @@ pub fn run() {
                 }
                 // 네이티브 webview 클릭의 포커스 추적(browser.rs 참조).
                 browser::install_click_monitor(app.handle());
+                // 레이어 역전: DOM(메인 webview)이 항상 최상위(browser.rs 머리말).
+                browser::install_layer_inversion(app.handle());
             }
             Ok(())
         })
@@ -115,6 +133,9 @@ pub fn run() {
             browser::browser_list,
             browser::browser_open_window,
             browser::browser_eval,
+            browser::browser_overlay_active,
+            browser::browser_debug_hierarchy,
+            window_set_background,
             ipc::cmd_result,
             titlebar::titlebar_backing,
             ime_debug,

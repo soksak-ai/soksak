@@ -2,7 +2,7 @@ import { ProgramOptions } from "./ProgramOptions";
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useSessions, type Program } from "../state/sessions";
-import { useSuppressBrowser } from "../state/ui";
+import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 import { useDraggableModal } from "./modalDrag";
@@ -28,8 +28,8 @@ type FolderMode = "auto" | "manual";
 
 export function NewProjectModal({ onClose }: { onClose: () => void }) {
   const t = useT();
-  // 네이티브 브라우저 웹뷰는 항상 DOM 위 — 모달이 떠 있는 동안 숨긴다.
-  useSuppressBrowser();
+  // 오버레이 등록 — 모달이 떠 있는 동안 브라우저 홀의 마우스 통과를 차단한다.
+  useOverlayActive();
   const addProject = useSessions((s) => s.addProject);
   const [mode, setMode] = useState<FolderMode>("auto");
   const [name, setName] = useState(""); // auto=폴더명(슬러그) / manual=별칭(자유)

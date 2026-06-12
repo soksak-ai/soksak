@@ -50,6 +50,11 @@
   display: none;
 }
 
+/* 레이어 원칙(src-tauri/browser.rs 머리말): 메인 webview 는 자체 배경을 칠하지
+   않고(drawsBackground=false) 브라우저 child webview 가 그 "아래"에 있다. 루트
+   체인은 투명 — 표면은 각자 불투명 배경을 소유하고, 미도장 영역은 네이티브 창
+   배경(= 테마 bg, 테마 엔진이 window_set_background 로 동기화)이 칠한다.
+   여기에 불투명 배경을 되돌리면 브라우저 슬롯(홀)이 막힌다. */
 html,
 body,
 #root {
@@ -58,7 +63,7 @@ body,
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg);
+  background: transparent;
   /* 앱 UI 폰트 = 설정의 글꼴(--app-font). 미설정 시 기본 모노 스택. */
   font-family: var(
     --app-font,
@@ -73,7 +78,8 @@ body,
 .app-root {
   width: 100vw;
   height: 100vh;
-  background: var(--bg);
+  /* 투명(레이어 원칙) — 색은 네이티브 창 배경이 동일 테마 bg 로 칠한다. */
+  background: transparent;
   display: flex;
   flex-direction: column;
   /* 앱 크롬은 선택 불가(editor 동일) — 드래그 제스처(디바이더/탭/사이드바)가
@@ -944,13 +950,15 @@ body,
   background: rgba(127, 127, 127, 0.16);
 }
 
-/* ── 브라우저 패널(child webview + URL 바 + 즐겨찾기) ── */
+/* ── 브라우저 패널(child webview + URL 바 + 즐겨찾기) ──
+   컨테이너는 투명(레이어 원칙) — .bv-area 가 홀이라 아래 webview 가 비친다.
+   URL 바/즐겨찾기는 각자 불투명 배경을 소유한다. */
 .browser-view {
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: var(--bg);
+  background: transparent;
   color: var(--fg);
 }
 .bv-bar {
@@ -959,6 +967,7 @@ body,
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
+  background: var(--bg);
   border-bottom: 1px solid var(--bd-soft);
   -webkit-user-select: none;
   user-select: none;
@@ -999,11 +1008,12 @@ body,
 .bv-url:focus {
   border-color: var(--acc);
 }
-/* 즐겨찾기 목록(열린 동안 webview 는 숨겨짐). */
+/* 즐겨찾기 목록 — flex 형제라 열리면 webview 본문(.bv-area)이 그만큼 줄어든다. */
 .bv-bm-list {
   flex: 0 0 auto;
   max-height: 50%;
   overflow-y: auto;
+  background: var(--bg);
   border-bottom: 1px solid var(--bd-soft);
   padding: 4px;
 }
@@ -1034,9 +1044,12 @@ body,
   font-size: 12px;
   opacity: 0.6;
 }
+/* 홀: 이 영역만 투명해 "아래" child webview 가 비친다(레이어 원칙). 조상 체인
+   (html/#root/.app-root/슬롯)도 이 영역에서 배경을 칠하지 않아야 한다. */
 .bv-area {
   flex: 1 1 auto;
   min-height: 0;
+  background: transparent;
 }
 
 /* 파일 뷰어. */
@@ -1657,6 +1670,17 @@ body,
   border-radius: 11px;
   overflow: hidden;
 }
+/* 홀 셀(레이어 원칙, browser.rs 머리말): 활성 뷰가 브라우저면 본문 영역이 홀 —
+   카드 배경을 헤더/상태바 밴드로만 칠한다(중간은 투명, bv-bar 는 자체 배경).
+   라운드 모서리는 overflow:hidden 이 밴드를 그대로 클립한다. */
+:root[data-pane-style="card"] .egroup-cell.cell-hole,
+:root[data-pane-style="floating"] .egroup-cell.cell-hole {
+  background:
+    linear-gradient(var(--card), var(--card)) top / 100% var(--header-h)
+      no-repeat,
+    linear-gradient(var(--card), var(--card)) bottom / 100% var(--status-h)
+      no-repeat;
+}
 :root[data-pane-style="floating"] .egroup-cell {
   border-radius: 14px;
   box-shadow: var(--shadow);
@@ -1785,6 +1809,11 @@ body,
 :root[data-pane-style="floating"] .egroup-body-slot {
   background: var(--bg);
   border: none;
+}
+/* 브라우저 슬롯은 홀(레이어 원칙) — 어떤 pane 스타일에서도 배경을 칠하지 않는다. */
+:root[data-pane-style="card"] .egroup-body-slot:has(.browser-view),
+:root[data-pane-style="floating"] .egroup-body-slot:has(.browser-view) {
+  background: transparent;
 }
 :root[data-pane-style="card"] .egroup-tabs .view-tabs-wrap,
 :root[data-pane-style="floating"] .egroup-tabs .view-tabs-wrap {

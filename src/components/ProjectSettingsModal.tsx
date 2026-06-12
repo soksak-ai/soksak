@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { isComposingEnter } from "../lib/imeKeys";
 import { useSessions, type Program } from "../state/sessions";
 import { useSettings } from "../state/settings";
-import { useSuppressBrowser } from "../state/ui";
+import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 import { useDraggableModal } from "./modalDrag";
@@ -32,8 +32,8 @@ export function ProjectSettingsModal({
   onClose: () => void;
 }) {
   const t = useT();
-  // 네이티브 브라우저 웹뷰는 항상 DOM 위 — 모달이 떠 있는 동안 숨긴다.
-  useSuppressBrowser();
+  // 오버레이 등록 — 모달이 떠 있는 동안 브라우저 홀의 마우스 통과를 차단한다.
+  useOverlayActive();
   const project = useSessions((s) => s.tabs.find((x) => x.id === projectId));
   const updateProject = useSessions((s) => s.updateProject);
   const setProjectColor = useSessions((s) => s.setProjectColor);

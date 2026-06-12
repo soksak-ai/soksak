@@ -2,6 +2,13 @@
 // X-Frame-Options 제약 없이 실제 브라우저). 링크 클릭은 webview 기본 동작이고,
 // 이전/이후는 history.back()/forward() eval, URL 변화는 on_navigation 으로 프론트에
 // emit(폴링 없음). 위치/크기는 프론트 레이아웃(slot rect)을 따라 browser_bounds 로 동기화.
+//
+// 레이어 원칙(z-순서 역전 + 투명 홀 + hitTest 위임 — mod layer):
+// DOM(메인 webview)이 항상 최상위 레이어다. child webview 는 생성 직후 메인 아래로
+// 내리고, 메인은 자체 배경을 칠하지 않아(CSS 투명 슬롯 = 홀) 아래 webview 가 비친다.
+// 마우스는 hitTest 가 위임한다 — 홀 안 + 오버레이 없음이면 아래 webview 가 받는다.
+// 그래서 모달/메뉴/드롭 인디케이터 등 모든 DOM 레이어가 브라우저 위에 그려진다
+// (과거의 "오버레이 동안 브라우저 숨김(suppress)" 우회는 폐지).
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -44,6 +51,226 @@ fn emit_page_title<R: tauri::Runtime>(webview: &tauri::Webview<R>, label: &str) 
 
 #[cfg(not(target_os = "macos"))]
 fn emit_page_title<R: tauri::Runtime>(_webview: &tauri::Webview<R>, _label: &str) {}
+
+// ── 레이어 정공법(macOS): z-순서 역전 + 투명 홀 + hitTest 위임 ────────────────
+// Tauri 에는 webview z-order API 가 없으므로(docs.rs 실측) AppKit 수준에서 직접
+// 수행한다 — browser.rs 의 기존 objc2 직접 호출(타이틀 KVO/eval/클릭 모니터)과
+// 같은 층위. 홀의 단일 진실 = "보이는 child webview 의 frame" 그 자체라서 별도
+// rect 레지스트리가 없다(set_position/set_size/hide 가 곧 홀 갱신).
+#[cfg(target_os = "macos")]
+mod layer {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    use objc2::msg_send;
+    use objc2::rc::Retained;
+    use objc2::runtime::{AnyObject, Sel};
+    use objc2::sel;
+    use objc2_app_kit::{NSView, NSWindowOrderingMode};
+    use objc2_foundation::{NSNumber, NSPoint, NSString};
+    use tauri::Manager;
+
+    // 오버레이(모달/메뉴 등 DOM 레이어)가 떠 있는 동안 true — 홀 마우스 통과를
+    // 차단해 "바깥 클릭=닫기"가 성립한다(브라우저는 보이되 비활성).
+    pub static OVERLAY_ACTIVE: AtomicBool = AtomicBool::new(false);
+    // 메인 webview 의 NSView 포인터. install 1회 저장, 메인 webview 는 앱 수명
+    // 동안 파괴되지 않으므로 불변.
+    static MAIN_VIEW: AtomicUsize = AtomicUsize::new(0);
+    // 교체 전 원본 hitTest IMP(클래스 메서드 스위즐의 폴백 경로).
+    static ORIG_HIT_TEST: AtomicUsize = AtomicUsize::new(0);
+
+    type HitTestFn = unsafe extern "C-unwind" fn(*mut AnyObject, Sel, NSPoint) -> *mut AnyObject;
+
+    // hitTest: 교체 구현. 클래스(WryWebView) 단위 스위즐이므로 모든 webview 가
+    // 거치지만 메인 뷰만 홀 로직을 탄다 — isa-swizzle(인스턴스 클래스 교체)은
+    // AppKit 의 클래스 기반 design-property 조회(NSDP)가 런타임 서브클래스에서
+    // assert 로 SIGABRT 를 내므로 금지(실측: <select> 팝업 attachPopUpWithFrame
+    // 경로 크래시). 클래스 정체성은 절대 바꾸지 않는다.
+    //
+    // AppKit 은 부모가 서브뷰를 앞→뒤로 hitTest 하고 첫 비-nil 이 이긴다 —
+    // 메인(최상위)이 nil 을 돌려주면 같은 지점의 아래 child webview 가 자연히
+    // 수신한다. point 는 superview 좌표계(형제 frame 과 동일 공간)이므로 변환
+    // 없이 비교한다. 메인 스레드에서만 호출된다(AppKit).
+    unsafe extern "C-unwind" fn hit_test(
+        this: *mut AnyObject,
+        cmd: Sel,
+        point: NSPoint,
+    ) -> *mut AnyObject {
+        let orig: HitTestFn = std::mem::transmute(ORIG_HIT_TEST.load(Ordering::Relaxed));
+        let default = orig(this, cmd, point);
+        if this as usize != MAIN_VIEW.load(Ordering::Relaxed) {
+            return default; // child/팝업 webview — 원본 동작 그대로.
+        }
+        if default.is_null() || OVERLAY_ACTIVE.load(Ordering::Relaxed) {
+            return default;
+        }
+        let view = &*(this as *const NSView);
+        let Some(superview) = view.superview() else {
+            return default;
+        };
+        for sub in superview.subviews().iter() {
+            if Retained::as_ptr(&sub) as *mut AnyObject == this || sub.isHidden() {
+                continue;
+            }
+            // 형제 중 webview(WKWebView 계열)만 홀이다 — 그 외 장식 뷰는 무시.
+            if !sub.class().name().to_string_lossy().contains("WebView") {
+                continue;
+            }
+            let f = sub.frame();
+            if point.x >= f.origin.x
+                && point.x < f.origin.x + f.size.width
+                && point.y >= f.origin.y
+                && point.y < f.origin.y + f.size.height
+            {
+                return std::ptr::null_mut();
+            }
+        }
+        default
+    }
+
+    // 메인 webview 에 1회 설치: ① 자체 배경 비활성(KVC drawsBackground=false —
+    // wry 의 transparent 경로와 동일 기법; CSS 불투명 표면은 그대로 그려지고
+    // 투명 슬롯만 아래가 비친다) ② hitTest 메서드 스위즐(클래스 단위, 위 주석).
+    pub fn install(app: &tauri::AppHandle) {
+        let Some(wv) = app.get_webview("main") else {
+            eprintln!("[layer] main webview 없음 — 레이어 역전 미설치");
+            return;
+        };
+        let _ = wv.with_webview(|pw| unsafe {
+            let obj = pw.inner() as *mut AnyObject;
+            MAIN_VIEW.store(obj as usize, Ordering::Relaxed);
+
+            let no = NSNumber::new_bool(false);
+            let key = NSString::from_str("drawsBackground");
+            let _: () = msg_send![&*obj, setValue: Some(&*no as &AnyObject), forKey: &*key];
+
+            // hitTest 스위즐 — 원본 IMP 를 보관하고 같은 타입 인코딩으로 교체.
+            // (인스턴스가 hitTest 를 직접 구현하지 않았으면 상속분이 원본이 된다.)
+            let cls = (*obj).class();
+            let sel = sel!(hitTest:);
+            let Some(method) = cls.instance_method(sel) else {
+                eprintln!("[layer] hitTest 메서드 없음 — 홀 위임 미설치");
+                return;
+            };
+            ORIG_HIT_TEST.store(method.implementation() as usize, Ordering::Relaxed);
+            objc2::ffi::class_replaceMethod(
+                (cls as *const objc2::runtime::AnyClass).cast_mut(),
+                sel,
+                std::mem::transmute::<HitTestFn, objc2::runtime::Imp>(hit_test),
+                objc2::ffi::method_getTypeEncoding(method as *const objc2::runtime::Method),
+            );
+        });
+    }
+
+    // child webview 를 메인(DOM) 아래로 강하. add_child 는 최상위에 붙이므로
+    // 생성 직후 1회 호출한다. 기존 서브뷰에 addSubview:positioned:relativeTo: 를
+    // 호출하면 제거 후 재삽입(AppKit 표준 동작)으로 순서만 바뀐다.
+    pub fn lower_below_main<R: tauri::Runtime>(webview: &tauri::Webview<R>) {
+        let _ = webview.with_webview(|pw| unsafe {
+            let main_ptr = MAIN_VIEW.load(Ordering::Relaxed);
+            if main_ptr == 0 {
+                return;
+            }
+            let child = &*(pw.inner() as *const NSView);
+            let main_view = &*(main_ptr as *const NSView);
+            let (Some(child_sv), Some(main_sv)) = (child.superview(), main_view.superview())
+            else {
+                return;
+            };
+            // 형제가 아니면(계층 가정 위반) 건드리지 않는다 — 진단만 남김.
+            if Retained::as_ptr(&child_sv) != Retained::as_ptr(&main_sv) {
+                eprintln!("[layer] child 와 main 이 형제가 아님 — z-순서 강하 생략");
+                return;
+            }
+            child_sv.addSubview_positioned_relativeTo(
+                child,
+                NSWindowOrderingMode::Below,
+                Some(main_view),
+            );
+        });
+    }
+
+    // 실측 프로브: contentView 서브뷰 트리 덤프(클래스/frame/hidden) — 계층
+    // 가정(형제 구조·순서)의 검증·진단용.
+    pub fn dump_view(view: &NSView, depth: usize, out: &mut String) {
+        let f = view.frame();
+        let _ = std::fmt::Write::write_fmt(
+            out,
+            format_args!(
+                "{}{} frame=({}, {}, {}, {}) hidden={} ptr={:p}\n",
+                "  ".repeat(depth),
+                view.class().name().to_string_lossy(),
+                f.origin.x,
+                f.origin.y,
+                f.size.width,
+                f.size.height,
+                view.isHidden(),
+                view as *const NSView,
+            ),
+        );
+        if depth >= 3 {
+            return;
+        }
+        for sub in view.subviews().iter() {
+            dump_view(&sub, depth + 1, out);
+        }
+    }
+}
+
+// 오버레이(모달/메뉴/드롭다운) 상태 동기화 — 프론트 ui 스토어 카운터가 0↔1 을
+// 넘을 때 호출한다. true 면 홀 마우스 통과 차단(hitTest 가 DOM 에 우선권).
+#[tauri::command]
+pub fn browser_overlay_active(active: bool) {
+    #[cfg(target_os = "macos")]
+    layer::OVERLAY_ACTIVE.store(active, Ordering::Relaxed);
+    #[cfg(not(target_os = "macos"))]
+    let _ = active;
+}
+
+// 실측 프로브: 메인 창 뷰 계층 덤프(레이어 가정 검증·진단용).
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub async fn browser_debug_hierarchy(app: AppHandle) -> Result<String, String> {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let window = app.get_window("main").ok_or("main window 없음")?;
+    let (tx, rx) = mpsc::sync_channel::<String>(1);
+    let win = window.clone();
+    window
+        .run_on_main_thread(move || {
+            let mut out = String::new();
+            unsafe {
+                if let Ok(ns) = win.ns_window() {
+                    let win_obj = &*(ns as *const objc2::runtime::AnyObject);
+                    let content: *mut objc2_app_kit::NSView =
+                        objc2::msg_send![win_obj, contentView];
+                    if !content.is_null() {
+                        layer::dump_view(&*content, 0, &mut out);
+                    }
+                }
+            }
+            let _ = tx.try_send(out);
+        })
+        .map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        rx.recv_timeout(Duration::from_secs(3))
+            .map_err(|_| "계층 덤프 시간 초과".to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub async fn browser_debug_hierarchy(_app: AppHandle) -> Result<String, String> {
+    Err("browser_debug_hierarchy 는 현재 macOS 전용".into())
+}
+
+// 메인 webview 레이어 설치(setup 에서 1회) — lib.rs 가 호출.
+#[cfg(target_os = "macos")]
+pub fn install_layer_inversion(app: &AppHandle) {
+    layer::install(app);
+}
 
 static POPUP_SEQ: AtomicUsize = AtomicUsize::new(1);
 const POPUP_MARKER_HOST: &str = "soksak-popup.invalid";
@@ -143,13 +370,18 @@ pub fn browser_open(
                 emit_page_title(&webview, webview.label());
             }
         });
-    window
+    let webview = window
         .add_child(
             builder,
             LogicalPosition::new(x, y),
             LogicalSize::new(w, h),
         )
         .map_err(|e| e.to_string())?;
+    // 레이어 원칙: child 는 DOM(메인 webview) 아래 — 생성 직후 z-순서 강하.
+    #[cfg(target_os = "macos")]
+    layer::lower_below_main(&webview);
+    #[cfg(not(target_os = "macos"))]
+    let _ = webview;
     Ok(())
 }
 
