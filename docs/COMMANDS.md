@@ -303,7 +303,7 @@ sok content.close '{"content":"c2"}'
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `program` | string |  | 프로그램 (terminal|claude|codex|browser) |
+| `program` | string |  | 프로그램 id — 플러그인 등록분(program.list 참조, 내장 없음). 미등록 id 는 터미널 뷰 폴백 |
 | `project` | string |  | 대상 프로젝트 id(생략=호출 컨텍스트의 프로젝트) |
 
 **반환**: { contentId, groupId, viewId, paneId? }
@@ -610,6 +610,24 @@ sok pane.split '{"dir":"row"}'
 sok panel.close '{"group":"g2"}'
 ```
 
+## `panel.equalize`
+
+분할 균등화 — index 지정 시 그 분할선의 인접 두 영역을 반반(분할선 더블클릭과 동일), 생략 시 전체 자식을 1/n 균등
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `index` | number |  | 분할선 번호(0=첫 경계). 생략=전체 균등 |
+| `project` | string |  | 대상 프로젝트 id(생략=호출 컨텍스트의 프로젝트) |
+| `split` | string | ✓ | 분할 노드 id(예: s1) |
+
+**반환**: { sizes }
+**에러**: TARGET_NOT_FOUND, INVALID_PARAMS
+
+```bash
+sok panel.equalize '{"split":"s1"}'
+sok panel.equalize '{"split":"s1","index":0}'
+```
+
 ## `panel.focus`
 
 패널 활성화(포커스)
@@ -700,7 +718,7 @@ sok panel.resize '{"split":"s1","sizes":[0.7,0.3]}'
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `group` | string |  | 대상 패널(그룹) id(생략=호출 컨텍스트의 패널) |
-| `program` | string |  | 프로그램 (terminal|claude|codex|browser) [기본 "terminal"] |
+| `program` | string |  | 프로그램 id — 플러그인 등록분(program.list 참조, 내장 없음). 미등록 id 는 터미널 뷰 폴백 [기본 "terminal"] |
 | `project` | string |  | 대상 프로젝트 id(생략=호출 컨텍스트의 프로젝트) |
 | `side` | string | ✓ | 분할 방향 (left|right|top|bottom) |
 
@@ -858,6 +876,16 @@ sok plugin.view.open '{"view":"soksak-memo.panel"}'
 sok plugin.view.open '{"view":"soksak-git-diff.view","placement":"content"}'
 ```
 
+## `program.list`
+
+사용 가능한 프로그램 목록(새 탭 + 메뉴와 동일) — 내장 없음, 전부 플러그인 등록분. path 는 메뉴 카테고리 경로
+
+**반환**: { programs: [{ id, title, path?, kind, pluginId }] }
+
+```bash
+sok program.list
+```
+
 ## `project.activate`
 
 프로젝트 전환
@@ -911,7 +939,7 @@ sok project.color '{"project":"t1","color":"#4a8fe8"}'
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `alias` | string |  | 탭 별칭(생략=폴더명) |
-| `program` | string |  | 첫 화면(생략=전역 설정) (terminal|claude|codex|browser) |
+| `program` | string |  | 첫 화면(생략=전역 설정) |
 | `root` | string |  | 프로젝트 루트 디렉토리(절대경로) |
 | `shell` | string |  | 터미널 셸 경로(생략=전역 설정→$SHELL) |
 
@@ -986,7 +1014,7 @@ sok project.sidebar.toggle
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `color` | string |  | 식별 색("" = 제거) |
-| `program` | string |  | 첫 화면("" = 전역 설정 따름) (terminal|claude|codex|browser|) |
+| `program` | string |  | 첫 화면 프로그램 id("" = 전역 설정 따름) |
 | `project` | string | ✓ | 대상 프로젝트 id(생략=호출 컨텍스트의 프로젝트) |
 | `shell` | string |  | 터미널 셸 경로("" = 기본) |
 | `title` | string |  | 별칭(빈 문자열은 무시) |
@@ -1002,7 +1030,7 @@ sok project.update '{"project":"t1","title":"백엔드","program":"claude"}'
 
 앱 설정 전체 조회
 
-**반환**: { language, projectTabPosition, defaultProgram, shell, homeUrl, fontFamily, fontSize, cursorBlink, cursorStyle, scrollback, resizeReflow, iconSet, iconBox, bg }
+**반환**: { language, projectTabPosition, defaultProgram, shell, homeUrl, fontFamily, fontSize, cursorBlink, cursorStyle, scrollback, resizeReflow, iconSet, iconBox, focusIndicator, bg }
 
 ```bash
 sok settings.get
@@ -1010,12 +1038,12 @@ sok settings.get
 
 ## `settings.set`
 
-설정 변경. key: language|projectTabPosition|defaultProgram|shell|homeUrl|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback|resizeReflow|iconSet|iconBox
+설정 변경. key: language|projectTabPosition|defaultProgram|shell|homeUrl|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback|resizeReflow|iconSet|iconBox|focusIndicator
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `key` | string | ✓ | 설정 키 (language|projectTabPosition|defaultProgram|shell|homeUrl|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback|resizeReflow|iconSet|iconBox) |
-| `value` | json | ✓ | 값 — language:ko|en, projectTabPosition:top|left, defaultProgram:terminal|claude|codex|browser, fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, iconSet:string(등록 셋 id — 미등록이면 lucide 폴백 렌더), iconBox:boolean |
+| `key` | string | ✓ | 설정 키 (language|projectTabPosition|defaultProgram|shell|homeUrl|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback|resizeReflow|iconSet|iconBox|focusIndicator) |
+| `value` | json | ✓ | 값 — language:ko|en, projectTabPosition:top|left, defaultProgram:string(프로그램 id — program.list 참조, 미등록이면 터미널 폴백), fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, iconSet:string(등록 셋 id — 미등록이면 lucide 폴백 렌더), iconBox:boolean, focusIndicator:outline|corners |
 
 **반환**: { key, value }
 **에러**: INVALID_PARAMS
@@ -1177,6 +1205,46 @@ sok theme.list
 sok theme.reload
 ```
 
+## `ui.expect`
+
+지정 DOM 에 어느 변의 어떤 보더가 있어야 하는지 계약 기준으로 알려준다(규칙 없음도 답 — 필요하면 계약 테이블에 추가가 정도)
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `selector` | string | ✓ | CSS 셀렉터 |
+
+**반환**: { matchedElements, rules: [{id, active, kind, edges?, seam?, note}] }
+
+```bash
+sok ui.expect '{"selector":".egroup-status"}'
+```
+
+## `ui.measure`
+
+앱 DOM 측정(레이아웃 진단) — selector 매칭 요소들의 rect 와 핵심 computed style. 픽셀 정렬 검증용
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `limit` | number |  | 최대 개수(기본 5) |
+| `selector` | string | ✓ | CSS 셀렉터 |
+
+**반환**: { count, items: [{ rect, style }] }
+
+## `ui.validate`
+
+보더 소유권 계약(docs/UI.md §B) 검증 — 살아있는 DOM 의 4변 computed border 를 계약 테이블과 대조해 위반을 적발
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `rule` | string |  | 규칙 id/셀렉터 부분 일치 필터(생략 시 전체) |
+
+**반환**: { pass, rulesActive, elementsChecked, violations: [{rule, selector, index, edge, expected, actual}] }
+
+```bash
+sok ui.validate
+sok ui.validate '{"rule":"status"}'
+```
+
 ## `view.activate`
 
 뷰(탭) 활성화
@@ -1222,6 +1290,22 @@ sok view.close '{"view":"v3"}'
 sok view.list
 ```
 
+## `view.maximize`
+
+뷰(탭) 최대화 — 컨텐츠 영역 전체 차지(분할 트리 보존, 표시만 전환). 탭 더블클릭과 동일. view 생략=활성 뷰
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `view` | string |  | 대상 뷰 id(생략=호출 컨텍스트의 뷰) |
+
+**반환**: { viewId }
+**에러**: TARGET_NOT_FOUND
+
+```bash
+sok view.maximize '{"view":"v3"}'
+sok view.maximize
+```
+
 ## `view.move`
 
 뷰(탭)를 dst 패널의 zone 위치로(center=이동, 그 외=분할해 새 패널)
@@ -1246,7 +1330,7 @@ sok view.move '{"view":"v3","dst":"g1","zone":"right"}'
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `group` | string |  | 대상 패널(그룹) id(생략=호출 컨텍스트의 패널) |
-| `program` | string | ✓ | 프로그램 (terminal|claude|codex|browser) |
+| `program` | string | ✓ | 프로그램 id — 플러그인 등록분(program.list 참조, 내장 없음). 미등록 id 는 터미널 뷰 폴백 |
 | `url` | string |  | 브라우저 시작 URL(program=browser) |
 
 **반환**: { groupId, viewId, paneId? }
@@ -1255,5 +1339,54 @@ sok view.move '{"view":"v3","dst":"g1","zone":"right"}'
 ```bash
 sok view.open '{"program":"claude"}'
 sok view.open '{"program":"browser","url":"https://example.com"}'
+```
+
+## `view.restore`
+
+뷰 최대화 해제 — 원래 분할 레이아웃으로 복원(활성 컨텐츠)
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `project` | string |  | 대상 프로젝트 id(생략=호출 컨텍스트의 프로젝트) |
+
+**반환**: { viewId(해제된 뷰 | null=최대화 없었음) }
+
+```bash
+sok view.restore
+```
+
+## `window.focus`
+
+앱 창을 전면으로 가져와 포커스(자동화·검증 시 비활성 상태 해제)
+
+**반환**: { focused: true }
+
+```bash
+sok window.focus
+```
+
+## `window.info`
+
+창 화면 좌표/크기/배율(자동화 검증용 — outerPosition 은 물리 픽셀)
+
+**반환**: { x, y, w, h, scale }
+
+```bash
+sok window.info
+```
+
+## `window.move`
+
+창을 화면 좌표(물리 픽셀)로 이동(자동화·다중 모니터 검증용)
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `x` | number | ✓ | 물리 x |
+| `y` | number | ✓ | 물리 y |
+
+**반환**: { x, y }
+
+```bash
+sok window.move '{"x":0,"y":0}'
 ```
 
