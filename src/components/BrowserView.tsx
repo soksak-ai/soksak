@@ -107,16 +107,18 @@ function BrowserViewImpl({
         if (!el || !openedRef.current) return;
         const r = el.getBoundingClientRect();
         const inset = frameInsetRef.current;
-        const key = `${r.left},${r.top},${r.width},${r.height},${inset}`;
+        // §B5 + 정수 스냅: rect 가 소수(예: x 819.5, w 577.5)면 네이티브 측
+        // 반올림이 우측 1px 을 도로 먹어 프레임 보더를 덮는다(캡처 실측으로
+        // 확인된 사고). ceil/floor 보수 스냅으로 webview 가 보더 예산을 절대
+        // 침범하지 못하게 한다.
+        const x = Math.ceil(r.left + inset);
+        const y = Math.ceil(r.top);
+        const w = Math.max(1, Math.floor(r.right - inset) - x);
+        const h = Math.max(1, Math.floor(r.bottom) - y);
+        const key = `${x},${y},${w},${h}`;
         if (key === lastRectRef.current) return;
         lastRectRef.current = key;
-        invoke("browser_bounds", {
-          label,
-          x: r.left + inset,
-          y: r.top,
-          w: Math.max(1, r.width - inset * 2),
-          h: Math.max(1, r.height),
-        }).catch(() => {});
+        invoke("browser_bounds", { label, x, y, w, h }).catch(() => {});
       }),
     [label],
   );

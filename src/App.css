@@ -1668,36 +1668,67 @@ body,
   outline-offset: -1px;
 }
 :root[data-focus-ind="corners"] .egroup-frame.focus {
-  --fk-len: 12px; /* 꺽쇠 팔 길이 */
-  --fk-th: 2px; /* 꺽쇠 두께 */
-  --fk-in: 2px; /* 모서리 인셋 */
+  --fk-len: 14px; /* 꺽쇠 팔 길이 */
+  --fk-th: 1px; /* 꺽쇠 두께 = 경계선 폭(같은 레인) */
+  /* 꺽쇠는 본문(헤더/스테이터스 사이) 네 모서리 — 기존 1px 경계선 레인(헤더
+     bottom 선·스테이터스 top 선·프레임 좌우 보더) 위에 정확히 얹는다(사용자
+     결정). 경계선 레인은 네이티브 webview(본문 슬롯, §B5 inset) 밖이라 어떤
+     패널에서도 가려질 수 없다 — 본문 쪽으로 두께를 키우면 webview 가 절반을
+     덮어 빈약해진다(픽셀 실측). */
+  --fk-top: calc(var(--header-h) - 1px);
+  --fk-bot: calc(var(--status-h) - 1px);
+  /* 가로팔 4개만 본체 배경이 담당. position 기준을 border-box 로 고정 —
+     기본 padding-box 는 프레임 보더(1px)만큼 본문 레인(webview 가림)으로
+     밀린다(픽셀 실측 사고). 세로팔은 배경으로 두면 프레임 보더가 덮으므로
+     (배경 < 보더 페인팅 순서) 가상요소(자식 — 부모 보더 위)가 담당. */
+  background-origin: border-box;
+  background-clip: border-box;
   background-image: linear-gradient(var(--acc), var(--acc)),
-    linear-gradient(var(--acc), var(--acc)),
-    linear-gradient(var(--acc), var(--acc)),
-    linear-gradient(var(--acc), var(--acc)),
-    linear-gradient(var(--acc), var(--acc)),
     linear-gradient(var(--acc), var(--acc)),
     linear-gradient(var(--acc), var(--acc)),
     linear-gradient(var(--acc), var(--acc));
   background-position:
-    left var(--fk-in) top var(--fk-in),
-    left var(--fk-in) top var(--fk-in),
-    right var(--fk-in) top var(--fk-in),
-    right var(--fk-in) top var(--fk-in),
-    left var(--fk-in) bottom var(--fk-in),
-    left var(--fk-in) bottom var(--fk-in),
-    right var(--fk-in) bottom var(--fk-in),
-    right var(--fk-in) bottom var(--fk-in);
-  background-size:
-    var(--fk-len) var(--fk-th),
-    var(--fk-th) var(--fk-len),
-    var(--fk-len) var(--fk-th),
-    var(--fk-th) var(--fk-len),
-    var(--fk-len) var(--fk-th),
-    var(--fk-th) var(--fk-len),
-    var(--fk-len) var(--fk-th),
-    var(--fk-th) var(--fk-len);
+    left 0 top var(--fk-top),
+    right 0 top var(--fk-top),
+    left 0 bottom var(--fk-bot),
+    right 0 bottom var(--fk-bot);
+  background-size: var(--fk-len) var(--fk-th);
   background-repeat: no-repeat;
+}
+/* 세로팔 — 프레임 좌/우 보더 레인 위 1px 스트립(::before=좌, ::after=우).
+   absolute offset 은 padding-box 기준이라 -1px 로 보더 위에 정렬(flat 은
+   보더 0 이라 0). 상/하 팔은 스트립 안 그라데이션 2개. */
+:root[data-focus-ind="corners"] .egroup-frame.focus::before,
+:root[data-focus-ind="corners"] .egroup-frame.focus::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background-image: linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc));
+  background-position:
+    left 0 top var(--fk-top),
+    left 0 bottom var(--fk-bot);
+  background-size: 1px var(--fk-len);
+  background-repeat: no-repeat;
+}
+:root[data-focus-ind="corners"] .egroup-frame.focus::before {
+  left: -1px;
+}
+:root[data-focus-ind="corners"] .egroup-frame.focus::after {
+  right: -1px;
+}
+:root[data-focus-ind="corners"][data-pane-style="flat"] .egroup-frame.focus::before {
+  left: 0;
+}
+:root[data-focus-ind="corners"][data-pane-style="flat"] .egroup-frame.focus::after {
+  right: 0;
+}
+:root[data-focus-ind="corners"][data-pane-style="flat"] .egroup-frame.focus::before,
+:root[data-focus-ind="corners"][data-pane-style="flat"] .egroup-frame.focus::after {
+  top: 0;
+  bottom: 0;
 }
 .egroup-frame {
   position: absolute;

@@ -456,13 +456,15 @@ export const GroupArea = memo(function GroupArea({
       {/* ── 전경 프레임: 카드 보더(1px)를 모든 것 위에(불투명 터미널 포함) 보장.
           슬롯 레이어가 셀 보더를 덮기 때문에 보더만 분리해 띄운다(pointer-events
           none). 좌표는 셀과 동일한 변수 — 산수는 CSS 규칙이 소유.
-          focus = 활성 그룹 표시(그룹 2개 이상일 때만 — 단일 그룹에선 노이즈).
-          구조 경계선(--bd, §B 계약)은 불변 — 강조는 outline(--acc, §B4)으로만. ── */}
+          focus = 활성 그룹 표시(단일 그룹 포함 항상 — 사용자 결정).
+          구조 경계선(--bd, §B 계약)은 불변 — 강조는 outline/배경(--acc, §B4)으로만.
+          꺽쇠는 프레임 모서리 = 헤더/스테이터스 밴드 구간이라 네이티브 webview
+          (본문 슬롯만 차지)에 가려지지 않는다. ── */}
       {cells.map(({ group, rect }) => (
         <div
           key={`frame-${group.id}`}
           className={`egroup-frame${
-            cells.length > 1 && group.id === content.activeGroupId ? " focus" : ""
+            group.id === content.activeGroupId ? " focus" : ""
           }`}
           style={cellVars(rect)}
         />
