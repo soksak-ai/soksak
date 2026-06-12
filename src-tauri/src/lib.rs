@@ -49,27 +49,6 @@ pub fn run() {
         .manage(PtyManager::default())
         .manage(FsWatcher::default())
         .manage(CmdBridge::default())
-        .on_window_event(|_window, _event| {
-            // 비활성/활성 전환 시 신호등 inset 재적용(titlebar.rs 참조 —
-            // 좌표 단일 진실은 tauri.conf.json trafficLightPosition).
-            #[cfg(target_os = "macos")]
-            if matches!(
-                _event,
-                tauri::WindowEvent::Focused(_) | tauri::WindowEvent::ThemeChanged(_)
-            ) {
-                use tauri::Manager;
-                if let Some(pos) = _window
-                    .app_handle()
-                    .config()
-                    .app
-                    .windows
-                    .first()
-                    .and_then(|w| w.traffic_light_position.as_ref())
-                {
-                    titlebar::reapply_after_layout(_window, pos.x, pos.y);
-                }
-            }
-        })
         .setup(|app| {
             // 파일 워처 1회 초기화(이벤트 콜백에 앱 핸들 주입).
             let handle = app.handle().clone();
@@ -78,8 +57,22 @@ pub fn run() {
             if let Err(e) = ipc::start(app.handle().clone()) {
                 eprintln!("[ipc] 소켓 서버 기동 실패: {e}");
             }
-            // 신호등 위치는 tauri.conf.json trafficLightPosition(공식, 2.4.0+)이
-            // 소유한다 — NSTitlebarView 수동 조작 핵은 클릭 가로챔 회귀로 폐기.
+            // 신호등: 좌표는 tauri.conf.json trafficLightPosition 이 소유, 유지는
+            // titlebar::install 의 NSNotification 옵저버가 담당(titlebar.rs 참조).
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::Manager;
+                if let (Some(window), Some(pos)) = (
+                    app.get_window("main"),
+                    app.config()
+                        .app
+                        .windows
+                        .first()
+                        .and_then(|w| w.traffic_light_position.as_ref()),
+                ) {
+                    titlebar::install(&window, pos.x, pos.y);
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -117,6 +110,7 @@ pub fn run() {
             browser::browser_open_window,
             browser::browser_eval,
             ipc::cmd_result,
+            titlebar::titlebar_backing,
             ime_debug,
             window_activate,
         ])

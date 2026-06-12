@@ -57,6 +57,24 @@ function loadBuiltins(): {
   return { themes, warnings };
 }
 
+// 신호등 백킹 색 동기화(macOS) — 비활성 위젯은 backdrop 합성으로 그려지는데
+// 배경이 webview 레이어면 유령이 된다. 버튼 뒤 불투명 백킹의 색을 테마에 맞춘다
+// (titlebar.rs titlebar_backing). 비 hex 색이면 시스템 폴백에 맡긴다.
+function syncTitlebarBacking(theme: ThemeSpec, mode: ThemeMode): void {
+  const { colors } = colorsForMode(theme, mode);
+  const hex = theme.chrome.titlebar === "side" ? colors.side : colors.bg;
+  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return;
+  const n = parseInt(m[1], 16);
+  void invoke("titlebar_backing", {
+    r: ((n >> 16) & 255) / 255,
+    g: ((n >> 8) & 255) / 255,
+    b: (n & 255) / 255,
+  }).catch(() => {
+    // 비 macOS/명령 부재 — 무시(백킹은 macOS 전용 보정).
+  });
+}
+
 function loadSelection(): { name: string; mode?: ThemeMode } {
   try {
     const raw = localStorage.getItem(KEY);
@@ -74,6 +92,7 @@ export const useTheme = create<ThemeState>((set, get) => {
     themes[sel.name] ?? themes[DEFAULT_THEME] ?? themes[FALLBACK];
   const initialMode = sel.mode ?? initial.defaultMode;
   const effective = applyThemeToDom(initial, initialMode);
+  syncTitlebarBacking(initial, effective);
 
   const persist = () => {
     const s = get();
@@ -126,6 +145,7 @@ export const useTheme = create<ThemeState>((set, get) => {
       if (!theme) return false;
       const m = mode ?? get().mode;
       const effectiveMode = applyThemeToDom(theme, m);
+      syncTitlebarBacking(theme, effectiveMode);
       set({
         current: name,
         spec: theme,
