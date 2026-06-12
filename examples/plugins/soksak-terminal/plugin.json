@@ -3,7 +3,7 @@
   "id": "soksak-terminal",
   "name": "터미널",
   "version": "1.0.0",
-  "description": "새 탭(+) 메뉴에 터미널을 추가 — 내장 프로그램 개념이 없는 메뉴(§2.6)에서 터미널도 플러그인이 기여한다",
+  "description": "새 탭(+) 메뉴에 터미널을 추가",
   "entry": "main.js",
   "permissions": [
     "programs"
