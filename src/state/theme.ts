@@ -65,23 +65,28 @@ function loadBuiltins(): {
 //   2) 버튼 뒤 불투명 백킹 색(titlebar_backing) — 비활성 위젯의 backdrop 합성은
 //      webview 레이어를 샘플링하지 못해 유령이 되므로 테마색 백킹을 깐다.
 function syncTitlebarBacking(theme: ThemeSpec, mode: ThemeMode): void {
-  void getCurrentWindow()
-    .setTheme(mode)
-    .catch(() => {
-      // 비지원 플랫폼/권한 부재 — 무시(테마 토큰 렌더에는 영향 없음).
+  try {
+    void getCurrentWindow()
+      .setTheme(mode)
+      .catch(() => {
+        // 비지원 플랫폼/권한 부재 — 무시(테마 토큰 렌더에는 영향 없음).
+      });
+    const { colors } = colorsForMode(theme, mode);
+    const hex = theme.chrome.titlebar === "side" ? colors.side : colors.bg;
+    const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
+    if (!m) return;
+    const n = parseInt(m[1], 16);
+    void invoke("titlebar_backing", {
+      r: ((n >> 16) & 255) / 255,
+      g: ((n >> 8) & 255) / 255,
+      b: (n & 255) / 255,
+    }).catch(() => {
+      // 비 macOS/명령 부재 — 무시(백킹은 macOS 전용 보정).
     });
-  const { colors } = colorsForMode(theme, mode);
-  const hex = theme.chrome.titlebar === "side" ? colors.side : colors.bg;
-  const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return;
-  const n = parseInt(m[1], 16);
-  void invoke("titlebar_backing", {
-    r: ((n >> 16) & 255) / 255,
-    g: ((n >> 8) & 255) / 255,
-    b: (n & 255) / 255,
-  }).catch(() => {
-    // 비 macOS/명령 부재 — 무시(백킹은 macOS 전용 보정).
-  });
+  } catch {
+    // 비 Tauri 환경(jsdom 테스트 등) — getCurrentWindow 가 동기 throw 한다.
+    // 네이티브 크롬이 없는 환경이므로 동기화 자체가 무의미: 조용히 통과.
+  }
 }
 
 function loadSelection(): { name: string; mode?: ThemeMode } {
