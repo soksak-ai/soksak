@@ -36,11 +36,13 @@ pub fn run() {
             if let Err(e) = ipc::start(app.handle().clone()) {
                 eprintln!("[ipc] 소켓 서버 기동 실패: {e}");
             }
-            // 신호등을 44px 커스텀 타이틀바 상하 중앙으로(x=19 좌측 인셋).
-            #[cfg(target_os = "macos")]
-            if let Some(win) = app.get_webview_window("main") {
-                titlebar::center_traffic_lights(&win, 44.0, 19.0);
-            }
+            // 신호등 중앙 정렬 임시 비활성화 — NSTitlebarView 를 44px 전체폭으로
+            // 키우면 우측 타이틀바 버튼(사이드바/테마/설정) 클릭을 가로채는 회귀
+            // 의심. 클릭 안전한 방식 확정 후 재활성화.
+            // #[cfg(target_os = "macos")]
+            // if let Some(win) = app.get_webview_window("main") {
+            //     titlebar::center_traffic_lights(&win, 44.0, 19.0);
+            // }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -11,6 +11,7 @@
 // 높이로 키워 창 상단에 붙이면 AppKit 이 버튼을 그 안에서 세로 중앙으로 배치한다.
 // x = 첫 버튼(닫기)의 좌측 인셋.
 #[cfg(target_os = "macos")]
+#[allow(dead_code)] // 현재 호출 비활성(클릭 가로챔 회귀 격리) — 모듈 보존.
 pub fn center_traffic_lights<R: tauri::Runtime>(
     win: &tauri::WebviewWindow<R>,
     bar_height: f64,
