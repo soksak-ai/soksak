@@ -1738,6 +1738,22 @@ body,
   border: 1px solid var(--bd);
   border-radius: 11px;
 }
+/* 프레임 보더 오버레이 보정: 프레임(z:5)의 1px 보더가 밴드의 가장자리 픽셀을
+   덮는다 — 상단 밴드는 첫 줄(가시 여백 위 −1px), 하단 스테이터스는 마지막 줄.
+   보더가 있는 pane 스타일에서만 1px 을 보정해 "보이는" 위/아래 여백을 대칭으로.
+   (flat 은 보더가 없어 박스 여백 = 가시 여백 — 보정하면 오히려 비대칭.) */
+:root[data-pane-style="card"] .view-tabs,
+:root[data-pane-style="floating"] .view-tabs {
+  padding-top: calc(var(--tab-pad, 4px) + 1px);
+}
+:root[data-pane-style="card"] .egroup-title,
+:root[data-pane-style="floating"] .egroup-title {
+  padding-top: 1px;
+}
+:root[data-pane-style="card"] .egroup-status,
+:root[data-pane-style="floating"] .egroup-status {
+  padding-bottom: 1px;
+}
 :root[data-pane-style="floating"] .egroup-frame {
   border: 1px solid var(--bd);
   border-radius: 14px;
