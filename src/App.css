@@ -529,12 +529,13 @@ body,
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  height: 26px;
+  /* 상단 밴드 통일: 컨텐츠 탭(38px)과 같은 높이/보더 — 가로 라인이 한 줄로 이어진다. */
+  height: 38px;
   padding: 0 6px 0 10px;
   font-size: 11px;
   color: var(--fg);
   opacity: 0.85;
-  border-bottom: 1px solid rgba(127, 127, 127, 0.12);
+  border-bottom: 1px solid var(--bd);
 }
 .ft-title {
   white-space: nowrap;
@@ -2166,7 +2167,8 @@ select.dctl {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 8px 0;
+  /* 첫 아이콘(26px)이 상단 밴드(38px) 세로 중앙에 오도록: (38-26)/2 = 6px. */
+  padding: 6px 0 8px;
   border-right: 1px solid rgba(127, 127, 127, 0.18);
 }
 .plugin-rail-btn {
@@ -2202,7 +2204,8 @@ select.dctl {
 }
 .plugin-side-head {
   flex: 0 0 auto;
-  height: 30px;
+  /* 상단 밴드 통일(38px) — 좌측 헤더·컨텐츠 탭과 같은 높이/보더. */
+  height: 38px;
   display: flex;
   align-items: center;
   padding: 0 12px;
@@ -2211,6 +2214,7 @@ select.dctl {
   letter-spacing: 0.08em;
   color: var(--fg3);
   text-transform: uppercase;
+  border-bottom: 1px solid var(--bd);
 }
 .plugin-side-body {
   flex: 1;
@@ -2470,9 +2474,13 @@ select.dctl {
 .left-host-tabs {
   flex: 0 0 auto;
   display: flex;
+  align-items: center;
   gap: 2px;
-  padding: 6px 8px 4px;
+  /* 상단 밴드 통일(38px). */
+  height: 38px;
+  padding: 0 8px;
   overflow-x: auto;
+  border-bottom: 1px solid var(--bd);
 }
 .left-host-tab {
   border: none;
