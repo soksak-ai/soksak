@@ -197,6 +197,16 @@ export function parseTheme(
     amb: typeof eff.amb === "string" ? eff.amb : null,
   };
 
+  // 경계 보장 불변식(UI 헌법 §B1: 패널 경계는 무조건 존재) — 토큰 조합이 경계를
+  // 소멸시키면 거부: flat(프레임 무)에는 divider "solid"(상시 seam 선)가 필수.
+  if (isRecord(raw.chrome)) {
+    if (raw.chrome.paneStyle === "flat" && raw.chrome.divider !== "solid") {
+      errors.push(
+        '경계 보장(§B1): paneStyle "flat" 은 divider "solid" 필수 — 프레임이 없는 테마에서 overlay 디바이더는 패널 경계를 소멸시킨다',
+      );
+    }
+  }
+
   if (errors.length > 0) return reject();
   return {
     theme: {
