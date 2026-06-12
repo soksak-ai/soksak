@@ -27,6 +27,13 @@ import DOMPurify from "dompurify";
 import { useT } from "../i18n";
 import { useSessions } from "../state/sessions";
 import { registerFileView } from "../commands/fileViewBridge";
+import { execute } from "../commands/registry";
+import {
+  extensionsFor,
+  languageFor,
+  useEditorRegistry,
+} from "../plugins/editorRegistry";
+import { emitFileSaved } from "../plugins/hooks";
 import { EditorFind } from "./EditorFind";
 
 // 파일 뷰어: 확장자로 렌더 전략을 정한다.
@@ -94,7 +101,9 @@ const LANG_ALIAS: Record<string, string> = {
 };
 
 function languageExtensionFor(path: string) {
-  const key = LANG_ALIAS[extOf(path)] ?? extOf(path);
+  const e = extOf(path);
+  // 플러그인 언어 매핑(contributes.languages)이 내장 별칭보다 우선.
+  const key = languageFor(e) ?? LANG_ALIAS[e] ?? e;
   return VALID_LANGS.has(key) ? loadLanguage(key as LanguageName) : null;
 }
 
@@ -210,6 +219,9 @@ export function FileViewer({
     [strat, text],
   );
 
+  // 플러그인 에디터 확장 — version 구독으로 등록/해제 시 열린 에디터 자동 재구성.
+  const regVersion = useEditorRegistry((s) => s.version);
+
   const cmExtensions = useMemo(() => {
     // search(): editor 스타일 찾기 위젯이 쓰는 검색 상태/하이라이트. 큰 파일도 포함
     // (가벼움 — 보이는 매치만 강조). 구문 강조 언어 확장은 큰 파일에서만 제외.
@@ -217,9 +229,13 @@ export function FileViewer({
     if (!isLarge) {
       const ext = languageExtensionFor(path);
       if (ext) exts.push(ext);
+      // 플러그인 확장(전역 + 이 확장자) — 큰 파일 보호 기준은 언어 확장과 동일.
+      exts.push(...extensionsFor(extOf(path)));
     }
     return exts;
-  }, [path, isLarge]);
+    // regVersion: 레지스트리 변경 신호(값 자체는 미사용).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, isLarge, regVersion]);
 
   const markdownHtml = useMemo(() => {
     if (strat !== "markdown" || text == null) return "";
@@ -253,6 +269,8 @@ export function FileViewer({
       await invoke("write_text_file", { path, content: text });
       savedRef.current = text;
       setFileDirty(projectId, viewId, false);
+      // 저장 성공은 store 신호로 구분 불가 — 유일한 명시 플러그인 이벤트 emit.
+      emitFileSaved({ projectId, viewId, path });
       return { saved: true };
     } catch (e) {
       setSaveError(String(e));
@@ -271,10 +289,23 @@ export function FileViewer({
   cmViewRef.current = cmView;
   const editableRef = useRef(editable);
   editableRef.current = editable;
+  const textRef = useRef<string | null>(null);
+  textRef.current = text;
   useEffect(
     () =>
       registerFileView(viewId, {
         save: () => saveRef.current(),
+        // 플러그인 editor API/포매터 통로 — 코드 편집 가능 상태에서만 의미.
+        getText: () => textRef.current,
+        setText: (next) => {
+          const v = cmViewRef.current;
+          if (!v || !editableRef.current) return false;
+          // 통째 치환 dispatch — undo 1회로 원복 가능, onChange 경유로 dirty 갱신.
+          v.dispatch({
+            changes: { from: 0, to: v.state.doc.length, insert: next },
+          });
+          return true;
+        },
         find: (query, opts) => {
           const v = cmViewRef.current;
           if (!v) return { matches: 0 };
@@ -324,6 +355,12 @@ export function FileViewer({
   //   ⌘F 찾기 / ⌘⌥F·⌘H 바꾸기 — editor 스타일 위젯 토글.
   const onKeyDown = useCallback(
     (e: ReactKeyboardEvent) => {
+      // ⇧⌥F 문서 포맷(editor 동일) — 플러그인 포매터(editor.format 명령) 경유.
+      if (!e.metaKey && !e.ctrlKey && e.altKey && e.shiftKey && e.code === "KeyF") {
+        e.preventDefault();
+        void execute("editor.format", { view: viewId }, {});
+        return;
+      }
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
       if (e.code === "KeyS") {
@@ -341,7 +378,7 @@ export function FileViewer({
         setFindFocus((n) => n + 1);
       }
     },
-    [save],
+    [save, viewId],
   );
 
   const dirty = editable && text != null && text !== savedRef.current;

@@ -26,9 +26,9 @@ function activeFile(): { viewId: string; path: string; text: string } | null {
   );
   const view = group?.views.find((v) => v.id === group.activeViewId);
   if (!view || view.kind !== "file") return null;
-  // 코드 편집 뷰가 아니면(프리뷰/미디어 — getText 미구현) null.
+  // 코드 편집 뷰가 아니거나(미디어/미구현) 로딩 전(null)이면 null.
   const text = getFileView(view.id)?.getText?.();
-  if (text === undefined) return null;
+  if (text == null) return null;
   return { viewId: view.id, path: view.path, text };
 }
 
