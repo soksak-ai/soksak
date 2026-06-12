@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -21,6 +22,7 @@ import {
   subscribeCommandFinished,
   subscribeCwd,
 } from "../terminal/paneHosts";
+import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 
 // 사이드바 파일 트리: lazy loading. 한 디렉토리의 직속 자식만 로드하고, 폴더를 펼칠 때
@@ -100,6 +102,10 @@ function LazyTree({
       if (item && !item.isDirectory()) {
         const r = rootRef.current.replace(/\/+$/, "");
         openRef.current(`${r}/${rel}`);
+        // 열자마자 선택 해제 — 선택이 남으면 (뷰를 닫고) 같은 파일을 다시
+        // 클릭해도 selection-change 가 발화하지 않아 재열기가 안 된다.
+        // 해제로 selected=[] 콜백이 한 번 더 오지만 이 루프는 무시한다.
+        item.deselect();
         return;
       }
     }
@@ -292,7 +298,7 @@ function LazyTree({
   return <FileTree className="ft" style={themeStyles} model={model} />;
 }
 
-export function FileTreeSidebar({
+function FileTreeSidebarImpl({
   paneId,
   onOpenFile,
   theme,
@@ -322,6 +328,25 @@ export function FileTreeSidebar({
   useEffect(() => {
     return subscribeCommandFinished(paneId, () => setGitNonce((n) => n + 1));
   }, [paneId]);
+
+  // 외부 변경(soksak 밖의 에디터/터미널이 만든 git 변화)도 데코에 반영 — 워처의
+  // fs-change(탐지 기반, 폴링 없음)를 git 상태 갱신으로 연결한다. 500ms 디바운스로
+  // 대량 변경을 1회 갱신으로 합친다. ⟳ 버튼은 워처 실패(권한/드라이브 한계)용 안전망.
+  useEffect(() => {
+    const root = listing?.root?.replace(/\/+$/, "");
+    if (!root) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const un = listen<string>("fs-change", (e) => {
+      const dir = e.payload.replace(/\/+$/, "");
+      if (dir !== root && !dir.startsWith(`${root}/`)) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => setGitNonce((n) => n + 1), 500);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      void un.then((f) => f());
+    };
+  }, [listing?.root]);
 
   // cwd(또는 새로고침) → 루트 + 직속 자식. cwd 미확인이면 path=null → Rust 가 HOME 사용.
   useEffect(() => {
@@ -369,12 +394,12 @@ export function FileTreeSidebar({
         </span>
         <button
           type="button"
-          className="ft-refresh"
+          className="icon-btn ft-refresh"
           title={t("common.refresh")}
           aria-label={t("tree.refreshAria")}
           onClick={() => setNonce((n) => n + 1)}
         >
-          ⟳
+          <Icon name="refresh" />
         </button>
       </div>
       <div className="ft-body">
@@ -396,3 +421,6 @@ export function FileTreeSidebar({
     </div>
   );
 }
+
+// memo 경계(원칙 2).
+export const FileTreeSidebar = memo(FileTreeSidebarImpl);

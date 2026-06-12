@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isComposingEnter } from "../lib/imeKeys";
+import { Icon } from "../ui/icons/Icon";
 import {
   SearchQuery,
   findNext,
@@ -150,6 +152,7 @@ export function EditorFind({
               spellCheck={false}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
+                if (isComposingEnter(e)) return; // IME 조합 확정 Enter 는 탐색 아님
                 if (e.key === "Enter") {
                   e.preventDefault();
                   run(e.shiftKey ? findPrevious : findNext);
@@ -193,30 +196,30 @@ export function EditorFind({
           </span>
           <button
             type="button"
-            className="cmf-btn"
+            className="icon-btn cmf-btn"
             title={t("find.prev")}
             onClick={() => run(findPrevious)}
             tabIndex={-1}
           >
-            ↑
+            <Icon name="arrow-up" />
           </button>
           <button
             type="button"
-            className="cmf-btn"
+            className="icon-btn cmf-btn"
             title={t("find.next")}
             onClick={() => run(findNext)}
             tabIndex={-1}
           >
-            ↓
+            <Icon name="arrow-down" />
           </button>
           <button
             type="button"
-            className="cmf-btn"
+            className="icon-btn cmf-btn"
             title={t("find.close")}
             onClick={close}
             tabIndex={-1}
           >
-            ✕
+            <Icon name="close" />
           </button>
         </div>
         {canReplace && showReplace && (
@@ -229,6 +232,7 @@ export function EditorFind({
                 spellCheck={false}
                 onChange={(e) => setReplace(e.target.value)}
                 onKeyDown={(e) => {
+                  if (isComposingEnter(e)) return; // IME 조합 확정 Enter 는 치환 아님
                   if (e.key === "Enter") {
                     e.preventDefault();
                     run(replaceNext);

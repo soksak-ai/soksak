@@ -2,12 +2,15 @@ import { useEffect } from "react";
 import {
   useSettings,
   type CursorStyle,
+  type ResizeReflow,
   type DefaultProgram,
   type Language,
-  type SplitHeaderMode,
   type TabPosition,
 } from "../state/settings";
 import { useTheme } from "../state/theme";
+import { useSuppressBrowser } from "../state/ui";
+import { Icon } from "../ui/icons/Icon";
+import { useIconRegistry } from "../ui/icons/registry";
 import { useT } from "../i18n";
 import { useDraggableModal } from "./modalDrag";
 
@@ -36,12 +39,12 @@ function Stepper({
 }) {
   return (
     <span className="dstepper">
-      <span className="dstep-btn" onClick={() => onChange(value - step)}>
-        −
+      <span className="dstep-btn icon-inline" onClick={() => onChange(value - step)}>
+        <Icon name="minus" size="sm" />
       </span>
       {value}
-      <span className="dstep-btn" onClick={() => onChange(value + step)}>
-        +
+      <span className="dstep-btn icon-inline" onClick={() => onChange(value + step)}>
+        <Icon name="add" size="sm" />
       </span>
     </span>
   );
@@ -49,7 +52,16 @@ function Stepper({
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const t = useT();
+  // 네이티브 브라우저 웹뷰는 항상 DOM 위 — 모달이 떠 있는 동안 숨긴다.
+  useSuppressBrowser();
+  // 전체 구독 예외(원칙 1 의 의도 내): 이 모달은 settings 의 거의 모든 필드를
+  // 렌더하고, 열려 있는 동안만 마운트된다(App 의 settingsOpen 게이트).
   const s = useSettings();
+  // 아이콘 셋 드롭다운 — 등록 셋(내장 + 활성 플러그인) 동적 나열.
+  const iconSets = useIconRegistry((x) => x.sets);
+  const iconSetOptions = Object.values(iconSets)
+    .map(({ id, name }) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const themes = useTheme((x) => x.themes);
   const themeName = useTheme((x) => x.current);
   const applyTheme = useTheme((x) => x.apply);
@@ -93,9 +105,15 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </svg>
           <span className="dmodal-title">{t("settings.title")}</span>
           <span className="dmodal-spacer" />
-          <span className="dmodal-grip">⠿</span>
-          <button type="button" className="dmodal-close" onClick={onClose}>
-            ✕
+          <span className="dmodal-grip icon-inline">
+            <Icon name="grip" />
+          </span>
+          <button
+            type="button"
+            className="icon-btn dmodal-close"
+            onClick={onClose}
+          >
+            <Icon name="close" />
           </button>
         </div>
 
@@ -132,6 +150,37 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div className="dsec">{t("settings.general")}</div>
+          <div className="drow">
+            <span className="drow-label">{t("settings.iconSet")}</span>
+            <select
+              className="dctl"
+              value={s.iconSet}
+              onChange={(e) => s.setIconSet(e.target.value)}
+            >
+              {/* 등록된 셋(내장 + 활성 플러그인)을 동적으로 나열. 선택한 셋이
+                  목록에 없으면(플러그인 비활성) 항목을 추가해 값 유실을 막는다
+                  — 렌더는 lucide 로 폴백 중. */}
+              {iconSetOptions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+              {!iconSetOptions.some((o) => o.id === s.iconSet) && (
+                <option value={s.iconSet}>{s.iconSet} (비활성)</option>
+              )}
+            </select>
+          </div>
+          <div className="drow">
+            <span className="drow-label">{t("settings.iconBox")}</span>
+            <select
+              className="dctl"
+              value={s.iconBox ? "on" : "off"}
+              onChange={(e) => s.setIconBox(e.target.value === "on")}
+            >
+              <option value="on">{t("common.on")}</option>
+              <option value="off">{t("common.off")}</option>
+            </select>
+          </div>
           <div className="drow">
             <span className="drow-label">{t("settings.language")}</span>
             <select
@@ -187,6 +236,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <option value="left">{t("position.left")}</option>
             </select>
           </div>
+          {/* 분할 패널 헤더 설정 — 탭 모드로 고정(2026-06 결정: 제목표시줄 모드
+              비노출). 재노출 시 아래 주석 해제 + GroupArea 의 고정값 복원.
           <div className="drow">
             <span className="drow-label">{t("settings.splitHeader")}</span>
             <select
@@ -200,6 +251,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <option value="tabs">{t("splitHeader.tabs")}</option>
             </select>
           </div>
+          */}
           <div className="drow">
             <span className="drow-label">{t("settings.defaultProgram")}</span>
             <select
@@ -251,6 +303,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             >
               <option value="on">{t("common.on")}</option>
               <option value="off">{t("common.off")}</option>
+            </select>
+          </div>
+          <div className="drow">
+            <span className="drow-label">{t("settings.resizeReflow")}</span>
+            <select
+              className="dctl"
+              value={s.resizeReflow}
+              onChange={(e) =>
+                s.setResizeReflow(e.target.value as ResizeReflow)
+              }
+            >
+              <option value="live">{t("reflow.live")}</option>
+              <option value="settle">{t("reflow.settle")}</option>
             </select>
           </div>
 

@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useSettings } from "./state/settings";
 
 // 간단한 i18n: 메시지 키 → 한/영. useT() 가 현재 언어로 번역 함수를 돌려준다.
@@ -14,6 +15,10 @@ const ko = {
   "project.folder": "폴더",
   "project.pickFolder": "폴더 선택…",
   "project.alias": "별칭",
+  "project.settings": "프로젝트 설정",
+  "project.color": "색상",
+  "color.default": "기본",
+  "common.save": "저장",
   "project.aliasPh": "폴더명",
   "project.program": "첫 프로그램",
   "project.create": "생성",
@@ -30,6 +35,8 @@ const ko = {
   "mode.dark": "다크",
   "mode.light": "라이트",
   "settings.general": "일반",
+  "settings.iconSet": "아이콘 셋",
+  "settings.iconBox": "아이콘 라운드박스",
   "settings.homeUrl": "시작 URL",
   "common.on": "켬",
   "common.off": "끔",
@@ -105,6 +112,9 @@ const ko = {
   "settings.cursorBar": "바",
   "settings.cursorUnderline": "밑줄",
   "settings.scrollback": "스크롤백 줄 수",
+  "settings.resizeReflow": "리사이즈 리플로우",
+  "reflow.live": "실시간 (드래그 중 재배치)",
+  "reflow.settle": "정착 후 (드래그 끝나면 1회)",
   "settings.close": "닫기",
 
   "plugin.sidebar.toggle": "플러그인 사이드바 (⌥⌘B)",
@@ -151,6 +161,10 @@ const en: Record<MsgKey, string> = {
   "project.folder": "Folder",
   "project.pickFolder": "Choose folder…",
   "project.alias": "Alias",
+  "project.settings": "Project settings",
+  "project.color": "Color",
+  "color.default": "Default",
+  "common.save": "Save",
   "project.aliasPh": "folder name",
   "project.program": "Open with",
   "project.create": "Create",
@@ -167,6 +181,8 @@ const en: Record<MsgKey, string> = {
   "mode.dark": "Dark",
   "mode.light": "Light",
   "settings.general": "General",
+  "settings.iconSet": "Icon set",
+  "settings.iconBox": "Icon button box",
   "settings.homeUrl": "Start URL",
   "common.on": "On",
   "common.off": "Off",
@@ -242,6 +258,9 @@ const en: Record<MsgKey, string> = {
   "settings.cursorBar": "Bar",
   "settings.cursorUnderline": "Underline",
   "settings.scrollback": "Scrollback lines",
+  "settings.resizeReflow": "Resize reflow",
+  "reflow.live": "Live (reflow while dragging)",
+  "reflow.settle": "On settle (once after drag)",
   "settings.close": "Close",
 
   "plugin.sidebar.toggle": "Plugin sidebar (⌥⌘B)",
@@ -280,13 +299,18 @@ const messages = { ko, en };
 export type TFn = (key: MsgKey, params?: Record<string, string | number>) => string;
 
 // 현재 언어 기준 번역 함수. 언어가 바뀌면 구독 컴포넌트가 리렌더된다.
+// 반환 함수는 언어가 같으면 참조가 안정(useCallback) — t 를 prop 으로 넘겨도
+// React.memo 경계를 깨지 않는다(성능 헌법 원칙 2).
 export function useT(): TFn {
   const lang = useSettings((s) => s.language);
-  return (key, params) => {
-    let s: string = messages[lang][key] ?? ko[key] ?? key;
-    if (params) {
-      for (const k in params) s = s.replace(`{${k}}`, String(params[k]));
-    }
-    return s;
-  };
+  return useCallback<TFn>(
+    (key, params) => {
+      let s: string = messages[lang][key] ?? ko[key] ?? key;
+      if (params) {
+        for (const k in params) s = s.replace(`{${k}}`, String(params[k]));
+      }
+      return s;
+    },
+    [lang],
+  );
 }

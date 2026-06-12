@@ -2,17 +2,22 @@
   "spec": "soksak-plugin-spec@1",
   "id": "soksak-memo",
   "name": "메모",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "프로젝트별 메모 — 프로젝트 루트마다 분리 저장되는 간단한 메모장 패널",
   "entry": "main.js",
-  "permissions": ["ui", "storage"],
+  "permissions": [
+    "ui",
+    "storage"
+  ],
   "contributes": {
     "views": [
       {
         "id": "panel",
         "title": "메모",
         "icon": "✎",
-        "placements": ["sidebar-right"]
+        "placements": [
+          "sidebar-right"
+        ]
       }
     ]
   }

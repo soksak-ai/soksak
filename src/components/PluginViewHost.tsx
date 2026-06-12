@@ -2,14 +2,15 @@
 // provider.mount/unmount 는 try/catch 경계(§0-4): mount 실패는 에러 카드, provider
 // 부재(플러그인 비활성/제거)는 플레이스홀더. 잔존 DOM 은 호스트가 정리한다.
 
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import {
   getRegisteredView,
   useViewRegistry,
 } from "../plugins/viewRegistry";
 import { useT } from "../i18n";
 
-export function PluginViewHost({
+// memo 경계(원칙 2).
+export const PluginViewHost = memo(function PluginViewHost({
   viewKey,
   projectId,
   root,
@@ -68,4 +69,4 @@ export function PluginViewHost({
       {overlay}
     </div>
   );
-}
+});

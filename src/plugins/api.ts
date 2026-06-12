@@ -22,6 +22,8 @@ import {
   type PluginViewProvider,
 } from "./viewRegistry";
 import { useEditorRegistry } from "./editorRegistry";
+import { useIconRegistry, validateIconSetData } from "../ui/icons/registry";
+import type { IconSetData } from "../ui/icons/types";
 import {
   pluginCommandName,
   qualifiedViewId,
@@ -89,6 +91,8 @@ export interface SoksakPluginApi {
       viewId: string,
       placement?: ViewPlacement,
     ) => Promise<CommandOutcome>;
+    /** 아이콘 셋 등록(contributes.iconSets 선언 필수). data 는 시맨틱 이름 전수 제공. */
+    registerIconSet: (setId: string, data: unknown) => Disposable;
   };
   editor?: {
     // 호스트의 @codemirror 모듈(§0-7 — 플러그인 자체 번들 금지).
@@ -299,6 +303,31 @@ export function buildPluginApi(
               },
               pluginCtx,
             ),
+          // 아이콘 셋 등록 — 선언(contributes.iconSets) 외 거부 + 데이터 전수 검증
+          // (registerView 와 동일 패턴). 전역 셋 id = "<pluginId>.<setId>".
+          registerIconSet: (setId, data) => {
+            const decl = manifest.contributes.iconSets.find(
+              (s) => s.id === setId,
+            );
+            if (!decl) {
+              throw new Error(
+                `매니페스트 contributes.iconSets 에 선언되지 않은 셋: ${setId}`,
+              );
+            }
+            const invalid = validateIconSetData(data);
+            if (invalid) {
+              throw new Error(`아이콘 셋 데이터 불량(${setId}): ${invalid}`);
+            }
+            const globalId = qualifiedViewId(id, setId);
+            useIconRegistry.getState().register({
+              id: globalId,
+              name: decl.title,
+              data: data as IconSetData,
+            });
+            return tracker.wrap(() =>
+              useIconRegistry.getState().unregister(globalId),
+            );
+          },
         }
       : undefined,
 
@@ -384,7 +413,7 @@ export function buildPluginApi(
       ? {
           log: (opts) => {
             const path = opts?.path ?? deps.currentProject()?.root;
-            if (!path) return Promise.reject(new Error("프로젝트 루트 없음 — path 명시 필요"));
+            if (!path) return Promise.reject(new Error("프로젝트 루트 없음 — 폴더가 열린 프로젝트에서 사용하세요"));
             return deps.invoke("git_log", {
               path,
               limit: opts?.limit,
@@ -393,12 +422,12 @@ export function buildPluginApi(
           },
           show: (commit, path) => {
             const p = path ?? deps.currentProject()?.root;
-            if (!p) return Promise.reject(new Error("프로젝트 루트 없음 — path 명시 필요"));
+            if (!p) return Promise.reject(new Error("프로젝트 루트 없음 — 폴더가 열린 프로젝트에서 사용하세요"));
             return deps.invoke("git_show", { path: p, commit });
           },
           diff: async (opts) => {
             const path = opts?.path ?? deps.currentProject()?.root;
-            if (!path) throw new Error("프로젝트 루트 없음 — path 명시 필요");
+            if (!path) throw new Error("프로젝트 루트 없음 — 폴더가 열린 프로젝트에서 사용하세요");
             return (await deps.invoke("git_diff", {
               path,
               file: opts?.file,
@@ -408,7 +437,7 @@ export function buildPluginApi(
           },
           status: (path) => {
             const p = path ?? deps.currentProject()?.root;
-            if (!p) return Promise.reject(new Error("프로젝트 루트 없음 — path 명시 필요"));
+            if (!p) return Promise.reject(new Error("프로젝트 루트 없음 — 폴더가 열린 프로젝트에서 사용하세요"));
             return deps.invoke("git_status", { path: p });
           },
         }

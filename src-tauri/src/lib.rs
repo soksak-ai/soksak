@@ -13,6 +13,25 @@ use pty::PtyManager;
 use tauri::Manager;
 use watcher::FsWatcher;
 
+// 앱 자기 활성화: JS setFocus 는 창을 key 로 만들 뿐 앱을 전면으로 못 가져온다
+// (macOS 포커스 탈취 방지). 자기 자신의 활성화는 허용되므로 NSApp 으로 수행.
+#[tauri::command]
+fn window_activate(window: tauri::WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = window.run_on_main_thread(|| unsafe {
+            use objc2::MainThreadMarker;
+            use objc2_app_kit::NSApplication;
+            if let Some(mtm) = MainThreadMarker::new() {
+                #[allow(deprecated)]
+                NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
+            }
+        });
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
+}
+
 // IME 진단: dev(debug) 빌드에서만 로깅. 릴리즈 빌드에서는 no-op.
 #[tauri::command]
 fn ime_debug(message: String) {
@@ -30,6 +49,27 @@ pub fn run() {
         .manage(PtyManager::default())
         .manage(FsWatcher::default())
         .manage(CmdBridge::default())
+        .on_window_event(|_window, _event| {
+            // 비활성/활성 전환 시 신호등 inset 재적용(titlebar.rs 참조 —
+            // 좌표 단일 진실은 tauri.conf.json trafficLightPosition).
+            #[cfg(target_os = "macos")]
+            if matches!(
+                _event,
+                tauri::WindowEvent::Focused(_) | tauri::WindowEvent::ThemeChanged(_)
+            ) {
+                use tauri::Manager;
+                if let Some(pos) = _window
+                    .app_handle()
+                    .config()
+                    .app
+                    .windows
+                    .first()
+                    .and_then(|w| w.traffic_light_position.as_ref())
+                {
+                    titlebar::reapply_after_layout(_window, pos.x, pos.y);
+                }
+            }
+        })
         .setup(|app| {
             // 파일 워처 1회 초기화(이벤트 콜백에 앱 핸들 주입).
             let handle = app.handle().clone();
@@ -38,13 +78,8 @@ pub fn run() {
             if let Err(e) = ipc::start(app.handle().clone()) {
                 eprintln!("[ipc] 소켓 서버 기동 실패: {e}");
             }
-            // 신호등 중앙 정렬 임시 비활성화 — NSTitlebarView 를 44px 전체폭으로
-            // 키우면 우측 타이틀바 버튼(사이드바/테마/설정) 클릭을 가로채는 회귀
-            // 의심. 클릭 안전한 방식 확정 후 재활성화.
-            // #[cfg(target_os = "macos")]
-            // if let Some(win) = app.get_webview_window("main") {
-            //     titlebar::center_traffic_lights(&win, 44.0, 19.0);
-            // }
+            // 신호등 위치는 tauri.conf.json trafficLightPosition(공식, 2.4.0+)이
+            // 소유한다 — NSTitlebarView 수동 조작 핵은 클릭 가로챔 회귀로 폐기.
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -78,10 +113,12 @@ pub fn run() {
             browser::browser_history,
             browser::browser_visible,
             browser::browser_close,
+            browser::browser_list,
             browser::browser_open_window,
             browser::browser_eval,
             ipc::cmd_result,
             ime_debug,
+            window_activate,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

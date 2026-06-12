@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { rafThrottle } from "./lib/rafThrottle";
 import type { TreeThemeInput } from "@pierre/trees";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
 import { PluginSidebar } from "./components/PluginSidebar";
 import { ContentTabs } from "./components/ContentTabs";
 import { GroupArea } from "./components/GroupArea";
 import { NewProjectModal } from "./components/NewProjectModal";
+import { ProjectSettingsModal } from "./components/ProjectSettingsModal";
+import { Icon } from "./ui/icons/Icon";
+// 워드마크 로고 — fill 이 currentColor 상속이라 테마를 자동 추종(정적 신뢰 에셋).
+import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
 import { useT } from "./i18n";
 import {
@@ -16,7 +21,11 @@ import {
   useSessions,
   type ProjectTab,
 } from "./state/sessions";
-import { terminalSettingsOf, useSettings } from "./state/settings";
+import {
+  terminalSettingsOf,
+  useSettings,
+  type TabPosition,
+} from "./state/settings";
 import { useTheme } from "./state/theme";
 import {
   applyTerminalSettingsAll,
@@ -62,16 +71,23 @@ function useResizableWidth(
     const v = Number(localStorage.getItem(key));
     return v >= min && v <= max ? v : def;
   });
-  const begin = (e: React.MouseEvent) => {
+  // begin 은 참조 안정(useCallback) — memo 된 ProjectPane 에 prop 으로 내려가도
+  // 경계를 깨지 않는다(원칙 2). 현재 폭은 ref 로 읽는다.
+  const wRef = useRef(w);
+  wRef.current = w;
+  const begin = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
-    const startW = w;
+    const startW = wRef.current;
     const sign = dir === "left" ? 1 : -1;
+    // 폭 상태 갱신은 프레임당 1회(원칙 4) — App 수준 상태라 리렌더 비용이 크다.
+    const commitW = rafThrottle((next: number) => setW(next));
     const onMove = (ev: MouseEvent) =>
-      setW(
+      commitW(
         Math.min(max, Math.max(min, startW + sign * (ev.clientX - startX))),
       );
     const onUp = () => {
+      commitW.flush(); // 리스너 제거 전에 — 마지막 프레임 유실 = 스냅백.
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
@@ -85,9 +101,129 @@ function useResizableWidth(
     window.addEventListener("mouseup", onUp);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
-  };
+    // key/min/max/dir 은 호출 지점마다 상수.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, min, max, dir]);
   return [w, begin] as const;
 }
+
+// 프로젝트 1개의 본문(좌측 사이드바 + 컨텐츠 + 우측 플러그인 사이드바).
+// memo 경계 = project 데이터 경계(원칙 2, docs/PERFORMANCE.md): 프로젝트 X 의
+// store 쓰기는 프로젝트 Y 의 객체 정체성을 보존(mapProject)하므로 Y 서브트리는
+// 리렌더되지 않는다. 모든 prop 은 참조/값 안정이어야 한다 — 커스텀 비교자 금지.
+const ProjectPane = memo(function ProjectPane({
+  project,
+  isActiveProject,
+  isDark,
+  sidebarW,
+  rightW,
+  contentTabPosition,
+  treeTheme,
+  startResize,
+  startRightResize,
+}: {
+  project: ProjectTab;
+  isActiveProject: boolean;
+  isDark: boolean;
+  sidebarW: number;
+  rightW: number;
+  contentTabPosition: TabPosition;
+  treeTheme: TreeThemeInput;
+  startResize: (e: React.MouseEvent) => void;
+  startRightResize: (e: React.MouseEvent) => void;
+}) {
+  const t = useT();
+  const openFileView = useSessions((s) => s.openFileView);
+  const onOpenFile = useCallback(
+    (p: string) => openFileView(project.id, p),
+    [openFileView, project.id],
+  );
+  return (
+    <div
+      className="terminal-pane"
+      style={{
+        visibility: isActiveProject ? "visible" : "hidden",
+        zIndex: isActiveProject ? 1 : 0,
+      }}
+    >
+      {/* 좌측 파일 트리 사이드바. 닫히면 width 0(언마운트 X → 상태 유지).
+          닫힐 때 우측 보더도 함께 제거 — 0폭이어도 보더는 1px 선으로 남아
+          사이드바 밖에 보더가 걸린 것처럼 보이기 때문. */}
+      <div
+        className="sidebar"
+        style={{
+          width: project.sidebarOpen ? sidebarW : 0,
+          borderRightWidth: project.sidebarOpen ? 1 : 0,
+        }}
+      >
+        <LeftSidebarHost
+          project={project}
+          paneId={cwdPaneOf(project) ?? ""}
+          onOpenFile={onOpenFile}
+          treeTheme={treeTheme}
+        />
+      </div>
+      {project.sidebarOpen && (
+        <div
+          className="sidebar-resizer"
+          onMouseDown={startResize}
+          title="사이드바 폭 조절"
+        />
+      )}
+
+      {/* 콘텐츠 영역: 컨텐츠 탭 바 + 각 컨텐츠의 에디터 그룹 그리드.
+          탭 위치 left 면 가로(행)로 배치해 좌측 세로 스트립 + 본문. */}
+      <div
+        className={`content${contentTabPosition === "left" ? " ctabs-left" : ""}`}
+      >
+        <ContentTabs
+          project={project}
+          vertical={contentTabPosition === "left"}
+        />
+        <div className="content-body">
+          {project.contents.map((c) => {
+            const isActiveContent = c.id === project.activeContentId;
+            return (
+              <div
+                key={c.id}
+                className="content-pane"
+                style={{
+                  visibility: isActiveContent ? "visible" : "hidden",
+                  zIndex: isActiveContent ? 1 : 0,
+                }}
+              >
+                <GroupArea
+                  content={c}
+                  projectId={project.id}
+                  isActiveProject={isActiveProject && isActiveContent}
+                  isDark={isDark}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 우측 플러그인 사이드바(⌥⌘B). 닫히면 width 0(언마운트 X — keep-alive). */}
+      {project.rightOpen && (
+        <div
+          className="sidebar-right-resizer"
+          onMouseDown={startRightResize}
+          title={t("plugin.sidebar.resize")}
+        />
+      )}
+      <div
+        className="sidebar-right"
+        style={{
+          width: project.rightOpen ? rightW : 0,
+          borderLeftWidth: project.rightOpen ? 1 : 0,
+        }}
+      >
+        <PluginSidebar project={project} />
+      </div>
+    </div>
+  );
+});
 
 // 프로젝트의 사이드바가 따라갈 터미널 pane(= 현재 작업 디렉토리 출처).
 // 활성 그룹의 활성 뷰가 터미널이면 그 포커스 pane, 아니면 아무 터미널 뷰의 포커스 pane.
@@ -123,6 +259,7 @@ function App() {
   const cursorBlink = useSettings((s) => s.cursorBlink);
   const cursorStyle = useSettings((s) => s.cursorStyle);
   const scrollback = useSettings((s) => s.scrollback);
+  const resizeReflow = useSettings((s) => s.resizeReflow);
   const termSettings = useMemo(
     () =>
       terminalSettingsOf({
@@ -131,8 +268,9 @@ function App() {
         cursorBlink,
         cursorStyle,
         scrollback,
+        resizeReflow,
       }),
-    [fontFamily, fontSize, cursorBlink, cursorStyle, scrollback],
+    [fontFamily, fontSize, cursorBlink, cursorStyle, scrollback, resizeReflow],
   );
   // 새 터미널이 현재 설정으로 생성되도록 provider 등록(ref 로 최신값 제공).
   const termSettingsRef = useRef(termSettings);
@@ -172,22 +310,28 @@ function App() {
     document.documentElement.style.setProperty("--app-font", fontFamily);
   }, [fontFamily]);
 
-  const {
-    tabs,
-    activeId,
-    closeTab,
-    setActive,
-    renameTab,
-    toggleSidebar,
-    toggleRightSidebar,
-    addViewToGroup,
-    splitWithNewView,
-    openFileView,
-    closeView,
-    splitPane,
-    closePane,
-  } = useSessions();
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // 아이콘 버튼 라운드박스 — 루트 어트리뷰트로 CSS 분기(data-pane-style 과 동형).
+  const iconBox = useSettings((s) => s.iconBox);
+  useEffect(() => {
+    document.documentElement.dataset.iconBox = iconBox ? "on" : "off";
+  }, [iconBox]);
+
+  // 구독 최소 원칙(docs/PERFORMANCE.md 1): 필드/액션별 셀렉터만 — bare 훅 금지.
+  // zustand 액션은 create() 시점에 고정되는 안정 참조라 액션 셀렉터는 리렌더 없음.
+  const tabs = useSessions((s) => s.tabs);
+  const activeId = useSessions((s) => s.activeId);
+  const closeTab = useSessions((s) => s.closeTab);
+  const setActive = useSessions((s) => s.setActive);
+  const toggleSidebar = useSessions((s) => s.toggleSidebar);
+  const toggleRightSidebar = useSessions((s) => s.toggleRightSidebar);
+  const addViewToGroup = useSessions((s) => s.addViewToGroup);
+  const closeView = useSessions((s) => s.closeView);
+  const splitPane = useSessions((s) => s.splitPane);
+  const closePane = useSessions((s) => s.closePane);
+  // 프로젝트 설정 모달(이름/색) 대상 프로젝트 id.
+  const [projectSettingsFor, setProjectSettingsFor] = useState<string | null>(
+    null,
+  );
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const activeProject = tabs.find((t) => t.id === activeId);
 
@@ -280,12 +424,8 @@ function App() {
         }
       } else if (key === "t" && !e.shiftKey) {
         e.preventDefault();
-        // title 모드: 새 터미널 = 새 패널(분할). tabs 모드: 새 탭.
-        if (useSettings.getState().splitHeaderMode === "tabs" || !grp) {
-          addViewToGroup(project.id, "terminal");
-        } else {
-          splitWithNewView(project.id, grp.id, "right");
-        }
+        // 분할 패널 헤더 = 탭 모드 고정: ⌘T 는 항상 새 탭.
+        addViewToGroup(project.id, "terminal");
       } else if (key === "b" && !e.shiftKey) {
         e.preventDefault();
         toggleSidebar(project.id);
@@ -310,7 +450,6 @@ function App() {
     closePane,
     closeView,
     addViewToGroup,
-    splitWithNewView,
     toggleSidebar,
     toggleRightSidebar,
   ]);
@@ -338,12 +477,8 @@ function App() {
     };
   }, []);
 
-  const commitRename = (id: string, raw: string, fallback: string) => {
-    renameTab(id, raw.trim() || fallback);
-    setEditingId(null);
-  };
-
   // 프로젝트 탭 목록(상단 가로 / 좌측 세로 양쪽에서 같은 마크업 재사용).
+  // 더블클릭 = 프로젝트 설정 모달(이름 + 식별 색 — 인라인 rename 대체).
   const projectTabsList = (
     <>
       {tabs.map((proj) => (
@@ -351,105 +486,90 @@ function App() {
           key={proj.id}
           className={`tab${proj.id === activeId ? " active" : ""}`}
           onClick={() => setActive(proj.id)}
-          onDoubleClick={() => setEditingId(proj.id)}
+          onDoubleClick={() => setProjectSettingsFor(proj.id)}
         >
-          {editingId === proj.id ? (
-            <input
-              className="tab-rename"
-              defaultValue={proj.title}
-              autoFocus
-              onClick={(e) => e.stopPropagation()}
-              onBlur={(e) => commitRename(proj.id, e.target.value, proj.title)}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "Enter") {
-                  commitRename(proj.id, e.currentTarget.value, proj.title);
-                } else if (e.key === "Escape") {
-                  setEditingId(null);
-                }
-              }}
-            />
-          ) : (
-            <span className="tab-title">{proj.title}</span>
+          {proj.color && (
+            <span className="tab-dot" style={{ background: proj.color }} />
           )}
+          <span className="tab-title">{proj.title}</span>
           {tabs.length > 1 && (
             <button
               type="button"
-              className="tab-close"
+              className="icon-btn icon-btn--mini tab-close"
               title={t("project.close")}
               onClick={(e) => {
                 e.stopPropagation();
                 closeTab(proj.id);
               }}
             >
-              ×
+              <Icon name="close" size="sm" />
             </button>
           )}
         </div>
       ))}
       <button
         type="button"
-        className="tab-add"
+        className="icon-btn tab-add"
         title={t("project.new")}
         onClick={() => setNewProjectOpen(true)}
       >
-        +
+        <Icon name="add" />
       </button>
     </>
   );
 
-  // 좌측 레일(54px): 라벨 대신 34px 번호 칩(레퍼런스). 더블클릭=이름변경, 우클릭=닫기.
+  // 좌측 레일: 칩 폭 = 레일 폭 추종(적응형). 라벨은 말줄임, 최소폭(RAIL_MIN)까지
+  // 줄이면 첫 글자만(말줄임 없음). 더블클릭=프로젝트 설정(이름/색), 우클릭=닫기.
+  const railAtMin = railW <= RAIL_MIN;
   const projectRailList = (
     <>
-      {tabs.map((proj, i) =>
-        editingId === proj.id ? (
-          <input
-            key={proj.id}
-            className="rail-rename"
-            defaultValue={proj.title}
-            autoFocus
-            onClick={(e) => e.stopPropagation()}
-            onBlur={(e) => commitRename(proj.id, e.target.value, proj.title)}
-            onKeyDown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter") {
-                commitRename(proj.id, e.currentTarget.value, proj.title);
-              } else if (e.key === "Escape") {
-                setEditingId(null);
-              }
-            }}
-          />
-        ) : (
-          <div
-            key={proj.id}
-            className={`rail-chip${proj.id === activeId ? " active" : ""}`}
-            title={proj.title}
-            onClick={() => setActive(proj.id)}
-            onDoubleClick={() => setEditingId(proj.id)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              if (tabs.length > 1) closeTab(proj.id);
-            }}
-          >
-            {i + 1}
-          </div>
-        ),
-      )}
+      {tabs.map((proj) => (
+        <div
+          key={proj.id}
+          className={`rail-chip${proj.id === activeId ? " active" : ""}`}
+          title={proj.title}
+          style={
+            proj.color
+              ? { borderColor: proj.color, color: proj.color }
+              : undefined
+          }
+          onClick={() => setActive(proj.id)}
+          onDoubleClick={() => setProjectSettingsFor(proj.id)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            if (tabs.length > 1) closeTab(proj.id);
+          }}
+        >
+          <span className="rail-chip-label">
+            {railAtMin ? ([...proj.title][0] ?? "") : proj.title}
+          </span>
+        </div>
+      ))}
       <button
         type="button"
         className="rail-add"
         title={t("project.new")}
         onClick={() => setNewProjectOpen(true)}
       >
-        +
+        <Icon name="add" size="lg" />
       </button>
     </>
   );
 
   return (
     <div className="app-root">
-      {/* 오버레이 타이틀바: 프로젝트 탭. 빈 영역 드래그로 창 이동. */}
+      {/* 오버레이 타이틀바: 로고(최앞단 고정) + 프로젝트 탭. 빈 영역 드래그로 창 이동. */}
       <div className="titlebar" data-tauri-drag-region>
+        {/* 로고는 신호등(82px) 바로 뒤 고정 — 탭은 항상 로고 뒤부터 쌓인다.
+            pointer-events:none 으로 창 드래그를 가로채지 않는다. */}
+        <span
+          className="titlebar-logo"
+          aria-hidden
+          dangerouslySetInnerHTML={{ __html: logoRaw }}
+        />
+        {/* DEV 배지 = 로고 바로 뒤 고정 — 프로젝트 탭(상단 모드)은 이 뒤부터 쌓인다.
+            HMR 개발 빌드에서만 표시(릴리스는 import.meta.env.DEV=false). */}
+        {import.meta.env.DEV && <span className="dev-badge">DEV</span>}
         {projectTabPosition === "top" ? (
           <div className="tabs" data-tauri-drag-region>
             {projectTabsList}
@@ -459,45 +579,43 @@ function App() {
           <div className="tabs" data-tauri-drag-region />
         )}
         <div className="titlebar-right">
-          {/* HMR 개발 빌드에서만 표시(릴리스 빌드는 import.meta.env.DEV=false). dev↔릴리스 구분. */}
-          {import.meta.env.DEV && <span className="dev-badge">DEV</span>}
           <button
             type="button"
-            className={`sidebar-toggle${activeProject?.sidebarOpen ? " active" : ""}`}
+            className={`icon-btn sidebar-toggle${activeProject?.sidebarOpen ? " active" : ""}`}
             title={t("sidebar.toggle")}
             aria-label={t("sidebar.toggle")}
             onClick={() => activeProject && toggleSidebar(activeProject.id)}
           >
-            ◧
+            <Icon name="panel-left" />
           </button>
           <button
             type="button"
-            className={`sidebar-toggle${activeProject?.rightOpen ? " active" : ""}`}
+            className={`icon-btn sidebar-toggle${activeProject?.rightOpen ? " active" : ""}`}
             title={t("plugin.sidebar.toggle")}
             aria-label={t("plugin.sidebar.toggle")}
             onClick={() =>
               activeProject && toggleRightSidebar(activeProject.id)
             }
           >
-            ◨
+            <Icon name="panel-right" />
           </button>
           <button
             type="button"
-            className="theme-toggle"
+            className="icon-btn theme-toggle"
             title={isDark ? t("theme.lightPreset") : t("theme.darkPreset")}
             aria-label={t("theme.toggle")}
             onClick={toggleMode}
           >
-            {isDark ? "☀" : "☾"}
+            <Icon name={isDark ? "sun" : "moon"} />
           </button>
           <button
             type="button"
-            className="settings-toggle"
+            className="icon-btn settings-toggle"
             title={t("settings.open")}
             aria-label={t("settings.open")}
             onClick={() => setSettingsOpen(true)}
           >
-            ⚙
+            <Icon name="settings" />
           </button>
         </div>
       </div>
@@ -505,6 +623,12 @@ function App() {
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {newProjectOpen && (
         <NewProjectModal onClose={() => setNewProjectOpen(false)} />
+      )}
+      {projectSettingsFor && (
+        <ProjectSettingsModal
+          projectId={projectSettingsFor}
+          onClose={() => setProjectSettingsFor(null)}
+        />
       )}
 
       {/* 본문: 좌측 모드면 세로 프로젝트 레일 + 콘텐츠 행. */}
@@ -523,95 +647,20 @@ function App() {
         )}
         {/* 모든 프로젝트를 마운트해 세션 유지(비활성은 visibility 로 숨김). */}
         <div className="terminal-stack">
-        {tabs.map((project) => {
-          const isActiveProject = project.id === activeId;
-          return (
-            <div
+          {tabs.map((project) => (
+            <ProjectPane
               key={project.id}
-              className="terminal-pane"
-              style={{
-                visibility: isActiveProject ? "visible" : "hidden",
-                zIndex: isActiveProject ? 1 : 0,
-              }}
-            >
-              {/* 좌측 파일 트리 사이드바. 닫히면 width 0(언마운트 X → 상태 유지).
-                  닫힐 때 우측 보더도 함께 제거 — 0폭이어도 보더는 1px 선으로 남아
-                  사이드바 밖에 보더가 걸린 것처럼 보이기 때문. */}
-              <div
-                className="sidebar"
-                style={{
-                  width: project.sidebarOpen ? sidebarW : 0,
-                  borderRightWidth: project.sidebarOpen ? 1 : 0,
-                }}
-              >
-                <LeftSidebarHost
-                  project={project}
-                  paneId={cwdPaneOf(project) ?? ""}
-                  onOpenFile={(p) => openFileView(project.id, p)}
-                  treeTheme={treeTheme}
-                />
-              </div>
-              {project.sidebarOpen && (
-                <div
-                  className="sidebar-resizer"
-                  onMouseDown={startResize}
-                  title="사이드바 폭 조절"
-                />
-              )}
-
-              {/* 콘텐츠 영역: 컨텐츠 탭 바 + 각 컨텐츠의 에디터 그룹 그리드.
-                  탭 위치 left 면 가로(행)로 배치해 좌측 세로 스트립 + 본문. */}
-              <div
-                className={`content${contentTabPosition === "left" ? " ctabs-left" : ""}`}
-              >
-                <ContentTabs
-                  project={project}
-                  vertical={contentTabPosition === "left"}
-                />
-                <div className="content-body">
-                  {project.contents.map((c) => {
-                    const isActiveContent = c.id === project.activeContentId;
-                    return (
-                      <div
-                        key={c.id}
-                        className="content-pane"
-                        style={{
-                          visibility: isActiveContent ? "visible" : "hidden",
-                          zIndex: isActiveContent ? 1 : 0,
-                        }}
-                      >
-                        <GroupArea
-                          content={c}
-                          projectId={project.id}
-                          isActiveProject={isActiveProject && isActiveContent}
-                          isDark={isDark}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 우측 플러그인 사이드바(⌥⌘B). 닫히면 width 0(언마운트 X — keep-alive). */}
-              {project.rightOpen && (
-                <div
-                  className="sidebar-right-resizer"
-                  onMouseDown={startRightResize}
-                  title={t("plugin.sidebar.resize")}
-                />
-              )}
-              <div
-                className="sidebar-right"
-                style={{
-                  width: project.rightOpen ? rightW : 0,
-                  borderLeftWidth: project.rightOpen ? 1 : 0,
-                }}
-              >
-                <PluginSidebar project={project} />
-              </div>
-            </div>
-          );
-        })}
+              project={project}
+              isActiveProject={project.id === activeId}
+              isDark={isDark}
+              sidebarW={sidebarW}
+              rightW={rightW}
+              contentTabPosition={contentTabPosition}
+              treeTheme={treeTheme}
+              startResize={startResize}
+              startRightResize={startRightResize}
+            />
+          ))}
         </div>
       </div>
     </div>

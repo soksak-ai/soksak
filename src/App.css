@@ -10,7 +10,9 @@
 /* 스크롤바: 얇고 배경색과 흡사하게(전역). 트랙은 투명(=배경), 썸은 아주 옅은 회색.
    -webkit-appearance:none 이 없으면 macOS 네이티브 오버레이(굵은 흰 막대)가 그대로
    떠 커스텀 스타일이 무시된다 — 반드시 꺼야 한다.
-   파일트리는 shadow DOM 이라 닿지 않으므로 라이브러리 unsafeCSS 로 별도 주입. */
+   파일트리는 shadow DOM 이라 닿지 않으므로 라이브러리 unsafeCSS 로 별도 주입.
+   (성능 A/B 검증 완료: 커스텀 스크롤바 제거(B) ≈ 현행(A) — 합성 스크롤 저해 없음,
+   scripts/perf results 20260612 scroll-B2 참조) */
 ::-webkit-scrollbar {
   -webkit-appearance: none;
   width: 4px;
@@ -67,13 +69,31 @@ body,
   background: var(--bg);
   display: flex;
   flex-direction: column;
+  /* 앱 크롬은 선택 불가(editor 동일) — 드래그 제스처(디바이더/탭/사이드바)가
+     UI 텍스트·컨테이너를 네이티브 선택으로 칠하는 것을 원천 차단한다.
+     드래그 시작 후 JS 로 user-select 를 꺼도 mousedown 시점에 시작된 선택은
+     못 막는다 — 콘텐츠/입력만 아래에서 선택 가능으로 되돌린다. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 선택이 의미 있는 곳만 opt-in: 입력 필드, 에디터 본문(CodeMirror contenteditable),
+   마크다운 프리뷰, 뷰어 메시지. 터미널(xterm)은 자체 선택 모델이라 제외. */
+.app-root input,
+.app-root textarea,
+.fv-cm .cm-content,
+.fv-markdown,
+.fv-msg {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* 오버레이 타이틀바: macOS 신호등(좌측)과 같은 라인. 빈 영역 드래그로 창 이동.
    좌측 ~78px 는 신호등이 덮으므로 padding-left 로 비워둔다. */
 .titlebar {
-  flex: 0 0 34px;
-  height: 34px;
+  /* 45 = 패딩4 + ws 슬롯 36 + 패딩4 + 구분선1 — 전 항 정수(절반픽셀 불가, R3). */
+  flex: 0 0 45px;
+  height: 45px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -85,12 +105,15 @@ body,
 
 .tabs {
   display: flex;
-  align-items: center;
+  /* ws 밴드: content-tabs 내부(36px)와 같은 슬롯 높이 — .tab ≡ .ctab 높이를
+     같은 변수(--ws-pad) 하나로 보장한다. 항목은 stretch 로 안을 가득 채운다. */
+  height: 36px;
+  align-self: center;
+  align-items: stretch;
+  padding-block: var(--ws-pad, 5px);
   gap: 4px;
   flex: 1 1 auto;
   min-width: 0;
-  /* visible: 닫기 팝오버가 탭 박스 밖(상단)으로 삐져나올 수 있게. overflow-x:auto 면
-     세로도 함께 클리핑돼 팝오버가 잘린다. (탭이 많아질 때의 가로 스크롤은 추후 처리.) */
   overflow: visible;
 }
 
@@ -99,7 +122,6 @@ body,
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
   padding: 0 8px;
   border-radius: 5px;
   font-size: 12px;
@@ -115,54 +137,14 @@ body,
 .tab:hover {
   background: rgba(127, 127, 127, 0.22);
 }
-.tab-rename {
-  width: 72px;
-  height: 18px;
-  padding: 0 2px;
-  border: 1px solid rgba(127, 127, 127, 0.6);
-  border-radius: 3px;
-  background: var(--bg);
-  color: var(--fg);
-  font-size: 12px;
-  font-family: inherit;
-  outline: none;
-}
-
-/* 닫기 버튼: 인라인 공간을 차지하지 않는다. 기본 숨김, 탭 호버 시에만 탭 박스 밖
-   상단 우측 모서리로 삐져나와 떠오른다(둥근 배경 + 그림자로 팝오버처럼). */
+/* 닫기 버튼: 뷰 탭과 동일한 인라인 × (.icon-btn--mini 가 기하 소유). */
 .tab-close {
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  z-index: 10;
-  width: 15px;
-  height: 15px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 50%;
-  background: var(--bg);
-  color: var(--fg);
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
-  font-size: 11px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  transform: scale(0.6);
-  transition:
-    opacity 0.12s ease,
-    transform 0.12s ease;
+  opacity: 0.55;
 }
-.tab:hover .tab-close {
-  opacity: 1;
-  pointer-events: auto;
-  transform: scale(1);
-}
+.tab:hover .tab-close,
 .tab-close:hover {
-  background: #f14c4c;
-  color: #fff;
+  opacity: 1;
+  background: var(--inset);
 }
 .tab-add {
   border: none;
@@ -189,11 +171,14 @@ body,
 .dev-badge {
   flex: 0 0 auto;
   font-size: 10px;
+  /* 칩 높이 = 12 + 2×2 = 16(짝수) — 폰트 메트릭(normal=홀수 15) 대신 결정적
+     line-height 로 짝수 확보 → 타이틀바 내부(44)에서 y 가 항상 정수. */
+  line-height: 12px;
   font-weight: 700;
   letter-spacing: 0.5px;
   color: #0a3d20;
   background: #2ec07a;
-  padding: 1px 6px;
+  padding: 2px 6px;
   border-radius: 4px;
   user-select: none;
 }
@@ -529,8 +514,7 @@ body,
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  /* 상단 밴드 통일: 컨텐츠 탭(38px)과 같은 높이/보더 — 가로 라인이 한 줄로 이어진다. */
-  height: 38px;
+  /* 높이는 크롬 행 계약(--chrome-row-h, 파일 끝)이 소유 — 지정 금지. */
   padding: 0 6px 0 10px;
   font-size: 11px;
   color: var(--fg);
@@ -615,10 +599,11 @@ body,
 .content-tabs {
   flex: 0 0 auto;
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
   gap: 2px;
-  height: 30px;
-  padding: 0 6px;
+  /* 높이는 크롬 행 계약(--chrome-row-h = 패딩5+칩26+패딩5+선1 = 37)이 소유.
+     패딩이 정수면 칩 y 도 항상 정수 — 절반픽셀 센터링 구조적 불가. */
+  padding: var(--ws-pad, 5px) 6px;
   background: var(--bg);
   border-bottom: 1px solid rgba(127, 127, 127, 0.18);
   overflow-x: auto;
@@ -629,7 +614,6 @@ body,
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
   padding: 0 8px;
   border-radius: 6px 6px 0 0;
   font-size: 12px;
@@ -744,15 +728,25 @@ body,
   position: absolute;
   inset: 0;
 }
-/* 영속 본문 슬롯: viewId 키로 이동해도 remount 없음. rect 는 인라인 스타일로. */
+/* ── 좌표 규칙(단일 소유) — 셀 변수(--l/--t/--w/--h)와 치수 변수(--pane-inset/
+   --header-h/--status-h, GroupArea 컨테이너가 1회 주입)로만 계산. 인라인 calc
+   문자열 조립 금지. 셀 내부는 flex column — 헤더/상태바 좌표 산수 없음. ── */
+
+/* 영속 본문 슬롯: viewId 키로 이동해도 remount 없음(CodeMirror/터미널 세션 보존)
+   — 위치 지정이 정당한 유일한 레이어. 본문 영역 = 셀 − 헤더 − 상태바. */
 .egroup-body-slot {
   position: absolute;
+  left: calc(var(--l) + var(--pane-inset));
+  top: calc(var(--t) + var(--pane-inset) + var(--header-h));
+  width: calc(var(--w) - var(--pane-inset) * 2);
+  height: calc(
+    var(--h) - (var(--pane-inset) * 2 + var(--header-h) + var(--status-h))
+  );
   overflow: hidden;
 }
-/* 그룹 타이틀바(셀 최상단) = 그룹 드래그 핸들. 활성 그룹은 파란 강조선. */
+/* 그룹 타이틀바(셀 flex 첫 행) = 그룹 드래그 핸들. 활성 그룹은 파란 강조선. */
 .egroup-title {
-  position: absolute;
-  z-index: 3;
+  flex: 0 0 var(--header-h);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -802,16 +796,20 @@ body,
 }
 /* 그룹 탭 바 스트립(타이틀바 아래). 높이는 인라인(TAB_PX)과 일치. */
 .egroup-tabs {
-  position: absolute;
+  flex: 0 0 var(--header-h);
+  position: relative;
   overflow: hidden;
-  z-index: 2;
   -webkit-user-select: none;
   user-select: none;
 }
-/* 그룹 스테이터스바(셀 하단). */
+/* 본문 공간(셀 flex 가운데) — 비워두고 영속 슬롯이 그 위에 뜬다. */
+.egc-body-space {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* 그룹 스테이터스바(셀 flex 마지막 행). */
 .egroup-status-wrap {
-  position: absolute;
-  z-index: 2;
+  flex: 0 0 var(--status-h);
   overflow: hidden;
   -webkit-user-select: none;
   user-select: none;
@@ -859,6 +857,12 @@ body,
 /* 드롭 인디케이터(포인터 드래그 중 시각용, 본문 영역 위). 이벤트는 받지 않음. */
 .drop-ind-wrap {
   position: absolute;
+  left: calc(var(--l) + var(--pane-inset));
+  top: calc(var(--t) + var(--pane-inset) + var(--header-h));
+  width: calc(var(--w) - var(--pane-inset) * 2);
+  height: calc(
+    var(--h) - (var(--pane-inset) * 2 + var(--header-h) + var(--status-h))
+  );
   z-index: 10;
   pointer-events: none;
 }
@@ -907,9 +911,10 @@ body,
 .view-tabs {
   height: 100%;
   display: flex;
-  align-items: flex-end;
+  /* 밴드 패딩 계약: 스트립이 --tab-pad 로 상하 여백을 소유, 항목은 stretch. */
+  align-items: stretch;
+  padding: var(--tab-pad, 4px) 6px;
   gap: 2px;
-  padding: 0 6px;
   overflow-x: auto;
 }
 /* 커스텀 3px 가로 스크롤바: 네이티브 오버레이는 숨기고(전역 display:none) 여기서 그린다.
@@ -938,10 +943,11 @@ body,
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
   padding: 0 8px;
-  border-radius: 6px 6px 0 0;
+  /* 부착형 탭(상단만 라운드) 레거시 제거 — 필 스타일 표준(스트립 센터 정렬). */
+  border-radius: 6px;
   font-size: 12px;
+  line-height: 1;
   color: rgba(127, 127, 127, 0.9);
   background: rgba(127, 127, 127, 0.08);
   cursor: pointer;
@@ -1449,9 +1455,8 @@ body,
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── 타이틀바(44px) ── */
+/* 기하(height)는 기본 규칙이 소유 — SKIN 은 표면만. */
 .titlebar {
-  flex: 0 0 44px;
-  height: 44px;
   gap: 10px;
   padding: 0 14px 0 82px;
   border-bottom: 1px solid var(--bd);
@@ -1464,21 +1469,20 @@ body,
   background: transparent;
 }
 
-/* ── 워크스페이스(컨텐츠) 탭 바(38px) ── */
+/* ── 워크스페이스(컨텐츠) 탭 바 — 기하(height/padding-block)는 기본 규칙이
+   소유(밴드 패딩 계약), SKIN 은 표면(배경/구분선/간격)만 덮는다. ── */
 .content-tabs {
-  height: 38px;
-  padding: 0 10px;
+  padding-inline: 10px;
   gap: 6px;
-  align-items: center;
   background: var(--side);
-  border-bottom-color: var(--bd);
+  border-bottom: 1px solid var(--bd);
 }
 :root[data-tab-bar="transparent"] .content-tabs {
   background: transparent;
 }
 .view-tabs-wrap {
   background: var(--side);
-  border-bottom-color: var(--bd);
+  border-bottom: 1px solid var(--bd);
 }
 :root[data-tab-bar="transparent"] .view-tabs-wrap {
   background: transparent;
@@ -1487,7 +1491,6 @@ body,
 /* ── 워크스페이스급 탭(.tab 프로젝트 / .ctab 컨텐츠) — SKIN wsA/wsI ── */
 .tab,
 .ctab {
-  height: 26px;
   padding: 0 12px;
   border-radius: 7px;
   font-size: 13px;
@@ -1507,10 +1510,12 @@ body,
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   color: var(--fg);
 }
-/* pill (Midnight) */
+/* pill (Midnight) — 칩 = 36 − 4×2 = 28 */
+:root[data-tab-shape="pill"] {
+  --ws-pad: 4px;
+}
 :root[data-tab-shape="pill"] .tab,
 :root[data-tab-shape="pill"] .ctab {
-  height: 28px;
   border-radius: 8px;
 }
 :root[data-tab-shape="pill"] .tab.active,
@@ -1519,10 +1524,12 @@ body,
   border-color: var(--bd);
   box-shadow: none;
 }
-/* underline (Bare) */
+/* underline (Bare) — 패딩 0 = 밴드 전체 높이 사용 */
+:root[data-tab-shape="underline"] {
+  --ws-pad: 0px;
+}
 :root[data-tab-shape="underline"] .tab,
 :root[data-tab-shape="underline"] .ctab {
-  height: 100%;
   padding: 0 3px;
   border-radius: 0;
   font-size: 12.5px;
@@ -1540,10 +1547,12 @@ body,
   box-shadow: none;
   border-bottom-color: var(--fg);
 }
-/* inverse (Phosphor) */
+/* inverse (Phosphor) — 칩 = 36 − 6×2 = 24 */
+:root[data-tab-shape="inverse"] {
+  --ws-pad: 6px;
+}
 :root[data-tab-shape="inverse"] .tab,
 :root[data-tab-shape="inverse"] .ctab {
-  height: 24px;
   padding: 0 10px;
   border-radius: 0;
   font-size: 12.5px;
@@ -1556,10 +1565,12 @@ body,
   color: var(--bg);
   box-shadow: none;
 }
-/* round (Paper) */
+/* round (Paper) — 칩 = 36 − 4×2 = 28 */
+:root[data-tab-shape="round"] {
+  --ws-pad: 4px;
+}
 :root[data-tab-shape="round"] .tab,
 :root[data-tab-shape="round"] .ctab {
-  height: 28px;
   padding: 0 14px;
   border-radius: 99px;
 }
@@ -1570,14 +1581,12 @@ body,
   box-shadow: 0 1px 3px rgba(80, 65, 40, 0.08);
 }
 
-/* ── 패널(뷰) 탭(32px 바) — SKIN pt ── */
+/* ── 패널(뷰) 탭(32px 바) — SKIN pt: 기하는 기본 규칙 소유, 표면만 덮는다 ── */
 .view-tabs {
-  align-items: center;
   gap: 5px;
-  padding: 0 8px;
+  padding-inline: 8px;
 }
 .view-tab {
-  height: 22px;
   padding: 0 11px;
   border-radius: 6px;
   font-size: 12px;
@@ -1598,8 +1607,11 @@ body,
 .view-tab.active:hover {
   background: var(--card);
 }
+/* 뷰 칩 = 32 − 3×2 = 26 */
+:root[data-tab-shape="pill"] {
+  --tab-pad: 3px;
+}
 :root[data-tab-shape="pill"] .view-tab {
-  height: 24px;
   border-radius: 7px;
 }
 :root[data-tab-shape="pill"] .view-tab.active {
@@ -1618,8 +1630,11 @@ body,
   box-shadow: none;
   color: var(--fg);
 }
+/* 뷰 칩 = 32 − 5×2 = 22 */
+:root[data-tab-shape="inverse"] {
+  --tab-pad: 5px;
+}
 :root[data-tab-shape="inverse"] .view-tab {
-  height: 21px;
   padding: 0 10px;
   border-radius: 0;
   font-size: 11.5px;
@@ -1631,8 +1646,11 @@ body,
   box-shadow: none;
   color: var(--fg);
 }
+/* 뷰 칩 = 32 − 4×2 = 24 (기본과 동일 — 명시 유지) */
+:root[data-tab-shape="round"] {
+  --tab-pad: 4px;
+}
 :root[data-tab-shape="round"] .view-tab {
-  height: 23px;
   padding: 0 13px;
   border-radius: 99px;
 }
@@ -1646,7 +1664,7 @@ body,
 /* ── 분할 패널 헤더(타이틀바 모드)·스테이터스바 ── */
 .egroup-title {
   background: var(--side);
-  border-bottom-color: var(--bd);
+  border-bottom: 1px solid var(--bd);
   color: var(--fg2);
   font-size: 12px;
 }
@@ -1658,7 +1676,7 @@ body,
   font-size: 11.5px;
   padding: 0 12px;
   background: var(--side);
-  border-top-color: var(--bd);
+  border-top: 1px solid var(--bd);
   color: var(--fg3);
 }
 :root[data-status-bg="inset"] .egroup-status {
@@ -1669,22 +1687,30 @@ body,
 }
 
 /* ── 패널 처리(paneStyle, 레퍼런스 SKIN.pane): 패널 전체를 단일 카드 하나로.
-   백킹 카드(.egroup-card)가 유일한 보더/배경/라운드. 내부 chrome(타이틀/탭/본문/
+   그룹 셀(.egroup-cell)이 유일한 보더/배경/라운드. 내부 chrome(타이틀/탭/본문/
    상태)은 투명·무보더 → 상하좌우 이음새(이중선) 제거. flat 은 카드 없음(투명). ── */
 /* 백킹 카드(z:0): --card 배경 + 라운드 + (floating)그림자. 보더는 여기 두지 않는다
    (불투명 터미널이 덮어 좌우/하단이 사라지므로). flat 은 배경 없음(투명). */
-.egroup-card {
+/* 그룹 셀(z:0): 유일한 위치 지정 레이어 — 카드 배경/라운드 소유 + 내부 flex
+   column([헤더][본문 공간][상태바]). 헤더/상태바 인터랙션을 받으므로
+   pointer-events 차단하지 않는다(본문 영역은 위의 슬롯 레이어가 받음). */
+.egroup-cell {
   position: absolute;
-  pointer-events: none;
+  left: calc(var(--l) + var(--pane-inset));
+  top: calc(var(--t) + var(--pane-inset));
+  width: calc(var(--w) - var(--pane-inset) * 2);
+  height: calc(var(--h) - var(--pane-inset) * 2);
+  display: flex;
+  flex-direction: column;
   z-index: 0;
 }
-:root[data-pane-style="card"] .egroup-card,
-:root[data-pane-style="floating"] .egroup-card {
+:root[data-pane-style="card"] .egroup-cell,
+:root[data-pane-style="floating"] .egroup-cell {
   background: var(--card);
   border-radius: 11px;
   overflow: hidden;
 }
-:root[data-pane-style="floating"] .egroup-card {
+:root[data-pane-style="floating"] .egroup-cell {
   border-radius: 14px;
   box-shadow: var(--shadow);
 }
@@ -1693,6 +1719,10 @@ body,
    보장. pointer-events:none 으로 클릭 통과. flat 은 프레임 없음. */
 .egroup-frame {
   position: absolute;
+  left: calc(var(--l) + var(--pane-inset));
+  top: calc(var(--t) + var(--pane-inset));
+  width: calc(var(--w) - var(--pane-inset) * 2);
+  height: calc(var(--h) - var(--pane-inset) * 2);
   pointer-events: none;
   z-index: 5;
 }
@@ -2053,8 +2083,10 @@ select.dctl {
   gap: 10px;
   padding: 12px 0;
 }
+/* 칩 폭 = 레일 폭 추종(적응형). 라벨은 말줄임 — 최소폭에서는 App 이 첫 글자만
+   렌더하므로 말줄임이 나타나지 않는다. 식별 색은 인라인 border/color 로 입힌다. */
 .rail-chip {
-  width: 34px;
+  width: calc(100% - 12px);
   height: 34px;
   flex: 0 0 auto;
   border-radius: 9px;
@@ -2067,6 +2099,57 @@ select.dctl {
   color: var(--fg2);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
   cursor: pointer;
+  padding: 0 4px;
+}
+.rail-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* 읽기 전용 값 표시(프로젝트 설정의 폴더 등) — 입력처럼 자리 잡되 편집 불가 룩. */
+.dctl-static {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg3);
+  font: 11.5px "JetBrains Mono", monospace;
+  border: none;
+  background: transparent;
+}
+
+/* 프로젝트 식별 색 점(상단 탭) + 색상 팔레트(프로젝트 설정 모달). */
+.tab-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 2px;
+}
+.color-palette {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--bd);
+  cursor: pointer;
+  padding: 0;
+}
+.color-swatch.on {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--acc);
+}
+.color-none {
+  background: transparent;
+  border-style: dashed;
+  color: var(--fg3);
+  font-size: 12px;
+  line-height: 1;
 }
 .rail-chip:hover {
   border-color: var(--fg3);
@@ -2080,6 +2163,12 @@ select.dctl {
   width: 34px;
   height: 34px;
   flex: 0 0 auto;
+  /* flex 센터(R2) — 베이스라인 정렬이 글리프를 2px 띄우던 문제의 정공법.
+     내부 32(보더 제외) − 아이콘 16 = 8/8 정수 대칭. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border-radius: 9px;
   background: none;
   border: 1px dashed var(--bd);
@@ -2120,12 +2209,17 @@ select.dctl {
   gap: 4px;
   overflow-y: auto;
 }
+/* 세로 리스트 = 가로 밴드 계약 밖(게이트 예외) — 항목 높이를 직접 소유한다. */
 .content-tabs.vertical .ctab {
   width: 100%;
+  height: 26px;
+  flex: 0 0 auto;
   justify-content: flex-start;
 }
 .content-tabs.vertical .ctab-add {
   width: 100%;
+  height: 26px;
+  flex: 0 0 auto;
 }
 .content.ctabs-left .content-body {
   flex: 1 1 auto;
@@ -2181,7 +2275,9 @@ select.dctl {
   border-radius: 6px;
   background: transparent;
   color: var(--fg3);
-  font-size: 14px;
+  /* 플러그인 텍스트 글리프(매니페스트 아이콘) 균일화. */
+  font-size: 13px;
+  line-height: 1;
   cursor: pointer;
   padding: 0;
 }
@@ -2204,8 +2300,7 @@ select.dctl {
 }
 .plugin-side-head {
   flex: 0 0 auto;
-  /* 상단 밴드 통일(38px) — 좌측 헤더·컨텐츠 탭과 같은 높이/보더. */
-  height: 38px;
+  /* 높이는 크롬 행 계약(--chrome-row-h, 파일 끝)이 소유 — 지정 금지. */
   display: flex;
   align-items: center;
   padding: 0 12px;
@@ -2239,6 +2334,8 @@ select.dctl {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  /* 빈 공간이 터미널 패널 본문과 같은 배경 — 사이드바 배경과 구분되는 콘텐츠면. */
+  background: var(--bg);
 }
 .plugin-view-empty,
 .plugin-view-error {
@@ -2256,6 +2353,31 @@ select.dctl {
   word-break: break-all;
   color: var(--fg2);
 }
+/* 하단 스테이터스바 — egroup-status 와 동일한 시각 언어(24px, --side 배경). */
+.plugin-side-status {
+  flex: 0 0 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--side);
+  border-top: 1px solid var(--bd);
+  font-size: 11.5px;
+  color: var(--fg3);
+  text-shadow: var(--glow, none);
+}
+.pss-left {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pss-right {
+  flex: 0 0 auto;
+  opacity: 0.8;
+}
+
 .plugin-side-empty {
   flex: 1;
   display: flex;
@@ -2322,23 +2444,22 @@ select.dctl {
 .plugin-reload:hover {
   color: var(--fg);
 }
+/* 플러그인 카드 — 3행: 타이틀|버전|상태 → 설명(전폭) → 액션. 좁은 사이드바에서
+   설명이 액션 칼럼에 짓눌리지 않도록 세로 적층. */
 .plugin-row {
   display: flex;
-  gap: 8px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
   border: 1px solid var(--bd);
   border-radius: 8px;
   padding: 8px 10px;
-}
-.plugin-row-main {
-  flex: 1;
-  min-width: 0;
 }
 .plugin-row-title {
   display: flex;
   align-items: baseline;
   gap: 6px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 .plugin-row-name {
   font-weight: 600;
@@ -2370,12 +2491,14 @@ select.dctl {
 .plugin-row-desc {
   color: var(--fg2);
   font-size: 11.5px;
-  margin-top: 2px;
+  line-height: 1.5;
+  /* 한국어 단어 중간 줄바꿈 방지 + 긴 코드 토큰만 강제 줄바꿈. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 .plugin-row-err {
   color: #e5534b;
   font-size: 11px;
-  margin-top: 3px;
   word-break: break-all;
 }
 .plugin-row-actions {
@@ -2476,8 +2599,7 @@ select.dctl {
   display: flex;
   align-items: center;
   gap: 2px;
-  /* 상단 밴드 통일(38px). */
-  height: 38px;
+  /* 높이는 크롬 행 계약(--chrome-row-h, 파일 끝)이 소유 — 지정 금지. */
   padding: 0 8px;
   overflow-x: auto;
   border-bottom: 1px solid var(--bd);
@@ -2505,4 +2627,116 @@ select.dctl {
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+/* ══ 아이콘 버튼 원형(아이콘 시스템 표준) ═══════════════════════════════════
+   모든 아이콘 버튼은 .icon-btn(+변형)을 함께 단다. 파일 끝 정의라 같은 특이성의
+   레거시 치수(width/height/font)를 이긴다 — 들쭉날쭉 수렴의 단일 지점.
+   아이콘 크기는 <Icon size>가 소유(xs8/sm12/md14/lg16), 색은 currentColor. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg2);
+  opacity: 0.7;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  opacity: 1;
+  background: var(--inset);
+}
+.icon-btn.active {
+  opacity: 1;
+  color: var(--acc);
+}
+/* 설정: 아이콘 라운드박스 on — 상시 보더+배경(베어 대신 박스 룩). */
+:root[data-icon-box="on"] .icon-btn {
+  border-color: var(--bd);
+  background: var(--inset);
+}
+/* 변형: 항상 박스(플러그인 레일 등 — iconBox 설정과 무관). */
+.icon-btn--boxed {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border-color: var(--bd);
+  background: var(--inset);
+}
+/* 변형: 소형 원형(탭 호버 닫기 popover). */
+.icon-btn--mini {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+/* 탭 타입 아이콘 등 비버튼 아이콘 정렬용 래퍼. */
+.icon-inline {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+/* 타이틀바 워드마크 로고 — 신호등 뒤 최앞단 고정. 탭은 항상 이 뒤부터 쌓인다.
+   fill=currentColor 상속이라 테마(--fg2)를 따른다. 드래그 영역을 가로채지 않음. */
+.titlebar-logo {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+  color: var(--fg2);
+  margin-right: 4px;
+}
+.titlebar-logo svg {
+  /* 18 → +30% = 23.4 → 24(짝수): 타이틀바 내부 44 에서 (44−24)/2 = 10 정수.
+     폭도 정수로 스냅(비율상 68.85 → 69) — auto(소수) 폭이 뒤따르는 배지/탭의
+     x 를 소수 픽셀에 얹는 것을 차단(1x 디스플레이 선명도). */
+  height: 24px;
+  width: 69px;
+  display: block;
+}
+
+/* ── 밴드 패딩 계약(2026-06, docs/UI.md R1) — "자유로우면서 정확" ────────────
+   밴드(스트립)가 padding-block 변수로 상하 여백을 소유하고, 항목은 stretch 로
+   안을 가득 채운다: 항목 높이 = 밴드 내부 − 패딩×2.
+   - 형제 박스(필/+/×)는 정의상 같은 높이·같은 축 — 1px 어긋남 구조적 불가.
+   - 패딩이 정수면 항목 y 도 항상 정수 — 절반픽셀 센터링(상하 공백 차이) 불가.
+   - 테마 자유 = :root 변수(--tab-pad 뷰 밴드 / --ws-pad ws 밴드)만. 항목에
+     height 직접 지정 금지(vitest 게이트 강제 — 세로 리스트/레일만 예외). */
+.view-tabs .view-tab,
+.view-tabs .view-add,
+.tab,
+.ctab,
+.tab-add,
+.ctab-add {
+  height: auto;
+  align-self: stretch;
+  margin: 0;
+}
+.ctab-add-wrap {
+  align-self: stretch;
+  display: flex;
+  align-items: stretch;
+}
+.view-add,
+.tab-add,
+.ctab-add {
+  width: auto;
+  padding: 0 10px;
+  border-radius: 6px;
+}
+
+/* ── 크롬 행 계약(docs/UI.md R1a): 수평으로 이웃한 밴드(좌측 헤더·컨텐츠 탭·
+   우측 헤더·좌측 호스트 탭)는 같은 행 — 높이는 이 규칙 하나만이 소유한다.
+   37 = 패딩5 + 칩26 + 패딩5 + 구분선1. 개별 블록의 height 지정 금지. */
+.ft-header,
+.plugin-side-head,
+.left-host-tabs,
+.content-tabs {
+  height: var(--chrome-row-h, 37px);
 }

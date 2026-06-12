@@ -215,6 +215,17 @@ pub fn browser_close(app: AppHandle, label: String) -> Result<(), String> {
     Ok(())
 }
 
+// 존재하는 브라우저 child 웹뷰 라벨 목록(b-*). 프론트 GC 가 "웹뷰 집합 ⊆ 스토어의
+// browser 뷰 집합" 불변식을 검증·회수하는 데 쓴다(생성/파괴 경쟁의 고아 방지).
+#[tauri::command]
+pub fn browser_list(app: AppHandle) -> Vec<String> {
+    app.webviews()
+        .keys()
+        .filter(|l| l.starts_with("b-"))
+        .cloned()
+        .collect()
+}
+
 // 내장 브라우저 새 창을 명령으로 직접 열기(browser.open where=window).
 #[tauri::command]
 pub fn browser_open_window(app: AppHandle, url: String) -> Result<(), String> {

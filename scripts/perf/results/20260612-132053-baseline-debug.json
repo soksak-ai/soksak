@@ -1,0 +1,94 @@
+{
+  "meta": {
+    "identity": "debug",
+    "label": "baseline",
+    "git": "211dfce",
+    "date": "20260612-132053"
+  },
+  "scenarios": {
+    "s1": {
+      "active": {
+        "avg": 53.3,
+        "max": 164.3,
+        "samples": 39
+      },
+      "tail": {
+        "avg": 1.1,
+        "max": 1.2,
+        "samples": 13
+      }
+    },
+    "s2": {
+      "active": {
+        "avg": 32.2,
+        "max": 126.9,
+        "samples": 34
+      },
+      "tail": {
+        "avg": 1.5,
+        "max": 1.7,
+        "samples": 13
+      }
+    },
+    "s3": {
+      "active": {
+        "avg": 10.3,
+        "max": 13.6,
+        "samples": 11
+      },
+      "tail": {
+        "avg": 3.6,
+        "max": 5.3,
+        "samples": 13
+      }
+    },
+    "s4": {
+      "active": {
+        "avg": 128.0,
+        "max": 163.0,
+        "samples": 11
+      },
+      "tail": {
+        "avg": 19.0,
+        "max": 164.2,
+        "samples": 14
+      }
+    },
+    "s5": {
+      "active": {
+        "avg": 36.7,
+        "max": 45.1,
+        "samples": 11
+      },
+      "tail": {
+        "avg": 5.5,
+        "max": 14.4,
+        "samples": 13
+      }
+    },
+    "s6": {
+      "active": {
+        "avg": 13.0,
+        "max": 17.2,
+        "samples": 11
+      },
+      "tail": {
+        "avg": 4.5,
+        "max": 7.0,
+        "samples": 13
+      }
+    },
+    "s7": {
+      "active": {
+        "avg": 4.3,
+        "max": 6.7,
+        "samples": 17
+      },
+      "tail": {
+        "avg": 3.6,
+        "max": 4.7,
+        "samples": 13
+      }
+    }
+  }
+}

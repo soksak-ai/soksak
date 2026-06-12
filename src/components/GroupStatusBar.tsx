@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { getCwdOfHost, subscribeCwd } from "../terminal/paneHosts";
+import { Icon } from "../ui/icons/Icon";
 import type { View, ViewGroup } from "../state/sessions";
 import { useT } from "../i18n";
 
@@ -31,8 +32,8 @@ function FileStatus({ view }: { view: Extract<View, { kind: "file" }> }) {
       <span className="egs-left" title={view.path}>
         {view.path}
       </span>
-      <span className="egs-right">
-        {view.dirty ? "● " : ""}
+      <span className="egs-right icon-inline" style={{ gap: 4 }}>
+        {view.dirty && <Icon name="dirty" size="xs" />}
         {view.mode === "code" ? t("viewer.code") : t("viewer.preview")}
       </span>
     </>
@@ -51,7 +52,12 @@ function BrowserStatus({ view }: { view: Extract<View, { kind: "browser" }> }) {
   );
 }
 
-export function GroupStatusBar({ group }: { group: ViewGroup }) {
+// memo 경계(원칙 2): group 정체성이 보존되는 무관한 store 쓰기에는 리렌더 없음.
+export const GroupStatusBar = memo(function GroupStatusBar({
+  group,
+}: {
+  group: ViewGroup;
+}) {
   const active = group.views.find((v) => v.id === group.activeViewId);
   return (
     <div className="egroup-status">
@@ -64,4 +70,4 @@ export function GroupStatusBar({ group }: { group: ViewGroup }) {
       ) : null}
     </div>
   );
-}
+});

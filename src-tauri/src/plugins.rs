@@ -226,7 +226,9 @@ pub fn plugin_install_git(
     install_git_into(&plugins_dir()?, &source, reference.as_deref())
 }
 
-// 설치된 플러그인 갱신 — fast-forward pull 만(로컬 수정과의 충돌 머지 금지).
+// 설치된 플러그인 갱신 — 설치본은 소스의 미러(사용자 작업공간이 아님): fetch 후
+// 원격 상태로 강제 동기화한다. pull(머지 의미론)은 원격 히스토리 재작성에 깨지고,
+// 설치본의 로컬 수정은 지원 대상이 아니다(플러그인 개발은 plugin.dev.load).
 #[tauri::command]
 pub fn plugin_update(id: String) -> Result<PluginInstallResult, String> {
     sanitize_id(&id)?;
@@ -238,9 +240,17 @@ pub fn plugin_update(id: String) -> Result<PluginInstallResult, String> {
         std::process::Command::new("git")
             .arg("-C")
             .arg(&dir)
-            .args(["pull", "--ff-only"]),
+            .args(["fetch", "origin"]),
     ) {
-        return Err(format!("git pull 실패: {e}"));
+        return Err(format!("git fetch 실패: {e}"));
+    }
+    if let Err(e) = git_run(
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(&dir)
+            .args(["reset", "--hard", "FETCH_HEAD"]),
+    ) {
+        return Err(format!("git reset 실패: {e}"));
     }
     let manifest =
         std::fs::read_to_string(dir.join("plugin.json")).map_err(|_| "plugin.json 없음".to_string())?;

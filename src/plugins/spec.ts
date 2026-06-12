@@ -142,6 +142,11 @@ export interface ContributedLanguage {
   lang: string; // CM6 언어 키(@uiw/codemirror-extensions-langs)
 }
 
+export interface ContributedIconSet {
+  id: string; // 플러그인 내 고유. 전역 키는 "<pluginId>.<id>"
+  title: string; // 설정 드롭다운 표시 이름
+}
+
 // ── §3 매니페스트 ────────────────────────────────────────────────────────────
 
 export const SPEC_VERSION = "soksak-plugin-spec@1";
@@ -162,6 +167,7 @@ export interface PluginManifest {
     commands: ContributedCommand[]; // "commands" 권한 필수
     formatters: ContributedFormatter[]; // "editor" 권한 필수
     languages: ContributedLanguage[]; // "editor" 권한 필수
+    iconSets: ContributedIconSet[]; // "ui" 권한 필수
   };
 }
 
@@ -366,6 +372,7 @@ export function parseManifest(
   let commands: ContributedCommand[] = [];
   let formatters: ContributedFormatter[] = [];
   let languages: ContributedLanguage[] = [];
+  let iconSets: ContributedIconSet[] = [];
   if (raw.contributes !== undefined) {
     if (!isRecord(raw.contributes)) {
       errors.push("contributes: 객체여야 함");
@@ -373,7 +380,7 @@ export function parseManifest(
       const c = raw.contributes;
       checkKnownKeys(
         c,
-        ["views", "commands", "formatters", "languages"],
+        ["views", "commands", "formatters", "languages", "iconSets"],
         "contributes",
         errors,
       );
@@ -494,6 +501,23 @@ export function parseManifest(
       if (languages.length > 0 && !has("editor")) {
         errors.push('contributes.languages: "editor" 권한 선언 필요');
       }
+
+      iconSets = parseEntries(c.iconSets, {
+        label: "contributes.iconSets",
+        required: ["id", "title"],
+        parse: (v, errs) => {
+          if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
+            errs.push("contributes.iconSets: id 는 ^[a-z0-9][a-z0-9-]*$");
+            return null;
+          }
+          if (!isNonEmptyString(v.title)) return null;
+          return { id: v.id.trim(), title: (v.title as string).trim() };
+        },
+      }, errors);
+      checkDuplicates(iconSets.map((v) => v.id), "contributes.iconSets.id", errors);
+      if (iconSets.length > 0 && !has("ui")) {
+        errors.push('contributes.iconSets: "ui" 권한 선언 필요');
+      }
     }
   }
 
@@ -512,7 +536,7 @@ export function parseManifest(
           ? (raw.minAppVersion as string).trim()
           : undefined,
       permissions,
-      contributes: { views, commands, formatters, languages },
+      contributes: { views, commands, formatters, languages, iconSets },
     },
     validation: { ok: true, errors, warnings },
   };

@@ -1,4 +1,6 @@
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
+import { isComposingEnter } from "../lib/imeKeys";
+import { Icon } from "../ui/icons/Icon";
 import { ProgramMenu } from "./ProgramMenu";
 import { useSessions, type Program, type ProjectTab } from "../state/sessions";
 import { useT } from "../i18n";
@@ -7,7 +9,8 @@ import { useT } from "../i18n";
 // 1,2,3,… 자동 번호 + 이름변경(더블클릭) + 닫기 + `+` 메뉴(터미널 / 에이전트▸Claude·Codex /
 // 브라우저 — 선택한 프로그램으로 새 컨텐츠).
 
-export function ContentTabs({
+// memo 경계(원칙 2): 다른 프로젝트의 store 쓰기에는 리렌더되지 않는다.
+export const ContentTabs = memo(function ContentTabs({
   project,
   vertical = false,
 }: {
@@ -63,6 +66,7 @@ export function ContentTabs({
               onBlur={(e) => commit(c.id, e.target.value, c.title)}
               onKeyDown={(e) => {
                 e.stopPropagation();
+                if (isComposingEnter(e)) return; // IME 조합 확정 Enter 는 커밋 아님
                 if (e.key === "Enter")
                   commit(c.id, e.currentTarget.value, c.title);
                 else if (e.key === "Escape") setEditingId(null);
@@ -74,14 +78,14 @@ export function ContentTabs({
           {project.contents.length > 1 && (
             <button
               type="button"
-              className="ctab-close"
+              className="icon-btn icon-btn--mini ctab-close"
               title={t("content.close")}
               onClick={(e) => {
                 e.stopPropagation();
                 closeContent(project.id, c.id);
               }}
             >
-              ×
+              <Icon name="close" size="sm" />
             </button>
           )}
         </div>
@@ -89,11 +93,11 @@ export function ContentTabs({
       <button
         ref={addBtnRef}
         type="button"
-        className="ctab-add"
+        className="icon-btn ctab-add"
         title={t("content.new")}
         onClick={toggleMenu}
       >
-        +
+        <Icon name="add" />
       </button>
       {menuPos && (
         <ProgramMenu
@@ -104,4 +108,4 @@ export function ContentTabs({
       )}
     </div>
   );
-}
+});

@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "identity": "debug",
+    "label": "scroll-B2",
+    "git": "211dfce",
+    "date": "20260612-141720"
+  },
+  "scenarios": {
+    "s5": {
+      "active": {
+        "avg": 13.0,
+        "max": 16.2,
+        "samples": 10
+      },
+      "tail": {
+        "avg": 3.0,
+        "max": 8.4,
+        "samples": 13
+      }
+    },
+    "s6": {
+      "active": {
+        "avg": 12.0,
+        "max": 17.3,
+        "samples": 10
+      },
+      "tail": {
+        "avg": 4.4,
+        "max": 14.7,
+        "samples": 13
+      }
+    }
+  }
+}

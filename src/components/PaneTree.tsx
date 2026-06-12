@@ -1,7 +1,7 @@
-import { Fragment, useCallback, useEffect, useRef } from "react";
+import { Fragment, memo, useCallback, useEffect, useRef } from "react";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { useSessions, type PaneNode } from "../state/sessions";
-import { focusHost, getHost } from "../terminal/paneHosts";
+import { fitHost, focusHost, getHost } from "../terminal/paneHosts";
 
 interface PaneTreeProps {
   node: PaneNode;
@@ -15,7 +15,9 @@ interface PaneTreeProps {
 // pane 트리를 재귀 렌더. leaf 는 마운트 포인트 div(터미널은 paneHosts 레지스트리가
 // 소유), split 은 react-resizable-panels Group. leaf 가 분할/닫기/탭전환으로 이동해도
 // React 가 만드는 건 빈 마운트 포인트뿐 — 호스트 div 는 appendChild 로 이동해 세션 보존.
-export function PaneTree({
+// memo 경계(원칙 2): 재귀 참조는 memo 래핑된 PaneTree(아래 const)를 가리켜야 한다 —
+// 내부 함수명을 직접 부르면 memo 를 우회한다.
+function PaneTreeImpl({
   node,
   projectId,
   viewId,
@@ -28,6 +30,7 @@ export function PaneTree({
         paneId={node.id}
         projectId={projectId}
         viewId={viewId}
+        visible={active}
         focused={active && node.id === focusedPaneId}
       />
     );
@@ -56,14 +59,24 @@ export function PaneTree({
   );
 }
 
+export const PaneTree = memo(PaneTreeImpl);
+
 interface PaneLeafProps {
   paneId: string;
   projectId: string;
   viewId: string;
+  /** 이 뷰가 화면에 보이는가 — 노출 전환 시 보정 fit(숨김 중 리사이즈 스킵 보상). */
+  visible: boolean;
   focused: boolean;
 }
 
-function PaneLeaf({ paneId, projectId, viewId, focused }: PaneLeafProps) {
+const PaneLeaf = memo(function PaneLeaf({
+  paneId,
+  projectId,
+  viewId,
+  visible,
+  focused,
+}: PaneLeafProps) {
   const setFocusedPane = useSessions((s) => s.setFocusedPane);
   const mountRef = useRef<HTMLDivElement | null>(null);
 
@@ -89,6 +102,12 @@ function PaneLeaf({ paneId, projectId, viewId, focused }: PaneLeafProps) {
     }
   });
 
+  // 노출 전환 시 보정 fit: 숨김 동안 리사이즈가 스킵되므로(createTerminal 의
+  // checkVisibility 가드) 보이게 된 순간 모든 pane 의 크기를 맞춘다.
+  useEffect(() => {
+    if (visible) fitHost(paneId);
+  }, [visible, paneId]);
+
   // 보이는 뷰의 포커스된 pane 이면 터미널에 포커스 + fit.
   useEffect(() => {
     if (focused) focusHost(paneId);
@@ -102,7 +121,7 @@ function PaneLeaf({ paneId, projectId, viewId, focused }: PaneLeafProps) {
       onFocusCapture={() => setFocusedPane(projectId, viewId, paneId)}
     />
   );
-}
+});
 
 // 안정적인 React key: leaf 는 pane id, split 은 자식 leaf id 들의 결합.
 function paneKey(node: PaneNode): string {

@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { isComposingEnter } from "../lib/imeKeys";
+import { rafThrottle } from "../lib/rafThrottle";
+import { Icon } from "../ui/icons/Icon";
 import { listen } from "@tauri-apps/api/event";
 import { useBookmarks } from "../state/bookmarks";
 import { useSessions } from "../state/sessions";
-import { useUi } from "../state/ui";
+import { useSuppressBrowser, useUi } from "../state/ui";
 import { useT } from "../i18n";
 
 // 브라우저 패널: 메인 창 안의 Tauri child webview(WKWebView)를 이 슬롯의 본문 영역에
@@ -19,7 +22,7 @@ function normalizeUrl(input: string): string {
   return `https://www.google.com/search?q=${encodeURIComponent(s)}`;
 }
 
-export function BrowserView({
+function BrowserViewImpl({
   projectId,
   viewId,
   url,
@@ -35,8 +38,6 @@ export function BrowserView({
   const setBrowserUrl = useSessions((s) => s.setBrowserUrl);
   const setBrowserTitle = useSessions((s) => s.setBrowserTitle);
   const suppressed = useUi((s) => s.browserSuppress > 0);
-  const suppressBrowser = useUi((s) => s.suppressBrowser);
-  const releaseBrowser = useUi((s) => s.releaseBrowser);
   const bookmarks = useBookmarks((s) => s.list);
   const toggleBookmark = useBookmarks((s) => s.toggle);
 
@@ -53,9 +54,13 @@ export function BrowserView({
   }, [url]);
 
   // 최초 1회 webview 생성. 언마운트(뷰 닫힘) 시 정리.
+  // 생성은 비동기 — 완료 전에 언마운트되면 cleanup 의 close 가 먼저 실행되고
+  // 늦게 생성된 웹뷰가 고아로 남는다(아무도 못 닫는 유령 창). closed 플래그로
+  // 늦게 도착한 생성을 즉시 회수한다. 잔여 경쟁은 browserGc 불변식이 보증.
   useEffect(() => {
     const el = areaRef.current;
     if (!el) return;
+    let closed = false;
     const r = el.getBoundingClientRect();
     invoke("browser_open", {
       label,
@@ -66,48 +71,66 @@ export function BrowserView({
       h: Math.max(1, r.height),
     })
       .then(() => {
+        if (closed) {
+          invoke("browser_close", { label }).catch(() => {});
+          return;
+        }
         openedRef.current = true;
+        syncBounds(); // 생성 완료 시점의 최신 rect 로 1회 보정
       })
       .catch((e) => console.error("browser_open:", e));
     return () => {
+      closed = true;
       openedRef.current = false;
       invoke("browser_close", { label }).catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [label]);
 
-  // 본문 영역 rect 를 webview 에 동기화. 매 렌더 후(레이아웃 이동: 분할/이동) +
-  // ResizeObserver(창/리사이저로 크기 변화) — 같은 rect 면 skip.
-  const syncBounds = () => {
-    const el = areaRef.current;
-    if (!el || !openedRef.current) return;
-    const r = el.getBoundingClientRect();
-    const key = `${r.left},${r.top},${r.width},${r.height}`;
-    if (key === lastRectRef.current) return;
-    lastRectRef.current = key;
-    invoke("browser_bounds", {
-      label,
-      x: r.left,
-      y: r.top,
-      w: Math.max(1, r.width),
-      h: Math.max(1, r.height),
-    }).catch(() => {});
-  };
-  useEffect(() => {
-    syncBounds();
-  });
+  // 본문 영역 rect 를 webview 에 동기화 — 같은 rect 면 skip.
+  // 측정(gBCR=강제 레이아웃)과 IPC(wry set_position/set_size)는 rAF 로 합쳐
+  // 프레임당 1회 상한(원칙 4·5) — 렌더 동기 강제 레이아웃 금지.
+  const syncBounds = useMemo(
+    () =>
+      rafThrottle(() => {
+        const el = areaRef.current;
+        if (!el || !openedRef.current) return;
+        const r = el.getBoundingClientRect();
+        const key = `${r.left},${r.top},${r.width},${r.height}`;
+        if (key === lastRectRef.current) return;
+        lastRectRef.current = key;
+        invoke("browser_bounds", {
+          label,
+          x: r.left,
+          y: r.top,
+          w: Math.max(1, r.width),
+          h: Math.max(1, r.height),
+        }).catch(() => {});
+      }),
+    [label],
+  );
+  // 구동원 3개가 전부다(매 렌더 effect 금지 — memo 경계와 양립 불가):
+  //   1) ResizeObserver — 크기 변화(분할/사이드바/창 리사이즈)
+  //   2) sessions transient 구독 — 위치만 바뀌는 레이아웃 이동(동일 크기 그룹 간
+  //      이동 등)은 RO 가 못 본다. 레이아웃 변화는 전부 sessions 쓰기이므로 렌더
+  //      없이 여기서 잡는다(zustand transient 패턴). rAF 합침 + 동일 rect skip
+  //      이라 무관한 쓰기의 비용은 프레임당 gBCR 1회로 끝.
+  //   3) window resize — 안전망(RO 와 대부분 중복).
   useEffect(() => {
     const el = areaRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(syncBounds);
+    const ro = new ResizeObserver(() => syncBounds());
     ro.observe(el);
-    window.addEventListener("resize", syncBounds);
+    const onWinResize = () => syncBounds();
+    window.addEventListener("resize", onWinResize);
+    const unsub = useSessions.subscribe(() => syncBounds());
     return () => {
       ro.disconnect();
-      window.removeEventListener("resize", syncBounds);
+      window.removeEventListener("resize", onWinResize);
+      unsub();
+      syncBounds.cancel();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [syncBounds]);
 
   // 표시/숨김: 뷰 활성 여부 + 전역 오버레이 suppress.
   const effectiveVisible = visible && !suppressed && !bmOpen;
@@ -160,39 +183,34 @@ export function BrowserView({
   })();
 
   // 즐겨찾기 드롭다운: 열린 동안 webview 숨김(네이티브 레이어가 메뉴를 가리므로).
-  // suppress/release 를 effect 로 묶어 언마운트 시에도 누수가 없다.
-  useEffect(() => {
-    if (!bmOpen) return;
-    suppressBrowser();
-    return () => releaseBrowser();
-  }, [bmOpen, suppressBrowser, releaseBrowser]);
+  useSuppressBrowser(bmOpen);
 
   return (
     <div className="browser-view">
       <div className="bv-bar">
         <button
           type="button"
-          className="bv-btn"
+          className="icon-btn bv-btn"
           title={t("browser.back")}
           onClick={() => invoke("browser_history", { label, delta: -1 })}
         >
-          ←
+          <Icon name="arrow-left" />
         </button>
         <button
           type="button"
-          className="bv-btn"
+          className="icon-btn bv-btn"
           title={t("browser.forward")}
           onClick={() => invoke("browser_history", { label, delta: 1 })}
         >
-          →
+          <Icon name="arrow-right" />
         </button>
         <button
           type="button"
-          className="bv-btn"
+          className="icon-btn bv-btn"
           title={t("browser.reload")}
           onClick={() => invoke("browser_navigate", { label, url })}
         >
-          ⟳
+          <Icon name="refresh" />
         </button>
         <input
           className="bv-url"
@@ -207,6 +225,7 @@ export function BrowserView({
           }}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
+            if (isComposingEnter(e)) return; // IME 조합 확정 Enter 는 이동 아님
             if (e.key === "Enter") {
               e.preventDefault();
               navigate(input);
@@ -216,19 +235,19 @@ export function BrowserView({
         />
         <button
           type="button"
-          className={`bv-btn${isBookmarked ? " on" : ""}`}
+          className={`icon-btn bv-btn${isBookmarked ? " on" : ""}`}
           title={t("browser.bookmark")}
           onClick={() => toggleBookmark(url, host)}
         >
-          {isBookmarked ? "★" : "☆"}
+          <Icon name={isBookmarked ? "star-filled" : "star"} />
         </button>
         <button
           type="button"
-          className={`bv-btn${bmOpen ? " on" : ""}`}
+          className={`icon-btn bv-btn${bmOpen ? " on" : ""}`}
           title={t("browser.bookmarks")}
           onClick={() => setBmOpen((o) => !o)}
         >
-          ☰
+          <Icon name="menu" />
         </button>
       </div>
       {bmOpen && (
@@ -257,3 +276,7 @@ export function BrowserView({
     </div>
   );
 }
+
+// memo 경계(원칙 2). bounds 동기화는 렌더가 아니라 RO + sessions transient 구독이
+// 구동하므로(위 주석) memo 로 렌더가 끊겨도 위치 추적은 유지된다.
+export const BrowserView = memo(BrowserViewImpl);

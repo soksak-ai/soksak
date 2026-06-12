@@ -31,6 +31,20 @@ const cwdSubs = new Map<string, Set<(cwd: string) => void>>();
 // paneId 별 명령 종료 구독자(git 상태 등 갱신 트리거). 위와 동일한 브리지 구조.
 const cmdSubs = new Map<string, Set<() => void>>();
 
+// 전역 명령 종료 구독자 — 어느 pane 이든 명령이 끝나면 paneId 와 함께 통지.
+// 플러그인 이벤트(command.finished) 중계용(OSC 133/633 탐지 기반, 폴링 없음).
+const anyCmdSubs = new Set<(paneId: string) => void>();
+
+/** 모든 pane 의 명령 종료를 구독(플러그인 이벤트 중계용). 반환=해지. */
+export function subscribeAnyCommandFinished(
+  cb: (paneId: string) => void,
+): () => void {
+  anyCmdSubs.add(cb);
+  return () => {
+    anyCmdSubs.delete(cb);
+  };
+}
+
 // App 이 등록하는 "현재 테마" getter. 새 호스트의 최초 createTerminal 에 쓰인다.
 let themeProvider: () => ITheme | undefined = () => undefined;
 
@@ -124,10 +138,11 @@ export function getHost(paneId: string): HTMLDivElement {
       handle.onCwdChange((c) => cwdSubs.get(paneId)?.forEach((cb) => cb(c)));
       const cwd = handle.getCwd();
       if (cwd) cwdSubs.get(paneId)?.forEach((cb) => cb(cwd));
-      // 명령 종료 이벤트 브리지.
-      handle.onCommandFinished(() =>
-        cmdSubs.get(paneId)?.forEach((cb) => cb()),
-      );
+      // 명령 종료 이벤트 브리지(pane 구독 + 전역 구독 — 플러그인 이벤트 중계용).
+      handle.onCommandFinished(() => {
+        cmdSubs.get(paneId)?.forEach((cb) => cb());
+        anyCmdSubs.forEach((cb) => cb(paneId));
+      });
     })
     .catch((e) => {
       console.error(`createTerminal failed for pane ${paneId}:`, e);

@@ -207,6 +207,16 @@ sok browser.eval '{"js":"return document.title"}'
 sok browser.forward
 ```
 
+## `browser.list`
+
+존재하는 네이티브 브라우저 웹뷰 라벨 목록(b-<viewId>) — 스토어의 browser 뷰 집합과 일치해야 정상(고아 검증)
+
+**반환**: { labels: string[] }
+
+```bash
+sok browser.list
+```
+
 ## `browser.navigate`
 
 브라우저 뷰를 URL 로 이동
@@ -878,6 +888,22 @@ sok project.activate '{"project":"t2"}'
 sok project.close '{"project":"t2"}'
 ```
 
+## `project.color`
+
+프로젝트 식별 색 설정(레일 칩/탭 강조). color 생략 = 제거
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `color` | string |  | CSS 색상(예: #4a8fe8). 생략하면 기본으로 되돌림 |
+| `project` | string | ✓ | 대상 프로젝트 id(생략=호출 컨텍스트의 프로젝트) |
+
+**반환**: {}
+**에러**: TARGET_NOT_FOUND
+
+```bash
+sok project.color '{"project":"t1","color":"#4a8fe8"}'
+```
+
 ## `project.create`
 
 새 프로젝트(루트 폴더 + 첫 화면 프로그램 + 셸)
@@ -921,6 +947,23 @@ sok project.list
 sok project.rename '{"project":"t1","title":"백엔드"}'
 ```
 
+## `project.rightbar.toggle`
+
+우측 플러그인 사이드바 토글(⌥⌘B). open 명시 시 그 상태로(멱등)
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `open` | boolean |  | 명시 시 열림/닫힘 고정 |
+| `project` | string |  | 대상 프로젝트 id(생략=호출 컨텍스트의 프로젝트) |
+
+**반환**: { rightOpen }
+**에러**: TARGET_NOT_FOUND
+
+```bash
+sok project.rightbar.toggle
+sok project.rightbar.toggle '{"open":true}'
+```
+
 ## `project.sidebar.toggle`
 
 파일트리 사이드바 토글
@@ -936,11 +979,30 @@ sok project.rename '{"project":"t1","title":"백엔드"}'
 sok project.sidebar.toggle
 ```
 
+## `project.update`
+
+프로젝트 설정 일괄 변경(생략한 필드는 유지, ""=기본으로 제거). root 는 불변
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `color` | string |  | 식별 색("" = 제거) |
+| `program` | string |  | 첫 화면("" = 전역 설정 따름) (terminal|claude|codex|browser|) |
+| `project` | string | ✓ | 대상 프로젝트 id(생략=호출 컨텍스트의 프로젝트) |
+| `shell` | string |  | 터미널 셸 경로("" = 기본) |
+| `title` | string |  | 별칭(빈 문자열은 무시) |
+
+**반환**: {}
+**에러**: TARGET_NOT_FOUND
+
+```bash
+sok project.update '{"project":"t1","title":"백엔드","program":"claude"}'
+```
+
 ## `settings.get`
 
 앱 설정 전체 조회
 
-**반환**: { language, projectTabPosition, splitHeaderMode, defaultProgram, shell, homeUrl, fontFamily, fontSize, cursorBlink, cursorStyle, scrollback, bg }
+**반환**: { language, projectTabPosition, defaultProgram, shell, homeUrl, fontFamily, fontSize, cursorBlink, cursorStyle, scrollback, resizeReflow, iconSet, iconBox, bg }
 
 ```bash
 sok settings.get
@@ -948,19 +1010,19 @@ sok settings.get
 
 ## `settings.set`
 
-설정 변경. key: language|projectTabPosition|splitHeaderMode|defaultProgram|shell|homeUrl|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback
+설정 변경. key: language|projectTabPosition|defaultProgram|shell|homeUrl|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback|resizeReflow|iconSet|iconBox
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
-| `key` | string | ✓ | 설정 키 (language|projectTabPosition|splitHeaderMode|defaultProgram|shell|homeUrl|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback) |
-| `value` | json | ✓ | 값 — language:ko|en, projectTabPosition:top|left, splitHeaderMode:title|tabs, defaultProgram:terminal|claude|codex|browser, fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number |
+| `key` | string | ✓ | 설정 키 (language|projectTabPosition|defaultProgram|shell|homeUrl|fontFamily|fontSize|cursorBlink|cursorStyle|scrollback|resizeReflow|iconSet|iconBox) |
+| `value` | json | ✓ | 값 — language:ko|en, projectTabPosition:top|left, defaultProgram:terminal|claude|codex|browser, fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, iconSet:string(등록 셋 id — 미등록이면 lucide 폴백 렌더), iconBox:boolean |
 
 **반환**: { key, value }
 **에러**: INVALID_PARAMS
 
 ```bash
 sok settings.set '{"key":"fontSize","value":14}'
-sok settings.set '{"key":"splitHeaderMode","value":"tabs"}'
+sok settings.set '{"key":"projectTabPosition","value":"left"}'
 ```
 
 ## `state.commands`

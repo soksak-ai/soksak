@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ProgramMenu } from "./ProgramMenu";
 import {
   useSessions,
@@ -6,11 +6,13 @@ import {
   type ViewGroup,
 } from "../state/sessions";
 import { getRegisteredView } from "../plugins/viewRegistry";
+import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 
-// 플러그인 뷰 탭 아이콘: 매니페스트 선언 아이콘, provider 미등록(비활성)이면 폴백.
-function pluginIconOf(pluginId: string, view: string): string {
-  return getRegisteredView(`${pluginId}.${view}`)?.decl.icon ?? "▦";
+// 플러그인 뷰 탭 아이콘: 매니페스트 선언 아이콘(문자열 — 외부 계약).
+// provider 미등록(비활성)이면 null — 호출측이 표준 plugin 아이콘으로 폴백.
+function pluginIconOf(pluginId: string, view: string): string | null {
+  return getRegisteredView(`${pluginId}.${view}`)?.decl.icon ?? null;
 }
 
 // 한 에디터 그룹의 탭 바(터미널/파일 전환 + 뷰 드래그 소스). 드래그는 HTML5 DnD 가 아니라
@@ -18,7 +20,8 @@ function pluginIconOf(pluginId: string, view: string): string {
 // 탭 클릭(이동 없이 떼면)=전환, 끌면=그 뷰 이동 — 판정은 GroupArea 가 한다.
 // 가로 오버플로는 네이티브 오버레이 스크롤바를 숨기고 3px 커스텀 썸을 그린다.
 
-export function ViewTabs({
+// memo 경계(원칙 2): onTabPointerDown 은 GroupArea 의 안정 콜백이어야 한다.
+export const ViewTabs = memo(function ViewTabs({
   projectId,
   group,
   onTabPointerDown,
@@ -125,26 +128,31 @@ export function ViewTabs({
                     : t("view.terminal")
             }
           >
-            <span className="view-tab-icon">
-              {v.kind === "terminal"
-                ? "›_"
-                : v.kind === "file"
-                  ? "▤"
-                  : v.kind === "plugin"
-                    ? pluginIconOf(v.pluginId, v.view)
-                    : "◍"}
+            <span className="view-tab-icon icon-inline">
+              {v.kind === "terminal" ? (
+                <Icon name="terminal" size="sm" />
+              ) : v.kind === "file" ? (
+                <Icon name="file" size="sm" />
+              ) : v.kind === "plugin" ? (
+                // 플러그인 아이콘은 매니페스트 선언 문자열(외부 계약) — 미등록만 폴백.
+                (pluginIconOf(v.pluginId, v.view) ?? (
+                  <Icon name="plugin" size="sm" />
+                ))
+              ) : (
+                <Icon name="browser" size="sm" />
+              )}
             </span>
             <span className="view-tab-title">
               {v.kind === "terminal" ? t("view.terminal") : v.title}
             </span>
             {v.kind === "file" && v.dirty && (
               <span className="view-tab-dirty" title={t("viewer.unsaved")}>
-                ●
+                <Icon name="dirty" size="xs" />
               </span>
             )}
             <button
               type="button"
-              className="view-tab-close"
+              className="icon-btn icon-btn--mini view-tab-close"
               title={t("view.close")}
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
@@ -152,14 +160,14 @@ export function ViewTabs({
                 closeView(projectId, v.id);
               }}
             >
-              ×
+              <Icon name="close" size="sm" />
             </button>
           </div>
         ))}
         <button
           ref={addBtnRef}
           type="button"
-          className="view-add"
+          className="icon-btn view-add"
           title={t("content.new")}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={() => {
@@ -171,7 +179,7 @@ export function ViewTabs({
             if (r) setMenuPos({ left: r.left, top: r.bottom + 2 });
           }}
         >
-          +
+          <Icon name="add" />
         </button>
       </div>
       {menuPos && (
@@ -195,4 +203,4 @@ export function ViewTabs({
       )}
     </div>
   );
-}
+});

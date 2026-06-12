@@ -4,9 +4,11 @@
 // FileViewer 저장 성공 지점의 emitFileSaved 하나).
 // 리스너 실패는 호스트를 죽이지 못한다(§0-4) — 콜백마다 try/catch.
 
-import { allGroups, useSessions } from "../state/sessions";
+import { rafThrottle } from "../lib/rafThrottle";
+import { allGroups, collectLeafIds, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useBookmarks, type Bookmark } from "../state/bookmarks";
+import { subscribeAnyCommandFinished } from "../terminal/paneHosts";
 
 type SessionsState = ReturnType<(typeof useSessions)["getState"]>;
 
@@ -27,6 +29,9 @@ export interface PluginEventMap {
   "file.saved": { projectId: string; viewId: string; path: string };
   "theme.changed": { name: string; mode: "light" | "dark" };
   "bookmarks.changed": { bookmarks: Bookmark[] };
+  // 터미널 명령 종료(OSC 133/633 셸 통합 탐지 — 폴링 없음). git 뷰 등의 자동
+  // 갱신 트리거. projectId 는 pane 의 소속 프로젝트(못 찾으면 null).
+  "command.finished": { projectId: string | null; paneId: string };
 }
 
 export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
@@ -37,6 +42,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "file.saved",
   "theme.changed",
   "bookmarks.changed",
+  "command.finished",
 ];
 
 type AnyListener = (payload: never) => void;
@@ -169,12 +175,17 @@ export function startPluginHooks(): void {
   if (started) return;
   started = true;
 
+  // 모든 store 쓰기마다 O(n) 스냅샷+diff 를 돌리지 않는다(원칙 1·5,
+  // docs/PERFORMANCE.md) — 드래그 중 resizeSplit 은 60Hz+ 로 쓰지만 이 이벤트들
+  // (코스 시맨틱: 활성/열림 변화)은 레이아웃 비율로는 절대 바뀌지 않는다.
+  // trailing rAF 로 coalesce: 프레임당 1회, 마지막 상태 기준으로 diff.
   let prevSessions = snapshotSessions(useSessions.getState());
-  useSessions.subscribe((state) => {
-    const next = snapshotSessions(state);
+  const scheduleSessionsDiff = rafThrottle(() => {
+    const next = snapshotSessions(useSessions.getState());
     diffSessions(prevSessions, next);
     prevSessions = next;
   });
+  useSessions.subscribe(() => scheduleSessionsDiff());
 
   let prevTheme = {
     name: useTheme.getState().current,
@@ -197,4 +208,29 @@ export function startPluginHooks(): void {
       emitPluginEvent("bookmarks.changed", { bookmarks: state.list });
     }
   });
+
+  // 터미널 명령 종료 → 플러그인 이벤트(git 뷰 자동 갱신 등). 이산 이벤트라
+  // coalesce 불필요 — 발생 빈도 = 사용자가 명령을 끝내는 빈도.
+  subscribeAnyCommandFinished((paneId) => {
+    emitPluginEvent("command.finished", {
+      projectId: projectOfPane(paneId),
+      paneId,
+    });
+  });
+}
+
+// pane 이 속한 프로젝트 id. 터미널 뷰들의 leaf 를 걸어 찾는다(못 찾으면 null).
+function projectOfPane(paneId: string): string | null {
+  for (const t of useSessions.getState().tabs) {
+    for (const c of t.contents) {
+      for (const g of allGroups(c.layout)) {
+        for (const v of g.views) {
+          if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
+            return t.id;
+          }
+        }
+      }
+    }
+  }
+  return null;
 }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useSessions, type Program } from "../state/sessions";
+import { useSuppressBrowser } from "../state/ui";
+import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 import { useDraggableModal } from "./modalDrag";
 
@@ -12,6 +14,8 @@ const baseName = (p?: string) =>
 
 export function NewProjectModal({ onClose }: { onClose: () => void }) {
   const t = useT();
+  // 네이티브 브라우저 웹뷰는 항상 DOM 위 — 모달이 떠 있는 동안 숨긴다.
+  useSuppressBrowser();
   const addProject = useSessions((s) => s.addProject);
   const [alias, setAlias] = useState("");
   const [root, setRoot] = useState<string | undefined>(undefined);
@@ -56,12 +60,20 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="dmodal-head" onMouseDown={onHeaderDown}>
-          <span className="dmodal-plus">+</span>
+          <span className="dmodal-plus icon-inline">
+            <Icon name="add" size="sm" />
+          </span>
           <span className="dmodal-title">{t("project.newTitle")}</span>
           <span className="dmodal-spacer" />
-          <span className="dmodal-grip">⠿</span>
-          <button type="button" className="dmodal-close" onClick={onClose}>
-            ✕
+          <span className="dmodal-grip icon-inline">
+            <Icon name="grip" />
+          </span>
+          <button
+            type="button"
+            className="icon-btn dmodal-close"
+            onClick={onClose}
+          >
+            <Icon name="close" />
           </button>
         </div>
 

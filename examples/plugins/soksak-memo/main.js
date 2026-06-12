@@ -32,12 +32,11 @@ function mount(container, viewCtx) {
   ta.placeholder = "이 프로젝트의 메모…";
   ta.spellcheck = false;
   ta.disabled = true; // 로드 완료 전 입력 금지(저장 전 텍스트 유실 방지)
+  // 터미널 본문과 같은 결: 테두리/인셋 카드 없이 배경(--bg)에 바로 녹아드는 입력면.
   ta.style.cssText =
-    "flex:1;width:100%;box-sizing:border-box;resize:none;padding:8px;" +
+    "flex:1;width:100%;box-sizing:border-box;resize:none;padding:2px 0;" +
     "font:inherit;font-size:12px;line-height:1.5;color:var(--fg);" +
-    "background:var(--inset);border:1px solid var(--bd);border-radius:6px;outline:none;";
-  ta.addEventListener("focus", () => (ta.style.borderColor = "var(--acc)"));
-  ta.addEventListener("blur", () => (ta.style.borderColor = "var(--bd)"));
+    "background:transparent;border:none;outline:none;";
 
   const status = document.createElement("div");
   status.style.cssText = "min-height:14px;font-size:11px;color:var(--fg3);";

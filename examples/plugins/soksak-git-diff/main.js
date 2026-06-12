@@ -30,6 +30,8 @@ function lineStyle(line) {
 export default {
   activate(ctx) {
     const app = ctx.app;
+    // mount 별 정리 함수(이벤트 구독 등) — unmount 에서 실행.
+    const cleanups = new Map();
 
     ctx.subscriptions.push(
       app.ui.registerView("view", {
@@ -46,16 +48,26 @@ export default {
             "display:flex;flex-direction:column;height:100%;min-height:0;font-size:12px;color:var(--fg);background:var(--bg)",
           );
 
-          // ── 상단 바: ⟳ 새로고침 + staged 체크박스
+          // ── 상단 바(표준 골격: 정보/컨트롤 좌 · 액션 우, border-bottom)
           const bar = h(
             "div",
-            "display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--bd);flex:0 0 auto",
+            "display:flex;align-items:center;justify-content:space-between;gap:10px;" +
+              "padding:4px 10px;border-bottom:1px solid var(--bd);flex:0 0 auto;" +
+              "min-height:28px;box-sizing:border-box",
           );
+          // 새로고침 아이콘 — 호스트 표준(앱 크롬과 동일한 lucide refresh, 정적
+          // 신뢰 마크업이라 innerHTML 안전). 텍스트 글리프(⟳) 크기 불일치 제거.
           const refreshBtn = h(
             "button",
-            "cursor:pointer;border:1px solid var(--bd);background:var(--inset);color:var(--fg);border-radius:4px;padding:1px 8px;font-size:12px;line-height:1.6",
-            "⟳",
+            "display:inline-flex;align-items:center;justify-content:center;" +
+              "width:24px;height:22px;padding:0;cursor:pointer;" +
+              "border:1px solid var(--bd);background:var(--inset);color:var(--fg2);border-radius:4px",
           );
+          refreshBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" ' +
+            'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>' +
+            '<path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>';
           refreshBtn.title = "새로고침";
           const stagedLabel = h(
             "label",
@@ -65,20 +77,24 @@ export default {
           stagedBox.type = "checkbox";
           stagedBox.style.cssText = "accent-color:var(--acc);margin:0";
           stagedLabel.append(stagedBox, document.createTextNode("staged"));
-          bar.append(refreshBtn, stagedLabel);
+          bar.append(stagedLabel, refreshBtn);
 
-          // ── 에러 표시(침묵 실패 금지) / 파일 목록 / diff 영역
+          // ── 에러 표시(침묵 실패 금지) / 파일 목록 / diff 영역.
+          // 에러 시 목록/디프를 숨겨 빈 칸(잔여 보더)이 남지 않게 한다.
           const errEl = h(
             "div",
-            "display:none;padding:6px 12px;color:#e5534b;font-size:11px;white-space:pre-wrap;flex:0 0 auto",
+            "display:none;padding:8px 10px;color:#e5534b;font-size:11px;" +
+              "white-space:pre-wrap;word-break:break-all;flex:0 0 auto",
           );
           const listEl = h(
             "div",
-            "flex:0 1 auto;max-height:45%;overflow:auto;padding:5px 0;border-bottom:1px solid var(--bd)",
+            "flex:0 1 auto;max-height:45%;overflow:auto;padding:5px 0",
           );
           const diffEl = h(
             "div",
-            "flex:1 1 auto;min-height:0;overflow:auto;padding:8px 12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;white-space:pre",
+            "flex:1 1 auto;min-height:0;overflow:auto;padding:8px 10px;" +
+              "border-top:1px solid var(--bd);" +
+              "font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.5;white-space:pre",
           );
 
           wrap.append(bar, errEl, listEl, diffEl);
@@ -87,9 +103,13 @@ export default {
           const showError = (e) => {
             errEl.textContent = String(e && e.message ? e.message : e);
             errEl.style.display = "block";
+            listEl.style.display = "none";
+            diffEl.style.display = "none";
           };
           const clearError = () => {
             errEl.style.display = "none";
+            listEl.style.display = "";
+            diffEl.style.display = "";
           };
           const highlight = () => {
             for (const [path, row] of rows) {
@@ -179,9 +199,28 @@ export default {
           };
 
           void loadList();
+
+          // 자동 갱신: 터미널 명령 종료 이벤트(OSC 탐지 기반 — 폴링 없음) →
+          // 300ms 정착 후 재로드. 다른 프로젝트의 명령은 무시. ⟳ 는 수동 보조.
+          let reloadTimer = null;
+          const sub = app.events.on("command.finished", (e) => {
+            if (e.projectId && vctx.projectId && e.projectId !== vctx.projectId)
+              return;
+            clearTimeout(reloadTimer);
+            reloadTimer = setTimeout(() => {
+              void loadList();
+              void loadDiff();
+            }, 300);
+          });
+          cleanups.set(container, () => {
+            clearTimeout(reloadTimer);
+            sub.dispose();
+          });
         },
 
         unmount(container) {
+          cleanups.get(container)?.();
+          cleanups.delete(container);
           container.replaceChildren();
         },
       }),

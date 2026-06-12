@@ -5,6 +5,8 @@
 import { useEffect } from "react";
 import { PERMISSION_INFO } from "../plugins/spec";
 import type { PluginRuntime } from "../state/plugins";
+import { useSuppressBrowser } from "../state/ui";
+import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 
 export function PluginConsentModal({
@@ -17,6 +19,8 @@ export function PluginConsentModal({
   onClose: () => void;
 }) {
   const t = useT();
+  // 네이티브 브라우저 웹뷰는 항상 DOM 위 — 모달이 떠 있는 동안 숨긴다.
+  useSuppressBrowser();
   const m = plugin.manifest;
 
   useEffect(() => {
@@ -41,8 +45,12 @@ export function PluginConsentModal({
             {t("plugin.consent.title", { name: m.name })}
           </span>
           <span className="dmodal-spacer" />
-          <button type="button" className="dmodal-close" onClick={onClose}>
-            ✕
+          <button
+            type="button"
+            className="icon-btn dmodal-close"
+            onClick={onClose}
+          >
+            <Icon name="close" />
           </button>
         </div>
         <div className="dmodal-body">

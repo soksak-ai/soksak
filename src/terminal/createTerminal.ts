@@ -255,13 +255,24 @@ export async function createTerminal(
     }
   });
 
-  // 리사이즈: fit 후 PTY cols/rows 동기화
-  const doResize = () => {
+  // 리사이즈 정책(docs/PERFORMANCE.md 원칙 4·5): fit(시각)과 PTY resize(IPC →
+  // SIGWINCH)를 분리한다. ResizeObserver 는 드래그 중 틱마다 발화하는데, 그때마다
+  // PTY 에 resize 를 보내면 셸/TUI 가 수 초간 연쇄 재그리기를 한다(지연 스파이크).
+  //   live   : fit 은 rAF 당 1회(실시간 리플로우), PTY 는 정착 후 1회
+  //   settle : fit·PTY 모두 정착 후 1회
+  // immediate=true 는 포커스/노출/폰트 변경처럼 지금 맞춰야 하는 경로.
+  const PTY_RESIZE_SETTLE_MS = 150;
+  let reflow = s?.resizeReflow ?? "live";
+  let fitRaf = 0;
+  let settleTimer: number | undefined;
+  const safeFit = () => {
     try {
       fitTerminal();
     } catch {
       /* 컨테이너가 0 크기일 때 등 무시 */
     }
+  };
+  const syncPty = () => {
     if (termId !== 0) {
       invoke("resize_terminal", {
         id: termId,
@@ -269,6 +280,42 @@ export async function createTerminal(
         rows: term.rows,
       }).catch(() => {});
     }
+  };
+  const doResize = (immediate = false) => {
+    if (immediate) {
+      if (fitRaf) {
+        cancelAnimationFrame(fitRaf);
+        fitRaf = 0;
+      }
+      if (settleTimer !== undefined) {
+        clearTimeout(settleTimer);
+        settleTimer = undefined;
+      }
+      safeFit();
+      syncPty();
+      return;
+    }
+    // 숨김 터미널(비활성 탭/뷰 — visibility:hidden 슬롯) 스킵: 창/사이드바
+    // 리사이즈 때 안 보이는 터미널까지 fit+IPC 할 이유가 없다. 노출 시
+    // PaneLeaf 가 즉시 fit 으로 보정한다(Safari 17.4+ checkVisibility).
+    if (
+      typeof container.checkVisibility === "function" &&
+      !container.checkVisibility({ visibilityProperty: true })
+    ) {
+      return;
+    }
+    if (reflow === "live" && !fitRaf) {
+      fitRaf = requestAnimationFrame(() => {
+        fitRaf = 0;
+        safeFit();
+      });
+    }
+    clearTimeout(settleTimer);
+    settleTimer = window.setTimeout(() => {
+      settleTimer = undefined;
+      if (reflow !== "live") safeFit();
+      syncPty();
+    }, PTY_RESIZE_SETTLE_MS);
   };
 
   const resizeObserver = new ResizeObserver(() => doResize());
@@ -282,7 +329,7 @@ export async function createTerminal(
     );
     const handler = () => {
       term.refresh(0, term.rows - 1);
-      doResize();
+      doResize(true); // 모니터 이동 = 즉시 보정
       dprCleanup?.();
       armDprListener();
     };
@@ -294,6 +341,8 @@ export async function createTerminal(
   const dispose = () => {
     container.removeEventListener("paste", onPaste, true);
     resizeObserver.disconnect();
+    if (fitRaf) cancelAnimationFrame(fitRaf);
+    clearTimeout(settleTimer);
     dprCleanup?.();
     dataSub.dispose();
     shellIntegration.dispose();
@@ -307,7 +356,8 @@ export async function createTerminal(
   return {
     terminal: term,
     id: () => termId,
-    fit: doResize,
+    // 포커스/노출/이동(appendChild) 직후 호출되는 경로 — 지금 맞춰야 한다.
+    fit: () => doResize(true),
     focus: () => term.focus(),
     getCwd: () => shellIntegration.getCwd(),
     onCwdChange: (cb) => shellIntegration.onCwdChange(cb),
@@ -338,8 +388,9 @@ export async function createTerminal(
       term.options.cursorBlink = next.cursorBlink;
       term.options.cursorStyle = next.cursorStyle;
       term.options.scrollback = next.scrollback;
+      reflow = next.resizeReflow;
       webgl?.clearTextureAtlas();
-      doResize(); // 폰트 크기 변경 → 셀 치수 변화 → 재fit + PTY resize
+      doResize(true); // 폰트 크기 변경 → 셀 치수 변화 → 즉시 재fit + PTY resize
     },
     dispose,
   };

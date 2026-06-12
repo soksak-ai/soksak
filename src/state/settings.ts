@@ -13,12 +13,19 @@ export type DefaultProgram = "terminal" | "claude" | "codex" | "browser";
 // 원격(AI/CLI/MCP) 위험 명령 정책. allow=즉시 실행, deny=차단(권한 게이트, M3).
 export type DangerPolicy = "allow" | "deny";
 
+// 리사이즈 중 터미널 리플로우 정책(docs/PERFORMANCE.md 원칙 4·5):
+//   live   = 드래그 중에도 프레임당 1회 fit(실시간 리플로우, editor 스타일)
+//   settle = 입력 정착(150ms) 후 1회 fit(드래그 중 리플로우 없음, CPU 최소)
+// 양쪽 모두 PTY resize(SIGWINCH)는 정착 후 1회만 보낸다.
+export type ResizeReflow = "live" | "settle";
+
 export interface TerminalSettings {
   fontFamily: string;
   fontSize: number;
   cursorBlink: boolean;
   cursorStyle: CursorStyle;
   scrollback: number;
+  resizeReflow: ResizeReflow;
 }
 
 interface SettingsState extends TerminalSettings {
@@ -38,6 +45,10 @@ interface SettingsState extends TerminalSettings {
   // 원격 위험 명령 정책: 파괴적(닫기/제거) / 주입(입력·임의 JS).
   remoteDestructive: DangerPolicy;
   remoteInject: DangerPolicy;
+  // 아이콘 셋 id(내장 "lucide" + 플러그인 등록 셋). 미등록이면 lucide 폴백.
+  iconSet: string;
+  // 아이콘 버튼 라운드박스(보더+배경) 상시 표시 여부. off = 베어(hover 만).
+  iconBox: boolean;
   setLanguage: (l: Language) => void;
   setProjectTabPosition: (p: TabPosition) => void;
   setContentTabPosition: (p: TabPosition) => void;
@@ -47,11 +58,14 @@ interface SettingsState extends TerminalSettings {
   setHomeUrl: (u: string) => void;
   setRemoteDestructive: (p: DangerPolicy) => void;
   setRemoteInject: (p: DangerPolicy) => void;
+  setIconSet: (id: string) => void;
+  setIconBox: (v: boolean) => void;
   setFontFamily: (v: string) => void;
   setFontSize: (v: number) => void;
   setCursorBlink: (v: boolean) => void;
   setCursorStyle: (v: CursorStyle) => void;
   setScrollback: (v: number) => void;
+  setResizeReflow: (v: ResizeReflow) => void;
 }
 
 const DEFAULTS = {
@@ -64,12 +78,15 @@ const DEFAULTS = {
   homeUrl: "https://www.google.com",
   remoteDestructive: "allow" as DangerPolicy,
   remoteInject: "allow" as DangerPolicy,
+  iconSet: "lucide",
+  iconBox: false,
   fontFamily:
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
   fontSize: 13,
   cursorBlink: true,
   cursorStyle: "block" as CursorStyle,
   scrollback: 10000,
+  resizeReflow: "live" as ResizeReflow,
 };
 
 const KEY = "soksak.settings";
@@ -92,6 +109,7 @@ export function terminalSettingsOf(s: TerminalSettings): TerminalSettings {
     cursorBlink: s.cursorBlink,
     cursorStyle: s.cursorStyle,
     scrollback: s.scrollback,
+    resizeReflow: s.resizeReflow,
   };
 }
 
@@ -110,6 +128,8 @@ export const useSettings = create<SettingsState>((set, get) => {
         homeUrl: s.homeUrl,
         remoteDestructive: s.remoteDestructive,
         remoteInject: s.remoteInject,
+        iconSet: s.iconSet,
+        iconBox: s.iconBox,
         ...terminalSettingsOf(s),
       }),
     );
@@ -152,6 +172,14 @@ export const useSettings = create<SettingsState>((set, get) => {
       set({ remoteInject });
       save();
     },
+    setIconSet: (iconSet) => {
+      set({ iconSet });
+      save();
+    },
+    setIconBox: (iconBox) => {
+      set({ iconBox });
+      save();
+    },
     setFontFamily: (fontFamily) => {
       set({ fontFamily });
       save();
@@ -170,6 +198,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setScrollback: (scrollback) => {
       set({ scrollback: Math.max(0, Math.min(1_000_000, scrollback)) });
+      save();
+    },
+    setResizeReflow: (resizeReflow) => {
+      set({ resizeReflow });
       save();
     },
   };

@@ -4,7 +4,9 @@
 // 관리 패널: 설치(git 소스)·동의·활성/비활성·갱신·제거·rejected 사유 — 설정 모달과
 // 분리된 플러그인 전용 관리 표면.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { isComposingEnter } from "../lib/imeKeys";
+import { Icon } from "../ui/icons/Icon";
 import {
   useViewRegistry,
   viewsForPlacement,
@@ -17,7 +19,12 @@ import { useT } from "../i18n";
 
 const MANAGER = "manager"; // 예약 키 — 뷰 전역 키는 항상 점을 포함하므로 충돌 없음.
 
-export function PluginSidebar({ project }: { project: ProjectTab }) {
+// memo 경계(원칙 2): 다른 프로젝트의 store 쓰기에는 리렌더되지 않는다.
+export const PluginSidebar = memo(function PluginSidebar({
+  project,
+}: {
+  project: ProjectTab;
+}) {
   const t = useT();
   const version = useViewRegistry((s) => s.version);
   const sidebarViews = useMemo(
@@ -56,21 +63,22 @@ export function PluginSidebar({ project }: { project: ProjectTab }) {
           <button
             key={key}
             type="button"
-            className={`plugin-rail-btn${rightView === key ? " active" : ""}`}
+            className={`icon-btn icon-btn--boxed plugin-rail-btn${rightView === key ? " active" : ""}`}
             title={view.decl.title}
             onClick={() => setRightView(project.id, key)}
           >
+            {/* 플러그인 아이콘 = 매니페스트 선언 문자열(외부 계약) — 그대로 표시 */}
             {view.decl.icon}
           </button>
         ))}
         <div className="plugin-rail-spacer" />
         <button
           type="button"
-          className={`plugin-rail-btn${rightView === MANAGER ? " active" : ""}`}
+          className={`icon-btn icon-btn--boxed plugin-rail-btn${rightView === MANAGER ? " active" : ""}`}
           title={t("plugin.manager")}
           onClick={() => setRightView(project.id, MANAGER)}
         >
-          ⚙
+          <Icon name="settings" />
         </button>
       </div>
       <div className="plugin-side-main">
@@ -103,10 +111,18 @@ export function PluginSidebar({ project }: { project: ProjectTab }) {
             </div>
           )}
         </div>
+        {/* 하단 스테이터스바 — 터미널 패널(egroup-status)과 같은 시각 언어:
+            좌측 컨텍스트(프로젝트 루트), 우측 현재 뷰 제목. */}
+        <div className="plugin-side-status">
+          <span className="pss-left" title={project.root}>
+            {project.root ?? "—"}
+          </span>
+          <span className="pss-right">{activeTitle}</span>
+        </div>
       </div>
     </div>
   );
-}
+});
 
 // ── 관리 패널 ────────────────────────────────────────────────────────────────
 
@@ -184,7 +200,9 @@ function PluginManagerPanel() {
           value={source}
           disabled={busy}
           onChange={(e) => setSource(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && doInstall()}
+          onKeyDown={(e) =>
+            e.key === "Enter" && !isComposingEnter(e) && doInstall()
+          }
         />
         <input
           className="plugin-input plugin-input-ref"
@@ -192,7 +210,9 @@ function PluginManagerPanel() {
           value={refName}
           disabled={busy}
           onChange={(e) => setRefName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && doInstall()}
+          onKeyDown={(e) =>
+            e.key === "Enter" && !isComposingEnter(e) && doInstall()
+          }
         />
         <button type="button" className="dbtn" disabled={busy} onClick={doInstall}>
           {t("plugin.install")}
@@ -209,26 +229,26 @@ function PluginManagerPanel() {
           disabled={busy}
           onClick={() => run(() => usePlugins.getState().reload().then(() => ({ ok: true })))}
         >
-          ⟳
+          <Icon name="refresh" size="sm" />
         </button>
       </div>
       {list.length === 0 && (
         <div className="plugin-side-empty-sub">{t("plugin.none")}</div>
       )}
+      {/* 카드 3행 구조: 타이틀|버전|상태 → 설명(전폭) → 액션. 좁은 사이드바에서
+          설명이 액션 칼럼에 짓눌려 한 단어씩 줄바꿈되던 문제 해결. */}
       {list.map((p) => (
         <div key={p.manifest.id} className="plugin-row">
-          <div className="plugin-row-main">
-            <div className="plugin-row-title">
-              <span className="plugin-row-name">{p.manifest.name}</span>
-              <span className="plugin-row-ver">v{p.manifest.version}</span>
-              {p.source === "dev" && <span className="plugin-badge dev">dev</span>}
-              <span className={`plugin-badge ${statusKey(p)}`}>
-                {t(`plugin.status.${statusKey(p)}`)}
-              </span>
-            </div>
-            <div className="plugin-row-desc">{p.manifest.description}</div>
-            {p.error && <div className="plugin-row-err">{p.error}</div>}
+          <div className="plugin-row-title">
+            <span className="plugin-row-name">{p.manifest.name}</span>
+            <span className="plugin-row-ver">v{p.manifest.version}</span>
+            {p.source === "dev" && <span className="plugin-badge dev">dev</span>}
+            <span className={`plugin-badge ${statusKey(p)}`}>
+              {t(`plugin.status.${statusKey(p)}`)}
+            </span>
           </div>
+          <div className="plugin-row-desc">{p.manifest.description}</div>
+          {p.error && <div className="plugin-row-err">{p.error}</div>}
           <div className="plugin-row-actions">
             {p.status === "enabled" ? (
               <button
@@ -261,7 +281,7 @@ function PluginManagerPanel() {
                   run(() => usePlugins.getState().update(p.manifest.id))
                 }
               >
-                ↑
+                <Icon name="arrow-up" size="sm" />
               </button>
             )}
             <button
@@ -273,7 +293,7 @@ function PluginManagerPanel() {
                 run(() => usePlugins.getState().remove(p.manifest.id))
               }
             >
-              ✕
+              <Icon name="close" size="sm" />
             </button>
           </div>
         </div>

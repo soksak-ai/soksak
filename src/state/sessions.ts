@@ -136,6 +136,8 @@ export interface ProjectTab {
   program?: Program;
   // 프로젝트의 터미널 셸(미지정이면 전역 설정 shell → 시스템 $SHELL).
   shell?: string;
+  // 프로젝트 식별 색(레일 칩/탭 강조). 미지정이면 테마 기본.
+  color?: string;
   // 컨텐츠 탭들 + 활성.
   contents: ContentArea[];
   activeContentId: string;
@@ -172,6 +174,18 @@ interface SessionsStore {
   closeTab: (id: string) => CmdResult<{ activeProjectId: string }>;
   setActive: (id: string) => CmdResult;
   renameTab: (id: string, title: string) => CmdResult;
+  // 프로젝트 식별 색 설정(null = 제거).
+  setProjectColor: (id: string, color: string | null) => CmdResult;
+  // 프로젝트 설정 일괄 변경(undefined = 유지, null = 제거→기본). root 는 불변.
+  updateProject: (
+    id: string,
+    patch: {
+      title?: string;
+      program?: Program | null;
+      shell?: string | null;
+      color?: string | null;
+    },
+  ) => CmdResult;
   toggleSidebar: (id: string) => CmdResult<{ sidebarOpen: boolean }>;
   // 우측 플러그인 사이드바. open 명시 시 그 상태로(멱등), 생략 시 토글.
   toggleRightSidebar: (
@@ -805,6 +819,49 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       if (!s.tabs.some((t) => t.id === id)) return s;
       r = ok({});
       return { tabs: s.tabs.map((t) => (t.id === id ? { ...t, title } : t)) };
+    });
+    return r;
+  },
+
+  setProjectColor: (id, color) => {
+    let r: CmdResult = noProject(id);
+    set((s) => {
+      if (!s.tabs.some((t) => t.id === id)) return s;
+      r = ok({});
+      return {
+        tabs: s.tabs.map((t) =>
+          t.id === id ? { ...t, color: color ?? undefined } : t,
+        ),
+      };
+    });
+    return r;
+  },
+
+  updateProject: (id, patch) => {
+    let r: CmdResult = noProject(id);
+    set((s) => {
+      if (!s.tabs.some((t) => t.id === id)) return s;
+      r = ok({});
+      return {
+        tabs: s.tabs.map((t) => {
+          if (t.id !== id) return t;
+          const next = { ...t };
+          // 빈 제목은 무시(제목은 항상 비어 있지 않다는 불변식 유지).
+          if (patch.title !== undefined && patch.title.trim()) {
+            next.title = patch.title.trim();
+          }
+          if (patch.program !== undefined) {
+            next.program = patch.program ?? undefined;
+          }
+          if (patch.shell !== undefined) {
+            next.shell = patch.shell ?? undefined;
+          }
+          if (patch.color !== undefined) {
+            next.color = patch.color ?? undefined;
+          }
+          return next;
+        }),
+      };
     });
     return r;
   },

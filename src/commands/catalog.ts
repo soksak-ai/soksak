@@ -22,6 +22,7 @@ import {
 import { useSettings } from "../state/settings";
 import { useBookmarks } from "../state/bookmarks";
 import { useTheme } from "../state/theme";
+import { useIconRegistry } from "../ui/icons/registry";
 import {
   focusHost,
   getCwdOfHost,
@@ -280,6 +281,7 @@ function serializeTree() {
       title: t.title,
       root: t.root ?? null,
       program: t.program ?? null,
+      color: t.color ?? null,
       sidebarOpen: t.sidebarOpen,
       active: t.id === s.activeId,
       activeContentId: t.activeContentId,
@@ -349,6 +351,50 @@ export function registerCatalog(): void {
   const S = () => useSessions.getState();
 
   // ----- state -----
+  register("ui.measure", {
+    description:
+      "앱 DOM 측정(레이아웃 진단) — selector 매칭 요소들의 rect 와 핵심 computed style. 픽셀 정렬 검증용",
+    params: {
+      selector: { type: "string", description: "CSS 셀렉터", required: true },
+      limit: { type: "number", description: "최대 개수(기본 5)" },
+    },
+    returns: "{ count, items: [{ rect, style }] }",
+    handler: (p) => {
+      const els = [
+        ...document.querySelectorAll(p.selector as string),
+      ].slice(0, (p.limit as number) ?? 5);
+      return {
+        count: els.length,
+        items: els.map((el) => {
+          const r = el.getBoundingClientRect();
+          const cs = getComputedStyle(el);
+          return {
+            rect: {
+              x: +r.x.toFixed(2),
+              y: +r.y.toFixed(2),
+              w: +r.width.toFixed(2),
+              h: +r.height.toFixed(2),
+            },
+            style: {
+              display: cs.display,
+              alignItems: cs.alignItems,
+              height: cs.height,
+              paddingTop: cs.paddingTop,
+              paddingBottom: cs.paddingBottom,
+              borderTop: cs.borderTopWidth,
+              borderBottom: cs.borderBottomWidth,
+              lineHeight: cs.lineHeight,
+              fontSize: cs.fontSize,
+              alignSelf: cs.alignSelf,
+              marginTop: cs.marginTop,
+              marginBottom: cs.marginBottom,
+            },
+          };
+        }),
+      };
+    },
+  });
+
   register("state.tree", {
     description:
       "전체 구조 스냅샷(주소록): 프로젝트→컨텐츠→패널(rect %)→뷰→pane 의 모든 id 와 활성 상태",
@@ -455,6 +501,53 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok project.rename \'{"project":"t1","title":"백엔드"}\''],
     handler: (p) => S().renameTab(p.project as string, p.title as string),
+  });
+
+  register("project.color", {
+    description: "프로젝트 식별 색 설정(레일 칩/탭 강조). color 생략 = 제거",
+    params: {
+      project: { ...P.project, required: true },
+      color: {
+        type: "string",
+        description: "CSS 색상(예: #4a8fe8). 생략하면 기본으로 되돌림",
+      },
+    },
+    returns: "{}",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok project.color \'{"project":"t1","color":"#4a8fe8"}\''],
+    handler: (p) =>
+      S().setProjectColor(p.project as string, (p.color as string) ?? null),
+  });
+
+  register("project.update", {
+    description:
+      "프로젝트 설정 일괄 변경(생략한 필드는 유지, \"\"=기본으로 제거). root 는 불변",
+    params: {
+      project: { ...P.project, required: true },
+      title: { type: "string", description: "별칭(빈 문자열은 무시)" },
+      program: {
+        type: "string",
+        description: '첫 화면("" = 전역 설정 따름)',
+        enum: ["terminal", "claude", "codex", "browser", ""],
+      },
+      shell: { type: "string", description: '터미널 셸 경로("" = 기본)' },
+      color: { type: "string", description: '식별 색("" = 제거)' },
+    },
+    returns: "{}",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: [
+      'sok project.update \'{"project":"t1","title":"백엔드","program":"claude"}\'',
+    ],
+    handler: (p) =>
+      S().updateProject(p.project as string, {
+        title: p.title as string | undefined,
+        program:
+          p.program === undefined
+            ? undefined
+            : ((p.program || null) as Program | null),
+        shell: p.shell === undefined ? undefined : (p.shell as string) || null,
+        color: p.color === undefined ? undefined : (p.color as string) || null,
+      }),
   });
 
   register("project.sidebar.toggle", {
@@ -1042,6 +1135,17 @@ export function registerCatalog(): void {
     },
   });
 
+  register("browser.list", {
+    description:
+      "존재하는 네이티브 브라우저 웹뷰 라벨 목록(b-<viewId>) — 스토어의 browser 뷰 집합과 일치해야 정상(고아 검증)",
+    params: {},
+    returns: "{ labels: string[] }",
+    examples: ["sok browser.list"],
+    handler: async () => ({
+      labels: await invoke<string[]>("browser_list"),
+    }),
+  });
+
   register("browser.eval", {
     danger: "inject",
     description:
@@ -1422,10 +1526,10 @@ export function registerCatalog(): void {
   });
 
   // ----- settings / theme -----
+  // splitHeaderMode 는 탭 모드 고정(2026-06 결정)으로 표면에서 제외.
   const SETTING_KEYS = [
     "language",
     "projectTabPosition",
-    "splitHeaderMode",
     "defaultProgram",
     "shell",
     "homeUrl",
@@ -1434,6 +1538,9 @@ export function registerCatalog(): void {
     "cursorBlink",
     "cursorStyle",
     "scrollback",
+    "resizeReflow",
+    "iconSet",
+    "iconBox",
   ] as const;
 
   register("settings.get", {
@@ -1446,7 +1553,6 @@ export function registerCatalog(): void {
       return {
         language: s.language,
         projectTabPosition: s.projectTabPosition,
-        splitHeaderMode: s.splitHeaderMode,
         defaultProgram: s.defaultProgram,
         shell: s.shell,
         homeUrl: s.homeUrl,
@@ -1455,6 +1561,14 @@ export function registerCatalog(): void {
         cursorBlink: s.cursorBlink,
         cursorStyle: s.cursorStyle,
         scrollback: s.scrollback,
+        resizeReflow: s.resizeReflow,
+        iconSet: s.iconSet,
+        iconBox: s.iconBox,
+        // 선택 가능한 아이콘 셋 목록(내장 + 활성 플러그인 등록분).
+        iconSets: Object.values(useIconRegistry.getState().sets).map((x) => ({
+          id: x.id,
+          name: x.name,
+        })),
         theme: useTheme.getState().current,
         themeMode: useTheme.getState().effectiveMode,
       };
@@ -1473,7 +1587,7 @@ export function registerCatalog(): void {
       value: {
         type: "json",
         description:
-          "값 — language:ko|en, projectTabPosition:top|left, splitHeaderMode:title|tabs, defaultProgram:terminal|claude|codex|browser, fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number",
+          "값 — language:ko|en, projectTabPosition:top|left, defaultProgram:terminal|claude|codex|browser, fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, iconSet:string(등록 셋 id — 미등록이면 lucide 폴백 렌더), iconBox:boolean",
         required: true,
       },
     },
@@ -1481,7 +1595,7 @@ export function registerCatalog(): void {
     errors: ["INVALID_PARAMS"],
     examples: [
       'sok settings.set \'{"key":"fontSize","value":14}\'',
-      'sok settings.set \'{"key":"splitHeaderMode","value":"tabs"}\'',
+      'sok settings.set \'{"key":"projectTabPosition","value":"left"}\'',
     ],
     handler: (p) => {
       const s = useSettings.getState();
@@ -1500,10 +1614,6 @@ export function registerCatalog(): void {
         case "projectTabPosition":
           if (v !== "top" && v !== "left") return bad("top|left");
           s.setProjectTabPosition(v);
-          break;
-        case "splitHeaderMode":
-          if (v !== "title" && v !== "tabs") return bad("title|tabs");
-          s.setSplitHeaderMode(v);
           break;
         case "defaultProgram":
           if (v !== "terminal" && v !== "claude" && v !== "codex" && v !== "browser")
@@ -1539,8 +1649,71 @@ export function registerCatalog(): void {
           if (typeof v !== "number") return bad("number");
           s.setScrollback(v);
           break;
+        case "resizeReflow":
+          if (v !== "live" && v !== "settle") return bad("live|settle");
+          s.setResizeReflow(v);
+          break;
+        case "iconSet":
+          if (typeof v !== "string" || !v.trim())
+            return bad("string(셋 id — settings.get 의 iconSets 참조)");
+          s.setIconSet(v.trim());
+          break;
+        case "iconBox":
+          if (typeof v !== "boolean") return bad("boolean");
+          s.setIconBox(v);
+          break;
       }
       return { key, value: v };
+    },
+  });
+
+  register("window.info", {
+    description: "창 화면 좌표/크기/배율(자동화 검증용 — outerPosition 은 물리 픽셀)",
+    params: {},
+    returns: "{ x, y, w, h, scale }",
+    examples: ["sok window.info"],
+    handler: async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const win = getCurrentWindow();
+      const [pos, size, scale] = await Promise.all([
+        win.outerPosition(),
+        win.outerSize(),
+        win.scaleFactor(),
+      ]);
+      return { x: pos.x, y: pos.y, w: size.width, h: size.height, scale };
+    },
+  });
+
+  register("window.move", {
+    description: "창을 화면 좌표(물리 픽셀)로 이동(자동화·다중 모니터 검증용)",
+    params: {
+      x: { type: "number", description: "물리 x", required: true },
+      y: { type: "number", description: "물리 y", required: true },
+    },
+    returns: "{ x, y }",
+    examples: ['sok window.move \'{"x":0,"y":0}\''],
+    handler: async (p) => {
+      const { getCurrentWindow, PhysicalPosition } = await import(
+        "@tauri-apps/api/window"
+      );
+      await getCurrentWindow().setPosition(
+        new PhysicalPosition(p.x as number, p.y as number),
+      );
+      return { x: p.x, y: p.y };
+    },
+  });
+
+  register("window.focus", {
+    description: "앱 창을 전면으로 가져와 포커스(자동화·검증 시 비활성 상태 해제)",
+    params: {},
+    returns: "{ focused: true }",
+    examples: ["sok window.focus"],
+    handler: async () => {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      // setFocus 는 창을 key 로 만들 뿐 — 앱 전면 전환은 네이티브 자기 활성화로.
+      await invoke("window_activate");
+      await getCurrentWindow().setFocus();
+      return { focused: true };
     },
   });
 

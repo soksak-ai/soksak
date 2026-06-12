@@ -2,7 +2,7 @@
 // 좌측 배치 뷰가 하나도 없으면 탭 스트립 없이 지금과 시각적으로 동일(파일 트리만).
 // 파일 트리는 상시 mount(상태 유지), 플러그인 뷰는 keep-alive(연 것만 누적).
 
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import type { TreeThemeInput } from "@pierre/trees";
 import { FileTreeSidebar } from "./FileTreeSidebar";
 import { PluginViewHost } from "./PluginViewHost";
@@ -15,7 +15,8 @@ import { useT } from "../i18n";
 
 const FILES = "files";
 
-export function LeftSidebarHost({
+// memo 경계(원칙 2): onOpenFile 은 ProjectPane 의 안정 콜백이어야 한다.
+export const LeftSidebarHost = memo(function LeftSidebarHost({
   project,
   paneId,
   onOpenFile,
@@ -95,4 +96,4 @@ export function LeftSidebarHost({
       ))}
     </div>
   );
-}
+});

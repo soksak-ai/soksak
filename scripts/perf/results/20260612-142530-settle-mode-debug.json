@@ -1,0 +1,34 @@
+{
+  "meta": {
+    "identity": "debug",
+    "label": "settle-mode",
+    "git": "211dfce",
+    "date": "20260612-142530"
+  },
+  "scenarios": {
+    "s1": {
+      "active": {
+        "avg": 34.6,
+        "max": 137.4,
+        "samples": 32
+      },
+      "tail": {
+        "avg": 2.7,
+        "max": 4.5,
+        "samples": 13
+      }
+    },
+    "s4": {
+      "active": {
+        "avg": 126.1,
+        "max": 153.0,
+        "samples": 11
+      },
+      "tail": {
+        "avg": 8.0,
+        "max": 55.4,
+        "samples": 12
+      }
+    }
+  }
+}

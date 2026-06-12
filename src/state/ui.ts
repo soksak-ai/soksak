@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { create } from "zustand";
 
 // 일시적 UI 상태. browserSuppress: 브라우저 child webview 는 네이티브 레이어라 DOM
@@ -18,3 +19,15 @@ export const useUi = create<UiState>((set) => ({
   releaseBrowser: () =>
     set((s) => ({ browserSuppress: Math.max(0, s.browserSuppress - 1) })),
 }));
+
+// 마운트 동안(active 가 true 인 동안) 브라우저 웹뷰를 숨긴다 — 네이티브 레이어는
+// 항상 DOM 위에 그려지므로 모든 모달/메뉴/드롭다운은 반드시 이 훅을 사용한다.
+export function useSuppressBrowser(active = true): void {
+  const suppress = useUi((s) => s.suppressBrowser);
+  const release = useUi((s) => s.releaseBrowser);
+  useEffect(() => {
+    if (!active) return;
+    suppress();
+    return () => release();
+  }, [active, suppress, release]);
+}

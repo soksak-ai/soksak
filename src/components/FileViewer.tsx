@@ -1,6 +1,7 @@
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -113,19 +114,24 @@ export interface FileViewerProps {
   isDark: boolean;
   projectId: string;
   viewId: string;
-  onMode: (mode: "code" | "preview") => void;
 }
 
-export function FileViewer({
+function FileViewerImpl({
   path,
   mode,
   isDark,
   projectId,
   viewId,
-  onMode,
 }: FileViewerProps) {
   const t = useT();
   const setFileDirty = useSessions((s) => s.setFileDirty);
+  // 모드 전환은 prop 콜백 대신 스토어 액션 직접 구독 — 부모(GroupArea)가 렌더마다
+  // 새 클로저를 만들면 memo 경계가 깨진다(원칙 2).
+  const setFileMode = useSessions((s) => s.setFileMode);
+  const onMode = useCallback(
+    (m: "code" | "preview") => setFileMode(projectId, viewId, m),
+    [setFileMode, projectId, viewId],
+  );
   const strat = strategyFor(path);
   const previewable = strat === "markdown" || strat === "svg";
   const needsText = strat === "text" || strat === "markdown" || strat === "svg";
@@ -541,3 +547,6 @@ function ImagePreview({ url }: { url: string }) {
     </div>
   );
 }
+
+// memo 경계(원칙 2): 드래그/무관 store 쓰기 중 CodeMirror 리렌더를 차단한다.
+export const FileViewer = memo(FileViewerImpl);
