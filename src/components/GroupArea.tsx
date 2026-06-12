@@ -492,7 +492,14 @@ export const GroupArea = memo(function GroupArea({
                   node={view.layout}
                   projectId={projectId}
                   viewId={view.id}
-                  active={isActiveProject && isActiveView}
+                  // 키보드 포커스는 "활성 그룹의" 활성 뷰만 — 그룹 조건이 빠지면
+                  // 모든 그룹의 활성 뷰가 focused 가 되어 activeGroup 변경(분할·
+                  // panel.focus)에도 실포커스가 안 따라간다(표시·입력 불일치 사고).
+                  active={
+                    isActiveProject &&
+                    isActiveView &&
+                    group.id === content.activeGroupId
+                  }
                   focusedPaneId={view.focusedPaneId}
                 />
               ) : view.kind === "file" ? (
