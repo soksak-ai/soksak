@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   applyThemeToDom,
   colorsForMode,
@@ -57,10 +58,18 @@ function loadBuiltins(): {
   return { themes, warnings };
 }
 
-// 신호등 백킹 색 동기화(macOS) — 비활성 위젯은 backdrop 합성으로 그려지는데
-// 배경이 webview 레이어면 유령이 된다. 버튼 뒤 불투명 백킹의 색을 테마에 맞춘다
-// (titlebar.rs titlebar_backing). 비 hex 색이면 시스템 폴백에 맡긴다.
+// 네이티브 크롬(macOS 신호등) 테마 동기화 — 두 채널:
+//   1) 창 NSAppearance 를 앱 테마 모드로(setTheme) — 비활성 회색 점은 창
+//      appearance 기준으로 그려져서, 시스템 다크 + 앱 라이트 테마처럼 어긋나면
+//      밝은 배경에 묻힌다(역도 동일).
+//   2) 버튼 뒤 불투명 백킹 색(titlebar_backing) — 비활성 위젯의 backdrop 합성은
+//      webview 레이어를 샘플링하지 못해 유령이 되므로 테마색 백킹을 깐다.
 function syncTitlebarBacking(theme: ThemeSpec, mode: ThemeMode): void {
+  void getCurrentWindow()
+    .setTheme(mode)
+    .catch(() => {
+      // 비지원 플랫폼/권한 부재 — 무시(테마 토큰 렌더에는 영향 없음).
+    });
   const { colors } = colorsForMode(theme, mode);
   const hex = theme.chrome.titlebar === "side" ? colors.side : colors.bg;
   const m = /^#([0-9a-f]{6})$/i.exec(hex.trim());
