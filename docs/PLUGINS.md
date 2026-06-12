@@ -109,6 +109,7 @@ sok plugin.reload
 | `contributes.commands[]` | | `{name, title}` — `"commands"` 권한 필요. 등록명은 `plugin.<id>.<name>` |
 | `contributes.formatters[]` | | `{id, title, languages[]}` — `"editor"` 권한 필요. languages = 확장자(점 없이) |
 | `contributes.languages[]` | | `{ext, lang}` — `"editor"` 권한 필요. **선언만으로 자동 적용**(코드 불필요) |
+| `contributes.programs[]` | | `{id, title, path?}` — `"programs"` 권한 필요. id 는 전역 평탄, path 는 "/" 구분 메뉴 카테고리(다단) |
 
 알 수 없는 키/권한/배치는 전부 거부된다(오타 조기 발견). `contributes` 에 선언하지 않은
 명령/뷰/포매터를 코드에서 바인딩하면 activate 시 예외가 난다 — **매니페스트가 선언의 단일진실**.
@@ -118,6 +119,7 @@ sok plugin.reload
 | 권한 | 부여 표면 | 주의 |
 |---|---|---|
 | `ui` | `app.ui` — 뷰 등록/열기 | |
+| `programs` | `app.programs` — 새 탭(+) 메뉴 프로그램 등록 | ⚠ 선택 시 터미널 명령 자동 실행(설치 명령 포함) |
 | `commands` | `app.commands` — 명령 실행(danger 없는 것)+자기 명령 등록 | |
 | `commands:destructive` | danger=destructive 명령 실행(닫기·제거) | ⚠ |
 | `commands:inject` | danger=inject 명령 실행(term.send/exec, browser.eval…) | ⚠ |
@@ -171,6 +173,33 @@ ctx.subscriptions.push(
   app.events.on("command.finished", ({ projectId }) => { /* 갱신 예약 */ }),
 );
 ```
+
+### app.programs (`"programs"`)
+
+새 탭(+) 메뉴에는 **내장 항목이 없다(§2.6)** — 터미널·에이전트·브라우저 전부
+플러그인이 등록한다. 코어가 소유하는 것은 뷰 능력(terminal/browser kind)뿐.
+
+```js
+ctx.subscriptions.push(
+  app.programs.register("claude", {
+    kind: "terminal",          // "terminal" | "browser"
+    command: "claude",         // kind=terminal: 자동 실행 셸 명령(생략=맨 터미널)
+    // url: "https://…",       // kind=browser: 시작 URL(생략=설정 homeUrl)
+    ensure: {                  // kind=terminal 한정: 선행 바이너리 보장
+      bin: "claude",           // 사용자 셸 PATH 에서 확인할 실행 파일명
+      install: {               // 미설치 시 같은 터미널에서 가시 실행되는 공식 설치 명령
+        darwin: "curl -fsSL https://claude.ai/install.sh | bash",
+        linux: "curl -fsSL https://claude.ai/install.sh | bash",
+        win32: "irm https://claude.ai/install.ps1 | iex",
+      },
+    },
+  }),
+);
+```
+
+- `register(id, spec)` 의 id 는 `contributes.programs` 선언 필수(미선언 = 예외).
+- 등록 즉시 + 메뉴·`program.list`·`view.open '{"program":"<id>"}'` 에 노출(§0-1).
+- 미등록 id 를 명령/설정이 참조하면 터미널 뷰 폴백(능력명 "browser" 는 그 능력).
 
 ### app.ui (`"ui"`)
 
@@ -280,6 +309,10 @@ sok plugin.install '{"source":"'$PWD'/examples/.repos/soksak-memo"}'
 | `soksak-code-highlight` | editor | 선언적 언어 매핑 + TODO/FIXME 강조(CM6 확장) |
 | `soksak-formatter` | editor | JSON 포메터(⇧⌥F), 실패 시 원본 보존 |
 | `soksak-bookmarks` | ui, commands, commands:destructive | **기존 명령만으로** 즐겨찾기 뷰(백엔드 0줄) |
+| `soksak-terminal` | programs | + 메뉴 "터미널" — 내장 0 모델의 기준 프로그램 |
+| `soksak-agent-claude` | programs | + 메뉴 "에이전트" ▸ Claude — **미설치 시 공식 설치(멀티플랫폼) 자동 실행** |
+| `soksak-agent-codex` | programs | + 메뉴 "에이전트" ▸ Codex — 동일 path 선언으로 카테고리 자동 병합 |
+| `soksak-browser` | programs | + 메뉴 "브라우저" — 코어 능력(네이티브 webview)의 메뉴 노출 |
 
 ## 트러블슈팅
 

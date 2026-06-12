@@ -353,8 +353,8 @@ const P = {
   },
   program: {
     type: "string",
-    description: "프로그램",
-    enum: ["terminal", "claude", "codex", "browser"],
+    description:
+      "프로그램 id — 플러그인 등록분(program.list 참조, 내장 없음). 미등록 id 는 터미널 뷰 폴백",
   },
   side: {
     type: "string",
@@ -550,8 +550,7 @@ export function registerCatalog(): void {
       title: { type: "string", description: "별칭(빈 문자열은 무시)" },
       program: {
         type: "string",
-        description: '첫 화면("" = 전역 설정 따름)',
-        enum: ["terminal", "claude", "codex", "browser", ""],
+        description: '첫 화면 프로그램 id("" = 전역 설정 따름)',
       },
       shell: { type: "string", description: '터미널 셸 경로("" = 기본)' },
       color: { type: "string", description: '식별 색("" = 제거)' },
@@ -1681,7 +1680,7 @@ export function registerCatalog(): void {
       value: {
         type: "json",
         description:
-          "값 — language:ko|en, projectTabPosition:top|left, defaultProgram:terminal|claude|codex|browser, fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, iconSet:string(등록 셋 id — 미등록이면 lucide 폴백 렌더), iconBox:boolean, focusIndicator:outline|corners",
+          "값 — language:ko|en, projectTabPosition:top|left, defaultProgram:string(프로그램 id — program.list 참조, 미등록이면 터미널 폴백), fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, iconSet:string(등록 셋 id — 미등록이면 lucide 폴백 렌더), iconBox:boolean, focusIndicator:outline|corners",
         required: true,
       },
     },
@@ -1710,9 +1709,9 @@ export function registerCatalog(): void {
           s.setProjectTabPosition(v);
           break;
         case "defaultProgram":
-          if (v !== "terminal" && v !== "claude" && v !== "codex" && v !== "browser")
-            return bad("terminal|claude|codex|browser");
-          s.setDefaultProgram(v);
+          if (typeof v !== "string" || !v.trim())
+            return bad("string(프로그램 id — program.list 참조)");
+          s.setDefaultProgram(v.trim());
           break;
         case "shell":
           if (typeof v !== "string") return bad("string(셸 경로, ''=기본)");

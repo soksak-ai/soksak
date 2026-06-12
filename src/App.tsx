@@ -364,7 +364,7 @@ function App() {
   useEffect(() => {
     setSpawnOptionsProvider((paneId) => {
       const info = paneSpawnInfo(useSessions.getState().tabs, paneId);
-      return { cwd: info.cwd, shell: info.shell, initialCommand: info.program };
+      return { cwd: info.cwd, shell: info.shell, initialCommand: info.command };
     });
   }, []);
 

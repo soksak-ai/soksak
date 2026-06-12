@@ -21,6 +21,7 @@ import {
   useViewRegistry,
   type PluginViewProvider,
 } from "./viewRegistry";
+import { useProgramRegistry, type ProgramSpec } from "./programRegistry";
 import { useEditorRegistry } from "./editorRegistry";
 import { useIconRegistry, validateIconSetData } from "../ui/icons/registry";
 import type { IconSetData } from "../ui/icons/types";
@@ -84,6 +85,10 @@ export interface SoksakPluginApi {
       event: K,
       fn: (payload: PluginEventMap[K]) => void,
     ) => Disposable;
+  };
+  programs?: {
+    // 매니페스트 contributes.programs 의 선언 id 에 동작 spec 을 바인딩.
+    register: (programId: string, spec: ProgramSpec) => Disposable;
   };
   ui?: {
     registerView: (viewId: string, provider: PluginViewProvider) => Disposable;
@@ -273,6 +278,25 @@ export function buildPluginApi(
               handler: (params) => spec.handler(params),
             });
             return tracker.wrap(() => deps.unregisterCommand(full));
+          },
+        }
+      : undefined,
+
+    programs: has("programs")
+      ? {
+          register: (programId, spec) => {
+            const decl = manifest.contributes.programs.find(
+              (p) => p.id === programId,
+            );
+            if (!decl) {
+              throw new Error(
+                `매니페스트 contributes.programs 에 선언되지 않은 프로그램: ${programId}`,
+              );
+            }
+            const remove = useProgramRegistry
+              .getState()
+              .register(id, decl, spec);
+            return tracker.wrap(remove);
           },
         }
       : undefined,

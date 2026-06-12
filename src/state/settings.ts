@@ -7,9 +7,10 @@ export type CursorStyle = "block" | "bar" | "underline";
 export type TabPosition = "top" | "left";
 // 분할 패널 헤더: 제목표시줄(단일 뷰) 또는 탭(여러 뷰 + +).
 export type SplitHeaderMode = "title" | "tabs";
-// 첫 화면 프로그램(새 컨텐츠/프로젝트 기본). sessions 의 Program 과 동일 값 집합 —
+// 첫 화면 프로그램(새 컨텐츠/프로젝트 기본). 내장 "terminal"·"browser" +
+// 플러그인 등록 프로그램 id — 미등록 값은 사용 시점에 터미널 폴백.
 // settings → sessions 단방향 import 를 지키기 위해 여기서 독립 정의.
-export type DefaultProgram = "terminal" | "claude" | "codex" | "browser";
+export type DefaultProgram = string;
 // 원격(AI/CLI/MCP) 위험 명령 정책. allow=즉시 실행, deny=차단(권한 게이트, M3).
 export type DangerPolicy = "allow" | "deny";
 // 포커스 영역 표시: outline=사각 아웃라인, corners=모서리 꺽쇠 4개.

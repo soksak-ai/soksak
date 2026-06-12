@@ -1,3 +1,4 @@
+import { ProgramOptions } from "./ProgramOptions";
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useSessions, type Program } from "../state/sessions";
@@ -105,10 +106,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setProgram(e.target.value as Program | "")}
             >
               <option value="">{t("program.default")}</option>
-              <option value="terminal">{t("program.terminal")}</option>
-              <option value="claude">Claude</option>
-              <option value="codex">Codex</option>
-              <option value="browser">{t("program.browser")}</option>
+              <ProgramOptions current={program || undefined} />
             </select>
           </div>
 

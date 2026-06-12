@@ -9,6 +9,7 @@ import {
   type FocusIndicator,
 } from "../state/settings";
 import { useTheme } from "../state/theme";
+import { ProgramOptions } from "./ProgramOptions";
 import { useSuppressBrowser } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useIconRegistry } from "../ui/icons/registry";
@@ -275,10 +276,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 s.setDefaultProgram(e.target.value as DefaultProgram)
               }
             >
-              <option value="terminal">{t("program.terminal")}</option>
-              <option value="claude">Claude</option>
-              <option value="codex">Codex</option>
-              <option value="browser">{t("program.browser")}</option>
+              <ProgramOptions current={s.defaultProgram} />
             </select>
           </div>
 

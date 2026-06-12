@@ -31,6 +31,7 @@
 
 export type PluginPermission =
   | "ui" // 뷰 등록(사이드바/콘텐츠)
+  | "programs" // + 메뉴 프로그램 등록(선택 시 터미널 명령 자동 실행 포함)
   | "commands" // registry 명령 실행(danger 없는 것) + 자기 명령 등록
   | "commands:destructive" // danger:"destructive" 명령 실행(닫기·제거)
   | "commands:inject" // danger:"inject" 명령 실행(term.send/exec, browser.eval …)
@@ -43,6 +44,7 @@ export type PluginPermission =
 
 export const PERMISSIONS: readonly PluginPermission[] = [
   "ui",
+  "programs",
   "commands",
   "commands:destructive",
   "commands:inject",
@@ -62,6 +64,12 @@ export const PERMISSION_INFO: Record<
   ui: {
     label: "뷰 표시",
     detail: "사이드바·콘텐츠 영역에 자체 화면을 띄웁니다.",
+  },
+  programs: {
+    label: "프로그램 등록",
+    detail:
+      "새 탭(+) 메뉴에 프로그램을 추가합니다. 선택하면 터미널에서 그 프로그램의 명령(미설치 시 설치 명령 포함)이 자동 실행됩니다.",
+    caution: true,
   },
   commands: {
     label: "명령 실행·등록",
@@ -147,6 +155,28 @@ export interface ContributedIconSet {
   title: string; // 설정 드롭다운 표시 이름
 }
 
+// ── §2.6 프로그램 ────────────────────────────────────────────────────────────
+// 프로그램 = 새 탭(+) 메뉴의 항목 하나 = 새 뷰를 여는 방법. 내장 프로그램은
+// 없다 — 터미널·에이전트·브라우저 전부 플러그인이 기여한다(메뉴·목록에
+// 하드코딩 항목 없음). 코어가 소유하는 것은 뷰 능력(terminal/browser kind)
+// 뿐이다. 프로그램 id 는 전역 평탄(사용자-facing 인터페이스 — 명령 파라미터·
+// 설정값에 그대로 쓰임). 충돌은 등록 시점 에러(§0-3 침묵 실패 금지).
+// 미등록 id 사용 시 코어는 능력명("browser")이면 그 능력, 아니면 터미널 뷰로
+// 폴백한다(상태·코어 명령의 동작 보장 — 메뉴 항목과는 무관).
+
+export interface ContributedProgram {
+  id: string; // 전역 프로그램 id(평탄). ^[a-z0-9][a-z0-9-]*$, "terminal" 예약
+  title: string; // 메뉴 표시명
+  // 메뉴 카테고리 경로 — "/" 구분으로 뎁스 지정(예: "에이전트", "에이전트/실험").
+  // 같은 경로끼리 서브메뉴로 묶인다. 생략 = 최상위.
+  path?: string;
+}
+
+// path → 세그먼트(빈 세그먼트 거부는 검증이). "a/b" → ["a","b"].
+export function programPathSegments(path: string): string[] {
+  return path.split("/").map((s) => s.trim());
+}
+
 // ── §3 매니페스트 ────────────────────────────────────────────────────────────
 
 export const SPEC_VERSION = "soksak-plugin-spec@1";
@@ -168,6 +198,7 @@ export interface PluginManifest {
     formatters: ContributedFormatter[]; // "editor" 권한 필수
     languages: ContributedLanguage[]; // "editor" 권한 필수
     iconSets: ContributedIconSet[]; // "ui" 권한 필수
+    programs: ContributedProgram[]; // "programs" 권한 필수
   };
 }
 
@@ -373,6 +404,7 @@ export function parseManifest(
   let formatters: ContributedFormatter[] = [];
   let languages: ContributedLanguage[] = [];
   let iconSets: ContributedIconSet[] = [];
+  let programs: ContributedProgram[] = [];
   if (raw.contributes !== undefined) {
     if (!isRecord(raw.contributes)) {
       errors.push("contributes: 객체여야 함");
@@ -380,7 +412,7 @@ export function parseManifest(
       const c = raw.contributes;
       checkKnownKeys(
         c,
-        ["views", "commands", "formatters", "languages", "iconSets"],
+        ["views", "commands", "formatters", "languages", "iconSets", "programs"],
         "contributes",
         errors,
       );
@@ -518,6 +550,42 @@ export function parseManifest(
       if (iconSets.length > 0 && !has("ui")) {
         errors.push('contributes.iconSets: "ui" 권한 선언 필요');
       }
+
+      programs = parseEntries(c.programs, {
+        label: "contributes.programs",
+        required: ["id", "title"],
+        optional: ["path"],
+        parse: (v, errs) => {
+          if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
+            errs.push("contributes.programs: id 는 ^[a-z0-9][a-z0-9-]*$");
+            return null;
+          }
+          const id = v.id.trim();
+          if (!isNonEmptyString(v.title)) return null;
+          let path: string | undefined;
+          if (v.path !== undefined) {
+            if (
+              !isNonEmptyString(v.path) ||
+              programPathSegments(v.path).some((s) => !s)
+            ) {
+              errs.push(
+                `contributes.programs["${id}"].path: "/" 구분 카테고리 경로(빈 세그먼트 금지)`,
+              );
+              return null;
+            }
+            path = programPathSegments(v.path).join("/");
+          }
+          return {
+            id,
+            title: (v.title as string).trim(),
+            ...(path !== undefined ? { path } : {}),
+          };
+        },
+      }, errors);
+      checkDuplicates(programs.map((v) => v.id), "contributes.programs.id", errors);
+      if (programs.length > 0 && !has("programs")) {
+        errors.push('contributes.programs: "programs" 권한 선언 필요');
+      }
     }
   }
 
@@ -536,7 +604,7 @@ export function parseManifest(
           ? (raw.minAppVersion as string).trim()
           : undefined,
       permissions,
-      contributes: { views, commands, formatters, languages, iconSets },
+      contributes: { views, commands, formatters, languages, iconSets, programs },
     },
     validation: { ok: true, errors, warnings },
   };

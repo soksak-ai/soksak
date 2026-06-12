@@ -1,5 +1,6 @@
 // 프로젝트 설정 모달 — 생성 시 설정 전부를 관리: 폴더(읽기 전용)·별칭·식별 색·
 // 첫 프로그램·셸. 탭/레일 칩 더블클릭으로 연다(인라인 rename 대체).
+import { ProgramOptions } from "./ProgramOptions";
 import { useEffect, useState } from "react";
 import { isComposingEnter } from "../lib/imeKeys";
 import { useSessions, type Program } from "../state/sessions";
@@ -140,10 +141,7 @@ export function ProjectSettingsModal({
               onChange={(e) => setProgram(e.target.value as Program | "")}
             >
               <option value="">{t("program.default")}</option>
-              <option value="terminal">{t("program.terminal")}</option>
-              <option value="claude">Claude</option>
-              <option value="codex">Codex</option>
-              <option value="browser">{t("program.browser")}</option>
+              <ProgramOptions current={program || undefined} />
             </select>
           </div>
 

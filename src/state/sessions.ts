@@ -1,5 +1,9 @@
 import { create } from "zustand";
 import { useSettings } from "./settings";
+import {
+  autorunCommandOf,
+  getRegisteredProgram,
+} from "../plugins/programRegistry";
 
 // 3단 구조:
 //   - 최상단 탭 = 프로젝트(ProjectTab): 자체 사이드바(파일트리) + 컨텐츠 탭들
@@ -52,8 +56,9 @@ export type View =
       title: string;
       layout: PaneNode;
       focusedPaneId: string;
-      // 이 pane 의 셸이 뜨면 1회 자동 실행할 프로그램(claude/codex 뷰).
-      autorun?: { paneId: string; program: "claude" | "codex" };
+      // 이 pane 의 셸이 뜨면 1회 자동 실행할 셸 명령(에이전트류 프로그램 —
+      // 명령 문자열은 programRegistry 가 resolve, ensure 설치 래핑 포함).
+      autorun?: { paneId: string; command: string };
     }
   | {
       id: string;
@@ -102,8 +107,9 @@ export type DropZone = "center" | "left" | "right" | "top" | "bottom";
 
 export type Side = "left" | "right" | "top" | "bottom";
 
-// 컨텐츠가 처음 열 때 띄우는 프로그램(첫 화면).
-export type Program = "terminal" | "claude" | "codex" | "browser";
+// 컨텐츠가 처음 열 때 띄우는 프로그램(첫 화면). 내장 "terminal"·"browser"(코어
+// 능력) + 플러그인 등록 프로그램 id(programRegistry). 미등록 id 는 터미널 폴백.
+export type Program = string;
 
 // 브라우저 뷰 기본 시작 페이지(설정 homeUrl).
 export function browserHome(): string {
@@ -329,20 +335,16 @@ const leaf = (id: string): PaneNode => ({ type: "leaf", id });
 
 const baseName = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
-// 새 터미널 뷰(빈 단일 pane). claude/codex 면 그 pane 에서 1회 자동 실행.
-function newTerminalView(program?: Program): View {
+// 새 터미널 뷰(빈 단일 pane). command 가 있으면 그 pane 에서 1회 자동 실행.
+function newTerminalView(command?: string): View {
   const paneId = newPaneId();
-  const autorun =
-    program === "claude" || program === "codex"
-      ? { paneId, program }
-      : undefined;
   return {
     id: newViewId(),
     kind: "terminal",
     title: "터미널",
     layout: leaf(paneId),
     focusedPaneId: paneId,
-    ...(autorun ? { autorun } : {}),
+    ...(command ? { autorun: { paneId, command } } : {}),
   };
 }
 
@@ -360,11 +362,20 @@ function newBrowserView(url?: string): View {
   };
 }
 
-// 프로그램에 맞는 새 뷰(브라우저 → 브라우저 뷰, 그 외 → 터미널 뷰[+autorun]).
+// 프로그램 → 새 뷰. 내장 프로그램 개념은 없다(§2.6) — 등록 프로그램의 spec 으로
+// resolve(kind 에 따라 터미널[+autorun] 또는 브라우저). 미등록 id 는 능력명
+// ("browser" — 코어 명령 browser.open 등의 직접 경로)이면 그 능력, 아니면
+// 터미널 뷰 폴백(아이콘 셋의 lucide 폴백과 동형 — 플러그인 비활성에도 상태
+// 유실 없음).
 function newViewFor(program: Program, opts?: { url?: string }): View {
-  return program === "browser"
-    ? newBrowserView(opts?.url)
-    : newTerminalView(program);
+  const reg = getRegisteredProgram(program);
+  if (reg) {
+    return reg.spec.kind === "browser"
+      ? newBrowserView(opts?.url ?? reg.spec.url)
+      : newTerminalView(autorunCommandOf(reg.spec));
+  }
+  if (program === "browser") return newBrowserView(opts?.url);
+  return newTerminalView();
 }
 
 // 뷰의 새 id 묶음(터미널이면 paneId 포함) — 생성 명령 응답용.
@@ -617,11 +628,11 @@ export function collectAllLeafIds(tabs: ProjectTab[]): string[] {
 }
 
 // paneId 의 spawn 정보: cwd=프로젝트 root, shell=프로젝트>전역 설정,
-// program=그 pane 이 뷰의 autorun 대상일 때만.
+// command=그 pane 이 뷰의 autorun 대상일 때만(1회 자동 실행 셸 명령).
 export function paneSpawnInfo(
   tabs: ProjectTab[],
   paneId: string,
-): { cwd?: string; shell?: string; program?: Program } {
+): { cwd?: string; shell?: string; command?: string } {
   for (const t of tabs) {
     for (const c of t.contents) {
       for (const v of allViews(c.layout)) {
@@ -630,8 +641,8 @@ export function paneSpawnInfo(
           return {
             cwd: t.root,
             shell,
-            program:
-              v.autorun?.paneId === paneId ? v.autorun.program : undefined,
+            command:
+              v.autorun?.paneId === paneId ? v.autorun.command : undefined,
           };
         }
       }

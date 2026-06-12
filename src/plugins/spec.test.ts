@@ -318,3 +318,85 @@ describe("이름 규칙·semver 헬퍼", () => {
     expect(semverGte("abc", "1.0.0")).toBeNull();
   });
 });
+
+describe("parseManifest — programs 기여(§2.6)", () => {
+  it("programs 는 'programs' 권한 필요", () => {
+    const errs = errorsOf(
+      base({
+        contributes: { programs: [{ id: "claude", title: "Claude" }] },
+      }),
+    );
+    expect(errs.some((e) => e.includes('"programs" 권한'))).toBe(true);
+  });
+
+  it("유효한 programs 기여 통과 + path 다단 카테고리", () => {
+    const { manifest, validation } = parseManifest(
+      base({
+        permissions: ["programs"],
+        contributes: {
+          programs: [
+            { id: "claude", title: "Claude", path: "에이전트" },
+            { id: "exp", title: "실험", path: "에이전트/실험 채널" },
+            { id: "web", title: "브라우저" },
+          ],
+        },
+      }),
+      "demo",
+    );
+    expect(validation.errors).toEqual([]);
+    expect(manifest?.contributes.programs).toEqual([
+      { id: "claude", title: "Claude", path: "에이전트" },
+      { id: "exp", title: "실험", path: "에이전트/실험 채널" },
+      { id: "web", title: "브라우저" },
+    ]);
+  });
+
+  it("path 빈 세그먼트 → 거부", () => {
+    const errs = errorsOf(
+      base({
+        permissions: ["programs"],
+        contributes: {
+          programs: [{ id: "a", title: "x", path: "에이전트//하위" }],
+        },
+      }),
+    );
+    expect(errs.some((e) => e.includes("path"))).toBe(true);
+  });
+
+  it("프로그램 id 형식 위반 → 거부", () => {
+    const errs = errorsOf(
+      base({
+        permissions: ["programs"],
+        contributes: { programs: [{ id: "Bad_ID", title: "x" }] },
+      }),
+    );
+    expect(errs.length).toBeGreaterThan(0);
+  });
+
+  it('내장 개념 없음 — "terminal" id 도 플러그인이 등록한다', () => {
+    const { manifest, validation } = parseManifest(
+      base({
+        permissions: ["programs"],
+        contributes: { programs: [{ id: "terminal", title: "터미널" }] },
+      }),
+      "demo",
+    );
+    expect(validation.errors).toEqual([]);
+    expect(manifest?.contributes.programs[0].id).toBe("terminal");
+  });
+
+  it("프로그램 id 중복 → 거부", () => {
+    const errs = errorsOf(
+      base({
+        permissions: ["programs"],
+        contributes: {
+          programs: [
+            { id: "a", title: "x" },
+            { id: "a", title: "y" },
+          ],
+        },
+      }),
+    );
+    expect(errs.some((e) => e.includes("중복"))).toBe(true);
+  });
+});

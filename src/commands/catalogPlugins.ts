@@ -6,6 +6,7 @@
 import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { allGroups, useSessions, type View } from "../state/sessions";
 import { getRegisteredView } from "../plugins/viewRegistry";
+import { listPrograms } from "../plugins/programRegistry";
 import { formatterFor } from "../plugins/editorRegistry";
 import { VIEW_PLACEMENTS, type ViewPlacement } from "../plugins/spec";
 import { getFileView } from "./fileViewBridge";
@@ -75,6 +76,23 @@ function serializeRuntime(p: PluginRuntime) {
 }
 
 export function registerPluginCatalog(): void {
+  register("program.list", {
+    description:
+      "사용 가능한 프로그램 목록(새 탭 + 메뉴와 동일) — 내장 없음, 전부 플러그인 등록분. path 는 메뉴 카테고리 경로",
+    params: {},
+    returns: "{ programs: [{ id, title, path?, kind, pluginId }] }",
+    examples: ["sok program.list"],
+    handler: () => ({
+      programs: listPrograms().map((p) => ({
+        id: p.decl.id,
+        title: p.decl.title,
+        ...(p.decl.path ? { path: p.decl.path } : {}),
+        kind: p.spec.kind,
+        pluginId: p.pluginId,
+      })),
+    }),
+  });
+
   register("plugin.list", {
     description:
       "플러그인 전체 상태 — 설치/dev 목록(status 포함) + 검증 거부(rejected) 사유",
