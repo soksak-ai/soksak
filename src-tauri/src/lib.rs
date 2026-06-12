@@ -1,6 +1,8 @@
 mod browser;
 mod fs;
+mod git;
 pub mod ipc;
+mod plugins;
 mod pty;
 #[cfg(target_os = "macos")]
 mod titlebar;
@@ -58,6 +60,16 @@ pub fn run() {
             fs::git_status,
             fs::themes_scan,
             fs::theme_install,
+            plugins::plugins_scan,
+            plugins::plugin_install_git,
+            plugins::plugin_update,
+            plugins::plugin_remove,
+            plugins::plugin_data_read,
+            plugins::plugin_data_write,
+            plugins::plugin_data_list,
+            git::git_log,
+            git::git_show,
+            git::git_diff,
             watcher::watch_dir,
             watcher::unwatch_dir,
             browser::browser_open,
