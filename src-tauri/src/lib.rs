@@ -72,6 +72,8 @@ pub fn run() {
                 ) {
                     titlebar::install(&window, pos.x, pos.y);
                 }
+                // 네이티브 webview 클릭의 포커스 추적(browser.rs 참조).
+                browser::install_click_monitor(app.handle());
             }
             Ok(())
         })

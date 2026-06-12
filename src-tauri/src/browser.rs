@@ -300,3 +300,62 @@ pub async fn browser_eval(app: AppHandle, label: String, js: String) -> Result<S
 pub async fn browser_eval(_app: AppHandle, _label: String, _js: String) -> Result<String, String> {
     Err("browser_eval 은 현재 macOS 전용".into())
 }
+
+// 네이티브 child webview 위 클릭은 메인 webview DOM 에 도달하지 않아 포커스
+// 추적(activeGroup)이 끊긴다. NSEvent 로컬 모니터로 메인 윈도 안 모든 좌클릭의
+// 좌표(top-left logical)를 프론트에 emit 한다 — 감지는 네이티브가, 판정(어느
+// 그룹인가)은 레이아웃을 아는 프론트가 소유(elementFromPoint). 이벤트는 그대로
+// 통과시킨다(클릭 동작 불변).
+#[cfg(target_os = "macos")]
+pub fn install_click_monitor(app: &AppHandle) {
+    use objc2::rc::Retained;
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSEvent, NSEventMask};
+    use tauri::Manager;
+
+    #[derive(Clone, Serialize)]
+    struct ClickPayload {
+        x: f64,
+        y: f64,
+    }
+
+    let Some(main) = app.get_window("main") else {
+        return;
+    };
+    let Ok(main_ns) = main.ns_window() else {
+        return;
+    };
+    let main_ptr = main_ns as usize;
+    let handle = app.clone();
+    let block = block2::RcBlock::new(
+        move |event: std::ptr::NonNull<NSEvent>| -> *mut NSEvent {
+            unsafe {
+                let ev = event.as_ref();
+                // 모니터 콜백은 메인 스레드에서 호출된다(AppKit 이벤트 루프).
+                let Some(mtm) = MainThreadMarker::new() else {
+                    return event.as_ptr();
+                };
+                if let Some(win) = ev.window(mtm) {
+                    if Retained::as_ptr(&win) as usize == main_ptr {
+                        if let Some(view) = win.contentView() {
+                            let h = view.frame().size.height;
+                            let loc = ev.locationInWindow();
+                            let _ = handle.emit(
+                                "native-mousedown",
+                                ClickPayload {
+                                    x: loc.x,
+                                    y: h - loc.y,
+                                },
+                            );
+                        }
+                    }
+                }
+                event.as_ptr()
+            }
+        },
+    );
+    let monitor =
+        unsafe { NSEvent::addLocalMonitorForEventsMatchingMask_handler(NSEventMask::LeftMouseDown, &block) };
+    // 모니터는 앱 수명 동안 유지 — drop 되면 해제되므로 의도적으로 leak.
+    std::mem::forget(monitor);
+}

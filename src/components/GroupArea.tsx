@@ -480,6 +480,9 @@ export const GroupArea = memo(function GroupArea({
             <div
               key={view.id}
               className="egroup-body-slot"
+              // 네이티브 클릭 판정용(App.tsx native-mousedown → elementFromPoint).
+              data-group-id={group.id}
+              data-project-id={projectId}
               style={{
                 ...cellVars(rect),
                 visibility: isActiveView ? "visible" : "hidden",

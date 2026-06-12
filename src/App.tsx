@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { listen } from "@tauri-apps/api/event";
 import { rafThrottle } from "./lib/rafThrottle";
 import type { TreeThemeInput } from "@pierre/trees";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
@@ -321,6 +322,24 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.focusInd = focusIndicator;
   }, [focusIndicator]);
+
+  // 네이티브 child webview(브라우저) 위 클릭은 메인 DOM 에 이벤트가 오지 않아
+  // 포커스 추적이 끊긴다 — 네이티브 모니터(browser.rs)가 emit 한 좌표를
+  // elementFromPoint 로 판정해 그룹을 활성화한다. 모달 등이 위에 떠 있으면
+  // 그 요소가 잡혀 자연 차단되고, DOM 클릭과 중복돼도 같은 결과라 무해.
+  useEffect(() => {
+    const un = listen<{ x: number; y: number }>("native-mousedown", (e) => {
+      const el = document.elementFromPoint(e.payload.x, e.payload.y);
+      const slot = el?.closest<HTMLElement>("[data-group-id]");
+      const { groupId, projectId } = slot?.dataset ?? {};
+      if (groupId && projectId) {
+        useSessions.getState().setActiveGroup(projectId, groupId);
+      }
+    });
+    return () => {
+      un.then((f) => f());
+    };
+  }, []);
 
   // 구독 최소 원칙(docs/PERFORMANCE.md 1): 필드/액션별 셀렉터만 — bare 훅 금지.
   // zustand 액션은 create() 시점에 고정되는 안정 참조라 액션 셀렉터는 리렌더 없음.
