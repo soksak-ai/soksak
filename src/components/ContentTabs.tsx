@@ -3,6 +3,7 @@ import { isComposingEnter } from "../lib/imeKeys";
 import { Icon } from "../ui/icons/Icon";
 import { ProgramMenu } from "./ProgramMenu";
 import { useSessions, type Program, type ProjectTab } from "../state/sessions";
+import { useProgramRegistry } from "../plugins/programRegistry";
 import { useT } from "../i18n";
 
 // 컨텐츠 탭 바(3단 구조의 가운데). 한 프로젝트 안의 독립 콘텐츠 영역(분할 그리드)을 전환.
@@ -22,6 +23,7 @@ export const ContentTabs = memo(function ContentTabs({
   const closeContent = useSessions((s) => s.closeContent);
   const setActiveContent = useSessions((s) => s.setActiveContent);
   const renameContent = useSessions((s) => s.renameContent);
+  const hasPrograms = useProgramRegistry((s) => s.order.length > 0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const addBtnRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(
@@ -90,15 +92,18 @@ export const ContentTabs = memo(function ContentTabs({
           )}
         </div>
       ))}
-      <button
-        ref={addBtnRef}
-        type="button"
-        className="icon-btn ctab-add"
-        title={t("content.new")}
-        onClick={toggleMenu}
-      >
-        <Icon name="add" />
-      </button>
+      {/* 등록 프로그램 0개면 + 자체가 없다(내장 없음 §2.6 — 빈 메뉴를 열 이유가 없음) */}
+      {hasPrograms && (
+        <button
+          ref={addBtnRef}
+          type="button"
+          className="icon-btn ctab-add"
+          title={t("content.new")}
+          onClick={toggleMenu}
+        >
+          <Icon name="add" />
+        </button>
+      )}
       {menuPos && (
         <ProgramMenu
           pos={menuPos}

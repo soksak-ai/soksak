@@ -6,6 +6,7 @@ import {
   type ViewGroup,
 } from "../state/sessions";
 import { getRegisteredView } from "../plugins/viewRegistry";
+import { useProgramRegistry } from "../plugins/programRegistry";
 import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 
@@ -34,6 +35,7 @@ export const ViewTabs = memo(function ViewTabs({
   const closeView = useSessions((s) => s.closeView);
   const addViewToGroup = useSessions((s) => s.addViewToGroup);
   const maximizeView = useSessions((s) => s.maximizeView);
+  const hasPrograms = useProgramRegistry((s) => s.order.length > 0);
   const addBtnRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(
     null,
@@ -168,23 +170,26 @@ export const ViewTabs = memo(function ViewTabs({
             </button>
           </div>
         ))}
-        <button
-          ref={addBtnRef}
-          type="button"
-          className="icon-btn view-add"
-          title={t("content.new")}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={() => {
-            if (menuPos) {
-              setMenuPos(null);
-              return;
-            }
-            const r = addBtnRef.current?.getBoundingClientRect();
-            if (r) setMenuPos({ left: r.left, top: r.bottom + 2 });
-          }}
-        >
-          <Icon name="add" />
-        </button>
+        {/* 등록 프로그램 0개면 + 자체가 없다(내장 없음 §2.6) */}
+        {hasPrograms && (
+          <button
+            ref={addBtnRef}
+            type="button"
+            className="icon-btn view-add"
+            title={t("content.new")}
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={() => {
+              if (menuPos) {
+                setMenuPos(null);
+                return;
+              }
+              const r = addBtnRef.current?.getBoundingClientRect();
+              if (r) setMenuPos({ left: r.left, top: r.bottom + 2 });
+            }}
+          >
+            <Icon name="add" />
+          </button>
+        )}
       </div>
       {menuPos && (
         <ProgramMenu

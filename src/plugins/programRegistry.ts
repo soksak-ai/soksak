@@ -85,18 +85,27 @@ export function listPrograms(): RegisteredProgram[] {
   return s.order.map((id) => s.programs[id]).filter(Boolean);
 }
 
+export type PlatformKey = "darwin" | "linux" | "win32";
+
+// 실행 플랫폼 판정(설치 명령 분기용). platform 이 빈 환경(테스트)은 UA 폴백.
+export function detectPlatform(): PlatformKey {
+  const s = `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
+  if (s.includes("mac")) return "darwin";
+  if (s.includes("win")) return "win32";
+  return "linux";
+}
+
 // 프로그램의 터미널 자동 실행 명령. ensure 가 있으면 사용자 셸에서 바이너리를
 // 확인하고 미설치면 공식 설치 명령을 실행하는 한 줄로 감싼다 — 셸 자체의 PATH
 // 기준이라 GUI 앱의 좁은 PATH 문제가 없고, 설치 과정이 터미널에 그대로 보인다.
-export function autorunCommandOf(spec: ProgramSpec): string | undefined {
+// platform 인자는 테스트 주입용(기본 = 실행 환경 판정).
+export function autorunCommandOf(
+  spec: ProgramSpec,
+  platform: PlatformKey = detectPlatform(),
+): string | undefined {
   if (spec.kind !== "terminal") return undefined;
   if (!spec.ensure) return spec.command;
-  const plat = navigator.platform.toLowerCase();
-  const key = plat.includes("mac")
-    ? "darwin"
-    : plat.includes("win")
-      ? "win32"
-      : "linux";
+  const key = platform;
   const install = spec.ensure.install[key];
   if (!install) return spec.command; // 이 플랫폼 설치 명령 미제공 — 그냥 실행
   const bin = spec.ensure.bin;
