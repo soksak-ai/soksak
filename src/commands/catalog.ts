@@ -34,6 +34,7 @@ import { getFileView, saveFileView } from "./fileViewBridge";
 import { catalogJson, register, type CommandContext } from "./registry";
 import { registerGitCatalog } from "./catalogGit";
 import { registerPluginCatalog } from "./catalogPlugins";
+import { registerUiCatalog } from "./catalogUi";
 
 // ── 공통 에러/헬퍼 ───────────────────────────────────────────────────────────
 
@@ -1789,4 +1790,5 @@ export function registerCatalog(): void {
   // ----- 분권 카탈로그(파일 분리 — 단일 진실은 동일 registry) -----
   registerGitCatalog();
   registerPluginCatalog();
+  registerUiCatalog();
 }

@@ -71,4 +71,24 @@ describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
       /\.view-tabs \.view-tab,\s*\.view-tabs \.view-add,\s*\.tab,\s*\.ctab,\s*\.tab-add,\s*\.ctab-add \{[^}]*align-self: stretch/,
     );
   });
+
+  it("B4: 보더 선언에 직색(rgba/hex) 금지 — 토큰(var(--bd*))/transparent 만", () => {
+    // 소유권 헌법(docs/UI.md §B4): 구조선 색은 --bd/--bd-soft 두 토큰뿐.
+    // outline/box-shadow 가 아닌 border* 선언만 대상(강조 표면은 --accbg 토큰).
+    const violations: string[] = [];
+    for (const { selector, decls } of rules()) {
+      const borders =
+        decls.match(/(?:^|;)\s*border[^:;]*:\s*[^;]+/g) ?? [];
+      for (const b of borders) {
+        if (/rgba?\(|#[0-9a-fA-F]{3}/.test(b)) {
+          violations.push(`${selector} → ${b.trim()}`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("B4: --bd-soft 파생 토큰 정의 존재(내부선 톤의 단일 출처)", () => {
+    expect(css).toMatch(/--bd-soft:\s*color-mix\(/);
+  });
 });

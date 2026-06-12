@@ -1,6 +1,13 @@
 :root {
   --bg: #1e1e1e;
   --fg: #e6e6e6;
+  /* 보더 소유권 헌법(docs/UI.md §B): 구조선 색은 --bd(앱 크롬·외곽·떠 있는 표면)와
+     --bd-soft(패널 내부선) 두 토큰뿐(§B4). --bd 는 테마 엔진이 주입, soft 는 파생 —
+     테마 슬롯을 늘리지 않는다. 직색 보더는 게이트(cssContract)가 빌드 실패시킨다. */
+  --bd-soft: color-mix(in srgb, var(--bd) 55%, transparent);
+  /* 상태색(오류/주의) 파생 상수 — 테마 슬롯 아님(전 테마 공통 시맨틱). */
+  --danger: #e5534b;
+  --danger-soft: color-mix(in srgb, var(--danger) 50%, transparent);
 }
 
 * {
@@ -187,7 +194,7 @@ body,
   width: 20px;
   height: 18px;
   padding: 0;
-  border: 1px solid rgba(127, 127, 127, 0.45);
+  border: 1px solid var(--bd);
   border-radius: 4px;
   background: none;
   cursor: pointer;
@@ -274,7 +281,7 @@ body,
   overflow: auto;
   background: var(--bg);
   color: var(--fg);
-  border: 1px solid rgba(127, 127, 127, 0.3);
+  border: 1px solid var(--bd);
   border-radius: 10px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
@@ -283,7 +290,7 @@ body,
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(127, 127, 127, 0.18);
+  border-bottom: 1px solid var(--bd-soft);
 }
 .settings-title {
   font-weight: 600;
@@ -335,7 +342,7 @@ body,
   max-width: 260px;
   background: rgba(127, 127, 127, 0.12);
   color: var(--fg);
-  border: 1px solid rgba(127, 127, 127, 0.3);
+  border: 1px solid var(--bd);
   border-radius: 6px;
   padding: 5px 8px;
   font-size: 12px;
@@ -362,7 +369,7 @@ body,
   text-align: left;
   background: rgba(127, 127, 127, 0.12);
   color: var(--fg);
-  border: 1px solid rgba(127, 127, 127, 0.3);
+  border: 1px solid var(--bd);
   border-radius: 6px;
   padding: 5px 8px;
   font-size: 12px;
@@ -446,6 +453,7 @@ body,
 /* 좌측 모드 프로젝트 레일(세로 탭). 폭은 인라인(드래그 조절). */
 .project-rail {
   flex: 0 0 auto;
+  border-right: 1px solid var(--bd); /* §B2 — 레일이 right 소유(§B6: 리사이저 금지) */
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -462,7 +470,6 @@ body,
   margin-right: -3px;
   cursor: col-resize;
   background: transparent;
-  border-left: 1px solid rgba(127, 127, 127, 0.18);
   transition: background 0.12s ease;
   z-index: 3;
 }
@@ -502,7 +509,7 @@ body,
   flex: 0 0 auto;
   height: 100%;
   overflow: hidden;
-  border-right: 1px solid rgba(127, 127, 127, 0.18);
+  border-right: 1px solid var(--bd); /* §B2 */
   background: var(--bg);
 }
 .ft-sidebar {
@@ -613,7 +620,7 @@ body,
      패딩이 정수면 칩 y 도 항상 정수 — 절반픽셀 센터링 구조적 불가. */
   padding: var(--ws-pad, 5px) 6px;
   background: var(--bg);
-  border-bottom: 1px solid rgba(127, 127, 127, 0.18);
+  border-bottom: 1px solid var(--bd); /* §B3 — 컨텐츠 탭이 하단 경계 소유 */
   overflow-x: auto;
   -webkit-user-select: none;
   user-select: none;
@@ -645,7 +652,7 @@ body,
 .ctab-rename {
   width: 80px;
   background: var(--bg);
-  border: 1px solid rgba(127, 127, 127, 0.4);
+  border: 1px solid var(--bd);
   border-radius: 3px;
   color: var(--fg);
   font: inherit;
@@ -691,7 +698,7 @@ body,
   min-width: 130px;
   padding: 4px;
   background: var(--bg);
-  border: 1px solid rgba(127, 127, 127, 0.34);
+  border: 1px solid var(--bd); /* §B4 떠 있는 표면 */
   border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   font-size: 12px;
@@ -723,7 +730,7 @@ body,
   min-width: 110px;
   padding: 4px;
   background: var(--bg);
-  border: 1px solid rgba(127, 127, 127, 0.34);
+  border: 1px solid var(--bd); /* §B4 떠 있는 표면 */
   border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
@@ -761,7 +768,7 @@ body,
   padding: 0 8px;
   overflow: hidden;
   background: rgba(127, 127, 127, 0.06);
-  border-bottom: 1px solid rgba(127, 127, 127, 0.1);
+  border-bottom: 1px solid var(--bd-soft); /* §B2 */
   cursor: grab;
   font-size: 11px;
   color: rgba(127, 127, 127, 0.9);
@@ -830,7 +837,7 @@ body,
   height: 100%;
   padding: 0 10px;
   background: rgba(127, 127, 127, 0.08);
-  border-top: 1px solid rgba(127, 127, 127, 0.1);
+  border-top: 1px solid var(--bd-soft); /* §B2 */
   font-size: 11px;
   color: rgba(127, 127, 127, 0.85);
 }
@@ -859,8 +866,18 @@ body,
   transform: translateY(-3px);
   cursor: row-resize;
 }
-.egroup-divider:hover {
-  background: rgba(55, 148, 255, 0.4);
+/* §B6 예외 — solid 테마: 그룹 분할 seam 에 1px 중앙선(소유 위임). */
+:root[data-divider="solid"] .egroup-divider.row {
+  background-image: linear-gradient(var(--bd-soft), var(--bd-soft));
+  background-size: 1px 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+:root[data-divider="solid"] .egroup-divider.col {
+  background-image: linear-gradient(var(--bd-soft), var(--bd-soft));
+  background-size: 100% 1px;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 /* 드롭 인디케이터(포인터 드래그 중 시각용, 본문 영역 위). 이벤트는 받지 않음. */
 .drop-ind-wrap {
@@ -877,7 +894,7 @@ body,
 .drop-ind {
   position: absolute;
   background: rgba(55, 148, 255, 0.26);
-  border: 1px solid rgba(55, 148, 255, 0.85);
+  border: 1px solid var(--acc);
   pointer-events: none;
 }
 .drop-ind.center {
@@ -914,7 +931,7 @@ body,
   width: 100%;
   height: 100%;
   background: var(--bg);
-  border-bottom: 1px solid rgba(127, 127, 127, 0.14);
+  border-bottom: 1px solid var(--bd-soft); /* §B2 — 패널 헤더가 본문과의 경계 소유 */
 }
 .view-tabs {
   height: 100%;
@@ -1031,7 +1048,7 @@ body,
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  border-bottom: 1px solid rgba(127, 127, 127, 0.16);
+  border-bottom: 1px solid var(--bd-soft);
   -webkit-user-select: none;
   user-select: none;
 }
@@ -1069,14 +1086,14 @@ body,
   outline: none;
 }
 .bv-url:focus {
-  border-color: #3794ff;
+  border-color: var(--acc);
 }
 /* 즐겨찾기 목록(열린 동안 webview 는 숨겨짐). */
 .bv-bm-list {
   flex: 0 0 auto;
   max-height: 50%;
   overflow-y: auto;
-  border-bottom: 1px solid rgba(127, 127, 127, 0.16);
+  border-bottom: 1px solid var(--bd-soft);
   padding: 4px;
 }
 .bv-bm-item {
@@ -1126,7 +1143,7 @@ body,
   align-items: center;
   height: 28px;
   padding: 0 8px;
-  border-bottom: 1px solid rgba(127, 127, 127, 0.14);
+  border-bottom: 1px solid var(--bd-soft);
 }
 .fv-modes {
   display: flex;
@@ -1168,7 +1185,7 @@ body,
   color: var(--fg);
   opacity: 0.85;
   background: rgba(127, 127, 127, 0.16);
-  border-bottom: 1px solid rgba(127, 127, 127, 0.18);
+  border-bottom: 1px solid var(--bd-soft);
 }
 .fv-banner-dirty {
   color: #c0a020;
@@ -1188,7 +1205,7 @@ body,
   gap: 2px;
   padding: 4px;
   background: var(--bg);
-  border: 1px solid rgba(127, 127, 127, 0.34);
+  border: 1px solid var(--bd); /* §B4 떠 있는 표면 */
   border-radius: 4px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
   font-size: 12px;
@@ -1243,10 +1260,10 @@ body,
   padding-right: 6px;
 }
 .cmf-input:focus {
-  border-color: #3794ff;
+  border-color: var(--acc);
 }
 .cmf-field.error .cmf-input {
-  border-color: #e06c6c;
+  border-color: var(--danger);
 }
 .cmf-opts {
   position: absolute;
@@ -1418,8 +1435,22 @@ body,
    라이브러리가 flexBasis:auto, flexGrow/Shrink:0, cursor 를 inline 으로 설정하므로
    크기는 width/height 로(flex shorthand 는 inline 에 밀린다), 상태는 data-separator 로. */
 .pane-resize-handle {
-  background: rgba(127, 127, 127, 0.18);
-  transition: background 0.12s ease;
+  /* §B6 — 도구는 선을 소유하지 않는다: overlay 휴면 완전 투명. solid 테마에선
+     소유 위임으로 1px 중앙선만 표시(불투명 pane 사이엔 선을 들 DOM 이 없다). */
+  background: transparent;
+  transition: background-color 0.12s ease;
+}
+:root[data-divider="solid"] .pane-resize-handle.horizontal {
+  background-image: linear-gradient(var(--bd-soft), var(--bd-soft));
+  background-size: 1px 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+:root[data-divider="solid"] .pane-resize-handle.vertical {
+  background-image: linear-gradient(var(--bd-soft), var(--bd-soft));
+  background-size: 100% 1px;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 .pane-resize-handle.horizontal {
   width: 4px;
@@ -1432,7 +1463,7 @@ body,
 .pane-resize-handle:hover,
 .pane-resize-handle[data-separator="active"],
 .pane-resize-handle[data-separator="focus"] {
-  background: rgba(127, 127, 127, 0.45);
+  background-color: var(--accbg); /* 강조는 --accbg(§B4) */
 }
 
 .terminal-view {
@@ -1489,8 +1520,7 @@ body,
   background: transparent;
 }
 .view-tabs-wrap {
-  background: var(--side);
-  border-bottom: 1px solid var(--bd);
+  background: var(--side); /* 내부선(§B2)은 base 가 소유 — 여기선 표면색만 */
 }
 :root[data-tab-bar="transparent"] .view-tabs-wrap {
   background: transparent;
@@ -1672,7 +1702,6 @@ body,
 /* ── 분할 패널 헤더(타이틀바 모드)·스테이터스바 ── */
 .egroup-title {
   background: var(--side);
-  border-bottom: 1px solid var(--bd);
   color: var(--fg2);
   font-size: 12px;
 }
@@ -1684,7 +1713,6 @@ body,
   font-size: 11.5px;
   padding: 0 12px;
   background: var(--side);
-  border-top: 1px solid var(--bd);
   color: var(--fg3);
 }
 :root[data-status-bg="inset"] .egroup-status {
@@ -1761,15 +1789,14 @@ body,
 
 /* 카드/플로팅: chrome(타이틀/탭/상태) 은 투명(카드 --card 가 비침), 본문 body-slot
    은 터미널 배경 --bg 로 채운다 — 터미널 fit 잔여(1셀 미만)가 --card 로 비쳐
-   "100% 높이 안 참"처럼 보이던 문제 제거. 내부 구분선 없음(외곽 프레임 1줄만). */
+   "100% 높이 안 참"처럼 보이던 문제 제거. 내부선(§B2)은 base 규칙이 소유. */
 :root[data-pane-style="card"] .egroup-title,
 :root[data-pane-style="card"] .egroup-tabs,
 :root[data-pane-style="card"] .egroup-status,
 :root[data-pane-style="floating"] .egroup-title,
 :root[data-pane-style="floating"] .egroup-tabs,
 :root[data-pane-style="floating"] .egroup-status {
-  background: transparent;
-  border: none;
+  background: transparent; /* 내부선(§B2)은 base 가 소유 — 여기선 배경만 */
 }
 :root[data-pane-style="card"] .egroup-body-slot,
 :root[data-pane-style="floating"] .egroup-body-slot {
@@ -2075,7 +2102,7 @@ select.dctl {
   display: block;
   height: 34px;
   border-radius: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--bd-soft);
   position: relative;
   overflow: hidden;
 }
@@ -2255,7 +2282,7 @@ select.dctl {
   flex: 0 0 auto;
   height: 100%;
   overflow: hidden;
-  border-left: 1px solid rgba(127, 127, 127, 0.18);
+  border-left: 1px solid var(--bd); /* §B2 */
   background: var(--bg);
 }
 /* 레이아웃 폭 0 오버레이 — 근거는 .sidebar-resizer 참조(좌우 마진 부호만 반전). */
@@ -2289,7 +2316,7 @@ select.dctl {
   gap: 4px;
   /* 첫 아이콘(26px)이 상단 밴드(38px) 세로 중앙에 오도록: (38-26)/2 = 6px. */
   padding: 6px 0 8px;
-  border-right: 1px solid rgba(127, 127, 127, 0.18);
+  border-right: 1px solid var(--bd); /* §B2 */
 }
 .plugin-rail-btn {
   width: 26px;
@@ -2508,7 +2535,7 @@ select.dctl {
 }
 .plugin-badge.error {
   color: #e5534b;
-  border-color: #e5534b;
+  border-color: var(--danger);
 }
 .plugin-badge.dev {
   color: var(--acc);
@@ -2584,7 +2611,7 @@ select.dctl {
   padding: 7px 10px;
 }
 .plugin-consent-item.caution {
-  border-color: rgba(229, 83, 75, 0.55);
+  border-color: var(--danger-soft);
 }
 .plugin-consent-label {
   font-weight: 600;
@@ -2598,7 +2625,7 @@ select.dctl {
   color: var(--fg3);
 }
 .plugin-consent-notice {
-  border: 1px solid rgba(229, 83, 75, 0.4);
+  border: 1px solid var(--danger-soft);
   background: rgba(229, 83, 75, 0.07);
   border-radius: 7px;
   padding: 8px 10px;
