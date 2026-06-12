@@ -19,7 +19,7 @@ use watcher::FsWatcher;
 fn window_activate(window: tauri::WebviewWindow) {
     #[cfg(target_os = "macos")]
     {
-        let _ = window.run_on_main_thread(|| unsafe {
+        let _ = window.run_on_main_thread(|| {
             use objc2::MainThreadMarker;
             use objc2_app_kit::NSApplication;
             if let Some(mtm) = MainThreadMarker::new() {
