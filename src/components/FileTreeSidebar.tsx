@@ -306,10 +306,14 @@ function LazyTree({
 
 function FileTreeSidebarImpl({
   paneId,
+  projectRoot,
   onOpenFile,
   theme,
 }: {
   paneId: string;
+  // 프로젝트 루트(P1 — 항상 존재). cwd(터미널 셸 통합) 미확인 시의 폴백 —
+  // HOME 폴백은 루트 헌법 위반이라 사멸.
+  projectRoot: string;
   onOpenFile: (absPath: string) => void;
   theme: TreeThemeInput;
 }) {
@@ -362,10 +366,11 @@ function FileTreeSidebarImpl({
     };
   }, [listing?.root]);
 
-  // cwd(또는 새로고침) → 루트 + 직속 자식. cwd 미확인이면 path=null → Rust 가 HOME 사용.
+  // cwd(또는 새로고침) → 루트 + 직속 자식. cwd 미확인(셸 통합 전)이면
+  // 프로젝트 루트가 폴백(P1) — HOME 폴백 금지.
   useEffect(() => {
     let cancelled = false;
-    invoke<Listing>("list_children", { path: cwd ?? null })
+    invoke<Listing>("list_children", { path: cwd ?? projectRoot })
       .then((l) => {
         if (!cancelled) {
           setListing(l);
@@ -378,7 +383,7 @@ function FileTreeSidebarImpl({
     return () => {
       cancelled = true;
     };
-  }, [cwd, nonce]);
+  }, [cwd, projectRoot, nonce]);
 
   // 루트의 git 상태(데코레이션). git repo 가 아니면 빈 목록. cwd/새로고침/명령종료 시 갱신.
   useEffect(() => {

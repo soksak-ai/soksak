@@ -35,7 +35,11 @@ import { catalogJson, register, type CommandContext } from "./registry";
 import { registerGitCatalog } from "./catalogGit";
 import { registerPluginCatalog } from "./catalogPlugins";
 import { registerUiCatalog } from "./catalogUi";
-import { ensureDefaultWorkspace, PROJECT_ID_RE } from "../lib/workspace";
+import {
+  ensureDefaultWorkspace,
+  FOLDER_NAME_RE,
+  validateProjectRoot,
+} from "../lib/workspace";
 
 // ── 공통 에러/헬퍼 ───────────────────────────────────────────────────────────
 
@@ -479,38 +483,48 @@ export function registerCatalog(): void {
 
   register("project.create", {
     description:
-      "새 프로젝트. root 생략 시 id(영문 슬러그) 필수 — ~/soksak/<id> 생성·사용",
+      "새 프로젝트. root 생략 시 folder(폴더명 슬러그) 필수 — ~/.soksak/projects/<folder> 생성·사용. 홈(~)·루트(/)는 root 불가, 동일 root 중복 시 기존 프로젝트 활성화(existing)",
     params: {
-      root: { type: "string", description: "프로젝트 루트 디렉토리(절대경로)" },
-      id: {
+      root: { type: "string", description: "프로젝트 루트 디렉토리(절대경로 — 홈/루트 금지)" },
+      folder: {
         type: "string",
         description:
-          "root 생략 시 필수 — ^[a-z0-9][a-z0-9-]*$, ~/soksak/<id> 디렉토리명",
+          "root 생략 시 필수 — ^[a-z0-9][a-z0-9-]*$, ~/.soksak/projects/<folder> 폴더명",
       },
-      alias: { type: "string", description: "탭 별칭(생략=폴더명/id)" },
+      alias: { type: "string", description: "탭 별칭(생략=폴더명)" },
       program: { ...P.program, description: "첫 화면(생략=전역 설정)" },
       shell: { type: "string", description: "터미널 셸 경로(생략=전역 설정→$SHELL)" },
     },
-    returns: "{ projectId, contentId, groupId, viewId, paneId? }",
+    returns: "{ projectId, contentId, groupId, viewId, paneId?, existing? }",
     errors: ["INVALID_PARAMS"],
     examples: [
       'sok project.create \'{"root":"/Users/me/work","program":"claude"}\'',
-      'sok project.create \'{"id":"my-project"}\'',
+      'sok project.create \'{"folder":"my-project"}\'',
     ],
     handler: async (p) => {
       let root = p.root as string | undefined;
-      let alias = (p.alias as string) ?? "";
-      if (!root) {
-        const id = (p.id as string | undefined)?.trim();
-        if (!id || !PROJECT_ID_RE.test(id)) {
+      const alias = (p.alias as string) ?? "";
+      if (root) {
+        // P2: 홈/루트 금지 + 정규화(P5 중복 비교 기준).
+        try {
+          root = await validateProjectRoot(root);
+        } catch (e) {
           return {
             ok: false as const,
             code: "INVALID_PARAMS" as const,
-            message: "root 생략 시 id 필수(^[a-z0-9][a-z0-9-]*$)",
+            message: String(e),
           };
         }
-        root = await ensureDefaultWorkspace(id);
-        alias = alias || id;
+      } else {
+        const folder = (p.folder as string | undefined)?.trim();
+        if (!folder || !FOLDER_NAME_RE.test(folder)) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: "root 생략 시 folder 필수(^[a-z0-9][a-z0-9-]*$)",
+          };
+        }
+        root = await ensureDefaultWorkspace(folder);
       }
       // 루트 초기화 정책(git init 등)은 project.created 이벤트 구독 플러그인 소유.
       return S().addProject({

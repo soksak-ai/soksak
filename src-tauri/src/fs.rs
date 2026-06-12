@@ -333,22 +333,44 @@ pub fn git_status(path: String) -> Result<Vec<GitEntry>, String> {
     Ok(entries)
 }
 
-// 기본 작업 공간(~/soksak/<id>) 생성 — 새 프로젝트에서 폴더를 지정하지 않은
-// 경우의 루트. 사용자 작업물은 가시 폴더(~/soksak)에, 앱 내부물(~/.soksak)과
-// 분리한다. id 는 디렉토리명 계약 — 슬러그만 허용(탈출/주입 차단).
+// 자동 지정 루트(~/.soksak/projects/<폴더명>) 생성 — 새 프로젝트에서 폴더를
+// 지정하지 않은 경우(P3). 앱이 만든 폴더는 앱 관리 영역(~/.soksak)에 둔다.
+// folder 는 디렉토리명 계약 — 슬러그만 허용(탈출/주입 차단).
 #[tauri::command]
-pub fn ensure_workspace_dir(id: String) -> Result<String, String> {
-    let valid = !id.is_empty()
-        && id
+pub fn ensure_workspace_dir(folder: String) -> Result<String, String> {
+    let valid = !folder.is_empty()
+        && folder
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-        && !id.starts_with('-');
+        && !folder.starts_with('-');
     if !valid {
         return Err(format!(
-            "프로젝트 id 형식 위반: \"{id}\" — ^[a-z0-9][a-z0-9-]*$"
+            "폴더명 형식 위반: \"{folder}\" — ^[a-z0-9][a-z0-9-]*$"
         ));
     }
-    let dir = home_dir().join("soksak").join(&id);
+    let dir = home_dir().join(".soksak").join("projects").join(&folder);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.to_string_lossy().to_string())
+}
+
+// 프로젝트 루트 검증(P1/P2) — 존재하는 디렉토리이고, 홈(~)과 파일시스템 루트
+// (/)가 아니어야 한다(루트 초기화 정책 플러그인이 루트 전체를 대상으로 동작
+// 하므로). 통과 시 정규화(canonicalize) 경로 반환 — 중복 비교(P5)의 기준.
+#[tauri::command]
+pub fn validate_project_root(path: String) -> Result<String, String> {
+    let dir = std::path::Path::new(&path);
+    if !dir.is_dir() {
+        return Err(format!("디렉토리 아님: {path}"));
+    }
+    let canon = dir
+        .canonicalize()
+        .map_err(|e| format!("경로 정규화 실패: {e}"))?;
+    let home = home_dir().canonicalize().unwrap_or_else(|_| home_dir());
+    if canon == home {
+        return Err("홈 디렉토리(~)는 프로젝트 루트가 될 수 없음".to_string());
+    }
+    if canon.parent().is_none() {
+        return Err("파일시스템 루트(/)는 프로젝트 루트가 될 수 없음".to_string());
+    }
+    Ok(canon.to_string_lossy().to_string())
 }

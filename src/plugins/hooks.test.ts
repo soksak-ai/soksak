@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   onPluginEvent,
   startPluginHooks,
@@ -6,42 +6,24 @@ import {
 } from "./hooks";
 import { useSessions } from "../state/sessions";
 
-// startPluginHooks 의 sessions diff 가 rAF 로 coalesce 되는지(원칙 4·5,
-// docs/PERFORMANCE.md), coalesce 후에도 이벤트 시맨틱이 보존되는지 검증한다.
-// rAF 를 수동 제어해 "한 프레임"을 명시적으로 진행시킨다.
+// startPluginHooks 의 sessions diff 가 마이크로태스크로 coalesce 되는지
+// (같은 동기 burst = diff 1회), coalesce 후에도 이벤트 시맨틱이 보존되는지
+// 검증한다. rAF 가 아닌 이유: WebKit 은 가려진(occluded) 창에서 rAF 를
+// 정지시켜 원격(sok/MCP) 조작 중 이벤트가 무기한 지연되는 사고가 실측됨 —
+// diff 는 렌더와 무관하므로 마이크로태스크가 옳은 정렬 지점이다.
 
-let queue: FrameRequestCallback[] = [];
-let nextId = 1;
-
-beforeEach(() => {
-  queue = [];
-  nextId = 1;
-  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
-    queue.push(cb);
-    return nextId++;
-  });
-  vi.stubGlobal("cancelAnimationFrame", () => {
-    queue = [];
-  });
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
-function frame() {
-  const cbs = queue;
-  queue = [];
-  for (const cb of cbs) cb(performance.now());
+// 대기 중인 마이크로태스크(scheduleSessionsDiff 의 queueMicrotask)를 소화.
+async function flush() {
+  await Promise.resolve();
 }
 
 type Ev = { event: keyof PluginEventMap; payload: unknown };
 
 describe("startPluginHooks — sessions diff coalescing", () => {
-  it("프레임 내 다중 쓰기(리사이즈 스톰)는 diff 1회로 합쳐지고, 시맨틱 이벤트는 보존된다", () => {
+  it("동기 burst 다중 쓰기(리사이즈 스톰)는 diff 1회로 합쳐지고, 시맨틱 이벤트는 보존된다", async () => {
     // startPluginHooks 는 모듈 수명당 1회(started 가드) — 이 테스트 파일에서 1회 기동.
     startPluginHooks();
-    frame(); // 기동 직전 상태로 prev 스냅샷 정착
+    await flush(); // 기동 직전 상태로 prev 스냅샷 정착
 
     const events: Ev[] = [];
     const subs = (
@@ -55,7 +37,7 @@ describe("startPluginHooks — sessions diff coalescing", () => {
     expect(created.ok).toBe(true);
 
     if (!created.ok) throw new Error("addProject 실패");
-    // 같은 프레임 안: 프로젝트 추가 + 분할 + 리사이즈 스톰(120회) + 파일 열기.
+    // 같은 동기 burst 안: 프로젝트 추가 + 분할 + 리사이즈 스톰(120회) + 파일 열기.
     const projectId = created.projectId;
     const split = useSessions
       .getState()
@@ -78,10 +60,10 @@ describe("startPluginHooks — sessions diff coalescing", () => {
       .openFileView(projectId, "/tmp/perf-test/a.txt");
     expect(opened.ok).toBe(true);
 
-    // 아직 프레임 전 — 이벤트 0건(쓰기마다 diff 돌았다면 이미 다수 발화).
+    // 아직 마이크로태스크 전 — 이벤트 0건(쓰기마다 diff 돌았다면 이미 다수 발화).
     expect(events.length).toBe(0);
 
-    frame(); // 한 프레임 진행 → coalesce 된 diff 1회
+    await flush(); // 마이크로태스크 소화 → coalesce 된 diff 1회
 
     // 시맨틱 보존: 프로젝트 활성 변경 1회 + 파일 열림 1회 + 뷰 활성 1회.
     // 리사이즈 120회는 어떤 이벤트도 만들지 않는다.
@@ -95,15 +77,15 @@ describe("startPluginHooks — sessions diff coalescing", () => {
     expect(byEvent("view.activated").length).toBe(1);
     expect(byEvent("file.closed").length).toBe(0);
 
-    // 추가 프레임에서 중복 발화 없음.
+    // 추가 양보에서 중복 발화 없음.
     events.length = 0;
-    frame();
+    await flush();
     expect(events.length).toBe(0);
 
     for (const d of subs) d.dispose();
   });
 
-  it("프레임 사이의 쓰기는 각각 diff 된다(열림→닫힘이 별개 프레임이면 둘 다 발화)", () => {
+  it("burst 사이의 쓰기는 각각 diff 된다(열림→닫힘이 별개 burst 면 둘 다 발화)", async () => {
     const events: Ev[] = [];
     const subOpen = onPluginEvent("file.opened", (p) =>
       events.push({ event: "file.opened", payload: p }),
@@ -114,9 +96,10 @@ describe("startPluginHooks — sessions diff coalescing", () => {
 
     const created = useSessions
       .getState()
-      .addProject({ alias: "perf2", root: "/tmp/perf-test" });
+      // P5(같은 root 중복 금지) — 첫 테스트와 다른 root 여야 새 프로젝트가 생긴다.
+      .addProject({ alias: "perf2", root: "/tmp/perf-test-2" });
     expect(created.ok).toBe(true);
-    frame(); // 프로젝트 추가 이벤트를 먼저 소화
+    await flush(); // 프로젝트 추가 이벤트를 먼저 소화
     events.length = 0;
 
     const tab = useSessions.getState().tabs.find((t) => t.title === "perf2")!;
@@ -124,13 +107,13 @@ describe("startPluginHooks — sessions diff coalescing", () => {
       .getState()
       .openFileView(tab.id, "/tmp/perf-test/b.txt");
     expect(opened.ok).toBe(true);
-    frame();
+    await flush();
     expect(events.filter((e) => e.event === "file.opened").length).toBe(1);
 
     if (opened.ok) {
       useSessions.getState().closeView(tab.id, opened.viewId);
     }
-    frame();
+    await flush();
     expect(events.filter((e) => e.event === "file.closed").length).toBe(1);
 
     subOpen.dispose();

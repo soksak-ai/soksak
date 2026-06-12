@@ -499,6 +499,21 @@ sok git.diff
 sok git.diff '{"file":"src/main.ts","staged":true}'
 ```
 
+## `git.init`
+
+디렉토리에 .git 이 없으면 git init(있으면 no-op, 멱등). 루트 초기화 정책 플러그인(soksak-git-init)이 project.created 이벤트와 조합해 사용
+
+| 파라미터 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `path` | string |  | 저장소 경로(생략 시 활성 프로젝트 루트) |
+
+**반환**: { initialized(수행 여부), path }
+**에러**: TARGET_NOT_FOUND, INTERNAL
+
+```bash
+sok git.init '{"path":"/Users/me/work"}'
+```
+
 ## `git.log`
 
 커밋 이력(최신순). limit 기본 50/최대 500, skip 으로 페이지네이션
@@ -732,7 +747,7 @@ sok panel.split '{"side":"bottom","program":"browser"}'
 
 ## `plugin.dev.load`
 
-개발 모드 — 임의 디렉토리의 플러그인을 설치 없이 적재(활성화는 별도 enable + 동의)
+개발 모드 — 임의 디렉토리의 플러그인을 설치 없이 적재. dev 소스는 동의 게이트 면제(§0-5 예외 — 게이트는 이 명령의 inject 정책)
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
@@ -934,19 +949,22 @@ sok project.color '{"project":"t1","color":"#4a8fe8"}'
 
 ## `project.create`
 
-새 프로젝트(루트 폴더 + 첫 화면 프로그램 + 셸)
+새 프로젝트. root 생략 시 folder(폴더명 슬러그) 필수 — ~/.soksak/projects/<folder> 생성·사용. 홈(~)·루트(/)는 root 불가, 동일 root 중복 시 기존 프로젝트 활성화(existing)
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |---|---|---|---|
 | `alias` | string |  | 탭 별칭(생략=폴더명) |
+| `folder` | string |  | root 생략 시 필수 — ^[a-z0-9][a-z0-9-]*$, ~/.soksak/projects/<folder> 폴더명 |
 | `program` | string |  | 첫 화면(생략=전역 설정) |
-| `root` | string |  | 프로젝트 루트 디렉토리(절대경로) |
+| `root` | string |  | 프로젝트 루트 디렉토리(절대경로 — 홈/루트 금지) |
 | `shell` | string |  | 터미널 셸 경로(생략=전역 설정→$SHELL) |
 
-**반환**: { projectId, contentId, groupId, viewId, paneId? }
+**반환**: { projectId, contentId, groupId, viewId, paneId?, existing? }
+**에러**: INVALID_PARAMS
 
 ```bash
 sok project.create '{"root":"/Users/me/work","program":"claude"}'
+sok project.create '{"folder":"my-project"}'
 ```
 
 ## `project.list`

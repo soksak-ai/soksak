@@ -139,8 +139,9 @@ export interface ProjectTab {
   rightView: string | null;
   // 좌측 사이드바 활성 탭: "files"(파일 트리) 또는 플러그인 뷰 전역 키(좌측 호스팅).
   leftTab: string;
-  // 프로젝트 루트 디렉토리(터미널 시작 위치). 미지정이면 앱 실행 디렉토리.
-  root?: string;
+  // 프로젝트 루트 디렉토리(P1 루트 필수 — workspace.ts 헌법). 정체성 = 이
+  // 경로(P4). 터미널 시작 위치이자 파일트리/git 의 기준.
+  root: string;
   // 프로젝트의 첫 화면(미지정이면 전역 설정 defaultProgram 사용 — 프로젝트 설정이 우선).
   program?: Program;
   // 프로젝트의 터미널 셸(미지정이면 전역 설정 shell → 시스템 $SHELL).
@@ -154,7 +155,7 @@ export interface ProjectTab {
 
 export interface NewProjectOpts {
   alias: string;
-  root?: string;
+  root: string; // P1 — 호출부가 검증·정규화(validateProjectRoot)까지 마친 경로
   program?: Program; // undefined = 전역 설정 따름
   shell?: string; // undefined = 전역 설정 따름
 }
@@ -177,9 +178,13 @@ interface SessionsStore {
   activeId: string;
 
   // 프로젝트 레벨
+  // 부트 1회: 기본 루트로 첫 프로젝트(t1/"P1") 생성 — main.tsx 전용(P3).
+  bootstrapFirstProject: (root: string) => void;
   addProject: (
     opts: NewProjectOpts,
-  ) => CmdResult<{ projectId: string; contentId: string; groupId: string } & NewViewIds>;
+  ) => CmdResult<
+    { projectId: string; contentId: string; groupId: string; existing?: true } & NewViewIds
+  >;
   closeTab: (id: string) => CmdResult<{ activeProjectId: string }>;
   setActive: (id: string) => CmdResult;
   renameTab: (id: string, title: string) => CmdResult;
@@ -753,29 +758,9 @@ function mapViewEverywhere(
   };
 }
 
-function firstProject(): ProjectTab {
-  const c = makeContent("1", "terminal");
-  return {
-    id: "t1",
-    title: "1",
-    sidebarOpen: true,
-    rightOpen: false,
-    rightView: null,
-    leftTab: "files",
-    program: "terminal",
-    contents: [c],
-    activeContentId: c.id,
-  };
-}
-
-function makeProject(
-  id: string,
-  opts: NewProjectOpts,
-  index: number,
-): ProjectTab {
+function makeProject(id: string, opts: NewProjectOpts): ProjectTab {
   const c = makeContent("1", effectiveProgram(undefined, opts.program));
-  const alias =
-    opts.alias.trim() || (opts.root ? baseName(opts.root) : String(index));
+  const alias = opts.alias.trim() || baseName(opts.root);
   return {
     id,
     title: alias,
@@ -796,12 +781,36 @@ const noProject = (id: string): CmdErr =>
   err("TARGET_NOT_FOUND", `프로젝트 없음: ${id}`);
 
 export const useSessions = create<SessionsStore>((set, get) => ({
-  tabs: [firstProject()],
-  activeId: "t1",
+  // 부트(main.tsx)가 기본 루트(~/.soksak/projects/project1)를 준비한 뒤
+  // bootstrapFirstProject 로 첫 프로젝트를 만든다(P3) — 렌더 전이므로
+  // 프로젝트 0개 상태는 화면에 나타나지 않는다(부트 실패만의 예외 상태).
+  tabs: [],
+  activeId: "",
+
+  bootstrapFirstProject: (root) => {
+    if (get().tabs.length > 0) return; // 멱등 — 부트 1회 전용
+    const t = makeProject("t1", { alias: "P1", root });
+    set({ tabs: [t], activeId: "t1" });
+  },
 
   addProject: (opts) => {
+    // P5 중복 금지 — 같은 루트(정규화는 호출부 책임)의 프로젝트가 있으면
+    // 그 프로젝트를 활성화하고 existing 으로 알린다(openFileView 패턴).
+    const dup = get().tabs.find((t) => t.root === opts.root);
+    if (dup) {
+      set({ activeId: dup.id });
+      const c = dup.contents.find((x) => x.id === dup.activeContentId)!;
+      const g = allGroups(c.layout)[0];
+      return ok({
+        projectId: dup.id,
+        contentId: c.id,
+        groupId: g.id,
+        ...idsOfView(g.views[0]),
+        existing: true,
+      });
+    }
     const id = `t${nextProjectId++}`;
-    const t = makeProject(id, opts, get().tabs.length + 1);
+    const t = makeProject(id, opts);
     set((s) => ({ tabs: [...s.tabs, t], activeId: id }));
     const c = t.contents[0];
     const g = allGroups(c.layout)[0];

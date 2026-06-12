@@ -92,6 +92,7 @@ pub fn run() {
             fs::themes_scan,
             fs::theme_install,
             fs::ensure_workspace_dir,
+            fs::validate_project_root,
             plugins::plugins_scan,
             plugins::plugin_install_git,
             plugins::plugin_update,

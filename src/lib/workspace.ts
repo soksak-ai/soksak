@@ -1,25 +1,28 @@
-// 프로젝트 루트 규칙 — 새 프로젝트 모달과 project.create 명령이 공유하는
-// 단일진실: 폴더 미지정 시 ~/soksak/<id> 를 생성해 루트로 쓴다. 이름은
-// 디렉토리명 계약이므로 자유 별칭이 아니라 id(영문 슬러그)다. 기본 루트가
-// 절대 홈(~)이 아닌 이유: 루트 초기화 정책 플러그인(git init 등 —
-// project.created 이벤트 구독)이 루트 전체를 대상으로 동작하므로 격리
-// 폴더여야 한다.
+// 프로젝트 루트 헌법 — 새 프로젝트 모달·project.create 명령·부트가 공유하는
+// 단일진실:
+//   P1 루트 필수: 모든 프로젝트는 루트 디렉토리를 가진다(타입 강제 —
+//      ProjectTab.root: string). 루트 없는 프로젝트는 존재 불가.
+//   P2 금지 루트: 홈(~)과 파일시스템 루트(/)는 프로젝트 루트 불가 — 루트
+//      초기화 정책 플러그인(git init 등, project.created 1회)이 루트 전체를
+//      대상으로 동작하므로. 하위 디렉토리는 자유.
+//   P3 자동 루트: 폴더 미지정 시 ~/.soksak/projects/<폴더명> 생성·사용(앱이
+//      만든 폴더는 앱 관리 영역). 첫 프로젝트는 부트 시 projects/project1.
+//   P4 정체성 = 루트 경로: 영속 id 필드 없음(이중화 금지). 자동 모드의
+//      입력은 만들 "폴더명"(슬러그)일 뿐 저장되지 않는다. 별칭 = 표시명
+//      (비면 폴더명 폴백).
+//   P5 중복 금지: 같은 루트(정규화 비교)의 프로젝트는 둘일 수 없다 — 중복
+//      생성 시도는 기존 프로젝트 활성화 + existing 반환.
 
 import { invoke } from "@tauri-apps/api/core";
 
-export const PROJECT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+export const FOLDER_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
-// 임의 문자열(폴더명 등) → id 후보 슬러그화. 비호환 문자는 하이픈으로,
-// 연속·양끝 하이픈 정리. 결과가 비면 ""(사용자 입력 요구가 정직).
-export function slugifyId(raw: string): string {
-  return raw
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-+|-+$/g, "");
+// ~/.soksak/projects/<폴더명> 생성(멱등) 후 절대경로 반환. 검증은 Rust 재확인.
+export function ensureDefaultWorkspace(folder: string): Promise<string> {
+  return invoke<string>("ensure_workspace_dir", { folder });
 }
 
-// ~/soksak/<id> 생성(멱등) 후 절대경로 반환. id 검증은 Rust 가 재확인한다.
-export function ensureDefaultWorkspace(id: string): Promise<string> {
-  return invoke<string>("ensure_workspace_dir", { id });
+// P1/P2 검증 + 정규화 경로 반환(P5 중복 비교의 기준). 위반 시 사유로 reject.
+export function validateProjectRoot(path: string): Promise<string> {
+  return invoke<string>("validate_project_root", { path });
 }

@@ -21,6 +21,8 @@ export const PROJECT_COLORS = [
   "#bf4b8a",
 ] as const;
 
+const baseName = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
+
 export function ProjectSettingsModal({
   projectId,
   onClose,
@@ -54,7 +56,8 @@ export function ProjectSettingsModal({
 
   const save = () => {
     updateProject(projectId, {
-      title: name,
+      // 별칭 비우면 폴더명 폴백(P4 — 표시명은 항상 존재).
+      title: name.trim() || baseName(project.root),
       program: program || null,
       shell: shell.trim() || null,
     });
@@ -85,11 +88,12 @@ export function ProjectSettingsModal({
         </div>
 
         <div className="dmodal-body">
-          {/* 폴더는 생성 후 불변(터미널/세션이 그 위에 서 있음) — 읽기 전용 표시. */}
+          {/* 폴더는 생성 후 불변(터미널/세션이 그 위에 서 있음) — 읽기 전용.
+              루트는 항상 존재(P1)하며 프로젝트의 정체성이다(P4). */}
           <div className="drow">
             <span className="drow-label">{t("project.folder")}</span>
             <span className="dctl dctl-static" title={project.root}>
-              {project.root ?? "—"}
+              {project.root}
             </span>
           </div>
 
@@ -99,6 +103,7 @@ export function ProjectSettingsModal({
               className="dctl"
               type="text"
               value={name}
+              placeholder={baseName(project.root)}
               autoFocus
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {

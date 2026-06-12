@@ -3,6 +3,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { allGroups, useSessions } from "./sessions";
 
+// 부트 모델(P3): 초기 tabs 는 비어 있고 main.tsx 가 bootstrapFirstProject 로
+// 첫 프로젝트를 만든다 — 테스트도 같은 경로로 t1 을 준비한 뒤 스냅샷.
+useSessions.getState().bootstrapFirstProject("/tmp/soksak-test-root");
+
 // 시작 상태 스냅샷(데이터만) — 각 테스트 전 복원.
 const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().tabs));
 const pristineActive = useSessions.getState().activeId;

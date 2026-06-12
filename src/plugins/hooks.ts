@@ -4,7 +4,6 @@
 // FileViewer 저장 성공 지점의 emitFileSaved 하나).
 // 리스너 실패는 호스트를 죽이지 못한다(§0-4) — 콜백마다 try/catch.
 
-import { rafThrottle } from "../lib/rafThrottle";
 import { allGroups, collectLeafIds, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
@@ -191,13 +190,22 @@ export function startPluginHooks(): void {
   // 모든 store 쓰기마다 O(n) 스냅샷+diff 를 돌리지 않는다(원칙 1·5,
   // docs/PERFORMANCE.md) — 드래그 중 resizeSplit 은 60Hz+ 로 쓰지만 이 이벤트들
   // (코스 시맨틱: 활성/열림 변화)은 레이아웃 비율로는 절대 바뀌지 않는다.
-  // trailing rAF 로 coalesce: 프레임당 1회, 마지막 상태 기준으로 diff.
+  // coalesce 는 rAF 가 아니라 마이크로태스크다: diff 는 렌더와 무관하고(원칙 4
+  // 의 rAF 는 입력→렌더 정렬용), WebKit 은 가려진(occluded) 창에서 rAF 를
+  // 정지시켜 원격(sok/MCP) 조작 중 이벤트가 무기한 지연되는 사고가 실측됐다.
+  // 같은 동기 burst(리사이즈 스톰 등)는 1회로 합쳐진다.
   let prevSessions = snapshotSessions(useSessions.getState());
-  const scheduleSessionsDiff = rafThrottle(() => {
-    const next = snapshotSessions(useSessions.getState());
-    diffSessions(prevSessions, next);
-    prevSessions = next;
-  });
+  let diffQueued = false;
+  const scheduleSessionsDiff = () => {
+    if (diffQueued) return;
+    diffQueued = true;
+    queueMicrotask(() => {
+      diffQueued = false;
+      const next = snapshotSessions(useSessions.getState());
+      diffSessions(prevSessions, next);
+      prevSessions = next;
+    });
+  };
   useSessions.subscribe(() => scheduleSessionsDiff());
 
   let prevTheme = {

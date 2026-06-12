@@ -79,7 +79,12 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
         className="left-host-body"
         style={{ display: leftTab === FILES ? "flex" : "none" }}
       >
-        <FileTreeSidebar paneId={paneId} onOpenFile={onOpenFile} theme={treeTheme} />
+        <FileTreeSidebar
+            paneId={paneId}
+            projectRoot={project.root}
+            onOpenFile={onOpenFile}
+            theme={treeTheme}
+          />
       </div>
       {opened.map((k) => (
         <div
@@ -90,7 +95,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
           <PluginViewHost
             viewKey={k}
             projectId={project.id}
-            root={project.root ?? null}
+            root={project.root}
           />
         </div>
       ))}
