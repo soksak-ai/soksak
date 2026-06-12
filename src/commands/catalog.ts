@@ -1606,6 +1606,7 @@ export function registerCatalog(): void {
     "resizeReflow",
     "iconSet",
     "iconBox",
+    "focusIndicator",
   ] as const;
 
   register("settings.get", {
@@ -1629,6 +1630,7 @@ export function registerCatalog(): void {
         resizeReflow: s.resizeReflow,
         iconSet: s.iconSet,
         iconBox: s.iconBox,
+        focusIndicator: s.focusIndicator,
         // 선택 가능한 아이콘 셋 목록(내장 + 활성 플러그인 등록분).
         iconSets: Object.values(useIconRegistry.getState().sets).map((x) => ({
           id: x.id,
@@ -1652,7 +1654,7 @@ export function registerCatalog(): void {
       value: {
         type: "json",
         description:
-          "값 — language:ko|en, projectTabPosition:top|left, defaultProgram:terminal|claude|codex|browser, fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, iconSet:string(등록 셋 id — 미등록이면 lucide 폴백 렌더), iconBox:boolean",
+          "값 — language:ko|en, projectTabPosition:top|left, defaultProgram:terminal|claude|codex|browser, fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, iconSet:string(등록 셋 id — 미등록이면 lucide 폴백 렌더), iconBox:boolean, focusIndicator:outline|corners",
         required: true,
       },
     },
@@ -1726,6 +1728,10 @@ export function registerCatalog(): void {
         case "iconBox":
           if (typeof v !== "boolean") return bad("boolean");
           s.setIconBox(v);
+          break;
+        case "focusIndicator":
+          if (v !== "outline" && v !== "corners") return bad("outline|corners");
+          s.setFocusIndicator(v);
           break;
       }
       return { key, value: v };

@@ -316,6 +316,12 @@ function App() {
     document.documentElement.dataset.iconBox = iconBox ? "on" : "off";
   }, [iconBox]);
 
+  // 포커스 그룹 표시 스타일(outline|corners) — 루트 어트리뷰트로 CSS 분기.
+  const focusIndicator = useSettings((s) => s.focusIndicator);
+  useEffect(() => {
+    document.documentElement.dataset.focusInd = focusIndicator;
+  }, [focusIndicator]);
+
   // 구독 최소 원칙(docs/PERFORMANCE.md 1): 필드/액션별 셀렉터만 — bare 훅 금지.
   // zustand 액션은 create() 시점에 고정되는 안정 참조라 액션 셀렉터는 리렌더 없음.
   const tabs = useSessions((s) => s.tabs);

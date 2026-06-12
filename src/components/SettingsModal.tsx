@@ -6,6 +6,7 @@ import {
   type DefaultProgram,
   type Language,
   type TabPosition,
+  type FocusIndicator,
 } from "../state/settings";
 import { useTheme } from "../state/theme";
 import { useSuppressBrowser } from "../state/ui";
@@ -179,6 +180,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             >
               <option value="on">{t("common.on")}</option>
               <option value="off">{t("common.off")}</option>
+            </select>
+          </div>
+          <div className="drow">
+            <span className="drow-label">{t("settings.focusIndicator")}</span>
+            <select
+              className="dctl"
+              value={s.focusIndicator}
+              onChange={(e) =>
+                s.setFocusIndicator(e.target.value as FocusIndicator)
+              }
+            >
+              <option value="outline">{t("focusIndicator.outline")}</option>
+              <option value="corners">{t("focusIndicator.corners")}</option>
             </select>
           </div>
           <div className="drow">

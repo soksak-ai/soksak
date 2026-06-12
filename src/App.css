@@ -1658,6 +1658,47 @@ body,
 
 /* 전경 프레임(z:5): 카드의 유일한 보더. 터미널/chrome 위에 얹혀 4면 모두 1px 1줄
    보장. pointer-events:none 으로 클릭 통과. flat 은 프레임 없음. */
+/* 포커스 프레임 — 활성 그룹 강조(상태 표시, 경계선 아님 §B4: outline/배경+--acc).
+   outline·background 는 레이아웃 비점유·border 게이트 비대상 — 계약(--bd) 불변.
+   flat 처럼 보더 없는 스타일에서도 동작. 스타일은 설정(focusIndicator →
+   :root[data-focus-ind])이 선택: outline=사각 아웃라인(프레임 radius 추종),
+   corners=모서리 꺽쇠 4개(radius 클리핑 회피로 2px 인셋). */
+:root[data-focus-ind="outline"] .egroup-frame.focus {
+  outline: 1px solid var(--acc);
+  outline-offset: -1px;
+}
+:root[data-focus-ind="corners"] .egroup-frame.focus {
+  --fk-len: 12px; /* 꺽쇠 팔 길이 */
+  --fk-th: 2px; /* 꺽쇠 두께 */
+  --fk-in: 2px; /* 모서리 인셋 */
+  background-image: linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc));
+  background-position:
+    left var(--fk-in) top var(--fk-in),
+    left var(--fk-in) top var(--fk-in),
+    right var(--fk-in) top var(--fk-in),
+    right var(--fk-in) top var(--fk-in),
+    left var(--fk-in) bottom var(--fk-in),
+    left var(--fk-in) bottom var(--fk-in),
+    right var(--fk-in) bottom var(--fk-in),
+    right var(--fk-in) bottom var(--fk-in);
+  background-size:
+    var(--fk-len) var(--fk-th),
+    var(--fk-th) var(--fk-len),
+    var(--fk-len) var(--fk-th),
+    var(--fk-th) var(--fk-len),
+    var(--fk-len) var(--fk-th),
+    var(--fk-th) var(--fk-len),
+    var(--fk-len) var(--fk-th),
+    var(--fk-th) var(--fk-len);
+  background-repeat: no-repeat;
+}
 .egroup-frame {
   position: absolute;
   left: calc(var(--l) + var(--pane-inset));
