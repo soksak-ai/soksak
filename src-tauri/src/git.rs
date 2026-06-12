@@ -35,6 +35,22 @@ fn run_git(dir: &str, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
+// 프로젝트 루트 git 보장 — .git 이 없으면 git init(프로젝트 루트 = git repo
+// 규칙). 기본 작업 공간이 홈이면 홈 전체가 repo 가 되는 재앙이 되므로 기본
+// 루트는 격리 폴더(~/soksak/<id>)다(fs::ensure_workspace_dir). 반환 = init 수행 여부.
+#[tauri::command]
+pub fn git_init_if_missing(path: String) -> Result<bool, String> {
+    let dir = std::path::Path::new(&path);
+    if !dir.is_dir() {
+        return Err(format!("디렉토리 아님: {path}"));
+    }
+    if dir.join(".git").exists() {
+        return Ok(false);
+    }
+    run_git(&path, &["init"])?;
+    Ok(true)
+}
+
 #[derive(Serialize, Clone)]
 pub struct CommitEntry {
     hash: String,

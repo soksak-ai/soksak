@@ -19,6 +19,9 @@ export interface Disposable {
 
 export interface PluginEventMap {
   "project.changed": { projectId: string; root: string | null };
+  // 새 프로젝트 생성(루트 확정 직후) — 루트 초기화 정책(git init 등)은
+  // 코어가 아니라 이 이벤트를 구독하는 플러그인이 소유한다.
+  "project.created": { projectId: string; root: string | null };
   "view.activated": {
     projectId: string;
     viewId: string;
@@ -39,6 +42,7 @@ export interface PluginEventMap {
 
 export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "project.changed",
+  "project.created",
   "view.activated",
   "file.opened",
   "file.closed",
@@ -149,6 +153,11 @@ function snapshotSessions(s: SessionsState): SessionsSnapshot {
 }
 
 function diffSessions(prev: SessionsSnapshot, next: SessionsSnapshot): void {
+  for (const [projectId, root] of next.rootByProject) {
+    if (!prev.rootByProject.has(projectId)) {
+      emitPluginEvent("project.created", { projectId, root: root ?? null });
+    }
+  }
   if (prev.activeProjectId !== next.activeProjectId) {
     emitPluginEvent("project.changed", {
       projectId: next.activeProjectId,

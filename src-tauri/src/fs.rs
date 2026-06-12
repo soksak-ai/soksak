@@ -332,3 +332,23 @@ pub fn git_status(path: String) -> Result<Vec<GitEntry>, String> {
     }
     Ok(entries)
 }
+
+// 기본 작업 공간(~/soksak/<id>) 생성 — 새 프로젝트에서 폴더를 지정하지 않은
+// 경우의 루트. 사용자 작업물은 가시 폴더(~/soksak)에, 앱 내부물(~/.soksak)과
+// 분리한다. id 는 디렉토리명 계약 — 슬러그만 허용(탈출/주입 차단).
+#[tauri::command]
+pub fn ensure_workspace_dir(id: String) -> Result<String, String> {
+    let valid = !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && !id.starts_with('-');
+    if !valid {
+        return Err(format!(
+            "프로젝트 id 형식 위반: \"{id}\" — ^[a-z0-9][a-z0-9-]*$"
+        ));
+    }
+    let dir = home_dir().join("soksak").join(&id);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.to_string_lossy().to_string())
+}

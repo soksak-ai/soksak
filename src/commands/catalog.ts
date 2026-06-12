@@ -35,6 +35,7 @@ import { catalogJson, register, type CommandContext } from "./registry";
 import { registerGitCatalog } from "./catalogGit";
 import { registerPluginCatalog } from "./catalogPlugins";
 import { registerUiCatalog } from "./catalogUi";
+import { ensureDefaultWorkspace, PROJECT_ID_RE } from "../lib/workspace";
 
 // ── 공통 에러/헬퍼 ───────────────────────────────────────────────────────────
 
@@ -477,22 +478,48 @@ export function registerCatalog(): void {
   });
 
   register("project.create", {
-    description: "새 프로젝트(루트 폴더 + 첫 화면 프로그램 + 셸)",
+    description:
+      "새 프로젝트. root 생략 시 id(영문 슬러그) 필수 — ~/soksak/<id> 생성·사용",
     params: {
       root: { type: "string", description: "프로젝트 루트 디렉토리(절대경로)" },
-      alias: { type: "string", description: "탭 별칭(생략=폴더명)" },
+      id: {
+        type: "string",
+        description:
+          "root 생략 시 필수 — ^[a-z0-9][a-z0-9-]*$, ~/soksak/<id> 디렉토리명",
+      },
+      alias: { type: "string", description: "탭 별칭(생략=폴더명/id)" },
       program: { ...P.program, description: "첫 화면(생략=전역 설정)" },
       shell: { type: "string", description: "터미널 셸 경로(생략=전역 설정→$SHELL)" },
     },
     returns: "{ projectId, contentId, groupId, viewId, paneId? }",
-    examples: ['sok project.create \'{"root":"/Users/me/work","program":"claude"}\''],
-    handler: (p) =>
-      S().addProject({
-        alias: (p.alias as string) ?? "",
-        root: p.root as string | undefined,
+    errors: ["INVALID_PARAMS"],
+    examples: [
+      'sok project.create \'{"root":"/Users/me/work","program":"claude"}\'',
+      'sok project.create \'{"id":"my-project"}\'',
+    ],
+    handler: async (p) => {
+      let root = p.root as string | undefined;
+      let alias = (p.alias as string) ?? "";
+      if (!root) {
+        const id = (p.id as string | undefined)?.trim();
+        if (!id || !PROJECT_ID_RE.test(id)) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: "root 생략 시 id 필수(^[a-z0-9][a-z0-9-]*$)",
+          };
+        }
+        root = await ensureDefaultWorkspace(id);
+        alias = alias || id;
+      }
+      // 루트 초기화 정책(git init 등)은 project.created 이벤트 구독 플러그인 소유.
+      return S().addProject({
+        alias,
+        root,
         program: p.program as Program | undefined,
         shell: p.shell as string | undefined,
-      }),
+      });
+    },
   });
 
   register("project.close", {

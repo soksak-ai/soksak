@@ -300,15 +300,15 @@ sok editor.format
 
 전체 명령 레퍼런스: [`docs/COMMANDS.md`](./COMMANDS.md) (`make docs` 로 재생성).
 
-## 예제 플러그인 (레퍼런스 구현)
+## 공식 플러그인 (레퍼런스 구현)
 
-소스는 [`examples/plugins/`](../examples/plugins/) — 전부 무번들 순수 JS.
-`make example-repos` 가 각 예제를 **독립 git 레포**(`examples/.repos/<id>`, `v<버전>` 태그)로
+소스는 [`plugins/`](../plugins/) — 전부 무번들 순수 JS.
+`make plugin-repos` 가 각 플러그인을 **독립 git 레포**(`plugins/.repos/<id>`, `v<버전>` 태그)로
 생성한다 — GitHub 배포 형식 그대로이며, 로컬 설치 검증에 쓴다:
 
 ```bash
-make example-repos
-sok plugin.install '{"source":"'$PWD'/examples/.repos/soksak-memo"}'
+make plugin-repos
+sok plugin.install '{"source":"'$PWD'/plugins/.repos/soksak-memo"}'
 ```
 
 | id | 권한 | 시연 |
@@ -320,6 +320,7 @@ sok plugin.install '{"source":"'$PWD'/examples/.repos/soksak-memo"}'
 | `soksak-formatter` | editor | JSON 포메터(⇧⌥F), 실패 시 원본 보존 |
 | `soksak-bookmarks` | ui, commands, commands:destructive | **기존 명령만으로** 즐겨찾기 뷰(백엔드 0줄) |
 | `soksak-terminal` | programs | + 메뉴 "터미널" — 내장 0 모델의 기준 프로그램 |
+| `soksak-git-init` | commands | 새 프로젝트 루트 자동 git init — **이벤트(project.created)+명령(git.init) 조합, 백엔드 0줄** |
 | `soksak-agent-claude` | programs | + 메뉴 "에이전트" ▸ Claude — **미설치 시 공식 설치(멀티플랫폼) 자동 실행** |
 | `soksak-agent-codex` | programs | + 메뉴 "에이전트" ▸ Codex — 동일 path 선언으로 카테고리 자동 병합 |
 | `soksak-browser` | programs | + 메뉴 "브라우저" — 코어 능력(네이티브 webview)의 메뉴 노출 |

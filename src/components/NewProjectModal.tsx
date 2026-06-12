@@ -6,9 +6,12 @@ import { useSuppressBrowser } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 import { useDraggableModal } from "./modalDrag";
+import { ensureDefaultWorkspace, PROJECT_ID_RE } from "../lib/workspace";
 
 // 새 프로젝트 모달 — 디자인 레퍼런스(soksak_final): 드래그 가능한 460px 카드,
 // 헤더(+ 아이콘·⠿·✕), 행 레이아웃. 폴더 + 별칭(비면 폴더명) + 첫 프로그램 + 셸.
+// 폴더 미지정 모드: 이름이 디렉토리명 계약이 되므로 자유 별칭이 아니라
+// id(영문 슬러그) 필수 — ~/soksak/<id> 를 생성해 루트로 쓴다(workspace.ts).
 
 const baseName = (p?: string) =>
   p ? (p.split("/").filter(Boolean).pop() ?? p) : "";
@@ -42,10 +45,21 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
   };
 
   const folderName = baseName(root);
-  const create = () => {
+  // 폴더 미지정 = id 모드: 입력값이 ~/soksak/<id> 디렉토리명이 된다.
+  const idMode = !root;
+  const idValue = alias.trim();
+  const idInvalid = idMode && (!idValue || !PROJECT_ID_RE.test(idValue));
+  const create = async () => {
+    let finalRoot = root;
+    if (idMode) {
+      if (idInvalid) return; // 버튼 disabled 와 이중 방어
+      finalRoot = await ensureDefaultWorkspace(idValue);
+    }
+    // 루트 초기화 정책(git init 등)은 코어가 아니라 project.created 이벤트를
+    // 구독하는 플러그인 소유(soksak-git-init) — 여기선 생성만.
     addProject({
-      alias,
-      root,
+      alias: idMode ? idValue : alias,
+      root: finalRoot,
       program: program || undefined,
       shell: shell.trim() || undefined,
     });
@@ -88,15 +102,24 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
           {root && <div className="dpath">{root}</div>}
 
           <div className="drow">
-            <span className="drow-label">{t("project.alias")}</span>
+            <span className="drow-label">
+              {idMode ? t("project.id") : t("project.alias")}
+            </span>
             <input
               className="dctl"
               type="text"
               value={alias}
-              placeholder={folderName || t("project.aliasPh")}
+              placeholder={idMode ? t("project.idPh") : folderName}
               onChange={(e) => setAlias(e.target.value)}
             />
           </div>
+          {idMode && (
+            <div className={`dpath${idValue && idInvalid ? " dpath-err" : ""}`}>
+              {idValue && idInvalid
+                ? t("project.idInvalid")
+                : t("project.idHint", { id: idValue || "<id>" })}
+            </div>
+          )}
 
           <div className="drow">
             <span className="drow-label">{t("project.program")}</span>
@@ -133,7 +156,12 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
             <button type="button" className="dbtn" onClick={onClose}>
               {t("common.cancel")}
             </button>
-            <button type="button" className="dbtn dbtn-acc" onClick={create}>
+            <button
+              type="button"
+              className="dbtn dbtn-acc"
+              disabled={idInvalid}
+              onClick={create}
+            >
               {t("project.create")}
             </button>
           </div>

@@ -24,6 +24,21 @@ const PATH_PARAM = {
 } as const;
 
 export function registerGitCatalog(): void {
+  register("git.init", {
+    description:
+      "디렉토리에 .git 이 없으면 git init(있으면 no-op, 멱등). 루트 초기화 정책 플러그인(soksak-git-init)이 project.created 이벤트와 조합해 사용",
+    params: { path: PATH_PARAM },
+    returns: "{ initialized(수행 여부), path }",
+    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
+    examples: ['sok git.init \'{"path":"/Users/me/work"}\''],
+    handler: async (p) => {
+      const path = resolveRepoPath(p);
+      if (!path) return notFound("프로젝트 루트 없음 — path 를 지정하세요");
+      const initialized = await invoke<boolean>("git_init_if_missing", { path });
+      return { initialized, path };
+    },
+  });
+
   register("git.log", {
     description: "커밋 이력(최신순). limit 기본 50/최대 500, skip 으로 페이지네이션",
     params: {
