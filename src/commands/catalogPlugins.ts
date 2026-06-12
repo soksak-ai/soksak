@@ -4,7 +4,7 @@
 // plugin.view.* 배치 명령은 M_P5(우측 사이드바)에서 등록된다.
 
 import { usePlugins, type PluginRuntime } from "../state/plugins";
-import { useSessions } from "../state/sessions";
+import { allGroups, useSessions } from "../state/sessions";
 import { getRegisteredView } from "../plugins/viewRegistry";
 import { VIEW_PLACEMENTS, type ViewPlacement } from "../plugins/spec";
 import { register } from "./registry";
@@ -193,8 +193,22 @@ export function registerPluginCatalog(): void {
         s.setLeftTab(projectId, key);
         return { view: key, placement, projectId };
       }
-      // content 배치는 M_P6(View "plugin" variant)에서 연결된다.
-      return invalid("content 배치는 아직 연결되지 않음(다음 단계 M_P6)");
+      // content: 에디터 그룹 탭으로 — 드래그/분할/닫기는 일반 뷰와 동일.
+      const r = s.openPluginView(
+        projectId,
+        reg.pluginId,
+        reg.decl.id,
+        reg.decl.title,
+      );
+      if (!r.ok) return r;
+      return {
+        view: key,
+        placement,
+        projectId,
+        viewId: r.viewId,
+        groupId: r.groupId,
+        existing: r.existing,
+      };
     },
   });
 
@@ -225,6 +239,20 @@ export function registerPluginCatalog(): void {
       if (project.leftTab === key) {
         s.setLeftTab(projectId, "files");
         closed.push("sidebar-left");
+      }
+      // content 배치: 전 컨텐츠에서 이 플러그인 뷰 탭을 전부 닫는다.
+      for (const content of project.contents) {
+        for (const g of allGroups(content.layout)) {
+          for (const v of g.views) {
+            if (
+              v.kind === "plugin" &&
+              `${v.pluginId}.${v.view}` === key
+            ) {
+              const r = s.closeView(projectId, v.id);
+              if (r.ok) closed.push("content");
+            }
+          }
+        }
       }
       return { view: key, closed };
     },

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { TreeThemeInput } from "@pierre/trees";
-import { FileTreeSidebar } from "./components/FileTreeSidebar";
+import { LeftSidebarHost } from "./components/LeftSidebarHost";
 import { PluginSidebar } from "./components/PluginSidebar";
 import { ContentTabs } from "./components/ContentTabs";
 import { GroupArea } from "./components/GroupArea";
@@ -544,10 +544,11 @@ function App() {
                   borderRightWidth: project.sidebarOpen ? 1 : 0,
                 }}
               >
-                <FileTreeSidebar
+                <LeftSidebarHost
+                  project={project}
                   paneId={cwdPaneOf(project) ?? ""}
                   onOpenFile={(p) => openFileView(project.id, p)}
-                  theme={treeTheme}
+                  treeTheme={treeTheme}
                 />
               </div>
               {project.sidebarOpen && (

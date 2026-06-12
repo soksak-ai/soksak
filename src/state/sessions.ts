@@ -68,6 +68,15 @@ export type View =
       kind: "browser";
       title: string;
       url: string;
+    }
+  // 플러그인 뷰(콘텐츠 배치) — 전역 키 "<pluginId>.<view>" 의 provider 를
+  // PluginViewHost 가 그린다. 닫기/이동/드래그는 일반 뷰와 동일(view id 제네릭).
+  | {
+      id: string;
+      kind: "plugin";
+      title: string;
+      pluginId: string;
+      view: string; // 플러그인 내 뷰 id
     };
 
 // 에디터 그룹: 탭(뷰) 묶음 + 활성 뷰. 그룹 트리의 leaf.
@@ -206,6 +215,13 @@ interface SessionsStore {
   openFileView: (
     projectId: string,
     path: string,
+  ) => CmdResult<{ viewId: string; groupId: string; existing: boolean }>;
+  // 플러그인 뷰를 콘텐츠 탭으로(중복 판정 키 = pluginId+view, openFileView 대칭).
+  openPluginView: (
+    projectId: string,
+    pluginId: string,
+    view: string,
+    title: string,
   ) => CmdResult<{ viewId: string; groupId: string; existing: boolean }>;
   closeView: (
     projectId: string,
@@ -1012,6 +1028,59 @@ export const useSessions = create<SessionsStore>((set, get) => ({
         title: baseName(path),
         path,
         mode: "code",
+      };
+      r = ok({ viewId: v.id, groupId: content.activeGroupId, existing: false });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, content.id, (c) => ({
+            ...c,
+            layout: mapGroupNode(c.layout, c.activeGroupId, (g) => ({
+              ...g,
+              views: [...g.views, v],
+              activeViewId: v.id,
+            })),
+          })),
+        ),
+      };
+    });
+    return r;
+  },
+
+  openPluginView: (projectId, pluginId, view, title) => {
+    let r: CmdResult<{ viewId: string; groupId: string; existing: boolean }> =
+      noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = activeContentOf(t);
+      if (!content) return s;
+      // 같은 플러그인 뷰가 이미 열려 있으면 그 그룹/뷰를 활성화(재사용).
+      const existing = allViews(content.layout).find(
+        (v) => v.kind === "plugin" && v.pluginId === pluginId && v.view === view,
+      );
+      if (existing) {
+        const grp = findGroupOfView(content.layout, existing.id);
+        if (!grp) return s;
+        r = ok({ viewId: existing.id, groupId: grp.id, existing: true });
+        return {
+          tabs: mapProject(s.tabs, projectId, (x) =>
+            mapContent(x, content.id, (c) => ({
+              ...c,
+              layout: mapGroupNode(c.layout, grp.id, (g) => ({
+                ...g,
+                activeViewId: existing.id,
+              })),
+              activeGroupId: grp.id,
+            })),
+          ),
+        };
+      }
+      const v: View = {
+        id: newViewId(),
+        kind: "plugin",
+        title,
+        pluginId,
+        view,
       };
       r = ok({ viewId: v.id, groupId: content.activeGroupId, existing: false });
       return {

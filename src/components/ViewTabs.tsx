@@ -5,7 +5,13 @@ import {
   type Program,
   type ViewGroup,
 } from "../state/sessions";
+import { getRegisteredView } from "../plugins/viewRegistry";
 import { useT } from "../i18n";
+
+// 플러그인 뷰 탭 아이콘: 매니페스트 선언 아이콘, provider 미등록(비활성)이면 폴백.
+function pluginIconOf(pluginId: string, view: string): string {
+  return getRegisteredView(`${pluginId}.${view}`)?.decl.icon ?? "▦";
+}
 
 // 한 에디터 그룹의 탭 바(터미널/파일 전환 + 뷰 드래그 소스). 드래그는 HTML5 DnD 가 아니라
 // 포인터(mousedown)로 시작한다(Tauri 네이티브 파일 drag-drop 과 충돌 회피 + 실제 동작).
@@ -114,11 +120,19 @@ export function ViewTabs({
                 ? v.path
                 : v.kind === "browser"
                   ? v.url
-                  : t("view.terminal")
+                  : v.kind === "plugin"
+                    ? `${v.pluginId}.${v.view}`
+                    : t("view.terminal")
             }
           >
             <span className="view-tab-icon">
-              {v.kind === "terminal" ? "›_" : v.kind === "file" ? "▤" : "◍"}
+              {v.kind === "terminal"
+                ? "›_"
+                : v.kind === "file"
+                  ? "▤"
+                  : v.kind === "plugin"
+                    ? pluginIconOf(v.pluginId, v.view)
+                    : "◍"}
             </span>
             <span className="view-tab-title">
               {v.kind === "terminal" ? t("view.terminal") : v.title}

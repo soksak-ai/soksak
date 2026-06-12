@@ -3,6 +3,7 @@ import { BrowserView } from "./BrowserView";
 import { FileViewer } from "./FileViewer";
 import { GroupStatusBar } from "./GroupStatusBar";
 import { PaneTree } from "./PaneTree";
+import { PluginViewHost } from "./PluginViewHost";
 import { ViewTabs } from "./ViewTabs";
 import { useT } from "../i18n";
 import { useSettings } from "../state/settings";
@@ -130,6 +131,10 @@ export function GroupArea({
   const splitWithNewView = useSessions((s) => s.splitWithNewView);
   const suppressBrowser = useUi((s) => s.suppressBrowser);
   const releaseBrowser = useUi((s) => s.releaseBrowser);
+  // 플러그인 뷰(콘텐츠 배치) 호스트에 넘길 프로젝트 루트.
+  const projectRoot = useSessions(
+    (s) => s.tabs.find((x) => x.id === projectId)?.root ?? null,
+  );
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ kind: "view" | "group"; id: string } | null>(
@@ -363,6 +368,12 @@ export function GroupArea({
                   projectId={projectId}
                   viewId={view.id}
                   onMode={(m) => setFileMode(projectId, view.id, m)}
+                />
+              ) : view.kind === "plugin" ? (
+                <PluginViewHost
+                  viewKey={`${view.pluginId}.${view.view}`}
+                  projectId={projectId}
+                  root={projectRoot}
                 />
               ) : (
                 <BrowserView

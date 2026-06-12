@@ -226,6 +226,15 @@ function serializeView(v: View) {
       dirty: v.dirty ?? false,
     };
   }
+  if (v.kind === "plugin") {
+    return {
+      id: v.id,
+      kind: v.kind,
+      title: v.title,
+      plugin: v.pluginId,
+      view: v.view,
+    };
+  }
   return { id: v.id, kind: v.kind, title: v.title, url: v.url };
 }
 
