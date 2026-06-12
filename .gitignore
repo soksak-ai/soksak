@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# 예제 플러그인의 독립 git 레포 산출물(make example-repos) — 소스는 examples/plugins/
+examples/.repos/
+
 # Editor directories and files
 .editor/*
 !.editor/extensions.json

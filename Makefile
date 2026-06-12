@@ -18,7 +18,7 @@ DEBUG_APP   := src-tauri/target/debug/bundle/macos/soksak-debug.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs
+.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs example-repos
 
 help: ## 사용 가능한 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -65,6 +65,20 @@ docs: ## 명령 레퍼런스 생성(docs/COMMANDS.md — 앱이 실행 중이어
 	@mkdir -p docs
 	src-tauri/target/release/sok docs > docs/COMMANDS.md
 	@echo "생성: docs/COMMANDS.md"
+
+example-repos: ## 예제 플러그인 → 독립 git 레포 생성(examples/.repos, 멱등)
+	@for d in examples/plugins/*/; do \
+		id=$$(basename $$d); \
+		ver=$$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' $$d/plugin.json | head -1); \
+		dest=examples/.repos/$$id; \
+		rm -rf $$dest && mkdir -p $$dest && cp -R $$d. $$dest/ && \
+		git -C $$dest init -q && \
+		git -C $$dest -c user.email=examples@soksak -c user.name=soksak add . && \
+		git -C $$dest -c user.email=examples@soksak -c user.name=soksak \
+			-c commit.gpgsign=false commit -qm "$$id v$$ver" && \
+		git -C $$dest -c user.email=examples@soksak -c user.name=soksak tag -f v$$ver >/dev/null && \
+		echo "examples/.repos/$$id (v$$ver)"; \
+	done
 
 typecheck: ## 프론트엔드 타입 체크(tsc)
 	$(PNPM) exec tsc --noEmit
