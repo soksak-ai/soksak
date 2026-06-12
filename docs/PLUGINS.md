@@ -195,9 +195,9 @@ ctx.subscriptions.push(
     "kind": "terminal",        // "terminal" | "browser"
     "command": "claude",       // kind=terminal: 자동 실행 셸 명령(생략=맨 터미널)
     // "url": "https://…",     // kind=browser: 시작 URL(생략=설정 homeUrl)
-    "ensure": {                // kind=terminal 한정: 선행 바이너리 보장
-      "bin": "claude",         // 사용자 셸 PATH 에서 확인할 실행 파일명
-      "install": {             // 미설치 시 같은 터미널에서 가시 실행되는 공식 설치 명령
+    "ensure": {                // kind=terminal 한정: 활성화 시점 선행 바이너리 보장
+      "bin": "claude",         // 사용자 셸 PATH 에서 확인할 실행 파일명(shell_which)
+      "install": {             // 활성화 시 미설치면 새 터미널 탭에서 가시 실행되는 공식 설치 명령
         "darwin": "curl -fsSL https://claude.ai/install.sh | bash",
         "linux": "curl -fsSL https://claude.ai/install.sh | bash",
         "win32": "irm https://claude.ai/install.ps1 | iex"

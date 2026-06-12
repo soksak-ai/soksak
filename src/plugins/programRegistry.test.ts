@@ -1,9 +1,10 @@
-// 프로그램 레지스트리 계약 고정 — 등록 충돌/ensure 자동실행 래퍼.
-// 래퍼는 사용자 셸에서 실행되는 한 줄이므로 형식을 기계로 고정한다(설치
-// 명령이 조용히 깨지면 사용자 터미널에서 즉시 보이는 사고가 된다).
+// 프로그램 레지스트리 계약 고정 — 등록 충돌 / 실행·설치 명령의 분리.
+// 실행(autorun)은 command 그대로(래핑 금지 — 터미널에 원라이너가 노출되는
+// 사고 방지), 설치(ensure)는 활성화 시점 소관(installCommandFor 가 공급).
 import { describe, expect, it } from "vitest";
 import {
   autorunCommandOf,
+  installCommandFor,
   useProgramRegistry,
 } from "./programRegistry";
 import type { ContributedProgram } from "./spec";
@@ -36,60 +37,56 @@ describe("programRegistry — 등록 규율", () => {
   });
 });
 
-describe("autorunCommandOf — ensure 래퍼", () => {
+describe("autorunCommandOf — 실행은 command 그대로(래핑 금지)", () => {
   it("browser kind 는 자동실행 없음", () => {
     expect(
       autorunCommandOf({ id: "b", title: "b", kind: "browser" }),
     ).toBeUndefined();
   });
 
-  it("ensure 없으면 command 그대로(맨 터미널은 undefined)", () => {
+  it("command 그대로(맨 터미널은 undefined)", () => {
     expect(autorunCommandOf(term("t"))).toBeUndefined();
     expect(autorunCommandOf(term("c", { command: "claude" }))).toBe("claude");
   });
 
-  it("ensure: 셸 PATH 확인 → 있으면 실행, 없으면 공식 설치 명령", () => {
-    const cmd = autorunCommandOf(
-      term("c", {
-        command: "claude",
-        ensure: {
-          bin: "claude",
-          install: { darwin: "curl -fsSL https://claude.ai/install.sh | bash" },
-        },
-      }),
-      "darwin",
-    );
-    // POSIX 셸 한 줄 — command -v 게이트 + then 실행 + else 설치 + 안내.
-    expect(cmd).toContain("command -v claude >/dev/null 2>&1");
-    expect(cmd).toContain("then claude;");
-    expect(cmd).toContain("curl -fsSL https://claude.ai/install.sh | bash");
-    expect(cmd).toMatch(/^if .*; fi$/);
-  });
-
-  it("이 플랫폼 설치 명령 미제공이면 래핑 없이 command", () => {
+  it("ensure 가 있어도 실행 명령은 command 그대로 — 설치는 활성화 시점 소관", () => {
     expect(
       autorunCommandOf(
-        term("x", {
-          command: "codex",
-          ensure: { bin: "codex", install: { win32: "irm …" } },
+        term("c", {
+          command: "claude",
+          ensure: { bin: "claude", install: { darwin: "curl …" } },
         }),
-        "darwin",
       ),
-    ).toBe("codex");
+    ).toBe("claude");
+  });
+});
+
+describe("installCommandFor — 활성화 시점 설치 명령(플랫폼 분기)", () => {
+  const decl = term("c", {
+    command: "claude",
+    ensure: {
+      bin: "claude",
+      install: {
+        darwin: "curl -fsSL https://claude.ai/install.sh | bash",
+        win32: "irm https://claude.ai/install.ps1 | iex",
+      },
+    },
   });
 
-  it("win32: PowerShell Get-Command 게이트", () => {
-    const cmd = autorunCommandOf(
-      term("c", {
-        command: "claude",
-        ensure: {
-          bin: "claude",
-          install: { win32: "irm https://claude.ai/install.ps1 | iex" },
-        },
-      }),
-      "win32",
+  it("이 플랫폼의 공식 설치 명령을 그대로 반환", () => {
+    expect(installCommandFor(decl, "darwin")).toBe(
+      "curl -fsSL https://claude.ai/install.sh | bash",
     );
-    expect(cmd).toContain("Get-Command claude");
-    expect(cmd).toContain("irm https://claude.ai/install.ps1 | iex");
+    expect(installCommandFor(decl, "win32")).toBe(
+      "irm https://claude.ai/install.ps1 | iex",
+    );
+  });
+
+  it("미제공 플랫폼/ensure 없음/browser kind 는 undefined", () => {
+    expect(installCommandFor(decl, "linux")).toBeUndefined();
+    expect(installCommandFor(term("t"), "darwin")).toBeUndefined();
+    expect(
+      installCommandFor({ id: "b", title: "b", kind: "browser" }, "darwin"),
+    ).toBeUndefined();
   });
 });

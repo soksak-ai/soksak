@@ -224,11 +224,13 @@ interface SessionsStore {
   ) => CmdResult;
 
   // 콘텐츠 뷰/그룹 레벨. 그룹에 프로그램별 새 뷰 탭(터미널/claude/codex/브라우저).
+  // opts.command = 터미널 자동 실행 명령 직접 지정(내부용 — 프로그램 resolve 우회.
+  // 플러그인 활성화 시 설치 터미널 등 호스트 흐름 전용, 원격 명령엔 비노출).
   addViewToGroup: (
     projectId: string,
     program: Program,
     groupId?: string,
-    opts?: { url?: string },
+    opts?: { url?: string; command?: string },
   ) => CmdResult<{ groupId: string } & NewViewIds>;
   // 그룹(패널) 통째 닫기 — 안의 모든 뷰 제거(마지막 그룹이면 거부).
   closeGroup: (
@@ -367,15 +369,18 @@ function newBrowserView(url?: string): View {
 // ("browser" — 코어 명령 browser.open 등의 직접 경로)이면 그 능력, 아니면
 // 터미널 뷰 폴백(아이콘 셋의 lucide 폴백과 동형 — 플러그인 비활성에도 상태
 // 유실 없음).
-function newViewFor(program: Program, opts?: { url?: string }): View {
+function newViewFor(
+  program: Program,
+  opts?: { url?: string; command?: string },
+): View {
   const reg = getRegisteredProgram(program);
   if (reg) {
     return reg.decl.kind === "browser"
       ? newBrowserView(opts?.url ?? reg.decl.url)
-      : newTerminalView(autorunCommandOf(reg.decl));
+      : newTerminalView(opts?.command ?? autorunCommandOf(reg.decl));
   }
   if (program === "browser") return newBrowserView(opts?.url);
-  return newTerminalView();
+  return newTerminalView(opts?.command);
 }
 
 // 뷰의 새 id 묶음(터미널이면 paneId 포함) — 생성 명령 응답용.

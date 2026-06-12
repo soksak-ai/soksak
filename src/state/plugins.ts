@@ -21,7 +21,8 @@ import {
   setActive,
 } from "../plugins/loader";
 import { defaultPluginDeps } from "../plugins/deps";
-import { err, ok, type CmdResult } from "./sessions";
+import { err, ok, useSessions, type CmdResult } from "./sessions";
+import { installCommandFor } from "../plugins/programRegistry";
 
 export interface PluginRuntime {
   manifest: PluginManifest;
@@ -107,6 +108,30 @@ export function consentValid(
     consent.version === manifest.version &&
     samePermissions(consent.permissions, manifest.permissions)
   );
+}
+
+// 프로그램 ensure(§2.6) — 활성화 시점에 선행 바이너리를 보장한다. 사용자
+// 로그인 셸 PATH 로 확인(shell_which)하고, 미설치면 공식 설치 명령을 새
+// 터미널 탭에서 가시 실행한다(은폐 금지 — 동의 화면에 고지된 그 명령 그대로).
+// 실패는 콘솔로만(§0-4 — 플러그인 활성화 자체를 막지 않는다).
+async function ensureProgramBinaries(manifest: PluginManifest): Promise<void> {
+  for (const prog of manifest.contributes.programs) {
+    if (!prog.ensure) continue;
+    const install = installCommandFor(prog);
+    if (!install) continue; // 이 플랫폼 설치 명령 미제공
+    try {
+      const found = await invoke<boolean>("shell_which", {
+        bin: prog.ensure.bin,
+      });
+      if (found) continue;
+      const s = useSessions.getState();
+      s.addViewToGroup(s.activeId, "terminal", undefined, {
+        command: `${install}; echo "[soksak] ${prog.ensure.bin} 설치 종료 — + 메뉴에서 선택해 실행하세요"`,
+      });
+    } catch (e) {
+      console.error(`ensure 실패(${manifest.id}/${prog.id}):`, e);
+    }
+  }
 }
 
 function basename(path: string): string {
@@ -354,6 +379,10 @@ export const usePlugins = create<PluginsState>((set, get) => {
         set((s) => ({ enabledIds: [...s.enabledIds, id] }));
       }
       persist();
+      // 프로그램 ensure(§2.6)는 활성화 시점에 처리 — 동의 화면에서 설치 명령을
+      // 고지받고 활성화한 지금이 설치의 자리다(실행 시점은 command 그대로 깨끗).
+      // 명시적 enable 에서만 — 앱 시작/reload 의 자동 재활성화는 조용히.
+      void ensureProgramBinaries(p.manifest);
       return ok({ id, status: "enabled" });
     },
 

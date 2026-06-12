@@ -175,7 +175,7 @@ const ko = {
   "plugin.consent.prog.browser": "브라우저 뷰를 연다(명령 실행 없음)",
   "plugin.consent.prog.run": "터미널에서 자동 실행:",
   "plugin.consent.prog.bareTerminal": "맨 터미널을 연다(명령 실행 없음)",
-  "plugin.consent.prog.install": "미설치 시 설치 실행:",
+  "plugin.consent.prog.install": "활성화 시 미설치면 설치 실행:",
   "plugin.contrib.program": "+ 메뉴:",
   "plugin.contrib.view": "화면:",
   "plugin.contrib.command": "명령",
@@ -187,7 +187,7 @@ const ko = {
   "perm.programs.run":
     "새 탭(+) 메뉴에 프로그램을 추가합니다. 선택하면 아래 명령이 터미널에서 자동 실행됩니다.",
   "perm.programs.runInstall":
-    "새 탭(+) 메뉴에 프로그램을 추가합니다. 선택하면 아래 명령이 터미널에서 자동 실행되고, 미설치면 아래 설치 명령까지 실행됩니다.",
+    "새 탭(+) 메뉴에 프로그램을 추가합니다. 선택하면 아래 명령이 터미널에서 자동 실행되고, 활성화 시 미설치면 아래 설치 명령이 터미널에서 실행됩니다.",
 } as const;
 
 export type MsgKey = keyof typeof ko;
@@ -355,7 +355,7 @@ const en: Record<MsgKey, string> = {
   "plugin.consent.prog.browser": "opens a browser view (no command run)",
   "plugin.consent.prog.run": "auto-runs in terminal:",
   "plugin.consent.prog.bareTerminal": "opens a bare terminal (no command run)",
-  "plugin.consent.prog.install": "runs installer if missing:",
+  "plugin.consent.prog.install": "runs installer on enable if missing:",
   "plugin.contrib.program": "+ menu:",
   "plugin.contrib.view": "View:",
   "plugin.contrib.command": "Commands",
@@ -367,7 +367,7 @@ const en: Record<MsgKey, string> = {
   "perm.programs.run":
     "Adds programs to the new-tab (+) menu. Picking one auto-runs the command below in a terminal.",
   "perm.programs.runInstall":
-    "Adds programs to the new-tab (+) menu. Picking one auto-runs the command below in a terminal, and runs the installer below if it is missing.",
+    "Adds programs to the new-tab (+) menu. Picking one auto-runs the command below in a terminal; on enable, the installer below runs if it is missing.",
 };
 
 const messages = { ko, en };

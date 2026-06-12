@@ -285,3 +285,33 @@ pub fn close_terminal(id: u32, manager: State<'_, PtyManager>) -> Result<(), Str
     }
     Ok(())
 }
+
+// 사용자 로그인 셸 PATH 기준 바이너리 존재 확인 — GUI 앱의 좁은 PATH 로는
+// 사용자가 쓰는 CLI 를 못 찾는다(설치 판정의 단일 기준 = 사용자 셸).
+// 플러그인 프로그램 ensure(§2.6)가 활성화 시점에 호출한다.
+#[tauri::command]
+pub fn shell_which(bin: String) -> bool {
+    // 셸 한 줄에 끼워 넣으므로 바이너리 이름 문자만 허용(주입 차단).
+    if bin.is_empty()
+        || !bin
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+    {
+        return false;
+    }
+    let shell = default_shell();
+    if cfg!(windows) {
+        std::process::Command::new(&shell)
+            .args(["-Command", &format!("Get-Command {bin}")])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    } else {
+        // -l: 로그인 셸 — 사용자의 rc/profile 이 구성한 PATH 그대로.
+        std::process::Command::new(&shell)
+            .args(["-lc", &format!("command -v {bin}")])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
+}

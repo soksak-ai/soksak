@@ -83,6 +83,7 @@ pub fn run() {
             pty::resize_terminal,
             pty::ack_terminal,
             pty::close_terminal,
+            pty::shell_which,
             fs::list_children,
             fs::read_text_file,
             fs::write_text_file,

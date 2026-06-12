@@ -70,23 +70,21 @@ export function detectPlatform(): PlatformKey {
   return "linux";
 }
 
-// 프로그램의 터미널 자동 실행 명령. ensure 가 있으면 사용자 셸에서 바이너리를
-// 확인하고 미설치면 공식 설치 명령을 실행하는 한 줄로 감싼다 — 셸 자체의 PATH
-// 기준이라 GUI 앱의 좁은 PATH 문제가 없고, 설치 과정이 터미널에 그대로 보인다.
-// platform 인자는 테스트 주입용(기본 = 실행 환경 판정).
+// 프로그램의 터미널 자동 실행 명령 — 실행은 깨끗하게 command 그대로다.
+// ensure(미설치 시 설치)는 실행 시점이 아니라 **플러그인 활성화 시점**에
+// 처리된다(state/plugins.ensureProgramBinaries) — 동의 화면에서 설치 명령을
+// 고지받고 "동의하고 활성화"한 그 시점이 설치의 정당한 자리다.
 export function autorunCommandOf(
+  decl: ContributedProgram,
+): string | undefined {
+  return decl.kind === "terminal" ? decl.command : undefined;
+}
+
+// 이 플랫폼의 설치 명령(ensure 선언) — 활성화 시점 설치 흐름이 소비.
+export function installCommandFor(
   decl: ContributedProgram,
   platform: PlatformKey = detectPlatform(),
 ): string | undefined {
   if (decl.kind !== "terminal") return undefined;
-  if (!decl.ensure) return decl.command;
-  const install = decl.ensure.install[platform];
-  if (!install) return decl.command; // 이 플랫폼 설치 명령 미제공 — 그냥 실행
-  const bin = decl.ensure.bin;
-  const run = decl.command ?? bin;
-  if (platform === "win32") {
-    // PowerShell 문법(Get-Command). 미설치 → 설치 후 재실행 안내.
-    return `if (Get-Command ${bin} -ErrorAction SilentlyContinue) { ${run} } else { Write-Host "[soksak] ${bin} 미설치 - 공식 설치를 시작합니다"; ${install}; Write-Host "[soksak] 설치 완료 - 새 탭에서 다시 열어주세요" }`;
-  }
-  return `if command -v ${bin} >/dev/null 2>&1; then ${run}; else echo "[soksak] ${bin} 미설치 — 공식 설치를 시작합니다"; ${install}; echo "[soksak] 설치 종료 — 새 탭에서 다시 열어주세요"; fi`;
+  return decl.ensure?.install[platform];
 }
