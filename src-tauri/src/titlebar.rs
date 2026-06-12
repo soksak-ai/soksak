@@ -146,6 +146,23 @@ unsafe fn apply_inset(window: &NSWindow, x: f64, y: f64) {
         );
     }
 
+    // AppKit 타이틀바 배경 숨김: NSTitlebarView 안의 NSVisualEffectView(vibrancy,
+    // 전면적 74×36)와 컨테이너의 _NSTitlebarDecorationView 가 — 컨테이너를 webview
+    // 위로 올린 탓에 — 테마와 무관한 흰 캡슐로 항상 드러난다(계측: sv.0/ctr.1).
+    // 버튼과 우리 원형 백킹만 남긴다. AppKit 이 되살리면 옵저버 재적용이 다시 숨김.
+    if let Some(sv) = close.superview() {
+        for sub in sv.subviews().iter() {
+            if format!("{:?}", sub.class()).contains("NSVisualEffectView") {
+                sub.setHidden(true);
+            }
+        }
+    }
+    for sub in container.subviews().iter() {
+        if format!("{:?}", sub.class()).contains("TitlebarDecorationView") {
+            sub.setHidden(true);
+        }
+    }
+
     // 비활성 위젯의 backdrop 합성 복원 — 점 모양 그대로의 원형 백킹 3개(§상단 주석).
     // 직사각 패치는 점 밖으로 노출돼 테마와 어긋난 띠가 보였다 — 버튼 프레임과
     // 동일한 원만 깔면 점 뒤에 완전히 숨는다. 활성 상태에선 숨김(점이 불투명
@@ -252,8 +269,17 @@ unsafe fn dump_state(label: &str, window: &NSWindow) {
     if let Some(close) = window.standardWindowButton(NSWindowButton::CloseButton) {
         if let Some(sv) = close.superview() {
             parts.push(line("sv", &sv));
+            // sv(NSTitlebarView) 하위 전체 — 호버 캡슐/배경 뷰의 정체 추적.
+            for (i, sub) in sv.subviews().iter().enumerate() {
+                parts.push(line(&format!("sv.{i}"), &sub));
+            }
             if let Some(container) = sv.superview() {
                 parts.push(line("ctr", &container));
+                for (i, sub) in container.subviews().iter().enumerate() {
+                    if !std::ptr::eq(&*sub as *const NSView, &*sv as *const NSView) {
+                        parts.push(line(&format!("ctr.{i}"), &sub));
+                    }
+                }
                 // 형제 중 컨테이너의 z 순서(인덱스가 클수록 위) — 합성 순서 추적.
                 if let Some(tf) = container.superview() {
                     let subs = tf.subviews();
