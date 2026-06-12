@@ -67,6 +67,11 @@ export function register(name: string, spec: CommandSpec): void {
   registry.set(name, spec);
 }
 
+// 등록 해제 — 플러그인 생명주기(비활성화/제거) 전용. 존재했으면 true.
+export function unregister(name: string): boolean {
+  return registry.delete(name);
+}
+
 export function getSpec(name: string): CommandSpec | undefined {
   return registry.get(name);
 }

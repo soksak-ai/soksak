@@ -18,7 +18,7 @@ DEBUG_APP   := src-tauri/target/debug/bundle/macos/soksak-debug.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install icons dev build build-debug run run-debug typecheck check test verify clean stop cli install-cli docs
+.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs
 
 help: ## 사용 가능한 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -75,7 +75,10 @@ check: ## Rust 컴파일 체크(cargo check)
 test: ## Rust 단위 테스트
 	cd src-tauri && cargo test --lib
 
-verify: typecheck check test ## 타입체크 + Rust 체크 + 테스트(커밋 전 검증)
+test-front: ## 프론트엔드 단위 테스트(vitest)
+	$(PNPM) test
+
+verify: typecheck check test test-front ## 타입체크 + Rust/프론트 테스트(커밋 전 검증)
 
 clean: ## 빌드 산출물 제거(dist, 번들)
 	rm -rf dist src-tauri/target/release/bundle src-tauri/target/debug/bundle
