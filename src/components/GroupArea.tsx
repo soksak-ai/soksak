@@ -16,8 +16,10 @@ import {
   type GroupNode,
   type View,
   type ViewGroup,
+  allGroups,
   useSessions,
 } from "../state/sessions";
+import { focusHost } from "../terminal/paneHosts";
 
 // 콘텐츠 영역을 에디터 그룹으로 렌더. 핵심 원칙 둘:
 // 1) 본문(터미널/에디터)을 그룹 트리 구조와 분리해 viewId 로 키된 "영속 본문 레이어"에
@@ -134,6 +136,28 @@ export const GroupArea = memo(function GroupArea({
   const setActiveGroup = useSessions((s) => s.setActiveGroup);
   const setActiveView = useSessions((s) => s.setActiveView);
   const restoreView = useSessions((s) => s.restoreView);
+
+  // 클릭 = 활성 + 실포커스 불변식. 상태 변경 effect 에만 의존하면 "이미 활성인
+  // 그룹/pane 재클릭"이 no-op 인 채 mousedown 기본동작(비포커서블 클릭 → blur)
+  // 만 남아 포커스가 body 로 풀리고, 풀린 뒤엔 그 그룹을 다시 클릭해도 복구할
+  // 길이 없다(분할 직후 체감되는 "꺽쇠는 붙는데 입력이 안 가는" 사고). 그래서
+  // 본문/탭/타이틀 클릭은 상태와 무관하게 항상 그 그룹의 focused pane 에 실포커스
+  // 를 부여한다 — 기본동작과 자식 캡처(setFocusedPane)가 끝난 다음 프레임(rAF)에
+  // 최신 상태를 읽어 확정(멱등 — 이미 포커스면 no-op).
+  const focusGroupPane = useCallback(
+    (groupId: string) => {
+      requestAnimationFrame(() => {
+        const t = useSessions.getState().tabs.find((x) => x.id === projectId);
+        const c = t?.contents.find((x) => x.id === t.activeContentId);
+        const g = c
+          ? allGroups(c.layout).find((x) => x.id === groupId)
+          : undefined;
+        const v = g?.views.find((x) => x.id === g.activeViewId);
+        if (v?.kind === "terminal") focusHost(v.focusedPaneId);
+      });
+    },
+    [projectId],
+  );
   const closeView = useSessions((s) => s.closeView);
   const moveViewToGroup = useSessions((s) => s.moveViewToGroup);
   const moveGroupToGroup = useSessions((s) => s.moveGroupToGroup);
@@ -293,8 +317,13 @@ export const GroupArea = memo(function GroupArea({
           }
         } else if (kind === "view") {
           setActiveView(projectId, id); // 클릭 = 탭 전환
+          const grp = cellsRef.current.find((c) =>
+            c.group.views.some((v) => v.id === id),
+          );
+          if (grp) focusGroupPane(grp.group.id);
         } else {
           setActiveGroup(projectId, id); // 클릭 = 그룹 활성
+          focusGroupPane(id);
         }
         setDrag(null);
         setHover(null);
@@ -309,6 +338,7 @@ export const GroupArea = memo(function GroupArea({
       moveGroupToGroup,
       setActiveView,
       setActiveGroup,
+      focusGroupPane,
       suppressBrowser,
       releaseBrowser,
     ],
@@ -537,7 +567,10 @@ export const GroupArea = memo(function GroupArea({
                 visibility: shown ? "visible" : "hidden",
                 zIndex: shown ? 1 : 0,
               }}
-              onMouseDownCapture={() => setActiveGroup(projectId, group.id)}
+              onMouseDownCapture={() => {
+                setActiveGroup(projectId, group.id);
+                focusGroupPane(group.id);
+              }}
             >
               {view.kind === "terminal" ? (
                 <PaneTree
