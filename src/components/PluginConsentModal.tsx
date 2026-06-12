@@ -102,7 +102,28 @@ export function PluginConsentModal({
           ) : (
             <ul className="plugin-consent-list">
               {m.permissions.map((p) => {
-                const info = PERMISSION_INFO[p];
+                const base = PERMISSION_INFO[p];
+                // "programs" 는 선언 기반 동적 고지 — 이 매니페스트가 실제로
+                // 하는 것만 말한다(메뉴 등록만 / 명령 실행 / 설치까지). 권한의
+                // 최대 능력을 일률 경고하면 과잉 고지 = 경고 피로(§0-2 위반).
+                let info: { label: string; detail: string; caution?: true } =
+                  base;
+                if (p === "programs") {
+                  const progs = m.contributes.programs;
+                  const runs = progs.some(
+                    (x) => x.kind === "terminal" && (x.command || x.ensure),
+                  );
+                  const installs = progs.some((x) => x.ensure);
+                  info = {
+                    label: base.label,
+                    detail: installs
+                      ? t("perm.programs.runInstall")
+                      : runs
+                        ? t("perm.programs.run")
+                        : t("perm.programs.menuOnly"),
+                    ...(runs || installs ? { caution: true as const } : {}),
+                  };
+                }
                 return (
                   <li
                     key={p}

@@ -167,6 +167,12 @@ const ko = {
   "plugin.consent.prog.run": "터미널에서 자동 실행:",
   "plugin.consent.prog.bareTerminal": "맨 터미널을 연다(명령 실행 없음)",
   "plugin.consent.prog.install": "미설치 시 설치 실행:",
+  "perm.programs.menuOnly":
+    "새 탭(+) 메뉴에 프로그램을 추가합니다. 명령 실행은 없습니다.",
+  "perm.programs.run":
+    "새 탭(+) 메뉴에 프로그램을 추가합니다. 선택하면 아래 명령이 터미널에서 자동 실행됩니다.",
+  "perm.programs.runInstall":
+    "새 탭(+) 메뉴에 프로그램을 추가합니다. 선택하면 아래 명령이 터미널에서 자동 실행되고, 미설치면 아래 설치 명령까지 실행됩니다.",
 } as const;
 
 export type MsgKey = keyof typeof ko;
@@ -335,6 +341,12 @@ const en: Record<MsgKey, string> = {
   "plugin.consent.prog.run": "auto-runs in terminal:",
   "plugin.consent.prog.bareTerminal": "opens a bare terminal (no command run)",
   "plugin.consent.prog.install": "runs installer if missing:",
+  "perm.programs.menuOnly":
+    "Adds programs to the new-tab (+) menu. No commands are run.",
+  "perm.programs.run":
+    "Adds programs to the new-tab (+) menu. Picking one auto-runs the command below in a terminal.",
+  "perm.programs.runInstall":
+    "Adds programs to the new-tab (+) menu. Picking one auto-runs the command below in a terminal, and runs the installer below if it is missing.",
 };
 
 const messages = { ko, en };
