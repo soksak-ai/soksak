@@ -323,7 +323,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
   it("programs 는 'programs' 권한 필요", () => {
     const errs = errorsOf(
       base({
-        contributes: { programs: [{ id: "claude", title: "Claude" }] },
+        contributes: { programs: [{ id: "claude", title: "Claude", kind: "terminal" }] },
       }),
     );
     expect(errs.some((e) => e.includes('"programs" 권한'))).toBe(true);
@@ -335,9 +335,9 @@ describe("parseManifest — programs 기여(§2.6)", () => {
         permissions: ["programs"],
         contributes: {
           programs: [
-            { id: "claude", title: "Claude", path: "에이전트" },
-            { id: "exp", title: "실험", path: "에이전트/실험 채널" },
-            { id: "web", title: "브라우저" },
+            { id: "claude", title: "Claude", kind: "terminal", path: "에이전트" },
+            { id: "exp", title: "실험", kind: "terminal", path: "에이전트/실험 채널" },
+            { id: "web", title: "브라우저", kind: "browser" },
           ],
         },
       }),
@@ -345,9 +345,9 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     );
     expect(validation.errors).toEqual([]);
     expect(manifest?.contributes.programs).toEqual([
-      { id: "claude", title: "Claude", path: "에이전트" },
-      { id: "exp", title: "실험", path: "에이전트/실험 채널" },
-      { id: "web", title: "브라우저" },
+      { id: "claude", title: "Claude", kind: "terminal", path: "에이전트" },
+      { id: "exp", title: "실험", kind: "terminal", path: "에이전트/실험 채널" },
+      { id: "web", title: "브라우저", kind: "browser" },
     ]);
   });
 
@@ -356,7 +356,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
       base({
         permissions: ["programs"],
         contributes: {
-          programs: [{ id: "a", title: "x", path: "에이전트//하위" }],
+          programs: [{ id: "a", title: "x", kind: "terminal", path: "에이전트//하위" }],
         },
       }),
     );
@@ -367,7 +367,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     const errs = errorsOf(
       base({
         permissions: ["programs"],
-        contributes: { programs: [{ id: "Bad_ID", title: "x" }] },
+        contributes: { programs: [{ id: "Bad_ID", title: "x", kind: "terminal" }] },
       }),
     );
     expect(errs.length).toBeGreaterThan(0);
@@ -377,7 +377,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     const { manifest, validation } = parseManifest(
       base({
         permissions: ["programs"],
-        contributes: { programs: [{ id: "terminal", title: "터미널" }] },
+        contributes: { programs: [{ id: "terminal", title: "터미널", kind: "terminal" }] },
       }),
       "demo",
     );
@@ -391,8 +391,8 @@ describe("parseManifest — programs 기여(§2.6)", () => {
         permissions: ["programs"],
         contributes: {
           programs: [
-            { id: "a", title: "x" },
-            { id: "a", title: "y" },
+            { id: "a", title: "x", kind: "terminal" },
+            { id: "a", title: "y", kind: "terminal" },
           ],
         },
       }),

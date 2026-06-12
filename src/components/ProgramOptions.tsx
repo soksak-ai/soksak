@@ -1,10 +1,12 @@
 import { useProgramRegistry } from "../plugins/programRegistry";
+import { useT } from "../i18n";
 
 // 프로그램 선택 <option> 목록의 단일진실 — 설정/새 프로젝트/프로젝트 설정이
 // 공유한다. 항목은 100% 플러그인 등록분(내장 없음 §2.6, 그룹은 optgroup).
 // 선택값이 미등록(플러그인 비활성)이면 항목을 추가해 값 유실을 막는다 —
 // 동작은 터미널 뷰 폴백 중(아이콘 셋의 lucide 폴백과 동형).
 export function ProgramOptions({ current }: { current?: string }) {
+  const t = useT();
   useProgramRegistry((s) => s.version);
   const { programs, order } = useProgramRegistry.getState();
 
@@ -35,7 +37,7 @@ export function ProgramOptions({ current }: { current?: string }) {
         </optgroup>
       ))}
       {current && !known.has(current) && (
-        <option value={current}>{current} (비활성)</option>
+        <option value={current}>{t("common.inactive", { id: current })}</option>
       )}
     </>
   );

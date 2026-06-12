@@ -2614,6 +2614,23 @@ select.dctl {
 .plugin-consent-none {
   color: var(--fg3);
 }
+/* 기여 체크리스트의 명령 원문(실행/설치) — 산문 가공 없이 그대로(§0-2) */
+.plugin-consent-cmd {
+  display: block;
+  margin-top: 4px;
+  padding: 4px 7px;
+  border: 1px solid var(--bd-soft);
+  border-radius: 5px;
+  background: var(--inset);
+  font-family: var(--mono, monospace);
+  font-size: 10.5px;
+  color: var(--fg2);
+  word-break: break-all;
+}
+.plugin-consent-revoke {
+  color: var(--fg3);
+  font-size: 11px;
+}
 .plugin-consent-notice {
   border: 1px solid var(--danger-soft);
   background: rgba(229, 83, 75, 0.07);

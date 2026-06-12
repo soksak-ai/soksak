@@ -2,7 +2,7 @@
   "spec": "soksak-plugin-spec@1",
   "id": "soksak-terminal",
   "name": "터미널",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "새 탭(+) 메뉴에 터미널을 추가",
   "entry": "main.js",
   "permissions": [
@@ -12,7 +12,8 @@
     "programs": [
       {
         "id": "terminal",
-        "title": "터미널"
+        "title": "터미널",
+        "kind": "terminal"
       }
     ]
   }

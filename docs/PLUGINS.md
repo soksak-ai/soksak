@@ -119,7 +119,7 @@ sok plugin.reload
 | 권한 | 부여 표면 | 주의 |
 |---|---|---|
 | `ui` | `app.ui` — 뷰 등록/열기 | |
-| `programs` | `app.programs` — 새 탭(+) 메뉴 프로그램 등록 | ⚠ 선택 시 터미널 명령 자동 실행(설치 명령 포함) |
+| `programs` | (표면 없음 — 선언만으로 자동 등록) 새 탭(+) 메뉴 프로그램 | ⚠ 선택 시 터미널 명령 자동 실행(설치 명령 포함) |
 | `commands` | `app.commands` — 명령 실행(danger 없는 것)+자기 명령 등록 | |
 | `commands:destructive` | danger=destructive 명령 실행(닫기·제거) | ⚠ |
 | `commands:inject` | danger=inject 명령 실행(term.send/exec, browser.eval…) | ⚠ |
@@ -174,32 +174,38 @@ ctx.subscriptions.push(
 );
 ```
 
-### app.programs (`"programs"`)
+### 프로그램 기여 (`"programs"`) — 완전 선언형, 코드 불필요
 
 새 탭(+) 메뉴에는 **내장 항목이 없다(§2.6)** — 터미널·에이전트·브라우저 전부
-플러그인이 등록한다. 코어가 소유하는 것은 뷰 능력(terminal/browser kind)뿐.
+플러그인이 기여한다. 코어가 소유하는 것은 뷰 능력(terminal/browser kind)뿐.
+프로그램은 languages 처럼 **매니페스트 선언만으로 자동 등록**된다(명령형 API
+없음) — 실행/설치 명령이 전부 선언에 있어 **동의 화면이 플러그인의 역할
+(코어 연결만 / 명령 실행 / 미설치 시 설치)을 명령 원문 그대로 고지**한다.
 
-```js
-ctx.subscriptions.push(
-  app.programs.register("claude", {
-    kind: "terminal",          // "terminal" | "browser"
-    command: "claude",         // kind=terminal: 자동 실행 셸 명령(생략=맨 터미널)
-    // url: "https://…",       // kind=browser: 시작 URL(생략=설정 homeUrl)
-    ensure: {                  // kind=terminal 한정: 선행 바이너리 보장
-      bin: "claude",           // 사용자 셸 PATH 에서 확인할 실행 파일명
-      install: {               // 미설치 시 같은 터미널에서 가시 실행되는 공식 설치 명령
-        darwin: "curl -fsSL https://claude.ai/install.sh | bash",
-        linux: "curl -fsSL https://claude.ai/install.sh | bash",
-        win32: "irm https://claude.ai/install.ps1 | iex",
-      },
-    },
-  }),
-);
+```jsonc
+"contributes": {
+  "programs": [{
+    "id": "claude",            // 전역 프로그램 id(평탄) — 충돌 시 활성화 에러
+    "title": "Claude",         // 메뉴 표시명
+    "path": "에이전트",         // "/" 구분 다단 카테고리(플러그인 간 병합). 생략=최상위
+    "kind": "terminal",        // "terminal" | "browser"
+    "command": "claude",       // kind=terminal: 자동 실행 셸 명령(생략=맨 터미널)
+    // "url": "https://…",     // kind=browser: 시작 URL(생략=설정 homeUrl)
+    "ensure": {                // kind=terminal 한정: 선행 바이너리 보장
+      "bin": "claude",         // 사용자 셸 PATH 에서 확인할 실행 파일명
+      "install": {             // 미설치 시 같은 터미널에서 가시 실행되는 공식 설치 명령
+        "darwin": "curl -fsSL https://claude.ai/install.sh | bash",
+        "linux": "curl -fsSL https://claude.ai/install.sh | bash",
+        "win32": "irm https://claude.ai/install.ps1 | iex"
+      }
+    }
+  }]
+}
 ```
 
-- `register(id, spec)` 의 id 는 `contributes.programs` 선언 필수(미선언 = 예외).
 - 등록 즉시 + 메뉴·`program.list`·`view.open '{"program":"<id>"}'` 에 노출(§0-1).
 - 미등록 id 를 명령/설정이 참조하면 터미널 뷰 폴백(능력명 "browser" 는 그 능력).
+- 등록 프로그램이 0개면 + 버튼 자체가 렌더되지 않는다.
 
 ### app.ui (`"ui"`)
 

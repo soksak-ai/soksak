@@ -2,7 +2,7 @@
   "spec": "soksak-plugin-spec@1",
   "id": "soksak-agent-claude",
   "name": "Claude Code",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "새 탭(+) 메뉴 에이전트 카테고리에 Claude Code 를 추가 — 미설치면 공식 설치 명령을 터미널에서 실행한 뒤 사용",
   "entry": "main.js",
   "permissions": [
@@ -13,7 +13,17 @@
       {
         "id": "claude",
         "title": "Claude",
-        "path": "에이전트"
+        "path": "에이전트",
+        "kind": "terminal",
+        "command": "claude",
+        "ensure": {
+          "bin": "claude",
+          "install": {
+            "darwin": "curl -fsSL https://claude.ai/install.sh | bash",
+            "linux": "curl -fsSL https://claude.ai/install.sh | bash",
+            "win32": "irm https://claude.ai/install.ps1 | iex"
+          }
+        }
       }
     ]
   }

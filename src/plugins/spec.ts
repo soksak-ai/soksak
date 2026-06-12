@@ -163,13 +163,35 @@ export interface ContributedIconSet {
 // 설정값에 그대로 쓰임). 충돌은 등록 시점 에러(§0-3 침묵 실패 금지).
 // 미등록 id 사용 시 코어는 능력명("browser")이면 그 능력, 아니면 터미널 뷰로
 // 폴백한다(상태·코어 명령의 동작 보장 — 메뉴 항목과는 무관).
+//
+// 프로그램은 완전 선언형이다(languages 와 동형 — 코드 바인딩 불요, 자동 적용).
+// 동작 전체(실행 명령·설치 명령)가 매니페스트에 있어야 동의 화면이 플러그인의
+// 역할을 명령 그대로 보여줄 수 있다(§0-2 정직한 고지): "코어 기능 연결만"인지
+// "명령 실행"인지 "미설치 시 설치까지"인지가 기계 검증되는 선언으로 드러난다.
+
+export type ProgramPlatform = "darwin" | "linux" | "win32";
+export const PROGRAM_PLATFORMS: readonly ProgramPlatform[] = [
+  "darwin",
+  "linux",
+  "win32",
+];
 
 export interface ContributedProgram {
-  id: string; // 전역 프로그램 id(평탄). ^[a-z0-9][a-z0-9-]*$, "terminal" 예약
+  id: string; // 전역 프로그램 id(평탄). ^[a-z0-9][a-z0-9-]*$
   title: string; // 메뉴 표시명
   // 메뉴 카테고리 경로 — "/" 구분으로 뎁스 지정(예: "에이전트", "에이전트/실험").
-  // 같은 경로끼리 서브메뉴로 묶인다. 생략 = 최상위.
+  // 같은 경로끼리 서브메뉴로 묶인다(플러그인 간 병합). 생략 = 최상위.
   path?: string;
+  // 동작: terminal = 터미널 뷰(+command 자동 실행), browser = 브라우저 뷰(+url).
+  kind: "terminal" | "browser";
+  command?: string; // kind=terminal 한정: 자동 실행할 셸 명령(생략 = 맨 터미널)
+  url?: string; // kind=browser 한정: 시작 URL(생략 = 설정 homeUrl)
+  // kind=terminal 한정 — 선행 바이너리 보장: 사용자 셸 PATH 에서 bin 을 확인하고
+  // 미설치면 공식 설치 명령을 같은 터미널에서 가시 실행한다(은폐 금지).
+  ensure?: {
+    bin: string;
+    install: Partial<Record<ProgramPlatform, string>>;
+  };
 }
 
 // path → 세그먼트(빈 세그먼트 거부는 검증이). "a/b" → ["a","b"].
@@ -553,8 +575,8 @@ export function parseManifest(
 
       programs = parseEntries(c.programs, {
         label: "contributes.programs",
-        required: ["id", "title"],
-        optional: ["path"],
+        required: ["id", "title", "kind"],
+        optional: ["path", "command", "url", "ensure"],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
             errs.push("contributes.programs: id 는 ^[a-z0-9][a-z0-9-]*$");
@@ -562,6 +584,11 @@ export function parseManifest(
           }
           const id = v.id.trim();
           if (!isNonEmptyString(v.title)) return null;
+          if (v.kind !== "terminal" && v.kind !== "browser") {
+            errs.push(`contributes.programs["${id}"].kind: terminal|browser`);
+            return null;
+          }
+          const kind = v.kind;
           let path: string | undefined;
           if (v.path !== undefined) {
             if (
@@ -575,10 +602,78 @@ export function parseManifest(
             }
             path = programPathSegments(v.path).join("/");
           }
+          // kind 정합: 동의 화면이 보여줄 동작 선언이 모호하면 거부.
+          if (v.command !== undefined) {
+            if (kind !== "terminal" || !isNonEmptyString(v.command)) {
+              errs.push(
+                `contributes.programs["${id}"].command: kind=terminal 한정 비공백 문자열`,
+              );
+              return null;
+            }
+          }
+          if (v.url !== undefined) {
+            if (kind !== "browser" || !isNonEmptyString(v.url)) {
+              errs.push(
+                `contributes.programs["${id}"].url: kind=browser 한정 비공백 문자열`,
+              );
+              return null;
+            }
+          }
+          let ensure: ContributedProgram["ensure"];
+          if (v.ensure !== undefined) {
+            if (kind !== "terminal" || !isRecord(v.ensure)) {
+              errs.push(
+                `contributes.programs["${id}"].ensure: kind=terminal 한정 객체`,
+              );
+              return null;
+            }
+            const e = v.ensure;
+            checkKnownKeys(
+              e,
+              ["bin", "install"],
+              `contributes.programs["${id}"].ensure`,
+              errs,
+            );
+            if (!isNonEmptyString(e.bin)) {
+              errs.push(`contributes.programs["${id}"].ensure.bin: 필수`);
+              return null;
+            }
+            if (!isRecord(e.install)) {
+              errs.push(`contributes.programs["${id}"].ensure.install: 객체 필수`);
+              return null;
+            }
+            const install: Partial<Record<ProgramPlatform, string>> = {};
+            for (const [k, val] of Object.entries(e.install)) {
+              if (!PROGRAM_PLATFORMS.includes(k as ProgramPlatform)) {
+                errs.push(
+                  `contributes.programs["${id}"].ensure.install: 플랫폼 키는 ${PROGRAM_PLATFORMS.join("|")}`,
+                );
+                return null;
+              }
+              if (!isNonEmptyString(val)) {
+                errs.push(
+                  `contributes.programs["${id}"].ensure.install.${k}: 비공백 문자열`,
+                );
+                return null;
+              }
+              install[k as ProgramPlatform] = val.trim();
+            }
+            if (Object.keys(install).length === 0) {
+              errs.push(
+                `contributes.programs["${id}"].ensure.install: 최소 1개 플랫폼 명령 필요`,
+              );
+              return null;
+            }
+            ensure = { bin: e.bin.trim(), install };
+          }
           return {
             id,
             title: (v.title as string).trim(),
+            kind,
             ...(path !== undefined ? { path } : {}),
+            ...(v.command !== undefined ? { command: (v.command as string).trim() } : {}),
+            ...(v.url !== undefined ? { url: (v.url as string).trim() } : {}),
+            ...(ensure !== undefined ? { ensure } : {}),
           };
         },
       }, errors);

@@ -107,6 +107,8 @@ describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
     ".plugin-badge",
     ".plugin-consent-item",
     ".plugin-consent-notice",
+    ".plugin-consent-cmd", // 명령 원문 코드 박스 — 폐곡선 윤곽
+
     ".dctl",
     ".dstepper",
     ".th-cell",

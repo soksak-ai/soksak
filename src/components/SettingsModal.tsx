@@ -168,7 +168,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </option>
               ))}
               {!iconSetOptions.some((o) => o.id === s.iconSet) && (
-                <option value={s.iconSet}>{s.iconSet} (비활성)</option>
+                <option value={s.iconSet}>
+                  {t("common.inactive", { id: s.iconSet })}
+                </option>
               )}
             </select>
           </div>

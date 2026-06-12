@@ -43,6 +43,7 @@ const ko = {
   "settings.homeUrl": "시작 URL",
   "common.on": "켬",
   "common.off": "끔",
+  "common.inactive": "{id} (비활성)",
   "browser.back": "이전",
   "browser.forward": "이후",
   "browser.reload": "새로고침",
@@ -153,6 +154,19 @@ const ko = {
   "plugin.consent.notice":
     "이 플러그인의 코드는 앱과 같은 권한으로 실행됩니다(샌드박스 없음). 권한 표시는 선언이며 격리가 아닙니다 — 신뢰할 수 있는 소스만 활성화하세요.",
   "plugin.consent.agree": "동의하고 활성화",
+  "plugin.consent.contributes": "이 플러그인이 추가하는 것",
+  "plugin.consent.noContributes": "추가하는 기능 없음",
+  "plugin.consent.revokeNote": "비활성화·제거 시 위 항목은 전부 자동 회수됩니다.",
+  "plugin.consent.kind.program": "프로그램(+ 메뉴)",
+  "plugin.consent.kind.view": "뷰",
+  "plugin.consent.kind.command": "명령",
+  "plugin.consent.kind.formatter": "포매터",
+  "plugin.consent.kind.language": "문법 매핑",
+  "plugin.consent.kind.iconSet": "아이콘 셋",
+  "plugin.consent.prog.browser": "브라우저 뷰를 연다(명령 실행 없음)",
+  "plugin.consent.prog.run": "터미널에서 자동 실행:",
+  "plugin.consent.prog.bareTerminal": "맨 터미널을 연다(명령 실행 없음)",
+  "plugin.consent.prog.install": "미설치 시 설치 실행:",
 } as const;
 
 export type MsgKey = keyof typeof ko;
@@ -196,6 +210,7 @@ const en: Record<MsgKey, string> = {
   "settings.homeUrl": "Start URL",
   "common.on": "On",
   "common.off": "Off",
+  "common.inactive": "{id} (inactive)",
   "browser.back": "Back",
   "browser.forward": "Forward",
   "browser.reload": "Reload",
@@ -306,6 +321,20 @@ const en: Record<MsgKey, string> = {
   "plugin.consent.notice":
     "This plugin's code runs with the same privileges as the app (no sandbox). Permissions are declarations, not isolation — only enable sources you trust.",
   "plugin.consent.agree": "Agree & enable",
+  "plugin.consent.contributes": "What this plugin adds",
+  "plugin.consent.noContributes": "No contributed features",
+  "plugin.consent.revokeNote":
+    "Disabling or removing the plugin automatically revokes all items above.",
+  "plugin.consent.kind.program": "Program (+ menu)",
+  "plugin.consent.kind.view": "View",
+  "plugin.consent.kind.command": "Command",
+  "plugin.consent.kind.formatter": "Formatter",
+  "plugin.consent.kind.language": "Language mapping",
+  "plugin.consent.kind.iconSet": "Icon set",
+  "plugin.consent.prog.browser": "opens a browser view (no command run)",
+  "plugin.consent.prog.run": "auto-runs in terminal:",
+  "plugin.consent.prog.bareTerminal": "opens a bare terminal (no command run)",
+  "plugin.consent.prog.install": "runs installer if missing:",
 };
 
 const messages = { ko, en };

@@ -370,9 +370,9 @@ function newBrowserView(url?: string): View {
 function newViewFor(program: Program, opts?: { url?: string }): View {
   const reg = getRegisteredProgram(program);
   if (reg) {
-    return reg.spec.kind === "browser"
-      ? newBrowserView(opts?.url ?? reg.spec.url)
-      : newTerminalView(autorunCommandOf(reg.spec));
+    return reg.decl.kind === "browser"
+      ? newBrowserView(opts?.url ?? reg.decl.url)
+      : newTerminalView(autorunCommandOf(reg.decl));
   }
   if (program === "browser") return newBrowserView(opts?.url);
   return newTerminalView();

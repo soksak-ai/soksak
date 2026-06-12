@@ -1,13 +1,47 @@
-// 플러그인 활성화 동의 모달 — §0-2 정직한 고지: 권한 목록(한국어 설명 + 주의 강조)과
-// 전체신뢰(샌드박스 없음) 고지를 보여주고, 사람의 명시적 동의만 기록한다(§0-5).
-// 동의 부여는 이 UI 가 유일한 통로 — 원격 명령은 존재하지 않는다.
+// 플러그인 활성화 동의 모달 — §0-2 정직한 고지: 권한 목록(한국어 설명 + 주의 강조),
+// 기여 체크리스트(이 플러그인이 추가하는 것 — 실행/설치 명령 원문 포함, 전부
+// 매니페스트 선언에서 기계적으로 파생), 전체신뢰(샌드박스 없음) 고지를 보여주고,
+// 사람의 명시적 동의만 기록한다(§0-5). 동의 부여는 이 UI 가 유일한 통로.
 
 import { useEffect } from "react";
-import { PERMISSION_INFO } from "../plugins/spec";
+import {
+  PERMISSION_INFO,
+  pluginCommandName,
+  type ContributedProgram,
+} from "../plugins/spec";
+import { detectPlatform } from "../plugins/programRegistry";
 import type { PluginRuntime } from "../state/plugins";
 import { useSuppressBrowser } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
+
+// 프로그램 선언 → 동의 화면 한 줄 요약(명령은 원문 그대로 — 산문 가공 금지).
+function programSummary(
+  p: ContributedProgram,
+  t: ReturnType<typeof useT>,
+): { text: string; cmds: string[] } {
+  const where = p.path ? `${p.path} ▸ ${p.title}` : p.title;
+  if (p.kind === "browser") {
+    return {
+      text: `${where} — ${t("plugin.consent.prog.browser")}${p.url ? `: ${p.url}` : ""}`,
+      cmds: [],
+    };
+  }
+  const cmds: string[] = [];
+  let text: string;
+  if (p.command) {
+    text = `${where} — ${t("plugin.consent.prog.run")}`;
+    cmds.push(p.command);
+  } else {
+    text = `${where} — ${t("plugin.consent.prog.bareTerminal")}`;
+  }
+  const install = p.ensure?.install[detectPlatform()];
+  if (install) {
+    text += ` · ${t("plugin.consent.prog.install")}`;
+    cmds.push(install);
+  }
+  return { text, cmds };
+}
 
 export function PluginConsentModal({
   plugin,
@@ -84,6 +118,76 @@ export function PluginConsentModal({
               })}
             </ul>
           )}
+
+          {/* 기여 체크리스트 — 매니페스트 선언에서 기계적으로 파생(산문 0).
+              명령/뷰/프로그램/포매터가 무엇이 추가되는지, 어떤 명령이 실행되는지
+              원문 그대로. 비활성화·제거 시 전부 자동 회수됨을 고지. */}
+          <div className="dsec">{t("plugin.consent.contributes")}</div>
+          {(() => {
+            const c = m.contributes;
+            const rows: { key: string; text: string; cmds?: string[] }[] = [];
+            for (const p of c.programs) {
+              const s = programSummary(p, t);
+              rows.push({
+                key: `prog:${p.id}`,
+                text: `${t("plugin.consent.kind.program")} — ${s.text}`,
+                cmds: s.cmds,
+              });
+            }
+            for (const v of c.views) {
+              rows.push({
+                key: `view:${v.id}`,
+                text: `${t("plugin.consent.kind.view")} — ${v.title} (${v.placements.join(", ")})`,
+              });
+            }
+            for (const cmd of c.commands) {
+              rows.push({
+                key: `cmd:${cmd.name}`,
+                text: `${t("plugin.consent.kind.command")} — ${pluginCommandName(m.id, cmd.name)}: ${cmd.title}`,
+              });
+            }
+            for (const f of c.formatters) {
+              rows.push({
+                key: `fmt:${f.id}`,
+                text: `${t("plugin.consent.kind.formatter")} — ${f.title} (.${f.languages.join(" .")})`,
+              });
+            }
+            for (const l of c.languages) {
+              rows.push({
+                key: `lang:${l.ext}`,
+                text: `${t("plugin.consent.kind.language")} — .${l.ext} → ${l.lang}`,
+              });
+            }
+            for (const s of c.iconSets) {
+              rows.push({
+                key: `icons:${s.id}`,
+                text: `${t("plugin.consent.kind.iconSet")} — ${s.title}`,
+              });
+            }
+            return rows.length === 0 ? (
+              <div className="plugin-consent-none">
+                {t("plugin.consent.noContributes")}
+              </div>
+            ) : (
+              <>
+                <ul className="plugin-consent-list">
+                  {rows.map((r) => (
+                    <li key={r.key} className="plugin-consent-item">
+                      <span className="plugin-consent-detail">{r.text}</span>
+                      {r.cmds?.map((cmd) => (
+                        <code key={cmd} className="plugin-consent-cmd">
+                          {cmd}
+                        </code>
+                      ))}
+                    </li>
+                  ))}
+                </ul>
+                <div className="plugin-consent-revoke">
+                  {t("plugin.consent.revokeNote")}
+                </div>
+              </>
+            );
+          })()}
 
           {/* 전체신뢰 고지(§0-2) — 권한은 격리가 아님을 그대로 말한다. */}
           <div className="plugin-consent-notice">{t("plugin.consent.notice")}</div>

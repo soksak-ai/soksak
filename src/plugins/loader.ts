@@ -12,6 +12,7 @@ import {
   type PluginContext,
 } from "./api";
 import { useEditorRegistry } from "./editorRegistry";
+import { useProgramRegistry } from "./programRegistry";
 import type { PluginManifest } from "./spec";
 
 // entry 코드 문자열 → ESM 모듈. 상대 import 불가(스펙: 단일 번들 필수).
@@ -75,7 +76,8 @@ export async function activatePlugin(
   }
   const { api, tracker } = buildPluginApi(manifest, dir, deps);
 
-  // 선언적 기여 자동 적용: languages 는 데이터만으로 충분(코드 바인딩 불요).
+  // 선언적 기여 자동 적용: languages/programs 는 데이터만으로 충분(코드 바인딩
+  // 불요) — 동작 전체가 매니페스트에 있어 동의 화면이 그대로 고지한다(§0-2).
   for (const l of manifest.contributes.languages) {
     tracker.wrap(
       useEditorRegistry.getState().registerLanguage({
@@ -84,6 +86,9 @@ export async function activatePlugin(
         lang: l.lang,
       }),
     );
+  }
+  for (const p of manifest.contributes.programs) {
+    tracker.wrap(useProgramRegistry.getState().register(manifest.id, p));
   }
 
   const subscriptions: Disposable[] = [];
