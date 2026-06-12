@@ -159,10 +159,17 @@ const d = app.commands.register("hello", {                    // contributes.com
 ### app.events (권한 불필요)
 
 `project.changed` · `view.activated` · `file.opened` · `file.closed` · `file.saved`
-· `theme.changed` · `bookmarks.changed`
+· `theme.changed` · `bookmarks.changed` · `command.finished`
 
 ```js
 ctx.subscriptions.push(app.events.on("file.saved", ({ path }) => { … }));
+
+// command.finished: 터미널 명령 종료(OSC 133/633 셸 통합 탐지 — 폴링 없음).
+// git 뷰 등의 자동 갱신 트리거. payload = { projectId: string | null, paneId }.
+// 핸들러는 메인스레드 동기 실행 — 무거운 갱신은 debounce/defer 할 것.
+ctx.subscriptions.push(
+  app.events.on("command.finished", ({ projectId }) => { /* 갱신 예약 */ }),
+);
 ```
 
 ### app.ui (`"ui"`)
@@ -179,6 +186,26 @@ await app.ui.openView("panel", "content");   // 배치: sidebar-right(기본)/si
 우측 사이드바(아이콘 레일), 좌측 사이드바(파일 트리 옆 탭), 콘텐츠 영역(에디터 그룹 탭 —
 드래그/분할/닫기 동작 동일). 테마 적용을 위해 CSS 변수(`var(--fg)`, `var(--bd)`,
 `var(--inset)`, `var(--acc)` …)로 스타일하라.
+
+#### 아이콘 셋 등록 (`contributes.iconSets` + `app.ui.registerIconSet`)
+
+앱 크롬 아이콘 셋을 플러그인으로 제공할 수 있다(설정 → 아이콘 셋에 나타남).
+매니페스트에 선언하지 않은 셋 id 는 등록이 거부된다.
+
+```json
+{ "permissions": ["ui"], "contributes": { "iconSets": [{ "id": "tabler", "title": "Tabler Icons" }] } }
+```
+
+```js
+// data: 시맨틱 이름 전수(close/add/refresh/… — 누락 시 등록 거부) →
+//       { v: viewBox, b: SVG 내부 마크업, f: "stroke"|"fill"|"both" }
+ctx.subscriptions.push(ctx.app.ui.registerIconSet("tabler", data));
+```
+
+시맨틱 이름 목록과 추출 도구는 호스트 레포 `scripts/icons/extract.mjs` 참조
+(예제: `soksak-icons-tabler`, `soksak-icons-codicons` — main.js 가 생성물).
+전역 셋 id 는 `<pluginId>.<setId>`, 플러그인 비활성화 시 자동 해제되고 선택돼
+있던 경우 내장 lucide 로 폴백된다.
 
 ### app.editor (`"editor"`)
 

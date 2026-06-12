@@ -8,7 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "icons:extract": "node scripts/icons/extract.mjs"
   },
   "dependencies": {
     "@codemirror/language": "^6.12.3",
@@ -35,13 +36,16 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@tabler/icons": "^3.44.0",
     "@tauri-apps/cli": "^2",
     "@types/dompurify": "^3.2.0",
     "@types/node": "^25.9.3",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "@editor/codicons": "^0.0.45",
     "jsdom": "^29.1.1",
+    "lucide-static": "^1.17.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
     "vitest": "^4.1.8"
