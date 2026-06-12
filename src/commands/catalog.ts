@@ -278,6 +278,7 @@ function serializeContent(c: ContentArea, activeContentId: string) {
     program: c.program,
     active: c.id === activeContentId,
     activeGroupId: c.activeGroupId,
+    maximizedViewId: c.maximizedViewId ?? null,
     layout: serializeLayout(c.layout),
     panels: cells.map(({ group, rect }) => ({
       id: group.id,
@@ -938,6 +939,32 @@ export function registerCatalog(): void {
       const loc = locateView(p.view as string);
       if (!loc) return notFound(`뷰 없음: ${p.view}`);
       return S().setActiveView(loc.project.id, p.view as string);
+    },
+  });
+
+  register("view.maximize", {
+    description:
+      "뷰(탭) 최대화 — 컨텐츠 영역 전체 차지(분할 트리 보존, 표시만 전환). 탭 더블클릭과 동일. view 생략=활성 뷰",
+    params: { view: P.view },
+    returns: "{ viewId }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok view.maximize \'{"view":"v3"}\'', "sok view.maximize"],
+    handler: (p, ctx) => {
+      const loc = p.view ? locateView(p.view as string) : resolveCtx(ctx);
+      if (!loc) return notFound(`뷰 없음: ${p.view ?? "(활성)"}`);
+      return S().maximizeView(loc.project.id, loc.view.id);
+    },
+  });
+
+  register("view.restore", {
+    description: "뷰 최대화 해제 — 원래 분할 레이아웃으로 복원(활성 컨텐츠)",
+    params: { project: P.project },
+    returns: "{ viewId(해제된 뷰 | null=최대화 없었음) }",
+    examples: ["sok view.restore"],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound("프로젝트 없음");
+      return S().restoreView(t.id);
     },
   });
 

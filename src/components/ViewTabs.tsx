@@ -33,6 +33,7 @@ export const ViewTabs = memo(function ViewTabs({
   const t = useT();
   const closeView = useSessions((s) => s.closeView);
   const addViewToGroup = useSessions((s) => s.addViewToGroup);
+  const maximizeView = useSessions((s) => s.maximizeView);
   const addBtnRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ left: number; top: number } | null>(
     null,
@@ -118,6 +119,9 @@ export const ViewTabs = memo(function ViewTabs({
             key={v.id}
             className={`view-tab${v.id === group.activeViewId ? " active" : ""}`}
             onMouseDown={(e) => onTabPointerDown(v.id, e)}
+            // 더블클릭 = 최대화(컨텐츠 영역 전체) — 헤더가 타이틀로 바뀌고
+            // 거기서 더블클릭/버튼으로 복원.
+            onDoubleClick={() => maximizeView(projectId, v.id)}
             title={
               v.kind === "file"
                 ? v.path

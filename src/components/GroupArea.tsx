@@ -52,6 +52,9 @@ const DRAG_THRESHOLD = 5; // 이 픽셀 이상 움직여야 드래그로 간주(
 // paneStyle 토큰별 패널 간격(절반값 — 이웃 간 합산 10/12px, 레퍼런스 divider 실폭).
 const PANE_INSET: Record<string, number> = { flat: 0, card: 5, floating: 6 };
 
+// 최대화 시 셀/슬롯이 차지하는 전체 rect(컨텐츠 영역 기준 %).
+const FULL_RECT = { left: 0, top: 0, width: 100, height: 100 };
+
 export function computeLayout(node: GroupNode): {
   cells: Cell[];
   dividers: Divider[];
@@ -130,6 +133,7 @@ export const GroupArea = memo(function GroupArea({
   const inset = PANE_INSET[paneStyle] ?? 0;
   const setActiveGroup = useSessions((s) => s.setActiveGroup);
   const setActiveView = useSessions((s) => s.setActiveView);
+  const restoreView = useSessions((s) => s.restoreView);
   const closeView = useSessions((s) => s.closeView);
   const moveViewToGroup = useSessions((s) => s.moveViewToGroup);
   const moveGroupToGroup = useSessions((s) => s.moveGroupToGroup);
@@ -154,6 +158,17 @@ export const GroupArea = memo(function GroupArea({
     () => computeLayout(content.layout),
     [content.layout],
   );
+  // 최대화(maximizedViewId): 한 뷰가 컨텐츠 영역 전체를 차지. 분할 트리는
+  // 불변 — 셀/프레임만 그 그룹 하나(전체 rect)로 바꿔 그리고, 나머지 그룹의
+  // 슬롯은 숨김 유지(세션 보존: 터미널/webview 마운트는 절대 깨지 않는다).
+  const maximizedId = content.maximizedViewId ?? null;
+  const maxCell = maximizedId
+    ? (cells.find((c) => c.group.views.some((v) => v.id === maximizedId)) ??
+      null)
+    : null;
+  const displayCells = maxCell
+    ? [{ group: maxCell.group, rect: FULL_RECT }]
+    : cells;
   // 드래그 콜백들이 참조 안정(useCallback)을 유지하면서 최신 cells 를 읽기 위한 ref.
   // (클로저가 cells 를 직접 캡처하면 렌더마다 새 함수 → memo 경계가 깨진다)
   const cellsRef = useRef(cells);
@@ -388,7 +403,7 @@ export const GroupArea = memo(function GroupArea({
       {/* ── 그룹 셀: 유일한 위치 지정 레이어(카드 배경/라운드 소유). 내부는
           flex column 정상 흐름 — [헤더][본문 공간][상태바]. 헤더/상태바 좌표
           산수는 존재하지 않는다. 본문 공간은 비워두고 영속 슬롯이 그 위에 뜬다. */}
-      {cells.map(({ group, rect }) => {
+      {displayCells.map(({ group, rect }) => {
         const isActiveGroup = group.id === content.activeGroupId;
         const active = group.views.find((v) => v.id === group.activeViewId);
         return (
@@ -397,7 +412,37 @@ export const GroupArea = memo(function GroupArea({
             className="egroup-cell"
             style={cellVars(rect)}
           >
-            {splitHeaderMode === "tabs" ? (
+            {maxCell ? (
+              /* 최대화 헤더: 탭·+ 대신 타이틀 — 더블클릭/버튼으로 원래 분할 복원 */
+              <div
+                className="egroup-title active"
+                title={t("view.restoreHint")}
+                onDoubleClick={() => restoreView(projectId)}
+              >
+                <span className="egt-icon icon-inline">
+                  {active?.kind === "terminal" ? (
+                    <Icon name="terminal" size="sm" />
+                  ) : active?.kind === "file" ? (
+                    <Icon name="file" size="sm" />
+                  ) : active?.kind === "plugin" ? (
+                    <Icon name="plugin" size="sm" />
+                  ) : (
+                    <Icon name="browser" size="sm" />
+                  )}
+                </span>
+                <span className="egt-name">
+                  {titleOf(active, t("view.terminal"))}
+                </span>
+                <button
+                  type="button"
+                  className="icon-btn egt-btn"
+                  title={t("view.restore")}
+                  onClick={() => restoreView(projectId)}
+                >
+                  <Icon name="minus" size="sm" />
+                </button>
+              </div>
+            ) : splitHeaderMode === "tabs" ? (
               /* 탭 모드: 탭바(탭 드래그=뷰 이동, +=새 탭) */
               <div className="egroup-tabs">
                 <ViewTabs
@@ -460,7 +505,7 @@ export const GroupArea = memo(function GroupArea({
           구조 경계선(--bd, §B 계약)은 불변 — 강조는 outline/배경(--acc, §B4)으로만.
           꺽쇠는 프레임 모서리 = 헤더/스테이터스 밴드 구간이라 네이티브 webview
           (본문 슬롯만 차지)에 가려지지 않는다. ── */}
-      {cells.map(({ group, rect }) => (
+      {displayCells.map(({ group, rect }) => (
         <div
           key={`frame-${group.id}`}
           className={`egroup-frame${
@@ -475,7 +520,11 @@ export const GroupArea = memo(function GroupArea({
           세션 보존). 본문 영역 좌표는 CSS 규칙(셀 변수 + 치수 변수)이 계산. ── */}
       {cells.flatMap(({ group, rect }) =>
         group.views.map((view) => {
-          const isActiveView = view.id === group.activeViewId;
+          // 최대화 중엔 최대화 뷰만 보인다(전체 rect) — 나머지는 숨김 유지.
+          const shown = maxCell
+            ? view.id === maximizedId
+            : view.id === group.activeViewId;
+          const slotRect = maxCell && shown ? FULL_RECT : rect;
           return (
             <div
               key={view.id}
@@ -484,9 +533,9 @@ export const GroupArea = memo(function GroupArea({
               data-group-id={group.id}
               data-project-id={projectId}
               style={{
-                ...cellVars(rect),
-                visibility: isActiveView ? "visible" : "hidden",
-                zIndex: isActiveView ? 1 : 0,
+                ...cellVars(slotRect),
+                visibility: shown ? "visible" : "hidden",
+                zIndex: shown ? 1 : 0,
               }}
               onMouseDownCapture={() => setActiveGroup(projectId, group.id)}
             >
@@ -500,7 +549,7 @@ export const GroupArea = memo(function GroupArea({
                   // panel.focus)에도 실포커스가 안 따라간다(표시·입력 불일치 사고).
                   active={
                     isActiveProject &&
-                    isActiveView &&
+                    shown &&
                     group.id === content.activeGroupId
                   }
                   focusedPaneId={view.focusedPaneId}
@@ -524,7 +573,7 @@ export const GroupArea = memo(function GroupArea({
                   projectId={projectId}
                   viewId={view.id}
                   url={view.url}
-                  visible={isActiveProject && isActiveView}
+                  visible={isActiveProject && shown}
                 />
               )}
             </div>
@@ -532,8 +581,9 @@ export const GroupArea = memo(function GroupArea({
         }),
       )}
 
-      {/* ── 리사이저(분할 경계 — 위치 지정이 본질인 요소) ── */}
-      {dividers.map((d) => (
+      {/* ── 리사이저(분할 경계 — 위치 지정이 본질인 요소). 최대화 중엔 경계 없음 ── */}
+      {!maxCell &&
+        dividers.map((d) => (
         <div
           key={`div-${d.splitId}-${d.index}`}
           className={`egroup-divider ${d.dir}`}

@@ -119,6 +119,9 @@ export interface ContentArea {
   program: Program;
   layout: GroupNode; // 그룹(분할) 트리
   activeGroupId: string;
+  // 최대화된 뷰(컨텐츠 영역 전체 차지). 레이아웃 트리는 불변 — 표시 오버라이드만.
+  // undefined = 보통. 뷰가 사라지면 normalize 가 해제한다.
+  maximizedViewId?: string;
 }
 
 export interface ProjectTab {
@@ -243,6 +246,12 @@ interface SessionsStore {
   ) => CmdResult<{ activeGroupId: string; activeViewId: string }>;
   setActiveView: (projectId: string, viewId: string) => CmdResult;
   setActiveGroup: (projectId: string, groupId: string) => CmdResult;
+  // 뷰 최대화 — 컨텐츠 영역 전체를 한 뷰가 차지(분할 트리 불변, 표시만). 복원=원래 분할.
+  maximizeView: (
+    projectId: string,
+    viewId: string,
+  ) => CmdResult<{ viewId: string }>;
+  restoreView: (projectId: string) => CmdResult<{ viewId: string | null }>;
   setFileMode: (
     projectId: string,
     viewId: string,
@@ -574,11 +583,16 @@ function splitAtGroup(
   };
 }
 
-// 활성 그룹이 사라졌으면 첫 그룹으로 보정.
+// 활성 그룹이 사라졌으면 첫 그룹으로 보정 + 최대화 뷰가 사라졌으면 최대화 해제.
 function normalizeActiveGroupC(c: ContentArea): ContentArea {
   const groups = allGroups(c.layout);
-  if (groups.some((g) => g.id === c.activeGroupId)) return c;
-  return { ...c, activeGroupId: groups[0]?.id ?? c.activeGroupId };
+  const next =
+    c.maximizedViewId &&
+    !groups.some((g) => g.views.some((v) => v.id === c.maximizedViewId))
+      ? { ...c, maximizedViewId: undefined }
+      : c;
+  if (groups.some((g) => g.id === next.activeGroupId)) return next;
+  return { ...next, activeGroupId: groups[0]?.id ?? next.activeGroupId };
 }
 
 // ── pane 트리 헬퍼(터미널 뷰 내부) ────────────────────────────────────────────
@@ -1243,6 +1257,59 @@ export const useSessions = create<SessionsStore>((set, get) => ({
           })),
           activeContentId: content.id,
         })),
+      };
+    });
+    return r;
+  },
+
+  maximizeView: (projectId, viewId) => {
+    let r: CmdResult<{ viewId: string }> = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = contentOfView(t, viewId);
+      if (!content) {
+        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
+        return s;
+      }
+      const grp = findGroupOfView(content.layout, viewId);
+      if (!grp) return s;
+      r = ok({ viewId });
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) => ({
+          ...mapContent(x, content.id, (c) => ({
+            ...c,
+            maximizedViewId: viewId,
+            // 최대화 뷰 = 그 그룹의 활성 뷰 + 활성 그룹(표시·입력 일치).
+            layout: mapGroupNode(c.layout, grp.id, (g) => ({
+              ...g,
+              activeViewId: viewId,
+            })),
+            activeGroupId: grp.id,
+          })),
+          activeContentId: content.id,
+        })),
+      };
+    });
+    return r;
+  },
+
+  restoreView: (projectId) => {
+    let r: CmdResult<{ viewId: string | null }> = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = t.contents.find((c) => c.id === t.activeContentId);
+      if (!content) return s;
+      r = ok({ viewId: content.maximizedViewId ?? null });
+      if (!content.maximizedViewId) return s;
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapContent(x, content.id, (c) => ({
+            ...c,
+            maximizedViewId: undefined,
+          })),
+        ),
       };
     });
     return r;
