@@ -352,7 +352,7 @@ export function registerPluginCatalog(): void {
 
   register("plugin.dev.load", {
     description:
-      "개발 모드 — 임의 디렉토리의 플러그인을 설치 없이 적재(활성화는 별도 enable + 동의)",
+      "개발 모드 — 임의 디렉토리의 플러그인을 설치 없이 적재. dev 소스는 동의 게이트 면제(§0-5 예외 — 게이트는 이 명령의 inject 정책)",
     params: {
       path: { type: "string", description: "플러그인 디렉토리 절대경로", required: true },
     },

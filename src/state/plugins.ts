@@ -237,7 +237,11 @@ export const usePlugins = create<PluginsState>((set, get) => {
       for (const id of get().enabledIds) {
         const p = get().plugins[id];
         if (!p) continue;
-        if (!consentValid(get().consents[id], p.manifest)) {
+        // dev 소스는 동의 게이트 면제(§0-5 예외 — enable 과 동일 규칙).
+        if (
+          p.source !== "dev" &&
+          !consentValid(get().consents[id], p.manifest)
+        ) {
           setRuntime(id, {
             status: "disabled",
             error: "재동의 필요(버전 또는 권한 변경)",
@@ -328,7 +332,12 @@ export const usePlugins = create<PluginsState>((set, get) => {
       if (p.status === "enabled" && isActive(id)) {
         return ok({ id, status: "enabled" }); // 멱등
       }
-      if (!consentValid(get().consents[id], p.manifest)) {
+      // dev 소스는 동의 게이트 면제(§0-5 예외) — 개발자가 경로를 직접 지정해
+      // 적재한 자기 작업물이고, 게이트는 적재 명령(danger:"inject")에 있다.
+      if (
+        p.source !== "dev" &&
+        !consentValid(get().consents[id], p.manifest)
+      ) {
         return err(
           "CONSENT_REQUIRED",
           `활성화 동의 필요: ${id} — 설정(우측 사이드바 관리)에서 권한을 확인하고 동의`,
