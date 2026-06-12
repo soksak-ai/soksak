@@ -12,12 +12,14 @@ import { describe, expect, it } from "vitest";
 const css = readFileSync(join(process.cwd(), "src", "App.css"), "utf8");
 
 // 단순 파서: 최상위 "selector { decls }" 단위로 분해(중첩 없음 — App.css 평면 규칙).
+// 셀렉터에 붙는 주석은 제거 — 주석 속 쉼표가 셀렉터 분해를 오염시키지 않게.
 function rules(): Array<{ selector: string; decls: string }> {
   const out: Array<{ selector: string; decls: string }> = [];
   const re = /([^{}]+)\{([^{}]*)\}/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(css))) {
-    out.push({ selector: m[1].trim(), decls: m[2] });
+    const selector = m[1].replace(/\/\*[\s\S]*?\*\//g, "").trim();
+    out.push({ selector, decls: m[2] });
   }
   return out;
 }
@@ -90,5 +92,129 @@ describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
 
   it("B4: --bd-soft 파생 토큰 정의 존재(내부선 톤의 단일 출처)", () => {
     expect(css).toMatch(/--bd-soft:\s*color-mix\(/);
+  });
+
+  // ── §B8 계약 전수성: 스펙이 모르는 경계면은 스펙이 못 잡는다 — 그래서
+  //    "CSS 의 구조 보더 ↔ 계약 테이블" 양방향 동기화를 게이트로 강제한다.
+  //    구조 보더(--bd/--bd-soft)를 긋는 셀렉터는 반드시 계약에 등재되거나,
+  //    경계면이 아닌 "위젯 윤곽"으로 명시 분류돼야 한다. ──
+
+  // 위젯 윤곽(비경계면) 허용 목록 — 입력/카드/배지/스와치 등 폐곡선 윤곽.
+  // 경계면(두 영역의 분리선)이 아니므로 소유권 계약 대상이 아니다.
+  const WIDGET_OUTLINE = [
+    ".plugin-input",
+    ".plugin-row",
+    ".plugin-badge",
+    ".plugin-consent-item",
+    ".plugin-consent-notice",
+    ".dctl",
+    ".dstepper",
+    ".th-cell",
+    ".th-swatch",
+    ".color-swatch",
+    ".rail-add",
+    ".plugin-rejected",
+    ".ctab-rename",
+    ".tab-rename",
+    ".rail-rename",
+    ".bv-url",
+    ".cmf-input",
+    ".cmf-field",
+    ".icon-btn",
+    ".drop-ind",
+    ".view-tab", // 칩 윤곽(테마 변형) — 칩 자체의 폐곡선
+    ".tab",
+    ".ctab",
+    ".dbtn",
+    ".rail-chip",
+  ];
+
+  it("B8: 구조 보더 셀렉터는 계약 등재 또는 위젯 윤곽 분류 — 미지의 경계면 금지", async () => {
+    const { BORDER_RULES } = await import("./borderContract");
+    const contractSelectors = BORDER_RULES.flatMap((r) =>
+      r.selector.split(",").map((s) => s.trim()),
+    );
+    const inContract = (selector: string) =>
+      contractSelectors.some((cs) => {
+        const head = cs.split(":")[0]; // ".content-tabs:not(...)" → ".content-tabs"
+        return selector.includes(head);
+      });
+    const isWidget = (selector: string) =>
+      WIDGET_OUTLINE.some((w) => selector.includes(w));
+
+    const unknown: string[] = [];
+    for (const { selector, decls } of rules()) {
+      const borders = decls.match(/(?:^|;)\s*border[^:;]*:\s*[^;]+/g) ?? [];
+      const structural = borders.filter((b) => /var\(--bd(-soft)?\)/.test(b));
+      if (structural.length === 0) continue;
+      for (const single of selector.split(",").map((s) => s.trim())) {
+        if (!inContract(single) && !isWidget(single)) {
+          unknown.push(`${single} → ${structural[0].trim()}`);
+        }
+      }
+    }
+    expect(unknown).toEqual([]);
+  });
+
+  it("B8 전수성: 조건부 표면은 상태 공간을 빈틈·모순 없이 커버한다", async () => {
+    // "존재해야 하는 상태"만 단언하고 반대 상태를 비워두면, 존재하면 안 되는
+    // 선이 있어도 RED 가 없다 — 조건부(when) 규칙이 있는 (selector, edge/seam)
+    // 단위는 paneStyle×divider 전 조합이 정확히 1개 규칙에 커버돼야 한다.
+    const { BORDER_RULES } = await import("./borderContract");
+    const PANE = ["flat", "card", "floating"];
+    const DIV = ["overlay", "solid"];
+    type Key = string; // `${selector}|${edge}`
+    const targets = new Map<Key, { rule: string; when?: { paneStyle?: readonly string[]; divider?: readonly string[] } }[]>();
+    for (const r of BORDER_RULES) {
+      const edges = r.kind === "seam" ? ["seam"] : Object.keys(r.edges ?? {});
+      for (const sel of r.selector.split(",").map((s) => s.trim())) {
+        for (const e of edges) {
+          const k = `${sel}|${e}`;
+          if (!targets.has(k)) targets.set(k, []);
+          targets.get(k)!.push({ rule: r.id, when: r.when });
+        }
+      }
+    }
+    const problems: string[] = [];
+    for (const [key, rs] of targets) {
+      // 무조건 규칙만 있으면 전 상태 커버 — 통과.
+      if (rs.every((r) => !r.when)) {
+        if (rs.length > 1) problems.push(`${key}: 무조건 규칙 중복(${rs.map((r) => r.rule)})`);
+        continue;
+      }
+      for (const p of PANE) {
+        for (const d of DIV) {
+          const hits = rs.filter(
+            (r) =>
+              (!r.when?.paneStyle || r.when.paneStyle.includes(p)) &&
+              (!r.when?.divider || r.when.divider.includes(d)),
+          );
+          if (hits.length === 0) {
+            problems.push(`${key}: 상태 공백 paneStyle=${p},divider=${d}`);
+          } else if (hits.length > 1) {
+            problems.push(
+              `${key}: 상태 모순 paneStyle=${p},divider=${d} → ${hits.map((h) => h.rule).join(",")}`,
+            );
+          }
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it("B8: 계약의 edges 규칙은 CSS 에 대응 선언 존재(공허한 규칙 금지)", async () => {
+    const { BORDER_RULES } = await import("./borderContract");
+    const empty: string[] = [];
+    for (const r of BORDER_RULES) {
+      if (r.kind !== "edges" || !r.edges) continue;
+      const tokens = Object.values(r.edges).filter((v) => v !== "none");
+      if (tokens.length === 0) continue; // none 단언은 선언 부재가 정답
+      for (const sel of r.selector.split(",").map((s) => s.trim())) {
+        const head = sel.split(":")[0].replace(/^\./, "\\.");
+        const re = new RegExp(`${head}[^{]*\\{[^}]*border[^:;]*:[^;]*var\\(--bd`);
+        if (!re.test(css)) empty.push(`${r.id} (${sel})`);
+      }
+    }
+    expect(empty).toEqual([]);
   });
 });

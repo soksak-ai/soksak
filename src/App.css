@@ -190,28 +190,7 @@ body,
   user-select: none;
 }
 
-.bg-picker {
-  width: 20px;
-  height: 18px;
-  padding: 0;
-  border: 1px solid var(--bd);
-  border-radius: 4px;
-  background: none;
-  cursor: pointer;
-  opacity: 0.65;
-  transition: opacity 0.15s ease;
-}
-.bg-picker:hover {
-  opacity: 1;
-}
 /* 기본 color input 의 내부 여백/테두리 제거(작은 스와치로) */
-.bg-picker::-webkit-color-swatch-wrapper {
-  padding: 0;
-}
-.bg-picker::-webkit-color-swatch {
-  border: none;
-  border-radius: 3px;
-}
 
 .sidebar-toggle {
   width: 22px;
@@ -274,24 +253,6 @@ body,
   align-items: center;
   justify-content: center;
 }
-.settings-modal {
-  width: 460px;
-  max-width: 92vw;
-  max-height: 86vh;
-  overflow: auto;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--bd);
-  border-radius: 10px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-}
-.settings-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--bd-soft);
-}
 .settings-title {
   font-weight: 600;
   font-size: 14px;
@@ -322,66 +283,10 @@ body,
   opacity: 0.55;
   margin: 14px 0 6px;
 }
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
-}
-.settings-row label {
-  font-size: 13px;
-  opacity: 0.9;
-  flex: 0 0 auto;
-}
 .settings-row input[type="text"],
 .settings-row input[type="number"],
-.settings-row select {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 260px;
-  background: rgba(127, 127, 127, 0.12);
-  color: var(--fg);
-  border: 1px solid var(--bd);
-  border-radius: 6px;
-  padding: 5px 8px;
-  font-size: 12px;
-  font-family: inherit;
-  outline: none;
-}
-.settings-row input[type="number"] {
-  max-width: 100px;
-}
-.settings-row input[type="checkbox"] {
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-.settings-row select {
-  cursor: pointer;
-}
 
 /* 새 프로젝트 모달 */
-.np-folder {
-  flex: 1 1 auto;
-  max-width: 260px;
-  text-align: left;
-  background: rgba(127, 127, 127, 0.12);
-  color: var(--fg);
-  border: 1px solid var(--bd);
-  border-radius: 6px;
-  padding: 5px 8px;
-  font-size: 12px;
-  font-family: inherit;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.np-folder:hover {
-  background: rgba(127, 127, 127, 0.2);
-}
 .np-path {
   font-size: 10px;
   opacity: 0.55;

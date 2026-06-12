@@ -35,6 +35,8 @@ export interface BorderRule {
 
 export const BORDER_RULES: readonly BorderRule[] = [
   // ── B1 외곽 전속 ──────────────────────────────────────────────────────────
+  // 조건부 표면은 상태 공간을 빈틈 없이 커버해야 한다(§B8 전수성 게이트):
+  // "존재해야 하는 상태"와 "존재하면 안 되는 상태"를 모두 단언한다.
   {
     id: "perimeter-frame",
     selector: ".egroup-frame",
@@ -42,6 +44,14 @@ export const BORDER_RULES: readonly BorderRule[] = [
     edges: { top: "bd", right: "bd", bottom: "bd", left: "bd" },
     when: { paneStyle: ["card", "floating"] },
     note: "§B1 — 패널 외곽 4변은 프레임 전속",
+  },
+  {
+    id: "perimeter-frame-flat",
+    selector: ".egroup-frame",
+    kind: "edges",
+    edges: { top: "none", right: "none", bottom: "none", left: "none" },
+    when: { paneStyle: ["flat"] },
+    note: "§B1 보수 — flat 은 프레임 무선(존재하면 안 되는 상태의 단언)",
   },
 
   // ── B3 앱 크롬(카드 영역 바깥) — 본문에서 먼 쪽이 소유, 톤 bd ─────────────
@@ -72,6 +82,13 @@ export const BORDER_RULES: readonly BorderRule[] = [
     kind: "edges",
     edges: { bottom: "bd" },
     note: "§B3 — 우측 사이드바 헤더가 하단 경계 소유",
+  },
+  {
+    id: "plugin-side-status-top",
+    selector: ".plugin-side-status",
+    kind: "edges",
+    edges: { top: "bd" },
+    note: "§B2 — 우측 사이드바 푸터가 본문과의 경계 소유(top)",
   },
   {
     id: "left-host-tabs-bottom",
@@ -186,6 +203,45 @@ export const BORDER_RULES: readonly BorderRule[] = [
     note: "§B6",
   },
 
+  // ── 패널 내부 보조 밴드(B2, 톤 bd-soft) ──────────────────────────────────
+  {
+    id: "bv-bar-bottom",
+    selector: ".bv-bar",
+    kind: "edges",
+    edges: { bottom: "bd-soft" },
+    note: "§B2 — 브라우저 URL 바가 본문(webview)과의 경계 소유",
+  },
+  {
+    id: "bv-bm-list-bottom",
+    selector: ".bv-bm-list",
+    kind: "edges",
+    edges: { bottom: "bd-soft" },
+    note: "§B2 — 즐겨찾기 드롭다운이 본문과의 경계 소유",
+  },
+  {
+    id: "fv-toolbar-bottom",
+    selector: ".fv-toolbar",
+    kind: "edges",
+    edges: { bottom: "bd-soft" },
+    note: "§B2 — 파일 뷰어 툴바가 본문과의 경계 소유",
+  },
+  {
+    id: "fv-banner-bottom",
+    selector: ".fv-banner",
+    kind: "edges",
+    edges: { bottom: "bd-soft" },
+    note: "§B2 — 파일 배너가 본문과의 경계 소유",
+  },
+
+  // ── 세로 모드 컨텐츠 탭(설정 조건 — 부재 시 매치 0으로 자연 skip) ─────────
+  {
+    id: "content-tabs-vertical-right",
+    selector: ".content-tabs.vertical",
+    kind: "edges",
+    edges: { right: "bd" },
+    note: "§B2 — 좌측 세로 탭 스트립은 right 소유",
+  },
+
   // ── 떠 있는 표면(B4 톤 bd) ────────────────────────────────────────────────
   {
     id: "float-surfaces",
@@ -193,5 +249,12 @@ export const BORDER_RULES: readonly BorderRule[] = [
     kind: "edges",
     edges: { top: "bd", right: "bd", bottom: "bd", left: "bd" },
     note: "§B4 — 떠 있는 표면은 4변 bd",
+  },
+  {
+    id: "dmodal-head-bottom",
+    selector: ".dmodal-head",
+    kind: "edges",
+    edges: { bottom: "bd" },
+    note: "§B3 — 모달 헤더가 본문과의 경계 소유",
   },
 ];
