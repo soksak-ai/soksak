@@ -470,6 +470,22 @@ export function registerCatalog(): void {
     },
   });
 
+  register("project.rightbar.toggle", {
+    description: "우측 플러그인 사이드바 토글(⌥⌘B). open 명시 시 그 상태로(멱등)",
+    params: {
+      project: P.project,
+      open: { type: "boolean", description: "명시 시 열림/닫힘 고정" },
+    },
+    returns: "{ rightOpen }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["sok project.rightbar.toggle", 'sok project.rightbar.toggle \'{"open":true}\''],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound("프로젝트 없음");
+      return S().toggleRightSidebar(t.id, p.open as boolean | undefined);
+    },
+  });
+
   // ----- content -----
   register("content.list", {
     description: "프로젝트의 컨텐츠 탭 목록",
