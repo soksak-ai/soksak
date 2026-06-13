@@ -328,30 +328,8 @@ function PluginManagerPanel() {
                 {t("plugin.enable")}
               </button>
             )}
-            {p.source === "installed" && (
-              <button
-                type="button"
-                className="dbtn"
-                disabled={busy}
-                title={t("plugin.update")}
-                onClick={() =>
-                  run(() => usePlugins.getState().update(p.manifest.id))
-                }
-              >
-                <Icon name="arrow-up" size="sm" />
-              </button>
-            )}
-            <button
-              type="button"
-              className="dbtn dbtn-danger"
-              disabled={busy}
-              title={t("plugin.remove")}
-              onClick={() =>
-                run(() => usePlugins.getState().remove(p.manifest.id))
-              }
-            >
-              <Icon name="close" size="sm" />
-            </button>
+            {/* 갱신(↑)·제거(✕) 제거 — 전체 둘러보기(재설치 경로)가 없으므로 삭제는
+                무의미하고 갱신도 불필요. 활성/비활성 토글만 둔다. */}
           </div>
         </div>
       ))}
