@@ -1855,6 +1855,84 @@ export function registerCatalog(): void {
     },
   });
 
+  register("window.snapshot", {
+    description:
+      "창 내용을 PNG 로 저장. 다른 앱에 완전히 가려져 있어도 캡처된다(캡처 순간만 가림감지 자동 해제→복원). WebGL 터미널 포함. 부모 폴더 자동 생성.",
+    params: {
+      path: {
+        type: "string",
+        description: "저장할 .png 경로. 생략 시 임시 폴더",
+      },
+    },
+    returns: "{ saved }",
+    examples: [
+      "sok window.snapshot",
+      'sok window.snapshot \'{"path":"/tmp/shot.png"}\'',
+    ],
+    handler: async (p) => {
+      let path = p.path as string | undefined;
+      if (!path) {
+        const { tempDir, join } = await import("@tauri-apps/api/path");
+        path = await join(
+          await tempDir(),
+          "soksak",
+          `snapshot-${Date.now()}.png`,
+        );
+      }
+      const saved = await invoke<string>("window_snapshot", { path });
+      return { saved };
+    },
+  });
+
+  register("window.record", {
+    description:
+      "창을 연사 캡처해 dir/f0000.png.. 연속 PNG 로 저장(내장 동영상 소스). 가려져 있어도 모든 프레임이 렌더된다(연사 동안 가림감지 해제). 폴더 자동 생성.",
+    params: {
+      dir: {
+        type: "string",
+        description: "프레임 저장 폴더",
+        required: true,
+      },
+      frames: { type: "number", description: "프레임 수(기본 40, 최대 600)" },
+      intervalMs: { type: "number", description: "프레임 간격 ms(기본 40)" },
+    },
+    returns: "{ dir, frames }",
+    examples: [
+      'sok window.record \'{"dir":"/tmp/rec"}\'',
+      'sok window.record \'{"dir":"/tmp/rec","frames":120,"intervalMs":33}\'',
+    ],
+    handler: async (p) => {
+      const dir = p.dir as string;
+      const frames = (p.frames as number | undefined) ?? 40;
+      const intervalMs = (p.intervalMs as number | undefined) ?? 40;
+      const n = await invoke<number>("window_record", {
+        dir,
+        frames,
+        intervalMs,
+      });
+      return { dir, frames: n };
+    },
+  });
+
+  register("window.occlusion", {
+    description:
+      "가림감지 토글. false 면 다른 앱에 완전히 가려져도 렌더를 멈추지 않는다(상시 백그라운드 캡처용 — 배터리 비용 주의). snapshot/record 는 캡처 순간만 자동으로 끄므로 평소엔 불필요.",
+    params: {
+      enabled: {
+        type: "boolean",
+        description: "가림감지 on(기본)/off",
+        required: true,
+      },
+    },
+    returns: "{ occlusion }",
+    examples: ['sok window.occlusion \'{"enabled":false}\''],
+    handler: async (p) => {
+      const enabled = !!p.enabled;
+      await invoke("window_set_occlusion", { enabled });
+      return { occlusion: enabled };
+    },
+  });
+
   register("theme.list", {
     description:
       "사용 가능한 테마 목록(내장 + ~/.soksak/themes 외부) + 검증 실패 파일과 사유",

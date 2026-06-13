@@ -542,6 +542,13 @@ async fn snapshot_to(app: &AppHandle, path: &str) -> Result<(), String> {
     use std::sync::mpsc;
     use std::time::Duration;
 
+    // 부모 디렉터리 보장 — 명령이 자급자족(호출자 mkdir 불필요).
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+    }
+
     let wv = app.get_webview("main").ok_or("main webview 없음")?;
     let (tx, rx) = mpsc::sync_channel::<Result<(), String>>(1);
     let out = path.to_string();
@@ -609,11 +616,40 @@ async fn snapshot_to(app: &AppHandle, path: &str) -> Result<(), String> {
     Ok(())
 }
 
-// 단일 스냅샷 → path. 저장 경로를 그대로 반환.
+// 가림 감지 토글(동기). enabled=false 면 덮여도 렌더 유지 → 캡처 가능.
+#[cfg(target_os = "macos")]
+fn set_occlusion_detection(app: &AppHandle, enabled: bool) -> Result<(), String> {
+    let wv = app.get_webview("main").ok_or("main webview 없음")?;
+    wv.with_webview(move |pw| unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+        let wk = pw.inner() as *mut AnyObject;
+        let _: () = msg_send![&*wk, _setWindowOcclusionDetectionEnabled: enabled];
+    })
+    .map_err(|e| e.to_string())
+}
+
+// 캡처 직전 가림 감지를 끄고 렌더가 재개될 시간을 준다. 덮인(occluded) 창도 캡처
+// 가능해진다. 호출자는 끝나면 set_occlusion_detection(true) 로 복원해야 한다.
+#[cfg(target_os = "macos")]
+async fn arm_capture(app: &AppHandle) -> Result<(), String> {
+    set_occlusion_detection(app, false)?;
+    // 스로틀에서 깨어나 WebGL 이 한 프레임 그릴 여유.
+    tauri::async_runtime::spawn_blocking(|| {
+        std::thread::sleep(std::time::Duration::from_millis(200))
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+// 단일 스냅샷 → path. 저장 경로를 그대로 반환. 덮인 창도 잡도록 가림 감지를 잠깐 끈다.
 #[cfg(target_os = "macos")]
 #[tauri::command]
 pub async fn window_snapshot(app: AppHandle, path: String) -> Result<String, String> {
-    snapshot_to(&app, &path).await?;
+    arm_capture(&app).await?;
+    let r = snapshot_to(&app, &path).await;
+    let _ = set_occlusion_detection(&app, true); // 항상 복원.
+    r?;
     Ok(path)
 }
 
@@ -621,6 +657,22 @@ pub async fn window_snapshot(app: AppHandle, path: String) -> Result<String, Str
 #[tauri::command]
 pub async fn window_snapshot(_app: AppHandle, _path: String) -> Result<String, String> {
     Err("window_snapshot 은 현재 macOS 전용".into())
+}
+
+// 메인 webview 의 가림(occlusion) 감지를 켜고 끈다. 끄면(enabled=false) WebKit 이
+// 창이 다른 창에 완전히 덮여도 렌더를 멈추지 않는다 → 덮인 채로도 WebGL(터미널)이
+// 살아 있어 캡처된다. 전면화/깜빡임 없음. 사적 API(_setWindowOcclusionDetectionEnabled)
+// — 비 App Store 앱이라 허용. 항상 켜 두면 배터리 부담이니 캡처 순간만 끄고 복원할 것.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn window_set_occlusion(app: AppHandle, enabled: bool) -> Result<(), String> {
+    set_occlusion_detection(&app, enabled)
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn window_set_occlusion(_app: AppHandle, _enabled: bool) -> Result<(), String> {
+    Err("window_set_occlusion 은 현재 macOS 전용".into())
 }
 
 // 연사 캡처(내장 "동영상"): dir/f0000.png .. 를 frames 개, interval_ms 간격으로 저장.
@@ -635,16 +687,25 @@ pub async fn window_record(
 ) -> Result<u32, String> {
     use std::time::Duration;
     let n = frames.min(600); // 폭주 방지 상한
+    // 연사 동안 가림 감지를 끈다 — 도중에 창이 덮여도 모든 프레임이 렌더된다.
+    arm_capture(&app).await?;
+    let mut err: Option<String> = None;
     for i in 0..n {
         let path = format!("{dir}/f{i:04}.png");
-        snapshot_to(&app, &path).await?;
+        if let Err(e) = snapshot_to(&app, &path).await {
+            err = Some(e);
+            break;
+        }
         if i + 1 < n {
-            tauri::async_runtime::spawn_blocking(move || {
+            let _ = tauri::async_runtime::spawn_blocking(move || {
                 std::thread::sleep(Duration::from_millis(interval_ms))
             })
-            .await
-            .map_err(|e| e.to_string())?;
+            .await;
         }
+    }
+    let _ = set_occlusion_detection(&app, true); // 항상 복원.
+    if let Some(e) = err {
+        return Err(e);
     }
     Ok(n)
 }

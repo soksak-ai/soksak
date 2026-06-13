@@ -139,6 +139,7 @@ pub fn run() {
             browser::browser_debug_hierarchy,
             browser::window_snapshot,
             browser::window_record,
+            browser::window_set_occlusion,
             window_set_background,
             ipc::cmd_result,
             titlebar::titlebar_backing,
