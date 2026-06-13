@@ -207,12 +207,13 @@ const ProjectPane = memo(function ProjectPane({
       {project.rightOpen && (
         <div
           className="sidebar-right-resizer"
+          style={{ right: rightW - 2 }}
           onMouseDown={startRightResize}
           title={t("plugin.sidebar.resize")}
         />
       )}
       <div
-        className="sidebar-right"
+        className={`sidebar-right${project.rightOpen ? " open" : ""}`}
         style={{
           width: project.rightOpen ? rightW : 0,
           borderLeftWidth: project.rightOpen ? 1 : 0,
@@ -246,6 +247,34 @@ function cwdPaneOf(project: ProjectTab): string | undefined {
   return undefined;
 }
 
+// 빌드 정체성 배지: DEV(HMR 개발 서버) / DEBUG(디버그 번들 soksak-debug) / 없음(릴리스).
+// HMR 은 import.meta.env.DEV 로 즉시 알고, 빌드 번들(DEV=false)은 둘을 앱 이름(getName)
+// 으로 가른다 — productName 이 soksak-dev / soksak-debug / soksak 로 정체성을 인코딩한다.
+function BuildBadge() {
+  const [label, setLabel] = useState<string | null>(
+    import.meta.env.DEV ? "DEV" : null,
+  );
+  useEffect(() => {
+    if (import.meta.env.DEV) return;
+    let alive = true;
+    import("@tauri-apps/api/app")
+      .then((m) => m.getName())
+      .then((name) => {
+        if (alive && name.includes("debug")) setLabel("DEBUG");
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!label) return null;
+  return (
+    <span className={`dev-badge${label === "DEBUG" ? " debug" : ""}`}>
+      {label}
+    </span>
+  );
+}
+
 function App() {
   const t = useT();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -259,6 +288,7 @@ function App() {
   const cursorStyle = useSettings((s) => s.cursorStyle);
   const scrollback = useSettings((s) => s.scrollback);
   const resizeReflow = useSettings((s) => s.resizeReflow);
+  const xtermRenderer = useSettings((s) => s.xtermRenderer);
   const termSettings = useMemo(
     () =>
       terminalSettingsOf({
@@ -268,8 +298,17 @@ function App() {
         cursorStyle,
         scrollback,
         resizeReflow,
+        xtermRenderer,
       }),
-    [fontFamily, fontSize, cursorBlink, cursorStyle, scrollback, resizeReflow],
+    [
+      fontFamily,
+      fontSize,
+      cursorBlink,
+      cursorStyle,
+      scrollback,
+      resizeReflow,
+      xtermRenderer,
+    ],
   );
   // 새 터미널이 현재 설정으로 생성되도록 provider 등록(ref 로 최신값 제공).
   const termSettingsRef = useRef(termSettings);
@@ -586,9 +625,9 @@ function App() {
           aria-hidden
           dangerouslySetInnerHTML={{ __html: logoRaw }}
         />
-        {/* DEV 배지 = 로고 바로 뒤 고정 — 프로젝트 탭(상단 모드)은 이 뒤부터 쌓인다.
-            HMR 개발 빌드에서만 표시(릴리스는 import.meta.env.DEV=false). */}
-        {import.meta.env.DEV && <span className="dev-badge">DEV</span>}
+        {/* 빌드 정체성 배지(DEV=HMR / DEBUG=디버그 번들) — 로고 바로 뒤 고정. 프로젝트
+            탭(상단 모드)은 이 뒤부터 쌓인다. 릴리스(soksak)는 배지 없음. */}
+        <BuildBadge />
         {projectTabPosition === "top" ? (
           <div className="tabs" data-tauri-drag-region>
             {projectTabsList}

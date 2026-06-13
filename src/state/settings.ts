@@ -22,6 +22,15 @@ export type FocusIndicator = "outline" | "corners";
 // 양쪽 모두 PTY resize(SIGWINCH)는 정착 후 1회만 보낸다.
 export type ResizeReflow = "live" | "settle";
 
+// xterm.js 전용 렌더러 백엔드(docs/PERFORMANCE.md [렌더러 선택]). dom/webgl 은
+// xterm 구현에만 있는 개념이라 xterm 스코프로 명명한다 — 다른 터미널 백엔드가
+// 들어오면 자기 스코프 설정을 따로 갖고 일반 term.* 인터페이스는 유지된다.
+//   webgl = GPU 렌더러. 처리량 우선 기본값. 단 창 리사이즈 중 합성 레이어(<canvas>)가
+//           새 크기로 스케일돼 글자가 늘어난다(WKWebView 구조적 한계).
+//   dom   = xterm DOM 렌더러. 리사이즈 정확성이 필요할 때 전환 — macOS WKWebView 라이브
+//           리사이즈에서 글자가 안 늘어난다(WebKit 이 DOM 을 매 프레임 타일 재래스터).
+export type XtermRenderer = "dom" | "webgl";
+
 export interface TerminalSettings {
   fontFamily: string;
   fontSize: number;
@@ -29,6 +38,7 @@ export interface TerminalSettings {
   cursorStyle: CursorStyle;
   scrollback: number;
   resizeReflow: ResizeReflow;
+  xtermRenderer: XtermRenderer;
 }
 
 interface SettingsState extends TerminalSettings {
@@ -76,6 +86,7 @@ interface SettingsState extends TerminalSettings {
   setCursorStyle: (v: CursorStyle) => void;
   setScrollback: (v: number) => void;
   setResizeReflow: (v: ResizeReflow) => void;
+  setXtermRenderer: (v: XtermRenderer) => void;
 }
 
 const DEFAULTS = {
@@ -99,6 +110,7 @@ const DEFAULTS = {
   cursorStyle: "block" as CursorStyle,
   scrollback: 10000,
   resizeReflow: "live" as ResizeReflow,
+  xtermRenderer: "webgl" as XtermRenderer,
 };
 
 const KEY = "soksak.settings";
@@ -122,6 +134,7 @@ export function terminalSettingsOf(s: TerminalSettings): TerminalSettings {
     cursorStyle: s.cursorStyle,
     scrollback: s.scrollback,
     resizeReflow: s.resizeReflow,
+    xtermRenderer: s.xtermRenderer,
   };
 }
 
@@ -224,6 +237,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setResizeReflow: (resizeReflow) => {
       set({ resizeReflow });
+      save();
+    },
+    setXtermRenderer: (xtermRenderer) => {
+      set({ xtermRenderer });
       save();
     },
   };

@@ -225,6 +225,21 @@ pub fn write_terminal(
     data: String,
     manager: State<'_, PtyManager>,
 ) -> Result<(), String> {
+    // [dev 진단] PTY 로 가는 모든 입력 바이트를 /tmp/soksak-pty.log 로 직접 기록한다.
+    // 프론트 트레이스(onData/IME)와 무관하게 claude 등 TUI 가 실제로 받는 입력을 놓치지
+    // 않고 뜬다 — CPR 응답이 onData 를 흔들어 한글 조합을 깨던 회귀를 이걸로 확정했고,
+    // 입력/IME 디버깅의 단일 진실로 상시 둔다. debug 빌드 한정(release 는 컴파일 제외).
+    #[cfg(debug_assertions)]
+    {
+        use std::io::Write as _;
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/soksak-pty.log")
+        {
+            let _ = writeln!(f, "[id={id}] {data:?}");
+        }
+    }
     let mut sessions = manager.sessions.lock().unwrap();
     let session = sessions.get_mut(&id).ok_or("no such terminal")?;
     session

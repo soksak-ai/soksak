@@ -140,6 +140,9 @@ const ko = {
   "settings.resizeReflow": "리사이즈 리플로우",
   "reflow.live": "실시간 (드래그 중 재배치)",
   "reflow.settle": "정착 후 (드래그 끝나면 1회)",
+  "settings.xtermRenderer": "터미널 렌더러",
+  "renderer.dom": "DOM",
+  "renderer.webgl": "WebGL",
   "settings.close": "닫기",
 
   "plugin.sidebar.toggle": "플러그인 사이드바 (⌥⌘B)",
@@ -329,6 +332,9 @@ const en: Record<MsgKey, string> = {
   "settings.resizeReflow": "Resize reflow",
   "reflow.live": "Live (reflow while dragging)",
   "reflow.settle": "On settle (once after drag)",
+  "settings.xtermRenderer": "Terminal renderer",
+  "renderer.dom": "DOM",
+  "renderer.webgl": "WebGL",
   "settings.close": "Close",
 
   "plugin.sidebar.toggle": "Plugin sidebar (⌥⌘B)",

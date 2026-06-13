@@ -11,10 +11,29 @@ import { WebkitImeAddon } from "../vendor/xterm-addon-webkit-ime";
 import { setupShellIntegration } from "./shellIntegration";
 import { onLiveResizeEnd } from "./liveResize";
 import { darkTheme } from "./theme";
-import type { TerminalSettings } from "../state/settings";
+import type { TerminalSettings, XtermRenderer } from "../state/settings";
 
 // editor FlowControlConstants.CharCountAckSize 와 동일.
 const FLOW_ACK_SIZE = 5000;
+
+// IME 진단 트레이스(DEV 전용). [원칙] 진단 로깅은 측정 대상을 교란하면 안 된다 —
+// 매 이벤트마다 invoke(Tauri IPC)를 때리면 WKWebView 조합(marked-text)이 깨진다
+// (claude 등 고빈도 TUI 에서 특히). 그래서 메모리에만 즉시 push 하고, 입력이 멎은
+// 뒤에만(트레일링 디바운스) 한 번 /tmp/soksak-ime.log 로 flush 한다 — 조합 중 invoke 0.
+const _imeLog: string[] = [];
+let _imeFlush: number | undefined;
+function imeTrace(m: string): void {
+  _imeLog.push(m);
+  if (_imeLog.length > 4000) _imeLog.splice(0, _imeLog.length - 4000);
+  if (_imeFlush !== undefined) clearTimeout(_imeFlush);
+  _imeFlush = window.setTimeout(() => {
+    _imeFlush = undefined;
+    void invoke("write_text_file", {
+      path: "/tmp/soksak-ime.log",
+      content: _imeLog.join("\n") + "\n",
+    }).catch(() => {});
+  }, 400);
+}
 
 export interface CreateTerminalOptions {
   cwd?: string;
@@ -57,10 +76,20 @@ export interface TerminalHandle {
 /**
  * editor xtermTerminal.ts 패턴을 따른 터미널 생성:
  * - 폰트 로드 완료 후 open (셀 메트릭 정확)
- * - WebGL 렌더러 + onContextLoss 폴백
- * - Unicode11(wide/CJK), FitAddon, WebLinks, Clipboard
+ * - 렌더러: 설정 xtermRenderer 로 WebGL(기본) ↔ DOM — 아래 [렌더러 선택] 참조
+ * - Unicode11(wide/CJK), WebLinks, Clipboard
  * - devicePixelRatio 변화 처리
  * - PTY 출력은 Channel(raw 바이트) → write(콜백)에서 ACK 플로우 컨트롤
+ *
+ * [렌더러 선택 — WKWebView 합성 stretch 불변식] @MX:ANCHOR
+ * macOS 라이브 리사이즈(inLiveResize) 동안 AppKit 은 redraw 를 멈추고 GPU 합성
+ * 레이어(WebGL 의 <canvas>)를 새 창 크기로 CALayer 스케일한다 → 글자가 늘어난다
+ * (합성 stretch). DOM 은 WebKit 이 매 프레임 타일 재래스터하므로 또렷하다. Chromium
+ * 은 리사이즈 콜백에서 동기 페인트로 회피하지만 WKWebView 엔 그 경로가 없어 Safari
+ * 에도 같은 증상이 있다(구조적 한계). 기본 렌더러는 WebGL(처리량 우선) — 단 리사이즈
+ * 중 늘어남이 따라온다. 리사이즈 정확성이 필요하면 DOM 으로 전환한다(WebKit 이 DOM 을
+ * 재래스터해 안 늘어남): 설정 xtermRenderer=dom(또는 sok settings.set key=xtermRenderer).
+ * 처리량과 정확성의 트레이드오프. 비교·근거: docs/PERFORMANCE.md.
  */
 export async function createTerminal(
   container: HTMLElement,
@@ -104,20 +133,31 @@ export async function createTerminal(
 
   term.open(container);
 
-  // WebGL 렌더러 + 컨텍스트 손실 폴백(canvas/DOM 으로).
+  // 렌더러: 설정(xtermRenderer)으로 WebGL(기본) ↔ DOM. 위 [렌더러 선택] 불변식 참조.
+  // 애드온 미적재 = 내장 DOM 렌더러. WebGL addon 은 dispose 시 DOM 으로 복귀하므로
+  // 런타임 전환(applySettings)이 안전하다 — 컨텍스트 손실 폴백과 동일 경로.
   let webgl: WebglAddon | undefined;
-  try {
-    webgl = new WebglAddon();
-    webgl.onContextLoss(() => {
-      webgl?.dispose();
+  const setRenderer = (mode: XtermRenderer) => {
+    if (mode === "webgl") {
+      if (webgl) return; // 이미 WebGL
+      try {
+        const addon = new WebglAddon();
+        addon.onContextLoss(() => {
+          addon.dispose();
+          if (webgl === addon) webgl = undefined; // 컨텍스트 손실 → DOM 폴백
+        });
+        term.loadAddon(addon);
+        webgl = addon;
+      } catch (e) {
+        console.warn("WebGL 렌더러 사용 불가 — DOM 유지:", e);
+        webgl = undefined;
+      }
+    } else if (webgl) {
+      webgl.dispose(); // → xterm 내장 DOM 렌더러로 복귀
       webgl = undefined;
-    });
-    term.loadAddon(webgl);
-  } catch (e) {
-    console.warn("WebGL renderer unavailable, falling back to DOM:", e);
-    webgl?.dispose();
-    webgl = undefined;
-  }
+    }
+  };
+  setRenderer(s?.xtermRenderer ?? "dom");
 
   // 직접 fit: 컨테이너 전체 크기로 행/열 계산. FitAddon 은 스크롤바용 14px 를 가용
   // 너비에서 빼서 우측에 갭을 만들지만(설치된 0.11.0 기준 overviewRuler?.width || 14),
@@ -158,9 +198,7 @@ export async function createTerminal(
 
   // IME 진단 로깅. 릴리즈 빌드(import.meta.env.DEV=false)에서는 undefined 로 제거된다.
   const imeDebug: ((m: string) => void) | undefined = import.meta.env.DEV
-    ? (m: string) => {
-        invoke("ime_debug", { message: m }).catch(() => {});
-      }
+    ? imeTrace
     : undefined;
 
   const writeToPty = (data: string) => {
@@ -252,7 +290,14 @@ export async function createTerminal(
     if (!skip) {
       // 조합 중 외부 입력(구두점/ASCII 등)이 들어오면 pending 음절을 먼저 PTY로
       // 보내 순서를 보장한다(자+. → 자. , 하+? → 하?).
-      ime.flushPending();
+      //
+      // [HARD] 단 ESC 시퀀스(CPR/DA/OSC 등)는 flush 대상이 아니다 — claude 같은 TUI 는
+      // 커서 위치(DSR `ESC[6n`)를 끊임없이 질의하고, xterm 이 CPR(`ESC[…R`)로 자동 응답
+      // 하는데 그 응답이 이 onData 로 흐른다. flushPending 이 그 응답마다 조합 중인 한글을
+      // 강제 flush 하면 → 첫 자모만 나간 자모 누수(ㅎ)·음절 중복(flush "한" + 최종 commit
+      // "한")이 발생한다. 셸은 커서를 안 물어 안 터지고, claude 만 터지던 근본 원인.
+      // 사용자 평문 입력(비 ESC)만 flush 한다(트레이스: /tmp/soksak-pty.log 로 확정).
+      if (data.charCodeAt(0) !== 0x1b) ime.flushPending();
       writeToPty(data);
     }
   });
@@ -409,8 +454,10 @@ export async function createTerminal(
       term.options.cursorStyle = next.cursorStyle;
       term.options.scrollback = next.scrollback;
       // resizeReflow 설정은 현 리사이즈 정책(네이티브 신호 기반)과 무관 — 보존만.
+      setRenderer(next.xtermRenderer); // 렌더러 라이브 전환(DOM ↔ WebGL) — 변화 없으면 no-op
       webgl?.clearTextureAtlas();
       doResize(true); // 폰트 크기 변경 → 셀 치수 변화 → 즉시 재fit + PTY resize
+      term.refresh(0, term.rows - 1); // 렌더러 전환·설정 변경 후 전체 재페인트
     },
     dispose,
   };

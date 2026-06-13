@@ -66,3 +66,42 @@ WebKit 의 합성(비동기) 스크롤·합성 레이어를 깨는 CSS 를 금�
 실행**된다. 무거운 작업(파싱, 네트워크 후처리, 대량 DOM)은 핸들러 안에서 직접
 하지 말고 defer 한다. 호스트는 상태 diff 를 프레임 단위로 coalesce 해 전달하므로
 이벤트는 "최종 상태" 기준이다 — 틱 단위 중간값에 의존하지 말 것.
+
+## 터미널 렌더러 — WKWebView 합성 stretch (불변식)
+
+증상: macOS 창 가장자리 드래그(라이브 리사이즈) 중 터미널 글자가 늘어난다(흐릿한
+확대). DOM(탭·사이드바)은 멀쩡한데 터미널만.
+
+근본 원인: 라이브 리사이즈 동안 AppKit 은 `inLiveResize` 로 redraw 를 멈추고, GPU
+합성 레이어(WebGL/Canvas 렌더러의 `<canvas>`)를 새 창 크기로 CALayer 스케일한다
+(`layerContentsRedrawPolicy` 가 명시적 redraw 없으면 콘텐츠를 stretch). DOM 은 WebKit
+이 타일을 매 프레임 재래스터하므로 또렷하다. Chromium 은 리사이즈 콜백에서 동기
+페인트로 회피하지만 WKWebView 엔 그 경로가 없어 Safari 에도 같은 증상이 있다. 즉
+**WKWebView + GPU 캔버스는 리사이즈 stretch 를 구조적으로 못 피한다** — 그 캔버스는
+WebKit 내부 합성 레이어라 우리가 contentsGravity 를 만질 수 없다.
+
+규칙:
+
+- 기본 터미널 렌더러는 WebGL(`xtermRenderer: "webgl"`) — 처리량 우선(사용자 기본값).
+  단 창 리사이즈 중 합성 stretch 가 따라온다(원인은 위). 정확성보다 처리량을 택한
+  기본값이다.
+- DOM 은 리사이즈 정확성이 필요할 때 전환 — WebKit 이 DOM 을 매 프레임 재래스터해
+  안 늘어난다. 설정의 "터미널 렌더러" 또는
+  `sok settings.set '{"key":"xtermRenderer","value":"dom"}'`. 살아있는 터미널에
+  라이브 전환된다(WebGL addon load/dispose).
+- [HARD] stretch 를 "본문을 가려서" 숨기는 류의 우회는 금지 — 은폐는 해결이 아니다.
+  렌더러 선택(DOM)만이 근본 해법이다.
+
+근거(2026-06 조사, URL 검증 완료):
+
+- NSView.LayerContentsRedrawPolicy — `never`/`onSetNeedsDisplay` 는 명시적 redraw
+  없으면 레이어 콘텐츠를 리사이즈 시 stretch(`duringViewResize` 는 매 프레임 redraw):
+  <https://developer.apple.com/documentation/appkit/nsview/layercontentsredrawpolicy-swift.enum>
+- Cocoa Live Window Resizing — `inLiveResize`, 콘텐츠 보존은 opt-in 최적화:
+  <https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/CocoaPerformance/Articles/CocoaLiveResize.html>
+- MTKView/SKView 라이브 리사이즈 콘텐츠 stretch(CALayer contentsGravity + redraw 중단):
+  <https://developer.apple.com/forums/thread/94765>
+- servo/webrender #1640 — macOS 는 "리사이즈 콜백에서 반환 전에 한 프레임을 그려야"
+  한다(동기 페인트 부재 시 콘텐츠가 lag/scale): <https://github.com/servo/webrender/issues/1640>
+
+코드 앵커: `createTerminal.ts` [렌더러 선택] @MX:ANCHOR.

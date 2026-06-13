@@ -3,6 +3,7 @@ import {
   useSettings,
   type CursorStyle,
   type ResizeReflow,
+  type XtermRenderer,
   type DefaultProgram,
   type Language,
   type TabPosition,
@@ -330,6 +331,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             >
               <option value="live">{t("reflow.live")}</option>
               <option value="settle">{t("reflow.settle")}</option>
+            </select>
+          </div>
+          <div className="drow">
+            <span className="drow-label">{t("settings.xtermRenderer")}</span>
+            <select
+              className="dctl"
+              value={s.xtermRenderer}
+              onChange={(e) =>
+                s.setXtermRenderer(e.target.value as XtermRenderer)
+              }
+            >
+              <option value="dom">{t("renderer.dom")}</option>
+              <option value="webgl">{t("renderer.webgl")}</option>
             </select>
           </div>
 

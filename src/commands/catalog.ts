@@ -1671,6 +1671,7 @@ export function registerCatalog(): void {
     "cursorStyle",
     "scrollback",
     "resizeReflow",
+    "xtermRenderer",
     "iconSet",
     "iconBox",
     "focusIndicator",
@@ -1695,6 +1696,7 @@ export function registerCatalog(): void {
         cursorStyle: s.cursorStyle,
         scrollback: s.scrollback,
         resizeReflow: s.resizeReflow,
+        xtermRenderer: s.xtermRenderer,
         iconSet: s.iconSet,
         iconBox: s.iconBox,
         focusIndicator: s.focusIndicator,
@@ -1721,7 +1723,7 @@ export function registerCatalog(): void {
       value: {
         type: "json",
         description:
-          "값 — language:ko|en, projectTabPosition:top|left, defaultProgram:string(프로그램 id — program.list 참조, 미등록이면 터미널 폴백), fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, iconSet:string(등록 셋 id — 미등록이면 lucide 폴백 렌더), iconBox:boolean, focusIndicator:outline|corners",
+          "값 — language:ko|en, projectTabPosition:top|left, defaultProgram:string(프로그램 id — program.list 참조, 미등록이면 터미널 폴백), fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, xtermRenderer:dom|webgl, iconSet:string(등록 셋 id — 미등록이면 lucide 폴백 렌더), iconBox:boolean, focusIndicator:outline|corners",
         required: true,
       },
     },
@@ -1786,6 +1788,10 @@ export function registerCatalog(): void {
         case "resizeReflow":
           if (v !== "live" && v !== "settle") return bad("live|settle");
           s.setResizeReflow(v);
+          break;
+        case "xtermRenderer":
+          if (v !== "dom" && v !== "webgl") return bad("dom|webgl");
+          s.setXtermRenderer(v);
           break;
         case "iconSet":
           if (typeof v !== "string" || !v.trim())
