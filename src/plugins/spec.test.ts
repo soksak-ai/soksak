@@ -84,6 +84,16 @@ describe("parseManifest — 수용", () => {
     );
     expect(validation.ok).toBe(true);
   });
+
+  it("template:true 보존, 생략/false 는 미포함", () => {
+    expect(parseManifest(base({ template: true }), "demo").manifest).toMatchObject(
+      { template: true },
+    );
+    expect(parseManifest(base(), "demo").manifest).not.toHaveProperty("template");
+    expect(
+      parseManifest(base({ template: false }), "demo").manifest,
+    ).not.toHaveProperty("template");
+  });
 });
 
 describe("parseManifest — 거부(필수 필드)", () => {
@@ -102,6 +112,7 @@ describe("parseManifest — 거부(필수 필드)", () => {
     ["description 누락", { ...base(), description: undefined }, "description"],
     ["author 비문자열", base({ author: 3 }), "author"],
     ["minAppVersion 비semver", base({ minAppVersion: "v1" }), "minAppVersion"],
+    ["template 비boolean", base({ template: "yes" }), "template"],
   ])("%s → 거부", (_label, raw, field) => {
     const errors = errorsOf(raw);
     expect(errors.some((e) => e.startsWith(field))).toBe(true);

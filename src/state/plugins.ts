@@ -262,6 +262,12 @@ export const usePlugins = create<PluginsState>((set, get) => {
       for (const id of get().enabledIds) {
         const p = get().plugins[id];
         if (!p) continue;
+        // 템플릿은 활성화하지 않는다(enable 게이트로 enabledIds 에 못 들지만,
+        // 설치본이 template 으로 바뀐 경우를 대비한 방어).
+        if (p.manifest.template) {
+          setRuntime(id, { status: "disabled", error: undefined });
+          continue;
+        }
         // dev 소스는 동의 게이트 면제(§0-5 예외 — enable 과 동일 규칙).
         if (
           p.source !== "dev" &&
@@ -354,6 +360,11 @@ export const usePlugins = create<PluginsState>((set, get) => {
     enable: async (id) => {
       const p = get().plugins[id];
       if (!p) return err("TARGET_NOT_FOUND", `플러그인 없음: ${id}`);
+      // 템플릿(읽기 전용)은 활성화 대상이 아니다 — UI 가 토글을 숨기지만 명령
+      // 경로(sok/MCP)도 막는다(단일 게이트).
+      if (p.manifest.template) {
+        return err("INVALID_PARAMS", `템플릿 플러그인은 활성화 대상이 아님: ${id}`);
+      }
       if (p.status === "enabled" && isActive(id)) {
         return ok({ id, status: "enabled" }); // 멱등
       }

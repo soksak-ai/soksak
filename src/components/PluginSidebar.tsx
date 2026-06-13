@@ -248,9 +248,13 @@ function PluginManagerPanel() {
             <span className="plugin-row-name">{localize(p.manifest.name)}</span>
             <span className="plugin-row-ver">v{p.manifest.version}</span>
             {p.source === "dev" && <span className="plugin-badge dev">dev</span>}
-            <span className={`plugin-badge ${statusKey(p)}`}>
-              {t(`plugin.status.${statusKey(p)}`)}
-            </span>
+            {p.manifest.template ? (
+              <span className="plugin-badge template">{t("plugin.template")}</span>
+            ) : (
+              <span className={`plugin-badge ${statusKey(p)}`}>
+                {t(`plugin.status.${statusKey(p)}`)}
+              </span>
+            )}
           </div>
           <div className="plugin-row-desc">{localize(p.manifest.description)}</div>
           {/* 역할 칩 — 검증된 선언(contributes)에서 기계적 파생(산문 카테고리
@@ -307,7 +311,10 @@ function PluginManagerPanel() {
           })()}
           {p.error && <div className="plugin-row-err">{p.error}</div>}
           <div className="plugin-row-actions">
-            {p.status === "enabled" ? (
+            {p.manifest.template ? (
+              // 템플릿(읽기 전용) — 활성화 토글 없음. 상세(설명·기여 칩)는 위에 그대로 노출.
+              <span className="plugin-row-note">{t("plugin.template.note")}</span>
+            ) : p.status === "enabled" ? (
               <button
                 type="button"
                 className="dbtn"

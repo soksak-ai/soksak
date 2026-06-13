@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "description": "soksak 플러그인 시작 템플릿 — 뷰 + 명령 + 이벤트 + 정리(subscriptions)의 최소 동작 예제. 완전 매뉴얼은 MANUAL.md.",
   "entry": "main.js",
+  "template": true,
   "permissions": ["ui", "commands"],
   "contributes": {
     "views": [

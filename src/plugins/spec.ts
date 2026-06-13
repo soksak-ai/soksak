@@ -278,6 +278,7 @@ export interface PluginManifest {
   author?: string;
   entry: string; // 파싱 시 기본 main.js 로 채움. 디렉토리 내부 상대경로만
   minAppVersion?: string;
+  template?: boolean; // true = 개발 템플릿(읽기 전용). 활성화 대상이 아니다 — 목록·상세만 노출하고 토글을 주지 않는다.
   permissions: PluginPermission[];
   contributes: {
     views: ContributedView[]; // "ui" 권한 필수
@@ -420,6 +421,7 @@ export function parseManifest(
       "author",
       "entry",
       "minAppVersion",
+      "template",
       "permissions",
       "contributes",
     ],
@@ -448,6 +450,9 @@ export function parseManifest(
     (!isNonEmptyString(raw.minAppVersion) || !SEMVER_RE.test(raw.minAppVersion))
   ) {
     errors.push("minAppVersion: semver 형식이어야 함");
+  }
+  if (raw.template !== undefined && typeof raw.template !== "boolean") {
+    errors.push("template: true/false 여야 함");
   }
 
   // entry: 디렉토리 내부 상대경로만(탈출 금지), ESM 단일 번들.
@@ -798,6 +803,7 @@ export function parseManifest(
         raw.minAppVersion !== undefined
           ? (raw.minAppVersion as string).trim()
           : undefined,
+      ...(raw.template === true ? { template: true } : {}),
       permissions,
       contributes: { views, commands, formatters, languages, iconSets, programs },
     },
