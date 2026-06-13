@@ -309,11 +309,14 @@ export const GroupArea = memo(function GroupArea({
             ? hitTest(ev.clientX, ev.clientY, rect, sourceGroupId, selfCenterOnly)
             : null;
           if (target) {
-            if (kind === "view") {
-              moveViewToGroup(projectId, id, target.groupId, target.zone);
-            } else {
-              moveGroupToGroup(projectId, id, target.groupId, target.zone);
-            }
+            // 드롭 = 활성(스토어가 도착 그룹을 activeGroupId 로 만든다) — 활성은
+            // 실포커스와 분리될 수 없다(클릭 분기와 동일 불변식). 분할 드롭은
+            // 새 그룹이 생성되므로 결과의 groupId 로 포커스한다.
+            const res =
+              kind === "view"
+                ? moveViewToGroup(projectId, id, target.groupId, target.zone)
+                : moveGroupToGroup(projectId, id, target.groupId, target.zone);
+            if (res.ok) focusGroupPane(res.groupId);
           }
         } else if (kind === "view") {
           setActiveView(projectId, id); // 클릭 = 탭 전환
