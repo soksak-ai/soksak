@@ -27,14 +27,18 @@ help: ## 사용 가능한 명령 목록
 install: ## 의존성 설치(멱등)
 	$(PNPM) install
 
-icons: ## dev(녹색)/debug(주황) 아이콘을 기본 아이콘에서 재생성(멱등)
+icons: ## 앱 아이콘 전체 재생성(SVG→마스터1024 + base/dev/debug 아이덴티티). 멱등
 	@command -v magick >/dev/null || { echo "ImageMagick(magick) 필요"; exit 1; }
-	magick src-tauri/icons/icon.png -fill '#2ec07a' -colorize 42% /tmp/soksak-icon-dev.png
+	bash scripts/logo/appicon.sh
+	cp src-tauri/icons/icon.png /tmp/soksak-icon-master.png   # 1024 스냅샷 — tauri icon 이 icon.png 를 512 로 덮으므로 보존
+	$(PNPM) tauri icon /tmp/soksak-icon-master.png --output src-tauri/icons
+	magick /tmp/soksak-icon-master.png -fill '#2ec07a' -colorize 42% /tmp/soksak-icon-dev.png
 	$(PNPM) tauri icon /tmp/soksak-icon-dev.png --output src-tauri/icons-dev
-	magick src-tauri/icons/icon.png -fill '#ff8c1a' -colorize 45% /tmp/soksak-icon-debug.png
+	magick /tmp/soksak-icon-master.png -fill '#ff8c1a' -colorize 45% /tmp/soksak-icon-debug.png
 	$(PNPM) tauri icon /tmp/soksak-icon-debug.png --output src-tauri/icons-debug
-	@rm -f /tmp/soksak-icon-dev.png /tmp/soksak-icon-debug.png
-	@echo "아이콘 재생성 완료: icons-dev(녹색), icons-debug(주황)"
+	cp /tmp/soksak-icon-master.png src-tauri/icons/icon.png   # 마스터 1024 복원(커밋되는 단일 원본)
+	@rm -f /tmp/soksak-icon-master.png /tmp/soksak-icon-dev.png /tmp/soksak-icon-debug.png
+	@echo "아이콘 재생성 완료: 마스터(1024 SVG벡터)+base+dev(녹색)+debug(주황)"
 
 dev: ## 개발 서버(HMR). 독 이름 "soksak-dev" + DEV 배지
 	$(PNPM) tauri dev
