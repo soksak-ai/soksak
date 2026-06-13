@@ -533,6 +533,133 @@ pub async fn browser_eval(_app: AppHandle, _label: String, _js: String) -> Resul
     Err("browser_eval 은 현재 macOS 전용".into())
 }
 
+// 메인 webview(DOM + WebGL 합성 결과)를 PNG 로 캡처해 path 에 저장한다 — 외부
+// screencapture 없이 앱 내부에서 정확한 프레임을 찍는 통로(E2E/디버그). WKWebView
+// takeSnapshot 은 화면에 합성된 결과(가속 레이어=WebGL 캔버스 포함)를 캡처하므로
+// 터미널 렌더도 찍힌다. 창이 가려지면 WebKit 렌더가 스로틀되니 호출 시 창은 보여야 한다.
+#[cfg(target_os = "macos")]
+async fn snapshot_to(app: &AppHandle, path: &str) -> Result<(), String> {
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let wv = app.get_webview("main").ok_or("main webview 없음")?;
+    let (tx, rx) = mpsc::sync_channel::<Result<(), String>>(1);
+    let out = path.to_string();
+
+    wv.with_webview(move |pw| {
+        use block2::RcBlock;
+        use objc2::msg_send;
+        use objc2::rc::Retained;
+        use objc2_app_kit::{NSBitmapImageFileType, NSBitmapImageRep, NSImage};
+        use objc2_foundation::{NSData, NSError, NSString};
+        use objc2_web_kit::WKWebView;
+
+        unsafe {
+            let wk = &*(pw.inner() as *const WKWebView);
+            let tx = tx.clone();
+            let out = out.clone();
+            // 완료 핸들러: NSImage → TIFF → NSBitmapImageRep → PNG → 파일.
+            let block = RcBlock::new(move |img: *mut NSImage, error: *mut NSError| {
+                let outcome = (|| -> Result<(), String> {
+                    if !error.is_null() {
+                        return Err((*error).localizedDescription().to_string());
+                    }
+                    if img.is_null() {
+                        return Err("snapshot 이미지 nil".into());
+                    }
+                    let image = &*img;
+                    let tiff: Option<Retained<NSData>> = msg_send![image, TIFFRepresentation];
+                    let tiff = tiff.ok_or("TIFF 표현 실패")?;
+                    let rep: Option<Retained<NSBitmapImageRep>> =
+                        msg_send![objc2::class!(NSBitmapImageRep), imageRepWithData: &*tiff];
+                    let rep = rep.ok_or("bitmap rep 실패")?;
+                    // properties=nil → 기본 PNG 인코딩.
+                    let png: Option<Retained<NSData>> = msg_send![
+                        &*rep,
+                        representationUsingType: NSBitmapImageFileType::PNG,
+                        properties: std::ptr::null::<objc2::runtime::AnyObject>()
+                    ];
+                    let png = png.ok_or("PNG 인코딩 실패")?;
+                    let nspath = NSString::from_str(&out);
+                    let ok: bool = msg_send![&*png, writeToFile: &*nspath, atomically: true];
+                    if ok {
+                        Ok(())
+                    } else {
+                        Err("파일 쓰기 실패".into())
+                    }
+                })();
+                let _ = tx.try_send(outcome);
+            });
+            // config=nil → 현재 보이는 전체 콘텐츠.
+            let _: () = msg_send![
+                wk,
+                takeSnapshotWithConfiguration: std::ptr::null::<objc2::runtime::AnyObject>(),
+                completionHandler: &*block
+            ];
+        }
+    })
+    .map_err(|e| e.to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        rx.recv_timeout(Duration::from_secs(5))
+            .map_err(|_| "snapshot 시간 초과".to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    Ok(())
+}
+
+// 단일 스냅샷 → path. 저장 경로를 그대로 반환.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub async fn window_snapshot(app: AppHandle, path: String) -> Result<String, String> {
+    snapshot_to(&app, &path).await?;
+    Ok(path)
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub async fn window_snapshot(_app: AppHandle, _path: String) -> Result<String, String> {
+    Err("window_snapshot 은 현재 macOS 전용".into())
+}
+
+// 연사 캡처(내장 "동영상"): dir/f0000.png .. 를 frames 개, interval_ms 간격으로 저장.
+// 외부에서 동시에 리사이즈 스톰을 돌리면 전환 프레임을 정확히 잡는다. 반환=찍은 수.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub async fn window_record(
+    app: AppHandle,
+    dir: String,
+    frames: u32,
+    interval_ms: u64,
+) -> Result<u32, String> {
+    use std::time::Duration;
+    let n = frames.min(600); // 폭주 방지 상한
+    for i in 0..n {
+        let path = format!("{dir}/f{i:04}.png");
+        snapshot_to(&app, &path).await?;
+        if i + 1 < n {
+            tauri::async_runtime::spawn_blocking(move || {
+                std::thread::sleep(Duration::from_millis(interval_ms))
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(n)
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub async fn window_record(
+    _app: AppHandle,
+    _dir: String,
+    _frames: u32,
+    _interval_ms: u64,
+) -> Result<u32, String> {
+    Err("window_record 은 현재 macOS 전용".into())
+}
+
 // 네이티브 child webview 위 클릭은 메인 webview DOM 에 도달하지 않아 포커스
 // 추적(activeGroup)이 끊긴다. NSEvent 로컬 모니터로 메인 윈도 안 모든 좌클릭의
 // 좌표(top-left logical)를 프론트에 emit 한다 — 감지는 네이티브가, 판정(어느

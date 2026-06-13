@@ -94,6 +94,9 @@ test-front: ## 프론트엔드 단위 테스트(vitest)
 
 verify: typecheck check test test-front ## 타입체크 + Rust/프론트 테스트(커밋 전 검증)
 
+e2e-resize: ## 리사이즈 E2E(기계 측정 — blank/프롬프트/TUI). macOS+앱 실행+동의 필요
+	scripts/e2e/resize.sh --identity $${IDENTITY:-dev}
+
 clean: ## 빌드 산출물 제거(dist, 번들)
 	rm -rf dist src-tauri/target/release/bundle src-tauri/target/debug/bundle
 

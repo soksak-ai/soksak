@@ -137,6 +137,8 @@ pub fn run() {
             browser::browser_eval,
             browser::browser_overlay_active,
             browser::browser_debug_hierarchy,
+            browser::window_snapshot,
+            browser::window_record,
             window_set_background,
             ipc::cmd_result,
             titlebar::titlebar_backing,
