@@ -259,6 +259,11 @@ export const GroupArea = memo(function GroupArea({
   const startDrag = useCallback(
     (kind: "view" | "group", id: string) => (e: React.MouseEvent) => {
       if (e.button !== 0) return;
+      // 탭/그룹 드래그가 에디터(.cm-content)·터미널 본문을 네이티브 선택으로 칠하지
+      // 않도록 mousedown 시점에 선택을 원천 차단한다 — 이후 user-select 변경으로는
+      // 이미 시작된 선택을 못 막는다(App.css .app-root 주석 참조). 클릭(탭 전환)은
+      // mouseup 에서 처리하므로 영향 없다.
+      e.preventDefault();
       const startX = e.clientX;
       const startY = e.clientY;
       const cells = cellsRef.current;
