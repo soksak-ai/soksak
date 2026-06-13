@@ -31,6 +31,8 @@ serde_json = "1"
 portable-pty = "0.9"
 base64 = "0.22"
 tauri-plugin-dialog = "2.7.1"
+# webview 캡처(DOM+WebGL, 가림 캡처) — 별도 저장소 플러그인(공개·재사용 의도). path 의존.
+tauri-plugin-webview-capture = { path = "../../tauri-plugin-webview-capture" }
 # 파일 트리 라이브 갱신용 파일시스템 워처(macOS=FSEvents, Linux=inotify, Win=ReadDirectoryChangesW).
 # 폴링 없이 OS 네이티브 이벤트. debouncer-mini 로 변경 폭주를 묶는다.
 notify-debouncer-mini = "0.6"

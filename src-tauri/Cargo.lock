@@ -3399,6 +3399,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
+ "tauri-plugin-webview-capture",
 ]
 
 [[package]]
@@ -3777,6 +3778,27 @@ dependencies = [
  "url",
  "windows",
  "zbus",
+]
+
+[[package]]
+name = "tauri-plugin-webview-capture"
+version = "0.1.0"
+dependencies = [
+ "block2",
+ "cairo-rs",
+ "gio",
+ "glib",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-web-kit",
+ "serde",
+ "tauri",
+ "tauri-plugin",
+ "webkit2gtk",
+ "webview2-com",
+ "windows",
+ "windows-core 0.61.2",
 ]
 
 [[package]]

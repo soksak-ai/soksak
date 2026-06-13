@@ -62,6 +62,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_webview_capture::init())
         .manage(PtyManager::default())
         .manage(FsWatcher::default())
         .manage(CmdBridge::default())
@@ -137,9 +138,6 @@ pub fn run() {
             browser::browser_eval,
             browser::browser_overlay_active,
             browser::browser_debug_hierarchy,
-            browser::window_snapshot,
-            browser::window_record,
-            browser::window_set_occlusion,
             window_set_background,
             ipc::cmd_result,
             titlebar::titlebar_backing,

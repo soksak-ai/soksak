@@ -1879,7 +1879,9 @@ export function registerCatalog(): void {
           `snapshot-${Date.now()}.png`,
         );
       }
-      const saved = await invoke<string>("window_snapshot", { path });
+      const saved = await invoke<string>("plugin:webview-capture|snapshot", {
+        path,
+      });
       return { saved };
     },
   });
@@ -1905,7 +1907,7 @@ export function registerCatalog(): void {
       const dir = p.dir as string;
       const frames = (p.frames as number | undefined) ?? 40;
       const intervalMs = (p.intervalMs as number | undefined) ?? 40;
-      const n = await invoke<number>("window_record", {
+      const n = await invoke<number>("plugin:webview-capture|record", {
         dir,
         frames,
         intervalMs,
@@ -1928,7 +1930,7 @@ export function registerCatalog(): void {
     examples: ['sok window.occlusion \'{"enabled":false}\''],
     handler: async (p) => {
       const enabled = !!p.enabled;
-      await invoke("window_set_occlusion", { enabled });
+      await invoke("plugin:webview-capture|set_occlusion", { enabled });
       return { occlusion: enabled };
     },
   });

@@ -10,6 +10,7 @@
     "core:window:allow-set-position",
     "core:window:allow-set-theme",
     "opener:default",
-    "dialog:default"
+    "dialog:default",
+    "webview-capture:default"
   ]
 }
