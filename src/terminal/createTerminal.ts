@@ -135,8 +135,9 @@ export async function createTerminal(
     const cols = Math.max(2, Math.floor(container.clientWidth / cell.width));
     const rows = Math.max(1, Math.floor(container.clientHeight / cell.height));
     if (cols !== term.cols || rows !== term.rows) {
-      // FitAddon 과 동일하게 리사이즈 전 렌더 캐시를 비운다(잔상/글리프 캐시 방지).
-      core._renderService?.clear?.();
+      // _renderService.clear() 는 호출하지 않는다 — 현재 xterm.js FitAddon 에는
+      // 없는 옛 번들의 유물이고, 캔버스를 통째로 비워 WebKit 이 페인트를 멈춘
+      // inLiveResize 중에 빈(깜빡) 프레임을 만든다. resize() 가 재렌더를 책임진다.
       term.resize(cols, rows);
     }
   };
@@ -255,19 +256,34 @@ export async function createTerminal(
     }
   });
 
-  // 리사이즈 정책(docs/PERFORMANCE.md 원칙 4·5): fit(시각)과 PTY resize(IPC →
-  // SIGWINCH)를 분리한다. ResizeObserver 는 드래그 중 틱마다 발화하는데, 그때마다
-  // PTY 에 resize 를 보내면 셸/TUI 가 수 초간 연쇄 재그리기를 한다(지연 스파이크).
-  //   live   : fit 은 rAF 당 1회(실시간 리플로우), PTY 는 정착 후 1회
-  //   settle : fit·PTY 모두 정착 후 1회
+  // 리사이즈 정책(WKWebView 깜빡임/잘림 회피 — docs/PERFORMANCE.md 원칙 4·5):
+  // 드래그 중에는 캔버스를 리사이즈하지 않는다(트레일링 디바운스로 합친다).
+  // WKWebView 는 macOS inLiveResize 동안 콘텐츠 페인트를 멈추므로, 매 프레임
+  // term.resize() 로 WebGL 캔버스를 리사이즈하면 ① 재렌더가 합성 전에 못 끝나
+  // 본문이 빈 프레임으로 깜빡이고 ② 수십 번의 resize 가 렌더러 내부 치수와
+  // 레이스를 일으켜 중간 폭으로 굳은 "잘린" 렌더가 남는다(둘 다 실측 확인).
+  // 대신 리사이즈가 멈출 때 한 번만 fit → CoreAnimation 이 드래그 중엔 직전
+  // 렌더를 매끈하게 늘린다(editor terminalResizeDebouncer / kitty / WezTerm 의
+  // 관측 동작과 동일). 정착 후의 단일 refresh 로 최종 치수의 깨끗한 재렌더를 보장.
+  //   live   : 짧은 디바운스(FIT_LIVE_MS) — 잠깐 멈추면 곧 reflow
+  //   settle : 긴 디바운스(PTY_RESIZE_SETTLE_MS) — CPU 최소
+  // PTY resize(SIGWINCH)는 항상 정착 후 1회(셸/TUI 연쇄 재그리기 방지).
   // immediate=true 는 포커스/노출/폰트 변경처럼 지금 맞춰야 하는 경로.
   const PTY_RESIZE_SETTLE_MS = 150;
+  const FIT_LIVE_MS = 90;
   let reflow = s?.resizeReflow ?? "live";
-  let fitRaf = 0;
+  let fitTimer: number | undefined;
   let settleTimer: number | undefined;
   const safeFit = () => {
     try {
+      const before = `${term.cols}x${term.rows}`;
       fitTerminal();
+      // 치수가 바뀌었으면 최종 폭으로 전체 행을 한 번 강제 재렌더 — 빠른 리사이즈
+      // 레이스로 캔버스에 남을 수 있는 잘린/스테일 글리프를 정리한다(정착 시 1회뿐
+      // 이라 깜빡임 없음).
+      if (`${term.cols}x${term.rows}` !== before) {
+        term.refresh(0, term.rows - 1);
+      }
     } catch {
       /* 컨테이너가 0 크기일 때 등 무시 */
     }
@@ -283,9 +299,9 @@ export async function createTerminal(
   };
   const doResize = (immediate = false) => {
     if (immediate) {
-      if (fitRaf) {
-        cancelAnimationFrame(fitRaf);
-        fitRaf = 0;
+      if (fitTimer !== undefined) {
+        clearTimeout(fitTimer);
+        fitTimer = undefined;
       }
       if (settleTimer !== undefined) {
         clearTimeout(settleTimer);
@@ -304,16 +320,19 @@ export async function createTerminal(
     ) {
       return;
     }
-    if (reflow === "live" && !fitRaf) {
-      fitRaf = requestAnimationFrame(() => {
-        fitRaf = 0;
+    // fit 은 트레일링 디바운스(드래그가 멈출 때 1회) — 매 프레임 캔버스 리사이즈
+    // 금지가 깜빡임/잘림의 핵심 수정.
+    clearTimeout(fitTimer);
+    fitTimer = window.setTimeout(
+      () => {
+        fitTimer = undefined;
         safeFit();
-      });
-    }
+      },
+      reflow === "live" ? FIT_LIVE_MS : PTY_RESIZE_SETTLE_MS,
+    );
     clearTimeout(settleTimer);
     settleTimer = window.setTimeout(() => {
       settleTimer = undefined;
-      if (reflow !== "live") safeFit();
       syncPty();
     }, PTY_RESIZE_SETTLE_MS);
   };
@@ -341,7 +360,7 @@ export async function createTerminal(
   const dispose = () => {
     container.removeEventListener("paste", onPaste, true);
     resizeObserver.disconnect();
-    if (fitRaf) cancelAnimationFrame(fitRaf);
+    clearTimeout(fitTimer);
     clearTimeout(settleTimer);
     dprCleanup?.();
     dataSub.dispose();
