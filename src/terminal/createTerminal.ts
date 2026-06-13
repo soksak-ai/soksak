@@ -9,6 +9,7 @@ import "@xterm/xterm/css/xterm.css";
 
 import { WebkitImeAddon } from "../vendor/xterm-addon-webkit-ime";
 import { setupShellIntegration } from "./shellIntegration";
+import { onLiveResizeEnd } from "./liveResize";
 import { darkTheme } from "./theme";
 import type { TerminalSettings } from "../state/settings";
 
@@ -256,38 +257,24 @@ export async function createTerminal(
     }
   });
 
-  // 리사이즈 정책(WKWebView 깜빡임/잘림 회피 — docs/PERFORMANCE.md 원칙 4·5):
-  // 드래그 중에는 캔버스를 리사이즈하지 않는다(트레일링 디바운스로 합친다).
-  // WKWebView 는 macOS inLiveResize 동안 콘텐츠 페인트를 멈추므로, 매 프레임
-  // term.resize() 로 WebGL 캔버스를 리사이즈하면 ① 재렌더가 합성 전에 못 끝나
-  // 본문이 빈 프레임으로 깜빡이고 ② 수십 번의 resize 가 렌더러 내부 치수와
-  // 레이스를 일으켜 중간 폭으로 굳은 "잘린" 렌더가 남는다(둘 다 실측 확인).
-  // 대신 리사이즈가 멈출 때 한 번만 fit → CoreAnimation 이 드래그 중엔 직전
-  // 렌더를 매끈하게 늘린다(editor terminalResizeDebouncer / kitty / WezTerm 의
-  // 관측 동작과 동일). 정착 후의 단일 refresh 로 최종 치수의 깨끗한 재렌더를 보장.
-  //   live   : 짧은 디바운스(FIT_LIVE_MS) — 잠깐 멈추면 곧 reflow
-  //   settle : 긴 디바운스(PTY_RESIZE_SETTLE_MS) — CPU 최소
-  // PTY resize(SIGWINCH)는 항상 정착 후 1회(셸/TUI 연쇄 재그리기 방지).
-  // immediate=true 는 포커스/노출/폰트 변경처럼 지금 맞춰야 하는 경로.
-  const PTY_RESIZE_SETTLE_MS = 150;
-  const FIT_LIVE_MS = 90;
-  let reflow = s?.resizeReflow ?? "live";
+  // 리사이즈 정책(라이브 reflow + blank 없음 + 프롬프트 정합 — PERFORMANCE.md 원칙 4·5):
+  // 드래그 중에도 화면이 새 폭에 맞춰 reflow 하되(라이브), fit·PTY 를 함께 "스로틀"한다.
+  //  ① 왜 스로틀(매 프레임 아님): 빠른 드래그는 프레임당 cols 가 크게 점프해 매 프레임
+  //     reflow(스크롤백 비례)+캔버스 리얼록이 16ms 예산을 넘긴다 → xterm 의 rAF 렌더가
+  //     한 번도 완료 못 해 본문이 통째로 비는(blank) 프레임이 지속된다(실측). 느린
+  //     드래그는 작은 reflow 라 멀쩡. FIT_THROTTLE_MS 간격이면 그 사이 렌더가 완료돼
+  //     빠른 드래그도 라이브로 보이며 blank 가 없다(leading+trailing).
+  //  ② 왜 PTY 도 함께(과거엔 150ms 디바운스): 셸은 정적 프롬프트를 SIGWINCH 때만 다시
+  //     그린다. PTY 를 끝에만 보내면 드래그 중 셸이 SIGWINCH 를 못 받아, xterm 이 reflow
+  //     하며 cursor(프롬프트) 줄을 망가뜨린 채 남는다(시작=끝 폭이면 net SIGWINCH 0 →
+  //     영영 안 고쳐짐 — 실측). 네이티브 터미널처럼 드래그 중 SIGWINCH 를 보내면 셸이
+  //     매 틱 프롬프트를 새 폭으로 다시 그려 항상 정확하다. 스로틀(50ms=20Hz)이라 TUI
+  //     재그리기 부담도 네이티브 수준.
+  // _renderService.clear() 는 제거 유지(캔버스를 비워 깜빡임 유발 — 옛 번들 유물).
+  // 치수 변화 시 term.refresh(전체 행)로 최종 폭 깨끗이 재렌더(비우지 않아 깜빡임 없음).
+  const FIT_THROTTLE_MS = 50; // 렌더 1회가 완료될 여유(reflow+그리기 < 50ms)
+  let lastFitAt = 0;
   let fitTimer: number | undefined;
-  let settleTimer: number | undefined;
-  const safeFit = () => {
-    try {
-      const before = `${term.cols}x${term.rows}`;
-      fitTerminal();
-      // 치수가 바뀌었으면 최종 폭으로 전체 행을 한 번 강제 재렌더 — 빠른 리사이즈
-      // 레이스로 캔버스에 남을 수 있는 잘린/스테일 글리프를 정리한다(정착 시 1회뿐
-      // 이라 깜빡임 없음).
-      if (`${term.cols}x${term.rows}` !== before) {
-        term.refresh(0, term.rows - 1);
-      }
-    } catch {
-      /* 컨테이너가 0 크기일 때 등 무시 */
-    }
-  };
   const syncPty = () => {
     if (termId !== 0) {
       invoke("resize_terminal", {
@@ -297,15 +284,41 @@ export async function createTerminal(
       }).catch(() => {});
     }
   };
+  const safeFit = () => {
+    try {
+      lastFitAt = performance.now();
+      const before = `${term.cols}x${term.rows}`;
+      fitTerminal();
+      if (`${term.cols}x${term.rows}` !== before) {
+        term.refresh(0, term.rows - 1);
+        syncPty(); // 셸에 SIGWINCH — 정적 프롬프트도 새 폭으로 다시 그린다.
+      }
+    } catch {
+      /* 컨테이너가 0 크기일 때 등 무시 */
+    }
+  };
+  // fit+PTY 스로틀(leading+trailing): 직전 fit 후 THROTTLE 경과면 즉시, 아니면 남은
+  // 시간 뒤 1회 — 연속 드래그 중 빈도를 렌더·셸이 따라올 수준으로 제한한다.
+  const scheduleFit = () => {
+    const since = performance.now() - lastFitAt;
+    if (since >= FIT_THROTTLE_MS) {
+      if (fitTimer !== undefined) {
+        clearTimeout(fitTimer);
+        fitTimer = undefined;
+      }
+      safeFit();
+    } else if (fitTimer === undefined) {
+      fitTimer = window.setTimeout(() => {
+        fitTimer = undefined;
+        safeFit();
+      }, FIT_THROTTLE_MS - since);
+    }
+  };
   const doResize = (immediate = false) => {
     if (immediate) {
       if (fitTimer !== undefined) {
         clearTimeout(fitTimer);
         fitTimer = undefined;
-      }
-      if (settleTimer !== undefined) {
-        clearTimeout(settleTimer);
-        settleTimer = undefined;
       }
       safeFit();
       syncPty();
@@ -320,25 +333,13 @@ export async function createTerminal(
     ) {
       return;
     }
-    // fit 은 트레일링 디바운스(드래그가 멈출 때 1회) — 매 프레임 캔버스 리사이즈
-    // 금지가 깜빡임/잘림의 핵심 수정.
-    clearTimeout(fitTimer);
-    fitTimer = window.setTimeout(
-      () => {
-        fitTimer = undefined;
-        safeFit();
-      },
-      reflow === "live" ? FIT_LIVE_MS : PTY_RESIZE_SETTLE_MS,
-    );
-    clearTimeout(settleTimer);
-    settleTimer = window.setTimeout(() => {
-      settleTimer = undefined;
-      syncPty();
-    }, PTY_RESIZE_SETTLE_MS);
+    scheduleFit();
   };
 
   const resizeObserver = new ResizeObserver(() => doResize());
   resizeObserver.observe(container);
+  // 라이브 리사이즈 끝(네이티브 신호) → 마지막 프레임을 한 번 더 즉시 보정.
+  const offResizeEnd = onLiveResizeEnd(() => doResize(true));
 
   // devicePixelRatio 변화(모니터 간 이동 등) → 렌더러 갱신 + 재fit.
   let dprCleanup: (() => void) | undefined;
@@ -360,8 +361,8 @@ export async function createTerminal(
   const dispose = () => {
     container.removeEventListener("paste", onPaste, true);
     resizeObserver.disconnect();
+    offResizeEnd();
     clearTimeout(fitTimer);
-    clearTimeout(settleTimer);
     dprCleanup?.();
     dataSub.dispose();
     shellIntegration.dispose();
@@ -407,7 +408,7 @@ export async function createTerminal(
       term.options.cursorBlink = next.cursorBlink;
       term.options.cursorStyle = next.cursorStyle;
       term.options.scrollback = next.scrollback;
-      reflow = next.resizeReflow;
+      // resizeReflow 설정은 현 리사이즈 정책(네이티브 신호 기반)과 무관 — 보존만.
       webgl?.clearTextureAtlas();
       doResize(true); // 폰트 크기 변경 → 셀 치수 변화 → 즉시 재fit + PTY resize
     },

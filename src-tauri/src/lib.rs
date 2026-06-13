@@ -92,6 +92,8 @@ pub fn run() {
                 browser::install_click_monitor(app.handle());
                 // 레이어 역전: DOM(메인 webview)이 항상 최상위(browser.rs 머리말).
                 browser::install_layer_inversion(app.handle());
+                // 라이브 리사이즈 시작/끝 신호(터미널 fit 타이밍 — browser.rs 참조).
+                browser::install_live_resize_monitor(app.handle());
             }
             Ok(())
         })

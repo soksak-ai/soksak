@@ -591,3 +591,59 @@ pub fn install_click_monitor(app: &AppHandle) {
     // 모니터는 앱 수명 동안 유지 — drop 되면 해제되므로 의도적으로 leak.
     std::mem::forget(monitor);
 }
+
+// 창 라이브 리사이즈(가장자리 드래그) 시작/끝을 네이티브로 감지해 프론트에 emit.
+// 왜 네이티브인가: JS(ResizeObserver)는 "리사이즈 중"만 알 뿐 "끝났다"를 모른다 →
+// 디바운스 추측으로 반영 지연이 생긴다(사용자 지적). 네이티브 신호는 정확하다 —
+// 드래그 중엔 터미널 fit 을 멈춰 깜빡임 0, 놓는 즉시(didEnd) 0지연 reflow.
+// 멀티플랫폼: 프론트는 "window-live-resize" {active} 한 채널만 소비한다. macOS 는
+// NSWindow live-resize 알림이 신호원이고, Windows(WM_ENTER/EXITSIZEMOVE)·Linux 도
+// 같은 이벤트를 자기 신호원으로 먹이면 프론트 로직은 그대로 재사용된다(Tauri 를
+// 쓴 이유 — Rust 가 모든 플랫폼의 네이티브 창 이벤트를 잡는 단일 지점).
+#[cfg(target_os = "macos")]
+pub fn install_live_resize_monitor(app: &AppHandle) {
+    use objc2_app_kit::{
+        NSWindowDidEndLiveResizeNotification, NSWindowWillStartLiveResizeNotification,
+    };
+    use objc2_foundation::{NSNotification, NSNotificationCenter};
+
+    #[derive(Clone, Serialize)]
+    struct LiveResizePayload {
+        active: bool,
+    }
+
+    let Some(main) = app.get_window("main") else {
+        return;
+    };
+    let Ok(main_ns) = main.ns_window() else {
+        return;
+    };
+    let main_ptr = main_ns as usize;
+
+    let center = NSNotificationCenter::defaultCenter();
+    // 통지 이름 상수는 extern static — 접근은 unsafe(읽기 전용, 항상 유효).
+    let events: [(bool, &'static objc2_foundation::NSNotificationName); 2] = unsafe {
+        [
+            (true, NSWindowWillStartLiveResizeNotification),
+            (false, NSWindowDidEndLiveResizeNotification),
+        ]
+    };
+    for (active, name) in events {
+        let handle = app.clone();
+        let block = block2::RcBlock::new(move |_note: std::ptr::NonNull<NSNotification>| {
+            // 통지는 메인 스레드에서 게시된다.
+            let _ = handle.emit("window-live-resize", LiveResizePayload { active });
+        });
+        let token = unsafe {
+            center.addObserverForName_object_queue_usingBlock(
+                Some(name),
+                // 이 창의 통지만(브라우저 자식 webview 창/패널 제외).
+                Some(&*(main_ptr as *const objc2::runtime::AnyObject)),
+                None,
+                &block,
+            )
+        };
+        // 옵저버는 앱 수명 동안 유지 — 의도된 leak(창 1개, 설치 1회).
+        std::mem::forget(token);
+    }
+}
