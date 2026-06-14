@@ -4,7 +4,7 @@
 // 색/그림자: 테마+라이트/다크 모드 추종 — fg 명도 + 강조색 보색 hue, 그림자도 모드 적응.
 //   갱신은 MutationObserver(테마/모드 변경 때만 — 매 프레임 아님). 로고처럼 모드에 반응.
 // 퍼포먼스(부차물 — 앱 영향 0): 격리 합성 레이어(각 상어 will-change), 30fps 상한,
-//   비활성/가려짐 정지, 비포커스 시 10fps, 매 프레임 레이아웃 읽기 0.
+//   비활성/가려짐(Page Visibility) 정지, 매 프레임 레이아웃 읽기 0.
 
 export default {
   activate(ctx) {
@@ -158,15 +158,12 @@ export default {
     }
     function start() { if (!raf) { last = 0; acc = 0; flexAcc = 0; raf = requestAnimationFrame(loop); } }
     function stop() { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
-    // 보임 && 포커스 && 비숨김 일 때만 구동. 포커스 아웃되면 throttle 이 아니라 아예 정지(0 비용) — 펫은 안 볼 때 멈춘다.
-    let focused = document.hasFocus();
-    const sync = () => { if (visible && focused && !document.hidden) start(); else stop(); };
+    // 보임 && 비숨김 일 때만 구동(0 비용 정지) — "안 볼 때 멈춘다"의 옳은 신호는 Page Visibility 이지
+    // 키보드 포커스가 아니다. 내장 브라우저(메인과 별개인 child webview)로 포커스가 가면 메인 창에
+    // blur 가 떠도 사용자는 같은 soksak 창을 보는 중 → hasFocus()/blur 게이팅은 펫을 잘못 멈춘다.
+    const sync = () => { if (visible && !document.hidden) start(); else stop(); };
     const onVis = sync;
-    const onFocus = () => { focused = true; sync(); };
-    const onBlur = () => { focused = false; sync(); };
     document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("blur", onBlur);
     sync();
 
     const onMove = (e) => { mx = e.clientX; my = e.clientY; };
@@ -188,8 +185,6 @@ export default {
       mo.disconnect();
       window.removeEventListener("resize", onResize);
       window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("blur", onBlur);
       document.removeEventListener("visibilitychange", onVis);
       layer.remove();
     } });

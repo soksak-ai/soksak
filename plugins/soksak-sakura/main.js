@@ -86,15 +86,12 @@ export default {
     function start() { if (!raf) { last = 0; acc = 0; raf = requestAnimationFrame(loop); } }
     function stop() { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
 
-    // 보임 && 포커스 && 비숨김 일 때만 구동. 비포커스 → 완전 정지(0 비용).
-    let focused = document.hasFocus();
-    const sync = () => { if (visible && focused && !document.hidden) start(); else stop(); };
+    // 보임 && 비숨김 일 때만 구동(0 비용 정지) — "안 볼 때 멈춘다"의 옳은 신호는 Page Visibility 이지
+    // 키보드 포커스가 아니다. 내장 브라우저(메인과 별개인 child webview)로 포커스가 가면 메인 창에
+    // blur 가 떠도 사용자는 같은 soksak 창을 보는 중 → hasFocus()/blur 게이팅은 펫을 잘못 멈춘다.
+    const sync = () => { if (visible && !document.hidden) start(); else stop(); };
     const onVis = sync;
-    const onFocus = () => { focused = true; sync(); };
-    const onBlur = () => { focused = false; sync(); };
     document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("blur", onBlur);
     sync();
 
     const reg = (n, params, h) => ctx.subscriptions.push(ctx.app.commands.register(n, { description: n, params, handler: h }));
@@ -106,8 +103,6 @@ export default {
     ctx.subscriptions.push({ dispose() {
       stop();
       window.removeEventListener("resize", resize);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("blur", onBlur);
       document.removeEventListener("visibilitychange", onVis);
       cv.remove();
     } });
