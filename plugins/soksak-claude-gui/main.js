@@ -1608,6 +1608,7 @@ export default {
       p.liveEl = liveEl;
       const foot = buildInput(paneId);
       p.queue = foot._queue; // 입력 3계층 큐(L3 확정 = renderEntry 에서 confirmUserLine)
+      p.ta = foot._ta; // 입력창 textarea — focus/type 명령이 실제 DOM 경로로 구동
       if (p.queue && p.savedQueue) {
         p.queue.restore(p.savedQueue); // 이전에 닫으며 보존한 대기 항목 복원
         p.savedQueue = null;
@@ -1723,6 +1724,38 @@ export default {
             ? classifyBuffer(term.readBuffer(id, 60) || "")
             : "unknown";
         return { paneId: id, classify: cls, queue: q.snapshot() };
+      },
+    );
+    // GUI 로 화면 이동 = 오버레이 열고 입력창(textarea)에 포커스. 사용자가 GUI 입력으로 가는 동작.
+    reg("focus", PANE_PARAM, (params) => {
+      const id = pick(params);
+      if (!id) return { paneId: null, error: "claude 패널 없음" };
+      if (!panes.get(id)?.open) open(id);
+      const p = panes.get(id);
+      if (!p || !p.ta) return { paneId: id, error: "입력창 없음" };
+      p.ta.focus();
+      return { paneId: id, open: !!p.open, focused: document.activeElement === p.ta };
+    });
+    // 입력창에 실제 입력 = textarea 에 값 넣고 진짜 Enter keydown 을 디스패치 → GUI 의 send
+    // 핸들러(ta.value 읽어 큐 enqueue)를 그대로 실행. 우회 없이 textarea→Enter→큐 글루를 탄다.
+    reg(
+      "type",
+      { ...PANE_PARAM, text: { type: "string", description: "입력창에 칠 텍스트", required: true } },
+      (params) => {
+        const id = pick(params);
+        if (!id) return { paneId: null, error: "claude 패널 없음" };
+        if (!panes.get(id)?.open) open(id);
+        const p = panes.get(id);
+        if (!p || !p.ta) return { paneId: id, error: "입력창 없음" };
+        const text = String(params.text == null ? "" : params.text);
+        if (!text.trim()) return { paneId: id, error: "빈 텍스트" };
+        p.ta.focus();
+        p.ta.value = text;
+        p.ta.dispatchEvent(new Event("input", { bubbles: true }));
+        p.ta.dispatchEvent(
+          new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+        );
+        return { paneId: id, queue: p.queue ? p.queue.snapshot() : [] };
       },
     );
     // 현재 큐 스냅샷(비동기 진행 폴링용). 각 항목 {text,state,reason}.

@@ -12,6 +12,8 @@
       { "name": "open", "title": { "en": "Open Claude GUI", "ko": "Claude GUI 열기" } },
       { "name": "close", "title": { "en": "Close Claude GUI", "ko": "Claude GUI 닫기" } },
       { "name": "send", "title": { "en": "Send input (returns queue status)", "ko": "입력 전송(큐 상태 반환)" } },
+      { "name": "focus", "title": { "en": "Focus GUI input box", "ko": "GUI 입력창 포커스(화면 이동)" } },
+      { "name": "type", "title": { "en": "Type into GUI input box + Enter", "ko": "GUI 입력창에 입력+Enter" } },
       { "name": "queue", "title": { "en": "Get input queue snapshot", "ko": "입력 큐 스냅샷 조회" } },
       { "name": "state", "title": { "en": "Get overlay render state (e2e)", "ko": "오버레이 렌더 상태 조회(e2e)" } }
     ]

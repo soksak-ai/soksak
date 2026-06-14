@@ -25,11 +25,15 @@ GUI 입력은 claude PTY 로 주입되는데, claude 가 **다이얼로그(/stat
 - `toggle [paneId]` — GUI 켜기/끄기(생략 = 최근 claude 패널)
 - `open [paneId]` / `close [paneId]` — 열기/닫기
 - `send {text, [paneId]}` — 입력 + **즉시 큐 상태 반환**(JSON). 반환 = `{ classify, queue:[{text,state,reason}] }`. 비동기라 최종 "실제 입력(L3)"은 아래 `queue` 로 폴링. GUI 미오픈이면 자동 open.
+- `focus [paneId]` — GUI 로 화면 이동 = 오버레이 열고 **입력창(textarea)에 포커스**. 반환 `{ focused }`.
+- `type {text, [paneId]}` — **입력창에 실제 타이핑 + Enter**. `send`(큐 직접 enqueue)와 달리 textarea 값 설정 후 **진짜 Enter keydown 이벤트를 디스패치**해 GUI 의 입력 핸들러(ta.value→큐)를 그대로 태운다. 실제 GUI 입력 경로 검증용.
 - `queue [paneId]` — 현재 입력 큐 스냅샷 조회(진행 폴링용)
 
 ```bash
 sok plugin.soksak-claude-gui.send '{"text":"안녕"}'
 # → { "classify":"modal", "queue":[{"text":"안녕","state":"held","reason":"modal"}] }
+sok plugin.soksak-claude-gui.focus      # GUI 입력창으로 화면 이동
+sok plugin.soksak-claude-gui.type '{"text":"안녕"}'   # 입력창에 실제 타이핑+Enter
 sok plugin.soksak-claude-gui.queue
 ```
 
