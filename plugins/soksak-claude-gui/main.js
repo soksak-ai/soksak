@@ -288,6 +288,20 @@ export function toolResultSummary(name, resultText) {
   }
 }
 
+// 활성 세션 선택 정책 = 프로젝트 dir 에서 "활발히 append 되는 jsonl(newest mtime)".
+// children = fs.list 의 항목들({ name, dir, modified(unix sec) }). since(unix sec) 이전 수정
+// 파일은 후보에서 제외(startup stale 방지) — 단 resume 한 옛 세션도 append 되면 mtime 이 갱신돼
+// 다시 후보가 된다. 그래서 /resume 로 다른 세션을 골라 그 세션이 쓰이면 즉시 그 세션을 고른다.
+// session-env 마커는 쓰지 않는다(codex companion·서브에이전트·헤드리스로 오염, resume 미반영).
+export function pickActiveSession(children, since) {
+  let jsonls = (children || []).filter(
+    (c) => c && !c.dir && /^[0-9a-f-]{36}\.jsonl$/.test(c.name),
+  );
+  if (since) jsonls = jsonls.filter((c) => (c.modified || 0) >= since);
+  jsonls.sort((a, b) => (b.modified || 0) - (a.modified || 0));
+  return jsonls.length ? jsonls[0].name.replace(/\.jsonl$/, "") : null;
+}
+
 export default {
   activate(ctx) {
     const CLAUDE_RE = /(^|\s|\/)claude(\s|$)/;
@@ -1406,40 +1420,16 @@ export default {
     // root 는 세션이 없어도 반환(빈 디렉토리도 watch 걸어 첫 세션 등장을 잡기 위함).
     async function findActive(dir, since) {
       const listing = await ctx.app.fs.list(dir, { meta: true });
-      let jsonls = (listing.children || []).filter(
-        (c) => !c.dir && /^[0-9a-f-]{36}\.jsonl$/.test(c.name),
-      );
-      if (since) jsonls = jsonls.filter((c) => (c.modified || 0) >= since);
-      jsonls.sort((a, b) => (b.modified || 0) - (a.modified || 0));
       return {
         root: listing.root,
-        session: jsonls.length ? jsonls[0].name.replace(/\.jsonl$/, "") : null,
+        session: pickActiveSession(listing.children, since),
       };
     }
 
-    // 현재 claude 세션 ID = ~/.claude/session-env/<uuid>/ (claude 가 세션 시작 시 생성하는
-    // 마커 — claude 자신의 "지금 이 세션" 신호). 디렉토리의 stale 파일을 mtime 으로 추정해
-    // 잘못 고르는 것을 막는다. detectAt(이 팬 claude 가 감지된 시각)이 있으면 그 근처에 생긴
-    // session-env 로 좁혀 팬-특정성을 높인다(claude 가 여러 개 떠 있는 환경 대비).
-    async function currentSessionId(detectAt) {
-      try {
-        const l = await ctx.app.fs.list("~/.claude/session-env", { meta: true });
-        let dirs = (l.children || []).filter(
-          (c) => c.dir && /^[0-9a-f-]{36}$/.test(c.name),
-        );
-        if (!dirs.length) return null;
-        if (detectAt) {
-          const near = dirs.filter(
-            (c) => Math.abs((c.modified || 0) - detectAt) <= 90,
-          );
-          if (near.length) dirs = near; // 이 팬 시작 시각 근처 = 이 팬의 세션
-        }
-        dirs.sort((a, b) => (b.modified || 0) - (a.modified || 0));
-        return dirs[0].name;
-      } catch {
-        return null;
-      }
-    }
+    // 현재 세션 = findActive(프로젝트 dir 의 newest jsonl). session-env 마커는 쓰지 않는다 —
+    // codex companion·서브에이전트·헤드리스 호출로 난립(실측 800+개)하고 mtime 이 세션 *생성*
+    // 시각이라 /resume·대화 활동에 갱신되지 않아 활성 세션을 못 가리킨다. 활발히 append 되는
+    // jsonl 이 유일하게 신뢰할 수 있는 "지금 이 팬의 세션" 신호다(pickActiveSession 참조).
 
     async function openConversation(p) {
       if (!ctx.app.fs || !ctx.app.fs.readText) {
@@ -1489,8 +1479,8 @@ export default {
       }
       conv.dir = root;
       conv.detectAt = p.detectAt || 0;
-      // 현재 세션 = claude 자신의 마커(session-env). 디렉토리의 stale 파일 추정 금지.
-      const sid = await currentSessionId(conv.detectAt);
+      // 현재 세션 = 프로젝트 dir 에서 활발히 append 되는 jsonl(newest mtime).
+      const sid = (await findActive(conv.dir, conv.detectAt)).session;
       if (sid) {
         switchToSession(conv, sid); // 현재 세션 타깃(본문 비움 + path 설정)
         const first = await ctx.app.fs.readText(conv.path, 0).catch(() => null);
@@ -1503,12 +1493,14 @@ export default {
           emptyState(p, "현재 세션 " + sid.slice(0, 8) + " — 대화가 오가면 표시됩니다.");
         }
       } else {
-        emptyState(p, "현재 claude 세션을 찾지 못함(~/.claude/session-env 없음).");
+        // 아직 이 dir 에 트랜스크립트 jsonl 이 없음 → 대기. watch 가 첫 등장을 잡는다.
+        emptyState(p, "현재 claude 세션을 찾지 못함 — 대화가 시작되면 표시됩니다.");
       }
       // 라이브 watch(폴링 없음). 현재 세션 파일 등장/갱신·세션 교체를 잡는다.
       conv.watchers.push(
         ctx.app.fs.watch(conv.dir, async () => {
-          const cur = await currentSessionId(conv.detectAt);
+          // dir 변경(resumed/신규 세션 jsonl append)마다 활성 세션 재확인 → 바뀌면 전환.
+          const cur = (await findActive(conv.dir, conv.detectAt)).session;
           if (cur && cur !== conv.session) switchToSession(conv, cur); // 교체/첫 등장
           if (conv.session) await tail(conv);
           if (conv.session) scanAgents(conv);
