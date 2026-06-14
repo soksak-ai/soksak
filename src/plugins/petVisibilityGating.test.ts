@@ -43,15 +43,23 @@ function setHidden(v: boolean) {
   document.dispatchEvent(new Event("visibilitychange"));
 }
 
+// ctx.app.events.on 으로 등록된 핸들러를 잡아 테스트에서 직접 트리거(app.focus 등).
 function mockCtx() {
   const disp = { dispose() {} };
-  return {
+  const handlers = new Map<string, (p: unknown) => void>();
+  const ctx = {
     subscriptions: [] as unknown[],
     app: {
       commands: { register: () => disp },
-      events: { on: () => disp },
+      events: {
+        on: (event: string, fn: (p: unknown) => void) => {
+          handlers.set(event, fn);
+          return disp;
+        },
+      },
     },
   };
+  return { ctx, fire: (event: string, p: unknown) => handlers.get(event)?.(p) };
 }
 
 const plugins = [
@@ -73,18 +81,31 @@ describe.each(plugins)("$name 펫 — visibility 게이팅", ({ load }) => {
   it("내장 브라우저 포커스(window blur)에도 계속 돈다", async () => {
     const env = installEnv();
     const mod = (await load()) as PetModule;
-    mod.default.activate(mockCtx());
-    expect(env.raf).toHaveBeenCalled(); // activate 시 구동(보임+포커스)
+    mod.default.activate(mockCtx().ctx);
+    expect(env.raf).toHaveBeenCalled(); // activate 시 구동(보임+활성)
     const cancelsBefore = env.caf.mock.calls.length;
-    window.dispatchEvent(new Event("blur")); // 내장 브라우저로 포커스 이동
+    window.dispatchEvent(new Event("blur")); // 내장 브라우저로 포커스 이동(DOM blur)
     expect(env.caf.mock.calls.length).toBe(cancelsBefore); // 정지 안 함
   });
 
   it("창이 가려지면(visibilitychange→hidden) 멈춘다", async () => {
     const env = installEnv();
     const mod = (await load()) as PetModule;
-    mod.default.activate(mockCtx());
+    mod.default.activate(mockCtx().ctx);
     setHidden(true);
     expect(env.caf).toHaveBeenCalled(); // 안 보이면 0비용 정지(불변 가드)
+  });
+
+  it("앱이 비활성(app.focus=false)이면 멈추고, 재활성이면 재개한다", async () => {
+    const env = installEnv();
+    const mod = (await load()) as PetModule;
+    const { ctx, fire } = mockCtx();
+    mod.default.activate(ctx);
+    expect(env.raf).toHaveBeenCalled(); // 시작 시 활성 가정 → 구동
+    fire("app.focus", { focused: false }); // 다른 앱으로 전환(메인 창 key 잃음)
+    expect(env.caf).toHaveBeenCalled(); // 안 보니 정지
+    const startsBefore = env.raf.mock.calls.length;
+    fire("app.focus", { focused: true }); // soksak 으로 복귀
+    expect(env.raf.mock.calls.length).toBeGreaterThan(startsBefore); // 재개
   });
 });

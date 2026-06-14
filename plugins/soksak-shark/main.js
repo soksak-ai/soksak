@@ -158,12 +158,15 @@ export default {
     }
     function start() { if (!raf) { last = 0; acc = 0; flexAcc = 0; raf = requestAnimationFrame(loop); } }
     function stop() { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
-    // 보임 && 비숨김 일 때만 구동(0 비용 정지) — "안 볼 때 멈춘다"의 옳은 신호는 Page Visibility 이지
-    // 키보드 포커스가 아니다. 내장 브라우저(메인과 별개인 child webview)로 포커스가 가면 메인 창에
-    // blur 가 떠도 사용자는 같은 soksak 창을 보는 중 → hasFocus()/blur 게이팅은 펫을 잘못 멈춘다.
-    const sync = () => { if (visible && !document.hidden) start(); else stop(); };
+    // 보임 && 앱활성 && 비숨김 일 때만 구동(0 비용 정지) — "안 볼 때 멈춘다"의 신호 둘:
+    //  ① Page Visibility(가려짐/최소화)  ② 앱활성(코어 app.focus — 메인 창 NSWindow key).
+    // DOM blur 는 못 쓴다 — 내장 브라우저(메인과 별개인 child webview)로 포커스만 가도 떠서, 같은
+    // soksak 창을 보는데 멈춘다. app.focus 는 창 레벨이라 child 이동엔 불변, 다른 앱 전환에만 false.
+    let active = true; // 초기 활성 가정. 코어 app.focus 이벤트가 갱신.
+    const sync = () => { if (visible && active && !document.hidden) start(); else stop(); };
     const onVis = sync;
     document.addEventListener("visibilitychange", onVis);
+    ctx.subscriptions.push(ctx.app.events.on("app.focus", (p) => { active = !!(p && p.focused); sync(); }));
     sync();
 
     const onMove = (e) => { mx = e.clientX; my = e.clientY; };

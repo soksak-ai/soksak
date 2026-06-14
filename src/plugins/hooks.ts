@@ -4,6 +4,7 @@
 // FileViewer 저장 성공 지점의 emitFileSaved 하나).
 // 리스너 실패는 호스트를 죽이지 못한다(§0-4) — 콜백마다 try/catch.
 
+import { listen } from "@tauri-apps/api/event";
 import { allGroups, collectLeafIds, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
@@ -37,6 +38,10 @@ export interface PluginEventMap {
   "theme.changed": { name: string; mode: "light" | "dark" };
   // 호스트 표시 언어 변경 — 플러그인 자체 i18n(뷰 내부 텍스트)의 갱신 신호.
   "locale.changed": { language: string };
+  // 앱(메인 창) 활성 여부 — 코어 WindowEvent::Focused 중계. 다른 앱으로 전환하면 false,
+  // 같은 창 안 child webview(내장 브라우저)로 포커스가 가도 창 레벨이라 불변. 펫 등 부차
+  // 애니메이션이 "안 볼 때 멈춘다"를 정확히 판정하는 신호(DOM blur 는 child 에도 반응해 부정확).
+  "app.focus": { focused: boolean };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   // 터미널 명령 시작(셸 preexec 의 OSC 633;E — 명령라인·cwd 동반, 폴링 없음).
   // [RULE] claude 등 "명령별" 도메인 처리는 코어가 아니라 이 이벤트를 구독하는
@@ -62,6 +67,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "file.saved",
   "theme.changed",
   "locale.changed",
+  "app.focus",
   "bookmarks.changed",
   "command.started",
   "command.finished",
@@ -281,6 +287,13 @@ export function startPluginHooks(): void {
       paneId,
     });
   });
+
+  // 앱(메인 창) 활성 → 플러그인 이벤트. 코어(WindowEvent::Focused)가 "window-focus" 로 emit
+  // 하면 그대로 중계한다(liveResize 와 동형 — 신호원은 OS 별이나 채널은 단일). Tauri 런타임
+  // 밖(jsdom 테스트)에선 listen 이 거부되며 조용히 무시.
+  void listen<boolean>("window-focus", (e) => {
+    emitPluginEvent("app.focus", { focused: e.payload });
+  }).catch(() => {});
 }
 
 // pane 이 속한 프로젝트 id. 터미널 뷰들의 leaf 를 걸어 찾는다(못 찾으면 null).
