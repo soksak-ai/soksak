@@ -6,7 +6,8 @@
   "description": "프로젝트 커밋 이력 사이드바 — 50개 단위 페이지네이션, 커밋 클릭 시 변경 파일 목록과 패치 표시.",
   "permissions": [
     "ui",
-    "git:read"
+    "git:read",
+    "terminal"
   ],
   "contributes": {
     "views": [

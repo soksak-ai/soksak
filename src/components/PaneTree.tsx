@@ -108,7 +108,8 @@ const PaneLeaf = memo(function PaneLeaf({
     if (visible) fitHost(paneId);
   }, [visible, paneId]);
 
-  // 보이는 뷰의 포커스된 pane 이면 터미널에 포커스 + fit.
+  // 보이는 뷰의 포커스된 pane 이면 터미널에 포커스 + fit. (포커스 탈취 가드는 focusHost
+  // 단일 지점에 있다 — 팬 하위 텍스트 입력이 포커스면 xterm 으로 안 뺏는다.)
   useEffect(() => {
     if (focused) focusHost(paneId);
   }, [focused, paneId]);
@@ -117,6 +118,9 @@ const PaneLeaf = memo(function PaneLeaf({
     <div
       ref={attach}
       className={`pane-leaf${focused ? " focused" : ""}`}
+      // 범용 앵커: 플러그인/도구가 paneId 로 패널 요소를 찾아 오버레이를 붙일 수 있다
+      // (코어는 용도를 모른다 — claude-GUI 등이 소비하는 DOM 소켓).
+      data-pane-id={paneId}
       onMouseDownCapture={() => setFocusedPane(projectId, viewId, paneId)}
       onFocusCapture={() => setFocusedPane(projectId, viewId, paneId)}
     />

@@ -771,6 +771,44 @@ body,
 .egs-right {
   flex: 0 0 auto;
   opacity: 0.8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* 플러그인 상태바 항목(예: claude-GUI 의 "gui"). 칩 윗 윤곽(위젯 — §B8 WIDGET_OUTLINE).
+   off = 투명 + 옅은 보더, on = --acc 솔리드 채움(반전 글자) — 토글 상태가 한눈에.
+   보더는 토큰만(§B4). */
+.egs-item {
+  display: inline-flex;
+  align-items: center;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--bd-soft);
+  background: transparent;
+  color: inherit;
+  opacity: 0.85;
+  cursor: pointer;
+}
+.egs-item:hover {
+  background: var(--accbg);
+  border-color: var(--acc);
+  opacity: 1;
+}
+/* on — accent 솔리드 채움 + 반전 글자(--bg). hover 보다 명확히 강한 표면. */
+.egs-item.active,
+.egs-item.active:hover {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--bg);
+  opacity: 1;
+  font-weight: 600;
+}
+/* 상태바 항목과 뷰 종류 라벨 사이 구분선("GUI | 터미널"). */
+.egs-sep {
+  opacity: 0.4;
 }
 /* 그룹 사이 리사이저(절대 배치). 얇은 선 + 드래그 히트영역. */
 .egroup-divider {

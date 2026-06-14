@@ -62,7 +62,10 @@ full-trust 모델이라 기술적 샌드박스는 아니지만, 동의 화면 �
 
 | 권한 | 능력 |
 |---|---|
-| `ui` | 뷰 등록(사이드바/콘텐츠), 아이콘 셋 등록 |
+| `ui` | 콘텐츠/사이드바 뷰 등록(호스트가 배치 소유 — 안전), 아이콘 셋 |
+| `ui:statusbar` | 상태바에 항목 추가(크롬 영역) — `app.ui.statusBarItem` |
+| `ui:overlay:pane` | 콘텐츠 패널 하나를 덮는 오버레이(그 패널 본문만 가림 — 패널 위 GUI) |
+| `ui:overlay:screen` | 앱 전체를 덮는 레이어(크롬·전 패널 위 — 마스코트 효과 등 가장 침습적) |
 | `programs` | 메뉴 프로그램 등록(선택 시 터미널 명령 자동 실행 포함) |
 | `commands` | registry 명령 실행(danger 없는 것) + **자기 명령 등록** |
 | `commands:destructive` | `danger:"destructive"` 명령 실행(닫기·제거) |
@@ -71,6 +74,8 @@ full-trust 모델이라 기술적 샌드박스는 아니지만, 동의 화면 �
 | `storage` | 전용 저장소(`~/.soksak/plugins-data/<id>/`) 읽기/쓰기 |
 | `fs:read` | 임의 경로 파일 읽기 |
 | `fs:write` | 임의 경로 파일 쓰기 |
+| `terminal` | 터미널 명령 생명주기 관찰(`command.started`/`command.finished` — 명령라인·cwd) + `app.terminal.runningCommands()` |
+| `terminal:write` | 터미널 PTY 에 입력 전송 — `app.terminal.sendText(paneId, text)`(관찰보다 강함, 별도 권한) |
 | `git:read` | git log/show/diff/status(읽기 전용) |
 | `network` | fetch 사용 **고지**(기술 강제 불가 — full-trust, 동의 화면 표기용) |
 
@@ -148,6 +153,14 @@ app.events.on(event, (payload) => {…}): Disposable
 ```
 - 호스트 이벤트 구독. 예: `locale.changed`, `bookmarks.changed` 등(PluginEventMap).
 - 콜백은 try/catch 경계 안에서 호출된다(실패가 호스트를 죽이지 않음).
+- **터미널 명령 생명주기 소켓(권한 `terminal`)** — 폴링 없음(셸 통합 OSC 기반). 코어는
+  도메인을 모르고, "특정 명령이 떴는지"로 동작하는 플러그인(예: claude-GUI)이 소유한다:
+```ts
+app.events.on("command.started", ({ paneId, commandLine, cwd }) => {…})  // 명령 시작(명령라인·cwd)
+app.events.on("command.finished", ({ paneId }) => {…})                   // 명령 종료
+```
+  패널 DOM 은 `document.querySelector('[data-pane-id="<paneId>"]')` 로 찾아 오버레이를 붙인다.
+  `terminal` 미선언 시 `command.*` 구독은 거부된다(동의 화면이 이 접근을 표시).
 
 ### 5.3 ui (권한: `ui`)
 ```ts
@@ -157,8 +170,11 @@ app.ui.registerView(viewId, {
 }): Disposable
 app.ui.openView(viewId, placement?): Promise<CommandOutcome>
 app.ui.registerIconSet(setId, data): Disposable
+app.ui.statusBarItem({ id, paneId, label, title?, active?, onClick }): Disposable
 ```
 - 뷰는 **React 비요구** — 호스트가 준 `container` DOM 에 직접 그린다.
+- `statusBarItem` — 그 `paneId` 가 활성 터미널인 그룹의 상태바에 항목을 띄운다(같은 `id`
+  재호출 = 교체, `active` 토글로 강조 갱신). 토글형 진입점에 쓴다(예: claude-GUI 의 "gui").
 - `mount` 는 재호출될 수 있다(재배치/재구성). 이벤트 구독은 `activate` 에서 1회, 마운트별 상태는 `mount` 에서.
 - 스타일은 테마 변수(`var(--fg)`, `var(--bg)`, `var(--inset)` …)를 쓰면 테마를 자동 추종한다.
 - 외부 데이터는 `textContent` 로(절대 `innerHTML` 로 해석시키지 말 것).
