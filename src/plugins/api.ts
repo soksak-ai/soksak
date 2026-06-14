@@ -23,6 +23,17 @@ import {
 } from "./viewRegistry";
 import { useEditorRegistry } from "./editorRegistry";
 import { useIconRegistry, validateIconSetData } from "../ui/icons/registry";
+import {
+  registerStatusBarItem,
+  type StatusBarItem,
+} from "../ui/statusBarItems";
+import {
+  runningCommands,
+  sendInputToHost,
+  readHostBuffer,
+  subscribeOutput,
+} from "../terminal/paneHosts";
+import { EVENT_PERMISSIONS } from "./hooks";
 import type { IconSetData } from "../ui/icons/types";
 import {
   pluginCommandName,
@@ -58,6 +69,8 @@ export interface PluginApiDeps {
   // 활성 파일 뷰(에디터 통합 M_P7 에서 FileViewer 가 bridge 구현을 채운다).
   activeFile: () => { viewId: string; path: string; text: string } | null;
   setFileText: (viewId: string, text: string) => boolean;
+  // 코어 fs watcher(fs-change) 구독 — 변경된 부모 디렉토리 문자열을 콜백. 반환=해지.
+  onFsChange: (cb: (dir: string) => void) => () => void;
 }
 
 // ── 플러그인이 보는 타입 ─────────────────────────────────────────────────────
@@ -97,6 +110,9 @@ export interface SoksakPluginApi {
     ) => Promise<CommandOutcome>;
     /** 아이콘 셋 등록(contributes.iconSets 선언 필수). data 는 시맨틱 이름 전수 제공. */
     registerIconSet: (setId: string, data: unknown) => Disposable;
+    /** paneId 연관 상태바 아이템 등록/갱신(같은 id 면 교체 — active 토글에 재호출).
+     *  그 pane 이 활성 터미널인 그룹의 상태바에 표시된다. 반환 = 해지. */
+    statusBarItem: (item: StatusBarItem) => Disposable;
   };
   editor?: {
     // 호스트의 @codemirror 모듈(§0-7 — 플러그인 자체 번들 금지).
@@ -126,9 +142,18 @@ export interface SoksakPluginApi {
     list: () => Promise<string[]>;
   };
   fs?: {
-    readText?: (path: string) => Promise<{ text: string; truncated: boolean }>;
+    /** 텍스트 읽기. offset(바이트) 지정 시 그 지점부터 끝까지만 — 증가 로그의 증분 tail.
+     *  totalBytes 를 다음 offset 으로 추적하면 델타만 읽는다. truncated = 안전상한 초과. */
+    readText?: (
+      path: string,
+      offset?: number,
+    ) => Promise<{ text: string; truncated: boolean; totalBytes: number }>;
     writeText?: (path: string, content: string) => Promise<void>;
-    list?: (path: string) => Promise<unknown>;
+    /** 디렉토리 직속 자식. meta:true 면 각 자식 modified(unix 초) 포함(최신 파일 선택용). */
+    list?: (path: string, opts?: { meta?: boolean }) => Promise<unknown>;
+    /** 디렉토리 감시(코어 watcher, 폴링 없음). dir 안의 변경 시 cb(dir). 비재귀 —
+     *  하위 폴더는 따로 watch. 반환 = 해지(unwatch). */
+    watch?: (dir: string, cb: (dir: string) => void) => Disposable;
   };
   git?: {
     log: (opts?: {
@@ -144,6 +169,25 @@ export interface SoksakPluginApi {
       staged?: boolean;
     }) => Promise<string>;
     status: (path?: string) => Promise<unknown>;
+  };
+  terminal?: {
+    /** 지금 실행 중인 명령 스냅샷(pane 당 최대 1). command.started/finished 이벤트의
+     *  현재-상태 버전 — 실행 중에 늦게 활성화된 플러그인이 즉시 동기화하는 용도(폴링 아님).
+     *  "terminal" 권한 한정. */
+    runningCommands?: () => {
+      paneId: string;
+      commandLine: string;
+      cwd: string | null;
+    }[];
+    /** pane 의 터미널 PTY 에 raw 입력 주입(실행 중 프로그램에 타이핑 — 예: claude 프롬프트).
+     *  엔터는 "\r". 준비 전이면 false. "terminal:write" 권한 한정. */
+    sendText?: (paneId: string, text: string) => boolean;
+    /** pane 터미널 화면 텍스트(끝에서 lines 줄, 기본 전체 뷰포트+스크롤백). 준비 전이면
+     *  undefined. "terminal:read" 권한 한정. TUI 라이브 스트림 표시·입력 landed 검증용. */
+    readBuffer?: (paneId: string, lines?: number) => string | undefined;
+    /** pane 터미널 화면 갱신 구독(프레임당 1회 코얼레스, 폴링 없음). 반환=해지.
+     *  "terminal:read" 권한 한정 — 버퍼 재독 트리거(라이브 스트림·입력 검증). */
+    onOutput?: (paneId: string, cb: () => void) => Disposable;
   };
   project: {
     current: () => { id: string; root: string | null } | null;
@@ -248,7 +292,17 @@ export function buildPluginApi(
     locale: () => useSettings.getState().language,
 
     events: {
-      on: (event, fn) => tracker.add(deps.on(event, fn)),
+      on: (event, fn) => {
+        // 권한 게이트: 민감 이벤트(command.* 등)는 선언 권한이 있어야 구독 가능.
+        // 동의 화면이 그 권한을 표시하므로 코어/터미널 접근이 사용자에게 고지된다.
+        const need = EVENT_PERMISSIONS[event];
+        if (need && !has(need)) {
+          throw new Error(
+            `이벤트 "${String(event)}" 구독은 "${need}" 권한 선언이 필요합니다`,
+          );
+        }
+        return tracker.add(deps.on(event, fn));
+      },
     },
 
     project: {
@@ -284,7 +338,7 @@ export function buildPluginApi(
 
     // programs 기여는 완전 선언형 — loader 가 자동 등록(명령형 API 없음 §2.6).
 
-    ui: has("ui")
+    ui: has("ui") || has("ui:statusbar")
       ? {
           registerView: (viewId, provider) => {
             const decl = manifest.contributes.views.find(
@@ -333,6 +387,17 @@ export function buildPluginApi(
             });
             return tracker.wrap(() =>
               useIconRegistry.getState().unregister(globalId),
+            );
+          },
+          // paneId 연관 상태바 아이템(claude-GUI 의 "gui" 등). id 는 플러그인 네임스페이스로
+          // 충돌 방지. 같은 id 재호출 = 교체(active 토글 갱신). 반환 = 해지.
+          // [RULE] 상태바는 콘텐츠 뷰("ui")와 다른 영역 → "ui:statusbar" 권한 필요.
+          statusBarItem: (item) => {
+            if (!has("ui:statusbar")) {
+              throw new Error('statusBarItem 은 "ui:statusbar" 권한이 필요합니다');
+            }
+            return tracker.wrap(
+              registerStatusBarItem({ ...item, id: `${id}:${item.id}` }),
             );
           },
         }
@@ -398,11 +463,20 @@ export function buildPluginApi(
       has("fs:read") || has("fs:write")
         ? {
             readText: has("fs:read")
-              ? async (path) => {
+              ? async (path, offset) => {
                   const data = (await deps.invoke("read_text_file", {
                     path,
-                  })) as { content: string; truncated: boolean };
-                  return { text: data.content, truncated: data.truncated };
+                    offset,
+                  })) as {
+                    content: string;
+                    truncated: boolean;
+                    total_bytes: number;
+                  };
+                  return {
+                    text: data.content,
+                    truncated: data.truncated,
+                    totalBytes: data.total_bytes,
+                  };
                 }
               : undefined,
             writeText: has("fs:write")
@@ -411,7 +485,22 @@ export function buildPluginApi(
                 }
               : undefined,
             list: has("fs:read")
-              ? (path) => deps.invoke("list_children", { path })
+              ? (path, opts) =>
+                  deps.invoke("list_children", { path, meta: opts?.meta })
+              : undefined,
+            // 코어 watcher 구독(폴링 없음). 비재귀 — 하위 폴더는 호출자가 따로 watch.
+            // [RULE] 감시는 읽기의 일부(언제 다시 읽을지) → "fs:read" 게이트 공유.
+            watch: has("fs:read")
+              ? (dir, cb) => {
+                  void deps.invoke("watch_dir", { path: dir });
+                  const un = deps.onFsChange((changed) => {
+                    if (changed === dir) cb(dir);
+                  });
+                  return tracker.wrap(() => {
+                    un();
+                    void deps.invoke("unwatch_dir", { path: dir });
+                  });
+                }
               : undefined,
           }
         : undefined,
@@ -449,6 +538,32 @@ export function buildPluginApi(
           },
         }
       : undefined,
+
+    // [RULE] 터미널 영역 — 능력이 다르면 권한도 분리: 관찰("terminal": command.* 스냅샷),
+    // 화면 읽기("terminal:read": 버퍼 내용·갱신 — 전 화면 텍스트), 입력 쓰기("terminal:write":
+    // PTY 키 주입). 셋 다 별도 권한.
+    terminal:
+      has("terminal") || has("terminal:read") || has("terminal:write")
+        ? {
+            ...(has("terminal")
+              ? { runningCommands: () => runningCommands() }
+              : {}),
+            ...(has("terminal:read")
+              ? {
+                  readBuffer: (paneId: string, lines?: number) =>
+                    readHostBuffer(paneId, lines),
+                  onOutput: (paneId: string, cb: () => void) =>
+                    tracker.wrap(subscribeOutput(paneId, cb)),
+                }
+              : {}),
+            ...(has("terminal:write")
+              ? {
+                  sendText: (paneId: string, text: string) =>
+                    sendInputToHost(paneId, text),
+                }
+              : {}),
+          }
+        : undefined,
   };
 
   return { api, tracker };

@@ -39,6 +39,7 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
     currentProject: () => ({ id: "p1", root: "/repo" }),
     activeFile: () => null,
     setFileText: () => false,
+    onFsChange: () => () => {},
     ...overrides,
   };
 }

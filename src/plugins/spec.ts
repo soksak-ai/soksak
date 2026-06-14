@@ -33,7 +33,14 @@
 // ── §1 권한 ──────────────────────────────────────────────────────────────────
 
 export type PluginPermission =
-  | "ui" // 뷰 등록(사이드바/콘텐츠)
+  // [RULE] UI 영역 권한 분리 — 플러그인이 건드리는 UI 영역은 명확히 구분되며 각각 별도
+  // 권한으로 선언한다(타이틀바·상태바·콘텐츠·전체화면은 서로 다른 영역). 사용자가 어느
+  // 영역에 영향받는지 동의 화면에서 정확히 알도록 — 영역이 다르면 권한도 다르다.
+  | "ui" // 콘텐츠/사이드바 뷰 등록(호스트가 배치 소유 — 안전) + 아이콘 셋
+  | "ui:statusbar" // 상태바에 항목 추가(크롬 영역)
+  // 오버레이 패밀리 — 둘 다 본문 위에 그리지만 스코프가 다르므로 변종으로 분리한다.
+  | "ui:overlay:pane" // 콘텐츠 패널 하나를 덮는 오버레이(그 패널 본문만 가림 — 패널 위 GUI)
+  | "ui:overlay:screen" // 앱 전체를 덮는 레이어(크롬·전 패널 위 — 마스코트 효과 등 가장 침습적)
   | "programs" // + 메뉴 프로그램 등록(선택 시 터미널 명령 자동 실행 포함)
   | "commands" // registry 명령 실행(danger 없는 것) + 자기 명령 등록
   | "commands:destructive" // danger:"destructive" 명령 실행(닫기·제거)
@@ -42,11 +49,17 @@ export type PluginPermission =
   | "storage" // 전용 저장소(~/.soksak/plugins-data/<id>/)
   | "fs:read" // 임의 경로 파일 읽기
   | "fs:write" // 임의 경로 파일 쓰기
+  | "terminal" // 터미널 명령 생명주기 관찰(command.started/finished — 명령라인·cwd)
+  | "terminal:read" // 터미널 화면 버퍼 내용 읽기·변경 구독(명령 메타보다 강함 — 전 화면 텍스트)
+  | "terminal:write" // 터미널 PTY 에 입력 전송(키 주입 — 관찰보다 강함, 별도 권한)
   | "git:read" // git log/show/diff/status (읽기 전용)
   | "network"; // fetch 사용 고지 — 기술적 강제 불가(§0-2 전체신뢰), 동의 화면 고지용
 
 export const PERMISSIONS: readonly PluginPermission[] = [
   "ui",
+  "ui:statusbar",
+  "ui:overlay:pane",
+  "ui:overlay:screen",
   "programs",
   "commands",
   "commands:destructive",
@@ -55,6 +68,9 @@ export const PERMISSIONS: readonly PluginPermission[] = [
   "storage",
   "fs:read",
   "fs:write",
+  "terminal",
+  "terminal:read",
+  "terminal:write",
   "git:read",
   "network",
 ];
@@ -65,8 +81,24 @@ export const PERMISSION_INFO: Record<
   { label: string; detail: string; caution?: true }
 > = {
   ui: {
-    label: "뷰 표시",
-    detail: "사이드바·콘텐츠 영역에 자체 화면을 띄웁니다.",
+    label: "콘텐츠 뷰",
+    detail: "사이드바·콘텐츠 영역에 자체 화면을 띄웁니다(호스트가 배치 소유 — 안전).",
+  },
+  "ui:statusbar": {
+    label: "상태바 항목",
+    detail: "상태바에 항목(버튼)을 추가합니다(크롬 영역).",
+  },
+  "ui:overlay:pane": {
+    label: "패널 오버레이",
+    detail:
+      "콘텐츠 패널 하나를 덮는 오버레이를 띄웁니다(그 패널의 본문만 가림 — 다른 패널·크롬은 그대로).",
+    caution: true,
+  },
+  "ui:overlay:screen": {
+    label: "전체화면 레이어",
+    detail:
+      "앱 전체를 덮는 레이어를 띄웁니다(크롬·모든 패널 위 — 가장 침습적). 마스코트 효과 등.",
+    caution: true,
   },
   programs: {
     label: "프로그램 등록",
@@ -104,6 +136,24 @@ export const PERMISSION_INFO: Record<
   "fs:write": {
     label: "파일 쓰기",
     detail: "디스크의 임의 경로 파일을 쓸 수 있습니다.",
+    caution: true,
+  },
+  terminal: {
+    label: "터미널 명령 관찰",
+    detail:
+      "터미널에서 어떤 명령이 실행/종료되는지(명령라인·작업 디렉토리 포함) 받습니다.",
+    caution: true,
+  },
+  "terminal:read": {
+    label: "터미널 화면 읽기",
+    detail:
+      "터미널 패널의 화면 텍스트(실행 중 프로그램의 출력 전체)를 읽고 갱신을 구독합니다(명령 관찰보다 강함).",
+    caution: true,
+  },
+  "terminal:write": {
+    label: "터미널 입력 전송",
+    detail:
+      "터미널 패널에 키 입력을 주입합니다(실행 중인 프로그램에 타이핑 — 셸 명령 실행 가능).",
     caution: true,
   },
   "git:read": {

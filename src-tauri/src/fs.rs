@@ -19,6 +19,9 @@ pub struct ChildListing {
 pub struct Child {
     name: String,
     dir: bool,
+    // 수정시각(unix 초). meta=true 일 때만 채운다(평상시 트리는 stat 회피 — TCC).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    modified: Option<u64>,
 }
 
 fn home_dir() -> PathBuf {
@@ -33,6 +36,18 @@ fn home_dir() -> PathBuf {
         std::env::var("HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|_| PathBuf::from("."))
+    }
+}
+
+// 선행 "~" 를 홈으로 확장(범용 — 플러그인이 ~/.claude 등 홈 하위를 절대경로 없이 가리키게).
+// "~" 단독 / "~/..." 만 처리(다른 사용자 "~user" 는 미지원 — 셸이 아니다).
+fn expand_path(path: &str) -> PathBuf {
+    if path == "~" {
+        home_dir()
+    } else if let Some(rest) = path.strip_prefix("~/") {
+        home_dir().join(rest)
+    } else {
+        PathBuf::from(path)
     }
 }
 
@@ -53,15 +68,23 @@ pub struct TextData {
 
 // 파일을 텍스트로 읽는다. 큰 파일은 앞 TEXT_READ_LIMIT 바이트만(truncated=true). 바이너리는
 // NUL 바이트 유무로 판정(텍스트엔 NUL 이 없다) 후 에러 → 프론트가 폴백 분기.
+// offset(범용): 지정 시 그 바이트부터 끝까지만 읽는다 — 증가하는 로그/JSONL 의 증분 tail.
+//   total_bytes 를 다음 offset 으로 추적하면 델타만 읽는다(폴링 아님 + O(delta)). offset 이
+//   현재 크기보다 크면(파일 축소·교체) 빈 내용 + 실제 total 을 돌려 프론트가 전체 재독 판단.
 #[tauri::command]
-pub fn read_text_file(path: String) -> Result<TextData, String> {
-    use std::io::Read;
-    let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
+pub fn read_text_file(path: String, offset: Option<u64>) -> Result<TextData, String> {
+    use std::io::{Read, Seek, SeekFrom};
+    let real = expand_path(&path);
+    let meta = std::fs::metadata(&real).map_err(|e| e.to_string())?;
     if !meta.is_file() {
         return Err("파일이 아님".to_string());
     }
     let total = meta.len();
-    let f = std::fs::File::open(&path).map_err(|e| e.to_string())?;
+    let start = offset.unwrap_or(0).min(total);
+    let mut f = std::fs::File::open(&real).map_err(|e| e.to_string())?;
+    if start > 0 {
+        f.seek(SeekFrom::Start(start)).map_err(|e| e.to_string())?;
+    }
     let mut buf = Vec::new();
     f.take(TEXT_READ_LIMIT)
         .read_to_end(&mut buf)
@@ -74,7 +97,7 @@ pub fn read_text_file(path: String) -> Result<TextData, String> {
     Ok(TextData {
         // 잘린 멀티바이트 문자/드문 비 UTF-8 바이트는 lossy 로 안전 처리.
         content: String::from_utf8_lossy(&buf).into_owned(),
-        truncated: total > read_bytes,
+        truncated: total > start + read_bytes,
         read_bytes,
         total_bytes: total,
         line_count,
@@ -174,16 +197,22 @@ mod write_tests {
 }
 
 // 한 디렉토리의 직속 자식만(재귀 X). path 가 None/빈값이면 HOME. lazy 트리의 단위.
+// meta=Some(true): 각 자식의 수정시각(unix 초)도 함께(여러 .jsonl 중 최신 세션 고르기 등).
+//   기본(None/false)은 stat 회피(TCC) — 트리 기본 동작 유지.
 #[tauri::command]
-pub fn list_children(path: Option<String>) -> Result<ChildListing, String> {
+pub fn list_children(
+    path: Option<String>,
+    meta: Option<bool>,
+) -> Result<ChildListing, String> {
     let root: PathBuf = match path {
-        Some(p) if !p.is_empty() => PathBuf::from(p),
+        Some(p) if !p.is_empty() => expand_path(&p),
         _ => home_dir(),
     };
     let root = root.canonicalize().unwrap_or(root);
     if !root.is_dir() {
         return Err(format!("디렉토리가 아님: {}", root.to_string_lossy()));
     }
+    let want_meta = meta.unwrap_or(false);
 
     let mut children = Vec::new();
     for entry in std::fs::read_dir(&root).map_err(|e| e.to_string())? {
@@ -203,7 +232,22 @@ pub fn list_children(path: Option<String>) -> Result<ChildListing, String> {
             Ok(ft) => ft.is_dir(),
             Err(_) => false,
         };
-        children.push(Child { name, dir });
+        // mtime 은 명시 요청 시에만(stat 1회). unix epoch 초.
+        let modified = if want_meta {
+            entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+        } else {
+            None
+        };
+        children.push(Child {
+            name,
+            dir,
+            modified,
+        });
     }
     // 폴더 먼저, 그 다음 이름순(대소문자 무시).
     children.sort_by(|a, b| {

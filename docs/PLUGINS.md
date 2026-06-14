@@ -130,8 +130,14 @@ sok plugin.reload
 | `editor` | `app.editor` — CM6 확장·언어·포매터·버퍼 읽기/쓰기 | |
 | `storage` | `app.storage` — `~/.soksak/plugins-data/<id>/` 전용 저장소 | |
 | `fs:read` / `fs:write` | `app.fs.readText·list` / `app.fs.writeText` — 임의 경로 | ⚠ |
+| `terminal` | `app.terminal.runningCommands` — 실행 중 명령 관찰(명령라인·cwd 스냅샷) | ⚠ |
+| `terminal:read` | `app.terminal.readBuffer·onOutput` — 화면 버퍼 내용 읽기·갱신 구독(전 화면 텍스트 — 명령 관찰보다 강함) | ⚠ |
+| `terminal:write` | `app.terminal.sendText` — PTY 키 주입(실행 중 프로그램에 타이핑) | ⚠ |
 | `git:read` | `app.git` — log/show/diff/status(읽기 전용) | |
 | `network` | (표면 없음) fetch 사용 **고지** — 기술적 강제 불가 | ⚠ |
+
+영역/능력별로 권한이 분리된다 — UI: `ui`(콘텐츠)·`ui:statusbar`·`ui:overlay:pane`(패널 덮기)·
+`ui:overlay:screen`(앱 전체). 터미널: `terminal`(관찰)·`terminal:read`(화면 내용)·`terminal:write`(입력).
 
 플러그인은 `plugin.*` 관리 명령(install/enable/…)을 호출할 수 없다(자기증식 금지, §0-5).
 `plugin.view.open/close` 와 자기·타 플러그인 명령(`plugin.<id>.*`)은 허용.
@@ -285,6 +291,25 @@ await app.git.show(hash);               // { meta, files[{status,path}], patch }
 await app.git.diff({ file, staged });   // unified diff 원문
 app.project.current();                  // { id, root } | null
 ```
+
+### app.terminal (`"terminal"` / `"terminal:read"` / `"terminal:write"`)
+
+능력별로 권한이 분리된다 — 선언한 권한의 메서드만 노출(미선언은 `undefined`).
+
+```js
+// "terminal" — 실행 중 명령 관찰(command.started/finished 이벤트의 현재-상태 스냅샷)
+app.terminal.runningCommands();          // [{ paneId, commandLine, cwd }]
+
+// "terminal:read" — 화면 버퍼 내용(전 화면 텍스트)·갱신 구독(폴링 없음, 프레임당 1회 코얼레스)
+app.terminal.readBuffer(paneId, lines);  // string | undefined (끝에서 lines 줄, 생략=전체)
+const d = app.terminal.onOutput(paneId, () => { … });  // Disposable — 화면 갱신 시 호출
+
+// "terminal:write" — PTY 에 raw 입력 주입(실행 중 프로그램에 타이핑). 엔터는 "\r"
+app.terminal.sendText(paneId, "안녕\r"); // boolean(준비 전 false)
+```
+
+readBuffer 는 alternate screen(=TUI 화면)만 본다 — 셸 스크롤백·다른 pane 과 안 섞인다.
+`soksak-claude-gui` 가 이 셋으로 claude TUI 의 입력 readiness 를 판별해 입력을 큐잉한다.
 
 ## 명령으로 모든 것 (CLI/MCP)
 

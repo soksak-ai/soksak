@@ -10,6 +10,9 @@ export interface ShellIntegration {
   getCwd: () => string | undefined;
   /** cwd 변경 구독(이벤트 기반, 폴링 금지). 값이 실제로 바뀔 때만 통지. 반환=해지. */
   onCwdChange: (cb: (cwd: string) => void) => () => void;
+  /** 명령 시작(OSC 633;E — 셸 preexec 가 명령라인 보고) 구독. "어떤 명령이 떴나"
+   *  를 플러그인에 전달하는 소켓의 원천. 폴링 없음(이벤트 기반). 반환=해지. */
+  onCommandStart: (cb: (commandLine: string) => void) => () => void;
   /** 명령 종료(OSC 133/633 D) 구독. git 상태 등 갱신 트리거용. 반환=해지. */
   onCommandFinished: (cb: () => void) => () => void;
   dispose: () => void;
@@ -34,6 +37,8 @@ export function setupShellIntegration(term: Terminal): ShellIntegration {
 
   // 명령 종료 구독자(D 마다 통지).
   const cmdListeners = new Set<() => void>();
+  // 명령 시작 구독자(633;E 마다 통지 — 명령라인 동반).
+  const cmdStartListeners = new Set<(commandLine: string) => void>();
 
   const markPromptStart = () => {
     // 같은 명령에서 A 가 여러 번 와도 최신 줄만 추적.
@@ -90,6 +95,15 @@ export function setupShellIntegration(term: Terminal): ShellIntegration {
       } else if (cmd === "P") {
         const m = /Cwd=([^;]*)/.exec(rest);
         if (m) setCwd(m[1]);
+      } else if (cmd === "E") {
+        // E;<percent-encoded-commandline> — preexec 가 보고한 명령라인.
+        let line: string;
+        try {
+          line = decodeURIComponent(rest);
+        } catch {
+          line = rest;
+        }
+        if (line) for (const cb of cmdStartListeners) cb(line);
       }
       return true;
     }).dispose,
@@ -109,6 +123,10 @@ export function setupShellIntegration(term: Terminal): ShellIntegration {
       cwdListeners.add(cb);
       return () => cwdListeners.delete(cb);
     },
+    onCommandStart: (cb) => {
+      cmdStartListeners.add(cb);
+      return () => cmdStartListeners.delete(cb);
+    },
     onCommandFinished: (cb) => {
       cmdListeners.add(cb);
       return () => cmdListeners.delete(cb);
@@ -118,6 +136,7 @@ export function setupShellIntegration(term: Terminal): ShellIntegration {
       disposers.forEach((d) => d());
       cwdListeners.clear();
       cmdListeners.clear();
+      cmdStartListeners.clear();
     },
   };
 }

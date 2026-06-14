@@ -1861,6 +1861,19 @@ export function registerCatalog(): void {
     },
   });
 
+  register("window.reload", {
+    description:
+      "앱 webview 를 풀 리로드(location.reload). 개발 중 코어/플러그인 코드 변경을 반영한다 — HMR 이 안 잡는 모듈(이미 활성화된 플러그인 API 표면 등)까지 새로 가져온다. 활성 플러그인은 리로드 후 자동 재활성(설치본+동의 영속).",
+    params: {},
+    returns: "{ reloaded: true }",
+    examples: ["sok window.reload"],
+    handler: async () => {
+      // 소켓 응답을 먼저 흘려보낸 뒤 다음 틱에 리로드(응답 유실 방지).
+      setTimeout(() => window.location.reload(), 30);
+      return { reloaded: true };
+    },
+  });
+
   register("window.snapshot", {
     description:
       "창 내용을 PNG 로 저장. 다른 앱에 완전히 가려져 있어도 캡처된다(캡처 순간만 가림감지 자동 해제→복원). WebGL 터미널 포함. 부모 폴더 자동 생성.",

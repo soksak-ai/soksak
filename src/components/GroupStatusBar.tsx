@@ -3,6 +3,11 @@ import { getCwdOfHost, subscribeCwd } from "../terminal/paneHosts";
 import { Icon } from "../ui/icons/Icon";
 import type { View, ViewGroup } from "../state/sessions";
 import { useT } from "../i18n";
+import {
+  statusBarItemsForPane,
+  subscribeStatusBarItems,
+  type StatusBarItem,
+} from "../ui/statusBarItems";
 
 // 분할창(그룹) 하단 스테이터스 바. 활성 뷰 정보:
 //   - 터미널: 현재 작업 디렉토리(cwd, 셸 통합 이벤트 구독 — 폴링 없음)
@@ -15,12 +20,38 @@ function TerminalStatus({ paneId }: { paneId: string }) {
     setCwd(getCwdOfHost(paneId));
     return subscribeCwd(paneId, setCwd);
   }, [paneId]);
+  // 이 pane 에 연관된 플러그인 상태바 아이템(예: claude-GUI 의 "gui") 구독.
+  const [items, setItems] = useState<StatusBarItem[]>(() =>
+    statusBarItemsForPane(paneId),
+  );
+  useEffect(() => {
+    const update = () => setItems(statusBarItemsForPane(paneId));
+    update();
+    return subscribeStatusBarItems(update);
+  }, [paneId]);
   return (
     <>
       <span className="egs-left" title={cwd}>
         {cwd ?? "~"}
       </span>
-      <span className="egs-right">{t("view.terminal")}</span>
+      <span className="egs-right">
+        {items.map((it) => (
+          <button
+            key={it.id}
+            type="button"
+            className={`egs-item${it.active ? " active" : ""}`}
+            title={it.title}
+            onClick={(e) => {
+              e.stopPropagation();
+              it.onClick();
+            }}
+          >
+            {it.label}
+          </button>
+        ))}
+        {items.length > 0 && <span className="egs-sep">|</span>}
+        {t("view.terminal")}
+      </span>
     </>
   );
 }

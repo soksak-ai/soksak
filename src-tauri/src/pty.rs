@@ -132,6 +132,24 @@ pub fn spawn_terminal(
 
     let shell = shell.unwrap_or_else(default_shell);
     let mut cmd = CommandBuilder::new(shell.clone());
+    // 터미널은 신선한 셸 컨텍스트여야 한다. soksak 을 claude(Claude Code) 세션 안에서
+    // 띄우면(예: 개발 시 `make dev` 를 claude 의 Bash 로 실행) claude 가 주입한 세션 env 가
+    // soksak 프로세스에 상속되고, 그게 PTY 로 새면 터미널에서 띄운 claude 가 CLAUDECODE 를
+    // 보고 자기를 "claude 안의 claude"(중첩 자식 세션, CLAUDE_CODE_CHILD_SESSION)로 인식해
+    // 트랜스크립트·세션 식별이 비정상이 된다. 세션 컨텍스트 env 를 제거해 터미널의 프로그램이
+    // 항상 최상위 세션으로 시작하게 한다(정상 설치 사용자에겐 무영향 — 애초에 없는 변수).
+    for k in [
+        "CLAUDECODE",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_VERSION",
+        "CLAUDE_CODE_EXECPATH",
+        "CODEX_COMPANION_SESSION_ID",
+        "AI_AGENT",
+    ] {
+        cmd.env_remove(k);
+    }
     if let Some(cwd) = cwd {
         cmd.cwd(cwd);
     }

@@ -2,6 +2,7 @@
 // (테스트는 가짜 deps 를 주입 — 이 파일은 실제 registry/store/bridge 연결만 담당.)
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
   execute,
   getSpec,
@@ -49,5 +50,19 @@ export function defaultPluginDeps(appVersion: string): PluginApiDeps {
     activeFile,
     setFileText: (viewId, text) =>
       getFileView(viewId)?.setText?.(text) ?? false,
+    // fs-change(코어 watcher, 폴링 없음) 구독 → 변경된 부모 디렉토리 문자열을 콜백.
+    // 반환 = 해지. listen 은 async 라 비동기 도착하면 즉시 연결(중간 해지도 처리).
+    onFsChange: (cb) => {
+      let un = () => {};
+      let disposed = false;
+      void listen<string>("fs-change", (e) => cb(e.payload)).then((u) => {
+        if (disposed) u();
+        else un = u;
+      });
+      return () => {
+        disposed = true;
+        un();
+      };
+    },
   };
 }

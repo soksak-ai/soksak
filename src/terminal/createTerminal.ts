@@ -58,6 +58,8 @@ export interface TerminalHandle {
   getCwd: () => string | undefined;
   /** cwd 변경 구독(이벤트 기반). 반환=해지. */
   onCwdChange: (cb: (cwd: string) => void) => () => void;
+  /** 명령 시작 구독(명령라인 동반 — "어떤 명령이 떴나"). 반환=해지. */
+  onCommandStart: (cb: (commandLine: string) => void) => () => void;
   /** 명령 종료 구독(git 상태 등 갱신 트리거). 반환=해지. */
   onCommandFinished: (cb: () => void) => () => void;
   /** 라이트/다크 등 테마 교체(그리드 fg/ANSI 색). 배경은 CSS --bg 가 담당. */
@@ -68,6 +70,9 @@ export interface TerminalHandle {
   sendInput: (data: string) => void;
   /** 화면+스크롤백 텍스트 직렬화(끝에서 lines 줄, 기본 전체 뷰포트+스크롤백). AI 의 눈. */
   readBuffer: (lines?: number) => string;
+  /** PTY 출력으로 화면이 갱신될 때 구독(프레임당 1회 코얼레스 — 쓰기 폭주 과통지 방지).
+   *  반환=해지. 플러그인이 라이브 버퍼(스트림 표시)·입력 landed 검증에 쓰는 범용 신호. */
+  onOutput: (cb: () => void) => () => void;
   /** 폰트/커서/스크롤백 설정을 라이브 적용(폰트 크기 변경 시 재fit). */
   applySettings: (settings: TerminalSettings) => void;
   dispose: () => void;
@@ -256,6 +261,25 @@ export async function createTerminal(
   };
   container.addEventListener("paste", onPaste, true);
 
+  // PTY 출력으로 화면이 바뀔 때 통지(코어 범용 소켓 — 플러그인 라이브 스트림/입력 검증용).
+  // rAF 로 프레임당 1회 코얼레스: TUI 가 한 프레임에 수십 청크를 써도 통지는 한 번.
+  const outputSubs = new Set<() => void>();
+  let outputNotifyScheduled = false;
+  const notifyOutput = () => {
+    if (outputNotifyScheduled || outputSubs.size === 0) return;
+    outputNotifyScheduled = true;
+    requestAnimationFrame(() => {
+      outputNotifyScheduled = false;
+      for (const cb of [...outputSubs]) {
+        try {
+          cb();
+        } catch (e) {
+          console.error("terminal onOutput 구독자 실패:", e);
+        }
+      }
+    });
+  };
+
   const onOutput = new Channel<ArrayBuffer>();
   onOutput.onmessage = (message) => {
     const bytes = new Uint8Array(message);
@@ -266,6 +290,7 @@ export async function createTerminal(
         invoke("ack_terminal", { id: termId, bytes: ackPending }).catch(() => {});
         ackPending = 0;
       }
+      notifyOutput(); // 화면 갱신 통지(코얼레스됨).
     });
   };
 
@@ -411,6 +436,7 @@ export async function createTerminal(
     dprCleanup?.();
     dataSub.dispose();
     shellIntegration.dispose();
+    outputSubs.clear(); // 잔여 rAF 통지를 no-op 으로 — 폐기 후 stale 구독 호출 방지.
     if (termId !== 0) {
       invoke("close_terminal", { id: termId }).catch(() => {});
     }
@@ -426,6 +452,7 @@ export async function createTerminal(
     focus: () => term.focus(),
     getCwd: () => shellIntegration.getCwd(),
     onCwdChange: (cb) => shellIntegration.onCwdChange(cb),
+    onCommandStart: (cb) => shellIntegration.onCommandStart(cb),
     onCommandFinished: (cb) => shellIntegration.onCommandFinished(cb),
     setTheme: (theme: ITheme) => {
       term.options.theme = theme;
@@ -446,6 +473,12 @@ export async function createTerminal(
       const out: string[] = [];
       for (let i = end + 1 - want; i <= end; i++) out.push(line(i));
       return out.join("\n");
+    },
+    onOutput: (cb) => {
+      outputSubs.add(cb);
+      return () => {
+        outputSubs.delete(cb);
+      };
     },
     applySettings: (next: TerminalSettings) => {
       term.options.fontFamily = next.fontFamily;

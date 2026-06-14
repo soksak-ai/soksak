@@ -43,6 +43,7 @@ function fakeDeps(): PluginApiDeps {
     currentProject: () => null,
     activeFile: () => null,
     setFileText: () => false,
+    onFsChange: () => () => {},
   };
 }
 

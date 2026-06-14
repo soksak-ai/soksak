@@ -1408,3 +1408,13 @@ sok window.info
 sok window.move '{"x":0,"y":0}'
 ```
 
+## `window.reload`
+
+앱 webview 를 풀 리로드(location.reload). 개발 중 코어/플러그인 코드 변경을 반영한다 — HMR 이 안 잡는 모듈(이미 활성화된 플러그인 API 표면 등)까지 새로 가져온다. 활성 플러그인은 리로드 후 자동 재활성(설치본+동의 영속).
+
+**반환**: { reloaded: true }
+
+```bash
+sok window.reload
+```
+

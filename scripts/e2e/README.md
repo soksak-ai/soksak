@@ -61,3 +61,48 @@ E2E_CONSENT=1 scripts/e2e/resize.sh --identity dev
 기준이 실제 버그를 잡는지 보려면, 수정 이전 동작으로 되돌린 뒤(예: createTerminal 의
 fit 스로틀 제거 → 매 프레임 fit, 또는 PTY 라이브 SIGWINCH 제거) 같은 명령을 돌리면
 T1 maxRun 이 수십으로, T2 마커가 잘려 RED 가 떠야 한다.
+
+---
+
+# claude-gui E2E (`claude-gui.mjs`)
+
+soksak-claude-gui 플러그인(입력 3계층 큐·대화 렌더·persistence·라이브)을 실제 앱에서 멱등 검증.
+
+```bash
+SOKSAK_SOCKET=~/.soksak/com.soksak.dev.sock node scripts/e2e/claude-gui.mjs [paneId]
+# 전제: 대상 pane 에 claude 실행 중(없으면 자동 시작). 스냅샷 → /tmp/sok-e2e-claude-gui
+```
+
+소켓 RPC + 플러그인 introspection 명령(`plugin.soksak-claude-gui.state/send/queue`)으로 단언.
+종료코드 0=결정적 PASS, 1=FAIL. 시나리오:
+
+| # | 검증 | 결정성 |
+|---|---|---|
+| 1 | 모달(/status) 중 입력 → held(다이얼로그 대기), claude 미주입 | 결정적 |
+| 2 | 모달 닫힘 → FIFO 드레인 → L3(claude 처리) 후 큐 제거 | claude 응답 의존(타임아웃 SKIP) |
+| 3 | persistence — GUI 닫았다 열어도 큐 항목 보존 | 결정적 |
+| 4 | 대화 렌더 — JSONL → 버블 N개 + 세션 식별 | 결정적(히스토리 전제) |
+| 5 | 라이브 응답 밴드(.cg-live) | claude 응답 의존(재시도+안전대기, SKIP 허용) |
+
+## 방법론 (테스트 설계 원칙)
+
+이 하니스를 만들며 확정한 원칙 — 새 기능 e2e 시 따른다:
+
+1. **일회성 명령 금지.** ad-hoc `sok` 호출로 한 번 확인하면 재현·개선이 안 된다. 반드시
+   setup→단언→teardown 의 **멱등 시나리오 파일**로 남긴다(이 디렉토리).
+
+2. **CLI/소켓에 안 노출돼 테스트 불가하면 거부하지 말고 인터페이스를 만든다.** DOM 등 소켓이
+   못 보는 상태는 대상 컴포넌트에 introspection 명령을 추가(예: `plugin.*.state` →
+   `{open,bubbles,live,queue,classify}`)하고 — 매니페스트 선언·`docs/COMMANDS.md`(자동 생성)·
+   `docs/PLUGINS.md`·플러그인 README 등 **부대 문서를 함께 갱신**한다. 명령은 레지스트리
+   단일원천이라 CLI·MCP 에 자동 노출된다.
+
+3. **결정적 단언과 LLM-응답 의존을 분리한다.** claude/TUI 의 응답 시작·시간은 LLM thinking·
+   컨디션에 따라 불가측(실측상 0~수십초 지연, 응답 트리거 자체가 누락되기도). 따라서:
+   - 상태·큐·렌더·classify 같은 **결정적** 부분은 hard 단언(FAIL 시 종료 1).
+   - 드레인·라이브 같은 **응답 의존** 부분은 **재시도(Nx) + 안전대기(고정 타임아웃 대신
+     조건 기반 폴링) + SKIP 허용**. 대기시간만 늘리는 건 답이 아니다 — 재시도가 정도.
+   - 로직 자체는 **단위테스트**로 못박고(예: `parseLiveResponse`), e2e 는 통합만 확인한다.
+
+4. **시그니처는 실측으로 확정한다.** 버퍼 시그니처(모달 `Esc to cancel`, 응답중 스피너 등)는
+   추정 금지 — 소켓 `term.read` 로 실제 버퍼를 읽어 RED fixture 로 고정한 뒤 구현·정정한다.

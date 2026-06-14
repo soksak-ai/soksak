@@ -8,7 +8,11 @@ import { allGroups, collectLeafIds, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
 import { useBookmarks, type Bookmark } from "../state/bookmarks";
-import { subscribeAnyCommandFinished } from "../terminal/paneHosts";
+import {
+  subscribeAnyCommandFinished,
+  subscribeAnyCommandStarted,
+} from "../terminal/paneHosts";
+import type { PluginPermission } from "./spec";
 
 type SessionsState = ReturnType<(typeof useSessions)["getState"]>;
 
@@ -34,6 +38,16 @@ export interface PluginEventMap {
   // 호스트 표시 언어 변경 — 플러그인 자체 i18n(뷰 내부 텍스트)의 갱신 신호.
   "locale.changed": { language: string };
   "bookmarks.changed": { bookmarks: Bookmark[] };
+  // 터미널 명령 시작(셸 preexec 의 OSC 633;E — 명령라인·cwd 동반, 폴링 없음).
+  // [RULE] claude 등 "명령별" 도메인 처리는 코어가 아니라 이 이벤트를 구독하는
+  // 플러그인이 소유한다 — project.created 와 동일 원칙. 코어는 범용 소켓만 제공하고
+  // 특정 플러그인(claude 등)용 특수 코드를 갖지 않는다(강결합 금지).
+  "command.started": {
+    projectId: string | null;
+    paneId: string;
+    commandLine: string;
+    cwd: string | null;
+  };
   // 터미널 명령 종료(OSC 133/633 셸 통합 탐지 — 폴링 없음). git 뷰 등의 자동
   // 갱신 트리거. projectId 는 pane 의 소속 프로젝트(못 찾으면 null).
   "command.finished": { projectId: string | null; paneId: string };
@@ -49,8 +63,19 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "theme.changed",
   "locale.changed",
   "bookmarks.changed",
+  "command.started",
   "command.finished",
 ];
+
+// 권한 게이트가 필요한 이벤트 → 요구 권한. 여기 없는 이벤트는 권한 불요(범용 알림).
+// command.* 는 사용자가 실행하는 명령(명령라인·cwd)을 노출 → "terminal" 권한 필요.
+// 동의 화면이 그 권한을 표시한다(코어/터미널 접근을 사용자에게 고지).
+export const EVENT_PERMISSIONS: Partial<
+  Record<keyof PluginEventMap, PluginPermission>
+> = {
+  "command.started": "terminal",
+  "command.finished": "terminal",
+};
 
 type AnyListener = (payload: never) => void;
 const listeners = new Map<keyof PluginEventMap, Set<AnyListener>>();
@@ -236,6 +261,16 @@ export function startPluginHooks(): void {
       prevBookmarks = state.list;
       emitPluginEvent("bookmarks.changed", { bookmarks: state.list });
     }
+  });
+
+  // 터미널 명령 시작 → 플러그인 이벤트(범용 소켓 — claude-GUI 등이 구독). 이산 이벤트.
+  subscribeAnyCommandStarted((paneId, commandLine, cwd) => {
+    emitPluginEvent("command.started", {
+      projectId: projectOfPane(paneId),
+      paneId,
+      commandLine,
+      cwd,
+    });
   });
 
   // 터미널 명령 종료 → 플러그인 이벤트(git 뷰 자동 갱신 등). 이산 이벤트라

@@ -109,6 +109,7 @@ describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
     ".plugin-consent-notice",
     ".plugin-consent-cmd", // 명령 원문 코드 박스 — 폐곡선 윤곽
     ".plugin-contrib-chip", // 역할 칩 — 폐곡선 윤곽
+    ".egs-item", // 상태바 플러그인 항목 칩(claude-GUI 의 "gui" 등) — 폐곡선 윤곽
 
     ".dctl",
     ".dstepper",
