@@ -73,8 +73,9 @@ SOKSAK_SOCKET=~/.soksak/com.soksak.dev.sock node scripts/e2e/claude-gui.mjs [pan
 # 전제: 대상 pane 에 claude 실행 중(없으면 자동 시작). 스냅샷 → /tmp/sok-e2e-claude-gui
 ```
 
-소켓 RPC + 플러그인 introspection 명령(`plugin.soksak-claude-gui.state/send/queue`)으로 단언.
-종료코드 0=결정적 PASS, 1=FAIL. 시나리오:
+소켓 RPC + 플러그인 introspection·구동 명령(`plugin.soksak-claude-gui.state/send/focus/type/queue`)
+으로 단언. `focus`=GUI 입력창 포커스(화면 이동), `type`=입력창에 진짜 타이핑+Enter(우회 없는 입력 경로).
+종료코드 0=결정적 PASS, 1=FAIL. `E2E_ONLY=<scenario[,...]>` 로 일부만 실행. 시나리오:
 
 | # | 검증 | 결정성 |
 |---|---|---|
@@ -83,6 +84,7 @@ SOKSAK_SOCKET=~/.soksak/com.soksak.dev.sock node scripts/e2e/claude-gui.mjs [pan
 | 3 | persistence — GUI 닫았다 열어도 큐 항목 보존 | 결정적 |
 | 4 | 대화 렌더 — JSONL → 버블 N개 + 세션 식별 | 결정적(히스토리 전제) |
 | 5 | 라이브 응답 밴드(.cg-live) | claude 응답 의존(재시도+안전대기, SKIP 허용) |
+| 6 | /resume 세션 동기화 — 통제 fixture(알려진 Q&A 세션 /clear 생성) → 피커 settle+DOWN+Enter → GUI 가 그 세션으로 전환(state.session==newest jsonl) → 입력창 type 입력이 그 세션 도달+렌더 | 결정적(자체 fixture·멱등), 피커 미등장/취소 SKIP |
 
 ## 방법론 (테스트 설계 원칙)
 
