@@ -14,6 +14,7 @@ dist-ssr
 
 # 공식 플러그인의 독립 git 레포 산출물(make plugin-repos) — 소스는 plugins/
 plugins/.repos/
+examples/.repos/
 
 # Editor directories and files
 .editor/*

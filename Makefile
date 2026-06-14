@@ -104,7 +104,10 @@ e2e-resize: ## 리사이즈 E2E(기계 측정 — blank/프롬프트/TUI). macOS
 clean: ## 빌드 산출물 제거(dist, 번들)
 	rm -rf dist src-tauri/target/release/bundle src-tauri/target/debug/bundle
 
-stop: ## 실행 중인 개발 서버 종료
+stop: ## 실행 중인 개발 스택 전체 종료(tauri 바이너리 + tauri.js dev + Vite)
 	@pkill -f "target/debug/soksak-dev" 2>/dev/null || true
 	@pkill -f "node_modules/.*tauri.js dev" 2>/dev/null || true
-	@echo "개발 서버 종료(실행 중이었다면)."
+	@# tauri.js dev 가 죽어도 beforeDevCommand 로 띄운 Vite(devUrl 포트 1420)는 고아로
+	@# 남는다 — devUrl 포트를 점유한 프로세스를 정리해 clean stop 을 보장한다.
+	@pids=$$(lsof -ti :1420 2>/dev/null); [ -n "$$pids" ] && kill $$pids 2>/dev/null || true
+	@echo "개발 서버 종료(tauri + Vite)."

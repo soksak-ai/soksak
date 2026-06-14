@@ -43,6 +43,8 @@ function BrowserViewImpl({
   const areaRef = useRef<HTMLDivElement>(null);
   const openedRef = useRef(false);
   const lastRectRef = useRef("");
+  // 최신 visible 값 — open 완료 시점에 재적용(생성 경쟁 보정, 아래 effect 참조).
+  const visibleRef = useRef(visible);
   const [input, setInput] = useState(url);
   const [bmOpen, setBmOpen] = useState(false);
   const inputFocusRef = useRef(false);
@@ -75,6 +77,11 @@ function BrowserViewImpl({
           return;
         }
         openedRef.current = true;
+        // [HARD] 생성 경쟁 보정: 마운트 시 visible=false 면 browser_visible 이 open
+        // 완료 *전* 실행돼 미존재 label 에 no-op 이었다(browser_visible 은 get_webview
+        // None 이면 조용히 통과). webview 는 기본 visible 로 생성되므로 비활성 프로젝트의
+        // 브라우저가 visible 로 남아 홀펀치 경계로 비친다. open 후 현재 visible 을 재적용.
+        invoke("browser_visible", { label, visible: visibleRef.current }).catch(() => {});
         syncBounds(); // 생성 완료 시점의 최신 rect 로 1회 보정
       })
       .catch((e) => console.error("browser_open:", e));
@@ -137,6 +144,7 @@ function BrowserViewImpl({
   // 표시/숨김: 뷰 활성 여부만(탭 전환/최대화의 숨김 슬롯). 오버레이/즐겨찾기는
   // 숨김 사유가 아니다 — DOM 이 webview 위에 그려진다(레이어 원칙).
   useEffect(() => {
+    visibleRef.current = visible;
     invoke("browser_visible", { label, visible }).catch(() => {});
   }, [label, visible]);
 

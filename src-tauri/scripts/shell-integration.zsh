@@ -20,22 +20,36 @@ VSTERM_SHELL_INTEGRATION=1
 
 __vsterm_osc133() { builtin print -n "\e]133;$1\a"; }
 
-# OSC 7: report cwd as a file URI. Percent-encode bytes outside the unreserved
-# set so paths with spaces/non-ascii survive.
-__vsterm_osc7() {
-  local path="${PWD}" enc="" i ch
-  for (( i = 1; i <= ${#path}; i++ )); do
-    ch="${path[i]}"
+# Percent-encode a string, preserving the unreserved set — shared by OSC 7 (cwd)
+# and OSC 633;E (command line) so paths/commands with spaces/non-ascii survive.
+__vsterm_pctenc() {
+  local s="$1" enc="" i ch
+  for (( i = 1; i <= ${#s}; i++ )); do
+    ch="${s[i]}"
     case "$ch" in
       [a-zA-Z0-9/._~-]) enc+="$ch" ;;
       *) enc+=$(builtin printf '%%%02X' "'$ch") ;;
     esac
   done
-  builtin print -n "\e]7;file://${HOST}${enc}\a"
+  builtin print -n "$enc"
 }
 
-# preexec: user submitted a command, before it runs → output begins (C).
+# OSC 7: report cwd as a file URI.
+__vsterm_osc7() {
+  builtin print -n "\e]7;file://${HOST}$(__vsterm_pctenc "${PWD}")\a"
+}
+
+# OSC 633;E: report the just-submitted command line (percent-encoded). The frontend
+# re-emits this as a generic plugin "command.started" event so plugins (e.g. a
+# claude GUI) can react to specific commands — the core itself stays domain-agnostic.
+__vsterm_osc633E() {
+  builtin print -n "\e]633;E;$(__vsterm_pctenc "$1")\a"
+}
+
+# preexec: user submitted a command, before it runs. $1 = the command line as
+# submitted → report it (E), then mark command output begin (C).
 __vsterm_preexec() {
+  __vsterm_osc633E "$1"
   __vsterm_osc133 "C"
   __vsterm_preexec_ran=1
 }
