@@ -15,7 +15,37 @@ import {
   synthAgentProgress,
   diffLines,
   toolResultSummary,
+  parseCommandTags,
 } from "../../plugins/soksak-claude-gui/main.js";
+
+describe("parseCommandTags (슬래시 명령 transcript 태그 파싱)", () => {
+  it("command-name 을 슬래시 명령으로 추출(이름 정규화)", () => {
+    const t = "<command-name>/clear</command-name>\n<command-message>clear</command-message>\n<command-args></command-args>";
+    expect(parseCommandTags(t)).toEqual({ kind: "command", name: "/clear", args: "" });
+  });
+
+  it("슬래시 없는 이름도 /접두 정규화 + 인자 보존", () => {
+    const t = "<command-name>resume</command-name> <command-args>foo bar</command-args>";
+    expect(parseCommandTags(t)).toEqual({ kind: "command", name: "/resume", args: "foo bar" });
+  });
+
+  it("local-command-stdout 은 출력 텍스트로", () => {
+    expect(parseCommandTags("<local-command-stdout>Resume cancelled</local-command-stdout>")).toEqual({
+      kind: "stdout",
+      text: "Resume cancelled",
+    });
+  });
+
+  it("빈 stdout 은 text 빈 문자열(버블 생략 신호)", () => {
+    expect(parseCommandTags("<local-command-stdout></local-command-stdout>")).toEqual({ kind: "stdout", text: "" });
+  });
+
+  it("명령 태그가 아니면 null(일반 메시지)", () => {
+    expect(parseCommandTags("안녕하세요")).toBeNull();
+    expect(parseCommandTags("")).toBeNull();
+    expect(parseCommandTags(null)).toBeNull();
+  });
+});
 
 describe("parseLiveResponse (② 라이브 응답 파서)", () => {
   const LIVE = [

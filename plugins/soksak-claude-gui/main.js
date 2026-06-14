@@ -302,6 +302,21 @@ export function pickActiveSession(children, since) {
   return jsonls.length ? jsonls[0].name.replace(/\.jsonl$/, "") : null;
 }
 
+// 슬래시 명령은 transcript 에 <command-name>/clear</command-name> 등으로 저장된다. raw 로 토하지
+// 말고 깔끔히 렌더하기 위해 파싱한다. command(이름+인자) / stdout(출력) / null(명령 아님).
+export function parseCommandTags(text) {
+  const t = String(text == null ? "" : text);
+  const name = /<command-name>([\s\S]*?)<\/command-name>/.exec(t);
+  if (name) {
+    const args = /<command-args>([\s\S]*?)<\/command-args>/.exec(t);
+    const nm = name[1].trim();
+    return { kind: "command", name: nm.startsWith("/") ? nm : "/" + nm, args: args ? args[1].trim() : "" };
+  }
+  const out = /<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/.exec(t);
+  if (out) return { kind: "stdout", text: out[1].trim() };
+  return null;
+}
+
 export default {
   activate(ctx) {
     const CLAUDE_RE = /(^|\s|\/)claude(\s|$)/;
@@ -349,6 +364,9 @@ export default {
 .cg-dim{opacity:.55}
 .cg-user .cg-user-body{background:var(--accbg);border-radius:8px;padding:7px 11px;
   white-space:pre-wrap;word-break:break-word;font-size:12.5px}
+.cg-cmd{align-self:flex-start;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:11.5px;color:var(--acc);background:var(--accbg);border-radius:6px;padding:3px 8px}
+.cg-cmd-out{font-size:12px;white-space:pre-wrap;word-break:break-word}
 .cg-assistant{flex-direction:row;align-items:flex-start;gap:7px}
 .cg-dot{flex:0 0 auto;color:var(--acc);font-size:12px;line-height:1.6}
 .cg-md{flex:1 1 auto;min-width:0;font-size:13px;line-height:1.55;word-break:break-word}
@@ -994,6 +1012,19 @@ export default {
     }
 
     function userBubble(text) {
+      // 슬래시 명령(<command-*>)·명령 출력(<local-command-stdout>)은 raw 태그 대신 깔끔하게.
+      const cmd = parseCommandTags(text);
+      if (cmd) {
+        if (cmd.kind === "stdout") {
+          if (!cmd.text) return null; // 빈 출력은 버블 생성 안 함
+          const r = el("div", "cg-row cg-user");
+          r.appendChild(el("div", "cg-cmd-out cg-dim", cmd.text));
+          return r;
+        }
+        const r = el("div", "cg-row cg-user");
+        r.appendChild(el("div", "cg-cmd", cmd.name + (cmd.args ? " " + cmd.args : "")));
+        return r;
+      }
       const row = el("div", "cg-row cg-user");
       const body = el("div", "cg-user-body");
       const isInjected = /^<[a-z-]+>/.test(text.trim());
@@ -1155,6 +1186,17 @@ export default {
       let txt = typeof entry.content === "string" ? entry.content : "";
       if (sub === "compact_boundary") txt = "─── 컨텍스트 압축 ───";
       if (!txt) return;
+      // 명령 출력(subtype local_command 등)은 <local-command-stdout> 태그로 옴 → 정리.
+      // 빈 출력은 렌더 안 함, 출력/이름만 깔끔히.
+      const cmd = parseCommandTags(txt);
+      if (cmd) {
+        if (cmd.kind === "stdout") {
+          if (!cmd.text) return;
+          txt = cmd.text;
+        } else {
+          txt = cmd.name + (cmd.args ? " " + cmd.args : "");
+        }
+      }
       const row = el("div", "cg-row cg-system");
       row.appendChild(el("span", "cg-sys-mark", "✻"));
       row.appendChild(el("span", "cg-dim", txt.length > 200 ? txt.slice(0, 200) + "…" : txt));
@@ -1699,6 +1741,7 @@ export default {
         paneId: id,
         open: !!p.open,
         session: p.conv ? p.conv.session : null,
+        dir: p.conv ? p.conv.dir : null, // 추적 중인 프로젝트 트랜스크립트 dir(테스트 오라클용)
         bubbles: p.bodyEl ? p.bodyEl.querySelectorAll(".cg-row").length : 0,
         agents: p.bodyEl ? p.bodyEl.querySelectorAll(".cg-subagent").length : 0,
         live: !!(p.liveEl && p.liveEl.style.display !== "none" && p.liveEl.childElementCount),
