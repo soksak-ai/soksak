@@ -176,33 +176,38 @@ function RegistrySection({
           <Icon name="refresh" size="sm" />
         </button>
       </div>
-      {sorted.map((e) => {
-        const st = stateOf(e);
-        return (
-          <div key={e.id} className="plugin-row">
-            <div className="plugin-row-title">
-              <span className="plugin-row-name">{localize(e.name)}</span>
-              <span className="plugin-row-ver">v{e.version}</span>
+      {/* 이미 설치+최신(installed)은 "설치됨" 섹션에만 — 여기선 미설치(available)·업데이트(update)만
+          보여 같은 플러그인이 양쪽에 2개씩 뜨는 것을 구조적으로 막는다. */}
+      {(() => {
+        const actionable = sorted.filter((e) => stateOf(e) !== "installed");
+        if (actionable.length === 0) {
+          return <div className="plugin-side-empty-sub">{t("plugin.registry.allInstalled")}</div>;
+        }
+        return actionable.map((e) => {
+          const st = stateOf(e);
+          return (
+            <div key={e.id} className="plugin-row">
+              <div className="plugin-row-title">
+                <span className="plugin-row-name">{localize(e.name)}</span>
+                <span className="plugin-row-ver">v{e.version}</span>
+              </div>
+              <div className="plugin-row-desc">{localize(e.description)}</div>
+              <div className="plugin-row-actions">
+                {st === "available" && (
+                  <button type="button" className="dbtn" disabled={busy} onClick={() => doInstall(e)}>
+                    {t("plugin.install")}
+                  </button>
+                )}
+                {st === "update" && (
+                  <button type="button" className="dbtn" disabled={busy} onClick={() => doUpdate(e)}>
+                    {t("plugin.registry.update")}
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="plugin-row-desc">{localize(e.description)}</div>
-            <div className="plugin-row-actions">
-              {st === "available" && (
-                <button type="button" className="dbtn" disabled={busy} onClick={() => doInstall(e)}>
-                  {t("plugin.install")}
-                </button>
-              )}
-              {st === "update" && (
-                <button type="button" className="dbtn" disabled={busy} onClick={() => doUpdate(e)}>
-                  {t("plugin.registry.update")}
-                </button>
-              )}
-              {st === "installed" && (
-                <span className="plugin-badge enabled">{t("plugin.registry.installed")}</span>
-              )}
-            </div>
-          </div>
-        );
-      })}
+          );
+        });
+      })()}
     </>
   );
 }
@@ -211,6 +216,12 @@ function PluginManagerPanel() {
   const t = useT();
   const plugins = usePlugins((s) => s.plugins);
   const rejected = usePlugins((s) => s.rejected);
+  // 설치본 출처 구분(공식/수동) — 레지스트리 등재 id 집합. entries 가 바뀔 때만 재계산.
+  const registryEntries = useRegistry((s) => s.entries);
+  const officialIds = useMemo(
+    () => new Set(registryEntries.map((e) => e.id)),
+    [registryEntries],
+  );
   const [source, setSource] = useState("");
   const [refName, setRefName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -323,6 +334,14 @@ function PluginManagerPanel() {
             <span className="plugin-row-name">{localize(p.manifest.name)}</span>
             <span className="plugin-row-ver">v{p.manifest.version}</span>
             {p.source === "dev" && <span className="plugin-badge dev">dev</span>}
+            {/* 출처: 공식 레지스트리 등재 vs 수동/서드파티(미등재). dev·template 은 별 배지라 제외. */}
+            {p.source !== "dev" && !p.manifest.template && (
+              <span
+                className={`plugin-badge ${officialIds.has(p.manifest.id) ? "official" : "manual"}`}
+              >
+                {t(officialIds.has(p.manifest.id) ? "plugin.source.official" : "plugin.source.manual")}
+              </span>
+            )}
             {p.manifest.template ? (
               <span className="plugin-badge template">{t("plugin.template")}</span>
             ) : (

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   installState,
+  isOfficial,
   mergeRegistry,
   parseRegistry,
   REGISTRY_SPEC,
@@ -123,5 +124,23 @@ describe("mergeRegistry — 원격 채택/폴백", () => {
   it("원격 손상(null parse) → 스냅샷 유지", () => {
     expect(mergeRegistry(snap, { bad: true }).plugins.map((p) => p.id)).toEqual(["soksak-plugin-shark"]);
     expect(mergeRegistry(snap, null)).toBe(snap);
+  });
+});
+
+describe("isOfficial — 레지스트리 등재 여부(출처 구분)", () => {
+  const entries: RegistryEntry[] = [
+    entry() as unknown as RegistryEntry,
+    entry({ id: "soksak-plugin-memo" }) as unknown as RegistryEntry,
+  ];
+  it("등재 id → true(공식)", () => {
+    expect(isOfficial(entries, "soksak-plugin-shark")).toBe(true);
+    expect(isOfficial(entries, "soksak-plugin-memo")).toBe(true);
+  });
+  it("미등재 id(옛 id·서드파티) → false(수동)", () => {
+    expect(isOfficial(entries, "soksak-shark")).toBe(false); // 옛 id 잔재
+    expect(isOfficial(entries, "third-party-plugin")).toBe(false);
+  });
+  it("빈 레지스트리 → 항상 false", () => {
+    expect(isOfficial([], "soksak-plugin-shark")).toBe(false);
   });
 });

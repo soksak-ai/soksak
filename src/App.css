@@ -2649,6 +2649,15 @@ select.dctl {
   color: var(--fg3);
   border-style: dashed;
 }
+/* 출처: 공식(레지스트리 등재) = 강조색, 수동/서드파티(미등재) = 점선 중립. */
+.plugin-badge.official {
+  color: var(--acc);
+  border-color: var(--acc);
+}
+.plugin-badge.manual {
+  color: var(--fg3);
+  border-style: dashed;
+}
 .plugin-row-desc {
   color: var(--fg2);
   font-size: 11.5px;

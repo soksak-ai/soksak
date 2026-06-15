@@ -84,3 +84,9 @@ export function installState(entry: RegistryEntry, installedVersion?: string): I
 export function mergeRegistry(snapshot: Registry, remoteRaw: unknown): Registry {
   return parseRegistry(remoteRaw) ?? snapshot;
 }
+
+// 설치본 id 가 공식 레지스트리에 등재됐나(출처 구분 — "설치됨" 섹션 배지). 등재=공식, 미등재=수동/
+// 서드파티(또는 옛 id 잔재). 미등재 설치본도 정상 — 출처만 구분하고 제거를 강제하지 않는다.
+export function isOfficial(entries: RegistryEntry[], id: string): boolean {
+  return entries.some((e) => e.id === id);
+}
