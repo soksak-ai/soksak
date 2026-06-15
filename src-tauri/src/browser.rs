@@ -161,6 +161,19 @@ mod layer {
         let label = label.to_string();
         let _ = wv.with_webview(move |pw| unsafe {
             let obj = pw.inner() as *mut AnyObject;
+            // [HARD] 상류 누수 상쇄 — tauri-runtime-wry 2.11.2 의 macOS WithWebview 핸들러는
+            // webview/manager/ns_window 를 Retained::into_raw 로 PlatformWebview 에 넣고 어디서도
+            // release 하지 않는다(PlatformWebview·wry::Webview 둘 다 Drop 없음 — 누수가 존재한다는
+            // 사실이 곧 증거). 그래서 with_webview 호출마다 각 +1 이 영구 leak 돼 창을 닫아도 WKWebView
+            // 가 해제되지 않고 그 창의 WebContent 프로세스가 잔존한다(실측: 이 호출만 남겨도 +1/창,
+            // hook 전체 제거 시 0). 노출된 세 포인터의 leaked +1 을 정확히 -1 씩 from_raw+drop 으로
+            // 균형 맞춘다. obj 등은 창 뷰 계층(TaoView)이 보유하므로 균형 후에도 유효하다.
+            // [주의] 상류가 release 를 추가하면 이중 해제가 되므로 tauri 버전 업 시 이 블록을 반드시
+            // 재검토·제거한다(.claude/rules lsp-client 식 버전 핀과 같은 성격).
+            drop(Retained::<AnyObject>::from_raw(obj));
+            drop(Retained::<AnyObject>::from_raw(pw.controller() as *mut AnyObject));
+            drop(Retained::<AnyObject>::from_raw(pw.ns_window() as *mut AnyObject));
+
             if let Ok(mut layers) = LAYERS.lock() {
                 layers.insert(label, WinLayer { main_ptr: obj as usize, overlay: false });
             }
