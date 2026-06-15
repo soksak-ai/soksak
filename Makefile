@@ -18,7 +18,7 @@ DEBUG_APP   := src-tauri/target/debug/bundle/macos/soksak-debug.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs plugin-repos registry
+.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs plugin-publish registry
 
 help: ## 사용 가능한 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -41,7 +41,7 @@ icons: ## 앱 아이콘 전체 재생성(SVG→마스터1024 + base/dev/debug �
 	@echo "아이콘 재생성 완료: 마스터(1024 SVG벡터)+base+dev(녹색)+debug(주황)"
 
 dev: ## 개발 서버(HMR). 독 이름 "soksak-dev" + DEV 배지
-	$(PNPM) tauri dev
+	SOKSAK_DEV_PLUGINS=$(PWD)/plugins $(PNPM) tauri dev
 
 build: ## 릴리스 번들 빌드 → "soksak.app"(기본 아이콘)
 	$(PNPM) tauri build --config $(RELEASE_CONFIG)
@@ -70,19 +70,28 @@ docs: ## 명령 레퍼런스 생성(docs/COMMANDS.md — 앱이 실행 중이어
 	src-tauri/target/release/sok docs > docs/COMMANDS.md
 	@echo "생성: docs/COMMANDS.md"
 
-plugin-repos: ## 공식 플러그인 → 독립 git 레포 생성(plugins/.repos, 멱등)
-	@for d in plugins/*/; do \
-		id=$$(basename $$d); \
-		ver=$$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' $$d/plugin.json | head -1); \
-		dest=plugins/.repos/$$id; \
-		rm -rf $$dest && mkdir -p $$dest && cp -R $$d. $$dest/ && \
-		git -C $$dest init -q -b main && \
-		git -C $$dest -c user.email=plugins@soksak -c user.name=soksak add . && \
-		git -C $$dest -c user.email=plugins@soksak -c user.name=soksak \
-			-c commit.gpgsign=false commit -qm "$$id v$$ver" && \
-		git -C $$dest -c user.email=plugins@soksak -c user.name=soksak tag -f v$$ver >/dev/null && \
-		echo "plugins/.repos/$$id (v$$ver)"; \
-	done
+plugin-publish: ## 플러그인 발행 — 소스를 리모트로 push(임시 clone, 영구 미러 없음). 사용: make plugin-publish id=<id>
+	@test -n "$(id)" || { echo "id=<플러그인id> 필요 (예: make plugin-publish id=soksak-plugin-claude-gui)"; exit 1; }
+	@test -d "plugins/$(id)" || { echo "없는 플러그인: plugins/$(id)"; exit 1; }
+	@# 발행은 영구 미러 없이 임시 clone 으로만 한다(소스+설치본 2개만 관리). plugin.json 의
+	@# repo 리모트를 mktemp 로 clone → 소스로 rsync → 커밋·태그 → push → 임시 디렉토리 삭제.
+	@repo=$$(sed -n 's/.*"repo"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' plugins/$(id)/plugin.json | head -1); \
+	ver=$$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' plugins/$(id)/plugin.json | head -1); \
+	test -n "$$repo" || { echo "plugin.json 에 repo 없음"; exit 1; }; \
+	tmp=$$(mktemp -d) || exit 1; \
+	git clone -q "$$repo" "$$tmp" || { echo "clone 실패: $$repo"; rm -rf "$$tmp"; exit 1; }; \
+	rsync -a --delete --exclude .git plugins/$(id)/ "$$tmp"/ && \
+	git -C "$$tmp" add -A && \
+	if git -C "$$tmp" diff --cached --quiet; then \
+		echo "변경 없음 — 발행 생략 ($(id) v$$ver)"; \
+	else \
+		git -C "$$tmp" -c user.email=plugins@soksak -c user.name=soksak -c commit.gpgsign=false commit -qm "$(id) v$$ver" && \
+		git -C "$$tmp" tag -f "v$$ver" >/dev/null && \
+		git -C "$$tmp" push -q origin HEAD:main && \
+		git -C "$$tmp" push -qf origin "refs/tags/v$$ver" && \
+		echo "발행: $(id) v$$ver → $$repo"; \
+	fi; \
+	rm -rf "$$tmp"
 
 registry: ## 공식 플러그인 → 레지스트리 스냅샷 생성(설치가능 목록, 빌드 포함). 멱등
 	@command -v jq >/dev/null || { echo "jq 필요"; exit 1; }

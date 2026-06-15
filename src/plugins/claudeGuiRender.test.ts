@@ -2,16 +2,12 @@
 // 규칙: 비자명 로직은 순수함수로 분리(named export) → RED→구현→GREEN. tsc 건너뜀, vitest 실행.
 //
 // 대상:
-//   parseLiveResponse(buf)   — ② 라이브 평면: 진행 중 응답 텍스트/토큰/상태 추출(readBuffer 기반)
 //   synthAgentProgress(...)  — ③ workflow/agent: agent JSONL+meta 로 진행 라인 합성(거짓 진행률 금지)
 //   diffLines(old,new)       — B: Edit/Write 구조화 diff(현 평문 → del/add/ctx 라인)
 //   toolResultSummary(name,t)— B: tool_result 결과 카운트(Read N lines 등)
-// 버퍼 시그니처 fixture 는 cc2 src 근거(SpinnerAnimationRow.tsx:216 "esc to interrupt",
-// figures.ts ⏺) — 실 캡처 검증은 실세션 게이트가 담당.
 
 import { describe, it, expect } from "vitest";
 import {
-  parseLiveResponse,
   synthAgentProgress,
   diffLines,
   toolResultSummary,
@@ -44,35 +40,6 @@ describe("parseCommandTags (슬래시 명령 transcript 태그 파싱)", () => {
     expect(parseCommandTags("안녕하세요")).toBeNull();
     expect(parseCommandTags("")).toBeNull();
     expect(parseCommandTags(null)).toBeNull();
-  });
-});
-
-describe("parseLiveResponse (② 라이브 응답 파서)", () => {
-  const LIVE = [
-    "⏺ 안녕하세요 반갑",
-    "습니다 여러분",
-    "✻ Cogitating… (esc to interrupt · 1.2k tokens)",
-    "─────────────────────────────",
-    " > ",
-    "─────────────────────────────",
-  ].join("\n");
-  const IDLE = ["⏺ 이전 답변.", "─────────", " > ", "─────────"].join("\n");
-
-  it("응답중: 진행 텍스트 + 토큰 + responding=true", () => {
-    const r = parseLiveResponse(LIVE);
-    expect(r.responding).toBe(true);
-    expect(r.tokens).toBe(1200); // 1.2k → 1200
-    expect(r.text).toBe("안녕하세요 반갑\n습니다 여러분");
-  });
-  it("idle: responding=false, 텍스트 없음", () => {
-    const r = parseLiveResponse(IDLE);
-    expect(r.responding).toBe(false);
-    expect(r.text).toBe("");
-  });
-  it("토큰 없는 스피너도 responding 인식", () => {
-    const r = parseLiveResponse("⏺ 작업\n(esc to interrupt)");
-    expect(r.responding).toBe(true);
-    expect(r.tokens).toBe(null);
   });
 });
 

@@ -327,13 +327,23 @@ sok editor.format
 
 ## 공식 플러그인 (레퍼런스 구현)
 
-소스는 [`plugins/`](../plugins/) — 전부 무번들 순수 JS.
-`make plugin-repos` 가 각 플러그인을 **독립 git 레포**(`plugins/.repos/<id>`, `v<버전>` 태그)로
-생성한다 — GitHub 배포 형식 그대로이며, 로컬 설치 검증에 쓴다:
+소스는 [`plugins/`](../plugins/) — 전부 무번들 순수 JS. 관리 위치는 **2개뿐**(미러 없음):
+
+- **소스(개발 폴더)** `plugins/<id>/` — 우리가 만드는 곳. 개발 중엔 이게 **우선**한다:
+  `SOKSAK_DEV_PLUGINS`(=`make dev` 가 레포 `plugins/` 로 지정)의 폴더가 동명 설치본을 가려
+  소스 편집이 앱 리로드에 즉시 반영된다(`plugin.dev.load` 자동). 설치본을 직접 고치지 않는다.
+- **설치본** `~/.soksak/plugins/<id>/` — git clone 본. 설치/업데이트는 **무조건 git**이고
+  설치 후 **읽기전용 잠금**(`chmod -R a-w`, update 가 잠시 해제)된다. 손으로 고쳐도 다음
+  update 의 `reset --hard` 가 날린다.
+
+발행은 영구 미러 없이 **임시 clone** 으로만 한다 — `make plugin-publish id=<id>` 가 plugin.json 의
+`repo` 리모트를 `mktemp` 로 clone → 소스로 rsync → 커밋·태그 → push → 임시 디렉토리 삭제.
+버전을 올려 발행하면 레지스트리(스냅샷 + 라이브 레포)와 설치본 버전 비교로 플러그인 패널에
+"업데이트"가 뜬다:
 
 ```bash
-make plugin-repos
-sok plugin.install '{"source":"'$PWD'/plugins/.repos/soksak-memo"}'
+make plugin-publish id=soksak-plugin-claude-gui   # 소스 → 리모트 push(임시 clone, 미러 없음)
+make registry                                      # 레지스트리 스냅샷 갱신
 ```
 
 | id | 권한 | 시연 |

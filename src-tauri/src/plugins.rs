@@ -62,6 +62,19 @@ fn git_run(cmd: &mut std::process::Command) -> Result<(), String> {
     }
 }
 
+// 설치 디렉토리 쓰기 잠금/해제 — 설치본은 git 미러(사용자 작업공간 아님)다. 개발은 개발
+// 폴더(소스)에서 하고 설치본은 직접 수정하면 안 된다(다음 update 의 reset --hard 가 날린다).
+// chmod 로 한 겹 더 막아 앱의 git 경로(update 가 잠시 해제)만 통과시킨다. best-effort —
+// 실패해도 설치/갱신 자체를 막지 않는다(데이터는 분리된 plugins-data 라 영향 없음).
+fn set_tree_writable(dir: &Path, writable: bool) {
+    let mode = if writable { "u+w" } else { "a-w" };
+    let _ = std::process::Command::new("chmod")
+        .arg("-R")
+        .arg(mode)
+        .arg(dir)
+        .output();
+}
+
 // ── 스캔 ────────────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -98,6 +111,40 @@ pub fn plugins_scan() -> Result<Vec<PluginScanEntry>, String> {
         });
     }
     out.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
+    Ok(out)
+}
+
+// 개발용 플러그인 경로 — SOKSAK_DEV_PLUGINS(':' 구분 디렉토리 목록)의 각 디렉토리에서
+// plugin.json 을 가진 직속 하위 디렉토리의 절대경로를 모은다. 프론트가 이를 devLoad 해
+// 설치본 위에 덮어 쓴다(레포 소스 = 즉시 반영). 미설정/읽기 실패는 빈 목록·침묵 누락으로
+// 부팅을 막지 않는다. "." 시작 항목 제외. 결정성 위해 정렬.
+#[tauri::command]
+pub fn dev_plugin_paths() -> Result<Vec<String>, String> {
+    let Ok(raw) = std::env::var("SOKSAK_DEV_PLUGINS") else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    for base in raw.split(':') {
+        if base.is_empty() {
+            continue;
+        }
+        // 없거나 못 읽는 디렉토리는 건너뛴다(전체 호출을 실패시키지 않음).
+        let Ok(rd) = std::fs::read_dir(base) else {
+            continue;
+        };
+        for entry in rd {
+            let Ok(entry) = entry else { continue };
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !path.is_dir() || name.starts_with('.') {
+                continue;
+            }
+            if path.join("plugin.json").is_file() {
+                out.push(path.to_string_lossy().to_string());
+            }
+        }
+    }
+    out.sort();
     Ok(out)
 }
 
@@ -223,7 +270,9 @@ pub fn plugin_install_git(
     source: String,
     reference: Option<String>,
 ) -> Result<PluginInstallResult, String> {
-    install_git_into(&plugins_dir()?, &source, reference.as_deref())
+    let r = install_git_into(&plugins_dir()?, &source, reference.as_deref())?;
+    set_tree_writable(Path::new(&r.dir), false); // 설치 직후 읽기전용 잠금
+    Ok(r)
 }
 
 // 설치된 플러그인 갱신 — 설치본은 소스의 미러(사용자 작업공간이 아님): fetch 후
@@ -236,6 +285,7 @@ pub fn plugin_update(id: String) -> Result<PluginInstallResult, String> {
     if !dir.is_dir() {
         return Err(format!("설치되지 않은 플러그인: {id}"));
     }
+    set_tree_writable(&dir, true); // git fetch/reset 위해 잠금 해제(실패 시 다음 update 가 재잠금)
     if let Err(e) = git_run(
         std::process::Command::new("git")
             .arg("-C")
@@ -252,6 +302,7 @@ pub fn plugin_update(id: String) -> Result<PluginInstallResult, String> {
     ) {
         return Err(format!("git reset 실패: {e}"));
     }
+    set_tree_writable(&dir, false); // 갱신 후 다시 읽기전용 잠금
     let manifest =
         std::fs::read_to_string(dir.join("plugin.json")).map_err(|_| "plugin.json 없음".to_string())?;
     Ok(PluginInstallResult {
@@ -269,6 +320,7 @@ pub fn plugin_remove(id: String) -> Result<(), String> {
     if !dir.exists() {
         return Err(format!("설치되지 않은 플러그인: {id}"));
     }
+    set_tree_writable(&dir, true); // 읽기전용 잠금 해제 후 제거(잠긴 트리는 remove 가 막힌다)
     std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())
 }
 

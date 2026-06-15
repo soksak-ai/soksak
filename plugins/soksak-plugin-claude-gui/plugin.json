@@ -2,7 +2,7 @@
   "spec": "soksak-plugin-spec@1",
   "id": "soksak-plugin-claude-gui",
   "name": "Claude GUI",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repo": "https://github.com/soksak-ai/soksak-plugin-claude-gui.git",
   "description": "터미널에서 claude(Claude Code CLI)가 실행되면 패널 상태바에 GUI 항목이 뜨고, 누르면 대화를 버블 UI로 보여주는 오버레이가 열린다. 활성 세션과 서브에이전트를 실시간 표시.",
   "entry": "main.js",

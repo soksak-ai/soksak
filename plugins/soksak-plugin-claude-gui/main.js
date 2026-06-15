@@ -184,44 +184,6 @@ export function createInputQueue(deps) {
   };
 }
 
-// ── ② 라이브 응답 파서(readBuffer 기반) — 순수, 테스트 노출 ─────────────────────
-// 진행 중(응답중) claude TUI 화면에서 스트리밍 어시스턴트 텍스트·토큰·상태를 뽑는다.
-// JSONL 은 완료 메시지만 담으므로(turn 종료 후), 진행 중 표시는 버퍼가 유일 소스(②평면).
-// [검증] 시그니처는 cc2 src 근거(SpinnerAnimationRow.tsx:216 "esc to interrupt", figures.ts ⏺) +
-// 단위테스트. 실 캡처가 최종 게이트.
-export function parseLiveResponse(bufferText) {
-  const buf = String(bufferText == null ? "" : bufferText);
-  const responding = /esc to interrupt/i.test(buf);
-  if (!responding) return { responding: false, tokens: null, text: "" };
-  let tokens = null;
-  const tm = buf.match(/([\d.]+)\s*(k?)\s*tokens/i);
-  if (tm) {
-    const n = parseFloat(tm[1]);
-    if (!isNaN(n)) tokens = Math.round(tm[2] ? n * 1000 : n);
-  }
-  // 진행 텍스트 = 마지막 ⏺(어시스턴트 마커) 라인부터 스피너/입력박스 보더 직전까지.
-  const lines = buf.split("\n");
-  let start = -1;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (lines[i].includes("⏺")) {
-      start = i;
-      break;
-    }
-  }
-  let text = "";
-  if (start !== -1) {
-    const out = [];
-    for (let i = start; i < lines.length; i++) {
-      const ln = lines[i];
-      if (/esc to interrupt/i.test(ln)) break; // 스피너 경계
-      if (/^\s*[─━]{3,}/.test(ln)) break; // 입력박스 보더 경계
-      out.push(ln);
-    }
-    text = out.join("\n").replace(/^⏺\s?/, "").replace(/\s+$/, "");
-  }
-  return { responding: true, tokens, text };
-}
-
 // ── ③ 에이전트 진행 합성 — 순수, 테스트 노출 ──────────────────────────────────
 // agent-{id}.jsonl 엔트리 + agent-{id}.meta.json 으로 진행 라인을 합성한다. 실측만 —
 // tool_use 카운트·usage 합·마지막 tool. 거짓 진행률 금지(cc2 LocalAgentTask 패턴).
@@ -438,13 +400,11 @@ export default {
   background:var(--acc);color:var(--bg);font-size:15px;cursor:pointer;line-height:1}
 .cg-send:disabled{opacity:.4;cursor:default;background:transparent;color:inherit;
   border-color:var(--bd-soft)}
-/* ② 라이브 응답 — 진행 중 표시. 완료 시 JSONL 구조 버블로 교체(parseLiveResponse). */
-.cg-live{display:none;flex:0 0 auto;max-height:32%;overflow:auto;padding:8px 16px;
-  border-top:1px solid var(--bd-soft)}
-.cg-live-head{display:flex;align-items:center;gap:7px;font-size:12px;opacity:.75}
-.cg-live-dot{color:var(--acc);animation:cg-pulse 1.2s ease-in-out infinite}
+/* jsonl "답변 중" 인디케이터 — user 라인 후 표시, assistant 라인 도착 시 제거. */
 @keyframes cg-pulse{0%,100%{opacity:.25}50%{opacity:1}}
-.cg-live-text{margin-top:5px;font-size:13px;line-height:1.55;opacity:.8;word-break:break-word}
+.cg-pending{flex-direction:row;align-items:center;gap:7px;font-style:italic;
+  opacity:.6;font-size:12.5px}
+.cg-pending .cg-pending-dot{color:var(--acc);animation:cg-pulse 1.2s ease-in-out infinite}
 /* B: Edit/Write 구조화 diff(diffLines). */
 .cg-diff{margin-top:4px;font-family:${MONO};font-size:11.5px;border-radius:6px;overflow:auto;
   border:1px solid var(--bd-soft)}
@@ -871,32 +831,20 @@ export default {
       }, 700);
     }
 
-    // ② 진행 중 응답을 라이브 밴드에 표시(parseLiveResponse). 완료(JSONL)되면 숨고 구조 버블로 교체.
-    function updateLive(conv) {
-      const live = conv.liveEl;
-      if (!live) return;
-      const term = ctx.app.terminal;
-      if (!term || !term.readBuffer || !conv.paneId) return;
-      const r = parseLiveResponse(term.readBuffer(conv.paneId, 80) || "");
-      if (!r.responding) {
-        if (live.style.display !== "none") {
-          live.style.display = "none";
-          live.replaceChildren();
-        }
-        return;
-      }
-      live.style.display = "block"; // CSS 기본 display:none 덮기(빈 문자열은 도로 숨김)
-      const head = el("div", "cg-live-head");
-      head.append(el("span", "cg-live-dot", "⏺"));
-      head.append(
-        el("span", null, "응답 중" + (r.tokens ? ` · ${fmtTokens(r.tokens)} tokens` : "")),
-      );
-      live.replaceChildren(head);
-      if (r.text) {
-        const bodyEl = el("div", "cg-live-text cg-md");
-        bodyEl.innerHTML = mdToHtml(r.text);
-        live.appendChild(bodyEl);
-      }
+    // jsonl "답변 중" 인디케이터 — user 엔트리 직후 본문 끝에 붙이고, assistant 엔트리가
+    // 도착하면(턴 응답 시작) 제거한다. 버퍼(readBuffer)는 안 본다 — 완전히 jsonl 기반.
+    function showPendingIndicator(conv) {
+      if (conv.pendingEl) return; // 이미 떠 있음 — 중복 금지
+      const node = el("div", "cg-row cg-pending");
+      node.append(el("span", "cg-pending-dot", "⏺"), el("span", null, "답변 중…"));
+      appendRow(conv, node);
+      conv.pendingEl = node;
+    }
+
+    function removePendingIndicator(conv) {
+      if (!conv.pendingEl) return;
+      conv.pendingEl.remove();
+      conv.pendingEl = null;
     }
 
     function fmtTokens(n) {
@@ -965,12 +913,15 @@ export default {
       renderBubble(conv, entry);
       // L3: 라이브 user 텍스트 라인 = 실제 입력 확정 → 입력 큐 head 매칭 제거(단일 제거점).
       // 이 경로는 라이브 tail(feed) 전용 — feedInitial(과거분)은 renderEntry 를 안 거친다.
-      if (entry.type === "user" && conv.queue) {
-        const ut = realUserText(entry);
-        if (ut) conv.queue.confirmUserLine(ut);
+      if (entry.type === "user") {
+        if (conv.queue) {
+          const ut = realUserText(entry);
+          if (ut) conv.queue.confirmUserLine(ut);
+        }
+        showPendingIndicator(conv); // user 라인 = claude 가 응답 시작 → "답변 중" 표시
       }
-      // 어시스턴트 완료 라인 = 그 턴 구조 버블 생성 → 라이브 밴드 재동기(보통 숨김).
-      if (entry.type === "assistant" && conv.liveEl) updateLive(conv);
+      // 어시스턴트 라인 도착 = 응답 시작 → "답변 중" 인디케이터 제거.
+      if (entry.type === "assistant") removePendingIndicator(conv);
     }
 
     function appendRow(conv, node) {
@@ -1496,8 +1447,8 @@ export default {
         wfWatched: false, // workflows 폴더 watch 1회
         wfRunWatched: new Set(), // runId 폴더별 watch·그룹 헤더 1회
         queue: p.queue || null, // L3 매칭 대상(renderEntry → confirmUserLine)
-        paneId: p.paneId, // ② readBuffer/onOutput 타깃
-        liveEl: p.liveEl || null, // ② 진행 중 응답 밴드
+        paneId: p.paneId, // readBuffer/onOutput 타깃
+        pendingEl: null, // jsonl "답변 중" 인디케이터 DOM(있으면 표시 중)
       };
       p.conv = conv;
       // effort 는 settings.json 에서(범용 fs 로 ~ 확장).
@@ -1548,13 +1499,6 @@ export default {
           if (conv.session) scanAgents(conv);
         }),
       );
-      // ② 라이브 응답 — 진행 중 버퍼를 onOutput(폴링 없음, 프레임당 1회)으로 표시.
-      const lterm = ctx.app.terminal;
-      if (lterm && lterm.readBuffer && lterm.onOutput && conv.paneId) {
-        const d = lterm.onOutput(conv.paneId, () => updateLive(conv));
-        conv.watchers.push({ dispose: () => (d && d.dispose ? d.dispose() : d && d()) });
-        updateLive(conv);
-      }
       if (conv.session) scanAgents(conv);
     }
 
@@ -1604,8 +1548,6 @@ export default {
       const headHolder = {};
       const head = buildHeader(headHolder, p.cwd, () => close(paneId));
       p.headRefs = headHolder.head; // openConversation 이 conv.head 로 받아 갱신
-      const liveEl = el("div", "cg-live"); // ② 진행 중 응답 밴드(body 와 foot 사이)
-      p.liveEl = liveEl;
       const foot = buildInput(paneId);
       p.queue = foot._queue; // 입력 3계층 큐(L3 확정 = renderEntry 에서 confirmUserLine)
       p.ta = foot._ta; // 입력창 textarea — focus/type 명령이 실제 DOM 경로로 구동
@@ -1613,7 +1555,7 @@ export default {
         p.queue.restore(p.savedQueue); // 이전에 닫으며 보존한 대기 항목 복원
         p.savedQueue = null;
       }
-      ov.append(head, body, liveEl, foot);
+      ov.append(head, body, foot);
       host.appendChild(ov);
       p.overlay = ov;
       p.open = true;
@@ -1777,7 +1719,7 @@ export default {
         dir: p.conv ? p.conv.dir : null, // 추적 중인 프로젝트 트랜스크립트 dir(테스트 오라클용)
         bubbles: p.bodyEl ? p.bodyEl.querySelectorAll(".cg-row").length : 0,
         agents: p.bodyEl ? p.bodyEl.querySelectorAll(".cg-subagent").length : 0,
-        live: !!(p.liveEl && p.liveEl.style.display !== "none" && p.liveEl.childElementCount),
+        pending: !!(p.conv && p.conv.pendingEl),
         queue: p.queue ? p.queue.snapshot() : [],
         classify:
           term && term.readBuffer

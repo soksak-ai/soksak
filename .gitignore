@@ -12,7 +12,8 @@ dist
 dist-ssr
 *.local
 
-# 공식 플러그인의 독립 git 레포 산출물(make plugin-repos) — 소스는 plugins/
+# 산출물(추적 제외). 플러그인은 영구 미러 없이 make plugin-publish(임시 clone)로 발행 —
+# plugins/.repos 는 구 plugin-repos 산출물(폐기, 남으면 무시).
 plugins/.repos/
 examples/.repos/
 
