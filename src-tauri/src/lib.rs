@@ -99,15 +99,22 @@ pub fn run() {
             }
             Ok(())
         })
-        // 메인 창 포커스(NSWindow key 등) 변화를 프론트로 emit. 다른 앱으로 전환하면 false,
-        // 같은 창 안 child webview(내장 브라우저)로 포커스가 가도 창 레벨이라 불변 — "안 볼 때
-        // 멈춘다"의 정확한 신호(부차 애니메이션 게이팅용). 멀티플랫폼 표준 이벤트(WindowEvent).
+        // 창 포커스(NSWindow key 등) 변화를 프론트로 emit({label, focused}). 다른 앱으로 전환하면
+        // false, 같은 창 안 child webview(내장 브라우저)로 포커스가 가도 창 레벨이라 불변. 부차
+        // 애니메이션 게이팅 신호이자, 멀티 윈도우 활성 창 추적(소켓 라우팅 기본 타겟) 소스.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(focused) = event {
-                if window.label() == "main" {
-                    use tauri::Emitter;
-                    let _ = window.emit("window-focus", *focused);
+                use tauri::Emitter;
+                let label = window.label().to_string();
+                if *focused {
+                    ipc::note_focus(&label); // 활성 창 갱신
                 }
+                // 전역 emit + 프론트가 자기 label 필터(emit_to 는 webview 라벨이라 별 창 webview 에
+                // 안 닿을 수 있어 전역 + 필터가 안전).
+                let _ = window.emit("window-focus", serde_json::json!({
+                    "label": label,
+                    "focused": *focused,
+                }));
             }
         })
         .invoke_handler(tauri::generate_handler![

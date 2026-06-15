@@ -36,6 +36,8 @@ export interface CommandSpec {
 export interface CommandContext {
   pane?: string;
   remote?: boolean;
+  // 멀티 윈도우: 이 명령이 도착한 창 label(소켓 emit_to 타겟). 창 명령(window.*)·라우팅 확인용.
+  window?: { label: string };
 }
 
 // 권한 게이트 콜백(설정 store 를 registry 가 직접 알지 않게 주입).

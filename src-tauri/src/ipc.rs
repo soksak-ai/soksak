@@ -10,7 +10,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{mpsc, Mutex, OnceLock};
+use std::sync::{mpsc, LazyLock, Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::Deserialize;
@@ -40,6 +40,27 @@ struct Request {
     #[serde(default)]
     params: Value,
     pane: Option<String>,
+    // 멀티 윈도우 타겟 창 label. 생략 시 활성 창(마지막 포커스), 그것도 없으면 "main".
+    // tmux -t 관례 — 특정 창을 명시할 때 지정한다.
+    window: Option<String>,
+}
+
+// 마지막으로 포커스된 창 label(활성 창 추적). lib.rs on_window_event 의 Focused(true) 가 갱신.
+// 소켓 명령이 window 를 생략하면 이 창으로 라우팅된다.
+static LAST_FOCUSED: LazyLock<Mutex<String>> = LazyLock::new(|| Mutex::new("main".to_string()));
+
+pub fn note_focus(label: &str) {
+    if let Ok(mut f) = LAST_FOCUSED.lock() {
+        *f = label.to_string();
+    }
+}
+
+fn active_window() -> String {
+    LAST_FOCUSED
+        .lock()
+        .ok()
+        .map(|f| f.clone())
+        .unwrap_or_else(|| "main".to_string())
 }
 
 fn parse_request(line: &str) -> Result<Request, String> {
@@ -105,8 +126,13 @@ fn handle_conn(app: AppHandle, stream: UnixStream) {
     }
 }
 
-// 요청을 프론트 registry 로 전달하고 응답을 기다린다.
+// 요청을 *타겟 창의* 프론트 registry 로 전달하고 응답을 기다린다. 타겟 = req.window ?? 활성 창 ??
+// "main". broadcast(app.emit) 가 아니라 emit_to(타겟)이라 멀티 윈도우에서 그 창만 응답 → seq 충돌 0.
 fn dispatch(app: &AppHandle, req: Request) -> Value {
+    let target = req.window.clone().unwrap_or_else(active_window);
+    if app.get_webview_window(&target).is_none() {
+        return error_reply("WINDOW_NOT_FOUND", &format!("창을 찾을 수 없음: {target}"));
+    }
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     let (tx, rx) = mpsc::sync_channel::<Value>(1);
     let bridge = app.state::<CmdBridge>();
@@ -117,8 +143,9 @@ fn dispatch(app: &AppHandle, req: Request) -> Value {
         "method": req.method,
         "params": req.params,
         "pane": req.pane,
+        "window": target,
     });
-    if app.emit("cmd-request", payload).is_err() {
+    if app.emit_to(&target, "cmd-request", payload).is_err() {
         bridge.pending.lock().unwrap().remove(&seq);
         return error_reply("INTERNAL", "프론트로 요청 전달 실패");
     }

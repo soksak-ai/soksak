@@ -12,6 +12,7 @@ interface CmdRequest {
   method: string;
   params?: Record<string, unknown> | null;
   pane?: string | null;
+  window?: string | null;
 }
 
 let started = false;
@@ -32,11 +33,13 @@ export function startExecutor(): void {
     return true;
   });
   void listen<CmdRequest>("cmd-request", async (e) => {
-    const { id, method, params, pane } = e.payload;
-    // 소켓 경유 = 원격(AI/CLI) 호출 → 권한 게이트 적용 대상.
+    const { id, method, params, pane, window } = e.payload;
+    // 소켓 경유 = 원격(AI/CLI) 호출 → 권한 게이트 적용 대상. emit_to 로 이 창에만 도착하므로
+    // window 는 자기 창 label(라우팅 확인·명령 컨텍스트용).
     const result = await execute(method, params ?? {}, {
       pane: pane ?? undefined,
       remote: true,
+      window: window ? { label: window } : undefined,
     });
     invoke("cmd_result", { id, result }).catch((err) =>
       console.error("cmd_result 회신 실패:", err),

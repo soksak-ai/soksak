@@ -5,6 +5,7 @@
 // 리스너 실패는 호스트를 죽이지 못한다(§0-4) — 콜백마다 try/catch.
 
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { allGroups, collectLeafIds, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
@@ -288,11 +289,18 @@ export function startPluginHooks(): void {
     });
   });
 
-  // 앱(메인 창) 활성 → 플러그인 이벤트. 코어(WindowEvent::Focused)가 "window-focus" 로 emit
-  // 하면 그대로 중계한다(liveResize 와 동형 — 신호원은 OS 별이나 채널은 단일). Tauri 런타임
-  // 밖(jsdom 테스트)에선 listen 이 거부되며 조용히 무시.
-  void listen<boolean>("window-focus", (e) => {
-    emitPluginEvent("app.focus", { focused: e.payload });
+  // 앱(이 창) 활성 → 플러그인 이벤트. 코어(WindowEvent::Focused)가 "window-focus" {label, focused}
+  // 를 전역 emit 하면, 자기 창 것만 골라 중계한다(멀티 윈도우 — 다른 창 포커스는 이 창의 펫과 무관).
+  // Tauri 런타임 밖(jsdom 테스트)에선 listen·getCurrentWindow 가 거부되며 조용히 무시.
+  let myLabel = "main";
+  try {
+    myLabel = getCurrentWindow().label;
+  } catch {
+    // 테스트 환경 — 폴백 유지
+  }
+  void listen<{ label: string; focused: boolean }>("window-focus", (e) => {
+    if (e.payload.label !== myLabel) return;
+    emitPluginEvent("app.focus", { focused: e.payload.focused });
   }).catch(() => {});
 }
 
