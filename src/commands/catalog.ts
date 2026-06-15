@@ -1874,6 +1874,45 @@ export function registerCatalog(): void {
     },
   });
 
+  // ── 멀티 윈도우 ──────────────────────────────────────────────────────────
+  register("window.new", {
+    description: "새 OS 창을 연다(독립 작업공간). 반환 = 생성된 창 label.",
+    params: {},
+    returns: "{ label }",
+    examples: ["sok window.new"],
+    handler: async () => ({ label: await invoke<string>("window_create") }),
+  });
+
+  register("window.list", {
+    description: "열린 창 label 목록. window 명시 타겟(다른 명령의 window 인자) 조회용.",
+    params: {},
+    returns: "{ labels }",
+    examples: ["sok window.list"],
+    handler: async () => ({ labels: await invoke<string[]>("window_list") }),
+  });
+
+  register("window.focus", {
+    description: "특정 창을 앞으로 가져온다(포커스).",
+    params: { label: { type: "string", description: "창 label(window.list 로 조회)" } },
+    returns: "{ ok }",
+    examples: ['sok window.focus \'{"label":"win-1"}\''],
+    handler: async (p) => {
+      await invoke("window_focus", { label: p.label as string });
+      return { ok: true };
+    },
+  });
+
+  register("window.close", {
+    description: "특정 창을 닫는다.",
+    params: { label: { type: "string", description: "창 label" } },
+    returns: "{ ok }",
+    examples: ['sok window.close \'{"label":"win-1"}\''],
+    handler: async (p) => {
+      await invoke("window_close", { label: p.label as string });
+      return { ok: true };
+    },
+  });
+
   register("window.snapshot", {
     description:
       "창 내용을 PNG 로 저장. 다른 앱에 완전히 가려져 있어도 캡처된다(캡처 순간만 가림감지 자동 해제→복원). WebGL 터미널 포함. 부모 폴더 자동 생성.",

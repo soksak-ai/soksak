@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { rafThrottle } from "./lib/rafThrottle";
 import type { TreeThemeInput } from "@pierre/trees";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
@@ -451,6 +452,12 @@ function App() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!e.metaKey) return;
       const key = e.key.toLowerCase();
+      // ⌘N 새 창(독립 작업공간) — 프로젝트 무관이라 가장 먼저 처리.
+      if (key === "n" && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        invoke("window_create").catch((err) => console.error("새 창 실패:", err));
+        return;
+      }
       const s = useSessions.getState();
       const project = s.tabs.find((t) => t.id === s.activeId);
       if (!project) return;
