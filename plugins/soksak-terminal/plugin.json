@@ -6,6 +6,7 @@
     "en": "Terminal"
   },
   "version": "1.2.0",
+  "repo": "https://github.com/soksak-ai/soksak-terminal.git",
   "description": {
     "ko": "새 탭(+) 메뉴에 터미널을 추가",
     "en": "Adds Terminal to the new-tab (+) menu"

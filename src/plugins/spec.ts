@@ -326,6 +326,9 @@ export interface PluginManifest {
   version: string; // semver(major.minor.patch)
   description: LocalizedText;
   author?: string;
+  // 이 플러그인의 git 레포(설치 source). 공식 레지스트리 생성이 추출하는 필드 — 저자가 자기
+  // 레포를 명시한다. 임의 git URL(github/gitlab/self-host 다). plugin.install 이 이걸로 clone.
+  repo?: string;
   entry: string; // 파싱 시 기본 main.js 로 채움. 디렉토리 내부 상대경로만
   minAppVersion?: string;
   template?: boolean; // true = 개발 템플릿(읽기 전용). 활성화 대상이 아니다 — 목록·상세만 노출하고 토글을 주지 않는다.
@@ -359,6 +362,8 @@ const VIEW_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const COMMAND_NAME_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 const EXT_RE = /^[a-z0-9]+$/;
 const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/;
+// git URL: 스킴형(https/http/git/ssh ://…) 또는 scp-유사(git@host:path). clone 가능한 형태만.
+const GIT_URL_RE = /^(?:https?|git|ssh):\/\/\S+|^[\w.-]+@[\w.-]+:\S+/;
 
 // a ≥ b (major.minor.patch 비교, pre-release 무시). 형식 불량이면 null.
 export function semverGte(a: string, b: string): boolean | null {
@@ -469,6 +474,7 @@ export function parseManifest(
       "version",
       "description",
       "author",
+      "repo",
       "entry",
       "minAppVersion",
       "template",
@@ -494,6 +500,10 @@ export function parseManifest(
   validateLocalizedText(raw.description, "description", errors);
   if (raw.author !== undefined && !isNonEmptyString(raw.author)) {
     errors.push("author: 문자열이어야 함");
+  }
+  // repo: git URL(스킴 또는 scp-유사 git@host:path). 빈 문자열·비URL 거부.
+  if (raw.repo !== undefined && (!isNonEmptyString(raw.repo) || !GIT_URL_RE.test(raw.repo))) {
+    errors.push("repo: git URL(https://… 또는 git@…) 이어야 함");
   }
   if (
     raw.minAppVersion !== undefined &&
@@ -848,6 +858,7 @@ export function parseManifest(
       version: (raw.version as string).trim(),
       description: normalizeText(raw.description as LocalizedText),
       author: raw.author !== undefined ? (raw.author as string).trim() : undefined,
+      ...(raw.repo !== undefined ? { repo: (raw.repo as string).trim() } : {}),
       entry,
       minAppVersion:
         raw.minAppVersion !== undefined

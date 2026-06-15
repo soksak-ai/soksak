@@ -3,6 +3,7 @@
   "id": "soksak-plugin-skeleton",
   "name": "플러그인 스켈레톤",
   "version": "1.0.0",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-skeleton.git",
   "description": "soksak 플러그인 시작 템플릿 — 뷰 + 명령 + 이벤트 + 정리(subscriptions)의 최소 동작 예제. 완전 매뉴얼은 MANUAL.md.",
   "entry": "main.js",
   "template": true,

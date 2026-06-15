@@ -3,6 +3,7 @@
   "id": "soksak-memo",
   "name": "메모",
   "version": "1.0.1",
+  "repo": "https://github.com/soksak-ai/soksak-memo.git",
   "description": "프로젝트별 메모 — 프로젝트 루트마다 분리 저장되는 간단한 메모장 패널",
   "entry": "main.js",
   "permissions": [

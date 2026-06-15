@@ -3,6 +3,7 @@
   "id": "soksak-git-diff",
   "name": "깃 변경",
   "version": "1.0.2",
+  "repo": "https://github.com/soksak-ai/soksak-git-diff.git",
   "description": "변경 파일 목록과 unified diff 를 보여주는 git 뷰. staged(index) 토글 지원.",
   "permissions": [
     "ui",

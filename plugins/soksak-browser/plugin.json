@@ -6,6 +6,7 @@
     "en": "Browser"
   },
   "version": "1.2.0",
+  "repo": "https://github.com/soksak-ai/soksak-browser.git",
   "description": {
     "ko": "새 탭(+) 메뉴에 브라우저를 추가 — 시작 페이지는 설정의 시작 URL",
     "en": "Adds Browser to the new-tab (+) menu — opens the start URL from settings"

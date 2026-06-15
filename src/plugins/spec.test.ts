@@ -94,6 +94,17 @@ describe("parseManifest — 수용", () => {
       parseManifest(base({ template: false }), "demo").manifest,
     ).not.toHaveProperty("template");
   });
+
+  it("repo(git URL) 수용 + 매니페스트에 보존", () => {
+    const { manifest, validation } = parseManifest(
+      base({ repo: "https://github.com/soksak-ai/soksak-plugin-shark.git" }),
+      "demo",
+    );
+    expect(validation.ok).toBe(true);
+    expect(manifest).toMatchObject({
+      repo: "https://github.com/soksak-ai/soksak-plugin-shark.git",
+    });
+  });
 });
 
 describe("parseManifest — 거부(필수 필드)", () => {
@@ -111,6 +122,7 @@ describe("parseManifest — 거부(필수 필드)", () => {
     ["version 비semver", base({ version: "1.0" }), "version"],
     ["description 누락", { ...base(), description: undefined }, "description"],
     ["author 비문자열", base({ author: 3 }), "author"],
+    ["repo 비URL", base({ repo: "soksak-ai/shark" }), "repo"],
     ["minAppVersion 비semver", base({ minAppVersion: "v1" }), "minAppVersion"],
     ["template 비boolean", base({ template: "yes" }), "template"],
   ])("%s → 거부", (_label, raw, field) => {

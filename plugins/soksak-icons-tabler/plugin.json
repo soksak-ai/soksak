@@ -3,6 +3,7 @@
   "id": "soksak-icons-tabler",
   "name": "Tabler 아이콘",
   "version": "1.0.0",
+  "repo": "https://github.com/soksak-ai/soksak-icons-tabler.git",
   "description": "Tabler Icons 아이콘 셋(MIT, tabler.io/icons) — 활성화하면 설정 > 아이콘 셋에서 선택할 수 있습니다",
   "entry": "main.js",
   "permissions": ["ui"],

@@ -1,0 +1,125 @@
+{
+  "spec": "soksak-registry@1",
+  "plugins": [
+    {
+      "id": "soksak-agent-claude",
+      "name": "Claude Code",
+      "description": {
+        "ko": "새 탭(+) 메뉴 에이전트 카테고리에 Claude Code 를 추가 — 미설치면 공식 설치 명령을 터미널에서 실행한 뒤 사용",
+        "en": "Adds Claude Code under the Agents category of the new-tab (+) menu — runs the official installer in a terminal if missing"
+      },
+      "repo": "https://github.com/soksak-ai/soksak-agent-claude.git"
+    },
+    {
+      "id": "soksak-agent-codex",
+      "name": "Codex",
+      "description": {
+        "ko": "새 탭(+) 메뉴 에이전트 카테고리에 Codex CLI 를 추가 — 미설치면 공식 설치 명령을 터미널에서 실행한 뒤 사용",
+        "en": "Adds Codex CLI under the Agents category of the new-tab (+) menu — runs the official installer in a terminal if missing"
+      },
+      "repo": "https://github.com/soksak-ai/soksak-agent-codex.git"
+    },
+    {
+      "id": "soksak-bookmarks",
+      "name": "즐겨찾기",
+      "description": "브라우저 즐겨찾기 목록 패널 — 클릭으로 열고 ✕ 로 제거. 기존 명령(bookmark.list / bookmark.remove / browser.open)만 조합, 백엔드 0줄",
+      "repo": "https://github.com/soksak-ai/soksak-bookmarks.git"
+    },
+    {
+      "id": "soksak-browser",
+      "name": {
+        "ko": "브라우저",
+        "en": "Browser"
+      },
+      "description": {
+        "ko": "새 탭(+) 메뉴에 브라우저를 추가 — 시작 페이지는 설정의 시작 URL",
+        "en": "Adds Browser to the new-tab (+) menu — opens the start URL from settings"
+      },
+      "repo": "https://github.com/soksak-ai/soksak-browser.git"
+    },
+    {
+      "id": "soksak-claude-gui",
+      "name": "Claude GUI",
+      "description": "터미널 패널에서 claude(Claude Code CLI)가 실행되면 그 패널 상태바에 GUI 항목이 뜨고, 누르면 패널을 덮는 GUI 오버레이가 열려 claude 대화(JSONL 트랜스크립트)를 cc2 TUI 구성 그대로 버블로 렌더한다. 감지는 코어 명령 생명주기 소켓, 대화는 코어 fs 소켓(읽기·watch·offset tail — 폴링 없음)으로 활성 세션 JSONL + 서브에이전트 서브폴더를 실시간 표시. 모든 claude 도메인 처리는 이 플러그인 소유(코어는 범용만).",
+      "repo": "https://github.com/soksak-ai/soksak-claude-gui.git"
+    },
+    {
+      "id": "soksak-code-highlight",
+      "name": "코드 하이라이트+",
+      "description": "TODO/FIXME/XXX 토큰 강조 + mjs/cjs/svelte 확장자 문법 매핑",
+      "repo": "https://github.com/soksak-ai/soksak-code-highlight.git"
+    },
+    {
+      "id": "soksak-formatter",
+      "name": "JSON 포메터",
+      "description": "JSON 파일을 2칸 들여쓰기로 정리하는 포매터(⇧⌥F). 파싱 실패 시 깨진 텍스트 대신 명확한 에러를 냅니다.",
+      "repo": "https://github.com/soksak-ai/soksak-formatter.git"
+    },
+    {
+      "id": "soksak-git-diff",
+      "name": "깃 변경",
+      "description": "변경 파일 목록과 unified diff 를 보여주는 git 뷰. staged(index) 토글 지원.",
+      "repo": "https://github.com/soksak-ai/soksak-git-diff.git"
+    },
+    {
+      "id": "soksak-git-history",
+      "name": "깃 히스토리",
+      "description": "프로젝트 커밋 이력 사이드바 — 50개 단위 페이지네이션, 커밋 클릭 시 변경 파일 목록과 패치 표시.",
+      "repo": "https://github.com/soksak-ai/soksak-git-history.git"
+    },
+    {
+      "id": "soksak-git-init",
+      "name": {
+        "ko": "git 자동 초기화",
+        "en": "Auto git init"
+      },
+      "description": {
+        "ko": "새 프로젝트의 루트에 .git 이 없으면 자동으로 git init",
+        "en": "Runs git init automatically when a new project root has no .git"
+      },
+      "repo": "https://github.com/soksak-ai/soksak-git-init.git"
+    },
+    {
+      "id": "soksak-icons-codicons",
+      "name": "Codicons 아이콘",
+      "description": "editor Codicons 아이콘 셋(CC-BY-4.0, microsoft/editor-codicons) — 활성화하면 설정 > 아이콘 셋에서 선택할 수 있습니다",
+      "repo": "https://github.com/soksak-ai/soksak-icons-codicons.git"
+    },
+    {
+      "id": "soksak-icons-tabler",
+      "name": "Tabler 아이콘",
+      "description": "Tabler Icons 아이콘 셋(MIT, tabler.io/icons) — 활성화하면 설정 > 아이콘 셋에서 선택할 수 있습니다",
+      "repo": "https://github.com/soksak-ai/soksak-icons-tabler.git"
+    },
+    {
+      "id": "soksak-memo",
+      "name": "메모",
+      "description": "프로젝트별 메모 — 프로젝트 루트마다 분리 저장되는 간단한 메모장 패널",
+      "repo": "https://github.com/soksak-ai/soksak-memo.git"
+    },
+    {
+      "id": "soksak-sakura",
+      "name": "sakura 벚꽃",
+      "description": "앱 위로 벚꽃 잎이 흩날린다 — 좌우로 흔들리며 3D로 텀블해 떨어지고 바람에 옆으로 흐른다. 밀도·낙하속도·바람 조절. 부차 효과라 앱 성능 영향 0(비포커스 시 완전 정지).",
+      "repo": "https://github.com/soksak-ai/soksak-sakura.git"
+    },
+    {
+      "id": "soksak-shark",
+      "name": "shork shark",
+      "description": "앱 위를 유유자적 헤엄쳐 다니는 shork shark — SOKSAK 워드마크가 곧 상어(S=머리, K=꼬리). 머리 방향으로 전진하며 턴 반경으로 점진 회전. 이동 속도가 헤엄 역동(1~10)과 연동. 브라우저 패널 위도 지나간다.",
+      "repo": "https://github.com/soksak-ai/soksak-shark.git"
+    },
+    {
+      "id": "soksak-terminal",
+      "name": {
+        "ko": "터미널",
+        "en": "Terminal"
+      },
+      "description": {
+        "ko": "새 탭(+) 메뉴에 터미널을 추가",
+        "en": "Adds Terminal to the new-tab (+) menu"
+      },
+      "repo": "https://github.com/soksak-ai/soksak-terminal.git"
+    }
+  ]
+}

@@ -18,7 +18,7 @@ DEBUG_APP   := src-tauri/target/debug/bundle/macos/soksak-debug.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs plugin-repos
+.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs plugin-repos registry
 
 help: ## 사용 가능한 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -83,6 +83,16 @@ plugin-repos: ## 공식 플러그인 → 독립 git 레포 생성(plugins/.repos
 		git -C $$dest -c user.email=plugins@soksak -c user.name=soksak tag -f v$$ver >/dev/null && \
 		echo "plugins/.repos/$$id (v$$ver)"; \
 	done
+
+registry: ## 공식 플러그인 → 레지스트리 스냅샷 생성(설치가능 목록, 빌드 포함). 멱등
+	@command -v jq >/dev/null || { echo "jq 필요"; exit 1; }
+	@jq -s 'map(select(.template != true) \
+		| {id, name, description, author, repo} \
+		| with_entries(select(.value != null))) \
+		| sort_by(.id) \
+		| {spec: "soksak-registry@1", plugins: .}' \
+		plugins/*/plugin.json > src/plugins/registrySnapshot.json
+	@echo "레지스트리 스냅샷: src/plugins/registrySnapshot.json ($$(jq '.plugins | length' src/plugins/registrySnapshot.json)개)"
 
 typecheck: ## 프론트엔드 타입 체크(tsc)
 	$(PNPM) exec tsc --noEmit

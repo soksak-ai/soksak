@@ -3,6 +3,7 @@
   "id": "soksak-code-highlight",
   "name": "코드 하이라이트+",
   "version": "1.0.0",
+  "repo": "https://github.com/soksak-ai/soksak-code-highlight.git",
   "description": "TODO/FIXME/XXX 토큰 강조 + mjs/cjs/svelte 확장자 문법 매핑",
   "entry": "main.js",
   "permissions": ["editor"],
