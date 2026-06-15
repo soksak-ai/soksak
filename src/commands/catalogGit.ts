@@ -26,7 +26,7 @@ const PATH_PARAM = {
 export function registerGitCatalog(): void {
   register("git.init", {
     description:
-      "디렉토리에 .git 이 없으면 git init(있으면 no-op, 멱등). 루트 초기화 정책 플러그인(soksak-git-init)이 project.created 이벤트와 조합해 사용",
+      "디렉토리에 .git 이 없으면 git init(있으면 no-op, 멱등). 루트 초기화 정책 플러그인(soksak-plugin-git-init)이 project.created 이벤트와 조합해 사용",
     params: { path: PATH_PARAM },
     returns: "{ initialized(수행 여부), path }",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],

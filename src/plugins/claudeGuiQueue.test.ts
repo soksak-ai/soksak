@@ -1,4 +1,4 @@
-// @ts-nocheck — 대상은 vanilla 플러그인(plugins/soksak-claude-gui/main.js). tsc 는 건너뛰고
+// @ts-nocheck — 대상은 vanilla 플러그인(plugins/soksak-plugin-claude-gui/main.js). tsc 는 건너뛰고
 // vitest(esbuild)로만 실행한다. named export(classifyBuffer/createInputQueue)는 로더가 무시
 // (loader.ts:38 default 만 사용)하므로 플러그인 동작 불변 — 테스트 전용 노출.
 //
@@ -10,7 +10,7 @@ import { describe, it, expect } from "vitest";
 import {
   classifyBuffer,
   createInputQueue,
-} from "../../plugins/soksak-claude-gui/main.js";
+} from "../../plugins/soksak-plugin-claude-gui/main.js";
 
 // ── 버퍼 fixture(cc2 근거) ───────────────────────────────────────────────────
 const PROMPT_BUF = [

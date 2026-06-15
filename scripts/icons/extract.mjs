@@ -2,8 +2,8 @@
 // 아이콘 셋 추출기 — devDependencies 의 3개 오픈소스 셋에서 "시맨틱 아이콘
 // 인벤토리"에 해당하는 SVG 만 뽑아 생성한다(멱등 — 재실행 시 동일 출력):
 //   ① 내장 폴백  src/ui/icons/sets/lucide.ts            (ISC)
-//   ② 플러그인   examples/plugins/soksak-icons-tabler/icons.json   (MIT)
-//   ③ 플러그인   examples/plugins/soksak-icons-codicons/icons.json (CC-BY-4.0)
+//   ② 플러그인   examples/plugins/soksak-plugin-icons-tabler/icons.json   (MIT)
+//   ③ 플러그인   examples/plugins/soksak-plugin-icons-codicons/icons.json (CC-BY-4.0)
 // 이 파일의 MAPPING 이 시맨틱 이름 ↔ 셋별 아이콘 id 의 단일 진실이다.
 // 실행: pnpm icons:extract  (생성물은 체크인 — 런타임 의존성 0)
 

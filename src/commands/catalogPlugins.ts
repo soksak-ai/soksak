@@ -126,7 +126,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id, dir }",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
-      'sok plugin.install \'{"source":"user/soksak-memo"}\'',
+      'sok plugin.install \'{"source":"user/soksak-plugin-memo"}\'',
       'sok plugin.install \'{"source":"/path/to/repo","ref":"v1.0.0"}\'',
     ],
     danger: "destructive",
@@ -141,7 +141,7 @@ export function registerPluginCatalog(): void {
     },
     returns: "{ id, version }",
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok plugin.update \'{"id":"soksak-memo"}\''],
+    examples: ['sok plugin.update \'{"id":"soksak-plugin-memo"}\''],
     danger: "destructive",
     handler: (p) => usePlugins.getState().update(p.id as string),
   });
@@ -153,7 +153,7 @@ export function registerPluginCatalog(): void {
     },
     returns: "{ id }",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ['sok plugin.remove \'{"id":"soksak-memo"}\''],
+    examples: ['sok plugin.remove \'{"id":"soksak-plugin-memo"}\''],
     danger: "destructive",
     handler: (p) => usePlugins.getState().remove(p.id as string),
   });
@@ -166,7 +166,7 @@ export function registerPluginCatalog(): void {
     },
     returns: "{ id, status }",
     errors: ["TARGET_NOT_FOUND", "CONSENT_REQUIRED", "INTERNAL"],
-    examples: ['sok plugin.enable \'{"id":"soksak-memo"}\''],
+    examples: ['sok plugin.enable \'{"id":"soksak-plugin-memo"}\''],
     danger: "inject",
     handler: (p) => usePlugins.getState().enable(p.id as string),
   });
@@ -178,7 +178,7 @@ export function registerPluginCatalog(): void {
     },
     returns: "{ id, status }",
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.disable \'{"id":"soksak-memo"}\''],
+    examples: ['sok plugin.disable \'{"id":"soksak-plugin-memo"}\''],
     danger: "destructive",
     handler: (p) => usePlugins.getState().disable(p.id as string),
   });
@@ -218,8 +218,8 @@ export function registerPluginCatalog(): void {
     returns: "{ view, placement, projectId }",
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sok plugin.view.open \'{"view":"soksak-memo.panel"}\'',
-      'sok plugin.view.open \'{"view":"soksak-git-diff.view","placement":"content"}\'',
+      'sok plugin.view.open \'{"view":"soksak-plugin-memo.panel"}\'',
+      'sok plugin.view.open \'{"view":"soksak-plugin-git-diff.view","placement":"content"}\'',
     ],
     handler: (p) => {
       const s = useSessions.getState();
@@ -279,7 +279,7 @@ export function registerPluginCatalog(): void {
     },
     returns: "{ view, closed: [배치 목록] }",
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.view.close \'{"view":"soksak-memo.panel"}\''],
+    examples: ['sok plugin.view.close \'{"view":"soksak-plugin-memo.panel"}\''],
     handler: (p) => {
       const s = useSessions.getState();
       const projectId = (p.project as string | undefined) ?? s.activeId;

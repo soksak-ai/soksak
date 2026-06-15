@@ -1,0 +1,19 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-git-init",
+  "name": {
+    "ko": "git 자동 초기화",
+    "en": "Auto git init"
+  },
+  "version": "1.0.0",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-git-init.git",
+  "description": {
+    "ko": "새 프로젝트의 루트에 .git 이 없으면 자동으로 git init",
+    "en": "Runs git init automatically when a new project root has no .git"
+  },
+  "entry": "main.js",
+  "permissions": [
+    "commands"
+  ],
+  "contributes": {}
+}

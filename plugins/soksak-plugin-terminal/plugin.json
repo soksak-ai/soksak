@@ -1,0 +1,30 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-terminal",
+  "name": {
+    "ko": "터미널",
+    "en": "Terminal"
+  },
+  "version": "1.2.0",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-terminal.git",
+  "description": {
+    "ko": "새 탭(+) 메뉴에 터미널을 추가",
+    "en": "Adds Terminal to the new-tab (+) menu"
+  },
+  "entry": "main.js",
+  "permissions": [
+    "programs"
+  ],
+  "contributes": {
+    "programs": [
+      {
+        "id": "terminal",
+        "title": {
+          "ko": "터미널",
+          "en": "Terminal"
+        },
+        "kind": "terminal"
+      }
+    ]
+  }
+}

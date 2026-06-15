@@ -66,14 +66,14 @@ T1 maxRun 이 수십으로, T2 마커가 잘려 RED 가 떠야 한다.
 
 # claude-gui E2E (`claude-gui.mjs`)
 
-soksak-claude-gui 플러그인(입력 3계층 큐·대화 렌더·persistence·라이브)을 실제 앱에서 멱등 검증.
+soksak-plugin-claude-gui 플러그인(입력 3계층 큐·대화 렌더·persistence·라이브)을 실제 앱에서 멱등 검증.
 
 ```bash
 SOKSAK_SOCKET=~/.soksak/com.soksak.dev.sock node scripts/e2e/claude-gui.mjs [paneId]
 # 전제: 대상 pane 에 claude 실행 중(없으면 자동 시작). 스냅샷 → /tmp/sok-e2e-claude-gui
 ```
 
-소켓 RPC + 플러그인 introspection·구동 명령(`plugin.soksak-claude-gui.state/send/focus/type/queue`)
+소켓 RPC + 플러그인 introspection·구동 명령(`plugin.soksak-plugin-claude-gui.state/send/focus/type/queue`)
 으로 단언. `focus`=GUI 입력창 포커스(화면 이동), `type`=입력창에 진짜 타이핑+Enter(우회 없는 입력 경로).
 종료코드 0=결정적 PASS, 1=FAIL. `E2E_ONLY=<scenario[,...]>` 로 일부만 실행. 시나리오:
 

@@ -1,0 +1,18 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-shark",
+  "name": "shork shark",
+  "version": "1.0.2",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-shark.git",
+  "description": "앱 위를 유유자적 헤엄쳐 다니는 shork shark — SOKSAK 워드마크가 곧 상어(S=머리, K=꼬리). 머리 방향으로 전진하며 턴 반경으로 점진 회전. 이동 속도가 헤엄 역동(1~10)과 연동. 브라우저 패널 위도 지나간다.",
+  "entry": "main.js",
+  "permissions": ["ui:overlay:screen", "commands"],
+  "contributes": {
+    "commands": [
+      { "name": "toggle", "title": { "en": "Toggle shork", "ko": "shork 켜기/끄기" } },
+      { "name": "mode", "title": { "en": "Interaction mode", "ko": "인터랙션 모드" } },
+      { "name": "speed", "title": { "en": "Liveliness", "ko": "활기 설정" } },
+      { "name": "count", "title": { "en": "Shark count", "ko": "상어 수" } }
+    ]
+  }
+}

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// soksak-claude-gui E2E — 멱등 시나리오 드라이버.
+// soksak-plugin-claude-gui E2E — 멱등 시나리오 드라이버.
 //
 // soksak 소켓(JSON-RPC)에 붙어 실제 앱을 구동하고, 플러그인이 노출하는 결정적
-// introspection 명령(plugin.soksak-claude-gui.state/send/queue)으로 단언한다.
+// introspection 명령(plugin.soksak-plugin-claude-gui.state/send/queue)으로 단언한다.
 // DOM 은 소켓이 못 보므로 plugin.*.state 가 {open,bubbles,live,queue,classify,session}
 // 을 돌려준다. 시각 확인용 스냅샷도 dir 에 남긴다.
 //
@@ -24,7 +24,7 @@ import process from "node:process";
 const SOCKET =
   process.env.SOKSAK_SOCKET ||
   path.join(os.homedir(), ".soksak", "com.soksak.dev.sock");
-const PLUGIN = "soksak-claude-gui";
+const PLUGIN = "soksak-plugin-claude-gui";
 const SHOTS = process.env.E2E_SHOTS || "/tmp/sok-e2e-claude-gui";
 fs.mkdirSync(SHOTS, { recursive: true });
 const RUN = Date.now().toString(36); // 실행별 고유 태그(이전 실행 잔여와 격리)

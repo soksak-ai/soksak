@@ -1,0 +1,37 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-agent-claude",
+  "name": "Claude Code",
+  "version": "1.2.0",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-agent-claude.git",
+  "description": {
+    "ko": "새 탭(+) 메뉴 에이전트 카테고리에 Claude Code 를 추가 — 미설치면 공식 설치 명령을 터미널에서 실행한 뒤 사용",
+    "en": "Adds Claude Code under the Agents category of the new-tab (+) menu — runs the official installer in a terminal if missing"
+  },
+  "entry": "main.js",
+  "permissions": [
+    "programs"
+  ],
+  "contributes": {
+    "programs": [
+      {
+        "id": "claude",
+        "title": "Claude",
+        "path": {
+          "ko": "에이전트",
+          "en": "Agents"
+        },
+        "kind": "terminal",
+        "command": "claude",
+        "ensure": {
+          "bin": "claude",
+          "install": {
+            "darwin": "curl -fsSL https://claude.ai/install.sh | bash",
+            "linux": "curl -fsSL https://claude.ai/install.sh | bash",
+            "win32": "irm https://claude.ai/install.ps1 | iex"
+          }
+        }
+      }
+    ]
+  }
+}

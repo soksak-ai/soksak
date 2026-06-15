@@ -1,0 +1,37 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-agent-codex",
+  "name": "Codex",
+  "version": "1.2.0",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-agent-codex.git",
+  "description": {
+    "ko": "새 탭(+) 메뉴 에이전트 카테고리에 Codex CLI 를 추가 — 미설치면 공식 설치 명령을 터미널에서 실행한 뒤 사용",
+    "en": "Adds Codex CLI under the Agents category of the new-tab (+) menu — runs the official installer in a terminal if missing"
+  },
+  "entry": "main.js",
+  "permissions": [
+    "programs"
+  ],
+  "contributes": {
+    "programs": [
+      {
+        "id": "codex",
+        "title": "Codex",
+        "path": {
+          "ko": "에이전트",
+          "en": "Agents"
+        },
+        "kind": "terminal",
+        "command": "codex",
+        "ensure": {
+          "bin": "codex",
+          "install": {
+            "darwin": "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+            "linux": "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+            "win32": "irm https://chatgpt.com/codex/install.ps1 | iex"
+          }
+        }
+      }
+    ]
+  }
+}

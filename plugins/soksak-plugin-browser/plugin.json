@@ -1,0 +1,30 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-browser",
+  "name": {
+    "ko": "브라우저",
+    "en": "Browser"
+  },
+  "version": "1.2.0",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-browser.git",
+  "description": {
+    "ko": "새 탭(+) 메뉴에 브라우저를 추가 — 시작 페이지는 설정의 시작 URL",
+    "en": "Adds Browser to the new-tab (+) menu — opens the start URL from settings"
+  },
+  "entry": "main.js",
+  "permissions": [
+    "programs"
+  ],
+  "contributes": {
+    "programs": [
+      {
+        "id": "browser",
+        "title": {
+          "ko": "브라우저",
+          "en": "Browser"
+        },
+        "kind": "browser"
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-icons-codicons",
+  "name": "Codicons 아이콘",
+  "version": "1.0.0",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-icons-codicons.git",
+  "description": "editor Codicons 아이콘 셋(CC-BY-4.0, microsoft/editor-codicons) — 활성화하면 설정 > 아이콘 셋에서 선택할 수 있습니다",
+  "entry": "main.js",
+  "permissions": ["ui"],
+  "contributes": {
+    "iconSets": [{ "id": "codicons", "title": "Codicons" }]
+  }
+}

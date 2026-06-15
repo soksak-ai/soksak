@@ -1,4 +1,4 @@
-// @ts-nocheck — vanilla 플러그인(plugins/soksak-claude-gui/main.js) 순수 로직 단위테스트.
+// @ts-nocheck — vanilla 플러그인(plugins/soksak-plugin-claude-gui/main.js) 순수 로직 단위테스트.
 // 규칙: 비자명 로직은 순수함수로 분리(named export) → RED→구현→GREEN. tsc 건너뜀, vitest 실행.
 //
 // 대상:
@@ -16,7 +16,7 @@ import {
   diffLines,
   toolResultSummary,
   parseCommandTags,
-} from "../../plugins/soksak-claude-gui/main.js";
+} from "../../plugins/soksak-plugin-claude-gui/main.js";
 
 describe("parseCommandTags (슬래시 명령 transcript 태그 파싱)", () => {
   it("command-name 을 슬래시 명령으로 추출(이름 정규화)", () => {

@@ -11,11 +11,11 @@ import snapshot from "./registrySnapshot.json";
 
 function entry(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    id: "soksak-shark",
+    id: "soksak-plugin-shark",
     name: "Shark",
     version: "1.0.2",
     description: "헤엄치는 상어",
-    repo: "https://github.com/soksak-ai/soksak-shark.git",
+    repo: "https://github.com/soksak-ai/soksak-plugin-shark.git",
     ...over,
   };
 }
@@ -29,8 +29,8 @@ describe("parseRegistry — 수용", () => {
     expect(r).not.toBeNull();
     expect(r!.plugins).toHaveLength(1);
     expect(r!.plugins[0]).toMatchObject({
-      id: "soksak-shark",
-      repo: "https://github.com/soksak-ai/soksak-shark.git",
+      id: "soksak-plugin-shark",
+      repo: "https://github.com/soksak-ai/soksak-plugin-shark.git",
     });
   });
 
@@ -57,11 +57,11 @@ describe("parseRegistry — 거부/방어(신뢰 경계)", () => {
       reg([
         entry(),
         { id: "x" }, // repo 없음 → 스킵
-        entry({ id: "soksak-memo", repo: "https://github.com/soksak-ai/soksak-memo.git" }),
+        entry({ id: "soksak-plugin-memo", repo: "https://github.com/soksak-ai/soksak-plugin-memo.git" }),
         { repo: "https://x" }, // id 없음 → 스킵
       ]),
     );
-    expect(r!.plugins.map((p) => p.id)).toEqual(["soksak-shark", "soksak-memo"]);
+    expect(r!.plugins.map((p) => p.id)).toEqual(["soksak-plugin-shark", "soksak-plugin-memo"]);
   });
 });
 
@@ -81,8 +81,8 @@ describe("registrySnapshot.json — 빌드 스냅샷 무결성", () => {
   });
   it("대표 플러그인(shark/claude-gui) 포함", () => {
     const ids = parseRegistry(snapshot)!.plugins.map((p) => p.id);
-    expect(ids).toContain("soksak-shark");
-    expect(ids).toContain("soksak-claude-gui");
+    expect(ids).toContain("soksak-plugin-shark");
+    expect(ids).toContain("soksak-plugin-claude-gui");
   });
   it("모든 엔트리에 version", () => {
     for (const p of parseRegistry(snapshot)!.plugins) {
@@ -93,11 +93,11 @@ describe("registrySnapshot.json — 빌드 스냅샷 무결성", () => {
 
 describe("installState — 설치 상태 판정", () => {
   const e = (over: Partial<RegistryEntry> = {}): RegistryEntry => ({
-    id: "soksak-shark",
+    id: "soksak-plugin-shark",
     name: "Shark",
     version: "1.0.2",
     description: "x",
-    repo: "https://github.com/soksak-ai/soksak-shark.git",
+    repo: "https://github.com/soksak-ai/soksak-plugin-shark.git",
     ...over,
   });
   it("미설치 → available", () => {
@@ -117,11 +117,11 @@ describe("installState — 설치 상태 판정", () => {
 describe("mergeRegistry — 원격 채택/폴백", () => {
   const snap: Registry = { spec: REGISTRY_SPEC, plugins: [entry() as unknown as RegistryEntry] };
   it("원격 valid → 원격 채택", () => {
-    const remote = { spec: REGISTRY_SPEC, plugins: [entry({ id: "soksak-memo" })] };
-    expect(mergeRegistry(snap, remote).plugins.map((p) => p.id)).toEqual(["soksak-memo"]);
+    const remote = { spec: REGISTRY_SPEC, plugins: [entry({ id: "soksak-plugin-memo" })] };
+    expect(mergeRegistry(snap, remote).plugins.map((p) => p.id)).toEqual(["soksak-plugin-memo"]);
   });
   it("원격 손상(null parse) → 스냅샷 유지", () => {
-    expect(mergeRegistry(snap, { bad: true }).plugins.map((p) => p.id)).toEqual(["soksak-shark"]);
+    expect(mergeRegistry(snap, { bad: true }).plugins.map((p) => p.id)).toEqual(["soksak-plugin-shark"]);
     expect(mergeRegistry(snap, null)).toBe(snap);
   });
 });

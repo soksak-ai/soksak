@@ -1,4 +1,4 @@
-// @ts-nocheck — 대상은 vanilla 플러그인(plugins/soksak-claude-gui/main.js). tsc 는 건너뛰고
+// @ts-nocheck — 대상은 vanilla 플러그인(plugins/soksak-plugin-claude-gui/main.js). tsc 는 건너뛰고
 // vitest(esbuild)로만 실행한다. named export(pickActiveSession)는 로더가 무시
 // (loader.ts:38 default 만 사용)하므로 플러그인 동작 불변 — 테스트 전용 노출.
 //
@@ -8,7 +8,7 @@
 // jsonl(newest mtime). pickActiveSession 이 그 선택 정책을 담당한다.
 
 import { describe, it, expect } from "vitest";
-import { pickActiveSession } from "../../plugins/soksak-claude-gui/main.js";
+import { pickActiveSession } from "../../plugins/soksak-plugin-claude-gui/main.js";
 
 // fs.list 의 children 형태: { name, dir(bool), modified(unix sec) }.
 const jsonl = (uuid, modified) => ({ name: `${uuid}.jsonl`, dir: false, modified });

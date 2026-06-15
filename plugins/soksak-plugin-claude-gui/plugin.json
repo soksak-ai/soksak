@@ -1,0 +1,22 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-claude-gui",
+  "name": "Claude GUI",
+  "version": "0.1.0",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-claude-gui.git",
+  "description": "터미널 패널에서 claude(Claude Code CLI)가 실행되면 그 패널 상태바에 GUI 항목이 뜨고, 누르면 패널을 덮는 GUI 오버레이가 열려 claude 대화(JSONL 트랜스크립트)를 cc2 TUI 구성 그대로 버블로 렌더한다. 감지는 코어 명령 생명주기 소켓, 대화는 코어 fs 소켓(읽기·watch·offset tail — 폴링 없음)으로 활성 세션 JSONL + 서브에이전트 서브폴더를 실시간 표시. 모든 claude 도메인 처리는 이 플러그인 소유(코어는 범용만).",
+  "entry": "main.js",
+  "permissions": ["ui:statusbar", "ui:overlay:pane", "commands", "terminal", "terminal:read", "terminal:write", "fs:read"],
+  "contributes": {
+    "commands": [
+      { "name": "toggle", "title": { "en": "Toggle Claude GUI", "ko": "Claude GUI 켜기/끄기" } },
+      { "name": "open", "title": { "en": "Open Claude GUI", "ko": "Claude GUI 열기" } },
+      { "name": "close", "title": { "en": "Close Claude GUI", "ko": "Claude GUI 닫기" } },
+      { "name": "send", "title": { "en": "Send input (returns queue status)", "ko": "입력 전송(큐 상태 반환)" } },
+      { "name": "focus", "title": { "en": "Focus GUI input box", "ko": "GUI 입력창 포커스(화면 이동)" } },
+      { "name": "type", "title": { "en": "Type into GUI input box + Enter", "ko": "GUI 입력창에 입력+Enter" } },
+      { "name": "queue", "title": { "en": "Get input queue snapshot", "ko": "입력 큐 스냅샷 조회" } },
+      { "name": "state", "title": { "en": "Get overlay render state (e2e)", "ko": "오버레이 렌더 상태 조회(e2e)" } }
+    ]
+  }
+}

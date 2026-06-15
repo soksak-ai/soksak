@@ -29,7 +29,7 @@ describe("openPluginView", () => {
   it("활성 그룹에 plugin 뷰 탭 생성 + 활성화", () => {
     const r = useSessions
       .getState()
-      .openPluginView("t1", "soksak-memo", "panel", "메모");
+      .openPluginView("t1", "soksak-plugin-memo", "panel", "메모");
     expect(r).toMatchObject({ ok: true, existing: false });
     if (!r.ok) return;
     const { c, groups } = activeLayout();
@@ -39,7 +39,7 @@ describe("openPluginView", () => {
     const v = grp.views.find((x) => x.id === r.viewId)!;
     expect(v).toMatchObject({
       kind: "plugin",
-      pluginId: "soksak-memo",
+      pluginId: "soksak-plugin-memo",
       view: "panel",
       title: "메모",
     });
@@ -48,7 +48,7 @@ describe("openPluginView", () => {
   it("같은 pluginId+view 재요청은 기존 탭 재사용(existing) + 활성화", () => {
     const first = useSessions
       .getState()
-      .openPluginView("t1", "soksak-memo", "panel", "메모");
+      .openPluginView("t1", "soksak-plugin-memo", "panel", "메모");
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     // 다른 뷰를 활성화해 둔 뒤 재요청 → 기존 plugin 뷰로 복귀해야 한다.
@@ -58,7 +58,7 @@ describe("openPluginView", () => {
 
     const again = useSessions
       .getState()
-      .openPluginView("t1", "soksak-memo", "panel", "메모");
+      .openPluginView("t1", "soksak-plugin-memo", "panel", "메모");
     expect(again).toMatchObject({
       ok: true,
       existing: true,
@@ -73,10 +73,10 @@ describe("openPluginView", () => {
   it("다른 뷰 id 면 별도 탭(dedupe 키 = pluginId+view)", () => {
     const a = useSessions
       .getState()
-      .openPluginView("t1", "soksak-git-diff", "view", "디프");
+      .openPluginView("t1", "soksak-plugin-git-diff", "view", "디프");
     const b = useSessions
       .getState()
-      .openPluginView("t1", "soksak-git-diff", "history", "이력");
+      .openPluginView("t1", "soksak-plugin-git-diff", "history", "이력");
     expect(a.ok && b.ok).toBe(true);
     if (!a.ok || !b.ok) return;
     expect(a.viewId).not.toBe(b.viewId);
@@ -85,7 +85,7 @@ describe("openPluginView", () => {
   it("없는 프로젝트는 TARGET_NOT_FOUND", () => {
     const r = useSessions
       .getState()
-      .openPluginView("ghost", "soksak-memo", "panel", "메모");
+      .openPluginView("ghost", "soksak-plugin-memo", "panel", "메모");
     expect(r).toMatchObject({ ok: false, code: "TARGET_NOT_FOUND" });
   });
 });
@@ -94,7 +94,7 @@ describe("closeView — plugin 뷰", () => {
   it("plugin 뷰 탭 닫기 후 그룹에서 제거", () => {
     const r = useSessions
       .getState()
-      .openPluginView("t1", "soksak-memo", "panel", "메모");
+      .openPluginView("t1", "soksak-plugin-memo", "panel", "메모");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const closed = useSessions.getState().closeView("t1", r.viewId);

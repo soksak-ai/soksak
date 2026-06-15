@@ -77,7 +77,7 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
     const finalRoot =
       mode === "auto" ? await ensureDefaultWorkspace(nameValue) : root!;
     // 루트 초기화 정책(git init 등)은 코어가 아니라 project.created 이벤트를
-    // 구독하는 플러그인 소유(soksak-git-init) — 여기선 생성만.
+    // 구독하는 플러그인 소유(soksak-plugin-git-init) — 여기선 생성만.
     addProject({
       alias: nameValue, // 비면 makeProject 가 폴더명 폴백
       root: finalRoot,

@@ -64,9 +64,9 @@ function mockCtx() {
 
 const plugins = [
   // @ts-expect-error 플러그인 main.js 는 선언형 single-file(d.ts 없음) — 런타임 동적 import 만.
-  { name: "shark", load: () => import("../../plugins/soksak-shark/main.js") as Promise<PetModule> },
+  { name: "shark", load: () => import("../../plugins/soksak-plugin-shark/main.js") as Promise<PetModule> },
   // @ts-expect-error 위와 동일.
-  { name: "sakura", load: () => import("../../plugins/soksak-sakura/main.js") as Promise<PetModule> },
+  { name: "sakura", load: () => import("../../plugins/soksak-plugin-sakura/main.js") as Promise<PetModule> },
 ];
 
 describe.each(plugins)("$name 펫 — visibility 게이팅", ({ load }) => {

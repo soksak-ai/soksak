@@ -1,0 +1,15 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-formatter",
+  "name": "JSON 포메터",
+  "version": "1.0.0",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-formatter.git",
+  "description": "JSON 파일을 2칸 들여쓰기로 정리하는 포매터(⇧⌥F). 파싱 실패 시 깨진 텍스트 대신 명확한 에러를 냅니다.",
+  "entry": "main.js",
+  "permissions": ["editor"],
+  "contributes": {
+    "formatters": [
+      { "id": "json", "title": "JSON 정리", "languages": ["json"] }
+    ]
+  }
+}
