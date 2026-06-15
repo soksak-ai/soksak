@@ -67,7 +67,7 @@ mod layer {
     use objc2::rc::Retained;
     use objc2::runtime::{AnyObject, Sel};
     use objc2::sel;
-    use objc2_app_kit::{NSView, NSWindow, NSWindowOrderingMode};
+    use objc2_app_kit::{NSView, NSWindowOrderingMode};
     use objc2_foundation::{NSNumber, NSPoint, NSString};
     use tauri::Manager;
 
@@ -154,35 +154,13 @@ mod layer {
     // wry 의 transparent 경로와 동일 기법; CSS 불투명 표면은 그대로 그려지고
     // 투명 슬롯만 아래가 비친다) ② hitTest 메서드 스위즐(클래스 단위, 위 주석).
     pub fn install(app: &tauri::AppHandle, label: &str) {
-        let Some(window) = app.get_window(label) else {
-            eprintln!("[layer] {label} 창 없음 — 레이어 역전 미설치");
+        let Some(wv) = app.get_webview(label) else {
+            eprintln!("[layer] {label} webview 없음 — 레이어 역전 미설치");
             return;
         };
         let label = label.to_string();
-        let win = window.clone();
-        // [HARD] webview.with_webview() 금지 — 호출마다 webview 참조를 leak 해 창을 닫아도 그 창의
-        // WebContent 프로세스가 영구 잔존한다(실측: 이 호출만 남겨도 +1/창, hook 전체 제거 시 0).
-        // window.run_on_main_thread 는 leak 0(titlebar 동일 패턴). 창 contentView 에서 메인 webview
-        // (WKWebView 계열, 설치 시점엔 브라우저 child 가 없어 1개)를 직접 찾아 동일 작업을 한다.
-        let _ = window.run_on_main_thread(move || unsafe {
-            let Ok(ns_ptr) = win.ns_window() else { return };
-            let ns_window = &*(ns_ptr as *const NSWindow);
-            let Some(content) = ns_window.contentView() else {
-                eprintln!("[layer] {label} contentView 없음 — 레이어 역전 미설치");
-                return;
-            };
-            let mut obj: *mut AnyObject = std::ptr::null_mut();
-            for v in content.subviews().iter() {
-                if v.class().name().to_string_lossy().contains("WebView") {
-                    obj = Retained::as_ptr(&v) as *mut AnyObject;
-                    break;
-                }
-            }
-            if obj.is_null() {
-                eprintln!("[layer] {label} 메인 webview NSView 못 찾음 — 레이어 역전 미설치");
-                return;
-            }
-
+        let _ = wv.with_webview(move |pw| unsafe {
+            let obj = pw.inner() as *mut AnyObject;
             if let Ok(mut layers) = LAYERS.lock() {
                 layers.insert(label, WinLayer { main_ptr: obj as usize, overlay: false });
             }
