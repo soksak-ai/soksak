@@ -1,6 +1,15 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { listenThisWindow } from "./lib/windowEvents";
 import { rafThrottle } from "./lib/rafThrottle";
 import type { TreeThemeInput } from "@pierre/trees";
@@ -378,6 +387,41 @@ function App() {
     });
   }, []);
 
+  // 내장 브라우저의 새 링크(target=_blank / window.open) — browser.rs 가 마커
+  // 네비게이션을 가로채 emit 한다. 새 창/새 탭 분기는 프론트 설정이 소유:
+  //   window(기본·무회귀) → 독립 OS 창(browser_open_window invoke)
+  //   tab → 활성 프로젝트의 활성 컨텐츠의 활성 그룹에 브라우저 뷰 추가(addViewToGroup).
+  // 전역 listen(이 이벤트는 emit_to 가 아닌 app.emit — 어느 창이 처리해도 무방하나
+  // 활성 프로젝트 기준이라 사용자가 보는 창에서 자연히 열린다).
+  useEffect(() => {
+    const unlisten = listen<{ url: string }>("browser-open-external", (e) => {
+      const url = e.payload.url;
+      const mode = useSettings.getState().browserNewWindow;
+      if (mode === "window") {
+        invoke("browser_open_window", { url }).catch((err) =>
+          console.error("브라우저 새 창 실패:", err),
+        );
+        return;
+      }
+      // 앱 내 새 탭: 활성 프로젝트 → 활성 컨텐츠 → 활성 그룹에 브라우저 뷰 추가.
+      const s = useSessions.getState();
+      const project = s.tabs.find((t) => t.id === s.activeId);
+      if (!project) return;
+      const content =
+        project.contents.find((c) => c.id === project.activeContentId) ??
+        project.contents[0];
+      if (!content) return;
+      const groups = allGroups(content.layout);
+      const group =
+        groups.find((g) => g.id === content.activeGroupId) ?? groups[0];
+      if (!group) return;
+      s.addViewToGroup(project.id, "browser", group.id, { url });
+    });
+    return () => {
+      unlisten.then((off) => off()).catch(() => {});
+    };
+  }, []);
+
   // 구독 최소 원칙(docs/PERFORMANCE.md 1): 필드/액션별 셀렉터만 — bare 훅 금지.
   // zustand 액션은 create() 시점에 고정되는 안정 참조라 액션 셀렉터는 리렌더 없음.
   const tabs = useSessions((s) => s.tabs);
@@ -421,6 +465,42 @@ function App() {
     RIGHT_MAX,
     "right",
   );
+
+  // 우측 사이드바(.sidebar-right)는 풀사이즈 브라우저 webview 위에 뜬 DOM 오버레이다
+  // (position:absolute, z-index 20). 그 사각형을 네이티브 hit_test 의 "홀"로 보고하면
+  // 그 영역의 스크롤/클릭이 아래 브라우저로 새지 않고 DOM(사이드바)이 받는다. webview 는
+  // 풀사이즈 그대로 유지된다(과거의 webview 폭 클램프 우회는 폐지 — browser.rs 참조).
+  const rightRect = activeProject?.rightOpen ? rightW : 0;
+  useLayoutEffect(() => {
+    // 닫힘(rightOpen false 또는 폭 0)이면 홀 비움.
+    if (!activeProject?.rightOpen || rightW <= 0) {
+      invoke("browser_dom_holes", { holes: [] }).catch(() => {});
+      return;
+    }
+    // 폭 변경 등 레이아웃이 커밋된 *다음* 프레임에 측정한다 — rAF 전엔 사이드바 폭이
+    // 아직 반영 전이라 rect 가 어긋난다.
+    const report = () => {
+      const sb = document.querySelector(".sidebar-right.open");
+      if (!sb) {
+        invoke("browser_dom_holes", { holes: [] }).catch(() => {});
+        return;
+      }
+      const r = sb.getBoundingClientRect();
+      invoke("browser_dom_holes", {
+        holes: [{ x: r.left, y: r.top, w: r.width, h: r.height }],
+      }).catch(() => {});
+    };
+    const raf = requestAnimationFrame(report);
+    // 창 리사이즈도 사이드바 rect(우변 고정·높이)를 옮긴다 — 다시 측정.
+    const onWinResize = () => requestAnimationFrame(report);
+    window.addEventListener("resize", onWinResize);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onWinResize);
+    };
+    // rightRect = rightOpen·rightW 의 단일 파생 — 둘 중 무엇이 바뀌어도 재측정.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rightRect]);
 
   // 새 호스트의 최초 createTerminal 이 현재 테마로 생성되도록 provider 등록.
   const themeRef = useRef(theme);

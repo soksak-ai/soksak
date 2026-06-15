@@ -12,7 +12,7 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::{
     AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Url, WebviewUrl,
     WebviewWindowBuilder,
@@ -21,6 +21,13 @@ use tauri::{
 #[derive(Clone, Serialize)]
 struct NavPayload {
     label: String,
+    url: String,
+}
+
+// 새 링크(_blank/window.open)를 "앱 내 새 탭"으로 열 때 프론트로 보내는 페이로드.
+// "window" 모드는 open_popup(새 OS 창)이 직접 처리하고, "tab" 모드만 이 이벤트를 탄다.
+#[derive(Clone, Serialize)]
+struct BrowserOpenPayload {
     url: String,
 }
 
@@ -134,6 +141,16 @@ mod status {
     }
 }
 
+// DOM 오버레이 영역(사이드바 등) 사각형 — CSS 논리 px, top-left 원점(browser_bounds 와
+// 동일 규약). 프론트가 getBoundingClientRect 로 측정해 browser_dom_holes 로 보고한다.
+#[derive(Clone, Deserialize)]
+pub(crate) struct Hole {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
 // ── 레이어 정공법(macOS): z-순서 역전 + 투명 홀 + hitTest 위임 ────────────────
 // Tauri 에는 webview z-order API 가 없으므로(docs.rs 실측) AppKit 수준에서 직접
 // 수행한다 — browser.rs 의 기존 objc2 직접 호출(타이틀 KVO/eval/클릭 모니터)과
@@ -158,8 +175,9 @@ mod layer {
     // 메인인지 이 맵에서 판정하고, 홀 로직은 superview/형제 기준이라 창 독립적으로 그 창의 child
     // webview 만 검사한다 — 그래서 한 맵으로 모든 창이 서로 간섭 없이 동작한다.
     struct WinLayer {
-        main_ptr: usize, // 메인 webview NSView 포인터(창 수명 동안 불변)
-        overlay: bool,   // 오버레이(모달/메뉴) 활성 시 홀 통과 차단
+        main_ptr: usize,             // 메인 webview NSView 포인터(창 수명 동안 불변)
+        overlay: bool,               // 오버레이(모달/메뉴) 활성 시 홀 통과 차단
+        holes: Vec<super::Hole>,     // DOM 오버레이(사이드바 등) 영역 — 이 안은 DOM 이 이벤트를 갖는다
     }
     static LAYERS: LazyLock<Mutex<HashMap<String, WinLayer>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -171,6 +189,15 @@ mod layer {
         if let Ok(mut layers) = LAYERS.lock() {
             if let Some(w) = layers.get_mut(label) {
                 w.overlay = active;
+            }
+        }
+    }
+
+    // 창의 DOM 오버레이 홀 갱신(사이드바 열림/닫힘·폭 변화 시 browser_dom_holes 가 호출).
+    pub fn set_holes(label: &str, holes: Vec<super::Hole>) {
+        if let Ok(mut layers) = LAYERS.lock() {
+            if let Some(w) = layers.get_mut(label) {
+                w.holes = holes;
             }
         }
     }
@@ -194,15 +221,16 @@ mod layer {
     ) -> *mut AnyObject {
         let orig: HitTestFn = std::mem::transmute(ORIG_HIT_TEST.load(Ordering::Relaxed));
         let default = orig(this, cmd, point);
-        // this 가 *어느 창의* 메인 view 인가 + 그 창 오버레이 활성? 미등록(child/팝업)이거나
+        // this 가 *어느 창의* 메인 view 인가 + 그 창 오버레이 활성/홀? 미등록(child/팝업)이거나
         // 맵 poisoned 면 원본 동작. (마우스 이벤트마다 호출 — lock 은 짧고 창 수는 적다.)
-        let overlay = {
+        // overlay 와 holes(클론)를 lock 한 번에 같이 꺼낸다.
+        let (overlay, holes) = {
             let Ok(layers) = LAYERS.lock() else {
                 return default;
             };
             match layers.values().find(|w| w.main_ptr == this as usize) {
                 None => return default, // child/팝업 webview — 원본 동작 그대로.
-                Some(w) => w.overlay,
+                Some(w) => (w.overlay, w.holes.clone()),
             }
         };
         if default.is_null() || overlay {
@@ -212,6 +240,30 @@ mod layer {
         let Some(superview) = view.superview() else {
             return default;
         };
+        // 사이드바 등 DOM 오버레이 영역은 풀사이즈 브라우저 위에 떠 있어도 DOM 이 이벤트를
+        // 갖는다(스크롤이 브라우저로 새지 않음). 홀 안이면 default(메인 webview)를 그대로
+        // 돌려줘 DOM 이 이벤트를 받는다. holes 는 메인 webview 콘텐츠 기준 CSS 논리 px(top-left,
+        // browser_bounds 와 동일 규약)이고, point 는 superview 좌표계이므로 mf(메인 frame)를
+        // 통해 변환한다. mf 는 메인 webview 콘텐츠 전 영역이다.
+        let mf = view.frame();
+        let flipped = superview.isFlipped();
+        for hole in holes.iter() {
+            let xlo = mf.origin.x + hole.x;
+            let xhi = mf.origin.x + hole.x + hole.w;
+            // y 변환: superview 가 flipped(top-left 원점)면 hole.y 를 그대로 더한다.
+            // AppKit 기본(non-flipped, bottom-left 원점)이면 콘텐츠 상단이 mf 의 위쪽 변
+            // (mf.origin.y + mf.size.height)이므로 거기서 hole.y/hole.y+h 를 빼 뒤집는다.
+            let (ylo, yhi) = if flipped {
+                (mf.origin.y + hole.y, mf.origin.y + hole.y + hole.h)
+            } else {
+                let y_high = mf.origin.y + mf.size.height - hole.y;
+                let y_low = mf.origin.y + mf.size.height - (hole.y + hole.h);
+                (y_low, y_high)
+            };
+            if point.x >= xlo && point.x < xhi && point.y >= ylo && point.y < yhi {
+                return default;
+            }
+        }
         for sub in superview.subviews().iter() {
             if Retained::as_ptr(&sub) as *mut AnyObject == this || sub.isHidden() {
                 continue;
@@ -244,7 +296,10 @@ mod layer {
         let _ = wv.with_webview(move |pw| unsafe {
             let obj = pw.inner() as *mut AnyObject;
             if let Ok(mut layers) = LAYERS.lock() {
-                layers.insert(label, WinLayer { main_ptr: obj as usize, overlay: false });
+                layers.insert(
+                    label,
+                    WinLayer { main_ptr: obj as usize, overlay: false, holes: Vec::new() },
+                );
             }
 
             let no = NSNumber::new_bool(false);
@@ -343,6 +398,17 @@ pub fn browser_overlay_active(window: tauri::Window, active: bool) {
     let _ = (window, active);
 }
 
+// DOM 오버레이 홀 동기화 — 프론트가 사이드바 열림/닫힘·폭 변화·창 리사이즈 시 측정해 보고.
+// 닫힘이면 빈 배열을 보내 홀을 비운다. holes 안은 풀사이즈 브라우저 위라도 DOM 이 받는다.
+#[tauri::command]
+pub fn browser_dom_holes(window: tauri::Window, holes: Vec<Hole>) {
+    // window = 호출 창(자동 인지). 그 창의 홀만 갱신(프론트 label 전달 불요).
+    #[cfg(target_os = "macos")]
+    layer::set_holes(window.label(), holes);
+    #[cfg(not(target_os = "macos"))]
+    let _ = (window, holes);
+}
+
 // 실측 프로브: 메인 창 뷰 계층 덤프(레이어 가정 검증·진단용).
 #[cfg(target_os = "macos")]
 #[tauri::command]
@@ -402,7 +468,11 @@ const NEW_WINDOW_NAV: &str = r#"
       if (u) location.href = "https://soksak-popup.invalid/?u=" + encodeURIComponent(u);
     } catch (_) {}
   };
-  window.open = function (u) { pop(u); return null; };
+  window.open = function (u, target) {
+    var tg = (target || "").toString().toLowerCase();
+    if (u && (tg === "_self" || tg === "_top" || tg === "_parent")) { try { location.href = u; } catch (_) {} return window; }
+    pop(u); return null;
+  };
   document.addEventListener("click", function (e) {
     var t = e.target;
     var a = t && t.closest ? t.closest('a[target="_blank"]') : null;
@@ -478,7 +548,14 @@ pub fn browser_open(
         // 주소창은 메인프레임 전용 신호인 on_page_load 로만 갱신한다.
         .on_navigation(move |url| {
             if let Some(target) = popup_target(url) {
-                open_popup(&nav_app, target);
+                // 마커 가로채기는 항상 차단(false). 새 탭/새 창 분기는 프론트 설정이
+                // 소유하므로 여기선 무조건 emit — 프론트가 browserNewWindow 로 라우팅한다.
+                let _ = nav_app.emit(
+                    "browser-open-external",
+                    BrowserOpenPayload {
+                        url: target.to_string(),
+                    },
+                );
                 return false;
             }
             true // 허용

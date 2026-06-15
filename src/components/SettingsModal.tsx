@@ -8,6 +8,7 @@ import {
   type Language,
   type TabPosition,
   type FocusIndicator,
+  type BrowserNewWindow,
 } from "../state/settings";
 import { useTheme } from "../state/theme";
 import { ProgramOptions } from "./ProgramOptions";
@@ -384,6 +385,19 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               value={s.homeUrl}
               onChange={(e) => s.setHomeUrl(e.target.value.trim())}
             />
+          </div>
+          <div className="drow">
+            <span className="drow-label">{t("settings.browserNewWindow")}</span>
+            <select
+              className="dctl"
+              value={s.browserNewWindow}
+              onChange={(e) =>
+                s.setBrowserNewWindow(e.target.value as BrowserNewWindow)
+              }
+            >
+              <option value="window">{t("browserNewWindow.window")}</option>
+              <option value="tab">{t("browserNewWindow.tab")}</option>
+            </select>
           </div>
           <div className="drow">
             <span className="drow-label">{t("settings.scrollback")}</span>
