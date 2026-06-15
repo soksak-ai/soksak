@@ -87,6 +87,9 @@ pub fn run() {
                 // 창인지 label 을 동반 emit 한다(MW4 — browser.rs 머리말). 프론트가 자기 창만 필터.
                 browser::install_click_monitor(app.handle());
                 browser::install_live_resize_monitor(app.handle());
+                // 신호등 유지 옵저버 — 앱 전역 1회(모든 창). 창마다 달면 창 닫아도 안 빠져 누수.
+                let (tlx, tly) = window::traffic_light_inset(app.handle());
+                titlebar::install_global_observers(tlx, tly);
                 // Dock 우클릭 "새 창"(Terminal.app 관례) — 앱 델리게이트 applicationDockMenu: 주입.
                 dockmenu::install(app.handle());
             }

@@ -57,7 +57,7 @@ pub fn titlebar_backing(window: tauri::Window, r: f64, g: f64, b: f64) {
     let _ = (window, r, g, b);
 }
 
-// 앱 수명 1회 설치: 즉시 1회 적용 + 옵저버 등록. 좌표는 conf 값(호출자 전달).
+// 창 생성 시 즉시 1회 신호등 inset 적용(이후 유지는 앱 전역 옵저버가 담당). 좌표는 conf 값.
 #[cfg(target_os = "macos")]
 pub fn install<R: tauri::Runtime>(window: &tauri::Window<R>, x: f64, y: f64) {
     *INSET.lock().unwrap() = (x, y);
@@ -67,12 +67,15 @@ pub fn install<R: tauri::Runtime>(window: &tauri::Window<R>, x: f64, y: f64) {
         let ns = &*(ptr as *const NSWindow);
         apply_inset(ns, x, y);
         dump_state("install", ns);
-        install_observers(ptr, x, y);
     });
 }
 
+// 신호등 유지 옵저버 — 앱 전역 1회 설치(lib.rs setup). object:None 으로 *모든 창*의 통지를 받아 그
+// 통지의 창에 inset 을 재적용한다(통지의 sender = 그 NSWindow). 과거엔 창마다 옵저버를 달고
+// std::mem::forget 했는데(단일 창 가정), 멀티 윈도우에선 창을 닫아도 옵저버가 안 빠져 창마다 누적
+// 누수였다. install_live_resize_monitor(browser.rs)와 동일 패턴 — 앱 전역 6개면 충분, 진짜 1회 leak.
 #[cfg(target_os = "macos")]
-unsafe fn install_observers(ns_window_ptr: *mut std::ffi::c_void, x: f64, y: f64) {
+pub fn install_global_observers(x: f64, y: f64) {
     use objc2_app_kit::{
         NSWindowDidBecomeKeyNotification, NSWindowDidBecomeMainNotification,
         NSWindowDidExitFullScreenNotification, NSWindowDidResignKeyNotification,
@@ -81,14 +84,16 @@ unsafe fn install_observers(ns_window_ptr: *mut std::ffi::c_void, x: f64, y: f64
     use objc2_foundation::{NSNotification, NSNotificationCenter};
 
     let center = NSNotificationCenter::defaultCenter();
-    let events: [(&'static str, &'static objc2_foundation::NSNotificationName); 6] = [
-        ("becomeKey", NSWindowDidBecomeKeyNotification),
-        ("resignKey", NSWindowDidResignKeyNotification),
-        ("becomeMain", NSWindowDidBecomeMainNotification),
-        ("resignMain", NSWindowDidResignMainNotification),
-        ("resize", NSWindowDidResizeNotification),
-        ("exitFullScreen", NSWindowDidExitFullScreenNotification),
-    ];
+    let events: [(&'static str, &'static objc2_foundation::NSNotificationName); 6] = unsafe {
+        [
+            ("becomeKey", NSWindowDidBecomeKeyNotification),
+            ("resignKey", NSWindowDidResignKeyNotification),
+            ("becomeMain", NSWindowDidBecomeMainNotification),
+            ("resignMain", NSWindowDidResignMainNotification),
+            ("resize", NSWindowDidResizeNotification),
+            ("exitFullScreen", NSWindowDidExitFullScreenNotification),
+        ]
+    };
 
     for (label, name) in events {
         let block = block2::RcBlock::new(move |note: std::ptr::NonNull<NSNotification>| {
@@ -103,15 +108,11 @@ unsafe fn install_observers(ns_window_ptr: *mut std::ffi::c_void, x: f64, y: f64
             }
         });
         let token = unsafe {
-            center.addObserverForName_object_queue_usingBlock(
-                Some(name),
-                // 이 창의 통지만(브라우저 자식 webview 창/패널 제외).
-                Some(&*(ns_window_ptr as *const objc2::runtime::AnyObject)),
-                None,
-                &block,
-            )
+            // object:None = 모든 창의 통지. 통지 sender 로 대상 창을 판정(브라우저 자식 webview 창은
+            // downcast::<NSWindow> 가 매칭되더라도 신호등 버튼이 없어 apply_inset 가 자연히 no-op).
+            center.addObserverForName_object_queue_usingBlock(Some(name), None, None, &block)
         };
-        // 옵저버는 앱 수명 동안 유지 — 의도된 leak(창 1개, 설치 1회).
+        // 앱 전역 6개 — 앱 수명 동안 유지(진짜 1회 leak, 창 수와 무관).
         std::mem::forget(token);
     }
 }

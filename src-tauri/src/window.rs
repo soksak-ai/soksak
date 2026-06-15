@@ -14,19 +14,24 @@ static WIN_SEQ: AtomicUsize = AtomicUsize::new(1);
 // 한 창의 네이티브를 설치하는 단일 진입점(MW1) — main(setup)·새 창(window_create)이 같은 함수를
 // 호출해 중복·누락을 막는다. 레이어 역전(hole-punch)과 신호등을 그 창에 건다. 앱 전역 모니터
 // (클릭·라이브리사이즈)는 창과 무관하게 1회만 설치되므로 여기 포함하지 않는다(lib.rs setup).
+// 신호등 inset 좌표(conf trafficLightPosition, 전 창 공통 정책·단일 진실). 미설정 시 (12,20).
+// 창별 즉시 적용(install_window_natives)과 앱 전역 유지 옵저버(titlebar::install_global_observers)가 공유.
+#[cfg(target_os = "macos")]
+pub fn traffic_light_inset(app: &AppHandle) -> (f64, f64) {
+    app.config()
+        .app
+        .windows
+        .first()
+        .and_then(|w| w.traffic_light_position.as_ref())
+        .map(|p| (p.x, p.y))
+        .unwrap_or((12.0, 20.0))
+}
+
 #[cfg(target_os = "macos")]
 pub fn install_window_natives(app: &AppHandle, label: &str) {
     crate::browser::install_layer_inversion(app, label);
     if let Some(window) = app.get_window(label) {
-        // 신호등 위치 = conf trafficLightPosition(전 창 공통 정책, 단일 진실). 미설정 시 (12,20).
-        let (x, y) = app
-            .config()
-            .app
-            .windows
-            .first()
-            .and_then(|w| w.traffic_light_position.as_ref())
-            .map(|p| (p.x, p.y))
-            .unwrap_or((12.0, 20.0));
+        let (x, y) = traffic_light_inset(app);
         crate::titlebar::install(&window, x, y);
     }
 }
