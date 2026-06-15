@@ -59,7 +59,9 @@ fn emit_page_title<R: tauri::Runtime>(_webview: &tauri::Webview<R>, _label: &str
 // rect 레지스트리가 없다(set_position/set_size/hide 가 곧 홀 갱신).
 #[cfg(target_os = "macos")]
 mod layer {
-    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{LazyLock, Mutex};
 
     use objc2::msg_send;
     use objc2::rc::Retained;
@@ -69,14 +71,27 @@ mod layer {
     use objc2_foundation::{NSNumber, NSPoint, NSString};
     use tauri::Manager;
 
-    // 오버레이(모달/메뉴 등 DOM 레이어)가 떠 있는 동안 true — 홀 마우스 통과를
-    // 차단해 "바깥 클릭=닫기"가 성립한다(브라우저는 보이되 비활성).
-    pub static OVERLAY_ACTIVE: AtomicBool = AtomicBool::new(false);
-    // 메인 webview 의 NSView 포인터. install 1회 저장, 메인 webview 는 앱 수명
-    // 동안 파괴되지 않으므로 불변.
-    static MAIN_VIEW: AtomicUsize = AtomicUsize::new(0);
-    // 교체 전 원본 hitTest IMP(클래스 메서드 스위즐의 폴백 경로).
+    // 창별 레이어 상태(멀티 윈도우): label → (그 창 메인 webview 의 NSView 포인터, 오버레이 게이트).
+    // 각 창이 자기 메인 view 와 오버레이 상태를 독립 보유한다. hit_test 는 this(view)가 *어느 창의*
+    // 메인인지 이 맵에서 판정하고, 홀 로직은 superview/형제 기준이라 창 독립적으로 그 창의 child
+    // webview 만 검사한다 — 그래서 한 맵으로 모든 창이 서로 간섭 없이 동작한다.
+    struct WinLayer {
+        main_ptr: usize, // 메인 webview NSView 포인터(창 수명 동안 불변)
+        overlay: bool,   // 오버레이(모달/메뉴) 활성 시 홀 통과 차단
+    }
+    static LAYERS: LazyLock<Mutex<HashMap<String, WinLayer>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+    // 교체 전 원본 hitTest IMP. 클래스(WryWebView) 단위 스위즐이라 앱 전역 1회면 충분.
     static ORIG_HIT_TEST: AtomicUsize = AtomicUsize::new(0);
+
+    // 창의 오버레이 게이트 갱신(프론트 ui 카운터 0↔1 전이 시 browser_overlay_active 가 호출).
+    pub fn set_overlay(label: &str, active: bool) {
+        if let Ok(mut layers) = LAYERS.lock() {
+            if let Some(w) = layers.get_mut(label) {
+                w.overlay = active;
+            }
+        }
+    }
 
     type HitTestFn = unsafe extern "C-unwind" fn(*mut AnyObject, Sel, NSPoint) -> *mut AnyObject;
 
@@ -97,10 +112,18 @@ mod layer {
     ) -> *mut AnyObject {
         let orig: HitTestFn = std::mem::transmute(ORIG_HIT_TEST.load(Ordering::Relaxed));
         let default = orig(this, cmd, point);
-        if this as usize != MAIN_VIEW.load(Ordering::Relaxed) {
-            return default; // child/팝업 webview — 원본 동작 그대로.
-        }
-        if default.is_null() || OVERLAY_ACTIVE.load(Ordering::Relaxed) {
+        // this 가 *어느 창의* 메인 view 인가 + 그 창 오버레이 활성? 미등록(child/팝업)이거나
+        // 맵 poisoned 면 원본 동작. (마우스 이벤트마다 호출 — lock 은 짧고 창 수는 적다.)
+        let overlay = {
+            let Ok(layers) = LAYERS.lock() else {
+                return default;
+            };
+            match layers.values().find(|w| w.main_ptr == this as usize) {
+                None => return default, // child/팝업 webview — 원본 동작 그대로.
+                Some(w) => w.overlay,
+            }
+        };
+        if default.is_null() || overlay {
             return default;
         }
         let view = &*(this as *const NSView);
@@ -130,21 +153,27 @@ mod layer {
     // 메인 webview 에 1회 설치: ① 자체 배경 비활성(KVC drawsBackground=false —
     // wry 의 transparent 경로와 동일 기법; CSS 불투명 표면은 그대로 그려지고
     // 투명 슬롯만 아래가 비친다) ② hitTest 메서드 스위즐(클래스 단위, 위 주석).
-    pub fn install(app: &tauri::AppHandle) {
-        let Some(wv) = app.get_webview("main") else {
-            eprintln!("[layer] main webview 없음 — 레이어 역전 미설치");
+    pub fn install(app: &tauri::AppHandle, label: &str) {
+        let Some(wv) = app.get_webview(label) else {
+            eprintln!("[layer] {label} webview 없음 — 레이어 역전 미설치");
             return;
         };
-        let _ = wv.with_webview(|pw| unsafe {
+        let label = label.to_string();
+        let _ = wv.with_webview(move |pw| unsafe {
             let obj = pw.inner() as *mut AnyObject;
-            MAIN_VIEW.store(obj as usize, Ordering::Relaxed);
+            if let Ok(mut layers) = LAYERS.lock() {
+                layers.insert(label, WinLayer { main_ptr: obj as usize, overlay: false });
+            }
 
             let no = NSNumber::new_bool(false);
             let key = NSString::from_str("drawsBackground");
             let _: () = msg_send![&*obj, setValue: Some(&*no as &AnyObject), forKey: &*key];
 
-            // hitTest 스위즐 — 원본 IMP 를 보관하고 같은 타입 인코딩으로 교체.
-            // (인스턴스가 hitTest 를 직접 구현하지 않았으면 상속분이 원본이 된다.)
+            // hitTest 스위즐 — 클래스(WryWebView) 단위라 앱 전역 1회면 모든 창 webview 가 거친다.
+            // 원본 IMP 를 보관하고 같은 타입 인코딩으로 교체. 이미 설치됐으면(ORIG≠0) 건너뛴다.
+            if ORIG_HIT_TEST.load(Ordering::Relaxed) != 0 {
+                return;
+            }
             let cls = (*obj).class();
             let sel = sel!(hitTest:);
             let Some(method) = cls.instance_method(sel) else {
@@ -164,9 +193,14 @@ mod layer {
     // child webview 를 메인(DOM) 아래로 강하. add_child 는 최상위에 붙이므로
     // 생성 직후 1회 호출한다. 기존 서브뷰에 addSubview:positioned:relativeTo: 를
     // 호출하면 제거 후 재삽입(AppKit 표준 동작)으로 순서만 바뀐다.
-    pub fn lower_below_main<R: tauri::Runtime>(webview: &tauri::Webview<R>) {
-        let _ = webview.with_webview(|pw| unsafe {
-            let main_ptr = MAIN_VIEW.load(Ordering::Relaxed);
+    pub fn lower_below_main<R: tauri::Runtime>(webview: &tauri::Webview<R>, label: &str) {
+        let label = label.to_string();
+        let _ = webview.with_webview(move |pw| unsafe {
+            let main_ptr = LAYERS
+                .lock()
+                .ok()
+                .and_then(|l| l.get(&label).map(|w| w.main_ptr))
+                .unwrap_or(0);
             if main_ptr == 0 {
                 return;
             }
@@ -219,11 +253,11 @@ mod layer {
 // 오버레이(모달/메뉴/드롭다운) 상태 동기화 — 프론트 ui 스토어 카운터가 0↔1 을
 // 넘을 때 호출한다. true 면 홀 마우스 통과 차단(hitTest 가 DOM 에 우선권).
 #[tauri::command]
-pub fn browser_overlay_active(active: bool) {
+pub fn browser_overlay_active(label: String, active: bool) {
     #[cfg(target_os = "macos")]
-    layer::OVERLAY_ACTIVE.store(active, Ordering::Relaxed);
+    layer::set_overlay(&label, active);
     #[cfg(not(target_os = "macos"))]
-    let _ = active;
+    let _ = (label, active);
 }
 
 // 실측 프로브: 메인 창 뷰 계층 덤프(레이어 가정 검증·진단용).
@@ -266,10 +300,10 @@ pub async fn browser_debug_hierarchy(_app: AppHandle) -> Result<String, String> 
     Err("browser_debug_hierarchy 는 현재 macOS 전용".into())
 }
 
-// 메인 webview 레이어 설치(setup 에서 1회) — lib.rs 가 호출.
+// 한 창의 webview 에 레이어 역전 설치 — setup(main)·새 창 생성 시 그 창 label 로 호출.
 #[cfg(target_os = "macos")]
-pub fn install_layer_inversion(app: &AppHandle) {
-    layer::install(app);
+pub fn install_layer_inversion(app: &AppHandle, label: &str) {
+    layer::install(app, label);
 }
 
 static POPUP_SEQ: AtomicUsize = AtomicUsize::new(1);
@@ -377,9 +411,9 @@ pub fn browser_open(
             LogicalSize::new(w, h),
         )
         .map_err(|e| e.to_string())?;
-    // 레이어 원칙: child 는 DOM(메인 webview) 아래 — 생성 직후 z-순서 강하.
+    // 레이어 원칙: child 는 DOM(부모 창 메인 webview) 아래 — 생성 직후 z-순서 강하.
     #[cfg(target_os = "macos")]
-    layer::lower_below_main(&webview);
+    layer::lower_below_main(&webview, window.label());
     #[cfg(not(target_os = "macos"))]
     let _ = webview;
     Ok(())

@@ -1,6 +1,16 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+// 이 webview 가 속한 창 label — 오버레이 게이트는 창별이라(멀티 윈도우) 자기 창만 갱신한다.
+// 비 Tauri(jsdom 테스트)에선 getCurrentWindow 가 throw → "main" 폴백.
+let WIN_LABEL = "main";
+try {
+  WIN_LABEL = getCurrentWindow().label;
+} catch {
+  // 테스트 환경 — 폴백 유지
+}
 
 // 일시적 UI 상태. overlayCount: DOM 오버레이(모달/메뉴/드롭다운/드래그)가 떠 있는
 // 동안의 카운터(중첩 안전). 레이어 원칙(src-tauri/browser.rs 머리말): DOM(메인
@@ -18,7 +28,7 @@ interface UiState {
 // 0↔1 경계에서만 네이티브 hitTest 게이트를 동기화(불필요 IPC 억제).
 function syncNative(prev: number, next: number): void {
   if (prev > 0 === next > 0) return;
-  invoke("browser_overlay_active", { active: next > 0 }).catch(() => {});
+  invoke("browser_overlay_active", { label: WIN_LABEL, active: next > 0 }).catch(() => {});
 }
 
 // 부트 정렬: 메인 webview 리로드(HMR/새로고침)는 카운터를 0부터 다시 시작하지만

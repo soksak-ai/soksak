@@ -91,8 +91,9 @@ pub fn run() {
                 }
                 // 네이티브 webview 클릭의 포커스 추적(browser.rs 참조).
                 browser::install_click_monitor(app.handle());
-                // 레이어 역전: DOM(메인 webview)이 항상 최상위(browser.rs 머리말).
-                browser::install_layer_inversion(app.handle());
+                // 레이어 역전: DOM(메인 webview)이 항상 최상위(browser.rs 머리말). main 창에 설치 —
+                // 새 창은 생성 시 그 label 로 별도 설치(window.rs).
+                browser::install_layer_inversion(app.handle(), "main");
                 // 라이브 리사이즈 시작/끝 신호(터미널 fit 타이밍 — browser.rs 참조).
                 browser::install_live_resize_monitor(app.handle());
             }
