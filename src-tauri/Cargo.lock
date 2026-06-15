@@ -3589,8 +3589,7 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 [[package]]
 name = "tauri"
 version = "2.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "437404997acf375d85f1177afa7e11bb971f274ed6a7b83a2a3e339015f4cc28"
+source = "git+https://github.com/soksak-ai/tauri?branch=fix-with-webview-leak#233b7d9dd6c71ca1f3e7bc4df850a9a2873de030"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3641,8 +3640,7 @@ dependencies = [
 [[package]]
 name = "tauri-build"
 version = "2.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4aa1f9055fc23919a54e4e125052bed16ed04aef0487086e758fe01a67b451c7"
+source = "git+https://github.com/soksak-ai/tauri?branch=fix-with-webview-leak#233b7d9dd6c71ca1f3e7bc4df850a9a2873de030"
 dependencies = [
  "anyhow",
  "cargo_toml",
@@ -3662,8 +3660,7 @@ dependencies = [
 [[package]]
 name = "tauri-codegen"
 version = "2.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4a0319528a025a38c4078e7dae2c446f4e63620ddb0659a643ede1cb38f90e9"
+source = "git+https://github.com/soksak-ai/tauri?branch=fix-with-webview-leak#233b7d9dd6c71ca1f3e7bc4df850a9a2873de030"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -3689,8 +3686,7 @@ dependencies = [
 [[package]]
 name = "tauri-macros"
 version = "2.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae6cb4e3896c21d2f6da5b31251d2faea0153bba56ed0e970f918115dbee4924"
+source = "git+https://github.com/soksak-ai/tauri?branch=fix-with-webview-leak#233b7d9dd6c71ca1f3e7bc4df850a9a2873de030"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -3804,8 +3800,7 @@ dependencies = [
 [[package]]
 name = "tauri-runtime"
 version = "2.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48222d7116c8807eaa6fe2f372e023fae125084e61e6eca6d70b7961cdf129ef"
+source = "git+https://github.com/soksak-ai/tauri?branch=fix-with-webview-leak#233b7d9dd6c71ca1f3e7bc4df850a9a2873de030"
 dependencies = [
  "cookie",
  "dpi",
@@ -3829,8 +3824,7 @@ dependencies = [
 [[package]]
 name = "tauri-runtime-wry"
 version = "2.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b83849ee63ecb27a8e8d0fe51915ca215076914aca43f96db1179f0f415f6cd9"
+source = "git+https://github.com/soksak-ai/tauri?branch=fix-with-webview-leak#233b7d9dd6c71ca1f3e7bc4df850a9a2873de030"
 dependencies = [
  "gtk",
  "http",
@@ -3855,8 +3849,7 @@ dependencies = [
 [[package]]
 name = "tauri-utils"
 version = "2.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "092379df9a707631978e6c56b1bc2401d387f01e2d4a3c123360d167bbb9aa95"
+source = "git+https://github.com/soksak-ai/tauri?branch=fix-with-webview-leak#233b7d9dd6c71ca1f3e7bc4df850a9a2873de030"
 dependencies = [
  "anyhow",
  "brotli",
@@ -4245,9 +4238,9 @@ dependencies = [
 
 [[package]]
 name = "tray-icon"
-version = "0.23.1"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15edbb0d80583e85ee8df283410038e17314df5cba30da2087a54a85216c0773"
+checksum = "65ba1e5f6b9ef9fd87e21b9c6f351554dbd717960089168fcfdef854686961dc"
 dependencies = [
  "crossbeam-channel",
  "dirs",

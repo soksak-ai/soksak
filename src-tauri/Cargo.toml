@@ -47,3 +47,15 @@ objc2-web-kit = { version = "0.3", features = ["block2"] }
 objc2-app-kit = "0.3"
 block2 = "0.6"
 
+# wry with_webview 프로세스 누수 수정 — soksak-ai/tauri fork(fix-with-webview-leak) 로 빌드.
+# tauri 는 모노레포(형제 크레이트 path 의존)라 한 크레이트만 patch 하면 버전이 갈려 충돌한다 →
+# 우리가 쓰는 tauri 계열 전체를 같은 포크로 물린다. 상류(tauri-apps/tauri) 머지 시 이 블록 제거.
+[patch.crates-io]
+tauri = { git = "https://github.com/soksak-ai/tauri", branch = "fix-with-webview-leak" }
+tauri-build = { git = "https://github.com/soksak-ai/tauri", branch = "fix-with-webview-leak" }
+tauri-codegen = { git = "https://github.com/soksak-ai/tauri", branch = "fix-with-webview-leak" }
+tauri-macros = { git = "https://github.com/soksak-ai/tauri", branch = "fix-with-webview-leak" }
+tauri-runtime = { git = "https://github.com/soksak-ai/tauri", branch = "fix-with-webview-leak" }
+tauri-runtime-wry = { git = "https://github.com/soksak-ai/tauri", branch = "fix-with-webview-leak" }
+tauri-utils = { git = "https://github.com/soksak-ai/tauri", branch = "fix-with-webview-leak" }
+
