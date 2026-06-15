@@ -25,7 +25,7 @@
       "id": "soksak-plugin-bookmarks",
       "name": "즐겨찾기",
       "version": "1.0.0",
-      "description": "브라우저 즐겨찾기 목록 패널 — 클릭으로 열고 ✕ 로 제거. 기존 명령(bookmark.list / bookmark.remove / browser.open)만 조합, 백엔드 0줄",
+      "description": "브라우저 즐겨찾기 목록 패널 — 클릭으로 열고 ✕ 로 제거.",
       "repo": "https://github.com/soksak-ai/soksak-plugin-bookmarks.git"
     },
     {
@@ -45,7 +45,7 @@
       "id": "soksak-plugin-claude-gui",
       "name": "Claude GUI",
       "version": "0.1.0",
-      "description": "터미널 패널에서 claude(Claude Code CLI)가 실행되면 그 패널 상태바에 GUI 항목이 뜨고, 누르면 패널을 덮는 GUI 오버레이가 열려 claude 대화(JSONL 트랜스크립트)를 cc2 TUI 구성 그대로 버블로 렌더한다. 감지는 코어 명령 생명주기 소켓, 대화는 코어 fs 소켓(읽기·watch·offset tail — 폴링 없음)으로 활성 세션 JSONL + 서브에이전트 서브폴더를 실시간 표시. 모든 claude 도메인 처리는 이 플러그인 소유(코어는 범용만).",
+      "description": "터미널에서 claude(Claude Code CLI)가 실행되면 패널 상태바에 GUI 항목이 뜨고, 누르면 대화를 버블 UI로 보여주는 오버레이가 열린다. 활성 세션과 서브에이전트를 실시간 표시.",
       "repo": "https://github.com/soksak-ai/soksak-plugin-claude-gui.git"
     },
     {
@@ -73,7 +73,7 @@
       "id": "soksak-plugin-git-history",
       "name": "깃 히스토리",
       "version": "1.0.3",
-      "description": "프로젝트 커밋 이력 사이드바 — 50개 단위 페이지네이션, 커밋 클릭 시 변경 파일 목록과 패치 표시.",
+      "description": "프로젝트 커밋 이력 사이드바 — 커밋을 클릭하면 변경 파일 목록과 패치를 표시.",
       "repo": "https://github.com/soksak-ai/soksak-plugin-git-history.git"
     },
     {
@@ -114,14 +114,14 @@
       "id": "soksak-plugin-sakura",
       "name": "sakura 벚꽃",
       "version": "1.0.2",
-      "description": "앱 위로 벚꽃 잎이 흩날린다 — 좌우로 흔들리며 3D로 텀블해 떨어지고 바람에 옆으로 흐른다. 밀도·낙하속도·바람 조절. 부차 효과라 앱 성능 영향 0(비포커스 시 완전 정지).",
+      "description": "앱 위로 벚꽃 잎이 흩날린다 — 좌우로 흔들리며 3D로 텀블해 떨어지고 바람에 옆으로 흐른다. 밀도·낙하속도·바람 조절.",
       "repo": "https://github.com/soksak-ai/soksak-plugin-sakura.git"
     },
     {
       "id": "soksak-plugin-shark",
       "name": "shork shark",
       "version": "1.0.2",
-      "description": "앱 위를 유유자적 헤엄쳐 다니는 shork shark — SOKSAK 워드마크가 곧 상어(S=머리, K=꼬리). 머리 방향으로 전진하며 턴 반경으로 점진 회전. 이동 속도가 헤엄 역동(1~10)과 연동. 브라우저 패널 위도 지나간다.",
+      "description": "앱 위를 유유자적 헤엄쳐 다니는 shork shark — SOKSAK 워드마크가 곧 상어(S=머리, K=꼬리). 마릿수·활기 조절.",
       "repo": "https://github.com/soksak-ai/soksak-plugin-shark.git"
     },
     {

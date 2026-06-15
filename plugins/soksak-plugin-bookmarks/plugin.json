@@ -4,7 +4,7 @@
   "name": "즐겨찾기",
   "version": "1.0.0",
   "repo": "https://github.com/soksak-ai/soksak-plugin-bookmarks.git",
-  "description": "브라우저 즐겨찾기 목록 패널 — 클릭으로 열고 ✕ 로 제거. 기존 명령(bookmark.list / bookmark.remove / browser.open)만 조합, 백엔드 0줄",
+  "description": "브라우저 즐겨찾기 목록 패널 — 클릭으로 열고 ✕ 로 제거.",
   "entry": "main.js",
   "permissions": ["ui", "commands", "commands:destructive"],
   "contributes": {

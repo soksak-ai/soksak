@@ -4,7 +4,7 @@
   "name": "sakura 벚꽃",
   "version": "1.0.2",
   "repo": "https://github.com/soksak-ai/soksak-plugin-sakura.git",
-  "description": "앱 위로 벚꽃 잎이 흩날린다 — 좌우로 흔들리며 3D로 텀블해 떨어지고 바람에 옆으로 흐른다. 밀도·낙하속도·바람 조절. 부차 효과라 앱 성능 영향 0(비포커스 시 완전 정지).",
+  "description": "앱 위로 벚꽃 잎이 흩날린다 — 좌우로 흔들리며 3D로 텀블해 떨어지고 바람에 옆으로 흐른다. 밀도·낙하속도·바람 조절.",
   "entry": "main.js",
   "permissions": ["ui:overlay:screen", "commands"],
   "contributes": {

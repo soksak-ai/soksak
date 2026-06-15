@@ -4,7 +4,7 @@
   "name": "깃 히스토리",
   "version": "1.0.3",
   "repo": "https://github.com/soksak-ai/soksak-plugin-git-history.git",
-  "description": "프로젝트 커밋 이력 사이드바 — 50개 단위 페이지네이션, 커밋 클릭 시 변경 파일 목록과 패치 표시.",
+  "description": "프로젝트 커밋 이력 사이드바 — 커밋을 클릭하면 변경 파일 목록과 패치를 표시.",
   "permissions": [
     "ui",
     "git:read",
