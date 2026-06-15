@@ -87,7 +87,7 @@ plugin-repos: ## 공식 플러그인 → 독립 git 레포 생성(plugins/.repos
 registry: ## 공식 플러그인 → 레지스트리 스냅샷 생성(설치가능 목록, 빌드 포함). 멱등
 	@command -v jq >/dev/null || { echo "jq 필요"; exit 1; }
 	@jq -s 'map(select(.template != true) \
-		| {id, name, description, author, repo} \
+		| {id, name, version, description, author, repo} \
 		| with_entries(select(.value != null))) \
 		| sort_by(.id) \
 		| {spec: "soksak-registry@1", plugins: .}' \

@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { parseRegistry, REGISTRY_SPEC } from "./registry";
+import {
+  installState,
+  mergeRegistry,
+  parseRegistry,
+  REGISTRY_SPEC,
+  type Registry,
+  type RegistryEntry,
+} from "./registry";
 import snapshot from "./registrySnapshot.json";
 
 function entry(over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: "soksak-shark",
     name: "Shark",
+    version: "1.0.2",
     description: "헤엄치는 상어",
     repo: "https://github.com/soksak-ai/soksak-shark.git",
     ...over,
@@ -75,5 +83,45 @@ describe("registrySnapshot.json — 빌드 스냅샷 무결성", () => {
     const ids = parseRegistry(snapshot)!.plugins.map((p) => p.id);
     expect(ids).toContain("soksak-shark");
     expect(ids).toContain("soksak-claude-gui");
+  });
+  it("모든 엔트리에 version", () => {
+    for (const p of parseRegistry(snapshot)!.plugins) {
+      expect(p.version).toMatch(/^\d+\.\d+\.\d+/);
+    }
+  });
+});
+
+describe("installState — 설치 상태 판정", () => {
+  const e = (over: Partial<RegistryEntry> = {}): RegistryEntry => ({
+    id: "soksak-shark",
+    name: "Shark",
+    version: "1.0.2",
+    description: "x",
+    repo: "https://github.com/soksak-ai/soksak-shark.git",
+    ...over,
+  });
+  it("미설치 → available", () => {
+    expect(installState(e())).toBe("available");
+  });
+  it("설치됨 + 같은 버전 → installed", () => {
+    expect(installState(e({ version: "1.0.2" }), "1.0.2")).toBe("installed");
+  });
+  it("설치됨 + 레지스트리가 더 높음 → update", () => {
+    expect(installState(e({ version: "1.1.0" }), "1.0.2")).toBe("update");
+  });
+  it("설치본이 더 높음(로컬 개발) → installed(다운그레이드 권유 안 함)", () => {
+    expect(installState(e({ version: "1.0.0" }), "1.0.2")).toBe("installed");
+  });
+});
+
+describe("mergeRegistry — 원격 채택/폴백", () => {
+  const snap: Registry = { spec: REGISTRY_SPEC, plugins: [entry() as unknown as RegistryEntry] };
+  it("원격 valid → 원격 채택", () => {
+    const remote = { spec: REGISTRY_SPEC, plugins: [entry({ id: "soksak-memo" })] };
+    expect(mergeRegistry(snap, remote).plugins.map((p) => p.id)).toEqual(["soksak-memo"]);
+  });
+  it("원격 손상(null parse) → 스냅샷 유지", () => {
+    expect(mergeRegistry(snap, { bad: true }).plugins.map((p) => p.id)).toEqual(["soksak-shark"]);
+    expect(mergeRegistry(snap, null)).toBe(snap);
   });
 });

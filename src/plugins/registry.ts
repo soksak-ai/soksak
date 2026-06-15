@@ -1,4 +1,4 @@
-import type { LocalizedText } from "./spec";
+import { semverGte, type LocalizedText } from "./spec";
 
 // 공식 플러그인 레지스트리 — "설치 가능 목록"의 단일 진실. 각 엔트리는 한 플러그인의 표시용 메타 +
 // git 레포 URL(설치 source). 빌드에 스냅샷으로 포함(첫 실행/오프라인), 온라인이면 원격 registry.json
@@ -10,6 +10,7 @@ export const REGISTRY_SPEC = "soksak-registry@1";
 export interface RegistryEntry {
   id: string;
   name: LocalizedText;
+  version: string; // 스냅샷/원격 시점의 게시 버전 — 설치본과 비교해 업데이트 표시
   description: LocalizedText;
   author?: string;
   repo: string; // git URL — plugin.install 의 source
@@ -34,10 +35,12 @@ function parseEntry(v: unknown): RegistryEntry | null {
   if (!isRecord(v)) return null;
   if (typeof v.id !== "string" || v.id.length === 0) return null;
   if (typeof v.repo !== "string" || v.repo.length === 0) return null;
+  if (typeof v.version !== "string" || v.version.length === 0) return null;
   if (!isText(v.name) || !isText(v.description)) return null;
   const e: RegistryEntry = {
     id: v.id,
     name: v.name,
+    version: v.version,
     description: v.description,
     repo: v.repo,
   };
@@ -57,4 +60,27 @@ export function parseRegistry(raw: unknown): Registry | null {
     if (e) plugins.push(e);
   }
   return { spec: REGISTRY_SPEC, plugins };
+}
+
+// 한 레지스트리 엔트리의 설치 상태(리스트 UI 배지·버튼 결정용). installedVersion 은 설치본 버전
+// (usePlugins 의 manifest.version), 미설치면 undefined.
+//  - "available"  : 미설치
+//  - "update"     : 설치됨 + 레지스트리 버전이 더 높음(semver)
+//  - "installed"  : 설치됨 + 최신(또는 버전 비교 불가)
+export type InstallState = "available" | "installed" | "update";
+
+export function installState(entry: RegistryEntry, installedVersion?: string): InstallState {
+  if (!installedVersion) return "available";
+  // 레지스트리 버전 ≥ 설치본이면서 같지 않음 = 업데이트 있음. 비교 불가(형식 불량)면 installed 로 보수.
+  if (entry.version !== installedVersion) {
+    const newer = semverGte(entry.version, installedVersion);
+    if (newer === true) return "update";
+  }
+  return "installed";
+}
+
+// 원격 fetch 결과를 빌드 스냅샷에 대해 채택. 원격이 valid(parse 성공)면 원격이 진실(교체),
+// 실패(null)면 스냅샷 유지 — 오프라인/손상에도 목록이 사라지지 않는다.
+export function mergeRegistry(snapshot: Registry, remoteRaw: unknown): Registry {
+  return parseRegistry(remoteRaw) ?? snapshot;
 }

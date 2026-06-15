@@ -4,6 +4,7 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { startPluginHooks } from "./hooks";
 import { usePlugins } from "../state/plugins";
+import { useRegistry } from "../state/registry";
 
 export async function initPluginHost(): Promise<void> {
   startPluginHooks();
@@ -18,4 +19,6 @@ export async function initPluginHost(): Promise<void> {
   } catch (e) {
     console.error("플러그인 초기 로드 실패:", e);
   }
+  // 설치 가능 목록 세션 1회 원격 갱신(실패해도 스냅샷으로 동작 — 막지 않음).
+  void useRegistry.getState().refresh();
 }
