@@ -96,15 +96,36 @@ pub fn run() {
         // false, 같은 창 안 child webview(내장 브라우저)로 포커스가 가도 창 레벨이라 불변. 부차
         // 애니메이션 게이팅 신호이자, 멀티 윈도우 활성 창 추적(소켓 라우팅 기본 타겟) 소스.
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Focused(focused) = event {
-                use tauri::{Emitter, Manager};
-                let label = window.label();
-                if *focused {
-                    ipc::note_focus(label); // 활성 창 갱신(Rust 가 추적)
+            use tauri::{Emitter, Manager};
+            match event {
+                tauri::WindowEvent::Focused(focused) => {
+                    let label = window.label();
+                    if *focused {
+                        ipc::note_focus(label); // 활성 창 갱신(Rust 가 추적)
+                    }
+                    // 그 창에만 emit_to — 프론트 필터 불필요(자기 창 신호만 도착). 활성 창 추적은
+                    // Rust(note_focus)가 담당하므로 프론트는 단순히 focused 만 받는다.
+                    let _ = window.app_handle().emit_to(label, "window-focus", *focused);
                 }
-                // 그 창에만 emit_to — 프론트 필터 불필요(자기 창 신호만 도착). 활성 창 추적은
-                // Rust(note_focus)가 담당하므로 프론트는 단순히 focused 만 받는다.
-                let _ = window.app_handle().emit_to(label, "window-focus", *focused);
+                // 창이 닫히면 그 창의 브라우저 child webview 를 회수한다 — 창 프론트가 사라지면 그 창
+                // browserGc 가 멈추고 다른 창 GC 는 접두사 필터로 안 건드리므로 child 가 좀비로 남는다.
+                // 창과 함께 죽어야 할 자식을 그 창 label 접두사(b-<label>-)로 골라 명시 정리.
+                tauri::WindowEvent::Destroyed => {
+                    let app = window.app_handle();
+                    let prefix = format!("b-{}-", window.label());
+                    let orphans: Vec<String> = app
+                        .webviews()
+                        .keys()
+                        .filter(|l| l.starts_with(&prefix))
+                        .cloned()
+                        .collect();
+                    for label in orphans {
+                        if let Some(wv) = app.get_webview(&label) {
+                            let _ = wv.close();
+                        }
+                    }
+                }
+                _ => {}
             }
         })
         .invoke_handler(tauri::generate_handler![
