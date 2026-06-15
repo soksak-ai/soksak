@@ -30,6 +30,14 @@ struct TitlePayload {
     title: String,
 }
 
+// 내장 브라우저 상태표시줄용 — 링크 hover 시 그 URL(링크를 벗어나면 빈 문자열).
+#[cfg(target_os = "macos")]
+#[derive(Clone, Serialize)]
+struct StatusPayload {
+    label: String,
+    url: String,
+}
+
 // 페이지 로드 완료 시 WKWebView.title(문서 <title>)을 네이티브로 읽어 프론트로 emit.
 // IPC/eval 없이 KVO 와 동일 원천(WKWebView.title) — 폴링 없음. 빈 제목은 보내지 않아
 // 프론트가 호스트명 폴백을 유지한다.
@@ -51,6 +59,80 @@ fn emit_page_title<R: tauri::Runtime>(webview: &tauri::Webview<R>, label: &str) 
 
 #[cfg(not(target_os = "macos"))]
 fn emit_page_title<R: tauri::Runtime>(_webview: &tauri::Webview<R>, _label: &str) {}
+
+// ── 상태표시줄(macOS): 내장 브라우저 링크 hover 통지 ──────────────────────────
+// child webview(외부 사이트)엔 Tauri IPC 가 없으므로 WKScriptMessageHandler("soksakStatus")를
+// 네이티브로 등록한다 — 내비게이션 마커 우회(soksak-popup.invalid)와 달리 페이지에 부작용이 없다.
+// HOVER_SCRIPT 가 링크 href 를 postMessage 하면 받아 on_message(→ browser-status emit)로 넘긴다.
+#[cfg(target_os = "macos")]
+mod status {
+    use objc2::rc::Retained;
+    use objc2::runtime::{NSObject, ProtocolObject};
+    use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly};
+    use objc2_foundation::{ns_string, NSObjectProtocol, NSString};
+    use objc2_web_kit::{
+        WKScriptMessage, WKScriptMessageHandler, WKUserContentController, WKWebView,
+    };
+
+    // 링크 hover 감지 — closest('a[href]').href 가 바뀔 때만 보낸다(스팸 방지). 링크를 벗어나면
+    // 빈 문자열(상태표시줄 숨김). 핸들러 미등록(초기 레이스) 시 try/catch 로 조용히 무시.
+    pub const HOVER_SCRIPT: &str = r#"
+(function () {
+  var last = null;
+  var send = function (u) {
+    try { window.webkit.messageHandlers.soksakStatus.postMessage(u || ""); } catch (_) {}
+  };
+  document.addEventListener("mouseover", function (e) {
+    var t = e.target;
+    var a = t && t.closest ? t.closest('a[href]') : null;
+    var h = a ? a.href : "";
+    if (h !== last) { last = h; send(h); }
+  }, true);
+})();
+"#;
+
+    pub struct StatusHandlerIvars {
+        pub on_message: Box<dyn Fn(String)>,
+    }
+
+    define_class!(
+        #[unsafe(super(NSObject))]
+        #[thread_kind = MainThreadOnly]
+        #[ivars = StatusHandlerIvars]
+        pub struct StatusHandler;
+
+        unsafe impl NSObjectProtocol for StatusHandler {}
+
+        unsafe impl WKScriptMessageHandler for StatusHandler {
+            #[unsafe(method(userContentController:didReceiveScriptMessage:))]
+            fn did_receive(
+                this: &StatusHandler,
+                _controller: &WKUserContentController,
+                msg: &WKScriptMessage,
+            ) {
+                let body = unsafe { msg.body() };
+                if let Ok(s) = body.downcast::<NSString>() {
+                    (this.ivars().on_message)(s.to_string());
+                }
+            }
+        }
+    );
+
+    // 브라우저 webview 의 userContentController 에 soksakStatus 핸들러를 등록한다(메인 스레드).
+    // addScriptMessageHandler 가 핸들러를 retain → controller(=webview) 수명에 묶여 자동 해제.
+    pub fn install(wk: &WKWebView, on_message: Box<dyn Fn(String)>) {
+        let mtm = unsafe { MainThreadMarker::new_unchecked() };
+        let controller = unsafe { wk.configuration().userContentController() };
+        let handler = mtm
+            .alloc::<StatusHandler>()
+            .set_ivars(StatusHandlerIvars { on_message });
+        let handler: Retained<StatusHandler> = unsafe { msg_send![super(handler), init] };
+        let proto = ProtocolObject::from_ref(&*handler);
+        unsafe {
+            controller.addScriptMessageHandler_name(proto, ns_string!("soksakStatus"));
+        }
+    }
+}
 
 // ── 레이어 정공법(macOS): z-순서 역전 + 투명 홀 + hitTest 위임 ────────────────
 // Tauri 에는 webview z-order API 가 없으므로(docs.rs 실측) AppKit 수준에서 직접
@@ -383,8 +465,13 @@ pub fn browser_open(
     let nav_app = app.clone();
     let pl_app = app.clone();
     let pl_label = label.clone();
+    // 상태표시줄용 hover 스크립트를 함께 주입(macOS — 메시지 핸들러가 받는다). 비-macOS 는 생략.
+    #[cfg(target_os = "macos")]
+    let init_script = format!("{NEW_WINDOW_NAV}\n{}", status::HOVER_SCRIPT);
+    #[cfg(not(target_os = "macos"))]
+    let init_script = NEW_WINDOW_NAV.to_string();
     let builder = tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(parsed))
-        .initialization_script(NEW_WINDOW_NAV)
+        .initialization_script(init_script)
         // 새 창 마커(_blank 등)는 차단하고 내장 브라우저 새 창으로. URL 동기화는 여기서 하지 않는다 —
         // on_navigation 은 iframe 등 서브프레임 내비게이션에도 발화하고(wry 가 프레임 정보를 주지 않아
         // 메인/서브 구분 불가) 그러면 주소창이 서브프레임 URL(예: 구글 ogs 위젯)로 오염된다.
@@ -422,7 +509,28 @@ pub fn browser_open(
         .map_err(|e| e.to_string())?;
     // 레이어 원칙: child 는 DOM(부모 창 메인 webview) 아래 — 생성 직후 z-순서 강하.
     #[cfg(target_os = "macos")]
-    layer::lower_below_main(&webview, window.label());
+    {
+        layer::lower_below_main(&webview, window.label());
+        // 상태표시줄: 링크 hover → browser-status emit. 메시지 핸들러를 이 webview 에 등록.
+        let st_app = app.clone();
+        let st_label = label.clone();
+        let _ = webview.with_webview(move |pw| {
+            use objc2_web_kit::WKWebView;
+            let wk = unsafe { &*(pw.inner() as *const WKWebView) };
+            status::install(
+                wk,
+                Box::new(move |url| {
+                    let _ = st_app.emit(
+                        "browser-status",
+                        StatusPayload {
+                            label: st_label.clone(),
+                            url,
+                        },
+                    );
+                }),
+            );
+        });
+    }
     #[cfg(not(target_os = "macos"))]
     let _ = webview;
     Ok(())

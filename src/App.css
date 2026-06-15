@@ -1003,6 +1003,7 @@ body,
   height: 100%;
   background: transparent;
   color: var(--fg);
+  position: relative; /* .bv-status(좌하단 오버레이) 기준 */
 }
 .bv-bar {
   flex: 0 0 auto;

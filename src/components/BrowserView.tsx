@@ -49,11 +49,14 @@ function BrowserViewImpl({
   const visibleRef = useRef(visible);
   const [input, setInput] = useState(url);
   const [bmOpen, setBmOpen] = useState(false);
+  // 링크 hover 시 그 URL(상태표시줄). 빈 문자열이면 숨김 — 네이티브(WKScriptMessageHandler)가 보낸다.
+  const [statusUrl, setStatusUrl] = useState("");
   const inputFocusRef = useRef(false);
 
   // URL 상태 변화(네비게이션/외부) → 입력칸 동기화(직접 입력 중엔 방해하지 않음).
   useEffect(() => {
     if (!inputFocusRef.current) setInput(url);
+    setStatusUrl(""); // 페이지가 바뀌면 hover 상태표시줄 초기화
   }, [url]);
 
   // 최초 1회 webview 생성. 언마운트(뷰 닫힘) 시 정리.
@@ -177,6 +180,16 @@ function BrowserViewImpl({
     };
   }, [label, projectId, viewId, setBrowserTitle]);
 
+  // 링크 hover(네이티브 WKScriptMessageHandler) → 상태표시줄 URL. 벗어나면 빈 문자열(숨김).
+  useEffect(() => {
+    const un = listen<{ label: string; url: string }>("browser-status", (e) => {
+      if (e.payload.label === label) setStatusUrl(e.payload.url);
+    });
+    return () => {
+      void un.then((f) => f());
+    };
+  }, [label]);
+
   const navigate = (raw: string) => {
     const u = normalizeUrl(raw);
     setBrowserUrl(projectId, viewId, u);
@@ -280,6 +293,11 @@ function BrowserViewImpl({
       )}
       {/* child webview 가 이 영역 위에 정렬된다. */}
       <div className="bv-area" ref={areaRef} />
+      {statusUrl && (
+        <div className="bv-status" title={statusUrl}>
+          {statusUrl}
+        </div>
+      )}
     </div>
   );
 }
