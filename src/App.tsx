@@ -366,6 +366,7 @@ function App() {
   // elementFromPoint 로 판정해 그룹을 활성화한다. 모달 등이 위에 떠 있으면
   // 그 요소가 잡혀 자연 차단되고, DOM 클릭과 중복돼도 같은 결과라 무해.
   useEffect(() => {
+    // 코어가 native-mousedown 을 emit_to(그 창)으로 보내므로 이 창은 자기 클릭만 받는다(필터 불요).
     const un = listen<{ x: number; y: number }>("native-mousedown", (e) => {
       const el = document.elementFromPoint(e.payload.x, e.payload.y);
       const slot = el?.closest<HTMLElement>("[data-group-id]");

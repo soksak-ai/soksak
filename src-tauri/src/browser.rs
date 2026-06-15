@@ -253,21 +253,22 @@ mod layer {
 // 오버레이(모달/메뉴/드롭다운) 상태 동기화 — 프론트 ui 스토어 카운터가 0↔1 을
 // 넘을 때 호출한다. true 면 홀 마우스 통과 차단(hitTest 가 DOM 에 우선권).
 #[tauri::command]
-pub fn browser_overlay_active(label: String, active: bool) {
+pub fn browser_overlay_active(window: tauri::Window, active: bool) {
+    // window = 호출 창(MW2 — 자동 인지). 그 창의 오버레이 게이트만 갱신(프론트 label 전달 불요).
     #[cfg(target_os = "macos")]
-    layer::set_overlay(&label, active);
+    layer::set_overlay(window.label(), active);
     #[cfg(not(target_os = "macos"))]
-    let _ = (label, active);
+    let _ = (window, active);
 }
 
 // 실측 프로브: 메인 창 뷰 계층 덤프(레이어 가정 검증·진단용).
 #[cfg(target_os = "macos")]
 #[tauri::command]
-pub async fn browser_debug_hierarchy(app: AppHandle) -> Result<String, String> {
+pub async fn browser_debug_hierarchy(window: tauri::Window) -> Result<String, String> {
     use std::sync::mpsc;
     use std::time::Duration;
 
-    let window = app.get_window("main").ok_or("main window 없음")?;
+    // window = 호출 창(MW2). 그 창의 뷰 계층을 덤프 — 소켓이 emit_to 로 타겟 창에 보내므로 자동.
     let (tx, rx) = mpsc::sync_channel::<String>(1);
     let win = window.clone();
     window
@@ -363,6 +364,7 @@ fn open_popup(app: &AppHandle, url: Url) {
 #[tauri::command]
 pub fn browser_open(
     app: AppHandle,
+    window: tauri::Window,
     label: String,
     url: String,
     x: f64,
@@ -373,7 +375,8 @@ pub fn browser_open(
     if app.get_webview(&label).is_some() {
         return Ok(());
     }
-    let window = app.get_window("main").ok_or("main window 없음")?;
+    // window = 이 명령을 invoke 한 창(MW2 — Tauri 가 호출 창을 주입). 그 창에 child webview 를
+    // 붙이므로 멀티 윈도우에서 BrowserView 가 실행된 창에 정확히 들어간다(프론트 label 전달 불요).
     let parsed = Url::parse(&url).map_err(|e| e.to_string())?;
     let nav_app = app.clone();
     let nav_label = label.clone();
@@ -571,17 +574,30 @@ pub async fn browser_eval(_app: AppHandle, _label: String, _js: String) -> Resul
 // (별도 저장소, 멀티플랫폼). 앱은 .plugin(tauri_plugin_webview_capture::init()) 로
 // 등록하고 sok 명령(window.snapshot/record/occlusion)이 plugin:webview-capture|* 를 호출.
 
-// 네이티브 child webview 위 클릭은 메인 webview DOM 에 도달하지 않아 포커스
-// 추적(activeGroup)이 끊긴다. NSEvent 로컬 모니터로 메인 윈도 안 모든 좌클릭의
-// 좌표(top-left logical)를 프론트에 emit 한다 — 감지는 네이티브가, 판정(어느
-// 그룹인가)은 레이아웃을 아는 프론트가 소유(elementFromPoint). 이벤트는 그대로
-// 통과시킨다(클릭 동작 불변).
+// NSWindow 포인터 → Tauri 창 label 역검색(MW1: 모든 네이티브 이벤트는 어느 창인지 label 로 식별).
+// 창 수는 적고(보통 1~3) 매 이벤트마다 호출되지만 순회 비용은 무시할 수준.
+#[cfg(target_os = "macos")]
+fn label_for_nswindow(app: &AppHandle, ns_ptr: usize) -> Option<String> {
+    use tauri::Manager;
+    for (label, w) in app.webview_windows() {
+        if let Ok(ns) = w.ns_window() {
+            if ns as usize == ns_ptr {
+                return Some(label);
+            }
+        }
+    }
+    None
+}
+
+// 네이티브 child webview 위 클릭은 메인 webview DOM 에 도달하지 않아 포커스 추적(activeGroup)이
+// 끊긴다. NSEvent 로컬 모니터(앱 전역 1회)로 *모든 창*의 좌클릭을 잡아 {label, 좌표}를 emit 한다 —
+// 감지는 네이티브가, 판정(어느 창·그룹)은 레이아웃을 아는 프론트가 소유(자기 창 label 필터 +
+// elementFromPoint). 이벤트는 그대로 통과(클릭 동작 불변). MW1/MW4 — 단일 창(main_ptr) 가정 제거.
 #[cfg(target_os = "macos")]
 pub fn install_click_monitor(app: &AppHandle) {
     use objc2::rc::Retained;
     use objc2::MainThreadMarker;
     use objc2_app_kit::{NSEvent, NSEventMask};
-    use tauri::Manager;
 
     #[derive(Clone, Serialize)]
     struct ClickPayload {
@@ -589,13 +605,6 @@ pub fn install_click_monitor(app: &AppHandle) {
         y: f64,
     }
 
-    let Some(main) = app.get_window("main") else {
-        return;
-    };
-    let Ok(main_ns) = main.ns_window() else {
-        return;
-    };
-    let main_ptr = main_ns as usize;
     let handle = app.clone();
     let block = block2::RcBlock::new(
         move |event: std::ptr::NonNull<NSEvent>| -> *mut NSEvent {
@@ -606,16 +615,16 @@ pub fn install_click_monitor(app: &AppHandle) {
                     return event.as_ptr();
                 };
                 if let Some(win) = ev.window(mtm) {
-                    if Retained::as_ptr(&win) as usize == main_ptr {
+                    let ns_ptr = Retained::as_ptr(&win) as usize;
+                    if let Some(label) = label_for_nswindow(&handle, ns_ptr) {
                         if let Some(view) = win.contentView() {
                             let h = view.frame().size.height;
                             let loc = ev.locationInWindow();
-                            let _ = handle.emit(
+                            // 그 창에만 emit_to — 프론트는 자기 창 클릭만 받아 필터가 불필요.
+                            let _ = handle.emit_to(
+                                &label,
                                 "native-mousedown",
-                                ClickPayload {
-                                    x: loc.x,
-                                    y: h - loc.y,
-                                },
+                                ClickPayload { x: loc.x, y: h - loc.y },
                             );
                         }
                     }
@@ -645,19 +654,6 @@ pub fn install_live_resize_monitor(app: &AppHandle) {
     };
     use objc2_foundation::{NSNotification, NSNotificationCenter};
 
-    #[derive(Clone, Serialize)]
-    struct LiveResizePayload {
-        active: bool,
-    }
-
-    let Some(main) = app.get_window("main") else {
-        return;
-    };
-    let Ok(main_ns) = main.ns_window() else {
-        return;
-    };
-    let main_ptr = main_ns as usize;
-
     let center = NSNotificationCenter::defaultCenter();
     // 통지 이름 상수는 extern static — 접근은 unsafe(읽기 전용, 항상 유효).
     let events: [(bool, &'static objc2_foundation::NSNotificationName); 2] = unsafe {
@@ -668,20 +664,19 @@ pub fn install_live_resize_monitor(app: &AppHandle) {
     };
     for (active, name) in events {
         let handle = app.clone();
-        let block = block2::RcBlock::new(move |_note: std::ptr::NonNull<NSNotification>| {
-            // 통지는 메인 스레드에서 게시된다.
-            let _ = handle.emit("window-live-resize", LiveResizePayload { active });
+        // object: None = 모든 창의 통지(MW1 — 단일 창 가정 제거). 콜백에서 통지의 NSWindow →
+        // label 을 찾아 그 창에만 emit_to(프론트 필터 불필요). child webview 창/패널은 label 매칭
+        // 실패로 자연 제외(webview_windows 에 없음).
+        let block = block2::RcBlock::new(move |note: std::ptr::NonNull<NSNotification>| unsafe {
+            let obj: *mut objc2::runtime::AnyObject = objc2::msg_send![note.as_ref(), object];
+            if let Some(label) = label_for_nswindow(&handle, obj as usize) {
+                let _ = handle.emit_to(&label, "window-live-resize", active);
+            }
         });
         let token = unsafe {
-            center.addObserverForName_object_queue_usingBlock(
-                Some(name),
-                // 이 창의 통지만(브라우저 자식 webview 창/패널 제외).
-                Some(&*(main_ptr as *const objc2::runtime::AnyObject)),
-                None,
-                &block,
-            )
+            center.addObserverForName_object_queue_usingBlock(Some(name), None, None, &block)
         };
-        // 옵저버는 앱 수명 동안 유지 — 의도된 leak(창 1개, 설치 1회).
+        // 옵저버는 앱 수명 동안 유지 — 의도된 leak(앱 전역, 설치 1회).
         std::mem::forget(token);
     }
 }

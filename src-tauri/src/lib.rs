@@ -79,23 +79,11 @@ pub fn run() {
             // titlebar::install 의 NSNotification 옵저버가 담당(titlebar.rs 참조).
             #[cfg(target_os = "macos")]
             {
-                use tauri::Manager;
-                if let (Some(window), Some(pos)) = (
-                    app.get_window("main"),
-                    app.config()
-                        .app
-                        .windows
-                        .first()
-                        .and_then(|w| w.traffic_light_position.as_ref()),
-                ) {
-                    titlebar::install(&window, pos.x, pos.y);
-                }
-                // 네이티브 webview 클릭의 포커스 추적(browser.rs 참조).
+                // main 창 네이티브(레이어 역전·신호등) — 새 창과 동일한 단일 진입점(window.rs).
+                window::install_window_natives(app.handle(), "main");
+                // 앱 전역 모니터(클릭·라이브리사이즈) — 창 무관 1회 설치. 모든 창을 추적하고 어느
+                // 창인지 label 을 동반 emit 한다(MW4 — browser.rs 머리말). 프론트가 자기 창만 필터.
                 browser::install_click_monitor(app.handle());
-                // 레이어 역전: DOM(메인 webview)이 항상 최상위(browser.rs 머리말). main 창에 설치 —
-                // 새 창은 생성 시 그 label 로 별도 설치(window.rs).
-                browser::install_layer_inversion(app.handle(), "main");
-                // 라이브 리사이즈 시작/끝 신호(터미널 fit 타이밍 — browser.rs 참조).
                 browser::install_live_resize_monitor(app.handle());
             }
             Ok(())
@@ -105,17 +93,14 @@ pub fn run() {
         // 애니메이션 게이팅 신호이자, 멀티 윈도우 활성 창 추적(소켓 라우팅 기본 타겟) 소스.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(focused) = event {
-                use tauri::Emitter;
-                let label = window.label().to_string();
+                use tauri::{Emitter, Manager};
+                let label = window.label();
                 if *focused {
-                    ipc::note_focus(&label); // 활성 창 갱신
+                    ipc::note_focus(label); // 활성 창 갱신(Rust 가 추적)
                 }
-                // 전역 emit + 프론트가 자기 label 필터(emit_to 는 webview 라벨이라 별 창 webview 에
-                // 안 닿을 수 있어 전역 + 필터가 안전).
-                let _ = window.emit("window-focus", serde_json::json!({
-                    "label": label,
-                    "focused": *focused,
-                }));
+                // 그 창에만 emit_to — 프론트 필터 불필요(자기 창 신호만 도착). 활성 창 추적은
+                // Rust(note_focus)가 담당하므로 프론트는 단순히 focused 만 받는다.
+                let _ = window.app_handle().emit_to(label, "window-focus", *focused);
             }
         })
         .invoke_handler(tauri::generate_handler![
