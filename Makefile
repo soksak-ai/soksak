@@ -76,7 +76,7 @@ plugin-repos: ## 공식 플러그인 → 독립 git 레포 생성(plugins/.repos
 		ver=$$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' $$d/plugin.json | head -1); \
 		dest=plugins/.repos/$$id; \
 		rm -rf $$dest && mkdir -p $$dest && cp -R $$d. $$dest/ && \
-		git -C $$dest init -q && \
+		git -C $$dest init -q -b main && \
 		git -C $$dest -c user.email=plugins@soksak -c user.name=soksak add . && \
 		git -C $$dest -c user.email=plugins@soksak -c user.name=soksak \
 			-c commit.gpgsign=false commit -qm "$$id v$$ver" && \
