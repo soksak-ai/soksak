@@ -69,6 +69,8 @@ fn print_usage() {
 컨텍스트:
   soksak 터미널 안에서는 $SOKSAK_PANE 이 자동 주입되어, 대상 id 를 생략하면
   호출한 pane 의 위치(패널/컨텐츠/프로젝트)가 기본 대상이 된다.
+  멀티 윈도우: $SOKSAK_WINDOW=win-1 sok <command> 로 특정 창을 지정(생략 시 활성 창).
+  창 목록은 sok window.list, 새 창은 sok window.new.
   소켓: $SOKSAK_SOCKET 또는 ~/.soksak/*.sock 자동 탐색."
     );
 }
@@ -115,6 +117,9 @@ fn request(method: &str, params: Value) -> Result<Value, String> {
         "method": method,
         "params": params,
         "pane": std::env::var("SOKSAK_PANE").ok(),
+        // 멀티 윈도우 타겟 창(SOKSAK_WINDOW). 생략 시 코어가 활성 창으로 라우팅. 특정 창 제어는
+        // SOKSAK_WINDOW=win-1 sok <command> (tmux -t 관례). window.list 로 label 조회.
+        "window": std::env::var("SOKSAK_WINDOW").ok(),
     });
     writeln!(stream, "{req}").map_err(|e| format!("요청 전송 실패: {e}"))?;
     let mut line = String::new();
