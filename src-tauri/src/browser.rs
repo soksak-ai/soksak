@@ -30,6 +30,29 @@ struct TitlePayload {
     title: String,
 }
 
+// [HARD] 모든 with_webview 호출의 단일 통로 — 상류(tauri-runtime-wry 2.11.2) webview 누수를 상쇄한다.
+// 그 macOS WithWebview 핸들러(lib.rs ~4009)가 webview 를 Retained::into_raw 로 PlatformWebview 에 넣고
+// 어디서도 release 하지 않아(PlatformWebview·wry::Webview 둘 다 Drop 없음 — 누수 존재가 곧 증거) 호출마다
+// +1 leak → 그 webview(창 메인 webview·브라우저 child)가 안 죽어 WebContent 프로세스가 잔존한다(실측).
+// 누수의 *본체*인 webview 포인터만 from_raw+drop 으로 상쇄한다. manager/ns_window 도 into_raw 누수지만
+// (a) 프로세스가 아닌 객체 메모리이고 (b) ns_window 는 브라우저 child 의 경우 부모 창을 가리켜 상쇄가
+// 렌더링 부작용을 낸다(실측) — 건드리지 않는다. 대상 webview 는 뷰 계층이 보유하므로 균형 후에도 유효.
+// [HARD] tauri 버전 업 시 상류가 release 를 추가하면 이중 해제 → 이 헬퍼 재검토·제거.
+#[cfg(target_os = "macos")]
+fn with_webview_balanced<R: tauri::Runtime>(
+    wv: &tauri::Webview<R>,
+    f: impl FnOnce(&tauri::webview::PlatformWebview) + Send + 'static,
+) -> tauri::Result<()> {
+    use objc2::rc::Retained;
+    use objc2::runtime::AnyObject;
+    wv.with_webview(move |pw| {
+        f(&pw);
+        unsafe {
+            drop(Retained::<AnyObject>::from_raw(pw.inner() as *mut AnyObject));
+        }
+    })
+}
+
 // 페이지 로드 완료 시 WKWebView.title(문서 <title>)을 네이티브로 읽어 프론트로 emit.
 // IPC/eval 없이 KVO 와 동일 원천(WKWebView.title) — 폴링 없음. 빈 제목은 보내지 않아
 // 프론트가 호스트명 폴백을 유지한다.
@@ -37,7 +60,7 @@ struct TitlePayload {
 fn emit_page_title<R: tauri::Runtime>(webview: &tauri::Webview<R>, label: &str) {
     let app = webview.app_handle().clone();
     let label = label.to_string();
-    let _ = webview.with_webview(move |pw| unsafe {
+    let _ = with_webview_balanced(webview, move |pw| unsafe {
         use objc2_web_kit::WKWebView;
         let wk = &*(pw.inner() as *const WKWebView);
         if let Some(t) = wk.title() {
@@ -159,7 +182,8 @@ mod layer {
             return;
         };
         let label = label.to_string();
-        let _ = wv.with_webview(move |pw| unsafe {
+        // with_webview_balanced(상위 모듈) — 모든 with_webview 의 단일 통로(상류 webview 누수 상쇄, 머리말).
+        let _ = super::with_webview_balanced(&wv, move |pw| unsafe {
             let obj = pw.inner() as *mut AnyObject;
             if let Ok(mut layers) = LAYERS.lock() {
                 layers.insert(label, WinLayer { main_ptr: obj as usize, overlay: false });
@@ -195,7 +219,8 @@ mod layer {
     // 호출하면 제거 후 재삽입(AppKit 표준 동작)으로 순서만 바뀐다.
     pub fn lower_below_main<R: tauri::Runtime>(webview: &tauri::Webview<R>, label: &str) {
         let label = label.to_string();
-        let _ = webview.with_webview(move |pw| unsafe {
+        // with_webview_balanced(상위 모듈) — 상류 webview 누수 상쇄 단일 통로(머리말 참조).
+        let _ = super::with_webview_balanced(webview, move |pw| unsafe {
             let main_ptr = LAYERS
                 .lock()
                 .ok()
@@ -520,7 +545,8 @@ pub async fn browser_eval(app: AppHandle, label: String, js: String) -> Result<S
         .ok_or_else(|| format!("webview 없음: {label}"))?;
     let (tx, rx) = mpsc::sync_channel::<Result<String, String>>(1);
 
-    wv.with_webview(move |pw| {
+    // with_webview_balanced — 상류 webview 누수 상쇄 단일 통로(머리말 참조).
+    with_webview_balanced(&wv, move |pw| {
         use block2::RcBlock;
         use objc2::runtime::AnyObject;
         use objc2::MainThreadMarker;
