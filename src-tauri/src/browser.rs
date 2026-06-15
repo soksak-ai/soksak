@@ -360,7 +360,9 @@ fn open_popup(app: &AppHandle, url: Url) {
     }
 }
 
-// child webview 생성(이미 있으면 무시). label = "b-<viewId>".
+// child webview 생성(이미 있으면 무시). label = "b-<windowLabel>-<viewId>"(프론트 webviewLabels 단일
+// 진실이 창 네임스페이스로 만든다 — Tauri webview label 은 앱 전역 유일해야 하므로 창별 viewId 만으론
+// 충돌). Rust 는 그 label 을 받아 add_child 할 뿐 형식은 프론트가 소유.
 #[tauri::command]
 pub fn browser_open(
     app: AppHandle,
@@ -576,10 +578,13 @@ pub async fn browser_eval(_app: AppHandle, _label: String, _js: String) -> Resul
 
 // NSWindow 포인터 → Tauri 창 label 역검색(MW1: 모든 네이티브 이벤트는 어느 창인지 label 로 식별).
 // 창 수는 적고(보통 1~3) 매 이벤트마다 호출되지만 순회 비용은 무시할 수준.
+// windows()(Window 레지스트리)를 쓴다 — 브라우저 child 를 add_child 한 창은 멀티-webview 가 되어
+// webview_windows()(단일-webview 전용, is_webview_window 필터)에서 빠지므로, 그걸 쓰면 브라우저 연
+// 창의 클릭이 label 매칭 실패로 사라진다.
 #[cfg(target_os = "macos")]
 fn label_for_nswindow(app: &AppHandle, ns_ptr: usize) -> Option<String> {
     use tauri::Manager;
-    for (label, w) in app.webview_windows() {
+    for (label, w) in app.windows() {
         if let Ok(ns) = w.ns_window() {
             if ns as usize == ns_ptr {
                 return Some(label);

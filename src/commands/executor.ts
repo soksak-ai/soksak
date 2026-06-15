@@ -2,7 +2,7 @@
 // invoke(cmd_result) 로 회신한다(요청 id 매칭). 앱 시작 시 1회 startExecutor().
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { listenThisWindow } from "../lib/windowEvents";
 import { useSettings } from "../state/settings";
 import { registerCatalog } from "./catalog";
 import { execute, setPermissionGate } from "./registry";
@@ -32,10 +32,12 @@ export function startExecutor(): void {
     }
     return true;
   });
-  void listen<CmdRequest>("cmd-request", async (e) => {
+  // 이 창에 emit_to 된 cmd-request 만 받는다(전역 listen 이면 emit_to(다른 창) 도 받아 명령이
+  // 두 창에서 중복 실행 → 창별 독립 붕괴). lib/windowEvents 머리말 참조.
+  listenThisWindow<CmdRequest>("cmd-request", async (e) => {
     const { id, method, params, pane, window } = e.payload;
-    // 소켓 경유 = 원격(AI/CLI) 호출 → 권한 게이트 적용 대상. emit_to 로 이 창에만 도착하므로
-    // window 는 자기 창 label(라우팅 확인·명령 컨텍스트용).
+    // 소켓 경유 = 원격(AI/CLI) 호출 → 권한 게이트 적용 대상. window 는 자기 창 label
+    // (라우팅 확인·명령 컨텍스트용).
     const result = await execute(method, params ?? {}, {
       pane: pane ?? undefined,
       remote: true,

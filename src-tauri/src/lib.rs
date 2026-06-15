@@ -1,4 +1,6 @@
 mod browser;
+#[cfg(target_os = "macos")]
+mod dockmenu;
 mod fs;
 mod git;
 pub mod ipc;
@@ -85,6 +87,8 @@ pub fn run() {
                 // 창인지 label 을 동반 emit 한다(MW4 — browser.rs 머리말). 프론트가 자기 창만 필터.
                 browser::install_click_monitor(app.handle());
                 browser::install_live_resize_monitor(app.handle());
+                // Dock 우클릭 "새 창"(Terminal.app 관례) — 앱 델리게이트 applicationDockMenu: 주입.
+                dockmenu::install(app.handle());
             }
             Ok(())
         })
@@ -156,8 +160,17 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            // 종료 요청 시 모든 PTY 자식 프로세스 정리(좀비 방지) + 제어 소켓 정리.
-            if let tauri::RunEvent::ExitRequested { .. } = event {
+            // 멀티 윈도우 종료 규칙: 창이 하나라도 남아 있으면 앱을 종료하지 않는다 — 한 창을 닫아도
+            // 다른 창은 살아야 한다. 실제 종료(PTY 자식 정리·소켓 정리)는 마지막 창이 닫혔을 때만.
+            // (Tauri 기본은 ExitRequested 시 그대로 종료 — prevent_exit 로 비-마지막 창 종료를 막는다.)
+            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                // windows()(Window 레지스트리) — 브라우저 child 를 연 창은 멀티-webview 라
+                // webview_windows() 에서 빠진다. 그걸 쓰면 브라우저 연 창이 마지막 1개일 때 "창 없음"
+                // 으로 오판해 앱이 종료된다. 실제 OS 창 존재 여부는 windows() 가 진실.
+                if !app_handle.windows().is_empty() {
+                    api.prevent_exit();
+                    return;
+                }
                 app_handle.state::<PtyManager>().kill_all();
                 ipc::cleanup();
             }

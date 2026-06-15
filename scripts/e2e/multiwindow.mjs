@@ -136,14 +136,14 @@ async function main() {
   await rpc("content.create", { program: "terminal" }, win);
   await sleep(400);
   const mainAfter = await tree("main");
+  const winAfter = await tree(win);
   ok(mainBefore === mainAfter, "창별 독립: win 콘텐츠 추가가 main 에 안 번짐");
-  const winTree = await tree(win);
-  ok(winTree !== mainAfter, "win 과 main 이 독립 상태(다름)");
+  ok(winAfter !== mainAfter, "win 과 main 이 독립 상태(다름)");
 
   // 4) 활성 추적: focus(win) → window 생략 = win, focus(main) → = main
   await rpc("window.focus", { label: win });
   await sleep(500); // 포커스 이벤트 → LAST_FOCUSED 갱신
-  ok((await tree()) === winTree, "활성 추적: focus(win) 후 window 생략 = win");
+  ok((await tree()) === winAfter, "활성 추적: focus(win) 후 window 생략 = win");
   await rpc("window.focus", { label: "main" });
   await sleep(500);
   ok((await tree()) === mainAfter, "활성 추적: focus(main) 후 window 생략 = main");

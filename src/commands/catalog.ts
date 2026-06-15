@@ -31,6 +31,7 @@ import {
 } from "../terminal/paneHosts";
 import { computeLayout } from "../components/GroupArea";
 import { getFileView, saveFileView } from "./fileViewBridge";
+import { browserLabel } from "../lib/webviewLabels";
 import { catalogJson, register, type CommandContext } from "./registry";
 import { registerGitCatalog } from "./catalogGit";
 import { registerPluginCatalog } from "./catalogPlugins";
@@ -319,8 +320,7 @@ function serializeTree() {
 }
 
 // ── 브라우저 eval 합성 ───────────────────────────────────────────────────────
-
-const browserLabel = (viewId: string) => `b-${viewId}`;
+// 브라우저 webview label 은 webviewLabels 단일 진실에서만 파생(창 네임스페이스 — 멀티 윈도우 충돌 방지).
 
 // js 본문을 async 로 실행하고 JSON 문자열 결과를 받는다(Rust browser_eval 은
 // WKWebView callAsyncJavaScript 네이티브 콜백 — CSP/IPC 권한 무관).

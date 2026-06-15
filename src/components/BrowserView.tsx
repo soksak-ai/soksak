@@ -6,6 +6,7 @@ import { Icon } from "../ui/icons/Icon";
 import { listen } from "@tauri-apps/api/event";
 import { useBookmarks } from "../state/bookmarks";
 import { useSessions } from "../state/sessions";
+import { browserLabel } from "../lib/webviewLabels";
 import { useT } from "../i18n";
 
 // 브라우저 패널: 메인 창 안의 Tauri child webview(WKWebView)를 이 슬롯의 본문 영역에
@@ -34,7 +35,8 @@ function BrowserViewImpl({
   visible: boolean;
 }) {
   const t = useT();
-  const label = `b-${viewId}`;
+  // 전역 유일 label(창 네임스페이스) — webviewLabels 단일 진실에서만 파생(inline 재정의 금지: 충돌).
+  const label = browserLabel(viewId);
   const setBrowserUrl = useSessions((s) => s.setBrowserUrl);
   const setBrowserTitle = useSessions((s) => s.setBrowserTitle);
   const bookmarks = useBookmarks((s) => s.list);

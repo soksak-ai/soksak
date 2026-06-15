@@ -126,11 +126,26 @@ fn handle_conn(app: AppHandle, stream: UnixStream) {
     }
 }
 
+// 클라이언트 상관 id echo 를 단일 지점에서 보장한다 — route 가 어떤 경로(WINDOW_NOT_FOUND·INTERNAL·
+// TIMEOUT·정상)로 끝나든 응답에 id 를 박는다. early return 마다 echo 를 흩뿌리면 누락이 생긴다
+// (클라이언트가 seq 매칭 실패 → 무한 대기). id echo 는 라우팅 로직과 직교하므로 바깥에서 1회.
+fn dispatch(app: &AppHandle, req: Request) -> Value {
+    let cid = req.id.clone();
+    let mut out = route(app, req);
+    if let (Some(cid), Some(obj)) = (cid, out.as_object_mut()) {
+        obj.insert("id".into(), cid);
+    }
+    out
+}
+
 // 요청을 *타겟 창의* 프론트 registry 로 전달하고 응답을 기다린다. 타겟 = req.window ?? 활성 창 ??
 // "main". broadcast(app.emit) 가 아니라 emit_to(타겟)이라 멀티 윈도우에서 그 창만 응답 → seq 충돌 0.
-fn dispatch(app: &AppHandle, req: Request) -> Value {
+fn route(app: &AppHandle, req: Request) -> Value {
     let target = req.window.clone().unwrap_or_else(active_window);
-    if app.get_webview_window(&target).is_none() {
+    // get_window(Window 레지스트리) — 브라우저 child 를 연 창은 멀티-webview 라 get_webview_window
+    // (단일-webview 전용)에서 빠진다. 그걸 쓰면 브라우저 연 창의 모든 소켓 명령이 WINDOW_NOT_FOUND.
+    // emit_to(label)은 멀티-webview 여도 그 창 메인 webview 로 도달하므로 라우팅은 정상.
+    if app.get_window(&target).is_none() {
         return error_reply("WINDOW_NOT_FOUND", &format!("창을 찾을 수 없음: {target}"));
     }
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
@@ -152,14 +167,10 @@ fn dispatch(app: &AppHandle, req: Request) -> Value {
 
     let result = rx.recv_timeout(Duration::from_secs(10));
     bridge.pending.lock().unwrap().remove(&seq);
-    let mut out = match result {
+    match result {
         Ok(v) => v,
         Err(_) => error_reply("TIMEOUT", "응답 시간 초과(앱 UI 미응답?)"),
-    };
-    if let (Some(cid), Some(obj)) = (req.id, out.as_object_mut()) {
-        obj.insert("id".into(), cid);
     }
-    out
 }
 
 // 프론트 executor 의 회신(요청 seq 매칭).

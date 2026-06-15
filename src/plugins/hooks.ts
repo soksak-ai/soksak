@@ -4,7 +4,7 @@
 // FileViewer 저장 성공 지점의 emitFileSaved 하나).
 // 리스너 실패는 호스트를 죽이지 못한다(§0-4) — 콜백마다 try/catch.
 
-import { listen } from "@tauri-apps/api/event";
+import { listenThisWindow } from "../lib/windowEvents";
 import { allGroups, collectLeafIds, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
@@ -288,11 +288,11 @@ export function startPluginHooks(): void {
     });
   });
 
-  // 앱(이 창) 활성 → 플러그인 이벤트. 코어가 "window-focus" 를 emit_to(그 창)으로 보내므로 이 창은
-  // 자기 신호만 받는다 — label 필터 불필요(멀티 윈도우). Tauri 런타임 밖(jsdom)에선 listen 무시.
-  void listen<boolean>("window-focus", (e) => {
+  // 앱(이 창) 활성 → 플러그인 이벤트. 이 창에 emit_to 된 "window-focus" 만 받는다(전역 listen 이면
+  // 다른 창 포커스도 받아 app.focus 가 잘못 발화). lib/windowEvents 머리말 참조.
+  listenThisWindow<boolean>("window-focus", (e) => {
     emitPluginEvent("app.focus", { focused: e.payload });
-  }).catch(() => {});
+  });
 }
 
 // pane 이 속한 프로젝트 id. 터미널 뷰들의 leaf 를 걸어 찾는다(못 찾으면 null).

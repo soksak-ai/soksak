@@ -7,7 +7,7 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
 static WIN_SEQ: AtomicUsize = AtomicUsize::new(1);
 
@@ -31,39 +31,70 @@ pub fn install_window_natives(app: &AppHandle, label: &str) {
     }
 }
 
-// 새 창 생성. label = "win-<seq>". 같은 앱(index.html)을 로드한다. 반환 = 생성된 창 label.
+// 새 창 생성(소켓 명령 window.new 의 핸들러). 본체는 create_window 가 소유 — Dock 메뉴 등 명령 밖
+// 호출처와 공용이다.
 #[tauri::command]
 pub fn window_create(app: AppHandle) -> Result<String, String> {
+    create_window(&app)
+}
+
+// 새 창 생성 본체. label = "win-<seq>". 같은 앱(index.html)을 로드한다. 반환 = 생성된 창 label.
+// 메인 스레드에서 호출해야 안전(WebviewWindowBuilder). 명령(window_create)과 Dock 메뉴(dockmenu)가
+// 공유하는 단일 진입점.
+pub fn create_window(app: &AppHandle) -> Result<String, String> {
+    // 새 창을 트리거한(현재 활성) 창의 위치·배율을 빌드 전에 캡처 — 빌드 후엔 새 창이 포커스를
+    // 가져가 활성 창이 바뀐다. 단일 창("main") 하드코딩이 아니라 is_focused 로 동적 판정(MW1).
+    // windows()(Window 레지스트리) — 브라우저 연 창도 포함해야 그 창에서 Cmd+N 한 경우 소스로 잡힌다.
+    let src = app
+        .windows()
+        .values()
+        .find(|w| w.is_focused().unwrap_or(false))
+        .and_then(|w| Some((w.outer_position().ok()?, w.scale_factor().ok()?)));
+
     let label = format!("win-{}", WIN_SEQ.fetch_add(1, Ordering::Relaxed));
-    #[allow(unused_mut)]
-    let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
-        .title("soksak")
-        .inner_size(900.0, 640.0);
-    #[cfg(target_os = "macos")]
-    {
-        use tauri::{LogicalPosition, TitleBarStyle};
-        builder = builder
-            .title_bar_style(TitleBarStyle::Overlay)
-            .hidden_title(true)
-            .traffic_light_position(LogicalPosition::new(12.0, 20.0));
+    // 메인 창 설정(tauri.conf.json windows[0])을 통째로 상속하고 label 만 교체한다 — 타이틀·
+    // titleBarStyle·hiddenTitle·신호등·decorations·transparent 등 모든 속성이 메인과 정합한다.
+    // 수동 빌더로 일부 속성만 옮기면 conf 와 어긋난다(타이틀 "soksak" 고정, 드래그영역/장식 손실).
+    // 단일 진실 = conf. 새 창이 늘어도 메인 창 설정을 바꾸면 같이 따라온다.
+    let mut cfg = app
+        .config()
+        .app
+        .windows
+        .first()
+        .cloned()
+        .ok_or_else(|| "창 설정 없음(tauri.conf.json windows[0])".to_string())?;
+    cfg.label = label.clone();
+    WebviewWindowBuilder::from_config(app, &cfg)
+        .map_err(|e| e.to_string())?
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    // 활성 창에서 가로·세로 ~1cm(28pt) 캐스케이드 — 정확히 겹치면 새 창이 떴는지 눈으로 알 수 없다.
+    // 물리 좌표를 배율로 나눠 논리 좌표로 환산 → 어느 DPI 든 시각적 1cm. 소스 창이 없으면 OS 기본 위치.
+    if let (Some((pos, scale)), Some(win)) = (src, app.get_window(&label)) {
+        const CASCADE_PT: f64 = 28.0; // ~1cm (72pt = 1in = 2.54cm)
+        let _ = win.set_position(tauri::LogicalPosition::new(
+            pos.x as f64 / scale + CASCADE_PT,
+            pos.y as f64 / scale + CASCADE_PT,
+        ));
     }
-    builder.build().map_err(|e| e.to_string())?;
 
     // 이 창에 네이티브 설치(레이어 역전·신호등) — main 과 동일한 단일 진입점.
     #[cfg(target_os = "macos")]
-    install_window_natives(&app, &label);
+    install_window_natives(app, &label);
     Ok(label)
 }
 
-// 열린 창 label 목록(소켓/CLI introspection — window 명시 타겟 조회).
+// 열린 창 label 목록(소켓/CLI introspection — window 명시 타겟 조회). windows()(Window 레지스트리)
+// 를 쓴다 — 브라우저 child 를 연 창은 멀티-webview 라 webview_windows() 에서 빠져 목록에 안 잡힌다.
 #[tauri::command]
 pub fn window_list(app: AppHandle) -> Vec<String> {
-    app.webview_windows().keys().cloned().collect()
+    app.windows().keys().cloned().collect()
 }
 
 #[tauri::command]
 pub fn window_focus(app: AppHandle, label: String) -> Result<(), String> {
-    app.get_webview_window(&label)
+    app.get_window(&label)
         .ok_or_else(|| format!("창 없음: {label}"))?
         .set_focus()
         .map_err(|e| e.to_string())
@@ -71,7 +102,7 @@ pub fn window_focus(app: AppHandle, label: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn window_close(app: AppHandle, label: String) -> Result<(), String> {
-    app.get_webview_window(&label)
+    app.get_window(&label)
         .ok_or_else(|| format!("창 없음: {label}"))?
         .close()
         .map_err(|e| e.to_string())
@@ -89,7 +120,13 @@ mod mw_rules {
             "get_webview(\"main\")",
             "get_webview_window(\"main\")",
         ];
-        for f in ["src/browser.rs", "src/ipc.rs", "src/window.rs", "src/lib.rs"] {
+        for f in [
+            "src/browser.rs",
+            "src/ipc.rs",
+            "src/window.rs",
+            "src/lib.rs",
+            "src/dockmenu.rs",
+        ] {
             let src = std::fs::read_to_string(f).unwrap_or_default();
             for pat in PATS {
                 assert!(
@@ -98,5 +135,18 @@ mod mw_rules {
                 );
             }
         }
+    }
+
+    // MW5 — capability(권한) 스코프도 새 창을 덮어야 한다. windows 가 "main" 만이면 새 창(win-*)이
+    // 창-종속 권한(start-dragging·set-focus 등)을 못 받아 드래그조차 안 된다. 소스(.rs)만 보던 전수조사가
+    // 이 JSON 가정을 놓쳤던 회귀 — 빌드로 잡는다.
+    #[test]
+    fn capability_covers_new_windows() {
+        let src = std::fs::read_to_string("capabilities/default.json").unwrap_or_default();
+        assert!(
+            src.contains("win-*") || src.contains("\"*\""),
+            "capability default.json 의 windows 스코프가 새 창(win-*)을 포함해야 한다 — \
+             \"main\" 단일 창 가정 금지(새 창이 드래그·포커스 권한을 못 받는다)"
+        );
     }
 }
