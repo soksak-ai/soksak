@@ -381,30 +381,34 @@ pub fn browser_open(
     // 붙이므로 멀티 윈도우에서 BrowserView 가 실행된 창에 정확히 들어간다(프론트 label 전달 불요).
     let parsed = Url::parse(&url).map_err(|e| e.to_string())?;
     let nav_app = app.clone();
-    let nav_label = label.clone();
+    let pl_app = app.clone();
+    let pl_label = label.clone();
     let builder = tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(parsed))
         .initialization_script(NEW_WINDOW_NAV)
-        // 링크 클릭 등 네비게이션을 프론트로 통지(URL 바 동기화, 폴링 없음).
-        // about:blank 는 WKWebView 초기화 과정의 중간 단계 — URL 상태를 덮어쓰지 않게 제외.
-        // 새 창 마커는 차단하고 내장 브라우저 새 창으로.
+        // 새 창 마커(_blank 등)는 차단하고 내장 브라우저 새 창으로. URL 동기화는 여기서 하지 않는다 —
+        // on_navigation 은 iframe 등 서브프레임 내비게이션에도 발화하고(wry 가 프레임 정보를 주지 않아
+        // 메인/서브 구분 불가) 그러면 주소창이 서브프레임 URL(예: 구글 ogs 위젯)로 오염된다.
+        // 주소창은 메인프레임 전용 신호인 on_page_load 로만 갱신한다.
         .on_navigation(move |url| {
             if let Some(target) = popup_target(url) {
                 open_popup(&nav_app, target);
                 return false;
             }
-            if url.as_str() != "about:blank" {
-                let _ = nav_app.emit(
+            true // 허용
+        })
+        // 메인프레임 커밋/완료(didCommit/didFinish) 시점의 URL 만 주소창에 반영 — 서브프레임은 안 온다.
+        // about:blank 는 WKWebView 초기화 중간 단계라 제외. 완료 시 문서 <title> 도 함께 emit.
+        .on_page_load(move |webview, payload| {
+            let u = payload.url().as_str();
+            if u != "about:blank" {
+                let _ = pl_app.emit(
                     "browser-nav",
                     NavPayload {
-                        label: nav_label.clone(),
-                        url: url.to_string(),
+                        label: pl_label.clone(),
+                        url: u.to_string(),
                     },
                 );
             }
-            true // 허용
-        })
-        // 로드 완료 시 문서 <title> 을 읽어 탭/타이틀바 제목으로 emit.
-        .on_page_load(move |webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Finished {
                 emit_page_title(&webview, webview.label());
             }
