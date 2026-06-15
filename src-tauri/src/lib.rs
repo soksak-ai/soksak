@@ -7,6 +7,7 @@ mod pty;
 #[cfg(target_os = "macos")]
 mod titlebar;
 mod watcher;
+mod window;
 
 use ipc::CmdBridge;
 use pty::PtyManager;
@@ -158,6 +159,10 @@ pub fn run() {
             browser::browser_overlay_active,
             browser::browser_debug_hierarchy,
             window_set_background,
+            window::window_create,
+            window::window_list,
+            window::window_focus,
+            window::window_close,
             ipc::cmd_result,
             titlebar::titlebar_backing,
             ime_debug,
