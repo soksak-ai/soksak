@@ -114,10 +114,11 @@ pub fn plugins_scan() -> Result<Vec<PluginScanEntry>, String> {
     Ok(out)
 }
 
-// 개발용 플러그인 경로 — SOKSAK_DEV_PLUGINS(':' 구분 디렉토리 목록)의 각 디렉토리에서
-// plugin.json 을 가진 직속 하위 디렉토리의 절대경로를 모은다. 프론트가 이를 devLoad 해
-// 설치본 위에 덮어 쓴다(레포 소스 = 즉시 반영). 미설정/읽기 실패는 빈 목록·침묵 누락으로
-// 부팅을 막지 않는다. "." 시작 항목 제외. 결정성 위해 정렬.
+// 개발용 플러그인 경로 — SOKSAK_DEV_PLUGINS(':' 구분 목록)의 각 항목에서 plugin.json 을 가진
+// 디렉토리의 절대경로를 모은다. 항목이 **그 자체로 플러그인 dir**(plugin.json 보유)이면 직접
+// 채택(독립 repo 직접 지정 — 코어 repo 하위 아닌 외부 플러그인), 아니면 직속 하위를 스캔(부모 dir).
+// 프론트가 이를 devLoad 해 설치본 위에 덮어 쓴다(소스=즉시 반영). 미설정/읽기 실패는 빈 목록·
+// 침묵 누락으로 부팅을 막지 않는다. "." 시작 항목 제외. 결정성 위해 정렬.
 #[tauri::command]
 pub fn dev_plugin_paths() -> Result<Vec<String>, String> {
     let Ok(raw) = std::env::var("SOKSAK_DEV_PLUGINS") else {
@@ -128,7 +129,12 @@ pub fn dev_plugin_paths() -> Result<Vec<String>, String> {
         if base.is_empty() {
             continue;
         }
-        // 없거나 못 읽는 디렉토리는 건너뛴다(전체 호출을 실패시키지 않음).
+        // 항목 자체가 플러그인 dir 이면 그대로 채택(외부 독립 repo 직접 지정).
+        if std::path::Path::new(base).join("plugin.json").is_file() {
+            out.push(base.to_string());
+            continue;
+        }
+        // 아니면 직속 하위에서 plugin.json 보유 dir 들을 모은다(부모 dir 스캔). 못 읽으면 건너뛴다.
         let Ok(rd) = std::fs::read_dir(base) else {
             continue;
         };
