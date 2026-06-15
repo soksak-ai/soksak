@@ -17,6 +17,9 @@ dist-ssr
 plugins/.repos*
 examples/.repos/
 
+# apphost Swift 사이드카 컴파일 산출물(빌드 파이프라인 생성, Tauri externalBin) — 플랫폼별 재생성
+src-tauri/binaries/
+
 # Editor directories and files
 .editor/*
 !.editor/extensions.json
