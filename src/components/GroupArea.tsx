@@ -576,8 +576,13 @@ export const GroupArea = memo(function GroupArea({
               data-project-id={projectId}
               style={{
                 ...cellVars(slotRect),
+                // 비활성 슬롯은 화면 밖으로 옮긴다. visibility:hidden 만으로는 WebGL 터미널 캔버스
+                // (별도 GPU 합성 레이어)가 투명해진 hole-punch DOM 아래로 합성돼, 활성 브라우저 슬롯의
+                // 홀(.bv-area)을 통해 비치며 브라우저를 덮는다("구글인데 터미널이 보인다"). 화면 밖
+                // 이동은 캔버스를 가시 영역에서 빼되 세션·크기는 보존한다(display:none 의 재-fit 회피).
                 visibility: shown ? "visible" : "hidden",
                 zIndex: shown ? 1 : 0,
+                transform: shown ? undefined : "translateX(-200vw)",
               }}
               onMouseDownCapture={() => {
                 setActiveGroup(projectId, group.id);
