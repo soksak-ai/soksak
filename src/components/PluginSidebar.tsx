@@ -12,6 +12,8 @@ import {
   viewsForPlacement,
 } from "../plugins/viewRegistry";
 import { usePlugins, type PluginRuntime } from "../state/plugins";
+import { useRegistry } from "../state/registry";
+import { installState, type RegistryEntry } from "../plugins/registry";
 import { useSessions, type ProjectTab } from "../state/sessions";
 import { PluginViewHost } from "./PluginViewHost";
 import { PluginConsentModal } from "./PluginConsentModal";
@@ -134,6 +136,77 @@ function statusKey(p: PluginRuntime): "enabled" | "disabled" | "error" {
   return p.status;
 }
 
+// 설치 가능 목록(공식 레지스트리) — 빌드 스냅샷 + 세션1회 온라인 갱신(useRegistry). 각 엔트리는
+// repo 를 source 로 plugin.install, 이미 설치/업데이트가능은 설치본 버전과 비교(installState).
+function RegistrySection({
+  busy,
+  run,
+  installed,
+}: {
+  busy: boolean;
+  run: (fn: () => Promise<unknown>) => void;
+  installed: Record<string, PluginRuntime>;
+}) {
+  const t = useT();
+  const entries = useRegistry((s) => s.entries);
+  const status = useRegistry((s) => s.status);
+  const sorted = useMemo(
+    () => [...entries].sort((a, b) => a.id.localeCompare(b.id)),
+    [entries],
+  );
+
+  const stateOf = (e: RegistryEntry) =>
+    installState(e, installed[e.id]?.manifest.version);
+  const doInstall = (e: RegistryEntry) =>
+    run(() => usePlugins.getState().install(e.repo));
+  const doUpdate = (e: RegistryEntry) =>
+    run(() => usePlugins.getState().update(e.id));
+
+  return (
+    <>
+      <div className="dsec dsec-row">
+        {t("plugin.registry.section")}
+        <button
+          type="button"
+          className="plugin-reload"
+          title={t("common.refresh")}
+          disabled={busy || status === "fetching"}
+          onClick={() => useRegistry.getState().refresh(true)}
+        >
+          <Icon name="refresh" size="sm" />
+        </button>
+      </div>
+      {sorted.map((e) => {
+        const st = stateOf(e);
+        return (
+          <div key={e.id} className="plugin-row">
+            <div className="plugin-row-title">
+              <span className="plugin-row-name">{localize(e.name)}</span>
+              <span className="plugin-row-ver">v{e.version}</span>
+            </div>
+            <div className="plugin-row-desc">{localize(e.description)}</div>
+            <div className="plugin-row-actions">
+              {st === "available" && (
+                <button type="button" className="dbtn" disabled={busy} onClick={() => doInstall(e)}>
+                  {t("plugin.install")}
+                </button>
+              )}
+              {st === "update" && (
+                <button type="button" className="dbtn" disabled={busy} onClick={() => doUpdate(e)}>
+                  {t("plugin.registry.update")}
+                </button>
+              )}
+              {st === "installed" && (
+                <span className="plugin-badge enabled">{t("plugin.registry.installed")}</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function PluginManagerPanel() {
   const t = useT();
   const plugins = usePlugins((s) => s.plugins);
@@ -223,6 +296,8 @@ function PluginManagerPanel() {
         </button>
       </div>
       {msg && <div className="plugin-msg">{msg}</div>}
+
+      <RegistrySection busy={busy} run={run} installed={plugins} />
 
       {/* §B7 — 텍스트+아이콘 행은 flex/center 컨테이너가 정렬 소유. */}
       <div className="dsec dsec-row">
