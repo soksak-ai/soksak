@@ -13,8 +13,8 @@ dist-ssr
 *.local
 
 # 산출물(추적 제외). 플러그인은 영구 미러 없이 make plugin-publish(임시 clone)로 발행 —
-# plugins/.repos 는 구 plugin-repos 산출물(폐기, 남으면 무시).
-plugins/.repos/
+# plugins/.repos* 는 구 plugin-repos 산출물(폐기). .repos_bak 은 삭제 전 백업.
+plugins/.repos*
 examples/.repos/
 
 # Editor directories and files
