@@ -13,6 +13,7 @@ import type {
   ParamSpec,
 } from "../commands/registry";
 import { Channel } from "@tauri-apps/api/core";
+import { busEmit, busOn } from "./bus";
 import {
   onPluginEvent,
   type Disposable,
@@ -209,6 +210,13 @@ export interface SoksakPluginApi {
     onExit: (handle: number, cb: (code: number) => void) => Disposable;
     /** kill + 정리. */
     kill: (handle: number) => Promise<void>;
+  };
+  /** 플러그인 커스텀 이벤트 버스 — 임의 토픽 pub/sub(플러그인 간 스트리밍 coordination). 코어-정의
+   *  이벤트(events.on)와 별개. 예: acp-core 가 session/update 를 emit → 코크핏/라운지가 구독. 시스템
+   *  접근 0 → 권한 불요(모든 플러그인). */
+  bus: {
+    emit: (topic: string, payload: unknown) => void;
+    on: (topic: string, fn: (payload: any) => void) => Disposable;
   };
   project: {
     current: () => { id: string; root: string | null } | null;
@@ -671,6 +679,11 @@ export function buildPluginApi(
           }
         : undefined,
     process: has("process") ? createProcessApi(deps, tracker) : undefined,
+    bus: {
+      emit: (topic: string, payload: unknown) => busEmit(topic, payload),
+      on: (topic: string, fn: (payload: unknown) => void) =>
+        tracker.wrap(busOn(topic, fn)),
+    },
   };
 
   return { api, tracker };
