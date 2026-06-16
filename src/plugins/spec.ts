@@ -243,11 +243,16 @@ function normalizeText(t: LocalizedText): LocalizedText {
 // ── §2 뷰 배치 ───────────────────────────────────────────────────────────────
 // 뷰 구현(provider)과 배치는 직교(§0-6). placements = 지원 배치, 기본 우측 사이드바.
 
-export type ViewPlacement = "sidebar-right" | "sidebar-left" | "content";
+export type ViewPlacement =
+  | "sidebar-right"
+  | "sidebar-left"
+  | "sidebar-footer"
+  | "content";
 
 export const VIEW_PLACEMENTS: readonly ViewPlacement[] = [
   "sidebar-right",
   "sidebar-left",
+  "sidebar-footer",
   "content",
 ];
 

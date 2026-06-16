@@ -34,6 +34,12 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [version],
   );
+  // 파일 트리 하단 상시 슬롯(범용) — 첫 등록 뷰만 호스팅(예: 마스코트).
+  const footerViews = useMemo(
+    () => viewsForPlacement("sidebar-footer"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [version],
+  );
   const setLeftTab = useSessions((s) => s.setLeftTab);
   const leftTab = project.leftTab;
 
@@ -76,7 +82,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
         </div>
       )}
       <div
-        className="left-host-body"
+        className="left-host-body left-host-body-files"
         style={{ display: leftTab === FILES ? "flex" : "none" }}
       >
         <FileTreeSidebar
@@ -85,6 +91,15 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
             onOpenFile={onOpenFile}
             theme={treeTheme}
           />
+        {footerViews.length > 0 && (
+          <div className="left-host-footer">
+            <PluginViewHost
+              viewKey={footerViews[0].key}
+              projectId={project.id}
+              root={project.root}
+            />
+          </div>
+        )}
       </div>
       {opened.map((k) => (
         <div

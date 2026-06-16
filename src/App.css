@@ -2852,6 +2852,26 @@ select.dctl {
   min-height: 0;
   position: relative;
 }
+/* 파일 탭 body 는 column — 파일 트리(flex:1) + 하단 상시 슬롯(sidebar-footer, 예: 마스코트). */
+.left-host-body-files {
+  display: flex;
+  flex-direction: column;
+}
+.left-host-body-files > .ft-sidebar {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.left-host-footer {
+  flex: 0 0 auto;
+  /* 높이 고정 안 함 — 안의 플러그인 뷰가 자기 콘텐츠(폭 비례)로 결정. */
+  border-top: 1px solid var(--bd);
+}
+/* footer 슬롯의 뷰 호스트는 absolute(inset:0)가 아니라 일반 흐름 — 콘텐츠가 높이를 만든다
+   (sidebar/content 는 부모 flex:1 박스를 채우지만, footer 는 콘텐츠 높이가 슬롯 높이). */
+.left-host-footer .plugin-view-host {
+  position: static;
+  inset: auto;
+}
 
 /* ══ 아이콘 버튼 원형(아이콘 시스템 표준) ═══════════════════════════════════
    모든 아이콘 버튼은 .icon-btn(+변형)을 함께 단다. 파일 끝 정의라 같은 특이성의
