@@ -55,6 +55,7 @@ export type PluginPermission =
   | "commands" // registry 명령 실행(danger 없는 것) + 자기 명령 등록
   | "commands:destructive" // danger:"destructive" 명령 실행(닫기·제거)
   | "commands:inject" // danger:"inject" 명령 실행(term.send/exec, browser.eval …)
+  | "process" // 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합)
   | "editor" // CM6 확장/언어 매핑/포매터 + 활성 버퍼 읽기/쓰기
   | "storage" // 전용 저장소(~/.soksak/plugins-data/<id>/)
   | "fs:read" // 임의 경로 파일 읽기
@@ -74,6 +75,7 @@ export const PERMISSIONS: readonly PluginPermission[] = [
   "commands",
   "commands:destructive",
   "commands:inject",
+  "process",
   "editor",
   "storage",
   "fs:read",
@@ -128,6 +130,12 @@ export const PERMISSION_INFO: Record<
   "commands:inject": {
     label: "입력 주입",
     detail: "터미널 입력 전송·브라우저 스크립트 실행 등 주입 명령을 쓸 수 있습니다.",
+    caution: true,
+  },
+  process: {
+    label: "외부 프로그램 실행",
+    detail:
+      "임의 외부 프로그램을 서브프로세스로 띄우고 입출력(stdin/stdout/stderr)을 주고받습니다(가장 강력 — 사실상 임의 코드 실행). LSP·MCP·ACP 등 외부 도구 통합용.",
     caution: true,
   },
   editor: {

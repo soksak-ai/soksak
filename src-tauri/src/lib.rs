@@ -5,6 +5,7 @@ mod fs;
 mod git;
 pub mod ipc;
 mod plugins;
+mod process;
 mod pty;
 #[cfg(target_os = "macos")]
 mod titlebar;
@@ -12,6 +13,7 @@ mod watcher;
 mod window;
 
 use ipc::CmdBridge;
+use process::ProcessManager;
 use pty::PtyManager;
 use tauri::Manager;
 use watcher::FsWatcher;
@@ -67,6 +69,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_webview_capture::init())
         .manage(PtyManager::default())
+        .manage(ProcessManager::default())
         .manage(FsWatcher::default())
         .manage(CmdBridge::default())
         .setup(|app| {
@@ -138,6 +141,9 @@ pub fn run() {
             pty::ack_terminal,
             pty::close_terminal,
             pty::shell_which,
+            process::process_spawn,
+            process::process_write,
+            process::process_kill,
             fs::list_children,
             fs::read_text_file,
             fs::write_text_file,
@@ -198,6 +204,7 @@ pub fn run() {
                     return;
                 }
                 app_handle.state::<PtyManager>().kill_all();
+                app_handle.state::<ProcessManager>().kill_all();
                 ipc::cleanup();
             }
         });

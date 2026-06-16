@@ -12,6 +12,7 @@ import type {
   CommandSpec,
   ParamSpec,
 } from "../commands/registry";
+import { Channel } from "@tauri-apps/api/core";
 import {
   onPluginEvent,
   type Disposable,
@@ -189,6 +190,26 @@ export interface SoksakPluginApi {
      *  "terminal:read" 권한 한정 — 버퍼 재독 트리거(라이브 스트림·입력 검증). */
     onOutput?: (paneId: string, cb: () => void) => Disposable;
   };
+  /** 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합). "process" 권한.
+   *  PTY 가 아니라 순수 파이프 → JSON-RPC 프레이밍 무손상. 이벤트 기반(폴링 0). */
+  process?: {
+    /** 프로그램 spawn → handle(id). cwd/env 선택. */
+    spawn: (
+      cmd: string,
+      args: string[],
+      opts?: { cwd?: string; env?: Record<string, string> },
+    ) => Promise<number>;
+    /** stdin 에 쓰기(JSON-RPC 프레임 등). */
+    write: (handle: number, data: string) => Promise<void>;
+    /** stdout 바이트 구독(반환=해지). 리스너 등록 전 도착분은 버퍼되어 유실 0. */
+    onData: (handle: number, cb: (data: Uint8Array) => void) => Disposable;
+    /** stderr 바이트 구독(반환=해지). */
+    onStderr: (handle: number, cb: (data: Uint8Array) => void) => Disposable;
+    /** 종료 코드 구독(반환=해지). 종료가 구독보다 먼저면 즉시 1회 호출. */
+    onExit: (handle: number, cb: (code: number) => void) => Disposable;
+    /** kill + 정리. */
+    kill: (handle: number) => Promise<void>;
+  };
   project: {
     current: () => { id: string; root: string | null } | null;
   };
@@ -253,6 +274,91 @@ const denied = (message: string): CommandOutcome => ({
   code: "PERMISSION_DENIED",
   message,
 });
+
+// app.process 구현 — handle(id)별 리스너 + 등록 전 도착분 버퍼(유실 0). spawn 시 Channel 3개
+// (stdout/stderr/exit)를 만들어 process_spawn 에 넘기고, onData/onStderr/onExit 가 그 스트림을 구독.
+function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker) {
+  type Bytes = (d: Uint8Array) => void;
+  interface ProcState {
+    stdout: Set<Bytes>;
+    stderr: Set<Bytes>;
+    exit: Set<(code: number) => void>;
+    stdoutBuf: Uint8Array[];
+    stderrBuf: Uint8Array[];
+    exitCode: number | null;
+  }
+  const procs = new Map<number, ProcState>();
+  const dispatch = (set: Set<Bytes>, buf: Uint8Array[], b: Uint8Array) => {
+    if (set.size) set.forEach((f) => f(b));
+    else buf.push(b);
+  };
+  const subscribe = (set: Set<Bytes>, buf: Uint8Array[], cb: Bytes): Disposable => {
+    set.add(cb);
+    for (const b of buf.splice(0)) cb(b); // 등록 전 버퍼 즉시 재생(유실 0)
+    return tracker.wrap(() => set.delete(cb));
+  };
+  return {
+    async spawn(
+      cmd: string,
+      args: string[],
+      opts?: { cwd?: string; env?: Record<string, string> },
+    ): Promise<number> {
+      const st: ProcState = {
+        stdout: new Set(),
+        stderr: new Set(),
+        exit: new Set(),
+        stdoutBuf: [],
+        stderrBuf: [],
+        exitCode: null,
+      };
+      const onStdout = new Channel<ArrayBuffer>();
+      onStdout.onmessage = (m) => dispatch(st.stdout, st.stdoutBuf, new Uint8Array(m));
+      const onStderr = new Channel<ArrayBuffer>();
+      onStderr.onmessage = (m) => dispatch(st.stderr, st.stderrBuf, new Uint8Array(m));
+      const onExit = new Channel<number>();
+      onExit.onmessage = (code) => {
+        if (st.exit.size) st.exit.forEach((f) => f(code));
+        else st.exitCode = code;
+      };
+      const id = (await deps.invoke("process_spawn", {
+        cmd,
+        args,
+        cwd: opts?.cwd ?? null,
+        env: opts?.env ?? null,
+        onStdout,
+        onStderr,
+        onExit,
+      })) as number;
+      procs.set(id, st);
+      return id;
+    },
+    write: async (handle: number, data: string): Promise<void> => {
+      await deps.invoke("process_write", { id: handle, data });
+    },
+    onData(handle: number, cb: Bytes): Disposable {
+      const st = procs.get(handle);
+      return st ? subscribe(st.stdout, st.stdoutBuf, cb) : tracker.wrap(() => {});
+    },
+    onStderr(handle: number, cb: Bytes): Disposable {
+      const st = procs.get(handle);
+      return st ? subscribe(st.stderr, st.stderrBuf, cb) : tracker.wrap(() => {});
+    },
+    onExit(handle: number, cb: (code: number) => void): Disposable {
+      const st = procs.get(handle);
+      if (!st) return tracker.wrap(() => {});
+      if (st.exitCode !== null) {
+        cb(st.exitCode); // 종료가 구독보다 먼저면 즉시 1회
+        return tracker.wrap(() => {});
+      }
+      st.exit.add(cb);
+      return tracker.wrap(() => st.exit.delete(cb));
+    },
+    kill: async (handle: number): Promise<void> => {
+      await deps.invoke("process_kill", { id: handle });
+      procs.delete(handle);
+    },
+  };
+}
 
 export function buildPluginApi(
   manifest: PluginManifest,
@@ -564,6 +670,7 @@ export function buildPluginApi(
               : {}),
           }
         : undefined,
+    process: has("process") ? createProcessApi(deps, tracker) : undefined,
   };
 
   return { api, tracker };
