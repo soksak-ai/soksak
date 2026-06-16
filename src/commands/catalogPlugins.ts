@@ -10,8 +10,22 @@ import { listPrograms } from "../plugins/programRegistry";
 import { localize } from "../i18n";
 import { formatterFor } from "../plugins/editorRegistry";
 import { VIEW_PLACEMENTS, type ViewPlacement } from "../plugins/spec";
+import {
+  depSummary,
+  versionIssues,
+  type DepNode,
+} from "../plugins/dependencyGraph";
 import { getFileView } from "./fileViewBridge";
 import { register } from "./registry";
+
+// 설치/dev 런타임 → 의존 그래프 노드(매니페스트 dependencies 기준).
+function depNodes(): DepNode[] {
+  return Object.values(usePlugins.getState().plugins).map((p) => ({
+    id: p.manifest.id,
+    version: p.manifest.version,
+    dependencies: p.manifest.dependencies ?? {},
+  }));
+}
 
 const notFound = (what: string) => ({
   ok: false as const,
@@ -147,15 +161,47 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.remove", {
-    description: "플러그인 제거(디렉토리째). 전용 저장소(plugins-data)는 보존",
+    description:
+      "플러그인 제거(디렉토리째). 전용 저장소(plugins-data)는 보존. 의존자가 있으면 cascade:true 동의 없이는 CASCADE_REQUIRED 로 차단(고아 방지)",
     params: {
       id: { type: "string", description: "플러그인 id", required: true },
+      cascade: {
+        type: "boolean",
+        description: "true 면 의존자(전이)까지 함께 삭제(동의). 생략 시 의존자 있으면 차단",
+      },
     },
-    returns: "{ id }",
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ['sok plugin.remove \'{"id":"soksak-plugin-memo"}\''],
+    returns: "{ id, removed: [삭제된 id …] }",
+    errors: ["TARGET_NOT_FOUND", "CASCADE_REQUIRED", "INTERNAL"],
+    examples: [
+      'sok plugin.remove \'{"id":"soksak-plugin-memo"}\'',
+      'sok plugin.remove \'{"id":"soksak-plugin-acp-core","cascade":true}\'',
+    ],
     danger: "destructive",
-    handler: (p) => usePlugins.getState().remove(p.id as string),
+    handler: (p) =>
+      usePlugins.getState().remove(p.id as string, { cascade: p.cascade as boolean | undefined }),
+  });
+
+  register("plugin.deps", {
+    description:
+      "플러그인 의존 그래프 — id 지정 시 그 플러그인의 의존/의존자/참조수/cascade, 생략 시 전체 버전 무결성 이슈",
+    params: {
+      id: { type: "string", description: "플러그인 id(생략 시 전체 버전 이슈)" },
+    },
+    returns: "{ summary?, issues? }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: [
+      "sok plugin.deps",
+      'sok plugin.deps \'{"id":"soksak-plugin-acp-core"}\'',
+    ],
+    handler: (p) => {
+      const nodes = depNodes();
+      if (p.id) {
+        const summary = depSummary(p.id as string, nodes);
+        if (!summary) return notFound(`플러그인 없음: ${p.id}`);
+        return { ok: true as const, summary };
+      }
+      return { ok: true as const, issues: versionIssues(nodes) };
+    },
   });
 
   register("plugin.enable", {

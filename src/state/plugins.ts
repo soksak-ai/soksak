@@ -21,7 +21,23 @@ import {
   setActive,
 } from "../plugins/loader";
 import { defaultPluginDeps } from "../plugins/deps";
+import {
+  allMissingDeps,
+  cascadeRemovalSet,
+  transitiveDependents,
+  type DepNode,
+} from "../plugins/dependencyGraph";
+import { useRegistry } from "./registry";
 import { err, ok, useSessions, type CmdResult } from "./sessions";
+
+// 설치/dev 런타임 → 의존 그래프 노드(매니페스트 dependencies 기준). 리졸버가 소비.
+function pluginDepNodes(plugins: Record<string, PluginRuntime>): DepNode[] {
+  return Object.values(plugins).map((p) => ({
+    id: p.manifest.id,
+    version: p.manifest.version,
+    dependencies: p.manifest.dependencies ?? {},
+  }));
+}
 import { installCommandFor } from "../plugins/programRegistry";
 
 export interface PluginRuntime {
@@ -59,9 +75,20 @@ interface PluginsState {
   install: (
     source: string,
     reference?: string,
-  ) => Promise<CmdResult<{ id: string; dir: string }>>;
+  ) => Promise<
+    CmdResult<{
+      id: string;
+      dir: string;
+      installedDeps?: string[]; // 전이적으로 동반 설치된 의존 id
+      unresolvedDeps?: string[]; // 레지스트리에 없어 못 깐 의존 id(침묵 금지 — 보고)
+    }>
+  >;
   update: (id: string) => Promise<CmdResult<{ id: string; version: string }>>;
-  remove: (id: string) => Promise<CmdResult<{ id: string }>>;
+  // cascade:true 면 의존자(전이)까지 함께 삭제. 미지정 + 의존자 존재 시 CASCADE_REQUIRED 로 차단.
+  remove: (
+    id: string,
+    opts?: { cascade?: boolean },
+  ) => Promise<CmdResult<{ id: string; removed?: string[] }>>;
   enable: (id: string) => Promise<CmdResult<{ id: string; status: string }>>;
   disable: (id: string) => Promise<CmdResult<{ id: string; status: string }>>;
   // 동의 기록 — UI(동의 모달)만 호출한다. 명령으로 노출하지 않는다(§0-5).
@@ -212,6 +239,32 @@ export const usePlugins = create<PluginsState>((set, get) => {
     setActive(p.manifest.id, instance);
   };
 
+  // 단일 제거 — dev 는 목록에서만, installed 는 디스크째. consent/enabled 정리. cascade 의 단위.
+  // reload 는 하지 않는다(cascade 호출부가 루프 끝에 1회) — 루프 중 그래프가 흔들리지 않게.
+  const removeSingle = async (id: string): Promise<CmdResult<{ id: string }>> => {
+    const p = get().plugins[id];
+    if (!p) return err("TARGET_NOT_FOUND", `플러그인 없음: ${id}`);
+    if (p.source === "dev") {
+      if (isActive(id)) await deactivateById(id);
+      set((s) => {
+        const plugins = { ...s.plugins };
+        delete plugins[id];
+        return { plugins, enabledIds: s.enabledIds.filter((x) => x !== id) };
+      });
+      persist();
+      return ok({ id });
+    }
+    if (isActive(id)) await get().disable(id);
+    await invoke("plugin_remove", { id });
+    set((s) => {
+      const consents = { ...s.consents };
+      delete consents[id];
+      return { consents, enabledIds: s.enabledIds.filter((x) => x !== id) };
+    });
+    persist();
+    return ok({ id });
+  };
+
   return {
     appVersion: "0.0.0",
     plugins: {},
@@ -302,7 +355,39 @@ export const usePlugins = create<PluginsState>((set, get) => {
           `설치됨(${r.dir})이나 매니페스트 검증 실패: ${rej?.errors.join("; ") ?? "사유 불명"}`,
         );
       }
-      return ok({ id: r.dir_name, dir: r.dir });
+      // 전이 의존 자동 동반 설치 — 미설치 의존을 레지스트리에서 찾아 clone. fixpoint(새 dep 의 dep 까지).
+      const registry = useRegistry.getState().entries;
+      const installedDeps: string[] = [];
+      for (let guard = 0; guard < 50; guard++) {
+        const missing = allMissingDeps(pluginDepNodes(get().plugins));
+        if (missing.length === 0) break;
+        let progressed = false;
+        for (const m of missing) {
+          const entry = registry.find((e) => e.id === m.id);
+          if (!entry) continue; // 소스 모름 — 루프 후 unresolved 로 보고
+          try {
+            const dr = await invoke<{ dir_name: string }>("plugin_install_git", {
+              source: entry.repo,
+              reference: undefined,
+            });
+            await get().reload();
+            if (get().plugins[dr.dir_name]) {
+              installedDeps.push(dr.dir_name);
+              progressed = true;
+            }
+          } catch {
+            // 설치 실패 — 다음 점검에서 여전히 missing 으로 잡혀 unresolved 보고됨.
+          }
+        }
+        if (!progressed) break; // 더 진전 없으면 종료(미해결은 아래 보고)
+      }
+      const unresolved = allMissingDeps(pluginDepNodes(get().plugins)).map((m) => m.id);
+      return ok({
+        id: r.dir_name,
+        dir: r.dir,
+        ...(installedDeps.length ? { installedDeps } : {}),
+        ...(unresolved.length ? { unresolvedDeps: unresolved } : {}),
+      });
     },
 
     update: async (id) => {
@@ -325,36 +410,33 @@ export const usePlugins = create<PluginsState>((set, get) => {
       return ok({ id, version: after.manifest.version });
     },
 
-    remove: async (id) => {
+    remove: async (id, opts) => {
       const p = get().plugins[id];
       if (!p) return err("TARGET_NOT_FOUND", `플러그인 없음: ${id}`);
-      if (p.source === "dev") {
-        // dev 는 디스크 삭제 없이 목록에서만 내린다.
-        if (isActive(id)) await deactivateById(id);
-        set((s) => {
-          const plugins = { ...s.plugins };
-          delete plugins[id];
-          return {
-            plugins,
-            enabledIds: s.enabledIds.filter((x) => x !== id),
-          };
-        });
-        persist();
-        return ok({ id });
+      // 의존자(전이) 점검 — 이 플러그인이 사라지면 고아가 될 것들. cascade 동의 없이는 차단(고아 방지).
+      const nodes = pluginDepNodes(get().plugins);
+      const dependents = transitiveDependents(id, nodes);
+      if (dependents.length > 0 && !opts?.cascade) {
+        return err(
+          "CASCADE_REQUIRED",
+          `"${id}" 삭제 시 의존자도 함께 삭제됩니다: ${dependents.join(", ")}. ` +
+            `cascade:true 로 동의하거나, 의존자를 먼저 제거하세요.`,
+        );
       }
-      if (isActive(id)) await get().disable(id);
-      await invoke("plugin_remove", { id });
-      set((s) => {
-        const consents = { ...s.consents };
-        delete consents[id];
-        return {
-          consents,
-          enabledIds: s.enabledIds.filter((x) => x !== id),
-        };
-      });
-      persist();
-      await get().reload();
-      return ok({ id });
+      // 삭제 순서 — 먼(잎) 의존자부터, 대상은 마지막. dev 가 섞여도 안전(removeSingle 이 분기).
+      const order = opts?.cascade ? cascadeRemovalSet(id, nodes) : [id];
+      const removed: string[] = [];
+      let sawInstalled = false;
+      for (const rid of order) {
+        const wasDev = get().plugins[rid]?.source === "dev";
+        const res = await removeSingle(rid);
+        if (!res.ok) return res; // 부분 진행 — 발생 사유 구조화 반환(침묵 금지)
+        removed.push(rid);
+        if (!wasDev) sawInstalled = true;
+      }
+      // 디스크 삭제(installed)가 있었으면 1회 재스캔. dev-only 면 메모리 정리로 충분(reload 가 dev 보존).
+      if (sawInstalled) await get().reload();
+      return ok({ id, removed });
     },
 
     enable: async (id) => {

@@ -26,7 +26,9 @@ export type CmdErrCode =
   | "LAST_ITEM"
   | "INVALID_PARAMS"
   // 플러그인 활성화에 사용자 동의가 필요(원격 enable 거부 — 플러그인 스펙 §0-5).
-  | "CONSENT_REQUIRED";
+  | "CONSENT_REQUIRED"
+  // 플러그인 삭제가 의존자 cascade 를 유발 — 동의(cascade:true) 없이는 차단(고아 방지).
+  | "CASCADE_REQUIRED";
 
 export type CmdErr = { ok: false; code: CmdErrCode; message: string };
 export type CmdOk<T extends object = object> = { ok: true } & T;
