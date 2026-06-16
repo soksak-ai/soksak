@@ -113,6 +113,21 @@ describe("installState — 설치 상태 판정", () => {
   it("설치본이 더 높음(로컬 개발) → installed(다운그레이드 권유 안 함)", () => {
     expect(installState(e({ version: "1.0.0" }), "1.0.2")).toBe("installed");
   });
+
+  // dev 소스: 로컬 워크스페이스가 단일진실 — 카탈로그 버전과 무관하게 install/update 권유 금지.
+  // state.update() 가 dev 를 거부하므로(plugins.ts) UI 도 그 계약을 그대로 반영해야 한다.
+  it("dev 소스 + 카탈로그가 더 높음 → installed(레지스트리에 dead 업데이트 버튼 금지)", () => {
+    expect(installState(e({ version: "1.2.0" }), "1.1.0", "dev")).toBe("installed");
+  });
+  it("dev 소스 + 같은 버전 → installed", () => {
+    expect(installState(e({ version: "1.1.0" }), "1.1.0", "dev")).toBe("installed");
+  });
+  it("dev 소스 + 로컬이 더 높음 → installed", () => {
+    expect(installState(e({ version: "1.0.0" }), "1.2.0", "dev")).toBe("installed");
+  });
+  it("installed 소스 명시 + 카탈로그 높음 → update(기존 동작 유지)", () => {
+    expect(installState(e({ version: "1.1.0" }), "1.0.2", "installed")).toBe("update");
+  });
 });
 
 describe("mergeRegistry — 원격 채택/폴백", () => {

@@ -63,14 +63,23 @@ export function parseRegistry(raw: unknown): Registry | null {
 }
 
 // 한 레지스트리 엔트리의 설치 상태(리스트 UI 배지·버튼 결정용). installedVersion 은 설치본 버전
-// (usePlugins 의 manifest.version), 미설치면 undefined.
+// (usePlugins 의 manifest.version), 미설치면 undefined. installedSource 는 설치본 출처(usePlugins 의
+// source), 미설치면 undefined.
 //  - "available"  : 미설치
 //  - "update"     : 설치됨 + 레지스트리 버전이 더 높음(semver)
-//  - "installed"  : 설치됨 + 최신(또는 버전 비교 불가)
+//  - "installed"  : 설치됨 + 최신(또는 버전 비교 불가, 또는 dev 소스)
 export type InstallState = "available" | "installed" | "update";
 
-export function installState(entry: RegistryEntry, installedVersion?: string): InstallState {
+export function installState(
+  entry: RegistryEntry,
+  installedVersion?: string,
+  installedSource?: "installed" | "dev",
+): InstallState {
   if (!installedVersion) return "available";
+  // dev 소스: 로컬 워크스페이스가 단일진실. 카탈로그 버전과 무관하게 install/update 권유 금지 —
+  // state.update() 가 dev 를 거부하므로(plugins.ts) 레지스트리에 dead 업데이트 버튼을 띄우면 불일치.
+  // dev 설치본은 "설치됨" 섹션에서 dev 배지로 노출되고, 레지스트리 actionable 목록에선 빠진다.
+  if (installedSource === "dev") return "installed";
   // 레지스트리 버전 ≥ 설치본이면서 같지 않음 = 업데이트 있음. 비교 불가(형식 불량)면 installed 로 보수.
   if (entry.version !== installedVersion) {
     const newer = semverGte(entry.version, installedVersion);
