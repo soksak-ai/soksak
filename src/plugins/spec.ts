@@ -357,6 +357,10 @@ export interface PluginManifest {
   entry: string; // 파싱 시 기본 main.js 로 채움. 디렉토리 내부 상대경로만
   minAppVersion?: string;
   template?: boolean; // true = 개발 템플릿(읽기 전용). 활성화 대상이 아니다 — 목록·상세만 노출하고 토글을 주지 않는다.
+  // 플러그인↔플러그인 의존(라이브러리 플러그인). pluginId → semver 범위(예: "^0.1.0").
+  // 설치 시 미설치 의존을 전이적으로 동반 설치(동의 게이트), 삭제 시 의존자 cascade(고아 방지).
+  // 코어 권한(permissions)과 별개 축 — 이건 다른 플러그인에 대한 의존. 범용(어떤 플러그인↔플러그인).
+  dependencies?: Record<string, string>;
   permissions: PluginPermission[];
   contributes: {
     views: ContributedView[]; // "ui" 권한 필수
@@ -387,6 +391,8 @@ const VIEW_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const COMMAND_NAME_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 const EXT_RE = /^[a-z0-9]+$/;
 const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/;
+// 의존 범위(npm 류 부분집합): * | x.y.z | ^x.y.z | ~x.y.z | >=x.y.z. 락인 0(표준 의미론).
+const SEMVER_RANGE_RE = /^(?:\*|[\^~]?\d+\.\d+\.\d+|>=\d+\.\d+\.\d+)$/;
 // git URL: 스킴형(https/http/git/ssh ://…) 또는 scp-유사(git@host:path). clone 가능한 형태만.
 const GIT_URL_RE = /^(?:https?|git|ssh):\/\/\S+|^[\w.-]+@[\w.-]+:\S+/;
 
@@ -401,6 +407,37 @@ export function semverGte(a: string, b: string): boolean | null {
     if (da !== db) return da > db;
   }
   return true;
+}
+
+// version 이 range 를 만족하는가(npm 류 부분집합: * | x.y.z | ^x.y.z | ~x.y.z | >=x.y.z).
+// 의존 시스템이 설치 버전 ↔ 의존 범위 매칭에 쓴다. 형식 불량이면 null(호출부가 거부 처리).
+export function semverSatisfies(version: string, range: string): boolean | null {
+  const v = SEMVER_RE.exec(version);
+  if (!v) return null;
+  const r = range.trim();
+  if (r === "*") return true;
+  const num = (m: RegExpExecArray, i: number) => Number(m[i]);
+  // lower(포함) ≤ version < upper(미포함). caret/tilde 상한 계산은 npm 의미론.
+  const lt = (a: string, b: string): boolean => semverGte(a, b) === false;
+  const cmp = />=(\d+\.\d+\.\d+)$/.exec(r);
+  if (cmp) return semverGte(version, cmp[1]) === true;
+  const exact = /^(\d+\.\d+\.\d+)$/.exec(r);
+  if (exact) return `${num(v, 1)}.${num(v, 2)}.${num(v, 3)}` === exact[1];
+  const caret = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(r);
+  if (caret) {
+    const [maj, min, pat] = [1, 2, 3].map((i) => Number(caret[i]));
+    const base = `${maj}.${min}.${pat}`;
+    const upper = maj > 0 ? `${maj + 1}.0.0` : min > 0 ? `0.${min + 1}.0` : `0.0.${pat + 1}`;
+    return semverGte(version, base) === true && lt(version, upper);
+  }
+  const tilde = /^~(\d+)\.(\d+)\.(\d+)$/.exec(r);
+  if (tilde) {
+    const [maj, min, pat] = [1, 2, 3].map((i) => Number(tilde[i]));
+    const base = `${maj}.${min}.${pat}`;
+    const upper = `${maj}.${min + 1}.0`;
+    return semverGte(version, base) === true && lt(version, upper);
+  }
+  return null;
 }
 
 // ── §4 검증 ──────────────────────────────────────────────────────────────────
@@ -503,6 +540,7 @@ export function parseManifest(
       "entry",
       "minAppVersion",
       "template",
+      "dependencies",
       "permissions",
       "contributes",
     ],
@@ -538,6 +576,28 @@ export function parseManifest(
   }
   if (raw.template !== undefined && typeof raw.template !== "boolean") {
     errors.push("template: true/false 여야 함");
+  }
+
+  // dependencies: 플러그인↔플러그인 의존(pluginId → semver 범위). 선택. 자기 의존 금지·빈 객체 무해.
+  const dependencies: Record<string, string> = {};
+  if (raw.dependencies !== undefined) {
+    if (!isRecord(raw.dependencies)) {
+      errors.push("dependencies: 객체(pluginId → semver 범위)여야 함");
+    } else {
+      for (const [depId, range] of Object.entries(raw.dependencies)) {
+        if (!PLUGIN_ID_RE.test(depId)) {
+          errors.push(`dependencies: 키 "${depId}" 는 플러그인 id 형식(^[a-z0-9][a-z0-9-]*$)`);
+        } else if (isNonEmptyString(raw.id) && depId === raw.id) {
+          errors.push(`dependencies: 자기 자신("${depId}") 의존 금지`);
+        } else if (!isNonEmptyString(range) || !SEMVER_RANGE_RE.test((range as string).trim())) {
+          errors.push(
+            `dependencies["${depId}"]: semver 범위(예: ^0.1.0, ~1.2.0, >=1.0.0, 1.2.3, *)`,
+          );
+        } else {
+          dependencies[depId] = (range as string).trim();
+        }
+      }
+    }
   }
 
   // entry: 디렉토리 내부 상대경로만(탈출 금지), ESM 단일 번들.
@@ -903,6 +963,7 @@ export function parseManifest(
           ? (raw.minAppVersion as string).trim()
           : undefined,
       ...(raw.template === true ? { template: true } : {}),
+      ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
       permissions,
       contributes: { views, commands, formatters, languages, iconSets, programs },
     },

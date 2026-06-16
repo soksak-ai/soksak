@@ -6,6 +6,7 @@ import {
   resolveText,
   qualifiedViewId,
   semverGte,
+  semverSatisfies,
   SPEC_VERSION,
 } from "./spec";
 
@@ -340,6 +341,57 @@ describe("이름 규칙·semver 헬퍼", () => {
     expect(semverGte("0.9.0", "1.0.0")).toBe(false);
     expect(semverGte("1.0.0-beta", "1.0.0")).toBe(true); // pre-release 무시(v1 정책)
     expect(semverGte("abc", "1.0.0")).toBeNull();
+  });
+
+  it("semverSatisfies — * / 정확", () => {
+    expect(semverSatisfies("9.9.9", "*")).toBe(true);
+    expect(semverSatisfies("1.2.3", "1.2.3")).toBe(true);
+    expect(semverSatisfies("1.2.4", "1.2.3")).toBe(false);
+  });
+  it("semverSatisfies — caret(^) npm 의미론", () => {
+    expect(semverSatisfies("1.5.0", "^1.2.3")).toBe(true);
+    expect(semverSatisfies("2.0.0", "^1.2.3")).toBe(false); // major 상한
+    expect(semverSatisfies("1.2.2", "^1.2.3")).toBe(false); // 하한 미만
+    // ^0.x — minor 잠금
+    expect(semverSatisfies("0.1.9", "^0.1.0")).toBe(true);
+    expect(semverSatisfies("0.2.0", "^0.1.0")).toBe(false);
+    // ^0.0.z — patch 잠금
+    expect(semverSatisfies("0.0.3", "^0.0.3")).toBe(true);
+    expect(semverSatisfies("0.0.4", "^0.0.3")).toBe(false);
+  });
+  it("semverSatisfies — tilde(~)/comparator(>=)", () => {
+    expect(semverSatisfies("1.2.9", "~1.2.3")).toBe(true);
+    expect(semverSatisfies("1.3.0", "~1.2.3")).toBe(false);
+    expect(semverSatisfies("2.0.0", ">=1.0.0")).toBe(true);
+    expect(semverSatisfies("0.9.0", ">=1.0.0")).toBe(false);
+  });
+  it("semverSatisfies — 형식 불량은 null", () => {
+    expect(semverSatisfies("abc", "^1.0.0")).toBeNull();
+    expect(semverSatisfies("1.0.0", "garbage")).toBeNull();
+  });
+});
+
+describe("parseManifest — dependencies(플러그인↔플러그인 의존)", () => {
+  it("유효한 dependencies 수용 + 정규화", () => {
+    const { manifest, validation } = parseManifest(
+      base({ dependencies: { "soksak-plugin-acp-core": "^0.1.0" } }),
+      "demo",
+    );
+    expect(validation.ok).toBe(true);
+    expect(manifest?.dependencies).toEqual({ "soksak-plugin-acp-core": "^0.1.0" });
+  });
+  it("dependencies 없으면 키 자체가 없음(선택)", () => {
+    expect(parseManifest(base(), "demo").manifest).not.toHaveProperty("dependencies");
+  });
+  it("자기 자신 의존 거부", () => {
+    expect(errorsOf(base({ dependencies: { demo: "^1.0.0" } }))).toContain(
+      'dependencies: 자기 자신("demo") 의존 금지',
+    );
+  });
+  it("잘못된 키/범위 거부(all-or-nothing)", () => {
+    expect(parseManifest(base({ dependencies: { "Bad_Id": "^1.0.0" } }), "demo").manifest).toBeNull();
+    expect(parseManifest(base({ dependencies: { dep: "latest" } }), "demo").manifest).toBeNull();
+    expect(parseManifest(base({ dependencies: [] }), "demo").manifest).toBeNull();
   });
 });
 
