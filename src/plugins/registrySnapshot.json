@@ -56,6 +56,13 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-code-highlight.git"
     },
     {
+      "id": "soksak-plugin-erd",
+      "name": "ERD",
+      "version": "0.1.0",
+      "description": "멀티-DB ERD 에디터 — 스키마 설계·마이그레이션·SQL 생성을 GUI 와 CLI/MCP 로.",
+      "repo": "https://github.com/soksak-ai/soksak-plugin-erd.git"
+    },
+    {
       "id": "soksak-plugin-formatter",
       "name": "JSON 포메터",
       "version": "1.0.0",

@@ -10,6 +10,9 @@
 SHELL := /bin/bash
 PNPM  := pnpm
 
+# 레지스트리 카탈로그 단일 진실(P2) — 코어는 이 URL 만 안다. src/state/registry.ts 와 동일.
+REGISTRY_URL := https://raw.githubusercontent.com/soksak-ai/soksak-plugin-registry/main/registry.json
+
 RELEASE_CONFIG := src-tauri/tauri.release.conf.json
 DEBUG_CONFIG   := src-tauri/tauri.debug.conf.json
 
@@ -18,7 +21,7 @@ DEBUG_APP   := src-tauri/target/debug/bundle/macos/soksak-debug.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs plugin-publish registry
+.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs registry
 
 help: ## 사용 가능한 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -70,38 +73,13 @@ docs: ## 명령 레퍼런스 생성(docs/COMMANDS.md — 앱이 실행 중이어
 	src-tauri/target/release/sok docs > docs/COMMANDS.md
 	@echo "생성: docs/COMMANDS.md"
 
-plugin-publish: ## 플러그인 발행 — 소스를 리모트로 push(임시 clone, 영구 미러 없음). 사용: make plugin-publish id=<id>
-	@test -n "$(id)" || { echo "id=<플러그인id> 필요 (예: make plugin-publish id=soksak-plugin-claude-gui)"; exit 1; }
-	@test -d "plugins/$(id)" || { echo "없는 플러그인: plugins/$(id)"; exit 1; }
-	@# 발행은 영구 미러 없이 임시 clone 으로만 한다(소스+설치본 2개만 관리). plugin.json 의
-	@# repo 리모트를 mktemp 로 clone → 소스로 rsync → 커밋·태그 → push → 임시 디렉토리 삭제.
-	@repo=$$(sed -n 's/.*"repo"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' plugins/$(id)/plugin.json | head -1); \
-	ver=$$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' plugins/$(id)/plugin.json | head -1); \
-	test -n "$$repo" || { echo "plugin.json 에 repo 없음"; exit 1; }; \
-	tmp=$$(mktemp -d) || exit 1; \
-	git clone -q "$$repo" "$$tmp" || { echo "clone 실패: $$repo"; rm -rf "$$tmp"; exit 1; }; \
-	rsync -a --delete --exclude .git plugins/$(id)/ "$$tmp"/ && \
-	git -C "$$tmp" add -A && \
-	if git -C "$$tmp" diff --cached --quiet; then \
-		echo "변경 없음 — 발행 생략 ($(id) v$$ver)"; \
-	else \
-		git -C "$$tmp" -c user.email=plugins@soksak -c user.name=soksak -c commit.gpgsign=false commit -qm "$(id) v$$ver" && \
-		git -C "$$tmp" tag -f "v$$ver" >/dev/null && \
-		git -C "$$tmp" push -q origin HEAD:main && \
-		git -C "$$tmp" push -qf origin "refs/tags/v$$ver" && \
-		echo "발행: $(id) v$$ver → $$repo"; \
-	fi; \
-	rm -rf "$$tmp"
+# 발행(plugin-publish)은 코어에 두지 않는다(P1·P3) — 각 플러그인은 자기 독립 repo 에서
+# 직접 커밋·태그·push 한다. 카탈로그 갱신(각 repo plugin.json → registry.json)은
+# soksak-plugin-registry repo 가 소유한다.
 
-registry: ## 공식 플러그인 → 레지스트리 스냅샷 생성(설치가능 목록, 빌드 포함). 멱등
-	@command -v jq >/dev/null || { echo "jq 필요"; exit 1; }
-	@jq -s 'map(select(.template != true) \
-		| {id, name, version, description, author, repo} \
-		| with_entries(select(.value != null))) \
-		| sort_by(.id) \
-		| {spec: "soksak-registry@1", plugins: .}' \
-		plugins/*/plugin.json > src/plugins/registrySnapshot.json
-	@echo "레지스트리 스냅샷: src/plugins/registrySnapshot.json ($$(jq '.plugins | length' src/plugins/registrySnapshot.json)개)"
+registry: ## 레지스트리 카탈로그 스냅샷 갱신 — 라이브 registry.json 을 fetch 해 캐시(P2 소비). 멱등
+	@curl -fsSL "$(REGISTRY_URL)" -o src/plugins/registrySnapshot.json
+	@echo "레지스트리 스냅샷: src/plugins/registrySnapshot.json ($$(jq '.plugins | length' src/plugins/registrySnapshot.json)개, 라이브 fetch)"
 
 typecheck: ## 프론트엔드 타입 체크(tsc)
 	$(PNPM) exec tsc --noEmit

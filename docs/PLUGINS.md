@@ -99,7 +99,7 @@ sok plugin.reload
 |---|---|---|
 | `spec` | ✓ | `"soksak-plugin-spec@1"` 고정 |
 | `id` | ✓ | `^[a-z0-9][a-z0-9-]*$` + 설치 디렉토리명과 일치 |
-| `name` / `description` | ✓ | 표시명 / 한 줄 설명 — 문자열 또는 언어 맵 `{"ko": …, "en": …}`(§3.5, 현재 언어 resolve·첫 값 폴백) |
+| `name` / `description` | ✓ | 표시명 / 기능을 적은 한 줄 설명 — 문자열 또는 언어 맵 `{"ko": …, "en": …}`(§3.5, 현재 언어 resolve·첫 값 폴백) |
 | `version` | ✓ | semver(`major.minor.patch`) |
 | `author` | | 표시용 |
 | `entry` | | 기본 `main.js`. 내부 상대경로만(`..` 금지) |
@@ -325,40 +325,19 @@ sok editor.format
 
 전체 명령 레퍼런스: [`docs/COMMANDS.md`](./COMMANDS.md) (`make docs` 로 재생성).
 
-## 공식 플러그인 (레퍼런스 구현)
+## 플러그인 = 독립 repo · 코어 = 플랫폼
 
-소스는 [`plugins/`](../plugins/) — 전부 무번들 순수 JS. 관리 위치는 **2개뿐**(미러 없음):
+코어는 플러그인을 모른다. 각 플러그인은 독립 git repo 가 단일 진실이고, 코어는 레지스트리
+카탈로그 하나만 fetch 해 설치 목록을 만든다(스펙 §0 P1~P5).
 
-- **소스(개발 폴더)** `plugins/<id>/` — 우리가 만드는 곳. 개발 중엔 이게 **우선**한다:
-  `SOKSAK_DEV_PLUGINS`(=`make dev` 가 레포 `plugins/` 로 지정)의 폴더가 동명 설치본을 가려
-  소스 편집이 앱 리로드에 즉시 반영된다(`plugin.dev.load` 자동). 설치본을 직접 고치지 않는다.
-- **설치본** `~/.soksak/plugins/<id>/` — git clone 본. 설치/업데이트는 **무조건 git**이고
-  설치 후 **읽기전용 잠금**(`chmod -R a-w`, update 가 잠시 해제)된다. 손으로 고쳐도 다음
-  update 의 `reset --hard` 가 날린다.
-
-발행은 영구 미러 없이 **임시 clone** 으로만 한다 — `make plugin-publish id=<id>` 가 plugin.json 의
-`repo` 리모트를 `mktemp` 로 clone → 소스로 rsync → 커밋·태그 → push → 임시 디렉토리 삭제.
-버전을 올려 발행하면 레지스트리(스냅샷 + 라이브 레포)와 설치본 버전 비교로 플러그인 패널에
-"업데이트"가 뜬다:
-
-```bash
-make plugin-publish id=soksak-plugin-claude-gui   # 소스 → 리모트 push(임시 clone, 미러 없음)
-make registry                                      # 레지스트리 스냅샷 갱신
-```
-
-| id | 권한 | 시연 |
-|---|---|---|
-| `soksak-memo` | ui, storage | 프로젝트별 메모(전용 저장소, debounce 저장) |
-| `soksak-git-history` | ui, git:read | 커밋 리스트(페이지네이션)→상세(파일+패치) |
-| `soksak-git-diff` | ui, git:read, commands | 변경 파일→착색 diff, **콘텐츠 탭 배치** |
-| `soksak-code-highlight` | editor | 선언적 언어 매핑 + TODO/FIXME 강조(CM6 확장) |
-| `soksak-formatter` | editor | JSON 포메터(⇧⌥F), 실패 시 원본 보존 |
-| `soksak-bookmarks` | ui, commands, commands:destructive | **기존 명령만으로** 즐겨찾기 뷰(백엔드 0줄) |
-| `soksak-terminal` | programs | + 메뉴 "터미널" — 내장 0 모델의 기준 프로그램 |
-| `soksak-git-init` | commands | 새 프로젝트 루트 자동 git init — **이벤트(project.created)+명령(git.init) 조합, 백엔드 0줄** |
-| `soksak-agent-claude` | programs | + 메뉴 "에이전트" ▸ Claude — **미설치 시 공식 설치(멀티플랫폼) 자동 실행** |
-| `soksak-agent-codex` | programs | + 메뉴 "에이전트" ▸ Codex — 동일 path 선언으로 카테고리 자동 병합 |
-| `soksak-browser` | programs | + 메뉴 "브라우저" — 코어 능력(네이티브 webview)의 메뉴 노출 |
+- **소스·발행**: 각 플러그인 repo 안에서 끝낸다 — 소스·매니페스트·테스트·태그·push 전부 자기 repo.
+- **카탈로그**: `soksak-plugin-registry` repo 의 `registry.json` 이 설치 가능 목록의 단일 진실이다.
+  그 repo 의 `update.sh` 가 org 의 각 `plugin.json` 을 집계한다(template 제외). 코어의
+  `make registry` 는 이 카탈로그를 fetch 해 `src/plugins/registrySnapshot.json`(오프라인 폴백)으로 캐시한다.
+- **설치**: 카탈로그 엔트리의 `repo` → `~/.soksak/plugins/<id>` 로 clone, 읽기전용 잠금.
+  `plugin.update` 는 fetch + reset --hard.
+- **dev**: 플러그인 repo 들을 로컬에 clone 하고 `SOKSAK_DEV_PLUGINS` 로 가리키면 설치본을 가려
+  소스 편집이 앱 리로드에 즉시 반영된다.
 
 ## 트러블슈팅
 
