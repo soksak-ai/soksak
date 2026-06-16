@@ -3,7 +3,8 @@
 //   요청: {"id":<any>, "method":"panel.split", "params":{...}, "pane":"p3"}
 //   응답: {"ok":true, ...} | {"ok":false, "code":"...", "message":"..."} (+ id echo)
 // 명령 실행은 프론트 Command Registry 가 담당: Rust 는 emit("cmd-request") 로 전달하고
-// 프론트가 invoke(cmd_result) 로 회신한다(요청 seq 매칭, 타임아웃 10s). 폴링 없음.
+// 프론트가 invoke(cmd_result) 로 회신한다(요청 seq 매칭, 기본 타임아웃 10s — 요청별 timeoutMs 로
+// 상향 가능, [1s,600s] 클램프. 실 LLM 에이전트 턴처럼 느린 커맨드용). 폴링 없음.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -43,6 +44,10 @@ struct Request {
     // 멀티 윈도우 타겟 창 label. 생략 시 활성 창(마지막 포커스), 그것도 없으면 "main".
     // tmux -t 관례 — 특정 창을 명시할 때 지정한다.
     window: Option<String>,
+    // 프론트 응답 대기 상한(ms). 생략 시 10s(정상 커맨드의 빠른 행 감지 유지). 느린 커맨드(실 LLM
+    // 에이전트 턴 등)는 크게 지정. [1s, 600s] 로 클램프(무한대기 금지). camelCase(timeoutMs) 수용.
+    #[serde(default, rename = "timeoutMs")]
+    timeout_ms: Option<u64>,
 }
 
 // 마지막으로 포커스된 창 label(활성 창 추적). lib.rs on_window_event 의 Focused(true) 가 갱신.
@@ -165,7 +170,9 @@ fn route(app: &AppHandle, req: Request) -> Value {
         return error_reply("INTERNAL", "프론트로 요청 전달 실패");
     }
 
-    let result = rx.recv_timeout(Duration::from_secs(10));
+    // 기본 10s(빠른 행 감지). 요청이 timeoutMs 를 주면 그 값으로 — 단 [1s, 600s] 클램프(무한대기 금지).
+    let timeout = Duration::from_millis(req.timeout_ms.unwrap_or(10_000).clamp(1_000, 600_000));
+    let result = rx.recv_timeout(timeout);
     bridge.pending.lock().unwrap().remove(&seq);
     match result {
         Ok(v) => v,
