@@ -297,10 +297,12 @@ export interface ContributedProgram {
   // 메뉴 카테고리 경로 — "/" 구분으로 뎁스 지정(예: "에이전트", "에이전트/실험").
   // 같은 경로끼리 서브메뉴로 묶인다(플러그인 간 병합 — 표시 언어 기준).
   path?: LocalizedText;
-  // 동작: terminal = 터미널 뷰(+command 자동 실행), browser = 브라우저 뷰(+url).
-  kind: "terminal" | "browser";
+  // 동작: terminal = 터미널 뷰(+command 자동 실행), browser = 브라우저 뷰(+url),
+  // view = 이 플러그인의 contributes.views 중 하나를 콘텐츠 탭으로 연다(+view).
+  kind: "terminal" | "browser" | "view";
   command?: string; // kind=terminal 한정: 자동 실행할 셸 명령(생략 = 맨 터미널)
   url?: string; // kind=browser 한정: 시작 URL(생략 = 설정 homeUrl)
+  view?: string; // kind=view 한정: 열 플러그인 내 뷰 id(contributes.views[].id)
   // kind=terminal 한정 — 선행 바이너리 보장: 사용자 셸 PATH 에서 bin 을 확인하고
   // 미설치면 공식 설치 명령을 같은 터미널에서 가시 실행한다(은폐 금지).
   ensure?: {
@@ -716,7 +718,7 @@ export function parseManifest(
       programs = parseEntries(c.programs, {
         label: "contributes.programs",
         required: ["id", "title", "kind"],
-        optional: ["path", "command", "url", "ensure"],
+        optional: ["path", "command", "url", "view", "ensure"],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
             errs.push("contributes.programs: id 는 ^[a-z0-9][a-z0-9-]*$");
@@ -732,8 +734,8 @@ export function parseManifest(
           ) {
             return null;
           }
-          if (v.kind !== "terminal" && v.kind !== "browser") {
-            errs.push(`contributes.programs["${id}"].kind: terminal|browser`);
+          if (v.kind !== "terminal" && v.kind !== "browser" && v.kind !== "view") {
+            errs.push(`contributes.programs["${id}"].kind: terminal|browser|view`);
             return null;
           }
           const kind = v.kind;
@@ -783,6 +785,18 @@ export function parseManifest(
               );
               return null;
             }
+          }
+          if (v.view !== undefined && (kind !== "view" || !isNonEmptyString(v.view))) {
+            errs.push(
+              `contributes.programs["${id}"].view: kind=view 한정 비공백 문자열`,
+            );
+            return null;
+          }
+          if (kind === "view" && !isNonEmptyString(v.view)) {
+            errs.push(
+              `contributes.programs["${id}"].view: kind=view 는 view(뷰 id) 필수`,
+            );
+            return null;
           }
           let ensure: ContributedProgram["ensure"];
           if (v.ensure !== undefined) {
@@ -838,6 +852,7 @@ export function parseManifest(
             ...(path !== undefined ? { path } : {}),
             ...(v.command !== undefined ? { command: (v.command as string).trim() } : {}),
             ...(v.url !== undefined ? { url: (v.url as string).trim() } : {}),
+            ...(v.view !== undefined ? { view: (v.view as string).trim() } : {}),
             ...(ensure !== undefined ? { ensure } : {}),
           };
         },

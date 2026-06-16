@@ -2,6 +2,7 @@
 // (close/move/drag 는 view id 제네릭이라 기존 동작 그대로 — 여기선 plugin 특화만 고정.)
 import { beforeEach, describe, expect, it } from "vitest";
 import { allGroups, useSessions } from "./sessions";
+import { useProgramRegistry } from "../plugins/programRegistry";
 
 // 부트 모델(P3): 초기 tabs 는 비어 있고 main.tsx 가 bootstrapFirstProject 로
 // 첫 프로젝트를 만든다 — 테스트도 같은 경로로 t1 을 준비한 뒤 스냅샷.
@@ -103,5 +104,35 @@ describe("closeView — plugin 뷰", () => {
     expect(
       groups.flatMap((g) => g.views).some((v) => v.id === r.viewId),
     ).toBe(false);
+  });
+});
+
+// 등록 프로그램 kind=view → +메뉴/addContent 가 plugin 뷰 콘텐츠를 연다(§2.6, plugin-agnostic).
+describe("addContent — kind=view 프로그램", () => {
+  it("등록된 view 프로그램으로 새 콘텐츠 첫 뷰 = 해당 플러그인 뷰", () => {
+    const dispose = useProgramRegistry.getState().register("soksak-plugin-erd", {
+      id: "erd-prog-test",
+      title: "ERD",
+      path: "유틸리티",
+      kind: "view",
+      view: "canvas",
+    });
+    try {
+      const r = useSessions.getState().addContent("t1", "erd-prog-test");
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      const { c, groups } = activeLayout();
+      expect(c.id).toBe(r.contentId);
+      const grp = groups.find((g) => g.id === r.groupId)!;
+      const v = grp.views.find((x) => x.id === r.viewId)!;
+      expect(v).toMatchObject({
+        kind: "plugin",
+        pluginId: "soksak-plugin-erd",
+        view: "canvas",
+        title: "ERD",
+      });
+    } finally {
+      dispose();
+    }
   });
 });

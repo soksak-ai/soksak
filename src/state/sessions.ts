@@ -4,6 +4,7 @@ import {
   autorunCommandOf,
   getRegisteredProgram,
 } from "../plugins/programRegistry";
+import { localize } from "../i18n";
 
 // 3단 구조:
 //   - 최상단 탭 = 프로젝트(ProjectTab): 자체 사이드바(파일트리) + 컨텐츠 탭들
@@ -369,6 +370,13 @@ function newBrowserView(url?: string): View {
   };
 }
 
+// 새 플러그인 뷰(콘텐츠 배치) — kind=view 프로그램이 자기 contributes.views 중 하나를 연다.
+// PluginViewHost 가 "<pluginId>.<view>" provider 를 그린다. 코어는 plugin-agnostic — 어떤
+// 플러그인이든 동일 경로(특정 플러그인 락인 0).
+function newPluginViewFor(pluginId: string, view: string, title: string): View {
+  return { id: newViewId(), kind: "plugin", title, pluginId, view };
+}
+
 // 프로그램 → 새 뷰. 내장 프로그램 개념은 없다(§2.6) — 등록 프로그램의 spec 으로
 // resolve(kind 에 따라 터미널[+autorun] 또는 브라우저). 미등록 id 는 능력명
 // ("browser" — 코어 명령 browser.open 등의 직접 경로)이면 그 능력, 아니면
@@ -380,9 +388,10 @@ function newViewFor(
 ): View {
   const reg = getRegisteredProgram(program);
   if (reg) {
-    return reg.decl.kind === "browser"
-      ? newBrowserView(opts?.url ?? reg.decl.url)
-      : newTerminalView(opts?.command ?? autorunCommandOf(reg.decl));
+    if (reg.decl.kind === "browser") return newBrowserView(opts?.url ?? reg.decl.url);
+    if (reg.decl.kind === "view" && reg.decl.view)
+      return newPluginViewFor(reg.pluginId, reg.decl.view, localize(reg.decl.title));
+    return newTerminalView(opts?.command ?? autorunCommandOf(reg.decl));
   }
   if (program === "browser") return newBrowserView(opts?.url);
   return newTerminalView(opts?.command);
