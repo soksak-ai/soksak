@@ -2473,13 +2473,21 @@ select.dctl {
   display: flex;
   flex-direction: column;
 }
+/* host = 슬롯(.egroup-body-slot: position:absolute + definite 픽셀 w/h)을 absolute inset:0 로
+   꽉 채운다. flex:1 은 부모가 flex 일 때만 유효한데 슬롯은 block 이라 무효였고, 그 결과 host 가
+   height:auto(콘텐츠 기반, definite 아님)가 되어 플러그인의 height:100%/h-full 이 안 풀렸다(범용
+   결함 — 모든 플러그인 공통). absolute inset:0 는 가로·세로 모두 definite 픽셀을 부여 → 어떤
+   플러그인도 100%/absolute 로 채울 수 있다. */
 .plugin-view-host {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
 }
 .plugin-view-container {
+  /* definite-높이 flex 컬럼 host 안의 flex:1 → 컨테이너도 definite 높이(+가로 stretch).
+     position:relative = 플러그인이 absolute 콘텐츠를 쓸 때의 containing block. */
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
