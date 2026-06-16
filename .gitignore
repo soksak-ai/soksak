@@ -12,9 +12,9 @@ dist
 dist-ssr
 *.local
 
-# 산출물(추적 제외). 플러그인은 영구 미러 없이 make plugin-publish(임시 clone)로 발행 —
-# plugins/.repos* 는 구 plugin-repos 산출물(폐기). .repos_bak 은 삭제 전 백업.
-plugins/.repos*
+# plugins/ 는 메인레포가 추적하지 않는다(P1·P3) — 각 플러그인은 독립 repo 가 단일 진실.
+# dev 시 make plugin-dev-sync 로 카탈로그 repo 들을 여기에 clone 한다.
+plugins/
 examples/.repos/
 
 # apphost Swift 사이드카 컴파일 산출물(빌드 파이프라인 생성, Tauri externalBin) — 플랫폼별 재생성

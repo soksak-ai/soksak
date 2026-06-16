@@ -21,7 +21,7 @@ DEBUG_APP   := src-tauri/target/debug/bundle/macos/soksak-debug.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs registry
+.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs registry plugin-dev-sync
 
 help: ## 사용 가능한 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -80,6 +80,14 @@ docs: ## 명령 레퍼런스 생성(docs/COMMANDS.md — 앱이 실행 중이어
 registry: ## 레지스트리 카탈로그 스냅샷 갱신 — 라이브 registry.json 을 fetch 해 캐시(P2 소비). 멱등
 	@curl -fsSL "$(REGISTRY_URL)" -o src/plugins/registrySnapshot.json
 	@echo "레지스트리 스냅샷: src/plugins/registrySnapshot.json ($$(jq '.plugins | length' src/plugins/registrySnapshot.json)개, 라이브 fetch)"
+
+plugin-dev-sync: ## dev 동기화 — 카탈로그 repo 들을 plugins/<id> 로 clone(없을 때만 — 기존 보존). plugins/ 는 gitignore
+	@curl -fsSL "$(REGISTRY_URL)" | jq -r '.plugins[].repo' | while read repo; do \
+		id=$$(basename "$$repo" .git); \
+		if [ -e "plugins/$$id" ]; then echo "  $$id (존재 — 보존)"; \
+		else git clone -q "$$repo" "plugins/$$id" && echo "  $$id (clone)"; fi; \
+	done
+	@echo "dev 동기화 완료 — plugins/ 는 gitignore, SOKSAK_DEV_PLUGINS 로 로딩"
 
 typecheck: ## 프론트엔드 타입 체크(tsc)
 	$(PNPM) exec tsc --noEmit
