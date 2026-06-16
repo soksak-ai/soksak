@@ -14,7 +14,8 @@ dist-ssr
 
 # plugins/ 는 메인레포가 추적하지 않는다(P1·P3) — 각 플러그인은 독립 repo 가 단일 진실.
 # dev 시 make plugin-dev-sync 로 카탈로그 repo 들을 여기에 clone 한다.
-plugins/
+# 선행 슬래시 = repo 루트 한정(src/plugins/ 같은 코어 소스까지 삼키지 않게 앵커).
+/plugins/
 examples/.repos/
 
 # apphost Swift 사이드카 컴파일 산출물(빌드 파이프라인 생성, Tauri externalBin) — 플랫폼별 재생성
