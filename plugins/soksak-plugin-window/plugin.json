@@ -1,0 +1,24 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-window",
+  "name": { "ko": "창밖 풍경", "en": "Window" },
+  "version": "1.0.0",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-window.git",
+  "description": { "ko": "좌측 사이드바 하단에 현재 시각을 따라 변하는 창밖 풍경 — 해·달·별·구름이 1초에 걸쳐 부드럽게 전환된다.", "en": "A window to the sky in the left sidebar — sun, moon, stars and clouds shift smoothly with the time of day." },
+  "entry": "main.js",
+  "permissions": ["ui", "commands"],
+  "contributes": {
+    "views": [
+      {
+        "id": "panel",
+        "title": { "ko": "창밖 풍경", "en": "Window" },
+        "icon": "☼",
+        "placements": ["sidebar-left"]
+      }
+    ],
+    "commands": [
+      { "name": "state", "title": { "ko": "현재 시간대 상태", "en": "Time-of-day state" } },
+      { "name": "set", "title": { "ko": "시간대 강제/복귀", "en": "Force / clear phase" } }
+    ]
+  }
+}

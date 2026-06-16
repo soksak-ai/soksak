@@ -1,4 +1,4 @@
-// 공식 플러그인 17종의 기계 검증 — 매니페스트가 실제 parseManifest 를 통과하고
+// 공식 플러그인 18종의 기계 검증 — 매니페스트가 실제 parseManifest 를 통과하고
 // main.js 가 스펙의 "단일 번들·import 금지" 규율을 지키는지 레포 차원에서 고정.
 // (런타임 동작은 E2E 수동 검증 항목 — 여기는 스펙 위반의 회귀 방지선.)
 import { readdirSync, readFileSync, existsSync } from "node:fs";
@@ -25,10 +25,11 @@ const EXPECTED = [
   "soksak-plugin-shark",
   "soksak-plugin-skeleton",
   "soksak-plugin-terminal",
+  "soksak-plugin-window",
 ];
 
 describe("공식 플러그인 — 스펙 준수", () => {
-  it("17종 전부 존재", () => {
+  it("18종 전부 존재", () => {
     const dirs = readdirSync(PLUGINS_DIR, { withFileTypes: true })
       // 숨김 디렉토리(.repos — make plugin-repos 산출물)는 소스가 아니다.
       .filter((d) => d.isDirectory() && !d.name.startsWith("."))
