@@ -61,6 +61,9 @@ pub fn process_spawn(
     args: Vec<String>,
     cwd: Option<String>,
     env: Option<HashMap<String, String>>,
+    // 부모 env 에서 제거할 키(설정 아닌 제거). 예: ACP 자식 에이전트에서 호스트 중첩 가드(CLAUDECODE)
+    // 를 떼어내 "에디터가 띄운 독립 에이전트"로 동작시킨다. 병합(env)으론 못 하는 unset 전용 경로.
+    env_remove: Option<Vec<String>>,
     on_stdout: Channel<InvokeResponseBody>,
     on_stderr: Channel<InvokeResponseBody>,
     on_exit: Channel<i32>,
@@ -77,6 +80,11 @@ pub fn process_spawn(
     if let Some(env) = env {
         for (k, v) in env {
             c.env(k, v);
+        }
+    }
+    if let Some(keys) = env_remove {
+        for k in keys {
+            c.env_remove(k);
         }
     }
     let mut child = c.spawn().map_err(|e| e.to_string())?;

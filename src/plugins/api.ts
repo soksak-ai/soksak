@@ -194,11 +194,11 @@ export interface SoksakPluginApi {
   /** 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합). "process" 권한.
    *  PTY 가 아니라 순수 파이프 → JSON-RPC 프레이밍 무손상. 이벤트 기반(폴링 0). */
   process?: {
-    /** 프로그램 spawn → handle(id). cwd/env 선택. */
+    /** 프로그램 spawn → handle(id). cwd/env 선택. envRemove=부모 env 에서 뗄 키(중첩 가드 제거 등). */
     spawn: (
       cmd: string,
       args: string[],
-      opts?: { cwd?: string; env?: Record<string, string> },
+      opts?: { cwd?: string; env?: Record<string, string>; envRemove?: string[] },
     ) => Promise<number>;
     /** stdin 에 쓰기(JSON-RPC 프레임 등). */
     write: (handle: number, data: string) => Promise<void>;
@@ -309,7 +309,7 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     async spawn(
       cmd: string,
       args: string[],
-      opts?: { cwd?: string; env?: Record<string, string> },
+      opts?: { cwd?: string; env?: Record<string, string>; envRemove?: string[] },
     ): Promise<number> {
       const st: ProcState = {
         stdout: new Set(),
@@ -333,6 +333,7 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         args,
         cwd: opts?.cwd ?? null,
         env: opts?.env ?? null,
+        envRemove: opts?.envRemove ?? null,
         onStdout,
         onStderr,
         onExit,
