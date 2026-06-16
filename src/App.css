@@ -2468,16 +2468,23 @@ select.dctl {
   overflow: hidden;
 }
 .plugin-view-slot {
+  /* sidebar-right 플러그인 뷰 슬롯 — flex:1 로 본문 높이를 차지하고 position:relative 로
+     containing block 을 세워 .plugin-view-host(absolute inset:0)가 이 박스를 채우게 한다. */
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  position: relative;
 }
-/* host = 슬롯(.egroup-body-slot: position:absolute + definite 픽셀 w/h)을 absolute inset:0 로
-   꽉 채운다. flex:1 은 부모가 flex 일 때만 유효한데 슬롯은 block 이라 무효였고, 그 결과 host 가
-   height:auto(콘텐츠 기반, definite 아님)가 되어 플러그인의 height:100%/h-full 이 안 풀렸다(범용
-   결함 — 모든 플러그인 공통). absolute inset:0 는 가로·세로 모두 definite 픽셀을 부여 → 어떤
-   플러그인도 100%/absolute 로 채울 수 있다. */
+/* ── 플러그인 뷰 슬롯 계약(상속 + 독립성) ──────────────────────────────────────
+   배치(content/sidebar-left/sidebar-right)마다 PluginViewHost 를 담는 "슬롯"이 있다.
+   - 독립성: 각 슬롯은 자기 크기·위치를 스스로 정한다(content=절대배치 픽셀, 사이드바=flex:1).
+     단, 공통 계약 하나 — 슬롯은 positioned(position:relative/absolute) containing block 이어야 한다.
+       · content    .egroup-body-slot   = position:absolute + definite px (GroupArea)
+       · sidebar-R  .plugin-view-slot    = flex:1 + position:relative   (PluginSidebar)
+       · sidebar-L  .left-host-body      = flex:1 + position:relative   (LeftSidebarHost)
+   - 상속: .plugin-view-host 는 그 슬롯을 absolute inset:0 로 균일하게 꽉 채운다(배치 불문 동일).
+     (flex:1 은 부모가 flex 일 때만 유효 → content 슬롯[block]에서 무효였다. absolute inset:0 는
+      positioned 부모면 배치에 무관하게 가로·세로 definite 픽셀을 부여 → 어떤 플러그인도 100%/
+      absolute 로 채울 수 있다.) 새 배치 추가 시 슬롯을 positioned 로 만드는 것이 유일한 의무. */
 .plugin-view-host {
   position: absolute;
   inset: 0;
@@ -2839,10 +2846,11 @@ select.dctl {
   color: var(--fg);
 }
 .left-host-body {
+  /* sidebar-left 플러그인 뷰 슬롯 — flex:1 + position:relative containing block(슬롯 계약).
+     .plugin-view-host(absolute inset:0)가 이 박스를 채운다. */
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  position: relative;
 }
 
 /* ══ 아이콘 버튼 원형(아이콘 시스템 표준) ═══════════════════════════════════
