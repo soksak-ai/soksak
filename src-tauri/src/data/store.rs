@@ -1,0 +1,622 @@
+// 데이터 저장 연산 — kv + 컬렉션. 전부 &Connection 을 받는 순수 함수(테스트는 임시 DB 주입).
+// ns/scope 강제·필드 화이트리스트는 호출 시 인자로 들어온다(commands.rs 가 ns 를 주입).
+
+use rusqlite::{Connection, OptionalExtension, ToSql};
+use serde_json::{json, Value};
+
+use super::{gen_id, now_millis, validate_coll, validate_field};
+
+// ── KV ───────────────────────────────────────────────────────────────────────
+
+pub fn kv_get(conn: &Connection, ns: &str, k: &str) -> Result<Option<Value>, String> {
+    let row: Option<String> = conn
+        .query_row(
+            "SELECT v FROM kv WHERE ns=?1 AND k=?2",
+            (ns, k),
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    match row {
+        Some(s) => Ok(Some(serde_json::from_str(&s).map_err(|e| e.to_string())?)),
+        None => Ok(None),
+    }
+}
+
+pub fn kv_set(conn: &Connection, ns: &str, k: &str, v: &Value) -> Result<(), String> {
+    let s = serde_json::to_string(v).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO kv(ns,k,v,updated) VALUES(?1,?2,?3,?4)\
+         ON CONFLICT(ns,k) DO UPDATE SET v=excluded.v, updated=excluded.updated",
+        (ns, k, s, now_millis()),
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn kv_delete(conn: &Connection, ns: &str, k: &str) -> Result<bool, String> {
+    let n = conn
+        .execute("DELETE FROM kv WHERE ns=?1 AND k=?2", (ns, k))
+        .map_err(|e| e.to_string())?;
+    Ok(n > 0)
+}
+
+pub fn kv_keys(conn: &Connection, ns: &str, prefix: Option<&str>) -> Result<Vec<String>, String> {
+    let pat = format!("{}%", prefix.unwrap_or(""));
+    let mut stmt = conn
+        .prepare("SELECT k FROM kv WHERE ns=?1 AND k LIKE ?2 ORDER BY k")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map((ns, pat), |r| r.get::<_, String>(0))
+        .map_err(|e| e.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+}
+
+// ── 컬렉션 메타 ────────────────────────────────────────────────────────────────
+
+struct Meta {
+    cid: i64,
+    fts: Vec<String>,
+    idx: Vec<String>,
+}
+
+fn get_meta(conn: &Connection, ns: &str, coll: &str) -> Result<Option<Meta>, String> {
+    conn.query_row(
+        "SELECT cid, idx_fields, fts_fields FROM meta_collections WHERE ns=?1 AND coll=?2",
+        (ns, coll),
+        |r| {
+            let cid: i64 = r.get(0)?;
+            let idx: String = r.get(1)?;
+            let fts: String = r.get(2)?;
+            Ok((cid, idx, fts))
+        },
+    )
+    .optional()
+    .map_err(|e| e.to_string())?
+    .map(|(cid, idx, fts)| {
+        Ok(Meta {
+            cid,
+            idx: serde_json::from_str(&idx).map_err(|e: serde_json::Error| e.to_string())?,
+            fts: serde_json::from_str(&fts).map_err(|e: serde_json::Error| e.to_string())?,
+        })
+    })
+    .transpose()
+}
+
+fn fts_table(cid: i64) -> String {
+    format!("fts_{cid}")
+}
+
+// define — 멱등. 메타 upsert + FTS 가상테이블 + 인덱스 필드별 표현식 인덱스 생성.
+pub fn define(
+    conn: &Connection,
+    ns: &str,
+    coll: &str,
+    indexes: &[String],
+    fts: &[String],
+) -> Result<(), String> {
+    validate_coll(coll)?;
+    for f in indexes.iter().chain(fts.iter()) {
+        validate_field(f)?;
+    }
+    let idx_json = serde_json::to_string(indexes).map_err(|e| e.to_string())?;
+    let fts_json = serde_json::to_string(fts).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO meta_collections(ns,coll,idx_fields,fts_fields) VALUES(?1,?2,?3,?4)\
+         ON CONFLICT(ns,coll) DO UPDATE SET idx_fields=excluded.idx_fields, fts_fields=excluded.fts_fields",
+        (ns, coll, &idx_json, &fts_json),
+    )
+    .map_err(|e| e.to_string())?;
+    let meta = get_meta(conn, ns, coll)?.ok_or("define 직후 메타 조회 실패")?;
+
+    if !fts.is_empty() {
+        // trigram = CJK 부분일치. content 기본(텍스트 사본 저장 → rowid 로 DELETE 가능, 갱신 안전).
+        conn.execute_batch(&format!(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS {} USING fts5(text, tokenize = 'trigram');",
+            fts_table(meta.cid)
+        ))
+        .map_err(|e| e.to_string())?;
+    }
+    // 표현식 인덱스 — query 의 json_extract 필터가 탄다. cid·필드명은 검증됨(주입 안전).
+    for f in indexes {
+        conn.execute_batch(&format!(
+            "CREATE INDEX IF NOT EXISTS idx_{cid}_{f} ON records(ns, coll, json_extract(doc, '$.{f}'));",
+            cid = meta.cid,
+            f = f
+        ))
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// ── 레코드 ─────────────────────────────────────────────────────────────────────
+
+// FTS 텍스트 = 선언된 fts 필드의 문자열 값 연결(공백 구분).
+fn fts_text(doc: &Value, fields: &[String]) -> String {
+    let mut parts = Vec::new();
+    for f in fields {
+        if let Some(s) = doc.get(f).and_then(|v| v.as_str()) {
+            parts.push(s.to_string());
+        }
+    }
+    parts.join(" ")
+}
+
+// put — upsert(ON CONFLICT 로 rowid 보존). doc 에 canonical id 주입. FTS 동기화.
+// 반환: 레코드 id.
+pub fn put(
+    conn: &Connection,
+    ns: &str,
+    coll: &str,
+    scope: &str,
+    id: Option<String>,
+    doc: &Value,
+) -> Result<String, String> {
+    validate_coll(coll)?;
+    let mut doc = doc.clone();
+    if !doc.is_object() {
+        return Err("doc 는 JSON 객체여야 함".to_string());
+    }
+    let id = id.unwrap_or_else(gen_id);
+    // canonical id 주입(doc.id = 레코드 id 항상 일치).
+    doc.as_object_mut().unwrap().insert("id".to_string(), json!(id));
+    let doc_s = serde_json::to_string(&doc).map_err(|e| e.to_string())?;
+    let now = now_millis();
+    conn.execute(
+        "INSERT INTO records(ns,coll,scope,id,doc,created,updated) VALUES(?1,?2,?3,?4,?5,?6,?6)\
+         ON CONFLICT(ns,coll,id) DO UPDATE SET scope=excluded.scope, doc=excluded.doc, updated=excluded.updated",
+        (ns, coll, scope, &id, &doc_s, now),
+    )
+    .map_err(|e| e.to_string())?;
+
+    // FTS 동기화(선언된 경우): rowid 로 교체.
+    if let Some(meta) = get_meta(conn, ns, coll)? {
+        if !meta.fts.is_empty() {
+            let rowid: i64 = conn
+                .query_row(
+                    "SELECT rowid FROM records WHERE ns=?1 AND coll=?2 AND id=?3",
+                    (ns, coll, &id),
+                    |r| r.get(0),
+                )
+                .map_err(|e| e.to_string())?;
+            let tbl = fts_table(meta.cid);
+            conn.execute(&format!("DELETE FROM {tbl} WHERE rowid=?1"), [rowid])
+                .map_err(|e| e.to_string())?;
+            let text = fts_text(&doc, &meta.fts);
+            if !text.is_empty() {
+                conn.execute(
+                    &format!("INSERT INTO {tbl}(rowid, text) VALUES(?1, ?2)"),
+                    (rowid, text),
+                )
+                .map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(id)
+}
+
+pub fn get(
+    conn: &Connection,
+    ns: &str,
+    coll: &str,
+    id: &str,
+    scope: Option<&str>,
+) -> Result<Option<Value>, String> {
+    let doc: Option<String> = match scope {
+        Some(s) => conn
+            .query_row(
+                "SELECT doc FROM records WHERE ns=?1 AND coll=?2 AND id=?3 AND scope=?4",
+                (ns, coll, id, s),
+                |r| r.get(0),
+            )
+            .optional(),
+        None => conn
+            .query_row(
+                "SELECT doc FROM records WHERE ns=?1 AND coll=?2 AND id=?3",
+                (ns, coll, id),
+                |r| r.get(0),
+            )
+            .optional(),
+    }
+    .map_err(|e| e.to_string())?;
+    match doc {
+        Some(s) => Ok(Some(serde_json::from_str(&s).map_err(|e| e.to_string())?)),
+        None => Ok(None),
+    }
+}
+
+pub fn delete(
+    conn: &Connection,
+    ns: &str,
+    coll: &str,
+    id: &str,
+    scope: Option<&str>,
+) -> Result<bool, String> {
+    // FTS 정리 위해 rowid·cid 선조회.
+    let rowid: Option<i64> = conn
+        .query_row(
+            "SELECT rowid FROM records WHERE ns=?1 AND coll=?2 AND id=?3",
+            (ns, coll, id),
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?;
+    let Some(rowid) = rowid else { return Ok(false) };
+
+    let n = match scope {
+        Some(s) => conn.execute(
+            "DELETE FROM records WHERE ns=?1 AND coll=?2 AND id=?3 AND scope=?4",
+            (ns, coll, id, s),
+        ),
+        None => conn.execute(
+            "DELETE FROM records WHERE ns=?1 AND coll=?2 AND id=?3",
+            (ns, coll, id),
+        ),
+    }
+    .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Ok(false);
+    }
+    if let Some(meta) = get_meta(conn, ns, coll)? {
+        if !meta.fts.is_empty() {
+            let tbl = fts_table(meta.cid);
+            conn.execute(&format!("DELETE FROM {tbl} WHERE rowid=?1"), [rowid])
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(true)
+}
+
+// ── 질의(구조 필터 → 파라미터화 SQL) ──────────────────────────────────────────
+
+// 비교값 1개를 바인딩 박스로. json_extract 는 bool→1/0, number, text 를 돌려주므로 동형으로 바인딩.
+fn bind_val(v: &Value) -> Box<dyn ToSql> {
+    match v {
+        Value::Null => Box::new(rusqlite::types::Null),
+        Value::Bool(b) => Box::new(if *b { 1i64 } else { 0i64 }),
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                Box::new(i)
+            } else {
+                Box::new(n.as_f64().unwrap_or(0.0))
+            }
+        }
+        Value::String(s) => Box::new(s.clone()),
+        other => Box::new(other.to_string()),
+    }
+}
+
+// 필드 → SQL 컬럼식. created/updated 는 실제 컬럼, 그 외는 json_extract. 필드는 검증·선언 확인됨.
+fn field_expr(field: &str) -> String {
+    if field == "created" || field == "updated" {
+        field.to_string()
+    } else {
+        format!("json_extract(doc, '$.{field}')")
+    }
+}
+
+// where 절 빌드. 허용 필드 = 선언 인덱스 ∪ {created,updated}. 값은 전부 ? 바인딩.
+fn build_where(
+    where_obj: Option<&Value>,
+    allowed: &[String],
+    params: &mut Vec<Box<dyn ToSql>>,
+) -> Result<String, String> {
+    let Some(Value::Object(map)) = where_obj else {
+        return Ok(String::new());
+    };
+    let mut clauses = Vec::new();
+    for (field, cond) in map {
+        validate_field(field)?;
+        let is_builtin = field == "created" || field == "updated";
+        if !is_builtin && !allowed.iter().any(|a| a == field) {
+            return Err(format!("필드가 인덱스로 선언되지 않음: {field}"));
+        }
+        let expr = field_expr(field);
+        // {op, value} 형태 또는 스칼라(=eq).
+        let (op, value) = match cond {
+            Value::Object(o) if o.contains_key("op") => {
+                let op = o.get("op").and_then(|v| v.as_str()).unwrap_or("eq");
+                let value = o.get("value").unwrap_or(&Value::Null);
+                (op.to_string(), value.clone())
+            }
+            other => ("eq".to_string(), other.clone()),
+        };
+        match op.as_str() {
+            "eq" => {
+                clauses.push(format!("{expr} = ?"));
+                params.push(bind_val(&value));
+            }
+            "ne" => {
+                clauses.push(format!("{expr} != ?"));
+                params.push(bind_val(&value));
+            }
+            "lt" => {
+                clauses.push(format!("{expr} < ?"));
+                params.push(bind_val(&value));
+            }
+            "lte" => {
+                clauses.push(format!("{expr} <= ?"));
+                params.push(bind_val(&value));
+            }
+            "gt" => {
+                clauses.push(format!("{expr} > ?"));
+                params.push(bind_val(&value));
+            }
+            "gte" => {
+                clauses.push(format!("{expr} >= ?"));
+                params.push(bind_val(&value));
+            }
+            "like" => {
+                clauses.push(format!("{expr} LIKE ?"));
+                params.push(bind_val(&value));
+            }
+            "in" => {
+                let Value::Array(arr) = &value else {
+                    return Err("in 연산자 value 는 배열이어야 함".to_string());
+                };
+                if arr.is_empty() {
+                    clauses.push("0".to_string()); // 빈 IN = 거짓
+                } else {
+                    let marks = vec!["?"; arr.len()].join(",");
+                    clauses.push(format!("{expr} IN ({marks})"));
+                    for v in arr {
+                        params.push(bind_val(v));
+                    }
+                }
+            }
+            other => return Err(format!("알 수 없는 연산자: {other}")),
+        }
+    }
+    if clauses.is_empty() {
+        Ok(String::new())
+    } else {
+        Ok(format!(" AND {}", clauses.join(" AND ")))
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn query(
+    conn: &Connection,
+    ns: &str,
+    coll: &str,
+    scope: Option<&str>,
+    where_obj: Option<&Value>,
+    order: Option<&str>,
+    desc: bool,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Vec<Value>, String> {
+    let allowed = get_meta(conn, ns, coll)?.map(|m| m.idx).unwrap_or_default();
+
+    let mut params: Vec<Box<dyn ToSql>> = vec![Box::new(ns.to_string()), Box::new(coll.to_string())];
+    let mut sql = String::from("SELECT doc FROM records WHERE ns=?1 AND coll=?2");
+    if let Some(s) = scope {
+        sql.push_str(" AND scope=?3");
+        params.push(Box::new(s.to_string()));
+    }
+    sql.push_str(&build_where(where_obj, &allowed, &mut params)?);
+
+    // ORDER BY — created/updated 또는 선언 인덱스 필드. 기본 updated DESC.
+    let order_field = order.unwrap_or("updated");
+    validate_field(order_field)?;
+    if order_field != "created" && order_field != "updated" && !allowed.iter().any(|a| a == order_field)
+    {
+        return Err(format!("정렬 필드가 인덱스로 선언되지 않음: {order_field}"));
+    }
+    sql.push_str(&format!(
+        " ORDER BY {} {}",
+        field_expr(order_field),
+        if desc { "DESC" } else { "ASC" }
+    ));
+    sql.push_str(&format!(" LIMIT {}", limit.unwrap_or(200).clamp(0, 5000)));
+    if let Some(off) = offset {
+        sql.push_str(&format!(" OFFSET {}", off.max(0)));
+    }
+
+    let refs: Vec<&dyn ToSql> = params.iter().map(|b| b.as_ref()).collect();
+    let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(refs.as_slice(), |r| r.get::<_, String>(0))
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for row in rows {
+        let s = row.map_err(|e| e.to_string())?;
+        out.push(serde_json::from_str(&s).map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
+pub fn count(
+    conn: &Connection,
+    ns: &str,
+    coll: &str,
+    scope: Option<&str>,
+    where_obj: Option<&Value>,
+) -> Result<i64, String> {
+    let allowed = get_meta(conn, ns, coll)?.map(|m| m.idx).unwrap_or_default();
+    let mut params: Vec<Box<dyn ToSql>> = vec![Box::new(ns.to_string()), Box::new(coll.to_string())];
+    let mut sql = String::from("SELECT COUNT(*) FROM records WHERE ns=?1 AND coll=?2");
+    if let Some(s) = scope {
+        sql.push_str(" AND scope=?3");
+        params.push(Box::new(s.to_string()));
+    }
+    sql.push_str(&build_where(where_obj, &allowed, &mut params)?);
+    let refs: Vec<&dyn ToSql> = params.iter().map(|b| b.as_ref()).collect();
+    conn.query_row(&sql, refs.as_slice(), |r| r.get::<_, i64>(0))
+        .map_err(|e| e.to_string())
+}
+
+// search — CJK 전문검색. 쿼리 ≥3 코드포인트면 FTS5 trigram MATCH, 미만이면 LIKE 폴백(소량).
+pub fn search(
+    conn: &Connection,
+    ns: &str,
+    coll: &str,
+    query_text: &str,
+    scope: Option<&str>,
+    limit: Option<i64>,
+) -> Result<Vec<Value>, String> {
+    let lim = limit.unwrap_or(50).clamp(0, 2000);
+    let meta = get_meta(conn, ns, coll)?;
+    let use_fts = meta.as_ref().is_some_and(|m| !m.fts.is_empty())
+        && query_text.chars().count() >= 3;
+
+    if use_fts {
+        let cid = meta.unwrap().cid;
+        let tbl = fts_table(cid);
+        // trigram 부분일치 — 따옴표 구문(내부 따옴표는 이중화).
+        let m = format!("\"{}\"", query_text.replace('"', "\"\""));
+        let mut params: Vec<Box<dyn ToSql>> =
+            vec![Box::new(m), Box::new(ns.to_string()), Box::new(coll.to_string())];
+        let mut sql = format!(
+            "SELECT r.doc FROM {tbl} f JOIN records r ON r.rowid=f.rowid \
+             WHERE f.text MATCH ?1 AND r.ns=?2 AND r.coll=?3"
+        );
+        if let Some(s) = scope {
+            sql.push_str(" AND r.scope=?4");
+            params.push(Box::new(s.to_string()));
+        }
+        sql.push_str(&format!(" ORDER BY r.updated DESC LIMIT {lim}"));
+        let refs: Vec<&dyn ToSql> = params.iter().map(|b| b.as_ref()).collect();
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(refs.as_slice(), |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(serde_json::from_str(&row.map_err(|e| e.to_string())?).map_err(|e: serde_json::Error| e.to_string())?);
+        }
+        Ok(out)
+    } else {
+        // 폴백 — doc 전체 LIKE(짧은 쿼리·FTS 미선언 컬렉션). scope 로 좁힘.
+        let like = format!("%{}%", query_text);
+        let mut params: Vec<Box<dyn ToSql>> =
+            vec![Box::new(ns.to_string()), Box::new(coll.to_string()), Box::new(like)];
+        let mut sql =
+            String::from("SELECT doc FROM records WHERE ns=?1 AND coll=?2 AND doc LIKE ?3");
+        if let Some(s) = scope {
+            sql.push_str(" AND scope=?4");
+            params.push(Box::new(s.to_string()));
+        }
+        sql.push_str(&format!(" ORDER BY updated DESC LIMIT {lim}"));
+        let refs: Vec<&dyn ToSql> = params.iter().map(|b| b.as_ref()).collect();
+        let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(refs.as_slice(), |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(serde_json::from_str(&row.map_err(|e| e.to_string())?).map_err(|e: serde_json::Error| e.to_string())?);
+        }
+        Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn mem() -> Connection {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        super::super::init_base(&conn).unwrap();
+        conn
+    }
+
+    #[test]
+    fn kv_roundtrip() {
+        let c = mem();
+        assert_eq!(kv_get(&c, "mailbox", "x").unwrap(), None);
+        kv_set(&c, "mailbox", "x", &json!({"a":1})).unwrap();
+        assert_eq!(kv_get(&c, "mailbox", "x").unwrap(), Some(json!({"a":1})));
+        // 네임스페이스 격리.
+        assert_eq!(kv_get(&c, "other", "x").unwrap(), None);
+        assert!(kv_delete(&c, "mailbox", "x").unwrap());
+        assert_eq!(kv_get(&c, "mailbox", "x").unwrap(), None);
+    }
+
+    #[test]
+    fn records_crud_and_scope() {
+        let c = mem();
+        define(&c, "mailbox", "messages", &["read".into(), "type".into()], &["title".into(), "body".into()]).unwrap();
+        let id1 = put(&c, "mailbox", "messages", "projA", None, &json!({"title":"빌드 완료","body":"성공","read":false,"type":"push"})).unwrap();
+        let _id2 = put(&c, "mailbox", "messages", "projB", None, &json!({"title":"테스트","body":"중문 测试","read":true,"type":"info"})).unwrap();
+
+        // get + canonical id 주입.
+        let got = get(&c, "mailbox", "messages", &id1, Some("projA")).unwrap().unwrap();
+        assert_eq!(got.get("id").unwrap().as_str().unwrap(), id1);
+        assert_eq!(got.get("title").unwrap(), "빌드 완료");
+
+        // scope 파티션 — projA 조회는 projB 안 섞임.
+        let qa = query(&c, "mailbox", "messages", Some("projA"), None, None, true, None, None).unwrap();
+        assert_eq!(qa.len(), 1);
+        // where: read=false.
+        let unread = query(&c, "mailbox", "messages", None, Some(&json!({"read":false})), None, true, None, None).unwrap();
+        assert_eq!(unread.len(), 1);
+        // count.
+        assert_eq!(count(&c, "mailbox", "messages", None, None).unwrap(), 2);
+
+        // 네임스페이스 격리 — 다른 ns 의 같은 컬렉션은 빈 결과.
+        assert_eq!(count(&c, "other", "messages", None, None).unwrap(), 0);
+    }
+
+    #[test]
+    fn cjk_trigram_search() {
+        let c = mem();
+        define(&c, "mailbox", "messages", &[], &["title".into(), "body".into()]).unwrap();
+        put(&c, "mailbox", "messages", "p", None, &json!({"title":"한글 테스트 메시지","body":"내용"})).unwrap();
+        put(&c, "mailbox", "messages", "p", None, &json!({"title":"中文测试","body":"日本語テスト"})).unwrap();
+
+        // 한글 부분일치(≥3).
+        let r = search(&c, "mailbox", "messages", "테스트", None, None).unwrap();
+        assert_eq!(r.len(), 1, "한글 trigram");
+        // 중문.
+        let r2 = search(&c, "mailbox", "messages", "测试", None, None).unwrap();
+        assert_eq!(r2.len(), 1, "중문 — 2자라 LIKE 폴백");
+        // 일본어 부분.
+        let r3 = search(&c, "mailbox", "messages", "本語テ", None, None).unwrap();
+        assert_eq!(r3.len(), 1, "일본어 trigram");
+        // 없음.
+        let r4 = search(&c, "mailbox", "messages", "존재안함", None, None).unwrap();
+        assert_eq!(r4.len(), 0);
+    }
+
+    #[test]
+    fn update_and_delete_sync_fts() {
+        let c = mem();
+        define(&c, "mailbox", "messages", &[], &["title".into()]).unwrap();
+        let id = put(&c, "mailbox", "messages", "p", None, &json!({"title":"옛제목입니다"})).unwrap();
+        assert_eq!(search(&c, "mailbox", "messages", "옛제목", None, None).unwrap().len(), 1);
+        // 갱신 → 옛 텍스트는 더이상 검색 안 됨.
+        put(&c, "mailbox", "messages", "p", Some(id.clone()), &json!({"title":"새제목입니다"})).unwrap();
+        assert_eq!(search(&c, "mailbox", "messages", "옛제목", None, None).unwrap().len(), 0);
+        assert_eq!(search(&c, "mailbox", "messages", "새제목", None, None).unwrap().len(), 1);
+        // 삭제 → FTS 도 정리.
+        assert!(delete(&c, "mailbox", "messages", &id, None).unwrap());
+        assert_eq!(search(&c, "mailbox", "messages", "새제목", None, None).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn where_builder_rejects_undeclared_and_unknown_op() {
+        let c = mem();
+        define(&c, "mailbox", "messages", &["read".into()], &[]).unwrap();
+        put(&c, "mailbox", "messages", "p", None, &json!({"read":false,"secret":"x"})).unwrap();
+        // 선언 안 된 필드 거부.
+        assert!(query(&c, "mailbox", "messages", None, Some(&json!({"secret":"x"})), None, true, None, None).is_err());
+        // 알 수 없는 연산자 거부.
+        assert!(query(&c, "mailbox", "messages", None, Some(&json!({"read":{"op":"xx","value":1}})), None, true, None, None).is_err());
+        // injection 문자열은 리터럴(매칭 0, 에러 아님).
+        let r = query(&c, "mailbox", "messages", None, Some(&json!({"read":"false' OR '1'='1"})), None, true, None, None).unwrap();
+        assert_eq!(r.len(), 0);
+    }
+
+    #[test]
+    fn define_idempotent() {
+        let c = mem();
+        define(&c, "mailbox", "messages", &["read".into()], &["title".into()]).unwrap();
+        // 재호출 — 에러 없이 통과(CREATE ... IF NOT EXISTS).
+        define(&c, "mailbox", "messages", &["read".into(), "type".into()], &["title".into()]).unwrap();
+        put(&c, "mailbox", "messages", "p", None, &json!({"read":true,"type":"x","title":"제목제목"})).unwrap();
+        assert_eq!(search(&c, "mailbox", "messages", "제목제목", None, None).unwrap().len(), 1);
+    }
+}

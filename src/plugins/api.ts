@@ -76,6 +76,18 @@ export interface PluginApiDeps {
   setFileText: (viewId: string, text: string) => boolean;
   // 코어 fs watcher(fs-change) 구독 — 변경된 부모 디렉토리 문자열을 콜백. 반환=해지.
   onFsChange: (cb: (dir: string) => void) => () => void;
+  // 코어 데이터 스토어 변경(data-change) 구독 — Rust 싱글톤이 전 창 브로드캐스트(멀티윈도우·같은
+  // 프로젝트 일관). app.data.watch 가 ns/coll/scope 로 필터. 반환=해지. (선례 onFsChange.)
+  onDataChange: (cb: (e: DataChangeEvent) => void) => () => void;
+}
+
+// data-change 페이로드 — Rust commands.rs DataChange 와 동형. coll/scope/id 는 연산에 따라 null.
+export interface DataChangeEvent {
+  ns: string;
+  coll: string | null;
+  scope: string | null;
+  op: string;
+  id: string | null;
 }
 
 // ── 플러그인이 보는 타입 ─────────────────────────────────────────────────────
@@ -145,6 +157,66 @@ export interface SoksakPluginApi {
     read: (key: string) => Promise<unknown>;
     write: (key: string, value: unknown) => Promise<void>;
     list: () => Promise<string[]>;
+  };
+  /** 범용 임베디드 데이터 스토어(코어 SQLite 싱글톤). DB-agnostic — raw SQL 비노출. 네임스페이스는
+   *  이 플러그인 id 로 강제(다른 플러그인 데이터 불가시). scope = 프로젝트 단위 파티션(예: projectId).
+   *  watch = 전 창 변경 구독(폴링 0, 멀티윈도우·같은 프로젝트 일관). "data" 권한 한정. */
+  data?: {
+    kv: {
+      get: (key: string) => Promise<unknown>;
+      set: (key: string, value: unknown) => Promise<void>;
+      delete: (key: string) => Promise<boolean>;
+      keys: (prefix?: string) => Promise<string[]>;
+    };
+    /** 컬렉션 정의(멱등) — indexes=구조 질의 필드, fts=CJK 전문검색 필드. */
+    define: (
+      collection: string,
+      opts: { indexes?: string[]; fts?: string[] },
+    ) => Promise<void>;
+    /** 레코드 upsert. id 미지정 시 생성·반환. doc 에 canonical id 주입됨. */
+    put: (
+      collection: string,
+      doc: Record<string, unknown>,
+      opts?: { scope?: string; id?: string },
+    ) => Promise<string>;
+    get: (
+      collection: string,
+      id: string,
+      opts?: { scope?: string },
+    ) => Promise<unknown>;
+    delete: (
+      collection: string,
+      id: string,
+      opts?: { scope?: string },
+    ) => Promise<boolean>;
+    /** 구조 질의 — where 필드는 define 의 indexes 로 선언돼야 함(또는 created/updated). */
+    query: (
+      collection: string,
+      opts?: {
+        scope?: string;
+        where?: Record<string, unknown>;
+        order?: string;
+        desc?: boolean;
+        limit?: number;
+        offset?: number;
+      },
+    ) => Promise<unknown[]>;
+    /** CJK 전문검색(FTS5 trigram). 쿼리 <3 코드포인트는 LIKE 폴백. */
+    search: (
+      collection: string,
+      text: string,
+      opts?: { scope?: string; limit?: number },
+    ) => Promise<unknown[]>;
+    count: (
+      collection: string,
+      opts?: { scope?: string; where?: Record<string, unknown> },
+    ) => Promise<number>;
+    /** 변경 구독 — 이 ns·coll(+scope 지정 시 그 scope)의 put/delete 시 콜백(전 창). 반환=해지. */
+    watch: (
+      collection: string,
+      opts: { scope?: string } | undefined,
+      cb: (e: DataChangeEvent) => void,
+    ) => Disposable;
   };
   fs?: {
     /** 텍스트 읽기. offset(바이트) 지정 시 그 지점부터 끝까지만 — 증가 로그의 증분 tail.
@@ -616,6 +688,91 @@ export function buildPluginApi(
           },
           list: async () =>
             (await deps.invoke("plugin_data_list", { id })) as string[],
+        }
+      : undefined,
+
+    // 범용 데이터 스토어 — ns 는 항상 이 플러그인 id 로 주입(storage 와 동일 격리 원칙). 모든 호출은
+    // Rust DbState(단일 진실)로 forward. watch 는 전 창 data-change 를 ns/coll/scope 로 필터.
+    data: has("data")
+      ? {
+          kv: {
+            get: (key) => deps.invoke("data_kv_get", { ns: id, key }),
+            set: async (key, value) => {
+              await deps.invoke("data_kv_set", { ns: id, key, value });
+            },
+            delete: (key) =>
+              deps.invoke("data_kv_delete", { ns: id, key }) as Promise<boolean>,
+            keys: (prefix) =>
+              deps.invoke("data_kv_keys", { ns: id, prefix: prefix ?? null }) as Promise<
+                string[]
+              >,
+          },
+          define: async (collection, opts) => {
+            await deps.invoke("data_define", {
+              ns: id,
+              coll: collection,
+              indexes: opts.indexes ?? [],
+              fts: opts.fts ?? [],
+            });
+          },
+          put: (collection, doc, opts) =>
+            deps.invoke("data_put", {
+              ns: id,
+              coll: collection,
+              scope: opts?.scope ?? null,
+              id: opts?.id ?? null,
+              doc,
+            }) as Promise<string>,
+          get: (collection, recordId, opts) =>
+            deps.invoke("data_get", {
+              ns: id,
+              coll: collection,
+              id: recordId,
+              scope: opts?.scope ?? null,
+            }),
+          delete: (collection, recordId, opts) =>
+            deps.invoke("data_delete", {
+              ns: id,
+              coll: collection,
+              id: recordId,
+              scope: opts?.scope ?? null,
+            }) as Promise<boolean>,
+          query: (collection, opts) =>
+            deps.invoke("data_query", {
+              ns: id,
+              coll: collection,
+              scope: opts?.scope ?? null,
+              filter: opts?.where ?? null,
+              order: opts?.order ?? null,
+              desc: opts?.desc ?? null,
+              limit: opts?.limit ?? null,
+              offset: opts?.offset ?? null,
+            }) as Promise<unknown[]>,
+          search: (collection, text, opts) =>
+            deps.invoke("data_search", {
+              ns: id,
+              coll: collection,
+              query: text,
+              scope: opts?.scope ?? null,
+              limit: opts?.limit ?? null,
+            }) as Promise<unknown[]>,
+          count: (collection, opts) =>
+            deps.invoke("data_count", {
+              ns: id,
+              coll: collection,
+              scope: opts?.scope ?? null,
+              filter: opts?.where ?? null,
+            }) as Promise<number>,
+          watch: (collection, opts, cb) => {
+            const un = deps.onDataChange((e) => {
+              if (e.ns !== id || e.coll !== collection) return;
+              if (opts?.scope != null && e.scope != null && e.scope !== opts.scope) {
+                return;
+              }
+              cb(e);
+            });
+            return tracker.wrap(un);
+          },
         }
       : undefined,
 

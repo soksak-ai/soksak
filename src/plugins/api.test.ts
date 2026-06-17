@@ -40,6 +40,7 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
     activeFile: () => null,
     setFileText: () => false,
     onFsChange: () => () => {},
+    onDataChange: () => () => {},
     ...overrides,
   };
 }
@@ -302,6 +303,56 @@ describe("storage — JSON 왕복 + 전용 명령 위임", () => {
       d,
     );
     expect(await api.storage!.read("missing")).toBeNull();
+  });
+});
+
+describe("data — 권한 게이트 + ns 강제 주입 + watch 필터(크로스윈도우)", () => {
+  it('"data" 미선언 시 표면 undefined', () => {
+    const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
+    expect(api.data).toBeUndefined();
+  });
+
+  it("모든 호출에 ns=manifest.id 를 주입(다른 ns 지정 불가)", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const d = fakeDeps({
+      invoke: vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
+        calls.push({ cmd, ...args });
+        if (cmd === "data_put") return "rec1";
+        return null;
+      }),
+    });
+    const { api } = buildPluginApi(manifestOf({ permissions: ["data"] }), "/d", d);
+    const id = await api.data!.put("messages", { title: "안녕" }, { scope: "projA" });
+    expect(id).toBe("rec1");
+    expect(calls[0]).toEqual({
+      cmd: "data_put",
+      ns: "demo",
+      coll: "messages",
+      scope: "projA",
+      id: null,
+      doc: { title: "안녕" },
+    });
+  });
+
+  it("watch 는 ns·coll·scope 일치만 콜백(나머지 무시)", () => {
+    let emit: ((e: unknown) => void) | null = null;
+    const d = fakeDeps({
+      onDataChange: (cb) => {
+        emit = cb as (e: unknown) => void;
+        return () => {};
+      },
+    });
+    const { api } = buildPluginApi(manifestOf({ permissions: ["data"] }), "/d", d);
+    const seen: string[] = [];
+    api.data!.watch("messages", { scope: "projA" }, (e) => seen.push(e.id ?? ""));
+
+    const ev = (o: Record<string, unknown>) => ({ ns: "demo", coll: "messages", scope: "projA", op: "put", id: "x", ...o });
+    emit!(ev({})); // 일치
+    emit!(ev({ ns: "other" })); // 다른 ns
+    emit!(ev({ coll: "logs" })); // 다른 coll
+    emit!(ev({ scope: "projB" })); // 다른 scope
+    emit!(ev({ id: "y" })); // 일치(다른 id)
+    expect(seen).toEqual(["x", "y"]);
   });
 });
 

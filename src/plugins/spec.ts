@@ -58,6 +58,8 @@ export type PluginPermission =
   | "process" // 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합)
   | "editor" // CM6 확장/언어 매핑/포매터 + 활성 버퍼 읽기/쓰기
   | "storage" // 전용 저장소(~/.soksak/plugins-data/<id>/)
+  | "data" // 범용 임베디드 DB(app.data — 네임스페이스 격리·CJK 검색·전 창 watch)
+  | "notify" // OS 알림(푸시)+인앱 배너·소리·딥링크(알림 = 푸시 동급 1급 객체)
   | "fs:read" // 임의 경로 파일 읽기
   | "fs:write" // 임의 경로 파일 쓰기
   | "terminal" // 터미널 명령 생명주기 관찰(command.started/finished — 명령라인·cwd)
@@ -78,6 +80,8 @@ export const PERMISSIONS: readonly PluginPermission[] = [
   "process",
   "editor",
   "storage",
+  "data",
+  "notify",
   "fs:read",
   "fs:write",
   "terminal",
@@ -145,6 +149,17 @@ export const PERMISSION_INFO: Record<
   storage: {
     label: "전용 저장소",
     detail: "이 플러그인 전용 폴더(~/.soksak/plugins-data)에 데이터를 저장합니다.",
+  },
+  data: {
+    label: "데이터베이스",
+    detail:
+      "공용 임베디드 DB(SQLite)의 이 플러그인 전용 네임스페이스에 레코드를 저장·검색합니다(CJK 전문검색 포함). 다른 플러그인 데이터에는 접근하지 못합니다.",
+  },
+  notify: {
+    label: "알림·푸시",
+    detail:
+      "OS 알림(앱이 비활성일 때 모바일식 푸시)과 인앱 배너를 띄우고 소리를 재생합니다. 알림 클릭 시 앱 내 위치로 이동(딥링크)합니다.",
+    caution: true,
   },
   "fs:read": {
     label: "파일 읽기",

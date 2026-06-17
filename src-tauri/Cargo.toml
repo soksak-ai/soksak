@@ -36,6 +36,13 @@ tauri-plugin-webview-capture = { path = "../../tauri-plugin-webview-capture" }
 # 파일 트리 라이브 갱신용 파일시스템 워처(macOS=FSEvents, Linux=inotify, Win=ReadDirectoryChangesW).
 # 폴링 없이 OS 네이티브 이벤트. debouncer-mini 로 변경 폭주를 묶는다.
 notify-debouncer-mini = "0.6"
+# 범용 임베디드 데이터 스토어(app.data) — 인프로세스 SQLite. bundled = SQLite amalgamation 동봉
+# (FTS5 trigram = CJK 부분일치, JSON1). 별도 서버/포트 없음(멱등 부팅), 단일 .db 파일(VACUUM INTO 백업).
+rusqlite = { version = "0.32", features = ["bundled"] }
+# 알림 = 푸시 동급 1급 객체: OS 알림(비포커스 시 모바일식 푸시).
+tauri-plugin-notification = "2"
+# 딥링크 soksak:// URL 스킴 — 알림/외부 진입을 command URI 로 라우팅(콜드스타트 포함).
+tauri-plugin-deep-link = "2"
 
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.

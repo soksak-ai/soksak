@@ -12,7 +12,7 @@ import {
 import { allGroups, useSessions } from "../state/sessions";
 import { getFileView } from "../commands/fileViewBridge";
 import { onPluginEvent } from "./hooks";
-import type { PluginApiDeps } from "./api";
+import type { DataChangeEvent, PluginApiDeps } from "./api";
 
 // 활성 체인(활성 프로젝트 → 활성 컨텐츠 → 활성 그룹 → 활성 뷰)의 파일 뷰.
 function activeFile(): { viewId: string; path: string; text: string } | null {
@@ -56,6 +56,20 @@ export function defaultPluginDeps(appVersion: string): PluginApiDeps {
       let un = () => {};
       let disposed = false;
       void listen<string>("fs-change", (e) => cb(e.payload)).then((u) => {
+        if (disposed) u();
+        else un = u;
+      });
+      return () => {
+        disposed = true;
+        un();
+      };
+    },
+    // data-change(Rust DbState 변경) 전 창 구독 — app.data.watch 의 크로스윈도우 채널.
+    // 전역 listen(@tauri-apps/api/event)이라 어느 창의 변경이든 모든 창이 받는다(같은 프로젝트 일관).
+    onDataChange: (cb) => {
+      let un = () => {};
+      let disposed = false;
+      void listen<DataChangeEvent>("data-change", (e) => cb(e.payload)).then((u) => {
         if (disposed) u();
         else un = u;
       });

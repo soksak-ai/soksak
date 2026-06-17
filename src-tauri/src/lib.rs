@@ -1,4 +1,5 @@
 mod browser;
+mod data;
 #[cfg(target_os = "macos")]
 mod dockmenu;
 mod fs;
@@ -68,11 +69,19 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_webview_capture::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_deep_link::init())
         .manage(PtyManager::default())
         .manage(ProcessManager::default())
         .manage(FsWatcher::default())
         .manage(CmdBridge::default())
+        .manage(data::DbState::default())
         .setup(|app| {
+            // 범용 데이터 스토어(app.data) — 소켓 서버 이전에 연다(커맨드가 즉시 쓸 수 있도록).
+            match data::db_path().and_then(|p| data::open(&p)) {
+                Ok(conn) => app.state::<data::DbState>().set(conn),
+                Err(e) => eprintln!("[data] DB 열기 실패: {e}"),
+            }
             // 파일 워처 1회 초기화(이벤트 콜백에 앱 핸들 주입).
             let handle = app.handle().clone();
             app.state::<FsWatcher>().init(handle);
@@ -161,6 +170,21 @@ pub fn run() {
             plugins::plugin_data_read,
             plugins::plugin_data_write,
             plugins::plugin_data_list,
+            data::commands::data_kv_get,
+            data::commands::data_kv_set,
+            data::commands::data_kv_delete,
+            data::commands::data_kv_keys,
+            data::commands::data_define,
+            data::commands::data_put,
+            data::commands::data_get,
+            data::commands::data_delete,
+            data::commands::data_query,
+            data::commands::data_search,
+            data::commands::data_count,
+            data::commands::data_backup,
+            data::commands::data_restore,
+            data::commands::data_export,
+            data::commands::data_import,
             git::git_log,
             git::git_init_if_missing,
             git::git_show,
