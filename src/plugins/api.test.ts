@@ -356,6 +356,17 @@ describe("data — 권한 게이트 + ns 강제 주입 + watch 필터(크로스�
   });
 });
 
+describe("notify/sound — 권한 게이트", () => {
+  it('"notify" 미선언 시 undefined, 선언 시 push/sound 표면', () => {
+    const off = buildPluginApi(manifestOf({}), "/d", fakeDeps());
+    expect(off.api.notify).toBeUndefined();
+    expect(off.api.sound).toBeUndefined();
+    const on = buildPluginApi(manifestOf({ permissions: ["notify"] }), "/d", fakeDeps());
+    expect(typeof on.api.notify?.push).toBe("function");
+    expect(on.api.sound?.builtins()).toContain("chime");
+  });
+});
+
 describe("git — path 기본값(활성 프로젝트 루트)", () => {
   it("path 생략 시 현재 프로젝트 루트, 루트 없으면 reject", async () => {
     const d = fakeDeps({ invoke: vi.fn(async () => []) });

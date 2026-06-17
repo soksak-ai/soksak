@@ -6,6 +6,7 @@ import { memo, useEffect, useMemo, useRef } from "react";
 import type { TreeThemeInput } from "@pierre/trees";
 import { FileTreeSidebar } from "./FileTreeSidebar";
 import { PluginViewHost } from "./PluginViewHost";
+import { ViewBadge } from "./ViewBadge";
 import {
   useViewRegistry,
   viewsForPlacement,
@@ -77,6 +78,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
               onClick={() => setLeftTab(project.id, key)}
             >
               {view.decl.icon} {localize(view.decl.title)}
+              <ViewBadge viewKey={key} />
             </button>
           ))}
         </div>

@@ -15,7 +15,7 @@ function decl(id: string, placements: ContributedView["placements"]): Contribute
 }
 
 beforeEach(() => {
-  useViewRegistry.setState({ views: {}, version: 0 });
+  useViewRegistry.setState({ views: {}, version: 0, badges: {} });
 });
 
 describe("viewRegistry", () => {
@@ -42,6 +42,27 @@ describe("viewRegistry", () => {
     const v = useViewRegistry.getState().version;
     remove(); // 두 번째 해제 — 변화 없음
     expect(useViewRegistry.getState().version).toBe(v);
+  });
+
+  it("setViewBadge — 설정/해제, 0 정규화, version 미증가(뷰 remount 방지), 뷰 해제 시 배지 정리", () => {
+    const st = useViewRegistry.getState();
+    const remove = st.register("memo", decl("panel", ["sidebar-right"]), provider);
+    const v = useViewRegistry.getState().version;
+
+    st.setViewBadge("memo.panel", 3);
+    expect(useViewRegistry.getState().badges["memo.panel"]).toBe(3);
+    // 배지 변경은 version 을 올리지 않는다(뷰 remount 방지).
+    expect(useViewRegistry.getState().version).toBe(v);
+
+    st.setViewBadge("memo.panel", "dot");
+    expect(useViewRegistry.getState().badges["memo.panel"]).toBe("dot");
+    // 0 = 없음으로 정규화(키 제거).
+    st.setViewBadge("memo.panel", 0);
+    expect(useViewRegistry.getState().badges["memo.panel"]).toBeUndefined();
+
+    st.setViewBadge("memo.panel", 5);
+    remove(); // 뷰 해제 → 배지도 정리.
+    expect(useViewRegistry.getState().badges["memo.panel"]).toBeUndefined();
   });
 
   it("viewsForPlacement 는 선언 배치로 필터", () => {

@@ -29,6 +29,8 @@ import {
   registerStatusBarItem,
   type StatusBarItem,
 } from "../ui/statusBarItems";
+import { pushNotification, type NotificationInput } from "../lib/notify";
+import { playSound, BUILTIN_SOUNDS } from "../ui/sound";
 import {
   runningCommands,
   sendInputToHost,
@@ -130,6 +132,9 @@ export interface SoksakPluginApi {
     /** paneId 연관 상태바 아이템 등록/갱신(같은 id 면 교체 — active 토글에 재호출).
      *  그 pane 이 활성 터미널인 그룹의 상태바에 표시된다. 반환 = 해지. */
     statusBarItem: (item: StatusBarItem) => Disposable;
+    /** 이 플러그인 뷰의 사이드바 탭 배지(읽지않음 표시). number=카운트, "dot"=점, null=해제.
+     *  뷰 안에서는 mount ctx.setBadge 가 편하고, 이건 뷰 밖에서 갱신할 때. per-window. */
+    setViewBadge: (viewId: string, badge: number | "dot" | null) => void;
   };
   editor?: {
     // 호스트의 @codemirror 모듈(§0-7 — 플러그인 자체 번들 금지).
@@ -217,6 +222,16 @@ export interface SoksakPluginApi {
       opts: { scope?: string } | undefined,
       cb: (e: DataChangeEvent) => void,
     ) => Disposable;
+  };
+  /** 알림 = 푸시 동급 1급 객체(리치 페이로드). 포커스 시 인앱 배너·비포커스 시 OS 알림(동일 페이로드).
+   *  클릭/액션 시 deepLink(soksak://cmd/...) 로 활성화(권한·danger 게이트 유지). "notify" 권한. */
+  notify?: {
+    push: (n: NotificationInput) => Promise<void>;
+  };
+  /** 알림 소리(순수 Web Audio). 내장음(default/ping/chime/success/alert) 또는 URL/asset 경로. */
+  sound?: {
+    play: (sound: string) => Promise<void>;
+    builtins: () => string[];
   };
   fs?: {
     /** 텍스트 읽기. offset(바이트) 지정 시 그 지점부터 끝까지만 — 증가 로그의 증분 tail.
@@ -632,6 +647,10 @@ export function buildPluginApi(
               registerStatusBarItem({ ...item, id: `${id}:${item.id}` }),
             );
           },
+          setViewBadge: (viewId, badge) =>
+            useViewRegistry
+              .getState()
+              .setViewBadge(qualifiedViewId(id, viewId), badge),
         }
       : undefined,
 
@@ -773,6 +792,19 @@ export function buildPluginApi(
             });
             return tracker.wrap(un);
           },
+        }
+      : undefined,
+
+    // 알림(=푸시) + 소리. 시스템 알림은 "notify" 권한 게이트(동의 화면 고지). 소리는 같은 capability.
+    notify: has("notify")
+      ? {
+          push: (n) => pushNotification(n),
+        }
+      : undefined,
+    sound: has("notify")
+      ? {
+          play: (s) => playSound(s),
+          builtins: () => [...BUILTIN_SOUNDS],
         }
       : undefined,
 

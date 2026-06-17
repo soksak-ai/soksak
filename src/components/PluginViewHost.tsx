@@ -32,7 +32,13 @@ export const PluginViewHost = memo(function PluginViewHost({
     if (!el || !reg) return;
     setError(null);
     try {
-      reg.provider.mount(el, { projectId, root });
+      reg.provider.mount(el, {
+        projectId,
+        root,
+        // 이 창의 그 뷰 탭 배지(per-window — 창마다 자체 store). 데이터 변경 시 플러그인이 재계산.
+        setBadge: (badge) =>
+          useViewRegistry.getState().setViewBadge(viewKey, badge),
+      });
     } catch (e) {
       console.error(`플러그인 뷰 mount 실패(${viewKey}):`, e);
       setError(String(e));

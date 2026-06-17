@@ -3,6 +3,7 @@ import App from "./App";
 import { startExecutor } from "./commands/executor";
 import { startBrowserGc } from "./lib/browserGc";
 import { initPluginHost } from "./plugins/host";
+import { initNotify } from "./lib/notify";
 import { ensureDefaultWorkspace, validateProjectRoot } from "./lib/workspace";
 import { paneSpawnInfo, useSessions } from "./state/sessions";
 import { useSettings } from "./state/settings";
@@ -33,6 +34,12 @@ async function boot(): Promise<void> {
     await initPluginHost();
   } catch (e) {
     console.error("플러그인 호스트 초기화 실패:", e);
+  }
+  // 알림 클릭(OS)·외부/콜드스타트 딥링크 라우팅 — command 레지스트리+플러그인 준비 후 1회.
+  try {
+    await initNotify();
+  } catch (e) {
+    console.error("알림/딥링크 초기화 실패:", e);
   }
   try {
     // 사용자가 지정한 기본 프로젝트(설정 영속)가 있으면 그 루트로 시작 —

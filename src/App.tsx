@@ -24,6 +24,7 @@ import { Icon } from "./ui/icons/Icon";
 import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConsentPreviewHost } from "./components/ConsentPreviewHost";
+import { NotifyHost } from "./ui/NotifyHost";
 import { useUi } from "./state/ui";
 import { useT } from "./i18n";
 import {
@@ -816,6 +817,8 @@ function App() {
           ))}
         </div>
       </div>
+      {/* 인앱 알림 배너(포커스 시) — 앱 루트 최상단 오버레이. */}
+      <NotifyHost />
     </div>
   );
 }

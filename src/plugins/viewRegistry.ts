@@ -8,7 +8,12 @@ import { qualifiedViewId, type ContributedView } from "./spec";
 export interface PluginViewContext {
   projectId: string;
   root: string | null;
+  // 이 뷰의 사이드바 탭 배지(읽지않음 표시). number=카운트, "dot"=점, null=해제.
+  // 창마다 자체 store라 per-window(그 창의 활성 프로젝트 기준). 데이터는 app.data.watch 로 재계산.
+  setBadge: (badge: number | "dot" | null) => void;
 }
+
+export type ViewBadge = number | "dot" | null;
 
 // 플러그인이 구현하는 뷰. React 비요구 — 컨테이너 DOM 에 직접 그린다.
 export interface PluginViewProvider {
@@ -25,16 +30,20 @@ export interface RegisteredView {
 interface ViewRegistryState {
   views: Record<string, RegisteredView>; // key = "<pluginId>.<viewId>"
   version: number; // 등록/해제마다 증가 — 소비자(UI) 재구성 신호
+  // 뷰별 배지(읽지않음 표시). version 과 분리 — 배지 변경이 뷰를 remount 시키지 않도록(독립 구독).
+  badges: Record<string, ViewBadge>;
   register: (
     pluginId: string,
     decl: ContributedView,
     provider: PluginViewProvider,
   ) => () => void;
+  setViewBadge: (key: string, badge: ViewBadge) => void;
 }
 
 export const useViewRegistry = create<ViewRegistryState>((set, get) => ({
   views: {},
   version: 0,
+  badges: {},
 
   register: (pluginId, decl, provider) => {
     const key = qualifiedViewId(pluginId, decl.id);
@@ -51,10 +60,24 @@ export const useViewRegistry = create<ViewRegistryState>((set, get) => ({
         if (!s.views[key]) return s; // 이미 해제됨 — 멱등
         const views = { ...s.views };
         delete views[key];
-        return { views, version: s.version + 1 };
+        const badges = { ...s.badges };
+        delete badges[key]; // 뷰 해제 시 배지도 정리
+        return { views, badges, version: s.version + 1 };
       });
     };
   },
+
+  // 배지 설정 — version 미증가(뷰 remount 방지). 동일값이면 no-op(불필요 렌더 차단).
+  setViewBadge: (key, badge) =>
+    set((s) => {
+      const cur = s.badges[key] ?? null;
+      const next = badge === 0 ? null : badge; // 0 = 없음으로 정규화
+      if (cur === next) return s;
+      const badges = { ...s.badges };
+      if (next == null) delete badges[key];
+      else badges[key] = next;
+      return { badges };
+    }),
 }));
 
 // 배치별 뷰 목록(아이콘 레일/탭 스트립용) — 등록 순서 유지.

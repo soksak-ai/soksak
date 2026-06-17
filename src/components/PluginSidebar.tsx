@@ -17,6 +17,7 @@ import { installState, type RegistryEntry } from "../plugins/registry";
 import { useSessions, type ProjectTab } from "../state/sessions";
 import { useUi } from "../state/ui";
 import { PluginViewHost } from "./PluginViewHost";
+import { ViewBadge } from "./ViewBadge";
 import { PluginConsentModal } from "./PluginConsentModal";
 import { localize, useT } from "../i18n";
 
@@ -76,6 +77,7 @@ export const PluginSidebar = memo(function PluginSidebar({
           >
             {/* 플러그인 아이콘 = 매니페스트 선언 문자열(외부 계약) — 그대로 표시 */}
             {view.decl.icon}
+            <ViewBadge viewKey={key} />
           </button>
         ))}
         <div className="plugin-rail-spacer" />
