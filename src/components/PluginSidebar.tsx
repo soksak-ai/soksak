@@ -197,7 +197,7 @@ function RegistrySection({
               <div className="plugin-row-desc">{localize(e.description)}</div>
               <div className="plugin-row-actions">
                 {st === "available" && (
-                  <button type="button" className="dbtn" disabled={busy} onClick={() => doInstall(e)}>
+                  <button type="button" className="dbtn dbtn-acc" disabled={busy} onClick={() => doInstall(e)}>
                     {t("plugin.install")}
                   </button>
                 )}
