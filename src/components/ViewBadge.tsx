@@ -6,10 +6,10 @@ import { useViewRegistry } from "../plugins/viewRegistry";
 export function ViewBadge({ viewKey }: { viewKey: string }) {
   const badge = useViewRegistry((s) => s.badges[viewKey]);
   if (badge == null) return null;
-  if (badge === "dot") return <span className="plugin-badge plugin-badge-dot" />;
+  if (badge === "dot") return <span className="view-badge view-badge-dot" />;
   if (badge <= 0) return null;
   return (
-    <span className="plugin-badge plugin-badge-count">
+    <span className="view-badge view-badge-count">
       {badge > 99 ? "99+" : badge}
     </span>
   );

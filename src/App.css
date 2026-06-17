@@ -2619,8 +2619,10 @@ select.dctl {
   padding: 0;
 }
 
-/* 사이드바 탭 배지(읽지않음). 레일(아이콘)=우상단 절대배치, 좌측 탭=인라인 핀. */
-.plugin-badge {
+/* 사이드바 탭 읽지않음 배지(view-badge). 매니저 칩(.plugin-badge — 출처/상태 칩)과 다른 클래스로
+   분리(이전엔 같은 .plugin-badge 를 재사용해 매니저 칩 배경을 덮어쓰던 충돌이 있었음).
+   레일(아이콘)=우상단 절대배치, 좌측 탭=인라인 핀. 배경=강조색(테마 토큰). */
+.view-badge {
   box-sizing: border-box;
   background: var(--acc);
   color: #fff; /* 강조색 위 텍스트(보더 아님 — B4 무관) */
@@ -2629,7 +2631,7 @@ select.dctl {
   line-height: 1;
   border-radius: 999px;
 }
-.plugin-badge-count {
+.view-badge-count {
   min-width: 15px;
   height: 15px;
   padding: 0 4px;
@@ -2637,24 +2639,24 @@ select.dctl {
   align-items: center;
   justify-content: center;
 }
-.plugin-badge-dot {
+.view-badge-dot {
   width: 8px;
   height: 8px;
   display: inline-block;
 }
-.plugin-rail-btn .plugin-badge-count {
+.plugin-rail-btn .view-badge-count {
   position: absolute;
   top: -3px;
   right: -3px;
   /* 배경색 링(아이콘과 분리) — box-shadow 사용(보더 직색 금지 §B4 회피). */
   box-shadow: 0 0 0 1.5px var(--bg2);
 }
-.plugin-rail-btn .plugin-badge-dot {
+.plugin-rail-btn .view-badge-dot {
   position: absolute;
   top: 1px;
   right: 1px;
 }
-.left-host-tab .plugin-badge {
+.left-host-tab .view-badge {
   margin-left: 4px;
   vertical-align: middle;
 }
