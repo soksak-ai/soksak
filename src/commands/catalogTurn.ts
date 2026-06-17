@@ -22,10 +22,11 @@ export function registerTurnCatalog(): void {
       paneId: { type: "string", description: "관련 pane(선택)" },
       project: { type: "string", description: "프로젝트 id(선택)" },
       root: { type: "string", description: "프로젝트 root(스코프 키 — 구독자가 root 로 스코프)" },
+      command: { type: "string", description: "끝난 작업/명령 설명(본문 enrich, 선택)" },
     },
     returns: "{ emitted }",
     errors: ["INTERNAL"],
-    examples: ['sok turn.signal \'{"source":"acp","root":"/Users/me/proj"}\''],
+    examples: ['sok turn.signal \'{"source":"acp","root":"/Users/me/proj","command":"claude 응답 완료"}\''],
     handler: (p) => {
       emitPluginEvent("turn.ended", {
         projectId: typeof p.project === "string" ? p.project : null,
@@ -33,6 +34,7 @@ export function registerTurnCatalog(): void {
         paneId: typeof p.paneId === "string" ? p.paneId : null,
         source:
           p.source === "shell" || p.source === "idle" ? p.source : "acp",
+        command: typeof p.command === "string" ? p.command : null,
       });
       return { emitted: true };
     },

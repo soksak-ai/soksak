@@ -129,10 +129,13 @@ async function main() {
   section("R5 self-subscribe");
   ok((await m("subscribe", { scope: SCOPE, source: "shell" })).ok, "subscribe(shell)");
   ok((await m("subscriptions", {})).subscriptions.some((s) => s.scope === SCOPE), "subscriptions 에 등재");
-  await rpc("turn.signal", { source: "shell", root: SCOPE });
+  await rpc("turn.signal", { source: "shell", root: SCOPE, command: "git status" });
   await sleep(400);
   const afterTurn = await m("list", { scope: SCOPE });
-  ok(afterTurn.messages.some((x) => x.title.includes("턴 종료")), "turn.signal → '턴 종료' 자동 메시지 생성");
+  const turnMsg = afterTurn.messages.find((x) => x.title.includes("턴 종료"));
+  ok(!!turnMsg, "turn.signal → '턴 종료' 자동 메시지 생성");
+  ok(turnMsg && typeof turnMsg.body === "string" && turnMsg.body.includes("git status"),
+    "자동 메시지 본문 = 끝난 명령(enrich, pane id 아님)");
   ok((await m("unsubscribe", { scope: SCOPE })).ok, "unsubscribe");
   // 디바운스: 구독 해제 후 turn.signal 은 메시지 안 만든다.
   const before = (await m("list", { scope: SCOPE })).messages.length;

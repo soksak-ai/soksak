@@ -68,6 +68,9 @@ export interface PluginEventMap {
     root: string | null;
     paneId: string | null;
     source: "shell" | "idle" | "acp";
+    // 끝난 명령 컨텍스트(shell provider 한정 — 본문 enrich 용). idle/acp 는 없음(undefined).
+    command?: string | null;
+    cwd?: string | null;
   };
 }
 
@@ -297,15 +300,17 @@ export function startPluginHooks(): void {
 
   // 터미널 명령 종료 → 플러그인 이벤트(git 뷰 자동 갱신 등). 이산 이벤트라
   // coalesce 불필요 — 발생 빈도 = 사용자가 명령을 끝내는 빈도.
-  subscribeAnyCommandFinished((paneId) => {
+  subscribeAnyCommandFinished((paneId, commandLine, cwd) => {
     const info = projectInfoOfPane(paneId);
     emitPluginEvent("command.finished", { projectId: info?.id ?? null, paneId });
-    // shell provider: 명령 종료 = turn.ended(source shell). 메일함 등이 구독. root 로 스코프.
+    // shell provider: 명령 종료 = turn.ended(source shell). 끝난 명령라인/cwd 동반(본문 enrich).
     emitPluginEvent("turn.ended", {
       projectId: info?.id ?? null,
       root: info?.root ?? null,
       paneId,
       source: "shell",
+      command: commandLine ?? null,
+      cwd: cwd ?? null,
     });
   });
 

@@ -35,13 +35,15 @@ const cmdSubs = new Map<string, Set<() => void>>();
 // 호스트 터미널이 준비되면 handle.onOutput 을 이 셋으로 브리지한다(폴링 없음).
 const outputSubs = new Map<string, Set<() => void>>();
 
-// 전역 명령 종료 구독자 — 어느 pane 이든 명령이 끝나면 paneId 와 함께 통지.
-// 플러그인 이벤트(command.finished) 중계용(OSC 133/633 탐지 기반, 폴링 없음).
-const anyCmdSubs = new Set<(paneId: string) => void>();
+// 전역 명령 종료 구독자 — 어느 pane 이든 명령이 끝나면 paneId + 끝난 명령라인/cwd 와 함께 통지
+// (삭제 직전 캡처). 플러그인 이벤트(command.finished/turn.ended) 중계용(OSC 133/633, 폴링 없음).
+const anyCmdSubs = new Set<
+  (paneId: string, commandLine?: string | null, cwd?: string | null) => void
+>();
 
-/** 모든 pane 의 명령 종료를 구독(플러그인 이벤트 중계용). 반환=해지. */
+/** 모든 pane 의 명령 종료를 구독. cb 는 끝난 명령라인·cwd 도 받는다(turn.ended 본문 enrich). 반환=해지. */
 export function subscribeAnyCommandFinished(
-  cb: (paneId: string) => void,
+  cb: (paneId: string, commandLine?: string | null, cwd?: string | null) => void,
 ): () => void {
   anyCmdSubs.add(cb);
   return () => {
@@ -184,9 +186,11 @@ export function getHost(paneId: string): HTMLDivElement {
       });
       // 명령 종료 이벤트 브리지(pane 구독 + 전역 구독 — 플러그인 이벤트 중계용).
       handle.onCommandFinished(() => {
+        // 삭제 직전 끝난 명령 캡처 → turn.ended 본문이 "어떤 명령이 끝났는지" 를 담는다.
+        const fin = runningCmds.get(paneId);
         runningCmds.delete(paneId);
         cmdSubs.get(paneId)?.forEach((cb) => cb());
-        anyCmdSubs.forEach((cb) => cb(paneId));
+        anyCmdSubs.forEach((cb) => cb(paneId, fin?.commandLine ?? null, fin?.cwd ?? null));
       });
       // 터미널 출력 변경 브리지(화면 갱신 → paneId 구독 셋 — 플러그인 라이브/검증용).
       handle.onOutput(() => outputSubs.get(paneId)?.forEach((cb) => cb()));
