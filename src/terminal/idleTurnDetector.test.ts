@@ -43,13 +43,13 @@ afterEach(() => vi.useRealTimers());
 
 describe("idleTurnDetector", () => {
   it("기본 OFF — 켜기 전엔 동작 안 함", () => {
-    configureIdleTurnDetector({ emit: () => {}, projectOf: () => null });
+    configureIdleTurnDetector({ emit: () => {}, projectInfoOf: () => null });
     expect(isIdleTurnDetectionOn()).toBe(false);
   });
 
   it("출력 후 N ms 무출력 → turn.ended(idle) 1회", () => {
     const emitted: unknown[] = [];
-    configureIdleTurnDetector({ emit: (p) => emitted.push(p), projectOf: () => "projA" });
+    configureIdleTurnDetector({ emit: (p) => emitted.push(p), projectInfoOf: () => ({ id: "t1", root: "projA" }) });
     setIdleTurnDetection(true, 1000);
     expect(isIdleTurnDetectionOn()).toBe(true);
 
@@ -61,12 +61,12 @@ describe("idleTurnDetector", () => {
     vi.advanceTimersByTime(999);
     expect(emitted).toHaveLength(0);
     vi.advanceTimersByTime(1); // 1000ms 무출력 → 발화
-    expect(emitted).toEqual([{ projectId: "projA", paneId: "pane1", source: "idle" }]);
+    expect(emitted).toEqual([{ projectId: "t1", root: "projA", paneId: "pane1", source: "idle" }]);
   });
 
   it("명령 종료 시 모니터 해제(이후 출력은 무시)", () => {
     const emitted: unknown[] = [];
-    configureIdleTurnDetector({ emit: (p) => emitted.push(p), projectOf: () => null });
+    configureIdleTurnDetector({ emit: (p) => emitted.push(p), projectInfoOf: () => null });
     setIdleTurnDetection(true, 500);
     handlers.start?.("pane1", "x", null);
     handlers.finish?.("pane1"); // 해제
@@ -76,7 +76,7 @@ describe("idleTurnDetector", () => {
   });
 
   it("setIdleTurnDetection(false) 로 정지", () => {
-    configureIdleTurnDetector({ emit: () => {}, projectOf: () => null });
+    configureIdleTurnDetector({ emit: () => {}, projectInfoOf: () => null });
     setIdleTurnDetection(true);
     expect(isIdleTurnDetectionOn()).toBe(true);
     setIdleTurnDetection(false);

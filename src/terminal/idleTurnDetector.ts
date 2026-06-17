@@ -11,22 +11,23 @@ import {
 
 export interface IdleTurnPayload {
   projectId: string | null;
+  root: string | null;
   paneId: string | null;
   source: "idle";
 }
 
 let emitFn: ((p: IdleTurnPayload) => void) | null = null;
-let projectOf: (paneId: string) => string | null = () => null;
+let projectInfoOf: (paneId: string) => { id: string; root: string | null } | null = () => null;
 let idleMs = 2000;
 let active: { dispose: () => void } | null = null;
 
-// 1회 배선(startPluginHooks) — emit/projectOf 주입(순환 import 회피). 시작 전엔 무동작.
+// 1회 배선(startPluginHooks) — emit/projectInfo 주입(순환 import 회피). 시작 전엔 무동작.
 export function configureIdleTurnDetector(deps: {
   emit: (p: IdleTurnPayload) => void;
-  projectOf: (paneId: string) => string | null;
+  projectInfoOf: (paneId: string) => { id: string; root: string | null } | null;
 }): void {
   emitFn = deps.emit;
-  projectOf = deps.projectOf;
+  projectInfoOf = deps.projectInfoOf;
 }
 
 export function isIdleTurnDetectionOn(): boolean {
@@ -60,7 +61,13 @@ function startDetector(): { dispose: () => void } {
     if (!e) return;
     if (e.timer) clearTimeout(e.timer);
     e.timer = setTimeout(() => {
-      emitFn?.({ projectId: projectOf(paneId), paneId, source: "idle" });
+      const info = projectInfoOf(paneId);
+      emitFn?.({
+        projectId: info?.id ?? null,
+        root: info?.root ?? null,
+        paneId,
+        source: "idle",
+      });
     }, idleMs);
   };
 
@@ -97,6 +104,6 @@ export function resetIdleTurnDetectorForTest(): void {
     active = null;
   }
   emitFn = null;
-  projectOf = () => null;
+  projectInfoOf = () => null;
   idleMs = 2000;
 }

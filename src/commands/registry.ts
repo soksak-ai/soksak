@@ -25,6 +25,9 @@ export interface CommandSpec {
   examples?: readonly string[];
   // 위험 분류(원격/AI 호출 권한 게이트 대상): destructive=닫기·제거, inject=입력 주입.
   danger?: "destructive" | "inject";
+  // [RULE] 핸들러 반환 객체에 top-level "id" 를 쓰지 말 것 — 소켓 응답이 JSON-RPC 봉투의
+  // 요청 id(숫자)와 한 객체로 합쳐져 덮어쓴다(식별자 유실). 식별자는 네임스페이스 필드로
+  // (groupId/viewId/messageId/label …). 같은 이유로 "ok"/"code"/"message" 도 결과 의미로만 사용.
   handler: (
     params: Record<string, unknown>,
     ctx: CommandContext,

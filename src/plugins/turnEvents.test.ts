@@ -8,8 +8,8 @@ describe("turn.ended 오픈 계약", () => {
     startPluginHooks(); // bus→hooks 미러 배선(모듈 수명당 1회 가드)
     const got: unknown[] = [];
     const sub = onPluginEvent("turn.ended", (p) => got.push(p));
-    busEmit("turn.ended", { projectId: "p1", paneId: null, source: "acp" });
-    expect(got).toEqual([{ projectId: "p1", paneId: null, source: "acp" }]);
+    busEmit("turn.ended", { projectId: "p1", root: "/r", paneId: null, source: "acp" });
+    expect(got).toEqual([{ projectId: "p1", root: "/r", paneId: null, source: "acp" }]);
     sub.dispose();
   });
 

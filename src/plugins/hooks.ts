@@ -63,6 +63,9 @@ export interface PluginEventMap {
   // 구독해 턴 종료 시 기계적으로 메시지 생성. 코어는 특정 플러그인을 모른다(결합 0) — 토픽 계약만.
   "turn.ended": {
     projectId: string | null;
+    // 프로젝트 root(폴더 경로) — 창 무관 안정 식별자. 멀티창 같은 프로젝트 일관성의 스코프 키
+    // (projectId 는 창마다 다를 수 있어 스코프로 부적합). 구독자(메일함)는 root 로 스코프한다.
+    root: string | null;
     paneId: string | null;
     source: "shell" | "idle" | "acp";
   };
@@ -295,16 +298,21 @@ export function startPluginHooks(): void {
   // 터미널 명령 종료 → 플러그인 이벤트(git 뷰 자동 갱신 등). 이산 이벤트라
   // coalesce 불필요 — 발생 빈도 = 사용자가 명령을 끝내는 빈도.
   subscribeAnyCommandFinished((paneId) => {
-    const projectId = projectOfPane(paneId);
-    emitPluginEvent("command.finished", { projectId, paneId });
-    // shell provider: 명령 종료 = turn.ended(source shell). 메일함 등이 구독.
-    emitPluginEvent("turn.ended", { projectId, paneId, source: "shell" });
+    const info = projectInfoOfPane(paneId);
+    emitPluginEvent("command.finished", { projectId: info?.id ?? null, paneId });
+    // shell provider: 명령 종료 = turn.ended(source shell). 메일함 등이 구독. root 로 스코프.
+    emitPluginEvent("turn.ended", {
+      projectId: info?.id ?? null,
+      root: info?.root ?? null,
+      paneId,
+      source: "shell",
+    });
   });
 
-  // idle provider 배선(기본 OFF — turn.idleDetection 커맨드로 켬). emit/projectOf 주입(순환 import 회피).
+  // idle provider 배선(기본 OFF — turn.idleDetection 커맨드로 켬). emit/projectInfo 주입(순환 import 회피).
   configureIdleTurnDetector({
     emit: (p) => emitPluginEvent("turn.ended", p),
-    projectOf: projectOfPane,
+    projectInfoOf: (paneId) => projectInfoOfPane(paneId),
   });
 
   // acp provider 채널 통합 — 오픈 bus 의 "turn.ended"(ACP 플러그인 발행)를 hooks 채널로 미러.
@@ -322,18 +330,24 @@ export function startPluginHooks(): void {
   });
 }
 
-// pane 이 속한 프로젝트 id. 터미널 뷰들의 leaf 를 걸어 찾는다(못 찾으면 null).
-function projectOfPane(paneId: string): string | null {
+// pane 이 속한 프로젝트 {id, root}. 터미널 뷰 leaf 를 걸어 찾는다(못 찾으면 null).
+// root 는 창 무관 안정 식별자(turn.ended 스코프 키). id 는 창-로컬 UI 핸들(project.activate 용).
+function projectInfoOfPane(paneId: string): { id: string; root: string | null } | null {
   for (const t of useSessions.getState().tabs) {
     for (const c of t.contents) {
       for (const g of allGroups(c.layout)) {
         for (const v of g.views) {
           if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
-            return t.id;
+            return { id: t.id, root: t.root ?? null };
           }
         }
       }
     }
   }
   return null;
+}
+
+// pane 이 속한 프로젝트 id(command.started 등 id-만 필요한 곳).
+function projectOfPane(paneId: string): string | null {
+  return projectInfoOfPane(paneId)?.id ?? null;
 }

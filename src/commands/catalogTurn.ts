@@ -21,13 +21,15 @@ export function registerTurnCatalog(): void {
       },
       paneId: { type: "string", description: "관련 pane(선택)" },
       project: { type: "string", description: "프로젝트 id(선택)" },
+      root: { type: "string", description: "프로젝트 root(스코프 키 — 구독자가 root 로 스코프)" },
     },
     returns: "{ emitted }",
     errors: ["INTERNAL"],
-    examples: ['sok turn.signal \'{"source":"acp","project":"projA"}\''],
+    examples: ['sok turn.signal \'{"source":"acp","root":"/Users/me/proj"}\''],
     handler: (p) => {
       emitPluginEvent("turn.ended", {
         projectId: typeof p.project === "string" ? p.project : null,
+        root: typeof p.root === "string" ? p.root : null,
         paneId: typeof p.paneId === "string" ? p.paneId : null,
         source:
           p.source === "shell" || p.source === "idle" ? p.source : "acp",
