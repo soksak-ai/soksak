@@ -9,7 +9,14 @@ import { getRegisteredView } from "../plugins/viewRegistry";
 import { listPrograms } from "../plugins/programRegistry";
 import { localize } from "../i18n";
 import { formatterFor } from "../plugins/editorRegistry";
-import { VIEW_PLACEMENTS, type ViewPlacement } from "../plugins/spec";
+import {
+  VIEW_PLACEMENTS,
+  configDefaults,
+  configSettingOf,
+  validateSettingValue,
+  type ViewPlacement,
+} from "../plugins/spec";
+import { usePluginSettings } from "../state/pluginSettings";
 import {
   depSummary,
   versionIssues,
@@ -270,6 +277,127 @@ export function registerPluginCatalog(): void {
       if (!usePlugins.getState().plugins[id]) return notFound(`플러그인 없음: ${id}`);
       useUi.getState().setConsentPreview(id);
       return { id, shown: true };
+    },
+  });
+
+  // 프로젝트 id → root(영속 정체성). 생략 시 활성 프로젝트.
+  const projectRoot = (projectId?: string): string | undefined => {
+    const s = useSessions.getState();
+    const id = projectId ?? s.activeId;
+    return s.tabs.find((t) => t.id === id)?.root ?? undefined;
+  };
+
+  register("plugin.settings.schema", {
+    description: "플러그인 설정 스키마(매니페스트 configuration) — UI·CLI 가 파생하는 단일 소스",
+    params: { id: { type: "string", description: "플러그인 id", required: true } },
+    returns: "{ id, configuration: ConfigSetting[] }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok plugin.settings.schema \'{"id":"soksak-plugin-acp-orchestra"}\''],
+    handler: (p) => {
+      const plug = usePlugins.getState().plugins[p.id as string];
+      if (!plug) return notFound(`플러그인 없음: ${p.id}`);
+      return { id: p.id, configuration: plug.manifest.configuration ?? [] };
+    },
+  });
+
+  register("plugin.settings.get", {
+    description:
+      "설정 값 조회 — scope effective(기본·프로젝트 오버라이드 반영)|global|project. key 생략 = 전체",
+    params: {
+      id: { type: "string", description: "플러그인 id", required: true },
+      key: { type: "string", description: "설정 키(생략 = 전체)" },
+      scope: { type: "string", description: "effective|global|project", enum: ["effective", "global", "project"] },
+      project: { type: "string", description: "프로젝트 id(생략 = 활성). project/effective 스코프에 적용" },
+    },
+    returns: "{ id, scope, values } 또는 { id, scope, key, value }",
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      'sok plugin.settings.get \'{"id":"soksak-plugin-acp-orchestra"}\'',
+      'sok plugin.settings.get \'{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent","scope":"global"}\'',
+    ],
+    handler: (p) => {
+      const plug = usePlugins.getState().plugins[p.id as string];
+      if (!plug) return notFound(`플러그인 없음: ${p.id}`);
+      const scope = (p.scope as string | undefined) ?? "effective";
+      const root = projectRoot(p.project as string | undefined);
+      const ps = usePluginSettings.getState();
+      const defs = configDefaults(plug.manifest);
+      const one = (key: string) => {
+        if (scope === "global") return ps.getGlobal(p.id as string, key);
+        if (scope === "project") return root ? ps.getProject(root, p.id as string, key) : undefined;
+        return ps.effective(p.id as string, key, defs[key], root);
+      };
+      const key = p.key as string | undefined;
+      if (key !== undefined) {
+        if (!(key in defs)) return invalid(`설정 키 없음: ${key}`);
+        return { id: p.id, scope, key, value: one(key) ?? null };
+      }
+      const values: Record<string, unknown> = {};
+      for (const k of Object.keys(defs)) values[k] = one(k) ?? null;
+      return { id: p.id, scope, values };
+    },
+  });
+
+  register("plugin.settings.set", {
+    description: "설정 값 변경(스키마 검증) — scope global(기본)|project. 검증 위반은 거부(저장 안 함)",
+    params: {
+      id: { type: "string", description: "플러그인 id", required: true },
+      key: { type: "string", description: "설정 키", required: true },
+      value: { type: "json", description: "값(boolean|number|string — 스키마 type 일치)", required: true },
+      scope: { type: "string", description: "global(기본)|project", enum: ["global", "project"] },
+      project: { type: "string", description: "프로젝트 id(생략 = 활성). scope=project 에 적용" },
+    },
+    returns: "{ id, scope, key, value, project? }",
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      'sok plugin.settings.set \'{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent","value":"codex"}\'',
+      'sok plugin.settings.set \'{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent","value":"gemini","scope":"project"}\'',
+    ],
+    handler: (p) => {
+      const plug = usePlugins.getState().plugins[p.id as string];
+      if (!plug) return notFound(`플러그인 없음: ${p.id}`);
+      const setting = configSettingOf(plug.manifest, p.key as string);
+      if (!setting) return invalid(`설정 키 없음(스키마 미선언): ${p.key}`);
+      const v = validateSettingValue(setting, p.value);
+      if (!v.ok) return invalid(v.error);
+      const scope = (p.scope as string | undefined) ?? "global";
+      const ps = usePluginSettings.getState();
+      if (scope === "project") {
+        const root = projectRoot(p.project as string | undefined);
+        if (!root) return invalid("프로젝트 root 해소 실패(프로젝트 없음)");
+        ps.setProject(root, p.id as string, p.key as string, v.value);
+        return { id: p.id, scope, key: p.key, value: v.value, project: root };
+      }
+      ps.setGlobal(p.id as string, p.key as string, v.value);
+      return { id: p.id, scope, key: p.key, value: v.value };
+    },
+  });
+
+  register("plugin.settings.reset", {
+    description: "설정 오버라이드 제거(기본값 복원) — scope global(기본)|project. key 생략 = 전체",
+    params: {
+      id: { type: "string", description: "플러그인 id", required: true },
+      key: { type: "string", description: "설정 키(생략 = 전체)" },
+      scope: { type: "string", description: "global(기본)|project", enum: ["global", "project"] },
+      project: { type: "string", description: "프로젝트 id(생략 = 활성). scope=project 에 적용" },
+    },
+    returns: "{ id, scope, key, project? }",
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: ['sok plugin.settings.reset \'{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent"}\''],
+    handler: (p) => {
+      const plug = usePlugins.getState().plugins[p.id as string];
+      if (!plug) return notFound(`플러그인 없음: ${p.id}`);
+      const scope = (p.scope as string | undefined) ?? "global";
+      const ps = usePluginSettings.getState();
+      const key = p.key as string | undefined;
+      if (scope === "project") {
+        const root = projectRoot(p.project as string | undefined);
+        if (!root) return invalid("프로젝트 root 해소 실패(프로젝트 없음)");
+        ps.resetProject(root, p.id as string, key);
+        return { id: p.id, scope, key: key ?? null, project: root };
+      }
+      ps.resetGlobal(p.id as string, key);
+      return { id: p.id, scope, key: key ?? null };
     },
   });
 

@@ -434,6 +434,39 @@ export function configSettingOf(
   return (manifest.configuration ?? []).find((c) => c.key === key);
 }
 
+// 설정 값을 스키마에 대해 검증 — type 정합·enum 멤버십·min/max. set 경로의 게이트(저장 전).
+export function validateSettingValue(
+  setting: ConfigSetting,
+  value: unknown,
+): { ok: true; value: boolean | number | string } | { ok: false; error: string } {
+  const k = setting.key;
+  switch (setting.type) {
+    case "boolean":
+      return typeof value === "boolean"
+        ? { ok: true, value }
+        : { ok: false, error: `${k}: boolean 필요` };
+    case "number":
+      if (typeof value !== "number" || Number.isNaN(value)) {
+        return { ok: false, error: `${k}: number 필요` };
+      }
+      if (setting.min !== undefined && value < setting.min) {
+        return { ok: false, error: `${k}: 최소 ${setting.min}` };
+      }
+      if (setting.max !== undefined && value > setting.max) {
+        return { ok: false, error: `${k}: 최대 ${setting.max}` };
+      }
+      return { ok: true, value };
+    case "string":
+      return typeof value === "string"
+        ? { ok: true, value }
+        : { ok: false, error: `${k}: string 필요` };
+    case "enum":
+      return typeof value === "string" && (setting.enum ?? []).includes(value)
+        ? { ok: true, value }
+        : { ok: false, error: `${k}: ${(setting.enum ?? []).join("|")} 중 하나` };
+  }
+}
+
 export const PLUGIN_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const VIEW_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const COMMAND_NAME_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;

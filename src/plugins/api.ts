@@ -38,6 +38,7 @@ import {
 import { EVENT_PERMISSIONS } from "./hooks";
 import type { IconSetData } from "../ui/icons/types";
 import {
+  configDefaults,
   pluginCommandName,
   qualifiedViewId,
   type PluginManifest,
@@ -46,6 +47,8 @@ import {
 } from "./spec";
 import { localize } from "../i18n";
 import { useSettings } from "../state/settings";
+import { usePluginSettings, type SettingValue } from "../state/pluginSettings";
+import { useSessions } from "../state/sessions";
 import type { Extension } from "@codemirror/state";
 import * as cmView from "@codemirror/view";
 import * as cmState from "@codemirror/state";
@@ -220,6 +223,13 @@ export interface SoksakPluginApi {
   };
   project: {
     current: () => { id: string; root: string | null } | null;
+  };
+  // 이 플러그인의 사용자 설정(매니페스트 configuration 선언). effective = 프로젝트 오버라이드 ?? 글로벌
+  // ?? 스키마 기본. 읽기+구독만(설정 변경은 사용자가 설정 화면/command 로 — 플러그인은 반응만).
+  settings: {
+    get: (key: string) => SettingValue | undefined;
+    all: () => Record<string, SettingValue>;
+    onChange: (cb: (all: Record<string, SettingValue>) => void) => Disposable;
   };
 }
 
@@ -422,6 +432,41 @@ export function buildPluginApi(
 
     project: {
       current: () => deps.currentProject(),
+    },
+
+    settings: {
+      get: (key) => {
+        const defs = configDefaults(manifest);
+        if (!(key in defs)) return undefined; // 스키마 밖 키는 노출 안 함
+        return usePluginSettings
+          .getState()
+          .effective(id, key, defs[key], deps.currentProject()?.root ?? undefined);
+      },
+      all: () =>
+        usePluginSettings
+          .getState()
+          .allEffective(id, configDefaults(manifest), deps.currentProject()?.root ?? undefined),
+      onChange: (cb) => {
+        const fire = () =>
+          cb(
+            usePluginSettings
+              .getState()
+              .allEffective(
+                id,
+                configDefaults(manifest),
+                deps.currentProject()?.root ?? undefined,
+              ),
+          );
+        // 값 변경(글로벌/프로젝트 오버라이드) + 활성 프로젝트 전환(다른 root → 다른 effective)에 재발화.
+        const unSettings = usePluginSettings.subscribe(fire);
+        const unProject = useSessions.subscribe((s, prev) => {
+          if (s.activeId !== prev.activeId) fire();
+        });
+        return tracker.wrap(() => {
+          unSettings();
+          unProject();
+        });
+      },
     },
 
     commands: has("commands")
