@@ -37,6 +37,7 @@ import { registerGitCatalog } from "./catalogGit";
 import { registerPluginCatalog } from "./catalogPlugins";
 import { registerUiCatalog } from "./catalogUi";
 import { registerDataCatalog } from "./catalogData";
+import { registerTurnCatalog } from "./catalogTurn";
 import {
   ensureDefaultWorkspace,
   FOLDER_NAME_RE,
@@ -2068,4 +2069,5 @@ export function registerCatalog(): void {
   registerPluginCatalog();
   registerUiCatalog();
   registerDataCatalog();
+  registerTurnCatalog();
 }

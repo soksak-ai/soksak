@@ -13,6 +13,8 @@ import {
   subscribeAnyCommandFinished,
   subscribeAnyCommandStarted,
 } from "../terminal/paneHosts";
+import { busOn } from "./bus";
+import { configureIdleTurnDetector } from "../terminal/idleTurnDetector";
 import type { PluginPermission } from "./spec";
 
 type SessionsState = ReturnType<(typeof useSessions)["getState"]>;
@@ -56,6 +58,14 @@ export interface PluginEventMap {
   // 터미널 명령 종료(OSC 133/633 셸 통합 탐지 — 폴링 없음). git 뷰 등의 자동
   // 갱신 트리거. projectId 는 pane 의 소속 프로젝트(못 찾으면 null).
   "command.finished": { projectId: string | null; paneId: string };
+  // 오픈 토픽 "턴 종료" — provider 3종: shell(OSC133 명령 종료), idle(출력 유휴 휴리스틱,
+  // 기본 OFF), acp(ACP 플러그인이 bus 로 발행 → 코어가 hooks 로 미러). 메일함 self-subscribe 가
+  // 구독해 턴 종료 시 기계적으로 메시지 생성. 코어는 특정 플러그인을 모른다(결합 0) — 토픽 계약만.
+  "turn.ended": {
+    projectId: string | null;
+    paneId: string | null;
+    source: "shell" | "idle" | "acp";
+  };
 }
 
 export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
@@ -71,6 +81,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "bookmarks.changed",
   "command.started",
   "command.finished",
+  "turn.ended",
 ];
 
 // 권한 게이트가 필요한 이벤트 → 요구 권한. 여기 없는 이벤트는 권한 불요(범용 알림).
@@ -81,6 +92,8 @@ export const EVENT_PERMISSIONS: Partial<
 > = {
   "command.started": "terminal",
   "command.finished": "terminal",
+  // 턴 종료는 터미널 화면 활동(유휴 감지 포함)을 노출 → 화면 읽기 권한 게이트.
+  "turn.ended": "terminal:read",
 };
 
 type AnyListener = (payload: never) => void;
@@ -282,10 +295,24 @@ export function startPluginHooks(): void {
   // 터미널 명령 종료 → 플러그인 이벤트(git 뷰 자동 갱신 등). 이산 이벤트라
   // coalesce 불필요 — 발생 빈도 = 사용자가 명령을 끝내는 빈도.
   subscribeAnyCommandFinished((paneId) => {
-    emitPluginEvent("command.finished", {
-      projectId: projectOfPane(paneId),
-      paneId,
-    });
+    const projectId = projectOfPane(paneId);
+    emitPluginEvent("command.finished", { projectId, paneId });
+    // shell provider: 명령 종료 = turn.ended(source shell). 메일함 등이 구독.
+    emitPluginEvent("turn.ended", { projectId, paneId, source: "shell" });
+  });
+
+  // idle provider 배선(기본 OFF — turn.idleDetection 커맨드로 켬). emit/projectOf 주입(순환 import 회피).
+  configureIdleTurnDetector({
+    emit: (p) => emitPluginEvent("turn.ended", p),
+    projectOf: projectOfPane,
+  });
+
+  // acp provider 채널 통합 — 오픈 bus 의 "turn.ended"(ACP 플러그인 발행)를 hooks 채널로 미러.
+  // 메일함은 app.events.on("turn.ended") 한 곳만 구독하면 3 provider 를 모두 받는다(창-로컬).
+  busOn("turn.ended", (payload) => {
+    if (payload && typeof payload === "object") {
+      emitPluginEvent("turn.ended", payload as PluginEventMap["turn.ended"]);
+    }
   });
 
   // 앱(이 창) 활성 → 플러그인 이벤트. 이 창에 emit_to 된 "window-focus" 만 받는다(전역 listen 이면
