@@ -217,6 +217,7 @@ const ko = {
   "plugin.contrib.formatter": "포매터:",
   "plugin.contrib.language": "문법",
   "plugin.contrib.iconSet": "아이콘:",
+  "plugin.contrib.event": "발행:",
   "perm.programs.menuOnly":
     "새 탭(+) 메뉴에 프로그램을 추가합니다. 명령 실행은 없습니다.",
   "perm.programs.run":
@@ -433,6 +434,7 @@ const en: Record<MsgKey, string> = {
   "plugin.contrib.formatter": "Formatter:",
   "plugin.contrib.language": "Languages",
   "plugin.contrib.iconSet": "Icons:",
+  "plugin.contrib.event": "Emits:",
   "perm.programs.menuOnly":
     "Adds programs to the new-tab (+) menu. No commands are run.",
   "perm.programs.run":

@@ -212,6 +212,28 @@ describe("parseManifest — 권한-기여 정합성", () => {
   });
 });
 
+describe("parseManifest — contributes.events(발행 토픽, 정보용)", () => {
+  it("유효 토픽 배열 수용(권한 불요)", () => {
+    const { manifest, validation } = parseManifest(
+      base({ contributes: { events: ["mailbox.message", "mailbox.read"] } }),
+      "demo",
+    );
+    expect(validation.errors).toEqual([]);
+    expect(manifest?.contributes.events).toEqual(["mailbox.message", "mailbox.read"]);
+  });
+  it("선언 없으면 빈 배열 기본", () => {
+    const { manifest } = parseManifest(base(), "demo");
+    expect(manifest?.contributes.events).toEqual([]);
+  });
+  it("불량 토픽(형식/비문자열)·중복 → 거부", () => {
+    expect(errorsOf(base({ contributes: { events: ["Bad Topic"] } })).length).toBeGreaterThan(0);
+    expect(errorsOf(base({ contributes: { events: [123] } })).length).toBeGreaterThan(0);
+    expect(
+      errorsOf(base({ contributes: { events: ["a.b", "a.b"] } })).some((e) => e.includes("중복")),
+    ).toBe(true);
+  });
+});
+
 describe("parseManifest — 기여 항목 검증", () => {
   it("뷰 id 중복 → 거부", () => {
     const errors = errorsOf(

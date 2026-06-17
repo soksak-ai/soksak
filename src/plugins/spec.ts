@@ -415,6 +415,9 @@ export interface PluginManifest {
     languages: ContributedLanguage[]; // "editor" 권한 필수
     iconSets: ContributedIconSet[]; // "ui" 권한 필수
     programs: ContributedProgram[]; // "programs" 권한 필수
+    // 이 플러그인이 발행하는 이벤트 토픽(정보용 — 발견성). 런타임 강제 없음(bus/events 는 그대로
+    // 동작). 다른 플러그인 작성자가 구독할 토픽을 매니저에서 볼 수 있게 하는 오픈 카탈로그.
+    events: string[];
   };
 }
 
@@ -903,6 +906,7 @@ export function parseManifest(
   let languages: ContributedLanguage[] = [];
   let iconSets: ContributedIconSet[] = [];
   let programs: ContributedProgram[] = [];
+  let events: string[] = [];
   if (raw.contributes !== undefined) {
     if (!isRecord(raw.contributes)) {
       errors.push("contributes: 객체여야 함");
@@ -910,7 +914,7 @@ export function parseManifest(
       const c = raw.contributes;
       checkKnownKeys(
         c,
-        ["views", "commands", "formatters", "languages", "iconSets", "programs"],
+        ["views", "commands", "formatters", "languages", "iconSets", "programs", "events"],
         "contributes",
         errors,
       );
@@ -1202,6 +1206,23 @@ export function parseManifest(
         },
       }, errors);
       checkDuplicates(programs.map((v) => v.id), "contributes.programs.id", errors);
+
+      // events — 발행 토픽 문자열 배열(정보용). 형식 검증만, 권한 불요. §0-3: 불량이면 거부.
+      if (c.events !== undefined) {
+        if (
+          !Array.isArray(c.events) ||
+          !c.events.every(
+            (e) => isNonEmptyString(e) && COMMAND_NAME_RE.test(e),
+          )
+        ) {
+          errors.push(
+            "contributes.events: 발행 토픽 문자열 배열(^[a-z0-9][a-z0-9-]*(.[a-z0-9][a-z0-9-]*)*$)",
+          );
+        } else {
+          events = c.events.map((e) => (e as string).trim());
+          checkDuplicates(events, "contributes.events", errors);
+        }
+      }
       if (programs.length > 0 && !has("programs")) {
         errors.push('contributes.programs: "programs" 권한 선언 필요');
       }
@@ -1228,7 +1249,7 @@ export function parseManifest(
       ...(libraries.length > 0 ? { libraries } : {}),
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
-      contributes: { views, commands, formatters, languages, iconSets, programs },
+      contributes: { views, commands, formatters, languages, iconSets, programs, events },
     },
     validation: { ok: true, errors, warnings },
   };

@@ -396,6 +396,9 @@ function PluginManagerPanel() {
                 text: `${t("plugin.contrib.iconSet")} ${localize(s.title)}`,
               });
             }
+            for (const ev of c.events) {
+              chips.push({ key: `event:${ev}`, text: `${t("plugin.contrib.event")} ${ev}` });
+            }
             return chips.length > 0 ? (
               <div className="plugin-row-contribs">
                 {chips.map((ch) => (
