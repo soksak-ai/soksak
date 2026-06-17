@@ -257,4 +257,20 @@ export const BORDER_RULES: readonly BorderRule[] = [
     edges: { bottom: "bd" },
     note: "§B3 — 모달 헤더가 본문과의 경계 소유",
   },
+
+  // ── 설정 모달 2-pane 내부선(B2, 톤 bd-soft) ──────────────────────────────
+  {
+    id: "settings-nav-right",
+    selector: ".settings-nav",
+    kind: "edges",
+    edges: { right: "bd-soft" },
+    note: "§B2 — 설정 좌측 내비가 본문 패널과의 경계 소유(모달 내부선)",
+  },
+  {
+    id: "settings-row-bottom",
+    selector: ".settings-row",
+    kind: "edges",
+    edges: { bottom: "bd-soft" },
+    note: "§B2 — 설정 항목 행의 하단 구분선(패널 내부 리스트 분리)",
+  },
 ];

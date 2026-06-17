@@ -24,6 +24,7 @@ import { Icon } from "./ui/icons/Icon";
 import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConsentPreviewHost } from "./components/ConsentPreviewHost";
+import { useUi } from "./state/ui";
 import { useT } from "./i18n";
 import {
   allGroups,
@@ -288,7 +289,8 @@ function BuildBadge() {
 
 function App() {
   const t = useT();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsSection = useUi((s) => s.settingsSection);
+  const setSettingsSection = useUi((s) => s.setSettingsSection);
   const projectTabPosition = useSettings((s) => s.projectTabPosition);
   const contentTabPosition = useSettings((s) => s.contentTabPosition);
 
@@ -758,14 +760,19 @@ function App() {
             className="icon-btn settings-toggle"
             title={t("settings.open")}
             aria-label={t("settings.open")}
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => setSettingsSection("general")}
           >
             <Icon name="settings" />
           </button>
         </div>
       </div>
 
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      {settingsSection !== null && (
+        <SettingsModal
+          initialSection={settingsSection}
+          onClose={() => setSettingsSection(null)}
+        />
+      )}
       <ConsentPreviewHost />
       {newProjectOpen && (
         <NewProjectModal onClose={() => setNewProjectOpen(false)} />

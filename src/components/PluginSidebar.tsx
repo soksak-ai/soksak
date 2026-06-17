@@ -15,6 +15,7 @@ import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { useRegistry } from "../state/registry";
 import { installState, type RegistryEntry } from "../plugins/registry";
 import { useSessions, type ProjectTab } from "../state/sessions";
+import { useUi } from "../state/ui";
 import { PluginViewHost } from "./PluginViewHost";
 import { PluginConsentModal } from "./PluginConsentModal";
 import { localize, useT } from "../i18n";
@@ -429,6 +430,16 @@ function PluginManagerPanel() {
                 {t("plugin.enable")}
               </button>
             )}
+            {/* 설정 바로가기 — configuration 선언 + 활성 시. 통합 설정 모달의 그 플러그인 패널로 딥링크. */}
+            {p.status === "enabled" && (p.manifest.configuration?.length ?? 0) > 0 ? (
+              <button
+                type="button"
+                className="dbtn"
+                onClick={() => useUi.getState().setSettingsSection(p.manifest.id)}
+              >
+                {t("plugin.settings")}
+              </button>
+            ) : null}
             {/* 갱신(↑)·제거(✕) 제거 — 전체 둘러보기(재설치 경로)가 없으므로 삭제는
                 무의미하고 갱신도 불필요. 활성/비활성 토글만 둔다. */}
           </div>

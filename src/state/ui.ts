@@ -17,6 +17,9 @@ interface UiState {
   // App 레벨에서 렌더(사이드바 마운트 여부 무관). 활성화는 안 함(검사 전용).
   consentPreviewId: string | null;
   setConsentPreview: (id: string | null) => void;
+  // 설정 모달 — null=닫힘, "general"=환경설정, 그 외=플러그인 id(딥링크). 사이드바 "설정" 바로가기 채널.
+  settingsSection: string | null;
+  setSettingsSection: (s: string | null) => void;
 }
 
 // 0↔1 경계에서만 네이티브 hitTest 게이트를 동기화(불필요 IPC 억제).
@@ -34,6 +37,8 @@ export const useUi = create<UiState>((set) => ({
   overlayCount: 0,
   consentPreviewId: null,
   setConsentPreview: (id) => set({ consentPreviewId: id }),
+  settingsSection: null,
+  setSettingsSection: (s) => set({ settingsSection: s }),
   pushOverlay: () =>
     set((s) => {
       syncNative(s.overlayCount, s.overlayCount + 1);

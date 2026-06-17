@@ -1,4 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { usePlugins } from "../state/plugins";
+import { PluginSettingsPanel } from "./PluginSettingsPanel";
 import {
   useSettings,
   type CursorStyle,
@@ -15,7 +17,7 @@ import { ProgramOptions } from "./ProgramOptions";
 import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useIconRegistry } from "../ui/icons/registry";
-import { useT } from "../i18n";
+import { localize, useT } from "../i18n";
 import { useDraggableModal } from "./modalDrag";
 
 // 설정 모달 — 디자인 레퍼런스(soksak_final) 그대로: 드래그 가능한 520px 카드,
@@ -54,8 +56,20 @@ function Stepper({
   );
 }
 
-export function SettingsModal({ onClose }: { onClose: () => void }) {
+export function SettingsModal({
+  onClose,
+  initialSection = "general",
+}: {
+  onClose: () => void;
+  initialSection?: string;
+}) {
   const t = useT();
+  // 좌측 내비 선택 — "general"(환경설정) 또는 플러그인 id. 사이드바 바로가기가 initialSection 으로 딥링크.
+  const [section, setSection] = useState(initialSection);
+  // 설정 스키마(configuration)를 선언한 플러그인만 내비에 노출.
+  const configPlugins = Object.values(usePlugins((x) => x.plugins))
+    .filter((p) => (p.manifest.configuration?.length ?? 0) > 0)
+    .sort((a, b) => localize(a.manifest.name).localeCompare(localize(b.manifest.name)));
   // 오버레이 등록 — 모달이 떠 있는 동안 브라우저 홀의 마우스 통과를 차단한다.
   useOverlayActive();
   // 전체 구독 예외(원칙 1 의 의도 내): 이 모달은 settings 의 거의 모든 필드를
@@ -121,8 +135,33 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="dmodal-body">
-          <div className="dsec">{t("settings.theme")}</div>
+        <div className="dmodal-2pane">
+          <div className="settings-nav">
+            <button
+              type="button"
+              className={`settings-nav-item${section === "general" ? " on" : ""}`}
+              onClick={() => setSection("general")}
+            >
+              {t("settings.general")}
+            </button>
+            {configPlugins.length > 0 ? (
+              <div className="settings-nav-head">{t("settings.plugins")}</div>
+            ) : null}
+            {configPlugins.map((p) => (
+              <button
+                key={p.manifest.id}
+                type="button"
+                className={`settings-nav-item${section === p.manifest.id ? " on" : ""}`}
+                onClick={() => setSection(p.manifest.id)}
+              >
+                {localize(p.manifest.name)}
+              </button>
+            ))}
+          </div>
+          <div className="dmodal-body settings-pane">
+            {section === "general" ? (
+              <>
+                <div className="dsec">{t("settings.theme")}</div>
           <div className="th-grid">
             {Object.values(themes).map((th) => (
               <span
@@ -406,6 +445,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               onChange={s.setScrollback}
               step={1000}
             />
+          </div>
+              </>
+            ) : (
+              <PluginSettingsPanel pluginId={section} />
+            )}
           </div>
         </div>
       </div>

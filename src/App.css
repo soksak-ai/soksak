@@ -2020,6 +2020,193 @@ body::after {
   font-size: 13px;
   overflow-y: auto;
 }
+
+/* 설정 모달 2-pane(editor식) — 좌측 내비(일반+플러그인) / 우측 패널. */
+.dmodal-settings {
+  width: 700px;
+  max-width: 92vw;
+}
+.dmodal-2pane {
+  display: flex;
+  min-height: 0;
+  max-height: 72vh;
+}
+.settings-nav {
+  flex: 0 0 168px;
+  border-right: 1px solid var(--bd-soft);
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.settings-nav-item {
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--fg2);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.settings-nav-item:hover {
+  background: var(--inset);
+  color: var(--fg);
+}
+.settings-nav-item.on {
+  background: var(--inset);
+  color: var(--fg);
+  font-weight: 600;
+}
+.settings-nav-head {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--fg3);
+  padding: 12px 10px 4px;
+  text-transform: uppercase;
+}
+.settings-pane {
+  flex: 1;
+  min-width: 0;
+}
+.settings-plugin {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-scope {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--inset);
+  border-radius: 7px;
+  margin: 2px 0 8px;
+  align-self: flex-start;
+}
+.settings-scope button {
+  background: none;
+  border: 0;
+  color: var(--fg3);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.settings-scope button.on {
+  background: var(--bg);
+  color: var(--fg);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+.settings-scope button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.settings-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--bd-soft);
+}
+.settings-row-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-row-title {
+  font-size: 13px;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.settings-row-desc {
+  font-size: 11px;
+  color: var(--fg3);
+  line-height: 1.4;
+}
+.settings-row-control {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.settings-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--acc, #4a8cff);
+  flex: 0 0 auto;
+}
+.settings-input {
+  background: var(--inset);
+  color: inherit;
+  border: 1px solid var(--bd);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  width: 84px;
+}
+.settings-input-text {
+  width: 160px;
+}
+.settings-select {
+  background: var(--inset);
+  color: inherit;
+  border: 1px solid var(--bd);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+}
+.settings-toggle {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  border: 0;
+  background: rgba(127, 127, 127, 0.4);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s;
+  flex: 0 0 auto;
+}
+.settings-toggle.on {
+  background: var(--acc, #4a8cff);
+}
+.settings-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+.settings-toggle.on .settings-toggle-knob {
+  left: 18px;
+}
+.settings-reset {
+  background: none;
+  border: 0;
+  color: var(--fg3);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.settings-reset:hover {
+  background: var(--inset);
+  color: var(--fg);
+}
 .dsec {
   font-size: 10.5px;
   font-weight: 700;

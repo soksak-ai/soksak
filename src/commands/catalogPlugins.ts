@@ -401,6 +401,33 @@ export function registerPluginCatalog(): void {
     },
   });
 
+  register("plugin.settings.open", {
+    description:
+      "통합 설정 모달 열기 — id 지정 시 그 플러그인 패널로, 생략 시 일반(환경설정). 빈 문자열=닫기. 멱등",
+    params: {
+      id: { type: "string", description: "플러그인 id(생략 = 일반, 빈 문자열 = 닫기)" },
+    },
+    returns: "{ section }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: [
+      "sok plugin.settings.open",
+      'sok plugin.settings.open \'{"id":"soksak-plugin-acp-orchestra"}\'',
+    ],
+    handler: (p) => {
+      const raw = p.id as string | undefined;
+      if (raw === "") {
+        useUi.getState().setSettingsSection(null);
+        return { section: null };
+      }
+      const section = raw ?? "general";
+      if (section !== "general" && !usePlugins.getState().plugins[section]) {
+        return notFound(`플러그인 없음: ${section}`);
+      }
+      useUi.getState().setSettingsSection(section);
+      return { section };
+    },
+  });
+
   register("plugin.reload", {
     description:
       "플러그인 전체 재적재 — 디렉토리 재스캔 + 활성(동의 유효) 플러그인 재활성화",
