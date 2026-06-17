@@ -395,6 +395,38 @@ describe("parseManifest — dependencies(플러그인↔플러그인 의존)", (
   });
 });
 
+describe("parseManifest — libraries(외부 CLI 종속성)", () => {
+  const lib = {
+    name: "@google/gemini-cli",
+    bin: "gemini",
+    install: { darwin: "npm i -g @google/gemini-cli@latest" },
+    label: "Gemini CLI",
+  };
+  it("유효한 libraries 수용 + 정규화", () => {
+    const { manifest, validation } = parseManifest(base({ libraries: [lib] }), "demo");
+    expect(validation.ok).toBe(true);
+    expect(manifest?.libraries).toEqual([lib]);
+  });
+  it("libraries 없으면 키 자체가 없음(선택)", () => {
+    expect(parseManifest(base(), "demo").manifest).not.toHaveProperty("libraries");
+  });
+  it("name/bin 누락 거부(all-or-nothing)", () => {
+    expect(parseManifest(base({ libraries: [{ bin: "gemini", install: { darwin: "x" } }] }), "demo").manifest).toBeNull();
+    expect(parseManifest(base({ libraries: [{ name: "x", install: { darwin: "x" } }] }), "demo").manifest).toBeNull();
+  });
+  it("install 플랫폼 키/빈 객체 거부", () => {
+    expect(parseManifest(base({ libraries: [{ name: "x", bin: "x", install: { bad: "y" } }] }), "demo").manifest).toBeNull();
+    expect(parseManifest(base({ libraries: [{ name: "x", bin: "x", install: {} }] }), "demo").manifest).toBeNull();
+  });
+  it("bin 중복 거부", () => {
+    const dup = { name: "a", bin: "gemini", install: { darwin: "x" } };
+    expect(parseManifest(base({ libraries: [dup, dup] }), "demo").manifest).toBeNull();
+  });
+  it("libraries 배열 아니면 거부", () => {
+    expect(parseManifest(base({ libraries: {} }), "demo").manifest).toBeNull();
+  });
+});
+
 describe("parseManifest — programs 기여(§2.6)", () => {
   it("programs 는 'programs' 권한 필요", () => {
     const errs = errorsOf(

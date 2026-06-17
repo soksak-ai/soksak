@@ -344,6 +344,15 @@ export function programPathSegments(path: string): string[] {
 export const SPEC_VERSION = "soksak-plugin-spec@1";
 export const DEFAULT_ENTRY = "main.js";
 
+// 외부 CLI/라이브러리 종속성 — 플러그인이 process 로 실행하는 외부 도구(npm 글로벌 CLI 등).
+// 플러그인↔플러그인 dependencies 와 별개 축. 동의 후 미설치면 강제 설치(install 명령 원문 고지).
+export interface LibraryDep {
+  name: string; // 패키지/도구 식별(예: "@google/gemini-cli")
+  bin: string; // 설치 후 실행 bin 이름(글로벌 bin 에서 확인·실행)
+  install: Partial<Record<ProgramPlatform, string>>; // 플랫폼별 설치 명령(원문 그대로 고지)
+  label?: LocalizedText; // 동의 화면 표시명(생략 시 name)
+}
+
 export interface PluginManifest {
   spec: typeof SPEC_VERSION; // 필수 — 불일치 시 거부
   id: string; // ^[a-z0-9][a-z0-9-]*$ + 설치 디렉토리명과 일치 강제
@@ -361,6 +370,8 @@ export interface PluginManifest {
   // 설치 시 미설치 의존을 전이적으로 동반 설치(동의 게이트), 삭제 시 의존자 cascade(고아 방지).
   // 코어 권한(permissions)과 별개 축 — 이건 다른 플러그인에 대한 의존. 범용(어떤 플러그인↔플러그인).
   dependencies?: Record<string, string>;
+  // 외부 CLI/라이브러리 종속성 — 동의 후 미설치면 강제 설치. dependencies(플러그인↔플러그인)와 별개 축.
+  libraries?: LibraryDep[];
   permissions: PluginPermission[];
   contributes: {
     views: ContributedView[]; // "ui" 권한 필수
@@ -541,6 +552,7 @@ export function parseManifest(
       "minAppVersion",
       "template",
       "dependencies",
+      "libraries",
       "permissions",
       "contributes",
     ],
@@ -597,6 +609,63 @@ export function parseManifest(
           dependencies[depId] = (range as string).trim();
         }
       }
+    }
+  }
+
+  // libraries: 외부 CLI/라이브러리 종속성(name·bin·install). 선택. 동의 후 미설치면 강제 설치.
+  // dependencies(플러그인↔플러그인)와 별개 축 — 외부 도구(npm 글로벌 CLI 등)에 대한 의존.
+  const libraries: LibraryDep[] = [];
+  if (raw.libraries !== undefined) {
+    if (!Array.isArray(raw.libraries)) {
+      errors.push("libraries: 배열(외부 CLI 종속성)이어야 함");
+    } else {
+      raw.libraries.forEach((item, i) => {
+        if (!isRecord(item)) {
+          errors.push(`libraries[${i}]: 객체여야 함`);
+          return;
+        }
+        checkKnownKeys(item, ["name", "bin", "install", "label"], `libraries[${i}]`, errors);
+        if (!isNonEmptyString(item.name)) {
+          errors.push(`libraries[${i}].name: 비공백 문자열 필수`);
+          return;
+        }
+        if (!isNonEmptyString(item.bin)) {
+          errors.push(`libraries[${i}].bin: 비공백 문자열 필수`);
+          return;
+        }
+        if (!isRecord(item.install)) {
+          errors.push(`libraries[${i}].install: 객체(플랫폼별 설치 명령) 필수`);
+          return;
+        }
+        const install: Partial<Record<ProgramPlatform, string>> = {};
+        let installBad = false;
+        for (const [k, val] of Object.entries(item.install)) {
+          if (!PROGRAM_PLATFORMS.includes(k as ProgramPlatform)) {
+            errors.push(`libraries[${i}].install: 플랫폼 키는 ${PROGRAM_PLATFORMS.join("|")}`);
+            installBad = true;
+            break;
+          }
+          if (!isNonEmptyString(val)) {
+            errors.push(`libraries[${i}].install.${k}: 비공백 문자열`);
+            installBad = true;
+            break;
+          }
+          install[k as ProgramPlatform] = val.trim();
+        }
+        if (installBad) return;
+        if (Object.keys(install).length === 0) {
+          errors.push(`libraries[${i}].install: 최소 1개 플랫폼 명령 필요`);
+          return;
+        }
+        if (item.label !== undefined && typeof item.label !== "string" && !isRecord(item.label)) {
+          errors.push(`libraries[${i}].label: 문자열 또는 {언어:문자열}`);
+          return;
+        }
+        const lib: LibraryDep = { name: item.name.trim(), bin: item.bin.trim(), install };
+        if (item.label !== undefined) lib.label = normalizeText(item.label as LocalizedText);
+        libraries.push(lib);
+      });
+      checkDuplicates(libraries.map((l) => l.bin), "libraries[].bin", errors);
     }
   }
 
@@ -964,6 +1033,7 @@ export function parseManifest(
           : undefined,
       ...(raw.template === true ? { template: true } : {}),
       ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
+      ...(libraries.length > 0 ? { libraries } : {}),
       permissions,
       contributes: { views, commands, formatters, languages, iconSets, programs },
     },

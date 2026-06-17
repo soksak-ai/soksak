@@ -9,6 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   parseManifest,
   semverGte,
+  type LibraryDep,
   type PluginManifest,
   type PluginPermission,
 } from "../plugins/spec";
@@ -38,7 +39,7 @@ function pluginDepNodes(plugins: Record<string, PluginRuntime>): DepNode[] {
     dependencies: p.manifest.dependencies ?? {},
   }));
 }
-import { installCommandFor } from "../plugins/programRegistry";
+import { installCommandFor, libraryInstallFor } from "../plugins/programRegistry";
 
 export interface PluginRuntime {
   manifest: PluginManifest;
@@ -159,6 +160,60 @@ async function ensureProgramBinaries(manifest: PluginManifest): Promise<void> {
       console.error(`ensure 실패(${manifest.id}/${prog.id}):`, e);
     }
   }
+}
+
+// 라이브러리 종속성(§libraries) 전이 수집 — 이 매니페스트 + 전이 플러그인 deps 의 libraries.
+// 라이브러리를 소유한 플러그인(예: core)에 의존하는 플러그인을 활성화해도 그 CLI 가 보장된다.
+// bin 기준 중복 제거(같은 CLI 를 두 번 안 깐다). plugins 키 = 설치 디렉토리명 = 플러그인 id.
+export function transitiveLibraries(
+  manifest: PluginManifest,
+  plugins: Record<string, PluginRuntime>,
+): LibraryDep[] {
+  const seenBin = new Set<string>();
+  const seenPlugin = new Set<string>();
+  const out: LibraryDep[] = [];
+  const visit = (m: PluginManifest) => {
+    if (seenPlugin.has(m.id)) return; // 순환 방어
+    seenPlugin.add(m.id);
+    for (const lib of m.libraries ?? []) {
+      if (!seenBin.has(lib.bin)) {
+        seenBin.add(lib.bin);
+        out.push(lib);
+      }
+    }
+    for (const depId of Object.keys(m.dependencies ?? {})) {
+      const dep = plugins[depId];
+      if (dep) visit(dep.manifest);
+    }
+  };
+  visit(manifest);
+  return out;
+}
+
+// 라이브러리 종속성 강제 설치 — 활성화 시점에 전이 libraries 를 보장한다. 로그인 셸 PATH 로
+// 확인(shell_which)하고, 미설치분을 한 터미널에서 가시 설치한다(은폐 금지 — 동의 화면에
+// 고지된 그 명령 그대로). 실패는 콘솔로만(§0-4 — 활성화 자체를 막지 않는다).
+async function ensureLibraries(
+  manifest: PluginManifest,
+  plugins: Record<string, PluginRuntime>,
+): Promise<void> {
+  const libs = transitiveLibraries(manifest, plugins);
+  const toInstall: string[] = [];
+  for (const lib of libs) {
+    const install = libraryInstallFor(lib);
+    if (!install) continue; // 이 플랫폼 설치 명령 미제공
+    try {
+      const found = await invoke<boolean>("shell_which", { bin: lib.bin });
+      if (!found) toInstall.push(install);
+    } catch (e) {
+      console.error(`라이브러리 ensure 검사 실패(${manifest.id}/${lib.bin}):`, e);
+    }
+  }
+  if (toInstall.length === 0) return;
+  const s = useSessions.getState();
+  s.addViewToGroup(s.activeId, "terminal", undefined, {
+    command: `${toInstall.join(" && ")}; echo "[soksak] 라이브러리 종속성 설치 종료"`,
+  });
 }
 
 function basename(path: string): string {
@@ -476,6 +531,8 @@ export const usePlugins = create<PluginsState>((set, get) => {
       // 고지받고 활성화한 지금이 설치의 자리다(실행 시점은 command 그대로 깨끗).
       // 명시적 enable 에서만 — 앱 시작/reload 의 자동 재활성화는 조용히.
       void ensureProgramBinaries(p.manifest);
+      // 라이브러리 종속성(libraries) 강제 설치 — 전이 deps 포함(core 의 에이전트 CLI 등).
+      void ensureLibraries(p.manifest, get().plugins);
       return ok({ id, status: "enabled" });
     },
 

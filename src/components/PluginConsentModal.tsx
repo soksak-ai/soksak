@@ -9,8 +9,8 @@ import {
   pluginCommandName,
   type ContributedProgram,
 } from "../plugins/spec";
-import { detectPlatform } from "../plugins/programRegistry";
-import type { PluginRuntime } from "../state/plugins";
+import { detectPlatform, libraryInstallFor } from "../plugins/programRegistry";
+import { transitiveLibraries, usePlugins, type PluginRuntime } from "../state/plugins";
 import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { localize, useT } from "../i18n";
@@ -57,6 +57,10 @@ export function PluginConsentModal({
   // 오버레이 등록 — 모달이 떠 있는 동안 브라우저 홀의 마우스 통과를 차단한다.
   useOverlayActive();
   const m = plugin.manifest;
+  const installed = usePlugins((s) => s.plugins);
+  // 종속성 — 플러그인↔플러그인(dependencies) + 외부 라이브러리(전이 수집, 설치와 단일 소스).
+  const pluginDeps = Object.entries(m.dependencies ?? {});
+  const libs = transitiveLibraries(m, installed);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -210,6 +214,50 @@ export function PluginConsentModal({
               </>
             );
           })()}
+
+          {/* 종속성 — 플러그인↔플러그인(dependencies, 전이 동반 설치) + 외부 라이브러리(libraries,
+              미설치 시 동의 후 강제 설치). 설치 명령은 원문 그대로(산문 가공 0). */}
+          {(pluginDeps.length > 0 || libs.length > 0) && (
+            <>
+              <div className="dsec">{t("plugin.consent.dependencies")}</div>
+              <ul className="plugin-consent-list">
+                {pluginDeps.map(([depId, range]) => {
+                  const dep = installed[depId];
+                  return (
+                    <li key={`dep:${depId}`} className="plugin-consent-item">
+                      <span className="plugin-consent-detail">
+                        {t("plugin.consent.dep.plugin")} —{" "}
+                        {dep ? `${localize(dep.manifest.name)} ` : ""}
+                        {depId} ({range})
+                      </span>
+                    </li>
+                  );
+                })}
+                {libs.map((lib) => {
+                  const cmd = libraryInstallFor(lib);
+                  return (
+                    <li
+                      key={`lib:${lib.bin}`}
+                      className="plugin-consent-item caution"
+                    >
+                      <span className="plugin-consent-detail">
+                        ⚠ {t("plugin.consent.dep.library")} —{" "}
+                        {lib.label ? localize(lib.label) : lib.name} ({lib.bin})
+                      </span>
+                      {cmd ? (
+                        <code className="plugin-consent-cmd">{cmd}</code>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+              {libs.length > 0 ? (
+                <div className="plugin-consent-revoke">
+                  {t("plugin.consent.dep.forceInstall")}
+                </div>
+              ) : null}
+            </>
+          )}
 
           {/* 전체신뢰 고지(§0-2) — 권한은 격리가 아님을 그대로 말한다. */}
           <div className="plugin-consent-notice">{t("plugin.consent.notice")}</div>

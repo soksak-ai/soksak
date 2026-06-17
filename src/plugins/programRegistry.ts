@@ -5,7 +5,7 @@
 // 프로그램)·명령(view.open program=)이 전부 여기를 소비한다(§0-1).
 
 import { create } from "zustand";
-import type { ContributedProgram } from "./spec";
+import type { ContributedProgram, LibraryDep } from "./spec";
 
 export interface RegisteredProgram {
   pluginId: string;
@@ -87,4 +87,13 @@ export function installCommandFor(
 ): string | undefined {
   if (decl.kind !== "terminal") return undefined;
   return decl.ensure?.install[platform];
+}
+
+// 이 플랫폼의 라이브러리 설치 명령(libraries 선언) — 동의 후 강제 설치 흐름이 소비.
+// 동의 화면이 이 명령을 원문 그대로 고지하고, 사람이 동의한 그 시점이 설치의 정당한 자리다.
+export function libraryInstallFor(
+  lib: LibraryDep,
+  platform: PlatformKey = detectPlatform(),
+): string | undefined {
+  return lib.install[platform];
 }
