@@ -353,6 +353,24 @@ export interface LibraryDep {
   label?: LocalizedText; // 동의 화면 표시명(생략 시 name)
 }
 
+// 플러그인 설정 스키마 — 사용자 구성 옵션의 단일 진실. UI(자동 컨트롤)·저장 기본값·검증·CLI/MCP·문서가
+// 전부 이 선언에서 파생(선언형 configuration 스키마). 무해(선언형) → 권한 불요. 저장은
+// 글로벌(앱 전역)·프로젝트별 오버라이드 2계층(effective = 프로젝트 ?? 글로벌 ?? default).
+export type ConfigType = "boolean" | "number" | "string" | "enum";
+export const CONFIG_TYPES: readonly ConfigType[] = ["boolean", "number", "string", "enum"];
+export interface ConfigSetting {
+  key: string; // ^[a-zA-Z][a-zA-Z0-9]*$ — 플러그인 네임스페이스 안에서 유일
+  type: ConfigType;
+  default: boolean | number | string;
+  title: LocalizedText;
+  description?: LocalizedText;
+  enum?: string[]; // type=enum 필수
+  enumLabels?: LocalizedText[]; // 선택 — 있으면 enum 과 길이 일치(표시명)
+  min?: number; // type=number 선택
+  max?: number; // type=number 선택
+}
+export const CONFIG_KEY_RE = /^[a-zA-Z][a-zA-Z0-9]*$/;
+
 export interface PluginManifest {
   spec: typeof SPEC_VERSION; // 필수 — 불일치 시 거부
   id: string; // ^[a-z0-9][a-z0-9-]*$ + 설치 디렉토리명과 일치 강제
@@ -372,6 +390,8 @@ export interface PluginManifest {
   dependencies?: Record<string, string>;
   // 외부 CLI/라이브러리 종속성 — 동의 후 미설치면 강제 설치. dependencies(플러그인↔플러그인)와 별개 축.
   libraries?: LibraryDep[];
+  // 사용자 구성 설정 스키마(선택). 글로벌+프로젝트별 오버라이드. 무해(선언형) → 권한 불요.
+  configuration?: ConfigSetting[];
   permissions: PluginPermission[];
   contributes: {
     views: ContributedView[]; // "ui" 권한 필수
@@ -395,6 +415,23 @@ export function qualifiedViewId(pluginId: string, viewId: string): string {
 }
 export function pluginCommandName(pluginId: string, name: string): string {
   return `plugin.${pluginId}.${name}`;
+}
+
+// 설정 스키마 → 기본값 맵(key → default). 저장소/effective 해석의 바닥값(단일 진실은 스키마).
+export function configDefaults(
+  manifest: PluginManifest,
+): Record<string, boolean | number | string> {
+  const out: Record<string, boolean | number | string> = {};
+  for (const c of manifest.configuration ?? []) out[c.key] = c.default;
+  return out;
+}
+
+// 설정 키의 스키마 항목 조회(검증/컨트롤 생성용). 없으면 undefined.
+export function configSettingOf(
+  manifest: PluginManifest,
+  key: string,
+): ConfigSetting | undefined {
+  return (manifest.configuration ?? []).find((c) => c.key === key);
 }
 
 export const PLUGIN_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -553,6 +590,7 @@ export function parseManifest(
       "template",
       "dependencies",
       "libraries",
+      "configuration",
       "permissions",
       "contributes",
     ],
@@ -666,6 +704,112 @@ export function parseManifest(
         libraries.push(lib);
       });
       checkDuplicates(libraries.map((l) => l.bin), "libraries[].bin", errors);
+    }
+  }
+
+  // configuration: 사용자 설정 스키마(선택). key·type·default 정합 + enum/enumLabels/min·max 검증.
+  // 단일 진실 — UI·저장 기본값·CLI/MCP 가 전부 여기서 파생.
+  const configuration: ConfigSetting[] = [];
+  if (raw.configuration !== undefined) {
+    if (!Array.isArray(raw.configuration)) {
+      errors.push("configuration: 배열(설정 스키마)이어야 함");
+    } else {
+      raw.configuration.forEach((item, i) => {
+        if (!isRecord(item)) {
+          errors.push(`configuration[${i}]: 객체여야 함`);
+          return;
+        }
+        checkKnownKeys(
+          item,
+          ["key", "type", "default", "title", "description", "enum", "enumLabels", "min", "max"],
+          `configuration[${i}]`,
+          errors,
+        );
+        if (!isNonEmptyString(item.key) || !CONFIG_KEY_RE.test(item.key)) {
+          errors.push(`configuration[${i}].key: ^[a-zA-Z][a-zA-Z0-9]*$ 필수`);
+          return;
+        }
+        if (typeof item.type !== "string" || !CONFIG_TYPES.includes(item.type as ConfigType)) {
+          errors.push(`configuration[${i}].type: ${CONFIG_TYPES.join("|")}`);
+          return;
+        }
+        const type = item.type as ConfigType;
+        if (item.title === undefined || (typeof item.title !== "string" && !isRecord(item.title))) {
+          errors.push(`configuration[${i}].title: 문자열 또는 {언어:문자열} 필수`);
+          return;
+        }
+        let enumVals: string[] | undefined;
+        if (type === "enum") {
+          if (
+            !Array.isArray(item.enum) ||
+            item.enum.length === 0 ||
+            !item.enum.every((x) => isNonEmptyString(x))
+          ) {
+            errors.push(`configuration[${i}].enum: type=enum 은 비공백 문자열 배열 필수`);
+            return;
+          }
+          enumVals = (item.enum as string[]).map((x) => x.trim());
+        } else if (item.enum !== undefined) {
+          errors.push(`configuration[${i}].enum: type=enum 에서만 허용`);
+          return;
+        }
+        if (item.enumLabels !== undefined) {
+          if (
+            type !== "enum" ||
+            !Array.isArray(item.enumLabels) ||
+            item.enumLabels.length !== (enumVals?.length ?? -1)
+          ) {
+            errors.push(`configuration[${i}].enumLabels: enum 과 같은 길이여야 함`);
+            return;
+          }
+        }
+        const d = item.default;
+        const defOk =
+          (type === "boolean" && typeof d === "boolean") ||
+          (type === "number" && typeof d === "number") ||
+          (type === "string" && typeof d === "string") ||
+          (type === "enum" && typeof d === "string" && enumVals!.includes(d));
+        if (!defOk) {
+          errors.push(
+            `configuration[${i}].default: type(${type}) 와 일치${type === "enum" ? "(enum 값 중 하나)" : ""}해야 함`,
+          );
+          return;
+        }
+        if (type === "number") {
+          if (item.min !== undefined && typeof item.min !== "number") {
+            errors.push(`configuration[${i}].min: 숫자`);
+            return;
+          }
+          if (item.max !== undefined && typeof item.max !== "number") {
+            errors.push(`configuration[${i}].max: 숫자`);
+            return;
+          }
+          if (typeof item.min === "number" && typeof item.max === "number" && item.min > item.max) {
+            errors.push(`configuration[${i}]: min > max`);
+            return;
+          }
+        } else if (item.min !== undefined || item.max !== undefined) {
+          errors.push(`configuration[${i}]: min/max 는 type=number 에서만`);
+          return;
+        }
+        const setting: ConfigSetting = {
+          key: item.key.trim(),
+          type,
+          default: d as boolean | number | string,
+          title: normalizeText(item.title as LocalizedText),
+        };
+        if (item.description !== undefined) {
+          setting.description = normalizeText(item.description as LocalizedText);
+        }
+        if (enumVals) setting.enum = enumVals;
+        if (item.enumLabels !== undefined) {
+          setting.enumLabels = (item.enumLabels as LocalizedText[]).map((x) => normalizeText(x));
+        }
+        if (typeof item.min === "number") setting.min = item.min;
+        if (typeof item.max === "number") setting.max = item.max;
+        configuration.push(setting);
+      });
+      checkDuplicates(configuration.map((c) => c.key), "configuration[].key", errors);
     }
   }
 
@@ -1034,6 +1178,7 @@ export function parseManifest(
       ...(raw.template === true ? { template: true } : {}),
       ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
       ...(libraries.length > 0 ? { libraries } : {}),
+      ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
       contributes: { views, commands, formatters, languages, iconSets, programs },
     },

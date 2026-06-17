@@ -1,6 +1,7 @@
 // soksak-plugin-spec v1 검증 매트릭스 — all-or-nothing(§0-3) 계약 고정.
 import { describe, expect, it } from "vitest";
 import {
+  configDefaults,
   parseManifest,
   pluginCommandName,
   resolveText,
@@ -424,6 +425,46 @@ describe("parseManifest — libraries(외부 CLI 종속성)", () => {
   });
   it("libraries 배열 아니면 거부", () => {
     expect(parseManifest(base({ libraries: {} }), "demo").manifest).toBeNull();
+  });
+});
+
+describe("parseManifest — configuration(설정 스키마)", () => {
+  const cfg = [
+    { key: "defaultAgent", type: "enum", enum: ["claude", "codex", "gemini"], default: "claude", title: "기본 에이전트" },
+    { key: "maxRounds", type: "number", default: 5, min: 1, max: 20, title: "합의 상한" },
+    { key: "showGuestbook", type: "boolean", default: true, title: "방명록" },
+  ];
+  it("유효한 configuration 수용 + 정규화", () => {
+    const { manifest, validation } = parseManifest(base({ configuration: cfg }), "demo");
+    expect(validation.ok).toBe(true);
+    expect(manifest?.configuration).toEqual(cfg);
+  });
+  it("없으면 키 자체가 없음(선택)", () => {
+    expect(parseManifest(base(), "demo").manifest).not.toHaveProperty("configuration");
+  });
+  it("enum default 가 enum 밖이면 거부", () => {
+    expect(parseManifest(base({ configuration: [{ key: "a", type: "enum", enum: ["x", "y"], default: "z", title: "t" }] }), "demo").manifest).toBeNull();
+  });
+  it("type 과 default 불일치 거부", () => {
+    expect(parseManifest(base({ configuration: [{ key: "a", type: "number", default: "5", title: "t" }] }), "demo").manifest).toBeNull();
+    expect(parseManifest(base({ configuration: [{ key: "a", type: "boolean", default: 1, title: "t" }] }), "demo").manifest).toBeNull();
+  });
+  it("enum 누락 / 비-enum 의 enum 거부", () => {
+    expect(parseManifest(base({ configuration: [{ key: "a", type: "enum", default: "x", title: "t" }] }), "demo").manifest).toBeNull();
+    expect(parseManifest(base({ configuration: [{ key: "a", type: "string", enum: ["x"], default: "x", title: "t" }] }), "demo").manifest).toBeNull();
+  });
+  it("min>max / min·max 는 number 전용 거부", () => {
+    expect(parseManifest(base({ configuration: [{ key: "a", type: "number", default: 5, min: 10, max: 1, title: "t" }] }), "demo").manifest).toBeNull();
+    expect(parseManifest(base({ configuration: [{ key: "a", type: "string", default: "x", min: 1, title: "t" }] }), "demo").manifest).toBeNull();
+  });
+  it("key 형식·중복 거부", () => {
+    expect(parseManifest(base({ configuration: [{ key: "1bad", type: "boolean", default: true, title: "t" }] }), "demo").manifest).toBeNull();
+    const dup = { key: "a", type: "boolean", default: true, title: "t" };
+    expect(parseManifest(base({ configuration: [dup, dup] }), "demo").manifest).toBeNull();
+  });
+  it("configDefaults 기본값 맵", () => {
+    const { manifest } = parseManifest(base({ configuration: cfg }), "demo");
+    expect(configDefaults(manifest!)).toEqual({ defaultAgent: "claude", maxRounds: 5, showGuestbook: true });
   });
 });
 
