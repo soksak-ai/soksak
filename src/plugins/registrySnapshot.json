@@ -111,6 +111,13 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-icons-tabler.git"
     },
     {
+      "id": "soksak-plugin-mailbox",
+      "name": "메시지함",
+      "version": "0.1.0",
+      "description": "프로젝트별 메시지함 — CLI/MCP/API 송신, 푸시(알림·소리·딥링크) 수신, 좌측 탭 읽지않음 표시, 턴 종료 자동 구독.",
+      "repo": "https://github.com/soksak-ai/soksak-plugin-mailbox.git"
+    },
+    {
       "id": "soksak-plugin-memo",
       "name": "메모",
       "version": "1.0.1",
