@@ -64,29 +64,18 @@ T1 maxRun 이 수십으로, T2 마커가 잘려 RED 가 떠야 한다.
 
 ---
 
-# claude-gui E2E (`claude-gui.mjs`)
+# 플러그인 E2E 는 각 플러그인 repo 가 소유한다
 
-soksak-plugin-claude-gui 플러그인(입력 3계층 큐·대화 렌더·persistence·라이브)을 실제 앱에서 멱등 검증.
+플러그인 전용 E2E 시나리오는 코어가 아니라 **해당 플러그인 repo** 에 둔다(분리 원칙 — 코어는
+플러그인 전용 테스트를 담지 않는다). 코어 `scripts/e2e/` 는 코어 기능(리사이즈·멀티윈도우 등)만.
 
-```bash
-SOKSAK_SOCKET=~/.soksak/com.soksak.dev.sock node scripts/e2e/claude-gui.mjs [paneId]
-# 전제: 대상 pane 에 claude 실행 중(없으면 자동 시작). 스냅샷 → /tmp/sok-e2e-claude-gui
-```
+- soksak-plugin-claude-gui → `e2e/claude-gui.mjs` (그 repo)
+- soksak-plugin-mailbox → `e2e/mailbox.mjs` (그 repo)
 
-소켓 RPC + 플러그인 introspection·구동 명령(`plugin.soksak-plugin-claude-gui.state/send/focus/type/queue`)
-으로 단언. `focus`=GUI 입력창 포커스(화면 이동), `type`=입력창에 진짜 타이핑+Enter(우회 없는 입력 경로).
-종료코드 0=결정적 PASS, 1=FAIL. `E2E_ONLY=<scenario[,...]>` 로 일부만 실행. 시나리오:
+각 시나리오는 소켓 RPC(JSON-RPC) 로 실행 중인 코어 앱을 구동·단언하므로 코어 의존성 없이
+플러그인 repo 안에서 독립 실행된다. 아래 방법론은 플러그인·코어 공통.
 
-| # | 검증 | 결정성 |
-|---|---|---|
-| 1 | 모달(/status) 중 입력 → held(다이얼로그 대기), claude 미주입 | 결정적 |
-| 2 | 모달 닫힘 → FIFO 드레인 → L3(claude 처리) 후 큐 제거 | claude 응답 의존(타임아웃 SKIP) |
-| 3 | persistence — GUI 닫았다 열어도 큐 항목 보존 | 결정적 |
-| 4 | 대화 렌더 — JSONL → 버블 N개 + 세션 식별 | 결정적(히스토리 전제) |
-| 5 | 라이브 응답 밴드(.cg-live) | claude 응답 의존(재시도+안전대기, SKIP 허용) |
-| 6 | /resume 세션 동기화 — 통제 fixture(알려진 Q&A 세션 /clear 생성) → 피커 settle+DOWN+Enter → GUI 가 그 세션으로 전환(state.session==newest jsonl) → 입력창 type 입력이 그 세션 도달+렌더 | 결정적(자체 fixture·멱등), 피커 미등장/취소 SKIP |
-
-## 방법론 (테스트 설계 원칙)
+# E2E 작성 방법론 (테스트 설계 원칙)
 
 이 하니스를 만들며 확정한 원칙 — 새 기능 e2e 시 따른다:
 
