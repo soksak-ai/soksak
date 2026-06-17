@@ -10,7 +10,8 @@ import {
   type ContributedProgram,
 } from "../plugins/spec";
 import { detectPlatform, libraryInstallFor } from "../plugins/programRegistry";
-import { transitiveLibraries, usePlugins, type PluginRuntime } from "../state/plugins";
+import { usePlugins, type PluginRuntime } from "../state/plugins";
+import { consentSummary } from "../plugins/consentSummary";
 import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { localize, useT } from "../i18n";
@@ -48,19 +49,22 @@ export function PluginConsentModal({
   plugin,
   onConsent,
   onClose,
+  preview = false,
 }: {
   plugin: PluginRuntime;
   onConsent: () => void;
   onClose: () => void;
+  // preview = 검사 전용(plugin.consent.preview command). 동의 버튼 없이 표시만 — 활성화 안 함.
+  preview?: boolean;
 }) {
   const t = useT();
   // 오버레이 등록 — 모달이 떠 있는 동안 브라우저 홀의 마우스 통과를 차단한다.
   useOverlayActive();
   const m = plugin.manifest;
   const installed = usePlugins((s) => s.plugins);
-  // 종속성 — 플러그인↔플러그인(dependencies) + 외부 라이브러리(전이 수집, 설치와 단일 소스).
-  const pluginDeps = Object.entries(m.dependencies ?? {});
-  const libs = transitiveLibraries(m, installed);
+  // 종속성 — 동의 표시 데이터의 단일 소스(consentSummary). plugin.consent.summary 와 같은 함수에서 파생.
+  const { plugins: pluginDeps, libraries: libs } =
+    consentSummary(m, installed).dependencies;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -221,18 +225,15 @@ export function PluginConsentModal({
             <>
               <div className="dsec">{t("plugin.consent.dependencies")}</div>
               <ul className="plugin-consent-list">
-                {pluginDeps.map(([depId, range]) => {
-                  const dep = installed[depId];
-                  return (
-                    <li key={`dep:${depId}`} className="plugin-consent-item">
-                      <span className="plugin-consent-detail">
-                        {t("plugin.consent.dep.plugin")} —{" "}
-                        {dep ? `${localize(dep.manifest.name)} ` : ""}
-                        {depId} ({range})
-                      </span>
-                    </li>
-                  );
-                })}
+                {pluginDeps.map((dep) => (
+                  <li key={`dep:${dep.id}`} className="plugin-consent-item">
+                    <span className="plugin-consent-detail">
+                      {t("plugin.consent.dep.plugin")} —{" "}
+                      {dep.name ? `${localize(dep.name)} ` : ""}
+                      {dep.id} ({dep.range})
+                    </span>
+                  </li>
+                ))}
                 {libs.map((lib) => {
                   const cmd = libraryInstallFor(lib);
                   return (
@@ -264,11 +265,13 @@ export function PluginConsentModal({
 
           <div className="plugin-consent-actions">
             <button type="button" className="dbtn" onClick={onClose}>
-              {t("common.cancel")}
+              {preview ? t("plugin.consent.close") : t("common.cancel")}
             </button>
-            <button type="button" className="dbtn dbtn-acc" onClick={onConsent}>
-              {t("plugin.consent.agree")}
-            </button>
+            {preview ? null : (
+              <button type="button" className="dbtn dbtn-acc" onClick={onConsent}>
+                {t("plugin.consent.agree")}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -17,6 +17,8 @@ import {
 } from "../plugins/dependencyGraph";
 import { getFileView } from "./fileViewBridge";
 import { register } from "./registry";
+import { useUi } from "../state/ui";
+import { consentSummary } from "../plugins/consentSummary";
 
 // 설치/dev 런타임 → 의존 그래프 노드(매니페스트 dependencies 기준).
 function depNodes(): DepNode[] {
@@ -227,6 +229,48 @@ export function registerPluginCatalog(): void {
     examples: ['sok plugin.disable \'{"id":"soksak-plugin-memo"}\''],
     danger: "destructive",
     handler: (p) => usePlugins.getState().disable(p.id as string),
+  });
+
+  register("plugin.consent.summary", {
+    description:
+      "동의 표시 데이터 — 권한·기여 수·종속성(플러그인+라이브러리). 동의 모달과 같은 단일 소스(consentSummary). 검증/검사용",
+    params: { id: { type: "string", description: "플러그인 id", required: true } },
+    returns: "{ id, version, permissions, contributes, dependencies:{plugins,libraries} }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok plugin.consent.summary \'{"id":"soksak-plugin-acp-orchestra"}\''],
+    handler: (p) => {
+      const s = usePlugins.getState();
+      const plug = s.plugins[p.id as string];
+      if (!plug) return notFound(`플러그인 없음: ${p.id}`);
+      return consentSummary(plug.manifest, s.plugins);
+    },
+  });
+
+  register("plugin.consent.preview", {
+    description:
+      "동의 모달을 검사용으로 표시(활성화 안 함) — 권한·기여·종속성을 사람이 확인. 멱등(다시 호출/null 로 닫기)",
+    params: {
+      id: {
+        type: "string",
+        description: "플러그인 id(빈 문자열/생략 = 닫기)",
+      },
+    },
+    returns: "{ id, shown }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: [
+      'sok plugin.consent.preview \'{"id":"soksak-plugin-acp-orchestra"}\'',
+      'sok plugin.consent.preview \'{"id":""}\'  # 닫기',
+    ],
+    handler: (p) => {
+      const id = (p.id as string | undefined) ?? "";
+      if (!id) {
+        useUi.getState().setConsentPreview(null);
+        return { id: "", shown: false };
+      }
+      if (!usePlugins.getState().plugins[id]) return notFound(`플러그인 없음: ${id}`);
+      useUi.getState().setConsentPreview(id);
+      return { id, shown: true };
+    },
   });
 
   register("plugin.reload", {

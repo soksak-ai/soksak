@@ -13,6 +13,10 @@ interface UiState {
   overlayCount: number;
   pushOverlay: () => void;
   popOverlay: () => void;
+  // 동의 모달 미리보기(plugin.consent.preview command) — 설정/검사용으로 띄울 플러그인 id. null=닫힘.
+  // App 레벨에서 렌더(사이드바 마운트 여부 무관). 활성화는 안 함(검사 전용).
+  consentPreviewId: string | null;
+  setConsentPreview: (id: string | null) => void;
 }
 
 // 0↔1 경계에서만 네이티브 hitTest 게이트를 동기화(불필요 IPC 억제).
@@ -28,6 +32,8 @@ invoke("browser_overlay_active", { active: false }).catch(() => {});
 
 export const useUi = create<UiState>((set) => ({
   overlayCount: 0,
+  consentPreviewId: null,
+  setConsentPreview: (id) => set({ consentPreviewId: id }),
   pushOverlay: () =>
     set((s) => {
       syncNative(s.overlayCount, s.overlayCount + 1);

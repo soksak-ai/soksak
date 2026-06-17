@@ -23,6 +23,7 @@ import { Icon } from "./ui/icons/Icon";
 // 워드마크 로고 — fill 이 currentColor 상속이라 테마를 자동 추종(정적 신뢰 에셋).
 import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
+import { ConsentPreviewHost } from "./components/ConsentPreviewHost";
 import { useT } from "./i18n";
 import {
   allGroups,
@@ -765,6 +766,7 @@ function App() {
       </div>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      <ConsentPreviewHost />
       {newProjectOpen && (
         <NewProjectModal onClose={() => setNewProjectOpen(false)} />
       )}

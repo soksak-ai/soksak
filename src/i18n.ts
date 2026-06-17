@@ -185,6 +185,7 @@ const ko = {
   "plugin.consent.notice":
     "이 플러그인의 코드는 앱과 같은 권한으로 실행됩니다(샌드박스 없음). 권한 표시는 선언이며 격리가 아닙니다 — 신뢰할 수 있는 소스만 활성화하세요.",
   "plugin.consent.agree": "동의하고 활성화",
+  "plugin.consent.close": "닫기",
   "plugin.consent.contributes": "이 플러그인이 추가하는 것",
   "plugin.consent.noContributes": "추가하는 기능 없음",
   "plugin.consent.revokeNote": "비활성화·제거 시 위 항목은 전부 자동 회수됩니다.",
@@ -390,6 +391,7 @@ const en: Record<MsgKey, string> = {
   "plugin.consent.notice":
     "This plugin's code runs with the same privileges as the app (no sandbox). Permissions are declarations, not isolation — only enable sources you trust.",
   "plugin.consent.agree": "Agree & enable",
+  "plugin.consent.close": "Close",
   "plugin.consent.contributes": "What this plugin adds",
   "plugin.consent.noContributes": "No contributed features",
   "plugin.consent.revokeNote":
