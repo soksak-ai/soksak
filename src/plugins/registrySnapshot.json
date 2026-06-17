@@ -163,6 +163,26 @@
         "en": "A window to the sky in the left sidebar — shifts with the time of day; trees sway, clouds drift by day, stars twinkle at night."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-window.git"
+    },
+    {
+      "id": "soksak-plugin-acp-core",
+      "name": "ACP Core",
+      "version": "0.1.0",
+      "description": {
+        "ko": "AI 코딩 에이전트(Claude·Codex·Gemini)를 ACP 로 서브프로세스 실행하는 라이브러리 플러그인(UI 없음). 다른 플러그인의 의존성.",
+        "en": "Library plugin (no UI) running ACP coding agents (Claude·Codex·Gemini) as subprocesses. A dependency of other plugins."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-acp-core.git"
+    },
+    {
+      "id": "soksak-plugin-acp-studio",
+      "name": "ACP Studio",
+      "version": "0.1.0",
+      "description": {
+        "ko": "여러 AI 코딩 에이전트를 한 워크스페이스에서 협업 — 체크박스 로스터·턴제/자유 대화·실파일·Clubhouse 사교. ACP 기반.",
+        "en": "Collaborate with multiple AI coding agents in one workspace — checkbox roster, turn-based/free chat, real files, Clubhouse social. ACP-based."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-acp-studio.git"
     }
   ]
 }
