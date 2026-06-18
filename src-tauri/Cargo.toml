@@ -43,6 +43,10 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 tauri-plugin-notification = "2"
 # 딥링크 soksak:// URL 스킴 — 알림/외부 진입을 command URI 로 라우팅(콜드스타트 포함).
 tauri-plugin-deep-link = "2"
+# 클립보드 capability — 크로스플랫폼 텍스트 읽기/쓰기 + 변경 감시. 변경 감시는 OS별 네이티브 푸시
+# 이벤트(Win=WM_CLIPBOARDUPDATE / X11=XFixes / Wayland=wl-data-control), macOS 만 NSPasteboard
+# changeCount 폴링(이벤트 API 부재). clipboard-rs 가 4 백엔드를 단일 ClipboardHandler 로 흡수.
+clipboard-rs = "0.2"
 
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.

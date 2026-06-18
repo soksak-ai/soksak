@@ -1,4 +1,5 @@
 mod browser;
+mod clipboard;
 mod data;
 #[cfg(target_os = "macos")]
 mod dockmenu;
@@ -75,6 +76,7 @@ pub fn run() {
         .manage(PtyManager::default())
         .manage(ProcessManager::default())
         .manage(FsWatcher::default())
+        .manage(clipboard::ClipboardState::default())
         .manage(CmdBridge::default())
         .manage(data::DbState::default())
         .setup(|app| {
@@ -86,6 +88,10 @@ pub fn run() {
             // 파일 워처 1회 초기화(이벤트 콜백에 앱 핸들 주입).
             let handle = app.handle().clone();
             app.state::<FsWatcher>().init(handle);
+            // 클립보드 watcher 1회 초기화(이벤트 emit 용 앱 핸들 주입). 실제 감시는 플러그인이
+            // clipboard_watch_start 를 호출할 때 시작 — 쓰지 않으면 스레드/폴링 0.
+            app.state::<clipboard::ClipboardState>()
+                .init(app.handle().clone());
             // AI 명령 인터페이스 소켓 서버(sok CLI/MCP 의 통로).
             if let Err(e) = ipc::start(app.handle().clone()) {
                 eprintln!("[ipc] 소켓 서버 기동 실패: {e}");
@@ -193,6 +199,10 @@ pub fn run() {
             git::git_diff,
             watcher::watch_dir,
             watcher::unwatch_dir,
+            clipboard::clipboard_read,
+            clipboard::clipboard_write,
+            clipboard::clipboard_watch_start,
+            clipboard::clipboard_watch_stop,
             browser::browser_open,
             browser::browser_bounds,
             browser::browser_navigate,

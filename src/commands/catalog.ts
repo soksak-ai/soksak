@@ -40,6 +40,7 @@ import { registerDomCatalog } from "./catalogDom";
 import { registerDataCatalog } from "./catalogData";
 import { registerTurnCatalog } from "./catalogTurn";
 import { registerNetworkCatalog } from "./catalogNetwork";
+import { registerClipboardCatalog } from "./catalogClipboard";
 import {
   ensureDefaultWorkspace,
   FOLDER_NAME_RE,
@@ -2032,4 +2033,5 @@ export function registerCatalog(): void {
   registerDataCatalog();
   registerTurnCatalog();
   registerNetworkCatalog();
+  registerClipboardCatalog();
 }
