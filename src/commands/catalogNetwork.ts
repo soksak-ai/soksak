@@ -14,6 +14,25 @@ function hexToBytes(hex: string): number[] | null {
   return out;
 }
 
+function bytesToHex(bytes: number[]): string {
+  return bytes.map((b) => (b & 0xff).toString(16).padStart(2, "0")).join("");
+}
+
+// 바이트 → UTF-8 텍스트(SSDP/HTTP-like 응답을 플러그인이 바로 파싱하게). 디코드 실패 시 빈 문자열.
+function bytesToText(bytes: number[]): string {
+  try {
+    return new TextDecoder().decode(new Uint8Array(bytes));
+  } catch {
+    return "";
+  }
+}
+
+interface CoreUdpPacket {
+  address: string;
+  port: number;
+  data: number[];
+}
+
 export function registerNetworkCatalog(): void {
   register("net.udp.send", {
     description:
@@ -54,6 +73,52 @@ export function registerNetworkCatalog(): void {
         broadcast: (p.broadcast as boolean | undefined) ?? null,
       });
       return { bytesSent };
+    },
+  });
+
+  register("net.udp.request", {
+    description:
+      "UDP 요청-응답 — 한 소켓에서 host:port 로 data(hex) 전송 후 timeoutMs 동안 응답을 수집(SSDP discover·mDNS·DNS 등). 같은 소켓이라 유니캐스트 응답이 송신 포트로 돌아온다. 응답은 hex+text 동반",
+    params: {
+      host: {
+        type: "string",
+        description: "목표 호스트(SSDP 는 239.255.255.250)",
+        required: true,
+      },
+      port: { type: "number", description: "목표 포트(SSDP 는 1900)", required: true },
+      data: { type: "string", description: "전송 바이트(hex 문자열)", required: true },
+      timeoutMs: { type: "number", description: "응답 수집 시간(ms, 기본 3000)" },
+      maxPackets: { type: "number", description: "최대 수신 패킷 수(기본 64)" },
+    },
+    returns: "{ packets: [{ address, port, data(hex), text }] }",
+    danger: "inject",
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: [
+      'sok net.udp.request \'{"host":"239.255.255.250","port":1900,"data":"...","timeoutMs":3000}\'',
+    ],
+    handler: async (p) => {
+      const bytes = hexToBytes(p.data as string);
+      if (!bytes) {
+        return {
+          ok: false as const,
+          code: "INVALID_PARAMS" as const,
+          message: "data 는 짝수 길이 hex 문자열이어야 함",
+        };
+      }
+      const raw = await invoke<CoreUdpPacket[]>("network_udp_request", {
+        host: p.host,
+        port: p.port,
+        data: bytes,
+        timeoutMs: (p.timeoutMs as number | undefined) ?? null,
+        maxPackets: (p.maxPackets as number | undefined) ?? null,
+      });
+      const packets = raw.map((pk) => ({
+        address: pk.address,
+        port: pk.port,
+        data: bytesToHex(pk.data),
+        text: bytesToText(pk.data),
+      }));
+      return { packets };
     },
   });
 }

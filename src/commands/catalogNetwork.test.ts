@@ -15,6 +15,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   unregister("net.udp.send");
+  unregister("net.udp.request");
 });
 
 describe("net.udp.send 등록", () => {
@@ -58,6 +59,46 @@ describe("net.udp.send 실행", () => {
 
   it("홀수 길이/비-hex data 는 INVALID_PARAMS (invoke 미호출)", async () => {
     const r = await execute("net.udp.send", { host: "127.0.0.1", port: 9, data: "xyz" }, {});
+    expect(r).toMatchObject({ ok: false, code: "INVALID_PARAMS" });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
+
+describe("net.udp.request 등록/실행", () => {
+  it("danger:inject + host/port/data 필수", () => {
+    const spec = getSpec("net.udp.request");
+    expect(spec).toBeDefined();
+    expect(spec!.danger).toBe("inject");
+    expect(spec!.params.host.required).toBe(true);
+    expect(spec!.params.port.required).toBe(true);
+    expect(spec!.params.data.required).toBe(true);
+  });
+
+  it("hex 송신 + 응답 패킷 data 를 hex 로 반환(코어 위임)", async () => {
+    // 코어가 raw 바이트 배열 패킷을 주면, hex 문자열로 변환해 반환.
+    invoke.mockResolvedValueOnce([
+      { address: "192.168.0.10", port: 1900, data: [72, 73] }, // "HI"
+    ]);
+    const r = await execute(
+      "net.udp.request",
+      { host: "239.255.255.250", port: 1900, data: "4d2d", timeoutMs: 800 },
+      {},
+    );
+    expect(invoke).toHaveBeenCalledWith("network_udp_request", {
+      host: "239.255.255.250",
+      port: 1900,
+      data: [0x4d, 0x2d],
+      timeoutMs: 800,
+      maxPackets: null,
+    });
+    expect(r).toEqual({
+      ok: true,
+      packets: [{ address: "192.168.0.10", port: 1900, data: "4849", text: "HI" }],
+    });
+  });
+
+  it("홀수 길이/비-hex data 는 INVALID_PARAMS (invoke 미호출)", async () => {
+    const r = await execute("net.udp.request", { host: "127.0.0.1", port: 9, data: "zz" }, {});
     expect(r).toMatchObject({ ok: false, code: "INVALID_PARAMS" });
     expect(invoke).not.toHaveBeenCalled();
   });

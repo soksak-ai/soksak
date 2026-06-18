@@ -155,6 +155,7 @@ pub fn run() {
             process::process_write,
             process::process_kill,
             network::network_udp_send,
+            network::network_udp_request,
             fs::list_children,
             fs::read_text_file,
             fs::write_text_file,
