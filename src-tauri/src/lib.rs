@@ -87,8 +87,16 @@ pub fn run() {
                 Ok(conn) => app.state::<data::DbState>().set(conn),
                 Err(e) => eprintln!("[data] DB 열기 실패: {e}"),
             }
-            // 시크릿 볼트 — 헤드리스/e2e 자동 unlock(SOKSAK_VAULT_KEY env 있을 때만, 없으면 잠김 유지).
-            secrets::auto_unlock_from_env(&app.state::<secrets::SecretsState>());
+            // 시크릿 볼트 — 프로덕션 경로 주입(init 1회) 후 헤드리스/e2e 자동 unlock
+            // (SOKSAK_VAULT_KEY env 있을 때만, 없으면 잠김 유지).
+            {
+                let st = app.state::<secrets::SecretsState>();
+                match secrets::default_vault_path() {
+                    Ok(p) => st.set_path(p),
+                    Err(e) => eprintln!("[secrets] 볼트 경로 계산 실패: {e}"),
+                }
+                secrets::auto_unlock_from_env(&st);
+            }
             // 파일 워처 1회 초기화(이벤트 콜백에 앱 핸들 주입).
             let handle = app.handle().clone();
             app.state::<FsWatcher>().init(handle);

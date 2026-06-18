@@ -13,9 +13,24 @@
 // passphrase 정합을 검증(KEK 자체는 저장하지 않으므로 이게 유일한 검증 채널).
 //
 // get 명령 없음 — 평문 readback 을 코어가 차단한다(2b 의 secretRef 주입만이 평문 경로).
+//
+// ── 메모리 위생(zeroize) — 실제 스크럽 범위(거짓 주장 0) ─────────────────────────
+// lock 시: kek Mutex 슬롯의 32바이트를 in-place 로 zeroize 한 뒤 None — 슬롯의 실제
+//   바이트를 지운다(로컬 사본만 지우고 슬롯은 남기지 않는다).
+// derive_kek→unlock 흐름의 파생 KEK 는 Zeroizing<[u8;32]> 로 감싸 잔존 스택 사본을
+//   소멸 시 자동 스크럽. seal/open 내부 중간 DEK 는 사용 직후 zeroize.
+// 한계(정직): Argon2/AEAD crate 내부가 입력 키를 복사하는 임시 버퍼·레지스터 잔존은
+//   이 코드가 닿지 않는다 — Rust/crate 경계 밖이라 완전 스택 스크럽은 보장하지 않는다.
+//   우리가 보장하는 것은 우리가 소유한 버퍼(슬롯·파생 KEK·중간 DEK)의 스크럽뿐이다.
+//
+// ── ns 는 암호 경계가 아니다 — 접근제어 라벨 ──────────────────────────────────
+// 전 ns 가 단일 KEK 를 공유한다(per-ns 키 분리 없음). ns 는 암호적 격리가 아니라
+//   API 주입층(api.ts 가 ns=manifest.id 주입)에서 강제되는 접근제어 라벨이다.
+// catalogSecrets.ts 의 secret.* 명령은 임의 ns 파라미터를 허용한다 — CLI/MCP 는
+//   운영자 full-trust 신뢰경계라 ns 를 자유 지정한다(플러그인 표면만 ns 가 고정).
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use argon2::{Algorithm, Argon2, Params, Version};
@@ -25,7 +40,7 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 // OWASP Argon2id 권장(2024): m=19456 KiB, t=2, p=1. 헤더에 기록 — 미래 파라미터 변경 대비.
 const ARGON2_M_COST: u32 = 19456;
@@ -91,12 +106,19 @@ mod b64 {
 // ── 순수 crypto(테스트 분리) ─────────────────────────────────────────────────
 
 // passphrase + salt → KEK(32B). Argon2id, 헤더 파라미터. 실패는 사유 문자열.
-pub fn derive_kek(passphrase: &[u8], salt: &[u8], m: u32, t: u32, p: u32) -> Result<[u8; KEY_LEN], String> {
+// 파생 KEK 는 Zeroizing 으로 감싸 잔존 스택 사본을 소멸 시 자동 스크럽한다.
+pub fn derive_kek(
+    passphrase: &[u8],
+    salt: &[u8],
+    m: u32,
+    t: u32,
+    p: u32,
+) -> Result<Zeroizing<[u8; KEY_LEN]>, String> {
     let params = Params::new(m, t, p, Some(KEY_LEN)).map_err(|e| format!("argon2 파라미터: {e}"))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
-    let mut kek = [0u8; KEY_LEN];
+    let mut kek = Zeroizing::new([0u8; KEY_LEN]);
     argon2
-        .hash_password_into(passphrase, salt, &mut kek)
+        .hash_password_into(passphrase, salt, kek.as_mut())
         .map_err(|e| format!("KEK 도출 실패: {e}"))?;
     Ok(kek)
 }
@@ -163,12 +185,16 @@ pub fn open(kek: &[u8; KEY_LEN], item: &SealedItem) -> Result<Vec<u8>, String> {
 
 #[derive(Default)]
 pub struct SecretsState {
-    kek: Mutex<Option<[u8; KEY_LEN]>>, // unlock 시 메모리에만, lock 시 zeroize
+    kek: Mutex<Option<[u8; KEY_LEN]>>, // unlock 시 메모리에만, lock 시 슬롯 in-place zeroize
     vault: Mutex<Option<VaultData>>,   // 디스크 동기화(None=미로딩)
+    // 볼트 파일 경로 — init(lib.rs setup) 에서 1회 설정. 미설정이면 프로덕션 경로 계산으로 폴백.
+    // 테스트는 임시 path 를 직접 주입(전역 HOME 변이 0 — data/store.rs·plugins.rs 주입형 선례).
+    path: Mutex<Option<PathBuf>>,
 }
 
-// ~/.soksak/secrets.vault — 단일 파일(data/mod.rs db_path 패턴).
-fn vault_path() -> Result<PathBuf, String> {
+// 프로덕션 볼트 경로: HOME → ~/.soksak/secrets.vault. data/mod.rs db_path 패턴.
+// '주어진 경로로 동작' 과 분리(이 함수는 경로 계산만, 디렉토리 생성 포함).
+pub fn default_vault_path() -> Result<PathBuf, String> {
     let home = std::env::var("HOME").map_err(|e| format!("HOME 없음: {e}"))?;
     let dir = PathBuf::from(home).join(".soksak");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -202,12 +228,26 @@ fn validate_key(key: &str) -> Result<(), String> {
 }
 
 impl SecretsState {
+    // init: 볼트 경로를 주입(lib.rs setup 1회). 프로덕션은 default_vault_path() 를 넘긴다.
+    pub fn set_path(&self, path: PathBuf) {
+        *self.path.lock().expect("secrets path mutex") = Some(path);
+    }
+
+    // 이 State 가 쓸 볼트 경로 — 주입됐으면 그 path, 아니면 프로덕션 계산으로 폴백.
+    fn vault_file(&self) -> Result<PathBuf, String> {
+        if let Some(p) = self.path.lock().map_err(|e| e.to_string())?.as_ref() {
+            return Ok(p.clone());
+        }
+        default_vault_path()
+    }
+
     // 새 볼트 헤더 생성 — salt 생성 + KEK 도출 + verifier 봉인. KEK 는 호출자가 보관.
-    fn new_vault(passphrase: &[u8]) -> Result<(VaultData, [u8; KEY_LEN]), String> {
+    fn new_vault(passphrase: &[u8]) -> Result<(VaultData, Zeroizing<[u8; KEY_LEN]>), String> {
         let mut salt = [0u8; SALT_LEN];
         OsRng.fill_bytes(&mut salt);
         let kek = derive_kek(passphrase, &salt, ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST)?;
         let verifier = seal(&kek, VERIFIER_MARKER)?;
+        // kek: &Zeroizing<[u8;32]> → seal 의 &[u8;32] 는 Deref 강제로 충족.
         let header = VaultHeader {
             version: VAULT_VERSION,
             kdf: "argon2id".to_string(),
@@ -220,32 +260,34 @@ impl SecretsState {
         Ok((VaultData { header, entries: BTreeMap::new() }, kek))
     }
 
-    // 디스크 → VaultData. 없으면 None.
-    fn load_from_disk() -> Result<Option<VaultData>, String> {
-        let path = vault_path()?;
+    // 주어진 경로 → VaultData. 없으면 None. (경로 주입형 — 테스트가 임시 path 를 직접 준다.)
+    fn load_from_disk(path: &Path) -> Result<Option<VaultData>, String> {
         if !path.exists() {
             return Ok(None);
         }
-        let raw = std::fs::read(&path).map_err(|e| format!("볼트 읽기 실패: {e}"))?;
+        let raw = std::fs::read(path).map_err(|e| format!("볼트 읽기 실패: {e}"))?;
         let vault: VaultData =
             serde_json::from_slice(&raw).map_err(|e| format!("볼트 파싱 실패: {e}"))?;
         Ok(Some(vault))
     }
 
-    // VaultData → 디스크(원자적: 임시파일 쓰고 rename). 볼트는 암호문만 담는다.
-    fn flush(vault: &VaultData) -> Result<(), String> {
-        let path = vault_path()?;
+    // VaultData → 주어진 경로(원자적: 임시파일 쓰고 rename). 볼트는 암호문만 담는다.
+    fn flush(path: &Path, vault: &VaultData) -> Result<(), String> {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("볼트 디렉토리 실패: {e}"))?;
+        }
         let bytes = serde_json::to_vec_pretty(vault).map_err(|e| e.to_string())?;
         let tmp = path.with_extension("vault.tmp");
         std::fs::write(&tmp, &bytes).map_err(|e| format!("볼트 쓰기 실패: {e}"))?;
-        std::fs::rename(&tmp, &path).map_err(|e| format!("볼트 교체 실패: {e}"))
+        std::fs::rename(&tmp, path).map_err(|e| format!("볼트 교체 실패: {e}"))
     }
 
     // unlock: 볼트 없으면 새로 생성(salt·verifier), 있으면 KEK 도출 후 verifier 복호로 검증.
     // 성공 시 KEK 를 메모리 보관. 잘못된 passphrase 면 verifier 개봉 실패 → Err.
     fn unlock(&self, passphrase: &str) -> Result<(), String> {
         let pw = passphrase.as_bytes();
-        let (vault, kek) = match Self::load_from_disk()? {
+        let path = self.vault_file()?;
+        let (vault, kek) = match Self::load_from_disk(&path)? {
             Some(vault) => {
                 let h = &vault.header;
                 let kek = derive_kek(pw, &h.salt, h.m_cost, h.t_cost, h.p_cost)?;
@@ -258,21 +300,25 @@ impl SecretsState {
             }
             None => {
                 let (vault, kek) = Self::new_vault(pw)?;
-                Self::flush(&vault)?;
+                Self::flush(&path, &vault)?;
                 (vault, kek)
             }
         };
-        *self.kek.lock().map_err(|e| e.to_string())? = Some(kek);
+        // Zeroizing 파생 KEK → 슬롯에 사본 저장(파생 본은 함수 끝에서 자동 스크럽).
+        *self.kek.lock().map_err(|e| e.to_string())? = Some(*kek);
         *self.vault.lock().map_err(|e| e.to_string())? = Some(vault);
         Ok(())
     }
 
-    // lock: KEK zeroize → None. 볼트 데이터(암호문)는 메모리에 남겨도 무해하나 함께 비운다.
+    // lock: KEK 슬롯을 in-place zeroize → None. take() 의 로컬 사본이 아니라
+    // Mutex 슬롯의 실제 32바이트를 직접 지운다(헤더의 '슬롯 in-place 스크럽' 보장과 일치).
+    // 볼트 데이터(암호문)는 메모리에 남겨도 무해하나 함께 비운다.
     fn lock(&self) -> Result<(), String> {
         let mut guard = self.kek.lock().map_err(|e| e.to_string())?;
-        if let Some(mut kek) = guard.take() {
-            kek.zeroize();
+        if let Some(k) = guard.as_mut() {
+            k.zeroize();
         }
+        *guard = None;
         *self.vault.lock().map_err(|e| e.to_string())? = None;
         Ok(())
     }
@@ -292,10 +338,11 @@ impl SecretsState {
         validate_ns(ns)?;
         validate_key(key)?;
         let item = self.with_kek(|kek| seal(kek, value.as_bytes()))?;
+        let path = self.vault_file()?;
         let mut guard = self.vault.lock().map_err(|e| e.to_string())?;
         let vault = guard.as_mut().ok_or("vault locked")?;
         vault.entries.entry(ns.to_string()).or_default().insert(key.to_string(), item);
-        Self::flush(vault)
+        Self::flush(&path, vault)
     }
 
     fn has(&self, ns: &str, key: &str) -> Result<bool, String> {
@@ -313,11 +360,12 @@ impl SecretsState {
         if !self.is_unlocked() {
             return Err("vault locked".to_string());
         }
+        let path = self.vault_file()?;
         let mut guard = self.vault.lock().map_err(|e| e.to_string())?;
         let vault = guard.as_mut().ok_or("vault locked")?;
         let removed = vault.entries.get_mut(ns).is_some_and(|m| m.remove(key).is_some());
         if removed {
-            Self::flush(vault)?;
+            Self::flush(&path, vault)?;
         }
         Ok(removed)
     }
@@ -407,9 +455,25 @@ pub fn secret_backend(state: State<'_, SecretsState>) -> Result<BackendInfo, Str
 mod tests {
     use super::*;
 
-    fn kek_a() -> [u8; KEY_LEN] {
+    fn kek_a() -> Zeroizing<[u8; KEY_LEN]> {
         derive_kek(b"correct horse", b"salt-aaaa-bbbb-cc", ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST)
             .unwrap()
+    }
+
+    // 임시 볼트 path 주입 — 전역 HOME 변이 0(병렬 test-threads 레이스 제거).
+    // data/store.rs(&Connection)·plugins.rs(&Path base) 주입형 선례.
+    fn state_with_tmp_vault(tag: &str) -> (SecretsState, PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "soksak-secrets-{tag}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("secrets.vault");
+        let s = SecretsState::default();
+        s.set_path(path);
+        (s, dir)
     }
 
     // (a) seal → open roundtrip — 같은 KEK 로 봉인·개봉 시 평문 복원.
@@ -446,39 +510,25 @@ mod tests {
         assert!(open(&kek, &item2).is_err());
     }
 
-    // (d) unlock 잘못된 passphrase → Err. 볼트 파일을 임시 HOME 에 만들고 다른 pass 로 재unlock.
+    // (d) unlock 잘못된 passphrase → Err. 임시 path 주입(HOME 변이 0), 다른 pass 로 재unlock.
     #[test]
     fn unlock_wrong_passphrase_rejected() {
-        let tmp = std::env::temp_dir().join(format!("soksak-secrets-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-        // HOME 격리 — vault_path 가 이 디렉토리를 쓰도록.
-        let prev = std::env::var("HOME").ok();
-        std::env::set_var("HOME", &tmp);
+        let (s, dir) = state_with_tmp_vault("wrongpass");
 
-        let s = SecretsState::default();
         s.unlock("right-passphrase").unwrap(); // 새 볼트 생성
         s.lock().unwrap();
         let bad = s.unlock("WRONG-passphrase");
         assert!(bad.is_err(), "잘못된 passphrase 는 거부되어야 함");
         s.unlock("right-passphrase").unwrap(); // 올바른 pass 는 다시 열림
 
-        if let Some(h) = prev {
-            std::env::set_var("HOME", h);
-        }
-        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // (e) ns 격리 — ns A 의 key 가 ns B keys 에 안 보임.
     #[test]
     fn ns_isolation() {
-        let tmp = std::env::temp_dir().join(format!("soksak-secrets-ns-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&tmp);
-        std::fs::create_dir_all(&tmp).unwrap();
-        let prev = std::env::var("HOME").ok();
-        std::env::set_var("HOME", &tmp);
+        let (s, dir) = state_with_tmp_vault("ns");
 
-        let s = SecretsState::default();
         s.unlock("pw").unwrap();
         s.set("plugin-a", "token", "aaa").unwrap();
         s.set("plugin-b", "key", "bbb").unwrap();
@@ -489,10 +539,7 @@ mod tests {
         assert!(!s.has("plugin-b", "token").unwrap()); // A 의 key 가 B 에 안 보임
         assert!(s.keys("plugin-c").unwrap().is_empty());
 
-        if let Some(h) = prev {
-            std::env::set_var("HOME", h);
-        }
-        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // locked 상태에서 연산 거부.
