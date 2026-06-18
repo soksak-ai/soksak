@@ -41,6 +41,7 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
     setFileText: () => false,
     onFsChange: () => () => {},
     onDataChange: () => () => {},
+    onClipboardChange: () => () => {},
     ...overrides,
   };
 }
@@ -364,6 +365,76 @@ describe("notify/sound — 권한 게이트", () => {
     const on = buildPluginApi(manifestOf({ permissions: ["notify"] }), "/d", fakeDeps());
     expect(typeof on.api.notify?.push).toBe("function");
     expect(on.api.sound?.builtins()).toContain("chime");
+  });
+});
+
+describe("clipboard — read/write 권한별 게이트 + watch(전 창 시그널)", () => {
+  it("미선언 시 표면 undefined", () => {
+    const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
+    expect(api.clipboard).toBeUndefined();
+  });
+
+  it("read/write 권한별 메서드 게이트(watch 는 read 소관)", () => {
+    const ro = buildPluginApi(
+      manifestOf({ permissions: ["clipboard:read"] }),
+      "/d",
+      fakeDeps(),
+    ).api;
+    expect(ro.clipboard?.readText).toBeDefined();
+    expect(ro.clipboard?.watch).toBeDefined();
+    expect(ro.clipboard?.writeText).toBeUndefined();
+
+    const wo = buildPluginApi(
+      manifestOf({ permissions: ["clipboard:write"] }),
+      "/d",
+      fakeDeps(),
+    ).api;
+    expect(wo.clipboard?.writeText).toBeDefined();
+    expect(wo.clipboard?.readText).toBeUndefined();
+    expect(wo.clipboard?.watch).toBeUndefined();
+  });
+
+  it("readText→clipboard_read, writeText→clipboard_write", async () => {
+    const d = fakeDeps({
+      invoke: vi.fn(async (cmd: string) =>
+        cmd === "clipboard_read" ? "복사된 텍스트" : null,
+      ),
+    });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["clipboard:read", "clipboard:write"] }),
+      "/d",
+      d,
+    );
+    expect(await api.clipboard!.readText!()).toBe("복사된 텍스트");
+    await api.clipboard!.writeText!("새 값");
+    expect(d.invoke).toHaveBeenCalledWith("clipboard_write", { text: "새 값" });
+  });
+
+  it("watch 는 clipboard_watch_start + onClipboardChange 구독, dispose 시 stop", () => {
+    const order: string[] = [];
+    let emit: ((text: string) => void) | null = null;
+    const d = fakeDeps({
+      invoke: vi.fn(async (cmd: string) => {
+        order.push(cmd);
+        return null;
+      }),
+      onClipboardChange: (cb) => {
+        emit = cb as (text: string) => void;
+        return () => order.push("unsubscribe");
+      },
+    });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["clipboard:read"] }),
+      "/d",
+      d,
+    );
+    const seen: string[] = [];
+    const sub = api.clipboard!.watch!((e) => seen.push(e.text));
+    emit!("바뀐 내용");
+    expect(seen).toEqual(["바뀐 내용"]);
+    sub.dispose();
+    expect(order).toContain("clipboard_watch_start");
+    expect(order).toContain("clipboard_watch_stop");
   });
 });
 

@@ -78,5 +78,19 @@ export function defaultPluginDeps(appVersion: string): PluginApiDeps {
         un();
       };
     },
+    // clipboard-change(코어 네이티브 watcher — Win/X11/Wayland 이벤트, macOS changeCount 폴링)
+    // 전 창 구독 → 바뀐 텍스트를 콜백. onFsChange 와 동형(async 도착/중간해지 가드).
+    onClipboardChange: (cb) => {
+      let un = () => {};
+      let disposed = false;
+      void listen<string>("clipboard-change", (e) => cb(e.payload)).then((u) => {
+        if (disposed) u();
+        else un = u;
+      });
+      return () => {
+        disposed = true;
+        un();
+      };
+    },
   };
 }
