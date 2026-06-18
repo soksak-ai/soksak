@@ -188,6 +188,23 @@ pub fn cmd_result(bridge: State<CmdBridge>, id: u64, result: Value) {
     }
 }
 
+// Rust 내부에서 프론트 registry 명령을 실행한다(딥링크 라우팅·스케줄러 발화 공용 — 소켓 서버와 같은
+// CmdBridge 경로 재사용, 새 채널 발명 0). 활성 창으로 라우팅하고 결과를 동기 대기한다(route 가 [1s,600s]
+// 클램프). registry 가 단일 실행 표면이므로 Rust 기능은 이 한 경로로만 명령을 부른다(R8 단일 경로).
+pub fn request_command(app: &AppHandle, method: String, params: Value, timeout_ms: u64) -> Value {
+    route(
+        app,
+        Request {
+            id: None,
+            method,
+            params,
+            pane: None,
+            window: None,
+            timeout_ms: Some(timeout_ms),
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

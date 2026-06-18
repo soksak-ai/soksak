@@ -51,6 +51,8 @@ clipboard-rs = "0.2"
 # HTTP 요청 capability(net.http.request) — runbook api 실행타입. blocking 클라이언트(자체 런타임 —
 # tauri 커맨드는 스레드풀에서 동기 실행). rustls-tls = OpenSSL 비의존 순수 Rust TLS(멀티플랫폼 R5).
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+# 딥링크 command URI(soksak://run?cmd=...) 파싱 — query 디코드. reqwest 트리에 이미 있어 추가 비용 0.
+url = "2"
 
 # 시크릿 볼트(app.secrets) — OS 키체인 비의존 순수 Rust crypto(KeePassXC/1Password 구조). 자체 crypto
 # 발명 0, 검증된 RustCrypto crate 만. Argon2id(passphrase→KEK) + XChaCha20Poly1305(24B nonce AEAD,

@@ -42,6 +42,7 @@ import { registerSecretsCatalog } from "./catalogSecrets";
 import { registerTurnCatalog } from "./catalogTurn";
 import { registerNetworkCatalog } from "./catalogNetwork";
 import { registerClipboardCatalog } from "./catalogClipboard";
+import { registerNotifyCatalog } from "./catalogNotify";
 import {
   ensureDefaultWorkspace,
   FOLDER_NAME_RE,
@@ -2036,4 +2037,5 @@ export function registerCatalog(): void {
   registerTurnCatalog();
   registerNetworkCatalog();
   registerClipboardCatalog();
+  registerNotifyCatalog();
 }

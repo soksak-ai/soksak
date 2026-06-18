@@ -1,6 +1,7 @@
 mod browser;
 mod clipboard;
 mod data;
+mod deeplink;
 #[cfg(target_os = "macos")]
 mod dockmenu;
 mod fs;
@@ -8,6 +9,7 @@ mod git;
 mod http;
 pub mod ipc;
 mod network;
+mod notify;
 mod plugins;
 mod process;
 mod pty;
@@ -110,6 +112,21 @@ pub fn run() {
             if let Err(e) = ipc::start(app.handle().clone()) {
                 eprintln!("[ipc] 소켓 서버 기동 실패: {e}");
             }
+            // 딥링크 라우팅 — soksak://run?cmd=... 외부 진입/알림 클릭이 한 명령을 실행한다(CmdBridge 경유,
+            // 단일 실행 경로). dev 는 스킴이 OS 미등록일 수 있어 register_all 로 런타임 등록(프로덕션은
+            // tauri.conf plugins.deep-link). 파싱 실패/미지 URL 은 조용히 무시(명령 누출 0).
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let dl_handle = app.handle().clone();
+                let _ = app.deep_link().register_all();
+                app.deep_link().on_open_url(move |event| {
+                    for u in event.urls() {
+                        if let Some((cmd, params)) = deeplink::parse_command_url(u.as_str()) {
+                            let _ = ipc::request_command(&dl_handle, cmd, params, 10_000);
+                        }
+                    }
+                });
+            }
             // 신호등: 좌표는 tauri.conf.json trafficLightPosition 이 소유, 유지는
             // titlebar::install 의 NSNotification 옵저버가 담당(titlebar.rs 참조).
             #[cfg(target_os = "macos")]
@@ -176,6 +193,7 @@ pub fn run() {
             process::process_kill,
             network::network_udp_send,
             http::network_http_request,
+            notify::notify_show,
             fs::list_children,
             fs::read_text_file,
             fs::write_text_file,
