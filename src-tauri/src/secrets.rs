@@ -201,6 +201,22 @@ pub fn default_vault_path() -> Result<PathBuf, String> {
     Ok(dir.join("secrets.vault"))
 }
 
+// 볼트 경로 해소 — SOKSAK_VAULT_PATH 가 있으면 그 경로(헤드리스/E2E 격리용 오픈 메커니즘:
+// 사용자 실볼트 비오염·실 passphrase 비종속), 없으면 default_vault_path(). SOKSAK_VAULT_KEY 와 대칭.
+// env 조회를 주입받아 테스트가 전역 env 변형 없이 검증한다(병렬 테스트 안전).
+pub fn resolve_vault_path(env: impl Fn(&str) -> Option<String>) -> Result<PathBuf, String> {
+    match env("SOKSAK_VAULT_PATH") {
+        Some(p) if !p.is_empty() => {
+            let path = PathBuf::from(p);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            Ok(path)
+        }
+        _ => default_vault_path(),
+    }
+}
+
 // ns 검증 — data/mod.rs validate_ns 와 동형(경로/식별자 안전 문자만). 코어 단일 규칙 복제
 // (네임스페이스 격리의 바닥값 — 플러그인 id 또는 core).
 fn validate_ns(ns: &str) -> Result<(), String> {
@@ -511,6 +527,28 @@ mod tests {
         let s = SecretsState::default();
         s.set_path(path);
         (s, dir)
+    }
+
+    // (a0) resolve_vault_path — SOKSAK_VAULT_PATH 주입 시 그 경로(격리), 없으면 default.
+    // 오픈 메커니즘: 헤드리스/E2E 가 사용자 실볼트를 오염하지 않게 경로를 격리한다(passphrase 비종속).
+    #[test]
+    fn vault_path_env_override() {
+        let iso = std::env::temp_dir().join("soksak-vault-override-test").join("secrets.vault");
+        let chosen = resolve_vault_path(|k| {
+            if k == "SOKSAK_VAULT_PATH" {
+                Some(iso.to_string_lossy().into_owned())
+            } else {
+                None
+            }
+        })
+        .unwrap();
+        assert_eq!(chosen, iso, "SOKSAK_VAULT_PATH 주입 → 그 경로");
+        // 미주입 → default_vault_path 와 동일(프로덕션 경로 유지).
+        let fallback = resolve_vault_path(|_| None).unwrap();
+        assert_eq!(fallback, default_vault_path().unwrap(), "미주입 → default");
+        // 빈 문자열 → default(빈 env 를 '설정 안 함' 으로 취급).
+        let empty = resolve_vault_path(|k| if k == "SOKSAK_VAULT_PATH" { Some(String::new()) } else { None }).unwrap();
+        assert_eq!(empty, default_vault_path().unwrap(), "빈 env → default");
     }
 
     // (a) seal → open roundtrip — 같은 KEK 로 봉인·개봉 시 평문 복원.

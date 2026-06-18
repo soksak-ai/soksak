@@ -91,7 +91,8 @@ pub fn run() {
             // (SOKSAK_VAULT_KEY env 있을 때만, 없으면 잠김 유지).
             {
                 let st = app.state::<secrets::SecretsState>();
-                match secrets::default_vault_path() {
+                // SOKSAK_VAULT_PATH 있으면 격리 경로(헤드리스/E2E), 없으면 프로덕션 default.
+                match secrets::resolve_vault_path(|k| std::env::var(k).ok()) {
                     Ok(p) => st.set_path(p),
                     Err(e) => eprintln!("[secrets] 볼트 경로 계산 실패: {e}"),
                 }
