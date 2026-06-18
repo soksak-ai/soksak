@@ -617,6 +617,7 @@ export const GroupArea = memo(function GroupArea({
                   viewKey={`${view.pluginId}.${view.view}`}
                   projectId={projectId}
                   root={projectRoot}
+                  region="content"
                 />
               ) : (
                 <BrowserView

@@ -19,6 +19,13 @@ export interface DepPluginSummary {
   transitive?: boolean; // 직접 의존이 아닌 전이 의존
 }
 
+// 노출 DOM 노드 — 동의 화면에 "이 플러그인이 외부(주소 클릭/측정)에 노출하는 요소"를 표기(정직한 고지).
+export interface ExposedNodeSummary {
+  id: string;
+  description?: LocalizedText;
+  danger?: true;
+}
+
 export interface ConsentSummary {
   id: string;
   version: string;
@@ -31,6 +38,8 @@ export interface ConsentSummary {
     languages: number;
     iconSets: number;
   };
+  // 노출 DOM 노드 종류(매니페스트 contributes.nodes) — 사용자가 무엇이 외부 클릭 가능한지 보고 동의.
+  exposedNodes: ExposedNodeSummary[];
   dependencies: {
     plugins: DepPluginSummary[];
     libraries: LibraryDep[];
@@ -96,6 +105,11 @@ export function consentSummary(
       languages: c.languages.length,
       iconSets: c.iconSets.length,
     },
+    exposedNodes: c.nodes.map((n) => ({
+      id: n.id,
+      ...(n.description !== undefined ? { description: n.description } : {}),
+      ...(n.danger ? { danger: true as const } : {}),
+    })),
     dependencies: {
       plugins: dependencyConsents(manifest, installed),
       libraries: transitiveLibraries(manifest, installed),

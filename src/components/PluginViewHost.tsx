@@ -7,6 +7,7 @@ import {
   getRegisteredView,
   useViewRegistry,
 } from "../plugins/viewRegistry";
+import { formatAddress, type Region } from "../commands/address";
 import { useT } from "../i18n";
 
 // memo 경계(원칙 2).
@@ -14,11 +15,16 @@ export const PluginViewHost = memo(function PluginViewHost({
   viewKey,
   projectId,
   root,
+  region,
 }: {
   viewKey: string; // "<pluginId>.<viewId>"
   projectId: string;
   root: string | null;
+  region: Region; // left|content|right — 컨테이너 절대 주소의 영역 세그먼트
 }) {
+  // 이 뷰 컨테이너의 절대 주소(노드 스캔의 baseAddress). project 는 경로(슬래시 충돌)라 활성 기준 생략 —
+  // <region>/view/<viewKey>. win 생략=현재 창. 안정 세그먼트(region·qualifiedViewId)라 멱등. ui.tree 가 읽는다.
+  const viewAddr = formatAddress({ region, view: viewKey });
   const t = useT();
   // version 구독 → 등록/해제 시 재평가. RegisteredView 객체는 변경 없으면 동일 참조
   // (zustand spread) — 무관한 version 증가로는 remount 되지 않는다.
@@ -69,6 +75,7 @@ export const PluginViewHost = memo(function PluginViewHost({
     <div className="plugin-view-host">
       <div
         className="plugin-view-container"
+        data-view-addr={viewAddr}
         ref={containerRef}
         style={overlay ? { display: "none" } : undefined}
       />

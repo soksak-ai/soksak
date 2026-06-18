@@ -99,6 +99,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
               viewKey={footerViews[0].key}
               projectId={project.id}
               root={project.root}
+              region="left"
             />
           </div>
         )}
@@ -113,6 +114,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
             viewKey={k}
             projectId={project.id}
             root={project.root}
+            region="left"
           />
         </div>
       ))}

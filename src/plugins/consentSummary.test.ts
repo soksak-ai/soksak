@@ -24,6 +24,7 @@ function mani(
       formatters: [],
       languages: [],
       iconSets: [],
+      nodes: [],
       programs: [],
       events: [],
     },
@@ -73,5 +74,24 @@ describe("consentSummary — 종속 권한 전이 표기", () => {
   it("종속 없으면 plugins 비어 있음", () => {
     const solo = mani("solo", ["ui"]);
     expect(consentSummary(solo, { solo: rt(solo) }).dependencies.plugins).toEqual([]);
+  });
+});
+
+describe("consentSummary — 노출 DOM 노드(동의 화면)", () => {
+  it("contributes.nodes 가 exposedNodes 로(id·설명·danger)", () => {
+    const m = mani("p", ["ui"]);
+    (m.contributes as { nodes: unknown[] }).nodes = [
+      { id: "submit", description: { ko: "전송", en: "Submit" } },
+      { id: "msg", description: "메시지 행" },
+      { id: "wipe", danger: true },
+    ];
+    const ex = consentSummary(m, { p: rt(m) }).exposedNodes;
+    expect(ex.map((n) => n.id)).toEqual(["submit", "msg", "wipe"]);
+    expect(ex[2].danger).toBe(true);
+    expect(ex[0].description).toEqual({ ko: "전송", en: "Submit" });
+  });
+  it("노출 노드 없으면 빈 배열", () => {
+    const m = mani("p", ["ui"]);
+    expect(consentSummary(m, { p: rt(m) }).exposedNodes).toEqual([]);
   });
 });

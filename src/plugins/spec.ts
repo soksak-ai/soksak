@@ -308,6 +308,15 @@ export interface ContributedIconSet {
   title: LocalizedText; // 설정 드롭다운 표시 이름
 }
 
+// DOM 노출 노드 — 플러그인이 자기 뷰 안에서 외부(주소 클릭/측정)에 노출하는 요소 "종류"의 선언.
+// command 노출 패턴과 동일: 선언하면 동의 화면에 자동 표기(정직한 고지 §0-2). 실제 DOM 요소는 data-node
+// 속성으로 인스턴스 부여(동적 목록은 "<id>/<key>"). 선언된 id 기반만 유효 — 미선언은 경고(침묵 금지).
+export interface ContributedNode {
+  id: string; // 뷰 내 고유 노드 종류. 전역 주소는 ".../view/<pluginId.viewId>/node/<id>[/<key>]"
+  description?: LocalizedText; // 동의 화면 설명(무엇을 노출하는지)
+  danger?: true; // 민감 노출(동의 화면 ⚠ 강조)
+}
+
 // ── §2.6 프로그램 ────────────────────────────────────────────────────────────
 // 프로그램 = 새 탭(+) 메뉴의 항목 하나 = 새 뷰를 여는 방법. 내장 프로그램은
 // 없다 — 터미널·에이전트·브라우저 전부 플러그인이 기여한다(메뉴·목록에
@@ -418,6 +427,8 @@ export interface PluginManifest {
     // 이 플러그인이 발행하는 이벤트 토픽(정보용 — 발견성). 런타임 강제 없음(bus/events 는 그대로
     // 동작). 다른 플러그인 작성자가 구독할 토픽을 매니저에서 볼 수 있게 하는 오픈 카탈로그.
     events: string[];
+    // DOM 노출 노드 종류(선언). 동의 화면에 표기 — 사용자가 무엇이 외부 클릭 가능한지 보고 동의. "ui" 권한 필수.
+    nodes: ContributedNode[];
   };
 }
 
@@ -905,6 +916,7 @@ export function parseManifest(
   let formatters: ContributedFormatter[] = [];
   let languages: ContributedLanguage[] = [];
   let iconSets: ContributedIconSet[] = [];
+  let nodes: ContributedNode[] = [];
   let programs: ContributedProgram[] = [];
   let events: string[] = [];
   if (raw.contributes !== undefined) {
@@ -914,7 +926,7 @@ export function parseManifest(
       const c = raw.contributes;
       checkKnownKeys(
         c,
-        ["views", "commands", "formatters", "languages", "iconSets", "programs", "events"],
+        ["views", "commands", "formatters", "languages", "iconSets", "nodes", "programs", "events"],
         "contributes",
         errors,
       );
@@ -1061,6 +1073,38 @@ export function parseManifest(
       checkDuplicates(iconSets.map((v) => v.id), "contributes.iconSets.id", errors);
       if (iconSets.length > 0 && !has("ui")) {
         errors.push('contributes.iconSets: "ui" 권한 선언 필요');
+      }
+
+      // DOM 노출 노드(선언) — command/view 패턴 미러. id 정규식·중복 거부, ui 권한 필수.
+      nodes = parseEntries(c.nodes, {
+        label: "contributes.nodes",
+        required: ["id"],
+        optional: ["description", "danger"],
+        parse: (v, errs) => {
+          if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
+            errs.push("contributes.nodes: id 는 ^[a-z0-9][a-z0-9-]*$");
+            return null;
+          }
+          if (v.description !== undefined &&
+              !validateLocalizedText(v.description, "contributes.nodes.description", errs)) {
+            return null;
+          }
+          if (v.danger !== undefined && v.danger !== true) {
+            errs.push("contributes.nodes.danger: true 만 허용");
+            return null;
+          }
+          return {
+            id: v.id.trim(),
+            ...(v.description !== undefined
+              ? { description: normalizeText(v.description as LocalizedText) }
+              : {}),
+            ...(v.danger === true ? { danger: true as const } : {}),
+          };
+        },
+      }, errors);
+      checkDuplicates(nodes.map((v) => v.id), "contributes.nodes.id", errors);
+      if (nodes.length > 0 && !has("ui")) {
+        errors.push('contributes.nodes: "ui" 권한 선언 필요');
       }
 
       programs = parseEntries(c.programs, {
@@ -1249,7 +1293,7 @@ export function parseManifest(
       ...(libraries.length > 0 ? { libraries } : {}),
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
-      contributes: { views, commands, formatters, languages, iconSets, programs, events },
+      contributes: { views, commands, formatters, languages, iconSets, nodes, programs, events },
     },
     validation: { ok: true, errors, warnings },
   };

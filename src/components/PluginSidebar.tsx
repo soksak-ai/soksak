@@ -103,6 +103,7 @@ export const PluginSidebar = memo(function PluginSidebar({
                 viewKey={k}
                 projectId={project.id}
                 root={project.root ?? null}
+                region="right"
               />
             </div>
           ))}

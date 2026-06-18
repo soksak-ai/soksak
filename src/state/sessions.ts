@@ -28,7 +28,9 @@ export type CmdErrCode =
   // 플러그인 활성화에 사용자 동의가 필요(원격 enable 거부 — 플러그인 스펙 §0-5).
   | "CONSENT_REQUIRED"
   // 플러그인 삭제가 의존자 cascade 를 유발 — 동의(cascade:true) 없이는 차단(고아 방지).
-  | "CASCADE_REQUIRED";
+  | "CASCADE_REQUIRED"
+  // DOM 주소가 노출 노드(data-node)에 없음 — 임의 selector 추측 금지, 노출된 것만 접근(ui.tree).
+  | "NOT_EXPOSED";
 
 // data = 코드별 부가 정보(선택). 예: CONSENT_REQUIRED 의 미동의 체인(연속 동의 팝업용).
 export type CmdErr = { ok: false; code: CmdErrCode; message: string; data?: unknown };

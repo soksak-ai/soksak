@@ -65,9 +65,10 @@ export function PluginConsentModal({
   useOverlayActive();
   const m = plugin.manifest;
   const installed = usePlugins((s) => s.plugins);
-  // 종속성 — 동의 표시 데이터의 단일 소스(consentSummary). plugin.consent.summary 와 같은 함수에서 파생.
-  const { plugins: pluginDeps, libraries: libs } =
-    consentSummary(m, installed).dependencies;
+  // 동의 표시 데이터의 단일 소스(consentSummary). plugin.consent.summary 와 같은 함수에서 파생.
+  const summary = consentSummary(m, installed);
+  const { plugins: pluginDeps, libraries: libs } = summary.dependencies;
+  const exposedNodes = summary.exposedNodes;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -229,6 +230,28 @@ export function PluginConsentModal({
               </>
             );
           })()}
+
+          {/* 노출 DOM — 이 플러그인이 외부(주소 클릭/측정)에 노출하는 요소 종류(매니페스트 contributes.nodes).
+              사용자가 무엇이 외부에서 조작 가능한지 보고 동의(정직한 고지 §0-2). danger 는 ⚠ 강조. */}
+          {exposedNodes.length > 0 && (
+            <>
+              <div className="dsec">{t("plugin.consent.nodes")}</div>
+              <ul className="plugin-consent-list">
+                {exposedNodes.map((n) => (
+                  <li
+                    key={`node:${n.id}`}
+                    className={`plugin-consent-item${n.danger ? " caution" : ""}`}
+                  >
+                    <span className="plugin-consent-detail">
+                      {n.danger ? "⚠ " : ""}
+                      {n.id}
+                      {n.description ? ` — ${localize(n.description)}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           {/* 종속성 — 플러그인↔플러그인(dependencies, 전이 동반 설치) + 외부 라이브러리(libraries,
               미설치 시 동의 후 강제 설치). 설치 명령은 원문 그대로(산문 가공 0). */}

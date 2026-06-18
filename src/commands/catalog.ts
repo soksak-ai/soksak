@@ -36,6 +36,7 @@ import { catalogJson, register, type CommandContext } from "./registry";
 import { registerGitCatalog } from "./catalogGit";
 import { registerPluginCatalog } from "./catalogPlugins";
 import { registerUiCatalog } from "./catalogUi";
+import { registerDomCatalog } from "./catalogDom";
 import { registerDataCatalog } from "./catalogData";
 import { registerTurnCatalog } from "./catalogTurn";
 import {
@@ -381,49 +382,7 @@ export function registerCatalog(): void {
   const S = () => useSessions.getState();
 
   // ----- state -----
-  register("ui.measure", {
-    description:
-      "앱 DOM 측정(레이아웃 진단) — selector 매칭 요소들의 rect 와 핵심 computed style. 픽셀 정렬 검증용",
-    params: {
-      selector: { type: "string", description: "CSS 셀렉터", required: true },
-      limit: { type: "number", description: "최대 개수(기본 5)" },
-    },
-    returns: "{ count, items: [{ rect, style }] }",
-    handler: (p) => {
-      const els = [
-        ...document.querySelectorAll(p.selector as string),
-      ].slice(0, (p.limit as number) ?? 5);
-      return {
-        count: els.length,
-        items: els.map((el) => {
-          const r = el.getBoundingClientRect();
-          const cs = getComputedStyle(el);
-          return {
-            rect: {
-              x: +r.x.toFixed(2),
-              y: +r.y.toFixed(2),
-              w: +r.width.toFixed(2),
-              h: +r.height.toFixed(2),
-            },
-            style: {
-              display: cs.display,
-              alignItems: cs.alignItems,
-              height: cs.height,
-              paddingTop: cs.paddingTop,
-              paddingBottom: cs.paddingBottom,
-              borderTop: cs.borderTopWidth,
-              borderBottom: cs.borderBottomWidth,
-              lineHeight: cs.lineHeight,
-              fontSize: cs.fontSize,
-              alignSelf: cs.alignSelf,
-              marginTop: cs.marginTop,
-              marginBottom: cs.marginBottom,
-            },
-          };
-        }),
-      };
-    },
-  });
+  // ui.measure / ui.tree / ui.input.* 는 catalogDom.ts(주소 기반) — selector 측정은 폐기(주소 체계로 전환).
 
   register("state.tree", {
     description:
@@ -2068,6 +2027,7 @@ export function registerCatalog(): void {
   registerGitCatalog();
   registerPluginCatalog();
   registerUiCatalog();
+  registerDomCatalog();
   registerDataCatalog();
   registerTurnCatalog();
 }

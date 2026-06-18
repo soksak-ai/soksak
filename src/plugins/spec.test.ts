@@ -491,6 +491,53 @@ describe("parseManifest — configuration(설정 스키마)", () => {
   });
 });
 
+describe("parseManifest — DOM 노출 노드(contributes.nodes)", () => {
+  it("nodes 는 'ui' 권한 필요", () => {
+    const errs = errorsOf(
+      base({ contributes: { nodes: [{ id: "submit", description: "전송" }] } }),
+    );
+    expect(errs.some((e) => e.includes('contributes.nodes: "ui" 권한'))).toBe(true);
+  });
+  it("ui 권한 있으면 수용 + 파싱", () => {
+    const { manifest, validation } = parseManifest(
+      base({
+        permissions: ["ui"],
+        contributes: {
+          nodes: [
+            { id: "submit", description: { ko: "전송 버튼", en: "Submit" } },
+            { id: "msg", description: "메시지 행" },
+            { id: "danger-node", danger: true },
+          ],
+        },
+      }),
+      "demo",
+    );
+    expect(validation.ok).toBe(true);
+    expect(manifest?.contributes.nodes.map((n) => n.id)).toEqual(["submit", "msg", "danger-node"]);
+    expect(manifest?.contributes.nodes[2].danger).toBe(true);
+  });
+  it("id 정규식 위반 거부", () => {
+    const errs = errorsOf(base({ permissions: ["ui"], contributes: { nodes: [{ id: "Bad-Id" }] } }));
+    expect(errs.some((e) => e.includes("contributes.nodes: id"))).toBe(true);
+  });
+  it("중복 id 거부", () => {
+    const errs = errorsOf(
+      base({ permissions: ["ui"], contributes: { nodes: [{ id: "x" }, { id: "x" }] } }),
+    );
+    expect(errs.some((e) => e.includes("contributes.nodes.id"))).toBe(true);
+  });
+  it("danger 는 true 만 허용", () => {
+    const errs = errorsOf(
+      base({ permissions: ["ui"], contributes: { nodes: [{ id: "x", danger: false }] } }),
+    );
+    expect(errs.some((e) => e.includes("danger: true 만"))).toBe(true);
+  });
+  it("nodes 없으면 빈 배열(기본)", () => {
+    const { manifest } = parseManifest(base(), "demo");
+    expect(manifest?.contributes.nodes).toEqual([]);
+  });
+});
+
 describe("parseManifest — programs 기여(§2.6)", () => {
   it("programs 는 'programs' 권한 필요", () => {
     const errs = errorsOf(

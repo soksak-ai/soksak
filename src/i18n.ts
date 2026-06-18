@@ -197,6 +197,7 @@ const ko = {
   "plugin.consent.contributes": "이 플러그인이 추가하는 것",
   "plugin.consent.noContributes": "추가하는 기능 없음",
   "plugin.consent.revokeNote": "비활성화·제거 시 위 항목은 전부 자동 회수됩니다.",
+  "plugin.consent.nodes": "노출 DOM(외부 조작 가능)",
   "plugin.consent.dependencies": "종속성",
   "plugin.consent.dep.plugin": "플러그인",
   "plugin.consent.dep.library": "라이브러리(외부 CLI)",
@@ -413,6 +414,7 @@ const en: Record<MsgKey, string> = {
   "plugin.consent.noContributes": "No contributed features",
   "plugin.consent.revokeNote":
     "Disabling or removing the plugin automatically revokes all items above.",
+  "plugin.consent.nodes": "Exposed DOM (externally operable)",
   "plugin.consent.dependencies": "Dependencies",
   "plugin.consent.dep.plugin": "Plugin",
   "plugin.consent.dep.library": "Library (external CLI)",
