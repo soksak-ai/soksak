@@ -76,3 +76,18 @@
 - `make verify`(typecheck + cargo check + cargo test + vitest) GREEN.
 - 각 플러그인 소켓 E2E 멱등 시나리오 통과(setup→단언→teardown, 합성 scope 격리).
 - 레지스트리 카탈로그 등재. 각 플러그인 README. 적대적 검증 PASS.
+
+## R10. api 실행타입 — HTTP는 코어 capability, 참조는 단일 엔진
+
+- HTTP 실행은 코어 capability(`net.http.request`, reqwest+rustls — OpenSSL 비의존 멀티플랫폼)다. 플러그인은 raw HTTP 소켓을 열지 않는다. registry 명령으로 노출(CLI/E2E 자가검증).
+- api 필드(url·headers·query·body)는 전부 **단일 Reference 엔진**으로 해소한다. 레거시의 필드별 분리 정규식(url/headers/query/body 5중 중복)을 복제하지 않는다 — params/env/secret/command-linking 한 엔진만.
+- 응답은 {status, headers, body} 로 캡처해 링킹 되먹임(`command@id|jsonPath` — 응답 바디 JSON 추출). lastResponse/lastStatusCode 갱신.
+- 시크릿이 헤더/쿼리/바디에 있으면 평문은 **Rust 경계에서만** 치환한다(R2 — JS·history·lastResponse 무노출). process secretEnv 와 동형.
+- E2E 는 로컬 HTTP 서버로 결정적이다. 외부 엔드포인트(httpbin 등) 의존 금지 — 네트워크 가변성은 테스트 신뢰를 무너뜨린다.
+
+## R11. schedule 실행타입 — 영속 스케줄러는 범용 코어, 알림은 1급
+
+- 스케줄링은 코어 capability(`app.schedule` — 등록/목록/취소)다. 임의 registry 명령을 cron/at+repeat 로 예약한다(runbook 락인 0). 앱 시작 시 app.data 에서 재무장(재시작 생존).
+- 발화는 폴링이 아니라 due 시각 기반 타이머다(R3 — 스케줄러 tick 은 정공법 타이머이며 앱 상태 폴링이 아니다). 시각/반복 계산은 단일 유틸(daily/weekly/monthly·reminder 오프셋).
+- 알림은 코어 capability(`notify.show` — tauri-plugin-notification + 딥링크 command URI)다. reminder(5분/30분/1시간/1일 전)와 발화 모두 notify 로 흐른다. 미설치/거부 시 조용한 실패 금지 — 명시 보고.
+- schedule 메타(at·repeat·reminders·interval)는 app.data 의 타입드 서브객체에 둔다. 평면 메가구조체(레거시) 복제 금지.
