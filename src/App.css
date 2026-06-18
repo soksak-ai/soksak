@@ -3213,14 +3213,23 @@ select.dctl {
   --status-h: 24px; /* 컨텐츠 그룹 상태바 — GroupArea 주입 폴백 */
 }
 
-/* ── 크롬 행 계약(docs/UI.md R1a): 수평으로 이웃한 밴드(좌측 헤더·컨텐츠 탭·우측 헤더·좌측 호스트 탭·
-   프로젝트 탭)는 같은 행 — 높이는 이 규칙 하나만이 소유한다(개별 블록 height 지정 금지: cssContract R3). */
-.ft-header,
+/* ── 크롬 행 계약(docs/UI.md R1a): 수평으로 이웃한 1단 밴드(우측 헤더·좌측 호스트 탭·프로젝트 탭·
+   컨텐츠 탭)는 같은 행 — 높이는 이 규칙이 소유(개별 블록 height 지정 금지: cssContract R3). */
 .plugin-side-head,
 .left-host-tabs,
 .content-tabs,
 .tabs {
   height: var(--chrome-row-h, 37px);
+}
+
+/* 파일 헤더(project1 행)는 좌측 사이드바 단(段)에 따라 표준이 다르다 — 사이드바에 뷰 탭행
+   (.left-host-tabs)이 있으면 2단(타이틀바 줄: 컨텐츠 뷰 탭과 같은 --header-h), 없으면 1단(탭행 줄:
+   --chrome-row-h). 둘 다 테마 표준 변수 — 하드코딩 금지(cssContract R3). */
+.ft-header {
+  height: var(--chrome-row-h, 37px);
+}
+.left-host:has(.left-host-tabs) .ft-header {
+  height: var(--header-h, 33px);
 }
 
 /* ── 인앱 알림 배너(NotifyHost) ── 포커스 시 우상단 오버레이. 클릭=딥링크. */

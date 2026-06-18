@@ -30,9 +30,11 @@ const BAND_ITEM = /\.(view-tab|view-add|ctab-add|tab-add|ctab|tab)(?![\w-])/;
 // 계약 밖 예외: 세로 레일(정사각 칩)·세로 리스트 모드 — 가로 밴드가 아니다.
 const EXEMPT = /\.project-rail|\.content-tabs\.vertical/;
 
-// 크롬 행 band(타이틀바 아래 같은 가로줄의 최상단 탭/헤더 스트립). 높이는 단일 표준 --chrome-row-h 만 소유.
-// \.tabs 는 .content-tabs/.view-tabs 를 매치하지 않는다('-tabs' 는 '.tabs' 가 아님) — 각 대안이 자기 것만 매치.
+// 크롬 행 band(타이틀바 아래 가로줄의 탭/헤더 스트립). 높이는 테마 표준 변수만 소유(--chrome-row-h=탭행,
+// --header-h=타이틀바/뷰 탭행). 하드코딩 px 금지. \.tabs 는 .content-tabs/.view-tabs 를 매치하지 않는다.
 const CHROME_ROW = /\.(ft-header|plugin-side-head|left-host-tabs|content-tabs|tabs)(?![\w-])/;
+// 허용 표준 변수(둘 다 테마 소유) — 크롬 행 높이는 이 중 하나의 var() 만.
+const CHROME_HEIGHT_OK = /height\s*:\s*var\(--(chrome-row|header)-h/;
 
 describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
   it("R1: 밴드 항목은 height 금지(auto 만 허용) — 여백은 스트립 패딩이 소유", () => {
@@ -89,7 +91,7 @@ describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
       const clean = decls.replace(/\/\*[\s\S]*?\*\//g, "");
       const heights = clean.match(/(?:^|;)\s*height\s*:\s*([^;]+)/g) ?? [];
       for (const h of heights) {
-        if (!/height\s*:\s*var\(--chrome-row-h/.test(h)) {
+        if (!CHROME_HEIGHT_OK.test(h)) {
           violations.push(`${selector.replace(/\s+/g, " ")} → ${h.trim()}`);
         }
       }
