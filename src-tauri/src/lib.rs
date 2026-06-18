@@ -13,6 +13,7 @@ mod notify;
 mod plugins;
 mod process;
 mod pty;
+mod schedule;
 mod secrets;
 #[cfg(target_os = "macos")]
 mod titlebar;
@@ -84,6 +85,7 @@ pub fn run() {
         .manage(CmdBridge::default())
         .manage(data::DbState::default())
         .manage(secrets::SecretsState::default())
+        .manage(schedule::ScheduleState::default())
         .setup(|app| {
             // 범용 데이터 스토어(app.data) — 소켓 서버 이전에 연다(커맨드가 즉시 쓸 수 있도록).
             match data::db_path().and_then(|p| data::open(&p)) {
@@ -194,6 +196,9 @@ pub fn run() {
             network::network_udp_send,
             http::network_http_request,
             notify::notify_show,
+            schedule::schedule_set,
+            schedule::schedule_cancel,
+            schedule::schedule_list,
             fs::list_children,
             fs::read_text_file,
             fs::write_text_file,
