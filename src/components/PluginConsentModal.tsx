@@ -50,12 +50,15 @@ export function PluginConsentModal({
   onConsent,
   onClose,
   preview = false,
+  step,
 }: {
   plugin: PluginRuntime;
   onConsent: () => void;
   onClose: () => void;
   // preview = 검사 전용(plugin.consent.preview command). 동의 버튼 없이 표시만 — 활성화 안 함.
   preview?: boolean;
+  // step = 연속 동의 큐 정보(종속 먼저). isDependency = 이 팝업이 종속(core)에 대한 것. remaining = 남은 팝업 수.
+  step?: { isDependency: boolean; remaining: number; ofId?: string };
 }) {
   const t = useT();
   // 오버레이 등록 — 모달이 떠 있는 동안 브라우저 홀의 마우스 통과를 차단한다.
@@ -97,6 +100,14 @@ export function PluginConsentModal({
           </button>
         </div>
         <div className="dmodal-body">
+          {/* 연속 동의 안내 — 이 팝업이 종속(예: core)에 대한 것이면, 본체를 활성화하기 전에 종속도
+              사용자가 권한을 보고 동의해야 함을 알린다(반쪽 동의 금지 §0-2). */}
+          {step?.isDependency && (
+            <div className="plugin-consent-notice">
+              이 플러그인은 활성화하려는 플러그인의 종속입니다. 먼저 권한을 확인하고 동의해야
+              합니다{step.remaining > 1 ? ` (남은 동의 ${step.remaining}개)` : ""}.
+            </div>
+          )}
           <div className="plugin-consent-meta">
             {m.id} · v{m.version}
             {m.author ? ` · ${m.author}` : ""}
@@ -230,8 +241,18 @@ export function PluginConsentModal({
                     <span className="plugin-consent-detail">
                       {t("plugin.consent.dep.plugin")} —{" "}
                       {dep.name ? `${localize(dep.name)} ` : ""}
-                      {dep.id} ({dep.range})
+                      {dep.id} ({dep.range ?? "전이"})
                     </span>
+                    {/* 종속의 권한도 고지(반쪽 동의 금지) — 동의는 종속별 팝업에서 따로 받지만, 여기서
+                        무엇을 쓸 수 있는지 미리 보여준다. 미설치면 미상(설치 후 동의). */}
+                    {dep.permissions && dep.permissions.length > 0 && (
+                      <span className="plugin-consent-detail">
+                        권한:{" "}
+                        {dep.permissions
+                          .map((p) => PERMISSION_INFO[p as keyof typeof PERMISSION_INFO]?.label ?? p)
+                          .join(", ")}
+                      </span>
+                    )}
                   </li>
                 ))}
                 {libs.map((lib) => {

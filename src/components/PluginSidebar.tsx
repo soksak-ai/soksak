@@ -229,7 +229,12 @@ function PluginManagerPanel() {
   const [refName, setRefName] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [consentFor, setConsentFor] = useState<PluginRuntime | null>(null);
+  // 동의 큐 — 종속이 강력한 권한을 가지므로, 활성화에 필요한 미동의 체인(종속 먼저)을 큐로 받아
+  // 동의 팝업을 연속으로 띄운다(반쪽 동의 금지). queue[0] 가 현재 팝업. pendingEnableId = 전부 동의 후
+  // 활성화할 원래 대상(cascade).
+  const [consentQueue, setConsentQueue] = useState<PluginRuntime[]>([]);
+  const [pendingEnableId, setPendingEnableId] = useState<string | null>(null);
+  const consentFor = consentQueue[0] ?? null;
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -264,18 +269,39 @@ function PluginManagerPanel() {
     run(async () => {
       const r = await usePlugins.getState().enable(p.manifest.id);
       if (!r.ok && r.code === "CONSENT_REQUIRED") {
-        setConsentFor(p);
+        // 미동의 체인(종속 먼저)을 큐로 — 종속부터 연속 팝업. 체인 없으면 자신만.
+        const chain =
+          (r.data as { pendingConsent?: string[] } | undefined)?.pendingConsent ??
+          [p.manifest.id];
+        const all = usePlugins.getState().plugins;
+        const queue = chain.map((id) => all[id]).filter(Boolean) as PluginRuntime[];
+        setConsentQueue(queue.length ? queue : [p]);
+        setPendingEnableId(p.manifest.id);
         return { ok: true }; // 모달로 이어짐 — 패널 에러 표시는 생략
       }
       return r;
     });
 
-  const consentAndEnable = (p: PluginRuntime) =>
+  // 현재 팝업 동의 → 큐에서 제거. 남으면 다음 팝업, 비면 원래 대상 활성화(cascade — 종속부터).
+  const consentNext = () =>
     run(async () => {
-      usePlugins.getState().grantConsent(p.manifest.id);
-      setConsentFor(null);
-      return usePlugins.getState().enable(p.manifest.id);
+      const [cur, ...rest] = consentQueue;
+      if (!cur) return { ok: true };
+      usePlugins.getState().grantConsent(cur.manifest.id);
+      if (rest.length > 0) {
+        setConsentQueue(rest);
+        return { ok: true }; // 다음 종속/플러그인 동의 팝업
+      }
+      setConsentQueue([]);
+      const target = pendingEnableId;
+      setPendingEnableId(null);
+      return target ? usePlugins.getState().enable(target) : { ok: true };
     });
+
+  const cancelConsent = () => {
+    setConsentQueue([]);
+    setPendingEnableId(null);
+  };
 
   const list = Object.values(plugins).sort((a, b) =>
     a.manifest.id.localeCompare(b.manifest.id),
@@ -470,8 +496,17 @@ function PluginManagerPanel() {
       {consentFor && (
         <PluginConsentModal
           plugin={consentFor}
-          onClose={() => setConsentFor(null)}
-          onConsent={() => consentAndEnable(consentFor)}
+          step={
+            consentQueue.length > 1 || consentFor.manifest.id !== pendingEnableId
+              ? {
+                  isDependency: consentFor.manifest.id !== pendingEnableId,
+                  remaining: consentQueue.length,
+                  ofId: pendingEnableId ?? undefined,
+                }
+              : undefined
+          }
+          onClose={cancelConsent}
+          onConsent={consentNext}
         />
       )}
     </div>

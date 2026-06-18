@@ -3,7 +3,7 @@
 // 동의 부여 명령 자체가 존재하지 않는다(UI 동의 모달 전용).
 // plugin.view.* 배치 명령은 M_P5(우측 사이드바)에서 등록된다.
 
-import { usePlugins, type PluginRuntime } from "../state/plugins";
+import { pendingConsentChain, usePlugins, type PluginRuntime } from "../state/plugins";
 import { allGroups, useSessions, type View } from "../state/sessions";
 import { getRegisteredView } from "../plugins/viewRegistry";
 import { listPrograms } from "../plugins/programRegistry";
@@ -250,6 +250,31 @@ export function registerPluginCatalog(): void {
       const plug = s.plugins[p.id as string];
       if (!plug) return notFound(`플러그인 없음: ${p.id}`);
       return consentSummary(plug.manifest, s.plugins);
+    },
+  });
+
+  register("plugin.consent.revoke", {
+    description:
+      "동의 철회 — 동의 기록 제거(재동의 필요 상태). 활성 중이면 비활성화하고 이 플러그인을 종속으로 쓰는 의존자도 함께 비활성화(전이 일관). 권한 축소라 안전",
+    params: { id: { type: "string", description: "플러그인 id", required: true } },
+    returns: "{ id }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok plugin.consent.revoke \'{"id":"soksak-plugin-acp-core"}\''],
+    danger: "destructive",
+    handler: (p) => usePlugins.getState().revokeConsent(p.id as string),
+  });
+
+  register("plugin.consent.chain", {
+    description:
+      "활성화에 필요한 미동의 체인(종속 먼저 순서). UI 가 이 순서대로 동의 팝업을 연속으로 띄운다 — 종속(강력한 권한)도 사용자가 본다. dev 소스·이미 동의된 것은 제외. 빈 배열이면 바로 활성화 가능",
+    params: { id: { type: "string", description: "플러그인 id", required: true } },
+    returns: "{ id, pending }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok plugin.consent.chain \'{"id":"soksak-plugin-acp-studio"}\''],
+    handler: (p) => {
+      const s = usePlugins.getState();
+      if (!s.plugins[p.id as string]) return notFound(`플러그인 없음: ${p.id}`);
+      return { id: p.id, pending: pendingConsentChain(p.id as string, s.plugins, s.consents) };
     },
   });
 

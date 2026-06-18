@@ -46,6 +46,29 @@ export function refcount(id: string, installed: DepNode[]): number {
   return directDependents(id, installed).length;
 }
 
+// 활성화 체인(의존 방향 위상정렬) — id 와 그 모든 전이 종속을, 종속이 먼저 오도록 반환(id 가 마지막).
+// 이 순서대로 동의·활성화하면 항상 종속이 먼저 준비된다(cascade 동의/활성화가 소비). 종속이 강력한 권한
+// (process 등)을 가지므로 동의 화면이 전 체인을 보여야 한다(정직한 고지). 순환은 1회만 방문(무한 가드).
+// 미설치 종속은 건너뛴다 — 설치 플로(resolveMissingDeps)가 별도로 동반 설치한다.
+export function activationChain(id: string, installed: DepNode[]): string[] {
+  const byId = new Map(installed.map((n) => [n.id, n]));
+  const out: string[] = [];
+  const done = new Set<string>();
+  const onStack = new Set<string>();
+  const visit = (cur: string) => {
+    if (done.has(cur) || onStack.has(cur)) return; // 방문 완료 또는 순환 — 중단
+    const node = byId.get(cur);
+    if (!node) return; // 미설치 종속(설치 플로가 처리)
+    onStack.add(cur);
+    for (const dep of Object.keys(node.dependencies || {})) visit(dep);
+    onStack.delete(cur);
+    done.add(cur);
+    out.push(cur);
+  };
+  visit(id);
+  return out;
+}
+
 // 삭제 cascade 집합 — [의존자(먼 것부터) …, 대상]. 이 순서대로 삭제하면 항상 의존자가 먼저 사라진다.
 export function cascadeRemovalSet(id: string, installed: DepNode[]): string[] {
   return [...transitiveDependents(id, installed), id];

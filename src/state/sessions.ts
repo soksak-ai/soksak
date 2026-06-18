@@ -30,7 +30,8 @@ export type CmdErrCode =
   // 플러그인 삭제가 의존자 cascade 를 유발 — 동의(cascade:true) 없이는 차단(고아 방지).
   | "CASCADE_REQUIRED";
 
-export type CmdErr = { ok: false; code: CmdErrCode; message: string };
+// data = 코드별 부가 정보(선택). 예: CONSENT_REQUIRED 의 미동의 체인(연속 동의 팝업용).
+export type CmdErr = { ok: false; code: CmdErrCode; message: string; data?: unknown };
 export type CmdOk<T extends object = object> = { ok: true } & T;
 export type CmdResult<T extends object = object> = CmdOk<T> | CmdErr;
 
@@ -38,10 +39,11 @@ export const ok = <T extends object>(data: T): CmdOk<T> => ({
   ok: true,
   ...data,
 });
-export const err = (code: CmdErrCode, message: string): CmdErr => ({
+export const err = (code: CmdErrCode, message: string, data?: unknown): CmdErr => ({
   ok: false,
   code,
   message,
+  ...(data !== undefined ? { data } : {}),
 });
 
 // ── 모델 타입 ────────────────────────────────────────────────────────────────

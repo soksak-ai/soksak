@@ -1,6 +1,7 @@
 // 의존 그래프 해소 — cascade·refcount·전이·버전 무결성 계약 고정.
 import { describe, expect, it } from "vitest";
 import {
+  activationChain,
   directDependents,
   transitiveDependents,
   refcount,
@@ -101,5 +102,38 @@ describe("dependencyGraph — depSummary(plugin.deps 반환)", () => {
   });
   it("미설치 id → null", () => {
     expect(depSummary("ghost", graph())).toBeNull();
+  });
+});
+
+describe("activationChain — 활성화 체인(종속 먼저, id 마지막)", () => {
+  it("직접 종속: [core, cockpit]", () => {
+    expect(activationChain("cockpit", graph())).toEqual(["core", "cockpit"]);
+  });
+  it("전이 종속: addon→lounge→core ⇒ [core, lounge, addon]", () => {
+    expect(activationChain("addon", graph())).toEqual(["core", "lounge", "addon"]);
+  });
+  it("종속 없는 leaf(core)는 자기 하나", () => {
+    expect(activationChain("core", graph())).toEqual(["core"]);
+  });
+  it("종속이 항상 자신보다 앞에 온다(위상 불변식)", () => {
+    const chain = activationChain("addon", graph());
+    const idx = (id: string) => chain.indexOf(id);
+    expect(idx("core")).toBeLessThan(idx("lounge"));
+    expect(idx("lounge")).toBeLessThan(idx("addon"));
+  });
+  it("순환 의존(a→b→a)에서도 무한루프 없이 1회 방문", () => {
+    const cyc: DepNode[] = [
+      { id: "a", version: "1", dependencies: { b: "*" } },
+      { id: "b", version: "1", dependencies: { a: "*" } },
+    ];
+    const chain = activationChain("a", cyc);
+    expect(new Set(chain)).toEqual(new Set(["a", "b"]));
+    expect(chain.length).toBe(2);
+  });
+  it("미설치 종속은 건너뛴다(설치 플로가 별도 처리)", () => {
+    const partial: DepNode[] = [
+      { id: "studio", version: "1", dependencies: { core: "*" } },
+    ];
+    expect(activationChain("studio", partial)).toEqual(["studio"]);
   });
 });

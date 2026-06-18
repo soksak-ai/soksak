@@ -24,6 +24,7 @@ import {
 } from "../plugins/loader";
 import { defaultPluginDeps } from "../plugins/deps";
 import {
+  activationChain,
   allMissingDeps,
   cascadeRemovalSet,
   transitiveDependents,
@@ -95,6 +96,8 @@ interface PluginsState {
   disable: (id: string) => Promise<CmdResult<{ id: string; status: string }>>;
   // 동의 기록 — UI(동의 모달)만 호출한다. 명령으로 노출하지 않는다(§0-5).
   grantConsent: (id: string) => boolean;
+  // 동의 철회 — 권한을 줄이는 안전 작업(재동의 필요 상태로). 활성 중이면 비활성화. 명령 노출 가능.
+  revokeConsent: (id: string) => Promise<CmdResult<{ id: string }>>;
   devLoad: (path: string) => Promise<CmdResult<{ id: string; dir: string }>>;
 }
 
@@ -137,6 +140,20 @@ export function consentValid(
     consent.version === manifest.version &&
     samePermissions(consent.permissions, manifest.permissions)
   );
+}
+
+// 활성화에 필요한 동의 미충족 체인 — id 와 전이 종속 중 동의가 필요한 것들을 위상순(종속 먼저)으로.
+// 종속(core)이 강력한 권한(process 등)을 가지므로, UI 는 이 순서대로 동의 팝업을 연속으로 띄워 각각
+// 동의받는다(반쪽 동의 금지 §0-2). dev 소스는 게이트 면제(§0-5). 이미 동의·dev 인 항목은 제외.
+export function pendingConsentChain(
+  id: string,
+  plugins: Record<string, PluginRuntime>,
+  consents: Record<string, ConsentRecord>,
+): string[] {
+  return activationChain(id, pluginDepNodes(plugins)).filter((cid) => {
+    const p = plugins[cid];
+    return p && p.source !== "dev" && !consentValid(consents[cid], p.manifest);
+  });
 }
 
 // 프로그램 ensure(§2.6) — 활성화 시점에 선행 바이너리를 보장한다. 사용자
@@ -387,14 +404,13 @@ export const usePlugins = create<PluginsState>((set, get) => {
           setRuntime(id, { status: "disabled", error: undefined });
           continue;
         }
-        // dev 소스는 동의 게이트 면제(§0-5 예외 — enable 과 동일 규칙).
-        if (
-          p.source !== "dev" &&
-          !consentValid(get().consents[id], p.manifest)
-        ) {
+        // 동의 게이트 — 자신뿐 아니라 전이 종속까지(종속 약관 변경 시 의존 플러그인도 재동의 대상).
+        // dev 소스는 면제(§0-5 예외 — enable 과 동일 규칙).
+        const pending = pendingConsentChain(id, get().plugins, get().consents);
+        if (pending.length > 0) {
           setRuntime(id, {
             status: "disabled",
-            error: "재동의 필요(버전 또는 권한 변경)",
+            error: `재동의 필요(자신 또는 종속의 버전·권한 변경): ${pending.join(", ")}`,
           });
           continue;
         }
@@ -516,34 +532,38 @@ export const usePlugins = create<PluginsState>((set, get) => {
       if (p.status === "enabled" && isActive(id)) {
         return ok({ id, status: "enabled" }); // 멱등
       }
-      // dev 소스는 동의 게이트 면제(§0-5 예외) — 개발자가 경로를 직접 지정해
-      // 적재한 자기 작업물이고, 게이트는 적재 명령(danger:"inject")에 있다.
-      if (
-        p.source !== "dev" &&
-        !consentValid(get().consents[id], p.manifest)
-      ) {
+      // 동의 게이트 — 자신뿐 아니라 전이 종속까지 검사한다(종속의 강력한 권한을 사용자가 봐야 함).
+      // dev 소스는 면제(§0-5 예외 — 적재 명령이 게이트). 미동의 체인이 있으면 그 목록을 반환해 UI 가
+      // 종속 먼저 순서로 동의 팝업을 연속으로 띄우게 한다(반쪽 동의 금지).
+      const pending = pendingConsentChain(id, get().plugins, get().consents);
+      if (pending.length > 0) {
         return err(
           "CONSENT_REQUIRED",
-          `활성화 동의 필요: ${id} — 설정(우측 사이드바 관리)에서 권한을 확인하고 동의`,
+          `활성화 동의 필요: ${pending.join(", ")} — 종속 먼저 순서로 동의가 필요합니다`,
+          { pendingConsent: pending },
         );
       }
-      try {
-        await activateRuntime(p);
-      } catch (e) {
-        setRuntime(id, { status: "error", error: String(e) });
-        throw e; // 명령 레이어가 INTERNAL 로 변환, UI 는 status 로 표시.
-      }
-      setRuntime(id, { status: "enabled", error: undefined });
-      if (!get().enabledIds.includes(id)) {
-        set((s) => ({ enabledIds: [...s.enabledIds, id] }));
+      // 종속부터 활성화(cascade) — activationChain 순서로, 미활성·동의된 것만. 종속이 먼저 준비된다.
+      const chain = activationChain(id, pluginDepNodes(get().plugins));
+      for (const cid of chain) {
+        const cp = get().plugins[cid];
+        if (!cp) continue; // 미설치 종속(설치 플로 별도) — 건너뜀
+        if (cp.status === "enabled" && isActive(cid)) continue; // 이미 활성
+        try {
+          await activateRuntime(cp);
+        } catch (e) {
+          setRuntime(cid, { status: "error", error: String(e) });
+          throw e; // 명령 레이어가 INTERNAL 로 변환, UI 는 status 로 표시.
+        }
+        setRuntime(cid, { status: "enabled", error: undefined });
+        if (!get().enabledIds.includes(cid)) {
+          set((s) => ({ enabledIds: [...s.enabledIds, cid] }));
+        }
+        // 프로그램·라이브러리 ensure(§2.6) — 활성화 시점, 동의 화면에서 고지된 명령 그대로.
+        void ensureProgramBinaries(cp.manifest);
+        void ensureLibraries(cp.manifest, get().plugins);
       }
       persist();
-      // 프로그램 ensure(§2.6)는 활성화 시점에 처리 — 동의 화면에서 설치 명령을
-      // 고지받고 활성화한 지금이 설치의 자리다(실행 시점은 command 그대로 깨끗).
-      // 명시적 enable 에서만 — 앱 시작/reload 의 자동 재활성화는 조용히.
-      void ensureProgramBinaries(p.manifest);
-      // 라이브러리 종속성(libraries) 강제 설치 — 전이 deps 포함(core 의 에이전트 CLI 등).
-      void ensureLibraries(p.manifest, get().plugins);
       return ok({ id, status: "enabled" });
     },
 
@@ -571,6 +591,29 @@ export const usePlugins = create<PluginsState>((set, get) => {
       }));
       persist();
       return true;
+    },
+
+    // 동의 철회 — 동의 기록 제거(재동의 필요 상태로). 활성 중이면 비활성화하고, 이 플러그인을 종속으로
+    // 쓰는 의존자도 비활성화한다(종속이 미동의면 의존자도 떠선 안 됨 — 전이 일관). 권한 축소라 안전.
+    revokeConsent: async (id) => {
+      const p = get().plugins[id];
+      if (!p) return err("TARGET_NOT_FOUND", `플러그인 없음: ${id}`);
+      // 자신 + 전이 의존자(먼 것부터)를 비활성화 — 종속의 동의가 사라지면 의존자도 재동의 흐름으로.
+      const affected = [...transitiveDependents(id, pluginDepNodes(get().plugins)), id];
+      for (const aid of affected) {
+        if (isActive(aid)) await deactivateById(aid);
+        setRuntime(aid, { status: "disabled", error: undefined });
+      }
+      set((s) => {
+        const consents = { ...s.consents };
+        delete consents[id];
+        return {
+          consents,
+          enabledIds: s.enabledIds.filter((x) => !affected.includes(x)),
+        };
+      });
+      persist();
+      return ok({ id });
     },
 
     devLoad: async (path) => {
