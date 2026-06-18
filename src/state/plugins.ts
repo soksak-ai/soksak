@@ -8,6 +8,7 @@ import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import {
   parseManifest,
+  scanHostChromeViolations,
   semverGte,
   type LibraryDep,
   type PluginManifest,
@@ -284,6 +285,16 @@ export const usePlugins = create<PluginsState>((set, get) => {
     const data = await invoke<{ content: string }>("read_text_file", {
       path: `${p.dir}/${p.manifest.entry}`,
     });
+    // 크롬 표준 게이트 — 번들 CSS 가 호스트 크롬 셀렉터/변수를 덮으면 탭 정렬이 깨진다. 명백한 정적 위반은
+    // 거부(침묵 실패 금지). 사이드바/컨텐츠 뷰가 있는 플러그인에만 적용 — 뷰 없는 플러그인은 크롬 무관.
+    if (p.manifest.contributes.views.length > 0) {
+      const violations = scanHostChromeViolations(data.content);
+      if (violations.length > 0) {
+        throw new Error(
+          `호스트 크롬 표준 위반(${p.manifest.id}): 플러그인 CSS 가 호스트 소유 셀렉터/변수를 덮습니다 — ${violations.join(", ")}. 자기 클래스만 스타일링하세요(탭/헤더 높이는 호스트가 소유).`,
+        );
+      }
+    }
     const module = await importPluginModule(data.content);
     const instance = await activatePlugin(
       module,

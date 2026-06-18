@@ -6,6 +6,7 @@ import {
   pluginCommandName,
   resolveText,
   qualifiedViewId,
+  scanHostChromeViolations,
   semverGte,
   semverSatisfies,
   SPEC_VERSION,
@@ -611,5 +612,30 @@ describe("LocalizedText — 플러그인 텍스트 다국어(§3.5)", () => {
     expect(resolveText("터미널", "en")).toBe("터미널");
     expect(resolveText({ ko: "터미널", en: "Terminal" }, "en")).toBe("Terminal");
     expect(resolveText({ ko: "터미널", en: "Terminal" }, "ja")).toBe("터미널");
+  });
+});
+
+describe("scanHostChromeViolations — 호스트 크롬 표준 정적 게이트", () => {
+  it("자기 클래스만 스타일링하면 통과(위반 0)", () => {
+    const ok = `.club-feed{height:100%}.st-tab{padding:3px}.acpc-bar{display:flex}`;
+    expect(scanHostChromeViolations(ok)).toEqual([]);
+  });
+  it("호스트 탭 셀렉터 height 오버라이드는 위반", () => {
+    expect(scanHostChromeViolations(`.left-host-tab{height:50px}`)).toContain(".left-host-tab");
+    expect(scanHostChromeViolations(`.content-tabs{height:60px}`)).toContain(".content-tabs");
+    expect(scanHostChromeViolations(`.view-tabs{padding:0}`)).toContain(".view-tabs");
+  });
+  it("호스트 크롬 변수 대입은 위반", () => {
+    expect(scanHostChromeViolations(`:root{--chrome-row-h:99px}`)).toContain("--chrome-row-h");
+    expect(scanHostChromeViolations(`.x{--header-h:10px}`)).toContain("--header-h");
+  });
+  it("주석·산문 언급은 오탐 아님(위반 0)", () => {
+    expect(scanHostChromeViolations(`// .left-host-tabs 는 호스트가 소유한다`)).toEqual([]);
+    expect(scanHostChromeViolations(`const note = "do not touch --chrome-row-h here"`)).toEqual([]);
+  });
+  it("여러 위반을 모두 보고", () => {
+    const bad = `.left-host-tabs{height:40px} .ft-header{height:40px} :root{--header-h:5px}`;
+    const v = scanHostChromeViolations(bad);
+    expect(v).toEqual(expect.arrayContaining([".left-host-tabs", ".ft-header", "--header-h"]));
   });
 });
