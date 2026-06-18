@@ -370,6 +370,25 @@ impl SecretsState {
         Ok(removed)
     }
 
+    // ns·key 의 평문을 복호해 반환 — Rust 전용(get 커맨드/CLI 미노출, 평문 readback 차단 유지).
+    // 유일 호출자 = process_spawn 의 secret_env 주입(자식 env 로만 흐름). 잠김=Err, 미존재=Err.
+    fn resolve(&self, ns: &str, key: &str) -> Result<String, String> {
+        validate_ns(ns)?;
+        validate_key(key)?;
+        let item = {
+            let guard = self.vault.lock().map_err(|e| e.to_string())?;
+            let vault = guard.as_ref().ok_or("vault locked")?;
+            vault
+                .entries
+                .get(ns)
+                .and_then(|m| m.get(key))
+                .cloned()
+                .ok_or_else(|| format!("시크릿 없음: {ns}/{key}"))?
+        };
+        let plain = self.with_kek(|kek| open(kek, &item))?;
+        String::from_utf8(plain).map_err(|_| "시크릿 평문 UTF-8 아님".to_string())
+    }
+
     // ns 의 key 목록만(값 아님 — 평문 readback 차단 원칙).
     fn keys(&self, ns: &str) -> Result<Vec<String>, String> {
         validate_ns(ns)?;
@@ -384,6 +403,24 @@ impl SecretsState {
             .map(|m| m.keys().cloned().collect())
             .unwrap_or_default())
     }
+}
+
+// 테스트 전용 헬퍼 — 다른 모듈(process.rs)의 secret_env 주입 테스트가 임시 볼트를 세팅할 때 쓴다.
+// 프로덕션 경로는 unlock/set 이 private 이므로 IPC/CLI 로만 진입(평문 readback 차단 불변).
+#[cfg(test)]
+pub fn test_state_with_secret(path: PathBuf, passphrase: &str, ns: &str, key: &str, value: &str) -> SecretsState {
+    let s = SecretsState::default();
+    s.set_path(path);
+    s.unlock(passphrase).expect("test unlock");
+    s.set(ns, key, value).expect("test set");
+    s
+}
+
+// ── 내부 평문 해소(Rust 전용 — process_spawn secret_env 주입) ────────────────
+// pub fn 이지만 tauri::command 아님 → IPC/CLI 비노출. 평문은 호출자(process_spawn)가
+// 자식 env 로만 흘린다(JS 로 반환 0, R2). 잠김=Err(vault locked), 미존재=Err.
+pub fn resolve(state: &SecretsState, ns: &str, key: &str) -> Result<String, String> {
+    state.resolve(ns, key)
 }
 
 // ── Tauri 커맨드 ─────────────────────────────────────────────────────────────
@@ -550,5 +587,33 @@ mod tests {
         assert!(s.has("ns", "k").is_err());
         assert!(s.keys("ns").is_err());
         assert!(s.delete("ns", "k").is_err());
+    }
+
+    // resolve(내부 평문 해소) — unlock 상태에서 저장값 평문 복원(process_spawn 주입 경로의 바닥).
+    #[test]
+    fn resolve_roundtrip() {
+        let (s, dir) = state_with_tmp_vault("resolve");
+        s.unlock("pw").unwrap();
+        s.set("plugin-a", "apiKey", "sk-token-xyz").unwrap();
+        assert_eq!(s.resolve("plugin-a", "apiKey").unwrap(), "sk-token-xyz");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // resolve 잠금/미존재 게이트 — 잠김=Err(vault locked), 미존재 key/ns=Err(평문 누출 0).
+    #[test]
+    fn resolve_locked_and_missing_rejected() {
+        let (s, dir) = state_with_tmp_vault("resolve-gate");
+        // 잠김 — unlock 전.
+        assert!(s.resolve("plugin-a", "apiKey").is_err());
+        s.unlock("pw").unwrap();
+        s.set("plugin-a", "apiKey", "v").unwrap();
+        // 미존재 key.
+        assert!(s.resolve("plugin-a", "nope").is_err());
+        // 미존재 ns.
+        assert!(s.resolve("plugin-z", "apiKey").is_err());
+        // lock 후 다시 잠김.
+        s.lock().unwrap();
+        assert!(s.resolve("plugin-a", "apiKey").is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

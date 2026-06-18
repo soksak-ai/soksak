@@ -317,11 +317,18 @@ export interface SoksakPluginApi {
   /** 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합). "process" 권한.
    *  PTY 가 아니라 순수 파이프 → JSON-RPC 프레이밍 무손상. 이벤트 기반(폴링 0). */
   process?: {
-    /** 프로그램 spawn → handle(id). cwd/env 선택. envRemove=부모 env 에서 뗄 키(중첩 가드 제거 등). */
+    /** 프로그램 spawn → handle(id). cwd/env 선택. envRemove=부모 env 에서 뗄 키(중첩 가드 제거 등).
+     *  secretEnv=envVar→secretKey(이 플러그인 ns 의 시크릿). 평문은 JS 가 안 만진다 — 키 이름만 넘기면
+     *  Rust 경계가 볼트에서 해소해 자식 env 에 주입(셸 args·ps·history 무노출 R2). 잠김/미존재면 spawn 실패. */
     spawn: (
       cmd: string,
       args: string[],
-      opts?: { cwd?: string; env?: Record<string, string>; envRemove?: string[] },
+      opts?: {
+        cwd?: string;
+        env?: Record<string, string>;
+        envRemove?: string[];
+        secretEnv?: Record<string, string>;
+      },
     ) => Promise<number>;
     /** stdin 에 쓰기(JSON-RPC 프레임 등). */
     write: (handle: number, data: string) => Promise<void>;
@@ -415,7 +422,7 @@ const denied = (message: string): CommandOutcome => ({
 
 // app.process 구현 — handle(id)별 리스너 + 등록 전 도착분 버퍼(유실 0). spawn 시 Channel 3개
 // (stdout/stderr/exit)를 만들어 process_spawn 에 넘기고, onData/onStderr/onExit 가 그 스트림을 구독.
-function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker) {
+function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker, ns: string) {
   type Bytes = (d: Uint8Array) => void;
   interface ProcState {
     stdout: Set<Bytes>;
@@ -439,7 +446,12 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     async spawn(
       cmd: string,
       args: string[],
-      opts?: { cwd?: string; env?: Record<string, string>; envRemove?: string[] },
+      opts?: {
+        cwd?: string;
+        env?: Record<string, string>;
+        envRemove?: string[];
+        secretEnv?: Record<string, string>;
+      },
     ): Promise<number> {
       const st: ProcState = {
         stdout: new Set(),
@@ -458,12 +470,16 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         if (st.exit.size) st.exit.forEach((f) => f(code));
         else st.exitCode = code;
       };
+      // 평문은 JS 가 만지지 않는다 — 키 이름만 넘긴다(secretEnv: envVar→secretKey). ns=플러그인 id.
+      // 평문 해소·자식 env 주입은 Rust 경계(process_spawn)에서만(R2). secretEnv 없으면 null.
       const id = (await deps.invoke("process_spawn", {
         cmd,
         args,
         cwd: opts?.cwd ?? null,
         env: opts?.env ?? null,
         envRemove: opts?.envRemove ?? null,
+        ns,
+        secretEnv: opts?.secretEnv ?? null,
         onStdout,
         onStderr,
         onExit,
@@ -1013,7 +1029,7 @@ export function buildPluginApi(
               : {}),
           }
         : undefined,
-    process: has("process") ? createProcessApi(deps, tracker) : undefined,
+    process: has("process") ? createProcessApi(deps, tracker, id) : undefined,
     bus: {
       emit: (topic: string, payload: unknown) => busEmit(topic, payload),
       on: (topic: string, fn: (payload: unknown) => void) =>
