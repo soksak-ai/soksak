@@ -48,6 +48,10 @@ tauri-plugin-deep-link = "2"
 # changeCount 폴링(이벤트 API 부재). clipboard-rs 가 4 백엔드를 단일 ClipboardHandler 로 흡수.
 clipboard-rs = "0.2"
 
+# HTTP 요청 capability(net.http.request) — runbook api 실행타입. blocking 클라이언트(자체 런타임 —
+# tauri 커맨드는 스레드풀에서 동기 실행). rustls-tls = OpenSSL 비의존 순수 Rust TLS(멀티플랫폼 R5).
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+
 # 시크릿 볼트(app.secrets) — OS 키체인 비의존 순수 Rust crypto(KeePassXC/1Password 구조). 자체 crypto
 # 발명 0, 검증된 RustCrypto crate 만. Argon2id(passphrase→KEK) + XChaCha20Poly1305(24B nonce AEAD,
 # envelope: 항목별 DEK 를 KEK 로 wrap). rand=OsRng(salt/nonce/DEK), zeroize=KEK 메모리 소거.

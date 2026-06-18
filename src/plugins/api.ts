@@ -341,6 +341,20 @@ export interface SoksakPluginApi {
     /** kill + 정리. */
     kill: (handle: number) => Promise<void>;
   };
+  /** HTTP 요청(범용 — runbook api 실행타입 등). "network" 권한. webview fetch 가 못 하는 임의 출처 +
+   *  시크릿 헤더/바디 주입을 코어가 대행. secretSubst=placeholder→secretKey(이 플러그인 ns). 평문은 JS 가
+   *  안 만진다 — Rust 경계가 볼트에서 해소해 url/headers/body 의 placeholder 에 치환(history/응답 무노출 R2). */
+  network?: {
+    http: (req: {
+      method: string;
+      url: string;
+      headers?: Record<string, string>;
+      query?: Record<string, string>;
+      body?: string;
+      contentType?: string;
+      secretSubst?: Record<string, string>;
+    }) => Promise<{ status: number; headers: Record<string, string>; body: string }>;
+  };
   /** 플러그인 커스텀 이벤트 버스 — 임의 토픽 pub/sub(플러그인 간 스트리밍 coordination). 코어-정의
    *  이벤트(events.on)와 별개. 예: acp-core 가 session/update 를 emit → 코크핏/라운지가 구독. 시스템
    *  접근 0 → 권한 불요(모든 플러그인). */
@@ -511,6 +525,33 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker, ns: s
     kill: async (handle: number): Promise<void> => {
       await deps.invoke("process_kill", { id: handle });
       procs.delete(handle);
+    },
+  };
+}
+
+// app.network 구현 — http(req) → 코어 network_http_request 위임. ns=플러그인 id 주입(타 ns 시크릿
+// 탈취 차단 R2/R6 — 호출자가 ns 를 못 정한다). secretSubst=placeholder→secretKey(평문 0, Rust 경계 치환).
+function createNetworkApi(deps: PluginApiDeps, ns: string) {
+  return {
+    http: async (req: {
+      method: string;
+      url: string;
+      headers?: Record<string, string>;
+      query?: Record<string, string>;
+      body?: string;
+      contentType?: string;
+      secretSubst?: Record<string, string>;
+    }): Promise<{ status: number; headers: Record<string, string>; body: string }> => {
+      return (await deps.invoke("network_http_request", {
+        method: req.method,
+        url: req.url,
+        headers: req.headers ?? null,
+        query: req.query ?? null,
+        body: req.body ?? null,
+        contentType: req.contentType ?? null,
+        ns,
+        secretSubst: req.secretSubst ?? null,
+      })) as { status: number; headers: Record<string, string>; body: string };
     },
   };
 }
@@ -1030,6 +1071,7 @@ export function buildPluginApi(
           }
         : undefined,
     process: has("process") ? createProcessApi(deps, tracker, id) : undefined,
+    network: has("network") ? createNetworkApi(deps, id) : undefined,
     bus: {
       emit: (topic: string, payload: unknown) => busEmit(topic, payload),
       on: (topic: string, fn: (payload: unknown) => void) =>
