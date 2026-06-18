@@ -41,6 +41,7 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
     setFileText: () => false,
     onFsChange: () => () => {},
     onDataChange: () => () => {},
+    onClipboardChange: () => () => {},
     ...overrides,
   };
 }
@@ -356,6 +357,50 @@ describe("data — 권한 게이트 + ns 강제 주입 + watch 필터(크로스�
   });
 });
 
+describe("secrets — 권한 게이트 + ns 강제 주입 + get 부재", () => {
+  it('"secrets" 미선언 시 표면 undefined', () => {
+    const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
+    expect(api.secrets).toBeUndefined();
+  });
+
+  it("선언 시 set/has/delete/keys/backend 존재, get 부재(평문 readback 차단)", () => {
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["secrets"] }),
+      "/d",
+      fakeDeps(),
+    );
+    expect(typeof api.secrets?.set).toBe("function");
+    expect(typeof api.secrets?.has).toBe("function");
+    expect(typeof api.secrets?.delete).toBe("function");
+    expect(typeof api.secrets?.keys).toBe("function");
+    expect(typeof api.secrets?.backend).toBe("function");
+    // get 은 존재해선 안 됨(주입 전용 — 평문 되읽기 경로 차단).
+    expect((api.secrets as Record<string, unknown>).get).toBeUndefined();
+  });
+
+  it("set 은 ns=manifest.id 를 주입(다른 ns 지정 불가)", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const d = fakeDeps({
+      invoke: vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
+        calls.push({ cmd, ...args });
+        return null;
+      }),
+    });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["secrets"] }),
+      "/d",
+      d,
+    );
+    await api.secrets!.set("apiKey", "sk-123");
+    expect(calls[0]).toEqual({
+      cmd: "secret_set",
+      ns: "demo",
+      key: "apiKey",
+      value: "sk-123",
+    });
+  });
+});
+
 describe("notify/sound — 권한 게이트", () => {
   it('"notify" 미선언 시 undefined, 선언 시 push/sound 표면', () => {
     const off = buildPluginApi(manifestOf({}), "/d", fakeDeps());
@@ -364,6 +409,76 @@ describe("notify/sound — 권한 게이트", () => {
     const on = buildPluginApi(manifestOf({ permissions: ["notify"] }), "/d", fakeDeps());
     expect(typeof on.api.notify?.push).toBe("function");
     expect(on.api.sound?.builtins()).toContain("chime");
+  });
+});
+
+describe("clipboard — read/write 권한별 게이트 + watch(전 창 시그널)", () => {
+  it("미선언 시 표면 undefined", () => {
+    const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
+    expect(api.clipboard).toBeUndefined();
+  });
+
+  it("read/write 권한별 메서드 게이트(watch 는 read 소관)", () => {
+    const ro = buildPluginApi(
+      manifestOf({ permissions: ["clipboard:read"] }),
+      "/d",
+      fakeDeps(),
+    ).api;
+    expect(ro.clipboard?.readText).toBeDefined();
+    expect(ro.clipboard?.watch).toBeDefined();
+    expect(ro.clipboard?.writeText).toBeUndefined();
+
+    const wo = buildPluginApi(
+      manifestOf({ permissions: ["clipboard:write"] }),
+      "/d",
+      fakeDeps(),
+    ).api;
+    expect(wo.clipboard?.writeText).toBeDefined();
+    expect(wo.clipboard?.readText).toBeUndefined();
+    expect(wo.clipboard?.watch).toBeUndefined();
+  });
+
+  it("readText→clipboard_read, writeText→clipboard_write", async () => {
+    const d = fakeDeps({
+      invoke: vi.fn(async (cmd: string) =>
+        cmd === "clipboard_read" ? "복사된 텍스트" : null,
+      ),
+    });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["clipboard:read", "clipboard:write"] }),
+      "/d",
+      d,
+    );
+    expect(await api.clipboard!.readText!()).toBe("복사된 텍스트");
+    await api.clipboard!.writeText!("새 값");
+    expect(d.invoke).toHaveBeenCalledWith("clipboard_write", { text: "새 값" });
+  });
+
+  it("watch 는 clipboard_watch_start + onClipboardChange 구독, dispose 시 stop", () => {
+    const order: string[] = [];
+    let emit: ((text: string) => void) | null = null;
+    const d = fakeDeps({
+      invoke: vi.fn(async (cmd: string) => {
+        order.push(cmd);
+        return null;
+      }),
+      onClipboardChange: (cb) => {
+        emit = cb as (text: string) => void;
+        return () => order.push("unsubscribe");
+      },
+    });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["clipboard:read"] }),
+      "/d",
+      d,
+    );
+    const seen: string[] = [];
+    const sub = api.clipboard!.watch!((e) => seen.push(e.text));
+    emit!("바뀐 내용");
+    expect(seen).toEqual(["바뀐 내용"]);
+    sub.dispose();
+    expect(order).toContain("clipboard_watch_start");
+    expect(order).toContain("clipboard_watch_stop");
   });
 });
 

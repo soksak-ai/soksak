@@ -45,6 +45,7 @@ function fakeDeps(): PluginApiDeps {
     setFileText: () => false,
     onFsChange: () => () => {},
     onDataChange: () => () => {},
+    onClipboardChange: () => () => {},
   };
 }
 

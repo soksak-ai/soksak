@@ -234,6 +234,21 @@ export interface SoksakPluginApi {
       cb: (e: DataChangeEvent) => void,
     ) => Disposable;
   };
+  /** 암호화 시크릿 볼트(코어 — OS 키체인 비의존 순수 Rust crypto). API 키·토큰 같은 민감값을 봉인 저장.
+   *  네임스페이스는 이 플러그인 id 로 강제(app.data 와 동일 격리). get 없음 — 평문 readback 차단(주입
+   *  전용). 볼트가 잠겨 있으면 호출은 reject("vault locked"). "secrets" 권한 한정. */
+  secrets?: {
+    /** 값 봉인 저장(envelope: 항목별 DEK 를 KEK 로 wrap). 같은 key 면 교체. */
+    set: (key: string, value: string) => Promise<void>;
+    /** key 존재 여부(값은 노출 안 함). */
+    has: (key: string) => Promise<boolean>;
+    /** key 삭제(있었으면 true). */
+    delete: (key: string) => Promise<boolean>;
+    /** 이 ns 의 key 목록만(값 아님 — 평문 차단). */
+    keys: () => Promise<string[]>;
+    /** 볼트 백엔드·잠금 상태({ backend:"vault", unlocked }). */
+    backend: () => Promise<{ backend: string; unlocked: boolean }>;
+  };
   /** 알림 = 푸시 동급 1급 객체(리치 페이로드). 포커스 시 인앱 배너·비포커스 시 OS 알림(동일 페이로드).
    *  클릭/액션 시 deepLink(soksak://cmd/...) 로 활성화(권한·danger 게이트 유지). "notify" 권한. */
   notify?: {
@@ -302,11 +317,18 @@ export interface SoksakPluginApi {
   /** 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합). "process" 권한.
    *  PTY 가 아니라 순수 파이프 → JSON-RPC 프레이밍 무손상. 이벤트 기반(폴링 0). */
   process?: {
-    /** 프로그램 spawn → handle(id). cwd/env 선택. envRemove=부모 env 에서 뗄 키(중첩 가드 제거 등). */
+    /** 프로그램 spawn → handle(id). cwd/env 선택. envRemove=부모 env 에서 뗄 키(중첩 가드 제거 등).
+     *  secretEnv=envVar→secretKey(이 플러그인 ns 의 시크릿). 평문은 JS 가 안 만진다 — 키 이름만 넘기면
+     *  Rust 경계가 볼트에서 해소해 자식 env 에 주입(셸 args·ps·history 무노출 R2). 잠김/미존재면 spawn 실패. */
     spawn: (
       cmd: string,
       args: string[],
-      opts?: { cwd?: string; env?: Record<string, string>; envRemove?: string[] },
+      opts?: {
+        cwd?: string;
+        env?: Record<string, string>;
+        envRemove?: string[];
+        secretEnv?: Record<string, string>;
+      },
     ) => Promise<number>;
     /** stdin 에 쓰기(JSON-RPC 프레임 등). */
     write: (handle: number, data: string) => Promise<void>;
@@ -332,6 +354,20 @@ export interface SoksakPluginApi {
     onClose: (handle: number, cb: () => void) => Disposable;
     /** 연결 종료 + 정리. */
     close: (handle: number) => Promise<void>;
+  };
+  /** HTTP 요청(범용 — runbook api 실행타입 등). "network" 권한. webview fetch 가 못 하는 임의 출처 +
+   *  시크릿 헤더/바디 주입을 코어가 대행. secretSubst=placeholder→secretKey(이 플러그인 ns). 평문은 JS 가
+   *  안 만진다 — Rust 경계가 볼트에서 해소해 url/headers/body 의 placeholder 에 치환(history/응답 무노출 R2). */
+  network?: {
+    http: (req: {
+      method: string;
+      url: string;
+      headers?: Record<string, string>;
+      query?: Record<string, string>;
+      body?: string;
+      contentType?: string;
+      secretSubst?: Record<string, string>;
+    }) => Promise<{ status: number; headers: Record<string, string>; body: string }>;
   };
   /** 플러그인 커스텀 이벤트 버스 — 임의 토픽 pub/sub(플러그인 간 스트리밍 coordination). 코어-정의
    *  이벤트(events.on)와 별개. 예: acp-core 가 session/update 를 emit → 코크핏/라운지가 구독. 시스템
@@ -414,7 +450,7 @@ const denied = (message: string): CommandOutcome => ({
 
 // app.process 구현 — handle(id)별 리스너 + 등록 전 도착분 버퍼(유실 0). spawn 시 Channel 3개
 // (stdout/stderr/exit)를 만들어 process_spawn 에 넘기고, onData/onStderr/onExit 가 그 스트림을 구독.
-function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker) {
+function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker, ns: string) {
   type Bytes = (d: Uint8Array) => void;
   interface ProcState {
     stdout: Set<Bytes>;
@@ -438,7 +474,12 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     async spawn(
       cmd: string,
       args: string[],
-      opts?: { cwd?: string; env?: Record<string, string>; envRemove?: string[] },
+      opts?: {
+        cwd?: string;
+        env?: Record<string, string>;
+        envRemove?: string[];
+        secretEnv?: Record<string, string>;
+      },
     ): Promise<number> {
       const st: ProcState = {
         stdout: new Set(),
@@ -457,12 +498,16 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         if (st.exit.size) st.exit.forEach((f) => f(code));
         else st.exitCode = code;
       };
+      // 평문은 JS 가 만지지 않는다 — 키 이름만 넘긴다(secretEnv: envVar→secretKey). ns=플러그인 id.
+      // 평문 해소·자식 env 주입은 Rust 경계(process_spawn)에서만(R2). secretEnv 없으면 null.
       const id = (await deps.invoke("process_spawn", {
         cmd,
         args,
         cwd: opts?.cwd ?? null,
         env: opts?.env ?? null,
         envRemove: opts?.envRemove ?? null,
+        ns,
+        secretEnv: opts?.secretEnv ?? null,
         onStdout,
         onStderr,
         onExit,
@@ -548,6 +593,33 @@ function createWsApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     close: async (handle: number): Promise<void> => {
       await deps.invoke("ws_close", { id: handle });
       conns.delete(handle);
+    },
+  };
+}
+
+// app.network 구현 — http(req) → 코어 network_http_request 위임. ns=플러그인 id 주입(타 ns 시크릿
+// 탈취 차단 R2/R6 — 호출자가 ns 를 못 정한다). secretSubst=placeholder→secretKey(평문 0, Rust 경계 치환).
+function createNetworkApi(deps: PluginApiDeps, ns: string) {
+  return {
+    http: async (req: {
+      method: string;
+      url: string;
+      headers?: Record<string, string>;
+      query?: Record<string, string>;
+      body?: string;
+      contentType?: string;
+      secretSubst?: Record<string, string>;
+    }): Promise<{ status: number; headers: Record<string, string>; body: string }> => {
+      return (await deps.invoke("network_http_request", {
+        method: req.method,
+        url: req.url,
+        headers: req.headers ?? null,
+        query: req.query ?? null,
+        body: req.body ?? null,
+        contentType: req.contentType ?? null,
+        ns,
+        secretSubst: req.secretSubst ?? null,
+      })) as { status: number; headers: Record<string, string>; body: string };
     },
   };
 }
@@ -900,6 +972,26 @@ export function buildPluginApi(
         }
       : undefined,
 
+    // 암호화 시크릿 볼트 — ns 는 항상 이 플러그인 id 로 주입(app.data 와 동일 격리). 모든 호출은
+    // Rust SecretsState(단일 진실)로 forward. get 없음 — 평문 readback 차단(주입 전용 2b).
+    secrets: has("secrets")
+      ? {
+          set: async (key, value) => {
+            await deps.invoke("secret_set", { ns: id, key, value });
+          },
+          has: (key) =>
+            deps.invoke("secret_has", { ns: id, key }) as Promise<boolean>,
+          delete: (key) =>
+            deps.invoke("secret_delete", { ns: id, key }) as Promise<boolean>,
+          keys: () => deps.invoke("secret_keys", { ns: id }) as Promise<string[]>,
+          backend: () =>
+            deps.invoke("secret_backend") as Promise<{
+              backend: string;
+              unlocked: boolean;
+            }>,
+        }
+      : undefined,
+
     // 알림(=푸시) + 소리. 시스템 알림은 "notify" 권한 게이트(동의 화면 고지). 소리는 같은 capability.
     notify: has("notify")
       ? {
@@ -1046,7 +1138,8 @@ export function buildPluginApi(
               : {}),
           }
         : undefined,
-    process: has("process") ? createProcessApi(deps, tracker) : undefined,
+    process: has("process") ? createProcessApi(deps, tracker, id) : undefined,
+    network: has("network") ? createNetworkApi(deps, id) : undefined,
     ws: has("network") ? createWsApi(deps, tracker) : undefined,
     bus: {
       emit: (topic: string, payload: unknown) => busEmit(topic, payload),

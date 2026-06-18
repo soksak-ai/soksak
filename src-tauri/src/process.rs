@@ -15,6 +15,8 @@ use std::sync::{Arc, Mutex};
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::State;
 
+use crate::secrets::{self, SecretsState};
+
 struct ProcessSession {
     child: Arc<Mutex<Child>>, // kill(세션) + EOF 후 wait(reader) 공유
     stdin: Option<ChildStdin>,
@@ -36,6 +38,28 @@ impl ProcessManager {
                 }
             }
         }
+    }
+}
+
+// secret_env(envVar→secretKey)를 평문(envVar→평문)으로 해소 — spawn 전 일괄. 비어있으면 빈 벡터.
+// 비어있지 않으면 ns 필수. 하나라도 잠김/미존재면 Err(미해소 시크릿이 자식으로 새지 않는다).
+// 호출자가 결과를 Command env 로만 흘린다(평문은 Rust+자식 프로세스에만 — JS 반환 0, R2).
+fn resolve_secret_env(
+    secrets_state: &SecretsState,
+    ns: Option<&str>,
+    secret_env: &Option<HashMap<String, String>>,
+) -> Result<Vec<(String, String)>, String> {
+    match secret_env {
+        Some(map) if !map.is_empty() => {
+            let ns = ns.ok_or("secret_env 주입에는 ns 필수")?;
+            let mut out = Vec::with_capacity(map.len());
+            for (env_var, secret_key) in map {
+                let plain = secrets::resolve(secrets_state, ns, secret_key)?;
+                out.push((env_var.clone(), plain));
+            }
+            Ok(out)
+        }
+        _ => Ok(Vec::new()),
     }
 }
 
@@ -64,11 +88,20 @@ pub fn process_spawn(
     // 부모 env 에서 제거할 키(설정 아닌 제거). 예: ACP 자식 에이전트에서 호스트 중첩 가드(CLAUDECODE)
     // 를 떼어내 "에디터가 띄운 독립 에이전트"로 동작시킨다. 병합(env)으론 못 하는 unset 전용 경로.
     env_remove: Option<Vec<String>>,
+    // 시크릿 주입 — ns(보통 플러그인 id) + secret_env(envVar→secretKey). 평문은 여기 Rust 경계에서만
+    // 해소돼 자식 env 로 들어간다(JS·셸 args·ps 미노출 R2). secret_env 가 있으면 ns 필수. 잠김/미존재면
+    // spawn 하지 않고 Err — 미해소 시크릿이 자식으로 새지 않는다.
+    ns: Option<String>,
+    secret_env: Option<HashMap<String, String>>,
     on_stdout: Channel<InvokeResponseBody>,
     on_stderr: Channel<InvokeResponseBody>,
     on_exit: Channel<i32>,
     manager: State<'_, ProcessManager>,
+    secrets_state: State<'_, SecretsState>,
 ) -> Result<u32, String> {
+    // 시크릿 평문 해소 — spawn 전에 전부 해소(하나라도 잠김/미존재면 spawn 0). Rust 경계에서만 평문 보유.
+    let resolved_secrets = resolve_secret_env(&secrets_state, ns.as_deref(), &secret_env)?;
+
     let mut c = Command::new(&cmd);
     c.args(&args)
         .stdin(Stdio::piped())
@@ -86,6 +119,10 @@ pub fn process_spawn(
         for k in keys {
             c.env_remove(k);
         }
+    }
+    // 시크릿 평문은 일반 env 뒤에 주입(같은 키면 시크릿 우선). 평문은 이 Command env 와 자식에만 존재.
+    for (k, v) in &resolved_secrets {
+        c.env(k, v);
     }
     let mut child = c.spawn().map_err(|e| e.to_string())?;
 
@@ -150,4 +187,82 @@ pub fn process_kill(id: u32, manager: State<'_, ProcessManager>) -> Result<(), S
         }
     }
     Ok(())
+}
+
+// ── 테스트(secret_env 주입 실증) ─────────────────────────────────────────────
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::secrets::{test_state_with_secret, SecretsState};
+
+    fn tmp_vault_path(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "soksak-proc-secret-{tag}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir.join("secrets.vault")
+    }
+
+    fn map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    // resolve_secret_env + 실제 spawn — secret_env{SOKSAK_SECRET_0:apiKey} 를 자식 env 로 주입하고
+    // /bin/sh -c 'printf %s "$SOKSAK_SECRET_0"' 의 stdout 을 캡처해 평문 일치 확인(자식 env 실주입).
+    #[test]
+    fn secret_env_injected_into_child() {
+        let path = tmp_vault_path("inject");
+        let state = test_state_with_secret(path.clone(), "pw", "plugin-a", "apiKey", "sk-real-9z");
+
+        let secret_env = Some(map(&[("SOKSAK_SECRET_0", "apiKey")]));
+        let resolved = resolve_secret_env(&state, Some("plugin-a"), &secret_env).unwrap();
+
+        // process_spawn 과 동일하게 Command env 로만 주입(평문은 여기서만).
+        let mut c = Command::new("/bin/sh");
+        c.args(["-c", "printf %s \"$SOKSAK_SECRET_0\""]);
+        for (k, v) in &resolved {
+            c.env(k, v);
+        }
+        let out = c.output().expect("spawn sh");
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "sk-real-9z");
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    // 빈/None secret_env → 빈 벡터(주입 없음), ns 불요.
+    #[test]
+    fn no_secret_env_is_empty() {
+        let state = SecretsState::default();
+        assert!(resolve_secret_env(&state, None, &None).unwrap().is_empty());
+        assert!(resolve_secret_env(&state, None, &Some(HashMap::new())).unwrap().is_empty());
+    }
+
+    // secret_env 있는데 ns 없음 → Err(주입 0).
+    #[test]
+    fn secret_env_without_ns_rejected() {
+        let path = tmp_vault_path("no-ns");
+        let state = test_state_with_secret(path.clone(), "pw", "plugin-a", "apiKey", "v");
+        let secret_env = Some(map(&[("SOKSAK_SECRET_0", "apiKey")]));
+        assert!(resolve_secret_env(&state, None, &secret_env).is_err());
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    // 잠긴 볼트 → Err(spawn 0). 미존재 key → Err.
+    #[test]
+    fn locked_or_missing_rejected() {
+        // 잠김 — unlock 안 한 기본 상태.
+        let locked = SecretsState::default();
+        let se = Some(map(&[("SOKSAK_SECRET_0", "apiKey")]));
+        assert!(resolve_secret_env(&locked, Some("plugin-a"), &se).is_err());
+
+        // 미존재 key.
+        let path = tmp_vault_path("missing");
+        let state = test_state_with_secret(path.clone(), "pw", "plugin-a", "apiKey", "v");
+        let bad = Some(map(&[("SOKSAK_SECRET_0", "nope")]));
+        assert!(resolve_secret_env(&state, Some("plugin-a"), &bad).is_err());
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
 }

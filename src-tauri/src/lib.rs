@@ -1,14 +1,20 @@
 mod browser;
+mod clipboard;
 mod data;
+mod deeplink;
 #[cfg(target_os = "macos")]
 mod dockmenu;
 mod fs;
 mod git;
+mod http;
 pub mod ipc;
 mod network;
+mod notify;
 mod plugins;
 mod process;
 mod pty;
+mod schedule;
+mod secrets;
 #[cfg(target_os = "macos")]
 mod titlebar;
 mod watcher;
@@ -77,20 +83,53 @@ pub fn run() {
         .manage(ProcessManager::default())
         .manage(ws::WsManager::default())
         .manage(FsWatcher::default())
+        .manage(clipboard::ClipboardState::default())
         .manage(CmdBridge::default())
         .manage(data::DbState::default())
+        .manage(secrets::SecretsState::default())
+        .manage(schedule::ScheduleState::default())
         .setup(|app| {
             // 범용 데이터 스토어(app.data) — 소켓 서버 이전에 연다(커맨드가 즉시 쓸 수 있도록).
             match data::db_path().and_then(|p| data::open(&p)) {
                 Ok(conn) => app.state::<data::DbState>().set(conn),
                 Err(e) => eprintln!("[data] DB 열기 실패: {e}"),
             }
+            // 시크릿 볼트 — 프로덕션 경로 주입(init 1회) 후 헤드리스/e2e 자동 unlock
+            // (SOKSAK_VAULT_KEY env 있을 때만, 없으면 잠김 유지).
+            {
+                let st = app.state::<secrets::SecretsState>();
+                // SOKSAK_VAULT_PATH 있으면 격리 경로(헤드리스/E2E), 없으면 프로덕션 default.
+                match secrets::resolve_vault_path(|k| std::env::var(k).ok()) {
+                    Ok(p) => st.set_path(p),
+                    Err(e) => eprintln!("[secrets] 볼트 경로 계산 실패: {e}"),
+                }
+                secrets::auto_unlock_from_env(&st);
+            }
             // 파일 워처 1회 초기화(이벤트 콜백에 앱 핸들 주입).
             let handle = app.handle().clone();
             app.state::<FsWatcher>().init(handle);
+            // 클립보드 watcher 1회 초기화(이벤트 emit 용 앱 핸들 주입). 실제 감시는 플러그인이
+            // clipboard_watch_start 를 호출할 때 시작 — 쓰지 않으면 스레드/폴링 0.
+            app.state::<clipboard::ClipboardState>()
+                .init(app.handle().clone());
             // AI 명령 인터페이스 소켓 서버(sok CLI/MCP 의 통로).
             if let Err(e) = ipc::start(app.handle().clone()) {
                 eprintln!("[ipc] 소켓 서버 기동 실패: {e}");
+            }
+            // 딥링크 라우팅 — soksak://run?cmd=... 외부 진입/알림 클릭이 한 명령을 실행한다(CmdBridge 경유,
+            // 단일 실행 경로). dev 는 스킴이 OS 미등록일 수 있어 register_all 로 런타임 등록(프로덕션은
+            // tauri.conf plugins.deep-link). 파싱 실패/미지 URL 은 조용히 무시(명령 누출 0).
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let dl_handle = app.handle().clone();
+                let _ = app.deep_link().register_all();
+                app.deep_link().on_open_url(move |event| {
+                    for u in event.urls() {
+                        if let Some((cmd, params)) = deeplink::parse_command_url(u.as_str()) {
+                            let _ = ipc::request_command(&dl_handle, cmd, params, 10_000);
+                        }
+                    }
+                });
             }
             // 신호등: 좌표는 tauri.conf.json trafficLightPosition 이 소유, 유지는
             // titlebar::install 의 NSNotification 옵저버가 담당(titlebar.rs 참조).
@@ -161,6 +200,11 @@ pub fn run() {
             ws::ws_connect,
             ws::ws_send,
             ws::ws_close,
+            http::network_http_request,
+            notify::notify_show,
+            schedule::schedule_set,
+            schedule::schedule_cancel,
+            schedule::schedule_list,
             fs::list_children,
             fs::read_text_file,
             fs::write_text_file,
@@ -193,12 +237,23 @@ pub fn run() {
             data::commands::data_restore,
             data::commands::data_export,
             data::commands::data_import,
+            secrets::secret_unlock,
+            secrets::secret_lock,
+            secrets::secret_set,
+            secrets::secret_has,
+            secrets::secret_delete,
+            secrets::secret_keys,
+            secrets::secret_backend,
             git::git_log,
             git::git_init_if_missing,
             git::git_show,
             git::git_diff,
             watcher::watch_dir,
             watcher::unwatch_dir,
+            clipboard::clipboard_read,
+            clipboard::clipboard_write,
+            clipboard::clipboard_watch_start,
+            clipboard::clipboard_watch_stop,
             browser::browser_open,
             browser::browser_bounds,
             browser::browser_navigate,
