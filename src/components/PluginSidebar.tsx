@@ -85,6 +85,7 @@ export const PluginSidebar = memo(function PluginSidebar({
           type="button"
           className={`icon-btn icon-btn--boxed plugin-rail-btn${rightView === MANAGER ? " active" : ""}`}
           title={t("plugin.manager")}
+          data-node="plugin-manager-tab"
           onClick={() => setRightView(project.id, MANAGER)}
         >
           <Icon name="settings" />
@@ -236,6 +237,8 @@ function PluginManagerPanel() {
   const [consentQueue, setConsentQueue] = useState<PluginRuntime[]>([]);
   const [pendingEnableId, setPendingEnableId] = useState<string | null>(null);
   const consentFor = consentQueue[0] ?? null;
+  // 카드 클릭 = 검사 전용 상세 모달(동의 화면과 같은 권한·설명 정보, 동의 버튼 없음). 활성화와 무관.
+  const [previewFor, setPreviewFor] = useState<PluginRuntime | null>(null);
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -359,7 +362,22 @@ function PluginManagerPanel() {
       {/* 카드 3행 구조: 타이틀|버전|상태 → 설명(전폭) → 액션. 좁은 사이드바에서
           설명이 액션 칼럼에 짓눌려 한 단어씩 줄바꿈되던 문제 해결. */}
       {list.map((p) => (
-        <div key={p.manifest.id} className="plugin-row">
+        <div
+          key={p.manifest.id}
+          className="plugin-row"
+          role="button"
+          tabIndex={0}
+          style={{ cursor: "pointer" }}
+          title={t("plugin.detail.open")}
+          data-node={`plugin/${p.manifest.id}/card`}
+          onClick={() => setPreviewFor(p)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setPreviewFor(p);
+            }
+          }}
+        >
           <div className="plugin-row-title">
             <span className="plugin-row-name">{localize(p.manifest.name)}</span>
             <span className="plugin-row-ver">v{p.manifest.version}</span>
@@ -437,7 +455,8 @@ function PluginManagerPanel() {
             ) : null;
           })()}
           {p.error && <div className="plugin-row-err">{p.error}</div>}
-          <div className="plugin-row-actions">
+          {/* 액션 버튼은 카드 클릭(상세 모달)과 분리 — 버블 차단. */}
+          <div className="plugin-row-actions" onClick={(e) => e.stopPropagation()}>
             {p.manifest.template ? (
               // 템플릿(읽기 전용) — 활성화 토글 없음. 상세(설명·기여 칩)는 위에 그대로 노출.
               <span className="plugin-row-note">{t("plugin.template.note")}</span>
@@ -510,6 +529,16 @@ function PluginManagerPanel() {
           }
           onClose={cancelConsent}
           onConsent={consentNext}
+        />
+      )}
+
+      {/* 카드 클릭 = 검사 전용 상세(권한·설명·접근 정보). 동의 흐름과 분리 — 동의 팝업이 떠 있으면 양보. */}
+      {previewFor && !consentFor && (
+        <PluginConsentModal
+          plugin={previewFor}
+          preview
+          onClose={() => setPreviewFor(null)}
+          onConsent={() => setPreviewFor(null)}
         />
       )}
     </div>

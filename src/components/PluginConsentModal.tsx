@@ -89,7 +89,9 @@ export function PluginConsentModal({
       >
         <div className="dmodal-head">
           <span className="dmodal-title">
-            {t("plugin.consent.title", { name: localize(m.name) })}
+            {t(preview ? "plugin.detail.title" : "plugin.consent.title", {
+              name: localize(m.name),
+            })}
           </span>
           <span className="dmodal-spacer" />
           <button
