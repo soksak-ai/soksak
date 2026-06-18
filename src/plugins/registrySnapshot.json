@@ -198,17 +198,17 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-runbook.git"
     },
     {
-      "id": "soksak-plugin-clipboard",
+      "id": "soksak-plugin-clip",
       "name": {
-        "ko": "클립보드",
-        "en": "Clipboard"
+        "ko": "클립",
+        "en": "Clip"
       },
-      "version": "0.1.0",
+      "version": "0.2.0",
       "description": {
-        "ko": "클립보드 복사 이력을 자동으로 모아 검색·즐겨찾기·휴지통으로 관리 — 같은 내용은 합쳐 복사 횟수를 센다. 우측 사이드바.",
-        "en": "Automatically collects clipboard copy history with search, favorites, and trash — duplicate copies merge and count. Right sidebar."
+        "ko": "클립보드 복사 이력과 영구 메모를 카테고리로 묶어 관리. 클립보드는 즐겨찾기·메모가 아니면 보존일(기본 3일, 설정 1~30) 후 자동 삭제, 메모는 영구. 우측 사이드바.",
+        "en": "Clipboard copy history plus permanent memos organized by category. Non-favorite, non-memo clips auto-delete after the retention window (default 3 days, 1–30 configurable); memos are permanent. Right sidebar."
       },
-      "repo": "https://github.com/soksak-ai/soksak-plugin-clipboard.git"
+      "repo": "https://github.com/soksak-ai/soksak-plugin-clip.git"
     }
   ]
 }
