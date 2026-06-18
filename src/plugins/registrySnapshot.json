@@ -183,6 +183,32 @@
         "en": "Collaborate with multiple AI coding agents in one workspace — checkbox roster, turn-based/free chat, real files, Clubhouse social. ACP-based."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-acp-studio.git"
+    },
+    {
+      "id": "soksak-plugin-runbook",
+      "name": {
+        "ko": "런북",
+        "en": "Runbook"
+      },
+      "version": "0.1.0",
+      "description": {
+        "ko": "재사용 가능한 작업(런북)을 저장·실행 — 터미널/셸/백그라운드/HTTP/일정 5종 실행타입에 파라미터·환경변수·시크릿·작업 체이닝(링킹)을 엮는다. 우측 사이드바.",
+        "en": "Store and run reusable tasks (runbooks) — five execution types (terminal/shell/background/HTTP/schedule) woven with parameters, env vars, secrets, and task chaining. Right sidebar."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-runbook.git"
+    },
+    {
+      "id": "soksak-plugin-clipboard",
+      "name": {
+        "ko": "클립보드",
+        "en": "Clipboard"
+      },
+      "version": "0.1.0",
+      "description": {
+        "ko": "클립보드 복사 이력을 자동으로 모아 검색·즐겨찾기·휴지통으로 관리 — 같은 내용은 합쳐 복사 횟수를 센다. 우측 사이드바.",
+        "en": "Automatically collects clipboard copy history with search, favorites, and trash — duplicate copies merge and count. Right sidebar."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-clipboard.git"
     }
   ]
 }
