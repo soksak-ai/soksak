@@ -234,6 +234,21 @@ export interface SoksakPluginApi {
       cb: (e: DataChangeEvent) => void,
     ) => Disposable;
   };
+  /** 암호화 시크릿 볼트(코어 — OS 키체인 비의존 순수 Rust crypto). API 키·토큰 같은 민감값을 봉인 저장.
+   *  네임스페이스는 이 플러그인 id 로 강제(app.data 와 동일 격리). get 없음 — 평문 readback 차단(주입
+   *  전용). 볼트가 잠겨 있으면 호출은 reject("vault locked"). "secrets" 권한 한정. */
+  secrets?: {
+    /** 값 봉인 저장(envelope: 항목별 DEK 를 KEK 로 wrap). 같은 key 면 교체. */
+    set: (key: string, value: string) => Promise<void>;
+    /** key 존재 여부(값은 노출 안 함). */
+    has: (key: string) => Promise<boolean>;
+    /** key 삭제(있었으면 true). */
+    delete: (key: string) => Promise<boolean>;
+    /** 이 ns 의 key 목록만(값 아님 — 평문 차단). */
+    keys: () => Promise<string[]>;
+    /** 볼트 백엔드·잠금 상태({ backend:"vault", unlocked }). */
+    backend: () => Promise<{ backend: string; unlocked: boolean }>;
+  };
   /** 알림 = 푸시 동급 1급 객체(리치 페이로드). 포커스 시 인앱 배너·비포커스 시 OS 알림(동일 페이로드).
    *  클릭/액션 시 deepLink(soksak://cmd/...) 로 활성화(권한·danger 게이트 유지). "notify" 권한. */
   notify?: {
@@ -829,6 +844,26 @@ export function buildPluginApi(
             });
             return tracker.wrap(un);
           },
+        }
+      : undefined,
+
+    // 암호화 시크릿 볼트 — ns 는 항상 이 플러그인 id 로 주입(app.data 와 동일 격리). 모든 호출은
+    // Rust SecretsState(단일 진실)로 forward. get 없음 — 평문 readback 차단(주입 전용 2b).
+    secrets: has("secrets")
+      ? {
+          set: async (key, value) => {
+            await deps.invoke("secret_set", { ns: id, key, value });
+          },
+          has: (key) =>
+            deps.invoke("secret_has", { ns: id, key }) as Promise<boolean>,
+          delete: (key) =>
+            deps.invoke("secret_delete", { ns: id, key }) as Promise<boolean>,
+          keys: () => deps.invoke("secret_keys", { ns: id }) as Promise<string[]>,
+          backend: () =>
+            deps.invoke("secret_backend") as Promise<{
+              backend: string;
+              unlocked: boolean;
+            }>,
         }
       : undefined,
 

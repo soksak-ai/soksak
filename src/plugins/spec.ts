@@ -60,6 +60,7 @@ export type PluginPermission =
   | "editor" // CM6 확장/언어 매핑/포매터 + 활성 버퍼 읽기/쓰기
   | "storage" // 전용 저장소(~/.soksak/plugins-data/<id>/)
   | "data" // 범용 임베디드 DB(app.data — 네임스페이스 격리·CJK 검색·전 창 watch)
+  | "secrets" // 암호화 볼트(app.secrets — API 키/토큰 봉인 저장, 평문 readback 불가·주입 전용)
   | "notify" // OS 알림(푸시)+인앱 배너·소리·딥링크(알림 = 푸시 동급 1급 객체)
   | "fs:read" // 임의 경로 파일 읽기
   | "fs:write" // 임의 경로 파일 쓰기
@@ -85,6 +86,7 @@ export const PERMISSIONS: readonly PluginPermission[] = [
   "editor",
   "storage",
   "data",
+  "secrets",
   "notify",
   "fs:read",
   "fs:write",
@@ -165,6 +167,12 @@ export const PERMISSION_INFO: Record<
     label: "데이터베이스",
     detail:
       "공용 임베디드 DB(SQLite)의 이 플러그인 전용 네임스페이스에 레코드를 저장·검색합니다(CJK 전문검색 포함). 다른 플러그인 데이터에는 접근하지 못합니다.",
+  },
+  secrets: {
+    label: "시크릿 저장",
+    detail:
+      "API 키·토큰 같은 민감값을 암호화 볼트에 저장합니다. 평문은 앱 데이터·백업·로그에 남지 않으며, 저장한 값을 평문으로 되읽을 수 없습니다(주입 전용).",
+    caution: true,
   },
   notify: {
     label: "알림·푸시",

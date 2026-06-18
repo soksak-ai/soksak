@@ -357,6 +357,50 @@ describe("data — 권한 게이트 + ns 강제 주입 + watch 필터(크로스�
   });
 });
 
+describe("secrets — 권한 게이트 + ns 강제 주입 + get 부재", () => {
+  it('"secrets" 미선언 시 표면 undefined', () => {
+    const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
+    expect(api.secrets).toBeUndefined();
+  });
+
+  it("선언 시 set/has/delete/keys/backend 존재, get 부재(평문 readback 차단)", () => {
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["secrets"] }),
+      "/d",
+      fakeDeps(),
+    );
+    expect(typeof api.secrets?.set).toBe("function");
+    expect(typeof api.secrets?.has).toBe("function");
+    expect(typeof api.secrets?.delete).toBe("function");
+    expect(typeof api.secrets?.keys).toBe("function");
+    expect(typeof api.secrets?.backend).toBe("function");
+    // get 은 존재해선 안 됨(주입 전용 — 평문 되읽기 경로 차단).
+    expect((api.secrets as Record<string, unknown>).get).toBeUndefined();
+  });
+
+  it("set 은 ns=manifest.id 를 주입(다른 ns 지정 불가)", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const d = fakeDeps({
+      invoke: vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
+        calls.push({ cmd, ...args });
+        return null;
+      }),
+    });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["secrets"] }),
+      "/d",
+      d,
+    );
+    await api.secrets!.set("apiKey", "sk-123");
+    expect(calls[0]).toEqual({
+      cmd: "secret_set",
+      ns: "demo",
+      key: "apiKey",
+      value: "sk-123",
+    });
+  });
+});
+
 describe("notify/sound — 권한 게이트", () => {
   it('"notify" 미선언 시 undefined, 선언 시 push/sound 표면', () => {
     const off = buildPluginApi(manifestOf({}), "/d", fakeDeps());

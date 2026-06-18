@@ -38,6 +38,7 @@ import { registerPluginCatalog } from "./catalogPlugins";
 import { registerUiCatalog } from "./catalogUi";
 import { registerDomCatalog } from "./catalogDom";
 import { registerDataCatalog } from "./catalogData";
+import { registerSecretsCatalog } from "./catalogSecrets";
 import { registerTurnCatalog } from "./catalogTurn";
 import { registerNetworkCatalog } from "./catalogNetwork";
 import { registerClipboardCatalog } from "./catalogClipboard";
@@ -2031,6 +2032,7 @@ export function registerCatalog(): void {
   registerUiCatalog();
   registerDomCatalog();
   registerDataCatalog();
+  registerSecretsCatalog();
   registerTurnCatalog();
   registerNetworkCatalog();
   registerClipboardCatalog();

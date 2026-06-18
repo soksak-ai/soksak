@@ -10,6 +10,7 @@ mod network;
 mod plugins;
 mod process;
 mod pty;
+mod secrets;
 #[cfg(target_os = "macos")]
 mod titlebar;
 mod watcher;
@@ -79,12 +80,15 @@ pub fn run() {
         .manage(clipboard::ClipboardState::default())
         .manage(CmdBridge::default())
         .manage(data::DbState::default())
+        .manage(secrets::SecretsState::default())
         .setup(|app| {
             // 범용 데이터 스토어(app.data) — 소켓 서버 이전에 연다(커맨드가 즉시 쓸 수 있도록).
             match data::db_path().and_then(|p| data::open(&p)) {
                 Ok(conn) => app.state::<data::DbState>().set(conn),
                 Err(e) => eprintln!("[data] DB 열기 실패: {e}"),
             }
+            // 시크릿 볼트 — 헤드리스/e2e 자동 unlock(SOKSAK_VAULT_KEY env 있을 때만, 없으면 잠김 유지).
+            secrets::auto_unlock_from_env(&app.state::<secrets::SecretsState>());
             // 파일 워처 1회 초기화(이벤트 콜백에 앱 핸들 주입).
             let handle = app.handle().clone();
             app.state::<FsWatcher>().init(handle);
@@ -193,6 +197,13 @@ pub fn run() {
             data::commands::data_restore,
             data::commands::data_export,
             data::commands::data_import,
+            secrets::secret_unlock,
+            secrets::secret_lock,
+            secrets::secret_set,
+            secrets::secret_has,
+            secrets::secret_delete,
+            secrets::secret_keys,
+            secrets::secret_backend,
             git::git_log,
             git::git_init_if_missing,
             git::git_show,
