@@ -60,6 +60,7 @@ function MenuLevel({
           <div
             key={node.items[o.idx].id}
             className="ctab-menu-item"
+            data-node={`menu/program/${node.items[o.idx].id}`}
             onClick={() => onPick(node.items[o.idx].id)}
           >
             {node.items[o.idx].title}

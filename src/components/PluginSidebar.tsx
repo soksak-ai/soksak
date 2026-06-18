@@ -445,6 +445,7 @@ function PluginManagerPanel() {
               <button
                 type="button"
                 className="dbtn"
+                data-node={`plugin/${p.manifest.id}/disable`}
                 disabled={busy}
                 onClick={() =>
                   run(() => usePlugins.getState().disable(p.manifest.id))
@@ -456,6 +457,7 @@ function PluginManagerPanel() {
               <button
                 type="button"
                 className="dbtn dbtn-acc"
+                data-node={`plugin/${p.manifest.id}/enable`}
                 disabled={busy}
                 onClick={() => doEnable(p)}
               >

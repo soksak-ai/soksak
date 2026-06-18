@@ -65,6 +65,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
           <button
             type="button"
             className={`left-host-tab${leftTab === FILES ? " active" : ""}`}
+            data-node="tab/left/files"
             onClick={() => setLeftTab(project.id, FILES)}
           >
             {t("sidebar.files")}
@@ -74,6 +75,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
               key={key}
               type="button"
               className={`left-host-tab${leftTab === key ? " active" : ""}`}
+              data-node={`tab/left/${key}`}
               title={localize(view.decl.title)}
               onClick={() => setLeftTab(project.id, key)}
             >

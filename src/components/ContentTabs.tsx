@@ -51,10 +51,11 @@ export const ContentTabs = memo(function ContentTabs({
 
   return (
     <div className={`content-tabs${vertical ? " vertical" : ""}`}>
-      {project.contents.map((c) => (
+      {project.contents.map((c, idx) => (
         <div
           key={c.id}
           className={`ctab${c.id === project.activeContentId ? " active" : ""}`}
+          data-node={`tab/content/${idx}`}
           onClick={() => setActiveContent(project.id, c.id)}
           onDoubleClick={() => setEditingId(c.id)}
           title={c.title}

@@ -308,11 +308,21 @@ export function PluginConsentModal({
           <div className="plugin-consent-notice">{t("plugin.consent.notice")}</div>
 
           <div className="plugin-consent-actions">
-            <button type="button" className="dbtn" onClick={onClose}>
+            <button
+              type="button"
+              className="dbtn"
+              data-node="modal/consent/cancel"
+              onClick={onClose}
+            >
               {preview ? t("plugin.consent.close") : t("common.cancel")}
             </button>
             {preview ? null : (
-              <button type="button" className="dbtn dbtn-acc" onClick={onConsent}>
+              <button
+                type="button"
+                className="dbtn dbtn-acc"
+                data-node="modal/consent/agree"
+                onClick={onConsent}
+              >
                 {t("plugin.consent.agree")}
               </button>
             )}

@@ -116,10 +116,11 @@ export const ViewTabs = memo(function ViewTabs({
   return (
     <div className="view-tabs-wrap">
       <div className="view-tabs" ref={scrollRef}>
-        {group.views.map((v) => (
+        {group.views.map((v, idx) => (
           <div
             key={v.id}
             className={`view-tab${v.id === group.activeViewId ? " active" : ""}`}
+            data-node={`tab/view/${idx}`}
             onMouseDown={(e) => onTabPointerDown(v.id, e)}
             // 더블클릭 = 최대화(컨텐츠 영역 전체) — 헤더가 타이틀로 바뀌고
             // 거기서 더블클릭/버튼으로 복원.
