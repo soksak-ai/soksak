@@ -118,9 +118,9 @@ body,
 
 .tabs {
   display: flex;
-  /* ws 밴드: content-tabs 내부(36px)와 같은 슬롯 높이 — .tab ≡ .ctab 높이를
-     같은 변수(--ws-pad) 하나로 보장한다. 항목은 stretch 로 안을 가득 채운다. */
-  height: 36px;
+  /* 크롬 행 표준 — 좌측 사이드바 탭(.left-host-tabs)·우측 헤더(.plugin-side-head)와 같은 가로줄·같은
+     높이. 높이는 크롬 행 계약(파일 하단, --chrome-row-h)이 단독 소유 — 여기서 지정 금지(cssContract R3).
+     여백은 --ws-pad, 항목은 stretch 로 채운다. */
   align-self: center;
   align-items: stretch;
   padding-block: var(--ws-pad, 5px);
@@ -3204,13 +3204,22 @@ select.dctl {
   border-radius: 6px;
 }
 
-/* ── 크롬 행 계약(docs/UI.md R1a): 수평으로 이웃한 밴드(좌측 헤더·컨텐츠 탭·
-   우측 헤더·좌측 호스트 탭)는 같은 행 — 높이는 이 규칙 하나만이 소유한다.
-   37 = 패딩5 + 칩26 + 패딩5 + 구분선1. 개별 블록의 height 지정 금지. */
+/* ── 크롬 행 높이 표준(단일 진실) — 테마가 값을 소유(테마별 기준). 미정의 시 var() 가 무너지므로
+   :root 기본값을 명시한다(cssContract R4). --header-h/--status-h 는 GroupArea 컨테이너가 같은 값으로
+   1회 주입(컨텐츠 그룹 중첩 헤더/상태바) — 여기 기본값은 그 주입 부재 시 폴백. */
+:root {
+  --chrome-row-h: 37px; /* 37 = 패딩5 + 칩26 + 패딩5 + 구분선1 */
+  --header-h: 33px; /* 컨텐츠 그룹 헤더(패딩5 + 칩26 + 패딩2) — GroupArea 주입 폴백 */
+  --status-h: 24px; /* 컨텐츠 그룹 상태바 — GroupArea 주입 폴백 */
+}
+
+/* ── 크롬 행 계약(docs/UI.md R1a): 수평으로 이웃한 밴드(좌측 헤더·컨텐츠 탭·우측 헤더·좌측 호스트 탭·
+   프로젝트 탭)는 같은 행 — 높이는 이 규칙 하나만이 소유한다(개별 블록 height 지정 금지: cssContract R3). */
 .ft-header,
 .plugin-side-head,
 .left-host-tabs,
-.content-tabs {
+.content-tabs,
+.tabs {
   height: var(--chrome-row-h, 37px);
 }
 

@@ -30,6 +30,10 @@ const BAND_ITEM = /\.(view-tab|view-add|ctab-add|tab-add|ctab|tab)(?![\w-])/;
 // 계약 밖 예외: 세로 레일(정사각 칩)·세로 리스트 모드 — 가로 밴드가 아니다.
 const EXEMPT = /\.project-rail|\.content-tabs\.vertical/;
 
+// 크롬 행 band(타이틀바 아래 같은 가로줄의 최상단 탭/헤더 스트립). 높이는 단일 표준 --chrome-row-h 만 소유.
+// \.tabs 는 .content-tabs/.view-tabs 를 매치하지 않는다('-tabs' 는 '.tabs' 가 아님) — 각 대안이 자기 것만 매치.
+const CHROME_ROW = /\.(ft-header|plugin-side-head|left-host-tabs|content-tabs|tabs)(?![\w-])/;
+
 describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
   it("R1: 밴드 항목은 height 금지(auto 만 허용) — 여백은 스트립 패딩이 소유", () => {
     const violations: string[] = [];
@@ -72,6 +76,33 @@ describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
     expect(css).toMatch(
       /\.view-tabs \.view-tab,\s*\.view-tabs \.view-add,\s*\.tab,\s*\.ctab,\s*\.tab-add,\s*\.ctab-add \{[^}]*align-self: stretch/,
     );
+  });
+
+  // ── R3/R4: 크롬 행 높이 표준 — 좌측 사이드바 탭 band 와 컨텐츠 탭 band 가 같은 가로줄·같은 높이가 되도록
+  //    모든 최상단 위치 band 가 단일 변수 --chrome-row-h 를 소유한다(테마가 그 값을 소유 = 테마별 기준).
+  //    기준 미달이라고 이 테스트를 약화하지 마라 — 어긋난 band 의 CSS 를 표준에 맞춰라(배신 금지). ──
+  it("R3: 크롬 행 band 높이는 표준 var(--chrome-row-h) 만 — 하드코딩 px 금지", () => {
+    const violations: string[] = [];
+    for (const { selector, decls } of rules()) {
+      if (!CHROME_ROW.test(selector) || EXEMPT.test(selector)) continue;
+      // 주석 제거 — ';'/'height' 가 주석 속에 있으면 (?:^|;) 앵커가 깨져 오탐/누락된다.
+      const clean = decls.replace(/\/\*[\s\S]*?\*\//g, "");
+      const heights = clean.match(/(?:^|;)\s*height\s*:\s*([^;]+)/g) ?? [];
+      for (const h of heights) {
+        if (!/height\s*:\s*var\(--chrome-row-h/.test(h)) {
+          violations.push(`${selector.replace(/\s+/g, " ")} → ${h.trim()}`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("R4: 패널 크롬 높이 변수 정의 존재 — --chrome-row-h·--header-h·--status-h (미정의 → var() 무너짐)", () => {
+    const missing: string[] = [];
+    for (const v of ["--chrome-row-h", "--header-h", "--status-h"]) {
+      if (!new RegExp(`${v}\\s*:`).test(css)) missing.push(v);
+    }
+    expect(missing).toEqual([]);
   });
 
   it("B4: 보더 선언에 직색(rgba/hex) 금지 — 토큰(var(--bd*))/transparent 만", () => {
