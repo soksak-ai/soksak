@@ -29,6 +29,7 @@ import {
   registerStatusBarItem,
   type StatusBarItem,
 } from "../ui/statusBarItems";
+import { registerHeaderAction, type HeaderAction } from "../ui/headerActions";
 import { pushNotification, type NotificationInput } from "../lib/notify";
 import { playSound, BUILTIN_SOUNDS } from "../ui/sound";
 import {
@@ -81,6 +82,9 @@ export interface PluginApiDeps {
   // 코어 데이터 스토어 변경(data-change) 구독 — Rust 싱글톤이 전 창 브로드캐스트(멀티윈도우·같은
   // 프로젝트 일관). app.data.watch 가 ns/coll/scope 로 필터. 반환=해지. (선례 onFsChange.)
   onDataChange: (cb: (e: DataChangeEvent) => void) => () => void;
+  // 클립보드 변경(clipboard-change) 전 창 구독 — 바뀐 텍스트를 콜백. 반환=해지. (선례 onFsChange.)
+  // 폴링은 macOS 한정(NSPasteboard 이벤트 없음); Win/X11/Wayland 은 네이티브 이벤트 — 코어가 흡수.
+  onClipboardChange: (cb: (text: string) => void) => () => void;
 }
 
 // data-change 페이로드 — Rust commands.rs DataChange 와 동형. coll/scope/id 는 연산에 따라 null.
@@ -132,6 +136,9 @@ export interface SoksakPluginApi {
     /** paneId 연관 상태바 아이템 등록/갱신(같은 id 면 교체 — active 토글에 재호출).
      *  그 pane 이 활성 터미널인 그룹의 상태바에 표시된다. 반환 = 해지. */
     statusBarItem: (item: StatusBarItem) => Disposable;
+    /** 타이틀바 우측 컨트롤(사이드바·다크모드·설정) 옆에 토글 아이콘 등록(같은 id 면 교체 —
+     *  active 토글에 재호출). "ui:titlebar" 권한 필요. 반환 = 해지. */
+    registerHeaderAction: (action: HeaderAction) => Disposable;
     /** 이 플러그인 뷰의 사이드바 탭 배지(읽지않음 표시). number=카운트, "dot"=점, null=해제.
      *  뷰 안에서는 mount ctx.setBadge 가 편하고, 이건 뷰 밖에서 갱신할 때. per-window. */
     setViewBadge: (viewId: string, badge: number | "dot" | null) => void;
@@ -246,6 +253,13 @@ export interface SoksakPluginApi {
     /** 디렉토리 감시(코어 watcher, 폴링 없음). dir 안의 변경 시 cb(dir). 비재귀 —
      *  하위 폴더는 따로 watch. 반환 = 해지(unwatch). */
     watch?: (dir: string, cb: (dir: string) => void) => Disposable;
+  };
+  /** 시스템 클립보드 — read/write 권한별 메서드 게이트. watch = 전 창 변경 구독(폴링 macOS 한정,
+   *  코어가 OS별 흡수). 변경 시 바뀐 텍스트를 콜백(구독 자체가 "clipboard:read" 동의 대상). */
+  clipboard?: {
+    readText?: () => Promise<string>;
+    writeText?: (text: string) => Promise<void>;
+    watch?: (cb: (e: { text: string }) => void) => Disposable;
   };
   git?: {
     log: (opts?: {
@@ -585,7 +599,7 @@ export function buildPluginApi(
 
     // programs 기여는 완전 선언형 — loader 가 자동 등록(명령형 API 없음 §2.6).
 
-    ui: has("ui") || has("ui:statusbar")
+    ui: has("ui") || has("ui:statusbar") || has("ui:titlebar")
       ? {
           registerView: (viewId, provider) => {
             const decl = manifest.contributes.views.find(
@@ -645,6 +659,16 @@ export function buildPluginApi(
             }
             return tracker.wrap(
               registerStatusBarItem({ ...item, id: `${id}:${item.id}` }),
+            );
+          },
+          // 타이틀바 우측 컨트롤 옆 토글 아이콘. id 는 플러그인 네임스페이스로 충돌 방지.
+          // [RULE] 타이틀바는 상태바("ui:statusbar")와 다른 영역 → "ui:titlebar" 권한 필요.
+          registerHeaderAction: (action) => {
+            if (!has("ui:titlebar")) {
+              throw new Error('registerHeaderAction 은 "ui:titlebar" 권한이 필요합니다');
+            }
+            return tracker.wrap(
+              registerHeaderAction({ ...action, id: `${id}:${action.id}` }),
             );
           },
           setViewBadge: (viewId, badge) =>
@@ -848,6 +872,34 @@ export function buildPluginApi(
                   return tracker.wrap(() => {
                     un();
                     void deps.invoke("unwatch_dir", { path: dir });
+                  });
+                }
+              : undefined,
+          }
+        : undefined,
+
+    // [RULE] 클립보드 영역 — 능력이 다르면 권한도 분리: 읽기("clipboard:read": 내용 읽기 + 변경
+    // 구독), 쓰기("clipboard:write": 내용 덮어쓰기). watch 는 읽기의 일부 → "clipboard:read"
+    // 게이트 공유(fs.watch 선례). 코어가 OS별 네이티브 이벤트(Win/X11/Wayland)+macOS changeCount
+    // 폴링을 흡수해 단일 clipboard-change 시그널로 노출 — 플러그인은 OS 분기를 보지 않는다.
+    clipboard:
+      has("clipboard:read") || has("clipboard:write")
+        ? {
+            readText: has("clipboard:read")
+              ? () => deps.invoke("clipboard_read") as Promise<string>
+              : undefined,
+            writeText: has("clipboard:write")
+              ? async (text: string) => {
+                  await deps.invoke("clipboard_write", { text });
+                }
+              : undefined,
+            watch: has("clipboard:read")
+              ? (cb: (e: { text: string }) => void) => {
+                  void deps.invoke("clipboard_watch_start");
+                  const un = deps.onClipboardChange((text) => cb({ text }));
+                  return tracker.wrap(() => {
+                    un();
+                    void deps.invoke("clipboard_watch_stop");
                   });
                 }
               : undefined,

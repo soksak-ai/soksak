@@ -5,6 +5,7 @@ mod dockmenu;
 mod fs;
 mod git;
 pub mod ipc;
+mod network;
 mod plugins;
 mod process;
 mod pty;
@@ -153,6 +154,7 @@ pub fn run() {
             process::process_spawn,
             process::process_write,
             process::process_kill,
+            network::network_udp_send,
             fs::list_children,
             fs::read_text_file,
             fs::write_text_file,

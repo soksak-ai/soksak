@@ -25,6 +25,7 @@ import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConsentPreviewHost } from "./components/ConsentPreviewHost";
 import { NotifyHost } from "./ui/NotifyHost";
+import { PluginHeaderActions } from "./ui/PluginHeaderActions";
 import { useUi } from "./state/ui";
 import { useT } from "./i18n";
 import {
@@ -727,6 +728,7 @@ function App() {
           <div className="tabs" data-tauri-drag-region />
         )}
         <div className="titlebar-right">
+          <PluginHeaderActions />
           <button
             type="button"
             className={`icon-btn sidebar-toggle${activeProject?.sidebarOpen ? " active" : ""}`}

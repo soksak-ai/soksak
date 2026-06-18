@@ -48,6 +48,7 @@ export type PluginPermission =
   // 영역에 영향받는지 동의 화면에서 정확히 알도록 — 영역이 다르면 권한도 다르다.
   | "ui" // 콘텐츠/사이드바 뷰 등록(호스트가 배치 소유 — 안전) + 아이콘 셋
   | "ui:statusbar" // 상태바에 항목 추가(크롬 영역)
+  | "ui:titlebar" // 타이틀바 우측 컨트롤 그룹에 토글 아이콘 추가(크롬 영역)
   // 오버레이 패밀리 — 둘 다 본문 위에 그리지만 스코프가 다르므로 변종으로 분리한다.
   | "ui:overlay:pane" // 콘텐츠 패널 하나를 덮는 오버레이(그 패널 본문만 가림 — 패널 위 GUI)
   | "ui:overlay:screen" // 앱 전체를 덮는 레이어(크롬·전 패널 위 — 마스코트 효과 등 가장 침습적)
@@ -62,6 +63,8 @@ export type PluginPermission =
   | "notify" // OS 알림(푸시)+인앱 배너·소리·딥링크(알림 = 푸시 동급 1급 객체)
   | "fs:read" // 임의 경로 파일 읽기
   | "fs:write" // 임의 경로 파일 쓰기
+  | "clipboard:read" // 시스템 클립보드 텍스트 읽기 + 변경 구독(감시는 읽기의 일부)
+  | "clipboard:write" // 시스템 클립보드에 텍스트 쓰기(다른 앱이 붙여넣게 됨)
   | "terminal" // 터미널 명령 생명주기 관찰(command.started/finished — 명령라인·cwd)
   | "terminal:read" // 터미널 화면 버퍼 내용 읽기·변경 구독(명령 메타보다 강함 — 전 화면 텍스트)
   | "terminal:write" // 터미널 PTY 에 입력 전송(키 주입 — 관찰보다 강함, 별도 권한)
@@ -71,6 +74,7 @@ export type PluginPermission =
 export const PERMISSIONS: readonly PluginPermission[] = [
   "ui",
   "ui:statusbar",
+  "ui:titlebar",
   "ui:overlay:pane",
   "ui:overlay:screen",
   "programs",
@@ -84,6 +88,8 @@ export const PERMISSIONS: readonly PluginPermission[] = [
   "notify",
   "fs:read",
   "fs:write",
+  "clipboard:read",
+  "clipboard:write",
   "terminal",
   "terminal:read",
   "terminal:write",
@@ -103,6 +109,11 @@ export const PERMISSION_INFO: Record<
   "ui:statusbar": {
     label: "상태바 항목",
     detail: "상태바에 항목(버튼)을 추가합니다(크롬 영역).",
+  },
+  "ui:titlebar": {
+    label: "헤더 아이콘",
+    detail:
+      "타이틀바 우측 컨트롤(사이드바·다크모드·설정) 옆에 토글 아이콘을 추가합니다(크롬 영역).",
   },
   "ui:overlay:pane": {
     label: "패널 오버레이",
@@ -169,6 +180,17 @@ export const PERMISSION_INFO: Record<
   "fs:write": {
     label: "파일 쓰기",
     detail: "디스크의 임의 경로 파일을 쓸 수 있습니다.",
+    caution: true,
+  },
+  "clipboard:read": {
+    label: "클립보드 읽기",
+    detail:
+      "다른 앱에서 복사한 내용을 포함해 시스템 클립보드의 텍스트를 읽고, 클립보드가 바뀔 때마다 그 내용을 받습니다. 어느 앱이 복사했는지는 알 수 없습니다.",
+    caution: true,
+  },
+  "clipboard:write": {
+    label: "클립보드 쓰기",
+    detail: "시스템 클립보드 내용을 덮어씁니다(다른 앱이 그 값을 붙여넣게 됩니다).",
     caution: true,
   },
   terminal: {
