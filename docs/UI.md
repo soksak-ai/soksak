@@ -70,9 +70,30 @@ JSX 에서 `calc(...)` 문자열을 조립해 인라인으로 흩뿌리는 것 �
 
 ## R5. 정렬 주장은 수치로 검증한다
 
-"맞아 보인다"는 근거가 아니다. `sok ui.measure '{"selector":".view-tab"}'` 로
-rect 를 찍어 형제 박스의 y/h 일치와 여백 대칭을 숫자로 확인한 뒤에만 완료를
-선언한다. (요소가 DOM 에 없으면 count:0 — 예: 레일 모드에서 `.tab` 부재는 정상)
+"맞아 보인다"는 근거가 아니다. `sok ui.measure '{"address":"..."}'` 로 rect 를 찍어 형제 박스의
+y/h 일치와 여백 대칭을 숫자로 확인한 뒤에만 완료를 선언한다. 주소는 §A6 의 노출 노드(`sok ui.tree`)에서
+얻는다 — 임의 selector 가 아니다(노출 안 된 요소는 측정 불가).
+
+## A6. DOM 접근은 구조적 주소 — 임의 selector 금지
+
+DOM 요소는 임의 CSS selector(취약·불명확)가 아니라 **구조적 path 주소**로만 접근한다. 주소 문법의 단일
+진실은 `src/commands/address.ts`:
+
+```
+호스트 뷰:   win/<label>/proj/<root|alias>/<region>/pane/<idx|active>/view/<pluginId.viewId>/node/<nodePath>
+호스트 크롬:  win/<label>/chrome/<chromePath>
+region ∈ { left | content | right }
+```
+
+세그먼트는 **안정 식별자**(카운터 id 금지) — root/alias·region·위치인덱스/active·qualifiedViewId·노드path.
+생략 = 활성(win=현재 창, proj=활성, pane=활성). 멱등(재실행 일관)·중복0(계층 유일)·규칙(구조=규칙).
+
+요소 노출은 **명시**다: `data-node="<nodePath>"` 속성을 부여한 요소만 주소 트리에 나타난다. 플러그인은
+`contributes.nodes` 로 노드 종류를 선언(동의 화면 표기) 후 `data-node` 로 인스턴스 부여(동적 목록은
+`<id>/<안정키>`). 호스트 크롬은 선언 없이 `data-node`(chrome 경로). 노출 안 된 요소 접근은 `NOT_EXPOSED`.
+
+명령(registry 단일진실): `ui.tree`(노출 주소 트리)·`ui.measure(address)`(rect/style)·`ui.input.click(address)`
+(클릭, danger:inject). `data-pane-id`/`data-group-id`(네이티브 마우스 판정)는 직교한 코어 계약 — 혼동 금지.
 
 ---
 
