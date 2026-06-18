@@ -319,6 +319,20 @@ export interface SoksakPluginApi {
     /** kill + 정리. */
     kill: (handle: number) => Promise<void>;
   };
+  /** WebSocket 클라이언트(ws:// 평문). "network" 권한. 브라우저 WebSocket 과 달리 Origin 헤더를
+   *  보내지 않아 Origin 을 검사하는 서버(webOS TV SSAP 등)에 연결된다. 이벤트 기반(폴링 0). */
+  ws?: {
+    /** ws:// URL 연결 → handle(id). 연결 수립 후 resolve. */
+    connect: (url: string) => Promise<number>;
+    /** 텍스트 프레임 전송. */
+    send: (handle: number, text: string) => Promise<void>;
+    /** 수신 텍스트 구독(반환=해지). 등록 전 도착분은 버퍼되어 유실 0. */
+    onMessage: (handle: number, cb: (text: string) => void) => Disposable;
+    /** 닫힘 구독(반환=해지). 이미 닫혔으면 즉시 1회. */
+    onClose: (handle: number, cb: () => void) => Disposable;
+    /** 연결 종료 + 정리. */
+    close: (handle: number) => Promise<void>;
+  };
   /** 플러그인 커스텀 이벤트 버스 — 임의 토픽 pub/sub(플러그인 간 스트리밍 coordination). 코어-정의
    *  이벤트(events.on)와 별개. 예: acp-core 가 session/update 를 emit → 코크핏/라운지가 구독. 시스템
    *  접근 0 → 권한 불요(모든 플러그인). */
@@ -480,6 +494,60 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     kill: async (handle: number): Promise<void> => {
       await deps.invoke("process_kill", { id: handle });
       procs.delete(handle);
+    },
+  };
+}
+
+// app.ws 구현 — handle 별 message/close 리스너 + 등록 전 도착분 버퍼(유실 0). createProcessApi 와 동형.
+function createWsApi(deps: PluginApiDeps, tracker: DisposableTracker) {
+  type Txt = (t: string) => void;
+  interface WsState {
+    msg: Set<Txt>;
+    close: Set<() => void>;
+    msgBuf: string[];
+    closed: boolean;
+  }
+  const conns = new Map<number, WsState>();
+  return {
+    async connect(url: string): Promise<number> {
+      const st: WsState = { msg: new Set(), close: new Set(), msgBuf: [], closed: false };
+      const onMessage = new Channel<string>();
+      onMessage.onmessage = (t) => {
+        if (st.msg.size) st.msg.forEach((f) => f(t));
+        else st.msgBuf.push(t);
+      };
+      const onClose = new Channel<null>();
+      onClose.onmessage = () => {
+        st.closed = true;
+        st.close.forEach((f) => f());
+      };
+      const id = (await deps.invoke("ws_connect", { url, onMessage, onClose })) as number;
+      conns.set(id, st);
+      return id;
+    },
+    send: async (handle: number, text: string): Promise<void> => {
+      await deps.invoke("ws_send", { id: handle, text });
+    },
+    onMessage(handle: number, cb: Txt): Disposable {
+      const st = conns.get(handle);
+      if (!st) return tracker.wrap(() => {});
+      st.msg.add(cb);
+      for (const t of st.msgBuf.splice(0)) cb(t); // 등록 전 버퍼 재생(유실 0)
+      return tracker.wrap(() => st.msg.delete(cb));
+    },
+    onClose(handle: number, cb: () => void): Disposable {
+      const st = conns.get(handle);
+      if (!st) return tracker.wrap(() => {});
+      if (st.closed) {
+        cb();
+        return tracker.wrap(() => {});
+      }
+      st.close.add(cb);
+      return tracker.wrap(() => st.close.delete(cb));
+    },
+    close: async (handle: number): Promise<void> => {
+      await deps.invoke("ws_close", { id: handle });
+      conns.delete(handle);
     },
   };
 }
@@ -979,6 +1047,7 @@ export function buildPluginApi(
           }
         : undefined,
     process: has("process") ? createProcessApi(deps, tracker) : undefined,
+    ws: has("network") ? createWsApi(deps, tracker) : undefined,
     bus: {
       emit: (topic: string, payload: unknown) => busEmit(topic, payload),
       on: (topic: string, fn: (payload: unknown) => void) =>

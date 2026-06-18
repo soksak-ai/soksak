@@ -13,6 +13,7 @@ mod pty;
 mod titlebar;
 mod watcher;
 mod window;
+mod ws;
 
 use ipc::CmdBridge;
 use process::ProcessManager;
@@ -74,6 +75,7 @@ pub fn run() {
         .plugin(tauri_plugin_deep_link::init())
         .manage(PtyManager::default())
         .manage(ProcessManager::default())
+        .manage(ws::WsManager::default())
         .manage(FsWatcher::default())
         .manage(CmdBridge::default())
         .manage(data::DbState::default())
@@ -156,6 +158,9 @@ pub fn run() {
             process::process_kill,
             network::network_udp_send,
             network::network_udp_request,
+            ws::ws_connect,
+            ws::ws_send,
+            ws::ws_close,
             fs::list_children,
             fs::read_text_file,
             fs::write_text_file,
@@ -232,6 +237,7 @@ pub fn run() {
                 }
                 app_handle.state::<PtyManager>().kill_all();
                 app_handle.state::<ProcessManager>().kill_all();
+                app_handle.state::<ws::WsManager>().close_all();
                 ipc::cleanup();
             }
         });

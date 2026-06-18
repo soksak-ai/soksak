@@ -43,6 +43,11 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 tauri-plugin-notification = "2"
 # 딥링크 soksak:// URL 스킴 — 알림/외부 진입을 command URI 로 라우팅(콜드스타트 포함).
 tauri-plugin-deep-link = "2"
+# WebSocket capability(net.ws) — Origin 헤더 미전송(브라우저 WebSocket 은 Origin 강제 → webOS 등이 거부).
+# ws:// 평문만(default-features=false → TLS 미포함, 가벼움). 양방향은 split sink/stream + Channel 스트리밍.
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "io-util", "time", "macros"] }
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect"] }
+futures-util = "0.3"
 
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.
