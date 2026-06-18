@@ -30,6 +30,7 @@ import {
   type StatusBarItem,
 } from "../ui/statusBarItems";
 import { registerHeaderAction, type HeaderAction } from "../ui/headerActions";
+import { useUi } from "../state/ui";
 import { pushNotification, type NotificationInput } from "../lib/notify";
 import { playSound, BUILTIN_SOUNDS } from "../ui/sound";
 import {
@@ -139,6 +140,9 @@ export interface SoksakPluginApi {
     /** 타이틀바 우측 컨트롤(사이드바·다크모드·설정) 옆에 토글 아이콘 등록(같은 id 면 교체 —
      *  active 토글에 재호출). "ui:titlebar" 권한 필요. 반환 = 해지. */
     registerHeaderAction: (action: HeaderAction) => Disposable;
+    /** 모달/오버레이 표시 동안 입력 게이트 활성(콘텐츠 네이티브 webview 영역 위 클릭 성립).
+     *  "ui:overlay:*" 권한 필요. 표시 시 true, 숨김/정리 시 false 를 호출(호출자가 균형 관리). */
+    setOverlayActive: (active: boolean) => void;
     /** 이 플러그인 뷰의 사이드바 탭 배지(읽지않음 표시). number=카운트, "dot"=점, null=해제.
      *  뷰 안에서는 mount ctx.setBadge 가 편하고, 이건 뷰 밖에서 갱신할 때. per-window. */
     setViewBadge: (viewId: string, badge: number | "dot" | null) => void;
@@ -599,7 +603,7 @@ export function buildPluginApi(
 
     // programs 기여는 완전 선언형 — loader 가 자동 등록(명령형 API 없음 §2.6).
 
-    ui: has("ui") || has("ui:statusbar") || has("ui:titlebar")
+    ui: has("ui") || has("ui:statusbar") || has("ui:titlebar") || has("ui:overlay:screen") || has("ui:overlay:pane")
       ? {
           registerView: (viewId, provider) => {
             const decl = manifest.contributes.views.find(
@@ -675,6 +679,15 @@ export function buildPluginApi(
             useViewRegistry
               .getState()
               .setViewBadge(qualifiedViewId(id, viewId), badge),
+          // 오버레이 입력 게이트(useUi overlayCount → browser_overlay_active). 콘텐츠 네이티브
+          // webview 위 클릭 성립. [RULE] 오버레이 영역 → "ui:overlay:*" 권한 필요.
+          setOverlayActive: (active) => {
+            if (!(has("ui:overlay:screen") || has("ui:overlay:pane"))) {
+              throw new Error('setOverlayActive 는 "ui:overlay:*" 권한이 필요합니다');
+            }
+            if (active) useUi.getState().pushOverlay();
+            else useUi.getState().popOverlay();
+          },
         }
       : undefined,
 
