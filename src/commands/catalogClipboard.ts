@@ -8,7 +8,7 @@ import { register } from "./registry";
 
 export function registerClipboardCatalog(): void {
   register("clipboard.read", {
-    description: "시스템 클립보드의 텍스트를 읽는다(텍스트 아니면 빈 문자열/에러). 실행 결과·복사 내용 확인용",
+    description: "시스템 클립보드의 현재 텍스트를 읽는다(비텍스트면 빈 문자열). 실행 결과·복사 내용 확인용",
     params: {},
     returns: "{ text }",
     errors: ["INTERNAL"],

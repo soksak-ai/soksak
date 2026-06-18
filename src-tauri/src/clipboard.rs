@@ -9,6 +9,7 @@
 // 소비됐으므로 정상 emit). 실제 감시 스레드는 플러그인이 watch_start 를 호출할 때만 시작(불필요 폴링 0).
 
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use clipboard_rs::{
     Clipboard, ClipboardContext, ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext,
@@ -16,11 +17,15 @@ use clipboard_rs::{
 };
 use tauri::{AppHandle, Emitter, State};
 
+// self-write 마커 TTL — macOS changeCount 폴링 윈도우(500ms)+여유. echo 는 이 안에 도착한다.
+// 이보다 길면 동일 값 사용자 복사를 잘못 억제(false-suppression)하므로 짧게 유지한다.
+const SELF_WRITE_TTL: Duration = Duration::from_secs(2);
+
 pub struct ClipboardState {
     app: Mutex<Option<AppHandle>>,
     shutdown: Mutex<Option<WatcherShutdown>>,
-    // 핸들러와 공유 — clipboard_write 가 마커를 심고, 핸들러가 echo 1회를 소비한다.
-    last_written: Arc<Mutex<Option<String>>>,
+    // 핸들러와 공유 — clipboard_write 가 (값, 시각) 마커를 심고, 핸들러가 echo 1회를 소비한다.
+    last_written: Arc<Mutex<Option<(String, Instant)>>>,
 }
 
 impl Default for ClipboardState {
@@ -40,20 +45,33 @@ impl ClipboardState {
     }
 }
 
-// 순수: self-write echo 억제 결정. 방금 쓴 값과 같으면 마커를 소비하고 false(=emit 안 함).
-fn should_emit(last_written: &mut Option<String>, text: &str) -> bool {
-    if last_written.as_deref() == Some(text) {
-        *last_written = None;
-        false
-    } else {
-        true
+// 순수: self-write echo 억제 결정(TTL 인지). 마커가 있을 때:
+//  - 만료(now-t >= ttl): 마커 정리 후 true — 잔존 마커가 정상 복사를 삼키지 않게.
+//  - 신선·동일값: 마커 소비(None) 후 false — echo 1회만 억제.
+//  - 신선·다른값: stale 마커 정리(None) 후 true — 다른 값이 도착했으면 더 기다릴 이유 없음.
+// 마커가 없으면 항상 true.
+fn should_emit(marker: &mut Option<(String, Instant)>, text: &str, now: Instant, ttl: Duration) -> bool {
+    match marker {
+        Some((v, t)) => {
+            if now.duration_since(*t) >= ttl {
+                *marker = None;
+                true
+            } else if v == text {
+                *marker = None;
+                false
+            } else {
+                *marker = None;
+                true
+            }
+        }
+        None => true,
     }
 }
 
 struct Handler {
     ctx: ClipboardContext,
     app: AppHandle,
-    last_written: Arc<Mutex<Option<String>>>,
+    last_written: Arc<Mutex<Option<(String, Instant)>>>,
 }
 
 impl ClipboardHandler for Handler {
@@ -63,7 +81,7 @@ impl ClipboardHandler for Handler {
             return;
         };
         if let Ok(mut lw) = self.last_written.lock() {
-            if !should_emit(&mut lw, &text) {
+            if !should_emit(&mut lw, &text, Instant::now(), SELF_WRITE_TTL) {
                 return;
             }
         }
@@ -74,14 +92,15 @@ impl ClipboardHandler for Handler {
 #[tauri::command]
 pub fn clipboard_read() -> Result<String, String> {
     let ctx = ClipboardContext::new().map_err(|e| e.to_string())?;
-    ctx.get_text().map_err(|e| e.to_string())
+    // 비텍스트(이미지/파일 등) 클립이면 에러 대신 빈 문자열 — 호출자는 텍스트만 다룬다.
+    Ok(ctx.get_text().unwrap_or_default())
 }
 
 #[tauri::command]
 pub fn clipboard_write(state: State<ClipboardState>, text: String) -> Result<(), String> {
-    // echo 억제 마커를 먼저 심는다(set 직후 변경 이벤트가 도착하므로).
+    // echo 억제 마커를 먼저 심는다(set 직후 변경 이벤트가 도착하므로). 값+시각을 함께 기록.
     if let Ok(mut lw) = state.last_written.lock() {
-        *lw = Some(text.clone());
+        *lw = Some((text.clone(), Instant::now()));
     }
     let ctx = ClipboardContext::new().map_err(|e| e.to_string())?;
     ctx.set_text(text).map_err(|e| e.to_string())
@@ -112,6 +131,10 @@ pub fn clipboard_watch_start(state: State<ClipboardState>) -> Result<(), String>
     std::thread::spawn(move || {
         watcher.start_watch();
     });
+    // 이전 세션의 잔존 마커를 정리 — 첫 정상 복사를 삼키지 않게.
+    if let Ok(mut lw) = state.last_written.lock() {
+        *lw = None;
+    }
     *guard = Some(shutdown);
     Ok(())
 }
@@ -122,28 +145,64 @@ pub fn clipboard_watch_stop(state: State<ClipboardState>) -> Result<(), String> 
     if let Some(shutdown) = state.shutdown.lock().map_err(|e| e.to_string())?.take() {
         shutdown.stop();
     }
+    // 마커 정리 — 다음 watch_start 까지 잔존하지 않게.
+    if let Ok(mut lw) = state.last_written.lock() {
+        *lw = None;
+    }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::should_emit;
+    use super::{should_emit, SELF_WRITE_TTL};
+    use std::time::{Duration, Instant};
 
-    // self-write echo 는 1회만 억제(마커 소비), 사용자가 같은 값을 재복사하면 정상 emit.
+    // (a) 신선·동일값: echo 1회만 억제(마커 소비), 이후엔 마커 없어 정상 emit.
     #[test]
-    fn self_write_suppressed_once_then_emits() {
-        let mut lw = Some("hello".to_string());
-        assert!(!should_emit(&mut lw, "hello"), "방금 쓴 값의 echo 는 억제");
+    fn fresh_self_write_suppressed_once_then_emits() {
+        let t0 = Instant::now();
+        let mut lw = Some(("hello".to_string(), t0));
+        assert!(
+            !should_emit(&mut lw, "hello", t0, SELF_WRITE_TTL),
+            "신선한 방금 쓴 값의 echo 는 억제"
+        );
         assert_eq!(lw, None, "마커 소비됨");
-        assert!(should_emit(&mut lw, "hello"), "재복사는 정상 emit");
+        assert!(
+            should_emit(&mut lw, "hello", t0, SELF_WRITE_TTL),
+            "마커 없으면 재복사 정상 emit"
+        );
     }
 
+    // (b) 만료: TTL 이상 경과한 마커는 동일값이라도 emit + 마커 정리.
     #[test]
-    fn unrelated_change_emits() {
-        let mut lw: Option<String> = None;
-        assert!(should_emit(&mut lw, "world"), "마커 없으면 항상 emit");
-        let mut lw2 = Some("a".to_string());
-        assert!(should_emit(&mut lw2, "b"), "다른 값이면 emit");
-        assert_eq!(lw2, Some("a".to_string()), "다른 값엔 마커 보존");
+    fn expired_marker_emits_and_clears() {
+        let t0 = Instant::now();
+        let now = t0 + SELF_WRITE_TTL + Duration::from_millis(1);
+        let mut lw = Some(("hello".to_string(), t0));
+        assert!(
+            should_emit(&mut lw, "hello", now, SELF_WRITE_TTL),
+            "만료 마커는 동일값이라도 emit"
+        );
+        assert_eq!(lw, None, "만료 마커 정리됨");
+    }
+
+    // (c) 신선·다른값: emit + stale 마커 정리.
+    #[test]
+    fn fresh_different_value_emits_and_clears() {
+        let t0 = Instant::now();
+        let mut lw = Some(("a".to_string(), t0));
+        assert!(
+            should_emit(&mut lw, "b", t0, SELF_WRITE_TTL),
+            "다른 값이면 emit"
+        );
+        assert_eq!(lw, None, "다른 값 도착 시 stale 마커 정리");
+    }
+
+    // 마커 없으면 항상 emit.
+    #[test]
+    fn no_marker_always_emits() {
+        let t0 = Instant::now();
+        let mut lw: Option<(String, Instant)> = None;
+        assert!(should_emit(&mut lw, "world", t0, SELF_WRITE_TTL), "마커 없으면 항상 emit");
     }
 }
