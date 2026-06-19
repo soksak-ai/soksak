@@ -3,6 +3,7 @@
 // 동의 부여 명령 자체가 존재하지 않는다(UI 동의 모달 전용).
 // plugin.view.* 배치 명령은 M_P5(우측 사이드바)에서 등록된다.
 
+import { invoke } from "@tauri-apps/api/core";
 import { pendingConsentChain, usePlugins, type PluginRuntime } from "../state/plugins";
 import { allGroups, useSessions, type View } from "../state/sessions";
 import { getRegisteredView } from "../plugins/viewRegistry";
@@ -631,5 +632,24 @@ export function registerPluginCatalog(): void {
     examples: ['sok plugin.dev.load \'{"path":"/path/to/my-plugin"}\''],
     danger: "inject",
     handler: (p) => usePlugins.getState().devLoad(p.path as string),
+  });
+
+  register("plugin.dev.new", {
+    description:
+      "단일 폴더 dev 스캐폴드 — ~/.soksak/plugins/<id>/ 에 최소 plugin.json·main.js·.soksak.json(version=dev) 생성 + git init. 외부 경로·dev.load 불필요(폴더가 곧 작업물). 적재 후 reload.",
+    params: {
+      id: { type: "string", description: "플러그인 id (^[a-z0-9][a-z0-9-]*$)", required: true },
+    },
+    returns: "{ ok, dir, pluginId }",
+    errors: ["INVALID_PARAMS"],
+    examples: ['sok plugin.dev.new \'{"id":"soksak-plugin-myapp"}\''],
+    danger: "inject",
+    handler: async (p) => {
+      const r = await invoke<{ dir: string; dir_name: string }>("plugin_dev_new", {
+        id: p.id as string,
+      });
+      await usePlugins.getState().reload();
+      return { ok: true, dir: r.dir, pluginId: r.dir_name };
+    },
   });
 }

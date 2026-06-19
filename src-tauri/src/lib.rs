@@ -218,6 +218,7 @@ pub fn run() {
             plugins::dev_plugin_paths,
             plugins::plugin_install_git,
             plugins::plugin_update,
+            plugins::plugin_dev_new,
             plugins::plugin_remove,
             plugins::plugin_data_read,
             plugins::plugin_data_write,

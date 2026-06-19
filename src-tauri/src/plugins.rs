@@ -388,6 +388,40 @@ fn plugin_update_in(base: &Path, id: &str) -> Result<PluginInstallResult, String
     })
 }
 
+// 단일 폴더 dev 스캐폴드 — ~/.soksak/plugins/<id>/ 에 최소 plugin.json·main.js·.soksak.json
+// (version="dev") 생성 + git init. 폴더가 곧 작업물(외부 경로·dev.load 불필요). .soksak.json 은
+// 머신-로컬 설치/dev 상태라 .gitignore(플러그인 repo 에 안 들어간다).
+fn plugin_dev_new_in(base: &Path, id: &str) -> Result<PluginInstallResult, String> {
+    sanitize_id(id)?;
+    let dir = base.join(id);
+    if dir.exists() {
+        return Err(format!("이미 존재하는 플러그인 폴더: {id}"));
+    }
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let manifest = format!(
+        "{{\n  \"spec\": \"soksak-plugin-spec@1\",\n  \"id\": \"{id}\",\n  \"name\": \"{id}\",\n  \"version\": \"0.0.0\",\n  \"description\": \"\",\n  \"entry\": \"main.js\",\n  \"permissions\": [],\n  \"contributes\": {{ \"views\": [], \"commands\": [], \"programs\": [] }}\n}}\n"
+    );
+    std::fs::write(dir.join("plugin.json"), &manifest).map_err(|e| e.to_string())?;
+    std::fs::write(
+        dir.join("main.js"),
+        "export default { activate() {}, deactivate() {} };\n",
+    )
+    .map_err(|e| e.to_string())?;
+    std::fs::write(dir.join(".gitignore"), ".soksak.json\nnode_modules/\n").map_err(|e| e.to_string())?;
+    write_state(&dir, "dev", "", "main");
+    let _ = git_run(std::process::Command::new("git").args(["init", "-q"]).arg(&dir));
+    Ok(PluginInstallResult {
+        dir: dir.to_string_lossy().to_string(),
+        dir_name: id.to_string(),
+        manifest,
+    })
+}
+
+#[tauri::command]
+pub fn plugin_dev_new(id: String) -> Result<PluginInstallResult, String> {
+    plugin_dev_new_in(&plugins_dir()?, &id)
+}
+
 // 플러그인 제거(디렉토리째). 전용 저장소(plugins-data)는 남긴다 — 재설치 시 데이터 보존.
 #[tauri::command]
 pub fn plugin_remove(id: String) -> Result<(), String> {
@@ -636,6 +670,25 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(dir.join(".soksak.json")).unwrap()).unwrap();
         assert_eq!(state2["version"], "0.2.0");
 
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // dev 스캐폴드: plugin.json·main.js·.soksak.json(version="dev") 생성, 중복 거부.
+    #[test]
+    fn plugin_dev_new_scaffold() {
+        let root = std::env::temp_dir().join(format!("soksak-devnew-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let base = root.join("plugins");
+        let r = plugin_dev_new_in(&base, "my-plugin").unwrap();
+        let dir = base.join("my-plugin");
+        assert!(dir.join("plugin.json").is_file());
+        assert!(dir.join("main.js").is_file());
+        let state: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join(".soksak.json")).unwrap()).unwrap();
+        assert_eq!(state["version"], "dev");
+        assert!(r.manifest.contains("my-plugin"));
+        // 이미 존재하면 거부.
+        assert!(plugin_dev_new_in(&base, "my-plugin").is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 }
