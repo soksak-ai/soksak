@@ -14,6 +14,7 @@ export interface RegistryEntry {
   description: LocalizedText;
   author?: string;
   repo: string; // git URL — plugin.install 의 source
+  branch?: string; // 설치 대상 브랜치 — 없으면 repo 기본 브랜치. master/main 가정 금지(설치 reference)
 }
 
 export interface Registry {
@@ -45,6 +46,7 @@ function parseEntry(v: unknown): RegistryEntry | null {
     repo: v.repo,
   };
   if (typeof v.author === "string" && v.author.length > 0) e.author = v.author;
+  if (typeof v.branch === "string" && v.branch.length > 0) e.branch = v.branch;
   return e;
 }
 

@@ -163,7 +163,7 @@ function RegistrySection({
   const stateOf = (e: RegistryEntry) =>
     installState(e, installed[e.id]?.manifest.version, installed[e.id]?.source);
   const doInstall = (e: RegistryEntry) =>
-    run(() => usePlugins.getState().install(e.repo));
+    run(() => usePlugins.getState().install(e.repo, e.branch));
   const doUpdate = (e: RegistryEntry) =>
     run(() => usePlugins.getState().update(e.id));
 
