@@ -1233,6 +1233,23 @@ export function registerCatalog(): void {
     },
   });
 
+  register("browser.devtools", {
+    description:
+      "브라우저 인스펙트(Web Inspector) 토글 — 이 브라우저 웹뷰의 devtools 를 연다/닫는다. WKWebView 는 CDP 가 없어 OS 인스펙터(별도 창)가 뜬다. 툴바 인스펙트 버튼과 동일.",
+    params: { view: P.view },
+    returns: "{ viewId, open }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["sok browser.devtools"],
+    handler: async (p, ctx) => {
+      const b = resolveBrowser(p, ctx);
+      if (!b) return notFound("브라우저 뷰 없음");
+      const open = await invoke<boolean>("browser_devtools", {
+        label: browserLabel(b.view.id),
+      });
+      return { viewId: b.view.id, open };
+    },
+  });
+
   register("browser.list", {
     description:
       "존재하는 네이티브 브라우저 웹뷰 라벨 목록(b-<viewId>) — 스토어의 browser 뷰 집합과 일치해야 정상(고아 검증)",

@@ -49,6 +49,7 @@ function BrowserViewImpl({
   const visibleRef = useRef(visible);
   const [input, setInput] = useState(url);
   const [bmOpen, setBmOpen] = useState(false);
+  const [dtOpen, setDtOpen] = useState(false); // 인스펙트(devtools) 열림 상태 — 버튼 on 동기화
   const inputFocusRef = useRef(false);
 
   // URL 상태 변화(네비게이션/외부) → 입력칸 동기화(직접 입력 중엔 방해하지 않음).
@@ -247,6 +248,18 @@ function BrowserViewImpl({
           onClick={() => toggleBookmark(url, host)}
         >
           <Icon name={isBookmarked ? "star-filled" : "star"} />
+        </button>
+        <button
+          type="button"
+          className={`icon-btn bv-btn${dtOpen ? " on" : ""}`}
+          title={t("browser.inspect")}
+          onClick={() => {
+            invoke<boolean>("browser_devtools", { label })
+              .then((open) => setDtOpen(open))
+              .catch(() => {});
+          }}
+        >
+          <Icon name="terminal" />
         </button>
         <button
           type="button"
