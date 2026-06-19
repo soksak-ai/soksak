@@ -202,31 +202,26 @@ Codex/Gemini `.agents/skills/<n>/SKILL.md`(공유; Gemini skills 는 preview v0.
 - 플러그인 명령 기여: `spec.ts:321-324`·`api.ts:720-740` `contributes.commands`→`plugin.<id>.<name>` 평탄,
   미선언 시 throw → 같은 registry 로 흘러 CLI/MCP 자동 노출.
 
-### 부족한 것
-- **MCP 가 발견형이 아님**: `tools/list` 가 전체 명령을 eager 평탄 tool 로 노출(`cli/main.rs:324-340`).
-  P3 위반·클라이언트 컨텍스트 폭증. 메타툴(commands/help/run) 부재.
-- **Skill 본문이 정적·불완전**: `SKILL_BODY`(`cli/main.rs:370-420`)가 12 도메인만 하드코딩. substrate 25
-  도메인 중 13 누락(clipboard/data/explorer/git/net/notify/plugin/program/schedule/secret/turn/ui/window),
-  플러그인 기여 명령 0 언급. 'Every feature is exposed'(`cli/main.rs:372`)가 완전성 오해 유발. P1·P5 위반.
-- **app vs `sok mcp` 경계 미문서화**: `lib.rs:115` 주석 'sok CLI/MCP 의 통로'가 app=MCP-gateway 오해 유발.
-- **플러그인 danger 가 매니페스트/동의 계층에 안 드러남**: 게이트는 작동하나, 매니페스트 `ContributedCommand`
-  (`spec.ts:321-324`)에 danger 필드가 없어 런타임 `register()` 인자로만 선언된다. 설치·동의 시점에 명령
-  위험도가 사용자에게 안 보임.
-- **SOKSAK_WINDOW PTY spawn 미주입**: `pty.rs:160-165` 가 PANE 만 주입(WINDOW 비대칭). 터미널 안 멀티윈도우
-  타겟 명령은 env 수동 지정 필요.
-- **정본 규칙 부재**: 단일진실·발견형·동치·thin 규칙이 코드 주석에 흩어져 표류 위험 → 이 문서가 해소.
+### 부족했던 것 → v1.1 해결(전부 구현·테스트·라이브 검증 완료)
+- ✅ **MCP 발견형**(U1): `tools/list` = 메타툴 3개(`soksak_commands`/`soksak_help`/`soksak_run`), eager 평탄
+  노출 폐기. `resources/read soksak://skill` 로 라이브 SKILL.md stdio 서빙(P8). `cli/main.rs run_mcp`.
+- ✅ **트리거 스킬**(U2): `SKILL_BODY`→`skill_doc()` 오리엔테이션 + 라이브 도메인 지도(fetch_commands 파생,
+  앱 미가동 시 코어 fallback). per-command 카탈로그 제거(P5). claude=.claude/skills, codex+gemini=.agents/skills.
+  마커-블록 폐기. AUTO-GENERATED 헤더(P10).
+- ✅ **app/`sok mcp` 경계**(U3): `lib.rs:115` 주석 정정(P6).
+- ✅ **플러그인 danger 가시성**(U4): `ContributedCommand.danger` + parseManifest 검증, api.ts register 가
+  매니페스트 danger 권위(모순 시 거부, 미선언+런타임은 게이트 보존 fallback+warn), consentSummary.dangerousCommands
+  노출. 게이트 무약화(보안 보존).
+- ✅ **SOKSAK_WINDOW PTY 주입**(U5): `pty.rs spawn_terminal` 이 PANE 과 대칭 주입. 터미널 안 sok 가 자기 창 기본 타겟.
+- ✅ **환경 묶임/배신 차단**(U8): `resolve_socket` — SOKSAK_SOCKET>--env>argv0, 침묵 cross-env 폐기(P9).
+  앱·CLI 짝 빌드(Makefile build→sok/build-debug→sok-debug/dev→sok-dev).
+- ✅ **MCP 클라이언트 등록**(U7): `sok mcp install` — 네이티브 `claude/codex/gemini mcp add` 셸아웃, env 핀.
+- ✅ **정본 규칙**(U6): 이 문서(P1–P10 + 메타원칙). 코드 주석이 이 문서를 참조.
 
-### 해야할 것 (우선순위)
-| 우선 | 작업 | 왜 |
-|---|---|---|
-| High | MCP `tools/list` 를 메타툴 3개(`soksak.commands`/`help`/`run`) + `resources/read soksak://skill` 로 재설계 (U1) | P3 발견>주입. eager 평탄 노출은 컨텍스트 폭증·CLI 와 비대칭 |
-| High | `SKILL_BODY`→`skill_doc()` 발견형 트리거 스킬(라이브 도메인 지도), 마커-블록 폐기 (U2) | 정적 카탈로그가 substrate 와 영구 불일치. P1·P5. `.agents/skills` 수렴 |
-| High | `sok mcp install`(네이티브 CLI 셸아웃, env SOKSAK_SOCKET 핀) (U7) | MCP 서버는 있는데 클라이언트 배선 0 — 채널 미연결 |
-| High | argv0 환경 디스패치(`resolve_socket`) + 앱·CLI 짝 빌드(Makefile) (U8) | P9 배신 차단 — `find_socket` 단일-소켓 자동선택이 cross-env |
-| High | 이 규칙 문서(`docs/AI-CONTROL.md`)를 정본으로 고정 + 코드 주석에서 참조 (U6) | 흩어진 규칙 표류 방지. 기반 결정의 명문화 |
-| Med | `lib.rs:115` 주석 정정 + app/`sok mcp` 경계 명문화 (U3) | app=MCP-gateway 오해 차단(P6) |
-| Med | `ContributedCommand`(`spec.ts:321`)에 danger 필드 추가 + parseManifest 검증 + 동의 화면 노출 (U4) | 게이트는 작동하나 위험도가 설치/동의 시점에 안 드러남 |
-| Med | `SOKSAK_WINDOW` 를 `pty.rs` spawn env 에 주입(PANE 과 대칭) (U5) | 터미널 내 멀티윈도우 타겟이 env 수동 지정 없이 동작 |
+### 남은 follow-up (코어 외 — 각 repo·선택)
+- 기존 danger 선언 플러그인(kanban/mailbox/dom-picker/lgtv-remote 등)의 **매니페스트에 danger 추가**(각 repo).
+  현재 런타임 danger fallback+warn 으로 게이트는 작동하나, 매니페스트 선언이라야 설치/동의 시점에 노출(U4 완전화).
+- PluginSidebar/동의 모달이 `consentSummary.dangerousCommands` 를 시각적으로 렌더(데이터는 준비됨).
 
 > 명령 총수는 고정 단언 금지(즉시 staleness). 코어 ~140(register 호출) + 설치 플러그인 기여(현재 207) ≈ 347.
 > 실시간 진실은 항상 `sok commands` 다 — 이것이 P1·P3 의 직접 귀결이다.
