@@ -12,9 +12,8 @@ dist
 dist-ssr
 *.local
 
-# plugins/ 는 메인레포가 추적하지 않는다(P1·P3) — 각 플러그인은 독립 repo 가 단일 진실.
-# dev 시 make plugin-dev-sync 로 카탈로그 repo 들을 여기에 clone 한다.
-# 선행 슬래시 = repo 루트 한정(src/plugins/ 같은 코어 소스까지 삼키지 않게 앵커).
+# 구 dev 폴더 plugins/ 는 메인레포가 추적하지 않는다(P1·P3) — dev 는 ~/.soksak/plugins 단일 폴더.
+# 방어용 무시 유지. 선행 슬래시 = repo 루트 한정(src/plugins/ 같은 코어 소스까지 삼키지 않게 앵커).
 /plugins/
 examples/.repos/
 

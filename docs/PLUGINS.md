@@ -335,10 +335,15 @@ sok editor.format
 - **카탈로그**: `soksak-plugin-registry` repo 의 `registry.json` 이 설치 가능 목록의 단일 진실이다.
   그 repo 의 `update.sh` 가 org 의 각 `plugin.json` 을 집계한다(template 제외). 코어의
   `make registry` 는 이 카탈로그를 fetch 해 `src/plugins/registrySnapshot.json`(오프라인 폴백)으로 캐시한다.
-- **설치**: 카탈로그 엔트리의 `repo` → `~/.soksak/plugins/<id>` 로 clone, 읽기전용 잠금.
-  `plugin.update` 는 fetch + reset --hard.
-- **dev**: 플러그인 repo 들을 로컬에 clone 하고 `SOKSAK_DEV_PLUGINS` 로 가리키면 설치본을 가려
-  소스 편집이 앱 리로드에 즉시 반영된다.
+- **단일 폴더**: dev·installed·local 이 `~/.soksak/plugins/<id>/` 한 곳에 공존한다. 각 폴더가
+  `.soksak.json`(머신-로컬, 플러그인 repo 는 `.gitignore`)로 자기 상태를 기술한다 —
+  `{version, repo, branch}`. `version` 3모드: `"local"`(그냥 돌아감·레지스트리 미등록·repo 없음),
+  `"dev"`(작업 중·동의 면제), `"<semver>"`(레지스트리 설치본).
+- **설치**: 카탈로그 엔트리의 `repo` → `~/.soksak/plugins/<id>` 로 clone, `.soksak.json`(version=semver)
+  기록, 읽기전용 잠금. `plugin.update` 는 fetch + reset --hard 후 version 갱신.
+- **dev**: `sok plugin.dev.new <id>` 가 단일 폴더에 스캐폴드(plugin.json·main.js·`.soksak.json`(version="dev")·git init)
+  한다. 소스 편집은 앱 리로드에 즉시 반영. `dev`·`local` 은 `plugin.update` 가 거부한다(작업물 보호).
+  폴더 밖 외부 repo 를 dev 로 얹으려면 `SOKSAK_DEV_PLUGINS_EXTRA=경로` 로 `make dev`.
 
 ## 트러블슈팅
 

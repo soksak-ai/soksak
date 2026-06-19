@@ -21,7 +21,7 @@ DEBUG_APP   := src-tauri/target/debug/bundle/macos/soksak-debug.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs registry plugin-dev-sync
+.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs registry
 
 help: ## 사용 가능한 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -43,8 +43,8 @@ icons: ## 앱 아이콘 전체 재생성(SVG→마스터1024 + base/dev/debug �
 	@rm -f /tmp/soksak-icon-master.png /tmp/soksak-icon-dev.png /tmp/soksak-icon-debug.png
 	@echo "아이콘 재생성 완료: 마스터(1024 SVG벡터)+base+dev(녹색)+debug(주황)"
 
-dev: ## 개발 서버(HMR). 독 "soksak-dev"+DEV 배지. 외부 플러그인 repo 는 SOKSAK_DEV_PLUGINS_EXTRA=경로 로 추가
-	SOKSAK_DEV_PLUGINS=$(PWD)/plugins$${SOKSAK_DEV_PLUGINS_EXTRA:+:$$SOKSAK_DEV_PLUGINS_EXTRA} $(PNPM) tauri dev
+dev: ## 개발 서버(HMR). 독 "soksak-dev"+DEV 배지. dev 는 ~/.soksak/plugins 단일 폴더(.soksak.json version="dev"). 폴더 밖 외부 repo 는 SOKSAK_DEV_PLUGINS_EXTRA=경로 로 추가
+	SOKSAK_DEV_PLUGINS="$$SOKSAK_DEV_PLUGINS_EXTRA" $(PNPM) tauri dev
 
 build: ## 릴리스 번들 빌드 → "soksak.app"(기본 아이콘)
 	$(PNPM) tauri build --config $(RELEASE_CONFIG)
@@ -80,14 +80,6 @@ docs: ## 명령 레퍼런스 생성(docs/COMMANDS.md — 앱이 실행 중이어
 registry: ## 레지스트리 카탈로그 스냅샷 갱신 — 라이브 registry.json 을 fetch 해 캐시(P2 소비). 멱등
 	@curl -fsSL "$(REGISTRY_URL)" -o src/plugins/registrySnapshot.json
 	@echo "레지스트리 스냅샷: src/plugins/registrySnapshot.json ($$(jq '.plugins | length' src/plugins/registrySnapshot.json)개, 라이브 fetch)"
-
-plugin-dev-sync: ## dev 동기화 — 카탈로그 repo 들을 plugins/<id> 로 clone(없을 때만 — 기존 보존). plugins/ 는 gitignore
-	@curl -fsSL "$(REGISTRY_URL)" | jq -r '.plugins[].repo' | while read repo; do \
-		id=$$(basename "$$repo" .git); \
-		if [ -e "plugins/$$id" ]; then echo "  $$id (존재 — 보존)"; \
-		else git clone -q "$$repo" "plugins/$$id" && echo "  $$id (clone)"; fi; \
-	done
-	@echo "dev 동기화 완료 — plugins/ 는 gitignore, SOKSAK_DEV_PLUGINS 로 로딩"
 
 typecheck: ## 프론트엔드 타입 체크(tsc)
 	$(PNPM) exec tsc --noEmit
