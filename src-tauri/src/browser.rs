@@ -641,9 +641,11 @@ pub fn browser_navigate(app: AppHandle, label: String, url: String) -> Result<()
     Ok(())
 }
 
-// 인스펙트(devtools) 토글 — 이 브라우저 child webview 의 Web Inspector 를 연다/닫는다(별도 탭 아님).
-// WKWebView 는 CDP 가 없어 OS 인스펙터(Safari)가 뜬다. devtools 는 debug 빌드에서만 활성(release 는 no-op).
-// 반환 = 토글 후 열림 여부(UI 버튼 on 상태 동기화).
+// 인스펙트(devtools) 토글 — 이 브라우저 child webview 의 Web Inspector 를 연다/닫는다.
+// WKWebView 는 CDP 가 없어 OS 인스펙터(WebKit Web Inspector)가 뜬다. devtools = debug 빌드 또는 devtools feature.
+// **반드시 별도 창**: wry open_devtools 는 [_inspector show] 만 호출 → WebKit 이 마지막 도킹 상태를 기억해
+// 브라우저 패널 '안'에 도킹돼 뜰 때가 있다. show 직후 [_inspector detach] 를 보내 항상 떼어낸 창으로 강제한다.
+// 반환 = 토글 후 열림 여부(UI 버튼 on 동기화).
 #[tauri::command]
 pub fn browser_devtools(app: AppHandle, label: String) -> Result<bool, String> {
     if let Some(wv) = app.get_webview(&label) {
@@ -651,7 +653,23 @@ pub fn browser_devtools(app: AppHandle, label: String) -> Result<bool, String> {
             wv.close_devtools();
             Ok(false)
         } else {
-            wv.open_devtools();
+            wv.open_devtools(); // [_inspector show] — 비동기(프론트엔드 로드). 마지막 도킹 상태로 뜸.
+            #[cfg(target_os = "macos")]
+            {
+                // [_inspector detach] — 도킹 해제(반드시 별도 창, _WKInspector WebKit SPI). show 가 비동기라
+                // 인스펙터가 연결된 뒤 떼어내야 한다 → 잠깐 대기 후 detach(with_webview 가 메인스레드 디스패치).
+                let wv2 = wv.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(450));
+                    let _ = wv2.with_webview(|pw| unsafe {
+                        use objc2::runtime::AnyObject;
+                        use objc2::{msg_send, rc::Retained};
+                        let wk = pw.inner() as *mut AnyObject;
+                        let inspector: Retained<AnyObject> = msg_send![&*wk, _inspector];
+                        let () = msg_send![&inspector, detach];
+                    });
+                });
+            }
             Ok(true)
         }
     } else {
