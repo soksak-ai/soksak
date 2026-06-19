@@ -4,6 +4,8 @@ soksak 의 모든 기능을 AI 에게 주는 방식의 정본 규칙. 세 가지
 **1 substrate + 2 transport + 1 teaching** 의 계층이다. 이 파일이 그 관계와 규칙의 단일 진실이다.
 코드 주석·Skill 본문·MCP 설계는 이 파일을 참조한다 — 여기서 어긋나면 코드가 틀린 것이다.
 
+> 설치·사용 how-to 는 [`AI-CONTROL-GUIDE.md`](./AI-CONTROL-GUIDE.md)(매뉴얼). 이 파일은 설계·규칙(왜)만 다룬다.
+
 ---
 
 ## 1. 멘탈 모델
