@@ -153,6 +153,93 @@ describe("commands.execute — danger ↔ 권한 매핑 + 관리 명령 차단(�
   });
 });
 
+describe("commands.register — 매니페스트 danger 권위(U4)", () => {
+  const capture = () => {
+    const registered: { name: string; danger?: string }[] = [];
+    const deps = fakeDeps({
+      registerCommand: vi.fn((name: string, spec: { danger?: string }) => {
+        registered.push({ name, danger: spec.danger });
+      }),
+    });
+    return { deps, registered };
+  };
+
+  it("매니페스트 danger 가 registry 로 전달(권위)", () => {
+    const { deps, registered } = capture();
+    const { api } = buildPluginApi(
+      manifestOf({
+        permissions: ["commands", "commands:destructive"],
+        contributes: {
+          views: [],
+          commands: [{ name: "wipe", title: "지우기", danger: "destructive" }],
+          formatters: [],
+          languages: [],
+        },
+      }),
+      "/d",
+      deps,
+    );
+    api.commands!.register("wipe", {
+      description: "",
+      handler: async () => ({ ok: true as const }),
+    });
+    expect(registered[0]).toMatchObject({
+      name: "plugin.demo.wipe",
+      danger: "destructive",
+    });
+  });
+
+  it("런타임 danger 가 매니페스트와 다르면 거부(모순)", () => {
+    const { deps } = capture();
+    const { api } = buildPluginApi(
+      manifestOf({
+        permissions: ["commands", "commands:destructive", "commands:inject"],
+        contributes: {
+          views: [],
+          commands: [{ name: "x", title: "엑스", danger: "destructive" }],
+          formatters: [],
+          languages: [],
+        },
+      }),
+      "/d",
+      deps,
+    );
+    expect(() =>
+      api.commands!.register("x", {
+        description: "",
+        danger: "inject",
+        handler: async () => ({ ok: true as const }),
+      }),
+    ).toThrow(/danger 모순/);
+  });
+
+  it("매니페스트 미선언+런타임 danger → fallback 으로 게이트 보존(거부 안 함, warn)", () => {
+    const { deps, registered } = capture();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { api } = buildPluginApi(
+      manifestOf({
+        permissions: ["commands", "commands:inject"],
+        contributes: {
+          views: [],
+          commands: [{ name: "y", title: "와이" }],
+          formatters: [],
+          languages: [],
+        },
+      }),
+      "/d",
+      deps,
+    );
+    api.commands!.register("y", {
+      description: "",
+      danger: "inject",
+      handler: async () => ({ ok: true as const }),
+    });
+    expect(registered[0]).toMatchObject({ name: "plugin.demo.y", danger: "inject" });
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
 describe("commands.register — 선언 외 거부 + 네임스페이스 강제", () => {
   it("contributes.commands 에 없는 이름은 throw", () => {
     const { api } = buildPluginApi(

@@ -718,12 +718,30 @@ export function buildPluginApi(
       ? {
           execute: executeGated,
           register: (name, spec) => {
-            const declared = manifest.contributes.commands.some(
+            const declared = manifest.contributes.commands.find(
               (c) => c.name === name,
             );
             if (!declared) {
               throw new Error(
                 `매니페스트 contributes.commands 에 선언되지 않은 명령: ${name}`,
+              );
+            }
+            // 매니페스트 선언이 danger 의 권위(설치·동의 시점 가시성). 런타임 spec.danger 와
+            // 매니페스트가 둘 다 있고 다르면 모순 → 거부. 매니페스트가 권위지만, 런타임만 danger 를
+            // 선언한 경우(레거시)는 게이트 보존을 위해 런타임 값을 쓰되 매니페스트 선언을 촉구(warn).
+            if (
+              spec.danger !== undefined &&
+              declared.danger !== undefined &&
+              spec.danger !== declared.danger
+            ) {
+              throw new Error(
+                `명령 danger 모순: ${name} — 매니페스트=${declared.danger}, 런타임=${spec.danger}`,
+              );
+            }
+            const danger = declared.danger ?? spec.danger;
+            if (declared.danger === undefined && spec.danger !== undefined) {
+              console.warn(
+                `[plugin:${id}] 명령 '${name}' 이 런타임 danger='${spec.danger}' 인데 매니페스트 contributes.commands 에 미선언 — 설치/동의 가시성 위해 매니페스트에 danger 선언 필요`,
               );
             }
             const full = pluginCommandName(id, name);
@@ -732,7 +750,7 @@ export function buildPluginApi(
               params: spec.params ?? {},
               returns: spec.returns ?? "object",
               examples: spec.examples,
-              danger: spec.danger,
+              danger, // 매니페스트 권위(없으면 런타임 fallback — 게이트 보존)
               // registry.execute 가 try/catch 로 INTERNAL 변환(§0-4).
               handler: (params) => spec.handler(params),
             });
