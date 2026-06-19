@@ -39,7 +39,10 @@ fn main() -> ExitCode {
         },
         Some("docs") => run_docs(),
         Some("skill") => run_skill(&args[1..]),
-        Some("mcp") => run_mcp(),
+        Some("mcp") => match args.get(1).map(String::as_str) {
+            Some("install") => run_mcp_install(&args[2..]),
+            _ => run_mcp(), // bare `sok mcp` = stdio MCP 서버 기동
+        },
         Some(method) => {
             let params = match args.get(1) {
                 None => Value::Null,
@@ -67,7 +70,9 @@ fn print_usage() {
   sok help <command>                  단일 명령 매뉴얼
   sok docs                            전체 매뉴얼 마크다운 출력
   sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]
-                                      AI 에이전트 스킬 설치(soksak 제어법)
+                                      AI 에이전트 트리거 스킬 설치(soksak 제어법)
+  sok mcp install [--claude|--codex|--gemini|--all] [--env dev|debug|app]
+                                      MCP 서버 등록(네이티브 mcp add, SOKSAK_SOCKET 핀)
 
 컨텍스트:
   soksak 터미널 안에서는 $SOKSAK_PANE 이 자동 주입되어, 대상 id 를 생략하면
@@ -444,6 +449,139 @@ fn run_mcp() -> ExitCode {
     ExitCode::SUCCESS
 }
 
+// ── MCP 클라이언트 등록(sok mcp install) ─────────────────────────────────────
+// `sok mcp` 서버를 외부 에이전트(claude/codex/gemini)의 MCP 클라이언트 config 에 배선한다.
+// 네이티브 CLI(`<tool> mcp add`)를 셸아웃 — 각 도구가 자기 config 포맷·병합·멱등을 소유(P7·P10).
+// 우리가 TOML/JSON 직접 병합하면 사용자 config 손상 위험. env SOKSAK_SOCKET 핀 = 환경 묶임(P9) 일관.
+
+// 설치 핀 환경(ENV_OVERRIDE=--env > SOKSAK_ENV > argv0). SOKSAK_SOCKET 절대경로는 핀 대상 아님(env 토큰 필요).
+fn pin_env() -> Result<String, String> {
+    let e = ENV_OVERRIDE
+        .get()
+        .cloned()
+        .flatten()
+        .or_else(|| std::env::var("SOKSAK_ENV").ok().filter(|s| !s.is_empty()))
+        .unwrap_or_else(|| {
+            env_from_prog(&std::env::args().next().unwrap_or_default()).to_string()
+        });
+    validate_env(&e).map(String::from)
+}
+
+// env 토큰 → MCP 서버 이름(클라이언트에서 세 환경 공존). app→soksak, dev→soksak-dev, debug→soksak-debug.
+fn server_name_for_env(env: &str) -> String {
+    match env {
+        "app" => "soksak".to_string(),
+        other => format!("soksak-{other}"),
+    }
+}
+
+// `<tool> mcp add` argv 빌더(순수). 조사 확정 문법(2026 공식문서). server=서버명, sock=핀 소켓, sok=sok 절대경로.
+fn mcp_add_argv(
+    tool: &str,
+    server: &str,
+    sock: &str,
+    sok: &str,
+) -> Result<(String, Vec<String>), String> {
+    let envpair = format!("SOKSAK_SOCKET={sock}");
+    let v = |xs: &[&str]| xs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    match tool {
+        // claude mcp add --scope user --env K=V <name> -- <sok> mcp
+        "claude" => Ok((
+            "claude".into(),
+            v(&["mcp", "add", "--scope", "user", "--env", &envpair, server, "--", sok, "mcp"]),
+        )),
+        // codex mcp add <name> --env K=V -- <sok> mcp
+        "codex" => Ok((
+            "codex".into(),
+            v(&["mcp", "add", server, "--env", &envpair, "--", sok, "mcp"]),
+        )),
+        // gemini mcp add <name> -e K=V -s user <sok> mcp  (flags before command, per docs)
+        "gemini" => Ok((
+            "gemini".into(),
+            v(&["mcp", "add", server, "-e", &envpair, "-s", "user", sok, "mcp"]),
+        )),
+        other => Err(format!("알 수 없는 도구: {other}")),
+    }
+}
+
+fn run_mcp_install(args: &[String]) -> ExitCode {
+    let (mut claude, mut codex, mut gemini) = (false, false, false);
+    for a in args {
+        match a.as_str() {
+            "--claude" => claude = true,
+            "--codex" => codex = true,
+            "--gemini" => gemini = true,
+            "--all" => {
+                claude = true;
+                codex = true;
+                gemini = true;
+            }
+            other => {
+                eprintln!("알 수 없는 옵션: {other}");
+                eprintln!("사용: sok mcp install [--claude|--codex|--gemini|--all] [--env dev|debug|app]");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+    if !claude && !codex && !gemini {
+        claude = true;
+        codex = true;
+        gemini = true; // 기본 --all
+    }
+
+    let env = match pin_env() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let server = server_name_for_env(&env);
+    let sock = match socket_path_for_env(&env) {
+        Ok(p) => p.to_string_lossy().to_string(),
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    // sok 절대경로(현재 실행 파일). env SOKSAK_SOCKET 핀이 환경을 결정하므로 어느 sok 든 무방.
+    let sok = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.to_str().map(String::from))
+        .unwrap_or_else(|| "sok".to_string());
+
+    let mut failed = false;
+    for (tool, on) in [("claude", claude), ("codex", codex), ("gemini", gemini)] {
+        if !on {
+            continue;
+        }
+        let (prog, argv) = match mcp_add_argv(tool, &server, &sock, &sok) {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("{tool}  ✗ {e}");
+                failed = true;
+                continue;
+            }
+        };
+        match std::process::Command::new(&prog).args(&argv).status() {
+            Ok(st) if st.success() => println!("{tool}  ✓ {server} → SOKSAK_SOCKET={sock}"),
+            Ok(st) => {
+                eprintln!("{tool}  ✗ {prog} 종료코드 {:?}", st.code());
+                failed = true;
+            }
+            Err(e) => {
+                eprintln!("{tool}  ✗ {prog} 실행 실패(미설치?): {e}");
+                failed = true;
+            }
+        }
+    }
+    if failed {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
 // ── 스킬 설치(Claude/Gemini/Codex) ───────────────────────────────────────────
 
 const SKILL_BODY: &str = r#"soksak is a terminal app with a 3-level layout: projects (t*) → contents (c*, tabs of
@@ -675,6 +813,47 @@ mod tests {
             SockTarget::Env(e) => assert_eq!(e, "app"),
             _ => panic!("빈 값 무시 후 argv0 여야"),
         }
+    }
+
+    // env 토큰 → MCP 서버 이름(세 환경 공존).
+    #[test]
+    fn server_name_per_env() {
+        assert_eq!(server_name_for_env("app"), "soksak");
+        assert_eq!(server_name_for_env("dev"), "soksak-dev");
+        assert_eq!(server_name_for_env("debug"), "soksak-debug");
+    }
+
+    // `<tool> mcp add` argv 빌더(2026 공식문서 문법). env SOKSAK_SOCKET 핀.
+    #[test]
+    fn mcp_add_argv_per_tool() {
+        let (p, a) = mcp_add_argv("claude", "soksak-dev", "/s.sock", "/bin/sok").unwrap();
+        assert_eq!(p, "claude");
+        assert_eq!(
+            a,
+            vec![
+                "mcp", "add", "--scope", "user", "--env", "SOKSAK_SOCKET=/s.sock", "soksak-dev",
+                "--", "/bin/sok", "mcp"
+            ]
+        );
+
+        let (p, a) = mcp_add_argv("codex", "soksak", "/s.sock", "/bin/sok").unwrap();
+        assert_eq!(p, "codex");
+        assert_eq!(
+            a,
+            vec!["mcp", "add", "soksak", "--env", "SOKSAK_SOCKET=/s.sock", "--", "/bin/sok", "mcp"]
+        );
+
+        let (p, a) = mcp_add_argv("gemini", "soksak-debug", "/s.sock", "/bin/sok").unwrap();
+        assert_eq!(p, "gemini");
+        assert_eq!(
+            a,
+            vec![
+                "mcp", "add", "soksak-debug", "-e", "SOKSAK_SOCKET=/s.sock", "-s", "user",
+                "/bin/sok", "mcp"
+            ]
+        );
+
+        assert!(mcp_add_argv("unknown", "x", "y", "z").is_err());
     }
 
     // 전역 --env 플래그 추출(어느 위치든) + 제거.
