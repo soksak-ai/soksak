@@ -21,7 +21,7 @@ DEBUG_APP   := src-tauri/target/debug/bundle/macos/soksak-debug.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli install-cli docs registry
+.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli cli-dev cli-debug install-cli install-cli-dev install-cli-debug docs registry
 
 help: ## 사용 가능한 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -43,13 +43,13 @@ icons: ## 앱 아이콘 전체 재생성(SVG→마스터1024 + base/dev/debug �
 	@rm -f /tmp/soksak-icon-master.png /tmp/soksak-icon-dev.png /tmp/soksak-icon-debug.png
 	@echo "아이콘 재생성 완료: 마스터(1024 SVG벡터)+base+dev(녹색)+debug(주황)"
 
-dev: ## 개발 서버(HMR). 독 "soksak-dev"+DEV 배지. dev 는 ~/.soksak/plugins 단일 폴더(.soksak.json version="dev"). 폴더 밖 외부 repo 는 SOKSAK_DEV_PLUGINS_EXTRA=경로 로 추가
+dev: cli-dev ## 개발 서버(HMR) + sok-dev. 독 "soksak-dev"+DEV 배지. dev 는 ~/.soksak/plugins 단일 폴더(.soksak.json version="dev"). 폴더 밖 외부 repo 는 SOKSAK_DEV_PLUGINS_EXTRA=경로 로 추가
 	SOKSAK_DEV_PLUGINS="$$SOKSAK_DEV_PLUGINS_EXTRA" $(PNPM) tauri dev
 
-build: ## 릴리스 번들 빌드 → "soksak.app"(기본 아이콘)
+build: cli ## 릴리스 번들 빌드 → "soksak.app"(기본 아이콘) + sok
 	$(PNPM) tauri build --config $(RELEASE_CONFIG)
 
-build-debug: ## 디버그 번들 빌드 → "soksak-debug.app"(주황 아이콘)
+build-debug: cli-debug ## 디버그 번들 빌드 → "soksak-debug.app"(주황 아이콘) + sok-debug
 	$(PNPM) tauri build --debug --config $(DEBUG_CONFIG)
 
 run: ## 릴리스 soksak.app 실행(새 인스턴스)
@@ -60,13 +60,33 @@ run-debug: ## 디버그 soksak-debug.app 실행(새 인스턴스)
 	@test -d "$(DEBUG_APP)" || { echo "먼저 'make build-debug' 를 실행하세요."; exit 1; }
 	open -n "$(DEBUG_APP)"
 
-cli: ## sok CLI 빌드(릴리스)
+# CLI 는 앱과 환경 짝으로 빌드된다(busybox 패턴 — 1 소스 바이너리, 설치명이 곧 환경: argv0 디스패치).
+# release→sok / debug 프로파일→sok-dev·sok-debug. cp 로 환경명 사본 생성(앱과 함께 빌드, 사용자 지시).
+cli: ## sok CLI 빌드(릴리스) → target/release/sok
 	cd src-tauri && cargo build --release -p sok
 
-install-cli: cli ## sok 를 /usr/local/bin 에 링크(멱등)
+cli-dev: ## sok-dev 빌드(debug 프로파일, argv0=dev) → target/debug/sok-dev
+	cd src-tauri && cargo build -p sok
+	cp -f src-tauri/target/debug/sok src-tauri/target/debug/sok-dev
+
+cli-debug: ## sok-debug 빌드(debug 프로파일, argv0=debug) → target/debug/sok-debug
+	cd src-tauri && cargo build -p sok
+	cp -f src-tauri/target/debug/sok src-tauri/target/debug/sok-debug
+
+install-cli: cli ## sok(release) 를 /usr/local/bin 에 링크(멱등)
 	@mkdir -p /usr/local/bin 2>/dev/null || true
 	ln -sf "$(abspath src-tauri/target/release/sok)" /usr/local/bin/sok
-	@echo "설치 완료: /usr/local/bin/sok → src-tauri/target/release/sok"
+	@echo "설치 완료: /usr/local/bin/sok → src-tauri/target/release/sok (release 환경)"
+
+install-cli-dev: cli-dev ## sok-dev 를 /usr/local/bin 에 링크(argv0 → dev 환경)
+	@mkdir -p /usr/local/bin 2>/dev/null || true
+	ln -sf "$(abspath src-tauri/target/debug/sok-dev)" /usr/local/bin/sok-dev
+	@echo "설치 완료: /usr/local/bin/sok-dev → src-tauri/target/debug/sok-dev (dev 환경)"
+
+install-cli-debug: cli-debug ## sok-debug 를 /usr/local/bin 에 링크(argv0 → debug 환경)
+	@mkdir -p /usr/local/bin 2>/dev/null || true
+	ln -sf "$(abspath src-tauri/target/debug/sok-debug)" /usr/local/bin/sok-debug
+	@echo "설치 완료: /usr/local/bin/sok-debug → src-tauri/target/debug/sok-debug (debug 환경)"
 
 docs: ## 명령 레퍼런스 생성(docs/COMMANDS.md — 앱이 실행 중이어야 함)
 	@mkdir -p docs

@@ -16,11 +16,14 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::OnceLock;
 
 use serde_json::{json, Value};
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // 전역 --env 추출(환경 묶임 P9). 명령 파싱 전에 제거 → 위치 인자 구조 보존.
+    let _ = ENV_OVERRIDE.set(take_flag_value(&mut args, "--env"));
     match args.first().map(String::as_str) {
         None | Some("-h") | Some("--help") => {
             print_usage();
@@ -71,45 +74,121 @@ fn print_usage() {
   호출한 pane 의 위치(패널/컨텐츠/프로젝트)가 기본 대상이 된다.
   멀티 윈도우: $SOKSAK_WINDOW=win-1 sok <command> 로 특정 창을 지정(생략 시 활성 창).
   창 목록은 sok window.list, 새 창은 sok window.new.
-  소켓: $SOKSAK_SOCKET 또는 ~/.soksak/*.sock 자동 탐색."
+
+환경(한 sok 은 한 환경에만 묶인다 — 침묵 cross-env 금지):
+  $SOKSAK_SOCKET(앱이 PTY 에 주입) > --env dev|debug|app > $SOKSAK_ENV > 설치명
+  (sok-dev→dev, sok-debug→debug, sok→release). 그 환경 미실행이면 에러(다른 환경 대체 안 함)."
     );
 }
 
 // ── 소켓 ────────────────────────────────────────────────────────────────────
 
-fn find_socket() -> Result<PathBuf, String> {
-    if let Ok(p) = std::env::var("SOKSAK_SOCKET") {
-        return Ok(PathBuf::from(p));
-    }
-    let home = std::env::var("HOME").map_err(|_| "HOME 없음".to_string())?;
-    let dir = PathBuf::from(home).join(".soksak");
-    let mut alive: Vec<PathBuf> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for e in entries.flatten() {
-            let p = e.path();
-            if p.extension().is_some_and(|x| x == "sock")
-                && UnixStream::connect(&p).is_ok()
-            {
-                alive.push(p);
-            }
-        }
-    }
-    match alive.len() {
-        0 => Err("실행 중인 soksak 을 찾지 못함(소켓 없음). 앱을 먼저 실행하세요.".into()),
-        1 => Ok(alive.remove(0)),
-        _ => Err(format!(
-            "soksak 인스턴스가 여러 개입니다. SOKSAK_SOCKET 으로 지정하세요:\n{}",
-            alive
-                .iter()
-                .map(|p| format!("  {}", p.display()))
-                .collect::<Vec<_>>()
-                .join("\n")
-        )),
+// 환경 묶임(배신 차단, docs/AI-CONTROL.md P9). 앱 정체성 3개(com.soksak.{dev|debug|app})로
+// 소켓이 분리된다. sok 은 정확히 한 환경에 묶이고, 의도치 않은 다른 환경에 침묵으로 붙지 않는다.
+// 우선순위: SOKSAK_SOCKET(앱이 PTY 에 주입, 권위) > --env/SOKSAK_ENV > argv0 접미사
+// (sok-dev→dev, sok-debug→debug, sok→app). env 가 정해지면 그 소켓만 — 없으면 에러(다른 env 대체 금지).
+// "살아있는-1개-잡기" 는 폐기(어느 env 든 말없이 잡던 배신 지점).
+
+// --env 전역 플래그(있으면). main 이 1회 설정.
+static ENV_OVERRIDE: OnceLock<Option<String>> = OnceLock::new();
+
+// argv0 basename → 기본 env 토큰. busybox 패턴: 설치명이 곧 환경.
+fn env_from_prog(prog: &str) -> &'static str {
+    let base = prog.rsplit(['/', '\\']).next().unwrap_or(prog);
+    if base.ends_with("-dev") {
+        "dev"
+    } else if base.ends_with("-debug") {
+        "debug"
+    } else {
+        "app"
     }
 }
 
+// env 토큰 검증(dev|debug|app 만). 그 외는 에러.
+fn validate_env(env: &str) -> Result<&str, String> {
+    match env {
+        "dev" | "debug" | "app" => Ok(env),
+        other => Err(format!("알 수 없는 환경: '{other}' (dev|debug|app)")),
+    }
+}
+
+// env 토큰 → 소켓 파일명.
+fn socket_name_for_env(env: &str) -> String {
+    format!("com.soksak.{env}.sock")
+}
+
+// env 토큰 → 소켓 절대경로(존재·생존 검사 없음 — 핀 용도). validate_env 통과 전제.
+fn socket_path_for_env(env: &str) -> Result<PathBuf, String> {
+    let env = validate_env(env)?;
+    let home = std::env::var("HOME").map_err(|_| "HOME 없음".to_string())?;
+    Ok(PathBuf::from(home)
+        .join(".soksak")
+        .join(socket_name_for_env(env)))
+}
+
+// 소켓 타겟 결정(순수). 명시 소켓 경로 또는 env 토큰.
+enum SockTarget {
+    Explicit(String),
+    Env(String),
+}
+
+fn resolve_target(
+    soksak_socket: Option<String>,
+    env_flag: Option<String>,
+    soksak_env: Option<String>,
+    prog: &str,
+) -> SockTarget {
+    if let Some(p) = soksak_socket.filter(|s| !s.is_empty()) {
+        return SockTarget::Explicit(p);
+    }
+    if let Some(e) = env_flag.filter(|s| !s.is_empty()) {
+        return SockTarget::Env(e);
+    }
+    if let Some(e) = soksak_env.filter(|s| !s.is_empty()) {
+        return SockTarget::Env(e);
+    }
+    SockTarget::Env(env_from_prog(prog).to_string())
+}
+
+// 묶인 환경의 소켓 경로. env 가 정해졌으면 그 소켓만 — 살아있지 않으면 에러(다른 env 로 대체 안 함).
+fn resolve_socket() -> Result<PathBuf, String> {
+    let target = resolve_target(
+        std::env::var("SOKSAK_SOCKET").ok(),
+        ENV_OVERRIDE.get().cloned().flatten(),
+        std::env::var("SOKSAK_ENV").ok(),
+        &std::env::args().next().unwrap_or_default(),
+    );
+    match target {
+        SockTarget::Explicit(p) => Ok(PathBuf::from(p)),
+        SockTarget::Env(env) => {
+            let path = socket_path_for_env(&env)?;
+            if UnixStream::connect(&path).is_ok() {
+                Ok(path)
+            } else {
+                Err(format!(
+                    "soksak({env}) 미실행 — 소켓 없음: {}\n다른 환경은 SOKSAK_ENV=dev|debug|app 또는 설치명(sok-dev) 으로 지정.",
+                    path.display()
+                ))
+            }
+        }
+    }
+}
+
+// args 에서 전역 `--flag VALUE` 를 뽑아 제거. 없으면 None. 값 없는 `--flag` 는 제거하고 None.
+fn take_flag_value(args: &mut Vec<String>, flag: &str) -> Option<String> {
+    if let Some(i) = args.iter().position(|a| a == flag) {
+        if i + 1 < args.len() {
+            let val = args.remove(i + 1);
+            args.remove(i);
+            return Some(val);
+        }
+        args.remove(i);
+    }
+    None
+}
+
 fn request(method: &str, params: Value) -> Result<Value, String> {
-    let sock = find_socket()?;
+    let sock = resolve_socket()?;
     let mut stream =
         UnixStream::connect(&sock).map_err(|e| format!("소켓 연결 실패({}): {e}", sock.display()))?;
     let req = json!({
@@ -531,5 +610,93 @@ fn run_skill(args: &[String]) -> ExitCode {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // argv0 접미사 → env 토큰(busybox 디스패치). 경로 접두 무시.
+    #[test]
+    fn argv0_maps_to_env() {
+        assert_eq!(env_from_prog("sok"), "app");
+        assert_eq!(env_from_prog("/usr/local/bin/sok"), "app");
+        assert_eq!(env_from_prog("sok-dev"), "dev");
+        assert_eq!(env_from_prog("/path/to/sok-dev"), "dev");
+        assert_eq!(env_from_prog("sok-debug"), "debug");
+        assert_eq!(env_from_prog("target/debug/sok-debug"), "debug");
+    }
+
+    // env 토큰 검증 — dev|debug|app 만.
+    #[test]
+    fn env_validation_rejects_unknown() {
+        assert!(validate_env("dev").is_ok());
+        assert!(validate_env("debug").is_ok());
+        assert!(validate_env("app").is_ok());
+        assert!(validate_env("prod").is_err());
+        assert!(validate_env("release").is_err());
+        assert!(validate_env("").is_err());
+    }
+
+    // env 토큰 → 소켓 파일명(identifier 와 일치).
+    #[test]
+    fn socket_name_per_env() {
+        assert_eq!(socket_name_for_env("dev"), "com.soksak.dev.sock");
+        assert_eq!(socket_name_for_env("debug"), "com.soksak.debug.sock");
+        assert_eq!(socket_name_for_env("app"), "com.soksak.app.sock");
+    }
+
+    // 소켓 타겟 우선순위: SOKSAK_SOCKET > --env > SOKSAK_ENV > argv0.
+    #[test]
+    fn resolve_priority() {
+        // SOKSAK_SOCKET(명시 경로) 최우선.
+        match resolve_target(Some("/x.sock".into()), Some("dev".into()), Some("debug".into()), "sok-dev") {
+            SockTarget::Explicit(p) => assert_eq!(p, "/x.sock"),
+            _ => panic!("SOKSAK_SOCKET 이 최우선이어야"),
+        }
+        // --env 가 SOKSAK_ENV·argv0 보다 우선.
+        match resolve_target(None, Some("dev".into()), Some("debug".into()), "sok-debug") {
+            SockTarget::Env(e) => assert_eq!(e, "dev"),
+            _ => panic!("--env 우선이어야"),
+        }
+        // SOKSAK_ENV 가 argv0 보다 우선.
+        match resolve_target(None, None, Some("debug".into()), "sok-dev") {
+            SockTarget::Env(e) => assert_eq!(e, "debug"),
+            _ => panic!("SOKSAK_ENV 우선이어야"),
+        }
+        // 아무것도 없으면 argv0 가 결정.
+        match resolve_target(None, None, None, "sok-dev") {
+            SockTarget::Env(e) => assert_eq!(e, "dev"),
+            _ => panic!("argv0 fallback 이어야"),
+        }
+        // 빈 문자열은 무시(설정 안 된 것으로 취급).
+        match resolve_target(Some(String::new()), Some(String::new()), None, "sok") {
+            SockTarget::Env(e) => assert_eq!(e, "app"),
+            _ => panic!("빈 값 무시 후 argv0 여야"),
+        }
+    }
+
+    // 전역 --env 플래그 추출(어느 위치든) + 제거.
+    #[test]
+    fn take_flag_extracts_and_removes() {
+        let mut a = vec!["--env".to_string(), "dev".into(), "state.tree".into()];
+        assert_eq!(take_flag_value(&mut a, "--env"), Some("dev".into()));
+        assert_eq!(a, vec!["state.tree".to_string()]);
+
+        // 명령 뒤에 와도 추출.
+        let mut b = vec!["mcp".to_string(), "install".into(), "--env".into(), "debug".into()];
+        assert_eq!(take_flag_value(&mut b, "--env"), Some("debug".into()));
+        assert_eq!(b, vec!["mcp".to_string(), "install".into()]);
+
+        // 없으면 None, 원본 보존.
+        let mut c = vec!["state.tree".to_string()];
+        assert_eq!(take_flag_value(&mut c, "--env"), None);
+        assert_eq!(c, vec!["state.tree".to_string()]);
+
+        // 값 없는 --env 는 제거하고 None.
+        let mut d = vec!["state.tree".to_string(), "--env".into()];
+        assert_eq!(take_flag_value(&mut d, "--env"), None);
+        assert_eq!(d, vec!["state.tree".to_string()]);
     }
 }
