@@ -218,10 +218,12 @@ Codex/Gemini `.agents/skills/<n>/SKILL.md`(공유; Gemini skills 는 preview v0.
 - ✅ **MCP 클라이언트 등록**(U7): `sok mcp install` — 네이티브 `claude/codex/gemini mcp add` 셸아웃, env 핀.
 - ✅ **정본 규칙**(U6): 이 문서(P1–P10 + 메타원칙). 코드 주석이 이 문서를 참조.
 
-### 남은 follow-up (코어 외 — 각 repo·선택)
-- 기존 danger 선언 플러그인(kanban/mailbox/dom-picker/lgtv-remote 등)의 **매니페스트에 danger 추가**(각 repo).
-  현재 런타임 danger fallback+warn 으로 게이트는 작동하나, 매니페스트 선언이라야 설치/동의 시점에 노출(U4 완전화).
-- PluginSidebar/동의 모달이 `consentSummary.dangerousCommands` 를 시각적으로 렌더(데이터는 준비됨).
+### follow-up 완료(v1.1.1)
+- ✅ danger 선언 플러그인 매니페스트에 danger 추가: kanban(node.remove·reset), mailbox(delete·clear·import),
+  lgtv-remote(text-input), dom-picker(selection.set·selection.clear·probe) = 9 명령. 런타임과 일치(reload
+  0-rejected = 불일치 시 throw). kanban/mailbox/lgtv-remote 각 repo 로컬 커밋(푸시는 사용자 검증 후),
+  dom-picker 는 local(repo 없음, 폴더 반영).
+- ✅ 동의 모달이 `dangerousCommands` 를 ⚠ 섹션으로 렌더(권한 다음=가장 결정적 위치). PNG 시각 검증.
 
 > 명령 총수는 고정 단언 금지(즉시 staleness). 코어 ~140(register 호출) + 설치 플러그인 기여(현재 207) ≈ 347.
 > 실시간 진실은 항상 `sok commands` 다 — 이것이 P1·P3 의 직접 귀결이다.
