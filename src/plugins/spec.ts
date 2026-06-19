@@ -321,6 +321,9 @@ export interface ContributedView {
 export interface ContributedCommand {
   name: string; // 등록명은 plugin.<pluginId>.<name> — 선언 외 등록은 거부됨
   title: LocalizedText;
+  // 위험 분류(설치·동의 시점 가시성). "destructive"=닫기/제거, "inject"=term.send/browser.eval 류.
+  // 매니페스트 선언이 권위 — 런타임 register({danger}) 가 불일치하면 거부된다(api.ts). 동의 요약이 노출.
+  danger?: "destructive" | "inject";
 }
 
 export interface ContributedFormatter {
@@ -1016,6 +1019,7 @@ export function parseManifest(
       commands = parseEntries(c.commands, {
         label: "contributes.commands",
         required: ["name", "title"],
+        optional: ["danger"],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.name) || !COMMAND_NAME_RE.test(v.name)) {
             errs.push(
@@ -1025,9 +1029,18 @@ export function parseManifest(
           }
           if (!validateLocalizedText(v.title, "contributes.commands.title", errs))
             return null;
+          let danger: "destructive" | "inject" | undefined;
+          if (v.danger !== undefined) {
+            if (v.danger !== "destructive" && v.danger !== "inject") {
+              errs.push('contributes.commands.danger 는 "destructive" | "inject"');
+              return null;
+            }
+            danger = v.danger;
+          }
           return {
             name: v.name.trim(),
             title: normalizeText(v.title as LocalizedText),
+            ...(danger ? { danger } : {}),
           };
         },
       }, errors);

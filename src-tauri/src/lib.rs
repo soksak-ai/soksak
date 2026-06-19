@@ -112,7 +112,8 @@ pub fn run() {
             // clipboard_watch_start 를 호출할 때 시작 — 쓰지 않으면 스레드/폴링 0.
             app.state::<clipboard::ClipboardState>()
                 .init(app.handle().clone());
-            // AI 명령 인터페이스 소켓 서버(sok CLI/MCP 의 통로).
+            // app-internal command socket(JSON-RPC). sok CLI 가 직접 사용하고, `sok mcp` 서브프로세스가
+            // stdio MCP↔이 소켓 브리지로 사용한다. app 은 MCP 서버가 아니다 — docs/AI-CONTROL.md P6.
             if let Err(e) = ipc::start(app.handle().clone()) {
                 eprintln!("[ipc] 소켓 서버 기동 실패: {e}");
             }

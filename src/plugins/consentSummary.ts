@@ -40,6 +40,8 @@ export interface ConsentSummary {
   };
   // 노출 DOM 노드 종류(매니페스트 contributes.nodes) — 사용자가 무엇이 외부 클릭 가능한지 보고 동의.
   exposedNodes: ExposedNodeSummary[];
+  // 위험 명령(매니페스트 contributes.commands.danger) — 설치/동의 시점에 무엇이 파괴적/주입인지 고지.
+  dangerousCommands: { name: string; danger: "destructive" | "inject" }[];
   dependencies: {
     plugins: DepPluginSummary[];
     libraries: LibraryDep[];
@@ -110,6 +112,11 @@ export function consentSummary(
       ...(n.description !== undefined ? { description: n.description } : {}),
       ...(n.danger ? { danger: true as const } : {}),
     })),
+    dangerousCommands: c.commands
+      .filter((cmd): cmd is typeof cmd & { danger: "destructive" | "inject" } =>
+        cmd.danger !== undefined,
+      )
+      .map((cmd) => ({ name: cmd.name, danger: cmd.danger })),
     dependencies: {
       plugins: dependencyConsents(manifest, installed),
       libraries: transitiveLibraries(manifest, installed),

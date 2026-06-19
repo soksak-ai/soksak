@@ -88,6 +88,47 @@ describe("parseManifest — 수용", () => {
     expect(validation.ok).toBe(true);
   });
 
+  it("contributes.commands.danger — destructive|inject 수용, 매니페스트에 보존", () => {
+    const { manifest, validation } = parseManifest(
+      base({
+        permissions: ["commands", "commands:destructive"],
+        contributes: {
+          views: [],
+          commands: [
+            { name: "wipe", title: "지우기", danger: "destructive" },
+            { name: "send", title: "보내기", danger: "inject" },
+            { name: "list", title: "목록" },
+          ],
+          formatters: [],
+          languages: [],
+        },
+      }),
+      "demo",
+    );
+    expect(validation.ok).toBe(true);
+    expect(manifest?.contributes.commands).toMatchObject([
+      { name: "wipe", danger: "destructive" },
+      { name: "send", danger: "inject" },
+      { name: "list" },
+    ]);
+    expect(manifest?.contributes.commands[2]).not.toHaveProperty("danger");
+  });
+
+  it("contributes.commands.danger — 알 수 없는 값은 거부", () => {
+    const errs = errorsOf(
+      base({
+        permissions: ["commands"],
+        contributes: {
+          views: [],
+          commands: [{ name: "x", title: "엑스", danger: "nuke" }],
+          formatters: [],
+          languages: [],
+        },
+      }),
+    );
+    expect(errs.some((e) => e.includes("danger"))).toBe(true);
+  });
+
   it("template:true 보존, 생략/false 는 미포함", () => {
     expect(parseManifest(base({ template: true }), "demo").manifest).toMatchObject(
       { template: true },

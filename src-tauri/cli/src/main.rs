@@ -16,11 +16,14 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::OnceLock;
 
 use serde_json::{json, Value};
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // 전역 --env 추출(환경 묶임 P9). 명령 파싱 전에 제거 → 위치 인자 구조 보존.
+    let _ = ENV_OVERRIDE.set(take_flag_value(&mut args, "--env"));
     match args.first().map(String::as_str) {
         None | Some("-h") | Some("--help") => {
             print_usage();
@@ -36,7 +39,10 @@ fn main() -> ExitCode {
         },
         Some("docs") => run_docs(),
         Some("skill") => run_skill(&args[1..]),
-        Some("mcp") => run_mcp(),
+        Some("mcp") => match args.get(1).map(String::as_str) {
+            Some("install") => run_mcp_install(&args[2..]),
+            _ => run_mcp(), // bare `sok mcp` = stdio MCP 서버 기동
+        },
         Some(method) => {
             let params = match args.get(1) {
                 None => Value::Null,
@@ -64,63 +70,156 @@ fn print_usage() {
   sok help <command>                  단일 명령 매뉴얼
   sok docs                            전체 매뉴얼 마크다운 출력
   sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]
-                                      AI 에이전트 스킬 설치(soksak 제어법)
+                                      AI 에이전트 트리거 스킬 설치(soksak 제어법)
+  sok mcp install [--claude|--codex|--gemini|--all] [--env dev|debug|app]
+                                      MCP 서버 등록(네이티브 mcp add, SOKSAK_SOCKET 핀)
 
 컨텍스트:
   soksak 터미널 안에서는 $SOKSAK_PANE 이 자동 주입되어, 대상 id 를 생략하면
   호출한 pane 의 위치(패널/컨텐츠/프로젝트)가 기본 대상이 된다.
   멀티 윈도우: $SOKSAK_WINDOW=win-1 sok <command> 로 특정 창을 지정(생략 시 활성 창).
   창 목록은 sok window.list, 새 창은 sok window.new.
-  소켓: $SOKSAK_SOCKET 또는 ~/.soksak/*.sock 자동 탐색."
+
+환경(한 sok 은 한 환경에만 묶인다 — 침묵 cross-env 금지):
+  $SOKSAK_SOCKET(앱이 PTY 에 주입) > --env dev|debug|app > $SOKSAK_ENV > 설치명
+  (sok-dev→dev, sok-debug→debug, sok→release). 그 환경 미실행이면 에러(다른 환경 대체 안 함)."
     );
 }
 
 // ── 소켓 ────────────────────────────────────────────────────────────────────
 
-fn find_socket() -> Result<PathBuf, String> {
-    if let Ok(p) = std::env::var("SOKSAK_SOCKET") {
-        return Ok(PathBuf::from(p));
-    }
-    let home = std::env::var("HOME").map_err(|_| "HOME 없음".to_string())?;
-    let dir = PathBuf::from(home).join(".soksak");
-    let mut alive: Vec<PathBuf> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&dir) {
-        for e in entries.flatten() {
-            let p = e.path();
-            if p.extension().is_some_and(|x| x == "sock")
-                && UnixStream::connect(&p).is_ok()
-            {
-                alive.push(p);
-            }
-        }
-    }
-    match alive.len() {
-        0 => Err("실행 중인 soksak 을 찾지 못함(소켓 없음). 앱을 먼저 실행하세요.".into()),
-        1 => Ok(alive.remove(0)),
-        _ => Err(format!(
-            "soksak 인스턴스가 여러 개입니다. SOKSAK_SOCKET 으로 지정하세요:\n{}",
-            alive
-                .iter()
-                .map(|p| format!("  {}", p.display()))
-                .collect::<Vec<_>>()
-                .join("\n")
-        )),
+// 환경 묶임(배신 차단, docs/AI-CONTROL.md P9). 앱 정체성 3개(com.soksak.{dev|debug|app})로
+// 소켓이 분리된다. sok 은 정확히 한 환경에 묶이고, 의도치 않은 다른 환경에 침묵으로 붙지 않는다.
+// 우선순위: SOKSAK_SOCKET(앱이 PTY 에 주입, 권위) > --env/SOKSAK_ENV > argv0 접미사
+// (sok-dev→dev, sok-debug→debug, sok→app). env 가 정해지면 그 소켓만 — 없으면 에러(다른 env 대체 금지).
+// "살아있는-1개-잡기" 는 폐기(어느 env 든 말없이 잡던 배신 지점).
+
+// --env 전역 플래그(있으면). main 이 1회 설정.
+static ENV_OVERRIDE: OnceLock<Option<String>> = OnceLock::new();
+
+// argv0 basename → 기본 env 토큰. busybox 패턴: 설치명이 곧 환경.
+fn env_from_prog(prog: &str) -> &'static str {
+    let base = prog.rsplit(['/', '\\']).next().unwrap_or(prog);
+    if base.ends_with("-dev") {
+        "dev"
+    } else if base.ends_with("-debug") {
+        "debug"
+    } else {
+        "app"
     }
 }
 
+// env 토큰 검증(dev|debug|app 만). 그 외는 에러.
+fn validate_env(env: &str) -> Result<&str, String> {
+    match env {
+        "dev" | "debug" | "app" => Ok(env),
+        other => Err(format!("알 수 없는 환경: '{other}' (dev|debug|app)")),
+    }
+}
+
+// env 토큰 → 소켓 파일명.
+fn socket_name_for_env(env: &str) -> String {
+    format!("com.soksak.{env}.sock")
+}
+
+// env 토큰 → 소켓 절대경로(존재·생존 검사 없음 — 핀 용도). validate_env 통과 전제.
+fn socket_path_for_env(env: &str) -> Result<PathBuf, String> {
+    let env = validate_env(env)?;
+    let home = std::env::var("HOME").map_err(|_| "HOME 없음".to_string())?;
+    Ok(PathBuf::from(home)
+        .join(".soksak")
+        .join(socket_name_for_env(env)))
+}
+
+// 소켓 타겟 결정(순수). 명시 소켓 경로 또는 env 토큰.
+enum SockTarget {
+    Explicit(String),
+    Env(String),
+}
+
+fn resolve_target(
+    soksak_socket: Option<String>,
+    env_flag: Option<String>,
+    soksak_env: Option<String>,
+    prog: &str,
+) -> SockTarget {
+    if let Some(p) = soksak_socket.filter(|s| !s.is_empty()) {
+        return SockTarget::Explicit(p);
+    }
+    if let Some(e) = env_flag.filter(|s| !s.is_empty()) {
+        return SockTarget::Env(e);
+    }
+    if let Some(e) = soksak_env.filter(|s| !s.is_empty()) {
+        return SockTarget::Env(e);
+    }
+    SockTarget::Env(env_from_prog(prog).to_string())
+}
+
+// 묶인 환경의 소켓 경로. env 가 정해졌으면 그 소켓만 — 살아있지 않으면 에러(다른 env 로 대체 안 함).
+fn resolve_socket() -> Result<PathBuf, String> {
+    let target = resolve_target(
+        std::env::var("SOKSAK_SOCKET").ok(),
+        ENV_OVERRIDE.get().cloned().flatten(),
+        std::env::var("SOKSAK_ENV").ok(),
+        &std::env::args().next().unwrap_or_default(),
+    );
+    match target {
+        SockTarget::Explicit(p) => Ok(PathBuf::from(p)),
+        SockTarget::Env(env) => {
+            let path = socket_path_for_env(&env)?;
+            if UnixStream::connect(&path).is_ok() {
+                Ok(path)
+            } else {
+                Err(format!(
+                    "soksak({env}) 미실행 — 소켓 없음: {}\n다른 환경은 SOKSAK_ENV=dev|debug|app 또는 설치명(sok-dev) 으로 지정.",
+                    path.display()
+                ))
+            }
+        }
+    }
+}
+
+// args 에서 전역 `--flag VALUE` 를 뽑아 제거. 없으면 None. 값 없는 `--flag` 는 제거하고 None.
+fn take_flag_value(args: &mut Vec<String>, flag: &str) -> Option<String> {
+    if let Some(i) = args.iter().position(|a| a == flag) {
+        if i + 1 < args.len() {
+            let val = args.remove(i + 1);
+            args.remove(i);
+            return Some(val);
+        }
+        args.remove(i);
+    }
+    None
+}
+
 fn request(method: &str, params: Value) -> Result<Value, String> {
-    let sock = find_socket()?;
+    // pane/window 는 env(SOKSAK_PANE/WINDOW)에서 — 터미널 안 "내 위치" 기본 타겟.
+    send_request(method, params, None, None, None)
+}
+
+// 소켓 JSON-RPC 1회 왕복. pane/window/timeout 명시값이 있으면 우선, 없으면 env(SOKSAK_PANE/WINDOW) 사용.
+// MCP soksak.run 은 명시값을 넘긴다(서브프로세스라 PTY env 없음).
+fn send_request(
+    method: &str,
+    params: Value,
+    pane: Option<String>,
+    window: Option<String>,
+    timeout_ms: Option<u64>,
+) -> Result<Value, String> {
+    let sock = resolve_socket()?;
     let mut stream =
         UnixStream::connect(&sock).map_err(|e| format!("소켓 연결 실패({}): {e}", sock.display()))?;
-    let req = json!({
-        "id": 1,
-        "method": method,
-        "params": params,
-        "pane": std::env::var("SOKSAK_PANE").ok(),
-        // 멀티 윈도우 타겟 창(SOKSAK_WINDOW). 생략 시 코어가 활성 창으로 라우팅. 특정 창 제어는
-        // SOKSAK_WINDOW=win-1 sok <command> (tmux -t 관례). window.list 로 label 조회.
-        "window": std::env::var("SOKSAK_WINDOW").ok(),
-    });
+    let mut req = json!({ "id": 1, "method": method, "params": params });
+    if let Some(p) = pane.or_else(|| std::env::var("SOKSAK_PANE").ok()) {
+        req["pane"] = json!(p);
+    }
+    // 멀티 윈도우 타겟 창(SOKSAK_WINDOW 또는 명시). 생략 시 코어가 활성 창으로 라우팅.
+    if let Some(w) = window.or_else(|| std::env::var("SOKSAK_WINDOW").ok()) {
+        req["window"] = json!(w);
+    }
+    if let Some(t) = timeout_ms {
+        req["timeoutMs"] = json!(t);
+    }
     writeln!(stream, "{req}").map_err(|e| format!("요청 전송 실패: {e}"))?;
     let mut line = String::new();
     BufReader::new(stream)
@@ -244,35 +343,86 @@ fn run_docs() -> ExitCode {
 // 직접 구현 사유: 카탈로그가 런타임 동적이라 정적 매크로 SDK 보다 소형 핸들러가
 // 정확하고, 추가 의존성이 없다(프로토콜은 newline-delimited JSON-RPC 2.0).
 
-fn mcp_input_schema(params: &Value) -> Value {
-    let mut props = serde_json::Map::new();
-    let mut required: Vec<String> = Vec::new();
-    if let Some(obj) = params.as_object() {
-        for (k, p) in obj {
-            let desc = p["description"].as_str().unwrap_or("");
-            let mut schema = match p["type"].as_str().unwrap_or("string") {
-                "number" => json!({"type": "number"}),
-                "boolean" => json!({"type": "boolean"}),
-                "string[]" => json!({"type": "array", "items": {"type": "string"}}),
-                "number[]" => json!({"type": "array", "items": {"type": "number"}}),
-                "json" => json!({}),
-                _ => json!({"type": "string"}),
-            };
-            if let Some(o) = schema.as_object_mut() {
-                o.insert("description".into(), json!(desc));
-                if let Some(e) = p.get("enum") {
-                    if !e.is_null() {
-                        o.insert("enum".into(), e.clone());
-                    }
-                }
-            }
-            props.insert(k.clone(), schema);
-            if p["required"].as_bool().unwrap_or(false) {
-                required.push(k.clone());
+// 발견형 메타툴 3개(P3). 전 명령(~347)을 eager tool 로 평탄 노출하지 않는다 — 명령 수가 늘어도
+// tool 수 불변. MCP tool 이름은 [a-zA-Z0-9_-] 만 → 점 대신 밑줄(soksak_commands). 발견 경로를
+// description 에 박는다(트리거 = description, P5). 핸들러 로직 0 — 전부 substrate 위임(P7).
+fn meta_tools() -> Vec<Value> {
+    vec![
+        json!({
+            "name": "soksak_commands",
+            "description": "Discover soksak commands. Call this FIRST when controlling soksak — returns the domain map and command catalog (name+description). Pass `domain` to filter one domain (e.g. panel, browser, window).",
+            "inputSchema": {"type": "object", "properties": {
+                "domain": {"type": "string", "description": "domain prefix filter (omit = all)"}
+            }},
+        }),
+        json!({
+            "name": "soksak_help",
+            "description": "Get one soksak command's schema (params/returns/errors/examples). Call after soksak_commands, before running.",
+            "inputSchema": {"type": "object", "required": ["name"], "properties": {
+                "name": {"type": "string", "description": "command name, e.g. panel.split"}
+            }},
+        }),
+        json!({
+            "name": "soksak_run",
+            "description": "Run any soksak command. `command` is a name discovered via soksak_commands/soksak_help; `params` is that command's parameters.",
+            "inputSchema": {"type": "object", "required": ["command"], "properties": {
+                "command": {"type": "string", "description": "command name, e.g. panel.split"},
+                "params": {"type": "object", "description": "command parameters"},
+                "window": {"type": "string", "description": "target window label (omit = active)"},
+                "pane": {"type": "string", "description": "target pane id (omit = default)"},
+                "timeoutMs": {"type": "number", "description": "response wait cap (ms)"}
+            }},
+        }),
+    ]
+}
+
+// 메타툴 디스패치. 반환 (text, is_error). substrate(state.commands/socket)만 호출 — thin(P7).
+fn mcp_call_meta(name: &str, args: &Value) -> Result<(String, bool), String> {
+    match name {
+        "soksak_commands" => {
+            let cmds = fetch_commands()?;
+            let domain = args["domain"].as_str();
+            let brief: Vec<Value> = cmds
+                .iter()
+                .filter(|c| match domain {
+                    Some(d) => c["name"]
+                        .as_str()
+                        .is_some_and(|n| n == d || n.starts_with(&format!("{d}."))),
+                    None => true,
+                })
+                // 발견용 — 이름+설명만. 파라미터 전량은 soksak_help 가 온디맨드(P3·P5).
+                .map(|c| json!({ "name": c["name"], "description": c["description"] }))
+                .collect();
+            let text = format!(
+                "# 도메인 지도\n{}\n# 명령 {}{}\n{}",
+                domain_map(&cmds),
+                brief.len(),
+                domain.map(|d| format!(" (domain={d})")).unwrap_or_default(),
+                serde_json::to_string_pretty(&brief).unwrap_or_default(),
+            );
+            Ok((text, false))
+        }
+        "soksak_help" => {
+            let cmd = args["name"].as_str().ok_or("name 필수")?;
+            let cmds = fetch_commands()?;
+            match cmds.iter().find(|c| c["name"] == cmd) {
+                Some(c) => Ok((format_command_md(c), false)),
+                None => Ok((format!("알 수 없는 명령: {cmd} (soksak_commands 로 목록 확인)"), true)),
             }
         }
+        "soksak_run" => {
+            let command = args["command"].as_str().ok_or("command 필수")?;
+            let params = args.get("params").cloned().unwrap_or(Value::Null);
+            let window = args["window"].as_str().map(String::from);
+            let pane = args["pane"].as_str().map(String::from);
+            let timeout = args["timeoutMs"].as_u64();
+            let v = send_request(command, params, pane, window, timeout)?;
+            let ok = v.get("ok").and_then(Value::as_bool).unwrap_or(false);
+            let text = serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string());
+            Ok((text, !ok))
+        }
+        other => Err(format!("알 수 없는 도구: {other}")),
     }
-    json!({"type": "object", "properties": props, "required": required})
 }
 
 fn mcp_reply(id: &Value, result: Value) {
@@ -315,47 +465,51 @@ fn run_mcp() -> ExitCode {
                     &id,
                     json!({
                         "protocolVersion": ver,
-                        "capabilities": {"tools": {}},
+                        "capabilities": {"tools": {}, "resources": {}},
                         "serverInfo": {"name": "soksak", "version": env!("CARGO_PKG_VERSION")},
                     }),
                 );
             }
             ("ping", Some(id)) => mcp_reply(&id, json!({})),
-            ("tools/list", Some(id)) => match fetch_commands() {
-                Err(e) => mcp_error(&id, -32000, &e),
-                Ok(cmds) => {
-                    let tools: Vec<Value> = cmds
-                        .iter()
-                        .map(|c| {
-                            let name = c["name"].as_str().unwrap_or("").replace('.', "_");
-                            json!({
-                                "name": name,
-                                "description": c["description"].as_str().unwrap_or(""),
-                                "inputSchema": mcp_input_schema(&c["params"]),
-                            })
-                        })
-                        .collect();
-                    mcp_reply(&id, json!({"tools": tools}));
-                }
-            },
+            // 발견형 메타툴 3개 고정(P3). 명령 카탈로그는 soksak_commands 가 온디맨드.
+            ("tools/list", Some(id)) => mcp_reply(&id, json!({ "tools": meta_tools() })),
             ("tools/call", Some(id)) => {
                 let name = msg["params"]["name"].as_str().unwrap_or("");
-                let method = name.replace('_', ".");
-                let args = msg["params"]["arguments"].clone();
-                match request(&method, args) {
+                let args = &msg["params"]["arguments"];
+                match mcp_call_meta(name, args) {
                     Err(e) => mcp_error(&id, -32000, &e),
-                    Ok(v) => {
-                        let ok = v.get("ok").and_then(Value::as_bool).unwrap_or(false);
-                        let text =
-                            serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string());
-                        mcp_reply(
-                            &id,
-                            json!({
-                                "content": [{"type": "text", "text": text}],
-                                "isError": !ok,
-                            }),
-                        );
-                    }
+                    Ok((text, is_error)) => mcp_reply(
+                        &id,
+                        json!({
+                            "content": [{"type": "text", "text": text}],
+                            "isError": is_error,
+                        }),
+                    ),
+                }
+            }
+            // 라이브 SKILL.md 를 stdio 로 서빙(P8 — 파일/심링크/FUSE 0).
+            ("resources/list", Some(id)) => mcp_reply(
+                &id,
+                json!({ "resources": [{
+                    "uri": "soksak://skill",
+                    "name": "soksak-control",
+                    "description": "soksak 제어 스킬(라이브 도메인 지도, sok commands 파생)",
+                    "mimeType": "text/markdown",
+                }]}),
+            ),
+            ("resources/read", Some(id)) => {
+                let uri = msg["params"]["uri"].as_str().unwrap_or("");
+                if uri == "soksak://skill" {
+                    mcp_reply(
+                        &id,
+                        json!({ "contents": [{
+                            "uri": uri,
+                            "mimeType": "text/markdown",
+                            "text": skill_doc(),
+                        }]}),
+                    );
+                } else {
+                    mcp_error(&id, -32002, &format!("알 수 없는 리소스: {uri}"));
                 }
             }
             (_, None) => {} // notification(initialized 등) — 무응답
@@ -365,11 +519,157 @@ fn run_mcp() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-// ── 스킬 설치(Claude/Gemini/Codex) ───────────────────────────────────────────
+// ── MCP 클라이언트 등록(sok mcp install) ─────────────────────────────────────
+// `sok mcp` 서버를 외부 에이전트(claude/codex/gemini)의 MCP 클라이언트 config 에 배선한다.
+// 네이티브 CLI(`<tool> mcp add`)를 셸아웃 — 각 도구가 자기 config 포맷·병합·멱등을 소유(P7·P10).
+// 우리가 TOML/JSON 직접 병합하면 사용자 config 손상 위험. env SOKSAK_SOCKET 핀 = 환경 묶임(P9) 일관.
 
-const SKILL_BODY: &str = r#"soksak is a terminal app with a 3-level layout: projects (t*) → contents (c*, tabs of
-split grids) → panels (g*, split groups) holding views (v*: terminal / file editor /
-browser; terminals contain panes p*). Every feature is exposed as a `sok` CLI command.
+// 설치 핀 환경(ENV_OVERRIDE=--env > SOKSAK_ENV > argv0). SOKSAK_SOCKET 절대경로는 핀 대상 아님(env 토큰 필요).
+fn pin_env() -> Result<String, String> {
+    let e = ENV_OVERRIDE
+        .get()
+        .cloned()
+        .flatten()
+        .or_else(|| std::env::var("SOKSAK_ENV").ok().filter(|s| !s.is_empty()))
+        .unwrap_or_else(|| {
+            env_from_prog(&std::env::args().next().unwrap_or_default()).to_string()
+        });
+    validate_env(&e).map(String::from)
+}
+
+// env 토큰 → MCP 서버 이름(클라이언트에서 세 환경 공존). app→soksak, dev→soksak-dev, debug→soksak-debug.
+fn server_name_for_env(env: &str) -> String {
+    match env {
+        "app" => "soksak".to_string(),
+        other => format!("soksak-{other}"),
+    }
+}
+
+// `<tool> mcp add` argv 빌더(순수). 조사 확정 문법(2026 공식문서). server=서버명, sock=핀 소켓, sok=sok 절대경로.
+fn mcp_add_argv(
+    tool: &str,
+    server: &str,
+    sock: &str,
+    sok: &str,
+) -> Result<(String, Vec<String>), String> {
+    let envpair = format!("SOKSAK_SOCKET={sock}");
+    let v = |xs: &[&str]| xs.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    match tool {
+        // claude mcp add --scope user --env K=V <name> -- <sok> mcp
+        "claude" => Ok((
+            "claude".into(),
+            v(&["mcp", "add", "--scope", "user", "--env", &envpair, server, "--", sok, "mcp"]),
+        )),
+        // codex mcp add <name> --env K=V -- <sok> mcp
+        "codex" => Ok((
+            "codex".into(),
+            v(&["mcp", "add", server, "--env", &envpair, "--", sok, "mcp"]),
+        )),
+        // gemini mcp add <name> -e K=V -s user <sok> mcp  (flags before command, per docs)
+        "gemini" => Ok((
+            "gemini".into(),
+            v(&["mcp", "add", server, "-e", &envpair, "-s", "user", sok, "mcp"]),
+        )),
+        other => Err(format!("알 수 없는 도구: {other}")),
+    }
+}
+
+fn run_mcp_install(args: &[String]) -> ExitCode {
+    let (mut claude, mut codex, mut gemini) = (false, false, false);
+    for a in args {
+        match a.as_str() {
+            "--claude" => claude = true,
+            "--codex" => codex = true,
+            "--gemini" => gemini = true,
+            "--all" => {
+                claude = true;
+                codex = true;
+                gemini = true;
+            }
+            other => {
+                eprintln!("알 수 없는 옵션: {other}");
+                eprintln!("사용: sok mcp install [--claude|--codex|--gemini|--all] [--env dev|debug|app]");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+    if !claude && !codex && !gemini {
+        claude = true;
+        codex = true;
+        gemini = true; // 기본 --all
+    }
+
+    let env = match pin_env() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let server = server_name_for_env(&env);
+    let sock = match socket_path_for_env(&env) {
+        Ok(p) => p.to_string_lossy().to_string(),
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    // sok 절대경로(현재 실행 파일). env SOKSAK_SOCKET 핀이 환경을 결정하므로 어느 sok 든 무방.
+    let sok = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.to_str().map(String::from))
+        .unwrap_or_else(|| "sok".to_string());
+
+    let mut failed = false;
+    for (tool, on) in [("claude", claude), ("codex", codex), ("gemini", gemini)] {
+        if !on {
+            continue;
+        }
+        let (prog, argv) = match mcp_add_argv(tool, &server, &sock, &sok) {
+            Ok(x) => x,
+            Err(e) => {
+                eprintln!("{tool}  ✗ {e}");
+                failed = true;
+                continue;
+            }
+        };
+        match std::process::Command::new(&prog).args(&argv).status() {
+            Ok(st) if st.success() => println!("{tool}  ✓ {server} → SOKSAK_SOCKET={sock}"),
+            Ok(st) => {
+                eprintln!("{tool}  ✗ {prog} 종료코드 {:?}", st.code());
+                failed = true;
+            }
+            Err(e) => {
+                eprintln!("{tool}  ✗ {prog} 실행 실패(미설치?): {e}");
+                failed = true;
+            }
+        }
+    }
+    if failed {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+// ── 트리거 스킬(라이브 도메인 지도) ──────────────────────────────────────────
+// 스킬은 오리엔테이션이다(P5) — 멘탈 모델·주소 모델·검증 워크플로 + 도메인 지도(목차)만 담고,
+// per-command 카탈로그(이름/params/returns)는 `sok commands`/`sok help`(목차의 본문)에 맡긴다.
+// 도메인 지도는 손으로 나열(P1 위반)하지 않고 install/serve 시 라이브 카탈로그에서 파생한다.
+
+// frontmatter description 이 트리거(자연어 자동발동, P5). Claude·Codex·Gemini 동일 포맷.
+const SKILL_FRONTMATTER: &str = "---\nname: soksak-control\ndescription: Control the soksak terminal app via the `sok` CLI — discover and run any soksak command to split/merge/close panels, open terminals/browsers/editors, run and read terminal output, drive TUIs, automate the embedded browser DOM, and manage windows. Use whenever asked to manipulate the soksak layout or automate anything inside soksak.\n---\n";
+
+const SKILL_BODY_HEAD: &str = r#"# Controlling soksak with `sok`
+
+> AUTO-GENERATED by `sok skill install` — edits are overwritten. Source of truth is `sok commands`.
+
+Orientation only. `sok commands` (catalog) and `sok help <cmd>` (one command's schema) are the
+live single source of truth — this file is a map, not the full catalog.
+
+soksak is a terminal app with a 3-level layout: projects (t*) -> contents (c*, tabs of split
+grids) -> panels (g*, split groups) holding views (v*: terminal / file editor / browser;
+terminals contain panes p*). Every feature is a `sok` command.
 
 ## Address model (targeting)
 
@@ -380,78 +680,114 @@ browser; terminals contain panes p*). Every feature is exposed as a `sok` CLI co
 
 ## Workflow — always verify
 
-1. `sok state.tree` to discover targets.
-2. Run the command. Mutations return resulting ids/state, e.g. panel.split →
+1. `sok commands` (or `sok commands '{"domain":"panel"}'`) to discover; `sok help <cmd>` for one schema.
+2. `sok state.tree` to discover live targets.
+3. Run the command. Mutations return resulting ids/state, e.g. panel.split ->
    `{"ok":true,"groupId":"g4","viewId":"v5","paneId":"p6"}`.
-3. Verify from the response; cross-check with `sok state.tree` or `sok term.read`.
-4. Errors are structured: `{"ok":false,"code":"TARGET_NOT_FOUND|LAST_ITEM|INVALID_PARAMS|TIMEOUT","message":...}`.
+4. Verify from the response; cross-check with `sok state.tree` or `sok term.read`.
+5. Errors are structured: `{"ok":false,"code":"TARGET_NOT_FOUND|LAST_ITEM|INVALID_PARAMS|TIMEOUT","message":...}`.
 
-## Command domains (full schemas: `sok commands`, one command: `sok help <cmd>`)
+## Domain map (table of contents — full schemas via `sok commands` / `sok help <cmd>`)
 
-- state: tree, context, commands
-- project: list, create, close, activate, rename, sidebar.toggle
-- content: list, create, close, activate, rename (tabs of split grids; `+` menu equivalent)
-- panel: list, split, merge, move, close, focus, resize (split-window management)
-- view: list, open, close, activate, move (tabs inside a panel: terminal/claude/codex/browser)
-- pane: list, split, close, focus (splits inside one terminal view)
-- term: read, send, exec, cwd (terminal I/O — your eyes and hands)
-- browser: open, navigate, back, forward, reload, eval (returns JSON result)
-- browser.dom: text, html, query, click, fill, submit, waitFor (DOM control, all return results)
-- bookmark: list, add, remove / editor: open, save, close / settings: get, set / theme.set
+"#;
 
+const SKILL_BODY_TAIL: &str = r#"
 ## Recipes
 
 - Split right and run claude: `sok panel.split '{"side":"right","program":"claude"}'`
-- Run a command and read output: `sok term.exec '{"cmd":"git status"}'` then
-  `sok term.read '{"lines":40}'`
-- Drive a TUI: `sok term.send '{"text":"\u001b[B"}'` (arrow down), `'{"text":"\r"}'` (enter),
-  `'{"text":"\u0003"}'` (ctrl-c)
-- Browser automation: `sok browser.open '{"url":"https://example.com"}'` →
-  `sok browser.dom.fill '{"selector":"input[name=q]","text":"hello"}'` →
-  `sok browser.dom.click '{"selector":"button[type=submit]"}'` →
-  `sok browser.dom.waitFor '{"selector":".results"}'` → `sok browser.dom.text`
+- Run a command and read output: `sok term.exec '{"cmd":"git status"}'` then `sok term.read '{"lines":40}'`
+- Drive a TUI: `sok term.send` with JSON text like `[B` (arrow down), `\r` (enter), `` (ctrl-c)
+- Browser automation: `sok browser.open` -> `sok browser.dom.fill` -> `sok browser.dom.click` -> `sok browser.dom.waitFor` -> `sok browser.dom.text`
 
 ## Cautions
 
-- close commands are destructive: panel.close removes every tab in the panel; the last
-  project/content/view/pane is protected (LAST_ITEM error).
+- close commands are destructive: panel.close removes every tab in the panel; the last project/content/view/pane is protected (LAST_ITEM error).
 - term.send writes raw bytes to the PTY; term.exec appends Enter.
 - browser.eval runs arbitrary JS in the page; `return` a JSON-serializable value.
 "#;
 
-const MARKER_START: &str = "<!-- soksak-control:start -->";
-const MARKER_END: &str = "<!-- soksak-control:end -->";
+// 앱 미가동(소켓 없음) 시 fallback 도메인 지도 — 코어 도메인만(플러그인은 라이브일 때만 발견).
+const CORE_DOMAIN_MAP: &str = "\
+- state: tree, context, commands
+- project: list, create, activate, ...
+- content: list, create, activate, ...
+- panel: split, merge, move, resize, ...
+- pane: split, focus, close, ...
+- view: open, activate, move, ...
+- window: new, list, focus, snapshot, ...
+- term: read, send, exec, cwd
+- browser: open, navigate, eval, ...
+- browser.dom: query, text, click, fill, ...
+- editor / explorer / git / bookmark / clipboard / data / secret / schedule / notify / net / theme / settings / ui
+- plugin (+ plugin.<id>.*): dynamic — `sok commands` / `sok plugin.list` (app down — live list omitted)
+";
 
-fn skill_md() -> String {
-    format!(
-        "---\nname: soksak-control\ndescription: Control the soksak terminal app via the `sok` CLI — split/merge/close panels, open terminals/browsers, run and read terminal commands, drive TUIs, and automate the embedded browser DOM. Use whenever asked to manipulate the soksak window layout or automate anything inside soksak.\n---\n\n# Controlling soksak with `sok`\n\n{SKILL_BODY}"
-    )
+// 카탈로그(catalogJson 배열) → 도메인 지도 markdown(순수). 도메인별 1줄(명령 수 + 대표 몇 개).
+// 플러그인 명령(plugin.*)은 한 줄로 collapse(동적 — 발견 명령 안내). P5 — per-command 전량 아님.
+fn domain_map(cmds: &[Value]) -> String {
+    use std::collections::BTreeMap;
+    let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for c in cmds {
+        let Some(name) = c["name"].as_str() else { continue };
+        if name.is_empty() {
+            continue;
+        }
+        let domain = if name.starts_with("plugin.") {
+            "plugin".to_string()
+        } else if name.starts_with("browser.dom.") {
+            "browser.dom".to_string()
+        } else {
+            name.split('.').next().unwrap_or(name).to_string()
+        };
+        let short = name
+            .strip_prefix(&format!("{domain}."))
+            .unwrap_or(name)
+            .to_string();
+        groups.entry(domain).or_default().push(short);
+    }
+    let mut out = String::new();
+    for (domain, mut names) in groups {
+        names.sort();
+        if domain == "plugin" {
+            out.push_str(&format!(
+                "- plugin ({}): dynamic — `sok commands` / `sok plugin.list`\n",
+                names.len()
+            ));
+            continue;
+        }
+        let reps: Vec<&str> = names.iter().take(3).map(String::as_str).collect();
+        let more = if names.len() > 3 { ", ..." } else { "" };
+        out.push_str(&format!(
+            "- {domain} ({}): {}{}\n",
+            names.len(),
+            reps.join(", "),
+            more
+        ));
+    }
+    out
 }
 
-fn marker_section() -> String {
-    format!("{MARKER_START}\n## Controlling soksak with `sok`\n\n{SKILL_BODY}{MARKER_END}\n")
+// 도메인 지도(주입)로 SKILL.md 전문 조립(순수). frontmatter + 오리엔테이션 본문 + 지도.
+fn skill_doc_with(map: &str) -> String {
+    format!("{SKILL_FRONTMATTER}\n{SKILL_BODY_HEAD}{map}{SKILL_BODY_TAIL}")
 }
 
-// 마커 블록을 추가/교체(멱등). 파일이 없으면 생성.
-fn upsert_marker(path: &Path) -> Result<(), String> {
-    let existing = std::fs::read_to_string(path).unwrap_or_default();
-    let section = marker_section();
-    let next = match (existing.find(MARKER_START), existing.find(MARKER_END)) {
-        (Some(s), Some(e)) if e > s => {
-            let after = e + MARKER_END.len();
-            // 기존 블록만 교체(마커 뒤 개행 하나까지 흡수).
-            let tail = existing[after..].strip_prefix('\n').unwrap_or(&existing[after..]);
-            format!("{}{}{}", &existing[..s], section, tail)
-        }
-        _ => {
-            if existing.is_empty() {
-                section
-            } else {
-                format!("{}\n{}", existing.trim_end(), section)
-            }
-        }
+// 라이브 SKILL.md. 앱 가동이면 카탈로그에서 도메인 지도 파생, 미가동이면 코어 지도 fallback.
+fn skill_doc() -> String {
+    let map = match fetch_commands() {
+        Ok(cmds) => domain_map(&cmds),
+        Err(_) => CORE_DOMAIN_MAP.to_string(),
     };
-    std::fs::write(path, next).map_err(|e| format!("{} 쓰기 실패: {e}", path.display()))
+    skill_doc_with(&map)
+}
+
+// 트리거 스킬 SKILL.md 를 도구별 경로에 쓴다(P10 — 우리 전용 디렉토리, 전체 재생성).
+// claude=.claude/skills/, codex·gemini=.agents/skills/(2026 공식문서 확정, 공유 네임스페이스).
+fn write_skill(path: &Path, doc: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(path, doc).map_err(|e| format!("{} 쓰기 실패: {e}", path.display()))
 }
 
 fn run_skill(args: &[String]) -> ExitCode {
@@ -493,36 +829,29 @@ fn run_skill(args: &[String]) -> ExitCode {
         codex = true; // 기본 --all
     }
 
-    let mut failed = false;
+    let doc = skill_doc();
+    // codex·gemini 는 같은 .agents/skills/ 경로(공유) — 한 번만 쓰면 둘 다 커버.
+    let mut targets: Vec<(&str, PathBuf)> = Vec::new();
     if claude {
-        let p = dir.join(".claude/skills/soksak-control/SKILL.md");
-        let r = std::fs::create_dir_all(p.parent().unwrap())
-            .map_err(|e| e.to_string())
-            .and_then(|_| std::fs::write(&p, skill_md()).map_err(|e| e.to_string()));
-        match r {
-            Ok(_) => println!("claude  ✓ {}", p.display()),
-            Err(e) => {
-                eprintln!("claude  ✗ {e}");
-                failed = true;
-            }
-        }
+        targets.push(("claude", dir.join(".claude/skills/soksak-control/SKILL.md")));
     }
-    if gemini {
-        let p = dir.join("GEMINI.md");
-        match upsert_marker(&p) {
-            Ok(_) => println!("gemini  ✓ {}", p.display()),
-            Err(e) => {
-                eprintln!("gemini  ✗ {e}");
-                failed = true;
-            }
-        }
+    if codex || gemini {
+        let label = if codex && gemini {
+            "codex+gemini"
+        } else if codex {
+            "codex"
+        } else {
+            "gemini"
+        };
+        targets.push((label, dir.join(".agents/skills/soksak-control/SKILL.md")));
     }
-    if codex {
-        let p = dir.join("AGENTS.md");
-        match upsert_marker(&p) {
-            Ok(_) => println!("codex   ✓ {}", p.display()),
+
+    let mut failed = false;
+    for (label, path) in targets {
+        match write_skill(&path, &doc) {
+            Ok(_) => println!("{label}  ✓ {}", path.display()),
             Err(e) => {
-                eprintln!("codex   ✗ {e}");
+                eprintln!("{label}  ✗ {e}");
                 failed = true;
             }
         }
@@ -531,5 +860,166 @@ fn run_skill(args: &[String]) -> ExitCode {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // argv0 접미사 → env 토큰(busybox 디스패치). 경로 접두 무시.
+    #[test]
+    fn argv0_maps_to_env() {
+        assert_eq!(env_from_prog("sok"), "app");
+        assert_eq!(env_from_prog("/usr/local/bin/sok"), "app");
+        assert_eq!(env_from_prog("sok-dev"), "dev");
+        assert_eq!(env_from_prog("/path/to/sok-dev"), "dev");
+        assert_eq!(env_from_prog("sok-debug"), "debug");
+        assert_eq!(env_from_prog("target/debug/sok-debug"), "debug");
+    }
+
+    // env 토큰 검증 — dev|debug|app 만.
+    #[test]
+    fn env_validation_rejects_unknown() {
+        assert!(validate_env("dev").is_ok());
+        assert!(validate_env("debug").is_ok());
+        assert!(validate_env("app").is_ok());
+        assert!(validate_env("prod").is_err());
+        assert!(validate_env("release").is_err());
+        assert!(validate_env("").is_err());
+    }
+
+    // env 토큰 → 소켓 파일명(identifier 와 일치).
+    #[test]
+    fn socket_name_per_env() {
+        assert_eq!(socket_name_for_env("dev"), "com.soksak.dev.sock");
+        assert_eq!(socket_name_for_env("debug"), "com.soksak.debug.sock");
+        assert_eq!(socket_name_for_env("app"), "com.soksak.app.sock");
+    }
+
+    // 소켓 타겟 우선순위: SOKSAK_SOCKET > --env > SOKSAK_ENV > argv0.
+    #[test]
+    fn resolve_priority() {
+        // SOKSAK_SOCKET(명시 경로) 최우선.
+        match resolve_target(Some("/x.sock".into()), Some("dev".into()), Some("debug".into()), "sok-dev") {
+            SockTarget::Explicit(p) => assert_eq!(p, "/x.sock"),
+            _ => panic!("SOKSAK_SOCKET 이 최우선이어야"),
+        }
+        // --env 가 SOKSAK_ENV·argv0 보다 우선.
+        match resolve_target(None, Some("dev".into()), Some("debug".into()), "sok-debug") {
+            SockTarget::Env(e) => assert_eq!(e, "dev"),
+            _ => panic!("--env 우선이어야"),
+        }
+        // SOKSAK_ENV 가 argv0 보다 우선.
+        match resolve_target(None, None, Some("debug".into()), "sok-dev") {
+            SockTarget::Env(e) => assert_eq!(e, "debug"),
+            _ => panic!("SOKSAK_ENV 우선이어야"),
+        }
+        // 아무것도 없으면 argv0 가 결정.
+        match resolve_target(None, None, None, "sok-dev") {
+            SockTarget::Env(e) => assert_eq!(e, "dev"),
+            _ => panic!("argv0 fallback 이어야"),
+        }
+        // 빈 문자열은 무시(설정 안 된 것으로 취급).
+        match resolve_target(Some(String::new()), Some(String::new()), None, "sok") {
+            SockTarget::Env(e) => assert_eq!(e, "app"),
+            _ => panic!("빈 값 무시 후 argv0 여야"),
+        }
+    }
+
+    // 도메인 지도: 도메인별 1줄, 플러그인 collapse, per-command params 미포함(P5).
+    #[test]
+    fn domain_map_groups_and_collapses() {
+        let cmds = vec![
+            json!({"name":"panel.split","params":{"side":{"type":"string"}}}),
+            json!({"name":"panel.merge"}),
+            json!({"name":"browser.navigate"}),
+            json!({"name":"browser.dom.click"}),
+            json!({"name":"plugin.soksak-plugin-clip.clip.capture"}),
+            json!({"name":"plugin.soksak-plugin-clip.clip.list"}),
+        ];
+        let map = domain_map(&cmds);
+        assert!(map.contains("- panel (2): merge, split"), "{map}");
+        assert!(map.contains("- browser (1): navigate"), "{map}");
+        assert!(map.contains("- browser.dom (1): click"), "{map}");
+        assert!(map.contains("- plugin (2): dynamic"), "{map}");
+        assert!(!map.contains("clip.capture"), "플러그인 per-command 가 새면 안 됨: {map}");
+        assert!(!map.contains("\"type\""), "params 가 지도에 포함되면 안 됨: {map}");
+    }
+
+    // skill_doc_with: frontmatter(name+description) + 주입된 도메인 지도. per-command 카탈로그 없음.
+    #[test]
+    fn skill_doc_has_frontmatter_and_map_no_catalog() {
+        let doc = skill_doc_with("- panel (2): merge, split\n");
+        assert!(doc.starts_with("---\nname: soksak-control\n"), "frontmatter 누락");
+        assert!(doc.contains("description:"), "description 트리거 누락");
+        assert!(doc.contains("- panel (2): merge, split"), "도메인 지도 주입 누락");
+        assert!(doc.contains("AUTO-GENERATED"), "생성 헤더 누락(P10)");
+        assert!(doc.contains("`sok commands`"), "발견 명령 안내 누락(P5)");
+        assert!(!doc.contains("\"params\""), "per-command params 가 스킬에 새면 안 됨");
+    }
+
+    // env 토큰 → MCP 서버 이름(세 환경 공존).
+    #[test]
+    fn server_name_per_env() {
+        assert_eq!(server_name_for_env("app"), "soksak");
+        assert_eq!(server_name_for_env("dev"), "soksak-dev");
+        assert_eq!(server_name_for_env("debug"), "soksak-debug");
+    }
+
+    // `<tool> mcp add` argv 빌더(2026 공식문서 문법). env SOKSAK_SOCKET 핀.
+    #[test]
+    fn mcp_add_argv_per_tool() {
+        let (p, a) = mcp_add_argv("claude", "soksak-dev", "/s.sock", "/bin/sok").unwrap();
+        assert_eq!(p, "claude");
+        assert_eq!(
+            a,
+            vec![
+                "mcp", "add", "--scope", "user", "--env", "SOKSAK_SOCKET=/s.sock", "soksak-dev",
+                "--", "/bin/sok", "mcp"
+            ]
+        );
+
+        let (p, a) = mcp_add_argv("codex", "soksak", "/s.sock", "/bin/sok").unwrap();
+        assert_eq!(p, "codex");
+        assert_eq!(
+            a,
+            vec!["mcp", "add", "soksak", "--env", "SOKSAK_SOCKET=/s.sock", "--", "/bin/sok", "mcp"]
+        );
+
+        let (p, a) = mcp_add_argv("gemini", "soksak-debug", "/s.sock", "/bin/sok").unwrap();
+        assert_eq!(p, "gemini");
+        assert_eq!(
+            a,
+            vec![
+                "mcp", "add", "soksak-debug", "-e", "SOKSAK_SOCKET=/s.sock", "-s", "user",
+                "/bin/sok", "mcp"
+            ]
+        );
+
+        assert!(mcp_add_argv("unknown", "x", "y", "z").is_err());
+    }
+
+    // 전역 --env 플래그 추출(어느 위치든) + 제거.
+    #[test]
+    fn take_flag_extracts_and_removes() {
+        let mut a = vec!["--env".to_string(), "dev".into(), "state.tree".into()];
+        assert_eq!(take_flag_value(&mut a, "--env"), Some("dev".into()));
+        assert_eq!(a, vec!["state.tree".to_string()]);
+
+        // 명령 뒤에 와도 추출.
+        let mut b = vec!["mcp".to_string(), "install".into(), "--env".into(), "debug".into()];
+        assert_eq!(take_flag_value(&mut b, "--env"), Some("debug".into()));
+        assert_eq!(b, vec!["mcp".to_string(), "install".into()]);
+
+        // 없으면 None, 원본 보존.
+        let mut c = vec!["state.tree".to_string()];
+        assert_eq!(take_flag_value(&mut c, "--env"), None);
+        assert_eq!(c, vec!["state.tree".to_string()]);
+
+        // 값 없는 --env 는 제거하고 None.
+        let mut d = vec!["state.tree".to_string(), "--env".into()];
+        assert_eq!(take_flag_value(&mut d, "--env"), None);
+        assert_eq!(d, vec!["state.tree".to_string()]);
     }
 }

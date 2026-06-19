@@ -117,6 +117,7 @@ pub fn spawn_terminal(
     cwd: Option<String>,
     shell: Option<String>,
     pane_id: Option<String>,
+    window_label: Option<String>,
     on_output: Channel<InvokeResponseBody>,
     manager: State<'_, PtyManager>,
 ) -> Result<u32, String> {
@@ -159,6 +160,11 @@ pub fn spawn_terminal(
     // 제어 소켓을 알 수 있게 주입 — sok CLI 가 이걸로 "내 위치" 기본 타기팅을 한다.
     if let Some(pane) = &pane_id {
         cmd.env("SOKSAK_PANE", pane);
+    }
+    // 멀티윈도우: 내 창 label 주입(PANE 과 대칭) — 터미널 안 sok 가 env 수동 지정 없이 자기 창을
+    // 기본 타겟. 없으면 코어가 활성 창으로 라우팅(ipc.rs route). 빈 문자열은 미주입.
+    if let Some(w) = window_label.filter(|w| !w.is_empty()) {
+        cmd.env("SOKSAK_WINDOW", w);
     }
     if let Some(sock) = crate::ipc::socket_path() {
         cmd.env("SOKSAK_SOCKET", sock);

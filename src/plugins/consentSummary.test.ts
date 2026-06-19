@@ -75,6 +75,20 @@ describe("consentSummary — 종속 권한 전이 표기", () => {
     const solo = mani("solo", ["ui"]);
     expect(consentSummary(solo, { solo: rt(solo) }).dependencies.plugins).toEqual([]);
   });
+
+  it("위험 명령(danger)이 동의 요약에 이름·종류로 노출(U4)", () => {
+    const m = mani("danger-demo", ["commands", "commands:destructive", "commands:inject"]);
+    m.contributes.commands = [
+      { name: "wipe", title: "지우기", danger: "destructive" },
+      { name: "send", title: "보내기", danger: "inject" },
+      { name: "list", title: "목록" }, // 위험 아님 — 제외
+    ] as PluginManifest["contributes"]["commands"];
+    const s = consentSummary(m, { "danger-demo": rt(m) });
+    expect(s.dangerousCommands).toEqual([
+      { name: "wipe", danger: "destructive" },
+      { name: "send", danger: "inject" },
+    ]);
+  });
 });
 
 describe("consentSummary — 노출 DOM 노드(동의 화면)", () => {
