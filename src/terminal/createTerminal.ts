@@ -9,6 +9,7 @@ import "@xterm/xterm/css/xterm.css";
 
 import { WebkitImeAddon } from "../vendor/xterm-addon-webkit-ime";
 import { setupShellIntegration } from "./shellIntegration";
+import { currentWindowLabel } from "../lib/webviewLabels";
 import { onLiveResizeEnd } from "./liveResize";
 import { darkTheme } from "./theme";
 import type { TerminalSettings, XtermRenderer } from "../state/settings";
@@ -300,6 +301,8 @@ export async function createTerminal(
     cwd: options.cwd ?? null,
     shell: options.shell ?? null,
     paneId: options.paneId ?? null,
+    // 내 창 label(ipc.rs 라우팅 label 과 동일 단일 진실) — 터미널 안 sok 의 기본 타겟 창.
+    windowLabel: currentWindowLabel() || null,
     onOutput,
   });
 
