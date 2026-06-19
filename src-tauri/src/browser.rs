@@ -641,6 +641,24 @@ pub fn browser_navigate(app: AppHandle, label: String, url: String) -> Result<()
     Ok(())
 }
 
+// 인스펙트(devtools) 토글 — 이 브라우저 child webview 의 Web Inspector 를 연다/닫는다(별도 탭 아님).
+// WKWebView 는 CDP 가 없어 OS 인스펙터(Safari)가 뜬다. devtools 는 debug 빌드에서만 활성(release 는 no-op).
+// 반환 = 토글 후 열림 여부(UI 버튼 on 상태 동기화).
+#[tauri::command]
+pub fn browser_devtools(app: AppHandle, label: String) -> Result<bool, String> {
+    if let Some(wv) = app.get_webview(&label) {
+        if wv.is_devtools_open() {
+            wv.close_devtools();
+            Ok(false)
+        } else {
+            wv.open_devtools();
+            Ok(true)
+        }
+    } else {
+        Ok(false)
+    }
+}
+
 // 이전/이후: webview 의 세션 히스토리 사용.
 #[tauri::command]
 pub fn browser_history(app: AppHandle, label: String, delta: i32) -> Result<(), String> {

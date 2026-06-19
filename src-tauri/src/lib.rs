@@ -259,6 +259,7 @@ pub fn run() {
             browser::browser_open,
             browser::browser_bounds,
             browser::browser_navigate,
+            browser::browser_devtools,
             browser::browser_history,
             browser::browser_visible,
             browser::browser_close,
