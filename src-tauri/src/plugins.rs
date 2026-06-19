@@ -82,12 +82,15 @@ pub struct PluginScanEntry {
     dir: String,
     dir_name: String,
     manifest: Option<String>,
+    // .soksak.json 원문(있으면) — 폴더 자기 기술 설치/dev 상태(version="dev"|<semver>, repo, branch).
+    // 단일 폴더 모델: 같은 ~/.soksak/plugins 안에서 dev(작업물)와 installed(릴리스)를 이 파일로 구분.
+    state: Option<String>,
     error: Option<String>,
 }
 
 // 설치 디렉토리의 직속 하위 디렉토리 전부(파일/"." 시작 제외 — 설치 중 .tmp-* 도 자연
-// 제외). plugin.json 원문만 나르고 내용 검증은 프론트 스펙(단일진실)이 담당. 읽기 실패는
-// 침묵 누락 대신 error 로 노출(§0-3 거부 사유 표시).
+// 제외). plugin.json·.soksak.json 원문만 나르고 내용 검증은 프론트 스펙(단일진실)이 담당.
+// 읽기 실패는 침묵 누락 대신 error 로 노출(§0-3 거부 사유 표시).
 #[tauri::command]
 pub fn plugins_scan() -> Result<Vec<PluginScanEntry>, String> {
     let base = plugins_dir()?;
@@ -103,15 +106,41 @@ pub fn plugins_scan() -> Result<Vec<PluginScanEntry>, String> {
             Ok(m) => (Some(m), None),
             Err(e) => (None, Some(format!("plugin.json 읽기 실패: {e}"))),
         };
+        let state = std::fs::read_to_string(path.join(".soksak.json")).ok();
         out.push(PluginScanEntry {
             dir: path.to_string_lossy().to_string(),
             dir_name: name,
             manifest,
+            state,
             error,
         });
     }
     out.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
     Ok(out)
+}
+
+// 설치/dev 상태 파일(.soksak.json) 기록 헬퍼 — version="dev"|<semver>, repo(원격 URL), branch.
+// 폴더가 자기 상태를 기술하므로 외부 env·전역 플래그가 불필요.
+fn write_state(dir: &Path, version: &str, repo: &str, branch: &str) {
+    let state = serde_json::json!({ "version": version, "repo": repo, "branch": branch });
+    let _ = std::fs::write(
+        dir.join(".soksak.json"),
+        serde_json::to_string_pretty(&state).unwrap_or_default(),
+    );
+}
+
+// 현재 체크아웃된 브랜치명(detached 면 "HEAD"). 실패 시 "main".
+fn current_branch(dir: &Path) -> String {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "main".to_string())
 }
 
 // 개발용 플러그인 경로 — SOKSAK_DEV_PLUGINS(':' 구분 목록)의 각 항목에서 plugin.json 을 가진
@@ -173,7 +202,7 @@ fn normalize_source(source: &str) -> String {
     source.to_string()
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug)]
 pub struct PluginInstallResult {
     dir: String,
     dir_name: String,
@@ -263,6 +292,10 @@ fn install_git_into(
         return Err(e.to_string());
     }
 
+    // .soksak.json 기록 — 설치본 자기 기술(version=설치 semver, repo, branch). dev 폴더와 구분되는 표식.
+    let version = parsed.get("version").and_then(|v| v.as_str()).unwrap_or("0.0.0");
+    write_state(&dest, version, &url, &current_branch(&dest));
+
     Ok(PluginInstallResult {
         dir: dest.to_string_lossy().to_string(),
         dir_name: id,
@@ -286,17 +319,47 @@ pub fn plugin_install_git(
 // 설치본의 로컬 수정은 지원 대상이 아니다(플러그인 개발은 plugin.dev.load).
 #[tauri::command]
 pub fn plugin_update(id: String) -> Result<PluginInstallResult, String> {
-    sanitize_id(&id)?;
-    let dir = plugins_dir()?.join(&id);
+    plugin_update_in(&plugins_dir()?, &id)
+}
+
+fn plugin_update_in(base: &Path, id: &str) -> Result<PluginInstallResult, String> {
+    sanitize_id(id)?;
+    let dir = base.join(id);
     if !dir.is_dir() {
         return Err(format!("설치되지 않은 플러그인: {id}"));
     }
+    // 기존 .soksak.json 파싱 — dev 모드(자기 작업물)는 갱신 대상 아님(reset --hard 가 작업물을 날린다).
+    // 폴더가 자기 보호. 기록된 branch 로 fetch 해 master/main 무관하게 동작.
+    let prev: Option<serde_json::Value> = std::fs::read_to_string(dir.join(".soksak.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
+    if prev
+        .as_ref()
+        .and_then(|v| v.get("version").and_then(|x| x.as_str()))
+        == Some("dev")
+    {
+        return Err("dev 모드 플러그인은 update 대상이 아님(작업물 보호)".to_string());
+    }
+    let branch = prev
+        .as_ref()
+        .and_then(|v| v.get("branch").and_then(|x| x.as_str()))
+        .map(String::from);
+    let repo = prev
+        .as_ref()
+        .and_then(|v| v.get("repo").and_then(|x| x.as_str()))
+        .unwrap_or("")
+        .to_string();
+
     set_tree_writable(&dir, true); // git fetch/reset 위해 잠금 해제(실패 시 다음 update 가 재잠금)
+    let fetch_args: Vec<&str> = match branch.as_deref() {
+        Some(b) => vec!["fetch", "origin", b],
+        None => vec!["fetch", "origin"],
+    };
     if let Err(e) = git_run(
         std::process::Command::new("git")
             .arg("-C")
             .arg(&dir)
-            .args(["fetch", "origin"]),
+            .args(&fetch_args),
     ) {
         return Err(format!("git fetch 실패: {e}"));
     }
@@ -308,12 +371,19 @@ pub fn plugin_update(id: String) -> Result<PluginInstallResult, String> {
     ) {
         return Err(format!("git reset 실패: {e}"));
     }
-    set_tree_writable(&dir, false); // 갱신 후 다시 읽기전용 잠금
     let manifest =
         std::fs::read_to_string(dir.join("plugin.json")).map_err(|_| "plugin.json 없음".to_string())?;
+    // .soksak.json version 갱신(새 manifest version). reset 는 미추적 .soksak.json 을 보존하므로 명시 갱신.
+    let new_ver = serde_json::from_str::<serde_json::Value>(&manifest)
+        .ok()
+        .and_then(|v| v.get("version").and_then(|x| x.as_str()).map(String::from))
+        .unwrap_or_else(|| "0.0.0".to_string());
+    let final_branch = branch.unwrap_or_else(|| current_branch(&dir));
+    write_state(&dir, &new_ver, &repo, &final_branch);
+    set_tree_writable(&dir, false); // 갱신 후 다시 읽기전용 잠금
     Ok(PluginInstallResult {
         dir: dir.to_string_lossy().to_string(),
-        dir_name: id,
+        dir_name: id.to_string(),
         manifest,
     })
 }
@@ -511,6 +581,60 @@ mod tests {
             .filter_map(|e| e.ok())
             .any(|e| e.file_name().to_string_lossy().starts_with(".tmp-"));
         assert!(!leftover);
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // 단일 폴더 모델: 설치 시 .soksak.json 기록, dev 모드면 update 거부(작업물 보호),
+    // 설치 모드면 기록 브랜치로 fetch+reset 후 version 갱신.
+    #[test]
+    fn plugin_update_dev_refusal_and_branch_fetch() {
+        let root = std::env::temp_dir().join(format!("soksak-plugupd-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let src = root.join("fixture-src");
+        std::fs::create_dir_all(&src).unwrap();
+        git_t(&src, &["init"]);
+        let write_manifest = |ver: &str| {
+            std::fs::write(
+                src.join("plugin.json"),
+                format!(
+                    r#"{{"spec":"soksak-plugin-spec@1","id":"upd-plugin","name":"Upd","version":"{ver}"}}"#
+                ),
+            )
+            .unwrap();
+        };
+        write_manifest("0.1.0");
+        git_t(&src, &["add", "."]);
+        git_t(&src, &["commit", "-m", "v0.1.0"]);
+
+        let base = root.join("plugins");
+        let r = install_git_into(&base, &src.to_string_lossy(), None).unwrap();
+        let dir = base.join(&r.dir_name);
+
+        // 설치가 .soksak.json 기록(version=manifest, repo=source, branch=현재).
+        let state: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join(".soksak.json")).unwrap()).unwrap();
+        assert_eq!(state["version"], "0.1.0");
+        assert_eq!(state["repo"].as_str().unwrap(), src.to_string_lossy());
+        let branch = state["branch"].as_str().unwrap().to_string();
+        assert!(!branch.is_empty());
+
+        // dev 모드면 update 거부.
+        std::fs::write(dir.join(".soksak.json"), r#"{"version":"dev","repo":"x","branch":"main"}"#)
+            .unwrap();
+        let err = plugin_update_in(&base, "upd-plugin").unwrap_err();
+        assert!(err.contains("dev 모드"), "{err}");
+
+        // 설치 모드로 복구 + src 새 버전 → update 가 fetch+reset, version 갱신.
+        write_state(&dir, "0.1.0", &src.to_string_lossy(), &branch);
+        write_manifest("0.2.0");
+        git_t(&src, &["add", "."]);
+        git_t(&src, &["commit", "-m", "v0.2.0"]);
+        let r2 = plugin_update_in(&base, "upd-plugin").unwrap();
+        assert!(r2.manifest.contains("0.2.0"), "{}", r2.manifest);
+        let state2: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join(".soksak.json")).unwrap()).unwrap();
+        assert_eq!(state2["version"], "0.2.0");
 
         let _ = std::fs::remove_dir_all(&root);
     }

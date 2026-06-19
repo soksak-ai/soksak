@@ -65,7 +65,21 @@ interface PluginScanEntry {
   dir: string;
   dir_name: string;
   manifest: string | null;
+  // .soksak.json 원문 — 폴더 자기 기술 상태(version="dev"|<semver>). 단일 폴더 모델:
+  // 같은 ~/.soksak/plugins 안에서 dev(작업물)/installed(릴리스)를 이 파일로 구분.
+  state: string | null;
   error: string | null;
+}
+
+// .soksak.json 으로 dev/installed 판정 — version="dev" 면 dev(동의 면제·update 클로버 방지). 없거나
+// 파싱 실패면 installed(레거시 설치본 호환).
+function sourceFromState(state: string | null): "installed" | "dev" {
+  if (!state) return "installed";
+  try {
+    return (JSON.parse(state) as { version?: string })?.version === "dev" ? "dev" : "installed";
+  } catch {
+    return "installed";
+  }
 }
 
 interface PluginsState {
@@ -367,7 +381,8 @@ export const usePlugins = create<PluginsState>((set, get) => {
           rejected.push({ dir: e.dir, errors: [e.error ?? "manifest 없음"] });
           continue;
         }
-        const rt = parseRuntime(e.manifest, e.dir, e.dir_name, "installed", rejected);
+        // 폴더의 .soksak.json 으로 dev/installed 판정 — 단일 폴더 안에서 작업물/릴리스 구분.
+        const rt = parseRuntime(e.manifest, e.dir, e.dir_name, sourceFromState(e.state), rejected);
         if (rt) next[rt.manifest.id] = rt;
       }
 
@@ -450,7 +465,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
           try {
             const dr = await invoke<{ dir_name: string }>("plugin_install_git", {
               source: entry.repo,
-              reference: undefined,
+              reference: entry.branch, // 레지스트리 명시 브랜치(없으면 기본 브랜치)
             });
             await get().reload();
             if (get().plugins[dr.dir_name]) {
