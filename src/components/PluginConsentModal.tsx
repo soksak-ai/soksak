@@ -69,6 +69,7 @@ export function PluginConsentModal({
   const summary = consentSummary(m, installed);
   const { plugins: pluginDeps, libraries: libs } = summary.dependencies;
   const exposedNodes = summary.exposedNodes;
+  const dangerousCommands = summary.dangerousCommands;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -161,6 +162,31 @@ export function PluginConsentModal({
                 );
               })}
             </ul>
+          )}
+
+          {/* 위험 명령 — 매니페스트 contributes.commands.danger. 원격(sok/MCP) 호출 시 게이트되는
+              파괴적/주입 명령을 동의 결정 직전에 ⚠ 로 고지(권한 다음=가장 결정적, 정직한 고지 §0-2). */}
+          {dangerousCommands.length > 0 && (
+            <>
+              <div className="dsec">{t("plugin.consent.dangerousCommands")}</div>
+              <ul className="plugin-consent-list">
+                {dangerousCommands.map((dc) => (
+                  <li
+                    key={`danger:${dc.name}`}
+                    className="plugin-consent-item caution"
+                  >
+                    <span className="plugin-consent-detail">
+                      {"⚠ "}
+                      {t(`plugin.consent.danger.${dc.danger}`)}
+                      {" — "}
+                    </span>
+                    <code className="plugin-consent-cmd">
+                      {pluginCommandName(m.id, dc.name)}
+                    </code>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
 
           {/* 기여 체크리스트 — 매니페스트 선언에서 기계적으로 파생(산문 0).
