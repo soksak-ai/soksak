@@ -333,12 +333,11 @@ fn plugin_update_in(base: &Path, id: &str) -> Result<PluginInstallResult, String
     let prev: Option<serde_json::Value> = std::fs::read_to_string(dir.join(".soksak.json"))
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok());
-    if prev
+    let cur_ver = prev
         .as_ref()
-        .and_then(|v| v.get("version").and_then(|x| x.as_str()))
-        == Some("dev")
-    {
-        return Err("dev 모드 플러그인은 update 대상이 아님(작업물 보호)".to_string());
+        .and_then(|v| v.get("version").and_then(|x| x.as_str()));
+    if cur_ver == Some("dev") || cur_ver == Some("local") {
+        return Err("dev/local 모드 플러그인은 update 대상이 아님(작업물 보호)".to_string());
     }
     let branch = prev
         .as_ref()
@@ -657,7 +656,13 @@ mod tests {
         std::fs::write(dir.join(".soksak.json"), r#"{"version":"dev","repo":"x","branch":"main"}"#)
             .unwrap();
         let err = plugin_update_in(&base, "upd-plugin").unwrap_err();
-        assert!(err.contains("dev 모드"), "{err}");
+        assert!(err.contains("update 대상이 아님"), "{err}");
+
+        // local 모드(그냥 돌아감)도 update 거부 — 작업물 보호.
+        std::fs::write(dir.join(".soksak.json"), r#"{"version":"local","repo":"","branch":""}"#)
+            .unwrap();
+        let err = plugin_update_in(&base, "upd-plugin").unwrap_err();
+        assert!(err.contains("update 대상이 아님"), "{err}");
 
         // 설치 모드로 복구 + src 새 버전 → update 가 fetch+reset, version 갱신.
         write_state(&dir, "0.1.0", &src.to_string_lossy(), &branch);

@@ -71,12 +71,14 @@ interface PluginScanEntry {
   error: string | null;
 }
 
-// .soksak.json 으로 dev/installed 판정 — version="dev" 면 dev(동의 면제·update 클로버 방지). 없거나
+// .soksak.json version 으로 판정 — "local"(그냥 돌아감)·"dev"(존재 체크) 는 둘 다 dev 소스
+// (동의 면제·update 클로버 방지=내 작업물). semver 는 installed(존재+버전 체크·갱신 대상). 없거나
 // 파싱 실패면 installed(레거시 설치본 호환).
 function sourceFromState(state: string | null): "installed" | "dev" {
   if (!state) return "installed";
   try {
-    return (JSON.parse(state) as { version?: string })?.version === "dev" ? "dev" : "installed";
+    const v = (JSON.parse(state) as { version?: string })?.version;
+    return v === "dev" || v === "local" ? "dev" : "installed";
   } catch {
     return "installed";
   }
