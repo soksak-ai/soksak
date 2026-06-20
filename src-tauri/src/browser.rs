@@ -481,6 +481,55 @@ const NEW_WINDOW_NAV: &str = r#"
 })();
 "#;
 
+// 범용 미디어 스니프 — 페이지가 스스로 요청하는 미디어 URL(m3u8/mpd/mp4/...)을 패시브 기록한다.
+// init script 라 페이지 스크립트보다 먼저 돌아 로드 시점의 요청까지 잡는다. 사이트 지식 0(어떤 페이지든
+// 자기 미디어를 요청하면 기록 — 난독화·차단과 무관, 디코드 불요). 기록만 하고 동작은 안 바꾼다(near-zero
+// 비용). 소비자는 window.__soksakMedia 를 browser_eval 로 읽는다(browser.media.sniff). 재사용 substrate.
+const MEDIA_SNIFF: &str = r#"
+(function () {
+  if (window.__soksakMedia) return;
+  var seen = {}, list = [];
+  window.__soksakMedia = list;
+  var RE = /\.(m3u8|mpd|mp4|m4s|webm|ts)(\?|#|$)/i;
+  function add(u, via) {
+    try {
+      if (!u || typeof u !== 'string') return;
+      if (u.indexOf('//') === 0) u = location.protocol + u;
+      else if (u.charAt(0) === '/') u = location.origin + u;
+      else if (!/^https?:/i.test(u)) return;
+      if (!RE.test(u)) return;
+      if (seen[u]) return;
+      seen[u] = 1;
+      list.push({ url: u, via: via, ref: location.href });
+    } catch (_) {}
+  }
+  try {
+    var ox = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (m, u) { add(u, 'xhr'); return ox.apply(this, arguments); };
+  } catch (_) {}
+  try {
+    var of = window.fetch;
+    if (of) window.fetch = function (i) {
+      try { add(typeof i === 'string' ? i : (i && i.url), 'fetch'); } catch (_) {}
+      return of.apply(this, arguments);
+    };
+  } catch (_) {}
+  try {
+    var mo = new MutationObserver(function (muts) {
+      for (var a = 0; a < muts.length; a++) {
+        var ns = muts[a].addedNodes || [];
+        for (var b = 0; b < ns.length; b++) {
+          var n = ns[b];
+          if (!n || !n.tagName) continue;
+          if ((n.tagName === 'VIDEO' || n.tagName === 'SOURCE') && n.src) add(n.src, n.tagName.toLowerCase());
+        }
+      }
+    });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+  } catch (_) {}
+})();
+"#;
+
 // 마커 네비게이션이면 새 창으로 열 대상 URL 을 추출(query_pairs 가 percent-decode).
 fn popup_target(url: &Url) -> Option<Url> {
     if url.host_str() != Some(POPUP_MARKER_HOST) {
@@ -537,9 +586,9 @@ pub fn browser_open(
     let pl_label = label.clone();
     // 상태표시줄용 hover 스크립트를 함께 주입(macOS — 메시지 핸들러가 받는다). 비-macOS 는 생략.
     #[cfg(target_os = "macos")]
-    let init_script = format!("{NEW_WINDOW_NAV}\n{}", status::HOVER_SCRIPT);
+    let init_script = format!("{NEW_WINDOW_NAV}\n{MEDIA_SNIFF}\n{}", status::HOVER_SCRIPT);
     #[cfg(not(target_os = "macos"))]
-    let init_script = NEW_WINDOW_NAV.to_string();
+    let init_script = format!("{NEW_WINDOW_NAV}\n{MEDIA_SNIFF}");
     let builder = tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(parsed))
         .initialization_script(init_script)
         // 새 창 마커(_blank 등)는 차단하고 내장 브라우저 새 창으로. URL 동기화는 여기서 하지 않는다 —
@@ -709,6 +758,89 @@ pub fn browser_close(app: AppHandle, label: String) -> Result<(), String> {
         wv.close().map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+// 숨김 미디어 추출 — 오프스크린 child webview 를 잠깐 띄워 페이지가 스스로 요청하는 미디어 URL 을
+// 코어 스니프 훅으로 수확하고 닫는다. 사용자에게 안 보이되(화면 밖), .hide() 가 아니라서 WKWebView 의
+// occlusion 스로틀(타이머·미디어 정지)을 피한다 — 레거시가 쓰던 기법. 사이트 지식 0(R3): url 만 받고
+// 페이지 자신의 요청을 가로챌 뿐 디코드·분기 없음. browser.media.sniff(보이는 탭)와 대칭인 숨김 경로.
+//
+// 플랫폼 중립: WKWebView 를 직접 만지지 않고 browser_eval 로 수확한다 — eval 이 동작하는 플랫폼이면
+// 추출도 동작한다(macOS 하드코딩 아님). 비-macOS 의 browser_eval 미구현 갭은 별도 코어 과제이며,
+// 추출은 그 위에 자동으로 올라탄다(미구현 플랫폼에선 eval 에러가 R9 로 표면화).
+#[tauri::command]
+pub async fn browser_media_extract(
+    app: AppHandle,
+    window: tauri::Window,
+    url: String,
+    timeout_ms: Option<u64>,
+) -> Result<serde_json::Value, String> {
+    use std::time::{Duration, Instant};
+    let parsed = Url::parse(&url).map_err(|e| e.to_string())?;
+    let label = format!("media-extract-{}", POPUP_SEQ.fetch_add(1, Ordering::Relaxed));
+    let init_script = format!("{NEW_WINDOW_NAV}\n{MEDIA_SNIFF}");
+    let builder = tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(parsed))
+        .initialization_script(init_script)
+        .on_navigation(|_| true);
+    // 화면 밖(-20000) — 보이지 않지만 합성기에는 살아있어 JS/미디어가 정상 동작(스로틀 회피).
+    window
+        .add_child(
+            builder,
+            LogicalPosition::new(-20000.0, -20000.0),
+            LogicalSize::new(1280.0, 720.0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let timeout = Duration::from_millis(timeout_ms.unwrap_or(15000).max(1000));
+    let start = Instant::now();
+    let mut triggered = false;
+    let mut hits = serde_json::json!([]);
+    loop {
+        let raw = browser_eval(
+            app.clone(),
+            label.clone(),
+            "return JSON.stringify(window.__soksakMedia || [])".to_string(),
+        )
+        .await
+        .unwrap_or_else(|_| "[]".to_string());
+        if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&raw) {
+            if !arr.is_empty() {
+                hits = serde_json::json!(arr);
+                // m3u8 이 잡혔으면 즉시 종료(아니면 더 기다려 본다).
+                let has_m3u8 = serde_json::from_str::<Vec<serde_json::Value>>(&raw)
+                    .ok()
+                    .map(|v| {
+                        v.iter().any(|h| {
+                            h.get("url")
+                                .and_then(|u| u.as_str())
+                                .map(|s| s.contains(".m3u8"))
+                                .unwrap_or(false)
+                        })
+                    })
+                    .unwrap_or(false);
+                if has_m3u8 {
+                    break;
+                }
+            }
+        }
+        if !triggered {
+            triggered = true;
+            let _ = browser_eval(
+                app.clone(),
+                label.clone(),
+                "try{var v=document.querySelector('video'); if(v){v.muted=true; v.play&&v.play().catch(function(){});}}catch(e){} return null;".to_string(),
+            )
+            .await;
+        }
+        if start.elapsed() >= timeout {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(400)).await;
+    }
+    if let Some(wv) = app.get_webview(&label) {
+        let _ = wv.close();
+    }
+    Ok(hits)
 }
 
 // 존재하는 브라우저 child 웹뷰 라벨 목록(b-*). 프론트 GC 가 "웹뷰 집합 ⊆ 스토어의

@@ -41,6 +41,7 @@ import { registerDataCatalog } from "./catalogData";
 import { registerSecretsCatalog } from "./catalogSecrets";
 import { registerTurnCatalog } from "./catalogTurn";
 import { registerNetworkCatalog } from "./catalogNetwork";
+import { registerMediaCatalog } from "./catalogMedia";
 import { registerClipboardCatalog } from "./catalogClipboard";
 import { registerNotifyCatalog } from "./catalogNotify";
 import { registerScheduleCatalog } from "./catalogSchedule";
@@ -1324,6 +1325,79 @@ export function registerCatalog(): void {
     },
   });
 
+  register("browser.media.extract", {
+    danger: "inject",
+    description:
+      "Extract media URLs from a page WITHOUT showing it — opens an offscreen webview, lets the page load (sniffing its own media requests via the core hook), then closes it and returns the hits. Site-agnostic (R3): takes a url only, intercepts whatever the page requests, no decode/branching. Reaches sites the webview can load (e.g. behind network/SNI blocks) but cross-origin fetch/yt-dlp cannot. Symmetric hidden counterpart of browser.media.sniff (visible tab).",
+    triggers: { ko: "미디어 추출 숨김 오프스크린 m3u8 스트림 페이지 가로채기 동영상" },
+    params: {
+      url: { type: "string", description: "Page URL to load offscreen and extract from", required: true },
+      timeoutMs: { type: "number", description: "Max wait for a media hit (ms)", default: 15000 },
+    },
+    returns: "{ urls: [{ url, via, ref }] }",
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['sok browser.media.extract \'{"url":"https://example.com/watch","timeoutMs":15000}\''],
+    handler: async (p) => {
+      if (typeof p.url !== "string" || !p.url) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "url 필요" };
+      }
+      const urls = await invoke<unknown>("browser_media_extract", {
+        url: p.url,
+        timeoutMs: typeof p.timeoutMs === "number" ? p.timeoutMs : 15000,
+      });
+      return { urls: Array.isArray(urls) ? urls : [] };
+    },
+  });
+
+  register("browser.media.sniff", {
+    danger: "inject",
+    description:
+      "Harvest media URLs (m3u8/mpd/mp4/...) that the page itself requested — captured passively by the core init-script hook (window.__soksakMedia). Site-agnostic: catches whatever the page loads, regardless of obfuscation. Waits up to timeoutMs for at least one hit; with autoplay it calls video.play() to provoke the stream. Use to extract a playable stream from a page the webview can reach (e.g. behind network blocks) but cross-origin fetch/yt-dlp cannot.",
+    triggers: { ko: "미디어 스니프 추출 m3u8 스트림 페이지 캡처 가로채기 동영상" },
+    params: {
+      view: P.view,
+      timeoutMs: { type: "number", description: "Max wait for a hit (ms)", default: 8000 },
+      autoplay: { type: "boolean", description: "Call video.play() to provoke the stream request", default: true },
+      pattern: { type: "string", description: "Only return URLs matching this regex (e.g. m3u8)" },
+    },
+    returns: "{ viewId, urls: [{ url, via, ref }] }",
+    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
+    examples: ['sok browser.media.sniff \'{"pattern":"m3u8","timeoutMs":10000}\''],
+    handler: async (p, ctx) => {
+      const b = resolveBrowser(p, ctx);
+      if (!b) return notFound("브라우저 뷰 없음");
+      const viewId = b.view.id;
+      const timeoutMs = typeof p.timeoutMs === "number" ? p.timeoutMs : 8000;
+      const autoplay = p.autoplay !== false;
+      const re = p.pattern ? new RegExp(p.pattern as string, "i") : null;
+      const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+      const deadline = Date.now() + Math.max(500, timeoutMs);
+      let triggered = false;
+      // 시간 상한 폴링(R10 무한폴링 금지) — hit 나오면 즉시 반환.
+      for (;;) {
+        const raw = (await evalInBrowser(viewId, "return JSON.stringify(window.__soksakMedia || [])")) as unknown;
+        let hits: { url: string; via?: string; ref?: string }[] = [];
+        try {
+          hits = typeof raw === "string" ? JSON.parse(raw) : (raw as typeof hits);
+        } catch {
+          hits = [];
+        }
+        const urls = re ? hits.filter((h) => re.test(h.url)) : hits;
+        if (urls.length > 0) return { viewId, urls };
+        if (autoplay && !triggered) {
+          triggered = true;
+          // 페이지 자신의 플레이어를 유발(사이트 무관) — 재생 시 m3u8 을 요청한다.
+          await evalInBrowser(
+            viewId,
+            "try { var v = document.querySelector('video'); if (v) { v.muted = true; v.play && v.play().catch(function(){}); } } catch(e){} return null;",
+          );
+        }
+        if (Date.now() >= deadline) return { viewId, urls: [] };
+        await delay(400);
+      }
+    },
+  });
+
   // ----- browser.dom -----
   register("browser.dom.text", {
     description: "Get the visible text of the page or a specific selector element.",
@@ -2120,6 +2194,7 @@ export function registerCatalog(): void {
   registerSecretsCatalog();
   registerTurnCatalog();
   registerNetworkCatalog();
+  registerMediaCatalog();
   registerClipboardCatalog();
   registerNotifyCatalog();
   registerScheduleCatalog();
