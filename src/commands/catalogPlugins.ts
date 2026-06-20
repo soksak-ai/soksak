@@ -103,7 +103,8 @@ function serializeRuntime(p: PluginRuntime) {
 export function registerPluginCatalog(): void {
   register("program.list", {
     description:
-      "사용 가능한 프로그램 목록(새 탭 + 메뉴와 동일) — 내장 없음, 전부 플러그인 등록분. path 는 메뉴 카테고리 경로",
+      "List all programs available in the new-tab menu. Every entry is plugin-registered; nothing is built-in. Use to discover launchable programs and their menu category paths.",
+    triggers: { ko: "프로그램 목록 앱 메뉴 새탭" },
     params: {},
     returns: "{ programs: [{ id, title, path?, kind, pluginId }] }",
     examples: ["sok program.list"],
@@ -123,7 +124,8 @@ export function registerPluginCatalog(): void {
 
   register("plugin.list", {
     description:
-      "플러그인 전체 상태 — 설치/dev 목록(status 포함) + 검증 거부(rejected) 사유",
+      "List all installed and dev plugins with their runtime status, permissions, and rejection reasons. Use to check which plugins exist and whether any failed to load.",
+    triggers: { ko: "플러그인 목록 설치된 확장 상태" },
     params: {},
     returns: "{ plugins: [{id, name, version, status, permissions, …}], rejected }",
     examples: ["sok plugin.list"],
@@ -138,14 +140,15 @@ export function registerPluginCatalog(): void {
 
   register("plugin.install", {
     description:
-      'git 소스에서 플러그인 설치(~/.soksak/plugins/<id>) — "user/repo" 단축형, URL, 로컬 경로',
+      'Install a plugin from a git source into ~/.soksak/plugins/<id>. Accepts a "user/repo" shorthand, a full git URL, or a local path. Use when adding a new plugin for the first time.',
+    triggers: { ko: "플러그인 설치 추가 install" },
     params: {
       source: {
         type: "string",
-        description: 'GitHub "user/repo" | git URL | 로컬 경로',
+        description: 'GitHub "user/repo" shorthand, git URL, or local directory path',
         required: true,
       },
-      ref: { type: "string", description: "브랜치/태그/커밋 핀" },
+      ref: { type: "string", description: "Branch, tag, or commit to pin" },
     },
     returns: "{ id, dir }",
     errors: ["INVALID_PARAMS", "INTERNAL"],
@@ -159,9 +162,11 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.update", {
-    description: "설치된 플러그인 갱신(git pull --ff-only). 갱신 후 재동의 필요",
+    description:
+      "Update an installed plugin via git pull --ff-only. Re-consent is required after update because permissions may have changed.",
+    triggers: { ko: "플러그인 업데이트 갱신 최신화" },
     params: {
-      id: { type: "string", description: "플러그인 id", required: true },
+      id: { type: "string", description: "Plugin id", required: true },
     },
     returns: "{ id, version }",
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS", "INTERNAL"],
@@ -172,15 +177,16 @@ export function registerPluginCatalog(): void {
 
   register("plugin.remove", {
     description:
-      "플러그인 제거(디렉토리째). 전용 저장소(plugins-data)는 보존. 의존자가 있으면 cascade:true 동의 없이는 CASCADE_REQUIRED 로 차단(고아 방지)",
+      "Remove a plugin and its directory. Plugin-owned data (plugins-data) is preserved. Blocked with CASCADE_REQUIRED if dependents exist unless cascade:true is passed to remove them transitively.",
+    triggers: { ko: "플러그인 제거 삭제 uninstall" },
     params: {
-      id: { type: "string", description: "플러그인 id", required: true },
+      id: { type: "string", description: "Plugin id", required: true },
       cascade: {
         type: "boolean",
-        description: "true 면 의존자(전이)까지 함께 삭제(동의). 생략 시 의존자 있으면 차단",
+        description: "When true, also removes all transitive dependents. Omit to block if any dependents exist.",
       },
     },
-    returns: "{ id, removed: [삭제된 id …] }",
+    returns: "{ id, removed: [removed ids …] }",
     errors: ["TARGET_NOT_FOUND", "CASCADE_REQUIRED", "INTERNAL"],
     examples: [
       'sok plugin.remove \'{"id":"soksak-plugin-memo"}\'',
@@ -193,9 +199,10 @@ export function registerPluginCatalog(): void {
 
   register("plugin.deps", {
     description:
-      "플러그인 의존 그래프 — id 지정 시 그 플러그인의 의존/의존자/참조수/cascade, 생략 시 전체 버전 무결성 이슈",
+      "Inspect the plugin dependency graph. With an id, returns that plugin's dependencies, dependents, reference count, and cascade impact. Without an id, returns all version integrity issues across installed plugins.",
+    triggers: { ko: "플러그인 의존성 의존 그래프 종속" },
     params: {
-      id: { type: "string", description: "플러그인 id(생략 시 전체 버전 이슈)" },
+      id: { type: "string", description: "Plugin id. Omit to list all version integrity issues." },
     },
     returns: "{ summary?, issues? }",
     errors: ["TARGET_NOT_FOUND"],
@@ -216,9 +223,10 @@ export function registerPluginCatalog(): void {
 
   register("plugin.enable", {
     description:
-      "플러그인 활성화(코드 실행 개시). 기록된 사용자 동의가 없으면 CONSENT_REQUIRED — 동의는 UI 에서만",
+      "Activate a plugin so its code begins executing. Returns CONSENT_REQUIRED if the user has not yet consented via the UI consent modal — remote enable without recorded consent is always blocked.",
+    triggers: { ko: "플러그인 활성화 켜기 enable" },
     params: {
-      id: { type: "string", description: "플러그인 id", required: true },
+      id: { type: "string", description: "Plugin id", required: true },
     },
     returns: "{ id, status }",
     errors: ["TARGET_NOT_FOUND", "CONSENT_REQUIRED", "INTERNAL"],
@@ -228,9 +236,11 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.disable", {
-    description: "플러그인 비활성화 — 등록한 명령/뷰/확장 전부 회수(§0-4)",
+    description:
+      "Deactivate a plugin and revoke all of its registered commands, views, and extensions (spec §0-4). Use when you want to stop a plugin without removing it.",
+    triggers: { ko: "플러그인 비활성화 끄기 disable" },
     params: {
-      id: { type: "string", description: "플러그인 id", required: true },
+      id: { type: "string", description: "Plugin id", required: true },
     },
     returns: "{ id, status }",
     errors: ["TARGET_NOT_FOUND"],
@@ -241,8 +251,9 @@ export function registerPluginCatalog(): void {
 
   register("plugin.consent.summary", {
     description:
-      "동의 표시 데이터 — 권한·기여 수·종속성(플러그인+라이브러리). 동의 모달과 같은 단일 소스(consentSummary). 검증/검사용",
-    params: { id: { type: "string", description: "플러그인 id", required: true } },
+      "Fetch the consent display data for a plugin — permissions, contribution counts, and dependency tree (plugins + libraries). Same single source used by the consent modal. Use to inspect what the user will be asked to consent to.",
+    triggers: { ko: "플러그인 동의 요약 권한 확인" },
+    params: { id: { type: "string", description: "Plugin id", required: true } },
     returns: "{ id, version, permissions, contributes, dependencies:{plugins,libraries} }",
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok plugin.consent.summary \'{"id":"soksak-plugin-acp-orchestra"}\''],
@@ -256,8 +267,9 @@ export function registerPluginCatalog(): void {
 
   register("plugin.consent.revoke", {
     description:
-      "동의 철회 — 동의 기록 제거(재동의 필요 상태). 활성 중이면 비활성화하고 이 플러그인을 종속으로 쓰는 의존자도 함께 비활성화(전이 일관). 권한 축소라 안전",
-    params: { id: { type: "string", description: "플러그인 id", required: true } },
+      "Revoke a recorded consent, putting the plugin back into a re-consent-required state. If active, the plugin and all transitive dependents are disabled first. Safe because it only reduces permissions.",
+    triggers: { ko: "동의 철회 취소 revoke 권한 제거" },
+    params: { id: { type: "string", description: "Plugin id", required: true } },
     returns: "{ id }",
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok plugin.consent.revoke \'{"id":"soksak-plugin-acp-core"}\''],
@@ -267,8 +279,9 @@ export function registerPluginCatalog(): void {
 
   register("plugin.consent.chain", {
     description:
-      "활성화에 필요한 미동의 체인(종속 먼저 순서). UI 가 이 순서대로 동의 팝업을 연속으로 띄운다 — 종속(강력한 권한)도 사용자가 본다. dev 소스·이미 동의된 것은 제외. 빈 배열이면 바로 활성화 가능",
-    params: { id: { type: "string", description: "플러그인 id", required: true } },
+      "Return the ordered list of plugins still needing consent before the target plugin can be activated (dependencies first). Dev-sourced and already-consented plugins are excluded. An empty pending array means the plugin can be activated immediately.",
+    triggers: { ko: "동의 체인 미동의 순서 활성화 전" },
+    params: { id: { type: "string", description: "Plugin id", required: true } },
     returns: "{ id, pending }",
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok plugin.consent.chain \'{"id":"soksak-plugin-acp-studio"}\''],
@@ -281,11 +294,12 @@ export function registerPluginCatalog(): void {
 
   register("plugin.consent.preview", {
     description:
-      "동의 모달을 검사용으로 표시(활성화 안 함) — 권한·기여·종속성을 사람이 확인. 멱등(다시 호출/null 로 닫기)",
+      "Open the consent modal for inspection without activating the plugin. Use when a human wants to review permissions, contributions, and dependencies before deciding to consent. Idempotent — call again or pass an empty id to close.",
+    triggers: { ko: "동의 모달 미리보기 확인 권한 검사" },
     params: {
       id: {
         type: "string",
-        description: "플러그인 id(빈 문자열/생략 = 닫기)",
+        description: "Plugin id. Empty string or omit to close the modal.",
       },
     },
     returns: "{ id, shown }",
@@ -314,8 +328,10 @@ export function registerPluginCatalog(): void {
   };
 
   register("plugin.settings.schema", {
-    description: "플러그인 설정 스키마(매니페스트 configuration) — UI·CLI 가 파생하는 단일 소스",
-    params: { id: { type: "string", description: "플러그인 id", required: true } },
+    description:
+      "Return the plugin's settings schema from its manifest configuration block. This is the single source of truth from which both UI and CLI derive setting fields and validation rules.",
+    triggers: { ko: "플러그인 설정 스키마 구성 항목" },
+    params: { id: { type: "string", description: "Plugin id", required: true } },
     returns: "{ id, configuration: ConfigSetting[] }",
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok plugin.settings.schema \'{"id":"soksak-plugin-acp-orchestra"}\''],
@@ -328,14 +344,15 @@ export function registerPluginCatalog(): void {
 
   register("plugin.settings.get", {
     description:
-      "설정 값 조회 — scope effective(기본·프로젝트 오버라이드 반영)|global|project. key 생략 = 전체",
+      "Read plugin setting values at a given scope. Scope 'effective' (default) merges global defaults with project overrides. Omit key to retrieve all settings at once.",
+    triggers: { ko: "플러그인 설정 조회 읽기 값 확인" },
     params: {
-      id: { type: "string", description: "플러그인 id", required: true },
-      key: { type: "string", description: "설정 키(생략 = 전체)" },
-      scope: { type: "string", description: "effective|global|project", enum: ["effective", "global", "project"] },
-      project: { type: "string", description: "프로젝트 id(생략 = 활성). project/effective 스코프에 적용" },
+      id: { type: "string", description: "Plugin id", required: true },
+      key: { type: "string", description: "Setting key. Omit to return all settings." },
+      scope: { type: "string", description: "effective (default, merges global+project) | global | project", enum: ["effective", "global", "project"] },
+      project: { type: "string", description: "Project id. Defaults to active project. Applies to project and effective scopes." },
     },
-    returns: "{ id, scope, values } 또는 { id, scope, key, value }",
+    returns: "{ id, scope, values } or { id, scope, key, value }",
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
       'sok plugin.settings.get \'{"id":"soksak-plugin-acp-orchestra"}\'',
@@ -365,13 +382,15 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.settings.set", {
-    description: "설정 값 변경(스키마 검증) — scope global(기본)|project. 검증 위반은 거부(저장 안 함)",
+    description:
+      "Write a plugin setting value after schema validation. Scope defaults to global; use project to override per-project. Validation failures are rejected without saving.",
+    triggers: { ko: "플러그인 설정 변경 저장 set 값 지정" },
     params: {
-      id: { type: "string", description: "플러그인 id", required: true },
-      key: { type: "string", description: "설정 키", required: true },
-      value: { type: "json", description: "값(boolean|number|string — 스키마 type 일치)", required: true },
-      scope: { type: "string", description: "global(기본)|project", enum: ["global", "project"] },
-      project: { type: "string", description: "프로젝트 id(생략 = 활성). scope=project 에 적용" },
+      id: { type: "string", description: "Plugin id", required: true },
+      key: { type: "string", description: "Setting key", required: true },
+      value: { type: "json", description: "Value to set (boolean | number | string — must match schema type)", required: true },
+      scope: { type: "string", description: "global (default) | project", enum: ["global", "project"] },
+      project: { type: "string", description: "Project id. Defaults to active project. Applies when scope=project." },
     },
     returns: "{ id, scope, key, value, project? }",
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
@@ -400,12 +419,14 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.settings.reset", {
-    description: "설정 오버라이드 제거(기본값 복원) — scope global(기본)|project. key 생략 = 전체",
+    description:
+      "Remove a setting override and restore the default value. Scope defaults to global. Omit key to reset all settings at once.",
+    triggers: { ko: "플러그인 설정 초기화 리셋 기본값" },
     params: {
-      id: { type: "string", description: "플러그인 id", required: true },
-      key: { type: "string", description: "설정 키(생략 = 전체)" },
-      scope: { type: "string", description: "global(기본)|project", enum: ["global", "project"] },
-      project: { type: "string", description: "프로젝트 id(생략 = 활성). scope=project 에 적용" },
+      id: { type: "string", description: "Plugin id", required: true },
+      key: { type: "string", description: "Setting key. Omit to reset all settings." },
+      scope: { type: "string", description: "global (default) | project", enum: ["global", "project"] },
+      project: { type: "string", description: "Project id. Defaults to active project. Applies when scope=project." },
     },
     returns: "{ id, scope, key, project? }",
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
@@ -429,9 +450,10 @@ export function registerPluginCatalog(): void {
 
   register("plugin.settings.open", {
     description:
-      "통합 설정 모달 열기 — id 지정 시 그 플러그인 패널로, 생략 시 일반(환경설정). 빈 문자열=닫기. 멱등",
+      "Open the unified settings modal. With a plugin id, navigates directly to that plugin's settings panel. Omit id for the general preferences section. Pass an empty string to close the modal. Idempotent.",
+    triggers: { ko: "설정 열기 환경설정 모달 플러그인 설정 패널" },
     params: {
-      id: { type: "string", description: "플러그인 id(생략 = 일반, 빈 문자열 = 닫기)" },
+      id: { type: "string", description: "Plugin id (omit for general preferences, empty string to close)" },
     },
     returns: "{ section }",
     errors: ["TARGET_NOT_FOUND"],
@@ -456,7 +478,8 @@ export function registerPluginCatalog(): void {
 
   register("plugin.reload", {
     description:
-      "플러그인 전체 재적재 — 디렉토리 재스캔 + 활성(동의 유효) 플러그인 재활성화",
+      "Rescan the plugins directory and reactivate all plugins whose consent is still valid. Use after manually editing plugin files or adding new plugin folders.",
+    triggers: { ko: "플러그인 재적재 리로드 새로고침" },
     params: {},
     returns: "{ count, rejected }",
     examples: ["sok plugin.reload"],
@@ -472,19 +495,20 @@ export function registerPluginCatalog(): void {
 
   register("plugin.view.open", {
     description:
-      "플러그인 뷰 열기 — placement 생략 시 매니페스트 기본 배치. 뷰 구현과 배치는 직교(스펙 §0-6)",
+      "Open a plugin view in the specified placement. Defaults to the view's declared defaultPlacement when placement is omitted. View implementation and placement are orthogonal (spec §0-6).",
+    triggers: { ko: "플러그인 뷰 열기 사이드바 패널 탭 보기" },
     params: {
       view: {
         type: "string",
-        description: '뷰 전역 키 "<pluginId>.<viewId>"',
+        description: 'Global view key in the form "<pluginId>.<viewId>"',
         required: true,
       },
       placement: {
         type: "string",
-        description: "배치(생략 시 뷰의 defaultPlacement)",
+        description: "Where to place the view. Defaults to the view's defaultPlacement.",
         enum: VIEW_PLACEMENTS,
       },
-      project: { type: "string", description: "프로젝트 id(생략 시 활성)" },
+      project: { type: "string", description: "Project id. Defaults to the active project." },
     },
     returns: "{ view, placement, projectId }",
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
@@ -539,16 +563,18 @@ export function registerPluginCatalog(): void {
   });
 
   register("plugin.view.close", {
-    description: "플러그인 뷰 닫기 — 사이드바 배치는 선택 해제(파일 트리/관리로 복귀)",
+    description:
+      "Close a plugin view. Sidebar placements are deselected and revert to the file tree. Content placements close the tab in every editor group where the view is open.",
+    triggers: { ko: "플러그인 뷰 닫기 사이드바 탭 제거" },
     params: {
       view: {
         type: "string",
-        description: '뷰 전역 키 "<pluginId>.<viewId>"',
+        description: 'Global view key in the form "<pluginId>.<viewId>"',
         required: true,
       },
-      project: { type: "string", description: "프로젝트 id(생략 시 활성)" },
+      project: { type: "string", description: "Project id. Defaults to the active project." },
     },
-    returns: "{ view, closed: [배치 목록] }",
+    returns: "{ view, closed: [placement list] }",
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok plugin.view.close \'{"view":"soksak-plugin-memo.panel"}\''],
     handler: (p) => {
@@ -586,9 +612,10 @@ export function registerPluginCatalog(): void {
 
   register("editor.format", {
     description:
-      "파일 뷰를 등록된 플러그인 포매터로 정리(⇧⌥F). 포매터는 contributes.formatters 선언 + registerFormatter 바인딩",
+      "Format the active file view using the registered plugin formatter for its file extension (equivalent to pressing ⇧⌥F). The formatter must be declared in contributes.formatters and bound via registerFormatter.",
+    triggers: { ko: "포맷 정리 코드 정렬 formatter 파일 서식" },
     params: {
-      view: { type: "string", description: "파일 뷰 id(생략 시 활성 체인)" },
+      view: { type: "string", description: "File view id. Defaults to the active file view in the focused chain." },
     },
     returns: "{ formatted, changed, formatter }",
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS", "INTERNAL"],
@@ -623,9 +650,10 @@ export function registerPluginCatalog(): void {
 
   register("plugin.dev.load", {
     description:
-      "개발 모드 — 임의 디렉토리의 플러그인을 설치 없이 적재. dev 소스는 동의 게이트 면제(§0-5 예외 — 게이트는 이 명령의 inject 정책)",
+      "Development mode: load a plugin from any directory without installing it. Dev-sourced plugins bypass the consent gate (spec §0-5 exception). The inject danger policy governs this command itself.",
+    triggers: { ko: "플러그인 개발 로드 dev 임시 적재" },
     params: {
-      path: { type: "string", description: "플러그인 디렉토리 절대경로", required: true },
+      path: { type: "string", description: "Absolute path to the plugin directory", required: true },
     },
     returns: "{ id, dir }",
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
@@ -636,9 +664,10 @@ export function registerPluginCatalog(): void {
 
   register("plugin.dev.new", {
     description:
-      "단일 폴더 dev 스캐폴드 — ~/.soksak/plugins/<id>/ 에 최소 plugin.json·main.js·.soksak.json(version=dev) 생성 + git init. 외부 경로·dev.load 불필요(폴더가 곧 작업물). 적재 후 reload.",
+      "Scaffold a new dev plugin in place at ~/.soksak/plugins/<id>/. Creates the minimum plugin.json, main.js, and .soksak.json (version=dev), then runs git init. No external path or dev.load needed — the folder is the working artifact. Reloads plugins automatically after scaffolding.",
+    triggers: { ko: "플러그인 개발 새로 만들기 스캐폴드 scaffold 생성" },
     params: {
-      id: { type: "string", description: "플러그인 id (^[a-z0-9][a-z0-9-]*$)", required: true },
+      id: { type: "string", description: "Plugin id (must match ^[a-z0-9][a-z0-9-]*$)", required: true },
     },
     returns: "{ ok, dir, pluginId }",
     errors: ["INVALID_PARAMS"],

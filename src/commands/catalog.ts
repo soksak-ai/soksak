@@ -352,31 +352,31 @@ const sel = (s: string) => JSON.stringify(s);
 const P = {
   project: {
     type: "string",
-    description: "대상 프로젝트 id(생략=호출 컨텍스트의 프로젝트)",
+    description: "Target project id (omit = caller's context project)",
   },
-  content: { type: "string", description: "대상 컨텐츠 id" },
+  content: { type: "string", description: "Target content tab id" },
   group: {
     type: "string",
-    description: "대상 패널(그룹) id(생략=호출 컨텍스트의 패널)",
+    description: "Target panel (group) id (omit = caller's context panel)",
   },
-  view: { type: "string", description: "대상 뷰 id(생략=호출 컨텍스트의 뷰)" },
+  view: { type: "string", description: "Target view id (omit = caller's context view)" },
   pane: {
     type: "string",
-    description: "대상 pane id(생략=호출 컨텍스트의 pane, $SOKSAK_PANE)",
+    description: "Target pane id (omit = caller's context pane, $SOKSAK_PANE)",
   },
   program: {
     type: "string",
     description:
-      "프로그램 id — 플러그인 등록분(program.list 참조, 내장 없음). 미등록 id 는 터미널 뷰 폴백",
+      "Program id — plugin-registered only (see program.list; no built-in default). Unregistered id falls back to terminal view",
   },
   side: {
     type: "string",
-    description: "분할 방향",
+    description: "Split direction",
     enum: ["left", "right", "top", "bottom"],
   },
   zone: {
     type: "string",
-    description: "놓을 위치(center=이동/병합, 그 외=그 방향으로 분할)",
+    description: "Drop zone (center = move/merge; others = split in that direction)",
     enum: ["center", "left", "right", "top", "bottom"],
   },
 } satisfies Record<string, import("./registry").ParamSpec>;
@@ -391,15 +391,15 @@ export function registerCatalog(): void {
 
   register("state.tree", {
     description:
-      "전체 구조 스냅샷(주소록): 프로젝트→컨텐츠→패널(rect %)→뷰→pane 의 모든 id 와 활성 상태",
+      "Full layout snapshot (address book): all ids and active state across project → content → panel (rect %) → view → pane. Use to discover ids before targeting other commands.",
     params: {},
-    returns: "{ activeProjectId, projects[] } — panels[].rect 는 컨텐츠 영역 기준 %",
+    returns: "{ activeProjectId, projects[] } — panels[].rect is % of the content area",
     examples: ["sok state.tree"],
     handler: () => serializeTree(),
   });
 
   register("state.commands", {
-    description: "전체 명령 카탈로그(파라미터 스키마·반환·에러·예시) — 매뉴얼의 원천",
+    description: "Full command catalog with parameter schemas, returns, errors, and examples — the source of truth for all available commands.",
     params: {},
     returns: "{ commands: [{name,description,params,returns,errors,examples}] }",
     examples: ["sok commands"],
@@ -408,7 +408,7 @@ export function registerCatalog(): void {
 
   register("state.context", {
     description:
-      "호출자 위치: $SOKSAK_PANE 이 속한 프로젝트/컨텐츠/패널/뷰(터미널 밖이면 활성 체인)",
+      "Resolve the caller's position: project/content/panel/view that $SOKSAK_PANE belongs to (falls back to active chain when called outside a terminal).",
     params: { pane: P.pane },
     returns: "{ projectId, contentId, groupId, viewId, paneId? }",
     errors: ["TARGET_NOT_FOUND"],
@@ -433,7 +433,8 @@ export function registerCatalog(): void {
 
   // ----- project -----
   register("project.list", {
-    description: "프로젝트 목록(id/제목/root/활성)",
+    description: "List all projects with id, title, root path, and active state.",
+    triggers: { ko: "프로젝트 목록 프로젝트 리스트 열린 프로젝트" },
     params: {},
     returns: "{ projects: [{id,title,root,active}] }",
     examples: ["sok project.list"],
@@ -449,17 +450,18 @@ export function registerCatalog(): void {
 
   register("project.create", {
     description:
-      "새 프로젝트. root 생략 시 folder(폴더명 슬러그) 필수 — ~/.soksak/projects/<folder> 생성·사용. 홈(~)·루트(/)는 root 불가, 동일 root 중복 시 기존 프로젝트 활성화(existing)",
+      "Create a new project. When root is omitted, folder (slug) is required — creates and uses ~/.soksak/projects/<folder>. Home (~) and root (/) are forbidden as root. Duplicate root activates the existing project instead.",
+    triggers: { ko: "프로젝트 만들기 새 프로젝트 프로젝트 생성 열기" },
     params: {
-      root: { type: "string", description: "프로젝트 루트 디렉토리(절대경로 — 홈/루트 금지)" },
+      root: { type: "string", description: "Project root directory (absolute path — home/root forbidden)" },
       folder: {
         type: "string",
         description:
-          "root 생략 시 필수 — ^[a-z0-9][a-z0-9-]*$, ~/.soksak/projects/<folder> 폴더명",
+          "Required when root is omitted — ^[a-z0-9][a-z0-9-]*$, used as ~/.soksak/projects/<folder>",
       },
-      alias: { type: "string", description: "탭 별칭(생략=폴더명)" },
-      program: { ...P.program, description: "첫 화면(생략=전역 설정)" },
-      shell: { type: "string", description: "터미널 셸 경로(생략=전역 설정→$SHELL)" },
+      alias: { type: "string", description: "Tab alias (omit = folder name)" },
+      program: { ...P.program, description: "Initial view program (omit = global default)" },
+      shell: { type: "string", description: "Terminal shell path (omit = global setting → $SHELL)" },
     },
     returns: "{ projectId, contentId, groupId, viewId, paneId?, existing? }",
     errors: ["INVALID_PARAMS"],
@@ -504,7 +506,8 @@ export function registerCatalog(): void {
 
   register("project.close", {
     danger: "destructive",
-    description: "프로젝트 닫기(마지막 프로젝트는 거부)",
+    description: "Close a project. Refuses to close the last remaining project.",
+    triggers: { ko: "프로젝트 닫기 프로젝트 제거" },
     params: { project: { ...P.project, required: true } },
     returns: "{ activeProjectId }",
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
@@ -513,7 +516,8 @@ export function registerCatalog(): void {
   });
 
   register("project.activate", {
-    description: "프로젝트 전환",
+    description: "Switch to a different project, making it active.",
+    triggers: { ko: "프로젝트 전환 프로젝트 바꾸기 이동" },
     params: { project: { ...P.project, required: true } },
     returns: "{}",
     errors: ["TARGET_NOT_FOUND"],
@@ -522,10 +526,11 @@ export function registerCatalog(): void {
   });
 
   register("project.rename", {
-    description: "프로젝트 이름 변경",
+    description: "Rename a project tab.",
+    triggers: { ko: "프로젝트 이름 바꾸기 이름 변경 프로젝트 제목" },
     params: {
       project: { ...P.project, required: true },
-      title: { type: "string", description: "새 이름", required: true },
+      title: { type: "string", description: "New project name", required: true },
     },
     returns: "{}",
     errors: ["TARGET_NOT_FOUND"],
@@ -534,12 +539,13 @@ export function registerCatalog(): void {
   });
 
   register("project.color", {
-    description: "프로젝트 식별 색 설정(레일 칩/탭 강조). color 생략 = 제거",
+    description: "Set the accent color for a project (rail chip and tab highlight). Omit color to remove.",
+    triggers: { ko: "프로젝트 색 색상 탭 색깔" },
     params: {
       project: { ...P.project, required: true },
       color: {
         type: "string",
-        description: "CSS 색상(예: #4a8fe8). 생략하면 기본으로 되돌림",
+        description: "CSS color (e.g. #4a8fe8). Omit to revert to default.",
       },
     },
     returns: "{}",
@@ -551,16 +557,16 @@ export function registerCatalog(): void {
 
   register("project.update", {
     description:
-      "프로젝트 설정 일괄 변경(생략한 필드는 유지, \"\"=기본으로 제거). root 는 불변",
+      "Batch-update project settings. Omitted fields are preserved; \"\" removes the override. root is immutable.",
     params: {
       project: { ...P.project, required: true },
-      title: { type: "string", description: "별칭(빈 문자열은 무시)" },
+      title: { type: "string", description: "Alias (empty string is ignored)" },
       program: {
         type: "string",
-        description: '첫 화면 프로그램 id("" = 전역 설정 따름)',
+        description: 'Initial view program id ("" = follow global setting)',
       },
-      shell: { type: "string", description: '터미널 셸 경로("" = 기본)' },
-      color: { type: "string", description: '식별 색("" = 제거)' },
+      shell: { type: "string", description: 'Terminal shell path ("" = default)' },
+      color: { type: "string", description: 'Accent color ("" = remove)' },
     },
     returns: "{}",
     errors: ["TARGET_NOT_FOUND"],
@@ -580,7 +586,8 @@ export function registerCatalog(): void {
   });
 
   register("project.sidebar.toggle", {
-    description: "파일트리 사이드바 토글",
+    description: "Toggle the file-tree sidebar for a project.",
+    triggers: { ko: "사이드바 파일트리 열기 닫기 토글" },
     params: { project: P.project },
     returns: "{ sidebarOpen }",
     errors: ["TARGET_NOT_FOUND"],
@@ -593,10 +600,11 @@ export function registerCatalog(): void {
   });
 
   register("project.rightbar.toggle", {
-    description: "우측 플러그인 사이드바 토글(⌥⌘B). open 명시 시 그 상태로(멱등)",
+    description: "Toggle the right plugin sidebar (⌥⌘B). Provide open to set state explicitly (idempotent).",
+    triggers: { ko: "우측 사이드바 오른쪽 패널 플러그인 바 열기 닫기" },
     params: {
       project: P.project,
-      open: { type: "boolean", description: "명시 시 열림/닫힘 고정" },
+      open: { type: "boolean", description: "When provided, force open or closed" },
     },
     returns: "{ rightOpen }",
     errors: ["TARGET_NOT_FOUND"],
@@ -610,7 +618,7 @@ export function registerCatalog(): void {
 
   // ----- content -----
   register("content.list", {
-    description: "프로젝트의 컨텐츠 탭 목록",
+    description: "List content tabs in a project.",
     params: { project: P.project },
     returns: "{ contents: [{id,title,program,active}] }",
     errors: ["TARGET_NOT_FOUND"],
@@ -630,7 +638,8 @@ export function registerCatalog(): void {
   });
 
   register("content.create", {
-    description: "새 컨텐츠 탭(프로그램: 명시 > 프로젝트 설정 > 전역 설정)",
+    description: "Create a new content tab. Program priority: explicit > project setting > global setting.",
+    triggers: { ko: "새 탭 콘텐츠 탭 추가 새로 열기" },
     params: { project: P.project, program: P.program },
     returns: "{ contentId, groupId, viewId, paneId? }",
     errors: ["TARGET_NOT_FOUND"],
@@ -644,7 +653,8 @@ export function registerCatalog(): void {
 
   register("content.close", {
     danger: "destructive",
-    description: "컨텐츠 탭 닫기(마지막 컨텐츠는 거부)",
+    description: "Close a content tab. Refuses to close the last remaining content.",
+    triggers: { ko: "탭 닫기 컨텐츠 닫기" },
     params: {
       project: P.project,
       content: { ...P.content, required: true },
@@ -660,7 +670,8 @@ export function registerCatalog(): void {
   });
 
   register("content.activate", {
-    description: "컨텐츠 탭 전환",
+    description: "Switch to a specific content tab, making it active.",
+    triggers: { ko: "탭 이동 탭 전환 탭 바꾸기" },
     params: {
       project: P.project,
       content: { ...P.content, required: true },
@@ -676,11 +687,11 @@ export function registerCatalog(): void {
   });
 
   register("content.rename", {
-    description: "컨텐츠 탭 이름 변경",
+    description: "Rename a content tab.",
     params: {
       project: P.project,
       content: { ...P.content, required: true },
-      title: { type: "string", description: "새 이름", required: true },
+      title: { type: "string", description: "New name", required: true },
     },
     returns: "{}",
     errors: ["TARGET_NOT_FOUND"],
@@ -694,7 +705,7 @@ export function registerCatalog(): void {
 
   // ----- panel(그룹) -----
   register("panel.list", {
-    description: "컨텐츠의 패널(분할창) 목록 + rect(%) + 분할 트리",
+    description: "List panels (split panes) in a content area, including their rect (%) and the split tree.",
     params: { project: P.project, content: P.content },
     returns: "{ activeGroupId, layout, panels[] }",
     errors: ["TARGET_NOT_FOUND"],
@@ -726,7 +737,7 @@ export function registerCatalog(): void {
       side: { ...P.side, required: true },
       program: { ...P.program, default: "terminal" },
     },
-    returns: "{ groupId(새 패널), viewId, paneId? }",
+    returns: "{ groupId(new panel), viewId, paneId? }",
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok panel.split \'{"side":"right"}\'', 'sok panel.split \'{"side":"bottom","program":"browser"}\''],
     handler: (p, ctx) => {
@@ -742,13 +753,14 @@ export function registerCatalog(): void {
   });
 
   register("panel.merge", {
-    description: "패널 병합 — src 패널의 모든 탭을 dst 패널로(빈 자리는 자동 정리)",
+    description: "Merge panels — move all tabs from src into dst; empty src panel is removed automatically.",
+    triggers: { ko: "패널 합치기 병합 탭 이동 합병" },
     params: {
       project: P.project,
-      src: { type: "string", description: "원본 패널 id", required: true },
-      dst: { type: "string", description: "대상 패널 id", required: true },
+      src: { type: "string", description: "Source panel id", required: true },
+      dst: { type: "string", description: "Destination panel id", required: true },
     },
-    returns: "{ groupId(병합된 패널) }",
+    returns: "{ groupId(merged panel) }",
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
     examples: ['sok panel.merge \'{"src":"g2","dst":"g1"}\''],
     handler: (p, ctx) => {
@@ -764,11 +776,12 @@ export function registerCatalog(): void {
   });
 
   register("panel.move", {
-    description: "패널 재배치 — src 패널 통째를 dst 패널의 zone 위치로",
+    description: "Reposition a panel — move the entire src panel to the zone position relative to dst.",
+    triggers: { ko: "패널 이동 재배치 위치 옮기기" },
     params: {
       project: P.project,
-      src: { type: "string", description: "원본 패널 id", required: true },
-      dst: { type: "string", description: "대상 패널 id", required: true },
+      src: { type: "string", description: "Source panel id", required: true },
+      dst: { type: "string", description: "Destination panel id", required: true },
       zone: { ...P.zone, required: true },
     },
     returns: "{ groupId }",
@@ -788,7 +801,8 @@ export function registerCatalog(): void {
 
   register("panel.close", {
     danger: "destructive",
-    description: "패널 닫기(안의 모든 탭 제거, 마지막 패널은 거부)",
+    description: "Close a panel and all its tabs. Refuses to close the last panel.",
+    triggers: { ko: "패널 닫기 패널 제거" },
     params: { group: { ...P.group, required: true } },
     returns: "{ activeGroupId }",
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
@@ -801,7 +815,8 @@ export function registerCatalog(): void {
   });
 
   register("panel.focus", {
-    description: "패널 활성화(포커스)",
+    description: "Focus (activate) a panel, making it the active group.",
+    triggers: { ko: "패널 포커스 패널 활성화 선택" },
     params: { group: { ...P.group, required: true } },
     returns: "{}",
     errors: ["TARGET_NOT_FOUND"],
@@ -817,13 +832,14 @@ export function registerCatalog(): void {
 
   register("panel.resize", {
     description:
-      "분할 비율 조절 — splitId(state.tree 의 layout.split.id)와 children 수만큼의 비율(합 1)",
+      "Adjust split ratios — provide the splitId (layout.split.id from state.tree) and an array of sizes that sum to 1.",
+    triggers: { ko: "패널 크기 조절 비율 분할 조정 크기 바꾸기" },
     params: {
       project: P.project,
-      split: { type: "string", description: "분할 노드 id(예: s1)", required: true },
+      split: { type: "string", description: "Split node id (e.g. s1)", required: true },
       sizes: {
         type: "number[]",
-        description: "자식 비율 배열(합 1, 예: [0.7,0.3])",
+        description: "Child ratios array summing to 1 (e.g. [0.7,0.3])",
         required: true,
       },
     },
@@ -839,13 +855,14 @@ export function registerCatalog(): void {
 
   register("panel.equalize", {
     description:
-      "분할 균등화 — index 지정 시 그 분할선의 인접 두 영역을 반반(분할선 더블클릭과 동일), 생략 시 전체 자식을 1/n 균등",
+      "Equalize split ratios — with index, halves the two areas at that divider (same as double-clicking the divider); without index, distributes all children equally.",
+    triggers: { ko: "패널 균등 같은 크기 반반 균등화" },
     params: {
       project: P.project,
-      split: { type: "string", description: "분할 노드 id(예: s1)", required: true },
+      split: { type: "string", description: "Split node id (e.g. s1)", required: true },
       index: {
         type: "number",
-        description: "분할선 번호(0=첫 경계). 생략=전체 균등",
+        description: "Divider index (0 = first boundary). Omit to equalize all children.",
       },
     },
     returns: "{ sizes }",
@@ -882,7 +899,7 @@ export function registerCatalog(): void {
 
   // ----- view(탭) -----
   register("view.list", {
-    description: "패널의 뷰(탭) 목록",
+    description: "List the views (tabs) inside a panel.",
     params: { group: P.group },
     returns: "{ groupId, activeViewId, views[] }",
     errors: ["TARGET_NOT_FOUND"],
@@ -899,11 +916,12 @@ export function registerCatalog(): void {
   });
 
   register("view.open", {
-    description: "패널에 새 뷰 탭(터미널/claude/codex/브라우저[url])",
+    description: "Open a new view tab in a panel (terminal / claude / codex / browser with optional url).",
+    triggers: { ko: "뷰 열기 탭 추가 claude 열기 터미널 열기 브라우저 탭" },
     params: {
       group: P.group,
       program: { ...P.program, required: true },
-      url: { type: "string", description: "브라우저 시작 URL(program=browser)" },
+      url: { type: "string", description: "Browser start URL (program=browser)" },
     },
     returns: "{ groupId, viewId, paneId? }",
     errors: ["TARGET_NOT_FOUND"],
@@ -925,7 +943,8 @@ export function registerCatalog(): void {
 
   register("view.close", {
     danger: "destructive",
-    description: "뷰(탭) 닫기 — 패널의 마지막 뷰면 패널도 정리(컨텐츠 마지막 뷰는 거부)",
+    description: "Close a view tab — if it was the last view in a panel, the panel is also removed. Refuses to close the last view in a content area.",
+    triggers: { ko: "탭 닫기 뷰 닫기" },
     params: { view: { ...P.view, required: true } },
     returns: "{ activeGroupId, activeViewId }",
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
@@ -938,7 +957,8 @@ export function registerCatalog(): void {
   });
 
   register("view.activate", {
-    description: "뷰(탭) 활성화",
+    description: "Activate (switch to) a specific view tab.",
+    triggers: { ko: "탭 전환 탭 선택 뷰 활성화" },
     params: { view: { ...P.view, required: true } },
     returns: "{}",
     errors: ["TARGET_NOT_FOUND"],
@@ -952,7 +972,8 @@ export function registerCatalog(): void {
 
   register("view.maximize", {
     description:
-      "뷰(탭) 최대화 — 컨텐츠 영역 전체 차지(분할 트리 보존, 표시만 전환). 탭 더블클릭과 동일. view 생략=활성 뷰",
+      "Maximize a view to fill the entire content area. The split tree is preserved; only the display is toggled. Same as double-clicking a tab. Omit view to maximize the active view.",
+    triggers: { ko: "최대화 전체화면 탭 최대화 크게 보기" },
     params: { view: P.view },
     returns: "{ viewId }",
     errors: ["TARGET_NOT_FOUND"],
@@ -965,9 +986,10 @@ export function registerCatalog(): void {
   });
 
   register("view.restore", {
-    description: "뷰 최대화 해제 — 원래 분할 레이아웃으로 복원(활성 컨텐츠)",
+    description: "Exit view maximize mode and restore the original split layout for the active content.",
+    triggers: { ko: "최대화 해제 원래대로 레이아웃 복원" },
     params: { project: P.project },
-    returns: "{ viewId(해제된 뷰 | null=최대화 없었음) }",
+    returns: "{ viewId(restored view | null = was not maximized) }",
     examples: ["sok view.restore"],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
@@ -977,13 +999,14 @@ export function registerCatalog(): void {
   });
 
   register("view.move", {
-    description: "뷰(탭)를 dst 패널의 zone 위치로(center=이동, 그 외=분할해 새 패널)",
+    description: "Move a view tab to the zone position of dst panel (center = move into panel; other = split and create new panel).",
+    triggers: { ko: "탭 이동 뷰 이동 다른 패널로" },
     params: {
       view: { ...P.view, required: true },
-      dst: { type: "string", description: "대상 패널 id", required: true },
+      dst: { type: "string", description: "Destination panel id", required: true },
       zone: { ...P.zone, required: true },
     },
-    returns: "{ groupId(이동/생성된 패널) }",
+    returns: "{ groupId(moved or created panel) }",
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
     examples: ['sok view.move \'{"view":"v3","dst":"g1","zone":"right"}\''],
     handler: (p) => {
@@ -1000,7 +1023,7 @@ export function registerCatalog(): void {
 
   // ----- pane(터미널 내부 분할) -----
   register("pane.list", {
-    description: "터미널 뷰의 pane 목록",
+    description: "List panes inside a terminal view, including the focused pane id.",
     params: { view: P.view, pane: P.pane },
     returns: "{ viewId, panes[], focusedPaneId }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1020,17 +1043,18 @@ export function registerCatalog(): void {
   });
 
   register("pane.split", {
-    description: "터미널 pane 분할(row=좌우, col=상하)",
+    description: "Split a terminal pane (row = side by side, col = top and bottom).",
+    triggers: { ko: "터미널 분할 pane 나누기 pane 분할" },
     params: {
       pane: P.pane,
       dir: {
         type: "string",
-        description: "분할 방향",
+        description: "Split direction",
         enum: ["row", "col"],
         required: true,
       },
     },
-    returns: "{ paneId(새 pane) }",
+    returns: "{ paneId(new pane) }",
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok pane.split \'{"dir":"row"}\''],
     handler: (p, ctx) => {
@@ -1042,7 +1066,8 @@ export function registerCatalog(): void {
 
   register("pane.close", {
     danger: "destructive",
-    description: "터미널 pane 닫기(마지막 pane 은 거부 — view.close 사용)",
+    description: "Close a terminal pane. Refuses to close the last pane — use view.close instead.",
+    triggers: { ko: "pane 닫기 터미널 pane 제거" },
     params: { pane: { ...P.pane, required: true } },
     returns: "{ focusedPaneId }",
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
@@ -1055,7 +1080,8 @@ export function registerCatalog(): void {
   });
 
   register("pane.focus", {
-    description: "터미널 pane 포커스",
+    description: "Focus a specific terminal pane.",
+    triggers: { ko: "pane 포커스 터미널 pane 선택 활성화" },
     params: { pane: { ...P.pane, required: true } },
     returns: "{}",
     errors: ["TARGET_NOT_FOUND"],
@@ -1072,10 +1098,11 @@ export function registerCatalog(): void {
   // ----- term(터미널 입출력 — AI 의 눈과 손) -----
   register("term.read", {
     description:
-      "터미널 화면+스크롤백 텍스트 읽기(TUI 는 현재 화면). 실행 결과 확인용",
+      "Read terminal screen and scrollback text (TUI shows current screen only). Use to check command output.",
+    triggers: { ko: "터미널 읽기 출력 확인 결과 보기" },
     params: {
       pane: P.pane,
-      lines: { type: "number", description: "끝에서 N 줄만(생략=전체)" },
+      lines: { type: "number", description: "Last N lines only (omit = all)" },
     },
     returns: "{ paneId, text }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1092,10 +1119,11 @@ export function registerCatalog(): void {
   register("term.send", {
     danger: "inject",
     description:
-      "터미널에 raw 키 입력 주입(TUI 조작). JSON 이스케이프로 제어키 전달: \\r=Enter, \\u0003=^C, \\u001b[A=↑",
+      "Inject raw key input into a terminal (for TUI control). Pass control characters via JSON escapes: \\r=Enter, \\u0003=^C, \\u001b[A=↑.",
+    triggers: { ko: "터미널 입력 키 주입 TUI 조작 키 보내기" },
     params: {
       pane: P.pane,
-      text: { type: "string", description: "주입할 바이트(이스케이프 허용)", required: true },
+      text: { type: "string", description: "Bytes to inject (escapes allowed)", required: true },
     },
     returns: "{ paneId }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1111,10 +1139,11 @@ export function registerCatalog(): void {
 
   register("term.exec", {
     danger: "inject",
-    description: "터미널에서 명령 실행(text + Enter). 결과는 term.read 로 확인",
+    description: "Execute a shell command in the terminal (sends text + Enter). Check output with term.read.",
+    triggers: { ko: "명령 실행 터미널 실행 셸 실행 커맨드 실행" },
     params: {
       pane: P.pane,
-      cmd: { type: "string", description: "실행할 셸 명령", required: true },
+      cmd: { type: "string", description: "Shell command to run", required: true },
     },
     returns: "{ paneId }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1129,7 +1158,8 @@ export function registerCatalog(): void {
   });
 
   register("term.cwd", {
-    description: "터미널의 현재 작업 디렉토리(셸 통합 기반)",
+    description: "Get the current working directory of a terminal pane (requires shell integration).",
+    triggers: { ko: "현재 디렉토리 cwd 작업 폴더 터미널 경로" },
     params: { pane: P.pane },
     returns: "{ paneId, cwd|null }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1143,12 +1173,13 @@ export function registerCatalog(): void {
 
   // ----- browser -----
   register("browser.open", {
-    description: "브라우저 열기 — 패널 탭(where=panel) 또는 독립 OS 창(where=window)",
+    description: "Open a browser — as a panel tab (where=panel) or a standalone OS window (where=window).",
+    triggers: { ko: "브라우저 열기 웹 열기 URL 열기 인터넷 열기" },
     params: {
-      url: { type: "string", description: "시작 URL(생략=설정 homeUrl)" },
+      url: { type: "string", description: "Start URL (omit = settings homeUrl)" },
       where: {
         type: "string",
-        description: "여는 위치",
+        description: "Where to open",
         enum: ["panel", "window"],
         default: "panel",
       },
@@ -1170,10 +1201,11 @@ export function registerCatalog(): void {
   });
 
   register("browser.navigate", {
-    description: "브라우저 뷰를 URL 로 이동",
+    description: "Navigate the browser view to a URL.",
+    triggers: { ko: "URL 이동 페이지 열기 주소 이동 사이트 열기" },
     params: {
       view: P.view,
-      url: { type: "string", description: "이동할 URL", required: true },
+      url: { type: "string", description: "Target URL", required: true },
     },
     returns: "{ viewId, url }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1191,7 +1223,8 @@ export function registerCatalog(): void {
   });
 
   register("browser.back", {
-    description: "브라우저 이전 페이지",
+    description: "Navigate the browser to the previous page in history.",
+    triggers: { ko: "뒤로 이전 페이지 브라우저 뒤로가기" },
     params: { view: P.view },
     returns: "{ viewId }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1205,7 +1238,8 @@ export function registerCatalog(): void {
   });
 
   register("browser.forward", {
-    description: "브라우저 다음 페이지",
+    description: "Navigate the browser to the next page in history.",
+    triggers: { ko: "앞으로 다음 페이지 브라우저 앞으로가기" },
     params: { view: P.view },
     returns: "{ viewId }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1219,7 +1253,8 @@ export function registerCatalog(): void {
   });
 
   register("browser.reload", {
-    description: "브라우저 새로고침",
+    description: "Reload the current browser page.",
+    triggers: { ko: "새로고침 페이지 리로드 브라우저 새로고침" },
     params: { view: P.view },
     returns: "{ viewId, url }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1237,7 +1272,8 @@ export function registerCatalog(): void {
 
   register("browser.devtools", {
     description:
-      "브라우저 인스펙트(Web Inspector) 토글 — 이 브라우저 웹뷰의 devtools 를 연다/닫는다. WKWebView 는 CDP 가 없어 OS 인스펙터(별도 창)가 뜬다. 툴바 인스펙트 버튼과 동일.",
+      "Toggle the browser Web Inspector. WKWebView has no CDP so the OS inspector opens in a separate window — same as clicking the toolbar inspect button.",
+    triggers: { ko: "개발자 도구 인스펙터 devtools 열기 닫기" },
     params: { view: P.view },
     returns: "{ viewId, open }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1254,7 +1290,7 @@ export function registerCatalog(): void {
 
   register("browser.list", {
     description:
-      "존재하는 네이티브 브라우저 웹뷰 라벨 목록(b-<viewId>) — 스토어의 browser 뷰 집합과 일치해야 정상(고아 검증)",
+      "List existing native browser webview labels (b-<viewId>). Should match the store's browser view set — use to detect orphaned webviews.",
     params: {},
     returns: "{ labels: string[] }",
     examples: ["sok browser.list"],
@@ -1266,12 +1302,13 @@ export function registerCatalog(): void {
   register("browser.eval", {
     danger: "inject",
     description:
-      "브라우저 페이지에서 임의 JS 실행(async 가능, return 값이 JSON 으로 반환됨)",
+      "Execute arbitrary JS in a browser page (async supported; return value is serialized as JSON).",
+    triggers: { ko: "JS 실행 자바스크립트 브라우저 실행 페이지 스크립트" },
     params: {
       view: P.view,
       js: {
         type: "string",
-        description: "실행할 JS 본문(예: return document.title)",
+        description: "JS body to execute (e.g. return document.title)",
         required: true,
       },
     },
@@ -1288,11 +1325,11 @@ export function registerCatalog(): void {
 
   // ----- browser.dom -----
   register("browser.dom.text", {
-    description: "페이지(또는 selector 요소)의 보이는 텍스트",
+    description: "Get the visible text of the page or a specific selector element.",
     params: {
       view: P.view,
-      selector: { type: "string", description: "CSS selector(생략=본문 전체)" },
-      maxLength: { type: "number", description: "최대 길이", default: 20000 },
+      selector: { type: "string", description: "CSS selector (omit = entire body)" },
+      maxLength: { type: "number", description: "Max character length", default: 20000 },
     },
     returns: "{ viewId, text|null }",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
@@ -1309,11 +1346,11 @@ export function registerCatalog(): void {
   });
 
   register("browser.dom.html", {
-    description: "페이지(또는 selector 요소)의 HTML",
+    description: "Get the HTML of the page or a specific selector element.",
     params: {
       view: P.view,
-      selector: { type: "string", description: "CSS selector(생략=문서 전체)" },
-      maxLength: { type: "number", description: "최대 길이", default: 50000 },
+      selector: { type: "string", description: "CSS selector (omit = entire document)" },
+      maxLength: { type: "number", description: "Max character length", default: 50000 },
     },
     returns: "{ viewId, html|null }",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
@@ -1330,11 +1367,11 @@ export function registerCatalog(): void {
   });
 
   register("browser.dom.query", {
-    description: "selector 매칭 요소 요약(태그/텍스트/속성) — 페이지 구조 파악용",
+    description: "Summarize matching elements (tag / text / attributes) for a CSS selector — use to understand page structure.",
     params: {
       view: P.view,
       selector: { type: "string", description: "CSS selector", required: true },
-      limit: { type: "number", description: "최대 개수", default: 20 },
+      limit: { type: "number", description: "Max element count", default: 20 },
     },
     returns: "{ viewId, count, elements[] }",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
@@ -1361,7 +1398,8 @@ export function registerCatalog(): void {
 
   register("browser.dom.click", {
     danger: "inject",
-    description: "selector 첫 매칭 요소 클릭",
+    description: "Click the first element matching a CSS selector.",
+    triggers: { ko: "클릭 버튼 클릭 링크 클릭 페이지 클릭" },
     params: {
       view: P.view,
       selector: { type: "string", description: "CSS selector", required: true },
@@ -1380,11 +1418,12 @@ export function registerCatalog(): void {
 
   register("browser.dom.fill", {
     danger: "inject",
-    description: "입력 요소에 값 채우기(input/change 이벤트 발화 — React 폼 호환)",
+    description: "Fill an input element with a value (fires input/change events — React form compatible).",
+    triggers: { ko: "입력 채우기 폼 입력 텍스트 입력 필드 채우기" },
     params: {
       view: P.view,
       selector: { type: "string", description: "CSS selector", required: true },
-      text: { type: "string", description: "입력할 값", required: true },
+      text: { type: "string", description: "Value to enter", required: true },
     },
     returns: "{ viewId, filled }",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
@@ -1408,7 +1447,8 @@ export function registerCatalog(): void {
 
   register("browser.dom.submit", {
     danger: "inject",
-    description: "폼 제출(selector=form 또는 폼 내부 요소)",
+    description: "Submit a form (selector can be the form element or any element inside it).",
+    triggers: { ko: "폼 제출 submit 전송 양식 제출" },
     params: {
       view: P.view,
       selector: { type: "string", description: "CSS selector", required: true },
@@ -1432,11 +1472,12 @@ export function registerCatalog(): void {
   });
 
   register("browser.dom.waitFor", {
-    description: "selector 가 나타날 때까지 대기(동적 페이지 — MutationObserver)",
+    description: "Wait until a selector appears on the page (dynamic pages — uses MutationObserver).",
+    triggers: { ko: "요소 대기 나타날 때까지 기다리기 동적 로딩 대기" },
     params: {
       view: P.view,
       selector: { type: "string", description: "CSS selector", required: true },
-      timeoutMs: { type: "number", description: "최대 대기(ms)", default: 5000 },
+      timeoutMs: { type: "number", description: "Max wait time (ms)", default: 5000 },
     },
     returns: "{ viewId, found }",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
@@ -1461,7 +1502,8 @@ export function registerCatalog(): void {
 
   // ----- bookmark -----
   register("bookmark.list", {
-    description: "즐겨찾기 목록",
+    description: "List saved browser bookmarks.",
+    triggers: { ko: "즐겨찾기 목록 북마크 목록" },
     params: {},
     returns: "{ bookmarks: [{url,title}] }",
     examples: ["sok bookmark.list"],
@@ -1469,10 +1511,11 @@ export function registerCatalog(): void {
   });
 
   register("bookmark.add", {
-    description: "즐겨찾기 추가",
+    description: "Add a URL to browser bookmarks.",
+    triggers: { ko: "즐겨찾기 추가 북마크 추가 저장" },
     params: {
       url: { type: "string", description: "URL", required: true },
-      title: { type: "string", description: "표시 이름(생략=호스트)" },
+      title: { type: "string", description: "Display name (omit = hostname)" },
     },
     returns: "{}",
     examples: ['sok bookmark.add \'{"url":"https://example.com"}\''],
@@ -1496,7 +1539,8 @@ export function registerCatalog(): void {
   });
 
   register("bookmark.remove", {
-    description: "즐겨찾기 제거",
+    description: "Remove a URL from browser bookmarks.",
+    triggers: { ko: "즐겨찾기 삭제 북마크 제거 삭제" },
     params: { url: { type: "string", description: "URL", required: true } },
     returns: "{}",
     examples: ['sok bookmark.remove \'{"url":"https://example.com"}\''],
@@ -1508,10 +1552,11 @@ export function registerCatalog(): void {
 
   // ----- editor(파일 뷰) -----
   register("editor.open", {
-    description: "파일을 에디터 뷰로 열기(이미 열려 있으면 그 탭 활성화)",
+    description: "Open a file in an editor view. If already open, activates that tab instead.",
+    triggers: { ko: "파일 열기 에디터 열기 파일 편집 코드 열기" },
     params: {
       project: P.project,
-      path: { type: "string", description: "파일 절대경로", required: true },
+      path: { type: "string", description: "Absolute file path", required: true },
     },
     returns: "{ viewId, groupId, existing }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1524,7 +1569,8 @@ export function registerCatalog(): void {
   });
 
   register("editor.save", {
-    description: "에디터 뷰 저장(⌘S 와 동일)",
+    description: "Save the editor view (same as ⌘S).",
+    triggers: { ko: "파일 저장 에디터 저장 저장하기" },
     params: { view: { ...P.view, required: true } },
     returns: "{ saved, reason? }",
     errors: ["TARGET_NOT_FOUND"],
@@ -1537,16 +1583,17 @@ export function registerCatalog(): void {
   });
 
   const FIND_OPTS = {
-    caseSensitive: { type: "boolean", description: "대소문자 구분", default: false },
-    regexp: { type: "boolean", description: "정규식 사용", default: false },
-    wholeWord: { type: "boolean", description: "단어 단위 일치", default: false },
+    caseSensitive: { type: "boolean", description: "Case-sensitive match", default: false },
+    regexp: { type: "boolean", description: "Use regular expression", default: false },
+    wholeWord: { type: "boolean", description: "Match whole word only", default: false },
   } satisfies Record<string, import("./registry").ParamSpec>;
 
   register("editor.find", {
-    description: "에디터 뷰에서 찾기(하이라이트 + 첫 매치 선택). 매치 수 반환",
+    description: "Find in the editor view (highlights matches and selects the first). Returns match count.",
+    triggers: { ko: "찾기 검색 에디터 찾기 텍스트 검색" },
     params: {
       view: { ...P.view, required: true },
-      query: { type: "string", description: "찾을 문자열/패턴", required: true },
+      query: { type: "string", description: "Search string or pattern", required: true },
       ...FIND_OPTS,
     },
     returns: "{ matches }",
@@ -1565,12 +1612,13 @@ export function registerCatalog(): void {
 
   register("editor.replace", {
     description:
-      "에디터 뷰에서 바꾸기(all=true 전체, 아니면 1건). 치환 수 반환 — 저장은 editor.save",
+      "Replace in the editor view (all=true replaces all, otherwise one occurrence). Returns replacement count — save with editor.save.",
+    triggers: { ko: "바꾸기 치환 에디터 바꾸기 텍스트 교체" },
     params: {
       view: { ...P.view, required: true },
-      query: { type: "string", description: "찾을 문자열/패턴", required: true },
-      replacement: { type: "string", description: "바꿀 문자열", required: true },
-      all: { type: "boolean", description: "모두 바꾸기", default: true },
+      query: { type: "string", description: "Search string or pattern", required: true },
+      replacement: { type: "string", description: "Replacement string", required: true },
+      all: { type: "boolean", description: "Replace all occurrences", default: true },
       ...FIND_OPTS,
     },
     returns: "{ replaced }",
@@ -1591,7 +1639,7 @@ export function registerCatalog(): void {
   });
 
   register("editor.close", {
-    description: "에디터 뷰 닫기(view.close 와 동일)",
+    description: "Close an editor view (same as view.close).",
     params: { view: { ...P.view, required: true } },
     returns: "{ activeGroupId, activeViewId }",
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
@@ -1606,10 +1654,11 @@ export function registerCatalog(): void {
   // ----- explorer(파일 탐색기) -----
   register("explorer.list", {
     description:
-      "디렉토리 직속 자식 나열(파일트리와 동일한 뷰). path 생략=프로젝트 root(없으면 HOME)",
+      "List direct children of a directory (same view as the file tree). Omit path to use the project root (falls back to HOME).",
+    triggers: { ko: "파일 목록 디렉토리 목록 폴더 내용 파일 탐색" },
     params: {
       project: P.project,
-      path: { type: "string", description: "디렉토리 절대경로" },
+      path: { type: "string", description: "Absolute directory path" },
     },
     returns: "{ root, children: [{name,dir}] }",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
@@ -1625,12 +1674,13 @@ export function registerCatalog(): void {
   });
 
   register("explorer.git", {
-    description: "디렉토리의 git 변경 상태(파일트리 데코레이션과 동일)",
+    description: "Get git change status for a directory (matches file-tree decoration).",
+    triggers: { ko: "git 상태 변경 파일 수정됨 git 변경" },
     params: {
       project: P.project,
-      path: { type: "string", description: "git repo 디렉토리(생략=프로젝트 root)" },
+      path: { type: "string", description: "Git repo directory (omit = project root)" },
     },
-    returns: "{ entries: [{path,status}] } — repo 아니면 빈 목록",
+    returns: "{ entries: [{path,status}] } — empty list if not a repo",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
     examples: ["sok explorer.git"],
     handler: async (p, ctx) => {
@@ -1663,7 +1713,8 @@ export function registerCatalog(): void {
   ] as const;
 
   register("settings.get", {
-    description: "앱 설정 전체 조회",
+    description: "Retrieve all application settings.",
+    triggers: { ko: "설정 확인 앱 설정 조회 환경설정" },
     params: {},
     returns: `{ ${SETTING_KEYS.join(", ")}, bg }`,
     examples: ["sok settings.get"],
@@ -1697,18 +1748,19 @@ export function registerCatalog(): void {
   });
 
   register("settings.set", {
-    description: `설정 변경. key: ${SETTING_KEYS.join("|")}`,
+    description: `Change an application setting. key: ${SETTING_KEYS.join("|")}`,
+    triggers: { ko: "설정 변경 설정 바꾸기 환경설정 변경 폰트 크기 언어" },
     params: {
       key: {
         type: "string",
-        description: "설정 키",
+        description: "Setting key",
         enum: SETTING_KEYS,
         required: true,
       },
       value: {
         type: "json",
         description:
-          "값 — language:ko|en, projectTabPosition:top|left, defaultProgram:string(프로그램 id — program.list 참조, 미등록이면 터미널 폴백), fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, xtermRenderer:dom|webgl, iconSet:string(등록 셋 id — 미등록이면 lucide 폴백 렌더), iconBox:boolean, focusIndicator:outline|corners",
+          "Value — language:ko|en, projectTabPosition:top|left, defaultProgram:string (program id — see program.list; unregistered falls back to terminal), fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, xtermRenderer:dom|webgl, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners",
         required: true,
       },
     },
@@ -1797,7 +1849,7 @@ export function registerCatalog(): void {
   });
 
   register("window.info", {
-    description: "창 화면 좌표/크기/배율(자동화 검증용 — outerPosition 은 물리 픽셀)",
+    description: "Get window screen position, size, and scale factor (for automation validation — outerPosition is physical pixels).",
     params: {},
     returns: "{ x, y, w, h, scale }",
     examples: ["sok window.info"],
@@ -1814,10 +1866,10 @@ export function registerCatalog(): void {
   });
 
   register("window.move", {
-    description: "창을 화면 좌표(물리 픽셀)로 이동(자동화·다중 모니터 검증용)",
+    description: "Move the window to a screen position in physical pixels (for automation and multi-monitor validation).",
     params: {
-      x: { type: "number", description: "물리 x", required: true },
-      y: { type: "number", description: "물리 y", required: true },
+      x: { type: "number", description: "Physical x coordinate", required: true },
+      y: { type: "number", description: "Physical y coordinate", required: true },
     },
     returns: "{ x, y }",
     examples: ['sok window.move \'{"x":0,"y":0}\''],
@@ -1833,7 +1885,7 @@ export function registerCatalog(): void {
   });
 
   register("window.focus", {
-    description: "앱 창을 전면으로 가져와 포커스(자동화·검증 시 비활성 상태 해제)",
+    description: "Bring the app window to the front and focus it (clears inactive state for automation).",
     params: {},
     returns: "{ focused: true }",
     examples: ["sok window.focus"],
@@ -1848,7 +1900,8 @@ export function registerCatalog(): void {
 
   register("window.reload", {
     description:
-      "앱 webview 를 풀 리로드(location.reload). 개발 중 코어/플러그인 코드 변경을 반영한다 — HMR 이 안 잡는 모듈(이미 활성화된 플러그인 API 표면 등)까지 새로 가져온다. 활성 플러그인은 리로드 후 자동 재활성(설치본+동의 영속).",
+      "Fully reload the app webview (location.reload). Picks up core/plugin code changes during development — including modules HMR misses (e.g. already-activated plugin API surfaces). Active plugins are re-activated automatically after reload (install and consent are persisted).",
+    triggers: { ko: "앱 리로드 새로고침 플러그인 재시작 코드 반영" },
     params: {},
     returns: "{ reloaded: true }",
     examples: ["sok window.reload"],
@@ -1861,7 +1914,8 @@ export function registerCatalog(): void {
 
   // ── 멀티 윈도우 ──────────────────────────────────────────────────────────
   register("window.new", {
-    description: "새 OS 창을 연다(독립 작업공간). 반환 = 생성된 창 label.",
+    description: "Open a new OS window (independent workspace). Returns the created window label.",
+    triggers: { ko: "새 창 창 열기 새 윈도우" },
     params: {},
     returns: "{ label }",
     examples: ["sok window.new"],
@@ -1869,7 +1923,8 @@ export function registerCatalog(): void {
   });
 
   register("window.list", {
-    description: "열린 창 label 목록. window 명시 타겟(다른 명령의 window 인자) 조회용.",
+    description: "List open window labels. Use to discover targets for commands that accept a window argument.",
+    triggers: { ko: "창 목록 윈도우 목록 열린 창" },
     params: {},
     returns: "{ labels }",
     examples: ["sok window.list"],
@@ -1877,8 +1932,9 @@ export function registerCatalog(): void {
   });
 
   register("window.focus", {
-    description: "특정 창을 앞으로 가져온다(포커스).",
-    params: { label: { type: "string", description: "창 label(window.list 로 조회)" } },
+    description: "Bring a specific window to the front (focus it).",
+    triggers: { ko: "창 포커스 창 활성화 창 앞으로" },
+    params: { label: { type: "string", description: "Window label (see window.list)" } },
     returns: "{ ok }",
     examples: ['sok window.focus \'{"label":"win-1"}\''],
     handler: async (p) => {
@@ -1888,8 +1944,9 @@ export function registerCatalog(): void {
   });
 
   register("window.close", {
-    description: "특정 창을 닫는다.",
-    params: { label: { type: "string", description: "창 label" } },
+    description: "Close a specific window.",
+    triggers: { ko: "창 닫기 윈도우 닫기" },
+    params: { label: { type: "string", description: "Window label" } },
     returns: "{ ok }",
     examples: ['sok window.close \'{"label":"win-1"}\''],
     handler: async (p) => {
@@ -1900,11 +1957,12 @@ export function registerCatalog(): void {
 
   register("window.snapshot", {
     description:
-      "창 내용을 PNG 로 저장. 다른 앱에 완전히 가려져 있어도 캡처된다(캡처 순간만 가림감지 자동 해제→복원). WebGL 터미널 포함. 부모 폴더 자동 생성.",
+      "Capture the window contents to a PNG. Captures even when fully occluded by other apps (occlusion detection is temporarily disabled during capture). Includes WebGL terminal. Parent folder is created automatically.",
+    triggers: { ko: "스크린샷 캡처 화면 저장 PNG 저장 스냅샷" },
     params: {
       path: {
         type: "string",
-        description: "저장할 .png 경로. 생략 시 임시 폴더",
+        description: "Output .png path. Omit to use a temp folder.",
       },
     },
     returns: "{ saved }",
@@ -1931,15 +1989,16 @@ export function registerCatalog(): void {
 
   register("window.record", {
     description:
-      "창을 연사 캡처해 dir/f0000.png.. 연속 PNG 로 저장(내장 동영상 소스). 가려져 있어도 모든 프레임이 렌더된다(연사 동안 가림감지 해제). 폴더 자동 생성.",
+      "Capture the window as a sequence of PNGs (dir/f0000.png ...) for use as a video source. All frames are rendered even when occluded (occlusion detection disabled for the duration). Folder is created automatically.",
+    triggers: { ko: "녹화 연속 캡처 프레임 저장 동영상 소스" },
     params: {
       dir: {
         type: "string",
-        description: "프레임 저장 폴더",
+        description: "Output directory for frames",
         required: true,
       },
-      frames: { type: "number", description: "프레임 수(기본 40, 최대 600)" },
-      intervalMs: { type: "number", description: "프레임 간격 ms(기본 40)" },
+      frames: { type: "number", description: "Number of frames (default 40, max 600)" },
+      intervalMs: { type: "number", description: "Interval between frames in ms (default 40)" },
     },
     returns: "{ dir, frames }",
     examples: [
@@ -1961,11 +2020,11 @@ export function registerCatalog(): void {
 
   register("window.occlusion", {
     description:
-      "가림감지 토글. false 면 다른 앱에 완전히 가려져도 렌더를 멈추지 않는다(상시 백그라운드 캡처용 — 배터리 비용 주의). snapshot/record 는 캡처 순간만 자동으로 끄므로 평소엔 불필요.",
+      "Toggle occlusion detection. When false, rendering continues even when fully covered by other apps (for continuous background capture — note battery cost). Not needed for normal use; snapshot/record disable it automatically during capture.",
     params: {
       enabled: {
         type: "boolean",
-        description: "가림감지 on(기본)/off",
+        description: "Occlusion detection on (default) / off",
         required: true,
       },
     },
@@ -1980,7 +2039,8 @@ export function registerCatalog(): void {
 
   register("theme.list", {
     description:
-      "사용 가능한 테마 목록(내장 + ~/.soksak/themes 외부) + 검증 실패 파일과 사유",
+      "List available themes (built-in + external ~/.soksak/themes), including files that failed validation and their reasons.",
+    triggers: { ko: "테마 목록 테마 보기 사용 가능 테마" },
     params: {},
     returns: "{ current, mode, themes:[{name,defaultMode,modes,source,warnings}], rejected }",
     examples: ["sok theme.list"],
@@ -2002,10 +2062,11 @@ export function registerCatalog(): void {
   });
 
   register("theme.apply", {
-    description: "테마 적용(토큰 슬롯 전체 교체). mode 생략=현재 모드 유지",
+    description: "Apply a theme (replaces all token slots). Omit mode to keep the current mode.",
+    triggers: { ko: "테마 적용 테마 바꾸기 다크 모드 라이트 모드 색 테마" },
     params: {
-      name: { type: "string", description: "테마 이름(theme.list)", required: true },
-      mode: { type: "string", description: "모드", enum: ["light", "dark"] },
+      name: { type: "string", description: "Theme name (see theme.list)", required: true },
+      mode: { type: "string", description: "Color mode", enum: ["light", "dark"] },
     },
     returns: "{ name, mode }",
     errors: ["TARGET_NOT_FOUND"],
@@ -2020,7 +2081,8 @@ export function registerCatalog(): void {
   });
 
   register("theme.reload", {
-    description: "외부 테마 디렉토리(~/.soksak/themes) 재스캔 + 현재 테마 재적용",
+    description: "Re-scan the external theme directory (~/.soksak/themes) and re-apply the current theme.",
+    triggers: { ko: "테마 새로고침 테마 리로드 외부 테마 재스캔" },
     params: {},
     returns: "{ count, rejected }",
     examples: ["sok theme.reload"],
@@ -2032,11 +2094,12 @@ export function registerCatalog(): void {
   });
 
   register("theme.install", {
-    description: "테마 JSON 파일을 ~/.soksak/themes 에 설치(검증 통과 시 즉시 사용 가능)",
+    description: "Install a theme JSON file into ~/.soksak/themes (immediately usable if validation passes).",
+    triggers: { ko: "테마 설치 테마 추가 외부 테마 설치" },
     params: {
-      path: { type: "string", description: "테마 .json 절대경로", required: true },
+      path: { type: "string", description: "Absolute path to theme .json file", required: true },
     },
-    returns: "{ installed(설치 경로), rejected? }",
+    returns: "{ installed(install path), rejected? }",
     errors: ["INTERNAL"],
     examples: ['sok theme.install \'{"path":"/tmp/dracula.json"}\''],
     handler: async (p) => {

@@ -1,12 +1,13 @@
-// net.* 네트워크 명령 — 코어 범용 capability 를 command registry 로 노출(단일 진실).
-// net.udp.send: 임의 host:port 로 UDP 데이터그램 전송(코어 network_udp_send 실행기 위임).
-// net.http.request: 임의 출처 HTTP 요청(코어 network_http_request 위임 — runbook api 실행타입).
-// webview JS 는 raw UDP/임의출처 HTTP 불가라 코어를 거치는 유일 경로. 특정 용도 락인 0(범용).
+// net.* network commands — exposes core generic capabilities via the command registry (single source of truth).
+// net.udp.send: send a UDP datagram to any host:port (delegates to network_udp_send core executor).
+// net.udp.request: send UDP and collect responses on the same socket (SSDP / mDNS / DNS).
+// net.http.request: arbitrary-origin HTTP request (delegates to network_http_request — runbook api type).
+// Webview JS cannot do raw UDP or cross-origin HTTP; the core is the only path. Zero domain lock-in (generic).
 
 import { invoke } from "@tauri-apps/api/core";
 import { register } from "./registry";
 
-// hex 문자열 → 바이트 배열. 짝수 길이 + [0-9a-fA-F] 만 허용, 아니면 null(호출자가 INVALID_PARAMS).
+// hex string → byte array. Requires even length + [0-9a-fA-F] only; returns null otherwise (caller emits INVALID_PARAMS).
 function hexToBytes(hex: string): number[] | null {
   const s = hex.trim().replace(/\s+/g, "");
   if (s.length === 0 || s.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(s)) return null;
@@ -19,7 +20,7 @@ function bytesToHex(bytes: number[]): string {
   return bytes.map((b) => (b & 0xff).toString(16).padStart(2, "0")).join("");
 }
 
-// 바이트 → UTF-8 텍스트(SSDP/HTTP-like 응답을 플러그인이 바로 파싱하게). 디코드 실패 시 빈 문자열.
+// bytes → UTF-8 text (lets plugins parse SSDP/HTTP-like responses directly). Returns empty string on decode failure.
 function bytesToText(bytes: number[]): string {
   try {
     return new TextDecoder().decode(new Uint8Array(bytes));
@@ -37,20 +38,21 @@ interface CoreUdpPacket {
 export function registerNetworkCatalog(): void {
   register("net.udp.send", {
     description:
-      "임의 host:port 로 UDP 데이터그램 전송(브로드캐스트 포함 — Wake-on-LAN 등). data 는 hex 문자열. webview JS 가 못 하는 raw UDP 를 코어가 대행",
+      "Send a UDP datagram to any host:port, including broadcast addresses (e.g. Wake-on-LAN). data must be a hex string. Core handles raw UDP that webview JS cannot perform.",
+    triggers: { ko: "UDP 전송 네트워크 브로드캐스트 WOL" },
     params: {
       host: {
         type: "string",
-        description: "목표 호스트/브로드캐스트 주소(예: 255.255.255.255)",
+        description: "Target host or broadcast address (e.g. 255.255.255.255)",
         required: true,
       },
-      port: { type: "number", description: "목표 UDP 포트(예: 9)", required: true },
+      port: { type: "number", description: "Target UDP port (e.g. 9)", required: true },
       data: {
         type: "string",
-        description: "전송 바이트(hex 문자열, 예: ffffffffffff...)",
+        description: "Bytes to send as a hex string (e.g. ffffffffffff...)",
         required: true,
       },
-      broadcast: { type: "boolean", description: "브로드캐스트 허용(255.255.255.255 등)" },
+      broadcast: { type: "boolean", description: "Allow broadcast addresses (255.255.255.255 etc.)" },
     },
     returns: "{ bytesSent }",
     danger: "inject",
@@ -79,17 +81,18 @@ export function registerNetworkCatalog(): void {
 
   register("net.udp.request", {
     description:
-      "UDP 요청-응답 — 한 소켓에서 host:port 로 data(hex) 전송 후 timeoutMs 동안 응답을 수집(SSDP discover·mDNS·DNS 등). 같은 소켓이라 유니캐스트 응답이 송신 포트로 돌아온다. 응답은 hex+text 동반",
+      "UDP request-response on a single socket: send data (hex) to host:port, then collect replies for timeoutMs (SSDP discover, mDNS, DNS, etc.). Unicast replies return to the sending port. Each packet includes hex and decoded text.",
+    triggers: { ko: "UDP 요청 SSDP mDNS 디스커버리 네트워크검색" },
     params: {
       host: {
         type: "string",
-        description: "목표 호스트(SSDP 는 239.255.255.250)",
+        description: "Target host (e.g. 239.255.255.250 for SSDP)",
         required: true,
       },
-      port: { type: "number", description: "목표 포트(SSDP 는 1900)", required: true },
-      data: { type: "string", description: "전송 바이트(hex 문자열)", required: true },
-      timeoutMs: { type: "number", description: "응답 수집 시간(ms, 기본 3000)" },
-      maxPackets: { type: "number", description: "최대 수신 패킷 수(기본 64)" },
+      port: { type: "number", description: "Target port (e.g. 1900 for SSDP)", required: true },
+      data: { type: "string", description: "Bytes to send as a hex string", required: true },
+      timeoutMs: { type: "number", description: "Response collection window in ms (default 3000)" },
+      maxPackets: { type: "number", description: "Max packets to collect (default 64)" },
     },
     returns: "{ packets: [{ address, port, data(hex), text }] }",
     danger: "inject",
@@ -125,18 +128,19 @@ export function registerNetworkCatalog(): void {
 
   register("net.http.request", {
     description:
-      "임의 출처 HTTP 요청(method/url/headers/query/body) → {status,headers,body}. webview fetch 가 못 하는 임의 출처를 코어가 대행. 시크릿은 ns 볼트에서 Rust 경계 치환(secretSubst=placeholder→key, 평문 무노출). ns 는 명시(CLI/E2E 운영자 신뢰) — 플러그인 런타임은 app.network.http 가 ns 자동주입",
+      "Send an arbitrary-origin HTTP request (method/url/headers/query/body) → {status,headers,body}. Core handles cross-origin requests that webview fetch cannot. Secrets are substituted at the Rust boundary from the ns vault (secretSubst: placeholder→secretKey, plaintext never exposed). ns must be explicit from CLI/E2E; plugin runtime uses app.network.http which injects ns automatically.",
+    triggers: { ko: "HTTP 요청 API호출 웹요청 GET POST" },
     params: {
-      method: { type: "string", description: "GET|POST|PUT|DELETE|PATCH 등", required: true },
-      url: { type: "string", description: "요청 URL", required: true },
-      headers: { type: "json", description: "요청 헤더 맵" },
-      query: { type: "json", description: "쿼리 파라미터 맵" },
-      body: { type: "string", description: "요청 바디(문자열)" },
-      contentType: { type: "string", description: "Content-Type 헤더" },
-      ns: { type: "string", description: "시크릿 해소 네임스페이스(secretSubst 있을 때 필수)" },
+      method: { type: "string", description: "HTTP method: GET, POST, PUT, DELETE, PATCH, etc.", required: true },
+      url: { type: "string", description: "Request URL", required: true },
+      headers: { type: "json", description: "Request headers map" },
+      query: { type: "json", description: "Query parameter map" },
+      body: { type: "string", description: "Request body as a string" },
+      contentType: { type: "string", description: "Content-Type header value" },
+      ns: { type: "string", description: "Secret resolution namespace (required when secretSubst is provided)" },
       secretSubst: {
         type: "json",
-        description: "placeholder→secretKey(ns 볼트에서 Rust 경계 치환, 평문 무노출)",
+        description: "placeholder→secretKey map; values are resolved from the ns vault at the Rust boundary, never exposed as plaintext",
       },
     },
     returns: "{ status, headers, body }",

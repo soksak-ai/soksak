@@ -355,7 +355,8 @@ function newTerminalView(command?: string): View {
   return {
     id: newViewId(),
     kind: "terminal",
-    title: "터미널",
+    // 기본 title 은 영어(state.tree 로 AI 에 노출되는 표면). UI 탭 라벨은 kind 로 t() 지역화(ViewTabs).
+    title: "Terminal",
     layout: leaf(paneId),
     focusedPaneId: paneId,
     ...(command ? { autorun: { paneId, command } } : {}),
@@ -371,7 +372,8 @@ function newBrowserView(url?: string): View {
   return {
     id: newViewId(),
     kind: "browser",
-    title: "브라우저",
+    // 기본 title 은 영어(state.tree AI 표면). UI 탭 라벨은 kind 로 t() 지역화(ViewTabs).
+    title: "Browser",
     url: url ?? browserHome(),
   };
 }

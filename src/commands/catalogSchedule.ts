@@ -1,7 +1,7 @@
-// schedule.* 스케줄러 명령 — 절대 시각 at(epoch ms)에 registry 명령 command(params)를 한 번 발화.
-// 코어 ScheduleState(인메모리 타이머 — 다음 due 까지 정확히 잠, 고정 폴링 0)에 위임. 단발이므로
-// 반복은 호출자가 발화 후 재무장하고, 리마인더는 예약된 notify.show 로 조합한다(코어는 타이밍만).
-// 영속은 코어가 갖지 않는다 — 플러그인이 자기 일정을 보관하고 activate 시 재무장한다.
+// schedule.* commands — fire a registry command at an absolute epoch-ms timestamp (one-shot).
+// Delegates to core ScheduleState (in-memory timer — sleeps exactly until next due, zero polling).
+// One-shot by design: callers re-arm after firing for recurrence; combine with notify.show for reminders.
+// Core holds no persistence — plugins store their own schedules and re-arm on activate.
 
 import { invoke } from "@tauri-apps/api/core";
 import { register } from "./registry";
@@ -9,12 +9,13 @@ import { register } from "./registry";
 export function registerScheduleCatalog(): void {
   register("schedule.set", {
     description:
-      "절대 시각 at(epoch ms)에 registry 명령 command(params)를 한 번 발화 예약. id 생략 시 발급(있으면 교체). 단발 — 반복은 발화 후 재무장, 리마인더는 별도 예약된 notify.show 로 조합",
+      "Schedule a registry command to fire once at an absolute epoch-ms timestamp. Generates a new id if omitted; replaces an existing schedule when id is supplied. For recurrence, re-arm after the command fires; compose with notify.show for reminders.",
+    triggers: { ko: "스케줄 예약 타이머 알람 일정 등록" },
     params: {
-      at: { type: "number", description: "발화 시각(epoch ms)", required: true },
-      command: { type: "string", description: "발화할 registry 명령 이름", required: true },
-      params: { type: "json", description: "명령 파라미터(생략 시 빈 오브젝트)" },
-      id: { type: "string", description: "기존 일정 교체용 id(생략 시 발급)" },
+      at: { type: "number", description: "Fire time as epoch milliseconds", required: true },
+      command: { type: "string", description: "Registry command name to fire", required: true },
+      params: { type: "json", description: "Command parameters (defaults to empty object when omitted)" },
+      id: { type: "string", description: "Existing schedule id to replace (a new id is issued when omitted)" },
     },
     returns: "{ scheduleId }",
     danger: "inject",
@@ -37,8 +38,9 @@ export function registerScheduleCatalog(): void {
   });
 
   register("schedule.cancel", {
-    description: "예약된 일정 취소(id). 있었으면 removed=true.",
-    params: { id: { type: "string", description: "schedule.set 이 발급한 id", required: true } },
+    description: "Cancel a pending schedule by id. Returns removed=true if the schedule existed.",
+    triggers: { ko: "스케줄 취소 삭제 예약취소 cancel" },
+    params: { id: { type: "string", description: "Schedule id issued by schedule.set", required: true } },
     returns: "{ removed }",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok schedule.cancel \'{"id":"sch-3"}\''],
@@ -52,7 +54,8 @@ export function registerScheduleCatalog(): void {
   });
 
   register("schedule.list", {
-    description: "예약된 일정 목록(at 오름차순 — id·at·command·params).",
+    description: "List all pending schedules sorted by fire time ascending (id, at, command, params).",
+    triggers: { ko: "스케줄 목록 예약 리스트 조회" },
     params: {},
     returns: "{ schedules: [{ id, at, command, params }] }",
     errors: ["INTERNAL"],

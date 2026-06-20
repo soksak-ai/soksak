@@ -8,7 +8,8 @@ import { register } from "./registry";
 
 export function registerClipboardCatalog(): void {
   register("clipboard.read", {
-    description: "시스템 클립보드의 현재 텍스트를 읽는다(비텍스트면 빈 문자열). 실행 결과·복사 내용 확인용",
+    description: "Read the current text from the system clipboard. Returns an empty string when the clipboard holds non-text content. Use to inspect a command result or the last copied value.",
+    triggers: { ko: "클립보드 읽기 복사내용 붙여넣기확인" },
     params: {},
     returns: "{ text }",
     errors: ["INTERNAL"],
@@ -20,9 +21,10 @@ export function registerClipboardCatalog(): void {
   });
 
   register("clipboard.write", {
-    description: "시스템 클립보드에 텍스트를 쓴다(기존 내용 덮어씀). 코어가 자기-쓰기 echo 를 1회 억제",
+    description: "Write text to the system clipboard, overwriting existing content. The core suppresses the self-write echo event once to prevent feedback loops.",
+    triggers: { ko: "클립보드 쓰기 복사 클립보드저장" },
     params: {
-      text: { type: "string", description: "클립보드에 넣을 텍스트", required: true },
+      text: { type: "string", description: "Text to place in the clipboard", required: true },
     },
     returns: "{ ok }",
     danger: "inject",

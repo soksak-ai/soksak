@@ -13,16 +13,17 @@ import { register } from "./registry";
 export function registerTurnCatalog(): void {
   register("turn.signal", {
     description:
-      "turn.ended 이벤트 발행(오픈 신호). 어떤 provider(ACP·외부 도구·테스트)든 턴 종료를 알릴 때. 구독자(메일함 등)가 받는다",
+      "Emit a turn.ended event (open signal). Use when any provider — ACP, external tool, or test harness — needs to signal that a turn has finished; subscribers such as the mailbox plugin react to this event.",
+    triggers: { ko: "턴 종료 신호 발행 턴완료 acp" },
     params: {
       source: {
         type: "string",
-        description: "신호 출처(shell/idle/acp 등 — 기본 acp)",
+        description: "Signal origin (shell / idle / acp — defaults to acp)",
       },
-      paneId: { type: "string", description: "관련 pane(선택)" },
-      project: { type: "string", description: "프로젝트 id(선택)" },
-      root: { type: "string", description: "프로젝트 root(스코프 키 — 구독자가 root 로 스코프)" },
-      command: { type: "string", description: "끝난 작업/명령 설명(본문 enrich, 선택)" },
+      paneId: { type: "string", description: "Related pane id (optional)" },
+      project: { type: "string", description: "Project id (optional)" },
+      root: { type: "string", description: "Project root path — scope key used by subscribers to filter events" },
+      command: { type: "string", description: "Description of the completed task or command (optional, enriches event body)" },
     },
     returns: "{ emitted }",
     errors: ["INTERNAL"],
@@ -42,10 +43,11 @@ export function registerTurnCatalog(): void {
 
   register("turn.idleDetection", {
     description:
-      "출력 유휴 휴리스틱 turn.ended provider 토글(기본 OFF). 실행 중 pane 출력이 N ms 멈추면 턴 종료로 추정(오탐 가능)",
+      "Toggle the idle-output heuristic turn.ended provider (off by default). When enabled, a pane with no output for N ms is treated as a completed turn; false positives are possible.",
+    triggers: { ko: "유휴감지 턴감지 아이들 idle 자동턴종료" },
     params: {
-      enabled: { type: "boolean", description: "켜기/끄기", required: true },
-      ms: { type: "number", description: "무출력 임계(ms, 기본 2000, 최소 250)" },
+      enabled: { type: "boolean", description: "Enable or disable idle detection", required: true },
+      ms: { type: "number", description: "No-output threshold in ms (default 2000, minimum 250)" },
     },
     returns: "{ enabled, ms }",
     errors: ["INVALID_PARAMS", "INTERNAL"],

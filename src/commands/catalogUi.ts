@@ -8,11 +8,12 @@ import { register } from "./registry";
 export function registerUiCatalog(): void {
   register("ui.validate", {
     description:
-      "보더 소유권 계약(docs/UI.md §B) 검증 — 살아있는 DOM 의 4변 computed border 를 계약 테이블과 대조해 위반을 적발",
+      "Validate the border ownership contract (docs/UI.md §B) against the live DOM. Compares computed border values on all four edges with the contract table and reports violations. Use as the single RED/GREEN gate for border rules.",
+    triggers: { ko: "보더검증 테두리확인 ui검증 border contract" },
     params: {
       rule: {
         type: "string",
-        description: "규칙 id/셀렉터 부분 일치 필터(생략 시 전체)",
+        description: "Rule id or selector substring filter (omit to check all rules)",
       },
     },
     returns: "{ pass, rulesActive, elementsChecked, violations: [{rule, selector, index, edge, expected, actual}] }",
@@ -22,9 +23,10 @@ export function registerUiCatalog(): void {
 
   register("ui.expect", {
     description:
-      "지정 DOM 에 어느 변의 어떤 보더가 있어야 하는지 계약 기준으로 알려준다(규칙 없음도 답 — 필요하면 계약 테이블에 추가가 정도)",
+      "Look up which border rules apply to a given DOM selector according to the contract table. Returns matched rules and their expected edge configuration; no matching rule is also a valid answer (add to the contract table if coverage is needed).",
+    triggers: { ko: "보더기대 계약조회 border expect ui계약" },
     params: {
-      selector: { type: "string", description: "CSS 셀렉터", required: true },
+      selector: { type: "string", description: "CSS selector", required: true },
     },
     returns: "{ matchedElements, rules: [{id, active, kind, edges?, seam?, note}] }",
     examples: ['sok ui.expect \'{"selector":".egroup-status"}\''],

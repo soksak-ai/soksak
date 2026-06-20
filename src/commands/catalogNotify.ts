@@ -9,10 +9,11 @@ import { register } from "./registry";
 export function registerNotifyCatalog(): void {
   register("notify.show", {
     description:
-      "OS 알림 표시(title·body). 비포커스 시 푸시 동급(모바일식). 클릭→명령 실행은 딥링크(soksak://run?cmd=<명령>&p=<JSON>)로 — 알림 본문/후속 안내에 동봉",
+      "Show an OS desktop notification (title + body). Behaves like a push notification when the window is not focused. To trigger a command on click, embed a deep-link URL (soksak://run?cmd=<command>&p=<JSON>) in the body or follow-up message.",
+    triggers: { ko: "알림 보내기 푸시 통지 데스크톱알림" },
     params: {
-      title: { type: "string", description: "알림 제목", required: true },
-      body: { type: "string", description: "알림 본문", required: true },
+      title: { type: "string", description: "Notification title", required: true },
+      body: { type: "string", description: "Notification body text", required: true },
     },
     returns: "{ ok }",
     errors: ["INVALID_PARAMS", "INTERNAL"],

@@ -261,7 +261,7 @@ fn format_command_md(c: &Value) -> String {
     let mut out = format!("## `{name}`\n\n{}\n\n", c["description"].as_str().unwrap_or(""));
     let params = c["params"].as_object();
     if params.is_some_and(|p| !p.is_empty()) {
-        out.push_str("| 파라미터 | 타입 | 필수 | 설명 |\n|---|---|---|---|\n");
+        out.push_str("| Parameter | Type | Required | Description |\n|---|---|---|---|\n");
         for (k, p) in params.unwrap() {
             let ty = p["type"].as_str().unwrap_or("?");
             let req = if p["required"].as_bool().unwrap_or(false) { "✓" } else { "" };
@@ -272,18 +272,18 @@ fn format_command_md(c: &Value) -> String {
             }
             if let Some(d) = p.get("default") {
                 if !d.is_null() {
-                    desc.push_str(&format!(" [기본 {d}]"));
+                    desc.push_str(&format!(" [default {d}]"));
                 }
             }
             out.push_str(&format!("| `{k}` | {ty} | {req} | {desc} |\n"));
         }
         out.push('\n');
     }
-    out.push_str(&format!("**반환**: {}\n", c["returns"].as_str().unwrap_or("{}")));
+    out.push_str(&format!("**Returns**: {}\n", c["returns"].as_str().unwrap_or("{}")));
     if let Some(errs) = c["errors"].as_array() {
         if !errs.is_empty() {
             let list: Vec<_> = errs.iter().filter_map(Value::as_str).collect();
-            out.push_str(&format!("**에러**: {}\n", list.join(", ")));
+            out.push_str(&format!("**Errors**: {}\n", list.join(", ")));
         }
     }
     if let Some(ex) = c["examples"].as_array() {

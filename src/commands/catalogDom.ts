@@ -53,7 +53,8 @@ function resolveElement(addressStr: string): HTMLElement | null {
 export function registerDomCatalog(): void {
   register("ui.tree", {
     description:
-      "노출된 DOM 주소 트리 — 플러그인 뷰가 data-node 로 노출한 노드 + 호스트 크롬 노드의 절대 주소 목록. 임의 selector 가 아닌 구조적 주소로만 접근(노출 안 된 요소는 여기 없음 = 접근 불가)",
+      "Return the exposed DOM address tree — absolute addresses of nodes declared via data-node by plugin views and host-chrome elements. Use to discover addressable targets before calling ui.measure or ui.input.click; unexposed elements are absent and unreachable.",
+    triggers: { ko: "DOM 트리 주소목록 노드목록 ui트리" },
     params: {},
     returns: "{ window, count, nodes: [{ address, nodePath }] }",
     examples: ["sok ui.tree"],
@@ -65,9 +66,10 @@ export function registerDomCatalog(): void {
 
   register("ui.measure", {
     description:
-      "DOM 주소 측정 — 노출 노드의 rect(뷰포트 px)와 핵심 computed style. 픽셀 정렬 진단용. 주소(ui.tree)로만 — selector 금지",
+      "Measure an exposed node — returns its viewport rect (px) and key computed style values. Use for pixel-alignment diagnostics. Accepts structural addresses from ui.tree only; CSS selectors are rejected.",
+    triggers: { ko: "DOM 측정 레이아웃 rect 크기 스타일" },
     params: {
-      address: { type: "string", description: "노출 노드 주소(ui.tree 의 address)", required: true },
+      address: { type: "string", description: "Exposed node address from ui.tree", required: true },
     },
     returns: "{ address, rect:{x,y,w,h}, style }",
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
@@ -103,9 +105,10 @@ export function registerDomCatalog(): void {
 
   register("ui.input.click", {
     description:
-      "DOM 주소 클릭 주입(흐름 E2E) — 노출 노드(ui.tree)에 click 디스패치. 노출 안 된 주소는 NOT_EXPOSED(추측 0)",
+      "Dispatch a click event to an exposed node (E2E injection). Use to drive UI flows programmatically or in tests. Unexposed addresses return NOT_EXPOSED — no guessing.",
+    triggers: { ko: "클릭 주입 ui클릭 버튼클릭 E2E" },
     params: {
-      address: { type: "string", description: "노출 노드 주소", required: true },
+      address: { type: "string", description: "Exposed node address from ui.tree", required: true },
     },
     returns: "{ clicked, address }",
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],

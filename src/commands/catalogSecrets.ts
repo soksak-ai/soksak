@@ -1,30 +1,32 @@
-// secret.* 명령 — 암호화 시크릿 볼트(Rust SecretsState)의 코어 표면을 command registry 로 노출
-// (단일 진실). CLI/MCP e2e 자가검증용 — unlock/lock/backend 운영 + ns·key 관리(set/has/keys/delete).
+// secret.* commands — exposes the encrypted secret vault (Rust SecretsState) through command registry
+// (single source of truth). Covers CLI/MCP e2e self-verification: vault ops (unlock/lock/backend)
+// + ns·key management (set/has/keys/delete).
 //
-// get 명령 없음 — 평문 readback 을 코어가 차단한다(2b 의 secretRef 주입만이 평문 경로). 관리 명령은
-// 전부 invoke 위임(볼트·crypto 는 Rust 단일 진실). 헤드리스 e2e 는 SOKSAK_VAULT_KEY 자동 unlock 또는
-// secret.unlock 으로 연다.
+// No get command — the core blocks plaintext readback (secretRef injection via 2b is the only plaintext path).
+// All management commands delegate to invoke (vault/crypto are Rust single source of truth).
+// Headless e2e opens the vault via SOKSAK_VAULT_KEY auto-unlock or secret.unlock.
 
 import { invoke } from "@tauri-apps/api/core";
 import { register } from "./registry";
 
 const NS_PARAM = {
   type: "string",
-  description: "네임스페이스(플러그인 id 또는 core)",
+  description: "Namespace (plugin id or core)",
   required: true,
 } as const;
 
 const KEY_PARAM = {
   type: "string",
-  description: "시크릿 key(영숫자·-·_·.)",
+  description: "Secret key name (alphanumeric, -, _, .)",
   required: true,
 } as const;
 
 export function registerSecretsCatalog(): void {
   register("secret.unlock", {
     description:
-      "마스터 passphrase 로 시크릿 볼트 열기(없으면 새 볼트 생성). KEK 를 메모리에만 보관 — 디스크엔 암호문만. 헤드리스는 SOKSAK_VAULT_KEY env 로 자동 unlock",
-    params: { passphrase: { type: "string", description: "마스터 passphrase", required: true } },
+      "Unlock the secret vault with a master passphrase (creates a new vault if one does not exist). Keeps the KEK in memory only — only ciphertext is on disk. For headless use, set SOKSAK_VAULT_KEY env to auto-unlock.",
+    triggers: { ko: "시크릿 볼트 열기 잠금해제 unlock 마스터키" },
+    params: { passphrase: { type: "string", description: "Master passphrase for the vault", required: true } },
     returns: "{ ok }",
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
@@ -39,7 +41,8 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.lock", {
-    description: "시크릿 볼트 잠그기 — 메모리의 KEK 를 소거(zeroize). 이후 연산은 unlock 전까지 거부",
+    description: "Lock the secret vault by zeroing the in-memory KEK. All subsequent operations are rejected until unlock is called again.",
+    triggers: { ko: "시크릿 볼트 잠금 lock 닫기" },
     params: {},
     returns: "{ ok }",
     errors: ["INTERNAL"],
@@ -51,7 +54,8 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.backend", {
-    description: "볼트 백엔드·잠금 상태 조회({ backend:\"vault\", unlocked })",
+    description: "Query the vault backend type and current lock state. Use to check whether the vault is open before performing secret operations.",
+    triggers: { ko: "시크릿 볼트 상태 백엔드 잠금여부" },
     params: {},
     returns: "{ backend, unlocked }",
     errors: ["INTERNAL"],
@@ -63,8 +67,9 @@ export function registerSecretsCatalog(): void {
 
   register("secret.set", {
     description:
-      "ns 의 key 에 민감값을 봉인 저장(envelope — 항목별 DEK 를 KEK 로 wrap). 같은 key 면 교체. 볼트가 잠겨 있으면 거부",
-    params: { ns: NS_PARAM, key: KEY_PARAM, value: { type: "string", description: "저장할 민감값", required: true } },
+      "Store a sensitive value under ns/key using envelope encryption (per-item DEK wrapped by the KEK). Overwrites the existing value if the key already exists. Rejected if the vault is locked.",
+    triggers: { ko: "시크릿 저장 설정 키 값 저장 set 보관" },
+    params: { ns: NS_PARAM, key: KEY_PARAM, value: { type: "string", description: "Sensitive value to store", required: true } },
     returns: "{ ok }",
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
@@ -79,7 +84,8 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.has", {
-    description: "ns 의 key 존재 여부(값은 노출하지 않음 — 평문 readback 차단)",
+    description: "Check whether ns/key exists in the vault without exposing the value (plaintext readback is blocked by the core).",
+    triggers: { ko: "시크릿 존재 확인 있는지 has 체크" },
     params: { ns: NS_PARAM, key: KEY_PARAM },
     returns: "{ has }",
     errors: ["INVALID_PARAMS", "INTERNAL"],
@@ -94,7 +100,8 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.keys", {
-    description: "ns 의 시크릿 key 목록(값 아님). 무엇이 저장돼 있는지 점검용",
+    description: "List the secret key names stored under a namespace (values are never returned). Use to audit what is stored in a namespace.",
+    triggers: { ko: "시크릿 목록 키 리스트 조회" },
     params: { ns: NS_PARAM },
     returns: "{ keys: string[] }",
     errors: ["INVALID_PARAMS", "INTERNAL"],
@@ -109,7 +116,8 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.delete", {
-    description: "ns 의 key 삭제(있었으면 removed=true). 볼트가 잠겨 있으면 거부",
+    description: "Delete ns/key from the vault (removed=true if the key existed). Rejected if the vault is locked.",
+    triggers: { ko: "시크릿 삭제 제거 지우기 delete" },
     params: { ns: NS_PARAM, key: KEY_PARAM },
     returns: "{ removed }",
     danger: "destructive",

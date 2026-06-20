@@ -1,5 +1,5 @@
-// git.* 명령 — 읽기 전용 git 조회(Rust git.rs 위임). path 생략 시 활성 프로젝트 루트.
-// registerCatalog() 말미에서 등록(카탈로그 분권 — catalog.ts 비대화 방지).
+// git.* commands — read-only git queries delegated to Rust git.rs. path defaults to active project root.
+// Registered at the end of registerCatalog() (catalog split — prevents catalog.ts bloat).
 
 import { invoke } from "@tauri-apps/api/core";
 import { useSessions } from "../state/sessions";
@@ -11,7 +11,7 @@ const notFound = (what: string) => ({
   message: what,
 });
 
-// path 파라미터 해석: 명시 > 활성 프로젝트 루트. 루트 없는 프로젝트면 에러.
+// path resolution: explicit param > active project root. Returns null if no root available.
 function resolveRepoPath(p: Record<string, unknown>): string | null {
   if (typeof p.path === "string" && p.path.trim()) return p.path;
   const s = useSessions.getState();
@@ -20,15 +20,16 @@ function resolveRepoPath(p: Record<string, unknown>): string | null {
 
 const PATH_PARAM = {
   type: "string",
-  description: "저장소 경로(생략 시 활성 프로젝트 루트)",
+  description: "Repository path (defaults to active project root when omitted)",
 } as const;
 
 export function registerGitCatalog(): void {
   register("git.init", {
     description:
-      "디렉토리에 .git 이 없으면 git init(있으면 no-op, 멱등). 루트 초기화 정책 플러그인(soksak-plugin-git-init)이 project.created 이벤트와 조합해 사용",
+      "Run git init in a directory if .git is absent (no-op when already initialized, idempotent). Use with project.created event in a git-init policy plugin to auto-initialize repos on project creation.",
+    triggers: { ko: "깃 초기화 저장소 생성 init" },
     params: { path: PATH_PARAM },
-    returns: "{ initialized(수행 여부), path }",
+    returns: "{ initialized: whether init was performed, path }",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
     examples: ['sok git.init \'{"path":"/Users/me/work"}\''],
     handler: async (p) => {
@@ -40,11 +41,12 @@ export function registerGitCatalog(): void {
   });
 
   register("git.log", {
-    description: "커밋 이력(최신순). limit 기본 50/최대 500, skip 으로 페이지네이션",
+    description: "Retrieve commit history in reverse-chronological order. Supports pagination via limit (default 50, max 500) and skip.",
+    triggers: { ko: "깃 로그 커밋 이력 히스토리" },
     params: {
       path: PATH_PARAM,
-      limit: { type: "number", description: "최대 건수(기본 50, 상한 500)" },
-      skip: { type: "number", description: "건너뛸 건수(페이지네이션)" },
+      limit: { type: "number", description: "Maximum number of commits to return (default 50, max 500)" },
+      skip: { type: "number", description: "Number of commits to skip for pagination" },
     },
     returns: "{ commits: [{hash, short, author, date, subject}] }",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
@@ -62,11 +64,12 @@ export function registerGitCatalog(): void {
   });
 
   register("git.show", {
-    description: "커밋 1개 상세 — 메타 + 변경 파일 목록 + 패치 전문",
+    description: "Show a single commit in full: metadata, changed file list, and the raw patch. Use to inspect what a specific commit introduced.",
+    triggers: { ko: "깃 커밋 상세 패치 변경내용 보기" },
     params: {
       commit: {
         type: "string",
-        description: "커밋 해시(4~40 hex) 또는 HEAD/HEAD~N/HEAD^",
+        description: "Commit hash (4–40 hex) or symbolic ref such as HEAD, HEAD~N, or HEAD^",
         required: true,
       },
       path: PATH_PARAM,
@@ -87,12 +90,13 @@ export function registerGitCatalog(): void {
 
   register("git.diff", {
     description:
-      "unified diff 원문 — 기본 작업트리, staged=true 면 index, commit 지정 시 그 커밋의 패치",
+      "Return the raw unified diff for the working tree (default), the index when staged=true, or a specific commit's patch when commit is supplied. Use to inspect uncommitted or committed changes.",
+    triggers: { ko: "깃 diff 변경 차이 수정내용 스테이지" },
     params: {
       path: PATH_PARAM,
-      file: { type: "string", description: "특정 파일로 한정(저장소 상대경로)" },
-      commit: { type: "string", description: "커밋 해시/HEAD 참조" },
-      staged: { type: "boolean", description: "index(staged) diff", default: false },
+      file: { type: "string", description: "Limit diff to this file (repository-relative path)" },
+      commit: { type: "string", description: "Commit hash or HEAD reference" },
+      staged: { type: "boolean", description: "Diff the index (staged changes) instead of the working tree", default: false },
     },
     returns: "{ diff: string }",
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],

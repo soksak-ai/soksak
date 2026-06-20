@@ -150,7 +150,11 @@ export const ViewTabs = memo(function ViewTabs({
               )}
             </span>
             <span className="view-tab-title">
-              {v.kind === "terminal" ? t("view.terminal") : v.title}
+              {v.kind === "terminal"
+                ? t("view.terminal")
+                : v.kind === "browser"
+                  ? t("view.browser")
+                  : v.title}
             </span>
             {v.kind === "file" && v.dirty && (
               <span className="view-tab-dirty" title={t("viewer.unsaved")}>
