@@ -1,9 +1,8 @@
-// 프로젝트 설정 모달 — 생성 시 설정 전부를 관리: 폴더(읽기 전용)·별칭·식별 색·
-// 첫 프로그램·셸. 탭/레일 칩 더블클릭으로 연다(인라인 rename 대체).
-import { ProgramOptions } from "./ProgramOptions";
+// 프로젝트 설정 모달 — 생성 시 설정 전부를 관리: 폴더(읽기 전용)·별칭·식별 색·셸.
+// 탭/레일 칩 더블클릭으로 연다(인라인 rename 대체).
 import { useEffect, useState } from "react";
 import { isComposingEnter } from "../lib/imeKeys";
-import { useSessions, type Program } from "../state/sessions";
+import { useSessions } from "../state/sessions";
 import { useSettings } from "../state/settings";
 import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
@@ -40,7 +39,6 @@ export function ProjectSettingsModal({
   const defaultProjectRoot = useSettings((s) => s.defaultProjectRoot);
   const setDefaultProjectRoot = useSettings((s) => s.setDefaultProjectRoot);
   const [name, setName] = useState(project?.title ?? "");
-  const [program, setProgram] = useState<Program | "">(project?.program ?? "");
   const [shell, setShell] = useState(project?.shell ?? "");
   const { cardRef, cardStyle, onHeaderDown } = useDraggableModal();
 
@@ -61,7 +59,6 @@ export function ProjectSettingsModal({
     updateProject(projectId, {
       // 별칭 비우면 폴더명 폴백(P4 — 표시명은 항상 존재).
       title: name.trim() || baseName(project.root),
-      program: program || null,
       shell: shell.trim() || null,
     });
     onClose();
@@ -157,17 +154,6 @@ export function ProjectSettingsModal({
             </div>
           </div>
 
-          <div className="drow">
-            <span className="drow-label">{t("project.program")}</span>
-            <select
-              className="dctl"
-              value={program}
-              onChange={(e) => setProgram(e.target.value as Program | "")}
-            >
-              <option value="">{t("program.default")}</option>
-              <ProgramOptions current={program || undefined} />
-            </select>
-          </div>
 
           <div className="drow">
             <span className="drow-label">{t("settings.shell")}</span>

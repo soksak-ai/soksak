@@ -6,14 +6,12 @@ import {
   type CursorStyle,
   type ResizeReflow,
   type XtermRenderer,
-  type DefaultProgram,
   type Language,
   type TabPosition,
   type FocusIndicator,
   type BrowserNewWindow,
 } from "../state/settings";
 import { useTheme } from "../state/theme";
-import { ProgramOptions } from "./ProgramOptions";
 import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useIconRegistry } from "../ui/icons/registry";
@@ -310,18 +308,6 @@ export function SettingsModal({
             </select>
           </div>
           */}
-          <div className="drow">
-            <span className="drow-label">{t("settings.defaultProgram")}</span>
-            <select
-              className="dctl"
-              value={s.defaultProgram}
-              onChange={(e) =>
-                s.setDefaultProgram(e.target.value as DefaultProgram)
-              }
-            >
-              <ProgramOptions current={s.defaultProgram} />
-            </select>
-          </div>
 
           <div className="dsec">{t("settings.font")}</div>
           <div className="drow">

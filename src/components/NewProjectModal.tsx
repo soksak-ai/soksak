@@ -1,7 +1,6 @@
-import { ProgramOptions } from "./ProgramOptions";
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useSessions, type Program } from "../state/sessions";
+import { useSessions } from "../state/sessions";
 import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
@@ -35,8 +34,6 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState(""); // auto=폴더명(슬러그) / manual=별칭(자유)
   const [root, setRoot] = useState<string | undefined>(undefined);
   const [rootError, setRootError] = useState<string | null>(null);
-  // "" = 기본값(전역 설정 따름). 지정하면 프로젝트 설정이 우선.
-  const [program, setProgram] = useState<Program | "">("");
   const [shell, setShell] = useState("");
   const { cardRef, cardStyle, onHeaderDown } = useDraggableModal();
 
@@ -81,7 +78,6 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
     addProject({
       alias: nameValue, // 비면 makeProject 가 폴더명 폴백
       root: finalRoot,
-      program: program || undefined,
       shell: shell.trim() || undefined,
     });
     onClose();
@@ -169,18 +165,6 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
                 : t("project.folderNameHint", { name: nameValue || "<폴더명>" })}
             </div>
           ) : null}
-
-          <div className="drow">
-            <span className="drow-label">{t("project.program")}</span>
-            <select
-              className="dctl"
-              value={program}
-              onChange={(e) => setProgram(e.target.value as Program | "")}
-            >
-              <option value="">{t("program.default")}</option>
-              <ProgramOptions current={program || undefined} />
-            </select>
-          </div>
 
           <div className="drow">
             <span className="drow-label">{t("settings.shell")}</span>

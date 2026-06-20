@@ -7,10 +7,6 @@ export type CursorStyle = "block" | "bar" | "underline";
 export type TabPosition = "top" | "left";
 // 분할 패널 헤더: 제목표시줄(단일 뷰) 또는 탭(여러 뷰 + +).
 export type SplitHeaderMode = "title" | "tabs";
-// 첫 화면 프로그램(새 컨텐츠/프로젝트 기본). 내장 "terminal"·"browser" +
-// 플러그인 등록 프로그램 id — 미등록 값은 사용 시점에 터미널 폴백.
-// settings → sessions 단방향 import 를 지키기 위해 여기서 독립 정의.
-export type DefaultProgram = string;
 // 원격(AI/CLI/MCP) 위험 명령 정책. allow=즉시 실행, deny=차단(권한 게이트, M3).
 export type DangerPolicy = "allow" | "deny";
 // 포커스 영역 표시: outline=사각 아웃라인, corners=모서리 꺽쇠 4개.
@@ -51,8 +47,6 @@ interface SettingsState extends TerminalSettings {
   contentTabPosition: TabPosition;
   // 분할 패널 헤더 모드(기본 title).
   splitHeaderMode: SplitHeaderMode;
-  // 첫 화면(새 컨텐츠 기본 프로그램). 프로젝트 설정이 있으면 그것이 우선.
-  defaultProgram: DefaultProgram;
   // 터미널 셸 경로("" = 시스템 기본 $SHELL). 프로젝트 설정이 있으면 그것이 우선.
   shell: string;
   // 브라우저 시작 URL.
@@ -75,7 +69,6 @@ interface SettingsState extends TerminalSettings {
   setProjectTabPosition: (p: TabPosition) => void;
   setContentTabPosition: (p: TabPosition) => void;
   setSplitHeaderMode: (m: SplitHeaderMode) => void;
-  setDefaultProgram: (p: DefaultProgram) => void;
   setShell: (s: string) => void;
   setHomeUrl: (u: string) => void;
   setRemoteDestructive: (p: DangerPolicy) => void;
@@ -99,7 +92,6 @@ const DEFAULTS = {
   projectTabPosition: "top" as TabPosition,
   contentTabPosition: "top" as TabPosition,
   splitHeaderMode: "title" as SplitHeaderMode,
-  defaultProgram: "terminal" as DefaultProgram,
   shell: "",
   homeUrl: "https://www.google.com",
   remoteDestructive: "allow" as DangerPolicy,
@@ -154,7 +146,6 @@ export const useSettings = create<SettingsState>((set, get) => {
         projectTabPosition: s.projectTabPosition,
         contentTabPosition: s.contentTabPosition,
         splitHeaderMode: s.splitHeaderMode,
-        defaultProgram: s.defaultProgram,
         shell: s.shell,
         homeUrl: s.homeUrl,
         remoteDestructive: s.remoteDestructive,
@@ -184,10 +175,6 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setSplitHeaderMode: (splitHeaderMode) => {
       set({ splitHeaderMode });
-      save();
-    },
-    setDefaultProgram: (defaultProgram) => {
-      set({ defaultProgram });
       save();
     },
     setShell: (shell) => {

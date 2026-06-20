@@ -289,7 +289,6 @@ function serializeContent(c: ContentArea, activeContentId: string) {
   return {
     id: c.id,
     title: c.title,
-    program: c.program,
     active: c.id === activeContentId,
     activeGroupId: c.activeGroupId,
     maximizedViewId: c.maximizedViewId ?? null,
@@ -317,7 +316,6 @@ function serializeTree() {
       id: t.id,
       title: t.title,
       root: t.root ?? null,
-      program: t.program ?? null,
       color: t.color ?? null,
       sidebarOpen: t.sidebarOpen,
       active: t.id === s.activeId,
@@ -498,7 +496,6 @@ export function registerCatalog(): void {
       return S().addProject({
         alias,
         root,
-        program: p.program as Program | undefined,
         shell: p.shell as string | undefined,
       });
     },
@@ -561,10 +558,6 @@ export function registerCatalog(): void {
     params: {
       project: { ...P.project, required: true },
       title: { type: "string", description: "Alias (empty string is ignored)" },
-      program: {
-        type: "string",
-        description: 'Initial view program id ("" = follow global setting)',
-      },
       shell: { type: "string", description: 'Terminal shell path ("" = default)' },
       color: { type: "string", description: 'Accent color ("" = remove)' },
     },
@@ -576,10 +569,6 @@ export function registerCatalog(): void {
     handler: (p) =>
       S().updateProject(p.project as string, {
         title: p.title as string | undefined,
-        program:
-          p.program === undefined
-            ? undefined
-            : ((p.program || null) as Program | null),
         shell: p.shell === undefined ? undefined : (p.shell as string) || null,
         color: p.color === undefined ? undefined : (p.color as string) || null,
       }),
@@ -630,7 +619,6 @@ export function registerCatalog(): void {
         contents: t.contents.map((c) => ({
           id: c.id,
           title: c.title,
-          program: c.program,
           active: c.id === t.activeContentId,
         })),
       };
@@ -1701,7 +1689,6 @@ export function registerCatalog(): void {
   const SETTING_KEYS = [
     "language",
     "projectTabPosition",
-    "defaultProgram",
     "shell",
     "homeUrl",
     "fontFamily",
@@ -1727,7 +1714,6 @@ export function registerCatalog(): void {
       return {
         language: s.language,
         projectTabPosition: s.projectTabPosition,
-        defaultProgram: s.defaultProgram,
         shell: s.shell,
         homeUrl: s.homeUrl,
         fontFamily: s.fontFamily,
@@ -1764,7 +1750,7 @@ export function registerCatalog(): void {
       value: {
         type: "json",
         description:
-          "Value — language:ko|en, projectTabPosition:top|left, defaultProgram:string (program id — see program.list; unregistered falls back to terminal), fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, xtermRenderer:dom|webgl, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners",
+          "Value — language:ko|en, projectTabPosition:top|left, fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, xtermRenderer:dom|webgl, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners",
         required: true,
       },
     },
@@ -1791,11 +1777,6 @@ export function registerCatalog(): void {
         case "projectTabPosition":
           if (v !== "top" && v !== "left") return bad("top|left");
           s.setProjectTabPosition(v);
-          break;
-        case "defaultProgram":
-          if (typeof v !== "string" || !v.trim())
-            return bad("string(프로그램 id — program.list 참조)");
-          s.setDefaultProgram(v.trim());
           break;
         case "shell":
           if (typeof v !== "string") return bad("string(셸 경로, ''=기본)");

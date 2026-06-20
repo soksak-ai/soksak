@@ -53,9 +53,13 @@ describe("openPluginView", () => {
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     // 다른 뷰를 활성화해 둔 뒤 재요청 → 기존 plugin 뷰로 복귀해야 한다.
-    const { groups } = activeLayout();
-    const other = groups[0].views.find((v) => v.id !== first.viewId)!;
-    useSessions.getState().setActiveView("t1", other.id);
+    // (빈 그룹 모델 — 첫 화면 자동 뷰가 없으므로 다른 plugin 뷰를 하나 더 열어 활성으로 둔다.)
+    const other = useSessions
+      .getState()
+      .openPluginView("t1", "soksak-plugin-git-diff", "view", "디프");
+    expect(other.ok).toBe(true);
+    if (!other.ok) return;
+    expect(other.viewId).not.toBe(first.viewId);
 
     const again = useSessions
       .getState()
