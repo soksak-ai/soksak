@@ -12,6 +12,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { listenThisWindow } from "./lib/windowEvents";
 import { rafThrottle } from "./lib/rafThrottle";
+import { parkedStyle } from "./lib/layerPark";
 import type { TreeThemeInput } from "@pierre/trees";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
 import { PluginSidebar } from "./components/PluginSidebar";
@@ -200,10 +201,10 @@ const ProjectPane = memo(function ProjectPane({
               <div
                 key={c.id}
                 className="content-pane"
-                style={{
-                  visibility: isActiveContent ? "visible" : "hidden",
-                  zIndex: isActiveContent ? 1 : 0,
-                }}
+                // 비활성 콘텐츠는 화면 밖으로 파킹(R12 단일 진실) — visibility:hidden 만으로는 그 안의
+                // 터미널 WebGL 캔버스가 GPU 레이어로 합성돼 활성 콘텐츠의 브라우저 홀로 비친다. 뷰 슬롯
+                // (GroupArea)과 동일 규칙을 같은 헬퍼로 적용(층 간 일치).
+                style={parkedStyle(isActiveContent)}
               >
                 <GroupArea
                   content={c}
