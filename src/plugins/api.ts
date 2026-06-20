@@ -86,6 +86,10 @@ export interface PluginApiDeps {
   // 클립보드 변경(clipboard-change) 전 창 구독 — 바뀐 텍스트를 콜백. 반환=해지. (선례 onFsChange.)
   // 폴링은 macOS 한정(NSPasteboard 이벤트 없음); Win/X11/Wayland 은 네이티브 이벤트 — 코어가 흡수.
   onClipboardChange: (cb: (text: string) => void) => () => void;
+  // 터미널 pane cwd 스냅샷/구독 + 명령 종료 구독(코어 paneHosts 브리지). app.terminal 이 노출.
+  getCwd: (paneId: string) => string | undefined;
+  subscribeCwd: (paneId: string, cb: (cwd: string) => void) => () => void;
+  subscribeCommandFinished: (paneId: string, cb: () => void) => () => void;
 }
 
 // data-change 페이로드 — Rust commands.rs DataChange 와 동형. coll/scope/id 는 연산에 따라 null.
@@ -316,6 +320,13 @@ export interface SoksakPluginApi {
     /** pane 터미널 화면 갱신 구독(프레임당 1회 코얼레스, 폴링 없음). 반환=해지.
      *  "terminal:read" 권한 한정 — 버퍼 재독 트리거(라이브 스트림·입력 검증). */
     onOutput?: (paneId: string, cb: () => void) => Disposable;
+    /** 이 pane 터미널의 현재 작업 디렉토리(cwd) 스냅샷. 셸 통합(OSC 7/633) 전이면 undefined.
+     *  "terminal" 권한. cwd 추종 뷰(파일 탐색기 등)가 ctx.paneId 와 함께 사용. */
+    getCwd?: (paneId: string) => string | undefined;
+    /** pane cwd 변경 구독(폴링 없음). 현재값이 있으면 등록 즉시 1회. 반환=해지. "terminal" 권한. */
+    onCwd?: (paneId: string, cb: (cwd: string) => void) => Disposable;
+    /** pane 의 명령 종료(OSC 133/633 D) 구독 — git 등 파생 상태 갱신 트리거. 반환=해지. "terminal" 권한. */
+    onCommandFinished?: (paneId: string, cb: () => void) => Disposable;
   };
   /** 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합). "process" 권한.
    *  PTY 가 아니라 순수 파이프 → JSON-RPC 프레이밍 무손상. 이벤트 기반(폴링 0). */
@@ -1142,7 +1153,14 @@ export function buildPluginApi(
       has("terminal") || has("terminal:read") || has("terminal:write")
         ? {
             ...(has("terminal")
-              ? { runningCommands: () => runningCommands() }
+              ? {
+                  runningCommands: () => runningCommands(),
+                  getCwd: (paneId: string) => deps.getCwd(paneId),
+                  onCwd: (paneId: string, cb: (cwd: string) => void) =>
+                    tracker.wrap(deps.subscribeCwd(paneId, cb)),
+                  onCommandFinished: (paneId: string, cb: () => void) =>
+                    tracker.wrap(deps.subscribeCommandFinished(paneId, cb)),
+                }
               : {}),
             ...(has("terminal:read")
               ? {

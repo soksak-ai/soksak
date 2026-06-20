@@ -46,6 +46,9 @@ function fakeDeps(): PluginApiDeps {
     onFsChange: () => () => {},
     onDataChange: () => () => {},
     onClipboardChange: () => () => {},
+    getCwd: () => undefined,
+    subscribeCwd: () => () => {},
+    subscribeCommandFinished: () => () => {},
   };
 }
 

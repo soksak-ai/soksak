@@ -16,11 +16,14 @@ export const PluginViewHost = memo(function PluginViewHost({
   projectId,
   root,
   region,
+  paneId = null,
 }: {
   viewKey: string; // "<pluginId>.<viewId>"
   projectId: string;
   root: string | null;
   region: Region; // left|content|right — 컨테이너 절대 주소의 영역 세그먼트
+  // 이 뷰가 추종할 터미널 pane(cwd 추종 대상). 미지정=null(계약 A13/S7). 사이드바 호스트가 cwdPaneOf 전달.
+  paneId?: string | null;
 }) {
   // 이 뷰 컨테이너의 절대 주소(노드 스캔의 baseAddress). project 는 경로(슬래시 충돌)라 활성 기준 생략 —
   // <region>/view/<viewKey>. win 생략=현재 창. 안정 세그먼트(region·qualifiedViewId)라 멱등. ui.tree 가 읽는다.
@@ -41,6 +44,7 @@ export const PluginViewHost = memo(function PluginViewHost({
       reg.provider.mount(el, {
         projectId,
         root,
+        paneId,
         // 이 창의 그 뷰 탭 배지(per-window — 창마다 자체 store). 데이터 변경 시 플러그인이 재계산.
         setBadge: (badge) =>
           useViewRegistry.getState().setViewBadge(viewKey, badge),
@@ -59,7 +63,7 @@ export const PluginViewHost = memo(function PluginViewHost({
       }
       el.replaceChildren(); // unmount 미구현 provider 대비 — 호스트가 정리 보장
     };
-  }, [reg, projectId, root, viewKey]);
+  }, [reg, projectId, root, paneId, viewKey]);
 
   // 컨테이너는 항상 렌더(ref 유지) — 에러/부재는 위에 겹쳐 보여 재등록 시 복구 가능.
   const overlay = !reg ? (

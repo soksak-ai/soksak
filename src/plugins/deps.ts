@@ -11,6 +11,11 @@ import {
 } from "../commands/registry";
 import { allGroups, useSessions } from "../state/sessions";
 import { getFileView } from "../commands/fileViewBridge";
+import {
+  getCwdOfHost,
+  subscribeCwd,
+  subscribeCommandFinished,
+} from "../terminal/paneHosts";
 import { onPluginEvent } from "./hooks";
 import type { DataChangeEvent, PluginApiDeps } from "./api";
 
@@ -92,5 +97,9 @@ export function defaultPluginDeps(appVersion: string): PluginApiDeps {
         un();
       };
     },
+    // 터미널 pane cwd 스냅샷/구독 + 명령 종료 구독 — 코어 paneHosts 브리지(app.terminal 노출).
+    getCwd: (paneId) => getCwdOfHost(paneId),
+    subscribeCwd: (paneId, cb) => subscribeCwd(paneId, cb),
+    subscribeCommandFinished: (paneId, cb) => subscribeCommandFinished(paneId, cb),
   };
 }

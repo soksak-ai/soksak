@@ -42,6 +42,9 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
     onFsChange: () => () => {},
     onDataChange: () => () => {},
     onClipboardChange: () => () => {},
+    getCwd: () => undefined,
+    subscribeCwd: () => () => {},
+    subscribeCommandFinished: () => () => {},
     ...overrides,
   };
 }
@@ -53,6 +56,30 @@ beforeEach(() => {
     extensions: [],
     languages: [],
     formatters: [],
+  });
+});
+
+describe("터미널 cwd 표면(A13 raw — terminal 권한)", () => {
+  it("terminal 권한 시 getCwd/onCwd/onCommandFinished 가 deps 로 위임", () => {
+    const getCwd = vi.fn(() => "/cwd");
+    const subscribeCwd = vi.fn(() => () => {});
+    const subscribeCommandFinished = vi.fn(() => () => {});
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["terminal"] }),
+      "/d",
+      fakeDeps({ getCwd, subscribeCwd, subscribeCommandFinished }),
+    );
+    expect(api.terminal?.getCwd?.("pane1")).toBe("/cwd");
+    expect(getCwd).toHaveBeenCalledWith("pane1");
+    api.terminal?.onCwd?.("pane1", () => {});
+    expect(subscribeCwd).toHaveBeenCalled();
+    api.terminal?.onCommandFinished?.("pane1", () => {});
+    expect(subscribeCommandFinished).toHaveBeenCalled();
+  });
+
+  it("terminal 권한 미선언 시 cwd 표면(및 terminal 객체) 부재", () => {
+    const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
+    expect(api.terminal).toBeUndefined();
   });
 });
 

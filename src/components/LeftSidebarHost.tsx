@@ -102,6 +102,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
               projectId={project.id}
               root={project.root}
               region="left"
+              paneId={paneId}
             />
           </div>
         )}
@@ -117,6 +118,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
             projectId={project.id}
             root={project.root}
             region="left"
+            paneId={paneId}
           />
         </div>
       ))}
