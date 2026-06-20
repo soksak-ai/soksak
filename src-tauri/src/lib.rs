@@ -8,6 +8,7 @@ mod fs;
 mod git;
 mod http;
 pub mod ipc;
+mod mediaproxy;
 mod network;
 mod notify;
 mod plugins;
@@ -117,6 +118,11 @@ pub fn run() {
             if let Err(e) = ipc::start(app.handle().clone()) {
                 eprintln!("[ipc] 소켓 서버 기동 실패: {e}");
             }
+            // 범용 미디어 스트리밍 프록시(루프백 HTTP) — webview 가 못 받는 Referer/CORS 보호 미디어를
+            // 헤더 주입해 바이너리 스트리밍한다. media.proxy.* 가 표면. 기동 실패는 재생만 실패(앱은 산다).
+            if let Err(e) = mediaproxy::start() {
+                eprintln!("[mediaproxy] 프록시 서버 기동 실패: {e}");
+            }
             // 딥링크 라우팅 — soksak://run?cmd=... 외부 진입/알림 클릭이 한 명령을 실행한다(CmdBridge 경유,
             // 단일 실행 경로). dev 는 스킴이 OS 미등록일 수 있어 register_all 로 런타임 등록(프로덕션은
             // tauri.conf plugins.deep-link). 파싱 실패/미지 URL 은 조용히 무시(명령 누출 0).
@@ -202,6 +208,7 @@ pub fn run() {
             ws::ws_send,
             ws::ws_close,
             http::network_http_request,
+            mediaproxy::media_proxy_info,
             notify::notify_show,
             schedule::schedule_set,
             schedule::schedule_cancel,
@@ -266,6 +273,7 @@ pub fn run() {
             browser::browser_list,
             browser::browser_open_window,
             browser::browser_eval,
+            browser::browser_media_extract,
             browser::browser_overlay_active,
             browser::browser_dom_holes,
             browser::browser_debug_hierarchy,
@@ -297,6 +305,7 @@ pub fn run() {
                 app_handle.state::<ProcessManager>().kill_all();
                 app_handle.state::<ws::WsManager>().close_all();
                 ipc::cleanup();
+                mediaproxy::cleanup();
             }
         });
 }
