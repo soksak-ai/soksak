@@ -13,7 +13,6 @@ import { listen } from "@tauri-apps/api/event";
 import { listenThisWindow } from "./lib/windowEvents";
 import { rafThrottle } from "./lib/rafThrottle";
 import { parkedStyle } from "./lib/layerPark";
-import type { TreeThemeInput } from "@pierre/trees";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
 import { PluginSidebar } from "./components/PluginSidebar";
 import { ContentTabs } from "./components/ContentTabs";
@@ -132,7 +131,6 @@ const ProjectPane = memo(function ProjectPane({
   sidebarW,
   rightW,
   contentTabPosition,
-  treeTheme,
   startResize,
   startRightResize,
 }: {
@@ -142,16 +140,10 @@ const ProjectPane = memo(function ProjectPane({
   sidebarW: number;
   rightW: number;
   contentTabPosition: TabPosition;
-  treeTheme: TreeThemeInput;
   startResize: (e: React.MouseEvent) => void;
   startRightResize: (e: React.MouseEvent) => void;
 }) {
   const t = useT();
-  const openFileView = useSessions((s) => s.openFileView);
-  const onOpenFile = useCallback(
-    (p: string) => openFileView(project.id, p),
-    [openFileView, project.id],
-  );
   return (
     <div
       className="terminal-pane"
@@ -173,8 +165,6 @@ const ProjectPane = memo(function ProjectPane({
         <LeftSidebarHost
           project={project}
           paneId={cwdPaneOf(project) ?? ""}
-          onOpenFile={onOpenFile}
-          treeTheme={treeTheme}
         />
       </div>
       {project.sidebarOpen && (
@@ -344,7 +334,6 @@ function App() {
   const toggleMode = useTheme((s) => s.toggleMode);
   const reloadThemes = useTheme((s) => s.reload);
   const bg = themeColors.bg;
-  const fg = themeColors.fg;
   const isDark = effectiveMode === "dark";
   const theme = useMemo(() => themeForBg(bg), [bg]);
 
@@ -353,11 +342,6 @@ function App() {
     reloadThemes().catch((e) => console.error("테마 스캔 실패:", e));
   }, [reloadThemes]);
 
-  // 파일트리(@pierre/trees) 테마: 앱 배경/글자색을 따라가도록.
-  const treeTheme = useMemo<TreeThemeInput>(
-    () => ({ type: isDark ? "dark" : "light", bg, fg }),
-    [isDark, bg, fg],
-  );
 
   // 앱 UI(body) 폰트는 설정의 글꼴을 따른다(터미널 xterm 은 옵션으로 별도 적용).
   useEffect(() => {
@@ -813,7 +797,6 @@ function App() {
               sidebarW={sidebarW}
               rightW={rightW}
               contentTabPosition={contentTabPosition}
-              treeTheme={treeTheme}
               startResize={startResize}
               startRightResize={startRightResize}
             />

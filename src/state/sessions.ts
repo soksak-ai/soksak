@@ -784,7 +784,7 @@ function makeProject(id: string, opts: NewProjectOpts): ProjectTab {
     sidebarOpen: true,
     rightOpen: false,
     rightView: null,
-    leftTab: "files",
+    leftTab: "",
     root: opts.root,
     program: opts.program,
     shell: opts.shell,
