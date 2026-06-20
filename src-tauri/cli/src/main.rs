@@ -790,11 +790,18 @@ fn write_skill(path: &Path, doc: &str) -> Result<(), String> {
     std::fs::write(path, doc).map_err(|e| format!("{} 쓰기 실패: {e}", path.display()))
 }
 
+// 발견된 동봉 스킬 — 설치 디렉토리명·플러그인 id·저자 본문(오리엔테이션).
+struct PluginSkill {
+    dir_name: String,
+    plugin_id: String,
+    body: String,
+}
+
 // 동봉 플러그인 스킬 발견 — ~/.soksak/plugins/<id>/plugin.json 의 contributes.skill.path 가 가리키는
-// SKILL.md 를 읽어 (id, 내용) 으로 돌려준다. 스킬 내용 단일진실 = 플러그인 repo(코어는 복사만, P10).
-// 코어는 플러그인 하드코딩 목록을 들지 않는다 — 매니페스트 선언만이 채널(docs/I18N.md §5).
-fn discover_plugin_skills() -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = Vec::new();
+// SKILL.md(오리엔테이션 본문) 를 읽는다. 명령 목록은 본문에 없다 — install 이 레지스트리에서 합성한다
+// (단일진실=registry, P1·docs/I18N.md §5). 코어는 플러그인 하드코딩 목록을 들지 않는다(매니페스트 선언만).
+fn discover_plugin_skills() -> Vec<PluginSkill> {
+    let mut out: Vec<PluginSkill> = Vec::new();
     let Ok(home) = std::env::var("HOME") else { return out };
     let base = PathBuf::from(home).join(".soksak").join("plugins");
     let Ok(entries) = std::fs::read_dir(&base) else { return out };
@@ -814,13 +821,47 @@ fn discover_plugin_skills() -> Vec<(String, String)> {
         if rel.starts_with('/') || rel.split('/').any(|s| s == "..") {
             continue;
         }
-        let Ok(content) = std::fs::read_to_string(pdir.join(rel)) else { continue };
+        let Ok(body) = std::fs::read_to_string(pdir.join(rel)) else { continue };
         // 설치 디렉토리 = SKILL.md frontmatter name(Claude 관례: dir==name). 없으면 플러그인 id.
-        let dir_name = skill_frontmatter_name(&content).unwrap_or_else(|| id.clone());
-        out.push((dir_name, content));
+        let dir_name = skill_frontmatter_name(&body).unwrap_or_else(|| id.clone());
+        out.push(PluginSkill { dir_name, plugin_id: id, body });
     }
-    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
     out
+}
+
+// 플러그인 명령 맵 합성 — 라이브 카탈로그에서 plugin.<id>.* 만 추려 `- sub — base` 목록(단일진실=registry).
+// base = 합성 description 의 트리거어 앞부분(사람 가독). 카탈로그 미가용(앱 다운)이면 빈 문자열.
+fn plugin_command_map(plugin_id: &str) -> String {
+    let Ok(cmds) = fetch_commands() else { return String::new() };
+    let prefix = format!("plugin.{plugin_id}.");
+    let mut out = String::new();
+    for c in &cmds {
+        let Some(name) = c["name"].as_str() else { continue };
+        if let Some(sub) = name.strip_prefix(&prefix) {
+            let desc = c["description"].as_str().unwrap_or("");
+            let base = desc.split(" | ").next().unwrap_or(desc).trim();
+            out.push_str(&format!("- `{sub}` — {base}\n"));
+        }
+    }
+    out
+}
+
+// 플러그인 SKILL.md 합성 = 저자 오리엔테이션 본문 + install 시점 명령 맵(레지스트리에서). 본문에
+// 명령을 손으로 나열하지 않는다(중복=단일진실 위반). 라이브 목록 포인터도 함께(맵은 스냅샷).
+fn compose_plugin_skill(skill: &PluginSkill) -> String {
+    let map = plugin_command_map(&skill.plugin_id);
+    let body = skill.body.trim_end();
+    let prefix = format!("plugin.{}.", skill.plugin_id);
+    if map.is_empty() {
+        format!(
+            "{body}\n\n## Commands\n\n> Live surface (names/params evolve — never guess): `sok commands | grep {prefix}`. One command's schema: `sok help <name>`.\n"
+        )
+    } else {
+        format!(
+            "{body}\n\n## Commands (snapshot — live: `sok commands | grep {prefix}`, schema: `sok help <name>`)\n\n{map}"
+        )
+    }
 }
 
 // SKILL.md frontmatter 의 `name:` 추출(첫 --- 블록 안의 name 줄). 안전한 디렉토리명만 허용.
@@ -913,15 +954,17 @@ fn run_skill(args: &[String]) -> ExitCode {
         }
     }
 
-    // 동봉 플러그인 스킬 — 매니페스트 contributes.skill 선언분을 도구별 디렉토리에 같은 베이스로 설치.
-    // 코어 control 과 같은 대상 디렉토리(.claude/skills/, .agents/skills/) 아래 <plugin-id>/SKILL.md.
+    // 동봉 플러그인 스킬 — 매니페스트 contributes.skill 선언분을 도구별 디렉토리(.claude/skills/,
+    // .agents/skills/) 아래 <name>/SKILL.md 로 설치. 본문 = 저자 오리엔테이션 + 레지스트리에서 합성한
+    // 명령 맵(손 전사 금지 — 단일진실=registry). 명령 맵은 install 시점 1회 합성하면 도구별로 동일하다.
     let plugin_skills = discover_plugin_skills();
-    for (dir_name, content) in &plugin_skills {
+    for skill in &plugin_skills {
+        let doc = compose_plugin_skill(skill);
         for (label, control_path) in &targets {
             // control SKILL.md 의 부모의 부모 = skills 루트(.claude/skills 또는 .agents/skills).
             let Some(skills_root) = control_path.parent().and_then(Path::parent) else { continue };
-            let path = skills_root.join(dir_name).join("SKILL.md");
-            match write_skill(&path, content) {
+            let path = skills_root.join(&skill.dir_name).join("SKILL.md");
+            match write_skill(&path, &doc) {
                 Ok(_) => println!("{label}  ✓ {} (plugin)", path.display()),
                 Err(e) => {
                     eprintln!("{label}  ✗ {e}");
@@ -941,6 +984,24 @@ fn run_skill(args: &[String]) -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // SKILL.md frontmatter name 추출 — 설치 디렉토리명(dir==name 관례).
+    #[test]
+    fn skill_frontmatter_name_parses() {
+        assert_eq!(
+            skill_frontmatter_name("---\nname: soksak-erd\ndescription: x\n---\nbody"),
+            Some("soksak-erd".to_string())
+        );
+        // 따옴표·공백 허용
+        assert_eq!(
+            skill_frontmatter_name("---\nname:  \"my-skill\" \n---\n"),
+            Some("my-skill".to_string())
+        );
+        // frontmatter 없음 → None
+        assert_eq!(skill_frontmatter_name("# 제목\nname: x"), None);
+        // 안전하지 않은 문자(경로 주입) 거부
+        assert_eq!(skill_frontmatter_name("---\nname: ../evil\n---\n"), None);
+    }
 
     // argv0 접미사 → env 토큰(busybox 디스패치). 경로 접두 무시.
     #[test]
