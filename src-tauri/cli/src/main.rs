@@ -790,6 +790,62 @@ fn write_skill(path: &Path, doc: &str) -> Result<(), String> {
     std::fs::write(path, doc).map_err(|e| format!("{} 쓰기 실패: {e}", path.display()))
 }
 
+// 동봉 플러그인 스킬 발견 — ~/.soksak/plugins/<id>/plugin.json 의 contributes.skill.path 가 가리키는
+// SKILL.md 를 읽어 (id, 내용) 으로 돌려준다. 스킬 내용 단일진실 = 플러그인 repo(코어는 복사만, P10).
+// 코어는 플러그인 하드코딩 목록을 들지 않는다 — 매니페스트 선언만이 채널(docs/I18N.md §5).
+fn discover_plugin_skills() -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    let Ok(home) = std::env::var("HOME") else { return out };
+    let base = PathBuf::from(home).join(".soksak").join("plugins");
+    let Ok(entries) = std::fs::read_dir(&base) else { return out };
+    for e in entries.flatten() {
+        let pdir = e.path();
+        if !pdir.is_dir() {
+            continue;
+        }
+        let Ok(txt) = std::fs::read_to_string(pdir.join("plugin.json")) else { continue };
+        let Ok(v) = serde_json::from_str::<Value>(&txt) else { continue };
+        let id = v["id"].as_str().unwrap_or("").trim().to_string();
+        if id.is_empty() {
+            continue;
+        }
+        let Some(rel) = v["contributes"]["skill"]["path"].as_str() else { continue };
+        // 디렉토리 탈출 방어(스펙도 막지만 CLI 도 독립 방어).
+        if rel.starts_with('/') || rel.split('/').any(|s| s == "..") {
+            continue;
+        }
+        let Ok(content) = std::fs::read_to_string(pdir.join(rel)) else { continue };
+        // 설치 디렉토리 = SKILL.md frontmatter name(Claude 관례: dir==name). 없으면 플러그인 id.
+        let dir_name = skill_frontmatter_name(&content).unwrap_or_else(|| id.clone());
+        out.push((dir_name, content));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+// SKILL.md frontmatter 의 `name:` 추출(첫 --- 블록 안의 name 줄). 안전한 디렉토리명만 허용.
+fn skill_frontmatter_name(content: &str) -> Option<String> {
+    let mut lines = content.lines();
+    if lines.next()?.trim() != "---" {
+        return None;
+    }
+    for line in lines {
+        let t = line.trim();
+        if t == "---" {
+            break;
+        }
+        if let Some(rest) = t.strip_prefix("name:") {
+            let name = rest.trim().trim_matches(['"', '\'']).trim();
+            if !name.is_empty()
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            {
+                return Some(name.to_string());
+            }
+        }
+    }
+    None
+}
+
 fn run_skill(args: &[String]) -> ExitCode {
     if args.first().map(String::as_str) != Some("install") {
         eprintln!("사용: sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]");
@@ -847,8 +903,8 @@ fn run_skill(args: &[String]) -> ExitCode {
     }
 
     let mut failed = false;
-    for (label, path) in targets {
-        match write_skill(&path, &doc) {
+    for (label, path) in &targets {
+        match write_skill(path, &doc) {
             Ok(_) => println!("{label}  ✓ {}", path.display()),
             Err(e) => {
                 eprintln!("{label}  ✗ {e}");
@@ -856,6 +912,25 @@ fn run_skill(args: &[String]) -> ExitCode {
             }
         }
     }
+
+    // 동봉 플러그인 스킬 — 매니페스트 contributes.skill 선언분을 도구별 디렉토리에 같은 베이스로 설치.
+    // 코어 control 과 같은 대상 디렉토리(.claude/skills/, .agents/skills/) 아래 <plugin-id>/SKILL.md.
+    let plugin_skills = discover_plugin_skills();
+    for (dir_name, content) in &plugin_skills {
+        for (label, control_path) in &targets {
+            // control SKILL.md 의 부모의 부모 = skills 루트(.claude/skills 또는 .agents/skills).
+            let Some(skills_root) = control_path.parent().and_then(Path::parent) else { continue };
+            let path = skills_root.join(dir_name).join("SKILL.md");
+            match write_skill(&path, content) {
+                Ok(_) => println!("{label}  ✓ {} (plugin)", path.display()),
+                Err(e) => {
+                    eprintln!("{label}  ✗ {e}");
+                    failed = true;
+                }
+            }
+        }
+    }
+
     if failed {
         ExitCode::FAILURE
     } else {

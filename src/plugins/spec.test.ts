@@ -88,6 +88,26 @@ describe("parseManifest — 수용", () => {
     expect(validation.ok).toBe(true);
   });
 
+  it("contributes.skill — { path } 선언 수용·보존(권한 불요)", () => {
+    const { manifest, validation } = parseManifest(
+      base({ contributes: { skill: { path: "skill/SKILL.md" } } }),
+      "demo",
+    );
+    expect(validation.ok).toBe(true);
+    expect(manifest?.contributes.skill).toEqual({ path: "skill/SKILL.md" });
+  });
+
+  it("contributes.skill — 선언 없으면 skill 키 부재(하위호환)", () => {
+    const { manifest } = parseManifest(base(), "demo");
+    expect(manifest?.contributes.skill).toBeUndefined();
+  });
+
+  it("contributes.skill.path — 절대경로·.. 탈출 거부", () => {
+    expect(parseManifest(base({ contributes: { skill: { path: "/etc/x" } } }), "demo").validation.ok).toBe(false);
+    expect(parseManifest(base({ contributes: { skill: { path: "../escape/SKILL.md" } } }), "demo").validation.ok).toBe(false);
+    expect(parseManifest(base({ contributes: { skill: {} } }), "demo").validation.ok).toBe(false);
+  });
+
   it("contributes.commands.danger — destructive|inject 수용, 매니페스트에 보존", () => {
     const { manifest, validation } = parseManifest(
       base({

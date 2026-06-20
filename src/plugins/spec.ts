@@ -351,6 +351,14 @@ export interface ContributedNode {
   danger?: true; // 민감 노출(동의 화면 ⚠ 강조)
 }
 
+// 이 플러그인이 동봉하는 도메인 스킬(선언형, 단일). 존재 = "per-command description 으로 못 가르치는
+// 시스템 절차지식이 있다"는 자기기술(docs/I18N.md §5). `sok skill install` 이 이 선언을 보유한 플러그인의
+// SKILL.md 를 .claude/skills/<id>·.agents/skills/<id> 로 균일 설치 — 코어는 플러그인 하드코딩 목록을 들지
+// 않는다(contributes.commands/views/nodes 와 같은 매니페스트 선언 패턴). 스킬 내용은 플러그인 repo 가 단일진실.
+export interface ContributedSkill {
+  path: string; // 플러그인 디렉토리 내부 SKILL.md 상대경로(예: "skill/SKILL.md"). 디렉토리 탈출(..) 금지.
+}
+
 // ── §2.6 프로그램 ────────────────────────────────────────────────────────────
 // 프로그램 = 새 탭(+) 메뉴의 항목 하나 = 새 뷰를 여는 방법. 내장 프로그램은
 // 없다 — 터미널·에이전트·브라우저 전부 플러그인이 기여한다(메뉴·목록에
@@ -463,6 +471,8 @@ export interface PluginManifest {
     events: string[];
     // DOM 노출 노드 종류(선언). 동의 화면에 표기 — 사용자가 무엇이 외부 클릭 가능한지 보고 동의. "ui" 권한 필수.
     nodes: ContributedNode[];
+    // 동봉 도메인 스킬(선택, 단일). 선언 = 전용 스킬 필요 자기기술(docs/I18N.md §5). 권한 불요(무해·선언형).
+    skill?: ContributedSkill;
   };
 }
 
@@ -953,6 +963,7 @@ export function parseManifest(
   let nodes: ContributedNode[] = [];
   let programs: ContributedProgram[] = [];
   let events: string[] = [];
+  let skill: ContributedSkill | undefined;
   if (raw.contributes !== undefined) {
     if (!isRecord(raw.contributes)) {
       errors.push("contributes: 객체여야 함");
@@ -960,7 +971,7 @@ export function parseManifest(
       const c = raw.contributes;
       checkKnownKeys(
         c,
-        ["views", "commands", "formatters", "languages", "iconSets", "nodes", "programs", "events"],
+        ["views", "commands", "formatters", "languages", "iconSets", "nodes", "programs", "events", "skill"],
         "contributes",
         errors,
       );
@@ -1151,6 +1162,20 @@ export function parseManifest(
         errors.push('contributes.nodes: "ui" 권한 선언 필요');
       }
 
+      // 동봉 스킬(단일 객체, 선언형). path = 디렉토리 내부 SKILL.md 상대경로. 탈출(..)·절대경로 거부.
+      if (c.skill !== undefined) {
+        if (!isRecord(c.skill) || !isNonEmptyString((c.skill as { path?: unknown }).path)) {
+          errors.push("contributes.skill: { path: string } 이어야 함");
+        } else {
+          const p = ((c.skill as { path: string }).path).trim();
+          if (p.startsWith("/") || p.split("/").includes("..")) {
+            errors.push("contributes.skill.path: 플러그인 디렉토리 내부 상대경로만(절대경로·.. 금지)");
+          } else {
+            skill = { path: p };
+          }
+        }
+      }
+
       programs = parseEntries(c.programs, {
         label: "contributes.programs",
         required: ["id", "title", "kind"],
@@ -1337,7 +1362,7 @@ export function parseManifest(
       ...(libraries.length > 0 ? { libraries } : {}),
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
-      contributes: { views, commands, formatters, languages, iconSets, nodes, programs, events },
+      contributes: { views, commands, formatters, languages, iconSets, nodes, programs, events, ...(skill ? { skill } : {}) },
     },
     validation: { ok: true, errors, warnings },
   };
