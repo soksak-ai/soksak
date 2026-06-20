@@ -342,6 +342,15 @@ export interface ContributedIconSet {
   title: LocalizedText; // 설정 드롭다운 표시 이름
 }
 
+// 파일 뷰어 — 파일을 콘텐츠로 열 때 확장자로 라우팅되는 렌더러(에디터=코드/텍스트, 미디어=이미지/영상…).
+// 엔진 중립(A13): 코어는 매칭·호스팅만, 렌더 엔진(CodeMirror/Monaco/…)은 플러그인 소유. provider 는
+// 런타임 app.ui.registerFileViewer 로 바인딩(선언 외 거부 §0-3).
+export interface ContributedFileViewer {
+  id: string; // 플러그인 내 고유. 전역 키는 "<pluginId>.<id>"
+  extensions: string[]; // 처리할 확장자(점 없이). "*" = 폴백(더 구체적 매칭이 없을 때)
+  priority?: number; // 겹칠 때 높은 값 우선(기본 0). 동일 priority 는 등록 순서
+}
+
 // DOM 노출 노드 — 플러그인이 자기 뷰 안에서 외부(주소 클릭/측정)에 노출하는 요소 "종류"의 선언.
 // command 노출 패턴과 동일: 선언하면 동의 화면에 자동 표기(정직한 고지 §0-2). 실제 DOM 요소는 data-node
 // 속성으로 인스턴스 부여(동적 목록은 "<id>/<key>"). 선언된 id 기반만 유효 — 미선언은 경고(침묵 금지).
@@ -473,6 +482,7 @@ export interface PluginManifest {
     formatters: ContributedFormatter[]; // "editor" 권한 필수
     languages: ContributedLanguage[]; // "editor" 권한 필수
     iconSets: ContributedIconSet[]; // "ui" 권한 필수
+    fileViewers: ContributedFileViewer[]; // "ui" 권한 필수 — 확장자별 콘텐츠 뷰어(A13 엔진 중립)
     programs: ContributedProgram[]; // "programs" 권한 필수
     // 이 플러그인이 발행하는 이벤트 토픽(정보용 — 발견성). 런타임 강제 없음(bus/events 는 그대로
     // 동작). 다른 플러그인 작성자가 구독할 토픽을 매니저에서 볼 수 있게 하는 오픈 카탈로그.
@@ -993,6 +1003,7 @@ export function parseManifest(
   let formatters: ContributedFormatter[] = [];
   let languages: ContributedLanguage[] = [];
   let iconSets: ContributedIconSet[] = [];
+  let fileViewers: ContributedFileViewer[] = [];
   let nodes: ContributedNode[] = [];
   let programs: ContributedProgram[] = [];
   let events: string[] = [];
@@ -1004,7 +1015,7 @@ export function parseManifest(
       const c = raw.contributes;
       checkKnownKeys(
         c,
-        ["views", "commands", "formatters", "languages", "iconSets", "nodes", "programs", "events", "skill"],
+        ["views", "commands", "formatters", "languages", "iconSets", "fileViewers", "nodes", "programs", "events", "skill"],
         "contributes",
         errors,
       );
@@ -1161,6 +1172,43 @@ export function parseManifest(
       checkDuplicates(iconSets.map((v) => v.id), "contributes.iconSets.id", errors);
       if (iconSets.length > 0 && !has("ui")) {
         errors.push('contributes.iconSets: "ui" 권한 선언 필요');
+      }
+
+      // 파일 뷰어(선언) — id 정규식·중복 거부, extensions 검증("*" 폴백 허용), ui 권한 필수.
+      fileViewers = parseEntries(c.fileViewers, {
+        label: "contributes.fileViewers",
+        required: ["id", "extensions"],
+        parse: (v, errs) => {
+          if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
+            errs.push("contributes.fileViewers: id 는 ^[a-z0-9][a-z0-9-]*$");
+            return null;
+          }
+          if (
+            !Array.isArray(v.extensions) ||
+            v.extensions.length === 0 ||
+            v.extensions.some(
+              (e) => typeof e !== "string" || (e !== "*" && !EXT_RE.test(e)),
+            )
+          ) {
+            errs.push(
+              `contributes.fileViewers["${v.id}"].extensions: 확장자(점 없이) 또는 "*"(폴백)의 비어있지 않은 배열`,
+            );
+            return null;
+          }
+          if (v.priority !== undefined && typeof v.priority !== "number") {
+            errs.push(`contributes.fileViewers["${v.id}"].priority: number`);
+            return null;
+          }
+          return {
+            id: v.id.trim(),
+            extensions: v.extensions as string[],
+            ...(typeof v.priority === "number" ? { priority: v.priority } : {}),
+          };
+        },
+      }, errors);
+      checkDuplicates(fileViewers.map((v) => v.id), "contributes.fileViewers.id", errors);
+      if (fileViewers.length > 0 && !has("ui")) {
+        errors.push('contributes.fileViewers: "ui" 권한 선언 필요');
       }
 
       // DOM 노출 노드(선언) — command/view 패턴 미러. id 정규식·중복 거부, ui 권한 필수.
@@ -1395,7 +1443,7 @@ export function parseManifest(
       ...(libraries.length > 0 ? { libraries } : {}),
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
-      contributes: { views, commands, formatters, languages, iconSets, nodes, programs, events, ...(skill ? { skill } : {}) },
+      contributes: { views, commands, formatters, languages, iconSets, fileViewers, nodes, programs, events, ...(skill ? { skill } : {}) },
     },
     validation: { ok: true, errors, warnings },
   };

@@ -9,6 +9,10 @@ import {
 import { parseManifest, type PluginManifest } from "./spec";
 import { useViewRegistry } from "./viewRegistry";
 import { useEditorRegistry } from "./editorRegistry";
+import {
+  useFileViewerRegistry,
+  resolveFileViewer,
+} from "./fileViewerRegistry";
 
 function manifestOf(overrides: Record<string, unknown>): PluginManifest {
   const { manifest, validation } = parseManifest(
@@ -51,11 +55,36 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
 
 beforeEach(() => {
   useViewRegistry.setState({ views: {}, version: 0 });
+  useFileViewerRegistry.setState({ viewers: {}, version: 0 });
   useEditorRegistry.setState({
     version: 0,
     extensions: [],
     languages: [],
     formatters: [],
+  });
+});
+
+describe("파일 뷰어 등록(registerFileViewer — 선언 외 거부, A13)", () => {
+  it("ui 권한 + contributes.fileViewers 선언 시 등록 → resolve 매칭", () => {
+    const m = manifestOf({
+      permissions: ["ui"],
+      contributes: { fileViewers: [{ id: "code", extensions: ["ts", "*"] }] },
+    });
+    const { api } = buildPluginApi(m, "/d", fakeDeps());
+    const d = api.ui?.registerFileViewer?.("code", { mount() {} });
+    expect(d).toBeDefined();
+    expect(resolveFileViewer("/x.ts")?.pluginId).toBe("demo");
+  });
+
+  it("선언되지 않은 파일 뷰어 등록은 throw", () => {
+    const m = manifestOf({
+      permissions: ["ui"],
+      contributes: { fileViewers: [{ id: "code", extensions: ["ts"] }] },
+    });
+    const { api } = buildPluginApi(m, "/d", fakeDeps());
+    expect(() =>
+      api.ui?.registerFileViewer?.("nope", { mount() {} }),
+    ).toThrow();
   });
 });
 

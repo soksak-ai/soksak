@@ -23,6 +23,10 @@ import {
   useViewRegistry,
   type PluginViewProvider,
 } from "./viewRegistry";
+import {
+  useFileViewerRegistry,
+  type FileViewerProvider,
+} from "./fileViewerRegistry";
 import { useEditorRegistry } from "./editorRegistry";
 import { useIconRegistry, validateIconSetData } from "../ui/icons/registry";
 import {
@@ -135,6 +139,12 @@ export interface SoksakPluginApi {
   };
   ui?: {
     registerView: (viewId: string, provider: PluginViewProvider) => Disposable;
+    /** 확장자별 파일 뷰어 등록(contributes.fileViewers 선언 필수). 코어가 파일을 콘텐츠로 열 때
+     *  매칭 뷰어의 provider 를 마운트한다(엔진 중립 A13 — 렌더 엔진은 플러그인 소유). 반환=해지. */
+    registerFileViewer: (
+      viewerId: string,
+      provider: FileViewerProvider,
+    ) => Disposable;
     openView: (
       viewId: string,
       placement?: ViewPlacement,
@@ -788,6 +798,20 @@ export function buildPluginApi(
               );
             }
             const remove = useViewRegistry
+              .getState()
+              .register(id, decl, provider);
+            return tracker.wrap(remove);
+          },
+          registerFileViewer: (viewerId, provider) => {
+            const decl = manifest.contributes.fileViewers.find(
+              (f) => f.id === viewerId,
+            );
+            if (!decl) {
+              throw new Error(
+                `매니페스트 contributes.fileViewers 에 선언되지 않은 파일 뷰어: ${viewerId}`,
+              );
+            }
+            const remove = useFileViewerRegistry
               .getState()
               .register(id, decl, provider);
             return tracker.wrap(remove);
