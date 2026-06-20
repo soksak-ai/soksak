@@ -283,6 +283,9 @@ export interface SoksakPluginApi {
       path: string,
       offset?: number,
     ) => Promise<{ text: string; truncated: boolean; totalBytes: number }>;
+    /** 바이너리 읽기 → { mime, base64 }(data URL 구성용). 미디어 뷰어(이미지/PDF/영상/오디오)가
+     *  플러그인에서 파일을 렌더할 때 쓴다. "fs:read" 권한. */
+    readBinary?: (path: string) => Promise<{ mime: string; base64: string }>;
     writeText?: (path: string, content: string) => Promise<void>;
     /** 디렉토리 직속 자식. meta:true 면 각 자식 modified(unix 초) 포함(최신 파일 선택용). */
     list?: (path: string, opts?: { meta?: boolean }) => Promise<unknown>;
@@ -1081,6 +1084,13 @@ export function buildPluginApi(
                     totalBytes: data.total_bytes,
                   };
                 }
+              : undefined,
+            readBinary: has("fs:read")
+              ? (path) =>
+                  deps.invoke("read_file_base64", { path }) as Promise<{
+                    mime: string;
+                    base64: string;
+                  }>
               : undefined,
             writeText: has("fs:write")
               ? async (path, content) => {

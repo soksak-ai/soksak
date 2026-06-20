@@ -64,6 +64,25 @@ beforeEach(() => {
   });
 });
 
+describe("fs.readBinary (A13 미디어 — fs:read)", () => {
+  it("fs:read 권한 시 read_file_base64 로 위임", async () => {
+    const invoke = vi.fn(async () => ({ mime: "image/png", base64: "AAA" }));
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["fs:read"] }),
+      "/d",
+      fakeDeps({ invoke }),
+    );
+    const r = await api.fs?.readBinary?.("/x.png");
+    expect(r).toEqual({ mime: "image/png", base64: "AAA" });
+    expect(invoke).toHaveBeenCalledWith("read_file_base64", { path: "/x.png" });
+  });
+
+  it("fs:read 미선언 시 fs 표면 부재", () => {
+    const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
+    expect(api.fs).toBeUndefined();
+  });
+});
+
 describe("파일 뷰어 등록(registerFileViewer — 선언 외 거부, A13)", () => {
   it("ui 권한 + contributes.fileViewers 선언 시 등록 → resolve 매칭", () => {
     const m = manifestOf({
