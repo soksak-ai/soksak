@@ -2228,7 +2228,6 @@ body::after {
 }
 .settings-list-remove:hover {
   color: #f88;
-  border-color: #f88;
 }
 .settings-list-add {
   align-self: flex-end;
