@@ -3,7 +3,7 @@ import { rafThrottle } from "../lib/rafThrottle";
 import { parkedStyle } from "../lib/layerPark";
 import { Icon } from "../ui/icons/Icon";
 import { BrowserView } from "./BrowserView";
-import { FileViewer } from "./FileViewer";
+import { FileViewerHost } from "./FileViewerHost";
 import { GroupStatusBar } from "./GroupStatusBar";
 import { PaneTree } from "./PaneTree";
 import { PluginViewHost } from "./PluginViewHost";
@@ -120,12 +120,10 @@ export const GroupArea = memo(function GroupArea({
   content,
   projectId,
   isActiveProject,
-  isDark,
 }: {
   content: ContentArea;
   projectId: string;
   isActiveProject: boolean;
-  isDark: boolean;
 }) {
   const t = useT();
   // 분할 패널 헤더 = 탭 모드 고정(2026-06 결정 — 설정 비노출). title 모드 분기는
@@ -599,11 +597,10 @@ export const GroupArea = memo(function GroupArea({
                   focusedPaneId={view.focusedPaneId}
                 />
               ) : view.kind === "file" ? (
-                <FileViewer
+                <FileViewerHost
                   path={view.path}
-                  mode={view.mode}
-                  isDark={isDark}
                   projectId={projectId}
+                  root={projectRoot}
                   viewId={view.id}
                 />
               ) : view.kind === "plugin" ? (

@@ -127,7 +127,6 @@ function useResizableWidth(
 const ProjectPane = memo(function ProjectPane({
   project,
   isActiveProject,
-  isDark,
   sidebarW,
   rightW,
   contentTabPosition,
@@ -136,7 +135,6 @@ const ProjectPane = memo(function ProjectPane({
 }: {
   project: ProjectTab;
   isActiveProject: boolean;
-  isDark: boolean;
   sidebarW: number;
   rightW: number;
   contentTabPosition: TabPosition;
@@ -200,7 +198,6 @@ const ProjectPane = memo(function ProjectPane({
                   content={c}
                   projectId={project.id}
                   isActiveProject={isActiveProject && isActiveContent}
-                  isDark={isDark}
                 />
               </div>
             );
@@ -793,7 +790,6 @@ function App() {
               key={project.id}
               project={project}
               isActiveProject={project.id === activeId}
-              isDark={isDark}
               sidebarW={sidebarW}
               rightW={rightW}
               contentTabPosition={contentTabPosition}
