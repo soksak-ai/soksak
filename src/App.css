@@ -2167,6 +2167,82 @@ body::after {
   font: inherit;
   font-size: 12px;
 }
+/* list/map 타입 설정 — 라벨·설명 아래 전체폭 스택(블록). 다른 스칼라 설정의 한 줄 리듬과 별개. */
+.settings-row--block {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.settings-row--block .settings-row-title {
+  width: 100%;
+}
+.settings-row--block .settings-row-title .settings-reset {
+  margin-left: auto;
+}
+.settings-row--block .settings-row-control {
+  width: 100%;
+}
+
+/* 행별 입력 + 삭제(✕) + 추가. 전체폭에서 셀이 균등 신축, ✕ 세로 정렬(그리드). */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  width: 100%;
+}
+.settings-list-row,
+.settings-map-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+.settings-list-cell {
+  flex: 1;
+  min-width: 0;
+}
+.settings-map-cell {
+  flex: 1;
+  min-width: 0;
+}
+.settings-map-arrow {
+  flex: 0 0 auto;
+  color: var(--fg3, #888);
+  width: 12px;
+  text-align: center;
+}
+.settings-list-remove {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--bd);
+  background: var(--inset);
+  color: var(--fg2, #aaa);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.settings-list-remove:hover {
+  color: #f88;
+  border-color: #f88;
+}
+.settings-list-add {
+  align-self: flex-end;
+  border: 1px solid var(--bd);
+  background: transparent;
+  color: var(--fg2, #aaa);
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.settings-list-add:hover {
+  background: var(--inset);
+}
 .settings-toggle {
   width: 36px;
   height: 20px;

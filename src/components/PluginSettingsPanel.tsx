@@ -3,7 +3,7 @@ import { usePlugins } from "../state/plugins";
 import { usePluginSettings, type SettingValue } from "../state/pluginSettings";
 import { useSessions } from "../state/sessions";
 import { localize, useT } from "../i18n";
-import type { ConfigSetting } from "../plugins/spec";
+import type { ConfigSetting, MapEntry } from "../plugins/spec";
 
 // 플러그인 설정 패널 — 매니페스트 configuration 스키마에서 컨트롤을 자동 생성한다(단일 소스).
 // 글로벌(앱 전역) / 프로젝트(현재 프로젝트 오버라이드) scope 토글.
@@ -66,6 +66,72 @@ function Control({
           </option>
         ))}
       </select>
+    );
+  }
+  if (setting.type === "list") {
+    // 문자열 리스트 — 행별 텍스트 + 삭제(✕) + 추가. 스칼라로 못 그리는 가변 목록.
+    const list = Array.isArray(value) ? (value as string[]) : [];
+    const setAt = (i: number, v: string) => onChange(list.map((x, j) => (j === i ? v : x)));
+    const removeAt = (i: number) => onChange(list.filter((_, j) => j !== i));
+    return (
+      <div className="settings-list">
+        {list.map((item, i) => (
+          <div className="settings-list-row" key={i}>
+            <input
+              type="text"
+              className="settings-input settings-list-cell"
+              value={item}
+              onChange={(e) => setAt(i, e.target.value)}
+            />
+            <button type="button" className="settings-list-remove" title="삭제" onClick={() => removeAt(i)}>
+              ✕
+            </button>
+          </div>
+        ))}
+        <button type="button" className="settings-list-add" onClick={() => onChange([...list, ""])}>
+          + 추가
+        </button>
+      </div>
+    );
+  }
+  if (setting.type === "map") {
+    // 키-값 매핑 — 행별 [키] → [값] + 삭제(✕) + 추가. 2칸 그리드 정렬(원본→미러 같은 매핑 테이블).
+    const rows = Array.isArray(value) ? (value as MapEntry[]) : [];
+    const setKey = (i: number, k: string) =>
+      onChange(rows.map((r, j) => (j === i ? { ...r, key: k } : r)));
+    const setValue = (i: number, v: string) =>
+      onChange(rows.map((r, j) => (j === i ? { ...r, value: v } : r)));
+    const removeAt = (i: number) => onChange(rows.filter((_, j) => j !== i));
+    return (
+      <div className="settings-list">
+        {rows.map((row, i) => (
+          <div className="settings-map-row" key={i}>
+            <input
+              type="text"
+              className="settings-input settings-map-cell"
+              value={row.key}
+              onChange={(e) => setKey(i, e.target.value)}
+            />
+            <span className="settings-map-arrow">→</span>
+            <input
+              type="text"
+              className="settings-input settings-map-cell"
+              value={row.value}
+              onChange={(e) => setValue(i, e.target.value)}
+            />
+            <button type="button" className="settings-list-remove" title="삭제" onClick={() => removeAt(i)}>
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="settings-list-add"
+          onClick={() => onChange([...rows, { key: "", value: "" }])}
+        >
+          + 추가
+        </button>
+      </div>
     );
   }
   // string
@@ -132,34 +198,41 @@ export function PluginSettingsPanel({ pluginId }: { pluginId: string }) {
               {t("settings.scope.project")}
             </button>
           </div>
-          {schema.map((c) => (
-            <div key={c.key} className="settings-row">
-              <div className="settings-row-label">
-                <span className="settings-row-title">
-                  {localize(c.title)}
-                  {isOverridden(c) ? (
-                    <span className="settings-dot" title={t("settings.overridden")} />
+          {schema.map((c) => {
+            // list/map 은 여러 행짜리 복합 컨트롤 — 라벨 옆에 욱여넣지 않고 라벨·설명 아래 전체폭으로
+            // 스택(블록). 단순 스칼라는 기존 라벨-좌/컨트롤-우 한 줄 유지.
+            const isBlock = c.type === "list" || c.type === "map";
+            const resetBtn = isOverridden(c) ? (
+              <button
+                type="button"
+                className="settings-reset"
+                onClick={() => reset(c)}
+                title={t("settings.reset")}
+              >
+                ↺
+              </button>
+            ) : null;
+            return (
+              <div key={c.key} className={"settings-row" + (isBlock ? " settings-row--block" : "")}>
+                <div className="settings-row-label">
+                  <span className="settings-row-title">
+                    {localize(c.title)}
+                    {isOverridden(c) ? (
+                      <span className="settings-dot" title={t("settings.overridden")} />
+                    ) : null}
+                    {isBlock ? resetBtn : null}
+                  </span>
+                  {c.description ? (
+                    <span className="settings-row-desc">{localize(c.description)}</span>
                   ) : null}
-                </span>
-                {c.description ? (
-                  <span className="settings-row-desc">{localize(c.description)}</span>
-                ) : null}
+                </div>
+                <div className="settings-row-control">
+                  <Control setting={c} value={valueOf(c)} onChange={(v) => setVal(c, v)} />
+                  {!isBlock ? resetBtn : null}
+                </div>
               </div>
-              <div className="settings-row-control">
-                <Control setting={c} value={valueOf(c)} onChange={(v) => setVal(c, v)} />
-                {isOverridden(c) ? (
-                  <button
-                    type="button"
-                    className="settings-reset"
-                    onClick={() => reset(c)}
-                    title={t("settings.reset")}
-                  >
-                    ↺
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </>
       )}
     </div>

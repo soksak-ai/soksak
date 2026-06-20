@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { MapEntry } from "../plugins/spec";
 
 // 플러그인 사용자 설정 — 글로벌(앱 전역) + 프로젝트별 오버라이드 2계층.
 // 저장은 "오버라이드된 값"만(기본값은 매니페스트 configuration 이 단일 진실 — 여기 안 둔다).
@@ -6,7 +7,8 @@ import { create } from "zustand";
 //
 // 프로젝트 정체성 = root 경로(ProjectTab.root, P4) — 세션-스코프 tab id 가 아니라 영속 키.
 
-export type SettingValue = boolean | number | string;
+// list(문자열 배열)·map({key,value} 배열) 타입 설정값 포함 — 설정 모달이 행별 add/remove 로 편집.
+export type SettingValue = boolean | number | string | string[] | MapEntry[];
 // [pluginId][key] → 값
 type Bag = Record<string, Record<string, SettingValue>>;
 

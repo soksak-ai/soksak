@@ -422,12 +422,20 @@ export interface LibraryDep {
 // 플러그인 설정 스키마 — 사용자 구성 옵션의 단일 진실. UI(자동 컨트롤)·저장 기본값·검증·CLI/MCP·문서가
 // 전부 이 선언에서 파생(선언형 configuration 스키마). 무해(선언형) → 권한 불요. 저장은
 // 글로벌(앱 전역)·프로젝트별 오버라이드 2계층(effective = 프로젝트 ?? 글로벌 ?? default).
-export type ConfigType = "boolean" | "number" | "string" | "enum";
-export const CONFIG_TYPES: readonly ConfigType[] = ["boolean", "number", "string", "enum"];
+// list = 문자열 리스트, map = 키-값 쌍 리스트(원본→미러 같은 2칸 매핑 테이블). 둘 다 설정 모달이
+// 행별 추가/삭제로 렌더 — 스칼라 4종으로 못 그리는 가변 목록/매핑용.
+export type ConfigType = "boolean" | "number" | "string" | "enum" | "list" | "map";
+export const CONFIG_TYPES: readonly ConfigType[] = ["boolean", "number", "string", "enum", "list", "map"];
+// map 값은 {key,value} 쌍 배열(삽입 순서·빈 행 보존 — Record 는 순서/중복키 못 지킴).
+export interface MapEntry {
+  key: string;
+  value: string;
+}
+export type ConfigValue = boolean | number | string | string[] | MapEntry[];
 export interface ConfigSetting {
   key: string; // ^[a-zA-Z][a-zA-Z0-9]*$ — 플러그인 네임스페이스 안에서 유일
   type: ConfigType;
-  default: boolean | number | string;
+  default: ConfigValue;
   title: LocalizedText;
   description?: LocalizedText;
   enum?: string[]; // type=enum 필수
@@ -493,8 +501,8 @@ export function pluginCommandName(pluginId: string, name: string): string {
 // 설정 스키마 → 기본값 맵(key → default). 저장소/effective 해석의 바닥값(단일 진실은 스키마).
 export function configDefaults(
   manifest: PluginManifest,
-): Record<string, boolean | number | string> {
-  const out: Record<string, boolean | number | string> = {};
+): Record<string, ConfigValue> {
+  const out: Record<string, ConfigValue> = {};
   for (const c of manifest.configuration ?? []) out[c.key] = c.default;
   return out;
 }
@@ -511,9 +519,24 @@ export function configSettingOf(
 export function validateSettingValue(
   setting: ConfigSetting,
   value: unknown,
-): { ok: true; value: boolean | number | string } | { ok: false; error: string } {
+): { ok: true; value: ConfigValue } | { ok: false; error: string } {
   const k = setting.key;
   switch (setting.type) {
+    case "list":
+      return Array.isArray(value) && value.every((x) => typeof x === "string")
+        ? { ok: true, value: value as string[] }
+        : { ok: false, error: `${k}: 문자열 배열 필요` };
+    case "map":
+      return Array.isArray(value) &&
+        value.every(
+          (x) =>
+            !!x &&
+            typeof x === "object" &&
+            typeof (x as MapEntry).key === "string" &&
+            typeof (x as MapEntry).value === "string",
+        )
+        ? { ok: true, value: value as MapEntry[] }
+        : { ok: false, error: `${k}: {key,value} 배열 필요` };
     case "boolean":
       return typeof value === "boolean"
         ? { ok: true, value }
@@ -874,7 +897,17 @@ export function parseManifest(
           (type === "boolean" && typeof d === "boolean") ||
           (type === "number" && typeof d === "number") ||
           (type === "string" && typeof d === "string") ||
-          (type === "enum" && typeof d === "string" && enumVals!.includes(d));
+          (type === "enum" && typeof d === "string" && enumVals!.includes(d)) ||
+          (type === "list" && Array.isArray(d) && d.every((x) => typeof x === "string")) ||
+          (type === "map" &&
+            Array.isArray(d) &&
+            d.every(
+              (x) =>
+                !!x &&
+                typeof x === "object" &&
+                typeof (x as MapEntry).key === "string" &&
+                typeof (x as MapEntry).value === "string",
+            ));
         if (!defOk) {
           errors.push(
             `configuration[${i}].default: type(${type}) 와 일치${type === "enum" ? "(enum 값 중 하나)" : ""}해야 함`,
@@ -901,7 +934,7 @@ export function parseManifest(
         const setting: ConfigSetting = {
           key: item.key.trim(),
           type,
-          default: d as boolean | number | string,
+          default: d as ConfigValue,
           title: normalizeText(item.title as LocalizedText),
         };
         if (item.description !== undefined) {
