@@ -100,7 +100,10 @@ export interface DataChangeEvent {
 // ── 플러그인이 보는 타입 ─────────────────────────────────────────────────────
 
 export interface PluginCommandSpec {
+  // description = 영어 base(LLM 발견 표면 — stub 금지). triggers = 비영어 트리거어(언어→단어).
+  // 호스트 catalogJson 이 base+triggers 를 합성(docs/I18N.md §3). 사람 UI 는 contributes.commands.title.
   description: string;
+  triggers?: Record<string, string>;
   params?: Record<string, ParamSpec>;
   returns?: string;
   examples?: readonly string[];
@@ -747,6 +750,7 @@ export function buildPluginApi(
             const full = pluginCommandName(id, name);
             deps.registerCommand(full, {
               description: spec.description,
+              triggers: spec.triggers, // 호스트 catalogJson 이 base+triggers 합성(docs/I18N.md §3)
               params: spec.params ?? {},
               returns: spec.returns ?? "object",
               examples: spec.examples,
