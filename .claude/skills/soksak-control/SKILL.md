@@ -1,6 +1,6 @@
 ---
 name: soksak-control
-description: Control the soksak terminal app via the `sok` CLI — discover and run any soksak command to split/merge/close panels, open terminals/browsers/editors, run and read terminal output, drive TUIs, automate the embedded browser DOM, and manage windows. Use whenever asked to manipulate the soksak layout or automate anything inside soksak.
+description: Control the soksak terminal app via the `sok` CLI — discover and run any soksak command. Reach for this whenever the user acts on anything inside soksak: split/merge/close panels & tabs, open terminals/browsers/editors, run and read terminal output, drive TUIs, automate the embedded browser (navigate/click/fill/eval), draw or annotate on the screen, manage windows/files/bookmarks/clipboard. If the user says they marked/drew/showed/annotated something "on screen" or "in the browser", it is almost certainly a soksak overlay or view — start here, not an external design tool. 화면/브라우저에 표시·낙서·주석·그림, 패널 나누기, 터미널 실행도 여기.
 ---
 
 # Controlling soksak with `sok`
@@ -45,7 +45,7 @@ terminals contain panes p*). Every feature is a `sok` command.
 - notify (1): show
 - pane (4): close, focus, list, ...
 - panel (8): close, equalize, focus, ...
-- plugin (219): dynamic — `sok commands` / `sok plugin.list`
+- plugin (228): dynamic — `sok commands` / `sok plugin.list`
 - program (1): list
 - project (9): activate, close, color, ...
 - schedule (3): cancel, list, set
