@@ -27,7 +27,6 @@ import {
   useFileViewerRegistry,
   type FileViewerProvider,
 } from "./fileViewerRegistry";
-import { useEditorRegistry } from "./editorRegistry";
 import { useIconRegistry, validateIconSetData } from "../ui/icons/registry";
 import {
   registerStatusBarItem,
@@ -57,10 +56,6 @@ import { localize } from "../i18n";
 import { useSettings } from "../state/settings";
 import { usePluginSettings, type SettingValue } from "../state/pluginSettings";
 import { useSessions } from "../state/sessions";
-import type { Extension } from "@codemirror/state";
-import * as cmView from "@codemirror/view";
-import * as cmState from "@codemirror/state";
-import * as cmLanguage from "@codemirror/language";
 
 export type { Disposable } from "./hooks";
 
@@ -79,9 +74,6 @@ export interface PluginApiDeps {
   getCommandDanger: (name: string) => "destructive" | "inject" | undefined;
   on: typeof onPluginEvent;
   currentProject: () => { id: string; root: string | null } | null;
-  // 활성 파일 뷰(에디터 통합 M_P7 에서 FileViewer 가 bridge 구현을 채운다).
-  activeFile: () => { viewId: string; path: string; text: string } | null;
-  setFileText: (viewId: string, text: string) => boolean;
   // 코어 fs watcher(fs-change) 구독 — 변경된 부모 디렉토리 문자열을 콜백. 반환=해지.
   onFsChange: (cb: (dir: string) => void) => () => void;
   // 코어 데이터 스토어 변경(data-change) 구독 — Rust 싱글톤이 전 창 브로드캐스트(멀티윈도우·같은
@@ -163,28 +155,6 @@ export interface SoksakPluginApi {
     /** 이 플러그인 뷰의 사이드바 탭 배지(읽지않음 표시). number=카운트, "dot"=점, null=해제.
      *  뷰 안에서는 mount ctx.setBadge 가 편하고, 이건 뷰 밖에서 갱신할 때. per-window. */
     setViewBadge: (viewId: string, badge: number | "dot" | null) => void;
-  };
-  editor?: {
-    // 호스트의 @codemirror 모듈(§0-7 — 플러그인 자체 번들 금지).
-    modules: {
-      view: typeof cmView;
-      state: typeof cmState;
-      language: typeof cmLanguage;
-    };
-    registerExtension: (reg: {
-      extension: Extension;
-      languages?: string[];
-    }) => Disposable;
-    // 매니페스트 contributes.formatters 의 선언 id 에 핸들러를 바인딩.
-    registerFormatter: (reg: {
-      id: string;
-      format: (
-        text: string,
-        ctx: { path: string; ext: string },
-      ) => string | Promise<string>;
-    }) => Disposable;
-    getActiveFile: () => { viewId: string; path: string; text: string } | null;
-    setFileText: (viewId: string, text: string) => boolean;
   };
   storage?: {
     read: (key: string) => Promise<unknown>;
@@ -891,40 +861,6 @@ export function buildPluginApi(
         }
       : undefined,
 
-    editor: has("editor")
-      ? {
-          modules: { view: cmView, state: cmState, language: cmLanguage },
-          registerExtension: (reg) =>
-            tracker.wrap(
-              useEditorRegistry.getState().registerExtension({
-                pluginId: id,
-                languages: reg.languages ?? null,
-                extension: reg.extension,
-              }),
-            ),
-          registerFormatter: (reg) => {
-            const decl = manifest.contributes.formatters.find(
-              (f) => f.id === reg.id,
-            );
-            if (!decl) {
-              throw new Error(
-                `매니페스트 contributes.formatters 에 선언되지 않은 포매터: ${reg.id}`,
-              );
-            }
-            return tracker.wrap(
-              useEditorRegistry.getState().registerFormatter({
-                pluginId: id,
-                id: decl.id,
-                title: localize(decl.title),
-                languages: decl.languages,
-                format: reg.format,
-              }),
-            );
-          },
-          getActiveFile: () => deps.activeFile(),
-          setFileText: (viewId, text) => deps.setFileText(viewId, text),
-        }
-      : undefined,
 
     storage: has("storage")
       ? {

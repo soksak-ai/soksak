@@ -30,7 +30,6 @@ import {
   sendInputToHost,
 } from "../terminal/paneHosts";
 import { computeLayout } from "../components/GroupArea";
-import { getFileView, saveFileView } from "./fileViewBridge";
 import { browserLabel } from "../lib/webviewLabels";
 import { catalogJson, register, type CommandContext } from "./registry";
 import { registerGitCatalog } from "./catalogGit";
@@ -1640,76 +1639,6 @@ export function registerCatalog(): void {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
       return S().openFileView(t.id, p.path as string);
-    },
-  });
-
-  register("editor.save", {
-    description: "Save the editor view (same as ⌘S).",
-    triggers: { ko: "파일 저장 에디터 저장 저장하기" },
-    params: { view: { ...P.view, required: true } },
-    returns: "{ saved, reason? }",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok editor.save \'{"view":"v4"}\''],
-    handler: async (p) => {
-      const r = saveFileView(p.view as string);
-      if (!r) return notFound(`열려 있는 에디터 뷰 없음: ${p.view}`);
-      return await r;
-    },
-  });
-
-  const FIND_OPTS = {
-    caseSensitive: { type: "boolean", description: "Case-sensitive match", default: false },
-    regexp: { type: "boolean", description: "Use regular expression", default: false },
-    wholeWord: { type: "boolean", description: "Match whole word only", default: false },
-  } satisfies Record<string, import("./registry").ParamSpec>;
-
-  register("editor.find", {
-    description: "Find in the editor view (highlights matches and selects the first). Returns match count.",
-    triggers: { ko: "찾기 검색 에디터 찾기 텍스트 검색" },
-    params: {
-      view: { ...P.view, required: true },
-      query: { type: "string", description: "Search string or pattern", required: true },
-      ...FIND_OPTS,
-    },
-    returns: "{ matches }",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok editor.find \'{"view":"v4","query":"TODO"}\''],
-    handler: (p) => {
-      const api = getFileView(p.view as string);
-      if (!api) return notFound(`열려 있는 에디터 뷰 없음: ${p.view}`);
-      return api.find(p.query as string, {
-        caseSensitive: p.caseSensitive as boolean,
-        regexp: p.regexp as boolean,
-        wholeWord: p.wholeWord as boolean,
-      });
-    },
-  });
-
-  register("editor.replace", {
-    description:
-      "Replace in the editor view (all=true replaces all, otherwise one occurrence). Returns replacement count — save with editor.save.",
-    triggers: { ko: "바꾸기 치환 에디터 바꾸기 텍스트 교체" },
-    params: {
-      view: { ...P.view, required: true },
-      query: { type: "string", description: "Search string or pattern", required: true },
-      replacement: { type: "string", description: "Replacement string", required: true },
-      all: { type: "boolean", description: "Replace all occurrences", default: true },
-      ...FIND_OPTS,
-    },
-    returns: "{ replaced }",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: [
-      'sok editor.replace \'{"view":"v4","query":"foo","replacement":"bar"}\'',
-    ],
-    handler: (p) => {
-      const api = getFileView(p.view as string);
-      if (!api) return notFound(`열려 있는 에디터 뷰 없음: ${p.view}`);
-      return api.replace(p.query as string, p.replacement as string, {
-        caseSensitive: p.caseSensitive as boolean,
-        regexp: p.regexp as boolean,
-        wholeWord: p.wholeWord as boolean,
-        all: p.all as boolean,
-      });
     },
   });
 

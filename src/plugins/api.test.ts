@@ -8,7 +8,6 @@ import {
 } from "./api";
 import { parseManifest, type PluginManifest } from "./spec";
 import { useViewRegistry } from "./viewRegistry";
-import { useEditorRegistry } from "./editorRegistry";
 import {
   useFileViewerRegistry,
   resolveFileViewer,
@@ -41,8 +40,6 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
     getCommandDanger: () => undefined,
     on: vi.fn(() => ({ dispose: () => {} })),
     currentProject: () => ({ id: "p1", root: "/repo" }),
-    activeFile: () => null,
-    setFileText: () => false,
     onFsChange: () => () => {},
     onDataChange: () => () => {},
     onClipboardChange: () => () => {},
@@ -56,12 +53,6 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
 beforeEach(() => {
   useViewRegistry.setState({ views: {}, version: 0 });
   useFileViewerRegistry.setState({ viewers: {}, version: 0 });
-  useEditorRegistry.setState({
-    version: 0,
-    extensions: [],
-    languages: [],
-    formatters: [],
-  });
 });
 
 describe("fs.readBinary (A13 미디어 — fs:read)", () => {
@@ -136,7 +127,6 @@ describe("권한 표면 게이트(§0-2)", () => {
     const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
     expect(api.commands).toBeUndefined();
     expect(api.ui).toBeUndefined();
-    expect(api.editor).toBeUndefined();
     expect(api.storage).toBeUndefined();
     expect(api.fs).toBeUndefined();
     expect(api.git).toBeUndefined();
@@ -399,37 +389,6 @@ describe("ui — 선언 외 뷰 거부 + 레지스트리 연동", () => {
       { view: "demo.panel", placement: "content" },
       {},
     );
-  });
-});
-
-describe("editor — 선언 id 바인딩 + 호스트 모듈 노출(§0-7)", () => {
-  const edManifest = () =>
-    manifestOf({
-      permissions: ["editor"],
-      contributes: {
-        formatters: [{ id: "fmt", title: "포맷", languages: ["json"] }],
-      },
-    });
-
-  it("modules 는 호스트 @codemirror 모듈을 노출", () => {
-    const { api } = buildPluginApi(edManifest(), "/d", fakeDeps());
-    expect(api.editor!.modules.view.EditorView).toBeDefined();
-    expect(api.editor!.modules.state.StateField).toBeDefined();
-  });
-
-  it("registerFormatter 는 선언 id 만, 메타(언어/제목)는 매니페스트가 단일진실", () => {
-    const { api } = buildPluginApi(edManifest(), "/d", fakeDeps());
-    expect(() =>
-      api.editor!.registerFormatter({ id: "ghost", format: (t) => t }),
-    ).toThrow(/선언되지 않은 포매터/);
-    api.editor!.registerFormatter({ id: "fmt", format: (t) => t.trim() });
-    const reg = useEditorRegistry.getState().formatters[0];
-    expect(reg).toMatchObject({
-      pluginId: "demo",
-      id: "fmt",
-      title: "포맷",
-      languages: ["json"],
-    });
   });
 });
 

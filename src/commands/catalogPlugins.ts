@@ -5,11 +5,10 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { pendingConsentChain, usePlugins, type PluginRuntime } from "../state/plugins";
-import { allGroups, useSessions, type View } from "../state/sessions";
+import { allGroups, useSessions } from "../state/sessions";
 import { getRegisteredView } from "../plugins/viewRegistry";
 import { listPrograms } from "../plugins/programRegistry";
 import { localize } from "../i18n";
-import { formatterFor } from "../plugins/editorRegistry";
 import {
   VIEW_PLACEMENTS,
   configDefaults,
@@ -23,7 +22,6 @@ import {
   versionIssues,
   type DepNode,
 } from "../plugins/dependencyGraph";
-import { getFileView } from "./fileViewBridge";
 import { register } from "./registry";
 import { useUi } from "../state/ui";
 import { consentSummary } from "../plugins/consentSummary";
@@ -47,37 +45,6 @@ const invalid = (what: string) => ({
   code: "INVALID_PARAMS" as const,
   message: what,
 });
-
-// 파일 뷰 해석: id 명시 → 전 프로젝트 검색, 생략 → 활성 체인의 파일 뷰.
-function resolveFileView(
-  viewId?: string,
-): { projectId: string; view: Extract<View, { kind: "file" }> } | null {
-  const s = useSessions.getState();
-  if (viewId) {
-    for (const t of s.tabs) {
-      for (const c of t.contents) {
-        for (const g of allGroups(c.layout)) {
-          const v = g.views.find((x) => x.id === viewId);
-          if (v) return v.kind === "file" ? { projectId: t.id, view: v } : null;
-        }
-      }
-    }
-    return null;
-  }
-  const t = s.tabs.find((x) => x.id === s.activeId);
-  const c = t?.contents.find((x) => x.id === t.activeContentId);
-  if (!t || !c) return null;
-  const g = allGroups(c.layout).find((x) => x.id === c.activeGroupId);
-  const v = g?.views.find((x) => x.id === g.activeViewId);
-  return v && v.kind === "file" ? { projectId: t.id, view: v } : null;
-}
-
-// 파일명 끝의 확장자(소문자) — 포매터/언어 매칭 키.
-function extOf(path: string): string {
-  const name = path.split("/").pop() ?? path;
-  const dot = name.lastIndexOf(".");
-  return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
-}
 
 // plugin.list 응답 항목(직렬화 가능 — 핸들러/모듈 비포함).
 function serializeRuntime(p: PluginRuntime) {
@@ -610,43 +577,6 @@ export function registerPluginCatalog(): void {
     },
   });
 
-  register("editor.format", {
-    description:
-      "Format the active file view using the registered plugin formatter for its file extension (equivalent to pressing ⇧⌥F). The formatter must be declared in contributes.formatters and bound via registerFormatter.",
-    triggers: { ko: "포맷 정리 코드 정렬 formatter 파일 서식" },
-    params: {
-      view: { type: "string", description: "File view id. Defaults to the active file view in the focused chain." },
-    },
-    returns: "{ formatted, changed, formatter }",
-    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS", "INTERNAL"],
-    examples: ["sok editor.format", 'sok editor.format \'{"view":"v12"}\''],
-    handler: async (p) => {
-      const target = resolveFileView(p.view as string | undefined);
-      if (!target) return notFound("파일 뷰 없음(활성 뷰가 파일이 아님)");
-      const ext = extOf(target.view.path);
-      const fmt = formatterFor(ext);
-      if (!fmt) return notFound(`포매터 없음: ${ext || "(확장자 없음)"}`);
-      const api = getFileView(target.view.id);
-      const text = api?.getText?.();
-      if (text == null) {
-        return invalid("코드 편집 뷰가 아니거나 로딩 전(프리뷰/미디어)");
-      }
-      const formatter = `${fmt.pluginId}.${fmt.id}`;
-      const out = await fmt.format(text, { path: target.view.path, ext });
-      if (typeof out !== "string") {
-        return {
-          ok: false as const,
-          code: "INTERNAL" as const,
-          message: `포매터(${formatter})가 문자열을 반환하지 않음`,
-        };
-      }
-      if (out === text) return { formatted: true, changed: false, formatter };
-      if (!(api?.setText?.(out) ?? false)) {
-        return invalid("쓰기 불가(읽기 전용 또는 코드 모드 아님)");
-      }
-      return { formatted: true, changed: true, formatter };
-    },
-  });
 
   register("plugin.dev.load", {
     description:

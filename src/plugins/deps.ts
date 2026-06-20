@@ -9,8 +9,7 @@ import {
   register,
   unregister,
 } from "../commands/registry";
-import { allGroups, useSessions } from "../state/sessions";
-import { getFileView } from "../commands/fileViewBridge";
+import { useSessions } from "../state/sessions";
 import {
   getCwdOfHost,
   subscribeCwd,
@@ -18,25 +17,6 @@ import {
 } from "../terminal/paneHosts";
 import { onPluginEvent } from "./hooks";
 import type { DataChangeEvent, PluginApiDeps } from "./api";
-
-// 활성 체인(활성 프로젝트 → 활성 컨텐츠 → 활성 그룹 → 활성 뷰)의 파일 뷰.
-function activeFile(): { viewId: string; path: string; text: string } | null {
-  const s = useSessions.getState();
-  const project = s.tabs.find((t) => t.id === s.activeId);
-  const content = project?.contents.find(
-    (c) => c.id === project.activeContentId,
-  );
-  if (!content) return null;
-  const group = allGroups(content.layout).find(
-    (g) => g.id === content.activeGroupId,
-  );
-  const view = group?.views.find((v) => v.id === group.activeViewId);
-  if (!view || view.kind !== "file") return null;
-  // 코드 편집 뷰가 아니거나(미디어/미구현) 로딩 전(null)이면 null.
-  const text = getFileView(view.id)?.getText?.();
-  if (text == null) return null;
-  return { viewId: view.id, path: view.path, text };
-}
 
 export function defaultPluginDeps(appVersion: string): PluginApiDeps {
   return {
@@ -52,9 +32,6 @@ export function defaultPluginDeps(appVersion: string): PluginApiDeps {
       const project = s.tabs.find((t) => t.id === s.activeId);
       return project ? { id: project.id, root: project.root ?? null } : null;
     },
-    activeFile,
-    setFileText: (viewId, text) =>
-      getFileView(viewId)?.setText?.(text) ?? false,
     // fs-change(코어 watcher, 폴링 없음) 구독 → 변경된 부모 디렉토리 문자열을 콜백.
     // 반환 = 해지. listen 은 async 라 비동기 도착하면 즉시 연결(중간 해지도 처리).
     onFsChange: (cb) => {

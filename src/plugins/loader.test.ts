@@ -11,7 +11,6 @@ import {
 } from "./loader";
 import type { PluginApiDeps, PluginContext } from "./api";
 import { parseManifest, type PluginManifest } from "./spec";
-import { languageFor, useEditorRegistry } from "./editorRegistry";
 import { useViewRegistry } from "./viewRegistry";
 
 function manifestOf(overrides: Record<string, unknown> = {}): PluginManifest {
@@ -41,8 +40,6 @@ function fakeDeps(): PluginApiDeps {
     getCommandDanger: () => undefined,
     on: vi.fn(() => ({ dispose: () => {} })),
     currentProject: () => null,
-    activeFile: () => null,
-    setFileText: () => false,
     onFsChange: () => () => {},
     onDataChange: () => () => {},
     onClipboardChange: () => () => {},
@@ -55,12 +52,6 @@ function fakeDeps(): PluginApiDeps {
 beforeEach(async () => {
   await deactivateAll();
   useViewRegistry.setState({ views: {}, version: 0 });
-  useEditorRegistry.setState({
-    version: 0,
-    extensions: [],
-    languages: [],
-    formatters: [],
-  });
 });
 
 describe("activatePlugin — 진입점 해석", () => {
@@ -145,9 +136,8 @@ describe("activatePlugin — 생명주기·수거", () => {
 
   it("activate throw → 등록분(선언적 언어 포함) 전부 회수 후 전파", async () => {
     const m = manifestOf({
-      permissions: ["editor", "ui"],
+      permissions: ["ui"],
       contributes: {
-        languages: [{ ext: "svelte", lang: "html" }],
         views: [{ id: "panel", title: "패널", icon: "P" }],
       },
     });
@@ -157,7 +147,6 @@ describe("activatePlugin — 생명주기·수거", () => {
           activate: (ctx: PluginContext) => {
             // 등록 후 폭발 — 부분 활성 상태가 남으면 안 된다.
             ctx.app.ui!.registerView("panel", { mount: () => {} });
-            expect(languageFor("svelte")).toBe("html"); // 선언적 자동 등록 확인
             throw new Error("부분 실패");
           },
         },
@@ -166,19 +155,7 @@ describe("activatePlugin — 생명주기·수거", () => {
         fakeDeps(),
       ),
     ).rejects.toThrow(/activate 실패/);
-    expect(languageFor("svelte")).toBeNull();
     expect(useViewRegistry.getState().views["demo.panel"]).toBeUndefined();
-  });
-
-  it("선언적 언어 매핑은 활성화에 적용되고 비활성화에 제거", async () => {
-    const m = manifestOf({
-      permissions: ["editor"],
-      contributes: { languages: [{ ext: "svelte", lang: "html" }] },
-    });
-    const p = await activatePlugin({ activate: () => {} }, m, "/d", fakeDeps());
-    expect(languageFor("svelte")).toBe("html");
-    await p.deactivate();
-    expect(languageFor("svelte")).toBeNull();
   });
 
   it("async activate 대기", async () => {
