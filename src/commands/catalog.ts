@@ -1173,8 +1173,9 @@ export function registerCatalog(): void {
 
   // ----- browser -----
   register("browser.open", {
-    description: "Open a browser — as a panel tab (where=panel) or a standalone OS window (where=window).",
-    triggers: { ko: "브라우저 열기 웹 열기 URL 열기 인터넷 열기" },
+    description:
+      "Open soksak's own built-in browser view — as a panel tab (where=panel) or a standalone soksak window (where=window). This is ONLY the embedded in-app browser. Do NOT use it when the user names a specific or external browser (Chrome, Safari, Edge, Firefox, an agent browser, etc.) or says 'not the embedded one' — those are separate applications, not this command; launch the OS app instead.",
+    triggers: { ko: "내장 브라우저 열기 웹페이지 인앱 브라우저 URL 띄우기" },
     params: {
       url: { type: "string", description: "Start URL (omit = settings homeUrl)" },
       where: {

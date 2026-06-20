@@ -1,7 +1,7 @@
 {
   "_doc": "발화 E2E 코퍼스 (docs/I18N.md §6, plans/ancient-finding-wand.md Stage 5). 사용자 발화 → 발견되어야 할 명령. Tier1(check-utterances.mjs): 합성 카탈로그(sok commands)에서 expect 명령의 description 이 그 발화 언어 트리거어를 담는지 단언(회귀 게이트). Tier2(실모델): 별도. ja 트리거어는 아직 미추가 — ja 시나리오는 Tier2 전용으로 표시.",
   "positive": [
-    { "id": "pin-ko-mark", "lang": "ko", "utterance": "브라우저에 표시했어, 저거 봐줘", "expect": "plugin.soksak-plugin-pin.toggle", "tokens": ["표시", "낙서", "그렸"], "note": "pin 사고 원본 — ko 발화로 pin 발견" },
+    { "id": "pin-ko-mark", "lang": "ko", "utterance": "브라우저에 표시했어, 저거 봐줘", "expect": "plugin.soksak-plugin-pin.toggle", "expectAny": ["plugin.soksak-plugin-pin.toggle", "plugin.soksak-plugin-pin.state", "plugin.soksak-plugin-pin.stroke", "window.snapshot", "browser.dom.text"], "tokens": ["표시", "낙서", "그렸"], "note": "pin 사고 원본. 모호('표시했어 저거 봐줘') → 여러 soksak engagement 타당(pin/snapshot/dom.text). 핵심: 원래 실패는 외부(Pencil/Figma)로 샘 → 이제 항상 soksak 안에 머뭄. Tier1 은 pin description 의 '표시' 토큰 단언" },
     { "id": "pin-ko-draw", "lang": "ko", "utterance": "화면에 낙서하면서 설명할게", "expect": "plugin.soksak-plugin-pin.toggle", "tokens": ["낙서", "그리기"] },
     { "id": "pin-en-draw", "lang": "en", "utterance": "let me draw on the screen", "expect": "plugin.soksak-plugin-pin.toggle", "tokens": ["draw", "doodle", "annotat"] },
     { "id": "panel-ko-split", "lang": "ko", "utterance": "패널 좀 나눠줘 오른쪽에", "expect": "panel.split", "tokens": ["패널", "나누기", "분할"] },
@@ -22,5 +22,11 @@
     { "id": "neg-weather", "lang": "ko", "utterance": "오늘 서울 날씨 어때?", "note": "soksak 무관 — 어떤 명령도 발동 안 해야" },
     { "id": "neg-algo", "lang": "ko", "utterance": "파이썬으로 퀵소트 알고리즘 설명해줘", "note": "일반 코딩 — soksak 제어 아님" },
     { "id": "neg-time", "lang": "en", "utterance": "what time is it in Tokyo right now", "note": "unrelated" }
+  ],
+  "disambiguation": [
+    { "id": "browser-pos", "lang": "ko", "utterance": "브라우저 열어서 이 페이지 보여줘", "expect": "browser.open", "note": "내장 브라우저 — 발동해야" },
+    { "id": "browser-neg-chrome", "lang": "ko", "utterance": "이거 브라우저 말고 크롬으로 열어줘", "mustNotTrigger": "browser.open", "note": "외부 Chrome 앱 — soksak 내장 browser.open 이 발동하면 안 됨(정밀도). base 가 '내장 ≠ 외부 Chrome' 을 명시하므로 실모델이 구분. Tier2 전용(lexical 로는 base 에 'Chrome' 이 부정문으로 들어가 불가)" },
+    { "id": "browser-neg-safari", "lang": "en", "utterance": "open this in Safari, not the embedded one", "mustNotTrigger": "browser.open", "note": "external Safari — Tier2" },
+    { "id": "browser-neg-agent", "lang": "ko", "utterance": "이거 agentbrowser로 열어줘", "mustNotTrigger": "browser.open", "note": "외부 agent browser — soksak 내장 browser.open 발동 금지(Tier2)" }
   ]
 }
