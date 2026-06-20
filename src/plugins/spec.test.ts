@@ -171,6 +171,62 @@ describe("parseManifest — 수용", () => {
   });
 });
 
+describe("parseManifest — fileViewers(A13)", () => {
+  it("id+extensions(+optional priority, '*' 폴백) 수용, ui 권한이면 통과", () => {
+    const { manifest, validation } = parseManifest(
+      base({
+        permissions: ["ui"],
+        contributes: {
+          fileViewers: [
+            { id: "code", extensions: ["ts", "*"], priority: 5 },
+            { id: "img", extensions: ["png"] },
+          ],
+        },
+      }),
+      "demo",
+    );
+    expect(validation.ok).toBe(true);
+    expect(manifest?.contributes.fileViewers).toEqual([
+      { id: "code", extensions: ["ts", "*"], priority: 5 },
+      { id: "img", extensions: ["png"] },
+    ]);
+  });
+
+  it("ui 권한 미선언이면 거부", () => {
+    const errs = errorsOf(
+      base({ contributes: { fileViewers: [{ id: "code", extensions: ["ts"] }] } }),
+    );
+    expect(errs.some((e) => e.includes('"ui" 권한'))).toBe(true);
+  });
+
+  it("빈 extensions / 잘못된 확장자 / 비-number priority 거부", () => {
+    expect(
+      errorsOf(base({ permissions: ["ui"], contributes: { fileViewers: [{ id: "a", extensions: [] }] } })).length,
+    ).toBeGreaterThan(0);
+    expect(
+      errorsOf(base({ permissions: ["ui"], contributes: { fileViewers: [{ id: "a", extensions: ["."] }] } })).length,
+    ).toBeGreaterThan(0);
+    expect(
+      errorsOf(base({ permissions: ["ui"], contributes: { fileViewers: [{ id: "a", extensions: ["ts"], priority: "hi" }] } })).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("id 중복 거부", () => {
+    const errs = errorsOf(
+      base({
+        permissions: ["ui"],
+        contributes: {
+          fileViewers: [
+            { id: "dup", extensions: ["ts"] },
+            { id: "dup", extensions: ["js"] },
+          ],
+        },
+      }),
+    );
+    expect(errs.some((e) => e.includes("fileViewers.id"))).toBe(true);
+  });
+});
+
 describe("parseManifest — 거부(필수 필드)", () => {
   it("객체가 아니면 거부", () => {
     expect(parseManifest("문자열", "demo").manifest).toBeNull();

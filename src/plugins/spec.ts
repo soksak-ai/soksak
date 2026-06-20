@@ -1178,6 +1178,7 @@ export function parseManifest(
       fileViewers = parseEntries(c.fileViewers, {
         label: "contributes.fileViewers",
         required: ["id", "extensions"],
+        optional: ["priority"],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
             errs.push("contributes.fileViewers: id 는 ^[a-z0-9][a-z0-9-]*$");
