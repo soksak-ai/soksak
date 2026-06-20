@@ -1,0 +1,26 @@
+{
+  "_doc": "발화 E2E 코퍼스 (docs/I18N.md §6, plans/ancient-finding-wand.md Stage 5). 사용자 발화 → 발견되어야 할 명령. Tier1(check-utterances.mjs): 합성 카탈로그(sok commands)에서 expect 명령의 description 이 그 발화 언어 트리거어를 담는지 단언(회귀 게이트). Tier2(실모델): 별도. ja 트리거어는 아직 미추가 — ja 시나리오는 Tier2 전용으로 표시.",
+  "positive": [
+    { "id": "pin-ko-mark", "lang": "ko", "utterance": "브라우저에 표시했어, 저거 봐줘", "expect": "plugin.soksak-plugin-pin.toggle", "tokens": ["표시", "낙서", "그렸"], "note": "pin 사고 원본 — ko 발화로 pin 발견" },
+    { "id": "pin-ko-draw", "lang": "ko", "utterance": "화면에 낙서하면서 설명할게", "expect": "plugin.soksak-plugin-pin.toggle", "tokens": ["낙서", "그리기"] },
+    { "id": "pin-en-draw", "lang": "en", "utterance": "let me draw on the screen", "expect": "plugin.soksak-plugin-pin.toggle", "tokens": ["draw", "doodle", "annotat"] },
+    { "id": "panel-ko-split", "lang": "ko", "utterance": "패널 좀 나눠줘 오른쪽에", "expect": "panel.split", "tokens": ["패널", "나누기", "분할"] },
+    { "id": "panel-en-split", "lang": "en", "utterance": "split the panel to the right", "expect": "panel.split", "tokens": ["split", "panel"] },
+    { "id": "term-ko-exec", "lang": "ko", "utterance": "터미널에서 git status 실행해줘", "expect": "term.exec", "tokens": ["실행", "터미널", "명령"] },
+    { "id": "erd-ko-schema", "lang": "ko", "utterance": "users 테이블 만들어서 스키마 짜줘", "expect": "plugin.soksak-plugin-erd.create-table", "tokens": ["테이블", "생성", "만들"] },
+    { "id": "erd-ko-rel", "lang": "ko", "utterance": "두 테이블 외래키로 연결해줘", "expect": "plugin.soksak-plugin-erd.add-relationship", "tokens": ["관계", "외래키", "연결"] },
+    { "id": "kanban-ko-add", "lang": "ko", "utterance": "칸반에 할 일 카드 추가", "expect": "plugin.soksak-plugin-kanban.node.add", "tokens": ["추가", "노드", "할일", "카드"] },
+    { "id": "kanban-ko-indent", "lang": "ko", "utterance": "이 항목을 들여쓰기 해서 하위로", "expect": "plugin.soksak-plugin-kanban.outline.indent", "tokens": ["들여쓰기", "하위", "자식"] },
+    { "id": "mailbox-ko-send", "lang": "ko", "utterance": "메시지 하나 보내줘", "expect": "plugin.soksak-plugin-mailbox.send", "tokens": ["메시지", "보내", "메일"] },
+    { "id": "clip-ko-search", "lang": "ko", "utterance": "클립보드에서 아까 복사한 거 찾아줘", "expect": "plugin.soksak-plugin-clip.clip.search", "tokens": ["클립보드", "검색", "찾"] },
+    { "id": "runbook-ko-run", "lang": "ko", "utterance": "저장해둔 배포 명령 실행", "expect": "plugin.soksak-plugin-runbook.runbook.command.run", "tokens": ["실행", "명령", "런북"] }
+  ],
+  "tier2_only": [
+    { "id": "pin-ja-draw", "lang": "ja", "utterance": "画面に落書きしたい", "expect": "plugin.soksak-plugin-pin.toggle", "note": "ja 트리거어 미추가 — 영어 base 의미매칭(실모델만)" }
+  ],
+  "negative": [
+    { "id": "neg-weather", "lang": "ko", "utterance": "오늘 서울 날씨 어때?", "note": "soksak 무관 — 어떤 명령도 발동 안 해야" },
+    { "id": "neg-algo", "lang": "ko", "utterance": "파이썬으로 퀵소트 알고리즘 설명해줘", "note": "일반 코딩 — soksak 제어 아님" },
+    { "id": "neg-time", "lang": "en", "utterance": "what time is it in Tokyo right now", "note": "unrelated" }
+  ]
+}

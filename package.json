@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "tauri": "tauri",
-    "icons:extract": "node scripts/icons/extract.mjs"
+    "icons:extract": "node scripts/icons/extract.mjs",
+    "check:utterances": "node scripts/e2e/check-utterances.mjs"
   },
   "dependencies": {
     "@codemirror/language": "^6.12.3",
