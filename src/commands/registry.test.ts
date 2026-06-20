@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   catalogJson,
+  composeTriggers,
   execute,
   getSpec,
   register,
@@ -196,5 +197,42 @@ describe("register / unregister — 플러그인 생명주기 기반", () => {
     expect(entry).toBeDefined();
     expect(JSON.parse(JSON.stringify(entry))).toEqual(entry);
     expect("handler" in (entry as object)).toBe(false);
+  });
+
+  // composeTriggers — LLM 발견 표면(결정 8): 영어 base + 전 언어 트리거어 합성. 로케일 사본 아님.
+  it("composeTriggers: triggers 없으면 base 그대로(하위호환)", () => {
+    expect(composeTriggers("Split the panel.")).toBe("Split the panel.");
+    expect(composeTriggers("Split the panel.", undefined)).toBe("Split the panel.");
+    expect(composeTriggers("Split the panel.", {})).toBe("Split the panel.");
+  });
+  it("composeTriggers: base + ' | ' + 언어별 트리거어(라벨 없음)", () => {
+    expect(composeTriggers("Split the panel.", { ko: "패널 나누기 분할" })).toBe(
+      "Split the panel. | 패널 나누기 분할",
+    );
+  });
+  it("composeTriggers: 언어코드 알파벳 정렬(결정적·대화언어 무관)", () => {
+    // ko·ja → 정렬하면 ja 먼저(j<k). 입력 순서 무관.
+    const out = composeTriggers("Draw.", { ko: "낙서 그리기", ja: "落書き 描く" });
+    expect(out).toBe("Draw. | 落書き 描く | 낙서 그리기");
+    // 입력 순서를 바꿔도 같은 결과(결정성).
+    expect(composeTriggers("Draw.", { ja: "落書き 描く", ko: "낙서 그리기" })).toBe(out);
+  });
+  it("composeTriggers: 새 언어(zh) 추가 = 그 데이터만 합성에 반영, 나머지 불변", () => {
+    const base2 = composeTriggers("Draw.", { ko: "낙서", ja: "落書き" });
+    const base3 = composeTriggers("Draw.", { ko: "낙서", ja: "落書き", zh: "涂鸦" });
+    expect(base3).toBe("Draw. | 落書き | 낙서 | 涂鸦"); // ja<ko<zh 알파벳 정렬
+    expect(base3.startsWith(base2.split(" | ")[0])).toBe(true); // base 불변
+  });
+  it("composeTriggers: 언어 문자열 내 공백토큰 dedup(케이스무시) + 빈 언어 제거", () => {
+    expect(composeTriggers("X.", { ko: "그리기 그리기  낙서", en: "" })).toBe("X. | 그리기 낙서");
+  });
+
+  it("catalogJson: description = composeTriggers(base, triggers)", () => {
+    reg(TEST_PREFIX + "compose", {
+      description: "Toggle the doodle overlay.",
+      triggers: { ko: "낙서 그리기" },
+    });
+    const entry = catalogJson().find((c) => c.name === TEST_PREFIX + "compose");
+    expect(entry?.description).toBe("Toggle the doodle overlay. | 낙서 그리기");
   });
 });

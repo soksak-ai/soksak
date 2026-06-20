@@ -350,7 +350,7 @@ fn meta_tools() -> Vec<Value> {
     vec![
         json!({
             "name": "soksak_commands",
-            "description": "Discover soksak commands. Call this FIRST when controlling soksak — returns the domain map and command catalog (name+description). Pass `domain` to filter one domain (e.g. panel, browser, window).",
+            "description": "Discover soksak commands — the domain map + catalog (name + composed description). Reach for this whenever the user acts on anything inside the soksak app: split/arrange/close panels & tabs, open/run/read terminals, open or automate the embedded browser (navigate, click, fill, eval), draw or annotate on the screen, design a DB schema/ERD, manage windows, files, bookmarks, clipboard. If the user says they marked/drew/showed something \"on screen\" or \"in the browser\", it is almost certainly a soksak overlay/view — start here. Pass `domain` to filter (panel, browser, term, window, pin, erd…).",
             "inputSchema": {"type": "object", "properties": {
                 "domain": {"type": "string", "description": "domain prefix filter (omit = all)"}
             }},
@@ -658,7 +658,7 @@ fn run_mcp_install(args: &[String]) -> ExitCode {
 // 도메인 지도는 손으로 나열(P1 위반)하지 않고 install/serve 시 라이브 카탈로그에서 파생한다.
 
 // frontmatter description 이 트리거(자연어 자동발동, P5). Claude·Codex·Gemini 동일 포맷.
-const SKILL_FRONTMATTER: &str = "---\nname: soksak-control\ndescription: Control the soksak terminal app via the `sok` CLI — discover and run any soksak command to split/merge/close panels, open terminals/browsers/editors, run and read terminal output, drive TUIs, automate the embedded browser DOM, and manage windows. Use whenever asked to manipulate the soksak layout or automate anything inside soksak.\n---\n";
+const SKILL_FRONTMATTER: &str = "---\nname: soksak-control\ndescription: Control the soksak terminal app via the `sok` CLI — discover and run any soksak command. Reach for this whenever the user acts on anything inside soksak: split/merge/close panels & tabs, open terminals/browsers/editors, run and read terminal output, drive TUIs, automate the embedded browser (navigate/click/fill/eval), draw or annotate on the screen, manage windows/files/bookmarks/clipboard. If the user says they marked/drew/showed/annotated something \"on screen\" or \"in the browser\", it is almost certainly a soksak overlay or view — start here, not an external design tool. 화면/브라우저에 표시·낙서·주석·그림, 패널 나누기, 터미널 실행도 여기.\n---\n";
 
 const SKILL_BODY_HEAD: &str = r#"# Controlling soksak with `sok`
 

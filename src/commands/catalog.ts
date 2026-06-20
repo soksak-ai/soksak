@@ -717,7 +717,9 @@ export function registerCatalog(): void {
   });
 
   register("panel.split", {
-    description: "패널 분할 — 대상 패널 옆에 새 패널(프로그램 지정 가능)",
+    description:
+      "Split a panel — add a new panel beside the target on a given side (optionally running a program). Use when arranging the layout or opening something side by side.",
+    triggers: { ko: "패널 나누기 분할 화면 분할 옆에 열기 나란히" },
     params: {
       project: P.project,
       group: P.group,

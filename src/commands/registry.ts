@@ -15,7 +15,11 @@ export interface ParamSpec {
 }
 
 export interface CommandSpec {
+  // description = 영어 base(역할·무엇·언제·왜). LLM 발견 표면 — stub(이름 복붙) 금지. 사람 UI 아님.
   description: string;
+  // triggers = 비영어 언어별 트리거 단어(공백구분). 노출 시 composeTriggers 로 base 에 합성된다.
+  // 영어 매칭은 base prose 가 담당하므로 en 은 보통 생략. 언어 추가(ja/zh)=이 맵에 키만 추가(docs/I18N.md §3).
+  triggers?: Record<string, string>;
   params: Record<string, ParamSpec>;
   // 성공 응답 형태 설명(매뉴얼용).
   returns: string;
@@ -81,7 +85,36 @@ export function getSpec(name: string): CommandSpec | undefined {
   return registry.get(name);
 }
 
+// LLM 발견 표면 합성(docs/I18N.md §3, 결정 8). 영어 base + 전 언어 트리거어를 한 문자열로.
+// 로케일 사본이 아니라 단일 합성 — MCP 에 로케일 채널이 없는 한계를 우회하고, 언어가 늘어도(triggers
+// 데이터만 추가) 자동 확장. 사람 UI 는 이걸 쓰지 않는다(그쪽은 LocalizedText 해소).
+//  - 언어 순서 = 언어코드 알파벳 오름차순(결정적·대화언어 무관). 라벨 없음(스크립트로 자기식별).
+//  - 각 언어 문자열 내 공백토큰 중복 제거(케이스무시). 빈 언어·빈 triggers → 무시(빈값이면 base 그대로).
+export function composeTriggers(base: string, triggers?: Record<string, string>): string {
+  if (!triggers) return base;
+  const groups = Object.keys(triggers)
+    .sort()
+    .map((lang) => dedupTokens(triggers[lang]))
+    .filter((s) => s.length > 0);
+  return groups.length ? `${base} | ${groups.join(" | ")}` : base;
+}
+
+// 공백구분 토큰에서 중복 제거(케이스무시, 첫 등장 순서·표기 유지).
+function dedupTokens(s: string): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const tok of (s ?? "").trim().split(/\s+/)) {
+    if (!tok) continue;
+    const key = tok.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(tok);
+  }
+  return out.join(" ");
+}
+
 // 카탈로그(핸들러 제외, 직렬화 가능) — sok commands/help/docs/MCP tool 목록의 원천.
+// description = composeTriggers(base, triggers) — CLI/MCP/skill 이 보는 단일 합성본.
 export function catalogJson(): {
   name: string;
   description: string;
@@ -94,7 +127,7 @@ export function catalogJson(): {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, s]) => ({
       name,
-      description: s.description,
+      description: composeTriggers(s.description, s.triggers),
       params: s.params,
       returns: s.returns,
       errors: s.errors ?? [],
