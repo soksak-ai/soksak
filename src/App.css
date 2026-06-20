@@ -3170,6 +3170,8 @@ select.dctl {
   flex: 0 0 auto;
   /* 높이 고정 안 함 — 안의 플러그인 뷰가 자기 콘텐츠(폭 비례)로 결정. */
   border-top: 1px solid var(--bd);
+  /* 항상 사이드바 바닥에 — 위에 탭/본문이 없어도(빈 프레임) 마스코트는 하단 고정(계약 S5). */
+  margin-top: auto;
 }
 /* footer 슬롯의 뷰 호스트는 absolute(inset:0)가 아니라 일반 흐름 — 콘텐츠가 높이를 만든다
    (sidebar/content 는 부모 flex:1 박스를 채우지만, footer 는 콘텐츠 높이가 슬롯 높이). */

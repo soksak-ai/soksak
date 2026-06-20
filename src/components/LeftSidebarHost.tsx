@@ -49,23 +49,23 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
 
   return (
     <div className="left-host">
-      {leftViews.length > 0 && (
-        <div className="left-host-tabs">
-          {leftViews.map(({ key, view }) => (
-            <button
-              key={key}
-              type="button"
-              className={`left-host-tab${active === key ? " active" : ""}`}
-              data-node={`tab/left/${key}`}
-              title={localize(view.decl.title)}
-              onClick={() => setLeftTab(project.id, key)}
-            >
-              {view.decl.icon} {localize(view.decl.title)}
-              <ViewBadge viewKey={key} />
-            </button>
-          ))}
-        </div>
-      )}
+      {/* 탭 스트립은 항상 그린다(콘텐츠·우측 사이드바와 일관) — 좌측 뷰가 0개면 빈 바(프레임).
+          탭 = 등록된 sidebar-left 뷰 1개당 1개. 플러그인 활성화 시 자동으로 탭이 채워진다(S2). */}
+      <div className="left-host-tabs">
+        {leftViews.map(({ key, view }) => (
+          <button
+            key={key}
+            type="button"
+            className={`left-host-tab${active === key ? " active" : ""}`}
+            data-node={`tab/left/${key}`}
+            title={localize(view.decl.title)}
+            onClick={() => setLeftTab(project.id, key)}
+          >
+            {view.decl.icon} {localize(view.decl.title)}
+            <ViewBadge viewKey={key} />
+          </button>
+        ))}
+      </div>
       {opened.map((k) => (
         <div
           key={k}

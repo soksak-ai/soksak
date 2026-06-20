@@ -39,7 +39,7 @@ Tab strip, body slot, footer slot, width, and visibility are the host's. Everyth
 The host special-cases no view. There is no built-in FILES tab, no built-in terminal tab, no built-in anything in the strip. Every tab in every placement arrives from a registered `PluginViewProvider`. A tab the host knows by name is a lock-in (parent A4) and is prohibited.
 
 ### S3. Empty sidebar is the frame and nothing else.
-A placement with zero registered views renders the frame only — an empty strip and an empty slot, or a collapsed rail. The host invents no placeholder content, no "no views" feature surface, no default view. Empty is a valid, stable state, not a defect to paper over.
+The tab strip is always present — consistent with the content and right-sidebar tab systems — and renders as an empty bar when zero views are registered. The body is empty; the footer slot stays pinned to the bottom. The host invents no placeholder content, no "no views" feature surface, no default view. Empty is a valid, stable state, not a defect to paper over.
 
 ### S4. The view context is the only channel into a sidebar view.
 A sidebar view receives state through exactly `{ projectId, root, paneId, setBadge }` and through `app.*` capabilities. It must not import core Zustand stores, read the layout tree, or reach into `sessions`/`settings`/`ui` (parent A2). The context carries identity and the badge setter; it carries nothing the host has not chosen to hand over. `paneId` identifies the host pane instance so a view rendered in two placements or two windows keeps per-instance state separate.
