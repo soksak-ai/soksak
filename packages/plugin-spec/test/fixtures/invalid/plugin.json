@@ -1,0 +1,7 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "mismatch",
+  "version": "not-semver",
+  "permissions": "not-an-array",
+  "contributes": {}
+}

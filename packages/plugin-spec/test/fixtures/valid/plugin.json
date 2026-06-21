@@ -1,0 +1,9 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "valid",
+  "name": "Valid Fixture",
+  "version": "0.1.0",
+  "description": "headless gate fixture — must pass parseManifest",
+  "permissions": ["ui"],
+  "contributes": { "views": [{ "id": "panel", "title": "Panel", "icon": "★" }] }
+}
