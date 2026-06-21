@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use rand::Rng;
 use url::Url;
+use wreq_util::Emulation;
 
 static PROXY_PORT: OnceLock<u16> = OnceLock::new();
 static PROXY_TOKEN: OnceLock<String> = OnceLock::new();
@@ -156,7 +157,10 @@ fn handle_conn(stream: TcpStream, port: u16, token: &str) -> std::io::Result<()>
 }
 
 fn build_client() -> Result<reqwest::blocking::Client, String> {
+    // OS 네이티브 TLS — rustls 의 ClientHello 는 JA3 핑거프린트가 비-브라우저로 잡혀 hotlink/봇차단
+    // CDN 이 403 으로 막는다(라이브 검증). native-tls(macOS Secure Transport 등)는 브라우저에 가까워 통과.
     reqwest::blocking::Client::builder()
+        .use_native_tls()
         .connect_timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| e.to_string())
@@ -176,6 +180,67 @@ fn apply_headers(
         }
     }
     rb
+}
+
+// ── 임퍼소네이션 폴백(wreq/BoringSSL) — native-tls 가 403 인 fingerprint 봇차단 CDN(Cloudflare/Akamai)용 ──
+// Chrome 의 TLS(JA3)+HTTP/2 핸드셰이크를 정밀 위조해 통과(라이브 증명: native-tls 403, wreq 200). 모든 OS
+// 동일 핑거프린트. wreq 는 async 전용 → 공용 tokio 런타임으로 sync 프록시 스레드에서 block_on. 둘 다 lazy
+// (첫 403 때 생성) + OnceLock 재사용 — 일반 CDN(403 아님)은 wreq/런타임 비용 0. UA·핑거프린트는 emulation
+// 이 일관되게 채우므로 UA 를 덮어쓰지 않는다.
+static ASYNC_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+static WREQ_CLIENT: OnceLock<wreq::Client> = OnceLock::new();
+
+fn wreq_rt() -> Option<&'static tokio::runtime::Runtime> {
+    if ASYNC_RT.get().is_none() {
+        if let Ok(rt) = tokio::runtime::Runtime::new() {
+            let _ = ASYNC_RT.set(rt);
+        }
+    }
+    ASYNC_RT.get()
+}
+
+fn wreq_client() -> Option<&'static wreq::Client> {
+    if WREQ_CLIENT.get().is_none() {
+        if let Ok(c) = wreq::Client::builder().emulation(Emulation::Chrome136).build() {
+            let _ = WREQ_CLIENT.set(c);
+        }
+    }
+    WREQ_CLIENT.get()
+}
+
+// 임퍼소네이션 fetch → (status, content-* 헤더, 바디 바이트). referer/origin/range 동일 주입.
+fn wreq_fetch(
+    url: &str,
+    referer: Option<&str>,
+    range: Option<&str>,
+) -> Result<(u16, Vec<(String, String)>, Vec<u8>), String> {
+    let rt = wreq_rt().ok_or("wreq runtime")?;
+    let client = wreq_client().ok_or("wreq client")?;
+    rt.block_on(async {
+        let mut rb = client.get(url);
+        if let Some(r) = referer {
+            rb = rb.header("referer", r);
+            if let Some(o) = origin_of(r) {
+                rb = rb.header("origin", o);
+            }
+        }
+        if let Some(rg) = range {
+            rb = rb.header("range", rg);
+        }
+        let resp = rb.send().await.map_err(|e| e.to_string())?;
+        let status = resp.status().as_u16();
+        let headers: Vec<(String, String)> = ["content-type", "content-length", "content-range", "accept-ranges"]
+            .iter()
+            .filter_map(|h| {
+                resp.headers()
+                    .get(*h)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|v| ((*h).to_string(), v.to_string()))
+            })
+            .collect();
+        let body = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
+        Ok::<_, String>((status, headers, body))
+    })
 }
 
 // 바이너리 패스스루: Range 전달 → 업스트림 200/206 + content-* 중계 → 바디 스트리밍(io::copy).
@@ -199,6 +264,25 @@ fn serve_stream(
         Ok(r) => r,
         Err(e) => return write_simple(writer, 502, &format!("upstream: {e}")),
     };
+    // fingerprint 봇차단(403) → 임퍼소네이션(wreq)으로 재시도. 일반 응답은 native-tls 그대로 스트리밍.
+    if resp.status().as_u16() == 403 {
+        return match wreq_fetch(url, referer, range) {
+            Ok((status, headers, body)) => {
+                let mut out = format!("HTTP/1.1 {status} {}\r\n", reason(status));
+                for (h, v) in &headers {
+                    out.push_str(&format!("{h}: {v}\r\n"));
+                }
+                out.push_str(CORS);
+                out.push_str("Connection: close\r\n\r\n");
+                writer.write_all(out.as_bytes())?;
+                if !head {
+                    writer.write_all(&body)?;
+                }
+                writer.flush()
+            }
+            Err(e) => write_simple(writer, 502, &format!("impersonate: {e}")),
+        };
+    }
     let status = resp.status().as_u16();
     let mut out = format!("HTTP/1.1 {status} {}\r\n", reason(status));
     for h in ["content-type", "content-length", "content-range", "accept-ranges"] {
@@ -234,10 +318,18 @@ fn serve_m3u8(
         Ok(r) => r,
         Err(e) => return write_simple(writer, 502, &format!("upstream: {e}")),
     };
-    if !resp.status().is_success() {
+    // 403(fingerprint 봇차단) → 임퍼소네이션(wreq)으로 m3u8 본문 재취득. 그 외 비-성공은 그대로 에러.
+    let body = if resp.status().as_u16() == 403 {
+        match wreq_fetch(url, referer, None) {
+            Ok((st, _, b)) if (200..300).contains(&st) => String::from_utf8_lossy(&b).into_owned(),
+            Ok((st, _, _)) => return write_simple(writer, st, "upstream m3u8 (impersonate)"),
+            Err(e) => return write_simple(writer, 502, &format!("impersonate: {e}")),
+        }
+    } else if resp.status().is_success() {
+        resp.text().unwrap_or_default()
+    } else {
         return write_simple(writer, resp.status().as_u16(), "upstream m3u8 error");
-    }
-    let body = resp.text().unwrap_or_default();
+    };
     let proxy_base = format!("http://127.0.0.1:{port}/{token}");
     let rewritten = rewrite_m3u8(&body, url, &proxy_base, referer, ua);
 
@@ -432,6 +524,31 @@ mod tests {
         // 주석/EXTINF 은 그대로.
         assert!(out.contains("#EXTINF:5,"));
         assert!(out.starts_with("#EXTM3U"));
+    }
+
+    // 임퍼소네이션 멱등 검증(네트워크 — 기본 제외, 수동: cargo test -- --ignored ja3). 중립 TLS 핑거프린트
+    // 에코(tls.peet.ws)로 native-tls(프록시 1차)와 wreq(프록시 폴백)의 JA3 가 다른지 = 임퍼소네이션이
+    // 핑거프린트를 실제로 바꾸는지 확인. 특정 사이트 비의존 — 봇차단 CDN 우회의 핵심 메커니즘만 검증.
+    #[test]
+    #[ignore = "network: cargo test -- --ignored ja3_impersonation_changes_fingerprint"]
+    fn ja3_impersonation_changes_fingerprint() {
+        fn ja3(json: &str) -> String {
+            // tls.ja3_hash 는 중첩 + pretty-print(공백) → serde_json 으로 파싱.
+            serde_json::from_str::<serde_json::Value>(json)
+                .ok()
+                .and_then(|v| v["tls"]["ja3_hash"].as_str().map(str::to_string))
+                .unwrap_or_default()
+        }
+        let peet = "https://tls.peet.ws/api/all";
+        let native = build_client().unwrap().get(peet).send().unwrap().text().unwrap();
+        let (_st, _h, body) = wreq_fetch(peet, None, None).unwrap();
+        let imp = String::from_utf8_lossy(&body).into_owned();
+
+        let n = ja3(&native);
+        let w = ja3(&imp);
+        assert!(!n.is_empty(), "native-tls JA3 비어있음");
+        assert!(!w.is_empty(), "wreq JA3 비어있음");
+        assert_ne!(n, w, "임퍼소네이션이 JA3 를 안 바꿈(native={n}, wreq={w})");
     }
 
     #[test]

@@ -54,9 +54,16 @@ futures-util = "0.3"
 # changeCount 폴링(이벤트 API 부재). clipboard-rs 가 4 백엔드를 단일 ClipboardHandler 로 흡수.
 clipboard-rs = "0.2"
 
-# HTTP 요청 capability(net.http.request) — runbook api 실행타입. blocking 클라이언트(자체 런타임 —
-# tauri 커맨드는 스레드풀에서 동기 실행). rustls-tls = OpenSSL 비의존 순수 Rust TLS(멀티플랫폼 R5).
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+# HTTP 요청 capability(net.http.request) + 미디어 프록시(mediaproxy.rs). blocking 클라이언트(자체 런타임).
+# native-tls 만(rustls 제거): 미디어 프록시는 OS 네이티브 TLS 로 fetch 해야 한다 — rustls 의 ClientHello 는
+# JA3 핑거프린트가 비-브라우저로 잡혀 hotlink/봇차단 CDN 이 403 으로 거부(라이브 검증). native-tls(macOS
+# Secure Transport)는 브라우저에 가까워 통과 — 레거시 Clean Player 와 동일 구성. Linux 는 OpenSSL 사용.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "native-tls"] }
+# 미디어 프록시 임퍼소네이션 폴백 — native-tls 도 403 인 fingerprint 봇차단 CDN(Cloudflare/Akamai 의 JA3+
+# HTTP/2 핑거프린트)을 위해. wreq(BoringSSL)가 Chrome 의 TLS+HTTP2 핸드셰이크를 정밀 위조해 통과(라이브
+# 증명: native-tls 403, wreq 200). 모든 OS 동일 핑거프린트. async 전용 → 프록시(sync)에서 공용 tokio block_on.
+wreq = "=6.0.0-rc.29"
+wreq-util = "=3.0.0-rc.12"
 # 딥링크 command URI(soksak://run?cmd=...) 파싱 — query 디코드. reqwest 트리에 이미 있어 추가 비용 0.
 url = "2"
 
