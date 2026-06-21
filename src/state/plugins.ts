@@ -42,7 +42,12 @@ function pluginDepNodes(plugins: Record<string, PluginRuntime>): DepNode[] {
   }));
 }
 import { installCommandFor, detectPlatform } from "../plugins/programRegistry";
-import { reconcileNeeds } from "../plugins/runtimeDep";
+import {
+  reconcilePlan,
+  parseProbeVersion,
+  type ReachExec,
+  type Observed,
+} from "../plugins/runtimeDep";
 
 export interface PluginRuntime {
   manifest: PluginManifest;
@@ -225,12 +230,11 @@ export function transitiveLibraries(
   return out;
 }
 
-// 라이브러리 종속성 강제 설치 — 활성화 시점에 전이 libraries 를 보장한다. 로그인 셸 PATH 로
-// 확인(shell_which)하고, 미설치분을 한 터미널에서 가시 설치한다(은폐 금지 — 동의 화면에
-// 고지된 그 명령 그대로). 실패는 콘솔로만(§0-4 — 활성화 자체를 막지 않는다).
-// 라이브러리 종속성 reconcile — 활성화 시점에 전이 libraries 를 보장한다(은폐 0, §0-4 비차단).
-// observe(shell_which 로 present 수집) → 순수 결정(reconcileNeeds: classifyHealth/accept) → reach(미충족 install).
-// M3: command/install(레거시). vendor/fetch reach·정밀 observe(partial/broken/version)는 M4(Rust runtime_dep.rs).
+// 라이브러리 종속성 reconcile — 활성화 시점에 전이 libraries 를 4-tuple 로 수렴시킨다(은폐 0, §0-4 비차단).
+//   observe(binary_integrity present/partial/broken + observe.probe 로 working/version)
+//   → 순수 결정(reconcilePlan: classifyHealth/accept/nextAction + reach 선택)
+//   → reach(command=가시 설치 / fetch=download_verify / vendor=verify_and_link, sha256 검증).
+// PARTIAL/BROKEN 은 cleanup_stale 후 reach — 어제 EEXIST 의 근본 복구. 실패는 콘솔로만(활성화는 안 막음).
 // spawnInstall 은 파라미터 — useSessions 내부 강탈 금지(테스트 가능 구조, J4).
 async function reconcileDependencies(
   manifest: PluginManifest,
@@ -238,17 +242,104 @@ async function reconcileDependencies(
   spawnInstall: (command: string) => void,
 ): Promise<void> {
   const libs = transitiveLibraries(manifest, plugins);
-  const present = new Set<string>();
+  const platform = detectPlatform();
+  const pluginDir = plugins[manifest.id]?.dir;
+  // npm 글로벌 dir 해소 — 알면 binary_integrity(present/partial/broken) 정밀 관찰, 모르면 shell_which fallback.
+  let npm: { bin_dir: string; lib_dir: string } | null = null;
+  try {
+    npm = await invoke<{ bin_dir: string; lib_dir: string }>("npm_global_dirs");
+  } catch {
+    npm = null;
+  }
   for (const lib of libs) {
     try {
-      if (await invoke<boolean>("shell_which", { bin: lib.bin })) present.add(lib.bin);
+      const observed = await observeDep(lib, npm);
+      const step = reconcilePlan(lib, observed, platform);
+      if (step.action === "noop" || !step.reach) continue;
+      if (step.action === "cleanup-then-reach" && npm) {
+        // PARTIAL/BROKEN — stale 정리 후 reach(어제 EEXIST 의 근본 복구). 화이트리스트 경로만.
+        await invoke("cleanup_stale", {
+          path: `${npm.bin_dir}/${lib.bin}`,
+          allowedRoots: [npm.bin_dir, `${npm.lib_dir}/node_modules`],
+        }).catch((e) => console.error(`cleanup 실패(${lib.bin}):`, e));
+      }
+      await execReach(step.reach, lib, npm, pluginDir, spawnInstall);
     } catch (e) {
-      console.error(`라이브러리 observe 실패(${manifest.id}/${lib.bin}):`, e);
+      console.error(`라이브러리 reconcile 실패(${manifest.id}/${lib.bin}):`, e);
     }
   }
-  const needs = reconcileNeeds(libs, present, detectPlatform());
-  if (needs.length === 0) return;
-  spawnInstall(`${needs.join(" && ")}; echo "[soksak] 라이브러리 종속성 설치 종료"`);
+}
+
+// 관찰 — npm dir 를 알면 binary_integrity(present/partial/broken), 모르면 shell_which(present)만.
+// present 이고 observe.probe 가 선언되면 실제 실행(probe)으로 working/version 을 관찰한다(존재 != 작동).
+// observe.probe 미선언이면 present 를 working 근사로 본다(레거시 dep — 작동 술어 없음).
+async function observeDep(
+  lib: LibraryDep,
+  npm: { bin_dir: string; lib_dir: string } | null,
+): Promise<Observed> {
+  if (!npm) {
+    const present = await invoke<boolean>("shell_which", { bin: lib.bin }).catch(() => false);
+    if (!present || !lib.observe) {
+      return { present, working: present, partial: false, broken: false };
+    }
+    const p = await probeDep(lib.bin, lib.observe); // 이름 → Command 가 PATH 탐색
+    return { present, working: p.ok, partial: false, broken: false, version: p.version };
+  }
+  const it = await invoke<{ present: boolean; partial: boolean; broken: boolean }>(
+    "binary_integrity",
+    { binPath: `${npm.bin_dir}/${lib.bin}`, libPath: `${npm.lib_dir}/node_modules/${lib.name}` },
+  );
+  if (!it.present || !lib.observe) {
+    return { present: it.present, working: it.present, partial: it.partial, broken: it.broken };
+  }
+  const p = await probeDep(`${npm.bin_dir}/${lib.bin}`, lib.observe);
+  return { present: it.present, working: p.ok, partial: it.partial, broken: it.broken, version: p.version };
+}
+
+// observe.probe 실행 — probe argv[0] 은 bin(절대경로 binPath 로 치환), 나머지는 인자.
+// exit 0 = working. stdout 은 순수 parseProbeVersion 이 versionRe 로 버전 추출.
+async function probeDep(
+  binPath: string,
+  observe: NonNullable<LibraryDep["observe"]>,
+): Promise<{ ok: boolean; version?: string }> {
+  const args = observe.probe.slice(1);
+  const r = await invoke<{ ok: boolean; stdout: string }>("probe_binary", {
+    bin: binPath,
+    args,
+  }).catch(() => ({ ok: false, stdout: "" }));
+  return { ok: r.ok, version: parseProbeVersion(r.stdout, observe.versionRe) };
+}
+
+// reach 실행 — command=가시 터미널 설치, fetch=download_verify(다운로드+sha256), vendor=verify_and_link(번들+sha256).
+async function execReach(
+  reach: ReachExec,
+  lib: LibraryDep,
+  npm: { bin_dir: string; lib_dir: string } | null,
+  pluginDir: string | undefined,
+  spawnInstall: (command: string) => void,
+): Promise<void> {
+  if (reach.kind === "command") {
+    spawnInstall(`${reach.command}; echo "[soksak] ${lib.bin} 설치 종료"`);
+    return;
+  }
+  if (!npm) {
+    console.error(`npm dir 미해소 — ${lib.bin} ${reach.kind} reach 스킵`);
+    return;
+  }
+  const dest = `${npm.bin_dir}/${lib.bin}`;
+  if (reach.kind === "fetch") {
+    await invoke("download_verify", { url: reach.url, dest, sha256: reach.sha256 });
+  } else {
+    if (!pluginDir) {
+      console.error(`plugin dir 미해소 — ${lib.bin} vendor reach 스킵`);
+      return;
+    }
+    await invoke("verify_and_link", {
+      src: `${pluginDir}/${reach.vendorPath}`,
+      dest,
+      sha256: reach.sha256,
+    });
+  }
 }
 
 function basename(path: string): string {

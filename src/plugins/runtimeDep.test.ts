@@ -3,7 +3,8 @@ import {
   classifyHealth,
   accept,
   nextAction,
-  reconcileNeeds,
+  reconcilePlan,
+  parseProbeVersion,
   type Observed,
 } from "./runtimeDep";
 import type { LibraryDep } from "./spec";
@@ -54,32 +55,75 @@ describe("nextAction — 상태별 reconcile 액션(순수)", () => {
   });
 });
 
-// reconcileNeeds — present 집합(observe 결과) → 미충족 dep 의 reach 명령(순수). M3: command/install.
-describe("reconcileNeeds — 미충족 dep 의 reach 명령", () => {
+// parseProbeVersion — probe stdout → 버전 추출(순수). observe.versionRe 가 "actual" 버전을 뽑는다.
+// versionRe 없으면 추출 불가(undefined) → accept.minVersion 비교 불가(classifyHealth 가 minVersion 무시).
+describe("parseProbeVersion — probe stdout 버전 추출", () => {
+  it("versionRe 없으면 undefined(추출 불가)", () => {
+    expect(parseProbeVersion("v1.2.3", undefined)).toBeUndefined();
+  });
+  it("캡처그룹 1 우선", () => {
+    expect(
+      parseProbeVersion("gemini version 2.5.1 (abc)", "version (\\d+\\.\\d+\\.\\d+)"),
+    ).toBe("2.5.1");
+  });
+  it("캡처그룹 없으면 전체 매치", () => {
+    expect(parseProbeVersion("v1.2.3 build", "\\d+\\.\\d+\\.\\d+")).toBe("1.2.3");
+  });
+  it("미매치 → undefined", () => {
+    expect(parseProbeVersion("no version here", "\\d+\\.\\d+\\.\\d+")).toBeUndefined();
+  });
+});
+
+// reconcilePlan — dep + 관찰(Observed) → reconcile 단계(순수): action + reach 실행 종류.
+// vendor/fetch reach 를 결정에 포함(command/install 만이 아니라 4-tuple 전체).
+describe("reconcilePlan — action + reach 실행 결정", () => {
   const lib = (extra: Partial<LibraryDep> = {}): LibraryDep => ({
     name: "x",
     bin: "x",
     install: { darwin: "npm i -g x" },
     ...extra,
   });
-  it("미설치(present X) → install 명령", () => {
-    expect(reconcileNeeds([lib()], new Set(), "darwin")).toEqual(["npm i -g x"]);
+  const obs = (extra: Partial<Observed> = {}): Observed => ({
+    present: false,
+    working: false,
+    partial: false,
+    broken: false,
+    ...extra,
   });
-  it("설치됨(present O, minVersion 없음) → 빈 배열(noop)", () => {
-    expect(reconcileNeeds([lib()], new Set(["x"]), "darwin")).toEqual([]);
+  it("HEALTHY → noop", () => {
+    expect(reconcilePlan(lib(), obs({ present: true, working: true }), "darwin")).toEqual({
+      action: "noop",
+    });
   });
-  it("reach.command 가 레거시 install 보다 우선", () => {
+  it("ABSENT → reach command(레거시 install)", () => {
+    expect(reconcilePlan(lib(), obs(), "darwin")).toEqual({
+      action: "reach",
+      reach: { kind: "command", command: "npm i -g x" },
+    });
+  });
+  it("PARTIAL → cleanup-then-reach", () => {
+    expect(reconcilePlan(lib(), obs({ partial: true }), "darwin")).toEqual({
+      action: "cleanup-then-reach",
+      reach: { kind: "command", command: "npm i -g x" },
+    });
+  });
+  it("reach.vendor → vendor 실행(path+sha256)", () => {
     expect(
-      reconcileNeeds(
-        [lib({ reach: { command: { darwin: "brew install x" } } })],
-        new Set(),
+      reconcilePlan(lib({ reach: { vendor: { path: "p", sha256: "h" } } }), obs(), "darwin"),
+    ).toEqual({ action: "reach", reach: { kind: "vendor", vendorPath: "p", sha256: "h" } });
+  });
+  it("reach.fetch → fetch 실행(이 플랫폼 url+sha256)", () => {
+    expect(
+      reconcilePlan(
+        lib({ reach: { fetch: { url: { darwin: "u" }, sha256: { darwin: "h" } } } }),
+        obs(),
         "darwin",
       ),
-    ).toEqual(["brew install x"]);
+    ).toEqual({ action: "reach", reach: { kind: "fetch", url: "u", sha256: "h" } });
   });
-  it("이 플랫폼 명령 없으면 제외", () => {
-    expect(
-      reconcileNeeds([lib({ install: { linux: "apt install x" } })], new Set(), "darwin"),
-    ).toEqual([]);
+  it("이 플랫폼 공급 수단 없으면 noop", () => {
+    expect(reconcilePlan(lib({ install: { linux: "apt" } }), obs(), "darwin")).toEqual({
+      action: "noop",
+    });
   });
 });

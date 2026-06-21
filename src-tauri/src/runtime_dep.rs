@@ -33,6 +33,25 @@ pub fn binary_integrity(bin_path: String, lib_path: String) -> BinaryIntegrity {
     }
 }
 
+#[derive(serde::Serialize)]
+pub struct ProbeResult {
+    pub ok: bool,       // probe argv 가 exit 0 (실제 작동)
+    pub stdout: String, // 버전 추출용 — TS 가 observe.versionRe 로 파싱
+}
+
+// observe.probe — bin 을 실제 실행해 작동을 관찰한다. "PATH 존재"가 아니라 "exit 0 = 작동".
+// bin 이 절대경로면 그대로, 이름이면 Command 가 PATH 탐색. 실행 자체 실패(부재)도 ok=false.
+#[tauri::command]
+pub fn probe_binary(bin: String, args: Vec<String>) -> ProbeResult {
+    match std::process::Command::new(&bin).args(&args).output() {
+        Ok(o) => ProbeResult {
+            ok: o.status.success(),
+            stdout: String::from_utf8_lossy(&o.stdout).to_string(),
+        },
+        Err(_) => ProbeResult { ok: false, stdout: String::new() },
+    }
+}
+
 // 화이트리스트 루트(npm prefix·~/.soksak 등) 안의 경로만 제거. 그 밖은 거부(안전).
 #[tauri::command]
 pub fn cleanup_stale(path: String, allowed_roots: Vec<String>) -> Result<bool, String> {
@@ -68,6 +87,50 @@ pub fn download_verify(url: String, dest: String, sha256: String) -> Result<(), 
         return Err(format!("sha256 불일치: 기대={} 실제={}", sha256, got));
     }
     fs::write(&dest, &body).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&dest, fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct NpmDirs {
+    pub bin_dir: String,
+    pub lib_dir: String,
+}
+
+// npm 글로벌 prefix → bin/lib 디렉터리(binary_integrity 의 경로 계산용). 로그인 셸로 PATH 보존.
+#[tauri::command]
+pub fn npm_global_dirs() -> Result<NpmDirs, String> {
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
+    let out = std::process::Command::new(&shell)
+        .args(["-lc", "npm prefix -g"])
+        .output()
+        .map_err(|e| e.to_string())?;
+    let prefix = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if prefix.is_empty() {
+        return Err("npm prefix 미해소".into());
+    }
+    Ok(NpmDirs {
+        bin_dir: format!("{prefix}/bin"),
+        lib_dir: format!("{prefix}/lib"),
+    })
+}
+
+// vendor reach — 저자 번들 파일 sha256 검증 후 dest 에 복사 + 실행권한. 불일치 시 dest 안 건드리고 Err.
+#[tauri::command]
+pub fn verify_and_link(src: String, dest: String, sha256: String) -> Result<(), String> {
+    let body = fs::read(&src).map_err(|e| e.to_string())?;
+    let mut hasher = Sha256::new();
+    hasher.update(&body);
+    let got: String = hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect();
+    if got != sha256.to_lowercase() {
+        return Err(format!("sha256 불일치(vendor): 기대={} 실제={}", sha256, got));
+    }
+    let _ = fs::remove_file(&dest);
+    fs::copy(&src, &dest).map_err(|e| e.to_string())?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -116,5 +179,18 @@ mod tests {
     #[test]
     fn cleanup_rejects_outside_whitelist() {
         assert!(cleanup_stale("/etc/passwd".into(), vec!["/tmp".into()]).is_err());
+    }
+
+    #[test]
+    fn probe_reports_exit_and_stdout() {
+        // 작동: echo 는 exit 0 + stdout
+        let r = probe_binary("echo".into(), vec!["hello".into()]);
+        assert!(r.ok && r.stdout.contains("hello"));
+        // 존재하나 작동 실패: false 는 exit 1 (present != working)
+        let r = probe_binary("false".into(), vec![]);
+        assert!(!r.ok);
+        // 부재: 없는 bin → 실행 실패 → ok=false
+        let r = probe_binary("definitely-no-such-bin-xyz".into(), vec![]);
+        assert!(!r.ok);
     }
 }

@@ -36,6 +36,18 @@ export function accept(health: Health): boolean {
   return health === "HEALTHY";
 }
 
+// probe stdout → 버전(순수). observe.versionRe 가 "actual" 버전을 뽑는다(캡처그룹 1 우선, 없으면 전체 매치).
+// versionRe 미선언이면 추출 불가(undefined) → classifyHealth 가 minVersion 비교를 건너뛴다(존재만 본다).
+export function parseProbeVersion(
+  stdout: string,
+  versionRe?: string,
+): string | undefined {
+  if (!versionRe) return undefined;
+  const m = new RegExp(versionRe).exec(stdout);
+  if (!m) return undefined;
+  return m[1] ?? m[0];
+}
+
 export type ReconcileAction = "noop" | "reach" | "cleanup-then-reach";
 
 // 멱등 reconcile 의 결정(순수): HEALTHY=무동작, PARTIAL/BROKEN=정리 후 공급, 그 외=공급.
@@ -53,26 +65,47 @@ export function nextAction(health: Health): ReconcileAction {
   }
 }
 
-// present 집합(observe 결과) → 미충족 dep 의 reach 명령 리스트(순수). M3 은 command/install(레거시)만.
-// vendor/fetch reach 는 M4(Rust download+sha256). reach.command 가 있으면 우선, 없으면 레거시 install.
-export function reconcileNeeds(
-  libs: readonly LibraryDep[],
-  presentBins: ReadonlySet<string>,
+// 공급(reach) 실행 종류 — IO 엔진(reconcileDependencies)이 그대로 실행한다.
+export type ReachExec =
+  | { kind: "command"; command: string } // process_spawn/터미널 설치 명령
+  | { kind: "vendor"; vendorPath: string; sha256: string } // 저자 번들 바이트 sha256 검증 후 링크
+  | { kind: "fetch"; url: string; sha256: string }; // download_verify(다운로드+sha256)
+
+export interface ReconcileStep {
+  action: ReconcileAction;
+  reach?: ReachExec; // action !== noop 일 때만
+}
+
+// dep + 관찰(Observed) → reconcile 단계(순수): action(noop/reach/cleanup-then-reach) + reach 실행 종류.
+// reach 우선순위: reach.vendor/fetch/command > 레거시 install. 이 플랫폼 공급 수단 없으면 noop.
+export function reconcilePlan(
+  dep: LibraryDep,
+  observed: Observed,
   platform: ProgramPlatform,
-): string[] {
-  const out: string[] = [];
-  for (const lib of libs) {
-    const present = presentBins.has(lib.bin);
-    const health = classifyHealth(
-      { present, working: present, partial: false, broken: false },
-      lib.accept?.minVersion,
-    );
-    if (accept(health)) continue;
-    const cmd =
-      lib.reach && "command" in lib.reach
-        ? lib.reach.command[platform]
-        : lib.install[platform];
-    if (cmd) out.push(cmd);
+): ReconcileStep {
+  const health = classifyHealth(observed, dep.accept?.minVersion);
+  if (accept(health)) return { action: "noop" };
+  const reach = reachExec(dep, platform);
+  if (!reach) return { action: "noop" }; // 이 플랫폼 공급 수단 없음 → 강제 X(§0-4)
+  return { action: nextAction(health), reach };
+}
+
+function reachExec(dep: LibraryDep, platform: ProgramPlatform): ReachExec | null {
+  const r = dep.reach;
+  if (r) {
+    if ("vendor" in r) {
+      return { kind: "vendor", vendorPath: r.vendor.path, sha256: r.vendor.sha256 };
+    }
+    if ("fetch" in r) {
+      const url = r.fetch.url[platform];
+      const sha256 = r.fetch.sha256[platform];
+      return url && sha256 ? { kind: "fetch", url, sha256 } : null;
+    }
+    if ("command" in r) {
+      const command = r.command[platform];
+      return command ? { kind: "command", command } : null;
+    }
   }
-  return out;
+  const command = dep.install[platform];
+  return command ? { kind: "command", command } : null;
 }
