@@ -63,3 +63,12 @@ export function getIconGlyph(setId: string, name: IconName): IconGlyph {
   const sets = useIconRegistry.getState().sets;
   return sets[setId]?.data[name] ?? LUCIDE_ICONS[name];
 }
+
+// 이 플러그인이 실제 등록한 셋 id(declared≡actual 의 actual). 전역 id="<pluginId>.<setId>" →
+// setId 만 반환. 내장 lucide(prefix 없음)는 자동 제외. plugin id 는 점 불포함이라 prefix 분리 안전.
+export function registeredIconSetIds(pluginId: string): string[] {
+  const prefix = `${pluginId}.`;
+  return Object.values(useIconRegistry.getState().sets)
+    .filter((s) => s.id.startsWith(prefix))
+    .map((s) => s.id.slice(prefix.length));
+}

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   useFileViewerRegistry,
   resolveFileViewer,
+  registeredFileViewerIds,
   type FileViewerProvider,
 } from "./fileViewerRegistry";
 
@@ -26,6 +27,16 @@ function reg(
       noop,
     );
 }
+
+describe("registeredFileViewerIds — declared≡actual 의 actual 관찰", () => {
+  it("pluginId 로 필터, 등록 순서", () => {
+    reg("ed", "code", ["ts"]);
+    reg("ed", "img", ["png"]);
+    reg("other", "x", ["md"]);
+    expect(registeredFileViewerIds("ed")).toEqual(["code", "img"]);
+    expect(registeredFileViewerIds("none")).toEqual([]);
+  });
+});
 
 describe("resolveFileViewer — 확장자 매칭/우선순위/폴백", () => {
   it("확장자 정확 매칭", () => {

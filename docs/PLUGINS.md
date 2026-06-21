@@ -139,8 +139,9 @@ npx soksak-validate plugin.json   # exit 0 = 통과, 1 = 거부(사유 출력), 
 
 **선언 ≡ 실제 (양방향).** 코어는 선언과 런타임 실제 배선이 맞물리는지 양방향으로 본다:
 미선언을 바인딩하면 거부(undeclared), 선언했는데 등록/배선이 없으면 감지한다(activate 후
-inventory + `nodeScan` 의 `data-node` diff). `sok plugin.conformance` 가 declared vs actual
-전체 diff 를 돌려준다(앱 필요 — 런타임 게이트).
+inventory + `nodeScan` 의 `data-node` diff). `sok plugin.conformance` 가 register-gated 기여
+(commands·views·fileViewers·iconSets)와 nodes 의 declared vs actual diff 를 돌려준다 — actual 은
+각 registry 의 이 플러그인 등록분에서 관찰한다(앱 필요 — 런타임 게이트).
 
 ### 외부 런타임 의존성 (`libraries` — 4-tuple)
 

@@ -4,6 +4,7 @@ import {
   getRegisteredView,
   useViewRegistry,
   viewsForPlacement,
+  registeredViewIds,
   type PluginViewProvider,
 } from "./viewRegistry";
 import type { ContributedView } from "./spec";
@@ -16,6 +17,16 @@ function decl(id: string, placements: ContributedView["placements"]): Contribute
 
 beforeEach(() => {
   useViewRegistry.setState({ views: {}, version: 0, badges: {} });
+});
+
+describe("registeredViewIds — declared≡actual 의 actual 관찰", () => {
+  it("이 플러그인이 등록한 view id(등록 순서) — 타 플러그인 제외", () => {
+    useViewRegistry.getState().register("memo", decl("panel", ["sidebar-right"]), provider);
+    useViewRegistry.getState().register("memo", decl("side", ["sidebar-left"]), provider);
+    useViewRegistry.getState().register("other", decl("x", ["content"]), provider);
+    expect(registeredViewIds("memo")).toEqual(["panel", "side"]);
+    expect(registeredViewIds("none")).toEqual([]);
+  });
 });
 
 describe("viewRegistry", () => {

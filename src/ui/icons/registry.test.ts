@@ -4,11 +4,26 @@ import {
   getIconGlyph,
   useIconRegistry,
   validateIconSetData,
+  registeredIconSetIds,
 } from "./registry";
 import { LUCIDE_ICONS } from "./sets/lucide";
 import { ICON_NAMES } from "./types";
 
 describe("iconRegistry", () => {
+  it("registeredIconSetIds — 이 플러그인이 등록한 셋 id(qualified→setId, lucide 제외)", () => {
+    const fake = Object.fromEntries(
+      ICON_NAMES.map((n) => [n, { v: "0 0 16 16", b: "<path d='M0 0'/>", f: "fill" }]),
+    );
+    useIconRegistry.getState().register({ id: "memo.dark", name: "Dark", data: fake as never });
+    useIconRegistry.getState().register({ id: "memo.light", name: "Light", data: fake as never });
+    useIconRegistry.getState().register({ id: "other.x", name: "X", data: fake as never });
+    expect(registeredIconSetIds("memo")).toEqual(["dark", "light"]);
+    expect(registeredIconSetIds("none")).toEqual([]);
+    useIconRegistry.getState().unregister("memo.dark");
+    useIconRegistry.getState().unregister("memo.light");
+    useIconRegistry.getState().unregister("other.x");
+  });
+
   it("내장 lucide 는 전 시맨틱 이름을 제공한다", () => {
     expect(validateIconSetData(LUCIDE_ICONS)).toBeNull();
     for (const n of ICON_NAMES) {

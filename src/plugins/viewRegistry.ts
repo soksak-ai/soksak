@@ -96,3 +96,10 @@ export function viewsForPlacement(
 export function getRegisteredView(key: string): RegisteredView | null {
   return useViewRegistry.getState().views[key] ?? null;
 }
+
+// 이 플러그인이 실제 등록한 view id(declared≡actual 의 actual). 등록 순서(Object 삽입순) 보존.
+export function registeredViewIds(pluginId: string): string[] {
+  return Object.values(useViewRegistry.getState().views)
+    .filter((v) => v.pluginId === pluginId)
+    .map((v) => v.decl.id);
+}

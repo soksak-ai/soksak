@@ -92,3 +92,10 @@ export function resolveFileViewer(path: string): RegisteredFileViewer | null {
   if (hit) return hit;
   return best(all.filter((v) => v.decl.extensions.includes("*")));
 }
+
+// 이 플러그인이 실제 등록한 fileViewer id(declared≡actual 의 actual). 등록 순서 보존.
+export function registeredFileViewerIds(pluginId: string): string[] {
+  return Object.values(useFileViewerRegistry.getState().viewers)
+    .filter((v) => v.pluginId === pluginId)
+    .map((v) => v.decl.id);
+}

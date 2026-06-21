@@ -76,7 +76,7 @@ every contribution kind — commands, views, fileViewers, iconSets, nodes, libra
 | Surface | What | Where | Needs app |
 |---------|------|-------|-----------|
 | Schema gate | `parseManifest` rejects a malformed manifest | `@soksak/plugin-spec` — `npx soksak-validate plugin.json` | No (headless) |
-| Runtime conformance | declared ≡ actual wiring diff | `sok plugin.conformance` | Yes (running app) |
+| Runtime conformance | declared ≡ actual diff across every register-gated kind (commands/views/fileViewers/iconSets) + nodes | `sok plugin.conformance` | Yes (running app) |
 
 `@soksak/plugin-spec` ships the **same** `parseManifest` the core imports — one spec, no vendored
 copy. The schema gate runs headless (CI, pre-commit); the wiring diff needs a live app because
