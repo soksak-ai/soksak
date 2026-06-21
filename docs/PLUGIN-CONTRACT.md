@@ -56,7 +56,50 @@ Rules:
 A non-zero exit blocks publish. A plugin that mis-declares anything errors — it is not audited by
 hand.
 
-## 3. Why this shape
+## 3. Conformance: declared ≡ actual
+
+Section 1 publishes the contract; section 2 checks one plugin's *declarations* against it. A
+declaration is worthless if the runtime wiring diverges from it. The law is bidirectional and covers
+every contribution kind — commands, views, fileViewers, iconSets, nodes, libraries:
+
+- **Undeclared actual → reject.** Binding a command/view/viewer/iconSet the manifest does not declare
+  throws at register time (`gateContribution`). Do not bind what you did not declare.
+- **Declared, not actual → detect.** A contribution declared but never registered is surfaced after
+  activate (inventory diff); a declared `nodes[]` id with no `data-node` in the DOM is surfaced by the
+  node scan. The core does not silently accept a half-wired plugin.
+- **Reach is for external state only.** A divergence in commands/views/nodes is an author bug — the
+  core detects and rejects it, it does not "fix" it. Only `libraries` (external tools, which are
+  system state) reconcile toward the declaration.
+
+### Two enforcement surfaces — do not conflate them
+
+| Surface | What | Where | Needs app |
+|---------|------|-------|-----------|
+| Schema gate | `parseManifest` rejects a malformed manifest | `@soksak/plugin-spec` — `npx soksak-validate plugin.json` | No (headless) |
+| Runtime conformance | declared ≡ actual wiring diff | `sok plugin.conformance` | Yes (running app) |
+
+`@soksak/plugin-spec` ships the **same** `parseManifest` the core imports — one spec, no vendored
+copy. The schema gate runs headless (CI, pre-commit); the wiring diff needs a live app because
+`actual` is a runtime fact (`ui.tree`, `catalogJson`, `observe`). Do not claim the schema gate proves
+wiring — it proves shape only.
+
+### External runtime dependencies are one conformance kind (4-tuple)
+
+A `libraries[]` entry is `identity (name·bin) + observe + accept + reach`. `actual` is observed by
+**running** the tool, not by checking PATH:
+
+- `observe.probe` runs the bin (exit 0 = working); `observe.versionRe` extracts the version.
+- `accept.minVersion` is the predicate — presence is not acceptance.
+- `reach` converges a non-accepting tool: `vendor` (bundled bytes + sha256), `fetch` (download +
+  per-platform sha256), or `command` (install line). `vendor`/`fetch` pin sha256 — a mismatch does
+  not write the target, it fails.
+
+Five health states classify the observation — `ABSENT`, `PARTIAL` (install trace, bin not linked),
+`BROKEN` (dangling link or probe failure), `VERSION_MISMATCH`, `HEALTHY`. Only `HEALTHY` is accepted;
+`PARTIAL`/`BROKEN` are cleaned then reached. Reconcile is idempotent — an already-`HEALTHY` tool is a
+no-op. "Presence == working" is killed deliberately.
+
+## 4. Why this shape
 
 Plugins are independent repos and must not import core source (skeleton rule M7). So the core
 publishes contract **data** (`contract.json`), and the Doctor — a shared package every plugin

@@ -18,6 +18,9 @@ soksak 의 기능을 JS 플러그인으로 확장한다. 플러그인은 뷰(우
 6. **뷰 구현과 배치는 직교.** `registerView` 하나로 등록하고, 우측/좌측 사이드바·콘텐츠 탭이 같은 뷰를 소비한다.
 7. **에디터 확장은 호스트의 CodeMirror 모듈만.** `@codemirror/*` 를 자체 번들하면 인스턴스
    이중화로 동작이 깨진다 — 반드시 `app.editor.modules` 를 사용한다.
+8. **선언 ≡ 실제 (conformance).** 매니페스트 선언과 런타임 실제 배선은 양방향으로 일치해야 한다 —
+   미선언을 코드에서 바인딩하면 거부, 선언했는데 배선이 없으면 감지된다. 외부 런타임 의존성
+   (`libraries`)도 같은 법칙의 한 종류 — `observe`(실제 실행)가 그 "실제"를 관찰한다.
 
 ## 빠른 시작
 
@@ -93,6 +96,19 @@ sok plugin.reload
   — v1 정책: 핀 설치는 갱신 대신 재설치.
 - 활성화에는 사람의 동의가 필요하다. **버전 또는 권한이 바뀌면 재동의**를 요구한다.
 
+### 배포 전 검증 (`soksak-validate`)
+
+매니페스트 스키마는 앱 없이 검증할 수 있다 — 저자의 CI/pre-commit 게이트:
+
+```bash
+npx soksak-validate plugin.json   # exit 0 = 통과, 1 = 거부(사유 출력), 2 = 사용법 오류
+```
+
+`@soksak/plugin-spec` 패키지가 코어와 **같은** `parseManifest` 를 싣는다(스펙 단일진실 —
+사본/vendoring 금지). 스키마 게이트는 앱이 필요 없고, 런타임 conformance(선언 ≡ 실제 배선)는
+앱이 필요하므로 `sok plugin.conformance` 로 따로 확인한다. (패키지 발행 전에는 monorepo 동봉
+`node packages/plugin-spec/bin/validate.mjs <plugin.json>` 로 같은 검증을 돌린다.)
+
 ## 매니페스트 레퍼런스
 
 | 필드 | 필수 | 설명 |
@@ -111,6 +127,8 @@ sok plugin.reload
 | `contributes.languages[]` | | `{ext, lang}` — `"editor"` 권한 필요. **선언만으로 자동 적용**(코드 불필요) |
 | `contributes.programs[]` | | `{id, title, path?, kind, command?, url?, ensure?}` — `"programs"` 권한 필요. id 는 전역 평탄, path 는 "/" 구분 메뉴 카테고리(다단) |
 | `contributes.nodes[]` | | `{id, description?, danger?}` — `"ui"` 권한 필요. **DOM 노출 노드 종류** 선언(외부 주소 클릭/측정). 실제 요소엔 `data-node="<id>"`(동적 목록은 `<id>/<안정키>`). 선언하면 동의 화면에 표기, `danger:true` 는 ⚠ 강조 |
+| `libraries[]` | | 외부 CLI 종속성 — **top-level**(`contributes` 밖). 4-tuple `{name, bin, install, observe?, accept?, reach?}`. 권한 불요(설치는 활성화 동의가 게이트). → 아래 「외부 런타임 의존성」 |
+| `dependencies` | | 플러그인↔플러그인 의존 — **top-level**. `{pluginId: semver}`. 전이 동반 설치(동의 게이트)·삭제 cascade. `libraries`(외부 CLI)와는 별개 축 |
 
 기여 `title`/프로그램 `path` 도 전부 문자열 또는 언어 맵(§3.5). 뷰 내부 텍스트의
 다국어는 플러그인 소유 — `app.locale()`(권한 불요)로 현재 언어를 읽고
@@ -118,6 +136,47 @@ sok plugin.reload
 
 알 수 없는 키/권한/배치는 전부 거부된다(오타 조기 발견). `contributes` 에 선언하지 않은
 명령/뷰/포매터를 코드에서 바인딩하면 activate 시 예외가 난다 — **매니페스트가 선언의 단일진실**.
+
+**선언 ≡ 실제 (양방향).** 코어는 선언과 런타임 실제 배선이 맞물리는지 양방향으로 본다:
+미선언을 바인딩하면 거부(undeclared), 선언했는데 등록/배선이 없으면 감지한다(activate 후
+inventory + `nodeScan` 의 `data-node` diff). `sok plugin.conformance` 가 declared vs actual
+전체 diff 를 돌려준다(앱 필요 — 런타임 게이트).
+
+### 외부 런타임 의존성 (`libraries` — 4-tuple)
+
+플러그인이 `process` 로 실행하는 외부 CLI(예: `gemini`, `yt-dlp`)를 선언한다. 코어가
+**관찰 → 결정 → 공급**(reconcile)으로 목표 상태에 수렴시킨다 — "존재"가 아니라 *작동*을 기준으로.
+
+| 슬롯 | 키 | 의미 |
+|---|---|---|
+| identity | `name` · `bin` | 패키지/도구 식별 + 실행 bin |
+| observe | `observe.probe[]` · `observe.versionRe?` | 작동 관찰: probe argv 를 실제 실행(exit 0 = 작동), stdout 에서 버전 추출 |
+| accept | `accept.minVersion?` | 수용 술어: 최소 SemVer(미선언이면 작동만으로 수용) |
+| reach | `reach` 또는 `install` | 공급: `vendor`(번들+sha256) / `fetch`(다운로드+플랫폼별 sha256) / `command`(설치 명령). 미선언이면 `install` 폴백 |
+
+```json
+"libraries": [{
+  "name": "@google/gemini-cli",
+  "bin": "gemini",
+  "install": { "darwin": "npm i -g @google/gemini-cli", "linux": "npm i -g @google/gemini-cli" },
+  "observe": { "probe": ["gemini", "--version"], "versionRe": "(\\d+\\.\\d+\\.\\d+)" },
+  "accept": { "minVersion": "0.1.0" },
+  "reach": { "fetch": {
+    "url":    { "darwin": "https://example.com/gemini-darwin" },
+    "sha256": { "darwin": "abc123…" }
+  } }
+}]
+```
+
+코어는 관찰을 5상태로 분류한다: `ABSENT`(없음)·`PARTIAL`(설치 흔적 있으나 bin 미연결 —
+EEXIST 류)·`BROKEN`(dangling 심링크/probe 실패)·`VERSION_MISMATCH`(minVersion 미달)·
+`HEALTHY`. **`HEALTHY` 만 수용**하고 그 외는 공급(reach)한다 — `PARTIAL`/`BROKEN` 은 stale 을
+정리한 뒤 공급(EEXIST 근본 복구). 멱등이다(이미 `HEALTHY` 면 무동작). 실패는 콘솔로만 보고하고
+활성화를 막지 않는다(§0-4 비차단).
+
+- `observe` 를 선언하면 존재가 아니라 probe(실제 실행)로 작동을 본다 — 미선언이면 존재를 작동으로 근사한다.
+- `accept.minVersion` 을 쓰려면 `observe.versionRe` 가 버전을 뽑아야 한다(없으면 버전 비교를 건너뛴다).
+- `vendor`/`fetch` 는 sha256 무결성 핀이 필수 — 불일치 시 대상 파일을 쓰지 않고 실패한다(공급 거부).
 
 ### 권한
 
