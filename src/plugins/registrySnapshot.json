@@ -298,8 +298,8 @@
     {
       "id": "soksak-plugin-media-player",
       "name": {
-        "ko": "미디어 플레이어",
-        "en": "Media Player"
+        "ko": "플레이박스",
+        "en": "Playbox"
       },
       "version": "0.1.0",
       "description": {
