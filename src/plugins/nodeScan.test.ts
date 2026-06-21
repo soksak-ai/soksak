@@ -64,3 +64,39 @@ describe("scanNodes — 불량/중복 경고(침묵 금지)", () => {
     expect(warns.some((w) => w.includes("중복"))).toBe(true);
   });
 });
+
+describe("scanNodes — conformance(contributes.nodes 선언 ≡ data-node 배선)", () => {
+  it("declaredNodeIds 주면 missing(선언했으나 미배선)·orphan(배선했으나 미선언) 경고", () => {
+    const warns: string[] = [];
+    const c = container(
+      `<button data-node="send">s</button><span data-node="extra">e</span>`,
+    );
+    scanNodes(c, BASE, (m) => warns.push(m), ["send", "ghost"]);
+    expect(
+      warns.some(
+        (w) => w.includes("declared-but-not-wired") && w.includes("ghost"),
+      ),
+    ).toBe(true);
+    expect(
+      warns.some(
+        (w) => w.includes("wired-but-not-declared") && w.includes("extra"),
+      ),
+    ).toBe(true);
+  });
+
+  it("declaredNodeIds 없으면 conformance 경고 없음(범용 스캔 무변경)", () => {
+    const warns: string[] = [];
+    const c = container(`<button data-node="anything">a</button>`);
+    scanNodes(c, BASE, (m) => warns.push(m));
+    expect(warns.some((w) => w.includes("not-declared"))).toBe(false);
+  });
+
+  it("동적 노드(id/key)는 base id 로 선언과 매칭(경고 없음)", () => {
+    const warns: string[] = [];
+    const c = container(
+      `<div data-node="row/0">0</div><div data-node="row/1">1</div>`,
+    );
+    scanNodes(c, BASE, (m) => warns.push(m), ["row"]);
+    expect(warns.some((w) => w.includes("not-wired") || w.includes("not-declared"))).toBe(false);
+  });
+});

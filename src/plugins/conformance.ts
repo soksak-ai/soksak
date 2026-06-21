@@ -31,3 +31,19 @@ export function missingRegistrations(
   const reg = new Set(registeredIds);
   return declaredIds.filter((id) => !reg.has(id));
 }
+
+// nodes 의 declared≡actual 진단. actual = DOM 의 data-node(scanNodes 의 nodePath).
+// 동적 리스트 노드는 "id/key" 형태라 base id(첫 세그먼트)로 매칭한다. nodes 는 register API 가 없는
+// contribution 이므로 게이트(throw)가 아니라 진단을 낸다:
+//   missing = 선언했으나 DOM 에 미배선(declared→actual), orphan = DOM 에 있으나 미선언(actual→declared).
+export function nodeConformance(
+  declaredIds: readonly string[],
+  scannedNodePaths: readonly string[],
+): { missing: string[]; orphan: string[] } {
+  const declared = new Set(declaredIds);
+  const scannedBase = new Set(scannedNodePaths.map((p) => p.split("/")[0]));
+  return {
+    missing: declaredIds.filter((id) => !scannedBase.has(id)),
+    orphan: [...scannedBase].filter((id) => !declared.has(id)),
+  };
+}

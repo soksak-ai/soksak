@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { gateContribution, missingRegistrations } from "./conformance";
+import {
+  gateContribution,
+  missingRegistrations,
+  nodeConformance,
+} from "./conformance";
 
 // gateContribution — declared≡actual 등록 게이트(통합). api.ts 4중 find+throw 를 하나로.
 // 규칙: 선언된 id 는 그 선언 엔트리를 반환, 미선언 id 는 fatal throw(undeclared-actual 거부).
@@ -69,5 +73,37 @@ describe("missingRegistrations — declared-but-not-actual 감지", () => {
 
   it("등록만 있고 선언 없는 건 여기서 다루지 않음(그건 gateContribution 의 몫)", () => {
     expect(missingRegistrations(["send"], ["send", "extra"])).toEqual([]);
+  });
+});
+
+// nodeConformance — nodes 의 declared≡actual. actual = DOM 의 data-node(scanNodes 결과).
+// register API 가 없는 contribution(nodes)이라 게이트가 아닌 *진단*(missing/orphan)으로 양방향을 본다.
+describe("nodeConformance — 선언(contributes.nodes) ≡ 배선(data-node)", () => {
+  it("선언 전부 배선되면 missing/orphan 없음", () => {
+    expect(nodeConformance(["send", "input"], ["send", "input"])).toEqual({
+      missing: [],
+      orphan: [],
+    });
+  });
+
+  it("동적 노드(id/key)는 base id 로 매칭(리스트 항목)", () => {
+    expect(nodeConformance(["row"], ["row/0", "row/1"])).toEqual({
+      missing: [],
+      orphan: [],
+    });
+  });
+
+  it("선언했는데 DOM 미배선 → missing(declared→actual)", () => {
+    expect(nodeConformance(["send", "ghost"], ["send"])).toEqual({
+      missing: ["ghost"],
+      orphan: [],
+    });
+  });
+
+  it("DOM 배선했는데 미선언 → orphan(actual→declared)", () => {
+    expect(nodeConformance(["send"], ["send", "extra"])).toEqual({
+      missing: [],
+      orphan: ["extra"],
+    });
   });
 });

@@ -5,6 +5,7 @@
 // 동적 목록은 data-node="<id>/<key>". Shadow DOM(erd)은 querySelectorAll 이 경계를 못 뚫으므로 재귀 순회.
 
 import { NODE_PATH_RE } from "../commands/address";
+import { nodeConformance } from "./conformance";
 
 export interface ScannedNode {
   address: string; // 절대 주소(baseAddress + "/node/" + nodePath)
@@ -35,6 +36,7 @@ export function scanNodes(
   container: ParentNode,
   baseAddress: string,
   onWarn?: (msg: string) => void,
+  declaredNodeIds?: readonly string[],
 ): ScannedNode[] {
   const seen = new Set<string>();
   const out: ScannedNode[] = [];
@@ -50,6 +52,18 @@ export function scanNodes(
     }
     seen.add(nodePath);
     out.push({ address: `${baseAddress}/node/${nodePath}`, nodePath, el });
+  }
+  // [conformance] 선언(contributes.nodes) ≡ 배선(data-node) — declaredNodeIds 줄 때만 진단.
+  // nodes 는 register API 가 없어 게이트 못 하므로 경고로 양방향 불일치를 드러낸다(은폐 0).
+  if (declaredNodeIds) {
+    const { missing, orphan } = nodeConformance(
+      declaredNodeIds,
+      out.map((n) => n.nodePath),
+    );
+    if (missing.length)
+      onWarn?.(`declared-but-not-wired: [${missing.join(",")}] @ ${baseAddress}`);
+    if (orphan.length)
+      onWarn?.(`wired-but-not-declared: [${orphan.join(",")}] @ ${baseAddress}`);
   }
   return out;
 }
