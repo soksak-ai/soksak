@@ -2,24 +2,11 @@
   "spec": "soksak-registry@1",
   "plugins": [
     {
-      "id": "soksak-plugin-acp-core",
-      "name": "ACP Core",
-      "version": "0.1.0",
-      "description": "AI 코딩 에이전트를 다루는 라이브러리 플러그인(UI 없음). Claude·Codex·Gemini 같은 ACP 에이전트를 서브프로세스로 실행하고, 표준 프로토콜(ACP)로 통신하는 엔진을 커맨드·이벤트로 노출한다.",
-      "repo": "https://github.com/soksak-ai/soksak-plugin-acp-core.git",
-      "branch": "main"
-    },
-    {
-      "id": "soksak-plugin-acp-studio",
-      "name": "ACP Studio",
-      "version": "0.1.0",
-      "description": "여러 AI 코딩 에이전트(Claude·Codex·Gemini)를 한 워크스페이스에서 — 체크박스로 1~3 선택, 탭 순서 턴제 또는 자유 대화로 협업해 실파일 작업. 사교 공간(Clubhouse)은 에이전트가 자율로 남기는 회고·잡담. ACP 기반, acp-core 의존.",
-      "repo": "https://github.com/soksak-ai/soksak-plugin-acp-studio.git",
-      "branch": "main"
-    },
-    {
       "id": "soksak-plugin-agent-claude",
-      "name": "Claude Code",
+      "name": {
+        "en": "Claude Code",
+        "ko": "Claude Code"
+      },
       "version": "1.2.0",
       "description": {
         "ko": "새 탭(+) 메뉴 에이전트 카테고리에 Claude Code 를 추가 — 미설치면 공식 설치 명령을 터미널에서 실행한 뒤 사용",
@@ -29,8 +16,25 @@
       "branch": "main"
     },
     {
+      "id": "soksak-plugin-agent-claude-gui",
+      "name": {
+        "en": "Claude GUI",
+        "ko": "Claude GUI"
+      },
+      "version": "0.1.1",
+      "description": {
+        "en": "When claude (Claude Code CLI) runs in a terminal, a GUI entry appears in the panel statusbar; clicking it opens a bubble-UI overlay showing the conversation and active subagents in real time.",
+        "ko": "터미널에서 claude(Claude Code CLI)가 실행되면 패널 상태바에 GUI 항목이 뜨고, 누르면 대화를 버블 UI로 보여주는 오버레이가 열린다. 활성 세션과 서브에이전트를 실시간 표시."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-agent-claude-gui.git",
+      "branch": "main"
+    },
+    {
       "id": "soksak-plugin-agent-codex",
-      "name": "Codex",
+      "name": {
+        "en": "Codex",
+        "ko": "Codex"
+      },
       "version": "1.2.0",
       "description": {
         "ko": "새 탭(+) 메뉴 에이전트 카테고리에 Codex CLI 를 추가 — 미설치면 공식 설치 명령을 터미널에서 실행한 뒤 사용",
@@ -40,11 +44,31 @@
       "branch": "main"
     },
     {
-      "id": "soksak-plugin-bookmarks",
-      "name": "즐겨찾기",
-      "version": "1.0.0",
-      "description": "브라우저 즐겨찾기 목록 패널 — 클릭으로 열고 ✕ 로 제거.",
-      "repo": "https://github.com/soksak-ai/soksak-plugin-bookmarks.git",
+      "id": "soksak-plugin-agents-acp",
+      "name": {
+        "en": "ACP Core",
+        "ko": "ACP Core"
+      },
+      "version": "0.1.0",
+      "description": {
+        "en": "Library plugin (no UI) for managing AI coding agents. Runs ACP agents (Claude, Codex, Gemini) as subprocesses and exposes the ACP communication engine via commands and events.",
+        "ko": "AI 코딩 에이전트를 다루는 라이브러리 플러그인(UI 없음). Claude·Codex·Gemini 같은 ACP 에이전트를 서브프로세스로 실행하고, 표준 프로토콜(ACP)로 통신하는 엔진을 커맨드·이벤트로 노출한다."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-agents-acp.git",
+      "branch": "main"
+    },
+    {
+      "id": "soksak-plugin-agents-clubhouse",
+      "name": {
+        "en": "Agents Clubhouse",
+        "ko": "에이전트 클럽하우스"
+      },
+      "version": "0.1.0",
+      "description": {
+        "en": "A hub that brings multiple AI coding agents (Claude, Codex, Gemini) together in one workspace — select 1–3 via checkboxes, discuss in turn-based, free, or simultaneous mode, and mention a peer directly with '@name'. Conversation by default; the agents touch real files only when you ask. Runs agents through the agents-acp runtime.",
+        "ko": "여러 AI 코딩 에이전트(Claude·Codex·Gemini)를 한 워크스페이스에 모아주는 허브 — 체크박스로 1~3 선택, 탭 순서대로 턴제·자유·동시 모드로 함께 논의. 본문 '@이름' 으로 동료 직접 호출. 기본은 대화이고, 사용자가 요청할 때만 실파일 작업. 에이전트 실행은 agents-acp 런타임 경유."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-agents-clubhouse.git",
       "branch": "main"
     },
     {
@@ -62,61 +86,128 @@
       "branch": "main"
     },
     {
-      "id": "soksak-plugin-claude-gui",
-      "name": "Claude GUI",
-      "version": "0.1.1",
-      "description": "터미널에서 claude(Claude Code CLI)가 실행되면 패널 상태바에 GUI 항목이 뜨고, 누르면 대화를 버블 UI로 보여주는 오버레이가 열린다. 활성 세션과 서브에이전트를 실시간 표시.",
-      "repo": "https://github.com/soksak-ai/soksak-plugin-claude-gui.git",
+      "id": "soksak-plugin-browser-bookmarks",
+      "name": {
+        "en": "Bookmarks",
+        "ko": "즐겨찾기"
+      },
+      "version": "1.0.0",
+      "description": {
+        "en": "Browser bookmarks panel — click to open, ✕ to remove.",
+        "ko": "브라우저 즐겨찾기 목록 패널 — 클릭으로 열고 ✕ 로 제거."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-browser-bookmarks.git",
       "branch": "main"
     },
     {
-      "id": "soksak-plugin-clip",
+      "id": "soksak-plugin-clipboard",
       "name": {
         "ko": "클립",
         "en": "Clip"
       },
       "version": "0.2.0",
-      "description": "클립보드 복사 이력과 영구 메모를 카테고리로 묶어 관리한다. 클립은 즐겨찾기·메모가 아니면 설정한 보존일(기본 3일) 후 자동 삭제, 메모는 영구. 같은 내용은 합쳐 복사 횟수를 센다. 우측 사이드바 탭.",
-      "repo": "https://github.com/soksak-ai/soksak-plugin-clip.git",
+      "description": {
+        "ko": "클립보드 복사 이력과 영구 메모를 카테고리로 묶어 관리한다. 클립은 즐겨찾기·메모가 아니면 설정한 보존일(기본 3일) 후 자동 삭제, 메모는 영구. 같은 내용은 합쳐 복사 횟수를 센다. 우측 사이드바 탭.",
+        "en": "Manages clipboard history and permanent memos grouped by category. Clips are auto-deleted after the configured retention period (default 3 days) unless starred or saved as memos; memos are permanent. Duplicate entries are merged and copy counts are tracked. Right sidebar tab."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-clipboard.git",
       "branch": "main"
     },
     {
-      "id": "soksak-plugin-code-highlight",
-      "name": "코드 하이라이트+",
-      "version": "1.0.0",
-      "description": "TODO/FIXME/XXX 토큰 강조 + mjs/cjs/svelte 확장자 문법 매핑",
-      "repo": "https://github.com/soksak-ai/soksak-plugin-code-highlight.git",
+      "id": "soksak-plugin-editor-codemirror",
+      "name": {
+        "ko": "에디터 (CodeMirror)",
+        "en": "Editor (CodeMirror)"
+      },
+      "version": "0.1.0",
+      "description": {
+        "ko": "코드·텍스트·마크다운·SVG 파일 에디터(CodeMirror). 찾기/바꾸기·저장·구문 강조. soksak 파일 뷰어로 등록(엔진 중립 — 코어는 매칭만).",
+        "en": "Code, text, markdown, and SVG file editor (CodeMirror). Find/replace, save, syntax highlighting. Registers as a soksak file viewer (engine-neutral — the core only routes)."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-editor-codemirror.git",
+      "branch": "main"
+    },
+    {
+      "id": "soksak-plugin-editor-codemirror-todo",
+      "name": {
+        "en": "CodeMirror TODO highlight",
+        "ko": "코드미러 TODO 강조"
+      },
+      "version": "0.1.0",
+      "description": {
+        "en": "CodeMirror extension: highlights TODO/FIXME/XXX tokens and maps mjs/cjs/svelte extensions to syntax modes, via the editor plugin's extension protocol.",
+        "ko": "코드미러 확장: TODO/FIXME/XXX 토큰 강조 + mjs/cjs/svelte 확장자 문법 매핑 — 에디터 플러그인의 확장 프로토콜 경유."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-editor-codemirror-todo.git",
+      "branch": "main"
+    },
+    {
+      "id": "soksak-plugin-editor-format-json",
+      "name": {
+        "en": "JSON Formatter",
+        "ko": "JSON 포메터"
+      },
+      "version": "0.1.0",
+      "description": {
+        "en": "Formats JSON files with 2-space indentation. An editor extension (registers a formatter with the editor plugin). On parse failure, emits a clear error instead of corrupted text.",
+        "ko": "JSON 파일을 2칸 들여쓰기로 정리하는 포매터. 에디터 확장(에디터 플러그인에 포매터 등록). 파싱 실패 시 깨진 텍스트 대신 명확한 에러를 냅니다."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-editor-format-json.git",
       "branch": "main"
     },
     {
       "id": "soksak-plugin-erd",
-      "name": "ERD",
+      "name": {
+        "en": "ERD",
+        "ko": "ERD"
+      },
       "version": "0.1.0",
-      "description": "멀티-DB ERD 에디터 — 스키마 설계·마이그레이션·SQL 생성을 GUI 와 CLI/MCP 로.",
+      "description": {
+        "en": "Multi-DB ERD editor — schema design, migration, and SQL generation via GUI and CLI/MCP.",
+        "ko": "멀티-DB ERD 에디터 — 스키마 설계·마이그레이션·SQL 생성을 GUI 와 CLI/MCP 로."
+      },
       "repo": "https://github.com/soksak-ai/soksak-plugin-erd.git",
       "branch": "main"
     },
     {
-      "id": "soksak-plugin-formatter",
-      "name": "JSON 포메터",
-      "version": "1.0.0",
-      "description": "JSON 파일을 2칸 들여쓰기로 정리하는 포매터(⇧⌥F). 파싱 실패 시 깨진 텍스트 대신 명확한 에러를 냅니다.",
-      "repo": "https://github.com/soksak-ai/soksak-plugin-formatter.git",
+      "id": "soksak-plugin-file-tree",
+      "name": {
+        "ko": "파일 트리",
+        "en": "File Tree"
+      },
+      "version": "0.1.0",
+      "description": {
+        "ko": "좌측 사이드바 파일 탐색기 트리. 셸 cwd 추종 토글, git 데코레이션. 파일 열기는 코어 editor.open 으로 위임(에디터/미디어 뷰어가 렌더).",
+        "en": "Left sidebar file explorer tree. Shell-cwd follow toggle and git decorations. Opening a file is delegated to the core editor.open command (editor / media viewers render it)."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-file-tree.git",
       "branch": "main"
     },
     {
       "id": "soksak-plugin-git-diff",
-      "name": "깃 변경",
+      "name": {
+        "en": "Git Changes",
+        "ko": "깃 변경"
+      },
       "version": "1.0.2",
-      "description": "변경 파일 목록과 unified diff 를 보여주는 git 뷰. staged(index) 토글 지원.",
+      "description": {
+        "en": "Git view showing changed file list and unified diff. Supports staged (index) toggle.",
+        "ko": "변경 파일 목록과 unified diff 를 보여주는 git 뷰. staged(index) 토글 지원."
+      },
       "repo": "https://github.com/soksak-ai/soksak-plugin-git-diff.git",
       "branch": "main"
     },
     {
       "id": "soksak-plugin-git-history",
-      "name": "깃 히스토리",
+      "name": {
+        "en": "Git History",
+        "ko": "깃 히스토리"
+      },
       "version": "1.0.3",
-      "description": "프로젝트 커밋 이력 사이드바 — 커밋을 클릭하면 변경 파일 목록과 패치를 표시.",
+      "description": {
+        "en": "Project commit history sidebar — click a commit to show changed files and patch.",
+        "ko": "프로젝트 커밋 이력 사이드바 — 커밋을 클릭하면 변경 파일 목록과 패치를 표시."
+      },
       "repo": "https://github.com/soksak-ai/soksak-plugin-git-history.git",
       "branch": "main"
     },
@@ -136,17 +227,29 @@
     },
     {
       "id": "soksak-plugin-icons-codicons",
-      "name": "Codicons 아이콘",
+      "name": {
+        "en": "Codicons Icons",
+        "ko": "Codicons 아이콘"
+      },
       "version": "1.0.0",
-      "description": "editor Codicons 아이콘 셋(CC-BY-4.0, microsoft/editor-codicons) — 활성화하면 설정 > 아이콘 셋에서 선택할 수 있습니다",
+      "description": {
+        "en": "editor Codicons icon set (CC-BY-4.0, microsoft/editor-codicons) — once enabled, select it under Settings > Icon Set.",
+        "ko": "editor Codicons 아이콘 셋(CC-BY-4.0, microsoft/editor-codicons) — 활성화하면 설정 > 아이콘 셋에서 선택할 수 있습니다"
+      },
       "repo": "https://github.com/soksak-ai/soksak-plugin-icons-codicons.git",
       "branch": "main"
     },
     {
       "id": "soksak-plugin-icons-tabler",
-      "name": "Tabler 아이콘",
+      "name": {
+        "en": "Tabler Icons",
+        "ko": "Tabler 아이콘"
+      },
       "version": "1.0.0",
-      "description": "Tabler Icons 아이콘 셋(MIT, tabler.io/icons) — 활성화하면 설정 > 아이콘 셋에서 선택할 수 있습니다",
+      "description": {
+        "en": "Tabler Icons icon set (MIT, tabler.io/icons) — once enabled, select it under Settings > Icon Set.",
+        "ko": "Tabler Icons 아이콘 셋(MIT, tabler.io/icons) — 활성화하면 설정 > 아이콘 셋에서 선택할 수 있습니다"
+      },
       "repo": "https://github.com/soksak-ai/soksak-plugin-icons-tabler.git",
       "branch": "main"
     },
@@ -157,7 +260,10 @@
         "en": "Kanban"
       },
       "version": "0.1.0",
-      "description": "트리(아웃라이너) 기반 이슈 추적 — 한 트리를 칸반·간트·타임라인·트리·테이블·캘린더 여섯 뷰로. 노드는 parentId+order 로 무한 깊이. CLI/MCP 로 조작.",
+      "description": {
+        "ko": "트리(아웃라이너) 기반 이슈 추적 — 한 트리를 칸반·간트·타임라인·트리·테이블·캘린더 여섯 뷰로. 노드는 parentId+order 로 무한 깊이. CLI/MCP 로 조작.",
+        "en": "Tree (outliner) based issue tracking — one tree projected as kanban, gantt, timeline, tree, table, and calendar. Nodes have infinite depth via parentId+order. Operated via CLI/MCP."
+      },
       "repo": "https://github.com/soksak-ai/soksak-plugin-kanban.git",
       "branch": "main"
     },
@@ -168,24 +274,109 @@
         "en": "LG TV Remote"
       },
       "version": "0.1.0",
-      "description": "LG webOS TV 리모컨 — 전원/볼륨/채널/방향키/입력/미디어/키보드를 모달 오버레이와 CLI/MCP 명령으로 조작한다. SSAP WebSocket 직결 + Wake-on-LAN(net.udp.send).",
+      "description": {
+        "en": "LG webOS TV remote — control power/volume/channel/d-pad/input/media/keyboard via modal overlay and CLI/MCP commands. Direct SSAP WebSocket connection + Wake-on-LAN (net.udp.send).",
+        "ko": "LG webOS TV 리모컨 — 전원/볼륨/채널/방향키/입력/미디어/키보드를 모달 오버레이와 CLI/MCP 명령으로 조작한다. SSAP WebSocket 직결 + Wake-on-LAN(net.udp.send)."
+      },
       "repo": "https://github.com/soksak-ai/soksak-plugin-lgtv-remote.git",
       "branch": "main"
     },
     {
       "id": "soksak-plugin-mailbox",
-      "name": "메시지함",
+      "name": {
+        "ko": "메시지함",
+        "en": "Mailbox"
+      },
       "version": "0.1.0",
-      "description": "프로젝트별 메시지함 — CLI/MCP/API 로 메시지를 보내고, 푸시 알림(소리·딥링크·이미지)으로 받는다. '스스로 구독'하면 턴 종료 시 기계적으로 메시지를 받는다. 좌측 사이드바 탭에 읽지않음 표시.",
+      "description": {
+        "ko": "프로젝트별 메시지함 — CLI/MCP/API 로 메시지를 보내고, 푸시 알림(소리·딥링크·이미지)으로 받는다. '스스로 구독'하면 턴 종료 시 기계적으로 메시지를 받는다. 좌측 사이드바 탭에 읽지않음 표시.",
+        "en": "Per-project message inbox — send messages via CLI/MCP/API and receive them as push notifications (sound, deep-link, image). Self-subscribe to receive messages automatically at turn end. Unread badge shown on the left sidebar tab."
+      },
       "repo": "https://github.com/soksak-ai/soksak-plugin-mailbox.git",
       "branch": "main"
     },
     {
+      "id": "soksak-plugin-media-player",
+      "name": {
+        "ko": "미디어 플레이어",
+        "en": "Media Player"
+      },
+      "version": "0.1.0",
+      "description": {
+        "ko": "비디오 라이브러리·플레이어 — 즐겨찾기·클립. YouTube·로컬 파일·직접 미디어 URL·임의 웹페이지(yt-dlp 경유)를 재생하고, 보호된 HLS 는 코어 미디어 프록시로 스트리밍.",
+        "en": "Video library and player — favorites and clips. Plays YouTube, local files, direct media URLs, and arbitrary web pages (via yt-dlp); protected HLS is streamed through the core media proxy."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-media-player.git",
+      "branch": "main"
+    },
+    {
+      "id": "soksak-plugin-media-viewer",
+      "name": {
+        "ko": "미디어 뷰어",
+        "en": "Media Viewer"
+      },
+      "version": "0.1.0",
+      "description": {
+        "ko": "이미지·PDF·영상·오디오 파일을 콘텐츠로 표시하는 뷰어. soksak 파일 뷰어로 등록(코어가 확장자로 라우팅).",
+        "en": "Viewers for image, PDF, video, and audio files. Registers as soksak file viewers (the core routes by extension)."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-media-viewer.git",
+      "branch": "main"
+    },
+    {
       "id": "soksak-plugin-memo",
-      "name": "메모",
+      "name": {
+        "en": "Memo",
+        "ko": "메모"
+      },
       "version": "1.0.1",
-      "description": "프로젝트별 메모 — 프로젝트 루트마다 분리 저장되는 간단한 메모장 패널",
+      "description": {
+        "en": "Per-project memo — a simple notepad panel stored separately per project root.",
+        "ko": "프로젝트별 메모 — 프로젝트 루트마다 분리 저장되는 간단한 메모장 패널"
+      },
       "repo": "https://github.com/soksak-ai/soksak-plugin-memo.git",
+      "branch": "main"
+    },
+    {
+      "id": "soksak-plugin-overlay-draw",
+      "name": {
+        "en": "Pin Doodle",
+        "ko": "Pin 낙서"
+      },
+      "version": "0.1.0",
+      "description": {
+        "en": "Freehand drawing overlay on top of the screen. In draw mode use the pen to doodle; outside draw mode clicks pass through but the drawing stays visible and appears in screenshots. Color, width, eraser, undo, clear.",
+        "ko": "화면 위에 연필로 자유롭게 적고 그리는 낙서 오버레이. 그리기 모드를 켜면 펜으로 낙서하고, 끄면 클릭은 통과하되 낙서는 화면에 남아 스크린샷에도 잡힌다. 색·굵기·지우개·되돌리기·지우기."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-overlay-draw.git",
+      "branch": "main"
+    },
+    {
+      "id": "soksak-plugin-overlay-sakura",
+      "name": {
+        "en": "Sakura Petals",
+        "ko": "sakura 벚꽃"
+      },
+      "version": "1.0.2",
+      "description": {
+        "en": "Cherry blossom petals drift over the app — swaying side to side, tumbling in 3D, and drifting sideways on the breeze. Density, fall speed, and wind are adjustable.",
+        "ko": "앱 위로 벚꽃 잎이 흩날린다 — 좌우로 흔들리며 3D로 텀블해 떨어지고 바람에 옆으로 흐른다. 밀도·낙하속도·바람 조절."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-overlay-sakura.git",
+      "branch": "main"
+    },
+    {
+      "id": "soksak-plugin-overlay-shark",
+      "name": {
+        "en": "shork shark",
+        "ko": "shork shark"
+      },
+      "version": "1.0.2",
+      "description": {
+        "en": "A shork shark lazily swimming across the app — the SOKSAK wordmark is the shark itself (S=head, K=tail). Shark count and liveliness are adjustable.",
+        "ko": "앱 위를 유유자적 헤엄쳐 다니는 shork shark — SOKSAK 워드마크가 곧 상어(S=머리, K=꼬리). 마릿수·활기 조절."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-overlay-shark.git",
       "branch": "main"
     },
     {
@@ -195,24 +386,25 @@
         "en": "Runbook"
       },
       "version": "0.1.0",
-      "description": "재사용 가능한 작업(런북)을 저장하고 실행한다. 작업은 파라미터·환경변수·시크릿·다른 작업 출력을 Reference 로 엮으며, 링킹은 순수 해석 + 의존 그래프 + 순환 검출로 안전하게 풀린다.",
+      "description": {
+        "ko": "재사용 가능한 작업(런북)을 저장하고 실행한다. 작업은 파라미터·환경변수·시크릿·다른 작업 출력을 Reference 로 엮으며, 링킹은 순수 해석 + 의존 그래프 + 순환 검출로 안전하게 풀린다.",
+        "en": "Store and run reusable commands (runbooks). Commands reference parameters, env vars, secrets, and other command outputs; linking resolves safely via pure evaluation, dependency graph, and cycle detection."
+      },
       "repo": "https://github.com/soksak-ai/soksak-plugin-runbook.git",
       "branch": "main"
     },
     {
-      "id": "soksak-plugin-sakura",
-      "name": "sakura 벚꽃",
-      "version": "1.0.2",
-      "description": "앱 위로 벚꽃 잎이 흩날린다 — 좌우로 흔들리며 3D로 텀블해 떨어지고 바람에 옆으로 흐른다. 밀도·낙하속도·바람 조절.",
-      "repo": "https://github.com/soksak-ai/soksak-plugin-sakura.git",
-      "branch": "main"
-    },
-    {
-      "id": "soksak-plugin-shark",
-      "name": "shork shark",
-      "version": "1.0.2",
-      "description": "앱 위를 유유자적 헤엄쳐 다니는 shork shark — SOKSAK 워드마크가 곧 상어(S=머리, K=꼬리). 마릿수·활기 조절.",
-      "repo": "https://github.com/soksak-ai/soksak-plugin-shark.git",
+      "id": "soksak-plugin-sidebar-sky",
+      "name": {
+        "ko": "창밖 풍경",
+        "en": "Window"
+      },
+      "version": "1.2.0",
+      "description": {
+        "ko": "좌측 사이드바 하단의 창밖 풍경 — 시간대에 따라 변하고, 나무가 흔들리고 낮엔 구름이 흐르며 밤엔 별이 반짝인다.",
+        "en": "A window to the sky in the left sidebar — shifts with the time of day; trees sway, clouds drift by day, stars twinkle at night."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-sidebar-sky.git",
       "branch": "main"
     },
     {
@@ -227,20 +419,6 @@
         "en": "Adds Terminal to the new-tab (+) menu"
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-terminal.git",
-      "branch": "main"
-    },
-    {
-      "id": "soksak-plugin-window",
-      "name": {
-        "ko": "창밖 풍경",
-        "en": "Window"
-      },
-      "version": "1.2.0",
-      "description": {
-        "ko": "좌측 사이드바 하단의 창밖 풍경 — 시간대에 따라 변하고, 나무가 흔들리고 낮엔 구름이 흐르며 밤엔 별이 반짝인다.",
-        "en": "A window to the sky in the left sidebar — shifts with the time of day; trees sway, clouds drift by day, stars twinkle at night."
-      },
-      "repo": "https://github.com/soksak-ai/soksak-plugin-window.git",
       "branch": "main"
     }
   ]

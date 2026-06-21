@@ -80,10 +80,10 @@ describe("registrySnapshot.json — 빌드 스냅샷 무결성", () => {
     const r = parseRegistry(snapshot)!;
     expect(r.plugins.find((p) => p.id === "soksak-plugin-skeleton")).toBeUndefined();
   });
-  it("대표 플러그인(shark/claude-gui) 포함", () => {
+  it("대표 플러그인(overlay-shark/agent-claude-gui) 포함", () => {
     const ids = parseRegistry(snapshot)!.plugins.map((p) => p.id);
-    expect(ids).toContain("soksak-plugin-shark");
-    expect(ids).toContain("soksak-plugin-claude-gui");
+    expect(ids).toContain("soksak-plugin-overlay-shark");
+    expect(ids).toContain("soksak-plugin-agent-claude-gui");
   });
   it("모든 엔트리에 version", () => {
     for (const p of parseRegistry(snapshot)!.plugins) {
