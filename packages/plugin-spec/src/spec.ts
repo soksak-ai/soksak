@@ -404,11 +404,29 @@ export const DEFAULT_ENTRY = "main.js";
 
 // 외부 CLI/라이브러리 종속성 — 플러그인이 process 로 실행하는 외부 도구(npm 글로벌 CLI 등).
 // 플러그인↔플러그인 dependencies 와 별개 축. 동의 후 미설치면 강제 설치(install 명령 원문 고지).
+// 공급(reach) 전략 — 외부 도구를 목표 상태로 만드는 법. 정확히 하나의 variant.
+//   vendor = 저자 번들 바이트 + sha256 무결성 핀, fetch = 코어 다운로드 + 플랫폼별 sha256,
+//   command = 레거시 설치 명령(검증 불가). 미선언이면 install(레거시)로 폴백.
+export type ReachStrategy =
+  | { vendor: { path: string; sha256: string } }
+  | {
+      fetch: {
+        url: Partial<Record<ProgramPlatform, string>>;
+        sha256: Partial<Record<ProgramPlatform, string>>;
+      };
+    }
+  | { command: Partial<Record<ProgramPlatform, string>> };
+
+// 외부 런타임 의존성 = 4-tuple: identity(name·bin) + observe(작동 관찰) + accept(수용 술어) + reach(공급).
+// observe/accept/reach 는 선택 — 미선언이면 레거시 동작(존재=수용, install=공급). reconcile 엔진(M3)이 실행.
 export interface LibraryDep {
-  name: string; // 패키지/도구 식별(예: "@google/gemini-cli")
-  bin: string; // 설치 후 실행 bin 이름(글로벌 bin 에서 확인·실행)
-  install: Partial<Record<ProgramPlatform, string>>; // 플랫폼별 설치 명령(원문 그대로 고지)
+  name: string; // identity — 패키지/도구 식별(예: "@google/gemini-cli")
+  bin: string; // PATH/probe 대상 실행 bin
+  install: Partial<Record<ProgramPlatform, string>>; // 레거시 공급(= reach.command 동치). reach 미선언 시 사용.
   label?: LocalizedText; // 동의 화면 표시명(생략 시 name)
+  observe?: { probe: string[]; versionRe?: string }; // 작동 관찰: probe argv(exit0=작동) + 버전 추출 정규식
+  accept?: { minVersion?: string }; // 수용 술어: 최소 SemVer(미선언이면 probe 성공만)
+  reach?: ReachStrategy; // 공급 전략(미선언이면 install 폴백)
 }
 
 // 플러그인 설정 스키마 — 사용자 구성 옵션의 단일 진실. UI(자동 컨트롤)·저장 기본값·검증·CLI/MCP·문서가
@@ -630,6 +648,66 @@ function checkKnownKeys(
   }
 }
 
+// 플랫폼별 값 맵 검증(reach.command·fetch.url/sha256 공통) — 키는 PROGRAM_PLATFORMS, 값 비공백, 최소 1개.
+// true 반환 = 에러(호출자 return).
+function validatePlatformMap(m: unknown, label: string, errors: string[]): boolean {
+  if (!isRecord(m)) {
+    errors.push(`${label}: 플랫폼별 객체 필요`);
+    return true;
+  }
+  let count = 0;
+  for (const [k, val] of Object.entries(m)) {
+    if (!PROGRAM_PLATFORMS.includes(k as ProgramPlatform)) {
+      errors.push(`${label}: 플랫폼 키는 ${PROGRAM_PLATFORMS.join("|")}`);
+      return true;
+    }
+    if (!isNonEmptyString(val)) {
+      errors.push(`${label}.${k}: 비공백 문자열`);
+      return true;
+    }
+    count++;
+  }
+  if (count === 0) {
+    errors.push(`${label}: 최소 1개 플랫폼 필요`);
+    return true;
+  }
+  return false;
+}
+
+// reach 전략 검증 — vendor|fetch|command 중 정확히 하나, vendor/fetch 는 sha256 무결성 핀 필수. true = 에러.
+function validateReach(reach: unknown, label: string, errors: string[]): boolean {
+  if (!isRecord(reach)) {
+    errors.push(`${label}: 객체(vendor|fetch|command)`);
+    return true;
+  }
+  const variants = (["vendor", "fetch", "command"] as const).filter((k) => k in reach);
+  if (variants.length !== 1) {
+    errors.push(`${label}: vendor|fetch|command 중 정확히 하나`);
+    return true;
+  }
+  const v = variants[0];
+  if (v === "vendor") {
+    const o = reach.vendor;
+    if (!isRecord(o) || !isNonEmptyString(o.path) || !isNonEmptyString(o.sha256)) {
+      errors.push(`${label}.vendor: { path, sha256 } 비공백 문자열 필수`);
+      return true;
+    }
+    return false;
+  }
+  if (v === "fetch") {
+    const o = reach.fetch;
+    if (!isRecord(o)) {
+      errors.push(`${label}.fetch: { url, sha256 } 객체 필요`);
+      return true;
+    }
+    return (
+      validatePlatformMap(o.url, `${label}.fetch.url`, errors) ||
+      validatePlatformMap(o.sha256, `${label}.fetch.sha256`, errors)
+    );
+  }
+  return validatePlatformMap(reach.command, `${label}.command`, errors);
+}
+
 interface EntryRule<T> {
   label: string;
   required: readonly string[];
@@ -782,7 +860,12 @@ export function parseManifest(
           errors.push(`libraries[${i}]: 객체여야 함`);
           return;
         }
-        checkKnownKeys(item, ["name", "bin", "install", "label"], `libraries[${i}]`, errors);
+        checkKnownKeys(
+          item,
+          ["name", "bin", "install", "label", "observe", "accept", "reach"],
+          `libraries[${i}]`,
+          errors,
+        );
         if (!isNonEmptyString(item.name)) {
           errors.push(`libraries[${i}].name: 비공백 문자열 필수`);
           return;
@@ -819,8 +902,45 @@ export function parseManifest(
           errors.push(`libraries[${i}].label: 문자열 또는 {언어:문자열}`);
           return;
         }
+        // [4-tuple] observe/accept/reach — 선택. 선언 시 형식 검증(미선언이면 레거시 동작).
+        if (item.observe !== undefined) {
+          const o = item.observe as Record<string, unknown>;
+          if (
+            !isRecord(o) ||
+            !Array.isArray(o.probe) ||
+            o.probe.length === 0 ||
+            !(o.probe as unknown[]).every((s) => isNonEmptyString(s))
+          ) {
+            errors.push(`libraries[${i}].observe.probe: 비공백 문자열 배열(argv) 필수`);
+            return;
+          }
+          if (o.versionRe !== undefined && !isNonEmptyString(o.versionRe)) {
+            errors.push(`libraries[${i}].observe.versionRe: 문자열`);
+            return;
+          }
+        }
+        if (item.accept !== undefined) {
+          const a = item.accept as Record<string, unknown>;
+          if (
+            !isRecord(a) ||
+            (a.minVersion !== undefined &&
+              (!isNonEmptyString(a.minVersion) || !SEMVER_RE.test(a.minVersion as string)))
+          ) {
+            errors.push(`libraries[${i}].accept.minVersion: semver 형식`);
+            return;
+          }
+        }
+        if (
+          item.reach !== undefined &&
+          validateReach(item.reach, `libraries[${i}].reach`, errors)
+        ) {
+          return;
+        }
         const lib: LibraryDep = { name: item.name.trim(), bin: item.bin.trim(), install };
         if (item.label !== undefined) lib.label = normalizeText(item.label as LocalizedText);
+        if (item.observe !== undefined) lib.observe = item.observe as LibraryDep["observe"];
+        if (item.accept !== undefined) lib.accept = item.accept as LibraryDep["accept"];
+        if (item.reach !== undefined) lib.reach = item.reach as ReachStrategy;
         libraries.push(lib);
       });
       checkDuplicates(libraries.map((l) => l.bin), "libraries[].bin", errors);

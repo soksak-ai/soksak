@@ -523,6 +523,35 @@ describe("parseManifest — libraries(외부 CLI 종속성)", () => {
   it("libraries 배열 아니면 거부", () => {
     expect(parseManifest(base({ libraries: {} }), "demo").manifest).toBeNull();
   });
+
+  // 4-tuple(observe/accept/reach) — 선택. 선언 시 형식 검증, 미선언이면 레거시 동작.
+  const ok4 = (extra: object): boolean =>
+    parseManifest(base({ libraries: [{ ...lib, ...extra }] }), "demo").validation.ok;
+  it("observe.probe 배열 유효 / 비배열·빈배열 거부", () => {
+    expect(ok4({ observe: { probe: ["gemini", "--version"] } })).toBe(true);
+    expect(ok4({ observe: { probe: "gemini" } })).toBe(false);
+    expect(ok4({ observe: { probe: [] } })).toBe(false);
+  });
+  it("accept.minVersion semver 유효 / 비semver 거부", () => {
+    expect(ok4({ accept: { minVersion: "1.2.3" } })).toBe(true);
+    expect(ok4({ accept: { minVersion: "latest" } })).toBe(false);
+  });
+  it("reach vendor 는 path+sha256 필수", () => {
+    expect(ok4({ reach: { vendor: { path: "bin/gemini", sha256: "abc" } } })).toBe(true);
+    expect(ok4({ reach: { vendor: { path: "bin/gemini" } } })).toBe(false);
+  });
+  it("reach fetch/command 플랫폼별 유효", () => {
+    expect(
+      ok4({ reach: { fetch: { url: { darwin: "https://x" }, sha256: { darwin: "h" } } } }),
+    ).toBe(true);
+    expect(ok4({ reach: { command: { darwin: "npm i -g x" } } })).toBe(true);
+  });
+  it("reach 는 정확히 하나 variant(0개·2개 거부)", () => {
+    expect(ok4({ reach: {} })).toBe(false);
+    expect(
+      ok4({ reach: { vendor: { path: "p", sha256: "h" }, command: { darwin: "c" } } }),
+    ).toBe(false);
+  });
 });
 
 describe("parseManifest — configuration(설정 스키마)", () => {
