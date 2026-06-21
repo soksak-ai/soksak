@@ -22,20 +22,52 @@ export const CORE_THEME_VARS: ReadonlySet<string> = new Set<string>([
   ...STATIC_CSS_VARS,
 ]);
 
+// 호스트 테마 "의미 어휘" — 플러그인이 코어 토큰으로 기대하고 쓰는(또는 착각해서 쓰는) 시맨틱 이름의 뿌리.
+// 유령 판정 범위를 이 어휘로 한정한다: 라이브러리/사적 네임스페이스(radix-*, trees-*, color-blue-500,
+// gap …)는 어휘 밖이라 검사하지 않는다(false positive 방지). 어휘 안 이름인데 코어가 안 주면 = 진짜 버그.
+// 예: text/surface/accent/border/background/foreground/hover/bg2 → 코어엔 fg/card/acc/bd/bg 만 있음.
+const HOST_THEME_VOCAB: ReadonlySet<string> = new Set<string>([
+  "bg", "fg", "text", "foreground", "background", "surface", "card", "panel",
+  "side", "sidebar", "inset", "bd", "border", "acc", "accent", "accbg", "ok",
+  "success", "shadow", "hover", "muted", "primary", "secondary", "danger",
+  "warning", "error", "link", "ring", "focus", "selection", "highlight",
+]);
+
 // 직렬화 가능한 계약(Doctor 가 contract.json 으로 소비 — 코어가 단일 발행).
-export function themeVarContract(): string[] {
-  return [...CORE_THEME_VARS].sort();
+export function themeVarContract(): { vars: string[]; vocab: string[] } {
+  return {
+    vars: [...CORE_THEME_VARS].sort(),
+    vocab: [...HOST_THEME_VOCAB].sort(),
+  };
 }
 
-// 텍스트(CSS/소스/번들 main.js)에서 참조된 var(--X) 중 계약 밖(유령)인 이름을 정렬해 반환.
-// 순수 함수 — 코어 테스트와 Doctor 가 동일 로직으로 재사용한다.
+// 변수 이름의 시맨틱 뿌리 — 끝 숫자/-숫자 제거(bg2→bg, text-2→text, surface-2→surface).
+function themeRoot(name: string): string {
+  return name.replace(/-?\d+$/, "");
+}
+
+// 이름이 호스트 테마 토큰을 의도한 것인지(유령 검사 대상인지).
+export function isHostThemeToken(
+  name: string,
+  vocab: ReadonlySet<string> = HOST_THEME_VOCAB,
+): boolean {
+  return vocab.has(name) || vocab.has(themeRoot(name));
+}
+
+// 텍스트(CSS/소스/번들 main.js)에서 "유령" 변수를 정렬해 반환. 순수 함수 — Doctor 와 동일 로직.
+// 유령 = var(--X) 로 참조됐지만 (a) 코어 계약에 없고 (b) 그 텍스트가 스스로 정의(--X:)하지도 않고
+// (c) 호스트 테마 의미 어휘에 속하는 이름 — 즉 "코어 토큰을 의도했는데 코어가 안 주는" 것.
+// 자체 정의 변수(Tailwind/Radix/@pierre-trees 등 라이브러리·사적 토큰)는 유령이 아니다.
 export function findGhostThemeVars(
   text: string,
   contract: ReadonlySet<string> = CORE_THEME_VARS,
 ): string[] {
+  const defined = new Set<string>();
+  for (const m of text.matchAll(/--([a-z0-9-]+)\s*:/g)) defined.add(m[1]);
   const ghosts = new Set<string>();
   for (const m of text.matchAll(/var\(\s*--([a-z0-9-]+)/g)) {
-    if (!contract.has(m[1])) ghosts.add(m[1]);
+    const v = m[1];
+    if (!contract.has(v) && !defined.has(v) && isHostThemeToken(v)) ghosts.add(v);
   }
   return [...ghosts].sort();
 }
