@@ -22,7 +22,9 @@ import {
   versionIssues,
   type DepNode,
 } from "../plugins/dependencyGraph";
-import { register } from "./registry";
+import { register, catalogJson } from "./registry";
+import { pluginCommandName } from "../plugins/spec";
+import { missingRegistrations } from "../plugins/conformance";
 import { useUi } from "../state/ui";
 import { consentSummary } from "../plugins/consentSummary";
 
@@ -609,6 +611,39 @@ export function registerPluginCatalog(): void {
       });
       await usePlugins.getState().reload();
       return { ok: true, dir: r.dir, pluginId: r.dir_name };
+    },
+  });
+
+  // declared≡actual 의 in-app 런타임 surface(M5). 발행-시점 스키마 게이트는 soksak-validate(헤드리스,
+  // @soksak/plugin-spec) — 별개. 여기는 "선언한 커맨드/노드가 실제 등록·노출됐나"를 e2e 소켓에서 조회한다.
+  register("plugin.conformance", {
+    description:
+      "Report a plugin's declared-vs-actual conformance: manifest-declared commands/nodes vs what is actually registered/exposed at runtime. Read-only diagnosis. The publish-time schema gate is soksak-validate (headless, @soksak/plugin-spec); this is the in-app runtime surface.",
+    triggers: { ko: "플러그인 정합성 선언 실제 conformance" },
+    params: { id: { type: "string", required: true, description: "플러그인 id" } },
+    returns: "{ id, commands: { declared, registered, missing }, nodesDeclared }",
+    examples: ["sok plugin.conformance soksak-plugin-terminal"],
+    handler: (p) => {
+      const id = p.id as string;
+      const plug = usePlugins.getState().plugins[id];
+      if (!plug) return notFound(`플러그인 없음: ${id}`);
+      const c = plug.manifest.contributes;
+      // commands: 선언(contributes.commands) vs 실제 등록(catalogJson 의 plugin.<id>. prefix).
+      const declaredCmds = c.commands.map((x) => x.name);
+      const prefix = pluginCommandName(id, "");
+      const registeredCmds = catalogJson()
+        .map((e) => e.name)
+        .filter((n) => n.startsWith(prefix))
+        .map((n) => n.slice(prefix.length));
+      return {
+        id,
+        commands: {
+          declared: declaredCmds,
+          registered: registeredCmds,
+          missing: missingRegistrations(declaredCmds, registeredCmds),
+        },
+        nodesDeclared: c.nodes.map((x) => x.id),
+      };
     },
   });
 }
