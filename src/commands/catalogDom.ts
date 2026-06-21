@@ -18,7 +18,7 @@ const notExposed = (addr: string) => ({
 });
 
 // 현재 창의 노출 노드 전부를 절대 주소로 수집한다(뷰 컨테이너 + 호스트 크롬). DOM 직접 순회.
-function collectExposed(): ScannedNode[] {
+export function collectExposed(): ScannedNode[] {
   const out: ScannedNode[] = [];
   const win = currentWindowLabel();
   // 뷰 컨테이너 — data-view-addr(<region>/view/<viewKey>) 를 baseAddress 로. win 접두는 현재 창.

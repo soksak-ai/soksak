@@ -23,8 +23,9 @@ import {
   type DepNode,
 } from "../plugins/dependencyGraph";
 import { register, catalogJson } from "./registry";
+import { collectExposed } from "./catalogDom";
 import { pluginCommandName } from "../plugins/spec";
-import { missingRegistrations } from "../plugins/conformance";
+import { missingRegistrations, nodeConformance } from "../plugins/conformance";
 import { useUi } from "../state/ui";
 import { consentSummary } from "../plugins/consentSummary";
 
@@ -621,7 +622,7 @@ export function registerPluginCatalog(): void {
       "Report a plugin's declared-vs-actual conformance: manifest-declared commands/nodes vs what is actually registered/exposed at runtime. Read-only diagnosis. The publish-time schema gate is soksak-validate (headless, @soksak/plugin-spec); this is the in-app runtime surface.",
     triggers: { ko: "플러그인 정합성 선언 실제 conformance" },
     params: { id: { type: "string", required: true, description: "플러그인 id" } },
-    returns: "{ id, commands: { declared, registered, missing }, nodesDeclared }",
+    returns: "{ id, commands: { declared, registered, missing }, nodes: { declared, wired, missing, orphan } }",
     examples: ["sok plugin.conformance soksak-plugin-terminal"],
     handler: (p) => {
       const id = p.id as string;
@@ -635,6 +636,12 @@ export function registerPluginCatalog(): void {
         .map((e) => e.name)
         .filter((n) => n.startsWith(prefix))
         .map((n) => n.slice(prefix.length));
+      // nodes: 선언(contributes.nodes) vs 실제 배선(collectExposed 의 이 플러그인 뷰 노드).
+      //   주소 = win/<win>/<region>/view/<id>.<viewId>/node/<path> → "/view/<id>." 로 이 플러그인 노드만.
+      const declaredNodes = c.nodes.map((x) => x.id);
+      const wired = collectExposed()
+        .filter((n) => n.address.includes(`/view/${id}.`))
+        .map((n) => n.nodePath);
       return {
         id,
         commands: {
@@ -642,7 +649,11 @@ export function registerPluginCatalog(): void {
           registered: registeredCmds,
           missing: missingRegistrations(declaredCmds, registeredCmds),
         },
-        nodesDeclared: c.nodes.map((x) => x.id),
+        nodes: {
+          declared: declaredNodes,
+          wired,
+          ...nodeConformance(declaredNodes, wired),
+        },
       };
     },
   });
