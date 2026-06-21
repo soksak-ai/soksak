@@ -54,6 +54,51 @@ beforeEach(async () => {
   useViewRegistry.setState({ views: {}, version: 0 });
 });
 
+describe("activatePlugin — conformance inventory(declared-but-not-registered)", () => {
+  it("선언했으나 미등록인 contribution → 경고(은폐 0)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // command 'send' 를 선언하지만 activate 에서 register 하지 않는다 → 약속 미이행.
+    await activatePlugin(
+      { activate: () => {} },
+      manifestOf({
+        permissions: ["commands"],
+        contributes: { commands: [{ name: "send", title: "전송" }] },
+      }),
+      "/d",
+      fakeDeps(),
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("declared-but-not-registered"),
+    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("send"));
+    warn.mockRestore();
+  });
+
+  it("선언한 걸 전부 register 하면 경고 없음", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await activatePlugin(
+      {
+        activate: (ctx: PluginContext) => {
+          ctx.app.commands!.register("send", {
+            description: "send",
+            handler: async () => ({ ok: true }),
+          });
+        },
+      },
+      manifestOf({
+        permissions: ["commands"],
+        contributes: { commands: [{ name: "send", title: "전송" }] },
+      }),
+      "/d",
+      fakeDeps(),
+    );
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.stringContaining("declared-but-not-registered"),
+    );
+    warn.mockRestore();
+  });
+});
+
 describe("activatePlugin — 진입점 해석", () => {
   it("named export activate 지원", async () => {
     const activate = vi.fn();

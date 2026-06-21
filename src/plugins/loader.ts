@@ -12,6 +12,7 @@ import {
   type PluginContext,
 } from "./api";
 import { useProgramRegistry } from "./programRegistry";
+import { missingRegistrations } from "./conformance";
 import type { PluginManifest } from "./spec";
 
 // entry 코드 문자열 → ESM 모듈. 상대 import 불가(스펙: 단일 번들 필수).
@@ -62,6 +63,40 @@ export interface ActivePlugin {
   deactivate: () => Promise<void>;
 }
 
+// 선언했으나 등록되지 않은 register-gated contribution 을 경고(은폐 0).
+// declared≡actual 의 declared→actual 방향. 활성화는 막지 않는다(§0-4) — 진단 노출은 plugin.conformance(후속).
+function reportDeclaredButNotRegistered(
+  manifest: PluginManifest,
+  registered: {
+    commands: Set<string>;
+    views: Set<string>;
+    fileViewers: Set<string>;
+    iconSets: Set<string>;
+  },
+): void {
+  const c = manifest.contributes;
+  const gaps = (
+    [
+      ["commands", c.commands.map((x) => x.name), registered.commands],
+      ["views", c.views.map((x) => x.id), registered.views],
+      ["fileViewers", c.fileViewers.map((x) => x.id), registered.fileViewers],
+      ["iconSets", c.iconSets.map((x) => x.id), registered.iconSets],
+    ] as const
+  )
+    .map(([kind, declared, reg]) => ({
+      kind,
+      missing: missingRegistrations(declared, [...reg]),
+    }))
+    .filter((g) => g.missing.length > 0);
+  if (gaps.length > 0) {
+    console.warn(
+      `[plugin:${manifest.id}] declared-but-not-registered: ${gaps
+        .map((g) => `${g.kind}=[${g.missing.join(",")}]`)
+        .join(", ")}`,
+    );
+  }
+}
+
 // 모듈 + 매니페스트 → 활성 인스턴스. activate 실패 시 등록분 전부 회수 후 throw.
 export async function activatePlugin(
   module: unknown,
@@ -73,7 +108,7 @@ export async function activatePlugin(
   if (!entry) {
     throw new Error("entry 모듈에 activate(ctx) 가 없음");
   }
-  const { api, tracker } = buildPluginApi(manifest, dir, deps);
+  const { api, tracker, registered } = buildPluginApi(manifest, dir, deps);
 
   // 선언적 기여 자동 적용: programs 는 데이터만으로 충분(코드 바인딩 불요) —
   // 동작 전체가 매니페스트에 있어 동의 화면이 그대로 고지한다(§0-2).
@@ -101,6 +136,9 @@ export async function activatePlugin(
     tracker.disposeAll();
     throw new Error(`activate 실패(${manifest.id}): ${e}`);
   }
+
+  // [conformance] activate 후 inventory — declared≡actual 의 declared→actual 방향.
+  reportDeclaredButNotRegistered(manifest, registered);
 
   let deactivated = false;
   return {

@@ -626,8 +626,24 @@ export function buildPluginApi(
   manifest: PluginManifest,
   _dir: string,
   deps: PluginApiDeps,
-): { api: SoksakPluginApi; tracker: DisposableTracker } {
+): {
+  api: SoksakPluginApi;
+  tracker: DisposableTracker;
+  registered: {
+    commands: Set<string>;
+    views: Set<string>;
+    fileViewers: Set<string>;
+    iconSets: Set<string>;
+  };
+} {
   const tracker = new DisposableTracker();
+  // [conformance] 실제 등록된 contribution id 추적 — activate 후 declared≡actual inventory 용.
+  const registered = {
+    commands: new Set<string>(),
+    views: new Set<string>(),
+    fileViewers: new Set<string>(),
+    iconSets: new Set<string>(),
+  };
   const id = manifest.id;
   const has = (p: PluginPermission) => manifest.permissions.includes(p);
 
@@ -723,6 +739,7 @@ export function buildPluginApi(
               declared: manifest.contributes.commands,
               idOf: (c) => c.name,
             });
+            registered.commands.add(name);
             // 매니페스트 선언이 danger 의 권위(설치·동의 시점 가시성). 런타임 spec.danger 와
             // 매니페스트가 둘 다 있고 다르면 모순 → 거부. 매니페스트가 권위지만, 런타임만 danger 를
             // 선언한 경우(레거시)는 게이트 보존을 위해 런타임 값을 쓰되 매니페스트 선언을 촉구(warn).
@@ -769,6 +786,7 @@ export function buildPluginApi(
               declared: manifest.contributes.views,
               idOf: (v) => v.id,
             });
+            registered.views.add(viewId);
             const remove = useViewRegistry
               .getState()
               .register(id, decl, provider);
@@ -782,6 +800,7 @@ export function buildPluginApi(
               declared: manifest.contributes.fileViewers,
               idOf: (f) => f.id,
             });
+            registered.fileViewers.add(viewerId);
             const remove = useFileViewerRegistry
               .getState()
               .register(id, decl, provider);
@@ -807,6 +826,7 @@ export function buildPluginApi(
               declared: manifest.contributes.iconSets,
               idOf: (s) => s.id,
             });
+            registered.iconSets.add(setId);
             const invalid = validateIconSetData(data);
             if (invalid) {
               throw new Error(`아이콘 셋 데이터 불량(${setId}): ${invalid}`);
@@ -1155,5 +1175,5 @@ export function buildPluginApi(
     },
   };
 
-  return { api, tracker };
+  return { api, tracker, registered };
 }
