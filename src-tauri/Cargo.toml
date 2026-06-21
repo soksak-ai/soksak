@@ -67,6 +67,8 @@ argon2 = "0.5"
 chacha20poly1305 = "0.10"
 rand = "0.8"
 zeroize = "1"
+# sha256 무결성 핀(runtime_dep: fetch reach 다운로드 검증). RustCrypto, 자체 crypto 0.
+sha2 = "0.10"
 
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.

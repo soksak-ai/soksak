@@ -19,6 +19,7 @@ mod secrets;
 #[cfg(target_os = "macos")]
 mod titlebar;
 mod watcher;
+mod runtime_dep;
 mod window;
 mod ws;
 
@@ -199,6 +200,9 @@ pub fn run() {
             pty::ack_terminal,
             pty::close_terminal,
             pty::shell_which,
+            runtime_dep::binary_integrity,
+            runtime_dep::cleanup_stale,
+            runtime_dep::download_verify,
             process::process_spawn,
             process::process_write,
             process::process_kill,
