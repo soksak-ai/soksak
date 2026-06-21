@@ -104,7 +104,7 @@ sok plugin.reload
 npx soksak-validate plugin.json   # exit 0 = 통과, 1 = 거부(사유 출력), 2 = 사용법 오류
 ```
 
-`@soksak/plugin-spec` 패키지가 코어와 **같은** `parseManifest` 를 싣는다(스펙 단일진실 —
+`@soksak-ai/plugin-spec` 패키지가 코어와 **같은** `parseManifest` 를 싣는다(스펙 단일진실 —
 사본/vendoring 금지). 스키마 게이트는 앱이 필요 없고, 런타임 conformance(선언 ≡ 실제 배선)는
 앱이 필요하므로 `sok plugin.conformance` 로 따로 확인한다. (패키지 발행 전에는 monorepo 동봉
 `node packages/plugin-spec/bin/validate.mjs <plugin.json>` 로 같은 검증을 돌린다.)

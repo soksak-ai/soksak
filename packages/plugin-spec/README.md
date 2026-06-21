@@ -1,4 +1,4 @@
-# @soksak/plugin-spec
+# @soksak-ai/plugin-spec
 
 The soksak plugin manifest spec and its `parseManifest` validator — the single source of
 truth shared by the soksak runtime and by plugin authors. Validate a `plugin.json` before
@@ -25,7 +25,7 @@ plugin repo so a broken manifest fails before publish:
 ## Programmatic
 
 ```ts
-import { parseManifest } from "@soksak/plugin-spec";
+import { parseManifest } from "@soksak-ai/plugin-spec";
 
 const { manifest, validation } = parseManifest(raw, dirName);
 if (!validation.ok) throw new Error(validation.errors.join("\n"));

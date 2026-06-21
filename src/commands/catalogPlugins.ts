@@ -618,10 +618,10 @@ export function registerPluginCatalog(): void {
   });
 
   // declared≡actual 의 in-app 런타임 surface(M5). 발행-시점 스키마 게이트는 soksak-validate(헤드리스,
-  // @soksak/plugin-spec) — 별개. 여기는 "선언한 커맨드/노드가 실제 등록·노출됐나"를 e2e 소켓에서 조회한다.
+  // @soksak-ai/plugin-spec) — 별개. 여기는 "선언한 커맨드/노드가 실제 등록·노출됐나"를 e2e 소켓에서 조회한다.
   register("plugin.conformance", {
     description:
-      "Report a plugin's declared-vs-actual conformance: manifest declarations vs what is actually registered/exposed at runtime, across every register-gated contribution (commands/views/fileViewers/iconSets) plus DOM nodes. Read-only diagnosis. The publish-time schema gate is soksak-validate (headless, @soksak/plugin-spec); this is the in-app runtime surface.",
+      "Report a plugin's declared-vs-actual conformance: manifest declarations vs what is actually registered/exposed at runtime, across every register-gated contribution (commands/views/fileViewers/iconSets) plus DOM nodes. Read-only diagnosis. The publish-time schema gate is soksak-validate (headless, @soksak-ai/plugin-spec); this is the in-app runtime surface.",
     triggers: { ko: "플러그인 정합성 선언 실제 conformance" },
     params: { id: { type: "string", required: true, description: "플러그인 id" } },
     returns: "{ id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan } }",

@@ -1,5 +1,5 @@
 {
-  "name": "@soksak/plugin-spec",
+  "name": "@soksak-ai/plugin-spec",
   "version": "0.1.0",
   "description": "soksak plugin manifest spec and headless parseManifest validator (single source of truth).",
   "license": "MIT",

@@ -8,7 +8,7 @@ importers:
 
   .:
     dependencies:
-      '@soksak/plugin-spec':
+      '@soksak-ai/plugin-spec':
         specifier: workspace:*
         version: link:packages/plugin-spec
       '@tauri-apps/api':
