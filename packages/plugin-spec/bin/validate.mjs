@@ -13,7 +13,7 @@
 // 종료코드: 0 = 전부 통과, 1 = 하나라도 위반, 2 = 사용법 오류.
 
 import { readFileSync } from "node:fs";
-import { basename, dirname } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { parseManifest } from "../dist/spec.js";
 
 const paths = process.argv.slice(2);
@@ -32,8 +32,9 @@ for (const p of paths) {
     failed++;
     continue;
   }
-  // dirName = 플러그인 디렉터리명(단일폴더 모델: ~/.soksak/plugins/<id>). parseManifest 가 id 검증 등에 사용.
-  const dirName = basename(dirname(p));
+  // dirName = 플러그인 디렉터리명(단일폴더 모델: ~/.soksak/plugins/<id>). parseManifest 가 id 검증에 사용.
+  // resolve 로 절대화 — pre-commit 의 `soksak-validate plugin.json`(상대) 도 repo 루트명을 dirName 으로 얻는다.
+  const dirName = basename(dirname(resolve(p)));
   const { validation } = parseManifest(raw, dirName);
   if (validation.ok) {
     console.log(`✓ ${p}`);
