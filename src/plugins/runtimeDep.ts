@@ -1,7 +1,7 @@
 // runtimeDep — 외부 런타임 의존성(4-tuple)의 *순수 결정* 로직. IO 없음(앱/디스크 비의존) → 단위검증.
 //   classifyHealth: 관찰(Observed) → Health 5상태. accept: Health → 수용 여부. nextAction: Health → 액션.
 // IO(observe = probe/디스크 관찰, reach = 설치/다운로드/정리)는 reconcile 엔진(M3, Rust 경계)이 실행한다.
-import { semverGte } from "./spec";
+import { semverGte, type LibraryDep, type ProgramPlatform } from "./spec";
 
 export type Health =
   | "ABSENT"
@@ -51,4 +51,28 @@ export function nextAction(health: Health): ReconcileAction {
     case "VERSION_MISMATCH":
       return "reach";
   }
+}
+
+// present 집합(observe 결과) → 미충족 dep 의 reach 명령 리스트(순수). M3 은 command/install(레거시)만.
+// vendor/fetch reach 는 M4(Rust download+sha256). reach.command 가 있으면 우선, 없으면 레거시 install.
+export function reconcileNeeds(
+  libs: readonly LibraryDep[],
+  presentBins: ReadonlySet<string>,
+  platform: ProgramPlatform,
+): string[] {
+  const out: string[] = [];
+  for (const lib of libs) {
+    const present = presentBins.has(lib.bin);
+    const health = classifyHealth(
+      { present, working: present, partial: false, broken: false },
+      lib.accept?.minVersion,
+    );
+    if (accept(health)) continue;
+    const cmd =
+      lib.reach && "command" in lib.reach
+        ? lib.reach.command[platform]
+        : lib.install[platform];
+    if (cmd) out.push(cmd);
+  }
+  return out;
 }

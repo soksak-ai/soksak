@@ -3,8 +3,10 @@ import {
   classifyHealth,
   accept,
   nextAction,
+  reconcileNeeds,
   type Observed,
 } from "./runtimeDep";
+import type { LibraryDep } from "./spec";
 
 // 관찰 → Health 5상태 분류(순수). "존재 == 작동" 폐기.
 describe("classifyHealth — 관찰 상태 분류", () => {
@@ -49,5 +51,35 @@ describe("nextAction — 상태별 reconcile 액션(순수)", () => {
     expect(nextAction("VERSION_MISMATCH")).toBe("reach");
     expect(nextAction("PARTIAL")).toBe("cleanup-then-reach");
     expect(nextAction("BROKEN")).toBe("cleanup-then-reach");
+  });
+});
+
+// reconcileNeeds — present 집합(observe 결과) → 미충족 dep 의 reach 명령(순수). M3: command/install.
+describe("reconcileNeeds — 미충족 dep 의 reach 명령", () => {
+  const lib = (extra: Partial<LibraryDep> = {}): LibraryDep => ({
+    name: "x",
+    bin: "x",
+    install: { darwin: "npm i -g x" },
+    ...extra,
+  });
+  it("미설치(present X) → install 명령", () => {
+    expect(reconcileNeeds([lib()], new Set(), "darwin")).toEqual(["npm i -g x"]);
+  });
+  it("설치됨(present O, minVersion 없음) → 빈 배열(noop)", () => {
+    expect(reconcileNeeds([lib()], new Set(["x"]), "darwin")).toEqual([]);
+  });
+  it("reach.command 가 레거시 install 보다 우선", () => {
+    expect(
+      reconcileNeeds(
+        [lib({ reach: { command: { darwin: "brew install x" } } })],
+        new Set(),
+        "darwin",
+      ),
+    ).toEqual(["brew install x"]);
+  });
+  it("이 플랫폼 명령 없으면 제외", () => {
+    expect(
+      reconcileNeeds([lib({ install: { linux: "apt install x" } })], new Set(), "darwin"),
+    ).toEqual([]);
   });
 });

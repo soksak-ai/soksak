@@ -41,7 +41,8 @@ function pluginDepNodes(plugins: Record<string, PluginRuntime>): DepNode[] {
     dependencies: p.manifest.dependencies ?? {},
   }));
 }
-import { installCommandFor, libraryInstallFor } from "../plugins/programRegistry";
+import { installCommandFor, detectPlatform } from "../plugins/programRegistry";
+import { reconcileNeeds } from "../plugins/runtimeDep";
 
 export interface PluginRuntime {
   manifest: PluginManifest;
@@ -227,27 +228,27 @@ export function transitiveLibraries(
 // 라이브러리 종속성 강제 설치 — 활성화 시점에 전이 libraries 를 보장한다. 로그인 셸 PATH 로
 // 확인(shell_which)하고, 미설치분을 한 터미널에서 가시 설치한다(은폐 금지 — 동의 화면에
 // 고지된 그 명령 그대로). 실패는 콘솔로만(§0-4 — 활성화 자체를 막지 않는다).
-async function ensureLibraries(
+// 라이브러리 종속성 reconcile — 활성화 시점에 전이 libraries 를 보장한다(은폐 0, §0-4 비차단).
+// observe(shell_which 로 present 수집) → 순수 결정(reconcileNeeds: classifyHealth/accept) → reach(미충족 install).
+// M3: command/install(레거시). vendor/fetch reach·정밀 observe(partial/broken/version)는 M4(Rust runtime_dep.rs).
+// spawnInstall 은 파라미터 — useSessions 내부 강탈 금지(테스트 가능 구조, J4).
+async function reconcileDependencies(
   manifest: PluginManifest,
   plugins: Record<string, PluginRuntime>,
+  spawnInstall: (command: string) => void,
 ): Promise<void> {
   const libs = transitiveLibraries(manifest, plugins);
-  const toInstall: string[] = [];
+  const present = new Set<string>();
   for (const lib of libs) {
-    const install = libraryInstallFor(lib);
-    if (!install) continue; // 이 플랫폼 설치 명령 미제공
     try {
-      const found = await invoke<boolean>("shell_which", { bin: lib.bin });
-      if (!found) toInstall.push(install);
+      if (await invoke<boolean>("shell_which", { bin: lib.bin })) present.add(lib.bin);
     } catch (e) {
-      console.error(`라이브러리 ensure 검사 실패(${manifest.id}/${lib.bin}):`, e);
+      console.error(`라이브러리 observe 실패(${manifest.id}/${lib.bin}):`, e);
     }
   }
-  if (toInstall.length === 0) return;
-  const s = useSessions.getState();
-  s.addViewToGroup(s.activeId, "terminal", undefined, {
-    command: `${toInstall.join(" && ")}; echo "[soksak] 라이브러리 종속성 설치 종료"`,
-  });
+  const needs = reconcileNeeds(libs, present, detectPlatform());
+  if (needs.length === 0) return;
+  spawnInstall(`${needs.join(" && ")}; echo "[soksak] 라이브러리 종속성 설치 종료"`);
 }
 
 function basename(path: string): string {
@@ -578,7 +579,10 @@ export const usePlugins = create<PluginsState>((set, get) => {
         }
         // 프로그램·라이브러리 ensure(§2.6) — 활성화 시점, 동의 화면에서 고지된 명령 그대로.
         void ensureProgramBinaries(cp.manifest);
-        void ensureLibraries(cp.manifest, get().plugins);
+        void reconcileDependencies(cp.manifest, get().plugins, (command) => {
+          const s = useSessions.getState();
+          s.addViewToGroup(s.activeId, "terminal", undefined, { command });
+        });
       }
       persist();
       return ok({ id, status: "enabled" });
