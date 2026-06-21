@@ -1,0 +1,16 @@
+{
+  "name": "@soksak/plugin-spec",
+  "version": "0.1.0",
+  "description": "soksak plugin manifest spec and headless parseManifest validator (single source of truth).",
+  "type": "module",
+  "exports": {
+    ".": "./src/spec.ts"
+  },
+  "bin": {
+    "soksak-validate": "./bin/validate.mjs"
+  },
+  "files": [
+    "src",
+    "bin"
+  ]
+}

@@ -9,12 +9,12 @@
 //     외부 import 0)라 node strip-types(v23.6+)로 의존성 없이 로드된다.
 //   이것이 vsce(editor)·검증 봇(notes-app)의 soksak 등가다.
 //
-// 사용: node scripts/spec/validate-manifest.mjs <plugin.json 경로...>
+// 사용: npx soksak-validate <plugin.json>...  (코어에선 node packages/plugin-spec/bin/validate.mjs)
 // 종료코드: 0 = 전부 통과, 1 = 하나라도 위반, 2 = 사용법 오류.
 
 import { readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
-import { parseManifest } from "../../src/plugins/spec.ts";
+import { parseManifest } from "../src/spec.ts";
 
 const paths = process.argv.slice(2);
 if (paths.length === 0) {
