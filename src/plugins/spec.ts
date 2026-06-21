@@ -19,9 +19,9 @@
 //    폴더 밖 경로 적재(danger:"inject"). 어느 쪽도 원격이 만들 수 없으므로 게이트는 로컬에 있다.
 // 6. 뷰 구현과 배치는 직교한다. 뷰 등록 API 는 registerView 하나이고, 우측/좌측
 //    사이드바·콘텐츠 영역 배치는 동일한 provider 를 소비한다.
-// 7. 에디터 확장은 호스트의 CodeMirror 모듈만 사용한다. @codemirror/* 를 플러그인이
-//    자체 번들하면 인스턴스 이중화로 동작이 깨진다 — api.editor.modules 로 호스트
-//    모듈을 제공받아 사용한다(번들 금지).
+// 7. 콘텐츠 렌더 엔진은 코어가 소유하지 않는다(엔진 중립 A13). 에디터(CodeMirror/Monaco)·
+//    터미널(xterm)·브라우저(webview)는 교체 가능한 플러그인 선택이다. 코어는 raw 원시
+//    (파일 IO·PTY·webview 호스팅·content slot)만 노출하고, 엔진-특정 capability 는 두지 않는다.
 // 8. 기준 불변. 테스트/검증 기준 미달이면 코드를 고친다. 기준 자체가 잘못이면
 //    기준을 낮추는 대신 열린 질문으로 기록해 정정한다.
 //
@@ -58,7 +58,6 @@ export type PluginPermission =
   | "commands:destructive" // danger:"destructive" 명령 실행(닫기·제거)
   | "commands:inject" // danger:"inject" 명령 실행(term.send/exec, browser.eval …)
   | "process" // 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합)
-  | "editor" // CM6 확장/언어 매핑/포매터 + 활성 버퍼 읽기/쓰기
   | "storage" // 전용 저장소(~/.soksak/plugins-data/<id>/)
   | "data" // 범용 임베디드 DB(app.data — 네임스페이스 격리·CJK 검색·전 창 watch)
   | "secrets" // 암호화 볼트(app.secrets — API 키/토큰 봉인 저장, 평문 readback 불가·주입 전용)
@@ -84,7 +83,6 @@ export const PERMISSIONS: readonly PluginPermission[] = [
   "commands:destructive",
   "commands:inject",
   "process",
-  "editor",
   "storage",
   "data",
   "secrets",
@@ -155,10 +153,6 @@ export const PERMISSION_INFO: Record<
     detail:
       "임의 외부 프로그램을 서브프로세스로 띄우고 입출력(stdin/stdout/stderr)을 주고받습니다(가장 강력 — 사실상 임의 코드 실행). LSP·MCP·ACP 등 외부 도구 통합용.",
     caution: true,
-  },
-  editor: {
-    label: "에디터 확장",
-    detail: "에디터 확장·문법 매핑·포매터를 등록하고 열린 파일 내용을 읽고 바꿉니다.",
   },
   storage: {
     label: "전용 저장소",
@@ -326,17 +320,6 @@ export interface ContributedCommand {
   danger?: "destructive" | "inject";
 }
 
-export interface ContributedFormatter {
-  id: string;
-  title: LocalizedText;
-  languages: string[]; // 확장자 목록(점 없이): ["json","ts",…]
-}
-
-export interface ContributedLanguage {
-  ext: string; // 확장자(점 없이)
-  lang: string; // CM6 언어 키(@uiw/codemirror-extensions-langs)
-}
-
 export interface ContributedIconSet {
   id: string; // 플러그인 내 고유. 전역 키는 "<pluginId>.<id>"
   title: LocalizedText; // 설정 드롭다운 표시 이름
@@ -479,8 +462,6 @@ export interface PluginManifest {
   contributes: {
     views: ContributedView[]; // "ui" 권한 필수
     commands: ContributedCommand[]; // "commands" 권한 필수
-    formatters: ContributedFormatter[]; // "editor" 권한 필수
-    languages: ContributedLanguage[]; // "editor" 권한 필수
     iconSets: ContributedIconSet[]; // "ui" 권한 필수
     fileViewers: ContributedFileViewer[]; // "ui" 권한 필수 — 확장자별 콘텐츠 뷰어(A13 엔진 중립)
     programs: ContributedProgram[]; // "programs" 권한 필수
@@ -1000,8 +981,6 @@ export function parseManifest(
   // contributes — 권한-기여 정합성: 기여가 요구하는 권한이 선언되어야 한다.
   let views: ContributedView[] = [];
   let commands: ContributedCommand[] = [];
-  let formatters: ContributedFormatter[] = [];
-  let languages: ContributedLanguage[] = [];
   let iconSets: ContributedIconSet[] = [];
   let fileViewers: ContributedFileViewer[] = [];
   let nodes: ContributedNode[] = [];
@@ -1015,7 +994,7 @@ export function parseManifest(
       const c = raw.contributes;
       checkKnownKeys(
         c,
-        ["views", "commands", "formatters", "languages", "iconSets", "fileViewers", "nodes", "programs", "events", "skill"],
+        ["views", "commands", "iconSets", "fileViewers", "nodes", "programs", "events", "skill"],
         "contributes",
         errors,
       );
@@ -1102,55 +1081,6 @@ export function parseManifest(
       checkDuplicates(commands.map((v) => v.name), "contributes.commands.name", errors);
       if (commands.length > 0 && !has("commands")) {
         errors.push('contributes.commands: "commands" 권한 선언 필요');
-      }
-
-      formatters = parseEntries(c.formatters, {
-        label: "contributes.formatters",
-        required: ["id", "title", "languages"],
-        parse: (v, errs) => {
-          if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
-            errs.push("contributes.formatters: id 는 ^[a-z0-9][a-z0-9-]*$");
-            return null;
-          }
-          if (!validateLocalizedText(v.title, "contributes.formatters.title", errs))
-            return null;
-          if (
-            !Array.isArray(v.languages) ||
-            v.languages.length === 0 ||
-            v.languages.some((l) => typeof l !== "string" || !EXT_RE.test(l))
-          ) {
-            errs.push(
-              `contributes.formatters["${v.id}"].languages: 확장자(점 없이) 비어있지 않은 배열`,
-            );
-            return null;
-          }
-          return {
-            id: v.id.trim(),
-            title: normalizeText(v.title as LocalizedText),
-            languages: v.languages as string[],
-          };
-        },
-      }, errors);
-      checkDuplicates(formatters.map((v) => v.id), "contributes.formatters.id", errors);
-      if (formatters.length > 0 && !has("editor")) {
-        errors.push('contributes.formatters: "editor" 권한 선언 필요');
-      }
-
-      languages = parseEntries(c.languages, {
-        label: "contributes.languages",
-        required: ["ext", "lang"],
-        parse: (v, errs) => {
-          if (!isNonEmptyString(v.ext) || !EXT_RE.test(v.ext)) {
-            errs.push("contributes.languages: ext 는 확장자(점 없이, 소문자/숫자)");
-            return null;
-          }
-          if (!isNonEmptyString(v.lang)) return null;
-          return { ext: v.ext.trim(), lang: (v.lang as string).trim() };
-        },
-      }, errors);
-      checkDuplicates(languages.map((v) => v.ext), "contributes.languages.ext", errors);
-      if (languages.length > 0 && !has("editor")) {
-        errors.push('contributes.languages: "editor" 권한 선언 필요');
       }
 
       iconSets = parseEntries(c.iconSets, {
@@ -1444,7 +1374,7 @@ export function parseManifest(
       ...(libraries.length > 0 ? { libraries } : {}),
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
-      contributes: { views, commands, formatters, languages, iconSets, fileViewers, nodes, programs, events, ...(skill ? { skill } : {}) },
+      contributes: { views, commands, iconSets, fileViewers, nodes, programs, events, ...(skill ? { skill } : {}) },
     },
     validation: { ok: true, errors, warnings },
   };

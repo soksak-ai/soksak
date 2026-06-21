@@ -237,8 +237,7 @@ describe("commands.register — 매니페스트 danger 권위(U4)", () => {
         contributes: {
           views: [],
           commands: [{ name: "wipe", title: "지우기", danger: "destructive" }],
-          formatters: [],
-          languages: [],
+
         },
       }),
       "/d",
@@ -262,8 +261,7 @@ describe("commands.register — 매니페스트 danger 권위(U4)", () => {
         contributes: {
           views: [],
           commands: [{ name: "x", title: "엑스", danger: "destructive" }],
-          formatters: [],
-          languages: [],
+
         },
       }),
       "/d",
@@ -287,8 +285,7 @@ describe("commands.register — 매니페스트 danger 권위(U4)", () => {
         contributes: {
           views: [],
           commands: [{ name: "y", title: "와이" }],
-          formatters: [],
-          languages: [],
+
         },
       }),
       "/d",

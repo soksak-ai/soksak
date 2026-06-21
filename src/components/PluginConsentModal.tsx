@@ -216,18 +216,6 @@ export function PluginConsentModal({
                 text: `${t("plugin.consent.kind.command")} — ${pluginCommandName(m.id, cmd.name)}: ${localize(cmd.title)}`,
               });
             }
-            for (const f of c.formatters) {
-              rows.push({
-                key: `fmt:${f.id}`,
-                text: `${t("plugin.consent.kind.formatter")} — ${localize(f.title)} (.${f.languages.join(" .")})`,
-              });
-            }
-            for (const l of c.languages) {
-              rows.push({
-                key: `lang:${l.ext}`,
-                text: `${t("plugin.consent.kind.language")} — .${l.ext} → ${l.lang}`,
-              });
-            }
             for (const s of c.iconSets) {
               rows.push({
                 key: `icons:${s.id}`,

@@ -423,18 +423,6 @@ function PluginManagerPanel() {
                 text: `${t("plugin.contrib.command")} ${c.commands.length}`,
               });
             }
-            for (const f of c.formatters) {
-              chips.push({
-                key: `fmt:${f.id}`,
-                text: `${t("plugin.contrib.formatter")} ${localize(f.title)}`,
-              });
-            }
-            if (c.languages.length > 0) {
-              chips.push({
-                key: "langs",
-                text: `${t("plugin.contrib.language")} ${c.languages.length}`,
-              });
-            }
             for (const s of c.iconSets) {
               chips.push({
                 key: `icons:${s.id}`,

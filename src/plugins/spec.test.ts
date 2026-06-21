@@ -37,7 +37,7 @@ describe("parseManifest — 수용", () => {
       id: "demo",
       entry: "main.js",
       permissions: [],
-      contributes: { views: [], commands: [], formatters: [], languages: [] },
+      contributes: { views: [], commands: [] },
     });
   });
 
@@ -75,12 +75,10 @@ describe("parseManifest — 수용", () => {
         author: "max",
         entry: "dist/main.js",
         minAppVersion: "0.1.0",
-        permissions: ["ui", "commands", "editor"],
+        permissions: ["ui", "commands"],
         contributes: {
           views: [{ id: "v", title: "뷰", icon: "V", defaultPlacement: "sidebar-right" }],
           commands: [{ name: "do.it", title: "실행" }],
-          formatters: [{ id: "f", title: "포맷", languages: ["json"] }],
-          languages: [{ ext: "mjs", lang: "javascript" }],
         },
       }),
       "demo",
@@ -119,8 +117,6 @@ describe("parseManifest — 수용", () => {
             { name: "send", title: "보내기", danger: "inject" },
             { name: "list", title: "목록" },
           ],
-          formatters: [],
-          languages: [],
         },
       }),
       "demo",
@@ -141,8 +137,6 @@ describe("parseManifest — 수용", () => {
         contributes: {
           views: [],
           commands: [{ name: "x", title: "엑스", danger: "nuke" }],
-          formatters: [],
-          languages: [],
         },
       }),
     );
@@ -317,17 +311,6 @@ describe("parseManifest — 권한-기여 정합성", () => {
     expect(errors.some((e) => e.includes('"commands"'))).toBe(true);
   });
 
-  it('formatters/languages 는 "editor" 권한 필요', () => {
-    const errors = errorsOf(
-      base({
-        contributes: {
-          formatters: [{ id: "f", title: "포맷", languages: ["json"] }],
-          languages: [{ ext: "mjs", lang: "javascript" }],
-        },
-      }),
-    );
-    expect(errors.filter((e) => e.includes('"editor"'))).toHaveLength(2);
-  });
 });
 
 describe("parseManifest — contributes.events(발행 토픽, 정보용)", () => {
@@ -424,32 +407,6 @@ describe("parseManifest — 기여 항목 검증", () => {
     }
   });
 
-  it("포매터 languages 빈 배열/점 포함 확장자 → 거부", () => {
-    for (const languages of [[], [".json"]]) {
-      const errors = errorsOf(
-        base({
-          permissions: ["editor"],
-          contributes: { formatters: [{ id: "f", title: "t", languages }] },
-        }),
-      );
-      expect(errors.some((e) => e.includes("languages"))).toBe(true);
-    }
-  });
-
-  it("languages ext 중복 → 거부", () => {
-    const errors = errorsOf(
-      base({
-        permissions: ["editor"],
-        contributes: {
-          languages: [
-            { ext: "mjs", lang: "javascript" },
-            { ext: "mjs", lang: "typescript" },
-          ],
-        },
-      }),
-    );
-    expect(errors.some((e) => e.includes("중복"))).toBe(true);
-  });
 });
 
 describe("parseManifest — all-or-nothing(§0-3)", () => {

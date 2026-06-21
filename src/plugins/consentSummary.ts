@@ -34,8 +34,6 @@ export interface ConsentSummary {
     views: number;
     commands: number;
     programs: number;
-    formatters: number;
-    languages: number;
     iconSets: number;
   };
   // 노출 DOM 노드 종류(매니페스트 contributes.nodes) — 사용자가 무엇이 외부 클릭 가능한지 보고 동의.
@@ -103,8 +101,6 @@ export function consentSummary(
       views: c.views.length,
       commands: c.commands.length,
       programs: c.programs.length,
-      formatters: c.formatters.length,
-      languages: c.languages.length,
       iconSets: c.iconSets.length,
     },
     exposedNodes: c.nodes.map((n) => ({
