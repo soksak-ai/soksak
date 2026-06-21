@@ -113,13 +113,14 @@ test: ## Rust 단위 테스트
 test-front: ## 프론트엔드 단위 테스트(vitest)
 	$(PNPM) test
 
-spec-gate: ## 헤드리스 스키마 게이트(node strip-types — spec.ts 순수성 + parseManifest 회귀, 앱 없이)
-	@node --experimental-strip-types packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/valid/plugin.json
-	@if node --experimental-strip-types packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/invalid/plugin.json >/dev/null 2>&1; then \
+spec-gate: ## 헤드리스 스키마 게이트(발행물 빌드 + dist 로 parseManifest 회귀, 앱 없이)
+	@npx tsc -p packages/plugin-spec/tsconfig.json
+	@node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/valid/plugin.json
+	@if node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/invalid/plugin.json >/dev/null 2>&1; then \
 		echo "spec-gate: 무효 매니페스트가 통과됨(게이트 깨짐)"; exit 1; \
-	else echo "✓ spec-gate(무효 거부 확인)"; fi
+	else echo "✓ spec-gate(빌드+무효 거부 확인)"; fi
 
-verify: typecheck check test test-front spec-gate ## 타입체크 + Rust/프론트 테스트 + 헤드리스 게이트(커밋 전 검증)
+verify: spec-gate typecheck check test test-front ## 헤드리스 게이트(spec 빌드) + 타입체크 + Rust/프론트 테스트(커밋 전 검증)
 
 e2e-resize: ## 리사이즈 E2E(기계 측정 — blank/프롬프트/TUI). macOS+앱 실행+동의 필요
 	scripts/e2e/resize.sh --identity $${IDENTITY:-dev}

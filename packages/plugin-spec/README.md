@@ -1,42 +1,39 @@
 # @soksak/plugin-spec
 
-Single source of truth for the soksak plugin manifest spec, plus a headless `parseManifest`
-validator. The soksak core imports the same `parseManifest`; plugin authors use the CLI to
-gate their manifest before publish — no app required.
+The soksak plugin manifest spec and its `parseManifest` validator — the single source of
+truth shared by the soksak runtime and by plugin authors. Validate a `plugin.json` before
+you ship, with no app and no build step.
 
 ## Requirements
 
-Node.js >= 22.18 — the validator loads the pure-TypeScript `spec.ts` via native type
-stripping (no build step, no dependencies).
+Node.js >= 22.18 — the validator runs the spec as pure TypeScript via native type stripping
+(no build, no dependencies).
 
-## Validate a manifest
+## CLI
 
 ```bash
 npx soksak-validate plugin.json
-# exit 0 = pass, 1 = rejected (reasons printed), 2 = usage error
 ```
 
-Wire it into your plugin repo's pre-commit / CI:
+Exit codes: `0` pass · `1` rejected (reasons printed) · `2` usage error. Wire it into your
+plugin repo so a broken manifest fails before publish:
 
 ```json
 { "scripts": { "validate": "soksak-validate plugin.json" } }
 ```
 
-## Programmatic use
+## Programmatic
 
 ```ts
 import { parseManifest } from "@soksak/plugin-spec";
 
-const { validation } = parseManifest(raw, dirName);
-if (!validation.ok) console.error(validation.errors);
+const { manifest, validation } = parseManifest(raw, dirName);
+if (!validation.ok) throw new Error(validation.errors.join("\n"));
 ```
 
-## Two conformance surfaces
-
-This package is the **headless schema gate** — it proves manifest *shape* without an app.
-Runtime conformance (declared ≡ actual wiring across commands/views/fileViewers/iconSets and
-DOM nodes) needs a running app via `sok plugin.conformance`. The schema gate does not prove
-wiring; it proves shape.
+`parseManifest(raw, dirName)` returns `{ manifest, validation }`, where `validation` is
+`{ ok, errors, warnings }`. `dirName` is the plugin's directory name — the spec requires the
+manifest `id` to equal it. Validation is all-or-nothing: `manifest` is `null` on rejection.
 
 ## License
 

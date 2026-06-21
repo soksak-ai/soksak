@@ -11,20 +11,27 @@
     "directory": "packages/plugin-spec"
   },
   "engines": {
-    "node": ">=22.18.0"
+    "node": ">=18"
   },
   "exports": {
-    ".": "./src/spec.ts"
+    ".": {
+      "types": "./dist/spec.d.ts",
+      "default": "./dist/spec.js"
+    }
   },
   "bin": {
     "soksak-validate": "./bin/validate.mjs"
   },
   "files": [
-    "src",
+    "dist",
     "bin",
     "LICENSE",
     "README.md"
   ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
   "publishConfig": {
     "access": "public"
   }
