@@ -2,7 +2,17 @@
   "name": "@soksak/plugin-spec",
   "version": "0.1.0",
   "description": "soksak plugin manifest spec and headless parseManifest validator (single source of truth).",
+  "license": "MIT",
+  "author": "soksak-ai",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soksak-ai/soksak.git",
+    "directory": "packages/plugin-spec"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "exports": {
     ".": "./src/spec.ts"
   },
@@ -11,6 +21,11 @@
   },
   "files": [
     "src",
-    "bin"
-  ]
+    "bin",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
