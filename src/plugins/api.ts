@@ -19,6 +19,7 @@ import {
   type Disposable,
   type PluginEventMap,
 } from "./hooks";
+import { gateContribution } from "./conformance";
 import {
   useViewRegistry,
   type PluginViewProvider,
@@ -715,14 +716,13 @@ export function buildPluginApi(
       ? {
           execute: executeGated,
           register: (name, spec) => {
-            const declared = manifest.contributes.commands.find(
-              (c) => c.name === name,
-            );
-            if (!declared) {
-              throw new Error(
-                `매니페스트 contributes.commands 에 선언되지 않은 명령: ${name}`,
-              );
-            }
+            const declared = gateContribution({
+              contributesKey: "commands",
+              noun: "명령",
+              id: name,
+              declared: manifest.contributes.commands,
+              idOf: (c) => c.name,
+            });
             // 매니페스트 선언이 danger 의 권위(설치·동의 시점 가시성). 런타임 spec.danger 와
             // 매니페스트가 둘 다 있고 다르면 모순 → 거부. 매니페스트가 권위지만, 런타임만 danger 를
             // 선언한 경우(레거시)는 게이트 보존을 위해 런타임 값을 쓰되 매니페스트 선언을 촉구(warn).
@@ -762,28 +762,26 @@ export function buildPluginApi(
     ui: has("ui") || has("ui:statusbar") || has("ui:titlebar") || has("ui:overlay:screen") || has("ui:overlay:pane")
       ? {
           registerView: (viewId, provider) => {
-            const decl = manifest.contributes.views.find(
-              (v) => v.id === viewId,
-            );
-            if (!decl) {
-              throw new Error(
-                `매니페스트 contributes.views 에 선언되지 않은 뷰: ${viewId}`,
-              );
-            }
+            const decl = gateContribution({
+              contributesKey: "views",
+              noun: "뷰",
+              id: viewId,
+              declared: manifest.contributes.views,
+              idOf: (v) => v.id,
+            });
             const remove = useViewRegistry
               .getState()
               .register(id, decl, provider);
             return tracker.wrap(remove);
           },
           registerFileViewer: (viewerId, provider) => {
-            const decl = manifest.contributes.fileViewers.find(
-              (f) => f.id === viewerId,
-            );
-            if (!decl) {
-              throw new Error(
-                `매니페스트 contributes.fileViewers 에 선언되지 않은 파일 뷰어: ${viewerId}`,
-              );
-            }
+            const decl = gateContribution({
+              contributesKey: "fileViewers",
+              noun: "파일 뷰어",
+              id: viewerId,
+              declared: manifest.contributes.fileViewers,
+              idOf: (f) => f.id,
+            });
             const remove = useFileViewerRegistry
               .getState()
               .register(id, decl, provider);
@@ -802,14 +800,13 @@ export function buildPluginApi(
           // 아이콘 셋 등록 — 선언(contributes.iconSets) 외 거부 + 데이터 전수 검증
           // (registerView 와 동일 패턴). 전역 셋 id = "<pluginId>.<setId>".
           registerIconSet: (setId, data) => {
-            const decl = manifest.contributes.iconSets.find(
-              (s) => s.id === setId,
-            );
-            if (!decl) {
-              throw new Error(
-                `매니페스트 contributes.iconSets 에 선언되지 않은 셋: ${setId}`,
-              );
-            }
+            const decl = gateContribution({
+              contributesKey: "iconSets",
+              noun: "셋",
+              id: setId,
+              declared: manifest.contributes.iconSets,
+              idOf: (s) => s.id,
+            });
             const invalid = validateIconSetData(data);
             if (invalid) {
               throw new Error(`아이콘 셋 데이터 불량(${setId}): ${invalid}`);
