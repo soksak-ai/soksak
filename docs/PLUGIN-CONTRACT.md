@@ -60,16 +60,16 @@ hand.
 
 The Doctor checks the *contract* (theme/permissions/naming). The *manifest schema* — every field of
 `plugin.json` — is validated by `@soksak-ai/plugin-spec`, the same `parseManifest` the core runs. One
-authority, three gates; no gate reimplements the schema:
+authority, **enforced only at boundaries the core owns** — independent of the plugin's git/npm/build
+setup (many plugins are a single main.js in a folder, with no git and no npm):
 
-- **Runtime** (install/load) — the core runs `parseManifest`; a malformed manifest is rejected. Absolute.
-- **Pre-publish** (author) — each plugin's `.githooks/pre-commit` runs `soksak-validate` on every commit.
-- **Enrollment** (registry) — `plugin.install` clones then re-runs `parseManifest` (= runtime).
+- **Runtime** (install/load) — the core runs `parseManifest`; a malformed manifest is rejected.
+  Absolute, unbypassable.
+- **Enrollment** (registry) — only manifests that pass `parseManifest` enter the catalog.
 
-The gate is wired automatically from one definition (`scripts/plugins/gate/`): `plugin.dev.new`
-scaffolds it into new plugins (Rust `include_str!` of that definition), and
-`scripts/plugins/apply-gate.mjs` applies the identical set to existing repos (merging, not clobbering,
-their `package.json`). Neither reimplements the schema — they only wire the call to the one package.
+An author may run the same check before publishing — `npx soksak-validate plugin.json`, one line, zero
+wiring. Whether to put that in a git hook or CI is the *author's* choice; the core never forces git,
+npm, or a build on a plugin.
 
 ## 3. Conformance: declared ≡ actual
 

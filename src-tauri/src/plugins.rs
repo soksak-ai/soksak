@@ -390,33 +390,6 @@ fn plugin_update_in(base: &Path, id: &str) -> Result<PluginInstallResult, String
 // 단일 폴더 dev 스캐폴드 — ~/.soksak/plugins/<id>/ 에 최소 plugin.json·main.js·.soksak.json
 // (version="dev") 생성 + git init. 폴더가 곧 작업물(외부 경로·dev.load 불필요). .soksak.json 은
 // 머신-로컬 설치/dev 상태라 .gitignore(플러그인 repo 에 안 들어간다).
-// 게이트 정의 단일진실 — scripts/plugins/apply-gate.mjs 와 같은 파일을 임베드(정의 재구현 0).
-const GATE_PKG_TMPL: &str = include_str!("../../scripts/plugins/gate/package.json.tmpl");
-const GATE_PRECOMMIT: &str = include_str!("../../scripts/plugins/gate/pre-commit");
-
-// 검증 게이트(단일진실 @soksak-ai/plugin-spec) 배선. 신규는 package.json 이 없으므로 템플릿(id 치환)
-// 그대로 + .githooks/pre-commit(실행권한) + hooksPath 즉시 활성. 기존 repo 병합은 apply-gate.mjs 담당.
-fn apply_gate(dir: &Path, id: &str) -> Result<(), String> {
-    std::fs::write(dir.join("package.json"), GATE_PKG_TMPL.replace("__ID__", id))
-        .map_err(|e| e.to_string())?;
-    let hooks = dir.join(".githooks");
-    std::fs::create_dir_all(&hooks).map_err(|e| e.to_string())?;
-    let hook = hooks.join("pre-commit");
-    std::fs::write(&hook, GATE_PRECOMMIT).map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| e.to_string())?;
-    }
-    let _ = git_run(
-        std::process::Command::new("git")
-            .current_dir(dir)
-            .args(["config", "core.hooksPath", ".githooks"]),
-    );
-    Ok(())
-}
-
 fn plugin_dev_new_in(base: &Path, id: &str) -> Result<PluginInstallResult, String> {
     sanitize_id(id)?;
     let dir = base.join(id);
@@ -436,7 +409,6 @@ fn plugin_dev_new_in(base: &Path, id: &str) -> Result<PluginInstallResult, Strin
     std::fs::write(dir.join(".gitignore"), ".soksak.json\nnode_modules/\n").map_err(|e| e.to_string())?;
     write_state(&dir, "dev", "", "main");
     let _ = git_run(std::process::Command::new("git").args(["init", "-q"]).arg(&dir));
-    apply_gate(&dir, id)?; // 검증 게이트(단일진실) — 신규 플러그인이 발행 전 셀프검증을 자동 탑재
     Ok(PluginInstallResult {
         dir: dir.to_string_lossy().to_string(),
         dir_name: id.to_string(),
@@ -720,11 +692,6 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(dir.join(".soksak.json")).unwrap()).unwrap();
         assert_eq!(state["version"], "dev");
         assert!(r.manifest.contains("my-plugin"));
-        // 검증 게이트 자동 탑재(단일진실 @soksak-ai/plugin-spec).
-        let pkg = std::fs::read_to_string(dir.join("package.json")).unwrap();
-        assert!(pkg.contains("soksak-validate") && pkg.contains("@soksak-ai/plugin-spec"));
-        assert!(pkg.contains("my-plugin")); // __ID__ 치환
-        assert!(dir.join(".githooks/pre-commit").is_file());
         // 이미 존재하면 거부.
         assert!(plugin_dev_new_in(&base, "my-plugin").is_err());
         let _ = std::fs::remove_dir_all(&root);
