@@ -182,11 +182,13 @@ fn apply_headers(
     rb
 }
 
-// ── 임퍼소네이션 폴백(wreq/BoringSSL) — native-tls 가 403 인 fingerprint 봇차단 CDN(Cloudflare/Akamai)용 ──
-// Chrome 의 TLS(JA3)+HTTP/2 핸드셰이크를 정밀 위조해 통과(라이브 증명: native-tls 403, wreq 200). 모든 OS
-// 동일 핑거프린트. wreq 는 async 전용 → 공용 tokio 런타임으로 sync 프록시 스레드에서 block_on. 둘 다 lazy
-// (첫 403 때 생성) + OnceLock 재사용 — 일반 CDN(403 아님)은 wreq/런타임 비용 0. UA·핑거프린트는 emulation
-// 이 일관되게 채우므로 UA 를 덮어쓰지 않는다.
+// ── 임퍼소네이션 1차(wreq/BoringSSL) — fingerprint 봇차단 CDN(Cloudflare/Akamai)이 TLS(JA3)+HTTP/2 로 ──
+// 비-브라우저를 403. wreq 가 Chrome 핸드셰이크를 정밀 위조해 통과(라이브 증명: native-tls 403, wreq 200) —
+// 차단 CDN + 일반 CDN 모두 1요청에 통과한다. 그래서 wreq 를 1차로 둔다: 차단 사이트가 세그먼트마다 헛
+// native 403 왕복을 치지 않게(프록시를 쓰는 사이트가 곧 차단 사이트). native-tls 는 wreq 가 연결 자체를
+// 실패하는 드문 경우(BoringSSL 이 못 무는 TLS 설정)의 폴백 — wreq 가 403/404 같은 상태코드를 받으면 native
+// 는 더 막히므로 폴백 안 한다(연결 실패일 때만). wreq 는 모든 OS 동일 핑거프린트 + async 전용 → 공용 tokio
+// 런타임(OnceLock)으로 sync 프록시 스레드에서 block_on. UA·핑거프린트는 emulation 이 일관 주입(UA 안 덮음).
 static ASYNC_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static WREQ_CLIENT: OnceLock<wreq::Client> = OnceLock::new();
 
@@ -243,7 +245,59 @@ fn wreq_fetch(
     })
 }
 
-// 바이너리 패스스루: Range 전달 → 업스트림 200/206 + content-* 중계 → 바디 스트리밍(io::copy).
+// wreq 스트리밍 결과. SendFailed = send 실패(아직 아무것도 안 씀 → native 폴백 가능). Io = 헤더/바디 쓰는 중
+// 실패(이미 부분 전송됨 → 폴백 불가, 그대로 에러).
+enum WreqStreamErr {
+    SendFailed,
+    Io(std::io::Error),
+}
+
+// 임퍼소네이션 스트리밍 — send 성공 시 status+content-* 헤더를 쓰고 바디를 청크 스트리밍(전체 버퍼링 0,
+// native 의 io::copy 동급). Range 도 전달. 큰 mp4(Range 0-)도 메모리에 안 쌓는다.
+fn wreq_stream_to(
+    writer: &mut TcpStream,
+    url: &str,
+    referer: Option<&str>,
+    range: Option<&str>,
+    head: bool,
+) -> Result<(), WreqStreamErr> {
+    let rt = wreq_rt().ok_or(WreqStreamErr::SendFailed)?;
+    let client = wreq_client().ok_or(WreqStreamErr::SendFailed)?;
+    rt.block_on(async {
+        let mut rb = client.get(url);
+        if let Some(r) = referer {
+            rb = rb.header("referer", r);
+            if let Some(o) = origin_of(r) {
+                rb = rb.header("origin", o);
+            }
+        }
+        if let Some(rg) = range {
+            rb = rb.header("range", rg);
+        }
+        let resp = rb.send().await.map_err(|_| WreqStreamErr::SendFailed)?;
+        let status = resp.status().as_u16();
+        let mut out = format!("HTTP/1.1 {status} {}\r\n", reason(status));
+        for h in ["content-type", "content-length", "content-range", "accept-ranges"] {
+            if let Some(v) = resp.headers().get(h).and_then(|v| v.to_str().ok()) {
+                out.push_str(&format!("{h}: {v}\r\n"));
+            }
+        }
+        out.push_str(CORS);
+        out.push_str("Connection: close\r\n\r\n");
+        writer.write_all(out.as_bytes()).map_err(WreqStreamErr::Io)?;
+        if !head {
+            use futures_util::StreamExt;
+            let mut stream = resp.bytes_stream();
+            while let Some(chunk) = stream.next().await {
+                let chunk = chunk.map_err(|e| WreqStreamErr::Io(std::io::Error::other(e)))?;
+                writer.write_all(&chunk).map_err(WreqStreamErr::Io)?;
+            }
+        }
+        writer.flush().map_err(WreqStreamErr::Io)
+    })
+}
+
+// 바이너리 패스스루: wreq 1차(청크 스트리밍) → 연결 실패 시 native-tls(io::copy) 폴백. Range 전달.
 fn serve_stream(
     writer: &mut TcpStream,
     url: &str,
@@ -252,6 +306,13 @@ fn serve_stream(
     range: Option<&str>,
     head: bool,
 ) -> std::io::Result<()> {
+    // wreq(임퍼소네이션) 1차 — 차단 + 일반 CDN 모두 1요청 통과. 바디는 청크 스트리밍(버퍼링 0).
+    match wreq_stream_to(writer, url, referer, range, head) {
+        Ok(()) => return Ok(()),
+        Err(WreqStreamErr::Io(e)) => return Err(e), // 이미 부분 전송 — 폴백 불가
+        Err(WreqStreamErr::SendFailed) => {}        // 연결 실패 → native-tls 폴백
+    }
+    // native-tls 폴백(wreq BoringSSL 가 연결 못 한 드문 경우) — io::copy 스트리밍.
     let client = match build_client() {
         Ok(c) => c,
         Err(e) => return write_simple(writer, 502, &e),
@@ -264,25 +325,6 @@ fn serve_stream(
         Ok(r) => r,
         Err(e) => return write_simple(writer, 502, &format!("upstream: {e}")),
     };
-    // fingerprint 봇차단(403) → 임퍼소네이션(wreq)으로 재시도. 일반 응답은 native-tls 그대로 스트리밍.
-    if resp.status().as_u16() == 403 {
-        return match wreq_fetch(url, referer, range) {
-            Ok((status, headers, body)) => {
-                let mut out = format!("HTTP/1.1 {status} {}\r\n", reason(status));
-                for (h, v) in &headers {
-                    out.push_str(&format!("{h}: {v}\r\n"));
-                }
-                out.push_str(CORS);
-                out.push_str("Connection: close\r\n\r\n");
-                writer.write_all(out.as_bytes())?;
-                if !head {
-                    writer.write_all(&body)?;
-                }
-                writer.flush()
-            }
-            Err(e) => write_simple(writer, 502, &format!("impersonate: {e}")),
-        };
-    }
     let status = resp.status().as_u16();
     let mut out = format!("HTTP/1.1 {status} {}\r\n", reason(status));
     for h in ["content-type", "content-length", "content-range", "accept-ranges"] {
@@ -310,25 +352,25 @@ fn serve_m3u8(
     token: &str,
     head: bool,
 ) -> std::io::Result<()> {
-    let client = match build_client() {
-        Ok(c) => c,
-        Err(e) => return write_simple(writer, 502, &e),
-    };
-    let resp = match apply_headers(client.get(url), referer, ua).send() {
-        Ok(r) => r,
-        Err(e) => return write_simple(writer, 502, &format!("upstream: {e}")),
-    };
-    // 403(fingerprint 봇차단) → 임퍼소네이션(wreq)으로 m3u8 본문 재취득. 그 외 비-성공은 그대로 에러.
-    let body = if resp.status().as_u16() == 403 {
-        match wreq_fetch(url, referer, None) {
-            Ok((st, _, b)) if (200..300).contains(&st) => String::from_utf8_lossy(&b).into_owned(),
-            Ok((st, _, _)) => return write_simple(writer, st, "upstream m3u8 (impersonate)"),
-            Err(e) => return write_simple(writer, 502, &format!("impersonate: {e}")),
+    // wreq(임퍼소네이션) 1차로 본문 취득. 연결 실패(send 에러)면 native-tls 폴백. wreq 가 상태코드(403/404)를
+    // 받으면 native 는 더 막히므로 폴백 안 하고 그대로 에러.
+    let body = match wreq_fetch(url, referer, None) {
+        Ok((st, _, b)) if (200..300).contains(&st) => String::from_utf8_lossy(&b).into_owned(),
+        Ok((st, _, _)) => return write_simple(writer, st, "upstream m3u8"),
+        Err(_) => {
+            let client = match build_client() {
+                Ok(c) => c,
+                Err(e) => return write_simple(writer, 502, &e),
+            };
+            let resp = match apply_headers(client.get(url), referer, ua).send() {
+                Ok(r) => r,
+                Err(e) => return write_simple(writer, 502, &format!("upstream: {e}")),
+            };
+            if !resp.status().is_success() {
+                return write_simple(writer, resp.status().as_u16(), "upstream m3u8 error");
+            }
+            resp.text().unwrap_or_default()
         }
-    } else if resp.status().is_success() {
-        resp.text().unwrap_or_default()
-    } else {
-        return write_simple(writer, resp.status().as_u16(), "upstream m3u8 error");
     };
     let proxy_base = format!("http://127.0.0.1:{port}/{token}");
     let rewritten = rewrite_m3u8(&body, url, &proxy_base, referer, ua);

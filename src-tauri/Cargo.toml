@@ -62,7 +62,8 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 # 미디어 프록시 임퍼소네이션 폴백 — native-tls 도 403 인 fingerprint 봇차단 CDN(Cloudflare/Akamai 의 JA3+
 # HTTP/2 핑거프린트)을 위해. wreq(BoringSSL)가 Chrome 의 TLS+HTTP2 핸드셰이크를 정밀 위조해 통과(라이브
 # 증명: native-tls 403, wreq 200). 모든 OS 동일 핑거프린트. async 전용 → 프록시(sync)에서 공용 tokio block_on.
-wreq = "=6.0.0-rc.29"
+# stream feature = Response::bytes_stream(청크 스트리밍 — 큰 바디 버퍼링 0, 프록시가 1차로 씀).
+wreq = { version = "=6.0.0-rc.29", features = ["stream"] }
 wreq-util = "=3.0.0-rc.12"
 # 딥링크 command URI(soksak://run?cmd=...) 파싱 — query 디코드. reqwest 트리에 이미 있어 추가 비용 0.
 url = "2"
