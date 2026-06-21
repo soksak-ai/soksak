@@ -1,0 +1,37 @@
+{
+  "name": "@soksak-ai/plugin-api",
+  "version": "0.1.0",
+  "description": "soksak plugin runtime API contract types (ctx.app, Plugin, PluginContext) — the @types/editor equivalent for soksak.",
+  "license": "MIT",
+  "author": "soksak-ai",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soksak-ai/soksak.git",
+    "directory": "packages/plugin-api"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@soksak-ai/plugin-spec": "workspace:^"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@soksak-ai/plugin-api':
+        specifier: workspace:*
+        version: link:packages/plugin-api
       '@soksak-ai/plugin-spec':
         specifier: workspace:*
         version: link:packages/plugin-spec
@@ -93,6 +96,12 @@ importers:
       vitest:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@25.9.3)(jsdom@29.1.1)(vite@7.3.5(@types/node@25.9.3))
+
+  packages/plugin-api:
+    dependencies:
+      '@soksak-ai/plugin-spec':
+        specifier: workspace:^
+        version: link:../plugin-spec
 
   packages/plugin-spec: {}
 

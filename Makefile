@@ -113,8 +113,9 @@ test: ## Rust 단위 테스트
 test-front: ## 프론트엔드 단위 테스트(vitest)
 	$(PNPM) test
 
-spec-gate: ## 헤드리스 스키마 게이트(발행물 빌드 + dist 로 parseManifest 회귀, 앱 없이)
+spec-gate: ## 패키지 빌드(plugin-spec·plugin-api dist — 코어가 소비) + 헤드리스 스키마 게이트
 	@npx tsc -p packages/plugin-spec/tsconfig.json
+	@npx tsc -p packages/plugin-api/tsconfig.json
 	@node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/valid/plugin.json
 	@if node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/invalid/plugin.json >/dev/null 2>&1; then \
 		echo "spec-gate: 무효 매니페스트가 통과됨(게이트 깨짐)"; exit 1; \
