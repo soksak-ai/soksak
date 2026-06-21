@@ -64,6 +64,10 @@ export default {
 };
 ```
 
+**TS+번들**로 짜면 `npm i -D @soksak-ai/plugin-api` 로 `ctx.app`·`Plugin`·`PluginContext` 타입을
+받는다(선택, 타입 전용 — 런타임 0). 코어가 `SoksakPluginApi ≡ 패키지` 양방향
+호환을 컴파일로 강제하므로 타입이 코어와 어긋나지 않는다. JS `main.js` 한 파일이면 불필요.
+
 개발 중 적재(설치 없이):
 
 ```bash
