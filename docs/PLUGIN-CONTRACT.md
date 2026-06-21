@@ -56,6 +56,21 @@ Rules:
 A non-zero exit blocks publish. A plugin that mis-declares anything errors — it is not audited by
 hand.
 
+## 2.5 The manifest validation gate
+
+The Doctor checks the *contract* (theme/permissions/naming). The *manifest schema* — every field of
+`plugin.json` — is validated by `@soksak-ai/plugin-spec`, the same `parseManifest` the core runs. One
+authority, three gates; no gate reimplements the schema:
+
+- **Runtime** (install/load) — the core runs `parseManifest`; a malformed manifest is rejected. Absolute.
+- **Pre-publish** (author) — each plugin's `.githooks/pre-commit` runs `soksak-validate` on every commit.
+- **Enrollment** (registry) — `plugin.install` clones then re-runs `parseManifest` (= runtime).
+
+The gate is wired automatically from one definition (`scripts/plugins/gate/`): `plugin.dev.new`
+scaffolds it into new plugins (Rust `include_str!` of that definition), and
+`scripts/plugins/apply-gate.mjs` applies the identical set to existing repos (merging, not clobbering,
+their `package.json`). Neither reimplements the schema — they only wire the call to the one package.
+
 ## 3. Conformance: declared ≡ actual
 
 Section 1 publishes the contract; section 2 checks one plugin's *declarations* against it. A

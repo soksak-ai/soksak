@@ -96,18 +96,30 @@ sok plugin.reload
   — v1 정책: 핀 설치는 갱신 대신 재설치.
 - 활성화에는 사람의 동의가 필요하다. **버전 또는 권한이 바뀌면 재동의**를 요구한다.
 
-### 배포 전 검증 (`soksak-validate`)
+### 검증 게이트 — 매니페스트 단일진실 + 3중 게이트
 
-매니페스트 스키마는 앱 없이 검증할 수 있다 — 저자의 CI/pre-commit 게이트:
+매니페스트 검증의 **유일 권위는 `@soksak-ai/plugin-spec`**(= 코어 `parseManifest`)다. 자체 스키마
+재구현·우회는 금지(그 자체가 파편화). 모든 플러그인은 매니페스트가 이 검증을 통과해야 존재한다 —
+3지점에서:
+
+1. **런타임**(설치/로드) — 코어 `parseManifest`. 절대(미통과 매니페스트는 설치·활성화 거부).
+2. **발행 전**(저자) — repo 의 `.githooks/pre-commit` 이 커밋마다 검증한다:
 
 ```bash
 npx soksak-validate plugin.json   # exit 0 = 통과, 1 = 거부(사유 출력), 2 = 사용법 오류
 ```
 
-`@soksak-ai/plugin-spec` 패키지가 코어와 **같은** `parseManifest` 를 싣는다(스펙 단일진실 —
-사본/vendoring 금지). 스키마 게이트는 앱이 필요 없고, 런타임 conformance(선언 ≡ 실제 배선)는
-앱이 필요하므로 `sok plugin.conformance` 로 따로 확인한다. (패키지 발행 전에는 monorepo 동봉
-`node packages/plugin-spec/bin/validate.mjs <plugin.json>` 로 같은 검증을 돌린다.)
+3. **등재**(레지스트리) — `plugin.install` 이 clone 후 `parseManifest` 로 재검증(=①).
+
+`@soksak-ai/plugin-spec` 패키지가 코어와 **같은** `parseManifest` 를 싣는다(사본/vendoring 금지).
+스키마 게이트는 앱 없이 돌고(CI/pre-commit), 런타임 conformance(선언 ≡ 실제 배선)는 앱이
+필요하므로 `sok plugin.conformance` 로 확인한다.
+
+**게이트는 자동 배선된다.** `sok plugin.dev.new` 로 만든 새 플러그인은 `package.json`(`validate`
+스크립트 + `@soksak-ai/plugin-spec` devDep)과 `.githooks/pre-commit` 을 갖고 태어난다. 기존
+플러그인은 `node scripts/plugins/apply-gate.mjs <plugin-dir>...` 로 동일 게이트를 일괄 적용한다.
+게이트 *정의*는 `scripts/plugins/gate/` 한 곳 — scaffold(Rust `include_str!`)와 apply-gate 가
+같은 파일을 쓴다(정의 재구현 0). `npm install` 후 `prepare` 가 `core.hooksPath=.githooks` 를 건다.
 
 ## 매니페스트 레퍼런스
 
@@ -401,7 +413,7 @@ sok editor.format
   `"dev"`(작업 중·동의 면제), `"<semver>"`(레지스트리 설치본).
 - **설치**: 카탈로그 엔트리의 `repo` → `~/.soksak/plugins/<id>` 로 clone, `.soksak.json`(version=semver)
   기록, 읽기전용 잠금. `plugin.update` 는 fetch + reset --hard 후 version 갱신.
-- **dev**: `sok plugin.dev.new <id>` 가 단일 폴더에 스캐폴드(plugin.json·main.js·`.soksak.json`(version="dev")·git init)
+- **dev**: `sok plugin.dev.new <id>` 가 단일 폴더에 스캐폴드(plugin.json·main.js·`.soksak.json`(version="dev")·git init + 검증 게이트 `package.json`·`.githooks/pre-commit`)
   한다. 소스 편집은 앱 리로드에 즉시 반영. `dev`·`local` 은 `plugin.update` 가 거부한다(작업물 보호).
   폴더 밖 외부 repo 를 dev 로 얹으려면 `SOKSAK_DEV_PLUGINS_EXTRA=경로` 로 `make dev`.
 

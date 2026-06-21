@@ -1,0 +1,5 @@
+#!/bin/sh
+# soksak plugin manifest gate — single source of truth is @soksak-ai/plugin-spec.
+# Rejects a malformed plugin.json before commit. npx fetches the validator (cached) so
+# the hook works without `npm install`; with deps installed it resolves the local bin.
+exec npx --yes --package=@soksak-ai/plugin-spec soksak-validate plugin.json
