@@ -73,8 +73,10 @@ localStorage 6개 스토어(settings/theme/pluginSettings/bookmarks/plugins/패�
 
 ## 4. 트랙 A — 영속·복원 인프라 (코어)
 
-- **A1 app.data 저장 레이어** — ns=`core` kv 래퍼(JSON blob). localStorage 공유 스토어(settings/theme/pluginSettings/plugins) 이전 + 1회 shim(`core/migrated` 플래그). data-change broadcast로 멀티창 일관성 확보. async hydrate-after-mount 전환.
-  - proof: 두 창에서 한쪽 설정 변경 → 다른 창 polling 0으로 반영. shim 멱등(2회=동일).
+- **A1 app.data 저장 레이어** — ns=`core` kv 래퍼(JSON blob). localStorage 공유 스토어(settings/theme/pluginSettings/plugins) 이전 + 1회 shim(`core/migrated` 플래그). data-change broadcast로 멀티창 일관성. async hydrate-after-mount.
+  - **설정 논리 그룹 분리 저장(forward-compat)**: `core/settings`를 platform / terminal(=`TerminalSettings`+shell, 이미 그룹화됨) / browser(homeUrl,browserNewWindow) 하위 그룹으로. terminal/browser는 아직 코어라 코어에 두되, 플러그인 추출 시 그 그룹째 plugin ns(app.data)로 이동 → 필드별 마이그레이션 0. **진짜 플랫폼 설정**(언어/탭위치/splitHeader/danger/아이콘/포커스/기본루트/탭닫기/우측모드)만 영구 core.
+  - 진짜 플러그인 소유 설정은 `usePluginSettings`(이미 per-plugin·byProject)에 — 코어 settings에 안 둔다(코어 락인 금지).
+  - proof: 두 창에서 한쪽 설정 변경 → 다른 창 polling 0 반영. shim 멱등(2회=동일). terminal 그룹이 단독 추출 가능한 형태로 분리 저장됨을 단언.
 - **A2 워크스페이스 직렬화** — `serializeLayout(sessions) ↔ deserializeLayout(json)` 순수 함수. id 재생성. 라운드트립 단위 테스트.
   - proof: 임의 레이아웃(중첩 split·다종 view) serialize→deserialize 후 구조·순서·sizes·active 동일.
 - **A3 PaneNode ratio 필드** — 터미널 pane split에 `ratio`(부모 자식 평행, 합=1). resize 시 갱신. 미지정 시 균등 폴백.
