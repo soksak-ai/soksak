@@ -16,7 +16,7 @@ const tab = (id: string, views: View[]): ProjectTab => ({
   sidebarOpen: false,
   rightOpen: false,
   rightView: null,
-  leftTab: "files",
+  leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
   root: "/r",
   contents: [
     {

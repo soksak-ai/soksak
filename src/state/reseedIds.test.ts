@@ -33,7 +33,7 @@ const tab = (id: string, layout: GroupNode, contentId = "c1"): ProjectTab => ({
   sidebarOpen: false,
   rightOpen: false,
   rightView: null,
-  leftTab: "files",
+  leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
   activeContentId: contentId,
   contents: [{ id: contentId, title: "1", activeGroupId: "g1", layout }],
 });

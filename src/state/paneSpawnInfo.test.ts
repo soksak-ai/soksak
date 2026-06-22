@@ -23,7 +23,7 @@ function tabWith(autorun?: {
     sidebarOpen: false,
     rightOpen: false,
     rightView: null,
-    leftTab: "files",
+    leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
     activeContentId: "c1",
     contents: [
       {

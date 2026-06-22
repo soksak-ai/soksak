@@ -23,7 +23,7 @@ const project: ProjectTab = {
   sidebarOpen: true,
   rightOpen: false,
   rightView: null,
-  leftTab: "files",
+  leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
   activeContentId: "c1",
   contents: [
     {

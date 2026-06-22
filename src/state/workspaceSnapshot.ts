@@ -11,6 +11,7 @@ import {
   deserializeSplitTree,
   type SplitSnapshot,
 } from "./splitTree";
+import type { SidebarGroup } from "./sidebarLayout";
 import type { ProjectTab, ContentArea, ViewGroup, View } from "./sessions";
 
 // ── 스냅샷 타입 ───────────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ export interface ProjectSnapshot {
   sidebarOpen: boolean;
   rightOpen: boolean;
   rightView: string | null;
-  leftTab: string;
+  leftLayout: SplitSnapshot<SidebarGroup>;
   activeContentId: string;
   contents: ContentSnapshot[];
 }
@@ -108,7 +109,8 @@ export function serializeProject(p: ProjectTab): ProjectSnapshot {
     sidebarOpen: p.sidebarOpen,
     rightOpen: p.rightOpen,
     rightView: p.rightView,
-    leftTab: p.leftTab,
+    // 사이드바 레이아웃(SplitTree<SidebarGroup>) — leaf 페이로드는 plain JSON.
+    leftLayout: serializeSplitTree(p.leftLayout, (g) => g),
     activeContentId: p.activeContentId,
     contents: p.contents.map(serializeContent),
   };
@@ -182,7 +184,7 @@ export function deserializeProject(
     sidebarOpen: s.sidebarOpen,
     rightOpen: s.rightOpen,
     rightView: s.rightView,
-    leftTab: s.leftTab,
+    leftLayout: deserializeSplitTree(s.leftLayout, (g) => g, newSplitId),
     activeContentId: s.activeContentId,
     contents: s.contents.map((c) => deserializeContent(c, newSplitId)),
   };

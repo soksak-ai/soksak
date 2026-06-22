@@ -665,6 +665,76 @@ export function registerCatalog(): void {
     },
   });
 
+  register("sidebar.left.tree", {
+    description:
+      "Return the left sidebar layout tree (SplitTree of tab groups) — split ids, sizes, each leaf's viewKeys + active. Source for sidebar.left.move/resize targets.",
+    triggers: { ko: "좌측 사이드바 레이아웃 트리 탭 분할 구조" },
+    params: { project: P.project },
+    returns: "{ projectId, layout }",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["sok sidebar.left.tree"],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound("프로젝트 없음");
+      return { projectId: t.id, layout: t.leftLayout };
+    },
+  });
+
+  register("sidebar.left.move", {
+    description:
+      "Drag-merge a left sidebar view — into=merge as a tab of the target's group, split=new vertical leaf above/below the target (same as the content area). viewKeys/targets come from sidebar.left.tree.",
+    triggers: { ko: "좌측 사이드바 탭 이동 합치기 분할 드래그 머지" },
+    params: {
+      project: P.project,
+      view: { type: "string", description: "viewKey to move", required: true },
+      target: { type: "string", description: "target viewKey (a view in the target group)", required: true },
+      zone: {
+        type: "string",
+        description: "into | top | bottom",
+        enum: ["into", "top", "bottom"],
+        required: true,
+      },
+    },
+    returns: "{}",
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      'sok sidebar.left.move \'{"view":"soksak-plugin-folderpop.folders","target":"soksak-plugin-file-tree.tree","zone":"bottom"}\'',
+    ],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound("프로젝트 없음");
+      const zone = p.zone as string;
+      const drop =
+        zone === "into"
+          ? ({ type: "into", targetKey: p.target as string } as const)
+          : zone === "top" || zone === "bottom"
+            ? ({ type: "split", targetKey: p.target as string, before: zone === "top" } as const)
+            : null;
+      if (!drop)
+        return { ok: false as const, code: "INVALID_PARAMS", message: "zone: into | top | bottom" };
+      return S().moveSidebarView(t.id, p.view as string, drop);
+    },
+  });
+
+  register("sidebar.left.resize", {
+    description:
+      "Resize a left sidebar split by ratio — sizes parallel to the split's children (sum 1). Split ids from sidebar.left.tree.",
+    triggers: { ko: "좌측 사이드바 분할 비율 크기 조절" },
+    params: {
+      project: P.project,
+      split: { type: "string", description: "Sidebar split id", required: true },
+      sizes: { type: "number[]", description: "Ratio per child, sum 1", required: true },
+    },
+    returns: "{}",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok sidebar.left.resize \'{"split":"s7","sizes":[0.6,0.4]}\''],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound("프로젝트 없음");
+      return S().resizeSidebar(t.id, p.split as string, p.sizes as number[]);
+    },
+  });
+
   // ----- content -----
   register("content.list", {
     description: "List content tabs in a project.",

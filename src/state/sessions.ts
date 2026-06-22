@@ -15,6 +15,14 @@ import {
   findSplitTree,
   mapLeaves,
 } from "./splitTree";
+import {
+  type SidebarLayout,
+  type SidebarDrop,
+  initialSidebarLayout,
+  reconcileSidebarLayout,
+  moveSidebarView as moveSidebarViewT,
+  hasSidebarView,
+} from "./sidebarLayout";
 
 // 3단 구조:
 //   - 최상단 탭 = 프로젝트(ProjectTab): 자체 사이드바(파일트리) + 컨텐츠 탭들
@@ -159,8 +167,9 @@ export interface ProjectTab {
   // 우측 플러그인 사이드바: 열림 + 활성 뷰("<pluginId>.<viewId>" | "manager" | null).
   rightOpen: boolean;
   rightView: string | null;
-  // 좌측 사이드바 활성 탭: "files"(파일 트리) 또는 플러그인 뷰 전역 키(좌측 호스팅).
-  leftTab: string;
+  // 좌측 사이드바 레이아웃(B2) — SplitTree<SidebarGroup>. 등록된 sidebar-left 뷰의 배치(탭 묶음 +
+  // 세로 분할 + 활성). 콘텐츠 영역과 동일한 drag-merge. 등록 변화와 reconcile(LeftSidebarHost).
+  leftLayout: SidebarLayout;
   // 프로젝트 루트 디렉토리(P1 루트 필수 — workspace.ts 헌법). 정체성 = 이
   // 경로(P4). 터미널 시작 위치이자 파일트리/git 의 기준.
   root: string;
@@ -226,7 +235,14 @@ interface SessionsStore {
     id: string,
     view: string | null,
   ) => CmdResult<{ rightView: string | null }>;
-  setLeftTab: (id: string, tab: string) => CmdResult<{ leftTab: string }>;
+  // 좌측 사이드바 활성 탭 — viewKey 가 든 leaf 그룹의 활성을 그것으로. (기존 setLeftTab 대체.)
+  setLeftTab: (id: string, viewKey: string) => CmdResult<{ leftTab: string }>;
+  // 등록 sidebar-left 뷰와 reconcile(LeftSidebarHost 가 렌더 시 호출). 변화 시에만 set.
+  reconcileSidebar: (id: string, registeredKeys: string[]) => void;
+  // 사이드바 뷰 drag-merge(into=탭 합류, split=세로 분리).
+  moveSidebarView: (id: string, viewKey: string, drop: SidebarDrop) => CmdResult;
+  // 사이드바 split 비율 조절(핸들 드래그/명령).
+  resizeSidebar: (id: string, splitId: string, sizes: number[]) => CmdResult;
 
   // 컨텐츠 탭 레벨. program 명시 시 그 프로그램으로(+메뉴), 아니면 프로젝트>전역 설정.
   addContent: (
@@ -788,7 +804,7 @@ function makeProject(id: string, opts: NewProjectOpts): ProjectTab {
     sidebarOpen: true,
     rightOpen: false,
     rightView: null,
-    leftTab: "",
+    leftLayout: initialSidebarLayout([]),
     root: opts.root,
     shell: opts.shell,
     contents: [c],
@@ -977,15 +993,72 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     return r;
   },
 
-  setLeftTab: (id, tab) => {
+  setLeftTab: (id, viewKey) => {
     let r: CmdResult<{ leftTab: string }> = noProject(id);
     set((s) => {
       const t = s.tabs.find((x) => x.id === id);
       if (!t) return s;
-      r = ok({ leftTab: tab });
-      if (t.leftTab === tab) return s;
+      if (!hasSidebarView(t.leftLayout, viewKey)) {
+        r = err("TARGET_NOT_FOUND", `사이드바 뷰 없음: ${viewKey}`);
+        return s;
+      }
+      r = ok({ leftTab: viewKey });
+      // viewKey 가 든 leaf 그룹의 활성만 그것으로(다른 leaf 는 불변).
+      const leftLayout = mapLeaves(t.leftLayout, (g) =>
+        g.viewKeys.includes(viewKey) && g.activeViewKey !== viewKey
+          ? { ...g, activeViewKey: viewKey }
+          : g,
+      );
       return {
-        tabs: s.tabs.map((x) => (x.id === id ? { ...x, leftTab: tab } : x)),
+        tabs: s.tabs.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
+      };
+    });
+    return r;
+  },
+
+  reconcileSidebar: (id, registeredKeys) => {
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === id);
+      if (!t) return s;
+      const next = reconcileSidebarLayout(t.leftLayout, registeredKeys);
+      if (next === t.leftLayout) return s; // 변화 없음(참조 보존 — 무한 reconcile 방지)
+      return {
+        tabs: s.tabs.map((x) => (x.id === id ? { ...x, leftLayout: next } : x)),
+      };
+    });
+  },
+
+  moveSidebarView: (id, viewKey, drop) => {
+    let r: CmdResult = noProject(id);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === id);
+      if (!t) return s;
+      if (!hasSidebarView(t.leftLayout, viewKey)) {
+        r = err("TARGET_NOT_FOUND", `사이드바 뷰 없음: ${viewKey}`);
+        return s;
+      }
+      const leftLayout = moveSidebarViewT(t.leftLayout, viewKey, drop, newSplitId);
+      r = ok({});
+      return {
+        tabs: s.tabs.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
+      };
+    });
+    return r;
+  },
+
+  resizeSidebar: (id, splitId, sizes) => {
+    let r: CmdResult = noProject(id);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === id);
+      if (!t) return s;
+      if (!findSplitTree(t.leftLayout, splitId)) {
+        r = err("TARGET_NOT_FOUND", `사이드바 split 없음: ${splitId}`);
+        return s;
+      }
+      r = ok({});
+      const leftLayout = resizeSplitTree(t.leftLayout, splitId, sizes);
+      return {
+        tabs: s.tabs.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
       };
     });
     return r;

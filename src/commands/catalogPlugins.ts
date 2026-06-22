@@ -6,6 +6,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { pendingConsentChain, usePlugins, type PluginRuntime } from "../state/plugins";
 import { allGroups, useSessions } from "../state/sessions";
+import { hasSidebarView as hasSidebarViewKey } from "../state/sidebarLayout";
 import { getRegisteredView, registeredViewIds } from "../plugins/viewRegistry";
 import { registeredFileViewerIds } from "../plugins/fileViewerRegistry";
 import { registeredIconSetIds } from "../ui/icons/registry";
@@ -560,8 +561,9 @@ export function registerPluginCatalog(): void {
         s.setRightView(projectId, null);
         closed.push("sidebar-right");
       }
-      if (project.leftTab === key) {
-        s.setLeftTab(projectId, "files");
+      // 좌측 사이드바는 registry 주도(레이아웃은 배치만) — 개별 close 는 멤버십만 보고한다.
+      // 실제 제거는 플러그인 비활성/해제 시 reconcileSidebar 가 처리.
+      if (hasSidebarViewKey(project.leftLayout, key)) {
         closed.push("sidebar-left");
       }
       // content 배치: 전 컨텐츠에서 이 플러그인 뷰 탭을 전부 닫는다.

@@ -27,7 +27,7 @@ const proj = (id: string, root: string): ProjectTab => ({
   sidebarOpen: true,
   rightOpen: false,
   rightView: null,
-  leftTab: "files",
+  leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
   activeContentId: "c1",
   contents: [{ id: "c1", title: "1", activeGroupId: "g1", layout: leafGroup("g1", "v1") }],
 });
