@@ -41,7 +41,8 @@ import { localize } from "../i18n";
 const DRAG_THRESHOLD = 5;
 const SIDEBAR_HEADER_PX = 30; // 탭 줄 높이(본문 가장자리 분할 판정 기준). 상태바 없음(=0).
 
-// 콘텐츠 zone → 사이드바 drop. center=탭 합류, 좌/우=가로(row) 분할, 상/하=세로(col) 분할.
+// 콘텐츠 zone → 사이드바 drop(콘텐츠와 동일 4방향). center=탭 합류, 좌/우=가로(row) 분할,
+// 상/하=세로(col) 분할.
 function zoneToDrop(targetKey: string, zone: DropZone): SidebarDrop {
   if (zone === "center") return { type: "into", targetKey };
   const dir = zone === "left" || zone === "right" ? "row" : "col";
@@ -97,16 +98,18 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
   const [drag, setDrag] = useState<string | null>(null);
   const [hover, setHover] = useState<{ cellId: string; zone: DropZone } | null>(null);
 
-  // 포인터 → 셀/zone(공유 hitTestCells). sourceCellId = 끌고 있는 탭이 속한 셀(자기 분할 가드는
-  // 그 셀에 뷰가 1개일 때만 — 다중 뷰면 가장자리 드롭으로 분리 허용).
+  // 포인터 → 셀/zone(공유 hitTestCells, 콘텐츠와 동일 4방향). sourceCellId = 끌고 있는 탭의 셀
+  // (자기 분할 가드는 그 셀 뷰 1개일 때만 — 다중 뷰면 가장자리 드롭으로 분리 허용).
   const hitTest = useCallback(
     (x: number, y: number, r: DOMRect, sourceCellId: string, selfCenterOnly: boolean) =>
-      hitTestCells(x, y, r, cellsRef.current.map((c) => ({ value: c.value, rect: c.rect })), cellId, {
-        chromeTop: SIDEBAR_HEADER_PX,
-        statusPx: 0,
-        sourceId: sourceCellId,
-        selfCenterOnly,
-      }),
+      hitTestCells(
+        x,
+        y,
+        r,
+        cellsRef.current.map((c) => ({ value: c.value, rect: c.rect })),
+        cellId,
+        { chromeTop: SIDEBAR_HEADER_PX, statusPx: 0, sourceId: sourceCellId, selfCenterOnly },
+      ),
     [],
   );
 
@@ -151,10 +154,13 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
         document.body.style.cursor = "";
         if (moved) {
           const h = rect ? hitTest(ev.clientX, ev.clientY, rect, srcCellId, selfCenterOnly) : null;
-          // 대상 셀의 활성 뷰를 target 으로(셀 id 는 viewKeys join 이므로 활성 뷰 키로 변환).
           if (h) {
+            // 대상 그룹을 "드래그한 뷰가 아닌" 멤버로 지정한다 — viewKey 는 이동 중 source 에서
+            // 제거되므로, targetKey 가 viewKey 와 같으면 대상 그룹을 못 찾아 뷰가 유실된다(같은
+            // 그룹 안 분할 시 발생). 다른 멤버를 우선, 없으면 활성 뷰(다른 그룹이면 viewKey 부재라 안전).
             const targetCell = cellsRef.current.find((c) => cellId(c.value) === h.id);
-            const targetKey = targetCell?.value.activeViewKey ?? "";
+            const keys = targetCell?.value.viewKeys ?? [];
+            const targetKey = keys.find((k) => k !== viewKey) ?? targetCell?.value.activeViewKey ?? "";
             if (targetKey && !(h.id === srcCellId && h.zone === "center")) {
               moveSidebarView(project.id, viewKey, zoneToDrop(targetKey, h.zone));
             }
@@ -218,14 +224,18 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
         className="left-host-grid"
         ref={containerRef}
         style={
-          { "--header-h": `${SIDEBAR_HEADER_PX}px`, "--status-h": "0px", "--pane-inset": "0px" } as CSSProperties
+          // --header-h:0 → 드롭 플레이스홀더(.drop-ind-wrap)가 셀 전체(탭 줄 포함)를 덮는다.
+          // (히트테스트의 헤더 오프셋은 JS SIDEBAR_HEADER_PX 가 따로 소유 — 시각/판정 분리.)
+          { "--header-h": "0px", "--status-h": "0px", "--pane-inset": "0px" } as CSSProperties
         }
       >
         {/* 셀(leaf 그룹) — 콘텐츠 egroup 처럼 % 절대 위치. 내부 = [탭 줄][본문]. */}
-        {cells.map(({ value: group, rect }) => (
+        {cells.map(({ value: group, rect }, i) => (
           <div
             key={cellId(group)}
             className="left-host-cell"
+            // 셀 드롭 타겟(E2E/AI): ui.input.drag 의 to 로 셀(인덱스)을 가리키고 zone 으로 분할/합류.
+            data-node={`cell/${i}`}
             style={cellVars(rect) as CSSProperties}
           >
             <SidebarLeaf
@@ -336,13 +346,14 @@ function SidebarLeaf({
             <button
               key={key}
               type="button"
-              className={`left-host-tab${active === key ? " active" : ""}${dragging === key ? " dragging" : ""}`}
+              // 콘텐츠 탭(.ctab, 상단 탭 줄)과 *동일 디자인* 재사용 — left-host-tab 은 드래그 마커만.
+              className={`ctab left-host-tab${active === key ? " active" : ""}${dragging === key ? " dragging" : ""}`}
               data-node={`tab/left/${key}`}
               title={label}
               onMouseDown={startDrag(key)}
               onDoubleClick={() => setEditingKey(key)}
             >
-              {reg?.decl.icon} {label}
+              <span className="ctab-title">{label}</span>
               <ViewBadge viewKey={key} />
             </button>
           );

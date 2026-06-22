@@ -682,7 +682,7 @@ export function registerCatalog(): void {
 
   register("sidebar.left.move", {
     description:
-      "Drag-merge a left sidebar view — into=merge as a tab of the target's group, split=new vertical leaf above/below the target (same as the content area). viewKeys/targets come from sidebar.left.tree.",
+      "Drag-merge a left sidebar view — into=merge as a tab, left/right=horizontal split, top/bottom=vertical split (same 4 directions as the content area). viewKeys/targets come from sidebar.left.tree.",
     triggers: { ko: "좌측 사이드바 탭 이동 합치기 분할 드래그 머지" },
     params: {
       project: P.project,
@@ -690,7 +690,7 @@ export function registerCatalog(): void {
       target: { type: "string", description: "target viewKey (a view in the target group)", required: true },
       zone: {
         type: "string",
-        description: "into | left | right | top | bottom (4-direction split like content area)",
+        description: "into | left | right | top | bottom (4-direction, same as content area)",
         enum: ["into", "left", "right", "top", "bottom"],
         required: true,
       },

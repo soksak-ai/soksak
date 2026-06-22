@@ -3198,36 +3198,21 @@ select.dctl {
   display: flex;
   flex-direction: column;
 }
-.left-host-tab.dragging {
-  opacity: 0.5;
-}
 .left-host-tabs {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
+  /* 콘텐츠 탭 줄(.content-tabs)과 *동일* — stretch + 세로패딩 5px 로 탭이 26px 칩이 되어 콘텐츠 탭과
+     치수·정렬 일치(높이는 --chrome-row-h 계약 소유, 패딩은 칩 높이 결정). */
+  align-items: stretch;
   gap: 2px;
-  /* 높이는 크롬 행 계약(--chrome-row-h, 파일 끝)이 소유 — 지정 금지. */
-  padding: 0 8px;
+  padding: var(--ws-pad, 5px) 6px;
   overflow-x: auto;
   border-bottom: 1px solid var(--bd);
 }
-.left-host-tab {
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--fg3);
-  font-size: 11px;
-  padding: 3px 8px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.left-host-tab:hover {
-  background: rgba(127, 127, 127, 0.18);
-  color: var(--fg);
-}
-.left-host-tab.active {
-  background: rgba(127, 127, 127, 0.28);
-  color: var(--fg);
+/* 사이드바 탭은 .view-tab(콘텐츠 뷰 탭) 디자인을 그대로 쓴다 — left-host-tab 은 드래그 마커뿐.
+   시각 속성은 .view-tab 가 단독 소유(중복/충돌 금지). */
+.left-host-tab.dragging {
+  opacity: 0.5;
 }
 /* 탭 이름변경 인라인 입력(B1) — 탭과 같은 폰트/패딩, accent 윤곽만. 박스 안 박스 회피. */
 .left-host-tab-rename {

@@ -157,4 +157,55 @@ export function registerDomCatalog(): void {
       return { filled: true, address: addr };
     },
   });
+
+  register("ui.input.drag", {
+    description:
+      "Drive a pointer drag (mousedown on `from` -> mousemove -> mouseup over `to`) — drives drag-merge UIs (content/sidebar tabs). zone picks the point within the target rect: center (default), left/right/top/bottom (edge, for directional split). from==to + zone=center = a plain click (mousedown/mouseup, no move). Unexposed addresses return NOT_EXPOSED.",
+    triggers: { ko: "드래그 주입 드롭 탭이동 분할 합치기 E2E 포인터드래그" },
+    params: {
+      from: { type: "string", description: "Source node address (the tab/element to grab)", required: true },
+      to: { type: "string", description: "Target node address (drop onto)", required: true },
+      zone: {
+        type: "string",
+        description: "center | left | right | top | bottom — point within the target rect",
+        enum: ["center", "left", "right", "top", "bottom"],
+      },
+    },
+    returns: "{ dragged, from, to, zone }",
+    errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
+    danger: "inject",
+    examples: [
+      'sok ui.input.drag \'{"from":"win/main/chrome/tab/left/a.x","to":"win/main/chrome/tab/left/b.y","zone":"center"}\'',
+    ],
+    handler: (p) => {
+      const fromEl = resolveElement(p.from as string);
+      if (!fromEl) return notExposed(p.from as string);
+      const toEl = resolveElement(p.to as string);
+      if (!toEl) return notExposed(p.to as string);
+      const fr = fromEl.getBoundingClientRect();
+      const tr = toEl.getBoundingClientRect();
+      const fromPt = { x: fr.left + fr.width / 2, y: fr.top + fr.height / 2 };
+      const zone = (p.zone as string) ?? "center";
+      // zone → 타겟 rect 내 지점. 가장자리는 분할(컨텐츠/사이드바 hitTest 의 ¼ 경계 안쪽).
+      const zx =
+        zone === "left" ? 0.08 : zone === "right" ? 0.92 : 0.5;
+      const zy =
+        zone === "top" ? 0.12 : zone === "bottom" ? 0.88 : 0.5;
+      const toPt = { x: tr.left + tr.width * zx, y: tr.top + tr.height * zy };
+      const fire = (type: string, x: number, y: number, target: EventTarget) =>
+        target.dispatchEvent(
+          new MouseEvent(type, { clientX: x, clientY: y, bubbles: true, button: 0, view: window }),
+        );
+      const dist = Math.hypot(toPt.x - fromPt.x, toPt.y - fromPt.y);
+      fire("mousedown", fromPt.x, fromPt.y, fromEl);
+      // 근접(같은 지점)이면 순수 클릭 — mousemove 없이 mouseup(드래그 임계 미만 = 탭 전환 등).
+      if (dist >= 5) {
+        const mid = { x: (fromPt.x + toPt.x) / 2, y: (fromPt.y + toPt.y) / 2 };
+        fire("mousemove", mid.x, mid.y, window);
+        fire("mousemove", toPt.x, toPt.y, window);
+      }
+      fire("mouseup", toPt.x, toPt.y, window);
+      return { dragged: dist >= 5, click: dist < 5, from: p.from, to: p.to, zone };
+    },
+  });
 }
