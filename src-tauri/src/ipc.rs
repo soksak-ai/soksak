@@ -143,6 +143,28 @@ fn dispatch(app: &AppHandle, req: Request) -> Value {
     out
 }
 
+// 타겟 창의 메인 webview 를 네이티브로 리로드한다(JS 브리지/eval 미경유). webview JS 가 멈춰도
+// (행) AppKit 메인 스레드는 살아있어 WKWebView.reload 가 페이지를 다시 띄운다 → 행 복구.
+#[cfg(target_os = "macos")]
+fn native_reload(app: &AppHandle, label: &str) -> bool {
+    let Some(wv) = app.get_webview(label) else { return false };
+    wv.with_webview(|pw| unsafe {
+        use objc2_web_kit::WKWebView;
+        let wk = &*(pw.inner() as *const WKWebView);
+        let _ = wk.reload();
+    })
+    .is_ok()
+}
+
+// 비-macos 폴백: 플랫폼 webview 직접접근이 없어 eval 로 리로드한다(JS 가 살아있을 때만 동작).
+#[cfg(not(target_os = "macos"))]
+fn native_reload(app: &AppHandle, label: &str) -> bool {
+    match app.get_webview(label) {
+        Some(wv) => wv.eval("location.reload()").is_ok(),
+        None => false,
+    }
+}
+
 // 요청을 *타겟 창의* 프론트 registry 로 전달하고 응답을 기다린다. 타겟 = req.window ?? 활성 창 ??
 // "main". broadcast(app.emit) 가 아니라 emit_to(타겟)이라 멀티 윈도우에서 그 창만 응답 → seq 충돌 0.
 fn route(app: &AppHandle, req: Request) -> Value {
@@ -152,6 +174,17 @@ fn route(app: &AppHandle, req: Request) -> Value {
     // emit_to(label)은 멀티-webview 여도 그 창 메인 webview 로 도달하므로 라우팅은 정상.
     if app.get_window(&target).is_none() {
         return error_reply("WINDOW_NOT_FOUND", &format!("창을 찾을 수 없음: {target}"));
+    }
+
+    // window.reload 는 네이티브로 처리한다(프론트 registry 미경유). 모든 일반 명령은 emit_to 로
+    // webview JS 에 보내 응답을 기다리지만, 그 webview 가 멈추면 reload 마저 TIMEOUT 이 되어 복구
+    // 수단이 사라진다. 네이티브 WKWebView.reload 는 JS 상태와 무관하게 동작 → 행에서도 리로드 가능.
+    if req.method == "window.reload" {
+        return if native_reload(app, &target) {
+            json!({ "ok": true, "reloaded": true })
+        } else {
+            error_reply("INTERNAL", &format!("네이티브 webview 리로드 실패: {target}"))
+        };
     }
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     let (tx, rx) = mpsc::sync_channel::<Value>(1);
