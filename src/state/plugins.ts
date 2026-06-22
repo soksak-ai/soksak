@@ -6,6 +6,8 @@
 
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { createCoreSync } from "./coreSync";
+import type { CoreStoreDeps } from "./coreStore";
 import {
   parseManifest,
   scanHostChromeViolations,
@@ -125,23 +127,33 @@ interface PluginsState {
 
 const KEY = "soksak.plugins";
 
-function loadPersisted(): {
+type PluginsBlob = {
   consents: Record<string, ConsentRecord>;
   enabledIds: string[];
-} {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        consents: parsed.consents ?? {},
-        enabledIds: Array.isArray(parsed.enabledIds) ? parsed.enabledIds : [],
-      };
-    }
-  } catch {
-    // 손상 시 기본값 — 동의는 보수적으로 초기화(재동의 요구가 안전).
-  }
-  return { consents: {}, enabledIds: [] };
+};
+const EMPTY_PLUGINS: PluginsBlob = { consents: {}, enabledIds: [] };
+
+// app.data 권위 + ls 동기캐시(coreSync) — consents/enabledIds 멀티창 일관(이전엔 ls 만이라 창 간
+// stale, 재동의/재활성 혼선). 권위 도착 시 set(활성화 자체는 reload 의 reconcile 이 담당 — 기존 모델).
+const pluginsSync = createCoreSync<PluginsBlob>({
+  key: "plugins",
+  lsKey: KEY,
+  fallback: EMPTY_PLUGINS,
+  apply: (v) =>
+    usePlugins.setState({
+      consents: v?.consents ?? {},
+      enabledIds: Array.isArray(v?.enabledIds) ? v.enabledIds : [],
+    }),
+});
+export const initPluginsPersistence = (deps: CoreStoreDeps): (() => void) =>
+  pluginsSync.init(deps);
+
+function loadPersisted(): PluginsBlob {
+  const v = pluginsSync.loadSync();
+  return {
+    consents: v?.consents ?? {},
+    enabledIds: Array.isArray(v?.enabledIds) ? v.enabledIds : [],
+  };
 }
 
 function samePermissions(
@@ -352,10 +364,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
 
   const persist = () => {
     const s = get();
-    localStorage.setItem(
-      KEY,
-      JSON.stringify({ consents: s.consents, enabledIds: s.enabledIds }),
-    );
+    pluginsSync.save({ consents: s.consents, enabledIds: s.enabledIds });
   };
 
   const setRuntime = (id: string, patch: Partial<PluginRuntime>) => {

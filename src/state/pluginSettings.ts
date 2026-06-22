@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import type { MapEntry } from "../plugins/spec";
+import { createCoreSync } from "./coreSync";
+import type { CoreStoreDeps } from "./coreStore";
 
 // 플러그인 사용자 설정 — 글로벌(앱 전역) + 프로젝트별 오버라이드 2계층.
 // 저장은 "오버라이드된 값"만(기본값은 매니페스트 configuration 이 단일 진실 — 여기 안 둔다).
@@ -32,15 +34,25 @@ interface PluginSettingsState {
 
 const KEY = "soksak.pluginSettings";
 
-function load(): { global: Bag; byProject: Record<string, Bag> } {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { global: {}, byProject: {} };
-    const p = JSON.parse(raw);
-    return { global: p.global ?? {}, byProject: p.byProject ?? {} };
-  } catch {
-    return { global: {}, byProject: {} };
-  }
+type PluginSettingsBlob = { global: Bag; byProject: Record<string, Bag> };
+const EMPTY: PluginSettingsBlob = { global: {}, byProject: {} };
+
+const pluginSettingsSync = createCoreSync<PluginSettingsBlob>({
+  key: "pluginSettings",
+  lsKey: KEY,
+  fallback: EMPTY,
+  apply: (v) =>
+    usePluginSettings.setState({
+      global: v?.global ?? {},
+      byProject: v?.byProject ?? {},
+    }),
+});
+export const initPluginSettingsPersistence = (deps: CoreStoreDeps): (() => void) =>
+  pluginSettingsSync.init(deps);
+
+function load(): PluginSettingsBlob {
+  const v = pluginSettingsSync.loadSync();
+  return { global: v?.global ?? {}, byProject: v?.byProject ?? {} };
 }
 
 // 불변 nested set — 새 객체로 갈아끼워 zustand 구독자가 깬다.
@@ -62,12 +74,8 @@ function bagDelete(bag: Bag, pluginId: string, key?: string): Bag {
 
 export const usePluginSettings = create<PluginSettingsState>((set, get) => {
   const persist = () => {
-    try {
-      const s = get();
-      localStorage.setItem(KEY, JSON.stringify({ global: s.global, byProject: s.byProject }));
-    } catch {
-      /* localStorage 불가 환경(테스트 등) — 메모리 상태는 유지, 영속만 생략 */
-    }
+    const s = get();
+    pluginSettingsSync.save({ global: s.global, byProject: s.byProject });
   };
   const init = load();
   return {

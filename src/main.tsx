@@ -8,6 +8,11 @@ import { ensureDefaultWorkspace, validateProjectRoot } from "./lib/workspace";
 import { paneSpawnInfo, useSessions } from "./state/sessions";
 import { initWorkspacePersistence, coreStoreDeps } from "./state/workspaceBoot";
 import { initViewLabelsPersistence } from "./state/viewLabels";
+import { initSettingsPersistence } from "./state/settings";
+import { initThemePersistence } from "./state/theme";
+import { initBookmarksPersistence } from "./state/bookmarks";
+import { initPluginSettingsPersistence } from "./state/pluginSettings";
+import { initPluginsPersistence } from "./state/plugins";
 import { useSettings } from "./state/settings";
 import { setSpawnOptionsProvider } from "./terminal/paneHosts";
 import { startTerminalStatusBridge } from "./terminal/terminalStatus";
@@ -41,6 +46,19 @@ startTerminalStatusBridge();
 // (신규 환경에서 첫 프로젝트의 git init 이 유실되던 사고의 원인).
 // 실패 시에도 렌더는 진행(프로젝트 0개 = 부트 실패만의 예외 상태, 사유는 콘솔).
 async function boot(): Promise<void> {
+  // 코어 영속 상태(설정·테마·즐겨찾기·플러그인 설정·플러그인 동의/활성)를 app.data 권위 +
+  // 멀티창 broadcast 로 동기화(coreSync). 동기 초기상태는 이미 ls 캐시에서 로드됨 — 여기선
+  // app.data hydrate + 다른 창 변경 구독을 켠다. 플러그인 호스트(enabledIds 소비)보다 먼저.
+  try {
+    initSettingsPersistence(coreStoreDeps);
+    initThemePersistence(coreStoreDeps);
+    initBookmarksPersistence(coreStoreDeps);
+    initPluginSettingsPersistence(coreStoreDeps);
+    initPluginsPersistence(coreStoreDeps);
+    initViewLabelsPersistence(coreStoreDeps);
+  } catch (e) {
+    console.error("코어 영속 동기화 초기화 실패:", e);
+  }
   try {
     await initPluginHost();
   } catch (e) {
@@ -60,12 +78,6 @@ async function boot(): Promise<void> {
     restored = await initWorkspacePersistence();
   } catch (e) {
     console.error("워크스페이스 영속 초기화 실패:", e);
-  }
-  // 사이드바 탭 라벨 오버라이드(B1) 영속 — 같은 core-kv deps 공유.
-  try {
-    initViewLabelsPersistence(coreStoreDeps);
-  } catch (e) {
-    console.error("뷰 라벨 영속 초기화 실패:", e);
   }
   try {
     if (!restored) {

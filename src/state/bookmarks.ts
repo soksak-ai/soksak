@@ -1,6 +1,8 @@
 import { create } from "zustand";
+import { createCoreSync } from "./coreSync";
+import type { CoreStoreDeps } from "./coreStore";
 
-// 브라우저 즐겨찾기(전역, localStorage 영속).
+// 브라우저 즐겨찾기(전역) — app.data 권위 + ls 동기캐시(coreSync), 멀티창 일관.
 
 export interface Bookmark {
   url: string;
@@ -16,20 +18,23 @@ interface BookmarksState {
 
 const KEY = "soksak.bookmarks";
 
+const bookmarksSync = createCoreSync<Bookmark[]>({
+  key: "bookmarks",
+  lsKey: KEY,
+  fallback: [],
+  apply: (list) => useBookmarks.setState({ list: Array.isArray(list) ? list : [] }),
+});
+export const initBookmarksPersistence = (deps: CoreStoreDeps): (() => void) =>
+  bookmarksSync.init(deps);
+
 function load(): Bookmark[] {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  const v = bookmarksSync.loadSync();
+  return Array.isArray(v) ? v : [];
 }
 
 export const useBookmarks = create<BookmarksState>((set, get) => {
   const save = (list: Bookmark[]) => {
-    localStorage.setItem(KEY, JSON.stringify(list));
+    bookmarksSync.save(list);
     set({ list });
   };
   return {

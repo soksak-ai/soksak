@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { createCoreSync } from "./coreSync";
+import type { CoreStoreDeps } from "./coreStore";
 
 // 앱 설정: 언어(i18n) + 터미널 외형(폰트/커서/스크롤백). localStorage 에 영속.
 
@@ -124,14 +126,42 @@ const DEFAULTS = {
 
 const KEY = "soksak.settings";
 
-function load(): typeof DEFAULTS {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULTS };
-    return { ...DEFAULTS, ...JSON.parse(raw) };
-  } catch {
-    return { ...DEFAULTS };
-  }
+type PersistedSettings = typeof DEFAULTS;
+
+// 영속 대상 필드만 추출(setter·메서드 제외) — load/save/applyPersisted 공유 단일진실.
+function serialize(s: SettingsState): PersistedSettings {
+  return {
+    language: s.language,
+    projectTabPosition: s.projectTabPosition,
+    contentTabPosition: s.contentTabPosition,
+    splitHeaderMode: s.splitHeaderMode,
+    shell: s.shell,
+    homeUrl: s.homeUrl,
+    remoteDestructive: s.remoteDestructive,
+    remoteInject: s.remoteInject,
+    iconSet: s.iconSet,
+    iconBox: s.iconBox,
+    focusIndicator: s.focusIndicator,
+    browserNewWindow: s.browserNewWindow,
+    defaultProjectRoot: s.defaultProjectRoot,
+    tabCloseConfirm: s.tabCloseConfirm,
+    rightSidebarMode: s.rightSidebarMode,
+    ...terminalSettingsOf(s),
+  };
+}
+
+// app.data 권위 + ls 동기캐시. 부트에서 init. apply=권위 도착 시 스토어 반영(저장 없음).
+const settingsSync = createCoreSync<PersistedSettings>({
+  key: "settings",
+  lsKey: KEY,
+  fallback: DEFAULTS,
+  apply: (v) => useSettings.setState({ ...DEFAULTS, ...v }),
+});
+export const initSettingsPersistence = (deps: CoreStoreDeps): (() => void) =>
+  settingsSync.init(deps);
+
+function load(): PersistedSettings {
+  return { ...DEFAULTS, ...settingsSync.loadSync() };
 }
 
 // 터미널 외형만 추출(createTerminal/paneHosts 에 전달).
@@ -149,28 +179,7 @@ export function terminalSettingsOf(s: TerminalSettings): TerminalSettings {
 
 export const useSettings = create<SettingsState>((set, get) => {
   const save = () => {
-    const s = get();
-    localStorage.setItem(
-      KEY,
-      JSON.stringify({
-        language: s.language,
-        projectTabPosition: s.projectTabPosition,
-        contentTabPosition: s.contentTabPosition,
-        splitHeaderMode: s.splitHeaderMode,
-        shell: s.shell,
-        homeUrl: s.homeUrl,
-        remoteDestructive: s.remoteDestructive,
-        remoteInject: s.remoteInject,
-        iconSet: s.iconSet,
-        iconBox: s.iconBox,
-        focusIndicator: s.focusIndicator,
-        browserNewWindow: s.browserNewWindow,
-        defaultProjectRoot: s.defaultProjectRoot,
-        tabCloseConfirm: s.tabCloseConfirm,
-        rightSidebarMode: s.rightSidebarMode,
-        ...terminalSettingsOf(s),
-      }),
-    );
+    settingsSync.save(serialize(get()));
   };
   return {
     ...load(),

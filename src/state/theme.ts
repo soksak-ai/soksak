@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { createCoreSync } from "./coreSync";
+import type { CoreStoreDeps } from "./coreStore";
 import {
   applyThemeToDom,
   colorsForMode,
@@ -31,6 +33,8 @@ interface ThemeState {
   // 외부 테마 로드(시작/재스캔). 현재 테마 재적용 포함.
   reload: () => Promise<void>;
   apply: (name: string, mode?: ThemeMode) => boolean;
+  // 권위(app.data) 선택 적용 — 저장하지 않는다(크로스윈도우 save 핑퐁 방지). coreSync 전용.
+  applyPersisted: (sel: { name: string; mode?: ThemeMode }) => void;
   toggleMode: () => void;
   install: (path: string) => Promise<string>;
 }
@@ -89,14 +93,20 @@ function syncTitlebarBacking(theme: ThemeSpec, mode: ThemeMode): void {
   }
 }
 
-function loadSelection(): { name: string; mode?: ThemeMode } {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // 무시 — 기본값
-  }
-  return { name: DEFAULT_THEME };
+// 테마 선택(이름/모드) 영속 — app.data 권위 + ls 동기캐시(coreSync). 부트에서 init.
+type ThemeSel = { name: string; mode?: ThemeMode };
+const themeSync = createCoreSync<ThemeSel>({
+  key: "theme",
+  lsKey: KEY,
+  fallback: { name: DEFAULT_THEME },
+  // 권위값 도착(hydrate/다른 창) → 저장 없이 적용.
+  apply: (sel) => useTheme.getState().applyPersisted(sel),
+});
+export const initThemePersistence = (deps: CoreStoreDeps): (() => void) =>
+  themeSync.init(deps);
+
+function loadSelection(): ThemeSel {
+  return themeSync.loadSync();
 }
 
 export const useTheme = create<ThemeState>((set, get) => {
@@ -110,7 +120,24 @@ export const useTheme = create<ThemeState>((set, get) => {
 
   const persist = () => {
     const s = get();
-    localStorage.setItem(KEY, JSON.stringify({ name: s.current, mode: s.mode }));
+    themeSync.save({ name: s.current, mode: s.mode });
+  };
+  // 선택 적용(DOM + 상태). save=true 면 영속(사용자 동작), false 면 권위 반영(저장 없음).
+  const applySel = (name: string, mode: ThemeMode | undefined, save: boolean): boolean => {
+    const theme = get().themes[name];
+    if (!theme) return false;
+    const m = mode ?? get().mode;
+    const effectiveMode = applyThemeToDom(theme, m);
+    syncTitlebarBacking(theme, effectiveMode);
+    set({
+      current: name,
+      spec: theme,
+      mode: m,
+      effectiveMode,
+      colors: colorsForMode(theme, m).colors,
+    });
+    if (save) persist();
+    return true;
   };
 
   return {
@@ -154,21 +181,10 @@ export const useTheme = create<ThemeState>((set, get) => {
       get().apply(cur.name, s.mode);
     },
 
-    apply: (name, mode) => {
-      const theme = get().themes[name];
-      if (!theme) return false;
-      const m = mode ?? get().mode;
-      const effectiveMode = applyThemeToDom(theme, m);
-      syncTitlebarBacking(theme, effectiveMode);
-      set({
-        current: name,
-        spec: theme,
-        mode: m,
-        effectiveMode,
-        colors: colorsForMode(theme, m).colors,
-      });
-      persist();
-      return true;
+    apply: (name, mode) => applySel(name, mode, true),
+    // 권위 반영(저장 없음) — 없는 테마면 무시(폴백 유지).
+    applyPersisted: (sel) => {
+      applySel(sel.name, sel.mode, false);
     },
 
     toggleMode: () => {
