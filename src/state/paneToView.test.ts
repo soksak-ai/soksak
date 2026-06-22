@@ -24,7 +24,7 @@ const tab = (id: string, views: View[]): ProjectTab => ({
       title: "1",
       layout: {
         type: "leaf",
-        group: { id: "g1", views, activeViewId: views[0]?.id ?? "" },
+        value: { id: "g1", views, activeViewId: views[0]?.id ?? "" },
       },
       activeGroupId: "g1",
     },

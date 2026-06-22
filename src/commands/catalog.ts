@@ -277,7 +277,7 @@ function serializeView(v: View) {
 
 // 그룹 트리(분할 구조 — splitId/dir/sizes 는 panel.resize 의 대상).
 function serializeLayout(node: GroupNode): object {
-  if (node.type === "leaf") return { panel: node.group.id };
+  if (node.type === "leaf") return { panel: node.value.id };
   return {
     split: { id: node.id, dir: node.dir, sizes: node.sizes },
     children: node.children.map(serializeLayout),

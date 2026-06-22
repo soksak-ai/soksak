@@ -5,6 +5,7 @@ import {
   resizeSplitTree,
   findSplitTree,
   leavesOf,
+  mapLeaves,
   removeLeaf,
   insertBeside,
   serializeSplitTree,
@@ -65,6 +66,25 @@ describe("findSplitTree / leavesOf", () => {
   });
   it("leaf 값 순서대로 수집", () => {
     expect(leavesOf(t)).toEqual(["p1", "p2", "p3"]);
+  });
+});
+
+describe("mapLeaves", () => {
+  it("모든 leaf 값 변환, 구조·sizes 보존", () => {
+    const t = split("a", "row", [0.7, 0.3], [
+      splitLeaf("p1"),
+      split("b", "col", [0.5, 0.5], [splitLeaf("p2"), splitLeaf("p3")]),
+    ]);
+    const up = mapLeaves(t, (v) => v.toUpperCase());
+    expect(leavesOf(up)).toEqual(["P1", "P2", "P3"]);
+    const s = up as Extract<SplitTree<string>, { type: "split" }>;
+    expect(s.sizes).toEqual([0.7, 0.3]);
+  });
+
+  it("fn 안에서 분기해 특정 leaf 만 변환", () => {
+    const t = split("a", "row", [0.5, 0.5], [splitLeaf("p1"), splitLeaf("p2")]);
+    const r = mapLeaves(t, (v) => (v === "p2" ? "X" : v));
+    expect(leavesOf(r)).toEqual(["p1", "X"]);
   });
 });
 

@@ -66,7 +66,7 @@ export function computeLayout(node: GroupNode): {
   const dividers: Divider[] = [];
   const walk = (n: GroupNode, r: Rect) => {
     if (n.type === "leaf") {
-      cells.push({ group: n.group, rect: r });
+      cells.push({ group: n.value, rect: r });
       return;
     }
     if (n.dir === "row") {

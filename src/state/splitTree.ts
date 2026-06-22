@@ -51,6 +51,15 @@ export function leavesOf<L>(node: SplitTree<L>): L[] {
   return node.type === "leaf" ? [node.value] : node.children.flatMap(leavesOf);
 }
 
+// 모든 leaf 값을 fn 으로 변환(구조 보존). 특정 leaf 만 바꾸려면 fn 안에서 분기.
+export function mapLeaves<L>(
+  node: SplitTree<L>,
+  fn: (v: L) => L,
+): SplitTree<L> {
+  if (node.type === "leaf") return { type: "leaf", value: fn(node.value) };
+  return { ...node, children: node.children.map((c) => mapLeaves(c, fn)) };
+}
+
 // pred 매칭 leaf 제거. 빈 split=null, 자식 1개=붕괴, 자식 수가 줄면 sizes 균등 재정규화.
 export function removeLeaf<L>(
   node: SplitTree<L>,

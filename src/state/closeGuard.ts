@@ -28,7 +28,7 @@ export function contentCloseReasons(content: ContentArea): string[] {
 // 그룹 트리(leaf/split) 안의 모든 뷰를 순서대로 — contentCloseReasons 가 쓴다.
 export function* viewsOfGroupNode(node: GroupNode): Generator<View> {
   if (node.type === "leaf") {
-    yield* node.group.views;
+    yield* node.value.views;
   } else {
     for (const child of node.children) yield* viewsOfGroupNode(child);
   }

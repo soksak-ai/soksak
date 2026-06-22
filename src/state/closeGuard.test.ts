@@ -21,7 +21,7 @@ const leafContent = (views: View[]): ContentArea => ({
   title: "1",
   layout: {
     type: "leaf",
-    group: { id: "g1", views, activeViewId: views[0]?.id ?? "" },
+    value: { id: "g1", views, activeViewId: views[0]?.id ?? "" },
   },
   activeGroupId: "g1",
 });
@@ -35,8 +35,8 @@ const splitContent = (left: View[], right: View[]): ContentArea => ({
     dir: "row",
     sizes: [0.5, 0.5],
     children: [
-      { type: "leaf", group: { id: "g1", views: left, activeViewId: left[0]?.id ?? "" } },
-      { type: "leaf", group: { id: "g2", views: right, activeViewId: right[0]?.id ?? "" } },
+      { type: "leaf", value: { id: "g1", views: left, activeViewId: left[0]?.id ?? "" } },
+      { type: "leaf", value: { id: "g2", views: right, activeViewId: right[0]?.id ?? "" } },
     ],
   },
   activeGroupId: "g1",

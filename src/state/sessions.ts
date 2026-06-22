@@ -13,6 +13,7 @@ import {
   leavesOf,
   resizeSplitTree,
   findSplitTree,
+  mapLeaves,
 } from "./splitTree";
 
 // 3단 구조:
@@ -119,15 +120,9 @@ export interface ViewGroup {
 }
 
 // 그룹 재귀 트리. leaf = 그룹 하나, split = 행/열로 묶인 그룹들(sizes = 분할 비율).
-export type GroupNode =
-  | { type: "leaf"; group: ViewGroup }
-  | {
-      type: "split";
-      id: string;
-      dir: "row" | "col";
-      children: GroupNode[];
-      sizes: number[]; // children 와 같은 길이, 합 1
-    };
+// 컨텐츠의 그룹(분할) 트리 = 제네릭 SplitTree(leaf 값 = ViewGroup). split/remove/resize/find 는
+// splitTree.ts 단일 추상(PaneNode 와 동일 코드 — 중복 없음). leaf.value 가 ViewGroup.
+export type GroupNode = SplitTree<ViewGroup>;
 
 // 드롭 위치(드래그 분할 방향). center=이동, 나머지=해당 방향으로 분할.
 export type DropZone = "center" | "left" | "right" | "top" | "bottom";
@@ -444,18 +439,16 @@ function makeContent(title: string, program?: Program): ContentArea {
   return {
     id: newContentId(),
     title,
-    layout: { type: "leaf", group: g },
+    layout: splitLeaf(g),
     activeGroupId: g.id,
   };
 }
 
-const equalSizes = (n: number): number[] => Array(n).fill(1 / n);
 
 // ── 그룹 트리 헬퍼 ────────────────────────────────────────────────────────────
 
 export function allGroups(node: GroupNode, acc: ViewGroup[] = []): ViewGroup[] {
-  if (node.type === "leaf") acc.push(node.group);
-  else for (const c of node.children) allGroups(c, acc);
+  acc.push(...leavesOf(node)); // leaf 값(ViewGroup) = SplitTree leavesOf
   return acc;
 }
 
@@ -478,21 +471,17 @@ function findGroup(node: GroupNode, groupId: string): ViewGroup | undefined {
   return allGroups(node).find((g) => g.id === groupId);
 }
 
+// ── GroupNode 연산 = 제네릭 SplitTree 위임(단일 진실, PaneNode 와 동일 코드). ──────────
+// 순회·구조 조작(map/find/resize/remove/insert)은 splitTree.ts 하나뿐이다. 여기는 leaf
+// (ViewGroup) 술어·변환만 제공한다.
+
 // 특정 그룹의 ViewGroup 을 변환.
 function mapGroupNode(
   node: GroupNode,
   groupId: string,
   fn: (g: ViewGroup) => ViewGroup,
 ): GroupNode {
-  if (node.type === "leaf") {
-    return node.group.id === groupId
-      ? { type: "leaf", group: fn(node.group) }
-      : node;
-  }
-  return {
-    ...node,
-    children: node.children.map((c) => mapGroupNode(c, groupId, fn)),
-  };
+  return mapLeaves(node, (g) => (g.id === groupId ? fn(g) : g));
 }
 
 // 뷰가 어느 그룹에 있든 변환(종류 보존).
@@ -501,108 +490,55 @@ function mapViewNode(
   viewId: string,
   fn: (v: View) => View,
 ): GroupNode {
-  if (node.type === "leaf") {
-    if (!node.group.views.some((v) => v.id === viewId)) return node;
-    return {
-      type: "leaf",
-      group: {
-        ...node.group,
-        views: node.group.views.map((v) => (v.id === viewId ? fn(v) : v)),
-      },
-    };
-  }
-  return {
-    ...node,
-    children: node.children.map((c) => mapViewNode(c, viewId, fn)),
-  };
+  return mapLeaves(node, (g) =>
+    g.views.some((v) => v.id === viewId)
+      ? { ...g, views: g.views.map((v) => (v.id === viewId ? fn(v) : v)) }
+      : g,
+  );
 }
 
-// split 노드 sizes 변환. 적용했으면 true.
-function findSplit(node: GroupNode, splitId: string): boolean {
-  if (node.type === "leaf") return false;
-  if (node.id === splitId) return true;
-  return node.children.some((c) => findSplit(c, splitId));
-}
-
-function mapSplitNode(
+// split 노드 존재 여부 / sizes 변환 — 제네릭 위임.
+const findSplit = (node: GroupNode, splitId: string): boolean =>
+  findSplitTree(node, splitId);
+const mapSplitNode = (
   node: GroupNode,
   splitId: string,
   sizes: number[],
-): GroupNode {
-  if (node.type === "leaf") return node;
-  if (node.id === splitId && sizes.length === node.children.length) {
-    return { ...node, sizes };
-  }
-  return {
-    ...node,
-    children: node.children.map((c) => mapSplitNode(c, splitId, sizes)),
-  };
-}
+): GroupNode => resizeSplitTree(node, splitId, sizes);
 
-// 뷰 제거. 그룹이 비면 leaf 제거, 자식 하나 남는 split 은 붕괴. 전체가 비면 tree=null.
+// 뷰 제거: (1) 그 뷰를 가진 그룹에서 뷰만 빼고 활성 보정(mapLeaves), (2) 빈 그룹 leaf 를
+// removeLeaf 로 붕괴. split 정리(붕괴·sizes 재정규화)는 removeLeaf 단일 구현 재사용.
 function removeView(
   node: GroupNode,
   viewId: string,
 ): { tree: GroupNode | null; removed: View | null } {
-  if (node.type === "leaf") {
-    const found = node.group.views.find((v) => v.id === viewId);
-    if (!found) return { tree: node, removed: null };
-    const views = node.group.views.filter((v) => v.id !== viewId);
-    if (views.length === 0) return { tree: null, removed: found };
-    let activeViewId = node.group.activeViewId;
-    if (activeViewId === viewId) {
-      const idx = node.group.views.findIndex((v) => v.id === viewId);
-      activeViewId = (views[idx] ?? views[idx - 1] ?? views[0]).id;
-    }
-    return {
-      tree: { type: "leaf", group: { ...node.group, views, activeViewId } },
-      removed: found,
-    };
-  }
   let removed: View | null = null;
-  const children: GroupNode[] = [];
-  for (const c of node.children) {
-    const r = removeView(c, viewId);
-    if (r.removed) removed = r.removed;
-    if (r.tree !== null) children.push(r.tree);
-  }
-  if (children.length === 0) return { tree: null, removed };
-  if (children.length === 1) return { tree: children[0], removed };
-  const sizes =
-    children.length === node.children.length
-      ? node.sizes
-      : equalSizes(children.length);
-  return { tree: { ...node, children, sizes }, removed };
+  const mapped = mapLeaves(node, (g) => {
+    const found = g.views.find((v) => v.id === viewId);
+    if (!found) return g;
+    removed = found;
+    const views = g.views.filter((v) => v.id !== viewId);
+    let activeViewId = g.activeViewId;
+    if (activeViewId === viewId) {
+      const idx = g.views.findIndex((v) => v.id === viewId);
+      activeViewId = (views[idx] ?? views[idx - 1] ?? views[0])?.id ?? "";
+    }
+    return { ...g, views, activeViewId };
+  });
+  if (!removed) return { tree: node, removed: null };
+  const { tree } = removeLeaf(mapped, (g) => g.views.length === 0);
+  return { tree, removed };
 }
 
-// 그룹(leaf) 하나를 통째로 제거. 빈 split 붕괴는 removeView 와 동일.
+// 그룹(leaf) 하나를 통째로 제거 = removeLeaf(그 group id 매칭, 붕괴 포함).
 function removeGroup(
   node: GroupNode,
   groupId: string,
 ): { tree: GroupNode | null; removed: ViewGroup | null } {
-  if (node.type === "leaf") {
-    return node.group.id === groupId
-      ? { tree: null, removed: node.group }
-      : { tree: node, removed: null };
-  }
-  let removed: ViewGroup | null = null;
-  const children: GroupNode[] = [];
-  for (const c of node.children) {
-    const r = removeGroup(c, groupId);
-    if (r.removed) removed = r.removed;
-    if (r.tree !== null) children.push(r.tree);
-  }
-  if (children.length === 0) return { tree: null, removed };
-  if (children.length === 1) return { tree: children[0], removed };
-  const sizes =
-    children.length === node.children.length
-      ? node.sizes
-      : equalSizes(children.length);
-  return { tree: { ...node, children, sizes }, removed };
+  return removeLeaf(node, (g) => g.id === groupId);
 }
 
-// targetGroup 을 fresh 그룹과 분할(side 방향). 이미 같은 방향 split 의 직속 자식이면
-// 형제로 삽입(중첩 회피).
+// targetGroup 을 fresh 그룹과 분할(side 방향) = insertBeside(같은 dir 형제면 중첩 회피).
 function splitAtGroup(
   node: GroupNode,
   targetGroupId: string,
@@ -612,38 +548,14 @@ function splitAtGroup(
   const dir: "row" | "col" =
     side === "left" || side === "right" ? "row" : "col";
   const before = side === "left" || side === "top";
-  if (node.type === "leaf") {
-    if (node.group.id !== targetGroupId) return node;
-    const target: GroupNode = { type: "leaf", group: node.group };
-    const freshNode: GroupNode = { type: "leaf", group: fresh };
-    const children = before ? [freshNode, target] : [target, freshNode];
-    return {
-      type: "split",
-      id: newSplitId(),
-      dir,
-      children,
-      sizes: equalSizes(2),
-    };
-  }
-  if (node.dir === dir) {
-    const idx = node.children.findIndex(
-      (c) => c.type === "leaf" && c.group.id === targetGroupId,
-    );
-    if (idx !== -1) {
-      const children = [...node.children];
-      children.splice(before ? idx : idx + 1, 0, {
-        type: "leaf",
-        group: fresh,
-      });
-      return { ...node, children, sizes: equalSizes(children.length) };
-    }
-  }
-  return {
-    ...node,
-    children: node.children.map((c) =>
-      splitAtGroup(c, targetGroupId, side, fresh),
-    ),
-  };
+  return insertBeside(
+    node,
+    (g) => g.id === targetGroupId,
+    dir,
+    before,
+    fresh,
+    newSplitId,
+  );
 }
 
 // 활성 그룹이 사라졌으면 첫 그룹으로 보정 + 최대화 뷰가 사라졌으면 최대화 해제.
@@ -1243,10 +1155,7 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       if (grp && content.layout.type === "leaf" && grp.views.length <= 1) {
         const next = normalizeActiveGroupC({
           ...content,
-          layout: {
-            type: "leaf",
-            group: { ...grp, views: [], activeViewId: "" },
-          },
+          layout: splitLeaf({ ...grp, views: [], activeViewId: "" }),
         });
         r = ok({ activeGroupId: next.activeGroupId, activeViewId: "" });
         return {
