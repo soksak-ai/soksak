@@ -105,7 +105,10 @@ localStorage 6개 스토어(settings/theme/pluginSettings/bookmarks/plugins/패�
 ## 7. 마일스톤 순서 (병행)
 
 - 독립·즉시: **C1**(우측 밀기) — 가시적, self-contained.
-- 인프라 기반: **A3 → A2 → A1 → A4 → A5 → A6** (직렬화·저장이 복원의 토대).
+- 인프라 기반: **A0(제네릭 SplitTree 통합) → A2(직렬화) → A1(저장) → A4 → A5 → A6**.
+  - **A0 [RULE]**: GroupNode(뷰 그룹)·PaneNode(터미널 pane)는 같은 split-tree를 두 번 구현한 중복이었다. 단일 제네릭 `SplitTree<L>`(데이터+연산 split/remove/resize/find+직렬화, `src/state/splitTree.ts`)로 통합하고 둘 다 이걸 쓴다. 렌더링만 특화. **split 로직 중복 금지(단일 진실).**
+  - **A3(터미널 pane 비율)는 A0에서 자동으로 나온다** — PaneNode가 SplitTree를 채택하면 sizes/resize를 공짜로 얻음(별도 구현 없음).
+  - A2는 A0의 `serializeSplitTree`로 두 트리를 동일 경로로 직렬화.
 - 사이드바: **B1 → B2 → B3** (rename·merge 일반화가 folderpop 토대).
 - A·B·C는 파일 겹침 최소(C=App.tsx/CSS, A=sessions/state/app.data, B=viewRegistry/LeftSidebarHost/sessions). sessions.ts는 A·B 공유 → 순차.
 
