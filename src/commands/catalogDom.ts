@@ -123,6 +123,36 @@ export function registerDomCatalog(): void {
     },
   });
 
+  register("ui.input.dblclick", {
+    description:
+      "Dispatch a double-click (two clicks + a dblclick event) to an exposed node (E2E injection). Use to drive double-click UI flows like inline tab/label rename. Unexposed addresses return NOT_EXPOSED — no guessing.",
+    triggers: { ko: "더블클릭 두번클릭 이름변경 rename 주입 E2E" },
+    params: {
+      address: { type: "string", description: "Exposed node address from ui.tree", required: true },
+    },
+    returns: "{ dblclicked, address }",
+    errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
+    danger: "inject",
+    examples: ['sok ui.input.dblclick \'{"address":"win/main/chrome/tab/left/a.x"}\''],
+    handler: (p) => {
+      const addr = p.address as string;
+      const el = resolveElement(addr);
+      if (!el) return notExposed(addr);
+      const r = el.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      const fire = (type: string) =>
+        el.dispatchEvent(
+          new MouseEvent(type, { clientX: x, clientY: y, bubbles: true, button: 0, view: window }),
+        );
+      // React onDoubleClick 은 네이티브 dblclick 을 듣는다 — 두 click 으로 자연 발생하지 않으니 명시 디스패치.
+      fire("mousedown"); fire("mouseup"); fire("click");
+      fire("mousedown"); fire("mouseup"); fire("click");
+      fire("dblclick");
+      return { dblclicked: true, address: addr };
+    },
+  });
+
   register("ui.input.fill", {
     description:
       "Set the value of an exposed input/textarea node and dispatch input+change events (E2E injection). Uses the native value setter so React controlled inputs pick the value up. Unexposed addresses return NOT_EXPOSED.",

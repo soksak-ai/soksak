@@ -165,6 +165,7 @@ export const ViewTabs = memo(function ViewTabs({
             <button
               type="button"
               className="icon-btn icon-btn--mini view-tab-close"
+              data-node={`tab/view/${idx}/close`}
               title={t("view.close")}
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
