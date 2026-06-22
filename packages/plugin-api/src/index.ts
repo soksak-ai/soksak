@@ -206,6 +206,8 @@ export interface SoksakPluginApi {
       set: (key: string, value: unknown) => Promise<void>;
       delete: (key: string) => Promise<boolean>;
       keys: (prefix?: string) => Promise<string[]>;
+      /** 이 플러그인 ns 의 kv 변경(set/delete) 전 창 구독 — 변경된 key 콜백. 해지 함수 반환. */
+      watch: (cb: (key: string | null) => void) => Disposable;
     };
     define: (collection: string, opts: { indexes?: string[]; fts?: string[] }) => Promise<void>;
     put: (

@@ -171,6 +171,9 @@ export interface SoksakPluginApi {
       set: (key: string, value: unknown) => Promise<void>;
       delete: (key: string) => Promise<boolean>;
       keys: (prefix?: string) => Promise<string[]>;
+      /** 이 플러그인 ns 의 kv 변경(set/delete) 전 창 구독 — CLI/MCP·다른 창 변경을 폴링 0 으로
+       *  반영. 콜백은 변경된 key. collection 변경은 제외(그건 data.watch). 해지 함수 반환. */
+      watch: (cb: (key: string | null) => void) => Disposable;
     };
     /** 컬렉션 정의(멱등) — indexes=구조 질의 필드, fts=CJK 전문검색 필드. */
     define: (
@@ -917,6 +920,13 @@ export function buildPluginApi(
               deps.invoke("data_kv_keys", { ns: id, prefix: prefix ?? null }) as Promise<
                 string[]
               >,
+            // kv 변경(coll 없음)만 — 이 플러그인 ns 의 set/delete 전 창 broadcast 를 필터(폴링 0).
+            watch: (cb) => {
+              const un = deps.onDataChange((e) => {
+                if (e.ns === id && e.coll == null) cb(e.id);
+              });
+              return tracker.wrap(un);
+            },
           },
           define: async (collection, opts) => {
             await deps.invoke("data_define", {
