@@ -17,7 +17,13 @@ import "./assets/fonts.css";
 // effect(마운트 후) 등록은 첫 터미널을 cwd 없이(홈) 시작시킨다(실측 사고).
 setSpawnOptionsProvider((paneId) => {
   const info = paneSpawnInfo(useSessions.getState().tabs, paneId);
-  return { cwd: info.cwd, shell: info.shell, initialCommand: info.command };
+  return {
+    cwd: info.cwd,
+    shell: info.shell,
+    initialCommand: info.command,
+    // 복원 터미널(A6)은 명령을 실행하지 않고 프롬프트에 붙여넣기만 한다.
+    ...(info.pasteOnly ? { pasteCommandOnly: true } : {}),
+  };
 });
 
 // AI 명령 인터페이스: 카탈로그 등록 + 소켓 요청 실행기(앱 수명 동안 1회).

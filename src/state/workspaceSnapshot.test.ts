@@ -111,7 +111,8 @@ describe("workspaceSnapshot 라운드트립", () => {
     const term = g1.views[0] as Extract<View, { kind: "terminal" }>;
     expect(term.kind).toBe("terminal");
     expect(term.focusedPaneId).toBe("p2");
-    expect(term.autorun).toEqual({ paneId: "p1", command: "claude" });
+    // A6: 복원된 터미널 autorun 은 pasteOnly 로 마킹된다(자동 실행 X, 프롬프트 paste).
+    expect(term.autorun).toEqual({ paneId: "p1", command: "claude", pasteOnly: true });
     const ps = term.layout as Extract<SplitTree<string>, { type: "split" }>;
     expect(ps.sizes).toEqual([0.7, 0.3]);
     expect(leavesOf(term.layout)).toEqual(["p1", "p2"]);

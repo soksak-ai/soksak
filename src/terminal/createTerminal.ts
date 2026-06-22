@@ -44,6 +44,9 @@ export interface CreateTerminalOptions {
   settings?: TerminalSettings;
   /** spawn 직후 PTY 로 자동 실행할 명령(예: claude/codex). 첫 pane 에서만. */
   initialCommand?: string;
+  /** 복원 터미널(A6): initialCommand 를 자동 실행(\r)하지 않고 프롬프트에 붙여넣기만 한다.
+   *  live PTY 는 복원 불가라 "같은 명령 재실행" 부작용을 강요하지 않는다 — 엔터는 사용자가. */
+  pasteCommandOnly?: boolean;
   /** 이 터미널의 pane id — 셸에 SOKSAK_PANE 으로 주입(sok CLI 컨텍스트 타기팅). */
   paneId?: string;
 }
@@ -307,8 +310,13 @@ export async function createTerminal(
   });
 
   // 첫 프로그램 자동 실행(claude/codex). 셸 프롬프트가 뜨면 PTY 가 버퍼한 입력을 처리한다.
+  // 복원 터미널(A6, pasteCommandOnly)은 \r 없이 명령만 넣어 프롬프트에 대기시킨다 — 엔터는 사용자가.
   if (options.initialCommand) {
-    writeToPty(`${options.initialCommand}\r`);
+    writeToPty(
+      options.pasteCommandOnly
+        ? options.initialCommand
+        : `${options.initialCommand}\r`,
+    );
   }
 
   // 입력: xterm → PTY. IME 조합 중 누출되는 부분 자모는 shouldSkip 으로 거른다.

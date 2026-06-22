@@ -125,7 +125,8 @@ function deserializeView(s: ViewSnapshot, newSplitId: () => string): View {
         title: s.title,
         layout: deserializeSplitTree(s.layout, (p) => p, newSplitId),
         focusedPaneId: s.focusedPaneId,
-        ...(s.autorun ? { autorun: s.autorun } : {}),
+        // 복원된 터미널의 명령은 자동 실행하지 않고 프롬프트에 붙여넣기만(A6) — pasteOnly 마킹.
+        ...(s.autorun ? { autorun: { ...s.autorun, pasteOnly: true } } : {}),
       };
     case "file":
       return { id: s.id, kind: "file", title: s.title, path: s.path, mode: s.mode };

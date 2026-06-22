@@ -106,6 +106,7 @@ let spawnOptionsProvider: (paneId: string) => {
   cwd?: string;
   shell?: string;
   initialCommand?: string;
+  pasteCommandOnly?: boolean;
 } = () => ({});
 
 export function setSpawnOptionsProvider(
@@ -113,6 +114,7 @@ export function setSpawnOptionsProvider(
     cwd?: string;
     shell?: string;
     initialCommand?: string;
+    pasteCommandOnly?: boolean;
   },
 ): void {
   spawnOptionsProvider = fn;
@@ -158,6 +160,7 @@ export function getHost(paneId: string): HTMLDivElement {
     ...(spawn.cwd ? { cwd: spawn.cwd } : {}),
     ...(spawn.shell ? { shell: spawn.shell } : {}),
     ...(spawn.initialCommand ? { initialCommand: spawn.initialCommand } : {}),
+    ...(spawn.pasteCommandOnly ? { pasteCommandOnly: true } : {}),
     paneId,
   })
     .then((handle) => {

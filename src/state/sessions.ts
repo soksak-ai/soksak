@@ -82,7 +82,9 @@ export type View =
       focusedPaneId: string;
       // 이 pane 의 셸이 뜨면 1회 자동 실행할 셸 명령(에이전트류 프로그램 —
       // 명령 문자열은 programRegistry 가 resolve, ensure 설치 래핑 포함).
-      autorun?: { paneId: string; command: string };
+      // pasteOnly: 복원된 터미널(A6)은 명령을 자동 실행하지 않고 프롬프트에 붙여넣기만 한다
+      // (엔터는 사용자가) — live PTY 는 복원 불가라 "같은 명령 재실행"을 강요하지 않는다(부작용 회피).
+      autorun?: { paneId: string; command: string; pasteOnly?: boolean };
       status?: ViewStatus;
     }
   | {
@@ -671,17 +673,19 @@ export function collectAllLeafIds(tabs: ProjectTab[]): string[] {
 export function paneSpawnInfo(
   tabs: ProjectTab[],
   paneId: string,
-): { cwd?: string; shell?: string; command?: string } {
+): { cwd?: string; shell?: string; command?: string; pasteOnly?: boolean } {
   for (const t of tabs) {
     for (const c of t.contents) {
       for (const v of allViews(c.layout)) {
         if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
           const shell = t.shell || useSettings.getState().shell || undefined;
+          const isAutorunPane = v.autorun?.paneId === paneId;
           return {
             cwd: t.root,
             shell,
-            command:
-              v.autorun?.paneId === paneId ? v.autorun.command : undefined,
+            command: isAutorunPane ? v.autorun?.command : undefined,
+            // 복원 터미널(A6): 명령을 실행 대신 프롬프트에 붙여넣기만.
+            ...(isAutorunPane && v.autorun?.pasteOnly ? { pasteOnly: true } : {}),
           };
         }
       }
