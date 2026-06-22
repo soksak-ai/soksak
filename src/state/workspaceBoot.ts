@@ -41,7 +41,8 @@ function coreOnDataChange(cb: (key: string) => void): () => void {
   };
 }
 
-const coreDeps = {
+// core kv 저장 의존성(invoke/data-change/ls) — viewLabels 등 다른 core 영속 상태도 공유.
+export const coreStoreDeps = {
   invoke: (cmd: string, args: Record<string, unknown>) => invoke(cmd, args),
   onDataChange: coreOnDataChange,
   localStorage: window.localStorage,
@@ -68,13 +69,13 @@ export async function initWorkspacePersistence(): Promise<boolean> {
     key: `window/${label}`,
     lsKey: `soksak.window.${label}`,
     fallback: EMPTY_WINDOW,
-    ...coreDeps,
+    ...coreStoreDeps,
   });
   const manifestStore = makeCoreStore<WindowManifest>({
     key: "windows",
     lsKey: "soksak.windows",
     fallback: EMPTY_MANIFEST,
-    ...coreDeps,
+    ...coreStoreDeps,
   });
 
   // 1) 복원

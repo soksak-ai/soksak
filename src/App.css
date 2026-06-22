@@ -3195,6 +3195,19 @@ select.dctl {
   background: rgba(127, 127, 127, 0.28);
   color: var(--fg);
 }
+/* 탭 이름변경 인라인 입력(B1) — 탭과 같은 폰트/패딩, accent 윤곽만. 박스 안 박스 회피. */
+.left-host-tab-rename {
+  border: none;
+  border-radius: 6px;
+  background: var(--inset);
+  color: var(--fg);
+  font-size: 11px;
+  padding: 3px 8px;
+  outline: 1px solid var(--acc);
+  outline-offset: -1px;
+  min-width: 0;
+  max-width: 120px;
+}
 .left-host-body {
   /* sidebar-left 플러그인 뷰 슬롯 — flex:1 + position:relative containing block(슬롯 계약).
      .plugin-view-host(absolute inset:0)가 이 박스를 채운다. */

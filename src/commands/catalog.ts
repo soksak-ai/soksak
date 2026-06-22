@@ -20,6 +20,7 @@ import {
   type ViewGroup,
 } from "../state/sessions";
 import { useSettings } from "../state/settings";
+import { useViewLabels } from "../state/viewLabels";
 import { useBookmarks } from "../state/bookmarks";
 import { useTheme } from "../state/theme";
 import { useIconRegistry } from "../ui/icons/registry";
@@ -602,6 +603,43 @@ export function registerCatalog(): void {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
       return S().toggleRightSidebar(t.id, p.open as boolean | undefined);
+    },
+  });
+
+  register("view.label.set", {
+    description:
+      "Set a custom tab label for a sidebar view (overrides the manifest title). Empty label clears the override (manifest fallback). viewKey = '<pluginId>.<viewId>' from ui.tree (tab/left/<key>).",
+    triggers: { ko: "사이드바 탭 이름변경 라벨 뷰 제목 변경" },
+    params: {
+      view: { type: "string", description: "viewKey '<pluginId>.<viewId>'", required: true },
+      label: { type: "string", description: "Custom label; empty to clear", required: true },
+    },
+    returns: "{ view, label }",
+    errors: ["INVALID_PARAMS"],
+    examples: [
+      'sok view.label.set \'{"view":"soksak-plugin-folderpop.folders","label":"폴더팝"}\'',
+    ],
+    handler: (p) => {
+      const key = p.view as string;
+      useViewLabels.getState().setLabel(key, p.label as string);
+      return { view: key, label: useViewLabels.getState().labels[key] ?? "" };
+    },
+  });
+
+  register("view.label.get", {
+    description:
+      "Get the custom tab label override for a sidebar view (empty = none, caller falls back to manifest title). Omit view to list all overrides.",
+    triggers: { ko: "사이드바 탭 라벨 조회 뷰 제목" },
+    params: {
+      view: { type: "string", description: "viewKey; omit to list all overrides" },
+    },
+    returns: "{ labels } or { view, label }",
+    examples: ["sok view.label.get", 'sok view.label.get \'{"view":"x.y"}\''],
+    handler: (p) => {
+      const labels = useViewLabels.getState().labels;
+      if (p.view !== undefined)
+        return { view: p.view, label: labels[p.view as string] ?? "" };
+      return { labels };
     },
   });
 

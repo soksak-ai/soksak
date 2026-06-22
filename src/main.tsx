@@ -6,7 +6,8 @@ import { initPluginHost } from "./plugins/host";
 import { initNotify } from "./lib/notify";
 import { ensureDefaultWorkspace, validateProjectRoot } from "./lib/workspace";
 import { paneSpawnInfo, useSessions } from "./state/sessions";
-import { initWorkspacePersistence } from "./state/workspaceBoot";
+import { initWorkspacePersistence, coreStoreDeps } from "./state/workspaceBoot";
+import { initViewLabelsPersistence } from "./state/viewLabels";
 import { useSettings } from "./state/settings";
 import { setSpawnOptionsProvider } from "./terminal/paneHosts";
 import { startTerminalStatusBridge } from "./terminal/terminalStatus";
@@ -59,6 +60,12 @@ async function boot(): Promise<void> {
     restored = await initWorkspacePersistence();
   } catch (e) {
     console.error("워크스페이스 영속 초기화 실패:", e);
+  }
+  // 사이드바 탭 라벨 오버라이드(B1) 영속 — 같은 core-kv deps 공유.
+  try {
+    initViewLabelsPersistence(coreStoreDeps);
+  } catch (e) {
+    console.error("뷰 라벨 영속 초기화 실패:", e);
   }
   try {
     if (!restored) {
