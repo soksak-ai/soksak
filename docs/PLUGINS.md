@@ -201,7 +201,7 @@ EEXIST 류)·`BROKEN`(dangling 심링크/probe 실패)·`VERSION_MISMATCH`(minVe
 | `commands:inject` | danger=inject 명령 실행(term.send/exec, browser.eval…) | ⚠ |
 | `editor` | `app.editor` — CM6 확장·언어·포매터·버퍼 읽기/쓰기 | |
 | `storage` | `app.storage` — `~/.soksak/plugins-data/<id>/` 전용 저장소 | |
-| `fs:read` / `fs:write` | `app.fs.readText·list` / `app.fs.writeText` — 임의 경로 | ⚠ |
+| `fs:read` / `fs:write` | `app.fs.readText·readBinary·url·list` / `app.fs.writeText` — 임의 경로 | ⚠ |
 | `terminal` | `app.terminal.runningCommands` — 실행 중 명령 관찰(명령라인·cwd 스냅샷) | ⚠ |
 | `terminal:read` | `app.terminal.readBuffer·onOutput` — 화면 버퍼 내용 읽기·갱신 구독(전 화면 텍스트 — 명령 관찰보다 강함) | ⚠ |
 | `terminal:write` | `app.terminal.sendText` — PTY 키 주입(실행 중 프로그램에 타이핑) | ⚠ |
@@ -357,6 +357,7 @@ key 는 `^[A-Za-z0-9._-]+$`. 플러그인 제거 후에도 데이터는 보존�
 
 ```js
 await app.fs.readText(path);            // fs:read — { text, truncated }
+await app.fs.url(localPath);            // fs:read — 로컬 파일 → webview 로드 URL(영상·이미지). 같은 path 멱등
 await app.fs.writeText(path, content);  // fs:write
 await app.git.log({ limit: 50, skip: 0 });   // git:read — path 기본값: 현재 프로젝트 루트
 await app.git.show(hash);               // { meta, files[{status,path}], patch }

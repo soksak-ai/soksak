@@ -257,6 +257,8 @@ export interface SoksakPluginApi {
     /** 바이너리 읽기 → { mime, base64 }(data URL 구성용). 미디어 뷰어(이미지/PDF/영상/오디오)가
      *  플러그인에서 파일을 렌더할 때 쓴다. "fs:read" 권한. */
     readBinary?: (path: string) => Promise<{ mime: string; base64: string }>;
+    /** 로컬 파일 → webview 로드 가능 URL(코어 표준). 같은 path 멱등. "fs:read" 게이트. */
+    url?: (path: string) => Promise<string>;
     writeText?: (path: string, content: string) => Promise<void>;
     /** 디렉토리 직속 자식. meta:true 면 각 자식 modified(unix 초) 포함(최신 파일 선택용). */
     list?: (path: string, opts?: { meta?: boolean }) => Promise<unknown>;
@@ -1044,6 +1046,32 @@ export function buildPluginApi(
                     mime: string;
                     base64: string;
                   }>
+              : undefined,
+            // [RULE] 로컬 파일 → webview 가 직접 로드 가능한 URL. 코어 표준 — 파일을 읽어 띄우는 모든
+            // 플러그인(에디터·미디어·이미지뷰어)이 동일 경로로 쓴다. asset:// 프로토콜은 hidden 디렉터리
+            // (.soksak)를 scope 에서 막는다 → read_file_base64(에디터가 쓰는 검증된 경로) 위에 blob URL.
+            // 멱등: 같은 path → 같은 URL(재read·재생성 없음). 언로드 시 revoke. "fs:read" 게이트 공유.
+            url: has("fs:read")
+              ? (() => {
+                  const urlCache = new Map<string, string>();
+                  return async (path: string): Promise<string> => {
+                    const hit = urlCache.get(path);
+                    if (hit) return hit;
+                    const { mime, base64 } = (await deps.invoke("read_file_base64", {
+                      path,
+                    })) as { mime: string; base64: string };
+                    const bin = atob(base64);
+                    const bytes = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+                    urlCache.set(path, objectUrl);
+                    tracker.wrap(() => {
+                      URL.revokeObjectURL(objectUrl);
+                      urlCache.delete(path);
+                    });
+                    return objectUrl;
+                  };
+                })()
               : undefined,
             writeText: has("fs:write")
               ? async (path, content) => {

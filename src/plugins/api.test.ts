@@ -74,6 +74,38 @@ describe("fs.readBinary (A13 미디어 — fs:read)", () => {
   });
 });
 
+describe("fs.url (로컬 파일 → webview 로드 URL — 코어 표준, 멱등)", () => {
+  it("read_file_base64 로 읽어 blob URL 반환, 같은 path 멱등(invoke 1회·동일 URL)", async () => {
+    let n = 0;
+    const orig = URL.createObjectURL;
+    const origRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = vi.fn(() => `blob:mock-${n++}`) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = vi.fn() as typeof URL.revokeObjectURL;
+    try {
+      const invoke = vi.fn(async () => ({ mime: "video/mp4", base64: "AAAA" }));
+      const { api } = buildPluginApi(
+        manifestOf({ permissions: ["fs:read"] }),
+        "/d",
+        fakeDeps({ invoke }),
+      );
+      const u1 = await api.fs?.url?.("/clip.mp4");
+      const u2 = await api.fs?.url?.("/clip.mp4");
+      expect(u1).toMatch(/^blob:/);
+      expect(u1).toBe(u2); // 멱등 — 같은 path 같은 URL
+      expect(invoke).toHaveBeenCalledTimes(1); // 캐시 → 재read 안 함
+      expect(invoke).toHaveBeenCalledWith("read_file_base64", { path: "/clip.mp4" });
+    } finally {
+      URL.createObjectURL = orig;
+      URL.revokeObjectURL = origRevoke;
+    }
+  });
+
+  it("fs:read 미선언 시 fs.url 부재", () => {
+    const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
+    expect(api.fs?.url).toBeUndefined();
+  });
+});
+
 describe("파일 뷰어 등록(registerFileViewer — 선언 외 거부, A13)", () => {
   it("ui 권한 + contributes.fileViewers 선언 시 등록 → resolve 매칭", () => {
     const m = manifestOf({

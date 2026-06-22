@@ -261,6 +261,8 @@ export interface SoksakPluginApi {
       offset?: number,
     ) => Promise<{ text: string; truncated: boolean; totalBytes: number }>;
     readBinary?: (path: string) => Promise<{ mime: string; base64: string }>;
+    /** 로컬 파일 → webview 로드 가능 URL(코어 표준). 같은 path 멱등. "fs:read" 게이트. */
+    url?: (path: string) => Promise<string>;
     writeText?: (path: string, content: string) => Promise<void>;
     list?: (path: string, opts?: { meta?: boolean }) => Promise<unknown>;
     watch?: (dir: string, cb: (dir: string) => void) => Disposable;
