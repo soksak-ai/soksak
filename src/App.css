@@ -855,10 +855,12 @@ body,
 .drop-ind-wrap {
   position: absolute;
   left: calc(var(--l) + var(--pane-inset));
-  top: calc(var(--t) + var(--pane-inset) + var(--header-h));
+  /* 드롭 오프셋은 전용 변수(--drop-top-h)가 소유 — 기본 = --header-h(콘텐츠: 본문 위 덮음).
+     사이드바는 --drop-top-h:0 으로 셀 전체를 덮되 --header-h(플러그인 row2 밴드 높이)는 건드리지 않는다. */
+  top: calc(var(--t) + var(--pane-inset) + var(--drop-top-h, var(--header-h)));
   width: calc(var(--w) - var(--pane-inset) * 2);
   height: calc(
-    var(--h) - (var(--pane-inset) * 2 + var(--header-h) + var(--status-h))
+    var(--h) - (var(--pane-inset) * 2 + var(--drop-top-h, var(--header-h)) + var(--status-h))
   );
   z-index: 10;
   pointer-events: none;
@@ -3197,6 +3199,9 @@ select.dctl {
   position: relative;
   display: flex;
   flex-direction: column;
+  /* 콘텐츠 그룹과 동일한 pane-inset 만큼 본문을 내려, 콘텐츠 row2(뷰 탭)와 사이드바 row2(플러그인
+     헤더)가 같은 y 에 오게 한다(그리드 정렬). */
+  padding-top: var(--pane-inset, 0);
 }
 .left-host-tabs {
   flex: 0 0 auto;
@@ -3215,18 +3220,8 @@ select.dctl {
   opacity: 0.5;
 }
 /* 탭 이름변경 인라인 입력(B1) — 탭과 같은 폰트/패딩, accent 윤곽만. 박스 안 박스 회피. */
-.left-host-tab-rename {
-  border: none;
-  border-radius: 6px;
-  background: var(--inset);
-  color: var(--fg);
-  font-size: 11px;
-  padding: 3px 8px;
-  outline: 1px solid var(--acc);
-  outline-offset: -1px;
-  min-width: 0;
-  max-width: 120px;
-}
+/* 좌측 탭 rename 은 콘텐츠 탭과 동일하게 .ctab.editing(박스) + .ctab-rename(투명 입력) 재사용 —
+   별도 .left-host-tab-rename 은 제거(폰트/박스 이중정의 방지). */
 .left-host-body {
   /* sidebar-left 플러그인 뷰 슬롯 — flex:1 + position:relative containing block(슬롯 계약).
      .plugin-view-host(absolute inset:0)가 이 박스를 채운다. */

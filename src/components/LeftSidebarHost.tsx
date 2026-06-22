@@ -28,6 +28,7 @@ import {
   getRegisteredView,
 } from "../plugins/viewRegistry";
 import { useSessions, type ProjectTab } from "../state/sessions";
+import { useTheme } from "../state/theme";
 import { useViewLabels, resolveViewLabel } from "../state/viewLabels";
 import {
   type SidebarGroup,
@@ -40,6 +41,9 @@ import { localize } from "../i18n";
 
 const DRAG_THRESHOLD = 5;
 const SIDEBAR_HEADER_PX = 30; // 탭 줄 높이(본문 가장자리 분할 판정 기준). 상태바 없음(=0).
+// 콘텐츠 그룹과 동일한 pane-inset(테마별) — 사이드바 본문도 같은 여백을 줘야 콘텐츠 row2(뷰 탭)와
+// 정렬된다(콘텐츠 그룹은 inset 만큼 row2 가 밀린다). GroupArea.PANE_INSET 과 동일 값.
+const PANE_INSET: Record<string, number> = { flat: 0, card: 5, floating: 6 };
 
 // 콘텐츠 zone → 사이드바 drop(콘텐츠와 동일 4방향). center=탭 합류, 좌/우=가로(row) 분할,
 // 상/하=세로(col) 분할.
@@ -58,6 +62,9 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
   paneId: string;
 }) {
   const version = useViewRegistry((s) => s.version);
+  // 콘텐츠 그룹과 동일한 pane-inset(테마 paneStyle) — row2 정렬용.
+  const paneStyle = useTheme((s) => s.spec.chrome.paneStyle);
+  const paneInset = PANE_INSET[paneStyle] ?? 0;
   const registeredKeys = useMemo(
     () => viewsForPlacement("sidebar-left").map((v) => v.key),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,9 +231,10 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
         className="left-host-grid"
         ref={containerRef}
         style={
-          // --header-h:0 → 드롭 플레이스홀더(.drop-ind-wrap)가 셀 전체(탭 줄 포함)를 덮는다.
+          // --drop-top-h:0 → 드롭 플레이스홀더(.drop-ind-wrap)가 셀 전체(탭 줄 포함)를 덮는다.
+          // --header-h 는 건드리지 않는다(플러그인 row2 밴드 높이 = 콘텐츠 뷰탭 밴드와 동일 33px 상속).
           // (히트테스트의 헤더 오프셋은 JS SIDEBAR_HEADER_PX 가 따로 소유 — 시각/판정 분리.)
-          { "--header-h": "0px", "--status-h": "0px", "--pane-inset": "0px" } as CSSProperties
+          { "--drop-top-h": "0px", "--status-h": "0px", "--pane-inset": `${paneInset}px` } as CSSProperties
         }
       >
         {/* 셀(leaf 그룹) — 콘텐츠 egroup 처럼 % 절대 위치. 내부 = [탭 줄][본문]. */}
@@ -317,45 +325,47 @@ function SidebarLeaf({
           const reg = getRegisteredView(key);
           const fallback = reg ? localize(reg.decl.title) : key;
           const label = resolveViewLabel(key, fallback);
-          if (editingKey === key) {
-            return (
-              <input
-                key={key}
-                className="left-host-tab-rename"
-                data-node={`tab/left/${key}/rename`}
-                defaultValue={label}
-                autoFocus
-                onClick={(e) => e.stopPropagation()}
-                onBlur={(e) => {
-                  setLabel(key, e.target.value === fallback ? "" : e.target.value);
-                  setEditingKey(null);
-                }}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  if (isComposingEnter(e)) return;
-                  if (e.key === "Enter") {
-                    const v = e.currentTarget.value;
-                    setLabel(key, v === fallback ? "" : v);
-                    setEditingKey(null);
-                  } else if (e.key === "Escape") setEditingKey(null);
-                }}
-              />
-            );
-          }
+          const editing = editingKey === key;
+          // 콘텐츠 탭(.ctab, 상단 탭 줄)과 *동일 구조/디자인* 재사용 — 편집 박스는 .ctab.editing 이,
+          // 입력은 .ctab-rename(투명·font:inherit)이 소유한다(라벨과 폰트/모양 동일). left-host-tab 은 드래그 마커만.
           return (
-            <button
+            <div
               key={key}
-              type="button"
-              // 콘텐츠 탭(.ctab, 상단 탭 줄)과 *동일 디자인* 재사용 — left-host-tab 은 드래그 마커만.
-              className={`ctab left-host-tab${active === key ? " active" : ""}${dragging === key ? " dragging" : ""}`}
+              className={`ctab left-host-tab${active === key ? " active" : ""}${editing ? " editing" : ""}${dragging === key ? " dragging" : ""}`}
               data-node={`tab/left/${key}`}
               title={label}
-              onMouseDown={startDrag(key)}
+              onMouseDown={editing ? undefined : startDrag(key)}
               onDoubleClick={() => setEditingKey(key)}
             >
-              <span className="ctab-title">{label}</span>
-              <ViewBadge viewKey={key} />
-            </button>
+              {editing ? (
+                <input
+                  className="ctab-rename"
+                  data-node={`tab/left/${key}/rename`}
+                  defaultValue={label}
+                  autoFocus
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                  onBlur={(e) => {
+                    setLabel(key, e.target.value === fallback ? "" : e.target.value);
+                    setEditingKey(null);
+                  }}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (isComposingEnter(e)) return;
+                    if (e.key === "Enter") {
+                      const v = e.currentTarget.value;
+                      setLabel(key, v === fallback ? "" : v);
+                      setEditingKey(null);
+                    } else if (e.key === "Escape") setEditingKey(null);
+                  }}
+                />
+              ) : (
+                <>
+                  <span className="ctab-title">{label}</span>
+                  <ViewBadge viewKey={key} />
+                </>
+              )}
+            </div>
           );
         })}
       </div>
