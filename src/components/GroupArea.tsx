@@ -8,6 +8,7 @@ import { GroupStatusBar } from "./GroupStatusBar";
 import { PaneTree } from "./PaneTree";
 import { PluginViewHost } from "./PluginViewHost";
 import { ViewTabs } from "./ViewTabs";
+import { computeSplitLayout, hitTestCells } from "./splitLayout";
 import { useT } from "../i18n";
 import { useTheme } from "../state/theme";
 import { useUi } from "../state/ui";
@@ -58,55 +59,17 @@ const PANE_INSET: Record<string, number> = { flat: 0, card: 5, floating: 6 };
 // 최대화 시 셀/슬롯이 차지하는 전체 rect(컨텐츠 영역 기준 %).
 const FULL_RECT = { left: 0, top: 0, width: 100, height: 100 };
 
+// 콘텐츠 셀 레이아웃 = 공유 머신(computeSplitLayout). leaf 값(ViewGroup)을 cell.group 으로 매핑.
+// [중복 제거] 좌측 사이드바와 동일한 레이아웃/히트테스트를 공유한다(splitLayout.ts).
 export function computeLayout(node: GroupNode): {
   cells: Cell[];
   dividers: Divider[];
 } {
-  const cells: Cell[] = [];
-  const dividers: Divider[] = [];
-  const walk = (n: GroupNode, r: Rect) => {
-    if (n.type === "leaf") {
-      cells.push({ group: n.value, rect: r });
-      return;
-    }
-    if (n.dir === "row") {
-      let x = r.left;
-      n.children.forEach((c, i) => {
-        const w = r.width * n.sizes[i];
-        walk(c, { left: x, top: r.top, width: w, height: r.height });
-        x += w;
-        if (i < n.children.length - 1) {
-          dividers.push({
-            splitId: n.id,
-            dir: "row",
-            index: i,
-            rect: { left: x, top: r.top, width: 0, height: r.height },
-            spanPct: r.width,
-            sizes: n.sizes,
-          });
-        }
-      });
-    } else {
-      let y = r.top;
-      n.children.forEach((c, i) => {
-        const h = r.height * n.sizes[i];
-        walk(c, { left: r.left, top: y, width: r.width, height: h });
-        y += h;
-        if (i < n.children.length - 1) {
-          dividers.push({
-            splitId: n.id,
-            dir: "col",
-            index: i,
-            rect: { left: r.left, top: y, width: r.width, height: 0 },
-            spanPct: r.height,
-            sizes: n.sizes,
-          });
-        }
-      });
-    }
+  const { cells, dividers } = computeSplitLayout(node);
+  return {
+    cells: cells.map((c) => ({ group: c.value, rect: c.rect })),
+    dividers,
   };
-  walk(node, { left: 0, top: 0, width: 100, height: 100 });
-  return { cells, dividers };
 }
 
 const titleOf = (
@@ -201,6 +164,7 @@ export const GroupArea = memo(function GroupArea({
   // 본문 가장자리 ¼ 는 해당 방향 분할.
   // r 은 드래그 시작 시 1회 캡처한 컨테이너 rect — 탭 드래그 중 레이아웃은 정적이므로
   // 틱마다 getBoundingClientRect(강제 레이아웃)를 다시 읽지 않는다(원칙 5).
+  // 히트테스트 = 공유 머신(hitTestCells). 콘텐츠 헤더(HEADER_PX)·상태바(STATUS_PX) 오프셋 주입.
   const hitTest = useCallback(
     (
       clientX: number,
@@ -208,47 +172,21 @@ export const GroupArea = memo(function GroupArea({
       r: DOMRect,
       sourceGroupId?: string,
       selfCenterOnly = true,
-    ) => {
-    const cells = cellsRef.current;
-    const xPct = ((clientX - r.left) / r.width) * 100;
-    const yPct = ((clientY - r.top) / r.height) * 100;
-    const cell = cells.find(
-      (c) =>
-        xPct >= c.rect.left &&
-        xPct <= c.rect.left + c.rect.width &&
-        yPct >= c.rect.top &&
-        yPct <= c.rect.top + c.rect.height,
-    );
-    if (!cell) return null;
-    // 자기 출발 그룹 위: 그룹 드래그나 단일-뷰 탭은 항상 center(분할 무의미). 다중-뷰
-    // 그룹의 탭 드래그는 본문 가장자리에 떨어뜨려 그 탭만 새 패널로 분리할 수 있게 통과.
-    if (cell.group.id === sourceGroupId && selfCenterOnly) {
-      return { groupId: cell.group.id, zone: "center" as DropZone };
-    }
-    const cellTopPx = r.top + (cell.rect.top / 100) * r.height;
-    const cellHpx = (cell.rect.height / 100) * r.height;
-    const cellLeftPx = r.left + (cell.rect.left / 100) * r.width;
-    const cellWpx = (cell.rect.width / 100) * r.width;
-    const localY = clientY - cellTopPx;
-    const bodyTop = CHROME_TOP;
-    const bodyBottom = cellHpx - STATUS_PX;
-    if (localY < bodyTop || localY > bodyBottom || bodyBottom <= bodyTop) {
-      return { groupId: cell.group.id, zone: "center" as DropZone };
-    }
-    const px = (clientX - cellLeftPx) / cellWpx;
-    const py = (localY - bodyTop) / (bodyBottom - bodyTop);
-    const edge = 0.25;
-    if (px > edge && px < 1 - edge && py > edge && py < 1 - edge) {
-      return { groupId: cell.group.id, zone: "center" as DropZone };
-    }
-    const dl = px;
-    const dr = 1 - px;
-    const dt = py;
-    const db = 1 - py;
-    const m = Math.min(dl, dr, dt, db);
-    const zone: DropZone =
-      m === dl ? "left" : m === dr ? "right" : m === dt ? "top" : "bottom";
-    return { groupId: cell.group.id, zone };
+    ): { groupId: string; zone: DropZone } | null => {
+      const res = hitTestCells(
+        clientX,
+        clientY,
+        r,
+        cellsRef.current.map((c) => ({ value: c.group, rect: c.rect })),
+        (g) => g.id,
+        {
+          chromeTop: CHROME_TOP,
+          statusPx: STATUS_PX,
+          sourceId: sourceGroupId,
+          selfCenterOnly,
+        },
+      );
+      return res ? { groupId: res.id, zone: res.zone } : null;
     },
     [],
   );

@@ -78,10 +78,11 @@ export function reconcileSidebarLayout(
   });
 }
 
-// 드롭 타겟: into=대상 leaf 그룹에 합류(탭), split=대상 옆에 새 leaf 로 분리(세로).
+// 드롭 타겟: into=대상 leaf 그룹에 합류(탭), split=대상 옆에 새 leaf 로 분리.
+// dir=row(좌/우 분할)·col(상/하 분할) — 콘텐츠 영역과 동일한 4방향. before=앞(좌/상)에 삽입.
 export type SidebarDrop =
   | { type: "into"; targetKey: string }
-  | { type: "split"; targetKey: string; before: boolean };
+  | { type: "split"; targetKey: string; dir: "row" | "col"; before: boolean };
 
 // viewKey 를 가진 leaf 를 찾아 그 그룹 반환(없으면 null).
 function groupOf(layout: SidebarLayout, viewKey: string): SidebarGroup | null {
@@ -119,11 +120,11 @@ export function moveSidebarView(
         : g,
     );
   } else {
-    // 대상 leaf 옆에 새 leaf(분리). insertBeside 의 pred 는 leaf 그룹 단위.
+    // 대상 leaf 옆에 새 leaf(분리) — dir(row=좌우/col=상하)로 콘텐츠 영역과 동일한 4방향.
     next = insertBeside(
       next,
       (g) => g.viewKeys.includes(drop.targetKey),
-      "col", // 사이드바 분할은 세로
+      drop.dir,
       drop.before,
       group([viewKey]),
       newSplitId,

@@ -690,28 +690,29 @@ export function registerCatalog(): void {
       target: { type: "string", description: "target viewKey (a view in the target group)", required: true },
       zone: {
         type: "string",
-        description: "into | top | bottom",
-        enum: ["into", "top", "bottom"],
+        description: "into | left | right | top | bottom (4-direction split like content area)",
+        enum: ["into", "left", "right", "top", "bottom"],
         required: true,
       },
     },
     returns: "{}",
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sok sidebar.left.move \'{"view":"soksak-plugin-folderpop.folders","target":"soksak-plugin-file-tree.tree","zone":"bottom"}\'',
+      'sok sidebar.left.move \'{"view":"soksak-plugin-folderpop.folders","target":"soksak-plugin-file-tree.tree","zone":"right"}\'',
     ],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
       const zone = p.zone as string;
-      const drop =
-        zone === "into"
-          ? ({ type: "into", targetKey: p.target as string } as const)
-          : zone === "top" || zone === "bottom"
-            ? ({ type: "split", targetKey: p.target as string, before: zone === "top" } as const)
-            : null;
-      if (!drop)
-        return { ok: false as const, code: "INVALID_PARAMS", message: "zone: into | top | bottom" };
+      const target = p.target as string;
+      let drop;
+      if (zone === "into") drop = { type: "into" as const, targetKey: target };
+      else if (zone === "left" || zone === "right")
+        drop = { type: "split" as const, targetKey: target, dir: "row" as const, before: zone === "left" };
+      else if (zone === "top" || zone === "bottom")
+        drop = { type: "split" as const, targetKey: target, dir: "col" as const, before: zone === "top" };
+      else
+        return { ok: false as const, code: "INVALID_PARAMS", message: "zone: into | left | right | top | bottom" };
       return S().moveSidebarView(t.id, p.view as string, drop);
     },
   });

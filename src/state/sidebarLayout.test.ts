@@ -88,20 +88,29 @@ describe("moveSidebarView (drag-merge)", () => {
     expect(groups[1].activeViewKey).toBe("a.x"); // 이동=활성
   });
 
-  it("split: 대상 옆에 새 leaf 로 분리(세로)", () => {
+  it("split col: 대상 아래로 세로 분리", () => {
     sid = 0;
     const l = single(["a.x", "b.y"]);
-    // b.y 를 a.x 아래로 split(분리)
-    const r = moveSidebarView(l, "b.y", { type: "split", targetKey: "a.x", before: false }, newSplitId);
-    expect(r.type).toBe("split");
-    const groups = leavesOf(r as SplitTree<{ viewKeys: string[]; activeViewKey: string }>);
-    expect(groups.map((g) => g.viewKeys)).toEqual([["a.x"], ["b.y"]]);
+    const r = moveSidebarView(l, "b.y", { type: "split", targetKey: "a.x", dir: "col", before: false }, newSplitId);
+    const s = r as Extract<SidebarLayout, { type: "split" }>;
+    expect(s.type).toBe("split");
+    expect(s.dir).toBe("col");
+    expect(leavesOf(s).map((g) => g.viewKeys)).toEqual([["a.x"], ["b.y"]]);
+  });
+
+  it("split row: 대상 좌측으로 가로 분리(4방향, 콘텐츠와 동일)", () => {
+    sid = 0;
+    const l = single(["a.x", "b.y"]);
+    const r = moveSidebarView(l, "b.y", { type: "split", targetKey: "a.x", dir: "row", before: true }, newSplitId);
+    const s = r as Extract<SidebarLayout, { type: "split" }>;
+    expect(s.dir).toBe("row");
+    expect(leavesOf(s).map((g) => g.viewKeys)).toEqual([["b.y"], ["a.x"]]); // before=좌
   });
 
   it("마지막 한 뷰를 split 하려 하면 무의미 → 변화 없음", () => {
     sid = 0;
     const l = single(["a.x"]);
-    const r = moveSidebarView(l, "a.x", { type: "split", targetKey: "a.x", before: false }, newSplitId);
+    const r = moveSidebarView(l, "a.x", { type: "split", targetKey: "a.x", dir: "col", before: false }, newSplitId);
     expect(r).toEqual(l);
   });
 });
