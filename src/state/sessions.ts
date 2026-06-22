@@ -192,6 +192,9 @@ interface SessionsStore {
   // 프로젝트 레벨
   // 부트 1회: 기본 루트로 첫 프로젝트(t1/"P1") 생성 — main.tsx 전용(P3).
   bootstrapFirstProject: (root: string) => void;
+  // 영속된 레이아웃 복원(A5) — main.tsx 부트가 직렬화 스냅샷을 deserialize 해 통째 주입.
+  // bootstrap 과 배타: 복원본이 있으면 이걸, 없으면 bootstrap. reseed 는 호출부(persistence)가.
+  restoreProjects: (tabs: ProjectTab[], activeId: string) => void;
   addProject: (
     opts: NewProjectOpts,
   ) => CmdResult<
@@ -361,6 +364,79 @@ const newPaneId = () => `p${nextPaneId++}`;
 const newGroupId = () => `g${nextGroupId++}`;
 const newSplitId = () => `s${nextSplitId++}`;
 const newContentId = () => `c${nextContentId++}`;
+// split id 생성기(복원 시 workspaceSnapshot.deserialize 에 주입 — A2 는 split id 를 재생성한다).
+export const nextSplitIdGen = (): string => newSplitId();
+
+// 복원된 트리의 보존 id 위로 카운터를 올린다(신규 생성이 보존 id 와 충돌하지 않게). prefix 별로
+// "<prefix><n>" 의 n 최대치를 찾아 next* 를 max+1 로. 모든 tabs 를 스캔한다. A5 복원 후 1회 호출.
+export function reseedIdCounters(tabs: ProjectTab[]): void {
+  let maxT = 1,
+    maxV = 1,
+    maxP = 1,
+    maxG = 1,
+    maxS = 0,
+    maxC = 1;
+  const num = (id: string, prefix: string): number => {
+    if (!id.startsWith(prefix)) return 0;
+    const n = Number(id.slice(prefix.length));
+    return Number.isFinite(n) ? n : 0;
+  };
+  const scanSplit = (node: GroupNode): void => {
+    if (node.type === "split") {
+      maxS = Math.max(maxS, num(node.id, "s"));
+      node.children.forEach(scanSplit);
+    }
+  };
+  const scanPaneSplit = (node: PaneNode): void => {
+    if (node.type === "split") {
+      maxS = Math.max(maxS, num(node.id, "s"));
+      node.children.forEach(scanPaneSplit);
+    }
+  };
+  for (const t of tabs) {
+    maxT = Math.max(maxT, num(t.id, "t"));
+    for (const c of t.contents) {
+      maxC = Math.max(maxC, num(c.id, "c"));
+      scanSplit(c.layout);
+      for (const g of allGroups(c.layout)) {
+        maxG = Math.max(maxG, num(g.id, "g"));
+        for (const v of g.views) {
+          maxV = Math.max(maxV, num(v.id, "v"));
+          if (v.kind === "terminal") {
+            scanPaneSplit(v.layout);
+            for (const pid of collectLeafIds(v.layout))
+              maxP = Math.max(maxP, num(pid, "p"));
+          }
+        }
+      }
+    }
+  }
+  nextProjectId = maxT + 1;
+  nextViewId = maxV + 1;
+  nextPaneId = maxP + 1;
+  nextGroupId = maxG + 1;
+  nextSplitId = maxS + 1;
+  nextContentId = maxC + 1;
+}
+
+// 다음 생성될 id 미리보기(비파괴) — reseed 검증·진단용. 카운터를 증가시키지 않는다.
+export function newIds(): {
+  project: string;
+  view: string;
+  pane: string;
+  group: string;
+  split: string;
+  content: string;
+} {
+  return {
+    project: `t${nextProjectId}`,
+    view: `v${nextViewId}`,
+    pane: `p${nextPaneId}`,
+    group: `g${nextGroupId}`,
+    split: `s${nextSplitId}`,
+    content: `c${nextContentId}`,
+  };
+}
 
 const leaf = (id: string): PaneNode => splitLeaf(id);
 
@@ -733,6 +809,13 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     const alias = baseName(root) === "project1" ? "P1" : "";
     const t = makeProject("t1", { alias, root });
     set({ tabs: [t], activeId: "t1" });
+  },
+
+  restoreProjects: (tabs, activeId) => {
+    if (get().tabs.length > 0) return; // 멱등 — 부트 1회 전용(bootstrap 과 배타)
+    if (tabs.length === 0) return; // 빈 복원본은 무시(부트가 bootstrap 으로 폴백)
+    const active = tabs.some((t) => t.id === activeId) ? activeId : tabs[0].id;
+    set({ tabs, activeId: active });
   },
 
   addProject: (opts) => {

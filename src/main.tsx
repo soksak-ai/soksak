@@ -6,6 +6,7 @@ import { initPluginHost } from "./plugins/host";
 import { initNotify } from "./lib/notify";
 import { ensureDefaultWorkspace, validateProjectRoot } from "./lib/workspace";
 import { paneSpawnInfo, useSessions } from "./state/sessions";
+import { initWorkspacePersistence } from "./state/workspaceBoot";
 import { useSettings } from "./state/settings";
 import { setSpawnOptionsProvider } from "./terminal/paneHosts";
 import { startTerminalStatusBridge } from "./terminal/terminalStatus";
@@ -44,20 +45,31 @@ async function boot(): Promise<void> {
   } catch (e) {
     console.error("알림/딥링크 초기화 실패:", e);
   }
+  // 영속된 워크스페이스(레이아웃·탭·분할)를 먼저 복원(A5). 복원본이 있으면 기본 부트를 건너뛴다.
+  // 복원본의 root 들은 이전 세션에서 검증된 경로 — 부재 시 그 프로젝트 뷰는 빈 상태로 뜨고
+  // 사용자가 정리한다(여기서 fs 검증으로 전체 복원을 막지 않는다). 자동 저장 구독도 여기서 시작.
+  let restored = false;
   try {
-    // 사용자가 지정한 기본 프로젝트(설정 영속)가 있으면 그 루트로 시작 —
-    // 무효(삭제됨/홈 등)면 사유를 콘솔에 남기고 project1 로 폴백.
-    let root: string | null = null;
-    const preferred = useSettings.getState().defaultProjectRoot;
-    if (preferred) {
-      try {
-        root = await validateProjectRoot(preferred);
-      } catch (e) {
-        console.error("기본 프로젝트 루트 무효 — project1 폴백:", e);
+    restored = await initWorkspacePersistence();
+  } catch (e) {
+    console.error("워크스페이스 영속 초기화 실패:", e);
+  }
+  try {
+    if (!restored) {
+      // 복원본 없음 — 사용자가 지정한 기본 프로젝트(설정 영속)가 있으면 그 루트로,
+      // 무효면 사유를 콘솔에 남기고 project1 로 폴백.
+      let root: string | null = null;
+      const preferred = useSettings.getState().defaultProjectRoot;
+      if (preferred) {
+        try {
+          root = await validateProjectRoot(preferred);
+        } catch (e) {
+          console.error("기본 프로젝트 루트 무효 — project1 폴백:", e);
+        }
       }
+      root ??= await ensureDefaultWorkspace("project1");
+      useSessions.getState().bootstrapFirstProject(root);
     }
-    root ??= await ensureDefaultWorkspace("project1");
-    useSessions.getState().bootstrapFirstProject(root);
   } catch (e) {
     console.error("기본 프로젝트 루트 준비 실패:", e);
   }
