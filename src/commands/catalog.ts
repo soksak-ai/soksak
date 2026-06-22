@@ -605,6 +605,28 @@ export function registerCatalog(): void {
     },
   });
 
+  register("sidebar.right.mode", {
+    description:
+      "Right sidebar layout mode — overlay (floats over content) or push (occupies area like the left sidebar). Global setting; omit mode to query current.",
+    triggers: { ko: "우측 사이드바 밀기 영역차지 오버레이 모드 도킹" },
+    params: {
+      mode: { type: "string", description: "overlay | push — omit to query current" },
+    },
+    returns: "{ mode }",
+    errors: ["INVALID_PARAMS"],
+    examples: ["sok sidebar.right.mode", 'sok sidebar.right.mode \'{"mode":"push"}\''],
+    handler: (p) => {
+      const s = useSettings.getState();
+      if (p.mode !== undefined) {
+        if (p.mode !== "overlay" && p.mode !== "push")
+          return { ok: false as const, code: "INVALID_PARAMS", message: "mode: overlay | push" };
+        s.setRightSidebarMode(p.mode);
+        return { mode: p.mode };
+      }
+      return { mode: s.rightSidebarMode };
+    },
+  });
+
   // ----- content -----
   register("content.list", {
     description: "List content tabs in a project.",

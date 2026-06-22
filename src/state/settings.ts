@@ -15,6 +15,8 @@ export type FocusIndicator = "outline" | "corners";
 export type BrowserNewWindow = "window" | "tab";
 // 탭 닫기 확인 정책(R6) — warn=blocking status(미저장·실행 중 등)면 확인창, off=무조건 즉시 닫기.
 export type TabCloseConfirm = "warn" | "off";
+// 우측 플러그인 사이드바 배치: overlay=콘텐츠 위에 뜸(기존), push=좌측 사이드바처럼 영역 차지(콘텐츠 밀어냄).
+export type RightSidebarMode = "overlay" | "push";
 
 // 리사이즈 중 터미널 리플로우 정책(docs/PERFORMANCE.md 원칙 4·5):
 //   live   = 드래그 중에도 프레임당 1회 fit(실시간 리플로우, editor 스타일)
@@ -69,6 +71,7 @@ interface SettingsState extends TerminalSettings {
   defaultProjectRoot: string;
   // 탭 닫기 확인 정책(R6 — warn 기본).
   tabCloseConfirm: TabCloseConfirm;
+  rightSidebarMode: RightSidebarMode;
   setLanguage: (l: Language) => void;
   setProjectTabPosition: (p: TabPosition) => void;
   setContentTabPosition: (p: TabPosition) => void;
@@ -83,6 +86,7 @@ interface SettingsState extends TerminalSettings {
   setBrowserNewWindow: (p: BrowserNewWindow) => void;
   setDefaultProjectRoot: (root: string) => void;
   setTabCloseConfirm: (v: TabCloseConfirm) => void;
+  setRightSidebarMode: (v: RightSidebarMode) => void;
   setFontFamily: (v: string) => void;
   setFontSize: (v: number) => void;
   setCursorBlink: (v: boolean) => void;
@@ -107,6 +111,7 @@ const DEFAULTS = {
   browserNewWindow: "tab" as BrowserNewWindow,
   defaultProjectRoot: "",
   tabCloseConfirm: "warn" as TabCloseConfirm,
+  rightSidebarMode: "overlay" as RightSidebarMode,
   fontFamily:
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
   fontSize: 13,
@@ -162,6 +167,7 @@ export const useSettings = create<SettingsState>((set, get) => {
         browserNewWindow: s.browserNewWindow,
         defaultProjectRoot: s.defaultProjectRoot,
         tabCloseConfirm: s.tabCloseConfirm,
+        rightSidebarMode: s.rightSidebarMode,
         ...terminalSettingsOf(s),
       }),
     );
@@ -222,6 +228,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setTabCloseConfirm: (tabCloseConfirm) => {
       set({ tabCloseConfirm });
+      save();
+    },
+    setRightSidebarMode: (rightSidebarMode) => {
+      set({ rightSidebarMode });
       save();
     },
     setFontFamily: (fontFamily) => {

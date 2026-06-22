@@ -155,6 +155,8 @@ const ko = {
 
   "plugin.sidebar.toggle": "플러그인 사이드바 (⌥⌘B)",
   "plugin.sidebar.resize": "플러그인 사이드바 폭 조절",
+  "plugin.sidebar.push": "영역 차지(밀기)",
+  "plugin.sidebar.overlay": "오버레이로",
   "plugin.manager": "플러그인 관리",
   "plugin.manager.open": "플러그인 관리 열기",
   "plugin.view.missing": "플러그인 뷰 없음 — 플러그인이 비활성화됐거나 제거됨",
@@ -379,6 +381,8 @@ const en: Record<MsgKey, string> = {
 
   "plugin.sidebar.toggle": "Plugin sidebar (⌥⌘B)",
   "plugin.sidebar.resize": "Resize plugin sidebar",
+  "plugin.sidebar.push": "Dock (push)",
+  "plugin.sidebar.overlay": "Overlay",
   "plugin.manager": "Manage plugins",
   "plugin.manager.open": "Open plugin manager",
   "plugin.view.missing": "Plugin view unavailable — plugin disabled or removed",

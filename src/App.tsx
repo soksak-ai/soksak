@@ -40,6 +40,7 @@ import {
   terminalSettingsOf,
   useSettings,
   type TabPosition,
+  type RightSidebarMode,
 } from "./state/settings";
 import { useTheme } from "./state/theme";
 import {
@@ -130,6 +131,7 @@ const ProjectPane = memo(function ProjectPane({
   isActiveProject,
   sidebarW,
   rightW,
+  rightMode,
   contentTabPosition,
   startResize,
   startRightResize,
@@ -138,6 +140,7 @@ const ProjectPane = memo(function ProjectPane({
   isActiveProject: boolean;
   sidebarW: number;
   rightW: number;
+  rightMode: RightSidebarMode;
   contentTabPosition: TabPosition;
   startResize: (e: React.MouseEvent) => void;
   startRightResize: (e: React.MouseEvent) => void;
@@ -216,7 +219,7 @@ const ProjectPane = memo(function ProjectPane({
         />
       )}
       <div
-        className={`sidebar-right${project.rightOpen ? " open" : ""}`}
+        className={`sidebar-right${project.rightOpen ? " open" : ""}${rightMode === "push" ? " push" : ""}`}
         style={{
           width: project.rightOpen ? rightW : 0,
           borderLeftWidth: project.rightOpen ? 1 : 0,
@@ -284,6 +287,7 @@ function App() {
   const setSettingsSection = useUi((s) => s.setSettingsSection);
   const projectTabPosition = useSettings((s) => s.projectTabPosition);
   const contentTabPosition = useSettings((s) => s.contentTabPosition);
+  const rightSidebarMode = useSettings((s) => s.rightSidebarMode);
 
   // 터미널 외형 설정(폰트/커서/스크롤백). 개별 필드 구독 → 객체는 memo 로 안정화.
   const fontFamily = useSettings((s) => s.fontFamily);
@@ -458,7 +462,9 @@ function App() {
   // (position:absolute, z-index 20). 그 사각형을 네이티브 hit_test 의 "홀"로 보고하면
   // 그 영역의 스크롤/클릭이 아래 브라우저로 새지 않고 DOM(사이드바)이 받는다. webview 는
   // 풀사이즈 그대로 유지된다(과거의 webview 폭 클램프 우회는 폐지 — browser.rs 참조).
-  const rightRect = activeProject?.rightOpen ? rightW : 0;
+  // push 모드면 사이드바가 in-flow로 영역을 차지(콘텐츠·webview가 이미 좁아짐) → 오버레이 홀 불필요.
+  const rightRect =
+    activeProject?.rightOpen && rightSidebarMode !== "push" ? rightW : 0;
   useLayoutEffect(() => {
     // 닫힘(rightOpen false 또는 폭 0)이면 홀 비움.
     if (!activeProject?.rightOpen || rightW <= 0) {
@@ -794,6 +800,7 @@ function App() {
               isActiveProject={project.id === activeId}
               sidebarW={sidebarW}
               rightW={rightW}
+              rightMode={rightSidebarMode}
               contentTabPosition={contentTabPosition}
               startResize={startResize}
               startRightResize={startRightResize}

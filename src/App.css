@@ -2677,6 +2677,14 @@ select.dctl {
   border-left: 1px solid var(--bd); /* §B2 */
   background: var(--bg);
 }
+/* 밀기(push) 모드 — overlay 를 풀고 flex 흐름에 합류해 영역을 차지(좌측 사이드바처럼
+   본문을 밀어낸다). inset:auto 로 absolute 오프셋 초기화, z-index 평준화. */
+.sidebar-right.push {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  flex: none;
+}
 /* 열렸을 때만 그림자(닫힘=폭 0 이므로 가장자리 그림자 잔상 방지). */
 .sidebar-right.open {
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);

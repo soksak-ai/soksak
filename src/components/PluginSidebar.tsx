@@ -15,6 +15,7 @@ import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { useRegistry } from "../state/registry";
 import { installState, type RegistryEntry } from "../plugins/registry";
 import { useSessions, type ProjectTab } from "../state/sessions";
+import { useSettings } from "../state/settings";
 import { useUi } from "../state/ui";
 import { PluginViewHost } from "./PluginViewHost";
 import { ViewBadge } from "./ViewBadge";
@@ -38,6 +39,8 @@ export const PluginSidebar = memo(function PluginSidebar({
   );
   const setRightView = useSessions((s) => s.setRightView);
   const rightView = project.rightView;
+  const rightMode = useSettings((s) => s.rightSidebarMode);
+  const setRightMode = useSettings((s) => s.setRightSidebarMode);
 
   // 열렸는데 선택이 없거나 사라진 뷰면: 첫 등록 뷰 → 없으면 관리 패널.
   useEffect(() => {
@@ -81,6 +84,18 @@ export const PluginSidebar = memo(function PluginSidebar({
           </button>
         ))}
         <div className="plugin-rail-spacer" />
+        {/* 밀기 — 우측 사이드바를 overlay ↔ push(영역 차지) 전환. 설정 버튼 바로 위. */}
+        <button
+          type="button"
+          className={`icon-btn icon-btn--boxed plugin-rail-btn${rightMode === "push" ? " active" : ""}`}
+          title={rightMode === "push" ? t("plugin.sidebar.overlay") : t("plugin.sidebar.push")}
+          data-node="plugin-sidebar-push"
+          onClick={() =>
+            setRightMode(rightMode === "push" ? "overlay" : "push")
+          }
+        >
+          <Icon name="panel-right" />
+        </button>
         <button
           type="button"
           className={`icon-btn icon-btn--boxed plugin-rail-btn${rightView === MANAGER ? " active" : ""}`}
