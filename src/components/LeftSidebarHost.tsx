@@ -359,7 +359,7 @@ function SidebarLeaf({
           );
         })}
       </div>
-      <div className="left-host-body-wrap">
+      <div className="left-host-body-wrap" data-node="bodywrap">
         {hosted.map((k) => (
           <div
             key={k}
