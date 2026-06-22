@@ -83,6 +83,7 @@ export const ContentTabs = memo(function ContentTabs({
             <button
               type="button"
               className="icon-btn icon-btn--mini ctab-close"
+              data-node={`tab/content/${idx}/close`}
               title={t("content.close")}
               onClick={(e) => {
                 e.stopPropagation();

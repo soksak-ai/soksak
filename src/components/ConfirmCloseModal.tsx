@@ -31,7 +31,11 @@ export function ConfirmCloseModal() {
   if (!pending) return null;
   return (
     <div className="dmodal-overlay" onMouseDown={cancel}>
-      <div className="dmodal-card dconfirm" onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className="dmodal-card dconfirm"
+        data-node="modal/confirm-close"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="dconfirm-title">{t("confirm.closeTitle")}</div>
         <ul className="dconfirm-reasons">
           {pending.reasons.map((r, i) => (
@@ -39,12 +43,18 @@ export function ConfirmCloseModal() {
           ))}
         </ul>
         <div className="dconfirm-actions">
-          <button type="button" className="dbtn" onClick={cancel}>
+          <button
+            type="button"
+            className="dbtn"
+            data-node="modal/confirm-close/cancel"
+            onClick={cancel}
+          >
             {t("common.cancel")}
           </button>
           <button
             type="button"
             className="dbtn dbtn-danger"
+            data-node="modal/confirm-close/confirm"
             onClick={confirm}
           >
             {t("confirm.close")}

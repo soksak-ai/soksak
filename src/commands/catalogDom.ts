@@ -122,4 +122,39 @@ export function registerDomCatalog(): void {
       return { clicked: true, address: addr };
     },
   });
+
+  register("ui.input.fill", {
+    description:
+      "Set the value of an exposed input/textarea node and dispatch input+change events (E2E injection). Uses the native value setter so React controlled inputs pick the value up. Unexposed addresses return NOT_EXPOSED.",
+    triggers: { ko: "입력 주입 값입력 텍스트입력 폼입력 E2E" },
+    params: {
+      address: { type: "string", description: "Exposed node address from ui.tree", required: true },
+      value: { type: "string", description: "Value to set into the field", required: true },
+    },
+    returns: "{ filled, address }",
+    errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
+    danger: "inject",
+    examples: [
+      'sok ui.input.fill \'{"address":"win/main/content/view/x/node/url-input","value":"/path/clip.mp4"}\'',
+    ],
+    handler: (p) => {
+      const addr = p.address as string;
+      const el = resolveElement(addr);
+      if (!el) return notExposed(addr);
+      if (
+        !(el instanceof HTMLInputElement) &&
+        !(el instanceof HTMLTextAreaElement)
+      )
+        return { ok: false as const, code: "INVALID_PARAMS", message: `입력 노드 아님: ${addr}` };
+      // React controlled input 은 .value 직접 할당을 덮어쓴다 — prototype 의 native setter 로 넣어야 onChange 가 먹는다.
+      const proto =
+        el instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, "value")?.set?.call(el, p.value as string);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+      return { filled: true, address: addr };
+    },
+  });
 }
