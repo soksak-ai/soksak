@@ -557,6 +557,14 @@ body,
   background: rgba(127, 127, 127, 0.24);
   color: var(--fg);
 }
+/* 이름 편집 중 — 탭 자체가 input 박스가 된다(박스 안 박스 금지). accent 테두리로 편집 표시,
+   outline-offset 음수로 탭 크기 변동 없이 라벨↔input 모양만 동일하게. */
+.ctab.editing {
+  background: var(--inset);
+  outline: 1px solid var(--acc);
+  outline-offset: -1px;
+  color: var(--fg);
+}
 .ctab:hover {
   background: rgba(127, 127, 127, 0.18);
 }
@@ -566,13 +574,17 @@ body,
   text-overflow: ellipsis;
 }
 .ctab-rename {
-  width: 80px;
-  background: var(--bg);
-  border: 1px solid var(--bd);
-  border-radius: 3px;
+  /* 박스 안 박스 금지 — input 은 투명 텍스트 필드일 뿐, 편집 박스(테두리/배경)는 탭(.ctab.editing)이 소유.
+     라벨(.ctab-title) 자리를 그대로 채워 모양이 라벨과 같다. */
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
   color: var(--fg);
   font: inherit;
-  padding: 0 4px;
+  padding: 0;
+  margin: 0;
 }
 .ctab-close {
   border: none;
@@ -1877,7 +1889,6 @@ body,
 /* ── 눌린 표면(inset): 입력류 ── */
 .bv-url,
 .tab-rename,
-.ctab-rename,
 .cmf-input {
   background: var(--inset);
   color: var(--fg);

@@ -55,7 +55,7 @@ export const ContentTabs = memo(function ContentTabs({
       {project.contents.map((c, idx) => (
         <div
           key={c.id}
-          className={`ctab${c.id === project.activeContentId ? " active" : ""}`}
+          className={`ctab${c.id === project.activeContentId ? " active" : ""}${editingId === c.id ? " editing" : ""}`}
           data-node={`tab/content/${idx}`}
           onClick={() => setActiveContent(project.id, c.id)}
           onDoubleClick={() => setEditingId(c.id)}
@@ -79,7 +79,7 @@ export const ContentTabs = memo(function ContentTabs({
           ) : (
             <span className="ctab-title">{c.title}</span>
           )}
-          {project.contents.length > 1 && (
+          {project.contents.length > 1 && editingId !== c.id && (
             <button
               type="button"
               className="icon-btn icon-btn--mini ctab-close"
