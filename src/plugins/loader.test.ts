@@ -46,6 +46,7 @@ function fakeDeps(): PluginApiDeps {
     getCwd: () => undefined,
     subscribeCwd: () => () => {},
     subscribeCommandFinished: () => () => {},
+    subscribeWebview: () => () => {},
   };
 }
 

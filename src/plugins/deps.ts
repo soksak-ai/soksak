@@ -78,5 +78,24 @@ export function defaultPluginDeps(appVersion: string): PluginApiDeps {
     getCwd: (paneId) => getCwdOfHost(paneId),
     subscribeCwd: (paneId, cb) => subscribeCwd(paneId, cb),
     subscribeCommandFinished: (paneId, cb) => subscribeCommandFinished(paneId, cb),
+    // webview 이벤트(코어가 browser.rs 에서 emit 하는 `browser-<event>`) label 필터 구독 — app.webview.on
+    // 노출. event 는 "nav"|"title"|"status"|"open-external". onFsChange 와 동형(async 도착/중간해지 가드).
+    subscribeWebview: (label, event, cb) => {
+      let un = () => {};
+      let disposed = false;
+      void listen<{ label: string } & Record<string, unknown>>(
+        `browser-${event}`,
+        (e) => {
+          if (e.payload.label === label) cb(e.payload);
+        },
+      ).then((u) => {
+        if (disposed) u();
+        else un = u;
+      });
+      return () => {
+        disposed = true;
+        un();
+      };
+    },
   };
 }

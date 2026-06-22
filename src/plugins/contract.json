@@ -15,6 +15,7 @@
     "notify",
     "process",
     "programs",
+    "pty",
     "secrets",
     "storage",
     "terminal",
@@ -24,7 +25,8 @@
     "ui:overlay:pane",
     "ui:overlay:screen",
     "ui:statusbar",
-    "ui:titlebar"
+    "ui:titlebar",
+    "webview"
   ],
   "themeVars": [
     "acc",

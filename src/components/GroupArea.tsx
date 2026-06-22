@@ -7,6 +7,7 @@ import { FileViewerHost } from "./FileViewerHost";
 import { GroupStatusBar } from "./GroupStatusBar";
 import { PaneTree } from "./PaneTree";
 import { PluginViewHost } from "./PluginViewHost";
+import { getRegisteredView } from "../plugins/viewRegistry";
 import { ViewTabs } from "./ViewTabs";
 import { computeSplitLayout, hitTestCells } from "./splitLayout";
 import { useT } from "../i18n";
@@ -381,10 +382,14 @@ export const GroupArea = memo(function GroupArea({
       {displayCells.map(({ group, rect }) => {
         const isActiveGroup = group.id === content.activeGroupId;
         const active = group.views.find((v) => v.id === group.activeViewId);
-        // 홀 셀(레이어 원칙): 활성 뷰가 브라우저면 본문 영역에 배경을 칠하면
-        // 안 된다 — 아래 child webview 가 비쳐야 한다. CSS 가 헤더/상태바
-        // 밴드만 칠하도록 클래스로 표시(card/floating 스타일에서 소비).
-        const holeCell = active?.kind === "browser";
+        // 홀 셀(레이어 원칙): 활성 뷰 아래 네이티브 레이어(임베드 webview)가 비쳐야 하면 본문 영역에
+        // 배경을 칠하면 안 된다 — CSS 가 헤더/상태바 밴드만 칠하도록 클래스로 표시. 코어의 browser 하드
+        // 체크 대신 데이터 주도: kind:"browser"(레거시) 또는 transparent 선언 플러그인 콘텐츠 뷰.
+        const holeCell =
+          active?.kind === "browser" ||
+          (active?.kind === "plugin" &&
+            !!getRegisteredView(`${active.pluginId}.${active.view}`)?.decl
+              .transparent);
         return (
           <div
             key={`cell-${group.id}`}

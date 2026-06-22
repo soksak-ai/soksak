@@ -316,6 +316,8 @@ interface SessionsStore {
     viewId: string,
     title: string,
   ) => CmdResult;
+  // 임의 뷰의 탭 제목 갱신(콘텐츠 플러그인이 동적 제목 — 예: 브라우저 페이지 <title>). 빈 값은 무시.
+  setViewTitle: (projectId: string, viewId: string, title: string) => void;
   // 드래그/명령 분할·이동: viewId 를 targetGroup 의 zone 위치로.
   moveViewToGroup: (
     projectId: string,
@@ -1545,6 +1547,16 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       };
     });
     return r;
+  },
+  // 임의 뷰 kind 의 탭 제목 갱신(콘텐츠 플러그인 동적 제목). setBrowserTitle 의 generic 판.
+  setViewTitle: (projectId, viewId, title) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (x) =>
+        mapViewEverywhere(x, viewId, (v) => ({ ...v, title: trimmed })),
+      ),
+    }));
   },
 
   moveViewToGroup: (projectId, viewId, targetGroupId, zone) => {

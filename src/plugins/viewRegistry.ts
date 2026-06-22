@@ -11,11 +11,16 @@ export interface PluginViewContext {
   // 이 뷰가 추종/연관하는 터미널 pane(cwd 추종 대상). 사이드바=cwdPaneOf(활성 그룹의 포커스 터미널),
   // 그 외 배치=null. app.terminal.getCwd/onCwd 와 함께 cwd 추종에 쓴다(계약 A13/S7). 없으면 null.
   paneId: string | null;
+  // 콘텐츠 배치 뷰의 sessions view.id(이 뷰 인스턴스의 안정 키 — 예: app.webview.label(viewId) 로
+  // 인스턴스별 webview 라벨 생성). 사이드바 배치는 null.
+  viewId: string | null;
   // 이 뷰의 사이드바 탭 배지(읽지않음 표시). number=카운트, "dot"=점, null=해제.
   // 창마다 자체 store라 per-window(그 창의 활성 프로젝트 기준). 데이터는 app.data.watch 로 재계산.
   setBadge: (badge: number | "dot" | null) => void;
   // 이 뷰의 status 보고(R1) — sessions view.status 로. null=회수. 콘텐츠 배치 뷰만 유효(close guard).
   setStatus: (status: { code: string; message?: string } | null) => void;
+  // 이 뷰의 탭 제목 동적 갱신(콘텐츠 배치만 — 예: 브라우저 페이지 <title>). 빈 값 무시. 사이드바=no-op.
+  setTitle: (title: string) => void;
 }
 
 export type ViewBadge = number | "dot" | null;

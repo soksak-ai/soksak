@@ -46,6 +46,7 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
     getCwd: () => undefined,
     subscribeCwd: () => () => {},
     subscribeCommandFinished: () => () => {},
+    subscribeWebview: () => () => {},
     ...overrides,
   };
 }

@@ -929,6 +929,59 @@ pub async fn browser_eval(_app: AppHandle, _label: String, _js: String) -> Resul
     Err("browser_eval 은 현재 macOS 전용".into())
 }
 
+// 열린 webview 에 init script(WKUserScript)를 주입한다 — 다음 내비게이션마다 자동 재주입.
+// 코어가 하드코딩하던 NEW_WINDOW_NAV/MEDIA_SNIFF/HOVER_SCRIPT 를 브라우저 플러그인이 소유하게 하는 통로.
+// phase = "document-start"(기본) | "document-end". macOS 전용(비-macOS no-op).
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn webview_inject_script(
+    app: AppHandle,
+    label: String,
+    code: String,
+    phase: Option<String>,
+) -> Result<(), String> {
+    let wv = app
+        .get_webview(&label)
+        .ok_or_else(|| format!("webview 없음: {label}"))?;
+    let at_start = phase.as_deref() != Some("document-end");
+    wv.with_webview(move |pw| {
+        use objc2::MainThreadMarker;
+        use objc2_foundation::NSString;
+        use objc2_web_kit::{WKUserScript, WKUserScriptInjectionTime, WKWebView};
+        // with_webview 클로저는 메인 스레드(tauri 보장).
+        unsafe {
+            let wk = &*(pw.inner() as *const WKWebView);
+            let mtm = MainThreadMarker::new_unchecked();
+            let controller = wk.configuration().userContentController();
+            let src = NSString::from_str(&code);
+            let time = if at_start {
+                WKUserScriptInjectionTime::AtDocumentStart
+            } else {
+                WKUserScriptInjectionTime::AtDocumentEnd
+            };
+            let script = WKUserScript::initWithSource_injectionTime_forMainFrameOnly(
+                mtm.alloc(),
+                &src,
+                time,
+                true,
+            );
+            controller.addUserScript(&script);
+        }
+    })
+    .map_err(|e| e.to_string())
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn webview_inject_script(
+    _app: AppHandle,
+    _label: String,
+    _code: String,
+    _phase: Option<String>,
+) -> Result<(), String> {
+    Ok(()) // 비-macOS no-op
+}
+
 // webview 캡처(snapshot/record/occlusion)는 tauri-plugin-webview-capture 로 분리됨
 // (별도 저장소, 멀티플랫폼). 앱은 .plugin(tauri_plugin_webview_capture::init()) 로
 // 등록하고 sok 명령(window.snapshot/record/occlusion)이 plugin:webview-capture|* 를 호출.

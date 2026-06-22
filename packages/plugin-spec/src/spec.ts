@@ -58,6 +58,8 @@ export type PluginPermission =
   | "commands:destructive" // danger:"destructive" 명령 실행(닫기·제거)
   | "commands:inject" // danger:"inject" 명령 실행(term.send/exec, browser.eval …)
   | "process" // 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합)
+  | "webview" // 코어가 임베드한 child webview(WKWebView) 구동 — 브라우저류 콘텐츠 뷰(네이티브 페이지 로드·eval·inject)
+  | "pty" // PTY 백드 터미널 세션 spawn+IO(flow control+셸 env 주입 — process 의 raw stdio 와 구분)
   | "storage" // 전용 저장소(~/.soksak/plugins-data/<id>/)
   | "data" // 범용 임베디드 DB(app.data — 네임스페이스 격리·CJK 검색·전 창 watch)
   | "secrets" // 암호화 볼트(app.secrets — API 키/토큰 봉인 저장, 평문 readback 불가·주입 전용)
@@ -83,6 +85,8 @@ export const PERMISSIONS: readonly PluginPermission[] = [
   "commands:destructive",
   "commands:inject",
   "process",
+  "webview",
+  "pty",
   "storage",
   "data",
   "secrets",
@@ -152,6 +156,18 @@ export const PERMISSION_INFO: Record<
     label: "외부 프로그램 실행",
     detail:
       "임의 외부 프로그램을 서브프로세스로 띄우고 입출력(stdin/stdout/stderr)을 주고받습니다(가장 강력 — 사실상 임의 코드 실행). LSP·MCP·ACP 등 외부 도구 통합용.",
+    caution: true,
+  },
+  webview: {
+    label: "내장 브라우저(webview)",
+    detail:
+      "코어가 임베드한 네이티브 webview 를 띄워 임의 웹페이지를 로드하고 그 페이지에서 스크립트를 실행·주입합니다(브라우저류 콘텐츠 뷰).",
+    caution: true,
+  },
+  pty: {
+    label: "터미널 세션 실행",
+    detail:
+      "PTY 백드 셸/터미널 세션을 띄우고 입출력을 주고받습니다(flow control·셸 환경 주입 포함 — 사실상 임의 셸 명령 실행).",
     caution: true,
   },
   storage: {
@@ -310,6 +326,9 @@ export interface ContributedView {
   icon: string; // 아이콘 레일용 짧은 글리프(문자 1~2개/이모지). v1 은 SVG 미지원
   placements: ViewPlacement[]; // 파싱 시 기본 ["sidebar-right"] 로 채움
   defaultPlacement: ViewPlacement; // 파싱 시 placements[0] 으로 채움
+  // 콘텐츠 뷰 아래 네이티브 레이어(임베드 webview 등)가 비쳐야 함 — 코어가 그 셀을 투명 홀로 처리한다.
+  // 브라우저류 뷰가 선언(코어의 kind==="browser" 하드 체크 대체, 데이터 주도). 기본 false.
+  transparent: boolean; // 파싱 시 기본 false
 }
 
 export interface ContributedCommand {
@@ -1122,7 +1141,7 @@ export function parseManifest(
       views = parseEntries(c.views, {
         label: "contributes.views",
         required: ["id", "title", "icon"],
-        optional: ["placements", "defaultPlacement"],
+        optional: ["placements", "defaultPlacement", "transparent"],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
             errs.push("contributes.views: id 는 ^[a-z0-9][a-z0-9-]*$");
@@ -1156,12 +1175,21 @@ export function parseManifest(
             }
             defaultPlacement = v.defaultPlacement as ViewPlacement;
           }
+          let transparent = false;
+          if (v.transparent !== undefined) {
+            if (typeof v.transparent !== "boolean") {
+              errs.push(`contributes.views["${v.id}"].transparent: boolean`);
+              return null;
+            }
+            transparent = v.transparent;
+          }
           return {
             id: v.id.trim(),
             title: normalizeText(v.title as LocalizedText),
             icon: (v.icon as string).trim(),
             placements,
             defaultPlacement,
+            transparent,
           };
         },
       }, errors);

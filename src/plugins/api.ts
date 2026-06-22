@@ -13,6 +13,7 @@ import type {
   ParamSpec,
 } from "../commands/registry";
 import { Channel } from "@tauri-apps/api/core";
+import { browserLabel, currentWindowLabel } from "../lib/webviewLabels";
 import { busEmit, busOn } from "./bus";
 import {
   onPluginEvent,
@@ -87,6 +88,12 @@ export interface PluginApiDeps {
   getCwd: (paneId: string) => string | undefined;
   subscribeCwd: (paneId: string, cb: (cwd: string) => void) => () => void;
   subscribeCommandFinished: (paneId: string, cb: () => void) => () => void;
+  // 코어가 browser.rs 에서 emit 하는 webview 이벤트(`browser-<event>`) label 필터 구독 — app.webview.on.
+  subscribeWebview: (
+    label: string,
+    event: string,
+    cb: (payload: Record<string, unknown>) => void,
+  ) => () => void;
 }
 
 // data-change 페이로드 — Rust commands.rs DataChange 와 동형. coll/scope/id 는 연산에 따라 null.
@@ -317,6 +324,71 @@ export interface SoksakPluginApi {
     /** pane 의 명령 종료(OSC 133/633 D) 구독 — git 등 파생 상태 갱신 트리거. 반환=해지. "terminal" 권한. */
     onCommandFinished?: (paneId: string, cb: () => void) => Disposable;
   };
+  /** 코어가 임베드/구동하는 child webview(WKWebView) — 브라우저 같은 콘텐츠 뷰가 소유. "webview" 권한.
+   *  네이티브 webview 는 코어가 label 키로 생성/소유, 플러그인은 label 로 구동(JS 가 WKWebView 못 만듦).
+   *  macOS 우선 — eval/inject 는 macOS 한정(비-macOS graceful 에러/no-op). */
+  webview?: {
+    /** viewId → 전역 유일 label(창 네임스페이스 `b-<win>-<view>`). webviewLabels 단일 진실. */
+    label: (viewId: string) => string;
+    /** child webview 생성 + 슬롯 rect 에 임베드. 이미 있으면 no-op. */
+    open: (
+      label: string,
+      o: { url: string; x: number; y: number; w: number; h: number },
+    ) => Promise<void>;
+    /** 슬롯 rect 동기화(분할/리사이즈 — 프레임당 1회 권장). */
+    bounds: (label: string, x: number, y: number, w: number, h: number) => Promise<void>;
+    /** 표시/숨김(탭 전환·최대화의 숨김 슬롯). */
+    visible: (label: string, visible: boolean) => Promise<void>;
+    /** URL 이동. */
+    navigate: (label: string, url: string) => Promise<void>;
+    /** 세션 히스토리 이동(delta=-1 뒤/+1 앞). */
+    history: (label: string, delta: number) => Promise<void>;
+    /** OS 인스펙터(devtools) 토글 → 열림 여부. */
+    devtools: (label: string) => Promise<boolean>;
+    /** 페이지에서 JS 실행 후 결과 문자열 반환(AI/E2E DOM 제어). macOS 한정. */
+    eval: (label: string, js: string) => Promise<string>;
+    /** init script 주입(document-start/end, 매 내비게이션 재주입). macOS 한정(비-macOS no-op).
+     *  반환 Disposable 은 추적용 — WKUserScript 개별 제거는 미지원(webview 수명까지 유지). */
+    injectScript: (
+      label: string,
+      code: string,
+      phase?: "document-start" | "document-end",
+    ) => Disposable;
+    /** webview 이벤트 구독: "nav"({url})·"title"({title})·"status"·"open-external"({url}). 반환=해지. */
+    on: (
+      label: string,
+      event: "nav" | "title" | "status" | "open-external",
+      cb: (payload: Record<string, unknown>) => void,
+    ) => Disposable;
+    /** 현재 살아있는 webview label 목록(prefix 필터). GC/정리용. */
+    list: (prefix?: string) => Promise<string[]>;
+    /** webview 종료 + 정리. */
+    close: (label: string) => Promise<void>;
+  };
+  /** PTY 백드 터미널 세션 spawn + raw 바이트 IO(터미널 플러그인이 xterm 구동). "pty" 권한.
+   *  process 와 달리 PTY(flow control·셸 통합·SOKSAK_* env 주입은 코어 pty.rs 소유). 출력은 onData 스트림. */
+  pty?: {
+    /** PTY 세션 spawn → id. windowLabel 은 코어가 현재 창으로 주입. */
+    spawn: (opts: {
+      cols: number;
+      rows: number;
+      cwd?: string;
+      shell?: string;
+      paneId?: string;
+    }) => Promise<number>;
+    /** PTY 에 입력 쓰기(키 입력·붙여넣기). */
+    write: (id: number, data: string) => Promise<void>;
+    /** 터미널 크기 변경(SIGWINCH). */
+    resize: (id: number, cols: number, rows: number) => Promise<void>;
+    /** flow control ack — 처리한 바이트 수 보고(커널 reader 재개). */
+    ack: (id: number, bytes: number) => Promise<void>;
+    /** 세션 종료 + 정리. */
+    close: (id: number) => Promise<void>;
+    /** PTY 출력(raw 바이트) 구독. 등록 전 도착분은 버퍼되어 유실 0. 반환=해지. */
+    onData: (id: number, cb: (data: Uint8Array) => void) => Disposable;
+    /** PATH 에서 셸/바이너리 경로 해소(없으면 null). */
+    which: (bin: string) => Promise<string | null>;
+  };
   /** 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합). "process" 권한.
    *  PTY 가 아니라 순수 파이프 → JSON-RPC 프레이밍 무손상. 이벤트 기반(폴링 0). */
   process?: {
@@ -543,6 +615,66 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker, ns: s
       await deps.invoke("process_kill", { id: handle });
       procs.delete(handle);
     },
+  };
+}
+
+// app.pty 구현 — PTY 세션 spawn + raw 바이트 IO(터미널 플러그인이 xterm 구동). 네이티브 명령은 기존
+// spawn/write/resize/ack/close_terminal(명령명 유지). 출력은 Channel 스트림(createProcessApi 와 동형 —
+// onData 등록 전 도착분 버퍼로 유실 0). SOKSAK_* env 주입·flow control 커널 측은 pty.rs 가 소유.
+function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
+  type Bytes = (d: Uint8Array) => void;
+  interface PtyState {
+    out: Set<Bytes>;
+    outBuf: Uint8Array[];
+  }
+  const ptys = new Map<number, PtyState>();
+  return {
+    spawn: async (opts: {
+      cols: number;
+      rows: number;
+      cwd?: string;
+      shell?: string;
+      paneId?: string;
+    }): Promise<number> => {
+      const st: PtyState = { out: new Set(), outBuf: [] };
+      const onOutput = new Channel<ArrayBuffer>();
+      onOutput.onmessage = (m) => {
+        const b = new Uint8Array(m);
+        if (st.out.size) st.out.forEach((f) => f(b));
+        else st.outBuf.push(b);
+      };
+      // windowLabel 은 코어가 현재 창으로 주입(멀티윈도우 sok 타겟 — webviewLabels 단일진실).
+      const id = (await deps.invoke("spawn_terminal", {
+        cols: opts.cols,
+        rows: opts.rows,
+        cwd: opts.cwd ?? null,
+        shell: opts.shell ?? null,
+        paneId: opts.paneId ?? null,
+        windowLabel: currentWindowLabel() || null,
+        onOutput,
+      })) as number;
+      ptys.set(id, st);
+      return id;
+    },
+    write: (id: number, data: string): Promise<void> =>
+      deps.invoke("write_terminal", { id, data }) as Promise<void>,
+    resize: (id: number, cols: number, rows: number): Promise<void> =>
+      deps.invoke("resize_terminal", { id, cols, rows }) as Promise<void>,
+    ack: (id: number, bytes: number): Promise<void> =>
+      deps.invoke("ack_terminal", { id, bytes }) as Promise<void>,
+    close: (id: number): Promise<void> => {
+      ptys.delete(id);
+      return deps.invoke("close_terminal", { id }) as Promise<void>;
+    },
+    onData: (id: number, cb: Bytes): Disposable => {
+      const st = ptys.get(id);
+      if (!st) return tracker.wrap(() => {});
+      st.out.add(cb);
+      for (const b of st.outBuf.splice(0)) cb(b); // 등록 전 버퍼 즉시 재생(유실 0)
+      return tracker.wrap(() => st.out.delete(cb));
+    },
+    which: (bin: string): Promise<string | null> =>
+      deps.invoke("shell_which", { bin }) as Promise<string | null>,
   };
 }
 
@@ -1203,6 +1335,44 @@ export function buildPluginApi(
               : {}),
           }
         : undefined,
+    // 코어가 소유하는 child webview 구동(브라우저 플러그인). 네이티브 명령은 기존 browser_*(명령명 유지),
+    // API 만 generic webview 이름으로 래핑. label 은 webviewLabels 단일진실에서만 파생.
+    webview: has("webview")
+      ? {
+          label: (viewId: string) => browserLabel(viewId),
+          open: (label, o) =>
+            deps.invoke("browser_open", { label, ...o }) as Promise<void>,
+          bounds: (label, x, y, w, h) =>
+            deps.invoke("browser_bounds", { label, x, y, w, h }) as Promise<void>,
+          visible: (label, visible) =>
+            deps.invoke("browser_visible", { label, visible }) as Promise<void>,
+          navigate: (label, url) =>
+            deps.invoke("browser_navigate", { label, url }) as Promise<void>,
+          history: (label, delta) =>
+            deps.invoke("browser_history", { label, delta }) as Promise<void>,
+          devtools: (label) =>
+            deps.invoke("browser_devtools", { label }) as Promise<boolean>,
+          eval: (label, js) =>
+            deps.invoke("browser_eval", { label, js }) as Promise<string>,
+          injectScript: (label, code, phase) => {
+            void deps.invoke("webview_inject_script", {
+              label,
+              code,
+              phase: phase ?? "document-start",
+            });
+            return tracker.wrap(() => {}); // WKUserScript 개별 제거 미지원(webview 수명까지)
+          },
+          on: (label, event, cb) =>
+            tracker.wrap(deps.subscribeWebview(label, event, cb)),
+          list: async (prefix) => {
+            const all = (await deps.invoke("browser_list", {})) as string[];
+            return prefix ? all.filter((l) => l.startsWith(prefix)) : all;
+          },
+          close: (label) =>
+            deps.invoke("browser_close", { label }) as Promise<void>,
+        }
+      : undefined,
+    pty: has("pty") ? createPtyApi(deps, tracker) : undefined,
     process: has("process") ? createProcessApi(deps, tracker, id) : undefined,
     network: has("network") ? createNetworkApi(deps, id) : undefined,
     ws: has("network") ? createWsApi(deps, tracker) : undefined,

@@ -280,6 +280,7 @@ pub fn run() {
             browser::browser_list,
             browser::browser_open_window,
             browser::browser_eval,
+            browser::webview_inject_script,
             browser::browser_media_extract,
             browser::browser_overlay_active,
             browser::browser_dom_holes,

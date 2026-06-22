@@ -49,6 +49,7 @@ export const PluginViewHost = memo(function PluginViewHost({
         projectId,
         root,
         paneId,
+        viewId: viewId ?? null,
         // 이 창의 그 뷰 탭 배지(per-window — 창마다 자체 store). 데이터 변경 시 플러그인이 재계산.
         setBadge: (badge) =>
           useViewRegistry.getState().setViewBadge(viewKey, badge),
@@ -58,6 +59,11 @@ export const PluginViewHost = memo(function PluginViewHost({
             ? void useSessions
                 .getState()
                 .setViewStatus(projectId, viewId, status)
+            : undefined,
+        // 탭 제목 동적 갱신 — 콘텐츠 배치(viewId 有)만. 사이드바는 no-op.
+        setTitle: (title) =>
+          viewId
+            ? useSessions.getState().setViewTitle(projectId, viewId, title)
             : undefined,
       });
     } catch (e) {

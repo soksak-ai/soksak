@@ -109,9 +109,13 @@ export interface PluginViewContext {
   projectId: string;
   root: string | null;
   paneId: string | null;
+  /** 콘텐츠 배치 뷰의 안정 인스턴스 키(예: app.webview.label(viewId)). 사이드바 배치는 null. */
+  viewId: string | null;
   setBadge: (badge: ViewBadge) => void;
   /** 이 뷰의 상태를 보고(R1) — null=회수. 콘텐츠 배치 뷰만 유효(close guard). */
   setStatus: (status: ViewStatus | null) => void;
+  /** 이 뷰의 탭 제목 동적 갱신(콘텐츠 배치만 — 예: 브라우저 페이지 제목). 빈 값 무시. 사이드바=no-op. */
+  setTitle: (title: string) => void;
 }
 
 /** 플러그인이 구현하는 뷰. React 비요구 — 컨테이너 DOM 에 직접 그린다. */
