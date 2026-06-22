@@ -27,24 +27,45 @@ function PaneTreeImpl({
   if (node.type === "leaf") {
     return (
       <PaneLeaf
-        paneId={node.id}
+        paneId={node.value}
         projectId={projectId}
         viewId={viewId}
         visible={active}
-        focused={active && node.id === focusedPaneId}
+        focused={active && node.value === focusedPaneId}
       />
     );
   }
 
   const orientation = node.dir === "row" ? "horizontal" : "vertical";
+  // 각 자식의 Panel id = leaf 면 paneId, split 이면 split id(둘 다 안정). Layout 은 {panelId: flexGrow}
+  // 맵이므로 sizes(합 1)를 그대로 flexGrow 로 넘기고, 변경 시 ordered sizes 로 되돌려 모델에 영속.
+  const childId = (c: PaneNode): string => (c.type === "leaf" ? c.value : c.id);
   return (
-    <Group orientation={orientation} className="pane-group">
+    <Group
+      orientation={orientation}
+      className="pane-group"
+      defaultLayout={Object.fromEntries(
+        node.children.map((c, i) => [childId(c), node.sizes[i]]),
+      )}
+      onLayoutChanged={(layout) => {
+        const raw = node.children.map((c) => layout[childId(c)] ?? 0);
+        const total = raw.reduce((a, b) => a + b, 0) || 1;
+        useSessions
+          .getState()
+          .resizePane(
+            projectId,
+            viewId,
+            node.id,
+            raw.map((x) => x / total),
+          );
+      }}
+    >
       {node.children.map((child, i) => (
         <Fragment key={paneKey(child)}>
           {i > 0 && (
             <Separator className={`pane-resize-handle ${orientation}`} />
           )}
-          <Panel minSize="10%" className="pane-panel">
+          <Panel id={childId(child)} minSize="10%" className="pane-panel">
             <PaneTree
               node={child}
               projectId={projectId}
@@ -129,6 +150,6 @@ const PaneLeaf = memo(function PaneLeaf({
 
 // 안정적인 React key: leaf 는 pane id, split 은 자식 leaf id 들의 결합.
 function paneKey(node: PaneNode): string {
-  if (node.type === "leaf") return node.id;
+  if (node.type === "leaf") return node.value;
   return `s:${node.children.map(paneKey).join("-")}`;
 }

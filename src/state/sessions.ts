@@ -5,6 +5,15 @@ import {
   getRegisteredProgram,
 } from "../plugins/programRegistry";
 import { localize } from "../i18n";
+import {
+  type SplitTree,
+  splitLeaf,
+  insertBeside,
+  removeLeaf,
+  leavesOf,
+  resizeSplitTree,
+  findSplitTree,
+} from "./splitTree";
 
 // 3단 구조:
 //   - 최상단 탭 = 프로젝트(ProjectTab): 자체 사이드바(파일트리) + 컨텐츠 탭들
@@ -51,9 +60,9 @@ export const err = (code: CmdErrCode, message: string, data?: unknown): CmdErr =
 // ── 모델 타입 ────────────────────────────────────────────────────────────────
 
 // 재귀 pane 트리. leaf = 터미널 하나, split = 자식들의 행/열 묶음.
-export type PaneNode =
-  | { type: "leaf"; id: string }
-  | { type: "split"; dir: "row" | "col"; children: PaneNode[] };
+// 터미널 뷰 내부 pane 트리 = 제네릭 SplitTree(leaf 값 = paneId). split/remove/resize/직렬화는
+// splitTree.ts 단일 추상(뷰 그룹 GroupNode 와 동일 코드 — 중복 없음). leaf.value 가 paneId.
+export type PaneNode = SplitTree<string>;
 
 // 뷰가 코어에 상시 보고하는 상태(R1) — code=기계 식별자, message=사람 표시.
 // blocking code(STATUS_BLOCKING)는 닫기 가드를 발동(R2). 회수는 뷰 종속(R4) — 뷰 삭제=status 삭제.
@@ -331,6 +340,13 @@ interface SessionsStore {
     viewId: string,
     paneId: string,
   ) => CmdResult<{ focusedPaneId: string }>;
+  // pane split 비율 조절(핸들 드래그/명령) — GroupNode resizeSplit 의 pane 판(동일 추상).
+  resizePane: (
+    projectId: string,
+    viewId: string,
+    splitId: string,
+    sizes: number[],
+  ) => CmdResult;
   setFocusedPane: (
     projectId: string,
     viewId: string,
@@ -351,7 +367,7 @@ const newGroupId = () => `g${nextGroupId++}`;
 const newSplitId = () => `s${nextSplitId++}`;
 const newContentId = () => `c${nextContentId++}`;
 
-const leaf = (id: string): PaneNode => ({ type: "leaf", id });
+const leaf = (id: string): PaneNode => splitLeaf(id);
 
 const baseName = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
@@ -645,8 +661,7 @@ function normalizeActiveGroupC(c: ContentArea): ContentArea {
 // ── pane 트리 헬퍼(터미널 뷰 내부) ────────────────────────────────────────────
 
 export function collectLeafIds(node: PaneNode, acc: string[] = []): string[] {
-  if (node.type === "leaf") acc.push(node.id);
-  else for (const c of node.children) collectLeafIds(c, acc);
+  acc.push(...leavesOf(node)); // leaf 값(paneId) = SplitTree leavesOf
   return acc;
 }
 
@@ -700,44 +715,19 @@ export function paneToView(
   return null;
 }
 
+// pane 분할/제거 = 제네릭 SplitTree 연산(중복 구현 없음). newId 는 새 pane id(leaf 값),
+// 새 split 노드 id 는 newSplitId. before=false → 기존(splitInTree)과 동일하게 뒤에 삽입.
 function splitInTree(
   node: PaneNode,
   paneId: string,
   dir: "row" | "col",
   newId: string,
 ): PaneNode {
-  if (node.type === "leaf") {
-    if (node.id !== paneId) return node;
-    return { type: "split", dir, children: [leaf(paneId), leaf(newId)] };
-  }
-  if (node.dir === dir) {
-    const idx = node.children.findIndex(
-      (c) => c.type === "leaf" && c.id === paneId,
-    );
-    if (idx !== -1) {
-      const children = [...node.children];
-      children.splice(idx + 1, 0, leaf(newId));
-      return { ...node, children };
-    }
-  }
-  return {
-    ...node,
-    children: node.children.map((c) => splitInTree(c, paneId, dir, newId)),
-  };
+  return insertBeside(node, (v) => v === paneId, dir, false, newId, newSplitId);
 }
 
 function removeInTree(node: PaneNode, paneId: string): PaneNode | null {
-  if (node.type === "leaf") {
-    return node.id === paneId ? null : node;
-  }
-  const children: PaneNode[] = [];
-  for (const c of node.children) {
-    const r = removeInTree(c, paneId);
-    if (r !== null) children.push(r);
-  }
-  if (children.length === 0) return null;
-  if (children.length === 1) return children[0];
-  return { ...node, children };
+  return removeLeaf(node, (v) => v === paneId).tree;
 }
 
 // ── 검색/변환 헬퍼 ───────────────────────────────────────────────────────────
@@ -1727,6 +1717,37 @@ export const useSessions = create<SessionsStore>((set, get) => ({
               focusedPaneId: newId,
             };
           }),
+        ),
+      };
+    });
+    return r;
+  },
+
+  resizePane: (projectId, viewId, splitId, sizes) => {
+    let r: CmdResult = noProject(projectId);
+    set((s) => {
+      const t = s.tabs.find((x) => x.id === projectId);
+      if (!t) return s;
+      const content = contentOfView(t, viewId);
+      const view = content
+        ? allViews(content.layout).find((v) => v.id === viewId)
+        : undefined;
+      if (!view || view.kind !== "terminal") {
+        r = err("TARGET_NOT_FOUND", `터미널 뷰 없음: ${viewId}`);
+        return s;
+      }
+      if (!findSplitTree(view.layout, splitId)) {
+        r = err("TARGET_NOT_FOUND", `pane split 없음: ${splitId}`);
+        return s;
+      }
+      r = ok({});
+      return {
+        tabs: mapProject(s.tabs, projectId, (x) =>
+          mapViewEverywhere(x, viewId, (v) =>
+            v.kind === "terminal"
+              ? { ...v, layout: resizeSplitTree(v.layout, splitId, sizes) }
+              : v,
+          ),
         ),
       };
     });

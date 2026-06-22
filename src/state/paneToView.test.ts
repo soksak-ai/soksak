@@ -6,7 +6,7 @@ const term = (viewId: string, paneId: string): View => ({
   id: viewId,
   kind: "terminal",
   title: "T",
-  layout: { type: "leaf", id: paneId },
+  layout: { type: "leaf", value: paneId },
   focusedPaneId: paneId,
 });
 
@@ -45,10 +45,12 @@ describe("paneToView", () => {
       title: "T",
       layout: {
         type: "split",
+        id: "ps1",
         dir: "row",
+        sizes: [0.5, 0.5],
         children: [
-          { type: "leaf", id: "pa" },
-          { type: "leaf", id: "pb" },
+          { type: "leaf", value: "pa" },
+          { type: "leaf", value: "pb" },
         ],
       },
       focusedPaneId: "pa",

@@ -1060,7 +1060,7 @@ export function registerCatalog(): void {
   register("pane.list", {
     description: "List panes inside a terminal view, including the focused pane id.",
     params: { view: P.view, pane: P.pane },
-    returns: "{ viewId, panes[], focusedPaneId }",
+    returns: "{ viewId, panes[], focusedPaneId, tree }",
     errors: ["TARGET_NOT_FOUND"],
     examples: ["sok pane.list"],
     handler: (p, ctx) => {
@@ -1073,7 +1073,44 @@ export function registerCatalog(): void {
         viewId: loc.view.id,
         panes: collectLeafIds(loc.view.layout),
         focusedPaneId: loc.view.focusedPaneId,
+        // split id + dir + sizes + leaf paneId 전체 — pane.resize 의 split id 발견원.
+        tree: loc.view.layout,
       };
+    },
+  });
+
+  register("pane.resize", {
+    description:
+      "Resize a terminal pane split by ratio — sizes parallel to the split's children (sum 1). Split ids and current sizes come from pane.list (tree field).",
+    triggers: { ko: "pane 분할 비율 크기 조절 리사이즈 split" },
+    params: {
+      view: P.view,
+      split: {
+        type: "string",
+        description: "Pane split id (from pane.list tree)",
+        required: true,
+      },
+      sizes: {
+        type: "number[]",
+        description: "Ratio per child, parallel to children, sum 1",
+        required: true,
+      },
+    },
+    returns: "{}",
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok pane.resize \'{"split":"s5","sizes":[0.7,0.3]}\''],
+    handler: (p, ctx) => {
+      const loc = p.view
+        ? locateView(p.view as string)
+        : (resolvePane(p, ctx)?.loc ?? null);
+      if (!loc || loc.view.kind !== "terminal")
+        return notFound("터미널 뷰 없음");
+      return S().resizePane(
+        loc.project.id,
+        loc.view.id,
+        p.split as string,
+        p.sizes as number[],
+      );
     },
   });
 
