@@ -98,12 +98,20 @@ export interface PluginEventMap {
 
 export type ViewBadge = number | "dot" | null;
 
+/** 뷰가 코어에 보고하는 상태(code=기계 식별자, message=사람 표시). blocking code(dirty/busy/running)는 닫기 가드를 발동. */
+export interface ViewStatus {
+  code: string;
+  message?: string;
+}
+
 /** registerView provider 의 mount 가 받는 컨텍스트. */
 export interface PluginViewContext {
   projectId: string;
   root: string | null;
   paneId: string | null;
   setBadge: (badge: ViewBadge) => void;
+  /** 이 뷰의 상태를 보고(R1) — null=회수. 콘텐츠 배치 뷰만 유효(close guard). */
+  setStatus: (status: ViewStatus | null) => void;
 }
 
 /** 플러그인이 구현하는 뷰. React 비요구 — 컨테이너 DOM 에 직접 그린다. */

@@ -260,7 +260,7 @@ function serializeView(v: View) {
       title: v.title,
       path: v.path,
       mode: v.mode,
-      dirty: v.dirty ?? false,
+      dirty: v.status?.code === "dirty",
     };
   }
   if (v.kind === "plugin") {
@@ -1006,6 +1006,31 @@ export function registerCatalog(): void {
         p.dst as string,
         p.zone as DropZone,
       );
+    },
+  });
+
+  // ----- status(뷰 보고 회신, R8) -----
+  register("status.query", {
+    description:
+      "Query the status each view reports (R8 회신) — what setStatus / file dirty / terminal running pushed. Omit view to list all reporting views.",
+    triggers: { ko: "상태 조회 뷰 상태 status 조회 무엇이 도는지" },
+    params: { view: P.view },
+    returns: "{ statuses: Array<{ viewId, code, message? }> }",
+    examples: ["sok status.query", 'sok status.query \'{"view":"v3"}\''],
+    handler: (p) => {
+      const only = p.view as string | undefined;
+      const statuses: { viewId: string; code: string; message?: string }[] = [];
+      for (const t of S().tabs)
+        for (const c of t.contents)
+          for (const g of allGroups(c.layout))
+            for (const v of g.views)
+              if (v.status && (!only || v.id === only))
+                statuses.push({
+                  viewId: v.id,
+                  code: v.status.code,
+                  message: v.status.message,
+                });
+      return { statuses };
     },
   });
 

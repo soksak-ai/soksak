@@ -606,6 +606,7 @@ export const GroupArea = memo(function GroupArea({
               ) : view.kind === "plugin" ? (
                 <PluginViewHost
                   viewKey={`${view.pluginId}.${view.view}`}
+                  viewId={view.id}
                   projectId={projectId}
                   root={projectRoot}
                   region="content"

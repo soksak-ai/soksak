@@ -224,6 +224,15 @@ const ko = {
     "새 탭(+) 메뉴에 프로그램을 추가합니다. 선택하면 아래 명령이 터미널에서 자동 실행됩니다.",
   "perm.programs.runInstall":
     "새 탭(+) 메뉴에 프로그램을 추가합니다. 선택하면 아래 명령이 터미널에서 자동 실행되고, 활성화 시 미설치면 아래 설치 명령이 터미널에서 실행됩니다.",
+  // 닫기 확인(R6) + status 표준 문구(R2).
+  "confirm.closeTitle": "정말 닫겠습니까?",
+  "confirm.close": "닫기",
+  "status.dirty": "저장하지 않은 변경",
+  "status.busy": "작업 중",
+  "status.running": "실행 중",
+  "settings.tabCloseConfirm": "탭 닫기 확인",
+  "tabCloseConfirm.warn": "위험할 때 경고",
+  "tabCloseConfirm.off": "무조건 닫기",
 } as const;
 
 export type MsgKey = keyof typeof ko;
@@ -441,6 +450,14 @@ const en: Record<MsgKey, string> = {
     "Adds programs to the new-tab (+) menu. Picking one auto-runs the command below in a terminal.",
   "perm.programs.runInstall":
     "Adds programs to the new-tab (+) menu. Picking one auto-runs the command below in a terminal; on enable, the installer below runs if it is missing.",
+  "confirm.closeTitle": "Close anyway?",
+  "confirm.close": "Close",
+  "status.dirty": "Unsaved changes",
+  "status.busy": "Busy",
+  "status.running": "Running",
+  "settings.tabCloseConfirm": "Tab close confirm",
+  "tabCloseConfirm.warn": "Warn when risky",
+  "tabCloseConfirm.off": "Always close",
 };
 
 const messages = { ko, en };

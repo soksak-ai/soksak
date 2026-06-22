@@ -8,6 +8,7 @@ import { ensureDefaultWorkspace, validateProjectRoot } from "./lib/workspace";
 import { paneSpawnInfo, useSessions } from "./state/sessions";
 import { useSettings } from "./state/settings";
 import { setSpawnOptionsProvider } from "./terminal/paneHosts";
+import { startTerminalStatusBridge } from "./terminal/terminalStatus";
 import "./assets/fonts.css";
 
 // pane 별 spawn 옵션(프로젝트 root → cwd, 셸, 첫 pane → 자동 실행 명령) —
@@ -22,6 +23,8 @@ setSpawnOptionsProvider((paneId) => {
 startExecutor();
 // 브라우저 child 웹뷰 고아 회수(불변식 검증 — 이벤트 기반, 폴링 없음).
 startBrowserGc();
+// 터미널 foreground 명령(셸 통합 OSC 이벤트) → 그 뷰의 running status(M5, 폴링 없음).
+startTerminalStatusBridge();
 
 // 부트(P3): 첫 프로젝트 루트(~/.soksak/projects/project1)를 준비한 뒤 렌더 —
 // 루트 없는 프로젝트는 존재 불가(P1)라 앱은 루트가 준비된 후 시작한다.

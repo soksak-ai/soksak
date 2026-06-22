@@ -3,6 +3,7 @@ import { isComposingEnter } from "../lib/imeKeys";
 import { Icon } from "../ui/icons/Icon";
 import { ProgramMenu } from "./ProgramMenu";
 import { useSessions, type Program, type ProjectTab } from "../state/sessions";
+import { useCloseConfirm } from "../state/closeConfirm";
 import { useProgramRegistry } from "../plugins/programRegistry";
 import { useT } from "../i18n";
 
@@ -20,7 +21,7 @@ export const ContentTabs = memo(function ContentTabs({
 }) {
   const t = useT();
   const addContent = useSessions((s) => s.addContent);
-  const closeContent = useSessions((s) => s.closeContent);
+  const requestCloseContent = useCloseConfirm((s) => s.requestCloseContent);
   const setActiveContent = useSessions((s) => s.setActiveContent);
   const renameContent = useSessions((s) => s.renameContent);
   const hasPrograms = useProgramRegistry((s) => s.order.length > 0);
@@ -85,10 +86,10 @@ export const ContentTabs = memo(function ContentTabs({
               title={t("content.close")}
               onClick={(e) => {
                 e.stopPropagation();
-                closeContent(project.id, c.id);
+                requestCloseContent(project.id, c.id);
               }}
             >
-              <Icon name="close" size="sm" />
+              <Icon name="close" size="md" />
             </button>
           )}
         </div>

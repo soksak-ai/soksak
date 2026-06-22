@@ -55,6 +55,13 @@ export type PaneNode =
   | { type: "leaf"; id: string }
   | { type: "split"; dir: "row" | "col"; children: PaneNode[] };
 
+// 뷰가 코어에 상시 보고하는 상태(R1) — code=기계 식별자, message=사람 표시.
+// blocking code(STATUS_BLOCKING)는 닫기 가드를 발동(R2). 회수는 뷰 종속(R4) — 뷰 삭제=status 삭제.
+export interface ViewStatus {
+  code: string;
+  message?: string;
+}
+
 // 콘텐츠 뷰: 터미널(분할 가능), 파일(CodeMirror/프리뷰), 브라우저(child webview).
 export type View =
   | {
@@ -66,6 +73,7 @@ export type View =
       // 이 pane 의 셸이 뜨면 1회 자동 실행할 셸 명령(에이전트류 프로그램 —
       // 명령 문자열은 programRegistry 가 resolve, ensure 설치 래핑 포함).
       autorun?: { paneId: string; command: string };
+      status?: ViewStatus;
     }
   | {
       id: string;
@@ -73,13 +81,15 @@ export type View =
       title: string;
       path: string; // 절대 경로
       mode: "code" | "preview";
-      dirty?: boolean; // 편집 후 미저장
+      // 미저장은 status.code "dirty" 로 표현(R5) — 별도 dirty 플래그 없음(이중진실 금지).
+      status?: ViewStatus;
     }
   | {
       id: string;
       kind: "browser";
       title: string;
       url: string;
+      status?: ViewStatus;
     }
   // 플러그인 뷰(콘텐츠 배치) — 전역 키 "<pluginId>.<view>" 의 provider 를
   // PluginViewHost 가 그린다. 닫기/이동/드래그는 일반 뷰와 동일(view id 제네릭).
@@ -89,6 +99,7 @@ export type View =
       title: string;
       pluginId: string;
       view: string; // 플러그인 내 뷰 id
+      status?: ViewStatus;
     };
 
 // 에디터 그룹: 탭(뷰) 묶음 + 활성 뷰. 그룹 트리의 leaf.
@@ -267,6 +278,12 @@ interface SessionsStore {
     mode: "code" | "preview",
   ) => CmdResult;
   setFileDirty: (projectId: string, viewId: string, dirty: boolean) => CmdResult;
+  // 뷰 status 보고(R1) — null 이면 회수(R4). 모든 뷰 kind 공통.
+  setViewStatus: (
+    projectId: string,
+    viewId: string,
+    status: ViewStatus | null,
+  ) => CmdResult;
   // 브라우저 뷰 URL 동기화(네비게이션 이벤트/URL 바 입력).
   setBrowserUrl: (projectId: string, viewId: string, url: string) => CmdResult;
   setBrowserTitle: (
@@ -668,6 +685,19 @@ export function paneSpawnInfo(
     }
   }
   return {};
+}
+
+// paneId 를 가진 터미널 뷰의 {projectId, viewId}(M5 — terminal status 브리지용). 없으면 null.
+export function paneToView(
+  tabs: ProjectTab[],
+  paneId: string,
+): { projectId: string; viewId: string } | null {
+  for (const t of tabs)
+    for (const c of t.contents)
+      for (const v of allViews(c.layout))
+        if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId))
+          return { projectId: t.id, viewId: v.id };
+  return null;
 }
 
 function splitInTree(
@@ -1386,7 +1416,12 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     return r;
   },
 
-  setFileDirty: (projectId, viewId, dirty) => {
+  // file 미저장은 status.code "dirty" 로 단일화(R5 — 이중진실 제거). setViewStatus 위임.
+  setFileDirty: (projectId, viewId, dirty) =>
+    get().setViewStatus(projectId, viewId, dirty ? { code: "dirty" } : null),
+
+  // 뷰 status 보고/회수(R1·R4) — 모든 뷰 공통. null=필드 소멸. setFileDirty 와 동형.
+  setViewStatus: (projectId, viewId, status) => {
     let r: CmdResult = noProject(projectId);
     set((s) => {
       const t = s.tabs.find((x) => x.id === projectId);
@@ -1398,9 +1433,10 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       r = ok({});
       return {
         tabs: mapProject(s.tabs, projectId, (x) =>
-          mapViewEverywhere(x, viewId, (v) =>
-            v.kind === "file" ? { ...v, dirty } : v,
-          ),
+          mapViewEverywhere(x, viewId, (v) => ({
+            ...v,
+            status: status ?? undefined,
+          })),
         ),
       };
     });

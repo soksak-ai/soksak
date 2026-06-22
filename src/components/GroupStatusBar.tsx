@@ -66,7 +66,7 @@ function FileStatus({ view }: { view: Extract<View, { kind: "file" }> }) {
         {view.path}
       </span>
       <span className="egs-right icon-inline" style={{ gap: 4 }}>
-        {view.dirty && <Icon name="dirty" size="xs" />}
+        {view.status?.code === "dirty" && <Icon name="dirty" size="xs" />}
         {view.mode === "code" ? t("viewer.code") : t("viewer.preview")}
       </span>
     </>

@@ -14,6 +14,8 @@ export interface PluginViewContext {
   // 이 뷰의 사이드바 탭 배지(읽지않음 표시). number=카운트, "dot"=점, null=해제.
   // 창마다 자체 store라 per-window(그 창의 활성 프로젝트 기준). 데이터는 app.data.watch 로 재계산.
   setBadge: (badge: number | "dot" | null) => void;
+  // 이 뷰의 status 보고(R1) — sessions view.status 로. null=회수. 콘텐츠 배치 뷰만 유효(close guard).
+  setStatus: (status: { code: string; message?: string } | null) => void;
 }
 
 export type ViewBadge = number | "dot" | null;

@@ -1962,6 +1962,32 @@ body::after {
   width: 460px;
   top: 120px;
 }
+/* 닫기 확인창(R6) — dmodal-card override(작은 카드) + 내용. */
+.dconfirm {
+  width: 320px;
+  top: 140px;
+  padding: 18px;
+  gap: 14px;
+}
+.dconfirm-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.dconfirm-reasons {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--fg2);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dconfirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .dmodal-head {
   display: flex;
   align-items: center;
@@ -3225,6 +3251,30 @@ select.dctl {
   width: 16px;
   height: 16px;
   border-radius: 50%;
+}
+/* 닫기 x(3종: 프로젝트=tab-close / 콘텐츠=ctab-close / 뷰=view-tab-close) — icon-btn--mini(16px)
+   박스가 작아 그 안의 글리프도 작아진다. 박스를 키우고, close 글리프(lucide x)가 viewBox 가운데
+   절반만 그리므로 svg 를 박스보다 키워 × 를 또렷이. opacity 는 같은 요소의 .icon-btn(0.7)을 특이성
+   한 단으로 이겨 베어 0.85, hover 100%. 세 종류 모두 동일 규칙 — 하나라도 빠지면 그 탭만 작게 남는다. */
+.icon-btn.tab-close,
+.icon-btn.ctab-close,
+.icon-btn.view-tab-close {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  opacity: 0.85;
+}
+.icon-btn.tab-close svg,
+.icon-btn.ctab-close svg,
+.icon-btn.view-tab-close svg {
+  width: 18px;
+  height: 18px;
+}
+.tab:hover .icon-btn.tab-close,
+.icon-btn.tab-close:hover,
+.icon-btn.ctab-close:hover,
+.icon-btn.view-tab-close:hover {
+  opacity: 1;
 }
 /* 탭 타입 아이콘 등 비버튼 아이콘 정렬용 래퍼. */
 .icon-inline {

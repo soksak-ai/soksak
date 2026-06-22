@@ -3,19 +3,26 @@
 // packages/plugin-api/src/index.ts 도 동기해야 이 파일이 통과한다(아니면 typecheck RED).
 // 단일진실은 코어이고 패키지는 그 미러다.
 import type { SoksakPluginApi, PluginContext } from "./api";
+import type { PluginViewContext } from "./viewRegistry";
 import type * as Pkg from "@soksak-ai/plugin-api";
 
 declare const coreApi: SoksakPluginApi;
 declare const pkgApi: Pkg.SoksakPluginApi;
 declare const coreCtx: PluginContext;
 declare const pkgCtx: Pkg.PluginContext;
+declare const coreViewCtx: PluginViewContext;
+declare const pkgViewCtx: Pkg.PluginViewContext;
 
 // 양방향 할당 = 어느 한쪽에 필드가 더 있거나 타입이 다르면 컴파일 실패.
 const _apiFwd: Pkg.SoksakPluginApi = coreApi;
 const _apiRev: SoksakPluginApi = pkgApi;
 const _ctxFwd: Pkg.PluginContext = coreCtx;
 const _ctxRev: PluginContext = pkgCtx;
+const _viewCtxFwd: Pkg.PluginViewContext = coreViewCtx;
+const _viewCtxRev: PluginViewContext = pkgViewCtx;
 void _apiFwd;
 void _apiRev;
 void _ctxFwd;
 void _ctxRev;
+void _viewCtxFwd;
+void _viewCtxRev;

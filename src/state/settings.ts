@@ -13,6 +13,8 @@ export type DangerPolicy = "allow" | "deny";
 export type FocusIndicator = "outline" | "corners";
 // 내장 브라우저의 새 링크(target=_blank / window.open) 처리: 새 OS 창 또는 앱 내 새 탭.
 export type BrowserNewWindow = "window" | "tab";
+// 탭 닫기 확인 정책(R6) — warn=blocking status(미저장·실행 중 등)면 확인창, off=무조건 즉시 닫기.
+export type TabCloseConfirm = "warn" | "off";
 
 // 리사이즈 중 터미널 리플로우 정책(docs/PERFORMANCE.md 원칙 4·5):
 //   live   = 드래그 중에도 프레임당 1회 fit(실시간 리플로우, editor 스타일)
@@ -65,6 +67,8 @@ interface SettingsState extends TerminalSettings {
   // 앱 첫 오픈 시 가리킬 기본 프로젝트 루트("" = 자동 project1). 프로젝트
   // 설정의 "기본 프로젝트" 체크박스가 저장 — 부트(main.tsx)가 소비.
   defaultProjectRoot: string;
+  // 탭 닫기 확인 정책(R6 — warn 기본).
+  tabCloseConfirm: TabCloseConfirm;
   setLanguage: (l: Language) => void;
   setProjectTabPosition: (p: TabPosition) => void;
   setContentTabPosition: (p: TabPosition) => void;
@@ -78,6 +82,7 @@ interface SettingsState extends TerminalSettings {
   setFocusIndicator: (v: FocusIndicator) => void;
   setBrowserNewWindow: (p: BrowserNewWindow) => void;
   setDefaultProjectRoot: (root: string) => void;
+  setTabCloseConfirm: (v: TabCloseConfirm) => void;
   setFontFamily: (v: string) => void;
   setFontSize: (v: number) => void;
   setCursorBlink: (v: boolean) => void;
@@ -101,6 +106,7 @@ const DEFAULTS = {
   focusIndicator: "outline" as FocusIndicator,
   browserNewWindow: "tab" as BrowserNewWindow,
   defaultProjectRoot: "",
+  tabCloseConfirm: "warn" as TabCloseConfirm,
   fontFamily:
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
   fontSize: 13,
@@ -155,6 +161,7 @@ export const useSettings = create<SettingsState>((set, get) => {
         focusIndicator: s.focusIndicator,
         browserNewWindow: s.browserNewWindow,
         defaultProjectRoot: s.defaultProjectRoot,
+        tabCloseConfirm: s.tabCloseConfirm,
         ...terminalSettingsOf(s),
       }),
     );
@@ -211,6 +218,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setDefaultProjectRoot: (defaultProjectRoot) => {
       set({ defaultProjectRoot });
+      save();
+    },
+    setTabCloseConfirm: (tabCloseConfirm) => {
+      set({ tabCloseConfirm });
       save();
     },
     setFontFamily: (fontFamily) => {

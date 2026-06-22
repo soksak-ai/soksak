@@ -5,6 +5,7 @@ import {
   type Program,
   type ViewGroup,
 } from "../state/sessions";
+import { useCloseConfirm } from "../state/closeConfirm";
 import { getRegisteredView } from "../plugins/viewRegistry";
 import { useProgramRegistry } from "../plugins/programRegistry";
 import { Icon } from "../ui/icons/Icon";
@@ -32,7 +33,7 @@ export const ViewTabs = memo(function ViewTabs({
   onTabPointerDown: (viewId: string, e: React.MouseEvent) => void;
 }) {
   const t = useT();
-  const closeView = useSessions((s) => s.closeView);
+  const requestCloseView = useCloseConfirm((s) => s.requestCloseView);
   const addViewToGroup = useSessions((s) => s.addViewToGroup);
   const maximizeView = useSessions((s) => s.maximizeView);
   const hasPrograms = useProgramRegistry((s) => s.order.length > 0);
@@ -156,7 +157,7 @@ export const ViewTabs = memo(function ViewTabs({
                   ? t("view.browser")
                   : v.title}
             </span>
-            {v.kind === "file" && v.dirty && (
+            {v.kind === "file" && v.status?.code === "dirty" && (
               <span className="view-tab-dirty" title={t("viewer.unsaved")}>
                 <Icon name="dirty" size="xs" />
               </span>
@@ -168,10 +169,10 @@ export const ViewTabs = memo(function ViewTabs({
               onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
-                closeView(projectId, v.id);
+                requestCloseView(projectId, v.id);
               }}
             >
-              <Icon name="close" size="sm" />
+              <Icon name="close" size="md" />
             </button>
           </div>
         ))}

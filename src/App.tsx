@@ -23,6 +23,7 @@ import { Icon } from "./ui/icons/Icon";
 // 워드마크 로고 — fill 이 currentColor 상속이라 테마를 자동 추종(정적 신뢰 에셋).
 import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
+import { ConfirmCloseModal } from "./components/ConfirmCloseModal";
 import { ConsentPreviewHost } from "./components/ConsentPreviewHost";
 import { NotifyHost } from "./ui/NotifyHost";
 import { PluginHeaderActions } from "./ui/PluginHeaderActions";
@@ -633,7 +634,7 @@ function App() {
                 closeTab(proj.id);
               }}
             >
-              <Icon name="close" size="sm" />
+              <Icon name="close" size="md" />
             </button>
           )}
         </div>
@@ -768,6 +769,7 @@ function App() {
           onClose={() => setProjectSettingsFor(null)}
         />
       )}
+      <ConfirmCloseModal />
 
       {/* 본문: 좌측 모드면 세로 프로젝트 레일 + 콘텐츠 행. */}
       <div className={`app-body${projectTabPosition === "left" ? " with-rail" : ""}`}>

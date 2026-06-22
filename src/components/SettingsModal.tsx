@@ -10,6 +10,7 @@ import {
   type TabPosition,
   type FocusIndicator,
   type BrowserNewWindow,
+  type TabCloseConfirm,
 } from "../state/settings";
 import { useTheme } from "../state/theme";
 import { useOverlayActive } from "../state/ui";
@@ -235,6 +236,19 @@ export function SettingsModal({
             >
               <option value="outline">{t("focusIndicator.outline")}</option>
               <option value="corners">{t("focusIndicator.corners")}</option>
+            </select>
+          </div>
+          <div className="drow">
+            <span className="drow-label">{t("settings.tabCloseConfirm")}</span>
+            <select
+              className="dctl"
+              value={s.tabCloseConfirm}
+              onChange={(e) =>
+                s.setTabCloseConfirm(e.target.value as TabCloseConfirm)
+              }
+            >
+              <option value="warn">{t("tabCloseConfirm.warn")}</option>
+              <option value="off">{t("tabCloseConfirm.off")}</option>
             </select>
           </div>
           <div className="drow">
