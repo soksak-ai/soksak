@@ -208,6 +208,13 @@ const ko = {
   "settings.tabCloseConfirm": "탭 닫기 확인",
   "tabCloseConfirm.warn": "위험할 때 경고",
   "tabCloseConfirm.off": "무조건 닫기",
+  // 원격 destructive confirm(폰-링크 안전모델) — 데스크톱 단일 권위.
+  "remoteConfirm.title": "원격 위험 작업 승인",
+  "remoteConfirm.device": "요청 기기",
+  "remoteConfirm.command": "명령",
+  "remoteConfirm.approve": "승인",
+  "remoteConfirm.deny": "거부",
+  "remoteConfirm.autoDeny": "{secs}초 안에 결정하지 않으면 자동 거부됩니다",
 } as const;
 
 export type MsgKey = keyof typeof ko;
@@ -407,6 +414,13 @@ const en: Record<MsgKey, string> = {
   "settings.tabCloseConfirm": "Tab close confirm",
   "tabCloseConfirm.warn": "Warn when risky",
   "tabCloseConfirm.off": "Always close",
+  // Remote destructive confirm (phone-link safety model) — single desktop authority.
+  "remoteConfirm.title": "Approve remote destructive action",
+  "remoteConfirm.device": "Requesting device",
+  "remoteConfirm.command": "Command",
+  "remoteConfirm.approve": "Approve",
+  "remoteConfirm.deny": "Deny",
+  "remoteConfirm.autoDeny": "Auto-denied in {secs}s if no decision",
 };
 
 const messages = { ko, en };

@@ -22,6 +22,9 @@ import { Icon } from "./ui/icons/Icon";
 import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConfirmCloseModal } from "./components/ConfirmCloseModal";
+import { RemoteConfirmModal } from "./components/RemoteConfirmModal";
+import { wireRemoteConfirm } from "./state/remoteConfirmWire";
+import { installRemoteConfirmDevTrigger } from "./state/remoteConfirmDev";
 import { ConsentPreviewHost } from "./components/ConsentPreviewHost";
 import { NotifyHost } from "./ui/NotifyHost";
 import { PluginHeaderActions } from "./ui/PluginHeaderActions";
@@ -279,6 +282,14 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.focusInd = focusIndicator;
   }, [focusIndicator]);
+
+  // 원격 destructive confirm 배선(폰-링크 안전모델) — Rust app.emit("remote-confirm-request")를
+  // store 큐에 잇고, 결정 sink 를 remote_confirm_resolve 로 잇는다(데스크톱 단일 권위). 부팅 1회.
+  useEffect(() => wireRemoteConfirm(), []);
+
+  // dev 전용 mock 트리거 — 라이브 폰 없이 모달을 띄워 시각 검증(import.meta.env.DEV 게이트). 프로덕션
+  // 번들(DEV=false)에선 아무것도 설치 안 한다. window.__soksakMockRemoteConfirm() 으로 mock 요청 emit.
+  useEffect(() => installRemoteConfirmDevTrigger(), []);
 
   // 앱 UI(앱 크롬) 전역 폰트 — 코어 소유. 터미널 폰트와 무관(터미널 플러그인 별도 소유).
   // appFontFamily → --app-font(루트 font-family), appFontSize → --app-font-size(루트 font-size).
@@ -636,6 +647,7 @@ function App() {
         />
       )}
       <ConfirmCloseModal />
+      <RemoteConfirmModal />
 
       {/* 본문: 좌측 모드면 세로 프로젝트 레일 + 콘텐츠 행. */}
       <div className={`app-body${projectTabPosition === "left" ? " with-rail" : ""}`}>
