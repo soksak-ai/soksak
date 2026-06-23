@@ -95,7 +95,7 @@ export const PluginViewHost = memo(function PluginViewHost({
   return (
     <div className="plugin-view-host">
       <div
-        className="plugin-view-container"
+        className={`plugin-view-container${reg?.decl.transparent ? " transparent" : ""}`}
         data-view-addr={viewAddr}
         ref={containerRef}
         style={overlay ? { display: "none" } : undefined}

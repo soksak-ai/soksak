@@ -2853,6 +2853,12 @@ select.dctl {
   /* 빈 공간이 터미널 패널 본문과 같은 배경 — 사이드바 배경과 구분되는 콘텐츠면. */
   background: var(--bg);
 }
+/* transparent 선언 콘텐츠 뷰(브라우저 등 네이티브 child webview 를 셀-hole 아래로 비치게
+   하는 뷰)는 컨테이너 배경을 비운다 — var(--bg) 가 hole 을 덮어 네이티브 webview 가
+   안 보이는 것을 막는다(레거시 코어 브라우저는 이 래퍼 없이 셀에 직접 렌더됐다). */
+.plugin-view-container.transparent {
+  background: transparent;
+}
 .plugin-view-empty,
 .plugin-view-error {
   padding: 14px;
