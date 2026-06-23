@@ -1,5 +1,6 @@
 import { memo, useEffect, useState } from "react";
 import { getCwdOfHost, subscribeCwd } from "../terminal/paneHosts";
+import { hasPtyObservation } from "../terminal/ptyObservationStore";
 import { Icon } from "../ui/icons/Icon";
 import type { View, ViewGroup } from "../state/sessions";
 import { useT } from "../i18n";
@@ -78,10 +79,12 @@ export const GroupStatusBar = memo(function GroupStatusBar({
   group: ViewGroup;
 }) {
   const active = group.views.find((v) => v.id === group.activeViewId);
+  // 터미널 = PTY 관찰을 가진 플러그인 뷰(view.id = paneId). cwd/상태바 아이템은 substrate 키.
+  const isTerminal = active != null && hasPtyObservation(active.id);
   return (
     <div className="egroup-status">
-      {active?.kind === "terminal" ? (
-        <TerminalStatus paneId={active.focusedPaneId} />
+      {isTerminal ? (
+        <TerminalStatus paneId={active.id} />
       ) : active?.kind === "file" ? (
         <FileStatus view={active} />
       ) : null}

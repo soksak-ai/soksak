@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { useSettings } from "./settings";
 import {
   autorunCommandOf,
   getRegisteredProgram,
@@ -28,7 +27,7 @@ import {
 //   - 최상단 탭 = 프로젝트(ProjectTab): 자체 사이드바(파일트리) + 컨텐츠 탭들
 //   - 컨텐츠(ContentArea) = 그룹 트리(GroupNode): 에디터 그룹처럼 좌/우/상/하 재귀 분할.
 //       각 leaf = ViewGroup(자체 헤더 + 활성 뷰). 드래그/명령으로 분할·이동·병합.
-//   - 뷰(View) = 터미널(내부 PaneTree 분할 가능) / 파일 / 브라우저.
+//   - 뷰(View) = 파일(뷰어 플러그인) / 플러그인(터미널·브라우저·에디터 등 — 코어는 터미널 비소유).
 // 비활성 프로젝트/컨텐츠/뷰는 언마운트하지 않고 숨겨 세션(PTY/에디터/웹뷰)을 유지한다.
 //
 // 설계 원칙(AI 명령 인터페이스의 기초):
@@ -68,11 +67,6 @@ export const err = (code: CmdErrCode, message: string, data?: unknown): CmdErr =
 
 // ── 모델 타입 ────────────────────────────────────────────────────────────────
 
-// 재귀 pane 트리. leaf = 터미널 하나, split = 자식들의 행/열 묶음.
-// 터미널 뷰 내부 pane 트리 = 제네릭 SplitTree(leaf 값 = paneId). split/remove/resize/직렬화는
-// splitTree.ts 단일 추상(뷰 그룹 GroupNode 와 동일 코드 — 중복 없음). leaf.value 가 paneId.
-export type PaneNode = SplitTree<string>;
-
 // 뷰가 코어에 상시 보고하는 상태(R1) — code=기계 식별자, message=사람 표시.
 // blocking code(STATUS_BLOCKING)는 닫기 가드를 발동(R2). 회수는 뷰 종속(R4) — 뷰 삭제=status 삭제.
 export interface ViewStatus {
@@ -80,21 +74,9 @@ export interface ViewStatus {
   message?: string;
 }
 
-// 콘텐츠 뷰: 터미널(분할 가능), 파일(CodeMirror/프리뷰), 플러그인(콘텐츠 배치).
+// 콘텐츠 뷰: 파일(뷰어 플러그인), 플러그인(콘텐츠 배치 — 터미널·브라우저·에디터 전부 여기).
+// 코어는 터미널 뷰를 소유하지 않는다(터미널도 플러그인 뷰).
 export type View =
-  | {
-      id: string;
-      kind: "terminal";
-      title: string;
-      layout: PaneNode;
-      focusedPaneId: string;
-      // 이 pane 의 셸이 뜨면 1회 자동 실행할 셸 명령(에이전트류 프로그램 —
-      // 명령 문자열은 programRegistry 가 resolve, ensure 설치 래핑 포함).
-      // pasteOnly: 복원된 터미널(A6)은 명령을 자동 실행하지 않고 프롬프트에 붙여넣기만 한다
-      // (엔터는 사용자가) — live PTY 는 복원 불가라 "같은 명령 재실행"을 강요하지 않는다(부작용 회피).
-      autorun?: { paneId: string; command: string; pasteOnly?: boolean };
-      status?: ViewStatus;
-    }
   | {
       id: string;
       kind: "file";
@@ -112,6 +94,9 @@ export type View =
       title: string;
       pluginId: string;
       view: string; // 플러그인 내 뷰 id
+      // 이 뷰가 마운트 시 받을 자동 실행 명령(에이전트 프로그램 — 터미널 뷰가 PTY 로 1회 실행).
+      // PluginViewContext.command 로 전달. 뷰 종류 무관 채널(터미널 뷰만 실제 자동 실행).
+      command?: string;
       status?: ViewStatus;
     };
 
@@ -178,10 +163,9 @@ export interface NewProjectOpts {
 
 // ── 액션 결과 형태 ──────────────────────────────────────────────────────────
 
-// 새 뷰 생성 결과(터미널이면 paneId 포함).
+// 새 뷰 생성 결과.
 export interface NewViewIds {
   viewId: string;
-  paneId?: string;
 }
 
 interface SessionsStore {
@@ -320,48 +304,22 @@ interface SessionsStore {
     sizes: number[],
   ) => CmdResult;
   // targetGroup 옆에 새 뷰 그룹을 분할 생성(split 버튼 / title 모드 ⌘T / 명령).
+  // program 미지정/미등록이면 빈 그룹(빈 패널) — viewId 없음(Partial).
   splitWithNewView: (
     projectId: string,
     targetGroupId: string,
     side: Side,
     program?: Program,
-  ) => CmdResult<{ groupId: string } & NewViewIds>;
-
-  // pane 레벨(특정 터미널 뷰 안에서)
-  splitPane: (
-    projectId: string,
-    viewId: string,
-    paneId: string,
-    dir: "row" | "col",
-  ) => CmdResult<{ paneId: string }>;
-  closePane: (
-    projectId: string,
-    viewId: string,
-    paneId: string,
-  ) => CmdResult<{ focusedPaneId: string }>;
-  // pane split 비율 조절(핸들 드래그/명령) — GroupNode resizeSplit 의 pane 판(동일 추상).
-  resizePane: (
-    projectId: string,
-    viewId: string,
-    splitId: string,
-    sizes: number[],
-  ) => CmdResult;
-  setFocusedPane: (
-    projectId: string,
-    viewId: string,
-    paneId: string,
-  ) => CmdResult;
+  ) => CmdResult<{ groupId: string } & Partial<NewViewIds>>;
 }
 
 let nextProjectId = 2; // 첫 프로젝트는 t1
 let nextViewId = 2; // 첫 뷰는 v1
-let nextPaneId = 2; // 첫 pane 은 p1
 let nextGroupId = 2; // 첫 그룹은 g1
 let nextSplitId = 1;
 let nextContentId = 2; // 첫 컨텐츠는 c1
 
 const newViewId = () => `v${nextViewId++}`;
-const newPaneId = () => `p${nextPaneId++}`;
 const newGroupId = () => `g${nextGroupId++}`;
 const newSplitId = () => `s${nextSplitId++}`;
 const newContentId = () => `c${nextContentId++}`;
@@ -373,7 +331,6 @@ export const nextSplitIdGen = (): string => newSplitId();
 export function reseedIdCounters(tabs: ProjectTab[]): void {
   let maxT = 1,
     maxV = 1,
-    maxP = 1,
     maxG = 1,
     maxS = 0,
     maxC = 1;
@@ -388,12 +345,6 @@ export function reseedIdCounters(tabs: ProjectTab[]): void {
       node.children.forEach(scanSplit);
     }
   };
-  const scanPaneSplit = (node: PaneNode): void => {
-    if (node.type === "split") {
-      maxS = Math.max(maxS, num(node.id, "s"));
-      node.children.forEach(scanPaneSplit);
-    }
-  };
   for (const t of tabs) {
     maxT = Math.max(maxT, num(t.id, "t"));
     for (const c of t.contents) {
@@ -403,18 +354,12 @@ export function reseedIdCounters(tabs: ProjectTab[]): void {
         maxG = Math.max(maxG, num(g.id, "g"));
         for (const v of g.views) {
           maxV = Math.max(maxV, num(v.id, "v"));
-          if (v.kind === "terminal") {
-            scanPaneSplit(v.layout);
-            for (const pid of collectLeafIds(v.layout))
-              maxP = Math.max(maxP, num(pid, "p"));
-          }
         }
       }
     }
   }
   nextProjectId = maxT + 1;
   nextViewId = maxV + 1;
-  nextPaneId = maxP + 1;
   nextGroupId = maxG + 1;
   nextSplitId = maxS + 1;
   nextContentId = maxC + 1;
@@ -424,7 +369,6 @@ export function reseedIdCounters(tabs: ProjectTab[]): void {
 export function newIds(): {
   project: string;
   view: string;
-  pane: string;
   group: string;
   split: string;
   content: string;
@@ -432,30 +376,13 @@ export function newIds(): {
   return {
     project: `t${nextProjectId}`,
     view: `v${nextViewId}`,
-    pane: `p${nextPaneId}`,
     group: `g${nextGroupId}`,
     split: `s${nextSplitId}`,
     content: `c${nextContentId}`,
   };
 }
 
-const leaf = (id: string): PaneNode => splitLeaf(id);
-
 const baseName = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
-
-// 새 터미널 뷰(빈 단일 pane). command 가 있으면 그 pane 에서 1회 자동 실행.
-function newTerminalView(command?: string): View {
-  const paneId = newPaneId();
-  return {
-    id: newViewId(),
-    kind: "terminal",
-    // 기본 title 은 영어(state.tree 로 AI 에 노출되는 표면). UI 탭 라벨은 kind 로 t() 지역화(ViewTabs).
-    title: "Terminal",
-    layout: leaf(paneId),
-    focusedPaneId: paneId,
-    ...(command ? { autorun: { paneId, command } } : {}),
-  };
-}
 
 function makeGroup(view?: View): ViewGroup {
   // view 생략 = 빈 그룹(빈 탭) — 첫 화면 자동 실행 없음(순수 스켈레톤). +메뉴로 뷰를 추가한다.
@@ -464,41 +391,53 @@ function makeGroup(view?: View): ViewGroup {
     : { id: newGroupId(), views: [], activeViewId: "" };
 }
 
-// 새 플러그인 뷰(콘텐츠 배치) — kind=view 프로그램이 자기 contributes.views 중 하나를 연다.
+// 새 플러그인 뷰(콘텐츠 배치) — 프로그램이 어떤 플러그인의 contributes.views 중 하나를 연다.
 // PluginViewHost 가 "<pluginId>.<view>" provider 를 그린다. 코어는 plugin-agnostic — 어떤
-// 플러그인이든 동일 경로(특정 플러그인 락인 0).
-function newPluginViewFor(pluginId: string, view: string, title: string): View {
-  return { id: newViewId(), kind: "plugin", title, pluginId, view };
+// 플러그인이든 동일 경로(특정 플러그인 락인 0). command 는 마운트 시 뷰에 흘려보낼 자동 실행
+// 명령(에이전트 프로그램 — 터미널 뷰가 PTY 로 1회 실행). 미지정 = 자동 실행 없음.
+function newPluginViewFor(
+  pluginId: string,
+  view: string,
+  title: string,
+  command?: string,
+): View {
+  return {
+    id: newViewId(),
+    kind: "plugin",
+    title,
+    pluginId,
+    view,
+    ...(command ? { command } : {}),
+  };
 }
 
-// 프로그램 → 새 뷰. 내장 프로그램 개념은 없다(§2.6) — 등록 프로그램의 spec 으로
-// resolve(kind 에 따라 터미널[+autorun] 또는 플러그인 콘텐츠 뷰). 미등록 id 는
-// 터미널 뷰 폴백(아이콘 셋의 lucide 폴백과 동형 — 플러그인 비활성에도 상태
-// 유실 없음).
+// 프로그램 → 새 뷰. 내장 프로그램 개념은 없다(§2.6) — 등록 프로그램의 spec 으로 resolve.
+// 모든 프로그램은 kind:"view"(코어 터미널 제거 — 터미널도 플러그인 뷰)다. viewPlugin 으로
+// 다른 플러그인의 뷰를 열 수 있고(크로스 플러그인 — 에이전트 프로그램 → 터미널 플러그인 뷰),
+// command 는 그 뷰에 흘려보낼 자동 실행 명령이다. 미등록 id 는 뷰 생성 불가(null).
 function newViewFor(
   program: Program,
   opts?: { command?: string },
-): View {
+): View | null {
   const reg = getRegisteredProgram(program);
-  if (reg) {
-    if (reg.decl.kind === "view" && reg.decl.view)
-      return newPluginViewFor(reg.pluginId, reg.decl.view, localize(reg.decl.title));
-    return newTerminalView(opts?.command ?? autorunCommandOf(reg.decl));
-  }
-  return newTerminalView(opts?.command);
+  if (!reg || !reg.decl.view) return null;
+  // viewPlugin 명시 = 그 플러그인의 뷰(크로스 플러그인), 미지정 = 프로그램 소유 플러그인.
+  const pluginId = reg.decl.viewPlugin ?? reg.pluginId;
+  // command 우선순위: 호출부 직접 지정(opts) > 프로그램 선언(autorun).
+  const command = opts?.command ?? autorunCommandOf(reg.decl);
+  return newPluginViewFor(pluginId, reg.decl.view, localize(reg.decl.title), command);
 }
 
-// 뷰의 새 id 묶음(터미널이면 paneId 포함) — 생성 명령 응답용.
+// 뷰의 새 id 묶음 — 생성 명령 응답용.
 function idsOfView(v: View): NewViewIds {
-  return v.kind === "terminal"
-    ? { viewId: v.id, paneId: v.focusedPaneId }
-    : { viewId: v.id };
+  return { viewId: v.id };
 }
 
 // 새 컨텐츠 영역. program 생략 = 빈 그룹(빈 탭, 첫 화면 자동실행 없음 — 순수 스켈레톤).
 // program 지정(+메뉴로 새 콘텐츠 탭) = 그 프로그램 뷰로 시작.
 function makeContent(title: string, program?: Program): ContentArea {
-  const g = program ? makeGroup(newViewFor(program)) : makeGroup();
+  // program 미지정 또는 미등록(newViewFor=null) = 빈 그룹(빈 탭, 순수 스켈레톤).
+  const g = makeGroup(program ? (newViewFor(program) ?? undefined) : undefined);
   return {
     id: newContentId(),
     title,
@@ -633,63 +572,17 @@ function normalizeActiveGroupC(c: ContentArea): ContentArea {
   return { ...next, activeGroupId: groups[0]?.id ?? next.activeGroupId };
 }
 
-// ── pane 트리 헬퍼(터미널 뷰 내부) ────────────────────────────────────────────
-
-export function collectLeafIds(node: PaneNode, acc: string[] = []): string[] {
-  acc.push(...leavesOf(node)); // leaf 값(paneId) = SplitTree leavesOf
-  return acc;
-}
-
-// 모든 프로젝트·모든 컨텐츠·모든 터미널 뷰의 pane leaf id 를 수집(호스트 폐기 diff 용).
-export function collectAllLeafIds(tabs: ProjectTab[]): string[] {
-  const acc: string[] = [];
-  for (const t of tabs) {
-    for (const c of t.contents) {
-      for (const v of allViews(c.layout)) {
-        if (v.kind === "terminal") collectLeafIds(v.layout, acc);
-      }
-    }
-  }
-  return acc;
-}
-
-// paneId 의 spawn 정보: cwd=프로젝트 root, shell=프로젝트>전역 설정,
-// command=그 pane 이 뷰의 autorun 대상일 때만(1회 자동 실행 셸 명령).
-export function paneSpawnInfo(
-  tabs: ProjectTab[],
-  paneId: string,
-): { cwd?: string; shell?: string; command?: string; pasteOnly?: boolean } {
-  for (const t of tabs) {
-    for (const c of t.contents) {
-      for (const v of allViews(c.layout)) {
-        if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
-          const shell = t.shell || useSettings.getState().shell || undefined;
-          const isAutorunPane = v.autorun?.paneId === paneId;
-          return {
-            cwd: t.root,
-            shell,
-            command: isAutorunPane ? v.autorun?.command : undefined,
-            // 복원 터미널(A6): 명령을 실행 대신 프롬프트에 붙여넣기만.
-            ...(isAutorunPane && v.autorun?.pasteOnly ? { pasteOnly: true } : {}),
-          };
-        }
-      }
-    }
-  }
-  return {};
-}
+// ── 터미널 pane resolver(플러그인 터미널 = substrate) ─────────────────────────
 
 // 뷰가 구동하는 PTY substrate 의 paneId 후보(있으면). 터미널 판정은 generic — 그 후보 id 가
 // PTY 관찰을 가지면(app.pty 를 구동하면) 터미널이다(pluginId·kind 하드코딩 없음, hasPty 주입).
-//   - 코어 터미널 뷰: 후보 = focusedPaneId(PaneTree leaf — 관찰 키).
-//   - 그 외(플러그인 터미널 포함): 후보 = view.id(플러그인이 app.pty.spawn 에 넘긴 paneId).
+// 코어는 터미널 뷰를 소유하지 않으므로 후보는 항상 view.id(플러그인이 app.pty.spawn 에 넘긴 paneId).
 function ptyPaneOfView(v: View, hasPty: (id: string) => boolean): string | undefined {
-  const candidate = v.kind === "terminal" ? v.focusedPaneId : v.id;
-  return hasPty(candidate) ? candidate : undefined;
+  return hasPty(v.id) ? v.id : undefined;
 }
 
 // 프로젝트의 사이드바(파일트리)가 따라갈 터미널 pane(= 현재 cwd 출처). 순수 resolver — PTY
-// 관찰 predicate(hasPty)를 주입받아 코어/플러그인 터미널을 구분 없이 따라간다(generic).
+// 관찰 predicate(hasPty)를 주입받아 플러그인 터미널을 따라간다(generic).
 // 활성 컨텐츠의 활성 그룹의 활성(=포커스된) 뷰가 터미널이면 그 pane, 아니면 아무 터미널 뷰의 pane.
 export function cwdPaneOf(
   project: ProjectTab,
@@ -718,7 +611,7 @@ export function cwdPaneOf(
   return undefined;
 }
 
-// paneId 를 가진 터미널 뷰의 {projectId, viewId}(M5 — terminal status 브리지용). 없으면 null.
+// paneId(=플러그인 터미널 view.id) 의 {projectId, viewId}(M5 — terminal status 브리지용). 없으면 null.
 export function paneToView(
   tabs: ProjectTab[],
   paneId: string,
@@ -726,24 +619,8 @@ export function paneToView(
   for (const t of tabs)
     for (const c of t.contents)
       for (const v of allViews(c.layout))
-        if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId))
-          return { projectId: t.id, viewId: v.id };
+        if (v.id === paneId) return { projectId: t.id, viewId: v.id };
   return null;
-}
-
-// pane 분할/제거 = 제네릭 SplitTree 연산(중복 구현 없음). newId 는 새 pane id(leaf 값),
-// 새 split 노드 id 는 newSplitId. before=false → 기존(splitInTree)과 동일하게 뒤에 삽입.
-function splitInTree(
-  node: PaneNode,
-  paneId: string,
-  dir: "row" | "col",
-  newId: string,
-): PaneNode {
-  return insertBeside(node, (v) => v === paneId, dir, false, newId, newSplitId);
-}
-
-function removeInTree(node: PaneNode, paneId: string): PaneNode | null {
-  return removeLeaf(node, (v) => v === paneId).tree;
 }
 
 // ── 검색/변환 헬퍼 ───────────────────────────────────────────────────────────
@@ -1182,6 +1059,11 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       }
       const target = groupId ?? content.activeGroupId;
       const v = newViewFor(program, opts);
+      if (!v) {
+        // 미등록 프로그램 — 코어는 터미널 폴백을 더 이상 갖지 않는다(터미널도 플러그인 뷰).
+        r = err("TARGET_NOT_FOUND", `프로그램 없음: ${program}`);
+        return s;
+      }
       r = ok({ groupId: target, ...idsOfView(v) });
       return {
         tabs: mapProject(s.tabs, projectId, (x) =>
@@ -1704,7 +1586,8 @@ export const useSessions = create<SessionsStore>((set, get) => ({
   },
 
   splitWithNewView: (projectId, targetGroupId, side, program) => {
-    let r: CmdResult<{ groupId: string } & NewViewIds> = noProject(projectId);
+    let r: CmdResult<{ groupId: string } & Partial<NewViewIds>> =
+      noProject(projectId);
     set((s) => {
       const t = s.tabs.find((x) => x.id === projectId);
       if (!t) return s;
@@ -1713,9 +1596,10 @@ export const useSessions = create<SessionsStore>((set, get) => ({
         r = err("TARGET_NOT_FOUND", `그룹 없음: ${targetGroupId}`);
         return s;
       }
-      const v = newViewFor(program ?? "terminal");
-      const fresh = makeGroup(v);
-      r = ok({ groupId: fresh.id, ...idsOfView(v) });
+      // program 지정 시 그 프로그램 뷰, 미지정/미등록이면 빈 그룹(빈 패널 — 순수 스켈레톤).
+      const v = program ? newViewFor(program) : null;
+      const fresh = makeGroup(v ?? undefined);
+      r = ok({ groupId: fresh.id, ...(v ? idsOfView(v) : {}) });
       return {
         tabs: mapProject(s.tabs, projectId, (x) =>
           mapContent(x, content.id, (c) =>
@@ -1731,129 +1615,4 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     return r;
   },
 
-  splitPane: (projectId, viewId, paneId, dir) => {
-    let r: CmdResult<{ paneId: string }> = noProject(projectId);
-    set((s) => {
-      const t = s.tabs.find((x) => x.id === projectId);
-      if (!t) return s;
-      const content = contentOfView(t, viewId);
-      const view = content
-        ? allViews(content.layout).find((v) => v.id === viewId)
-        : undefined;
-      if (!view || view.kind !== "terminal") {
-        r = err("TARGET_NOT_FOUND", `터미널 뷰 없음: ${viewId}`);
-        return s;
-      }
-      if (!collectLeafIds(view.layout).includes(paneId)) {
-        r = err("TARGET_NOT_FOUND", `pane 없음: ${paneId}`);
-        return s;
-      }
-      const newId = newPaneId();
-      r = ok({ paneId: newId });
-      return {
-        tabs: mapProject(s.tabs, projectId, (x) =>
-          mapViewEverywhere(x, viewId, (v) => {
-            if (v.kind !== "terminal") return v;
-            return {
-              ...v,
-              layout: splitInTree(v.layout, paneId, dir, newId),
-              focusedPaneId: newId,
-            };
-          }),
-        ),
-      };
-    });
-    return r;
-  },
-
-  resizePane: (projectId, viewId, splitId, sizes) => {
-    let r: CmdResult = noProject(projectId);
-    set((s) => {
-      const t = s.tabs.find((x) => x.id === projectId);
-      if (!t) return s;
-      const content = contentOfView(t, viewId);
-      const view = content
-        ? allViews(content.layout).find((v) => v.id === viewId)
-        : undefined;
-      if (!view || view.kind !== "terminal") {
-        r = err("TARGET_NOT_FOUND", `터미널 뷰 없음: ${viewId}`);
-        return s;
-      }
-      if (!findSplitTree(view.layout, splitId)) {
-        r = err("TARGET_NOT_FOUND", `pane split 없음: ${splitId}`);
-        return s;
-      }
-      r = ok({});
-      return {
-        tabs: mapProject(s.tabs, projectId, (x) =>
-          mapViewEverywhere(x, viewId, (v) =>
-            v.kind === "terminal"
-              ? { ...v, layout: resizeSplitTree(v.layout, splitId, sizes) }
-              : v,
-          ),
-        ),
-      };
-    });
-    return r;
-  },
-
-  closePane: (projectId, viewId, paneId) => {
-    let r: CmdResult<{ focusedPaneId: string }> = noProject(projectId);
-    set((s) => {
-      const t = s.tabs.find((x) => x.id === projectId);
-      if (!t) return s;
-      const content = contentOfView(t, viewId);
-      const view = content
-        ? allViews(content.layout).find((v) => v.id === viewId)
-        : undefined;
-      if (!view || view.kind !== "terminal") {
-        r = err("TARGET_NOT_FOUND", `터미널 뷰 없음: ${viewId}`);
-        return s;
-      }
-      if (!collectLeafIds(view.layout).includes(paneId)) {
-        r = err("TARGET_NOT_FOUND", `pane 없음: ${paneId}`);
-        return s;
-      }
-      if (collectLeafIds(view.layout).length <= 1) {
-        r = err("LAST_ITEM", "마지막 pane 은 닫을 수 없음(뷰 닫기를 사용)");
-        return s;
-      }
-      const next = removeInTree(view.layout, paneId);
-      if (next === null) return s;
-      const remaining = collectLeafIds(next);
-      const focusedPaneId = remaining.includes(view.focusedPaneId)
-        ? view.focusedPaneId
-        : remaining[0];
-      r = ok({ focusedPaneId });
-      return {
-        tabs: mapProject(s.tabs, projectId, (x) =>
-          mapViewEverywhere(x, viewId, (v) =>
-            v.kind === "terminal" ? { ...v, layout: next, focusedPaneId } : v,
-          ),
-        ),
-      };
-    });
-    return r;
-  },
-
-  setFocusedPane: (projectId, viewId, paneId) => {
-    let r: CmdResult = noProject(projectId);
-    set((s) => {
-      const t = s.tabs.find((x) => x.id === projectId);
-      if (!t) return s;
-      if (!contentOfView(t, viewId)) {
-        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
-        return s;
-      }
-      r = ok({});
-      return {
-        tabs: mapProject(s.tabs, projectId, (x) =>
-          mapViewEverywhere(x, viewId, (v) =>
-            v.kind === "terminal" ? { ...v, focusedPaneId: paneId } : v,
-          ),
-        ),
-      };
-    });
-    return r;
-  },
 }));

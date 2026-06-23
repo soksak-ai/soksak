@@ -1,9 +1,9 @@
 // PTY 관찰 파서 — 셸 통합 OSC 시퀀스를 raw PTY 출력에서 직접 파싱한다(xterm Terminal 비의존).
 //
 // [원칙] 관찰(cwd·명령 시작/종료)은 터미널-프로토콜 레벨 = 범용 substrate 이지 터미널-기능-뷰가
-// 아니다. 그러므로 PTY 바이트를 흘리는 누구든(코어 createTerminal 이든 터미널 플러그인이든) 이
-// 파서에 출력을 먹이면 동일한 관찰을 얻는다. xterm 의 parser.registerOscHandler 에 의존하던
-// shellIntegration.ts 의 OSC 파싱 의미론(OSC 7 / 133 / 633)을 바이트 스트림 파서로 옮긴 것이다.
+// 아니다. 그러므로 PTY 바이트를 흘리는 누구든(터미널 플러그인 등) 이 파서에 출력을 먹이면 동일한
+// 관찰을 얻는다. xterm 의 parser.registerOscHandler 에 의존하던 OSC 파싱 의미론(OSC 7 / 133 / 633)을
+// 바이트 스트림 파서로 옮긴 것이다.
 //
 // 파싱 대상:
 //   - OSC 7  : file URI → cwd

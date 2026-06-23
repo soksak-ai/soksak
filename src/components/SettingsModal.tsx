@@ -3,9 +3,6 @@ import { usePlugins } from "../state/plugins";
 import { PluginSettingsPanel } from "./PluginSettingsPanel";
 import {
   useSettings,
-  type CursorStyle,
-  type ResizeReflow,
-  type XtermRenderer,
   type Language,
   type TabPosition,
   type FocusIndicator,
@@ -28,28 +25,6 @@ function ThemeSwatch({ bg, side, acc }: { bg: string; side: string; acc: string 
     <span className="th-swatch" style={{ background: bg }}>
       <span className="th-swatch-side" style={{ background: side }} />
       <span className="th-swatch-dot" style={{ background: acc }} />
-    </span>
-  );
-}
-
-function Stepper({
-  value,
-  onChange,
-  step = 1,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  step?: number;
-}) {
-  return (
-    <span className="dstepper">
-      <span className="dstep-btn icon-inline" onClick={() => onChange(value - step)}>
-        <Icon name="minus" size="sm" />
-      </span>
-      {value}
-      <span className="dstep-btn icon-inline" onClick={() => onChange(value + step)}>
-        <Icon name="add" size="sm" />
-      </span>
     </span>
   );
 }
@@ -225,6 +200,26 @@ export function SettingsModal({
             </select>
           </div>
           <div className="drow">
+            <span className="drow-label">{t("settings.appFont")}</span>
+            <input
+              className="dctl"
+              type="text"
+              value={s.appFontFamily}
+              onChange={(e) => s.setAppFontFamily(e.target.value)}
+            />
+          </div>
+          <div className="drow">
+            <span className="drow-label">{t("settings.appFontSize")}</span>
+            <input
+              className="dctl"
+              type="number"
+              min={6}
+              max={40}
+              value={s.appFontSize}
+              onChange={(e) => s.setAppFontSize(Number(e.target.value))}
+            />
+          </div>
+          <div className="drow">
             <span className="drow-label">{t("settings.focusIndicator")}</span>
             <select
               className="dctl"
@@ -260,24 +255,6 @@ export function SettingsModal({
               <option value="ko">한국어</option>
               <option value="en">English</option>
             </select>
-          </div>
-          <div className="drow">
-            <span className="drow-label">{t("settings.shell")}</span>
-            <input
-              className="dctl dctl-mono"
-              type="text"
-              list="shell-options"
-              value={s.shell}
-              placeholder={t("shell.default")}
-              onChange={(e) => s.setShell(e.target.value.trim())}
-            />
-            <datalist id="shell-options">
-              <option value="/bin/zsh" />
-              <option value="/bin/bash" />
-              <option value="/bin/sh" />
-              <option value="/opt/homebrew/bin/fish" />
-              <option value="/opt/homebrew/bin/nu" />
-            </datalist>
           </div>
           <div className="drow">
             <span className="drow-label">{t("settings.projectTabPos")}</span>
@@ -322,77 +299,9 @@ export function SettingsModal({
           </div>
           */}
 
-          <div className="dsec">{t("settings.font")}</div>
-          <div className="drow">
-            <span className="drow-label">{t("settings.fontFamily")}</span>
-            <input
-              className="dctl dctl-mono"
-              type="text"
-              value={s.fontFamily}
-              onChange={(e) => s.setFontFamily(e.target.value)}
-            />
-          </div>
-          <div className="drow">
-            <span className="drow-label">{t("settings.fontSize")}</span>
-            <Stepper value={s.fontSize} onChange={s.setFontSize} />
-          </div>
-          <div className="drow">
-            <span className="drow-label">{t("settings.cursor")}</span>
-            <select
-              className="dctl"
-              value={s.cursorStyle}
-              onChange={(e) => s.setCursorStyle(e.target.value as CursorStyle)}
-            >
-              <option value="block">{t("settings.cursorBlock")}</option>
-              <option value="bar">{t("settings.cursorBar")}</option>
-              <option value="underline">{t("settings.cursorUnderline")}</option>
-            </select>
-          </div>
-          <div className="drow">
-            <span className="drow-label">{t("settings.cursorBlink")}</span>
-            <select
-              className="dctl"
-              value={s.cursorBlink ? "on" : "off"}
-              onChange={(e) => s.setCursorBlink(e.target.value === "on")}
-            >
-              <option value="on">{t("common.on")}</option>
-              <option value="off">{t("common.off")}</option>
-            </select>
-          </div>
-          <div className="drow">
-            <span className="drow-label">{t("settings.resizeReflow")}</span>
-            <select
-              className="dctl"
-              value={s.resizeReflow}
-              onChange={(e) =>
-                s.setResizeReflow(e.target.value as ResizeReflow)
-              }
-            >
-              <option value="live">{t("reflow.live")}</option>
-              <option value="settle">{t("reflow.settle")}</option>
-            </select>
-          </div>
-          <div className="drow">
-            <span className="drow-label">{t("settings.xtermRenderer")}</span>
-            <select
-              className="dctl"
-              value={s.xtermRenderer}
-              onChange={(e) =>
-                s.setXtermRenderer(e.target.value as XtermRenderer)
-              }
-            >
-              <option value="dom">{t("renderer.dom")}</option>
-              <option value="webgl">{t("renderer.webgl")}</option>
-            </select>
-          </div>
-          <div className="drow">
-            <span className="drow-label">{t("settings.scrollback")}</span>
-            <Stepper
-              value={s.scrollback}
-              onChange={s.setScrollback}
-              step={1000}
-            />
-          </div>
+          {/* 터미널 외형(글꼴/크기/커서/깜빡임/리사이즈 리플로우/렌더러/스크롤백/셸)은
+              코어 설정이 아니다 — 터미널 플러그인의 설정 패널(아래 PluginSettingsPanel)이
+              소유한다(manifest configuration 단일진실, 중복 제거). */}
 
           <div className="dsec">{t("settings.permission")}</div>
           <div className="drow">

@@ -7,7 +7,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   allGroups,
-  collectLeafIds,
   useSessions,
   type ContentArea,
   type DropZone,
@@ -23,7 +22,7 @@ import { useViewLabels } from "../state/viewLabels";
 import { useBookmarks } from "../state/bookmarks";
 import { useTheme } from "../state/theme";
 import { useIconRegistry } from "../ui/icons/registry";
-import { focusHost } from "../terminal/paneHosts";
+import { hasPtyObservation } from "../terminal/ptyObservationStore";
 import { resolveTermPane } from "./termResolve";
 import { computeLayout } from "../components/GroupArea";
 import { catalogJson, register, type CommandContext } from "./registry";
@@ -82,16 +81,14 @@ function findSplitNode(
   return null;
 }
 
+// paneId = 플러그인 터미널의 view.id(코어 터미널 제거 — 터미널도 플러그인 뷰). 그 뷰의 위치.
 function locatePane(paneId: string): Location | null {
   const s = useSessions.getState();
   for (const project of s.tabs) {
     for (const content of project.contents) {
       for (const group of allGroups(content.layout)) {
         for (const view of group.views) {
-          if (
-            view.kind === "terminal" &&
-            collectLeafIds(view.layout).includes(paneId)
-          ) {
+          if (view.id === paneId) {
             return { project, content, group, view };
           }
         }
@@ -181,31 +178,22 @@ function resolveGroup(
   return resolveCtx(ctx);
 }
 
-// 대상 pane: 명시 > 컨텍스트 pane > 컨텍스트 뷰의 포커스 pane.
-function resolvePane(
-  params: Record<string, unknown>,
+// term.* 의 컨텍스트 기반 터미널 pane 해석(명시 pane 이 없을 때) — resolveTermPane 에 주입.
+// 터미널 = PTY 관찰을 가진 뷰(플러그인 터미널, view.id = paneId). 컨텍스트 pane > 활성 뷰 >
+// 같은 컨텐츠의 첫 터미널 뷰 순. substrate 술어(hasPtyObservation)로 generic 판정(코어 락인 0).
+function terminalContextPane(
+  _params: Record<string, unknown>,
   ctx: CommandContext,
-): { paneId: string; loc: Location } | null {
-  const explicit = params.pane as string | undefined;
-  if (explicit) {
-    const loc = locatePane(explicit);
-    return loc ? { paneId: explicit, loc } : null;
-  }
-  if (ctx.pane) {
-    const loc = locatePane(ctx.pane);
-    if (loc) return { paneId: ctx.pane, loc };
-  }
+): { paneId: string } | null {
+  if (ctx.pane && hasPtyObservation(ctx.pane)) return { paneId: ctx.pane };
   const loc = activeChain();
   if (!loc) return null;
-  if (loc.view.kind === "terminal") {
-    return { paneId: loc.view.focusedPaneId, loc };
+  if (loc.view && hasPtyObservation(loc.view.id)) {
+    return { paneId: loc.view.id };
   }
-  // 활성 뷰가 터미널이 아니면 같은 컨텐츠의 첫 터미널.
   for (const g of allGroups(loc.content.layout)) {
     for (const v of g.views) {
-      if (v.kind === "terminal") {
-        return { paneId: v.focusedPaneId, loc: { ...loc, group: g, view: v } };
-      }
+      if (hasPtyObservation(v.id)) return { paneId: v.id };
     }
   }
   return null;
@@ -214,15 +202,6 @@ function resolvePane(
 // ── 직렬화(state.tree) ──────────────────────────────────────────────────────
 
 function serializeView(v: View) {
-  if (v.kind === "terminal") {
-    return {
-      id: v.id,
-      kind: v.kind,
-      title: v.title,
-      panes: collectLeafIds(v.layout),
-      focusedPaneId: v.focusedPaneId,
-    };
-  }
   if (v.kind === "file") {
     return {
       id: v.id,
@@ -368,10 +347,11 @@ export function registerCatalog(): void {
         contentId: loc.content.id,
         groupId: loc.group.id,
         viewId: loc.view.id,
+        // 터미널 pane = 플러그인 터미널의 view.id(PTY 관찰을 가진 뷰). 명시 > 컨텍스트 > 활성 뷰.
         paneId:
           (p.pane as string) ??
           ctx.pane ??
-          (loc.view.kind === "terminal" ? loc.view.focusedPaneId : undefined),
+          (hasPtyObservation(loc.view.id) ? loc.view.id : undefined),
       };
     },
   });
@@ -889,9 +869,8 @@ export function registerCatalog(): void {
     handler: (p) => {
       const loc = locateGroup(p.group as string);
       if (!loc) return notFound(`패널 없음: ${p.group}`);
-      const r = S().setActiveGroup(loc.project.id, p.group as string);
-      if (r.ok && loc.view.kind === "terminal") focusHost(loc.view.focusedPaneId);
-      return r;
+      // 그룹 활성화만 — 뷰 내부 포커스는 뷰(플러그인 터미널 등)가 마운트/활성 시 스스로 처리.
+      return S().setActiveGroup(loc.project.id, p.group as string);
     },
   });
 
@@ -1106,117 +1085,6 @@ export function registerCatalog(): void {
     },
   });
 
-  // ----- pane(터미널 내부 분할) -----
-  register("pane.list", {
-    description: "List panes inside a terminal view, including the focused pane id.",
-    params: { view: P.view, pane: P.pane },
-    returns: "{ viewId, panes[], focusedPaneId, tree }",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok pane.list"],
-    handler: (p, ctx) => {
-      const loc = p.view
-        ? locateView(p.view as string)
-        : (resolvePane(p, ctx)?.loc ?? null);
-      if (!loc || loc.view.kind !== "terminal")
-        return notFound("터미널 뷰 없음");
-      return {
-        viewId: loc.view.id,
-        panes: collectLeafIds(loc.view.layout),
-        focusedPaneId: loc.view.focusedPaneId,
-        // split id + dir + sizes + leaf paneId 전체 — pane.resize 의 split id 발견원.
-        tree: loc.view.layout,
-      };
-    },
-  });
-
-  register("pane.resize", {
-    description:
-      "Resize a terminal pane split by ratio — sizes parallel to the split's children (sum 1). Split ids and current sizes come from pane.list (tree field).",
-    triggers: { ko: "pane 분할 비율 크기 조절 리사이즈 split" },
-    params: {
-      view: P.view,
-      split: {
-        type: "string",
-        description: "Pane split id (from pane.list tree)",
-        required: true,
-      },
-      sizes: {
-        type: "number[]",
-        description: "Ratio per child, parallel to children, sum 1",
-        required: true,
-      },
-    },
-    returns: "{}",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok pane.resize \'{"split":"s5","sizes":[0.7,0.3]}\''],
-    handler: (p, ctx) => {
-      const loc = p.view
-        ? locateView(p.view as string)
-        : (resolvePane(p, ctx)?.loc ?? null);
-      if (!loc || loc.view.kind !== "terminal")
-        return notFound("터미널 뷰 없음");
-      return S().resizePane(
-        loc.project.id,
-        loc.view.id,
-        p.split as string,
-        p.sizes as number[],
-      );
-    },
-  });
-
-  register("pane.split", {
-    description: "Split a terminal pane (row = side by side, col = top and bottom).",
-    triggers: { ko: "터미널 분할 pane 나누기 pane 분할" },
-    params: {
-      pane: P.pane,
-      dir: {
-        type: "string",
-        description: "Split direction",
-        enum: ["row", "col"],
-        required: true,
-      },
-    },
-    returns: "{ paneId(new pane) }",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok pane.split \'{"dir":"row"}\''],
-    handler: (p, ctx) => {
-      const r = resolvePane(p, ctx);
-      if (!r) return notFound("pane 없음");
-      return S().splitPane(r.loc.project.id, r.loc.view.id, r.paneId, p.dir as "row" | "col");
-    },
-  });
-
-  register("pane.close", {
-    danger: "destructive",
-    description: "Close a terminal pane. Refuses to close the last pane — use view.close instead.",
-    triggers: { ko: "pane 닫기 터미널 pane 제거" },
-    params: { pane: { ...P.pane, required: true } },
-    returns: "{ focusedPaneId }",
-    errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok pane.close \'{"pane":"p3"}\''],
-    handler: (p) => {
-      const loc = locatePane(p.pane as string);
-      if (!loc) return notFound(`pane 없음: ${p.pane}`);
-      return S().closePane(loc.project.id, loc.view.id, p.pane as string);
-    },
-  });
-
-  register("pane.focus", {
-    description: "Focus a specific terminal pane.",
-    triggers: { ko: "pane 포커스 터미널 pane 선택 활성화" },
-    params: { pane: { ...P.pane, required: true } },
-    returns: "{}",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok pane.focus \'{"pane":"p3"}\''],
-    handler: (p) => {
-      const loc = locatePane(p.pane as string);
-      if (!loc) return notFound(`pane 없음: ${p.pane}`);
-      const r = S().setFocusedPane(loc.project.id, loc.view.id, p.pane as string);
-      if (r.ok) focusHost(p.pane as string);
-      return r;
-    },
-  });
-
   // ----- term(터미널 입출력 — AI 의 눈과 손) -----
   register("term.read", {
     description:
@@ -1230,7 +1098,7 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ["sok term.read", 'sok term.read \'{"lines":50}\''],
     handler: (p, ctx) => {
-      const r = resolveTermPane(p, ctx, resolvePane);
+      const r = resolveTermPane(p, ctx, terminalContextPane);
       if (!r) return notFound("pane 없음");
       const text = r.readBuffer(p.lines as number | undefined);
       if (text === undefined) return notFound(`터미널 준비 안 됨: ${r.paneId}`);
@@ -1251,7 +1119,7 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok term.send \'{"text":"ls\\r"}\'', 'sok term.send \'{"text":"\\u0003"}\''],
     handler: (p, ctx) => {
-      const r = resolveTermPane(p, ctx, resolvePane);
+      const r = resolveTermPane(p, ctx, terminalContextPane);
       if (!r) return notFound("pane 없음");
       if (!r.sendInput(p.text as string))
         return notFound(`터미널 준비 안 됨: ${r.paneId}`);
@@ -1271,7 +1139,7 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok term.exec \'{"cmd":"git status"}\''],
     handler: (p, ctx) => {
-      const r = resolveTermPane(p, ctx, resolvePane);
+      const r = resolveTermPane(p, ctx, terminalContextPane);
       if (!r) return notFound("pane 없음");
       if (!r.sendInput(`${p.cmd as string}\r`))
         return notFound(`터미널 준비 안 됨: ${r.paneId}`);
@@ -1287,7 +1155,7 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ["sok term.cwd"],
     handler: (p, ctx) => {
-      const r = resolveTermPane(p, ctx, resolvePane);
+      const r = resolveTermPane(p, ctx, terminalContextPane);
       if (!r) return notFound("pane 없음");
       return { paneId: r.paneId, cwd: r.getCwd() ?? null };
     },
@@ -1417,20 +1285,16 @@ export function registerCatalog(): void {
 
   // ----- settings / theme -----
   // splitHeaderMode 는 탭 모드 고정(2026-06 결정)으로 표면에서 제외.
+  // 터미널 외형(shell/font/cursor/scrollback/renderer)은 코어 설정이 아니다 — 터미널
+  // 플러그인 설정(manifest configuration)이 소유한다(plugin.<id>.settings.* 로 노출).
   const SETTING_KEYS = [
     "language",
     "projectTabPosition",
-    "shell",
-    "fontFamily",
-    "fontSize",
-    "cursorBlink",
-    "cursorStyle",
-    "scrollback",
-    "resizeReflow",
-    "xtermRenderer",
     "iconSet",
     "iconBox",
     "focusIndicator",
+    "appFontFamily",
+    "appFontSize",
   ] as const;
 
   register("settings.get", {
@@ -1444,17 +1308,11 @@ export function registerCatalog(): void {
       return {
         language: s.language,
         projectTabPosition: s.projectTabPosition,
-        shell: s.shell,
-        fontFamily: s.fontFamily,
-        fontSize: s.fontSize,
-        cursorBlink: s.cursorBlink,
-        cursorStyle: s.cursorStyle,
-        scrollback: s.scrollback,
-        resizeReflow: s.resizeReflow,
-        xtermRenderer: s.xtermRenderer,
         iconSet: s.iconSet,
         iconBox: s.iconBox,
         focusIndicator: s.focusIndicator,
+        appFontFamily: s.appFontFamily,
+        appFontSize: s.appFontSize,
         // 선택 가능한 아이콘 셋 목록(내장 + 활성 플러그인 등록분).
         iconSets: Object.values(useIconRegistry.getState().sets).map((x) => ({
           id: x.id,
@@ -1479,15 +1337,15 @@ export function registerCatalog(): void {
       value: {
         type: "json",
         description:
-          "Value — language:ko|en, projectTabPosition:top|left, fontFamily:string, fontSize:number, cursorBlink:boolean, cursorStyle:block|bar|underline, scrollback:number, resizeReflow:live|settle, xtermRenderer:dom|webgl, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners",
+          "Value — language:ko|en, projectTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, appFontFamily:string (CSS font-family stack), appFontSize:number (6-40)",
         required: true,
       },
     },
     returns: "{ key, value }",
     errors: ["INVALID_PARAMS"],
     examples: [
-      'sok settings.set \'{"key":"fontSize","value":14}\'',
       'sok settings.set \'{"key":"projectTabPosition","value":"left"}\'',
+      'sok settings.set \'{"key":"iconBox","value":true}\'',
     ],
     handler: (p) => {
       const s = useSettings.getState();
@@ -1507,39 +1365,6 @@ export function registerCatalog(): void {
           if (v !== "top" && v !== "left") return bad("top|left");
           s.setProjectTabPosition(v);
           break;
-        case "shell":
-          if (typeof v !== "string") return bad("string(셸 경로, ''=기본)");
-          s.setShell(v);
-          break;
-        case "fontFamily":
-          if (typeof v !== "string") return bad("string");
-          s.setFontFamily(v);
-          break;
-        case "fontSize":
-          if (typeof v !== "number") return bad("number");
-          s.setFontSize(v);
-          break;
-        case "cursorBlink":
-          if (typeof v !== "boolean") return bad("boolean");
-          s.setCursorBlink(v);
-          break;
-        case "cursorStyle":
-          if (v !== "block" && v !== "bar" && v !== "underline")
-            return bad("block|bar|underline");
-          s.setCursorStyle(v);
-          break;
-        case "scrollback":
-          if (typeof v !== "number") return bad("number");
-          s.setScrollback(v);
-          break;
-        case "resizeReflow":
-          if (v !== "live" && v !== "settle") return bad("live|settle");
-          s.setResizeReflow(v);
-          break;
-        case "xtermRenderer":
-          if (v !== "dom" && v !== "webgl") return bad("dom|webgl");
-          s.setXtermRenderer(v);
-          break;
         case "iconSet":
           if (typeof v !== "string" || !v.trim())
             return bad("string(셋 id — settings.get 의 iconSets 참조)");
@@ -1552,6 +1377,16 @@ export function registerCatalog(): void {
         case "focusIndicator":
           if (v !== "outline" && v !== "corners") return bad("outline|corners");
           s.setFocusIndicator(v);
+          break;
+        case "appFontFamily":
+          if (typeof v !== "string" || !v.trim())
+            return bad("string(CSS font-family 스택)");
+          s.setAppFontFamily(v.trim());
+          break;
+        case "appFontSize":
+          if (typeof v !== "number" || !Number.isFinite(v))
+            return bad("number(6~40 클램프)");
+          s.setAppFontSize(v);
           break;
       }
       return { key, value: v };

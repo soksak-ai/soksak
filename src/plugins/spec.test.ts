@@ -645,7 +645,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
   it("programs 는 'programs' 권한 필요", () => {
     const errs = errorsOf(
       base({
-        contributes: { programs: [{ id: "claude", title: "Claude", kind: "terminal" }] },
+        contributes: { programs: [{ id: "claude", title: "Claude", kind: "view", view: "content" }] },
       }),
     );
     expect(errs.some((e) => e.includes('"programs" 권한'))).toBe(true);
@@ -657,8 +657,8 @@ describe("parseManifest — programs 기여(§2.6)", () => {
         permissions: ["programs"],
         contributes: {
           programs: [
-            { id: "claude", title: "Claude", kind: "terminal", path: "에이전트" },
-            { id: "exp", title: "실험", kind: "terminal", path: "에이전트/실험 채널" },
+            { id: "claude", title: "Claude", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", command: "claude", path: "에이전트" },
+            { id: "exp", title: "실험", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", path: "에이전트/실험 채널" },
             { id: "web", title: "뷰", kind: "view", view: "content" },
           ],
         },
@@ -667,10 +667,67 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     );
     expect(validation.errors).toEqual([]);
     expect(manifest?.contributes.programs).toEqual([
-      { id: "claude", title: "Claude", kind: "terminal", path: "에이전트" },
-      { id: "exp", title: "실험", kind: "terminal", path: "에이전트/실험 채널" },
+      { id: "claude", title: "Claude", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", command: "claude", path: "에이전트" },
+      { id: "exp", title: "실험", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", path: "에이전트/실험 채널" },
       { id: "web", title: "뷰", kind: "view", view: "content" },
     ]);
+  });
+
+  it("kind 는 view 만 허용(terminal 수렴 — 코어 터미널 제거)", () => {
+    const errs = errorsOf(
+      base({
+        permissions: ["programs"],
+        contributes: { programs: [{ id: "claude", title: "Claude", kind: "terminal", command: "claude" }] },
+      }),
+    );
+    expect(errs.some((e) => e.includes("kind"))).toBe(true);
+  });
+
+  it("kind=view 는 view(뷰 id) 필수", () => {
+    const errs = errorsOf(
+      base({
+        permissions: ["programs"],
+        contributes: { programs: [{ id: "a", title: "x", kind: "view" }] },
+      }),
+    );
+    expect(errs.some((e) => e.includes("view"))).toBe(true);
+  });
+
+  it("viewPlugin 은 플러그인 id 형식(크로스 플러그인 뷰 참조)", () => {
+    const errs = errorsOf(
+      base({
+        permissions: ["programs"],
+        contributes: { programs: [{ id: "a", title: "x", kind: "view", view: "content", viewPlugin: "Bad_ID" }] },
+      }),
+    );
+    expect(errs.some((e) => e.includes("viewPlugin"))).toBe(true);
+  });
+
+  it("command/ensure 는 kind=view 에서 자동실행/설치로 동반 가능(에이전트 프로그램)", () => {
+    const { manifest, validation } = parseManifest(
+      base({
+        permissions: ["programs"],
+        contributes: {
+          programs: [
+            {
+              id: "claude",
+              title: "Claude",
+              kind: "view",
+              view: "content",
+              viewPlugin: "soksak-plugin-terminal",
+              command: "claude",
+              ensure: { bin: "claude", install: { darwin: "curl … | bash" } },
+            },
+          ],
+        },
+      }),
+      "demo",
+    );
+    expect(validation.errors).toEqual([]);
+    expect(manifest?.contributes.programs[0]).toMatchObject({
+      command: "claude",
+      ensure: { bin: "claude", install: { darwin: "curl … | bash" } },
+    });
   });
 
   it("path 빈 세그먼트 → 거부", () => {
@@ -678,7 +735,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
       base({
         permissions: ["programs"],
         contributes: {
-          programs: [{ id: "a", title: "x", kind: "terminal", path: "에이전트//하위" }],
+          programs: [{ id: "a", title: "x", kind: "view", view: "content", path: "에이전트//하위" }],
         },
       }),
     );
@@ -689,7 +746,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     const errs = errorsOf(
       base({
         permissions: ["programs"],
-        contributes: { programs: [{ id: "Bad_ID", title: "x", kind: "terminal" }] },
+        contributes: { programs: [{ id: "Bad_ID", title: "x", kind: "view", view: "content" }] },
       }),
     );
     expect(errs.length).toBeGreaterThan(0);
@@ -699,7 +756,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     const { manifest, validation } = parseManifest(
       base({
         permissions: ["programs"],
-        contributes: { programs: [{ id: "terminal", title: "터미널", kind: "terminal" }] },
+        contributes: { programs: [{ id: "terminal", title: "터미널", kind: "view", view: "content" }] },
       }),
       "demo",
     );
@@ -713,8 +770,8 @@ describe("parseManifest — programs 기여(§2.6)", () => {
         permissions: ["programs"],
         contributes: {
           programs: [
-            { id: "a", title: "x", kind: "terminal" },
-            { id: "a", title: "y", kind: "terminal" },
+            { id: "a", title: "x", kind: "view", view: "content" },
+            { id: "a", title: "y", kind: "view", view: "content" },
           ],
         },
       }),
@@ -741,7 +798,8 @@ describe("LocalizedText — 플러그인 텍스트 다국어(§3.5)", () => {
               id: "t",
               title: { ko: "터미널", en: "Terminal" },
               path: { ko: "에이전트", en: "Agents" },
-              kind: "terminal",
+              kind: "view",
+              view: "content",
             },
           ],
         },

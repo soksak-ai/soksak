@@ -1,9 +1,6 @@
-// 제네릭 split-tree — 뷰 그룹(leaf=ViewGroup)·터미널 pane(leaf=paneId)이 공유하는 단일 추상.
+// 제네릭 split-tree — 뷰 그룹(leaf=ViewGroup)·좌측 사이드바(leaf=SidebarGroup)가 공유하는 단일 추상.
 // [RULE] split 트리의 데이터·연산(split/remove/resize/find)·직렬화는 여기 하나뿐이다(중복 구현 금지).
-// 두 소비자는 leaf 페이로드 L 만 다르다. 렌더링만 각자 특화(GroupArea / PaneTree).
-//
-// 의미는 기존 sessions.ts 의 GroupNode(mapSplitNode/removeView/splitAtGroup) + PaneNode(splitInTree/
-// removeInTree)와 동일하게 유지한다 — 그래야 두 트리를 이 추상으로 옮겨도 동작이 보존된다.
+// 소비자는 leaf 페이로드 L 만 다르다. 렌더링만 각자 특화(GroupArea / 사이드바 호스트).
 
 export type SplitTree<L> =
   | { type: "leaf"; value: L }

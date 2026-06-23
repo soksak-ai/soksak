@@ -17,14 +17,6 @@ import type { ProjectTab, ContentArea, ViewGroup, View } from "./sessions";
 // ── 스냅샷 타입 ───────────────────────────────────────────────────────────────
 
 type ViewSnapshot =
-  | {
-      id: string;
-      kind: "terminal";
-      title: string;
-      layout: SplitSnapshot<string>;
-      focusedPaneId: string;
-      autorun?: { paneId: string; command: string };
-    }
   | { id: string; kind: "file"; title: string; path: string; mode: "code" | "preview" }
   | { id: string; kind: "plugin"; title: string; pluginId: string; view: string };
 
@@ -60,18 +52,11 @@ export interface ProjectSnapshot {
 
 function serializeView(v: View): ViewSnapshot {
   switch (v.kind) {
-    case "terminal":
-      return {
-        id: v.id,
-        kind: "terminal",
-        title: v.title,
-        layout: serializeSplitTree(v.layout, (p) => p), // PaneNode(leaf=paneId)
-        focusedPaneId: v.focusedPaneId,
-        ...(v.autorun ? { autorun: v.autorun } : {}),
-      };
     case "file":
       return { id: v.id, kind: "file", title: v.title, path: v.path, mode: v.mode };
     case "plugin":
+      // command(자동 실행)는 영속하지 않는다 — 복원된 터미널은 명령을 재실행하지 않는다(A6:
+      // live PTY 복원 불가, 재실행은 부작용). 새로 열 때만 autorun 한다.
       return {
         id: v.id,
         kind: "plugin",
@@ -115,21 +100,12 @@ export function serializeProject(p: ProjectTab): ProjectSnapshot {
 
 // ── deserialize (split id 만 재생성; 나머지 id·active 참조 보존) ────────────────
 
-function deserializeView(s: ViewSnapshot, newSplitId: () => string): View {
+function deserializeView(s: ViewSnapshot, _newSplitId: () => string): View {
   switch (s.kind) {
-    case "terminal":
-      return {
-        id: s.id,
-        kind: "terminal",
-        title: s.title,
-        layout: deserializeSplitTree(s.layout, (p) => p, newSplitId),
-        focusedPaneId: s.focusedPaneId,
-        // 복원된 터미널의 명령은 자동 실행하지 않고 프롬프트에 붙여넣기만(A6) — pasteOnly 마킹.
-        ...(s.autorun ? { autorun: { ...s.autorun, pasteOnly: true } } : {}),
-      };
     case "file":
       return { id: s.id, kind: "file", title: s.title, path: s.path, mode: s.mode };
     case "plugin":
+      // command 미복원 — 복원된 터미널은 명령을 재실행하지 않는다(A6).
       return {
         id: s.id,
         kind: "plugin",

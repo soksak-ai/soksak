@@ -5,7 +5,7 @@ import { startBrowserGc } from "./lib/browserGc";
 import { initPluginHost } from "./plugins/host";
 import { initNotify } from "./lib/notify";
 import { ensureDefaultWorkspace, validateProjectRoot } from "./lib/workspace";
-import { paneSpawnInfo, useSessions } from "./state/sessions";
+import { useSessions } from "./state/sessions";
 import { initWorkspacePersistence, coreStoreDeps } from "./state/workspaceBoot";
 import { initViewLabelsPersistence } from "./state/viewLabels";
 import { initSettingsPersistence } from "./state/settings";
@@ -14,23 +14,11 @@ import { initBookmarksPersistence } from "./state/bookmarks";
 import { initPluginSettingsPersistence } from "./state/pluginSettings";
 import { initPluginsPersistence } from "./state/plugins";
 import { useSettings } from "./state/settings";
-import { setSpawnOptionsProvider } from "./terminal/paneHosts";
 import { startTerminalStatusBridge } from "./terminal/terminalStatus";
 import "./assets/fonts.css";
 
-// pane 별 spawn 옵션(프로젝트 root → cwd, 셸, 첫 pane → 자동 실행 명령) —
-// 렌더 전 등록이 규칙이다: 첫 렌더 커밋 중 PaneLeaf ref 가 즉시 spawn 하므로
-// effect(마운트 후) 등록은 첫 터미널을 cwd 없이(홈) 시작시킨다(실측 사고).
-setSpawnOptionsProvider((paneId) => {
-  const info = paneSpawnInfo(useSessions.getState().tabs, paneId);
-  return {
-    cwd: info.cwd,
-    shell: info.shell,
-    initialCommand: info.command,
-    // 복원 터미널(A6)은 명령을 실행하지 않고 프롬프트에 붙여넣기만 한다.
-    ...(info.pasteOnly ? { pasteCommandOnly: true } : {}),
-  };
-});
+// 터미널 spawn 옵션(cwd/셸/자동실행 명령)은 코어가 아니라 터미널 플러그인이 소유한다 —
+// 플러그인 뷰가 마운트 시 PluginViewContext(root/command)와 자기 설정(shell)으로 직접 spawn 한다.
 
 // AI 명령 인터페이스: 카탈로그 등록 + 소켓 요청 실행기(앱 수명 동안 1회).
 startExecutor();
@@ -98,8 +86,8 @@ async function boot(): Promise<void> {
   } catch (e) {
     console.error("기본 프로젝트 루트 준비 실패:", e);
   }
-  // StrictMode 비활성: dev 에서 effect 이중 실행 → createTerminal 이 두 번 돌며
-  // PTY 를 잠깐 두 번 spawn(하나는 즉시 dispose)하므로 dev 동작을 단순화한다.
+  // StrictMode 비활성: dev 에서 effect 이중 실행이 플러그인 마운트/PTY spawn 을 두 번 돌려
+  // 잠깐 중복 세션을 만드는 것을 피한다(dev 동작 단순화).
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <App />,
   );

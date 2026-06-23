@@ -9,19 +9,22 @@ import {
 } from "./programRegistry";
 import type { ContributedProgram } from "./spec";
 
-const term = (id: string, extra: Partial<ContributedProgram> = {}): ContributedProgram => ({
+// 프로그램은 전부 kind:"view"(코어 터미널 제거 — 터미널도 플러그인 뷰). command/ensure 는
+// view 프로그램이 동반할 수 있다(에이전트 프로그램: 터미널 플러그인 뷰 + 자동실행 명령 + 설치).
+const prog = (id: string, extra: Partial<ContributedProgram> = {}): ContributedProgram => ({
   id,
   title: id,
-  kind: "terminal",
+  kind: "view",
+  view: "content",
   ...extra,
 });
 
 describe("programRegistry — 등록 규율", () => {
   it("전역 id 충돌은 등록 시점 에러(§0-3)", () => {
-    const off = useProgramRegistry.getState().register("p1", term("dup"));
+    const off = useProgramRegistry.getState().register("p1", prog("dup"));
     try {
       expect(() =>
-        useProgramRegistry.getState().register("p2", term("dup")),
+        useProgramRegistry.getState().register("p2", prog("dup")),
       ).toThrow(/이미 등록된 프로그램/);
     } finally {
       off();
@@ -29,30 +32,27 @@ describe("programRegistry — 등록 규율", () => {
   });
 
   it("해제 후 재등록 가능(멱등 해제)", () => {
-    const off = useProgramRegistry.getState().register("p1", term("re"));
+    const off = useProgramRegistry.getState().register("p1", prog("re"));
     off();
     off(); // 멱등
-    const off2 = useProgramRegistry.getState().register("p1", term("re"));
+    const off2 = useProgramRegistry.getState().register("p1", prog("re"));
     off2();
   });
 });
 
 describe("autorunCommandOf — 실행은 command 그대로(래핑 금지)", () => {
-  it("비터미널(view) kind 는 자동실행 없음", () => {
-    expect(
-      autorunCommandOf({ id: "b", title: "b", kind: "view", view: "x" }),
-    ).toBeUndefined();
+  it("command 없는 view 프로그램(맨 터미널)은 undefined", () => {
+    expect(autorunCommandOf(prog("t"))).toBeUndefined();
   });
 
-  it("command 그대로(맨 터미널은 undefined)", () => {
-    expect(autorunCommandOf(term("t"))).toBeUndefined();
-    expect(autorunCommandOf(term("c", { command: "claude" }))).toBe("claude");
+  it("command 그대로 반환(에이전트 프로그램 — 터미널 뷰 + 자동실행)", () => {
+    expect(autorunCommandOf(prog("c", { command: "claude" }))).toBe("claude");
   });
 
   it("ensure 가 있어도 실행 명령은 command 그대로 — 설치는 활성화 시점 소관", () => {
     expect(
       autorunCommandOf(
-        term("c", {
+        prog("c", {
           command: "claude",
           ensure: { bin: "claude", install: { darwin: "curl …" } },
         }),
@@ -62,7 +62,7 @@ describe("autorunCommandOf — 실행은 command 그대로(래핑 금지)", () =
 });
 
 describe("installCommandFor — 활성화 시점 설치 명령(플랫폼 분기)", () => {
-  const decl = term("c", {
+  const decl = prog("c", {
     command: "claude",
     ensure: {
       bin: "claude",
@@ -82,11 +82,8 @@ describe("installCommandFor — 활성화 시점 설치 명령(플랫폼 분기)
     );
   });
 
-  it("미제공 플랫폼/ensure 없음/비터미널(view) kind 는 undefined", () => {
+  it("미제공 플랫폼/ensure 없음은 undefined", () => {
     expect(installCommandFor(decl, "linux")).toBeUndefined();
-    expect(installCommandFor(term("t"), "darwin")).toBeUndefined();
-    expect(
-      installCommandFor({ id: "b", title: "b", kind: "view", view: "x" }, "darwin"),
-    ).toBeUndefined();
+    expect(installCommandFor(prog("t"), "darwin")).toBeUndefined();
   });
 });

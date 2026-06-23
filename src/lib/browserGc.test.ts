@@ -43,12 +43,13 @@ const pluginBrowser = (id: string): View => ({
   view: "content",
 });
 
+// 터미널 = 터미널 플러그인 뷰(코어 터미널 제거). browserGc 는 브라우저 플러그인만 센다.
 const terminal = (id: string): View => ({
   id,
-  kind: "terminal",
+  kind: "plugin",
   title: "T",
-  layout: splitLeaf("p1"),
-  focusedPaneId: "p1",
+  pluginId: "soksak-plugin-terminal",
+  view: "content",
 });
 
 const otherPlugin = (id: string): View => ({

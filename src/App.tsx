@@ -3,7 +3,6 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -30,29 +29,17 @@ import { useUi } from "./state/ui";
 import { useT } from "./i18n";
 import {
   allGroups,
-  collectAllLeafIds,
-  collectLeafIds,
   cwdPaneOf as resolveCwdPane,
   useSessions,
   type ProjectTab,
 } from "./state/sessions";
 import {
-  terminalSettingsOf,
   useSettings,
   type TabPosition,
   type RightSidebarMode,
 } from "./state/settings";
 import { useTheme } from "./state/theme";
-import {
-  applyTerminalSettingsAll,
-  disposeHost,
-  pasteToHost,
-  setTerminalSettingsProvider,
-  setThemeAll,
-  setThemeProvider,
-} from "./terminal/paneHosts";
-import { hasPtyObservation } from "./terminal/ptyObservationStore";
-import { themeForBg } from "./terminal/theme";
+import { getPtyIo, hasPtyObservation } from "./terminal/ptyObservationStore";
 import "./App.css";
 
 // 파일 경로를 셸·Claude Code 양쪽에서 안전하게: 영숫자와 안전문자 외에는 백슬래시
@@ -199,11 +186,7 @@ const ProjectPane = memo(function ProjectPane({
                 // (GroupArea)과 동일 규칙을 같은 헬퍼로 적용(층 간 일치).
                 style={parkedStyle(isActiveContent)}
               >
-                <GroupArea
-                  content={c}
-                  projectId={project.id}
-                  isActiveProject={isActiveProject && isActiveContent}
-                />
+                <GroupArea content={c} projectId={project.id} />
               </div>
             );
           })}
@@ -274,66 +257,16 @@ function App() {
   const contentTabPosition = useSettings((s) => s.contentTabPosition);
   const rightSidebarMode = useSettings((s) => s.rightSidebarMode);
 
-  // 터미널 외형 설정(폰트/커서/스크롤백). 개별 필드 구독 → 객체는 memo 로 안정화.
-  const fontFamily = useSettings((s) => s.fontFamily);
-  const fontSize = useSettings((s) => s.fontSize);
-  const cursorBlink = useSettings((s) => s.cursorBlink);
-  const cursorStyle = useSettings((s) => s.cursorStyle);
-  const scrollback = useSettings((s) => s.scrollback);
-  const resizeReflow = useSettings((s) => s.resizeReflow);
-  const xtermRenderer = useSettings((s) => s.xtermRenderer);
-  const termSettings = useMemo(
-    () =>
-      terminalSettingsOf({
-        fontFamily,
-        fontSize,
-        cursorBlink,
-        cursorStyle,
-        scrollback,
-        resizeReflow,
-        xtermRenderer,
-      }),
-    [
-      fontFamily,
-      fontSize,
-      cursorBlink,
-      cursorStyle,
-      scrollback,
-      resizeReflow,
-      xtermRenderer,
-    ],
-  );
-  // 새 터미널이 현재 설정으로 생성되도록 provider 등록(ref 로 최신값 제공).
-  const termSettingsRef = useRef(termSettings);
-  termSettingsRef.current = termSettings;
-  useEffect(() => {
-    setTerminalSettingsProvider(() => termSettingsRef.current);
-  }, []);
-  // 설정 변경 시 살아있는 모든 터미널에 라이브 적용.
-  useEffect(() => {
-    applyTerminalSettingsAll(termSettings);
-  }, [termSettings]);
-
   // 테마 시스템(토큰 슬롯)이 단일 소스 — CSS 변수/구조 속성은 테마 엔진이 적용한다.
-  // 여기서는 파생값(xterm 팔레트, 파일트리 테마)만 토큰에서 유도한다.
-  const themeColors = useTheme((s) => s.colors);
   const effectiveMode = useTheme((s) => s.effectiveMode);
   const toggleMode = useTheme((s) => s.toggleMode);
   const reloadThemes = useTheme((s) => s.reload);
-  const bg = themeColors.bg;
   const isDark = effectiveMode === "dark";
-  const theme = useMemo(() => themeForBg(bg), [bg]);
 
   // 시작 시 외부 테마(~/.soksak/themes) 1회 스캔.
   useEffect(() => {
     reloadThemes().catch((e) => console.error("테마 스캔 실패:", e));
   }, [reloadThemes]);
-
-
-  // 앱 UI(body) 폰트는 설정의 글꼴을 따른다(터미널 xterm 은 옵션으로 별도 적용).
-  useEffect(() => {
-    document.documentElement.style.setProperty("--app-font", fontFamily);
-  }, [fontFamily]);
 
   // 아이콘 버튼 라운드박스 — 루트 어트리뷰트로 CSS 분기(data-pane-style 과 동형).
   const iconBox = useSettings((s) => s.iconBox);
@@ -346,6 +279,20 @@ function App() {
   useEffect(() => {
     document.documentElement.dataset.focusInd = focusIndicator;
   }, [focusIndicator]);
+
+  // 앱 UI(앱 크롬) 전역 폰트 — 코어 소유. 터미널 폰트와 무관(터미널 플러그인 별도 소유).
+  // appFontFamily → --app-font(루트 font-family), appFontSize → --app-font-size(루트 font-size).
+  const appFontFamily = useSettings((s) => s.appFontFamily);
+  const appFontSize = useSettings((s) => s.appFontSize);
+  useEffect(() => {
+    document.documentElement.style.setProperty("--app-font", appFontFamily);
+  }, [appFontFamily]);
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--app-font-size",
+      `${appFontSize}px`,
+    );
+  }, [appFontSize]);
 
   // 네이티브 child webview(브라우저) 위 클릭은 메인 DOM 에 이벤트가 오지 않아
   // 포커스 추적이 끊긴다 — 네이티브 모니터(browser.rs)가 emit 한 좌표를
@@ -374,8 +321,6 @@ function App() {
   const toggleRightSidebar = useSessions((s) => s.toggleRightSidebar);
   const addViewToGroup = useSessions((s) => s.addViewToGroup);
   const closeView = useSessions((s) => s.closeView);
-  const splitPane = useSessions((s) => s.splitPane);
-  const closePane = useSessions((s) => s.closePane);
   // 프로젝트 설정 모달(이름/색) 대상 프로젝트 id.
   const [projectSettingsFor, setProjectSettingsFor] = useState<string | null>(
     null,
@@ -446,28 +391,8 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rightRect]);
 
-  // 새 호스트의 최초 createTerminal 이 현재 테마로 생성되도록 provider 등록.
-  const themeRef = useRef(theme);
-  themeRef.current = theme;
-  useEffect(() => {
-    setThemeProvider(() => themeRef.current);
-  }, []);
-
-  // 테마 변경 시 살아있는 모든 터미널에 라이브 적용.
-  useEffect(() => {
-    setThemeAll(theme);
-  }, [theme]);
-
-  // 호스트 폐기 diff: 모든 프로젝트·터미널 뷰의 leaf id 집합을 추적해, 사라진 paneId 만
-  // disposeHost(뷰/탭 닫기·pane 닫기 모두 여기서). 재렌더로는 폐기되지 않음.
-  const liveLeavesRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    const current = new Set(collectAllLeafIds(tabs));
-    for (const id of liveLeavesRef.current) {
-      if (!current.has(id)) disposeHost(id);
-    }
-    liveLeavesRef.current = current;
-  }, [tabs]);
+  // 터미널 테마·세션 폐기는 코어가 소유하지 않는다 — 터미널 플러그인이 자기 뷰의 xterm 테마를
+  // app 테마 토큰으로 적용하고, 뷰 언마운트(PluginViewHost) 시 PTY 세션을 스스로 정리한다.
 
   // 키보드 단축키(캡처 단계 → xterm 보다 먼저). 활성 프로젝트의 활성 뷰 기준.
   // ⌘D 좌우분할 / ⌘⇧D 상하분할 / ⌘W pane→뷰 닫기 / ⌘T 새 터미널 / ⌘B 사이드바.
@@ -479,6 +404,23 @@ function App() {
       if (key === "n" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         invoke("window_create").catch((err) => console.error("새 창 실패:", err));
+        return;
+      }
+      // ⌘+ 앱 글자 크게 / ⌘- 작게 / ⌘0 기본(13). 앱 UI(앱 크롬) 전역 폰트만 — 코어 소유.
+      // 터미널 폰트는 터미널 플러그인이 별도로 소유한다(여기서 건드리지 않음).
+      if (key === "=" || key === "+") {
+        e.preventDefault();
+        const st = useSettings.getState();
+        st.setAppFontSize(st.appFontSize + 1);
+        return;
+      } else if (key === "-") {
+        e.preventDefault();
+        const st = useSettings.getState();
+        st.setAppFontSize(st.appFontSize - 1);
+        return;
+      } else if (key === "0") {
+        e.preventDefault();
+        useSettings.getState().setAppFontSize(13);
         return;
       }
       const s = useSessions.getState();
@@ -498,67 +440,35 @@ function App() {
       const grp =
         groups.find((g) => g.id === content.activeGroupId) ?? groups[0];
       const view = grp?.views.find((v) => v.id === grp.activeViewId);
-      if (key === "d") {
-        if (view && view.kind === "terminal") {
-          e.preventDefault();
-          splitPane(project.id, view.id, view.focusedPaneId, e.shiftKey ? "col" : "row");
-        }
-      } else if (key === "w" && !e.shiftKey) {
+      if (key === "w" && !e.shiftKey) {
+        // ⌘W 활성 뷰 닫기(코어 터미널 pane 분할 제거 — 뷰 단위 닫기만).
         e.preventDefault();
-        if (view && view.kind === "terminal" && collectLeafIds(view.layout).length > 1) {
-          closePane(project.id, view.id, view.focusedPaneId);
-        } else if (view) {
-          closeView(project.id, view.id);
-        }
+        if (view) closeView(project.id, view.id);
       } else if (key === "t" && !e.shiftKey) {
         e.preventDefault();
-        // 분할 패널 헤더 = 탭 모드 고정: ⌘T 는 항상 새 탭.
+        // 분할 패널 헤더 = 탭 모드 고정: ⌘T 는 항상 새 터미널 탭(터미널 플러그인 뷰).
         addViewToGroup(project.id, "terminal");
       } else if (key === "b" && !e.shiftKey) {
         e.preventDefault();
         toggleSidebar(project.id);
-      } else if (key === "=" || key === "+") {
-        // ⌘+ 글자 크게 / ⌘- 작게 / ⌘0 기본(13). 터미널·UI 폰트 모두 설정을 따른다.
-        e.preventDefault();
-        const st = useSettings.getState();
-        st.setFontSize(st.fontSize + 1);
-      } else if (key === "-") {
-        e.preventDefault();
-        const st = useSettings.getState();
-        st.setFontSize(st.fontSize - 1);
-      } else if (key === "0") {
-        e.preventDefault();
-        useSettings.getState().setFontSize(13);
       }
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [
-    splitPane,
-    closePane,
-    closeView,
-    addViewToGroup,
-    toggleSidebar,
-    toggleRightSidebar,
-  ]);
+  }, [closeView, addViewToGroup, toggleSidebar, toggleRightSidebar]);
 
-  // 파일 드래그&드롭: 드롭 위치 아래의 pane-host(터미널)에 이스케이프 경로를 붙여넣는다.
-  // pane 이 아니면 활성 프로젝트의 터미널 pane 으로 폴백.
+  // 파일 드래그&드롭: 활성 프로젝트의 터미널 pane(플러그인 터미널, PTY substrate)에 이스케이프
+  // 경로를 주입한다. 코어가 터미널 host-div 를 소유하지 않으므로 substrate IO(getPtyIo)로 보낸다.
   useEffect(() => {
     const unlisten = getCurrentWebview().onDragDropEvent((event) => {
       if (event.payload.type !== "drop") return;
-      const { paths, position } = event.payload;
+      const { paths } = event.payload;
       if (!paths || paths.length === 0) return;
-      const dpr = window.devicePixelRatio || 1;
-      const el = document.elementFromPoint(position.x / dpr, position.y / dpr);
-      let paneId = el?.closest<HTMLElement>(".pane-host")?.dataset.paneId;
-      if (!paneId) {
-        const s = useSessions.getState();
-        const proj = s.tabs.find((t) => t.id === s.activeId);
-        paneId = proj ? cwdPaneOf(proj) : undefined;
-      }
+      const s = useSessions.getState();
+      const proj = s.tabs.find((t) => t.id === s.activeId);
+      const paneId = proj ? cwdPaneOf(proj) : undefined;
       if (!paneId) return;
-      pasteToHost(paneId, paths.map(shellEscape).join(" "));
+      getPtyIo(paneId)?.sendInput(paths.map(shellEscape).join(" "));
     });
     return () => {
       unlisten.then((off) => off()).catch(() => {});

@@ -1,13 +1,14 @@
-// paneToView(M5) — paneId → 그 pane 을 가진 터미널 뷰의 {projectId, viewId}. 순수함수.
+// paneToView(M5) — paneId(=플러그인 터미널 view.id) → {projectId, viewId}. 순수함수.
 import { describe, expect, it } from "vitest";
 import { paneToView, type ProjectTab, type View } from "./sessions";
 
-const term = (viewId: string, paneId: string): View => ({
+// 플러그인 터미널 뷰: paneId = view.id(코어 터미널 제거 후 단일 키).
+const term = (viewId: string): View => ({
   id: viewId,
-  kind: "terminal",
+  kind: "plugin",
   title: "T",
-  layout: { type: "leaf", value: paneId },
-  focusedPaneId: paneId,
+  pluginId: "soksak-plugin-terminal",
+  view: "content",
 });
 
 const tab = (id: string, views: View[]): ProjectTab => ({
@@ -33,34 +34,18 @@ const tab = (id: string, views: View[]): ProjectTab => ({
 });
 
 describe("paneToView", () => {
-  it("leaf pane 을 가진 터미널 뷰를 찾는다", () => {
-    const tabs = [tab("t1", [term("v1", "p1")])];
-    expect(paneToView(tabs, "p1")).toEqual({ projectId: "t1", viewId: "v1" });
+  it("paneId(=view.id) 로 그 터미널 뷰를 찾는다", () => {
+    const tabs = [tab("t1", [term("v1")])];
+    expect(paneToView(tabs, "v1")).toEqual({ projectId: "t1", viewId: "v1" });
   });
 
-  it("split 안의 pane 도 찾는다", () => {
-    const split: View = {
-      id: "v2",
-      kind: "terminal",
-      title: "T",
-      layout: {
-        type: "split",
-        id: "ps1",
-        dir: "row",
-        sizes: [0.5, 0.5],
-        children: [
-          { type: "leaf", value: "pa" },
-          { type: "leaf", value: "pb" },
-        ],
-      },
-      focusedPaneId: "pa",
-    };
-    const tabs = [tab("t1", [split])];
-    expect(paneToView(tabs, "pb")).toEqual({ projectId: "t1", viewId: "v2" });
+  it("여러 뷰 중 일치하는 view.id 를 찾는다", () => {
+    const tabs = [tab("t1", [term("v1"), term("v2")])];
+    expect(paneToView(tabs, "v2")).toEqual({ projectId: "t1", viewId: "v2" });
   });
 
   it("없는 pane 은 null", () => {
-    const tabs = [tab("t1", [term("v1", "p1")])];
+    const tabs = [tab("t1", [term("v1")])];
     expect(paneToView(tabs, "nope")).toBeNull();
   });
 });

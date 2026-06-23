@@ -2,10 +2,11 @@ import { create } from "zustand";
 import { createCoreSync } from "./coreSync";
 import type { CoreStoreDeps } from "./coreStore";
 
-// 앱 설정: 언어(i18n) + 터미널 외형(폰트/커서/스크롤백). localStorage 에 영속.
+// 앱 설정: 언어(i18n) + 크롬(탭 위치·아이콘·포커스 등). localStorage 에 영속.
+// 터미널 외형(폰트/커서/스크롤백/렌더러/셸)은 코어가 소유하지 않는다 — 터미널 플러그인의
+// manifest configuration 이 단일진실(중복 제거). 코어 설정은 터미널을 모른다.
 
 export type Language = "ko" | "en";
-export type CursorStyle = "block" | "bar" | "underline";
 export type TabPosition = "top" | "left";
 // 분할 패널 헤더: 제목표시줄(단일 뷰) 또는 탭(여러 뷰 + +).
 export type SplitHeaderMode = "title" | "tabs";
@@ -18,32 +19,7 @@ export type TabCloseConfirm = "warn" | "off";
 // 우측 플러그인 사이드바 배치: overlay=콘텐츠 위에 뜸(기존), push=좌측 사이드바처럼 영역 차지(콘텐츠 밀어냄).
 export type RightSidebarMode = "overlay" | "push";
 
-// 리사이즈 중 터미널 리플로우 정책(docs/PERFORMANCE.md 원칙 4·5):
-//   live   = 드래그 중에도 프레임당 1회 fit(실시간 리플로우, editor 스타일)
-//   settle = 입력 정착(150ms) 후 1회 fit(드래그 중 리플로우 없음, CPU 최소)
-// 양쪽 모두 PTY resize(SIGWINCH)는 정착 후 1회만 보낸다.
-export type ResizeReflow = "live" | "settle";
-
-// xterm.js 전용 렌더러 백엔드(docs/PERFORMANCE.md [렌더러 선택]). dom/webgl 은
-// xterm 구현에만 있는 개념이라 xterm 스코프로 명명한다 — 다른 터미널 백엔드가
-// 들어오면 자기 스코프 설정을 따로 갖고 일반 term.* 인터페이스는 유지된다.
-//   webgl = GPU 렌더러. 처리량 우선 기본값. 단 창 리사이즈 중 합성 레이어(<canvas>)가
-//           새 크기로 스케일돼 글자가 늘어난다(WKWebView 구조적 한계).
-//   dom   = xterm DOM 렌더러. 리사이즈 정확성이 필요할 때 전환 — macOS WKWebView 라이브
-//           리사이즈에서 글자가 안 늘어난다(WebKit 이 DOM 을 매 프레임 타일 재래스터).
-export type XtermRenderer = "dom" | "webgl";
-
-export interface TerminalSettings {
-  fontFamily: string;
-  fontSize: number;
-  cursorBlink: boolean;
-  cursorStyle: CursorStyle;
-  scrollback: number;
-  resizeReflow: ResizeReflow;
-  xtermRenderer: XtermRenderer;
-}
-
-interface SettingsState extends TerminalSettings {
+interface SettingsState {
   language: Language;
   // 프로젝트(최상단) 탭 위치. left 면 사이드바 왼쪽 세로 레일.
   projectTabPosition: TabPosition;
@@ -51,8 +27,6 @@ interface SettingsState extends TerminalSettings {
   contentTabPosition: TabPosition;
   // 분할 패널 헤더 모드(기본 title).
   splitHeaderMode: SplitHeaderMode;
-  // 터미널 셸 경로("" = 시스템 기본 $SHELL). 프로젝트 설정이 있으면 그것이 우선.
-  shell: string;
   // 원격 위험 명령 정책: 파괴적(닫기/제거) / 주입(입력·임의 JS).
   remoteDestructive: DangerPolicy;
   remoteInject: DangerPolicy;
@@ -68,11 +42,14 @@ interface SettingsState extends TerminalSettings {
   // 탭 닫기 확인 정책(R6 — warn 기본).
   tabCloseConfirm: TabCloseConfirm;
   rightSidebarMode: RightSidebarMode;
+  // 앱 UI 폰트(=앱 크롬 전역). 터미널 폰트와 무관 — 터미널 폰트는 터미널 플러그인이 별도 소유.
+  // appFontFamily → --app-font(루트 font-family), appFontSize → --app-font-size(루트 font-size).
+  appFontFamily: string;
+  appFontSize: number;
   setLanguage: (l: Language) => void;
   setProjectTabPosition: (p: TabPosition) => void;
   setContentTabPosition: (p: TabPosition) => void;
   setSplitHeaderMode: (m: SplitHeaderMode) => void;
-  setShell: (s: string) => void;
   setRemoteDestructive: (p: DangerPolicy) => void;
   setRemoteInject: (p: DangerPolicy) => void;
   setIconSet: (id: string) => void;
@@ -81,13 +58,8 @@ interface SettingsState extends TerminalSettings {
   setDefaultProjectRoot: (root: string) => void;
   setTabCloseConfirm: (v: TabCloseConfirm) => void;
   setRightSidebarMode: (v: RightSidebarMode) => void;
-  setFontFamily: (v: string) => void;
-  setFontSize: (v: number) => void;
-  setCursorBlink: (v: boolean) => void;
-  setCursorStyle: (v: CursorStyle) => void;
-  setScrollback: (v: number) => void;
-  setResizeReflow: (v: ResizeReflow) => void;
-  setXtermRenderer: (v: XtermRenderer) => void;
+  setAppFontFamily: (v: string) => void;
+  setAppFontSize: (v: number) => void;
 }
 
 const DEFAULTS = {
@@ -95,7 +67,6 @@ const DEFAULTS = {
   projectTabPosition: "top" as TabPosition,
   contentTabPosition: "top" as TabPosition,
   splitHeaderMode: "title" as SplitHeaderMode,
-  shell: "",
   remoteDestructive: "allow" as DangerPolicy,
   remoteInject: "allow" as DangerPolicy,
   iconSet: "lucide",
@@ -104,14 +75,9 @@ const DEFAULTS = {
   defaultProjectRoot: "",
   tabCloseConfirm: "warn" as TabCloseConfirm,
   rightSidebarMode: "overlay" as RightSidebarMode,
-  fontFamily:
+  appFontFamily:
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
-  fontSize: 13,
-  cursorBlink: true,
-  cursorStyle: "block" as CursorStyle,
-  scrollback: 10000,
-  resizeReflow: "live" as ResizeReflow,
-  xtermRenderer: "webgl" as XtermRenderer,
+  appFontSize: 13,
 };
 
 const KEY = "soksak.settings";
@@ -125,7 +91,6 @@ function serialize(s: SettingsState): PersistedSettings {
     projectTabPosition: s.projectTabPosition,
     contentTabPosition: s.contentTabPosition,
     splitHeaderMode: s.splitHeaderMode,
-    shell: s.shell,
     remoteDestructive: s.remoteDestructive,
     remoteInject: s.remoteInject,
     iconSet: s.iconSet,
@@ -134,7 +99,8 @@ function serialize(s: SettingsState): PersistedSettings {
     defaultProjectRoot: s.defaultProjectRoot,
     tabCloseConfirm: s.tabCloseConfirm,
     rightSidebarMode: s.rightSidebarMode,
-    ...terminalSettingsOf(s),
+    appFontFamily: s.appFontFamily,
+    appFontSize: s.appFontSize,
   };
 }
 
@@ -150,19 +116,6 @@ export const initSettingsPersistence = (deps: CoreStoreDeps): (() => void) =>
 
 function load(): PersistedSettings {
   return { ...DEFAULTS, ...settingsSync.loadSync() };
-}
-
-// 터미널 외형만 추출(createTerminal/paneHosts 에 전달).
-export function terminalSettingsOf(s: TerminalSettings): TerminalSettings {
-  return {
-    fontFamily: s.fontFamily,
-    fontSize: s.fontSize,
-    cursorBlink: s.cursorBlink,
-    cursorStyle: s.cursorStyle,
-    scrollback: s.scrollback,
-    resizeReflow: s.resizeReflow,
-    xtermRenderer: s.xtermRenderer,
-  };
 }
 
 export const useSettings = create<SettingsState>((set, get) => {
@@ -185,10 +138,6 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setSplitHeaderMode: (splitHeaderMode) => {
       set({ splitHeaderMode });
-      save();
-    },
-    setShell: (shell) => {
-      set({ shell });
       save();
     },
     setRemoteDestructive: (remoteDestructive) => {
@@ -223,32 +172,13 @@ export const useSettings = create<SettingsState>((set, get) => {
       set({ rightSidebarMode });
       save();
     },
-    setFontFamily: (fontFamily) => {
-      set({ fontFamily });
+    setAppFontFamily: (appFontFamily) => {
+      set({ appFontFamily });
       save();
     },
-    setFontSize: (fontSize) => {
-      set({ fontSize: Math.max(6, Math.min(40, fontSize)) });
-      save();
-    },
-    setCursorBlink: (cursorBlink) => {
-      set({ cursorBlink });
-      save();
-    },
-    setCursorStyle: (cursorStyle) => {
-      set({ cursorStyle });
-      save();
-    },
-    setScrollback: (scrollback) => {
-      set({ scrollback: Math.max(0, Math.min(1_000_000, scrollback)) });
-      save();
-    },
-    setResizeReflow: (resizeReflow) => {
-      set({ resizeReflow });
-      save();
-    },
-    setXtermRenderer: (xtermRenderer) => {
-      set({ xtermRenderer });
+    setAppFontSize: (appFontSize) => {
+      // 앱 UI 폰트 크기 클램프(터미널 폰트와 동일 안전 범위).
+      set({ appFontSize: Math.max(6, Math.min(40, appFontSize)) });
       save();
     },
   };

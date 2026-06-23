@@ -127,17 +127,11 @@ export const ViewTabs = memo(function ViewTabs({
             // 거기서 더블클릭/버튼으로 복원.
             onDoubleClick={() => maximizeView(projectId, v.id)}
             title={
-              v.kind === "file"
-                ? v.path
-                : v.kind === "plugin"
-                  ? `${v.pluginId}.${v.view}`
-                  : t("view.terminal")
+              v.kind === "file" ? v.path : `${v.pluginId}.${v.view}`
             }
           >
             <span className="view-tab-icon icon-inline">
-              {v.kind === "terminal" ? (
-                <Icon name="terminal" size="sm" />
-              ) : v.kind === "file" ? (
+              {v.kind === "file" ? (
                 <Icon name="file" size="sm" />
               ) : (
                 // 플러그인 아이콘은 매니페스트 선언 문자열(외부 계약) — 미등록만 폴백.
@@ -146,9 +140,7 @@ export const ViewTabs = memo(function ViewTabs({
                 ))
               )}
             </span>
-            <span className="view-tab-title">
-              {v.kind === "terminal" ? t("view.terminal") : v.title}
-            </span>
+            <span className="view-tab-title">{v.title}</span>
             {v.kind === "file" && v.status?.code === "dirty" && (
               <span className="view-tab-dirty" title={t("viewer.unsaved")}>
                 <Icon name="dirty" size="xs" />

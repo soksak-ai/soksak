@@ -70,14 +70,15 @@ export function detectPlatform(): PlatformKey {
   return "linux";
 }
 
-// 프로그램의 터미널 자동 실행 명령 — 실행은 깨끗하게 command 그대로다.
-// ensure(미설치 시 설치)는 실행 시점이 아니라 **플러그인 활성화 시점**에
-// 처리된다(state/plugins.ensureProgramBinaries) — 동의 화면에서 설치 명령을
-// 고지받고 "동의하고 활성화"한 그 시점이 설치의 정당한 자리다.
+// 프로그램의 자동 실행 명령 — 실행은 깨끗하게 command 그대로다(래핑 금지).
+// 프로그램은 전부 kind:"view"(코어 터미널 제거) — 명령은 연 뷰(터미널 뷰)에 흘러가
+// 마운트 시 1회 실행된다. ensure(미설치 시 설치)는 실행 시점이 아니라 **플러그인
+// 활성화 시점**에 처리된다(state/plugins.ensureProgramBinaries) — 동의 화면에서
+// 설치 명령을 고지받고 "동의하고 활성화"한 그 시점이 설치의 정당한 자리다.
 export function autorunCommandOf(
   decl: ContributedProgram,
 ): string | undefined {
-  return decl.kind === "terminal" ? decl.command : undefined;
+  return decl.command;
 }
 
 // 이 플랫폼의 설치 명령(ensure 선언) — 활성화 시점 설치 흐름이 소비.
@@ -85,7 +86,6 @@ export function installCommandFor(
   decl: ContributedProgram,
   platform: PlatformKey = detectPlatform(),
 ): string | undefined {
-  if (decl.kind !== "terminal") return undefined;
   return decl.ensure?.install[platform];
 }
 

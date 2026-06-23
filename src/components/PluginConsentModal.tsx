@@ -128,9 +128,9 @@ export function PluginConsentModal({
                   base;
                 if (p === "programs") {
                   const progs = m.contributes.programs;
-                  const runs = progs.some(
-                    (x) => x.kind === "terminal" && (x.command || x.ensure),
-                  );
+                  // 프로그램은 전부 kind:"view"(코어 터미널 제거). command 가 있으면 자동 실행,
+                  // ensure 가 있으면 미설치 시 설치까지 — 동의 화면이 실제 동작만 고지(§0-2).
+                  const runs = progs.some((x) => x.command || x.ensure);
                   const installs = progs.some((x) => x.ensure);
                   info = {
                     label: base.label,

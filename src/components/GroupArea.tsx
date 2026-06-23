@@ -4,7 +4,6 @@ import { parkedStyle } from "../lib/layerPark";
 import { Icon } from "../ui/icons/Icon";
 import { FileViewerHost } from "./FileViewerHost";
 import { GroupStatusBar } from "./GroupStatusBar";
-import { PaneTree } from "./PaneTree";
 import { PluginViewHost } from "./PluginViewHost";
 import { getRegisteredView } from "../plugins/viewRegistry";
 import { ViewTabs } from "./ViewTabs";
@@ -18,10 +17,8 @@ import {
   type GroupNode,
   type View,
   type ViewGroup,
-  allGroups,
   useSessions,
 } from "../state/sessions";
-import { focusHost } from "../terminal/paneHosts";
 
 // 콘텐츠 영역을 에디터 그룹으로 렌더. 핵심 원칙 둘:
 // 1) 본문(터미널/에디터)을 그룹 트리 구조와 분리해 viewId 로 키된 "영속 본문 레이어"에
@@ -72,21 +69,16 @@ export function computeLayout(node: GroupNode): {
   };
 }
 
-const titleOf = (
-  v: View | undefined,
-  term: string,
-): string => (v ? (v.kind === "terminal" ? term : v.title) : "");
+const titleOf = (v: View | undefined): string => (v ? v.title : "");
 
 // memo 경계 = content 데이터 경계(원칙 2): content X 의 store 쓰기는 content Y 의
 // 객체 정체성을 보존(mapContent)하므로 다른 컨텐츠/프로젝트의 GroupArea 는 건너뛴다.
 export const GroupArea = memo(function GroupArea({
   content,
   projectId,
-  isActiveProject,
 }: {
   content: ContentArea;
   projectId: string;
-  isActiveProject: boolean;
 }) {
   const t = useT();
   // 분할 패널 헤더 = 탭 모드 고정(2026-06 결정 — 설정 비노출). title 모드 분기는
@@ -104,22 +96,8 @@ export const GroupArea = memo(function GroupArea({
   // 만 남아 포커스가 body 로 풀리고, 풀린 뒤엔 그 그룹을 다시 클릭해도 복구할
   // 길이 없다(분할 직후 체감되는 "꺽쇠는 붙는데 입력이 안 가는" 사고). 그래서
   // 본문/탭/타이틀 클릭은 상태와 무관하게 항상 그 그룹의 focused pane 에 실포커스
-  // 를 부여한다 — 기본동작과 자식 캡처(setFocusedPane)가 끝난 다음 프레임(rAF)에
-  // 최신 상태를 읽어 확정(멱등 — 이미 포커스면 no-op).
-  const focusGroupPane = useCallback(
-    (groupId: string) => {
-      requestAnimationFrame(() => {
-        const t = useSessions.getState().tabs.find((x) => x.id === projectId);
-        const c = t?.contents.find((x) => x.id === t.activeContentId);
-        const g = c
-          ? allGroups(c.layout).find((x) => x.id === groupId)
-          : undefined;
-        const v = g?.views.find((x) => x.id === g.activeViewId);
-        if (v?.kind === "terminal") focusHost(v.focusedPaneId);
-      });
-    },
-    [projectId],
-  );
+  // 뷰 내부 포커스(터미널 등)는 플러그인 뷰가 마운트/활성 시 스스로 처리한다 — 코어는
+  // 그룹 활성화만 한다(코어가 더 이상 터미널 host-div 를 소유하지 않음).
   const closeView = useSessions((s) => s.closeView);
   const moveViewToGroup = useSessions((s) => s.moveViewToGroup);
   const moveGroupToGroup = useSessions((s) => s.moveGroupToGroup);
@@ -254,21 +232,14 @@ export const GroupArea = memo(function GroupArea({
             // 드롭 = 활성(스토어가 도착 그룹을 activeGroupId 로 만든다) — 활성은
             // 실포커스와 분리될 수 없다(클릭 분기와 동일 불변식). 분할 드롭은
             // 새 그룹이 생성되므로 결과의 groupId 로 포커스한다.
-            const res =
-              kind === "view"
-                ? moveViewToGroup(projectId, id, target.groupId, target.zone)
-                : moveGroupToGroup(projectId, id, target.groupId, target.zone);
-            if (res.ok) focusGroupPane(res.groupId);
+            if (kind === "view")
+              moveViewToGroup(projectId, id, target.groupId, target.zone);
+            else moveGroupToGroup(projectId, id, target.groupId, target.zone);
           }
         } else if (kind === "view") {
           setActiveView(projectId, id); // 클릭 = 탭 전환
-          const grp = cellsRef.current.find((c) =>
-            c.group.views.some((v) => v.id === id),
-          );
-          if (grp) focusGroupPane(grp.group.id);
         } else {
           setActiveGroup(projectId, id); // 클릭 = 그룹 활성
-          focusGroupPane(id);
         }
         setDrag(null);
         setHover(null);
@@ -283,7 +254,6 @@ export const GroupArea = memo(function GroupArea({
       moveGroupToGroup,
       setActiveView,
       setActiveGroup,
-      focusGroupPane,
       pushOverlay,
       popOverlay,
     ],
@@ -402,16 +372,14 @@ export const GroupArea = memo(function GroupArea({
                 onDoubleClick={() => restoreView(projectId)}
               >
                 <span className="egt-icon icon-inline">
-                  {active?.kind === "terminal" ? (
-                    <Icon name="terminal" size="sm" />
-                  ) : active?.kind === "file" ? (
+                  {active?.kind === "file" ? (
                     <Icon name="file" size="sm" />
                   ) : (
                     <Icon name="plugin" size="sm" />
                   )}
                 </span>
                 <span className="egt-name">
-                  {titleOf(active, t("view.terminal"))}
+                  {titleOf(active)}
                 </span>
                 <button
                   type="button"
@@ -439,16 +407,14 @@ export const GroupArea = memo(function GroupArea({
                 onMouseDown={startDrag("group", group.id)}
               >
                 <span className="egt-icon icon-inline">
-                  {active?.kind === "terminal" ? (
-                    <Icon name="terminal" size="sm" />
-                  ) : active?.kind === "file" ? (
+                  {active?.kind === "file" ? (
                     <Icon name="file" size="sm" />
                   ) : (
                     <Icon name="plugin" size="sm" />
                   )}
                 </span>
                 <span className="egt-name">
-                  {titleOf(active, t("view.terminal"))}
+                  {titleOf(active)}
                 </span>
                 <button
                   type="button"
@@ -517,25 +483,9 @@ export const GroupArea = memo(function GroupArea({
               style={{ ...cellVars(slotRect), ...parkedStyle(shown) }}
               onMouseDownCapture={() => {
                 setActiveGroup(projectId, group.id);
-                focusGroupPane(group.id);
               }}
             >
-              {view.kind === "terminal" ? (
-                <PaneTree
-                  node={view.layout}
-                  projectId={projectId}
-                  viewId={view.id}
-                  // 키보드 포커스는 "활성 그룹의" 활성 뷰만 — 그룹 조건이 빠지면
-                  // 모든 그룹의 활성 뷰가 focused 가 되어 activeGroup 변경(분할·
-                  // panel.focus)에도 실포커스가 안 따라간다(표시·입력 불일치 사고).
-                  active={
-                    isActiveProject &&
-                    shown &&
-                    group.id === content.activeGroupId
-                  }
-                  focusedPaneId={view.focusedPaneId}
-                />
-              ) : view.kind === "file" ? (
+              {view.kind === "file" ? (
                 <FileViewerHost
                   path={view.path}
                   projectId={projectId}
@@ -549,6 +499,7 @@ export const GroupArea = memo(function GroupArea({
                   projectId={projectId}
                   root={projectRoot}
                   region="content"
+                  command={view.command ?? null}
                 />
               )}
             </div>

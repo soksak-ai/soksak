@@ -5,7 +5,7 @@
 // 리스너 실패는 호스트를 죽이지 못한다(§0-4) — 콜백마다 try/catch.
 
 import { listenThisWindow } from "../lib/windowEvents";
-import { allGroups, collectLeafIds, useSessions } from "../state/sessions";
+import { allGroups, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
 import { useBookmarks, type Bookmark } from "../state/bookmarks";
@@ -338,20 +338,14 @@ export function startPluginHooks(): void {
 // pane 이 속한 프로젝트 {id, root}. 못 찾으면 null. root 는 창 무관 안정 식별자(turn.ended 스코프
 // 키). id 는 창-로컬 UI 핸들(project.activate 용).
 //
-// 관찰 substrate 의 paneId 는 producer 가 정한다:
-//   - 코어 터미널 뷰: PaneTree leaf id(v.layout 의 collectLeafIds). v.focusedPaneId 도 그 중 하나.
-//   - 플러그인 터미널: 그 콘텐츠 뷰의 sessions view.id(= app.pty.spawn 에 넘긴 paneId).
-// 둘 다 동일 paneId 키로 매칭해, 코어 뷰가 사라져도 플러그인 터미널의 프로젝트가 해소된다.
+// 관찰 substrate 의 paneId = 플러그인 터미널 뷰의 sessions view.id(= app.pty.spawn 에 넘긴 paneId).
+// 코어는 터미널 뷰를 소유하지 않는다(터미널도 플러그인 뷰).
 function projectInfoOfPane(paneId: string): { id: string; root: string | null } | null {
   for (const t of useSessions.getState().tabs) {
     for (const c of t.contents) {
       for (const g of allGroups(c.layout)) {
         for (const v of g.views) {
-          if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
-            return { id: t.id, root: t.root ?? null };
-          }
-          // 플러그인 터미널 뷰: paneId = 그 콘텐츠 뷰의 view.id.
-          if (v.kind === "plugin" && v.id === paneId) {
+          if (v.id === paneId) {
             return { id: t.id, root: t.root ?? null };
           }
         }

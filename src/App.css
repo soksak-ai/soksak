@@ -73,6 +73,9 @@ body,
     Consolas,
     monospace
   );
+  /* 앱 UI 기준 글자 크기 = 설정/⌘±(--app-font-size). 컴포넌트 px 규칙은 절대값이라
+     스케일되지 않지만, px 를 명시하지 않고 상속받는 루트 텍스트는 이 크기를 따른다. */
+  font-size: var(--app-font-size, 13px);
 }
 
 .app-root {
@@ -2147,9 +2150,10 @@ body::after {
 }
 .settings-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   padding: 8px 0;
+  min-height: 38px;
   border-bottom: 1px solid var(--bd-soft);
 }
 .settings-row-label {
@@ -2177,6 +2181,19 @@ body::after {
   align-items: center;
   gap: 6px;
 }
+/* 스칼라 설정 행: 컨트롤 영역을 고정폭·우측정렬로 묶어 모든 컨트롤의 우측 끝이 한 열에
+   정렬되게 한다(타입별 폭 차이·reset 유무에 흔들리지 않음). input/select 는 영역을 균일하게
+   채우고, toggle 등은 우측 정렬, reset 슬롯은 항상 같은 폭. block(list) 행은 제외. */
+.settings-row:not(.settings-row--block) .settings-row-control {
+  flex-basis: 200px;
+  justify-content: flex-end;
+}
+.settings-row:not(.settings-row--block) .settings-row-control > input,
+.settings-row:not(.settings-row--block) .settings-row-control > select {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
 .settings-dot {
   width: 6px;
   height: 6px;
@@ -2193,6 +2210,8 @@ body::after {
   font: inherit;
   font-size: 12px;
   width: 84px;
+  height: 28px;
+  box-sizing: border-box;
 }
 .settings-input-text {
   width: 160px;
@@ -2206,6 +2225,8 @@ body::after {
   font: inherit;
   font-size: 12px;
   width: 160px;
+  height: 28px;
+  box-sizing: border-box;
 }
 /* reset(↺) 슬롯 — 오버라이드 여부와 무관하게 항상 같은 폭을 차지해, 컨트롤의 우측 끝이
    행마다 흔들리지 않게 한다(없을 때 컨트롤이 더 오른쪽으로 가는 정렬 깨짐 방지). */

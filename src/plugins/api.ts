@@ -40,8 +40,6 @@ import { pushNotification, type NotificationInput } from "../lib/notify";
 import { playSound, BUILTIN_SOUNDS } from "../ui/sound";
 import {
   runningCommands,
-  sendInputToHost,
-  readHostBuffer,
   subscribeOutput,
 } from "../terminal/paneHosts";
 import {
@@ -1355,25 +1353,23 @@ export function buildPluginApi(
               : {}),
             ...(has("terminal:read")
               ? {
-                  // 등록된 PTY IO(substrate, 코어/플러그인 통합) 우선 — 없으면 코어 host-div 폴백
-                  // (공존 기간). 코어 터미널 뷰 제거 후엔 substrate IO 만 남는다.
+                  // 등록된 PTY IO(substrate) 로 화면 읽기 — 플러그인 터미널이 registerIo 로 등록한 키.
                   readBuffer: (paneId: string, lines?: number) =>
-                    getPtyIo(paneId)?.readBuffer(lines) ??
-                    readHostBuffer(paneId, lines),
+                    getPtyIo(paneId)?.readBuffer(lines),
                   onOutput: (paneId: string, cb: () => void) =>
                     tracker.wrap(subscribeOutput(paneId, cb)),
                 }
               : {}),
             ...(has("terminal:write")
               ? {
-                  // sendText: substrate IO 우선(있으면 true), 없으면 코어 host-div 폴백.
+                  // sendText: substrate IO(플러그인 터미널 registerIo). 없으면 false(미준비).
                   sendText: (paneId: string, text: string) => {
                     const io = getPtyIo(paneId);
                     if (io) {
                       io.sendInput(text);
                       return true;
                     }
-                    return sendInputToHost(paneId, text);
+                    return false;
                   },
                 }
               : {}),

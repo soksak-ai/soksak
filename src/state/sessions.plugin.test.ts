@@ -139,4 +139,62 @@ describe("addContent — kind=view 프로그램", () => {
       dispose();
     }
   });
+
+  // 에이전트 프로그램(agent-claude)이 다른 플러그인(terminal)의 뷰를 자동실행 명령과 함께 연다.
+  // viewPlugin = 뷰 소유 플러그인(크로스 플러그인 참조), command = 그 터미널 뷰에 흘려보낼 자동실행 명령.
+  it("크로스 플러그인 view 프로그램 + command → 대상 플러그인 뷰 + autorun 명령 전달", () => {
+    const dispose = useProgramRegistry.getState().register("soksak-plugin-agent-claude", {
+      id: "claude-prog-test",
+      title: "Claude",
+      path: "에이전트",
+      kind: "view",
+      view: "content",
+      viewPlugin: "soksak-plugin-terminal",
+      command: "claude",
+      ensure: { bin: "claude", install: { darwin: "curl … | bash" } },
+    });
+    try {
+      const r = useSessions.getState().addViewToGroup("t1", "claude-prog-test");
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      const { groups } = activeLayout();
+      const grp = groups.find((g) => g.id === r.groupId)!;
+      const v = grp.views.find((x) => x.id === r.viewId)!;
+      expect(v).toMatchObject({
+        kind: "plugin",
+        pluginId: "soksak-plugin-terminal", // viewPlugin — 뷰 소유 플러그인(자기 plugin 아님)
+        view: "content",
+        title: "Claude",
+        command: "claude", // 자동실행 명령이 plugin View 에 실린다
+      });
+    } finally {
+      dispose();
+    }
+  });
+
+  // viewPlugin 미지정이면 자기 플러그인 뷰(터미널 플러그인의 terminal 프로그램 — 후방호환).
+  it("viewPlugin 미지정 = 자기 플러그인 뷰(후방호환)", () => {
+    const dispose = useProgramRegistry.getState().register("soksak-plugin-terminal", {
+      id: "terminal-prog-test",
+      title: "Terminal",
+      kind: "view",
+      view: "content",
+    });
+    try {
+      const r = useSessions.getState().addViewToGroup("t1", "terminal-prog-test");
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      const { groups } = activeLayout();
+      const grp = groups.find((g) => g.id === r.groupId)!;
+      const v = grp.views.find((x) => x.id === r.viewId)!;
+      expect(v).toMatchObject({
+        kind: "plugin",
+        pluginId: "soksak-plugin-terminal",
+        view: "content",
+      });
+      expect((v as { command?: string }).command).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
 });

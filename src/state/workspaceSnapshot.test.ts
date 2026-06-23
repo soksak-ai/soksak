@@ -1,10 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { serializeProject, deserializeProject } from "./workspaceSnapshot";
-import { leavesOf, type SplitTree } from "./splitTree";
 import type { ProjectTab, GroupNode, View } from "./sessions";
 
-// 직렬화 라운드트립 — 두 트리(GroupNode·PaneNode) serializeSplitTree 동일 경로. id 보존,
-// split id 만 재생성, live status 제외. 구조·순서·sizes·active·view 파라미터·autorun 보존이 불변식.
+// 직렬화 라운드트립 — GroupNode serializeSplitTree 경로. id 보존, split id 만 재생성,
+// live status 제외. 구조·순서·sizes·active·view 파라미터 보존이 불변식. 터미널도 플러그인 뷰다.
 
 let sid = 0;
 const newSplitId = () => `S${++sid}`;
@@ -44,20 +43,11 @@ const project: ProjectTab = {
               views: [
                 {
                   id: "v1",
-                  kind: "terminal",
+                  kind: "plugin",
                   title: "T",
-                  focusedPaneId: "p2",
-                  autorun: { paneId: "p1", command: "claude" },
-                  layout: {
-                    type: "split",
-                    id: "ps1",
-                    dir: "col",
-                    sizes: [0.7, 0.3],
-                    children: [
-                      { type: "leaf", value: "p1" },
-                      { type: "leaf", value: "p2" },
-                    ],
-                  },
+                  pluginId: "soksak-plugin-terminal",
+                  view: "content",
+                  command: "claude", // 자동 실행 명령(영속 제외 — 복원 시 재실행 안 함)
                 },
               ],
             },
@@ -81,12 +71,13 @@ const project: ProjectTab = {
 };
 
 describe("workspaceSnapshot 라운드트립", () => {
-  it("구조·sizes·active·view 파라미터·터미널 autorun 보존, split id 만 재생성", () => {
+  it("구조·sizes·active·view 파라미터 보존, split id 만 재생성, 터미널 command 미영속", () => {
     sid = 0;
     const snap = serializeProject(project);
     // split id 는 직렬화에 담기지 않는다(복원 시 재생성).
     expect(JSON.stringify(snap)).not.toContain("gs1");
-    expect(JSON.stringify(snap)).not.toContain("ps1");
+    // command(자동 실행)는 영속하지 않는다(A6: 복원 터미널은 재실행 안 함).
+    expect(JSON.stringify(snap)).not.toContain("claude");
 
     const back = deserializeProject(snap, newSplitId);
     expect(back.root).toBe("/repo");
@@ -108,14 +99,12 @@ describe("workspaceSnapshot 라운드트립", () => {
     const g1 = leafOf(c.layout, 0);
     expect(g1.id).toBe("g1");
     expect(g1.activeViewId).toBe("v1");
-    const term = g1.views[0] as Extract<View, { kind: "terminal" }>;
-    expect(term.kind).toBe("terminal");
-    expect(term.focusedPaneId).toBe("p2");
-    // A6: 복원된 터미널 autorun 은 pasteOnly 로 마킹된다(자동 실행 X, 프롬프트 paste).
-    expect(term.autorun).toEqual({ paneId: "p1", command: "claude", pasteOnly: true });
-    const ps = term.layout as Extract<SplitTree<string>, { type: "split" }>;
-    expect(ps.sizes).toEqual([0.7, 0.3]);
-    expect(leavesOf(term.layout)).toEqual(["p1", "p2"]);
+    const term = g1.views[0] as Extract<View, { kind: "plugin" }>;
+    expect(term.kind).toBe("plugin");
+    expect(term.pluginId).toBe("soksak-plugin-terminal");
+    expect(term.view).toBe("content");
+    // 복원된 터미널은 command 를 갖지 않는다(자동 재실행 방지).
+    expect(term.command).toBeUndefined();
 
     const g2 = leafOf(c.layout, 1);
     expect(g2.views.map((v) => v.kind)).toEqual(["file", "plugin", "plugin"]);
@@ -147,11 +136,11 @@ describe("workspaceSnapshot 라운드트립", () => {
               views: [
                 {
                   id: "v1",
-                  kind: "terminal",
+                  kind: "plugin",
                   title: "T",
-                  focusedPaneId: "p1",
+                  pluginId: "soksak-plugin-terminal",
+                  view: "content",
                   status: { code: "busy", message: "재생 중" },
-                  layout: { type: "leaf", value: "p1" },
                 },
               ],
             },

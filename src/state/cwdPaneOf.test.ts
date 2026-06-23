@@ -1,15 +1,7 @@
 // cwdPaneOf — 파일트리가 따라갈 터미널 pane 을 generic 하게 고른다. 터미널 판정은 주입된
-// hasPty(id) predicate 로만(코어=focusedPaneId, 플러그인=view.id). pluginId·kind 하드코딩 없음.
+// hasPty(id) predicate 로만(플러그인 터미널 = view.id). pluginId·kind 하드코딩 없음.
 import { describe, expect, it } from "vitest";
 import { cwdPaneOf, type ProjectTab, type View } from "./sessions";
-
-const term = (viewId: string, paneId: string): View => ({
-  id: viewId,
-  kind: "terminal",
-  title: "T",
-  layout: { type: "leaf", value: paneId },
-  focusedPaneId: paneId,
-});
 
 const plugin = (viewId: string, pluginId: string, view: string): View => ({
   id: viewId,
@@ -60,13 +52,6 @@ describe("cwdPaneOf", () => {
     const t = tab([plugin("v9", "soksak-plugin-terminal", "content")]);
     const hasPty = (id: string) => id === "v9";
     expect(cwdPaneOf(t, hasPty)).toBe("v9");
-  });
-
-  // 코어 터미널: paneId = focusedPaneId(view.id 아님). hasPty(focusedPaneId) 로 매칭.
-  it("코어 터미널(활성)을 focusedPaneId 로 따라간다(공존)", () => {
-    const t = tab([term("v1", "p1")]);
-    const hasPty = (id: string) => id === "p1";
-    expect(cwdPaneOf(t, hasPty)).toBe("p1");
   });
 
   // 활성 뷰가 터미널이면 그것을 우선(비활성 터미널보다).

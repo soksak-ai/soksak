@@ -111,6 +111,10 @@ export interface PluginViewContext {
   paneId: string | null;
   /** 콘텐츠 배치 뷰의 안정 인스턴스 키(예: app.webview.label(viewId)). 사이드바 배치는 null. */
   viewId: string | null;
+  /** 이 뷰가 마운트 시 1회 자동 실행할 명령(에이전트 프로그램 — 터미널 뷰가 PTY 로 실행).
+   *  프로그램 선언(ContributedProgram.command)이 source. 뷰 종류 무관 채널 — 자동 실행 여부는
+   *  뷰 구현이 결정한다(터미널 뷰만 PTY 로 실행). 명령 없으면 null. */
+  command: string | null;
   setBadge: (badge: ViewBadge) => void;
   /** 이 뷰의 상태를 보고(R1) — null=회수. 콘텐츠 배치 뷰만 유효(close guard). */
   setStatus: (status: ViewStatus | null) => void;

@@ -5,7 +5,7 @@
 import { COLOR_SLOTS } from "../theme/engine";
 
 // 엔진이 슬롯 외에 추가로 setProperty 하는 변수(engine.ts applyThemeToDom) + App.tsx.
-const ENGINE_EXTRA_VARS = ["glow", "scan", "amb", "pane-pad", "app-font"] as const;
+const ENGINE_EXTRA_VARS = ["glow", "scan", "amb", "pane-pad", "app-font", "app-font-size"] as const;
 
 // App.css 가 :root 에 정적 선언하는 변수(레이아웃 치수 포함). 출처: src/App.css.
 // 색·폰트뿐 아니라 플러그인이 정당하게 참조할 수 있는 모든 정적 변수를 포함한다.
