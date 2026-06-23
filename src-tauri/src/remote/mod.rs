@@ -11,10 +11,14 @@
 //     (길이-프리픽스 ciphertext frame 루프). iroh/Go-relay/cloudflared 가 재사용한다(additive).
 //   - tcp: serve_connection 을 **127.0.0.1 전용** TCP 위에 얹는 한 transport(P1 브리지, off by
 //     default). 임의 노출/SSRF/rebinding 표면 0.
+//   - iroh: serve_connection 을 **iroh QUIC bi-stream**(P2P + 릴레이 fallback) 위에 얹는 transport
+//     tier ①(폰-링크 P2, off by default). CGNAT 인바운드-불가 환경의 outbound 랑데부 + LAN mDNS 직결.
+//     iroh node-id = 전송 주소일 뿐 auth 아님 — Noise 가 그 위에서 mutual-auth(node-id≠auth).
 
 pub mod auth;
 pub mod bridge;
 pub mod confirm;
+pub mod iroh;
 pub mod noise;
 pub mod session;
 pub mod tcp;

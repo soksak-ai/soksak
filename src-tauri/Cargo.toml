@@ -84,6 +84,19 @@ ed25519-dalek = "2"
 # KK = 양측 static 키 사전공지(페어링 핀닝) ⇒ mutual auth + ee DH 로 PFS. snow = 감사된 순수
 # Rust Noise 구현("Hard To Fuck Up"). 자체 crypto 0 — Ed25519(auth) 와 별개의 X25519 static 키.
 snow = "0.9"
+# 폰-링크 transport tier ① (remote::iroh) — QUIC P2P + 릴레이 fallback. CGNAT(공유 IP·인바운드 불가)
+# 환경에서 outbound 랑데부로 desktop↔phone 직결, 같은 WiFi 면 mDNS 로 0지연 직결 승급. iroh 의 node-id
+# (EndpointId)=desktop 의 안정적 다이얼 주소(STATIC SecretKey 로 고정). **iroh 는 바이트만 운반** — 우리
+# Noise KK mutual-auth + E2E(transport.rs serve_connection)가 그 QUIC bi-stream **위에** 그대로 얹힌다
+# (node-id ≠ auth, defense-in-depth). discovery-local-network = LAN mDNS fast-path. SendStream/RecvStream 은
+# tokio AsyncWrite/AsyncRead 라 split 쌍을 JoinedStream 으로 합쳐 serve_connection 에 무수정 주입.
+#
+# 버전 핀 0.91.2 (NOT 0.95.x): iroh 0.95.x 의 iroh-base 는 ed25519-dalek 3.0.0-pre.1(프리릴리스)을
+# 강제하는데, 그 프리릴리스가 자신이 끌어오는 ed25519/pkcs8 v3 와 어긋나 컴파일이 깨진다(KeyMalformed
+# 가 unit variant→fn variant 로 바뀐 drift). 0.91.2 는 stable ed25519-dalek 2.2.0 을 써서 우리 기존
+# `ed25519-dalek = "2"`(remote::auth)와 단일 트리로 통일된다 — 충돌 0. 업그레이드는 iroh 가 stable
+# dalek 3 로 정착한 뒤(upstream fix) 재평가한다.
+iroh = { version = "=0.91.2", features = ["discovery-local-network"] }
 
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.

@@ -16,9 +16,14 @@ use tauri::{AppHandle, Manager};
 use crate::ipc::request_command;
 use crate::remote::auth::{AuthorizedAction, DeviceRegistry, Scope};
 use crate::remote::confirm::{PendingConfirms, PendingSummary};
+use crate::remote::iroh::{
+    accept_loop as iroh_accept_loop, build_endpoint, node_id_string, IrohListenerConfig,
+};
 use crate::remote::noise::{PinnedPeerRegistry, StaticKeypair};
 use crate::remote::tcp::{accept_loop, bind_loopback, ListenerConfig};
 use crate::remote::transport::SharedAuth;
+
+use iroh::{RelayMode, SecretKey};
 
 /// 데스크톱 confirm 단일 권위의 기본 TTL(초) — 미해결 confirm 은 이 후 AUTO-DENY(matrix
 /// "confirm timeout→미실행"). 사람이 모달을 못 보고 지나가도 destructive 가 영구 hang 하지 않는다.
@@ -106,15 +111,29 @@ pub const ENABLE_ENV: &str = "SOKSAK_REMOTE_TCP";
 /// 바인드 포트 env(선택) — 미설정 시 OS 할당(0). 항상 127.0.0.1 에만 바인드(tcp.rs).
 pub const PORT_ENV: &str = "SOKSAK_REMOTE_TCP_PORT";
 
-/// env 플래그가 명시적으로 켜졌는가. 미설정/빈/"0"/"false"(대소문자 무시) ⇒ false(기본 비활성).
-fn enabled() -> bool {
-    match std::env::var(ENABLE_ENV) {
+/// iroh 폰-링크 transport(tier ①) 활성 env 키 — 명시적·generic(RULE 8). 미설정 ⇒ 비활성(endpoint 0).
+/// 루프백 TCP 와 **독립** 플래그 — 둘은 같은 serve_connection 을 다른 transport 위에 얹을 뿐.
+pub const IROH_ENABLE_ENV: &str = "SOKSAK_REMOTE_IROH";
+
+/// env 값이 명시적으로 켜졌는가(공통 파서). 미설정/빈/"0"/"false"/"off"/"no" ⇒ false(기본 비활성).
+fn env_flag_on(key: &str) -> bool {
+    match std::env::var(key) {
         Ok(v) => {
             let v = v.trim().to_ascii_lowercase();
             !(v.is_empty() || v == "0" || v == "false" || v == "off" || v == "no")
         }
         Err(_) => false,
     }
+}
+
+/// 루프백 TCP 브리지 활성 여부(기본 비활성).
+fn enabled() -> bool {
+    env_flag_on(ENABLE_ENV)
+}
+
+/// iroh 폰-링크 transport 활성 여부(기본 비활성). off-by-default 회귀 테스트가 이 함수를 단언한다.
+pub fn iroh_enabled() -> bool {
+    env_flag_on(IROH_ENABLE_ENV)
 }
 
 /// 인가된 frame 의 불투명 request 바이트를 코어 route() 로 라우팅하는 dispatch 를 만든다.
@@ -200,4 +219,62 @@ fn now_unix() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0)
+}
+
+/// 기본 비활성 **iroh 폰-링크 transport(tier ①)** 를 (켜져 있을 때만) 시작한다. 꺼져 있으면 즉시
+/// 반환(endpoint bind 0). 루프백 TCP 와 독립 — 같은 serve_connection 을 iroh QUIC bi-stream 위에 얹는다.
+///
+/// 켜진 경우: 새 iroh static SecretKey(안정적 node-id = 폰의 다이얼 주소) 로 endpoint 를 만들고,
+/// RelayMode::Default(CGNAT traversal: 직결 실패 시 n0 릴레이 fallback) + mDNS(LAN fast-path)를 켠다.
+/// Noise/auth 레지스트리는 **빈 채로** 둔다(페어링 UI 는 별도 후속) → 모든 연결이 fail-closed.
+/// "켬"이 곧 "접근 허용"이 아니다(페어링이 별도 게이트). 어떤 실패도 앱을 죽이지 않는다(로깅 후 계속).
+///
+/// dispatch 는 루프백과 **동일** make_dispatch(코어 route() — request_command). confirm 권위 재사용은
+/// destructive 경로의 후속(현재 token provider 는 None ⇒ deny-until-token, 루프백과 대칭).
+pub fn maybe_start_iroh_bridge(app: &AppHandle) {
+    if !iroh_enabled() {
+        return; // 기본 경로 — 어떤 iroh endpoint 도 bind 하지 않는다(실행 중 앱 무영향).
+    }
+    // Noise device 신원(전송 node-id 와 별개 — node-id≠auth). 빈 핀닝/auth 로 fail-closed.
+    let local = match StaticKeypair::generate() {
+        Ok(k) => Arc::new(k),
+        Err(e) => {
+            eprintln!("[remote::bridge] iroh: Noise static 키 생성 실패: {e}");
+            return;
+        }
+    };
+    let config = Arc::new(IrohListenerConfig {
+        local,
+        noise_registry: Arc::new(PinnedPeerRegistry::new()),
+        auth: SharedAuth::new(DeviceRegistry::new(8)),
+    });
+    // iroh 전송 신원 — 실제 앱은 영속 키를 로드해 안정적 node-id 를 유지한다(여기선 매 부팅 새 키 =
+    // 페어링 UI 후속에서 영속화). 페어링이 아직 없으니 어차피 fail-closed.
+    let secret = SecretKey::generate(&mut rand::rngs::OsRng);
+    let app = app.clone();
+
+    tauri::async_runtime::spawn(async move {
+        // RelayMode::Default = CGNAT 직결 실패 시 n0 릴레이로 fallback(릴레이는 ciphertext 만 운반).
+        // mDNS = 같은 WiFi 면 0지연 직결 승급(LAN fast-path).
+        let endpoint = match build_endpoint(secret, RelayMode::Default, true).await {
+            Ok(ep) => ep,
+            Err(e) => {
+                eprintln!("[remote::bridge] iroh endpoint bind 실패: {e}");
+                return;
+            }
+        };
+        eprintln!(
+            "[remote::bridge] iroh 폰-링크 transport 활성(페어링 전 fail-closed). node-id={}",
+            node_id_string(&endpoint)
+        );
+        // now/token/dispatch 는 루프백과 동일 계약. dispatch = 코어 route().
+        iroh_accept_loop(
+            endpoint,
+            config,
+            || now_unix,
+            || |_peer: &str| None,
+            move || make_dispatch(app.clone()),
+        )
+        .await;
+    });
 }

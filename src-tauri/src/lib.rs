@@ -145,6 +145,10 @@ pub fn run() {
             // 명시적으로 켜졌을 때만 127.0.0.1 에 바인드하고 인증된 frame 을 코어 route()(request_command)
             // 로 디스패치한다. 꺼져 있으면 아무것도 바인드하지 않아 기존 동작 무영향(off by default).
             remote::bridge::maybe_start_loopback_bridge(app.handle());
+            // 원격 제어 iroh transport(폰-링크 P2, tier ①) — 기본 비활성(additive). SOKSAK_REMOTE_IROH
+            // 가 켜졌을 때만 iroh endpoint 를 bind(QUIC P2P + 릴레이 fallback)하고 같은 코어 route() 로
+            // 디스패치한다. 꺼져 있으면 endpoint 자체가 안 생겨 기존 동작 무영향(off by default).
+            remote::bridge::maybe_start_iroh_bridge(app.handle());
             // 신호등: 좌표는 tauri.conf.json trafficLightPosition 이 소유, 유지는
             // titlebar::install 의 NSNotification 옵저버가 담당(titlebar.rs 참조).
             #[cfg(target_os = "macos")]
