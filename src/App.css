@@ -675,6 +675,11 @@ body,
 .ctab-menu-item.has-sub:hover > .ctab-submenu {
   display: block;
 }
+/* 메뉴가 오른쪽 끝이라 서브메뉴 펼칠 자리가 없으면 왼쪽으로 뒤집는다(ProgramMenu flip). */
+.ctab-menu.flip-sub .ctab-submenu {
+  left: auto;
+  right: 100%;
+}
 
 /* ── 에디터 그룹 영역(드래그 분할) ── */
 .egroup-area {

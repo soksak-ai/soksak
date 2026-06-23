@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Program } from "../state/sessions";
 import { useProgramRegistry } from "../plugins/programRegistry";
@@ -93,6 +93,8 @@ export function ProgramMenu({
   const t = useT();
   useOverlayActive();
   const menuRef = useRef<HTMLDivElement>(null);
+  // 측정 후 뷰포트 안으로 보정한 위치 + 서브메뉴 뒤집기 여부.
+  const [place, setPlace] = useState({ left: pos.left, top: pos.top, flip: false });
   // 등록/해제 신호 구독 — 플러그인 활성 전환이 열린 메뉴에도 반영된다.
   useProgramRegistry((s) => s.version);
   const { programs, order } = useProgramRegistry.getState();
@@ -117,6 +119,25 @@ export function ProgramMenu({
     };
   }, [onClose]);
 
+  // + 가 오른쪽/아래 끝일 때 메뉴가 뷰포트 밖으로 잘리지 않도록 측정 후 안쪽으로
+  // 당긴다(useLayoutEffect = paint 전, 깜빡임 없음). 서브메뉴(오른쪽 펼침)가 넘칠
+  // 자리면 flip 으로 왼쪽으로 연다.
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    const m = 8;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    let left = pos.left;
+    let top = pos.top;
+    if (left + w > window.innerWidth - m)
+      left = Math.max(m, window.innerWidth - m - w);
+    if (top + h > window.innerHeight - m)
+      top = Math.max(m, window.innerHeight - m - h);
+    const flip = left + w + 130 > window.innerWidth - m;
+    setPlace({ left, top, flip });
+  }, [pos.left, pos.top, order.length]);
+
   const root = emptyNode();
   for (const id of order) {
     const p = programs[id];
@@ -131,8 +152,8 @@ export function ProgramMenu({
   return createPortal(
     <div
       ref={menuRef}
-      className="ctab-menu"
-      style={{ left: pos.left, top: pos.top }}
+      className={place.flip ? "ctab-menu flip-sub" : "ctab-menu"}
+      style={{ left: place.left, top: place.top }}
     >
       {order.length === 0 ? (
         <div className="ctab-menu-empty">{t("program.empty")}</div>
