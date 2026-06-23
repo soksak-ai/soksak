@@ -9,14 +9,97 @@
 
 use std::sync::Arc;
 
+use serde::Serialize;
 use serde_json::{json, Value};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::ipc::request_command;
 use crate::remote::auth::{AuthorizedAction, DeviceRegistry, Scope};
+use crate::remote::confirm::{PendingConfirms, PendingSummary};
 use crate::remote::noise::{PinnedPeerRegistry, StaticKeypair};
 use crate::remote::tcp::{accept_loop, bind_loopback, ListenerConfig};
 use crate::remote::transport::SharedAuth;
+
+/// 데스크톱 confirm 단일 권위의 기본 TTL(초) — 미해결 confirm 은 이 후 AUTO-DENY(matrix
+/// "confirm timeout→미실행"). 사람이 모달을 못 보고 지나가도 destructive 가 영구 hang 하지 않는다.
+pub const CONFIRM_TTL_SECS: u64 = 120;
+
+/// 앱이 manage 하는 데스크톱 confirm 권위 — Tauri glue(resolve/pending 커맨드)와 serve loop 가
+/// 공유하는 단일 PendingConfirms. lib.rs 가 `.manage(RemoteConfirmState::default())` 로 등록한다.
+/// **이 상태가 켜져도 destructive 실행 0** — 토큰은 serve loop 의 APPROVE 에서만 만들어진다.
+pub struct RemoteConfirmState {
+    pub confirms: PendingConfirms,
+}
+
+impl Default for RemoteConfirmState {
+    fn default() -> Self {
+        RemoteConfirmState {
+            confirms: PendingConfirms::new(CONFIRM_TTL_SECS),
+        }
+    }
+}
+
+/// 현재 Unix 초(park 의 created_at / TTL 만료 기준).
+fn now_unix_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// 데스크톱 confirm 모달의 결정을 PendingConfirms 로 전달하는 thin Tauri glue.
+///
+/// **데스크톱 전용 권위(RULE 0/6)**: 이 커맨드는 데스크톱 웹뷰(confirm 모달)만 호출한다 — 폰은
+/// 이 IPC 표면에 닿을 경로가 없다(원격 frame 은 serve loop 가 resolve 로 라우팅하지 않는다).
+/// TS confirm 모달은 얇은 표현일 뿐 — APPROVE/DENY 를 여기로 보내고, **권위는 Rust 에 있다**
+/// (토큰은 serve loop 의 finish_confirmed 가 만든다, 이 커맨드가 아니라).
+///
+/// 반환: 결정이 전달됐으면 true. 미상/이미 해결/만료(또는 serve loop 가 timeout 으로 떠남)면 false.
+/// off-by-default: 이 커맨드는 앱에 컴파일되지만 RemoteConfirmState 가 등록돼야 동작한다.
+#[tauri::command]
+pub fn remote_confirm_resolve(
+    app: AppHandle,
+    request_id: u64,
+    approve: bool,
+) -> Result<bool, String> {
+    let state = app.state::<RemoteConfirmState>();
+    // 만료분 청소(stale 누수 0) 후 resolve.
+    state.confirms.expire_due(now_unix_secs());
+    Ok(state.confirms.resolve(request_id, approve))
+}
+
+/// 데스크톱 모달용 — 현재 미해결 confirm 목록(RULE 8 노출/감사). 평문 토큰/키 0(표시 정보만).
+#[tauri::command]
+pub fn remote_confirm_pending(app: AppHandle) -> Result<Vec<ConfirmPendingView>, String> {
+    let state = app.state::<RemoteConfirmState>();
+    state.confirms.expire_due(now_unix_secs());
+    Ok(state
+        .confirms
+        .list_pending()
+        .into_iter()
+        .map(ConfirmPendingView::from)
+        .collect())
+}
+
+/// remote_confirm_pending 의 직렬화 뷰(프론트 모달이 읽는 모양).
+#[derive(Debug, Clone, Serialize)]
+pub struct ConfirmPendingView {
+    pub request_id: u64,
+    pub device_id: String,
+    pub command: String,
+    pub created_at: u64,
+}
+
+impl From<PendingSummary> for ConfirmPendingView {
+    fn from(s: PendingSummary) -> Self {
+        ConfirmPendingView {
+            request_id: s.request_id,
+            device_id: s.device_id,
+            command: s.command,
+            created_at: s.created_at,
+        }
+    }
+}
 
 /// 루프백 브리지 활성 env 키 — 명시적·generic(RULE 8). 미설정/"0"/"false" ⇒ 비활성(바인드 0).
 pub const ENABLE_ENV: &str = "SOKSAK_REMOTE_TCP";

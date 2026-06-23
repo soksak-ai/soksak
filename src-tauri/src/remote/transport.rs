@@ -22,14 +22,16 @@
 #![allow(dead_code)]
 
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::remote::auth::{
     AuthorizedAction, DesktopConfirmToken, DeviceRegistry, VerifyCtx,
 };
+use crate::remote::confirm::{ConfirmDecision, PendingConfirms};
 use crate::remote::noise::{Handshake, NoiseError, PinnedPeerRegistry, StaticKeypair};
-use crate::remote::session::SecureSession;
+use crate::remote::session::{FrameOutcome, SecureSession};
 
 // ===========================================================================
 // 0. 와이어 상수 — 길이 프리픽스 한계(Noise frame 캡과 정합).
@@ -241,6 +243,139 @@ where
         let response = {
             let mut reg = auth.lock();
             session.handle_frame(&ciphertext, &mut reg, ctx, token.as_ref(), &mut dispatch)
+        };
+        write_framed(&mut stream, &response).await?;
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// 5. serve_connection_confirmed — destructive 를 데스크톱 사람 결정에 PARK 하는 변형(additive).
+// ===========================================================================
+
+/// 데스크톱 모달이 띄울 confirm 요청. 어댑터가 emit_confirm 콜백으로 받아 실제 앱에선
+/// `app.emit("remote-confirm-request", {request_id, device_id, command, danger})` 한다(테스트는
+/// 콜백을 직접 검사 — Tauri 비의존). danger 는 항상 true(이 경로는 destructive 만 도달).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfirmRequest {
+    /// resolve 의 키(PendingConfirms 가 발급). 데스크톱 모달이 그대로 remote_confirm_resolve 로 회신.
+    pub request_id: u64,
+    /// 어느 원격 기기의 요청인가(표시/감사).
+    pub device_id: String,
+    /// 사람이 읽을 명령 요약(예: "panel.close").
+    pub command: String,
+    /// 항상 true — destructive 만 이 경로에 도달(데스크톱 confirm 필수).
+    pub danger: bool,
+}
+
+/// serve_connection 의 **파킹 변형**: destructive grant 를 만나면 그 frame 의 응답을 PARK 하고
+/// 데스크톱 사람 결정을 oneshot 으로 **await** 한다(폴링 0 — RULE 7). 읽기 전용/비파괴 경로는
+/// serve_connection 과 **동일**(즉시 dispatch, 파킹 0) — destructive 분기만 추가된다(additive).
+///
+/// 흐름(handshake 는 serve_connection 과 동일 — 미페어링/revoked ⇒ 채널 0):
+///   frame 루프:
+///     - begin_frame(게이트 1·2, nonce 1회 소비) ⇒ Terminal | AwaitConfirm.
+///     - Terminal(비파괴 Ok·거부): 그대로 회신(파킹 0 — 읽기 전용 무영향).
+///     - AwaitConfirm(pending, destructive): confirms.park ⇒ (request_id, oneshot rx). emit_confirm
+///       으로 데스크톱 모달에 요청 emit. tokio::select!{ rx, sleep(ttl) }:
+///         · APPROVE ⇒ finish_confirmed — 어댑터가 (device, bound_nonce) 토큰을 **스스로** 만들어
+///           같은 Grant 를 dispatch(폰은 토큰 못 만든다). 암호화된 결과 회신.
+///         · DENY/TIMEOUT ⇒ finish_denied — dispatch 0, 암호화된 "denied" 회신.
+///
+/// **anti-escalation 불변**: destructive 는 begin_frame 이 항상 AwaitConfirm 으로 보내고, dispatch
+/// 는 finish_confirmed(APPROVE)에서만 일어난다 — destructive 를 auto-grant 로 만드는 env/config
+/// 플래그가 이 함수 본문 어디에도 없다(파킹+await 가 무조건 경로).
+///
+/// 주입:
+///   - confirms: PendingConfirms — 데스크톱 confirm 단일 권위(park/resolve). 여러 연결 공유 가능.
+///   - now_fn: 매 frame 의 VerifyCtx.now + park 의 created_at(같은 시계).
+///   - emit_confirm: Fn(ConfirmRequest) — 데스크톱 모달 요청 emit(실제는 app.emit, 테스트는 recorder).
+///   - dispatch: AuthorizedAction + request → 응답(실제는 request_command→route).
+pub async fn serve_connection_confirmed<S, NowF, EmitF, Disp>(
+    mut stream: S,
+    local: &StaticKeypair,
+    noise_registry: &PinnedPeerRegistry,
+    auth: &SharedAuth,
+    confirms: &PendingConfirms,
+    confirm_ttl: Duration,
+    mut now_fn: NowF,
+    mut emit_confirm: EmitF,
+    mut dispatch: Disp,
+) -> Result<(), ServeError>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+    NowF: FnMut() -> u64,
+    EmitF: FnMut(ConfirmRequest),
+    Disp: FnMut(&AuthorizedAction, &[u8]) -> Vec<u8>,
+{
+    // 1. announce + 2. KK 핸드셰이크 — serve_connection 과 동일(fail-closed, 미페어링 ⇒ 채널 0).
+    let id_bytes = match read_framed(&mut stream).await? {
+        Some(b) => b,
+        None => return Ok(()),
+    };
+    if id_bytes.len() > MAX_DEVICE_ID_LEN {
+        return Err(ServeError::BadDeviceId);
+    }
+    let device_id = String::from_utf8(id_bytes).map_err(|_| ServeError::BadDeviceId)?;
+    let mut handshake = Handshake::respond(local, noise_registry, &device_id)
+        .map_err(ServeError::Handshake)?;
+    let m1 = match read_framed(&mut stream).await? {
+        Some(b) => b,
+        None => return Ok(()),
+    };
+    handshake.read_message(&m1).map_err(ServeError::Handshake)?;
+    let m2 = handshake.write_message().map_err(ServeError::Handshake)?;
+    write_framed(&mut stream, &m2).await?;
+    let mut session =
+        SecureSession::establish(handshake, &device_id).map_err(ServeError::Handshake)?;
+
+    // 3. frame 루프 — 비파괴는 즉시, destructive 는 데스크톱 결정 await.
+    while let Some(ciphertext) = read_framed(&mut stream).await? {
+        let ctx = VerifyCtx { now: now_fn() };
+        // 게이트 1·2(동기 락) — nonce 1회 소비. destructive 면 dispatch 를 미룬다.
+        let outcome = {
+            let mut reg = auth.lock();
+            session.begin_frame(&ciphertext, &mut reg, ctx, &mut dispatch)
+            // 락은 여기서 해제된다 — 데스크톱 await 동안 auth 권위를 잡지 않는다(다른 연결 무블록).
+        };
+        let response = match outcome {
+            // 비파괴 Ok·거부 — 파킹 0(읽기 전용 무영향). 그대로 회신.
+            FrameOutcome::Terminal(bytes) => bytes,
+            // destructive — 데스크톱 사람 결정을 await(이벤트-우선, 폴링 0).
+            FrameOutcome::AwaitConfirm(pending) => {
+                let park_now = now_fn();
+                let (request_id, rx) =
+                    confirms.park(pending.device_id(), pending.command(), park_now);
+                // 데스크톱 모달에 confirm 요청 emit(실제는 app.emit). danger=true(destructive).
+                emit_confirm(ConfirmRequest {
+                    request_id,
+                    device_id: pending.device_id().to_string(),
+                    command: pending.command().to_string(),
+                    danger: true,
+                });
+                // oneshot OR timeout — 둘 중 먼저 오는 쪽. sleep-poll 루프 아님(select! 가 깨운다).
+                let decision = tokio::select! {
+                    r = rx => match r {
+                        Ok(d) => d,
+                        // 송신 끝 drop(만료 청소 등) ⇒ AUTO-DENY.
+                        Err(_) => ConfirmDecision::Deny,
+                    },
+                    _ = tokio::time::sleep(confirm_ttl) => {
+                        // TTL 초과 ⇒ AUTO-DENY. parked entry 를 청소(stale 누수 0).
+                        confirms.resolve(request_id, false);
+                        ConfirmDecision::Deny
+                    }
+                };
+                if decision.approved() {
+                    // APPROVE — 어댑터가 (device, bound_nonce) 토큰을 스스로 만들어 같은 Grant 를
+                    // dispatch(폰은 이 토큰 생성자에 도달 불가). nonce 는 begin_frame 에서 이미
+                    // 소비됐으므로 registry 재상담 0 — Grant 만으로 종결(엮인 게이트 유지).
+                    session.finish_confirmed(pending, &mut dispatch)
+                } else {
+                    // DENY/TIMEOUT — dispatch 0, 암호화된 "denied".
+                    session.finish_denied(pending)
+                }
+            }
         };
         write_framed(&mut stream, &response).await?;
     }

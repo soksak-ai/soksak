@@ -14,6 +14,7 @@
 
 pub mod auth;
 pub mod bridge;
+pub mod confirm;
 pub mod noise;
 pub mod session;
 pub mod tcp;

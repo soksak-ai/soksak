@@ -32,7 +32,7 @@
 
 use crate::remote::auth::{
     AuthDecision, AuthorizeError, AuthorizedAction, CapabilityAssertion, DenyReason,
-    DesktopConfirmToken, DeviceRegistry, Scope, VerifyCtx,
+    DesktopConfirmToken, DeviceRegistry, Grant, Scope, VerifyCtx,
 };
 use crate::remote::noise::{Handshake, NoiseChannel, NoiseError, X25519_KEY_LEN};
 
@@ -220,6 +220,82 @@ impl SessionResponse {
 }
 
 // ===========================================================================
+// 1b. 파킹 결과 — begin_frame 이 dispatch 시점을 분기(비파괴 즉시 vs destructive 파킹).
+// ===========================================================================
+
+/// begin_frame 의 결과 — 한 frame 이 즉시 종결되는가, 데스크톱 confirm 을 기다리는가.
+pub enum FrameOutcome {
+    /// 종결됨(암호화된 응답 바이트). 비파괴 Ok(dispatch 완료) 또는 어떤 사유의 거부.
+    /// 호출자는 이 바이트를 그대로 회신한다 — 파킹/대기 0.
+    Terminal(Vec<u8>),
+    /// destructive grant — dispatch 미실행. 호출자가 데스크톱 결정을 await 한 뒤
+    /// finish_confirmed/finish_denied 로 종결한다(데스크톱 결정 전엔 실행 0).
+    AwaitConfirm(PendingDestructive),
+}
+
+impl FrameOutcome {
+    /// 종결 바이트면 Some(테스트 편의). AwaitConfirm 이면 None.
+    pub fn terminal_bytes(&self) -> Option<&[u8]> {
+        match self {
+            FrameOutcome::Terminal(b) => Some(b),
+            FrameOutcome::AwaitConfirm(_) => None,
+        }
+    }
+
+    /// 데스크톱 confirm 대기 상태인가(테스트 편의).
+    pub fn is_await_confirm(&self) -> bool {
+        matches!(self, FrameOutcome::AwaitConfirm(_))
+    }
+}
+
+/// 데스크톱 결정을 기다리는 봉인된 destructive 액션. **봉인된 Grant 를 들고 있다** — dispatch
+/// 는 데스크톱 APPROVE(finish_confirmed)에서만, 어댑터-구성 토큰과 함께 일어난다. 이 타입의
+/// 필드는 private — 외부가 grant 를 빼내 임의 dispatch 할 수 없다(엮인 게이트 유지).
+pub struct PendingDestructive {
+    /// auth floor 가 봉인한 Grant(destructive — DesktopConfirmRequired 를 싣는다). nonce 는
+    /// begin_frame 에서 이미 소비됨 — 재-verify 없이 이 Grant 만으로 종결한다.
+    grant: Grant,
+    /// dispatch 로 넘길 불투명 request 바이트(원래 frame 의 페이로드).
+    request: Vec<u8>,
+    /// 사람이 읽을 명령 요약(데스크톱 모달 표시 — PendingConfirms 에 함께 등록).
+    command: String,
+}
+
+impl PendingDestructive {
+    /// 어느 기기의 요청인가(데스크톱 모달/감사). Grant 가 봉인한 device_id.
+    pub fn device_id(&self) -> &str {
+        self.grant.device_id()
+    }
+
+    /// 사람이 읽을 명령 요약(데스크톱 모달 표시).
+    pub fn command(&self) -> &str {
+        &self.command
+    }
+
+    /// 이 destructive 가 결속한 nonce(감사). Grant 의 DesktopConfirmRequired 에서.
+    pub fn bound_nonce(&self) -> Option<[u8; 32]> {
+        self.grant.desktop_confirm().map(|r| r.bound_nonce())
+    }
+}
+
+/// request 바이트 → 사람이 읽을 명령 요약(데스크톱 모달 표시용). request 는 보통 JSON
+/// `{"method":"panel.close",...}` 또는 raw 명령명. method 가 있으면 그걸, 없으면 앞부분을
+/// UTF-8 lossy 로 자른다(표시 전용 — dispatch 로 가는 raw 바이트는 그대로 보존).
+fn summarize_command(request: &[u8]) -> String {
+    // JSON method 추출 시도(소켓 JSON-RPC 모양).
+    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(request) {
+        if let Some(m) = v.get("method").and_then(|m| m.as_str()) {
+            if !m.is_empty() {
+                return m.to_string();
+            }
+        }
+    }
+    // fallback — 앞 64바이트를 lossy 표시(긴 페이로드 truncate).
+    let head = &request[..request.len().min(64)];
+    String::from_utf8_lossy(head).into_owned()
+}
+
+// ===========================================================================
 // 2. SecureSession — 성립된 채널 + 인증된 peer 기기 신원의 결속
 // ===========================================================================
 
@@ -367,6 +443,145 @@ impl SecureSession {
         // `action` 이 있어야 한다 ⇒ Grant 없이 dispatch 도달 불가(구조적 no-bypass).
         let out = dispatch(&action, &frame.request);
         SessionResponse::Ok(out)
+    }
+
+    // -----------------------------------------------------------------------
+    // 파킹 API(additive) — destructive 는 데스크톱 사람 결정을 await 한 뒤에만 dispatch.
+    //
+    // serve_connection 은 매 frame 을 동기 락 안에서 처리하지만, 데스크톱 confirm 은 **비동기**
+    // 사람 결정을 기다려야 한다(oneshot await). 그래서 한 frame 처리를 둘로 쪼갠다:
+    //   1) begin_frame — 복호+파싱+기기결속+인가(게이트 1·2, nonce **단 1회** 소비)를 동기로
+    //      끝낸다. 비파괴(read-only/write)거나 어떤 사유로든 거부면 **즉시 종결**(암호화된 응답).
+    //      destructive grant 면 dispatch 를 **미루고** PendingDestructive(봉인된 Grant 보유)를
+    //      돌려준다 — 아직 토큰도 dispatch 도 없다.
+    //   2) 데스크톱 결정 후:
+    //      - finish_confirmed(pending, dispatch) — 어댑터가 (device, bound_nonce) 토큰을 **스스로**
+    //        만들어(폰은 못 만든다 — auth.rs private 생성자) 같은 Grant 를 authorize+dispatch.
+    //      - finish_denied(pending) — dispatch 0, 암호화된 "denied".
+    //
+    // nonce 는 begin_frame 에서 한 번만 소비된다 — 승인 후 재-복호/재-verify 가 없으므로 재생
+    // 판정과 충돌하지 않는다(꼼수 없는 단일 패스).
+    // -----------------------------------------------------------------------
+
+    /// 한 frame 의 게이트 1·2 를 동기로 처리하고, dispatch 시점을 분기한다.
+    ///
+    /// 반환:
+    ///   - FrameOutcome::Terminal(ciphertext) — 비파괴 Ok(이미 dispatch 됨) 또는 거부. 호출자는
+    ///     이 바이트를 그대로 회신한다(파킹 불요).
+    ///   - FrameOutcome::AwaitConfirm(pending) — destructive grant. dispatch 는 아직 0. 호출자가
+    ///     데스크톱 결정을 await 한 뒤 finish_confirmed/finish_denied 로 종결한다.
+    ///
+    /// `dispatch` 는 비파괴 경로에서만 호출된다(destructive 는 finish_confirmed 가 호출). 즉
+    /// dispatch 가능성은 여전히 AuthorizedAction 에 묶여 있다(엮인 게이트 불변).
+    pub fn begin_frame<F>(
+        &mut self,
+        ciphertext: &[u8],
+        registry: &mut DeviceRegistry,
+        ctx: VerifyCtx,
+        dispatch: F,
+    ) -> FrameOutcome
+    where
+        F: FnOnce(&AuthorizedAction, &[u8]) -> Vec<u8>,
+    {
+        // (게이트 1, 채널) 복호 — 변조/재생/미페어링 ⇒ Decrypt. nonce 미소비.
+        let plaintext = match self.channel.decrypt(ciphertext) {
+            Ok(pt) => pt,
+            Err(_) => return self.terminal(SessionResponse::Denied(SessionDenied::Decrypt)),
+        };
+        // 파싱.
+        let frame = match RequestFrame::decode(&plaintext) {
+            Some(f) => f,
+            None => return self.terminal(SessionResponse::Denied(SessionDenied::MalformedFrame)),
+        };
+        // 기기-신원 결속.
+        if frame.assertion.device_id != self.peer_device_id {
+            return self.terminal(SessionResponse::Denied(SessionDenied::DeviceMismatch));
+        }
+        // (게이트 2, 인가) — 여기서 nonce 가 **단 1회** 소비된다(Granted 일 때).
+        let grant = match registry.verify(&frame.assertion, &frame.signature, ctx) {
+            AuthDecision::Granted(g) => g,
+            AuthDecision::Denied(reason) => {
+                return self.terminal(SessionResponse::Denied(SessionDenied::Unauthorized(reason)));
+            }
+        };
+
+        // 비파괴 vs destructive 분기 — destructive 는 Grant 가 DesktopConfirmRequired 를 싣는다.
+        if grant.requires_desktop_confirm() {
+            // dispatch 를 미룬다 — 봉인된 Grant + request + 명령 요약을 PendingDestructive 로 들고
+            // 나간다. 아직 토큰도 dispatch 도 없다(데스크톱 결정 전엔 실행 0 — anti-escalation).
+            let command = summarize_command(&frame.request);
+            FrameOutcome::AwaitConfirm(PendingDestructive {
+                grant,
+                request: frame.request,
+                command,
+            })
+        } else {
+            // 비파괴 — confirm 불요. 즉시 authorize(None)+dispatch 하고 종결.
+            let action = match AuthorizedAction::authorize(&grant, None) {
+                Ok(a) => a,
+                // read-only/write 는 None 토큰으로 항상 Ok — 이 분기는 실질적으로 도달 안 함
+                // (방어적 fail-closed: 혹시라도 confirm 요구가 새어 들어오면 거부).
+                Err(e) => {
+                    return self.terminal(SessionResponse::Denied(SessionDenied::DesktopConfirm(e)));
+                }
+            };
+            let out = dispatch(&action, &frame.request);
+            self.terminal(SessionResponse::Ok(out))
+        }
+    }
+
+    /// 데스크톱 APPROVE 후 — 파킹된 destructive grant 를 종결한다. **어댑터가 토큰을 직접 만든다**:
+    /// Grant 의 DesktopConfirmRequired 에서 정확한 (device, bound_nonce) 를 읽어 그 결속의
+    /// DesktopConfirmToken 을 auth.rs 의 데스크톱-권위 생성자로 만든다(폰은 이 생성자에 도달 불가).
+    /// 그 토큰으로 같은 Grant 를 authorize → dispatch 1회 → 암호화된 결과.
+    ///
+    /// 토큰이 Grant 의 (device, nonce) 와 정확히 일치하므로 authorize 는 성공한다. 다른 Grant
+    /// 의 토큰을 끼워넣을 수 없다(이 함수는 self 의 parked grant 에서만 토큰을 만든다 — 재사용 0).
+    pub fn finish_confirmed<F>(&mut self, pending: PendingDestructive, dispatch: F) -> Vec<u8>
+    where
+        F: FnOnce(&AuthorizedAction, &[u8]) -> Vec<u8>,
+    {
+        let required = match pending.grant.desktop_confirm() {
+            Some(r) => r,
+            // 파킹된 것은 destructive 만이므로 항상 Some. 방어적으로 None 이면 거부(dispatch 0).
+            None => {
+                return self.terminal_bytes(SessionResponse::Denied(SessionDenied::DesktopConfirm(
+                    AuthorizeError::DesktopConfirmRequired,
+                )))
+            }
+        };
+        // 어댑터-구성 토큰 — 정확히 이 Grant 의 (device, bound_nonce). 폰은 이 생성자를 못 부른다.
+        let token = DesktopConfirmToken::issue_after_desktop_confirm(
+            required.device_id(),
+            required.bound_nonce(),
+        );
+        let action = match AuthorizedAction::authorize(&pending.grant, Some(&token)) {
+            Ok(a) => a,
+            Err(e) => {
+                return self
+                    .terminal_bytes(SessionResponse::Denied(SessionDenied::DesktopConfirm(e)))
+            }
+        };
+        let out = dispatch(&action, &pending.request);
+        self.terminal_bytes(SessionResponse::Ok(out))
+    }
+
+    /// 데스크톱 DENY 또는 TIMEOUT 후 — dispatch 0, 암호화된 "denied"(confirm 사유코드). 파킹된
+    /// Grant 는 여기서 버려진다(토큰 미구성 ⇒ dispatch 불가). 폰은 결과로 거부만 받는다.
+    pub fn finish_denied(&mut self, _pending: PendingDestructive) -> Vec<u8> {
+        self.terminal_bytes(SessionResponse::Denied(SessionDenied::DesktopConfirm(
+            AuthorizeError::DesktopConfirmRequired,
+        )))
+    }
+
+    /// SessionResponse 를 즉시 암호화해 Terminal 로 감싼다(begin_frame 의 종결 경로).
+    fn terminal(&mut self, response: SessionResponse) -> FrameOutcome {
+        FrameOutcome::Terminal(self.encrypt_response(&response))
+    }
+
+    /// SessionResponse 를 암호화 바이트로(finish_* 의 종결 경로).
+    fn terminal_bytes(&mut self, response: SessionResponse) -> Vec<u8> {
+        self.encrypt_response(&response)
     }
 
     /// SessionResponse 를 채널로 암호화한다 — Ok/Denied 모두 ciphertext(릴레이 zero-knowledge).

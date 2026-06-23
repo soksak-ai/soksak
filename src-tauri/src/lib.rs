@@ -87,6 +87,7 @@ pub fn run() {
         .manage(ws::WsManager::default())
         .manage(FsWatcher::default())
         .manage(clipboard::ClipboardState::default())
+        .manage(remote::bridge::RemoteConfirmState::default())
         .manage(CmdBridge::default())
         .manage(data::DbState::default())
         .manage(secrets::SecretsState::default())
@@ -297,6 +298,8 @@ pub fn run() {
             window::window_close,
             ipc::cmd_result,
             titlebar::titlebar_backing,
+            remote::bridge::remote_confirm_resolve,
+            remote::bridge::remote_confirm_pending,
             ime_debug,
             window_activate,
         ])

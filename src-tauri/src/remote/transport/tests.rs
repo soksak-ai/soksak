@@ -789,3 +789,428 @@ async fn response_on_wire_is_ciphertext_not_plaintext() {
     assert_eq!(pt[0], 0x01);
     assert!(pt[1..].starts_with(plaintext_marker), "폰은 복호로 정확한 결과");
 }
+
+// ===========================================================================
+// DESKTOP-CONFIRM AUTHORITY (serve_connection_confirmed) — destructive 는 데스크톱 사람
+// 결정을 await 한 뒤에만 dispatch. 폰은 우회·자가승인·timeout-bypass 불가(매트릭스
+// "danger 우회(폰)" / "confirm 거부·timeout→미실행" / RULE 0 anti-escalation).
+//
+// 테스트가 데스크톱 사람을 흉내낸다: PendingConfirms.resolve(request_id, approve) 를 직접 호출.
+// 폰(Client)은 destructive frame 을 보내고 그 결과(승인 시 dispatch 결과 / 거부·timeout 시
+// denied)를 기다린다 — request 가 blocking 이므로 client.request 를 별도 task 로 돌리고 서버가
+// emit 한 request_id 를 받아 resolve 한다.
+// ===========================================================================
+
+use std::time::Duration;
+use tokio::sync::mpsc;
+
+/// emit_confirm 콜백이 받은 ConfirmRequest 들을 수집하는 recorder(채널). 서버가 destructive 를
+/// 파킹하면 여기로 ConfirmRequest 가 흘러온다 — 테스트가 그 request_id 로 resolve 한다.
+fn confirm_emit_recorder() -> (
+    mpsc::UnboundedSender<ConfirmRequest>,
+    mpsc::UnboundedReceiver<ConfirmRequest>,
+) {
+    mpsc::unbounded_channel()
+}
+
+/// serve_connection_confirmed 를 진짜 루프백 소켓에 1연결만 띄운다. (주소, PendingConfirms,
+/// dispatch 카운터, 마지막 request, emit 수신측)을 돌려준다. TTL 은 호출자가 지정(timeout 테스트).
+async fn spawn_one_conn_confirmed(
+    server: Arc<Server>,
+    confirms: PendingConfirms,
+    ttl: Duration,
+) -> (
+    SocketAddr,
+    Arc<AtomicU32>,
+    Arc<Mutex<Vec<u8>>>,
+    mpsc::UnboundedReceiver<ConfirmRequest>,
+) {
+    let listener = bind_loopback(0).await.expect("bind loopback");
+    let addr = listener.local_addr().expect("local addr");
+    let calls = Arc::new(AtomicU32::new(0));
+    let last_req = Arc::new(Mutex::new(Vec::new()));
+    let (emit_tx, emit_rx) = confirm_emit_recorder();
+    let calls_c = Arc::clone(&calls);
+    let last_c = Arc::clone(&last_req);
+    tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.expect("accept");
+        let dispatch = recording_dispatch(calls_c, last_c);
+        let _ = serve_connection_confirmed(
+            stream,
+            &server.local,
+            &server.noise,
+            &server.auth,
+            &confirms,
+            ttl,
+            || 200u64, // 고정 now(테스트 결정성).
+            move |req: ConfirmRequest| {
+                let _ = emit_tx.send(req); // 파킹된 confirm 요청을 테스트로 전달.
+            },
+            dispatch,
+        )
+        .await;
+    });
+    (addr, calls, last_req, emit_rx)
+}
+
+#[tokio::test]
+async fn confirm_approve_dispatches_once_encrypted_result() {
+    // APPROVE ⇒ dispatch 정확히 1회, 암호화된 결과를 폰이 복호. RED(방어 전): destructive 가
+    //   승인 후에도 절대 dispatch 안 됨(park 만 하고 finish 누락) / 또는 승인 없이 dispatch.
+    //   GREEN: resolve(true) ⇒ 어댑터가 토큰 생성 → dispatch 1회 → {ok:true,scope:destructive}.
+    let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::Destructive);
+    let desktop_pub = server.local.public_key();
+    let server = Arc::new(server);
+    let confirms = PendingConfirms::new(60);
+    let (addr, calls, last_req, mut emit_rx) =
+        spawn_one_conn_confirmed(Arc::clone(&server), confirms.clone(), Duration::from_secs(60))
+            .await;
+
+    let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+        .await
+        .unwrap();
+
+    // 폰의 destructive 요청을 별도 task 로(응답은 데스크톱 승인 후에야 온다).
+    let req_task = tokio::spawn(async move {
+        let resp = client
+            .request(&phone.ed, "phone", Scope::Destructive, nonce(30), 100, 1000, b"panel.close")
+            .await;
+        resp
+    });
+
+    // 서버가 파킹하고 emit 한 confirm 요청을 받는다.
+    let req = emit_rx.recv().await.expect("confirm 요청 emit");
+    assert_eq!(req.device_id, "phone", "요청의 기기");
+    assert_eq!(req.command, "panel.close", "명령 요약");
+    assert!(req.danger, "destructive ⇒ danger=true");
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "승인 전엔 dispatch 0");
+
+    // 데스크톱 사람: APPROVE.
+    assert!(confirms.resolve(req.request_id, true), "데스크톱 승인 전달");
+
+    let resp = req_task.await.unwrap();
+    assert_eq!(resp[0], 0x01, "승인 ⇒ Ok 응답");
+    assert_eq!(&resp[1..], b"{\"ok\":true,\"scope\":\"destructive\"}", "암호화 결과 복호");
+    assert_eq!(calls.load(Ordering::SeqCst), 1, "승인 후 dispatch 정확히 1회");
+    assert_eq!(&*last_req.lock().unwrap(), b"panel.close", "dispatch 가 실제 request 수신");
+}
+
+#[tokio::test]
+async fn confirm_deny_no_dispatch_client_gets_denied() {
+    // DENY ⇒ dispatch 0, 폰은 denied(코드 5). RED: 거부에도 dispatch 면 데스크톱 권위 무력.
+    let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::Destructive);
+    let desktop_pub = server.local.public_key();
+    let server = Arc::new(server);
+    let confirms = PendingConfirms::new(60);
+    let (addr, calls, _last, mut emit_rx) =
+        spawn_one_conn_confirmed(Arc::clone(&server), confirms.clone(), Duration::from_secs(60))
+            .await;
+
+    let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+        .await
+        .unwrap();
+    let req_task = tokio::spawn(async move {
+        client
+            .request(&phone.ed, "phone", Scope::Destructive, nonce(31), 100, 1000, b"rm -rf")
+            .await
+    });
+
+    let req = emit_rx.recv().await.expect("confirm 요청");
+    // 데스크톱 사람: DENY.
+    assert!(confirms.resolve(req.request_id, false), "데스크톱 거부 전달");
+
+    let resp = req_task.await.unwrap();
+    assert_eq!(resp[0], 0x00, "거부 ⇒ Denied 응답");
+    assert_eq!(resp[1], 5, "DesktopConfirm 사유코드");
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "거부 ⇒ dispatch 0");
+}
+
+#[tokio::test]
+async fn confirm_timeout_auto_denies_no_dispatch() {
+    // TTL 내 미해결 ⇒ AUTO-DENY, dispatch 0(matrix "timeout→미실행"). RED: hang forever
+    //   (응답 영원히 안 옴) / 또는 timeout 에 dispatch. GREEN: 짧은 TTL ⇒ select! sleep 팔이
+    //   깨워 finish_denied ⇒ 폰은 denied(코드 5), dispatch 0. resolve 를 **호출하지 않는다**.
+    let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::Destructive);
+    let desktop_pub = server.local.public_key();
+    let server = Arc::new(server);
+    let confirms = PendingConfirms::new(60);
+    // 아주 짧은 TTL — 사람이 결정 안 하면 곧 AUTO-DENY.
+    let (addr, calls, _last, mut emit_rx) = spawn_one_conn_confirmed(
+        Arc::clone(&server),
+        confirms.clone(),
+        Duration::from_millis(120),
+    )
+    .await;
+
+    let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+        .await
+        .unwrap();
+    let req_task = tokio::spawn(async move {
+        client
+            .request(&phone.ed, "phone", Scope::Destructive, nonce(32), 100, 1000, b"rm -rf")
+            .await
+    });
+
+    // 요청은 emit 되지만 **resolve 하지 않는다** — TTL 이 만료돼 AUTO-DENY.
+    let _req = emit_rx.recv().await.expect("confirm 요청 emit");
+    let resp = req_task.await.unwrap();
+    assert_eq!(resp[0], 0x00, "timeout ⇒ Denied(hang 0)");
+    assert_eq!(resp[1], 5, "DesktopConfirm 사유코드(AUTO-DENY)");
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "timeout ⇒ dispatch 0");
+}
+
+#[tokio::test]
+async fn phone_cannot_self_approve_no_frame_resolves_own_confirm() {
+    // 폰이 자가승인 시도: destructive 를 보낸 직후, **추가 frame 으로 자기 confirm 을 승인**하려
+    //   한다(어떤 바이트도 resolve 로 라우팅되길 기대). RED: 폰 frame 이 resolve 경로에 닿으면
+    //   자가승인 → 데스크톱 권위 무력. GREEN: serve loop 는 폰 frame 을 resolve 로 라우팅하는
+    //   경로가 없다(resolve 는 PendingConfirms 메서드 — 데스크톱 glue 만 보유). 폰의 두 번째
+    //   frame 은 또 다른 요청으로 취급될 뿐 첫 confirm 을 승인하지 못한다. 데스크톱이 끝내 거부
+    //   하면 dispatch 0.
+    let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::Destructive);
+    let desktop_pub = server.local.public_key();
+    let server = Arc::new(server);
+    let confirms = PendingConfirms::new(60);
+    let (addr, calls, _last, mut emit_rx) =
+        spawn_one_conn_confirmed(Arc::clone(&server), confirms.clone(), Duration::from_secs(60))
+            .await;
+
+    let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+        .await
+        .unwrap();
+
+    // 폰이 destructive 를 보내고(파킹), 데스크톱 승인 전에 "승인처럼 보이는" 두 번째 frame 을
+    // 흘리려 한다. 하지만 첫 요청이 blocking 이라 폰은 응답 전엔 두 번째를 못 보낸다 — 그것이
+    // 곧 "폰은 자기 confirm 을 승인할 채널이 없다"(첫 요청 결과를 받아야 다음 frame). 데스크톱이
+    // 결국 거부하면 dispatch 0. (resolve 는 데스크톱 핸들 전용 — 폰 와이어에 그 표면이 없다.)
+    let req_task = tokio::spawn(async move {
+        client
+            .request(&phone.ed, "phone", Scope::Destructive, nonce(33), 100, 1000, b"rm -rf")
+            .await
+    });
+
+    let req = emit_rx.recv().await.expect("confirm 요청");
+    // 폰 와이어에는 resolve 표면이 없다 — request_id 를 알아도 폰은 PendingConfirms 핸들이 없어
+    // resolve 를 호출할 수 없다. 데스크톱(이 테스트)이 거부 ⇒ dispatch 0.
+    assert!(confirms.resolve(req.request_id, false), "데스크톱만 resolve");
+    let resp = req_task.await.unwrap();
+    assert_eq!(resp[0], 0x00, "폰 자가승인 불가 ⇒ Denied");
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "자가승인 불가 ⇒ dispatch 0");
+}
+
+#[tokio::test]
+async fn confirm_token_bound_to_exact_device_nonce_not_reusable() {
+    // 토큰은 어댑터가 (device, bound_nonce) 정확히로 만든다 — A 의 승인이 B 를 인가하지 못하고,
+    //   한 요청의 토큰이 다른 요청에 재사용되지 않는다. 여기선 **두 destructive 요청**을 순차로:
+    //   첫째 승인(자기 nonce 토큰으로 dispatch), 둘째는 **거부** ⇒ 첫 토큰이 둘째로 새지 않음을
+    //   단언(둘째 dispatch 0). RED: 토큰이 요청 간 재사용되면 둘째도 dispatch.
+    let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::Destructive);
+    let desktop_pub = server.local.public_key();
+    let server = Arc::new(server);
+    let confirms = PendingConfirms::new(60);
+    let (addr, calls, last_req, mut emit_rx) =
+        spawn_one_conn_confirmed(Arc::clone(&server), confirms.clone(), Duration::from_secs(60))
+            .await;
+
+    let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+        .await
+        .unwrap();
+
+    // --- 첫 요청(nonce 40) — 승인 ⇒ dispatch 1 ---
+    // request 는 blocking 이라 한 task 안에서 두 요청을 순차로 보낸다(채널 counter 자연 직렬).
+    let confirms_c = confirms.clone();
+    let req_task = tokio::spawn(async move {
+        let r1 = client
+            .request(&phone.ed, "phone", Scope::Destructive, nonce(40), 100, 1000, b"panel.close")
+            .await;
+        let r2 = client
+            .request(&phone.ed, "phone", Scope::Destructive, nonce(41), 101, 1000, b"tab.close")
+            .await;
+        (r1, r2)
+    });
+
+    // 첫 confirm — 승인.
+    let req1 = emit_rx.recv().await.expect("confirm 1");
+    assert_eq!(req1.command, "panel.close");
+    assert!(confirms_c.resolve(req1.request_id, true), "첫 요청 승인");
+
+    // 둘째 confirm — 거부(첫 토큰이 새지 않음을 단언).
+    let req2 = emit_rx.recv().await.expect("confirm 2");
+    assert_eq!(req2.command, "tab.close");
+    assert_ne!(req2.request_id, req1.request_id, "요청별 독립 request_id");
+    assert!(confirms_c.resolve(req2.request_id, false), "둘째 요청 거부");
+
+    let (r1, r2) = req_task.await.unwrap();
+    assert_eq!(r1[0], 0x01, "첫 요청 승인 ⇒ Ok");
+    assert_eq!(&r1[1..], b"{\"ok\":true,\"scope\":\"destructive\"}");
+    assert_eq!(r2[0], 0x00, "둘째 요청 거부 ⇒ Denied(첫 토큰 재사용 0)");
+    assert_eq!(r2[1], 5, "DesktopConfirm 사유코드");
+    assert_eq!(calls.load(Ordering::SeqCst), 1, "첫째만 dispatch(둘째 dispatch 0)");
+    assert_eq!(&*last_req.lock().unwrap(), b"panel.close", "dispatch 된 건 첫 요청뿐");
+}
+
+#[tokio::test]
+async fn read_only_request_unaffected_immediate_dispatch_no_parking() {
+    // 회귀 가드: read-only 요청은 confirmed serve loop 에서도 **즉시 dispatch**(파킹 0, emit 0).
+    //   RED: 파킹 분기가 read-only 까지 잡으면 읽기 전용이 데스크톱 승인을 기다림(과확장). GREEN:
+    //   begin_frame 이 비파괴를 Terminal 로 즉시 종결 — emit_confirm 호출 0, dispatch 1회.
+    let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::ReadOnly);
+    let desktop_pub = server.local.public_key();
+    let server = Arc::new(server);
+    let confirms = PendingConfirms::new(60);
+    let (addr, calls, last_req, mut emit_rx) =
+        spawn_one_conn_confirmed(Arc::clone(&server), confirms.clone(), Duration::from_secs(60))
+            .await;
+
+    let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+        .await
+        .unwrap();
+    // read-only 는 즉시 응답(데스크톱 승인 불요) — 직접 await(task 불요).
+    let resp = client
+        .request(&phone.ed, "phone", Scope::ReadOnly, nonce(34), 100, 1000, b"ui.tree")
+        .await;
+    assert_eq!(resp[0], 0x01, "read-only ⇒ 즉시 Ok");
+    assert_eq!(&resp[1..], b"{\"ok\":true,\"scope\":\"read-only\"}");
+    assert_eq!(calls.load(Ordering::SeqCst), 1, "read-only ⇒ dispatch 1회(파킹 0)");
+    assert_eq!(&*last_req.lock().unwrap(), b"ui.tree");
+    // emit_confirm 은 호출되지 않았다(파킹 0) — 채널이 비어 있다.
+    assert!(emit_rx.try_recv().is_err(), "read-only ⇒ confirm emit 0(파킹 없음)");
+    assert_eq!(confirms.pending_count(), 0, "read-only ⇒ 파킹 0");
+}
+
+#[tokio::test]
+async fn anti_escalation_destructive_always_parks_no_auto_grant_flag() {
+    // anti-escalation(RULE 0): destructive 는 **항상** 파킹+await 한다 — auto-grant 로 만드는
+    //   env/config 플래그가 없다. 이 테스트는 destructive 가 어떤 환경에서도 emit_confirm 을
+    //   거치고(파킹), 데스크톱 결정 없이는 dispatch 0 임을 단언한다. RED: 만약 "config off" 가
+    //   destructive 를 즉시 grant 하면 emit 0 + dispatch 1(우회). GREEN: 무조건 파킹 → emit 1,
+    //   결정 전 dispatch 0. (resolve 안 하면 위 timeout 테스트가 미실행을 단언.)
+    let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::Destructive);
+    let desktop_pub = server.local.public_key();
+    let server = Arc::new(server);
+    let confirms = PendingConfirms::new(60);
+    let (addr, calls, _last, mut emit_rx) =
+        spawn_one_conn_confirmed(Arc::clone(&server), confirms.clone(), Duration::from_secs(60))
+            .await;
+
+    let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+        .await
+        .unwrap();
+    let req_task = tokio::spawn(async move {
+        client
+            .request(&phone.ed, "phone", Scope::Destructive, nonce(35), 100, 1000, b"rm -rf")
+            .await
+    });
+
+    // destructive 는 무조건 파킹 → emit 정확히 1회.
+    let req = emit_rx.recv().await.expect("destructive 는 항상 파킹+emit(우회 0)");
+    assert!(req.danger, "destructive ⇒ danger=true");
+    // 데스크톱 결정 전: dispatch 0(파킹된 채 await).
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "결정 전 dispatch 0(auto-grant 플래그 0)");
+    // 정리: 거부로 종결(hang 방지).
+    confirms.resolve(req.request_id, false);
+    let resp = req_task.await.unwrap();
+    assert_eq!(resp[0], 0x00, "결정 전 실행 0 — 거부로 종결");
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "끝까지 dispatch 0");
+}
+
+#[tokio::test]
+async fn read_only_denied_scope_in_confirmed_loop_no_parking() {
+    // 회귀: read-only 기기가 destructive 요청 ⇒ scope 거부(게이트 2)로 **즉시 종결**(파킹 0).
+    //   거부는 destructive grant 가 아니므로 confirm 경로에 닿지 않는다. RED: 거부도 파킹하면 hang.
+    let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::ReadOnly);
+    let desktop_pub = server.local.public_key();
+    let server = Arc::new(server);
+    let confirms = PendingConfirms::new(60);
+    let (addr, calls, _last, mut emit_rx) =
+        spawn_one_conn_confirmed(Arc::clone(&server), confirms.clone(), Duration::from_secs(60))
+            .await;
+
+    let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+        .await
+        .unwrap();
+    let resp = client
+        .request(&phone.ed, "phone", Scope::Destructive, nonce(36), 100, 1000, b"rm -rf")
+        .await;
+    assert_eq!(resp[0], 0x00, "scope 거부 ⇒ 즉시 Denied");
+    assert_eq!(resp[1], 4, "Unauthorized(ScopeEscalation) — confirm 아님");
+    assert_eq!(calls.load(Ordering::SeqCst), 0, "거부 ⇒ dispatch 0");
+    assert!(emit_rx.try_recv().is_err(), "scope 거부 ⇒ 파킹/emit 0");
+    assert_eq!(confirms.pending_count(), 0, "거부는 파킹 0");
+}
+
+#[tokio::test]
+async fn two_destructive_confirms_park_independently() {
+    // 직렬/격리: 두 destructive 요청이 각각 독립 request_id 로 파킹된다 — 하나의 resolve 가
+    //   다른 것을 해결하지 않는다. (한 연결 내 순차이므로 list_pending 으로 독립성을 본다.)
+    //   RED: 한 resolve 가 모든 pending 을 해결하면 격리 깨짐. GREEN: request_id 별 entry.
+    let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::Destructive);
+    let desktop_pub = server.local.public_key();
+    let server = Arc::new(server);
+    let confirms = PendingConfirms::new(60);
+    let (addr, calls, _last, mut emit_rx) =
+        spawn_one_conn_confirmed(Arc::clone(&server), confirms.clone(), Duration::from_secs(60))
+            .await;
+
+    let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+        .await
+        .unwrap();
+    // 첫 요청만 보내고 파킹 확인 → 그 사이 두 번째는 아직(blocking). 대신 첫째를 승인해 진행시키고
+    // 두 request_id 가 서로 다름을 emit 으로 확인.
+    let confirms_c = confirms.clone();
+    let req_task = tokio::spawn(async move {
+        let r1 = client
+            .request(&phone.ed, "phone", Scope::Destructive, nonce(42), 100, 1000, b"a.close")
+            .await;
+        let r2 = client
+            .request(&phone.ed, "phone", Scope::Destructive, nonce(43), 101, 1000, b"b.close")
+            .await;
+        (r1, r2)
+    });
+
+    let req1 = emit_rx.recv().await.expect("confirm 1");
+    // 첫째가 파킹돼 있는 동안 미해결은 정확히 1(둘째는 아직 안 옴 — 직렬).
+    assert_eq!(confirms_c.pending_count(), 1, "한 번에 하나씩 파킹(직렬)");
+    assert!(confirms_c.resolve(req1.request_id, true));
+    let req2 = emit_rx.recv().await.expect("confirm 2");
+    assert_ne!(req2.request_id, req1.request_id, "독립 request_id(격리)");
+    assert!(confirms_c.resolve(req2.request_id, true));
+
+    let (r1, r2) = req_task.await.unwrap();
+    assert_eq!(r1[0], 0x01, "첫째 승인 Ok");
+    assert_eq!(r2[0], 0x01, "둘째 승인 Ok");
+    assert_eq!(calls.load(Ordering::SeqCst), 2, "둘 다 승인 ⇒ dispatch 2");
+}
+
+#[tokio::test]
+async fn event_first_resolve_wakes_promptly_not_poll() {
+    // 이벤트-우선(RULE 7): await 는 resolve 가 **깨운다**(poll interval 대기 아님). TTL 을 아주
+    //   길게(60s) 두고 resolve 를 즉시 호출 — 응답이 TTL 근처가 아니라 곧바로 온다면 oneshot/
+    //   select! 가 깨운 것(sleep-poll 루프면 폴 간격만큼 지연). 짧은 시간 budget 안에 완료 단언.
+    let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::Destructive);
+    let desktop_pub = server.local.public_key();
+    let server = Arc::new(server);
+    let confirms = PendingConfirms::new(60);
+    let (addr, calls, _last, mut emit_rx) =
+        spawn_one_conn_confirmed(Arc::clone(&server), confirms.clone(), Duration::from_secs(60))
+            .await;
+
+    let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+        .await
+        .unwrap();
+    let req_task = tokio::spawn(async move {
+        client
+            .request(&phone.ed, "phone", Scope::Destructive, nonce(44), 100, 1000, b"panel.close")
+            .await
+    });
+
+    let req = emit_rx.recv().await.expect("confirm 요청");
+    // resolve 직후 응답이 와야 한다. TTL 60s 보다 훨씬 짧은 budget(1s) 안에 종료 = poll 아님.
+    confirms.resolve(req.request_id, true);
+    let resp = tokio::time::timeout(Duration::from_secs(1), req_task)
+        .await
+        .expect("resolve 가 즉시 깨움(폴링 아님)")
+        .unwrap();
+    assert_eq!(resp[0], 0x01, "승인 ⇒ Ok(즉시)");
+    assert_eq!(calls.load(Ordering::SeqCst), 1, "dispatch 1회");
+}
