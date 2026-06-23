@@ -2205,6 +2205,15 @@ body::after {
   padding: 4px 8px;
   font: inherit;
   font-size: 12px;
+  width: 160px;
+}
+/* reset(↺) 슬롯 — 오버라이드 여부와 무관하게 항상 같은 폭을 차지해, 컨트롤의 우측 끝이
+   행마다 흔들리지 않게 한다(없을 때 컨트롤이 더 오른쪽으로 가는 정렬 깨짐 방지). */
+.settings-reset-slot {
+  flex: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 /* list/map 타입 설정 — 라벨·설명 아래 전체폭 스택(블록). 다른 스칼라 설정의 한 줄 리듬과 별개. */
 .settings-row--block {

@@ -228,7 +228,9 @@ export function PluginSettingsPanel({ pluginId }: { pluginId: string }) {
                 </div>
                 <div className="settings-row-control">
                   <Control setting={c} value={valueOf(c)} onChange={(v) => setVal(c, v)} />
-                  {!isBlock ? resetBtn : null}
+                  {!isBlock ? (
+                    <span className="settings-reset-slot">{resetBtn}</span>
+                  ) : null}
                 </div>
               </div>
             );
