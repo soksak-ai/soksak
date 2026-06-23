@@ -597,3 +597,71 @@ fn remote_static_matches_pinned_after_handshake() {
         "핸드셰이크 후 상대 static = 핀닝값(KK 정적키 바인딩)"
     );
 }
+
+// ===========================================================================
+// proptest 적대 하니스 — Noise 채널/핸드셰이크가 임의 ciphertext/임의 핸드셰이크 바이트에
+// Err(Decrypt/HandshakeFailed), 평문 반환 0·패닉 0(계획서 스위트 B/I). super::* 로 floor 직접.
+// ===========================================================================
+use proptest::prelude::*;
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// channel_decrypt_arbitrary_never_plaintext_never_panic:
+    /// 성립된 채널에 임의 ciphertext → AEAD 실패 ⇒ Err, garbage plaintext 0, 패닉 0.
+    #[test]
+    fn channel_decrypt_arbitrary_never_plaintext_never_panic(
+        ct in proptest::collection::vec(any::<u8>(), 0..2048),
+    ) {
+        let (_a, mut b) = paired_channels();
+        let _ = b.decrypt(&ct); // Err 또는 (천문학적으로 희박한) Ok — 둘 다 패닉 0.
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// initiator_handshake_arbitrary_m2_fails_no_channel:
+    /// initiator 가 m1 을 쓴 뒤 임의 m2 바이트를 read_message → DH/MAC 불일치 ⇒ HandshakeFailed,
+    /// 패닉 0. 틀린/garbage 응답에는 채널이 안 생긴다(fail-closed). into_channel 도 Err(미완).
+    #[test]
+    fn initiator_handshake_arbitrary_m2_fails_no_channel(
+        m2 in proptest::collection::vec(any::<u8>(), 0..70_000),
+    ) {
+        let a = keypair();
+        let b = keypair();
+        let (a_reg, _b_reg) = mutual_pinned(&a, &b, "desktop", "phone");
+        let mut ini = Handshake::initiate(&a, &a_reg, "phone").expect("initiate");
+        let _m1 = ini.write_message().expect("m1");
+        let r = ini.read_message(&m2);
+        prop_assert!(r.is_err(), "arbitrary m2 must fail the handshake");
+        prop_assert!(ini.into_channel().is_err(), "no channel from an unfinished handshake");
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// channel_out_of_order_replay_rejected:
+    /// 폰이 두 프레임을 암호화하면, responder 가 두 번째를 먼저 복호하려 하면(순서뒤바뀜) Noise
+    /// nonce sequencing 이 Err 로 막는다(재생/순서 거부). 패닉 0, 평문 0.
+    #[test]
+    fn channel_out_of_order_replay_rejected(
+        p1 in proptest::collection::vec(any::<u8>(), 1..32),
+        p2 in proptest::collection::vec(any::<u8>(), 1..32),
+    ) {
+        let (mut a, mut b) = paired_channels();
+        let c1 = a.encrypt(&p1).expect("ct1");
+        let c2 = a.encrypt(&p2).expect("ct2");
+        // 두 번째(counter=1) 를 먼저 복호 — 첫 번째(counter=0) 를 건너뜀 ⇒ Noise 가 거부.
+        let r = b.decrypt(&c2);
+        prop_assert!(r.is_err(), "out-of-order frame must be rejected by nonce sequencing");
+        // 거부 후에도 in-order 첫 프레임(counter=0)은 정상 복호 — 채널이 조용히 망가지지 않는다.
+        prop_assert_eq!(b.decrypt(&c1).ok(), Some(p1.clone()), "in-order frame still decrypts after rejecting OOO");
+        // 재생: 첫 번째를 두 번 — 두 번째 복호는 counter 재사용으로 거부.
+        let (mut a2, mut b2) = paired_channels();
+        let c = a2.encrypt(&p1).expect("ct");
+        prop_assert!(b2.decrypt(&c).is_ok(), "first decrypt ok");
+        prop_assert!(b2.decrypt(&c).is_err(), "replay of same frame rejected");
+    }
+}

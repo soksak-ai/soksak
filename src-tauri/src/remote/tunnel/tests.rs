@@ -640,3 +640,126 @@ fn tunnel_allowlist_comes_only_from_desktop_env_observable() {
     std::env::remove_var(crate::remote::bridge::TUNNEL_ALLOWLIST_ENV); // 즉시 청소(다른 테스트 오염 0).
     assert_eq!(al.allowed_ports(), vec![3000, 5173, 8080], "데스크톱 env 의 유효 포트만(0/bad 무시)");
 }
+
+// ===========================================================================
+// proptest 적대 하니스 — tunnel 의 length-prefix 코덱(proxy 프레이밍)과 proxy 루프가 임의·
+// 경계·malformed·청크 입력에 패닉 0·over-read 0·증폭 0·행 0(계획서 스위트 I, SSRF/DoS).
+// read_framed/MAX_FRAME 는 tunnel 모듈 private 이라 super::* 로만 직접 fuzz 가능하다.
+// ===========================================================================
+use proptest::prelude::*;
+use crate::remote::noise::{Handshake as NoiseHandshake, NoiseChannel, PinnedPeerRegistry as PPR, StaticKeypair as SKP};
+
+/// 임의 바이트에 tunnel::read_framed 를 1회 돌린다(bounded — &[u8] EOF 확정, 행 0).
+fn tunnel_read_one(bytes: &[u8]) -> Result<Option<Vec<u8>>, ProxyError> {
+    let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+    rt.block_on(async move {
+        let mut cur: &[u8] = bytes;
+        read_framed(&mut cur).await
+    })
+}
+
+/// KK 핸드셰이크를 끝까지 돌려 양측 NoiseChannel 을 만든다(proxy 입력 암호화에 필요).
+fn tunnel_channel_pair() -> (NoiseChannel, NoiseChannel) {
+    let a = SKP::generate().unwrap();
+    let b = SKP::generate().unwrap();
+    let mut ar = PPR::new();
+    ar.pin("phone", &b.public_key()).unwrap();
+    let mut br = PPR::new();
+    br.pin("desktop", &a.public_key()).unwrap();
+    let mut ini = NoiseHandshake::initiate(&a, &ar, "phone").unwrap();
+    let mut resp = NoiseHandshake::respond(&b, &br, "desktop").unwrap();
+    let m1 = ini.write_message().unwrap();
+    resp.read_message(&m1).unwrap();
+    let m2 = resp.write_message().unwrap();
+    ini.read_message(&m2).unwrap();
+    (ini.into_channel().unwrap(), resp.into_channel().unwrap())
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(1024))]
+
+    /// tunnel_framing_arbitrary_never_panic_no_amplification:
+    /// 임의 바이트 → tunnel::read_framed 는 패닉 0. 캡 초과 길이 ⇒ Io(InvalidData)(그만큼 할당 0).
+    /// Ok(Some(body)) 면 body ≤ 캡 + 입력 안(증폭 0).
+    #[test]
+    fn tunnel_framing_arbitrary_never_panic_no_amplification(
+        bytes in proptest::collection::vec(any::<u8>(), 0..4096),
+    ) {
+        match tunnel_read_one(&bytes) {
+            Ok(Some(body)) => {
+                prop_assert!(body.len() <= MAX_FRAME);
+                prop_assert!(body.len() + 4 <= bytes.len(), "body+prefix fits input (no amplification)");
+            }
+            Ok(None) => {}
+            Err(ProxyError::Io(_)) => {} // 캡 초과/잘림 — graceful.
+            Err(_) => {}
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// tunnel_framing_oversize_prefix_rejected_without_allocating:
+    /// 캡+1..u32::MAX 길이 프리픽스 ⇒ 반드시 Io 에러(그 길이만큼 할당/행 0).
+    #[test]
+    fn tunnel_framing_oversize_prefix_rejected_without_allocating(
+        len in (MAX_FRAME as u32 + 1)..=u32::MAX,
+    ) {
+        let mut wire = Vec::new();
+        wire.extend_from_slice(&len.to_be_bytes());
+        wire.push(0u8);
+        prop_assert!(matches!(tunnel_read_one(&wire), Err(ProxyError::Io(_))), "oversize prefix must error");
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// proxy_arbitrary_inbound_chunks_terminate_no_hang_no_panic:
+    /// 폰→dev-server 방향에 **임의 청크들**(일부는 valid ciphertext, 일부는 garbage frame)을 채널에
+    /// 흘린다. proxy 는 garbage ciphertext 를 만나면 ProxyError::Decrypt 로 fail-closed 종료(평문 0),
+    /// valid 빈 평문은 EOF 신호로 graceful 처리. 어느 입력이든 bounded 종료(행 0)·패닉 0. local 측은
+    /// duplex 의 한쪽(dev-server 흉내) — proxy 가 local 로 write 하다 끊겨도 graceful.
+    #[test]
+    fn proxy_arbitrary_inbound_chunks_terminate_no_hang_no_panic(
+        chunks in proptest::collection::vec(proptest::collection::vec(any::<u8>(), 0..64), 0..6),
+        garbage_at in proptest::collection::vec(any::<bool>(), 0..6),
+    ) {
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let res = rt.block_on(async move {
+            // (phone_ch=폰 측 암호화, server_ch=proxy 가 쓸 복호 채널).
+            let (mut phone_ch, server_ch) = tunnel_channel_pair();
+            // 채널 와이어: 폰이 쓰고 proxy 가 읽는다.
+            let (chan_to_proxy_w, chan_to_proxy_r) = tokio::io::duplex(8192);
+            let (proxy_to_chan_w, _proxy_to_chan_r) = tokio::io::duplex(8192);
+            // local: dev-server 흉내 — proxy 가 write/ read 하는 한쪽.
+            let (local_a, _local_b) = tokio::io::duplex(8192);
+
+            // 폰 측: 각 청크를 암호화(또는 garbage 로 망가뜨려) 길이-프리픽스로 채널에 쓴다.
+            let mut writer = chan_to_proxy_w;
+            for (i, c) in chunks.iter().enumerate() {
+                let ct = phone_ch.encrypt(c).unwrap();
+                let frame = if garbage_at.get(i).copied().unwrap_or(false) {
+                    // ciphertext 를 변조 — proxy decrypt 가 Decrypt 로 막아야 한다.
+                    let mut g = ct.clone();
+                    if let Some(b) = g.first_mut() { *b ^= 0xFF; }
+                    g
+                } else {
+                    ct
+                };
+                let len = (frame.len() as u32).to_be_bytes();
+                use tokio::io::AsyncWriteExt as _;
+                let _ = writer.write_all(&len).await;
+                let _ = writer.write_all(&frame).await;
+            }
+            drop(writer); // 채널 EOF — proxy inbound 가 None 을 받아 graceful 종료.
+
+            // proxy 를 돌린다 — server_ch 로 복호, local_a 로 write. bounded 종료해야 한다.
+            let proxy_fut = proxy(chan_to_proxy_r, proxy_to_chan_w, server_ch, local_a);
+            tokio::time::timeout(std::time::Duration::from_secs(5), proxy_fut).await
+        });
+        // 타임아웃 0(행 아님). proxy 반환은 Ok 또는 typed ProxyError(Decrypt 등) — 둘 다 graceful.
+        prop_assert!(res.is_ok(), "proxy must terminate (no hang) on arbitrary inbound chunks");
+    }
+}

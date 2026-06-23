@@ -646,3 +646,79 @@ fn device_identity_from_parts_round_trips_public_keys() {
     assert_ne!(phone2.x25519_public(), x_pub, "새 generate 는 distinct x25519");
     assert_ne!(phone2.ed25519_public(), ed_pub, "새 generate 는 distinct ed25519");
 }
+
+// ===========================================================================
+// proptest 적대 하니스 — decode_response(서버 응답 와이어 역) + build_request 가 임의 server
+// 바이트/임의 command·params 에 패닉 0·typed Err(클라이언트 자기 복호 정확성, 계획서 스위트 I).
+// decode_response/build_request 는 client 모듈 private 이라 super::* 로만 직접 fuzz 가능하다.
+// ===========================================================================
+use proptest::prelude::*;
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(1024))]
+
+    /// decode_response_arbitrary_server_bytes_never_panic:
+    /// 임의 server 평문 바이트 → decode_response ⇒ Ok(ClientResponse) | Err(BadResponse), 패닉 0.
+    /// 빈/짧은/미지-tag 응답은 BadResponse(다운그레이드/형식불량 거부). over-read 0(get(1) checked).
+    #[test]
+    fn decode_response_arbitrary_server_bytes_never_panic(
+        bytes in proptest::collection::vec(any::<u8>(), 0..512),
+    ) {
+        match decode_response(&bytes) {
+            Ok(ClientResponse::Ok(body)) => {
+                // tag 0x01 — 나머지가 body. body 는 입력보다 작다(over-read/증폭 0).
+                prop_assert!(body.len() + 1 <= bytes.len());
+            }
+            Ok(ClientResponse::Denied(_)) => {
+                // tag 0x00 + 사유코드 1바이트가 있었다는 뜻.
+                prop_assert!(bytes.len() >= 2);
+            }
+            Err(_) => {} // 빈/짧은/미지 — clean 거부(패닉 0).
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// decode_response_tag_semantics_exact:
+    /// tag 0x01 ⇒ Ok(body=꼬리), tag 0x00+code ⇒ Denied(code 매핑), tag 0x00 단독(코드 없음) ⇒
+    /// BadResponse, 그 외 tag ⇒ BadResponse. 결정적 매핑을 property 로 고정(서버 denied_code 의 역).
+    #[test]
+    fn decode_response_tag_semantics_exact(tag in any::<u8>(), tail in proptest::collection::vec(any::<u8>(), 0..32)) {
+        let mut pt = vec![tag];
+        pt.extend_from_slice(&tail);
+        match decode_response(&pt) {
+            Ok(ClientResponse::Ok(_)) => prop_assert_eq!(tag, 0x01),
+            Ok(ClientResponse::Denied(_)) => {
+                prop_assert_eq!(tag, 0x00);
+                prop_assert!(!tail.is_empty(), "Denied requires a reason code byte");
+            }
+            Err(_) => {
+                // 0x00 인데 code 없음, 또는 0x01/0x00 아닌 tag.
+                prop_assert!(tag != 0x01 && !(tag == 0x00 && !tail.is_empty()));
+            }
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// build_request_arbitrary_inputs_never_panic:
+    /// 임의 command/params 바이트 → build_request ⇒ 항상 Vec(패닉 0). params 비면 command 그대로,
+    /// 있으면 JSON 봉투(lossy UTF-8 — non-UTF8 도 패닉 0). 결과는 input 합에 비례(증폭 0 — 봉투 상수만).
+    #[test]
+    fn build_request_arbitrary_inputs_never_panic(
+        command in proptest::collection::vec(any::<u8>(), 0..256),
+        params in proptest::collection::vec(any::<u8>(), 0..256),
+    ) {
+        let out = build_request(&command, &params);
+        if params.is_empty() {
+            prop_assert_eq!(out, command);
+        } else {
+            // 봉투 상수 오버헤드는 작은 상수 — 입력의 몇 배가 되지 않는다(증폭 0).
+            prop_assert!(out.len() <= command.len() * 2 + params.len() * 2 + 64);
+        }
+    }
+}

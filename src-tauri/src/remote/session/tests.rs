@@ -955,3 +955,102 @@ fn contains_subsequence(haystack: &[u8], needle: &[u8]) -> bool {
     }
     haystack.windows(needle.len()).any(|w| w == needle)
 }
+
+// ===========================================================================
+// proptest 적대 하니스 — RequestFrame::decode(Reader 경계검사) + scope_from_tag + handle_frame
+// 상태머신이 임의·근사·순서밖 입력에 패닉 0·over-read 0·dispatch 0(계획서 스위트 I/C).
+// Reader/scope_from_tag 는 session 모듈 private 이라 super::* 로만 직접 fuzz 가능하다.
+// ===========================================================================
+use proptest::prelude::*;
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(1024))]
+
+    /// session_decode_arbitrary_and_near_miss_never_panic:
+    /// 임의 바이트 + 구조적 근사 frame(valid version + 거짓 길이들)을 decode. Reader 의 checked
+    /// take/u8/u64 가 모든 경계를 본다 ⇒ None | Some, 패닉/over-read 0.
+    #[test]
+    fn session_decode_arbitrary_and_near_miss_never_panic(
+        version in any::<u8>(),
+        id_len in any::<u64>(),
+        body in proptest::collection::vec(any::<u8>(), 0..128),
+    ) {
+        let mut buf = Vec::new();
+        buf.push(version);
+        buf.extend_from_slice(&id_len.to_le_bytes());
+        buf.extend_from_slice(&body);
+        let _ = RequestFrame::decode(&buf); // 패닉 0 이면 통과.
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// session_scope_from_tag_total_no_panic:
+    /// 임의 u8 → scope_from_tag ⇒ 0..2 만 Some, 그 외 None(미지 태그 거부). 패닉 0(전수).
+    #[test]
+    fn session_scope_from_tag_total_no_panic(tag in any::<u8>()) {
+        let r = scope_from_tag(tag);
+        match tag {
+            0 | 1 | 2 => prop_assert!(r.is_some()),
+            _ => prop_assert!(r.is_none(), "unknown scope tag must be None"),
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// session_handle_frame_arbitrary_ciphertext_no_dispatch_no_panic:
+    /// 성립된 SecureSession 에 **임의 ciphertext**(순서밖/garbage/data-before-anything)를 던진다.
+    /// 채널 게이트(decrypt)가 garbage 를 Decrypt 로 막아 auth 층 도달 0 ⇒ dispatch 콜백 호출 0,
+    /// 패닉 0. 응답은 암호화된 Denied(Decrypt). 상태머신이 순서밖 데이터를 fail-closed 거부.
+    #[test]
+    fn session_handle_frame_arbitrary_ciphertext_no_dispatch_no_panic(
+        ct in proptest::collection::vec(any::<u8>(), 0..2048),
+        now in any::<u64>(),
+    ) {
+        let mut desktop = desktop_side(8);
+        let remote = pair_device(&mut desktop, "phone", 3, Scope::Destructive);
+        let (mut session, _remote_channel) = establish_session(&desktop, &remote, "desktop");
+        let calls = Cell::new(0u32);
+        let resp = session.handle_frame(
+            &ct, &mut desktop.auth, ctx(now), None, counting_dispatch(&calls),
+        );
+        // garbage ciphertext ⇒ decrypt 실패 ⇒ dispatch 0(상태머신이 순서밖 데이터를 흘리지 않음).
+        prop_assert_eq!(calls.get(), 0, "arbitrary ciphertext must not reach dispatch");
+        prop_assert!(!resp.is_empty(), "response is encrypted (Denied), never panics");
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// session_begin_frame_zero_length_and_garbage_loop_no_dispatch:
+    /// begin_frame 에 영(0)길이/임의 ciphertext 를 **반복** 던져도(zero-length flood 흉내) 매번
+    /// Terminal(거부)로 종결, dispatch 0, 패닉/행 0. busy-loop 없이 각 호출이 bounded 종료한다.
+    #[test]
+    fn session_begin_frame_zero_length_and_garbage_loop_no_dispatch(
+        garbage in proptest::collection::vec(
+            proptest::collection::vec(any::<u8>(), 0..32), 1..8),
+    ) {
+        let mut desktop = desktop_side(8);
+        let remote = pair_device(&mut desktop, "phone", 4, Scope::Destructive);
+        let (mut session, _rc) = establish_session(&desktop, &remote, "desktop");
+        let calls = Cell::new(0u32);
+        for ct in &garbage {
+            let outcome = session.begin_frame(&mut_dispatch_input(ct), &mut desktop.auth, ctx(1000), |_a, _r| {
+                calls.set(calls.get() + 1);
+                b"x".to_vec()
+            });
+            // garbage/zero-length ⇒ 항상 Terminal(거부) — AwaitConfirm 으로 새지 않는다.
+            prop_assert!(outcome.terminal_bytes().is_some(), "garbage frame must terminate, not await");
+        }
+        prop_assert_eq!(calls.get(), 0, "no garbage frame reaches dispatch");
+    }
+}
+
+/// begin_frame 입력 헬퍼 — 슬라이스를 그대로 넘긴다(가독). (별도 변환 없음 — 명시 표현.)
+fn mut_dispatch_input(ct: &[u8]) -> &[u8] {
+    ct
+}

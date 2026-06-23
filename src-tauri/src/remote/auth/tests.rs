@@ -674,3 +674,91 @@ fn scope_lattice_subset_rules() {
     assert!(!Scope::Destructive.is_subset_of(Scope::Write));
     assert!(!Scope::Destructive.is_subset_of(Scope::ReadOnly));
 }
+
+// ===========================================================================
+// proptest 적대 하니스 — parse_signature(길이 게이트) + verify(임의 sig/필드) 가 임의
+// 입력에 패닉 0·Granted 0(fail-closed). 매트릭스 "위조 assertion" + 스위트 C 의 property 화.
+// parse_signature 는 auth 모듈 private 이라 super::* 로만 직접 fuzz 가능하다.
+// ===========================================================================
+use proptest::prelude::*;
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(1024))]
+
+    /// parse_signature_only_exact_64_is_some_never_panic:
+    /// 임의 길이 바이트 → parse_signature. 길이 != 64 ⇒ None(절대 패닉 0). 길이 == 64 ⇒ Some
+    /// (v2 64B from_bytes 는 infallible — Signature 구조만, 검증은 verify_strict 가 따로). 핵심:
+    /// 어떤 길이든 패닉/over-read 0(매트릭스 "parse_signature(64B check)").
+    #[test]
+    fn parse_signature_only_exact_64_is_some_never_panic(
+        bytes in proptest::collection::vec(any::<u8>(), 0..256),
+    ) {
+        let r = parse_signature(&bytes);
+        if bytes.len() == SIGNATURE_LENGTH {
+            prop_assert!(r.is_some(), "exactly 64 bytes parses to a Signature struct");
+        } else {
+            prop_assert!(r.is_none(), "length != 64 must be None (no panic)");
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// verify_arbitrary_signature_and_fields_never_granted_never_panic:
+    /// 페어링된 기기에 임의 sig + 임의 assertion 필드(scope/nonce/issued_at/exp 임의)를 verify.
+    /// 임의 sig 는 valid Ed25519 서명일 수 없으므로 절대 Granted 0(BadSignature/Expired/… 어느
+    /// Denied 든). 패닉 0. fail-closed 기본값(거부)을 property 로 못박는다.
+    #[test]
+    fn verify_arbitrary_signature_and_fields_never_granted_never_panic(
+        sig in proptest::collection::vec(any::<u8>(), 0..200),
+        scope_tag in 0u8..3,
+        nonce in any::<[u8; 32]>(),
+        issued_at in any::<u64>(),
+        exp in any::<u64>(),
+        now in any::<u64>(),
+    ) {
+        let sk = signing_key(5);
+        let pk = sk.verifying_key().to_bytes();
+        let mut reg = DeviceRegistry::new(8);
+        reg.pair("dev", &pk, Scope::Destructive).expect("pair");
+        let scope = match scope_tag { 0 => Scope::ReadOnly, 1 => Scope::Write, _ => Scope::Destructive };
+        let assertion = CapabilityAssertion {
+            device_id: "dev".to_string(),
+            scope,
+            nonce,
+            issued_at,
+            exp,
+        };
+        let decision = reg.verify(&assertion, &sig, VerifyCtx { now });
+        prop_assert!(!decision.is_granted(), "arbitrary signature must never grant");
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// verify_unknown_device_arbitrary_input_denied_unknown:
+    /// 등록되지 않은 device_id 로 임의 sig/필드를 verify ⇒ 항상 Denied(UnknownDevice). 미상 기기는
+    /// 어떤 입력으로도 통과 0(fail-closed). 패닉 0.
+    #[test]
+    fn verify_unknown_device_arbitrary_input_denied_unknown(
+        id in "\\PC{0,40}",
+        sig in proptest::collection::vec(any::<u8>(), 0..120),
+        now in any::<u64>(),
+    ) {
+        let mut reg = DeviceRegistry::new(8);
+        // 다른 기기 하나만 등록(타겟 id 는 미등록일 확률이 압도적; 같으면 still BadSignature).
+        let sk = signing_key(7);
+        reg.pair("other-device-xyz", &sk.verifying_key().to_bytes(), Scope::Write).expect("pair");
+        let assertion = CapabilityAssertion {
+            device_id: id.clone(),
+            scope: Scope::ReadOnly,
+            nonce: [1u8; 32],
+            issued_at: 10,
+            exp: 1_000_000_000_000,
+        };
+        let decision = reg.verify(&assertion, &sig, VerifyCtx { now });
+        prop_assert!(!decision.is_granted(), "unknown/forged must never grant");
+    }
+}

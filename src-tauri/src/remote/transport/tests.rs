@@ -1214,3 +1214,141 @@ async fn event_first_resolve_wakes_promptly_not_poll() {
     assert_eq!(resp[0], 0x01, "승인 ⇒ Ok(즉시)");
     assert_eq!(calls.load(Ordering::SeqCst), 1, "dispatch 1회");
 }
+
+// ===========================================================================
+// proptest 적대 framing 하니스 — read_framed/write_framed 의 length-prefix 코덱을
+// 임의·경계·잘림·증폭 입력으로 두드린다(계획서 스위트 I, 매트릭스 "오버사이즈/malformed").
+//
+// read_framed/write_framed 는 transport 모듈 private 이라 여기(super::*)서만 직접 fuzz 가능하다.
+// 불변식(RULE 2 — 약화 0): 패닉 0 · 캡(MAX_NOISE_MESSAGE) 초과 길이 ⇒ FrameTooLarge(그만큼
+// 할당 시도 0 = 증폭 0) · 깨끗한 EOF ⇒ Ok(None) · 잘린 body ⇒ Io(UnexpectedEof) · 행 0(bounded).
+// ===========================================================================
+use proptest::prelude::*;
+
+/// 임의 바이트 슬라이스에 read_framed 를 1회 돌린다(bounded — &[u8] 은 EOF 가 확정이라 행 0).
+fn read_one_framed(bytes: &[u8]) -> Result<Option<Vec<u8>>, ServeError> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async move {
+        let mut cur: &[u8] = bytes;
+        read_framed(&mut cur).await
+    })
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(1024))]
+
+    /// framing_arbitrary_stream_never_panics_no_amplification:
+    /// 완전 임의 바이트 스트림 → read_framed 는 패닉 0. 길이 프리픽스가 캡 초과면 FrameTooLarge
+    /// (그 길이만큼 절대 할당하지 않는다 = 증폭 0). Ok(Some) 이면 그 body 는 캡 이하 + 입력 안에서만.
+    #[test]
+    fn framing_arbitrary_stream_never_panics_no_amplification(
+        bytes in proptest::collection::vec(any::<u8>(), 0..4096),
+    ) {
+        match read_one_framed(&bytes) {
+            Ok(Some(body)) => {
+                prop_assert!(body.len() <= MAX_NOISE_MESSAGE, "body must respect cap");
+                // 캡 이하 + 입력에서만 떼므로 입력보다 큰 할당 0(증폭 0). 프리픽스 4바이트 제외.
+                prop_assert!(body.len() + 4 <= bytes.len(), "body+prefix must fit in input (no amplification)");
+            }
+            Ok(None) => {}            // 깨끗한 EOF — 정상.
+            Err(ServeError::FrameTooLarge) => {} // 캡 초과 — graceful 거부(할당 0).
+            Err(ServeError::Io(_)) => {}         // 잘린 body — UnexpectedEof, graceful.
+            Err(_) => {}                          // 그 외 typed Err 도 graceful(패닉 아님).
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// framing_oversize_prefix_rejected_without_allocating:
+    /// 거짓 거대 길이 프리픽스(캡+1 .. u32::MAX) + 짧은/빈 body ⇒ 반드시 FrameTooLarge.
+    /// 그 거대 길이만큼 vec 를 할당하려다 OOM/행 하지 않는다(캡 검사가 할당 이전).
+    #[test]
+    fn framing_oversize_prefix_rejected_without_allocating(
+        len in (MAX_NOISE_MESSAGE as u32 + 1)..=u32::MAX,
+        tail in proptest::collection::vec(any::<u8>(), 0..16),
+    ) {
+        let mut wire = Vec::new();
+        wire.extend_from_slice(&len.to_be_bytes());
+        wire.extend_from_slice(&tail);
+        let r = read_one_framed(&wire);
+        prop_assert!(matches!(r, Err(ServeError::FrameTooLarge)), "oversize prefix must be FrameTooLarge");
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// framing_boundary_lengths_zero_one_cap:
+    /// 경계 길이(0 / 1 / cap)에 정확히 그 길이의 body 를 주면 Ok(Some(body)) — 정확 복원.
+    /// body 가 부족하면(잘림) Io(UnexpectedEof). 패닉 0.
+    #[test]
+    fn framing_boundary_lengths_zero_one_cap(which in 0u8..3) {
+        let len: usize = match which { 0 => 0, 1 => 1, _ => MAX_NOISE_MESSAGE };
+        let mut wire = Vec::new();
+        wire.extend_from_slice(&(len as u32).to_be_bytes());
+        wire.extend(std::iter::repeat(0xABu8).take(len));
+        let r = read_one_framed(&wire).expect("boundary length must not error");
+        prop_assert_eq!(r, Some(vec![0xABu8; len]), "exact-length body must round-trip");
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// framing_truncated_prefix_or_body_graceful:
+    /// 길이 프리픽스가 부분(0..4바이트)만 오고 끊기면 — 첫 read_exact 가 UnexpectedEof 를 내고
+    /// read_framed 가 그것을 **Ok(None)(깨끗한 종료)** 로 매핑한다(0바이트든 1..3바이트든 동일):
+    /// 잘린 프리픽스는 "frame 없음·dispatch 없음"이라는 가장 안전한 해석으로 환원된다(패닉/행/
+    /// over-read 0, fail-closed). 호출부에서 Ok(None) ⇒ 연결만 닫힘. **이건 정상·안전 동작이다.**
+    /// 반면 프리픽스가 멀쩡하고 body 가 짧으면(잘림) — read_exact(body) 가 UnexpectedEof ⇒ Io 에러
+    /// (graceful). 둘 다 행 0·패닉 0·dispatch 0.
+    #[test]
+    fn framing_truncated_prefix_or_body_graceful(prefix_bytes in 0usize..4, claimed in 1u32..1000) {
+        // (a) 부분/빈 프리픽스 — 잘린 length-prefix 는 깨끗한 종료(Ok(None)) 로 환원된다(안전).
+        let pfx = claimed.to_be_bytes();
+        let partial = &pfx[..prefix_bytes];
+        prop_assert_eq!(
+            read_one_framed(partial).ok(), Some(None),
+            "a truncated length prefix maps to a clean Ok(None) (no panic/hang/dispatch)"
+        );
+        // (b) 완전 프리픽스 + 짧은 body(잘림) ⇒ Io(UnexpectedEof)(graceful, frame 미생성).
+        let mut wire = Vec::new();
+        wire.extend_from_slice(&pfx);
+        wire.extend(std::iter::repeat(0u8).take((claimed as usize).saturating_sub(1)));
+        prop_assert!(matches!(read_one_framed(&wire), Err(ServeError::Io(_))), "short body must be Io error");
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// framing_multi_frame_sequential_decode_no_overrun:
+    /// 여러 valid frame 을 이어붙인 스트림에서 read_framed 를 반복 호출하면 각 frame 을 순서대로
+    /// 정확히 떼고, 마지막엔 Ok(None)(깨끗한 EOF). over-read/혼선 0, 패닉 0.
+    #[test]
+    fn framing_multi_frame_sequential_decode_no_overrun(
+        frames in proptest::collection::vec(
+            proptest::collection::vec(any::<u8>(), 0..64), 0..8),
+    ) {
+        let mut wire = Vec::new();
+        for f in &frames {
+            wire.extend_from_slice(&(f.len() as u32).to_be_bytes());
+            wire.extend_from_slice(f);
+        }
+        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        rt.block_on(async move {
+            let mut cur: &[u8] = &wire;
+            for expected in &frames {
+                let got = read_framed(&mut cur).await.expect("frame ok").expect("frame present");
+                prop_assert_eq!(&got, expected, "each frame must decode in order");
+            }
+            prop_assert_eq!(read_framed(&mut cur).await.expect("eof ok"), None, "clean EOF after all frames");
+            Ok(())
+        })?;
+    }
+}

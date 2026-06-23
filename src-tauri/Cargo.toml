@@ -98,6 +98,12 @@ snow = "0.9"
 # dalek 3 로 정착한 뒤(upstream fix) 재평가한다.
 iroh = { version = "=0.91.2", features = ["discovery-local-network"] }
 
+# 적대 fuzz/property 하니스(remote::*::fuzz_tests) — 임의/경계/malformed 바이트로 와이어
+# 파서·상태머신을 두드려 패닉/행/over-read/무한할당 0 을 증명한다(테스트 전용 dev-dep).
+# proptest = 안정 채널·nightly 불요·작은 의존(cargo-fuzz 보다 가벼움). default-features 만.
+[dev-dependencies]
+proptest = "1"
+
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.
 [target.'cfg(target_os = "macos")'.dependencies]

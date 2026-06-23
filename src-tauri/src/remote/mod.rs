@@ -32,3 +32,11 @@ pub mod transport;
 //   SSRF 0(loopback-only + allowlist, connect 이전 거부), allowlist=데스크톱 소유(폰 상승 불가),
 //   브리지 auth 게이트 무수정(미페어링 ⇒ 채널 0), 평문은 와이어에 안 나감(NoiseChannel encrypt/decrypt).
 pub mod tunnel;
+
+// fuzz_tests: 적대 property/fuzz 하니스(테스트 전용). 임의·경계·malformed·재배열 입력으로
+//   각 파서/디코더/상태머신이 패닉 0·행 0·over-read 0·무한할당 0 으로 fail-closed Err 만
+//   내는지 proptest 로 증명한다(공개 표면 횡단 — RequestFrame/noise/client/state-machine).
+//   private 와이어 함수(read_framed/parse_signature/Reader)의 property 는 각 모듈 자기 tests.rs
+//   의 proptest! 블록이 super::* 로 직접 두드린다(가시성). 둘 다 `cargo test remote::` 에 뜬다.
+#[cfg(test)]
+mod fuzz_tests;
