@@ -32,6 +32,7 @@ import {
   allGroups,
   collectAllLeafIds,
   collectLeafIds,
+  cwdPaneOf as resolveCwdPane,
   useSessions,
   type ProjectTab,
 } from "./state/sessions";
@@ -50,6 +51,7 @@ import {
   setThemeAll,
   setThemeProvider,
 } from "./terminal/paneHosts";
+import { hasPtyObservation } from "./terminal/ptyObservationStore";
 import { themeForBg } from "./terminal/theme";
 import "./App.css";
 
@@ -230,27 +232,11 @@ const ProjectPane = memo(function ProjectPane({
   );
 });
 
-// 프로젝트의 사이드바가 따라갈 터미널 pane(= 현재 작업 디렉토리 출처).
-// 활성 그룹의 활성 뷰가 터미널이면 그 포커스 pane, 아니면 아무 터미널 뷰의 포커스 pane.
-function cwdPaneOf(project: ProjectTab): string | undefined {
-  const content =
-    project.contents.find((c) => c.id === project.activeContentId) ??
-    project.contents[0];
-  if (!content) return undefined;
-  const groups = allGroups(content.layout);
-  const activeGroup =
-    groups.find((g) => g.id === content.activeGroupId) ?? groups[0];
-  const active = activeGroup?.views.find(
-    (v) => v.id === activeGroup.activeViewId,
-  );
-  if (active && active.kind === "terminal") return active.focusedPaneId;
-  for (const g of groups) {
-    for (const v of g.views) {
-      if (v.kind === "terminal") return v.focusedPaneId;
-    }
-  }
-  return undefined;
-}
+// 프로젝트의 사이드바(파일트리)가 따라갈 터미널 pane(= 현재 cwd 출처). 순수 resolver 는
+// sessions.cwdPaneOf — 여기서는 PTY 관찰 predicate(hasPtyObservation)를 주입해 호출한다.
+// 코어/플러그인 터미널 구분 없음 — PTY substrate 를 구동하는(관찰을 가진) 뷰면 따라간다.
+const cwdPaneOf = (project: ProjectTab): string | undefined =>
+  resolveCwdPane(project, hasPtyObservation);
 
 // 빌드 정체성 배지: DEV(HMR 개발 서버) / DEBUG(디버그 번들 soksak-debug) / 없음(릴리스).
 // HMR 은 import.meta.env.DEV 로 즉시 알고, 빌드 번들(DEV=false)은 둘을 앱 이름(getName)

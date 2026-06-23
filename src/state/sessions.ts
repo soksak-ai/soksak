@@ -679,6 +679,45 @@ export function paneSpawnInfo(
   return {};
 }
 
+// 뷰가 구동하는 PTY substrate 의 paneId 후보(있으면). 터미널 판정은 generic — 그 후보 id 가
+// PTY 관찰을 가지면(app.pty 를 구동하면) 터미널이다(pluginId·kind 하드코딩 없음, hasPty 주입).
+//   - 코어 터미널 뷰: 후보 = focusedPaneId(PaneTree leaf — 관찰 키).
+//   - 그 외(플러그인 터미널 포함): 후보 = view.id(플러그인이 app.pty.spawn 에 넘긴 paneId).
+function ptyPaneOfView(v: View, hasPty: (id: string) => boolean): string | undefined {
+  const candidate = v.kind === "terminal" ? v.focusedPaneId : v.id;
+  return hasPty(candidate) ? candidate : undefined;
+}
+
+// 프로젝트의 사이드바(파일트리)가 따라갈 터미널 pane(= 현재 cwd 출처). 순수 resolver — PTY
+// 관찰 predicate(hasPty)를 주입받아 코어/플러그인 터미널을 구분 없이 따라간다(generic).
+// 활성 컨텐츠의 활성 그룹의 활성(=포커스된) 뷰가 터미널이면 그 pane, 아니면 아무 터미널 뷰의 pane.
+export function cwdPaneOf(
+  project: ProjectTab,
+  hasPty: (id: string) => boolean,
+): string | undefined {
+  const content =
+    project.contents.find((c) => c.id === project.activeContentId) ??
+    project.contents[0];
+  if (!content) return undefined;
+  const groups = allGroups(content.layout);
+  const activeGroup =
+    groups.find((g) => g.id === content.activeGroupId) ?? groups[0];
+  const active = activeGroup?.views.find(
+    (v) => v.id === activeGroup.activeViewId,
+  );
+  if (active) {
+    const pane = ptyPaneOfView(active, hasPty);
+    if (pane) return pane;
+  }
+  for (const g of groups) {
+    for (const v of g.views) {
+      const pane = ptyPaneOfView(v, hasPty);
+      if (pane) return pane;
+    }
+  }
+  return undefined;
+}
+
 // paneId 를 가진 터미널 뷰의 {projectId, viewId}(M5 — terminal status 브리지용). 없으면 null.
 export function paneToView(
   tabs: ProjectTab[],

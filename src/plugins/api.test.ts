@@ -12,6 +12,10 @@ import {
   useFileViewerRegistry,
   resolveFileViewer,
 } from "./fileViewerRegistry";
+import {
+  registerPtyIo,
+  resetPtyObservationStoreForTest,
+} from "../terminal/ptyObservationStore";
 
 function manifestOf(overrides: Record<string, unknown>): PluginManifest {
   const { manifest, validation } = parseManifest(
@@ -152,6 +156,56 @@ describe("터미널 cwd 표면(A13 raw — terminal 권한)", () => {
   it("terminal 권한 미선언 시 cwd 표면(및 terminal 객체) 부재", () => {
     const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
     expect(api.terminal).toBeUndefined();
+  });
+});
+
+describe("터미널 readBuffer/sendText — substrate IO 우선(GAP2, 플러그인 터미널 도달)", () => {
+  beforeEach(() => resetPtyObservationStoreForTest());
+
+  it("등록된 PTY IO 가 있으면 readBuffer/sendText 가 그 핸들러로 라우팅(코어 host-div 비의존)", () => {
+    const sends: string[] = [];
+    registerPtyIo("v9", {
+      readBuffer: (lines) => `buf:${lines ?? "all"}`,
+      sendInput: (data) => sends.push(data),
+    });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["terminal:read", "terminal:write"] }),
+      "/d",
+      fakeDeps(),
+    );
+    expect(api.terminal?.readBuffer?.("v9", 3)).toBe("buf:3");
+    expect(api.terminal?.sendText?.("v9", "ls\r")).toBe(true);
+    expect(sends).toEqual(["ls\r"]);
+  });
+
+  it("등록된 IO 가 없으면 sendText 는 코어 host-div 폴백(없는 pane → false)", () => {
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["terminal:write"] }),
+      "/d",
+      fakeDeps(),
+    );
+    // 등록 IO 없음 + 코어 host 없음(테스트 환경) → false.
+    expect(api.terminal?.sendText?.("ghost", "x")).toBe(false);
+  });
+});
+
+describe("app.pty.registerIo — substrate IO 등록", () => {
+  beforeEach(() => resetPtyObservationStoreForTest());
+
+  it("pty 권한 시 registerIo 가 app.terminal 도달 경로를 연다(반환 Disposable 해지)", () => {
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["pty", "terminal:read"] }),
+      "/d",
+      fakeDeps(),
+    );
+    const reg = api.pty?.registerIo?.("v9", {
+      readBuffer: () => "hello",
+      sendInput: () => {},
+    });
+    expect(reg).toBeDefined();
+    expect(api.terminal?.readBuffer?.("v9")).toBe("hello");
+    reg!.dispose();
+    expect(api.terminal?.readBuffer?.("v9")).toBeUndefined();
   });
 });
 

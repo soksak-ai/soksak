@@ -15,6 +15,14 @@ import {
   type PtyObservationParser,
 } from "./ptyObservation";
 
+// PTY-driver 가 등록하는 IO 핸들러(GAP2) — 화면 버퍼 읽기 + PTY 입력 쓰기. 코어 호스트도
+// 플러그인 터미널도 같은 paneId 키로 등록한다. app.terminal.readBuffer/sendText 가 이걸 우선 쓴다
+// (코어 paneHosts host-div 비의존 — 코어 터미널 뷰 제거 후에도 플러그인 터미널에 닿는다).
+export interface PtyIo {
+  readBuffer: (lines?: number) => string;
+  sendInput: (data: string) => void;
+}
+
 interface PaneObservation {
   parser: PtyObservationParser;
   cwd: string | undefined;
@@ -22,6 +30,8 @@ interface PaneObservation {
   cwdSubs: Set<(cwd: string) => void>;
   cmdFinishedSubs: Set<() => void>;
   outputSubs: Set<() => void>;
+  // 이 pane 을 구동하는 PTY-driver 의 IO 핸들러(등록되면). 없으면 undefined.
+  io?: PtyIo;
 }
 
 const panes = new Map<string, PaneObservation>();
@@ -131,6 +141,29 @@ export function disposePtyObservation(paneId: string): void {
 /** pane 의 현재 cwd 스냅샷(셸 통합 전이면 undefined). */
 export function getObservedCwd(paneId: string): string | undefined {
   return panes.get(paneId)?.cwd;
+}
+
+/** 이 id 가 PTY substrate 를 구동하는가(터미널 generic 신호 — pluginId 무관). 등록된 관찰이
+ *  있으면 true. 파일트리 cwdPaneOf 가 코어/플러그인 터미널을 구분 없이 따라가는 데 쓴다. */
+export function hasPtyObservation(paneId: string): boolean {
+  return panes.has(paneId);
+}
+
+/** PTY-driver(코어 호스트/플러그인 터미널)가 이 paneId 의 IO 핸들러를 등록(GAP2). 관찰이
+ *  아직 없으면 함께 선등록(멱등). 반환=해지(등록 해제). app.terminal.readBuffer/sendText 우선 경로. */
+export function registerPtyIo(paneId: string, io: PtyIo): () => void {
+  registerPtyObservation(paneId); // 관찰 선등록(구독·IO 가 spawn 보다 먼저여도 안전)
+  const obs = panes.get(paneId)!;
+  obs.io = io;
+  return () => {
+    const cur = panes.get(paneId);
+    if (cur && cur.io === io) cur.io = undefined;
+  };
+}
+
+/** 이 paneId 의 등록된 IO 핸들러(없으면 undefined). app.terminal.readBuffer/sendText 가 조회. */
+export function getPtyIo(paneId: string): PtyIo | undefined {
+  return panes.get(paneId)?.io;
 }
 
 /** 지금 실행 중인 모든 명령 스냅샷(pane 당 최대 1). */

@@ -3,6 +3,9 @@ import {
   feedPtyOutput,
   registerPtyObservation,
   disposePtyObservation,
+  hasPtyObservation,
+  registerPtyIo,
+  getPtyIo,
   getObservedCwd,
   subscribeObservedCwd,
   subscribeObservedCommandFinished,
@@ -107,6 +110,51 @@ describe("ptyObservationStore", () => {
   it("미등록 paneId 에 feed 해도 안전(no-op)", () => {
     expect(() => feedPtyOutput("ghost", "\x1b]7;file:///g\x07")).not.toThrow();
     expect(getObservedCwd("ghost")).toBeUndefined();
+  });
+
+  // hasPtyObservation = "이 id 가 PTY substrate 를 구동하는가"(터미널 generic 신호 —
+  // pluginId 무관). 파일트리 cwdPaneOf 가 코어/플러그인 터미널을 구분 없이 따라가는 데 쓴다.
+  it("hasPtyObservation 은 등록된 paneId 에만 true, dispose 후 false", () => {
+    expect(hasPtyObservation("p1")).toBe(false);
+    registerPtyObservation("p1");
+    expect(hasPtyObservation("p1")).toBe(true);
+    expect(hasPtyObservation("p2")).toBe(false);
+    disposePtyObservation("p1");
+    expect(hasPtyObservation("p1")).toBe(false);
+  });
+
+  // PTY IO 핸들러 등록(GAP2) — pty-driver(코어 호스트/플러그인 터미널)가 paneId 키로
+  // readBuffer/sendInput 을 등록한다. app.terminal.readBuffer/sendText 가 이걸 우선 쓴다.
+  it("registerPtyIo 로 등록한 IO 를 getPtyIo 로 조회, dispose 시 회수", () => {
+    expect(getPtyIo("p1")).toBeUndefined();
+    const reads: (number | undefined)[] = [];
+    const sends: string[] = [];
+    const off = registerPtyIo("p1", {
+      readBuffer: (lines) => {
+        reads.push(lines);
+        return "buffer-text";
+      },
+      sendInput: (data) => {
+        sends.push(data);
+      },
+    });
+    const io = getPtyIo("p1");
+    expect(io?.readBuffer(5)).toBe("buffer-text");
+    expect(reads).toEqual([5]);
+    io?.sendInput("ls\r");
+    expect(sends).toEqual(["ls\r"]);
+    off();
+    expect(getPtyIo("p1")).toBeUndefined();
+  });
+
+  it("registerPtyIo 는 미등록 관찰이어도 자체적으로 등록(선등록 불요) + 키 격리", () => {
+    registerPtyIo("a", { readBuffer: () => "A", sendInput: () => {} });
+    registerPtyIo("b", { readBuffer: () => "B", sendInput: () => {} });
+    expect(getPtyIo("a")?.readBuffer()).toBe("A");
+    expect(getPtyIo("b")?.readBuffer()).toBe("B");
+    disposePtyObservation("a");
+    expect(getPtyIo("a")).toBeUndefined();
+    expect(getPtyIo("b")?.readBuffer()).toBe("B");
   });
 
   // 코어 터미널 뷰 producer 경로 — 이미 파싱된 관찰을 직접 푸시(raw 재파싱 없이).

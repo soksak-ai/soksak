@@ -48,6 +48,8 @@ import {
   registerPtyObservation,
   feedPtyOutput,
   disposePtyObservation,
+  registerPtyIo,
+  getPtyIo,
 } from "../terminal/ptyObservationStore";
 import { EVENT_PERMISSIONS } from "./hooks";
 import type { IconSetData } from "../ui/icons/types";
@@ -396,6 +398,13 @@ export interface SoksakPluginApi {
     onData: (id: number, cb: (data: Uint8Array) => void) => Disposable;
     /** PATH 에서 셸/바이너리 경로 해소(없으면 null). */
     which: (bin: string) => Promise<string | null>;
+    /** 이 paneId 의 IO 핸들러(화면 읽기·입력 쓰기)를 substrate 에 등록 → app.terminal.readBuffer/
+     *  sendText 가 이 터미널에 닿는다(코어 host-div 비의존). 터미널 플러그인이 마운트 시 자기
+     *  TerminalInstance 의 readBuffer/sendInput 을 등록하고 언마운트 시 해지(반환 Disposable). */
+    registerIo: (
+      paneId: string,
+      io: { readBuffer: (lines?: number) => string; sendInput: (data: string) => void },
+    ) => Disposable;
   };
   /** 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합). "process" 권한.
    *  PTY 가 아니라 순수 파이프 → JSON-RPC 프레이밍 무손상. 이벤트 기반(폴링 0). */
@@ -694,6 +703,12 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     },
     which: (bin: string): Promise<string | null> =>
       deps.invoke("shell_which", { bin }) as Promise<string | null>,
+    // PTY IO 핸들러 등록(substrate) — app.terminal.readBuffer/sendText 의 우선 경로. tracker 로
+    // 비활성화 시 자동 해지(누수 0). 플러그인 언마운트가 직접 dispose 해도 멱등(같은 io 만 해지).
+    registerIo: (
+      paneId: string,
+      io: { readBuffer: (lines?: number) => string; sendInput: (data: string) => void },
+    ): Disposable => tracker.wrap(registerPtyIo(paneId, io)),
   };
 }
 
@@ -1340,7 +1355,10 @@ export function buildPluginApi(
               : {}),
             ...(has("terminal:read")
               ? {
+                  // 등록된 PTY IO(substrate, 코어/플러그인 통합) 우선 — 없으면 코어 host-div 폴백
+                  // (공존 기간). 코어 터미널 뷰 제거 후엔 substrate IO 만 남는다.
                   readBuffer: (paneId: string, lines?: number) =>
+                    getPtyIo(paneId)?.readBuffer(lines) ??
                     readHostBuffer(paneId, lines),
                   onOutput: (paneId: string, cb: () => void) =>
                     tracker.wrap(subscribeOutput(paneId, cb)),
@@ -1348,8 +1366,15 @@ export function buildPluginApi(
               : {}),
             ...(has("terminal:write")
               ? {
-                  sendText: (paneId: string, text: string) =>
-                    sendInputToHost(paneId, text),
+                  // sendText: substrate IO 우선(있으면 true), 없으면 코어 host-div 폴백.
+                  sendText: (paneId: string, text: string) => {
+                    const io = getPtyIo(paneId);
+                    if (io) {
+                      io.sendInput(text);
+                      return true;
+                    }
+                    return sendInputToHost(paneId, text);
+                  },
                 }
               : {}),
           }
