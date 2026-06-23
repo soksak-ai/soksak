@@ -5,8 +5,11 @@
 export interface HeaderAction {
   /** 등록 식별자(해지·갱신 키). data-node 주소(titlebar/<id>)에도 쓰인다. */
   id: string;
-  /** 표시 글리프/이모지/짧은 텍스트. */
+  /** 표시 글리프/이모지/짧은 텍스트. icon 미지정 시 폴백 표시. */
   label: string;
+  /** 아웃라인 아이콘 본문(선택) — 24 viewBox 기준 SVG 내부 마크업(currentColor stroke).
+      지정 시 코어가 다른 타이틀바 아이콘과 동일한 단색 아웃라인 SVG 로 렌더하고 label 은 무시. */
+  icon?: string;
   /** 툴팁(선택). */
   title?: string;
   /** 활성(토글 on) — true 면 강조. 같은 id 재등록으로 갱신. */

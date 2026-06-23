@@ -23,7 +23,25 @@ export function PluginHeaderActions() {
           data-node={`titlebar/${a.id.replace(/:/g, "/")}`}
           onClick={a.onClick}
         >
-          {a.label}
+          {a.icon ? (
+            // 아웃라인 아이콘 — 코어 Icon 과 동일 기하(md 14px, currentColor stroke, round caps).
+            // 본문은 신뢰 출처(플러그인은 이미 코드 실행 권한 보유 — 전체신뢰 모델).
+            <svg
+              viewBox="0 0 24 24"
+              width={14}
+              height={14}
+              aria-hidden
+              focusable={false}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              dangerouslySetInnerHTML={{ __html: a.icon }}
+            />
+          ) : (
+            a.label
+          )}
         </button>
       ))}
     </>
