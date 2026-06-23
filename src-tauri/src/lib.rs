@@ -14,7 +14,9 @@ mod notify;
 mod plugins;
 mod process;
 mod pty;
-mod remote;
+// remote: 폰-링크 원격 제어. client(INITIATOR/폰) 표면을 thin CLI bin 이 쓰도록 pub
+// (floor 들은 그대로 — pub mod 노출은 client 다이얼 경로에 필요한 최소 additive).
+pub mod remote;
 mod schedule;
 mod secrets;
 #[cfg(target_os = "macos")]

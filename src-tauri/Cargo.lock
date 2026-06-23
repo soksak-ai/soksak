@@ -6014,6 +6014,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sok-phone"
+version = "0.1.0"
+dependencies = [
+ "iroh",
+ "serde_json",
+ "soksak-dev",
+ "tokio",
+]
+
+[[package]]
 name = "soksak-dev"
 version = "0.0.1"
 dependencies = [

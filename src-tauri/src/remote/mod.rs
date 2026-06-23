@@ -17,6 +17,10 @@
 
 pub mod auth;
 pub mod bridge;
+// client: 폰-링크 프로토콜의 INITIATOR(폰) 측 라이브러리(SYMMETRIC 절반). 위 floor 들을
+//   손대지 않고 그것들과 대화하는 클라이언트 표면을 추가한다(KK INITIATOR 핸드셰이크 +
+//   assertion 서명 + ConfirmRequired 이벤트-우선 recv). P3 모바일 앱이 임베드한다.
+pub mod client;
 pub mod confirm;
 pub mod iroh;
 pub mod noise;
