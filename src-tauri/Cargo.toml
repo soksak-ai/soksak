@@ -77,6 +77,9 @@ rand = "0.8"
 zeroize = "1"
 # sha256 무결성 핀(runtime_dep: fetch reach 다운로드 검증). RustCrypto, 자체 crypto 0.
 sha2 = "0.10"
+# 원격 기기 인증(remote::auth) — per-device Ed25519 capability assertion 검증. verify_strict
+# (약/소위수 키 거부) + from_bytes Result 처리. 자체 crypto 0, 검증된 dalek crate 만.
+ed25519-dalek = "2"
 
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.

@@ -14,6 +14,7 @@ mod notify;
 mod plugins;
 mod process;
 mod pty;
+mod remote;
 mod schedule;
 mod secrets;
 #[cfg(target_os = "macos")]
