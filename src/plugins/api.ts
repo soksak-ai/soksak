@@ -341,6 +341,9 @@ export interface SoksakPluginApi {
     visible: (label: string, visible: boolean) => Promise<void>;
     /** URL 이동. */
     navigate: (label: string, url: string) => Promise<void>;
+    /** URL 을 독립 OS 창(새 브라우저 윈도우)으로 연다. label 키 webview 와 무관 — 코어가 popup
+     *  윈도우를 직접 만든다. browserNewWindow="window" 모드가 쓴다. */
+    openWindow: (url: string) => Promise<void>;
     /** 세션 히스토리 이동(delta=-1 뒤/+1 앞). */
     history: (label: string, delta: number) => Promise<void>;
     /** OS 인스펙터(devtools) 토글 → 열림 여부. */
@@ -1348,6 +1351,8 @@ export function buildPluginApi(
             deps.invoke("browser_visible", { label, visible }) as Promise<void>,
           navigate: (label, url) =>
             deps.invoke("browser_navigate", { label, url }) as Promise<void>,
+          openWindow: (url) =>
+            deps.invoke("browser_open_window", { url }) as Promise<void>,
           history: (label, delta) =>
             deps.invoke("browser_history", { label, delta }) as Promise<void>,
           devtools: (label) =>

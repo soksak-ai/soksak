@@ -25,9 +25,11 @@ struct NavPayload {
 }
 
 // 새 링크(_blank/window.open)를 "앱 내 새 탭"으로 열 때 프론트로 보내는 페이로드.
-// "window" 모드는 open_popup(새 OS 창)이 직접 처리하고, "tab" 모드만 이 이벤트를 탄다.
+// label = 이 이벤트를 emit 한 child webview 의 label — 플러그인 host 가 label 필터로 구독하므로
+// (app.webview.on(label,"open-external")) 반드시 실어 보낸다(없으면 필터에서 드롭).
 #[derive(Clone, Serialize)]
 struct BrowserOpenPayload {
+    label: String,
     url: String,
 }
 
@@ -582,6 +584,7 @@ pub fn browser_open(
     // 붙이므로 멀티 윈도우에서 BrowserView 가 실행된 창에 정확히 들어간다(프론트 label 전달 불요).
     let parsed = Url::parse(&url).map_err(|e| e.to_string())?;
     let nav_app = app.clone();
+    let nav_label = label.clone();
     let pl_app = app.clone();
     let pl_label = label.clone();
     // 상태표시줄용 hover 스크립트를 함께 주입(macOS — 메시지 핸들러가 받는다). 비-macOS 는 생략.
@@ -602,6 +605,7 @@ pub fn browser_open(
                 let _ = nav_app.emit(
                     "browser-open-external",
                     BrowserOpenPayload {
+                        label: nav_label.clone(),
                         url: target.to_string(),
                     },
                 );
