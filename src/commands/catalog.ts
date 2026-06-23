@@ -23,12 +23,8 @@ import { useViewLabels } from "../state/viewLabels";
 import { useBookmarks } from "../state/bookmarks";
 import { useTheme } from "../state/theme";
 import { useIconRegistry } from "../ui/icons/registry";
-import {
-  focusHost,
-  getCwdOfHost,
-  readHostBuffer,
-  sendInputToHost,
-} from "../terminal/paneHosts";
+import { focusHost } from "../terminal/paneHosts";
+import { resolveTermPane } from "./termResolve";
 import { computeLayout } from "../components/GroupArea";
 import { catalogJson, register, type CommandContext } from "./registry";
 import { registerGitCatalog } from "./catalogGit";
@@ -1234,9 +1230,9 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ["sok term.read", 'sok term.read \'{"lines":50}\''],
     handler: (p, ctx) => {
-      const r = resolvePane(p, ctx);
+      const r = resolveTermPane(p, ctx, resolvePane);
       if (!r) return notFound("pane 없음");
-      const text = readHostBuffer(r.paneId, p.lines as number | undefined);
+      const text = r.readBuffer(p.lines as number | undefined);
       if (text === undefined) return notFound(`터미널 준비 안 됨: ${r.paneId}`);
       return { paneId: r.paneId, text };
     },
@@ -1255,9 +1251,9 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok term.send \'{"text":"ls\\r"}\'', 'sok term.send \'{"text":"\\u0003"}\''],
     handler: (p, ctx) => {
-      const r = resolvePane(p, ctx);
+      const r = resolveTermPane(p, ctx, resolvePane);
       if (!r) return notFound("pane 없음");
-      if (!sendInputToHost(r.paneId, p.text as string))
+      if (!r.sendInput(p.text as string))
         return notFound(`터미널 준비 안 됨: ${r.paneId}`);
       return { paneId: r.paneId };
     },
@@ -1275,9 +1271,9 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok term.exec \'{"cmd":"git status"}\''],
     handler: (p, ctx) => {
-      const r = resolvePane(p, ctx);
+      const r = resolveTermPane(p, ctx, resolvePane);
       if (!r) return notFound("pane 없음");
-      if (!sendInputToHost(r.paneId, `${p.cmd as string}\r`))
+      if (!r.sendInput(`${p.cmd as string}\r`))
         return notFound(`터미널 준비 안 됨: ${r.paneId}`);
       return { paneId: r.paneId };
     },
@@ -1291,9 +1287,9 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ["sok term.cwd"],
     handler: (p, ctx) => {
-      const r = resolvePane(p, ctx);
+      const r = resolveTermPane(p, ctx, resolvePane);
       if (!r) return notFound("pane 없음");
-      return { paneId: r.paneId, cwd: getCwdOfHost(r.paneId) ?? null };
+      return { paneId: r.paneId, cwd: r.getCwd() ?? null };
     },
   });
 
