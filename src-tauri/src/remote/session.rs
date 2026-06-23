@@ -347,6 +347,36 @@ impl SecureSession {
     }
 
     // -----------------------------------------------------------------------
+    // 터널 모드 진입 — 첫 frame 을 복호·파싱하고, 채널을 raw 바이트 파이프로 넘긴다(additive).
+    //
+    // 명령 dispatch(handle_frame/begin_frame)와 **별개의 명시 모드**다(blur 0). serve_tunnel 이
+    // 핸드셰이크 후 첫 frame 을 이 메서드로 복호·파싱해 RequestFrame(터널 인가 페이로드)을 얻고,
+    // 그 다음 into_channel 로 NoiseChannel 을 꺼내 remote::tunnel::proxy 에 넘긴다. 채널 게이트
+    // (game 1)는 이미 establish 가 통과시켰으므로 — 첫 frame 복호 = 채널이 진짜라는 추가 증거.
+    // -----------------------------------------------------------------------
+
+    /// 터널 첫 frame(ciphertext)을 복호·파싱해 RequestFrame 으로 환원한다. **명령 dispatch 와
+    /// 무관** — 인가(auth verify)는 호출자(tunnel::authorize_tunnel)가 한다(채널 ≠ 인가 분리 유지).
+    /// 복호 실패(변조/재생/미페어링 부재) ⇒ None(fail-closed, garbage 평문 0). 형식 불량 ⇒ None.
+    pub fn decrypt_first_frame(&mut self, ciphertext: &[u8]) -> Option<RequestFrame> {
+        let plaintext = self.channel.decrypt(ciphertext).ok()?;
+        RequestFrame::decode(&plaintext)
+    }
+
+    /// 세션을 raw NoiseChannel 로 환원한다(터널 proxy 단계로 채널 소유 이전). 명령 dispatch 모드를
+    /// 떠나 바이트-파이프 모드로 전환하는 단방향 소비 — 이후 이 채널은 tunnel::proxy 의
+    /// encrypt/decrypt(릴레이 zero-knowledge)에만 쓰인다. peer_device_id 결속은 이미 검증에 사용됨.
+    pub fn into_channel(self) -> NoiseChannel {
+        self.channel
+    }
+
+    /// 1바이트 터널 ack 태그를 채널로 암호화한다(릴레이 zero-knowledge — 결과조차 평문 0). 성립된
+    /// 채널은 1바이트 암호화에 항상 성공하나, 만일 실패하면 빈 벡터(평문 누출보다 무응답이 안전).
+    pub fn encrypt_tag(&mut self, tag: u8) -> Vec<u8> {
+        self.channel.encrypt(&[tag]).unwrap_or_default()
+    }
+
+    // -----------------------------------------------------------------------
     // handle_frame — 두 게이트를 엮은 단일 처리점(RULE 6 단일 실행점).
     // -----------------------------------------------------------------------
 

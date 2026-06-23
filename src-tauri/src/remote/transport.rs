@@ -382,5 +382,140 @@ where
     Ok(())
 }
 
+// ===========================================================================
+// 6. serve_tunnel — 보안 세션의 POST-AUTH 모드가 "allowlist loopback 포트 프록시"인 변형(additive).
+// ===========================================================================
+
+/// serve_connection 의 **터널 변형(sibling)**: 핸드셰이크는 **정확히 동일**(미페어링/revoked/틀린
+/// 키 ⇒ 채널 0 — 브리지 auth 게이트 무수정)하고, 그 다음 **터널-인가 첫 frame**을 받아 모드를
+/// 명령 dispatch 가 아니라 **127.0.0.1:allowlist-port 로의 양방향 바이트 프록시**로 전환한다.
+///
+/// 명령 dispatch 와 터널은 **별개의 명시 모드**다(blur 0) — 이 함수는 dispatch 콜백을 받지 않고,
+/// serve_connection 은 allowlist 를 받지 않는다. 호출자(glue)가 어느 serve 를 쓸지 명시 선택한다.
+///
+/// 흐름(전부 fail-closed):
+///   1. announce + KK 핸드셰이크 — serve_connection 과 **동일**(미페어링 ⇒ 채널 0 ⇒ 프록시 0).
+///   2. SecureSession::establish — peer 기기 신원을 채널에 결속.
+///   3. 첫 frame(ciphertext) 읽기 → session.decrypt_first_frame → RequestFrame(터널 인가 페이로드).
+///   4. tunnel::authorize_tunnel(assertion, sig, request, peer_id, registry, ctx, allowlist):
+///      브리지 auth 게이트(auth.rs verify 재사용) + 포트 ∈ allowlist. Denied ⇒ **connect 0**,
+///      거부 frame 회신 후 종료(어떤 TcpStream 도 안 열린다 — SSRF 0).
+///   5. Granted ⇒ "tunnel-ok" ack 회신 → tunnel::connect_local(127.0.0.1:port) → tunnel::proxy
+///      (채널 ↔ 로컬 양방향, 평문은 와이어에 안 나감). 로컬 미기동 ⇒ clean 에러 frame 후 종료(패닉 0).
+///
+/// **allowlist 는 데스크톱 소유**: `&PortAllowlist`(불변)로만 들어온다 — 폰 frame 이 닿는 mutate
+/// 경로가 없다(anti-escalation). **SSRF 0**: connect 는 connect_local(고정 LOCALHOST)만, allowlist
+/// 통과 포트만. **DNS rebinding 무력**: 타겟이 Host 헤더가 아니라 봉인 포트라 rebinding 부재.
+pub async fn serve_tunnel<S, NowF>(
+    mut stream: S,
+    local: &StaticKeypair,
+    noise_registry: &PinnedPeerRegistry,
+    auth: &SharedAuth,
+    allowlist: &crate::remote::tunnel::PortAllowlist,
+    mut now_fn: NowF,
+) -> Result<(), ServeError>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+    NowF: FnMut() -> u64,
+{
+    use crate::remote::tunnel::{authorize_tunnel, connect_local, proxy, TunnelDecision};
+
+    // 1. announce + 2. KK 핸드셰이크 — serve_connection 과 동일(fail-closed, 미페어링 ⇒ 채널 0).
+    let id_bytes = match read_framed(&mut stream).await? {
+        Some(b) => b,
+        None => return Ok(()),
+    };
+    if id_bytes.len() > MAX_DEVICE_ID_LEN {
+        return Err(ServeError::BadDeviceId);
+    }
+    let device_id = String::from_utf8(id_bytes).map_err(|_| ServeError::BadDeviceId)?;
+    let mut handshake =
+        Handshake::respond(local, noise_registry, &device_id).map_err(ServeError::Handshake)?;
+    let m1 = match read_framed(&mut stream).await? {
+        Some(b) => b,
+        None => return Ok(()),
+    };
+    handshake.read_message(&m1).map_err(ServeError::Handshake)?;
+    let m2 = handshake.write_message().map_err(ServeError::Handshake)?;
+    write_framed(&mut stream, &m2).await?;
+    let mut session =
+        SecureSession::establish(handshake, &device_id).map_err(ServeError::Handshake)?;
+
+    // 3. 터널-인가 첫 frame — ciphertext 읽기 → 복호·파싱. 없으면 정상 종료(빈 연결).
+    let first_ct = match read_framed(&mut stream).await? {
+        Some(b) => b,
+        None => return Ok(()),
+    };
+    let frame = match session.decrypt_first_frame(&first_ct) {
+        Some(f) => f,
+        // 복호/파싱 실패 — fail-closed(프록시 0). 채널로 거부 ack 회신 후 종료.
+        None => {
+            let nak = session_encrypt_tag(&mut session, TUNNEL_NAK)?;
+            let _ = write_framed(&mut stream, &nak).await;
+            return Ok(());
+        }
+    };
+
+    // 4. authorize — 브리지 auth 게이트(auth.rs verify 재사용) + allowlist(SSRF 0, connect 이전).
+    let ctx = VerifyCtx { now: now_fn() };
+    let peer_id = session.peer_device_id().to_string();
+    let grant = {
+        let mut reg = auth.lock();
+        authorize_tunnel(
+            &frame.assertion,
+            &frame.signature,
+            &frame.request,
+            &peer_id,
+            &mut reg,
+            ctx,
+            allowlist,
+        )
+    };
+    let grant = match grant {
+        TunnelDecision::Granted(g) => g,
+        // 거부(미페어링/위조/scope/allowlist 밖) — **connect 0**. 채널로 거부 ack 회신 후 종료.
+        TunnelDecision::Denied(_reason) => {
+            let nak = session_encrypt_tag(&mut session, TUNNEL_NAK)?;
+            let _ = write_framed(&mut stream, &nak).await;
+            return Ok(());
+        }
+    };
+
+    // 5. Granted — **loopback-only connect 를 ack 이전에 시도**(127.0.0.1:allowlist-port). 미기동 ⇒
+    //    NAK 회신 후 종료(패닉 0). connect 성공해야만 ACK 를 보낸다 — 클라이언트가 ACK 를 받으면
+    //    프록시가 진짜 시작됐다는 뜻이다(미기동에 ACK 0 — 클라이언트가 NAK 로 깔끔히 거부).
+    let local_stream = match connect_local(&grant).await {
+        Ok(s) => s,
+        Err(_e) => {
+            let nak = session_encrypt_tag(&mut session, TUNNEL_NAK)?;
+            let _ = write_framed(&mut stream, &nak).await;
+            return Ok(());
+        }
+    };
+
+    // connect 성공 — "tunnel-ok" ack 회신 → 양방향 프록시.
+    let ack = session_encrypt_tag(&mut session, TUNNEL_ACK)?;
+    write_framed(&mut stream, &ack).await?;
+
+    // 채널을 raw 파이프로 환원(명령 모드 떠남) + 스트림을 read/write 절반으로 split → 양방향 프록시.
+    let channel = session.into_channel();
+    let (rd, wr) = tokio::io::split(stream);
+    // 프록시 종료(어느 한쪽 닫힘)는 정상 — Io 에러는 ServeError 로 환원하지 않고 Ok 로 닫는다.
+    let _ = proxy(rd, wr, channel, local_stream).await;
+    Ok(())
+}
+
+/// 터널 핸드셰이크 ack 와이어 태그 — ACK(0x01)=인가됨/프록시 시작, NAK(0x00)=거부/에러.
+/// 채널로 암호화되어 나간다(릴레이 zero-knowledge — 결과조차 평문 0). 클라이언트가 이 1바이트로
+/// "프록시 시작" vs "거부"를 안다(이후부터 raw 바이트 파이프).
+const TUNNEL_ACK: u8 = 0x01;
+const TUNNEL_NAK: u8 = 0x00;
+
+/// 1바이트 태그를 세션 채널로 암호화한다(터널 ack). encrypt 실패는 정상 경로 도달 0(빈 벡터 회피
+/// 위해 FrameTooLarge 로 환원하지 않고, 성립된 채널은 1바이트 암호화에 항상 성공).
+fn session_encrypt_tag(session: &mut SecureSession, tag: u8) -> Result<Vec<u8>, ServeError> {
+    Ok(session.encrypt_tag(tag))
+}
+
 #[cfg(test)]
 mod tests;

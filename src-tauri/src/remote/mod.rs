@@ -27,3 +27,8 @@ pub mod noise;
 pub mod session;
 pub mod tcp;
 pub mod transport;
+// tunnel: 로컬 dev-server reverse-proxy 터널(폰-링크 secure channel 위, additive). 터널 = POST-AUTH
+//   모드가 '명령 dispatch' 가 아니라 'allowlist 된 127.0.0.1 포트로 raw 바이트 프록시'인 SecureSession.
+//   SSRF 0(loopback-only + allowlist, connect 이전 거부), allowlist=데스크톱 소유(폰 상승 불가),
+//   브리지 auth 게이트 무수정(미페어링 ⇒ 채널 0), 평문은 와이어에 안 나감(NoiseChannel encrypt/decrypt).
+pub mod tunnel;

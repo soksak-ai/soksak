@@ -34,6 +34,7 @@ fn main() -> ExitCode {
         }
         Some("pair") => run_pair(),
         Some("call") => run_call(&args[1..]),
+        Some("tunnel") => run_tunnel(&args[1..]),
         Some(other) => {
             eprintln!("알 수 없는 하위명령: {other}");
             print_usage();
@@ -54,6 +55,11 @@ fn print_usage() {
       <target> = host:port (TCP) | iroh:<node-id>
       <desktop-static-hex> = 데스크톱 X25519 static 공개키 32B hex(페어링 때 받음).
       --destructive: 데스크톱 confirm 권위 경로(승인 대기 → 최종 결과, 이벤트-우선).
+
+  sok-phone tunnel <target> <desktop-id> <desktop-static-hex> <port>
+      데스크톱 로컬 dev-server(127.0.0.1:<port>)로의 reverse-proxy 터널을 연다(allowlist 안 포트만).
+      stdin→터널, 터널→stdout 으로 바이트를 파이프한다(예: raw HTTP 요청을 stdin 으로 넣어 응답을
+      stdout 으로 받는다). <port> 가 데스크톱 allowlist 밖이거나 미페어링이면 거부(SSRF 0).
 
 폰 신원은 $SOK_PHONE_IDENTITY(없으면 ~/.soksak/phone-identity.json)에 영속된다.
 수동 E2E 는 라이브 데스크톱 브리지(앱이 bridge 켜진 채 실행 + 이 폰 페어링됨)를 요구한다."
@@ -271,6 +277,178 @@ async fn drive_call(
             Err(e) => {
                 eprintln!("연결 실패(핸드셰이크 미성립 = 미페어링/틀린 키면 정상): {e}");
                 ExitCode::FAILURE
+            }
+        }
+    }
+}
+
+// ── tunnel — 데스크톱 로컬 dev-server 로의 reverse-proxy 터널(stdin↔터널↔stdout) ──────────
+
+/// `sok-phone tunnel <target> <desktop-id> <desktop-static-hex> <port>` — 데스크톱 127.0.0.1:port
+/// 로의 터널을 열고 stdin→터널, 터널→stdout 으로 바이트를 파이프한다. 모든 보안(인가/암호/allowlist)은
+/// 검증된 라이브러리(open_tunnel)에 있다 — 이 함수는 인자 파싱 + 런타임 + stdio 파이프 글루뿐.
+fn run_tunnel(args: &[String]) -> ExitCode {
+    if args.len() < 4 {
+        eprintln!("사용: sok-phone tunnel <target> <desktop-id> <desktop-static-hex> <port>");
+        return ExitCode::FAILURE;
+    }
+    let target = args[0].clone();
+    let desktop_id = args[1].clone();
+    let desktop_static = match from_hex32(&args[2]) {
+        Ok(k) => k,
+        Err(e) => {
+            eprintln!("desktop-static-hex 파싱 실패: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let port: u16 = match args[3].parse() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("포트 파싱 실패('{}'): {e}", args[3]);
+            return ExitCode::FAILURE;
+        }
+    };
+    let identity = match load_or_create_identity() {
+        Ok(i) => i,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("tokio 런타임 생성 실패: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    rt.block_on(async move { drive_tunnel(&target, &desktop_id, &desktop_static, &identity, port).await })
+}
+
+/// 터널을 연 뒤 stdin↔터널↔stdout 파이프를 돈다. target 분기(iroh/TCP)는 call 과 동일.
+async fn drive_tunnel(
+    target: &str,
+    desktop_id: &str,
+    desktop_static: &[u8; 32],
+    identity: &DeviceIdentity,
+    port: u16,
+) -> ExitCode {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let exp = now + 30;
+
+    if let Some(node_id_str) = target.strip_prefix("iroh:") {
+        let node_id: iroh::NodeId = match node_id_str.parse() {
+            Ok(n) => n,
+            Err(e) => {
+                eprintln!("iroh node-id 파싱 실패: {e}");
+                return ExitCode::FAILURE;
+            }
+        };
+        let endpoint = match iroh::Endpoint::builder()
+            .alpns(vec![soksak_lib::remote::iroh::IROH_ALPN.to_vec()])
+            .relay_mode(iroh::RelayMode::Default)
+            .bind()
+            .await
+        {
+            Ok(ep) => ep,
+            Err(e) => {
+                eprintln!("iroh endpoint bind 실패: {e}");
+                return ExitCode::FAILURE;
+            }
+        };
+        let node_addr = iroh::NodeAddr::new(node_id);
+        match connect_iroh(&endpoint, node_addr, identity, desktop_id, desktop_static).await {
+            Ok(session) => open_and_pipe(session, port, exp, now).await,
+            Err(e) => {
+                eprintln!("연결 실패(미페어링/틀린 키면 정상): {e}");
+                ExitCode::FAILURE
+            }
+        }
+    } else {
+        let addr: std::net::SocketAddr = match target.parse() {
+            Ok(a) => a,
+            Err(e) => {
+                eprintln!("주소 파싱 실패('{target}'): {e}");
+                return ExitCode::FAILURE;
+            }
+        };
+        match connect_tcp(addr, identity, desktop_id, desktop_static).await {
+            Ok(session) => open_and_pipe(session, port, exp, now).await,
+            Err(e) => {
+                eprintln!("연결 실패(미페어링/틀린 키면 정상): {e}");
+                ExitCode::FAILURE
+            }
+        }
+    }
+}
+
+/// open_tunnel 후 stdin→터널·터널→stdout 파이프. 어느 한쪽 EOF 면 종료(graceful).
+async fn open_and_pipe<S>(
+    session: soksak_lib::remote::client::ClientSession<S>,
+    port: u16,
+    exp: u64,
+    issued_at: u64,
+) -> ExitCode
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut tunnel = match session.open_tunnel(port, exp, issued_at).await {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("터널 거부(allowlist 밖/미페어링/scope/로컬 미기동이면 정상): {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    eprintln!("# 터널 열림 — 127.0.0.1:{port} (stdin→터널, 터널→stdout). Ctrl-D 로 송신 종료.");
+
+    let mut stdin = tokio::io::stdin();
+    let mut stdout = tokio::io::stdout();
+    let mut buf = vec![0u8; 16 * 1024];
+    let mut sending_done = false;
+    loop {
+        tokio::select! {
+            // stdin → 터널(아직 송신 안 끝났을 때만).
+            n = stdin.read(&mut buf), if !sending_done => {
+                match n {
+                    Ok(0) => {
+                        let _ = tunnel.finish_sending().await;
+                        sending_done = true;
+                    }
+                    Ok(n) => {
+                        if let Err(e) = tunnel.send(&buf[..n]).await {
+                            eprintln!("터널 송신 실패: {e}");
+                            return ExitCode::FAILURE;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("stdin 읽기 실패: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
+            // 터널 → stdout.
+            chunk = tunnel.recv() => {
+                match chunk {
+                    Ok(Some(bytes)) => {
+                        if stdout.write_all(&bytes).await.is_err() {
+                            return ExitCode::FAILURE;
+                        }
+                        let _ = stdout.flush().await;
+                    }
+                    Ok(None) => {
+                        // 서버 EOF — 응답 끝. 정상 종료.
+                        let _ = stdout.flush().await;
+                        return ExitCode::SUCCESS;
+                    }
+                    Err(e) => {
+                        eprintln!("터널 수신 실패: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
             }
         }
     }

@@ -20,7 +20,7 @@ use crate::remote::iroh::{
     accept_loop as iroh_accept_loop, build_endpoint, node_id_string, IrohListenerConfig,
 };
 use crate::remote::noise::{PinnedPeerRegistry, StaticKeypair};
-use crate::remote::tcp::{accept_loop, bind_loopback, ListenerConfig};
+use crate::remote::tcp::{accept_loop, bind_loopback, tunnel_accept_loop, ListenerConfig};
 use crate::remote::transport::SharedAuth;
 
 use iroh::{RelayMode, SecretKey};
@@ -115,6 +115,19 @@ pub const PORT_ENV: &str = "SOKSAK_REMOTE_TCP_PORT";
 /// 루프백 TCP 와 **독립** 플래그 — 둘은 같은 serve_connection 을 다른 transport 위에 얹을 뿐.
 pub const IROH_ENABLE_ENV: &str = "SOKSAK_REMOTE_IROH";
 
+/// 로컬 dev-server reverse-proxy **터널** 활성 env 키 — 명시적·generic(RULE 8). 미설정 ⇒ 비활성
+/// (어떤 터널 리스너도 안 뜬다). 명령 dispatch 브리지(TCP/iroh)와 **독립** 플래그 — 터널은 별개
+/// 명시 모드(serve_tunnel)다. 켜져도 allowlist 가 비어 있으면 **모든 터널이 fail-closed**(SSRF 0).
+pub const TUNNEL_ENABLE_ENV: &str = "SOKSAK_REMOTE_TUNNEL";
+
+/// 터널 **포트 allowlist** env(데스크톱 소유 — anti-escalation). 쉼표 구분 포트 목록(예
+/// `"3000,5173,8080"`). 미설정/빈 ⇒ 빈 allowlist ⇒ 모든 터널 거부(fail-closed). 폰은 이 집합을
+/// 어떤 frame 으로도 바꿀 수 없다 — allowlist 는 오직 이 env(데스크톱 설정)에서만 온다(RULE 8 observable).
+pub const TUNNEL_ALLOWLIST_ENV: &str = "SOKSAK_REMOTE_TUNNEL_PORTS";
+
+/// 터널 리스너 바인드 포트 env(선택) — 미설정 시 OS 할당. 항상 127.0.0.1 에만 바인드.
+pub const TUNNEL_BIND_PORT_ENV: &str = "SOKSAK_REMOTE_TUNNEL_BIND_PORT";
+
 /// env 값이 명시적으로 켜졌는가(공통 파서). 미설정/빈/"0"/"false"/"off"/"no" ⇒ false(기본 비활성).
 fn env_flag_on(key: &str) -> bool {
     match std::env::var(key) {
@@ -134,6 +147,23 @@ fn enabled() -> bool {
 /// iroh 폰-링크 transport 활성 여부(기본 비활성). off-by-default 회귀 테스트가 이 함수를 단언한다.
 pub fn iroh_enabled() -> bool {
     env_flag_on(IROH_ENABLE_ENV)
+}
+
+/// 로컬 dev-server 터널 활성 여부(기본 비활성). off-by-default 회귀 테스트가 이 함수를 단언한다.
+pub fn tunnel_enabled() -> bool {
+    env_flag_on(TUNNEL_ENABLE_ENV)
+}
+
+/// 데스크톱 소유 터널 포트 allowlist 를 env 에서 파싱한다(RULE 8 observable config — 관측 가능한
+/// 단일 진실). 쉼표 구분 u16 포트. 파싱 불가 토큰/포트 0 은 무시한다(fail-closed: 빈 ⇒ 전부 거부).
+/// **폰은 이 함수에 영향을 줄 수 없다** — allowlist 는 오직 데스크톱 env 에서만 온다(anti-escalation).
+pub fn tunnel_allowlist() -> crate::remote::tunnel::PortAllowlist {
+    let raw = std::env::var(TUNNEL_ALLOWLIST_ENV).unwrap_or_default();
+    let ports = raw
+        .split(',')
+        .filter_map(|t| t.trim().parse::<u16>().ok())
+        .filter(|p| *p != 0);
+    crate::remote::tunnel::PortAllowlist::from_ports(ports)
 }
 
 /// 인가된 frame 의 불투명 request 바이트를 코어 route() 로 라우팅하는 dispatch 를 만든다.
@@ -276,5 +306,54 @@ pub fn maybe_start_iroh_bridge(app: &AppHandle) {
             move || make_dispatch(app.clone()),
         )
         .await;
+    });
+}
+
+/// 기본 비활성 **로컬 dev-server reverse-proxy 터널 브리지**를 (켜져 있을 때만) 시작한다. 꺼져 있으면
+/// 즉시 반환(어떤 터널 리스너도 안 뜬다). 명령 dispatch 브리지(TCP/iroh)와 **독립 명시 모드**(serve_tunnel)다.
+///
+/// 켜진 경우: 127.0.0.1 전용 리스너를 바인드하고, **데스크톱 소유 allowlist**(env 에서 파싱)로
+/// tunnel_accept_loop 를 돈다. allowlist 가 비어 있으면(SOKSAK_REMOTE_TUNNEL_PORTS 미설정) **모든
+/// 터널이 fail-closed**(SSRF 0). Noise/auth 레지스트리는 빈 채(페어링 UI 는 별도 후속) → 미페어링은
+/// 핸드셰이크 미성립(터널 0). dispatch 없음 — 터널은 명령이 아니라 바이트 파이프다. 어떤 실패도
+/// 앱을 죽이지 않는다(로깅 후 계속). **allowlist 는 폰이 못 바꾼다**(오직 데스크톱 env — anti-escalation).
+pub fn maybe_start_tunnel_bridge(_app: &AppHandle) {
+    if !tunnel_enabled() {
+        return; // 기본 경로 — 어떤 터널 리스너도 바인드하지 않는다(실행 중 앱 무영향).
+    }
+    let local = match StaticKeypair::generate() {
+        Ok(k) => Arc::new(k),
+        Err(e) => {
+            eprintln!("[remote::bridge] 터널: static 키 생성 실패: {e}");
+            return;
+        }
+    };
+    // 빈 핀닝/auth 레지스트리 — 페어링 전이라 fail-closed. allowlist 는 데스크톱 env 단일 진실.
+    let config = Arc::new(ListenerConfig {
+        local,
+        noise_registry: Arc::new(PinnedPeerRegistry::new()),
+        auth: SharedAuth::new(DeviceRegistry::new(8)),
+    });
+    let allowlist = Arc::new(tunnel_allowlist());
+    let port: u16 = std::env::var(TUNNEL_BIND_PORT_ENV)
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+
+    tauri::async_runtime::spawn(async move {
+        let listener = match bind_loopback(port).await {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("[remote::bridge] 터널 루프백 바인드 실패: {e}");
+                return;
+            }
+        };
+        if let Ok(a) = listener.local_addr() {
+            eprintln!(
+                "[remote::bridge] 로컬 터널 브리지 활성(페어링 전 fail-closed): {a}, allowlist={:?}",
+                allowlist.allowed_ports()
+            );
+        }
+        tunnel_accept_loop(listener, config, allowlist, || now_unix).await;
     });
 }

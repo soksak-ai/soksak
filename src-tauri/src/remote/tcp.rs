@@ -21,7 +21,8 @@ use tokio::net::TcpListener;
 
 use crate::remote::auth::{AuthorizedAction, DesktopConfirmToken};
 use crate::remote::noise::{PinnedPeerRegistry, StaticKeypair};
-use crate::remote::transport::{serve_connection, SharedAuth};
+use crate::remote::transport::{serve_connection, serve_tunnel, SharedAuth};
+use crate::remote::tunnel::PortAllowlist;
 
 /// 루프백 전용 바인드 주소 — **127.0.0.1**(절대 0.0.0.0 아님). 임의 노출/rebinding 표면 0.
 pub const LOOPBACK: Ipv4Addr = Ipv4Addr::LOCALHOST;
@@ -98,6 +99,51 @@ pub async fn accept_loop<NowFac, NowF, TokFac, TokF, DispFac, Disp>(
             if let Err(e) = r {
                 // 핸드셰이크 미성립/형식불량/I/O — 정상적인 fail-closed 종료(미인증 dispatch 0).
                 eprintln!("[remote::tcp] 연결 종료: {e}");
+            }
+        });
+    }
+}
+
+/// 터널 accept 루프 — 각 연결을 독립 task 로 **serve_tunnel** 에 넘긴다(연결 격리). 명령 dispatch
+/// accept_loop 의 sibling 이며 **별개 모드**(dispatch 없음, allowlist 있음). 어떤 host:port forward 도
+/// 없다 — serve_tunnel 은 connect_local(고정 127.0.0.1 + allowlist 포트)만 한다(SSRF 0).
+///
+/// allowlist 는 **데스크톱 소유**(Arc<PortAllowlist> 불변 공유) — 폰 frame 이 닿는 mutate 경로가 없다.
+/// now_fac 는 팩토리(accept 마다 그 연결 전용 클로저). 무한 루프 — 호출자가 spawn 으로 백그라운드에 둔다.
+pub async fn tunnel_accept_loop<NowFac, NowF>(
+    listener: TcpListener,
+    config: Arc<ListenerConfig>,
+    allowlist: Arc<PortAllowlist>,
+    now_fac: NowFac,
+) where
+    NowFac: Fn() -> NowF + Send + Sync + 'static,
+    NowF: FnMut() -> u64 + Send + 'static,
+{
+    let now_fac = Arc::new(now_fac);
+    loop {
+        let (stream, _peer) = match listener.accept().await {
+            Ok(pair) => pair,
+            Err(e) => {
+                eprintln!("[remote::tcp] 터널 accept 실패: {e}");
+                continue;
+            }
+        };
+        let config = Arc::clone(&config);
+        let allowlist = Arc::clone(&allowlist);
+        let now = now_fac();
+        tokio::spawn(async move {
+            let r = serve_tunnel(
+                stream,
+                &config.local,
+                &config.noise_registry,
+                &config.auth,
+                &allowlist,
+                now,
+            )
+            .await;
+            if let Err(e) = r {
+                // 핸드셰이크 미성립/형식불량/I/O — fail-closed 종료(미인증 프록시 0).
+                eprintln!("[remote::tcp] 터널 연결 종료: {e}");
             }
         });
     }

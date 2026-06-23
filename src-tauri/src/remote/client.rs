@@ -58,6 +58,9 @@ pub enum ClientError {
     Decrypt,
     /// iroh 다이얼/연결 실패(transport 도달 실패 — auth 와 무관).
     Dial(String),
+    /// 터널 거부(open_tunnel) — 서버가 NAK 회신. 미페어링/scope 부족/allowlist 밖 포트/로컬 미기동.
+    /// **폰은 사유 코드를 못 받는다**(서버 zero-knowledge — ACK/NAK 1바이트만) — 거부 사실만 안다.
+    TunnelDenied,
 }
 
 impl std::fmt::Display for ClientError {
@@ -68,6 +71,7 @@ impl std::fmt::Display for ClientError {
             ClientError::BadResponse => f.write_str("malformed response frame"),
             ClientError::Decrypt => f.write_str("response decrypt failed (AEAD)"),
             ClientError::Dial(e) => write!(f, "dial failed: {e}"),
+            ClientError::TunnelDenied => f.write_str("tunnel denied (unpaired/scope/allowlist/local)"),
         }
     }
 }
@@ -441,6 +445,66 @@ where
         // 응답(승인-결과/거부)은 await_outcome 이 같은 채널에서 이벤트-우선으로 받는다.
         Ok(PendingCall { session: self })
     }
+
+    /// **터널 열기(폰 측)** — 데스크톱의 로컬 dev-server(`127.0.0.1:port`)로의 reverse-proxy
+    /// 바이트 스트림을 연다. 서버 serve_tunnel 의 대칭쌍이다.
+    ///
+    /// 흐름(서버 serve_tunnel 의 거울):
+    ///   1. 터널-인가 frame 송신 — assertion(scope=Write, 신선 nonce + 단조 issued_at) +
+    ///      request=`tunnel:port`(encode_tunnel_request) 를 폰 Ed25519 키로 서명·암호화·송신.
+    ///      이건 명령 dispatch frame 과 **별개 모드**(request 형식이 다름) — 서버가 authorize_tunnel 로 처리.
+    ///   2. ack 수신 — 서버가 채널로 암호화한 1바이트(ACK=인가+프록시 시작 / NAK=거부/에러).
+    ///      NAK ⇒ 터널 거부(미페어링/scope/allowlist 밖/로컬 미기동) ⇒ TunnelDenied 에러(스트림 0).
+    ///   3. ACK ⇒ ClientSession 을 **TunnelStream 으로 소비** — 이후 채널은 raw 바이트 파이프
+    ///      (send=암호화·프레임·송신, recv=수신·복호). 평문은 와이어에 안 나간다(릴레이 zero-knowledge).
+    ///
+    /// scope=Write(TUNNEL_SCOPE 거울) — read-only 폰은 서버 auth 게이트에서 거부된다(scope ⊆ granted).
+    /// 데스크톱이 그 포트를 allowlist 에 넣지 않았으면 NAK(폰은 allowlist 를 못 바꾼다 — anti-escalation).
+    pub async fn open_tunnel(
+        mut self,
+        port: u16,
+        exp: u64,
+        proposed_issued_at: u64,
+    ) -> Result<TunnelStream<S>, ClientError> {
+        // 1. 터널-인가 frame — request 바이트는 정확히 `tunnel:port`(서버 decode_tunnel_request 의 역).
+        let request = crate::remote::tunnel::encode_tunnel_request(port);
+        let nonce = self.fresh_nonce();
+        let issued_at = self.monotonic_issued_at(proposed_issued_at);
+        let assertion = CapabilityAssertion {
+            device_id: self.device_id.clone(),
+            scope: crate::remote::tunnel::TUNNEL_SCOPE,
+            nonce,
+            issued_at,
+            exp,
+        };
+        let signature = self.ed25519.sign(&assertion.canonical_bytes()).to_bytes().to_vec();
+        let frame = RequestFrame {
+            assertion,
+            signature,
+            request,
+        }
+        .encode();
+        let ct = self.channel.encrypt(&frame).map_err(|_| ClientError::BadResponse)?;
+        write_framed(&mut self.stream, &ct).await?;
+
+        // 2. ack 수신 — 서버가 채널로 암호화한 1바이트(ACK/NAK).
+        let ack_ct = match read_framed(&mut self.stream).await? {
+            Some(b) => b,
+            None => return Err(ClientError::Handshake(NoiseError::HandshakeFailed)),
+        };
+        let ack_pt = self.channel.decrypt(&ack_ct).map_err(|_| ClientError::Decrypt)?;
+        match ack_pt.first() {
+            Some(0x01) => {} // ACK — 프록시 시작.
+            // NAK(0x00) 또는 빈/미지 — 터널 거부(미페어링/scope/allowlist 밖/로컬 미기동).
+            _ => return Err(ClientError::TunnelDenied),
+        }
+
+        // 3. ACK ⇒ TunnelStream 으로 소비. 채널 + 스트림을 raw 파이프로 넘긴다.
+        Ok(TunnelStream {
+            stream: self.stream,
+            channel: self.channel,
+        })
+    }
 }
 
 impl<S> std::fmt::Debug for ClientSession<S> {
@@ -485,6 +549,65 @@ where
     /// 회신하면 그 바이트가 도착해 read 가 풀린다). 변조 ⇒ clean error(패닉 0).
     pub async fn await_outcome(self) -> Result<ClientResponse, ClientError> {
         self.session.recv_response().await
+    }
+}
+
+// ===========================================================================
+// 4b. TunnelStream — 인가된 터널의 폰 측 raw 바이트 파이프(서버 tunnel::proxy 의 거울).
+// ===========================================================================
+
+/// open_tunnel 성공(ACK)의 산물 — 데스크톱의 `127.0.0.1:port` dev-server 로 프록시되는 폰 측
+/// 바이트 스트림. ClientSession 을 소비해 만들어진다(명령 dispatch 모드를 떠나 바이트-파이프 모드).
+///
+/// 와이어는 서버 tunnel::proxy 와 **정확히 같다**: 각 방향의 청크가 채널로 암호화되어 길이-프리픽스
+/// frame 1개로 흐른다. send=평문→암호화→frame→송신, recv=수신→복호→평문. **평문은 와이어에 안
+/// 나간다**(릴레이 zero-knowledge — NoiseChannel encrypt/decrypt 재사용). 빈 평문 = EOF 신호.
+///
+/// 명시 send/recv API(AsyncRead/AsyncWrite poll 버퍼링 대신) — 프레임 경계가 곧 청크 경계라
+/// HTTP 요청/응답 단위 round-trip 과 멀티-청크 스트리밍을 직접 표현한다(테스트가 행위로 강제).
+pub struct TunnelStream<S> {
+    stream: S,
+    channel: NoiseChannel,
+}
+
+impl<S> TunnelStream<S>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    /// 평문 바이트 1청크를 데스크톱 dev-server 로 보낸다(암호화→frame→송신). HTTP 요청 바이트를
+    /// 그대로 넣으면 서버 proxy 가 복호해 127.0.0.1:port 에 write 한다. 평문은 와이어에 안 나간다.
+    pub async fn send(&mut self, plaintext: &[u8]) -> Result<(), ClientError> {
+        let ct = self.channel.encrypt(plaintext).map_err(|_| ClientError::BadResponse)?;
+        write_framed(&mut self.stream, &ct).await
+    }
+
+    /// dev-server 응답 1청크를 받는다(수신→복호). None = EOF(서버가 빈 평문/채널 종료로 신호).
+    /// 변조/잘림 ⇒ clean error(패닉 0). 멀티-청크 응답은 recv 를 반복 호출해 스트리밍으로 받는다.
+    pub async fn recv(&mut self) -> Result<Option<Vec<u8>>, ClientError> {
+        let ct = match read_framed(&mut self.stream).await? {
+            Some(b) => b,
+            None => return Ok(None), // 채널 EOF — 서버가 끊음.
+        };
+        let plaintext = self.channel.decrypt(&ct).map_err(|_| ClientError::Decrypt)?;
+        if plaintext.is_empty() {
+            // 빈 평문 = 서버 측 EOF 신호(dev-server 응답 끝). 더 받을 게 없다.
+            return Ok(None);
+        }
+        Ok(Some(plaintext))
+    }
+
+    /// 보낼 게 끝났음을 신호한다(빈 평문 = write-half EOF). 서버 proxy 가 로컬 write-half 를 닫는다.
+    pub async fn finish_sending(&mut self) -> Result<(), ClientError> {
+        let ct = self.channel.encrypt(&[]).map_err(|_| ClientError::BadResponse)?;
+        write_framed(&mut self.stream, &ct).await
+    }
+}
+
+impl<S> std::fmt::Debug for TunnelStream<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TunnelStream")
+            .field("channel", &"<noise channel>")
+            .finish()
     }
 }
 

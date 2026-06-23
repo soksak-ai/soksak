@@ -151,6 +151,11 @@ pub fn run() {
             // 가 켜졌을 때만 iroh endpoint 를 bind(QUIC P2P + 릴레이 fallback)하고 같은 코어 route() 로
             // 디스패치한다. 꺼져 있으면 endpoint 자체가 안 생겨 기존 동작 무영향(off by default).
             remote::bridge::maybe_start_iroh_bridge(app.handle());
+            // 원격 제어 로컬 dev-server **터널**(폰-링크) — 기본 비활성(additive). SOKSAK_REMOTE_TUNNEL
+            // 이 켜졌을 때만 127.0.0.1 에 터널 리스너를 바인드하고, **데스크톱 소유 allowlist**
+            // (SOKSAK_REMOTE_TUNNEL_PORTS)의 loopback 포트로만 reverse-proxy 한다(SSRF 0, 폰 상승 불가).
+            // 명령 dispatch 와 별개 명시 모드(serve_tunnel). 꺼져 있으면 무영향(off by default).
+            remote::bridge::maybe_start_tunnel_bridge(app.handle());
             // 신호등: 좌표는 tauri.conf.json trafficLightPosition 이 소유, 유지는
             // titlebar::install 의 NSNotification 옵저버가 담당(titlebar.rs 참조).
             #[cfg(target_os = "macos")]
