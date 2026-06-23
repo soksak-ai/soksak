@@ -26,7 +26,6 @@ type ViewSnapshot =
       autorun?: { paneId: string; command: string };
     }
   | { id: string; kind: "file"; title: string; path: string; mode: "code" | "preview" }
-  | { id: string; kind: "browser"; title: string; url: string }
   | { id: string; kind: "plugin"; title: string; pluginId: string; view: string };
 
 interface ViewGroupSnapshot {
@@ -72,8 +71,6 @@ function serializeView(v: View): ViewSnapshot {
       };
     case "file":
       return { id: v.id, kind: "file", title: v.title, path: v.path, mode: v.mode };
-    case "browser":
-      return { id: v.id, kind: "browser", title: v.title, url: v.url };
     case "plugin":
       return {
         id: v.id,
@@ -132,8 +129,6 @@ function deserializeView(s: ViewSnapshot, newSplitId: () => string): View {
       };
     case "file":
       return { id: s.id, kind: "file", title: s.title, path: s.path, mode: s.mode };
-    case "browser":
-      return { id: s.id, kind: "browser", title: s.title, url: s.url };
     case "plugin":
       return {
         id: s.id,

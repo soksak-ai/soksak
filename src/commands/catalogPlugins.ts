@@ -88,7 +88,6 @@ export function registerPluginCatalog(): void {
         ...(p.decl.path ? { path: p.decl.path } : {}),
         kind: p.decl.kind,
         ...(p.decl.command ? { command: p.decl.command } : {}),
-        ...(p.decl.url ? { url: p.decl.url } : {}),
         ...(p.decl.ensure ? { ensure: p.decl.ensure } : {}),
         pluginId: p.pluginId,
       })),

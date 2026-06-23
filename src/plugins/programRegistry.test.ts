@@ -38,9 +38,9 @@ describe("programRegistry — 등록 규율", () => {
 });
 
 describe("autorunCommandOf — 실행은 command 그대로(래핑 금지)", () => {
-  it("browser kind 는 자동실행 없음", () => {
+  it("비터미널(view) kind 는 자동실행 없음", () => {
     expect(
-      autorunCommandOf({ id: "b", title: "b", kind: "browser" }),
+      autorunCommandOf({ id: "b", title: "b", kind: "view", view: "x" }),
     ).toBeUndefined();
   });
 
@@ -82,11 +82,11 @@ describe("installCommandFor — 활성화 시점 설치 명령(플랫폼 분기)
     );
   });
 
-  it("미제공 플랫폼/ensure 없음/browser kind 는 undefined", () => {
+  it("미제공 플랫폼/ensure 없음/비터미널(view) kind 는 undefined", () => {
     expect(installCommandFor(decl, "linux")).toBeUndefined();
     expect(installCommandFor(term("t"), "darwin")).toBeUndefined();
     expect(
-      installCommandFor({ id: "b", title: "b", kind: "browser" }, "darwin"),
+      installCommandFor({ id: "b", title: "b", kind: "view", view: "x" }, "darwin"),
     ).toBeUndefined();
   });
 });

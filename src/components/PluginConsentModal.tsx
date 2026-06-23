@@ -23,12 +23,6 @@ function programSummary(
 ): { text: string; cmds: string[] } {
   const title = localize(p.title);
   const where = p.path ? `${localize(p.path)} ▸ ${title}` : title;
-  if (p.kind === "browser") {
-    return {
-      text: `${where} — ${t("plugin.consent.prog.browser")}${p.url ? `: ${p.url}` : ""}`,
-      cmds: [],
-    };
-  }
   const cmds: string[] = [];
   let text: string;
   if (p.command) {

@@ -9,7 +9,6 @@ import {
   allGroups,
   collectLeafIds,
   useSessions,
-  browserHome,
   type ContentArea,
   type DropZone,
   type GroupNode,
@@ -31,7 +30,6 @@ import {
   sendInputToHost,
 } from "../terminal/paneHosts";
 import { computeLayout } from "../components/GroupArea";
-import { browserLabel } from "../lib/webviewLabels";
 import { catalogJson, register, type CommandContext } from "./registry";
 import { registerGitCatalog } from "./catalogGit";
 import { registerPluginCatalog } from "./catalogPlugins";
@@ -217,31 +215,6 @@ function resolvePane(
   return null;
 }
 
-// 대상 브라우저 뷰: 명시 view id > 컨텍스트(활성 뷰가 브라우저) > 같은 컨텐츠의 첫 브라우저.
-function resolveBrowser(
-  params: Record<string, unknown>,
-  ctx: CommandContext,
-): (Location & { url: string }) | null {
-  const id = params.view as string | undefined;
-  if (id) {
-    const loc = locateView(id);
-    return loc && loc.view.kind === "browser"
-      ? { ...loc, url: loc.view.url }
-      : null;
-  }
-  const loc = resolveCtx(ctx);
-  if (!loc) return null;
-  if (loc.view.kind === "browser") return { ...loc, url: loc.view.url };
-  for (const g of allGroups(loc.content.layout)) {
-    for (const v of g.views) {
-      if (v.kind === "browser") {
-        return { ...loc, group: g, view: v, url: v.url };
-      }
-    }
-  }
-  return null;
-}
-
 // ── 직렬화(state.tree) ──────────────────────────────────────────────────────
 
 function serializeView(v: View) {
@@ -264,16 +237,13 @@ function serializeView(v: View) {
       dirty: v.status?.code === "dirty",
     };
   }
-  if (v.kind === "plugin") {
-    return {
-      id: v.id,
-      kind: v.kind,
-      title: v.title,
-      plugin: v.pluginId,
-      view: v.view,
-    };
-  }
-  return { id: v.id, kind: v.kind, title: v.title, url: v.url };
+  return {
+    id: v.id,
+    kind: v.kind,
+    title: v.title,
+    plugin: v.pluginId,
+    view: v.view,
+  };
 }
 
 // 그룹 트리(분할 구조 — splitId/dir/sizes 는 panel.resize 의 대상).
@@ -325,26 +295,6 @@ function serializeTree() {
     })),
   };
 }
-
-// ── 브라우저 eval 합성 ───────────────────────────────────────────────────────
-// 브라우저 webview label 은 webviewLabels 단일 진실에서만 파생(창 네임스페이스 — 멀티 윈도우 충돌 방지).
-
-// js 본문을 async 로 실행하고 JSON 문자열 결과를 받는다(Rust browser_eval 은
-// WKWebView callAsyncJavaScript 네이티브 콜백 — CSP/IPC 권한 무관).
-async function evalInBrowser(viewId: string, body: string): Promise<unknown> {
-  const wrapped = `const __r = await (async () => { ${body} })(); return JSON.stringify(__r === undefined ? null : __r);`;
-  const raw = await invoke<string>("browser_eval", {
-    label: browserLabel(viewId),
-    js: wrapped,
-  });
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-}
-
-const sel = (s: string) => JSON.stringify(s);
 
 // ── 파라미터 조각(재사용) ────────────────────────────────────────────────────
 
@@ -1035,19 +985,15 @@ export function registerCatalog(): void {
   });
 
   register("view.open", {
-    description: "Open a new view tab in a panel (terminal / claude / codex / browser with optional url).",
-    triggers: { ko: "뷰 열기 탭 추가 claude 열기 터미널 열기 브라우저 탭" },
+    description: "Open a new view tab in a panel by program id (terminal / claude / codex / a plugin view program).",
+    triggers: { ko: "뷰 열기 탭 추가 claude 열기 터미널 열기" },
     params: {
       group: P.group,
       program: { ...P.program, required: true },
-      url: { type: "string", description: "Browser start URL (program=browser)" },
     },
     returns: "{ groupId, viewId, paneId? }",
     errors: ["TARGET_NOT_FOUND"],
-    examples: [
-      'sok view.open \'{"program":"claude"}\'',
-      'sok view.open \'{"program":"browser","url":"https://example.com"}\'',
-    ],
+    examples: ['sok view.open \'{"program":"claude"}\''],
     handler: (p, ctx) => {
       const loc = resolveGroup(p, ctx);
       if (!loc) return notFound("패널 없음");
@@ -1055,7 +1001,6 @@ export function registerCatalog(): void {
         loc.project.id,
         p.program as Program,
         loc.group.id,
-        { url: p.url as string | undefined },
       );
     },
   });
@@ -1352,409 +1297,6 @@ export function registerCatalog(): void {
     },
   });
 
-  // ----- browser -----
-  register("browser.open", {
-    description:
-      "Open soksak's own built-in browser view — as a panel tab (where=panel) or a standalone soksak window (where=window). This is ONLY the embedded in-app browser. Do NOT use it when the user names a specific or external browser (Chrome, Safari, Edge, Firefox, an agent browser, etc.) or says 'not the embedded one' — those are separate applications, not this command; launch the OS app instead.",
-    triggers: { ko: "내장 브라우저 열기 웹페이지 인앱 브라우저 URL 띄우기" },
-    params: {
-      url: { type: "string", description: "Start URL (omit = settings homeUrl)" },
-      where: {
-        type: "string",
-        description: "Where to open",
-        enum: ["panel", "window"],
-        default: "panel",
-      },
-      group: P.group,
-    },
-    returns: "panel: { groupId, viewId } / window: {}",
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ['sok browser.open \'{"url":"https://example.com"}\''],
-    handler: async (p, ctx) => {
-      const url = (p.url as string) ?? browserHome();
-      if (p.where === "window") {
-        await invoke("browser_open_window", { url });
-        return {};
-      }
-      const loc = resolveGroup(p, ctx);
-      if (!loc) return notFound("패널 없음");
-      return S().addViewToGroup(loc.project.id, "browser", loc.group.id, { url });
-    },
-  });
-
-  register("browser.navigate", {
-    description: "Navigate the browser view to a URL.",
-    triggers: { ko: "URL 이동 페이지 열기 주소 이동 사이트 열기" },
-    params: {
-      view: P.view,
-      url: { type: "string", description: "Target URL", required: true },
-    },
-    returns: "{ viewId, url }",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok browser.navigate \'{"url":"https://news.ycombinator.com"}\''],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      S().setBrowserUrl(b.project.id, b.view.id, p.url as string);
-      await invoke("browser_navigate", {
-        label: browserLabel(b.view.id),
-        url: p.url as string,
-      });
-      return { viewId: b.view.id, url: p.url };
-    },
-  });
-
-  register("browser.back", {
-    description: "Navigate the browser to the previous page in history.",
-    triggers: { ko: "뒤로 이전 페이지 브라우저 뒤로가기" },
-    params: { view: P.view },
-    returns: "{ viewId }",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok browser.back"],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      await invoke("browser_history", { label: browserLabel(b.view.id), delta: -1 });
-      return { viewId: b.view.id };
-    },
-  });
-
-  register("browser.forward", {
-    description: "Navigate the browser to the next page in history.",
-    triggers: { ko: "앞으로 다음 페이지 브라우저 앞으로가기" },
-    params: { view: P.view },
-    returns: "{ viewId }",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok browser.forward"],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      await invoke("browser_history", { label: browserLabel(b.view.id), delta: 1 });
-      return { viewId: b.view.id };
-    },
-  });
-
-  register("browser.reload", {
-    description: "Reload the current browser page.",
-    triggers: { ko: "새로고침 페이지 리로드 브라우저 새로고침" },
-    params: { view: P.view },
-    returns: "{ viewId, url }",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok browser.reload"],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      await invoke("browser_navigate", {
-        label: browserLabel(b.view.id),
-        url: b.url,
-      });
-      return { viewId: b.view.id, url: b.url };
-    },
-  });
-
-  register("browser.devtools", {
-    description:
-      "Toggle the browser Web Inspector. WKWebView has no CDP so the OS inspector opens in a separate window — same as clicking the toolbar inspect button.",
-    triggers: { ko: "개발자 도구 인스펙터 devtools 열기 닫기" },
-    params: { view: P.view },
-    returns: "{ viewId, open }",
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok browser.devtools"],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      const open = await invoke<boolean>("browser_devtools", {
-        label: browserLabel(b.view.id),
-      });
-      return { viewId: b.view.id, open };
-    },
-  });
-
-  register("browser.list", {
-    description:
-      "List existing native browser webview labels (b-<viewId>). Should match the store's browser view set — use to detect orphaned webviews.",
-    params: {},
-    returns: "{ labels: string[] }",
-    examples: ["sok browser.list"],
-    handler: async () => ({
-      labels: await invoke<string[]>("browser_list"),
-    }),
-  });
-
-  register("browser.eval", {
-    danger: "inject",
-    description:
-      "Execute arbitrary JS in a browser page (async supported; return value is serialized as JSON).",
-    triggers: { ko: "JS 실행 자바스크립트 브라우저 실행 페이지 스크립트" },
-    params: {
-      view: P.view,
-      js: {
-        type: "string",
-        description: "JS body to execute (e.g. return document.title)",
-        required: true,
-      },
-    },
-    returns: "{ viewId, result }",
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ['sok browser.eval \'{"js":"return document.title"}\''],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      const result = await evalInBrowser(b.view.id, p.js as string);
-      return { viewId: b.view.id, result };
-    },
-  });
-
-  register("browser.media.extract", {
-    danger: "inject",
-    description:
-      "Extract media URLs from a page WITHOUT showing it — opens an offscreen webview, lets the page load (sniffing its own media requests via the core hook), then closes it and returns the hits. Site-agnostic (R3): takes a url only, intercepts whatever the page requests, no decode/branching. Reaches sites the webview can load (e.g. behind network/SNI blocks) but cross-origin fetch/yt-dlp cannot. Symmetric hidden counterpart of browser.media.sniff (visible tab).",
-    triggers: { ko: "미디어 추출 숨김 오프스크린 m3u8 스트림 페이지 가로채기 동영상" },
-    params: {
-      url: { type: "string", description: "Page URL to load offscreen and extract from", required: true },
-      timeoutMs: { type: "number", description: "Max wait for a media hit (ms)", default: 15000 },
-    },
-    returns: "{ urls: [{ url, via, ref }] }",
-    errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok browser.media.extract \'{"url":"https://example.com/watch","timeoutMs":15000}\''],
-    handler: async (p) => {
-      if (typeof p.url !== "string" || !p.url) {
-        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "url 필요" };
-      }
-      const urls = await invoke<unknown>("browser_media_extract", {
-        url: p.url,
-        timeoutMs: typeof p.timeoutMs === "number" ? p.timeoutMs : 15000,
-      });
-      return { urls: Array.isArray(urls) ? urls : [] };
-    },
-  });
-
-  register("browser.media.sniff", {
-    danger: "inject",
-    description:
-      "Harvest media URLs (m3u8/mpd/mp4/...) that the page itself requested — captured passively by the core init-script hook (window.__soksakMedia). Site-agnostic: catches whatever the page loads, regardless of obfuscation. Waits up to timeoutMs for at least one hit; with autoplay it calls video.play() to provoke the stream. Use to extract a playable stream from a page the webview can reach (e.g. behind network blocks) but cross-origin fetch/yt-dlp cannot.",
-    triggers: { ko: "미디어 스니프 추출 m3u8 스트림 페이지 캡처 가로채기 동영상" },
-    params: {
-      view: P.view,
-      timeoutMs: { type: "number", description: "Max wait for a hit (ms)", default: 8000 },
-      autoplay: { type: "boolean", description: "Call video.play() to provoke the stream request", default: true },
-      pattern: { type: "string", description: "Only return URLs matching this regex (e.g. m3u8)" },
-    },
-    returns: "{ viewId, urls: [{ url, via, ref }] }",
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ['sok browser.media.sniff \'{"pattern":"m3u8","timeoutMs":10000}\''],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      const viewId = b.view.id;
-      const timeoutMs = typeof p.timeoutMs === "number" ? p.timeoutMs : 8000;
-      const autoplay = p.autoplay !== false;
-      const re = p.pattern ? new RegExp(p.pattern as string, "i") : null;
-      const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-      const deadline = Date.now() + Math.max(500, timeoutMs);
-      let triggered = false;
-      // 시간 상한 폴링(R10 무한폴링 금지) — hit 나오면 즉시 반환.
-      for (;;) {
-        const raw = (await evalInBrowser(viewId, "return JSON.stringify(window.__soksakMedia || [])")) as unknown;
-        let hits: { url: string; via?: string; ref?: string }[] = [];
-        try {
-          hits = typeof raw === "string" ? JSON.parse(raw) : (raw as typeof hits);
-        } catch {
-          hits = [];
-        }
-        const urls = re ? hits.filter((h) => re.test(h.url)) : hits;
-        if (urls.length > 0) return { viewId, urls };
-        if (autoplay && !triggered) {
-          triggered = true;
-          // 페이지 자신의 플레이어를 유발(사이트 무관) — 재생 시 m3u8 을 요청한다.
-          await evalInBrowser(
-            viewId,
-            "try { var v = document.querySelector('video'); if (v) { v.muted = true; v.play && v.play().catch(function(){}); } } catch(e){} return null;",
-          );
-        }
-        if (Date.now() >= deadline) return { viewId, urls: [] };
-        await delay(400);
-      }
-    },
-  });
-
-  // ----- browser.dom -----
-  register("browser.dom.text", {
-    description: "Get the visible text of the page or a specific selector element.",
-    params: {
-      view: P.view,
-      selector: { type: "string", description: "CSS selector (omit = entire body)" },
-      maxLength: { type: "number", description: "Max character length", default: 20000 },
-    },
-    returns: "{ viewId, text|null }",
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ["sok browser.dom.text", 'sok browser.dom.text \'{"selector":"#main"}\''],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      const js = p.selector
-        ? `const el = document.querySelector(${sel(p.selector as string)}); return el ? el.innerText.slice(0, ${p.maxLength}) : null;`
-        : `return document.body.innerText.slice(0, ${p.maxLength});`;
-      const text = await evalInBrowser(b.view.id, js);
-      return { viewId: b.view.id, text };
-    },
-  });
-
-  register("browser.dom.html", {
-    description: "Get the HTML of the page or a specific selector element.",
-    params: {
-      view: P.view,
-      selector: { type: "string", description: "CSS selector (omit = entire document)" },
-      maxLength: { type: "number", description: "Max character length", default: 50000 },
-    },
-    returns: "{ viewId, html|null }",
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ['sok browser.dom.html \'{"selector":"form"}\''],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      const js = p.selector
-        ? `const el = document.querySelector(${sel(p.selector as string)}); return el ? el.outerHTML.slice(0, ${p.maxLength}) : null;`
-        : `return document.documentElement.outerHTML.slice(0, ${p.maxLength});`;
-      const html = await evalInBrowser(b.view.id, js);
-      return { viewId: b.view.id, html };
-    },
-  });
-
-  register("browser.dom.query", {
-    description: "Summarize matching elements (tag / text / attributes) for a CSS selector — use to understand page structure.",
-    params: {
-      view: P.view,
-      selector: { type: "string", description: "CSS selector", required: true },
-      limit: { type: "number", description: "Max element count", default: 20 },
-    },
-    returns: "{ viewId, count, elements[] }",
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ['sok browser.dom.query \'{"selector":"a"}\''],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      const js = `
-        const all = [...document.querySelectorAll(${sel(p.selector as string)})];
-        return { count: all.length, elements: all.slice(0, ${p.limit}).map(e => ({
-          tag: e.tagName.toLowerCase(),
-          text: (e.innerText || "").trim().slice(0, 120) || undefined,
-          id: e.id || undefined,
-          class: (typeof e.className === "string" && e.className) || undefined,
-          name: e.getAttribute("name") || undefined,
-          href: e.getAttribute("href") || undefined,
-          type: e.getAttribute("type") || undefined,
-          value: e.value !== undefined ? String(e.value).slice(0, 120) : undefined,
-        })) };`;
-      const r = await evalInBrowser(b.view.id, js);
-      return { viewId: b.view.id, ...(r as object) };
-    },
-  });
-
-  register("browser.dom.click", {
-    danger: "inject",
-    description: "Click the first element matching a CSS selector.",
-    triggers: { ko: "클릭 버튼 클릭 링크 클릭 페이지 클릭" },
-    params: {
-      view: P.view,
-      selector: { type: "string", description: "CSS selector", required: true },
-    },
-    returns: "{ viewId, clicked }",
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ['sok browser.dom.click \'{"selector":"button[type=submit]"}\''],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      const js = `const el = document.querySelector(${sel(p.selector as string)}); if (!el) return { clicked: false, reason: "selector 매칭 없음" }; el.click(); return { clicked: true };`;
-      const r = await evalInBrowser(b.view.id, js);
-      return { viewId: b.view.id, ...(r as object) };
-    },
-  });
-
-  register("browser.dom.fill", {
-    danger: "inject",
-    description: "Fill an input element with a value (fires input/change events — React form compatible).",
-    triggers: { ko: "입력 채우기 폼 입력 텍스트 입력 필드 채우기" },
-    params: {
-      view: P.view,
-      selector: { type: "string", description: "CSS selector", required: true },
-      text: { type: "string", description: "Value to enter", required: true },
-    },
-    returns: "{ viewId, filled }",
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ['sok browser.dom.fill \'{"selector":"input[name=q]","text":"soksak"}\''],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      const js = `
-        const el = document.querySelector(${sel(p.selector as string)});
-        if (!el) return { filled: false, reason: "selector 매칭 없음" };
-        const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-        const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-        if (setter) setter.call(el, ${sel(String(p.text))}); else el.value = ${sel(String(p.text))};
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-        el.dispatchEvent(new Event("change", { bubbles: true }));
-        return { filled: true };`;
-      const r = await evalInBrowser(b.view.id, js);
-      return { viewId: b.view.id, ...(r as object) };
-    },
-  });
-
-  register("browser.dom.submit", {
-    danger: "inject",
-    description: "Submit a form (selector can be the form element or any element inside it).",
-    triggers: { ko: "폼 제출 submit 전송 양식 제출" },
-    params: {
-      view: P.view,
-      selector: { type: "string", description: "CSS selector", required: true },
-    },
-    returns: "{ viewId, submitted }",
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ['sok browser.dom.submit \'{"selector":"form"}\''],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      const js = `
-        const el = document.querySelector(${sel(p.selector as string)});
-        if (!el) return { submitted: false, reason: "selector 매칭 없음" };
-        const form = el instanceof HTMLFormElement ? el : el.closest("form");
-        if (!form) return { submitted: false, reason: "form 없음" };
-        form.requestSubmit ? form.requestSubmit() : form.submit();
-        return { submitted: true };`;
-      const r = await evalInBrowser(b.view.id, js);
-      return { viewId: b.view.id, ...(r as object) };
-    },
-  });
-
-  register("browser.dom.waitFor", {
-    description: "Wait until a selector appears on the page (dynamic pages — uses MutationObserver).",
-    triggers: { ko: "요소 대기 나타날 때까지 기다리기 동적 로딩 대기" },
-    params: {
-      view: P.view,
-      selector: { type: "string", description: "CSS selector", required: true },
-      timeoutMs: { type: "number", description: "Max wait time (ms)", default: 5000 },
-    },
-    returns: "{ viewId, found }",
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ['sok browser.dom.waitFor \'{"selector":".results"}\''],
-    handler: async (p, ctx) => {
-      const b = resolveBrowser(p, ctx);
-      if (!b) return notFound("브라우저 뷰 없음");
-      const js = `
-        const find = () => document.querySelector(${sel(p.selector as string)});
-        if (find()) return { found: true };
-        return await new Promise((resolve) => {
-          const obs = new MutationObserver(() => {
-            if (find()) { obs.disconnect(); clearTimeout(timer); resolve({ found: true }); }
-          });
-          const timer = setTimeout(() => { obs.disconnect(); resolve({ found: false }); }, ${p.timeoutMs});
-          obs.observe(document.documentElement, { childList: true, subtree: true });
-        });`;
-      const r = await evalInBrowser(b.view.id, js);
-      return { viewId: b.view.id, ...(r as object) };
-    },
-  });
-
   // ----- bookmark -----
   register("bookmark.list", {
     description: "List saved browser bookmarks.",
@@ -1883,7 +1425,6 @@ export function registerCatalog(): void {
     "language",
     "projectTabPosition",
     "shell",
-    "homeUrl",
     "fontFamily",
     "fontSize",
     "cursorBlink",
@@ -1908,7 +1449,6 @@ export function registerCatalog(): void {
         language: s.language,
         projectTabPosition: s.projectTabPosition,
         shell: s.shell,
-        homeUrl: s.homeUrl,
         fontFamily: s.fontFamily,
         fontSize: s.fontSize,
         cursorBlink: s.cursorBlink,
@@ -1974,10 +1514,6 @@ export function registerCatalog(): void {
         case "shell":
           if (typeof v !== "string") return bad("string(셸 경로, ''=기본)");
           s.setShell(v);
-          break;
-        case "homeUrl":
-          if (typeof v !== "string") return bad("string(URL)");
-          s.setHomeUrl(v);
           break;
         case "fontFamily":
           if (typeof v !== "string") return bad("string");

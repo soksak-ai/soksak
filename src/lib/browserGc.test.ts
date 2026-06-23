@@ -1,7 +1,7 @@
 // browserGc — webview 회수 불변식의 순수 핵(collectBrowserLabels) 단위검증.
-// 불변식: live label 집합 = 레거시 브라우저 뷰(kind:"browser") ∪ 브라우저 플러그인 콘텐츠
-// 뷰(kind:"plugin", pluginId=soksak-plugin-browser). 한 형태만 세면 다른 형태의 살아있는
-// webview 를 고아로 오인해 회수하거나(잘못된 회수), 죽은 webview 를 못 잡는다(고아 누수).
+// 불변식: live label 집합 = 브라우저 플러그인 콘텐츠 뷰(kind:"plugin", pluginId=soksak-plugin-browser).
+// 이 형태를 못 세면 살아있는 webview 를 고아로 오인해 회수하거나(잘못된 회수), 죽은 webview 를
+// 못 잡는다(고아 누수).
 
 import { describe, expect, it } from "vitest";
 import { collectBrowserLabels } from "./browserGc";
@@ -35,13 +35,6 @@ function tab(views: View[]): ProjectTab {
   };
 }
 
-const legacyBrowser = (id: string): View => ({
-  id,
-  kind: "browser",
-  title: "B",
-  url: "https://example.com/",
-});
-
 const pluginBrowser = (id: string): View => ({
   id,
   kind: "plugin",
@@ -67,22 +60,9 @@ const otherPlugin = (id: string): View => ({
 });
 
 describe("collectBrowserLabels — webview 소유 뷰 label 집합", () => {
-  it("레거시 브라우저 뷰의 label 을 센다", () => {
-    const live = collectBrowserLabels([tab([legacyBrowser("v1")])], labelOf);
-    expect([...live]).toEqual(["b-v1"]);
-  });
-
   it("브라우저 플러그인 콘텐츠 뷰의 label 을 센다(누락하면 고아 오인 회수 — 회귀 가드)", () => {
     const live = collectBrowserLabels([tab([pluginBrowser("v2")])], labelOf);
     expect([...live]).toEqual(["b-v2"]);
-  });
-
-  it("레거시 + 플러그인 브라우저 공존 시 둘 다 센다", () => {
-    const live = collectBrowserLabels(
-      [tab([legacyBrowser("v1"), pluginBrowser("v2")])],
-      labelOf,
-    );
-    expect(live).toEqual(new Set(["b-v1", "b-v2"]));
   });
 
   it("webview 비소유 뷰(터미널·다른 플러그인)는 세지 않는다", () => {
@@ -93,10 +73,10 @@ describe("collectBrowserLabels — webview 소유 뷰 label 집합", () => {
     expect(live.size).toBe(0);
   });
 
-  it("여러 콘텐츠/그룹에 흩어진 브라우저를 전부 모은다", () => {
+  it("여러 콘텐츠/그룹에 흩어진 브라우저 플러그인 뷰를 전부 모은다", () => {
     const t: ProjectTab = {
-      ...tab([legacyBrowser("v1")]),
-      contents: [content([legacyBrowser("v1")]), content([pluginBrowser("v2")])],
+      ...tab([pluginBrowser("v1")]),
+      contents: [content([pluginBrowser("v1")]), content([pluginBrowser("v2")])],
     };
     // 두 번째 content 의 id 충돌 회피
     t.contents[1] = { ...t.contents[1], id: "c2" };

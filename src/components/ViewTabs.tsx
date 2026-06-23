@@ -129,11 +129,9 @@ export const ViewTabs = memo(function ViewTabs({
             title={
               v.kind === "file"
                 ? v.path
-                : v.kind === "browser"
-                  ? v.url
-                  : v.kind === "plugin"
-                    ? `${v.pluginId}.${v.view}`
-                    : t("view.terminal")
+                : v.kind === "plugin"
+                  ? `${v.pluginId}.${v.view}`
+                  : t("view.terminal")
             }
           >
             <span className="view-tab-icon icon-inline">
@@ -141,21 +139,15 @@ export const ViewTabs = memo(function ViewTabs({
                 <Icon name="terminal" size="sm" />
               ) : v.kind === "file" ? (
                 <Icon name="file" size="sm" />
-              ) : v.kind === "plugin" ? (
+              ) : (
                 // 플러그인 아이콘은 매니페스트 선언 문자열(외부 계약) — 미등록만 폴백.
                 (pluginIconOf(v.pluginId, v.view) ?? (
                   <Icon name="plugin" size="sm" />
                 ))
-              ) : (
-                <Icon name="browser" size="sm" />
               )}
             </span>
             <span className="view-tab-title">
-              {v.kind === "terminal"
-                ? t("view.terminal")
-                : v.kind === "browser"
-                  ? t("view.browser")
-                  : v.title}
+              {v.kind === "terminal" ? t("view.terminal") : v.title}
             </span>
             {v.kind === "file" && v.status?.code === "dirty" && (
               <span className="view-tab-dirty" title={t("viewer.unsaved")}>

@@ -2,7 +2,6 @@ import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { rafThrottle } from "../lib/rafThrottle";
 import { parkedStyle } from "../lib/layerPark";
 import { Icon } from "../ui/icons/Icon";
-import { BrowserView } from "./BrowserView";
 import { FileViewerHost } from "./FileViewerHost";
 import { GroupStatusBar } from "./GroupStatusBar";
 import { PaneTree } from "./PaneTree";
@@ -383,13 +382,12 @@ export const GroupArea = memo(function GroupArea({
         const isActiveGroup = group.id === content.activeGroupId;
         const active = group.views.find((v) => v.id === group.activeViewId);
         // 홀 셀(레이어 원칙): 활성 뷰 아래 네이티브 레이어(임베드 webview)가 비쳐야 하면 본문 영역에
-        // 배경을 칠하면 안 된다 — CSS 가 헤더/상태바 밴드만 칠하도록 클래스로 표시. 코어의 browser 하드
-        // 체크 대신 데이터 주도: kind:"browser"(레거시) 또는 transparent 선언 플러그인 콘텐츠 뷰.
+        // 배경을 칠하면 안 된다 — CSS 가 헤더/상태바 밴드만 칠하도록 클래스로 표시. 데이터 주도:
+        // transparent 선언 플러그인 콘텐츠 뷰(예: 브라우저 플러그인)만 홀로 처리(코어 하드 체크 없음).
         const holeCell =
-          active?.kind === "browser" ||
-          (active?.kind === "plugin" &&
-            !!getRegisteredView(`${active.pluginId}.${active.view}`)?.decl
-              .transparent);
+          active?.kind === "plugin" &&
+          !!getRegisteredView(`${active.pluginId}.${active.view}`)?.decl
+            .transparent;
         return (
           <div
             key={`cell-${group.id}`}
@@ -408,10 +406,8 @@ export const GroupArea = memo(function GroupArea({
                     <Icon name="terminal" size="sm" />
                   ) : active?.kind === "file" ? (
                     <Icon name="file" size="sm" />
-                  ) : active?.kind === "plugin" ? (
-                    <Icon name="plugin" size="sm" />
                   ) : (
-                    <Icon name="browser" size="sm" />
+                    <Icon name="plugin" size="sm" />
                   )}
                 </span>
                 <span className="egt-name">
@@ -448,7 +444,7 @@ export const GroupArea = memo(function GroupArea({
                   ) : active?.kind === "file" ? (
                     <Icon name="file" size="sm" />
                   ) : (
-                    <Icon name="browser" size="sm" />
+                    <Icon name="plugin" size="sm" />
                   )}
                 </span>
                 <span className="egt-name">
@@ -546,20 +542,13 @@ export const GroupArea = memo(function GroupArea({
                   root={projectRoot}
                   viewId={view.id}
                 />
-              ) : view.kind === "plugin" ? (
+              ) : (
                 <PluginViewHost
                   viewKey={`${view.pluginId}.${view.view}`}
                   viewId={view.id}
                   projectId={projectId}
                   root={projectRoot}
                   region="content"
-                />
-              ) : (
-                <BrowserView
-                  projectId={projectId}
-                  viewId={view.id}
-                  url={view.url}
-                  visible={isActiveProject && shown}
                 />
               )}
             </div>

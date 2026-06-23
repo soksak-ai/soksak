@@ -9,7 +9,6 @@ import {
   type Language,
   type TabPosition,
   type FocusIndicator,
-  type BrowserNewWindow,
   type TabCloseConfirm,
 } from "../state/settings";
 import { useTheme } from "../state/theme";
@@ -386,6 +385,14 @@ export function SettingsModal({
               <option value="webgl">{t("renderer.webgl")}</option>
             </select>
           </div>
+          <div className="drow">
+            <span className="drow-label">{t("settings.scrollback")}</span>
+            <Stepper
+              value={s.scrollback}
+              onChange={s.setScrollback}
+              step={1000}
+            />
+          </div>
 
           <div className="dsec">{t("settings.permission")}</div>
           <div className="drow">
@@ -413,38 +420,6 @@ export function SettingsModal({
               <option value="allow">{t("policy.allow")}</option>
               <option value="deny">{t("policy.deny")}</option>
             </select>
-          </div>
-
-          <div className="dsec">{t("program.browser")}</div>
-          <div className="drow">
-            <span className="drow-label">{t("settings.homeUrl")}</span>
-            <input
-              className="dctl dctl-mono"
-              type="text"
-              value={s.homeUrl}
-              onChange={(e) => s.setHomeUrl(e.target.value.trim())}
-            />
-          </div>
-          <div className="drow">
-            <span className="drow-label">{t("settings.browserNewWindow")}</span>
-            <select
-              className="dctl"
-              value={s.browserNewWindow}
-              onChange={(e) =>
-                s.setBrowserNewWindow(e.target.value as BrowserNewWindow)
-              }
-            >
-              <option value="window">{t("browserNewWindow.window")}</option>
-              <option value="tab">{t("browserNewWindow.tab")}</option>
-            </select>
-          </div>
-          <div className="drow">
-            <span className="drow-label">{t("settings.scrollback")}</span>
-            <Stepper
-              value={s.scrollback}
-              onChange={s.setScrollback}
-              step={1000}
-            />
           </div>
               </>
             ) : (

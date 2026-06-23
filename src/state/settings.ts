@@ -13,8 +13,6 @@ export type SplitHeaderMode = "title" | "tabs";
 export type DangerPolicy = "allow" | "deny";
 // 포커스 영역 표시: outline=사각 아웃라인, corners=모서리 꺽쇠 4개.
 export type FocusIndicator = "outline" | "corners";
-// 내장 브라우저의 새 링크(target=_blank / window.open) 처리: 새 OS 창 또는 앱 내 새 탭.
-export type BrowserNewWindow = "window" | "tab";
 // 탭 닫기 확인 정책(R6) — warn=blocking status(미저장·실행 중 등)면 확인창, off=무조건 즉시 닫기.
 export type TabCloseConfirm = "warn" | "off";
 // 우측 플러그인 사이드바 배치: overlay=콘텐츠 위에 뜸(기존), push=좌측 사이드바처럼 영역 차지(콘텐츠 밀어냄).
@@ -55,8 +53,6 @@ interface SettingsState extends TerminalSettings {
   splitHeaderMode: SplitHeaderMode;
   // 터미널 셸 경로("" = 시스템 기본 $SHELL). 프로젝트 설정이 있으면 그것이 우선.
   shell: string;
-  // 브라우저 시작 URL.
-  homeUrl: string;
   // 원격 위험 명령 정책: 파괴적(닫기/제거) / 주입(입력·임의 JS).
   remoteDestructive: DangerPolicy;
   remoteInject: DangerPolicy;
@@ -66,8 +62,6 @@ interface SettingsState extends TerminalSettings {
   iconBox: boolean;
   // 포커스 그룹 표시 스타일(그룹 2개 이상일 때 활성 그룹에 표시).
   focusIndicator: FocusIndicator;
-  // 내장 브라우저의 새 링크(_blank/window.open) 처리: window=새 OS 창, tab=앱 내 새 탭.
-  browserNewWindow: BrowserNewWindow;
   // 앱 첫 오픈 시 가리킬 기본 프로젝트 루트("" = 자동 project1). 프로젝트
   // 설정의 "기본 프로젝트" 체크박스가 저장 — 부트(main.tsx)가 소비.
   defaultProjectRoot: string;
@@ -79,13 +73,11 @@ interface SettingsState extends TerminalSettings {
   setContentTabPosition: (p: TabPosition) => void;
   setSplitHeaderMode: (m: SplitHeaderMode) => void;
   setShell: (s: string) => void;
-  setHomeUrl: (u: string) => void;
   setRemoteDestructive: (p: DangerPolicy) => void;
   setRemoteInject: (p: DangerPolicy) => void;
   setIconSet: (id: string) => void;
   setIconBox: (v: boolean) => void;
   setFocusIndicator: (v: FocusIndicator) => void;
-  setBrowserNewWindow: (p: BrowserNewWindow) => void;
   setDefaultProjectRoot: (root: string) => void;
   setTabCloseConfirm: (v: TabCloseConfirm) => void;
   setRightSidebarMode: (v: RightSidebarMode) => void;
@@ -104,13 +96,11 @@ const DEFAULTS = {
   contentTabPosition: "top" as TabPosition,
   splitHeaderMode: "title" as SplitHeaderMode,
   shell: "",
-  homeUrl: "https://www.google.com",
   remoteDestructive: "allow" as DangerPolicy,
   remoteInject: "allow" as DangerPolicy,
   iconSet: "lucide",
   iconBox: false,
   focusIndicator: "outline" as FocusIndicator,
-  browserNewWindow: "tab" as BrowserNewWindow,
   defaultProjectRoot: "",
   tabCloseConfirm: "warn" as TabCloseConfirm,
   rightSidebarMode: "overlay" as RightSidebarMode,
@@ -136,13 +126,11 @@ function serialize(s: SettingsState): PersistedSettings {
     contentTabPosition: s.contentTabPosition,
     splitHeaderMode: s.splitHeaderMode,
     shell: s.shell,
-    homeUrl: s.homeUrl,
     remoteDestructive: s.remoteDestructive,
     remoteInject: s.remoteInject,
     iconSet: s.iconSet,
     iconBox: s.iconBox,
     focusIndicator: s.focusIndicator,
-    browserNewWindow: s.browserNewWindow,
     defaultProjectRoot: s.defaultProjectRoot,
     tabCloseConfirm: s.tabCloseConfirm,
     rightSidebarMode: s.rightSidebarMode,
@@ -203,10 +191,6 @@ export const useSettings = create<SettingsState>((set, get) => {
       set({ shell });
       save();
     },
-    setHomeUrl: (homeUrl) => {
-      set({ homeUrl });
-      save();
-    },
     setRemoteDestructive: (remoteDestructive) => {
       set({ remoteDestructive });
       save();
@@ -225,10 +209,6 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setFocusIndicator: (focusIndicator) => {
       set({ focusIndicator });
-      save();
-    },
-    setBrowserNewWindow: (browserNewWindow) => {
-      set({ browserNewWindow });
       save();
     },
     setDefaultProjectRoot: (defaultProjectRoot) => {

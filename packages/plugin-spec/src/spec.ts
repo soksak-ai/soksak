@@ -327,7 +327,7 @@ export interface ContributedView {
   placements: ViewPlacement[]; // 파싱 시 기본 ["sidebar-right"] 로 채움
   defaultPlacement: ViewPlacement; // 파싱 시 placements[0] 으로 채움
   // 콘텐츠 뷰 아래 네이티브 레이어(임베드 webview 등)가 비쳐야 함 — 코어가 그 셀을 투명 홀로 처리한다.
-  // 브라우저류 뷰가 선언(코어의 kind==="browser" 하드 체크 대체, 데이터 주도). 기본 false.
+  // 브라우저류 뷰(child webview 임베드)가 선언한다(코어 하드 체크 없음 — 데이터 주도). 기본 false.
   transparent: boolean; // 파싱 시 기본 false
 }
 
@@ -372,12 +372,11 @@ export interface ContributedSkill {
 
 // ── §2.6 프로그램 ────────────────────────────────────────────────────────────
 // 프로그램 = 새 탭(+) 메뉴의 항목 하나 = 새 뷰를 여는 방법. 내장 프로그램은
-// 없다 — 터미널·에이전트·브라우저 전부 플러그인이 기여한다(메뉴·목록에
-// 하드코딩 항목 없음). 코어가 소유하는 것은 뷰 능력(terminal/browser kind)
-// 뿐이다. 프로그램 id 는 전역 평탄(사용자-facing 인터페이스 — 명령 파라미터·
-// 설정값에 그대로 쓰임). 충돌은 등록 시점 에러(§0-3 침묵 실패 금지).
-// 미등록 id 사용 시 코어는 능력명("browser")이면 그 능력, 아니면 터미널 뷰로
-// 폴백한다(상태·코어 명령의 동작 보장 — 메뉴 항목과는 무관).
+// 없다 — 터미널·에이전트 전부 플러그인이 기여한다(메뉴·목록에 하드코딩 항목
+// 없음). 코어가 소유하는 것은 터미널 뷰 능력(terminal kind)뿐이다. 프로그램 id
+// 는 전역 평탄(사용자-facing 인터페이스 — 명령 파라미터·설정값에 그대로 쓰임).
+// 충돌은 등록 시점 에러(§0-3 침묵 실패 금지). 미등록 id 사용 시 코어는 터미널
+// 뷰로 폴백한다(상태·코어 명령의 동작 보장 — 메뉴 항목과는 무관).
 //
 // 프로그램은 완전 선언형이다(languages 와 동형 — 코드 바인딩 불요, 자동 적용).
 // 동작 전체(실행 명령·설치 명령)가 매니페스트에 있어야 동의 화면이 플러그인의
@@ -397,11 +396,10 @@ export interface ContributedProgram {
   // 메뉴 카테고리 경로 — "/" 구분으로 뎁스 지정(예: "에이전트", "에이전트/실험").
   // 같은 경로끼리 서브메뉴로 묶인다(플러그인 간 병합 — 표시 언어 기준).
   path?: LocalizedText;
-  // 동작: terminal = 터미널 뷰(+command 자동 실행), browser = 브라우저 뷰(+url),
+  // 동작: terminal = 터미널 뷰(+command 자동 실행),
   // view = 이 플러그인의 contributes.views 중 하나를 콘텐츠 탭으로 연다(+view).
-  kind: "terminal" | "browser" | "view";
+  kind: "terminal" | "view";
   command?: string; // kind=terminal 한정: 자동 실행할 셸 명령(생략 = 맨 터미널)
-  url?: string; // kind=browser 한정: 시작 URL(생략 = 설정 homeUrl)
   view?: string; // kind=view 한정: 열 플러그인 내 뷰 id(contributes.views[].id)
   // kind=terminal 한정 — 선행 바이너리 보장: 사용자 셸 PATH 에서 bin 을 확인하고
   // 미설치면 공식 설치 명령을 같은 터미널에서 가시 실행한다(은폐 금지).
@@ -1339,7 +1337,7 @@ export function parseManifest(
       programs = parseEntries(c.programs, {
         label: "contributes.programs",
         required: ["id", "title", "kind"],
-        optional: ["path", "command", "url", "view", "ensure"],
+        optional: ["path", "command", "view", "ensure"],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
             errs.push("contributes.programs: id 는 ^[a-z0-9][a-z0-9-]*$");
@@ -1355,8 +1353,8 @@ export function parseManifest(
           ) {
             return null;
           }
-          if (v.kind !== "terminal" && v.kind !== "browser" && v.kind !== "view") {
-            errs.push(`contributes.programs["${id}"].kind: terminal|browser|view`);
+          if (v.kind !== "terminal" && v.kind !== "view") {
+            errs.push(`contributes.programs["${id}"].kind: terminal|view`);
             return null;
           }
           const kind = v.kind;
@@ -1395,14 +1393,6 @@ export function parseManifest(
             if (kind !== "terminal" || !isNonEmptyString(v.command)) {
               errs.push(
                 `contributes.programs["${id}"].command: kind=terminal 한정 비공백 문자열`,
-              );
-              return null;
-            }
-          }
-          if (v.url !== undefined) {
-            if (kind !== "browser" || !isNonEmptyString(v.url)) {
-              errs.push(
-                `contributes.programs["${id}"].url: kind=browser 한정 비공백 문자열`,
               );
               return null;
             }
@@ -1472,7 +1462,6 @@ export function parseManifest(
             kind,
             ...(path !== undefined ? { path } : {}),
             ...(v.command !== undefined ? { command: (v.command as string).trim() } : {}),
-            ...(v.url !== undefined ? { url: (v.url as string).trim() } : {}),
             ...(v.view !== undefined ? { view: (v.view as string).trim() } : {}),
             ...(ensure !== undefined ? { ensure } : {}),
           };

@@ -3,8 +3,6 @@ import { getCwdOfHost, subscribeCwd } from "../terminal/paneHosts";
 import { Icon } from "../ui/icons/Icon";
 import type { View, ViewGroup } from "../state/sessions";
 import { useT } from "../i18n";
-import { listen } from "@tauri-apps/api/event";
-import { browserLabel } from "../lib/webviewLabels";
 import {
   statusBarItemsForPane,
   subscribeStatusBarItems,
@@ -73,36 +71,6 @@ function FileStatus({ view }: { view: Extract<View, { kind: "file" }> }) {
   );
 }
 
-function BrowserStatus({ view }: { view: Extract<View, { kind: "browser" }> }) {
-  const t = useT();
-  // 링크 hover URL(네이티브 browser-status). 호버 중이면 그 URL, 아니면 현재 페이지 URL
-  // (크롬 상태표시줄 관례). 별도 줄을 만들지 않고 이 기존 상태표시줄에 표시한다.
-  const [hover, setHover] = useState("");
-  const label = browserLabel(view.id);
-  useEffect(() => {
-    setHover("");
-    const un = listen<{ label: string; url: string }>("browser-status", (e) => {
-      if (e.payload.label === label) setHover(e.payload.url);
-    });
-    return () => {
-      void un.then((f) => f());
-    };
-  }, [label]);
-  // 페이지가 바뀌면 호버 잔상 초기화.
-  useEffect(() => {
-    setHover("");
-  }, [view.url]);
-  const shown = hover || view.url;
-  return (
-    <>
-      <span className="egs-left" title={shown}>
-        {shown}
-      </span>
-      <span className="egs-right">{t("program.browser")}</span>
-    </>
-  );
-}
-
 // memo 경계(원칙 2): group 정체성이 보존되는 무관한 store 쓰기에는 리렌더 없음.
 export const GroupStatusBar = memo(function GroupStatusBar({
   group,
@@ -116,8 +84,6 @@ export const GroupStatusBar = memo(function GroupStatusBar({
         <TerminalStatus paneId={active.focusedPaneId} />
       ) : active?.kind === "file" ? (
         <FileStatus view={active} />
-      ) : active?.kind === "browser" ? (
-        <BrowserStatus view={active} />
       ) : null}
     </div>
   );

@@ -80,7 +80,7 @@ export interface ViewStatus {
   message?: string;
 }
 
-// 콘텐츠 뷰: 터미널(분할 가능), 파일(CodeMirror/프리뷰), 브라우저(child webview).
+// 콘텐츠 뷰: 터미널(분할 가능), 파일(CodeMirror/프리뷰), 플러그인(콘텐츠 배치).
 export type View =
   | {
       id: string;
@@ -102,13 +102,6 @@ export type View =
       path: string; // 절대 경로
       mode: "code" | "preview";
       // 미저장은 status.code "dirty" 로 표현(R5) — 별도 dirty 플래그 없음(이중진실 금지).
-      status?: ViewStatus;
-    }
-  | {
-      id: string;
-      kind: "browser";
-      title: string;
-      url: string;
       status?: ViewStatus;
     }
   // 플러그인 뷰(콘텐츠 배치) — 전역 키 "<pluginId>.<view>" 의 provider 를
@@ -139,14 +132,9 @@ export type DropZone = "center" | "left" | "right" | "top" | "bottom";
 
 export type Side = "left" | "right" | "top" | "bottom";
 
-// 컨텐츠가 처음 열 때 띄우는 프로그램(첫 화면). 내장 "terminal"·"browser"(코어
-// 능력) + 플러그인 등록 프로그램 id(programRegistry). 미등록 id 는 터미널 폴백.
+// 컨텐츠가 처음 열 때 띄우는 프로그램(첫 화면). 내장 "terminal"(코어 능력) +
+// 플러그인 등록 프로그램 id(programRegistry). 미등록 id 는 터미널 폴백.
 export type Program = string;
-
-// 브라우저 뷰 기본 시작 페이지(설정 homeUrl).
-export function browserHome(): string {
-  return useSettings.getState().homeUrl;
-}
 
 // 컨텐츠 탭: 한 프로젝트 안의 독립 콘텐츠 영역(분할 그리드). 프로젝트당 여러 개 + 전환.
 // 프로그램 자동 실행은 터미널 뷰의 autorun 이 담당(뷰 단위로 일반화).
@@ -267,7 +255,7 @@ interface SessionsStore {
     projectId: string,
     program: Program,
     groupId?: string,
-    opts?: { url?: string; command?: string },
+    opts?: { command?: string },
   ) => CmdResult<{ groupId: string } & NewViewIds>;
   // 그룹(패널) 통째 닫기 — 안의 모든 뷰 제거(마지막 그룹이면 거부).
   closeGroup: (
@@ -309,14 +297,7 @@ interface SessionsStore {
     viewId: string,
     status: ViewStatus | null,
   ) => CmdResult;
-  // 브라우저 뷰 URL 동기화(네비게이션 이벤트/URL 바 입력).
-  setBrowserUrl: (projectId: string, viewId: string, url: string) => CmdResult;
-  setBrowserTitle: (
-    projectId: string,
-    viewId: string,
-    title: string,
-  ) => CmdResult;
-  // 임의 뷰의 탭 제목 갱신(콘텐츠 플러그인이 동적 제목 — 예: 브라우저 페이지 <title>). 빈 값은 무시.
+  // 임의 뷰의 탭 제목 갱신(콘텐츠 플러그인이 동적 제목 — 예: 페이지 <title>). 빈 값은 무시.
   setViewTitle: (projectId: string, viewId: string, title: string) => void;
   // 드래그/명령 분할·이동: viewId 를 targetGroup 의 zone 위치로.
   moveViewToGroup: (
@@ -483,17 +464,6 @@ function makeGroup(view?: View): ViewGroup {
     : { id: newGroupId(), views: [], activeViewId: "" };
 }
 
-// 새 브라우저 뷰(url 미지정 시 홈).
-function newBrowserView(url?: string): View {
-  return {
-    id: newViewId(),
-    kind: "browser",
-    // 기본 title 은 영어(state.tree AI 표면). UI 탭 라벨은 kind 로 t() 지역화(ViewTabs).
-    title: "Browser",
-    url: url ?? browserHome(),
-  };
-}
-
 // 새 플러그인 뷰(콘텐츠 배치) — kind=view 프로그램이 자기 contributes.views 중 하나를 연다.
 // PluginViewHost 가 "<pluginId>.<view>" provider 를 그린다. 코어는 plugin-agnostic — 어떤
 // 플러그인이든 동일 경로(특정 플러그인 락인 0).
@@ -502,22 +472,19 @@ function newPluginViewFor(pluginId: string, view: string, title: string): View {
 }
 
 // 프로그램 → 새 뷰. 내장 프로그램 개념은 없다(§2.6) — 등록 프로그램의 spec 으로
-// resolve(kind 에 따라 터미널[+autorun] 또는 브라우저). 미등록 id 는 능력명
-// ("browser" — 코어 명령 browser.open 등의 직접 경로)이면 그 능력, 아니면
+// resolve(kind 에 따라 터미널[+autorun] 또는 플러그인 콘텐츠 뷰). 미등록 id 는
 // 터미널 뷰 폴백(아이콘 셋의 lucide 폴백과 동형 — 플러그인 비활성에도 상태
 // 유실 없음).
 function newViewFor(
   program: Program,
-  opts?: { url?: string; command?: string },
+  opts?: { command?: string },
 ): View {
   const reg = getRegisteredProgram(program);
   if (reg) {
-    if (reg.decl.kind === "browser") return newBrowserView(opts?.url ?? reg.decl.url);
     if (reg.decl.kind === "view" && reg.decl.view)
       return newPluginViewFor(reg.pluginId, reg.decl.view, localize(reg.decl.title));
     return newTerminalView(opts?.command ?? autorunCommandOf(reg.decl));
   }
-  if (program === "browser") return newBrowserView(opts?.url);
   return newTerminalView(opts?.command);
 }
 
@@ -1504,51 +1471,7 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     return r;
   },
 
-  setBrowserUrl: (projectId, viewId, url) => {
-    let r: CmdResult = noProject(projectId);
-    set((s) => {
-      const t = s.tabs.find((x) => x.id === projectId);
-      if (!t) return s;
-      if (!contentOfView(t, viewId)) {
-        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
-        return s;
-      }
-      r = ok({});
-      return {
-        tabs: mapProject(s.tabs, projectId, (x) =>
-          mapViewEverywhere(x, viewId, (v) =>
-            v.kind === "browser" ? { ...v, url } : v,
-          ),
-        ),
-      };
-    });
-    return r;
-  },
-
-  // 브라우저 뷰의 탭/타이틀 제목(문서 <title>). 빈 문자열은 무시.
-  setBrowserTitle: (projectId, viewId, title) => {
-    const trimmed = title.trim();
-    let r: CmdResult = noProject(projectId);
-    set((s) => {
-      const t = s.tabs.find((x) => x.id === projectId);
-      if (!t) return s;
-      if (!contentOfView(t, viewId)) {
-        r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
-        return s;
-      }
-      r = ok({});
-      if (!trimmed) return s;
-      return {
-        tabs: mapProject(s.tabs, projectId, (x) =>
-          mapViewEverywhere(x, viewId, (v) =>
-            v.kind === "browser" ? { ...v, title: trimmed } : v,
-          ),
-        ),
-      };
-    });
-    return r;
-  },
-  // 임의 뷰 kind 의 탭 제목 갱신(콘텐츠 플러그인 동적 제목). setBrowserTitle 의 generic 판.
+  // 임의 뷰 kind 의 탭 제목 갱신(콘텐츠 플러그인 동적 제목 — 예: 페이지 <title>). 빈 값은 무시.
   setViewTitle: (projectId, viewId, title) => {
     const trimmed = title.trim();
     if (!trimmed) return;

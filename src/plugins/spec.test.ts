@@ -659,7 +659,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
           programs: [
             { id: "claude", title: "Claude", kind: "terminal", path: "에이전트" },
             { id: "exp", title: "실험", kind: "terminal", path: "에이전트/실험 채널" },
-            { id: "web", title: "브라우저", kind: "browser" },
+            { id: "web", title: "뷰", kind: "view", view: "content" },
           ],
         },
       }),
@@ -669,7 +669,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     expect(manifest?.contributes.programs).toEqual([
       { id: "claude", title: "Claude", kind: "terminal", path: "에이전트" },
       { id: "exp", title: "실험", kind: "terminal", path: "에이전트/실험 채널" },
-      { id: "web", title: "브라우저", kind: "browser" },
+      { id: "web", title: "뷰", kind: "view", view: "content" },
     ]);
   });
 

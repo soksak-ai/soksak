@@ -9,7 +9,6 @@ import {
 } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import { listenThisWindow } from "./lib/windowEvents";
 import { rafThrottle } from "./lib/rafThrottle";
 import { parkedStyle } from "./lib/layerPark";
@@ -377,41 +376,6 @@ function App() {
         useSessions.getState().setActiveGroup(projectId, groupId);
       }
     });
-  }, []);
-
-  // 내장 브라우저의 새 링크(target=_blank / window.open) — browser.rs 가 마커
-  // 네비게이션을 가로채 emit 한다. 새 창/새 탭 분기는 프론트 설정이 소유:
-  //   window(기본·무회귀) → 독립 OS 창(browser_open_window invoke)
-  //   tab → 활성 프로젝트의 활성 컨텐츠의 활성 그룹에 브라우저 뷰 추가(addViewToGroup).
-  // 전역 listen(이 이벤트는 emit_to 가 아닌 app.emit — 어느 창이 처리해도 무방하나
-  // 활성 프로젝트 기준이라 사용자가 보는 창에서 자연히 열린다).
-  useEffect(() => {
-    const unlisten = listen<{ url: string }>("browser-open-external", (e) => {
-      const url = e.payload.url;
-      const mode = useSettings.getState().browserNewWindow;
-      if (mode === "window") {
-        invoke("browser_open_window", { url }).catch((err) =>
-          console.error("브라우저 새 창 실패:", err),
-        );
-        return;
-      }
-      // 앱 내 새 탭: 활성 프로젝트 → 활성 컨텐츠 → 활성 그룹에 브라우저 뷰 추가.
-      const s = useSessions.getState();
-      const project = s.tabs.find((t) => t.id === s.activeId);
-      if (!project) return;
-      const content =
-        project.contents.find((c) => c.id === project.activeContentId) ??
-        project.contents[0];
-      if (!content) return;
-      const groups = allGroups(content.layout);
-      const group =
-        groups.find((g) => g.id === content.activeGroupId) ?? groups[0];
-      if (!group) return;
-      s.addViewToGroup(project.id, "browser", group.id, { url });
-    });
-    return () => {
-      unlisten.then((off) => off()).catch(() => {});
-    };
   }, []);
 
   // 구독 최소 원칙(docs/PERFORMANCE.md 1): 필드/액션별 셀렉터만 — bare 훅 금지.

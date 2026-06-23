@@ -342,7 +342,7 @@ export interface SoksakPluginApi {
     /** URL 이동. */
     navigate: (label: string, url: string) => Promise<void>;
     /** URL 을 독립 OS 창(새 브라우저 윈도우)으로 연다. label 키 webview 와 무관 — 코어가 popup
-     *  윈도우를 직접 만든다. browserNewWindow="window" 모드가 쓴다. */
+     *  윈도우를 직접 만든다(범용 webview 호스트 표면 — 새 링크를 새 창으로 여는 플러그인이 쓴다). */
     openWindow: (url: string) => Promise<void>;
     /** 세션 히스토리 이동(delta=-1 뒤/+1 앞). */
     history: (label: string, delta: number) => Promise<void>;
