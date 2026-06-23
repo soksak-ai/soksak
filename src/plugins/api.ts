@@ -44,6 +44,11 @@ import {
   readHostBuffer,
   subscribeOutput,
 } from "../terminal/paneHosts";
+import {
+  registerPtyObservation,
+  feedPtyOutput,
+  disposePtyObservation,
+} from "../terminal/ptyObservationStore";
 import { EVENT_PERMISSIONS } from "./hooks";
 import type { IconSetData } from "../ui/icons/types";
 import {
@@ -629,6 +634,8 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
   interface PtyState {
     out: Set<Bytes>;
     outBuf: Uint8Array[];
+    // 이 PTY 를 substrate 관찰에 연결한 paneId(있으면 close 시 관찰도 회수). 없으면 undefined.
+    paneId?: string;
   }
   const ptys = new Map<number, PtyState>();
   return {
@@ -639,10 +646,17 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
       shell?: string;
       paneId?: string;
     }): Promise<number> => {
-      const st: PtyState = { out: new Set(), outBuf: [] };
+      const paneId = opts.paneId;
+      // [substrate 관찰 탭] paneId 가 있으면 이 PTY 의 출력을 관찰 파서에 흘려, app.terminal.*
+      // (getCwd/onCwd/onCommandFinished)·command.*/turn.ended 가 이 플러그인 터미널에도 자동으로
+      // 동작하게 한다. 코어 터미널 뷰가 자기 OSC 를 파싱하던 것과 무관 — 같은 paneId 는 한
+      // producer 만 채우므로 이중 발화가 없다(ptyObservationStore 단일 producer 불변식).
+      if (paneId) registerPtyObservation(paneId);
+      const st: PtyState = { out: new Set(), outBuf: [], paneId };
       const onOutput = new Channel<ArrayBuffer>();
       onOutput.onmessage = (m) => {
         const b = new Uint8Array(m);
+        if (paneId) feedPtyOutput(paneId, b); // 관찰: onData 구독과 독립(누가 구독하든 자동).
         if (st.out.size) st.out.forEach((f) => f(b));
         else st.outBuf.push(b);
       };
@@ -652,7 +666,7 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         rows: opts.rows,
         cwd: opts.cwd ?? null,
         shell: opts.shell ?? null,
-        paneId: opts.paneId ?? null,
+        paneId: paneId ?? null,
         windowLabel: currentWindowLabel() || null,
         onOutput,
       })) as number;
@@ -666,6 +680,8 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     ack: (id: number, bytes: number): Promise<void> =>
       deps.invoke("ack_terminal", { id, bytes }) as Promise<void>,
     close: (id: number): Promise<void> => {
+      const st = ptys.get(id);
+      if (st?.paneId) disposePtyObservation(st.paneId); // substrate 관찰 회수.
       ptys.delete(id);
       return deps.invoke("close_terminal", { id }) as Promise<void>;
     },

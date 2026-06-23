@@ -335,14 +335,23 @@ export function startPluginHooks(): void {
   });
 }
 
-// pane 이 속한 프로젝트 {id, root}. 터미널 뷰 leaf 를 걸어 찾는다(못 찾으면 null).
-// root 는 창 무관 안정 식별자(turn.ended 스코프 키). id 는 창-로컬 UI 핸들(project.activate 용).
+// pane 이 속한 프로젝트 {id, root}. 못 찾으면 null. root 는 창 무관 안정 식별자(turn.ended 스코프
+// 키). id 는 창-로컬 UI 핸들(project.activate 용).
+//
+// 관찰 substrate 의 paneId 는 producer 가 정한다:
+//   - 코어 터미널 뷰: PaneTree leaf id(v.layout 의 collectLeafIds). v.focusedPaneId 도 그 중 하나.
+//   - 플러그인 터미널: 그 콘텐츠 뷰의 sessions view.id(= app.pty.spawn 에 넘긴 paneId).
+// 둘 다 동일 paneId 키로 매칭해, 코어 뷰가 사라져도 플러그인 터미널의 프로젝트가 해소된다.
 function projectInfoOfPane(paneId: string): { id: string; root: string | null } | null {
   for (const t of useSessions.getState().tabs) {
     for (const c of t.contents) {
       for (const g of allGroups(c.layout)) {
         for (const v of g.views) {
           if (v.kind === "terminal" && collectLeafIds(v.layout).includes(paneId)) {
+            return { id: t.id, root: t.root ?? null };
+          }
+          // 플러그인 터미널 뷰: paneId = 그 콘텐츠 뷰의 view.id.
+          if (v.kind === "plugin" && v.id === paneId) {
             return { id: t.id, root: t.root ?? null };
           }
         }

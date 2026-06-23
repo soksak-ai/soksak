@@ -4,6 +4,21 @@ import {
   type TerminalHandle,
 } from "./createTerminal";
 import type { TerminalSettings } from "../state/settings";
+import {
+  registerPtyObservation,
+  disposePtyObservation,
+  pushObservedCwd,
+  pushObservedCommandStart,
+  pushObservedCommandFinished,
+  pushObservedOutput,
+  getObservedCwd as storeGetCwd,
+  observedRunningCommands,
+  subscribeObservedCwd,
+  subscribeObservedCommandFinished,
+  subscribeObservedOutput,
+  subscribeAnyCommandStarted as storeSubAnyStart,
+  subscribeAnyCommandFinished as storeSubAnyFinish,
+} from "./ptyObservationStore";
 
 // pane별 호스트 레지스트리. 핵심 불변식: paneId 하나당 호스트 <div> 와 터미널
 // (PTY 세션)은 정확히 한 번 생성되고, pane 이 영구히 닫힐 때까지 재사용된다.
@@ -24,64 +39,34 @@ interface PaneHost {
 
 const hosts = new Map<string, PaneHost>();
 
-// paneId 별 cwd 변경 구독자(호스트 존재와 독립). 사이드바가 폴링 없이 cwd 를 따라가는
-// 통로. 호스트의 터미널이 준비되면 handle.onCwdChange 를 이 셋으로 브리지한다.
-const cwdSubs = new Map<string, Set<(cwd: string) => void>>();
+// [substrate 이관] cwd/명령/출력 관찰은 더 이상 paneHosts 의 사적 맵이 아니라 ptyObservationStore
+// (범용 PTY substrate)가 단일 진실이다. 코어 터미널 뷰는 그 store 의 한 producer 로서, xterm
+// shellIntegration 이 이미 파싱한 이벤트를 push*Observed* 로 store 에 흘린다(아래 getHost 브리지).
+// 플러그인 터미널은 app.pty.spawn 이 raw 바이트를 feedPtyOutput 으로 흘린다. 두 경로 모두 같은
+// store·같은 구독자를 채우므로, 코어 터미널 뷰가 사라져도 app.terminal.*/command.* 가 계속 동작한다.
 
-// paneId 별 명령 종료 구독자(git 상태 등 갱신 트리거). 위와 동일한 브리지 구조.
-const cmdSubs = new Map<string, Set<() => void>>();
-
-// paneId 별 터미널 출력 변경 구독자(화면 갱신 통지 — 라이브 스트림·입력 landed 검증).
-// 호스트 터미널이 준비되면 handle.onOutput 을 이 셋으로 브리지한다(폴링 없음).
-const outputSubs = new Map<string, Set<() => void>>();
-
-// 전역 명령 종료 구독자 — 어느 pane 이든 명령이 끝나면 paneId + 끝난 명령라인/cwd 와 함께 통지
-// (삭제 직전 캡처). 플러그인 이벤트(command.finished/turn.ended) 중계용(OSC 133/633, 폴링 없음).
-const anyCmdSubs = new Set<
-  (paneId: string, commandLine?: string | null, cwd?: string | null) => void
->();
-
-/** 모든 pane 의 명령 종료를 구독. cb 는 끝난 명령라인·cwd 도 받는다(turn.ended 본문 enrich). 반환=해지. */
+/** 모든 pane 의 명령 종료를 구독(turn.ended 본문 enrich — 끝난 명령라인·cwd 동반). 반환=해지.
+ *  [위임] substrate store 의 동명 구독으로 forward(코어/플러그인 producer 통합). */
 export function subscribeAnyCommandFinished(
   cb: (paneId: string, commandLine?: string | null, cwd?: string | null) => void,
 ): () => void {
-  anyCmdSubs.add(cb);
-  return () => {
-    anyCmdSubs.delete(cb);
-  };
+  return storeSubAnyFinish(cb);
 }
 
-// 전역 명령 시작 구독자 — 어느 pane 이든 명령이 시작되면 paneId·명령라인·cwd 와
-// 함께 통지. 플러그인 이벤트(command.started) 중계용(셸 preexec 탐지, 폴링 없음).
-const anyCmdStartSubs = new Set<
-  (paneId: string, commandLine: string, cwd: string | null) => void
->();
-
-/** 모든 pane 의 명령 시작을 구독(플러그인 이벤트 중계용). 반환=해지. */
+/** 모든 pane 의 명령 시작을 구독(command.started 중계용). 반환=해지. [위임] substrate store. */
 export function subscribeAnyCommandStarted(
   cb: (paneId: string, commandLine: string, cwd: string | null) => void,
 ): () => void {
-  anyCmdStartSubs.add(cb);
-  return () => {
-    anyCmdStartSubs.delete(cb);
-  };
+  return storeSubAnyStart(cb);
 }
 
-// 현재 실행 중인 명령(pane 당 최대 1) — command.started 에 set, command.finished/
-// 호스트 제거에 clear. 이벤트는 미래만 잡으므로, 늦게 구독한 플러그인(예: 실행 중
-// 활성화)이 즉시 현재 상태를 동기화하도록 스냅샷 조회를 제공한다(폴링 아님).
-const runningCmds = new Map<string, { commandLine: string; cwd: string | null }>();
-
-/** 지금 실행 중인 모든 명령의 스냅샷. */
+/** 지금 실행 중인 모든 명령의 스냅샷. [위임] substrate store(코어+플러그인 통합). */
 export function runningCommands(): {
   paneId: string;
   commandLine: string;
   cwd: string | null;
 }[] {
-  const out: { paneId: string; commandLine: string; cwd: string | null }[] = [];
-  for (const [paneId, v] of runningCmds)
-    out.push({ paneId, commandLine: v.commandLine, cwd: v.cwd });
-  return out;
+  return observedRunningCommands();
 }
 
 // App 이 등록하는 "현재 테마" getter. 새 호스트의 최초 createTerminal 에 쓰인다.
@@ -150,6 +135,9 @@ export function getHost(paneId: string): HTMLDivElement {
     pendingSettings: null,
   };
   hosts.set(paneId, host);
+  // 이 pane 의 substrate 관찰을 선등록(구독이 핸들보다 먼저여도 안전). 코어 터미널 뷰는
+  // 이 store 의 producer — 아래에서 handle 의 파싱 결과를 push 한다.
+  registerPtyObservation(paneId);
 
   const theme = themeProvider();
   const settings = terminalSettingsProvider();
@@ -176,27 +164,17 @@ export function getHost(paneId: string): HTMLDivElement {
         handle.focus();
         handle.fit();
       }
-      // cwd 이벤트를 paneId 구독 셋으로 브리지 + 현재값 즉시 통지.
-      handle.onCwdChange((c) => cwdSubs.get(paneId)?.forEach((cb) => cb(c)));
+      // [substrate producer] xterm shellIntegration 이 이미 파싱한 관찰을 store 로 푸시(raw
+      // 재파싱 없이 — 단일 producer 불변식이라 플러그인 경로와 안 겹친다). store 가 cwd/명령/
+      // 출력 구독자(app.terminal.*·command.*·idle·status)에 흘린다.
+      handle.onCwdChange((c) => pushObservedCwd(paneId, c));
       const cwd = handle.getCwd();
-      if (cwd) cwdSubs.get(paneId)?.forEach((cb) => cb(cwd));
-      // 명령 시작 이벤트 브리지(명령라인·cwd 동반 — 플러그인 이벤트 중계용).
-      handle.onCommandStart((commandLine) => {
-        runningCmds.set(paneId, { commandLine, cwd: handle.getCwd() ?? null });
-        anyCmdStartSubs.forEach((cb) =>
-          cb(paneId, commandLine, handle.getCwd() ?? null),
-        );
-      });
-      // 명령 종료 이벤트 브리지(pane 구독 + 전역 구독 — 플러그인 이벤트 중계용).
-      handle.onCommandFinished(() => {
-        // 삭제 직전 끝난 명령 캡처 → turn.ended 본문이 "어떤 명령이 끝났는지" 를 담는다.
-        const fin = runningCmds.get(paneId);
-        runningCmds.delete(paneId);
-        cmdSubs.get(paneId)?.forEach((cb) => cb());
-        anyCmdSubs.forEach((cb) => cb(paneId, fin?.commandLine ?? null, fin?.cwd ?? null));
-      });
-      // 터미널 출력 변경 브리지(화면 갱신 → paneId 구독 셋 — 플러그인 라이브/검증용).
-      handle.onOutput(() => outputSubs.get(paneId)?.forEach((cb) => cb()));
+      if (cwd) pushObservedCwd(paneId, cwd);
+      handle.onCommandStart((commandLine) =>
+        pushObservedCommandStart(paneId, commandLine),
+      );
+      handle.onCommandFinished(() => pushObservedCommandFinished(paneId));
+      handle.onOutput(() => pushObservedOutput(paneId));
     })
     .catch((e) => {
       console.error(`createTerminal failed for pane ${paneId}:`, e);
@@ -210,10 +188,7 @@ export function disposeHost(paneId: string): void {
   const host = hosts.get(paneId);
   if (!host) return;
   hosts.delete(paneId);
-  cwdSubs.delete(paneId);
-  cmdSubs.delete(paneId);
-  outputSubs.delete(paneId);
-  runningCmds.delete(paneId);
+  disposePtyObservation(paneId); // substrate 관찰(cwd/명령/출력 구독) 회수.
   host.handle?.dispose();
   host.div.remove();
 }
@@ -250,62 +225,33 @@ export function readHostBuffer(
   return hosts.get(paneId)?.handle?.readBuffer(lines);
 }
 
-/** pane 터미널의 현재 작업 디렉토리(셸 통합 OSC 7/633;P). 미확인이면 undefined. */
+/** pane 터미널의 현재 작업 디렉토리(셸 통합 OSC 7/633;P). 미확인이면 undefined.
+ *  [위임] substrate store(코어+플러그인 통합 — 코어 뷰 제거 후에도 플러그인 cwd 가 해소된다). */
 export function getCwdOfHost(paneId: string): string | undefined {
-  return hosts.get(paneId)?.handle?.getCwd();
+  return storeGetCwd(paneId);
 }
 
-/**
- * pane 의 cwd 변경을 구독(폴링 없음). 등록 즉시 현재값이 있으면 한 번 호출하고,
- * 이후 OSC 7/633;P 로 cwd 가 바뀔 때마다 호출한다. 반환=해지 함수.
- * 핸들이 아직 준비 전이어도 안전 — 준비되면 getHost 가 현재값을 통지한다.
- */
+/** pane 의 cwd 변경을 구독(폴링 없음). 현재값이 있으면 등록 즉시 1회. 반환=해지.
+ *  [위임] substrate store — 핸들 준비 전 구독해도 안전(선등록된 빈 관찰). */
 export function subscribeCwd(
   paneId: string,
   cb: (cwd: string) => void,
 ): () => void {
-  let set = cwdSubs.get(paneId);
-  if (!set) {
-    set = new Set();
-    cwdSubs.set(paneId, set);
-  }
-  set.add(cb);
-  const cur = hosts.get(paneId)?.handle?.getCwd();
-  if (cur) cb(cur);
-  return () => {
-    set?.delete(cb);
-  };
+  return subscribeObservedCwd(paneId, cb);
 }
 
-/** pane 의 명령 종료(OSC 133/633 D)를 구독(폴링 없음). 반환=해지. */
+/** pane 의 명령 종료(OSC 133/633 D)를 구독(폴링 없음). 반환=해지. [위임] substrate store. */
 export function subscribeCommandFinished(
   paneId: string,
   cb: () => void,
 ): () => void {
-  let set = cmdSubs.get(paneId);
-  if (!set) {
-    set = new Set();
-    cmdSubs.set(paneId, set);
-  }
-  set.add(cb);
-  return () => {
-    set?.delete(cb);
-  };
+  return subscribeObservedCommandFinished(paneId, cb);
 }
 
-/** pane 터미널의 출력 변경(화면 갱신)을 구독(폴링 없음, 프레임당 1회 코얼레스). 반환=해지.
- *  핸들 준비 전 구독해도 안전 — 준비되면 getHost 가 handle.onOutput 을 이 셋으로 브리지한다.
+/** pane 터미널의 출력 변경(화면 갱신)을 구독(폴링 없음). 반환=해지. [위임] substrate store.
  *  플러그인이 라이브 스트림 표시·입력 landed 검증(버퍼 재독 트리거)에 쓰는 범용 신호. */
 export function subscribeOutput(paneId: string, cb: () => void): () => void {
-  let set = outputSubs.get(paneId);
-  if (!set) {
-    set = new Set();
-    outputSubs.set(paneId, set);
-  }
-  set.add(cb);
-  return () => {
-    set?.delete(cb);
-  };
+  return subscribeObservedOutput(paneId, cb);
 }
 
 /** pane 에 포커스 + fit. 핸들이 아직 없으면 준비 직후 적용되도록 플래그를 남긴다.
