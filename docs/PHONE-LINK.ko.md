@@ -163,5 +163,5 @@ confirm 모달**(`RemoteConfirmModal`). 남은 것은 실 인프라가 필요하
 의도적으로 남겨둠(가짜 검증 0):
 
 - **P3 모바일 앱** — `remote::client`를 임베드한 Tauri 모바일 클라이언트 + 미러 UI; 모바일 툴체인 + 스토어 서명 필요.
-- **P4 Cloudflare Worker 수렴** — 페어링/취소를 라이선스 인프라(`docs/license-system-design.md`: Ed25519 챌린지-응답, `machine_id`, `max_devices`, `deactivate`)에 통합. 사용자 Cloudflare/Paddle 설정 필요.
+- **P4 Cloudflare Worker 수렴** — Worker **빌드+로컬검증 완료**(`worker/`, 69 테스트), 교차-언어 golden vector로 Worker 발급 assertion이 Rust에서 `verify_strict` 통과 입증(`docs/license-system-design.md` §4.3). 남은 것: **배포**(Cloudflare/Paddle 계정 필요) + 라이브 발급자 전환(peer→Worker-issued, 미정).
 - **실 교차-네트워크 검증** — 실제 NAT hole-punching, relay 페일오버, mDNS 발견, 발화 E2E("왼쪽 창 닫고 터미널 크게 보여줘")는 두 네트워크 실기기 필요.

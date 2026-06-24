@@ -173,9 +173,10 @@ intentionally left for that context (no faked verification):
 
 - **P3 mobile app** — a Tauri mobile client embedding `remote::client` + a mirror UI; needs mobile
   tooling and store signing.
-- **P4 Cloudflare Worker convergence** — fold pairing/revocation into the license infrastructure
-  (`docs/license-system-design.md`: Ed25519 challenge-response, `machine_id`, `max_devices`,
-  `deactivate`). Needs the user's Cloudflare/Paddle setup.
+- **P4 Cloudflare Worker convergence** — the Worker is built and locally verified (`worker/`, 69
+  tests), and a cross-language golden vector proves a Worker-issued capability assertion verifies on
+  the Rust side (`docs/license-system-design.md` §4.3). Remaining: **deployment** (needs the user's
+  Cloudflare/Paddle setup) and switching the live issuer (peer-signed → Worker-issued, not yet taken).
 - **Real cross-network verification** — actual NAT hole-punching, relay failover, mDNS discovery,
   and the spoken-command E2E ("close the left pane, make the terminal big") need two real devices
   on separate networks.

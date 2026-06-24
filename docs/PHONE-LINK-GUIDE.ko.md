@@ -154,7 +154,7 @@ destructive grant는 **파킹**; 데스크톱이 `remote-confirm-request` emit; 
 외부 환경/결정이 필요하고, 가짜로 만들지 않았다:
 
 - **P3 — 모바일 앱**: `remote::client`를 임베드한 Tauri 모바일 클라이언트 + 미러 UI. 모바일 툴체인(Xcode / Android SDK) + 스토어 서명 필요.
-- **P4 — Cloudflare Worker 수렴**: 페어링/취소를 라이선스 인프라(`docs/license-system-design.md`: Ed25519 챌린지-응답, `machine_id`, `max_devices`, `deactivate`)와 통합. Worker 코드 + 로컬 테스트는 자율 빌드 가능; **배포**는 사용자 Cloudflare/Paddle 계정 필요, **assertion 발급자 전환**(기기 자가서명 → Worker 발급)은 검증된 클라이언트를 재배선하는 통합(아직 안 내린 결정).
+- **P4 — Cloudflare Worker 수렴**: Worker는 **빌드+로컬검증 완료**(`worker/`, 69 테스트 — Paddle 라이선스 웹훅 + Ed25519 챌린지-응답 `/verify`, 기기 페어링, revoke; `worker/README.md` 참조), **수렴 기초**도 마련됨 — 교차-언어 golden vector가 Worker 발급 capability assertion이 Rust `remote::auth`에서 byte-perfect로 `verify_strict` 통과함을 증명(`docs/license-system-design.md` §4.3; additive Rust 테스트, floor 무변경). 남은 것: **배포**(사용자 Cloudflare/Paddle 계정 필요)와 **라이브 발급자 전환**(기기 자가서명 → Worker 발급) — 검증된 클라이언트를 재배선하는 의도적 모델 변경(아직 안 함; 라이브 모델은 peer-signed 유지).
 - **실 페어링 UI 라이브-앱 E2E**: 현재 페어링은 헤드리스 데스크톱-소유 설정; QR/승인 UI가 상용형.
 - **실 교차-네트워크 테스트**: 실제 NAT hole-punching, relay 페일오버, mDNS 발견, 발화 E2E는 두 네트워크 실기기 필요.
 - **multi-frame 요청 chunking**: 응답은 chunk하나 요청은 단일-프레임(assertion이 작아 현재 충분 — 병적으로 큰 요청은 chunk 아니라 거부).

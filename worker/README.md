@@ -67,10 +67,14 @@ scope subset). The Worker assertion uses the same canonicalization philosophy �
 fixed key order, compact JSON, Ed25519 over the exact bytes — so the two are byte-shape
 compatible by construction.
 
-**Switching the issuer** from device-self-signed to Worker-issued (so the Rust client
-verifies Worker assertions with the embedded Worker public key) is a deliberate
-follow-on integration that re-wires the verified client. It is NOT done here. The Rust
-canonical bytes are length-prefixed binary (`auth.rs::canonical_bytes`) while the
-Worker assertion is compact JSON; aligning those two encodings (one golden vector on
-both sides) is the concrete convergence task left for that follow-on. This deliverable
-does not touch the Rust client.
+**Convergence foundation (done).** The Worker now also serializes a *capability* assertion
+to the EXACT length-prefixed binary bytes of `auth.rs::canonical_bytes` (`canonicalCapabilityBytes`
+in `src/verify.ts`), and a cross-language **golden vector** (`test/capability-golden.json`, mirrored
+at `src-tauri/src/remote/auth/capability-golden.json`) proves a Worker-signed assertion verifies
+byte-for-byte on the Rust side via `verify_strict` and grants through the full verify floor — an
+additive Rust test, no floor change. `docs/license-system-design.md` §4.3 records the canonical layout.
+(The entitlement assertion of Track B stays compact JSON; only the *capability* assertion was aligned.)
+
+**Remaining — the live issuer switch.** The live Rust client still uses the peer model
+(device-self-signed). Re-wiring it so the desktop verifies Worker-issued assertions with the embedded
+Worker public key — and the phone fetches them — is a deliberate model change, **not yet taken**.
