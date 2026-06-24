@@ -648,3 +648,8 @@ pub enum AuthorizeError {
 
 #[cfg(test)]
 mod tests;
+
+// ADDITIVE cross-language golden-vector test (Worker<->Rust capability-assertion
+// convergence). Test-only; no effect on the floor logic above.
+#[cfg(test)]
+mod golden_tests;

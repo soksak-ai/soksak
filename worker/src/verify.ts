@@ -43,6 +43,9 @@ interface NonceEntry {
 // Compact JSON (no insignificant whitespace). Built by hand so key order does NOT
 // depend on JSON.stringify behavior. The Rust client reconstructs THESE bytes and
 // verifies with verify_strict over the embedded public key (see convergence note).
+//
+// This is the LICENSE-ENTITLEMENT assertion (Track B). The phone-link CAPABILITY
+// assertion uses a different, binary canonical layout — see canonicalCapabilityBytes.
 export function canonicalAssertionBytes(a: Assertion): Uint8Array {
   const json =
     "{" +
@@ -54,6 +57,78 @@ export function canonicalAssertionBytes(a: Assertion): Uint8Array {
     `"expires_at":${JSON.stringify(a.expires_at)}` +
     "}";
   return new TextEncoder().encode(json);
+}
+
+// ----- Capability-assertion convergence (phone-link remote::auth, BINDING) -----
+//
+// The SHIPPED Rust src-tauri/src/remote/auth.rs::CapabilityAssertion::canonical_bytes
+// is the source of truth — a length-prefixed BINARY layout, NOT the JSON sketch above.
+// When the Worker becomes the capability issuer it MUST sign these EXACT bytes so the
+// verified Rust verify_strict accepts the signature byte-for-byte. We conform to the
+// Rust floor; we do not invent a third format. The cross-language golden vector
+// (worker/test/capability-golden.json, mirrored in the Rust golden test) pins it.
+//
+// Rust layout (auth.rs:128-138), reproduced field-for-field:
+//   device_id.len() as u64 LE (8 bytes) || device_id UTF-8 bytes
+//   scope_tag           (1 byte: 0=read-only, 1=write, 2=destructive)
+//   nonce               (32 raw bytes)
+//   issued_at as u64 LE (8 bytes)
+//   exp as u64 LE       (8 bytes)
+//
+// Field mapping Worker -> Rust:
+//   device_id <- the phone-link device identity (machine_id; the Rust assertion is
+//                keyed on device_id, so the Worker uses the Rust device_id slot)
+//   scope     <- DeviceScope ("read-only" | "write" | "destructive")
+//   nonce     <- the raw 32-byte challenge nonce (binary, not base64url)
+//   issued_at <- Unix seconds (u64)
+//   exp       <- Unix seconds (u64)
+export type CapabilityScope = "read-only" | "write" | "destructive";
+
+export interface CapabilityAssertion {
+  device_id: string;
+  scope: CapabilityScope;
+  nonce: Uint8Array; // exactly 32 bytes
+  issued_at: number; // Unix seconds
+  exp: number; // Unix seconds
+}
+
+// scope -> 1-byte tag. Matches Rust auth.rs::scope_tag exactly.
+const CAPABILITY_SCOPE_TAG: Record<CapabilityScope, number> = {
+  "read-only": 0,
+  write: 1,
+  destructive: 2,
+};
+
+// Little-endian u64 of a non-negative integer. Mirrors Rust u64::to_le_bytes.
+function u64le(n: number): Uint8Array {
+  const out = new Uint8Array(8);
+  const view = new DataView(out.buffer);
+  view.setBigUint64(0, BigInt(n), true /* littleEndian */);
+  return out;
+}
+
+// Produce the EXACT bytes Rust auth.rs::canonical_bytes produces for the shared
+// fields. Byte-identical: same field order, same length-prefix, same LE encoding.
+// Ed25519-sign THESE bytes (via ed25519Sign) so the Rust verify_strict accepts them.
+export function canonicalCapabilityBytes(a: CapabilityAssertion): Uint8Array {
+  if (a.nonce.length !== 32) {
+    throw new Error(`capability nonce must be 32 bytes, got ${a.nonce.length}`);
+  }
+  const id = new TextEncoder().encode(a.device_id);
+  const out = new Uint8Array(8 + id.length + 1 + 32 + 8 + 8);
+  let off = 0;
+  out.set(u64le(id.length), off);
+  off += 8;
+  out.set(id, off);
+  off += id.length;
+  out[off] = CAPABILITY_SCOPE_TAG[a.scope];
+  off += 1;
+  out.set(a.nonce, off);
+  off += 32;
+  out.set(u64le(a.issued_at), off);
+  off += 8;
+  out.set(u64le(a.exp), off);
+  return out;
 }
 
 // ----- POST /verify/challenge (Step 1) -----
