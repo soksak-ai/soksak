@@ -2009,6 +2009,55 @@ body::after {
   justify-content: flex-end;
   gap: 8px;
 }
+/* 원격 destructive confirm(폰-링크) — dconfirm 위에 행/라벨만 더한다. 색은 전부 코어 토큰. */
+.dremote-confirm {
+  width: 380px;
+}
+.dremote-confirm-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dremote-confirm-danger {
+  color: var(--danger);
+  font-size: 15px;
+  line-height: 1;
+}
+.dremote-confirm-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dremote-confirm-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+}
+.dremote-confirm-label {
+  flex: 0 0 64px;
+  color: var(--fg3);
+}
+.dremote-confirm-value {
+  flex: 1 1 auto;
+  color: var(--fg);
+  word-break: break-all;
+}
+.dremote-confirm-mono {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11.5px;
+}
+.dremote-confirm-params {
+  color: var(--fg2);
+}
+.dremote-confirm-notice {
+  font-size: 11.5px;
+  color: var(--fg3);
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: var(--inset);
+  border: 1px solid var(--bd-soft);
+}
 .dmodal-head {
   display: flex;
   align-items: center;

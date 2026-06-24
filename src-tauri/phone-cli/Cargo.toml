@@ -1,0 +1,22 @@
+# sok-phone — 폰-링크 INITIATOR 측 thin CLI(수동 E2E). 라이브 데스크톱 브리지(앱이 bridge 켜진
+# 채로 실행 중)에 대해 remote::client 라이브러리를 구동한다. 앱 크레이트와 분리된 워크스페이스
+# 멤버(같은 패키지 [[bin]] 으로 두면 tauri 번들러가 메인 바이너리를 오인 — cli/ 와 동일 사유).
+#
+# 이 바이너리는 **얇은 글루**다 — 모든 보안 로직은 src/remote/client.rs(검증된 라이브러리)에
+# 있고, 여기선 인자 파싱 + 키 영속 + tokio 런타임 + 출력 포맷만 한다.
+[package]
+name = "sok-phone"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "sok-phone"
+path = "src/main.rs"
+
+[dependencies]
+# 검증된 클라이언트 라이브러리(remote::client) — 단일 진실. CLI 는 이걸 구동만 한다.
+# 패키지명은 soksak-dev, lib 이름은 soksak_lib → package rename 으로 soksak_lib 로 가져온다.
+soksak_lib = { package = "soksak-dev", path = ".." }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "macros", "io-util", "time"] }
+iroh = { version = "=0.91.2", features = ["discovery-local-network"] }

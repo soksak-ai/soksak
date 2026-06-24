@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listenThisWindow } from "../lib/windowEvents";
 import { useSettings } from "../state/settings";
 import { registerCatalog } from "./catalog";
+import { registerRemoteConfirmDevCatalog } from "./catalogRemoteConfirmDev";
 import { execute, setPermissionGate } from "./registry";
 
 interface CmdRequest {
@@ -21,6 +22,8 @@ export function startExecutor(): void {
   if (started) return;
   started = true;
   registerCatalog();
+  // dev 전용 mock 커맨드(프로덕션 번들엔 등록 0) — 라이브 폰 없이 confirm 모달 헤드리스 검증.
+  registerRemoteConfirmDevCatalog();
   // 권한 게이트: 위험 분류별 정책을 설정 store 에서 읽어 allow/deny 판정.
   setPermissionGate((danger) => {
     const s = useSettings.getState();

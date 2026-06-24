@@ -144,6 +144,7 @@ describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
     ".settings-list-remove", // 설정 리스트 삭제 버튼 — 폐곡선 윤곽
     ".plugin-consent-item",
     ".plugin-consent-notice",
+    ".dremote-confirm-notice", // 원격 confirm 자동거부 안내 박스 — 폐곡선 윤곽(경계면 아님)
     ".plugin-consent-cmd", // 명령 원문 코드 박스 — 폐곡선 윤곽
     ".plugin-contrib-chip", // 역할 칩 — 폐곡선 윤곽
     ".egs-item", // 상태바 플러그인 항목 칩(claude-GUI 의 "gui" 등) — 폐곡선 윤곽
