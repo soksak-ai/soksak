@@ -104,6 +104,19 @@ Conformance is proven, not asserted (Section 6). "Looks decoupled" is not decoup
 ### A13. Engine-neutral primitives — the skeleton fixes no engine.
 The skeleton exposes only engine-neutral raw substrate: raw PTY bytes, file IO, an OS-webview hosting primitive (one option among possible rendering approaches), and a bare content-pane surface. It fixes no concrete engine. The terminal emulator (xterm or other), the editor engine (CodeMirror or Monaco), and the browser engine (OS webview or Chromium) are each a plugin's replaceable choice. A capability only one engine can satisfy — a CodeMirror `Extension` type, an xterm addon, a WebKit-only eval shape — does not belong in the skeleton; it belongs in the plugin that owns that engine. Where an alternative engine needs a primitive the skeleton lacks (e.g. embedding an external Chromium surface), add it generically when that plugin is built (A9); never special-case one engine.
 
+### A14. Heavy plugin-specific native code is a sidecar, not a skeleton dependency.
+The skeleton's native dependencies are limited to **host-only primitives it alone can provide** — PTY allocation, an `Origin`-less WebSocket, UDP, the in-memory-key secrets vault, file IO, the OS-webview host — and the generic capabilities built on them. Heavy native code that serves **one** feature and that a JS plugin physically cannot run (a P2P transport stack, a protocol implementation, a fingerprinting HTTP fork) does **not** belong in the skeleton binary. A compile-time dependency would still link it into the skeleton and defeat the thin-skeleton goal; so such code lives in **its own plugin repo as a sidecar binary**, spawned through the `process` capability and talking to the skeleton over the socket — **vendored + hash-pinned**. The decision, in order:
+1. **Can a JS plugin do it through existing capabilities?** → it is a JS plugin (e.g. clubhouse over `app.process`/`app.data`).
+2. **Is it a host-only primitive that neither a JS plugin nor a separate process can replicate** (PTY, `Origin`-less socket, in-memory-key vault, fs, the webview)? → it is a **generic skeleton capability**.
+3. **Is it heavy, self-contained, plugin-specific native code** — not JS-able, not a generic primitive? → it is a **sidecar binary in its own plugin repo**.
+Example: the phone-link remote-control stack (iroh QUIC + Noise) is `soksak-plugin-remote-iroh`, a sidecar; the skeleton links no `iroh`. A swappable engine takes the engine's name (`remote-iroh`; siblings `remote-yamux`/`remote-cloudflared`), per the plugin-naming convention.
+
+### A15. Unify the interface, not the crate.
+When two backends genuinely differ (plain first-party HTTP vs browser-impersonation HTTP; a stable client vs a fingerprint-spoofing fork), do **not** force them into one crate. The skeleton keeps both implementations and exposes **one capability with opt-in modes** (e.g. `net.http.request` with `impersonate?: "off" | "chrome"`). Plugins call the capability; they never bundle their own HTTP/WS/PTY. Every capability used by one or more plugins is a generic command-registry capability — permission-gated, ns-isolated, CLI/MCP auto-exposed — like `app.data` over SQLite, so the wheel is invented once. Consolidate the **interface**; keep the implementations that genuinely differ (and if they must coexist, the reason is recorded, not hidden).
+
+### A16. Core→plugin extraction is a move, not a rewrite.
+When a subsystem leaves the skeleton its code **moves verbatim**; only the integration seam changes (an in-process call becomes a socket/capability call). The verified code and its tests travel intact — never re-implemented. The skeleton-side commit says **"separated from core"**; never "ported", "migrated", "transplanted", "realized", or "rewritten". (A8's separation test proves the removal; this rule governs how the code travels.)
+
 ---
 
 ## 5. Extraction Targets
@@ -164,6 +177,18 @@ For each subsystem: what STAYS in the skeleton (the generic interface), what MOV
 **Generic capability the skeleton must expose:** generic open-path-as-content routing to `registerFileViewer`; `file.activated` event; cross-window file-state consistency (existing `app.data.watch`). Engine-specific surfaces (`api.editor.modules`, `registerExtension`, `registerLanguage`) are removed from the skeleton (A13).
 
 **Ruling:** extractable in v1. Multi-window file-state consistency is achieved through the existing cross-window data broadcast, not a skeleton-owned editor. The editor is a plugin like the others; formatter and language plugins depend on it, not on the skeleton.
+
+### Remote transport (iroh) → plugin **sidecar** (A14 — the native-sidecar pattern, not a JS plugin)
+
+The first extraction that is **native code a JS plugin cannot run**, so it leaves as a spawned sidecar binary, not a JS plugin over a skeleton capability. (`soksak-plugin-remote-iroh`, completed.)
+
+**STAYS (skeleton):** nothing of the transport or the crypto. Only the **desktop confirm modal** (`RemoteConfirmModal`, a skeleton webview surface) and a `remote.confirm` command — the human-decision gate for destructive remote actions — stay, because the human authority lives where the webview is. Dispatch reuses the existing `request_command` → `route()` socket path.
+
+**MOVES (sidecar):** the entire `remote/` stack — iroh (QUIC P2P + relay), Noise (`snow`), the Ed25519 device-auth floor, and the session/transport/tcp/tunnel/pairing floors — plus the `iroh`/`snow`/`ed25519-dalek` static-key Cargo tree. Into `soksak-plugin-remote-iroh` (its own git repo), built as a sidecar binary, vendored + sha256-pinned, spawned via the `process` capability.
+
+**Two seams only (A16 — move, not rewrite):** the 24 floor files moved **byte-identical**; only `bridge.rs` changed. ① **dispatch** — the in-process `request_command(app, …)` became a `SOKSAK_SOCKET` JSON-RPC call (same wire). ② **confirm** — the in-process `app.emit("remote-confirm-request")` became a socket round-trip: the sidecar requests `remote.confirm`, the skeleton shows the modal and returns the human decision; the phone still cannot self-approve.
+
+**Ruling:** extractable as a native sidecar. Unlike Terminal/Browser/Files/Editor (JS plugins over skeleton primitives), this is heavy, self-contained, plugin-specific native code, so it is a spawned binary in its own repo — and the skeleton binary drops the whole iroh tree (~13 MB, measured 33M → 20M). Swappable transport engine → engine in the name (`remote-iroh`; future `remote-yamux`/`remote-cloudflared`). The verified floor tests (271) moved with the code and stay green in the sidecar.
 
 ---
 
