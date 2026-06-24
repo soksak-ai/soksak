@@ -103,3 +103,9 @@ tauri-runtime = { git = "https://github.com/soksak-ai/tauri", branch = "fix-with
 tauri-runtime-wry = { git = "https://github.com/soksak-ai/tauri", branch = "fix-with-webview-leak" }
 tauri-utils = { git = "https://github.com/soksak-ai/tauri", branch = "fix-with-webview-leak" }
 
+# 분포(release) 빌드 최적화 — 런타임 perf 수준은 유지(opt-level 은 release 기본 3)하면서 용량만 줄인다.
+[profile.release]
+strip = true       # 출하 바이너리에서 심볼 제거(가장 큰 단일 절감)
+lto = "thin"       # 크레이트 간 dead-code 제거(thin = fat 에 근접하면서 빌드 더 빠름)
+codegen-units = 1  # 단일 codegen unit → 최적화/중복제거 향상
+
