@@ -1,0 +1,34 @@
+# License Worker — Cloudflare config.
+#
+# NOT DEPLOYED here. This file documents the binding/secret contract so the same
+# code that the local test suite proves can later be deployed by the account owner.
+# Deployment needs the user's Cloudflare + Paddle accounts (out of scope).
+#
+# compatibility_date is pinned to a date on which crypto.subtle supports the
+# native "Ed25519" algorithm (importKey/sign/verify). See license-system-design.md
+# "/verify 챌린지-응답 + Ed25519 서명".
+
+name = "license-worker"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# One KV namespace holds every key family:
+#   license:{app_user_id}      -> LicenseRecord (webhook writes, /verify reads)
+#   order:{order_id}           -> app_user_id index
+#   event:{event_id}           -> idempotency marker (24h TTL)
+#   verify-nonce:{app_user_id} -> single-use challenge nonce (short TTL)
+#   device:{app_user_id}       -> device-binding registry (/pair, /device/deactivate)
+kv_namespaces = [
+  { binding = "LICENSE_KV", id = "PASTE_KV_NAMESPACE_ID" }
+]
+
+# Non-secret var: default device cap when a license record omits max_devices.
+[vars]
+MAX_DEVICES = "3"
+
+# Secrets (set via `wrangler secret put`, NEVER committed):
+#   PADDLE_WEBHOOK_SECRET             -> pdl_ntfset_... per-destination HMAC key (raw UTF-8)
+#   ED25519_PRIVATE_KEY_PKCS8_B64     -> base64 PKCS#8 Ed25519 private key (/verify signing)
+#
+# The matching 32-byte raw public key is embedded in the Tauri app (src-tauri),
+# never here. Generate the pair with gen-keypair (see design doc) before deploy.
