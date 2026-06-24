@@ -5,7 +5,14 @@
 //
 // 시크릿은 Rust 경계에서만 치환한다(평문 JS·history·lastResponse 무노출 R2): secret_subst{placeholder→
 // secretKey} 를 ns 볼트에서 해소해 url/headers/body 의 placeholder 를 실값으로 바꾼 뒤 전송한다. 잠김/
-// 미존재면 전송 전에 Err(미해소 시크릿이 요청으로 안 나간다). reqwest blocking(자체 런타임) + rustls.
+// 미존재면 전송 전에 Err(미해소 시크릿이 요청으로 안 나간다). reqwest blocking(자체 런타임) + native-tls
+// (reqwest 의 "native-tls" feature·기본 클라이언트 = OS 네이티브 TLS; rustls 는 코어에 없다).
+//
+// 두 백엔드, 한 인터페이스: impersonate 토글이 전송기를 고른다.
+//   "off"(기본)  = 여기 reqwest native-tls 경로 — first-party 호출은 평문(위조 안 함)이 올바른 기본값.
+//   "chrome"     = mediaproxy.rs 의 이미 떠 있는 wreq/BoringSSL 싱글톤(JA3/JA4 브라우저 위장) 재사용.
+// 어느 모드든 응답 shape({status,headers,body})·시크릿 치환·ns 격리·danger 게이트는 동일 — impersonate
+// 는 전송 백엔드만 바꾼다(보안 불변, 신규 client 인스턴스 0).
 
 use crate::secrets::{self, SecretsState};
 use std::collections::HashMap;
@@ -46,6 +53,30 @@ fn resolve_secret_subst(
         }
         _ => Ok(HashMap::new()),
     }
+}
+
+// 전송 백엔드 선택 — "off"(기본)=reqwest native-tls, "chrome"=mediaproxy wreq 임퍼소네이션 싱글톤.
+fn impersonate_chrome(impersonate: Option<&str>) -> bool {
+    matches!(impersonate, Some("chrome"))
+}
+
+// impersonate:"chrome" — 이미 떠 있는 mediaproxy wreq 싱글톤으로 전송하고 응답을 HttpResponse 로 맵핑
+// (off 경로와 동일 shape). 치환은 호출 전 완료됨 — 여기는 백엔드만 다르다(신규 client 0).
+fn send_http_impersonated(
+    method: &str,
+    url: &str,
+    headers: &HashMap<String, String>,
+    query: &HashMap<String, String>,
+    body: Option<&str>,
+    content_type: Option<&str>,
+) -> Result<HttpResponse, String> {
+    let (status, headers, body) =
+        crate::mediaproxy::impersonated_request(method, url, headers, query, body, content_type)?;
+    Ok(HttpResponse {
+        status,
+        headers,
+        body,
+    })
 }
 
 // 실제 HTTP 전송(reqwest blocking). 치환 완료된 순수 입력 → 응답. State 비의존(테스트 직접 호출).
@@ -102,6 +133,7 @@ pub fn network_http_request(
     content_type: Option<String>,
     ns: Option<String>,
     secret_subst: Option<HashMap<String, String>>,
+    impersonate: Option<String>,
     secrets_state: State<'_, SecretsState>,
 ) -> Result<HttpResponse, String> {
     let subst = resolve_secret_subst(&secrets_state, ns.as_deref(), &secret_subst)?;
@@ -117,14 +149,27 @@ pub fn network_http_request(
         .map(|(k, v)| (k, substitute(&v, &subst)))
         .collect();
     let body = body.map(|b| substitute(&b, &subst));
-    send_http(
-        &method,
-        &url,
-        &headers,
-        &query,
-        body.as_deref(),
-        content_type.as_deref(),
-    )
+    // 치환·ns·danger 게이트는 위에서 끝났다(두 모드 동일). 백엔드만 impersonate 로 분기 — "chrome"=위장
+    // 싱글톤 재사용, 그 외/absent="off"=reqwest native-tls. 보안 불변(impersonate 는 전송기일 뿐).
+    if impersonate_chrome(impersonate.as_deref()) {
+        send_http_impersonated(
+            &method,
+            &url,
+            &headers,
+            &query,
+            body.as_deref(),
+            content_type.as_deref(),
+        )
+    } else {
+        send_http(
+            &method,
+            &url,
+            &headers,
+            &query,
+            body.as_deref(),
+            content_type.as_deref(),
+        )
+    }
 }
 
 // ── 테스트(로컬 HTTP 서버 — 외부망 비의존, R10) ─────────────────────────────
@@ -249,5 +294,33 @@ mod tests {
         let mut subst_map = HashMap::new();
         subst_map.insert("\0secret:k\0".to_string(), "k".to_string());
         assert!(resolve_secret_subst(&state, None, &Some(subst_map)).is_err());
+    }
+
+    // (f) impersonate 백엔드 선택 — off=reqwest native-tls, chrome=wreq 위장. 두 전송기로 같은 JA3 에코
+    //     (tls.peet.ws)를 쳐서 핑거프린트가 실제로 달라지는지 = net.http.request 인터페이스가 모드만으로
+    //     백엔드를 바꾸는지 검증(네트워크 — 기본 제외: cargo test -- --ignored impersonate_off_vs_chrome).
+    #[test]
+    #[ignore = "network: cargo test -- --ignored impersonate_off_vs_chrome_changes_ja3"]
+    fn impersonate_off_vs_chrome_changes_ja3() {
+        fn ja3(body: &str) -> String {
+            serde_json::from_str::<serde_json::Value>(body)
+                .ok()
+                .and_then(|v| v["tls"]["ja3_hash"].as_str().map(str::to_string))
+                .unwrap_or_default()
+        }
+        let peet = "https://tls.peet.ws/api/all";
+        let h = HashMap::new();
+        let q = HashMap::new();
+        // off: 기존 reqwest native-tls 경로.
+        let off = send_http("GET", peet, &h, &q, None, None).unwrap();
+        // chrome: mediaproxy wreq 싱글톤 재사용 경로.
+        let chrome = send_http_impersonated("GET", peet, &h, &q, None, None).unwrap();
+        assert_eq!(off.status, 200);
+        assert_eq!(chrome.status, 200);
+        let n = ja3(&off.body);
+        let w = ja3(&chrome.body);
+        assert!(!n.is_empty(), "off(native-tls) JA3 비어있음");
+        assert!(!w.is_empty(), "chrome(wreq) JA3 비어있음");
+        assert_ne!(n, w, "impersonate 가 JA3 를 안 바꿈(off={n}, chrome={w})");
     }
 }

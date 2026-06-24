@@ -245,6 +245,57 @@ fn wreq_fetch(
     })
 }
 
+// net.http.request 의 impersonate:"chrome" 백엔드 — 위장 client 를 한 군데(여기)만 소유하고, http.rs 는
+// 이 helper 로 재사용한다(신규 wreq client 인스턴스 0, 이미 떠 있는 WREQ_CLIENT/ASYNC_RT 싱글톤 그대로).
+// http.rs 의 reqwest native-tls 경로와 응답 shape 동일: (status, 전체 헤더, 바디 문자열). 시크릿 치환은
+// 호출 전 http.rs 가 이미 끝낸다 — 여기는 순수 전송기(임퍼소네이션 백엔드)일 뿐.
+pub(crate) fn impersonated_request(
+    method: &str,
+    url: &str,
+    headers: &HashMap<String, String>,
+    query: &HashMap<String, String>,
+    body: Option<&str>,
+    content_type: Option<&str>,
+) -> Result<(u16, HashMap<String, String>, String), String> {
+    let rt = wreq_rt().ok_or("wreq runtime")?;
+    let client = wreq_client().ok_or("wreq client")?;
+    let m = wreq::Method::from_bytes(method.to_uppercase().as_bytes())
+        .map_err(|e| format!("HTTP method 불량: {e}"))?;
+    // query 는 URL 에 직접 붙인다 — wreq 의 .query() 는 "query" feature 게이트라(현재 미활성) 새 feature
+    // 켜는 대신 이미 쓰는 url::form_urlencoded 로 인코딩(off 경로의 reqwest .query() 와 동등 결과).
+    let target = if query.is_empty() {
+        url.to_string()
+    } else {
+        let mut enc = url::form_urlencoded::Serializer::new(String::new());
+        for (k, v) in query {
+            enc.append_pair(k, v);
+        }
+        let qs = enc.finish();
+        let sep = if url.contains('?') { '&' } else { '?' };
+        format!("{url}{sep}{qs}")
+    };
+    rt.block_on(async {
+        let mut rb = client.request(m, target.as_str());
+        for (k, v) in headers {
+            rb = rb.header(k.as_str(), v.as_str());
+        }
+        if let Some(ct) = content_type {
+            rb = rb.header("content-type", ct);
+        }
+        if let Some(b) = body {
+            rb = rb.body(b.to_string());
+        }
+        let resp = rb.send().await.map_err(|e| e.to_string())?;
+        let status = resp.status().as_u16();
+        let mut hmap = HashMap::new();
+        for (k, v) in resp.headers() {
+            hmap.insert(k.as_str().to_string(), v.to_str().unwrap_or("").to_string());
+        }
+        let text = resp.text().await.map_err(|e| e.to_string())?;
+        Ok::<_, String>((status, hmap, text))
+    })
+}
+
 // wreq 스트리밍 결과. SendFailed = send 실패(아직 아무것도 안 씀 → native 폴백 가능). Io = 헤더/바디 쓰는 중
 // 실패(이미 부분 전송됨 → 폴백 불가, 그대로 에러).
 enum WreqStreamErr {

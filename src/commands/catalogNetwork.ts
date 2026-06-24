@@ -128,8 +128,8 @@ export function registerNetworkCatalog(): void {
 
   register("net.http.request", {
     description:
-      "Send an arbitrary-origin HTTP request (method/url/headers/query/body) → {status,headers,body}. Core handles cross-origin requests that webview fetch cannot. Secrets are substituted at the Rust boundary from the ns vault (secretSubst: placeholder→secretKey, plaintext never exposed). ns must be explicit from CLI/E2E; plugin runtime uses app.network.http which injects ns automatically.",
-    triggers: { ko: "HTTP 요청 API호출 웹요청 GET POST" },
+      "Send an arbitrary-origin HTTP request (method/url/headers/query/body) → {status,headers,body}. Core handles cross-origin requests that webview fetch cannot. Secrets are substituted at the Rust boundary from the ns vault (secretSubst: placeholder→secretKey, plaintext never exposed). ns must be explicit from CLI/E2E; plugin runtime uses app.network.http which injects ns automatically. impersonate:\"chrome\" routes the request through the browser-fingerprint (JA3/JA4) backend; \"off\" (default) uses the plain native-tls backend.",
+    triggers: { ko: "HTTP 요청 API호출 웹요청 GET POST 임퍼소네이션 핑거프린트" },
     params: {
       method: { type: "string", description: "HTTP method: GET, POST, PUT, DELETE, PATCH, etc.", required: true },
       url: { type: "string", description: "Request URL", required: true },
@@ -142,12 +142,17 @@ export function registerNetworkCatalog(): void {
         type: "json",
         description: "placeholder→secretKey map; values are resolved from the ns vault at the Rust boundary, never exposed as plaintext",
       },
+      impersonate: {
+        type: "string",
+        description: "Transport backend: \"off\" (default, plain native-tls) or \"chrome\" (browser JA3/JA4 fingerprint via the wreq backend, to pass fingerprint-blocking CDNs). Same response shape, secret/ns/danger gates either way.",
+      },
     },
     returns: "{ status, headers, body }",
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
       'sok net.http.request \'{"method":"GET","url":"https://api.example.com/v1/ping"}\'',
+      'sok net.http.request \'{"method":"GET","url":"https://blocked.example.com","impersonate":"chrome"}\'',
     ],
     handler: async (p) => {
       if (typeof p.method !== "string" || typeof p.url !== "string") {
@@ -164,6 +169,7 @@ export function registerNetworkCatalog(): void {
           contentType: (p.contentType as string | undefined) ?? null,
           ns: (p.ns as string | undefined) ?? null,
           secretSubst: (p.secretSubst as Record<string, string> | undefined) ?? null,
+          impersonate: (p.impersonate as string | undefined) ?? null,
         },
       );
     },
