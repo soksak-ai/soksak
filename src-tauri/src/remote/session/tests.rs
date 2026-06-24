@@ -1054,3 +1054,197 @@ proptest! {
 fn mut_dispatch_input(ct: &[u8]) -> &[u8] {
     ct
 }
+
+// ===========================================================================
+// LOGICAL-MESSAGE CHUNKING — 단일 Noise frame 을 넘는 논리 응답을 N frame 으로 스트리밍.
+// 코덱(encrypt_logical / LogicalReassembler / decrypt_frame) 을 raw 채널 쌍 위에서 RED→GREEN
+// 검증한다. RED = 청킹 전엔 single-frame encrypt 가 빈 frame(silent corruption) 또는 거짓
+// total 로 OOM/무한대기였음을 못박는다. GREEN = byte-for-byte 왕복 + cap/잘림/변조 거부.
+// 기준 약화 0 — 실패하면 구현을 고친다(RULE 2).
+// ===========================================================================
+
+/// KK 핸드셰이크를 끝까지 돌려 **두 raw 채널**(send, recv)을 만든다 — SecureSession 래핑 없이
+/// 코덱을 직접 두드린다. 데스크톱(send=responder)↔원격(recv=initiator) 양방향. Noise 는 양방향
+/// 이라 send 로 암호화한 frame 을 recv 가 복호한다.
+fn channel_pair() -> (NoiseChannel, NoiseChannel) {
+    let mut desktop = desktop_side(4);
+    let remote = pair_device(&mut desktop, "phone-chunk", 7, Scope::ReadOnly);
+    let mut remote_peers = PinnedPeerRegistry::new();
+    remote_peers
+        .pin("desktop", &desktop.x_local.public_key())
+        .expect("원격이 데스크톱 핀닝");
+    let mut ini = Handshake::initiate(&remote.x_remote, &remote_peers, "desktop").expect("initiate");
+    let mut resp = Handshake::respond(&desktop.x_local, &desktop.peers, &remote.device_id).expect("respond");
+    let m1 = ini.write_message().expect("m1");
+    resp.read_message(&m1).expect("resp read m1");
+    let m2 = resp.write_message().expect("m2");
+    ini.read_message(&m2).expect("ini read m2");
+    let send = resp.into_channel().expect("send channel"); // 데스크톱(송신).
+    let recv = ini.into_channel().expect("recv channel"); // 원격(수신).
+    (send, recv)
+}
+
+/// 코덱 왕복 헬퍼 — send 채널로 logical 을 N frame 인코딩하고, recv 채널로 재조립해 평문을 돌려준다
+/// (transport.write_logical + client.recv_logical 의 순수 거울). 코덱 행위를 한 곳에서 강제.
+fn logical_round_trip(
+    send: &mut NoiseChannel,
+    recv: &mut NoiseChannel,
+    logical: &[u8],
+) -> Result<Vec<u8>, LogicalError> {
+    let frames = encrypt_logical(send, logical)?;
+    let first = decrypt_frame(recv, &frames[0])?;
+    // 첫 frame 이 청크 헤더면 재조립, 아니면 단일 frame fast-path.
+    match parse_logical_header(&first) {
+        None => {
+            assert_eq!(frames.len(), 1, "fast-path 는 정확히 1 frame");
+            Ok(first)
+        }
+        Some(_) => {
+            let mut acc = LogicalReassembler::from_header(&first)?;
+            for f in &frames[1..] {
+                let chunk = decrypt_frame(recv, f)?;
+                acc.push(&chunk)?;
+            }
+            acc.into_message()
+        }
+    }
+}
+
+#[test]
+fn chunking_boundary_sizes_round_trip_byte_for_byte() {
+    // 경계 크기 전수 — 한 frame 미만 / 정확히 한 frame / 한 frame + 1 / 여러 frame / 큰 응답.
+    // GREEN: 클라이언트가 받은 바이트가 보낸 바이트와 **정확히 동일**(byte-for-byte). RED(청킹 전):
+    //   CHUNK_PLAINTEXT 초과는 single-frame encrypt 가 빈 frame 을 내 복호 실패(silent corruption).
+    let sizes = [
+        0usize,
+        1,
+        CHUNK_PLAINTEXT - 1, // 한 frame 직전.
+        CHUNK_PLAINTEXT,     // 정확히 한 frame(fast-path 경계).
+        CHUNK_PLAINTEXT + 1, // 한 frame + 1(첫 멀티-frame).
+        CHUNK_PLAINTEXT * 2, // 두 데이터 frame.
+        CHUNK_PLAINTEXT * 3 + 17,
+        200 * 1024,          // state.commands 규모(~244KB) 근사.
+        300 * 1024,
+    ];
+    for &n in &sizes {
+        let (mut send, mut recv) = channel_pair();
+        // 결정적이되 자명하지 않은 페이로드(위치별 패턴 — 누락/재배열이면 깨짐).
+        let logical: Vec<u8> = (0..n).map(|i| (i * 31 + 7) as u8).collect();
+        let got = logical_round_trip(&mut send, &mut recv, &logical)
+            .unwrap_or_else(|e| panic!("size {n} round-trip 실패: {e:?}"));
+        assert_eq!(got.len(), n, "size {n}: 길이 일치");
+        assert_eq!(got, logical, "size {n}: byte-for-byte 일치");
+    }
+}
+
+#[test]
+fn chunking_fast_path_single_frame_for_small_response() {
+    // fast-path 무회귀: ≤ CHUNK_PLAINTEXT 응답은 **정확히 1 frame**(헤더 0). 와이어가 청킹 이전과
+    //   동일함을 frame 개수로 못박는다(floor 테스트가 깨지지 않는 근거).
+    let (mut send, _recv) = channel_pair();
+    let small = vec![0xABu8; CHUNK_PLAINTEXT];
+    let frames = encrypt_logical(&mut send, &small).expect("encode");
+    assert_eq!(frames.len(), 1, "한 frame 에 드는 응답은 단일 frame(헤더 0)");
+    let over = vec![0xABu8; CHUNK_PLAINTEXT + 1];
+    let frames2 = encrypt_logical(&mut send, &over).expect("encode over");
+    assert!(frames2.len() >= 2, "한 frame 초과는 헤더+청크(>= 2 frame)");
+}
+
+#[test]
+fn chunking_declared_total_over_cap_rejected_without_allocating() {
+    // 증폭/DoS(매트릭스 I): 헤더가 MAX_LOGICAL_RESPONSE 초과 total 을 선언하면 from_header 가
+    //   **그 크기를 할당하기 전에** TooLarge 로 거부한다(OOM/거대 선할당 0). RED: with_capacity(total)
+    //   같은 구현이면 거짓 거대 total 로 OOM. GREEN: 도착분만 자라는 설계라 할당 0 + typed Err.
+    // u32::MAX 에 가까운 total 을 직접 헤더로 구성(복호 없이 from_header 단독 — 순수 단언).
+    let mut header = [0u8; 5];
+    header[0] = LOGICAL_HDR_TAG;
+    header[1..5].copy_from_slice(&u32::MAX.to_be_bytes()); // ~4GB 선언.
+    let r = LogicalReassembler::from_header(&header);
+    assert_eq!(r.err(), Some(LogicalError::TooLarge), "cap 초과 total ⇒ 할당 전 거부");
+    // 바로 위 cap 경계: cap 은 허용, cap+1 은 거부.
+    let mk = |total: usize| {
+        let mut h = [0u8; 5];
+        h[0] = LOGICAL_HDR_TAG;
+        h[1..5].copy_from_slice(&(total as u32).to_be_bytes());
+        LogicalReassembler::from_header(&h)
+    };
+    assert!(mk(MAX_LOGICAL_RESPONSE).is_ok(), "cap 정확히는 허용");
+    assert_eq!(mk(MAX_LOGICAL_RESPONSE + 1).err(), Some(LogicalError::TooLarge), "cap+1 거부");
+}
+
+#[test]
+fn chunking_truncated_stream_clean_error_not_hang() {
+    // 잘린 스트림(매트릭스 I — 무한대기 0): peer 가 total=N 선언 후 **데이터 frame 을 적게** 보내고
+    //   멈춘다. RED: 무한 대기/부분 데이터 수용. GREEN: 모자란 채로 into_message ⇒ Truncated(부분
+    //   버림). (실제 스트림 EOF 는 client.recv_logical 의 read_framed None 이 잡고, 코덱은 미완을
+    //   Truncated 로 환원 — 양쪽 다 bounded.)
+    let (mut send, mut recv) = channel_pair();
+    let logical = vec![0x5Au8; CHUNK_PLAINTEXT * 2 + 5]; // 3 데이터 frame.
+    let frames = encrypt_logical(&mut send, &logical).expect("encode");
+    let first = decrypt_frame(&mut recv, &frames[0]).expect("hdr");
+    let mut acc = LogicalReassembler::from_header(&first).expect("acc");
+    // 데이터 frame 을 **하나만** 누적하고 멈춘다(나머지 2개를 안 보냄).
+    let chunk0 = decrypt_frame(&mut recv, &frames[1]).expect("chunk0");
+    acc.push(&chunk0).expect("push0");
+    assert!(!acc.is_complete(), "아직 미완(적게 도착)");
+    assert!(acc.remaining() > 0, "남은 바이트 > 0");
+    assert_eq!(acc.into_message().err(), Some(LogicalError::Truncated), "미완 ⇒ Truncated(부분 버림)");
+}
+
+#[test]
+fn chunking_overflow_more_than_declared_rejected() {
+    // 약속 위반(over-declare 의 반대): 데이터가 선언 total 을 넘으면 push 가 Overflow 로 거부한다
+    //   (cap 도 절대 안 넘는다). RED: 누적 무한 ⇒ 메모리 증폭. GREEN: typed Overflow.
+    let (mut send, mut recv) = channel_pair();
+    let logical = vec![0x33u8; CHUNK_PLAINTEXT + 10]; // 헤더 total = len.
+    let frames = encrypt_logical(&mut send, &logical).expect("encode");
+    let first = decrypt_frame(&mut recv, &frames[0]).expect("hdr");
+    let mut acc = LogicalReassembler::from_header(&first).expect("acc");
+    for f in &frames[1..] {
+        let chunk = decrypt_frame(&mut recv, f).expect("chunk");
+        acc.push(&chunk).expect("push within total");
+    }
+    assert!(acc.is_complete(), "정확히 total 누적");
+    // 약속을 넘는 여분 데이터를 한 번 더 push ⇒ Overflow.
+    assert_eq!(acc.push(b"extra").err(), Some(LogicalError::Overflow), "total 초과 push ⇒ Overflow");
+}
+
+#[test]
+fn chunking_tampered_chunk_fails_whole_message() {
+    // 변조(silent corruption 0): 멀티-frame 응답에서 한 데이터 frame 의 한 바이트를 뒤집으면 그
+    //   frame 의 AEAD 가 깨져 decrypt_frame ⇒ Decrypt ⇒ 논리 메시지 전체 실패(부분 수용 0).
+    //   RED: AEAD 없으면 garbage chunk 가 조용히 섞임. GREEN: 한 chunk 변조 ⇒ 전체 Decrypt 실패.
+    let (mut send, mut recv) = channel_pair();
+    let logical = vec![0x77u8; CHUNK_PLAINTEXT * 2 + 3];
+    let mut frames = encrypt_logical(&mut send, &logical).expect("encode");
+    // 헤더는 정상 복호 — 데이터 frame[2](마지막 청크)의 한 바이트를 변조.
+    let first = decrypt_frame(&mut recv, &frames[0]).expect("hdr");
+    let mut acc = LogicalReassembler::from_header(&first).expect("acc");
+    let chunk0 = decrypt_frame(&mut recv, &frames[1]).expect("chunk0");
+    acc.push(&chunk0).expect("push0");
+    let tampered = frames[2].len() / 2;
+    frames[2][tampered] ^= 0x01; // 변조.
+    let r = decrypt_frame(&mut recv, &frames[2]);
+    assert_eq!(r.err(), Some(LogicalError::Decrypt), "변조된 chunk ⇒ AEAD 실패(전체 메시지 실패)");
+}
+
+#[test]
+fn chunking_reorder_chunk_fails_decrypt() {
+    // 순서뒤바뀜(Noise counter 가 순서를 강제): 데이터 frame 을 뒤바꿔 복호하면 채널 counter 가
+    //   안 맞아 AEAD 가 거부한다 — 멀티-frame 도 순서 무결성이 보장됨(누락/재배열 ⇒ 복호 실패).
+    let (mut send, mut recv) = channel_pair();
+    let logical = vec![0x99u8; CHUNK_PLAINTEXT * 2 + 1]; // 3 데이터 frame.
+    let frames = encrypt_logical(&mut send, &logical).expect("encode");
+    let _hdr = decrypt_frame(&mut recv, &frames[0]).expect("hdr");
+    // 첫 데이터 frame 을 건너뛰고 두 번째를 먼저 복호 ⇒ counter 불일치 ⇒ Decrypt.
+    let r = decrypt_frame(&mut recv, &frames[2]);
+    assert_eq!(r.err(), Some(LogicalError::Decrypt), "순서뒤바뀜 ⇒ AEAD 거부");
+}
+
+#[test]
+fn chunking_empty_logical_message_round_trips() {
+    // 빈 논리 메시지(total=0) — fast-path(단일 frame, 빈 평문)로 정확히 왕복(off-by-one 0).
+    let (mut send, mut recv) = channel_pair();
+    let got = logical_round_trip(&mut send, &mut recv, b"").expect("empty round-trip");
+    assert!(got.is_empty(), "빈 메시지는 빈 채로 왕복");
+}

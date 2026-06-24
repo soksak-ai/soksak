@@ -37,7 +37,7 @@ use crate::remote::auth::{CapabilityAssertion, Scope};
 use crate::remote::noise::{
     Handshake, NoiseChannel, NoiseError, PinnedPeerRegistry, StaticKeypair, X25519_KEY_LEN,
 };
-use crate::remote::session::RequestFrame;
+use crate::remote::session::{parse_logical_header, LogicalError, LogicalReassembler, RequestFrame};
 use crate::remote::transport::MAX_NOISE_MESSAGE;
 
 // ===========================================================================
@@ -284,6 +284,9 @@ pub enum DeniedReason {
     Unauthorized,
     /// destructive confirm 토큰 미제공/불일치 또는 데스크톱 거부/timeout — 코드 5.
     DesktopConfirm,
+    /// dispatch 결과가 서버 MAX_LOGICAL_RESPONSE 초과 — route() 는 실행됐으나 결과가 병적으로 큼.
+    /// 정상 응답은 청크로 온전히 오므로 도달 0 — 방어선(서버 SessionDenied::ResponseTooLarge) — 코드 6.
+    ResponseTooLarge,
     /// 미지 코드(형식 진화 — 거부 표면).
     Unknown(u8),
 }
@@ -296,6 +299,7 @@ impl DeniedReason {
             3 => DeniedReason::DeviceMismatch,
             4 => DeniedReason::Unauthorized,
             5 => DeniedReason::DesktopConfirm,
+            6 => DeniedReason::ResponseTooLarge,
             other => DeniedReason::Unknown(other),
         }
     }
@@ -409,17 +413,51 @@ where
         Ok(())
     }
 
-    /// 서버의 암호화 응답 1개를 길이-프리픽스로 받아 복호→ClientResponse 로 환원(공통 수신 경로).
+    /// 서버의 암호화 응답을 받아 복호→ClientResponse 로 환원(공통 수신 경로). 응답이 한 frame 을
+    /// 넘으면(state.commands 류) 헤더+청크 N frame 을 재조립한다(서버 transport.write_logical 의 거울).
     /// **이벤트-우선**: read_framed 가 채널 바이트가 올 때까지 await 한다(폴링 0). 변조/잘림 ⇒
     /// clean error(패닉 0 — 클라이언트 자기 복호 정확성).
+    ///
+    /// fast-path(무회귀): 첫 frame 복호 평문이 정상 응답 태그(0x01/0x00)면 그대로 decode(단일 frame,
+    /// 이전과 동일). 청크 헤더 태그면 total 을 읽고 데이터 frame 을 cap-bounded 재조립 후 decode.
     async fn recv_response(&mut self) -> Result<ClientResponse, ClientError> {
-        let ct = match read_framed(&mut self.stream).await? {
+        let logical = self.recv_logical().await?;
+        decode_response(&logical)
+    }
+
+    /// 한 논리 응답 메시지를 받아 평문 바이트로 환원한다(decode_response 입력). 단일 frame fast-path
+    /// 와 멀티-frame 재조립을 모두 처리한다 — 서버 session::encrypt_logical 의 정확한 역.
+    ///
+    /// DoS 불변식(매트릭스 I — 서버와 대칭): 헤더가 선언한 total 이 MAX_LOGICAL_RESPONSE 초과면
+    /// **그 크기 할당 전에** Err(BadResponse)(증폭/OOM 0). 누적 버퍼는 도착분만큼만 자라고 cap·total
+    /// 을 절대 안 넘는다. peer 가 total 선언 후 적게 보내고 끊으면(EOF) Err(잘림, 무한 대기 0 —
+    /// read_framed 가 EOF/잘림을 즉시 환원하고, 그 위에 호출부의 read timeout 이 또 한 겹).
+    async fn recv_logical(&mut self) -> Result<Vec<u8>, ClientError> {
+        let first_ct = match read_framed(&mut self.stream).await? {
             Some(b) => b,
             // 서버가 응답 없이 끊김 — clean error(핸드셰이크 후 비정상 종료).
             None => return Err(ClientError::BadResponse),
         };
-        let plaintext = self.channel.decrypt(&ct).map_err(|_| ClientError::Decrypt)?;
-        decode_response(&plaintext)
+        let first_pt = self.channel.decrypt(&first_ct).map_err(|_| ClientError::Decrypt)?;
+        // 청크 헤더인가? 아니면 단일 frame fast-path(평문이 곧 논리 메시지).
+        let total = match parse_logical_header(&first_pt) {
+            Some(t) => t,
+            None => return Ok(first_pt), // fast-path — 단일 frame 응답(이전 와이어와 동일).
+        };
+        // 멀티-frame — total > cap 이면 from_header 가 **할당 전에** 거부(증폭 0).
+        let mut acc = LogicalReassembler::from_header(&first_pt).map_err(map_logical_err)?;
+        // 데이터 frame 을 복호·누적한다(total 바이트가 다 모일 때까지). cap·total 초과는 typed Err.
+        let _ = total; // total 은 acc.remaining() 으로 추적(이중 진실 회피).
+        while !acc.is_complete() {
+            let ct = match read_framed(&mut self.stream).await? {
+                Some(b) => b,
+                // peer 가 total 선언 후 적게 보내고 끊음 — 잘림(부분 데이터 버림, 무한 대기 0).
+                None => return Err(ClientError::BadResponse),
+            };
+            let chunk = self.channel.decrypt(&ct).map_err(|_| ClientError::Decrypt)?;
+            acc.push(&chunk).map_err(map_logical_err)?; // 누적 > total ⇒ Overflow ⇒ BadResponse.
+        }
+        acc.into_message().map_err(map_logical_err)
     }
 
     /// **read-only/write 호출** — 동기 즉시 경로. frame 송신 → 응답 1개 수신(이벤트-우선) →
@@ -784,6 +822,17 @@ where
     w.write_all(bytes).await?;
     w.flush().await?;
     Ok(())
+}
+
+/// 논리 재조립 실패 → ClientError. AEAD 복호 실패(변조/순서뒤바뀜)는 Decrypt, 그 외(헤더 형식
+/// 불량·cap 초과·잘림·overflow)는 BadResponse(malformed/증폭의 clean 거부 — 패닉 0, 부분 데이터 0).
+fn map_logical_err(e: LogicalError) -> ClientError {
+    match e {
+        LogicalError::Decrypt => ClientError::Decrypt,
+        LogicalError::TooLarge | LogicalError::Truncated | LogicalError::Overflow => {
+            ClientError::BadResponse
+        }
+    }
 }
 
 /// 복호된 응답 평문 → ClientResponse(서버 session::encrypt_response 의 정확한 역).

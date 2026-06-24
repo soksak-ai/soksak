@@ -168,6 +168,193 @@ impl<'a> Reader<'a> {
 }
 
 // ===========================================================================
+// 0b. LOGICAL-MESSAGE CHUNKING — 한 논리 응답이 단일 Noise frame(65535)을 넘으면 N 개의
+//     **각자 독립 암호화된** Noise frame 으로 스트리밍한다(additive — 단일-frame fast-path 무회귀).
+//
+// 동기: route() 응답(예: state.commands ~244KB)이 한 frame 평문 캡(65519 = 65535 - AEAD16)을
+// 넘으면 snow write_message 가 거부 ⇒ encrypt 가 빈 vec ⇒ 클라이언트 복호 실패(silent corruption).
+// cap_response(RESPONSE_TOO_LARGE) 는 안전한 임시방편이었을 뿐 — 실제 데이터를 못 돌려줬다.
+//
+// **단일-frame fast-path 무회귀(핵심)**: 응답 평문이 한 frame 에 들어가면(≤ CHUNK_PLAINTEXT)
+// **오늘과 정확히 같은 1 frame** 으로 나간다(encrypt(평문) — 헤더 0, 추가 frame 0). 수신측은 첫
+// frame 을 복호해 평문 첫 바이트를 본다: 정상 응답 태그(Ok=0x01/Denied=0x00)면 fast-path(그대로
+// 종결), 청크 헤더 태그(LOGICAL_HDR_TAG=0xC4)면 멀티-frame 재조립. AEAD 가 이 판별 바이트를
+// 봉인하므로 릴레이가 위조 불가(0xC4 는 0x01/0x00 과 충돌 0). 즉 작은 응답은 와이어 바이트가
+// 이전과 동일하고, 큰 응답만 헤더+청크가 붙는다(floor 테스트 무회귀).
+//
+// 와이어(논리 메시지가 한 frame 을 넘을 때만 = 헤더 frame 1개 + 데이터 frame N개, 전부 AEAD):
+//   [frame_0] = encrypt( LOGICAL_HDR_TAG(1) | total_len:u32 BE )   ← 총 바이트 수를 봉인
+//   [frame_1] = encrypt( chunk_0 )   (chunk ≤ CHUNK_PLAINTEXT)
+//   ...
+//   [frame_K] = encrypt( chunk_{K-1} )
+// 수신측은 헤더로 total 을 알고, 데이터 frame 을 복호·누적해 정확히 total 바이트가 모이면 종결.
+//
+// 절대 불변식(RULE 0/매트릭스 I — DoS·증폭·malformed):
+//   - 헤더가 봉인(AEAD) — 릴레이/MITM 이 total 을 위조하면 헤더 frame AEAD 가 깨져 전체 실패.
+//   - total > MAX_LOGICAL_RESPONSE ⇒ **그 크기를 할당하기 전에** typed Err(증폭/OOM 0).
+//   - 누적 버퍼는 **실제 도착한 만큼만** 자란다(절대 total 만큼 선할당 0) — 그리고 cap 을 절대
+//     안 넘는다(데이터 frame 이 누적 > total 이면 typed Err).
+//   - peer 가 total=N 선언 후 < N 만 보내고 멈추면 — read 가 EOF 를 만나거나(Err) 호출부의
+//     기존 read timeout 이 잡는다(무한 대기 0). 이 코덱은 EOF 를 typed Err 로 환원한다.
+//   - 각 chunk 가 독립 AEAD frame 이라 한 chunk 의 변조 ⇒ 그 frame 복호 실패 ⇒ 논리 메시지 전체
+//     실패(silent corruption 0). Noise counter 가 순서/재생을 이미 강제(누락/재배열 ⇒ 복호 실패).
+// ===========================================================================
+
+/// 논리 메시지 헤더 frame 의 평문 1바이트 태그. 정상 응답 태그(Ok=0x01/Denied=0x00)와 충돌 0 —
+/// 수신측이 복호된 첫 frame 의 첫 바이트로 fast-path(단일 frame) vs 청크 헤더를 가른다.
+pub const LOGICAL_HDR_TAG: u8 = 0xC4;
+
+/// 한 데이터 frame 이 실어 나르는 **평문** chunk 의 최대 바이트. 암호화하면 +16(AEAD tag)이라
+/// 65519 + 16 = 65535 = MAX_NOISE_MESSAGE(snow MAXMSGLEN). 이보다 크면 snow write_message 거부.
+/// 단일-frame fast-path 의 경계와 정확히 정합(이하 1 frame, 초과 시 청크).
+pub const CHUNK_PLAINTEXT: usize = crate::remote::transport::MAX_NOISE_MESSAGE - 16;
+
+/// 한 논리 응답의 하드 상한(DoS — 매트릭스 I). 선언 total 이 이를 넘으면 **할당 전에** 거부하고,
+/// 누적 버퍼도 절대 이를 넘지 않는다. 몇 MB — 정상 route() 응답(state.commands 수백 KB)은 한참
+/// 아래, 병적 거대 응답만 친다(그땐 깨끗한 typed 에러). 약화 금지 — 늘리려면 위협 재평가 후.
+pub const MAX_LOGICAL_RESPONSE: usize = 8 * 1024 * 1024;
+
+/// 논리 메시지 재조립 실패 분류(전부 fail-closed — 부분 데이터 0, 패닉 0).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogicalError {
+    /// 헤더/데이터 frame 의 AEAD 복호 실패(변조/재생/순서뒤바뀜) 또는 헤더 형식 불량.
+    Decrypt,
+    /// 선언 total 이 MAX_LOGICAL_RESPONSE 초과 — **그 크기 할당 0**(증폭/OOM 거부).
+    TooLarge,
+    /// peer 가 total=N 선언 후 < N 만 보내고 스트림 종료(EOF). 부분 데이터는 버린다(무한 대기 0).
+    Truncated,
+    /// 누적이 선언 total 을 초과(데이터 frame 이 약속보다 많이 옴) — 형식 불량 거부.
+    Overflow,
+}
+
+/// 한 chunk 가 single Noise frame 에 들어가도록, 논리 평문을 CHUNK_PLAINTEXT 경계로 자른 iterator
+/// (할당 0 — 슬라이스 뷰만). 빈 입력도 chunk 0개가 아니라 "데이터 frame 0개 + total=0 헤더"로
+/// 표현된다(헤더가 total 을 싣는다).
+fn chunk_slices(logical: &[u8]) -> impl Iterator<Item = &[u8]> {
+    logical.chunks(CHUNK_PLAINTEXT.max(1))
+}
+
+/// 한 논리 메시지를 재조립하는 누산기 — 헤더에서 total 을 받고, 데이터 frame 평문을 누적한다.
+/// **실제 도착분만큼만** 자라고(선할당 0), total 도 cap 도 절대 안 넘는다(매트릭스 I 증폭 0).
+///
+/// 사용(수신부 — transport/client 양쪽 대칭):
+///   1. LogicalReassembler::from_header(plaintext) — 첫(헤더) frame 의 복호 평문으로 생성. total
+///      이 cap 초과면 Err(TooLarge) — 그 크기 할당 0. total=0 이면 즉시 완성(데이터 frame 불요).
+///   2. push(plaintext) — 데이터 frame 의 복호 평문을 누적. 누적 > total 이면 Err(Overflow).
+///   3. is_complete() / into_message() — total 바이트가 다 모이면 논리 메시지 반환.
+pub struct LogicalReassembler {
+    total: usize,
+    buf: Vec<u8>,
+}
+
+impl LogicalReassembler {
+    /// 헤더 frame 평문 → 누산기. 평문 = LOGICAL_HDR_TAG(1) | total:u32 BE. 형식 불량 ⇒ Decrypt.
+    /// total > cap ⇒ TooLarge(**할당 0** — with_capacity 를 호출하지 않는다, 도착분만 자란다).
+    pub fn from_header(header_plaintext: &[u8]) -> Result<LogicalReassembler, LogicalError> {
+        let total = match parse_logical_header(header_plaintext) {
+            Some(t) => t,
+            None => return Err(LogicalError::Decrypt), // 헤더 형식 불량 = 다운그레이드/변조 거부.
+        };
+        if total > MAX_LOGICAL_RESPONSE {
+            // **할당 이전에** 거부 — total 만큼의 메모리를 절대 잡지 않는다(증폭/OOM 0).
+            return Err(LogicalError::TooLarge);
+        }
+        Ok(LogicalReassembler {
+            total,
+            // 선할당 0 — 도착분만큼만 자란다(거짓 total 로 OOM 유도 불가). cap 은 from_header 가 이미 검증.
+            buf: Vec::new(),
+        })
+    }
+
+    /// 데이터 frame 평문 1개를 누적. 누적이 total 을 넘으면 Overflow(약속보다 많이 옴 = 형식 불량).
+    pub fn push(&mut self, chunk_plaintext: &[u8]) -> Result<(), LogicalError> {
+        if self.buf.len() + chunk_plaintext.len() > self.total {
+            return Err(LogicalError::Overflow); // 누적 > 선언 total — cap 도 절대 안 넘는다(이미 ≤ cap).
+        }
+        self.buf.extend_from_slice(chunk_plaintext);
+        Ok(())
+    }
+
+    /// total 바이트가 다 모였는가(데이터 frame 을 더 읽어야 하는지 판단).
+    pub fn is_complete(&self) -> bool {
+        self.buf.len() == self.total
+    }
+
+    /// 아직 더 받아야 할 바이트 수(읽기 루프 종료 판정 — 0 이면 완성).
+    pub fn remaining(&self) -> usize {
+        self.total - self.buf.len()
+    }
+
+    /// 완성된 논리 메시지를 꺼낸다(미완이면 Truncated — peer 가 적게 보내고 멈춤).
+    pub fn into_message(self) -> Result<Vec<u8>, LogicalError> {
+        if self.buf.len() == self.total {
+            Ok(self.buf)
+        } else {
+            Err(LogicalError::Truncated) // 선언보다 적게 도착 — 부분 데이터 버림(무한 대기 0).
+        }
+    }
+}
+
+/// 한 논리 평문 메시지를 **하나 이상의 독립 암호화 Noise frame** 으로 인코딩한다.
+/// `&mut NoiseChannel` 만 받으므로 데스크톱(SecureSession)·폰(ClientSession) 양쪽이 같은 코덱을
+/// 대칭으로 쓴다(평행 구현 0 — RULE 6 단일 진실). 반환은 각 frame 의 ciphertext — 호출부가 각각
+/// write_framed 로 흘린다. 각 frame ≤ MAX_NOISE_MESSAGE 보장(chunk ≤ CHUNK_PLAINTEXT).
+///
+/// **fast-path(무회귀)**: logical ≤ CHUNK_PLAINTEXT ⇒ **단 1 frame** = encrypt(logical)(헤더 0,
+/// 추가 frame 0 — 오늘과 정확히 같은 와이어). 큰 메시지만 헤더 frame + 데이터 frame N개가 붙는다.
+///
+/// total > MAX_LOGICAL_RESPONSE ⇒ Err(TooLarge): 병적 거대 메시지는 **인코딩조차 안 한다**(보내는
+/// 쪽도 cap 강제 — 약속을 어기는 헤더를 애초에 안 만든다). encrypt 실패(채널 죽음)는 도달 0이나
+/// 방어적으로 Decrypt.
+pub fn encrypt_logical(
+    channel: &mut NoiseChannel,
+    logical: &[u8],
+) -> Result<Vec<Vec<u8>>, LogicalError> {
+    if logical.len() > MAX_LOGICAL_RESPONSE {
+        return Err(LogicalError::TooLarge);
+    }
+    // fast-path — 한 frame 에 들어가면 헤더 없이 단일 frame(이전과 동일 와이어, floor 무회귀).
+    if logical.len() <= CHUNK_PLAINTEXT {
+        return Ok(vec![channel.encrypt(logical).map_err(|_| LogicalError::Decrypt)?]);
+    }
+    // 멀티-frame — 헤더(total 봉인) + 데이터 청크들.
+    let mut frames = Vec::new();
+    let mut header = [0u8; 5];
+    header[0] = LOGICAL_HDR_TAG;
+    header[1..5].copy_from_slice(&(logical.len() as u32).to_be_bytes());
+    frames.push(channel.encrypt(&header).map_err(|_| LogicalError::Decrypt)?);
+    for chunk in chunk_slices(logical) {
+        frames.push(channel.encrypt(chunk).map_err(|_| LogicalError::Decrypt)?);
+    }
+    Ok(frames)
+}
+
+/// 데이터/헤더 frame ciphertext 1개를 복호한다(재조립 입력). 변조/재생/순서뒤바뀜 ⇒ Decrypt
+/// (Noise counter 가 순서를 강제 — 한 chunk 누락/재배열도 복호 실패로 전체 메시지 실패).
+pub fn decrypt_frame(
+    channel: &mut NoiseChannel,
+    ciphertext: &[u8],
+) -> Result<Vec<u8>, LogicalError> {
+    channel.decrypt(ciphertext).map_err(|_| LogicalError::Decrypt)
+}
+
+/// 복호된 첫 frame 평문이 청크 헤더인가(LOGICAL_HDR_TAG + 5바이트)를 판별한다 — 수신측이
+/// fast-path(단일 frame) vs 멀티-frame 재조립을 가르는 단일 진실(양쪽 대칭). 헤더면 total 을 돌려준다.
+pub fn parse_logical_header(first_plaintext: &[u8]) -> Option<usize> {
+    if first_plaintext.len() == 5 && first_plaintext[0] == LOGICAL_HDR_TAG {
+        Some(u32::from_be_bytes([
+            first_plaintext[1],
+            first_plaintext[2],
+            first_plaintext[3],
+            first_plaintext[4],
+        ]) as usize)
+    } else {
+        None
+    }
+}
+
+
+// ===========================================================================
 // 1. 응답 frame — dispatch 결과 또는 typed 에러(평문, 채널로 암호화되어 나감)
 // ===========================================================================
 
@@ -195,6 +382,10 @@ pub enum SessionDenied {
     Unauthorized(DenyReason),
     /// destructive Grant 인데 데스크톱 confirm 토큰 미제공/불일치 — 폰이 토큰 위조 불가.
     DesktopConfirm(AuthorizeError),
+    /// dispatch 결과가 MAX_LOGICAL_RESPONSE 초과 — route() 는 실행됐으나 결과가 병적으로 큼.
+    /// 깨끗이 복호되는 typed 거부로 환원(truncate/silent drop 0). 정상 응답은 cap 한참 아래라
+    /// 도달 0 — bridge 가 1차로 막고, 이건 세션 방어선(매트릭스 I — 증폭/DoS 거부).
+    ResponseTooLarge,
 }
 
 impl SessionResponse {
@@ -246,6 +437,16 @@ impl FrameOutcome {
     pub fn is_await_confirm(&self) -> bool {
         matches!(self, FrameOutcome::AwaitConfirm(_))
     }
+}
+
+/// begin_frame_chunked 의 결과 — FrameOutcome 의 청크 변형. Terminal 이 단일 ciphertext 가 아니라
+/// **하나 이상의 frame**(큰 비파괴 응답은 헤더+청크)을 들고 종결한다. AwaitConfirm 은 동일
+/// (destructive 는 finish_confirmed_chunked 가 응답을 청크 인코딩). serve loop 가 이걸 쓴다.
+pub enum FrameOutcomeChunked {
+    /// 종결됨 — 회신할 frame 들(작으면 1개, 크면 헤더+청크 N개). 호출자가 순서대로 write_framed.
+    Terminal(Vec<Vec<u8>>),
+    /// destructive grant — dispatch 미실행(FrameOutcome::AwaitConfirm 과 동일 의미).
+    AwaitConfirm(PendingDestructive),
 }
 
 /// 데스크톱 결정을 기다리는 봉인된 destructive 액션. **봉인된 Grant 를 들고 있다** — dispatch
@@ -415,6 +616,25 @@ impl SecureSession {
         self.encrypt_response(&response)
     }
 
+    /// handle_frame 의 **청크 변형**(transport serve loop 가 호출) — 게이트 흐름은 process 로 동일
+    /// (RULE 6 단일 처리점), 응답만 **하나 이상의 frame** 으로 인코딩한다. 작은 응답(≤ 한 frame)은
+    /// 단일 frame(fast-path, 이전 와이어와 동일), 큰 응답(state.commands 류)은 헤더+청크 N frame.
+    /// 호출부는 반환된 frame 들을 순서대로 write_framed 한다.
+    pub fn handle_frame_chunked<F>(
+        &mut self,
+        ciphertext: &[u8],
+        registry: &mut DeviceRegistry,
+        ctx: VerifyCtx,
+        desktop_token: Option<&DesktopConfirmToken>,
+        dispatch: F,
+    ) -> Vec<Vec<u8>>
+    where
+        F: FnOnce(&AuthorizedAction, &[u8]) -> Vec<u8>,
+    {
+        let response = self.process(ciphertext, registry, ctx, desktop_token, dispatch);
+        self.encrypt_response_chunked(&response)
+    }
+
     /// 내부 처리 — 게이트 흐름을 SessionResponse 로 환원(암호화 전 단계). 테스트가 평문
     /// 결과(dispatch 호출 여부·사유)를 직접 단언할 수 있게 분리한다.
     ///
@@ -560,6 +780,59 @@ impl SecureSession {
         }
     }
 
+    /// begin_frame 의 **청크 변형**(confirmed serve loop 가 호출) — 게이트 흐름 동일, 비파괴
+    /// 종결 응답만 하나 이상의 frame 으로 인코딩한다(큰 read-only 응답도 청크 회신). destructive 는
+    /// FrameOutcomeChunked::AwaitConfirm 으로 동일 분기(dispatch 미실행 — anti-escalation 불변).
+    pub fn begin_frame_chunked<F>(
+        &mut self,
+        ciphertext: &[u8],
+        registry: &mut DeviceRegistry,
+        ctx: VerifyCtx,
+        dispatch: F,
+    ) -> FrameOutcomeChunked
+    where
+        F: FnOnce(&AuthorizedAction, &[u8]) -> Vec<u8>,
+    {
+        let plaintext = match self.channel.decrypt(ciphertext) {
+            Ok(pt) => pt,
+            Err(_) => return self.terminal_chunked(SessionResponse::Denied(SessionDenied::Decrypt)),
+        };
+        let frame = match RequestFrame::decode(&plaintext) {
+            Some(f) => f,
+            None => {
+                return self.terminal_chunked(SessionResponse::Denied(SessionDenied::MalformedFrame))
+            }
+        };
+        if frame.assertion.device_id != self.peer_device_id {
+            return self.terminal_chunked(SessionResponse::Denied(SessionDenied::DeviceMismatch));
+        }
+        let grant = match registry.verify(&frame.assertion, &frame.signature, ctx) {
+            AuthDecision::Granted(g) => g,
+            AuthDecision::Denied(reason) => {
+                return self
+                    .terminal_chunked(SessionResponse::Denied(SessionDenied::Unauthorized(reason)));
+            }
+        };
+        if grant.requires_desktop_confirm() {
+            let command = summarize_command(&frame.request);
+            FrameOutcomeChunked::AwaitConfirm(PendingDestructive {
+                grant,
+                request: frame.request,
+                command,
+            })
+        } else {
+            let action = match AuthorizedAction::authorize(&grant, None) {
+                Ok(a) => a,
+                Err(e) => {
+                    return self
+                        .terminal_chunked(SessionResponse::Denied(SessionDenied::DesktopConfirm(e)));
+                }
+            };
+            let out = dispatch(&action, &frame.request);
+            self.terminal_chunked(SessionResponse::Ok(out))
+        }
+    }
+
     /// 데스크톱 APPROVE 후 — 파킹된 destructive grant 를 종결한다. **어댑터가 토큰을 직접 만든다**:
     /// Grant 의 DesktopConfirmRequired 에서 정확한 (device, bound_nonce) 를 읽어 그 결속의
     /// DesktopConfirmToken 을 auth.rs 의 데스크톱-권위 생성자로 만든다(폰은 이 생성자에 도달 불가).
@@ -596,6 +869,40 @@ impl SecureSession {
         self.terminal_bytes(SessionResponse::Ok(out))
     }
 
+    /// finish_confirmed 의 **청크 변형**(confirmed serve loop) — APPROVE 후 dispatch 결과를
+    /// 하나 이상의 frame 으로 인코딩한다(승인된 destructive 가 큰 응답을 내도 청크 회신).
+    pub fn finish_confirmed_chunked<F>(
+        &mut self,
+        pending: PendingDestructive,
+        dispatch: F,
+    ) -> Vec<Vec<u8>>
+    where
+        F: FnOnce(&AuthorizedAction, &[u8]) -> Vec<u8>,
+    {
+        let required = match pending.grant.desktop_confirm() {
+            Some(r) => r,
+            None => {
+                return self.encrypt_response_chunked(&SessionResponse::Denied(
+                    SessionDenied::DesktopConfirm(AuthorizeError::DesktopConfirmRequired),
+                ))
+            }
+        };
+        let token = DesktopConfirmToken::issue_after_desktop_confirm(
+            required.device_id(),
+            required.bound_nonce(),
+        );
+        let action = match AuthorizedAction::authorize(&pending.grant, Some(&token)) {
+            Ok(a) => a,
+            Err(e) => {
+                return self.encrypt_response_chunked(&SessionResponse::Denied(
+                    SessionDenied::DesktopConfirm(e),
+                ))
+            }
+        };
+        let out = dispatch(&action, &pending.request);
+        self.encrypt_response_chunked(&SessionResponse::Ok(out))
+    }
+
     /// 데스크톱 DENY 또는 TIMEOUT 후 — dispatch 0, 암호화된 "denied"(confirm 사유코드). 파킹된
     /// Grant 는 여기서 버려진다(토큰 미구성 ⇒ dispatch 불가). 폰은 결과로 거부만 받는다.
     pub fn finish_denied(&mut self, _pending: PendingDestructive) -> Vec<u8> {
@@ -604,9 +911,22 @@ impl SecureSession {
         )))
     }
 
+    /// finish_denied 의 청크 변형 — 거부는 작아서 항상 단일 frame 이지만 serve loop 의 회신 타입
+    /// (Vec<Vec<u8>>)에 맞춘다(코덱 단일 진실).
+    pub fn finish_denied_chunked(&mut self, _pending: PendingDestructive) -> Vec<Vec<u8>> {
+        self.encrypt_response_chunked(&SessionResponse::Denied(SessionDenied::DesktopConfirm(
+            AuthorizeError::DesktopConfirmRequired,
+        )))
+    }
+
     /// SessionResponse 를 즉시 암호화해 Terminal 로 감싼다(begin_frame 의 종결 경로).
     fn terminal(&mut self, response: SessionResponse) -> FrameOutcome {
         FrameOutcome::Terminal(self.encrypt_response(&response))
+    }
+
+    /// SessionResponse 를 청크 인코딩해 Terminal 로 감싼다(begin_frame_chunked 의 종결 경로).
+    fn terminal_chunked(&mut self, response: SessionResponse) -> FrameOutcomeChunked {
+        FrameOutcomeChunked::Terminal(self.encrypt_response_chunked(&response))
     }
 
     /// SessionResponse 를 암호화 바이트로(finish_* 의 종결 경로).
@@ -617,21 +937,45 @@ impl SecureSession {
     /// SessionResponse 를 채널로 암호화한다 — Ok/Denied 모두 ciphertext(릴레이 zero-knowledge).
     /// 응답 와이어: tag(1) | 페이로드. Ok=0x01 + 바이트, Denied=0x00 + 사유코드(1).
     fn encrypt_response(&mut self, response: &SessionResponse) -> Vec<u8> {
-        let mut plaintext = Vec::new();
-        match response {
-            SessionResponse::Ok(body) => {
-                plaintext.push(0x01);
-                plaintext.extend_from_slice(body);
-            }
-            SessionResponse::Denied(d) => {
-                plaintext.push(0x00);
-                plaintext.push(denied_code(d));
-            }
-        }
+        let plaintext = response_plaintext(response);
         // 채널이 살아있는 한 encrypt 는 성공한다(성립된 AEAD). 실패 시(버퍼) 빈 벡터 —
         // 평문 누출보다 무응답이 안전(fail-closed). 정상 경로에선 도달 안 함.
         self.channel.encrypt(&plaintext).unwrap_or_default()
     }
+
+    /// encrypt_response 의 **청크 변형** — 응답 평문을 하나 이상의 frame 으로(encrypt_logical).
+    /// 작은 응답(≤ 한 frame)은 단일 frame(이전 와이어와 동일), 큰 응답은 헤더+청크 N frame.
+    /// 응답이 cap 초과면(병적) typed 에러 응답을 단일 frame 으로 환원해 회신한다(silent drop 0).
+    fn encrypt_response_chunked(&mut self, response: &SessionResponse) -> Vec<Vec<u8>> {
+        let plaintext = response_plaintext(response);
+        match encrypt_logical(&mut self.channel, &plaintext) {
+            Ok(frames) => frames,
+            // cap 초과(MAX_LOGICAL_RESPONSE) — route() 는 실행됐으나 결과가 병적으로 큼. 깨끗이
+            // 복호되는 typed 에러를 단일 frame 으로 회신(꼼수 truncate 0 — 정직한 거부). cap 자체는
+            // bridge 가 1차로 막으므로 이 분기는 방어선(도달하면 정직 보고). encrypt 실패도 동일 환원.
+            Err(_) => {
+                let err = SessionResponse::Denied(SessionDenied::ResponseTooLarge);
+                vec![self.channel.encrypt(&response_plaintext(&err)).unwrap_or_default()]
+            }
+        }
+    }
+}
+
+/// SessionResponse → 응답 평문 바이트(tag(1) | 페이로드). Ok=0x01 + 바이트, Denied=0x00 + 사유코드.
+/// 단일진실 — encrypt_response/encrypt_response_chunked 가 공유(평행 구현 0).
+fn response_plaintext(response: &SessionResponse) -> Vec<u8> {
+    let mut plaintext = Vec::new();
+    match response {
+        SessionResponse::Ok(body) => {
+            plaintext.push(0x01);
+            plaintext.extend_from_slice(body);
+        }
+        SessionResponse::Denied(d) => {
+            plaintext.push(0x00);
+            plaintext.push(denied_code(d));
+        }
+    }
+    plaintext
 }
 
 /// SessionDenied → 1바이트 사유코드(응답 와이어 결정성). 평문 사유 문자열 누출 0.
@@ -642,6 +986,7 @@ fn denied_code(d: &SessionDenied) -> u8 {
         SessionDenied::DeviceMismatch => 3,
         SessionDenied::Unauthorized(_) => 4,
         SessionDenied::DesktopConfirm(_) => 5,
+        SessionDenied::ResponseTooLarge => 6,
     }
 }
 

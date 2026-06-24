@@ -269,31 +269,35 @@ fn make_dispatch(app: AppHandle) -> impl FnMut(&AuthorizedAction, &[u8]) -> Vec<
             Err(e) => json!({ "ok": false, "code": "INVALID_PARAMS", "message": format!("JSON 파싱 실패: {e}") }),
         };
         let bytes = serde_json::to_vec(&envelope).unwrap_or_else(|_| b"{\"ok\":false}".to_vec());
-        cap_response(bytes)
+        guard_logical_cap(bytes)
     }
 }
 
-/// 단일 Noise transport frame 캡(65535) — session 이 tag(1)+AEAD(16) 를 더하므로 평문 응답은
-/// 그보다 작아야 한다. 캡 초과면 session.encrypt 가 빈 frame 을 내 클라이언트가 복호 실패(silent
-/// corruption)했다 — 이를 **깨끗이 복호되는 명시 에러 envelope** 로 환원한다(route() 는 실제로
-/// 실행됐고 결과가 너무 큼을 정직히 보고; floor 무수정 — bridge 가드). 이 한계 자체는 transport
-/// 의 단일-frame 한계다(다중-frame 청크는 별도 후속). 순수 함수 — 테스트가 행위로 강제한다.
-pub const SAFE_PLAINTEXT_CAP: usize = 60_000;
+/// 한 논리 응답의 하드 상한 — transport 의 청킹 코덱과 정확히 같은 cap(단일진실: 코덱의 cap).
+/// 청킹이 도입되기 전 cap_response(RESPONSE_TOO_LARGE) 는 한 Noise frame(65535)을 넘는 응답을
+/// **truncate** 하는 임시방편이었다. 이제 transport 가 큰 응답을 **헤더+청크 N frame** 으로 온전히
+/// 보내므로 그 임시방편은 사라진다 — 정상 route() 응답(state.commands 수백 KB)은 그대로 통과한다.
+/// 남는 건 **병적 거대 응답**(> MAX_LOGICAL_RESPONSE, 몇 MB)뿐 — 그땐 코덱이 인코딩을 거부하므로,
+/// bridge 가 1차로 **깨끗이 복호되는 명시 JSON 에러**로 환원한다(route() 는 실행됐고 결과가 cap
+/// 초과임을 정직히 보고 — silent drop/truncate 0). 순수 함수 — 테스트가 행위로 강제한다.
+pub const MAX_LOGICAL_RESPONSE: usize = crate::remote::session::MAX_LOGICAL_RESPONSE;
 
-fn cap_response(bytes: Vec<u8>) -> Vec<u8> {
-    if bytes.len() > SAFE_PLAINTEXT_CAP {
+/// 응답 바이트가 cap 이하면 그대로 통과(청킹이 크기를 처리), cap 초과면 깨끗한 typed JSON 에러로
+/// 환원한다(병적 케이스만 — 정상 응답은 한참 아래라 무가공 통과).
+fn guard_logical_cap(bytes: Vec<u8>) -> Vec<u8> {
+    if bytes.len() > MAX_LOGICAL_RESPONSE {
         let err = json!({
             "ok": false,
             "code": "RESPONSE_TOO_LARGE",
             "message": format!(
-                "응답 {}B 가 단일 transport frame 캡({}B)을 초과 — route() 는 실행됐으나 결과가 너무 큼(다중-frame 청크는 후속).",
-                bytes.len(), SAFE_PLAINTEXT_CAP
+                "응답 {}B 가 논리 메시지 상한({}B)을 초과 — route() 는 실행됐으나 결과가 병적으로 큼(청크 한도 밖).",
+                bytes.len(), MAX_LOGICAL_RESPONSE
             ),
             "size": bytes.len(),
         });
         return serde_json::to_vec(&err).unwrap_or_else(|_| b"{\"ok\":false}".to_vec());
     }
-    bytes
+    bytes // 청킹이 모든 크기를(cap 이하) 온전히 전송 — truncate 0.
 }
 
 #[cfg(test)]
@@ -302,30 +306,40 @@ mod tests {
 
     #[test]
     fn small_response_passes_through_unchanged() {
-        // 캡 이하 응답은 그대로(가공 0).
+        // 작은 응답은 그대로(가공 0).
         let small = br#"{"ok":true,"count":3}"#.to_vec();
-        assert_eq!(cap_response(small.clone()), small);
+        assert_eq!(guard_logical_cap(small.clone()), small);
     }
 
     #[test]
-    fn oversize_response_becomes_clean_decodable_error() {
-        // RED(버그 재현): 캡 초과를 안 막으면 session.encrypt 가 빈 frame 을 내 클라이언트가 AEAD
-        //   복호 실패(라이브 E2E 에서 state.commands 244KB 로 실제 관측). GREEN: 캡 초과는 단일
-        //   frame 에 들어가는 **깨끗한 JSON 에러**(RESPONSE_TOO_LARGE + 실제 size)로 환원된다.
-        let big = vec![b'x'; SAFE_PLAINTEXT_CAP + 1];
-        let out = cap_response(big);
-        assert!(out.len() <= SAFE_PLAINTEXT_CAP, "환원된 에러는 캡 안에 든다");
+    fn large_but_under_cap_response_passes_through_unchanged() {
+        // RED→GREEN(이 SPEC 의 핵심): 한 Noise frame(65535)을 한참 넘는 응답(state.commands ~244KB
+        //   모사 300KB)도 **truncate 0** — 청킹이 transport 에서 온전히 전송하므로 bridge 는 가공
+        //   하지 않는다(이전 cap_response 는 여기서 RESPONSE_TOO_LARGE 로 잘랐다 = RED). cap 한참
+        //   아래라 그대로 통과한다.
+        let big = vec![b'x'; 300 * 1024];
+        assert_eq!(guard_logical_cap(big.clone()), big, "프레임 초과여도 truncate 0(청킹이 전송)");
+    }
+
+    #[test]
+    fn pathological_over_logical_cap_becomes_clean_decodable_error() {
+        // 병적 케이스(> MAX_LOGICAL_RESPONSE)만 환원 — 깨끗이 복호되는 JSON 에러(route() 는
+        //   실행됐고 결과가 상한 초과임을 정직히 보고). RED: 환원 안 하면 코덱이 TooLarge 로 거부해
+        //   클라가 의미 없는 BadResponse 만 받음. GREEN: 명시 RESPONSE_TOO_LARGE + 실제 size.
+        let huge = vec![b'x'; MAX_LOGICAL_RESPONSE + 1];
+        let out = guard_logical_cap(huge);
+        assert!(out.len() <= 1024, "환원된 에러는 작다(거대 페이로드 미반환)");
         let v: Value = serde_json::from_slice(&out).expect("환원 결과는 유효 JSON(복호 가능)");
         assert_eq!(v["ok"], json!(false));
         assert_eq!(v["code"], json!("RESPONSE_TOO_LARGE"));
-        assert_eq!(v["size"], json!(SAFE_PLAINTEXT_CAP + 1), "실제 크기를 정직히 보고");
+        assert_eq!(v["size"], json!(MAX_LOGICAL_RESPONSE + 1), "실제 크기를 정직히 보고");
     }
 
     #[test]
-    fn boundary_exactly_at_cap_passes() {
-        // 정확히 캡 크기는 통과(경계 off-by-one 0).
-        let exact = vec![b'y'; SAFE_PLAINTEXT_CAP];
-        assert_eq!(cap_response(exact.clone()), exact);
+    fn boundary_exactly_at_logical_cap_passes() {
+        // 정확히 cap 크기는 통과(경계 off-by-one 0).
+        let exact = vec![b'y'; MAX_LOGICAL_RESPONSE];
+        assert_eq!(guard_logical_cap(exact.clone()).len(), MAX_LOGICAL_RESPONSE);
     }
 }
 

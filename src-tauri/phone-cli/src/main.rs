@@ -550,6 +550,7 @@ fn denied_name(r: DeniedReason) -> String {
         DeniedReason::DeviceMismatch => "device-mismatch".into(),
         DeniedReason::Unauthorized => "unauthorized".into(),
         DeniedReason::DesktopConfirm => "desktop-confirm-denied".into(),
+        DeniedReason::ResponseTooLarge => "response-too-large".into(),
         DeniedReason::Unknown(c) => format!("unknown-{c}"),
     }
 }

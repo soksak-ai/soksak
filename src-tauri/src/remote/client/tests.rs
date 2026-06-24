@@ -260,6 +260,123 @@ async fn positive_readonly_call_dispatches_once_decrypts_ok() {
 }
 
 // ===========================================================================
+// A2. LOGICAL-MESSAGE CHUNKING (공개 client API E2E) — 큰 route() 응답이 헤더+청크 N frame 으로
+// 와서 ClientSession::call(recv_logical 재조립)이 **byte-for-byte** 온전한 결과를 돌려준다.
+// (state.commands ~244KB 라이브 갭의 클라이언트-측 RED→GREEN — 진짜 serve_connection 왕복.)
+// ===========================================================================
+
+/// serve_connection 을 1연결 띄우되 dispatch 가 **size 바이트 고정 결정 응답**을 내게 한다(route()
+/// 가 큰 JSON 을 내는 상황 모사). (주소) 반환 — 응답 내용은 테스트가 같은 식으로 재현해 비교한다.
+async fn spawn_serve_fixed_response(desktop: Arc<Desktop>, size: usize) -> SocketAddr {
+    let listener = bind_loopback(0).await.expect("bind loopback");
+    let addr = listener.local_addr().expect("local addr");
+    tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.expect("accept");
+        let dispatch = move |_a: &AuthorizedAction, _r: &[u8]| -> Vec<u8> {
+            (0..size).map(|i| (i * 31 + 7) as u8).collect()
+        };
+        let _ = serve_connection(
+            stream,
+            &desktop.local,
+            &desktop.noise,
+            &desktop.auth,
+            || 200u64,
+            |_id| None,
+            dispatch,
+        )
+        .await;
+    });
+    addr
+}
+
+#[tokio::test]
+async fn client_reassembles_large_response_byte_for_byte() {
+    // 공개 API(connect_tcp + call)만으로: 서버가 한 frame 을 넘는 응답(state.commands 규모)을 내면
+    //   클라이언트가 헤더+청크를 재조립해 **정확히 같은 바이트**를 ok_bytes 로 받는다.
+    // RED(청킹 전): single-frame 만 읽어 큰 응답은 복호 실패/잘림. GREEN: 경계 전수 byte-for-byte.
+    use crate::remote::session::CHUNK_PLAINTEXT;
+    let sizes = [
+        CHUNK_PLAINTEXT - 1,
+        CHUNK_PLAINTEXT,
+        CHUNK_PLAINTEXT + 1,
+        CHUNK_PLAINTEXT * 2 + 13,
+        200 * 1024,
+        300 * 1024,
+    ];
+    for &n in &sizes {
+        let phone = DeviceIdentity::generate("phone").unwrap();
+        let desktop = Arc::new(pair_desktop_with_phone("desktop", &phone, Scope::ReadOnly));
+        let bundle = desktop.pairing_bundle(None);
+        let addr = spawn_serve_fixed_response(Arc::clone(&desktop), n).await;
+
+        let mut session = connect_tcp(addr, &phone, &bundle.desktop_id, &bundle.desktop_static)
+            .await
+            .expect("connect");
+        let resp = session
+            .call(b"state.commands", b"", Scope::ReadOnly, 1000, 100)
+            .await
+            .unwrap_or_else(|e| panic!("size {n}: call 실패: {e}"));
+        assert!(resp.is_ok(), "size {n}: Ok 수신");
+        let expected: Vec<u8> = (0..n).map(|i| (i * 31 + 7) as u8).collect();
+        assert_eq!(resp.ok_bytes().unwrap().len(), n, "size {n}: 길이 일치");
+        assert_eq!(resp.ok_bytes().unwrap(), &expected[..], "size {n}: byte-for-byte 일치(청킹 온전)");
+    }
+}
+
+#[tokio::test]
+async fn client_over_cap_declared_total_clean_error_no_alloc() {
+    // 증폭/DoS(매트릭스 I — 클라이언트 측): 악성 서버가 헤더로 cap 초과 total 을 선언하면 클라이언트
+    //   from_header 가 **그 크기 할당 전에** 거부 ⇒ recv_logical 이 BadResponse(OOM 0, hang 0).
+    //   RED: with_capacity(거대 total) ⇒ OOM. GREEN: typed 거부 + 거대 할당 0.
+    use crate::remote::session::LOGICAL_HDR_TAG;
+    let phone = DeviceIdentity::generate("phone").unwrap();
+    let desktop = Arc::new(pair_desktop_with_phone("desktop", &phone, Scope::ReadOnly));
+    let bundle = desktop.pairing_bundle(None);
+
+    // 커스텀 악성 서버: 핸드셰이크 후 첫 요청을 받고, **cap 초과 total 을 선언하는 헤더**를 보낸다.
+    let listener = bind_loopback(0).await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let desktop_c = Arc::clone(&desktop);
+    tokio::spawn(async move {
+        use crate::remote::noise::Handshake;
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let id = raw_read_framed(&mut stream).await.unwrap();
+        let device_id = String::from_utf8(id).unwrap();
+        let mut hs = Handshake::respond(&desktop_c.local, &desktop_c.noise, &device_id).unwrap();
+        let m1 = raw_read_framed(&mut stream).await.unwrap();
+        hs.read_message(&m1).unwrap();
+        let m2 = hs.write_message().unwrap();
+        raw_write_framed(&mut stream, &m2).await;
+        let mut channel = hs.into_channel().unwrap();
+        let _req = raw_read_framed(&mut stream).await; // 요청 받고 버림.
+        // cap(8MB) 초과 total(0xFFFFFFFF ~4GB)을 선언하는 헤더 frame. 데이터는 안 보낸다.
+        let mut header = [0u8; 5];
+        header[0] = LOGICAL_HDR_TAG;
+        header[1..5].copy_from_slice(&u32::MAX.to_be_bytes());
+        let ct = channel.encrypt(&header).unwrap();
+        raw_write_framed(&mut stream, &ct).await;
+        // 스트림 유지(클라이언트가 헤더만 보고 거부해야 함 — 데이터 대기 없이).
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    });
+
+    let mut session = connect_tcp(addr, &phone, &bundle.desktop_id, &bundle.desktop_static)
+        .await
+        .unwrap();
+    // recv_logical 이 from_header(TooLarge) ⇒ BadResponse 로 환원해 call 이 Err 를 낸다(거대 할당
+    //   0). timeout 으로 hang 0 도 단언한다(헤더만 보고 즉시 거부 — 데이터 대기 없음).
+    let r = tokio::time::timeout(
+        Duration::from_secs(3),
+        session.call(b"state.commands", b"", Scope::ReadOnly, 1000, 100),
+    )
+    .await
+    .expect("cap 초과 헤더가 클라이언트를 hang 시키지 않음");
+    match r {
+        Err(ClientError::BadResponse) => {} // cap 초과 선언 ⇒ clean 거부(거대 할당 0).
+        other => panic!("cap 초과 선언 ⇒ BadResponse 여야 — got {other:?}"),
+    }
+}
+
+// ===========================================================================
 // B. fail-closed dial — 틀린 데스크톱 static 키 ⇒ 핸드셰이크 미성립 ⇒ ClientSession 0.
 // ===========================================================================
 

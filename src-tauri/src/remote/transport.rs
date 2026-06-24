@@ -31,7 +31,7 @@ use crate::remote::auth::{
 };
 use crate::remote::confirm::{ConfirmDecision, PendingConfirms};
 use crate::remote::noise::{Handshake, NoiseError, PinnedPeerRegistry, StaticKeypair};
-use crate::remote::session::{FrameOutcome, SecureSession};
+use crate::remote::session::{FrameOutcomeChunked, SecureSession};
 
 // ===========================================================================
 // 0. 와이어 상수 — 길이 프리픽스 한계(Noise frame 캡과 정합).
@@ -240,11 +240,26 @@ where
         let token = desktop_token_for(session.peer_device_id());
         // 공유 권위 락 — handle_frame(동기) 동안만. await 를 가로지르지 않으므로 교착 0.
         // 락 안에서 인가 판정 + nonce 소비가 원자적 → 동시 연결의 재생/revoke race-free.
-        let response = {
+        // **청크 회신**: 응답이 한 frame 을 넘으면(state.commands 류) 헤더+청크 N frame 으로 흘린다
+        // (작은 응답은 단일 frame — 이전 와이어와 동일, fast-path 무회귀).
+        let frames = {
             let mut reg = auth.lock();
-            session.handle_frame(&ciphertext, &mut reg, ctx, token.as_ref(), &mut dispatch)
+            session.handle_frame_chunked(&ciphertext, &mut reg, ctx, token.as_ref(), &mut dispatch)
         };
-        write_framed(&mut stream, &response).await?;
+        write_logical(&mut stream, &frames).await?;
+    }
+    Ok(())
+}
+
+/// 한 논리 응답을 이루는 frame 들(헤더+청크 또는 단일)을 순서대로 길이-프리픽스 송신한다. Noise
+/// counter 가 각 frame 의 순서/재생을 강제하므로 별도 시퀀스 번호 불요 — 받는 쪽은 복호 순서대로
+/// 재조립한다. 한 frame 이라도 쓰기 실패면 즉시 Err(부분 송신은 상위 read timeout/EOF 가 잡음).
+async fn write_logical<W>(w: &mut W, frames: &[Vec<u8>]) -> Result<(), ServeError>
+where
+    W: AsyncWrite + Unpin,
+{
+    for frame in frames {
+        write_framed(w, frame).await?;
     }
     Ok(())
 }
@@ -332,17 +347,18 @@ where
     // 3. frame 루프 — 비파괴는 즉시, destructive 는 데스크톱 결정 await.
     while let Some(ciphertext) = read_framed(&mut stream).await? {
         let ctx = VerifyCtx { now: now_fn() };
-        // 게이트 1·2(동기 락) — nonce 1회 소비. destructive 면 dispatch 를 미룬다.
+        // 게이트 1·2(동기 락) — nonce 1회 소비. destructive 면 dispatch 를 미룬다. 청크 변형이라
+        // 비파괴 종결 응답이 크면(read-only state.commands 류) 헤더+청크 N frame 으로 회신한다.
         let outcome = {
             let mut reg = auth.lock();
-            session.begin_frame(&ciphertext, &mut reg, ctx, &mut dispatch)
+            session.begin_frame_chunked(&ciphertext, &mut reg, ctx, &mut dispatch)
             // 락은 여기서 해제된다 — 데스크톱 await 동안 auth 권위를 잡지 않는다(다른 연결 무블록).
         };
-        let response = match outcome {
+        let frames = match outcome {
             // 비파괴 Ok·거부 — 파킹 0(읽기 전용 무영향). 그대로 회신.
-            FrameOutcome::Terminal(bytes) => bytes,
+            FrameOutcomeChunked::Terminal(frames) => frames,
             // destructive — 데스크톱 사람 결정을 await(이벤트-우선, 폴링 0).
-            FrameOutcome::AwaitConfirm(pending) => {
+            FrameOutcomeChunked::AwaitConfirm(pending) => {
                 let park_now = now_fn();
                 let (request_id, rx) =
                     confirms.park(pending.device_id(), pending.command(), park_now);
@@ -370,14 +386,15 @@ where
                     // APPROVE — 어댑터가 (device, bound_nonce) 토큰을 스스로 만들어 같은 Grant 를
                     // dispatch(폰은 이 토큰 생성자에 도달 불가). nonce 는 begin_frame 에서 이미
                     // 소비됐으므로 registry 재상담 0 — Grant 만으로 종결(엮인 게이트 유지).
-                    session.finish_confirmed(pending, &mut dispatch)
+                    // 청크 변형 — 승인된 destructive 가 큰 응답을 내도 헤더+청크 N frame 으로 회신.
+                    session.finish_confirmed_chunked(pending, &mut dispatch)
                 } else {
-                    // DENY/TIMEOUT — dispatch 0, 암호화된 "denied".
-                    session.finish_denied(pending)
+                    // DENY/TIMEOUT — dispatch 0, 암호화된 "denied"(작아서 단일 frame).
+                    session.finish_denied_chunked(pending)
                 }
             }
         };
-        write_framed(&mut stream, &response).await?;
+        write_logical(&mut stream, &frames).await?;
     }
     Ok(())
 }

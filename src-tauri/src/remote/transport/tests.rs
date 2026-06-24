@@ -216,6 +216,48 @@ impl Client {
     async fn send_raw(&mut self, bytes: &[u8]) {
         send_framed(&mut self.stream, bytes).await;
     }
+
+    /// request 의 **청크-인지 변형** — frame 송신 후, 응답을 single-frame fast-path 든 멀티-frame
+    /// (헤더+청크)든 재조립해 **논리 응답 평문** 을 돌려준다(client.recv_logical 의 거울). 큰 응답
+    /// (state.commands 류)이 와이어 너머로 온전히 오는지 byte-for-byte 검증하는 데 쓴다.
+    async fn request_logical(
+        &mut self,
+        signer: &SigningKey,
+        claim_id: &str,
+        scope: Scope,
+        n: [u8; 32],
+        issued_at: u64,
+        exp: u64,
+        request: &[u8],
+    ) -> Vec<u8> {
+        use crate::remote::session::{parse_logical_header, LogicalReassembler};
+        let assertion = CapabilityAssertion {
+            device_id: claim_id.to_string(),
+            scope,
+            nonce: n,
+            issued_at,
+            exp,
+        };
+        let sig = signer.sign(&assertion.canonical_bytes()).to_bytes().to_vec();
+        let frame = RequestFrame { assertion, signature: sig, request: request.to_vec() }.encode();
+        let ct = self.channel.encrypt(&frame).expect("client encrypt");
+        send_framed(&mut self.stream, &ct).await;
+        // 첫 응답 frame 복호 — 헤더면 재조립, 아니면 단일 frame.
+        let first_ct = recv_framed(&mut self.stream).await;
+        let first_pt = self.channel.decrypt(&first_ct).expect("decrypt first frame");
+        match parse_logical_header(&first_pt) {
+            None => first_pt, // fast-path.
+            Some(_) => {
+                let mut acc = LogicalReassembler::from_header(&first_pt).expect("hdr");
+                while !acc.is_complete() {
+                    let ct = recv_framed(&mut self.stream).await;
+                    let chunk = self.channel.decrypt(&ct).expect("decrypt chunk");
+                    acc.push(&chunk).expect("push chunk");
+                }
+                acc.into_message().expect("complete message")
+            }
+        }
+    }
 }
 
 /// 서버를 진짜 루프백 소켓에 띄우고 (주소, dispatch 카운터, 마지막 request 슬롯)을 돌려준다.
@@ -302,6 +344,151 @@ async fn k_state_commands_shaped_request_round_trips() {
     assert_eq!(calls.load(Ordering::SeqCst), 1);
     assert_eq!(&*last_req.lock().unwrap(), b"state.commands");
     assert_eq!(resp[0], 0x01);
+}
+
+// ===========================================================================
+// LOGICAL-MESSAGE CHUNKING (와이어 E2E) — 한 frame 을 넘는 route() 응답이 N frame 으로 흘러
+// 클라이언트에 byte-for-byte 온전히 도착(state.commands ~244KB 라이브 갭의 RED→GREEN).
+// 진짜 serve_connection + 진짜 소켓 위에서 검증한다(인-프로세스 풀 라운드트립).
+// ===========================================================================
+
+/// 정해진 크기의 결정적 페이로드를 응답으로 내는 dispatch — route() 가 큰 JSON(state.commands 류)을
+/// 내는 상황을 모사한다. 위치별 패턴이라 누락/재배열/변조면 클라이언트 비교가 깨진다.
+fn fixed_size_dispatch(size: usize) -> impl FnMut(&AuthorizedAction, &[u8]) -> Vec<u8> + Send + 'static {
+    move |_action, _request| (0..size).map(|i| (i * 31 + 7) as u8).collect()
+}
+
+/// serve_connection 을 1연결 띄우되 dispatch 가 **size 바이트 고정 응답**을 내게 한다.
+async fn spawn_one_conn_fixed_response(server: Arc<Server>, size: usize) -> SocketAddr {
+    let listener = bind_loopback(0).await.expect("bind loopback");
+    let addr = listener.local_addr().expect("local addr");
+    tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.expect("accept");
+        let dispatch = fixed_size_dispatch(size);
+        let _ = serve_connection(
+            stream,
+            &server.local,
+            &server.noise,
+            &server.auth,
+            || 200u64,
+            |_id| None,
+            dispatch,
+        )
+        .await;
+    });
+    addr
+}
+
+#[tokio::test]
+async fn chunked_large_response_round_trips_byte_for_byte_over_wire() {
+    // RED(라이브 갭): route() 응답이 한 Noise frame(65535)을 넘으면 이전엔 RESPONSE_TOO_LARGE 로
+    //   잘려 실제 데이터가 안 왔다(state.commands ~244KB). GREEN: 헤더+청크 N frame 으로 흘러
+    //   클라이언트가 **정확히 같은 바이트**를 받는다. 경계 크기 전수: 한 frame 미만/정확/+1/여러/큰.
+    use crate::remote::session::CHUNK_PLAINTEXT;
+    let sizes = [
+        CHUNK_PLAINTEXT - 1,
+        CHUNK_PLAINTEXT,
+        CHUNK_PLAINTEXT + 1,
+        CHUNK_PLAINTEXT * 2 + 9,
+        200 * 1024,
+        300 * 1024,
+    ];
+    let mut tag = 50u8;
+    for &n in &sizes {
+        let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::ReadOnly);
+        let desktop_pub = server.local.public_key();
+        let server = Arc::new(server);
+        let addr = spawn_one_conn_fixed_response(Arc::clone(&server), n).await;
+
+        let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+            .await
+            .unwrap();
+        let got = client
+            .request_logical(&phone.ed, "phone", Scope::ReadOnly, nonce(tag), 100, 1000, b"state.commands")
+            .await;
+        tag += 1;
+        // 응답 평문 = tag(0x01) | body. body 가 정확히 fixed_size_dispatch(n).
+        assert_eq!(got[0], 0x01, "size {n}: Ok 태그");
+        let expected: Vec<u8> = (0..n).map(|i| (i * 31 + 7) as u8).collect();
+        assert_eq!(got.len(), n + 1, "size {n}: 길이(tag+body) 일치");
+        assert_eq!(&got[1..], &expected[..], "size {n}: body byte-for-byte 일치(청킹 온전)");
+    }
+}
+
+#[tokio::test]
+async fn chunked_truncated_stream_client_clean_error_no_hang() {
+    // 잘린 스트림(매트릭스 I — 무한대기 0): 악성 서버가 헤더로 큰 total 을 선언하고 데이터 frame 을
+    //   **적게** 보낸 뒤 끊는다. 클라이언트는 hang 하지 않고 clean error(BadResponse)를 받는다.
+    //   RED: 무한 대기. GREEN: read_framed None(EOF) ⇒ BadResponse, bounded.
+    use crate::remote::session::{encrypt_logical, CHUNK_PLAINTEXT};
+    let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::ReadOnly);
+    let desktop_pub = server.local.public_key();
+
+    // 커스텀 악성 서버: 정상 핸드셰이크 후, 첫 요청을 받고 **헤더 + 청크 일부만** 보내고 끊는다.
+    let listener = bind_loopback(0).await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server2 = Arc::new(server);
+    let server_c = Arc::clone(&server2);
+    tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        // 핸드셰이크(RESPONDER).
+        let id = recv_framed(&mut stream).await;
+        let device_id = String::from_utf8(id).unwrap();
+        let mut hs = Handshake::respond(&server_c.local, &server_c.noise, &device_id).unwrap();
+        let m1 = recv_framed(&mut stream).await;
+        hs.read_message(&m1).unwrap();
+        let m2 = hs.write_message().unwrap();
+        send_framed(&mut stream, &m2).await;
+        let mut channel = hs.into_channel().unwrap();
+        let _req = recv_framed(&mut stream).await; // 요청 받고 버림.
+        // 큰 total 을 선언하는 헤더 + 청크 **1개만** 보내고 끊는다(나머지 누락).
+        let big = vec![0u8; CHUNK_PLAINTEXT * 3];
+        let frames = encrypt_logical(&mut channel, &big).expect("encode");
+        send_framed(&mut stream, &frames[0]).await; // 헤더(total=3*chunk).
+        send_framed(&mut stream, &frames[1]).await; // 청크 1개만.
+        // 스트림 drop ⇒ EOF.
+    });
+
+    let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+        .await
+        .unwrap();
+    // 클라이언트 request_logical 은 try 가 아니라 unwrap 하므로, 여기선 ClientSession 의 진짜 recv 를
+    // 쓰지 않고 raw 로 보내고 받는다 — 대신 timeout 으로 hang 0 을 단언한다(EOF ⇒ clean Err).
+    let assertion = CapabilityAssertion {
+        device_id: "phone".into(),
+        scope: Scope::ReadOnly,
+        nonce: nonce(60),
+        issued_at: 100,
+        exp: 1000,
+    };
+    let sig = phone.ed.sign(&assertion.canonical_bytes()).to_bytes().to_vec();
+    let frame = RequestFrame { assertion, signature: sig, request: b"state.commands".to_vec() }.encode();
+    let ct = client.channel.encrypt(&frame).unwrap();
+    send_framed(&mut client.stream, &ct).await;
+    // 재조립 시도 — 헤더 total 만큼 안 오고 EOF ⇒ try_recv_framed 가 Err ⇒ clean(hang 0).
+    let reassemble = async {
+        use crate::remote::session::{parse_logical_header, LogicalReassembler};
+        let first_ct = recv_framed(&mut client.stream).await;
+        let first_pt = client.channel.decrypt(&first_ct).unwrap();
+        let total = parse_logical_header(&first_pt).expect("헤더");
+        let mut acc = LogicalReassembler::from_header(&first_pt).unwrap();
+        assert!(total > 0);
+        while !acc.is_complete() {
+            // 다음 frame 을 try 로 — EOF 면 Err(잘림) 로 종료(무한 대기 0).
+            match try_recv_framed(&mut client.stream).await {
+                Ok(ct) => {
+                    let chunk = client.channel.decrypt(&ct).unwrap();
+                    acc.push(&chunk).unwrap();
+                }
+                Err(_) => return Err("truncated"),
+            }
+        }
+        Ok(acc.into_message().unwrap())
+    };
+    let r = tokio::time::timeout(std::time::Duration::from_secs(3), reassemble)
+        .await
+        .expect("잘린 스트림이 클라이언트를 hang 시키지 않음");
+    assert!(r.is_err(), "잘린 스트림 ⇒ clean Err(부분 데이터 0, 무한 대기 0)");
 }
 
 // ===========================================================================
