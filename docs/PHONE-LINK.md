@@ -1,6 +1,10 @@
 # Phone-Link — remote control security contract (정본)
 
-Status: security/transport core complete on branch `feat/phone-link` (not merged, not pushed).
+Status: complete and merged to `main`. This contract documents the core security floors; the
+full current stack — adding the dev-server tunnel (`tunnel.rs`), the desktop-owned pairing config
+(`pairing.rs`), and response chunking (in `session.rs`), for **263 Rust tests total** — plus the
+requirements, usage, and live-E2E evidence are in `docs/PHONE-LINK-GUIDE.md`. A cross-cutting
+adversarial audit found no security gap (see the guide).
 Scope: a phone (or any paired device) remotely drives a CGNAT desktop's `command`/`dom`/`status`
 surface, and tunnels local dev servers, over a mutually-authenticated end-to-end-encrypted channel.
 
@@ -32,8 +36,9 @@ seam it reuses is `ipc.rs::request_command` → `route()` (unchanged).
 | `client.rs`  | reusable initiator (the half a phone embeds) + `sok-phone` CLI | 13 |
 | `bridge.rs`  | off-by-default app glue (enable flags, `request_command` dispatch, Tauri confirm cmds) | — |
 
-Total: **166 RED→GREEN tests**, all green; the floors were each verified independently by
-NOP-patching a defense (attack passes = RED) and restoring (blocked = GREEN).
+Total for the floors above: **166 RED→GREEN tests** — the full stack (adding tunnel, pairing,
+chunking, adversarial fuzz, and audit coverage) is **263**. Each defense was verified independently
+by NOP-patching it (attack passes = RED) and restoring (blocked = GREEN).
 
 ---
 
@@ -161,13 +166,11 @@ carries the bytes, so a relay only ever moves opaque ciphertext.
 
 ## 6. Frontier (needs the user's environment — not built)
 
-The protocol core is complete and verified in-process. The remaining pieces require real
-infrastructure or the live app, and are intentionally left for that context (no faked verification):
+Done since this contract was first written: the **live-app E2E** (a paired client drives the real
+`route()` — `state.commands` round-trips the full 244 KB catalog chunked) and the **desktop confirm
+modal** (`RemoteConfirmModal`). The remaining pieces require real infrastructure and are
+intentionally left for that context (no faked verification):
 
-- **Live-app E2E** — enabling the bridge in the running app and proving a paired client drives the
-  real `route()` (`state.commands` / `ui.tree`). Needs the app rebuilt+running on this branch.
-- **Desktop confirm modal (TS)** — thin presentation calling `remote_confirm_resolve`; the Rust
-  authority is done, the webview UI is not.
 - **P3 mobile app** — a Tauri mobile client embedding `remote::client` + a mirror UI; needs mobile
   tooling and store signing.
 - **P4 Cloudflare Worker convergence** — fold pairing/revocation into the license infrastructure
