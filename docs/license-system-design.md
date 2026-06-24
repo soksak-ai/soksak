@@ -262,13 +262,15 @@ assertion 이 Rust 측에서 검증됨**을 증명한다. tamper-negative(서명
 - [ ] Ed25519 키쌍 생성 (개인키는 절대 커밋 금지)
 
 ### Phase 1 — 서버(Worker)
-- [ ] `wrangler secret put PRIVATE_KEY` 로 개인키 등록
-- [ ] KV 네임스페이스 생성, 바인딩
-- [ ] `POST /verify` 구현 (조회 → 바인딩 → 서명)
-- [ ] nonce·issued_at·exp 로직
-- [ ] `POST /webhook/{pg}` 구현 (발급/취소) + 웹훅 서명 검증
+> 상태: Worker **코드는 `worker/` 에 구현·로컬 테스트(vitest 69) 완료** — `/verify`(+`/verify/challenge`), `/webhooks/paddle`, `/pair`, `/device/deactivate`, nonce·issued_at·exp·Ed25519 서명·timing-safe 비교·raw-body-before-parse. 폰-링크 capability assertion 의 canonical 바이트는 Rust `auth.rs` 와 정합(§4.3 교차언어 골든 벡터). **남은 것은 배포**(아래 미체크 — Cloudflare/Paddle 계정 필요).
+- [ ] `wrangler secret put PRIVATE_KEY` 로 개인키 등록 (배포 — 계정 필요)
+- [ ] KV 네임스페이스 생성, 바인딩 (배포 — 계정 필요)
+- [x] `POST /verify` 구현 (조회 → 바인딩 → 서명) — `worker/src/verify.ts` (로컬 테스트됨)
+- [x] nonce·issued_at·exp 로직 — `worker/src/verify.ts` (단일사용·만료·단조 테스트됨)
+- [x] `POST /webhook/{pg}` 구현 (발급/취소) + 웹훅 서명 검증 — `worker/src/webhook.ts` (HMAC·멱등성·순서·refund→revoke 테스트됨)
 
 ### Phase 2 — 클라이언트(Tauri/Rust)
+> 상태: 미착수. **주의** — 이 Phase 2 는 *앱 자신의 라이선스* 검증 클라이언트로, 폰-링크 원격제어(`src-tauri/src/remote/`, peer 모델)와는 **별개**다. 둘은 Ed25519/nonce 같은 암호 1차요소를 공유하나 목적이 다르다.
 - [ ] 공개키 내장
 - [ ] machine_id 핑거프린트
 - [ ] nonce 생성 + `/verify` 호출
