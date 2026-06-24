@@ -153,6 +153,18 @@ impl DeviceIdentity {
         self.ed25519.verifying_key().to_bytes()
     }
 
+    /// **영속 전용**(테스트 글루/P3 keystore) — 이 신원의 두 개인키 + x25519 공개키를 돌려준다
+    /// (from_parts 라운드트립용). 호출자(CLI/keystore)가 데스크톱-도달 불가한 자기 저장소에만
+    /// 쓰고 즉시 zeroize 책임을 진다. 데스크톱 responder 코어는 이 메서드를 절대 안 쓴다(폰 측만).
+    /// 반환: (x25519_private, x25519_public, ed25519_private) — 전부 32B.
+    pub fn persistable_parts(&self) -> ([u8; X25519_KEY_LEN], [u8; X25519_KEY_LEN], [u8; 32]) {
+        (
+            self.x25519.persistable_private(),
+            self.x25519.public_key(),
+            self.ed25519.to_bytes(),
+        )
+    }
+
     /// QR 페어링이 데스크톱에 넘길 이 기기의 페어링 번들(두 공개키 + device_id).
     /// 데스크톱은 이걸 받아 noise.pin + auth.pair 로 핀닝한다(페어링 = 신뢰 확립).
     pub fn pairing_bundle(&self) -> PhonePairingBundle {
@@ -311,6 +323,11 @@ pub struct ClientSession<S> {
     /// per-call 신선 nonce 발급기(절대 재사용 0 — 서버 NonceReplay 게이트를 안 트립).
     /// 호출마다 단조 증가하는 카운터를 nonce 바이트에 박아 매 호출 distinct nonce 를 보장한다.
     nonce_counter: u64,
+    /// **per-session 무작위 salt**(세션 생성 시 OsRng 1회). 같은 기기의 두 세션(예: 모바일 앱
+    /// 재연결, CLI 재호출)이 둘 다 counter=1 로 시작해도 salt 가 달라 nonce 가 충돌하지 않는다.
+    /// device_id 만 섞으면 같은 기기의 distinct 세션이 동일 nonce 를 내 서버 NonceReplay 를 트립
+    /// 했다 — salt 가 그 충돌을 닫는다(서버 NonceLedger 는 전역·영속, 클라 counter 는 세션-로컬).
+    nonce_salt: [u8; 8],
     /// per-call 단조 비감소 issued_at 워터마크(서버 ClockRollback 게이트를 안 트립).
     /// 호출자가 준 issued_at 이 직전보다 작으면 직전값으로 끌어올린다(클라이언트는 자기
     /// 시계를 되돌리지 않는다 — 올바른 클라이언트의 단조성).
@@ -328,13 +345,16 @@ where
         self.nonce_counter += 1;
         let mut n = [0u8; 32];
         n[..8].copy_from_slice(&self.nonce_counter.to_le_bytes());
-        // 세션 식별 마커(같은 기기의 두 세션이 우연히 같은 counter 를 써도, 각 세션 채널이
-        // 분리돼 nonce 원장은 전역 1개 — 그래서 device_id 해시 일부를 섞어 충돌 여지를 더 줄인다).
+        // per-session 무작위 salt(8B) — 같은 기기의 distinct 세션이 같은 counter 를 써도 nonce 가
+        // 충돌하지 않게 닫는다(서버 NonceLedger 는 전역·영속이라 세션-간 counter 충돌이 재생으로
+        // 오판되던 버그를 막는다). salt 는 세션당 1회 생성(connect 시 OsRng).
+        n[8..16].copy_from_slice(&self.nonce_salt);
+        // 세션 식별 마커(device_id 해시 일부를 추가로 섞어 distinct 보강).
         let id = self.device_id.as_bytes();
         for (i, b) in id.iter().take(16).enumerate() {
             n[16 + i] ^= *b;
         }
-        n[15] = 0xAB; // 고정 마커(테스트 가독 + nonce 가 전부 0 이 되는 것 방지).
+        n[15] = 0xAB; // 고정 마커(nonce 가 전부 0 이 되는 것 방지). salt 보다 우선(가독 마커).
         n
     }
 
@@ -664,12 +684,20 @@ where
 
     // 4. 봉인 — 미완이면 into_channel 이 Err(채널 0). 채널 = 상호 인증 성립의 증거.
     let channel = handshake.into_channel().map_err(ClientError::Handshake)?;
+    // per-session 무작위 nonce salt(OsRng 1회) — 같은 기기의 distinct 세션이 같은 counter 를
+    // 써도 nonce 충돌 0(서버 NonceLedger 는 전역·영속). 재연결/CLI 재호출의 오판 재생을 닫는다.
+    let mut nonce_salt = [0u8; 8];
+    {
+        use rand::RngCore;
+        rand::rngs::OsRng.fill_bytes(&mut nonce_salt);
+    }
     Ok(ClientSession {
         stream,
         channel,
         device_id: identity.device_id.clone(),
         ed25519: identity.ed25519.clone(),
         nonce_counter: 0,
+        nonce_salt,
         last_issued_at: 0,
     })
 }

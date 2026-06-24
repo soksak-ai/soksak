@@ -24,6 +24,10 @@ pub mod client;
 pub mod confirm;
 pub mod iroh;
 pub mod noise;
+// pairing: 데스크톱 소유 페어링 설정(헤드리스 QR 등가물 — PART A). floor 무수정, PUBLIC API 만
+//   호출해 라이브 레지스트리를 채운다. 폰은 스스로 페어링 못 한다(핀닝 엔트리는 데스크톱 소유
+//   파일/env 에서만 — anti-escalation). 빈 설정 ⇒ fail-closed(아무도 연결 못 함).
+pub mod pairing;
 pub mod session;
 pub mod tcp;
 pub mod transport;

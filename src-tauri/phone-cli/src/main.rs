@@ -83,19 +83,30 @@ fn identity_path() -> Result<PathBuf, String> {
 /// 저장 형식: {device_id, x25519_private, x25519_public, ed25519_private} (전부 hex).
 /// **개인키가 평문 hex 로 디스크에 남는다** — 수동 E2E 편의용이며, P3 실앱은 OS 키체인/
 /// secrets 코어를 쓴다(이 CLI 는 테스트 글루). 파일 권한은 0600 으로 좁힌다.
+///
+/// 개인키 영속으로 **신원이 재시작에 걸쳐 안정**하다 — pair 출력의 공개키를 데스크톱이 한 번
+/// 핀닝하면 이후 call 들이 같은 신원으로 핸드셰이크/서명한다(재페어링 불필요). 이것이 PART B
+/// 의 "pre-pinned 테스트 기기" 를 가능케 한다.
 fn load_or_create_identity() -> Result<DeviceIdentity, String> {
     let path = identity_path()?;
     if let Ok(txt) = std::fs::read_to_string(&path) {
         if let Ok(v) = serde_json::from_str::<Value>(&txt) {
-            let device_id = v["device_id"].as_str().ok_or("device_id 없음")?;
-            let xp = from_hex32(v["x25519_private"].as_str().ok_or("x25519_private 없음")?)?;
-            let xpub = from_hex32(v["x25519_public"].as_str().ok_or("x25519_public 없음")?)?;
-            let ep = from_hex32(v["ed25519_private"].as_str().ok_or("ed25519_private 없음")?)?;
-            return DeviceIdentity::from_parts(device_id, xp, xpub, ep)
-                .map_err(|e| format!("신원 복원 실패: {e}"));
+            // 개인키 영속 형식이면 그대로 복원(안정 신원). 구(공개-only) 형식이면 아래에서 재생성.
+            if let (Some(did), Some(xpriv), Some(xpub), Some(epriv)) = (
+                v["device_id"].as_str(),
+                v["x25519_private"].as_str(),
+                v["x25519_public"].as_str(),
+                v["ed25519_private"].as_str(),
+            ) {
+                let xp = from_hex32(xpriv)?;
+                let xpub = from_hex32(xpub)?;
+                let ep = from_hex32(epriv)?;
+                return DeviceIdentity::from_parts(did, xp, xpub, ep)
+                    .map_err(|e| format!("신원 복원 실패: {e}"));
+            }
         }
     }
-    // 새 신원 — device_id 는 호스트명 기반(고정 식별자). 저장.
+    // 새 신원 — device_id 는 호스트명 기반(고정 식별자). 개인키 포함 저장(안정 신원).
     let device_id = std::env::var("SOK_PHONE_DEVICE_ID").unwrap_or_else(|_| {
         format!(
             "phone-{}",
@@ -103,28 +114,34 @@ fn load_or_create_identity() -> Result<DeviceIdentity, String> {
         )
     });
     let identity = DeviceIdentity::generate(&device_id).map_err(|e| format!("키 생성 실패: {e}"))?;
-    // 개인키 영속을 위해 from_parts 라운드트립이 필요하나, 라이브러리는 개인키를 노출하지 않는다
-    // (zeroize 보호). 그래서 저장 시점엔 공개부만 안전히 기록하고, 개인키는 메모리에만 둔다 —
-    // 즉 이 CLI 인스턴스 수명 동안만 같은 신원을 쓴다(재시작 시 새 신원 = 재페어링 필요).
-    // 수동 E2E 편의로는 충분하다(한 세션 내 pair→call). 영속 개인키는 P3 의 책임.
-    persist_public_only(&path, &identity)?;
+    persist_identity(&path, &identity)?;
     Ok(identity)
 }
 
-/// 공개부만 파일에 남긴다(개인키 미노출 — 라이브러리 zeroize 계약 존중). pair 출력 재현용.
-fn persist_public_only(path: &PathBuf, identity: &DeviceIdentity) -> Result<(), String> {
+/// 신원 전체(개인키 포함)를 데스크톱-도달 불가한 폰 측 파일에 저장한다(0600). from_parts
+/// 라운드트립으로 재로드 가능 = 신원 안정. 개인키 hex 는 이 파일에만(와이어/로그 0).
+fn persist_identity(path: &PathBuf, identity: &DeviceIdentity) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
     let bundle = identity.pairing_bundle();
+    let (xpriv, xpub, epriv) = identity.persistable_parts();
     let v = json!({
         "device_id": bundle.device_id,
-        "x25519_public": to_hex(&bundle.x25519_public),
+        "x25519_private": to_hex(&xpriv),
+        "x25519_public": to_hex(&xpub),
+        "ed25519_private": to_hex(&epriv),
         "ed25519_public": to_hex(&bundle.ed25519_public),
-        "note": "public-only (private keys held in-memory per session; persistent keystore is P3)",
+        "note": "phone identity incl private keys (phone-owned, 0600). stable across restarts.",
     });
     std::fs::write(path, serde_json::to_string_pretty(&v).unwrap_or_default())
-        .map_err(|e| format!("{} 쓰기 실패: {e}", path.display()))
+        .map_err(|e| format!("{} 쓰기 실패: {e}", path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
 }
 
 // ── pair — 이 기기의 페어링 번들 출력 ────────────────────────────────────────

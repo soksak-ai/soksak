@@ -150,6 +150,14 @@ impl StaticKeypair {
     fn private_bytes(&self) -> &[u8] {
         &self.private
     }
+
+    /// **데스크톱 소유 영속 전용** — static 개인키 32B 복사본을 돌려준다(from_parts 라운드트립용).
+    /// 이 키는 데스크톱 자신의 static 신원이라 데스크톱 소유 위치(앱 config, 폰-도달 불가)에만
+    /// 저장된다. 폰의 개인키는 절대 노출하지 않는다(client.rs 는 이 메서드를 안 쓴다 — 데스크톱
+    /// bridge 의 키 영속에서만 호출). 반환 배열은 호출자가 저장 후 zeroize 책임을 진다.
+    pub fn persistable_private(&self) -> [u8; X25519_KEY_LEN] {
+        self.private
+    }
 }
 
 impl Drop for StaticKeypair {

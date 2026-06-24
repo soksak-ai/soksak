@@ -20,8 +20,11 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 
 use crate::remote::auth::{AuthorizedAction, DesktopConfirmToken};
+use crate::remote::confirm::PendingConfirms;
 use crate::remote::noise::{PinnedPeerRegistry, StaticKeypair};
-use crate::remote::transport::{serve_connection, serve_tunnel, SharedAuth};
+use crate::remote::transport::{
+    serve_connection, serve_connection_confirmed, serve_tunnel, ConfirmRequest, SharedAuth,
+};
 use crate::remote::tunnel::PortAllowlist;
 
 /// 루프백 전용 바인드 주소 — **127.0.0.1**(절대 0.0.0.0 아님). 임의 노출/rebinding 표면 0.
@@ -99,6 +102,67 @@ pub async fn accept_loop<NowFac, NowF, TokFac, TokF, DispFac, Disp>(
             if let Err(e) = r {
                 // 핸드셰이크 미성립/형식불량/I/O — 정상적인 fail-closed 종료(미인증 dispatch 0).
                 eprintln!("[remote::tcp] 연결 종료: {e}");
+            }
+        });
+    }
+}
+
+/// **confirmed** accept 루프 — accept_loop 의 sibling 이며, destructive 를 데스크톱 사람 결정에
+/// PARK 하는 serve_connection_confirmed 를 돈다(데스크톱 confirm 권위 — RULE 0). 비파괴 경로는
+/// accept_loop 와 동일(즉시 dispatch), destructive 만 emit_confirm 으로 데스크톱 모달에 요청을
+/// 띄우고 oneshot await(폴링 0). confirms(PendingConfirms)는 데스크톱 glue(remote_confirm_resolve)
+/// 와 공유하는 단일 권위 — 모달의 APPROVE/DENY 가 이 await 를 깨운다.
+///
+/// emit_fac/now_fac/dispatch_fac 는 팩토리(accept 마다 그 연결 전용 클로저). emit 은 실제 앱에서
+/// `app.emit("remote-confirm-request", ConfirmRequest)` 를 한다(테스트는 recorder). confirm_ttl
+/// 초과 ⇒ AUTO-DENY(matrix "confirm timeout→미실행"). 무한 루프 — 호출자가 spawn.
+pub async fn confirmed_accept_loop<NowFac, NowF, EmitFac, EmitF, DispFac, Disp>(
+    listener: TcpListener,
+    config: Arc<ListenerConfig>,
+    confirms: PendingConfirms,
+    confirm_ttl: std::time::Duration,
+    now_fac: NowFac,
+    emit_fac: EmitFac,
+    dispatch_fac: DispFac,
+) where
+    NowFac: Fn() -> NowF + Send + Sync + 'static,
+    NowF: FnMut() -> u64 + Send + 'static,
+    EmitFac: Fn() -> EmitF + Send + Sync + 'static,
+    EmitF: FnMut(ConfirmRequest) + Send + 'static,
+    DispFac: Fn() -> Disp + Send + Sync + 'static,
+    Disp: FnMut(&AuthorizedAction, &[u8]) -> Vec<u8> + Send + 'static,
+{
+    let now_fac = Arc::new(now_fac);
+    let emit_fac = Arc::new(emit_fac);
+    let dispatch_fac = Arc::new(dispatch_fac);
+    loop {
+        let (stream, _peer) = match listener.accept().await {
+            Ok(pair) => pair,
+            Err(e) => {
+                eprintln!("[remote::tcp] confirmed accept 실패: {e}");
+                continue;
+            }
+        };
+        let config = Arc::clone(&config);
+        let confirms = confirms.clone();
+        let now = now_fac();
+        let emit = emit_fac();
+        let dispatch = dispatch_fac();
+        tokio::spawn(async move {
+            let r = serve_connection_confirmed(
+                stream,
+                &config.local,
+                &config.noise_registry,
+                &config.auth,
+                &confirms,
+                confirm_ttl,
+                now,
+                emit,
+                dispatch,
+            )
+            .await;
+            if let Err(e) = r {
+                eprintln!("[remote::tcp] confirmed 연결 종료: {e}");
             }
         });
     }

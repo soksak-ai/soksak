@@ -118,6 +118,40 @@ async fn spawn_serve(desktop: Arc<Desktop>) -> (SocketAddr, Arc<AtomicU32>, Arc<
     (addr, calls, last_req)
 }
 
+/// serve_connection 을 **여러 연결**(N개) 받게 띄운다 — 같은 Desktop(공유 NonceLedger via
+/// SharedAuth) 을 두 세션이 차례로 쓰는 시나리오용. (주소, dispatch 카운터) 반환.
+async fn spawn_serve_multi(desktop: Arc<Desktop>, conns: usize) -> (SocketAddr, Arc<AtomicU32>) {
+    let listener = bind_loopback(0).await.expect("bind loopback");
+    let addr = listener.local_addr().expect("local addr");
+    let calls = Arc::new(AtomicU32::new(0));
+    let calls_c = Arc::clone(&calls);
+    tokio::spawn(async move {
+        for _ in 0..conns {
+            let (stream, _) = match listener.accept().await {
+                Ok(p) => p,
+                Err(_) => return,
+            };
+            let calls_inner = Arc::clone(&calls_c);
+            let last = Arc::new(Mutex::new(Vec::new()));
+            let desktop = Arc::clone(&desktop);
+            tokio::spawn(async move {
+                let dispatch = recording_dispatch(calls_inner, last);
+                let _ = serve_connection(
+                    stream,
+                    &desktop.local,
+                    &desktop.noise,
+                    &desktop.auth,
+                    || 200u64,
+                    |_id| None,
+                    dispatch,
+                )
+                .await;
+            });
+        }
+    });
+    (addr, calls)
+}
+
 /// serve_connection_confirmed(destructive 파킹) 를 1연결만 띄운다 — (주소, calls, last_req, emit_rx).
 async fn spawn_serve_confirmed(
     desktop: Arc<Desktop>,
@@ -465,6 +499,44 @@ async fn nonces_are_distinct_per_call() {
     assert_ne!(b, c, "연속 nonce 는 distinct");
     assert_ne!(a, c, "연속 nonce 는 distinct");
     assert_ne!(a, [0u8; 32], "nonce 가 전부 0 이 아님(약 nonce 회피)");
+}
+
+#[tokio::test]
+async fn two_sessions_same_identity_no_nonce_collision() {
+    // RED(버그 재현): per-session nonce 가 counter+device_id 만으로 구성되면, 같은 기기의 **두
+    //   세션**(예: CLI 재호출/모바일 앱 재연결)이 둘 다 counter=1 로 시작해 **동일 nonce** 를 낸다
+    //   → 서버 전역 NonceLedger 가 둘째를 NonceReplay(Unauthorized) 로 거부한다(라이브 E2E 에서
+    //   실제로 관측된 버그). GREEN(per-session 무작위 salt): 두 세션의 첫 호출 nonce 가 distinct
+    //   → 둘 다 Granted·dispatch. 같은 Desktop(공유 NonceLedger) 을 두 connect 가 차례로 쓴다.
+    let phone = DeviceIdentity::generate("phone-multi").unwrap();
+    let desktop = Arc::new(pair_desktop_with_phone("desktop", &phone, Scope::ReadOnly));
+    let bundle = desktop.pairing_bundle(None);
+    let (addr, calls) = spawn_serve_multi(Arc::clone(&desktop), 2).await;
+
+    // 세션 1 — 첫 호출(counter=1).
+    let mut s1 = connect_tcp(addr, &phone, &bundle.desktop_id, &bundle.desktop_static)
+        .await
+        .expect("세션1 connect");
+    let r1 = s1
+        .call(b"ui.tree", b"", Scope::ReadOnly, 1000, 100)
+        .await
+        .expect("세션1 call");
+    assert!(r1.is_ok(), "세션1 첫 호출 Granted");
+
+    // 세션 2 — **같은 신원**, 새 connect, 첫 호출(역시 counter=1). 같은 데스크톱(같은 NonceLedger).
+    let mut s2 = connect_tcp(addr, &phone, &bundle.desktop_id, &bundle.desktop_static)
+        .await
+        .expect("세션2 connect");
+    let r2 = s2
+        .call(b"ui.tree", b"", Scope::ReadOnly, 1000, 100)
+        .await
+        .expect("세션2 call");
+    // salt 없으면 여기서 Denied(Unauthorized=NonceReplay) — salt 가 충돌을 닫아 Ok 여야 한다.
+    assert!(
+        r2.is_ok(),
+        "세션2 첫 호출도 Granted(per-session salt 가 nonce 충돌을 막음). got {r2:?}"
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2, "두 세션 모두 dispatch");
 }
 
 // ===========================================================================
