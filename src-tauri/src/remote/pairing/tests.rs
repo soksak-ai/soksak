@@ -310,6 +310,29 @@ fn desktop_key_persists_and_reloads_same_public() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[cfg(unix)]
+#[test]
+fn desktop_key_file_is_0600_no_world_readable_window() {
+    // 개인키 파일은 **생성 시점부터 0600**(소유자만) — write→chmod 사이의 world-readable
+    // 윈도우(개인키 잠깐 노출)를 없앤다. 최종 권한이 0600 임을 단언한다.
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!("soksak-pairing-perm-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    let key_path = dir.join("desktop-static.json");
+    let _ = std::fs::remove_file(&key_path);
+    let env = |k: &str| -> Option<String> {
+        if k == DESKTOP_KEY_PATH_ENV {
+            Some(key_path.to_string_lossy().to_string())
+        } else {
+            None
+        }
+    };
+    let _ = load_or_create_desktop_key(None, &env).unwrap();
+    let mode = std::fs::metadata(&key_path).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o600, "개인키 파일은 0600 — group/world readable 금지");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn desktop_key_no_path_is_ephemeral() {
     // 경로 없음 ⇒ ephemeral(generate). 두 호출이 다른 키(영속 안 함) — 핀닝 안정 불가.

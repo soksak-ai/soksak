@@ -326,15 +326,31 @@ fn persist_desktop_key(path: &std::path::Path, kp: &StaticKeypair) {
         x25519_public: to_hex(&kp.public_key()),
         note: "desktop-owned static key (phone-unreachable); private kept 0600".into(),
     };
-    if let Ok(txt) = serde_json::to_string_pretty(&stored) {
-        if std::fs::write(path, txt).is_ok() {
-            // 권한을 0600 으로 좁힌다(개인키 보호). 실패는 무시(파일은 이미 데스크톱 소유 위치).
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
+    let Ok(txt) = serde_json::to_string_pretty(&stored) else {
+        return;
+    };
+    // 개인키 파일은 **생성 시점부터 0600** 으로 연다 — write→chmod 사이의 world-readable
+    // 윈도우(개인키가 잠깐 노출되는 구멍)를 없앤다. set_permissions 백스톱은 기존 파일이
+    // 느슨한 권한이던 경우만을 위한 보조(우리는 항상 0600 으로 생성하므로 보통 무동작).
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+        {
+            if f.write_all(txt.as_bytes()).is_ok() {
                 let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
             }
         }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = std::fs::write(path, txt);
     }
 }
 
