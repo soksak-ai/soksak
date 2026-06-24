@@ -1,44 +1,24 @@
-// 원격 confirm Tauri 배선(이벤트-우선, 폴링 0 — RULE 7) — Rust app.emit("remote-confirm-request", …)
-// 를 store 큐에 연결하고, store 의 결정 sink 를 invoke("remote_confirm_resolve", …) 로 잇는다.
+// 원격 confirm 배선(이벤트-우선, 폴링 0 — RULE 7) — 모달의 결정을 remote.confirm 커맨드의 await 로
+// 잇는다. 코어가 remote-iroh 사이드카에서 분리된 뒤: confirm 권위(PendingConfirms·토큰)는 사이드카에
+// 있고, 코어는 사람 모달만 렌더한다. 사이드카가 소켓으로 `remote.confirm` 을 부르면 그 핸들러가 요청을
+// 큐에 넣고 사람 결정을 await 한다(catalogRemote). 모달의 resolve/deny 가 sink 로 (request_id, approve)
+// 를 보내면 이 배선이 deliverDecision 으로 그 await 를 깨운다 — 사이드카는 회신받은 결정으로 자신의
+// PendingConfirms 를 resolve 한다.
 //
-// 권위 경계: 이 모듈은 표현층 ↔ Rust 권위의 얇은 어댑터다. 결정은 invoke 한 곳으로만 나가고(데스크톱
-// 전용 진입점, 폰은 닿을 경로 0), 토큰/실행은 전적으로 Rust serve loop 에 있다. 이 배선이 끊겨도
-// destructive 는 실행되지 않는다 — Rust 가 TTL AUTO-DENY 로 fail-closed(단일 권위).
-//
-// 글로벌 listen: Rust 는 app.emit(전 창 브로드캐스트)으로 confirm 을 알린다. confirm 권위는 창마다가
-// 아니라 데스크톱 단일이므로 글로벌 listen 으로 받는다. 여러 창이 동시에 resolve 해도 Rust resolve 가
-// 멱등(두 번째는 false) 이라 안전 — 그래도 큐 enqueue 멱등(request_id)이 중복 표시를 막는다.
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import {
-  useRemoteConfirm,
-  type RemoteConfirmRequest,
-} from "./remoteConfirm";
+// 권위 경계: 결정은 이 데스크톱 사람 모달에서만 나간다(폰은 닿을 경로 0). 이 배선이 끊겨도 destructive
+// 는 실행되지 않는다 — remote.confirm 핸들러의 TTL 이 무결정을 Deny 로 환원하고(fail-closed), 토큰/실행
+// 권위는 전적으로 사이드카 floor(remote::*)에 있다.
+import { useRemoteConfirm, deliverDecision } from "./remoteConfirm";
 
-// 앱 부팅 1회 호출 — 결정 sink(→ Rust invoke) 주입 + remote-confirm-request 이벤트 구독.
-// 반환 = 해지 함수(언마운트 정리). Tauri 런타임 밖(테스트)에선 listen 이 reject 하므로 무해히 무시.
+// 앱 부팅 1회 호출 — 결정 sink(→ remote.confirm await 해소) 주입. 반환 = 해지 함수(언마운트 정리).
 export function wireRemoteConfirm(): () => void {
-  // 결정 sink — 데스크톱 단일 진입점. resolve 실패(미상/이미 해결)는 무해(Rust 가 false 반환).
+  // 결정 sink — 데스크톱 단일 진입점. 모달 resolve(approve/deny)가 (request_id, approve)를 보내면
+  // 대기 중인 remote.confirm 핸들러의 await 를 깨운다(미상/이미 해결이면 deliverDecision 이 무해 no-op).
   useRemoteConfirm.getState().setSink((requestId, approve) => {
-    invoke("remote_confirm_resolve", { requestId, approve }).catch(() => {});
+    deliverDecision(requestId, approve);
   });
 
-  let off: (() => void) | null = null;
-  let cancelled = false;
-  void listen<RemoteConfirmRequest>("remote-confirm-request", (e) => {
-    useRemoteConfirm.getState().enqueue(e.payload);
-  })
-    .then((fn) => {
-      if (cancelled) fn();
-      else off = fn;
-    })
-    .catch(() => {
-      /* Tauri 런타임 없음(테스트) — 구독 없음 */
-    });
-
   return () => {
-    cancelled = true;
-    if (off) off();
     useRemoteConfirm.getState().setSink(null);
   };
 }

@@ -14,9 +14,6 @@ mod notify;
 mod plugins;
 mod process;
 mod pty;
-// remote: 폰-링크 원격 제어. client(INITIATOR/폰) 표면을 thin CLI bin 이 쓰도록 pub
-// (floor 들은 그대로 — pub mod 노출은 client 다이얼 경로에 필요한 최소 additive).
-pub mod remote;
 mod schedule;
 mod secrets;
 #[cfg(target_os = "macos")]
@@ -89,7 +86,6 @@ pub fn run() {
         .manage(ws::WsManager::default())
         .manage(FsWatcher::default())
         .manage(clipboard::ClipboardState::default())
-        .manage(remote::bridge::RemoteConfirmState::default())
         .manage(CmdBridge::default())
         .manage(data::DbState::default())
         .manage(secrets::SecretsState::default())
@@ -143,19 +139,10 @@ pub fn run() {
                     }
                 });
             }
-            // 원격 제어 루프백 브리지(폰-링크 P1) — 기본 비활성(additive). SOKSAK_REMOTE_TCP 가
-            // 명시적으로 켜졌을 때만 127.0.0.1 에 바인드하고 인증된 frame 을 코어 route()(request_command)
-            // 로 디스패치한다. 꺼져 있으면 아무것도 바인드하지 않아 기존 동작 무영향(off by default).
-            remote::bridge::maybe_start_loopback_bridge(app.handle());
-            // 원격 제어 iroh transport(폰-링크 P2, tier ①) — 기본 비활성(additive). SOKSAK_REMOTE_IROH
-            // 가 켜졌을 때만 iroh endpoint 를 bind(QUIC P2P + 릴레이 fallback)하고 같은 코어 route() 로
-            // 디스패치한다. 꺼져 있으면 endpoint 자체가 안 생겨 기존 동작 무영향(off by default).
-            remote::bridge::maybe_start_iroh_bridge(app.handle());
-            // 원격 제어 로컬 dev-server **터널**(폰-링크) — 기본 비활성(additive). SOKSAK_REMOTE_TUNNEL
-            // 이 켜졌을 때만 127.0.0.1 에 터널 리스너를 바인드하고, **데스크톱 소유 allowlist**
-            // (SOKSAK_REMOTE_TUNNEL_PORTS)의 loopback 포트로만 reverse-proxy 한다(SSRF 0, 폰 상승 불가).
-            // 명령 dispatch 와 별개 명시 모드(serve_tunnel). 꺼져 있으면 무영향(off by default).
-            remote::bridge::maybe_start_tunnel_bridge(app.handle());
+            // 원격 제어(폰-링크) transport 는 코어에서 분리됐다 — soksak-plugin-remote-iroh 사이드카가
+            // 검증된 보안 하한선(remote::*)을 코어 밖 프로세스에서 구동하고, 인가된 명령을 SOKSAK_SOCKET
+            // 으로 코어에 중계하며 destructive 는 코어 remote.confirm 사람 모달을 거친다. 코어는 모달
+            // (RemoteConfirmModal + remote.confirm 커맨드)만 남긴다 — iroh/snow 트리는 코어에서 빠진다.
             // 신호등: 좌표는 tauri.conf.json trafficLightPosition 이 소유, 유지는
             // titlebar::install 의 NSNotification 옵저버가 담당(titlebar.rs 참조).
             #[cfg(target_os = "macos")]
@@ -309,8 +296,6 @@ pub fn run() {
             window::window_close,
             ipc::cmd_result,
             titlebar::titlebar_backing,
-            remote::bridge::remote_confirm_resolve,
-            remote::bridge::remote_confirm_pending,
             ime_debug,
             window_activate,
         ])
