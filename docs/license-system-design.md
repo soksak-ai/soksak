@@ -131,10 +131,10 @@
 }
 ```
 
-### 4.3 폰-링크 capability assertion 의 canonical 바이트 (확정: Rust 바이너리 레이아웃)
+### 4.3 원격 제어(remote-iroh) capability assertion 의 canonical 바이트 (확정: Rust 바이너리 레이아웃)
 
 위 §4.2 의 JSON 스케치는 **라이선스 엔타이틀먼트**(트랙 B) assertion 의 초기 구상이다.
-**폰-링크 원격 제어**(remote::auth)의 capability assertion 은 별도의 토큰이며, 그
+**원격 제어**(remote::auth, soksak-plugin-remote-iroh)의 capability assertion 은 별도의 토큰이며, 그
 canonical 서명 바이트는 JSON 이 아니라 **출하된 Rust 바이너리 레이아웃**이다 —
 `src-tauri/src/remote/auth.rs::CapabilityAssertion::canonical_bytes`. 41개+ auth 테스트가
 이 형식에 의존하므로 이것이 **단일 진실(source of truth)** 이고, Worker 가 발급자(issuer)로
@@ -160,7 +160,7 @@ Rust 의 `device_id` 슬롯을 쓴다:
 
 | Rust 필드 | Worker 출처 | 비고 |
 |---|---|---|
-| `device_id` | 폰-링크 기기 식별자(`machine_id`) | Rust 가 `device_id` 로 키잉 → Worker 는 그 슬롯 사용 |
+| `device_id` | 원격 기기 식별자(`machine_id`) | Rust 가 `device_id` 로 키잉 → Worker 는 그 슬롯 사용 |
 | `scope` | `DeviceScope`(`read-only`/`write`/`destructive`) | `scope_tag` 0/1/2 로 인코딩 |
 | `nonce` | raw 32바이트 챌린지 nonce | base64url 아님 — 원시 바이트 |
 | `issued_at` | Unix seconds(u64) | 단조 증가 가드 |
@@ -181,7 +181,7 @@ assertion 이 Rust 측에서 검증됨**을 증명한다. tamper-negative(서명
 
 > **현재 라이브 모델은 그대로 peer 다.** 라이브 Rust 클라이언트는 여전히 기기 자기 키로
 > 서명하고 핀닝 공개키로 검증한다(§위협 모델). 이 §4.3 는 **interop 준비(기초)** 이지
-> 모델 교체가 아니다 — Worker 발급(issuer) 로의 실제 전환(라이브 폰-링크 클라이언트를
+> 모델 교체가 아니다 — Worker 발급(issuer) 로의 실제 전환(라이브 원격 제어 클라이언트를
 > Worker-발급 assertion 으로 재배선)은 **별도의 후속 통합**이다. 골든 벡터가 그 전환을
 > trivial 하게 만든다(양측 바이트·서명이 이미 고정·검증됨).
 
@@ -262,7 +262,7 @@ assertion 이 Rust 측에서 검증됨**을 증명한다. tamper-negative(서명
 - [ ] Ed25519 키쌍 생성 (개인키는 절대 커밋 금지)
 
 ### Phase 1 — 서버(Worker)
-> 상태: Worker **코드는 `worker/` 에 구현·로컬 테스트(vitest 69) 완료** — `/verify`(+`/verify/challenge`), `/webhooks/paddle`, `/pair`, `/device/deactivate`, nonce·issued_at·exp·Ed25519 서명·timing-safe 비교·raw-body-before-parse. 폰-링크 capability assertion 의 canonical 바이트는 Rust `auth.rs` 와 정합(§4.3 교차언어 골든 벡터). **남은 것은 배포**(아래 미체크 — Cloudflare/Paddle 계정 필요).
+> 상태: Worker **코드는 `worker/` 에 구현·로컬 테스트(vitest 69) 완료** — `/verify`(+`/verify/challenge`), `/webhooks/paddle`, `/pair`, `/device/deactivate`, nonce·issued_at·exp·Ed25519 서명·timing-safe 비교·raw-body-before-parse. 원격 제어 capability assertion 의 canonical 바이트는 Rust `auth.rs` 와 정합(§4.3 교차언어 골든 벡터). **남은 것은 배포**(아래 미체크 — Cloudflare/Paddle 계정 필요).
 - [ ] `wrangler secret put PRIVATE_KEY` 로 개인키 등록 (배포 — 계정 필요)
 - [ ] KV 네임스페이스 생성, 바인딩 (배포 — 계정 필요)
 - [x] `POST /verify` 구현 (조회 → 바인딩 → 서명) — `worker/src/verify.ts` (로컬 테스트됨)
@@ -270,7 +270,7 @@ assertion 이 Rust 측에서 검증됨**을 증명한다. tamper-negative(서명
 - [x] `POST /webhook/{pg}` 구현 (발급/취소) + 웹훅 서명 검증 — `worker/src/webhook.ts` (HMAC·멱등성·순서·refund→revoke 테스트됨)
 
 ### Phase 2 — 클라이언트(Tauri/Rust)
-> 상태: 미착수. **주의** — 이 Phase 2 는 *앱 자신의 라이선스* 검증 클라이언트로, 폰-링크 원격제어(`src-tauri/src/remote/`, peer 모델)와는 **별개**다. 둘은 Ed25519/nonce 같은 암호 1차요소를 공유하나 목적이 다르다.
+> 상태: 미착수. **주의** — 이 Phase 2 는 *앱 자신의 라이선스* 검증 클라이언트로, 원격 제어(remote-iroh, peer 모델)와는 **별개**다. 둘은 Ed25519/nonce 같은 암호 1차요소를 공유하나 목적이 다르다.
 - [ ] 공개키 내장
 - [ ] machine_id 핑거프린트
 - [ ] nonce 생성 + `/verify` 호출

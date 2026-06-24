@@ -5,7 +5,7 @@
 //   2. 사람 결정(Approve/Deny) 또는 TTL 만료(Deny)를 **await**(이벤트-우선, 폴링 0).
 //   3. {ok:true, approve:bool} 회신 → 사이드카가 그 결정으로 자신의 PendingConfirms 를 resolve.
 //
-// 보안 불변(plan §1.3 / PHONE-LINK §1): 폰은 자가승인 불가 — 결정은 오직 이 데스크톱 사람 모달에서만.
+// 보안 불변(plan §1.3 / REMOTE-IROH §1): 폰은 자가승인 불가 — 결정은 오직 이 데스크톱 사람 모달에서만.
 // danger-gate(원격 권한 정책)는 그대로 적용된다(remote 호출 → setPermissionGate). 무결정/모달 미표시/
 // 권한 거부/TTL 만료는 전부 Deny 로 환원(fail-closed). 토큰/실행 로직은 코어에 없다 — 사이드카 floor 소유.
 import { register } from "./registry";

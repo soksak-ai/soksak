@@ -414,7 +414,7 @@ const en: Record<MsgKey, string> = {
   "settings.tabCloseConfirm": "Tab close confirm",
   "tabCloseConfirm.warn": "Warn when risky",
   "tabCloseConfirm.off": "Always close",
-  // Remote destructive confirm (phone-link safety model) — single desktop authority.
+  // Remote destructive confirm (remote-control safety model) — single desktop authority.
   "remoteConfirm.title": "Approve remote destructive action",
   "remoteConfirm.device": "Requesting device",
   "remoteConfirm.command": "Command",
