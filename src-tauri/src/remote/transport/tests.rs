@@ -1403,6 +1403,127 @@ async fn event_first_resolve_wakes_promptly_not_poll() {
 }
 
 // ===========================================================================
+// 교차검증(chunking ↔ confirm) — 파킹된 destructive 의 승인 결과가 **멀티-frame** 일 때.
+// 단위 테스트는 read-only 청킹과 confirm 을 각자 검증하지만, "큰 destructive 결과가 confirm
+// 승인 후 finish_confirmed_chunked 로 청크 회신되고 폰이 await_outcome 자리에서 재조립" 하는
+// 결합 경로는 어디서도 안 돌았다. 이 테스트가 그 결합을 진짜 소켓 + 진짜 park/await 로 못박는다.
+// ===========================================================================
+
+/// serve_connection_confirmed 를 띄우되 dispatch 가 **size 바이트 고정 응답**을 내게 한다
+/// (승인된 destructive 가 큰 결과를 낼 때 청크 회신 경로를 강제). emit 수신측 + 주소 반환.
+async fn spawn_one_conn_confirmed_fixed(
+    server: Arc<Server>,
+    confirms: PendingConfirms,
+    ttl: Duration,
+    size: usize,
+) -> (SocketAddr, mpsc::UnboundedReceiver<ConfirmRequest>) {
+    let listener = bind_loopback(0).await.expect("bind loopback");
+    let addr = listener.local_addr().expect("local addr");
+    let (emit_tx, emit_rx) = confirm_emit_recorder();
+    tokio::spawn(async move {
+        let (stream, _) = listener.accept().await.expect("accept");
+        let dispatch = move |_a: &AuthorizedAction, _r: &[u8]| -> Vec<u8> {
+            (0..size).map(|i| (i * 31 + 7) as u8).collect()
+        };
+        let _ = serve_connection_confirmed(
+            stream,
+            &server.local,
+            &server.noise,
+            &server.auth,
+            &confirms,
+            ttl,
+            || 200u64,
+            move |req: ConfirmRequest| {
+                let _ = emit_tx.send(req);
+            },
+            dispatch,
+        )
+        .await;
+    });
+    (addr, emit_rx)
+}
+
+#[tokio::test]
+async fn confirmed_destructive_large_result_chunks_and_reassembles_byte_for_byte() {
+    // 결합 경로(chunking ↔ confirm): destructive 가 APPROVE 된 뒤 dispatch 결과가 한 Noise frame
+    //   (65535)을 넘으면 finish_confirmed_chunked 가 헤더+청크 N frame 으로 회신하고, 폰이
+    //   await_outcome 자리에서 재조립해 **byte-for-byte** 동일 바이트를 받는다. RED(결합 미검증):
+    //   finish_confirmed 가 단일-frame encrypt 였다면 큰 승인 결과는 빈 frame(silent corruption)
+    //   또는 잘림. GREEN: 경계 전수(한 frame 초과/여러/큰)에서 온전 재조립 + dispatch 정확히 1회.
+    use crate::remote::session::{parse_logical_header, LogicalReassembler, CHUNK_PLAINTEXT};
+    let sizes = [CHUNK_PLAINTEXT + 1, CHUNK_PLAINTEXT * 2 + 7, 200 * 1024];
+    let mut tag = 70u8;
+    for &n in &sizes {
+        let (server, phone) = make_server_with_phone("desktop", "phone", 1, Scope::Destructive);
+        let desktop_pub = server.local.public_key();
+        let server = Arc::new(server);
+        let confirms = PendingConfirms::new(60);
+        let (addr, mut emit_rx) = spawn_one_conn_confirmed_fixed(
+            Arc::clone(&server),
+            confirms.clone(),
+            Duration::from_secs(60),
+            n,
+        )
+        .await;
+
+        let mut client = Client::connect(addr, desktop_pub, "desktop", "phone", &phone.x, &phone.ed)
+            .await
+            .unwrap();
+
+        // 폰이 destructive 를 보내고(파킹), 데스크톱 승인 후 **멀티-frame 결과**를 재조립한다.
+        let this_tag = tag;
+        let req_task = tokio::spawn(async move {
+            // 1. destructive frame 송신(파킹 유발).
+            let assertion = CapabilityAssertion {
+                device_id: "phone".into(),
+                scope: Scope::Destructive,
+                nonce: nonce(this_tag),
+                issued_at: 100,
+                exp: 1000,
+            };
+            let sig = phone.ed.sign(&assertion.canonical_bytes()).to_bytes().to_vec();
+            let frame =
+                RequestFrame { assertion, signature: sig, request: b"panel.close".to_vec() }.encode();
+            let ct = client.channel.encrypt(&frame).unwrap();
+            send_framed(&mut client.stream, &ct).await;
+            // 2. 승인 후 회신을 받는다 — 첫 frame 이 헤더면 재조립(멀티-frame 결과).
+            let first_ct = recv_framed(&mut client.stream).await;
+            let first_pt = client.channel.decrypt(&first_ct).unwrap();
+            match parse_logical_header(&first_pt) {
+                None => first_pt, // 작은 결과(이 테스트 크기에선 도달 안 함).
+                Some(_) => {
+                    let mut acc = LogicalReassembler::from_header(&first_pt).unwrap();
+                    while !acc.is_complete() {
+                        let ct = recv_framed(&mut client.stream).await;
+                        let chunk = client.channel.decrypt(&ct).unwrap();
+                        acc.push(&chunk).unwrap();
+                    }
+                    acc.into_message().unwrap()
+                }
+            }
+        });
+
+        // 데스크톱: 파킹된 confirm 을 받아 APPROVE.
+        let req = emit_rx.recv().await.expect("confirm 요청 emit");
+        assert_eq!(req.command, "panel.close", "size {n}: 명령 요약");
+        assert!(req.danger, "size {n}: destructive ⇒ danger=true");
+        assert!(confirms.resolve(req.request_id, true), "size {n}: 데스크톱 승인");
+
+        let got = req_task.await.unwrap();
+        // 응답 평문 = tag(0x01) | body. body 가 정확히 fixed dispatch(n) 바이트.
+        assert_eq!(got[0], 0x01, "size {n}: 승인 ⇒ Ok 태그");
+        let expected: Vec<u8> = (0..n).map(|i| (i * 31 + 7) as u8).collect();
+        assert_eq!(got.len(), n + 1, "size {n}: 길이(tag+body) 일치");
+        assert_eq!(
+            &got[1..],
+            &expected[..],
+            "size {n}: 승인된 destructive 의 큰 결과가 청킹으로 온전 재조립(silent corruption 0)"
+        );
+        tag += 1;
+    }
+}
+
+// ===========================================================================
 // proptest 적대 framing 하니스 — read_framed/write_framed 의 length-prefix 코덱을
 // 임의·경계·잘림·증폭 입력으로 두드린다(계획서 스위트 I, 매트릭스 "오버사이즈/malformed").
 //

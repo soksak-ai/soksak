@@ -452,6 +452,131 @@ async fn ssrf_unpaired_peer_no_tunnel() {
     assert!(matches!(r, Err(ClientError::Handshake(_))), "미페어링(틀린 키) ⇒ 핸드셰이크 미성립(터널 0)");
 }
 
+// ===========================================================================
+// 교차검증(chunking ↔ tunnel / mode confusion) — 터널 첫 frame 이 **터널 요청이 아닐 때**
+// (명령-JSON 또는 청크-헤더 태그처럼 보이는 request) serve_tunnel 이 깨끗이 NAK 하고 프록시/
+// connect 0 임을 진짜 소켓으로 못박는다. 단위 decode_tunnel_request 는 분리를 검증하지만,
+// "터널 listener 에 명령/청크 모양 첫 frame 을 흘려 모드를 헷갈리게" 하는 결합 경로는 미검증.
+// ===========================================================================
+
+/// 길이-프리픽스(u32 BE) 쓰기/읽기 — serve_tunnel 의 와이어와 동일(transport.rs 코덱).
+async fn raw_send_framed(stream: &mut TcpStream, bytes: &[u8]) {
+    let len = (bytes.len() as u32).to_be_bytes();
+    stream.write_all(&len).await.unwrap();
+    stream.write_all(bytes).await.unwrap();
+    stream.flush().await.unwrap();
+}
+async fn raw_try_recv_framed(stream: &mut TcpStream) -> Option<Vec<u8>> {
+    let mut len_buf = [0u8; 4];
+    stream.read_exact(&mut len_buf).await.ok()?;
+    let len = u32::from_be_bytes(len_buf) as usize;
+    let mut body = vec![0u8; len];
+    stream.read_exact(&mut body).await.ok()?;
+    Some(body)
+}
+
+/// 페어링된 폰이 진짜 KK INITIATOR 핸드셰이크로 NoiseChannel 을 세우되, 그 채널을 직접 들고
+/// **임의 첫 frame**(터널 인가 아님)을 흘릴 수 있게 (stream, channel) 을 raw 로 돌려준다.
+async fn tunnel_handshake_raw(
+    addr: SocketAddr,
+    desktop_pub: &[u8; 32],
+    phone: &DeviceIdentity,
+) -> (TcpStream, crate::remote::noise::NoiseChannel) {
+    use crate::remote::noise::Handshake;
+    let mut stream = TcpStream::connect(addr).await.unwrap();
+    raw_send_framed(&mut stream, phone.device_id().as_bytes()).await; // announce.
+    let mut peers = PinnedPeerRegistry::new();
+    peers.pin("desktop", desktop_pub).unwrap();
+    // phone 의 x25519 static 으로 initiate — DeviceIdentity 는 pairing_bundle 로 공개키만 노출하므로
+    // 재서명 가능한 from_parts 로 같은 키쌍을 복원해 쓴다(테스트 글루 — persistable_parts).
+    let (xpriv, xpub, _ed) = phone.persistable_parts();
+    let x = StaticKeypair::from_parts(xpriv, xpub).unwrap();
+    let mut ini = Handshake::initiate(&x, &peers, "desktop").unwrap();
+    let m1 = ini.write_message().unwrap();
+    raw_send_framed(&mut stream, &m1).await;
+    let m2 = raw_try_recv_framed(&mut stream).await.expect("m2(핸드셰이크 성립)");
+    ini.read_message(&m2).unwrap();
+    let channel = ini.into_channel().unwrap();
+    (stream, channel)
+}
+
+#[tokio::test]
+async fn tunnel_first_frame_command_or_chunk_header_shaped_naked_no_proxy_no_connect() {
+    // 모드 혼동(chunking ↔ tunnel): 페어링된 폰이 터널 listener 에 핸드셰이크까지 성립시킨 뒤,
+    //   첫 frame 의 request 를 (a) 명령-JSON `{"method":...}` 또는 (b) 청크 헤더 태그(0xC4..)처럼
+    //   흘린다. RED(결합 미검증): serve_tunnel 이 모드를 헷갈려 프록시로 새거나 connect 를 시도하면
+    //   터널이 명령 채널을 흉내내거나 그 반대로 오작동. GREEN: decode_tunnel_request 가 None ⇒
+    //   authorize_tunnel MalformedRequest ⇒ NAK 회신, connect/proxy 0(함정 포트가 연결을 안 받음).
+    //
+    // request 가 destructive scope 든 청크 헤더 모양이든, 터널 모드는 `tunnel:port` prefix 만 받는다.
+    for shaped in [
+        b"{\"method\":\"ui.tree\",\"params\":{}}".to_vec(), // 명령-JSON 모양.
+        {
+            // 청크 헤더 태그(0xC4) + 거대 total 모양 — 재조립을 유발하려는 시도.
+            let mut v = vec![0xC4u8];
+            v.extend_from_slice(&u32::MAX.to_be_bytes());
+            v
+        },
+        b"tunnel".to_vec(),    // prefix 근사(콜론 없음).
+        b"tunnel:".to_vec(),   // 포트 누락.
+        Vec::new(),            // 빈 request.
+    ] {
+        // 함정 포트 — 터널이 절대 connect 하지 않아야 한다(connect 0 증명).
+        let trap = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+        let trap_port = trap.local_addr().unwrap().port();
+        let trap_hit = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let trap_hit2 = Arc::clone(&trap_hit);
+        let trap_handle = tokio::spawn(async move {
+            match tokio::time::timeout(std::time::Duration::from_millis(300), trap.accept()).await {
+                Ok(Ok(_)) => trap_hit2.store(true, std::sync::atomic::Ordering::SeqCst),
+                _ => {}
+            }
+        });
+
+        let phone = DeviceIdentity::generate("phone-a").unwrap();
+        // allowlist 에 trap_port 를 넣어둔다 — 그래도 첫 frame 이 터널 요청이 아니면 connect 0 이어야 한다
+        // (포트가 허용돼 있어도 모드 자체가 성립 안 함 = 모드 혼동 차단).
+        let (addr, desktop_pub, _srv) =
+            spawn_serve_tunnel(&phone, Scope::Write, PortAllowlist::from_ports([trap_port])).await;
+
+        let (mut stream, mut channel) = tunnel_handshake_raw(addr, &desktop_pub, &phone).await;
+
+        // 첫 frame — request 가 `tunnel:port` 가 아닌 모양. assertion 은 유효 서명(scope=Write).
+        let mut nonce = [0u8; 32];
+        nonce[0] = 0x5A;
+        nonce[15] = 0xAB;
+        let assertion = CapabilityAssertion {
+            device_id: "phone-a".into(),
+            scope: Scope::Write,
+            nonce,
+            issued_at: 100,
+            exp: 1000,
+        };
+        let (_x, _xp, ed_priv) = phone.persistable_parts();
+        let ed = SigningKey::from_bytes(&ed_priv);
+        let sig = ed.sign(&assertion.canonical_bytes()).to_bytes().to_vec();
+        let frame = crate::remote::session::RequestFrame {
+            assertion,
+            signature: sig,
+            request: shaped.clone(),
+        }
+        .encode();
+        let ct = channel.encrypt(&frame).unwrap();
+        raw_send_framed(&mut stream, &ct).await;
+
+        // 서버는 NAK(0x00)를 채널로 암호화해 회신하고 종료 — 프록시 0. 폰이 복호해 NAK 단언.
+        let nak_ct = raw_try_recv_framed(&mut stream).await.expect("NAK 회신");
+        let nak_pt = channel.decrypt(&nak_ct).expect("NAK 복호");
+        assert_eq!(nak_pt.first(), Some(&0x00u8), "터널 요청 아님 ⇒ NAK(프록시 0), shaped={shaped:?}");
+
+        let _ = trap_handle.await;
+        assert!(
+            !trap_hit.load(std::sync::atomic::Ordering::SeqCst),
+            "터널 요청이 아닌 첫 frame ⇒ connect 시도 0(모드 혼동 0), shaped={shaped:?}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn confidentiality_http_bytes_not_plaintext_on_wire() {
     // 기밀성: 프록시되는 HTTP 바이트가 와이어 ciphertext 에 평문으로 안 보인다(릴레이 zero-knowledge).

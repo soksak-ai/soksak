@@ -1055,6 +1055,41 @@ fn mut_dispatch_input(ct: &[u8]) -> &[u8] {
     ct
 }
 
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// session_summarize_command_arbitrary_bytes_never_panic:
+    /// summarize_command 는 destructive 파킹 경로(begin_frame/begin_frame_chunked)에서 **공격자
+    /// 통제 request 바이트** 위에 호출된다(복호·검증 이후라 floor proptest 는 여기 도달 0). 임의·
+    /// 근사-JSON·비-UTF8 바이트로 직접 두드려 패닉 0 + bounded(앞 64B 표시) 를 못박는다. JSON 파싱
+    /// (serde_json::from_slice)·UTF-8 lossy·슬라이스 min(64) 가 전부 graceful(over-read/패닉 0).
+    #[test]
+    fn session_summarize_command_arbitrary_bytes_never_panic(
+        req in proptest::collection::vec(any::<u8>(), 0..4096),
+    ) {
+        let s = summarize_command(&req); // 패닉 0 이면 통과.
+        // 표시 요약은 bounded — method 문자열 또는 앞 64B lossy(거대 페이로드 전체를 안 싣는다).
+        prop_assert!(s.len() <= 4096, "summary is bounded (no unbounded copy of payload)");
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(256))]
+
+    /// session_summarize_command_near_json_extracts_method_or_truncates:
+    /// method 키가 있는 유효 JSON 은 method 를, 아니면 앞부분 lossy 를 돌려준다(전수 패닉 0).
+    /// 거대 method 문자열이어도 그대로 — 단 비-JSON 거대 페이로드는 64B 로 자른다(표시 bounded).
+    #[test]
+    fn session_summarize_command_non_json_truncates_to_head(
+        body in proptest::collection::vec(any::<u8>().prop_filter("non-brace", |b| *b != b'{'), 65..2048),
+    ) {
+        // 첫 바이트가 '{' 가 아니면 JSON 객체가 아니라 fallback(앞 64B lossy)로 간다.
+        let s = summarize_command(&body);
+        // UTF-8 lossy 는 바이트당 최대 3바이트(U+FFFD)로 늘 수 있으나 입력이 64B 로 잘리므로 bounded.
+        prop_assert!(s.len() <= 64 * 3, "non-JSON summary truncates head to <=64 bytes (bounded display)");
+    }
+}
+
 // ===========================================================================
 // LOGICAL-MESSAGE CHUNKING — 단일 Noise frame 을 넘는 논리 응답을 N frame 으로 스트리밍.
 // 코덱(encrypt_logical / LogicalReassembler / decrypt_frame) 을 raw 채널 쌍 위에서 RED→GREEN
