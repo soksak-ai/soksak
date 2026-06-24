@@ -32,8 +32,40 @@ export interface RemoteConfirmRequest {
 // 테스트는 recorder 를 주입해 Tauri 비의존(순수 큐 로직만 검증).
 export type ResolveSink = (requestId: number, approve: boolean) => void;
 
-// 기본 TTL(초) — Rust bridge.rs CONFIRM_TTL_SECS 의 거울. 페이로드에 ttl_secs 가 없을 때만 쓴다.
+// 기본 TTL(초) — 사이드카(remote-iroh) bridge CONFIRM_TTL_SECS 의 거울. 페이로드에 ttl_secs 가
+// 없을 때만 쓴다.
 export const DEFAULT_CONFIRM_TTL_SECS = 120;
+
+// ── 결정 awaiter(remote.confirm 커맨드용) ──────────────────────────────────────────────────
+// 코어가 사이드카에서 분리된 뒤: confirm 권위(PendingConfirms·토큰)는 사이드카에 있고, 코어는 사람
+// 모달만 렌더하고 결정을 사이드카에 회신한다. `remote.confirm` 커맨드(catalogRemote)가 한 요청을
+// enqueue 하고 사람 결정을 **await** 한다 — 이 맵이 request_id ↔ 그 await 의 resolver 다. 모달의
+// resolve/expire 가 sink 로 (request_id, approve) 를 보내면 wireRemoteConfirm 의 sink 가 이 맵에서
+// 해당 resolver 를 깨운다(스토어 큐 로직은 무수정 — 기존 직렬 큐 의미 그대로). 멱등: 두 번째 결정은 무시.
+const decisionWaiters = new Map<number, (approve: boolean) => void>();
+
+// request_id 의 사람 결정을 기다리는 Promise 를 등록한다(remote.confirm 핸들러가 호출). 같은 id 가
+// 이미 대기 중이면 그 대기를 deny 로 정리하고 새로 등록(중복 요청 방어 — 무결정 누수 0).
+export function awaitDecision(requestId: number): Promise<boolean> {
+  const prev = decisionWaiters.get(requestId);
+  if (prev) prev(false);
+  return new Promise<boolean>((resolve) => {
+    decisionWaiters.set(requestId, resolve);
+  });
+}
+
+// request_id 의 대기를 결정으로 깨운다(wireRemoteConfirm 의 sink 가 호출). 미상/이미 해결이면 무해 no-op.
+export function deliverDecision(requestId: number, approve: boolean): void {
+  const w = decisionWaiters.get(requestId);
+  if (!w) return;
+  decisionWaiters.delete(requestId);
+  w(approve);
+}
+
+// 대기 중인 request_id 인지(테스트/감사). 표시 정보만.
+export function hasPendingDecision(requestId: number): boolean {
+  return decisionWaiters.has(requestId);
+}
 
 interface RemoteConfirmState {
   /// 직렬 큐 — 머리(index 0)만 모달에 노출된다. FIFO(도착 순).

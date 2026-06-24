@@ -447,7 +447,9 @@ export interface SoksakPluginApi {
   };
   /** HTTP 요청(범용 — runbook api 실행타입 등). "network" 권한. webview fetch 가 못 하는 임의 출처 +
    *  시크릿 헤더/바디 주입을 코어가 대행. secretSubst=placeholder→secretKey(이 플러그인 ns). 평문은 JS 가
-   *  안 만진다 — Rust 경계가 볼트에서 해소해 url/headers/body 의 placeholder 에 치환(history/응답 무노출 R2). */
+   *  안 만진다 — Rust 경계가 볼트에서 해소해 url/headers/body 의 placeholder 에 치환(history/응답 무노출 R2).
+   *  impersonate="chrome" 은 브라우저 핑거프린트(JA3/JA4) 백엔드로 보낸다(핑거프린트 차단 CDN 통과용);
+   *  "off"(기본)은 평문 native-tls. 응답 shape·시크릿·ns 격리는 모드와 무관하게 동일. */
   network?: {
     http: (req: {
       method: string;
@@ -457,6 +459,7 @@ export interface SoksakPluginApi {
       body?: string;
       contentType?: string;
       secretSubst?: Record<string, string>;
+      impersonate?: "off" | "chrome";
     }) => Promise<{ status: number; headers: Record<string, string>; body: string }>;
   };
   /** 플러그인 커스텀 이벤트 버스 — 임의 토픽 pub/sub(플러그인 간 스트리밍 coordination). 코어-정의
@@ -776,6 +779,7 @@ function createNetworkApi(deps: PluginApiDeps, ns: string) {
       body?: string;
       contentType?: string;
       secretSubst?: Record<string, string>;
+      impersonate?: "off" | "chrome";
     }): Promise<{ status: number; headers: Record<string, string>; body: string }> => {
       return (await deps.invoke("network_http_request", {
         method: req.method,
@@ -786,6 +790,7 @@ function createNetworkApi(deps: PluginApiDeps, ns: string) {
         contentType: req.contentType ?? null,
         ns,
         secretSubst: req.secretSubst ?? null,
+        impersonate: req.impersonate ?? null,
       })) as { status: number; headers: Record<string, string>; body: string };
     },
   };

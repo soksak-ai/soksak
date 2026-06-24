@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listenThisWindow } from "../lib/windowEvents";
 import { useSettings } from "../state/settings";
 import { registerCatalog } from "./catalog";
+import { registerRemoteCatalog } from "./catalogRemote";
 import { registerRemoteConfirmDevCatalog } from "./catalogRemoteConfirmDev";
 import { execute, setPermissionGate } from "./registry";
 
@@ -22,6 +23,9 @@ export function startExecutor(): void {
   if (started) return;
   started = true;
   registerCatalog();
+  // 원격 confirm 데스크톱 사람 게이트(remote.confirm) — remote-iroh 사이드카가 destructive 결정을
+  // 위임하는 라이브 커맨드. 권위(PendingConfirms·토큰)는 사이드카, 사람 결정만 코어 모달에서.
+  registerRemoteCatalog();
   // dev 전용 mock 커맨드(프로덕션 번들엔 등록 0) — 라이브 폰 없이 confirm 모달 헤드리스 검증.
   registerRemoteConfirmDevCatalog();
   // 권한 게이트: 위험 분류별 정책을 설정 store 에서 읽어 allow/deny 판정.
