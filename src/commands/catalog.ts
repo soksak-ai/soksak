@@ -5,6 +5,7 @@
 //   - 모든 변이는 결과(새 id/변경 후 상태)를 반환 — 호출자가 응답만으로 검증 가능.
 
 import { invoke } from "@tauri-apps/api/core";
+import { flushSync } from "react-dom";
 import {
   allGroups,
   useSessions,
@@ -729,6 +730,49 @@ export function registerCatalog(): void {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
       return S().setActiveContent(t.id, p.content as string);
+    },
+  });
+
+  register("content.activateProbe", {
+    description:
+      "Measure the latency of switching to a content tab: the synchronous re-render plus style recalc/layout to reveal it. Parked content is content-visibility:hidden, so revealing it pays a deferred render cost. Restores the original active tab. For tab-switch perf A/B.",
+    triggers: { ko: "탭 이동 지연 측정 탭 전환 성능 unpark 비용" },
+    params: {
+      project: P.project,
+      content: { ...P.content, required: true },
+      restore: {
+        type: "boolean",
+        description: "Restore the original active tab after measuring (default true)",
+      },
+    },
+    returns: "{ from, to, switchJsMs, switchReflowMs }",
+    examples: ['sok content.activateProbe \'{"content":"c3"}\''],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound("프로젝트 없음");
+      const target = p.content as string;
+      const from = t.activeContentId;
+      const restore = p.restore !== false;
+      // flushSync 로 setActiveContent 의 React 재렌더를 동기화 → 강제 reflow 로 드러난 서브트리의
+      // recalc+layout 까지 동기 측정(rAF 없이 백그라운드 창서도 견고). js=재렌더, reflow=+recalc/layout.
+      const t0 = performance.now();
+      flushSync(() => {
+        S().setActiveContent(t.id, target);
+      });
+      const switchJsMs = performance.now() - t0;
+      void document.documentElement.offsetHeight;
+      const switchReflowMs = performance.now() - t0;
+      if (restore && from && from !== target) {
+        flushSync(() => {
+          S().setActiveContent(t.id, from);
+        });
+      }
+      return {
+        from,
+        to: target,
+        switchJsMs: Math.round(switchJsMs),
+        switchReflowMs: Math.round(switchReflowMs),
+      };
     },
   });
 
