@@ -17,5 +17,11 @@ export function parkedStyle(active: boolean): CSSProperties {
     visibility: active ? "visible" : "hidden",
     zIndex: active ? 1 : 0,
     transform: active ? undefined : OFFSCREEN,
-  };
+    // [성능] 비활성 콘텐츠 서브트리를 렌더링(style recalc·layout·paint)에서 통째로 제외한다. content-visibility:
+    // hidden 은 display:none 과 달리 DOM·상태·크기를 보존하면서 렌더만 스킵한다(활성 시 즉시 복귀). 이게 없으면
+    // 테마/다크라이트 변경 시 보이는 터미널의 스타일시트 교체가 *전 문서*(파킹된 터미널 DOM 포함) style recalc 를
+    // 유발해 ~100ms 든다 — 파킹분을 recalc 에서 빼면 보이는 것만 recalc 되어 즉각이다. WebGL/네이티브 레이어
+    // 합성 차단은 여전히 transform 오프스크린이 담당(content-visibility 는 별도 GPU 레이어를 못 막는다).
+    contentVisibility: active ? "visible" : "hidden",
+  } as CSSProperties;
 }
