@@ -299,6 +299,11 @@ pub fn put(
     if !doc.is_object() {
         return Err("doc 는 JSON 객체여야 함".to_string());
     }
+    // [단계②] 예약 필드 거부 — 봉인 봉투 자리(__enc)와 충돌하면 후속 convert/회전이 그 레코드에서 실패한다.
+    // 평문 시점에 막아 암호화 전환이 항상 안전하게(seal_doc 의 충돌 거부와 같은 불변).
+    if doc.as_object().unwrap().contains_key(super::crypto::ENC_FIELD) {
+        return Err(format!("doc 가 예약 필드 {} 를 포함함", super::crypto::ENC_FIELD));
+    }
     let id = id.unwrap_or_else(gen_id);
     // canonical id 주입(doc.id = 레코드 id 항상 일치).
     doc.as_object_mut().unwrap().insert("id".to_string(), json!(id));
@@ -924,6 +929,9 @@ mod tests {
 
         // get 은 복호 경로 미배선이라 정직하게 Err(은닉 오반환 금지).
         assert!(get(&c, "terminal", "command_blocks", &id1, None, None).is_err(), "복호 resolver 없으면 봉인 레코드 get 게이트");
+
+        // 예약 필드 __enc 를 담은 doc 은 put 거부(convert/회전 안전 불변).
+        assert!(put(&c, "terminal", "command_blocks", "proj-a", None, &json!({"__enc": 1})).is_err(), "예약 필드 __enc 거부");
     }
 
     // [단계②] 읽기 경로 — resolver(S 공급)로 get/query 가 봉인 레코드를 개봉(R12). resolver 가 None(lock)이면
