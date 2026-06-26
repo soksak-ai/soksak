@@ -107,6 +107,19 @@ pub fn run() {
                 }
                 secrets::auto_unlock_from_env(&st);
             }
+            // [단계③] auto-lock 틱 — idle 타임아웃 경과 시 vault 를 잠그고 전 창에 broadcast(터미널 폐기·
+            // 잠금 UI 전환을 프론트가 반응). 단일 OS 스레드 15s tick(폴링 비용 무시 가능). 타임아웃 0(기본)
+            // 이면 auto_lock_due 가 항상 false → no-op. 활동 reset 은 프론트 secret_touch.
+            {
+                let lock_handle = app.handle().clone();
+                std::thread::spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_secs(15));
+                    let st = lock_handle.state::<secrets::SecretsState>();
+                    if st.auto_lock_due(secrets::now_ms()) {
+                        let _ = secrets::lock_and_broadcast(&lock_handle, &st);
+                    }
+                });
+            }
             // 파일 워처 1회 초기화(이벤트 콜백에 앱 핸들 주입).
             let handle = app.handle().clone();
             app.state::<FsWatcher>().init(handle);
@@ -265,6 +278,9 @@ pub fn run() {
             data::commands::data_import,
             secrets::secret_unlock,
             secrets::secret_lock,
+            secrets::secret_touch,
+            secrets::secret_set_idle_timeout,
+            secrets::secret_lock_info,
             secrets::secret_set,
             secrets::secret_has,
             secrets::secret_delete,

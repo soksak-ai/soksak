@@ -53,6 +53,24 @@ export function registerSecretsCatalog(): void {
     },
   });
 
+  register("secret.autolock", {
+    description:
+      "Set the idle auto-lock timeout in milliseconds (0 disables). When the vault stays idle past this, it locks itself and broadcasts secrets-locked to every window. Activity resets the timer via secret_touch.",
+    triggers: { ko: "자동잠금 유휴잠금 오토락 잠금시간" },
+    params: { ms: { type: "number", description: "Idle timeout in milliseconds; 0 disables auto-lock", required: true } },
+    returns: "{ ms }",
+    errors: ["INVALID_PARAMS"],
+    examples: ['sok secret.autolock \'{"ms":300000}\''],
+    handler: async (p) => {
+      const ms = typeof p.ms === "number" ? p.ms : Number(p.ms);
+      if (!Number.isFinite(ms) || ms < 0) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ms 는 0 이상 숫자" };
+      }
+      await invoke("secret_set_idle_timeout", { ms: Math.floor(ms) });
+      return { ms: Math.floor(ms) };
+    },
+  });
+
   register("secret.backend", {
     description: "Query the vault backend type and current lock state. Use to check whether the vault is open before performing secret operations.",
     triggers: { ko: "시크릿 볼트 상태 백엔드 잠금여부" },

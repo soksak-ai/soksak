@@ -24,6 +24,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { ConfirmCloseModal } from "./components/ConfirmCloseModal";
 import { RemoteConfirmModal } from "./components/RemoteConfirmModal";
 import { wireRemoteConfirm } from "./state/remoteConfirmWire";
+import { startAutoLock } from "./secrets/autoLock";
 import { installRemoteConfirmDevTrigger } from "./state/remoteConfirmDev";
 import { ConsentPreviewHost } from "./components/ConsentPreviewHost";
 import { NotifyHost } from "./ui/NotifyHost";
@@ -286,6 +287,10 @@ function App() {
   // 원격 destructive confirm 배선(폰-링크 안전모델) — Rust app.emit("remote-confirm-request")를
   // store 큐에 잇고, 결정 sink 를 remote_confirm_resolve 로 잇는다(데스크톱 단일 권위). 부팅 1회.
   useEffect(() => wireRemoteConfirm(), []);
+
+  // [단계③] auto-lock 배선 — 사용자 활동을 백엔드에 통지(idle 타이머 리셋)하고, vault 자동/수동 잠금
+  // broadcast 를 DOM 이벤트로 재방출(UI·터미널이 반응). 부팅 1회.
+  useEffect(() => startAutoLock(), []);
 
   // dev 전용 mock 트리거 — 라이브 폰 없이 모달을 띄워 시각 검증(import.meta.env.DEV 게이트). 프로덕션
   // 번들(DEV=false)에선 아무것도 설치 안 한다. window.__soksakMockRemoteConfirm() 으로 mock 요청 emit.

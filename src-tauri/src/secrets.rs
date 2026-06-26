@@ -41,7 +41,7 @@ use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use x25519_dalek::{PublicKey, StaticSecret};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -302,6 +302,18 @@ pub struct SecretsState {
     // 볼트 파일 경로 — init(lib.rs setup) 에서 1회 설정. 미설정이면 프로덕션 경로 계산으로 폴백.
     // 테스트는 임시 path 를 직접 주입(전역 HOME 변이 0 — data/store.rs·plugins.rs 주입형 선례).
     path: Mutex<Option<PathBuf>>,
+    // [단계③] auto-lock — idle 타이머가 lock 을 건다(vault lock = 프로세스 전역 = app.data S 도 전부 무효화).
+    idle_timeout_ms: Mutex<i64>,  // 0 = 비활성. set_idle_timeout 으로 설정.
+    last_activity_ms: Mutex<i64>, // 프론트가 활동 시 touch. unlock 도 touch(즉시 재잠금 방지).
+    lock_epoch: Mutex<u64>,       // lock 마다 +1 — 프론트가 stale lock 상태 구분, broadcast 페이로드.
+}
+
+// 현재 시각(ms) — auto-lock 판정·touch 용. data::now_millis 와 동일 계산(자기완결).
+pub fn now_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
 }
 
 // 프로덕션 볼트 경로: HOME → ~/.soksak/secrets.vault. data/mod.rs db_path 패턴.
@@ -435,20 +447,60 @@ impl SecretsState {
         // Zeroizing 파생 KEK → 슬롯에 사본 저장(파생 본은 함수 끝에서 자동 스크럽).
         *self.kek.lock().map_err(|e| e.to_string())? = Some(*kek);
         *self.vault.lock().map_err(|e| e.to_string())? = Some(vault);
+        self.touch(now_ms()); // unlock 직후 활동 기록 — idle 타이머가 즉시 재잠그지 않게.
         Ok(())
     }
 
     // lock: KEK 슬롯을 in-place zeroize → None. take() 의 로컬 사본이 아니라
     // Mutex 슬롯의 실제 32바이트를 직접 지운다(헤더의 '슬롯 in-place 스크럽' 보장과 일치).
-    // 볼트 데이터(암호문)는 메모리에 남겨도 무해하나 함께 비운다.
-    fn lock(&self) -> Result<(), String> {
+    // 볼트 데이터(암호문)는 메모리에 남겨도 무해하나 함께 비운다. lock_epoch +1(전 창 broadcast 표식).
+    pub fn lock(&self) -> Result<(), String> {
         let mut guard = self.kek.lock().map_err(|e| e.to_string())?;
         if let Some(k) = guard.as_mut() {
             k.zeroize();
         }
         *guard = None;
         *self.vault.lock().map_err(|e| e.to_string())? = None;
+        if let Ok(mut g) = self.lock_epoch.lock() {
+            *g = g.wrapping_add(1);
+        }
         Ok(())
+    }
+
+    // [단계③] auto-lock — 활동 기록(프론트가 입력/포커스 시 touch). any-window 활동이 타이머를 리셋한다.
+    pub fn touch(&self, now: i64) {
+        if let Ok(mut g) = self.last_activity_ms.lock() {
+            *g = now;
+        }
+    }
+
+    // idle 타임아웃 설정(ms, 0=비활성). 음수는 0 으로 클램프.
+    pub fn set_idle_timeout(&self, ms: i64) {
+        if let Ok(mut g) = self.idle_timeout_ms.lock() {
+            *g = ms.max(0);
+        }
+    }
+
+    pub fn idle_timeout(&self) -> i64 {
+        self.idle_timeout_ms.lock().map(|g| *g).unwrap_or(0)
+    }
+
+    pub fn lock_epoch(&self) -> u64 {
+        self.lock_epoch.lock().map(|g| *g).unwrap_or(0)
+    }
+
+    // 지금 자동 잠금해야 하는가 — unlock 상태 + 타임아웃>0 + (now - 마지막활동) ≥ 타임아웃. 순수 판정
+    // (now 주입)이라 테스트 가능. lib.rs 백그라운드 틱이 이걸 호출해 lock + broadcast.
+    pub fn auto_lock_due(&self, now: i64) -> bool {
+        if !self.is_unlocked() {
+            return false;
+        }
+        let timeout = self.idle_timeout();
+        if timeout <= 0 {
+            return false;
+        }
+        let last = self.last_activity_ms.lock().map(|g| *g).unwrap_or(0);
+        now.saturating_sub(last) >= timeout
     }
 
     pub fn is_unlocked(&self) -> bool {
@@ -612,9 +664,46 @@ pub fn secret_unlock(passphrase: String, state: State<'_, SecretsState>) -> Resu
     state.unlock(&passphrase)
 }
 
+// lock + 전 창 broadcast("secrets-locked", lock_epoch). 수동 lock 과 idle 자동 lock 모두 이 경로로 알린다
+// → 프론트가 잠금 UI 전환·터미널 폐기(R14) 등 반응. 단일 vault·단일 KEK 라 한 번 lock 이 프로세스 전역.
+pub fn lock_and_broadcast(app: &AppHandle, state: &SecretsState) -> Result<(), String> {
+    state.lock()?;
+    let _ = app.emit("secrets-locked", state.lock_epoch());
+    Ok(())
+}
+
 #[tauri::command]
-pub fn secret_lock(state: State<'_, SecretsState>) -> Result<(), String> {
-    state.lock()
+pub fn secret_lock(app: AppHandle, state: State<'_, SecretsState>) -> Result<(), String> {
+    lock_and_broadcast(&app, &state)
+}
+
+// [단계③] idle 활동 기록 — 프론트가 입력/포커스/명령 시 호출(디바운스). any-window 활동이 타이머 리셋.
+#[tauri::command]
+pub fn secret_touch(state: State<'_, SecretsState>) {
+    state.touch(now_ms());
+}
+
+// idle 자동잠금 타임아웃(ms, 0=비활성) 설정. 프론트 설정값 반영.
+#[tauri::command]
+pub fn secret_set_idle_timeout(ms: i64, state: State<'_, SecretsState>) {
+    state.set_idle_timeout(ms);
+}
+
+#[derive(Serialize)]
+pub struct LockInfo {
+    pub unlocked: bool,
+    pub idle_timeout_ms: i64,
+    pub lock_epoch: u64,
+}
+
+// 잠금 상태 조회 — 프론트가 현재 unlock 여부·타임아웃·epoch 를 읽어 UI 동기화.
+#[tauri::command]
+pub fn secret_lock_info(state: State<'_, SecretsState>) -> LockInfo {
+    LockInfo {
+        unlocked: state.is_unlocked(),
+        idle_timeout_ms: state.idle_timeout(),
+        lock_epoch: state.lock_epoch(),
+    }
 }
 
 #[tauri::command]
@@ -835,6 +924,37 @@ mod tests {
         let mut t2 = seal_to(&p, b"value", AAD1).unwrap();
         t2.eph_pk[0] ^= 0xff;
         assert!(open_sealed(&s, &t2, AAD1).is_err(), "eph_pk 변조 거부");
+    }
+
+    // (lock-a, 단계③) auto_lock_due 판정 — lock 이면 false, 타임아웃 0 이면 false, idle 경과 시 true,
+    // touch 가 타이머를 리셋. lock_epoch 가 lock 마다 증가.
+    #[test]
+    fn auto_lock_policy() {
+        let (s, dir) = state_with_tmp_vault("autolock");
+        // 잠김 상태 — 타임아웃 무관 false.
+        s.set_idle_timeout(1000);
+        assert!(!s.auto_lock_due(now_ms()), "lock 상태면 자동잠금 대상 아님");
+
+        s.unlock("pw").unwrap();
+        let e0 = s.lock_epoch();
+        // 타임아웃 0 = 비활성.
+        s.set_idle_timeout(0);
+        assert!(!s.auto_lock_due(1_000_000), "타임아웃 0 = 비활성");
+        // 타임아웃 1000ms, 마지막 활동 t=10_000.
+        s.set_idle_timeout(1000);
+        s.touch(10_000);
+        assert!(!s.auto_lock_due(10_500), "0.5s 경과 < 1s → 잠금 아님");
+        assert!(s.auto_lock_due(11_000), "1s 경과 = 1s → 잠금");
+        assert!(s.auto_lock_due(99_999), "한참 idle → 잠금");
+        // touch 가 타이머 리셋.
+        s.touch(99_000);
+        assert!(!s.auto_lock_due(99_500), "touch 후 0.5s → 잠금 아님(any-window 활동 reset)");
+
+        // lock 하면 epoch +1, 이후 auto_lock_due false(이미 잠김).
+        s.lock().unwrap();
+        assert_eq!(s.lock_epoch(), e0 + 1, "lock 마다 epoch 증가");
+        assert!(!s.auto_lock_due(99_999), "잠긴 뒤엔 대상 아님");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // (asym-f) app.data 봉투 개인키 vault 보관 — wrap/unwrap 라운드트립, lock 게이트, 디스크 영속, 삭제.
