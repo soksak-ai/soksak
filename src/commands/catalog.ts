@@ -1583,6 +1583,158 @@ export function registerCatalog(): void {
     },
   });
 
+  register("window.themeScan", {
+    description:
+      "Measure whether a dark/light theme transition is atomic across screen regions. Records the toggle, then reports each region's transition frame and how many frames they are out of sync (a torn frame is chrome already switched while content has not). Idempotent — replaces ad-hoc capture scripts. Restores the original theme when done.",
+    triggers: {
+      ko: "테마 전환 검사 원자성 깜빡임 tear 측정 다크 라이트 토글 회귀",
+    },
+    params: {
+      theme: {
+        type: "string",
+        description: "Theme name to scan (default: current theme)",
+      },
+      from: {
+        type: "string",
+        description: "Starting mode (default dark)",
+        enum: ["light", "dark"],
+      },
+      to: {
+        type: "string",
+        description: "Ending mode (default light)",
+        enum: ["light", "dark"],
+      },
+      frames: { type: "number", description: "Frames to capture (default 40)" },
+      intervalMs: {
+        type: "number",
+        description: "Frame interval in ms (default 16 ≈ one display frame)",
+      },
+      applyAtMs: {
+        type: "number",
+        description: "Delay after recording starts before toggling (default 250)",
+      },
+      settleMs: {
+        type: "number",
+        description: "Settle wait after setting the start mode (default 800)",
+      },
+      regions: {
+        type: "json",
+        description:
+          "Named fractional rects {name:{x0,y0,x1,y1}} (0..1). Default samples chrome top bar, center content, and left sidebar.",
+      },
+    },
+    returns:
+      "{ frames, frameMs (measured capture interval), spreadFrames, spreadMs, atomic, regions:[{name,start,end,transitionFrame}] }",
+    examples: [
+      "sok window.themeScan",
+      'sok window.themeScan \'{"theme":"Midnight","frames":48}\'',
+    ],
+    handler: async (p) => {
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      const ts = useTheme.getState();
+      const theme = (p.theme as string | undefined) ?? ts.current;
+      const startMode = (p.from as "light" | "dark" | undefined) ?? "dark";
+      const endMode = (p.to as "light" | "dark" | undefined) ?? "light";
+      // 기본값은 RPC 10s 안에 여유로 들어오게 보수적으로(네이티브 캡처가 프레임당 ~55ms 로
+      // intervalMs 보다 느리고 가끔 stall — 전환은 3~5프레임이라 20프레임이면 충분).
+      const frames = (p.frames as number | undefined) ?? 20;
+      const intervalMs = (p.intervalMs as number | undefined) ?? 16;
+      const applyAtMs = (p.applyAtMs as number | undefined) ?? 180;
+      const settleMs = (p.settleMs as number | undefined) ?? 600;
+      const regionMap =
+        (p.regions as Record<
+          string,
+          { x0: number; y0: number; x1: number; y1: number }
+        >) ?? {
+          // 크롬 상단바 / 중앙 콘텐츠(에디터·터미널) / 좌측 사이드바 — tear 를 드러내는 세 구역.
+          top: { x0: 0.3, y0: 0.0, x1: 0.95, y1: 0.06 },
+          center: { x0: 0.45, y0: 0.15, x1: 0.95, y1: 0.85 },
+          left: { x0: 0.02, y0: 0.2, x1: 0.22, y1: 0.85 },
+        };
+      const names = Object.keys(regionMap);
+      const regionList = names.map((n) => regionMap[n]);
+
+      // 원래 테마/모드 — 검사 후 복원(부수효과 없는 멱등 호출).
+      const prevTheme = ts.current;
+      const prevMode = ts.effectiveMode;
+
+      let stage = "start";
+      try {
+        stage = "path";
+        const { tempDir, join } = await import("@tauri-apps/api/path");
+        const dir = await join(
+          await tempDir(),
+          "soksak",
+          `themescan-${Date.now()}`,
+        );
+
+        // 1) 시작 모드로 세팅 + settle.
+        stage = "applyStart";
+        useTheme.getState().apply(theme, startMode);
+        await sleep(settleMs);
+        // 2) 녹화 시작(비대기) → applyAtMs 후 끝 모드로 토글 → 녹화 완료 대기.
+        stage = "record";
+        const recT0 = performance.now();
+        const recP = invoke<number>("plugin:webview-capture|record", {
+          dir,
+          frames,
+          intervalMs,
+        });
+        await sleep(applyAtMs);
+        useTheme.getState().apply(theme, endMode);
+        const n = await recP;
+        // 실측 프레임 간격(네이티브 캡처가 intervalMs 보다 느릴 수 있음 — tear ms 는 이것 기준).
+        const realFrameMs = n > 0 ? (performance.now() - recT0) / n : intervalMs;
+        // 3) 프레임별 영역 명도 → tear 판정.
+        stage = "analyze";
+        const grid = await invoke<number[][]>(
+          "plugin:webview-capture|analyze_regions",
+          { dir, regions: regionList },
+        );
+        // 4) 원래 테마 복원.
+        useTheme.getState().apply(prevTheme, prevMode);
+
+        stage = "interpret";
+        const round = (v: number) => Math.round(v);
+        const per = names.map((name, c) => {
+          const start = grid[0]?.[c] ?? 0;
+          const end = grid[grid.length - 1]?.[c] ?? 0;
+          const mid = (start + end) / 2;
+          const rising = end >= start;
+          let transitionFrame = -1;
+          for (let f = 0; f < grid.length; f++) {
+            const v = grid[f]?.[c] ?? 0;
+            if (rising ? v >= mid : v <= mid) {
+              transitionFrame = f;
+              break;
+            }
+          }
+          return { name, start: round(start), end: round(end), transitionFrame };
+        });
+        const tfs = per.map((r) => r.transitionFrame).filter((f) => f >= 0);
+        const minTf = tfs.length ? Math.min(...tfs) : 0;
+        const maxTf = tfs.length ? Math.max(...tfs) : 0;
+        const spreadFrames = maxTf - minTf;
+        return {
+          frames: n,
+          frameMs: Math.round(realFrameMs),
+          spreadFrames,
+          spreadMs: Math.round(spreadFrames * realFrameMs),
+          atomic: spreadFrames === 0,
+          regions: per,
+        };
+      } catch (e) {
+        // 행이 아니라 실패면 단계와 함께 회신(타임아웃으로 침묵하지 않게).
+        try {
+          useTheme.getState().apply(prevTheme, prevMode);
+        } catch {
+          /* 복원 실패는 부차 */
+        }
+        return { error: String(e), stage };
+      }
+    },
+  });
+
   register("theme.list", {
     description:
       "List available themes (built-in + external ~/.soksak/themes), including files that failed validation and their reasons.",
