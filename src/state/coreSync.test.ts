@@ -64,9 +64,37 @@ describe("createCoreSync", () => {
     cs.init(h.deps);
     await flush();
     cs.save({ a: 7 });
+    cs.flush(); // 권위(app.data) 디바운스 즉시 비움(테스트 — 실제는 300ms 후)
     await flush();
     expect(h.remote.get("x")).toEqual({ a: 7 });
     expect(JSON.parse(h.ls.get("soksak.x")!)).toEqual({ a: 7 });
+  });
+
+  // [성능 RULE] 연타(⌘± autorepeat·슬라이더 드래그)는 라이브 UI(메모리/ls 캐시)는 매번 즉시 반영하되,
+  // 권위 persist(app.data: SQLite 쓰기 + 전 창 broadcast)는 정착값 1회로 접어야 한다. 디바운스 없으면
+  // 키마다 SQLite+IPC+broadcast 폭풍 → CPU 100%(사용자 보고). RED: 연타 30회 → 권위 쓰기 30회(폭풍).
+  it("연타 save: 권위 persist 는 디바운스(연타 폭풍 차단), ls 캐시는 즉시", async () => {
+    vi.useFakeTimers();
+    try {
+      const h = harness();
+      const sets = () => h.deps.invoke.mock.calls.filter((c) => c[0] === "data_kv_set").length;
+      const cs = createCoreSync<{ n: number }>({ key: "x", lsKey: "soksak.x", fallback: { n: 0 }, apply: () => {} });
+      cs.init(h.deps);
+      await vi.runAllTimersAsync(); // hydrate(빈 권위 → 캐시 1회 마이그레이션)
+      const before = sets();
+      // 연타 30회.
+      for (let i = 0; i < 30; i++) cs.save({ n: i });
+      // ls 캐시는 매번 즉시(부트 crash-safe) — 마지막 값.
+      expect(JSON.parse(h.ls.get("soksak.x")!)).toEqual({ n: 29 });
+      // 디바운스 만료 전 — 권위 쓰기 0(폭풍 차단).
+      expect(sets() - before).toBe(0);
+      // 만료 후 — 권위 쓰기 정확히 1회(마지막 값만).
+      await vi.advanceTimersByTimeAsync(400);
+      expect(sets() - before).toBe(1);
+      expect(h.remote.get("x")).toEqual({ n: 29 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("init: app.data 권위값을 apply 로 적용", async () => {
