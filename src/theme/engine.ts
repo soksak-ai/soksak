@@ -263,5 +263,11 @@ export function applyThemeToDom(theme: ThemeSpec, mode: ThemeMode): ThemeMode {
   root.dataset.statusBg = theme.chrome.statusBg;
   root.dataset.divider = theme.chrome.divider;
   root.dataset.chromeFont = theme.chrome.font;
+  // [성능 RULE] 테마 변경 단일 신호 — 플러그인(터미널)이 색 토큰 재적용 시점을 이 한 속성으로만 안다.
+  // 색은 `style`(--bg 등 setProperty)로 들어가지만, 플러그인이 `style` 전체를 관찰하면 ⌘±(--app-font-size)
+  // 같은 테마-무관 style 변이에도 전 터미널이 reflow+clearTextureAtlas+refresh 한다(결합 → CPU 폭풍).
+  // 그래서 실제 테마 적용마다 epoch 를 1 올려, 플러그인은 data-theme-epoch 만 관찰하면 된다(폰트 변경과 분리).
+  const epoch = Number(root.dataset.themeEpoch ?? "0") + 1;
+  root.dataset.themeEpoch = String(epoch);
   return effective;
 }
