@@ -245,6 +245,10 @@ export interface SoksakPluginApi {
       collection: string,
       opts?: { scope?: string; where?: Record<string, unknown> },
     ) => Promise<number>;
+    /** retention(R5) — (coll,scope) 수가 cap 초과 시 oldest(created) 축출. 반환=삭제 수. */
+    retentionTrim: (collection: string, scope: string, cap: number) => Promise<number>;
+    /** retention(R5) — created < cutoffMs 인 레코드 삭제(시간축). 반환=삭제 수. */
+    retentionReap: (collection: string, cutoffMs: number) => Promise<number>;
     watch: (
       collection: string,
       opts: { scope?: string } | undefined,

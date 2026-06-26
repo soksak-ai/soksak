@@ -213,6 +213,33 @@ pub fn data_count(
     })
 }
 
+// ── retention(R5) — 코어가 노출(R0 command registry). 반환=삭제 수. AI/E2E 가 cleanup 호출 가능. ──
+
+// count FIFO — (ns,coll,scope) 수가 cap 초과 시 oldest(created) 축출.
+#[tauri::command]
+pub fn data_retention_trim(
+    ns: String,
+    coll: String,
+    scope: String,
+    cap: i64,
+    state: State<'_, DbState>,
+) -> Result<usize, String> {
+    validate_ns(&ns)?;
+    with_conn(&state, |c| store::retention_trim(c, &ns, &coll, &scope, cap))
+}
+
+// TTL reaper — created < cutoff_ms 삭제(시간축).
+#[tauri::command]
+pub fn data_retention_reap(
+    ns: String,
+    coll: String,
+    cutoff_ms: i64,
+    state: State<'_, DbState>,
+) -> Result<usize, String> {
+    validate_ns(&ns)?;
+    with_conn(&state, |c| store::retention_reap_ttl(c, &ns, &coll, cutoff_ms))
+}
+
 // ── 백업/복원/이식(코어 커맨드 — data.* 카탈로그 핸들러가 ns="core" 로 호출) ───────────
 
 #[tauri::command]

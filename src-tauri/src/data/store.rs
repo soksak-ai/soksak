@@ -87,6 +87,109 @@ fn fts_table(cid: i64) -> String {
     format!("fts_{cid}")
 }
 
+// [M0] 부팅 FTS 정합 backstop — 과거 비원자 put(트랜잭션화 전) crash 로 생긴 orphan FTS 행(records 에 없는
+// rowid)을 정리한다. put 트랜잭션화 이후 새 쓰기는 records+FTS 동시 커밋이라 정합 — 이건 레거시 잔재 청소.
+// 누락(records 있는데 FTS 없음)은 search 가 약간 놓칠 뿐이라 전체 재구축(비쌈)은 안 한다. 멱등·저비용.
+pub fn reconcile_fts(conn: &Connection) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare("SELECT cid, ns, coll, fts_fields FROM meta_collections")
+        .map_err(|e| e.to_string())?;
+    let metas: Vec<(i64, String, String, String)> = stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<_, _>>()
+        .map_err(|e| e.to_string())?;
+    for (cid, ns, coll, fts_json) in metas {
+        let fts: Vec<String> = serde_json::from_str(&fts_json).unwrap_or_default();
+        if fts.is_empty() {
+            continue;
+        }
+        let tbl = fts_table(cid);
+        conn.execute(
+            &format!(
+                "DELETE FROM {tbl} WHERE rowid NOT IN (SELECT rowid FROM records WHERE ns=?1 AND coll=?2)"
+            ),
+            (&ns, &coll),
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// [단계①·R5] retention 공통 — rowid 집합을 records+FTS 동시 삭제(whole-record, mid-record 절단 금지).
+// trim(count)/reap(TTL) 이 rowid 선택만 다르고 삭제 경로는 이 한 유틸을 공유(단일 진실). 호출부가 트랜잭션
+// 소유(conn 은 그 tx 의 deref — half-evicted 방지). FTS 는 선언된 경우만.
+fn delete_rowids(conn: &Connection, ns: &str, coll: &str, rowids: &[i64]) -> Result<(), String> {
+    if rowids.is_empty() {
+        return Ok(());
+    }
+    if let Some(meta) = get_meta(conn, ns, coll)? {
+        if !meta.fts.is_empty() {
+            let tbl = fts_table(meta.cid);
+            for &rid in rowids {
+                conn.execute(&format!("DELETE FROM {tbl} WHERE rowid=?1"), [rid])
+                    .map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    for &rid in rowids {
+        conn.execute("DELETE FROM records WHERE rowid=?1", [rid])
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// 셀렉트한 rowid 집합 → 단일 트랜잭션 삭제(공통 래퍼).
+fn select_and_delete(
+    conn: &Connection,
+    ns: &str,
+    coll: &str,
+    sql: &str,
+    params: impl rusqlite::Params,
+) -> Result<usize, String> {
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let rowids: Vec<i64> = {
+        let mut stmt = tx.prepare(sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params, |r| r.get::<_, i64>(0))
+            .map_err(|e| e.to_string())?;
+        let mut v = Vec::new();
+        for r in rows {
+            v.push(r.map_err(|e| e.to_string())?);
+        }
+        v
+    };
+    delete_rowids(&tx, ns, coll, &rowids)?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(rowids.len())
+}
+
+// [단계①·R5] retention count FIFO — (ns,coll,scope) 수가 cap 초과 시 oldest(created) 초과분 삭제. created
+// 정렬(updated 금지: 변환 UPDATE 가 updated 를 바꾸면 축출 순서 비결정). insert 시점 호출(주기 sweep 아님).
+pub fn retention_trim(conn: &Connection, ns: &str, coll: &str, scope: &str, cap: i64) -> Result<usize, String> {
+    select_and_delete(
+        conn,
+        ns,
+        coll,
+        "SELECT rowid FROM records WHERE ns=?1 AND coll=?2 AND scope=?3 \
+         ORDER BY created ASC, rowid ASC \
+         LIMIT MAX(0, (SELECT COUNT(*) FROM records WHERE ns=?1 AND coll=?2 AND scope=?3) - ?4)",
+        (ns, coll, scope, cap),
+    )
+}
+
+// [단계①·R5] retention TTL reaper — created < cutoff_ms 인 레코드 일괄 삭제(시간축, trim 과 별개). 부팅/주기
+// 호출. scope 무관(컬렉션 전체) — orphan(live scope 외) 판정은 commands 레벨이 live 목록으로 별도 수행.
+pub fn retention_reap_ttl(conn: &Connection, ns: &str, coll: &str, cutoff_ms: i64) -> Result<usize, String> {
+    select_and_delete(
+        conn,
+        ns,
+        coll,
+        "SELECT rowid FROM records WHERE ns=?1 AND coll=?2 AND created < ?3",
+        (ns, coll, cutoff_ms),
+    )
+}
+
 // define — 멱등. 메타 upsert + FTS 가상테이블 + 인덱스 필드별 표현식 인덱스 생성.
 pub fn define(
     conn: &Connection,
@@ -131,6 +234,16 @@ pub fn define(
 
 // ── 레코드 ─────────────────────────────────────────────────────────────────────
 
+// [M0] doc 코덱 seam — records 의 doc 직렬화/역직렬화를 이 한 쌍으로 모은다. 지금(단계①)은 평문 직렬화
+// 항등. 단계②(암호화)가 scope 의 active key 로 여기에 seal(encode)/open(decode)을 끼운다 — 암호화가
+// put/get/query/search 에 흩어지지 않고 한 지점만 탄다. enc=0=평문(현재 전부). kv/meta 는 코덱 대상 아님.
+fn encode_doc(doc: &Value) -> Result<String, String> {
+    serde_json::to_string(doc).map_err(|e| e.to_string())
+}
+fn decode_doc(s: &str) -> Result<Value, String> {
+    serde_json::from_str(s).map_err(|e| e.to_string())
+}
+
 // FTS 텍스트 = 선언된 fts 필드의 문자열 값 연결(공백 구분).
 fn fts_text(doc: &Value, fields: &[String]) -> String {
     let mut parts = Vec::new();
@@ -160,19 +273,24 @@ pub fn put(
     let id = id.unwrap_or_else(gen_id);
     // canonical id 주입(doc.id = 레코드 id 항상 일치).
     doc.as_object_mut().unwrap().insert("id".to_string(), json!(id));
-    let doc_s = serde_json::to_string(&doc).map_err(|e| e.to_string())?;
+    let doc_s = encode_doc(&doc)?; // [M0] 코덱 seam(평문 항등; 단계② 가 seal 끼움)
     let now = now_millis();
-    conn.execute(
+    // [M0] records 쓰기 + FTS 동기화를 단일 트랜잭션으로 묶는다 — 과거엔 INSERT records → DELETE fts →
+    // INSERT fts 가 별도 autocommit 이라, 중간 크래시 시 records 는 있고 FTS 는 stale 인 찢긴 상태가 남았다
+    // (search 오결과 + 변환 시 doc/마커 불일치). BEGIN IMMEDIATE 로 원자화해 records+FTS 동시 커밋한다.
+    // unchecked_transaction: 단일 쓰기 커넥션(mod.rs Mutex 직렬화)이라 빌림 충돌 없음.
+    let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    tx.execute(
         "INSERT INTO records(ns,coll,scope,id,doc,created,updated) VALUES(?1,?2,?3,?4,?5,?6,?6)\
          ON CONFLICT(ns,coll,id) DO UPDATE SET scope=excluded.scope, doc=excluded.doc, updated=excluded.updated",
         (ns, coll, scope, &id, &doc_s, now),
     )
     .map_err(|e| e.to_string())?;
 
-    // FTS 동기화(선언된 경우): rowid 로 교체.
-    if let Some(meta) = get_meta(conn, ns, coll)? {
+    // FTS 동기화(선언된 경우): rowid 로 교체. (tx 는 Deref<Connection> 이라 get_meta 에 그대로 넘어간다.)
+    if let Some(meta) = get_meta(&tx, ns, coll)? {
         if !meta.fts.is_empty() {
-            let rowid: i64 = conn
+            let rowid: i64 = tx
                 .query_row(
                     "SELECT rowid FROM records WHERE ns=?1 AND coll=?2 AND id=?3",
                     (ns, coll, &id),
@@ -180,11 +298,11 @@ pub fn put(
                 )
                 .map_err(|e| e.to_string())?;
             let tbl = fts_table(meta.cid);
-            conn.execute(&format!("DELETE FROM {tbl} WHERE rowid=?1"), [rowid])
+            tx.execute(&format!("DELETE FROM {tbl} WHERE rowid=?1"), [rowid])
                 .map_err(|e| e.to_string())?;
             let text = fts_text(&doc, &meta.fts);
             if !text.is_empty() {
-                conn.execute(
+                tx.execute(
                     &format!("INSERT INTO {tbl}(rowid, text) VALUES(?1, ?2)"),
                     (rowid, text),
                 )
@@ -192,6 +310,7 @@ pub fn put(
             }
         }
     }
+    tx.commit().map_err(|e| e.to_string())?;
     Ok(id)
 }
 
@@ -220,7 +339,7 @@ pub fn get(
     }
     .map_err(|e| e.to_string())?;
     match doc {
-        Some(s) => Ok(Some(serde_json::from_str(&s).map_err(|e| e.to_string())?)),
+        Some(s) => Ok(Some(decode_doc(&s)?)), // [M0] 코덱 seam(평문 항등; 단계② 가 open 끼움)
         None => Ok(None),
     }
 }
@@ -558,6 +677,47 @@ mod tests {
 
         // 네임스페이스 격리 — 다른 ns 의 같은 컬렉션은 빈 결과.
         assert_eq!(count(&c, "other", "messages", None, None).unwrap(), 0);
+    }
+
+    // [단계①·R5] retention — cap 초과 시 oldest(created) 축출, 멱등, scope 격리.
+    #[test]
+    fn retention_trim_evicts_oldest_by_created() {
+        let c = mem();
+        define(&c, "terminal", "blocks", &["viewId".into()], &[]).unwrap();
+        let mut ids = vec![];
+        for i in 0..5 {
+            ids.push(put(&c, "terminal", "blocks", "projA", None, &json!({"viewId":"v1","n":i})).unwrap());
+        }
+        assert_eq!(count(&c, "terminal", "blocks", Some("projA"), None).unwrap(), 5);
+        // cap=3 → oldest 2 축출.
+        assert_eq!(retention_trim(&c, "terminal", "blocks", "projA", 3).unwrap(), 2);
+        assert_eq!(count(&c, "terminal", "blocks", Some("projA"), None).unwrap(), 3);
+        assert!(get(&c, "terminal", "blocks", &ids[0], Some("projA")).unwrap().is_none()); // oldest 삭제
+        assert!(get(&c, "terminal", "blocks", &ids[4], Some("projA")).unwrap().is_some()); // newest 유지
+        // cap 미만 재호출 → 0(멱등).
+        assert_eq!(retention_trim(&c, "terminal", "blocks", "projA", 3).unwrap(), 0);
+        // scope 격리 — projB 불변.
+        put(&c, "terminal", "blocks", "projB", None, &json!({"viewId":"v2"})).unwrap();
+        retention_trim(&c, "terminal", "blocks", "projA", 1).unwrap();
+        assert_eq!(count(&c, "terminal", "blocks", Some("projB"), None).unwrap(), 1);
+    }
+
+    // [단계①·R5] TTL reaper — created < cutoff 만 삭제, 신선분 유지. created 를 직접 써 시간 결정성 확보.
+    #[test]
+    fn retention_reap_ttl_drops_expired_only() {
+        let c = mem();
+        define(&c, "terminal", "blocks", &[], &[]).unwrap();
+        // created 를 명시 주입(테스트 결정성): 오래된 3 + 신선 2.
+        for (i, ts) in [(0, 1000_i64), (1, 1000), (2, 1500), (3, 5000), (4, 5000)] {
+            let id = put(&c, "terminal", "blocks", "p", None, &json!({"n": i})).unwrap();
+            c.execute("UPDATE records SET created=?1 WHERE id=?2", (ts, &id)).unwrap();
+        }
+        assert_eq!(count(&c, "terminal", "blocks", Some("p"), None).unwrap(), 5);
+        // cutoff=2000 → created<2000(1000·1000·1500) 3개 삭제, 5000·5000 유지.
+        assert_eq!(retention_reap_ttl(&c, "terminal", "blocks", 2000).unwrap(), 3);
+        assert_eq!(count(&c, "terminal", "blocks", Some("p"), None).unwrap(), 2);
+        // 재호출 멱등(이미 정리) → 0.
+        assert_eq!(retention_reap_ttl(&c, "terminal", "blocks", 2000).unwrap(), 0);
     }
 
     #[test]

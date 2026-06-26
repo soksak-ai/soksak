@@ -16,8 +16,8 @@ export interface PtyObservationCallbacks {
   onCwd?: (cwd: string) => void;
   /** 명령 시작(OSC 633;E — 셸 preexec 가 보고한 명령라인). */
   onCommandStart?: (commandLine: string) => void;
-  /** 명령 종료(OSC 133/633 D). */
-  onCommandFinished?: () => void;
+  /** 명령 종료(OSC 133/633 D). exitCode = D;<code> 의 종료코드(없거나 비수치면 undefined). */
+  onCommandFinished?: (exitCode?: number) => void;
 }
 
 export interface PtyObservationParser {
@@ -76,7 +76,9 @@ export function createPtyObservationParser(
       const cmd = semi === -1 ? body : body.slice(0, semi);
       const rest = semi === -1 ? "" : body.slice(semi + 1);
       if (cmd === "D") {
-        cb.onCommandFinished?.();
+        // D;<exitcode> — 종료코드 파싱(없거나 비수치면 undefined). R2 블록의 exitCode.
+        const code = rest === "" ? undefined : Number.parseInt(rest, 10);
+        cb.onCommandFinished?.(Number.isNaN(code as number) ? undefined : code);
       } else if (num === "633" && cmd === "P") {
         const m = /Cwd=([^;]*)/.exec(rest);
         if (m) setCwd(m[1]);

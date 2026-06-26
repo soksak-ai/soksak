@@ -51,6 +51,8 @@ pub fn open(path: &Path) -> Result<Connection, String> {
     )
     .map_err(|e| e.to_string())?;
     init_base(&conn)?;
+    // [M0] 부팅 시 FTS 정합 backstop(과거 비원자 put crash 의 orphan 청소). 멱등·저비용.
+    store::reconcile_fts(&conn)?;
     Ok(conn)
 }
 
@@ -64,6 +66,7 @@ fn init_base(conn: &Connection) -> Result<(), String> {
          CREATE TABLE IF NOT EXISTS records (\
             ns TEXT NOT NULL, coll TEXT NOT NULL, scope TEXT NOT NULL, id TEXT NOT NULL,\
             doc TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL,\
+            enc INTEGER NOT NULL DEFAULT 0, keyId TEXT,\
             PRIMARY KEY(ns, coll, id)\
          );\
          CREATE INDEX IF NOT EXISTS records_scope ON records(ns, coll, scope, updated);\
@@ -74,7 +77,33 @@ fn init_base(conn: &Connection) -> Result<(), String> {
             UNIQUE(ns, coll)\
          );",
     )
+    .map_err(|e| e.to_string())?;
+    migrate_records(conn)?;
+    // [M0] retention FIFO 는 created 정렬(updated 금지 — 변환 UPDATE 가 updated 를 바꾸면 순서 비결정, R5).
+    // enc 부분 인덱스 = 변환 재개를 O(pending) 으로(미변환 enc=0 만, R17). 둘 다 멱등.
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS records_created ON records(ns, coll, scope, created);\
+         CREATE INDEX IF NOT EXISTS records_pending ON records(ns, coll) WHERE enc=0;",
+    )
     .map_err(|e| e.to_string())
+}
+
+// [M0] 기존 DB(enc/keyId 없는) 멱등 마이그레이션 — CREATE TABLE IF NOT EXISTS 는 기존 테이블에 컬럼을
+// 추가하지 않으므로, pragma_table_info 로 부재 확인 후 ALTER ADD. 신규 DB 는 위 CREATE 에 이미 포함(no-op).
+fn migrate_records(conn: &Connection) -> Result<(), String> {
+    let has_enc: bool = conn
+        .prepare("SELECT 1 FROM pragma_table_info('records') WHERE name='enc'")
+        .map_err(|e| e.to_string())?
+        .exists([])
+        .map_err(|e| e.to_string())?;
+    if !has_enc {
+        conn.execute_batch(
+            "ALTER TABLE records ADD COLUMN enc INTEGER NOT NULL DEFAULT 0;\
+             ALTER TABLE records ADD COLUMN keyId TEXT;",
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 // ── 공용 헬퍼 ────────────────────────────────────────────────────────────────

@@ -57,7 +57,7 @@ export interface PluginEventMap {
   };
   // 터미널 명령 종료(OSC 133/633 셸 통합 탐지 — 폴링 없음). git 뷰 등의 자동
   // 갱신 트리거. projectId 는 pane 의 소속 프로젝트(못 찾으면 null).
-  "command.finished": { projectId: string | null; paneId: string };
+  "command.finished": { projectId: string | null; paneId: string; exitCode?: number };
   // 오픈 토픽 "턴 종료" — provider 3종: shell(OSC133 명령 종료), idle(출력 유휴 휴리스틱,
   // 기본 OFF), acp(ACP 플러그인이 bus 로 발행 → 코어가 hooks 로 미러). 메일함 self-subscribe 가
   // 구독해 턴 종료 시 기계적으로 메시지 생성. 코어는 특정 플러그인을 모른다(결합 0) — 토픽 계약만.
@@ -71,6 +71,8 @@ export interface PluginEventMap {
     // 끝난 명령 컨텍스트(shell provider 한정 — 본문 enrich 용). idle/acp 는 없음(undefined).
     command?: string | null;
     cwd?: string | null;
+    // 종료코드(R2 — shell provider OSC133 D;<code>). 없으면 undefined(코드 미동반/비-shell).
+    exitCode?: number;
   };
 }
 
@@ -300,10 +302,10 @@ export function startPluginHooks(): void {
 
   // 터미널 명령 종료 → 플러그인 이벤트(git 뷰 자동 갱신 등). 이산 이벤트라
   // coalesce 불필요 — 발생 빈도 = 사용자가 명령을 끝내는 빈도.
-  subscribeAnyCommandFinished((paneId, commandLine, cwd) => {
+  subscribeAnyCommandFinished((paneId, commandLine, cwd, exitCode) => {
     const info = projectInfoOfPane(paneId);
-    emitPluginEvent("command.finished", { projectId: info?.id ?? null, paneId });
-    // shell provider: 명령 종료 = turn.ended(source shell). 끝난 명령라인/cwd 동반(본문 enrich).
+    emitPluginEvent("command.finished", { projectId: info?.id ?? null, paneId, exitCode });
+    // shell provider: 명령 종료 = turn.ended(source shell). 끝난 명령라인/cwd/exitCode(R2) 동반(본문 enrich).
     emitPluginEvent("turn.ended", {
       projectId: info?.id ?? null,
       root: info?.root ?? null,
@@ -311,6 +313,7 @@ export function startPluginHooks(): void {
       source: "shell",
       command: commandLine ?? null,
       cwd: cwd ?? null,
+      exitCode,
     });
   });
 

@@ -19,7 +19,7 @@ import {
 /** 모든 pane 의 명령 종료를 구독(turn.ended 본문 enrich — 끝난 명령라인·cwd 동반). 반환=해지.
  *  [위임] substrate store 의 동명 구독으로 forward(플러그인 터미널 producer). */
 export function subscribeAnyCommandFinished(
-  cb: (paneId: string, commandLine?: string | null, cwd?: string | null) => void,
+  cb: (paneId: string, commandLine?: string | null, cwd?: string | null, exitCode?: number) => void,
 ): () => void {
   return storeSubAnyFinish(cb);
 }

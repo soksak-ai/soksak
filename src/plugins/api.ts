@@ -230,6 +230,10 @@ export interface SoksakPluginApi {
       collection: string,
       opts?: { scope?: string; where?: Record<string, unknown> },
     ) => Promise<number>;
+    /** retention(R5) — (coll,scope) 수가 cap 초과 시 oldest(created) 축출. 반환=삭제 수. 영속 컬렉션이 호출. */
+    retentionTrim: (collection: string, scope: string, cap: number) => Promise<number>;
+    /** retention(R5) — created < cutoffMs 인 레코드 삭제(시간축). 반환=삭제 수. */
+    retentionReap: (collection: string, cutoffMs: number) => Promise<number>;
     /** 변경 구독 — 이 ns·coll(+scope 지정 시 그 scope)의 put/delete 시 콜백(전 창). 반환=해지. */
     watch: (
       collection: string,
@@ -1152,6 +1156,20 @@ export function buildPluginApi(
               coll: collection,
               scope: opts?.scope ?? null,
               filter: opts?.where ?? null,
+            }) as Promise<number>,
+          // retention(R5) — count FIFO trim / TTL reaper. 반환=삭제 수. 터미널 블록 등 영속 컬렉션이 호출.
+          retentionTrim: (collection, scope, cap) =>
+            deps.invoke("data_retention_trim", {
+              ns: id,
+              coll: collection,
+              scope,
+              cap,
+            }) as Promise<number>,
+          retentionReap: (collection, cutoffMs) =>
+            deps.invoke("data_retention_reap", {
+              ns: id,
+              coll: collection,
+              cutoff_ms: cutoffMs,
             }) as Promise<number>,
           watch: (collection, opts, cb) => {
             const un = deps.onDataChange((e) => {

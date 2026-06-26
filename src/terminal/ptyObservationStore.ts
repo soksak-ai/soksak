@@ -42,7 +42,7 @@ const anyCmdStartSubs = new Set<
   (paneId: string, commandLine: string, cwd: string | null) => void
 >();
 const anyCmdFinishedSubs = new Set<
-  (paneId: string, commandLine?: string | null, cwd?: string | null) => void
+  (paneId: string, commandLine?: string | null, cwd?: string | null, exitCode?: number) => void
 >();
 
 /**
@@ -69,13 +69,13 @@ export function registerPtyObservation(paneId: string): void {
       for (const cb of [...anyCmdStartSubs])
         cb(paneId, commandLine, obs.cwd ?? null);
     },
-    onCommandFinished: () => {
-      // 삭제 직전 끝난 명령 캡처 → turn.ended 본문이 "어떤 명령이 끝났는지" 를 담는다.
+    onCommandFinished: (exitCode) => {
+      // 삭제 직전 끝난 명령 캡처 → turn.ended 본문이 "어떤 명령이 끝났는지 + 종료코드(R2)" 를 담는다.
       const fin = obs.running;
       obs.running = null;
       for (const cb of [...obs.cmdFinishedSubs]) cb();
       for (const cb of [...anyCmdFinishedSubs])
-        cb(paneId, fin?.commandLine ?? null, fin?.cwd ?? null);
+        cb(paneId, fin?.commandLine ?? null, fin?.cwd ?? null, exitCode);
     },
   });
   panes.set(paneId, obs);
@@ -110,15 +110,15 @@ export function pushObservedCommandStart(paneId: string, commandLine: string): v
   for (const cb of [...anyCmdStartSubs]) cb(paneId, commandLine, obs.cwd ?? null);
 }
 
-/** 코어 producer: 명령 종료 푸시(pane + 전역 구독자, 끝난 명령라인·cwd 동반, running clear). */
-export function pushObservedCommandFinished(paneId: string): void {
+/** 코어 producer: 명령 종료 푸시(pane + 전역 구독자, 끝난 명령라인·cwd·exitCode(R2) 동반, running clear). */
+export function pushObservedCommandFinished(paneId: string, exitCode?: number): void {
   const obs = panes.get(paneId);
   if (!obs) return;
   const fin = obs.running;
   obs.running = null;
   for (const cb of [...obs.cmdFinishedSubs]) cb();
   for (const cb of [...anyCmdFinishedSubs])
-    cb(paneId, fin?.commandLine ?? null, fin?.cwd ?? null);
+    cb(paneId, fin?.commandLine ?? null, fin?.cwd ?? null, exitCode);
 }
 
 /** 코어 producer: 출력 변경 푸시(화면 갱신 통지 — 라이브 스트림·입력 검증용). */
@@ -232,7 +232,7 @@ export function subscribeAnyCommandStarted(
 
 /** 모든 pane 의 명령 종료 구독(command.finished/turn.ended 중계용). 끝난 명령라인·cwd 동반. 반환=해지. */
 export function subscribeAnyCommandFinished(
-  cb: (paneId: string, commandLine?: string | null, cwd?: string | null) => void,
+  cb: (paneId: string, commandLine?: string | null, cwd?: string | null, exitCode?: number) => void,
 ): () => void {
   anyCmdFinishedSubs.add(cb);
   return () => {
