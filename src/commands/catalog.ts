@@ -1617,6 +1617,11 @@ export function registerCatalog(): void {
         type: "number",
         description: "Settle wait after setting the start mode (default 800)",
       },
+      skipCapture: {
+        type: "boolean",
+        description:
+          "Measure latency only (applyJsMs, applyReflowMs) and skip frame capture — fast, robust even when the window is backgrounded. For A/B latency tuning.",
+      },
       regions: {
         type: "json",
         description:
@@ -1672,6 +1677,28 @@ export function registerCatalog(): void {
         stage = "applyStart";
         useTheme.getState().apply(theme, startMode);
         await sleep(settleMs);
+        // 1b) clean 지연 측정(캡처 전, 동시 캡처가 rAF 를 느리게 해 오염되지 않게). rAF 대신 강제
+        // reflow(offsetHeight)로 동기 style recalc+layout 을 잰다 — 백그라운드 창에서도 견고
+        // (paint/composite 는 제외되나 recalc+layout 이 테마 변경의 주 비용). applyJsMs=동기 JS
+        // (플러그인 theme.changed 핸들러), applyReflowMs=그 위에 recalc+layout 까지.
+        stage = "measurePaint";
+        const applyT0 = performance.now();
+        useTheme.getState().apply(theme, endMode);
+        const applyJsMs = performance.now() - applyT0;
+        void document.documentElement.offsetHeight;
+        const applyReflowMs = performance.now() - applyT0;
+        // skipCapture: 캡처 없이 지연만 — 빠르고 견고(가려진 창·헤드리스에서도). 최적화 A/B 용.
+        if (p.skipCapture) {
+          useTheme.getState().apply(prevTheme, prevMode);
+          return {
+            applyJsMs: Math.round(applyJsMs),
+            applyReflowMs: Math.round(applyReflowMs),
+            skipped: "capture",
+          };
+        }
+        // 캡처 패스를 위해 다시 startMode 로 되돌리고 짧게 settle.
+        useTheme.getState().apply(theme, startMode);
+        await sleep(250);
         // 2) 녹화 시작(비대기) → applyAtMs 후 끝 모드로 토글 → 녹화 완료 대기.
         stage = "record";
         const recT0 = performance.now();
@@ -1718,6 +1745,8 @@ export function registerCatalog(): void {
         return {
           frames: n,
           frameMs: Math.round(realFrameMs),
+          applyJsMs: Math.round(applyJsMs),
+          applyReflowMs: Math.round(applyReflowMs),
           spreadFrames,
           spreadMs: Math.round(spreadFrames * realFrameMs),
           atomic: spreadFrames === 0,
