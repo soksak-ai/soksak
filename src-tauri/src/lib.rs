@@ -107,6 +107,16 @@ pub fn run() {
                     Ok(p) => st.set_path(p),
                     Err(e) => eprintln!("[secrets] 볼트 경로 계산 실패: {e}"),
                 }
+                // [R23] app.data 에 봉투 키가 등록돼 있으면 vault 가 있어야 한다 — 부재 시 새 vault 자동생성
+                // 거부 플래그를 켠다(임의 passphrase 통과+전손 차단). data DB 가 열린 뒤라 조회 가능.
+                let expect = match app.state::<data::DbState>().conn.lock() {
+                    Ok(g) => g
+                        .as_ref()
+                        .map(|c| data::crypto::has_any_keys(c).unwrap_or(false))
+                        .unwrap_or(false),
+                    Err(_) => false,
+                };
+                st.set_expect_vault(expect);
                 secrets::auto_unlock_from_env(&st);
             }
             // [단계③] auto-lock 틱 — idle 타임아웃 경과 시 vault 를 잠그고 전 창에 broadcast(터미널 폐기·

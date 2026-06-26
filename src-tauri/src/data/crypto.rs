@@ -124,6 +124,15 @@ fn decode_pk(b64: &str) -> Result<[u8; 32], String> {
     Ok(p)
 }
 
+// [R23] 이 DB 에 봉투 키가 하나라도 등록됐는가 — 등록됐다면 그 개인키 S 가 vault 에 있어야 한다(과거
+// vault 존재 증거). 부팅 시 이게 true 인데 vault 파일이 없으면(삭제·손실) secrets 가 새 vault 자동생성을
+// 거부한다 — 임의 passphrase 가 통과해 봉인 레코드가 영구 복호불가가 되는 footgun 차단(prevention).
+pub fn has_any_keys(conn: &Connection) -> Result<bool, String> {
+    conn.query_row("SELECT EXISTS(SELECT 1 FROM encryption_keys)", [], |r| r.get::<_, i64>(0))
+        .map(|n| n != 0)
+        .map_err(|e| e.to_string())
+}
+
 // scope 의 active 키 — Some 이면 이 scope 의 put 은 반드시 봉인해야(fail-closed 트리거).
 pub fn active_key(conn: &Connection, scope: &str) -> Result<Option<ActiveKey>, String> {
     let row = conn

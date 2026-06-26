@@ -306,6 +306,9 @@ pub struct SecretsState {
     idle_timeout_ms: Mutex<i64>,  // 0 = 비활성. set_idle_timeout 으로 설정.
     last_activity_ms: Mutex<i64>, // 프론트가 활동 시 touch. unlock 도 touch(즉시 재잠금 방지).
     lock_epoch: Mutex<u64>,       // lock 마다 +1 — 프론트가 stale lock 상태 구분, broadcast 페이로드.
+    // [R23] true 면 vault 가 있어야 한다(app.data 에 봉투 키 등록됨). 부팅 시 setup 이 설정 — vault 파일이
+    // 없는데 이게 true 면 unlock 의 새 vault 자동생성을 거부한다(임의 passphrase 통과+전손 차단).
+    expect_vault: Mutex<bool>,
 }
 
 // 현재 시각(ms) — auto-lock 판정·touch 용. data::now_millis 와 동일 계산(자기완결).
@@ -439,6 +442,15 @@ impl SecretsState {
                 (vault, kek)
             }
             None => {
+                // [R23] vault 가 있어야 하는데(봉투 키 등록됨) 파일이 없으면 — 삭제·손실 의심. 임의
+                // passphrase 로 새 vault 를 자동생성하면 그게 통과해 봉인 레코드가 영구 복호불가가 된다.
+                // 거부하고 백업 vault 복원을 유도한다(전손 footgun 차단).
+                if self.expect_vault.lock().map(|g| *g).unwrap_or(false) {
+                    return Err(
+                        "vault 파일 부재 + 암호화 키 등록됨 — 손실/삭제 의심. 임의 passphrase 로 새 vault 생성 거부(백업 복원 필요)"
+                            .to_string(),
+                    );
+                }
                 let (vault, kek) = Self::new_vault(pw)?;
                 Self::flush(&path, &vault)?;
                 (vault, kek)
@@ -487,6 +499,13 @@ impl SecretsState {
 
     pub fn lock_epoch(&self) -> u64 {
         self.lock_epoch.lock().map(|g| *g).unwrap_or(0)
+    }
+
+    // [R23] 부팅 시 app.data 에 봉투 키가 있으면 setup 이 true 로 — 그럼 vault 부재 시 새 vault 자동생성을 막는다.
+    pub fn set_expect_vault(&self, expect: bool) {
+        if let Ok(mut g) = self.expect_vault.lock() {
+            *g = expect;
+        }
     }
 
     // 지금 자동 잠금해야 하는가 — unlock 상태 + 타임아웃>0 + (now - 마지막활동) ≥ 타임아웃. 순수 판정
@@ -932,6 +951,26 @@ mod tests {
         let mut t2 = seal_to(&p, b"value", AAD1).unwrap();
         t2.eph_pk[0] ^= 0xff;
         assert!(open_sealed(&s, &t2, AAD1).is_err(), "eph_pk 변조 거부");
+    }
+
+    // (r23, B8) vault must-exist — 키가 등록된 상태(expect_vault)에서 vault 파일이 없으면 unlock 이 새
+    // vault 자동생성을 거부한다(임의 passphrase 통과+전손 차단). expect 없으면 정상 생성(첫 실행).
+    #[test]
+    fn vault_must_exist_gate() {
+        let (s, dir) = state_with_tmp_vault("mustexist");
+        // 첫 실행 — expect 없음 → 새 vault 생성 정상.
+        s.unlock("pw").unwrap();
+        s.lock().unwrap();
+        // vault 파일 삭제(손실 모의) + expect_vault 켜기(키 등록됨 가정).
+        let path = s.vault_file().unwrap();
+        std::fs::remove_file(&path).unwrap();
+        s.set_expect_vault(true);
+        // 임의 passphrase 로 unlock 시도 → 거부(새 vault 자동생성 안 함).
+        assert!(s.unlock("any-passphrase").is_err(), "vault 부재+키등록 → 자동생성 거부");
+        // expect 끄면(키 없음) 다시 생성 허용.
+        s.set_expect_vault(false);
+        assert!(s.unlock("pw").is_ok(), "expect 없으면 새 vault 생성 허용");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // (lock-a, 단계③) auto_lock_due 판정 — lock 이면 false, 타임아웃 0 이면 false, idle 경과 시 true,
