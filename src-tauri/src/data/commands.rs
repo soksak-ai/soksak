@@ -199,10 +199,12 @@ pub fn data_search(
     scope: Option<String>,
     limit: Option<i64>,
     state: State<'_, DbState>,
+    secrets: State<'_, SecretsState>,
 ) -> Result<Vec<Value>, String> {
     validate_ns(&ns)?;
+    let resolver = |key_id: &str| secrets.get_data_key(key_id);
     with_conn(&state, |c| {
-        store::search(c, &ns, &coll, &query, scope.as_deref(), limit)
+        store::search(c, &ns, &coll, &query, scope.as_deref(), limit, Some(&resolver))
     })
 }
 
@@ -257,6 +259,7 @@ pub struct EncryptionStatus {
     pub key_id: Option<String>,
     pub algo: Option<String>,
     pub unlocked: bool,       // vault(개인키 S) 해제 여부 — 복호 가능 조건
+    pub tampered: bool,       // [blocker④] publicKey 가 vault S 와 불일치(키스왑 탐지). unlock 상태에서만 판정.
 }
 
 // scope 암호화 활성 — X25519 키페어 생성, 개인키 S 를 vault 에 wrap(먼저), 공개키 P 를 테이블에 등록.
@@ -285,6 +288,28 @@ pub fn data_encryption_enable(
     Ok(key_id)
 }
 
+// 기존 평문 레코드 봉인 변환(R17) — 암호화 활성 후 이미 쌓인 (ns,coll,scope) 평문을 active key 로 봉인.
+// 레코드별 단일 트랜잭션이라 크래시 재개 가능. 배치 반복으로 전부 변환, 반환=변환 수.
+#[tauri::command]
+pub fn data_encryption_convert(
+    ns: String,
+    coll: String,
+    scope: String,
+    state: State<'_, DbState>,
+) -> Result<usize, String> {
+    validate_ns(&ns)?;
+    let mut total = 0usize;
+    loop {
+        // 암호화 활성 scope 에선 새 put 이 이미 봉인(enc=1)이라 enc=0 은 줄기만 한다 → n==0 = 잔여 0.
+        let n = with_conn(&state, |c| store::convert_pending(c, &ns, &coll, &scope, 512))?;
+        total += n;
+        if n == 0 {
+            break;
+        }
+    }
+    Ok(total)
+}
+
 // scope 암호화 상태 — enabled(트리거), keyId, algo, vault unlock 여부(복호 가능 조건).
 #[tauri::command]
 pub fn data_encryption_status(
@@ -293,11 +318,21 @@ pub fn data_encryption_status(
     secrets: State<'_, SecretsState>,
 ) -> Result<EncryptionStatus, String> {
     let ak = with_conn(&state, |c| crypto::active_key(c, &scope))?;
+    let unlocked = secrets.is_unlocked();
+    // [blocker④] unlock 상태에서만 키스왑 판정 가능(S 필요). lock 이면 tampered=false(미판정).
+    let tampered = match (&ak, unlocked) {
+        (Some(k), true) => match secrets.get_data_key(&k.key_id)? {
+            Some(s) => !with_conn(&state, |c| crypto::verify_active_key(c, &scope, &s))?,
+            None => false, // S 부재(키 미보관) — 별도 무결성 이슈지만 스왑 판정은 보류
+        },
+        _ => false,
+    };
     Ok(EncryptionStatus {
         enabled: ak.is_some(),
         key_id: ak.as_ref().map(|k| k.key_id.clone()),
         algo: ak.as_ref().map(|_| crypto::ALGO_V1.to_string()),
-        unlocked: secrets.is_unlocked(), // vault 해제 = S 복호 가능 조건
+        unlocked,
+        tampered,
     })
 }
 

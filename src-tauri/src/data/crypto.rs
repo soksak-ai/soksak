@@ -169,6 +169,16 @@ pub fn register_active_key(
     tx.commit().map_err(|e| e.to_string())
 }
 
+// [blocker④] active key 의 publicKey P 가 vault 의 개인키 S 에서 파생됐는지 검증 — P==basepoint(S).
+// 공격자가 encryption_keys.publicKey 를 자기 키로 스왑하면 byte-eq 가 깨진다 → 탐지. S 는 vault 에서
+// (호출자가 unlock 후 get_data_key 로). 키 없으면 검증 대상 아님(true). 스왑 탐지 시 false.
+pub fn verify_active_key(conn: &Connection, scope: &str, secret: &[u8; 32]) -> Result<bool, String> {
+    match active_key(conn, scope)? {
+        Some(ak) => Ok(crate::secrets::public_from_secret(secret) == ak.public_key),
+        None => Ok(true),
+    }
+}
+
 // 특정 키로 봉인된(enc=1) 레코드 수 — retired 키 폐기 가드(R18: 0 일 때만 폐기 안전).
 pub fn count_sealed_with_key(conn: &Connection, scope: &str, key_id: &str) -> Result<i64, String> {
     conn.query_row(
@@ -308,6 +318,25 @@ mod tests {
             )
             .unwrap();
         assert_eq!(n, 1, "scope 당 active 1개 불변");
+    }
+
+    // (k-d, blocker④) 키스왑 탐지 — publicKey 를 공격자 P 로 변조하면 verify_active_key 가 false.
+    #[test]
+    fn key_swap_detected() {
+        let c = mem();
+        let (s, p) = gen_asym_keypair();
+        register_active_key(&c, "proj-a", "key-1", &p, 100).unwrap();
+        assert!(verify_active_key(&c, "proj-a", &s).unwrap(), "정상 키페어는 검증 통과");
+        // 공격자가 테이블의 publicKey 를 자기 P 로 스왑.
+        let (_s_atk, p_atk) = gen_asym_keypair();
+        c.execute(
+            "UPDATE encryption_keys SET publicKey=?1 WHERE scope='proj-a' AND keyId='key-1'",
+            [base64::engine::general_purpose::STANDARD.encode(p_atk)],
+        )
+        .unwrap();
+        assert!(!verify_active_key(&c, "proj-a", &s).unwrap(), "스왑된 P 는 우리 S 와 불일치 → 탐지");
+        // 키 없는 scope 는 검증 대상 아님(true).
+        assert!(verify_active_key(&c, "proj-z", &s).unwrap());
     }
 
     // (k-c, R18) retired 폐기 가드 — 그 키로 봉인된 enc=1 레코드가 있으면 폐기 거부, 0 이면 성공.

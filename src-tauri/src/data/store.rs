@@ -328,37 +328,120 @@ pub fn put(
     )
     .map_err(|e| e.to_string())?;
 
-    // FTS 동기화(선언된 경우): rowid 로 교체. 봉인 시엔 평문(인덱스) 필드만 FTS 가능 — 봉인된 fts 필드를
-    // 평문 색인하면 자격증명이 FTS 테이블에 노출된다(R19). 그래서 enc=1 이면 대상 = fts ∩ idx 로 제한.
-    if let Some(meta) = meta {
-        if !meta.fts.is_empty() {
-            let rowid: i64 = tx
-                .query_row(
-                    "SELECT rowid FROM records WHERE ns=?1 AND coll=?2 AND id=?3",
-                    (ns, coll, &id),
-                    |r| r.get(0),
-                )
-                .map_err(|e| e.to_string())?;
-            let tbl = fts_table(meta.cid);
-            tx.execute(&format!("DELETE FROM {tbl} WHERE rowid=?1"), [rowid])
-                .map_err(|e| e.to_string())?;
-            let fts_fields: Vec<String> = if enc == 1 {
-                meta.fts.iter().filter(|f| idx_fields.iter().any(|i| i == *f)).cloned().collect()
-            } else {
-                meta.fts.clone()
-            };
-            let text = fts_text(&doc, &fts_fields);
-            if !text.is_empty() {
-                tx.execute(
-                    &format!("INSERT INTO {tbl}(rowid, text) VALUES(?1, ?2)"),
-                    (rowid, text),
-                )
-                .map_err(|e| e.to_string())?;
-            }
-        }
+    if let Some(meta) = &meta {
+        sync_fts(&tx, meta, ns, coll, &id, &doc, enc, &idx_fields)?;
     }
     tx.commit().map_err(|e| e.to_string())?;
     Ok(id)
+}
+
+// FTS 재동기화 — 한 행의 FTS 텍스트를 doc·enc 기준으로 교체(rowid). 봉인(enc=1)이면 평문 인덱스 필드만
+// 색인(fts ∩ idx) — 봉인된 fts 필드를 평문 색인하면 자격증명이 FTS 테이블에 노출된다(R19). put·convert 공용.
+fn sync_fts(
+    tx: &Connection,
+    meta: &Meta,
+    ns: &str,
+    coll: &str,
+    id: &str,
+    doc: &Value,
+    enc: i64,
+    idx_fields: &[String],
+) -> Result<(), String> {
+    if meta.fts.is_empty() {
+        return Ok(());
+    }
+    let rowid: i64 = tx
+        .query_row(
+            "SELECT rowid FROM records WHERE ns=?1 AND coll=?2 AND id=?3",
+            (ns, coll, id),
+            |r| r.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+    let tbl = fts_table(meta.cid);
+    tx.execute(&format!("DELETE FROM {tbl} WHERE rowid=?1"), [rowid])
+        .map_err(|e| e.to_string())?;
+    let fts_fields: Vec<String> = if enc == 1 {
+        meta.fts.iter().filter(|f| idx_fields.iter().any(|i| i == *f)).cloned().collect()
+    } else {
+        meta.fts.clone()
+    };
+    let text = fts_text(doc, &fts_fields);
+    if !text.is_empty() {
+        tx.execute(&format!("INSERT INTO {tbl}(rowid, text) VALUES(?1, ?2)"), (rowid, text))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// [R17] scope 의 평문(enc=0) 레코드를 active key 로 봉인 변환. 레코드별 단일 트랜잭션 — 멱등(WHERE enc=0:
+// 이미 봉인된 행은 0 rows, 이중봉인 불가, blocker②) + 동시 삭제와 무경합(삭제된 행은 UPDATE 0 rows, 부활
+// 0, blocker③). created/updated 미변경(retention FIFO 순서 불변, R5). 크래시 시 enc=0/1 혼재로 남고
+// 재호출이 이어받는다(records_pending 인덱스로 O(pending) 재개). batch 로 끊어 락 시간 바운드. 반환=변환 수.
+pub fn convert_pending(
+    conn: &Connection,
+    ns: &str,
+    coll: &str,
+    scope: &str,
+    batch: i64,
+) -> Result<usize, String> {
+    let ak = match super::crypto::active_key(conn, scope)? {
+        Some(k) => k,
+        None => return Ok(0), // 트리거 없으면 변환 대상 아님
+    };
+    let meta = get_meta(conn, ns, coll)?;
+    let idx_fields = meta.as_ref().map(|m| m.idx.clone()).unwrap_or_default();
+    let ids: Vec<String> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT id FROM records WHERE ns=?1 AND coll=?2 AND scope=?3 AND enc=0 \
+                 ORDER BY created ASC, rowid ASC LIMIT ?4",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map((ns, coll, scope, batch.max(0)), |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        let mut v = Vec::new();
+        for r in rows {
+            v.push(r.map_err(|e| e.to_string())?);
+        }
+        v
+    };
+    let mut n = 0usize;
+    for id in ids {
+        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        // tx 안에서 enc=0 재확인 — 멱등·경합 안전(이미 변환/삭제됐으면 None → skip).
+        let doc_s: Option<String> = tx
+            .query_row(
+                "SELECT doc FROM records WHERE ns=?1 AND coll=?2 AND id=?3 AND enc=0",
+                (ns, coll, &id),
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        let Some(doc_s) = doc_s else {
+            tx.commit().map_err(|e| e.to_string())?;
+            continue;
+        };
+        let doc = decode_doc(&doc_s)?;
+        let aad = super::crypto::canonical_aad(ns, coll, scope, &id, &ak.key_id);
+        let sealed = super::crypto::seal_doc(&doc, &idx_fields, &ak.public_key, &ak.key_id, &aad)?;
+        let sealed_s = encode_doc(&sealed)?;
+        // created/updated 손대지 않음(retention 순서 불변). WHERE enc=0 으로 멱등.
+        let updated = tx
+            .execute(
+                "UPDATE records SET doc=?4, enc=1, keyId=?5 WHERE ns=?1 AND coll=?2 AND id=?3 AND enc=0",
+                (ns, coll, &id, &sealed_s, &ak.key_id),
+            )
+            .map_err(|e| e.to_string())?;
+        if updated == 1 {
+            if let Some(m) = &meta {
+                sync_fts(&tx, m, ns, coll, &id, &doc, 1, &idx_fields)?; // 봉인 후 FTS = fts ∩ idx
+            }
+            n += 1;
+        }
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    Ok(n)
 }
 
 pub fn get(
@@ -630,6 +713,8 @@ pub fn count(
 }
 
 // search — CJK 전문검색. 쿼리 ≥3 코드포인트면 FTS5 trigram MATCH, 미만이면 LIKE 폴백(소량).
+// 봉인 레코드는 봉인 필드가 FTS·doc 평문에 없으므로 매치되지 않지만(R19), 평문 인덱스로 매치된 enc=1 행은
+// resolve_sk 로 개봉해 반환(없으면 게이트) — 읽기 경로 일관성(decode_stored 단일 지점).
 pub fn search(
     conn: &Connection,
     ns: &str,
@@ -637,6 +722,7 @@ pub fn search(
     query_text: &str,
     scope: Option<&str>,
     limit: Option<i64>,
+    resolve_sk: Option<SkResolver>,
 ) -> Result<Vec<Value>, String> {
     let lim = limit.unwrap_or(50).clamp(0, 2000);
     let meta = get_meta(conn, ns, coll)?;
@@ -651,7 +737,7 @@ pub fn search(
         let mut params: Vec<Box<dyn ToSql>> =
             vec![Box::new(m), Box::new(ns.to_string()), Box::new(coll.to_string())];
         let mut sql = format!(
-            "SELECT r.doc FROM {tbl} f JOIN records r ON r.rowid=f.rowid \
+            "SELECT r.doc, r.scope, r.id, r.enc, r.keyId FROM {tbl} f JOIN records r ON r.rowid=f.rowid \
              WHERE f.text MATCH ?1 AND r.ns=?2 AND r.coll=?3"
         );
         if let Some(s) = scope {
@@ -661,21 +747,16 @@ pub fn search(
         sql.push_str(&format!(" ORDER BY r.updated DESC LIMIT {lim}"));
         let refs: Vec<&dyn ToSql> = params.iter().map(|b| b.as_ref()).collect();
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map(refs.as_slice(), |r| r.get::<_, String>(0))
-            .map_err(|e| e.to_string())?;
-        let mut out = Vec::new();
-        for row in rows {
-            out.push(serde_json::from_str(&row.map_err(|e| e.to_string())?).map_err(|e: serde_json::Error| e.to_string())?);
-        }
-        Ok(out)
+        search_collect(&mut stmt, refs.as_slice(), ns, coll, resolve_sk)
     } else {
-        // 폴백 — doc 전체 LIKE(짧은 쿼리·FTS 미선언 컬렉션). scope 로 좁힘.
+        // 폴백 — doc 전체 LIKE(짧은 쿼리·FTS 미선언 컬렉션). scope 로 좁힘. 봉인 doc 은 암호문이라 평문 LIKE 와
+        // 매치 안 됨(자격증명 누출 0) — 매치는 평문 인덱스/id 뿐.
         let like = format!("%{}%", query_text);
         let mut params: Vec<Box<dyn ToSql>> =
             vec![Box::new(ns.to_string()), Box::new(coll.to_string()), Box::new(like)];
-        let mut sql =
-            String::from("SELECT doc FROM records WHERE ns=?1 AND coll=?2 AND doc LIKE ?3");
+        let mut sql = String::from(
+            "SELECT doc, scope, id, enc, keyId FROM records WHERE ns=?1 AND coll=?2 AND doc LIKE ?3",
+        );
         if let Some(s) = scope {
             sql.push_str(" AND scope=?4");
             params.push(Box::new(s.to_string()));
@@ -683,15 +764,35 @@ pub fn search(
         sql.push_str(&format!(" ORDER BY updated DESC LIMIT {lim}"));
         let refs: Vec<&dyn ToSql> = params.iter().map(|b| b.as_ref()).collect();
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map(refs.as_slice(), |r| r.get::<_, String>(0))
-            .map_err(|e| e.to_string())?;
-        let mut out = Vec::new();
-        for row in rows {
-            out.push(serde_json::from_str(&row.map_err(|e| e.to_string())?).map_err(|e: serde_json::Error| e.to_string())?);
-        }
-        Ok(out)
+        search_collect(&mut stmt, refs.as_slice(), ns, coll, resolve_sk)
     }
+}
+
+// search 두 분기 공용 — (doc,scope,id,enc,keyId) 행을 decode_stored 로 디코드(봉인 행은 resolve_sk 로 개봉).
+fn search_collect(
+    stmt: &mut rusqlite::Statement,
+    params: &[&dyn ToSql],
+    ns: &str,
+    coll: &str,
+    resolve_sk: Option<SkResolver>,
+) -> Result<Vec<Value>, String> {
+    let rows = stmt
+        .query_map(params, |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, i64>(3)?,
+                r.get::<_, Option<String>>(4)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for row in rows {
+        let (doc_s, row_scope, id, enc, key_id) = row.map_err(|e| e.to_string())?;
+        out.push(decode_stored(ns, coll, &row_scope, &id, &doc_s, enc, key_id.as_deref(), resolve_sk)?);
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -788,6 +889,55 @@ mod tests {
         assert!(query(&c, "terminal", "command_blocks", Some("proj-a"), None, None, true, None, None, Some(&locked)).is_err(), "lock query Err");
     }
 
+    // [단계②·R17] 변환 — 기존 평문(enc=0) 레코드를 active key 로 봉인. 멱등(재호출 no-op), 이중봉인 0,
+    // created 보존(retention 순서 불변), 봉인 후 인덱스 query·S 개봉 가능, FTS 에서 봉인 필드 제거.
+    #[test]
+    fn convert_pending_seals_existing_plaintext() {
+        use super::super::crypto;
+        let c = mem();
+        define(&c, "terminal", "command_blocks", &["viewId".into()], &["commandLine".into()]).unwrap();
+        // 평문 레코드 3개(키 없을 때 — enc=0).
+        let mut ids = Vec::new();
+        for i in 0..3 {
+            ids.push(put(&c, "terminal", "command_blocks", "proj-a", None,
+                &json!({"viewId":format!("t{i}"),"commandLine":format!("cmd{i} secret{i}"),"output":format!("out{i}")})).unwrap());
+        }
+        // created 기록(변환이 안 바꿔야).
+        let created_before: Vec<i64> = ids.iter().map(|id|
+            c.query_row("SELECT created FROM records WHERE id=?1", [id], |r| r.get(0)).unwrap()).collect();
+        // FTS 가 commandLine 평문 색인 중 — search 로 확인.
+        assert_eq!(search(&c, "terminal", "command_blocks", "secret1", None, None, None).unwrap().len(), 1, "변환 전 FTS 검색 1건");
+
+        // 암호화 활성 후 변환.
+        let (s, p) = crate::secrets::gen_asym_keypair();
+        crypto::register_active_key(&c, "proj-a", "key-1", &p, 50).unwrap();
+        let n = convert_pending(&c, "terminal", "command_blocks", "proj-a", 100).unwrap();
+        assert_eq!(n, 3, "평문 3건 봉인 변환");
+
+        // 멱등 — 재호출 0건(이미 enc=1, WHERE enc=0 → no-op, 이중봉인 0).
+        assert_eq!(convert_pending(&c, "terminal", "command_blocks", "proj-a", 100).unwrap(), 0, "재변환 no-op");
+
+        for (i, id) in ids.iter().enumerate() {
+            let (enc, kid, doc_s, created): (i64, Option<String>, String, i64) = c.query_row(
+                "SELECT enc, keyId, doc, created FROM records WHERE id=?1", [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).unwrap();
+            assert_eq!(enc, 1, "변환 후 봉인");
+            assert_eq!(kid.as_deref(), Some("key-1"));
+            assert_eq!(created, created_before[i], "created 보존(retention 순서 불변)");
+            assert!(!doc_s.contains(&format!("secret{i}")), "commandLine 평문 누출 0");
+            assert!(!doc_s.contains(&format!("out{i}")), "output 평문 누출 0");
+            // S 로 개봉 → 원본 복원.
+            let stored: Value = serde_json::from_str(&doc_s).unwrap();
+            let aad = crypto::canonical_aad("terminal", "command_blocks", "proj-a", id, "key-1");
+            let opened = crypto::open_doc(&stored, &s, &aad).unwrap();
+            assert_eq!(opened["commandLine"], format!("cmd{i} secret{i}"));
+        }
+        // 봉인 후 FTS 에서 commandLine(봉인 필드) 제거 — search 0건(자격증명 평문 노출 0, R19).
+        assert_eq!(search(&c, "terminal", "command_blocks", "secret1", None, None, None).unwrap().len(), 0, "봉인 후 FTS 검색 0건");
+        // 인덱스(viewId) query 는 여전히 탄다(blocker①).
+        assert_eq!(count(&c, "terminal", "command_blocks", Some("proj-a"), Some(&json!({"viewId":"t1"}))).unwrap(), 1);
+    }
+
     #[test]
     fn kv_roundtrip() {
         let c = mem();
@@ -874,16 +1024,16 @@ mod tests {
         put(&c, "mailbox", "messages", "p", None, &json!({"title":"中文测试","body":"日本語テスト"})).unwrap();
 
         // 한글 부분일치(≥3).
-        let r = search(&c, "mailbox", "messages", "테스트", None, None).unwrap();
+        let r = search(&c, "mailbox", "messages", "테스트", None, None, None).unwrap();
         assert_eq!(r.len(), 1, "한글 trigram");
         // 중문.
-        let r2 = search(&c, "mailbox", "messages", "测试", None, None).unwrap();
+        let r2 = search(&c, "mailbox", "messages", "测试", None, None, None).unwrap();
         assert_eq!(r2.len(), 1, "중문 — 2자라 LIKE 폴백");
         // 일본어 부분.
-        let r3 = search(&c, "mailbox", "messages", "本語テ", None, None).unwrap();
+        let r3 = search(&c, "mailbox", "messages", "本語テ", None, None, None).unwrap();
         assert_eq!(r3.len(), 1, "일본어 trigram");
         // 없음.
-        let r4 = search(&c, "mailbox", "messages", "존재안함", None, None).unwrap();
+        let r4 = search(&c, "mailbox", "messages", "존재안함", None, None, None).unwrap();
         assert_eq!(r4.len(), 0);
     }
 
@@ -892,14 +1042,14 @@ mod tests {
         let c = mem();
         define(&c, "mailbox", "messages", &[], &["title".into()]).unwrap();
         let id = put(&c, "mailbox", "messages", "p", None, &json!({"title":"옛제목입니다"})).unwrap();
-        assert_eq!(search(&c, "mailbox", "messages", "옛제목", None, None).unwrap().len(), 1);
+        assert_eq!(search(&c, "mailbox", "messages", "옛제목", None, None, None).unwrap().len(), 1);
         // 갱신 → 옛 텍스트는 더이상 검색 안 됨.
         put(&c, "mailbox", "messages", "p", Some(id.clone()), &json!({"title":"새제목입니다"})).unwrap();
-        assert_eq!(search(&c, "mailbox", "messages", "옛제목", None, None).unwrap().len(), 0);
-        assert_eq!(search(&c, "mailbox", "messages", "새제목", None, None).unwrap().len(), 1);
+        assert_eq!(search(&c, "mailbox", "messages", "옛제목", None, None, None).unwrap().len(), 0);
+        assert_eq!(search(&c, "mailbox", "messages", "새제목", None, None, None).unwrap().len(), 1);
         // 삭제 → FTS 도 정리.
         assert!(delete(&c, "mailbox", "messages", &id, None).unwrap());
-        assert_eq!(search(&c, "mailbox", "messages", "새제목", None, None).unwrap().len(), 0);
+        assert_eq!(search(&c, "mailbox", "messages", "새제목", None, None, None).unwrap().len(), 0);
     }
 
     #[test]
@@ -923,6 +1073,6 @@ mod tests {
         // 재호출 — 에러 없이 통과(CREATE ... IF NOT EXISTS).
         define(&c, "mailbox", "messages", &["read".into(), "type".into()], &["title".into()]).unwrap();
         put(&c, "mailbox", "messages", "p", None, &json!({"read":true,"type":"x","title":"제목제목"})).unwrap();
-        assert_eq!(search(&c, "mailbox", "messages", "제목제목", None, None).unwrap().len(), 1);
+        assert_eq!(search(&c, "mailbox", "messages", "제목제목", None, None, None).unwrap().len(), 1);
     }
 }

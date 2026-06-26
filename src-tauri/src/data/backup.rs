@@ -229,7 +229,7 @@ mod tests {
         let bak = restore_into(&db, &snap).unwrap();
         assert!(bak.exists());
         let conn2 = super::super::open(&db).unwrap();
-        assert_eq!(store::search(&conn2, "mailbox", "messages", "백업", None, None).unwrap().len(), 1);
+        assert_eq!(store::search(&conn2, "mailbox", "messages", "백업", None, None, None).unwrap().len(), 1);
 
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -252,7 +252,7 @@ mod tests {
         let n = import(&c2, &dump).unwrap();
         assert_eq!(n, 2); // 1 record + 1 kv
         assert_eq!(store::get(&c2, "mailbox", "messages", "m1", None, None).unwrap().unwrap().get("title").unwrap(), "이식 테스트");
-        assert_eq!(store::search(&c2, "mailbox", "messages", "이식", None, None).unwrap().len(), 1);
+        assert_eq!(store::search(&c2, "mailbox", "messages", "이식", None, None, None).unwrap().len(), 1);
         assert_eq!(store::kv_get(&c2, "mailbox", "cfg").unwrap(), Some(json!({"on":true})));
     }
 }
