@@ -44,7 +44,11 @@ pub fn open(path: &Path) -> Result<Connection, String> {
     // WAL: 읽기-쓰기 비차단(사이드바 읽기 중 CLI 쓰기 → 락 스톨 회피). NORMAL: WAL 에서 안전·고성능.
     // execute_batch 는 sqlite3_exec 라 journal_mode 가 돌려주는 행을 버린다(pragma_update 보다 안전).
     conn.execute_batch(
-        "PRAGMA journal_mode=WAL;\
+        // [R5] auto_vacuum=INCREMENTAL — retention 의 logical delete 후 incremental_vacuum 으로 free 페이지를
+        // bounded 반환(physical reclaim, #8835 의 '삭제해도 파일 안 줄어듦' 방지). 첫 CREATE 전에 설정해야
+        // 효과 — 기존 DB(auto_vacuum=NONE 으로 생성됨)는 변경이 무시되고 다음 풀 VACUUM(backup) 에 정리된다.
+        "PRAGMA auto_vacuum=INCREMENTAL;\
+         PRAGMA journal_mode=WAL;\
          PRAGMA synchronous=NORMAL;\
          PRAGMA busy_timeout=5000;\
          PRAGMA foreign_keys=ON;\

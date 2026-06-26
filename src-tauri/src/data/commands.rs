@@ -246,7 +246,12 @@ pub fn data_retention_reap(
     state: State<'_, DbState>,
 ) -> Result<usize, String> {
     validate_ns(&ns)?;
-    with_conn(&state, |c| store::retention_reap_ttl(c, &ns, &coll, cutoff_ms))
+    with_conn(&state, |c| {
+        let n = store::retention_reap_ttl(c, &ns, &coll, cutoff_ms)?;
+        // [R5] reaper 가 만든 free 페이지를 bounded 반환(physical reclaim). 정리 실패는 reap 결과 비차단.
+        let _ = store::incremental_vacuum(c, 256);
+        Ok(n)
+    })
 }
 
 // ── 암호화(단계② — scope 단위 봉투 키 라이프사이클, R0 command registry) ─────────────

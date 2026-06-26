@@ -61,6 +61,8 @@ export interface PluginEventMap {
     paneId: string;
     commandLine: string;
     cwd: string | null;
+    // [R2] 막 시작한 명령의 foreground pgid(best-effort — exec 레이스면 셸/null). command/pid/sessionId 짝.
+    pid?: number | null;
   };
   // 터미널 명령 종료(OSC 133/633 셸 통합 탐지 — 폴링 없음). git 뷰 등의 자동
   // 갱신 트리거. projectId 는 pane 의 소속 프로젝트(못 찾으면 null).
@@ -303,15 +305,18 @@ export function startPluginHooks(): void {
 
   // 터미널 명령 시작 → 플러그인 이벤트(범용 소켓 — claude-GUI 등이 구독). 이산 이벤트.
   subscribeAnyCommandStarted((paneId, commandLine, cwd) => {
-    emitPluginEvent("command.started", {
-      projectId: projectOfPane(paneId),
-      paneId,
-      commandLine,
-      cwd,
-    });
+    // [R2] 막 시작한 명령의 foreground pid 를 best-effort 캡처해 함께 emit(command/pid/sessionId 짝).
     // [단계⑤] claude 실행이면 그 cwd 세션 디렉토리 watch arm — 실행 중 /clear·/resume 전이를 fs-change
     // 이벤트로 관찰한다(폴링 아님). detect 는 코어 단일진실, 명령당 1회.
     void (async () => {
+      const pid = await invoke<number | null>("pty_pane_pid", { paneId }).catch(() => null);
+      emitPluginEvent("command.started", {
+        projectId: projectOfPane(paneId),
+        paneId,
+        commandLine,
+        cwd,
+        pid,
+      });
       const kind = commandLine ? await invoke<string | null>("ai_session_detect", { commandLine }) : null;
       if (kind === "claude" && cwd) void startSessionTrack(paneId, cwd);
     })();

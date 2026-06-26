@@ -214,6 +214,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             pty::spawn_terminal,
+            pty::pty_pane_pid,
             pty::write_terminal,
             pty::resize_terminal,
             pty::ack_terminal,

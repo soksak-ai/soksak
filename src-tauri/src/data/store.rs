@@ -178,6 +178,14 @@ pub fn retention_trim(conn: &Connection, ns: &str, coll: &str, scope: &str, cap:
     )
 }
 
+// [R5] free 페이지를 bounded 반환(physical reclaim) — logical delete(retention) 후 파일이 안 줄어드는
+// 문제(#8835) 해소. auto_vacuum=INCREMENTAL 인 DB 에서만 효과(아니면 no-op). N 페이지만(부하 바운드,
+// 전체 VACUUM 의 락·재기록 회피). reaper 직후 호출 — 트랜잭션 밖(PRAGMA 자체 처리).
+pub fn incremental_vacuum(conn: &Connection, pages: i64) -> Result<(), String> {
+    conn.execute_batch(&format!("PRAGMA incremental_vacuum({});", pages.max(0)))
+        .map_err(|e| e.to_string())
+}
+
 // [단계①·R5] retention TTL reaper — created < cutoff_ms 인 레코드 일괄 삭제(시간축, trim 과 별개). 부팅/주기
 // 호출. scope 무관(컬렉션 전체) — orphan(live scope 외) 판정은 commands 레벨이 live 목록으로 별도 수행.
 pub fn retention_reap_ttl(conn: &Connection, ns: &str, coll: &str, cutoff_ms: i64) -> Result<usize, String> {
@@ -1055,6 +1063,30 @@ mod tests {
             assert_eq!(crypto::open_doc(&stored, &s2, &aad).unwrap()["output"], format!("payload{i}"));
             assert!(crypto::open_doc(&stored, &s1, &aad).is_err(), "old S 로는 개봉 불가");
         }
+    }
+
+    // [R5] incremental_vacuum — auto_vacuum=INCREMENTAL DB 에서 reap(logical delete) 후 free 페이지가
+    // 실제 반환(physical reclaim)되는지. in-memory 는 파일 truncate 의미 없어 실파일 open() 경로로.
+    #[test]
+    fn incremental_vacuum_reclaims_pages() {
+        let dir = std::env::temp_dir().join(format!("soksak-vac-{}-{:?}", std::process::id(), std::thread::current().id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("d.db");
+        {
+            let c = super::super::open(&path).unwrap(); // auto_vacuum=INCREMENTAL 적용(신규 DB)
+            define(&c, "t", "c", &[], &[]).unwrap();
+            for i in 0..300 {
+                put(&c, "t", "c", "s", None, &json!({"pad": "y".repeat(500), "i": i})).unwrap();
+            }
+            retention_reap_ttl(&c, "t", "c", i64::MAX).unwrap(); // 전부 삭제(created < MAX)
+            let free_before: i64 = c.query_row("PRAGMA freelist_count", [], |r| r.get(0)).unwrap();
+            incremental_vacuum(&c, 100_000).unwrap();
+            let free_after: i64 = c.query_row("PRAGMA freelist_count", [], |r| r.get(0)).unwrap();
+            assert!(free_before > 0, "삭제 후 free 페이지 존재(auto_vacuum=INCREMENTAL)");
+            assert!(free_after < free_before, "incremental_vacuum 이 free 페이지 반환(physical reclaim)");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

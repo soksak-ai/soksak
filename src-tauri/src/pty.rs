@@ -27,6 +27,8 @@ pub struct PtySession {
     master: Box<dyn MasterPty + Send>,
     child: Box<dyn Child + Send + Sync>,
     flow: Arc<(Mutex<FlowState>, Condvar)>,
+    // [R2] 관찰 substrate 타깃 키 — pty_pane_pid 가 이 키로 master 의 foreground pgid 를 찾는다.
+    pane_id: Option<String>,
 }
 
 #[derive(Default)]
@@ -238,9 +240,24 @@ pub fn spawn_terminal(
             master: pair.master,
             child,
             flow,
+            pane_id: pane_id.clone(),
         },
     );
     Ok(id)
+}
+
+// [R2] pane 의 foreground 프로세스 그룹 pid — 그 PTY 에서 지금 실행 중인 명령(claude/codex 등)의 pgid.
+// command.started 직후 호출하면 막 시작한 명령의 pid 다(best-effort — exec 직전 레이스면 셸 pgid/None).
+// AI 세션 추적의 sessionId 와 짝(command/pid/sessionId). 없으면 null.
+#[tauri::command]
+pub fn pty_pane_pid(pane_id: String, manager: State<'_, PtyManager>) -> Option<i32> {
+    let sessions = manager.sessions.lock().ok()?;
+    for s in sessions.values() {
+        if s.pane_id.as_deref() == Some(pane_id.as_str()) {
+            return s.master.process_group_leader();
+        }
+    }
+    None
 }
 
 #[tauri::command]
