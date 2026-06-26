@@ -90,6 +90,7 @@ pub fn run() {
         .manage(CmdBridge::default())
         .manage(data::DbState::default())
         .manage(secrets::SecretsState::default())
+        .manage(ai_session::SessionTracker::default())
         .manage(schedule::ScheduleState::default())
         .setup(|app| {
             // 범용 데이터 스토어(app.data) — 소켓 서버 이전에 연다(커맨드가 즉시 쓸 수 있도록).
@@ -276,6 +277,9 @@ pub fn run() {
             ai_session::ai_session_detect,
             ai_session::ai_session_inspect,
             ai_session::ai_session_find,
+            ai_session::ai_session_dir,
+            ai_session::ai_session_active,
+            ai_session::ai_session_untrack,
             data::commands::data_backup,
             data::commands::data_restore,
             data::commands::data_export,

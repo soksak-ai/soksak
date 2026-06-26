@@ -11,7 +11,10 @@
 
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use tauri::State;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -136,6 +139,57 @@ pub fn claude_session_dir(home: &str, cwd: &str) -> PathBuf {
     Path::new(home).join(".claude").join("projects").join(enc)
 }
 
+// ── 세션 전이 추적(R8 watch — claude 가 분기를 파일에 안 남기므로 우리가 관찰) ──────────
+// claude 는 /clear·/resume 분기를 파일 간 링크로 안 남긴다(실측: 49세션 분기링크 0). compact 만 같은
+// 파일 compactMetadata. 그래서 viewId 가 claude 실행 중 그 cwd 세션 디렉토리를 watch 하고, 디렉토리
+// 스냅샷(sessionId→mtime) 변화로 '지금 쓰이는 세션' 을 잡아 (prev→new) 전이를 우리가 구성한다.
+
+// 세션 디렉토리 스냅샷 — 디렉토리의 <sessionId>.jsonl 들을 sessionId→mtime(ms) 로. watch 콜백이 매
+// fs-change 마다 다시 찍어 직전 스냅샷과 비교한다.
+pub fn snapshot_dir(dir: &Path) -> std::collections::BTreeMap<String, i64> {
+    let mut snap = std::collections::BTreeMap::new();
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return snap;
+    };
+    for entry in rd.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if !is_valid_session_id(stem) {
+            continue; // 파일명이 UUID(sessionId)인 것만 — 위조/잡파일 배제(R9)
+        }
+        let mtime = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        snap.insert(stem.to_string(), mtime);
+    }
+    snap
+}
+
+// prev→cur 스냅샷에서 '지금 쓰이는 세션' = 새로 생기거나 mtime 이 증가한 것 중 가장 최근(claude 가 방금
+// 쓴 세션). 변화 없으면 None. 이게 viewId 의 현재 세션이고, 직전 현재 세션과 다르면 전이다.
+pub fn active_session(
+    prev: &std::collections::BTreeMap<String, i64>,
+    cur: &std::collections::BTreeMap<String, i64>,
+) -> Option<String> {
+    let mut best: Option<(i64, String)> = None;
+    for (sid, &m) in cur {
+        let changed = prev.get(sid).is_none_or(|&pm| m > pm);
+        if changed && best.as_ref().is_none_or(|(bm, _)| m > *bm) {
+            best = Some((m, sid.clone()));
+        }
+    }
+    best.map(|(_, s)| s)
+}
+
 // 디렉토리에서 가장 최근(mtime) .jsonl 경로. 없으면 None.
 fn newest_jsonl(dir: &Path) -> Option<PathBuf> {
     let mut newest: Option<(std::time::SystemTime, PathBuf)> = None;
@@ -154,7 +208,59 @@ fn newest_jsonl(dir: &Path) -> Option<PathBuf> {
     newest.map(|(_, p)| p)
 }
 
-// ── 점검 커맨드(R0 — 실시간 watch·viewId 매칭은 다음 조각, 지금은 식별 표면만) ──────────
+// ── 전이 추적 상태(watch 구동 — 폴링 아님, notify fs-change 이벤트가 호출) ─────────────
+// dir(세션 디렉토리)별 직전 스냅샷을 들고, 프론트가 fs-change 이벤트를 받을 때마다 active(dir) 를 호출하면
+// 직전과 비교해 '방금 쓰인 세션' 을 돌려준다. 주기 조회 0 — OS 가 파일 변경을 알릴 때만 깬다.
+#[derive(Default)]
+pub struct SessionTracker {
+    snaps: Mutex<HashMap<String, BTreeMap<String, i64>>>,
+}
+
+impl SessionTracker {
+    // dir 의 현재 활성 세션(직전 스냅샷 대비 새/갱신 중 최신) + 내부 스냅샷 갱신. 변화 없으면 None.
+    pub fn active(&self, dir: &str) -> Option<String> {
+        let cur = snapshot_dir(Path::new(dir));
+        let mut g = self.snaps.lock().ok()?;
+        let prev = g.get(dir).cloned().unwrap_or_default();
+        let active = active_session(&prev, &cur);
+        g.insert(dir.to_string(), cur);
+        active
+    }
+
+    // watch 종료 시 dir 스냅샷 폐기(누수 방지).
+    pub fn forget(&self, dir: &str) {
+        if let Ok(mut g) = self.snaps.lock() {
+            g.remove(dir);
+        }
+    }
+}
+
+// ── 점검 커맨드(R0) ──────────────────────────────────────────────────────────
+
+// cwd → claude 세션 디렉토리 경로(프론트가 watch_dir 대상으로 쓴다). 인코딩 단일진실(claude_session_dir).
+#[tauri::command]
+pub fn ai_session_dir(cwd: String) -> Result<String, String> {
+    if cwd.is_empty() {
+        return Err("cwd 필요".to_string());
+    }
+    let home = std::env::var("HOME").map_err(|e| e.to_string())?;
+    Ok(claude_session_dir(&home, &cwd).to_string_lossy().into_owned())
+}
+
+// fs-change 이벤트 시 호출 — dir 에서 방금 쓰인 세션(직전 대비 새/갱신). 프론트가 직전 활성과 비교해
+// 전이를 기록한다. 폴링 아님(notify 이벤트가 구동). 변화 없으면 null.
+#[tauri::command]
+pub fn ai_session_active(dir: String, tracker: State<'_, SessionTracker>) -> Option<String> {
+    tracker.active(&dir)
+}
+
+// watch 종료 — dir 스냅샷 폐기.
+#[tauri::command]
+pub fn ai_session_untrack(dir: String, tracker: State<'_, SessionTracker>) {
+    tracker.forget(&dir);
+}
+
+// ── 식별 커맨드(R0) ──────────────────────────────────────────────────────────
 
 // cwd 로 claude 세션을 on-demand 조회 — 그 cwd 의 세션 디렉토리에서 가장 최근 세션 파일을 식별한다.
 // 프론트가 에이전트 명령 turn.ended 시 1회 호출해 블록에 sessionId 를 채운다(상시 watch 대신 on-demand
@@ -248,6 +354,41 @@ mod tests {
         assert_eq!(info.kind, AgentKind::Codex);
         assert_eq!(info.session_id, "019d09a1-6bc4-7691-9458-088bde7fca3d");
         assert_eq!(info.cwd, "/Users/max/proj");
+    }
+
+    // 세션 전이 감지 — 두 스냅샷 비교로 '지금 쓰이는 세션'(새/갱신 중 최신). 전이 시퀀스의 코어.
+    #[test]
+    fn active_session_transition() {
+        use std::collections::BTreeMap;
+        let a = "accd937f-5c22-48c6-b83d-70a2e0f2e4aa".to_string();
+        let b = "019d09a1-6bc4-7691-9458-088bde7fca3d".to_string();
+        // 시작: A 만 존재 → A 활성.
+        let s0: BTreeMap<String, i64> = BTreeMap::new();
+        let s1 = BTreeMap::from([(a.clone(), 1000)]);
+        assert_eq!(active_session(&s0, &s1), Some(a.clone()), "새 세션 A 등장 → 활성");
+        // 변화 없음 → None(전이 아님).
+        assert_eq!(active_session(&s1, &s1), None, "변화 없으면 전이 아님");
+        // /clear: 새 파일 B 생성(A 그대로) → B 활성 = A→B 전이.
+        let s2 = BTreeMap::from([(a.clone(), 1000), (b.clone(), 2000)]);
+        assert_eq!(active_session(&s1, &s2), Some(b.clone()), "새 세션 B → 전이");
+        // /resume A: 기존 A 파일 갱신(mtime↑) → A 활성 = B→A 전이.
+        let s3 = BTreeMap::from([(a.clone(), 3000), (b.clone(), 2000)]);
+        assert_eq!(active_session(&s2, &s3), Some(a.clone()), "기존 A 갱신 → 재활성 전이");
+    }
+
+    // 스냅샷 — sessionId(UUID) 파일명만, 위조/잡파일 배제.
+    #[test]
+    fn snapshot_filters_non_session() {
+        let dir = std::env::temp_dir().join(format!("soksak-aisess-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("accd937f-5c22-48c6-b83d-70a2e0f2e4aa.jsonl"), "{}").unwrap();
+        std::fs::write(dir.join("not-a-session.jsonl"), "{}").unwrap(); // UUID 아님 → 배제
+        std::fs::write(dir.join("readme.txt"), "x").unwrap(); // .jsonl 아님 → 배제
+        let snap = snapshot_dir(&dir);
+        assert_eq!(snap.len(), 1, "sessionId UUID .jsonl 만");
+        assert!(snap.contains_key("accd937f-5c22-48c6-b83d-70a2e0f2e4aa"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // claude 세션 디렉토리 인코딩 — 실측 규칙('/'·'.' → '-'). watch/find 대상 경로.
