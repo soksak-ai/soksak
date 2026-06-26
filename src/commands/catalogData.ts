@@ -174,4 +174,66 @@ export function registerDataCatalog(): void {
       return { count };
     },
   });
+
+  // ── 암호화(단계② — scope 단위 봉투 키, R0 투명 노출) ────────────────────────
+
+  register("data.encrypt.status", {
+    description:
+      "Report encryption state for a scope: enabled (an active key = sealing trigger), keyId, algo, whether the vault is unlocked (decryption possible), and tampered (publicKey no longer matches the vault private key).",
+    triggers: { ko: "암호화상태 암호화확인 봉인상태" },
+    params: { scope: { type: "string", description: "Scope partition key (e.g. projectId)", required: true } },
+    returns: "{ enabled, keyId, algo, unlocked, tampered }",
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['sok data.encrypt.status \'{"scope":"projA"}\''],
+    handler: async (p) => {
+      if (typeof p.scope !== "string" || !p.scope.trim()) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
+      }
+      return await invoke("data_encryption_status", { scope: p.scope });
+    },
+  });
+
+  register("data.encrypt.enable", {
+    description:
+      "Enable encryption for a scope: generate an X25519 keypair, wrap the private key in the vault (requires the vault to be unlocked first), then register the public key so every subsequent write to this scope is sealed. Run data.encrypt.convert afterward to seal records already stored.",
+    triggers: { ko: "암호화활성 암호화켜기 봉인활성" },
+    params: { scope: { type: "string", description: "Scope partition key to encrypt", required: true } },
+    returns: "{ keyId }",
+    danger: "destructive",
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['sok data.encrypt.enable \'{"scope":"projA"}\''],
+    handler: async (p) => {
+      if (typeof p.scope !== "string" || !p.scope.trim()) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
+      }
+      const keyId = await invoke<string>("data_encryption_enable", { scope: p.scope });
+      return { keyId };
+    },
+  });
+
+  register("data.encrypt.convert", {
+    description:
+      "Seal records already stored plaintext in a scope under the active key (one transaction per record, idempotent, resumable). Run after data.encrypt.enable to protect pre-existing data.",
+    triggers: { ko: "암호화변환 봉인변환 기존암호화" },
+    params: {
+      ns: NS_PARAM,
+      coll: COLL_PARAM,
+      scope: { type: "string", description: "Scope partition key to convert", required: true },
+    },
+    returns: "{ converted }",
+    danger: "destructive",
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['sok data.encrypt.convert \'{"ns":"soksak-plugin-terminal","coll":"command_blocks","scope":"projA"}\''],
+    handler: async (p) => {
+      if (typeof p.scope !== "string" || !p.scope.trim()) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
+      }
+      const converted = await invoke<number>("data_encryption_convert", {
+        ns: p.ns,
+        coll: p.coll,
+        scope: p.scope,
+      });
+      return { converted };
+    },
+  });
 }
