@@ -23,6 +23,29 @@ export function registerAiSessionCatalog(): void {
     },
   });
 
+  register("ai.session.lineage", {
+    description:
+      "Read the session-transition history for a working directory (and optionally one viewId), oldest first. Each row is {viewId, fromSession, toSession, kind, time} — the time-ordered from→to chain is the flow, and one fromSession branching to several toSession is a fork. This is what we observe via watch since claude doesn't record /clear·/resume branches itself.",
+    triggers: { ko: "세션계보 세션흐름 세션분기 lineage" },
+    params: {
+      cwd: { type: "string", description: "Working directory (scope) to read lineage for", required: true },
+      viewId: { type: "string", description: "Limit to one terminal view; omit for all in this cwd" },
+    },
+    returns: "{ rows }",
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['sok ai.session.lineage \'{"cwd":"/Users/me/proj"}\''],
+    handler: async (p) => {
+      if (typeof p.cwd !== "string" || !p.cwd.trim()) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "cwd 필요" };
+      }
+      const rows = await invoke<unknown[]>("ai_session_lineage", {
+        cwd: p.cwd,
+        viewId: typeof p.viewId === "string" ? p.viewId : null,
+      });
+      return { rows };
+    },
+  });
+
   register("ai.session.find", {
     description:
       "Find the most recent claude session for a working directory by reading its session folder (~/.claude/projects/<encoded-cwd>/). Returns sessionId and cwd, or null. Used to tag a terminal's command block with the session it launched (on-demand, no live watch). codex uses date folders and is resolved later.",

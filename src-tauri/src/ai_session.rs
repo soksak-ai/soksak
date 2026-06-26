@@ -260,6 +260,35 @@ pub fn ai_session_untrack(dir: String, tracker: State<'_, SessionTracker>) {
     tracker.forget(&dir);
 }
 
+// 세션 계보 조회 — cwd(scope)의 전이 레코드를 시간순(created)으로. 각 레코드 = {viewId, fromSession,
+// toSession, kind, time}. 시간순 from→to 가 곧 흐름이고, 같은 fromSession 에서 여러 toSession 이면 분기다.
+// 저장은 sessionLineage(watch)가, 조회는 app.data 단일 경로(store::query)로 — 단일진실.
+#[tauri::command]
+pub fn ai_session_lineage(
+    cwd: String,
+    view_id: Option<String>,
+    state: State<'_, crate::data::DbState>,
+) -> Result<Vec<Value>, String> {
+    if cwd.is_empty() {
+        return Err("cwd 필요".to_string());
+    }
+    let guard = state.conn.lock().map_err(|e| e.to_string())?;
+    let conn = guard.as_ref().ok_or("DB 미초기화")?;
+    let where_obj = view_id.filter(|v| !v.is_empty()).map(|v| serde_json::json!({ "viewId": v }));
+    crate::data::store::query(
+        conn,
+        "core",
+        "ai_session_lineage",
+        Some(&cwd),
+        where_obj.as_ref(),
+        Some("created"),
+        false,
+        Some(1000),
+        None,
+        None, // lineage 는 평문(전이 메타) — 복호 resolver 불요
+    )
+}
+
 // ── 식별 커맨드(R0) ──────────────────────────────────────────────────────────
 
 // cwd 로 claude 세션을 on-demand 조회 — 그 cwd 의 세션 디렉토리에서 가장 최근 세션 파일을 식별한다.

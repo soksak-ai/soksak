@@ -280,6 +280,7 @@ pub fn run() {
             ai_session::ai_session_dir,
             ai_session::ai_session_active,
             ai_session::ai_session_untrack,
+            ai_session::ai_session_lineage,
             data::commands::data_backup,
             data::commands::data_restore,
             data::commands::data_export,
