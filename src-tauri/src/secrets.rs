@@ -34,6 +34,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use argon2::{Algorithm, Argon2, Params, Version};
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use chacha20poly1305::aead::Aead;
 use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
 use rand::rngs::OsRng;
@@ -449,7 +451,7 @@ impl SecretsState {
         Ok(())
     }
 
-    fn is_unlocked(&self) -> bool {
+    pub fn is_unlocked(&self) -> bool {
         self.kek.lock().map(|g| g.is_some()).unwrap_or(false)
     }
 
@@ -540,6 +542,42 @@ pub fn test_state_with_secret(path: PathBuf, passphrase: &str, ns: &str, key: &s
     s.unlock(passphrase).expect("test unlock");
     s.set(ns, key, value).expect("test set");
     s
+}
+
+// ── app.data 봉투 개인키 보관(단계②) ─────────────────────────────────────────
+// app.data 비대칭 봉투의 개인키 S(32B)는 이 vault 에만 KEK wrap 으로 보관된다(공개키 P 는 data DB 의
+// encryption_keys 평문 메타). 코어 예약 ns — 플러그인 secret.* 는 ns=pluginId 로 주입되므로 이 ns 에
+// 닿지 못한다(접근제어 라벨). 봉인은 P 만 쓰므로 vault lock 중에도 가능, 개봉(S)만 unlock 필요(R12/R18).
+pub const DATA_ENC_NS: &str = "core-data-enc";
+
+impl SecretsState {
+    // S(32B)를 vault 에 wrap 저장 — 암호화 활성/회전 시. unlock 필요(set 이 with_kek 게이트).
+    pub fn put_data_key(&self, key_id: &str, secret: &[u8; 32]) -> Result<(), String> {
+        self.set(DATA_ENC_NS, key_id, &STANDARD.encode(secret))
+    }
+
+    // keyId 의 S 를 vault 에서 unwrap. lock 이거나 미존재면 Ok(None)(복호 불가 → 읽기 경로가 게이트).
+    pub fn get_data_key(&self, key_id: &str) -> Result<Option<[u8; 32]>, String> {
+        if !self.is_unlocked() {
+            return Ok(None);
+        }
+        let b64 = match self.resolve(DATA_ENC_NS, key_id) {
+            Ok(v) => v,
+            Err(_) => return Ok(None), // 미존재(잠김은 위에서 차단)
+        };
+        let raw = STANDARD.decode(b64).map_err(|e| e.to_string())?;
+        if raw.len() != KEY_LEN {
+            return Err("data key 길이 오류(32B 아님)".to_string());
+        }
+        let mut s = [0u8; KEY_LEN];
+        s.copy_from_slice(&raw);
+        Ok(Some(s))
+    }
+
+    // retired 키 폐기 시 S 를 vault 에서 제거(R18, count==0 검증은 data::crypto 가 선행).
+    pub fn delete_data_key(&self, key_id: &str) -> Result<bool, String> {
+        self.delete(DATA_ENC_NS, key_id)
+    }
 }
 
 // ── 내부 평문 해소(Rust 전용 — process_spawn secret_env 주입) ────────────────
@@ -797,6 +835,27 @@ mod tests {
         let mut t2 = seal_to(&p, b"value", AAD1).unwrap();
         t2.eph_pk[0] ^= 0xff;
         assert!(open_sealed(&s, &t2, AAD1).is_err(), "eph_pk 변조 거부");
+    }
+
+    // (asym-f) app.data 봉투 개인키 vault 보관 — wrap/unwrap 라운드트립, lock 게이트, 디스크 영속, 삭제.
+    #[test]
+    fn data_key_vault_roundtrip() {
+        let (s, dir) = state_with_tmp_vault("datakey");
+        // lock 상태 — get 은 None(복호 불가).
+        assert!(s.get_data_key("key-1").unwrap().is_none(), "lock 이면 None");
+        s.unlock("pw").unwrap();
+        let (sk, _p) = gen_asym_keypair();
+        s.put_data_key("key-1", &sk).unwrap();
+        assert_eq!(s.get_data_key("key-1").unwrap().unwrap(), sk, "KEK wrap/unwrap 라운드트립");
+        assert!(s.get_data_key("key-2").unwrap().is_none(), "미존재 키 None");
+        // lock 후 None, 재 unlock 시 디스크에서 복원(영속).
+        s.lock().unwrap();
+        assert!(s.get_data_key("key-1").unwrap().is_none(), "lock 후 None");
+        s.unlock("pw").unwrap();
+        assert_eq!(s.get_data_key("key-1").unwrap().unwrap(), sk, "재 unlock 복원");
+        assert!(s.delete_data_key("key-1").unwrap());
+        assert!(s.get_data_key("key-1").unwrap().is_none(), "삭제 후 None");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // (asym-e) 봉투 직렬화 라운드트립 — doc 컬럼 문자열로 직렬화/역직렬화 후 개봉 가능(저장 경로 검증).

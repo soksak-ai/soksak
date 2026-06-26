@@ -251,7 +251,7 @@ mod tests {
         super::super::init_base(&c2).unwrap();
         let n = import(&c2, &dump).unwrap();
         assert_eq!(n, 2); // 1 record + 1 kv
-        assert_eq!(store::get(&c2, "mailbox", "messages", "m1", None).unwrap().unwrap().get("title").unwrap(), "이식 테스트");
+        assert_eq!(store::get(&c2, "mailbox", "messages", "m1", None, None).unwrap().unwrap().get("title").unwrap(), "이식 테스트");
         assert_eq!(store::search(&c2, "mailbox", "messages", "이식", None, None).unwrap().len(), 1);
         assert_eq!(store::kv_get(&c2, "mailbox", "cfg").unwrap(), Some(json!({"on":true})));
     }

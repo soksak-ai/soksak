@@ -244,6 +244,35 @@ fn decode_doc(s: &str) -> Result<Value, String> {
     serde_json::from_str(s).map_err(|e| e.to_string())
 }
 
+// [단계②] 봉인 레코드 개인키(S) 공급자 — keyId → Some(S) (없으면/lock 이면 None). 읽기 경로(get/query)가
+// 받아서 enc=1 행을 개봉한다. commands 레벨이 vault(SecretsState)로 뒤를 댄다. None 이면 평문 전용.
+pub type SkResolver<'a> = &'a dyn Fn(&str) -> Result<Option<[u8; 32]>, String>;
+
+// 저장된 (doc_s, enc, keyId) → 평문 Value. enc=0 평문 항등. enc=1 이면 resolve_sk 로 S 얻어 개봉(R12).
+// resolver 미제공이면 봉인 JSON 을 doc 인 양 반환하지 않고 정직하게 Err(R10 게이트, 은닉 오반환 금지).
+fn decode_stored(
+    ns: &str,
+    coll: &str,
+    scope: &str,
+    id: &str,
+    doc_s: &str,
+    enc: i64,
+    key_id: Option<&str>,
+    resolve_sk: Option<SkResolver>,
+) -> Result<Value, String> {
+    if enc == 0 {
+        return decode_doc(doc_s);
+    }
+    let key_id = key_id.ok_or("enc=1 인데 keyId 없음")?;
+    let Some(resolve) = resolve_sk else {
+        return Err("암호화 레코드 — 복호 경로 미배선(vault resolver 없음)".to_string());
+    };
+    let s = resolve(key_id)?.ok_or("vault locked 또는 키 없음 — 복호 불가")?;
+    let stored = decode_doc(doc_s)?;
+    let aad = super::crypto::canonical_aad(ns, coll, scope, id, key_id);
+    super::crypto::open_doc(&stored, &s, &aad)
+}
+
 // FTS 텍스트 = 선언된 fts 필드의 문자열 값 연결(공백 구분).
 fn fts_text(doc: &Value, fields: &[String]) -> String {
     let mut parts = Vec::new();
@@ -338,29 +367,30 @@ pub fn get(
     coll: &str,
     id: &str,
     scope: Option<&str>,
+    resolve_sk: Option<SkResolver>,
 ) -> Result<Option<Value>, String> {
-    let row: Option<(String, i64)> = match scope {
+    // scope 가 None 이면 행의 실제 scope 를 가져와 AAD 에 쓴다(봉인 컨텍스트는 저장 시 scope 로 묶임).
+    let row: Option<(String, String, i64, Option<String>)> = match scope {
         Some(s) => conn
             .query_row(
-                "SELECT doc, enc FROM records WHERE ns=?1 AND coll=?2 AND id=?3 AND scope=?4",
+                "SELECT doc, scope, enc, keyId FROM records WHERE ns=?1 AND coll=?2 AND id=?3 AND scope=?4",
                 (ns, coll, id, s),
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
             )
             .optional(),
         None => conn
             .query_row(
-                "SELECT doc, enc FROM records WHERE ns=?1 AND coll=?2 AND id=?3",
+                "SELECT doc, scope, enc, keyId FROM records WHERE ns=?1 AND coll=?2 AND id=?3",
                 (ns, coll, id),
-                |r| Ok((r.get(0)?, r.get(1)?)),
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
             )
             .optional(),
     }
     .map_err(|e| e.to_string())?;
     match row {
-        // [단계②] enc=1 = 봉인 레코드. 복호는 개인키 S(vault) 가 필요 — 읽기 경로(resolve_sk)는 다음
-        // 묶음에서 배선한다. 그 전까지 봉인 JSON 을 doc 인 양 반환하지 않고 정직하게 게이트(은닉 오반환 금지).
-        Some((_s, 1)) => Err("암호화 레코드 — 복호 읽기 경로 미배선(단계② 진행 중)".to_string()),
-        Some((s, _)) => Ok(Some(decode_doc(&s)?)), // [M0] 코덱 seam(평문 항등)
+        Some((doc_s, row_scope, enc, key_id)) => Ok(Some(decode_stored(
+            ns, coll, &row_scope, id, &doc_s, enc, key_id.as_deref(), resolve_sk,
+        )?)),
         None => Ok(None),
     }
 }
@@ -515,6 +545,7 @@ fn build_where(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 pub fn query(
     conn: &Connection,
     ns: &str,
@@ -525,11 +556,13 @@ pub fn query(
     desc: bool,
     limit: Option<i64>,
     offset: Option<i64>,
+    resolve_sk: Option<SkResolver>,
 ) -> Result<Vec<Value>, String> {
     let allowed = get_meta(conn, ns, coll)?.map(|m| m.idx).unwrap_or_default();
 
     let mut params: Vec<Box<dyn ToSql>> = vec![Box::new(ns.to_string()), Box::new(coll.to_string())];
-    let mut sql = String::from("SELECT doc FROM records WHERE ns=?1 AND coll=?2");
+    // 봉인 행 개봉에 scope·id·enc·keyId 가 필요 — doc 만이 아니라 함께 가져온다(blocker① 필터는 평문 인덱스).
+    let mut sql = String::from("SELECT doc, scope, id, enc, keyId FROM records WHERE ns=?1 AND coll=?2");
     if let Some(s) = scope {
         sql.push_str(" AND scope=?3");
         params.push(Box::new(s.to_string()));
@@ -556,12 +589,22 @@ pub fn query(
     let refs: Vec<&dyn ToSql> = params.iter().map(|b| b.as_ref()).collect();
     let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
     let rows = stmt
-        .query_map(refs.as_slice(), |r| r.get::<_, String>(0))
+        .query_map(refs.as_slice(), |r| {
+            Ok((
+                r.get::<_, String>(0)?,         // doc
+                r.get::<_, String>(1)?,         // scope
+                r.get::<_, String>(2)?,         // id
+                r.get::<_, i64>(3)?,            // enc
+                r.get::<_, Option<String>>(4)?, // keyId
+            ))
+        })
         .map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     for row in rows {
-        let s = row.map_err(|e| e.to_string())?;
-        out.push(serde_json::from_str(&s).map_err(|e| e.to_string())?);
+        let (doc_s, row_scope, id, enc, key_id) = row.map_err(|e| e.to_string())?;
+        out.push(decode_stored(
+            ns, coll, &row_scope, &id, &doc_s, enc, key_id.as_deref(), resolve_sk,
+        )?);
     }
     Ok(out)
 }
@@ -677,7 +720,7 @@ mod tests {
             "SELECT doc, enc FROM records WHERE id=?1", [&id0], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
         assert_eq!(enc0, 0, "키 없으면 평문");
         assert!(doc0.contains("plain"), "평문 레코드는 output 노출");
-        assert_eq!(get(&c, "terminal", "command_blocks", &id0, None).unwrap().unwrap()["output"], "plain");
+        assert_eq!(get(&c, "terminal", "command_blocks", &id0, None, None).unwrap().unwrap()["output"], "plain");
 
         // active key 등록 → put 봉인.
         let (s, p) = crate::secrets::gen_asym_keypair();
@@ -696,9 +739,9 @@ mod tests {
         assert!(!doc1.contains("sk-XYZ"), "자격증명 평문 누출 0");
         assert!(!doc1.contains("secret echo"), "output 평문 누출 0");
 
-        // blocker①: 봉인돼도 인덱스 필드로 query 가 탄다(0 아님).
-        let hits = query(&c, "terminal", "command_blocks", Some("proj-a"), Some(&json!({"viewId":"t2"})), Some("startTs"), false, Some(10), None).unwrap();
-        assert_eq!(hits.len(), 1, "봉인 레코드도 인덱스 query 로 1건 조회(blocker①)");
+        // blocker①: 봉인돼도 평문 인덱스 필터가 탄다(0 아님). count 는 디코드 없이 인덱스만 → R10 평문 프로젝션.
+        let n = count(&c, "terminal", "command_blocks", Some("proj-a"), Some(&json!({"viewId":"t2"}))).unwrap();
+        assert_eq!(n, 1, "봉인 레코드도 평문 인덱스 필터로 1건(blocker①)");
 
         // 봉인 doc 을 S 로 개봉하면 원본 복원(쓰기 경로 정합).
         let stored: Value = serde_json::from_str(&doc1).unwrap();
@@ -709,7 +752,40 @@ mod tests {
         assert_eq!(opened["viewId"], "t2");
 
         // get 은 복호 경로 미배선이라 정직하게 Err(은닉 오반환 금지).
-        assert!(get(&c, "terminal", "command_blocks", &id1, None).is_err(), "봉인 레코드 get 은 게이트");
+        assert!(get(&c, "terminal", "command_blocks", &id1, None, None).is_err(), "복호 resolver 없으면 봉인 레코드 get 게이트");
+    }
+
+    // [단계②] 읽기 경로 — resolver(S 공급)로 get/query 가 봉인 레코드를 개봉(R12). resolver 가 None(lock)이면
+    // 게이트(Err). 평문 레코드는 resolver 무관 동작.
+    #[test]
+    fn get_query_open_with_resolver() {
+        use super::super::crypto;
+        let c = mem();
+        define(&c, "terminal", "command_blocks", &["viewId".into()], &[]).unwrap();
+        let (s, p) = crate::secrets::gen_asym_keypair();
+        crypto::register_active_key(&c, "proj-a", "key-1", &p, 100).unwrap();
+        let id = put(&c, "terminal", "command_blocks", "proj-a", None,
+            &json!({"viewId":"t1","output":"secret echo","exitCode":0})).unwrap();
+
+        // unlock 모의 — resolver 가 key-1 의 S 를 돌려준다.
+        let unlocked = |kid: &str| -> Result<Option<[u8; 32]>, String> {
+            if kid == "key-1" { Ok(Some(s)) } else { Ok(None) }
+        };
+        // lock 모의 — resolver 가 항상 None(vault locked).
+        let locked = |_kid: &str| -> Result<Option<[u8; 32]>, String> { Ok(None) };
+
+        // get: unlock 이면 개봉(원본 복원), lock 이면 Err.
+        let got = get(&c, "terminal", "command_blocks", &id, Some("proj-a"), Some(&unlocked)).unwrap().unwrap();
+        assert_eq!(got["output"], "secret echo", "resolver 로 봉인 레코드 개봉");
+        assert_eq!(got["viewId"], "t1");
+        assert_eq!(got["exitCode"], 0);
+        assert!(get(&c, "terminal", "command_blocks", &id, Some("proj-a"), Some(&locked)).is_err(), "lock 이면 복호 불가 Err");
+
+        // query: unlock 이면 개봉된 doc 반환.
+        let hits = query(&c, "terminal", "command_blocks", Some("proj-a"), None, None, true, None, None, Some(&unlocked)).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0]["output"], "secret echo", "query 도 resolver 로 개봉");
+        assert!(query(&c, "terminal", "command_blocks", Some("proj-a"), None, None, true, None, None, Some(&locked)).is_err(), "lock query Err");
     }
 
     #[test]
@@ -732,15 +808,15 @@ mod tests {
         let _id2 = put(&c, "mailbox", "messages", "projB", None, &json!({"title":"테스트","body":"중문 测试","read":true,"type":"info"})).unwrap();
 
         // get + canonical id 주입.
-        let got = get(&c, "mailbox", "messages", &id1, Some("projA")).unwrap().unwrap();
+        let got = get(&c, "mailbox", "messages", &id1, Some("projA"), None).unwrap().unwrap();
         assert_eq!(got.get("id").unwrap().as_str().unwrap(), id1);
         assert_eq!(got.get("title").unwrap(), "빌드 완료");
 
         // scope 파티션 — projA 조회는 projB 안 섞임.
-        let qa = query(&c, "mailbox", "messages", Some("projA"), None, None, true, None, None).unwrap();
+        let qa = query(&c, "mailbox", "messages", Some("projA"), None, None, true, None, None, None).unwrap();
         assert_eq!(qa.len(), 1);
         // where: read=false.
-        let unread = query(&c, "mailbox", "messages", None, Some(&json!({"read":false})), None, true, None, None).unwrap();
+        let unread = query(&c, "mailbox", "messages", None, Some(&json!({"read":false})), None, true, None, None, None).unwrap();
         assert_eq!(unread.len(), 1);
         // count.
         assert_eq!(count(&c, "mailbox", "messages", None, None).unwrap(), 2);
@@ -762,8 +838,8 @@ mod tests {
         // cap=3 → oldest 2 축출.
         assert_eq!(retention_trim(&c, "terminal", "blocks", "projA", 3).unwrap(), 2);
         assert_eq!(count(&c, "terminal", "blocks", Some("projA"), None).unwrap(), 3);
-        assert!(get(&c, "terminal", "blocks", &ids[0], Some("projA")).unwrap().is_none()); // oldest 삭제
-        assert!(get(&c, "terminal", "blocks", &ids[4], Some("projA")).unwrap().is_some()); // newest 유지
+        assert!(get(&c, "terminal", "blocks", &ids[0], Some("projA"), None).unwrap().is_none()); // oldest 삭제
+        assert!(get(&c, "terminal", "blocks", &ids[4], Some("projA"), None).unwrap().is_some()); // newest 유지
         // cap 미만 재호출 → 0(멱등).
         assert_eq!(retention_trim(&c, "terminal", "blocks", "projA", 3).unwrap(), 0);
         // scope 격리 — projB 불변.
@@ -832,11 +908,11 @@ mod tests {
         define(&c, "mailbox", "messages", &["read".into()], &[]).unwrap();
         put(&c, "mailbox", "messages", "p", None, &json!({"read":false,"secret":"x"})).unwrap();
         // 선언 안 된 필드 거부.
-        assert!(query(&c, "mailbox", "messages", None, Some(&json!({"secret":"x"})), None, true, None, None).is_err());
+        assert!(query(&c, "mailbox", "messages", None, Some(&json!({"secret":"x"})), None, true, None, None, None).is_err());
         // 알 수 없는 연산자 거부.
-        assert!(query(&c, "mailbox", "messages", None, Some(&json!({"read":{"op":"xx","value":1}})), None, true, None, None).is_err());
+        assert!(query(&c, "mailbox", "messages", None, Some(&json!({"read":{"op":"xx","value":1}})), None, true, None, None, None).is_err());
         // injection 문자열은 리터럴(매칭 0, 에러 아님).
-        let r = query(&c, "mailbox", "messages", None, Some(&json!({"read":"false' OR '1'='1"})), None, true, None, None).unwrap();
+        let r = query(&c, "mailbox", "messages", None, Some(&json!({"read":"false' OR '1'='1"})), None, true, None, None, None).unwrap();
         assert_eq!(r.len(), 0);
     }
 

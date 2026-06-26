@@ -20,6 +20,15 @@ use serde_json::{json, Map, Value};
 // 현재 봉투 알고리즘 식별자 — 미래 마이그레이션 분기용(헤더에 기록).
 pub const ALGO_V1: &str = "x25519-hkdf-sha256-xchacha20poly1305-v1";
 
+// 새 keyId — "k-" + 9 랜덤바이트 base64url(검증 통과 문자만: A-Za-z0-9-_). vault key·테이블 PK 양쪽 안전.
+pub fn new_key_id() -> String {
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use rand::RngCore;
+    let mut b = [0u8; 9];
+    rand::rngs::OsRng.fill_bytes(&mut b);
+    format!("k-{}", URL_SAFE_NO_PAD.encode(b))
+}
+
 // 봉인된 나머지 페이로드가 담기는 예약 필드. 평문 doc 에 이 키가 있으면 충돌이므로 호출자가 거부해야.
 pub const ENC_FIELD: &str = "__enc";
 

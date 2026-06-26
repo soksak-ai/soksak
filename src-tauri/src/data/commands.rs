@@ -8,6 +8,7 @@ use serde_json::Value;
 use tauri::{AppHandle, Emitter, State};
 
 use super::{backup, db_path, store, validate_ns, DbState};
+use crate::secrets::SecretsState;
 
 #[derive(Serialize, Clone)]
 struct DataChange {
@@ -133,9 +134,12 @@ pub fn data_get(
     id: String,
     scope: Option<String>,
     state: State<'_, DbState>,
+    secrets: State<'_, SecretsState>,
 ) -> Result<Option<Value>, String> {
     validate_ns(&ns)?;
-    with_conn(&state, |c| store::get(c, &ns, &coll, &id, scope.as_deref()))
+    // [단계②] 봉인(enc=1) 레코드는 vault 의 개인키 S 로 개봉(unlock 필요). 평문은 resolver 무관.
+    let resolver = |key_id: &str| secrets.get_data_key(key_id);
+    with_conn(&state, |c| store::get(c, &ns, &coll, &id, scope.as_deref(), Some(&resolver)))
 }
 
 #[tauri::command]
@@ -167,8 +171,10 @@ pub fn data_query(
     limit: Option<i64>,
     offset: Option<i64>,
     state: State<'_, DbState>,
+    secrets: State<'_, SecretsState>,
 ) -> Result<Vec<Value>, String> {
     validate_ns(&ns)?;
+    let resolver = |key_id: &str| secrets.get_data_key(key_id);
     with_conn(&state, |c| {
         store::query(
             c,
@@ -180,6 +186,7 @@ pub fn data_query(
             desc.unwrap_or(true),
             limit,
             offset,
+            Some(&resolver),
         )
     })
 }
@@ -238,6 +245,60 @@ pub fn data_retention_reap(
 ) -> Result<usize, String> {
     validate_ns(&ns)?;
     with_conn(&state, |c| store::retention_reap_ttl(c, &ns, &coll, cutoff_ms))
+}
+
+// ── 암호화(단계② — scope 단위 봉투 키 라이프사이클, R0 command registry) ─────────────
+
+use super::crypto;
+
+#[derive(Serialize)]
+pub struct EncryptionStatus {
+    pub enabled: bool,        // scope 에 active key 존재(= 봉인 트리거 ON)
+    pub key_id: Option<String>,
+    pub algo: Option<String>,
+    pub unlocked: bool,       // vault(개인키 S) 해제 여부 — 복호 가능 조건
+}
+
+// scope 암호화 활성 — X25519 키페어 생성, 개인키 S 를 vault 에 wrap(먼저), 공개키 P 를 테이블에 등록.
+// 순서가 안전핀이다: S 를 vault 에 넣은 뒤에만 P 를 등록한다 — P(=봉인 트리거)만 있고 S 가 없으면 이후
+// 모든 put 이 봉인되는데 영원히 복호 불가(전손)다. vault 잠김이면 put_data_key 가 Err → P 미등록(무해).
+#[tauri::command]
+pub fn data_encryption_enable(
+    scope: String,
+    state: State<'_, DbState>,
+    secrets: State<'_, SecretsState>,
+) -> Result<String, String> {
+    if scope.is_empty() {
+        return Err("scope 필요".to_string());
+    }
+    // 이미 active key 있으면 재활성 거부(중복 트리거·키 혼선 방지 — 회전은 별도 커맨드).
+    if with_conn(&state, |c| crypto::active_key(c, &scope))?.is_some() {
+        return Err(format!("scope {scope} 는 이미 암호화 활성(회전은 rotate 커맨드)"));
+    }
+    let (sk, pk) = crate::secrets::gen_asym_keypair();
+    let key_id = crypto::new_key_id();
+    // (1) S 를 vault 에 먼저 — 잠김이면 여기서 Err(P 미등록, 전손 0).
+    secrets.put_data_key(&key_id, &sk)?;
+    // (2) P 를 테이블에 등록(봉인 트리거 ON). 실패해도 vault 의 S 는 orphan(무해 — 트리거 없음).
+    let created = super::now_millis();
+    with_conn(&state, |c| crypto::register_active_key(c, &scope, &key_id, &pk, created))?;
+    Ok(key_id)
+}
+
+// scope 암호화 상태 — enabled(트리거), keyId, algo, vault unlock 여부(복호 가능 조건).
+#[tauri::command]
+pub fn data_encryption_status(
+    scope: String,
+    state: State<'_, DbState>,
+    secrets: State<'_, SecretsState>,
+) -> Result<EncryptionStatus, String> {
+    let ak = with_conn(&state, |c| crypto::active_key(c, &scope))?;
+    Ok(EncryptionStatus {
+        enabled: ak.is_some(),
+        key_id: ak.as_ref().map(|k| k.key_id.clone()),
+        algo: ak.as_ref().map(|_| crypto::ALGO_V1.to_string()),
+        unlocked: secrets.is_unlocked(), // vault 해제 = S 복호 가능 조건
+    })
 }
 
 // ── 백업/복원/이식(코어 커맨드 — data.* 카탈로그 핸들러가 ns="core" 로 호출) ───────────

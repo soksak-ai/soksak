@@ -255,6 +255,8 @@ pub fn run() {
             data::commands::data_count,
             data::commands::data_retention_trim,
             data::commands::data_retention_reap,
+            data::commands::data_encryption_enable,
+            data::commands::data_encryption_status,
             data::commands::data_backup,
             data::commands::data_restore,
             data::commands::data_export,
