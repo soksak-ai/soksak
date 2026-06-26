@@ -179,10 +179,10 @@ export function registerDataCatalog(): void {
 
   register("data.encrypt.status", {
     description:
-      "Report encryption state for a scope: enabled (an active key = sealing trigger), keyId, algo, whether the vault is unlocked (decryption possible), and tampered (publicKey no longer matches the vault private key).",
+      "Report encryption state for a scope: enabled (an active key = sealing trigger), keyId, algo, whether the vault is unlocked (decryption possible), tampered (publicKey no longer matches the vault private key), and keyMissing (the public key exists but its private key is gone from the vault — sealed records are unrecoverable).",
     triggers: { ko: "암호화상태 암호화확인 봉인상태" },
     params: { scope: { type: "string", description: "Scope partition key (e.g. projectId)", required: true } },
-    returns: "{ enabled, keyId, algo, unlocked, tampered }",
+    returns: "{ enabled, keyId, algo, unlocked, tampered, keyMissing }",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.encrypt.status \'{"scope":"projA"}\''],
     handler: async (p) => {

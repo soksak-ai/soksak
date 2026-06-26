@@ -260,6 +260,7 @@ pub struct EncryptionStatus {
     pub algo: Option<String>,
     pub unlocked: bool,       // vault(개인키 S) 해제 여부 — 복호 가능 조건
     pub tampered: bool,       // [blocker④] publicKey 가 vault S 와 불일치(키스왑 탐지). unlock 상태에서만 판정.
+    pub key_missing: bool,    // [R23] active P 있는데 vault 에 S 없음(vault 리셋/손실) — 레코드 복호 영구 불가 경고.
 }
 
 // scope 암호화 활성 — X25519 키페어 생성, 개인키 S 를 vault 에 wrap(먼저), 공개키 P 를 테이블에 등록.
@@ -377,20 +378,23 @@ pub fn data_encryption_status(
 ) -> Result<EncryptionStatus, String> {
     let ak = with_conn(&state, |c| crypto::active_key(c, &scope))?;
     let unlocked = secrets.is_unlocked();
-    // [blocker④] unlock 상태에서만 키스왑 판정 가능(S 필요). lock 이면 tampered=false(미판정).
-    let tampered = match (&ak, unlocked) {
-        (Some(k), true) => match secrets.get_data_key(&k.key_id)? {
-            Some(s) => !with_conn(&state, |c| crypto::verify_active_key(c, &scope, &s))?,
-            None => false, // S 부재(키 미보관) — 별도 무결성 이슈지만 스왑 판정은 보류
-        },
-        _ => false,
-    };
+    // unlock 상태에서만 S 기반 판정. tampered=키스왑(blocker④), key_missing=S 부재(R23 footgun: vault
+    // 리셋/삭제로 P 는 남고 S 가 사라진 상태 — 그 scope 의 봉인 레코드는 영구 복호 불가).
+    let mut tampered = false;
+    let mut key_missing = false;
+    if let (Some(k), true) = (&ak, unlocked) {
+        match secrets.get_data_key(&k.key_id)? {
+            Some(s) => tampered = !with_conn(&state, |c| crypto::verify_active_key(c, &scope, &s))?,
+            None => key_missing = true,
+        }
+    }
     Ok(EncryptionStatus {
         enabled: ak.is_some(),
         key_id: ak.as_ref().map(|k| k.key_id.clone()),
         algo: ak.as_ref().map(|_| crypto::ALGO_V1.to_string()),
         unlocked,
         tampered,
+        key_missing,
     })
 }
 
