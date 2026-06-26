@@ -8,8 +8,9 @@ import { listen } from "@tauri-apps/api/event";
 // 활동을 최대 이 간격에 한 번만 백엔드에 통지(매 키 입력마다 invoke 하지 않게 스팸 방지).
 export const TOUCH_THROTTLE_MS = 10_000;
 
-// 백엔드 broadcast 를 받아 UI 가 듣는 표준 DOM 이벤트 이름(잠금 반응 단일 채널).
+// 백엔드 broadcast 를 받아 UI 가 듣는 표준 DOM 이벤트 이름(잠금/해제 반응 단일 채널).
 export const VAULT_LOCKED_EVENT = "soksak:vault-locked";
+export const VAULT_UNLOCKED_EVENT = "soksak:vault-unlocked";
 
 // 활동 통지 스로틀 — 순수 판정(now 주입)이라 테스트 가능. 마지막 통지 후 THROTTLE 경과 시에만 true.
 export function shouldTouch(lastTouchMs: number, now: number): boolean {
@@ -30,20 +31,23 @@ export function startAutoLock(): () => void {
   window.addEventListener("keydown", onActivity, opts);
   window.addEventListener("focus", onActivity, opts);
 
-  let unlisten: (() => void) | undefined;
+  const unlisteners: Array<() => void> = [];
+  // 잠금/해제 broadcast → DOM 이벤트 재방출. UI/플러그인이 듣고 반응(터미널 폐기↔재-hydrate).
   void listen<number>("secrets-locked", (e) => {
-    // 잠금 broadcast → DOM 이벤트 재방출(lockEpoch 페이로드). UI/플러그인이 이걸 듣고 반응.
     window.dispatchEvent(new CustomEvent(VAULT_LOCKED_EVENT, { detail: { lockEpoch: e.payload } }));
   })
-    .then((u) => {
-      unlisten = u;
-    })
+    .then((u) => unlisteners.push(u))
+    .catch(() => {});
+  void listen<number>("secrets-unlocked", (e) => {
+    window.dispatchEvent(new CustomEvent(VAULT_UNLOCKED_EVENT, { detail: { lockEpoch: e.payload } }));
+  })
+    .then((u) => unlisteners.push(u))
     .catch(() => {});
 
   return () => {
     window.removeEventListener("pointerdown", onActivity, opts);
     window.removeEventListener("keydown", onActivity, opts);
     window.removeEventListener("focus", onActivity, opts);
-    unlisten?.();
+    for (const u of unlisteners) u();
   };
 }

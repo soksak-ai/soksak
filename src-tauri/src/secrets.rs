@@ -660,8 +660,16 @@ pub fn auto_unlock_from_env(state: &SecretsState) {
 }
 
 #[tauri::command]
-pub fn secret_unlock(passphrase: String, state: State<'_, SecretsState>) -> Result<(), String> {
-    state.unlock(&passphrase)
+pub fn secret_unlock(
+    app: AppHandle,
+    passphrase: String,
+    state: State<'_, SecretsState>,
+) -> Result<(), String> {
+    state.unlock(&passphrase)?;
+    // [단계④] unlock 성공 → 전 창 broadcast. 프론트가 잠금 중 폐기한 화면을 sealed 기록에서 재-hydrate
+    // (R14 dispose↔re-hydrate 사이클). lock 과 대칭 채널.
+    let _ = app.emit("secrets-unlocked", state.lock_epoch());
+    Ok(())
 }
 
 // lock + 전 창 broadcast("secrets-locked", lock_epoch). 수동 lock 과 idle 자동 lock 모두 이 경로로 알린다
