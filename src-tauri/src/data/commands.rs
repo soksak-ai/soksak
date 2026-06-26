@@ -268,15 +268,23 @@ pub struct EncryptionStatus {
     pub key_missing: bool,    // [R23] active P 있는데 vault 에 S 없음(vault 리셋/손실) — 레코드 복호 영구 불가 경고.
 }
 
-// scope 암호화 활성 — X25519 키페어 생성, 개인키 S 를 vault 에 wrap(먼저), 공개키 P 를 테이블에 등록.
-// 순서가 안전핀이다: S 를 vault 에 넣은 뒤에만 P 를 등록한다 — P(=봉인 트리거)만 있고 S 가 없으면 이후
-// 모든 put 이 봉인되는데 영원히 복호 불가(전손)다. vault 잠김이면 put_data_key 가 Err → P 미등록(무해).
+#[derive(Serialize)]
+pub struct EnableResult {
+    pub key_id: String,
+    // [R24] 의무 recovery code(1회 표시). passphrase 분실 시 S 복구의 유일 경로 — 사용자가 안전 보관해야
+    // 하고 분실 시 영구손실. 이후 조회 불가(blob 만 DB 에 남고 코드 원문은 어디에도 저장 안 함).
+    pub recovery_code: String,
+}
+
+// scope 암호화 활성 — X25519 키페어 생성, 개인키 S 를 vault 에 wrap + recovery code 로도 2중 wrap(R24),
+// 공개키 P 를 테이블에 등록. 순서가 안전핀이다: S 를 vault 에 넣은 뒤에만 P 를 등록한다 — P(=봉인 트리거)만
+// 있고 S 가 없으면 이후 모든 put 이 봉인되는데 영원히 복호 불가(전손)다. vault 잠김이면 여기서 Err(P 미등록).
 #[tauri::command]
 pub fn data_encryption_enable(
     scope: String,
     state: State<'_, DbState>,
     secrets: State<'_, SecretsState>,
-) -> Result<String, String> {
+) -> Result<EnableResult, String> {
     if scope.is_empty() {
         return Err("scope 필요".to_string());
     }
@@ -291,7 +299,49 @@ pub fn data_encryption_enable(
     // (2) P 를 테이블에 등록(봉인 트리거 ON). 실패해도 vault 의 S 는 orphan(무해 — 트리거 없음).
     let created = super::now_millis();
     with_conn(&state, |c| crypto::register_active_key(c, &scope, &key_id, &pk, created))?;
-    Ok(key_id)
+    // (3) [R24] recovery code 발급 + S 를 코드로 2중 wrap → blob 저장(평문 DB 안전, 코드로만 열림).
+    let recovery_code = crate::secrets::gen_recovery_code();
+    let (salt, sealed) = crate::secrets::recovery_wrap(&recovery_code, &sk)?;
+    let blob = serde_json::to_string(&crate::secrets::RecoveryBlob { salt, sealed }).map_err(|e| e.to_string())?;
+    with_conn(&state, |c| crypto::set_recovery(c, &scope, &key_id, &blob))?;
+    Ok(EnableResult { key_id, recovery_code })
+}
+
+// [R24] passphrase 분실 복구 — recovery code 로 S 를 되찾아 현재 vault 에 재저장(re-wrap). 새 passphrase 로
+// unlock 한 vault 가 전제(S 를 KEK 로 다시 wrap). 복구된 S 가 등록 P 와 일치(basepoint)해야 한다 — 코드가
+// 맞아도 P 불일치면 거부(무결성). 성공 시 그 scope 봉인 레코드가 다시 복호 가능.
+#[tauri::command]
+pub fn data_encryption_recover(
+    scope: String,
+    recovery_code: String,
+    state: State<'_, DbState>,
+    secrets: State<'_, SecretsState>,
+) -> Result<(), String> {
+    if scope.is_empty() {
+        return Err("scope 필요".to_string());
+    }
+    if !secrets.is_unlocked() {
+        return Err("vault 잠김 — 복구는 새 passphrase 로 unlock 후(S 재저장에 KEK 필요)".to_string());
+    }
+    let ak = with_conn(&state, |c| crypto::active_key(c, &scope))?
+        .ok_or("암호화 비활성 scope — 복구 대상 아님")?;
+    let blob_json = with_conn(&state, |c| crypto::active_recovery(c, &scope))?
+        .ok_or("recovery blob 없음 — 이 키는 복구 코드 미발급")?;
+    let blob: crate::secrets::RecoveryBlob = serde_json::from_str(&blob_json).map_err(|e| e.to_string())?;
+    let s_vec = crate::secrets::recovery_unwrap(&recovery_code, &blob.salt, &blob.sealed)
+        .map_err(|_| "복구 실패 — 잘못된 recovery code".to_string())?;
+    if s_vec.len() != 32 {
+        return Err("복구된 키 길이 오류".to_string());
+    }
+    let mut s = [0u8; 32];
+    s.copy_from_slice(&s_vec);
+    // 무결성 — 복구된 S 가 등록 P 와 일치해야(스왑·손상 거부).
+    if crate::secrets::public_from_secret(&s) != ak.public_key {
+        return Err("복구된 키가 등록 publicKey 와 불일치 — 거부".to_string());
+    }
+    // 현재 vault(새 passphrase)에 S 재저장 → 이제 KEK 로 열린다.
+    secrets.put_data_key(&ak.key_id, &s)?;
+    Ok(())
 }
 
 #[derive(Serialize)]

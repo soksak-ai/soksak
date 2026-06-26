@@ -184,6 +184,82 @@ pub fn open(kek: &[u8; KEY_LEN], item: &SealedItem) -> Result<Vec<u8>, String> {
     out
 }
 
+// ── 복구 코드(R24) — 개인키 S 를 passphrase(KEK) 외 recovery-key 로도 2중 wrap ─────────
+// passphrase 분실 시에도 S 를 되찾는 독립 경로. recovery code 문자열을 Argon2id 로 RK 도출 → 기존
+// seal/open(대칭 envelope)으로 S 를 wrap. blob(salt+SealedItem)은 암호문이라 평문 DB(encryption_keys)에
+// 저장 안전 — recovery code 자체는 사용자만 보관(1회 표시, 영구손실 고지). 코드는 decode 안 한다(Argon2id
+// 입력일 뿐) → 생성은 typeable 문자열만 만들면 된다(Crockford base32, 혼동문자 I/L/O/U 제외).
+
+const RECOVERY_BYTES: usize = 20; // 160비트 — recovery 코드 엔트로피
+
+// Crockford base32(0-9 A-Z, ILOU 제외) — recovery 코드용 인코딩(생성 전용, decode 불요).
+fn crockford_base32(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+    let mut out = String::new();
+    let mut buffer: u32 = 0;
+    let mut bits = 0u32;
+    for &b in bytes {
+        buffer = (buffer << 8) | b as u32;
+        bits += 8;
+        while bits >= 5 {
+            bits -= 5;
+            out.push(ALPHABET[((buffer >> bits) & 0x1f) as usize] as char);
+        }
+    }
+    if bits > 0 {
+        out.push(ALPHABET[((buffer << (5 - bits)) & 0x1f) as usize] as char);
+    }
+    out
+}
+
+// 새 recovery 코드 — 160비트 랜덤 → Crockford base32 → 4자 그룹 대시 구분(타이핑 친화). 1회 표시용.
+pub fn gen_recovery_code() -> String {
+    let mut raw = [0u8; RECOVERY_BYTES];
+    OsRng.fill_bytes(&mut raw);
+    let enc = crockford_base32(&raw);
+    enc.as_bytes()
+        .chunks(4)
+        .map(|c| std::str::from_utf8(c).unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+// recovery 코드로 입력 정규화 — 대시/공백 제거 + 대문자(사용자가 소문자·구분자 섞어 입력해도 동일 RK).
+fn normalize_recovery(code: &str) -> String {
+    code.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .flat_map(|c| c.to_uppercase())
+        .collect()
+}
+
+// recovery 코드로 secret(S) wrap → (salt, SealedItem). Argon2id(코드)→RK, seal(RK, secret).
+pub fn recovery_wrap(recovery_code: &str, secret: &[u8]) -> Result<(Vec<u8>, SealedItem), String> {
+    let norm = normalize_recovery(recovery_code);
+    if norm.is_empty() {
+        return Err("빈 recovery 코드".to_string());
+    }
+    let mut salt = [0u8; SALT_LEN];
+    OsRng.fill_bytes(&mut salt);
+    let rk = derive_kek(norm.as_bytes(), &salt, ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST)?;
+    let item = seal(&rk, secret)?;
+    Ok((salt.to_vec(), item))
+}
+
+// recovery 코드로 secret 복구 — Argon2id(코드,salt)→RK, open(RK, item). 잘못된 코드면 AEAD Err.
+pub fn recovery_unwrap(recovery_code: &str, salt: &[u8], item: &SealedItem) -> Result<Vec<u8>, String> {
+    let norm = normalize_recovery(recovery_code);
+    let rk = derive_kek(norm.as_bytes(), salt, ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST)?;
+    open(&rk, item)
+}
+
+// recovery blob 직렬화 — encryption_keys.recovery 컬럼에 저장할 JSON(salt + SealedItem, 전부 b64).
+#[derive(Serialize, Deserialize, Clone)]
+pub struct RecoveryBlob {
+    #[serde(with = "b64")]
+    pub salt: Vec<u8>,
+    pub sealed: SealedItem,
+}
+
 // ── 비대칭 봉투(app.data 단계②) — X25519 sealed box + AAD ──────────────────────
 // libsodium crypto_box_seal 구조: 공개키 P 로 봉인(개인키 불요 = vault lock 중에도 at-rest 쓰기 가능),
 // 개인키 S 로만 개봉(unlock 필요). 1회용 ephemeral 키페어로 DH → HKDF-SHA256 대칭키 → 기존
@@ -951,6 +1027,32 @@ mod tests {
         let mut t2 = seal_to(&p, b"value", AAD1).unwrap();
         t2.eph_pk[0] ^= 0xff;
         assert!(open_sealed(&s, &t2, AAD1).is_err(), "eph_pk 변조 거부");
+    }
+
+    // (r24, B10) recovery code — S 를 코드로 wrap/unwrap 라운드트립. 잘못된 코드 거부. 구분자/대소문자
+    // 무관 정규화. 코드는 typeable(Crockford base32, 혼동문자 없음).
+    #[test]
+    fn recovery_code_roundtrip() {
+        let (s, _p) = gen_asym_keypair();
+        let code = gen_recovery_code();
+        // 코드 형식 — 대시 그룹, 혼동문자(I L O U) 없음.
+        assert!(code.contains('-'), "그룹 구분 대시");
+        for c in code.chars().filter(|c| *c != '-') {
+            assert!("0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(c), "Crockford 문자만: {c}");
+        }
+        let (salt, sealed) = recovery_wrap(&code, &s).unwrap();
+        // 정확한 코드 → 복구.
+        assert_eq!(recovery_unwrap(&code, &salt, &sealed).unwrap(), s, "코드로 S 복구");
+        // 구분자/소문자 섞어도 동일(정규화).
+        let messy = code.to_lowercase().replace('-', " ");
+        assert_eq!(recovery_unwrap(&messy, &salt, &sealed).unwrap(), s, "정규화 후 동일 복구");
+        // 잘못된 코드 → 거부(AEAD).
+        assert!(recovery_unwrap("WRONG-CODE-0000", &salt, &sealed).is_err(), "잘못된 코드 거부");
+        // blob 직렬화 라운드트립.
+        let blob = RecoveryBlob { salt: salt.clone(), sealed: sealed.clone() };
+        let json = serde_json::to_string(&blob).unwrap();
+        let back: RecoveryBlob = serde_json::from_str(&json).unwrap();
+        assert_eq!(recovery_unwrap(&code, &back.salt, &back.sealed).unwrap(), s);
     }
 
     // (r23, B8) vault must-exist — 키가 등록된 상태(expect_vault)에서 vault 파일이 없으면 unlock 이 새

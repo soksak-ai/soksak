@@ -100,18 +100,57 @@ pub struct ActiveKey {
     pub public_key: [u8; 32],
 }
 
-// 부팅 시 1회 — 테이블 + active 부분 인덱스. init_base 에서 호출(멱등).
+// 부팅 시 1회 — 테이블 + active 부분 인덱스. init_base 에서 호출(멱등). recovery = R24 복구 blob(암호문,
+// 평문 저장 안전 — recovery code 로만 열림). 기존 DB(recovery 컬럼 없는)는 멱등 ALTER 로 추가.
 pub fn init_keys_table(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS encryption_keys (\
             scope TEXT NOT NULL, keyId TEXT NOT NULL,\
             publicKey TEXT NOT NULL, algo TEXT NOT NULL,\
             status TEXT NOT NULL, created INTEGER NOT NULL,\
+            recovery TEXT,\
             PRIMARY KEY(scope, keyId)\
          );\
          CREATE INDEX IF NOT EXISTS encryption_keys_active ON encryption_keys(scope) WHERE status='active';",
     )
+    .map_err(|e| e.to_string())?;
+    // [R24] 기존 DB(recovery 컬럼 부재) 멱등 마이그레이션.
+    let has_recovery: bool = conn
+        .prepare("SELECT 1 FROM pragma_table_info('encryption_keys') WHERE name='recovery'")
+        .map_err(|e| e.to_string())?
+        .exists([])
+        .map_err(|e| e.to_string())?;
+    if !has_recovery {
+        conn.execute_batch("ALTER TABLE encryption_keys ADD COLUMN recovery TEXT;")
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// [R24] 키 행에 recovery blob 저장(JSON 문자열). enable 시 keypair 생성 직후 1회.
+pub fn set_recovery(conn: &Connection, scope: &str, key_id: &str, recovery_json: &str) -> Result<(), String> {
+    let n = conn
+        .execute(
+            "UPDATE encryption_keys SET recovery=?3 WHERE scope=?1 AND keyId=?2",
+            (scope, key_id, recovery_json),
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err(format!("키 {key_id} 없음 — recovery 저장 실패"));
+    }
+    Ok(())
+}
+
+// [R24] active 키의 recovery blob 조회 — 복구 흐름이 읽는다. 없으면 None.
+pub fn active_recovery(conn: &Connection, scope: &str) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT recovery FROM encryption_keys WHERE scope=?1 AND status='active'",
+        [scope],
+        |r| r.get::<_, Option<String>>(0),
+    )
+    .optional()
     .map_err(|e| e.to_string())
+    .map(|o| o.flatten())
 }
 
 fn decode_pk(b64: &str) -> Result<[u8; 32], String> {
@@ -322,6 +361,31 @@ mod tests {
             )
             .unwrap();
         assert_eq!(n, 1, "scope 당 active 1개 불변");
+    }
+
+    // (k-e, R24/B10) recovery blob 저장/조회 + 코드로 S 복구 — passphrase 분실 시 독립 복구 경로.
+    #[test]
+    fn recovery_blob_store_and_recover() {
+        use crate::secrets::{gen_recovery_code, public_from_secret, recovery_unwrap, recovery_wrap, RecoveryBlob};
+        let c = mem();
+        let (s, p) = gen_asym_keypair();
+        register_active_key(&c, "proj-a", "key-1", &p, 100).unwrap();
+        // enable 흐름 모의 — recovery code 로 S wrap → blob 저장.
+        let code = gen_recovery_code();
+        let (salt, sealed) = recovery_wrap(&code, &s).unwrap();
+        let blob_json = serde_json::to_string(&RecoveryBlob { salt, sealed }).unwrap();
+        set_recovery(&c, "proj-a", "key-1", &blob_json).unwrap();
+        // active_recovery 로 조회.
+        let got = active_recovery(&c, "proj-a").unwrap().unwrap();
+        let blob: RecoveryBlob = serde_json::from_str(&got).unwrap();
+        // 코드로 S 복구 → 등록 P 와 일치(무결성).
+        let recovered = recovery_unwrap(&code, &blob.salt, &blob.sealed).unwrap();
+        assert_eq!(recovered, s.to_vec(), "코드로 S 복구");
+        let mut rs = [0u8; 32];
+        rs.copy_from_slice(&recovered);
+        assert_eq!(public_from_secret(&rs), p, "복구된 S 가 등록 P 와 일치");
+        // recovery 없는 scope → None.
+        assert!(active_recovery(&c, "proj-z").unwrap().is_none());
     }
 
     // (k-d, blocker④) 키스왑 탐지 — publicKey 를 공격자 P 로 변조하면 verify_active_key 가 false.

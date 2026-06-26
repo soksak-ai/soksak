@@ -195,10 +195,10 @@ export function registerDataCatalog(): void {
 
   register("data.encrypt.enable", {
     description:
-      "Enable encryption for a scope: generate an X25519 keypair, wrap the private key in the vault (requires the vault to be unlocked first), then register the public key so every subsequent write to this scope is sealed. Run data.encrypt.convert afterward to seal records already stored.",
+      "Enable encryption for a scope: generate an X25519 keypair, wrap the private key in the vault (requires the vault to be unlocked first) AND under a one-time recovery code, then register the public key so every subsequent write is sealed. Returns the recovery code ONCE — store it safely; it is the only way to recover the data if the passphrase is lost, and it is never retrievable again. Run data.encrypt.convert afterward to seal records already stored.",
     triggers: { ko: "암호화활성 암호화켜기 봉인활성" },
     params: { scope: { type: "string", description: "Scope partition key to encrypt", required: true } },
-    returns: "{ keyId }",
+    returns: "{ keyId, recoveryCode }",
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.encrypt.enable \'{"scope":"projA"}\''],
@@ -206,8 +206,29 @@ export function registerDataCatalog(): void {
       if (typeof p.scope !== "string" || !p.scope.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
       }
-      const keyId = await invoke<string>("data_encryption_enable", { scope: p.scope });
-      return { keyId };
+      const r = await invoke<{ key_id: string; recovery_code: string }>("data_encryption_enable", { scope: p.scope });
+      return { keyId: r.key_id, recoveryCode: r.recovery_code };
+    },
+  });
+
+  register("data.encrypt.recover", {
+    description:
+      "Recover a scope's encryption private key from its one-time recovery code after a lost passphrase. Unlock the vault with a NEW passphrase first; this re-stores the recovered key under it. The recovered key must match the registered public key or recovery is refused. After success the scope's sealed records decrypt again.",
+    triggers: { ko: "암호화복구 키복구 복구코드" },
+    params: {
+      scope: { type: "string", description: "Scope partition key to recover", required: true },
+      recoveryCode: { type: "string", description: "The recovery code issued at enable", required: true },
+    },
+    returns: "{ ok }",
+    danger: "destructive",
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['sok data.encrypt.recover \'{"scope":"projA","recoveryCode":"XXXX-XXXX-..."}\''],
+    handler: async (p) => {
+      if (typeof p.scope !== "string" || !p.scope.trim() || typeof p.recoveryCode !== "string" || !p.recoveryCode.trim()) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope·recoveryCode 필요" };
+      }
+      await invoke("data_encryption_recover", { scope: p.scope, recoveryCode: p.recoveryCode });
+      return { ok: true };
     },
   });
 
