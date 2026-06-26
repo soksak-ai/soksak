@@ -14,7 +14,7 @@ import {
 import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { useRegistry } from "../state/registry";
 import { installState, type RegistryEntry } from "../plugins/registry";
-import { useSessions, type ProjectTab } from "../state/sessions";
+import { useSessions } from "../state/sessions";
 import { useSettings } from "../state/settings";
 import { useUi } from "../state/ui";
 import { PluginViewHost } from "./PluginViewHost";
@@ -24,11 +24,13 @@ import { localize, useT } from "../i18n";
 
 const MANAGER = "manager"; // 예약 키 — 뷰 전역 키는 항상 점을 포함하므로 충돌 없음.
 
-// memo 경계(원칙 2): 다른 프로젝트의 store 쓰기에는 리렌더되지 않는다.
+// memo 경계(원칙 2·3): 프로젝트 식별자만 받고 *자기가 쓰는 필드*(rightView/rightOpen/root)를
+// 셀렉터로 구독한다 — project 객체 전체를 prop 으로 받으면 activeContentId 같은 무관 필드 변경(탭
+// 전환)에도 정체성이 바뀌어 리렌더된다. 슬라이스 구독이면 그 필드가 실제 바뀔 때만 리렌더된다.
 export const PluginSidebar = memo(function PluginSidebar({
-  project,
+  projectId,
 }: {
-  project: ProjectTab;
+  projectId: string;
 }) {
   const t = useT();
   const version = useViewRegistry((s) => s.version);
@@ -38,18 +40,24 @@ export const PluginSidebar = memo(function PluginSidebar({
     [version],
   );
   const setRightView = useSessions((s) => s.setRightView);
-  const rightView = project.rightView;
+  const rightView = useSessions(
+    (s) => s.tabs.find((x) => x.id === projectId)?.rightView,
+  );
+  const rightOpen = useSessions(
+    (s) => s.tabs.find((x) => x.id === projectId)?.rightOpen ?? false,
+  );
+  const root = useSessions((s) => s.tabs.find((x) => x.id === projectId)?.root);
   const rightMode = useSettings((s) => s.rightSidebarMode);
   const setRightMode = useSettings((s) => s.setRightSidebarMode);
 
   // 열렸는데 선택이 없거나 사라진 뷰면: 첫 등록 뷰 → 없으면 관리 패널.
   useEffect(() => {
-    if (!project.rightOpen) return;
+    if (!rightOpen) return;
     const valid =
       rightView === MANAGER || sidebarViews.some((v) => v.key === rightView);
     if (rightView && valid) return;
-    setRightView(project.id, sidebarViews[0]?.key ?? MANAGER);
-  }, [project.rightOpen, project.id, rightView, sidebarViews, setRightView]);
+    setRightView(projectId, sidebarViews[0]?.key ?? MANAGER);
+  }, [rightOpen, projectId, rightView, sidebarViews, setRightView]);
 
   // keep-alive: 이 프로젝트에서 한 번 연 뷰 키 누적(등록 해제되면 자연 제외).
   const openedRef = useRef<Set<string>>(new Set());
@@ -76,7 +84,7 @@ export const PluginSidebar = memo(function PluginSidebar({
             type="button"
             className={`icon-btn icon-btn--boxed plugin-rail-btn${rightView === key ? " active" : ""}`}
             title={localize(view.decl.title)}
-            onClick={() => setRightView(project.id, key)}
+            onClick={() => setRightView(projectId, key)}
           >
             {/* 플러그인 아이콘 = 매니페스트 선언 문자열(외부 계약) — 그대로 표시 */}
             {view.decl.icon}
@@ -101,7 +109,7 @@ export const PluginSidebar = memo(function PluginSidebar({
           className={`icon-btn icon-btn--boxed plugin-rail-btn${rightView === MANAGER ? " active" : ""}`}
           title={t("plugin.manager")}
           data-node="plugin-manager-tab"
-          onClick={() => setRightView(project.id, MANAGER)}
+          onClick={() => setRightView(projectId, MANAGER)}
         >
           <Icon name="settings" />
         </button>
@@ -117,8 +125,8 @@ export const PluginSidebar = memo(function PluginSidebar({
             >
               <PluginViewHost
                 viewKey={k}
-                projectId={project.id}
-                root={project.root ?? null}
+                projectId={projectId}
+                root={root ?? null}
                 region="right"
               />
             </div>
@@ -130,7 +138,7 @@ export const PluginSidebar = memo(function PluginSidebar({
               <button
                 type="button"
                 className="dbtn"
-                onClick={() => setRightView(project.id, MANAGER)}
+                onClick={() => setRightView(projectId, MANAGER)}
               >
                 {t("plugin.manager.open")}
               </button>
@@ -140,8 +148,8 @@ export const PluginSidebar = memo(function PluginSidebar({
         {/* 하단 스테이터스바 — 터미널 패널(egroup-status)과 같은 시각 언어:
             좌측 컨텍스트(프로젝트 루트), 우측 현재 뷰 제목. */}
         <div className="plugin-side-status">
-          <span className="pss-left" title={project.root}>
-            {project.root ?? "—"}
+          <span className="pss-left" title={root}>
+            {root ?? "—"}
           </span>
           <span className="pss-right">{activeTitle}</span>
         </div>

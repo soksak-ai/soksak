@@ -213,7 +213,7 @@ const ProjectPane = memo(function ProjectPane({
           borderLeftWidth: project.rightOpen ? 1 : 0,
         }}
       >
-        <PluginSidebar project={project} />
+        <PluginSidebar projectId={project.id} />
       </div>
     </div>
   );

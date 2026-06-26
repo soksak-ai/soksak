@@ -33,6 +33,12 @@ export type ViewBadge = number | "dot" | null;
 export interface PluginViewProvider {
   mount(container: HTMLElement, ctx: PluginViewContext): void;
   unmount?(container: HTMLElement): void;
+  // 라이브 갱신 — 구조(projectId/viewKey)는 그대로인데 추종 대상(paneId=cwd 따라갈 터미널)만 바뀔 때,
+  // 호스트가 remount 대신 이걸 호출해 같은 인스턴스에 새 ctx 를 전달한다. 탭 전환마다 활성 pane 이
+  // 바뀌므로 paneId 로 remount 하면 매번 뷰를 통째 재생성(파일트리 canvas 재구축 ~36ms)하고 뷰 상태
+  // (펼친 폴더 등)도 유실된다. update 를 구현하면 그 churn 을 없앤다. 미구현 provider 는 호스트가
+  // 기존대로 paneId 변경에 remount 로 폴백하므로 하위호환. (배지가 version 과 분리된 것과 같은 원칙.)
+  update?(container: HTMLElement, ctx: PluginViewContext): void;
 }
 
 export interface RegisteredView {

@@ -6,6 +6,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import {
   getRegisteredView,
   useViewRegistry,
+  type PluginViewContext,
 } from "../plugins/viewRegistry";
 import { formatAddress, type Region } from "../commands/address";
 import { useSessions } from "../state/sessions";
@@ -42,34 +43,40 @@ export const PluginViewHost = memo(function PluginViewHost({
   const reg = getRegisteredView(viewKey);
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+  // provider 가 라이브 update 를 구현하면 paneId 변경을 remount 대신 update 로 전달한다(아래 deps 참조).
+  const supportsUpdate = typeof reg?.provider.update === "function";
 
+  // 최신 ctx 를 ref 로 보관 — mount/update effect 가 deps 를 늘리지 않고 최신값을 읽는다.
+  const ctxRef = useRef<PluginViewContext | null>(null);
+  ctxRef.current = {
+    projectId,
+    root,
+    paneId,
+    viewId: viewId ?? null,
+    command: command ?? null,
+    // 이 창의 그 뷰 탭 배지(per-window — 창마다 자체 store). 데이터 변경 시 플러그인이 재계산.
+    setBadge: (badge) => useViewRegistry.getState().setViewBadge(viewKey, badge),
+    // status 보고(R1) — 콘텐츠 배치(viewId 有)만 sessions view.status 로. 사이드바는 no-op.
+    setStatus: (status) =>
+      viewId
+        ? void useSessions.getState().setViewStatus(projectId, viewId, status)
+        : undefined,
+    // 탭 제목 동적 갱신 — 콘텐츠 배치(viewId 有)만. 사이드바는 no-op.
+    setTitle: (title) =>
+      viewId
+        ? useSessions.getState().setViewTitle(projectId, viewId, title)
+        : undefined,
+  };
+
+  // 구조 mount/unmount. paneId 는 *update 를 구현한 provider 면 deps 에서 제외*(별도 effect 가 푸시) —
+  // 탭 전환마다 바뀌는 추종 pane 으로 뷰를 통째 재생성하지 않기 위함. 미구현 provider 는 paneId 를
+  // 포함해 기존대로 remount(하위호환). projectId/root/viewKey 등 구조 변경엔 항상 remount.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !reg) return;
     setError(null);
     try {
-      reg.provider.mount(el, {
-        projectId,
-        root,
-        paneId,
-        viewId: viewId ?? null,
-        command: command ?? null,
-        // 이 창의 그 뷰 탭 배지(per-window — 창마다 자체 store). 데이터 변경 시 플러그인이 재계산.
-        setBadge: (badge) =>
-          useViewRegistry.getState().setViewBadge(viewKey, badge),
-        // status 보고(R1) — 콘텐츠 배치(viewId 有)만 sessions view.status 로. 사이드바는 no-op.
-        setStatus: (status) =>
-          viewId
-            ? void useSessions
-                .getState()
-                .setViewStatus(projectId, viewId, status)
-            : undefined,
-        // 탭 제목 동적 갱신 — 콘텐츠 배치(viewId 有)만. 사이드바는 no-op.
-        setTitle: (title) =>
-          viewId
-            ? useSessions.getState().setViewTitle(projectId, viewId, title)
-            : undefined,
-      });
+      reg.provider.mount(el, ctxRef.current!);
     } catch (e) {
       console.error(`플러그인 뷰 mount 실패(${viewKey}):`, e);
       setError(String(e));
@@ -84,7 +91,21 @@ export const PluginViewHost = memo(function PluginViewHost({
       }
       el.replaceChildren(); // unmount 미구현 provider 대비 — 호스트가 정리 보장
     };
-  }, [reg, projectId, root, paneId, viewKey, viewId, command]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reg, projectId, root, viewKey, viewId, command, supportsUpdate ? "" : paneId]);
+
+  // paneId 라이브 갱신 — 마운트된 뷰에 새 ctx 푸시(remount 없이). update 미구현이면 위 effect 가
+  // paneId 를 deps 에 포함해 remount 하므로 여기선 no-op. mount 직후에도 1회 도나 update 는 멱등.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !reg || !supportsUpdate) return;
+    try {
+      reg.provider.update!(el, ctxRef.current!);
+    } catch (e) {
+      console.error(`플러그인 뷰 update 실패(${viewKey}):`, e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paneId, supportsUpdate, reg]);
 
   // 컨테이너는 항상 렌더(ref 유지) — 에러/부재는 위에 겹쳐 보여 재등록 시 복구 가능.
   const overlay = !reg ? (
