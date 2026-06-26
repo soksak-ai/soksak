@@ -273,22 +273,35 @@ pub fn put(
     let id = id.unwrap_or_else(gen_id);
     // canonical id 주입(doc.id = 레코드 id 항상 일치).
     doc.as_object_mut().unwrap().insert("id".to_string(), json!(id));
-    let doc_s = encode_doc(&doc)?; // [M0] 코덱 seam(평문 항등; 단계② 가 seal 끼움)
     let now = now_millis();
     // [M0] records 쓰기 + FTS 동기화를 단일 트랜잭션으로 묶는다 — 과거엔 INSERT records → DELETE fts →
     // INSERT fts 가 별도 autocommit 이라, 중간 크래시 시 records 는 있고 FTS 는 stale 인 찢긴 상태가 남았다
     // (search 오결과 + 변환 시 doc/마커 불일치). BEGIN IMMEDIATE 로 원자화해 records+FTS 동시 커밋한다.
     // unchecked_transaction: 단일 쓰기 커넥션(mod.rs Mutex 직렬화)이라 빌림 충돌 없음.
     let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+    let meta = get_meta(&tx, ns, coll)?;
+    // [단계②] codec seam — fail-closed: scope 에 active key 있으면 봉인(공개키 P 만, vault 불요 →
+    // lock 중에도 at-rest 쓰기). 인덱스 필드(meta.idx)는 평문 top-level 로 남겨 query 가 그대로 탄다
+    // (blocker①). enc/keyId 컬럼에 표식. active key 없으면 평문 항등(현재 전부) — 회귀 0.
+    let idx_fields = meta.as_ref().map(|m| m.idx.clone()).unwrap_or_default();
+    let (doc_s, enc, key_id): (String, i64, Option<String>) = match super::crypto::active_key(&tx, scope)? {
+        Some(ak) => {
+            let aad = super::crypto::canonical_aad(ns, coll, scope, &id, &ak.key_id);
+            let sealed = super::crypto::seal_doc(&doc, &idx_fields, &ak.public_key, &ak.key_id, &aad)?;
+            (encode_doc(&sealed)?, 1, Some(ak.key_id))
+        }
+        None => (encode_doc(&doc)?, 0, None),
+    };
     tx.execute(
-        "INSERT INTO records(ns,coll,scope,id,doc,created,updated) VALUES(?1,?2,?3,?4,?5,?6,?6)\
-         ON CONFLICT(ns,coll,id) DO UPDATE SET scope=excluded.scope, doc=excluded.doc, updated=excluded.updated",
-        (ns, coll, scope, &id, &doc_s, now),
+        "INSERT INTO records(ns,coll,scope,id,doc,created,updated,enc,keyId) VALUES(?1,?2,?3,?4,?5,?6,?6,?7,?8)\
+         ON CONFLICT(ns,coll,id) DO UPDATE SET scope=excluded.scope, doc=excluded.doc, updated=excluded.updated, enc=excluded.enc, keyId=excluded.keyId",
+        (ns, coll, scope, &id, &doc_s, now, enc, &key_id),
     )
     .map_err(|e| e.to_string())?;
 
-    // FTS 동기화(선언된 경우): rowid 로 교체. (tx 는 Deref<Connection> 이라 get_meta 에 그대로 넘어간다.)
-    if let Some(meta) = get_meta(&tx, ns, coll)? {
+    // FTS 동기화(선언된 경우): rowid 로 교체. 봉인 시엔 평문(인덱스) 필드만 FTS 가능 — 봉인된 fts 필드를
+    // 평문 색인하면 자격증명이 FTS 테이블에 노출된다(R19). 그래서 enc=1 이면 대상 = fts ∩ idx 로 제한.
+    if let Some(meta) = meta {
         if !meta.fts.is_empty() {
             let rowid: i64 = tx
                 .query_row(
@@ -300,7 +313,12 @@ pub fn put(
             let tbl = fts_table(meta.cid);
             tx.execute(&format!("DELETE FROM {tbl} WHERE rowid=?1"), [rowid])
                 .map_err(|e| e.to_string())?;
-            let text = fts_text(&doc, &meta.fts);
+            let fts_fields: Vec<String> = if enc == 1 {
+                meta.fts.iter().filter(|f| idx_fields.iter().any(|i| i == *f)).cloned().collect()
+            } else {
+                meta.fts.clone()
+            };
+            let text = fts_text(&doc, &fts_fields);
             if !text.is_empty() {
                 tx.execute(
                     &format!("INSERT INTO {tbl}(rowid, text) VALUES(?1, ?2)"),
@@ -321,25 +339,28 @@ pub fn get(
     id: &str,
     scope: Option<&str>,
 ) -> Result<Option<Value>, String> {
-    let doc: Option<String> = match scope {
+    let row: Option<(String, i64)> = match scope {
         Some(s) => conn
             .query_row(
-                "SELECT doc FROM records WHERE ns=?1 AND coll=?2 AND id=?3 AND scope=?4",
+                "SELECT doc, enc FROM records WHERE ns=?1 AND coll=?2 AND id=?3 AND scope=?4",
                 (ns, coll, id, s),
-                |r| r.get(0),
+                |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .optional(),
         None => conn
             .query_row(
-                "SELECT doc FROM records WHERE ns=?1 AND coll=?2 AND id=?3",
+                "SELECT doc, enc FROM records WHERE ns=?1 AND coll=?2 AND id=?3",
                 (ns, coll, id),
-                |r| r.get(0),
+                |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .optional(),
     }
     .map_err(|e| e.to_string())?;
-    match doc {
-        Some(s) => Ok(Some(decode_doc(&s)?)), // [M0] 코덱 seam(평문 항등; 단계② 가 open 끼움)
+    match row {
+        // [단계②] enc=1 = 봉인 레코드. 복호는 개인키 S(vault) 가 필요 — 읽기 경로(resolve_sk)는 다음
+        // 묶음에서 배선한다. 그 전까지 봉인 JSON 을 doc 인 양 반환하지 않고 정직하게 게이트(은닉 오반환 금지).
+        Some((_s, 1)) => Err("암호화 레코드 — 복호 읽기 경로 미배선(단계② 진행 중)".to_string()),
+        Some((s, _)) => Ok(Some(decode_doc(&s)?)), // [M0] 코덱 seam(평문 항등)
         None => Ok(None),
     }
 }
@@ -640,6 +661,55 @@ mod tests {
         conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
         super::super::init_base(&conn).unwrap();
         conn
+    }
+
+    // [단계②] put 봉인 경로 — scope 에 active key 등록 후 put 하면 doc 컬럼이 봉인되고(enc=1),
+    // 인덱스 필드는 평문 top-level 로 남아 query 가 그대로 탄다(blocker①). 봉인 doc 은 S 로 개봉 가능.
+    #[test]
+    fn put_seals_when_active_key_present() {
+        use super::super::crypto;
+        let c = mem();
+        define(&c, "terminal", "command_blocks", &["viewId".into(), "startTs".into()], &["commandLine".into()]).unwrap();
+        // 평문 baseline — 키 없으면 평문(enc=0).
+        let id0 = put(&c, "terminal", "command_blocks", "proj-a", None,
+            &json!({"viewId":"t1","startTs":1,"output":"plain"})).unwrap();
+        let (doc0, enc0): (String, i64) = c.query_row(
+            "SELECT doc, enc FROM records WHERE id=?1", [&id0], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!(enc0, 0, "키 없으면 평문");
+        assert!(doc0.contains("plain"), "평문 레코드는 output 노출");
+        assert_eq!(get(&c, "terminal", "command_blocks", &id0, None).unwrap().unwrap()["output"], "plain");
+
+        // active key 등록 → put 봉인.
+        let (s, p) = crate::secrets::gen_asym_keypair();
+        crypto::register_active_key(&c, "proj-a", "key-1", &p, 100).unwrap();
+        let id1 = put(&c, "terminal", "command_blocks", "proj-a", None,
+            &json!({"viewId":"t2","startTs":1718900000000i64,"commandLine":"export T=sk-XYZ","output":"secret echo"})).unwrap();
+
+        // 저장 형태 검증: enc=1, keyId, 인덱스 평문, 민감 필드 비노출.
+        let (doc1, enc1, kid): (String, i64, Option<String>) = c.query_row(
+            "SELECT doc, enc, keyId FROM records WHERE id=?1", [&id1],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
+        assert_eq!(enc1, 1, "active key 있으면 봉인");
+        assert_eq!(kid.as_deref(), Some("key-1"));
+        assert!(doc1.contains("\"viewId\":\"t2\""), "인덱스 viewId 평문 유지");
+        assert!(doc1.contains("1718900000000"), "인덱스 startTs 평문 유지");
+        assert!(!doc1.contains("sk-XYZ"), "자격증명 평문 누출 0");
+        assert!(!doc1.contains("secret echo"), "output 평문 누출 0");
+
+        // blocker①: 봉인돼도 인덱스 필드로 query 가 탄다(0 아님).
+        let hits = query(&c, "terminal", "command_blocks", Some("proj-a"), Some(&json!({"viewId":"t2"})), Some("startTs"), false, Some(10), None).unwrap();
+        assert_eq!(hits.len(), 1, "봉인 레코드도 인덱스 query 로 1건 조회(blocker①)");
+
+        // 봉인 doc 을 S 로 개봉하면 원본 복원(쓰기 경로 정합).
+        let stored: Value = serde_json::from_str(&doc1).unwrap();
+        let aad = crypto::canonical_aad("terminal", "command_blocks", "proj-a", &id1, "key-1");
+        let opened = crypto::open_doc(&stored, &s, &aad).unwrap();
+        assert_eq!(opened["commandLine"], "export T=sk-XYZ");
+        assert_eq!(opened["output"], "secret echo");
+        assert_eq!(opened["viewId"], "t2");
+
+        // get 은 복호 경로 미배선이라 정직하게 Err(은닉 오반환 금지).
+        assert!(get(&c, "terminal", "command_blocks", &id1, None).is_err(), "봉인 레코드 get 은 게이트");
     }
 
     #[test]

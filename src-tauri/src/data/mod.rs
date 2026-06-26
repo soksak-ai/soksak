@@ -14,6 +14,7 @@ use rusqlite::Connection;
 
 pub mod backup;
 pub mod commands;
+pub mod crypto;
 pub mod store;
 
 // 단일 쓰기 커넥션(Mutex). SQLite WAL 은 읽기 동시·쓰기 단일 — 이 한 커넥션을 직렬화한다.
@@ -85,7 +86,9 @@ fn init_base(conn: &Connection) -> Result<(), String> {
         "CREATE INDEX IF NOT EXISTS records_created ON records(ns, coll, scope, created);\
          CREATE INDEX IF NOT EXISTS records_pending ON records(ns, coll) WHERE enc=0;",
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    // [단계②] scope 별 봉투 키 메타(encryption_keys). active 행 존재 = 암호화 트리거(fail-closed).
+    crypto::init_keys_table(conn)
 }
 
 // [M0] 기존 DB(enc/keyId 없는) 멱등 마이그레이션 — CREATE TABLE IF NOT EXISTS 는 기존 테이블에 컬럼을

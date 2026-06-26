@@ -40,6 +40,7 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use tauri::State;
+use x25519_dalek::{PublicKey, StaticSecret};
 use zeroize::{Zeroize, Zeroizing};
 
 // OWASP Argon2id 권장(2024): m=19456 KiB, t=2, p=1. 헤더에 기록 — 미래 파라미터 변경 대비.
@@ -179,6 +180,115 @@ pub fn open(kek: &[u8; KEY_LEN], item: &SealedItem) -> Result<Vec<u8>, String> {
     let out = aead_open(&dek, &item.val_nonce, &item.val_ct);
     dek.zeroize();
     out
+}
+
+// ── 비대칭 봉투(app.data 단계②) — X25519 sealed box + AAD ──────────────────────
+// libsodium crypto_box_seal 구조: 공개키 P 로 봉인(개인키 불요 = vault lock 중에도 at-rest 쓰기 가능),
+// 개인키 S 로만 개봉(unlock 필요). 1회용 ephemeral 키페어로 DH → HKDF-SHA256 대칭키 → 기존
+// XChaCha20Poly1305(이번엔 AAD 바인딩). AAD 에 봉인 컨텍스트(ns‖coll‖scope‖id‖keyId)를 묶어
+// 재배치/replay/교차-scope 이동을 거부한다(blocker high). 자체 crypto 발명 0 — RustCrypto + dalek.
+
+const X25519_LEN: usize = 32;
+
+// 비대칭 봉투 — 디스크/doc 컬럼 직렬화(전부 암호문·공개값, 비밀 0). b64(JSON 안전).
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SealedBox {
+    #[serde(with = "b64")]
+    pub eph_pk: Vec<u8>, // ephemeral 공개키(32B) — 개봉 측 DH 입력
+    #[serde(with = "b64")]
+    pub nonce: Vec<u8>, // XChaCha20 nonce(24B)
+    #[serde(with = "b64")]
+    pub ct: Vec<u8>, // AEAD 암호문(인증 태그 포함)
+}
+
+// 개인키 S(32B) → 공개키 P = X25519_basepoint · S. unlock 시 P==basepoint(S) byte-eq 로
+// encryption_keys.publicKey 스왑을 거부한다(blocker④). dalek 의 clamp/곱셈만 사용(자체 0).
+pub fn public_from_secret(secret: &[u8; X25519_LEN]) -> [u8; X25519_LEN] {
+    PublicKey::from(&StaticSecret::from(*secret)).to_bytes()
+}
+
+// 새 X25519 키페어 (S, P). S 는 vault wrap 대상(개인), P 는 encryption_keys 평문 메타(공개).
+pub fn gen_asym_keypair() -> ([u8; X25519_LEN], [u8; X25519_LEN]) {
+    let s = StaticSecret::random_from_rng(OsRng);
+    let p = PublicKey::from(&s).to_bytes();
+    (s.to_bytes(), p)
+}
+
+// DH 공유비밀 → HKDF-SHA256 → 봉투 대칭키(32B). info 에 두 공개키를 묶어 키 혼동 방지.
+fn derive_box_key(
+    shared: &[u8; 32],
+    eph_pk: &[u8; X25519_LEN],
+    recipient_pk: &[u8; X25519_LEN],
+) -> Zeroizing<[u8; KEY_LEN]> {
+    let hk = hkdf::Hkdf::<sha2::Sha256>::new(None, shared);
+    let mut info = Vec::with_capacity(13 + 2 * X25519_LEN);
+    info.extend_from_slice(b"soksak-box-v1");
+    info.extend_from_slice(eph_pk);
+    info.extend_from_slice(recipient_pk);
+    let mut key = Zeroizing::new([0u8; KEY_LEN]);
+    hk.expand(&info, key.as_mut()).expect("hkdf-sha256 32B expand 는 불변 길이");
+    key
+}
+
+// AAD 바인딩 AEAD — 기존 aead_seal/open 은 AAD 없음. 비대칭 봉투는 AAD 필수라 Payload 변형.
+fn aead_seal_aad(
+    key: &[u8; KEY_LEN],
+    nonce: &[u8; NONCE_LEN],
+    plaintext: &[u8],
+    aad: &[u8],
+) -> Result<Vec<u8>, String> {
+    let cipher = XChaCha20Poly1305::new(key.into());
+    cipher
+        .encrypt(XNonce::from_slice(nonce), chacha20poly1305::aead::Payload { msg: plaintext, aad })
+        .map_err(|_| "AEAD 봉인 실패".to_string())
+}
+fn aead_open_aad(
+    key: &[u8; KEY_LEN],
+    nonce: &[u8],
+    ciphertext: &[u8],
+    aad: &[u8],
+) -> Result<Vec<u8>, String> {
+    if nonce.len() != NONCE_LEN {
+        return Err("nonce 길이 오류".to_string());
+    }
+    let cipher = XChaCha20Poly1305::new(key.into());
+    cipher
+        .decrypt(XNonce::from_slice(nonce), chacha20poly1305::aead::Payload { msg: ciphertext, aad })
+        .map_err(|_| "AEAD 개봉 실패(잘못된 키·AAD·변조)".to_string())
+}
+
+// 공개키 P 로 봉인 — 개인키 불요(lock 중 at-rest 쓰기). aad 가 봉인 컨텍스트를 묶는다.
+pub fn seal_to(
+    recipient_pk: &[u8; X25519_LEN],
+    plaintext: &[u8],
+    aad: &[u8],
+) -> Result<SealedBox, String> {
+    let eph = StaticSecret::random_from_rng(OsRng);
+    let eph_pk = PublicKey::from(&eph).to_bytes();
+    let shared = eph.diffie_hellman(&PublicKey::from(*recipient_pk));
+    let key = derive_box_key(shared.as_bytes(), &eph_pk, recipient_pk);
+    let mut nonce = [0u8; NONCE_LEN];
+    OsRng.fill_bytes(&mut nonce);
+    let ct = aead_seal_aad(&key, &nonce, plaintext, aad)?;
+    Ok(SealedBox { eph_pk: eph_pk.to_vec(), nonce: nonce.to_vec(), ct })
+}
+
+// 개인키 S 로 개봉(unlock 필요). aad 불일치·변조·잘못된 키 → Err(평문 누출 0).
+pub fn open_sealed(
+    recipient_sk: &[u8; X25519_LEN],
+    boxed: &SealedBox,
+    aad: &[u8],
+) -> Result<Vec<u8>, String> {
+    if boxed.eph_pk.len() != X25519_LEN {
+        return Err("eph_pk 길이 오류".to_string());
+    }
+    let mut eph_pk = [0u8; X25519_LEN];
+    eph_pk.copy_from_slice(&boxed.eph_pk);
+    let s = StaticSecret::from(*recipient_sk);
+    let recipient_pk = PublicKey::from(&s).to_bytes();
+    let shared = s.diffie_hellman(&PublicKey::from(eph_pk));
+    let key = derive_box_key(shared.as_bytes(), &eph_pk, &recipient_pk);
+    aead_open_aad(&key, &boxed.nonce, &boxed.ct, aad)
 }
 
 // ── 상태(lib.rs manage) ──────────────────────────────────────────────────────
@@ -635,6 +745,68 @@ mod tests {
         s.set("plugin-a", "apiKey", "sk-token-xyz").unwrap();
         assert_eq!(s.resolve("plugin-a", "apiKey").unwrap(), "sk-token-xyz");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── 비대칭 봉투(단계②) ──────────────────────────────────────────────────
+    const AAD1: &[u8] = b"terminal|command_blocks|proj-a|rec-1|key-1|1";
+    const AAD2: &[u8] = b"terminal|command_blocks|proj-b|rec-1|key-1|1"; // scope 만 다름
+
+    // (asym-a) seal_to(P) → open_sealed(S) roundtrip — 같은 키페어·같은 AAD 면 평문 복원.
+    #[test]
+    fn asym_seal_open_roundtrip() {
+        let (s, p) = gen_asym_keypair();
+        let msg = br#"{"id":"rec-1","output":"secret echo"}"#;
+        let boxed = seal_to(&p, msg, AAD1).unwrap();
+        assert_eq!(open_sealed(&s, &boxed, AAD1).unwrap(), msg);
+    }
+
+    // (asym-b, blocker④) P == basepoint(S) — public_from_secret(S) 가 키페어 P 와 byte-eq.
+    // 키스왑 거부의 토대: encryption_keys.publicKey 가 S 에서 파생됐는지 검증할 수 있다.
+    #[test]
+    fn asym_public_matches_basepoint() {
+        let (s, p) = gen_asym_keypair();
+        assert_eq!(public_from_secret(&s), p, "P 는 basepoint·S 와 일치해야");
+        // 다른 S 의 P 는 다르다(스왑된 P 는 검증에서 탈락).
+        let (s2, _p2) = gen_asym_keypair();
+        assert_ne!(public_from_secret(&s2), p, "다른 S → 다른 P(스왑 탐지 가능)");
+    }
+
+    // (asym-c, blocker high) AAD 불일치 → open Err. scope 만 바뀐 AAD 로 개봉 거부(교차-scope 누출 0).
+    #[test]
+    fn asym_aad_mismatch_rejected() {
+        let (s, p) = gen_asym_keypair();
+        let boxed = seal_to(&p, b"value", AAD1).unwrap();
+        assert!(open_sealed(&s, &boxed, AAD2).is_err(), "다른 AAD 면 개봉 거부");
+        assert!(open_sealed(&s, &boxed, b"").is_err(), "빈 AAD 면 개봉 거부");
+        assert_eq!(open_sealed(&s, &boxed, AAD1).unwrap(), b"value"); // 정합 AAD 는 성공
+    }
+
+    // (asym-d) 잘못된 개인키 → open Err. 변조(ct/eph_pk) → open Err(평문 누출 0).
+    #[test]
+    fn asym_wrong_key_and_tamper_rejected() {
+        let (_s, p) = gen_asym_keypair();
+        let (s_other, _p2) = gen_asym_keypair();
+        let boxed = seal_to(&p, b"value", AAD1).unwrap();
+        assert!(open_sealed(&s_other, &boxed, AAD1).is_err(), "타 개인키 거부");
+        // ct 변조
+        let (s, p) = gen_asym_keypair();
+        let mut t1 = seal_to(&p, b"value", AAD1).unwrap();
+        t1.ct[0] ^= 0xff;
+        assert!(open_sealed(&s, &t1, AAD1).is_err(), "ct 변조 거부");
+        // eph_pk 변조 → DH 키 달라짐 → 인증 실패
+        let mut t2 = seal_to(&p, b"value", AAD1).unwrap();
+        t2.eph_pk[0] ^= 0xff;
+        assert!(open_sealed(&s, &t2, AAD1).is_err(), "eph_pk 변조 거부");
+    }
+
+    // (asym-e) 봉투 직렬화 라운드트립 — doc 컬럼 문자열로 직렬화/역직렬화 후 개봉 가능(저장 경로 검증).
+    #[test]
+    fn asym_serialize_roundtrip() {
+        let (s, p) = gen_asym_keypair();
+        let boxed = seal_to(&p, b"persisted", AAD1).unwrap();
+        let json = serde_json::to_string(&boxed).unwrap();
+        let back: SealedBox = serde_json::from_str(&json).unwrap();
+        assert_eq!(open_sealed(&s, &back, AAD1).unwrap(), b"persisted");
     }
 
     // resolve 잠금/미존재 게이트 — 잠김=Err(vault locked), 미존재 key/ns=Err(평문 누출 0).
