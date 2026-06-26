@@ -4,6 +4,7 @@
 // FileViewer 저장 성공 지점의 emitFileSaved 하나).
 // 리스너 실패는 호스트를 죽이지 못한다(§0-4) — 콜백마다 try/catch.
 
+import { invoke } from "@tauri-apps/api/core";
 import { listenThisWindow } from "../lib/windowEvents";
 import { allGroups, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
@@ -73,6 +74,10 @@ export interface PluginEventMap {
     cwd?: string | null;
     // 종료코드(R2 — shell provider OSC133 D;<code>). 없으면 undefined(코드 미동반/비-shell).
     exitCode?: number;
+    // [단계⑤] AI 세션 계보 — 끝난 명령이 claude/codex 면 그 종류와 sessionId(없으면 null). 블록에
+    // 기록해 복원 후 '이어가기' 의 토대. 비-에이전트 명령은 둘 다 null/undefined(부하 0).
+    agentKind?: string | null;
+    sessionId?: string | null;
   };
 }
 
@@ -306,15 +311,37 @@ export function startPluginHooks(): void {
     const info = projectInfoOfPane(paneId);
     emitPluginEvent("command.finished", { projectId: info?.id ?? null, paneId, exitCode });
     // shell provider: 명령 종료 = turn.ended(source shell). 끝난 명령라인/cwd/exitCode(R2) 동반(본문 enrich).
-    emitPluginEvent("turn.ended", {
-      projectId: info?.id ?? null,
-      root: info?.root ?? null,
-      paneId,
-      source: "shell",
-      command: commandLine ?? null,
-      cwd: cwd ?? null,
-      exitCode,
-    });
+    // [단계⑤] 에이전트(claude/codex) 명령이면 sessionId 를 곁들여 emit(계보) — detect/find 는 코어 단일진실
+    // (ai_session_*). 비-에이전트는 detect 1회만(find 안 함, 부하 최소). 조회 실패는 turn.ended 비차단.
+    void (async () => {
+      let agentKind: string | null = null;
+      let sessionId: string | null = null;
+      try {
+        const kind = commandLine
+          ? await invoke<string | null>("ai_session_detect", { commandLine })
+          : null;
+        if (kind) {
+          agentKind = kind;
+          if (cwd) {
+            const s = await invoke<{ session_id?: string } | null>("ai_session_find", { cwd });
+            sessionId = s?.session_id ?? null;
+          }
+        }
+      } catch {
+        /* 계보 조회 실패는 turn.ended 를 막지 않는다 */
+      }
+      emitPluginEvent("turn.ended", {
+        projectId: info?.id ?? null,
+        root: info?.root ?? null,
+        paneId,
+        source: "shell",
+        command: commandLine ?? null,
+        cwd: cwd ?? null,
+        exitCode,
+        agentKind,
+        sessionId,
+      });
+    })();
   });
 
   // idle provider 배선(기본 OFF — turn.idleDetection 커맨드로 켬). emit/projectInfo 주입(순환 import 회피).
