@@ -211,6 +211,23 @@ export function registerDataCatalog(): void {
     },
   });
 
+  register("data.encrypt.rotate", {
+    description:
+      "Rotate a scope's encryption key: generate a new keypair, re-seal every record from the old key to the new one (one transaction each, resumable), then dispose the old key only once nothing references it. Requires the vault unlocked.",
+    triggers: { ko: "키회전 키교체 암호화회전" },
+    params: { scope: { type: "string", description: "Scope partition key to rotate", required: true } },
+    returns: "{ oldKeyId, newKeyId, rekeyed, oldDisposed }",
+    danger: "destructive",
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['sok data.encrypt.rotate \'{"scope":"projA"}\''],
+    handler: async (p) => {
+      if (typeof p.scope !== "string" || !p.scope.trim()) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
+      }
+      return await invoke("data_encryption_rotate", { scope: p.scope });
+    },
+  });
+
   register("data.encrypt.convert", {
     description:
       "Seal records already stored plaintext in a scope under the active key (one transaction per record, idempotent, resumable). Run after data.encrypt.enable to protect pre-existing data.",

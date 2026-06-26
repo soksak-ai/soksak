@@ -444,6 +444,76 @@ pub fn convert_pending(
     Ok(n)
 }
 
+// [R18/B9] 키 회전 re-key — scope 의 old_key_id 로 봉인된 enc=1 레코드를 new_key 로 재봉인(전 ns/coll).
+// 레코드별 단일 트랜잭션: old S 로 개봉 → new P 로 재봉인 → UPDATE keyId WHERE keyId=old(멱등·이미 재키된
+// 행 0 rows). 개봉 실패(변조/잘못된 S)면 그 레코드 건너뛰지 않고 Err 전파(은닉 손실 0). created/updated 불변.
+// 부팅/중단 재개 = keyId=old 인 잔여만 다시 처리. dispose(old) 는 호출자가 잔여 0 확인 후.
+#[allow(clippy::too_many_arguments)]
+pub fn rekey_scope(
+    conn: &Connection,
+    scope: &str,
+    old_key_id: &str,
+    old_secret: &[u8; 32],
+    new_key_id: &str,
+    new_pk: &[u8; 32],
+    batch: i64,
+) -> Result<usize, String> {
+    let targets: Vec<(String, String, String)> = {
+        let mut stmt = conn
+            .prepare(
+                "SELECT ns, coll, id FROM records WHERE scope=?1 AND keyId=?2 AND enc=1 \
+                 ORDER BY created ASC, rowid ASC LIMIT ?3",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map((scope, old_key_id, batch.max(0)), |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+            })
+            .map_err(|e| e.to_string())?;
+        let mut v = Vec::new();
+        for r in rows {
+            v.push(r.map_err(|e| e.to_string())?);
+        }
+        v
+    };
+    let mut n = 0usize;
+    for (ns, coll, id) in targets {
+        let tx = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        // tx 안에서 keyId=old 재확인(멱등·경합 안전).
+        let doc_s: Option<String> = tx
+            .query_row(
+                "SELECT doc FROM records WHERE ns=?1 AND coll=?2 AND id=?3 AND keyId=?4 AND enc=1",
+                (&ns, &coll, &id, old_key_id),
+                |r| r.get(0),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+        let Some(doc_s) = doc_s else {
+            tx.commit().map_err(|e| e.to_string())?;
+            continue;
+        };
+        // 개봉(old S, old AAD) → 재봉인(new P, new AAD). 인덱스 평문 split 은 동일 메타.
+        let stored = decode_doc(&doc_s)?;
+        let aad_old = super::crypto::canonical_aad(&ns, &coll, scope, &id, old_key_id);
+        let plain = super::crypto::open_doc(&stored, old_secret, &aad_old)?;
+        let idx_fields = get_meta(&tx, &ns, &coll)?.map(|m| m.idx).unwrap_or_default();
+        let aad_new = super::crypto::canonical_aad(&ns, &coll, scope, &id, new_key_id);
+        let resealed = super::crypto::seal_doc(&plain, &idx_fields, new_pk, new_key_id, &aad_new)?;
+        let resealed_s = encode_doc(&resealed)?;
+        let updated = tx
+            .execute(
+                "UPDATE records SET doc=?4, keyId=?5 WHERE ns=?1 AND coll=?2 AND id=?3 AND keyId=?6 AND enc=1",
+                (&ns, &coll, &id, &resealed_s, new_key_id, old_key_id),
+            )
+            .map_err(|e| e.to_string())?;
+        if updated == 1 {
+            n += 1;
+        }
+        tx.commit().map_err(|e| e.to_string())?;
+    }
+    Ok(n)
+}
+
 pub fn get(
     conn: &Connection,
     ns: &str,
@@ -936,6 +1006,47 @@ mod tests {
         assert_eq!(search(&c, "terminal", "command_blocks", "secret1", None, None, None).unwrap().len(), 0, "봉인 후 FTS 검색 0건");
         // 인덱스(viewId) query 는 여전히 탄다(blocker①).
         assert_eq!(count(&c, "terminal", "command_blocks", Some("proj-a"), Some(&json!({"viewId":"t1"}))).unwrap(), 1);
+    }
+
+    // [단계②·R18/B9] 키 회전 re-key — old 로 봉인된 레코드를 new 로 재봉인. 재키 후 new S 로 개봉 가능,
+    // old S 로는 불가(전이 완료), keyId 갱신, 잔여 0 → dispose 안전. created 보존.
+    #[test]
+    fn rekey_scope_migrates_records() {
+        use super::super::crypto;
+        let c = mem();
+        define(&c, "terminal", "command_blocks", &["viewId".into()], &[]).unwrap();
+        let (s1, p1) = crate::secrets::gen_asym_keypair();
+        crypto::register_active_key(&c, "proj-a", "key-1", &p1, 10).unwrap();
+        let mut ids = Vec::new();
+        for i in 0..3 {
+            ids.push(put(&c, "terminal", "command_blocks", "proj-a", None,
+                &json!({"viewId":format!("t{i}"),"output":format!("payload{i}")})).unwrap());
+        }
+        let created_before: Vec<i64> = ids.iter().map(|id|
+            c.query_row("SELECT created FROM records WHERE id=?1", [id], |r| r.get(0)).unwrap()).collect();
+
+        // 회전: 새 키 등록(old retired) → re-key.
+        let (s2, p2) = crate::secrets::gen_asym_keypair();
+        crypto::register_active_key(&c, "proj-a", "key-2", &p2, 20).unwrap();
+        let n = rekey_scope(&c, "proj-a", "key-1", &s1, "key-2", &p2, 100).unwrap();
+        assert_eq!(n, 3, "3건 재키");
+        // 멱등 — 재호출 0(이미 key-2, WHERE keyId=old → no-op).
+        assert_eq!(rekey_scope(&c, "proj-a", "key-1", &s1, "key-2", &p2, 100).unwrap(), 0);
+        // old 키로 봉인된 잔여 0 → dispose 안전.
+        assert_eq!(crypto::count_sealed_with_key(&c, "proj-a", "key-1").unwrap(), 0);
+
+        for (i, id) in ids.iter().enumerate() {
+            let (kid, doc_s, created): (Option<String>, String, i64) = c.query_row(
+                "SELECT keyId, doc, created FROM records WHERE id=?1", [id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
+            assert_eq!(kid.as_deref(), Some("key-2"), "keyId 가 new 로 갱신");
+            assert_eq!(created, created_before[i], "created 보존");
+            let stored: Value = serde_json::from_str(&doc_s).unwrap();
+            // new S(s2)로 개봉 성공, old S(s1)로는 실패(전이 완료).
+            let aad = crypto::canonical_aad("terminal", "command_blocks", "proj-a", id, "key-2");
+            assert_eq!(crypto::open_doc(&stored, &s2, &aad).unwrap()["output"], format!("payload{i}"));
+            assert!(crypto::open_doc(&stored, &s1, &aad).is_err(), "old S 로는 개봉 불가");
+        }
     }
 
     #[test]

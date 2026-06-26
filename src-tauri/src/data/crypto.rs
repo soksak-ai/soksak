@@ -66,11 +66,6 @@ pub fn seal_doc(
     Ok(Value::Object(public))
 }
 
-// 저장 doc(enc=1)의 __enc 에서 keyId 추출 — 변환/회전이 어느 키로 봉인됐는지 알아야 할 때.
-pub fn sealed_key_id(stored: &Value) -> Option<String> {
-    stored.get(ENC_FIELD)?.get("k")?.as_str().map(|s| s.to_string())
-}
-
 // 봉인 doc 개봉 → 원본 doc 복원. 개인키 S 로 __enc 개봉 후 평문 top-level 과 병합(__enc 제거).
 // aad 불일치·변조·잘못된 키 → Err(평문 누출 0).
 pub fn open_doc(stored: &Value, secret: &[u8; 32], aad: &[u8]) -> Result<Value, String> {
@@ -272,13 +267,13 @@ mod tests {
         assert!(open_doc(&sealed, &s, &aad_a).is_ok(), "정합 AAD 는 성공");
     }
 
-    // (c-d) keyId 추출 + 예약 필드 충돌 거부.
+    // (c-d) 봉투가 keyId 를 자기기술(__enc.k) + 예약 필드 충돌 거부.
     #[test]
     fn key_id_and_reserved_field() {
         let (_s, p) = gen_asym_keypair();
         let aad = canonical_aad("terminal", "command_blocks", "proj-a", "rec-1", "key-9");
         let sealed = seal_doc(&sample(), &idx(), &p, "key-9", &aad).unwrap();
-        assert_eq!(sealed_key_id(&sealed).as_deref(), Some("key-9"));
+        assert_eq!(sealed.get(ENC_FIELD).unwrap().get("k").unwrap(), "key-9", "봉투가 keyId 자기기술");
         // doc 가 이미 __enc 를 담으면 거부(봉투 자리 충돌).
         let bad = json!({ "id": "x", "__enc": 1 });
         assert!(seal_doc(&bad, &[], &p, "key-9", &aad).is_err());

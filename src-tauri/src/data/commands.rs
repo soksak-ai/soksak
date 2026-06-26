@@ -288,6 +288,64 @@ pub fn data_encryption_enable(
     Ok(key_id)
 }
 
+#[derive(Serialize)]
+pub struct RotateResult {
+    pub old_key_id: String,
+    pub new_key_id: String,
+    pub rekeyed: usize,
+    pub old_disposed: bool, // old 키로 봉인된 잔여 0 이라 폐기됨(아니면 다음 회전/재개에서)
+}
+
+// 키 회전(R18/B9) — 새 키페어로 scope 전체를 re-key. old S 로 개봉→new P 로 재봉인. 잔여 0 확인 후에만
+// old 키를 폐기한다(영구손실 0). unlock 필요(old 개봉). 중단 시 keyId=old 잔여만 다음 회전에서 이어받음.
+#[tauri::command]
+pub fn data_encryption_rotate(
+    scope: String,
+    state: State<'_, DbState>,
+    secrets: State<'_, SecretsState>,
+) -> Result<RotateResult, String> {
+    if scope.is_empty() {
+        return Err("scope 필요".to_string());
+    }
+    if !secrets.is_unlocked() {
+        return Err("vault 잠김 — 회전은 unlock 필요(old 키 개봉)".to_string());
+    }
+    let old = with_conn(&state, |c| crypto::active_key(c, &scope))?
+        .ok_or("암호화 비활성 scope — 회전 대상 아님")?;
+    let old_s = secrets
+        .get_data_key(&old.key_id)?
+        .ok_or("old 개인키 부재 — 회전 불가(무결성 이슈)")?;
+    // 변조 검증 — old P==basepoint(old S). 스왑된 키로 회전하면 옛 레코드 개봉 실패 전손 위험.
+    if crate::secrets::public_from_secret(&old_s) != old.public_key {
+        return Err("old publicKey 가 vault 키와 불일치(스왑 의심) — 회전 거부".to_string());
+    }
+    // 새 키페어 → vault wrap → 등록(old retired, new active). 이후 새 put 은 new 로 봉인.
+    let (new_s, new_p) = crate::secrets::gen_asym_keypair();
+    let new_key_id = crypto::new_key_id();
+    secrets.put_data_key(&new_key_id, &new_s)?;
+    let created = super::now_millis();
+    with_conn(&state, |c| crypto::register_active_key(c, &scope, &new_key_id, &new_p, created))?;
+    // 전 레코드 re-key(배치 반복).
+    let mut rekeyed = 0usize;
+    loop {
+        let n = with_conn(&state, |c| {
+            store::rekey_scope(c, &scope, &old.key_id, &old_s, &new_key_id, &new_p, 512)
+        })?;
+        rekeyed += n;
+        if n == 0 {
+            break;
+        }
+    }
+    // 잔여 0(전 ns/coll) 확인 후에만 old 폐기(테이블 + vault). 잔여 있으면 다음 호출이 이어받음.
+    let remaining = with_conn(&state, |c| crypto::count_sealed_with_key(c, &scope, &old.key_id))?;
+    let old_disposed = remaining == 0;
+    if old_disposed {
+        with_conn(&state, |c| crypto::dispose_retired_key(c, &scope, &old.key_id))?;
+        secrets.delete_data_key(&old.key_id)?;
+    }
+    Ok(RotateResult { old_key_id: old.key_id, new_key_id, rekeyed, old_disposed })
+}
+
 // 기존 평문 레코드 봉인 변환(R17) — 암호화 활성 후 이미 쌓인 (ns,coll,scope) 평문을 active key 로 봉인.
 // 레코드별 단일 트랜잭션이라 크래시 재개 가능. 배치 반복으로 전부 변환, 반환=변환 수.
 #[tauri::command]
