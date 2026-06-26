@@ -1,3 +1,4 @@
+mod ai_session;
 mod browser;
 mod clipboard;
 mod data;
@@ -272,6 +273,8 @@ pub fn run() {
             data::commands::data_encryption_convert,
             data::commands::data_encryption_rotate,
             data::commands::data_encryption_status,
+            ai_session::ai_session_detect,
+            ai_session::ai_session_inspect,
             data::commands::data_backup,
             data::commands::data_restore,
             data::commands::data_export,

@@ -30,6 +30,7 @@ import { registerGitCatalog } from "./catalogGit";
 import { registerPluginCatalog } from "./catalogPlugins";
 import { registerUiCatalog } from "./catalogUi";
 import { registerDomCatalog } from "./catalogDom";
+import { registerAiSessionCatalog } from "./catalogAiSession";
 import { registerDataCatalog } from "./catalogData";
 import { registerSecretsCatalog } from "./catalogSecrets";
 import { registerTurnCatalog } from "./catalogTurn";
@@ -1662,6 +1663,7 @@ export function registerCatalog(): void {
   registerDomCatalog();
   registerDataCatalog();
   registerSecretsCatalog();
+  registerAiSessionCatalog();
   registerTurnCatalog();
   registerNetworkCatalog();
   registerMediaCatalog();
