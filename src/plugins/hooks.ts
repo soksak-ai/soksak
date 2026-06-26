@@ -6,6 +6,12 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listenThisWindow } from "../lib/windowEvents";
+import {
+  currentSessionOf,
+  isTracking,
+  startSessionTrack,
+  stopSessionTrack,
+} from "../state/sessionLineage";
 import { allGroups, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
@@ -303,6 +309,12 @@ export function startPluginHooks(): void {
       commandLine,
       cwd,
     });
+    // [단계⑤] claude 실행이면 그 cwd 세션 디렉토리 watch arm — 실행 중 /clear·/resume 전이를 fs-change
+    // 이벤트로 관찰한다(폴링 아님). detect 는 코어 단일진실, 명령당 1회.
+    void (async () => {
+      const kind = commandLine ? await invoke<string | null>("ai_session_detect", { commandLine }) : null;
+      if (kind === "claude" && cwd) void startSessionTrack(paneId, cwd);
+    })();
   });
 
   // 터미널 명령 종료 → 플러그인 이벤트(git 뷰 자동 갱신 등). 이산 이벤트라
@@ -311,37 +323,22 @@ export function startPluginHooks(): void {
     const info = projectInfoOfPane(paneId);
     emitPluginEvent("command.finished", { projectId: info?.id ?? null, paneId, exitCode });
     // shell provider: 명령 종료 = turn.ended(source shell). 끝난 명령라인/cwd/exitCode(R2) 동반(본문 enrich).
-    // [단계⑤] 에이전트(claude/codex) 명령이면 sessionId 를 곁들여 emit(계보) — detect/find 는 코어 단일진실
-    // (ai_session_*). 비-에이전트는 detect 1회만(find 안 함, 부하 최소). 조회 실패는 turn.ended 비차단.
-    void (async () => {
-      let agentKind: string | null = null;
-      let sessionId: string | null = null;
-      try {
-        const kind = commandLine
-          ? await invoke<string | null>("ai_session_detect", { commandLine })
-          : null;
-        if (kind) {
-          agentKind = kind;
-          if (cwd) {
-            const s = await invoke<{ session_id?: string } | null>("ai_session_find", { cwd });
-            sessionId = s?.session_id ?? null;
-          }
-        }
-      } catch {
-        /* 계보 조회 실패는 turn.ended 를 막지 않는다 */
-      }
-      emitPluginEvent("turn.ended", {
-        projectId: info?.id ?? null,
-        root: info?.root ?? null,
-        paneId,
-        source: "shell",
-        command: commandLine ?? null,
-        cwd: cwd ?? null,
-        exitCode,
-        agentKind,
-        sessionId,
-      });
-    })();
+    // [단계⑤] claude 추적 중이었으면 그 watch 추적값(currentSessionOf)을 블록에 싣는다 — find 폴링이 아니라
+    // 실행 내내 fs-change 로 갱신된 현재 세션. 그 후 watch disarm.
+    const agentKind = isTracking(paneId) ? "claude" : null;
+    const sessionId = currentSessionOf(paneId);
+    emitPluginEvent("turn.ended", {
+      projectId: info?.id ?? null,
+      root: info?.root ?? null,
+      paneId,
+      source: "shell",
+      command: commandLine ?? null,
+      cwd: cwd ?? null,
+      exitCode,
+      agentKind,
+      sessionId,
+    });
+    if (agentKind === "claude") void stopSessionTrack(paneId);
   });
 
   // idle provider 배선(기본 OFF — turn.idleDetection 커맨드로 켬). emit/projectInfo 주입(순환 import 회피).
