@@ -140,6 +140,7 @@ export function SettingsModal({
               <span
                 key={th.name}
                 className={`th-cell${th.name === themeName ? " active" : ""}`}
+                data-node={`settings/theme-cell/${th.name}`}
                 onClick={() => applyTheme(th.name)}
               >
                 <ThemeSwatch

@@ -617,6 +617,7 @@ function App() {
           <button
             type="button"
             className="icon-btn theme-toggle"
+            data-node="theme-toggle"
             title={isDark ? t("theme.lightPreset") : t("theme.darkPreset")}
             aria-label={t("theme.toggle")}
             onClick={toggleMode}
@@ -626,6 +627,7 @@ function App() {
           <button
             type="button"
             className="icon-btn settings-toggle"
+            data-node="settings-open"
             title={t("settings.open")}
             aria-label={t("settings.open")}
             onClick={() => setSettingsSection("general")}
