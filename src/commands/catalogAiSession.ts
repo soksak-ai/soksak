@@ -23,6 +23,23 @@ export function registerAiSessionCatalog(): void {
     },
   });
 
+  register("ai.session.find", {
+    description:
+      "Find the most recent claude session for a working directory by reading its session folder (~/.claude/projects/<encoded-cwd>/). Returns sessionId and cwd, or null. Used to tag a terminal's command block with the session it launched (on-demand, no live watch). codex uses date folders and is resolved later.",
+    triggers: { ko: "세션찾기 세션조회 현세션" },
+    params: { cwd: { type: "string", description: "Working directory the agent ran in", required: true } },
+    returns: "{ session }",
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['sok ai.session.find \'{"cwd":"/Users/me/proj"}\''],
+    handler: async (p) => {
+      if (typeof p.cwd !== "string" || !p.cwd.trim()) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "cwd 필요" };
+      }
+      const session = await invoke<unknown>("ai_session_find", { cwd: p.cwd });
+      return { session };
+    },
+  });
+
   register("ai.session.inspect", {
     description:
       "Read a claude/codex session jsonl file's header and return its sessionId and cwd. Only paths under ~/.claude/projects or ~/.codex/sessions are allowed; arbitrary file reads are rejected. The sessionId is validated against a UUID whitelist.",

@@ -275,6 +275,7 @@ pub fn run() {
             data::commands::data_encryption_status,
             ai_session::ai_session_detect,
             ai_session::ai_session_inspect,
+            ai_session::ai_session_find,
             data::commands::data_backup,
             data::commands::data_restore,
             data::commands::data_export,

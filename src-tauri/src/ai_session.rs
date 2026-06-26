@@ -11,6 +11,7 @@
 
 use serde::Serialize;
 use serde_json::Value;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -127,7 +128,54 @@ pub fn parse(kind: AgentKind, content: &str) -> Option<SessionInfo> {
     }
 }
 
+// claude 세션 디렉토리 — cwd 의 각 '/'·'.' 를 '-' 로 치환(실측: /Users/max/ai/cli/vsterm-tauri →
+// -Users-max-ai-cli-vsterm-tauri, /Users/x/soksak/.cache → -Users-x-soksak--cache, / → -). 이 디렉토리
+// 아래 <sessionId>.jsonl 이 생긴다. 터미널이 이 cwd 에서 claude 를 돌리면 여기 새 파일이 나타난다.
+pub fn claude_session_dir(home: &str, cwd: &str) -> PathBuf {
+    let enc: String = cwd.chars().map(|c| if c == '/' || c == '.' { '-' } else { c }).collect();
+    Path::new(home).join(".claude").join("projects").join(enc)
+}
+
+// 디렉토리에서 가장 최근(mtime) .jsonl 경로. 없으면 None.
+fn newest_jsonl(dir: &Path) -> Option<PathBuf> {
+    let mut newest: Option<(std::time::SystemTime, PathBuf)> = None;
+    for entry in std::fs::read_dir(dir).ok()?.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
+            continue;
+        }
+        let Ok(m) = entry.metadata().and_then(|md| md.modified()) else {
+            continue;
+        };
+        if newest.as_ref().is_none_or(|(t, _)| m > *t) {
+            newest = Some((m, path));
+        }
+    }
+    newest.map(|(_, p)| p)
+}
+
 // ── 점검 커맨드(R0 — 실시간 watch·viewId 매칭은 다음 조각, 지금은 식별 표면만) ──────────
+
+// cwd 로 claude 세션을 on-demand 조회 — 그 cwd 의 세션 디렉토리에서 가장 최근 세션 파일을 식별한다.
+// 프론트가 에이전트 명령 turn.ended 시 1회 호출해 블록에 sessionId 를 채운다(상시 watch 대신 on-demand
+// = 부하 최소, 폴링 없음). codex 는 date-dir 라 cwd 로 못 좁혀 후속(전체 스캔). 못 찾으면 None.
+#[tauri::command]
+pub fn ai_session_find(cwd: String) -> Result<Option<SessionInfo>, String> {
+    if cwd.is_empty() {
+        return Ok(None);
+    }
+    let home = std::env::var("HOME").map_err(|e| e.to_string())?;
+    let dir = claude_session_dir(&home, &cwd);
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+    let Some(path) = newest_jsonl(&dir) else {
+        return Ok(None);
+    };
+    let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let head: String = content.chars().take(65536).collect(); // 헤더만(전체 재파싱 금지, R8)
+    Ok(parse(AgentKind::Claude, &head))
+}
 
 // 터미널 명령이 추적 대상 에이전트인가 — "claude"/"codex"/null. 프론트가 command.started 의
 // commandLine 으로 호출해 블록의 agentKind 를 채운다(sessionId 는 watch 통합 후속).
@@ -200,6 +248,22 @@ mod tests {
         assert_eq!(info.kind, AgentKind::Codex);
         assert_eq!(info.session_id, "019d09a1-6bc4-7691-9458-088bde7fca3d");
         assert_eq!(info.cwd, "/Users/max/proj");
+    }
+
+    // claude 세션 디렉토리 인코딩 — 실측 규칙('/'·'.' → '-'). watch/find 대상 경로.
+    #[test]
+    fn claude_dir_encoding() {
+        assert_eq!(
+            claude_session_dir("/home/u", "/Users/max/ai/cli/vsterm-tauri"),
+            Path::new("/home/u/.claude/projects/-Users-max-ai-cli-vsterm-tauri")
+        );
+        // '/.' → '--' (실측: soksak/.cache → soksak--cache).
+        assert_eq!(
+            claude_session_dir("/h", "/Users/max/soksak/.cache"),
+            Path::new("/h/.claude/projects/-Users-max-soksak--cache")
+        );
+        // 루트 cwd → "-".
+        assert_eq!(claude_session_dir("/h", "/"), Path::new("/h/.claude/projects/-"));
     }
 
     // 깨진 줄(truncated tail)·위조 sessionId 는 건너뛰고 유효 줄에서 sessionId+cwd 를 취한다.
