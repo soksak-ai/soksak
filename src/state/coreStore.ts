@@ -39,6 +39,10 @@ export interface CoreStore<T> {
 export function makeCoreStore<T>(opts: CoreStoreOpts<T>): CoreStore<T> {
   const { key, lsKey, fallback, invoke, onDataChange, localStorage } = opts;
 
+  // 이 창이 방금 쓴 값(직렬화). data-change broadcast 는 송신 창 자신도 받으므로(commands.rs 가 전 창 emit),
+  // 그 self-echo 를 readRemote→apply 하면 불필요한 재렌더가 한 번 더 돈다. lastSavedJson 과 같으면 skip.
+  let lastSavedJson: string | null = null;
+
   const writeCache = (value: T) => {
     try {
       localStorage.setItem(lsKey, JSON.stringify(value));
@@ -63,6 +67,7 @@ export function makeCoreStore<T>(opts: CoreStoreOpts<T>): CoreStore<T> {
   };
 
   const save = async (value: T): Promise<void> => {
+    lastSavedJson = JSON.stringify(value); // 이 값의 echo 는 self — subscribe 에서 skip
     writeCache(value);
     await invoke("data_kv_set", { ns: NS, key, value });
   };
@@ -83,10 +88,11 @@ export function makeCoreStore<T>(opts: CoreStoreOpts<T>): CoreStore<T> {
     onDataChange((changedKey) => {
       if (changedKey !== key) return;
       void readRemote().then((v) => {
-        if (v != null) {
-          writeCache(v);
-          cb(v);
-        }
+        if (v == null) return;
+        // self-echo(이 창이 방금 쓴 값)면 이미 스토어·캐시에 반영됨 — 재apply(재렌더) skip.
+        if (JSON.stringify(v) === lastSavedJson) return;
+        writeCache(v);
+        cb(v);
       });
     });
 

@@ -126,6 +126,32 @@ describe("makeCoreStore", () => {
     expect(seen[seen.length - 1]).toEqual({ a: 2 });
   });
 
+  it("subscribe: self-echo(자기 창이 방금 쓴 값) 는 재apply skip", async () => {
+    const h = harness();
+    const store = makeCoreStore<{ a: number }>({
+      key: "settings",
+      lsKey: "soksak.settings",
+      fallback: { a: 0 },
+      invoke: h.invoke,
+      onDataChange: h.onDataChange,
+      localStorage: h.localStorage,
+    });
+    const seen: Array<{ a: number }> = [];
+    store.subscribe((v) => seen.push(v));
+    // 이 창이 저장 → broadcast self-echo. 같은 값 echo 는 cb 미호출(이미 반영됨, 재렌더 0).
+    await store.save({ a: 5 });
+    h.fireRemoteChange("settings");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(seen).toEqual([]); // self-echo skip
+    // 이후 다른 창이 다른 값 저장 → 그 echo 는 정상 apply.
+    h.remote.set("settings", { a: 9 });
+    h.fireRemoteChange("settings");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(seen[seen.length - 1]).toEqual({ a: 9 });
+  });
+
   it("subscribe: 다른 key 의 data-change 는 무시", async () => {
     const h = harness();
     const store = makeCoreStore({
