@@ -22,6 +22,7 @@ import {
 } from "./hooks";
 import { gateContribution } from "./conformance";
 import { mountPaneOverlay as mountPaneOverlayDom } from "./paneOverlay";
+import { injectPluginStyle as injectPluginStyleDom } from "./pluginStyle";
 import {
   useViewRegistry,
   type PluginViewProvider,
@@ -172,6 +173,9 @@ export interface SoksakPluginApi {
      *  실패 금지). 입력 게이트(setOverlayActive)는 별개 — 호출자가 마운트와 함께 관리. paneId 는
      *  command.started·statusBarItem 이 발급한 값. "ui:overlay:pane" 권한 필요. */
     mountPaneOverlay: (paneId: string, element: HTMLElement) => Disposable;
+    /** 이 플러그인 전용 <style> 을 코어가 head 에 멱등 주입(전역 document.head 직접 접근 대체). 같은
+     *  styleId(생략 = 플러그인당 1개) 재호출은 새 태그 없이 css 만 교체. dispose 로 제거. "ui" 권한 필요. */
+    injectStyle: (css: string, styleId?: string) => Disposable;
     /** 이 플러그인 뷰의 사이드바 탭 배지(읽지않음 표시). number=카운트, "dot"=점, null=해제.
      *  뷰 안에서는 mount ctx.setBadge 가 편하고, 이건 뷰 밖에서 갱신할 때. per-window. */
     setViewBadge: (viewId: string, badge: number | "dot" | null) => void;
@@ -1069,6 +1073,15 @@ export function buildPluginApi(
               throw new Error('mountPaneOverlay 는 "ui:overlay:pane" 권한이 필요합니다');
             }
             return tracker.wrap(mountPaneOverlayDom(paneId, element));
+          },
+          // 플러그인 전용 스타일 주입 — 코어가 head 를 소유하고 key(이 플러그인 id + 선택 styleId)
+          // 단위로 <style> 을 멱등 관리(플러그인은 전역 document.head 를 안 만진다). [RULE] "ui" 권한.
+          injectStyle: (css, styleId) => {
+            if (!has("ui")) {
+              throw new Error('injectStyle 은 "ui" 권한이 필요합니다');
+            }
+            const key = styleId ? `${id}:${styleId}` : id;
+            return tracker.wrap(injectPluginStyleDom(document, key, css));
           },
         }
       : undefined,

@@ -205,6 +205,9 @@ export interface SoksakPluginApi {
      *  대행한다(플러그인은 전역 document 로 코어 DOM 을 조회하지 않는다). dispose 로 제거. host
      *  부재 시 throw. 입력 게이트(setOverlayActive)는 별개. "ui:overlay:pane" 권한 필요. */
     mountPaneOverlay: (paneId: string, element: HTMLElement) => Disposable;
+    /** 이 플러그인 전용 <style> 을 코어가 head 에 멱등 주입(전역 document.head 직접 접근 대체). 같은
+     *  styleId(생략 = 플러그인당 1개) 재호출은 css 만 교체. dispose 로 제거. "ui" 권한 필요. */
+    injectStyle: (css: string, styleId?: string) => Disposable;
     setViewBadge: (viewId: string, badge: number | "dot" | null) => void;
   };
   storage?: {
