@@ -1,8 +1,7 @@
 // 범용 상태바 아이템 레지스트리(플러그인 소켓). 플러그인이 paneId 에 연관된 상태바
 // 아이템(라벨 + 클릭 핸들러)을 등록하면, 그 pane 이 활성 터미널인 그룹의 상태바
 // (GroupStatusBar)가 렌더한다. 코어는 아이템의 용도를 모른다 — claude-GUI 등 도메인은
-// 전부 플러그인 소유(command.started·paneHostRegistry 와 동일 decoupled 원칙 — 코어가 paneId 로
-// 노출하고 플러그인이 참조).
+// 전부 플러그인 소유(command.started·data-pane-id 와 동일 decoupled 원칙).
 
 export interface StatusBarItem {
   /** 등록 식별자(해지·갱신 키). 보통 "<plugin>:<paneId>". */

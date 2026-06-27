@@ -21,8 +21,6 @@ import {
   type PluginEventMap,
 } from "./hooks";
 import { gateContribution } from "./conformance";
-import { mountPaneOverlay as mountPaneOverlayDom } from "./paneOverlay";
-import { injectPluginStyle as injectPluginStyleDom } from "./pluginStyle";
 import {
   useViewRegistry,
   type PluginViewProvider,
@@ -167,15 +165,6 @@ export interface SoksakPluginApi {
     /** 모달/오버레이 표시 동안 입력 게이트 활성(콘텐츠 네이티브 webview 영역 위 클릭 성립).
      *  "ui:overlay:*" 권한 필요. 표시 시 true, 숨김/정리 시 false 를 호출(호출자가 균형 관리). */
     setOverlayActive: (active: boolean) => void;
-    /** paneId 가 가리키는 콘텐츠 뷰 호스트에 오버레이 element 를 마운트 — 코어가 host lookup 을
-     *  대행한다(플러그인은 전역 document 로 코어 DOM 을 조회하지 않는다). 오버레이는 provider 가
-     *  비우지 않는 안전 슬롯(.plugin-view-host)에 붙는다. dispose 로 제거. host 부재 시 throw(침묵
-     *  실패 금지). 입력 게이트(setOverlayActive)는 별개 — 호출자가 마운트와 함께 관리. paneId 는
-     *  command.started·statusBarItem 이 발급한 값. "ui:overlay:pane" 권한 필요. */
-    mountPaneOverlay: (paneId: string, element: HTMLElement) => Disposable;
-    /** 이 플러그인 전용 <style> 을 코어가 head 에 멱등 주입(전역 document.head 직접 접근 대체). 같은
-     *  styleId(생략 = 플러그인당 1개) 재호출은 새 태그 없이 css 만 교체. dispose 로 제거. "ui" 권한 필요. */
-    injectStyle: (css: string, styleId?: string) => Disposable;
     /** 이 플러그인 뷰의 사이드바 탭 배지(읽지않음 표시). number=카운트, "dot"=점, null=해제.
      *  뷰 안에서는 mount ctx.setBadge 가 편하고, 이건 뷰 밖에서 갱신할 때. per-window. */
     setViewBadge: (viewId: string, badge: number | "dot" | null) => void;
@@ -1063,25 +1052,6 @@ export function buildPluginApi(
             }
             if (active) useUi.getState().pushOverlay();
             else useUi.getState().popOverlay();
-          },
-          // pane 오버레이 마운트 — 코어가 paneId → host element 를 레지스트리(paneHostRegistry)로
-          // 노출하고, 여기선 그 참조로 마운트한다(셀렉터 0 — 플러그인도 코어도 DOM 을 안 뒤진다). 안전
-          // 슬롯(.plugin-view-host)에 붙이고 dispose 로 제거. 미등록 host 는 throw(침묵 실패 금지).
-          // [RULE] pane 영역 오버레이 → "ui:overlay:pane" 권한 필요.
-          mountPaneOverlay: (paneId, element) => {
-            if (!has("ui:overlay:pane")) {
-              throw new Error('mountPaneOverlay 는 "ui:overlay:pane" 권한이 필요합니다');
-            }
-            return tracker.wrap(mountPaneOverlayDom(paneId, element));
-          },
-          // 플러그인 전용 스타일 주입 — 코어가 head 를 소유하고 key(이 플러그인 id + 선택 styleId)
-          // 단위로 <style> 을 멱등 관리(플러그인은 전역 document.head 를 안 만진다). [RULE] "ui" 권한.
-          injectStyle: (css, styleId) => {
-            if (!has("ui")) {
-              throw new Error('injectStyle 은 "ui" 권한이 필요합니다');
-            }
-            const key = styleId ? `${id}:${styleId}` : id;
-            return tracker.wrap(injectPluginStyleDom(document, key, css));
           },
         }
       : undefined,

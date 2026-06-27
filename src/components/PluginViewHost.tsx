@@ -9,7 +9,7 @@ import {
   type PluginViewContext,
 } from "../plugins/viewRegistry";
 import { formatAddress, type Region } from "../commands/address";
-import { registerPaneHost } from "../plugins/paneHostRegistry";
+import { viewHostAnchors } from "../plugins/viewHostAnchors";
 import { useSessions } from "../state/sessions";
 import { useT } from "../i18n";
 
@@ -42,7 +42,6 @@ export const PluginViewHost = memo(function PluginViewHost({
   // (zustand spread) — 무관한 version 증가로는 remount 되지 않는다.
   useViewRegistry((s) => s.version);
   const reg = getRegisteredView(viewKey);
-  const hostRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   // provider 가 라이브 update 를 구현하면 paneId 변경을 remount 대신 update 로 전달한다(아래 deps 참조).
@@ -109,15 +108,6 @@ export const PluginViewHost = memo(function PluginViewHost({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId, supportsUpdate, reg]);
 
-  // paneId 역참조 노출 — 콘텐츠 배치(viewId 有)면 paneId(= viewId) → 이 host element 를 레지스트리에
-  // 등록한다. app.ui.mountPaneOverlay 가 셀렉터 없이 이 참조를 직접 받아 오버레이를 마운트한다. 사이드바
-  // (viewId 없음)는 자기 인스턴스 id 가 아니라 추종 대상이므로 등록하지 않는다. unmount = 해지.
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host || !viewId) return;
-    return registerPaneHost(viewId, host);
-  }, [viewId]);
-
   // 컨테이너는 항상 렌더(ref 유지) — 에러/부재는 위에 겹쳐 보여 재등록 시 복구 가능.
   const overlay = !reg ? (
     <div className="plugin-view-empty">{t("plugin.view.missing")}</div>
@@ -129,10 +119,10 @@ export const PluginViewHost = memo(function PluginViewHost({
   ) : null;
 
   return (
-    <div className="plugin-view-host" ref={hostRef}>
+    <div className="plugin-view-host">
       <div
         className={`plugin-view-container${reg?.decl.transparent ? " transparent" : ""}`}
-        data-view-addr={viewAddr}
+        {...viewHostAnchors(viewAddr, viewId)}
         ref={containerRef}
         style={overlay ? { display: "none" } : undefined}
       />
