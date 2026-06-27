@@ -1199,13 +1199,16 @@ export const useSessions = create<SessionsStore>((set, get) => ({
         r = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
         return s;
       }
-      // 마지막 뷰를 닫으면 빈 그룹(빈 탭)으로 — 컨텐츠/그룹은 유지(순수 스켈레톤: 빈 탭이
-      // 정당한 상태). 단일 그룹이면 그 그룹을 비우고, 분할 중이면 removeView 가 그룹을 접는다.
+      // 닫은 뒤 content 가 통째로 비면 단일 빈 탭으로 유지한다 — 컨텐츠/그룹은 유지(순수 스켈레톤:
+      // 빈 탭이 정당한 상태). leaf 단일 그룹의 마지막 뷰든, split 한쪽이 빈 그룹이라 removeView 가
+      // 빈 그룹들을 정리하며 트리 전체가 비는 경우든 동일하다(removeView → tree=null). 닫은 뷰의
+      // 그룹을 빈 채로 남긴다. tree=null 을 "프로젝트 없음" 으로 오인하면 안 된다(r 초기값 함정).
       const grp = findGroupOfView(content.layout, viewId);
-      if (grp && content.layout.type === "leaf" && grp.views.length <= 1) {
+      const { tree } = removeView(content.layout, viewId);
+      if (!tree) {
         const next = normalizeActiveGroupC({
           ...content,
-          layout: splitLeaf({ ...grp, views: [], activeViewId: "" }),
+          layout: splitLeaf({ ...grp!, views: [], activeViewId: "" }),
         });
         r = ok({ activeGroupId: next.activeGroupId, activeViewId: "" });
         return {
@@ -1214,8 +1217,6 @@ export const useSessions = create<SessionsStore>((set, get) => ({
           ),
         };
       }
-      const { tree } = removeView(content.layout, viewId);
-      if (!tree) return s;
       const next = normalizeActiveGroupC({ ...content, layout: tree });
       const activeGroup = findGroup(next.layout, next.activeGroupId);
       r = ok({
