@@ -1060,14 +1060,15 @@ export function buildPluginApi(
             if (active) useUi.getState().pushOverlay();
             else useUi.getState().popOverlay();
           },
-          // pane 오버레이 마운트 — 코어가 paneId → host lookup 대행(플러그인은 전역 document 로 코어
-          // DOM 을 안 만진다). 안전 슬롯(.plugin-view-host)에 붙이고 dispose 로 제거. host 부재 시
-          // throw(침묵 실패 금지). [RULE] pane 영역 오버레이 → "ui:overlay:pane" 권한 필요.
+          // pane 오버레이 마운트 — 코어가 paneId → host element 를 레지스트리(paneHostRegistry)로
+          // 노출하고, 여기선 그 참조로 마운트한다(셀렉터 0 — 플러그인도 코어도 DOM 을 안 뒤진다). 안전
+          // 슬롯(.plugin-view-host)에 붙이고 dispose 로 제거. 미등록 host 는 throw(침묵 실패 금지).
+          // [RULE] pane 영역 오버레이 → "ui:overlay:pane" 권한 필요.
           mountPaneOverlay: (paneId, element) => {
             if (!has("ui:overlay:pane")) {
               throw new Error('mountPaneOverlay 는 "ui:overlay:pane" 권한이 필요합니다');
             }
-            return tracker.wrap(mountPaneOverlayDom(document, paneId, element));
+            return tracker.wrap(mountPaneOverlayDom(paneId, element));
           },
         }
       : undefined,

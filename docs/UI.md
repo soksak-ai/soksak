@@ -93,17 +93,23 @@ region ∈ { left | content | right }
 `<id>/<안정키>`). 호스트 크롬은 선언 없이 `data-node`(chrome 경로). 노출 안 된 요소 접근은 `NOT_EXPOSED`.
 
 명령(registry 단일진실): `ui.tree`(노출 주소 트리)·`ui.measure(address)`(rect/style)·`ui.input.click(address)`
-(클릭, danger:inject). `data-pane-id`/`data-group-id`(네이티브 마우스 판정)는 직교한 코어 계약 — 혼동 금지.
+(클릭, danger:inject). `data-group-id`(네이티브 마우스 판정)는 직교한 코어 계약 — 혼동 금지.
 
-**paneId 역참조 앵커 (대칭성 계약).** 코어가 플러그인에 발급하는 paneId(= 콘텐츠 뷰 인스턴스 id —
-`command.started` 이벤트·`app.ui.statusBarItem({paneId})` 가 발급)는 DOM 에서 역참조 가능해야 한다. 콘텐츠
-뷰 호스트(`PluginViewHost`)는 `.plugin-view-container` 에 `data-pane-id="<viewId>"` 앵커를 노출한다 — 단일
-진실은 `src/plugins/viewHostAnchors.ts`. `ui:overlay:pane` 플러그인은 이 앵커로 host 를 찾아
-(`[data-pane-id="<paneId>"]`) 그 위에 오버레이를 마운트한다. statusBarItem 을 paneId 로 붙일 수 있으면
-오버레이도 paneId 로 붙을 수 있어야 한다 — 비대칭은 계약 위반. 사이드바 호스트의 paneId 는 '추종 대상
-터미널'이지 자기 인스턴스 id 가 아니므로 앵커를 안 단다(혼동 금지). [회귀] `942ae86`(내장 터미널 →
-플러그인) 에서 코어 터미널 뷰가 박던 이 앵커가 통합 호스트로 이전되지 못해 누락 → paneId 로 host 를 찾는
-claude-gui 오버레이가 안 열렸다. `viewHostAnchors.test.ts` 가 재발을 차단한다.
+**paneId 역참조 (레지스트리 계약).** 코어가 플러그인에 발급하는 paneId(= 콘텐츠 뷰 인스턴스 id —
+`command.started` 이벤트·`app.ui.statusBarItem({paneId})` 가 발급)로 그 pane 의 host element 를 참조할 수
+있어야 한다. 콘텐츠 뷰 호스트(`PluginViewHost`)는 mount 생명주기에 `paneId → host element` 를
+레지스트리(`src/plugins/paneHostRegistry.ts`)에 등록하고, `app.ui.mountPaneOverlay(paneId, el)` 가 그 참조로
+`.plugin-view-host` 슬롯(provider 가 `replaceChildren` 로 비우는 `.plugin-view-container` 의 부모)에 오버레이를
+마운트한다. statusBarItem 을 paneId 로 붙일 수 있으면 오버레이도 paneId 로 붙을 수 있어야 한다 — 비대칭은
+계약 위반. 사이드바 호스트의 paneId 는 '추종 대상 터미널'이지 자기 인스턴스 id 가 아니므로 등록하지 않는다.
+
+[원칙] **코어가 노출하는 element 는 셀렉터가 아니라 참조로 연결한다.** 셀렉터(`querySelector`, 문자열/속성
+매칭)는 못 찾으면 `throw` 가 아니라 `null` 을 줘 침묵 실패한다 — 코어가 DOM 구조/클래스/앵커를 바꾸면
+소비자가 조용히 깨진다. `942ae86`(내장 터미널 → 플러그인) 에서 코어가 박던 `data-pane-id` 앵커가 통합
+호스트로 이전되지 못해 누락됐고, claude-gui 가 `[data-pane-id]` 셀렉터로 host 를 못 찾고도 조용히 멈춰
+오버레이가 영영 안 열린 게 그 본질이다. 레지스트리는 element 를 직접 보유하므로 DOM 표현 변경에 면역이고,
+미등록은 즉시 `mountPaneOverlay` 의 throw 로 드러난다. (임베디드 webview 등 코어가 소유하지 않는 DOM 은
+레지스트리가 없으므로 셀렉터가 정당 — 이 원칙은 soksak 자기 UI 한정이다.)
 
 ---
 
