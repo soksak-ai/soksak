@@ -126,8 +126,12 @@ verify: spec-gate typecheck check test test-front ## 헤드리스 게이트(spec
 e2e-resize: ## 리사이즈 E2E(기계 측정 — blank/프롬프트/TUI). macOS+앱 실행+동의 필요
 	scripts/e2e/resize.sh --identity $${IDENTITY:-dev}
 
-clean: ## 빌드 산출물 제거(dist, 번들)
-	rm -rf dist src-tauri/target/release/bundle src-tauri/target/debug/bundle
+clean: ## dev 에 불필요한 재생성 산출물 제거(release 프로파일·번들·dist). 증분 빌드 자산(deps/.fingerprint/build/incremental/바이너리)은 보존 — 다음 dev 빌드 영향 0
+	cd src-tauri && cargo clean --release
+	rm -rf dist src-tauri/target/debug/bundle
+
+clean-deep: clean ## clean + 증분 컴파일 캐시(target/debug/incremental) 제거. deps 는 유지하나 다음 빌드 때 앱 크레이트만 전체 재컴파일(deps 재컴파일 X). 디스크 압박 시만
+	rm -rf src-tauri/target/debug/incremental
 
 stop: ## 실행 중인 개발 스택 전체 종료(tauri 바이너리 + tauri.js dev + Vite)
 	@pkill -f "target/debug/soksak-dev" 2>/dev/null || true
