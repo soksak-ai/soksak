@@ -761,7 +761,7 @@ export function registerCatalog(): void {
       threshold: {
         type: "number",
         description:
-          "Fraction of changed pixels that counts as a switch frame (default 0.01). Switches run 2-4%, static/clock noise 0.1-0.2%.",
+          "Noise floor (changed-pixel fraction) below which no switch is reported (default 0.003). Detection above the floor is peak-relative, so it adapts to the switch's magnitude.",
       },
     },
     returns:
@@ -816,20 +816,21 @@ export function registerCatalog(): void {
       S().setActiveContent(t.id, prev);
 
       const diffs = grid.map((r) => r[0] ?? 0);
-      // 전환 = 뚜렷한 변화(>1%) 프레임. 콘텐츠 전환은 2~4%, 정적/클럭 틱 노이즈는 0.1~0.2% 라 1% 가
-      // 둘을 가른다. 깨끗 = 그런 프레임이 정확히 1개(연속이면 번짐=jank). threshold 로 조절 가능.
-      const SW = (p.threshold as number | undefined) ?? 0.01;
+      // 자기적응 감지 — 전환 변화량은 콘텐츠 쌍마다 다르다(비슷한 두 터미널=0.5%, 터미널↔에디터=수%).
+      // 고정 임계값은 작은 전환을 놓치므로, peak 의 40% 이상인 프레임을 전환으로 본다(단 floor 미만이면
+      // 노이즈로 보고 전환 없음). 깨끗 = 그런 프레임이 정확히 1개(연속/복수면 번짐=jank). floor 조절 가능.
+      const peak = diffs.length ? Math.max(...diffs) : 0;
+      const floor = (p.threshold as number | undefined) ?? 0.003;
       let switchFrame = -1;
-      for (let f = 0; f < diffs.length; f++) {
-        if (diffs[f] > SW) {
-          switchFrame = f;
-          break;
-        }
-      }
       let switchFrames = 0;
-      if (switchFrame >= 0) {
-        for (let f = switchFrame; f < diffs.length && diffs[f] > SW; f++)
-          switchFrames++;
+      if (peak >= floor) {
+        const hi = Math.max(floor, peak * 0.4);
+        for (let f = 0; f < diffs.length; f++) {
+          if (diffs[f] >= hi) {
+            if (switchFrame < 0) switchFrame = f;
+            switchFrames++;
+          }
+        }
       }
       return {
         frames: n,
