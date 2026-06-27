@@ -758,6 +758,11 @@ export function registerCatalog(): void {
         description:
           "Content area fractional rect {x0,y0,x1,y1} (0..1). Default covers the main content pane.",
       },
+      threshold: {
+        type: "number",
+        description:
+          "Fraction of changed pixels that counts as a switch frame (default 0.01). Switches run 2-4%, static/clock noise 0.1-0.2%.",
+      },
     },
     returns:
       "{ frames, frameMs, switchFrame, switchFrames (consecutive changed = jank spread), clean, diffsPct }",
@@ -811,8 +816,9 @@ export function registerCatalog(): void {
       S().setActiveContent(t.id, prev);
 
       const diffs = grid.map((r) => r[0] ?? 0);
-      // 전환 = 큰 변화(>3%) 프레임. 깨끗 = 그런 프레임이 정확히 1개(연속이면 번짐=jank).
-      const SW = 0.03;
+      // 전환 = 뚜렷한 변화(>1%) 프레임. 콘텐츠 전환은 2~4%, 정적/클럭 틱 노이즈는 0.1~0.2% 라 1% 가
+      // 둘을 가른다. 깨끗 = 그런 프레임이 정확히 1개(연속이면 번짐=jank). threshold 로 조절 가능.
+      const SW = (p.threshold as number | undefined) ?? 0.01;
       let switchFrame = -1;
       for (let f = 0; f < diffs.length; f++) {
         if (diffs[f] > SW) {
