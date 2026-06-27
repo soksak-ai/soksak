@@ -5,7 +5,6 @@
 //   - 모든 변이는 결과(새 id/변경 후 상태)를 반환 — 호출자가 응답만으로 검증 가능.
 
 import { invoke } from "@tauri-apps/api/core";
-import { flushSync } from "react-dom";
 import {
   allGroups,
   useSessions,
@@ -733,45 +732,106 @@ export function registerCatalog(): void {
     },
   });
 
-  register("content.activateProbe", {
+  register("content.switchScan", {
     description:
-      "Measure the latency of switching to a content tab: the synchronous re-render plus style recalc/layout to reveal it. Parked content is content-visibility:hidden, so revealing it pays a deferred render cost. Restores the original active tab. For tab-switch perf A/B.",
-    triggers: { ko: "탭 이동 지연 측정 탭 전환 성능 unpark 비용" },
+      "Measure a content-tab switch as the user sees it: record the switch and report whether the new content lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts.",
+    triggers: { ko: "탭 전환 측정 깜빡임 jank 콘텐츠 전환 검사 단일프레임" },
     params: {
       project: P.project,
-      content: { ...P.content, required: true },
-      restore: {
-        type: "boolean",
-        description: "Restore the original active tab after measuring (default true)",
+      to: { ...P.content, required: true },
+      from: {
+        type: "string",
+        description: "Content id to start on (default: current active)",
+      },
+      frames: { type: "number", description: "Frames to capture (default 30)" },
+      intervalMs: { type: "number", description: "Frame interval ms (default 16)" },
+      applyAtMs: {
+        type: "number",
+        description: "Delay after recording starts before switching (default 250)",
+      },
+      settleMs: {
+        type: "number",
+        description: "Settle wait on the start content (default 600)",
+      },
+      region: {
+        type: "json",
+        description:
+          "Content area fractional rect {x0,y0,x1,y1} (0..1). Default covers the main content pane.",
       },
     },
-    returns: "{ from, to, switchJsMs, switchReflowMs }",
-    examples: ['sok content.activateProbe \'{"content":"c3"}\''],
-    handler: (p, ctx) => {
+    returns:
+      "{ frames, frameMs, switchFrame, switchFrames (consecutive changed = jank spread), clean, diffsPct }",
+    examples: [
+      'sok content.switchScan \'{"from":"c1","to":"c3"}\'',
+      'sok content.switchScan \'{"to":"c3","frames":40}\'',
+    ],
+    handler: async (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      const target = p.content as string;
-      const from = t.activeContentId;
-      const restore = p.restore !== false;
-      // flushSync 로 setActiveContent 의 React 재렌더를 동기화 → 강제 reflow 로 드러난 서브트리의
-      // recalc+layout 까지 동기 측정(rAF 없이 백그라운드 창서도 견고). js=재렌더, reflow=+recalc/layout.
-      const t0 = performance.now();
-      flushSync(() => {
-        S().setActiveContent(t.id, target);
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      const prev = t.activeContentId;
+      const to = p.to as string;
+      const from = (p.from as string | undefined) ?? prev;
+      const frames = (p.frames as number | undefined) ?? 30;
+      const intervalMs = (p.intervalMs as number | undefined) ?? 16;
+      const applyAtMs = (p.applyAtMs as number | undefined) ?? 250;
+      const settleMs = (p.settleMs as number | undefined) ?? 600;
+      const region =
+        (p.region as { x0: number; y0: number; x1: number; y1: number }) ?? {
+          // 좌측 사이드바·상단 크롬 제외한 본문 영역(탭 전환이 바뀌는 곳).
+          x0: 0.23,
+          y0: 0.1,
+          x1: 0.99,
+          y1: 0.96,
+        };
+
+      const { tempDir, join } = await import("@tauri-apps/api/path");
+      const dir = await join(await tempDir(), "soksak", `switchscan-${Date.now()}`);
+
+      // 1) 시작 콘텐츠로 + settle.
+      S().setActiveContent(t.id, from);
+      await sleep(settleMs);
+      // 2) 녹화 시작(비대기) → applyAtMs 후 대상 콘텐츠로 전환 → 완료 대기.
+      const recT0 = performance.now();
+      const recP = invoke<number>("plugin:webview-capture|record", {
+        dir,
+        frames,
+        intervalMs,
       });
-      const switchJsMs = performance.now() - t0;
-      void document.documentElement.offsetHeight;
-      const switchReflowMs = performance.now() - t0;
-      if (restore && from && from !== target) {
-        flushSync(() => {
-          S().setActiveContent(t.id, from);
-        });
+      await sleep(applyAtMs);
+      S().setActiveContent(t.id, to);
+      const n = await recP;
+      const realFrameMs = n > 0 ? (performance.now() - recT0) / n : intervalMs;
+      // 3) 프레임간 픽셀 변화율 → 전환 프레임 탐지.
+      const grid = await invoke<number[][]>(
+        "plugin:webview-capture|analyze_frame_diffs",
+        { dir, regions: [region] },
+      );
+      // 4) 원래 콘텐츠 복원.
+      S().setActiveContent(t.id, prev);
+
+      const diffs = grid.map((r) => r[0] ?? 0);
+      // 전환 = 큰 변화(>3%) 프레임. 깨끗 = 그런 프레임이 정확히 1개(연속이면 번짐=jank).
+      const SW = 0.03;
+      let switchFrame = -1;
+      for (let f = 0; f < diffs.length; f++) {
+        if (diffs[f] > SW) {
+          switchFrame = f;
+          break;
+        }
+      }
+      let switchFrames = 0;
+      if (switchFrame >= 0) {
+        for (let f = switchFrame; f < diffs.length && diffs[f] > SW; f++)
+          switchFrames++;
       }
       return {
-        from,
-        to: target,
-        switchJsMs: Math.round(switchJsMs),
-        switchReflowMs: Math.round(switchReflowMs),
+        frames: n,
+        frameMs: Math.round(realFrameMs),
+        switchFrame,
+        switchFrames,
+        clean: switchFrame >= 0 && switchFrames <= 1,
+        diffsPct: diffs.map((d) => +(d * 100).toFixed(1)),
       };
     },
   });
