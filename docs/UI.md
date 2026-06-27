@@ -95,6 +95,16 @@ region ∈ { left | content | right }
 명령(registry 단일진실): `ui.tree`(노출 주소 트리)·`ui.measure(address)`(rect/style)·`ui.input.click(address)`
 (클릭, danger:inject). `data-pane-id`/`data-group-id`(네이티브 마우스 판정)는 직교한 코어 계약 — 혼동 금지.
 
+**paneId 역참조 앵커 (대칭성 계약).** 코어가 플러그인에 발급하는 paneId(= 콘텐츠 뷰 인스턴스 id —
+`command.started` 이벤트·`app.ui.statusBarItem({paneId})` 가 발급)는 DOM 에서 역참조 가능해야 한다. 콘텐츠
+뷰 호스트(`PluginViewHost`)는 `.plugin-view-container` 에 `data-pane-id="<viewId>"` 앵커를 노출한다 — 단일
+진실은 `src/plugins/viewHostAnchors.ts`. `ui:overlay:pane` 플러그인은 이 앵커로 host 를 찾아
+(`[data-pane-id="<paneId>"]`) 그 위에 오버레이를 마운트한다. statusBarItem 을 paneId 로 붙일 수 있으면
+오버레이도 paneId 로 붙을 수 있어야 한다 — 비대칭은 계약 위반. 사이드바 호스트의 paneId 는 '추종 대상
+터미널'이지 자기 인스턴스 id 가 아니므로 앵커를 안 단다(혼동 금지). [회귀] `942ae86`(내장 터미널 →
+플러그인) 에서 코어 터미널 뷰가 박던 이 앵커가 통합 호스트로 이전되지 못해 누락 → paneId 로 host 를 찾는
+claude-gui 오버레이가 안 열렸다. `viewHostAnchors.test.ts` 가 재발을 차단한다.
+
 ---
 
 # B. 보더 소유권 헌법 — 어느 박스가 어느 변을 긋는가

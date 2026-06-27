@@ -9,6 +9,7 @@ import {
   type PluginViewContext,
 } from "../plugins/viewRegistry";
 import { formatAddress, type Region } from "../commands/address";
+import { viewHostAnchors } from "../plugins/viewHostAnchors";
 import { useSessions } from "../state/sessions";
 import { useT } from "../i18n";
 
@@ -121,7 +122,7 @@ export const PluginViewHost = memo(function PluginViewHost({
     <div className="plugin-view-host">
       <div
         className={`plugin-view-container${reg?.decl.transparent ? " transparent" : ""}`}
-        data-view-addr={viewAddr}
+        {...viewHostAnchors(viewAddr, viewId)}
         ref={containerRef}
         style={overlay ? { display: "none" } : undefined}
       />
