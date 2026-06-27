@@ -192,9 +192,15 @@ fn take_flag_value(args: &mut Vec<String>, flag: &str) -> Option<String> {
     None
 }
 
-fn request(method: &str, params: Value) -> Result<Value, String> {
+fn request(method: &str, mut params: Value) -> Result<Value, String> {
     // pane/window 는 env(SOKSAK_PANE/WINDOW)에서 — 터미널 안 "내 위치" 기본 타겟.
-    send_request(method, params, None, None, None)
+    // params 안의 timeoutMs 는 응답 대기 상한(envelope)으로 hoist — 커맨드 자체 params 검증에선 빠진다.
+    // record/캡처처럼 기본 10s 를 넘는 장시간 커맨드가 이걸로 상한을 키운다(코어가 [1s,600s] 클램프). 숫자 아니면 무시.
+    let timeout_ms = params
+        .as_object_mut()
+        .and_then(|o| o.remove("timeoutMs"))
+        .and_then(|v| v.as_u64());
+    send_request(method, params, None, None, timeout_ms)
 }
 
 // 소켓 JSON-RPC 1회 왕복. pane/window/timeout 명시값이 있으면 우선, 없으면 env(SOKSAK_PANE/WINDOW) 사용.
