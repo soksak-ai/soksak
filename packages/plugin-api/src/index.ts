@@ -201,6 +201,10 @@ export interface SoksakPluginApi {
     statusBarItem: (item: StatusBarItem) => Disposable;
     registerHeaderAction: (action: HeaderAction) => Disposable;
     setOverlayActive: (active: boolean) => void;
+    /** paneId 가 가리키는 콘텐츠 뷰 호스트에 오버레이 element 를 마운트 — 코어가 host lookup 을
+     *  대행한다(플러그인은 전역 document 로 코어 DOM 을 조회하지 않는다). dispose 로 제거. host
+     *  부재 시 throw. 입력 게이트(setOverlayActive)는 별개. "ui:overlay:pane" 권한 필요. */
+    mountPaneOverlay: (paneId: string, element: HTMLElement) => Disposable;
     setViewBadge: (viewId: string, badge: number | "dot" | null) => void;
   };
   storage?: {
