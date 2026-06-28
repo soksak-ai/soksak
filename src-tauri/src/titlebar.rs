@@ -84,27 +84,38 @@ pub fn install_global_observers(x: f64, y: f64) {
     use objc2_foundation::{NSNotification, NSNotificationCenter};
 
     let center = NSNotificationCenter::defaultCenter();
-    let events: [(&'static str, &'static objc2_foundation::NSNotificationName); 6] = unsafe {
+    // dump = 전/후 상태를 /tmp/soksak-titlebar.log 에 기록할지(디버그 빌드 한정). resize 는
+    // 끈다 — 드래그/최대화 애니메이션 중 60~120Hz 로 통지가 오는데, dump_state 는 NSView
+    // 서브트리 introspection + 매 호출 파일 open+write(메인 스레드 동기 I/O)라, 켜 두면
+    // 리사이즈가 그 자체로 마비된다(실측: /tmp/soksak-titlebar.log 가 resize:before/after 로
+    // 폭증, 내용·제스처 무관 버벅임의 원인). 신호등 inset 유지(apply_inset — 파일 I/O 없는
+    // 가벼운 재배치)는 resize 에도 계속 돈다. 진단(포커스 전환 유령)은 becomeKey/resignKey/
+    // becomeMain/resignMain 같은 저빈도 이벤트에서만 기록한다.
+    let events: [(&'static str, bool, &'static objc2_foundation::NSNotificationName); 6] = unsafe {
         [
-            ("becomeKey", NSWindowDidBecomeKeyNotification),
-            ("resignKey", NSWindowDidResignKeyNotification),
-            ("becomeMain", NSWindowDidBecomeMainNotification),
-            ("resignMain", NSWindowDidResignMainNotification),
-            ("resize", NSWindowDidResizeNotification),
-            ("exitFullScreen", NSWindowDidExitFullScreenNotification),
+            ("becomeKey", true, NSWindowDidBecomeKeyNotification),
+            ("resignKey", true, NSWindowDidResignKeyNotification),
+            ("becomeMain", true, NSWindowDidBecomeMainNotification),
+            ("resignMain", true, NSWindowDidResignMainNotification),
+            ("resize", false, NSWindowDidResizeNotification),
+            ("exitFullScreen", true, NSWindowDidExitFullScreenNotification),
         ]
     };
 
-    for (label, name) in events {
+    for (label, dump, name) in events {
         let block = block2::RcBlock::new(move |note: std::ptr::NonNull<NSNotification>| {
             // 통지는 메인 스레드에서 게시된다(queue=None = 게시 스레드에서 실행).
             let note = unsafe { note.as_ref() };
             let Some(obj) = note.object() else { return };
             let Ok(ns) = obj.downcast::<NSWindow>() else { return };
             unsafe {
-                dump_state(&format!("{label}:before"), &ns);
+                if dump {
+                    dump_state(&format!("{label}:before"), &ns);
+                }
                 apply_inset(&ns, x, y);
-                dump_state(&format!("{label}:after"), &ns);
+                if dump {
+                    dump_state(&format!("{label}:after"), &ns);
+                }
             }
         });
         let token = unsafe {

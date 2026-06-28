@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  emitPluginEvent,
   onPluginEvent,
   startPluginHooks,
   type PluginEventMap,
@@ -118,5 +119,21 @@ describe("startPluginHooks — sessions diff coalescing", () => {
 
     subOpen.dispose();
     subClose.dispose();
+  });
+});
+
+describe("window.live-resize 이벤트", () => {
+  // 코어 네이티브 드래그 신호(window-live-resize)를 플러그인 events 채널로 노출한다.
+  // 터미널/브라우저 플러그인이 드래그 중 무거운 작업을 멈추고 끝에 1회 스냅하기 위한
+  // 단일 채널 — app.focus(window-focus 중계)와 동형. 권한 불요(비민감 라이프사이클).
+  it("active 토글(시작=true / 끝=false)을 순서대로 전달한다", () => {
+    const got: boolean[] = [];
+    const d = onPluginEvent("window.live-resize", (p) => got.push(p.active));
+    emitPluginEvent("window.live-resize", { active: true });
+    emitPluginEvent("window.live-resize", { active: false });
+    d.dispose();
+    // 해지 후 이벤트는 받지 않는다.
+    emitPluginEvent("window.live-resize", { active: true });
+    expect(got).toEqual([true, false]);
   });
 });

@@ -78,6 +78,10 @@ export interface PluginEventMap {
   "theme.changed": { name: string; mode: "light" | "dark" };
   "locale.changed": { language: string };
   "app.focus": { focused: boolean };
+  /** 창 가장자리 드래그 라이브 리사이즈 시작(true)/끝(false). 코어 네이티브 신호 중계 —
+   *  뷰 플러그인이 드래그 중 무거운 작업(fit·네이티브 재배치)의 빈도를 낮추고 끝에 1회
+   *  정확히 스냅하기 위한 채널. 권한 불요. per-window(이 창의 드래그만 도착). */
+  "window.live-resize": { active: boolean };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   "command.started": {
     projectId: string | null;

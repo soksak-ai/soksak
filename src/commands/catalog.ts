@@ -1541,6 +1541,25 @@ export function registerCatalog(): void {
     },
   });
 
+  register("window.resize", {
+    description: "Resize the window to a physical pixel size (for automation and resize-path E2E — drives the native window resize, the same path as edge-drag, which panel.resize does not exercise).",
+    params: {
+      w: { type: "number", description: "Physical width", required: true },
+      h: { type: "number", description: "Physical height", required: true },
+    },
+    returns: "{ w, h }",
+    examples: ['sok window.resize \'{"w":1200,"h":800}\''],
+    handler: async (p) => {
+      const { getCurrentWindow, PhysicalSize } = await import(
+        "@tauri-apps/api/window"
+      );
+      await getCurrentWindow().setSize(
+        new PhysicalSize(p.w as number, p.h as number),
+      );
+      return { w: p.w, h: p.h };
+    },
+  });
+
   register("window.focus", {
     description: "Bring the app window to the front and focus it (clears inactive state for automation).",
     params: {},

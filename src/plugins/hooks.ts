@@ -51,6 +51,12 @@ export interface PluginEventMap {
   // 같은 창 안 child webview(내장 브라우저)로 포커스가 가도 창 레벨이라 불변. 펫 등 부차
   // 애니메이션이 "안 볼 때 멈춘다"를 정확히 판정하는 신호(DOM blur 는 child 에도 반응해 부정확).
   "app.focus": { focused: boolean };
+  // 창 가장자리 드래그 라이브 리사이즈 시작(true)/끝(false) — 코어 NSWindow live-resize 통지
+  // (browser.rs install_live_resize_monitor)를 중계한다. 터미널/브라우저 플러그인이 드래그 중
+  // 무거운 작업(터미널 fit·PTY, 네이티브 webview 재배치)의 빈도를 낮추고 드래그 끝에 1회
+  // 정확히 스냅하기 위한 단일 채널 — app.focus(window-focus 중계)와 동형. 권한 불요(비민감
+  // 라이프사이클). 이 창에 emit_to 된 신호만 받는다(per-window — listenThisWindow).
+  "window.live-resize": { active: boolean };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   // 터미널 명령 시작(셸 preexec 의 OSC 633;E — 명령라인·cwd 동반, 폴링 없음).
   // [RULE] claude 등 "명령별" 도메인 처리는 코어가 아니라 이 이벤트를 구독하는
@@ -99,6 +105,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "theme.changed",
   "locale.changed",
   "app.focus",
+  "window.live-resize",
   "bookmarks.changed",
   "command.started",
   "command.finished",
@@ -364,6 +371,14 @@ export function startPluginHooks(): void {
   // 다른 창 포커스도 받아 app.focus 가 잘못 발화). lib/windowEvents 머리말 참조.
   listenThisWindow<boolean>("window-focus", (e) => {
     emitPluginEvent("app.focus", { focused: e.payload });
+  });
+
+  // 창 라이브 리사이즈(가장자리 드래그) 시작/끝 → 플러그인 이벤트. 이 창에 emit_to 된
+  // "window-live-resize" 만 받는다(per-window). 코어 browser.rs install_live_resize_monitor
+  // 가 NSWindow Will/DidEndLiveResize 통지를 그 창 label 로만 보낸다 → 각 창은 자기
+  // 드래그만 받는다(프론트 필터 불필요). window-focus → app.focus 와 동형 배선.
+  listenThisWindow<boolean>("window-live-resize", (e) => {
+    emitPluginEvent("window.live-resize", { active: e.payload });
   });
 }
 
