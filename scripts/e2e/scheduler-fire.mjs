@@ -6,7 +6,7 @@
 //
 // 시나리오:
 //   (a) reconcile 발화 → workflow.reconcile 핸들러 실행            [통합 의존 — 워크플로+칸반 플러그인]
-//   (b) process_lease: exec 도는 중 무중단 + 재발화 0(lease)        [통합 의존 — held-reply 명령]
+//   (b) process_lease: exec 도는 중 무중단 + 재발화 0(lease)        [자급 — dev debug.sleep held-reply]
 //   (c) crash/ok:false → backoff 재시도                            [자급 — notify.show 빈 params]
 //   (d) 더미 플러그인 at/every/cron 시간 발화(reminder-demo)        [자급 — notify.show]
 //
@@ -181,29 +181,12 @@ async function scenarioC() {
   ok(!(await findJob(id)), "재시도 소진 후 작업 제거(At 종료)", null);
 }
 
-// ── (b) process_lease 무중단 + 재발화 0 — 통합 의존(held-reply 명령). ──
+// ── (b) process_lease 무중단 + 재발화 0 + cancel-wakes-wait — dev debug.sleep(held-reply). ──
 async function scenarioB() {
-  console.log("\n[b] process_lease 무중단 + lease(재발화 0) — held-reply 명령 필요");
-  // TODO(통합): HELD_CMD = onExit 까지 reply 보류하는 명령. 후보:
-  //   - "plugin.soksak-plugin-workflow.workflow.exec-one"(실 exec-one, 프로세스 spawn→onExit await)
-  //   - 또는 dev 전용 debug.sleep(ms) 명령(프론트 핸들러가 ms 동안 await 후 ok:true) — 없으면 추가.
-  const HELD_CMD = process.env.HELD_CMD; // 통합 전엔 미설정 → 골격만 검증.
-  if (!HELD_CMD) {
-    warnIf(false, "HELD_CMD 미설정 — 통합 후 exec-one/debug.sleep 으로 실행", "skeleton");
-    // 골격: process_lease 등록 자체는 지금도 검증 가능(목록·취소).
-    const id = await registerTracked({
-      trigger: { kind: "at", at: now() + 100000 }, // 먼 미래 — 발화 안 함, 등록만 확인.
-      command: "notify.show",
-      params: NOTIFY,
-      process_lease: true,
-    });
-    const j = await findJob(id);
-    ok(!!j, "process_lease 작업 등록됨(목록 존재)", j && j.trigger);
-    await cancel(id);
-    ok(!(await findJob(id)), "process_lease 작업 cancel(대기 중)", null);
-    return;
-  }
-  // 통합 본검증: held 명령을 ~5s 보류하도록 구동(HELD_MS).
+  console.log("\n[b] process_lease 무중단 + lease(재발화 0) + cancel-wakes-wait — debug.sleep");
+  // HELD_CMD = ms 동안 reply 를 보류하는 명령(프론트 핸들러가 await). 기본 = dev 전용 debug.sleep
+  //   (실 LLM 없이 lease 로직 빠르게 검증). 통합 시 workflow.exec-one 으로도 가능(HELD_CMD 로 교체).
+  const HELD_CMD = process.env.HELD_CMD || "debug.sleep"; // dev 빌드에 등록됨(catalogDebug).
   const heldMs = Number(process.env.HELD_MS || 5000);
   const id = await registerTracked({
     trigger: { kind: "at", at: now() + 300 },

@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listenThisWindow } from "../lib/windowEvents";
 import { useSettings } from "../state/settings";
 import { registerCatalog } from "./catalog";
+import { registerDebugCatalog } from "./catalogDebug";
 import { registerRemoteCatalog } from "./catalogRemote";
 import { registerRemoteConfirmDevCatalog } from "./catalogRemoteConfirmDev";
 import { execute, setPermissionGate } from "./registry";
@@ -28,6 +29,8 @@ export function startExecutor(): void {
   registerRemoteCatalog();
   // dev 전용 mock 커맨드(프로덕션 번들엔 등록 0) — 라이브 폰 없이 confirm 모달 헤드리스 검증.
   registerRemoteConfirmDevCatalog();
+  // dev 전용 debug.* — 스케줄러 process_lease lease e2e 검증용 held-reply(debug.sleep). 프로덕션 0.
+  registerDebugCatalog();
   // 권한 게이트: 위험 분류별 정책을 설정 store 에서 읽어 allow/deny 판정.
   setPermissionGate((danger) => {
     const s = useSettings.getState();
