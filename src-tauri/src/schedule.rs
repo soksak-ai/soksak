@@ -311,6 +311,14 @@ struct Inner {
     started: bool,
 }
 
+// 다음 깨울 시각 — running 작업은 제외(완료가 notify 로 깨운다). None=대기 중 타이머 없음.
+fn earliest_wake(jobs: &HashMap<String, Job>) -> Option<u64> {
+    jobs.values()
+        .filter(|j| !j.running)
+        .filter_map(|j| j.next_at)
+        .min()
+}
+
 pub struct ScheduleState {
     inner: Mutex<Inner>,
     cv: Condvar,
@@ -439,15 +447,30 @@ impl ScheduleState {
         fires
     }
 
-    // 다음 깨울 시각 — running 작업은 제외(완료가 notify). None=타이머 없음(poke/register 대기).
+    // 다음 깨울 시각(테스트 핀) — running 작업 제외 불변식을 고정. park_until_due 와 같은 헬퍼를 쓴다.
+    #[cfg(test)]
     fn next_wake(&self, _now: u64) -> Option<u64> {
+        earliest_wake(&self.inner.lock().unwrap().jobs)
+    }
+
+    // 다음 due 까지 park — due 판정과 wait 를 한 번의 락 보유로 묶어 missed-wakeup 을 막는다(완료/poke/
+    // register 는 같은 락으로 next_at 을 세팅하므로, 우리 판정 전이면 즉시 재루프, 후면 notify 가 깨운다).
+    // 이미 due 면 즉시 반환(루프가 claim). 타이머 없으면 1시간 캡 후 깬다(notify 가 정상 경로).
+    fn park_until_due(&self) {
         let inner = self.inner.lock().unwrap();
-        inner
+        let now = now_ms();
+        let any_due = inner
             .jobs
             .values()
-            .filter(|j| !j.running)
-            .filter_map(|j| j.next_at)
-            .min()
+            .any(|j| !j.running && j.next_at.is_some_and(|a| a <= now));
+        if any_due {
+            return;
+        }
+        let wait = match earliest_wake(&inner.jobs) {
+            Some(at) => Duration::from_millis(at.saturating_sub(now).clamp(1, 3_600_000)),
+            None => Duration::from_secs(3_600),
+        };
+        let _ = self.cv.wait_timeout(inner, wait);
     }
 
     // 발화 완료 후처리 — lease 해제 + 재시도/재무장/coalesce + At 종료 정리.
@@ -521,14 +544,8 @@ pub fn ensure_started(app: &AppHandle) {
                 // 완료가 다음을 깨운다(blockedBy 충족분 reconcile 재평가) — complete 가 이미 notify.
             });
         }
-        // 다음 wake 까지 대기. 발화가 있었으면 즉시 재루프(추가 due 확인).
-        let st = app.state::<ScheduleState>();
-        let wait = match st.next_wake(now_ms()) {
-            Some(at) => Duration::from_millis(at.saturating_sub(now_ms()).clamp(1, 3_600_000)),
-            None => Duration::from_secs(3_600), // 타이머 없음 — register/poke/cancel notify 가 깨운다.
-        };
-        let inner = st.inner.lock().unwrap();
-        let _ = st.cv.wait_timeout(inner, wait);
+        // 다음 due 까지 park(due 판정+wait 한 락 — missed-wakeup 차단). 발화/완료/poke 가 깨운다.
+        app.state::<ScheduleState>().park_until_due();
     });
 }
 
