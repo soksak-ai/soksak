@@ -78,11 +78,17 @@ pub struct JobSpec {
     pub retry: Option<Retry>,
     #[serde(default = "default_concurrency")]
     pub concurrency: u32,
+    // 발화 1회당 명령 응답 대기 상한(ms). LLM exec(예: GLM 529 복구)은 길게 잡아야 — 너무 짧으면 명령이
+    // 아직 도는데 TIMEOUT=실패로 보고 backoff 재시도하다 중복 실행된다. 미지정 시 30s(route 가 [1s,600s] 클램프).
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
 }
 
 fn default_concurrency() -> u32 {
     1
 }
+
+const DEFAULT_TIMEOUT_MS: u64 = 30_000;
 
 // ── 순수 스케줄 계산 ─────────────────────────────────────────────────────────
 
@@ -271,6 +277,7 @@ struct Job {
     params: Value,
     retry: Option<Retry>,
     concurrency: u32,
+    timeout_ms: u64, // 발화 1회당 명령 응답 대기 상한.
     // 런타임:
     next_at: Option<u64>, // 다음 예정 발화(None=대기/완료).
     last_due: u64,        // 마지막으로 claim 된 예정 시각(드리프트 없는 re-arm 기준).
@@ -285,6 +292,7 @@ struct Fire {
     id: String,
     command: String,
     params: Value,
+    timeout_ms: u64,
 }
 
 // 완료 후 후처리 결과 — removed 면 영속에서도 제거해야 한다(At 1회 종료).
@@ -351,6 +359,7 @@ impl ScheduleState {
                 params: spec.params,
                 retry: spec.retry,
                 concurrency: spec.concurrency.max(1),
+                timeout_ms: spec.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS),
                 next_at,
                 last_due: 0,
                 running: false,
@@ -440,6 +449,7 @@ impl ScheduleState {
                         id: job.id.clone(),
                         command: job.command.clone(),
                         params: job.params.clone(),
+                        timeout_ms: job.timeout_ms,
                     });
                 }
             }
@@ -535,7 +545,9 @@ pub fn ensure_started(app: &AppHandle) {
         for f in fires {
             let app2 = app.clone();
             std::thread::spawn(move || {
-                let reply = ipc::request_command(&app2, f.command, f.params, 30_000);
+                // f.timeout_ms 까지 명령 완료를 기다린다(route 가 [1s,600s] 클램프). 충분히 길어야 LLM
+                // exec 가 도는 동안 lease 가 유지되어 중복 발화가 없다. TIMEOUT/오류는 ok:false → backoff.
+                let reply = ipc::request_command(&app2, f.command, f.params, f.timeout_ms);
                 let ok = reply.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
                 let c = app2.state::<ScheduleState>().complete(&f.id, ok, now_ms());
                 if c.removed {
@@ -616,6 +628,7 @@ pub fn schedule_register(
     id: Option<String>,
     retry: Option<Retry>,
     concurrency: Option<u32>,
+    timeout_ms: Option<u64>,
 ) -> Result<String, String> {
     if command.is_empty() {
         return Err("command 필요".into());
@@ -627,6 +640,7 @@ pub fn schedule_register(
         params: params.unwrap_or(Value::Object(Default::default())),
         retry,
         concurrency: concurrency.unwrap_or(1),
+        timeout_ms,
     };
     ensure_started(&app);
     let assigned = state.register(spec.clone(), now_ms());
@@ -678,6 +692,7 @@ pub fn schedule_set(
         id,
         None,
         None,
+        None,
     )
 }
 
@@ -714,6 +729,7 @@ mod tests {
             params: json!({"title":"틱"}),
             retry: Some(Retry { max: 3, base_ms: 1000, max_ms: 60_000 }),
             concurrency: 2,
+            timeout_ms: Some(600_000),
         };
         let v = serde_json::to_value(&s).unwrap();
         let back: JobSpec = serde_json::from_value(v).unwrap();
@@ -722,6 +738,23 @@ mod tests {
         assert_eq!(back.command, "notify.show");
         assert_eq!(back.retry, s.retry);
         assert_eq!(back.concurrency, 2);
+        assert_eq!(back.timeout_ms, Some(600_000));
+    }
+
+    // 발화 timeout — 미지정 시 30s 기본, 지정 시 그 값이 Fire 로 전달(LLM exec 가 길게 잡는 노브).
+    #[test]
+    fn fire_carries_timeout() {
+        let st = ScheduleState::default();
+        st.register(spec(Trigger::At { at: 100 }), 0); // timeout 미지정.
+        let f = st.claim_due(150);
+        assert_eq!(f[0].timeout_ms, DEFAULT_TIMEOUT_MS); // 기본 30s.
+
+        let st2 = ScheduleState::default();
+        let mut s = spec(Trigger::At { at: 100 });
+        s.timeout_ms = Some(600_000); // GLM exec 류.
+        st2.register(s, 0);
+        let f2 = st2.claim_due(150);
+        assert_eq!(f2[0].timeout_ms, 600_000);
     }
 
     // 분=15배수 cron, 에폭 0(=1970-01-01T00:00:00Z, 분0 매칭) 직후 → 분15 = 900000.
@@ -813,6 +846,7 @@ mod tests {
             params: json!({}),
             retry: None,
             concurrency: 1,
+            timeout_ms: None,
         }
     }
 

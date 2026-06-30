@@ -729,6 +729,7 @@ describe("app.scheduler — 범용 스케줄러 표면(schedule 권한)", () => 
       command: "notify.show",
       params: { title: "틱" },
       retry: { max: 3, base_ms: 1000, max_ms: 60_000 },
+      timeout_ms: 600_000,
     });
     expect(id).toBe("sch-7");
     expect(d.invoke).toHaveBeenCalledWith("schedule_register", {
@@ -738,6 +739,7 @@ describe("app.scheduler — 범용 스케줄러 표면(schedule 권한)", () => 
       id: null,
       retry: { max: 3, base_ms: 1000, max_ms: 60_000 },
       concurrency: null,
+      timeout_ms: 600_000,
     });
   });
 
