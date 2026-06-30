@@ -79,7 +79,7 @@ pub struct JobSpec {
     #[serde(default = "default_concurrency")]
     pub concurrency: u32,
     // 발화 1회당 명령 응답 대기 상한(ms). LLM exec(예: GLM 529 복구)은 길게 잡아야 — 너무 짧으면 명령이
-    // 아직 도는데 TIMEOUT=실패로 보고 backoff 재시도하다 중복 실행된다. 미지정 시 30s(route 가 [1s,600s] 클램프).
+    // 아직 도는데 TIMEOUT=실패로 보고 backoff 재시도하다 중복 실행된다. 미지정 시 30s(route 가 [1s,3600s] 클램프).
     #[serde(default)]
     pub timeout_ms: Option<u64>,
 }
@@ -545,7 +545,7 @@ pub fn ensure_started(app: &AppHandle) {
         for f in fires {
             let app2 = app.clone();
             std::thread::spawn(move || {
-                // f.timeout_ms 까지 명령 완료를 기다린다(route 가 [1s,600s] 클램프). 충분히 길어야 LLM
+                // f.timeout_ms 까지 명령 완료를 기다린다(route 가 [1s,3600s] 클램프). 충분히 길어야 LLM
                 // exec 가 도는 동안 lease 가 유지되어 중복 발화가 없다. TIMEOUT/오류는 ok:false → backoff.
                 let reply = ipc::request_command(&app2, f.command, f.params, f.timeout_ms);
                 let ok = reply.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);

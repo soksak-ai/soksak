@@ -292,7 +292,7 @@ export interface SoksakPluginApi {
       retry?: SchedulerRetry;
       concurrency?: number;
       /** 발화 1회당 명령 응답 대기 상한(ms). LLM exec(GLM 529 backoff 복구)은 길게 — 너무 짧으면
-       *  명령이 도는 중 TIMEOUT=실패로 보고 재시도하다 중복 실행된다. 미지정 30s, 코어가 [1s,600s] 클램프. */
+       *  명령이 도는 중 TIMEOUT=실패로 보고 재시도하다 중복 실행된다. 미지정 30s, 코어가 [1s,3600s] 클램프. */
       timeout_ms?: number;
     }) => Promise<string>;
     /** 즉시 발화 요청 — id 지정 시 그 작업, 미지정 시 모든 reconcile 작업(완료 트리거·외부 변화 반영). */

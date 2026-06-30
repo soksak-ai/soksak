@@ -4,7 +4,7 @@
 //   응답: {"ok":true, ...} | {"ok":false, "code":"...", "message":"..."} (+ id echo)
 // 명령 실행은 프론트 Command Registry 가 담당: Rust 는 emit("cmd-request") 로 전달하고
 // 프론트가 invoke(cmd_result) 로 회신한다(요청 seq 매칭, 기본 타임아웃 10s — 요청별 timeoutMs 로
-// 상향 가능, [1s,600s] 클램프. 실 LLM 에이전트 턴처럼 느린 커맨드용). 폴링 없음.
+// 상향 가능, [1s,3600s] 클램프. 실 LLM 에이전트 턴처럼 느린 커맨드용). 폴링 없음.
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
@@ -74,6 +74,20 @@ fn parse_request(line: &str) -> Result<Request, String> {
 
 fn error_reply(code: &str, message: &str) -> Value {
     json!({ "ok": false, "code": code, "message": message })
+}
+
+// 명령 응답 대기 timeout(ms) 정규화. 미지정 시 기본 10s(빠른 행 감지). [1s, 3600s] 클램프:
+// 무한대기는 금지(hung UI 하드캡)하되, 단일 LLM 턴(검색 fan-out + 긴 추론, 30분+)이 provider
+// 강제종료 캡 안에서 끝까지 응답을 기다릴 수 있어야 한다 — 천장이 provider 캡(soksak-workflow
+// provider.rs)보다 짧으면 provider 가 도는 중 스케줄러/호출자가 먼저 TIMEOUT → 중복 발화.
+const MIN_TIMEOUT_MS: u64 = 1_000;
+const MAX_TIMEOUT_MS: u64 = 3_600_000;
+const DEFAULT_TIMEOUT_MS: u64 = 10_000;
+
+fn clamp_timeout_ms(requested: Option<u64>) -> u64 {
+    requested
+        .unwrap_or(DEFAULT_TIMEOUT_MS)
+        .clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS)
 }
 
 // 소켓 서버 기동. 잔존 소켓이 살아 있으면(다른 인스턴스) 에러, 죽었으면 제거 후 재바인드.
@@ -203,8 +217,8 @@ fn route(app: &AppHandle, req: Request) -> Value {
         return error_reply("INTERNAL", "프론트로 요청 전달 실패");
     }
 
-    // 기본 10s(빠른 행 감지). 요청이 timeoutMs 를 주면 그 값으로 — 단 [1s, 600s] 클램프(무한대기 금지).
-    let timeout = Duration::from_millis(req.timeout_ms.unwrap_or(10_000).clamp(1_000, 600_000));
+    // 기본 10s(빠른 행 감지). 요청이 timeoutMs 를 주면 그 값으로 — [1s, 3600s] 클램프(무한대기 금지).
+    let timeout = Duration::from_millis(clamp_timeout_ms(req.timeout_ms));
     let result = rx.recv_timeout(timeout);
     bridge.pending.lock().unwrap().remove(&seq);
     match result {
@@ -269,5 +283,18 @@ mod tests {
         let reply = error_reply("INVALID_PARAMS", &msg);
         assert_eq!(reply["ok"], false);
         assert_eq!(reply["code"], "INVALID_PARAMS");
+    }
+
+    // timeout 클램프 경계 — 핵심: >600s(구 상한)가 그대로 통과해야 LLM 30분+ 턴을 끝까지 기다린다.
+    // 천장이 provider 강제종료 캡(900s)보다 짧으면 provider 가 도는 중 TIMEOUT → 중복 발화(회귀 방지).
+    #[test]
+    fn timeout_clamp_bounds() {
+        assert_eq!(clamp_timeout_ms(None), 10_000); // 미지정 → 기본 10s.
+        assert_eq!(clamp_timeout_ms(Some(0)), 1_000); // 하한 1s.
+        assert_eq!(clamp_timeout_ms(Some(500)), 1_000);
+        assert_eq!(clamp_timeout_ms(Some(900_000)), 900_000); // provider 캡 = 통과(구 600s 였으면 막힘).
+        assert_eq!(clamp_timeout_ms(Some(1_800_000)), 1_800_000); // 30분 LLM 턴 통과.
+        assert_eq!(clamp_timeout_ms(Some(3_600_000)), 3_600_000); // 천장 정확히.
+        assert_eq!(clamp_timeout_ms(Some(7_200_000)), 3_600_000); // 천장 초과 → 하드캡(무한 X).
     }
 }
