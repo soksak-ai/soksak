@@ -590,6 +590,33 @@ export function isBlockedForPlugins(name: string): boolean {
   return BLOCKED_MANAGEMENT.has(name) || name.startsWith("plugin.dev.");
 }
 
+// 명령 이름에서 *대상 플러그인 id* 추출(cross-plugin 호출 판정용). pluginCommandName=plugin.<id>.<cmd>
+// (id 에 dot 없음). null = cross-plugin 아님: 코어 명령(plugin. 접두 X)·plugin.view.*(호스트 뷰 ops)·
+// plugin.dev.*·관리(plugin.list 등, 2세그). plugin.<id>.<cmd> 만 <id> 반환.
+export function targetPluginId(name: string): string | null {
+  if (!name.startsWith("plugin.")) return null;
+  const rest = name.slice("plugin.".length);
+  const dot = rest.indexOf(".");
+  if (dot < 0) return null; // 관리(plugin.list 등) — isBlockedForPlugins 가 차단.
+  const seg = rest.slice(0, dot);
+  if (seg === "view" || seg === "dev") return null; // 뷰 ops / dev.
+  return seg;
+}
+
+// cross-plugin 호출 인가 — caller 가 target 플러그인을 manifest.dependencies 에 선언했는지(직접 의존 presence).
+// 자기 명령·코어·view 는 통과. 미선언 cross-plugin 이면 거부 사유 반환(없으면 null=허용). 호출경계 강제
+// (§ dependencyGraph 선언이 install cascade·consent 표시에만 쓰이던 갭을 닫음). 버전은 install-time 소관.
+function crossPluginDenyReason(
+  selfId: string,
+  dependencies: Record<string, string> | undefined,
+  commandName: string,
+): string | null {
+  const target = targetPluginId(commandName);
+  if (target === null || target === selfId) return null;
+  if (target in (dependencies ?? {})) return null;
+  return `미선언 의존 플러그인 호출: ${target} — manifest.dependencies 에 "${target}" 선언 필요 (명령: ${commandName})`;
+}
+
 // ── API 조립 ─────────────────────────────────────────────────────────────────
 
 const denied = (message: string): CommandOutcome => ({
@@ -897,6 +924,11 @@ export function buildPluginApi(
           : "commands";
     if (!has(need)) {
       return denied(`매니페스트 미선언 권한: ${need} (명령: ${name})`);
+    }
+    // cross-plugin 호출은 의존 선언 필수 — 미선언이면 거부(호출경계 강제). 코어/자기/view 는 통과.
+    const crossDeny = crossPluginDenyReason(id, manifest.dependencies, name);
+    if (crossDeny) {
+      return denied(crossDeny);
     }
     return deps.execute(name, params ?? {}, pluginCtx);
   };
@@ -1261,8 +1293,14 @@ export function buildPluginApi(
     // register 의 command 는 발화 시 registry 로 라우팅된다. reconcile 작업은 poke 로 상태-틱을 돌린다.
     scheduler: has("schedule")
       ? {
-          register: (job) =>
-            deps.invoke("schedule_register", {
+          register: (job) => {
+            // 스케줄 발화는 코어 remote 채널이라 executeGated 를 안 거친다 → cross-plugin 강제를
+            // 우회할 수 있다(A 가 plugin.B.cmd 를 스케줄). 등록 시점(caller 식별 가능)에 동형 검사.
+            const crossDeny = crossPluginDenyReason(id, manifest.dependencies, job.command);
+            if (crossDeny) {
+              return Promise.reject(new Error(crossDeny));
+            }
+            return deps.invoke("schedule_register", {
               trigger: job.trigger,
               command: job.command,
               params: job.params ?? null,
@@ -1278,7 +1316,8 @@ export function buildPluginApi(
                   ? 10_800_000
                   : job.zombie_backstop_ms
                 : null,
-            }) as Promise<string>,
+            }) as Promise<string>;
+          },
           poke: async (jobId) => {
             await deps.invoke("schedule_poke", { id: jobId ?? null });
           },

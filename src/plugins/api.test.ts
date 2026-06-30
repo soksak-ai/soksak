@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildPluginApi,
   isBlockedForPlugins,
+  targetPluginId,
   type PluginApiDeps,
 } from "./api";
 import { parseManifest, type PluginManifest } from "./spec";
@@ -811,5 +812,76 @@ describe("app.scheduler — 범용 스케줄러 표면(schedule 권한)", () => 
     expect(d.invoke).toHaveBeenCalledWith("schedule_cancel", { id: "sch-3" });
     await api.scheduler!.list();
     expect(d.invoke).toHaveBeenLastCalledWith("schedule_list");
+  });
+});
+
+describe("cross-plugin 의존 게이트 (executeGated + scheduler.register, §dependencyGraph 호출경계 강제)", () => {
+  it("targetPluginId — plugin.<id>.<cmd> 만 추출, 코어·view·dev·관리는 null", () => {
+    expect(targetPluginId("plugin.foo-bar.baz")).toBe("foo-bar");
+    expect(targetPluginId("plugin.foo-bar.baz.qux")).toBe("foo-bar"); // 다세그 cmd.
+    expect(targetPluginId("notify.show")).toBeNull(); // 코어(plugin. 접두 X).
+    expect(targetPluginId("plugin.view.open")).toBeNull(); // 뷰 ops.
+    expect(targetPluginId("plugin.dev.load")).toBeNull(); // dev.
+    expect(targetPluginId("plugin.list")).toBeNull(); // 관리(2세그).
+  });
+
+  it("미선언 cross-plugin 호출 → deny(실행 차단)", async () => {
+    const d = fakeDeps();
+    const { api } = buildPluginApi(manifestOf({ permissions: ["commands"] }), "/d", d);
+    const out = await api.commands!.execute("plugin.other-plugin.foo");
+    expect(out).toMatchObject({ ok: false, code: "PERMISSION_DENIED" });
+    expect(d.execute).not.toHaveBeenCalled();
+  });
+
+  it("선언된 cross-plugin 호출 → 통과", async () => {
+    const d = fakeDeps();
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["commands"], dependencies: { "other-plugin": "^1.0.0" } }),
+      "/d",
+      d,
+    );
+    const out = await api.commands!.execute("plugin.other-plugin.foo");
+    expect(out).toEqual({ ok: true });
+    expect(d.execute).toHaveBeenCalledWith("plugin.other-plugin.foo", {}, {});
+  });
+
+  it("자기 명령·코어·plugin.view 는 의존 무관 허용", async () => {
+    const d = fakeDeps();
+    const { api } = buildPluginApi(manifestOf({ permissions: ["commands"] }), "/d", d);
+    expect((await api.commands!.execute("plugin.demo.foo")).ok).toBe(true); // self(id=demo).
+    expect((await api.commands!.execute("notify.show")).ok).toBe(true); // 코어.
+    expect((await api.commands!.execute("plugin.view.open")).ok).toBe(true); // 뷰 ops.
+    expect(d.execute).toHaveBeenCalledTimes(3);
+  });
+
+  it("scheduler.register — 미선언 cross-plugin 명령 스케줄 → reject(remote 발화 우회 차단)", async () => {
+    const inv = vi.fn(async () => "sch-1");
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["schedule"] }),
+      "/d",
+      fakeDeps({ invoke: inv }),
+    );
+    await expect(
+      api.scheduler!.register({
+        trigger: { kind: "reconcile" },
+        command: "plugin.other-plugin.exec",
+      }),
+    ).rejects.toThrow(/other-plugin/);
+    expect(inv).not.toHaveBeenCalled(); // 등록 자체 차단.
+  });
+
+  it("scheduler.register — 선언된 cross-plugin·코어 명령은 통과", async () => {
+    const inv = vi.fn(async () => "sch-1");
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["schedule"], dependencies: { "other-plugin": "^1.0.0" } }),
+      "/d",
+      fakeDeps({ invoke: inv }),
+    );
+    await api.scheduler!.register({
+      trigger: { kind: "reconcile" },
+      command: "plugin.other-plugin.exec",
+    });
+    await api.scheduler!.register({ trigger: { kind: "reconcile" }, command: "notify.show" });
+    expect(inv).toHaveBeenCalledTimes(2);
   });
 });
