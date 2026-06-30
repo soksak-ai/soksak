@@ -670,6 +670,43 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    // wire 계약 — JS app.scheduler 가 보내고 kv 가 저장하는 JSON 형태를 정확히 역직렬화한다.
+    // (kind 태그 lowercase, every_ms 필드명 그대로.) 깨지면 런타임 발화/복구가 조용히 실패.
+    #[test]
+    fn trigger_wire_format() {
+        let at: Trigger = serde_json::from_value(json!({"kind":"at","at":123})).unwrap();
+        assert_eq!(at, Trigger::At { at: 123 });
+        let ev: Trigger = serde_json::from_value(json!({"kind":"every","every_ms":1000})).unwrap();
+        assert_eq!(ev, Trigger::Every { every_ms: 1000, anchor: None });
+        let ev2: Trigger =
+            serde_json::from_value(json!({"kind":"every","every_ms":1000,"anchor":50})).unwrap();
+        assert_eq!(ev2, Trigger::Every { every_ms: 1000, anchor: Some(50) });
+        let cr: Trigger = serde_json::from_value(json!({"kind":"cron","expr":"0 0 * * *"})).unwrap();
+        assert_eq!(cr, Trigger::Cron { expr: "0 0 * * *".into() });
+        let rc: Trigger = serde_json::from_value(json!({"kind":"reconcile"})).unwrap();
+        assert_eq!(rc, Trigger::Reconcile);
+    }
+
+    // JobSpec 영속 round-trip — kv 저장(serde_json::to_value) → 로드(from_value) 동일.
+    #[test]
+    fn jobspec_persist_roundtrip() {
+        let s = JobSpec {
+            id: Some("sch-1".into()),
+            trigger: Trigger::Cron { expr: "*/5 * * * *".into() },
+            command: "notify.show".into(),
+            params: json!({"title":"틱"}),
+            retry: Some(Retry { max: 3, base_ms: 1000, max_ms: 60_000 }),
+            concurrency: 2,
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        let back: JobSpec = serde_json::from_value(v).unwrap();
+        assert_eq!(back.id.as_deref(), Some("sch-1"));
+        assert_eq!(back.trigger, s.trigger);
+        assert_eq!(back.command, "notify.show");
+        assert_eq!(back.retry, s.retry);
+        assert_eq!(back.concurrency, 2);
+    }
+
     // 분=15배수 cron, 에폭 0(=1970-01-01T00:00:00Z, 분0 매칭) 직후 → 분15 = 900000.
     #[test]
     fn cron_every_15min() {
