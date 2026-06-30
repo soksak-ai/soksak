@@ -740,12 +740,12 @@ describe("app.scheduler — 범용 스케줄러 표면(schedule 권한)", () => 
       retry: { max: 3, base_ms: 1000, max_ms: 60_000 },
       concurrency: null,
       timeout_ms: 600_000,
-      heartbeat_stale_ms: null,
-      backstop_ms: null,
+      process_lease: null,
+      zombie_backstop_ms: null,
     });
   });
 
-  it("heartbeat 작업 register(staleness/backstop) + heartbeat(id) forward", async () => {
+  it("process_lease 작업 register — backstop 미지정 시 3h 기본 주입", async () => {
     const d = fakeDeps({ invoke: vi.fn(async () => "sch-2") });
     const { api } = buildPluginApi(
       manifestOf({ permissions: ["schedule"] }),
@@ -755,20 +755,34 @@ describe("app.scheduler — 범용 스케줄러 표면(schedule 권한)", () => 
     await api.scheduler!.register({
       trigger: { kind: "reconcile" },
       command: "workflow.exec-one",
-      heartbeat_stale_ms: 300_000,
-      backstop_ms: 14_400_000,
+      process_lease: true,
     });
     expect(d.invoke).toHaveBeenCalledWith(
       "schedule_register",
       expect.objectContaining({
-        heartbeat_stale_ms: 300_000,
-        backstop_ms: 14_400_000,
+        process_lease: true,
+        zombie_backstop_ms: 10_800_000, // 3h 기본.
       }),
     );
-    await api.scheduler!.heartbeat("sch-2");
-    expect(d.invoke).toHaveBeenLastCalledWith("schedule_heartbeat", {
-      id: "sch-2",
+  });
+
+  it("process_lease + zombie_backstop_ms null → 무한(코어 None)", async () => {
+    const d = fakeDeps({ invoke: vi.fn(async () => "sch-3") });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["schedule"] }),
+      "/d",
+      d,
+    );
+    await api.scheduler!.register({
+      trigger: { kind: "reconcile" },
+      command: "workflow.exec-one",
+      process_lease: true,
+      zombie_backstop_ms: null,
     });
+    expect(d.invoke).toHaveBeenCalledWith(
+      "schedule_register",
+      expect.objectContaining({ process_lease: true, zombie_backstop_ms: null }),
+    );
   });
 
   it("reconcile 등록 + poke(미지정)로 상태-틱 발화 요청", async () => {

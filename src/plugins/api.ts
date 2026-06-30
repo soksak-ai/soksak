@@ -291,23 +291,20 @@ export interface SoksakPluginApi {
       id?: string;
       retry?: SchedulerRetry;
       concurrency?: number;
-      /** 발화 1회당 명령 응답 대기 상한(ms) — 비-heartbeat 작업(notify.show 등) 전용. 미지정 30s,
-       *  코어가 [1s,3600s] 클램프. heartbeat_stale_ms 설정 작업은 이 값 무시(프로세스-생존 lease). */
+      /** 발화 1회당 명령 응답 대기 상한(ms) — 비-프로세스 작업(notify.show 등) 전용. 미지정 30s,
+       *  코어가 [1s,3600s] 클램프. process_lease 작업은 이 값 무시(프로세스-생존 lease). */
       timeout_ms?: number;
-      /** heartbeat 작업 opt-in(프로세스-생존 lease). 설정 시: 발화 명령이 exec-one 프로세스를 돌리고
-       *  thinking/event 라인마다 heartbeat(id)를 호출하면, 코어는 살아있는 한(검색 1h 든) 안 자르고
-       *  이 ms 동안 신호가 끊긴 좀비만 거둔다(→ok:false→backoff). 권장 300_000. */
-      heartbeat_stale_ms?: number;
-      /** heartbeat 작업 절대 천장(ms, claim 이후). 신호가 신선해도 초과 시 거둔다(진행 무한루프 병리).
-       *  미지정 14_400_000(4h). 정상 LLM 턴을 안 자르게 넉넉히. */
-      backstop_ms?: number;
+      /** 프로세스-생존 lease opt-in. true 시: 발화 명령(exec-one)이 프로세스를 돌리고 onExit 까지 reply 를
+       *  보류하면, 코어는 reply(=프로세스 exit)까지 lease 를 쥐고 기다린다 — 도는 동안(검색 1h 든) 절대
+       *  안 자른다. 정상 exit→ok, crash→ok:false→backoff. 좀비(reply 영영 없음)만 zombie_backstop_ms 에 거둠. */
+      process_lease?: boolean;
+      /** 프로세스-생존 작업의 좀비 backstop(ms, claim 이후). reply 가 영영 안 올 때만 거둔다. null=무한
+       *  (reply/cancel 까지, 사람 개입). process_lease 시 미지정이면 3h(10_800_000) 기본. */
+      zombie_backstop_ms?: number | null;
     }) => Promise<string>;
     /** 즉시 발화 요청 — id 지정 시 그 작업, 미지정 시 모든 reconcile 작업(완료 트리거·외부 변화 반영). */
     poke: (id?: string) => Promise<void>;
-    /** heartbeat 작업의 살아있음 신호(thinking delta ∨ event jsonl). staleness 리셋 → 도는 중 좀비 오판
-     *  방지. exec-one 이 라인마다 throttle(~5-10s)로 호출. 반환=리셋됨(실행 중 작업만 true). */
-    heartbeat: (id: string) => Promise<boolean>;
-    /** 작업 취소(영속도 제거, 발화 중 heartbeat 작업은 대기 즉시 깨움). 있었으면 true. */
+    /** 작업 취소(영속도 제거, 발화 중 프로세스 작업은 대기 즉시 깨움). 있었으면 true. */
     cancel: (id: string) => Promise<boolean>;
     /** 등록된 작업 목록(next_at 오름차순). */
     list: () => Promise<SchedulerJobView[]>;
@@ -1273,14 +1270,18 @@ export function buildPluginApi(
               retry: job.retry ?? null,
               concurrency: job.concurrency ?? null,
               timeout_ms: job.timeout_ms ?? null,
-              heartbeat_stale_ms: job.heartbeat_stale_ms ?? null,
-              backstop_ms: job.backstop_ms ?? null,
+              process_lease: job.process_lease ?? null,
+              // process_lease 시 backstop 미지정이면 3h 기본 주입. null=무한(코어 None). 그래서 코어
+              // None 은 "무한" 의미만 갖는다(JS 가 기본을 책임짐). 비-프로세스면 무시되므로 null.
+              zombie_backstop_ms: job.process_lease
+                ? job.zombie_backstop_ms === undefined
+                  ? 10_800_000
+                  : job.zombie_backstop_ms
+                : null,
             }) as Promise<string>,
           poke: async (jobId) => {
             await deps.invoke("schedule_poke", { id: jobId ?? null });
           },
-          heartbeat: (jobId) =>
-            deps.invoke("schedule_heartbeat", { id: jobId }) as Promise<boolean>,
           cancel: (jobId) =>
             deps.invoke("schedule_cancel", { id: jobId }) as Promise<boolean>,
           list: () =>
