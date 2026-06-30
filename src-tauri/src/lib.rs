@@ -98,6 +98,9 @@ pub fn run() {
                 Ok(conn) => app.state::<data::DbState>().set(conn),
                 Err(e) => eprintln!("[data] DB 열기 실패: {e}"),
             }
+            // 영속된 시간 기반(At/Every/Cron) 일정 재무장(crash 복구) — DB 열린 직후. 무상태 Reconcile 은
+            // 플러그인이 activate 시 재등록한다. 일정 없으면 no-op(발화 스레드도 안 뜸).
+            schedule::reload_persisted(app.handle());
             // 시크릿 볼트 — 프로덕션 경로 주입(init 1회) 후 헤드리스/e2e 자동 unlock
             // (SOKSAK_VAULT_KEY env 있을 때만, 없으면 잠김 유지).
             {
@@ -248,6 +251,8 @@ pub fn run() {
             mediaproxy::media_proxy_info,
             notify::notify_show,
             schedule::schedule_set,
+            schedule::schedule_register,
+            schedule::schedule_poke,
             schedule::schedule_cancel,
             schedule::schedule_list,
             fs::list_children,
