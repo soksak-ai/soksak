@@ -626,7 +626,7 @@ pub fn ensure_started(app: &AppHandle) {
     });
 }
 
-// 비-heartbeat 발화 — f.timeout_ms 까지 단일 recv(route 가 [1s,3600s] 클램프). notify.show 등 즉시 완료.
+// 비-프로세스 발화 — f.timeout_ms 까지 단일 recv(route 가 [1s,3600s] 클램프). notify.show 등 즉시 완료.
 fn fire_simple(app: &AppHandle, f: Fire) {
     let reply = ipc::request_command(app, f.command, f.params, f.timeout_ms);
     let ok = reply.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
