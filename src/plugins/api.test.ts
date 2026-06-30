@@ -710,3 +710,62 @@ describe("git — path 기본값(활성 프로젝트 루트)", () => {
     await expect(noRoot.git!.log()).rejects.toThrow(/루트 없음/);
   });
 });
+
+describe("app.scheduler — 범용 스케줄러 표면(schedule 권한)", () => {
+  it('"schedule" 미선언 시 scheduler 표면 undefined', () => {
+    const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
+    expect(api.scheduler).toBeUndefined();
+  });
+
+  it("register 는 트리거·명령을 wire 그대로 schedule_register 로 forward(매핑 없음)", async () => {
+    const d = fakeDeps({ invoke: vi.fn(async () => "sch-7") });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["schedule"] }),
+      "/d",
+      d,
+    );
+    const id = await api.scheduler!.register({
+      trigger: { kind: "every", every_ms: 1000 },
+      command: "notify.show",
+      params: { title: "틱" },
+      retry: { max: 3, base_ms: 1000, max_ms: 60_000 },
+    });
+    expect(id).toBe("sch-7");
+    expect(d.invoke).toHaveBeenCalledWith("schedule_register", {
+      trigger: { kind: "every", every_ms: 1000 },
+      command: "notify.show",
+      params: { title: "틱" },
+      id: null,
+      retry: { max: 3, base_ms: 1000, max_ms: 60_000 },
+      concurrency: null,
+    });
+  });
+
+  it("reconcile 등록 + poke(미지정)로 상태-틱 발화 요청", async () => {
+    const d = fakeDeps({ invoke: vi.fn(async () => "sch-1") });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["schedule"] }),
+      "/d",
+      d,
+    );
+    await api.scheduler!.register({
+      trigger: { kind: "reconcile" },
+      command: "workflow.reconcile",
+    });
+    await api.scheduler!.poke();
+    expect(d.invoke).toHaveBeenLastCalledWith("schedule_poke", { id: null });
+  });
+
+  it("cancel/list forward", async () => {
+    const d = fakeDeps({ invoke: vi.fn(async () => true) });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["schedule"] }),
+      "/d",
+      d,
+    );
+    await api.scheduler!.cancel("sch-3");
+    expect(d.invoke).toHaveBeenCalledWith("schedule_cancel", { id: "sch-3" });
+    await api.scheduler!.list();
+    expect(d.invoke).toHaveBeenLastCalledWith("schedule_list");
+  });
+});

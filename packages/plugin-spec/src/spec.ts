@@ -64,6 +64,7 @@ export type PluginPermission =
   | "data" // 범용 임베디드 DB(app.data — 네임스페이스 격리·CJK 검색·전 창 watch)
   | "secrets" // 암호화 볼트(app.secrets — API 키/토큰 봉인 저장, 평문 readback 불가·주입 전용)
   | "notify" // OS 알림(푸시)+인앱 배너·소리·딥링크(알림 = 푸시 동급 1급 객체)
+  | "schedule" // 범용 스케줄러(app.scheduler — at/every/cron/reconcile 트리거로 명령 자동 발화·영속)
   | "fs:read" // 임의 경로 파일 읽기
   | "fs:write" // 임의 경로 파일 쓰기
   | "clipboard:read" // 시스템 클립보드 텍스트 읽기 + 변경 구독(감시는 읽기의 일부)
@@ -91,6 +92,7 @@ export const PERMISSIONS: readonly PluginPermission[] = [
   "data",
   "secrets",
   "notify",
+  "schedule",
   "fs:read",
   "fs:write",
   "clipboard:read",
@@ -189,6 +191,12 @@ export const PERMISSION_INFO: Record<
     label: "알림·푸시",
     detail:
       "OS 알림(앱이 비활성일 때 모바일식 푸시)과 인앱 배너를 띄우고 소리를 재생합니다. 알림 클릭 시 앱 내 위치로 이동(딥링크)합니다.",
+    caution: true,
+  },
+  schedule: {
+    label: "스케줄러",
+    detail:
+      "정해진 시각·간격·cron 또는 상태 변화에 맞춰 앱 명령을 자동 실행하도록 예약합니다(앱 재시작 후에도 복구). 사용자 조작 없이 명령이 실행됩니다.",
     caution: true,
   },
   "fs:read": {

@@ -124,6 +124,30 @@ export interface PluginCommandSpec {
   handler: (params: Record<string, unknown>) => Promise<object> | object;
 }
 
+// 스케줄러 트리거(코어 schedule.rs Trigger 와 동형 — wire 형태 그대로 전달). every_ms 는 코어 serde
+// 필드명과 일치(매핑 없는 얇은 forward). reconcile = 타이머 없는 poke 이벤트 트리거.
+export type SchedulerTrigger =
+  | { kind: "at"; at: number } // 절대 ms 1회(과거면 즉시).
+  | { kind: "every"; every_ms: number; anchor?: number } // 고정 간격 주기(anchor 격자).
+  | { kind: "cron"; expr: string } // 5필드 cron(UTC).
+  | { kind: "reconcile" }; // 등록 시 1회(부팅 스캔) + poke 시.
+
+export interface SchedulerRetry {
+  max: number; // 최대 재시도 횟수(0=없음).
+  base_ms: number; // backoff 기준.
+  max_ms: number; // backoff 상한.
+}
+
+export interface SchedulerJobView {
+  id: string;
+  trigger: SchedulerTrigger;
+  command: string;
+  params: Record<string, unknown>;
+  next_at: number | null; // 다음 예정 발화(null=대기/완료).
+  running: boolean;
+  concurrency: number;
+}
+
 export interface SoksakPluginApi {
   appVersion: string;
   pluginId: string;
@@ -255,6 +279,25 @@ export interface SoksakPluginApi {
     keys: () => Promise<string[]>;
     /** 볼트 백엔드·잠금 상태({ backend:"vault", unlocked }). */
     backend: () => Promise<{ backend: string; unlocked: boolean }>;
+  };
+  /** 범용 스케줄러(코어 — at/every/cron 으로 명령 자동 발화, reconcile 로 상태-틱 발화). 시간 기반은
+   *  영속(crash 복구). 한 작업은 자기 자신과 동시 2회 안 돎(lease). 실패 시 backoff 재시도. "schedule" 권한. */
+  scheduler?: {
+    /** 작업 등록(멱등 — id 지정 시 교체). 반환=id. command=발화할 registry 명령. retry/concurrency 선택. */
+    register: (job: {
+      trigger: SchedulerTrigger;
+      command: string;
+      params?: Record<string, unknown>;
+      id?: string;
+      retry?: SchedulerRetry;
+      concurrency?: number;
+    }) => Promise<string>;
+    /** 즉시 발화 요청 — id 지정 시 그 작업, 미지정 시 모든 reconcile 작업(완료 트리거·외부 변화 반영). */
+    poke: (id?: string) => Promise<void>;
+    /** 작업 취소(영속도 제거). 있었으면 true. */
+    cancel: (id: string) => Promise<boolean>;
+    /** 등록된 작업 목록(next_at 오름차순). */
+    list: () => Promise<SchedulerJobView[]>;
   };
   /** 알림 = 푸시 동급 1급 객체(리치 페이로드). 포커스 시 인앱 배너·비포커스 시 OS 알림(동일 페이로드).
    *  클릭/액션 시 deepLink(soksak://cmd/...) 로 활성화(권한·danger 게이트 유지). "notify" 권한. */
@@ -1201,6 +1244,29 @@ export function buildPluginApi(
               backend: string;
               unlocked: boolean;
             }>,
+        }
+      : undefined,
+
+    // 범용 스케줄러 — 코어 ScheduleState(단일 진실)로 forward(매핑 없는 얇은 통로, app.data 선례).
+    // register 의 command 는 발화 시 registry 로 라우팅된다. reconcile 작업은 poke 로 상태-틱을 돌린다.
+    scheduler: has("schedule")
+      ? {
+          register: (job) =>
+            deps.invoke("schedule_register", {
+              trigger: job.trigger,
+              command: job.command,
+              params: job.params ?? null,
+              id: job.id ?? null,
+              retry: job.retry ?? null,
+              concurrency: job.concurrency ?? null,
+            }) as Promise<string>,
+          poke: async (jobId) => {
+            await deps.invoke("schedule_poke", { id: jobId ?? null });
+          },
+          cancel: (jobId) =>
+            deps.invoke("schedule_cancel", { id: jobId }) as Promise<boolean>,
+          list: () =>
+            deps.invoke("schedule_list") as Promise<SchedulerJobView[]>,
         }
       : undefined,
 

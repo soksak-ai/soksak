@@ -16,6 +16,7 @@
     "process",
     "programs",
     "pty",
+    "schedule",
     "secrets",
     "storage",
     "terminal",
