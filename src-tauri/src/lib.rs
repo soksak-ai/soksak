@@ -253,6 +253,7 @@ pub fn run() {
             schedule::schedule_set,
             schedule::schedule_register,
             schedule::schedule_poke,
+            schedule::schedule_heartbeat,
             schedule::schedule_cancel,
             schedule::schedule_list,
             fs::list_children,

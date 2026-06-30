@@ -78,10 +78,20 @@ pub struct JobSpec {
     pub retry: Option<Retry>,
     #[serde(default = "default_concurrency")]
     pub concurrency: u32,
-    // 발화 1회당 명령 응답 대기 상한(ms). LLM exec(예: GLM 529 복구)은 길게 잡아야 — 너무 짧으면 명령이
-    // 아직 도는데 TIMEOUT=실패로 보고 backoff 재시도하다 중복 실행된다. 미지정 시 30s(route 가 [1s,3600s] 클램프).
+    // 발화 1회당 명령 응답 대기 상한(ms). 비-heartbeat 작업 전용(예: notify.show). 미지정 시 30s
+    // (route 가 [1s,3600s] 클램프). heartbeat 작업(heartbeat_stale_ms 설정)은 이 값을 안 쓰고
+    // 프로세스-생존 lease(staleness + backstop)로 대기한다.
     #[serde(default)]
     pub timeout_ms: Option<u64>,
+    // heartbeat 작업 opt-in(프로세스-생존 lease). Some=발화 명령이 exec-one 프로세스를 돌리고 thinking/event
+    // 라인마다 app.scheduler.heartbeat 로 살아있음을 알린다 → 코어는 stale_ms 끊김(좀비)만 거두고, 도는 중엔
+    // (검색 1h 든) 안 자른다. None=비-heartbeat(timeout_ms 경로). 권장 300_000(검색 tool 갭 여유).
+    #[serde(default)]
+    pub heartbeat_stale_ms: Option<u64>,
+    // heartbeat 작업의 절대 천장(claim 이후). 신호가 신선해도 초과 시 거둔다(진행 무한루프 병리). 미지정 4h.
+    // 정상 LLM 턴(1h)을 자르지 않게 넉넉히 — staleness 가 정상을 지키고 total 은 병리만.
+    #[serde(default)]
+    pub backstop_ms: Option<u64>,
 }
 
 fn default_concurrency() -> u32 {
@@ -89,6 +99,8 @@ fn default_concurrency() -> u32 {
 }
 
 const DEFAULT_TIMEOUT_MS: u64 = 30_000;
+const DEFAULT_BACKSTOP_MS: u64 = 14_400_000; // 4h — heartbeat 작업 절대 천장.
+const DEFAULT_STALE_MS: u64 = 300_000; // 5분 — alive 신호 끊김 좀비 판정(검색 tool 갭 여유).
 
 // ── 순수 스케줄 계산 ─────────────────────────────────────────────────────────
 
@@ -129,6 +141,31 @@ fn rearm(trigger: &Trigger, last_due: u64) -> Option<u64> {
 fn backoff_delay(attempt: u32, base_ms: u64, max_ms: u64) -> u64 {
     let shift = (attempt.saturating_sub(1)).min(20);
     base_ms.saturating_mul(1u64 << shift).min(max_ms)
+}
+
+// heartbeat 작업(프로세스-생존 lease)의 발화 중 판정. 살아있음 = 프로세스 alive ∧ (thinking delta ∨
+// event jsonl) 최근 수신. last_liveness 는 어느 alive 신호든 수신 시 리셋(claim 시 claim 시각으로 초기화).
+//   Wait(d)   — 아직 살아있음. d 후 재평가(heartbeat 가 stale_deadline 늘렸으면 다시 Wait).
+//   Hung      — alive 신호가 stale_ms 끊김 = 좀비(검색·추론 다 끊긴 뻗음). ok:false → backoff.
+//   Backstop  — total(claim 이후) 초과 = 절대 천장. **신호가 신선해도** 거둔다(진행 라인 무한루프 병리).
+// total backstop 은 정상(1h 턴)을 자르지 않게 넉넉히(4h) — staleness 가 정상을 지키고 total 은 병리만.
+#[derive(Debug, PartialEq)]
+enum Verdict {
+    Wait(u64),
+    Hung,
+    Backstop,
+}
+
+fn fire_verdict(now: u64, last_liveness: u64, claim: u64, stale_ms: u64, backstop_ms: u64) -> Verdict {
+    let total_deadline = claim.saturating_add(backstop_ms);
+    let stale_deadline = last_liveness.saturating_add(stale_ms);
+    if now >= total_deadline {
+        Verdict::Backstop // fresh 여도 절대 천장 우선.
+    } else if now >= stale_deadline {
+        Verdict::Hung
+    } else {
+        Verdict::Wait(total_deadline.min(stale_deadline) - now)
+    }
 }
 
 // ── cron 평가(5필드, UTC) ────────────────────────────────────────────────────
@@ -277,13 +314,17 @@ struct Job {
     params: Value,
     retry: Option<Retry>,
     concurrency: u32,
-    timeout_ms: u64, // 발화 1회당 명령 응답 대기 상한.
+    timeout_ms: u64,                  // 비-heartbeat 발화 응답 대기 상한.
+    heartbeat_stale_ms: Option<u64>,  // Some=heartbeat 작업(프로세스-생존 lease).
+    backstop_ms: u64,                 // heartbeat 작업 절대 천장(claim 이후).
     // 런타임:
-    next_at: Option<u64>, // 다음 예정 발화(None=대기/완료).
-    last_due: u64,        // 마지막으로 claim 된 예정 시각(드리프트 없는 re-arm 기준).
-    running: bool,        // lease 보유 중(중첩 차단).
-    pending: bool,        // 실행 중 다음 발화 요청 도착(완료 후 1회로 합침).
-    attempt: u32,         // 현재 backoff 재시도 회차.
+    next_at: Option<u64>,  // 다음 예정 발화(None=대기/완료).
+    last_due: u64,         // 마지막으로 claim 된 예정 시각(드리프트 없는 re-arm 기준).
+    last_liveness: u64,    // heartbeat 작업: 마지막 alive 신호(claim 시 claim 시각으로 초기화).
+    seq: Option<u64>,      // 발화 중 ipc pending seq(cancel 이 채널 끊어 wait 깨움).
+    running: bool,         // lease 보유 중(중첩 차단).
+    pending: bool,         // 실행 중 다음 발화 요청 도착(완료 후 1회로 합침).
+    attempt: u32,          // 현재 backoff 재시도 회차.
 }
 
 // 발화 대상(락 밖 dispatch 용).
@@ -293,6 +334,9 @@ struct Fire {
     command: String,
     params: Value,
     timeout_ms: u64,
+    heartbeat_stale_ms: Option<u64>, // Some=heartbeat 경로(프로세스-생존 lease).
+    backstop_ms: u64,
+    claimed_at: u64, // claim 시각 = total backstop·last_liveness 기준.
 }
 
 // 완료 후 후처리 결과 — removed 면 영속에서도 제거해야 한다(At 1회 종료).
@@ -360,8 +404,12 @@ impl ScheduleState {
                 retry: spec.retry,
                 concurrency: spec.concurrency.max(1),
                 timeout_ms: spec.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS),
+                heartbeat_stale_ms: spec.heartbeat_stale_ms,
+                backstop_ms: spec.backstop_ms.unwrap_or(DEFAULT_BACKSTOP_MS),
                 next_at,
                 last_due: 0,
+                last_liveness: 0,
+                seq: None,
                 running: false,
                 pending: false,
                 attempt: 0,
@@ -445,11 +493,16 @@ impl ScheduleState {
                     job.running = true;
                     job.last_due = at;
                     job.next_at = None; // 실행 중 재claim 차단(완료에서 재무장).
+                    job.last_liveness = now; // heartbeat staleness 기준 초기화(claim=첫 alive 증거).
+                    job.seq = None;
                     fires.push(Fire {
                         id: job.id.clone(),
                         command: job.command.clone(),
                         params: job.params.clone(),
                         timeout_ms: job.timeout_ms,
+                        heartbeat_stale_ms: job.heartbeat_stale_ms,
+                        backstop_ms: job.backstop_ms,
+                        claimed_at: now,
                     });
                 }
             }
@@ -520,6 +573,43 @@ impl ScheduleState {
         self.cv.notify_all();
         Completion { removed }
     }
+
+    // 살아있음 신호(thinking delta ∨ event jsonl) 수신 — 실행 중 작업의 staleness 타이머 리셋. 반환=리셋됨.
+    // 실행 중이 아니거나 미지 id 면 무시(false) — 좀비 판정 외 작업에 영향 없음.
+    fn heartbeat(&self, id: &str, now: u64) -> bool {
+        let mut inner = self.inner.lock().unwrap();
+        match inner.jobs.get_mut(id) {
+            Some(j) if j.running => {
+                j.last_liveness = now;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn last_liveness(&self, id: &str) -> Option<u64> {
+        self.inner.lock().unwrap().jobs.get(id).map(|j| j.last_liveness)
+    }
+
+    fn set_seq(&self, id: &str, seq: u64) {
+        if let Some(j) = self.inner.lock().unwrap().jobs.get_mut(id) {
+            j.seq = Some(seq);
+        }
+    }
+
+    // 발화 중 seq 회수(cancel 이 채널 끊어 wait 깨우는 용). 작업 제거 전에 호출.
+    fn take_seq(&self, id: &str) -> Option<u64> {
+        self.inner
+            .lock()
+            .unwrap()
+            .jobs
+            .get_mut(id)
+            .and_then(|j| j.seq.take())
+    }
+
+    fn exists(&self, id: &str) -> bool {
+        self.inner.lock().unwrap().jobs.contains_key(id)
+    }
 }
 
 // ── 발화 스레드 ──────────────────────────────────────────────────────────────
@@ -545,20 +635,82 @@ pub fn ensure_started(app: &AppHandle) {
         for f in fires {
             let app2 = app.clone();
             std::thread::spawn(move || {
-                // f.timeout_ms 까지 명령 완료를 기다린다(route 가 [1s,3600s] 클램프). 충분히 길어야 LLM
-                // exec 가 도는 동안 lease 가 유지되어 중복 발화가 없다. TIMEOUT/오류는 ok:false → backoff.
-                let reply = ipc::request_command(&app2, f.command, f.params, f.timeout_ms);
-                let ok = reply.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
-                let c = app2.state::<ScheduleState>().complete(&f.id, ok, now_ms());
-                if c.removed {
-                    persist_delete(&app2, &f.id);
+                if f.heartbeat_stale_ms.is_some() {
+                    fire_heartbeat(&app2, f);
+                } else {
+                    fire_simple(&app2, f);
                 }
-                // 완료가 다음을 깨운다(blockedBy 충족분 reconcile 재평가) — complete 가 이미 notify.
             });
         }
         // 다음 due 까지 park(due 판정+wait 한 락 — missed-wakeup 차단). 발화/완료/poke 가 깨운다.
         app.state::<ScheduleState>().park_until_due();
     });
+}
+
+// 비-heartbeat 발화 — f.timeout_ms 까지 단일 recv(route 가 [1s,3600s] 클램프). notify.show 등 즉시 완료.
+fn fire_simple(app: &AppHandle, f: Fire) {
+    let reply = ipc::request_command(app, f.command, f.params, f.timeout_ms);
+    let ok = reply.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+    let c = app.state::<ScheduleState>().complete(&f.id, ok, now_ms());
+    if c.removed {
+        persist_delete(app, &f.id);
+    }
+}
+
+// heartbeat 발화(프로세스-생존 lease) — emit 후 fire_verdict 루프로 대기. 결과(프로세스 exit reply)는
+// recv 즉시, staleness/backstop 은 deadline 으로. ipc 클램프 안 거침(도는 중 안 자름). 좀비/취소 처리.
+fn fire_heartbeat(app: &AppHandle, f: Fire) {
+    let st = app.state::<ScheduleState>();
+    let stale_ms = f.heartbeat_stale_ms.unwrap_or(DEFAULT_STALE_MS);
+    let params = inject_job_id(f.params, &f.id);
+    let Some((seq, rx)) = ipc::open_request(app, f.command, params) else {
+        // emit 실패 — 프론트 도달 불가. 실패로 완료(backoff 여지).
+        let c = st.complete(&f.id, false, now_ms());
+        if c.removed {
+            persist_delete(app, &f.id);
+        }
+        return;
+    };
+    st.set_seq(&f.id, seq);
+    // reply=Some(프로세스 exit) / None(좀비·backstop·취소).
+    let reply = loop {
+        if !st.exists(&f.id) {
+            break None; // 취소됨(작업 제거).
+        }
+        let now = now_ms();
+        let last = st.last_liveness(&f.id).unwrap_or(f.claimed_at);
+        match fire_verdict(now, last, f.claimed_at, stale_ms, f.backstop_ms) {
+            Verdict::Wait(d) => match rx.recv_timeout(Duration::from_millis(d.max(1))) {
+                Ok(v) => break Some(v),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue, // 재평가(heartbeat 가 연장?).
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break None, // cancel 이 채널 끊음.
+            },
+            Verdict::Hung | Verdict::Backstop => break None, // 좀비 — 거둔다.
+        }
+    };
+    ipc::close_request(app, seq); // pending 회수(멱등).
+    let _ = st.take_seq(&f.id);
+    // 취소된 작업은 complete 안 함(이미 제거). 그 외엔 reply 의 ok 로 완료(None=좀비→ok:false→backoff).
+    if st.exists(&f.id) {
+        let ok = reply
+            .as_ref()
+            .and_then(|v| v.get("ok"))
+            .and_then(|b| b.as_bool())
+            .unwrap_or(false);
+        let c = st.complete(&f.id, ok, now_ms());
+        if c.removed {
+            persist_delete(app, &f.id);
+        }
+    }
+}
+
+// 발화 명령 params 에 jobId 주입(__schedule_job_id) — exec-one 이 echo 해 app.scheduler.heartbeat 로 회신.
+// object params 만 주입(대부분 object). 비-object 면 그대로(주입 불가).
+fn inject_job_id(mut params: Value, id: &str) -> Value {
+    if let Value::Object(ref mut m) = params {
+        m.insert("__schedule_job_id".into(), Value::String(id.to_string()));
+    }
+    params
 }
 
 // ── 영속(app.data, ns="core") ────────────────────────────────────────────────
@@ -629,6 +781,8 @@ pub fn schedule_register(
     retry: Option<Retry>,
     concurrency: Option<u32>,
     timeout_ms: Option<u64>,
+    heartbeat_stale_ms: Option<u64>,
+    backstop_ms: Option<u64>,
 ) -> Result<String, String> {
     if command.is_empty() {
         return Err("command 필요".into());
@@ -641,6 +795,8 @@ pub fn schedule_register(
         retry,
         concurrency: concurrency.unwrap_or(1),
         timeout_ms,
+        heartbeat_stale_ms,
+        backstop_ms,
     };
     ensure_started(&app);
     let assigned = state.register(spec.clone(), now_ms());
@@ -657,12 +813,24 @@ pub fn schedule_poke(state: State<ScheduleState>, id: Option<String>) -> Result<
     Ok(())
 }
 
+// app.scheduler.heartbeat — heartbeat 작업의 살아있음(thinking delta ∨ event jsonl) 신호. staleness 리셋.
+// 반환=리셋됨(실행 중 작업만). exec-one 이 라인마다(throttle) 호출 → 도는 중 좀비 오판 방지.
+#[tauri::command]
+pub fn schedule_heartbeat(state: State<ScheduleState>, id: String) -> Result<bool, String> {
+    Ok(state.heartbeat(&id, now_ms()))
+}
+
 #[tauri::command]
 pub fn schedule_cancel(
     app: AppHandle,
     state: State<ScheduleState>,
     id: String,
 ) -> Result<bool, String> {
+    // 발화 중 heartbeat 작업이면 seq 로 pending 을 끊어 fire_heartbeat 의 recv 를 즉시 깨운다(좀비 대기
+    // 누수 0). seq 회수는 작업 제거 전. close_request 는 멱등이라 발화 중이 아니어도 무해.
+    if let Some(seq) = state.take_seq(&id) {
+        ipc::close_request(&app, seq);
+    }
     let removed = state.cancel(&id);
     persist_delete(&app, &id);
     Ok(removed)
@@ -690,6 +858,8 @@ pub fn schedule_set(
         command,
         params,
         id,
+        None,
+        None,
         None,
         None,
         None,
@@ -730,6 +900,8 @@ mod tests {
             retry: Some(Retry { max: 3, base_ms: 1000, max_ms: 60_000 }),
             concurrency: 2,
             timeout_ms: Some(600_000),
+            heartbeat_stale_ms: Some(300_000),
+            backstop_ms: Some(14_400_000),
         };
         let v = serde_json::to_value(&s).unwrap();
         let back: JobSpec = serde_json::from_value(v).unwrap();
@@ -739,6 +911,47 @@ mod tests {
         assert_eq!(back.retry, s.retry);
         assert_eq!(back.concurrency, 2);
         assert_eq!(back.timeout_ms, Some(600_000));
+        assert_eq!(back.heartbeat_stale_ms, Some(300_000));
+        assert_eq!(back.backstop_ms, Some(14_400_000));
+    }
+
+    // heartbeat — claim 시 last_liveness=claim 초기화, heartbeat 수신 시 리셋(실행 중만).
+    #[test]
+    fn heartbeat_resets_liveness() {
+        let st = ScheduleState::default();
+        let mut s = spec(Trigger::At { at: 100 });
+        s.heartbeat_stale_ms = Some(300_000);
+        let id = st.register(s, 0);
+        // 실행 전 heartbeat 무시(running 아님).
+        assert!(!st.heartbeat(&id, 50));
+        st.claim_due(100); // claim → last_liveness=100, running.
+        assert_eq!(st.last_liveness(&id), Some(100));
+        assert!(st.heartbeat(&id, 5000)); // 실행 중 → 리셋.
+        assert_eq!(st.last_liveness(&id), Some(5000));
+        // 미지 id 무시.
+        assert!(!st.heartbeat("nope", 9999));
+    }
+
+    // seq set/take — cancel-wakes-wait 용. take 후 None.
+    #[test]
+    fn seq_set_take() {
+        let st = ScheduleState::default();
+        let id = st.register(spec(Trigger::At { at: 100 }), 0);
+        st.claim_due(100);
+        st.set_seq(&id, 42);
+        assert_eq!(st.take_seq(&id), Some(42));
+        assert_eq!(st.take_seq(&id), None); // 이미 회수.
+        assert!(st.exists(&id));
+    }
+
+    // inject_job_id — object params 에 __schedule_job_id 주입(exec-one echo 용). 비-object 는 그대로.
+    #[test]
+    fn inject_job_id_into_params() {
+        let p = inject_job_id(json!({"node":"n1"}), "sch-9");
+        assert_eq!(p["__schedule_job_id"], "sch-9");
+        assert_eq!(p["node"], "n1"); // 기존 키 보존.
+        // 비-object 는 주입 불가 → 그대로.
+        assert_eq!(inject_job_id(json!("x"), "sch-9"), json!("x"));
     }
 
     // 발화 timeout — 미지정 시 30s 기본, 지정 시 그 값이 Fire 로 전달(LLM exec 가 길게 잡는 노브).
@@ -838,6 +1051,27 @@ mod tests {
         assert_eq!(backoff_delay(99, 1000, 60_000), 60_000); // overflow 없음.
     }
 
+    // fire_verdict — heartbeat 작업 판정. stale=300s, backstop=4h.
+    #[test]
+    fn fire_verdict_cases() {
+        let stale = 300_000;
+        let total = 14_400_000;
+        // claim 직후 신호 신선 → 다음 stale_deadline 까지 Wait.
+        assert_eq!(fire_verdict(0, 0, 0, stale, total), Verdict::Wait(300_000));
+        // ping 으로 last_liveness 전진 → stale_deadline 자가연장.
+        assert_eq!(fire_verdict(150_000, 100_000, 0, stale, total), Verdict::Wait(250_000));
+        // 신호 stale_ms 끊김 → Hung(좀비).
+        assert_eq!(fire_verdict(300_000, 0, 0, stale, total), Verdict::Hung);
+        assert_eq!(fire_verdict(500_000, 100_000, 0, stale, total), Verdict::Hung); // 100k+300k=400k ≤ now.
+        // total 초과 → Backstop, **신호가 방금 와도(fresh)** 절대 천장 우선(진행 무한루프 거둠).
+        assert_eq!(fire_verdict(14_400_000, 14_390_000, 0, stale, total), Verdict::Backstop);
+        // 경계: now=stale_deadline → Hung, now=total_deadline → Backstop.
+        assert_eq!(fire_verdict(300_000, 0, 0, stale, total), Verdict::Hung);
+        assert_eq!(fire_verdict(14_400_000, 0, 0, stale, total), Verdict::Backstop);
+        // Wait 는 두 deadline 중 이른 것까지.
+        assert_eq!(fire_verdict(0, 0, 0, stale, 200_000), Verdict::Wait(200_000)); // total 이 더 이름.
+    }
+
     fn spec(trigger: Trigger) -> JobSpec {
         JobSpec {
             id: None,
@@ -847,6 +1081,8 @@ mod tests {
             retry: None,
             concurrency: 1,
             timeout_ms: None,
+            heartbeat_stale_ms: None,
+            backstop_ms: None,
         }
     }
 

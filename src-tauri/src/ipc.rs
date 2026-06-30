@@ -252,6 +252,38 @@ pub fn request_command(app: &AppHandle, method: String, params: Value, timeout_m
     )
 }
 
+// 스트리밍 발화 프리미티브 — emit + pending 채널만 노출(단일 recv·[1s,3600s] 클램프 없음). 호출자(스케줄러
+// heartbeat 경로)가 직접 recv_timeout 루프로 staleness/backstop 을 관리한다(프로세스-생존 lease — 도는 중
+// 안 자름). 반환=(seq, rx). 호출자는 종료 시 close_request(seq)로 pending 을 회수해야 한다(cancel 도 호출 →
+// tx drop → rx Disconnected 로 대기 즉시 깨움). emit 실패면 None.
+pub fn open_request(app: &AppHandle, method: String, params: Value) -> Option<(u64, mpsc::Receiver<Value>)> {
+    let target = active_window();
+    if app.get_window(&target).is_none() {
+        return None;
+    }
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    let (tx, rx) = mpsc::sync_channel::<Value>(1);
+    let bridge = app.state::<CmdBridge>();
+    bridge.pending.lock().unwrap().insert(seq, tx);
+    let payload = json!({
+        "id": seq,
+        "method": method,
+        "params": params,
+        "pane": Value::Null,
+        "window": target,
+    });
+    if app.emit_to(&target, "cmd-request", payload).is_err() {
+        bridge.pending.lock().unwrap().remove(&seq);
+        return None;
+    }
+    Some((seq, rx))
+}
+
+// pending 회수(멱등) — 정상 완료·좀비 포기·cancel 공용. 남은 tx 를 drop 해 호출자 rx 를 깨운다.
+pub fn close_request(app: &AppHandle, seq: u64) {
+    app.state::<CmdBridge>().pending.lock().unwrap().remove(&seq);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

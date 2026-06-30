@@ -740,6 +740,34 @@ describe("app.scheduler — 범용 스케줄러 표면(schedule 권한)", () => 
       retry: { max: 3, base_ms: 1000, max_ms: 60_000 },
       concurrency: null,
       timeout_ms: 600_000,
+      heartbeat_stale_ms: null,
+      backstop_ms: null,
+    });
+  });
+
+  it("heartbeat 작업 register(staleness/backstop) + heartbeat(id) forward", async () => {
+    const d = fakeDeps({ invoke: vi.fn(async () => "sch-2") });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["schedule"] }),
+      "/d",
+      d,
+    );
+    await api.scheduler!.register({
+      trigger: { kind: "reconcile" },
+      command: "workflow.exec-one",
+      heartbeat_stale_ms: 300_000,
+      backstop_ms: 14_400_000,
+    });
+    expect(d.invoke).toHaveBeenCalledWith(
+      "schedule_register",
+      expect.objectContaining({
+        heartbeat_stale_ms: 300_000,
+        backstop_ms: 14_400_000,
+      }),
+    );
+    await api.scheduler!.heartbeat("sch-2");
+    expect(d.invoke).toHaveBeenLastCalledWith("schedule_heartbeat", {
+      id: "sch-2",
     });
   });
 
