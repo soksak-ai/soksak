@@ -316,6 +316,8 @@ struct Job {
     timeout_ms: u64,                   // 비-프로세스 발화 응답 대기 상한.
     process_lease: bool,               // true=프로세스-생존 lease(reply=프로세스 exit 까지 대기).
     zombie_backstop_ms: Option<u64>,   // 프로세스 작업 좀비 backstop(None=무한).
+    epoch: u64,                        // 이 job 인스턴스 세대. 전체 교체(재생성) 시 바뀜 — 발화 중 fire 가
+                                       // 자기 epoch 와 대조해 교체된 job 을 오염시키지 않게(complete/set_seq).
     // 런타임:
     next_at: Option<u64>,  // 다음 예정 발화(None=대기/완료).
     last_due: u64,         // 마지막으로 claim 된 예정 시각(드리프트 없는 re-arm 기준).
@@ -335,6 +337,7 @@ struct Fire {
     process_lease: bool, // true=fire_process(프로세스-생존 lease).
     zombie_backstop_ms: Option<u64>,
     claimed_at: u64, // claim 시각 = 좀비 backstop 기준.
+    epoch: u64,      // claim 시 job 세대 — complete/set_seq 가 이걸로 교체된 job 을 건드리지 않는다.
 }
 
 // 완료 후 후처리 결과 — removed 면 영속에서도 제거해야 한다(At 1회 종료).
@@ -357,7 +360,8 @@ pub struct JobView {
 #[derive(Default)]
 struct Inner {
     jobs: HashMap<String, Job>,
-    seq: u64,
+    seq: u64,        // 자동 id 생성용.
+    next_epoch: u64, // job 인스턴스 세대 — 전체 교체마다 +1(같은 id 재생성도 구분).
     started: bool,
 }
 
@@ -391,6 +395,29 @@ impl ScheduleState {
             inner.seq += 1;
             format!("sch-{}", inner.seq)
         });
+        // 발화 중(running) 재등록 = config 만 갱신, 런타임(running/seq/next_at/epoch) 보존. 덮어쓰면(아래)
+        // running 이 false 로 리셋돼 claim_due 가 2차 동시 발화 → 단일 in-flight lease 가 깨진다(예: 긴
+        // process_lease exec 도중 플러그인 re-activate). 강제 재시작이 필요하면 cancel 후 register 한다.
+        if let Some(job) = inner.jobs.get_mut(&id) {
+            if job.running {
+                job.trigger = spec.trigger;
+                job.command = spec.command;
+                job.params = spec.params;
+                job.retry = spec.retry;
+                job.concurrency = spec.concurrency.max(1);
+                job.timeout_ms = spec.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS);
+                job.process_lease = spec.process_lease;
+                job.zombie_backstop_ms = spec.zombie_backstop_ms;
+                // epoch·running·seq·last_due·pending·attempt·next_at(None) 보존 — live fire 가 그대로 완주.
+                drop(inner);
+                self.cv.notify_all();
+                return id;
+            }
+        }
+        // 신규 또는 idle: 전체 교체. 새 epoch 부여 — cancel+register race 로 이전 fire 가 살아 있어도
+        // 그 fire 의 complete/set_seq 가 epoch mismatch 로 no-op → 재생성 job 오염 차단.
+        inner.next_epoch += 1;
+        let epoch = inner.next_epoch;
         let next_at = first_fire(&spec.trigger, now);
         inner.jobs.insert(
             id.clone(),
@@ -404,6 +431,7 @@ impl ScheduleState {
                 timeout_ms: spec.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS),
                 process_lease: spec.process_lease,
                 zombie_backstop_ms: spec.zombie_backstop_ms,
+                epoch,
                 next_at,
                 last_due: 0,
                 seq: None,
@@ -499,6 +527,7 @@ impl ScheduleState {
                         process_lease: job.process_lease,
                         zombie_backstop_ms: job.zombie_backstop_ms,
                         claimed_at: now,
+                        epoch: job.epoch,
                     });
                 }
             }
@@ -532,13 +561,18 @@ impl ScheduleState {
         let _ = self.cv.wait_timeout(inner, wait);
     }
 
-    // 발화 완료 후처리 — lease 해제 + 재시도/재무장/coalesce + At 종료 정리.
-    fn complete(&self, id: &str, ok: bool, now: u64) -> Completion {
+    // 발화 완료 후처리 — lease 해제 + 재시도/재무장/coalesce + At 종료 정리. epoch 가 현재 job 과 다르면
+    // (재등록 전체교체·cancel+register 로 인스턴스가 바뀜) 이 fire 는 orphan → no-op(교체된 job 안 건드림).
+    fn complete(&self, id: &str, ok: bool, now: u64, epoch: u64) -> Completion {
         let mut inner = self.inner.lock().unwrap();
         let Some(job) = inner.jobs.get_mut(id) else {
             return Completion { removed: false };
         };
+        if job.epoch != epoch {
+            return Completion { removed: false }; // orphaned old fire — 현재 인스턴스 보호.
+        }
         job.running = false;
+        job.seq = None; // 발화 종료 — seq 정리(cancel 이 더는 이 fire 를 깨울 필요 없음).
         // 실패 + 재시도 여력 → backoff 재시도 예약(정상 일정 대신 우선).
         if !ok {
             if let Some(retry) = job.retry.clone() {
@@ -570,9 +604,12 @@ impl ScheduleState {
         Completion { removed }
     }
 
-    fn set_seq(&self, id: &str, seq: u64) {
+    // 발화 중 seq 기록 — epoch 일치 시만(교체된 job 의 seq 를 덮어쓰지 않게).
+    fn set_seq(&self, id: &str, seq: u64, epoch: u64) {
         if let Some(j) = self.inner.lock().unwrap().jobs.get_mut(id) {
-            j.seq = Some(seq);
+            if j.epoch == epoch {
+                j.seq = Some(seq);
+            }
         }
     }
 
@@ -586,8 +623,15 @@ impl ScheduleState {
             .and_then(|j| j.seq.take())
     }
 
+    #[cfg(test)]
     fn exists(&self, id: &str) -> bool {
         self.inner.lock().unwrap().jobs.contains_key(id)
+    }
+
+    // 테스트 핀 — job 의 현재 epoch(인스턴스 세대).
+    #[cfg(test)]
+    fn epoch_of(&self, id: &str) -> Option<u64> {
+        self.inner.lock().unwrap().jobs.get(id).map(|j| j.epoch)
     }
 }
 
@@ -630,7 +674,7 @@ pub fn ensure_started(app: &AppHandle) {
 fn fire_simple(app: &AppHandle, f: Fire) {
     let reply = ipc::request_command(app, f.command, f.params, f.timeout_ms);
     let ok = reply.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
-    let c = app.state::<ScheduleState>().complete(&f.id, ok, now_ms());
+    let c = app.state::<ScheduleState>().complete(&f.id, ok, now_ms(), f.epoch);
     if c.removed {
         persist_delete(app, &f.id);
     }
@@ -643,13 +687,13 @@ fn fire_process(app: &AppHandle, f: Fire) {
     let st = app.state::<ScheduleState>();
     let Some((seq, rx)) = ipc::open_request(app, f.command, f.params) else {
         // emit 실패 — 프론트 도달 불가. 실패로 완료(backoff 여지).
-        let c = st.complete(&f.id, false, now_ms());
+        let c = st.complete(&f.id, false, now_ms(), f.epoch);
         if c.removed {
             persist_delete(app, &f.id);
         }
         return;
     };
-    st.set_seq(&f.id, seq);
+    st.set_seq(&f.id, seq, f.epoch);
     // reply=Some(프로세스 exit) / None(좀비 backstop·취소). 무한은 recv(차단), 유한은 recv_timeout.
     let reply: Option<Value> = match process_wait(now_ms(), f.claimed_at, f.zombie_backstop_ms) {
         ProcWait::Forever => rx.recv().ok(), // reply 또는 cancel(Disconnected→None).
@@ -657,18 +701,16 @@ fn fire_process(app: &AppHandle, f: Fire) {
         ProcWait::Backstop => None,          // 이미 좀비 backstop 초과(드묾).
     };
     ipc::close_request(app, seq); // pending 회수(멱등).
-    let _ = st.take_seq(&f.id);
-    // 취소된 작업은 complete 안 함(이미 제거). 그 외엔 reply 의 ok 로 완료(None=좀비→ok:false→backoff).
-    if st.exists(&f.id) {
-        let ok = reply
-            .as_ref()
-            .and_then(|v| v.get("ok"))
-            .and_then(|b| b.as_bool())
-            .unwrap_or(false);
-        let c = st.complete(&f.id, ok, now_ms());
-        if c.removed {
-            persist_delete(app, &f.id);
-        }
+    // reply 의 ok 로 완료(None=좀비/취소→ok:false). complete 가 epoch·존재를 검사 — 취소(제거)·재등록
+    // (전체교체)된 job 은 no-op(removed:false) 라 이중 처리·재생성 job 오염·seq steal 이 없다.
+    let ok = reply
+        .as_ref()
+        .and_then(|v| v.get("ok"))
+        .and_then(|b| b.as_bool())
+        .unwrap_or(false);
+    let c = st.complete(&f.id, ok, now_ms(), f.epoch);
+    if c.removed {
+        persist_delete(app, &f.id);
     }
 }
 
@@ -887,11 +929,66 @@ mod tests {
     fn seq_set_take() {
         let st = ScheduleState::default();
         let id = st.register(spec(Trigger::At { at: 100 }), 0);
-        st.claim_due(100);
-        st.set_seq(&id, 42);
+        let f = st.claim_due(100);
+        st.set_seq(&id, 42, f[0].epoch);
         assert_eq!(st.take_seq(&id), Some(42));
         assert_eq!(st.take_seq(&id), None); // 이미 회수.
         assert!(st.exists(&id));
+    }
+
+    fn spec_id(id: &str, trigger: Trigger) -> JobSpec {
+        let mut s = spec(trigger);
+        s.id = Some(id.into());
+        s
+    }
+
+    // ① 벡터1 — 발화 중 재등록(running)은 config 만 갱신·runtime 보존. 2차 동시 발화 없음(단일 in-flight).
+    #[test]
+    fn reregister_during_inflight_keeps_single_fire() {
+        let st = ScheduleState::default();
+        let id = st.register(spec(Trigger::At { at: 100 }), 0);
+        let ep1 = st.epoch_of(&id).unwrap();
+        let f = st.claim_due(150); // running(epoch ep1).
+        assert_eq!(f.len(), 1);
+        // 발화 중 재등록 — 덮어쓰기였다면 running=false 로 리셋돼 재발화. Option B 는 보존.
+        st.register(spec_id(&id, Trigger::Cron { expr: "0 0 * * *".into() }), 200);
+        assert_eq!(st.epoch_of(&id), Some(ep1)); // epoch 보존(같은 인스턴스).
+        assert!(st.claim_due(300).is_empty()); // running 유지 → 2차 발화 0(lease).
+        // live fire 완료(같은 epoch) → 정상 동작. config 갱신(At→Cron)됐으니 rearm 됨(제거 X).
+        let c = st.complete(&id, true, 400, f[0].epoch);
+        assert!(!c.removed);
+        assert!(matches!(st.list()[0].trigger, Trigger::Cron { .. })); // 갱신된 config.
+    }
+
+    // ① 벡터2 — cancel(제거)+register(재생성) race: old fire 의 complete 가 epoch mismatch 로 no-op
+    //   (재생성 job 오염 안 함).
+    #[test]
+    fn complete_stale_epoch_is_noop() {
+        let st = ScheduleState::default();
+        let id = st.register(spec(Trigger::At { at: 100 }), 0);
+        let f = st.claim_due(150); // old fire(ep1).
+        let ep1 = f[0].epoch;
+        st.cancel(&id); // 제거(old fire 깨움).
+        st.register(spec_id(&id, Trigger::At { at: 5000 }), 0); // 재생성(ep2, idle).
+        let ep2 = st.epoch_of(&id).unwrap();
+        assert_ne!(ep1, ep2);
+        let c = st.complete(&id, true, 200, ep1); // old fire 의 완료 — 현재는 ep2.
+        assert!(!c.removed); // no-op.
+        assert_eq!(st.list()[0].next_at, Some(5000)); // 재생성 job 무손상.
+        assert!(!st.list()[0].running);
+    }
+
+    // ① 벡터2 — old fire 의 set_seq 가 epoch mismatch 로 재생성 job 의 seq 를 훔치지 않음.
+    #[test]
+    fn set_seq_stale_epoch_is_noop() {
+        let st = ScheduleState::default();
+        let id = st.register(spec(Trigger::At { at: 100 }), 0);
+        let f = st.claim_due(150);
+        let ep1 = f[0].epoch;
+        st.cancel(&id);
+        st.register(spec_id(&id, Trigger::At { at: 5000 }), 0); // 재생성 ep2.
+        st.set_seq(&id, 999, ep1); // old fire 의 seq 기록 시도 — ep2 라 무시.
+        assert_eq!(st.take_seq(&id), None); // 재생성 job seq steal 없음.
     }
 
     // 발화 timeout — 미지정 시 30s 기본, 지정 시 그 값이 Fire 로 전달(LLM exec 가 길게 잡는 노브).
@@ -1046,7 +1143,7 @@ mod tests {
         let f1 = st.claim_due(150);
         assert_eq!(f1.len(), 1);
         assert!(st.claim_due(150).is_empty()); // running — 재claim 없음.
-        let c = st.complete(&id, true, 200);
+        let c = st.complete(&id, true, 200, f1[0].epoch);
         assert!(c.removed);
         assert!(st.list().is_empty());
     }
@@ -1060,7 +1157,7 @@ mod tests {
         assert_eq!(st.list()[0].next_at, Some(100));
         let f = st.claim_due(120);
         assert_eq!(f.len(), 1);
-        let c = st.complete(&id, true, 130);
+        let c = st.complete(&id, true, 130, f[0].epoch);
         assert!(!c.removed);
         assert_eq!(st.list()[0].next_at, Some(200)); // last_due(100) 기준 → 200, 130 드리프트 없음.
     }
@@ -1072,12 +1169,13 @@ mod tests {
         let mut s = spec(Trigger::At { at: 100 });
         s.retry = Some(Retry { max: 1, base_ms: 1000, max_ms: 60_000 });
         let id = st.register(s, 0);
+        let ep = st.epoch_of(&id).unwrap(); // 재시도 내내 epoch 불변(Option B/재시도는 교체 아님).
         st.claim_due(150);
-        let c1 = st.complete(&id, false, 200); // 1회차 실패 → 재시도.
+        let c1 = st.complete(&id, false, 200, ep); // 1회차 실패 → 재시도.
         assert!(!c1.removed);
         assert_eq!(st.list()[0].next_at, Some(1200)); // 200 + backoff(1)=1000.
         st.claim_due(1300);
-        let c2 = st.complete(&id, false, 1400); // 재시도 소진 → 종료.
+        let c2 = st.complete(&id, false, 1400, ep); // 재시도 소진 → 종료.
         assert!(c2.removed);
         assert!(st.list().is_empty());
     }
@@ -1094,7 +1192,7 @@ mod tests {
         assert_eq!(f.len(), 1);
         st.poke(Some(&id), 600); // 실행 중 poke → pending.
         assert_eq!(st.list()[0].next_at, None); // 아직 running.
-        let c = st.complete(&id, true, 700);
+        let c = st.complete(&id, true, 700, f[0].epoch);
         assert!(!c.removed);
         assert_eq!(st.list()[0].next_at, Some(700)); // pending coalesce → 즉시 재발화.
     }
