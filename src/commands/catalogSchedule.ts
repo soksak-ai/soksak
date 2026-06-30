@@ -37,6 +37,62 @@ export function registerScheduleCatalog(): void {
     },
   });
 
+  register("schedule.register", {
+    description:
+      "Register a scheduler job (trigger + registry command to fire). trigger = { kind:'at', at } | { kind:'every', every_ms, anchor? } | { kind:'cron', expr } | { kind:'reconcile' }. process_lease=true holds the lease until the fired command's process exits (no kill while running, zombie_backstop_ms cap, default 3h). retry = { max, base_ms, max_ms } for ok:false backoff. Returns the assigned id. Generalizes schedule.set.",
+    triggers: { ko: "스케줄 등록 register 트리거 reconcile cron every 프로세스" },
+    params: {
+      trigger: { type: "json", description: "{ kind:'at'|'every'|'cron'|'reconcile', ... }", required: true },
+      command: { type: "string", description: "Registry command name to fire", required: true },
+      params: { type: "json", description: "Command parameters (fired with the command)" },
+      id: { type: "string", description: "Existing job id to replace (new id issued when omitted)" },
+      retry: { type: "json", description: "{ max, base_ms, max_ms } — backoff on ok:false" },
+      concurrency: { type: "number", description: "Reserved (per-job lease is always single)" },
+      timeout_ms: { type: "number", description: "Non-process wait cap (ms). Ignored when process_lease." },
+      process_lease: { type: "boolean", description: "Hold lease until fired process exits (exec-one)" },
+      zombie_backstop_ms: { type: "number", description: "Process-lease zombie cap (ms). null=infinite, default 3h" },
+    },
+    returns: "{ jobId }",
+    danger: "inject",
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: [
+      'sok schedule.register \'{"trigger":{"kind":"every","every_ms":60000},"command":"notify.show","params":{"title":"틱","body":"1분"}}\'',
+      'sok schedule.register \'{"trigger":{"kind":"reconcile"},"command":"plugin.soksak-plugin-workflow.workflow.reconcile","process_lease":true,"retry":{"max":5,"base_ms":2000,"max_ms":60000}}\'',
+    ],
+    handler: async (p) => {
+      if (typeof p.command !== "string" || p.trigger == null || typeof p.trigger !== "object") {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "trigger·command 필요" };
+      }
+      const jobId = await invoke<string>("schedule_register", {
+        trigger: p.trigger,
+        command: p.command,
+        params: (p.params as Record<string, unknown> | undefined) ?? null,
+        id: (p.id as string | undefined) ?? null,
+        retry: (p.retry as Record<string, unknown> | undefined) ?? null,
+        concurrency: (p.concurrency as number | undefined) ?? null,
+        timeout_ms: (p.timeout_ms as number | undefined) ?? null,
+        process_lease: (p.process_lease as boolean | undefined) ?? null,
+        zombie_backstop_ms: (p.zombie_backstop_ms as number | null | undefined) ?? null,
+      });
+      return { jobId };
+    },
+  });
+
+  register("schedule.poke", {
+    description:
+      "Fire a job immediately (completion trigger / external change). id given = that job; omitted = all reconcile jobs. Running jobs coalesce (re-fire once after completion).",
+    triggers: { ko: "스케줄 깨우기 poke 재평가 reconcile 틱" },
+    params: { id: { type: "string", description: "Job id (omit = all reconcile jobs)" } },
+    returns: "{ ok }",
+    danger: "inject",
+    errors: ["INTERNAL"],
+    examples: ["sok schedule.poke", 'sok schedule.poke \'{"id":"sch-3"}\''],
+    handler: async (p) => {
+      await invoke("schedule_poke", { id: (p.id as string | undefined) ?? null });
+      return { ok: true as const };
+    },
+  });
+
   register("schedule.cancel", {
     description: "Cancel a pending schedule by id. Returns removed=true if the schedule existed.",
     triggers: { ko: "스케줄 취소 삭제 예약취소 cancel" },
@@ -54,10 +110,11 @@ export function registerScheduleCatalog(): void {
   });
 
   register("schedule.list", {
-    description: "List all pending schedules sorted by fire time ascending (id, at, command, params).",
+    description:
+      "List all jobs sorted by next fire time ascending. Each: { id, trigger, command, params, next_at, running, concurrency }. next_at=null means waiting (reconcile/event) or running. running=true means a fire is in flight (lease held).",
     triggers: { ko: "스케줄 목록 예약 리스트 조회" },
     params: {},
-    returns: "{ schedules: [{ id, at, command, params }] }",
+    returns: "{ schedules: [{ id, trigger, command, params, next_at, running, concurrency }] }",
     errors: ["INTERNAL"],
     examples: ["sok schedule.list"],
     handler: async () => {
