@@ -417,6 +417,10 @@ pub fn browser_overlay_active(window: tauri::Window, active: bool) {
     // window = 호출 창(MW2 — 자동 인지). 그 창의 오버레이 게이트만 갱신(프론트 label 전달 불요).
     #[cfg(target_os = "macos")]
     layer::set_overlay(window.label(), active);
+    // 인프로세스 CEF child 는 코어 layer 시스템 밖(별도 set_as_child NSView)이라 오버레이 시 DOM
+    // 모달 위로 뚫고 올라온다 → 같은 게이트로 CEF child 도 숨긴다.
+    #[cfg(feature = "cef-browser")]
+    crate::cef_engine::set_overlay(active);
     #[cfg(not(target_os = "macos"))]
     let _ = (window, active);
 }

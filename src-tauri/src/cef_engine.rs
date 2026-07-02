@@ -48,6 +48,7 @@ enum Op {
     Hidden { id: u32, hidden: bool },
     Focus { id: u32 },
     Close { id: u32 },
+    Overlay { active: bool }, // DOM 오버레이/모달이 브라우저 pane 위에 뜸 → 모든 CEF child 숨김
 }
 static PENDING: LazyLock<Mutex<Vec<CreateReq>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 static OPS: LazyLock<Mutex<Vec<Op>>> = LazyLock::new(|| Mutex::new(Vec::new()));
@@ -117,6 +118,7 @@ static VISIBLE: LazyLock<Mutex<std::collections::HashSet<u32>>> =
 static LOADING: LazyLock<Mutex<std::collections::HashSet<i32>>> =
     LazyLock::new(|| Mutex::new(std::collections::HashSet::new()));
 static TICK_ON: AtomicBool = AtomicBool::new(false);
+static OVERLAY_ACTIVE: AtomicBool = AtomicBool::new(false); // DOM 모달/오버레이가 pane 위에 떠 있음
 static ACTIVE_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
 static CLOCK: LazyLock<std::time::Instant> = LazyLock::new(std::time::Instant::now);
 const RENDER_TICK_MS: i64 = 16; // ~60fps(활동 중에만)
@@ -325,18 +327,8 @@ fn apply_ops() {
                 if !hidden {
                     bump_active(); // 다시 보일 때 present 위해 틱 가동
                 }
-                if let Some(host) = find_browser(id).and_then(|b| b.host()) {
-                    host.was_hidden(if hidden { 1 } else { 0 });
-                    // 숨김 시 네이티브 뷰도 hidden — was_hidden 만으론 windowed 뷰가 안 사라진다.
-                    #[cfg(target_os = "macos")]
-                    unsafe {
-                        let view = host.window_handle() as *mut c_void;
-                        if !view.is_null() {
-                            let v = &*(view as *const objc2::runtime::AnyObject);
-                            let _: () = objc2::msg_send![v, setHidden: hidden];
-                        }
-                    }
-                }
+                // 실효 숨김 = 탭 숨김 || 오버레이 활성(모달이 pane 위에 뜨면 브라우저를 숨긴다).
+                set_native_hidden(id, hidden || OVERLAY_ACTIVE.load(Ordering::Relaxed));
             }
             Op::Focus { id } => {
                 if let Some(host) = find_browser(id).and_then(|b| b.host()) {
@@ -351,6 +343,36 @@ fn apply_ops() {
                     host.close_browser(0);
                 }
                 eprintln!("[cef] close 요청 (id={id})");
+            }
+            Op::Overlay { active } => {
+                // DOM 오버레이/모달이 브라우저 pane 위에 뜸 — CEF 네이티브 뷰가 DOM 위로 뚫고 올라오므로
+                // 모든 CEF child 를 숨긴다(오버레이 닫히면 탭-활성인 것만 다시 보임). 코어 layer 시스템이
+                // 네이티브 WKWebView 에 하는 것과 동형(CEF child 는 layer 밖이라 여기서 별도 처리).
+                OVERLAY_ACTIVE.store(active, Ordering::Relaxed);
+                let ids: Vec<u32> =
+                    BROWSERS.lock().map(|l| l.iter().map(|(i, _)| *i).collect()).unwrap_or_default();
+                for id in ids {
+                    let tab_visible = VISIBLE.lock().map(|s| s.contains(&id)).unwrap_or(false);
+                    set_native_hidden(id, active || !tab_visible);
+                }
+                if !active {
+                    bump_active(); // 오버레이 닫힘 → 다시 보이는 브라우저 present
+                }
+            }
+        }
+    }
+}
+
+// CEF child 네이티브 뷰 숨김/표시(was_hidden + NSView setHidden). 메인 스레드에서만.
+fn set_native_hidden(id: u32, hidden: bool) {
+    if let Some(host) = find_browser(id).and_then(|b| b.host()) {
+        host.was_hidden(if hidden { 1 } else { 0 });
+        #[cfg(target_os = "macos")]
+        unsafe {
+            let view = host.window_handle() as *mut c_void;
+            if !view.is_null() {
+                let v = &*(view as *const objc2::runtime::AnyObject);
+                let _: () = objc2::msg_send![v, setHidden: hidden];
             }
         }
     }
@@ -397,6 +419,10 @@ pub fn set_hidden(id: u32, hidden: bool) {
 }
 pub fn set_focus(id: u32) {
     request_op(Op::Focus { id });
+}
+// DOM 오버레이/모달 게이트 — 코어 browser_overlay_active 가 창 전이 시 호출. 활성이면 모든 CEF child 숨김.
+pub fn set_overlay(active: bool) {
+    request_op(Op::Overlay { active });
 }
 pub fn close(id: u32) {
     request_op(Op::Close { id });
