@@ -32,6 +32,7 @@ import { registerUiCatalog } from "./catalogUi";
 import { registerDomCatalog } from "./catalogDom";
 import { registerAiSessionCatalog } from "./catalogAiSession";
 import { registerDataCatalog } from "./catalogData";
+import { registerBrowserCefCatalog } from "./catalogBrowserCef";
 import { registerSecretsCatalog } from "./catalogSecrets";
 import { registerTurnCatalog } from "./catalogTurn";
 import { registerNetworkCatalog } from "./catalogNetwork";
@@ -1973,6 +1974,7 @@ export function registerCatalog(): void {
   registerUiCatalog();
   registerDomCatalog();
   registerDataCatalog();
+  registerBrowserCefCatalog();
   registerSecretsCatalog();
   registerAiSessionCatalog();
   registerTurnCatalog();
