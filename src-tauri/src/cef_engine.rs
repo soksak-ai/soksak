@@ -28,7 +28,9 @@ pub fn enabled() -> bool {
 }
 
 // 임베드 대기 요청(플러그인 → 커맨드 → 여기). CEF 조작은 UI(메인) 스레드에서만 하므로 큐잉 후 pump 에서 적용.
+// 좌표(x,y,w,h)는 플랫폼 중립 top-left 원점 DIP(points) — 부모 뷰 안에서. macOS 는 apply 시 y-flip.
 struct CreateReq {
+    id: u32,
     nsview: usize,
     x: i32,
     y: i32,
@@ -36,10 +38,64 @@ struct CreateReq {
     h: i32,
     url: String,
 }
+// 기존 브라우저 대상 제어 오퍼레이션(id 로 지정). CEF 조작은 메인 스레드 전용 → 큐잉 후 pump 에서 적용.
+enum Op {
+    Load { id: u32, url: String },
+    Reload { id: u32, ignore_cache: bool },
+    Back { id: u32 },
+    Forward { id: u32 },
+    Bounds { id: u32, x: i32, y: i32, w: i32, h: i32 },
+    Hidden { id: u32, hidden: bool },
+    Focus { id: u32 },
+    Close { id: u32 },
+}
 static PENDING: LazyLock<Mutex<Vec<CreateReq>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+static OPS: LazyLock<Mutex<Vec<Op>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
-// 생성된 브라우저: id → Browser. bounds/navigate/close 는 여기서 찾아 적용(후속).
+// 생성된 브라우저: id → Browser. bounds/navigate/close 는 여기서 찾아 적용.
 static BROWSERS: LazyLock<Mutex<Vec<(u32, Browser)>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+
+// 부모 뷰 좌표계는 macOS 가 하단-좌 원점(비-flip) → top-left DIP 를 NSView y 로 뒤집는다.
+// parent_h(부모 뷰 높이, points) - (top + h). 비-macos 는 그대로(top-left).
+#[cfg(target_os = "macos")]
+fn flip_y(parent_view: *mut c_void, top: i32, h: i32) -> i32 {
+    if parent_view.is_null() {
+        return top;
+    }
+    unsafe {
+        let v = &*(parent_view as *const objc2::runtime::AnyObject);
+        let b: objc2_foundation::NSRect = objc2::msg_send![v, bounds];
+        (b.size.height as i32) - (top + h)
+    }
+}
+#[cfg(not(target_os = "macos"))]
+fn flip_y(_parent_view: *mut c_void, top: i32, _h: i32) -> i32 {
+    top
+}
+
+// NSView setFrame(부모 좌표계, 하단-좌). 메인 스레드에서만.
+#[cfg(target_os = "macos")]
+fn set_view_frame(view: *mut c_void, x: i32, y: i32, w: i32, h: i32) {
+    if view.is_null() {
+        return;
+    }
+    unsafe {
+        let v = &*(view as *const objc2::runtime::AnyObject);
+        let frame = objc2_foundation::NSRect::new(
+            objc2_foundation::NSPoint::new(x as f64, y as f64),
+            objc2_foundation::NSSize::new(w.max(1) as f64, h.max(1) as f64),
+        );
+        let _: () = objc2::msg_send![v, setFrame: frame];
+    }
+}
+
+// id 로 브라우저 조회(clone — refcount 증가, 호출자가 소유).
+fn find_browser(id: u32) -> Option<Browser> {
+    BROWSERS
+        .lock()
+        .ok()
+        .and_then(|list| list.iter().find(|(bid, _)| *bid == id).map(|(_, b)| b.clone()))
+}
 
 // ── 메시지펌프 스케줄링(GCD 메인큐, 비재진입) ──────────────────────────────────────────────
 // PUMP_SCHEDULED: GCD 블록이 하나 예약돼 있음(중복 예약 억제). IN_WORK: do_message_loop_work 실행 중
@@ -95,6 +151,7 @@ fn do_work() {
     }
     IN_WORK.store(true, Ordering::SeqCst);
     apply_pending();
+    apply_ops();
     do_message_loop_work();
     IN_WORK.store(false, Ordering::SeqCst);
     if REDO.swap(false, Ordering::SeqCst) {
@@ -102,14 +159,16 @@ fn do_work() {
     }
 }
 
-// 대기 CreateReq → set_as_child 로 CEF child 브라우저 생성(메인 스레드에서만).
+// 대기 CreateReq → set_as_child 로 CEF child 브라우저 생성(메인 스레드에서만). y 는 top-left → NSView 로 flip.
 fn apply_pending() {
     let reqs: Vec<CreateReq> =
         PENDING.lock().map(|mut q| q.drain(..).collect()).unwrap_or_default();
     for r in reqs {
+        let parent = r.nsview as *mut c_void;
+        let ns_y = flip_y(parent, r.y, r.h.max(1));
         let wi = WindowInfo::default().set_as_child(
-            r.nsview as *mut c_void,
-            &Rect { x: r.x, y: r.y, width: r.w.max(1), height: r.h.max(1) },
+            parent,
+            &Rect { x: r.x, y: ns_y, width: r.w.max(1), height: r.h.max(1) },
         );
         let mut client = CefClient::new();
         let url = CefString::from(r.url.as_str());
@@ -123,15 +182,138 @@ fn apply_pending() {
             None,
         );
         if let Some(b) = browser {
-            let id = NEXT_ID.load(Ordering::Relaxed);
             if let Ok(mut list) = BROWSERS.lock() {
-                list.push((id, b));
+                list.push((r.id, b));
             }
-            eprintln!("[cef] child browser 생성 OK (nsview={:#x})", r.nsview);
+            eprintln!("[cef] child browser 생성 OK (id={}, nsview={:#x})", r.id, r.nsview);
         } else {
-            eprintln!("[cef] child browser 생성 실패");
+            eprintln!("[cef] child browser 생성 실패 (id={})", r.id);
         }
     }
+}
+
+// 대기 제어 오퍼레이션 적용(메인 스레드). 대상 브라우저가 없으면 조용히 건너뜀(닫힌 뒤 늦은 op).
+fn apply_ops() {
+    let ops: Vec<Op> = OPS.lock().map(|mut q| q.drain(..).collect()).unwrap_or_default();
+    for op in ops {
+        match op {
+            Op::Load { id, url } => {
+                if let Some(f) = find_browser(id).and_then(|b| b.main_frame()) {
+                    f.load_url(Some(&CefString::from(url.as_str())));
+                }
+            }
+            Op::Reload { id, ignore_cache } => {
+                if let Some(b) = find_browser(id) {
+                    if ignore_cache {
+                        b.reload_ignore_cache();
+                    } else {
+                        b.reload();
+                    }
+                }
+            }
+            Op::Back { id } => {
+                if let Some(b) = find_browser(id) {
+                    if b.can_go_back() == 1 {
+                        b.go_back();
+                    }
+                }
+            }
+            Op::Forward { id } => {
+                if let Some(b) = find_browser(id) {
+                    if b.can_go_forward() == 1 {
+                        b.go_forward();
+                    }
+                }
+            }
+            Op::Bounds { id, x, y, w, h } => {
+                if let Some(host) = find_browser(id).and_then(|b| b.host()) {
+                    let view = host.window_handle() as *mut c_void;
+                    #[cfg(target_os = "macos")]
+                    {
+                        // 자식 뷰의 superview(부모) 높이로 flip.
+                        let parent = unsafe {
+                            if view.is_null() {
+                                std::ptr::null_mut()
+                            } else {
+                                let v = &*(view as *const objc2::runtime::AnyObject);
+                                let sv: *mut objc2::runtime::AnyObject = objc2::msg_send![v, superview];
+                                sv as *mut c_void
+                            }
+                        };
+                        let ns_y = flip_y(parent, y, h.max(1));
+                        set_view_frame(view, x, ns_y, w, h);
+                        host.was_resized();
+                    }
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        let _ = (view, x, y, w, h);
+                        host.was_resized();
+                    }
+                }
+            }
+            Op::Hidden { id, hidden } => {
+                if let Some(host) = find_browser(id).and_then(|b| b.host()) {
+                    host.was_hidden(if hidden { 1 } else { 0 });
+                    // 숨김 시 네이티브 뷰도 hidden — was_hidden 만으론 windowed 뷰가 안 사라진다.
+                    #[cfg(target_os = "macos")]
+                    unsafe {
+                        let view = host.window_handle() as *mut c_void;
+                        if !view.is_null() {
+                            let v = &*(view as *const objc2::runtime::AnyObject);
+                            let _: () = objc2::msg_send![v, setHidden: hidden];
+                        }
+                    }
+                }
+            }
+            Op::Focus { id } => {
+                if let Some(host) = find_browser(id).and_then(|b| b.host()) {
+                    host.set_focus(1);
+                }
+            }
+            Op::Close { id } => {
+                if let Some(host) = find_browser(id).and_then(|b| b.host()) {
+                    host.close_browser(1);
+                }
+                if let Ok(mut list) = BROWSERS.lock() {
+                    list.retain(|(bid, _)| *bid != id);
+                }
+                eprintln!("[cef] child browser close (id={id})");
+            }
+        }
+    }
+}
+
+// 제어 op 큐잉 + 즉시 pump 예약(메인 스레드에서 apply_ops 가 실제 적용). 어느 스레드든 안전.
+fn request_op(op: Op) {
+    if let Ok(mut q) = OPS.lock() {
+        q.push(op);
+    }
+    schedule_pump(0);
+}
+
+pub fn load(id: u32, url: String) {
+    request_op(Op::Load { id, url });
+}
+pub fn reload(id: u32, ignore_cache: bool) {
+    request_op(Op::Reload { id, ignore_cache });
+}
+pub fn go_back(id: u32) {
+    request_op(Op::Back { id });
+}
+pub fn go_forward(id: u32) {
+    request_op(Op::Forward { id });
+}
+pub fn set_bounds(id: u32, x: i32, y: i32, w: i32, h: i32) {
+    request_op(Op::Bounds { id, x, y, w, h });
+}
+pub fn set_hidden(id: u32, hidden: bool) {
+    request_op(Op::Hidden { id, hidden });
+}
+pub fn set_focus(id: u32) {
+    request_op(Op::Focus { id });
+}
+pub fn close(id: u32) {
+    request_op(Op::Close { id });
 }
 
 // disable-gpu 로 GPU 프로세스 서명 이슈 회피(ad-hoc 서명 dev). 정식 서명 시 재검토.
@@ -263,7 +445,7 @@ pub fn initialize_engine() -> bool {
 pub fn request_create(nsview: usize, x: i32, y: i32, w: i32, h: i32, url: String) -> u32 {
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     if let Ok(mut q) = PENDING.lock() {
-        q.push(CreateReq { nsview, x, y, w, h, url });
+        q.push(CreateReq { id, nsview, x, y, w, h, url });
     }
     schedule_pump(0);
     id

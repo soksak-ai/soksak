@@ -19,22 +19,140 @@ export function registerBrowserCefCatalog(): void {
       h: { type: "number", description: "Child height in points", required: true },
       url: { type: "string", description: "Initial URL to load", required: true },
     },
-    returns: "{ id } — engine-local browser id",
+    returns: "{ browserId } — engine-local browser id (use as id in browser.cef.* control commands)",
     errors: ["INTERNAL", "INVALID_PARAMS"],
     examples: [
       'sok browser.cef.create \'{"x":100,"y":100,"w":600,"h":450,"url":"https://example.com"}\'',
     ],
     handler: async (p) => {
-      const n = (v: unknown, d: number): number => (typeof v === "number" && Number.isFinite(v) ? v : d);
       const url = typeof p.url === "string" && p.url ? p.url : "about:blank";
-      const id = await invoke<number>("cef_browser_create", {
-        x: Math.round(n(p.x, 0)),
-        y: Math.round(n(p.y, 0)),
-        w: Math.round(n(p.w, 1)),
-        h: Math.round(n(p.h, 1)),
+      const browserId = await invoke<number>("cef_browser_create", {
+        x: int(p.x, 0),
+        y: int(p.y, 0),
+        w: int(p.w, 1),
+        h: int(p.h, 1),
         url,
       });
-      return { id };
+      return { browserId };
     },
   });
+
+  const ID_PARAM = { type: "number", description: "Engine-local browser id from browser.cef.create", required: true } as const;
+
+  register("browser.cef.bounds", {
+    description:
+      "Move/resize a CEF child to a rect (parent-view DIP, top-left origin). Call on pane resize/move so the native Chromium view tracks its slot. Missing id is a no-op (browser may be closed).",
+    triggers: { ko: "크롬 CEF 위치 크기 bounds 이동 리사이즈" },
+    params: {
+      id: ID_PARAM,
+      x: { type: "number", description: "x in points (top-left origin)", required: true },
+      y: { type: "number", description: "y in points (top-left origin)", required: true },
+      w: { type: "number", description: "width in points", required: true },
+      h: { type: "number", description: "height in points", required: true },
+    },
+    returns: "{ ok }",
+    errors: ["INTERNAL", "INVALID_PARAMS"],
+    examples: ['sok browser.cef.bounds \'{"id":1,"x":150,"y":100,"w":600,"h":450}\''],
+    handler: async (p) => {
+      await invoke("cef_browser_bounds", { id: int(p.id, 0), x: int(p.x, 0), y: int(p.y, 0), w: int(p.w, 1), h: int(p.h, 1) });
+      return { ok: true };
+    },
+  });
+
+  register("browser.cef.load", {
+    description: "Navigate a CEF child to a URL (address-bar go).",
+    triggers: { ko: "크롬 CEF 주소 이동 navigate 로드 URL" },
+    params: { id: ID_PARAM, url: { type: "string", description: "URL to load", required: true } },
+    returns: "{ ok }",
+    errors: ["INTERNAL", "INVALID_PARAMS"],
+    examples: ['sok browser.cef.load \'{"id":1,"url":"https://example.org"}\''],
+    handler: async (p) => {
+      await invoke("cef_browser_load", { id: int(p.id, 0), url: typeof p.url === "string" ? p.url : "about:blank" });
+      return { ok: true };
+    },
+  });
+
+  register("browser.cef.reload", {
+    description: "Reload a CEF child (ignoreCache=true bypasses the cache).",
+    triggers: { ko: "크롬 CEF 새로고침 reload 리로드" },
+    params: { id: ID_PARAM, ignoreCache: { type: "boolean", description: "Bypass cache (hard reload)" } },
+    returns: "{ ok }",
+    errors: ["INTERNAL", "INVALID_PARAMS"],
+    examples: ['sok browser.cef.reload \'{"id":1}\''],
+    handler: async (p) => {
+      await invoke("cef_browser_reload", { id: int(p.id, 0), ignoreCache: p.ignoreCache === true });
+      return { ok: true };
+    },
+  });
+
+  register("browser.cef.back", {
+    description: "Go back in a CEF child's history (no-op if none).",
+    triggers: { ko: "크롬 CEF 뒤로 back 이전" },
+    params: { id: ID_PARAM },
+    returns: "{ ok }",
+    errors: ["INTERNAL", "INVALID_PARAMS"],
+    examples: ['sok browser.cef.back \'{"id":1}\''],
+    handler: async (p) => {
+      await invoke("cef_browser_back", { id: int(p.id, 0) });
+      return { ok: true };
+    },
+  });
+
+  register("browser.cef.forward", {
+    description: "Go forward in a CEF child's history (no-op if none).",
+    triggers: { ko: "크롬 CEF 앞으로 forward 다음" },
+    params: { id: ID_PARAM },
+    returns: "{ ok }",
+    errors: ["INTERNAL", "INVALID_PARAMS"],
+    examples: ['sok browser.cef.forward \'{"id":1}\''],
+    handler: async (p) => {
+      await invoke("cef_browser_forward", { id: int(p.id, 0) });
+      return { ok: true };
+    },
+  });
+
+  register("browser.cef.hidden", {
+    description:
+      "Hide or show a CEF child's native view (hidden=true when its tab is inactive). Frees compositing while hidden without destroying the browser.",
+    triggers: { ko: "크롬 CEF 숨김 표시 hidden 탭전환" },
+    params: { id: ID_PARAM, hidden: { type: "boolean", description: "true=hide, false=show", required: true } },
+    returns: "{ ok }",
+    errors: ["INTERNAL", "INVALID_PARAMS"],
+    examples: ['sok browser.cef.hidden \'{"id":1,"hidden":true}\''],
+    handler: async (p) => {
+      await invoke("cef_browser_hidden", { id: int(p.id, 0), hidden: p.hidden === true });
+      return { ok: true };
+    },
+  });
+
+  register("browser.cef.focus", {
+    description: "Give keyboard focus to a CEF child.",
+    triggers: { ko: "크롬 CEF 포커스 focus 입력" },
+    params: { id: ID_PARAM },
+    returns: "{ ok }",
+    errors: ["INTERNAL", "INVALID_PARAMS"],
+    examples: ['sok browser.cef.focus \'{"id":1}\''],
+    handler: async (p) => {
+      await invoke("cef_browser_focus", { id: int(p.id, 0) });
+      return { ok: true };
+    },
+  });
+
+  register("browser.cef.close", {
+    description: "Close and destroy a CEF child. Call on view close.",
+    triggers: { ko: "크롬 CEF 닫기 close 종료 파괴" },
+    params: { id: ID_PARAM },
+    returns: "{ ok }",
+    errors: ["INTERNAL", "INVALID_PARAMS"],
+    examples: ['sok browser.cef.close \'{"id":1}\''],
+    handler: async (p) => {
+      await invoke("cef_browser_close", { id: int(p.id, 0) });
+      return { ok: true };
+    },
+  });
+}
+
+// 숫자 파라미터 정규화(정수, 비유한값→기본).
+function int(v: unknown, d: number): number {
+  return typeof v === "number" && Number.isFinite(v) ? Math.round(v) : d;
 }

@@ -54,6 +54,37 @@ fn cef_browser_create(
     }
 }
 
+// CEF child 제어(id 기반, 창 불요). 미빌드/미활성 시 명확한 에러. 실제 CEF 조작은 엔진이 메인 스레드에서.
+macro_rules! cef_cmd {
+    ($name:ident ( $($arg:ident : $ty:ty),* ) => $body:expr) => {
+        #[tauri::command]
+        fn $name($($arg : $ty),*) -> Result<(), String> {
+            #[cfg(feature = "cef-browser")]
+            {
+                if !cef_engine::enabled() {
+                    return Err("CEF 비활성(SOKSAK_CEF 미설정)".into());
+                }
+                $body;
+                Ok(())
+            }
+            #[cfg(not(feature = "cef-browser"))]
+            {
+                let _ = ($($arg),*);
+                Err("CEF 미빌드(cef-browser feature off)".into())
+            }
+        }
+    };
+}
+
+cef_cmd!(cef_browser_load(id: u32, url: String) => cef_engine::load(id, url));
+cef_cmd!(cef_browser_reload(id: u32, ignore_cache: bool) => cef_engine::reload(id, ignore_cache));
+cef_cmd!(cef_browser_back(id: u32) => cef_engine::go_back(id));
+cef_cmd!(cef_browser_forward(id: u32) => cef_engine::go_forward(id));
+cef_cmd!(cef_browser_bounds(id: u32, x: i32, y: i32, w: i32, h: i32) => cef_engine::set_bounds(id, x, y, w, h));
+cef_cmd!(cef_browser_hidden(id: u32, hidden: bool) => cef_engine::set_hidden(id, hidden));
+cef_cmd!(cef_browser_focus(id: u32) => cef_engine::set_focus(id));
+cef_cmd!(cef_browser_close(id: u32) => cef_engine::close(id));
+
 // 앱 자기 활성화: JS setFocus 는 창을 key 로 만들 뿐 앱을 전면으로 못 가져온다
 // (macOS 포커스 탈취 방지). 자기 자신의 활성화는 허용되므로 NSApp 으로 수행.
 #[tauri::command]
@@ -381,6 +412,14 @@ pub fn run() {
             ime_debug,
             window_activate,
             cef_browser_create,
+            cef_browser_load,
+            cef_browser_reload,
+            cef_browser_back,
+            cef_browser_forward,
+            cef_browser_bounds,
+            cef_browser_hidden,
+            cef_browser_focus,
+            cef_browser_close,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
