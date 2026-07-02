@@ -89,6 +89,11 @@ hkdf = "0.12"
 
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.
+# CEF 인프로세스 브라우저 엔진(optional). 기본 빌드는 무영향 — feature "cef-browser" 켤 때만 당긴다.
+# 무거운 CEF framework 는 런타임 dlopen(cef LibraryLoader)이라 바이너리에 정적 링크되지 않는다.
+[features]
+cef-browser = ["dep:cef"]
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = "0.3"
@@ -96,6 +101,8 @@ objc2-web-kit = { version = "0.3", features = ["block2"] }
 # 신호등(트래픽 라이트) 44px 타이틀바 중앙 재배치 — wry inset_traffic_lights 로직 복제.
 objc2-app-kit = "0.3"
 block2 = "0.6"
+# 인프로세스 CEF(optional). sandbox 비활성(no_sandbox 초기화와 정합).
+cef = { version = "149.3.0", default-features = false, optional = true }
 
 # wry with_webview 프로세스 누수 수정 — soksak-ai/tauri fork(fix-with-webview-leak) 로 빌드.
 # tauri 는 모노레포(형제 크레이트 path 의존)라 한 크레이트만 patch 하면 버전이 갈려 충돌한다 →
