@@ -1,5 +1,7 @@
 mod ai_session;
 mod browser;
+#[cfg(feature = "cef-browser")]
+mod cef_engine;
 mod clipboard;
 mod data;
 mod deeplink;
@@ -76,6 +78,16 @@ fn ime_debug(message: String) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 인프로세스 CEF 부트스트랩(feature+env 게이트). 서브프로세스면 여기서 종료, 메인이면 init 후 계속.
+    // env SOKSAK_CEF 미설정 시 전부 no-op — 기본 시작 무영향.
+    #[cfg(feature = "cef-browser")]
+    {
+        if let Some(code) = cef_engine::execute_and_route() {
+            std::process::exit(code);
+        }
+        cef_engine::initialize_engine();
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -350,6 +362,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
+            // 인프로세스 CEF work 를 Tauri 루프에서 편다(external_message_pump). 게이트 off 면 no-op.
+            #[cfg(feature = "cef-browser")]
+            cef_engine::pump();
             // 멀티 윈도우 종료 규칙: 창이 하나라도 남아 있으면 앱을 종료하지 않는다 — 한 창을 닫아도
             // 다른 창은 살아야 한다. 실제 종료(PTY 자식 정리·소켓 정리)는 마지막 창이 닫혔을 때만.
             // (Tauri 기본은 ExitRequested 시 그대로 종료 — prevent_exit 로 비-마지막 창 종료를 막는다.)
