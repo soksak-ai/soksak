@@ -385,9 +385,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            // 인프로세스 CEF work 를 Tauri 루프에서 편다(external_message_pump). 게이트 off 면 no-op.
-            #[cfg(feature = "cef-browser")]
-            cef_engine::pump();
+            // 인프로세스 CEF 메시지펌프는 tao 콜백에서 do_message_loop_work 를 직접 부르지 않는다 —
+            // NSApp 이벤트펌프 재진입 데드락(실측). CEF 가 OnScheduleMessagePumpWork 로 push 하면
+            // cef_engine 이 GCD 로 메인런루프 최상위에 비재진입 디스패치한다(cef_engine.rs 참조).
             // 멀티 윈도우 종료 규칙: 창이 하나라도 남아 있으면 앱을 종료하지 않는다 — 한 창을 닫아도
             // 다른 창은 살아야 한다. 실제 종료(PTY 자식 정리·소켓 정리)는 마지막 창이 닫혔을 때만.
             // (Tauri 기본은 ExitRequested 시 그대로 종료 — prevent_exit 로 비-마지막 창 종료를 막는다.)
