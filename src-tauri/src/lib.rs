@@ -32,6 +32,28 @@ use pty::PtyManager;
 use tauri::Manager;
 use watcher::FsWatcher;
 
+// 인프로세스 CEF child 를 pane(창 rect)에 임베드 — 브라우저 CEF 플러그인이 호출. feature off 면 에러.
+// 항상 handler 에 등록(고정 리스트)하고 내부에서 cfg 분기 — 미빌드 시 명확한 에러 반환.
+#[tauri::command]
+fn cef_browser_create(
+    window: tauri::Window,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    url: String,
+) -> Result<u32, String> {
+    #[cfg(feature = "cef-browser")]
+    {
+        cef_engine::create_in_window(&window, x, y, w, h, url)
+    }
+    #[cfg(not(feature = "cef-browser"))]
+    {
+        let _ = (window, x, y, w, h, url);
+        Err("CEF 미빌드(cef-browser feature off)".into())
+    }
+}
+
 // 앱 자기 활성화: JS setFocus 는 창을 key 로 만들 뿐 앱을 전면으로 못 가져온다
 // (macOS 포커스 탈취 방지). 자기 자신의 활성화는 허용되므로 NSApp 으로 수행.
 #[tauri::command]
@@ -358,6 +380,7 @@ pub fn run() {
             titlebar::titlebar_backing,
             ime_debug,
             window_activate,
+            cef_browser_create,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -381,6 +404,8 @@ pub fn run() {
                 app_handle.state::<ws::WsManager>().close_all();
                 ipc::cleanup();
                 mediaproxy::cleanup();
+                #[cfg(feature = "cef-browser")]
+                cef_engine::shutdown_engine();
             }
         });
 }

@@ -180,6 +180,46 @@ pub fn request_create(nsview: usize, x: i32, y: i32, w: i32, h: i32, url: String
     id
 }
 
+// 커맨드 구현 — 창의 contentView(NSView)를 부모로 CEF child 임베드 요청. 메인 스레드에서 NSView 취득.
+pub fn create_in_window(
+    window: &tauri::Window,
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+    url: String,
+) -> Result<u32, String> {
+    if !enabled() {
+        return Err("CEF 비활성(SOKSAK_CEF 미설정)".into());
+    }
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let (tx, rx) = mpsc::sync_channel::<usize>(1);
+    let win = window.clone();
+    window
+        .run_on_main_thread(move || {
+            let mut ptr = 0usize;
+            #[cfg(target_os = "macos")]
+            unsafe {
+                if let Ok(ns) = win.ns_window() {
+                    let win_obj = &*(ns as *const objc2::runtime::AnyObject);
+                    let content: *mut objc2_app_kit::NSView =
+                        objc2::msg_send![win_obj, contentView];
+                    ptr = content as usize;
+                }
+            }
+            let _ = tx.try_send(ptr);
+        })
+        .map_err(|e| e.to_string())?;
+    let nsview = rx
+        .recv_timeout(Duration::from_secs(2))
+        .map_err(|_| "NSView 취득 시간 초과".to_string())?;
+    if nsview == 0 {
+        return Err("NSView 취득 실패".into());
+    }
+    Ok(request_create(nsview, x, y, w, h, url))
+}
+
 pub fn shutdown_engine() {
     if enabled() {
         shutdown();
