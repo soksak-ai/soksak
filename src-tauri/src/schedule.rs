@@ -5,12 +5,13 @@
 //   At        — 절대 ms 1회 발화(과거면 즉시).
 //   Every     — 고정 간격 주기(anchor 격자 기준, 발화 후 자동 re-arm).
 //   Cron      — 5필드 cron 주기(UTC 평가, 자동 re-arm).
-//   Reconcile — 타이머 없는 순수 이벤트: 등록 시 1회(부팅 스캔) + poke 시(완료 트리거·외부 변화).
+//   Reconcile — 타이머 없는 순수 이벤트: poke 시에만 발화(완료 트리거·외부 변화). 등록만으론 발화하지
+//               않는다(first_fire=None) — 부팅 스캔이 필요하면 등록자가 register 직후 poke 1회를 쏜다.
 //
 // 견고성(cron 급):
 //   영속    — 시간 기반(At/Every/Cron)만 app.data(SQLite, ns="core", key="schedule:<id>")에 발화
-//             '언제'를 보관해 crash 후 복구한다. Reconcile 은 무상태 — 칸반이 단일 진실이라 영속 0,
-//             부팅 1회 스캔으로 자연 복구한다.
+//             '언제'를 보관해 crash 후 복구한다. Reconcile 은 무상태 — 상태 원천(칸반 등)이 단일 진실이라
+//             영속 0, 등록자의 register-직후 poke(부팅 스캔)로 자연 복구한다.
 //   lease   — 한 작업은 자기 자신과 동시에 두 번 돌지 않는다(running 플래그). 발화 중 다음 슬롯/poke 가
 //             도착하면 완료까지 미루고 1회로 합친다(coalesce).
 //   backoff — 발화 명령이 {"ok":false} 면 지수 backoff 로 재시도(retry.max 까지). 소진 후 정상 일정 복귀.
