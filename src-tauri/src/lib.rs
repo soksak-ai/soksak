@@ -84,6 +84,7 @@ cef_cmd!(cef_browser_bounds(id: u32, x: i32, y: i32, w: i32, h: i32) => cef_engi
 cef_cmd!(cef_browser_hidden(id: u32, hidden: bool) => cef_engine::set_hidden(id, hidden));
 cef_cmd!(cef_browser_focus(id: u32) => cef_engine::set_focus(id));
 cef_cmd!(cef_browser_close(id: u32) => cef_engine::close(id));
+cef_cmd!(cef_browser_popup_mode(as_window: bool) => cef_engine::set_popup_window(as_window));
 
 // 앱 자기 활성화: JS setFocus 는 창을 key 로 만들 뿐 앱을 전면으로 못 가져온다
 // (macOS 포커스 탈취 방지). 자기 자신의 활성화는 허용되므로 NSApp 으로 수행.
@@ -158,6 +159,10 @@ pub fn run() {
         .manage(ai_session::SessionTracker::default())
         .manage(schedule::ScheduleState::default())
         .setup(|app| {
+            // 인프로세스 CEF 팝업(target=_blank/window.open) 라우팅용 AppHandle 등록 — on_before_popup
+            // 이 "새 탭" 모드에서 URL 을 프론트로 emit 할 때 쓴다.
+            #[cfg(feature = "cef-browser")]
+            cef_engine::set_app_handle(app.handle().clone());
             // 범용 데이터 스토어(app.data) — 소켓 서버 이전에 연다(커맨드가 즉시 쓸 수 있도록).
             match data::db_path().and_then(|p| data::open(&p)) {
                 Ok(conn) => app.state::<data::DbState>().set(conn),
@@ -420,6 +425,7 @@ pub fn run() {
             cef_browser_hidden,
             cef_browser_focus,
             cef_browser_close,
+            cef_browser_popup_mode,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

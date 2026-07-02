@@ -15,7 +15,7 @@
 
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::{LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, OnceLock};
 
 use cef::args::Args;
 use cef::library_loader::LibraryLoader;
@@ -416,6 +416,9 @@ wrap_app! {
                 // 풀 GPU — disable-gpu 를 켜지 않는다(브라우저는 GPU 가속이 정상, CPU 렌더는 타협).
                 // GPU 프로세스 서명은 ad-hoc(arm64 링커 자동) 로 통과. 키체인은 in-memory 로 회피.
                 c.append_switch(Some(&CefString::from("use-mock-keychain")));
+                // 팝업 차단 해제 — target=_blank/window.open 을 막지 않고 on_before_popup 으로 설정대로
+                // 라우팅(새 탭/새 창). 차단이 아니라 라우팅이 브라우저의 올바른 동작.
+                c.append_switch(Some(&CefString::from("disable-popup-blocking")));
             }
         }
         fn browser_process_handler(&self) -> Option<BrowserProcessHandler> {
@@ -437,9 +440,52 @@ wrap_browser_process_handler! {
 // LifeSpanHandler — close 시퀀스의 정석. close_browser 후 CEF 가 do_close → on_before_close 를
 // 부른다. on_before_close 에서야 Browser 를 놓는 게 안전하다(그 전에 동기 drop 하면 파괴 중
 // use-after-free 로 크래시 — 실측). BROWSERS 제거를 여기서만 한다.
+// 새 링크(target=_blank/window.open) 열기 정책 — 플러그인 browserNewWindow 설정 반영. true=새 창(CEF
+// 네이티브 팝업), false=새 탭(팝업 취소 + URL 을 프론트로 emit → 플러그인이 인앱 새 탭). 전역(플러그인
+// 설정이 전역이라 브라우저별 아님).
+static POPUP_AS_WINDOW: AtomicBool = AtomicBool::new(false);
+static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
+
+pub fn set_app_handle(h: tauri::AppHandle) {
+    let _ = APP_HANDLE.set(h);
+}
+pub fn set_popup_window(as_window: bool) {
+    POPUP_AS_WINDOW.store(as_window, Ordering::Relaxed);
+}
+
 wrap_life_span_handler! {
     struct CefLifeSpanHandler {}
     impl LifeSpanHandler {
+        // 새 링크 열기 — 설정 반영(꼼수 아님, 코어가 CEF 팝업을 설정대로 라우팅).
+        fn on_before_popup(
+            &self,
+            _browser: Option<&mut Browser>,
+            _frame: Option<&mut Frame>,
+            _popup_id: i32,
+            target_url: Option<&CefString>,
+            _target_frame_name: Option<&CefString>,
+            _target_disposition: WindowOpenDisposition,
+            _user_gesture: i32,
+            _popup_features: Option<&PopupFeatures>,
+            _window_info: Option<&mut WindowInfo>,
+            _client: Option<&mut Option<Client>>,
+            _settings: Option<&mut BrowserSettings>,
+            _extra_info: Option<&mut Option<DictionaryValue>>,
+            _no_js_access: Option<&mut i32>,
+        ) -> i32 {
+            let url = target_url.map(|u| u.to_string()).unwrap_or_default();
+            if POPUP_AS_WINDOW.load(Ordering::Relaxed) {
+                eprintln!("[cef] on_before_popup → 새 창(네이티브) url={url}");
+                return 0; // 새 창 = CEF 네이티브 팝업 허용
+            }
+            // 새 탭 = 팝업 취소 + URL 을 프론트로 emit(플러그인이 인앱 새 탭으로 연다)
+            if let Some(app) = APP_HANDLE.get() {
+                use tauri::Emitter;
+                let _ = app.emit("cef-popup", url.clone());
+            }
+            eprintln!("[cef] on_before_popup → 새 탭(emit cef-popup) url={url}");
+            1 // cancel
+        }
         fn do_close(&self, _browser: Option<&mut Browser>) -> i32 {
             // 1 = 앱이 close 를 처리(CEF 가 호스트 NSWindow 를 닫지 못하게). set_as_child 의 부모
             // 창은 Tauri 소유라, 0(기본)이면 CEF 가 그 창을 닫으려다 내부 무한 재귀로 행(실측).

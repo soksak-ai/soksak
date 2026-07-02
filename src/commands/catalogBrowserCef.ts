@@ -150,6 +150,20 @@ export function registerBrowserCefCatalog(): void {
       return { ok: true };
     },
   });
+
+  register("browser.cef.popupmode", {
+    description:
+      "Set how new links (target=_blank / window.open) open across all CEF browsers: asWindow=true → native new OS window, false → cancel the popup and route the URL to a new in-app tab. Reflects the plugin's browserNewWindow setting.",
+    triggers: { ko: "크롬 CEF 새링크 새창 새탭 팝업 정책" },
+    params: { asWindow: { type: "boolean", description: "true=new OS window, false=new in-app tab", required: true } },
+    returns: "{ ok }",
+    errors: ["INTERNAL", "INVALID_PARAMS"],
+    examples: ['sok browser.cef.popupmode \'{"asWindow":false}\''],
+    handler: async (p) => {
+      await invoke("cef_browser_popup_mode", { asWindow: p.asWindow === true });
+      return { ok: true };
+    },
+  });
 }
 
 // 숫자 파라미터 정규화(정수, 비유한값→기본).
