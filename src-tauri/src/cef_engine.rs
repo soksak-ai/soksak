@@ -14,7 +14,7 @@
 #![cfg(feature = "cef-browser")]
 
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex};
 
 use cef::args::Args;
@@ -107,6 +107,69 @@ static PUMP_SCHEDULED: AtomicBool = AtomicBool::new(false);
 static IN_WORK: AtomicBool = AtomicBool::new(false);
 static REDO: AtomicBool = AtomicBool::new(false);
 
+// 렌더 틱: external_message_pump 에선 CEF present 가 "활동 중 메시지루프가 계속 도는 것"을 전제한다
+// (안 돌면 렌더러 프레임이 합성/present 안 됨 → 흰 화면). 그래서 "보이는 브라우저 && 활동 중"일 때만
+// ~60fps 로 do_message_loop_work 를 돌려 present 를 몰아준다. 유휴(정적·로드 완료 후)엔 멈춘다 → CPU 0.
+// cefclient 의 external pump 타이머와 동치(꼼수 아님). schedule_pump 는 활동으로 안 침(펌프→CEF 재요청
+// →bump 무한 피드백 방지). 활동 = LoadHandler 로딩 + 사용자 op(navigate/bounds/…).
+static VISIBLE: LazyLock<Mutex<std::collections::HashSet<u32>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashSet::new()));
+static LOADING: LazyLock<Mutex<std::collections::HashSet<i32>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashSet::new()));
+static TICK_ON: AtomicBool = AtomicBool::new(false);
+static ACTIVE_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
+static CLOCK: LazyLock<std::time::Instant> = LazyLock::new(std::time::Instant::now);
+const RENDER_TICK_MS: i64 = 16; // ~60fps(활동 중에만)
+const ACTIVE_GRACE_MS: u64 = 1500; // 활동 신호 후 이만큼 더 틱(로드 후 지연 페인트 커버)
+
+fn now_ms() -> u64 {
+    CLOCK.elapsed().as_millis() as u64
+}
+fn visible_nonempty() -> bool {
+    VISIBLE.lock().map(|s| !s.is_empty()).unwrap_or(false)
+}
+fn loading_nonempty() -> bool {
+    LOADING.lock().map(|s| !s.is_empty()).unwrap_or(false)
+}
+fn is_active() -> bool {
+    loading_nonempty() || now_ms() < ACTIVE_UNTIL_MS.load(Ordering::Relaxed)
+}
+fn bump_active() {
+    ACTIVE_UNTIL_MS.store(now_ms() + ACTIVE_GRACE_MS, Ordering::Relaxed);
+    start_render_tick();
+}
+fn note_visible(id: u32, visible: bool) {
+    if let Ok(mut s) = VISIBLE.lock() {
+        if visible {
+            s.insert(id);
+        } else {
+            s.remove(&id);
+        }
+    }
+}
+fn note_gone(id: u32) {
+    if let Ok(mut s) = VISIBLE.lock() {
+        s.remove(&id);
+    }
+}
+fn start_render_tick() {
+    if TICK_ON.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    unsafe { dispatch_async_f(main_queue(), std::ptr::null_mut(), render_tick) };
+}
+extern "C" fn render_tick(_ctx: *mut c_void) {
+    if !visible_nonempty() || !is_active() {
+        TICK_ON.store(false, Ordering::SeqCst);
+        return;
+    }
+    do_work();
+    unsafe {
+        let when = dispatch_time(DISPATCH_TIME_NOW, RENDER_TICK_MS.saturating_mul(1_000_000));
+        dispatch_after_f(when, main_queue(), std::ptr::null_mut(), render_tick);
+    }
+}
+
 // libdispatch(GCD) 원시 FFI — libSystem 자동 링크. _dispatch_main_q 는 메인 시리얼 큐 심볼.
 #[allow(non_upper_case_globals)]
 extern "C" {
@@ -189,6 +252,8 @@ fn apply_pending() {
             if let Ok(mut list) = BROWSERS.lock() {
                 list.push((r.id, b));
             }
+            note_visible(r.id, true); // 생성 시 보임
+            bump_active(); // 초기 로드 present 위해 렌더 틱 가동
             eprintln!("[cef] child browser 생성 OK (id={}, nsview={:#x})", r.id, r.nsview);
         } else {
             eprintln!("[cef] child browser 생성 실패 (id={})", r.id);
@@ -256,6 +321,10 @@ fn apply_ops() {
                 }
             }
             Op::Hidden { id, hidden } => {
+                note_visible(id, !hidden);
+                if !hidden {
+                    bump_active(); // 다시 보일 때 present 위해 틱 가동
+                }
                 if let Some(host) = find_browser(id).and_then(|b| b.host()) {
                     host.was_hidden(if hidden { 1 } else { 0 });
                     // 숨김 시 네이티브 뷰도 hidden — was_hidden 만으론 windowed 뷰가 안 사라진다.
@@ -275,6 +344,7 @@ fn apply_ops() {
                 }
             }
             Op::Close { id } => {
+                note_gone(id);
                 // non-force(0) — 정석 close 시퀀스(do_close→on_before_close). BROWSERS 제거·drop 은
                 // on_before_close 가 CLOSING 에 넣고 reap_closing 이 다음 pump 에서 한다(동기 drop 금지).
                 if let Some(host) = find_browser(id).and_then(|b| b.host()) {
@@ -303,6 +373,7 @@ fn request_op(op: Op) {
     if let Ok(mut q) = OPS.lock() {
         q.push(op);
     }
+    bump_active(); // 네비/뒤로/리로드/bounds 등 = 활동 → 렌더 틱 가동(present)
     schedule_pump(0);
 }
 
@@ -342,8 +413,9 @@ wrap_app! {
             cmd: Option<&mut CommandLine>,
         ) {
             if let Some(c) = cmd {
-                c.append_switch(Some(&CefString::from("disable-gpu")));
-                c.append_switch(Some(&CefString::from("disable-gpu-compositing")));
+                // 풀 GPU — disable-gpu 를 켜지 않는다(브라우저는 GPU 가속이 정상, CPU 렌더는 타협).
+                // GPU 프로세스 서명은 ad-hoc(arm64 링커 자동) 로 통과. 키체인은 in-memory 로 회피.
+                c.append_switch(Some(&CefString::from("use-mock-keychain")));
             }
         }
         fn browser_process_handler(&self) -> Option<BrowserProcessHandler> {
@@ -389,11 +461,37 @@ wrap_life_span_handler! {
     }
 }
 
+// LoadHandler — 로딩 상태. 로딩 중엔 LOADING 에 넣어 렌더 틱을 확실히 유지(present 가 가장 필요한 구간),
+// 완료 시 빼고 grace 를 준다(로드 후 지연 페인트).
+wrap_load_handler! {
+    struct CefLoadHandler {}
+    impl LoadHandler {
+        fn on_loading_state_change(
+            &self,
+            browser: Option<&mut Browser>,
+            is_loading: i32,
+            _can_go_back: i32,
+            _can_go_forward: i32,
+        ) {
+            if let Some(b) = browser {
+                let cid = b.identifier();
+                if let Ok(mut s) = LOADING.lock() {
+                    if is_loading == 1 { s.insert(cid); } else { s.remove(&cid); }
+                }
+            }
+            bump_active();
+        }
+    }
+}
+
 wrap_client! {
     struct CefClient {}
     impl Client {
         fn life_span_handler(&self) -> Option<LifeSpanHandler> {
             Some(CefLifeSpanHandler::new())
+        }
+        fn load_handler(&self) -> Option<LoadHandler> {
+            Some(CefLoadHandler::new())
         }
     }
 }
@@ -447,12 +545,12 @@ pub fn initialize_engine() -> bool {
         return false;
     }
     let args = Args::new();
-    let cache = std::env::temp_dir().join(format!("soksak-cef-{}", std::process::id()));
-    let _ = std::fs::create_dir_all(&cache);
     let mut settings = Settings::default();
     settings.no_sandbox = 1;
     settings.external_message_pump = 1; // 스레드루프 안 돌고 OnScheduleMessagePumpWork 로 pump 지시
-    settings.root_cache_path = CefString::from(cache.to_string_lossy().as_ref());
+    // root_cache_path 미설정(in-memory) — 디스크 쿠키 DB 가 없으면 os_crypt 가 키체인("Chromium Safe
+    // Storage")을 안 건드려 ad-hoc dev 재프롬프트가 원천 사라진다(그 모달이 메인 스레드를 막아 흰 화면의
+    // 진짜 공범이었다). dev 브라우저는 세션 지속 불요. 프로덕션은 정식 서명 + 영속 cache 로 전환.
     // 서브프로세스 helper 경로(env). 미설정 시 번들 자동 파생.
     if let Ok(helper) = std::env::var("SOKSAK_CEF_HELPER") {
         settings.browser_subprocess_path = CefString::from(helper.as_str());
