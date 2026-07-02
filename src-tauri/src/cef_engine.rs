@@ -121,6 +121,14 @@ pub fn initialize_engine() -> bool {
     if let Ok(helper) = std::env::var("SOKSAK_CEF_HELPER") {
         settings.browser_subprocess_path = CefString::from(helper.as_str());
     }
+    // dlopen 한 framework 의 리소스(icudtl.dat/locales/.pak)를 CEF 에 알려준다 — 앱 번들에 CEF 가 없는
+    // dev 경로에선 필수(없으면 "icudtl.dat not found" 로 죽음). framework_dir_path=.framework 디렉토리,
+    // resources_dir_path=그 Resources.
+    if let Ok(fw_dir) = std::env::var("SOKSAK_CEF_FRAMEWORK") {
+        let framework = format!("{fw_dir}/Chromium Embedded Framework.framework");
+        settings.framework_dir_path = CefString::from(framework.as_str());
+        settings.resources_dir_path = CefString::from(format!("{framework}/Resources").as_str());
+    }
     let mut app = CefApp::new();
     let ok = initialize(
         Some(args.as_main_args()),
