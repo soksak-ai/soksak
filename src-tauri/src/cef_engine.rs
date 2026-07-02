@@ -51,6 +51,9 @@ enum Op {
 }
 static PENDING: LazyLock<Mutex<Vec<CreateReq>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 static OPS: LazyLock<Mutex<Vec<Op>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+// on_before_close 가 넣는 "제거 대기" CEF identifier. Browser drop(refcount 해제)은 CEF 콜백
+// 안이 아니라 다음 pump(do_work)에서 한다 — 콜백 안에서 drop 하면 파괴 재진입으로 크래시.
+static CLOSING: LazyLock<Mutex<Vec<i32>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
 // 생성된 브라우저: id → Browser. bounds/navigate/close 는 여기서 찾아 적용.
 static BROWSERS: LazyLock<Mutex<Vec<(u32, Browser)>>> = LazyLock::new(|| Mutex::new(Vec::new()));
@@ -153,6 +156,7 @@ fn do_work() {
     apply_pending();
     apply_ops();
     do_message_loop_work();
+    reap_closing();
     IN_WORK.store(false, Ordering::SeqCst);
     if REDO.swap(false, Ordering::SeqCst) {
         schedule_pump(0);
@@ -271,15 +275,26 @@ fn apply_ops() {
                 }
             }
             Op::Close { id } => {
+                // non-force(0) — 정석 close 시퀀스(do_close→on_before_close). BROWSERS 제거·drop 은
+                // on_before_close 가 CLOSING 에 넣고 reap_closing 이 다음 pump 에서 한다(동기 drop 금지).
                 if let Some(host) = find_browser(id).and_then(|b| b.host()) {
-                    host.close_browser(1);
+                    host.close_browser(0);
                 }
-                if let Ok(mut list) = BROWSERS.lock() {
-                    list.retain(|(bid, _)| *bid != id);
-                }
-                eprintln!("[cef] child browser close (id={id})");
+                eprintln!("[cef] close 요청 (id={id})");
             }
         }
+    }
+}
+
+// on_before_close 가 기록한 닫힌 브라우저를 BROWSERS 에서 제거(=Rust Browser drop). CEF 콜백
+// 밖(do_message_loop_work 이후)에서 실행돼 파괴 재진입을 피한다.
+fn reap_closing() {
+    let ids: Vec<i32> = CLOSING.lock().map(|mut q| q.drain(..).collect()).unwrap_or_default();
+    if ids.is_empty() {
+        return;
+    }
+    if let Ok(mut list) = BROWSERS.lock() {
+        list.retain(|(_, br)| !ids.contains(&br.identifier()));
     }
 }
 
@@ -347,9 +362,40 @@ wrap_browser_process_handler! {
     }
 }
 
+// LifeSpanHandler — close 시퀀스의 정석. close_browser 후 CEF 가 do_close → on_before_close 를
+// 부른다. on_before_close 에서야 Browser 를 놓는 게 안전하다(그 전에 동기 drop 하면 파괴 중
+// use-after-free 로 크래시 — 실측). BROWSERS 제거를 여기서만 한다.
+wrap_life_span_handler! {
+    struct CefLifeSpanHandler {}
+    impl LifeSpanHandler {
+        fn do_close(&self, _browser: Option<&mut Browser>) -> i32 {
+            // 1 = 앱이 close 를 처리(CEF 가 호스트 NSWindow 를 닫지 못하게). set_as_child 의 부모
+            // 창은 Tauri 소유라, 0(기본)이면 CEF 가 그 창을 닫으려다 내부 무한 재귀로 행(실측).
+            // 1 이면 CEF 는 child 뷰만 정리하고 on_before_close 로 이어진다.
+            1
+        }
+        fn on_before_close(&self, browser: Option<&mut Browser>) {
+            // 콜백 안에서 Browser 를 drop 하지 않는다(파괴 재진입 크래시). identifier 만 기록하고
+            // 실제 제거/drop 은 다음 pump(reap_closing)로 미룬다.
+            if let Some(b) = browser {
+                let closing = b.identifier();
+                if let Ok(mut q) = CLOSING.lock() {
+                    q.push(closing);
+                }
+                schedule_pump(0);
+                eprintln!("[cef] on_before_close (cef_id={closing})");
+            }
+        }
+    }
+}
+
 wrap_client! {
     struct CefClient {}
-    impl Client {}
+    impl Client {
+        fn life_span_handler(&self) -> Option<LifeSpanHandler> {
+            Some(CefLifeSpanHandler::new())
+        }
+    }
 }
 
 // 프로세스 진입 최초 — framework 로드 + api_hash + execute_process. CEF 서브프로세스면 Some(code) 반환
