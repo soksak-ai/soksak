@@ -63,17 +63,42 @@ fn resolve_secret_env(
     }
 }
 
-// stdout/stderr 한쪽을 raw 바이트로 Channel 스트리밍하는 reader 루프.
-fn pump<R: Read + Send + 'static>(mut src: R, ch: Channel<InvokeResponseBody>) {
+// pump 종료 사유 — EOF(자식이 stdout 닫음=종료 진행)와 Channel 죽음(뷰 unmount 등, 자식은 살아있을
+// 수 있음)을 구분한다. 이 구분이 데드락 회피의 핵심(아래 reader 참조).
+enum PumpEnd {
+    Eof,
+    Closed,
+}
+
+// stdout/stderr 한쪽을 raw 바이트로 Channel 스트리밍하는 reader 루프. 종료 사유를 반환한다.
+fn pump<R: Read>(src: &mut R, ch: &Channel<InvokeResponseBody>) -> PumpEnd {
+    // 64KB — macOS 파이프 용량과 동급이라 한 번 read 로 파이프를 통째 비운다. 8KB 였을 때 대용량
+    // 스트림(OSR 프레임 4MB)이 프레임당 ~512개 Channel 메시지로 쪼개져 프론트 콜백이 폭주했다.
+    // 64KB 면 프레임당 read 횟수·메시지 수가 8× 줄어 프론트 IPC 오버헤드가 크게 준다.
+    let mut buf = vec![0u8; 65536];
+    loop {
+        match src.read(&mut buf) {
+            Ok(0) => return PumpEnd::Eof, // 자식이 stdout 닫음 → 종료 진행
+            Ok(n) => {
+                if ch.send(InvokeResponseBody::Raw(buf[..n].to_vec())).is_err() {
+                    return PumpEnd::Closed; // Channel 죽음(뷰 unmount) — 자식은 아직 살아있을 수 있다
+                }
+            }
+            Err(_) => return PumpEnd::Eof, // read 에러 = 파이프 끊김 → EOF 취급
+        }
+    }
+}
+
+// 남은 출력을 버리며 EOF 까지 읽는다. Channel 이 죽어 더는 스트리밍하지 않을 때, 자식 파이프가 가득
+// 차서 자식이 write 에서 막히는 것(OSR sidecar 는 UI 스레드가 막혀 kill 도 안 먹는 상태)을 방지한다.
+// child mutex 를 절대 잡지 않으므로, 이 함수가 (자식이 살아있어) 블록해도 process_kill 은 자유롭게 kill
+// 할 수 있다 — kill 되면 자식이 죽어 EOF 가 오고 여기서 반환한다. 이것이 데드락 회피의 요체다.
+fn drain<R: Read>(src: &mut R) {
     let mut buf = vec![0u8; 8192];
     loop {
         match src.read(&mut buf) {
-            Ok(0) => break, // EOF
-            Ok(n) => {
-                if ch.send(InvokeResponseBody::Raw(buf[..n].to_vec())).is_err() {
-                    break;
-                }
-            }
+            Ok(0) => break,     // EOF(자식 종료)
+            Ok(_) => continue,  // 버림
             Err(_) => break,
         }
     }
@@ -131,16 +156,28 @@ pub fn process_spawn(
     let stderr = child.stderr.take();
     let child = Arc::new(Mutex::new(child));
 
-    // stderr reader — 스트리밍만.
-    if let Some(err) = stderr {
-        std::thread::spawn(move || pump(err, on_stderr));
+    // stderr reader — 스트리밍. Channel 죽으면 drain 으로 계속 비운다(자식 stderr 파이프가 차서
+    // 자식이 write 에서 막히는 것 방지). child mutex 미접근.
+    if let Some(mut err) = stderr {
+        std::thread::spawn(move || {
+            if let PumpEnd::Closed = pump(&mut err, &on_stderr) {
+                drain(&mut err);
+            }
+        });
     }
-    // stdout reader — 스트리밍 + EOF 후 reaping 으로 exit code.
-    if let Some(out) = stdout {
+    // stdout reader — 스트리밍 + 종료 후 reaping 으로 exit code.
+    if let Some(mut out) = stdout {
         let child = child.clone();
         std::thread::spawn(move || {
-            pump(out, on_stdout);
-            // stdout EOF = 종료 진행 → wait() 가 곧 반환(블록 짧음 → kill 잠금 경합 없음).
+            // Channel 이 죽어도(뷰 unmount) 자식은 살아있을 수 있다. 그때 child mutex 를 잡은 채 wait()
+            // 로 블록하면 process_kill 이 같은 mutex 에서 영구 대기(데드락) → 좀비 자식(과거 32GB swap
+            // 폭주의 원인). 그래서 Channel 죽음이면 mutex 없이 drain 으로 EOF(자식 종료)를 기다린 뒤에만
+            // wait() 한다 — drain 중엔 lock 이 비어 process_kill 이 즉시 kill 하고, kill 되면 EOF 가 와서
+            // drain 이 반환한다.
+            if let PumpEnd::Closed = pump(&mut out, &on_stdout) {
+                drain(&mut out);
+            }
+            // 여기 도달 = stdout EOF(자식 종료 진행) → wait() 는 즉시 반환(짧은 lock → kill 경합 없음).
             let code = child
                 .lock()
                 .ok()
@@ -248,6 +285,45 @@ mod tests {
         let secret_env = Some(map(&[("SOKSAK_SECRET_0", "apiKey")]));
         assert!(resolve_secret_env(&state, None, &secret_env).is_err());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    // 데드락 회귀 — 스스로 끝나지 않고 stdout 을 계속 쏟는 자식(OSR sidecar 와 동형)을 reader 가 drain
+    // 하는 동안(= Channel 죽음 이후 경로) 다른 스레드에서 child mutex 를 잠그고 kill 이 즉시 되는지.
+    // 과거 버그: reader 가 child mutex 를 잡은 채 wait() 로 영구 블록 → process_kill 이 같은 mutex 에서
+    // 영구 대기 → 좀비(32GB swap). drain 은 mutex 미보유이므로 kill 이 즉시 되어야 한다.
+    #[test]
+    fn kill_not_blocked_by_draining_reader() {
+        use std::time::{Duration, Instant};
+
+        let mut child = Command::new("/bin/sh")
+            .args(["-c", "while true; do echo x; done"]) // 스스로 안 끝남
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut out = child.stdout.take().unwrap();
+        let child = Arc::new(Mutex::new(child));
+
+        // reader: Channel 죽음 이후처럼 drain 으로 EOF(자식 종료) 대기 — mutex 미보유.
+        let reader_child = child.clone();
+        let reader = std::thread::spawn(move || {
+            drain(&mut out); // 자식이 죽어야 반환
+            let _ = reader_child.lock().ok().and_then(|mut c| c.wait().ok());
+        });
+
+        std::thread::sleep(Duration::from_millis(50)); // reader 가 drain 에 진입
+
+        // process_kill 과 동일 경로: child mutex 잠그고 kill. 데드락이면 여기서 영구 블록.
+        let t0 = Instant::now();
+        {
+            let mut c = child.lock().unwrap();
+            let _ = c.kill();
+        }
+        assert!(
+            t0.elapsed() < Duration::from_secs(2),
+            "kill 은 즉시 반환해야 한다(reader 가 drain 중 mutex 를 안 잡음)"
+        );
+
+        reader.join().unwrap();
     }
 
     // 잠긴 볼트 → Err(spawn 0). 미존재 key → Err.

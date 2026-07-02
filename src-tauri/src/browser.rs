@@ -160,7 +160,7 @@ pub(crate) struct Hole {
 // rect 레지스트리가 없다(set_position/set_size/hide 가 곧 홀 갱신).
 #[cfg(target_os = "macos")]
 mod layer {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{LazyLock, Mutex};
 
@@ -183,6 +183,11 @@ mod layer {
     }
     static LAYERS: LazyLock<Mutex<HashMap<String, WinLayer>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
+    // Backend N 네이티브 surface 레지스트리 — 등록된 child NSView 포인터 집합. hit_test 는 형제 중
+    // 이 집합에 든 것만 "홀"로 본다(classname 대신 멤버십 — 엔진 중립: WKWebView·CEF surface 동일
+    // 취급). identity(포인터)만 저장하고 geometry 는 live frame(sub.frame())에서 읽는다 — "홀 = 보이는
+    // child frame" 불변식 보존(별도 rect 레지스트리 없음).
+    static SURFACES: LazyLock<Mutex<HashSet<usize>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
     // 교체 전 원본 hitTest IMP. 클래스(WryWebView) 단위 스위즐이라 앱 전역 1회면 충분.
     static ORIG_HIT_TEST: AtomicUsize = AtomicUsize::new(0);
 
@@ -201,6 +206,19 @@ mod layer {
             if let Some(w) = layers.get_mut(label) {
                 w.holes = holes;
             }
+        }
+    }
+
+    // Backend N surface 등록/해제 — browser_open 직후(가시 홀 편입), browser_close 직전(회수).
+    // 오프스크린 추출 webview(media_extract, -20000)는 홀이 아니므로 등록하지 않는다.
+    pub fn register_surface(ptr: usize) {
+        if let Ok(mut s) = SURFACES.lock() {
+            s.insert(ptr);
+        }
+    }
+    pub fn unregister_surface(ptr: usize) {
+        if let Ok(mut s) = SURFACES.lock() {
+            s.remove(&ptr);
         }
     }
 
@@ -235,6 +253,8 @@ mod layer {
                 Some(w) => (w.overlay, w.holes.clone()),
             }
         };
+        // 등록된 Backend N surface 스냅샷(마우스 이벤트마다 — 탭 수만큼 작음, holes.clone 과 동일 층위).
+        let surfaces = SURFACES.lock().ok().map(|s| s.clone()).unwrap_or_default();
         if default.is_null() || overlay {
             return default;
         }
@@ -270,8 +290,9 @@ mod layer {
             if Retained::as_ptr(&sub) as *mut AnyObject == this || sub.isHidden() {
                 continue;
             }
-            // 형제 중 webview(WKWebView 계열)만 홀이다 — 그 외 장식 뷰는 무시.
-            if !sub.class().name().to_string_lossy().contains("WebView") {
+            // 형제 중 등록된 Backend N surface 만 홀이다(classname 대신 registry 멤버십 — 엔진 중립:
+            // WKWebView·CEF surface 동일 취급). 미등록(장식 뷰·오프스크린 추출 webview)은 무시.
+            if !surfaces.contains(&(Retained::as_ptr(&sub) as usize)) {
                 continue;
             }
             let f = sub.frame();
@@ -646,6 +667,8 @@ pub fn browser_open(
         let st_label = label.clone();
         let _ = webview.with_webview(move |pw| {
             use objc2_web_kit::WKWebView;
+            // Backend N 레지스트리 등록 — 이 child 가 hit_test 의 "홀"이 된다(NSView 포인터 = 형제 비교 키).
+            layer::register_surface(pw.inner() as usize);
             let wk = unsafe { &*(pw.inner() as *const WKWebView) };
             status::install(
                 wk,
@@ -759,6 +782,12 @@ pub fn browser_visible(app: AppHandle, label: String, visible: bool) -> Result<(
 #[tauri::command]
 pub fn browser_close(app: AppHandle, label: String) -> Result<(), String> {
     if let Some(wv) = app.get_webview(&label) {
+        // Backend N 레지스트리 회수 — close 전에 surface 포인터를 집합에서 제거(위생; 미제거여도
+        // 형제 순회가 live subview 만 보므로 자가치유되나 누수 방지).
+        #[cfg(target_os = "macos")]
+        {
+            let _ = wv.with_webview(|pw| layer::unregister_surface(pw.inner() as usize));
+        }
         wv.close().map_err(|e| e.to_string())?;
     }
     Ok(())

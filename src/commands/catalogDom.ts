@@ -103,6 +103,50 @@ export function registerDomCatalog(): void {
     },
   });
 
+  register("ui.slot", {
+    description:
+      "Measure a content view's slot rectangle — the bare host container a view renders into (viewport px + devicePixelRatio). Use so an engine plugin learns its present-target rect (device px = css px * dpr) to align a native/offscreen surface, and so AI can verify placement. Address is a VIEW container (no /node): win/<label>/<region>/view/<pluginId.viewId>. Unexposed returns NOT_EXPOSED.",
+    triggers: { ko: "슬롯 뷰컨테이너 rect present타깃 dpr 측정" },
+    params: {
+      address: {
+        type: "string",
+        description: "View container address (win/<label>/<region>/view/<pluginId.viewId>, no node)",
+        required: true,
+      },
+    },
+    returns: "{ address, rect:{x,y,w,h}, dpr }",
+    errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
+    examples: ['sok ui.slot \'{"address":"win/main/content/view/soksak-plugin-browser-native.content"}\''],
+    handler: (p) => {
+      const addr = (p.address as string) ?? "";
+      const want = addr.replace(/^\/+|\/+$/g, "");
+      const win = currentWindowLabel();
+      const wantWithWin = want.startsWith("win/") ? want : `win/${win}/${want}`;
+      // 뷰 컨테이너를 base 주소(collectExposed 와 동일 생성 규칙)로 매칭 — node 없는 view 주소.
+      for (const c of document.querySelectorAll<HTMLElement>(
+        ".plugin-view-container[data-view-addr]",
+      )) {
+        const base = c.dataset.viewAddr ?? "";
+        if (!base) continue;
+        const full = `win/${win}/${base}`;
+        if (full === wantWithWin || full === want) {
+          const r = c.getBoundingClientRect();
+          return {
+            address: addr,
+            rect: {
+              x: +r.x.toFixed(2),
+              y: +r.y.toFixed(2),
+              w: +r.width.toFixed(2),
+              h: +r.height.toFixed(2),
+            },
+            dpr: window.devicePixelRatio,
+          };
+        }
+      }
+      return notExposed(addr);
+    },
+  });
+
   register("ui.input.click", {
     description:
       "Dispatch a click event to an exposed node (E2E injection). Use to drive UI flows programmatically or in tests. Unexposed addresses return NOT_EXPOSED — no guessing.",
