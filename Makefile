@@ -140,3 +140,24 @@ stop: ## 실행 중인 개발 스택 전체 종료(tauri 바이너리 + tauri.js
 	@# 남는다 — devUrl 포트를 점유한 프로세스를 정리해 clean stop 을 보장한다.
 	@pids=$$(lsof -ti :1420 2>/dev/null); [ -n "$$pids" ] && kill $$pids 2>/dev/null || true
 	@echo "개발 서버 종료(tauri + Vite)."
+
+sidecar-chromium: ## Chromium 엔진 사이드카 빌드+스테이지(dev) → ~/.soksak/sidecars/soksak-sidecar-chromium/dist
+	cd crates/soksak-sidecar-chromium && cargo build --release
+	@dist="$$HOME/.soksak/sidecars/soksak-sidecar-chromium/dist"; \
+	src="crates/soksak-sidecar-chromium/target/release"; \
+	mkdir -p "$$dist"; \
+	cp "$$src/libsoksak_sidecar_chromium.dylib" "$$dist/soksak-sidecar-chromium.dylib"; \
+	for v in "" " (Renderer)" " (GPU)" " (Plugin)" " (Alerts)"; do \
+	  app="$$dist/soksak-sidecar-chromium Helper$$v.app"; \
+	  exe="soksak-sidecar-chromium Helper$$v"; \
+	  bid=$$(printf '%s' "helper$$v" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '.' | tr -s '.' | sed 's/\.$$//'); \
+	  mkdir -p "$$app/Contents/MacOS"; \
+	  cp "$$src/soksak-sidecar-chromium-helper" "$$app/Contents/MacOS/$$exe"; \
+	  sed -e "s/__EXECUTABLE__/$$exe/g" -e "s/__BUNDLE_ID_SUFFIX__/$$bid/g" \
+	    crates/soksak-sidecar-chromium/resources/HelperInfo.plist > "$$app/Contents/Info.plist"; \
+	done; \
+	rm -f "$$dist/soksak-sidecar-chromium Helper.app/Contents/MacOS/soksak-sidecar-chromium-helper"; \
+	fw=$$(ls -dt "$$src/build/"cef-dll-sys-*/out/cef_macos_*/"Chromium Embedded Framework.framework" 2>/dev/null | head -1); \
+	if [ -z "$$fw" ]; then echo "framework 미발견(cef 빌드 산출물 없음)"; exit 1; fi; \
+	ln -sfn "$$(cd "$$(dirname "$$fw")" && pwd)/Chromium Embedded Framework.framework" "$$dist/Chromium Embedded Framework.framework"; \
+	echo "스테이지 완료: $$dist (helper 변형 5종)"

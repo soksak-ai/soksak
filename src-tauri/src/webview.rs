@@ -184,7 +184,7 @@ mod layer {
     static LAYERS: LazyLock<Mutex<HashMap<String, WinLayer>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
     // Backend N 네이티브 surface 레지스트리 — 등록된 child NSView 포인터 집합. hit_test 는 형제 중
-    // 이 집합에 든 것만 "홀"로 본다(classname 대신 멤버십 — 엔진 중립: WKWebView·CEF surface 동일
+    // 이 집합에 든 것만 "홀"로 본다(classname 대신 멤버십 — 엔진 중립: WKWebView·Chromium surface 동일
     // 취급). identity(포인터)만 저장하고 geometry 는 live frame(sub.frame())에서 읽는다 — "홀 = 보이는
     // child frame" 불변식 보존(별도 rect 레지스트리 없음).
     static SURFACES: LazyLock<Mutex<HashSet<usize>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
@@ -291,7 +291,7 @@ mod layer {
                 continue;
             }
             // 형제 중 등록된 Backend N surface 만 홀이다(classname 대신 registry 멤버십 — 엔진 중립:
-            // WKWebView·CEF surface 동일 취급). 미등록(장식 뷰·오프스크린 추출 webview)은 무시.
+            // WKWebView·Chromium surface 동일 취급). 미등록(장식 뷰·오프스크린 추출 webview)은 무시.
             if !surfaces.contains(&(Retained::as_ptr(&sub) as usize)) {
                 continue;
             }
@@ -417,13 +417,9 @@ pub fn webview_overlay_active(window: tauri::Window, active: bool) {
     // window = 호출 창(MW2 — 자동 인지). 그 창의 오버레이 게이트만 갱신(프론트 label 전달 불요).
     #[cfg(target_os = "macos")]
     layer::set_overlay(window.label(), active);
-    // 인프로세스 CEF child 는 코어 layer 시스템 밖(별도 set_as_child NSView)이라 오버레이 시 DOM
-    // 모달 위로 뚫고 올라온다 → 같은 게이트로 CEF child 도 숨긴다. (엔진 사이드카 이관 시 삭제 —
-    // 아래 notify_all 이 대체.)
-    #[cfg(feature = "cef-browser")]
-    crate::cef_engine::set_overlay(active);
-    // 엔진 사이드카 모듈에도 같은 호스트 사실을 통지 — 모듈이 자기 surface 를 숨김/복원(코어는
-    // 의미 모름, relay 만). 로드 모듈 0 이면 no-op.
+    // 엔진 사이드카(예: Chromium)의 native child 는 코어 layer 시스템 밖이라 오버레이 시 DOM 모달
+    // 위로 뚫고 올라온다 → 같은 호스트 사실(surface-occluded)을 로드된 모듈 전부에 통지해 모듈이
+    // 자기 surface 를 숨김/복원한다(코어는 의미 모름, relay 만). 로드 모듈 0 이면 no-op.
     crate::sidecar::notify_all(&serde_json::json!({
         "type": "surface-occluded",
         "window": window.label(),

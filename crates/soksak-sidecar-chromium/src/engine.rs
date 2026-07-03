@@ -1,9 +1,11 @@
-// 인프로세스 CEF 브라우저 엔진 — Chromium 을 앱 프로세스 안에서 windowed 로 구동해 pane 의 네이티브
-// child 뷰로 임베드한다(set_as_child). 프레임이 JS 를 안 거치므로 네이티브 크롬 속도(OSR 폐기 이유).
+// Chromium 엔진 — 앱 프로세스 안에서 windowed 로 구동해 pane 의 네이티브 child 뷰로 임베드한다
+// (set_as_child). 프레임이 JS 를 안 거치므로 네이티브 Chromium 속도. 임베딩 수단은 서드파티 CEF
+// (Chromium Embedded Framework) — 그 이름은 이 크레이트 안에만 산다(docs/NAMING.md §2).
 //
-// 왜 코어에 있나: macOS 는 부모 뷰(NSView)가 프로세스-로컬이라 사이드카(별프로세스)의 CEF 창을 앱 창에
-// 붙일 수 없다 → CEF 가 앱 프로세스에서 렌더해야 한다. 무거운 CEF framework 는 런타임 dlopen 이라
-// 바이너리에 정적 링크되지 않는다(feature "cef-browser" + env 게이트로 기본 시작 무영향).
+// 왜 in-process 인가: macOS 는 부모 뷰(NSView)가 프로세스-로컬이라 별도 프로세스의 Chromium 창을 앱
+// 창에 붙일 수 없다 → 엔진이 앱 프로세스에서 렌더해야 한다. 그래서 이 사이드카는 engine 모델
+// (in-process dylib, docs/SIDECARS.md)이고 코어가 런타임 dlopen 한다(코어 링크 0). 게이트도 env 가
+// 아니라 "플러그인이 선언하고 열 때"다 — 로드됨 = 활성.
 //
 // 메시지펌프(핵심): CEF 는 자기 스레드루프를 안 돈다(external_message_pump=1). 대신 "지금 work 필요"를
 // OnScheduleMessagePumpWork(delay) 로 push 한다. 그걸 GCD 로 메인큐 "최상위"에 비재진입 디스패치해서
@@ -11,21 +13,15 @@
 // 이벤트펌프가 재진입되어 didFinishLaunching 도중 CATransaction display 에서 데드락한다(실측). 이 방식은
 // cefclient 의 MainMessageLoopExternalPumpMac(NSTimer) 와 동치 — 폴링 아님, CEF push 기반.
 
-#![cfg(feature = "cef-browser")]
-
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::{LazyLock, Mutex, OnceLock};
+use std::sync::{LazyLock, Mutex};
 
 use cef::args::Args;
-use cef::library_loader::LibraryLoader;
 use cef::rc::*;
 use cef::*;
 
-// CEF 활성 여부 — env SOKSAK_CEF=1 일 때만. 미설정 시 이 모듈의 모든 진입은 no-op(기본 시작 무영향).
-pub fn enabled() -> bool {
-    std::env::var("SOKSAK_CEF").ok().as_deref() == Some("1")
-}
+use crate::host_emit_json;
 
 // 임베드 대기 요청(플러그인 → 커맨드 → 여기). CEF 조작은 UI(메인) 스레드에서만 하므로 큐잉 후 pump 에서 적용.
 // 좌표(x,y,w,h)는 플랫폼 중립 top-left 원점 DIP(points) — 부모 뷰 안에서. macOS 는 apply 시 y-flip.
@@ -154,10 +150,10 @@ fn note_gone(id: u32) {
         s.remove(&id);
     }
 }
-// SOKSAK_CEF_NO_TICK=1 → 렌더 틱(busy-pump) 비활성. present 를 GPU vsync + CEF 이벤트 펌프
-// (OnScheduleMessagePumpWork)만으로 모는지 실측하기 위한 게이트. 근본 교정 검증용.
+// SOKSAK_SIDECAR_CHROMIUM_NO_TICK=1 → 렌더 틱(busy-pump) 비활성. present 를 GPU vsync + 이벤트 펌프
+// (OnScheduleMessagePumpWork)만으로 모는지 실측하기 위한 진단 게이트(사이드카 소유 env — 코어 env 아님).
 static NO_TICK: LazyLock<bool> =
-    LazyLock::new(|| std::env::var("SOKSAK_CEF_NO_TICK").as_deref() == Ok("1"));
+    LazyLock::new(|| std::env::var("SOKSAK_SIDECAR_CHROMIUM_NO_TICK").as_deref() == Ok("1"));
 fn start_render_tick() {
     if *NO_TICK {
         return;
@@ -263,9 +259,9 @@ fn apply_pending() {
             }
             note_visible(r.id, true); // 생성 시 보임
             bump_active(); // 초기 로드 present 위해 렌더 틱 가동
-            eprintln!("[cef] child browser 생성 OK (id={}, nsview={:#x})", r.id, r.nsview);
+            eprintln!("[chromium] child browser 생성 OK (id={}, nsview={:#x})", r.id, r.nsview);
         } else {
-            eprintln!("[cef] child browser 생성 실패 (id={})", r.id);
+            eprintln!("[chromium] child browser 생성 실패 (id={})", r.id);
         }
     }
 }
@@ -349,7 +345,7 @@ fn apply_ops() {
                 if let Some(host) = find_browser(id).and_then(|b| b.host()) {
                     host.close_browser(0);
                 }
-                eprintln!("[cef] close 요청 (id={id})");
+                eprintln!("[chromium] close 요청 (id={id})");
             }
             Op::Overlay { active } => {
                 // DOM 오버레이/모달이 브라우저 pane 위에 뜸 — CEF 네이티브 뷰가 DOM 위로 뚫고 올라오므로
@@ -473,17 +469,23 @@ wrap_browser_process_handler! {
 // LifeSpanHandler — close 시퀀스의 정석. close_browser 후 CEF 가 do_close → on_before_close 를
 // 부른다. on_before_close 에서야 Browser 를 놓는 게 안전하다(그 전에 동기 drop 하면 파괴 중
 // use-after-free 로 크래시 — 실측). BROWSERS 제거를 여기서만 한다.
-// 새 링크(target=_blank/window.open) 열기 정책 — 플러그인 browserNewWindow 설정 반영. true=새 창(CEF
-// 네이티브 팝업), false=새 탭(팝업 취소 + URL 을 프론트로 emit → 플러그인이 인앱 새 탭). 전역(플러그인
-// 설정이 전역이라 브라우저별 아님).
+// 새 링크(target=_blank/window.open) 열기 정책 — 플러그인 browserNewWindow 설정 반영. true=새 창(엔진
+// 네이티브 팝업), false=새 탭(팝업 취소 + URL 을 host.emit 으로 채널에 배달 → 플러그인이 인앱 새 탭).
+// 전역(플러그인 설정이 전역이라 브라우저별 아님).
 static POPUP_AS_WINDOW: AtomicBool = AtomicBool::new(false);
-static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 
-pub fn set_app_handle(h: tauri::AppHandle) {
-    let _ = APP_HANDLE.set(h);
-}
 pub fn set_popup_window(as_window: bool) {
     POPUP_AS_WINDOW.store(as_window, Ordering::Relaxed);
+}
+
+// CEF identifier → 엔진-로컬 id (popup-url 이벤트에 소스 브라우저를 실어 멀티창 어댑터가 자기 것만
+// 소비하게 — 구 전역 emit 의 중복 수신 구조 교정).
+fn engine_id_of(cef_identifier: i32) -> Option<u32> {
+    BROWSERS.lock().ok().and_then(|list| {
+        list.iter()
+            .find(|(_, b)| b.identifier() == cef_identifier)
+            .map(|(id, _)| *id)
+    })
 }
 
 wrap_life_span_handler! {
@@ -492,7 +494,7 @@ wrap_life_span_handler! {
         // 새 링크 열기 — 설정 반영(꼼수 아님, 코어가 CEF 팝업을 설정대로 라우팅).
         fn on_before_popup(
             &self,
-            _browser: Option<&mut Browser>,
+            browser: Option<&mut Browser>,
             _frame: Option<&mut Frame>,
             _popup_id: i32,
             target_url: Option<&CefString>,
@@ -508,15 +510,18 @@ wrap_life_span_handler! {
         ) -> i32 {
             let url = target_url.map(|u| u.to_string()).unwrap_or_default();
             if POPUP_AS_WINDOW.load(Ordering::Relaxed) {
-                eprintln!("[cef] on_before_popup → 새 창(네이티브) url={url}");
-                return 0; // 새 창 = CEF 네이티브 팝업 허용
+                eprintln!("[chromium] on_before_popup → 새 창(네이티브) url={url}");
+                return 0; // 새 창 = 엔진 네이티브 팝업 허용
             }
-            // 새 탭 = 팝업 취소 + URL 을 프론트로 emit(플러그인이 인앱 새 탭으로 연다)
-            if let Some(app) = APP_HANDLE.get() {
-                use tauri::Emitter;
-                let _ = app.emit("cef-popup", url.clone());
-            }
-            eprintln!("[cef] on_before_popup → 새 탭(emit cef-popup) url={url}");
+            // 새 탭 = 팝업 취소 + URL 을 host.emit 으로 채널에 배달(플러그인이 인앱 새 탭으로 연다).
+            // 소스 브라우저 id 동반 — 어댑터가 자기 소유 id 만 소비(멀티창 중복 수신 구조 교정).
+            let src = browser.map(|b| b.identifier()).and_then(engine_id_of);
+            host_emit_json(&serde_json::json!({
+                "event": "popup-url",
+                "url": url,
+                "id": src,
+            }));
+            eprintln!("[chromium] on_before_popup → 새 탭(emit popup-url) url={url}");
             1 // cancel
         }
         fn do_close(&self, _browser: Option<&mut Browser>) -> i32 {
@@ -534,7 +539,7 @@ wrap_life_span_handler! {
                     q.push(closing);
                 }
                 schedule_pump(0);
-                eprintln!("[cef] on_before_close (cef_id={closing})");
+                eprintln!("[chromium] on_before_close (cef_id={closing})");
             }
         }
     }
@@ -575,41 +580,6 @@ wrap_client! {
     }
 }
 
-// 프로세스 진입 최초 — framework 로드 + api_hash + execute_process. CEF 서브프로세스면 Some(code) 반환
-// (호출자가 그 코드로 종료). 브라우저(메인) 프로세스면 None(계속 진행). enabled() 아니면 None.
-pub fn execute_and_route() -> Option<i32> {
-    if !enabled() {
-        return None;
-    }
-    // framework 로드: 번들(../Frameworks) 우선, dev 는 SOKSAK_CEF_FRAMEWORK 로 명시 경로.
-    let exe = std::env::current_exe().ok()?;
-    let loaded = if let Ok(dir) = std::env::var("SOKSAK_CEF_FRAMEWORK") {
-        let p = std::path::Path::new(&dir)
-            .join("Chromium Embedded Framework.framework/Chromium Embedded Framework");
-        load_framework_at(&p)
-    } else {
-        LibraryLoader::new(&exe, false).load()
-    };
-    if !loaded {
-        eprintln!("[cef] framework 로드 실패 — CEF 비활성");
-        return None;
-    }
-    let _ = api_hash(sys::CEF_API_VERSION_LAST, 0);
-
-    let args = Args::new();
-    let is_browser = args
-        .as_cmd_line()
-        .map(|c| c.has_switch(Some(&CefString::from("type"))) != 1)
-        .unwrap_or(true);
-    let mut app = CefApp::new();
-    let code = execute_process(Some(args.as_main_args()), Some(&mut app), std::ptr::null_mut());
-    if is_browser {
-        None // 메인 프로세스 — 계속 진행(이후 init 호출)
-    } else {
-        Some(code) // 서브프로세스 — 이 코드로 종료
-    }
-}
-
 fn load_framework_at(path: &std::path::Path) -> bool {
     use std::os::unix::ffi::OsStrExt;
     let Ok(c) = std::ffi::CString::new(path.as_os_str().as_bytes()) else {
@@ -618,11 +588,20 @@ fn load_framework_at(path: &std::path::Path) -> bool {
     unsafe { load_library(Some(&*c.as_ptr().cast())) == 1 }
 }
 
-// cef_initialize — execute_and_route 가 None(메인) 반환 후 1회. 성공 시 true.
-pub fn initialize_engine() -> bool {
-    if !enabled() {
+// 엔진 초기화 — 호스트의 soksak_engine_init(메인스레드)에서 1회. 모든 경로는 사이드카 dist 디렉토리
+// 기준(자기 위치 상대 해소 — PLUGIN-CONTRACT §5): framework/helper/main-bundle 이 전부 dist 안에 산다.
+// 서브프로세스는 전용 helper 바이너리가 담당하므로 여기서 execute_process 를 부르지 않는다(cefsimple
+// 의 분리-helper 패턴). 성공 시 true.
+pub fn initialize(dist_dir: &std::path::Path) -> bool {
+    // framework dlopen — dist/Chromium Embedded Framework.framework
+    let framework_dir = dist_dir.join("Chromium Embedded Framework.framework");
+    let framework_bin = framework_dir.join("Chromium Embedded Framework");
+    if !load_framework_at(&framework_bin) {
+        eprintln!("[chromium] framework 로드 실패: {}", framework_bin.display());
         return false;
     }
+    let _ = api_hash(sys::CEF_API_VERSION_LAST, 0);
+
     let args = Args::new();
     let mut settings = Settings::default();
     settings.no_sandbox = 1;
@@ -630,35 +609,32 @@ pub fn initialize_engine() -> bool {
     // root_cache_path 미설정(in-memory) — 디스크 쿠키 DB 가 없으면 os_crypt 가 키체인("Chromium Safe
     // Storage")을 안 건드려 ad-hoc dev 재프롬프트가 원천 사라진다(그 모달이 메인 스레드를 막아 흰 화면의
     // 진짜 공범이었다). dev 브라우저는 세션 지속 불요. 프로덕션은 정식 서명 + 영속 cache 로 전환.
-    // 서브프로세스 helper 경로(env). 미설정 시 번들 자동 파생.
-    if let Ok(helper) = std::env::var("SOKSAK_CEF_HELPER") {
-        settings.browser_subprocess_path = CefString::from(helper.as_str());
-    }
-    // dlopen 한 framework 의 리소스(icudtl.dat/locales/.pak)를 CEF 에 알려준다 — 앱 번들에 CEF 가 없는
-    // dev 경로에선 필수(없으면 "icudtl.dat not found" 로 죽음). framework_dir_path=.framework 디렉토리,
-    // resources_dir_path=그 Resources.
-    if let Ok(fw_dir) = std::env::var("SOKSAK_CEF_FRAMEWORK") {
-        let framework = format!("{fw_dir}/Chromium Embedded Framework.framework");
-        settings.framework_dir_path = CefString::from(framework.as_str());
-        settings.resources_dir_path = CefString::from(format!("{framework}/Resources").as_str());
-    }
-    // main_bundle_path — CEF mach-port rendezvous 서비스명은 메인 번들 정체성에서 파생된다. helper 가
-    // 사이드카 번들 정체성으로 서비스를 찾으므로, 브라우저(soksak) 프로세스도 같은 번들을 메인으로
-    // 인식하게 해 서비스명을 일치시킨다(dev — soksak.app 에 CEF 정식 번들 전까지의 경로).
-    if let Ok(bundle) = std::env::var("SOKSAK_CEF_MAIN_BUNDLE") {
-        settings.main_bundle_path = CefString::from(bundle.as_str());
-    }
+    // 서브프로세스 = dist 의 전용 helper(.app 안 — CEF 정본 macOS 배치에서 dist 가 Frameworks 역할).
+    // 실행파일명은 Chromium 관례("<이름> Helper") — 렌더러는 형제 "<이름> Helper (Renderer).app" 변형
+    // 번들에서 뜬다(실측: 변형 부재 시 렌더러 spawn 이 조용히 실패해 콘텐츠 blank). 변형 4종
+    // (Renderer/GPU/Plugin/Alerts)은 스테이징(make sidecar-chromium)이 배치한다.
+    let helper_app = dist_dir.join("soksak-sidecar-chromium Helper.app");
+    let helper_bin = helper_app.join("Contents/MacOS/soksak-sidecar-chromium Helper");
+    settings.browser_subprocess_path = CefString::from(helper_bin.to_string_lossy().as_ref());
+    // dlopen 한 framework 의 리소스(icudtl.dat/locales/.pak) 위치 — 없으면 "icudtl.dat not found" 로 죽음.
+    settings.framework_dir_path = CefString::from(framework_dir.to_string_lossy().as_ref());
+    settings.resources_dir_path =
+        CefString::from(framework_dir.join("Resources").to_string_lossy().as_ref());
+    // main_bundle_path — CEF mach-port rendezvous 서비스명은 메인 번들 정체성에서 파생된다. helper 의
+    // 최외곽 번들이 곧 helper .app 이므로 브라우저 쪽도 같은 번들을 메인으로 선언해 서비스명을 일치시킨다
+    // (검증된 기존 메커니즘의 재지향 — 구 SOKSAK_CEF_MAIN_BUNDLE 대체).
+    settings.main_bundle_path = CefString::from(helper_app.to_string_lossy().as_ref());
     let mut app = CefApp::new();
-    let ok = initialize(
+    let ok = cef::initialize(
         Some(args.as_main_args()),
         Some(&settings),
         Some(&mut app),
         std::ptr::null_mut(),
     ) == 1;
     if ok {
-        eprintln!("[cef] initialize OK (in-process)");
+        eprintln!("[chromium] initialize OK (in-process, dist={})", dist_dir.display());
     } else {
-        eprintln!("[cef] initialize 실패");
+        eprintln!("[chromium] initialize 실패");
     }
     ok
 }
@@ -674,48 +650,8 @@ pub fn request_create(nsview: usize, x: i32, y: i32, w: i32, h: i32, url: String
     id
 }
 
-// 커맨드 구현 — 창의 contentView(NSView)를 부모로 CEF child 임베드 요청. 메인 스레드에서 NSView 취득.
-pub fn create_in_window(
-    window: &tauri::Window,
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-    url: String,
-) -> Result<u32, String> {
-    if !enabled() {
-        return Err("CEF 비활성(SOKSAK_CEF 미설정)".into());
-    }
-    use std::sync::mpsc;
-    use std::time::Duration;
-    let (tx, rx) = mpsc::sync_channel::<usize>(1);
-    let win = window.clone();
-    window
-        .run_on_main_thread(move || {
-            let mut ptr = 0usize;
-            #[cfg(target_os = "macos")]
-            unsafe {
-                if let Ok(ns) = win.ns_window() {
-                    let win_obj = &*(ns as *const objc2::runtime::AnyObject);
-                    let content: *mut objc2_app_kit::NSView =
-                        objc2::msg_send![win_obj, contentView];
-                    ptr = content as usize;
-                }
-            }
-            let _ = tx.try_send(ptr);
-        })
-        .map_err(|e| e.to_string())?;
-    let nsview = rx
-        .recv_timeout(Duration::from_secs(2))
-        .map_err(|_| "NSView 취득 시간 초과".to_string())?;
-    if nsview == 0 {
-        return Err("NSView 취득 실패".into());
-    }
-    Ok(request_create(nsview, x, y, w, h, url))
-}
-
+// surface(부모 NSView)는 호스트가 ABI ambient 파라미터로 주입한다 — 창 취득은 코어(sidecar.rs
+// content_view_of)가 소유하고, 이 크레이트는 usize 만 받는다(tauri 무의존).
 pub fn shutdown_engine() {
-    if enabled() {
-        shutdown();
-    }
+    shutdown();
 }

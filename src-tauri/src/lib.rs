@@ -1,8 +1,6 @@
 mod ai_session;
 mod sidecar;
 mod webview;
-#[cfg(feature = "cef-browser")]
-mod cef_engine;
 mod clipboard;
 mod data;
 mod deeplink;
@@ -32,60 +30,6 @@ use process::ProcessManager;
 use pty::PtyManager;
 use tauri::Manager;
 use watcher::FsWatcher;
-
-// 인프로세스 CEF child 를 pane(창 rect)에 임베드 — 브라우저 CEF 플러그인이 호출. feature off 면 에러.
-// 항상 handler 에 등록(고정 리스트)하고 내부에서 cfg 분기 — 미빌드 시 명확한 에러 반환.
-#[tauri::command]
-fn cef_browser_create(
-    window: tauri::Window,
-    x: i32,
-    y: i32,
-    w: i32,
-    h: i32,
-    url: String,
-) -> Result<u32, String> {
-    #[cfg(feature = "cef-browser")]
-    {
-        cef_engine::create_in_window(&window, x, y, w, h, url)
-    }
-    #[cfg(not(feature = "cef-browser"))]
-    {
-        let _ = (window, x, y, w, h, url);
-        Err("CEF 미빌드(cef-browser feature off)".into())
-    }
-}
-
-// CEF child 제어(id 기반, 창 불요). 미빌드/미활성 시 명확한 에러. 실제 CEF 조작은 엔진이 메인 스레드에서.
-macro_rules! cef_cmd {
-    ($name:ident ( $($arg:ident : $ty:ty),* ) => $body:expr) => {
-        #[tauri::command]
-        fn $name($($arg : $ty),*) -> Result<(), String> {
-            #[cfg(feature = "cef-browser")]
-            {
-                if !cef_engine::enabled() {
-                    return Err("CEF 비활성(SOKSAK_CEF 미설정)".into());
-                }
-                $body;
-                Ok(())
-            }
-            #[cfg(not(feature = "cef-browser"))]
-            {
-                let _ = ($($arg),*);
-                Err("CEF 미빌드(cef-browser feature off)".into())
-            }
-        }
-    };
-}
-
-cef_cmd!(cef_browser_load(id: u32, url: String) => cef_engine::load(id, url));
-cef_cmd!(cef_browser_reload(id: u32, ignore_cache: bool) => cef_engine::reload(id, ignore_cache));
-cef_cmd!(cef_browser_back(id: u32) => cef_engine::go_back(id));
-cef_cmd!(cef_browser_forward(id: u32) => cef_engine::go_forward(id));
-cef_cmd!(cef_browser_bounds(id: u32, x: i32, y: i32, w: i32, h: i32) => cef_engine::set_bounds(id, x, y, w, h));
-cef_cmd!(cef_browser_hidden(id: u32, hidden: bool) => cef_engine::set_hidden(id, hidden));
-cef_cmd!(cef_browser_focus(id: u32) => cef_engine::set_focus(id));
-cef_cmd!(cef_browser_close(id: u32) => cef_engine::close(id));
-cef_cmd!(cef_browser_popup_mode(as_window: bool) => cef_engine::set_popup_window(as_window));
 
 // 앱 자기 활성화: JS setFocus 는 창을 key 로 만들 뿐 앱을 전면으로 못 가져온다
 // (macOS 포커스 탈취 방지). 자기 자신의 활성화는 허용되므로 NSApp 으로 수행.
@@ -133,16 +77,6 @@ fn ime_debug(message: String) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // 인프로세스 CEF 부트스트랩(feature+env 게이트). 서브프로세스면 여기서 종료, 메인이면 init 후 계속.
-    // env SOKSAK_CEF 미설정 시 전부 no-op — 기본 시작 무영향.
-    #[cfg(feature = "cef-browser")]
-    {
-        if let Some(code) = cef_engine::execute_and_route() {
-            std::process::exit(code);
-        }
-        cef_engine::initialize_engine();
-    }
-
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -160,10 +94,6 @@ pub fn run() {
         .manage(ai_session::SessionTracker::default())
         .manage(schedule::ScheduleState::default())
         .setup(|app| {
-            // 인프로세스 CEF 팝업(target=_blank/window.open) 라우팅용 AppHandle 등록 — on_before_popup
-            // 이 "새 탭" 모드에서 URL 을 프론트로 emit 할 때 쓴다.
-            #[cfg(feature = "cef-browser")]
-            cef_engine::set_app_handle(app.handle().clone());
             // 범용 데이터 스토어(app.data) — 소켓 서버 이전에 연다(커맨드가 즉시 쓸 수 있도록).
             match data::db_path().and_then(|p| data::open(&p)) {
                 Ok(conn) => app.state::<data::DbState>().set(conn),
@@ -419,16 +349,6 @@ pub fn run() {
             titlebar::titlebar_backing,
             ime_debug,
             window_activate,
-            cef_browser_create,
-            cef_browser_load,
-            cef_browser_reload,
-            cef_browser_back,
-            cef_browser_forward,
-            cef_browser_bounds,
-            cef_browser_hidden,
-            cef_browser_focus,
-            cef_browser_close,
-            cef_browser_popup_mode,
             sidecar::sidecar_open,
             sidecar::sidecar_send,
             sidecar::sidecar_close,
@@ -436,9 +356,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            // 인프로세스 CEF 메시지펌프는 tao 콜백에서 do_message_loop_work 를 직접 부르지 않는다 —
-            // NSApp 이벤트펌프 재진입 데드락(실측). CEF 가 OnScheduleMessagePumpWork 로 push 하면
-            // cef_engine 이 GCD 로 메인런루프 최상위에 비재진입 디스패치한다(cef_engine.rs 참조).
+            // 엔진 사이드카(예: Chromium)의 메시지펌프는 tao 콜백에서 돌리지 않는다 — NSApp 이벤트
+            // 펌프 재진입 데드락(실측). 모듈이 GCD 로 메인런루프 최상위에 비재진입 디스패치한다
+            // (crates/soksak-sidecar-chromium 참조).
             // 멀티 윈도우 종료 규칙: 창이 하나라도 남아 있으면 앱을 종료하지 않는다 — 한 창을 닫아도
             // 다른 창은 살아야 한다. 실제 종료(PTY 자식 정리·소켓 정리)는 마지막 창이 닫혔을 때만.
             // (Tauri 기본은 ExitRequested 시 그대로 종료 — prevent_exit 로 비-마지막 창 종료를 막는다.)
@@ -455,8 +375,6 @@ pub fn run() {
                 app_handle.state::<ws::WsManager>().close_all();
                 ipc::cleanup();
                 mediaproxy::cleanup();
-                #[cfg(feature = "cef-browser")]
-                cef_engine::shutdown_engine();
                 sidecar::shutdown_all();
             }
         });

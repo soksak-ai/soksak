@@ -339,6 +339,7 @@ pub fn sidecar_open(
     };
     let handle = module.next_handle.fetch_add(1, Ordering::Relaxed);
     module.clients.lock().map_err(|e| e.to_string())?.insert(handle, on_event);
+    eprintln!("[sidecar:{name}] 채널 open (handle={handle})");
     Ok(handle)
 }
 
@@ -349,8 +350,9 @@ pub fn sidecar_send(
     handle: u64,
     payload: String,
 ) -> Result<serde_json::Value, String> {
-    let module = get_module(&name)?;
+    let module = get_module(&name).inspect_err(|e| eprintln!("[sidecar:{name}] send 거부: {e}"))?;
     if !module.clients.lock().map_err(|e| e.to_string())?.contains_key(&handle) {
+        eprintln!("[sidecar:{name}] send 거부: 무효 핸들 {handle} (payload {} bytes)", payload.len());
         return Err(format!("무효 핸들: {handle}"));
     }
     let surface = content_view_of(&window)?;
@@ -380,6 +382,7 @@ pub fn sidecar_send(
 pub fn sidecar_close(name: String, handle: u64) -> Result<(), String> {
     let module = get_module(&name)?;
     module.clients.lock().map_err(|e| e.to_string())?.remove(&handle);
+    eprintln!("[sidecar:{name}] 채널 close (handle={handle})");
     // 모듈 자체는 상주 유지(unload 금지) — 채널만 닫는다.
     Ok(())
 }
