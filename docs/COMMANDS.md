@@ -6,6 +6,22 @@
 
 코어 명령만 수록한다. 플러그인 기여 명령(`plugin.<플러그인id>.*`)은 설치본마다 다르므로 `sok commands` 또는 각 플러그인 스킬에서 조회한다.
 
+## `activity.recent`
+
+Query the app-wide activity stream (P12 execution visibility): registry command executions (command/source/danger/duration/outcome — param keys only, no values), terminal command start/finish, AI turn ends, view activations. Cursor with since (exclusive seq) to fetch only new entries; entries carry monotonic seq + epoch-ms ts. Same answer from any window (process-wide singleton hub). | 활동 피드 실행 기록 최근 명령 스트림 조회 오케스트레이터
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `limit` | number |  | Maximum entries to return (default 200) [default 200] |
+| `since` | number |  | Return entries with seq greater than this (backfill cursor). Omit for latest. |
+
+**Returns**: { entries: [{ seq, ts, kind, source, payload }] }
+
+```bash
+sok activity.recent '{"limit":20}'
+sok activity.recent '{"since":1234}'
+```
+
 ## `ai.session.detect`
 
 Detect whether a shell command launches a tracked AI agent (claude or codex). Returns the agent kind or null. Used to tag terminal command blocks with agentKind. | 에이전트탐지 세션탐지 ai탐지

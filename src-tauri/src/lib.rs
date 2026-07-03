@@ -22,6 +22,7 @@ mod secrets;
 mod titlebar;
 mod watcher;
 mod runtime_dep;
+mod activity;
 mod project_registry;
 mod window;
 mod ws;
@@ -84,6 +85,7 @@ pub fn run() {
         .plugin(tauri_plugin_webview_capture::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_deep_link::init())
+        .manage(activity::ActivityHub::default())
         .manage(PtyManager::default())
         .manage(ProcessManager::default())
         .manage(ws::WsManager::default())
@@ -98,7 +100,11 @@ pub fn run() {
         .setup(|app| {
             // 범용 데이터 스토어(app.data) — 소켓 서버 이전에 연다(커맨드가 즉시 쓸 수 있도록).
             match data::db_path().and_then(|p| data::open(&p)) {
-                Ok(conn) => app.state::<data::DbState>().set(conn),
+                Ok(conn) => {
+                    // 활동 허브 컬렉션(core/activity) 정의 — 발행 즉시 영속 가능(A1).
+                    activity::init_collection(&conn);
+                    app.state::<data::DbState>().set(conn)
+                }
                 Err(e) => eprintln!("[data] DB 열기 실패: {e}"),
             }
             // 영속된 시간 기반(At/Every/Cron) 일정 재무장(crash 복구) — DB 열린 직후. 무상태 Reconcile 은
@@ -373,6 +379,8 @@ pub fn run() {
             webview::webview_dom_holes,
             webview::webview_debug_hierarchy,
             window_set_background,
+            activity::activity_publish,
+            activity::activity_recent,
             project_registry::project_claim,
             project_registry::project_release,
             project_registry::project_owners,

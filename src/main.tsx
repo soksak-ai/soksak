@@ -18,6 +18,7 @@ import { initPluginSettingsPersistence } from "./state/pluginSettings";
 import { initPluginsPersistence } from "./state/plugins";
 import { useSettings } from "./state/settings";
 import { startTerminalStatusBridge } from "./terminal/terminalStatus";
+import { startActivityFeed } from "./state/activityFeed";
 import "./assets/fonts.css";
 
 // 터미널 spawn 옵션(cwd/셸/자동실행 명령)은 코어가 아니라 터미널 플러그인이 소유한다 —
@@ -29,6 +30,8 @@ startExecutor();
 startWebviewGc();
 // 터미널 foreground 명령(셸 통합 OSC 이벤트) → 그 뷰의 running status(M5, 폴링 없음).
 startTerminalStatusBridge();
+// 활동 피드(A1) — 이 창의 이벤트·레지스트리 실행 계측을 코어 허브로 발행(P12).
+startActivityFeed();
 
 // 부트(P3): 첫 프로젝트 루트(~/.soksak/projects/project1)를 준비한 뒤 렌더 —
 // 루트 없는 프로젝트는 존재 불가(P1)라 앱은 루트가 준비된 후 시작한다.

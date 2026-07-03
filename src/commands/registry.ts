@@ -176,8 +176,48 @@ function validate(
   return null;
 }
 
+// 실행 계측 sink(A1 — P12 실행 가시성). 오케스트레이터가 soksak 에 내리는 명령이 곧 이
+// 경로이므로, 여기 계측이 없으면 "무엇이 실행되는지 본다"가 성립하지 않는다. 주입식(테스트
+// 격리·부트 전 no-op). params 는 키 목록만 — secret 등 민감값을 스트림에 싣지 않는다.
+export interface CommandTrace {
+  command: string;
+  source: "ui" | "remote";
+  danger?: "destructive" | "inject";
+  paramKeys: string[];
+  ok: boolean;
+  code?: string;
+  durationMs: number;
+}
+let traceSink: ((t: CommandTrace) => void) | null = null;
+export function setCommandTraceSink(fn: ((t: CommandTrace) => void) | null): void {
+  traceSink = fn;
+}
+
 // 명령 실행. 결과는 항상 {ok:true,…} 또는 {ok:false,code,message}.
 export async function execute(
+  name: string,
+  params: Record<string, unknown>,
+  ctx: CommandContext,
+): Promise<CommandOutcome> {
+  const started = Date.now();
+  const out = await executeInner(name, params, ctx);
+  try {
+    traceSink?.({
+      command: name,
+      source: ctx.remote ? "remote" : "ui",
+      danger: registry.get(name)?.danger,
+      paramKeys: Object.keys(params),
+      ok: out.ok,
+      code: out.ok ? undefined : out.code,
+      durationMs: Date.now() - started,
+    });
+  } catch {
+    // 계측 실패는 명령 실행에 영향을 주지 않는다.
+  }
+  return out;
+}
+
+async function executeInner(
   name: string,
   params: Record<string, unknown>,
   ctx: CommandContext,

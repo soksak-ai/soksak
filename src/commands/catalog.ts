@@ -1801,6 +1801,37 @@ export function registerCatalog(): void {
     },
   });
 
+  register("activity.recent", {
+    description:
+      "Query the app-wide activity stream (P12 execution visibility): registry command executions (command/source/danger/duration/outcome — param keys only, no values), terminal command start/finish, AI turn ends, view activations. Cursor with since (exclusive seq) to fetch only new entries; entries carry monotonic seq + epoch-ms ts. Same answer from any window (process-wide singleton hub).",
+    triggers: {
+      ko: "활동 피드 실행 기록 최근 명령 스트림 조회 오케스트레이터",
+    },
+    params: {
+      since: {
+        type: "number",
+        description: "Return entries with seq greater than this (backfill cursor). Omit for latest.",
+      },
+      limit: {
+        type: "number",
+        description: "Maximum entries to return (default 200)",
+        default: 200,
+      },
+    },
+    returns: "{ entries: [{ seq, ts, kind, source, payload }] }",
+    examples: [
+      'sok activity.recent \'{"limit":20}\'',
+      'sok activity.recent \'{"since":1234}\'',
+    ],
+    handler: async (p) => {
+      const entries = await invoke("activity_recent", {
+        since: p.since ?? null,
+        limit: p.limit ?? 200,
+      });
+      return { entries };
+    },
+  });
+
   register("window.themeScan", {
     description:
       "Measure whether a dark/light theme transition is atomic across screen regions. Records the toggle, then reports each region's transition frame and how many frames they are out of sync (a torn frame is chrome already switched while content has not). Idempotent — replaces ad-hoc capture scripts. Restores the original theme when done.",

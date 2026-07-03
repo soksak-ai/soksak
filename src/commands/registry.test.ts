@@ -10,6 +10,8 @@ import {
   setPermissionGate,
   unregister,
   type CommandSpec,
+  setCommandTraceSink,
+  type CommandTrace,
 } from "./registry";
 
 const TEST_PREFIX = "test.";
@@ -234,5 +236,49 @@ describe("register / unregister — 플러그인 생명주기 기반", () => {
     });
     const entry = catalogJson().find((c) => c.name === TEST_PREFIX + "compose");
     expect(entry?.description).toBe("Toggle the doodle overlay. | 낙서 그리기");
+  });
+});
+
+describe("execute — 계측 sink (A1 활동 허브)", () => {
+  it("성공·실패·출처·danger·paramKeys 가 trace 로 흐른다(민감값 미포함)", async () => {
+    const traces: CommandTrace[] = [];
+    setCommandTraceSink((t) => traces.push(t));
+    try {
+      reg("trace.ok", { params: { secretValue: { type: "string", description: "" } } });
+      await execute("trace.ok", { secretValue: "s3cr3t" }, { remote: true });
+      await execute("trace.missing", {}, { remote: false });
+
+      expect(traces).toHaveLength(2);
+      expect(traces[0]).toMatchObject({
+        command: "trace.ok",
+        source: "remote",
+        ok: true,
+        paramKeys: ["secretValue"],
+      });
+      // 값 자체는 어디에도 없다 — 키 목록만.
+      expect(JSON.stringify(traces[0])).not.toContain("s3cr3t");
+      expect(traces[1]).toMatchObject({
+        command: "trace.missing",
+        source: "ui",
+        ok: false,
+        code: "UNKNOWN_COMMAND",
+      });
+      expect(typeof traces[0].durationMs).toBe("number");
+    } finally {
+      setCommandTraceSink(null);
+    }
+  });
+
+  it("sink 예외는 명령 결과에 영향을 주지 않는다", async () => {
+    setCommandTraceSink(() => {
+      throw new Error("sink 고장");
+    });
+    try {
+      reg("trace.safe", {});
+      const r = await execute("trace.safe", {}, { remote: false });
+      expect(r.ok).toBe(true);
+    } finally {
+      setCommandTraceSink(null);
+    }
   });
 });
