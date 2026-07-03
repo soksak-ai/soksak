@@ -28,7 +28,7 @@ export function browserLabel(viewId: string): string {
 }
 
 // 이 창의 브라우저 webview label 접두사 — GC 가 *자기 창* 브라우저만 대조·회수하도록 필터링한다
-// (browser_list 는 앱 전역 모든 창의 브라우저를 반환하므로, 접두사로 자기 것만 골라야 다른 창 것을
+// (webview_list 는 앱 전역 모든 창의 브라우저를 반환하므로, 접두사로 자기 것만 골라야 다른 창 것을
 // 잘못 닫지 않는다).
 export function browserLabelPrefix(): string {
   return `b-${currentWindowLabel()}-`;

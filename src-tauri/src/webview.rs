@@ -1,7 +1,7 @@
 // 브라우저 패널: 메인 창 안에 child webview(WKWebView)를 임베드한다(iframe 아님 —
 // X-Frame-Options 제약 없이 실제 브라우저). 링크 클릭은 webview 기본 동작이고,
 // 이전/이후는 history.back()/forward() eval, URL 변화는 on_navigation 으로 프론트에
-// emit(폴링 없음). 위치/크기는 프론트 레이아웃(slot rect)을 따라 browser_bounds 로 동기화.
+// emit(폴링 없음). 위치/크기는 프론트 레이아웃(slot rect)을 따라 webview_bounds 로 동기화.
 //
 // 레이어 원칙(z-순서 역전 + 투명 홀 + hitTest 위임 — mod layer):
 // DOM(메인 webview)이 항상 최상위 레이어다. child webview 는 생성 직후 메인 아래로
@@ -143,8 +143,8 @@ mod status {
     }
 }
 
-// DOM 오버레이 영역(사이드바 등) 사각형 — CSS 논리 px, top-left 원점(browser_bounds 와
-// 동일 규약). 프론트가 getBoundingClientRect 로 측정해 browser_dom_holes 로 보고한다.
+// DOM 오버레이 영역(사이드바 등) 사각형 — CSS 논리 px, top-left 원점(webview_bounds 와
+// 동일 규약). 프론트가 getBoundingClientRect 로 측정해 webview_dom_holes 로 보고한다.
 #[derive(Clone, Deserialize)]
 pub(crate) struct Hole {
     x: f64,
@@ -155,7 +155,7 @@ pub(crate) struct Hole {
 
 // ── 레이어 정공법(macOS): z-순서 역전 + 투명 홀 + hitTest 위임 ────────────────
 // Tauri 에는 webview z-order API 가 없으므로(docs.rs 실측) AppKit 수준에서 직접
-// 수행한다 — browser.rs 의 기존 objc2 직접 호출(타이틀 KVO/eval/클릭 모니터)과
+// 수행한다 — webview.rs 의 기존 objc2 직접 호출(타이틀 KVO/eval/클릭 모니터)과
 // 같은 층위. 홀의 단일 진실 = "보이는 child webview 의 frame" 그 자체라서 별도
 // rect 레지스트리가 없다(set_position/set_size/hide 가 곧 홀 갱신).
 #[cfg(target_os = "macos")]
@@ -191,7 +191,7 @@ mod layer {
     // 교체 전 원본 hitTest IMP. 클래스(WryWebView) 단위 스위즐이라 앱 전역 1회면 충분.
     static ORIG_HIT_TEST: AtomicUsize = AtomicUsize::new(0);
 
-    // 창의 오버레이 게이트 갱신(프론트 ui 카운터 0↔1 전이 시 browser_overlay_active 가 호출).
+    // 창의 오버레이 게이트 갱신(프론트 ui 카운터 0↔1 전이 시 webview_overlay_active 가 호출).
     pub fn set_overlay(label: &str, active: bool) {
         if let Ok(mut layers) = LAYERS.lock() {
             if let Some(w) = layers.get_mut(label) {
@@ -200,7 +200,7 @@ mod layer {
         }
     }
 
-    // 창의 DOM 오버레이 홀 갱신(사이드바 열림/닫힘·폭 변화 시 browser_dom_holes 가 호출).
+    // 창의 DOM 오버레이 홀 갱신(사이드바 열림/닫힘·폭 변화 시 webview_dom_holes 가 호출).
     pub fn set_holes(label: &str, holes: Vec<super::Hole>) {
         if let Ok(mut layers) = LAYERS.lock() {
             if let Some(w) = layers.get_mut(label) {
@@ -209,7 +209,7 @@ mod layer {
         }
     }
 
-    // Backend N surface 등록/해제 — browser_open 직후(가시 홀 편입), browser_close 직전(회수).
+    // Backend N surface 등록/해제 — webview_open 직후(가시 홀 편입), webview_close 직전(회수).
     // 오프스크린 추출 webview(media_extract, -20000)는 홀이 아니므로 등록하지 않는다.
     pub fn register_surface(ptr: usize) {
         if let Ok(mut s) = SURFACES.lock() {
@@ -265,7 +265,7 @@ mod layer {
         // 사이드바 등 DOM 오버레이 영역은 풀사이즈 브라우저 위에 떠 있어도 DOM 이 이벤트를
         // 갖는다(스크롤이 브라우저로 새지 않음). 홀 안이면 default(메인 webview)를 그대로
         // 돌려줘 DOM 이 이벤트를 받는다. holes 는 메인 webview 콘텐츠 기준 CSS 논리 px(top-left,
-        // browser_bounds 와 동일 규약)이고, point 는 superview 좌표계이므로 mf(메인 frame)를
+        // webview_bounds 와 동일 규약)이고, point 는 superview 좌표계이므로 mf(메인 frame)를
         // 통해 변환한다. mf 는 메인 webview 콘텐츠 전 영역이다.
         let mf = view.frame();
         let flipped = superview.isFlipped();
@@ -413,7 +413,7 @@ mod layer {
 // 오버레이(모달/메뉴/드롭다운) 상태 동기화 — 프론트 ui 스토어 카운터가 0↔1 을
 // 넘을 때 호출한다. true 면 홀 마우스 통과 차단(hitTest 가 DOM 에 우선권).
 #[tauri::command]
-pub fn browser_overlay_active(window: tauri::Window, active: bool) {
+pub fn webview_overlay_active(window: tauri::Window, active: bool) {
     // window = 호출 창(MW2 — 자동 인지). 그 창의 오버레이 게이트만 갱신(프론트 label 전달 불요).
     #[cfg(target_os = "macos")]
     layer::set_overlay(window.label(), active);
@@ -428,7 +428,7 @@ pub fn browser_overlay_active(window: tauri::Window, active: bool) {
 // DOM 오버레이 홀 동기화 — 프론트가 사이드바 열림/닫힘·폭 변화·창 리사이즈 시 측정해 보고.
 // 닫힘이면 빈 배열을 보내 홀을 비운다. holes 안은 풀사이즈 브라우저 위라도 DOM 이 받는다.
 #[tauri::command]
-pub fn browser_dom_holes(window: tauri::Window, holes: Vec<Hole>) {
+pub fn webview_dom_holes(window: tauri::Window, holes: Vec<Hole>) {
     // window = 호출 창(자동 인지). 그 창의 홀만 갱신(프론트 label 전달 불요).
     #[cfg(target_os = "macos")]
     layer::set_holes(window.label(), holes);
@@ -439,7 +439,7 @@ pub fn browser_dom_holes(window: tauri::Window, holes: Vec<Hole>) {
 // 실측 프로브: 메인 창 뷰 계층 덤프(레이어 가정 검증·진단용).
 #[cfg(target_os = "macos")]
 #[tauri::command]
-pub async fn browser_debug_hierarchy(window: tauri::Window) -> Result<String, String> {
+pub async fn webview_debug_hierarchy(window: tauri::Window) -> Result<String, String> {
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -472,8 +472,8 @@ pub async fn browser_debug_hierarchy(window: tauri::Window) -> Result<String, St
 
 #[cfg(not(target_os = "macos"))]
 #[tauri::command]
-pub async fn browser_debug_hierarchy(_app: AppHandle) -> Result<String, String> {
-    Err("browser_debug_hierarchy 는 현재 macOS 전용".into())
+pub async fn webview_debug_hierarchy(_app: AppHandle) -> Result<String, String> {
+    Err("webview_debug_hierarchy 는 현재 macOS 전용".into())
 }
 
 // 한 창의 webview 에 레이어 역전 설치 — setup(main)·새 창 생성 시 그 창 label 로 호출.
@@ -511,7 +511,7 @@ const NEW_WINDOW_NAV: &str = r#"
 // 범용 미디어 스니프 — 페이지가 스스로 요청하는 미디어 URL(m3u8/mpd/mp4/...)을 패시브 기록한다.
 // init script 라 페이지 스크립트보다 먼저 돌아 로드 시점의 요청까지 잡는다. 사이트 지식 0(어떤 페이지든
 // 자기 미디어를 요청하면 기록 — 난독화·차단과 무관, 디코드 불요). 기록만 하고 동작은 안 바꾼다(near-zero
-// 비용). 소비자는 window.__soksakMedia 를 browser_eval 로 읽는다(browser.media.sniff). 재사용 substrate.
+// 비용). 소비자는 window.__soksakMedia 를 webview_eval 로 읽는다(browser.media.sniff). 재사용 substrate.
 const MEDIA_SNIFF: &str = r#"
 (function () {
   if (window.__soksakMedia) return;
@@ -592,7 +592,7 @@ fn open_popup(app: &AppHandle, url: Url) {
 // 진실이 창 네임스페이스로 만든다 — Tauri webview label 은 앱 전역 유일해야 하므로 창별 viewId 만으론
 // 충돌). Rust 는 그 label 을 받아 add_child 할 뿐 형식은 프론트가 소유.
 #[tauri::command]
-pub fn browser_open(
+pub fn webview_open(
     app: AppHandle,
     window: tauri::Window,
     label: String,
@@ -695,7 +695,7 @@ pub fn browser_open(
 
 // 패널 레이아웃 변화(분할/리사이즈/이동)에 맞춰 위치/크기 동기화.
 #[tauri::command]
-pub fn browser_bounds(
+pub fn webview_bounds(
     app: AppHandle,
     label: String,
     x: f64,
@@ -713,7 +713,7 @@ pub fn browser_bounds(
 }
 
 #[tauri::command]
-pub fn browser_navigate(app: AppHandle, label: String, url: String) -> Result<(), String> {
+pub fn webview_navigate(app: AppHandle, label: String, url: String) -> Result<(), String> {
     if let Some(wv) = app.get_webview(&label) {
         wv.navigate(Url::parse(&url).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
@@ -727,7 +727,7 @@ pub fn browser_navigate(app: AppHandle, label: String, url: String) -> Result<()
 // 브라우저 패널 '안'에 도킹돼 뜰 때가 있다. show 직후 [_inspector detach] 를 보내 항상 떼어낸 창으로 강제한다.
 // 반환 = 토글 후 열림 여부(UI 버튼 on 동기화).
 #[tauri::command]
-pub fn browser_devtools(app: AppHandle, label: String) -> Result<bool, String> {
+pub fn webview_devtools(app: AppHandle, label: String) -> Result<bool, String> {
     if let Some(wv) = app.get_webview(&label) {
         if wv.is_devtools_open() {
             wv.close_devtools();
@@ -759,7 +759,7 @@ pub fn browser_devtools(app: AppHandle, label: String) -> Result<bool, String> {
 
 // 이전/이후: webview 의 세션 히스토리 사용.
 #[tauri::command]
-pub fn browser_history(app: AppHandle, label: String, delta: i32) -> Result<(), String> {
+pub fn webview_history(app: AppHandle, label: String, delta: i32) -> Result<(), String> {
     if let Some(wv) = app.get_webview(&label) {
         wv.eval(format!("history.go({delta})"))
             .map_err(|e| e.to_string())?;
@@ -769,7 +769,7 @@ pub fn browser_history(app: AppHandle, label: String, delta: i32) -> Result<(), 
 
 // 탭/뷰 전환 시 표시/숨김(native 레이어는 DOM 위에 떠서 CSS visibility 가 안 닿는다).
 #[tauri::command]
-pub fn browser_visible(app: AppHandle, label: String, visible: bool) -> Result<(), String> {
+pub fn webview_visible(app: AppHandle, label: String, visible: bool) -> Result<(), String> {
     if let Some(wv) = app.get_webview(&label) {
         if visible {
             wv.show().map_err(|e| e.to_string())?;
@@ -784,7 +784,7 @@ pub fn browser_visible(app: AppHandle, label: String, visible: bool) -> Result<(
 
 // 뷰가 영구히 닫힐 때 webview 정리.
 #[tauri::command]
-pub fn browser_close(app: AppHandle, label: String) -> Result<(), String> {
+pub fn webview_close(app: AppHandle, label: String) -> Result<(), String> {
     if let Some(wv) = app.get_webview(&label) {
         // Backend N 레지스트리 회수 — close 전에 surface 포인터를 집합에서 제거(위생; 미제거여도
         // 형제 순회가 live subview 만 보므로 자가치유되나 누수 방지).
@@ -802,11 +802,11 @@ pub fn browser_close(app: AppHandle, label: String) -> Result<(), String> {
 // occlusion 스로틀(타이머·미디어 정지)을 피한다 — 레거시가 쓰던 기법. 사이트 지식 0(R3): url 만 받고
 // 페이지 자신의 요청을 가로챌 뿐 디코드·분기 없음. browser.media.sniff(보이는 탭)와 대칭인 숨김 경로.
 //
-// 플랫폼 중립: WKWebView 를 직접 만지지 않고 browser_eval 로 수확한다 — eval 이 동작하는 플랫폼이면
-// 추출도 동작한다(macOS 하드코딩 아님). 비-macOS 의 browser_eval 미구현 갭은 별도 코어 과제이며,
+// 플랫폼 중립: WKWebView 를 직접 만지지 않고 webview_eval 로 수확한다 — eval 이 동작하는 플랫폼이면
+// 추출도 동작한다(macOS 하드코딩 아님). 비-macOS 의 webview_eval 미구현 갭은 별도 코어 과제이며,
 // 추출은 그 위에 자동으로 올라탄다(미구현 플랫폼에선 eval 에러가 R9 로 표면화).
 #[tauri::command]
-pub async fn browser_media_extract(
+pub async fn webview_media_extract(
     app: AppHandle,
     window: tauri::Window,
     url: String,
@@ -833,7 +833,7 @@ pub async fn browser_media_extract(
     let mut triggered = false;
     let mut hits = serde_json::json!([]);
     loop {
-        let raw = browser_eval(
+        let raw = webview_eval(
             app.clone(),
             label.clone(),
             "return JSON.stringify(window.__soksakMedia || [])".to_string(),
@@ -862,7 +862,7 @@ pub async fn browser_media_extract(
         }
         if !triggered {
             triggered = true;
-            let _ = browser_eval(
+            let _ = webview_eval(
                 app.clone(),
                 label.clone(),
                 "try{var v=document.querySelector('video'); if(v){v.muted=true; v.play&&v.play().catch(function(){});}}catch(e){} return null;".to_string(),
@@ -883,7 +883,7 @@ pub async fn browser_media_extract(
 // 존재하는 브라우저 child 웹뷰 라벨 목록(b-*). 프론트 GC 가 "웹뷰 집합 ⊆ 스토어의
 // browser 뷰 집합" 불변식을 검증·회수하는 데 쓴다(생성/파괴 경쟁의 고아 방지).
 #[tauri::command]
-pub fn browser_list(app: AppHandle) -> Vec<String> {
+pub fn webview_list(app: AppHandle) -> Vec<String> {
     app.webviews()
         .keys()
         .filter(|l| l.starts_with("b-"))
@@ -893,7 +893,7 @@ pub fn browser_list(app: AppHandle) -> Vec<String> {
 
 // 내장 브라우저 새 창을 명령으로 직접 열기(browser.open where=window).
 #[tauri::command]
-pub fn browser_open_window(app: AppHandle, url: String) -> Result<(), String> {
+pub fn webview_open_window(app: AppHandle, url: String) -> Result<(), String> {
     let parsed = Url::parse(&url).map_err(|e| e.to_string())?;
     open_popup(&app, parsed);
     Ok(())
@@ -905,7 +905,7 @@ pub fn browser_open_window(app: AppHandle, url: String) -> Result<(), String> {
 // (호출측 래퍼가 JSON.stringify 로 감싼) 문자열을 반환해야 한다.
 #[cfg(target_os = "macos")]
 #[tauri::command]
-pub async fn browser_eval(app: AppHandle, label: String, js: String) -> Result<String, String> {
+pub async fn webview_eval(app: AppHandle, label: String, js: String) -> Result<String, String> {
     use std::sync::mpsc;
     use std::time::Duration;
 
@@ -962,8 +962,8 @@ pub async fn browser_eval(app: AppHandle, label: String, js: String) -> Result<S
 
 #[cfg(not(target_os = "macos"))]
 #[tauri::command]
-pub async fn browser_eval(_app: AppHandle, _label: String, _js: String) -> Result<String, String> {
-    Err("browser_eval 은 현재 macOS 전용".into())
+pub async fn webview_eval(_app: AppHandle, _label: String, _js: String) -> Result<String, String> {
+    Err("webview_eval 은 현재 macOS 전용".into())
 }
 
 // 열린 webview 에 init script(WKUserScript)를 주입한다 — 다음 내비게이션마다 자동 재주입.

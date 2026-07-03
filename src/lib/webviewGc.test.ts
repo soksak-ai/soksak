@@ -1,11 +1,11 @@
-// browserGc — webview 회수 불변식의 순수 핵(collectBrowserLabels) 단위검증.
+// webviewGc — webview 회수 불변식의 순수 핵(collectWebviewLabels) 단위검증.
 // 불변식: live label 집합 = native 브라우저 엔진 플러그인 콘텐츠 뷰(kind:"plugin", pluginId ∈ owner
 // 집합: soksak-plugin-browser-native — Backend N OS webview 소유). OSR 엔진은 비소유(DOM canvas).
 // 이 형태를 못 세면 살아있는 webview 를 고아로 오인해 회수하거나(잘못된 회수), 죽은 webview 를
 // 못 잡는다(고아 누수).
 
 import { describe, expect, it } from "vitest";
-import { collectBrowserLabels } from "./browserGc";
+import { collectWebviewLabels } from "./webviewGc";
 import { splitLeaf } from "../state/splitTree";
 import type { ProjectTab, View, ViewGroup, ContentArea } from "../state/sessions";
 
@@ -53,7 +53,7 @@ const pluginBrowserOsr = (id: string): View => ({
   view: "content",
 });
 
-// 터미널 = 터미널 플러그인 뷰(코어 터미널 제거). browserGc 는 브라우저 플러그인만 센다.
+// 터미널 = 터미널 플러그인 뷰(코어 터미널 제거). webviewGc 는 브라우저 플러그인만 센다.
 const terminal = (id: string): View => ({
   id,
   kind: "plugin",
@@ -70,14 +70,14 @@ const otherPlugin = (id: string): View => ({
   view: "content",
 });
 
-describe("collectBrowserLabels — webview 소유 뷰 label 집합", () => {
+describe("collectWebviewLabels — webview 소유 뷰 label 집합", () => {
   it("브라우저 플러그인 콘텐츠 뷰의 label 을 센다(누락하면 고아 오인 회수 — 회귀 가드)", () => {
-    const live = collectBrowserLabels([tab([pluginBrowser("v2")])], labelOf);
+    const live = collectWebviewLabels([tab([pluginBrowser("v2")])], labelOf);
     expect([...live]).toEqual(["b-v2"]);
   });
 
   it("webview 비소유 뷰(터미널·다른 플러그인)는 세지 않는다", () => {
-    const live = collectBrowserLabels(
+    const live = collectWebviewLabels(
       [tab([terminal("v3"), otherPlugin("v4")])],
       labelOf,
     );
@@ -85,7 +85,7 @@ describe("collectBrowserLabels — webview 소유 뷰 label 집합", () => {
   });
 
   it("native 와 OSR 공존 시 native 만 센다(OSR 은 DOM canvas — GC 대상 아님)", () => {
-    const live = collectBrowserLabels(
+    const live = collectWebviewLabels(
       [tab([pluginBrowser("v1"), pluginBrowserOsr("v2")])],
       labelOf,
     );
@@ -93,7 +93,7 @@ describe("collectBrowserLabels — webview 소유 뷰 label 집합", () => {
   });
 
   it("OSR 엔진 뷰는 native surface 비소유라 세지 않는다(DOM canvas — GC 대상 아님)", () => {
-    const live = collectBrowserLabels([tab([pluginBrowserOsr("v5")])], labelOf);
+    const live = collectWebviewLabels([tab([pluginBrowserOsr("v5")])], labelOf);
     expect(live.size).toBe(0);
   });
 
@@ -104,7 +104,7 @@ describe("collectBrowserLabels — webview 소유 뷰 label 집합", () => {
     };
     // 두 번째 content 의 id 충돌 회피
     t.contents[1] = { ...t.contents[1], id: "c2" };
-    const live = collectBrowserLabels([t], labelOf);
+    const live = collectWebviewLabels([t], labelOf);
     expect(live).toEqual(new Set(["b-v1", "b-v2"]));
   });
 });

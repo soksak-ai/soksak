@@ -1,5 +1,5 @@
 mod ai_session;
-mod browser;
+mod webview;
 #[cfg(feature = "cef-browser")]
 mod cef_engine;
 mod clipboard;
@@ -105,7 +105,7 @@ fn window_activate(window: tauri::WebviewWindow) {
     let _ = window;
 }
 
-// 네이티브 창 배경 = 테마 bg 단일화(레이어 원칙, browser.rs 머리말 참조): 루트
+// 네이티브 창 배경 = 테마 bg 단일화(레이어 원칙, webview.rs 머리말 참조): 루트
 // DOM 배경은 투명이고 창 배경이 그 아래를 칠한다 — 미도장 영역(홀 정렬 순간 등)
 // 의 색이 테마와 항상 일치한다. 테마 엔진(theme/engine.ts)이 적용 시점마다 호출.
 #[tauri::command]
@@ -248,9 +248,9 @@ pub fn run() {
                 // main 창 네이티브(레이어 역전·신호등) — 새 창과 동일한 단일 진입점(window.rs).
                 window::install_window_natives(app.handle(), "main");
                 // 앱 전역 모니터(클릭·라이브리사이즈) — 창 무관 1회 설치. 모든 창을 추적하고 어느
-                // 창인지 label 을 동반 emit 한다(MW4 — browser.rs 머리말). 프론트가 자기 창만 필터.
-                browser::install_click_monitor(app.handle());
-                browser::install_live_resize_monitor(app.handle());
+                // 창인지 label 을 동반 emit 한다(MW4 — webview.rs 머리말). 프론트가 자기 창만 필터.
+                webview::install_click_monitor(app.handle());
+                webview::install_live_resize_monitor(app.handle());
                 // 신호등 유지 옵저버 — 앱 전역 1회(모든 창). 창마다 달면 창 닫아도 안 빠져 누수.
                 let (tlx, tly) = window::traffic_light_inset(app.handle());
                 titlebar::install_global_observers(tlx, tly);
@@ -393,21 +393,21 @@ pub fn run() {
             clipboard::clipboard_write,
             clipboard::clipboard_watch_start,
             clipboard::clipboard_watch_stop,
-            browser::browser_open,
-            browser::browser_bounds,
-            browser::browser_navigate,
-            browser::browser_devtools,
-            browser::browser_history,
-            browser::browser_visible,
-            browser::browser_close,
-            browser::browser_list,
-            browser::browser_open_window,
-            browser::browser_eval,
-            browser::webview_inject_script,
-            browser::browser_media_extract,
-            browser::browser_overlay_active,
-            browser::browser_dom_holes,
-            browser::browser_debug_hierarchy,
+            webview::webview_open,
+            webview::webview_bounds,
+            webview::webview_navigate,
+            webview::webview_devtools,
+            webview::webview_history,
+            webview::webview_visible,
+            webview::webview_close,
+            webview::webview_list,
+            webview::webview_open_window,
+            webview::webview_eval,
+            webview::webview_inject_script,
+            webview::webview_media_extract,
+            webview::webview_overlay_active,
+            webview::webview_dom_holes,
+            webview::webview_debug_hierarchy,
             window_set_background,
             window::window_create,
             window::window_list,

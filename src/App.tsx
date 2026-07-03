@@ -379,7 +379,7 @@ function App() {
   useLayoutEffect(() => {
     // 닫힘(rightOpen false 또는 폭 0)이면 홀 비움.
     if (!activeProject?.rightOpen || rightW <= 0) {
-      invoke("browser_dom_holes", { holes: [] }).catch(() => {});
+      invoke("webview_dom_holes", { holes: [] }).catch(() => {});
       return;
     }
     // 폭 변경 등 레이아웃이 커밋된 *다음* 프레임에 측정한다 — rAF 전엔 사이드바 폭이
@@ -387,11 +387,11 @@ function App() {
     const report = () => {
       const sb = document.querySelector(".sidebar-right.open");
       if (!sb) {
-        invoke("browser_dom_holes", { holes: [] }).catch(() => {});
+        invoke("webview_dom_holes", { holes: [] }).catch(() => {});
         return;
       }
       const r = sb.getBoundingClientRect();
-      invoke("browser_dom_holes", {
+      invoke("webview_dom_holes", {
         holes: [{ x: r.left, y: r.top, w: r.width, h: r.height }],
       }).catch(() => {});
     };

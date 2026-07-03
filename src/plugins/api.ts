@@ -1134,7 +1134,7 @@ export function buildPluginApi(
             useViewRegistry
               .getState()
               .setViewBadge(qualifiedViewId(id, viewId), badge),
-          // 오버레이 입력 게이트(useUi overlayCount → browser_overlay_active). 콘텐츠 네이티브
+          // 오버레이 입력 게이트(useUi overlayCount → webview_overlay_active). 콘텐츠 네이티브
           // webview 위 클릭 성립. [RULE] 오버레이 영역 → "ui:overlay:*" 권한 필요.
           setOverlayActive: (active) => {
             if (!(has("ui:overlay:screen") || has("ui:overlay:pane"))) {
@@ -1527,27 +1527,27 @@ export function buildPluginApi(
               : {}),
           }
         : undefined,
-    // 코어가 소유하는 child webview 구동(브라우저 플러그인). 네이티브 명령은 기존 browser_*(명령명 유지),
-    // API 만 generic webview 이름으로 래핑. label 은 webviewLabels 단일진실에서만 파생.
+    // 코어가 소유하는 child webview 구동(브라우저 플러그인). 네이티브 명령 = webview_*(capability 접두,
+    // docs/NAMING.md 법). label 은 webviewLabels 단일진실에서만 파생.
     webview: has("webview")
       ? {
           label: (viewId: string) => browserLabel(viewId),
           open: (label, o) =>
-            deps.invoke("browser_open", { label, ...o }) as Promise<void>,
+            deps.invoke("webview_open", { label, ...o }) as Promise<void>,
           bounds: (label, x, y, w, h) =>
-            deps.invoke("browser_bounds", { label, x, y, w, h }) as Promise<void>,
+            deps.invoke("webview_bounds", { label, x, y, w, h }) as Promise<void>,
           visible: (label, visible) =>
-            deps.invoke("browser_visible", { label, visible }) as Promise<void>,
+            deps.invoke("webview_visible", { label, visible }) as Promise<void>,
           navigate: (label, url) =>
-            deps.invoke("browser_navigate", { label, url }) as Promise<void>,
+            deps.invoke("webview_navigate", { label, url }) as Promise<void>,
           openWindow: (url) =>
-            deps.invoke("browser_open_window", { url }) as Promise<void>,
+            deps.invoke("webview_open_window", { url }) as Promise<void>,
           history: (label, delta) =>
-            deps.invoke("browser_history", { label, delta }) as Promise<void>,
+            deps.invoke("webview_history", { label, delta }) as Promise<void>,
           devtools: (label) =>
-            deps.invoke("browser_devtools", { label }) as Promise<boolean>,
+            deps.invoke("webview_devtools", { label }) as Promise<boolean>,
           eval: (label, js) =>
-            deps.invoke("browser_eval", { label, js }) as Promise<string>,
+            deps.invoke("webview_eval", { label, js }) as Promise<string>,
           injectScript: (label, code, phase) => {
             void deps.invoke("webview_inject_script", {
               label,
@@ -1559,11 +1559,11 @@ export function buildPluginApi(
           on: (label, event, cb) =>
             tracker.wrap(deps.subscribeWebview(label, event, cb)),
           list: async (prefix) => {
-            const all = (await deps.invoke("browser_list", {})) as string[];
+            const all = (await deps.invoke("webview_list", {})) as string[];
             return prefix ? all.filter((l) => l.startsWith(prefix)) : all;
           },
           close: (label) =>
-            deps.invoke("browser_close", { label }) as Promise<void>,
+            deps.invoke("webview_close", { label }) as Promise<void>,
         }
       : undefined,
     pty: has("pty") ? createPtyApi(deps, tracker) : undefined,

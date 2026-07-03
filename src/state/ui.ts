@@ -26,12 +26,12 @@ interface UiState {
 function syncNative(prev: number, next: number): void {
   if (prev > 0 === next > 0) return;
   // 코어가 호출 창을 자동 인지(window 주입)하므로 label 전달 불요 — 이 창의 게이트만 갱신.
-  invoke("browser_overlay_active", { active: next > 0 }).catch(() => {});
+  invoke("webview_overlay_active", { active: next > 0 }).catch(() => {});
 }
 
 // 부트 정렬: 메인 webview 리로드(HMR/새로고침)는 카운터를 0부터 다시 시작하지만
 // 네이티브 게이트엔 직전 상태(true)가 남을 수 있다 — 시작 시 1회 false 로 맞춘다.
-invoke("browser_overlay_active", { active: false }).catch(() => {});
+invoke("webview_overlay_active", { active: false }).catch(() => {});
 
 export const useUi = create<UiState>((set) => ({
   overlayCount: 0,

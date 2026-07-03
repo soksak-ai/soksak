@@ -427,7 +427,7 @@ pub fn set_hidden(id: u32, hidden: bool) {
 pub fn set_focus(id: u32) {
     request_op(Op::Focus { id });
 }
-// DOM 오버레이/모달 게이트 — 코어 browser_overlay_active 가 창 전이 시 호출. 활성이면 모든 CEF child 숨김.
+// DOM 오버레이/모달 게이트 — 코어 webview_overlay_active 가 창 전이 시 호출. 활성이면 모든 CEF child 숨김.
 pub fn set_overlay(active: bool) {
     request_op(Op::Overlay { active });
 }

@@ -3,7 +3,7 @@
 // 메뉴 API 를 노출하지 않으므로(트레이·NSApp Window/Help 메뉴만), 이 델리게이트 메서드가 유일한 정공법.
 //
 // Tauri(tao)가 설치한 델리게이트 클래스에 applicationDockMenu: 와 액션(sokNewWindow:)을 런타임 추가한다
-// — browser.rs hitTest 스위즐과 동일한 "기존 objc 클래스에 메서드 주입" 패턴. 앱 델리게이트는 하나뿐
+// — webview.rs hitTest 스위즐과 동일한 "기존 objc 클래스에 메서드 주입" 패턴. 앱 델리게이트는 하나뿐
 // 이라 새 델리게이트로 교체하면 Tauri 생명주기 콜백(applicationDidFinishLaunching 등)이 끊긴다 → 교체가
 // 오히려 파손. 그래서 교체가 아니라 미구현 셀렉터 추가(class_addMethod)로 확장한다.
 
@@ -21,7 +21,7 @@ use tauri::AppHandle;
 // 액션이 새 창을 만들 때 쓰는 AppHandle(install 1회 설정). AppHandle 은 Send+Sync 라 static 가능.
 static APP: OnceLock<AppHandle> = OnceLock::new();
 // Dock 메뉴 포인터(앱 수명 leak 으로 생존). Retained<NSMenu> 는 !Sync 라 static 에 못 담으므로 usize 로
-// 보관한다(browser.rs 가 NSView 포인터를 usize 로 다루는 것과 동일 결). 0 = 미설치.
+// 보관한다(webview.rs 가 NSView 포인터를 usize 로 다루는 것과 동일 결). 0 = 미설치.
 static DOCK_MENU_PTR: AtomicUsize = AtomicUsize::new(0);
 
 // applicationDockMenu:(id self, SEL _cmd, NSApplication* sender) -> NSMenu*. 인코딩 "@@:@".

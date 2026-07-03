@@ -73,7 +73,7 @@ pub fn install<R: tauri::Runtime>(window: &tauri::Window<R>, x: f64, y: f64) {
 // 신호등 유지 옵저버 — 앱 전역 1회 설치(lib.rs setup). object:None 으로 *모든 창*의 통지를 받아 그
 // 통지의 창에 inset 을 재적용한다(통지의 sender = 그 NSWindow). 과거엔 창마다 옵저버를 달고
 // std::mem::forget 했는데(단일 창 가정), 멀티 윈도우에선 창을 닫아도 옵저버가 안 빠져 창마다 누적
-// 누수였다. install_live_resize_monitor(browser.rs)와 동일 패턴 — 앱 전역 6개면 충분, 진짜 1회 leak.
+// 누수였다. install_live_resize_monitor(webview.rs)와 동일 패턴 — 앱 전역 6개면 충분, 진짜 1회 leak.
 #[cfg(target_os = "macos")]
 pub fn install_global_observers(x: f64, y: f64) {
     use objc2_app_kit::{

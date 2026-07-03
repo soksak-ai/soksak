@@ -3,7 +3,7 @@
 // settings/theme/plugins 는 localStorage 공유 — 의도적 전역). 소켓·플러그인·설정은 1 프로세스 공유.
 //
 // 새 창은 생성 직후 그 label 로 네이티브 hook(레이어 역전·신호등)을 설치해 hole-punch 브라우저가
-// 이 창에서도 동작한다(P0 창별 HashMap 덕 — browser.rs layer 참조).
+// 이 창에서도 동작한다(P0 창별 HashMap 덕 — webview.rs layer 참조).
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -29,7 +29,7 @@ pub fn traffic_light_inset(app: &AppHandle) -> (f64, f64) {
 
 #[cfg(target_os = "macos")]
 pub fn install_window_natives(app: &AppHandle, label: &str) {
-    crate::browser::install_layer_inversion(app, label);
+    crate::webview::install_layer_inversion(app, label);
     if let Some(window) = app.get_window(label) {
         let (x, y) = traffic_light_inset(app);
         crate::titlebar::install(&window, x, y);
@@ -126,7 +126,7 @@ mod mw_rules {
             "get_webview_window(\"main\")",
         ];
         for f in [
-            "src/browser.rs",
+            "src/webview.rs",
             "src/ipc.rs",
             "src/window.rs",
             "src/lib.rs",
