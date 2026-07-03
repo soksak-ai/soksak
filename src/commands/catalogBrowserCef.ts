@@ -1,5 +1,5 @@
 // browser.cef.* — 코어의 인프로세스 CEF(Chromium) 엔진 표면. 엔진 플러그인
-// (soksak-plugin-browser-cef)이 이 커맨드로 자기 pane 슬롯에 네이티브 Chromium child 를 붙인다
+// (soksak-plugin-browser-chromium)이 이 커맨드로 자기 pane 슬롯에 네이티브 Chromium child 를 붙인다
 // (set_as_child, JS 미경유 = 네이티브 크롬 속도). 코어는 엔진과 강결합하지 않는다 — 이 커맨드는
 // cef-browser feature + SOKSAK_CEF env 게이트 뒤에서만 실동작하고, 미빌드 시 명확한 에러를 돌려준다.
 // rect 은 부모 NSView(창 contentView) 좌표계의 DIP(포인트) — 슬롯 정렬은 호출측(플러그인)이 ui.slot 로

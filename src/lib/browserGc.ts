@@ -6,17 +6,22 @@
 // 것만 회수한다(다른 창 것 종료 금지). 소유 뷰 "집합"이 변한 경우에만 네이티브 질의(browser_list)
 // — 드래그 등 무관한 store 쓰기는 문자열 비교 한 번으로 끝난다(docs/PERFORMANCE.md 원칙 5).
 //
-// webview 를 소유하는 콘텐츠 뷰는 브라우저 플러그인 뷰(kind:"plugin", pluginId=soksak-plugin-browser)
-// 하나다 — `browserLabel(view.id)` 로 child webview 를 만든다(app.webview.label = browserLabel).
+// child webview(Backend N surface)를 소유하는 콘텐츠 뷰는 native 브라우저 엔진 플러그인 뷰다
+// (kind:"plugin", pluginId ∈ WEBVIEW_OWNER_PLUGIN_IDS) — `browserLabel(view.id)` 로 child webview 를
+// 만든다(app.webview.label = browserLabel). owner 는 집합으로 두어 향후 OS-webview 계열 엔진이 늘어도
+// (예: 별도 webview 변형) 확장 가능하게 한다.
 
 import { invoke } from "@tauri-apps/api/core";
 import { rafThrottle } from "./rafThrottle";
 import { allGroups, useSessions, type ProjectTab } from "../state/sessions";
 import { browserLabel, browserLabelPrefix } from "./webviewLabels";
 
-// child webview 를 소유하는 플러그인 뷰의 플러그인 id. 이 플러그인의 콘텐츠 뷰는 app.webview.open
-// 으로 `browserLabel(viewId)` webview 를 만든다 — 레거시 kind:"browser" 와 동일 label 스킴.
-const WEBVIEW_OWNER_PLUGIN_ID = "soksak-plugin-browser";
+// child webview(Backend N = OS native webview)를 소유하는 브라우저 엔진 플러그인 id 집합. 그 콘텐츠
+// 뷰는 app.webview.open 으로 `browserLabel(viewId)` webview 를 만든다. OSR 엔진(soksak-plugin-browser
+// -osr)은 native child webview 를 만들지 않고 DOM canvas 에 그리므로(Backend O) 여기 없다.
+const WEBVIEW_OWNER_PLUGIN_IDS: ReadonlySet<string> = new Set([
+  "soksak-plugin-browser-native",
+]);
 
 // 순수 — tabs 에서 webview 를 소유하는 모든 뷰의 label 집합. 레거시 브라우저 뷰와 브라우저 플러그인
 // 콘텐츠 뷰를 모두 센다(둘 다 browserLabel(view.id) 로 같은 webview 를 만든다). labelOf 주입으로
@@ -30,8 +35,8 @@ export function collectBrowserLabels(
     for (const c of t.contents) {
       for (const g of allGroups(c.layout)) {
         for (const v of g.views) {
-          // 브라우저 플러그인 콘텐츠 뷰 — browserLabel(view.id) 스킴으로 child webview 소유.
-          if (v.kind === "plugin" && v.pluginId === WEBVIEW_OWNER_PLUGIN_ID)
+          // 브라우저 엔진 플러그인 콘텐츠 뷰 — browserLabel(view.id) 스킴으로 child webview/surface 소유.
+          if (v.kind === "plugin" && WEBVIEW_OWNER_PLUGIN_IDS.has(v.pluginId))
             live.add(labelOf(v.id));
         }
       }

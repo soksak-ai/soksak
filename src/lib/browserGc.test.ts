@@ -1,5 +1,6 @@
 // browserGc — webview 회수 불변식의 순수 핵(collectBrowserLabels) 단위검증.
-// 불변식: live label 집합 = 브라우저 플러그인 콘텐츠 뷰(kind:"plugin", pluginId=soksak-plugin-browser).
+// 불변식: live label 집합 = native 브라우저 엔진 플러그인 콘텐츠 뷰(kind:"plugin", pluginId ∈ owner
+// 집합: soksak-plugin-browser-native — Backend N OS webview 소유). OSR 엔진은 비소유(DOM canvas).
 // 이 형태를 못 세면 살아있는 webview 를 고아로 오인해 회수하거나(잘못된 회수), 죽은 webview 를
 // 못 잡는다(고아 누수).
 
@@ -39,7 +40,16 @@ const pluginBrowser = (id: string): View => ({
   id,
   kind: "plugin",
   title: "B",
-  pluginId: "soksak-plugin-browser",
+  pluginId: "soksak-plugin-browser-native",
+  view: "content",
+});
+
+// OSR 엔진은 native child webview 를 만들지 않는다(DOM canvas 에 그림) — GC 소유 뷰가 아니다.
+const pluginBrowserOsr = (id: string): View => ({
+  id,
+  kind: "plugin",
+  title: "O",
+  pluginId: "soksak-plugin-browser-osr",
   view: "content",
 });
 
@@ -71,6 +81,19 @@ describe("collectBrowserLabels — webview 소유 뷰 label 집합", () => {
       [tab([terminal("v3"), otherPlugin("v4")])],
       labelOf,
     );
+    expect(live.size).toBe(0);
+  });
+
+  it("native 와 OSR 공존 시 native 만 센다(OSR 은 DOM canvas — GC 대상 아님)", () => {
+    const live = collectBrowserLabels(
+      [tab([pluginBrowser("v1"), pluginBrowserOsr("v2")])],
+      labelOf,
+    );
+    expect(live).toEqual(new Set(["b-v1"]));
+  });
+
+  it("OSR 엔진 뷰는 native surface 비소유라 세지 않는다(DOM canvas — GC 대상 아님)", () => {
+    const live = collectBrowserLabels([tab([pluginBrowserOsr("v5")])], labelOf);
     expect(live.size).toBe(0);
   });
 

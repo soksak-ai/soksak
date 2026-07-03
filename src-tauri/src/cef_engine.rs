@@ -154,7 +154,14 @@ fn note_gone(id: u32) {
         s.remove(&id);
     }
 }
+// SOKSAK_CEF_NO_TICK=1 → 렌더 틱(busy-pump) 비활성. present 를 GPU vsync + CEF 이벤트 펌프
+// (OnScheduleMessagePumpWork)만으로 모는지 실측하기 위한 게이트. 근본 교정 검증용.
+static NO_TICK: LazyLock<bool> =
+    LazyLock::new(|| std::env::var("SOKSAK_CEF_NO_TICK").as_deref() == Ok("1"));
 fn start_render_tick() {
+    if *NO_TICK {
+        return;
+    }
     if TICK_ON.swap(true, Ordering::SeqCst) {
         return;
     }

@@ -59,7 +59,7 @@ const project: ProjectTab = {
               activeViewId: "v3",
               views: [
                 { id: "v2", kind: "file", title: "a.ts", path: "/repo/a.ts", mode: "code" },
-                { id: "v3", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser", view: "content" },
+                { id: "v3", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
                 { id: "v4", kind: "plugin", title: "ERD", pluginId: "soksak-plugin-erd", view: "studio" },
               ],
             },
@@ -112,7 +112,7 @@ describe("workspaceSnapshot 라운드트립", () => {
     expect(file.path).toBe("/repo/a.ts");
     expect(file.mode).toBe("code");
     const webview = g2.views[1] as Extract<View, { kind: "plugin" }>;
-    expect(webview.pluginId).toBe("soksak-plugin-browser");
+    expect(webview.pluginId).toBe("soksak-plugin-browser-native");
     expect(webview.view).toBe("content");
     const plug = g2.views[2] as Extract<View, { kind: "plugin" }>;
     expect(plug.pluginId).toBe("soksak-plugin-erd");

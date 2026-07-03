@@ -17,7 +17,7 @@ const leafGroup = (gid: string, vid: string): GroupNode => ({
     id: gid,
     activeViewId: vid,
     views: [
-      { id: vid, kind: "plugin", title: "B", pluginId: "soksak-plugin-browser", view: "content" },
+      { id: vid, kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
     ],
   },
 });
