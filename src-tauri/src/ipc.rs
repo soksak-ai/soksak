@@ -135,14 +135,83 @@ fn handle_conn(app: AppHandle, stream: UnixStream) {
         if line.trim().is_empty() {
             continue;
         }
-        let reply = match parse_request(&line) {
-            Err(msg) => error_reply("INVALID_PARAMS", &msg),
-            Ok(req) => dispatch(&app, req),
+        let req = match parse_request(&line) {
+            Err(msg) => {
+                if writeln!(writer, "{}", error_reply("INVALID_PARAMS", &msg)).is_err() {
+                    break;
+                }
+                continue;
+            }
+            Ok(req) => req,
         };
+        // events.subscribe 는 transport 레벨(A2 — window.reload 선례): 확인 응답 1회 후 이
+        // 연결을 push 스트림으로 전환한다(요청-응답 프로토콜에서 이탈 — 연결 수명 = 구독 수명).
+        if req.method == "events.subscribe" {
+            subscribe_stream(&app, req, writer);
+            return;
+        }
+        let reply = dispatch(&app, req);
         if writeln!(writer, "{reply}").is_err() {
             break;
         }
     }
+}
+
+// 활동 스트림 push 루프(A2 — P11 이벤트 스트림). params: kinds?=서버측 필터(prefix 매칭),
+// since?=백필 커서(exclusive seq). 백필(링에서) 후 라이브 전환 — 구독자 큐는 bounded·drop-oldest
+// (느린 소비자가 발행을 못 막고, 유실은 seq gap 으로 드러나 클라이언트가 since 재접속으로 메꾼다).
+// 연결이 끊기면(write 실패) 구독 해지. 폴링 없음 — Condvar 대기.
+fn subscribe_stream(app: &AppHandle, req: Request, mut writer: UnixStream) {
+    let kinds: Vec<String> = req
+        .params
+        .get("kinds")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
+        .unwrap_or_default();
+    let since = req.params.get("since").and_then(Value::as_u64);
+    let matches = |e: &Value| -> bool {
+        if kinds.is_empty() {
+            return true;
+        }
+        let k = e.get("kind").and_then(Value::as_str).unwrap_or("");
+        kinds.iter().any(|f| k == f || k.starts_with(&format!("{f}.")))
+    };
+
+    let hub = app.state::<crate::activity::ActivityHub>();
+    let sub = hub.subscribe(); // 백필 조회 전에 등록 — 조회↔라이브 사이 공백 0(중복은 seq 로 dedup 가능)
+    let mut ack = json!({ "ok": true, "subscribed": true });
+    if let (Some(cid), Some(obj)) = (req.id.clone(), ack.as_object_mut()) {
+        obj.insert("id".into(), cid);
+    }
+    if writeln!(writer, "{ack}").is_err() {
+        hub.unsubscribe(&sub);
+        return;
+    }
+    let mut last_seq = since.unwrap_or(0);
+    if since.is_some() {
+        for e in hub.recent(since, usize::MAX) {
+            if !matches(&e) {
+                continue;
+            }
+            last_seq = e.get("seq").and_then(Value::as_u64).unwrap_or(last_seq);
+            if writeln!(writer, "{e}").is_err() {
+                hub.unsubscribe(&sub);
+                return;
+            }
+        }
+    }
+    while let Some(e) = sub.pop_wait() {
+        // 백필과 라이브의 겹침 제거(seq 단조) + kinds 필터.
+        let seq = e.get("seq").and_then(Value::as_u64).unwrap_or(0);
+        if seq <= last_seq || !matches(&e) {
+            continue;
+        }
+        last_seq = seq;
+        if writeln!(writer, "{e}").is_err() {
+            break;
+        }
+    }
+    hub.unsubscribe(&sub);
 }
 
 // 클라이언트 상관 id echo 를 단일 지점에서 보장한다 — route 가 어떤 경로(WINDOW_NOT_FOUND·INTERNAL·

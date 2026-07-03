@@ -38,6 +38,7 @@ fn main() -> ExitCode {
             }
         },
         Some("docs") => run_docs(),
+        Some("events") => run_events(&args[1..]),
         Some("skill") => run_skill(&args[1..]),
         Some("mcp") => match args.get(1).map(String::as_str) {
             Some("install") => run_mcp_install(&args[2..]),
@@ -69,6 +70,7 @@ fn print_usage() {
   sok commands                        전체 명령 카탈로그(JSON)
   sok help <command>                  단일 명령 매뉴얼
   sok docs                            전체 매뉴얼 마크다운 출력
+  sok events [--kinds a,b] [--since N] 활동 스트림 팔로우(JSONL, Ctrl-C 종료)
   sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]
                                       AI 에이전트 트리거 스킬 설치(soksak 제어법)
   sok mcp install [--claude|--codex|--gemini|--all] [--env dev|debug|app]
@@ -201,6 +203,49 @@ fn request(method: &str, mut params: Value) -> Result<Value, String> {
         .and_then(|o| o.remove("timeoutMs"))
         .and_then(|v| v.as_u64());
     send_request(method, params, None, None, timeout_ms)
+}
+
+// 활동 스트림 팔로우(A2) — events.subscribe 로 연결을 push 모드로 전환하고 라인을 그대로
+// 흘린다(JSONL). 종료는 Ctrl-C(연결 끊김 → 코어가 구독 해지).
+fn run_events(args: &[String]) -> ExitCode {
+    let mut args = args.to_vec();
+    let kinds = take_flag_value(&mut args, "--kinds")
+        .map(|v| v.split(',').map(str::to_string).collect::<Vec<_>>())
+        .unwrap_or_default();
+    let since = take_flag_value(&mut args, "--since").and_then(|v| v.parse::<u64>().ok());
+    let mut params = json!({});
+    if !kinds.is_empty() {
+        params["kinds"] = json!(kinds);
+    }
+    if let Some(s) = since {
+        params["since"] = json!(s);
+    }
+    let sock = match resolve_socket() {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let stream = match UnixStream::connect(&sock) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("소켓 연결 실패({}): {e}", sock.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut w = stream.try_clone().expect("소켓 클론 실패");
+    let req = json!({ "id": 1, "method": "events.subscribe", "params": params });
+    if writeln!(w, "{req}").is_err() {
+        eprintln!("구독 요청 전송 실패");
+        return ExitCode::FAILURE;
+    }
+    let reader = std::io::BufReader::new(stream);
+    for line in reader.lines() {
+        let Ok(line) = line else { break };
+        println!("{line}");
+    }
+    ExitCode::SUCCESS
 }
 
 // 소켓 JSON-RPC 1회 왕복. pane/window/timeout 명시값이 있으면 우선, 없으면 env(SOKSAK_PANE/WINDOW) 사용.

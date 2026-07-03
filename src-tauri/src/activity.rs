@@ -9,12 +9,17 @@
 // seq 는 단조 증가 — since 커서(재접속 백필)의 기준. ts 는 epoch ms.
 
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::Duration;
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 
 const RING_CAP: usize = 2000;
+// 구독자 큐 상한 — 느린 소켓 소비자가 발행을 막지 못한다(bounded). 초과 시 오래된 것부터
+// 버린다(drop-oldest — 최신이 진실, 유실 구간은 seq gap 으로 드러나 since 백필로 메꾼다).
+const SUB_CAP: usize = 256;
 // records 영속 상한 — 링보다 넉넉히(재시작 후 recent 백필의 원천).
 const PERSIST_CAP: i64 = 5000;
 const NS: &str = "core";
@@ -23,6 +28,7 @@ const SCOPE: &str = "app";
 
 pub struct ActivityHub {
     inner: Mutex<HubInner>,
+    subs: Mutex<Vec<Arc<Subscriber>>>,
 }
 
 struct HubInner {
@@ -30,9 +36,50 @@ struct HubInner {
     seq: u64,
 }
 
+/// 소켓 스트리밍 구독자(A2) — bounded 큐 + 알림. 소비는 pop_wait(블로킹, 소켓 쓰기 스레드).
+pub struct Subscriber {
+    queue: Mutex<VecDeque<Value>>,
+    cv: Condvar,
+    closed: AtomicBool,
+}
+
+impl Subscriber {
+    fn push(&self, entry: Value) {
+        let mut q = self.queue.lock().unwrap();
+        q.push_back(entry);
+        while q.len() > SUB_CAP {
+            q.pop_front(); // drop-oldest
+        }
+        self.cv.notify_one();
+    }
+
+    /// 다음 항목(블로킹, 주기적 타임아웃으로 closed 재확인). None = 구독 종료.
+    pub fn pop_wait(&self) -> Option<Value> {
+        let mut q = self.queue.lock().unwrap();
+        loop {
+            if let Some(v) = q.pop_front() {
+                return Some(v);
+            }
+            if self.closed.load(Ordering::Relaxed) {
+                return None;
+            }
+            let (g, _) = self.cv.wait_timeout(q, Duration::from_secs(1)).unwrap();
+            q = g;
+        }
+    }
+
+    pub fn close(&self) {
+        self.closed.store(true, Ordering::Relaxed);
+        self.cv.notify_all();
+    }
+}
+
 impl Default for ActivityHub {
     fn default() -> Self {
-        Self { inner: Mutex::new(HubInner { ring: VecDeque::new(), seq: 0 }) }
+        Self {
+            inner: Mutex::new(HubInner { ring: VecDeque::new(), seq: 0 }),
+            subs: Mutex::new(Vec::new()),
+        }
     }
 }
 
@@ -53,6 +100,28 @@ impl ActivityHub {
             g.ring.pop_front();
         }
         entry
+    }
+
+    /// 스트리밍 구독 등록(A2) — 이후 publish 가 이 구독자 큐로도 흐른다. 해지는 unsubscribe.
+    pub fn subscribe(&self) -> Arc<Subscriber> {
+        let sub = Arc::new(Subscriber {
+            queue: Mutex::new(VecDeque::new()),
+            cv: Condvar::new(),
+            closed: AtomicBool::new(false),
+        });
+        self.subs.lock().unwrap().push(sub.clone());
+        sub
+    }
+
+    pub fn unsubscribe(&self, sub: &Arc<Subscriber>) {
+        sub.close();
+        self.subs.lock().unwrap().retain(|s| !Arc::ptr_eq(s, sub));
+    }
+
+    fn fan_out(&self, entry: &Value) {
+        for s in self.subs.lock().unwrap().iter() {
+            s.push(entry.clone());
+        }
     }
 
     /// since(exclusive) 이후 항목 — 재접속 백필 커서. None = 최신 limit 개.
@@ -79,6 +148,7 @@ fn now_ms() -> u64 {
 pub fn publish(app: &AppHandle, kind: &str, source: &str, payload: Value) -> Value {
     let hub = app.state::<ActivityHub>();
     let entry = hub.push(kind, source, payload);
+    hub.fan_out(&entry); // 소켓 스트리밍 구독자(A2)
     let _ = app.emit("activity", entry.clone());
     // 영속(retention trim) — 실패는 스트림을 막지 않는다(라이브 우선, 콘솔 보고).
     let st = app.state::<crate::data::DbState>();
