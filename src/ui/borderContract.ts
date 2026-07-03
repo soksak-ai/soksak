@@ -273,4 +273,27 @@ export const BORDER_RULES: readonly BorderRule[] = [
     edges: { bottom: "bd-soft" },
     note: "§B2 — 설정 항목 행의 하단 구분선(패널 내부 리스트 분리)",
   },
+
+  // ── 오케스트레이터 창(A3) 내부선 — 헤더/맵/콘솔이 각자 경계 소유 ──────────
+  {
+    id: "orch-header-bottom",
+    selector: ".orch-header",
+    kind: "edges",
+    edges: { bottom: "bd-soft" },
+    note: "A3 — 오케스트레이터 헤더가 본문과의 경계 소유",
+  },
+  {
+    id: "orch-map-right",
+    selector: ".orch-map",
+    kind: "edges",
+    edges: { right: "bd-soft" },
+    note: "A3 — 창·모니터 맵이 피드와의 세로 경계 소유",
+  },
+  {
+    id: "orch-console-top",
+    selector: ".orch-console",
+    kind: "edges",
+    edges: { top: "bd-soft" },
+    note: "A3 — 명령 콘솔이 본문과의 경계 소유",
+  },
 ];

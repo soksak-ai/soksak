@@ -1,3 +1,4 @@
+import { execute } from "./commands/registry";
 import {
   memo,
   useCallback,
@@ -707,6 +708,16 @@ function App() {
             }
           >
             <Icon name="panel-right" />
+          </button>
+          <button
+            type="button"
+            className="icon-btn orch-open"
+            data-node="orch-open"
+            title={t("orch.open")}
+            aria-label={t("orch.open")}
+            onClick={() => void execute("window.new", { mode: "orchestrator" }, { remote: false })}
+          >
+            <Icon name="browser" />
           </button>
           <button
             type="button"

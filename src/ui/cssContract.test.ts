@@ -151,6 +151,9 @@ describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
     ".notify-banner", // 인앱 알림 배너 카드 + 액션 버튼(-action) — 폐곡선 윤곽
     ".picker-card", // 프로젝트 픽커 카드(프로젝트 0개 창 첫 화면) — 폐곡선 윤곽
     ".root-missing-banner", // root 부재 격하 배너(B1) — 배너 카드 윤곽(notify-banner 동형)
+    ".orch-win", // 오케스트레이터 창맵 항목 카드(A3) — 폐곡선 윤곽
+    ".orch-console input", // 오케스트레이터 콘솔 입력 — 폐곡선 윤곽
+    ".orch-console button", // 오케스트레이터 실행 버튼 — 폐곡선 윤곽
 
     ".dctl",
     ".dstepper",

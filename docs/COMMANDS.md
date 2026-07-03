@@ -2240,10 +2240,11 @@ sok window.move '{"x":0,"y":0}'
 
 ## `window.new`
 
-Open a new OS window (independent workspace). Without root it opens to the project picker. With root it boots straight into that project (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). | 새 창 열기 윈도우 프로젝트
+Open a new OS window (independent workspace). Without root it opens to the project picker. With root it boots straight into that project (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). mode orchestrator opens the orchestrator window (activity feed + window/monitor map + command console; label orch-<n>, idempotent — an existing orchestrator window is focused and returned as existingWindow). | 새 창 열기 윈도우 프로젝트 오케스트레이터
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
+| `mode` | string |  | Window mode. orchestrator = the observation/control window (no workspace). Mutually exclusive with root. (orchestrator) |
 | `root` | string |  | Project root to open in the new window (absolute path). Omit = picker. |
 
 **Returns**: { label } | { existingWindow } (root already open — focused instead)
@@ -2252,6 +2253,7 @@ Open a new OS window (independent workspace). Without root it opens to the proje
 ```bash
 sok window.new
 sok window.new '{"root":"/Users/me/work"}'
+sok window.new '{"mode":"orchestrator"}'
 ```
 
 ## `window.occlusion`

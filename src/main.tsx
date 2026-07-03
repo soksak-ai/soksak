@@ -19,6 +19,7 @@ import { initPluginsPersistence } from "./state/plugins";
 import { useSettings } from "./state/settings";
 import { startTerminalStatusBridge } from "./terminal/terminalStatus";
 import { startActivityFeed } from "./state/activityFeed";
+import { OrchestratorApp } from "./orchestrator/OrchestratorApp";
 import "./assets/fonts.css";
 
 // 터미널 spawn 옵션(cwd/셸/자동실행 명령)은 코어가 아니라 터미널 플러그인이 소유한다 —
@@ -52,6 +53,15 @@ async function boot(): Promise<void> {
     initViewLabelsPersistence(coreStoreDeps);
   } catch (e) {
     console.error("코어 영속 동기화 초기화 실패:", e);
+  }
+  // 오케스트레이터 창(A3) — 코어 영속(테마·설정 변수 주입) 이후, 워크스페이스 부트
+  // (플러그인 호스트·프로젝트·복원) 이전에 분기해 셸만 렌더한다. 셸은 커맨드·이벤트
+  // 표면만 소비(외부 클라이언트와 같은 자격 — P13). 커맨드 카탈로그·활동 계측은 module-level.
+  if (new URLSearchParams(window.location.search).get("mode") === "orchestrator") {
+    ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+      <OrchestratorApp />,
+    );
+    return;
   }
   try {
     await initPluginHost();

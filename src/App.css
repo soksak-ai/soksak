@@ -3664,3 +3664,91 @@ select.dctl {
   background: var(--warn-bg, rgba(245, 158, 11, 0.12));
   border-bottom: 1px solid var(--bd-soft);
 }
+
+/* ── 오케스트레이터 창(A3) — 피드+창맵+콘솔. 워크스페이스와 무관한 독립 셸 ── */
+.orch-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+}
+.orch-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 8px 84px; /* 신호등 회피 */
+  border-bottom: 1px solid var(--bd-soft);
+}
+.orch-title { font-weight: 700; }
+.orch-body { flex: 1; display: flex; min-height: 0; }
+.orch-map {
+  flex: 0 0 240px;
+  overflow-y: auto;
+  padding: 10px;
+  border-right: 1px solid var(--bd-soft);
+}
+.orch-map h2, .orch-feed-wrap h2 {
+  font-size: 11px;
+  opacity: 0.6;
+  margin: 2px 0 8px;
+  text-transform: uppercase;
+}
+.orch-monitor { margin-bottom: 12px; }
+.orch-monitor-name { font-size: 11px; opacity: 0.7; margin-bottom: 6px; }
+.orch-win {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  margin: 3px 0;
+  border: 1px solid var(--bd-soft);
+  border-radius: 6px;
+  background: var(--inset);
+  color: inherit;
+  cursor: pointer;
+}
+.orch-win.focused { border-color: var(--acc); }
+.orch-feed-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 10px; }
+.orch-feed { flex: 1; overflow-y: auto; font-family: var(--mono, monospace); font-size: 12px; }
+.orch-entry { display: flex; gap: 8px; padding: 2px 0; white-space: nowrap; }
+.orch-seq { opacity: 0.35; min-width: 42px; text-align: right; }
+.orch-src { opacity: 0.55; min-width: 110px; }
+.orch-line { overflow: hidden; text-overflow: ellipsis; }
+.orch-entry.k-command-executed .orch-line { color: var(--acc); }
+.orch-console {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--bd-soft);
+}
+.orch-console input {
+  flex: 1;
+  min-width: 200px;
+  padding: 7px 10px;
+  border: 1px solid var(--bd-soft);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+}
+.orch-console button {
+  padding: 7px 14px;
+  border: 1px solid var(--bd-soft);
+  border-radius: 6px;
+  background: var(--acc);
+  color: var(--bg);
+  font-weight: 600;
+  cursor: pointer;
+}
+.orch-result {
+  flex-basis: 100%;
+  max-height: 160px;
+  overflow: auto;
+  margin: 0;
+  font-size: 11px;
+  opacity: 0.85;
+}

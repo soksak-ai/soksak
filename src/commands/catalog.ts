@@ -1597,19 +1597,50 @@ export function registerCatalog(): void {
   // ── 멀티 윈도우 ──────────────────────────────────────────────────────────
   register("window.new", {
     description:
-      "Open a new OS window (independent workspace). Without root it opens to the project picker. With root it boots straight into that project (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow).",
-    triggers: { ko: "새 창 창 열기 새 윈도우 프로젝트 새 창" },
+      "Open a new OS window (independent workspace). Without root it opens to the project picker. With root it boots straight into that project (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). mode orchestrator opens the orchestrator window (activity feed + window/monitor map + command console; label orch-<n>, idempotent — an existing orchestrator window is focused and returned as existingWindow).",
+    triggers: { ko: "새 창 창 열기 새 윈도우 프로젝트 새 창 오케스트레이터 창" },
     params: {
       root: {
         type: "string",
         description:
           "Project root to open in the new window (absolute path). Omit = picker.",
       },
+      mode: {
+        type: "string",
+        description:
+          "Window mode. orchestrator = the observation/control window (no workspace). Mutually exclusive with root.",
+        enum: ["orchestrator"],
+      },
     },
     returns: "{ label } | { existingWindow } (root already open — focused instead)",
     errors: ["INVALID_PARAMS"],
-    examples: ["sok window.new", 'sok window.new \'{"root":"/Users/me/work"}\''],
+    examples: [
+      "sok window.new",
+      'sok window.new \'{"root":"/Users/me/work"}\'',
+      'sok window.new \'{"mode":"orchestrator"}\'',
+    ],
     handler: async (p) => {
+      if (p.mode === "orchestrator") {
+        if (p.root) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: "mode=orchestrator 는 root 와 함께 쓸 수 없음",
+          };
+        }
+        // 멱등: 오케스트레이터 창은 관찰 표면이라 1개면 족하다 — 있으면 포커스.
+        const labels = await invoke<string[]>("window_list");
+        const existing = labels.find((l) => l.startsWith("orch-"));
+        if (existing) {
+          await invoke("window_focus", { label: existing }).catch(() => {});
+          return { existingWindow: existing };
+        }
+        const label = await invoke<string>("window_create", {
+          label: "orch-1",
+          init: "mode=orchestrator",
+        });
+        return { label };
+      }
       let init: string | undefined;
       if (p.root) {
         let root: string;

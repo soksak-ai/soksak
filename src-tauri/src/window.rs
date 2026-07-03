@@ -347,6 +347,10 @@ mod mw_rules {
             "capability default.json 의 windows 스코프가 새 창(win-*)을 포함해야 한다 — \
              \"main\" 단일 창 가정 금지(새 창이 드래그·포커스 권한을 못 받는다)"
         );
+        assert!(
+            src.contains("orch-*") || src.contains("\"*\""),
+            "capability windows 스코프가 오케스트레이터 창(orch-*)을 포함해야 한다(A3)"
+        );
     }
     // B1 — 창 닫힘 시 영속 흔적 정리: 그 창의 스냅샷 kv 와 manifest slot 만 제거, 남의 것 보존.
     #[test]
