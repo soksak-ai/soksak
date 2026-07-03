@@ -161,14 +161,27 @@ async function setup(sock, repoRoot) {
     "panel.split bottom",
   );
   const gBrowser = bottom.groupId;
-  must(
+  const browserView = must(
     await rpc(sock, "view.open", {
       group: gBrowser,
       program: "browser",
-      url: "about:blank",
     }),
     "view.open browser",
   );
+  // 네비게이션은 브라우저 플러그인 커맨드로 분리되어 있다(view.open 은 program 만 받음).
+  // view.open 반환 시점에 브라우저 뷰 마운트·등록이 끝나지 않을 수 있어 유한 재시도.
+  {
+    let nav;
+    for (let i = 0; i < 20; i++) {
+      nav = await rpc(sock, "plugin.soksak-plugin-browser-native.navigate", {
+        url: "about:blank",
+        viewId: browserView.viewId,
+      });
+      if (nav?.ok === true) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    must(nav, "browser navigate");
+  }
 
   // s2 용: 이동해도 그룹이 해체되지 않도록 우상단에 보조 터미널 뷰 1개 추가,
   // 그 뷰를 왕복 이동 대상으로 쓴다.
