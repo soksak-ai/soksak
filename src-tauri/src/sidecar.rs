@@ -87,6 +87,16 @@ extern "C" fn host_emit(ctx: *mut c_void, json: *const u8, len: usize) {
             eprintln!("[sidecar:{name}] emit: JSON 파싱 실패({len}B) — 무시");
             return;
         };
+        // 호스트 사실 이벤트 가로채기 — 엔진 native surface 의 레이어 편입/해제(hitTest 위임 대상).
+        // 클라이언트 relay 는 그대로(플러그인이 알 필요는 없지만 막을 이유도 없다).
+        #[cfg(target_os = "macos")]
+        if let Some(ptr) = value.get("view").and_then(|v| v.as_u64()) {
+            match value.get("event").and_then(|e| e.as_str()) {
+                Some("surface-created") => crate::webview::register_engine_surface(ptr as usize),
+                Some("surface-destroyed") => crate::webview::unregister_engine_surface(ptr as usize),
+                _ => {}
+            }
+        }
         let module = MODULES.lock().ok().and_then(|m| m.get(name).cloned());
         if let Some(m) = module {
             if let Ok(clients) = m.clients.lock() {

@@ -410,6 +410,18 @@ mod layer {
     }
 }
 
+// 엔진 사이드카의 native surface 를 레이어 시스템(SURFACES — hitTest 위임)에 편입/해제.
+// 엔진이 surface-created/destroyed 호스트 사실을 emit 하면 sidecar.rs 가 여기로 relay 한다.
+// 코어는 의미를 모른다 — 포인터 멤버십만 관리(엔진 중립: WKWebView·Chromium 동일 취급).
+#[cfg(target_os = "macos")]
+pub(crate) fn register_engine_surface(ptr: usize) {
+    layer::register_surface(ptr);
+}
+#[cfg(target_os = "macos")]
+pub(crate) fn unregister_engine_surface(ptr: usize) {
+    layer::unregister_surface(ptr);
+}
+
 // 오버레이(모달/메뉴/드롭다운) 상태 동기화 — 프론트 ui 스토어 카운터가 0↔1 을
 // 넘을 때 호출한다. true 면 홀 마우스 통과 차단(hitTest 가 DOM 에 우선권).
 #[tauri::command]
