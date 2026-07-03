@@ -568,6 +568,32 @@ wrap_load_handler! {
     }
 }
 
+// DisplayHandler — 주소/제목 변화를 채널 이벤트로 배달(nav/title). URL 바·탭 제목의 단일 소스.
+// 메인 프레임만(iframe 주소 변화는 잡음). id = 엔진-로컬(어댑터가 자기 소유만 소비).
+wrap_display_handler! {
+    struct CefDisplayHandler {}
+    impl DisplayHandler {
+        fn on_address_change(
+            &self,
+            browser: Option<&mut Browser>,
+            frame: Option<&mut Frame>,
+            url: Option<&CefString>,
+        ) {
+            if !frame.map(|f| f.is_main() == 1).unwrap_or(false) {
+                return;
+            }
+            let id = browser.map(|b| b.identifier()).and_then(engine_id_of);
+            let url = url.map(|u| u.to_string()).unwrap_or_default();
+            host_emit_json(&serde_json::json!({ "event": "nav", "id": id, "url": url }));
+        }
+        fn on_title_change(&self, browser: Option<&mut Browser>, title: Option<&CefString>) {
+            let id = browser.map(|b| b.identifier()).and_then(engine_id_of);
+            let title = title.map(|t| t.to_string()).unwrap_or_default();
+            host_emit_json(&serde_json::json!({ "event": "title", "id": id, "title": title }));
+        }
+    }
+}
+
 wrap_client! {
     struct CefClient {}
     impl Client {
@@ -576,6 +602,9 @@ wrap_client! {
         }
         fn load_handler(&self) -> Option<LoadHandler> {
             Some(CefLoadHandler::new())
+        }
+        fn display_handler(&self) -> Option<DisplayHandler> {
+            Some(CefDisplayHandler::new())
         }
     }
 }
