@@ -81,12 +81,20 @@ export function registerPtyObservation(paneId: string): void {
   panes.set(paneId, obs);
 }
 
+// 전 pane 출력 활동 sink(B3) — hooks 가 주입해 lastActivity 를 기록한다(스로틀은 주입측 소유).
+// pane별 구독(subscribeObservedOutput)과 달리 pane 열거 없이 전 출력을 한 곳에서 본다.
+let anyOutputSink: ((paneId: string) => void) | null = null;
+export function setAnyOutputSink(cb: ((paneId: string) => void) | null): void {
+  anyOutputSink = cb;
+}
+
 /** PTY 출력 청크를 그 paneId 의 관찰 파서에 먹인다 + output 구독자 통지. 미등록이면 no-op. */
 export function feedPtyOutput(paneId: string, chunk: string | Uint8Array): void {
   const obs = panes.get(paneId);
   if (!obs) return;
   obs.parser.write(chunk);
   if (obs.outputSubs.size) for (const cb of [...obs.outputSubs]) cb();
+  anyOutputSink?.(paneId);
 }
 
 // ── 이미-파싱된 관찰 푸시(코어 터미널 뷰 producer 경로) ──────────────────────────

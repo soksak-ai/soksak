@@ -98,6 +98,11 @@ export type View =
       // PluginViewContext.command 로 전달. 뷰 종류 무관 채널(터미널 뷰만 실제 자동 실행).
       command?: string;
       status?: ViewStatus;
+      // 관찰된 작업 디렉토리(OSC 7/633) — 영속 대상(B3): 복원 뷰가 마지막 cwd 에서 시작한다.
+      cwd?: string;
+      // 마지막 활동 시각(epoch ms) — 근거는 이벤트만(명령 시작/종료·turn·활성화·PTY 출력).
+      // 복원 hydration 우선순위(B4)와 "마지막 사용" 표시의 데이터.
+      lastActivity?: number;
     };
 
 // 에디터 그룹: 탭(뷰) 묶음 + 활성 뷰. 그룹 트리의 leaf.
@@ -288,6 +293,13 @@ interface SessionsStore {
   ) => CmdResult;
   // 임의 뷰의 탭 제목 갱신(콘텐츠 플러그인이 동적 제목 — 예: 페이지 <title>). 빈 값은 무시.
   setViewTitle: (projectId: string, viewId: string, title: string) => void;
+  // 뷰 런타임 관찰값(B3) — cwd(OSC 관찰)·lastActivity(이벤트 근거). undefined = 유지.
+  // projectId null 허용: 이벤트가 프로젝트를 모르면 전 탭에서 뷰를 찾는다(pane→view 매핑 안정).
+  setViewRuntime: (
+    projectId: string | null,
+    viewId: string,
+    patch: { cwd?: string; lastActivity?: number },
+  ) => void;
   // 드래그/명령 분할·이동: viewId 를 targetGroup 의 zone 위치로.
   moveViewToGroup: (
     projectId: string,
@@ -1376,6 +1388,24 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     get().setViewStatus(projectId, viewId, dirty ? { code: "dirty" } : null),
 
   // 뷰 status 보고/회수(R1·R4) — 모든 뷰 공통. null=필드 소멸. setFileDirty 와 동형.
+  setViewRuntime: (projectId, viewId, patch) => {
+    set((s) => {
+      const targets = projectId
+        ? s.tabs.filter((t) => t.id === projectId)
+        : s.tabs.filter((t) => contentOfView(t, viewId));
+      if (targets.length === 0) return s;
+      let tabs = s.tabs;
+      for (const t of targets) {
+        tabs = mapProject(tabs, t.id, (x) =>
+          mapViewEverywhere(x, viewId, (v) =>
+            v.kind === "plugin" ? { ...v, ...patch } : v,
+          ),
+        );
+      }
+      return { tabs };
+    });
+  },
+
   setViewStatus: (projectId, viewId, status) => {
     let r: CmdResult = noProject(projectId);
     set((s) => {

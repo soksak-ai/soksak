@@ -531,6 +531,9 @@ export const GroupArea = memo(function GroupArea({
                   root={projectRoot}
                   region="content"
                   command={view.command ?? null}
+                  // B3 복원 seam — 관찰됐던 cwd(있으면). 터미널은 spawn 위치로 쓴다
+                  // (살아있는 PTY 입양이 우선이므로 재시작 복원에서만 실효).
+                  restore={view.cwd ? { cwd: view.cwd } : null}
                 />
               )}
             </div>

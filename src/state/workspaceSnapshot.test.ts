@@ -155,3 +155,46 @@ describe("workspaceSnapshot 라운드트립", () => {
     expect(g.views[0].status).toBeUndefined();
   });
 });
+
+describe("B3 — cwd·lastActivity 영속 round-trip", () => {
+  it("plugin 뷰의 cwd/lastActivity 가 직렬화·복원을 통과한다(옵션 — 없으면 생략)", () => {
+    const tab: ProjectTab = {
+      ...project,
+      contents: [
+        {
+          id: "c1",
+          title: "1",
+          activeGroupId: "g1",
+          layout: {
+            type: "leaf",
+            value: {
+              id: "g1",
+              activeViewId: "v1",
+              views: [
+                {
+                  id: "v1",
+                  kind: "plugin",
+                  title: "Terminal",
+                  pluginId: "soksak-plugin-terminal",
+                  view: "content",
+                  cwd: "/tmp/somewhere",
+                  lastActivity: 1234567890,
+                },
+                { id: "v2", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
+              ],
+            },
+          },
+        },
+      ],
+    };
+    const snap = serializeProject(tab);
+    const back = deserializeProject(snap, newSplitId);
+    const g = (back.contents[0].layout as Extract<GroupNode, { type: "leaf" }>).value;
+    const v1 = g.views.find((v) => v.id === "v1") as Extract<View, { kind: "plugin" }>;
+    const v2 = g.views.find((v) => v.id === "v2") as Extract<View, { kind: "plugin" }>;
+    expect(v1.cwd).toBe("/tmp/somewhere");
+    expect(v1.lastActivity).toBe(1234567890);
+    expect(v2.cwd).toBeUndefined();
+    expect(v2.lastActivity).toBeUndefined();
+  });
+});

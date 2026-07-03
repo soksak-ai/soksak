@@ -16,6 +16,7 @@ import { allGroups, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
 import { useBookmarks, type Bookmark } from "../state/bookmarks";
+import { setAnyOutputSink } from "../terminal/ptyObservationStore";
 import {
   subscribeAnyCommandFinished,
   subscribeAnyCommandStarted,
@@ -245,6 +246,8 @@ function diffSessions(prev: SessionsSnapshot, next: SessionsSnapshot): void {
   const b = next.activeView;
   if (b && (!a || a.projectId !== b.projectId || a.viewId !== b.viewId)) {
     emitPluginEvent("view.activated", b);
+    // B3 — 활성화도 활동이다(마지막 사용 시각·hydration 우선순위의 근거).
+    useSessions.getState().setViewRuntime(b.projectId, b.viewId, { lastActivity: Date.now() });
   }
   for (const [viewId, info] of next.fileViews) {
     if (!prev.fileViews.has(viewId)) {
@@ -309,6 +312,21 @@ export function startPluginHooks(): void {
   });
 
   let prevBookmarks = useBookmarks.getState().list;
+  // B3 — PTY 출력도 활동이다(process 출력 근거). 영속 반영은 pane 당 30s 스로틀:
+  // 출력은 고빈도라 매번 스토어에 쓰면 저장·리렌더 폭풍(live vs durable 분리 원칙).
+  // CPU/GPU 사용률 샘플링은 불채택 — 상시 폴링이며, 출력 이벤트가 같은 정보의 이벤트 근거다.
+  {
+    const OUTPUT_ACTIVITY_MS = 30_000;
+    const lastWrite = new Map<string, number>();
+    setAnyOutputSink((paneId) => {
+      const now = Date.now();
+      const prev = lastWrite.get(paneId) ?? 0;
+      if (now - prev < OUTPUT_ACTIVITY_MS) return;
+      lastWrite.set(paneId, now);
+      useSessions.getState().setViewRuntime(null, paneId, { lastActivity: now });
+    });
+  }
+
   useBookmarks.subscribe((state) => {
     if (state.list !== prevBookmarks) {
       prevBookmarks = state.list;
@@ -330,6 +348,11 @@ export function startPluginHooks(): void {
         cwd,
         pid,
       });
+      // B3 — 뷰 런타임 기록: 관찰된 cwd(복원 spawn 위치)와 활동 시각(이벤트가 근거).
+      useSessions.getState().setViewRuntime(null, paneId, {
+        ...(cwd ? { cwd } : {}),
+        lastActivity: Date.now(),
+      });
       const kind = commandLine ? await invoke<string | null>("ai_session_detect", { commandLine }) : null;
       if (kind === "claude" && cwd) void startSessionTrack(paneId, cwd);
     })();
@@ -340,6 +363,11 @@ export function startPluginHooks(): void {
   subscribeAnyCommandFinished((paneId, commandLine, cwd, exitCode) => {
     const info = projectInfoOfPane(paneId);
     emitPluginEvent("command.finished", { projectId: info?.id ?? null, paneId, exitCode });
+    // B3 — 명령 종료 시점의 cwd(cd 후 종료 반영)·활동 시각.
+    useSessions.getState().setViewRuntime(null, paneId, {
+      ...(cwd ? { cwd } : {}),
+      lastActivity: Date.now(),
+    });
     // shell provider: 명령 종료 = turn.ended(source shell). 끝난 명령라인/cwd/exitCode(R2) 동반(본문 enrich).
     // [단계⑤] claude 추적 중이었으면 그 watch 추적값(currentSessionOf)을 블록에 싣는다 — find 폴링이 아니라
     // 실행 내내 fs-change 로 갱신된 현재 세션. 그 후 watch disarm.

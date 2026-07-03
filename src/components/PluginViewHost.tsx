@@ -22,6 +22,7 @@ export const PluginViewHost = memo(function PluginViewHost({
   paneId = null,
   viewId = null,
   command = null,
+  restore = null,
 }: {
   viewKey: string; // "<pluginId>.<viewId>"
   projectId: string;
@@ -33,6 +34,8 @@ export const PluginViewHost = memo(function PluginViewHost({
   viewId?: string | null;
   // 이 뷰가 마운트 시 받을 자동 실행 명령(에이전트 프로그램 — 터미널 뷰가 PTY 로 실행). 없으면 null.
   command?: string | null;
+  // 복원 seam(B3) — 재시작 복원 마운트면 관찰됐던 런타임(cwd). 새 뷰는 미지정(null).
+  restore?: { cwd: string | null } | null;
 }) {
   // 이 뷰 컨테이너의 절대 주소(노드 스캔의 baseAddress). project 는 경로(슬래시 충돌)라 활성 기준 생략 —
   // <region>/view/<viewKey>. win 생략=현재 창. 안정 세그먼트(region·qualifiedViewId)라 멱등. ui.tree 가 읽는다.
@@ -55,6 +58,7 @@ export const PluginViewHost = memo(function PluginViewHost({
     paneId,
     viewId: viewId ?? null,
     command: command ?? null,
+    restore: restore ?? null,
     // 이 창의 그 뷰 탭 배지(per-window — 창마다 자체 store). 데이터 변경 시 플러그인이 재계산.
     setBadge: (badge) => useViewRegistry.getState().setViewBadge(viewKey, badge),
     // status 보고(R1) — 콘텐츠 배치(viewId 有)만 sessions view.status 로. 사이드바는 no-op.

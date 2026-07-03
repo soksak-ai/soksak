@@ -18,7 +18,16 @@ import type { ProjectTab, ContentArea, ViewGroup, View } from "./sessions";
 
 type ViewSnapshot =
   | { id: string; kind: "file"; title: string; path: string; mode: "code" | "preview" }
-  | { id: string; kind: "plugin"; title: string; pluginId: string; view: string };
+  | {
+      id: string;
+      kind: "plugin";
+      title: string;
+      pluginId: string;
+      view: string;
+      // B3 — 관찰된 cwd(복원 spawn 위치)·마지막 활동 시각(hydration 우선순위). 옵션(구 스냅샷 호환).
+      cwd?: string;
+      lastActivity?: number;
+    };
 
 interface ViewGroupSnapshot {
   id: string;
@@ -63,6 +72,9 @@ function serializeView(v: View): ViewSnapshot {
         title: v.title,
         pluginId: v.pluginId,
         view: v.view,
+        // B3 — 마지막 cwd·활동 시각은 복원의 실질(터미널이 그 자리에서 다시 시작).
+        ...(v.cwd ? { cwd: v.cwd } : {}),
+        ...(v.lastActivity ? { lastActivity: v.lastActivity } : {}),
       };
   }
 }
@@ -112,6 +124,8 @@ function deserializeView(s: ViewSnapshot, _newSplitId: () => string): View {
         title: s.title,
         pluginId: s.pluginId,
         view: s.view,
+        ...(s.cwd ? { cwd: s.cwd } : {}),
+        ...(s.lastActivity ? { lastActivity: s.lastActivity } : {}),
       };
   }
 }

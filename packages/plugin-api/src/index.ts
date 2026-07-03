@@ -134,6 +134,9 @@ export interface PluginViewContext {
    *  프로그램 선언(ContributedProgram.command)이 source. 뷰 종류 무관 채널 — 자동 실행 여부는
    *  뷰 구현이 결정한다(터미널 뷰만 PTY 로 실행). 명령 없으면 null. */
   command: string | null;
+  /** 복원 seam(B3) — 재시작 복원 마운트면 관찰됐던 런타임(cwd). 새 뷰는 null.
+   *  터미널 뷰는 restore.cwd 에서 spawn(마지막 작업 위치 복원). */
+  restore: { cwd: string | null } | null;
   setBadge: (badge: ViewBadge) => void;
   /** 이 뷰의 상태를 보고(R1) — null=회수. 콘텐츠 배치 뷰만 유효(close guard). */
   setStatus: (status: ViewStatus | null) => void;

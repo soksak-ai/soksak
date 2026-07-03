@@ -18,6 +18,9 @@ export interface PluginViewContext {
   // 프로그램 선언(ContributedProgram.command)이 source. 뷰 종류 무관 채널 — 자동 실행 여부는
   // 뷰 구현이 결정한다(터미널 뷰만 PTY 로 실행). 명령 없으면 null.
   command: string | null;
+  // 복원 seam(B3) — 이 마운트가 재시작 복원이면 관찰됐던 런타임(cwd 등)을 싣는다.
+  // 터미널 뷰는 restore.cwd 에서 spawn(마지막 작업 위치 복원). 새로 연 뷰는 null.
+  restore: { cwd: string | null } | null;
   // 이 뷰의 사이드바 탭 배지(읽지않음 표시). number=카운트, "dot"=점, null=해제.
   // 창마다 자체 store라 per-window(그 창의 활성 프로젝트 기준). 데이터는 app.data.watch 로 재계산.
   setBadge: (badge: number | "dot" | null) => void;
