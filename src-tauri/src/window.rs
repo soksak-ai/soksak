@@ -55,7 +55,12 @@ pub fn create_window(app: &AppHandle) -> Result<String, String> {
 // init = 새 창 부트 지시 쿼리스트링("root=<enc>" 등, '?' 제외). 새 창의 main.tsx 부트가
 // location.search 로 읽는다 — 창 생성자가 프론트 상태에 직접 손대지 않는 유일한 전달 통로
 // (창별 JS 컨텍스트 분리 원칙). 코어는 쿼리의 의미를 강제하지 않는다(부트가 해석).
+//
+// init 생략 = "fresh=1": 런타임에 만든 새 창은 새 세션이다 — 스냅샷 복원을 하지 않는다.
+// 라벨(win-<seq>)이 세션마다 재사용되므로, 복원을 허용하면 crash/SIGKILL 로 남은 옛
+// 스냅샷을 유령 복원한다(실측). 부트 복원 리스폰(B2)은 명시 쿼리로 별도 요청한다.
 pub fn create_window_init(app: &AppHandle, init: Option<&str>) -> Result<String, String> {
+    let init = init.or(Some("fresh=1"));
     // 새 창을 트리거한(현재 활성) 창의 위치·배율을 빌드 전에 캡처 — 빌드 후엔 새 창이 포커스를
     // 가져가 활성 창이 바뀐다. 단일 창("main") 하드코딩이 아니라 is_focused 로 동적 판정(MW1).
     // windows()(Window 레지스트리) — 브라우저 연 창도 포함해야 그 창에서 Cmd+N 한 경우 소스로 잡힌다.
@@ -114,6 +119,49 @@ pub fn create_window_init(app: &AppHandle, init: Option<&str>) -> Result<String,
     #[cfg(target_os = "macos")]
     install_window_natives(app, &label);
     Ok(label)
+}
+
+// ── 창 닫힘 의미론(B1) ───────────────────────────────────────────────────────
+// 명시 종료(Cmd+Q/app.exit)=전 창 세션 보존(재시작 복원 대상), 사용자 개별 닫기(빨간 버튼·
+// window.close)=그 창 세션 폐기. 폐기는 두 단계다: CloseRequested 에서 "사용자 닫기" 마크만
+// 남기고, 실제 정리는 Destroyed 에서 한다 — 웹뷰 unload(pagehide)의 마지막 저장이 정리 *뒤에*
+// 도착해 스냅샷을 부활시키는 순서 결함을 피한다(저장→파괴→정리 순서 보장). 앱 종료의 창
+// 파괴는 CloseRequested 를 지나지 않아 마크가 없고, 아무것도 지우지 않는다.
+
+static USER_CLOSED: std::sync::Mutex<Option<std::collections::HashSet<String>>> =
+    std::sync::Mutex::new(None);
+
+/// CloseRequested — 사용자가 이 창을 닫는 중임을 기록.
+pub fn mark_user_closed(label: &str) {
+    let mut g = USER_CLOSED.lock().unwrap();
+    g.get_or_insert_with(Default::default).insert(label.to_string());
+}
+
+/// Destroyed — 사용자 닫기였는지 회수(1회성). 앱 종료 경로는 false.
+pub fn take_user_closed(label: &str) -> bool {
+    let mut g = USER_CLOSED.lock().unwrap();
+    g.as_mut().map(|s| s.remove(label)).unwrap_or(false)
+}
+
+// 창 영속 흔적 정리 — 사용자 개별 닫기의 Destroyed 에서만 호출된다(위 의미론).
+// 지우는 것: ① 그 창의 워크스페이스 스냅샷(core kv "window/<label>") ② manifest("windows")의
+// 그 창 slot. 라벨은 세션마다 재사용(win-<seq> 리셋)되므로, 안 지우면 다음 세션의 새 창이
+// 옛 스냅샷을 유령 복원한다(실측 — C3 E2E 에서 픽커 창이 이전 세션 프로젝트로 부팅).
+pub fn prune_window_persistence(
+    conn: &rusqlite::Connection,
+    label: &str,
+) -> Result<(), String> {
+    crate::data::store::kv_delete(conn, "core", &format!("window/{label}"))?;
+    if let Some(mut m) = crate::data::store::kv_get(conn, "core", "windows")? {
+        if let Some(slots) = m.get_mut("slots").and_then(|s| s.as_array_mut()) {
+            let before = slots.len();
+            slots.retain(|s| s.get("label").and_then(|l| l.as_str()) != Some(label));
+            if slots.len() != before {
+                crate::data::store::kv_set(conn, "core", "windows", &m)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 // 열린 창 label 목록(소켓/CLI introspection — window 명시 타겟 조회). windows()(Window 레지스트리)
@@ -180,4 +228,33 @@ mod mw_rules {
              \"main\" 단일 창 가정 금지(새 창이 드래그·포커스 권한을 못 받는다)"
         );
     }
+    // B1 — 창 닫힘 시 영속 흔적 정리: 그 창의 스냅샷 kv 와 manifest slot 만 제거, 남의 것 보존.
+    #[test]
+    fn prune_window_persistence_removes_only_that_window() {
+        let c = rusqlite::Connection::open_in_memory().unwrap();
+        c.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        crate::data::init_base(&c).unwrap();
+        let set = |k: &str, v: serde_json::Value| {
+            crate::data::store::kv_set(&c, "core", k, &v).unwrap()
+        };
+        set("window/win-1", serde_json::json!({"activeId":"t1","projects":[{"id":"t1"}]}));
+        set("window/main", serde_json::json!({"activeId":"t9","projects":[{"id":"t9"}]}));
+        set(
+            "windows",
+            serde_json::json!({"slots":[
+                {"label":"win-1","roots":["/a"],"activeRoot":"/a"},
+                {"label":"main","roots":["/m"],"activeRoot":"/m"}
+            ]}),
+        );
+        super::prune_window_persistence(&c, "win-1").unwrap();
+        assert_eq!(crate::data::store::kv_get(&c, "core", "window/win-1").unwrap(), None);
+        assert!(crate::data::store::kv_get(&c, "core", "window/main").unwrap().is_some());
+        let m = crate::data::store::kv_get(&c, "core", "windows").unwrap().unwrap();
+        let slots = m["slots"].as_array().unwrap();
+        assert_eq!(slots.len(), 1);
+        assert_eq!(slots[0]["label"], "main");
+        // 멱등 — 없는 창 정리는 무해.
+        super::prune_window_persistence(&c, "win-1").unwrap();
+    }
+
 }

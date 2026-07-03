@@ -62,7 +62,8 @@ pub fn open(path: &Path) -> Result<Connection, String> {
 }
 
 // 기본 테이블(멱등). 컬렉션별 FTS/인덱스는 define() 이 동적 생성.
-fn init_base(conn: &Connection) -> Result<(), String> {
+// (테스트 픽스처에서 in-memory 스키마 초기화에 재사용 — window.rs prune 유닛)
+pub(crate) fn init_base(conn: &Connection) -> Result<(), String> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS kv (\
             ns TEXT NOT NULL, k TEXT NOT NULL, v TEXT NOT NULL, updated INTEGER NOT NULL,\

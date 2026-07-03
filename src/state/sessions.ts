@@ -146,6 +146,9 @@ export interface ProjectTab {
   // 프로젝트 루트 디렉토리(P1 루트 필수 — workspace.ts 헌법). 정체성 = 이
   // 경로(P4). 터미널 시작 위치이자 파일트리/git 의 기준.
   root: string;
+  // 복원 시 root 가 파일시스템에 없음(휘발 — 직렬화 제외). 탭은 유지하되 배너로 알리고
+  // 사용자가 정리한다(무단 삭제 금지 — B1 정합성). 경로가 돌아오면 재시작 복원에서 해소.
+  rootMissing?: boolean;
   // 프로젝트의 터미널 셸(미지정이면 전역 설정 shell → 시스템 $SHELL).
   shell?: string;
   // 프로젝트 식별 색(레일 칩/탭 강조). 미지정이면 테마 기본.

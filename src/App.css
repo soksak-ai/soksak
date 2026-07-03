@@ -3654,3 +3654,13 @@ select.dctl {
 .picker-item--open .picker-item-alias { opacity: 0.7; }
 .picker-item-owner { font-size: 11px; color: var(--acc); }
 .picker-actions { display: flex; justify-content: flex-end; }
+
+/* root 부재 격하 배너(B1) — 탭은 유지, 사용자에게 정리를 맡긴다(무단 삭제 금지). */
+.root-missing-banner {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--warn-fg, #b45309);
+  background: var(--warn-bg, rgba(245, 158, 11, 0.12));
+  border-bottom: 1px solid var(--bd-soft);
+}

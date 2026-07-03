@@ -210,12 +210,36 @@ pub fn run() {
                 // 창이 닫히면 그 창의 브라우저 child webview 를 회수한다 — 창 프론트가 사라지면 그 창
                 // browserGc 가 멈추고 다른 창 GC 는 접두사 필터로 안 건드리므로 child 가 좀비로 남는다.
                 // 창과 함께 죽어야 할 자식을 그 창 label 접두사(b-<label>-)로 골라 명시 정리.
+                // 사용자가 이 창을 닫는 중(빨간 버튼·Cmd+W·window.close 요청 경로) — 마크만 남긴다.
+                // 실제 영속 정리는 Destroyed 에서(B1 의미론, window.rs 머리말): 웹뷰 unload 의 마지막
+                // 저장(pagehide)이 정리 뒤에 도착해 스냅샷을 부활시키지 않도록 순서를 보장한다.
+                // 앱 종료(Cmd+Q/app.exit)의 창 파괴는 이 이벤트를 지나지 않아 세션이 보존된다.
+                tauri::WindowEvent::CloseRequested { .. } => {
+                    window::mark_user_closed(window.label());
+                }
                 tauri::WindowEvent::Destroyed => {
                     crate::sidecar::forget_window(window.label()); // 사이드카 surface 캐시 무효화(stale NSView 방지)
                     let app = window.app_handle();
                     // 프로젝트 전역 단일 오픈(P6): 죽은 창의 점유를 해제해 다른 창이 그 프로젝트를
                     // 열 수 있게 한다(해제 없으면 앱 재시작까지 유령 점유).
                     crate::project_registry::on_window_destroyed(&app, window.label());
+                    // 사용자 개별 닫기였다면 그 창의 세션 흔적(스냅샷 kv + manifest slot)을 폐기.
+                    if window::take_user_closed(window.label()) {
+                        let st = app.state::<data::DbState>();
+                        let guard = st.conn.lock();
+                        if let Ok(guard) = guard {
+                            if let Some(conn) = guard.as_ref() {
+                                if let Err(e) =
+                                    window::prune_window_persistence(conn, window.label())
+                                {
+                                    eprintln!(
+                                        "[persist] 창 흔적 정리 실패({}): {e}",
+                                        window.label()
+                                    );
+                                }
+                            }
+                        }
+                    }
                     let prefix = format!("b-{}-", window.label());
                     let orphans: Vec<String> = app
                         .webviews()
@@ -374,11 +398,14 @@ pub fn run() {
             // 멀티 윈도우 종료 규칙: 창이 하나라도 남아 있으면 앱을 종료하지 않는다 — 한 창을 닫아도
             // 다른 창은 살아야 한다. 실제 종료(PTY 자식 정리·소켓 정리)는 마지막 창이 닫혔을 때만.
             // (Tauri 기본은 ExitRequested 시 그대로 종료 — prevent_exit 로 비-마지막 창 종료를 막는다.)
-            if let tauri::RunEvent::ExitRequested { api, .. } = event {
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event {
                 // windows()(Window 레지스트리) — 브라우저 child 를 연 창은 멀티-webview 라
                 // webview_windows() 에서 빠진다. 그걸 쓰면 브라우저 연 창이 마지막 1개일 때 "창 없음"
                 // 으로 오판해 앱이 종료된다. 실제 OS 창 존재 여부는 windows() 가 진실.
-                if !app_handle.windows().is_empty() {
+                // code Some = 명시 종료(Cmd+Q 메뉴/app.exit) — 창이 남아 있어도 종료를 막지 않는다.
+                // 이 경로의 창 파괴는 CloseRequested 를 지나지 않아 전 창 세션(스냅샷·manifest)이
+                // 보존된다(B1: 종료=보존, 개별 닫기=폐기 — window.rs 의미론).
+                if code.is_none() && !app_handle.windows().is_empty() {
                     api.prevent_exit();
                     return;
                 }

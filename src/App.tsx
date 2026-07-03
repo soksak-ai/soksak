@@ -177,6 +177,11 @@ const ProjectPane = memo(function ProjectPane({
       <div
         className={`content${contentTabPosition === "left" ? " ctabs-left" : ""}`}
       >
+        {project.rootMissing && (
+          <div className="root-missing-banner" data-node="banner/root-missing">
+            {t("project.rootMissing", { root: project.root })}
+          </div>
+        )}
         <ContentTabs
           project={project}
           vertical={contentTabPosition === "left"}

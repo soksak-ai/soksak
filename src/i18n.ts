@@ -19,6 +19,7 @@ const ko = {
   "common.cancel": "취소",
 
   "picker.title": "프로젝트 열기",
+  "project.rootMissing": "프로젝트 폴더를 찾을 수 없습니다: {root} — 경로를 복구하거나 이 프로젝트를 닫으세요.",
   "picker.empty": "최근 프로젝트가 없습니다 — 새 프로젝트로 시작하세요.",
   "picker.openIn": "{window} 창에 열림",
 
@@ -230,6 +231,7 @@ const en: Record<MsgKey, string> = {
 
   "project.close": "Close project",
   "picker.title": "Open a project",
+  "project.rootMissing": "Project folder not found: {root} — restore the path or close this project.",
   "picker.empty": "No recent projects — start with a new project.",
   "picker.openIn": "open in {window}",
   "project.new": "New project",

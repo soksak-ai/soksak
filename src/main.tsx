@@ -64,7 +64,11 @@ async function boot(): Promise<void> {
   // 프로그래매틱 오픈(window.new{root}) — 창 생성자가 부트 지시를 URL 쿼리로 전달한다
   // (창별 JS 컨텍스트 분리의 유일한 통로). 지시가 있으면 복원보다 우선: 사용자 의도가
   // "이 창에서 그 프로젝트"이므로. claim 실패(생성↔부트 레이스)면 빈 창 → 픽커로 열화.
-  const initRoot = new URLSearchParams(window.location.search).get("root");
+  const bootParams = new URLSearchParams(window.location.search);
+  const initRoot = bootParams.get("root");
+  // fresh=1(런타임 새 창): 스냅샷 복원 금지 — 라벨(win-<seq>) 재사용이 crash 로 남은 옛
+  // 세션을 유령 복원하는 것을 차단한다(자동 저장은 켠다 — 이 창의 새 세션은 저장돼야 함).
+  const freshWindow = bootParams.get("fresh") === "1";
   if (initRoot) {
     try {
       const denied = await claimRoots([initRoot]);
@@ -84,7 +88,7 @@ async function boot(): Promise<void> {
   // (initRoot 로 이미 탭이 있으면 restoreProjects 는 멱등 no-op — 자동 저장 구독만 켜진다.)
   let restored = false;
   try {
-    restored = await initWorkspacePersistence();
+    restored = await initWorkspacePersistence({ skipRestore: freshWindow });
   } catch (e) {
     console.error("워크스페이스 영속 초기화 실패:", e);
   }

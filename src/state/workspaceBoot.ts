@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { makeCoreStore } from "./coreStore";
+import { validateProjectRoot } from "../lib/workspace";
 import { claimRoots } from "./projectRegistry";
 import {
   useSessions,
@@ -64,7 +65,10 @@ function debounce<A extends unknown[]>(
 }
 
 // 부트 1회. 복원 성공 시 true(호출부는 bootstrap 생략), 없으면 false(호출부 폴백).
-export async function initWorkspacePersistence(): Promise<boolean> {
+// skipRestore: 런타임 새 창(fresh=1) — 라벨 재사용의 유령 복원 차단(자동 저장만 켠다).
+export async function initWorkspacePersistence(
+  opts: { skipRestore?: boolean } = {},
+): Promise<boolean> {
   const label = currentWindowLabel();
   const winStore = makeCoreStore<WindowSnapshot>({
     key: `window/${label}`,
@@ -82,9 +86,21 @@ export async function initWorkspacePersistence(): Promise<boolean> {
   // 1) 복원
   let restored = false;
   try {
-    const snap = await winStore.hydrate();
+    const snap = opts.skipRestore ? EMPTY_WINDOW : await winStore.hydrate();
     if (snap.projects.length > 0) {
       const { tabs, activeId } = restoreWindow(snap, nextSplitIdGen);
+      // root 존재 검증 — 부재/무효 root 는 탭을 지우지 않고 rootMissing 으로 격하한다
+      // (무단 삭제 금지). 배너가 알리고, 경로가 돌아오면 다음 복원에서 자연 해소.
+      await Promise.all(
+        tabs.map(async (t) => {
+          try {
+            await validateProjectRoot(t.root);
+          } catch {
+            t.rootMissing = true;
+            console.warn(`[restore] 프로젝트 root 부재 — 격하 탭으로 복원: ${t.root}`);
+          }
+        }),
+      );
       // P6(전역 단일 오픈): 이 창 스냅샷의 root 들을 일괄 점유. 다른 창이 이미 점유한
       // root 의 탭은 이 창에서 드롭한다(같은 프로젝트 중복 창 금지 — 우아한 열화).
       const denied = await claimRoots(tabs.map((t) => t.root));
@@ -106,12 +122,16 @@ export async function initWorkspacePersistence(): Promise<boolean> {
     console.error("워크스페이스 복원 실패 — 기본 부트로 폴백:", e);
   }
 
-  // 2) 자동 저장 — 변경마다 디바운스(빠른 연속 변경 1회 저장).
-  const persist = debounce(() => {
+  // 2) 자동 저장 — 변경마다 디바운스(빠른 연속 변경 1회 저장). pagehide(창 닫힘·앱 종료
+  // 직전)에 잔여 기록을 즉시 flush — 디바운스 창(≤400ms) 내 종료의 마지막 변경 유실 방지
+  // (coreSync.ts 와 동일 패턴 — B1 정합성: 저장은 종료 시 flush 보장).
+  const doPersist = () => {
     const { tabs, activeId } = useSessions.getState();
     void persistNow(label, tabs, activeId, winStore, manifestStore);
-  }, 400);
+  };
+  const persist = debounce(doPersist, 400);
   useSessions.subscribe(persist);
+  window.addEventListener("pagehide", doPersist);
 
   return restored;
 }
