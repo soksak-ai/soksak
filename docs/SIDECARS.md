@@ -181,7 +181,8 @@ Rules:
 
 Requests: `create(x,y,w,h,url)→{id}`, `bounds(id,x,y,w,h)`, `load(id,url)`,
 `reload(id,ignoreCache)`, `back(id)`, `forward(id)`, `hidden(id,hidden)`,
-`focus(id)`, `close(id)`, `popup-mode(asWindow)`.
+`focus(id)`, `devtools(id)` (toggle — opens a separate native DevTools window),
+`close(id)`, `popup-mode(asWindow)`.
 Events: `{event:"popup-url", url, id}` — new-link routing when popup-mode is
 "tab"; `id` is the source browser so multi-window adapters consume only their
 own. Reserved (follow-up): `nav`, `title` (urlbar sync).
