@@ -22,6 +22,7 @@ mod secrets;
 mod titlebar;
 mod watcher;
 mod runtime_dep;
+mod project_registry;
 mod window;
 mod ws;
 
@@ -93,6 +94,7 @@ pub fn run() {
         .manage(secrets::SecretsState::default())
         .manage(ai_session::SessionTracker::default())
         .manage(schedule::ScheduleState::default())
+        .manage(project_registry::ProjectRegistry::default())
         .setup(|app| {
             // 범용 데이터 스토어(app.data) — 소켓 서버 이전에 연다(커맨드가 즉시 쓸 수 있도록).
             match data::db_path().and_then(|p| data::open(&p)) {
@@ -211,6 +213,9 @@ pub fn run() {
                 tauri::WindowEvent::Destroyed => {
                     crate::sidecar::forget_window(window.label()); // 사이드카 surface 캐시 무효화(stale NSView 방지)
                     let app = window.app_handle();
+                    // 프로젝트 전역 단일 오픈(P6): 죽은 창의 점유를 해제해 다른 창이 그 프로젝트를
+                    // 열 수 있게 한다(해제 없으면 앱 재시작까지 유령 점유).
+                    crate::project_registry::on_window_destroyed(&app, window.label());
                     let prefix = format!("b-{}-", window.label());
                     let orphans: Vec<String> = app
                         .webviews()
@@ -344,6 +349,9 @@ pub fn run() {
             webview::webview_dom_holes,
             webview::webview_debug_hierarchy,
             window_set_background,
+            project_registry::project_claim,
+            project_registry::project_release,
+            project_registry::project_owners,
             window::window_create,
             window::window_list,
             window::window_focus,

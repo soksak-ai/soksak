@@ -1233,7 +1233,7 @@ Create a new project. When root is omitted, folder (slug) is required — create
 | `root` | string |  | Project root directory (absolute path — home/root forbidden) |
 | `shell` | string |  | Terminal shell path (omit = global setting → $SHELL) |
 
-**Returns**: { projectId, contentId, groupId, viewId, paneId?, existing? }
+**Returns**: { projectId, contentId, groupId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — that window is focused instead)
 **Errors**: INVALID_PARAMS
 
 ```bash

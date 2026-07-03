@@ -17,6 +17,7 @@ import {
   type View,
   type ViewGroup,
 } from "../state/sessions";
+import { addProjectClaimed, closeProjectReleased } from "../state/projectRegistry";
 import { useSettings } from "../state/settings";
 import { useViewLabels } from "../state/viewLabels";
 import { useBookmarks } from "../state/bookmarks";
@@ -389,7 +390,8 @@ export function registerCatalog(): void {
       program: { ...P.program, description: "Initial view program (omit = empty content tab)" },
       shell: { type: "string", description: "Terminal shell path (omit = global setting → $SHELL)" },
     },
-    returns: "{ projectId, contentId, groupId, viewId, paneId?, existing? }",
+    returns:
+      "{ projectId, contentId, groupId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — that window is focused instead)",
     errors: ["INVALID_PARAMS"],
     examples: [
       'sok project.create \'{"root":"/Users/me/work","program":"claude"}\'',
@@ -421,7 +423,8 @@ export function registerCatalog(): void {
         root = await ensureDefaultWorkspace(folder);
       }
       // 루트 초기화 정책(git init 등)은 project.created 이벤트 구독 플러그인 소유.
-      return S().addProject({
+      // P6(전역 단일 오픈) 게이트 경유 — 다른 창 소유면 그 창 포커스 + existingWindow 반환.
+      return addProjectClaimed({
         alias,
         root,
         shell: p.shell as string | undefined,
@@ -438,7 +441,8 @@ export function registerCatalog(): void {
     returns: "{ activeProjectId }",
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
     examples: ['sok project.close \'{"project":"t2"}\''],
-    handler: (p) => S().closeTab(p.project as string),
+    // P6: 닫기 성공 시 전역 점유 해제(다른 창이 이 프로젝트를 열 수 있게).
+    handler: (p) => closeProjectReleased(p.project as string),
   });
 
   register("project.activate", {

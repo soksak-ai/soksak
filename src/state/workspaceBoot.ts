@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { makeCoreStore } from "./coreStore";
+import { claimRoots } from "./projectRegistry";
 import {
   useSessions,
   reseedIdCounters,
@@ -84,8 +85,21 @@ export async function initWorkspacePersistence(): Promise<boolean> {
     const snap = await winStore.hydrate();
     if (snap.projects.length > 0) {
       const { tabs, activeId } = restoreWindow(snap, nextSplitIdGen);
-      reseedIdCounters(tabs);
-      useSessions.getState().restoreProjects(tabs, activeId);
+      // P6(전역 단일 오픈): 이 창 스냅샷의 root 들을 일괄 점유. 다른 창이 이미 점유한
+      // root 의 탭은 이 창에서 드롭한다(같은 프로젝트 중복 창 금지 — 우아한 열화).
+      const denied = await claimRoots(tabs.map((t) => t.root));
+      const owned = tabs.filter((t) => !denied.has(t.root));
+      for (const t of tabs) {
+        if (denied.has(t.root))
+          console.warn(`[P6] 복원 탭 드롭(다른 창 점유): ${t.root}`);
+      }
+      const active = owned.some((t) => t.id === activeId)
+        ? activeId
+        : (owned[0]?.id ?? "");
+      reseedIdCounters(owned);
+      if (owned.length > 0) {
+        useSessions.getState().restoreProjects(owned, active);
+      }
       restored = useSessions.getState().tabs.length > 0;
     }
   } catch (e) {

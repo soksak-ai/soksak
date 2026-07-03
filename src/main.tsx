@@ -5,6 +5,7 @@ import { startWebviewGc } from "./lib/webviewGc";
 import { initPluginHost } from "./plugins/host";
 import { initNotify } from "./lib/notify";
 import { ensureDefaultWorkspace, validateProjectRoot } from "./lib/workspace";
+import { claimRoots } from "./state/projectRegistry";
 import { useSessions } from "./state/sessions";
 import { initWorkspacePersistence, coreStoreDeps } from "./state/workspaceBoot";
 import { initViewLabelsPersistence } from "./state/viewLabels";
@@ -81,7 +82,14 @@ async function boot(): Promise<void> {
         }
       }
       root ??= await ensureDefaultWorkspace("project1");
-      useSessions.getState().bootstrapFirstProject(root);
+      // P6(전역 단일 오픈): 기본 프로젝트도 점유를 지나서 연다. 다른 창이 이미 점유했으면
+      // (멀티창 부트 레이스) 이 창은 빈 채로 두고 사용자가 픽커/새 프로젝트로 시작한다.
+      const denied = await claimRoots([root]);
+      if (!denied.has(root)) {
+        useSessions.getState().bootstrapFirstProject(root);
+      } else {
+        console.warn(`[P6] 기본 프로젝트가 다른 창에 열려 있음 — 빈 창 시작: ${root}`);
+      }
     }
   } catch (e) {
     console.error("기본 프로젝트 루트 준비 실패:", e);

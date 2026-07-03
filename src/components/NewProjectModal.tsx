@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useSessions } from "../state/sessions";
+import { addProjectClaimed } from "../state/projectRegistry";
 import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
@@ -29,7 +29,6 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
   const t = useT();
   // 오버레이 등록 — 모달이 떠 있는 동안 브라우저 홀의 마우스 통과를 차단한다.
   useOverlayActive();
-  const addProject = useSessions((s) => s.addProject);
   const [mode, setMode] = useState<FolderMode>("auto");
   const [name, setName] = useState(""); // auto=폴더명(슬러그) / manual=별칭(자유)
   const [root, setRoot] = useState<string | undefined>(undefined);
@@ -75,7 +74,8 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
       mode === "auto" ? await ensureDefaultWorkspace(nameValue) : root!;
     // 루트 초기화 정책(git init 등)은 코어가 아니라 project.created 이벤트를
     // 구독하는 플러그인 소유(soksak-plugin-git-init) — 여기선 생성만.
-    addProject({
+    // P6(전역 단일 오픈) 게이트 — 다른 창에 열려 있으면 그 창이 포커스된다.
+    await addProjectClaimed({
       alias: nameValue, // 비면 makeProject 가 폴더명 폴백
       root: finalRoot,
       shell: shell.trim() || undefined,

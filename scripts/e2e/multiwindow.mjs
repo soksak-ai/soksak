@@ -154,6 +154,44 @@ async function main() {
   const end = await listLabels();
   ok(!end.includes(win) && end.length === before.length, `window.close → 원복 (${end.join(",")})`);
 
+  // 7) P6 전역 단일 오픈 — 같은 root 는 전 창 통틀어 1곳, 충돌은 소유 창 포커스,
+  //    닫기/창 파괴는 점유를 해제한다(project_registry.rs 시행의 소켓 검증).
+  {
+    const fs = await import("node:fs");
+    const root = path.join(os.tmpdir(), "soksak-e2e-p6");
+    fs.mkdirSync(root, { recursive: true });
+
+    const win2 = (await rpc("window.new")).label;
+    await waitFor(
+      async () => (await rpc("state.tree", {}, win2)).ok !== false,
+      12000,
+      "P6 창 부트",
+    );
+
+    const r1 = await rpc("project.create", { root }, "main");
+    ok(r1.ok === true && !!r1.projectId, `P6: main 에서 열기 (${r1.projectId})`);
+
+    const r2 = await rpc("project.create", { root }, win2);
+    ok(
+      r2.ok === true && r2.existingWindow === "main" && !r2.projectId,
+      `P6: ${win2} 중복 열기 → existingWindow=main(새 탭 없음)`,
+    );
+    await sleep(500); // window_focus → LAST_FOCUSED 갱신
+    ok((await tree()) === (await tree("main")), "P6: 충돌 시 소유 창(main) 포커스");
+
+    await rpc("project.close", { project: r1.projectId }, "main");
+    await sleep(300);
+    const r3 = await rpc("project.create", { root }, win2);
+    ok(r3.ok === true && !!r3.projectId, "P6: main 닫은 후(점유 해제) 다른 창 열기 성공");
+
+    // 창 파괴 = 그 창 점유 전부 해제(release_window) — 닫고 main 에서 재열기.
+    await rpc("window.close", { label: win2 });
+    await sleep(500);
+    const r4 = await rpc("project.create", { root }, "main");
+    ok(r4.ok === true && !!r4.projectId, "P6: 창 파괴 후 점유 해제 → main 재열기");
+    await rpc("project.close", { project: r4.projectId }, "main");
+  }
+
   console.log(`\n결과: ${pass} pass / ${fail} fail`);
   sock.end();
   process.exit(fail > 0 ? 1 : 0);

@@ -9,6 +9,7 @@ import {
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { invoke } from "@tauri-apps/api/core";
 import { listenThisWindow } from "./lib/windowEvents";
+import { closeProjectReleased } from "./state/projectRegistry";
 import { rafThrottle } from "./lib/rafThrottle";
 import { parkedStyle } from "./lib/layerPark";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
@@ -419,7 +420,6 @@ function App() {
   // zustand 액션은 create() 시점에 고정되는 안정 참조라 액션 셀렉터는 리렌더 없음.
   const tabs = useSessions((s) => s.tabs);
   const activeId = useSessions((s) => s.activeId);
-  const closeTab = useSessions((s) => s.closeTab);
   const setActive = useSessions((s) => s.setActive);
   const toggleSidebar = useSessions((s) => s.toggleSidebar);
   const toggleRightSidebar = useSessions((s) => s.toggleRightSidebar);
@@ -601,7 +601,7 @@ function App() {
               title={t("project.close")}
               onClick={(e) => {
                 e.stopPropagation();
-                closeTab(proj.id);
+                void closeProjectReleased(proj.id); // P6: 닫기 성공 시 전역 점유 해제
               }}
             >
               <Icon name="close" size="md" />
@@ -639,7 +639,7 @@ function App() {
           onDoubleClick={() => setProjectSettingsFor(proj.id)}
           onContextMenu={(e) => {
             e.preventDefault();
-            if (tabs.length > 1) closeTab(proj.id);
+            if (tabs.length > 1) void closeProjectReleased(proj.id); // P6 해제 동반
           }}
         >
           <span className="rail-chip-label">
