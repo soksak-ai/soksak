@@ -21,6 +21,7 @@ import {
   type PluginEventMap,
 } from "./hooks";
 import { gateContribution } from "./conformance";
+import { detectPlatform } from "./programRegistry";
 import {
   useViewRegistry,
   type PluginViewProvider,
@@ -755,6 +756,17 @@ function createSidecarApi(
       const decl = (manifest.sidecars ?? []).find((s) => s.name === name);
       if (!decl) {
         throw new Error(`매니페스트 sidecars 에 선언되지 않은 사이드카: ${name}`);
+      }
+      // 공급(lazy) — 선언에 reach 가 있으면 open 직전에 ensure(설치돼 있으면 즉시 present).
+      // sha256 핀·원자 설치·경로 파생은 전부 Rust 경계(sidecar_ensure) 소유.
+      if (decl.reach) {
+        const platform = detectPlatform();
+        const url = decl.reach.fetch.url[platform];
+        const sha256 = decl.reach.fetch.sha256[platform];
+        if (!url || !sha256) {
+          throw new Error(`sidecars["${name}"].reach: 플랫폼 ${platform} 항목 없음`);
+        }
+        await deps.invoke("sidecar_ensure", { name, url, sha256 });
       }
       const listeners = new Map<string, Set<(p: Record<string, unknown>) => void>>();
       const onEvent = new Channel<Record<string, unknown>>();

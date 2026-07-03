@@ -902,4 +902,27 @@ describe("parseManifest — sidecars(engine 모듈 의존 선언)", () => {
       ).manifest,
     ).toBeNull();
   });
+  it("reach.fetch(플랫폼 url+sha256) 수용", () => {
+    const reach = { fetch: { url: { darwin: "https://x/a.tar.gz" }, sha256: { darwin: "ab12" } } };
+    const { manifest, validation } = parseManifest(
+      base({ permissions: ["sidecar"], sidecars: [{ ...sc, reach }] }),
+      "demo",
+    );
+    expect(validation.ok).toBe(true);
+    expect(manifest?.sidecars?.[0].reach).toEqual(reach);
+  });
+  it("reach 는 fetch 전용 — command/vendor 거부", () => {
+    for (const reach of [
+      { command: { darwin: "brew install x" } },
+      { vendor: { path: "v/x", sha256: "ab" } },
+      { fetch: { url: { darwin: "u" }, sha256: { darwin: "s" } }, command: {} },
+    ]) {
+      expect(
+        parseManifest(
+          base({ permissions: ["sidecar"], sidecars: [{ ...sc, reach }] }),
+          "demo",
+        ).manifest,
+      ).toBeNull();
+    }
+  });
 });

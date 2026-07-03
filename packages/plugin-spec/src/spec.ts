@@ -467,6 +467,14 @@ export type ReachStrategy =
 export interface SidecarDep {
   name: string; // ^[a-z0-9][a-z0-9-]*$
   interface: string; // ^[a-z0-9][a-z0-9.-]*@[0-9]+$ (예: "soksak-engine-chromium@1")
+  // 공급(선택) — 미설치 시 sha256 핀 아카이브(dist tar.gz)를 받아 ~/.soksak/sidecars/에 설치.
+  // fetch 전용(사이드카는 command/vendor 비적용). 미선언이면 dev 스테이징(make) 전제.
+  reach?: {
+    fetch: {
+      url: Partial<Record<ProgramPlatform, string>>;
+      sha256: Partial<Record<ProgramPlatform, string>>;
+    };
+  };
 }
 
 export interface LibraryDep {
@@ -1016,7 +1024,7 @@ export function parseManifest(
           errors.push(`sidecars[${i}]: 객체여야 함`);
           return;
         }
-        checkKnownKeys(item, ["name", "interface"], `sidecars[${i}]`, errors);
+        checkKnownKeys(item, ["name", "interface", "reach"], `sidecars[${i}]`, errors);
         if (!isNonEmptyString(item.name) || !SIDECAR_NAME_RE.test(item.name)) {
           errors.push(`sidecars[${i}].name: ^[a-z0-9][a-z0-9-]*$ 필수`);
           return;
@@ -1025,7 +1033,25 @@ export function parseManifest(
           errors.push(`sidecars[${i}].interface: ^[a-z0-9][a-z0-9.-]*@[0-9]+$ 필수(예: soksak-engine-chromium@1)`);
           return;
         }
-        sidecars.push({ name: item.name.trim(), interface: item.interface.trim() });
+        const dep: SidecarDep = { name: item.name.trim(), interface: item.interface.trim() };
+        if (item.reach !== undefined) {
+          // 사이드카 공급은 fetch 전용 — command/vendor 는 라이브러리 축의 개념(사이드카 비적용).
+          if (
+            !isRecord(item.reach) ||
+            !("fetch" in item.reach) ||
+            Object.keys(item.reach).length !== 1 ||
+            !isRecord(item.reach.fetch) ||
+            validatePlatformMap(item.reach.fetch.url, `sidecars[${i}].reach.fetch.url`, errors) ||
+            validatePlatformMap(item.reach.fetch.sha256, `sidecars[${i}].reach.fetch.sha256`, errors)
+          ) {
+            if (!isRecord(item.reach) || !("fetch" in item.reach) || Object.keys(item.reach).length !== 1) {
+              errors.push(`sidecars[${i}].reach: { fetch: { url, sha256 } } 만 허용(fetch 전용)`);
+            }
+            return;
+          }
+          dep.reach = item.reach as SidecarDep["reach"];
+        }
+        sidecars.push(dep);
       });
       checkDuplicates(sidecars.map((s) => s.name), "sidecars[].name", errors);
       if (sidecars.length > 0 && !(raw.permissions as unknown[] | undefined)?.includes("sidecar")) {

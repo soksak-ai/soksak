@@ -194,3 +194,135 @@ mod tests {
         assert!(!r.ok);
     }
 }
+
+// ── 사이드카 아카이브 설치(fetch reach) ──────────────────────────────────────────────────────
+// tmp 다운로드 → sha256 핀 → tar 해제 → entry 존재 확인 → 원자적 rename. 실패는 어느 단계든
+// 목적지에 아무것도 남기지 않는다(download_verify 와 같은 무결성 우선 규칙).
+
+pub fn download_unpack_verify(
+    url: &str,
+    sha256: &str,
+    dest_dir: &Path,
+    entry: &str,
+) -> Result<(), String> {
+    let body = reqwest::blocking::get(url)
+        .map_err(|e| e.to_string())?
+        .bytes()
+        .map_err(|e| e.to_string())?;
+    unpack_verify_install(&body, sha256, dest_dir, entry)
+}
+
+// 순수부(네트워크 분리 — 유닛테스트 대상). dest_dir 이 이미 있으면 거부(멱등은 호출자가 entry
+// 존재로 판정). tmp 는 dest 형제(같은 파일시스템 = rename 원자성 보장).
+pub fn unpack_verify_install(
+    body: &[u8],
+    sha256: &str,
+    dest_dir: &Path,
+    entry: &str,
+) -> Result<(), String> {
+    let mut hasher = Sha256::new();
+    hasher.update(body);
+    let got: String = hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect();
+    if got != sha256.to_lowercase() {
+        return Err(format!("sha256 불일치: 기대={sha256} 실제={got}"));
+    }
+    if dest_dir.exists() {
+        return Err(format!("목적지 이미 존재: {}", dest_dir.display()));
+    }
+    let parent = dest_dir.parent().ok_or("목적지 부모 없음")?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let pid = std::process::id();
+    let tmp_archive = parent.join(format!(".fetch-{pid}.tar.gz"));
+    let tmp_dir = parent.join(format!(".unpack-{pid}"));
+    let cleanup = || {
+        let _ = fs::remove_file(&tmp_archive);
+        let _ = fs::remove_dir_all(&tmp_dir);
+    };
+    fs::write(&tmp_archive, body).map_err(|e| e.to_string())?;
+    fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
+    // 시스템 tar(bsdtar) — 프레임워크 내부 심링크·실행권한 보존.
+    let st = std::process::Command::new("/usr/bin/tar")
+        .arg("-xzf")
+        .arg(&tmp_archive)
+        .arg("-C")
+        .arg(&tmp_dir)
+        .status()
+        .map_err(|e| e.to_string())?;
+    if !st.success() {
+        cleanup();
+        return Err(format!("tar 해제 실패(exit {:?})", st.code()));
+    }
+    if !tmp_dir.join(entry).is_file() {
+        cleanup();
+        return Err(format!("아카이브에 entry 없음: {entry}"));
+    }
+    fs::rename(&tmp_dir, dest_dir).map_err(|e| {
+        cleanup();
+        format!("설치 rename 실패: {e}")
+    })?;
+    let _ = fs::remove_file(&tmp_archive);
+    Ok(())
+}
+
+#[cfg(test)]
+mod unpack_tests {
+    use super::*;
+
+    fn tmp_root(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("soksak-unpack-{}-{}", name, std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    // dest 내용물(top-level entry) 구조의 tar.gz 바이트 생성(시스템 tar) — 사이드카 dist 아카이브 계약.
+    fn make_archive(root: &std::path::Path) -> Vec<u8> {
+        let src = root.join("payload");
+        fs::create_dir_all(&src).unwrap();
+        fs::write(src.join("mod.dylib"), b"fake").unwrap();
+        let ar = root.join("a.tar.gz");
+        let st = std::process::Command::new("/usr/bin/tar")
+            .arg("-czf").arg(&ar).arg("-C").arg(&src).arg(".")
+            .status().unwrap();
+        assert!(st.success());
+        fs::read(&ar).unwrap()
+    }
+
+    fn sha_of(b: &[u8]) -> String {
+        let mut h = Sha256::new();
+        h.update(b);
+        h.finalize().iter().map(|x| format!("{:02x}", x)).collect()
+    }
+
+    #[test]
+    fn sha_mismatch_writes_nothing() {
+        let root = tmp_root("sha");
+        let body = make_archive(&root);
+        let dest = root.join("installed");
+        let err = unpack_verify_install(&body, "deadbeef", &dest, "mod.dylib").unwrap_err();
+        assert!(err.contains("sha256 불일치"));
+        assert!(!dest.exists());
+    }
+
+    #[test]
+    fn valid_archive_installs_atomically() {
+        let root = tmp_root("ok");
+        let body = make_archive(&root);
+        let dest = root.join("installed");
+        unpack_verify_install(&body, &sha_of(&body), &dest, "mod.dylib").unwrap();
+        assert!(dest.join("mod.dylib").is_file());
+        // 재설치는 목적지 존재로 거부(멱등 판정은 호출자가 entry 존재로 — sidecar_ensure)
+        let err = unpack_verify_install(&body, &sha_of(&body), &dest, "mod.dylib").unwrap_err();
+        assert!(err.contains("이미 존재"));
+    }
+
+    #[test]
+    fn missing_entry_writes_nothing() {
+        let root = tmp_root("entry");
+        let body = make_archive(&root);
+        let dest = root.join("installed");
+        let err = unpack_verify_install(&body, &sha_of(&body), &dest, "other.dylib").unwrap_err();
+        assert!(err.contains("entry 없음"));
+        assert!(!dest.exists());
+    }
+}

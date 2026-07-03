@@ -378,6 +378,33 @@ pub fn sidecar_send(
     }
 }
 
+// 사이드카 공급(fetch reach) — 미설치면 sha256 핀 아카이브(dist tar.gz)를 받아 설치. 멱등:
+// entry(dylib) 존재 = "present" 즉시 반환. 경로는 이름에서만 파생(경로 주입 없음 — traversal 가드).
+// app.sidecar.open 직전에 어댑터가 부른다(lazy 공급 — 선언에 reach 있을 때만).
+#[tauri::command]
+pub fn sidecar_ensure(name: String, url: String, sha256: String) -> Result<String, String> {
+    if !valid_name(&name) {
+        return Err(format!("사이드카 이름 형식 오류: {name}"));
+    }
+    let home = dirs_home().ok_or("홈 디렉토리를 찾을 수 없음")?;
+    // dest = dist 디렉토리 자체(아카이브 = dist 내용물). 사이드카 루트는 이미 존재할 수 있다
+    // (백업·데이터) — 원자 rename 의 대상은 항상 새로 생기는 dist 다.
+    let dest = home
+        .join(".soksak")
+        .join("sidecars")
+        .join(format!("soksak-sidecar-{name}"))
+        .join("dist");
+    let entry = format!("soksak-sidecar-{name}.dylib");
+    if dest.join(&entry).is_file() {
+        return Ok("present".into());
+    }
+    eprintln!("[sidecar:{name}] fetch 설치 시작: {url}");
+    crate::runtime_dep::download_unpack_verify(&url, &sha256, &dest, &entry)
+        .inspect_err(|e| eprintln!("[sidecar:{name}] fetch 설치 실패: {e}"))?;
+    eprintln!("[sidecar:{name}] fetch 설치 완료: {}", dest.display());
+    Ok("fetched".into())
+}
+
 #[tauri::command]
 pub fn sidecar_close(name: String, handle: u64) -> Result<(), String> {
     let module = get_module(&name)?;

@@ -352,6 +352,7 @@ pub fn run() {
             sidecar::sidecar_open,
             sidecar::sidecar_send,
             sidecar::sidecar_close,
+            sidecar::sidecar_ensure,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

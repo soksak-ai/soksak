@@ -161,3 +161,11 @@ sidecar-chromium: ## Chromium 엔진 사이드카 빌드+스테이지(dev) → ~
 	if [ -z "$$fw" ]; then echo "framework 미발견(cef 빌드 산출물 없음)"; exit 1; fi; \
 	ln -sfn "$$(cd "$$(dirname "$$fw")" && pwd)/Chromium Embedded Framework.framework" "$$dist/Chromium Embedded Framework.framework"; \
 	echo "스테이지 완료: $$dist (helper 변형 5종)"
+
+sidecar-chromium-archive: sidecar-chromium ## 배포 아카이브(dist "내용물" tar.gz, 심링크 해소) + sha256 출력(매니페스트 핀용)
+	@root="$$HOME/.soksak/sidecars/soksak-sidecar-chromium"; \
+	ver=$$(grep '^version' crates/soksak-sidecar-chromium/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/'); \
+	out="crates/soksak-sidecar-chromium/target/soksak-sidecar-chromium-$$ver-darwin-arm64.tar.gz"; \
+	/usr/bin/tar -czLf "$$out" -C "$$root/dist" .; \
+	echo "아카이브: $$out"; \
+	shasum -a 256 "$$out" | awk '{print "sha256: "$$1}'
