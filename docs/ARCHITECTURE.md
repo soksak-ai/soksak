@@ -2,6 +2,8 @@
 
 This is the authoritative v1 architecture contract for soksak. It is binding on the core (the skeleton) and on every plugin. Where this document and code disagree, fix the code. Where this document and a single-source-of-truth schema disagree, the schema wins for what it can enforce and this document wins for everything it cannot.
 
+Korean copy: [ARCHITECTURE.ko.md](ARCHITECTURE.ko.md) — the English text is canonical.
+
 ---
 
 ## 1. Identity and Purpose
