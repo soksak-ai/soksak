@@ -71,6 +71,11 @@ export function computeLayout(node: GroupNode): {
 
 const titleOf = (v: View | undefined): string => (v ? v.title : "");
 
+// divider 리사이즈 드래그 중복 시작 가드. divider 가 네이티브 child 없는 gap 위면 실제 DOM mousedown
+// 과, 코어 네이티브-마우스 브릿지(App.tsx)가 재생하는 합성 mousedown 이 둘 다 도착할 수 있다 — 먼저
+// 온 하나만 드래그를 소유하고 나머지는 무시(window 리스너 이중 등록 방지). 한 번에 divider 하나만 드래그.
+let resizeDragActive = false;
+
 // memo 경계 = content 데이터 경계(원칙 2): content X 의 store 쓰기는 content Y 의
 // 객체 정체성을 보존(mapContent)하므로 다른 컨텐츠/프로젝트의 GroupArea 는 건너뛴다.
 export const GroupArea = memo(function GroupArea({
@@ -276,12 +281,14 @@ export const GroupArea = memo(function GroupArea({
 
   const onDividerDown = (d: Divider) => (e: React.MouseEvent) => {
     e.preventDefault();
+    if (resizeDragActive) return; // 중복 시작(DOM + 네이티브 합성) 무시.
     const cont = containerRef.current;
     if (!cont) return;
     const contRect = cont.getBoundingClientRect();
     const totalPx = d.dir === "row" ? contRect.width : contRect.height;
     const splitPx = (totalPx * d.spanPct) / 100;
     if (splitPx <= 0) return;
+    resizeDragActive = true; // 실제 드래그 개시 확정 후에만(위 early-return 은 잠그지 않음).
     const startPos = d.dir === "row" ? e.clientX : e.clientY;
     const startSizes = [...d.sizes];
     const i = d.index;
@@ -308,6 +315,7 @@ export const GroupArea = memo(function GroupArea({
       window.removeEventListener("mouseup", onUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      resizeDragActive = false;
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);

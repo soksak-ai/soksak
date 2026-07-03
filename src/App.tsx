@@ -315,16 +315,55 @@ function App() {
   // elementFromPoint 로 판정해 그룹을 활성화한다. 모달 등이 위에 떠 있으면
   // 그 요소가 잡혀 자연 차단되고, DOM 클릭과 중복돼도 같은 결과라 무해.
   useEffect(() => {
-    // 이 창에 emit_to 된 native-mousedown 만 받는다(전역 listen 이면 다른 창 클릭도 받아
-    // 엉뚱한 창의 그룹을 활성화). lib/windowEvents 머리말 참조.
-    return listenThisWindow<{ x: number; y: number }>("native-mousedown", (e) => {
-      const el = document.elementFromPoint(e.payload.x, e.payload.y);
+    // 이 창에 emit_to 된 native-mouse* 만 받는다(전역 listen 이면 다른 창 이벤트도 받아 엉뚱한 창을
+    // 건드림). lib/windowEvents 머리말 참조.
+    //
+    // 두 역할: (1) 포커스 — mousedown 좌표의 그룹 활성화. (2) 분할 divider 리사이즈 — 네이티브 child
+    // (브라우저 등)는 OS 뷰라 그 위의 mousedown/move/up 이 DOM 에 오지 않아, 그 위를 지나는 divider 를
+    // 드래그로 못 잡는다. 좌표의 divider(elementFromPoint 는 DOM 만 보므로 네이티브 위여도 divider 반환)
+    // 에 합성 마우스 이벤트를 재생해 기존 드래그 로직(GroupArea 의 window mousemove/up 리스너)을 그대로
+    // 구동한다 → gap 이나 child 숨김 없이, 화면을 꽉 채운 채 리사이즈. GroupArea 가 중복 시작을 가드한다
+    // (divider 가 gap 위면 실제 DOM 이벤트와 이 합성이 겹칠 수 있음).
+    const fire = (target: EventTarget, type: string, x: number, y: number) =>
+      target.dispatchEvent(
+        new MouseEvent(type, {
+          clientX: x,
+          clientY: y,
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          buttons: type === "mouseup" ? 0 : 1,
+        }),
+      );
+    let dragging = false;
+    const offDown = listenThisWindow<{ x: number; y: number }>("native-mousedown", (e) => {
+      const { x, y } = e.payload;
+      const el = document.elementFromPoint(x, y);
+      const divider = el?.closest<HTMLElement>(".egroup-divider");
+      if (divider) {
+        dragging = true;
+        fire(divider, "mousedown", x, y);
+        return;
+      }
       const slot = el?.closest<HTMLElement>("[data-group-id]");
       const { groupId, projectId } = slot?.dataset ?? {};
       if (groupId && projectId) {
         useSessions.getState().setActiveGroup(projectId, groupId);
       }
     });
+    const offMove = listenThisWindow<{ x: number; y: number }>("native-mousemove", (e) => {
+      if (dragging) fire(window, "mousemove", e.payload.x, e.payload.y);
+    });
+    const offUp = listenThisWindow<{ x: number; y: number }>("native-mouseup", (e) => {
+      if (!dragging) return;
+      dragging = false;
+      fire(window, "mouseup", e.payload.x, e.payload.y);
+    });
+    return () => {
+      offDown();
+      offMove();
+      offUp();
+    };
   }, []);
 
   // 구독 최소 원칙(docs/PERFORMANCE.md 1): 필드/액션별 셀렉터만 — bare 훅 금지.

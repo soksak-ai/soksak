@@ -1053,7 +1053,7 @@ fn label_for_nswindow(app: &AppHandle, ns_ptr: usize) -> Option<String> {
 pub fn install_click_monitor(app: &AppHandle) {
     use objc2::rc::Retained;
     use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSEvent, NSEventMask};
+    use objc2_app_kit::{NSEvent, NSEventMask, NSEventType};
 
     #[derive(Clone, Serialize)]
     struct ClickPayload {
@@ -1066,6 +1066,17 @@ pub fn install_click_monitor(app: &AppHandle) {
         move |event: std::ptr::NonNull<NSEvent>| -> *mut NSEvent {
             unsafe {
                 let ev = event.as_ref();
+                // Down/Dragged/Up 을 각각 native-mousedown/native-mousemove/native-mouseup 으로 브릿지한다.
+                // 왜 3종인가: 네이티브 child(브라우저 등)는 OS 뷰라 그 위의 mousedown/move/up 이 DOM 에 오지
+                // 않는다 → 그 위를 지나는 분할 divider 를 드래그로 리사이즈할 수 없다. 좌표를 프론트에 넘겨
+                // 프론트가 divider 판정+합성 이벤트로 드래그를 구동하게 한다. 이벤트는 통과(동작 불변).
+                // move/up 은 버튼 누른 드래그(LeftMouseDragged) 동안만 흐르므로 IPC 폭주 없음(hover 는 제외).
+                let name = match ev.r#type() {
+                    NSEventType::LeftMouseDown => "native-mousedown",
+                    NSEventType::LeftMouseDragged => "native-mousemove",
+                    NSEventType::LeftMouseUp => "native-mouseup",
+                    _ => return event.as_ptr(),
+                };
                 // 모니터 콜백은 메인 스레드에서 호출된다(AppKit 이벤트 루프).
                 let Some(mtm) = MainThreadMarker::new() else {
                     return event.as_ptr();
@@ -1076,12 +1087,8 @@ pub fn install_click_monitor(app: &AppHandle) {
                         if let Some(view) = win.contentView() {
                             let h = view.frame().size.height;
                             let loc = ev.locationInWindow();
-                            // 그 창에만 emit_to — 프론트는 자기 창 클릭만 받아 필터가 불필요.
-                            let _ = handle.emit_to(
-                                &label,
-                                "native-mousedown",
-                                ClickPayload { x: loc.x, y: h - loc.y },
-                            );
+                            // 그 창에만 emit_to — 프론트는 자기 창 이벤트만 받아 필터가 불필요.
+                            let _ = handle.emit_to(&label, name, ClickPayload { x: loc.x, y: h - loc.y });
                         }
                     }
                 }
@@ -1089,8 +1096,10 @@ pub fn install_click_monitor(app: &AppHandle) {
             }
         },
     );
-    let monitor =
-        unsafe { NSEvent::addLocalMonitorForEventsMatchingMask_handler(NSEventMask::LeftMouseDown, &block) };
+    let mask = NSEventMask(
+        NSEventMask::LeftMouseDown.0 | NSEventMask::LeftMouseDragged.0 | NSEventMask::LeftMouseUp.0,
+    );
+    let monitor = unsafe { NSEvent::addLocalMonitorForEventsMatchingMask_handler(mask, &block) };
     // 모니터는 앱 수명 동안 유지 — drop 되면 해제되므로 의도적으로 leak.
     std::mem::forget(monitor);
 }
