@@ -305,12 +305,18 @@ export function registerDomCatalog(): void {
     returns: "{ tag, className, data, rect } | { tag: null }",
     handler: (p) => {
       const el = document.elementFromPoint(Number(p.x), Number(p.y));
-      if (!(el instanceof HTMLElement)) return { tag: null };
+      if (!(el instanceof Element)) return { tag: null };
       const r = el.getBoundingClientRect();
+      // SVG 의 className 은 SVGAnimatedString — getAttribute 로 통일. 조상 체인의 데이터도 유용해
+      // 가장 가까운 [data-node]/[class] 보유 HTML 조상을 closest 로 함께 보고한다.
+      const host = el.closest<HTMLElement>("[data-node], button, a, [class]");
       return {
         tag: el.tagName.toLowerCase(),
-        className: el.className,
-        data: { ...el.dataset },
+        className: el.getAttribute("class") ?? "",
+        data: el instanceof HTMLElement ? { ...el.dataset } : {},
+        host: host
+          ? { tag: host.tagName.toLowerCase(), className: host.className, data: { ...host.dataset } }
+          : null,
         rect: { x: +r.x.toFixed(1), y: +r.y.toFixed(1), w: +r.width.toFixed(1), h: +r.height.toFixed(1) },
       };
     },
