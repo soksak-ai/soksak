@@ -1,4 +1,8 @@
-# 워크스페이스 영속·복원 + folderpop + 우측 사이드바 밀기 — 설계 플랜
+# 워크스페이스 영속·복원 — 설계 플랜 (참조 전환)
+
+> **원칙 정본은 [docs/RESTORE.md](../docs/RESTORE.md)** (한글본 [docs/RESTORE.ko.md](../docs/RESTORE.ko.md)) 로 이관됐다.
+> 이 파일은 당시 설계 이력(왜·무엇을·어떻게 결정했는가)의 기록으로만 남는다 — 규칙의 이중진실 금지.
+
 
 > 브랜치: `feat/workspace-restore`. 전수조사(워크플로 6감사, file:line 근거)에서 출발.
 
