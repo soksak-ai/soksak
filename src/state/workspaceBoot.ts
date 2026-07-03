@@ -8,6 +8,11 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import {
+  getCurrentWindow,
+  LogicalPosition,
+  LogicalSize,
+} from "@tauri-apps/api/window";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { makeCoreStore } from "./coreStore";
 import { validateProjectRoot } from "../lib/workspace";
@@ -23,9 +28,32 @@ import {
   restoreWindow,
   windowManifestEntry,
   upsertManifest,
+  setManifestFocused,
   type WindowSnapshot,
   type WindowManifest,
 } from "./workspacePersistence";
+
+// 이 창의 프레임(논리 px) — manifest rect 기록용. 실패는 rect 생략(복원은 OS 기본 위치).
+async function currentFrame(): Promise<
+  { x: number; y: number; w: number; h: number } | undefined
+> {
+  try {
+    const win = getCurrentWindow();
+    const [pos, size, scale] = await Promise.all([
+      win.outerPosition(),
+      win.outerSize(),
+      win.scaleFactor(),
+    ]);
+    return {
+      x: Math.round(pos.x / scale),
+      y: Math.round(pos.y / scale),
+      w: Math.round(size.width / scale),
+      h: Math.round(size.height / scale),
+    };
+  } catch {
+    return undefined;
+  }
+}
 
 // core ns data-change → coreStore 가 기대하는 (key)=>void. kv 키는 페이로드 id 필드.
 function coreOnDataChange(cb: (key: string) => void): () => void {
@@ -132,6 +160,10 @@ export async function initWorkspacePersistence(
   const persist = debounce(doPersist, 400);
   useSessions.subscribe(persist);
   window.addEventListener("pagehide", doPersist);
+  // 창 이동/리사이즈도 저장 트리거(B2 rect) — sessions 변화가 아니라 위 구독이 못 잡는다.
+  // 네이티브 이벤트 기반(폴링 0), 같은 디바운스로 coalesce.
+  void getCurrentWindow().onMoved(persist);
+  void getCurrentWindow().onResized(persist);
 
   return restored;
 }
@@ -146,10 +178,63 @@ async function persistNow(
   try {
     await winStore.save(snapshotWindow(tabs, activeId));
     const manifest = await manifestStore.hydrate();
-    await manifestStore.save(
-      upsertManifest(manifest, windowManifestEntry(label, tabs, activeId)),
-    );
+    // 창 프레임(B2) — 리스폰이 같은 자리·크기로 되살린다(듀얼 모니터 배치 유지).
+    const entry = { ...windowManifestEntry(label, tabs, activeId), rect: await currentFrame() };
+    let next = upsertManifest(manifest, entry);
+    // 마지막 포커스 창(B2) — 재시작 후 그 창을 앞으로.
+    if (document.hasFocus()) next = setManifestFocused(next, label);
+    await manifestStore.save(next);
   } catch (e) {
     console.error("워크스페이스 저장 실패:", e);
+  }
+}
+
+// 멀티윈도우 리스폰(B2) — main 창 부트가 1회 호출: manifest 의 다른 slot 창들을 라벨 그대로
+// 되살린다(각 창은 자기 스냅샷을 스스로 복원). 스냅샷 없는 유령 slot(B1 이전 잔재·수동 삭제)은
+// 건너뛰고 manifest 에서 정리한다. 스폰이 포커스를 차례로 뺏으므로, 마지막에 focusedLabel 을
+// 1회 포커스해 사용자가 마지막으로 보던 창이 앞으로 온다.
+export async function respawnSavedWindows(): Promise<void> {
+  if (currentWindowLabel() !== "main") return; // 리스폰 소유자는 main 부트 하나(멱등 가드)
+  const manifestStore = makeCoreStore<WindowManifest>({
+    key: "windows",
+    lsKey: "soksak.windows",
+    fallback: EMPTY_MANIFEST,
+    ...coreStoreDeps,
+  });
+  try {
+    let manifest = await manifestStore.hydrate();
+    let pruned = false;
+    for (const slot of manifest.slots.filter((s) => s.label !== "main")) {
+      const snapStore = makeCoreStore<WindowSnapshot>({
+        key: `window/${slot.label}`,
+        lsKey: `soksak.window.${slot.label}`,
+        fallback: EMPTY_WINDOW,
+        ...coreStoreDeps,
+      });
+      const snap = await snapStore.hydrate();
+      if (snap.projects.length === 0) {
+        manifest = upsertManifest(manifest, { ...slot, roots: [] }); // slot 제거
+        pruned = true;
+        console.warn(`[restore] 유령 slot 정리(스냅샷 없음): ${slot.label}`);
+        continue;
+      }
+      await invoke("window_create", {
+        label: slot.label,
+        rect: slot.rect ?? null,
+      }).catch((e) => console.error(`창 리스폰 실패(${slot.label}):`, e));
+    }
+    if (pruned) await manifestStore.save(manifest);
+    // main 자신의 프레임 복원 + 마지막 포커스 창 전면.
+    const mainSlot = manifest.slots.find((s) => s.label === "main");
+    if (mainSlot?.rect) {
+      const win = getCurrentWindow();
+      await win.setPosition(new LogicalPosition(mainSlot.rect.x, mainSlot.rect.y)).catch(() => {});
+      await win.setSize(new LogicalSize(mainSlot.rect.w, mainSlot.rect.h)).catch(() => {});
+    }
+    if (manifest.focusedLabel) {
+      await invoke("window_focus", { label: manifest.focusedLabel }).catch(() => {});
+    }
+  } catch (e) {
+    console.error("멀티윈도우 리스폰 실패:", e);
   }
 }

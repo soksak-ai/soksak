@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  setManifestFocused,
   snapshotWindow,
   restoreWindow,
   windowManifestEntry,
@@ -89,5 +90,27 @@ describe("upsertManifest", () => {
   it("빈 roots = slot 제거(창 닫힘)", () => {
     const r = upsertManifest(base, { label: "main", roots: [], activeRoot: null });
     expect(r.slots).toEqual([]);
+  });
+});
+
+describe("manifest rect·focused (B2 멀티윈도우 복원)", () => {
+  it("entry 에 rect 를 실으면 upsert 가 보존한다", () => {
+    const m = upsertManifest(
+      { slots: [] },
+      { label: "win-1", roots: ["/a"], activeRoot: "/a", rect: { x: 10, y: 20, w: 800, h: 600 } },
+    );
+    expect(m.slots[0].rect).toEqual({ x: 10, y: 20, w: 800, h: 600 });
+  });
+
+  it("focusedLabel 은 manifest 최상위 — setManifestFocused 로 갱신·유지", () => {
+    let m: WindowManifest = { slots: [] };
+    m = upsertManifest(m, { label: "main", roots: ["/m"], activeRoot: "/m" });
+    m = setManifestFocused(m, "main");
+    expect(m.focusedLabel).toBe("main");
+    // 다른 창 upsert 가 focusedLabel 을 지우지 않는다.
+    m = upsertManifest(m, { label: "win-1", roots: ["/a"], activeRoot: "/a" });
+    expect(m.focusedLabel).toBe("main");
+    m = setManifestFocused(m, "win-1");
+    expect(m.focusedLabel).toBe("win-1");
   });
 });

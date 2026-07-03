@@ -24,10 +24,14 @@ export interface ManifestEntry {
   label: string;
   roots: string[];
   activeRoot: string | null;
+  // 창 프레임(논리 px) — 재시작 리스폰이 같은 자리·크기로 창을 만든다(듀얼 모니터 배치 유지).
+  rect?: { x: number; y: number; w: number; h: number };
 }
 
 export interface WindowManifest {
   slots: ManifestEntry[];
+  // 마지막 포커스 창 — 재시작 후 그 창을 앞으로(없으면 main 이 무조건 앞이라 어색).
+  focusedLabel?: string;
 }
 
 // 창의 현재 sessions 상태 → 직렬화 스냅샷(창 단위).
@@ -69,6 +73,14 @@ export function upsertManifest(
   entry: ManifestEntry,
 ): WindowManifest {
   const others = manifest.slots.filter((s) => s.label !== entry.label);
-  if (entry.roots.length === 0) return { slots: others };
-  return { slots: [...others, entry] };
+  if (entry.roots.length === 0) return { ...manifest, slots: others };
+  return { ...manifest, slots: [...others, entry] };
+}
+
+// 마지막 포커스 창 기록 — persist 시 이 창이 포커스면 호출(최상위 필드라 slot upsert 와 독립).
+export function setManifestFocused(
+  manifest: WindowManifest,
+  label: string,
+): WindowManifest {
+  return { ...manifest, focusedLabel: label };
 }

@@ -38,9 +38,38 @@ pub fn install_window_natives(app: &AppHandle, label: &str) {
 
 // 새 창 생성(소켓 명령 window.new 의 핸들러). 본체는 create_window 가 소유 — Dock 메뉴 등 명령 밖
 // 호출처와 공용이다.
+//
+// label/rect = 재시작 복원 리스폰(B2) 전용: manifest slot 의 라벨을 그대로 재사용해 그 창의
+// 스냅샷 키("window/<label>")가 일치하게 하고, 저장된 프레임(논리 px)으로 같은 자리에 만든다.
+// label 지정 창은 fresh 기본이 붙지 않는다(복원이 목적). 이미 존재하는 label 은 멱등(그대로 반환).
 #[tauri::command]
-pub fn window_create(app: AppHandle, init: Option<String>) -> Result<String, String> {
-    create_window_init(&app, init.as_deref())
+pub fn window_create(
+    app: AppHandle,
+    init: Option<String>,
+    label: Option<String>,
+    rect: Option<serde_json::Value>,
+) -> Result<String, String> {
+    match label {
+        None => create_window_init(&app, init.as_deref()),
+        Some(label) => {
+            if app.get_window(&label).is_some() {
+                return Ok(label); // 멱등 — 리스폰 재호출 무해
+            }
+            // 라벨 충돌 방지: win-N 재사용 시 이후 런타임 창이 같은 N 을 다시 뽑지 않게 상향.
+            if let Some(n) = label.strip_prefix("win-").and_then(|s| s.parse::<usize>().ok()) {
+                let _ = WIN_SEQ.fetch_max(n + 1, Ordering::Relaxed);
+            }
+            let r = rect.as_ref().and_then(|v| {
+                Some((
+                    v.get("x")?.as_f64()?,
+                    v.get("y")?.as_f64()?,
+                    v.get("w")?.as_f64()?,
+                    v.get("h")?.as_f64()?,
+                ))
+            });
+            create_window_labeled(&app, &label, r, init.as_deref())
+        }
+    }
 }
 
 // 새 창 생성(기존 시그니처 유지 — Dock 메뉴 등 init 불요 호출부).
@@ -71,6 +100,38 @@ pub fn create_window_init(app: &AppHandle, init: Option<&str>) -> Result<String,
         .and_then(|w| Some((w.outer_position().ok()?, w.scale_factor().ok()?)));
 
     let label = format!("win-{}", WIN_SEQ.fetch_add(1, Ordering::Relaxed));
+    create_window_core(app, &label, init)?;
+
+    // 활성 창에서 가로·세로 ~1cm(28pt) 캐스케이드 — 정확히 겹치면 새 창이 떴는지 눈으로 알 수 없다.
+    // 물리 좌표를 배율로 나눠 논리 좌표로 환산 → 어느 DPI 든 시각적 1cm. 소스 창이 없으면 OS 기본 위치.
+    if let (Some((pos, scale)), Some(win)) = (src, app.get_window(&label)) {
+        const CASCADE_PT: f64 = 28.0; // ~1cm (72pt = 1in = 2.54cm)
+        let _ = win.set_position(tauri::LogicalPosition::new(
+            pos.x as f64 / scale + CASCADE_PT,
+            pos.y as f64 / scale + CASCADE_PT,
+        ));
+    }
+    Ok(label)
+}
+
+// 재시작 복원 리스폰(B2) — manifest slot 라벨로 창을 만들고 저장된 프레임(논리 px)을 적용한다.
+// 캐스케이드 없음(제자리 복원). fresh 기본 없음(이 창의 스냅샷 복원이 목적).
+fn create_window_labeled(
+    app: &AppHandle,
+    label: &str,
+    rect: Option<(f64, f64, f64, f64)>,
+    init: Option<&str>,
+) -> Result<String, String> {
+    create_window_core(app, label, init)?;
+    if let (Some((x, y, w, h)), Some(win)) = (rect, app.get_window(label)) {
+        let _ = win.set_position(tauri::LogicalPosition::new(x, y));
+        let _ = win.set_size(tauri::LogicalSize::new(w, h));
+    }
+    Ok(label.to_string())
+}
+
+// 창 생성 공용 골격 — conf windows[0] 상속 + label 교체 + init 쿼리 + 네이티브 설치.
+fn create_window_core(app: &AppHandle, label: &str, init: Option<&str>) -> Result<(), String> {
     // 메인 창 설정(tauri.conf.json windows[0])을 통째로 상속하고 label 만 교체한다 — 타이틀·
     // titleBarStyle·hiddenTitle·신호등·decorations·transparent 등 모든 속성이 메인과 정합한다.
     // 수동 빌더로 일부 속성만 옮기면 conf 와 어긋난다(타이틀 "soksak" 고정, 드래그영역/장식 손실).
@@ -82,7 +143,7 @@ pub fn create_window_init(app: &AppHandle, init: Option<&str>) -> Result<String,
         .first()
         .cloned()
         .ok_or_else(|| "창 설정 없음(tauri.conf.json windows[0])".to_string())?;
-    cfg.label = label.clone();
+    cfg.label = label.to_string();
     if let Some(q) = init {
         // conf url(App("index.html") | External(devUrl))에 부트 지시 쿼리 부여.
         use tauri::WebviewUrl;
@@ -105,20 +166,10 @@ pub fn create_window_init(app: &AppHandle, init: Option<&str>) -> Result<String,
         .build()
         .map_err(|e| e.to_string())?;
 
-    // 활성 창에서 가로·세로 ~1cm(28pt) 캐스케이드 — 정확히 겹치면 새 창이 떴는지 눈으로 알 수 없다.
-    // 물리 좌표를 배율로 나눠 논리 좌표로 환산 → 어느 DPI 든 시각적 1cm. 소스 창이 없으면 OS 기본 위치.
-    if let (Some((pos, scale)), Some(win)) = (src, app.get_window(&label)) {
-        const CASCADE_PT: f64 = 28.0; // ~1cm (72pt = 1in = 2.54cm)
-        let _ = win.set_position(tauri::LogicalPosition::new(
-            pos.x as f64 / scale + CASCADE_PT,
-            pos.y as f64 / scale + CASCADE_PT,
-        ));
-    }
-
     // 이 창에 네이티브 설치(레이어 역전·신호등) — main 과 동일한 단일 진입점.
     #[cfg(target_os = "macos")]
-    install_window_natives(app, &label);
-    Ok(label)
+    install_window_natives(app, label);
+    Ok(())
 }
 
 // ── 창 닫힘 의미론(B1) ───────────────────────────────────────────────────────
