@@ -1,0 +1,36 @@
+# 릴리즈 — tag(v*) push 시 사이드카 dist 아카이브를 빌드해 GitHub Release 자산으로 올린다.
+# 소비측(플러그인 manifest sidecars[].reach.fetch = 이 자산 URL + sha256 핀)은 코어에 구현·검증 완료.
+# 버전업 = Cargo.toml version + tag 하나. (이 워크플로는 크레이트가 자기 repo 로 분리될 때 그대로
+# 이동한다 — 메인 repo 안에서는 실행되지 않는 동봉 템플릿.)
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  release-darwin-arm64:
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build --release
+      - name: Stage dist
+        run: ./stage.sh /tmp/dist
+      - name: Archive (+sha256)
+        id: archive
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          out="soksak-sidecar-chromium-$ver-darwin-arm64.tar.gz"
+          /usr/bin/tar -czLf "$out" -C /tmp/dist .
+          shasum -a 256 "$out" | tee "$out.sha256"
+          echo "asset=$out" >> "$GITHUB_OUTPUT"
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --generate-notes \
+            "${{ steps.archive.outputs.asset }}" \
+            "${{ steps.archive.outputs.asset }}.sha256"
