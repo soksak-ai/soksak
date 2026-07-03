@@ -6,28 +6,32 @@
 // 것만 회수한다(다른 창 것 종료 금지). 소유 뷰 "집합"이 변한 경우에만 네이티브 질의(webview_list)
 // — 드래그 등 무관한 store 쓰기는 문자열 비교 한 번으로 끝난다(docs/PERFORMANCE.md 원칙 5).
 //
-// child webview(Backend N surface)를 소유하는 콘텐츠 뷰는 native 브라우저 엔진 플러그인 뷰다
-// (kind:"plugin", pluginId ∈ WEBVIEW_OWNER_PLUGIN_IDS) — `browserLabel(view.id)` 로 child webview 를
-// 만든다(app.webview.label = browserLabel). owner 는 집합으로 두어 향후 OS-webview 계열 엔진이 늘어도
-// (예: 별도 webview 변형) 확장 가능하게 한다.
+// child webview(native surface)를 소유하는 뷰는 코어가 이름으로 알지 않는다 — 플러그인이 매니페스트
+// contributes.views[].nativeSurface=true 로 "선언"하고(spec 데이터 주도), 여기는 그 선언에서 파생한
+// ownsSurface 술어로만 판정한다. 코어에 플러그인 id 하드코딩 = 강결합(플러그인/코어 분리 원칙 위반).
 
 import { invoke } from "@tauri-apps/api/core";
 import { rafThrottle } from "./rafThrottle";
 import { allGroups, useSessions, type ProjectTab } from "../state/sessions";
+import { usePlugins } from "../state/plugins";
 import { browserLabel, browserLabelPrefix } from "./webviewLabels";
 
-// child webview(Backend N = OS native webview)를 소유하는 브라우저 엔진 플러그인 id 집합. 그 콘텐츠
-// 뷰는 app.webview.open 으로 `browserLabel(viewId)` webview 를 만든다. OSR 엔진(soksak-plugin-browser
-// -osr)은 native child webview 를 만들지 않고 DOM canvas 에 그리므로(Backend O) 여기 없다.
-const WEBVIEW_OWNER_PLUGIN_IDS: ReadonlySet<string> = new Set([
-  "soksak-plugin-browser-native",
-]);
+// "플러그인 pluginId 의 뷰 viewId 가 native child surface 를 소유하는가" — 매니페스트 선언의 술어형.
+export type OwnsSurface = (pluginId: string, viewId: string) => boolean;
 
-// 순수 — tabs 에서 webview 를 소유하는 모든 뷰의 label 집합. 레거시 브라우저 뷰와 브라우저 플러그인
-// 콘텐츠 뷰를 모두 센다(둘 다 browserLabel(view.id) 로 같은 webview 를 만든다). labelOf 주입으로
-// 창 네임스페이스(currentWindowLabel)에 의존하지 않는 단위검증이 가능하다.
+// 실런타임 술어 — 로드된 플러그인 매니페스트(usePlugins)의 nativeSurface 선언에서 파생.
+// 미로드/미선언 = 비소유(선언 없이 소유 없음 — declared≡actual 원칙의 GC 면).
+function ownsSurfaceFromManifests(pluginId: string, viewId: string): boolean {
+  const p = usePlugins.getState().plugins[pluginId];
+  if (!p) return false;
+  return p.manifest.contributes.views.some((v) => v.id === viewId && v.nativeSurface);
+}
+
+// 순수 — tabs 에서 webview 를 소유하는(선언한) 모든 뷰의 label 집합. ownsSurface/labelOf 주입으로
+// 플러그인 상태·창 네임스페이스(currentWindowLabel)에 의존하지 않는 단위검증이 가능하다.
 export function collectWebviewLabels(
   tabs: readonly ProjectTab[],
+  ownsSurface: OwnsSurface,
   labelOf: (viewId: string) => string = browserLabel,
 ): Set<string> {
   const live = new Set<string>();
@@ -35,8 +39,8 @@ export function collectWebviewLabels(
     for (const c of t.contents) {
       for (const g of allGroups(c.layout)) {
         for (const v of g.views) {
-          // 브라우저 엔진 플러그인 콘텐츠 뷰 — browserLabel(view.id) 스킴으로 child webview/surface 소유.
-          if (v.kind === "plugin" && WEBVIEW_OWNER_PLUGIN_IDS.has(v.pluginId))
+          // nativeSurface 선언 뷰 — browserLabel(view.id) 스킴으로 child webview/surface 소유.
+          if (v.kind === "plugin" && ownsSurface(v.pluginId, v.view))
             live.add(labelOf(v.id));
         }
       }
@@ -46,7 +50,7 @@ export function collectWebviewLabels(
 }
 
 function liveBrowserLabels(): Set<string> {
-  return collectWebviewLabels(useSessions.getState().tabs);
+  return collectWebviewLabels(useSessions.getState().tabs, ownsSurfaceFromManifests);
 }
 
 let started = false;
@@ -57,6 +61,9 @@ export function startWebviewGc(): void {
 
   let lastKey: string | null = null;
   const sweep = rafThrottle(() => {
+    // 매니페스트 미적재(부팅 직후·플러그인 스캔 전) 동안은 판정 불가 — live=∅ 오판으로 HMR 생존
+    // webview 를 잘못 회수할 수 있다. 선언이 실릴 때까지 보류(usePlugins 구독이 적재 시 재발화).
+    if (Object.keys(usePlugins.getState().plugins).length === 0) return;
     const live = liveBrowserLabels();
     const key = [...live].sort().join(",");
     if (key === lastKey) return;
@@ -77,5 +84,6 @@ export function startWebviewGc(): void {
   });
 
   useSessions.subscribe(() => sweep());
-  sweep(); // 기동 직후 1회(HMR/이전 상태 잔재 회수)
+  usePlugins.subscribe(() => sweep()); // 매니페스트 적재/변경 시 재판정(부팅 보류 해제 포함)
+  sweep(); // 기동 직후 1회(HMR/이전 상태 잔재 회수 — 매니페스트 적재 전이면 보류)
 }

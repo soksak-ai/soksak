@@ -1,11 +1,12 @@
 // webviewGc — webview 회수 불변식의 순수 핵(collectWebviewLabels) 단위검증.
-// 불변식: live label 집합 = native 브라우저 엔진 플러그인 콘텐츠 뷰(kind:"plugin", pluginId ∈ owner
-// 집합: soksak-plugin-browser-native — Backend N OS webview 소유). OSR 엔진은 비소유(DOM canvas).
+// 불변식: live label 집합 = "native surface 소유를 매니페스트로 선언한"(contributes.views[].
+// nativeSurface=true) 플러그인 콘텐츠 뷰 집합. 소유는 하드코딩 id 가 아니라 선언(ownsSurface 술어)
+// 에서 온다 — 코어가 특정 플러그인 이름을 알면 강결합(플러그인/코어 분리 원칙 위반).
 // 이 형태를 못 세면 살아있는 webview 를 고아로 오인해 회수하거나(잘못된 회수), 죽은 webview 를
 // 못 잡는다(고아 누수).
 
 import { describe, expect, it } from "vitest";
-import { collectWebviewLabels } from "./webviewGc";
+import { collectWebviewLabels, type OwnsSurface } from "./webviewGc";
 import { splitLeaf } from "../state/splitTree";
 import type { ProjectTab, View, ViewGroup, ContentArea } from "../state/sessions";
 
@@ -13,6 +14,17 @@ import type { ProjectTab, View, ViewGroup, ContentArea } from "../state/sessions
 // 인라인 템플릿이 아니라 문자열 결합으로 구성한다(단일 진실 가드는 인라인 템플릿만 막는다 —
 // 이건 실제 label 스킴 재정의가 아니라 주입형 테스트 더블).
 const labelOf = (viewId: string) => "b-".concat(viewId);
+
+// 선언 더블 — 매니페스트 contributes.views[].nativeSurface 의 형상 그대로:
+// pluginId → (플러그인 내 view id → nativeSurface). 실런타임 술어는 usePlugins 매니페스트에서 파생.
+const decls: Record<string, Record<string, boolean>> = {
+  "soksak-plugin-browser-native": { content: true },
+  // 프레임 스트리밍류 엔진: 뷰는 있으나 native child surface 를 만들지 않음(DOM canvas) — 비소유 선언.
+  "soksak-plugin-browser-canvas": { content: false },
+  "soksak-plugin-terminal": { content: false },
+};
+const ownsSurface: OwnsSurface = (pluginId, viewId) =>
+  decls[pluginId]?.[viewId] === true;
 
 function group(views: View[]): ViewGroup {
   return { id: "g1", views, activeViewId: views[0]?.id ?? "" };
@@ -36,75 +48,76 @@ function tab(views: View[]): ProjectTab {
   };
 }
 
-const pluginBrowser = (id: string): View => ({
+const pluginView = (id: string, pluginId: string, view = "content"): View => ({
   id,
   kind: "plugin",
-  title: "B",
-  pluginId: "soksak-plugin-browser-native",
-  view: "content",
+  title: "P",
+  pluginId,
+  view,
 });
 
-// OSR 엔진은 native child webview 를 만들지 않는다(DOM canvas 에 그림) — GC 소유 뷰가 아니다.
-const pluginBrowserOsr = (id: string): View => ({
-  id,
-  kind: "plugin",
-  title: "O",
-  pluginId: "soksak-plugin-browser-osr",
-  view: "content",
-});
-
-// 터미널 = 터미널 플러그인 뷰(코어 터미널 제거). webviewGc 는 브라우저 플러그인만 센다.
-const terminal = (id: string): View => ({
-  id,
-  kind: "plugin",
-  title: "T",
-  pluginId: "soksak-plugin-terminal",
-  view: "content",
-});
-
-const otherPlugin = (id: string): View => ({
-  id,
-  kind: "plugin",
-  title: "X",
-  pluginId: "soksak-plugin-other",
-  view: "content",
-});
-
-describe("collectWebviewLabels — webview 소유 뷰 label 집합", () => {
-  it("브라우저 플러그인 콘텐츠 뷰의 label 을 센다(누락하면 고아 오인 회수 — 회귀 가드)", () => {
-    const live = collectWebviewLabels([tab([pluginBrowser("v2")])], labelOf);
+describe("collectWebviewLabels — 선언(nativeSurface) 기반 webview 소유 뷰 label 집합", () => {
+  it("nativeSurface 선언 뷰의 label 을 센다(누락하면 고아 오인 회수 — 회귀 가드)", () => {
+    const live = collectWebviewLabels(
+      [tab([pluginView("v2", "soksak-plugin-browser-native")])],
+      ownsSurface,
+      labelOf,
+    );
     expect([...live]).toEqual(["b-v2"]);
   });
 
-  it("webview 비소유 뷰(터미널·다른 플러그인)는 세지 않는다", () => {
+  it("비소유 선언 뷰(터미널·미선언 플러그인)는 세지 않는다", () => {
     const live = collectWebviewLabels(
-      [tab([terminal("v3"), otherPlugin("v4")])],
+      [tab([pluginView("v3", "soksak-plugin-terminal"), pluginView("v4", "soksak-plugin-other")])],
+      ownsSurface,
       labelOf,
     );
     expect(live.size).toBe(0);
   });
 
-  it("native 와 OSR 공존 시 native 만 센다(OSR 은 DOM canvas — GC 대상 아님)", () => {
+  it("소유·비소유 엔진 공존 시 선언된 쪽만 센다", () => {
     const live = collectWebviewLabels(
-      [tab([pluginBrowser("v1"), pluginBrowserOsr("v2")])],
+      [
+        tab([
+          pluginView("v1", "soksak-plugin-browser-native"),
+          pluginView("v2", "soksak-plugin-browser-canvas"),
+        ]),
+      ],
+      ownsSurface,
       labelOf,
     );
     expect(live).toEqual(new Set(["b-v1"]));
   });
 
-  it("OSR 엔진 뷰는 native surface 비소유라 세지 않는다(DOM canvas — GC 대상 아님)", () => {
-    const live = collectWebviewLabels([tab([pluginBrowserOsr("v5")])], labelOf);
+  it("nativeSurface=false 선언 뷰는 세지 않는다(DOM canvas 류 — GC 대상 아님)", () => {
+    const live = collectWebviewLabels(
+      [tab([pluginView("v5", "soksak-plugin-browser-canvas")])],
+      ownsSurface,
+      labelOf,
+    );
     expect(live.size).toBe(0);
   });
 
-  it("여러 콘텐츠/그룹에 흩어진 브라우저 플러그인 뷰를 전부 모은다", () => {
+  it("같은 플러그인이라도 선언 안 된 view id 는 세지 않는다(뷰 단위 선언)", () => {
+    const live = collectWebviewLabels(
+      [tab([pluginView("v6", "soksak-plugin-browser-native", "settings")])],
+      ownsSurface,
+      labelOf,
+    );
+    expect(live.size).toBe(0);
+  });
+
+  it("여러 콘텐츠/그룹에 흩어진 소유 뷰를 전부 모은다", () => {
     const t: ProjectTab = {
-      ...tab([pluginBrowser("v1")]),
-      contents: [content([pluginBrowser("v1")]), content([pluginBrowser("v2")])],
+      ...tab([pluginView("v1", "soksak-plugin-browser-native")]),
+      contents: [
+        content([pluginView("v1", "soksak-plugin-browser-native")]),
+        content([pluginView("v2", "soksak-plugin-browser-native")]),
+      ],
     };
     // 두 번째 content 의 id 충돌 회피
     t.contents[1] = { ...t.contents[1], id: "c2" };
-    const live = collectWebviewLabels([t], labelOf);
+    const live = collectWebviewLabels([t], ownsSurface, labelOf);
     expect(live).toEqual(new Set(["b-v1", "b-v2"]));
   });
 });

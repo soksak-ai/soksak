@@ -337,6 +337,10 @@ export interface ContributedView {
   // 콘텐츠 뷰 아래 네이티브 레이어(임베드 webview 등)가 비쳐야 함 — 코어가 그 셀을 투명 홀로 처리한다.
   // 브라우저류 뷰(child webview 임베드)가 선언한다(코어 하드 체크 없음 — 데이터 주도). 기본 false.
   transparent: boolean; // 파싱 시 기본 false
+  // 이 뷰가 코어 호스팅 native child surface(app.webview 의 child webview)를 소유함 — "수명주기"
+  // 선언. transparent(합성 — 셀을 홀로 뚫음)와 별개 축. 코어 webviewGc 가 이 선언에서 고아 회수
+  // 대상을 파생한다(코어에 플러그인 id 하드코딩 금지 — 데이터 주도). 기본 false.
+  nativeSurface: boolean; // 파싱 시 기본 false
 }
 
 export interface ContributedCommand {
@@ -1152,7 +1156,7 @@ export function parseManifest(
       views = parseEntries(c.views, {
         label: "contributes.views",
         required: ["id", "title", "icon"],
-        optional: ["placements", "defaultPlacement", "transparent"],
+        optional: ["placements", "defaultPlacement", "transparent", "nativeSurface"],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
             errs.push("contributes.views: id 는 ^[a-z0-9][a-z0-9-]*$");
@@ -1194,6 +1198,14 @@ export function parseManifest(
             }
             transparent = v.transparent;
           }
+          let nativeSurface = false;
+          if (v.nativeSurface !== undefined) {
+            if (typeof v.nativeSurface !== "boolean") {
+              errs.push(`contributes.views["${v.id}"].nativeSurface: boolean`);
+              return null;
+            }
+            nativeSurface = v.nativeSurface;
+          }
           return {
             id: v.id.trim(),
             title: normalizeText(v.title as LocalizedText),
@@ -1201,6 +1213,7 @@ export function parseManifest(
             placements,
             defaultPlacement,
             transparent,
+            nativeSurface,
           };
         },
       }, errors);
