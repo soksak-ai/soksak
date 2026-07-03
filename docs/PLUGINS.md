@@ -198,7 +198,7 @@ EEXIST 류)·`BROKEN`(dangling 심링크/probe 실패)·`VERSION_MISMATCH`(minVe
 ```json
 "permissions": ["sidecar"],
 "sidecars": [
-  { "name": "chromium", "interface": "soksak-browser-engine@1",
+  { "name": "chromium", "interface": "soksak-sidecar-browser@1",
     "reach": { "fetch": { "url": { "darwin": "https://…/dist.tar.gz" },
                            "sha256": { "darwin": "<hex>" } } } }
 ]

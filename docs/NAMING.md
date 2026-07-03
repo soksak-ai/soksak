@@ -111,7 +111,19 @@ belong to the third-party crate and were never rename targets.
 
 Mechanical check for the §2 ruling: `grep -riE "\bcef\b" src src-tauri/src packages`
 must return zero hits. Documented exceptions where the string legitimately lives:
-this file (the ruling must name what it bans), `crates/soksak-sidecar-chromium/`
+this file (the ruling must name what it bans), the `soksak-ai/soksak-sidecar-chromium` repo
 (the importing crate: dep line, `use cef`, attribution README), and third-party
 API names inside that crate. Substring false positives (`sourceFromState`,
 `graceful`) require word-boundary matching.
+
+## 8. Sidecar Interface Ids
+
+A sidecar interface id (the protocol handshake string) is derived, never invented:
+`soksak-sidecar-<domain>@<major>` — it reuses the existing `soksak-sidecar-*` name
+family (no third family), names the protocol *domain* (browser), never the
+implementation (chromium — a protocol-compatible replacement engine must not have
+to self-report someone else's name) and never the model (`engine` is the model
+axis; models are machine-encoded, banned from names — SIDECARS.md §1). The
+mandatory `@<major>` makes it syntactically disjoint from sidecar directory
+names. Its sole job is the version handshake between independently-shipped
+artifacts (plugin JS ↔ engine dylib); it appears nowhere else.

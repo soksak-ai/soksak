@@ -141,12 +141,16 @@ stop: ## 실행 중인 개발 스택 전체 종료(tauri 바이너리 + tauri.js
 	@pids=$$(lsof -ti :1420 2>/dev/null); [ -n "$$pids" ] && kill $$pids 2>/dev/null || true
 	@echo "개발 서버 종료(tauri + Vite)."
 
-sidecar-chromium: ## Chromium 엔진 사이드카 빌드+스테이지(dev) → ~/.soksak/sidecars/soksak-sidecar-chromium/dist
-	cd crates/soksak-sidecar-chromium && cargo build --release && ./stage.sh "$$HOME/.soksak/sidecars/soksak-sidecar-chromium/dist"
+# 사이드카 소스 = 독립 repo(단일진실), 홈 = ~/.soksak/sidecars/<이름>(플러그인 단일 폴더 모델과 동형).
+SIDECAR_CHROMIUM_HOME := $(HOME)/.soksak/sidecars/soksak-sidecar-chromium
+
+sidecar-chromium: ## Chromium 엔진 사이드카 빌드+스테이지(dev) — 소스·dist 모두 사이드카 홈
+	@test -d "$(SIDECAR_CHROMIUM_HOME)/src" || { echo "사이드카 소스 없음 — git clone https://github.com/soksak-ai/soksak-sidecar-chromium \"$(SIDECAR_CHROMIUM_HOME)\""; exit 1; }
+	cd "$(SIDECAR_CHROMIUM_HOME)" && cargo build --release && ./stage.sh dist
 sidecar-chromium-archive: sidecar-chromium ## 배포 아카이브(dist "내용물" tar.gz, 심링크 해소) + sha256 출력(매니페스트 핀용)
 	@root="$$HOME/.soksak/sidecars/soksak-sidecar-chromium"; \
-	ver=$$(grep '^version' crates/soksak-sidecar-chromium/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/'); \
-	out="crates/soksak-sidecar-chromium/target/soksak-sidecar-chromium-$$ver-darwin-arm64.tar.gz"; \
+	ver=$$(grep '^version' "$(SIDECAR_CHROMIUM_HOME)/Cargo.toml" | head -1 | sed 's/.*"\(.*\)"/\1/'); \
+	out="$(SIDECAR_CHROMIUM_HOME)/target/soksak-sidecar-chromium-$$ver-darwin-arm64.tar.gz"; \
 	/usr/bin/tar -czLf "$$out" -C "$$root/dist" .; \
 	echo "아카이브: $$out"; \
 	shasum -a 256 "$$out" | awk '{print "sha256: "$$1}'

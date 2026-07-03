@@ -849,7 +849,7 @@ describe("scanHostChromeViolations — 호스트 크롬 표준 정적 게이트"
 });
 
 describe("parseManifest — sidecars(engine 모듈 의존 선언)", () => {
-  const sc = { name: "chromium", interface: "soksak-browser-engine@1" };
+  const sc = { name: "chromium", interface: "soksak-sidecar-browser@1" };
   it("유효한 sidecars 수용(sidecar 권한 동반)", () => {
     const { manifest, validation } = parseManifest(
       base({ permissions: ["sidecar"], sidecars: [sc] }),

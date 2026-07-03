@@ -64,7 +64,7 @@ no unwinding crosses the boundary in either direction; a trapped panic returns -
 ```rust
 #[repr(C)] struct SoksakSidecarEngineAbi {
     abi: u32,                 // hosting ABI version — core accepts exactly 1
-    interface: *const c_char, // e.g. "soksak-browser-engine@1"
+    interface: *const c_char, // e.g. "soksak-sidecar-browser@1"
     version: *const c_char,   // crate semver (diagnostics)
 }
 fn soksak_sidecar_engine_abi() -> *const SoksakSidecarEngineAbi;    // self-description handshake
@@ -123,7 +123,7 @@ Plugins declare sidecars in the manifest (top-level, parallel to `libraries`):
 ```json
 "permissions": ["sidecar"],
 "sidecars": [
-  { "name": "chromium", "interface": "soksak-browser-engine@1",
+  { "name": "chromium", "interface": "soksak-sidecar-browser@1",
     "reach": { "fetch": { "url": { "darwin": "https://.../dist.tar.gz" },
                            "sha256": { "darwin": "<hex>" } } } }
 ]
@@ -154,10 +154,11 @@ prompt via its in-memory profile).
 
 ## 7. Authoring an engine sidecar
 
-Skeleton (see `crates/soksak-sidecar-chromium` — the reference implementation):
+Skeleton (see the `soksak-ai/soksak-sidecar-chromium` repo — the reference
+implementation; its dev checkout lives at the sidecar home):
 
 ```
-crates/soksak-sidecar-<name>/
+soksak-sidecar-<name>/   (independent repo; dev checkout = the sidecar home)
   Cargo.toml          # cdylib (+ helper [[bin]] if the engine spawns subprocesses)
   src/lib.rs          # ABI surface: exports above, catch_unwind edges, JSON dispatch
   src/engine.rs       # the engine itself
@@ -176,7 +177,7 @@ Rules:
   renderers from the `" Helper (Renderer).app"` sibling bundle and fails
   silently without it.
 
-## 8. Chromium engine protocol — `soksak-browser-engine@1`
+## 8. Chromium engine protocol — `soksak-sidecar-browser@1`
 
 Requests: `create(x,y,w,h,url)→{id}`, `bounds(id,x,y,w,h)`, `load(id,url)`,
 `reload(id,ignoreCache)`, `back(id)`, `forward(id)`, `hidden(id,hidden)`,

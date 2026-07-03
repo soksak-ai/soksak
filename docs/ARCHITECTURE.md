@@ -200,8 +200,9 @@ primitive (`src-tauri/src/sidecar.rs`, `app.sidecar`; ABI in docs/SIDECARS.md).
 
 **MOVES (verbatim, A16):** the whole engine — GCD message pump with re-entrancy guards, the
 gated render tick, `do_close=1` + deferred-reap close sequence, in-memory profile, popup
-routing, child bounds/flip-y. `src-tauri/src/cef_engine.rs` → `crates/soksak-sidecar-chromium
-/src/engine.rs` (git mv).
+routing, child bounds/flip-y. `src-tauri/src/cef_engine.rs` → the standalone repo
+`soksak-ai/soksak-sidecar-chromium` (`src/engine.rs`; dev checkout lives at the sidecar
+home `~/.soksak/sidecars/soksak-sidecar-chromium`).
 
 **Seams only:** ① bootstrap — env-pointed framework/helper paths became dist-relative
 (own-location resolution), and the browser process no longer re-executes as its own
@@ -209,7 +210,7 @@ subprocess (a dedicated helper binary owns `execute_process`); ② events — th
 `app.emit("cef-popup")` became a host-vtable emit on the per-caller channel, carrying the
 source browser id; ③ control — the `browser.cef.*` registry commands and `cef_browser_*`
 invokes were **deleted**, replaced by the opaque plugin↔sidecar protocol
-(`soksak-browser-engine@1`) the skeleton relays without understanding.
+(`soksak-sidecar-browser@1`) the skeleton relays without understanding.
 
 **Ruling:** the skeleton links zero Chromium/CEF (the `cef-browser` cargo feature is gone);
 the consumed library's name lives only inside the engine crate (NAMING.md §2). Verified by
