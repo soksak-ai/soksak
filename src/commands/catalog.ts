@@ -386,7 +386,7 @@ export function registerCatalog(): void {
           "Required when root is omitted — ^[a-z0-9][a-z0-9-]*$, used as ~/.soksak/projects/<folder>",
       },
       alias: { type: "string", description: "Tab alias (omit = folder name)" },
-      program: { ...P.program, description: "Initial view program (omit = global default)" },
+      program: { ...P.program, description: "Initial view program (omit = empty content tab)" },
       shell: { type: "string", description: "Terminal shell path (omit = global setting → $SHELL)" },
     },
     returns: "{ projectId, contentId, groupId, viewId, paneId?, existing? }",
@@ -425,6 +425,7 @@ export function registerCatalog(): void {
         alias,
         root,
         shell: p.shell as string | undefined,
+        program: p.program as Program | undefined,
       });
     },
   });
@@ -1710,6 +1711,21 @@ export function registerCatalog(): void {
       const enabled = !!p.enabled;
       await invoke("plugin:webview-capture|set_occlusion", { enabled });
       return { occlusion: enabled };
+    },
+  });
+
+  register("window.layers", {
+    description:
+      "Dump the window's native view hierarchy (class / frame / hidden, indented text). Ground truth for layer diagnostics — verify a native child webview's actual bounds and z-order against the DOM slot (e.g. divider-drag freeze, hole-punch mismatch).",
+    triggers: {
+      ko: "네이티브 뷰 계층 레이어 덤프 child 위치 진단",
+    },
+    params: {},
+    returns: "{ hierarchy } — indented text, one view per line",
+    examples: ["sok window.layers"],
+    handler: async () => {
+      const hierarchy = await invoke<string>("webview_debug_hierarchy");
+      return { hierarchy };
     },
   });
 

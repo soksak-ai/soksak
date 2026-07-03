@@ -334,7 +334,14 @@ fn run_docs() -> ExitCode {
             println!("# soksak 명령 레퍼런스\n");
             println!("> 자동 생성 문서 — 원천은 앱 Command Registry(`sok docs` 로 재생성).\n");
             println!("모든 명령: `sok <command> ['{{JSON}}']`. 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.\n");
+            println!("코어 명령만 수록한다. 플러그인 기여 명령(`plugin.<플러그인id>.*`)은 설치본마다 다르므로 `sok commands` 또는 각 플러그인 스킬에서 조회한다.\n");
             for c in &cmds {
+                // 플러그인 기여 명령 제외 — 플러그인 id 는 명명법상 soksak-plugin- 접두 강제
+                // (NAMING.md). 코어 plugin.* 라이프사이클(list/install/view/consent/dev …)은 통과.
+                let name = c.get("name").and_then(Value::as_str).unwrap_or("");
+                if name.starts_with("plugin.soksak-plugin-") {
+                    continue;
+                }
                 println!("{}", format_command_md(c));
             }
             ExitCode::SUCCESS

@@ -1,7 +1,7 @@
 // sessions 의 plugin View variant 계약 — openPluginView dedupe/활성화/닫기 경로.
 // (close/move/drag 는 view id 제네릭이라 기존 동작 그대로 — 여기선 plugin 특화만 고정.)
 import { beforeEach, describe, expect, it } from "vitest";
-import { allGroups, useSessions } from "./sessions";
+import { allGroups, allViews, useSessions } from "./sessions";
 import { useProgramRegistry } from "../plugins/programRegistry";
 
 // 부트 모델(P3): 초기 tabs 는 비어 있고 main.tsx 가 bootstrapFirstProject 로
@@ -196,5 +196,64 @@ describe("addContent — kind=view 프로그램", () => {
     } finally {
       dispose();
     }
+  });
+});
+
+// project.create 의 초기 program — addProject 가 program 을 받아 첫 그룹에 뷰를 만든다.
+// (터미널 플러그인화 이후 커맨드가 program 을 선언만 하고 버려 빈 패널(검은 화면)로
+// 보이던 결함의 재현·고정 — 생략 시 빈 스켈레톤은 기존 설계 그대로.)
+describe("addProject — 초기 program", () => {
+  it("program 지정 시 첫 그룹에 그 프로그램 뷰 + activeViewId + viewId 반환", () => {
+    const dispose = useProgramRegistry.getState().register("soksak-plugin-terminal", {
+      id: "terminal-prog-test",
+      title: "Terminal",
+      kind: "view",
+      view: "content",
+    });
+    try {
+      const r = useSessions.getState().addProject({
+        alias: "px",
+        root: "/tmp/soksak-test-addproject",
+        program: "terminal-prog-test",
+      });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.viewId).toBeTruthy();
+      const t = useSessions.getState().tabs.find((x) => x.id === r.projectId)!;
+      const grp = allGroups(t.contents[0].layout).find((g) => g.id === r.groupId)!;
+      expect(grp.activeViewId).toBe(r.viewId);
+      const v = grp.views.find((x) => x.id === r.viewId)!;
+      expect(v).toMatchObject({
+        kind: "plugin",
+        pluginId: "soksak-plugin-terminal",
+        view: "content",
+        title: "Terminal",
+      });
+    } finally {
+      dispose();
+    }
+  });
+
+  it("program 생략 시 빈 스켈레톤(뷰 0, viewId 미반환) — 기존 설계 유지", () => {
+    const r = useSessions.getState().addProject({
+      alias: "",
+      root: "/tmp/soksak-test-addproject-empty",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.viewId).toBeUndefined();
+    const t = useSessions.getState().tabs.find((x) => x.id === r.projectId)!;
+    expect(allViews(t.contents[0].layout)).toHaveLength(0);
+  });
+
+  it("미등록 program 은 빈 스켈레톤으로 격하(뷰 생성 불가 — makeContent 계약)", () => {
+    const r = useSessions.getState().addProject({
+      alias: "",
+      root: "/tmp/soksak-test-addproject-unreg",
+      program: "no-such-program",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.viewId).toBeUndefined();
   });
 });

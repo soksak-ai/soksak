@@ -159,6 +159,8 @@ export interface NewProjectOpts {
   alias: string;
   root: string; // P1 — 호출부가 검증·정규화(validateProjectRoot)까지 마친 경로
   shell?: string; // undefined = 전역 설정 따름
+  // 첫 콘텐츠의 초기 뷰 프로그램. 생략 = 빈 스켈레톤(makeContent 계약과 동일).
+  program?: Program;
 }
 
 // ── 액션 결과 형태 ──────────────────────────────────────────────────────────
@@ -681,7 +683,7 @@ function mapViewEverywhere(
 }
 
 function makeProject(id: string, opts: NewProjectOpts): ProjectTab {
-  const c = makeContent("1");
+  const c = makeContent("1", opts.program);
   const alias = opts.alias.trim() || baseName(opts.root);
   return {
     id,
