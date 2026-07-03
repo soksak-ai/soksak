@@ -582,6 +582,21 @@ Show a single commit in full: metadata, changed file list, and the raw patch. Us
 sok git.show '{"commit":"HEAD"}'
 ```
 
+## `layout.suggest`
+
+Suggest window placements from current monitor/window facts (pure strategy — nothing moves). strategy spread: orchestrator windows take a workspace-free monitor whole (or the right third alongside on a single monitor); workspaces fill their own monitor. strategy grid: tile all windows on the first monitor. Feed each placement to window.place to execute. | 창 배치 제안 전략 모니터 분배 오케스트레이터
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `roles` | json |  | Optional label→role map, e.g. {"orch-1":"orchestrator"} — unlisted windows count as workspaces |
+| `strategy` | string |  | Placement strategy (spread|grid) [default "spread"] |
+
+**Returns**: { placements: [{label,monitor,x,y,w,h}] }
+
+```bash
+sok layout.suggest '{"strategy":"spread","roles":{"orch-1":"orchestrator"}}'
+```
+
 ## `media.proxy.info`
 
 Return the local media-stream proxy endpoint { base, port, token }. The proxy fetches Referer/CORS-protected media (HLS .m3u8/.ts, ranged .mp4) the webview cannot fetch cross-origin: it injects caller-supplied headers, streams binary with Range support, rewrites m3u8 segment/key URLs, and sets permissive CORS for hls.js / <video>. Build URLs as {base}/m3u8?url=&referer=&ua= or {base}/stream?url=&referer=&ua=. | 미디어 프록시 스트리밍 엔드포인트 HLS 재생 Referer CORS
@@ -2198,6 +2213,16 @@ List open window labels. Use to discover targets for commands that accept a wind
 sok window.list
 ```
 
+## `window.monitors`
+
+Monitor and window placement facts (physical px): every monitor's rect/scale/name and every window's rect, focus state, and owning monitor index. Facts only — placement strategy is layout.suggest, execution is window.place (same coordinate space). | 모니터 목록 해상도 창 배치 현황 듀얼 파악
+
+**Returns**: { monitors: [{index,name,x,y,w,h,scale}], windows: [{label,x,y,w,h,focused,monitor}] }
+
+```bash
+sok window.monitors
+```
+
 ## `window.move`
 
 Move the window to a screen position in physical pixels (for automation and multi-monitor validation).
@@ -2241,6 +2266,24 @@ Toggle occlusion detection. When false, rendering continues even when fully cove
 
 ```bash
 sok window.occlusion '{"enabled":false}'
+```
+
+## `window.place`
+
+Place a window at an exact frame (physical px — the window.monitors coordinate space). Position and size applied once. Use layout.suggest output directly. The OS may clamp frames into the usable area (e.g. below the macOS menu bar) — read back window.monitors for the settled frame. | 창 배치 이동 모니터로 옮기기 위치 지정
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `h` | number | ✓ | Height (physical px) |
+| `label` | string | ✓ | Window label (window.list) |
+| `w` | number | ✓ | Width (physical px) |
+| `x` | number | ✓ | Left edge (physical px) |
+| `y` | number | ✓ | Top edge (physical px) |
+
+**Returns**: { ok }
+
+```bash
+sok window.place '{"label":"orch-1","x":2560,"y":0,"w":2560,"h":1440}'
 ```
 
 ## `window.record`

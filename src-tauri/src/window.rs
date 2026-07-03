@@ -222,6 +222,75 @@ pub fn window_list(app: AppHandle) -> Vec<String> {
     app.windows().keys().cloned().collect()
 }
 
+// 모니터·창 배치 팩트(A4) — 판단 없이 사실만: 모니터 목록(물리 px rect·배율·이름)과
+// 각 창의 물리 rect + 소속 모니터 인덱스. 전략(어디에 둘지)은 layout.suggest 순수함수가
+// 프론트에서 계산한다(팩트/전략 분리 — 확정 결정).
+#[tauri::command]
+pub fn window_monitors(app: AppHandle) -> Result<serde_json::Value, String> {
+    let monitors: Vec<tauri::Monitor> =
+        app.available_monitors().map_err(|e| e.to_string())?;
+    let mons: Vec<serde_json::Value> = monitors
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            serde_json::json!({
+                "index": i,
+                "name": m.name().cloned().unwrap_or_default(),
+                "x": m.position().x,
+                "y": m.position().y,
+                "w": m.size().width,
+                "h": m.size().height,
+                "scale": m.scale_factor(),
+            })
+        })
+        .collect();
+    let mut wins: Vec<serde_json::Value> = Vec::new();
+    for (label, w) in app.windows() {
+        let pos = w.outer_position().map_err(|e| e.to_string())?;
+        let size = w.outer_size().map_err(|e| e.to_string())?;
+        // 소속 모니터 = 창 중심점이 들어가는 모니터(경계 걸친 창은 중심 기준 단일 판정).
+        let (cx, cy) = (
+            pos.x + size.width as i32 / 2,
+            pos.y + size.height as i32 / 2,
+        );
+        let monitor = monitors.iter().position(|m| {
+            let (mx, my) = (m.position().x, m.position().y);
+            let (mw, mh) = (m.size().width as i32, m.size().height as i32);
+            cx >= mx && cx < mx + mw && cy >= my && cy < my + mh
+        });
+        wins.push(serde_json::json!({
+            "label": label,
+            "x": pos.x,
+            "y": pos.y,
+            "w": size.width,
+            "h": size.height,
+            "focused": w.is_focused().unwrap_or(false),
+            "monitor": monitor,
+        }));
+    }
+    Ok(serde_json::json!({ "monitors": mons, "windows": wins }))
+}
+
+// 창 배치 실행(A4) — 물리 px(window_monitors 와 같은 좌표계)로 위치+크기 1회 적용.
+#[tauri::command]
+pub fn window_place(
+    app: AppHandle,
+    label: String,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+) -> Result<(), String> {
+    let win = app
+        .get_window(&label)
+        .ok_or_else(|| format!("창 없음: {label}"))?;
+    win.set_position(tauri::PhysicalPosition::new(x, y))
+        .map_err(|e| e.to_string())?;
+    win.set_size(tauri::PhysicalSize::new(w, h))
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn window_focus(app: AppHandle, label: String) -> Result<(), String> {
     app.get_window(&label)

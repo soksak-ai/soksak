@@ -5,6 +5,7 @@
 //   - 모든 변이는 결과(새 id/변경 후 상태)를 반환 — 호출자가 응답만으로 검증 가능.
 
 import { invoke } from "@tauri-apps/api/core";
+import { suggestLayout, type MonitorFact, type WindowFact } from "../lib/layoutSuggest";
 import {
   allGroups,
   useSessions,
@@ -1798,6 +1799,86 @@ export function registerCatalog(): void {
     handler: async () => {
       const hierarchy = await invoke<string>("webview_debug_hierarchy");
       return { hierarchy };
+    },
+  });
+
+  register("window.monitors", {
+    description:
+      "Monitor and window placement facts (physical px): every monitor's rect/scale/name and every window's rect, focus state, and owning monitor index. Facts only — placement strategy is layout.suggest, execution is window.place (same coordinate space).",
+    triggers: {
+      ko: "모니터 목록 해상도 창 배치 현황 듀얼 모니터 파악",
+    },
+    params: {},
+    returns:
+      "{ monitors: [{index,name,x,y,w,h,scale}], windows: [{label,x,y,w,h,focused,monitor}] }",
+    examples: ["sok window.monitors"],
+    handler: async () => {
+      return (await invoke("window_monitors")) as object;
+    },
+  });
+
+  register("window.place", {
+    description:
+      "Place a window at an exact frame (physical px — the window.monitors coordinate space). Position and size applied once. Use layout.suggest output directly. The OS may clamp frames into the usable area (e.g. below the macOS menu bar) — read back window.monitors for the settled frame.",
+    triggers: {
+      ko: "창 배치 이동 모니터로 옮기기 위치 지정",
+    },
+    params: {
+      label: { type: "string", description: "Window label (window.list)", required: true },
+      x: { type: "number", description: "Left edge (physical px)", required: true },
+      y: { type: "number", description: "Top edge (physical px)", required: true },
+      w: { type: "number", description: "Width (physical px)", required: true },
+      h: { type: "number", description: "Height (physical px)", required: true },
+    },
+    returns: "{ ok }",
+    examples: ['sok window.place \'{"label":"orch-1","x":2560,"y":0,"w":2560,"h":1440}\''],
+    handler: async (p) => {
+      await invoke("window_place", {
+        label: p.label,
+        x: p.x,
+        y: p.y,
+        w: p.w,
+        h: p.h,
+      });
+      return {};
+    },
+  });
+
+  register("layout.suggest", {
+    description:
+      "Suggest window placements from current monitor/window facts (pure strategy — nothing moves). strategy spread: orchestrator windows take a workspace-free monitor whole (or the right third alongside on a single monitor); workspaces fill their own monitor. strategy grid: tile all windows on the first monitor. Feed each placement to window.place to execute.",
+    triggers: {
+      ko: "창 배치 제안 전략 모니터 분배 오케스트레이터 배치",
+    },
+    params: {
+      strategy: {
+        type: "string",
+        description: "Placement strategy",
+        enum: ["spread", "grid"],
+        default: "spread",
+      },
+      roles: {
+        type: "json",
+        description:
+          'Optional label→role map, e.g. {"orch-1":"orchestrator"} — unlisted windows count as workspaces',
+      },
+    },
+    returns: "{ placements: [{label,monitor,x,y,w,h}] }",
+    examples: [
+      'sok layout.suggest \'{"strategy":"spread","roles":{"orch-1":"orchestrator"}}\'',
+    ],
+    handler: async (p) => {
+      const facts = (await invoke("window_monitors")) as {
+        monitors: MonitorFact[];
+        windows: WindowFact[];
+      };
+      const placements = suggestLayout({
+        monitors: facts.monitors,
+        windows: facts.windows,
+        strategy: (p.strategy as "spread" | "grid") ?? "spread",
+        roles: (p.roles as Record<string, "orchestrator" | "workspace">) ?? undefined,
+      });
+      return { placements };
     },
   });
 
