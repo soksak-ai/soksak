@@ -17,6 +17,7 @@ import { currentWindowLabel } from "../lib/webviewLabels";
 import { makeCoreStore } from "./coreStore";
 import { validateProjectRoot } from "../lib/workspace";
 import { claimRoots } from "./projectRegistry";
+import { beginRestoreHydration } from "./hydration";
 import {
   useSessions,
   reseedIdCounters,
@@ -143,6 +144,9 @@ export async function initWorkspacePersistence(
       reseedIdCounters(owned);
       if (owned.length > 0) {
         useSessions.getState().restoreProjects(owned, active);
+        // B4 — 복원 hydration: 보이지 않는 복원 뷰의 본문 마운트를 미루고(PTY 동시
+        // spawn 분산), idle 체인이 lastActivity 순으로 채운다. 외형은 즉시 전부.
+        beginRestoreHydration();
       }
       restored = useSessions.getState().tabs.length > 0;
     }

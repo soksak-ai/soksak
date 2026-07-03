@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { rafThrottle } from "../lib/rafThrottle";
 import { emitPluginEvent } from "../plugins/hooks";
@@ -19,8 +19,10 @@ import {
   type GroupNode,
   type View,
   type ViewGroup,
+  allGroups,
   useSessions,
 } from "../state/sessions";
+import { useHydration } from "../state/hydration";
 
 // 콘텐츠 영역을 에디터 그룹으로 렌더. 핵심 원칙 둘:
 // 1) 본문(터미널/에디터)을 그룹 트리 구조와 분리해 viewId 로 키된 "영속 본문 레이어"에
@@ -105,6 +107,17 @@ export const GroupArea = memo(function GroupArea({
   projectId: string;
 }) {
   const t = useT();
+  // B4 — 복원 hydration cold 집합 구독(평상시 빈 집합 → 리렌더 없음).
+  const coldSet = useHydration((s) => s.cold);
+  // 보이는 cold 뷰는 즉시 승격(렌더 중 set 금지 — effect). shown 판정과 동일 규칙.
+  useEffect(() => {
+    if (coldSet.size === 0) return;
+    const maximizedId2 = content.maximizedViewId ?? null;
+    for (const g of allGroups(content.layout)) {
+      const visibleId = maximizedId2 ?? g.activeViewId;
+      if (coldSet.has(visibleId)) useHydration.getState().promote(visibleId);
+    }
+  }, [coldSet, content]);
   // 분할 패널 헤더 = 탭 모드 고정(2026-06 결정 — 설정 비노출). title 모드 분기는
   // 재노출 대비 보존: 복원하려면 useSettings((s) => s.splitHeaderMode) 로 되돌린다.
   const splitHeaderMode = "tabs" as "title" | "tabs";
@@ -502,6 +515,10 @@ export const GroupArea = memo(function GroupArea({
             ? view.id === maximizedId
             : view.id === group.activeViewId;
           const slotRect = maxCell && shown ? FULL_RECT : rect;
+          // B4 복원 hydration 게이트 — cold(복원됐지만 아직 안 보인) 뷰는 본문 마운트를
+          // 미룬다(PTY 동시 spawn 분산). 보이는 순간·idle 체인이 승격한다. 평상시 cold 는
+          // 빈 집합이라 게이트 비용 0. 슬롯 div 자체는 항상 렌더(원자적 외형·주소 안정).
+          const hydrated = !coldSet.has(view.id) || shown;
           return (
             <div
               key={view.id}
@@ -516,7 +533,7 @@ export const GroupArea = memo(function GroupArea({
                 setActiveGroup(projectId, group.id);
               }}
             >
-              {view.kind === "file" ? (
+              {!hydrated ? null : view.kind === "file" ? (
                 <FileViewerHost
                   path={view.path}
                   projectId={projectId}
