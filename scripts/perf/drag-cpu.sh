@@ -9,6 +9,7 @@ set -u
 PERF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$PERF_DIR/../.." && pwd)"
 source "$PERF_DIR/lib.sh"
+set +e # lib 가 켠 -e 해제 — pid 폴백 등 개별 실패는 직접 처리(resize.sh 선례)
 
 IDENTITY="debug"; LABEL="drag"
 while [ $# -gt 0 ]; do case "$1" in
