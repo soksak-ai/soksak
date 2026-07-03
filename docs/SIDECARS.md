@@ -64,7 +64,7 @@ no unwinding crosses the boundary in either direction; a trapped panic returns -
 ```rust
 #[repr(C)] struct SoksakSidecarEngineAbi {
     abi: u32,                 // hosting ABI version — core accepts exactly 1
-    interface: *const c_char, // e.g. "soksak-sidecar-browser@1"
+    interface: *const c_char, // e.g. "soksak-sidecar-browser-spec@1"
     version: *const c_char,   // crate semver (diagnostics)
 }
 fn soksak_sidecar_engine_abi() -> *const SoksakSidecarEngineAbi;    // self-description handshake
@@ -123,7 +123,7 @@ Plugins declare sidecars in the manifest (top-level, parallel to `libraries`):
 ```json
 "permissions": ["sidecar"],
 "sidecars": [
-  { "name": "chromium", "interface": "soksak-sidecar-browser@1",
+  { "name": "chromium", "interface": "soksak-sidecar-browser-spec@1",
     "reach": { "fetch": { "url": { "darwin": "https://.../dist.tar.gz" },
                            "sha256": { "darwin": "<hex>" } } } }
 ]
@@ -146,15 +146,15 @@ sha256 pin → unpack (bsdtar, preserves symlinks/exec bits) → entry check →
 atomic rename into `dist/`. Any failure leaves the destination untouched.
 The archive contains the **contents of `dist/`** at top level.
 
-Dev: `make sidecar-chromium` stages from the engine crate's build output;
-`make sidecar-chromium-archive` emits the pinned tar.gz + sha256 for the
+Dev: `make sidecar-browser-chromium` stages from the engine crate's build output;
+`make sidecar-browser-chromium-archive` emits the pinned tar.gz + sha256 for the
 manifest. Production signing/notarization of engine payloads is deferred and
 tracked here: dev runs ad-hoc signed (the Chromium engine avoids the keychain
 prompt via its in-memory profile).
 
 ## 7. Authoring an engine sidecar
 
-Skeleton (see the `soksak-ai/soksak-sidecar-chromium` repo — the reference
+Skeleton (see the `soksak-ai/soksak-sidecar-browser-chromium` repo — the reference
 implementation; its dev checkout lives at the sidecar home):
 
 ```
@@ -177,7 +177,7 @@ Rules:
   renderers from the `" Helper (Renderer).app"` sibling bundle and fails
   silently without it.
 
-## 8. Chromium engine protocol — `soksak-sidecar-browser@1`
+## 8. Chromium engine protocol — `soksak-sidecar-browser-spec@1`
 
 Requests: `create(x,y,w,h,url)→{id}`, `bounds(id,x,y,w,h)`, `load(id,url)`,
 `reload(id,ignoreCache)`, `back(id)`, `forward(id)`, `hidden(id,hidden)`,

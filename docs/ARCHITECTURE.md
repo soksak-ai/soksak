@@ -110,7 +110,7 @@ The skeleton's native dependencies are limited to **host-only primitives it alon
 2. **Is it a host-only primitive that neither a JS plugin nor a separate process can replicate** (PTY, `Origin`-less socket, in-memory-key vault, fs, the webview)? → it is a **generic skeleton capability**.
 3. **Is it heavy native code that must render into the app's own windows** (process-local NSView parenting — a separate process physically cannot attach)? → it is an **engine sidecar**: an in-process dylib behind the generic engine-hosting primitive (`app.sidecar` — docs/SIDECARS.md). The skeleton links nothing and understands none of its messages; it dlopens at plugin request, verifies the binary's ABI self-report against the plugin's declaration, hands over the surface, and relays.
 4. **Is it heavy, self-contained, plugin-specific native code** — not JS-able, not a generic primitive, not surface-bound? → it is a **service sidecar binary in its own repo**, spawned through the `process` capability.
-Example: the remote-control stack (iroh QUIC + Noise) is `soksak-plugin-remote-iroh`, a service sidecar; the skeleton links no `iroh`. The Chromium browser engine is `soksak-sidecar-chromium`, an engine sidecar; the skeleton links no Chromium/CEF. A swappable engine takes the engine's name (`remote-iroh`, `browser-chromium`), per the plugin-naming convention.
+Example: the remote-control stack (iroh QUIC + Noise) is `soksak-plugin-remote-iroh`, a service sidecar; the skeleton links no `iroh`. The Chromium browser engine is `soksak-sidecar-browser-chromium`, an engine sidecar; the skeleton links no Chromium/CEF. A swappable engine takes the engine's name (`remote-iroh`, `browser-chromium`), per the plugin-naming convention.
 
 ### A15. Unify the interface, not the crate.
 When two backends genuinely differ (plain first-party HTTP vs browser-impersonation HTTP; a stable client vs a fingerprint-spoofing fork), do **not** force them into one crate. The skeleton keeps both implementations and exposes **one capability with opt-in modes** (e.g. `net.http.request` with `impersonate?: "off" | "chrome"`). Plugins call the capability; they never bundle their own HTTP/WS/PTY. Every capability used by one or more plugins is a generic command-registry capability — permission-gated, ns-isolated, CLI/MCP auto-exposed — like `app.data` over SQLite, so the wheel is invented once. Consolidate the **interface**; keep the implementations that genuinely differ (and if they must coexist, the reason is recorded, not hidden).
@@ -195,14 +195,14 @@ The first extraction that is **native code a JS plugin cannot run**, so it leave
 
 The first engine-model sidecar: the bundled Chromium engine renders into pane surfaces, so
 it cannot be a separate process (process-local NSView parenting) — it is an in-process dylib
-(`soksak-sidecar-chromium`, `crates/`) loaded by the skeleton's generic engine-hosting
+(`soksak-sidecar-browser-chromium`, `crates/`) loaded by the skeleton's generic engine-hosting
 primitive (`src-tauri/src/sidecar.rs`, `app.sidecar`; ABI in docs/SIDECARS.md).
 
 **MOVES (verbatim, A16):** the whole engine — GCD message pump with re-entrancy guards, the
 gated render tick, `do_close=1` + deferred-reap close sequence, in-memory profile, popup
 routing, child bounds/flip-y. `src-tauri/src/cef_engine.rs` → the standalone repo
-`soksak-ai/soksak-sidecar-chromium` (`src/engine.rs`; dev checkout lives at the sidecar
-home `~/.soksak/sidecars/soksak-sidecar-chromium`).
+`soksak-ai/soksak-sidecar-browser-chromium` (`src/engine.rs`; dev checkout lives at the sidecar
+home `~/.soksak/sidecars/soksak-sidecar-browser-chromium`).
 
 **Seams only:** ① bootstrap — env-pointed framework/helper paths became dist-relative
 (own-location resolution), and the browser process no longer re-executes as its own
@@ -210,7 +210,7 @@ subprocess (a dedicated helper binary owns `execute_process`); ② events — th
 `app.emit("cef-popup")` became a host-vtable emit on the per-caller channel, carrying the
 source browser id; ③ control — the `browser.cef.*` registry commands and `cef_browser_*`
 invokes were **deleted**, replaced by the opaque plugin↔sidecar protocol
-(`soksak-sidecar-browser@1`) the skeleton relays without understanding.
+(`soksak-sidecar-browser-spec@1`) the skeleton relays without understanding.
 
 **Ruling:** the skeleton links zero Chromium/CEF (the `cef-browser` cargo feature is gone);
 the consumed library's name lives only inside the engine crate (NAMING.md §2). Verified by

@@ -466,7 +466,7 @@ export type ReachStrategy =
 // 자기보고(soksak_sidecar_abi)와 대조한다 — 불일치는 거부(선언≡실물). 분류·ABI 정본 docs/SIDECARS.md.
 export interface SidecarDep {
   name: string; // ^[a-z0-9][a-z0-9-]*$
-  interface: string; // ^[a-z0-9][a-z0-9.-]*@[0-9]+$ (예: "soksak-sidecar-browser@1")
+  interface: string; // ^[a-z0-9][a-z0-9.-]*@[0-9]+$ (예: "soksak-sidecar-browser-spec@1")
   // 공급(선택) — 미설치 시 sha256 핀 아카이브(dist tar.gz)를 받아 ~/.soksak/sidecars/에 설치.
   // fetch 전용(사이드카는 command/vendor 비적용). 미선언이면 dev 스테이징(make) 전제.
   reach?: {
@@ -636,7 +636,7 @@ export const PLUGIN_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const VIEW_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 // 사이드카 이름(soksak-sidecar-<name> 의 <name>) — 경로 조립에 쓰이므로 traversal 안전 형식.
 const SIDECAR_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
-// 사이드카 interface id — "<protocol-id>@<major>" (예: soksak-sidecar-browser@1).
+// 사이드카 interface id — "<protocol-id>@<major>" (예: soksak-sidecar-browser-spec@1).
 const SIDECAR_INTERFACE_RE = /^[a-z0-9][a-z0-9.-]*@[0-9]+$/;
 const COMMAND_NAME_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 const EXT_RE = /^[a-z0-9]+$/;
@@ -1030,7 +1030,7 @@ export function parseManifest(
           return;
         }
         if (!isNonEmptyString(item.interface) || !SIDECAR_INTERFACE_RE.test(item.interface)) {
-          errors.push(`sidecars[${i}].interface: ^[a-z0-9][a-z0-9.-]*@[0-9]+$ 필수(예: soksak-sidecar-browser@1)`);
+          errors.push(`sidecars[${i}].interface: ^[a-z0-9][a-z0-9.-]*@[0-9]+$ 필수(예: soksak-sidecar-browser-spec@1)`);
           return;
         }
         const dep: SidecarDep = { name: item.name.trim(), interface: item.interface.trim() };

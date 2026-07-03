@@ -17,7 +17,11 @@ git/clipboard/ai.session) and removes the violators.
 4. **Plugin** = `soksak-plugin-<domain>-<name>`. A replaceable-seam plugin MUST carry the
    observable engine name (`browser-native` is the exception naming the provisioning axis —
    see §3; `browser-chromium`, `editor-codemirror`).
-5. **Sidecar** = `soksak-sidecar-<name>`. Sidecars are never exposed in the command
+5. **Sidecar** = `soksak-sidecar-<domain>[-<engine>]` — the same artifact shape as
+   plugins, so a plugin/sidecar pair is visible at a glance
+   (`soksak-plugin-browser-chromium` ↔ `soksak-sidecar-browser-chromium`). A replaceable
+   seam carries the engine name, exactly as for plugins; a non-seam sidecar carries the
+   domain only (`soksak-sidecar-workflow`). Sidecars are never exposed in the command
    registry (`sok`). The sidecar's model (engine/service) is NOT part of the name — it is
    machine-encoded (attachment path, artifact kind, ABI self-report). See docs/SIDECARS.md.
 6. **Env var** = `SOKSAK_<area>_<item>`. The area obeys rule 1 (no implementation names).
@@ -79,6 +83,8 @@ break the symmetry law (file = command prefix: `webview_open`, not `webview_host
 | `browser.cef.*` registry + `cef_browser_*` invoke + `catalogBrowserCef.ts` | **deleted** (engine control is a plugin↔sidecar channel, never a registry concern) | removal |
 | `SOKSAK_CEF`, `SOKSAK_CEF_NO_TICK`, `SOKSAK_CEF_FRAMEWORK`, `SOKSAK_CEF_HELPER`, `SOKSAK_CEF_MAIN_BUNDLE` | **deleted** (sidecar derives paths from its own location; diagnostics move to `SOKSAK_SIDECAR_CHROMIUM_*`) | env |
 | `soksak-plugin-browser-cef` | `soksak-plugin-browser-chromium` | plugin |
+| `soksak-sidecar-chromium` (initial publish) | `soksak-sidecar-browser-chromium` | sidecar artifact — unified with the plugin shape |
+| `soksak-engine-chromium@1` → `soksak-sidecar-browser@1` (both rejected) | `soksak-sidecar-browser-spec@1` | contract id — §8 |
 
 `webview_inject_script` already conformed and is unchanged.
 
@@ -111,19 +117,26 @@ belong to the third-party crate and were never rename targets.
 
 Mechanical check for the §2 ruling: `grep -riE "\bcef\b" src src-tauri/src packages`
 must return zero hits. Documented exceptions where the string legitimately lives:
-this file (the ruling must name what it bans), the `soksak-ai/soksak-sidecar-chromium` repo
+this file (the ruling must name what it bans), the `soksak-ai/soksak-sidecar-browser-chromium` repo
 (the importing crate: dep line, `use cef`, attribution README), and third-party
 API names inside that crate. Substring false positives (`sourceFromState`,
 `graceful`) require word-boundary matching.
 
-## 8. Sidecar Interface Ids
+## 8. Contract Ids (specs and protocols)
 
-A sidecar interface id (the protocol handshake string) is derived, never invented:
-`soksak-sidecar-<domain>@<major>` — it reuses the existing `soksak-sidecar-*` name
-family (no third family), names the protocol *domain* (browser), never the
-implementation (chromium — a protocol-compatible replacement engine must not have
-to self-report someone else's name) and never the model (`engine` is the model
-axis; models are machine-encoded, banned from names — SIDECARS.md §1). The
-mandatory `@<major>` makes it syntactically disjoint from sidecar directory
-names. Its sole job is the version handshake between independently-shipped
-artifacts (plugin JS ↔ engine dylib); it appears nowhere else.
+**Self-evidence principle**: a name must reveal its kind and its relationships
+without explanation. An artifact-family shape must never be used for a
+non-artifact — a contract string shaped like `soksak-sidecar-<x>` reads as a
+sidecar that does not exist.
+
+A contract id is therefore derived, never invented: **`<scope>-spec@<major>`** —
+the scope it governs plus the mandatory kind marker `-spec`. The archetype is
+`soksak-plugin-spec@1` (the contract of soksak plugins). Applied here:
+`soksak-sidecar-browser-spec@1` = the contract of browser-domain sidecars, read
+directly off the artifact it pairs with (`soksak-sidecar-browser-chromium` minus
+the engine, plus `-spec`). The scope names the domain, never the implementation
+(a protocol-compatible replacement engine must not self-report someone else's
+name) and never the model (models are machine-encoded, banned from names —
+SIDECARS.md §1). Its sole job is the version handshake between
+independently-shipped artifacts (plugin JS ↔ engine dylib); it appears nowhere
+else.
