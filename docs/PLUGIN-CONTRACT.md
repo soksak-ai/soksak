@@ -121,3 +121,30 @@ publishes contract **data** (`contract.json`), and the Doctor — a shared packa
 depends on — consumes it. The detector logic lives once (in the core and mirrored in the Doctor);
 the contract data lives once (in the core). This is the same published-cache model the plugin
 registry uses (`registry.json` → `registrySnapshot.json`).
+
+## 5. Sidecar standard
+
+A **sidecar** is a native executable a plugin spawns as a subprocess (LLM runners, embedded
+browsers, media pipelines). Sidecars are not plugins: they have no manifest, no permissions,
+no lifecycle — they are artifacts a plugin consumes through one fixed convention.
+
+Layout rule — one directory per artifact, names always derived the same way:
+
+- Plugin: `~/.soksak/plugins/soksak-plugin-{name}/`
+- Sidecar: `~/.soksak/sidecars/soksak-sidecar-{name}/`
+
+Consumption contract (what a plugin may reference — nothing else):
+
+- Entry point: `~/.soksak/sidecars/soksak-sidecar-{name}/dist/soksak-sidecar-{name}`
+  (single binary) or `dist/soksak-sidecar-{name}.app` (bundle).
+- Directory name = binary name = crate/package name = `soksak-sidecar-{name}`.
+- Dev override env var: `SOKSAK_SIDECAR_{NAME}_BIN` (uppercased name) — points at an
+  alternate entry point; the consuming plugin's spawn wrapper must honor it.
+- Bundled resources the sidecar reads (prompt references, canonical workflow docs, …) live
+  under the sidecar directory next to `dist/`; the binary resolves them relative to its own
+  location, never relative to the consuming plugin.
+
+Source location is free (an independent repo is the norm, matching the plugin rule); the build
+is responsible for placing the entry point under `dist/`. Dev environments may satisfy `dist/`
+with symlinks into a build tree. Build debris (logs, scratch output) must not live in the
+sidecar directory.
