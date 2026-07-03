@@ -311,6 +311,7 @@ pub fn run() {
             runtime_dep::verify_and_link,
             process::process_spawn,
             process::process_write,
+            process::process_stdin_close,
             process::process_kill,
             network::network_udp_send,
             network::network_udp_request,

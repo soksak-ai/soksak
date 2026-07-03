@@ -479,6 +479,8 @@ export interface SoksakPluginApi {
     ) => Promise<number>;
     /** stdin 에 쓰기(JSON-RPC 프레임 등). */
     write: (handle: number, data: string) => Promise<void>;
+    /** stdin 닫기(자식은 계속 실행) — 파이프 입력을 read-to-end 하는 자식에 EOF 전달. 멱등. */
+    closeStdin: (handle: number) => Promise<void>;
     /** stdout 바이트 구독(반환=해지). 리스너 등록 전 도착분은 버퍼되어 유실 0. */
     onData: (handle: number, cb: (data: Uint8Array) => void) => Disposable;
     /** stderr 바이트 구독(반환=해지). */
@@ -694,6 +696,9 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker, ns: s
     },
     write: async (handle: number, data: string): Promise<void> => {
       await deps.invoke("process_write", { id: handle, data });
+    },
+    closeStdin: async (handle: number): Promise<void> => {
+      await deps.invoke("process_stdin_close", { id: handle });
     },
     onData(handle: number, cb: Bytes): Disposable {
       const st = procs.get(handle);

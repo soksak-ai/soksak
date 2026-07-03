@@ -216,6 +216,16 @@ pub fn process_write(
 }
 
 #[tauri::command]
+pub fn process_stdin_close(id: u32, manager: State<'_, ProcessManager>) -> Result<(), String> {
+    // stdin 만 닫는다(자식은 계속) — take → drop → 파이프 닫힘 → 자식이 EOF 수신. stdin 을 read_to_end
+    // 하는 자식(파이프 입력 CLI)은 이 호출 없이는 영원히 블록한다. 이미 닫혔으면 no-op(멱등).
+    let mut sessions = manager.sessions.lock().unwrap();
+    let session = sessions.get_mut(&id).ok_or("no such process")?;
+    drop(session.stdin.take());
+    Ok(())
+}
+
+#[tauri::command]
 pub fn process_kill(id: u32, manager: State<'_, ProcessManager>) -> Result<(), String> {
     // 세션 제거 + 자식 kill. stdin 드롭 → stdin 닫힘. kill → stdout EOF → reader 가 on_exit 발신.
     if let Some(session) = manager.sessions.lock().unwrap().remove(&id) {

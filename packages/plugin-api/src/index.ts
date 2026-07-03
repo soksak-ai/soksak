@@ -322,6 +322,8 @@ export interface SoksakPluginApi {
       },
     ) => Promise<number>;
     write: (handle: number, data: string) => Promise<void>;
+    /** stdin 닫기(자식은 계속 실행) — 파이프 입력을 read-to-end 하는 자식에 EOF 전달. 멱등. */
+    closeStdin: (handle: number) => Promise<void>;
     onData: (handle: number, cb: (data: Uint8Array) => void) => Disposable;
     onStderr: (handle: number, cb: (data: Uint8Array) => void) => Disposable;
     onExit: (handle: number, cb: (code: number) => void) => Disposable;
