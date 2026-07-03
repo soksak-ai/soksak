@@ -8,6 +8,16 @@ import type { PluginManifest, ViewPlacement, MapEntry } from "@soksak-ai/plugin-
 export type { PluginManifest, ViewPlacement } from "@soksak-ai/plugin-spec";
 
 /** register* 가 돌려주는 해지 토큰. ctx.subscriptions 에 넣으면 비활성화 시 자동 dispose. */
+// 사이드카(engine 모듈) 채널 핸들 — 불투명 JSON 채널(의미는 플러그인↔사이드카 사적 계약).
+export interface SidecarHandle {
+  /** 불투명 요청 → 모듈의 동기 응답(JSON). */
+  send: (msg: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  /** 모듈 이벤트 구독 — {event, ...payload} 의 event 필드로 demux. 반환=해지. */
+  on: (event: string, cb: (payload: Record<string, unknown>) => void) => Disposable;
+  /** 채널 해제(모듈은 상주 유지). 멱등. */
+  close: () => Promise<void>;
+}
+
 export interface Disposable {
   dispose(): void;
 }
@@ -328,6 +338,11 @@ export interface SoksakPluginApi {
     onStderr: (handle: number, cb: (data: Uint8Array) => void) => Disposable;
     onExit: (handle: number, cb: (code: number) => void) => Disposable;
     kill: (handle: number) => Promise<void>;
+  };
+  /** 사이드카(engine 모듈) 채널 — 매니페스트 sidecars[] 선언 필수, "sidecar" 권한(caution).
+   *  코어는 맹목 relay(메시지 의미는 플러그인↔사이드카 사적 계약 — docs/SIDECARS.md). */
+  sidecar?: {
+    open: (name: string) => Promise<SidecarHandle>;
   };
   ws?: {
     connect: (url: string) => Promise<number>;

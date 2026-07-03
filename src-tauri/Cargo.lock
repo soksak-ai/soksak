@@ -4691,6 +4691,7 @@ dependencies = [
  "clipboard-rs",
  "futures-util",
  "hkdf",
+ "libloading 0.8.9",
  "notify-debouncer-mini",
  "objc2",
  "objc2-app-kit",

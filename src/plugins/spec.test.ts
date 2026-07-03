@@ -847,3 +847,59 @@ describe("scanHostChromeViolations — 호스트 크롬 표준 정적 게이트"
     expect(v).toEqual(expect.arrayContaining([".left-host-tabs", ".ft-header", "--header-h"]));
   });
 });
+
+describe("parseManifest — sidecars(engine 모듈 의존 선언)", () => {
+  const sc = { name: "chromium", interface: "soksak-engine-chromium@1" };
+  it("유효한 sidecars 수용(sidecar 권한 동반)", () => {
+    const { manifest, validation } = parseManifest(
+      base({ permissions: ["sidecar"], sidecars: [sc] }),
+      "demo",
+    );
+    expect(validation.ok).toBe(true);
+    expect(manifest?.sidecars).toEqual([sc]);
+  });
+  it("sidecars 없으면 키 자체가 없음(선택)", () => {
+    expect(parseManifest(base(), "demo").manifest).not.toHaveProperty("sidecars");
+  });
+  it("sidecar 권한 없이 sidecars 선언 = 거부", () => {
+    const { manifest, validation } = parseManifest(base({ sidecars: [sc] }), "demo");
+    expect(manifest).toBeNull();
+    expect(validation.errors.join()).toContain('"sidecar" 권한');
+  });
+  it("name 형식 위반 거부(경로 traversal 가드)", () => {
+    for (const name of ["../evil", "Upper", "a/b", ""]) {
+      expect(
+        parseManifest(
+          base({ permissions: ["sidecar"], sidecars: [{ name, interface: "x@1" }] }),
+          "demo",
+        ).manifest,
+      ).toBeNull();
+    }
+  });
+  it("interface 형식 위반 거부(id@major 필수)", () => {
+    for (const iface of ["no-version", "x@", "x@abc", "@1"]) {
+      expect(
+        parseManifest(
+          base({ permissions: ["sidecar"], sidecars: [{ name: "ok", interface: iface }] }),
+          "demo",
+        ).manifest,
+      ).toBeNull();
+    }
+  });
+  it("중복 name 거부", () => {
+    expect(
+      parseManifest(
+        base({ permissions: ["sidecar"], sidecars: [sc, { ...sc, interface: "other@2" }] }),
+        "demo",
+      ).manifest,
+    ).toBeNull();
+  });
+  it("미지 키 거부(all-or-nothing)", () => {
+    expect(
+      parseManifest(
+        base({ permissions: ["sidecar"], sidecars: [{ ...sc, extra: 1 }] }),
+        "demo",
+      ).manifest,
+    ).toBeNull();
+  });
+});

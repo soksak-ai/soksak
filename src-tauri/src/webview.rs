@@ -418,9 +418,17 @@ pub fn webview_overlay_active(window: tauri::Window, active: bool) {
     #[cfg(target_os = "macos")]
     layer::set_overlay(window.label(), active);
     // 인프로세스 CEF child 는 코어 layer 시스템 밖(별도 set_as_child NSView)이라 오버레이 시 DOM
-    // 모달 위로 뚫고 올라온다 → 같은 게이트로 CEF child 도 숨긴다.
+    // 모달 위로 뚫고 올라온다 → 같은 게이트로 CEF child 도 숨긴다. (엔진 사이드카 이관 시 삭제 —
+    // 아래 notify_all 이 대체.)
     #[cfg(feature = "cef-browser")]
     crate::cef_engine::set_overlay(active);
+    // 엔진 사이드카 모듈에도 같은 호스트 사실을 통지 — 모듈이 자기 surface 를 숨김/복원(코어는
+    // 의미 모름, relay 만). 로드 모듈 0 이면 no-op.
+    crate::sidecar::notify_all(&serde_json::json!({
+        "type": "surface-occluded",
+        "window": window.label(),
+        "occluded": active,
+    }));
     #[cfg(not(target_os = "macos"))]
     let _ = (window, active);
 }

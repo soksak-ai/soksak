@@ -60,6 +60,7 @@ export type PluginPermission =
   | "process" // 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합)
   | "webview" // 코어가 임베드한 child webview(WKWebView) 구동 — 브라우저류 콘텐츠 뷰(네이티브 페이지 로드·eval·inject)
   | "pty" // PTY 백드 터미널 세션 spawn+IO(flow control+셸 env 주입 — process 의 raw stdio 와 구분)
+  | "sidecar" // 공유 네이티브 엔진 모듈(dylib)을 앱 프로세스에 로드 + 불투명 채널(sidecars[] 선언 필수 — docs/SIDECARS.md)
   | "storage" // 전용 저장소(~/.soksak/plugins-data/<id>/)
   | "data" // 범용 임베디드 DB(app.data — 네임스페이스 격리·CJK 검색·전 창 watch)
   | "secrets" // 암호화 볼트(app.secrets — API 키/토큰 봉인 저장, 평문 readback 불가·주입 전용)
@@ -88,6 +89,7 @@ export const PERMISSIONS: readonly PluginPermission[] = [
   "process",
   "webview",
   "pty",
+  "sidecar",
   "storage",
   "data",
   "secrets",
@@ -164,6 +166,12 @@ export const PERMISSION_INFO: Record<
     label: "내장 브라우저(webview)",
     detail:
       "코어가 임베드한 네이티브 webview 를 띄워 임의 웹페이지를 로드하고 그 페이지에서 스크립트를 실행·주입합니다(브라우저류 콘텐츠 뷰).",
+    caution: true,
+  },
+  sidecar: {
+    label: "네이티브 엔진 모듈 로드",
+    detail:
+      "공유 네이티브 엔진 모듈(사이드카 dylib)을 앱 프로세스 안에 로드하고 메시지를 주고받습니다(네이티브 코드 실행 — 가장 강력한 부류). 매니페스트 sidecars[] 에 선언된 모듈만 열 수 있습니다.",
     caution: true,
   },
   pty: {
@@ -453,6 +461,14 @@ export type ReachStrategy =
 
 // 외부 런타임 의존성 = 4-tuple: identity(name·bin) + observe(작동 관찰) + accept(수용 술어) + reach(공급).
 // observe/accept/reach 는 선택 — 미선언이면 레거시 동작(존재=수용, install=공급). reconcile 엔진(M3)이 실행.
+// 사이드카(engine 모델) 의존 선언 — 플러그인이 열 공유 네이티브 모듈. name 은 사이드카 이름
+// (soksak-sidecar-<name> 의 <name>), interface 는 메시지 프로토콜 id@major. 코어가 로드 시 바이너리
+// 자기보고(soksak_sidecar_abi)와 대조한다 — 불일치는 거부(선언≡실물). 분류·ABI 정본 docs/SIDECARS.md.
+export interface SidecarDep {
+  name: string; // ^[a-z0-9][a-z0-9-]*$
+  interface: string; // ^[a-z0-9][a-z0-9.-]*@[0-9]+$ (예: "soksak-engine-chromium@1")
+}
+
 export interface LibraryDep {
   name: string; // identity — 패키지/도구 식별(예: "@google/gemini-cli")
   bin: string; // PATH/probe 대상 실행 bin
@@ -508,6 +524,8 @@ export interface PluginManifest {
   dependencies?: Record<string, string>;
   // 외부 CLI/라이브러리 종속성 — 동의 후 미설치면 강제 설치. dependencies(플러그인↔플러그인)와 별개 축.
   libraries?: LibraryDep[];
+  // 사이드카(engine 모듈) 의존 — 선언된 것만 app.sidecar.open 가능. "sidecar" 권한 필수.
+  sidecars?: SidecarDep[];
   // 사용자 구성 설정 스키마(선택). 글로벌+프로젝트별 오버라이드. 무해(선언형) → 권한 불요.
   configuration?: ConfigSetting[];
   permissions: PluginPermission[];
@@ -608,6 +626,10 @@ export function validateSettingValue(
 
 export const PLUGIN_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const VIEW_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+// 사이드카 이름(soksak-sidecar-<name> 의 <name>) — 경로 조립에 쓰이므로 traversal 안전 형식.
+const SIDECAR_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
+// 사이드카 interface id — "<protocol-id>@<major>" (예: soksak-engine-chromium@1).
+const SIDECAR_INTERFACE_RE = /^[a-z0-9][a-z0-9.-]*@[0-9]+$/;
 const COMMAND_NAME_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 const EXT_RE = /^[a-z0-9]+$/;
 const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/;
@@ -822,6 +844,7 @@ export function parseManifest(
       "template",
       "dependencies",
       "libraries",
+      "sidecars",
       "configuration",
       "permissions",
       "contributes",
@@ -978,6 +1001,36 @@ export function parseManifest(
         libraries.push(lib);
       });
       checkDuplicates(libraries.map((l) => l.bin), "libraries[].bin", errors);
+    }
+  }
+
+  // sidecars: 사이드카(engine 모듈) 의존 선언(선택). 선언된 것만 app.sidecar.open 가능(코어가
+  // 로드 시 interface 를 바이너리 자기보고와 대조). "sidecar" 권한 필수. 정본 docs/SIDECARS.md.
+  const sidecars: SidecarDep[] = [];
+  if (raw.sidecars !== undefined) {
+    if (!Array.isArray(raw.sidecars)) {
+      errors.push("sidecars: 배열(사이드카 의존 선언)이어야 함");
+    } else {
+      raw.sidecars.forEach((item, i) => {
+        if (!isRecord(item)) {
+          errors.push(`sidecars[${i}]: 객체여야 함`);
+          return;
+        }
+        checkKnownKeys(item, ["name", "interface"], `sidecars[${i}]`, errors);
+        if (!isNonEmptyString(item.name) || !SIDECAR_NAME_RE.test(item.name)) {
+          errors.push(`sidecars[${i}].name: ^[a-z0-9][a-z0-9-]*$ 필수`);
+          return;
+        }
+        if (!isNonEmptyString(item.interface) || !SIDECAR_INTERFACE_RE.test(item.interface)) {
+          errors.push(`sidecars[${i}].interface: ^[a-z0-9][a-z0-9.-]*@[0-9]+$ 필수(예: soksak-engine-chromium@1)`);
+          return;
+        }
+        sidecars.push({ name: item.name.trim(), interface: item.interface.trim() });
+      });
+      checkDuplicates(sidecars.map((s) => s.name), "sidecars[].name", errors);
+      if (sidecars.length > 0 && !(raw.permissions as unknown[] | undefined)?.includes("sidecar")) {
+        errors.push('sidecars: "sidecar" 권한 선언 필요');
+      }
     }
   }
 
@@ -1536,6 +1589,7 @@ export function parseManifest(
       ...(raw.template === true ? { template: true } : {}),
       ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
       ...(libraries.length > 0 ? { libraries } : {}),
+      ...(sidecars.length > 0 ? { sidecars } : {}),
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
       contributes: { views, commands, iconSets, fileViewers, nodes, programs, events, ...(skill ? { skill } : {}) },

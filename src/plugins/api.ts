@@ -490,6 +490,13 @@ export interface SoksakPluginApi {
     /** kill + 정리. */
     kill: (handle: number) => Promise<void>;
   };
+  /** 사이드카(engine 모듈) 채널 — 매니페스트 sidecars[] 에 선언된 공유 네이티브 모듈을 앱 프로세스에
+   *  로드하고 불투명 JSON 메시지를 주고받는다. "sidecar" 권한(caution). 코어는 맹목 relay(메시지
+   *  의미는 플러그인↔사이드카 사적 계약 — docs/SIDECARS.md). 모듈은 로드 후 상주(unload 없음). */
+  sidecar?: {
+    /** 선언된 사이드카 열기 → 채널 핸들. 미선언 이름은 거부(선언≡실물). 최초 open 이 로드+검증+init. */
+    open: (name: string) => Promise<SidecarHandle>;
+  };
   /** WebSocket 클라이언트(ws:// 평문). "network" 권한. 브라우저 WebSocket 과 달리 Origin 헤더를
    *  보내지 않아 Origin 을 검사하는 서버(webOS TV SSAP 등)에 연결된다. 이벤트 기반(폴링 0). */
   ws?: {
@@ -721,6 +728,70 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker, ns: s
     kill: async (handle: number): Promise<void> => {
       await deps.invoke("process_kill", { id: handle });
       procs.delete(handle);
+    },
+  };
+}
+
+// app.sidecar 채널 핸들 — 열린 engine 모듈과의 불투명 JSON 채널. 의미는 플러그인↔사이드카 사적
+// 계약(docs/SIDECARS.md), 코어·이 API 는 내용을 해석하지 않는다.
+export interface SidecarHandle {
+  /** 불투명 요청 → 모듈의 동기 응답(JSON). */
+  send: (msg: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  /** 모듈 이벤트 구독 — 이벤트는 {event, ...payload} 형이고 event 필드로 demux. 반환=해지. */
+  on: (event: string, cb: (payload: Record<string, unknown>) => void) => Disposable;
+  /** 채널 해제(모듈은 상주 유지 — unload 없음). 멱등. */
+  close: () => Promise<void>;
+}
+
+// app.sidecar 구현 — 매니페스트 sidecars[] 에 선언된 engine 모듈만 연다(선언≡실물: 미선언 open =
+// throw). 이벤트는 Tauri Channel 로 이 호출자에만 배달(전역 emit 아님 — 미개봉 코드 무배달·누수 0).
+function createSidecarApi(
+  deps: PluginApiDeps,
+  tracker: DisposableTracker,
+  manifest: PluginManifest,
+) {
+  return {
+    open: async (name: string): Promise<SidecarHandle> => {
+      const decl = (manifest.sidecars ?? []).find((s) => s.name === name);
+      if (!decl) {
+        throw new Error(`매니페스트 sidecars 에 선언되지 않은 사이드카: ${name}`);
+      }
+      const listeners = new Map<string, Set<(p: Record<string, unknown>) => void>>();
+      const onEvent = new Channel<Record<string, unknown>>();
+      onEvent.onmessage = (m) => {
+        const ev = typeof m?.event === "string" ? (m.event as string) : "";
+        listeners.get(ev)?.forEach((f) => f(m));
+      };
+      const handle = (await deps.invoke("sidecar_open", {
+        name,
+        interface: decl.interface,
+        onEvent,
+      })) as number;
+      let closed = false;
+      const close = async () => {
+        if (closed) return;
+        closed = true;
+        await deps.invoke("sidecar_close", { name, handle }).catch(() => {});
+      };
+      tracker.wrap(() => void close()); // 플러그인 비활성화 시 채널 회수
+      return {
+        send: async (msg) =>
+          (await deps.invoke("sidecar_send", {
+            name,
+            handle,
+            payload: JSON.stringify(msg),
+          })) as Record<string, unknown>,
+        on: (event, cb) => {
+          let set = listeners.get(event);
+          if (!set) {
+            set = new Set();
+            listeners.set(event, set);
+          }
+          set.add(cb);
+          return tracker.wrap(() => void listeners.get(event)?.delete(cb));
+        },
+        close,
+      };
     },
   };
 }
@@ -1568,6 +1639,7 @@ export function buildPluginApi(
       : undefined,
     pty: has("pty") ? createPtyApi(deps, tracker) : undefined,
     process: has("process") ? createProcessApi(deps, tracker, id) : undefined,
+    sidecar: has("sidecar") ? createSidecarApi(deps, tracker, manifest) : undefined,
     network: has("network") ? createNetworkApi(deps, id) : undefined,
     ws: has("network") ? createWsApi(deps, tracker) : undefined,
     bus: {

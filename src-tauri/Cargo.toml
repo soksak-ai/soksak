@@ -29,6 +29,8 @@ tauri = { version = "2", features = ["protocol-asset", "unstable", "devtools"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# 사이드카(engine 모델) dylib 로더 — docs/SIDECARS.md. 모듈은 로드 후 unload 금지(의도적 leak).
+libloading = "0.8"
 portable-pty = "0.9"
 base64 = "0.22"
 tauri-plugin-dialog = "2.7.1"

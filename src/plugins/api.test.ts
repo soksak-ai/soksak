@@ -885,3 +885,51 @@ describe("cross-plugin 의존 게이트 (executeGated + scheduler.register, §de
     expect(inv).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("app.sidecar — 권한 게이트 + 선언≡실물", () => {
+  beforeEach(() => {
+    // Tauri Channel 생성이 요구하는 내부 스텁(jsdom 에 실물 없음) — 콜백 id 발급만 흉내.
+    (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ ??= {
+      transformCallback: () => 0,
+    };
+  });
+  it("sidecar 권한 없으면 API 부재", () => {
+    const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
+    expect(api.sidecar).toBeUndefined();
+  });
+  it("선언된 사이드카만 open — 미선언 이름은 거부", async () => {
+    const m = manifestOf({
+      permissions: ["sidecar"],
+      sidecars: [{ name: "chromium", interface: "soksak-engine-chromium@1" }],
+    });
+    const { api } = buildPluginApi(m, "/d", fakeDeps());
+    await expect(api.sidecar!.open("undeclared")).rejects.toThrow(/선언되지 않은 사이드카/);
+  });
+  it("선언된 이름 open 은 sidecar_open invoke 로 위임(선언 interface 동반)", async () => {
+    const invoke = vi.fn(async () => 7);
+    const m = manifestOf({
+      permissions: ["sidecar"],
+      sidecars: [{ name: "chromium", interface: "soksak-engine-chromium@1" }],
+    });
+    const { api } = buildPluginApi(m, "/d", fakeDeps({ invoke }));
+    const h = await api.sidecar!.open("chromium");
+    expect(invoke).toHaveBeenCalledWith(
+      "sidecar_open",
+      expect.objectContaining({ name: "chromium", interface: "soksak-engine-chromium@1" }),
+    );
+    // send 는 handle 동반 sidecar_send 위임
+    (invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+    await h.send({ type: "ping" });
+    expect(invoke).toHaveBeenCalledWith(
+      "sidecar_send",
+      expect.objectContaining({ name: "chromium", handle: 7, payload: '{"type":"ping"}' }),
+    );
+    // close 는 멱등
+    await h.close();
+    await h.close();
+    const closes = (invoke as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (c) => c[0] === "sidecar_close",
+    );
+    expect(closes.length).toBe(1);
+  });
+});

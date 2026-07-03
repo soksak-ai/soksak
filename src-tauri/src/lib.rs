@@ -1,4 +1,5 @@
 mod ai_session;
+mod sidecar;
 mod webview;
 #[cfg(feature = "cef-browser")]
 mod cef_engine;
@@ -278,6 +279,7 @@ pub fn run() {
                 // browserGc 가 멈추고 다른 창 GC 는 접두사 필터로 안 건드리므로 child 가 좀비로 남는다.
                 // 창과 함께 죽어야 할 자식을 그 창 label 접두사(b-<label>-)로 골라 명시 정리.
                 tauri::WindowEvent::Destroyed => {
+                    crate::sidecar::forget_window(window.label()); // 사이드카 surface 캐시 무효화(stale NSView 방지)
                     let app = window.app_handle();
                     let prefix = format!("b-{}-", window.label());
                     let orphans: Vec<String> = app
@@ -427,6 +429,9 @@ pub fn run() {
             cef_browser_focus,
             cef_browser_close,
             cef_browser_popup_mode,
+            sidecar::sidecar_open,
+            sidecar::sidecar_send,
+            sidecar::sidecar_close,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
@@ -452,6 +457,7 @@ pub fn run() {
                 mediaproxy::cleanup();
                 #[cfg(feature = "cef-browser")]
                 cef_engine::shutdown_engine();
+                sidecar::shutdown_all();
             }
         });
 }

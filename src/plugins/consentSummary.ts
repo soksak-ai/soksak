@@ -4,7 +4,7 @@
 // 권한·기여는 매니페스트 직접값, 종속성은 플러그인↔플러그인(dependencies) + 외부 라이브러리(libraries,
 // 전이 수집). 라이브러리/플러그인 deps 표기가 이 함수의 핵심(동의 화면에 종속성 표기 = 규칙).
 
-import type { LibraryDep, LocalizedText, PluginManifest } from "./spec";
+import type { LibraryDep, LocalizedText, PluginManifest, SidecarDep } from "./spec";
 import { transitiveLibraries, type PluginRuntime } from "../state/plugins";
 import { activationChain, type DepNode } from "./dependencyGraph";
 
@@ -43,6 +43,8 @@ export interface ConsentSummary {
   dependencies: {
     plugins: DepPluginSummary[];
     libraries: LibraryDep[];
+    // 사이드카(engine 모듈) 의존 — 네이티브 코드를 앱 프로세스에 로드(caution 권한과 짝) 고지.
+    sidecars: SidecarDep[];
   };
 }
 
@@ -116,6 +118,7 @@ export function consentSummary(
     dependencies: {
       plugins: dependencyConsents(manifest, installed),
       libraries: transitiveLibraries(manifest, installed),
+      sidecars: manifest.sidecars ?? [],
     },
   };
 }
