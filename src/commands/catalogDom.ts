@@ -6,6 +6,7 @@
 //  - ui.input.click: 주소 → 요소 click 디스패치(danger:inject). 불일치 = NOT_EXPOSED.
 // 노출(data-node)되지 않은 요소는 주소 트리에 없어 접근 불가 → 명확한 에러(추측 0).
 
+import { invoke } from "@tauri-apps/api/core";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { parseAddress, isParseError } from "./address";
 import { scanNodes, type ScannedNode } from "../plugins/nodeScan";
@@ -234,52 +235,79 @@ export function registerDomCatalog(): void {
 
   register("ui.input.drag", {
     description:
-      "Drive a pointer drag (mousedown on `from` -> mousemove -> mouseup over `to`) — drives drag-merge UIs (content/sidebar tabs). zone picks the point within the target rect: center (default), left/right/top/bottom (edge, for directional split). from==to + zone=center = a plain click (mousedown/mouseup, no move). Unexposed addresses return NOT_EXPOSED.",
-    triggers: { ko: "드래그 주입 드롭 탭이동 분할 합치기 E2E 포인터드래그" },
+      "Drive a pointer drag (mousedown on `from` -> mousemove -> mouseup). Two modes: (1) drop onto a target — give `to` (+ optional zone: center default, left/right/top/bottom edge for directional split), drives drag-merge tab UIs; (2) drag by a pixel delta — give `dx`/`dy` instead of `to`, grabs `from` at its center and drags that many CSS px (for resize handles / split dividers). mousemove+mouseup dispatch on window so window-level drag listeners (divider resize) receive them. Unexposed addresses return NOT_EXPOSED.",
+    triggers: { ko: "드래그 주입 드롭 탭이동 분할 합치기 리사이즈 디바이더 E2E 포인터드래그" },
     params: {
-      from: { type: "string", description: "Source node address (the tab/element to grab)", required: true },
-      to: { type: "string", description: "Target node address (drop onto)", required: true },
+      from: { type: "string", description: "Source node address (the tab / divider / element to grab)", required: true },
+      to: { type: "string", description: "Target node address to drop onto (mode 1). Omit when using dx/dy.", required: false },
       zone: {
         type: "string",
-        description: "center | left | right | top | bottom — point within the target rect",
+        description: "center | left | right | top | bottom — point within the target rect (mode 1)",
         enum: ["center", "left", "right", "top", "bottom"],
       },
+      dx: { type: "number", description: "Horizontal drag distance in CSS px from `from` center (mode 2 — resize/divider). Alternative to `to`.", required: false },
+      dy: { type: "number", description: "Vertical drag distance in CSS px from `from` center (mode 2).", required: false },
     },
-    returns: "{ dragged, from, to, zone }",
+    returns: "{ dragged, from, to?, zone?, dx?, dy? }",
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
     danger: "inject",
     examples: [
       'sok ui.input.drag \'{"from":"win/main/chrome/tab/left/a.x","to":"win/main/chrome/tab/left/b.y","zone":"center"}\'',
+      'sok ui.input.drag \'{"from":"win/main/chrome/divider/s0/0","dx":120}\'',
     ],
     handler: (p) => {
       const fromEl = resolveElement(p.from as string);
       if (!fromEl) return notExposed(p.from as string);
-      const toEl = resolveElement(p.to as string);
-      if (!toEl) return notExposed(p.to as string);
       const fr = fromEl.getBoundingClientRect();
-      const tr = toEl.getBoundingClientRect();
       const fromPt = { x: fr.left + fr.width / 2, y: fr.top + fr.height / 2 };
-      const zone = (p.zone as string) ?? "center";
-      // zone → 타겟 rect 내 지점. 가장자리는 분할(컨텐츠/사이드바 hitTest 의 ¼ 경계 안쪽).
-      const zx =
-        zone === "left" ? 0.08 : zone === "right" ? 0.92 : 0.5;
-      const zy =
-        zone === "top" ? 0.12 : zone === "bottom" ? 0.88 : 0.5;
-      const toPt = { x: tr.left + tr.width * zx, y: tr.top + tr.height * zy };
+      const byDelta = p.dx != null || p.dy != null;
+      let toPt: { x: number; y: number };
+      if (byDelta) {
+        // 모드 2 — 픽셀 델타(리사이즈 핸들/디바이더). from 중앙을 잡아 dx/dy 만큼 끈다.
+        toPt = { x: fromPt.x + (Number(p.dx) || 0), y: fromPt.y + (Number(p.dy) || 0) };
+      } else {
+        // 모드 1 — 타겟에 드롭(탭 병합/분할).
+        const toEl = resolveElement(p.to as string);
+        if (!toEl) return notExposed(p.to as string);
+        const tr = toEl.getBoundingClientRect();
+        const zone = (p.zone as string) ?? "center";
+        const zx = zone === "left" ? 0.08 : zone === "right" ? 0.92 : 0.5;
+        const zy = zone === "top" ? 0.12 : zone === "bottom" ? 0.88 : 0.5;
+        toPt = { x: tr.left + tr.width * zx, y: tr.top + tr.height * zy };
+      }
       const fire = (type: string, x: number, y: number, target: EventTarget) =>
         target.dispatchEvent(
           new MouseEvent(type, { clientX: x, clientY: y, bubbles: true, button: 0, view: window }),
         );
       const dist = Math.hypot(toPt.x - fromPt.x, toPt.y - fromPt.y);
+      // mousedown 은 잡는 요소(divider/탭)에, move/up 은 window 에 — divider 리사이즈는 window 레벨
+      // mousemove/mouseup 리스너를 onDividerDown 이 등록하므로 window 로 보내야 받는다.
       fire("mousedown", fromPt.x, fromPt.y, fromEl);
-      // 근접(같은 지점)이면 순수 클릭 — mousemove 없이 mouseup(드래그 임계 미만 = 탭 전환 등).
       if (dist >= 5) {
         const mid = { x: (fromPt.x + toPt.x) / 2, y: (fromPt.y + toPt.y) / 2 };
         fire("mousemove", mid.x, mid.y, window);
         fire("mousemove", toPt.x, toPt.y, window);
       }
       fire("mouseup", toPt.x, toPt.y, window);
-      return { dragged: dist >= 5, click: dist < 5, from: p.from, to: p.to, zone };
+      return byDelta
+        ? { dragged: dist >= 5, from: p.from, dx: p.dx ?? 0, dy: p.dy ?? 0 }
+        : { dragged: dist >= 5, click: dist < 5, from: p.from, to: p.to, zone: p.zone ?? "center" };
+    },
+  });
+
+  // native 마우스 브릿지(App 의 native-mousedown/move/up)를 소켓으로 구동 — 브라우저(네이티브 child)
+  // 위 divider 드래그를 실제 마우스 없이 E2E 자가검증. kind = native-mousedown|native-mousemove|native-mouseup.
+  register("webview.emitNative", {
+    description: "Emit a native mouse-bridge event (native-mousedown/move/up) at viewport x,y — drives divider drag/resize over a native child (browser) without a real mouse, for E2E. Pair with ui.input.drag (DOM path); this is the native path.",
+    params: {
+      kind: { type: "string", description: "native-mousedown | native-mousemove | native-mouseup", required: true },
+      x: { type: "number", description: "viewport x", required: true },
+      y: { type: "number", description: "viewport y", required: true },
+    },
+    returns: "{ ok, kind }",
+    handler: async (p) => {
+      await invoke("webview_emit_native", { kind: p.kind, x: p.x, y: p.y });
+      return { ok: true, kind: p.kind };
     },
   });
 }

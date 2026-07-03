@@ -525,6 +525,7 @@ export const GroupArea = memo(function GroupArea({
         <div
           key={`div-${d.splitId}-${d.index}`}
           data-divider-key={dividerKey(d)}
+          data-node={`divider/${d.splitId}/${d.index}`}
           className={`egroup-divider ${d.dir}`}
           style={
             d.dir === "row"
