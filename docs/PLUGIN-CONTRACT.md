@@ -122,11 +122,21 @@ depends on — consumes it. The detector logic lives once (in the core and mirro
 the contract data lives once (in the core). This is the same published-cache model the plugin
 registry uses (`registry.json` → `registrySnapshot.json`).
 
-## 5. Sidecar standard
+## 5. Sidecar standard — two models
 
-A **sidecar** is a native executable a plugin spawns as a subprocess (LLM runners, embedded
-browsers, media pipelines). Sidecars are not plugins: they have no manifest, no permissions,
-no lifecycle — they are artifacts a plugin consumes through one fixed convention.
+A **sidecar** is a shared binary consumed by plugins. Sidecars are not plugins: they carry no
+plugin manifest and no plugin lifecycle. Two models exist (taxonomy and the engine ABI are
+owned by docs/SIDECARS.md):
+
+- **service** (this section, the original standard): a native executable a plugin spawns as a
+  subprocess (LLM runners, media pipelines) — no manifest, no permissions, stdio contract.
+- **engine**: an in-process dylib that renders into pane surfaces, loaded by the core's
+  generic hosting primitive at plugin request. It self-describes via exported C symbols
+  (the binary is the single truth — no sidecar.json), and the consuming plugin declares it
+  in its manifest (`sidecars[]` + the `"sidecar"` permission), verified at load
+  (declared ≡ actual). See docs/SIDECARS.md §3–§7.
+
+The rest of this section is the **service** model:
 
 Layout rule — one directory per artifact, names always derived the same way:
 

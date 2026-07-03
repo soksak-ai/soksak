@@ -190,6 +190,35 @@ EEXIST 류)·`BROKEN`(dangling 심링크/probe 실패)·`VERSION_MISMATCH`(minVe
 - `accept.minVersion` 을 쓰려면 `observe.versionRe` 가 버전을 뽑아야 한다(없으면 버전 비교를 건너뛴다).
 - `vendor`/`fetch` 는 sha256 무결성 핀이 필수 — 불일치 시 대상 파일을 쓰지 않고 실패한다(공급 거부).
 
+### 사이드카 (`sidecars` — engine 모듈 의존)
+
+플러그인이 열 공유 네이티브 엔진 모듈(사이드카 dylib — 예: 번들 Chromium 브라우저 엔진)을
+선언한다. 분류·ABI·수명주기 정본은 docs/SIDECARS.md — 여기는 저작자 요약.
+
+```json
+"permissions": ["sidecar"],
+"sidecars": [
+  { "name": "chromium", "interface": "soksak-engine-chromium@1",
+    "reach": { "fetch": { "url": { "darwin": "https://…/dist.tar.gz" },
+                           "sha256": { "darwin": "<hex>" } } } }
+]
+```
+
+- `"sidecar"` 권한(주의 등급) 필수 — 네이티브 코드를 앱 프로세스에 로드한다(동의 화면에
+  선언된 사이드카 이름·interface 가 함께 표기된다).
+- `app.sidecar.open(name)` 은 **선언된 이름만** 연다(미선언 = throw). 로드 시 코어가 선언
+  `interface` 를 바이너리 자기보고(`soksak_sidecar_abi`)와 대조한다 — 불일치는 거부(선언≡실물).
+- 채널은 불투명 JSON(`handle.send(msg)` / `handle.on(event, cb)`) — 메시지 의미는 플러그인↔
+  사이드카 사적 계약이고 코어는 relay 만 한다. 모듈은 로드 후 상주(`close()`는 채널만 해제).
+- `reach` 는 fetch 전용(sha256 핀 아카이브 자동 설치, 실패 시 무기록). 미선언이면 dev
+  스테이징(`make sidecar-<name>`) 전제.
+
+```ts
+const engine = await app.sidecar!.open("chromium");
+const { id } = await engine.send({ type: "create", x, y, w, h, url });
+engine.on("popup-url", (p) => openInNewTab(String(p.url)));
+```
+
 ### 권한
 
 | 권한 | 부여 표면 | 주의 |
@@ -207,6 +236,7 @@ EEXIST 류)·`BROKEN`(dangling 심링크/probe 실패)·`VERSION_MISMATCH`(minVe
 | `terminal:write` | `app.terminal.sendText` — PTY 키 주입(실행 중 프로그램에 타이핑) | ⚠ |
 | `git:read` | `app.git` — log/show/diff/status(읽기 전용) | |
 | `network` | (표면 없음) fetch 사용 **고지** — 기술적 강제 불가 | ⚠ |
+| `sidecar` | `app.sidecar` — 선언된 엔진 모듈(dylib)을 앱 프로세스에 로드+불투명 채널 | ⚠ 네이티브 코드 실행(sidecars[] 선언 필수) |
 
 영역/능력별로 권한이 분리된다 — UI: `ui`(콘텐츠)·`ui:statusbar`·`ui:overlay:pane`(패널 덮기)·
 `ui:overlay:screen`(앱 전체). 터미널: `terminal`(관찰)·`terminal:read`(화면 내용)·`terminal:write`(입력).

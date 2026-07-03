@@ -72,7 +72,7 @@ The skeleton hardcodes no terminal renderer, no browser chrome, no file-type ren
 A plugin view receives state through its `PluginViewContext` and through `app.*` capabilities. It must not import core Zustand stores, reach into `sessions`/`settings`/`ui`, or read the layout tree. Plugins must not reach into core stores. The context carries identity (`projectId`, `root`, pane/view identity) and nothing the skeleton has not chosen to hand over.
 
 ### A3. Generic capability only — no view-specific hooks.
-Every capability the skeleton exposes must be feature-neutral. No `onBrowserNavigated` baked into the core; expose generic webview events. No terminal-only spawn endpoint dressed as core; expose a generic pane/PTY capability. A capability named after one consumer is a lock-in and is prohibited. Existing feature-named events (`browser-nav`, `native-mousedown`, `browser_overlay_active`) are migration debt, not the contract — they generalize per Section 5.
+Every capability the skeleton exposes must be feature-neutral. No `onBrowserNavigated` baked into the core; expose generic webview events. No terminal-only spawn endpoint dressed as core; expose a generic pane/PTY capability. A capability named after one consumer is a lock-in and is prohibited. Existing feature-named events (`browser-nav`, `native-mousedown`) are migration debt, not the contract — they generalize per Section 5. (The `browser_*` invoke layer was renamed `webview_*` per docs/NAMING.md — file `webview.rs`.)
 
 ### A4. No core lock-in.
 The skeleton must not assume terminal/browser/files are built-in. View kinds, program kinds, and routing must be data-driven, not a fixed enum the skeleton special-cases. Adding a new content subsystem must require zero edits to the skeleton.
@@ -108,8 +108,9 @@ The skeleton exposes only engine-neutral raw substrate: raw PTY bytes, file IO, 
 The skeleton's native dependencies are limited to **host-only primitives it alone can provide** — PTY allocation, an `Origin`-less WebSocket, UDP, the in-memory-key secrets vault, file IO, the OS-webview host — and the generic capabilities built on them. Heavy native code that serves **one** feature and that a JS plugin physically cannot run (a P2P transport stack, a protocol implementation, a fingerprinting HTTP fork) does **not** belong in the skeleton binary. A compile-time dependency would still link it into the skeleton and defeat the thin-skeleton goal; so such code lives in **its own plugin repo as a sidecar binary**, spawned through the `process` capability and talking to the skeleton over the socket — **vendored + hash-pinned**. The decision, in order:
 1. **Can a JS plugin do it through existing capabilities?** → it is a JS plugin (e.g. clubhouse over `app.process`/`app.data`).
 2. **Is it a host-only primitive that neither a JS plugin nor a separate process can replicate** (PTY, `Origin`-less socket, in-memory-key vault, fs, the webview)? → it is a **generic skeleton capability**.
-3. **Is it heavy, self-contained, plugin-specific native code** — not JS-able, not a generic primitive? → it is a **sidecar binary in its own plugin repo**.
-Example: the remote-control stack (iroh QUIC + Noise) is `soksak-plugin-remote-iroh`, a sidecar; the skeleton links no `iroh`. A swappable engine takes the engine's name (`remote-iroh`; siblings `remote-yamux`/`remote-cloudflared`), per the plugin-naming convention.
+3. **Is it heavy native code that must render into the app's own windows** (process-local NSView parenting — a separate process physically cannot attach)? → it is an **engine sidecar**: an in-process dylib behind the generic engine-hosting primitive (`app.sidecar` — docs/SIDECARS.md). The skeleton links nothing and understands none of its messages; it dlopens at plugin request, verifies the binary's ABI self-report against the plugin's declaration, hands over the surface, and relays.
+4. **Is it heavy, self-contained, plugin-specific native code** — not JS-able, not a generic primitive, not surface-bound? → it is a **service sidecar binary in its own repo**, spawned through the `process` capability.
+Example: the remote-control stack (iroh QUIC + Noise) is `soksak-plugin-remote-iroh`, a service sidecar; the skeleton links no `iroh`. The Chromium browser engine is `soksak-sidecar-chromium`, an engine sidecar; the skeleton links no Chromium/CEF. A swappable engine takes the engine's name (`remote-iroh`, `browser-chromium`), per the plugin-naming convention.
 
 ### A15. Unify the interface, not the crate.
 When two backends genuinely differ (plain first-party HTTP vs browser-impersonation HTTP; a stable client vs a fingerprint-spoofing fork), do **not** force them into one crate. The skeleton keeps both implementations and exposes **one capability with opt-in modes** (e.g. `net.http.request` with `impersonate?: "off" | "chrome"`). Plugins call the capability; they never bundle their own HTTP/WS/PTY. Every capability used by one or more plugins is a generic command-registry capability — permission-gated, ns-isolated, CLI/MCP auto-exposed — like `app.data` over SQLite, so the wheel is invented once. Consolidate the **interface**; keep the implementations that genuinely differ (and if they must coexist, the reason is recorded, not hidden).
@@ -141,14 +142,14 @@ For each subsystem: what STAYS in the skeleton (the generic interface), what MOV
 
 ### Browser → plugin
 
-**STAYS (skeleton):** child-webview lifecycle (`browser_open/close/bounds/visible/navigate/eval/list`), macOS layer inversion + hole-punch + native input monitors, media proxy, view routing, GC infrastructure (`browser.rs`, `mediaproxy.rs`).
+**STAYS (skeleton):** child-webview lifecycle (`webview_open/close/bounds/visible/navigate/eval/list` — renamed from `browser_*` per docs/NAMING.md), macOS layer inversion + hole-punch + native input monitors, media proxy, view routing, GC infrastructure (`webview.rs`, `mediaproxy.rs`).
 
 **MOVES (plugin):** URL bar, back/forward/reload, bookmarks UI, devtools toggle, the `kind:"browser"` view-type definition and `BrowserView.tsx` chrome.
 
 **Generic capability the skeleton must expose (browser-map gaps D1–D10, risks E1–E10):**
 - `app.webview.label(hint) → label` — app-level, Tauri-global-unique label coordination across windows (gap D1, risk E1).
 - Generic webview events: `webview.on(label, "nav"|"title"|"open-external"|"status", cb)` replacing hardcoded `browser-*` event names (gap D2, principle A3).
-- Generic `ui.overlayActive(label, bool)` and `ui.domHoles(label, holes[])` replacing `browser_overlay_active` (gap D3).
+- Generic `ui.overlayActive(label, bool)` and `ui.domHoles(label, holes[])` replacing `webview_overlay_active` (gap D3 — the invoke was renamed; the generic registry surface is still the target).
 - Generic `native.click.on(label, cb)` and resize subscription, scoped via `emit_to(label, ...)` (gap D4, risk E4).
 - Cross-platform `webview.eval(label, js)` and `webview.injectScript(label, {script, phase})` with graceful degradation (gaps D5, D8, risk E5).
 - `webview.list(prefix)` for GC parity (risk E6).
@@ -189,6 +190,31 @@ The first extraction that is **native code a JS plugin cannot run**, so it leave
 **Two seams only (A16 — move, not rewrite):** the 24 floor files moved **byte-identical**; only `bridge.rs` changed. ① **dispatch** — the in-process `request_command(app, …)` became a `SOKSAK_SOCKET` JSON-RPC call (same wire). ② **confirm** — the in-process `app.emit("remote-confirm-request")` became a socket round-trip: the sidecar requests `remote.confirm`, the skeleton shows the modal and returns the human decision; the phone still cannot self-approve.
 
 **Ruling:** extractable as a native sidecar. Unlike Terminal/Browser/Files/Editor (JS plugins over skeleton primitives), this is heavy, self-contained, plugin-specific native code, so it is a spawned binary in its own repo — and the skeleton binary drops the whole iroh tree (~13 MB, measured 33M → 20M). Swappable transport engine → engine in the name (`remote-iroh`; future `remote-yamux`/`remote-cloudflared`). The verified floor tests (271) moved with the code and stay green in the sidecar.
+
+### Chromium browser engine → **engine sidecar** (A14 step 3 — surface-bound native code; completed)
+
+The first engine-model sidecar: the bundled Chromium engine renders into pane surfaces, so
+it cannot be a separate process (process-local NSView parenting) — it is an in-process dylib
+(`soksak-sidecar-chromium`, `crates/`) loaded by the skeleton's generic engine-hosting
+primitive (`src-tauri/src/sidecar.rs`, `app.sidecar`; ABI in docs/SIDECARS.md).
+
+**MOVES (verbatim, A16):** the whole engine — GCD message pump with re-entrancy guards, the
+gated render tick, `do_close=1` + deferred-reap close sequence, in-memory profile, popup
+routing, child bounds/flip-y. `src-tauri/src/cef_engine.rs` → `crates/soksak-sidecar-chromium
+/src/engine.rs` (git mv).
+
+**Seams only:** ① bootstrap — env-pointed framework/helper paths became dist-relative
+(own-location resolution), and the browser process no longer re-executes as its own
+subprocess (a dedicated helper binary owns `execute_process`); ② events — the global
+`app.emit("cef-popup")` became a host-vtable emit on the per-caller channel, carrying the
+source browser id; ③ control — the `browser.cef.*` registry commands and `cef_browser_*`
+invokes were **deleted**, replaced by the opaque plugin↔sidecar protocol
+(`soksak-engine-chromium@1`) the skeleton relays without understanding.
+
+**Ruling:** the skeleton links zero Chromium/CEF (the `cef-browser` cargo feature is gone);
+the consumed library's name lives only inside the engine crate (NAMING.md §2). Verified by
+the separation grep gate plus sok E2E on the sidecar path (paint, tab-switch hide/restore,
+modal occlusion, close, idle CPU 0).
 
 ---
 

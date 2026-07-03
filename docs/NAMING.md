@@ -106,3 +106,12 @@ dedicated pass:
 mandatory for any sweep; `cef_browser_*` (pre-deletion) and CEF API names
 (`browser_host_create_browser_sync`, `browser_process_handler`, `browser_subprocess_path`)
 belong to the third-party crate and were never rename targets.
+
+## 7. Enforcement Gate
+
+Mechanical check for the §2 ruling: `grep -riE "\bcef\b" src src-tauri/src packages`
+must return zero hits. Documented exceptions where the string legitimately lives:
+this file (the ruling must name what it bans), `crates/soksak-sidecar-chromium/`
+(the importing crate: dep line, `use cef`, attribution README), and third-party
+API names inside that crate. Substring false positives (`sourceFromState`,
+`graceful`) require word-boundary matching.
