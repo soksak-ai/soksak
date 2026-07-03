@@ -28,6 +28,20 @@
           "en": "Clear recorded events",
           "ko": "기록 비우기"
         }
+      },
+      {
+        "name": "hit",
+        "title": {
+          "en": "elementFromPoint chain",
+          "ko": "좌표 히트 체인"
+        }
+      },
+      {
+        "name": "mouselog",
+        "title": {
+          "en": "Window mouse event counters",
+          "ko": "window 마우스 이벤트 카운터"
+        }
       }
     ]
   },

@@ -51,5 +51,53 @@ export default {
         },
       }),
     );
+
+    // DOM 히트 체인 — elementFromPoint(x,y)의 태그.클래스 체인(위→root). 네이티브 브리지
+    // E2E 에서 "그 좌표에 정말 divider 가 있는가"를 소켓에서 단언하는 관찰 표면.
+    ctx.subscriptions.push(
+      ctx.app.commands.register("hit", {
+        description: "elementFromPoint(x,y) ancestor chain (tag.class list).",
+        params: {
+          x: { type: "number", required: true },
+          y: { type: "number", required: true },
+        },
+        returns: "{ chain: string[] }",
+        handler: (p) => {
+          const el = document.elementFromPoint(Number(p.x), Number(p.y));
+          const chain = [];
+          for (let n = el; n && chain.length < 12; n = n.parentElement) {
+            chain.push(
+              n.tagName.toLowerCase() +
+                (n.className && typeof n.className === "string"
+                  ? "." + n.className.split(/\s+/).filter(Boolean).join(".")
+                  : ""),
+            );
+          }
+          return { chain };
+        },
+      }),
+    );
+
+    // window 레벨 마우스 이벤트 카운터 — 합성 이벤트(mousemove/up)가 window 리스너에
+    // 실제 도달하는지 단언(네이티브 브리지 재생 경로 검증).
+    const mouseLog = { mousemove: 0, mouseup: 0, mousedown: 0, lastX: null };
+    const onAny = (e) => {
+      mouseLog[e.type] += 1;
+      mouseLog.lastX = e.clientX;
+    };
+    for (const t of ["mousedown", "mousemove", "mouseup"]) {
+      window.addEventListener(t, onAny, true);
+      ctx.subscriptions.push({
+        dispose: () => window.removeEventListener(t, onAny, true),
+      });
+    }
+    ctx.subscriptions.push(
+      ctx.app.commands.register("mouselog", {
+        description: "Window-level mouse event counters since load (+ last clientX).",
+        params: {},
+        returns: "{ mousedown, mousemove, mouseup, lastX }",
+        handler: () => ({ ...mouseLog }),
+      }),
+    );
   },
 };

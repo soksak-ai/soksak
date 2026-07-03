@@ -1,107 +1,151 @@
-# 성능 헌법 — 상호작용 성능 원칙
+# Performance Constitution — Interaction Performance Principles
 
-soksak 의 상호작용 성능을 지키는 7가지 원칙. 모든 프런트엔드 코드 변경은 이
-문서를 기준으로 리뷰한다. 위반은 "동작하니까 통과"가 아니라 결함이다.
+Seven principles that protect soksak's interaction performance. Every frontend
+change is reviewed against this document. A violation is a defect — "it works"
+is not a pass.
 
-배경: 2026-06 전수조사에서 가벼운 상호작용(디바이더/탭/사이드바 드래그, 스크롤)
-만으로 WebContent CPU 가 ~100% 까지 오르는 구조적 원인 10건(R1~R10)이 확인됐다.
-원인은 전부 아래 원칙의 위반이었다. 측정 하니스는 `scripts/perf/` 참조.
+Background: a 2026-06 audit found ten structural causes (R1–R10) that drove
+WebContent CPU to ~100% from light interactions alone (divider/tab/sidebar
+drags, scrolling). Every cause was a violation of a principle below. The
+measurement harness lives in `scripts/perf/`.
 
-## 원칙
+Korean translation: [`PERFORMANCE.ko.md`](./PERFORMANCE.ko.md). The English
+file is canonical; on conflict, English wins.
 
-### 1. 구독 최소
+## Principles
 
-컴포넌트는 렌더에 실제로 쓰는 데이터에만 셀렉터로 구독한다.
+### 1. Minimal subscriptions
 
-- 금지: `useSessions()` / `useSettings()` 등 셀렉터 없는 bare 훅 — 스토어의 모든
-  쓰기가 그 컴포넌트(와 전 자식)를 리렌더시킨다.
-- `useSessions.subscribe(cb)` 류 store 전체 구독도 동일 — 콜백이 모든 쓰기마다
-  실행되므로, 비싼 콜백은 프레임 단위로 coalesce 한다(원칙 4·5).
-- 다중 필드가 필요하면 `useShallow` 픽. 액션은 정의 시점에 고정되는 안정 참조라
-  액션별 셀렉터가 안전하다.
+A component subscribes, via selector, only to the data it actually renders.
 
-### 2. 렌더 경계 = 데이터 경계
+- Forbidden: bare hooks with no selector (`useSessions()` / `useSettings()`) —
+  every store write re-renders that component and all of its children.
+- Whole-store subscriptions (`useSessions.subscribe(cb)`) are the same — the
+  callback runs on every write, so expensive callbacks must be coalesced per
+  frame (principles 4 and 5).
+- Use a `useShallow` pick when multiple fields are needed. Actions are stable
+  references fixed at definition time, so per-action selectors are safe.
 
-`React.memo` 경계는 데이터 소유 단위와 일치시킨다(GroupArea=content,
-FileViewer=view, ProjectPane=project …). 경계를 넘는 prop 은 참조 안정성을
-보장한다(useCallback/안정 셀렉터/ref 경유). 커스텀 비교자는 금지 — staleness
-버그의 온상이다. 기본 shallow compare 로 성립하지 않는 memo 는 설계가 틀린 것.
+### 2. Render boundary = data boundary
 
-### 3. 일시 상태와 영속 상태의 분리
+`React.memo` boundaries match data-ownership units (GroupArea=content,
+FileViewer=view, ProjectPane=project …). Props crossing a boundary guarantee
+referential stability (useCallback / stable selectors / refs). Custom
+comparators are forbidden — they breed staleness bugs. A memo that does not
+hold with the default shallow compare has a wrong design.
 
-제스처(드래그) 중간값은 일시 상태다. 스토어(영속 상태) 커밋은 제스처 종료 시
-1회, 또는 시각 추종이 필요하면 프레임당 1회를 상한으로 한다. 매 mousemove 마다
-스토어에 쓰는 코드는 금지.
+### 3. Separate transient from durable state
 
-### 4. 고빈도 이벤트는 프레임당 1회
+Mid-gesture values (drags) are transient state. Commit to the store (durable
+state) once at gesture end — or, when visual tracking is required, at most
+once per frame. Writing to the store on every mousemove is forbidden.
 
-mousemove/dragover/스크롤 연동 등 연속 입력 핸들러는 `rafThrottle`(src/lib)로
-프레임당 1회로 합친다. 제스처 종료 시 `flush()` 로 마지막 값을 반드시 커밋한다
-(리스너 제거 전에 — 아니면 마지막 프레임이 유실돼 스냅백한다).
+### 4. High-frequency events run once per frame
 
-### 5. 비싼 부수효과는 정착 후 1회
+Continuous-input handlers (mousemove, dragover, scroll-linked work) are
+coalesced to once per frame with `rafThrottle` (src/lib). At gesture end,
+`flush()` commits the final value — before removing listeners, or the last
+frame is lost and the UI snaps back.
 
-IPC(invoke)·PTY resize(SIGWINCH)·네이티브 웹뷰 이동/리사이즈는 trailing
-debounce 로 입력이 정착한 뒤 1회 실행한다. 스톰은 본구간 CPU 뿐 아니라
-**지연 스파이크**(예: SIGWINCH 수백 발 → TUI 가 수 초간 연쇄 재그리기)를 만든다.
-강제 레이아웃 읽기(getBoundingClientRect 등)는 매 렌더 동기 실행 금지 — rAF
-타이밍으로 옮긴다.
+### 5. Expensive side effects run once, after input settles
 
-### 6. 플랫폼 페인트 경로 보존
+IPC (invoke), PTY resize (SIGWINCH), and native-webview move/resize run once
+after input settles (trailing debounce). Storms cost not only active-phase CPU
+but **delayed spikes** (e.g. hundreds of SIGWINCHes → a TUI redraw cascade for
+seconds). Forced layout reads (getBoundingClientRect etc.) never run
+synchronously per render — move them to rAF timing.
 
-WebKit 의 합성(비동기) 스크롤·합성 레이어를 깨는 CSS 를 금지한다. 대표:
-전역 `::-webkit-scrollbar` 커스텀(레거시 스크롤바 경로 강제). 스크롤바 스타일은
-표준 `scrollbar-width`/`scrollbar-color` 를 우선한다. 의심 패턴은 반드시
-하니스 A/B 측정으로 검증 후 적용한다.
+#### 5a. Visual continuity during gestures (freeze-frame)
 
-### 7. 측정 없이 완료 없음
+Deferring a native surface's bounds commit (settle-then-once above) must not
+expose a visual gap: during the gesture the slot moves live while the native
+surface below holds its stale bounds, so the pane appears torn or blank.
+The rule: a user gesture never shows discontinuous content.
 
-성능에 닿는 변경은 `scripts/perf/run.sh` 의 before/after 수치를 동반해야 한다.
-시나리오(S1~S7)와 게이트 절차는 `scripts/perf/README.md` 참조. 본구간(active)과
-테일(tail) 둘 다 본다 — 테일 악화는 부수효과 스톰의 신호다.
+- The core emits the gesture fact (`layout.resize-gesture` plugin event, start
+  and end) and provides capture (`app.webview.captureRegion`). It does not
+  know what providers do with them.
+- A native-surface provider covers its slot with a stand-in for the duration:
+  capture the slot at gesture start, show it top-left anchored without
+  scaling inside an opaque container (slot growth must not reveal the stale
+  native beneath), commit bounds exactly once at gesture end, remove the
+  stand-in after the native has repainted. On capture failure, fall back to
+  the pre-existing behavior rather than blanking content.
+- Engine sidecars (surfaces outside the core layer system, composited above
+  the DOM) receive the same fact via the sidecar host-fact relay
+  (`resize-gesture`) and must hide/defer their own surface for the duration.
+- This does not conflict with the [HARD] rule below: the stand-in is a
+  deliberate, temporary visual bridge over a deferred resize whose end state
+  is a true repaint — not a cover-up of a rendering artifact.
 
-## 플러그인 성능 계약
+### 6. Preserve the platform paint path
 
-플러그인 이벤트 핸들러(`onDidChangeActiveView` 등)는 **메인스레드에서 동기
-실행**된다. 무거운 작업(파싱, 네트워크 후처리, 대량 DOM)은 핸들러 안에서 직접
-하지 말고 defer 한다. 호스트는 상태 diff 를 프레임 단위로 coalesce 해 전달하므로
-이벤트는 "최종 상태" 기준이다 — 틱 단위 중간값에 의존하지 말 것.
+CSS that breaks WebKit's composited (async) scrolling or composited layers is
+forbidden. Canonical example: global `::-webkit-scrollbar` customization
+(forces the legacy scrollbar path). Prefer standard `scrollbar-width` /
+`scrollbar-color`. Suspected patterns must be verified with an A/B harness
+measurement before adoption.
 
-## 터미널 렌더러 — WKWebView 합성 stretch (불변식)
+### 7. No completion without measurement
 
-증상: macOS 창 가장자리 드래그(라이브 리사이즈) 중 터미널 글자가 늘어난다(흐릿한
-확대). DOM(탭·사이드바)은 멀쩡한데 터미널만.
+A change that touches performance ships with before/after numbers from
+`scripts/perf/run.sh`. Scenarios (S1–S7) and the gate procedure are in
+`scripts/perf/README.md`. Read both the active phase and the tail — tail
+regressions signal side-effect storms.
 
-근본 원인: 라이브 리사이즈 동안 AppKit 은 `inLiveResize` 로 redraw 를 멈추고, GPU
-합성 레이어(WebGL/Canvas 렌더러의 `<canvas>`)를 새 창 크기로 CALayer 스케일한다
-(`layerContentsRedrawPolicy` 가 명시적 redraw 없으면 콘텐츠를 stretch). DOM 은 WebKit
-이 타일을 매 프레임 재래스터하므로 또렷하다. Chromium 은 리사이즈 콜백에서 동기
-페인트로 회피하지만 WKWebView 엔 그 경로가 없어 Safari 에도 같은 증상이 있다. 즉
-**WKWebView + GPU 캔버스는 리사이즈 stretch 를 구조적으로 못 피한다** — 그 캔버스는
-WebKit 내부 합성 레이어라 우리가 contentsGravity 를 만질 수 없다.
+## Plugin performance contract
 
-규칙:
+Plugin event handlers (`onDidChangeActiveView` etc.) run **synchronously on
+the main thread**. Do not do heavy work (parsing, network post-processing,
+bulk DOM) inside the handler — defer it. The host coalesces state diffs per
+frame, so events describe the final state; do not depend on per-tick
+intermediate values.
 
-- 기본 터미널 렌더러는 WebGL(`xtermRenderer: "webgl"`) — 처리량 우선(사용자 기본값).
-  단 창 리사이즈 중 합성 stretch 가 따라온다(원인은 위). 정확성보다 처리량을 택한
-  기본값이다.
-- DOM 은 리사이즈 정확성이 필요할 때 전환 — WebKit 이 DOM 을 매 프레임 재래스터해
-  안 늘어난다. 설정의 "터미널 렌더러" 또는
-  `sok settings.set '{"key":"xtermRenderer","value":"dom"}'`. 살아있는 터미널에
-  라이브 전환된다(WebGL addon load/dispose).
-- [HARD] stretch 를 "본문을 가려서" 숨기는 류의 우회는 금지 — 은폐는 해결이 아니다.
-  렌더러 선택(DOM)만이 근본 해법이다.
+## Terminal renderer — WKWebView composite stretch (invariant)
 
-근거(2026-06 조사, URL 검증 완료):
+Symptom: during a macOS window-edge drag (live resize), terminal glyphs
+stretch (blurry scaling). DOM (tabs, sidebar) stays crisp; only the terminal
+distorts.
 
-- NSView.LayerContentsRedrawPolicy — `never`/`onSetNeedsDisplay` 는 명시적 redraw
-  없으면 레이어 콘텐츠를 리사이즈 시 stretch(`duringViewResize` 는 매 프레임 redraw):
+Root cause: during live resize AppKit stops redraws (`inLiveResize`) and
+scales the GPU-composited layer (the WebGL/Canvas renderer's `<canvas>`) to
+the new window size as a CALayer (`layerContentsRedrawPolicy` stretches layer
+contents unless explicitly redrawn). DOM stays sharp because WebKit
+re-rasterizes tiles every frame. Chromium avoids this with a synchronous paint
+in the resize callback; WKWebView has no such path, and Safari shows the same
+symptom. In short, **WKWebView + GPU canvas cannot structurally avoid resize
+stretch** — the canvas is a WebKit-internal composited layer whose
+contentsGravity we cannot touch.
+
+Rules:
+
+- The default terminal renderer is WebGL (`xtermRenderer: "webgl"`) —
+  throughput first (the user default). Composite stretch during window resize
+  comes with it (cause above). This default chooses throughput over resize
+  fidelity.
+- Switch to DOM when resize fidelity matters — WebKit re-rasterizes DOM every
+  frame, so it does not stretch. Settings "terminal renderer" or
+  `sok settings.set '{"key":"xtermRenderer","value":"dom"}'`. Live terminals
+  switch in place (WebGL addon load/dispose).
+- [HARD] Workarounds that hide the stretch by covering the body are forbidden
+  — concealment is not a fix. Renderer choice (DOM) is the only root remedy.
+  (The gesture stand-in of 5a is not this: it bridges a deferred resize and
+  ends in a true repaint.)
+
+Evidence (2026-06 investigation, URLs verified):
+
+- NSView.LayerContentsRedrawPolicy — `never`/`onSetNeedsDisplay` stretch layer
+  contents on resize without an explicit redraw (`duringViewResize` redraws
+  every frame):
   <https://developer.apple.com/documentation/appkit/nsview/layercontentsredrawpolicy-swift.enum>
-- Cocoa Live Window Resizing — `inLiveResize`, 콘텐츠 보존은 opt-in 최적화:
+- Cocoa Live Window Resizing — `inLiveResize`; content preservation is an
+  opt-in optimization:
   <https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/CocoaPerformance/Articles/CocoaLiveResize.html>
-- MTKView/SKView 라이브 리사이즈 콘텐츠 stretch(CALayer contentsGravity + redraw 중단):
-  <https://developer.apple.com/forums/thread/94765>
-- servo/webrender #1640 — macOS 는 "리사이즈 콜백에서 반환 전에 한 프레임을 그려야"
-  한다(동기 페인트 부재 시 콘텐츠가 lag/scale): <https://github.com/servo/webrender/issues/1640>
+- MTKView/SKView live-resize content stretch (CALayer contentsGravity + halted
+  redraw): <https://developer.apple.com/forums/thread/94765>
+- servo/webrender #1640 — on macOS "a frame must be drawn before returning
+  from the resize callback" (without synchronous paint, content lags/scales):
+  <https://github.com/servo/webrender/issues/1640>
 
-코드 앵커: `createTerminal.ts` [렌더러 선택] @MX:ANCHOR.
+Code anchor: renderer selection lives in the terminal plugin
+(soksak-plugin-terminal, `src/terminal.ts` `xtermRenderer`).
