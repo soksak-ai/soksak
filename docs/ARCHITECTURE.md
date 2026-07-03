@@ -209,7 +209,7 @@ subprocess (a dedicated helper binary owns `execute_process`); ② events — th
 `app.emit("cef-popup")` became a host-vtable emit on the per-caller channel, carrying the
 source browser id; ③ control — the `browser.cef.*` registry commands and `cef_browser_*`
 invokes were **deleted**, replaced by the opaque plugin↔sidecar protocol
-(`soksak-engine-chromium@1`) the skeleton relays without understanding.
+(`soksak-browser-engine@1`) the skeleton relays without understanding.
 
 **Ruling:** the skeleton links zero Chromium/CEF (the `cef-browser` cargo feature is gone);
 the consumed library's name lives only inside the engine crate (NAMING.md §2). Verified by

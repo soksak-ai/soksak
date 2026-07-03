@@ -1,7 +1,7 @@
 // 사이드카(engine 모델) 호스팅 — 코어의 범용 원시 primitive(A13 의 "webview hosting" 과 같은 층).
 // 플러그인이 매니페스트로 선언한 공유 네이티브 모듈(dylib)을 앱 프로세스에 로드하고, 호출 창의
 // surface(NSView)와 불투명 메시지 채널을 중개한다. 코어는 메시지 의미(create/navigate …)를 모른다
-// — 하는 일은 (1) 선언 interface ↔ 바이너리 자기보고(soksak_sidecar_abi) 대조, (2) surface 주입,
+// — 하는 일은 (1) 선언 interface ↔ 바이너리 자기보고(soksak_sidecar_engine_abi) 대조, (2) surface 주입,
 // (3) JSON bytes relay, (4) surface 이벤트(occlusion) 통지뿐. 분류·ABI 정본 = docs/SIDECARS.md.
 //
 // 수명: 엔진 모듈은 로드 후 절대 unload 하지 않는다(프로세스 종료 시 shutdown 만). 살아있는
@@ -23,15 +23,14 @@ use tauri::ipc::Channel;
 pub const HOST_ABI_VERSION: u32 = 1;
 
 #[repr(C)]
-pub struct SoksakSidecarAbi {
+pub struct SoksakSidecarEngineAbi {
     pub abi: u32,                 // 호스팅 ABI 버전 — 정확 일치만 수용
-    pub model: *const c_char,     // "engine" (service 모델은 ABI 없음 — process/stdio)
-    pub interface: *const c_char, // "soksak-engine-<name>@<major>" — 메시지 프로토콜 id
+    pub interface: *const c_char, // "<protocol-domain>@<major>(예: soksak-browser-engine@1)" — 메시지 프로토콜 id
     pub version: *const c_char,   // 크레이트 semver(진단용)
 }
 
 #[repr(C)]
-pub struct SoksakEngineHost {
+pub struct SoksakSidecarEngineHost {
     pub abi: u32,
     pub ctx: *mut c_void,
     // 모듈→호스트 이벤트(JSON bytes). 임의 스레드. 호스트가 열린 플러그인 채널 전부에 relay.
@@ -47,8 +46,8 @@ pub struct SoksakBuf {
     pub cap: usize,
 }
 
-type AbiFn = unsafe extern "C" fn() -> *const SoksakSidecarAbi;
-type InitFn = unsafe extern "C" fn(host: *const SoksakEngineHost, cfg: *const u8, cfg_len: usize) -> i32;
+type AbiFn = unsafe extern "C" fn() -> *const SoksakSidecarEngineAbi;
+type InitFn = unsafe extern "C" fn(host: *const SoksakSidecarEngineHost, cfg: *const u8, cfg_len: usize) -> i32;
 type MessageFn =
     unsafe extern "C" fn(req: *const u8, len: usize, surface: usize, reply: *mut SoksakBuf) -> i32;
 type NotifyFn = unsafe extern "C" fn(evt: *const u8, len: usize);
@@ -168,7 +167,7 @@ unsafe fn cstr_of(p: *const c_char, what: &str) -> Result<String, String> {
     Ok(CStr::from_ptr(p).to_string_lossy().into_owned())
 }
 
-// 최초 open 시 1회 — dlopen → soksak_sidecar_abi 대조 → 메인스레드 init(rendezvous). 성공 시 등록.
+// 최초 open 시 1회 — dlopen → soksak_sidecar_engine_abi 대조 → 메인스레드 init(rendezvous). 성공 시 등록.
 fn load_module(
     window: &tauri::Window,
     name: &str,
@@ -179,36 +178,28 @@ fn load_module(
         .map_err(|e| format!("dlopen 실패 {}: {e}", path.display()))?;
 
     // 심볼 해소(전부 먼저 — 하나라도 없으면 거부, 부분 로드 없음).
-    let abi_fn: AbiFn = *unsafe { lib.get(b"soksak_sidecar_abi\0") }
-        .map_err(|e| format!("심볼 soksak_sidecar_abi 없음: {e}"))?;
-    let init_fn: InitFn = *unsafe { lib.get(b"soksak_engine_init\0") }
-        .map_err(|e| format!("심볼 soksak_engine_init 없음: {e}"))?;
-    let message: MessageFn = *unsafe { lib.get(b"soksak_engine_message\0") }
-        .map_err(|e| format!("심볼 soksak_engine_message 없음: {e}"))?;
-    let notify: NotifyFn = *unsafe { lib.get(b"soksak_engine_notify\0") }
-        .map_err(|e| format!("심볼 soksak_engine_notify 없음: {e}"))?;
-    let free: FreeFn = *unsafe { lib.get(b"soksak_engine_free\0") }
-        .map_err(|e| format!("심볼 soksak_engine_free 없음: {e}"))?;
-    let shutdown: ShutdownFn = *unsafe { lib.get(b"soksak_engine_shutdown\0") }
-        .map_err(|e| format!("심볼 soksak_engine_shutdown 없음: {e}"))?;
+    // 모델 판정 = 심볼 가족 존재 그 자체(soksak_sidecar_engine_* export = engine 모델). model 필드 재진술 없음.
+    let abi_fn: AbiFn = *unsafe { lib.get(b"soksak_sidecar_engine_abi\0") }
+        .map_err(|e| format!("심볼 soksak_sidecar_engine_abi 없음(engine 모델 아님?): {e}"))?;
+    let init_fn: InitFn = *unsafe { lib.get(b"soksak_sidecar_engine_init\0") }
+        .map_err(|e| format!("심볼 soksak_sidecar_engine_init 없음: {e}"))?;
+    let message: MessageFn = *unsafe { lib.get(b"soksak_sidecar_engine_message\0") }
+        .map_err(|e| format!("심볼 soksak_sidecar_engine_message 없음: {e}"))?;
+    let notify: NotifyFn = *unsafe { lib.get(b"soksak_sidecar_engine_notify\0") }
+        .map_err(|e| format!("심볼 soksak_sidecar_engine_notify 없음: {e}"))?;
+    let free: FreeFn = *unsafe { lib.get(b"soksak_sidecar_engine_free\0") }
+        .map_err(|e| format!("심볼 soksak_sidecar_engine_free 없음: {e}"))?;
+    let shutdown: ShutdownFn = *unsafe { lib.get(b"soksak_sidecar_engine_shutdown\0") }
+        .map_err(|e| format!("심볼 soksak_sidecar_engine_shutdown 없음: {e}"))?;
 
     // 자기기술 대조 — 무매니페스트 원칙의 검증 지점: 바이너리가 곧 진실, 선언과 불일치 = 거부.
     let abi = unsafe { abi_fn() };
     if abi.is_null() {
-        return Err("soksak_sidecar_abi() 가 null 반환".into());
+        return Err("soksak_sidecar_engine_abi() 가 null 반환".into());
     }
-    let (abi_ver, model, iface) = unsafe {
-        (
-            (*abi).abi,
-            cstr_of((*abi).model, "model")?,
-            cstr_of((*abi).interface, "interface")?,
-        )
-    };
+    let (abi_ver, iface) = unsafe { ((*abi).abi, cstr_of((*abi).interface, "interface")?) };
     if abi_ver != HOST_ABI_VERSION {
         return Err(format!("호스팅 ABI 불일치: 모듈 {abi_ver}, 코어 {HOST_ABI_VERSION}"));
-    }
-    if model != "engine" {
-        return Err(format!("model 불일치: 모듈 \"{model}\", engine 필요"));
     }
     if iface != declared_interface {
         return Err(format!(
@@ -218,7 +209,7 @@ fn load_module(
 
     // init 은 메인스레드 계약 — invoke 스레드에서 rendezvous 로 위임(타임아웃 10s).
     let host_ctx = Box::into_raw(Box::new(HostCtx { name: name.to_string() }));
-    let host = Box::into_raw(Box::new(SoksakEngineHost {
+    let host = Box::into_raw(Box::new(SoksakSidecarEngineHost {
         abi: HOST_ABI_VERSION,
         ctx: host_ctx as *mut c_void,
         emit: host_emit,
@@ -233,7 +224,7 @@ fn load_module(
     window
         .run_on_main_thread(move || {
             let cfg = cfg; // move
-            let code = unsafe { init_fn(host_addr as *const SoksakEngineHost, cfg.as_ptr(), cfg.len()) };
+            let code = unsafe { init_fn(host_addr as *const SoksakSidecarEngineHost, cfg.as_ptr(), cfg.len()) };
             let _ = tx.try_send(code);
         })
         .map_err(|e| e.to_string())?;

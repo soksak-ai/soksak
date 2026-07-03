@@ -198,7 +198,7 @@ EEXIST 류)·`BROKEN`(dangling 심링크/probe 실패)·`VERSION_MISMATCH`(minVe
 ```json
 "permissions": ["sidecar"],
 "sidecars": [
-  { "name": "chromium", "interface": "soksak-engine-chromium@1",
+  { "name": "chromium", "interface": "soksak-browser-engine@1",
     "reach": { "fetch": { "url": { "darwin": "https://…/dist.tar.gz" },
                            "sha256": { "darwin": "<hex>" } } } }
 ]
@@ -207,7 +207,7 @@ EEXIST 류)·`BROKEN`(dangling 심링크/probe 실패)·`VERSION_MISMATCH`(minVe
 - `"sidecar"` 권한(주의 등급) 필수 — 네이티브 코드를 앱 프로세스에 로드한다(동의 화면에
   선언된 사이드카 이름·interface 가 함께 표기된다).
 - `app.sidecar.open(name)` 은 **선언된 이름만** 연다(미선언 = throw). 로드 시 코어가 선언
-  `interface` 를 바이너리 자기보고(`soksak_sidecar_abi`)와 대조한다 — 불일치는 거부(선언≡실물).
+  `interface` 를 바이너리 자기보고(`soksak_sidecar_engine_abi`)와 대조한다 — 불일치는 거부(선언≡실물).
 - 채널은 불투명 JSON(`handle.send(msg)` / `handle.on(event, cb)`) — 메시지 의미는 플러그인↔
   사이드카 사적 계약이고 코어는 relay 만 한다. 모듈은 로드 후 상주(`close()`는 채널만 해제).
 - `reach` 는 fetch 전용(sha256 핀 아카이브 자동 설치, 실패 시 무기록). 미선언이면 dev

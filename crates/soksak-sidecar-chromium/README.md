@@ -3,8 +3,8 @@
 Chromium engine sidecar for soksak — the `engine`-model shared native module
 (in-process dylib) behind the `Browser ▸ Chromium` plugin. The core never links
 this crate; it dlopens the built dylib at plugin request and speaks the opaque
-`soksak-engine-chromium@1` message protocol over the generic hosting ABI
-(`soksak-engine-abi`, see `docs/SIDECARS.md`).
+`soksak-browser-engine@1` message protocol over the generic hosting ABI
+(`soksak-sidecar-engine ABI`, see `docs/SIDECARS.md`).
 
 ## Provenance / attribution
 
@@ -31,7 +31,7 @@ the helper's relative framework resolution works unmodified.
 - Diagnostics: `SOKSAK_SIDECAR_CHROMIUM_NO_TICK=1` disables the render tick
   (event-pump-only measurement).
 
-## Protocol (soksak-engine-chromium@1)
+## Protocol (soksak-browser-engine@1)
 
 Requests: `create(x,y,w,h,url)→{id}`, `bounds`, `load`, `reload(ignoreCache)`,
 `back`, `forward`, `hidden`, `focus`, `close`, `popup-mode(asWindow)`.

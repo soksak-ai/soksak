@@ -617,7 +617,7 @@ fn load_framework_at(path: &std::path::Path) -> bool {
     unsafe { load_library(Some(&*c.as_ptr().cast())) == 1 }
 }
 
-// 엔진 초기화 — 호스트의 soksak_engine_init(메인스레드)에서 1회. 모든 경로는 사이드카 dist 디렉토리
+// 엔진 초기화 — 호스트의 soksak_sidecar_engine_init(메인스레드)에서 1회. 모든 경로는 사이드카 dist 디렉토리
 // 기준(자기 위치 상대 해소 — PLUGIN-CONTRACT §5): framework/helper/main-bundle 이 전부 dist 안에 산다.
 // 서브프로세스는 전용 helper 바이너리가 담당하므로 여기서 execute_process 를 부르지 않는다(cefsimple
 // 의 분리-helper 패턴). 성공 시 true.

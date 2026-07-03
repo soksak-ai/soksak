@@ -51,7 +51,7 @@ the name would create a second, driftable truth.
 - No PATH exposure; no `sok` registry surface. Both inherited from the original
   sidecar standard.
 
-## 3. Engine hosting ABI — `soksak-engine-abi` v1 (normative)
+## 3. Engine hosting ABI — `soksak-sidecar-engine ABI` v1 (normative)
 
 Two layers: the **hosting ABI** (u32 version, exact match — how any engine module
 is loaded and driven; the core validates this) and the **interface id**
@@ -62,34 +62,35 @@ Module exports (all `#[no_mangle] extern "C"`, every body `catch_unwind`-wrapped
 no unwinding crosses the boundary in either direction; a trapped panic returns -2):
 
 ```rust
-#[repr(C)] struct SoksakSidecarAbi {
+#[repr(C)] struct SoksakSidecarEngineAbi {
     abi: u32,                 // hosting ABI version — core accepts exactly 1
-    model: *const c_char,     // "engine"
-    interface: *const c_char, // e.g. "soksak-engine-chromium@1"
+    interface: *const c_char, // e.g. "soksak-browser-engine@1"
     version: *const c_char,   // crate semver (diagnostics)
 }
-fn soksak_sidecar_abi() -> *const SoksakSidecarAbi;   // self-description handshake
+fn soksak_sidecar_engine_abi() -> *const SoksakSidecarEngineAbi;    // self-description handshake
+// The model declaration IS the symbol family itself: exporting soksak_sidecar_engine_* = engine
+// model. No model field — a field restating what the symbols already prove could drift.
 
-#[repr(C)] struct SoksakEngineHost {
+#[repr(C)] struct SoksakSidecarEngineHost {
     abi: u32, ctx: *mut c_void,
     emit: extern "C" fn(ctx, json: *const u8, len: usize),  // module→host event (any thread)
     log:  extern "C" fn(ctx, level: i32, msg: *const u8, len: usize),
 }
-fn soksak_engine_init(host: *const SoksakEngineHost, cfg_json: *const u8, len: usize) -> i32;
+fn soksak_sidecar_engine_init(host: *const SoksakSidecarEngineHost, cfg_json: *const u8, len: usize) -> i32;
     // once per process, MAIN THREAD (host guarantees). cfg = {"name", "distDir"} only —
     // engine-specific paths derive from distDir (own-location resolution).
 
 #[repr(C)] struct SoksakBuf { ptr: *mut u8, len: usize, cap: usize }
-fn soksak_engine_message(req: *const u8, len: usize, surface: usize,
+fn soksak_sidecar_engine_message(req: *const u8, len: usize, surface: usize,
                          reply: *mut SoksakBuf) -> i32;
     // opaque request → synchronous JSON reply (module allocates; host must call free).
     // surface = calling window's parent view (NSView as usize), host-injected on every
     // call; the module uses it only where its protocol needs it (e.g. create).
     // Callable from ANY thread — modules queue real work to the main queue internally.
     // Return: 0 ok, -1 protocol error (reply = {"error": ...}), -2 trapped panic.
-fn soksak_engine_notify(evt: *const u8, len: usize);   // host→module fact, fire-and-forget
-fn soksak_engine_free(buf: SoksakBuf);
-fn soksak_engine_shutdown();                            // app exit only, main thread
+fn soksak_sidecar_engine_notify(evt: *const u8, len: usize);   // host→module fact, fire-and-forget
+fn soksak_sidecar_engine_free(buf: SoksakBuf);
+fn soksak_sidecar_engine_shutdown();                            // app exit only, main thread
 ```
 
 Host notifications (v1): `{"type":"surface-occluded","window":<label>,"occluded":bool}`
@@ -101,9 +102,9 @@ The `surface` parameter is ambient because every engine is surface-bound by
 definition — a future pdf/video engine reuses this ABI unchanged.
 
 Handshake order (core, on first `open`): dlopen → resolve **all** symbols (any
-missing = refuse, no partial load) → `soksak_sidecar_abi()` → check `abi == 1`,
-`model == "engine"`, `interface ==` plugin declaration (mismatch names both
-strings) → `init` on the main thread (rendezvous, 10s timeout) → register.
+missing = refuse, no partial load — the symbol family's presence IS the model claim) →
+`soksak_sidecar_engine_abi()` → check `abi == 1`, `interface ==` plugin declaration (mismatch names
+both strings) → `init` on the main thread (rendezvous, 10s timeout) → register.
 
 ## 4. Lifecycle
 
@@ -113,7 +114,7 @@ strings) → `init` on the main thread (rendezvous, 10s timeout) → register.
   per process and live children reference module code — the core intentionally
   leaks the library handle. `close()` releases only the caller's event channel.
 - Repeat `open` reuses the loaded module (new channel handle per caller).
-- `soksak_engine_shutdown` runs only at app exit (RunEvent, main thread).
+- `soksak_sidecar_engine_shutdown` runs only at app exit (RunEvent, main thread).
 
 ## 5. Plugin declaration, permission, conformance
 
@@ -122,7 +123,7 @@ Plugins declare sidecars in the manifest (top-level, parallel to `libraries`):
 ```json
 "permissions": ["sidecar"],
 "sidecars": [
-  { "name": "chromium", "interface": "soksak-engine-chromium@1",
+  { "name": "chromium", "interface": "soksak-browser-engine@1",
     "reach": { "fetch": { "url": { "darwin": "https://.../dist.tar.gz" },
                            "sha256": { "darwin": "<hex>" } } } }
 ]
@@ -175,7 +176,7 @@ Rules:
   renderers from the `" Helper (Renderer).app"` sibling bundle and fails
   silently without it.
 
-## 8. Chromium engine protocol — `soksak-engine-chromium@1`
+## 8. Chromium engine protocol — `soksak-browser-engine@1`
 
 Requests: `create(x,y,w,h,url)→{id}`, `bounds(id,x,y,w,h)`, `load(id,url)`,
 `reload(id,ignoreCache)`, `back(id)`, `forward(id)`, `hidden(id,hidden)`,
