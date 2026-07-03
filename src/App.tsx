@@ -341,7 +341,10 @@ function App() {
     const offDown = listenThisWindow<{ x: number; y: number }>("native-mousedown", (e) => {
       const { x, y } = e.payload;
       const el = document.elementFromPoint(x, y);
-      const divider = el?.closest<HTMLElement>(".egroup-divider");
+      // 네이티브 child 위 드래그 중계 대상: 분할 divider + [data-native-drag] 선언 요소(범용 계약 —
+      // 플러그인 내부 리사이저 등). 드래그가 child 영역에 들어가면 실 이벤트는 child 가 삼키므로,
+      // 여기서 mousedown 을 쏘고 move/up 을 window 로 중계해야 DOM 드래그가 이어진다.
+      const divider = el?.closest<HTMLElement>(".egroup-divider, [data-native-drag]");
       if (divider) {
         dragging = true;
         fire(divider, "mousedown", x, y);

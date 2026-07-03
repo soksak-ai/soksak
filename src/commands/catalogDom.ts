@@ -295,6 +295,27 @@ export function registerDomCatalog(): void {
     },
   });
 
+  register("ui.hit", {
+    description:
+      "Return the topmost DOM element at viewport x,y (tag, classes, data-* attrs, rect) — hit-test diagnostics for drag/click E2E (what would elementFromPoint see?).",
+    params: {
+      x: { type: "number", description: "viewport x", required: true },
+      y: { type: "number", description: "viewport y", required: true },
+    },
+    returns: "{ tag, className, data, rect } | { tag: null }",
+    handler: (p) => {
+      const el = document.elementFromPoint(Number(p.x), Number(p.y));
+      if (!(el instanceof HTMLElement)) return { tag: null };
+      const r = el.getBoundingClientRect();
+      return {
+        tag: el.tagName.toLowerCase(),
+        className: el.className,
+        data: { ...el.dataset },
+        rect: { x: +r.x.toFixed(1), y: +r.y.toFixed(1), w: +r.width.toFixed(1), h: +r.height.toFixed(1) },
+      };
+    },
+  });
+
   // native 마우스 브릿지(App 의 native-mousedown/move/up)를 소켓으로 구동 — 브라우저(네이티브 child)
   // 위 divider 드래그를 실제 마우스 없이 E2E 자가검증. kind = native-mousedown|native-mousemove|native-mouseup.
   register("webview.emitNative", {
