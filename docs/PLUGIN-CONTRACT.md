@@ -148,3 +148,12 @@ Source location is free (an independent repo is the norm, matching the plugin ru
 is responsible for placing the entry point under `dist/`. Dev environments may satisfy `dist/`
 with symlinks into a build tree. Build debris (logs, scratch output) must not live in the
 sidecar directory.
+
+Sidecars expose **no external command surface**. The argv/stdin interface is a private
+contract between the sidecar and its consuming plugin — never place sidecar binaries on PATH,
+never document them as user-facing CLIs, and never mirror them as internal commands of the
+`sok` CLI. Human and AI control goes through the consuming plugin's registry commands
+(surfaced automatically via `sok`/MCP); the command registry is the single control surface.
+Direct-invocation harnesses are unit-level development aids only — completion-grade
+verification must go through the plugin's registry commands so the real path (spawn, IPC,
+stdin EOF, secret env, consent gating) is exercised.
