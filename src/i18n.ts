@@ -18,6 +18,10 @@ const ko = {
   "common.refresh": "새로고침",
   "common.cancel": "취소",
 
+  "picker.title": "프로젝트 열기",
+  "picker.empty": "최근 프로젝트가 없습니다 — 새 프로젝트로 시작하세요.",
+  "picker.openIn": "{window} 창에 열림",
+
   "project.close": "프로젝트 닫기",
   "project.new": "새 프로젝트",
   "project.newTitle": "새 프로젝트",
@@ -225,6 +229,9 @@ const en: Record<MsgKey, string> = {
   "common.cancel": "Cancel",
 
   "project.close": "Close project",
+  "picker.title": "Open a project",
+  "picker.empty": "No recent projects — start with a new project.",
+  "picker.openIn": "open in {window}",
   "project.new": "New project",
   "project.newTitle": "New project",
   "project.folder": "Folder",

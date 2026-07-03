@@ -15,6 +15,7 @@ import { parkedStyle } from "./lib/layerPark";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
 import { PluginSidebar } from "./components/PluginSidebar";
 import { ContentTabs } from "./components/ContentTabs";
+import { ProjectPickerScreen } from "./components/ProjectPickerScreen";
 import { GroupArea } from "./components/GroupArea";
 import { NewProjectModal } from "./components/NewProjectModal";
 import { ProjectSettingsModal } from "./components/ProjectSettingsModal";
@@ -758,6 +759,8 @@ function App() {
             />
           </>
         )}
+        {/* 프로젝트 0개(새 창·P6 열화) = 픽커 화면 — 새 창은 자동 부팅하지 않는다(P6 UX). */}
+        {tabs.length === 0 && <ProjectPickerScreen />}
         {/* 모든 프로젝트를 마운트해 세션 유지(비활성은 visibility 로 숨김). */}
         <div className="terminal-stack">
           {tabs.map((project) => (

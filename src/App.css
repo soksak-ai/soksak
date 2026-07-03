@@ -3603,3 +3603,54 @@ select.dctl {
   color: var(--fg);
   background: rgba(127, 127, 127, 0.18);
 }
+
+/* ── 프로젝트 픽커(프로젝트 0개 창의 첫 화면 — P6 UX) ─────────────────────── */
+.picker-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+.picker-card {
+  width: 460px;
+  max-height: 70%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-soft, var(--bg));
+  border: 1px solid var(--bd-soft);
+  border-radius: 10px;
+  padding: 14px;
+  gap: 10px;
+}
+.picker-head { display: flex; align-items: center; }
+.picker-title { font-weight: 600; font-size: 14px; color: var(--fg); }
+.picker-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.picker-empty { padding: 18px 8px; font-size: 12px; opacity: 0.6; text-align: center; }
+.picker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+}
+.picker-item:hover { background: var(--bg-hover, rgba(127, 127, 127, 0.12)); }
+.picker-item-alias { font-size: 13px; font-weight: 600; }
+.picker-item-root { font-size: 11px; opacity: 0.55; font-family: var(--mono-font, monospace); }
+.picker-item--open .picker-item-alias { opacity: 0.7; }
+.picker-item-owner { font-size: 11px; color: var(--acc); }
+.picker-actions { display: flex; justify-content: flex-end; }

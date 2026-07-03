@@ -1595,12 +1595,46 @@ export function registerCatalog(): void {
 
   // ── 멀티 윈도우 ──────────────────────────────────────────────────────────
   register("window.new", {
-    description: "Open a new OS window (independent workspace). Returns the created window label.",
-    triggers: { ko: "새 창 창 열기 새 윈도우" },
-    params: {},
-    returns: "{ label }",
-    examples: ["sok window.new"],
-    handler: async () => ({ label: await invoke<string>("window_create") }),
+    description:
+      "Open a new OS window (independent workspace). Without root it opens to the project picker. With root it boots straight into that project (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow).",
+    triggers: { ko: "새 창 창 열기 새 윈도우 프로젝트 새 창" },
+    params: {
+      root: {
+        type: "string",
+        description:
+          "Project root to open in the new window (absolute path). Omit = picker.",
+      },
+    },
+    returns: "{ label } | { existingWindow } (root already open — focused instead)",
+    errors: ["INVALID_PARAMS"],
+    examples: ["sok window.new", 'sok window.new \'{"root":"/Users/me/work"}\''],
+    handler: async (p) => {
+      let init: string | undefined;
+      if (p.root) {
+        let root: string;
+        try {
+          root = await validateProjectRoot(p.root as string);
+        } catch (e) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: String(e),
+          };
+        }
+        // P6 선검사: 이미 열려 있으면 창을 만들지 않고 소유 창 포커스(중복 창 0).
+        // 검사↔생성 사이 레이스는 새 창 부트의 claim 이 최종 시행(실패 시 픽커로 열화).
+        const owners = await invoke<{ owners: { root: string; window: string }[] }>(
+          "project_owners",
+        );
+        const owner = owners.owners.find((o) => o.root === root)?.window;
+        if (owner) {
+          await invoke("window_focus", { label: owner }).catch(() => {});
+          return { existingWindow: owner };
+        }
+        init = `root=${encodeURIComponent(root)}`;
+      }
+      return { label: await invoke<string>("window_create", { init }) };
+    },
   });
 
   register("window.list", {

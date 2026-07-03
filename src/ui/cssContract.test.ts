@@ -149,6 +149,7 @@ describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
     ".plugin-contrib-chip", // 역할 칩 — 폐곡선 윤곽
     ".egs-item", // 상태바 플러그인 항목 칩(claude-GUI 의 "gui" 등) — 폐곡선 윤곽
     ".notify-banner", // 인앱 알림 배너 카드 + 액션 버튼(-action) — 폐곡선 윤곽
+    ".picker-card", // 프로젝트 픽커 카드(프로젝트 0개 창 첫 화면) — 폐곡선 윤곽
 
     ".dctl",
     ".dstepper",

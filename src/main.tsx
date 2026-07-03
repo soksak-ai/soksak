@@ -5,7 +5,9 @@ import { startWebviewGc } from "./lib/webviewGc";
 import { initPluginHost } from "./plugins/host";
 import { initNotify } from "./lib/notify";
 import { ensureDefaultWorkspace, validateProjectRoot } from "./lib/workspace";
+import { currentWindowLabel } from "./lib/webviewLabels";
 import { claimRoots } from "./state/projectRegistry";
+import { recordRecentProject } from "./state/recentProjects";
 import { useSessions } from "./state/sessions";
 import { initWorkspacePersistence, coreStoreDeps } from "./state/workspaceBoot";
 import { initViewLabelsPersistence } from "./state/viewLabels";
@@ -59,9 +61,27 @@ async function boot(): Promise<void> {
   } catch (e) {
     console.error("알림/딥링크 초기화 실패:", e);
   }
+  // 프로그래매틱 오픈(window.new{root}) — 창 생성자가 부트 지시를 URL 쿼리로 전달한다
+  // (창별 JS 컨텍스트 분리의 유일한 통로). 지시가 있으면 복원보다 우선: 사용자 의도가
+  // "이 창에서 그 프로젝트"이므로. claim 실패(생성↔부트 레이스)면 빈 창 → 픽커로 열화.
+  const initRoot = new URLSearchParams(window.location.search).get("root");
+  if (initRoot) {
+    try {
+      const denied = await claimRoots([initRoot]);
+      if (!denied.has(initRoot)) {
+        useSessions.getState().bootstrapFirstProject(initRoot);
+        void recordRecentProject(initRoot, ""); // 픽커 최근 목록(명시적 열기)
+      } else {
+        console.warn(`[P6] 지시된 프로젝트가 다른 창에 열림 — 픽커로 열화: ${initRoot}`);
+      }
+    } catch (e) {
+      console.error("지시된 프로젝트 부트 실패:", e);
+    }
+  }
   // 영속된 워크스페이스(레이아웃·탭·분할)를 먼저 복원(A5). 복원본이 있으면 기본 부트를 건너뛴다.
   // 복원본의 root 들은 이전 세션에서 검증된 경로 — 부재 시 그 프로젝트 뷰는 빈 상태로 뜨고
   // 사용자가 정리한다(여기서 fs 검증으로 전체 복원을 막지 않는다). 자동 저장 구독도 여기서 시작.
+  // (initRoot 로 이미 탭이 있으면 restoreProjects 는 멱등 no-op — 자동 저장 구독만 켜진다.)
   let restored = false;
   try {
     restored = await initWorkspacePersistence();
@@ -69,9 +89,10 @@ async function boot(): Promise<void> {
     console.error("워크스페이스 영속 초기화 실패:", e);
   }
   try {
-    if (!restored) {
-      // 복원본 없음 — 사용자가 지정한 기본 프로젝트(설정 영속)가 있으면 그 루트로,
+    if (!restored && !initRoot && currentWindowLabel() === "main") {
+      // 복원본 없음(main 창) — 사용자가 지정한 기본 프로젝트(설정 영속)가 있으면 그 루트로,
       // 무효면 사유를 콘솔에 남기고 project1 로 폴백.
+      // 비-main 새 창은 자동 부팅하지 않는다 — 프로젝트 선택(픽커)이 선행한다(P6 UX).
       let root: string | null = null;
       const preferred = useSettings.getState().defaultProjectRoot;
       if (preferred) {
@@ -87,6 +108,7 @@ async function boot(): Promise<void> {
       const denied = await claimRoots([root]);
       if (!denied.has(root)) {
         useSessions.getState().bootstrapFirstProject(root);
+        void recordRecentProject(root, ""); // 픽커 최근 목록(기본 부트 포함)
       } else {
         console.warn(`[P6] 기본 프로젝트가 다른 창에 열려 있음 — 빈 창 시작: ${root}`);
       }

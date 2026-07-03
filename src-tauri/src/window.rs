@@ -39,14 +39,23 @@ pub fn install_window_natives(app: &AppHandle, label: &str) {
 // 새 창 생성(소켓 명령 window.new 의 핸들러). 본체는 create_window 가 소유 — Dock 메뉴 등 명령 밖
 // 호출처와 공용이다.
 #[tauri::command]
-pub fn window_create(app: AppHandle) -> Result<String, String> {
-    create_window(&app)
+pub fn window_create(app: AppHandle, init: Option<String>) -> Result<String, String> {
+    create_window_init(&app, init.as_deref())
+}
+
+// 새 창 생성(기존 시그니처 유지 — Dock 메뉴 등 init 불요 호출부).
+pub fn create_window(app: &AppHandle) -> Result<String, String> {
+    create_window_init(app, None)
 }
 
 // 새 창 생성 본체. label = "win-<seq>". 같은 앱(index.html)을 로드한다. 반환 = 생성된 창 label.
 // 메인 스레드에서 호출해야 안전(WebviewWindowBuilder). 명령(window_create)과 Dock 메뉴(dockmenu)가
 // 공유하는 단일 진입점.
-pub fn create_window(app: &AppHandle) -> Result<String, String> {
+//
+// init = 새 창 부트 지시 쿼리스트링("root=<enc>" 등, '?' 제외). 새 창의 main.tsx 부트가
+// location.search 로 읽는다 — 창 생성자가 프론트 상태에 직접 손대지 않는 유일한 전달 통로
+// (창별 JS 컨텍스트 분리 원칙). 코어는 쿼리의 의미를 강제하지 않는다(부트가 해석).
+pub fn create_window_init(app: &AppHandle, init: Option<&str>) -> Result<String, String> {
     // 새 창을 트리거한(현재 활성) 창의 위치·배율을 빌드 전에 캡처 — 빌드 후엔 새 창이 포커스를
     // 가져가 활성 창이 바뀐다. 단일 창("main") 하드코딩이 아니라 is_focused 로 동적 판정(MW1).
     // windows()(Window 레지스트리) — 브라우저 연 창도 포함해야 그 창에서 Cmd+N 한 경우 소스로 잡힌다.
@@ -69,6 +78,23 @@ pub fn create_window(app: &AppHandle) -> Result<String, String> {
         .cloned()
         .ok_or_else(|| "창 설정 없음(tauri.conf.json windows[0])".to_string())?;
     cfg.label = label.clone();
+    if let Some(q) = init {
+        // conf url(App("index.html") | External(devUrl))에 부트 지시 쿼리 부여.
+        use tauri::WebviewUrl;
+        cfg.url = match &cfg.url {
+            WebviewUrl::External(u) => {
+                let mut u2 = u.clone();
+                u2.set_query(Some(q));
+                WebviewUrl::External(u2)
+            }
+            WebviewUrl::App(p) => {
+                let s = p.to_string_lossy();
+                let joined = if s.contains('?') { format!("{s}&{q}") } else { format!("{s}?{q}") };
+                WebviewUrl::App(joined.into())
+            }
+            other => other.clone(),
+        };
+    }
     WebviewWindowBuilder::from_config(app, &cfg)
         .map_err(|e| e.to_string())?
         .build()
