@@ -332,6 +332,7 @@ pub fn run() {
             webview::webview_history,
             webview::webview_visible,
             webview::webview_close,
+            webview::webview_divider_highlight,
             webview::webview_list,
             webview::webview_open_window,
             webview::webview_eval,

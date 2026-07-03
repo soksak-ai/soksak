@@ -697,6 +697,32 @@ pub fn webview_open(
     Ok(())
 }
 
+// hover 중인 divider(리사이즈 경계) 강조 — 프론트가 그 요소의 화면 rect 를 넘기면 코어가 accent 바를
+// 브라우저 위 네이티브 레이어에 그린다(rect=None → 숨김). 네이티브 child 위에서도 보이는 유일한 길.
+#[derive(Deserialize)]
+pub struct HlRect {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+#[tauri::command]
+pub fn webview_divider_highlight(window: tauri::Window, rect: Option<HlRect>) {
+    #[cfg(target_os = "macos")]
+    {
+        let app = window.app_handle().clone();
+        set_divider_highlight(
+            &app,
+            window.label().to_string(),
+            rect.map(|r| (r.x, r.y, r.w, r.h)),
+        );
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (window, rect);
+    }
+}
+
 // 패널 레이아웃 변화(분할/리사이즈/이동)에 맞춰 위치/크기 동기화.
 #[tauri::command]
 pub fn webview_bounds(
@@ -1075,6 +1101,20 @@ pub fn install_click_monitor(app: &AppHandle) {
                     NSEventType::LeftMouseDown => "native-mousedown",
                     NSEventType::LeftMouseDragged => "native-mousemove",
                     NSEventType::LeftMouseUp => "native-mouseup",
+                    // hover(버튼 안 누름) — divider 강조용. 브라우저 위 마우스 이동은 매우 빈번하므로
+                    // 25ms(~40Hz) 스로틀한다(드래그 Dragged 는 스로틀 없음 — 리사이즈 정밀).
+                    NSEventType::MouseMoved => {
+                        static LAST_MS: std::sync::atomic::AtomicU64 =
+                            std::sync::atomic::AtomicU64::new(0);
+                        static CLOCK: std::sync::LazyLock<std::time::Instant> =
+                            std::sync::LazyLock::new(std::time::Instant::now);
+                        let now = CLOCK.elapsed().as_millis() as u64;
+                        if now.saturating_sub(LAST_MS.load(Ordering::Relaxed)) < 25 {
+                            return event.as_ptr();
+                        }
+                        LAST_MS.store(now, Ordering::Relaxed);
+                        "native-mousemove"
+                    }
                     _ => return event.as_ptr(),
                 };
                 // 모니터 콜백은 메인 스레드에서 호출된다(AppKit 이벤트 루프).
@@ -1097,11 +1137,80 @@ pub fn install_click_monitor(app: &AppHandle) {
         },
     );
     let mask = NSEventMask(
-        NSEventMask::LeftMouseDown.0 | NSEventMask::LeftMouseDragged.0 | NSEventMask::LeftMouseUp.0,
+        NSEventMask::LeftMouseDown.0
+            | NSEventMask::LeftMouseDragged.0
+            | NSEventMask::LeftMouseUp.0
+            | NSEventMask::MouseMoved.0,
     );
     let monitor = unsafe { NSEvent::addLocalMonitorForEventsMatchingMask_handler(mask, &block) };
     // 모니터는 앱 수명 동안 유지 — drop 되면 해제되므로 의도적으로 leak.
     std::mem::forget(monitor);
+}
+
+// 창별 divider 강조바(메인스레드 전용 — Retained 는 !Send 라 thread_local 로 소유). NSBox(fillColor 가
+// NSColor 를 직접 받음 — CALayer.setBackgroundColor 는 objc2-core-graphics feature 게이트라 회피).
+#[cfg(target_os = "macos")]
+thread_local! {
+    static HL_BARS: std::cell::RefCell<
+        std::collections::HashMap<String, objc2::rc::Retained<objc2_app_kit::NSBox>>,
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+// hover 중인 divider 위치(창 클라이언트 좌표 top-left, px)에 accent 바를 브라우저(네이티브 뷰) "위"에
+// 그린다. rect=None 이면 숨김. seam(child 물림) 방식과 달리 브라우저를 건드리지 않아 밀림/리플로우 0 이고,
+// contentView 최상위 subview 라 브라우저(네이티브)를 덮어 flat 에서도 강조가 보인다.
+#[cfg(target_os = "macos")]
+pub fn set_divider_highlight(app: &AppHandle, label: String, rect: Option<(f64, f64, f64, f64)>) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSBox, NSBoxType, NSColor, NSTitlePosition, NSView, NSWindow};
+    use objc2_foundation::{NSPoint, NSRect, NSSize};
+    let app = app.clone();
+    let _ = app.clone().run_on_main_thread(move || {
+        let Some(mtm) = MainThreadMarker::new() else { return };
+        let Some(win) = app.get_window(&label) else { return };
+        let Ok(ns) = win.ns_window() else { return };
+        if ns.is_null() {
+            return;
+        }
+        let ns_window: &NSWindow = unsafe { &*(ns as *const NSWindow) };
+        let Some(content) = ns_window.contentView() else { return };
+        let ch = content.frame().size.height;
+        HL_BARS.with(|cell| {
+            let mut bars = cell.borrow_mut();
+            match rect {
+                Some((x, y, w, h)) => {
+                    // top-left(웹) → bottom-left(NSView) y-flip.
+                    let frame = NSRect::new(
+                        NSPoint::new(x, ch - (y + h)),
+                        NSSize::new(w.max(1.0), h.max(1.0)),
+                    );
+                    let bar = bars.entry(label.clone()).or_insert_with(|| {
+                        let b = NSBox::new(mtm);
+                        unsafe {
+                            b.setBoxType(NSBoxType::Custom); // 커스텀 = fillColor 로 단색 채움(테두리/타이틀 X)
+                            b.setTitlePosition(NSTitlePosition::NoTitle);
+                            b.setBorderWidth(0.0);
+                            b.setFillColor(&NSColor::controlAccentColor());
+                        }
+                        b
+                    });
+                    let view: &NSView = bar;
+                    unsafe {
+                        view.setFrame(frame);
+                        view.removeFromSuperview();
+                        content.addSubview(view); // 맨 위 subview = 브라우저 child 포함 모든 것 위.
+                        view.setHidden(false);
+                    }
+                }
+                None => {
+                    if let Some(bar) = bars.get(&label) {
+                        let view: &NSView = bar;
+                        unsafe { view.setHidden(true) };
+                    }
+                }
+            }
+        });
+    });
 }
 
 // 창 라이브 리사이즈(가장자리 드래그) 시작/끝을 네이티브로 감지해 프론트에 emit.

@@ -76,6 +76,10 @@ const titleOf = (v: View | undefined): string => (v ? v.title : "");
 // 온 하나만 드래그를 소유하고 나머지는 무시(window 리스너 이중 등록 방지). 한 번에 divider 하나만 드래그.
 let resizeDragActive = false;
 
+// divider 안정 키(hover 강조 매칭용) — data-divider-key 로 노출, App 이 그 요소 rect 를 코어에 넘겨
+// 네이티브 강조바를 브라우저 위에 그린다(seam=child 물림 방식은 밀림/리플로우라 폐기).
+const dividerKey = (d: Divider): string => `${d.splitId}:${d.index}`;
+
 // memo 경계 = content 데이터 경계(원칙 2): content X 의 store 쓰기는 content Y 의
 // 객체 정체성을 보존(mapContent)하므로 다른 컨텐츠/프로젝트의 GroupArea 는 건너뛴다.
 export const GroupArea = memo(function GroupArea({
@@ -520,6 +524,7 @@ export const GroupArea = memo(function GroupArea({
         dividers.map((d) => (
         <div
           key={`div-${d.splitId}-${d.index}`}
+          data-divider-key={dividerKey(d)}
           className={`egroup-divider ${d.dir}`}
           style={
             d.dir === "row"

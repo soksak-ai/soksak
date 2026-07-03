@@ -30,6 +30,7 @@ import { ConsentPreviewHost } from "./components/ConsentPreviewHost";
 import { NotifyHost } from "./ui/NotifyHost";
 import { PluginHeaderActions } from "./ui/PluginHeaderActions";
 import { useUi } from "./state/ui";
+import { useDividerHover } from "./state/dividerHover";
 import { useT } from "./i18n";
 import {
   allGroups,
@@ -352,7 +353,16 @@ function App() {
       }
     });
     const offMove = listenThisWindow<{ x: number; y: number }>("native-mousemove", (e) => {
-      if (dragging) fire(window, "mousemove", e.payload.x, e.payload.y);
+      if (dragging) {
+        fire(window, "mousemove", e.payload.x, e.payload.y);
+        return;
+      }
+      // hover(버튼 안 누름) — 네이티브 child 위에선 divider :hover 가 발동하지 않으므로, 좌표의 divider
+      // (elementFromPoint 는 DOM 만 보므로 네이티브 밑의 divider 를 반환)를 store 에 기록한다. GroupArea 가
+      // 그걸 강조 + 좌우 셀을 잠깐 물려 divider 를 드러낸다. divider 아니면 null(강조 해제).
+      const el = document.elementFromPoint(e.payload.x, e.payload.y);
+      const div = el?.closest<HTMLElement>(".egroup-divider");
+      useDividerHover.getState().set(div?.dataset.dividerKey ?? null);
     });
     const offUp = listenThisWindow<{ x: number; y: number }>("native-mouseup", (e) => {
       if (!dragging) return;
@@ -365,6 +375,30 @@ function App() {
       offUp();
     };
   }, []);
+
+  // hover 중인 divider → 코어가 그 화면 rect 에 accent 바를 브라우저 위(네이티브)에 그린다. 네이티브
+  // child 위에선 DOM 강조가 안 보이므로 유일한 길(seam=child 물림은 밀림이라 폐기). rect 는 그 divider
+  // 요소의 실제 화면 좌표(transform 반영). 없으면 숨김. hover 이동은 코어가 25ms 스로틀한 값이라 빈번치 않다.
+  const dividerHoverKey = useDividerHover((s) => s.key);
+  useEffect(() => {
+    const send = (rect: { x: number; y: number; w: number; h: number } | null) => {
+      void invoke("webview_divider_highlight", { rect }).catch(() => {});
+    };
+    if (!dividerHoverKey) {
+      send(null);
+      return;
+    }
+    const el = document.querySelector(
+      `.egroup-divider[data-divider-key="${CSS.escape(dividerHoverKey)}"]`,
+    );
+    if (!(el instanceof HTMLElement)) {
+      send(null);
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    send({ x: r.left, y: r.top, w: r.width, h: r.height });
+    return () => send(null);
+  }, [dividerHoverKey]);
 
   // 구독 최소 원칙(docs/PERFORMANCE.md 1): 필드/액션별 셀렉터만 — bare 훅 금지.
   // zustand 액션은 create() 시점에 고정되는 안정 참조라 액션 셀렉터는 리렌더 없음.
