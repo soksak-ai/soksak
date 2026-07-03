@@ -1634,20 +1634,54 @@ export function registerCatalog(): void {
 
   register("window.snapshot", {
     description:
-      "Capture the window contents to a PNG. Captures even when fully occluded by other apps (occlusion detection is temporarily disabled during capture). Includes WebGL terminal. Parent folder is created automatically.",
-    triggers: { ko: "스크린샷 캡처 화면 저장 PNG 저장 스냅샷" },
+      "Capture the window contents to a PNG. Captures even when fully occluded by other apps (occlusion detection is temporarily disabled during capture). Includes WebGL terminal. Parent folder is created automatically. Pass base64:true to get the PNG inline instead of a file; rect (CSS px, window coords — same space as ui.measure) crops to a region and implies base64.",
+    triggers: { ko: "스크린샷 캡처 화면 저장 PNG 저장 스냅샷 부분 영역" },
     params: {
       path: {
         type: "string",
-        description: "Output .png path. Omit to use a temp folder.",
+        description: "Output .png path (file mode). Omit to use a temp folder.",
+      },
+      base64: {
+        type: "boolean",
+        description: "Return the PNG as base64 instead of writing a file",
+      },
+      rect: {
+        type: "json",
+        description:
+          "Crop region {x,y,w,h} in CSS px, window coordinates (ui.measure space). Implies base64 mode.",
       },
     },
-    returns: "{ saved }",
+    returns: "{ saved } (file mode) | { pngBase64 } (base64/rect mode)",
+    errors: ["INVALID_PARAMS"],
     examples: [
       "sok window.snapshot",
       'sok window.snapshot \'{"path":"/tmp/shot.png"}\'',
+      'sok window.snapshot \'{"rect":{"x":100,"y":80,"w":400,"h":300},"base64":true}\'',
     ],
     handler: async (p) => {
+      const rect = p.rect as
+        | { x: number; y: number; w: number; h: number }
+        | undefined;
+      if (rect || p.base64) {
+        if (
+          rect &&
+          (typeof rect.x !== "number" ||
+            typeof rect.y !== "number" ||
+            typeof rect.w !== "number" ||
+            typeof rect.h !== "number")
+        ) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: "rect 는 {x,y,w,h} 숫자 필수",
+          };
+        }
+        const pngBase64 = await invoke<string>(
+          "plugin:webview-capture|snapshot_region",
+          rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
+        );
+        return { pngBase64 };
+      }
       let path = p.path as string | undefined;
       if (!path) {
         const { tempDir, join } = await import("@tauri-apps/api/path");

@@ -434,41 +434,6 @@ Full-text search a collection using FTS5 trigram (CJK-aware). Queries shorter th
 sok data.search '{"ns":"soksak-plugin-mailbox","coll":"messages","query":"빌드 실패"}'
 ```
 
-## `debug.sleep`
-
-DEV-ONLY: hold the reply for `ms` then return (ok by default; ok:false when fail=true). Simulates a held-reply process (exec-one onExit) so the scheduler's process_lease lease — no-kill while running, single in-flight, cancel-wakes-wait — can be e2e-tested without a real LLM. Absent in production builds. | 디버그 슬립 대기 보류 테스트 lease 스케줄러
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `fail` | boolean |  | Return ok:false instead of ok:true (exercises backoff/crash path). |
-| `ms` | number |  | Milliseconds to hold the reply before returning (default 3000). |
-
-**Returns**: { slept } (ok:true) | { ok:false } when fail
-**Errors**: INTERNAL
-
-```bash
-sok debug.sleep '{"ms":5000}'
-sok debug.sleep '{"ms":2000,"fail":true}'
-```
-
-## `dev.remoteConfirmMock`
-
-DEV-ONLY: emit a mock remote destructive confirm request so the desktop RemoteConfirmModal renders without a paired phone. For visual verification and headless E2E only; does not touch the Rust confirm authority. Absent in production builds. | 원격 confirm mock 데스크톱 테스트 모달
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `command` | string |  | Command summary to show (default panel.close). |
-| `device_id` | string |  | Requesting device label to show (default iPhone-mock). |
-| `params` | string |  | Optional params summary string to show. |
-| `ttl_secs` | number |  | Countdown seconds to show (default 120). |
-
-**Returns**: { request_id }
-
-```bash
-sok dev.remoteConfirmMock
-sok dev.remoteConfirmMock '{"command":"terminal.clear","device_id":"Pixel-9"}'
-```
-
 ## `editor.close`
 
 Close an editor view (same as view.close).
@@ -2300,17 +2265,21 @@ sok window.resize '{"w":1200,"h":800}'
 
 ## `window.snapshot`
 
-Capture the window contents to a PNG. Captures even when fully occluded by other apps (occlusion detection is temporarily disabled during capture). Includes WebGL terminal. Parent folder is created automatically. | 스크린샷 캡처 화면 저장 PNG 스냅샷
+Capture the window contents to a PNG. Captures even when fully occluded by other apps (occlusion detection is temporarily disabled during capture). Includes WebGL terminal. Parent folder is created automatically. Pass base64:true to get the PNG inline instead of a file; rect (CSS px, window coords — same space as ui.measure) crops to a region and implies base64. | 스크린샷 캡처 화면 저장 PNG 스냅샷 부분 영역
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string |  | Output .png path. Omit to use a temp folder. |
+| `base64` | boolean |  | Return the PNG as base64 instead of writing a file |
+| `path` | string |  | Output .png path (file mode). Omit to use a temp folder. |
+| `rect` | json |  | Crop region {x,y,w,h} in CSS px, window coordinates (ui.measure space). Implies base64 mode. |
 
-**Returns**: { saved }
+**Returns**: { saved } (file mode) | { pngBase64 } (base64/rect mode)
+**Errors**: INVALID_PARAMS
 
 ```bash
 sok window.snapshot
 sok window.snapshot '{"path":"/tmp/shot.png"}'
+sok window.snapshot '{"rect":{"x":100,"y":80,"w":400,"h":300},"base64":true}'
 ```
 
 ## `window.themeScan`

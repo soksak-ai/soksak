@@ -430,6 +430,9 @@ export interface SoksakPluginApi {
     list: (prefix?: string) => Promise<string[]>;
     /** webview 종료 + 정리. */
     close: (label: string) => Promise<void>;
+    /** 창 합성 캡처를 rect(CSS px, 창 좌표)로 crop 한 PNG data URL. 가림 상태에서도 캡처.
+     *  드래그 중 네이티브 표면의 시각 연속 스탠드인(freeze-frame — layout.resize-gesture 와 짝). */
+    captureRegion: (rect: { x: number; y: number; w: number; h: number }) => Promise<string>;
   };
   /** PTY 백드 터미널 세션 spawn + raw 바이트 IO(터미널 플러그인이 xterm 구동). "pty" 권한.
    *  process 와 달리 PTY(flow control·셸 통합·SOKSAK_* env 주입은 코어 pty.rs 소유). 출력은 onData 스트림. */
@@ -1647,6 +1650,18 @@ export function buildPluginApi(
           },
           close: (label) =>
             deps.invoke("webview_close", { label }) as Promise<void>,
+          // 창 합성 캡처를 rect(CSS px, 창 좌표 — getBoundingClientRect 공간)로 crop 한
+          // PNG data URL. 가림 상태에서도 캡처. 용도: 드래그 중 네이티브 표면의 시각 연속
+          // 스탠드인(freeze-frame — layout.resize-gesture 와 짝).
+          captureRegion: async (rect) => {
+            const b64 = (await deps.invoke("plugin:webview-capture|snapshot_region", {
+              x: rect.x,
+              y: rect.y,
+              w: rect.w,
+              h: rect.h,
+            })) as string;
+            return `data:image/png;base64,${b64}`;
+          },
         }
       : undefined,
     pty: has("pty") ? createPtyApi(deps, tracker) : undefined,
