@@ -334,6 +334,7 @@ function App() {
           cancelable: true,
           button: 0,
           buttons: type === "mouseup" ? 0 : 1,
+          view: window, // React 위임이 SyntheticEvent 를 만들려면 view(defaultView)가 필요할 수 있다.
         }),
       );
     let dragging = false;
@@ -376,9 +377,10 @@ function App() {
     };
   }, []);
 
-  // hover 중인 divider → 코어가 그 화면 rect 에 accent 바를 브라우저 위(네이티브)에 그린다. 네이티브
-  // child 위에선 DOM 강조가 안 보이므로 유일한 길(seam=child 물림은 밀림이라 폐기). rect 는 그 divider
-  // 요소의 실제 화면 좌표(transform 반영). 없으면 숨김. hover 이동은 코어가 25ms 스로틀한 값이라 빈번치 않다.
+  // hover/드래그 중인 divider → 코어가 그 화면 rect 에 accent 바를 브라우저 위(네이티브)에 그린다.
+  // 네이티브 child 위에선 DOM 강조가 안 보이므로 유일한 길. rAF 추적 루프: 드래그(리사이즈)로 DOM
+  // divider 가 움직이면 매 프레임 rect 를 재측정해 네이티브 바가 정확히 따라간다 — 1회성 배치는 드래그
+  // 중 바가 제자리에 남는다(회귀). rect 가 안 변한 프레임은 IPC 를 보내지 않는다(변화시에만 invoke).
   const dividerHoverKey = useDividerHover((s) => s.key);
   useEffect(() => {
     const send = (rect: { x: number; y: number; w: number; h: number } | null) => {
@@ -388,16 +390,26 @@ function App() {
       send(null);
       return;
     }
-    const el = document.querySelector(
-      `.egroup-divider[data-divider-key="${CSS.escape(dividerHoverKey)}"]`,
-    );
-    if (!(el instanceof HTMLElement)) {
+    const sel = `.egroup-divider[data-divider-key="${CSS.escape(dividerHoverKey)}"]`;
+    let raf = 0;
+    let last = "";
+    const tick = () => {
+      const el = document.querySelector(sel);
+      if (el instanceof HTMLElement) {
+        const r = el.getBoundingClientRect();
+        const sig = `${r.left.toFixed(1)},${r.top.toFixed(1)},${r.width.toFixed(1)},${r.height.toFixed(1)}`;
+        if (sig !== last) {
+          last = sig;
+          send({ x: r.left, y: r.top, w: r.width, h: r.height });
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => {
+      cancelAnimationFrame(raf);
       send(null);
-      return;
-    }
-    const r = el.getBoundingClientRect();
-    send({ x: r.left, y: r.top, w: r.width, h: r.height });
-    return () => send(null);
+    };
   }, [dividerHoverKey]);
 
   // 구독 최소 원칙(docs/PERFORMANCE.md 1): 필드/액션별 셀렉터만 — bare 훅 금지.

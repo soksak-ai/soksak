@@ -697,6 +697,16 @@ pub fn webview_open(
     Ok(())
 }
 
+// native 마우스 브릿지(App 의 native-mousedown/move/up)를 소켓으로 구동 — 브라우저(네이티브 child)
+// 위 divider 드래그를 실제 마우스 없이 E2E 자가검증한다(ui.input.drag 와 짝: 이건 native 경로,
+// 그건 DOM 경로). kind = native-mousedown | native-mousemove | native-mouseup. 전역 emit —
+// App 의 getCurrentWebviewWindow().listen 은 전역 이벤트도 받는다.
+#[tauri::command]
+pub fn webview_emit_native(window: tauri::Window, kind: String, x: f64, y: f64) {
+    use tauri::Emitter;
+    let _ = window.app_handle().emit(&kind, serde_json::json!({ "x": x, "y": y }));
+}
+
 // hover 중인 divider(리사이즈 경계) 강조 — 프론트가 그 요소의 화면 rect 를 넘기면 코어가 accent 바를
 // 브라우저 위 네이티브 레이어에 그린다(rect=None → 숨김). 네이티브 child 위에서도 보이는 유일한 길.
 #[derive(Deserialize)]
@@ -1147,12 +1157,28 @@ pub fn install_click_monitor(app: &AppHandle) {
     std::mem::forget(monitor);
 }
 
-// 창별 divider 강조바(메인스레드 전용 — Retained 는 !Send 라 thread_local 로 소유). NSBox(fillColor 가
+// divider 강조바 = 순수 시각. hitTest 를 nil 반환해 마우스를 통과시킨다 — 그래야 강조바가 divider 위를
+// 덮어도 그 밑 divider 가 native-mousedown(드래그/리사이즈)을 받는다. NSBox 서브클래스(fillColor 가
 // NSColor 를 직접 받음 — CALayer.setBackgroundColor 는 objc2-core-graphics feature 게이트라 회피).
+#[cfg(target_os = "macos")]
+objc2::define_class!(
+    #[unsafe(super(objc2_app_kit::NSBox))]
+    #[thread_kind = objc2::MainThreadOnly]
+    struct DividerHiliteBox;
+
+    impl DividerHiliteBox {
+        #[unsafe(method(hitTest:))]
+        fn hit_test(&self, _point: objc2_foundation::NSPoint) -> *mut objc2_app_kit::NSView {
+            std::ptr::null_mut() // 마우스 통과 — 밑의 divider 가 드래그를 받는다
+        }
+    }
+);
+
+// 창별 divider 강조바(메인스레드 전용 — Retained 는 !Send 라 thread_local 로 소유).
 #[cfg(target_os = "macos")]
 thread_local! {
     static HL_BARS: std::cell::RefCell<
-        std::collections::HashMap<String, objc2::rc::Retained<objc2_app_kit::NSBox>>,
+        std::collections::HashMap<String, objc2::rc::Retained<DividerHiliteBox>>,
     > = std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
@@ -1161,8 +1187,9 @@ thread_local! {
 // contentView 최상위 subview 라 브라우저(네이티브)를 덮어 flat 에서도 강조가 보인다.
 #[cfg(target_os = "macos")]
 pub fn set_divider_highlight(app: &AppHandle, label: String, rect: Option<(f64, f64, f64, f64)>) {
-    use objc2::MainThreadMarker;
-    use objc2_app_kit::{NSBox, NSBoxType, NSColor, NSTitlePosition, NSView, NSWindow};
+    use objc2::{msg_send, MainThreadMarker};
+    use objc2::rc::Retained;
+    use objc2_app_kit::{NSBoxType, NSColor, NSTitlePosition, NSView, NSWindow};
     use objc2_foundation::{NSPoint, NSRect, NSSize};
     let app = app.clone();
     let _ = app.clone().run_on_main_thread(move || {
@@ -1185,7 +1212,8 @@ pub fn set_divider_highlight(app: &AppHandle, label: String, rect: Option<(f64, 
                         NSSize::new(w.max(1.0), h.max(1.0)),
                     );
                     let bar = bars.entry(label.clone()).or_insert_with(|| {
-                        let b = NSBox::new(mtm);
+                        let b: Retained<DividerHiliteBox> =
+                            unsafe { msg_send![mtm.alloc::<DividerHiliteBox>(), init] };
                         unsafe {
                             b.setBoxType(NSBoxType::Custom); // 커스텀 = fillColor 로 단색 채움(테두리/타이틀 X)
                             b.setTitlePosition(NSTitlePosition::NoTitle);
