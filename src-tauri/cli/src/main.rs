@@ -757,6 +757,22 @@ const SKILL_BODY_TAIL: &str = r#"
 - Drive a TUI: `sok term.send` with JSON text like `[B` (arrow down), `\r` (enter), `` (ctrl-c)
 - Browser automation: `sok browser.open` -> `sok browser.dom.fill` -> `sok browser.dom.click` -> `sok browser.dom.waitFor` -> `sok browser.dom.text`
 
+## Orchestration (multi-window, monitors, live feed)
+
+- Windows are first-class: `sok window.new '{"root":"/abs/path"}'` opens a project in its own
+  window (P6 single-open: an already-open root focuses its window and returns `existingWindow`).
+  `sok window.new '{"mode":"orchestrator"}'` opens the observation window (idempotent).
+- Placement: `sok window.monitors` (facts: monitor rects/scale + every window's frame) ->
+  `sok layout.suggest '{"strategy":"spread","roles":{"orch-1":"orchestrator"}}'` (pure strategy)
+  -> `sok window.place '{"label":...,"x":...,"y":...,"w":...,"h":...}'` (execute, physical px).
+- Watch everything that runs: `sok activity.recent '{"limit":50}'` (cursor with `since`), or
+  follow live: `sok events --kinds command,terminal --since 0` (JSONL push stream; every `sok`
+  call you make is itself recorded as `command.executed`).
+- WINDOW TARGETING TRAP: commands route to the focused window by default. After opening the
+  orchestrator window it usually holds focus, so terminal/panel commands would land there and
+  fail (TARGET_NOT_FOUND). Always pass `"window":"main"` (or the project window's label) in the
+  request envelope — or set it per call: `sok state.tree` first, then target explicitly.
+
 ## Cautions
 
 - close commands are destructive: panel.close removes every tab in the panel; the last project/content/view/pane is protected (LAST_ITEM error).
