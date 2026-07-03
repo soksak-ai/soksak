@@ -71,9 +71,12 @@ The rule: a user gesture never shows discontinuous content.
   native beneath), commit bounds exactly once at gesture end, remove the
   stand-in after the native has repainted. On capture failure, fall back to
   the pre-existing behavior rather than blanking content.
-- Engine sidecars (surfaces outside the core layer system, composited above
-  the DOM) receive the same fact via the sidecar host-fact relay
-  (`resize-gesture`) and must hide/defer their own surface for the duration.
+- Engine-sidecar surfaces (outside the core layer system, composited above
+  the DOM) are orchestrated by their provider plugin, not by the relay: the
+  stand-in must be mounted before the surface hides (hide-first would blank
+  the pane until the capture arrives) and the surface must be shown again
+  before the stand-in is removed. The sidecar host-fact relay
+  (`resize-gesture`) exists for engines that have no DOM-side provider.
 - This does not conflict with the [HARD] rule below: the stand-in is a
   deliberate, temporary visual bridge over a deferred resize whose end state
   is a true repaint — not a cover-up of a rendering artifact.
