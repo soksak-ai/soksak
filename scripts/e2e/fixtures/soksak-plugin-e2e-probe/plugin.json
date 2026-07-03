@@ -1,0 +1,35 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-e2e-probe",
+  "name": {
+    "en": "E2E Event Probe",
+    "ko": "E2E 이벤트 프로브"
+  },
+  "version": "0.1.0",
+  "description": {
+    "en": "Test fixture: records permission-free host events into a ring buffer and exposes them as commands. Loaded via plugin.dev.load by e2e scripts only.",
+    "ko": "테스트 픽스처: 권한 불요 호스트 이벤트를 링버퍼에 기록하고 커맨드로 노출한다. e2e 스크립트가 plugin.dev.load 로만 적재한다."
+  },
+  "permissions": [
+    "commands"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "name": "events",
+        "title": {
+          "en": "Get recorded events",
+          "ko": "기록된 이벤트 조회"
+        }
+      },
+      {
+        "name": "clear",
+        "title": {
+          "en": "Clear recorded events",
+          "ko": "기록 비우기"
+        }
+      }
+    ]
+  },
+  "entry": "main.js"
+}

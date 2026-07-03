@@ -57,6 +57,11 @@ export interface PluginEventMap {
   // 정확히 스냅하기 위한 단일 채널 — app.focus(window-focus 중계)와 동형. 권한 불요(비민감
   // 라이프사이클). 이 창에 emit_to 된 신호만 받는다(per-window — listenThisWindow).
   "window.live-resize": { active: boolean };
+  // 패널 디바이더 드래그 제스처 시작(true)/끝(false) — window.live-resize(창 가장자리)와
+  // 동형의 레이아웃-내부 제스처 채널. 네이티브 표면 제공자(브라우저 플러그인)가 드래그 중
+  // bounds 커밋을 유예하고 시각 연속 스탠드인(freeze-frame)을 띄우는 근거 신호. 발화는
+  // GroupArea 디바이더 핸들러(실드래그·네이티브 브리지·E2E 합성 모두 같은 경로). 권한 불요.
+  "layout.resize-gesture": { active: boolean };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   // 터미널 명령 시작(셸 preexec 의 OSC 633;E — 명령라인·cwd 동반, 폴링 없음).
   // [RULE] claude 등 "명령별" 도메인 처리는 코어가 아니라 이 이벤트를 구독하는
@@ -106,6 +111,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "locale.changed",
   "app.focus",
   "window.live-resize",
+  "layout.resize-gesture",
   "bookmarks.changed",
   "command.started",
   "command.finished",

@@ -340,6 +340,7 @@ pub fn run() {
             webview::webview_inject_script,
             webview::webview_media_extract,
             webview::webview_overlay_active,
+            webview::webview_resize_gesture,
             webview::webview_dom_holes,
             webview::webview_debug_hierarchy,
             window_set_background,

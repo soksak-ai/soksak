@@ -137,3 +137,19 @@ describe("window.live-resize 이벤트", () => {
     expect(got).toEqual([true, false]);
   });
 });
+
+describe("layout.resize-gesture 이벤트", () => {
+  // 패널 디바이더 드래그 제스처(시작/끝)를 플러그인 events 채널로 노출한다.
+  // window.live-resize(창 가장자리)와 동형의 레이아웃-내부 제스처 채널 — 네이티브
+  // 표면 제공자(브라우저)가 드래그 중 bounds 커밋을 유예하고 freeze-frame 을 띄우는
+  // 근거 신호. 권한 불요(비민감 라이프사이클).
+  it("active 토글(드래그 시작=true / 끝=false)을 순서대로 전달한다", () => {
+    const got: boolean[] = [];
+    const d = onPluginEvent("layout.resize-gesture", (p) => got.push(p.active));
+    emitPluginEvent("layout.resize-gesture", { active: true });
+    emitPluginEvent("layout.resize-gesture", { active: false });
+    d.dispose();
+    emitPluginEvent("layout.resize-gesture", { active: true });
+    expect(got).toEqual([true, false]);
+  });
+});

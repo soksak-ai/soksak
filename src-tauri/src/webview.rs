@@ -441,6 +441,19 @@ pub fn webview_overlay_active(window: tauri::Window, active: bool) {
     let _ = (window, active);
 }
 
+// 패널 디바이더 드래그 제스처 릴레이 — 프론트(GroupArea)가 드래그 시작/끝에 호출한다.
+// 코어 layer 안의 child(WKWebView)는 DOM freeze-frame 이 위에서 덮으므로 조치 불요하나,
+// 엔진 사이드카(CEF) surface 는 코어 layer 밖(DOM 위)이라 모듈이 직접 숨김/유예해야 한다
+// → 같은 호스트 사실을 로드된 모듈 전부에 통지(webview_overlay_active 와 동형, relay 만).
+#[tauri::command]
+pub fn webview_resize_gesture(window: tauri::Window, active: bool) {
+    crate::sidecar::notify_all(&serde_json::json!({
+        "type": "resize-gesture",
+        "window": window.label(),
+        "active": active,
+    }));
+}
+
 // DOM 오버레이 홀 동기화 — 프론트가 사이드바 열림/닫힘·폭 변화·창 리사이즈 시 측정해 보고.
 // 닫힘이면 빈 배열을 보내 홀을 비운다. holes 안은 풀사이즈 브라우저 위라도 DOM 이 받는다.
 #[tauri::command]

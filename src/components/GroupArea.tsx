@@ -1,5 +1,7 @@
 import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { rafThrottle } from "../lib/rafThrottle";
+import { emitPluginEvent } from "../plugins/hooks";
 import { parkedStyle } from "../lib/layerPark";
 import { Icon } from "../ui/icons/Icon";
 import { FileViewerHost } from "./FileViewerHost";
@@ -75,6 +77,19 @@ const titleOf = (v: View | undefined): string => (v ? v.title : "");
 // 과, 코어 네이티브-마우스 브릿지(App.tsx)가 재생하는 합성 mousedown 이 둘 다 도착할 수 있다 — 먼저
 // 온 하나만 드래그를 소유하고 나머지는 무시(window 리스너 이중 등록 방지). 한 번에 divider 하나만 드래그.
 let resizeDragActive = false;
+
+// 디바이더 드래그 제스처 사실을 두 소비자 계층에 알린다(코어는 의미를 모름 — 사실만):
+// ① 플러그인 events 채널(layout.resize-gesture) — 이 창의 뷰 제공자(브라우저 플러그인 등)가
+//    드래그 중 native bounds 커밋을 유예하고 freeze-frame 을 띄우는 근거.
+// ② Rust 릴레이(webview_resize_gesture) — 코어 layer 밖의 엔진 사이드카(CEF) surface 에
+//    같은 사실을 통지(webview_overlay_active 의 surface-occluded 패턴과 동형).
+// resizeDragActive 가드 뒤에서만 호출되므로 시작/끝이 항상 짝을 이룬다.
+function emitResizeGesture(active: boolean): void {
+  emitPluginEvent("layout.resize-gesture", { active });
+  void invoke("webview_resize_gesture", { active }).catch(() => {
+    // 비-macOS 등 릴레이 미지원은 무해 — 플러그인 채널은 이미 전달됨.
+  });
+}
 
 // divider 안정 키(hover 강조 매칭용) — data-divider-key 로 노출, App 이 그 요소 rect 를 코어에 넘겨
 // 네이티브 강조바를 브라우저 위에 그린다(seam=child 물림 방식은 밀림/리플로우라 폐기).
@@ -293,6 +308,7 @@ export const GroupArea = memo(function GroupArea({
     const splitPx = (totalPx * d.spanPct) / 100;
     if (splitPx <= 0) return;
     resizeDragActive = true; // 실제 드래그 개시 확정 후에만(위 early-return 은 잠그지 않음).
+    emitResizeGesture(true);
     const startPos = d.dir === "row" ? e.clientX : e.clientY;
     const startSizes = [...d.sizes];
     const i = d.index;
@@ -320,6 +336,9 @@ export const GroupArea = memo(function GroupArea({
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       resizeDragActive = false;
+      // flush(최종 레이아웃 커밋) 뒤에 종료를 알린다 — 구독자(브라우저 provider)는
+      // 이 시점의 슬롯 rect 를 최종값으로 신뢰하고 bounds 를 1회 커밋한다.
+      emitResizeGesture(false);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);

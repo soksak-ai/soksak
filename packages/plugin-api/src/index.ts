@@ -92,6 +92,11 @@ export interface PluginEventMap {
    *  뷰 플러그인이 드래그 중 무거운 작업(fit·네이티브 재배치)의 빈도를 낮추고 끝에 1회
    *  정확히 스냅하기 위한 채널. 권한 불요. per-window(이 창의 드래그만 도착). */
   "window.live-resize": { active: boolean };
+  /** 패널 디바이더 드래그 제스처 시작(true)/끝(false) — window.live-resize(창 가장자리)와
+   *  동형의 레이아웃-내부 제스처 채널. 네이티브 표면 제공자(브라우저 뷰 등)가 드래그 중
+   *  bounds 커밋을 유예하고 시각 연속 스탠드인(freeze-frame)을 띄우는 근거 신호.
+   *  끝(false)은 최종 레이아웃 커밋 이후에 도착한다 — 그 시점 슬롯 rect 가 최종값. 권한 불요. */
+  "layout.resize-gesture": { active: boolean };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   "command.started": {
     projectId: string | null;
