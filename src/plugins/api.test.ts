@@ -39,7 +39,7 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
   return {
     appVersion: "1.0.0",
     invoke: vi.fn(async () => null),
-    execute: vi.fn(async () => ({ ok: true as const })),
+    execute: vi.fn(async () => ({ ok: true as const, code: "OK", message: "ok" })),
     registerCommand: vi.fn(),
     unregisterCommand: vi.fn(() => true),
     getCommandDanger: () => undefined,
@@ -258,7 +258,7 @@ describe("commands.execute — danger ↔ 권한 매핑 + 관리 명령 차단(�
       "/d",
       d,
     );
-    expect(await api.commands!.execute("view.list")).toEqual({ ok: true });
+    expect(await api.commands!.execute("view.list")).toEqual({ ok: true, code: "OK", message: "ok" });
     expect(d.execute).toHaveBeenCalledWith("view.list", {}, {});
   });
 
@@ -283,7 +283,7 @@ describe("commands.execute — danger ↔ 권한 매핑 + 관리 명령 차단(�
       "/d",
       d,
     );
-    expect(await api.commands!.execute("view.close")).toEqual({ ok: true });
+    expect(await api.commands!.execute("view.close")).toEqual({ ok: true, code: "OK", message: "ok" });
   });
 
   it("플러그인 관리 명령은 권한과 무관하게 차단(자기증식 금지)", async () => {
@@ -841,7 +841,7 @@ describe("cross-plugin 의존 게이트 (executeGated + scheduler.register, §de
       d,
     );
     const out = await api.commands!.execute("plugin.other-plugin.foo");
-    expect(out).toEqual({ ok: true });
+    expect(out).toEqual({ ok: true, code: "OK", message: "ok" });
     expect(d.execute).toHaveBeenCalledWith("plugin.other-plugin.foo", {}, {});
   });
 

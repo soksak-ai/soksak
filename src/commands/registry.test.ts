@@ -42,7 +42,7 @@ describe("execute — 기본 계약", () => {
   it("핸들러 일반 객체 반환은 ok:true 로 래핑", async () => {
     reg(TEST_PREFIX + "plain", { handler: () => ({ value: 7 }) });
     const r = await execute(TEST_PREFIX + "plain", {}, {});
-    expect(r).toEqual({ ok: true, value: 7 });
+    expect(r).toEqual({ ok: true, code: "OK", message: "OK", data: { value: 7 } });
   });
 
   it("핸들러의 CmdResult({ok:false}) 는 그대로 통과", async () => {
@@ -114,10 +114,7 @@ describe("execute — 파라미터 검증 매트릭스", () => {
       ok: false,
       code: "INVALID_PARAMS",
     });
-    expect(await execute(TEST_PREFIX + "enum", { mode: "a" }, {})).toEqual({
-      ok: true,
-      mode: "a",
-    });
+    expect(await execute(TEST_PREFIX + "enum", { mode: "a" }, {})).toEqual({ ok: true, code: "OK", message: "OK", data: { mode: "a" } });
   });
 
   it("json 타입은 임의 값 통과(핸들러 책임)", async () => {
@@ -126,7 +123,7 @@ describe("execute — 파라미터 검증 매트릭스", () => {
       handler: (p) => ({ got: p.v }),
     });
     const r = await execute(TEST_PREFIX + "json", { v: { deep: [1] } }, {});
-    expect(r).toEqual({ ok: true, got: { deep: [1] } });
+    expect(r).toEqual({ ok: true, code: "OK", message: "OK", data: { got: { deep: [1] } } });
   });
 
   it("default 는 미지정 시 채워지고 지정 시 유지", async () => {
@@ -134,8 +131,8 @@ describe("execute — 파라미터 검증 매트릭스", () => {
       params: { n: { type: "number", description: "", default: 10 } },
       handler: (p) => ({ n: p.n }),
     });
-    expect(await execute(TEST_PREFIX + "def", {}, {})).toEqual({ ok: true, n: 10 });
-    expect(await execute(TEST_PREFIX + "def", { n: 3 }, {})).toEqual({ ok: true, n: 3 });
+    expect(await execute(TEST_PREFIX + "def", {}, {})).toEqual({ ok: true, code: "OK", message: "OK", data: { n: 10 } });
+    expect(await execute(TEST_PREFIX + "def", { n: 3 }, {})).toEqual({ ok: true, code: "OK", message: "OK", data: { n: 3 } });
   });
 });
 
@@ -151,21 +148,21 @@ describe("execute — 권한 게이트", () => {
     reg(TEST_PREFIX + "danger2", { danger: "inject", handler: () => ({ did: true }) });
     setPermissionGate(() => false);
     const r = await execute(TEST_PREFIX + "danger2", {}, {});
-    expect(r).toEqual({ ok: true, did: true });
+    expect(r).toEqual({ ok: true, code: "OK", message: "OK", data: { did: true } });
   });
 
   it("게이트 허용 시 remote danger 도 실행", async () => {
     reg(TEST_PREFIX + "danger3", { danger: "destructive", handler: () => ({ did: true }) });
     setPermissionGate(() => true);
     const r = await execute(TEST_PREFIX + "danger3", {}, { remote: true });
-    expect(r).toEqual({ ok: true, did: true });
+    expect(r).toEqual({ ok: true, code: "OK", message: "OK", data: { did: true } });
   });
 
   it("danger 미분류 명령은 게이트와 무관", async () => {
     reg(TEST_PREFIX + "safe", { handler: () => ({ did: true }) });
     setPermissionGate(() => false);
     const r = await execute(TEST_PREFIX + "safe", {}, { remote: true });
-    expect(r).toEqual({ ok: true, did: true });
+    expect(r).toEqual({ ok: true, code: "OK", message: "OK", data: { did: true } });
   });
 });
 

@@ -39,18 +39,23 @@ export type CmdErrCode =
   | "CASCADE_REQUIRED"
   | "NOT_EXPOSED";
 
-export type CommandError = {
-  ok: false;
-  code:
-    | CmdErrCode
-    | "INTERNAL"
-    | "TIMEOUT"
-    | "UNKNOWN_COMMAND"
-    | "INVALID_PARAMS"
-    | "PERMISSION_DENIED";
+// 표준 응답 봉투 — 성공/실패 대칭. docs/MESSAGE-PROTOCOL.md 단일진실.
+//   ok=성공/실패, code=성공 "OK"/도메인·실패 ErrCode, message=사람이 읽는 한 줄 표준 답변,
+//   data=기계 페이로드(선택, 중첩). 버블은 message 를 렌더한다.
+export type ErrCode =
+  | CmdErrCode
+  | "INTERNAL"
+  | "TIMEOUT"
+  | "UNKNOWN_COMMAND"
+  | "INVALID_PARAMS"
+  | "PERMISSION_DENIED";
+export interface CommandOutcome {
+  ok: boolean;
+  code: string;
   message: string;
-};
-export type CommandOutcome = ({ ok: true } & object) | CommandError;
+  data?: Record<string, unknown>;
+}
+export type CommandError = CommandOutcome & { ok: false };
 
 /** 플러그인이 register 하는 명령 스펙. description=영어 base(LLM 발견), triggers=언어별 트리거어. */
 export interface PluginCommandSpec {

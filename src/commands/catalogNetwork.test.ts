@@ -38,7 +38,7 @@ describe("net.udp.send 실행", () => {
       { host: "255.255.255.255", port: 9, data: "ff0102", broadcast: true },
       {},
     );
-    expect(r).toEqual({ ok: true, bytesSent: 3 });
+    expect(r).toEqual({ ok: true, code: "OK", message: "OK", data: { bytesSent: 3 } });
     expect(invoke).toHaveBeenCalledWith("network_udp_send", {
       host: "255.255.255.255",
       port: 9,
@@ -94,7 +94,9 @@ describe("net.udp.request 등록/실행", () => {
     });
     expect(r).toEqual({
       ok: true,
-      packets: [{ address: "192.168.0.10", port: 1900, data: "4849", text: "HI" }],
+      code: "OK",
+      message: "OK",
+      data: { packets: [{ address: "192.168.0.10", port: 1900, data: "4849", text: "HI" }] },
     });
   });
 

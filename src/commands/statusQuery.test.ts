@@ -39,8 +39,8 @@ beforeEach(() => {
 describe("status.query — 보고 == 회신(R8)", () => {
   it("보고한 status 가 회신에 그대로 온다", async () => {
     const vid = mkView({ code: "busy", message: "작업 중" });
-    const res = (await execute("status.query", {}, {})) as unknown as StatusRes;
-    expect(res.statuses).toContainEqual({
+    const res = (await execute("status.query", {}, {})) as unknown as { data: StatusRes };
+    expect(res.data.statuses).toContainEqual({
       viewId: vid,
       code: "busy",
       message: "작업 중",
@@ -49,8 +49,8 @@ describe("status.query — 보고 == 회신(R8)", () => {
 
   it("status 미보고 뷰만이면 빈 배열", async () => {
     mkView();
-    const res = (await execute("status.query", {}, {})) as unknown as StatusRes;
-    expect(res.statuses).toEqual([]);
+    const res = (await execute("status.query", {}, {})) as unknown as { data: StatusRes };
+    expect(res.data.statuses).toEqual([]);
   });
 
   it("view 파라미터로 특정 뷰만 회신", async () => {
@@ -60,8 +60,8 @@ describe("status.query — 보고 == 회신(R8)", () => {
       "status.query",
       { view: a },
       {},
-    )) as unknown as StatusRes;
-    expect(res.statuses).toHaveLength(1);
-    expect(res.statuses[0].viewId).toBe(a);
+    )) as unknown as { data: StatusRes };
+    expect(res.data.statuses).toHaveLength(1);
+    expect(res.data.statuses[0].viewId).toBe(a);
   });
 });

@@ -23,6 +23,9 @@ export interface CommandSpec {
   params: Record<string, ParamSpec>;
   // 성공 응답 형태 설명(매뉴얼용).
   returns: string;
+  // 표준 답변(message) 생성 — 성공 결과 data 를 사람이 읽는 한 줄로. 없으면 execute 가 code 를
+  // message 로 에코("OK" 등, 변환 없음). docs/MESSAGE-PROTOCOL.md 의 응답 봉투 message 계약.
+  summarize?: (data: Record<string, unknown>) => string;
   // 발생 가능한 에러 코드.
   errors?: readonly (CmdErrCode | "INTERNAL" | "TIMEOUT")[];
   // CLI 사용 예시(매뉴얼용).
@@ -57,18 +60,26 @@ export function setPermissionGate(
   permissionGate = fn;
 }
 
-export type CommandError = {
-  ok: false;
-  code:
-    | CmdErrCode
-    | "INTERNAL"
-    | "TIMEOUT"
-    | "UNKNOWN_COMMAND"
-    | "INVALID_PARAMS"
-    | "PERMISSION_DENIED";
+// 표준 응답 봉투(요청·진행·응답 3부의 응답) — 성공/실패 대칭. docs/MESSAGE-PROTOCOL.md 단일진실.
+//   ok      성공/실패
+//   code    성공: "OK"/도메인(CREATED·NOOP·UNCHANGED…), 실패: ErrCode 닫힌 열거형
+//   message 사람이 읽는 한 줄 표준 답변(성공·실패 모두 — 버블이 이걸 렌더). 명령이 제공(summarize).
+//   data    기계 페이로드(선택, 중첩 — 봉투 예약키와 충돌 원천 제거)
+export type ErrCode =
+  | CmdErrCode
+  | "INTERNAL"
+  | "TIMEOUT"
+  | "UNKNOWN_COMMAND"
+  | "INVALID_PARAMS"
+  | "PERMISSION_DENIED";
+export interface CommandOutcome {
+  ok: boolean;
+  code: string;
   message: string;
-};
-export type CommandOutcome = ({ ok: true } & object) | CommandError;
+  data?: Record<string, unknown>;
+}
+// 하위호환 별칭 — 실패 봉투를 지칭하던 기존 참조 유지.
+export type CommandError = CommandOutcome & { ok: false };
 
 const registry = new Map<string, CommandSpec>();
 
@@ -179,36 +190,20 @@ function validate(
 // 실행 계측 sink(A1 — P12 실행 가시성). 오케스트레이터가 soksak 에 내리는 명령이 곧 이
 // 경로이므로, 여기 계측이 없으면 "무엇이 실행되는지 본다"가 성립하지 않는다. 주입식(테스트
 // 격리·부트 전 no-op). params 는 키 목록만 — secret 등 민감값을 스트림에 싣지 않는다.
+// 활동 트레이스 — 표준 응답 봉투를 그대로 나른다(사후 변환 없음). message 가 표준 답변,
+// data 는 활동 허브가 별도 표시(hover). docs/MESSAGE-PROTOCOL.md.
 export interface CommandTrace {
   command: string;
   source: "ui" | "remote";
   danger?: "destructive" | "inject";
   paramKeys: string[];
   ok: boolean;
-  code?: string;
+  code: string; // 항상(성공 "OK" 포함)
+  message: string; // 표준 답변(성공·실패 모두)
   durationMs: number;
-  // 실행 구간(대화 버블용) — 요청/응답을 시각에 세울 수 있게 시작·종료를 epoch ms 로 담는다.
   startedAt: number;
   finishedAt: number;
-  // 요청 인자 요약(값) — 요청 버블 본문. 큰 값은 잘라 담는다.
-  params?: string;
-  // 결과 요약(응답 버블 본문) — 성공 시 결과 데이터, 실패 시 message. 큰 결과는 잘라 담는다.
-  // 전체는 호출자(콘솔 result 박스)가 따로 보여준다.
-  result?: string;
-}
-
-function clip(s: string, n = 240): string {
-  return s.length > n ? s.slice(0, n) + "…" : s;
-}
-// 결과를 관찰용 문자열로 — ok/code 는 이미 별도 필드라 데이터 본문만 남긴다.
-function summarizeOutcome(out: CommandOutcome): string {
-  if (!out.ok) return out.message || out.code || "error";
-  const { ok: _ok, ...rest } = out as { ok: true } & Record<string, unknown>;
-  if (Object.keys(rest).length === 0) return "ok";
-  return clip(JSON.stringify(rest));
-}
-function summarizeParams(params: Record<string, unknown>): string {
-  return Object.keys(params).length === 0 ? "" : clip(JSON.stringify(params));
+  data?: Record<string, unknown>; // 기계 페이로드(hover 상세)
 }
 let traceSink: ((t: CommandTrace) => void) | null = null;
 export function setCommandTraceSink(fn: ((t: CommandTrace) => void) | null): void {
@@ -231,12 +226,12 @@ export async function execute(
       danger: registry.get(name)?.danger,
       paramKeys: Object.keys(params),
       ok: out.ok,
-      code: out.ok ? undefined : out.code,
+      code: out.code,
+      message: out.message,
       durationMs: finished - started,
       startedAt: started,
       finishedAt: finished,
-      params: summarizeParams(params),
-      result: summarizeOutcome(out),
+      data: out.data,
     });
   } catch {
     // 계측 실패는 명령 실행에 영향을 주지 않는다.
@@ -272,12 +267,32 @@ async function executeInner(
       }
     }
     const result = await spec.handler(filled, ctx);
-    // handler 가 CmdResult 형태({ok:…})면 그대로, 아니면 ok 래핑.
-    if (result && typeof result === "object" && "ok" in result) {
-      return result as CommandOutcome;
-    }
-    return { ok: true, ...result };
+    return normalizeOutcome(spec, result);
   } catch (e) {
     return { ok: false, code: "INTERNAL", message: String(e) };
   }
+}
+
+// 핸들러 반환(자유 객체 또는 {ok:false,…})을 표준 응답 봉투 {ok,code,message,data?}로 정규화한다.
+// 성공: 예약키(ok/code/message) 분리 → 나머지는 data 로 중첩, message 는 summarize(data) 또는
+// code 에코(변환 없음). 실패: code/message 보존, error 방언은 message 로 흡수(플러그인 하위호환).
+function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): CommandOutcome {
+  const raw: Record<string, unknown> =
+    result && typeof result === "object" ? (result as Record<string, unknown>) : {};
+  const pickData = (rest: Record<string, unknown>, existing: unknown): Record<string, unknown> | undefined => {
+    if (existing && typeof existing === "object") return existing as Record<string, unknown>;
+    return Object.keys(rest).length ? rest : undefined;
+  };
+  if (raw.ok === false) {
+    const { ok: _o, code: rc, message: rm, error: re, data: rd, ...rest } = raw;
+    const code = typeof rc === "string" ? rc : typeof re === "string" ? re : "INTERNAL";
+    const message = typeof rm === "string" ? rm : typeof re === "string" ? re : "error";
+    const data = pickData(rest, rd);
+    return data ? { ok: false, code, message, data } : { ok: false, code, message };
+  }
+  const { ok: _ok, code: rc, message: rm, data: rd, ...rest } = raw;
+  const data = pickData(rest, rd);
+  const code = typeof rc === "string" ? rc : "OK";
+  const message = typeof rm === "string" ? rm : (spec?.summarize?.(data ?? {}) ?? code);
+  return data ? { ok: true, code, message, data } : { ok: true, code, message };
 }

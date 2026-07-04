@@ -42,7 +42,7 @@ describe("resolveDeepLink", () => {
     const out = await resolveDeepLink("soksak://cmd/mailbox.open?id=m1&project=projA", {
       execute: async (name, params, ctx) => {
         calls.push({ name, params, ctx });
-        return { ok: true };
+        return { ok: true, code: "OK", message: "ok" };
       },
       activate: async () => {
         calls.push("activate");
@@ -62,7 +62,7 @@ describe("resolveDeepLink", () => {
     const out = await resolveDeepLink("http://nope", {
       execute: async () => {
         executed = true;
-        return { ok: true };
+        return { ok: true, code: "OK", message: "ok" };
       },
       activate: async () => {},
     });

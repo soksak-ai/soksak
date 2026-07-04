@@ -54,11 +54,11 @@ export function startActivityFeed(): void {
       paramKeys: t.paramKeys,
       ok: t.ok,
       code: t.code,
+      message: t.message,
       durationMs: t.durationMs,
       startedAt: t.startedAt,
       finishedAt: t.finishedAt,
-      params: t.params,
-      result: t.result,
+      data: t.data,
     });
   });
 }

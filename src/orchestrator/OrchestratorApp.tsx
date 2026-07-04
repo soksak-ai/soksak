@@ -27,8 +27,11 @@ function lineOf(e: ActivityEntry): string {
   switch (e.kind) {
     case "command.executed": {
       const head = `${p.command} ${p.ok ? "✓" : `✗ ${p.code ?? ""}`} (${p.durationMs}ms)`;
-      return p.result ? `${head} → ${p.result}` : head;
+      return p.message ? `${head} → ${p.message}` : head;
     }
+    // 진행 델타(요청→응답 사이 세부 — 사이드카 이벤트·터미널·AI thinking). textdelta 개념.
+    case "command.progress":
+      return `⋯ ${p.command ? `${p.command}: ` : ""}${p.delta ?? ""}`;
     case "terminal.command.started":
       return `$ ${p.commandLine}`;
     case "terminal.command.finished":
@@ -51,44 +54,55 @@ function fmtTime(ms: number): string {
 }
 
 // 활동 1건을 렌더 — 명령 실행은 요청/응답 대화 버블(시작·종료 시각 세움), 나머지는 단일 이벤트 줄.
-function renderEntry(e: ActivityEntry) {
+// 메타의 창은 프로젝트명으로 보인다(nameOf). 요청 인자(params)는 노이즈라 버블 본문에 넣지 않고
+// 전체 payload 는 title(hover)로만 — 결과 요약은 응답 버블에 남긴다.
+function renderEntry(
+  e: ActivityEntry,
+  nameOf: (win: string) => string,
+  showWho: boolean, // 프로젝트명은 "전체" 볼 때만(필터 시엔 헤더에 이미 있음)
+  onToggle: (seq: number) => void, // 클릭: 원문 JSON 펼치기
+  isExpanded: boolean,
+) {
   const win = String(e.payload.window ?? "");
+  const who = win ? nameOf(win) : e.source;
+  const meta = (t: number) => `${fmtTime(t)}${showWho ? ` · ${who}` : ""}`;
+  const raw = isExpanded ? (
+    <pre className="orch-raw">{JSON.stringify(e.payload, null, 2)}</pre>
+  ) : null;
   if (e.kind === "command.executed") {
     const p = e.payload;
     const ok = p.ok !== false;
     return (
-      <div key={e.seq} className="orch-turn" title={JSON.stringify(p)}>
+      <div key={e.seq} className="orch-turn">
         <div className="orch-bubble req" data-node="orch/turn/req">
-          <div className="orch-bubble-meta">
-            {fmtTime(Number(p.startedAt))} · {win || e.source}
-          </div>
-          <div className="orch-bubble-body">
-            {String(p.command)}
-            {p.params ? <span className="orch-args"> {String(p.params)}</span> : null}
-          </div>
+          <div className="orch-bubble-meta">{meta(Number(p.startedAt))}</div>
+          <div className="orch-bubble-body">{String(p.command)}</div>
         </div>
-        <div className={`orch-bubble res ${ok ? "ok" : "err"}`} data-node="orch/turn/res">
+        {/* 응답 = 표준 답변 message. 클릭하면 원문 JSON(봉투 전체)을 펼친다. */}
+        <div
+          className={`orch-bubble res ${ok ? "ok" : "err"}${isExpanded ? " open" : ""}`}
+          data-node="orch/turn/res"
+          title="클릭: 원문 JSON"
+          onClick={() => onToggle(e.seq)}
+        >
           <div className="orch-bubble-meta">
             {fmtTime(Number(p.finishedAt))} · {String(p.durationMs ?? "")}ms
           </div>
           <div className="orch-bubble-body">
-            {ok ? "✓" : `✗ ${p.code ?? ""}`}
-            {p.result ? ` ${String(p.result)}` : ""}
+            {ok ? "✓" : `✗ ${String(p.code ?? "")}`} {String(p.message ?? "")}
           </div>
         </div>
+        {raw}
       </div>
     );
   }
   return (
-    <div
-      key={e.seq}
-      className={`orch-event k-${e.kind.split(".").join("-")}`}
-      title={JSON.stringify(e.payload)}
-    >
-      <span className="orch-bubble-meta">
-        {fmtTime(e.ts)} · {win}·{e.source}
-      </span>
-      <span className="orch-line">{lineOf(e)}</span>
+    <div key={e.seq} className={`orch-event k-${e.kind.split(".").join("-")}`}>
+      <div className="orch-event-line" onClick={() => onToggle(e.seq)} title="클릭: 원문 JSON">
+        <span className="orch-bubble-meta">{meta(e.ts)}</span>
+        <span className="orch-line">{lineOf(e)}</span>
+      </div>
+      {raw}
     </div>
   );
 }
@@ -103,7 +117,17 @@ export function OrchestratorApp() {
   const [pinned, setPinned] = useState(false); // 핀 = always-on-top(이 창 로컬, 재열기 시 off)
   const [selectedWindow, setSelectedWindow] = useState<string | null>(null); // 피드 필터 대상 창
   const [unread, setUnread] = useState(0); // 위로 스크롤해 보던 중 도착한 안읽은 항목 수
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set()); // 원문 JSON 펼친 항목(seq)
   const feedRef = useRef<HTMLDivElement>(null);
+
+  const toggleExpand = useCallback((seq: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(seq)) next.delete(seq);
+      else next.add(seq);
+      return next;
+    });
+  }, []);
   const atBottomRef = useRef(true); // 피드 바닥 근처 여부 — 바닥이면 따라가고, 아니면 안읽음 누적
 
   // 피드 스크롤 추적: 바닥 근처면 계속 따라가고 안읽음을 0으로, 위로 올리면 추종 중단.
@@ -128,6 +152,12 @@ export function OrchestratorApp() {
   const focusWindow = useCallback((label: string) => {
     void invoke("window_focus", { label }).catch(() => {});
   }, []);
+
+  // 피드 메타의 창 라벨(win-11 등)을 프로젝트명으로 — 창 라벨은 사람에게 무의미하다.
+  const nameOf = useCallback(
+    (win: string) => projects.find((p) => p.window === win)?.name ?? win,
+    [projects],
+  );
 
   // 좌측 프로젝트 목록 = 최근 연 것(project.recent) ∪ 지금 열린 것(project_owners). 열린 것은
   // 소유 창(window)을 갖는다. 프로젝트 열림/닫힘마다 project-registry-change 로 자동 갱신.
@@ -308,7 +338,9 @@ export function OrchestratorApp() {
             {(selectedWindow
               ? feed.filter((e) => e.payload.window === selectedWindow)
               : feed
-            ).map(renderEntry)}
+            ).map((e) =>
+              renderEntry(e, nameOf, selectedWindow === null, toggleExpand, expanded.has(e.seq)),
+            )}
           </div>
           {unread > 0 && (
             <button

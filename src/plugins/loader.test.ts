@@ -34,7 +34,7 @@ function fakeDeps(): PluginApiDeps {
   return {
     appVersion: "1.0.0",
     invoke: vi.fn(async () => null),
-    execute: vi.fn(async () => ({ ok: true as const })),
+    execute: vi.fn(async () => ({ ok: true as const, code: "OK", message: "ok" })),
     registerCommand: vi.fn(),
     unregisterCommand: vi.fn(() => true),
     getCommandDanger: () => undefined,
@@ -82,7 +82,7 @@ describe("activatePlugin — conformance inventory(declared-but-not-registered)"
         activate: (ctx: PluginContext) => {
           ctx.app.commands!.register("send", {
             description: "send",
-            handler: async () => ({ ok: true }),
+            handler: async () => ({ ok: true, code: "OK", message: "ok" }),
           });
         },
       },

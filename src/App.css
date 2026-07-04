@@ -3869,3 +3869,19 @@ select.dctl {
 
 /* 안 열린 프로젝트 — 흐리게(열림과 구분). 클릭하면 열린다. */
 .orch-proj.closed .orch-proj-label { opacity: 0.45; }
+
+/* 원문 JSON 펼침(응답 버블/이벤트 클릭) — 봉투 전체를 접이식으로. */
+.orch-raw {
+  margin: 2px 0 6px 20px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: rgba(127, 127, 127, 0.08);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow: auto;
+}
+.orch-bubble.res { cursor: pointer; }
+.orch-event-line { cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
