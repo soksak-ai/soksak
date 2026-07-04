@@ -66,10 +66,10 @@ media?: { kind: string /* MIME, 예 "image/png" */, base64?: string, path?: stri
 ## 강제
 
 - **코어 `execute`**가 핸들러 반환을 봉투로 정규화하고, `summarize`(또는 `code` 에코)에서 `message`를 주입하며, `ok`/`code`/`message`를 예약한다.
-- **plugin-spec / doctor**가 플러그인 명령이 봉투(`ok`/`code`+`message`)를 내고 `summarize`를 제공하는지 검사한다. runbook의 `ok()/err()` 쌍이 준거.
+- **플러그인 로더**가 등록 시점에 `summarize` 미제공 명령을 경고한다 — 표준 답변이 `code` 에코로 열화하기 때문. runbook의 `ok()/err()` 쌍이 준거. `PluginCommandSpec.summarize`는 코어 spec 으로 흘러 같은 정규화를 탄다.
 
 ## 마이그레이션
 
-M1(이번)은 표준 확립 — 봉투 타입, `summarize` 계약, `command.progress` kind, 오케스트레이터 버블(요청→델타→message), doctor 골격, 문서, 대표 코어 명령 몇 개의 `summarize`. M2는 코어 전 명령, M3은 플러그인 통일(`error`→`code`/`message` + `summarize`), M4는 사이드카 어댑터(이벤트→progress).
+M1은 표준 확립 — 봉투 타입, `summarize` 계약, `command.progress` kind, 오케스트레이터 버블(요청→델타→message), 문서. M2는 코어 전 명령 완료. M4는 플러그인 API `events.progress(command, delta)` 발행기로 사이드카 어댑터를 배선 — workflow 플러그인이 exec-stage 자식 이벤트(`{ev:add}` 라인)를 라이브 델타로, chromium 플러그인이 open/navigate 로드를 알린다. M3(플러그인별 `error`→`code`/`message`+`summarize` 정비)은 로더 경고 아래 플러그인 단위로 진행한다.
 
 예약키 규칙(과거: 핸들러 데이터에 top-level `id`/`ok`/`code`/`message` 금지)은 이제 구조적이다 — 핸들러는 자유 데이터를 반환하고, `execute`가 `data`에 중첩하며, 봉투가 예약키를 소유한다.

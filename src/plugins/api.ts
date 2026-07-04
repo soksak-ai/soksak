@@ -17,6 +17,7 @@ import { browserLabel, currentWindowLabel } from "../lib/webviewLabels";
 import { busEmit, busOn } from "./bus";
 import {
   onPluginEvent,
+  emitPluginEvent,
   type Disposable,
   type PluginEventMap,
 } from "./hooks";
@@ -122,6 +123,9 @@ export interface PluginCommandSpec {
   returns?: string;
   examples?: readonly string[];
   danger?: "destructive" | "inject";
+  /** 표준 답변(MESSAGE-PROTOCOL §3) — 성공 data 를 사람이 읽는 한 줄 message 로. 미제공이면
+   *  code 에코("OK")로 열화하고 로더가 경고한다. 준거=runbook ok()/err(). */
+  summarize?: (data: Record<string, unknown>) => string;
   handler: (params: Record<string, unknown>) => Promise<object> | object;
 }
 
@@ -166,6 +170,10 @@ export interface SoksakPluginApi {
       event: K,
       fn: (payload: PluginEventMap[K]) => void,
     ) => Disposable;
+    /** 진행 델타 발행(MESSAGE-PROTOCOL §2) — 장시간 명령이 실행 중 "무엇을 하는 중인지"를
+     *  활동 스트림에 흘린다. 사이드카 이벤트를 표준 progress 로 변환하는 책임은 소비 플러그인에
+     *  있다(A14 — 코어는 blind relay). source 는 플러그인 id 로 고정 — 발행 주체가 항상 보인다. */
+    progress: (command: string, delta: unknown) => void;
   };
   ui?: {
     registerView: (viewId: string, provider: PluginViewProvider) => Disposable;
@@ -1041,6 +1049,9 @@ export function buildPluginApi(
         }
         return tracker.add(deps.on(event, fn));
       },
+      progress: (command, delta) => {
+        emitPluginEvent("command.progress", { command, delta, source: id });
+      },
     },
 
     project: {
@@ -1112,6 +1123,13 @@ export function buildPluginApi(
                 `[plugin:${id}] 명령 '${name}' 이 런타임 danger='${spec.danger}' 인데 매니페스트 contributes.commands 에 미선언 — 설치/동의 가시성 위해 매니페스트에 danger 선언 필요`,
               );
             }
+            // 응답 봉투 표준(MESSAGE-PROTOCOL): message 는 명령이 제공한다 — summarize 없는
+            // 명령은 code 에코("OK")만 남아 관찰자가 결과를 읽지 못한다. 준거=runbook ok()/err().
+            if (typeof spec.summarize !== "function") {
+              console.warn(
+                `[plugin:${id}] 명령 '${name}' 에 summarize 미제공 — 표준 답변(message)이 code 에코로 열화(MESSAGE-PROTOCOL §3)`,
+              );
+            }
             const full = pluginCommandName(id, name);
             deps.registerCommand(full, {
               description: spec.description,
@@ -1120,6 +1138,7 @@ export function buildPluginApi(
               params: spec.params ?? {},
               returns: spec.returns ?? "object",
               examples: spec.examples,
+              summarize: spec.summarize, // 표준 답변(message) — execute 정규화가 주입
               danger, // 매니페스트 권위(없으면 런타임 fallback — 게이트 보존)
               // registry.execute 가 try/catch 로 INTERNAL 변환(§0-4).
               handler: (params) => spec.handler(params),

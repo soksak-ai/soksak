@@ -66,10 +66,10 @@ A sidecar's own wire (engine C-ABI / service stdio / iroh socket) is opaque to t
 ## Enforcement
 
 - **Core `execute`** normalizes handler returns into the envelope, injects `message` from `summarize` (or the `code` echo), and reserves `ok`/`code`/`message`.
-- **plugin-spec / doctor** checks that a plugin command yields the envelope (`ok`/`code`+`message`) and provides `summarize`. runbook's `ok()/err()` pair is the reference.
+- **The plugin loader** warns at registration when a plugin command provides no `summarize` — the standard answer degrades to the `code` echo. runbook's `ok()/err()` pair is the reference. `PluginCommandSpec.summarize` flows into the core spec, so plugin answers ride the same normalization.
 
 ## Migration
 
-M1 (this) establishes the standard: envelope type, `summarize` contract, `command.progress` kind, orchestrator bubble (request→delta→message), doctor skeleton, docs — with a few representative core commands carrying `summarize`. M2 fills all core commands; M3 unifies plugins (`error`→`code`/`message` + `summarize`); M4 wires sidecar adapters (events→progress).
+M1 established the standard: envelope type, `summarize` contract, `command.progress` kind, orchestrator bubble (request→delta→message), docs. M2 filled all core commands. M4 wires sidecar adapters through the plugin API `events.progress(command, delta)` publisher: the workflow plugin translates exec-stage child events (`{ev:add}` lines) into live deltas, and the chromium plugin announces open/navigate loads. M3 (per-plugin `error`→`code`/`message` + `summarize` sweeps) proceeds plugin-by-plugin under the loader warning.
 
 Reserved-key rule (was: no top-level `id`/`ok`/`code`/`message` in handler data) is now structural — handlers return free data, `execute` nests it under `data`, and the envelope owns the reserved keys.

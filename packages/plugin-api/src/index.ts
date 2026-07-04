@@ -65,6 +65,9 @@ export interface PluginCommandSpec {
   returns?: string;
   examples?: readonly string[];
   danger?: "destructive" | "inject";
+  /** 표준 답변(MESSAGE-PROTOCOL §3) — 성공 data 를 사람이 읽는 한 줄 message 로. 미제공이면
+   *  code 에코("OK")로 열화하고 로더가 경고한다. */
+  summarize?: (data: Record<string, unknown>) => string;
   handler: (params: Record<string, unknown>) => Promise<object> | object;
 }
 
@@ -221,6 +224,9 @@ export interface SoksakPluginApi {
       event: K,
       fn: (payload: PluginEventMap[K]) => void,
     ) => Disposable;
+    /** 진행 델타 발행(MESSAGE-PROTOCOL §2) — 장시간 명령의 실행 중 상태를 활동 스트림에 흘린다.
+     *  사이드카 이벤트 → 표준 progress 변환은 소비 플러그인 책임(A14). source=플러그인 id 고정. */
+    progress: (command: string, delta: unknown) => void;
   };
   ui?: {
     registerView: (viewId: string, provider: PluginViewProvider) => Disposable;
