@@ -68,6 +68,7 @@ export function startActivityFeed(): void {
       startedAt: t.startedAt,
       finishedAt: t.finishedAt,
       data: t.data,
+      media: t.media,
     });
   });
 }

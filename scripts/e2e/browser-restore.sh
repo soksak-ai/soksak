@@ -118,7 +118,7 @@ def png_brightness(data, box):
 CONTENT_BOX = (0.45, 0.30, 0.95, 0.85)
 def render_check(window, name, expect_light=True, save=None):
     r = rpc("window.snapshot", {"base64": True}, window)
-    png = base64.b64decode(r["pngBase64"])
+    png = base64.b64decode(r["media"]["base64"])
     if save or KEEP:
         p = os.path.join(TMP, f"{save or name}.png"); open(p, "wb").write(png)
     b = png_brightness(png, CONTENT_BOX)

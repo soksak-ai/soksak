@@ -63,6 +63,46 @@ function commandLabel(cmd: string, t: TFn, carried?: unknown): string {
   return spec?.description ?? cmd;
 }
 
+// 응답 media 렌더 — 봉투가 선언한 표시 미디어만 그린다(MESSAGE-PROTOCOL: 소비자는 키 추측 금지).
+// base64 는 즉시 data URI, path 는 read_file_base64 로 지연 로드(실패 시 조용히 생략 — 파일 삭제됨 등).
+function MediaView({ media, onZoom }: { media: unknown; onZoom: (src: string) => void }) {
+  const m = media as { kind?: string; base64?: string; path?: string } | undefined;
+  const isImage = typeof m?.kind === "string" && m.kind.startsWith("image/");
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isImage) return;
+    if (m?.base64) {
+      setSrc(`data:${m.kind};base64,${m.base64}`);
+      return;
+    }
+    if (m?.path) {
+      let disposed = false;
+      void invoke<{ mime: string; base64: string }>("read_file_base64", { path: m.path })
+        .then((f) => {
+          if (!disposed) setSrc(`data:${f.mime};base64,${f.base64}`);
+        })
+        .catch(() => {});
+      return () => {
+        disposed = true;
+      };
+    }
+  }, [isImage, m?.base64, m?.path, m?.kind]);
+  if (!isImage || !src) return null;
+  return (
+    <img
+      className="orch-shot"
+      alt=""
+      src={src}
+      data-node="orch/turn/media"
+      title="클릭: 확대"
+      onClick={(e) => {
+        e.stopPropagation(); // 버블의 원문 JSON 토글과 분리
+        onZoom(src);
+      }}
+    />
+  );
+}
+
 // HH:MM:SS — 대화 버블 메타. 0/누락은 빈 문자열.
 function fmtTime(ms: number): string {
   if (!ms) return "";
@@ -81,6 +121,7 @@ function renderEntry(
   onToggle: (seq: number) => void, // 클릭: 원문 JSON 펼치기
   isExpanded: boolean,
   t: TFn,
+  onZoom: (src: string) => void,
 ) {
   const win = String(e.payload.window ?? "");
   const who = win ? nameOf(win) : e.source;
@@ -110,14 +151,8 @@ function renderEntry(
           <div className="orch-bubble-body">
             {ok ? "✓" : `✗ ${String(p.code ?? "")}`} {String(p.message ?? "")}
           </div>
-          {/* 이미지 응답(window.snapshot pngBase64)은 원문 문자열이 아니라 이미지로 렌더한다. */}
-          {typeof (p.data as Record<string, unknown> | undefined)?.pngBase64 === "string" && (
-            <img
-              className="orch-shot"
-              alt=""
-              src={`data:image/png;base64,${String((p.data as Record<string, unknown>).pngBase64)}`}
-            />
-          )}
+          {/* 응답이 media 를 선언하면 그대로 렌더(표준 — 키 추측 없음): base64 즉시, path 는 지연 로드. */}
+          <MediaView media={p.media} onZoom={onZoom} />
         </div>
         {raw}
       </div>
@@ -145,6 +180,7 @@ export function OrchestratorApp() {
   const [selectedWindow, setSelectedWindow] = useState<string | null>(null); // 피드 필터 대상 창
   const [unread, setUnread] = useState(0); // 위로 스크롤해 보던 중 도착한 안읽은 항목 수
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set()); // 원문 JSON 펼친 항목(seq)
+  const [zoomSrc, setZoomSrc] = useState<string | null>(null); // 이미지 확대(라이트박스)
   const feedRef = useRef<HTMLDivElement>(null);
 
   const toggleExpand = useCallback((seq: number) => {
@@ -366,7 +402,15 @@ export function OrchestratorApp() {
               ? feed.filter((e) => e.payload.window === selectedWindow)
               : feed
             ).map((e) =>
-              renderEntry(e, nameOf, selectedWindow === null, toggleExpand, expanded.has(e.seq), t),
+              renderEntry(
+                e,
+                nameOf,
+                selectedWindow === null,
+                toggleExpand,
+                expanded.has(e.seq),
+                t,
+                setZoomSrc,
+              ),
             )}
           </div>
           {unread > 0 && (
@@ -385,6 +429,18 @@ export function OrchestratorApp() {
           )}
         </section>
       </div>
+      {zoomSrc && (
+        <div
+          className="orch-lightbox"
+          data-node="orch/lightbox"
+          onClick={() => setZoomSrc(null)}
+          onKeyDown={(e) => e.key === "Escape" && setZoomSrc(null)}
+          role="button"
+          tabIndex={0}
+        >
+          <img alt="" src={zoomSrc} />
+        </div>
+      )}
       <footer className="orch-console">
         <input
           data-node="orch/console"

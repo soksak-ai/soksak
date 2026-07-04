@@ -77,11 +77,20 @@ export type ErrCode =
   | "UNKNOWN_COMMAND"
   | "INVALID_PARAMS"
   | "PERMISSION_DENIED";
+// 표시 미디어(선택) — 이미지 등 "그대로 렌더할 내용"을 응답이 스스로 선언한다(MCP content 정합).
+// 소비자(피드·폰·미래 표면)는 키 냄새 맡기 없이 media 만 보고 렌더한다. base64 또는 path 중 하나.
+export interface MediaContent {
+  kind: string; // "image/png" 등 MIME
+  base64?: string;
+  path?: string;
+}
+
 export interface CommandOutcome {
   ok: boolean;
   code: string;
   message: string;
   data?: Record<string, unknown>;
+  media?: MediaContent;
 }
 // 하위호환 별칭 — 실패 봉투를 지칭하던 기존 참조 유지.
 export type CommandError = CommandOutcome & { ok: false };
@@ -213,6 +222,7 @@ export interface CommandTrace {
   startedAt: number;
   finishedAt: number;
   data?: Record<string, unknown>; // 기계 페이로드(hover 상세)
+  media?: MediaContent; // 표시 미디어(이미지 등) — 피드가 그대로 렌더
 }
 let traceSink: ((t: CommandTrace) => void) | null = null;
 export function setCommandTraceSink(fn: ((t: CommandTrace) => void) | null): void {
@@ -242,6 +252,7 @@ export async function execute(
       startedAt: started,
       finishedAt: finished,
       data: out.data,
+      media: out.media,
     });
   } catch {
     // 계측 실패는 명령 실행에 영향을 주지 않는다.
@@ -318,10 +329,17 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
     const data = pickData(rest, rd);
     return data ? { ok: false, code, message, data } : { ok: false, code, message };
   }
-  const { ok: _ok, code: rc, message: rm, data: rd, ...rest } = raw;
+  const { ok: _ok, code: rc, message: rm, data: rd, media: rmedia, ...rest } = raw;
   const data = pickData(rest, rd);
   const code = typeof rc === "string" ? rc : "OK";
   const message =
     typeof rm === "string" ? rm : (spec?.summarize?.(data ?? {}) ?? autoMessage(data) ?? code);
-  return data ? { ok: true, code, message, data } : { ok: true, code, message };
+  const media =
+    rmedia && typeof rmedia === "object" && typeof (rmedia as MediaContent).kind === "string"
+      ? (rmedia as MediaContent)
+      : undefined;
+  const out: CommandOutcome = { ok: true, code, message };
+  if (data) out.data = data;
+  if (media) out.media = media;
+  return out;
 }

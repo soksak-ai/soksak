@@ -1755,7 +1755,8 @@ export function registerCatalog(): void {
           "Crop region {x,y,w,h} in CSS px, window coordinates (ui.measure space). Implies base64 mode.",
       },
     },
-    returns: "{ saved } (file mode) | { pngBase64 } (base64/rect mode)",
+    returns:
+      "{ saved, media:{kind,path} } (file mode) | { media:{kind:'image/png',base64} } (base64/rect mode)",
     summarize: (d) => (d.saved ? `저장했습니다: ${String(d.saved)}` : "화면을 캡처했습니다"),
     errors: ["INVALID_PARAMS"],
     examples: [
@@ -1785,7 +1786,8 @@ export function registerCatalog(): void {
           "plugin:webview-capture|snapshot_region",
           rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
         );
-        return { pngBase64 };
+        // 이미지는 봉투 media 로 선언(표준) — 소비자는 키 추측 없이 media 만 렌더한다.
+        return { media: { kind: "image/png", base64: pngBase64 } };
       }
       let path = p.path as string | undefined;
       if (!path) {
@@ -1799,7 +1801,8 @@ export function registerCatalog(): void {
       const saved = await invoke<string>("plugin:webview-capture|snapshot", {
         path,
       });
-      return { saved };
+      // 파일 캡처도 media 로 선언 — 피드가 경로를 읽어 이미지로 렌더한다(경로 텍스트만 보이지 않게).
+      return { saved, media: { kind: "image/png", path: saved } };
     },
   });
 

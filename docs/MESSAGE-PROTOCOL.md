@@ -41,6 +41,16 @@ Success and failure share **one shape** — only `data` is optional.
 
 Success and failure are symmetric because observation is first-class — a successful command still owes the observer a `code` and a `message`.
 
+### Display media (optional)
+
+A response that carries renderable content declares it — consumers never sniff data keys:
+
+```
+media?: { kind: string /* MIME, e.g. "image/png" */, base64?: string, path?: string }
+```
+
+`window.snapshot` sets `media` in both modes (file mode carries `path`, base64/rect mode carries `base64`); the feed renders it inline (a saved screenshot shows as an image, not as a path string; `path` is loaded lazily via `read_file_base64`); clicking the inline image enlarges it (lightbox, click/ESC to close).
+
 ## Command labels
 
 Display surfaces (the orchestrator feed and any future consumer) never show a raw command key. The label ownership is structured to scale to any number of languages:

@@ -77,13 +77,13 @@ DUR_FREEZE=$("$SOK" ui.tree 2>/dev/null | grep -c '"freeze"\|/freeze')
 sleep 0.3
 DURING_NATIVE=$(native_frames)
 "$SOK" window.snapshot "{\"rect\":{\"x\":$((X-110)),\"y\":$((Y-60)),\"w\":400,\"h\":200},\"base64\":true}" 2>/dev/null \
-  | jqpy "import base64; open('$TMP/mid.png','wb').write(base64.b64decode(d['pngBase64']))"
+  | jqpy "import base64; open('$TMP/mid.png','wb').write(base64.b64decode(d['media']['base64']))"
 "$SOK" webview.emitNative "{\"kind\":\"native-mouseup\",\"x\":$((X-120)),\"y\":$Y}" >/dev/null
 sleep 0.6
 AFTER_FREEZE=$("$SOK" ui.tree 2>/dev/null | grep -c '"freeze"\|/freeze')
 AFTER_NATIVE=$(native_frames)
 "$SOK" window.snapshot "{\"rect\":{\"x\":$((X-110)),\"y\":$((Y-60)),\"w\":400,\"h\":200},\"base64\":true}" 2>/dev/null \
-  | jqpy "import base64; open('$TMP/after.png','wb').write(base64.b64decode(d['pngBase64']))"
+  | jqpy "import base64; open('$TMP/after.png','wb').write(base64.b64decode(d['media']['base64']))"
 
 # ── 단언 ─────────────────────────────────────────────────────────────────────
 GEV=$("$SOK" plugin.soksak-plugin-e2e-probe.events '{"event":"layout.resize-gesture"}' 2>/dev/null \

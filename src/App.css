@@ -3903,3 +3903,21 @@ select.dctl {
   max-height: 220px;
   border-radius: 6px;
 }
+
+/* 이미지 확대(라이트박스) — 썸네일 클릭 시 창 전체에 크게, 클릭/ESC 로 닫는다. */
+.orch-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  cursor: zoom-out;
+}
+.orch-lightbox img {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: 8px;
+}
+.orch-shot { cursor: zoom-in; }
