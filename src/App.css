@@ -3904,3 +3904,11 @@ select.dctl {
   width: 100%;
 }
 .orch-proj-new:hover { opacity: 1; border-color: var(--acc); color: var(--acc); }
+
+/* 턴에 접힌 진행 델타 — 요청·응답 사이의 실행 중 흔적(dimmed, 버블 아님). */
+.orch-delta {
+  margin: 2px 0 2px 18px;
+  font-size: 11px;
+  opacity: 0.55;
+  font-family: var(--mono, monospace);
+}

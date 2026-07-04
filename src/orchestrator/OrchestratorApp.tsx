@@ -123,6 +123,7 @@ function renderEntry(
   isExpanded: boolean,
   t: TFn,
   onZoom: (src: string) => void,
+  deltas?: ActivityEntry[], // 이 턴에 접힌 진행 델타(MESSAGE-PROTOCOL §2 — 요청→델타→응답)
 ) {
   const win = String(e.payload.window ?? "");
   const who = win ? nameOf(win) : e.source;
@@ -139,6 +140,12 @@ function renderEntry(
           <div className="orch-bubble-meta">{meta(Number(p.startedAt))}</div>
           <div className="orch-bubble-body">{commandLabel(String(p.command), t, p.title)}</div>
         </div>
+        {/* 진행 델타 — 요청과 응답 사이, 실행 중 "무엇을 했는지"의 흔적(§2). */}
+        {deltas?.map((d) => (
+          <div key={d.seq} className="orch-delta" data-node="orch/turn/delta">
+            ⋯ {String((d.payload as { delta?: unknown }).delta ?? "")}
+          </div>
+        ))}
         {/* 응답 = 표준 답변 message. 클릭하면 원문 JSON(봉투 전체)을 펼친다. */}
         <div
           className={`orch-bubble res ${ok ? "ok" : "err"}${isExpanded ? " open" : ""}`}
@@ -420,20 +427,50 @@ export function OrchestratorApp() {
             )}
           </h2>
           <div className="orch-feed" data-node="orch/feed" ref={feedRef} onScroll={onFeedScroll}>
-            {(selectedWindow
-              ? feed.filter((e) => e.payload.window === selectedWindow)
-              : feed
-            ).map((e) =>
-              renderEntry(
-                e,
-                nameOf,
-                selectedWindow === null,
-                toggleExpand,
-                expanded.has(e.seq),
-                t,
-                setZoomSrc,
-              ),
-            )}
+            {(() => {
+              const visible = selectedWindow
+                ? feed.filter((e) => e.payload.window === selectedWindow)
+                : feed;
+              // 진행 델타를 그 명령의 턴에 접합(§2: 버블 = 요청→델타→응답). 매칭 = 같은 창 +
+              // 명령명(플러그인 발행은 짧은 이름) + 실행 시간창. 완료 전(진행 중) 델타는 단독 표시.
+              const matches = (full: string, short: string) =>
+                full === short || full.endsWith(`.${short}`);
+              const consumed = new Set<number>();
+              const deltasFor = new Map<number, ActivityEntry[]>();
+              for (const e of visible) {
+                if (e.kind !== "command.executed") continue;
+                const p = e.payload;
+                const started = Number(p.startedAt ?? 0);
+                const finished = Number(p.finishedAt ?? e.ts);
+                const list = visible.filter(
+                  (d) =>
+                    d.kind === "command.progress" &&
+                    !consumed.has(d.seq) &&
+                    String(d.payload.window ?? "") === String(p.window ?? "") &&
+                    matches(String(p.command ?? ""), String(d.payload.command ?? "")) &&
+                    d.ts >= started - 1500 &&
+                    d.ts <= finished + 1500,
+                );
+                if (list.length) {
+                  deltasFor.set(e.seq, list);
+                  for (const d of list) consumed.add(d.seq);
+                }
+              }
+              return visible
+                .filter((e) => !(e.kind === "command.progress" && consumed.has(e.seq)))
+                .map((e) =>
+                  renderEntry(
+                    e,
+                    nameOf,
+                    selectedWindow === null,
+                    toggleExpand,
+                    expanded.has(e.seq),
+                    t,
+                    setZoomSrc,
+                    deltasFor.get(e.seq),
+                  ),
+                );
+            })()}
           </div>
           {unread > 0 && (
             <button
