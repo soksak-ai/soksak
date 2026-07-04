@@ -1868,7 +1868,7 @@ export function registerCatalog(): void {
     },
     params: {},
     returns:
-      "{ monitors: [{index,name,x,y,w,h,scale}], windows: [{label,x,y,w,h,focused,monitor}] }",
+      "{ monitors: [{index,name,x,y,w,h,scale}], windows: [{label,title,x,y,w,h,focused,monitor}] }",
     examples: ["sok window.monitors"],
     handler: async () => {
       return (await invoke("window_monitors")) as object;

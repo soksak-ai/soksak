@@ -10,6 +10,7 @@ import { claimRoots } from "./state/projectRegistry";
 import { recordRecentProject } from "./state/recentProjects";
 import { useSessions } from "./state/sessions";
 import { initWorkspacePersistence, respawnSavedWindows, coreStoreDeps } from "./state/workspaceBoot";
+import { initWindowTitle } from "./state/windowTitle";
 import { initViewLabelsPersistence } from "./state/viewLabels";
 import { initSettingsPersistence } from "./state/settings";
 import { initThemePersistence } from "./state/theme";
@@ -105,6 +106,9 @@ async function boot(): Promise<void> {
   } catch (e) {
     console.error("워크스페이스 영속 초기화 실패:", e);
   }
+  // 창 네이티브 타이틀 = 활성 프로젝트(Dock 창 목록·Mission Control 구분 — 실측: 전 창이
+  // 앱 이름 하나로 보였음). 자동 저장과 무관한 표시 전용 구독.
+  void initWindowTitle();
   // 멀티윈도우 리스폰(B2) — main 부트만: manifest 의 다른 창들을 라벨·프레임 그대로 되살린다.
   // await 하지 않는다 — 각 창은 독립 부트라 main 렌더를 막을 이유가 없다.
   if (!freshWindow && currentWindowLabel() === "main") {

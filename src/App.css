@@ -3752,3 +3752,10 @@ select.dctl {
   font-size: 11px;
   opacity: 0.85;
 }
+
+/* 레일: 다른 창 프로젝트 칩 — 점선 테두리+감쇠로 자기 것과 구분, 클릭=그 창 포커스. */
+.rail-chip.other {
+  opacity: 0.55;
+  border-style: dashed;
+}
+.rail-chip.other:hover { opacity: 0.9; }

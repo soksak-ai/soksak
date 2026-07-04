@@ -10,7 +10,7 @@ import {
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { invoke } from "@tauri-apps/api/core";
 import { listenThisWindow } from "./lib/windowEvents";
-import { closeProjectReleased } from "./state/projectRegistry";
+import { closeProjectReleased, useOtherWindowProjects } from "./state/projectRegistry";
 import { rafThrottle } from "./lib/rafThrottle";
 import { parkedStyle } from "./lib/layerPark";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
@@ -630,6 +630,7 @@ function App() {
   // 좌측 레일: 칩 폭 = 레일 폭 추종(적응형). 라벨은 말줄임, 최소폭(RAIL_MIN)까지
   // 줄이면 첫 글자만(말줄임 없음). 더블클릭=프로젝트 설정(이름/색), 우클릭=닫기.
   const railAtMin = railW <= RAIL_MIN;
+  const otherProjects = useOtherWindowProjects();
   const projectRailList = (
     <>
       {tabs.map((proj) => (
@@ -654,6 +655,25 @@ function App() {
           </span>
         </div>
       ))}
+      {/* 다른 창의 프로젝트(전역 레지스트리) — 전 프로젝트가 한 목록으로 나열된다(내 것
+          다음, "+" 앞 — 사용자 확정 순서 s,p,+). 점선·감쇠 스타일이 구분을 담당한다.
+          클릭 = 소유 창 포커스(P6: 중복 오픈 대신 이동). */}
+      {otherProjects.map((o) => {
+        const name = o.root.split("/").filter(Boolean).pop() ?? o.root;
+        return (
+          <div
+            key={o.root}
+            className="rail-chip other"
+            data-node={`rail/other/${name}`}
+            title={t("project.otherWindow", { window: o.window, root: o.root })}
+            onClick={() => void invoke("window_focus", { label: o.window })}
+          >
+            <span className="rail-chip-label">
+              {railAtMin ? ([...name][0] ?? "") : name}
+            </span>
+          </div>
+        );
+      })}
       <button
         type="button"
         className="rail-add"

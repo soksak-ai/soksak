@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { execute } from "../commands/registry";
 import { useT } from "../i18n";
 
@@ -58,6 +59,8 @@ export function OrchestratorApp() {
   }, []);
 
   useEffect(() => {
+    // 네이티브 타이틀(Dock 창 목록 구분) — 프로젝트 창과 같은 규칙: 이름만, 앱 이름 무접미.
+    void getCurrentWindow().setTitle(t("orch.title")).catch(() => {});
     // 백필(커서) 후 라이브 구독 — 폴링 0. 창 배치 팩트는 부트 1회 + 수동 새로고침 +
     // 창 관련 활동이 보일 때 갱신(이벤트 기반).
     let un = () => {};

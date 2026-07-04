@@ -19,6 +19,7 @@ const ko = {
   "common.cancel": "취소",
 
   "picker.title": "프로젝트 열기",
+  "project.otherWindow": "다른 창에 열림 — {window}\n{root}\n클릭하면 그 창으로 이동합니다.",
   "orch.title": "오케스트레이터",
   "orch.windows": "창·모니터",
   "orch.feed": "활동 피드",
@@ -238,6 +239,7 @@ const en: Record<MsgKey, string> = {
 
   "project.close": "Close project",
   "picker.title": "Open a project",
+  "project.otherWindow": "Open in another window — {window}\n{root}\nClick to focus that window.",
   "orch.title": "Orchestrator",
   "orch.windows": "Windows · Monitors",
   "orch.feed": "Activity feed",

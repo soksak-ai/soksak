@@ -2217,7 +2217,7 @@ sok window.list
 
 Monitor and window placement facts (physical px): every monitor's rect/scale/name and every window's rect, focus state, and owning monitor index. Facts only — placement strategy is layout.suggest, execution is window.place (same coordinate space). | 모니터 목록 해상도 창 배치 현황 듀얼 파악
 
-**Returns**: { monitors: [{index,name,x,y,w,h,scale}], windows: [{label,x,y,w,h,focused,monitor}] }
+**Returns**: { monitors: [{index,name,x,y,w,h,scale}], windows: [{label,title,x,y,w,h,focused,monitor}] }
 
 ```bash
 sok window.monitors

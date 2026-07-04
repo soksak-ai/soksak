@@ -5,7 +5,10 @@
 // 규칙(P6): 하나의 root 는 전 창을 통틀어 최대 1곳. 충돌 시 새로 열지 않고 소유 창을
 // 포커스한다. 같은 창의 재청구는 멱등(복원·재시도 안전). 창 파괴 해제는 코어가 담당.
 
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { currentWindowLabel } from "../lib/webviewLabels";
 import { recordRecentProject } from "./recentProjects";
 import { useSessions, type NewProjectOpts } from "./sessions";
 
@@ -67,4 +70,37 @@ export async function claimRoots(roots: string[]): Promise<Set<string>> {
     if (!c.ok) denied.add(root);
   }
   return denied;
+}
+
+/** 다른 창에 열린 프로젝트 목록(전역 레지스트리 뷰) — 레일이 소비해 "자기 것만 보이는" 창을
+ *  없앤다: 어느 창에서든 전 프로젝트가 보이고, 클릭은 소유 창 포커스(P6 — 중복 오픈 대신 이동).
+ *  반응형: project-registry-change 브로드캐스트(Rust 싱글톤 emit — 멀티창 교차상태 규칙). */
+export function useOtherWindowProjects(): { root: string; window: string }[] {
+  const [others, setOthers] = useState<{ root: string; window: string }[]>([]);
+  useEffect(() => {
+    let disposed = false;
+    let un = () => {};
+    const refresh = async () => {
+      try {
+        const r = await invoke<{ owners: { root: string; window: string }[] }>(
+          "project_owners",
+        );
+        if (disposed) return;
+        const me = currentWindowLabel();
+        setOthers(r.owners.filter((o) => o.window !== me));
+      } catch {
+        /* 레지스트리 불능(테스트 하니스 등) — 빈 목록 유지 */
+      }
+    };
+    void refresh();
+    void listen("project-registry-change", refresh).then((u) => {
+      if (disposed) u();
+      else un = u;
+    });
+    return () => {
+      disposed = true;
+      un();
+    };
+  }, []);
+  return others;
 }
