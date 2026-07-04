@@ -58,6 +58,7 @@ export function startActivityFeed(): void {
     if (t.command === "activity.recent") return;
     publish("command.executed", t.source, {
       command: t.command,
+      title: t.title,
       danger: t.danger,
       paramKeys: t.paramKeys,
       ok: t.ok,

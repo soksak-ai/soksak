@@ -3,6 +3,7 @@
 // 문서(sok help/docs)와 MCP tool 정의도 이 스펙에서 생성된다 — 코드와 어긋날 수 없다.
 
 import type { CmdErrCode } from "../state/sessions";
+import type { LocalizedText } from "../plugins/spec";
 
 // 파라미터 스펙(JSON 직렬화 가능 — CLI/MCP/문서 생성에 그대로 쓰임).
 export interface ParamSpec {
@@ -21,6 +22,10 @@ export interface CommandSpec {
   // 영어 매칭은 base prose 가 담당하므로 en 은 보통 생략. 언어 추가(ja/zh)=이 맵에 키만 추가(docs/I18N.md §3).
   triggers?: Record<string, string>;
   params: Record<string, ParamSpec>;
+  // 사람이 읽는 명령 라벨(아나운서체 — "git 저장소를 초기화합니다"). 표시 표면(피드 버블 등)이
+  // raw 키 대신 이걸 현재 언어로 해소해 보인다. 플러그인 명령은 매니페스트 contributes.commands
+  // 의 title 이 실린다(플러그인 소유). 라벨의 단일 진실은 명령 정의 자신 — 별도 표 금지.
+  title?: LocalizedText;
   // 성공 응답 형태 설명(매뉴얼용).
   returns: string;
   // 표준 답변(message) 생성 — 성공 결과 data 를 사람이 읽는 한 줄로. 없으면 execute 가 code 를
@@ -194,6 +199,10 @@ function validate(
 // data 는 활동 허브가 별도 표시(hover). docs/MESSAGE-PROTOCOL.md.
 export interface CommandTrace {
   command: string;
+  // 명령 라벨 원본(LocalizedText) — 실행 창의 spec 에서 그대로 싣는다. 소비자(오케스트레이터 등)가
+  // 자기 언어로 해소한다. 플러그인 명령은 실행 창에만 로드되므로 스트림이 라벨을 날라야 다른
+  // 창에서도 raw 키 없이 표시된다(스트림 자족성).
+  title?: LocalizedText;
   source: "ui" | "remote";
   danger?: "destructive" | "inject";
   paramKeys: string[];
@@ -222,6 +231,7 @@ export async function execute(
   try {
     traceSink?.({
       command: name,
+      title: registry.get(name)?.title,
       source: ctx.remote ? "remote" : "ui",
       danger: registry.get(name)?.danger,
       paramKeys: Object.keys(params),

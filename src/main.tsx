@@ -1,4 +1,22 @@
 import ReactDOM from "react-dom/client";
+import { invoke as bootInvoke } from "@tauri-apps/api/core";
+// 부트 오류 관찰(P12 사각지대 커버) — 렌더/모듈 오류로 화면이 백지가 되면 스냅샷·DOM 으로는
+// 원인을 볼 수 없다. 전역 오류를 활동 허브(boot.error)로 발행해 소켓 activity.recent 만으로
+// 부트 크래시의 메시지·스택을 읽을 수 있게 한다. React 마운트 전에 걸어야 하므로 최상단.
+if (typeof window !== "undefined") {
+  const reportBootError = (msg: string, stack: string) =>
+    void bootInvoke("activity_publish", {
+      kind: "boot.error",
+      source: "boot",
+      payload: { msg, stack },
+    }).catch(() => {});
+  window.addEventListener("error", (e) =>
+    reportBootError(String(e.message), String((e.error && e.error.stack) || "")),
+  );
+  window.addEventListener("unhandledrejection", (e) =>
+    reportBootError("reject: " + String(e.reason), String((e.reason && e.reason.stack) || "")),
+  );
+}
 import App from "./App";
 import { startExecutor } from "./commands/executor";
 import { startWebviewGc } from "./lib/webviewGc";

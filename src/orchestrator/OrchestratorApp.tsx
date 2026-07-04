@@ -7,9 +7,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { execute } from "../commands/registry";
+import { execute, getSpec } from "../commands/registry";
 import { Icon } from "../ui/icons/Icon";
-import { useT } from "../i18n";
+import { hasMessage, localize, useT, type MsgKey, type TFn } from "../i18n";
 
 interface ActivityEntry {
   seq: number;
@@ -45,6 +45,24 @@ function lineOf(e: ActivityEntry): string {
   }
 }
 
+// 명령을 사람이 읽는 라벨로 — raw 키(plugin.soksak-plugin-workflow.reconcile) 노출 금지.
+// 소유 구조(18개 언어로 확장 가능한 유일한 형태):
+//   · 플러그인 명령 = 매니페스트 contributes.commands 의 title(LocalizedText) — 저자가 소유·번역.
+//   · 코어 명령 = 언어 테이블의 cmd.* 키(언어 추가 = 테이블 1장 추가, 정의 자리는 불변).
+//     전 명령 커버리지는 commandTitles.test.ts 게이트가 강제한다 — 부분 커버리지 불가.
+//   · 어느 쪽도 없으면 description(영어 산문) — raw 키는 어떤 경우에도 안 보인다.
+function commandLabel(cmd: string, t: TFn, carried?: unknown): string {
+  // 스트림이 나른 라벨 원본(LocalizedText) — 플러그인 명령은 실행 창에만 로드되므로 이 경로가
+  // 창 경계를 넘는 유일한 라벨 공급선이다(스트림 자족성).
+  if (carried && (typeof carried === "string" || typeof carried === "object"))
+    return localize(carried as Parameters<typeof localize>[0]);
+  const spec = getSpec(cmd);
+  if (spec?.title) return localize(spec.title);
+  const key = `cmd.${cmd}`;
+  if (hasMessage(key)) return t(key as MsgKey);
+  return spec?.description ?? cmd;
+}
+
 // HH:MM:SS — 대화 버블 메타. 0/누락은 빈 문자열.
 function fmtTime(ms: number): string {
   if (!ms) return "";
@@ -62,6 +80,7 @@ function renderEntry(
   showWho: boolean, // 프로젝트명은 "전체" 볼 때만(필터 시엔 헤더에 이미 있음)
   onToggle: (seq: number) => void, // 클릭: 원문 JSON 펼치기
   isExpanded: boolean,
+  t: TFn,
 ) {
   const win = String(e.payload.window ?? "");
   const who = win ? nameOf(win) : e.source;
@@ -76,7 +95,7 @@ function renderEntry(
       <div key={e.seq} className="orch-turn">
         <div className="orch-bubble req" data-node="orch/turn/req">
           <div className="orch-bubble-meta">{meta(Number(p.startedAt))}</div>
-          <div className="orch-bubble-body">{String(p.command)}</div>
+          <div className="orch-bubble-body">{commandLabel(String(p.command), t, p.title)}</div>
         </div>
         {/* 응답 = 표준 답변 message. 클릭하면 원문 JSON(봉투 전체)을 펼친다. */}
         <div
@@ -167,7 +186,7 @@ export function OrchestratorApp() {
       let owners: { root: string; window: string }[] = [];
       try {
         const r = await execute("project.recent", {}, { remote: false });
-        if (r.ok) recents = (r as { recents?: typeof recents }).recents ?? [];
+        if (r.ok) recents = (r.data as { recents?: typeof recents } | undefined)?.recents ?? [];
       } catch {
         /* 무시 — 빈 목록 */
       }
@@ -339,7 +358,7 @@ export function OrchestratorApp() {
               ? feed.filter((e) => e.payload.window === selectedWindow)
               : feed
             ).map((e) =>
-              renderEntry(e, nameOf, selectedWindow === null, toggleExpand, expanded.has(e.seq)),
+              renderEntry(e, nameOf, selectedWindow === null, toggleExpand, expanded.has(e.seq), t),
             )}
           </div>
           {unread > 0 && (

@@ -118,6 +118,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "bookmarks.changed",
   "command.started",
   "command.finished",
+  "command.progress",
   "turn.ended",
 ];
 

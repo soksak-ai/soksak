@@ -1115,6 +1115,7 @@ export function buildPluginApi(
             const full = pluginCommandName(id, name);
             deps.registerCommand(full, {
               description: spec.description,
+              title: declared.title, // 사람 라벨(ko/en) — 매니페스트가 소유, 표시 표면이 해소
               triggers: spec.triggers, // 호스트 catalogJson 이 base+triggers 합성(docs/I18N.md §3)
               params: spec.params ?? {},
               returns: spec.returns ?? "object",
