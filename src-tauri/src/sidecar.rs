@@ -133,16 +133,10 @@ fn valid_name(name: &str) -> bool {
         && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
-// dev 오버라이드 env 이름 — PLUGIN-CONTRACT §5 의 SOKSAK_SIDECAR_{NAME}_BIN 규약.
-fn override_env_key(name: &str) -> String {
-    format!("SOKSAK_SIDECAR_{}_BIN", name.to_uppercase().replace('-', "_"))
-}
-
-// dylib 경로: env 오버라이드 > <identity 홈>/sidecars/soksak-sidecar-{name}/dist/soksak-sidecar-{name}.dylib
-fn module_path(name: &str, soksak_home: &std::path::Path, env_override: Option<&str>) -> std::path::PathBuf {
-    if let Some(p) = env_override {
-        return std::path::PathBuf::from(p);
-    }
+// dylib 경로 = <identity 홈>/sidecars/soksak-sidecar-{name}/dist/… 하나뿐 — env 바이너리 주입은
+// 없다(A17: 상시 env 주입 금지 — identity 홈 분리로 존재 이유가 소멸했다. dev 는 자기 홈의
+// 체크아웃에 stage.sh 로 dist 를 스테이징한다).
+fn module_path(name: &str, soksak_home: &std::path::Path) -> std::path::PathBuf {
     soksak_home
         .join("sidecars")
         .join(format!("soksak-sidecar-{name}"))
@@ -151,13 +145,10 @@ fn module_path(name: &str, soksak_home: &std::path::Path, env_override: Option<&
 }
 
 fn resolve_module_path(name: &str) -> Result<std::path::PathBuf, String> {
-    let key = override_env_key(name);
-    // release 는 설치본(reach 해시 핀 dist)만(A17) — dev 바이너리 오버라이드를 봉쇄.
-    let over = if crate::home::is_release() { None } else { std::env::var(&key).ok() };
-    let path = module_path(name, &crate::home::soksak_home(), over.as_deref());
+    let path = module_path(name, &crate::home::soksak_home());
     if !path.is_file() {
         return Err(format!(
-            "사이드카 모듈 없음: {} (설치: 플러그인 reach 또는 dev 스테이징 `make sidecar-{name}`; 오버라이드 env {key})",
+            "사이드카 모듈 없음: {} (설치: 플러그인 reach 또는 dev 스테이징 `make sidecar-{name}`)",
             path.display()
         ));
     }
@@ -457,24 +448,14 @@ mod tests {
     }
 
     #[test]
-    fn override_env_key_follows_contract() {
-        assert_eq!(override_env_key("chromium"), "SOKSAK_SIDECAR_CHROMIUM_BIN");
-        assert_eq!(override_env_key("my-engine"), "SOKSAK_SIDECAR_MY_ENGINE_BIN");
-    }
-
-    #[test]
     fn module_path_default_layout_and_override() {
         // 인자는 identity 홈 자체(home.rs 파생) — 사이드카는 그 아래 sidecars/ 에 산다.
         let home = std::path::Path::new("/Users/x/.soksak-debug");
         assert_eq!(
-            module_path("browser-chromium", home, None),
+            module_path("browser-chromium", home),
             std::path::PathBuf::from(
                 "/Users/x/.soksak-debug/sidecars/soksak-sidecar-browser-chromium/dist/soksak-sidecar-browser-chromium.dylib"
             )
-        );
-        assert_eq!(
-            module_path("browser-chromium", home, Some("/tmp/dev.dylib")),
-            std::path::PathBuf::from("/tmp/dev.dylib")
         );
     }
 }

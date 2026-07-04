@@ -43,8 +43,8 @@ icons: ## 앱 아이콘 전체 재생성(SVG→마스터1024 + base/dev/debug �
 	@rm -f /tmp/soksak-icon-master.png /tmp/soksak-icon-dev.png /tmp/soksak-icon-debug.png
 	@echo "아이콘 재생성 완료: 마스터(1024 SVG벡터)+base+dev(녹색)+debug(주황)"
 
-dev: cli-dev ## 개발 서버(HMR) + sok-dev. 독 "soksak-dev"+DEV 배지. dev 는 ~/.soksak/plugins 단일 폴더(.soksak.json version="dev"). 폴더 밖 외부 repo 는 SOKSAK_DEV_PLUGINS_EXTRA=경로 로 추가
-	SOKSAK_DEV_PLUGINS="$$SOKSAK_DEV_PLUGINS_EXTRA" $(PNPM) tauri dev
+dev: cli-dev ## 개발 서버(HMR) + sok-dev. 독 "soksak-dev"+DEV 배지. 플러그인은 ~/.soksak-dev/plugins 단일 폴더(.soksak.json 자기기술) — 외부 폴더 일회 테스트는 plugin.dev.load
+	$(PNPM) tauri dev
 
 build: cli ## 릴리스 번들 빌드 → "soksak.app"(기본 아이콘) + sok
 	$(PNPM) tauri build --config $(RELEASE_CONFIG)

@@ -445,7 +445,8 @@ sok editor.format
   기록, 읽기전용 잠금. `plugin.update` 는 fetch + reset --hard 후 version 갱신.
 - **dev**: `sok plugin.dev.new <id>` 가 단일 폴더에 스캐폴드(plugin.json·main.js·`.soksak.json`(version="dev")·git init)
   한다. 소스 편집은 앱 리로드에 즉시 반영. `dev`·`local` 은 `plugin.update` 가 거부한다(작업물 보호).
-  폴더 밖 외부 repo 를 dev 로 얹으려면 `SOKSAK_DEV_PLUGINS_EXTRA=경로` 로 `make dev`.
+  폴더 밖 외부 폴더의 일회 테스트는 `plugin.dev.load`(명시적 명령)로 한다 — 지정 폴더가 유일한
+  상시 메커니즘이고, env 주입은 없다(보이지 않는 상태 금지).
 
 ## 트러블슈팅
 

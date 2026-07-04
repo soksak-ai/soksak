@@ -45,7 +45,8 @@ the name would create a second, driftable truth.
 ```
 
 - `{name}`: `^[a-z0-9][a-z0-9-]*$` (used in path assembly — traversal-safe).
-- Dev override: `SOKSAK_SIDECAR_{NAME}_BIN` (dashes → underscores, uppercased).
+- No ambient env binary override — the identity home's `sidecars/` directory is the only
+  resolution path (A17); dev stages into its own home via `stage.sh`.
 - Diagnostics env belongs to the sidecar: `SOKSAK_SIDECAR_{NAME}_*`. Core env
   never carries engine names (NAMING.md).
 - No PATH exposure; no `sok` registry surface. Both inherited from the original

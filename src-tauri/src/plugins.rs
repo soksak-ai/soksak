@@ -141,50 +141,6 @@ fn current_branch(dir: &Path) -> String {
         .unwrap_or_else(|| "main".to_string())
 }
 
-// 개발용 플러그인 경로 — SOKSAK_DEV_PLUGINS(':' 구분 목록)의 각 항목에서 plugin.json 을 가진
-// 디렉토리의 절대경로를 모은다. 항목이 **그 자체로 플러그인 dir**(plugin.json 보유)이면 직접
-// 채택(독립 repo 직접 지정 — 코어 repo 하위 아닌 외부 플러그인), 아니면 직속 하위를 스캔(부모 dir).
-// 프론트가 이를 devLoad 해 설치본 위에 덮어 쓴다(소스=즉시 반영). 미설정/읽기 실패는 빈 목록·
-// 침묵 누락으로 부팅을 막지 않는다. "." 시작 항목 제외. 결정성 위해 정렬.
-#[tauri::command]
-pub fn dev_plugin_paths() -> Result<Vec<String>, String> {
-    // release 는 설치본만(A17) — dev 소스 주입 경로를 identity 게이트로 봉쇄.
-    if crate::home::is_release() {
-        return Ok(Vec::new());
-    }
-    let Ok(raw) = std::env::var("SOKSAK_DEV_PLUGINS") else {
-        return Ok(Vec::new());
-    };
-    let mut out = Vec::new();
-    for base in raw.split(':') {
-        if base.is_empty() {
-            continue;
-        }
-        // 항목 자체가 플러그인 dir 이면 그대로 채택(외부 독립 repo 직접 지정).
-        if std::path::Path::new(base).join("plugin.json").is_file() {
-            out.push(base.to_string());
-            continue;
-        }
-        // 아니면 직속 하위에서 plugin.json 보유 dir 들을 모은다(부모 dir 스캔). 못 읽으면 건너뛴다.
-        let Ok(rd) = std::fs::read_dir(base) else {
-            continue;
-        };
-        for entry in rd {
-            let Ok(entry) = entry else { continue };
-            let path = entry.path();
-            let name = entry.file_name().to_string_lossy().to_string();
-            if !path.is_dir() || name.starts_with('.') {
-                continue;
-            }
-            if path.join("plugin.json").is_file() {
-                out.push(path.to_string_lossy().to_string());
-            }
-        }
-    }
-    out.sort();
-    Ok(out)
-}
-
 // ── 설치/갱신/제거 ──────────────────────────────────────────────────────────
 
 // "user/repo" 단축형(슬래시 1개, 양쪽 다 [A-Za-z0-9_.-]+)만 GitHub URL 로 확장.

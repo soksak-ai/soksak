@@ -148,8 +148,8 @@ Consumption contract (what a plugin may reference — nothing else):
 - Entry point: `~/.soksak/sidecars/soksak-sidecar-{name}/dist/soksak-sidecar-{name}`
   (single binary) or `dist/soksak-sidecar-{name}.app` (bundle).
 - Directory name = binary name = crate/package name = `soksak-sidecar-{name}`.
-- Dev override env var: `SOKSAK_SIDECAR_{NAME}_BIN` (uppercased name) — points at an
-  alternate entry point; the consuming plugin's spawn wrapper must honor it.
+- There is no ambient env binary override — the identity home's `sidecars/` directory is
+  the only resolution path (A17); dev stages a fresh build into its own home via `stage.sh`.
 - Bundled resources the sidecar reads (prompt references, canonical workflow docs, …) live
   under the sidecar directory next to `dist/`; the binary resolves them relative to its own
   location, never relative to the consuming plugin.

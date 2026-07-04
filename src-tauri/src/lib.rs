@@ -316,7 +316,6 @@ pub fn run() {
             fs::ensure_workspace_dir,
             fs::validate_project_root,
             plugins::plugins_scan,
-            plugins::dev_plugin_paths,
             home::app_is_release,
             plugins::plugin_install_git,
             plugins::plugin_update,
