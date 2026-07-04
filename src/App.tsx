@@ -17,7 +17,6 @@ import { parkedStyle } from "./lib/layerPark";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
 import { PluginSidebar } from "./components/PluginSidebar";
 import { ContentTabs } from "./components/ContentTabs";
-import { ProjectPickerScreen } from "./components/ProjectPickerScreen";
 import { GroupArea } from "./components/GroupArea";
 import { NewProjectModal } from "./components/NewProjectModal";
 import { ProjectSettingsModal } from "./components/ProjectSettingsModal";
@@ -683,7 +682,7 @@ function App() {
           </div>
         );
       })}
-      {/* 어디에도 안 열린 최근 프로젝트 — 픽커에만 있던 목록을 레일 버튼으로도 제공한다.
+      {/* 어디에도 안 열린 최근 프로젝트 — 레일 버튼으로 제공한다.
           클릭 = 이 창에서 열기(P6 게이트 경유). root 소실은 목록에서 자가 치유(제거). */}
       {recentClosed.map((r) => {
         const name = r.alias || (r.root.split("/").filter(Boolean).pop() ?? r.root);
@@ -833,8 +832,13 @@ function App() {
             />
           </>
         )}
-        {/* 프로젝트 0개(새 창·P6 열화) = 픽커 화면 — 새 창은 자동 부팅하지 않는다(P6 UX). */}
-        {tabs.length === 0 && <ProjectPickerScreen />}
+        {/* 프로젝트 0개 = 예외 상태(P6 열화·복원 드롭)뿐 — 열기·생성은 컨트롤 플레인의 표면이다.
+            빈 워크스페이스 창은 생성 경로가 없으므로(window.new root 필수) 안내만 남긴다. */}
+        {tabs.length === 0 && (
+          <div className="workspace-empty" data-node="workspace/empty">
+            {t("workspace.empty")}
+          </div>
+        )}
         {/* 모든 프로젝트를 마운트해 세션 유지(비활성은 visibility 로 숨김). */}
         <div className="terminal-stack">
           {tabs.map((project) => (

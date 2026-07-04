@@ -22,12 +22,16 @@ import { markCommandHostReady, startExecutor } from "./commands/executor";
 import { startWebviewGc } from "./lib/webviewGc";
 import { initPluginHost } from "./plugins/host";
 import { initNotify } from "./lib/notify";
-import { ensureDefaultWorkspace, validateProjectRoot } from "./lib/workspace";
 import { currentWindowLabel } from "./lib/webviewLabels";
 import { claimRoots } from "./state/projectRegistry";
 import { recordRecentProject } from "./state/recentProjects";
 import { useSessions } from "./state/sessions";
-import { initWorkspacePersistence, respawnSavedWindows, coreStoreDeps } from "./state/workspaceBoot";
+import {
+  initWorkspacePersistence,
+  respawnSavedWindows,
+  initControlPlaneFrame,
+  coreStoreDeps,
+} from "./state/workspaceBoot";
 import { initWindowTitle } from "./state/windowTitle";
 import { initViewLabelsPersistence } from "./state/viewLabels";
 import { initSettingsPersistence } from "./state/settings";
@@ -35,7 +39,6 @@ import { initThemePersistence } from "./state/theme";
 import { initBookmarksPersistence } from "./state/bookmarks";
 import { initPluginSettingsPersistence } from "./state/pluginSettings";
 import { initPluginsPersistence } from "./state/plugins";
-import { useSettings } from "./state/settings";
 import { startTerminalStatusBridge } from "./terminal/terminalStatus";
 import { startActivityFeed } from "./state/activityFeed";
 import { OrchestratorApp } from "./orchestrator/OrchestratorApp";
@@ -73,13 +76,16 @@ async function boot(): Promise<void> {
   } catch (e) {
     console.error("코어 영속 동기화 초기화 실패:", e);
   }
-  // 오케스트레이터 창(A3) — 코어 영속(테마·설정 변수 주입) 이후, 워크스페이스 부트
-  // (플러그인 호스트·프로젝트·복원) 이전에 분기해 셸만 렌더한다. 셸은 커맨드·이벤트
-  // 표면만 소비(외부 클라이언트와 같은 자격 — P13). 커맨드 카탈로그·활동 계측은 module-level.
-  if (new URLSearchParams(window.location.search).get("mode") === "orchestrator") {
-    // 오케스트레이터 창은 플러그인 호스트를 돌리지 않는다 — 레지스트리가 이미 최종 상태이므로
-    // 준비 게이트를 즉시 해제한다(잠긴 채 두면 이 창으로 온 미등록 명령이 타임아웃까지 대기).
+  // 컨트롤 플레인(A3) — main 은 오케스트레이터의 예약어다(NAMING 4b): 플랫폼 부트스트랩 창이
+  // 곧 컨트롤 플레인이고, 워크스페이스는 전부 w-<uuid> 창이다. 코어 영속(테마·설정) 이후 분기해
+  // 셸만 렌더한다. 셸은 커맨드·이벤트 표면만 소비(외부 클라이언트와 같은 자격 — P13).
+  // 커맨드 카탈로그·활동 계측은 module-level. 리스폰(전 워크스페이스 slot)도 여기가 소유한다.
+  if (currentWindowLabel() === "main") {
+    // 플러그인 호스트를 돌리지 않는다 — 레지스트리가 이미 최종 상태이므로 준비 게이트를 즉시
+    // 해제한다(잠긴 채 두면 이 창으로 온 미등록 명령이 타임아웃까지 대기).
     markCommandHostReady();
+    void initControlPlaneFrame();
+    void respawnSavedWindows();
     ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <OrchestratorApp />,
     );
@@ -101,17 +107,22 @@ async function boot(): Promise<void> {
   }
   // 프로그래매틱 오픈(window.new{root}) — 창 생성자가 부트 지시를 URL 쿼리로 전달한다
   // (창별 JS 컨텍스트 분리의 유일한 통로). 지시가 있으면 복원보다 우선: 사용자 의도가
-  // "이 창에서 그 프로젝트"이므로. claim 실패(생성↔부트 레이스)면 빈 창 → 픽커로 열화.
+  // "이 창에서 그 프로젝트"이므로. claim 실패(생성↔부트 레이스)면 빈 상태로 열화(안내가 오케스트레이터를 가리킨다).
   const bootParams = new URLSearchParams(window.location.search);
   const initRoot = bootParams.get("root");
   if (initRoot) {
     try {
       const denied = await claimRoots([initRoot]);
       if (!denied.has(initRoot)) {
-        useSessions.getState().bootstrapFirstProject(initRoot);
-        void recordRecentProject(initRoot, ""); // 픽커 최근 목록(명시적 열기)
+        const initAlias = bootParams.get("alias") ?? "";
+        const initShell = bootParams.get("shell") ?? undefined;
+        useSessions.getState().bootstrapFirstProject(initRoot, {
+          alias: initAlias,
+          shell: initShell,
+        });
+        void recordRecentProject(initRoot, initAlias); // 최근 목록(명시적 열기)
       } else {
-        console.warn(`[P6] 지시된 프로젝트가 다른 창에 열림 — 픽커로 열화: ${initRoot}`);
+        console.warn(`[P6] 지시된 프로젝트가 다른 창에 열림 — 빈 상태로 열화: ${initRoot}`);
       }
     } catch (e) {
       console.error("지시된 프로젝트 부트 실패:", e);
@@ -121,48 +132,16 @@ async function boot(): Promise<void> {
   // 복원본의 root 들은 이전 세션에서 검증된 경로 — 부재 시 그 프로젝트 뷰는 빈 상태로 뜨고
   // 사용자가 정리한다(여기서 fs 검증으로 전체 복원을 막지 않는다). 자동 저장 구독도 여기서 시작.
   // (initRoot 로 이미 탭이 있으면 restoreProjects 는 멱등 no-op — 자동 저장 구독만 켜진다.)
-  let restored = false;
   try {
-    restored = await initWorkspacePersistence();
+    await initWorkspacePersistence();
   } catch (e) {
     console.error("워크스페이스 영속 초기화 실패:", e);
   }
   // 창 네이티브 타이틀 = 활성 프로젝트(Dock 창 목록·Mission Control 구분 — 실측: 전 창이
   // 앱 이름 하나로 보였음). 자동 저장과 무관한 표시 전용 구독.
   void initWindowTitle();
-  // 멀티윈도우 리스폰(B2) — main 부트만: manifest 의 다른 창들을 라벨·프레임 그대로 되살린다.
-  // await 하지 않는다 — 각 창은 독립 부트라 main 렌더를 막을 이유가 없다.
-  if (currentWindowLabel() === "main") {
-    void respawnSavedWindows();
-  }
-  try {
-    if (!restored && !initRoot && currentWindowLabel() === "main") {
-      // 복원본 없음(main 창) — 사용자가 지정한 기본 프로젝트(설정 영속)가 있으면 그 루트로,
-      // 무효면 사유를 콘솔에 남기고 project1 로 폴백.
-      // 비-main 새 창은 자동 부팅하지 않는다 — 프로젝트 선택(픽커)이 선행한다(P6 UX).
-      let root: string | null = null;
-      const preferred = useSettings.getState().defaultProjectRoot;
-      if (preferred) {
-        try {
-          root = await validateProjectRoot(preferred);
-        } catch (e) {
-          console.error("기본 프로젝트 루트 무효 — project1 폴백:", e);
-        }
-      }
-      root ??= await ensureDefaultWorkspace("project1");
-      // P6(전역 단일 오픈): 기본 프로젝트도 점유를 지나서 연다. 다른 창이 이미 점유했으면
-      // (멀티창 부트 레이스) 이 창은 빈 채로 두고 사용자가 픽커/새 프로젝트로 시작한다.
-      const denied = await claimRoots([root]);
-      if (!denied.has(root)) {
-        useSessions.getState().bootstrapFirstProject(root);
-        void recordRecentProject(root, ""); // 픽커 최근 목록(기본 부트 포함)
-      } else {
-        console.warn(`[P6] 기본 프로젝트가 다른 창에 열려 있음 — 빈 창 시작: ${root}`);
-      }
-    }
-  } catch (e) {
-    console.error("기본 프로젝트 루트 준비 실패:", e);
-  }
+  // 리스폰·첫 실행 부트스트랩은 컨트롤 플레인(main)이 소유한다 — 워크스페이스 창은 자기 복원
+  // (스냅샷 또는 initRoot)만 책임지고, 그 둘 다 없으면 빈 상태(예외)로 시작한다.
   // StrictMode 비활성: dev 에서 effect 이중 실행이 플러그인 마운트/PTY spawn 을 두 번 돌려
   // 잠깐 중복 세션을 만드는 것을 피한다(dev 동작 단순화).
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

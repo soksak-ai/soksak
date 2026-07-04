@@ -381,7 +381,7 @@ export function registerCatalog(): void {
 
   register("project.recent", {
     description:
-      "List recent projects (the cross-window recents feeding the picker and the project rail): root, alias, last-opened timestamp. Same list from any window (core kv).",
+      "List recent projects (the cross-window recents feeding the control-plane project map and the project rail): root, alias, last-opened timestamp. Same list from any window (core kv).",
     triggers: { ko: "최근 프로젝트 목록 최근 연 프로젝트 픽커 레일" },
     params: {},
     returns: "{ recents: [{root, alias, lastOpenedAt}] }",
@@ -392,7 +392,7 @@ export function registerCatalog(): void {
 
   register("project.recent.forget", {
     description:
-      "Remove a project from the recents list (picker/rail). Does not touch the project on disk — only the recents entry. Idempotent (missing root is a no-op).",
+      "Remove a project from the recents list (project map/rail). Does not touch the project on disk — only the recents entry. Idempotent (missing root is a no-op).",
     triggers: { ko: "최근 프로젝트 제거 최근 목록에서 지우기 잊기" },
     params: {
       root: { type: "string", description: "Project root to forget", required: true },
@@ -1627,18 +1627,25 @@ export function registerCatalog(): void {
   // ── 멀티 윈도우 ──────────────────────────────────────────────────────────
   register("window.new", {
     description:
-      "Open a new OS window (independent workspace). Without root it opens to the project picker. With root it boots straight into that project (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). mode orchestrator opens the orchestrator window (activity feed + window/monitor map + command console; label orch-<n>, idempotent — an existing orchestrator window is focused and returned as existingWindow) and immediately places it via the spread strategy: a workspace-free monitor whole, or the right third beside the workspace on a single monitor.",
+      "Open a new workspace window for a project root (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). root is required unless mode orchestrator, which brings the control plane (main) forward instead — opening and creating projects live there; empty workspace windows do not exist.",
     triggers: { ko: "새 창 창 열기 새 윈도우 프로젝트 새 창 오케스트레이터 창" },
     params: {
       root: {
         type: "string",
-        description:
-          "Project root to open in the new window (absolute path). Omit = picker.",
+        description: "Project root to open in the new window (absolute path).",
+      },
+      alias: {
+        type: "string",
+        description: "Display alias for the project tab (defaults to the folder name).",
+      },
+      shell: {
+        type: "string",
+        description: "Shell binary for the project's terminals (defaults to the user shell).",
       },
       mode: {
         type: "string",
         description:
-          "Window mode. orchestrator = the observation/control window (no workspace). Mutually exclusive with root.",
+          "orchestrator = bring the control plane (main) forward. Mutually exclusive with root.",
         enum: ["orchestrator"],
       },
     },
@@ -1647,7 +1654,6 @@ export function registerCatalog(): void {
       d.existingWindow ? "이미 열려 있어 그 창을 앞으로 가져왔습니다" : "새 창을 열었습니다",
     errors: ["INVALID_PARAMS"],
     examples: [
-      "sok window.new",
       'sok window.new \'{"root":"/Users/me/work"}\'',
       'sok window.new \'{"mode":"orchestrator"}\'',
     ],
@@ -1660,46 +1666,47 @@ export function registerCatalog(): void {
             message: "mode=orchestrator 는 root 와 함께 쓸 수 없음",
           };
         }
-        // 멱등: 오케스트레이터 창은 관찰 표면이라 1개면 족하다 — 있으면 포커스.
+        // 컨트롤 플레인은 main 하나뿐(NAMING 4b 예약어) — 있으면 앞으로, 사용자가 닫았으면
+        // 같은 예약 라벨로 재개설한다(부트가 라벨로 분기하므로 init 불요).
         const labels = await invoke<string[]>("window_list");
-        const existing = labels.find((l) => l.startsWith("orch-"));
-        if (existing) {
-          await invoke("window_focus", { label: existing }).catch(() => {});
-          return { existingWindow: existing };
+        if (labels.includes("main")) {
+          await invoke("window_focus", { label: "main" }).catch(() => {});
+          return { existingWindow: "main" };
         }
-        // orch 창만 만든다 — 다른 창(워크스페이스)의 크기·위치는 절대 건드리지 않는다.
-        // (이전엔 layout.suggest→window.place 로 main 창까지 재배치했으나, 남의 창을 임의
-        // 변경하는 것이라 제거. orch 창은 자기 초기 프레임만 갖고, 위로 보이기는 핀 토글이 맡는다.)
-        const label = await invoke<string>("window_create", {
-          label: "orch-1",
-          init: "mode=orchestrator",
-        });
-        return { label };
+        await invoke("window_create", { label: "main" });
+        return { label: "main" };
       }
-      let init: string | undefined;
-      if (p.root) {
-        let root: string;
-        try {
-          root = await validateProjectRoot(p.root as string);
-        } catch (e) {
-          return {
-            ok: false as const,
-            code: "INVALID_PARAMS" as const,
-            message: String(e),
-          };
-        }
-        // P6 선검사: 이미 열려 있으면 창을 만들지 않고 소유 창 포커스(중복 창 0).
-        // 검사↔생성 사이 레이스는 새 창 부트의 claim 이 최종 시행(실패 시 픽커로 열화).
-        const owners = await invoke<{ owners: { root: string; window: string }[] }>(
-          "project_owners",
-        );
-        const owner = owners.owners.find((o) => o.root === root)?.window;
-        if (owner) {
-          await invoke("window_focus", { label: owner }).catch(() => {});
-          return { existingWindow: owner };
-        }
-        init = `root=${encodeURIComponent(root)}`;
+      // 빈 워크스페이스 창은 없다 — 프로젝트 열기·생성은 컨트롤 플레인(main)의 표면이다.
+      if (!p.root) {
+        return {
+          ok: false as const,
+          code: "INVALID_PARAMS" as const,
+          message: "root 필요 — 프로젝트 열기·생성은 오케스트레이터(main)에서",
+        };
       }
+      let root: string;
+      try {
+        root = await validateProjectRoot(p.root as string);
+      } catch (e) {
+        return {
+          ok: false as const,
+          code: "INVALID_PARAMS" as const,
+          message: String(e),
+        };
+      }
+      // P6 선검사: 이미 열려 있으면 창을 만들지 않고 소유 창 포커스(중복 창 0).
+      // 검사↔생성 사이 레이스는 새 창 부트의 claim 이 최종 시행(실패 시 빈 상태로 열화).
+      const owners = await invoke<{ owners: { root: string; window: string }[] }>(
+        "project_owners",
+      );
+      const owner = owners.owners.find((o) => o.root === root)?.window;
+      if (owner) {
+        await invoke("window_focus", { label: owner }).catch(() => {});
+        return { existingWindow: owner };
+      }
+      let init = `root=${encodeURIComponent(root)}`;
+      if (typeof p.alias === "string" && p.alias) init += `&alias=${encodeURIComponent(p.alias)}`;
+      if (typeof p.shell === "string" && p.shell) init += `&shell=${encodeURIComponent(p.shell)}`;
       return { label: await invoke<string>("window_create", { init }) };
     },
   });
@@ -1904,7 +1911,7 @@ export function registerCatalog(): void {
       h: { type: "number", description: "Height (physical px)", required: true },
     },
     returns: "{ ok }",
-    examples: ['sok window.place \'{"label":"orch-1","x":2560,"y":0,"w":2560,"h":1440}\''],
+    examples: ['sok window.place \'{"label":"main","x":2560,"y":0,"w":2560,"h":1440}\''],
     handler: async (p) => {
       await invoke("window_place", {
         label: p.label,
@@ -1933,12 +1940,12 @@ export function registerCatalog(): void {
       roles: {
         type: "json",
         description:
-          'Optional label→role map, e.g. {"orch-1":"orchestrator"} — unlisted windows count as workspaces',
+          'Optional label→role map, e.g. {"main":"orchestrator"} — unlisted windows count as workspaces',
       },
     },
     returns: "{ placements: [{label,monitor,x,y,w,h}] }",
     examples: [
-      'sok layout.suggest \'{"strategy":"spread","roles":{"orch-1":"orchestrator"}}\'',
+      'sok layout.suggest \'{"strategy":"spread","roles":{"main":"orchestrator"}}\'',
     ],
     handler: async (p) => {
       const facts = (await invoke("window_monitors")) as {

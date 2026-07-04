@@ -2,7 +2,7 @@
 // Dock 창 목록·Mission Control·Cmd+` 창 전환은 NSWindow 타이틀을 보여준다. 갱신하지 않으면
 // 모든 창이 conf 타이틀 하나로 보여 구분이 불가능하다(실측 — Dock 에 "soksak-dev" 3개).
 // 앱 이름은 붙이지 않는다: 그 표면들은 이미 앱 아이콘/그룹 아래라 순수 중복(macOS 관례도
-// 문서명만). 프로젝트 없는 창(픽커)만 앱 이름(getName — identity 별 실명)으로 폴백한다.
+// 문서명만). 프로젝트 없는 창(빈 예외 상태)만 앱 이름(getName — identity 별 실명)으로 폴백한다.
 // 활성 프로젝트 전환·이름 변경·탭 증감마다 따라간다(sessions 구독).
 
 import { getName } from "@tauri-apps/api/app";

@@ -1,11 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for all soksak windows (main + 런타임 창 w-<uuid> + 오케스트레이터 orch-*). 새 창 라벨 패턴은 여기 등재가 필수 — 누락 시 그 창은 event.listen 부터 거부되어 모든 소켓 명령이 TIMEOUT 으로만 죽는다(NAMING 4b). 구세대 win-* 는 리스폰 세대 이관으로 소멸 — 재등재 금지.",
+  "description": "Capability for all soksak windows (main = 컨트롤 플레인 예약어 + 워크스페이스 창 w-<uuid>). 새 창 라벨 패턴은 여기 등재가 필수 — 누락 시 그 창은 event.listen 부터 거부되어 모든 소켓 명령이 TIMEOUT 으로만 죽는다(NAMING 4b). 구세대 win-*·orch-* 는 소멸 — 재등재 금지.",
   "windows": [
     "main",
-    "w-*",
-    "orch-*"
+    "w-*"
   ],
   "permissions": [
     "core:default",

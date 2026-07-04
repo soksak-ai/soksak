@@ -22,8 +22,12 @@ git/clipboard/ai.session) and removes the violators.
    (a new window resurrecting a dead session's persisted slot) cannot exist. Intentional
    reuse is respawn only: the boot manifest recreates a window under its original uuid so
    its snapshot key matches. `main` is the single platform-forced constant (the statically
-   declared bootstrap window); no other name carries meaning, and no code may parse a role
-   out of a label — roles are metadata. Identifiers never surface in human answers
+   declared bootstrap window) and the **control plane reserved word**: the bootstrap window
+   IS the orchestrator, owns respawn, and carries no workspace; every workspace window is
+   `w-<uuid4>`. The `orch-<n>` family is retired with the same finality as `win-<seq>`
+   (one-shot migration `scripts/migrations/20260705-main-control-plane.sh` moved the old
+   main workspace into a `w-*` slot). No other name carries meaning, and no code may parse
+   a role out of a label — roles are metadata. Identifiers never surface in human answers
    (MESSAGE-PROTOCOL: `message` speaks in projects and sentences; labels live in `data`).
    Every window-label pattern MUST be listed in `src-tauri/capabilities/default.json`
    `windows` — a label family missing from the capability is denied `event.listen` and

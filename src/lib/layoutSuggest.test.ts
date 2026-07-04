@@ -27,30 +27,30 @@ describe("suggestLayout", () => {
   it("spread: 듀얼 모니터 — 오케스트레이터는 보조 모니터 전체, 워크스페이스는 주 모니터", () => {
     const out = suggestLayout({
       monitors: [mon(0, 0), mon(1, 2560)],
-      windows: [win("main", 0), win("orch-1", 0)],
+      windows: [win("w-1", 0), win("main", 0)],
       strategy: "spread",
-      roles: { "orch-1": "orchestrator" },
+      roles: { main: "orchestrator" },
     });
-    const orch = out.find((p) => p.label === "orch-1")!;
-    const main = out.find((p) => p.label === "main")!;
+    const orch = out.find((p) => p.label === "main")!;
+    const work = out.find((p) => p.label === "w-1")!;
     // 오케스트레이터 = 워크스페이스가 없는 모니터(1) 전체.
     expect(orch.monitor).toBe(1);
     expect([orch.x, orch.y, orch.w, orch.h]).toEqual([2560, 0, 2560, 1440]);
     // 워크스페이스 = 자기 모니터(0) 전체 사용 제안.
-    expect(main.monitor).toBe(0);
-    expect([main.x, main.w]).toEqual([0, 2560]);
+    expect(work.monitor).toBe(0);
+    expect([work.x, work.w]).toEqual([0, 2560]);
   });
 
   it("spread: 단일 모니터 — 오케스트레이터 우측 1/3, 워크스페이스 좌측 2/3(겹침 없이 나란히)", () => {
     const out = suggestLayout({
       monitors: [mon(0, 0, 3000, 1500)],
-      windows: [win("main", 0), win("orch-1", 0)],
+      windows: [win("w-1", 0), win("main", 0)],
       strategy: "spread",
-      roles: { "orch-1": "orchestrator" },
+      roles: { main: "orchestrator" },
     });
-    const orch = out.find((p) => p.label === "orch-1")!;
-    const main = out.find((p) => p.label === "main")!;
-    expect(main.w).toBe(2000);
+    const orch = out.find((p) => p.label === "main")!;
+    const work = out.find((p) => p.label === "w-1")!;
+    expect(work.w).toBe(2000);
     expect(orch.x).toBe(2000);
     expect(orch.w).toBe(1000);
     // 세로는 전체.

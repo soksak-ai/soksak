@@ -23,7 +23,6 @@ const ko = {
   "common.refresh": "새로고침",
   "common.cancel": "취소",
 
-  "picker.title": "프로젝트 열기",
   "project.otherWindow": "다른 창에 열림 — {window}\n{root}\n클릭하면 그 창으로 이동합니다.",
   "project.recentOpen": "최근 프로젝트 — {root}\n클릭하면 이 창에서 엽니다.",
   "orch.title": "오케스트레이터",
@@ -42,8 +41,7 @@ const ko = {
   "orch.run": "실행",
   "orch.open": "오케스트레이터 열기",
   "project.rootMissing": "프로젝트 폴더를 찾을 수 없습니다: {root} — 경로를 복구하거나 이 프로젝트를 닫으세요.",
-  "picker.empty": "최근 프로젝트가 없습니다 — 새 프로젝트로 시작하세요.",
-  "picker.openIn": "{window} 창에 열림",
+  "workspace.empty": "이 창에 열린 프로젝트가 없습니다 — 오케스트레이터에서 프로젝트를 열거나 만드세요.",
 
   "project.close": "프로젝트 닫기",
   "project.new": "새 프로젝트",
@@ -412,7 +410,6 @@ const en: Record<MsgKey, string> = {
   "common.cancel": "Cancel",
 
   "project.close": "Close project",
-  "picker.title": "Open a project",
   "project.otherWindow": "Open in another window — {window}\n{root}\nClick to focus that window.",
   "project.recentOpen": "Recent project — {root}\nClick to open in this window.",
   "orch.title": "Orchestrator",
@@ -431,8 +428,7 @@ const en: Record<MsgKey, string> = {
   "orch.run": "Run",
   "orch.open": "Open orchestrator",
   "project.rootMissing": "Project folder not found: {root} — restore the path or close this project.",
-  "picker.empty": "No recent projects — start with a new project.",
-  "picker.openIn": "open in {window}",
+  "workspace.empty": "No project in this window — open or create one from the orchestrator.",
   "project.new": "New project",
   "project.newTitle": "New project",
   "project.folder": "Folder",

@@ -35,7 +35,7 @@
 
 ## 멀티윈도우
 
-manifest(core kv `windows`)는 창마다 slot 하나를 담는다: 라벨·root 목록·활성 root·논리 프레임, 그리고 마지막 포커스 라벨. 부트 시 main 이 자신을 복원하고, 나머지 slot 을 라벨·프레임 그대로 리스폰하며(스냅샷 없는 유령 slot 은 정리), 마지막에 마지막 포커스 창을 앞으로 가져온다. 리스폰은 `w-*` slot 만 스폰한다(NAMING 4b): 다른 라벨의 slot 은 시끄러운 오류와 함께 거부하고 데이터는 건드리지 않는다 — capability 스코프 밖이라 그런 창은 귀머거리로 부팅된다(전 소켓 명령 타임아웃). 구세대 데이터는 깃 추적 일회용 마이그레이션 `scripts/migrations/20260704-window-label-uuid.sh`(스냅샷 키 rename + manifest 라벨 교체, 값 불변)가 한 번 교정했다. 리스폰된 각 창은 자기 스냅샷(`window/<label>`)을 단일 복원 경로로 복원하고, 프로젝트 root 는 전역 단일 오픈 레지스트리(P6)를 지나 점유한다.
+manifest(core kv `windows`)는 워크스페이스 창마다 slot 하나를 담는다: 라벨·root 목록·활성 root·논리 프레임, 그리고 마지막 포커스 라벨. `main` 은 컨트롤 플레인(NAMING 4b)이라 워크스페이스 스냅샷을 갖지 않고, 프레임은 자체 키(`controlPlaneFrame`)로 영속된다. 부트 시 컨트롤 플레인이 manifest 의 전 slot 을 스폰하고(스냅샷 없는 유령 slot 은 정리), 마지막 포커스 창을 앞으로 가져오며, 진짜 첫 실행(slot 0·recents 0)이면 기본 프로젝트 워크스페이스 창을 하나 연다. 리스폰은 `w-*` slot 만 스폰한다(NAMING 4b): 다른 라벨의 slot 은 시끄러운 오류와 함께 거부하고 데이터는 건드리지 않는다 — capability 스코프 밖이라 그런 창은 귀머거리로 부팅된다(전 소켓 명령 타임아웃). 구세대 데이터는 깃 추적 일회용 마이그레이션 `scripts/migrations/20260704-window-label-uuid.sh`(win-<seq> → uuid)와 `scripts/migrations/20260705-main-control-plane.sh`(구 main 워크스페이스 → w-<uuid> slot, main 은 워크스페이스 없음)가 한 번씩 교정했다. 리스폰된 각 창은 자기 스냅샷(`window/<label>`)을 단일 복원 경로로 복원하고, 프로젝트 root 는 전역 단일 오픈 레지스트리(P6)를 지나 점유한다.
 
 ## 복원 seam
 

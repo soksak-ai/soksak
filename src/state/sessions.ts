@@ -184,7 +184,7 @@ interface SessionsStore {
 
   // 프로젝트 레벨
   // 부트 1회: 기본 루트로 첫 프로젝트(t1/"P1") 생성 — main.tsx 전용(P3).
-  bootstrapFirstProject: (root: string) => void;
+  bootstrapFirstProject: (root: string, opts?: { alias?: string; shell?: string }) => void;
   // 영속된 레이아웃 복원(A5) — main.tsx 부트가 직렬화 스냅샷을 deserialize 해 통째 주입.
   // bootstrap 과 배타: 복원본이 있으면 이걸, 없으면 bootstrap. reseed 는 호출부(persistence)가.
   restoreProjects: (tabs: ProjectTab[], activeId: string) => void;
@@ -725,11 +725,12 @@ export const useSessions = create<SessionsStore>((set, get) => ({
   tabs: [],
   activeId: "",
 
-  bootstrapFirstProject: (root) => {
+  bootstrapFirstProject: (root, opts) => {
     if (get().tabs.length > 0) return; // 멱등 — 부트 1회 전용
-    // 자동 project1 은 "P1", 사용자 지정 기본 프로젝트는 폴더명이 표시명.
-    const alias = baseName(root) === "project1" ? "P1" : "";
-    const t = makeProject("t1", { alias, root });
+    // 자동 project1 은 "P1", 그 외 기본 표시명은 폴더명 — 생성자(컨트롤 플레인)가 별칭을
+    // 지정하면 그것이 우선한다(init 쿼리 alias).
+    const alias = opts?.alias || (baseName(root) === "project1" ? "P1" : "");
+    const t = makeProject("t1", { alias, root, shell: opts?.shell });
     set({ tabs: [t], activeId: "t1" });
   },
 

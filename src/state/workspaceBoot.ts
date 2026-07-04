@@ -15,9 +15,10 @@ import {
 } from "@tauri-apps/api/window";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { makeCoreStore } from "./coreStore";
-import { validateProjectRoot } from "../lib/workspace";
+import { validateProjectRoot, ensureDefaultWorkspace } from "../lib/workspace";
 import { claimRoots } from "./projectRegistry";
 import { beginRestoreHydration } from "./hydration";
+import { listRecentProjects } from "./recentProjects";
 import {
   useSessions,
   reseedIdCounters,
@@ -236,17 +237,50 @@ export async function respawnSavedWindows(): Promise<void> {
       }).catch((e) => console.error(`창 리스폰 실패(${slot.label}):`, e));
     }
     if (pruned) await manifestStore.save(manifest);
-    // main 자신의 프레임 복원 + 마지막 포커스 창 전면.
-    const mainSlot = manifest.slots.find((s) => s.label === "main");
-    if (mainSlot?.rect) {
-      const win = getCurrentWindow();
-      await win.setPosition(new LogicalPosition(mainSlot.rect.x, mainSlot.rect.y)).catch(() => {});
-      await win.setSize(new LogicalSize(mainSlot.rect.w, mainSlot.rect.h)).catch(() => {});
-    }
-    if (manifest.focusedLabel) {
+    if (manifest.focusedLabel && manifest.focusedLabel !== "main") {
       await invoke("window_focus", { label: manifest.focusedLabel }).catch(() => {});
+    }
+    // 첫 실행(리스폰할 워크스페이스 slot 0 + 최근 프로젝트 0) — 기본 프로젝트 워크스페이스 창을
+    // 하나 연다. 사용자가 창을 전부 닫아둔 경우(recents 존재)는 존중해 아무것도 열지 않는다.
+    const hasSlots = manifest.slots.some((s) => s.label !== "main");
+    if (!hasSlots) {
+      const recents = await listRecentProjects().catch(() => []);
+      if (recents.length === 0) {
+        try {
+          const root = await ensureDefaultWorkspace("project1");
+          await invoke("window_create", { init: `root=${encodeURIComponent(root)}` });
+        } catch (e) {
+          console.error("첫 실행 기본 워크스페이스 생성 실패:", e);
+        }
+      }
     }
   } catch (e) {
     console.error("멀티윈도우 리스폰 실패:", e);
   }
+}
+
+// 컨트롤 플레인(main) 프레임 영속 — 워크스페이스 manifest 와 분리된 자체 키. main 은 워크스페이스
+// 스냅샷을 갖지 않으므로(오케스트레이터 전용) 프레임만 기억한다. 이동/리사이즈는 디바운스 저장.
+export async function initControlPlaneFrame(): Promise<void> {
+  const store = makeCoreStore<{ x: number; y: number; w: number; h: number } | null>({
+    key: "controlPlaneFrame",
+    lsKey: "soksak.controlPlaneFrame",
+    fallback: null,
+    ...coreStoreDeps,
+  });
+  try {
+    const rect = await store.hydrate();
+    if (rect) {
+      const win = getCurrentWindow();
+      await win.setPosition(new LogicalPosition(rect.x, rect.y)).catch(() => {});
+      await win.setSize(new LogicalSize(rect.w, rect.h)).catch(() => {});
+    }
+  } catch (e) {
+    console.error("컨트롤 플레인 프레임 복원 실패:", e);
+  }
+  const persist = debounce(() => {
+    void currentFrame().then((f) => f && store.save(f));
+  }, 400);
+  void getCurrentWindow().onMoved(persist);
+  void getCurrentWindow().onResized(persist);
 }

@@ -312,7 +312,9 @@ fn run_request(method: &str, params: Value, pretty_only: bool) -> ExitCode {
 
 fn fetch_commands() -> Result<Vec<Value>, String> {
     let v = request("state.commands", Value::Null)?;
-    v.get("commands")
+    // 응답 봉투(MESSAGE-PROTOCOL) — 기계 페이로드는 data 에 중첩된다.
+    v.get("data")
+        .and_then(|d| d.get("commands"))
         .and_then(Value::as_array)
         .cloned()
         .ok_or_else(|| "카탈로그 응답 형식 오류".into())

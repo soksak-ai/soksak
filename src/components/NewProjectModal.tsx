@@ -25,7 +25,22 @@ const baseName = (p?: string) =>
 
 type FolderMode = "auto" | "manual";
 
-export function NewProjectModal({ onClose }: { onClose: () => void }) {
+// create 주입: 기본 = 이 창에 프로젝트 탭 추가(워크스페이스). 컨트롤 플레인(오케스트레이터)은
+// 새 워크스페이스 창 생성으로 주입한다 — 모달은 폴더 준비·검증만 소유하고 "무엇을 여는가"는
+// 호출부가 정한다(열기·생성의 단일 UI, 두 소비처).
+export interface CreateProjectArgs {
+  alias: string;
+  root: string;
+  shell?: string;
+}
+
+export function NewProjectModal({
+  onClose,
+  create: createOverride,
+}: {
+  onClose: () => void;
+  create?: (args: CreateProjectArgs) => Promise<void>;
+}) {
   const t = useT();
   // 오버레이 등록 — 모달이 떠 있는 동안 브라우저 홀의 마우스 통과를 차단한다.
   useOverlayActive();
@@ -74,12 +89,14 @@ export function NewProjectModal({ onClose }: { onClose: () => void }) {
       mode === "auto" ? await ensureDefaultWorkspace(nameValue) : root!;
     // 루트 초기화 정책(git init 등)은 코어가 아니라 project.created 이벤트를
     // 구독하는 플러그인 소유(soksak-plugin-git-init) — 여기선 생성만.
-    // P6(전역 단일 오픈) 게이트 — 다른 창에 열려 있으면 그 창이 포커스된다.
-    await addProjectClaimed({
+    const args = {
       alias: nameValue, // 비면 makeProject 가 폴더명 폴백
       root: finalRoot,
       shell: shell.trim() || undefined,
-    });
+    };
+    // P6(전역 단일 오픈) 게이트 — 다른 창에 열려 있으면 그 창이 포커스된다.
+    if (createOverride) await createOverride(args);
+    else await addProjectClaimed(args);
     onClose();
   };
 

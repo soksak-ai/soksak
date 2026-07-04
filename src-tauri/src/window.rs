@@ -349,12 +349,12 @@ mod mw_rules {
              \"main\" 단일 창 가정 금지(새 창이 listen·드래그·포커스 권한을 못 받는다)"
         );
         assert!(
-            !windows.contains(&"win-*"),
-            "구세대 라벨(win-*)은 일회용 마이그레이션으로 소멸했다 — capability 재등재 금지(NAMING 4b)"
+            windows.contains(&"main"),
+            "capability windows 스코프에 컨트롤 플레인(main)이 있어야 한다(NAMING 4b)"
         );
         assert!(
-            windows.contains(&"orch-*") || windows.contains(&"*"),
-            "capability windows 스코프가 오케스트레이터 창(orch-*)을 포함해야 한다(A3)"
+            !windows.contains(&"win-*") && !windows.contains(&"orch-*"),
+            "구세대 라벨(win-*·orch-*)은 소멸했다 — capability 재등재 금지(NAMING 4b: 워크스페이스는 w-*, 컨트롤 플레인은 main)"
         );
     }
     // B1 — 창 닫힘 시 영속 흔적 정리: 그 창의 스냅샷 kv 와 manifest slot 만 제거, 남의 것 보존.

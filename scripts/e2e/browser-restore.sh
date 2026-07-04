@@ -150,7 +150,7 @@ def owners(recovered=False):
     t = rpc("window.list"); labs = t["labels"]
     res = {}; zombies = []
     for l in labs:
-        if l == "main" or l.startswith("orch-"): continue
+        if l == "main": continue  # 컨트롤 플레인(예약어) — 워크스페이스 아님
         try:
             tr = rpc("state.tree", window=l, timeout=4)
             for p in tr.get("projects", []):

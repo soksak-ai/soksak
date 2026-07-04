@@ -588,13 +588,13 @@ Suggest window placements from current monitor/window facts (pure strategy — n
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `roles` | json |  | Optional label→role map, e.g. {"orch-1":"orchestrator"} — unlisted windows count as workspaces |
+| `roles` | json |  | Optional label→role map, e.g. {"main":"orchestrator"} — unlisted windows count as workspaces |
 | `strategy` | string |  | Placement strategy (spread|grid) [default "spread"] |
 
 **Returns**: { placements: [{label,monitor,x,y,w,h}] }
 
 ```bash
-sok layout.suggest '{"strategy":"spread","roles":{"orch-1":"orchestrator"}}'
+sok layout.suggest '{"strategy":"spread","roles":{"main":"orchestrator"}}'
 ```
 
 ## `media.proxy.info`
@@ -1284,7 +1284,7 @@ sok project.list
 
 ## `project.recent`
 
-List recent projects (the cross-window recents feeding the picker and the project rail): root, alias, last-opened timestamp. Same list from any window (core kv). | 최근 프로젝트 목록 연 픽커 레일
+List recent projects (the cross-window recents feeding the control-plane project map and the project rail): root, alias, last-opened timestamp. Same list from any window (core kv). | 최근 프로젝트 목록 연 픽커 레일
 
 **Returns**: { recents: [{root, alias, lastOpenedAt}] }
 
@@ -1294,7 +1294,7 @@ sok project.recent
 
 ## `project.recent.forget`
 
-Remove a project from the recents list (picker/rail). Does not touch the project on disk — only the recents entry. Idempotent (missing root is a no-op). | 최근 프로젝트 제거 목록에서 지우기 잊기
+Remove a project from the recents list (project map/rail). Does not touch the project on disk — only the recents entry. Idempotent (missing root is a no-op). | 최근 프로젝트 제거 목록에서 지우기 잊기
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -2190,7 +2190,7 @@ Close a specific window. | 창 닫기 윈도우
 **Returns**: { ok }
 
 ```bash
-sok window.close '{"label":"win-1"}'
+sok window.close '{"label":"w-<uuid>"}'
 ```
 
 ## `window.focus`
@@ -2204,7 +2204,7 @@ Bring a specific window to the front (focus it). | 창 포커스 활성화 앞�
 **Returns**: { ok }
 
 ```bash
-sok window.focus '{"label":"win-1"}'
+sok window.focus '{"label":"w-<uuid>"}'
 ```
 
 ## `window.info`
@@ -2264,18 +2264,19 @@ sok window.move '{"x":0,"y":0}'
 
 ## `window.new`
 
-Open a new OS window (independent workspace). Without root it opens to the project picker. With root it boots straight into that project (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). mode orchestrator opens the orchestrator window (activity feed + window/monitor map + command console; label orch-<n>, idempotent — an existing orchestrator window is focused and returned as existingWindow) and immediately places it via the spread strategy: a workspace-free monitor whole, or the right third beside the workspace on a single monitor. | 새 창 열기 윈도우 프로젝트 오케스트레이터
+Open a new workspace window for a project root (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). root is required unless mode orchestrator, which brings the control plane (main) forward instead — opening and creating projects live there; empty workspace windows do not exist. | 새 창 열기 윈도우 프로젝트 오케스트레이터
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `mode` | string |  | Window mode. orchestrator = the observation/control window (no workspace). Mutually exclusive with root. (orchestrator) |
-| `root` | string |  | Project root to open in the new window (absolute path). Omit = picker. |
+| `alias` | string |  | Display alias for the project tab (defaults to the folder name). |
+| `mode` | string |  | orchestrator = bring the control plane (main) forward. Mutually exclusive with root. (orchestrator) |
+| `root` | string |  | Project root to open in the new window (absolute path). |
+| `shell` | string |  | Shell binary for the project's terminals (defaults to the user shell). |
 
 **Returns**: { label } | { existingWindow } (root already open — focused instead)
 **Errors**: INVALID_PARAMS
 
 ```bash
-sok window.new
 sok window.new '{"root":"/Users/me/work"}'
 sok window.new '{"mode":"orchestrator"}'
 ```
@@ -2309,7 +2310,7 @@ Place a window at an exact frame (physical px — the window.monitors coordinate
 **Returns**: { ok }
 
 ```bash
-sok window.place '{"label":"orch-1","x":2560,"y":0,"w":2560,"h":1440}'
+sok window.place '{"label":"main","x":2560,"y":0,"w":2560,"h":1440}'
 ```
 
 ## `window.record`
@@ -2364,7 +2365,7 @@ Capture the window contents to a PNG. Captures even when fully occluded by other
 | `path` | string |  | Output .png path (file mode). Omit to use a temp folder. |
 | `rect` | json |  | Crop region {x,y,w,h} in CSS px, window coordinates (ui.measure space). Implies base64 mode. |
 
-**Returns**: { saved } (file mode) | { pngBase64 } (base64/rect mode)
+**Returns**: { saved, media:{kind,path} } (file mode) | { media:{kind:'image/png',base64} } (base64/rect mode)
 **Errors**: INVALID_PARAMS
 
 ```bash

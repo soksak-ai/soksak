@@ -49,29 +49,26 @@ os.makedirs(demo, exist_ok=True)
 r = rpc("window.new", {"root": demo}); time.sleep(3)
 w_demo = r.get("label") or r.get("existingWindow")
 
-# 잔재 orch 정리(멱등)
-for l in [x for x in rpc("window.list")["labels"] if x.startswith("orch-")]:
-    rpc("window.close", {"label": l}); time.sleep(0.4)
+# 기준: 호출 전 데모 창 rect(컨트롤 플레인 호출이 남의 창을 건드리지 않는지의 기준점)
+before = wins()[w_demo]; before_rect = (before["x"], before["y"], before["w"], before["h"])
 
-# 기준: 열기 전 main rect
-before = wins()["main"]; before_rect = (before["x"], before["y"], before["w"], before["h"])
-
-# 열기
+# 컨트롤 플레인 = main 예약어(NAMING 4b) — mode=orchestrator 는 창을 만들지 않고 main 을 앞으로.
 res = rpc("window.new", {"mode": "orchestrator"}); orch = res.get("label") or res.get("existingWindow")
-(ok if orch and orch.startswith("orch-") else ng)(f"별도 OS 창 생성: {orch}")
-time.sleep(4)
+(ok if orch == "main" else ng)(f"컨트롤 플레인은 main 예약어: {orch}")
+time.sleep(2)
 w = wins()
-(ok if orch in w else ng)("window.list에 orch 등재")
+(ok if orch in w else ng)("window.list에 main 등재")
+(ok if not any(l.startswith("orch-") for l in w) else ng)("orch-* 라벨 부재(세대 소멸)")
 
-# (c) 열 때 main rect 불변(자동 배치 없음)
-after_rect = (w["main"]["x"], w["main"]["y"], w["main"]["w"], w["main"]["h"])
-(ok if after_rect == before_rect else ng)(f"(c) 열 때 main rect 불변: {before_rect}=={after_rect}")
+# (c) 호출해도 남의 창(데모 워크스페이스) rect 불변(자동 배치 없음)
+after_rect = (w[w_demo]["x"], w[w_demo]["y"], w[w_demo]["w"], w[w_demo]["h"])
+(ok if after_rect == before_rect else ng)(f"(c) 호출 시 워크스페이스 rect 불변: {before_rect}=={after_rect}")
 
 # (a) 좌측 = 프로젝트 목록: "전체"(all) + 데모 프로젝트. 오케스트레이터 자신은 없다.
 projs = nodes(orch, "/orch/proj/")
 (ok if "all" in projs else ng)(f"(a) 좌측에 '전체' 항목: {projs}")
 (ok if "soksak-e2e-orch-demo" in projs else ng)(f"(a) 데모 프로젝트가 목록에: {projs}")
-(ok if not any(p.startswith("orch-") for p in projs) else ng)("(a) 오케스트레이터 자신은 목록에 없음")
+(ok if not any(p == "main" for p in projs) else ng)("(a) 컨트롤 플레인 자신은 목록에 없음")
 
 # (b) 창호출 아이콘(우측) → 그 프로젝트의 창을 앞으로. 핀 off 라 그 창이 focus 된다.
 calls = nodes(orch, "/orch/proj-call/")
@@ -106,7 +103,7 @@ r2 = rpc("window.new", {"mode": "orchestrator"})
 (ok if r2.get("existingWindow") == orch else ng)(f"멱등 재열기 → existingWindow={r2.get('existingWindow')}")
 
 # 워크스페이스 명령이 활동 피드(대화 버블)에 — 시작/종료/결과가 payload 에 실린다
-rpc("state.tree", window="main"); time.sleep(0.6)
+rpc("state.tree", window=w_demo); time.sleep(0.6)
 recent = rpc("activity.recent", {"limit": 20}).get("entries", [])
 ce = [e for e in recent if e["kind"] == "command.executed"]
 (ok if ce else ng)("워크스페이스 명령이 활동 피드에 등장")
@@ -115,8 +112,7 @@ if ce:
     (ok if ("startedAt" in p and "finishedAt" in p and "message" in p) else ng)(
         f"(피드) 대화 버블 데이터(시작/종료/결과) 존재: {sorted(p.keys())}")
 
-# 정리
-rpc("window.close", {"label": orch}); time.sleep(0.4)
+# 정리 — 컨트롤 플레인(main)은 상주 창이라 닫지 않는다. 데모 워크스페이스만 정리.
 for pr in rpc("state.tree", window=w_demo).get("projects", []):
     if "soksak-e2e-orch-demo" in pr["root"]:
         rpc("project.close", {"project": pr["id"]}, w_demo); time.sleep(0.3)

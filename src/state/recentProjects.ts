@@ -1,6 +1,6 @@
-// 최근 프로젝트 목록 — 픽커(새 창 프로젝트 선택)의 데이터원. core kv "recentProjects"
+// 최근 프로젝트 목록 — 레일·컨트롤 플레인 프로젝트맵의 데이터원. core kv "recentProjects"
 // (makeCoreStore: app.data 권위 + localStorage 캐시 + 크로스윈도우 broadcast — 어느 창에서
-// 열어도 전 창의 픽커가 같은 목록을 본다). 기록 시점 = 명시적 열기 성공(addProjectClaimed)
+// 열어도 전 창이 같은 목록을 본다). 기록 시점 = 명시적 열기 성공(addProjectClaimed)
 // 과 기본 부트 — 복원은 기록하지 않는다(이미 목록에 있던 것의 유지일 뿐).
 
 import { useEffect, useState } from "react";
@@ -56,7 +56,7 @@ export async function recordRecentProject(root: string, alias: string): Promise<
   }
 }
 
-/** 픽커용 조회. */
+/** 레일·프로젝트맵용 조회. */
 export async function listRecentProjects(): Promise<RecentProject[]> {
   try {
     return await recentStore().hydrate();
@@ -65,7 +65,7 @@ export async function listRecentProjects(): Promise<RecentProject[]> {
   }
 }
 
-/** 항목 제거 — root 가 더는 존재하지 않을 때(레일/픽커 클릭 실패의 자가 치유). */
+/** 항목 제거 — root 가 더는 존재하지 않을 때(레일 클릭 실패의 자가 치유). */
 export async function removeRecentProject(root: string): Promise<void> {
   try {
     const s = recentStore();

@@ -9,6 +9,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { execute, getSpec } from "../commands/registry";
 import { Icon } from "../ui/icons/Icon";
+import { NewProjectModal, type CreateProjectArgs } from "../components/NewProjectModal";
 import { hasMessage, localize, useT, type MsgKey, type TFn } from "../i18n";
 
 interface ActivityEntry {
@@ -266,6 +267,17 @@ export function OrchestratorApp() {
     void execute("window.new", { root }, { remote: false }).catch(() => {});
   }, []);
 
+  // 프로젝트 생성 — 열기·생성의 단일 표면은 컨트롤 플레인이다(워크스페이스 픽커 소멸).
+  // 모달이 폴더를 준비·검증하고, 여기서는 그 root 로 새 워크스페이스 창을 연다.
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const createProject = useCallback(async (args: CreateProjectArgs) => {
+    await execute(
+      "window.new",
+      { root: args.root, ...(args.alias ? { alias: args.alias } : {}), ...(args.shell ? { shell: args.shell } : {}) },
+      { remote: false },
+    );
+  }, []);
+
   useEffect(() => {
     // 네이티브 타이틀(Dock 창 목록 구분) — 프로젝트 창과 같은 규칙: 이름만, 앱 이름 무접미.
     void getCurrentWindow().setTitle(t("orch.title")).catch(() => {});
@@ -388,6 +400,14 @@ export function OrchestratorApp() {
               </div>
             );
           })}
+          <button
+            type="button"
+            className="orch-proj-new"
+            data-node="orch/new-project"
+            onClick={() => setNewProjectOpen(true)}
+          >
+            <Icon name="add" size="sm" /> {t("project.new")}
+          </button>
         </section>
         <section className="orch-feed-wrap">
           <h2>
@@ -431,6 +451,9 @@ export function OrchestratorApp() {
           )}
         </section>
       </div>
+      {newProjectOpen && (
+        <NewProjectModal onClose={() => setNewProjectOpen(false)} create={createProject} />
+      )}
       {zoomSrc && (
         <div
           className="orch-lightbox"
