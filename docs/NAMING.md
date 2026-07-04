@@ -25,6 +25,9 @@ git/clipboard/ai.session) and removes the violators.
    declared bootstrap window); no other name carries meaning, and no code may parse a role
    out of a label — roles are metadata. Identifiers never surface in human answers
    (MESSAGE-PROTOCOL: `message` speaks in projects and sentences; labels live in `data`).
+   Every window-label pattern MUST be listed in `src-tauri/capabilities/default.json`
+   `windows` — a label family missing from the capability is denied `event.listen` and
+   every socket command to such a window dies as TIMEOUT with no error at the source.
 
 5. **Sidecar** = `soksak-sidecar-<domain>[-<engine>]` — the same artifact shape as
    plugins, so a plugin/sidecar pair is visible at a glance

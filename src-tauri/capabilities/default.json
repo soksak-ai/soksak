@@ -1,9 +1,10 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for all soksak windows (main + 멀티 윈도우 win-* + 오케스트레이터 orch-*)",
+  "description": "Capability for all soksak windows (main + 런타임 창 w-<uuid> + 오케스트레이터 orch-* + 레거시 manifest 리스폰 win-*). 새 창 라벨 패턴은 여기 등재가 필수 — 누락 시 그 창은 event.listen 부터 거부되어 모든 소켓 명령이 TIMEOUT 으로만 죽는다(NAMING 4b).",
   "windows": [
     "main",
+    "w-*",
     "win-*",
     "orch-*"
   ],
