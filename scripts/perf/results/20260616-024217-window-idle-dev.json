@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "identity": "dev",
+    "label": "window-idle",
+    "git": "b229222",
+    "date": "20260616-024217"
+  },
+  "scenarios": {
+    "s7": {
+      "active": {
+        "avg": 1.8,
+        "max": 3.1,
+        "samples": 16
+      },
+      "tail": {
+        "avg": 1.4,
+        "max": 1.9,
+        "samples": 12
+      }
+    }
+  }
+}
