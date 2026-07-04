@@ -3,6 +3,7 @@
 // 열어도 전 창의 픽커가 같은 목록을 본다). 기록 시점 = 명시적 열기 성공(addProjectClaimed)
 // 과 기본 부트 — 복원은 기록하지 않는다(이미 목록에 있던 것의 유지일 뿐).
 
+import { useEffect, useState } from "react";
 import { coreStoreDeps } from "./workspaceBoot";
 import { makeCoreStore } from "./coreStore";
 
@@ -62,4 +63,37 @@ export async function listRecentProjects(): Promise<RecentProject[]> {
   } catch {
     return [];
   }
+}
+
+/** 항목 제거 — root 가 더는 존재하지 않을 때(레일/픽커 클릭 실패의 자가 치유). */
+export async function removeRecentProject(root: string): Promise<void> {
+  try {
+    const s = recentStore();
+    const cur = await s.hydrate();
+    await s.save(cur.filter((r) => r.root !== root));
+  } catch (e) {
+    console.warn("최근 프로젝트 제거 실패:", e);
+  }
+}
+
+/** 반응형 최근 목록(레일·픽커 공용) — data-change(recentProjects) + 초기 hydrate.
+ *  레일은 여기서 "열려 있지 않은 것"만 걸러 이 창에서 열기 버튼으로 쓴다. */
+export function useRecentProjects(): RecentProject[] {
+  const [list, setList] = useState<RecentProject[]>([]);
+  useEffect(() => {
+    let disposed = false;
+    const refresh = () =>
+      void listRecentProjects().then((l) => {
+        if (!disposed) setList(l);
+      });
+    refresh();
+    const un = coreStoreDeps.onDataChange((key) => {
+      if (key === "recentProjects") refresh();
+    });
+    return () => {
+      disposed = true;
+      un();
+    };
+  }, []);
+  return list;
 }

@@ -10,7 +10,8 @@ import {
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { invoke } from "@tauri-apps/api/core";
 import { listenThisWindow } from "./lib/windowEvents";
-import { closeProjectReleased, useOtherWindowProjects } from "./state/projectRegistry";
+import { addProjectClaimed, closeProjectReleased, useOtherWindowProjects } from "./state/projectRegistry";
+import { removeRecentProject, useRecentProjects } from "./state/recentProjects";
 import { rafThrottle } from "./lib/rafThrottle";
 import { parkedStyle } from "./lib/layerPark";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
@@ -21,6 +22,7 @@ import { GroupArea } from "./components/GroupArea";
 import { NewProjectModal } from "./components/NewProjectModal";
 import { ProjectSettingsModal } from "./components/ProjectSettingsModal";
 import { Icon } from "./ui/icons/Icon";
+import { validateProjectRoot } from "./lib/workspace";
 // 워드마크 로고 — fill 이 currentColor 상속이라 테마를 자동 추종(정적 신뢰 에셋).
 import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
@@ -631,6 +633,13 @@ function App() {
   // 줄이면 첫 글자만(말줄임 없음). 더블클릭=프로젝트 설정(이름/색), 우클릭=닫기.
   const railAtMin = railW <= RAIL_MIN;
   const otherProjects = useOtherWindowProjects();
+  const recentAll = useRecentProjects();
+  // 어디에도 안 열린 최근 = 전체 최근 − 내 창 root − 타창 root.
+  const openRoots = new Set([
+    ...tabs.map((p) => p.root),
+    ...otherProjects.map((o) => o.root),
+  ]);
+  const recentClosed = recentAll.filter((r) => !openRoots.has(r.root));
   const projectRailList = (
     <>
       {tabs.map((proj) => (
@@ -667,6 +676,35 @@ function App() {
             data-node={`rail/other/${name}`}
             title={t("project.otherWindow", { window: o.window, root: o.root })}
             onClick={() => void invoke("window_focus", { label: o.window })}
+          >
+            <span className="rail-chip-label">
+              {railAtMin ? ([...name][0] ?? "") : name}
+            </span>
+          </div>
+        );
+      })}
+      {/* 어디에도 안 열린 최근 프로젝트 — 픽커에만 있던 목록을 레일 버튼으로도 제공한다.
+          클릭 = 이 창에서 열기(P6 게이트 경유). root 소실은 목록에서 자가 치유(제거). */}
+      {recentClosed.map((r) => {
+        const name = r.alias || (r.root.split("/").filter(Boolean).pop() ?? r.root);
+        return (
+          <div
+            key={r.root}
+            className="rail-chip recent"
+            data-node={`rail/recent/${name}`}
+            title={t("project.recentOpen", { root: r.root })}
+            onClick={() => {
+              void (async () => {
+                try {
+                  await validateProjectRoot(r.root);
+                } catch {
+                  console.warn(`최근 프로젝트 root 소실 — 목록에서 제거: ${r.root}`);
+                  void removeRecentProject(r.root);
+                  return;
+                }
+                await addProjectClaimed({ root: r.root, alias: r.alias });
+              })();
+            }}
           >
             <span className="rail-chip-label">
               {railAtMin ? ([...name][0] ?? "") : name}

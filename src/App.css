@@ -3608,6 +3608,7 @@ select.dctl {
 .picker-screen {
   position: absolute;
   inset: 0;
+  z-index: 5; /* 빈 terminal-stack(DOM 뒤·relative)이 픽커를 덮어 클릭을 가로채는 것 방지 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3759,3 +3760,7 @@ select.dctl {
   border-style: dashed;
 }
 .rail-chip.other:hover { opacity: 0.9; }
+
+/* 레일: 안 열린 최근 프로젝트 칩 — 타창보다 더 은은(점선 없음, 감쇠만), 클릭=이 창에서 열기. */
+.rail-chip.recent { opacity: 0.4; }
+.rail-chip.recent:hover { opacity: 0.85; }
