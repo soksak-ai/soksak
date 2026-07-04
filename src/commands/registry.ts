@@ -273,9 +273,23 @@ async function executeInner(
   }
 }
 
+// 결과 형태에서 기본 message 를 만든다 — 명령마다 summarize 를 다는 반복을 없앤다. 지배 형태
+// 한 줄만 뽑는다(humanize 처럼 모든 키를 raw 나열하지 않는다): 단일 배열키 → "키 N", 단일
+// 스칼라키 → "키: 값". 복합/불명은 undefined → code 로 폴백. 사람이 다듬을 특수 답변만 summarize.
+function autoMessage(data: Record<string, unknown> | undefined): string | undefined {
+  if (!data) return undefined;
+  const keys = Object.keys(data);
+  if (keys.length !== 1) return undefined;
+  const k = keys[0];
+  const v = data[k];
+  if (Array.isArray(v)) return `${k} ${v.length}`;
+  if (v === null || typeof v !== "object") return `${k}: ${String(v)}`;
+  return undefined;
+}
+
 // 핸들러 반환(자유 객체 또는 {ok:false,…})을 표준 응답 봉투 {ok,code,message,data?}로 정규화한다.
-// 성공: 예약키(ok/code/message) 분리 → 나머지는 data 로 중첩, message 는 summarize(data) 또는
-// code 에코(변환 없음). 실패: code/message 보존, error 방언은 message 로 흡수(플러그인 하위호환).
+// 성공: 예약키(ok/code/message) 분리 → 나머지는 data 로 중첩, message 는 summarize(data) → 형태
+// 기반 autoMessage → code 에코 순(변환 추측 없음). 실패: code/message 보존, error 방언 흡수.
 function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): CommandOutcome {
   const raw: Record<string, unknown> =
     result && typeof result === "object" ? (result as Record<string, unknown>) : {};
@@ -293,6 +307,7 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
   const { ok: _ok, code: rc, message: rm, data: rd, ...rest } = raw;
   const data = pickData(rest, rd);
   const code = typeof rc === "string" ? rc : "OK";
-  const message = typeof rm === "string" ? rm : (spec?.summarize?.(data ?? {}) ?? code);
+  const message =
+    typeof rm === "string" ? rm : (spec?.summarize?.(data ?? {}) ?? autoMessage(data) ?? code);
   return data ? { ok: true, code, message, data } : { ok: true, code, message };
 }
