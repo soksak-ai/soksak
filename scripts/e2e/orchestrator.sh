@@ -65,15 +65,23 @@ rpc("ui.input.click", {"address": f"win/{orch}/chrome/orch/pin"}, orch); time.sl
 rpc("ui.input.click", {"address": f"win/{orch}/chrome/orch/pin"}, orch); time.sleep(0.8)
 (ok if wins()[orch].get("alwaysOnTop") is False else ng)("(b) 핀 재클릭 → alwaysOnTop=False")
 
-# (b) z-order 케이스 2: 창맵에서 main 클릭 → main 포커스되되 orch가 다시 앞(포커스)
+# z-order 모델: 핀 off → 창맵 클릭 시 타겟이 앞(깜빡임 없이 항상위로 감쌌다 해제).
+#              핀 on  → 창맵 클릭해도 orch 가 위 유지(항상위라 타겟은 뒤에서 활성).
+def focused_after_click(node, t=2.0):
+    rpc("ui.input.click", {"address": node}, orch)
+    end = 0
+    while end < 8:  # OS 포커스 반영은 비동기 — 잠깐 대기
+        time.sleep(0.35); end += 1
+        f = [l for l, x in wins().items() if x.get("focused")]
+        if f: return f
+    return []
 mnode = None
 for n in rpc("ui.tree", window=orch).get("nodes", []):
     if n.get("address","").endswith("/orch/win/main"): mnode = n["address"]; break
 if mnode:
-    rpc("ui.input.click", {"address": mnode}, orch); time.sleep(1)
-    foc = [l for l, x in wins().items() if x.get("focused")]
-    # 케이스 2: 창맵 클릭 후 orch 가 다시 앞으로(포커스) — main 은 활성되되 orch 최상.
-    (ok if foc == [orch] else ng)(f"(b) 창맵 클릭 후 orch가 앞으로 유지(케이스 2): focused={foc}")
+    # (핀 off) 창맵 클릭 → 타겟(main)이 앞으로. orch 는 뒤로.
+    foc = focused_after_click(mnode)
+    (ok if foc == ["main"] else ng)(f"(b) 핀 off + 창맵 클릭 → 타겟이 앞으로(깜빡임 없음): focused={foc}")
     # 창 선택 → 피드가 그 창으로 필터(전체 해제 버튼 노출). 전체 클릭 → 필터 해제.
     def has(addr_suffix):
         return any(n.get("address","").endswith(addr_suffix) for n in rpc("ui.tree", window=orch).get("nodes", []))
@@ -83,6 +91,13 @@ if mnode:
             rpc("ui.input.click", {"address": n["address"]}, orch); break
     time.sleep(0.6)
     (ok if not has("/orch/feed-all") else ng)("전체 클릭 → 필터 해제(버튼 사라짐)")
+    # (핀 on) → 창맵 클릭 시 타겟은 focus 되지만 orch 가 always-on-top(시각적 위) 유지.
+    # "orch 위"는 key-window(focused)가 아니라 always-on-top level 로 판정한다.
+    rpc("ui.input.click", {"address": f"win/{orch}/chrome/orch/pin"}, orch); time.sleep(0.8)
+    rpc("ui.input.click", {"address": mnode}, orch); time.sleep(1.3)
+    aot = wins()[orch].get("alwaysOnTop")
+    (ok if aot is True else ng)(f"(b) 핀 on + 창맵 클릭 → orch always-on-top 유지(시각적 위): alwaysOnTop={aot}")
+    rpc("ui.input.click", {"address": f"win/{orch}/chrome/orch/pin"}, orch); time.sleep(0.5)  # 핀 off 복귀
 else: ng("창맵 main 노드 없음")
 
 # 멱등 재열기

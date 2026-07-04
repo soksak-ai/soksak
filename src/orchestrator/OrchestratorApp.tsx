@@ -68,10 +68,10 @@ export function OrchestratorApp() {
   // 앞으로 raise(핀 무관). 케이스 3(OS 에서 프로젝트 창 직접 클릭 → 그 창 앞)은 OS 기본이라 코드 불요.
   const selectWindow = useCallback((label: string) => {
     setSelectedWindow((cur) => (cur === label ? null : label));
-    void (async () => {
-      await invoke("window_focus", { label }).catch(() => {});
-      await getCurrentWindow().setFocus().catch(() => {});
-    })();
+    // 자연스럽게 둔다(해킹 안 함): 핀 off 면 타겟이 앞으로 오고 오케스트레이터는 뒤로 간다.
+    // 핀 on 이면 오케스트레이터가 always-on-top 이라 타겟을 focus 해도 위에 남는다. 다시
+    // 앞으로 부르려면 프로젝트 창의 오케스트레이터 아이콘(window.new{orchestrator} 멱등 focus).
+    void invoke("window_focus", { label }).catch(() => {});
   }, []);
 
   const refreshFacts = useCallback(() => {
