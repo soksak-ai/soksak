@@ -20,6 +20,23 @@ interface CmdRequest {
 
 let started = false;
 
+// 부팅 준비 게이트 — 플러그인 활성화(initPluginHost) 완료 전에 도착한 외부 요청(스케줄러·소켓)을
+// 완료 이벤트까지 지연한다. 부팅 직후 발화가 아직 등록 전인 플러그인 명령(또는 등록은 됐지만
+// 의존 플러그인이 활성화 전인 핸들러)에 부딪혀 가짜 UNKNOWN_COMMAND 를 내던 레이스의 구조적
+// 봉합(재시도·폴링 없음). "미등록 명령만 대기"는 부족하다 — 등록된 명령의 핸들러가 다른
+// 플러그인 명령을 부르는 경우(workflow reconcile → kanban)를 놓친다. 전부 대기가 올바른 의미론.
+let hostReady = false;
+let resolveHostReady: (() => void) | undefined;
+const hostReadyGate = new Promise<void>((resolve) => {
+  resolveHostReady = resolve;
+});
+
+/** 플러그인 호스트 활성화 완료 신호 — main.tsx 가 initPluginHost() 직후 1회 호출한다. */
+export function markCommandHostReady(): void {
+  hostReady = true;
+  resolveHostReady?.();
+}
+
 export function startExecutor(): void {
   if (started) return;
   started = true;
@@ -46,6 +63,9 @@ export function startExecutor(): void {
   // 두 창에서 중복 실행 → 창별 독립 붕괴). lib/windowEvents 머리말 참조.
   listenThisWindow<CmdRequest>("cmd-request", async (e) => {
     const { id, method, params, pane, window } = e.payload;
+    // 호스트 미준비 = 플러그인 활성화 진행 중 — 완료까지 대기 후 실행.
+    // (완료 후에도 미등록이면 그때의 UNKNOWN_COMMAND 가 진짜다.)
+    if (!hostReady) await hostReadyGate;
     // 소켓 경유 = 원격(AI/CLI) 호출 → 권한 게이트 적용 대상. window 는 자기 창 label
     // (라우팅 확인·명령 컨텍스트용).
     const result = await execute(method, params ?? {}, {

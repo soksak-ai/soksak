@@ -18,7 +18,7 @@ if (typeof window !== "undefined") {
   );
 }
 import App from "./App";
-import { startExecutor } from "./commands/executor";
+import { markCommandHostReady, startExecutor } from "./commands/executor";
 import { startWebviewGc } from "./lib/webviewGc";
 import { initPluginHost } from "./plugins/host";
 import { initNotify } from "./lib/notify";
@@ -77,6 +77,9 @@ async function boot(): Promise<void> {
   // (플러그인 호스트·프로젝트·복원) 이전에 분기해 셸만 렌더한다. 셸은 커맨드·이벤트
   // 표면만 소비(외부 클라이언트와 같은 자격 — P13). 커맨드 카탈로그·활동 계측은 module-level.
   if (new URLSearchParams(window.location.search).get("mode") === "orchestrator") {
+    // 오케스트레이터 창은 플러그인 호스트를 돌리지 않는다 — 레지스트리가 이미 최종 상태이므로
+    // 준비 게이트를 즉시 해제한다(잠긴 채 두면 이 창으로 온 미등록 명령이 타임아웃까지 대기).
+    markCommandHostReady();
     ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <OrchestratorApp />,
     );
@@ -87,6 +90,9 @@ async function boot(): Promise<void> {
   } catch (e) {
     console.error("플러그인 호스트 초기화 실패:", e);
   }
+  // 부팅 준비 게이트 해제 — 이 전에 도착해 대기 중이던 미등록(플러그인) 명령 요청이 실행된다.
+  // 실패로 빠져나와도 반드시 해제한다(게이트가 영영 잠기면 원격 요청이 타임아웃으로만 죽는다).
+  markCommandHostReady();
   // 알림 클릭(OS)·외부/콜드스타트 딥링크 라우팅 — command 레지스트리+플러그인 준비 후 1회.
   try {
     await initNotify();
