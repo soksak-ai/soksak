@@ -212,6 +212,14 @@ pub fn run() {
                     // 그 창에만 emit_to — 프론트 필터 불필요(자기 창 신호만 도착). 활성 창 추적은
                     // Rust(note_focus)가 담당하므로 프론트는 단순히 focused 만 받는다.
                     let _ = window.app_handle().emit_to(label, "window-focus", *focused);
+                    // 전역 broadcast — 오케스트레이터 창맵이 팩트(위치·포커스)를 자동 갱신한다(수동
+                    // 새로고침 제거). 다른 창은 이 이벤트를 구독하지 않아 무시한다.
+                    let _ = window.app_handle().emit("window-changed", ());
+                }
+                // 창 이동·크기변경도 창맵 팩트를 바꾼다 — 자동 갱신 대상. 드래그 중 폭주는 구독측
+                // (오케스트레이터)이 디바운스로 흡수하므로 코어는 그대로 broadcast 한다.
+                tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                    let _ = window.app_handle().emit("window-changed", ());
                 }
                 // 창이 닫히면 그 창의 브라우저 child webview 를 회수한다 — 창 프론트가 사라지면 그 창
                 // browserGc 가 멈추고 다른 창 GC 는 접두사 필터로 안 건드리므로 child 가 좀비로 남는다.
@@ -229,6 +237,7 @@ pub fn run() {
                     // 프로젝트 전역 단일 오픈(P6): 죽은 창의 점유를 해제해 다른 창이 그 프로젝트를
                     // 열 수 있게 한다(해제 없으면 앱 재시작까지 유령 점유).
                     crate::project_registry::on_window_destroyed(&app, window.label());
+                    let _ = app.emit("window-changed", ()); // 오케스트레이터 창맵 자동 갱신
                     // 사용자 개별 닫기였다면 그 창의 세션 흔적(스냅샷 kv + manifest slot)을 폐기.
                     if window::take_user_closed(window.label()) {
                         let st = app.state::<data::DbState>();

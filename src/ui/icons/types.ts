@@ -14,6 +14,8 @@ export const ICON_NAMES = [
   "panel-right",
   "star",
   "star-filled",
+  "pin",
+  "pin-filled",
   "menu",
   "arrow-left",
   "arrow-right",

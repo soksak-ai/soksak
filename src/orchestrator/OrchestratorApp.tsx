@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { execute } from "../commands/registry";
+import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 
 interface ActivityEntry {
@@ -29,8 +30,10 @@ const FEED_CAP = 500;
 function lineOf(e: ActivityEntry): string {
   const p = e.payload;
   switch (e.kind) {
-    case "command.executed":
-      return `${p.command} ${p.ok ? "✓" : `✗ ${p.code ?? ""}`} (${p.durationMs}ms)`;
+    case "command.executed": {
+      const head = `${p.command} ${p.ok ? "✓" : `✗ ${p.code ?? ""}`} (${p.durationMs}ms)`;
+      return p.result ? `${head} → ${p.result}` : head;
+    }
     case "terminal.command.started":
       return `$ ${p.commandLine}`;
     case "terminal.command.finished":
@@ -44,6 +47,57 @@ function lineOf(e: ActivityEntry): string {
   }
 }
 
+// HH:MM:SS — 대화 버블 메타. 0/누락은 빈 문자열.
+function fmtTime(ms: number): string {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+// 활동 1건을 렌더 — 명령 실행은 요청/응답 대화 버블(시작·종료 시각 세움), 나머지는 단일 이벤트 줄.
+function renderEntry(e: ActivityEntry) {
+  const win = String(e.payload.window ?? "");
+  if (e.kind === "command.executed") {
+    const p = e.payload;
+    const ok = p.ok !== false;
+    return (
+      <div key={e.seq} className="orch-turn" title={JSON.stringify(p)}>
+        <div className="orch-bubble req" data-node="orch/turn/req">
+          <div className="orch-bubble-meta">
+            {fmtTime(Number(p.startedAt))} · {win || e.source}
+          </div>
+          <div className="orch-bubble-body">
+            {String(p.command)}
+            {p.params ? <span className="orch-args"> {String(p.params)}</span> : null}
+          </div>
+        </div>
+        <div className={`orch-bubble res ${ok ? "ok" : "err"}`} data-node="orch/turn/res">
+          <div className="orch-bubble-meta">
+            {fmtTime(Number(p.finishedAt))} · {String(p.durationMs ?? "")}ms
+          </div>
+          <div className="orch-bubble-body">
+            {ok ? "✓" : `✗ ${p.code ?? ""}`}
+            {p.result ? ` ${String(p.result)}` : ""}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div
+      key={e.seq}
+      className={`orch-event k-${e.kind.split(".").join("-")}`}
+      title={JSON.stringify(e.payload)}
+    >
+      <span className="orch-bubble-meta">
+        {fmtTime(e.ts)} · {win}·{e.source}
+      </span>
+      <span className="orch-line">{lineOf(e)}</span>
+    </div>
+  );
+}
+
 export function OrchestratorApp() {
   const t = useT();
   const [feed, setFeed] = useState<ActivityEntry[]>([]);
@@ -52,7 +106,17 @@ export function OrchestratorApp() {
   const [result, setResult] = useState<string>("");
   const [pinned, setPinned] = useState(false); // 핀 = always-on-top(이 창 로컬, 재열기 시 off)
   const [selectedWindow, setSelectedWindow] = useState<string | null>(null); // 피드 필터 대상 창
+  const [unread, setUnread] = useState(0); // 위로 스크롤해 보던 중 도착한 안읽은 항목 수
   const feedRef = useRef<HTMLDivElement>(null);
+  const atBottomRef = useRef(true); // 피드 바닥 근처 여부 — 바닥이면 따라가고, 아니면 안읽음 누적
+
+  // 피드 스크롤 추적: 바닥 근처면 계속 따라가고 안읽음을 0으로, 위로 올리면 추종 중단.
+  const onFeedScroll = useCallback(() => {
+    const el = feedRef.current;
+    if (!el) return;
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (atBottomRef.current) setUnread(0);
+  }, []);
 
   // 핀 토글(z-order 케이스 1) — on 이면 뭘 하든 오케스트레이터가 최상단 고정.
   const togglePin = useCallback(() => {
@@ -83,10 +147,16 @@ export function OrchestratorApp() {
   useEffect(() => {
     // 네이티브 타이틀(Dock 창 목록 구분) — 프로젝트 창과 같은 규칙: 이름만, 앱 이름 무접미.
     void getCurrentWindow().setTitle(t("orch.title")).catch(() => {});
-    // 백필(커서) 후 라이브 구독 — 폴링 0. 창 배치 팩트는 부트 1회 + 수동 새로고침 +
-    // 창 관련 활동이 보일 때 갱신(이벤트 기반).
+    // 백필(커서) 후 라이브 구독 — 폴링 0. 창 배치 팩트는 부트 1회 + window-changed 이벤트로
+    // 자동 갱신(수동 새로고침 없음). 드래그 폭주는 아래 디바운스로 흡수.
     let un = () => {};
+    let unWin = () => {};
     let disposed = false;
+    let debTimer: ReturnType<typeof setTimeout> | undefined;
+    const bumpFacts = () => {
+      clearTimeout(debTimer);
+      debTimer = setTimeout(refreshFacts, 150);
+    };
     void invoke<ActivityEntry[]>("activity_recent", { since: null, limit: 200 }).then(
       (entries) => setFeed(entries),
     );
@@ -97,25 +167,30 @@ export function OrchestratorApp() {
         const next = [...cur, e];
         return next.length > FEED_CAP ? next.slice(next.length - FEED_CAP) : next;
       });
-      if (e.kind === "command.executed" && String(e.payload.command).startsWith("window."))
-        refreshFacts();
+      if (!atBottomRef.current) setUnread((u) => u + 1); // 위로 스크롤 중이면 안읽음 누적
     }).then((u) => {
       if (disposed) u();
       else un = u;
+    });
+    // 창 변경(focus/이동/크기/닫기)마다 코어가 broadcast — 창맵 팩트를 자동 갱신한다.
+    void listen("window-changed", bumpFacts).then((u) => {
+      if (disposed) u();
+      else unWin = u;
     });
     refreshFacts();
     return () => {
       disposed = true;
       un();
+      unWin();
+      clearTimeout(debTimer);
     };
   }, [refreshFacts]);
 
-  // 새 항목 도착 시 피드 바닥 고정(사람이 위로 스크롤해 보던 중이면 방해하지 않는다).
+  // 새 항목 도착 시: 바닥에 있었으면 계속 따라간다. 위로 스크롤해 보던 중이면 건드리지 않고
+  // 안읽음 배지로 알린다(onFeedScroll 이 atBottomRef 를 추적).
   useEffect(() => {
     const el = feedRef.current;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-    if (nearBottom) el.scrollTop = el.scrollHeight;
+    if (el && atBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [feed]);
 
   const runCommand = useCallback(async () => {
@@ -149,16 +224,7 @@ export function OrchestratorApp() {
           aria-pressed={pinned}
           onClick={togglePin}
         >
-          📌
-        </button>
-        <button
-          type="button"
-          className="icon-btn"
-          data-node="orch/refresh"
-          title={t("orch.refresh")}
-          onClick={refreshFacts}
-        >
-          ⟳
+          <Icon name={pinned ? "pin-filled" : "pin"} />
         </button>
       </header>
       <div className="orch-body">
@@ -207,24 +273,26 @@ export function OrchestratorApp() {
               </>
             )}
           </h2>
-          <div className="orch-feed" data-node="orch/feed" ref={feedRef}>
+          <div className="orch-feed" data-node="orch/feed" ref={feedRef} onScroll={onFeedScroll}>
             {(selectedWindow
               ? feed.filter((e) => e.payload.window === selectedWindow)
               : feed
-            ).map((e) => (
-              <div
-                key={e.seq}
-                className={`orch-entry k-${e.kind.split(".").join("-")}`}
-                title={JSON.stringify(e.payload)}
-              >
-                <span className="orch-seq">{e.seq}</span>
-                <span className="orch-src">
-                  {String(e.payload.window ?? "")}·{e.source}
-                </span>
-                <span className="orch-line">{lineOf(e)}</span>
-              </div>
-            ))}
+            ).map(renderEntry)}
           </div>
+          {unread > 0 && (
+            <button
+              type="button"
+              className="orch-unread"
+              data-node="orch/unread"
+              onClick={() => {
+                const el = feedRef.current;
+                if (el) el.scrollTop = el.scrollHeight;
+                setUnread(0);
+              }}
+            >
+              <Icon name="arrow-down" /> {t("orch.unread")} {unread}
+            </button>
+          )}
         </section>
       </div>
       <footer className="orch-console">

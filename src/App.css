@@ -3776,3 +3776,40 @@ select.dctl {
   color: inherit;
   cursor: pointer;
 }
+
+/* 오케스트레이터 활동 피드 — 요청/응답 대화 버블(시작·종료 시각). */
+.orch-turn { display: flex; flex-direction: column; gap: 3px; margin: 7px 0; }
+.orch-bubble {
+  max-width: 92%;
+  padding: 4px 9px;
+  border-radius: 8px;
+}
+.orch-bubble.req { align-self: flex-start; background: rgba(127, 127, 127, 0.09); }
+.orch-bubble.res { align-self: flex-start; margin-left: 20px; background: rgba(127, 127, 127, 0.045); }
+.orch-bubble.res.ok { background: rgba(63, 185, 80, 0.12); }
+.orch-bubble.res.err { background: rgba(229, 83, 75, 0.14); }
+.orch-bubble-meta { font-size: 10px; opacity: 0.5; margin-bottom: 1px; }
+.orch-bubble-body { font-size: 12px; word-break: break-word; white-space: pre-wrap; }
+.orch-args { opacity: 0.7; }
+/* 단일 이벤트(터미널·턴·뷰 등) — 버블 아닌 한 줄. */
+.orch-event { display: flex; gap: 8px; padding: 1px 0; font-size: 11px; opacity: 0.75; align-items: baseline; }
+.orch-event .orch-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 안읽음 배지 — 위로 스크롤해 보던 중 새 항목이 오면 sticky 로 알린다. */
+.orch-unread {
+  position: sticky;
+  bottom: 6px;
+  align-self: center;
+  margin: 4px auto 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 12px;
+  border: 1px solid var(--acc);
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--acc);
+  font-size: 11px;
+  cursor: pointer;
+}
+/* 핀(항상위) 활성 — 선택 여부를 색·배경으로 명확히. */
+.orch-pin.active { color: var(--acc); background: color-mix(in srgb, var(--acc) 16%, transparent); }

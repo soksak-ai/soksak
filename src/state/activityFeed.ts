@@ -55,6 +55,10 @@ export function startActivityFeed(): void {
       ok: t.ok,
       code: t.code,
       durationMs: t.durationMs,
+      startedAt: t.startedAt,
+      finishedAt: t.finishedAt,
+      params: t.params,
+      result: t.result,
     });
   });
 }

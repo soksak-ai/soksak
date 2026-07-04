@@ -187,6 +187,28 @@ export interface CommandTrace {
   ok: boolean;
   code?: string;
   durationMs: number;
+  // 실행 구간(대화 버블용) — 요청/응답을 시각에 세울 수 있게 시작·종료를 epoch ms 로 담는다.
+  startedAt: number;
+  finishedAt: number;
+  // 요청 인자 요약(값) — 요청 버블 본문. 큰 값은 잘라 담는다.
+  params?: string;
+  // 결과 요약(응답 버블 본문) — 성공 시 결과 데이터, 실패 시 message. 큰 결과는 잘라 담는다.
+  // 전체는 호출자(콘솔 result 박스)가 따로 보여준다.
+  result?: string;
+}
+
+function clip(s: string, n = 240): string {
+  return s.length > n ? s.slice(0, n) + "…" : s;
+}
+// 결과를 관찰용 문자열로 — ok/code 는 이미 별도 필드라 데이터 본문만 남긴다.
+function summarizeOutcome(out: CommandOutcome): string {
+  if (!out.ok) return out.message || out.code || "error";
+  const { ok: _ok, ...rest } = out as { ok: true } & Record<string, unknown>;
+  if (Object.keys(rest).length === 0) return "ok";
+  return clip(JSON.stringify(rest));
+}
+function summarizeParams(params: Record<string, unknown>): string {
+  return Object.keys(params).length === 0 ? "" : clip(JSON.stringify(params));
 }
 let traceSink: ((t: CommandTrace) => void) | null = null;
 export function setCommandTraceSink(fn: ((t: CommandTrace) => void) | null): void {
@@ -201,6 +223,7 @@ export async function execute(
 ): Promise<CommandOutcome> {
   const started = Date.now();
   const out = await executeInner(name, params, ctx);
+  const finished = Date.now();
   try {
     traceSink?.({
       command: name,
@@ -209,7 +232,11 @@ export async function execute(
       paramKeys: Object.keys(params),
       ok: out.ok,
       code: out.ok ? undefined : out.code,
-      durationMs: Date.now() - started,
+      durationMs: finished - started,
+      startedAt: started,
+      finishedAt: finished,
+      params: summarizeParams(params),
+      result: summarizeOutcome(out),
     });
   } catch {
     // 계측 실패는 명령 실행에 영향을 주지 않는다.
