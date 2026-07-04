@@ -19,11 +19,6 @@ interface ActivityEntry {
   payload: Record<string, unknown>;
 }
 
-interface MonitorFacts {
-  monitors: { index: number; name: string; x: number; y: number; w: number; h: number; scale: number }[];
-  windows: { label: string; title: string; x: number; y: number; w: number; h: number; focused: boolean; monitor: number | null }[];
-}
-
 const FEED_CAP = 500;
 
 // 피드 한 줄 요약 — kind 별 사람이 읽는 문장(전체 payload 는 title 로).
@@ -101,7 +96,8 @@ function renderEntry(e: ActivityEntry) {
 export function OrchestratorApp() {
   const t = useT();
   const [feed, setFeed] = useState<ActivityEntry[]>([]);
-  const [facts, setFacts] = useState<MonitorFacts | null>(null);
+  // 좌측은 모든 프로젝트(최근 연 것 ∪ 지금 열린 것). window!=null 이면 열려 있어 그 창을 가진다.
+  const [projects, setProjects] = useState<{ root: string; name: string; window: string | null }[]>([]);
   const [cmd, setCmd] = useState("");
   const [result, setResult] = useState<string>("");
   const [pinned, setPinned] = useState(false); // 핀 = always-on-top(이 창 로컬, 재열기 시 off)
@@ -127,36 +123,63 @@ export function OrchestratorApp() {
     });
   }, []);
 
-  // 창맵에서 프로젝트 클릭: (1) 피드를 그 창으로 필터(같은 창 재클릭 = 전체로), (2) 그 창을
-  // 활성(z-order 케이스 2)하되 창맵 조작은 오케스트레이터 안의 행위이므로 오케스트레이터를 다시
-  // 앞으로 raise(핀 무관). 케이스 3(OS 에서 프로젝트 창 직접 클릭 → 그 창 앞)은 OS 기본이라 코드 불요.
-  const selectWindow = useCallback((label: string) => {
-    setSelectedWindow((cur) => (cur === label ? null : label));
-    // 자연스럽게 둔다(해킹 안 함): 핀 off 면 타겟이 앞으로 오고 오케스트레이터는 뒤로 간다.
-    // 핀 on 이면 오케스트레이터가 always-on-top 이라 타겟을 focus 해도 위에 남는다. 다시
-    // 앞으로 부르려면 프로젝트 창의 오케스트레이터 아이콘(window.new{orchestrator} 멱등 focus).
+  // 좌측 창 목록은 피드 필터 선택일 뿐 — 창을 호출(포커스)하지 않는다. 항목 클릭은 그 창으로
+  // 피드를 좁히고("전체" 항목은 필터 해제), 창을 앞으로 부르는 건 항목 우측 포커스 아이콘이 맡는다.
+  const focusWindow = useCallback((label: string) => {
     void invoke("window_focus", { label }).catch(() => {});
   }, []);
 
-  const refreshFacts = useCallback(() => {
-    void invoke<MonitorFacts>("window_monitors")
-      .then(setFacts)
-      .catch(() => {});
+  // 좌측 프로젝트 목록 = 최근 연 것(project.recent) ∪ 지금 열린 것(project_owners). 열린 것은
+  // 소유 창(window)을 갖는다. 프로젝트 열림/닫힘마다 project-registry-change 로 자동 갱신.
+  const refreshProjects = useCallback(() => {
+    void (async () => {
+      let recents: { root: string; alias?: string }[] = [];
+      let owners: { root: string; window: string }[] = [];
+      try {
+        const r = await execute("project.recent", {}, { remote: false });
+        if (r.ok) recents = (r as { recents?: typeof recents }).recents ?? [];
+      } catch {
+        /* 무시 — 빈 목록 */
+      }
+      try {
+        owners = (
+          await invoke<{ owners: { root: string; window: string }[] }>("project_owners")
+        ).owners;
+      } catch {
+        /* 무시 */
+      }
+      const ownerOf = new Map(owners.map((o) => [o.root, o.window]));
+      const aliasOf = new Map(recents.map((r) => [r.root, r.alias]));
+      const order: string[] = [];
+      const seen = new Set<string>();
+      for (const r of [...recents.map((x) => x.root), ...owners.map((x) => x.root)]) {
+        if (!seen.has(r)) {
+          seen.add(r);
+          order.push(r);
+        }
+      }
+      setProjects(
+        order.map((root) => ({
+          root,
+          name: aliasOf.get(root) || root.split("/").filter(Boolean).pop() || root,
+          window: ownerOf.get(root) ?? null,
+        })),
+      );
+    })();
+  }, []);
+
+  // 안 열린 프로젝트 클릭 = 열기(그 root 로 창 생성; 이미 열려 있으면 P6 로 그 창 포커스).
+  const openProject = useCallback((root: string) => {
+    void execute("window.new", { root }, { remote: false }).catch(() => {});
   }, []);
 
   useEffect(() => {
     // 네이티브 타이틀(Dock 창 목록 구분) — 프로젝트 창과 같은 규칙: 이름만, 앱 이름 무접미.
     void getCurrentWindow().setTitle(t("orch.title")).catch(() => {});
-    // 백필(커서) 후 라이브 구독 — 폴링 0. 창 배치 팩트는 부트 1회 + window-changed 이벤트로
-    // 자동 갱신(수동 새로고침 없음). 드래그 폭주는 아래 디바운스로 흡수.
+    // 백필(커서) 후 라이브 구독 — 폴링 0.
     let un = () => {};
-    let unWin = () => {};
+    let unReg = () => {};
     let disposed = false;
-    let debTimer: ReturnType<typeof setTimeout> | undefined;
-    const bumpFacts = () => {
-      clearTimeout(debTimer);
-      debTimer = setTimeout(refreshFacts, 150);
-    };
     void invoke<ActivityEntry[]>("activity_recent", { since: null, limit: 200 }).then(
       (entries) => setFeed(entries),
     );
@@ -172,19 +195,18 @@ export function OrchestratorApp() {
       if (disposed) u();
       else un = u;
     });
-    // 창 변경(focus/이동/크기/닫기)마다 코어가 broadcast — 창맵 팩트를 자동 갱신한다.
-    void listen("window-changed", bumpFacts).then((u) => {
+    // 프로젝트 열림/닫힘/소유 창 변경마다 코어가 broadcast — 좌측 프로젝트 목록을 자동 갱신한다.
+    void listen("project-registry-change", refreshProjects).then((u) => {
       if (disposed) u();
-      else unWin = u;
+      else unReg = u;
     });
-    refreshFacts();
+    refreshProjects();
     return () => {
       disposed = true;
       un();
-      unWin();
-      clearTimeout(debTimer);
+      unReg();
     };
-  }, [refreshFacts]);
+  }, [refreshProjects]);
 
   // 새 항목 도착 시: 바닥에 있었으면 계속 따라간다. 위로 스크롤해 보던 중이면 건드리지 않고
   // 안읽음 배지로 알린다(onFeedScroll 이 atBottomRef 를 추적).
@@ -229,48 +251,57 @@ export function OrchestratorApp() {
       </header>
       <div className="orch-body">
         <section className="orch-map" data-node="orch/map">
-          <h2>{t("orch.windows")}</h2>
-          {facts?.monitors.map((m) => (
-            <div key={m.index} className="orch-monitor">
-              <div className="orch-monitor-name">
-                {m.name || `monitor ${m.index}`} — {m.w}×{m.h} @{m.scale}x
+          <h2>{t("orch.projects")}</h2>
+          {/* "전체" = 피드 필터 해제. 필터링 선택이므로 목록에 둔다(피드 우측 배지 대신). */}
+          <button
+            type="button"
+            className={`orch-proj all${selectedWindow === null ? " selected" : ""}`}
+            data-node="orch/proj/all"
+            onClick={() => setSelectedWindow(null)}
+          >
+            {t("orch.allProjects")}
+          </button>
+          {projects.map((p) => {
+            const open = p.window !== null;
+            return (
+              <div
+                key={p.root}
+                className={`orch-proj${open ? "" : " closed"}${
+                  open && p.window === selectedWindow ? " selected" : ""
+                }`}
+              >
+                {/* 라벨 클릭: 열린 것 = 그 창으로 피드 필터, 안 열린 것 = 열기. */}
+                <button
+                  type="button"
+                  className="orch-proj-label"
+                  data-node={`orch/proj/${p.name}`}
+                  title={p.root}
+                  onClick={() => (open ? setSelectedWindow(p.window) : openProject(p.root))}
+                >
+                  {p.name}
+                </button>
+                {/* 우측 아이콘: 열린 것 = 그 창 앞으로 호출, 안 열린 것 = 열기. */}
+                <button
+                  type="button"
+                  className="orch-proj-call"
+                  data-node={`orch/proj-call/${p.name}`}
+                  title={open ? t("orch.callWindow") : t("orch.openProject")}
+                  onClick={() => (open ? focusWindow(p.window as string) : openProject(p.root))}
+                >
+                  <Icon name={open ? "arrow-up-right" : "add"} />
+                </button>
               </div>
-              {facts.windows
-                // 오케스트레이터 자신(orch-*)은 관찰 도구이지 관찰 대상이 아니라 목록에서 뺀다.
-                // (자기가 항상 앞이라 창맵에 두면 늘 선택된 것처럼 보이는 문제도 함께 해소.)
-                .filter((w) => w.monitor === m.index && !w.label.startsWith("orch-"))
-                .map((w) => (
-                  <button
-                    type="button"
-                    key={w.label}
-                    className={`orch-win${w.label === selectedWindow ? " selected" : ""}`}
-                    data-node={`orch/win/${w.label}`}
-                    title={`${w.title || w.label} — ${w.x},${w.y} ${w.w}×${w.h}`}
-                    onClick={() => selectWindow(w.label)}
-                  >
-                    {w.title || w.label}
-                  </button>
-                ))}
-            </div>
-          ))}
+            );
+          })}
         </section>
         <section className="orch-feed-wrap">
           <h2>
             {t("orch.feed")}
             {selectedWindow && (
-              <>
+              <span className="orch-feed-scope">
                 {" — "}
-                {facts?.windows.find((w) => w.label === selectedWindow)?.title ??
-                  selectedWindow}
-                <button
-                  type="button"
-                  className="orch-feed-all"
-                  data-node="orch/feed-all"
-                  onClick={() => setSelectedWindow(null)}
-                >
-                  {t("orch.feedAll")}
-                </button>
-              </>
+                {projects.find((p) => p.window === selectedWindow)?.name ?? selectedWindow}
+              </span>
             )}
           </h2>
           <div className="orch-feed" data-node="orch/feed" ref={feedRef} onScroll={onFeedScroll}>

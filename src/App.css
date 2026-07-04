@@ -3813,3 +3813,59 @@ select.dctl {
 }
 /* 핀(항상위) 활성 — 선택 여부를 색·배경으로 명확히. */
 .orch-pin.active { color: var(--acc); background: color-mix(in srgb, var(--acc) 16%, transparent); }
+
+/* 오케스트레이터 좌측 = 프로젝트 목록(창·모니터 아님). 라벨=피드 필터, 우측 아이콘=창 앞으로. */
+/* 프로젝트 항목 = 테두리 없이 한 행(라벨 + 우측 아이콘). 구분은 배경·색으로만. */
+.orch-proj {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1px;
+  border-radius: 6px;
+}
+.orch-proj:hover { background: rgba(127, 127, 127, 0.07); }
+.orch-proj.selected { background: color-mix(in srgb, var(--acc) 15%, transparent); }
+.orch-proj.all {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.orch-proj.all:hover { background: rgba(127, 127, 127, 0.07); }
+.orch-proj.all.selected { background: color-mix(in srgb, var(--acc) 15%, transparent); opacity: 1; }
+.orch-proj-label {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.orch-proj-call {
+  display: flex;
+  align-items: center;
+  padding: 5px 8px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+}
+.orch-proj-call:hover { opacity: 1; color: var(--acc); }
+.orch-feed-scope { opacity: 0.7; font-weight: 400; }
+
+/* 안 열린 프로젝트 — 흐리게(열림과 구분). 클릭하면 열린다. */
+.orch-proj.closed .orch-proj-label { opacity: 0.45; }

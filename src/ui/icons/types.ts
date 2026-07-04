@@ -21,6 +21,7 @@ export const ICON_NAMES = [
   "arrow-right",
   "arrow-up",
   "arrow-down",
+  "arrow-up-right",
   "terminal",
   "file",
   "browser",

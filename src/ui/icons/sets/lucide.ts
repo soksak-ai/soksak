@@ -94,6 +94,11 @@ export const LUCIDE_ICONS: IconSetData = {
     "b": "<path d=\"M12 5v14\" /> <path d=\"m19 12-7 7-7-7\" />",
     "f": "stroke"
   },
+  "arrow-up-right": {
+    "v": "0 0 24 24",
+    "b": "<path d=\"M7 7h10v10\" /> <path d=\"M7 17 17 7\" />",
+    "f": "stroke"
+  },
   "terminal": {
     "v": "0 0 24 24",
     "b": "<path d=\"M12 19h8\" /> <path d=\"m4 17 6-6-6-6\" />",
