@@ -1643,6 +1643,8 @@ export function registerCatalog(): void {
       },
     },
     returns: "{ label } | { existingWindow } (root already open — focused instead)",
+    summarize: (d) =>
+      d.existingWindow ? "이미 열려 있어 그 창을 앞으로 가져왔습니다" : "새 창을 열었습니다",
     errors: ["INVALID_PARAMS"],
     examples: [
       "sok window.new",
@@ -1696,9 +1698,12 @@ export function registerCatalog(): void {
           await invoke("window_focus", { label: owner }).catch(() => {});
           return { existingWindow: owner };
         }
-        init = `root=${encodeURIComponent(root)}`;
+        // fresh=1 — 런타임 새 창은 스냅샷 복원 금지(main.tsx 부트 계약). 라벨(win-<seq>) 재사용이
+        // 이전 세션의 스냅샷을 유령 복원해 그 root 들을 claim(살아있는 창의 유령 점유)하는 것을
+        // 차단한다(실측: e2e 라벨 재사용 → 옛 root 가 새 창에 claim 되어 P6 가 오판).
+        init = `root=${encodeURIComponent(root)}&fresh=1`;
       }
-      return { label: await invoke<string>("window_create", { init }) };
+      return { label: await invoke<string>("window_create", { init: init ?? "fresh=1" }) };
     },
   });
 

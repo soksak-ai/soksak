@@ -156,9 +156,10 @@ for l in owners():
     rpc("window.close", {"label": l}); time.sleep(0.5)
 
 # ── 1. 두 창 + 양 엔진 브라우저 3개 ──────────────────────────────────────────
-wa = rpc("window.new", {"root": ra}).get("label"); time.sleep(4)
-wb = rpc("window.new", {"root": rb}).get("label"); time.sleep(4)
-assert wa and wb, "창 생성 실패"
+r_wa = rpc("window.new", {"root": ra}); time.sleep(4)
+r_wb = rpc("window.new", {"root": rb}); time.sleep(4)
+wa = r_wa.get("label"); wb = r_wb.get("label")
+assert wa and wb, f"창 생성 실패 — wa={r_wa} wb={r_wb}"
 ok(f"창 2개 생성({wa},{wb} — 임시 root, 사용자 워크스페이스 무접촉)")
 
 va_n = rpc("view.open", {"program": "browser"}, wa).get("viewId"); time.sleep(2)
