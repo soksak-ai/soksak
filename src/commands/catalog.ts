@@ -1661,37 +1661,13 @@ export function registerCatalog(): void {
           await invoke("window_focus", { label: existing }).catch(() => {});
           return { existingWindow: existing };
         }
+        // orch 창만 만든다 — 다른 창(워크스페이스)의 크기·위치는 절대 건드리지 않는다.
+        // (이전엔 layout.suggest→window.place 로 main 창까지 재배치했으나, 남의 창을 임의
+        // 변경하는 것이라 제거. orch 창은 자기 초기 프레임만 갖고, 위로 보이기는 핀 토글이 맡는다.)
         const label = await invoke<string>("window_create", {
           label: "orch-1",
           init: "mode=orchestrator",
         });
-        // 열리면 즉시 배치(수용 데모 1): 팩트(monitors)→전략(suggest spread)→실행(place).
-        // 보조 모니터가 있으면 오케스트레이터가 그 모니터 전체를, 단일 모니터면 우측 1/3 을
-        // 차지하고 워크스페이스 창은 좌측 2/3 로 나란히 — 겹쳐 떠서 모달처럼 보이는 것 방지.
-        // 배치 실패는 열기 자체를 막지 않는다.
-        try {
-          const facts = (await invoke("window_monitors")) as {
-            monitors: MonitorFact[];
-            windows: WindowFact[];
-          };
-          const placements = suggestLayout({
-            monitors: facts.monitors,
-            windows: facts.windows,
-            strategy: "spread",
-            roles: { [label]: "orchestrator" },
-          });
-          for (const pl of placements) {
-            await invoke("window_place", {
-              label: pl.label,
-              x: pl.x,
-              y: pl.y,
-              w: pl.w,
-              h: pl.h,
-            });
-          }
-        } catch (e) {
-          console.warn("오케스트레이터 배치 실패(창은 열림):", e);
-        }
         return { label };
       }
       let init: string | undefined;

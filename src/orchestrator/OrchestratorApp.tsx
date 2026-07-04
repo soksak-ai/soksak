@@ -20,7 +20,7 @@ interface ActivityEntry {
 
 interface MonitorFacts {
   monitors: { index: number; name: string; x: number; y: number; w: number; h: number; scale: number }[];
-  windows: { label: string; x: number; y: number; w: number; h: number; focused: boolean; monitor: number | null }[];
+  windows: { label: string; title: string; x: number; y: number; w: number; h: number; focused: boolean; monitor: number | null }[];
 }
 
 const FEED_CAP = 500;
@@ -50,7 +50,27 @@ export function OrchestratorApp() {
   const [facts, setFacts] = useState<MonitorFacts | null>(null);
   const [cmd, setCmd] = useState("");
   const [result, setResult] = useState<string>("");
+  const [pinned, setPinned] = useState(false); // 핀 = always-on-top(이 창 로컬, 재열기 시 off)
   const feedRef = useRef<HTMLDivElement>(null);
+
+  // 핀 토글(z-order 케이스 1) — on 이면 뭘 하든 오케스트레이터가 최상단 고정.
+  const togglePin = useCallback(() => {
+    setPinned((prev) => {
+      const next = !prev;
+      void getCurrentWindow().setAlwaysOnTop(next).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  // 창맵에서 프로젝트 클릭(z-order 케이스 2) — 그 프로젝트 창을 활성(뒤에서)하되, 창맵 조작은
+  // 오케스트레이터 안의 행위이므로 오케스트레이터를 다시 앞으로 raise(핀 여부 무관).
+  // 케이스 3(핀 off + OS 에서 프로젝트 창 직접 클릭 → 그 창이 앞)은 OS 기본 z-order라 코드 불요.
+  const focusWindowFromMap = useCallback((label: string) => {
+    void (async () => {
+      await invoke("window_focus", { label }).catch(() => {});
+      await getCurrentWindow().setFocus().catch(() => {});
+    })();
+  }, []);
 
   const refreshFacts = useCallback(() => {
     void invoke<MonitorFacts>("window_monitors")
@@ -121,6 +141,16 @@ export function OrchestratorApp() {
         <span className="orch-title">{t("orch.title")}</span>
         <button
           type="button"
+          className={`icon-btn orch-pin${pinned ? " active" : ""}`}
+          data-node="orch/pin"
+          title={pinned ? t("orch.unpin") : t("orch.pin")}
+          aria-pressed={pinned}
+          onClick={togglePin}
+        >
+          📌
+        </button>
+        <button
+          type="button"
           className="icon-btn"
           data-node="orch/refresh"
           title={t("orch.refresh")}
@@ -145,10 +175,10 @@ export function OrchestratorApp() {
                     key={w.label}
                     className={`orch-win${w.focused ? " focused" : ""}`}
                     data-node={`orch/win/${w.label}`}
-                    title={`${w.x},${w.y} ${w.w}×${w.h}`}
-                    onClick={() => void invoke("window_focus", { label: w.label }).catch(() => {})}
+                    title={`${w.title || w.label} — ${w.x},${w.y} ${w.w}×${w.h}`}
+                    onClick={() => focusWindowFromMap(w.label)}
                   >
-                    {w.label}
+                    {w.title || w.label}
                   </button>
                 ))}
             </div>

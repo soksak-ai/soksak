@@ -261,6 +261,7 @@ pub fn window_monitors(app: AppHandle) -> Result<serde_json::Value, String> {
         wins.push(serde_json::json!({
             "label": label,
             "title": w.title().unwrap_or_default(),
+            "alwaysOnTop": w.is_always_on_top().unwrap_or(false),
             "x": pos.x,
             "y": pos.y,
             "w": size.width,

@@ -1,0 +1,91 @@
+#!/bin/bash
+# 오케스트레이터 창 E2E — 오늘 실물 결함 3개의 회귀 가드(TDD: 수정 전 RED → 지금 GREEN):
+#   (a) 창맵 이름 = 프로젝트명(네이티브 라벨 아님).
+#   (b) 핀 토글 — 클릭하면 alwaysOnTop on/off, z-order 케이스 2(창맵 클릭→그 창 활성 + orch 앞 유지).
+#   (c) 열 때 다른 창(main)의 rect를 임의 변경하지 않는다(자동 배치 제거).
+#   + 별도 OS 창 생성(window.list), 멱등 재열기(existingWindow), 워크스페이스 명령이 피드에 등장.
+#
+# 전제: debug 앱 실행 중. 창을 만들고 끝에 닫는다(멱등). 사용자 프로젝트 무접촉(창만 조작).
+# 사용: bash scripts/e2e/orchestrator.sh [--identity debug]
+set -uo pipefail
+IDENTITY=debug
+[ "${1:-}" = "--identity" ] && IDENTITY="$2"
+export OR_SOCK="$HOME/.soksak/com.soksak.$IDENTITY.sock"
+
+python3 - <<'PYEOF'
+import json, os, socket, sys, time
+SOCK = os.environ["OR_SOCK"]
+PASS = []; FAIL = []
+def ok(m): PASS.append(m); print(f"  ✓ {m}")
+def ng(m): FAIL.append(m); print(f"  ✗ {m}")
+def rpc(method, params=None, window="main", t=25):
+    s = socket.socket(socket.AF_UNIX); s.settimeout(t); s.connect(SOCK)
+    s.sendall((json.dumps({"id":1,"method":method,"params":params or {},"window":window})+"\n").encode())
+    buf=b""
+    while b"\n" not in buf: buf+=s.recv(1<<20)
+    s.close(); return json.loads(buf.split(b"\n")[0])
+def wins(): return {w["label"]: w for w in rpc("window.monitors")["windows"]}
+
+try: rpc("window.list", t=5)
+except Exception: print("FAIL: 앱 소켓 없음 — debug 앱 실행 필요"); sys.exit(1)
+
+# 잔재 orch 정리(멱등)
+for l in [x for x in rpc("window.list")["labels"] if x.startswith("orch-")]:
+    rpc("window.close", {"label": l}); time.sleep(0.4)
+
+# 기준: 열기 전 main rect
+before = wins()["main"]
+before_rect = (before["x"], before["y"], before["w"], before["h"])
+
+# 열기
+r = rpc("window.new", {"mode": "orchestrator"})
+orch = r.get("label") or r.get("existingWindow")
+(ok if orch and orch.startswith("orch-") else ng)(f"별도 OS 창 생성: {orch}")
+time.sleep(4)
+w = wins()
+(ok if orch in w else ng)("window.list에 orch 등재")
+
+# (c) main rect 불변
+after_rect = (w["main"]["x"], w["main"]["y"], w["main"]["w"], w["main"]["h"])
+(ok if after_rect == before_rect else ng)(f"(c) 열 때 main rect 불변 (자동 배치 없음): {before_rect}=={after_rect}")
+
+# (a) 창맵 이름 = 프로젝트명 — window.monitors.title이 프로젝트명(main은 활성 프로젝트명)
+main_title = w["main"].get("title", "")
+(ok if main_title and main_title != "main" else ng)(f"(a) 창 title=프로젝트명(라벨 아님): main→'{main_title}'")
+(ok if w[orch].get("title") == "오케스트레이터" else ng)(f"(a) orch title='오케스트레이터': '{w[orch].get('title')}'")
+
+# (b) 핀 토글: 기본 off → 클릭 → on → 다시 클릭 → off
+(ok if w[orch].get("alwaysOnTop") is False else ng)("(b) 핀 기본 off (alwaysOnTop=False)")
+rpc("ui.input.click", {"address": f"win/{orch}/chrome/orch/pin"}, orch); time.sleep(0.8)
+(ok if wins()[orch].get("alwaysOnTop") is True else ng)("(b) 핀 클릭 → alwaysOnTop=True")
+rpc("ui.input.click", {"address": f"win/{orch}/chrome/orch/pin"}, orch); time.sleep(0.8)
+(ok if wins()[orch].get("alwaysOnTop") is False else ng)("(b) 핀 재클릭 → alwaysOnTop=False")
+
+# (b) z-order 케이스 2: 창맵에서 main 클릭 → main 포커스되되 orch가 다시 앞(포커스)
+mnode = None
+for n in rpc("ui.tree", window=orch).get("nodes", []):
+    if n.get("address","").endswith("/orch/win/main"): mnode = n["address"]; break
+if mnode:
+    rpc("ui.input.click", {"address": mnode}, orch); time.sleep(1)
+    foc = [l for l, x in wins().items() if x.get("focused")]
+    # 케이스 2: 창맵 클릭 후 orch 가 다시 앞으로(포커스) — main 은 활성되되 orch 최상.
+    (ok if foc == [orch] else ng)(f"(b) 창맵 클릭 후 orch가 앞으로 유지(케이스 2): focused={foc}")
+else: ng("창맵 main 노드 없음")
+
+# 멱등 재열기
+r2 = rpc("window.new", {"mode": "orchestrator"})
+(ok if r2.get("existingWindow") == orch else ng)(f"멱등 재열기 → existingWindow={r2.get('existingWindow')}")
+
+# 워크스페이스 명령이 피드에 — main에서 명령 실행 후 activity에 등장
+rpc("state.tree", window="main")  # remote 계측이 activity에 남김
+time.sleep(0.6)
+recent = rpc("activity.recent", {"limit": 20}).get("entries", [])
+(ok if any(e["kind"] == "command.executed" for e in recent) else ng)("워크스페이스 명령이 활동 피드에 등장")
+
+# 정리
+rpc("window.close", {"label": orch}); time.sleep(0.5)
+
+print()
+print(f"orchestrator: PASS={len(PASS)} FAIL={len(FAIL)}")
+sys.exit(0 if not FAIL else 1)
+PYEOF
