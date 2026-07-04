@@ -322,6 +322,7 @@ export function registerCatalog(): void {
       "Full layout snapshot (address book): all ids and active state across project → content → panel (rect %) → view → pane. Use to discover ids before targeting other commands.",
     params: {},
     returns: "{ activeProjectId, projects[] } — panels[].rect is % of the content area",
+    summarize: (d) => `프로젝트 ${((d.projects as unknown[]) ?? []).length}개`,
     examples: ["sok state.tree"],
     handler: () => serializeTree(),
   });
@@ -366,6 +367,7 @@ export function registerCatalog(): void {
     triggers: { ko: "프로젝트 목록 프로젝트 리스트 열린 프로젝트" },
     params: {},
     returns: "{ projects: [{id,title,root,active}] }",
+    summarize: (d) => `프로젝트 ${((d.projects as unknown[]) ?? []).length}개`,
     examples: ["sok project.list"],
     handler: () => ({
       projects: S().tabs.map((t) => ({
@@ -383,6 +385,7 @@ export function registerCatalog(): void {
     triggers: { ko: "최근 프로젝트 목록 최근 연 프로젝트 픽커 레일" },
     params: {},
     returns: "{ recents: [{root, alias, lastOpenedAt}] }",
+    summarize: (d) => `최근 ${((d.recents as unknown[]) ?? []).length}개`,
     examples: ["sok project.recent"],
     handler: async () => ({ recents: await listRecentProjects() }),
   });
@@ -419,6 +422,7 @@ export function registerCatalog(): void {
     },
     returns:
       "{ projectId, contentId, groupId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — that window is focused instead)",
+    summarize: (d) => (d.existingWindow ? "이미 다른 창에 열림" : "프로젝트 열림"),
     errors: ["INVALID_PARAMS"],
     examples: [
       'sok project.create \'{"root":"/Users/me/work","program":"claude"}\'',
@@ -1703,6 +1707,7 @@ export function registerCatalog(): void {
     triggers: { ko: "창 목록 윈도우 목록 열린 창" },
     params: {},
     returns: "{ labels }",
+    summarize: (d) => `창 ${((d.labels as unknown[]) ?? []).length}개`,
     examples: ["sok window.list"],
     handler: async () => ({ labels: await invoke<string[]>("window_list") }),
   });
@@ -1871,6 +1876,8 @@ export function registerCatalog(): void {
     params: {},
     returns:
       "{ monitors: [{index,name,x,y,w,h,scale}], windows: [{label,title,x,y,w,h,focused,monitor}] }",
+    summarize: (d) =>
+      `모니터 ${((d.monitors as unknown[]) ?? []).length}·창 ${((d.windows as unknown[]) ?? []).length}`,
     examples: ["sok window.monitors"],
     handler: async () => {
       return (await invoke("window_monitors")) as object;
