@@ -6,6 +6,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { suggestLayout, type MonitorFact, type WindowFact } from "../lib/layoutSuggest";
+import { listRecentProjects, removeRecentProject } from "../state/recentProjects";
 import {
   allGroups,
   useSessions,
@@ -374,6 +375,31 @@ export function registerCatalog(): void {
         active: t.id === S().activeId,
       })),
     }),
+  });
+
+  register("project.recent", {
+    description:
+      "List recent projects (the cross-window recents feeding the picker and the project rail): root, alias, last-opened timestamp. Same list from any window (core kv).",
+    triggers: { ko: "최근 프로젝트 목록 최근 연 프로젝트 픽커 레일" },
+    params: {},
+    returns: "{ recents: [{root, alias, lastOpenedAt}] }",
+    examples: ["sok project.recent"],
+    handler: async () => ({ recents: await listRecentProjects() }),
+  });
+
+  register("project.recent.forget", {
+    description:
+      "Remove a project from the recents list (picker/rail). Does not touch the project on disk — only the recents entry. Idempotent (missing root is a no-op).",
+    triggers: { ko: "최근 프로젝트 제거 최근 목록에서 지우기 잊기" },
+    params: {
+      root: { type: "string", description: "Project root to forget", required: true },
+    },
+    returns: "{ ok }",
+    examples: ['sok project.recent.forget \'{"root":"/Users/me/old"}\''],
+    handler: async (p) => {
+      await removeRecentProject(p.root as string);
+      return {};
+    },
   });
 
   register("project.create", {

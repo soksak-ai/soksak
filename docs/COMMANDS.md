@@ -1282,6 +1282,30 @@ List all projects with id, title, root path, and active state. | 프로젝트 �
 sok project.list
 ```
 
+## `project.recent`
+
+List recent projects (the cross-window recents feeding the picker and the project rail): root, alias, last-opened timestamp. Same list from any window (core kv). | 최근 프로젝트 목록 연 픽커 레일
+
+**Returns**: { recents: [{root, alias, lastOpenedAt}] }
+
+```bash
+sok project.recent
+```
+
+## `project.recent.forget`
+
+Remove a project from the recents list (picker/rail). Does not touch the project on disk — only the recents entry. Idempotent (missing root is a no-op). | 최근 프로젝트 제거 목록에서 지우기 잊기
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `root` | string | ✓ | Project root to forget |
+
+**Returns**: { ok }
+
+```bash
+sok project.recent.forget '{"root":"/Users/me/old"}'
+```
+
 ## `project.rename`
 
 Rename a project tab. | 프로젝트 이름 바꾸기 변경 제목
