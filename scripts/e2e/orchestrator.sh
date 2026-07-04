@@ -117,6 +117,7 @@ rpc("window.close", {"label": orch}); time.sleep(0.4)
 for pr in rpc("state.tree", window=w_demo).get("projects", []):
     if "soksak-e2e-orch-demo" in pr["root"]:
         rpc("project.close", {"project": pr["id"]}, w_demo); time.sleep(0.3)
+rpc("project.recent.forget", {"root": demo})  # recents 위생(T5)
 
 print()
 print(f"orchestrator: PASS={len(PASS)} FAIL={len(FAIL)}")

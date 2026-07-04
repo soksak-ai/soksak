@@ -397,10 +397,10 @@ pub fn now_ms() -> i64 {
 
 // 프로덕션 볼트 경로: HOME → ~/.soksak/secrets.vault. data/mod.rs db_path 패턴.
 // '주어진 경로로 동작' 과 분리(이 함수는 경로 계산만, 디렉토리 생성 포함).
+// 순수 경로 계산 — mkdir 부수효과 없음(디렉토리 생성은 쓰기 시점의 것). 유닛테스트가 이 함수를
+// 호출해도 사용자 홈에 흔적을 남기지 않는다(A17 — 실측: cargo test 가 ~/.soksak 을 재생성했었다).
 pub fn default_vault_path() -> Result<PathBuf, String> {
-    let dir = crate::home::soksak_home();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir.join("secrets.vault"))
+    Ok(crate::home::soksak_home().join("secrets.vault"))
 }
 
 // 볼트 경로 해소 — SOKSAK_VAULT_PATH 가 있으면 그 경로(헤드리스/E2E 격리용 오픈 메커니즘:
@@ -496,6 +496,9 @@ impl SecretsState {
         }
         let bytes = serde_json::to_vec_pretty(vault).map_err(|e| e.to_string())?;
         let tmp = path.with_extension("vault.tmp");
+        if let Some(parent) = tmp.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("볼트 디렉토리 생성 실패: {e}"))?;
+        }
         std::fs::write(&tmp, &bytes).map_err(|e| format!("볼트 쓰기 실패: {e}"))?;
         std::fs::rename(&tmp, path).map_err(|e| format!("볼트 교체 실패: {e}"))
     }

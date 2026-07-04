@@ -119,10 +119,18 @@ pub fn project_release(
 
 /// 전역 점유 스냅샷 { owners: [{root,window}] } — 픽커의 "다른 창에 열림" 표시용.
 #[tauri::command]
-pub fn project_owners(state: tauri::State<'_, ProjectRegistry>) -> serde_json::Value {
+pub fn project_owners(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, ProjectRegistry>,
+) -> serde_json::Value {
+    use tauri::Manager;
+    // 자가치유: 살아있는 창의 점유만 보고한다. Destroyed 이벤트를 못 받는 경로(SIGKILL·라벨
+    // 재사용 레이스)가 남긴 유령 점유가 픽커/오케스트레이터에 "열림"으로 표면화되는 것을
+    // 구조적으로 차단(실측: 닫힌 프로젝트가 열림+선택으로 표시).
     let owners: Vec<serde_json::Value> = state
         .snapshot()
         .into_iter()
+        .filter(|(_, window)| app.get_window(window).is_some())
         .map(|(root, window)| serde_json::json!({ "root": root, "window": window }))
         .collect();
     serde_json::json!({ "owners": owners })

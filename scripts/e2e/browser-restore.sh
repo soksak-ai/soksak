@@ -203,6 +203,9 @@ for l in (wa, wb):
     rpc("window.close", {"label": l}); time.sleep(0.5)
 labs = rpc("window.list")["labels"]
 (ok if wa not in labs and wb not in labs else ng)("정리: 테스트 창 닫힘(스냅샷 prune)")
+# recents 위생(T5) — 이 하니스의 임시 root 만 잊는다(사용자 recents 무접촉).
+for r0 in (ra, rb):
+    rpc("project.recent.forget", {"root": r0})
 
 print()
 print(f"browser-restore: PASS={len(PASS)} FAIL={len(FAIL)}" + (f"  캡처={TMP}" if KEEP or FAIL else ""))
