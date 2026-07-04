@@ -148,6 +148,10 @@ fn current_branch(dir: &Path) -> String {
 // 침묵 누락으로 부팅을 막지 않는다. "." 시작 항목 제외. 결정성 위해 정렬.
 #[tauri::command]
 pub fn dev_plugin_paths() -> Result<Vec<String>, String> {
+    // release 는 설치본만(A17) — dev 소스 주입 경로를 identity 게이트로 봉쇄.
+    if crate::home::is_release() {
+        return Ok(Vec::new());
+    }
     let Ok(raw) = std::env::var("SOKSAK_DEV_PLUGINS") else {
         return Ok(Vec::new());
     };

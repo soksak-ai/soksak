@@ -152,7 +152,8 @@ fn module_path(name: &str, soksak_home: &std::path::Path, env_override: Option<&
 
 fn resolve_module_path(name: &str) -> Result<std::path::PathBuf, String> {
     let key = override_env_key(name);
-    let over = std::env::var(&key).ok();
+    // release 는 설치본(reach 해시 핀 dist)만(A17) — dev 바이너리 오버라이드를 봉쇄.
+    let over = if crate::home::is_release() { None } else { std::env::var(&key).ok() };
     let path = module_path(name, &crate::home::soksak_home(), over.as_deref());
     if !path.is_file() {
         return Err(format!(

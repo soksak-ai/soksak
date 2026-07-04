@@ -15,6 +15,25 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 static HOME: OnceLock<PathBuf> = OnceLock::new();
+static IDENTIFIER: OnceLock<String> = OnceLock::new();
+
+// release 판정 — identifier 마지막 세그먼트가 "app". release 홈은 GitHub 설치본(레지스트리
+// 플러그인·해시 핀 사이드카 dist)과 사용자 데이터만 담는다 — dev 표면(dev 경로 주입·dev 로더·
+// 바이너리 오버라이드)은 identity 게이트로 봉쇄된다(A17).
+fn is_release_identifier(identifier: &str) -> bool {
+    identifier.rsplit('.').next() == Some("app")
+}
+
+/// release identity 여부. init 전(유닛테스트 등)은 false — dev 표면 게이트는 앱 런타임의 것.
+pub fn is_release() -> bool {
+    IDENTIFIER.get().map(|s| is_release_identifier(s)).unwrap_or(false)
+}
+
+/// 프론트 게이트용(플러그인 로더·plugin.dev.* 거부 판정).
+#[tauri::command]
+pub fn app_is_release() -> bool {
+    is_release()
+}
 
 fn suffix_for_identifier(identifier: &str) -> String {
     let seg = identifier.rsplit('.').next().unwrap_or("app");
@@ -39,6 +58,7 @@ fn resolve(identifier: Option<&str>) -> PathBuf {
 /// 앱 부트 1회(lib.rs setup 최상단) — 이후 모든 경로가 이 값에서 파생된다.
 pub fn init(identifier: &str) {
     let _ = HOME.set(resolve(Some(identifier)));
+    let _ = IDENTIFIER.set(identifier.to_string());
 }
 
 /// identity 홈(절대경로). init 전 호출(유닛테스트 등)은 SOKSAK_HOME > ~/.soksak 폴백.
@@ -49,6 +69,14 @@ pub fn soksak_home() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::suffix_for_identifier;
+
+    #[test]
+    fn release_identifier_contract() {
+        use super::is_release_identifier;
+        assert!(is_release_identifier("com.soksak.app"));
+        assert!(!is_release_identifier("com.soksak.dev"));
+        assert!(!is_release_identifier("com.soksak.debug"));
+    }
 
     #[test]
     fn identity_suffix_contract() {

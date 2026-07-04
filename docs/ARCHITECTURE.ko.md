@@ -124,7 +124,7 @@ soksak 은 뼈대다. 공통 인터페이스를 관리하며, 그 외에는 아�
 
 
 ### A17. identity 하나, 홈 하나 — identity 간 공유는 없다.
-각 앱 identity(`com.soksak.app` → `~/.soksak`, `com.soksak.dev` → `~/.soksak-dev`, `com.soksak.debug` → `~/.soksak-debug`)는 완전히 독립된 홈을 소유한다: 데이터 DB·플러그인·사이드카·테마·프로젝트·시크릿 금고·백업·소켓이 전부 그 한 루트에서 파생된다(`home.rs soksak_home()` — 단일 진실; 새 identity 는 identifier 마지막 세그먼트에서 자동으로 자기 홈을 얻는다). 무엇이든 공유하면 상태가 identity 경계를 넘는다 — 실측: 공유 크로미움 프로필의 ProcessSingleton 이 두 번째 앱의 엔진 기동을 첫 앱으로 위임했다(그쪽엔 유령 네이티브 창, 이쪽엔 백지 브라우저 뷰). `SOKSAK_HOME` 이 파생을 오버라이드한다(테스트 격리 — `SOKSAK_VAULT_PATH` 와 같은 오픈 테스트 메커니즘). `sok` CLI 는 독립 busybox 바이너리라 같은 계약을 자체 구현한다(`cli/src/main.rs home_for_env`); 이 절이 그 계약의 정본이다.
+각 앱 identity(`com.soksak.app` → `~/.soksak`, `com.soksak.dev` → `~/.soksak-dev`, `com.soksak.debug` → `~/.soksak-debug`)는 완전히 독립된 홈을 소유한다: 데이터 DB·플러그인·사이드카·테마·프로젝트·시크릿 금고·백업·소켓이 전부 그 한 루트에서 파생된다(`home.rs soksak_home()` — 단일 진실; 새 identity 는 identifier 마지막 세그먼트에서 자동으로 자기 홈을 얻는다). 무엇이든 공유하면 상태가 identity 경계를 넘는다 — 실측: 공유 크로미움 프로필의 ProcessSingleton 이 두 번째 앱의 엔진 기동을 첫 앱으로 위임했다(그쪽엔 유령 네이티브 창, 이쪽엔 백지 브라우저 뷰). `SOKSAK_HOME` 이 파생을 오버라이드한다(테스트 격리 — `SOKSAK_VAULT_PATH` 와 같은 오픈 테스트 메커니즘). `sok` CLI 는 독립 busybox 바이너리라 같은 계약을 자체 구현한다(`cli/src/main.rs home_for_env`); 이 절이 그 계약의 정본이다. release 홈은 **설치본만** 담는다 — 레지스트리 설치 플러그인(semver 자기기술)과 GitHub 릴리스에서 받은 해시 핀 사이드카 dist. 개발 소스는 어떤 것도 들어가지 않는다. dev 표면은 release 에서 identity 게이트로 봉쇄된다: `SOKSAK_DEV_PLUGINS` 주입·`SOKSAK_SIDECAR_*_BIN` 오버라이드 무시, `plugin.dev.*` 거부, `version=dev|local` 자기기술 폴더는 로드 거부.
 
 ---
 

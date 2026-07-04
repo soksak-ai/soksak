@@ -595,6 +595,7 @@ export function registerPluginCatalog(): void {
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: ['sok plugin.dev.load \'{"path":"/path/to/my-plugin"}\''],
     danger: "inject",
+    // release 게이트는 devLoad 자체가 수행(A17) — 여기선 위임만.
     handler: (p) => usePlugins.getState().devLoad(p.path as string),
   });
 
@@ -610,6 +611,10 @@ export function registerPluginCatalog(): void {
     examples: ['sok plugin.dev.new \'{"id":"soksak-plugin-myapp"}\''],
     danger: "inject",
     handler: async (p) => {
+      // release 는 설치본만(A17) — dev 스캐폴드 봉쇄.
+      if (usePlugins.getState().release) {
+        return { ok: false, code: "INVALID_PARAMS", message: "release 에서는 dev 로더를 제공하지 않습니다(A17)" };
+      }
       const r = await invoke<{ dir: string; dir_name: string }>("plugin_dev_new", {
         id: p.id as string,
       });

@@ -94,6 +94,7 @@ function sourceFromState(state: string | null): "installed" | "dev" {
 
 interface PluginsState {
   appVersion: string; // initPluginHost 가 채움("0.0.0" = 미확인)
+  release: boolean; // release identity(A17) — dev/local 플러그인 로드·dev 로더를 봉쇄
   plugins: Record<string, PluginRuntime>;
   rejected: RejectedPlugin[];
   consents: Record<string, ConsentRecord>; // localStorage 영속
@@ -467,6 +468,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
 
   return {
     appVersion: "0.0.0",
+    release: false,
     plugins: {},
     rejected: [],
     consents: persisted.consents,
@@ -485,7 +487,13 @@ export const usePlugins = create<PluginsState>((set, get) => {
           continue;
         }
         // 폴더의 .soksak.json 으로 dev/installed 판정 — 단일 폴더 안에서 작업물/릴리스 구분.
-        const rt = parseRuntime(e.manifest, e.dir, e.dir_name, sourceFromState(e.state), rejected);
+        const source = sourceFromState(e.state);
+        // release 는 설치본만(A17) — dev/local 소스는 로드 자체를 거부한다(파일이 있어도 실행 0).
+        if (get().release && source === "dev") {
+          rejected.push({ dir: e.dir, errors: ["release 는 설치본만 로드합니다(A17) — dev/local 거부"] });
+          continue;
+        }
+        const rt = parseRuntime(e.manifest, e.dir, e.dir_name, source, rejected);
         if (rt) next[rt.manifest.id] = rt;
       }
 
@@ -738,6 +746,10 @@ export const usePlugins = create<PluginsState>((set, get) => {
     },
 
     devLoad: async (path) => {
+      // release 는 설치본만(A17) — dev 로더 봉쇄.
+      if (get().release) {
+        return err("INVALID_PARAMS", "release 에서는 dev 로더를 제공하지 않습니다(A17)");
+      }
       const dirName = basename(path);
       let content: string;
       try {
