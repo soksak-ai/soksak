@@ -5,11 +5,9 @@
 // 새 창은 생성 직후 그 label 로 네이티브 hook(레이어 역전·신호등)을 설치해 hole-punch 브라우저가
 // 이 창에서도 동작한다(P0 창별 HashMap 덕 — webview.rs layer 참조).
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
-static WIN_SEQ: AtomicUsize = AtomicUsize::new(1);
+
 
 // 한 창의 네이티브를 설치하는 단일 진입점(MW1) — main(setup)·새 창(window_create)이 같은 함수를
 // 호출해 중복·누락을 막는다. 레이어 역전(hole-punch)과 신호등을 그 창에 건다. 앱 전역 모니터
@@ -55,10 +53,6 @@ pub fn window_create(
             if app.get_window(&label).is_some() {
                 return Ok(label); // 멱등 — 리스폰 재호출 무해
             }
-            // 라벨 충돌 방지: win-N 재사용 시 이후 런타임 창이 같은 N 을 다시 뽑지 않게 상향.
-            if let Some(n) = label.strip_prefix("win-").and_then(|s| s.parse::<usize>().ok()) {
-                let _ = WIN_SEQ.fetch_max(n + 1, Ordering::Relaxed);
-            }
             let r = rect.as_ref().and_then(|v| {
                 Some((
                     v.get("x")?.as_f64()?,
@@ -77,19 +71,17 @@ pub fn create_window(app: &AppHandle) -> Result<String, String> {
     create_window_init(app, None)
 }
 
-// 새 창 생성 본체. label = "win-<seq>". 같은 앱(index.html)을 로드한다. 반환 = 생성된 창 label.
+// 새 창 생성 본체. label = "w-<uuid4>" — 불투명·비재사용 식별자(NAMING). uuid 라 라벨이
+// 세션 간 우연히 재사용될 수 없고, 죽은 세션의 영속 슬롯을 유령 복원하는 부류가 존재 자체로
+// 불가능하다(과거 win-<seq> 재사용의 실측 사고 근치 — fresh 플래그 패치는 폐기).
+// 의도적 재사용은 respawn 뿐: manifest 의 같은 uuid 로 재생성해 그 창의 스냅샷을 되살린다.
 // 메인 스레드에서 호출해야 안전(WebviewWindowBuilder). 명령(window_create)과 Dock 메뉴(dockmenu)가
 // 공유하는 단일 진입점.
 //
 // init = 새 창 부트 지시 쿼리스트링("root=<enc>" 등, '?' 제외). 새 창의 main.tsx 부트가
 // location.search 로 읽는다 — 창 생성자가 프론트 상태에 직접 손대지 않는 유일한 전달 통로
 // (창별 JS 컨텍스트 분리 원칙). 코어는 쿼리의 의미를 강제하지 않는다(부트가 해석).
-//
-// init 생략 = "fresh=1": 런타임에 만든 새 창은 새 세션이다 — 스냅샷 복원을 하지 않는다.
-// 라벨(win-<seq>)이 세션마다 재사용되므로, 복원을 허용하면 crash/SIGKILL 로 남은 옛
-// 스냅샷을 유령 복원한다(실측). 부트 복원 리스폰(B2)은 명시 쿼리로 별도 요청한다.
 pub fn create_window_init(app: &AppHandle, init: Option<&str>) -> Result<String, String> {
-    let init = init.or(Some("fresh=1"));
     // 새 창을 트리거한(현재 활성) 창의 위치·배율을 빌드 전에 캡처 — 빌드 후엔 새 창이 포커스를
     // 가져가 활성 창이 바뀐다. 단일 창("main") 하드코딩이 아니라 is_focused 로 동적 판정(MW1).
     // windows()(Window 레지스트리) — 브라우저 연 창도 포함해야 그 창에서 Cmd+N 한 경우 소스로 잡힌다.
@@ -99,7 +91,7 @@ pub fn create_window_init(app: &AppHandle, init: Option<&str>) -> Result<String,
         .find(|w| w.is_focused().unwrap_or(false))
         .and_then(|w| Some((w.outer_position().ok()?, w.scale_factor().ok()?)));
 
-    let label = format!("win-{}", WIN_SEQ.fetch_add(1, Ordering::Relaxed));
+    let label = format!("w-{}", uuid::Uuid::new_v4());
     create_window_core(app, &label, init)?;
 
     // 활성 창에서 가로·세로 ~1cm(28pt) 캐스케이드 — 정확히 겹치면 새 창이 떴는지 눈으로 알 수 없다.
@@ -196,8 +188,8 @@ pub fn take_user_closed(label: &str) -> bool {
 
 // 창 영속 흔적 정리 — 사용자 개별 닫기의 Destroyed 에서만 호출된다(위 의미론).
 // 지우는 것: ① 그 창의 워크스페이스 스냅샷(core kv "window/<label>") ② manifest("windows")의
-// 그 창 slot. 라벨은 세션마다 재사용(win-<seq> 리셋)되므로, 안 지우면 다음 세션의 새 창이
-// 옛 스냅샷을 유령 복원한다(실측 — C3 E2E 에서 픽커 창이 이전 세션 프로젝트로 부팅).
+// 그 창 slot. 식별자가 uuid 라 유령 복원은 없지만, 닫힌 창의 흔적을 남기면 죽은 슬롯이
+// manifest 에 쌓여 respawn 대상을 오염시킨다 — 사용자 닫기 = 흔적 폐기가 위생이다.
 pub fn prune_window_persistence(
     conn: &rusqlite::Connection,
     label: &str,

@@ -104,9 +104,6 @@ async function boot(): Promise<void> {
   // "이 창에서 그 프로젝트"이므로. claim 실패(생성↔부트 레이스)면 빈 창 → 픽커로 열화.
   const bootParams = new URLSearchParams(window.location.search);
   const initRoot = bootParams.get("root");
-  // fresh=1(런타임 새 창): 스냅샷 복원 금지 — 라벨(win-<seq>) 재사용이 crash 로 남은 옛
-  // 세션을 유령 복원하는 것을 차단한다(자동 저장은 켠다 — 이 창의 새 세션은 저장돼야 함).
-  const freshWindow = bootParams.get("fresh") === "1";
   if (initRoot) {
     try {
       const denied = await claimRoots([initRoot]);
@@ -126,7 +123,7 @@ async function boot(): Promise<void> {
   // (initRoot 로 이미 탭이 있으면 restoreProjects 는 멱등 no-op — 자동 저장 구독만 켜진다.)
   let restored = false;
   try {
-    restored = await initWorkspacePersistence({ skipRestore: freshWindow });
+    restored = await initWorkspacePersistence();
   } catch (e) {
     console.error("워크스페이스 영속 초기화 실패:", e);
   }
@@ -135,7 +132,7 @@ async function boot(): Promise<void> {
   void initWindowTitle();
   // 멀티윈도우 리스폰(B2) — main 부트만: manifest 의 다른 창들을 라벨·프레임 그대로 되살린다.
   // await 하지 않는다 — 각 창은 독립 부트라 main 렌더를 막을 이유가 없다.
-  if (!freshWindow && currentWindowLabel() === "main") {
+  if (currentWindowLabel() === "main") {
     void respawnSavedWindows();
   }
   try {

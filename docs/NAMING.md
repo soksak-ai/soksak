@@ -17,6 +17,15 @@ git/clipboard/ai.session) and removes the violators.
 4. **Plugin** = `soksak-plugin-<domain>-<name>`. A replaceable-seam plugin MUST carry the
    observable engine name (`browser-native` is the exception naming the provisioning axis —
    see §3; `browser-chromium`, `editor-codemirror`).
+4b. **Window identity** = opaque, never-reused. Runtime windows are labeled `w-<uuid4>` —
+   an accidental label collision across sessions is impossible, so the ghost-restore class
+   (a new window resurrecting a dead session's persisted slot) cannot exist. Intentional
+   reuse is respawn only: the boot manifest recreates a window under its original uuid so
+   its snapshot key matches. `main` is the single platform-forced constant (the statically
+   declared bootstrap window); no other name carries meaning, and no code may parse a role
+   out of a label — roles are metadata. Identifiers never surface in human answers
+   (MESSAGE-PROTOCOL: `message` speaks in projects and sentences; labels live in `data`).
+
 5. **Sidecar** = `soksak-sidecar-<domain>[-<engine>]` — the same artifact shape as
    plugins, so a plugin/sidecar pair is visible at a glance
    (`soksak-plugin-browser-chromium` ↔ `soksak-sidecar-browser-chromium`). A replaceable

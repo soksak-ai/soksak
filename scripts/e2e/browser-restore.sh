@@ -141,19 +141,33 @@ ra = "/tmp/soksak-e2e-brestore-a"; rb = "/tmp/soksak-e2e-brestore-b"
 os.makedirs(ra, exist_ok=True); os.makedirs(rb, exist_ok=True)
 
 # 잔재 창 정리(멱등 재실행 대비): 이전 실행이 남긴 brestore 창을 먼저 닫는다.
+# 좀비(창은 목록에 있는데 웹뷰가 죽어 질의 타임아웃 — 실측: chromium child 창 close 미완)가
+# 있으면 조용히 건너뛰지 않고 앱을 재기동해 확정 상태에서 시작한다(claim 도 함께 소거).
 def owners():
     t = rpc("window.list"); labs = t["labels"]
-    res = {}
+    res = {}; zombies = []
     for l in labs:
         if l == "main" or l.startswith("orch-"): continue
         try:
-            tr = rpc("state.tree", window=l)
+            tr = rpc("state.tree", window=l, t=4)
             for p in tr.get("projects", []):
                 if "brestore" in p.get("root", ""): res[l] = p["root"]
-        except Exception: pass
+        except Exception:
+            zombies.append(l)
+    if zombies:
+        print(f"  좀비 창 감지 {zombies} — 앱 재기동으로 회복")
+        os.system("pkill -9 -f soksak-debug >/dev/null 2>&1")
+        time.sleep(3); launch(); assert wait_socket(), "재기동 소켓 없음"
+        return owners()
     return res
 for l in owners():
-    rpc("window.close", {"label": l}); time.sleep(0.5)
+    rpc("window.close", {"label": l})
+# 닫힘 완료 대기 — close 는 비동기(claim 해제는 Destroyed 에서). 고정 sleep 은 레이스(실측:
+# 중간 살해된 이전 실행의 잔재 창이 미해제 상태로 남아 window.new 가 existingWindow 를 봄).
+for _ in range(24):
+    if not owners(): break
+    time.sleep(0.5)
+assert not owners(), f"잔재 창 닫힘 미완료: {owners()}"
 
 # ── 1. 두 창 + 양 엔진 브라우저 3개 ──────────────────────────────────────────
 r_wa = rpc("window.new", {"root": ra}); time.sleep(4)

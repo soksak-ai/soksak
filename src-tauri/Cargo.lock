@@ -4389,6 +4389,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "url",
+ "uuid",
  "wreq",
  "wreq-util",
  "x25519-dalek",

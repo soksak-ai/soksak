@@ -94,9 +94,7 @@ function debounce<A extends unknown[]>(
 }
 
 // 부트 1회. 복원 성공 시 true(호출부는 bootstrap 생략), 없으면 false(호출부 폴백).
-// skipRestore: 런타임 새 창(fresh=1) — 라벨 재사용의 유령 복원 차단(자동 저장만 켠다).
 export async function initWorkspacePersistence(
-  opts: { skipRestore?: boolean } = {},
 ): Promise<boolean> {
   const label = currentWindowLabel();
   const winStore = makeCoreStore<WindowSnapshot>({
@@ -115,7 +113,7 @@ export async function initWorkspacePersistence(
   // 1) 복원
   let restored = false;
   try {
-    const snap = opts.skipRestore ? EMPTY_WINDOW : await winStore.hydrate();
+    const snap = await winStore.hydrate();
     if (snap.projects.length > 0) {
       const { tabs, activeId } = restoreWindow(snap, nextSplitIdGen);
       // root 존재 검증 — 부재/무효 root 는 탭을 지우지 않고 rootMissing 으로 격하한다
