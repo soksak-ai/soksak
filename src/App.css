@@ -3876,8 +3876,11 @@ select.dctl {
 .orch-proj-call:hover { opacity: 1; color: var(--acc); }
 .orch-feed-scope { opacity: 0.7; font-weight: 400; }
 
-/* 안 열린 프로젝트 — 흐리게(열림과 구분). 클릭하면 열린다. */
-.orch-proj.closed .orch-proj-label { opacity: 0.45; }
+/* 안 열린 프로젝트 — 흐리게(열림과 구분). 라벨은 선택 대상이 아니고(창 없음) 열지도 않는다 —
+   열기는 우측 화살표만. 화살표는 모양 통일·색으로 구분(열림 hover=액센트, 닫힘 hover=중립 밝기). */
+.orch-proj.closed .orch-proj-label { opacity: 0.45; cursor: default; }
+.orch-proj.closed .orch-proj-call { opacity: 0.35; }
+.orch-proj.closed .orch-proj-call:hover { opacity: 0.9; color: inherit; }
 
 /* 원문 JSON 펼침(응답 버블/이벤트 클릭) — 봉투 전체를 접이식으로. */
 .orch-raw {

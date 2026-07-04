@@ -363,17 +363,19 @@ export function OrchestratorApp() {
                   open && p.window === selectedWindow ? " selected" : ""
                 }`}
               >
-                {/* 라벨 클릭: 열린 것 = 그 창으로 피드 필터, 안 열린 것 = 열기. */}
+                {/* 라벨 클릭: 열린 것 = 그 창으로 피드 필터. 안 열린 것은 열지 않는다 —
+                    창 열기는 우측 아이콘만의 몫(선택이 창을 강제로 만들면 안 된다). */}
                 <button
                   type="button"
                   className="orch-proj-label"
                   data-node={`orch/proj/${p.name}`}
                   title={p.root}
-                  onClick={() => (open ? setSelectedWindow(p.window) : openProject(p.root))}
+                  onClick={() => open && setSelectedWindow(p.window)}
                 >
                   {p.name}
                 </button>
-                {/* 우측 아이콘: 열린 것 = 그 창 앞으로 호출, 안 열린 것 = 열기. */}
+                {/* 우측 아이콘: 화살표 하나로 통일(+ 는 "추가"로 읽힌다) — 색으로 구분.
+                    열린 것 = 그 창 앞으로 호출, 안 열린 것 = 새 창으로 열기. */}
                 <button
                   type="button"
                   className="orch-proj-call"
@@ -381,7 +383,7 @@ export function OrchestratorApp() {
                   title={open ? t("orch.callWindow") : t("orch.openProject")}
                   onClick={() => (open ? focusWindow(p.window as string) : openProject(p.root))}
                 >
-                  <Icon name={open ? "arrow-up-right" : "add"} />
+                  <Icon name="arrow-up-right" />
                 </button>
               </div>
             );
