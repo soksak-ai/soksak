@@ -51,6 +51,7 @@ export function OrchestratorApp() {
   const [cmd, setCmd] = useState("");
   const [result, setResult] = useState<string>("");
   const [pinned, setPinned] = useState(false); // 핀 = always-on-top(이 창 로컬, 재열기 시 off)
+  const [selectedWindow, setSelectedWindow] = useState<string | null>(null); // 피드 필터 대상 창
   const feedRef = useRef<HTMLDivElement>(null);
 
   // 핀 토글(z-order 케이스 1) — on 이면 뭘 하든 오케스트레이터가 최상단 고정.
@@ -62,10 +63,11 @@ export function OrchestratorApp() {
     });
   }, []);
 
-  // 창맵에서 프로젝트 클릭(z-order 케이스 2) — 그 프로젝트 창을 활성(뒤에서)하되, 창맵 조작은
-  // 오케스트레이터 안의 행위이므로 오케스트레이터를 다시 앞으로 raise(핀 여부 무관).
-  // 케이스 3(핀 off + OS 에서 프로젝트 창 직접 클릭 → 그 창이 앞)은 OS 기본 z-order라 코드 불요.
-  const focusWindowFromMap = useCallback((label: string) => {
+  // 창맵에서 프로젝트 클릭: (1) 피드를 그 창으로 필터(같은 창 재클릭 = 전체로), (2) 그 창을
+  // 활성(z-order 케이스 2)하되 창맵 조작은 오케스트레이터 안의 행위이므로 오케스트레이터를 다시
+  // 앞으로 raise(핀 무관). 케이스 3(OS 에서 프로젝트 창 직접 클릭 → 그 창 앞)은 OS 기본이라 코드 불요.
+  const selectWindow = useCallback((label: string) => {
+    setSelectedWindow((cur) => (cur === label ? null : label));
     void (async () => {
       await invoke("window_focus", { label }).catch(() => {});
       await getCurrentWindow().setFocus().catch(() => {});
@@ -168,15 +170,17 @@ export function OrchestratorApp() {
                 {m.name || `monitor ${m.index}`} — {m.w}×{m.h} @{m.scale}x
               </div>
               {facts.windows
-                .filter((w) => w.monitor === m.index)
+                // 오케스트레이터 자신(orch-*)은 관찰 도구이지 관찰 대상이 아니라 목록에서 뺀다.
+                // (자기가 항상 앞이라 창맵에 두면 늘 선택된 것처럼 보이는 문제도 함께 해소.)
+                .filter((w) => w.monitor === m.index && !w.label.startsWith("orch-"))
                 .map((w) => (
                   <button
                     type="button"
                     key={w.label}
-                    className={`orch-win${w.focused ? " focused" : ""}`}
+                    className={`orch-win${w.label === selectedWindow ? " selected" : ""}`}
                     data-node={`orch/win/${w.label}`}
                     title={`${w.title || w.label} — ${w.x},${w.y} ${w.w}×${w.h}`}
-                    onClick={() => focusWindowFromMap(w.label)}
+                    onClick={() => selectWindow(w.label)}
                   >
                     {w.title || w.label}
                   </button>
@@ -185,9 +189,29 @@ export function OrchestratorApp() {
           ))}
         </section>
         <section className="orch-feed-wrap">
-          <h2>{t("orch.feed")}</h2>
+          <h2>
+            {t("orch.feed")}
+            {selectedWindow && (
+              <>
+                {" — "}
+                {facts?.windows.find((w) => w.label === selectedWindow)?.title ??
+                  selectedWindow}
+                <button
+                  type="button"
+                  className="orch-feed-all"
+                  data-node="orch/feed-all"
+                  onClick={() => setSelectedWindow(null)}
+                >
+                  {t("orch.feedAll")}
+                </button>
+              </>
+            )}
+          </h2>
           <div className="orch-feed" data-node="orch/feed" ref={feedRef}>
-            {feed.map((e) => (
+            {(selectedWindow
+              ? feed.filter((e) => e.payload.window === selectedWindow)
+              : feed
+            ).map((e) => (
               <div
                 key={e.seq}
                 className={`orch-entry k-${e.kind.split(".").join("-")}`}

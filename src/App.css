@@ -3711,7 +3711,7 @@ select.dctl {
   color: inherit;
   cursor: pointer;
 }
-.orch-win.focused { border-color: var(--acc); }
+.orch-win.selected { border-color: var(--acc); }
 .orch-feed-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 10px; }
 .orch-feed { flex: 1; overflow-y: auto; font-family: var(--mono, monospace); font-size: 12px; }
 .orch-entry { display: flex; gap: 8px; padding: 2px 0; white-space: nowrap; }
@@ -3764,3 +3764,15 @@ select.dctl {
 /* 레일: 안 열린 최근 프로젝트 칩 — 타창보다 더 은은(점선 없음, 감쇠만), 클릭=이 창에서 열기. */
 .rail-chip.recent { opacity: 0.4; }
 .rail-chip.recent:hover { opacity: 0.85; }
+
+/* 피드 헤더의 "전체" 필터 해제 버튼(창 선택 시 표시). */
+.orch-feed-all {
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 11px;
+  border: 1px solid var(--bd-soft);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}

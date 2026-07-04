@@ -54,6 +54,10 @@ main_title = w["main"].get("title", "")
 (ok if main_title and main_title != "main" else ng)(f"(a) 창 title=프로젝트명(라벨 아님): main→'{main_title}'")
 (ok if w[orch].get("title") == "오케스트레이터" else ng)(f"(a) orch title='오케스트레이터': '{w[orch].get('title')}'")
 
+# (a2) 창맵에 오케스트레이터 자신(orch-*)은 노출하지 않는다 — 관찰 도구이지 대상이 아님.
+mapnodes = [n["address"] for n in rpc("ui.tree", window=orch).get("nodes", []) if "/orch/win/" in n.get("address","")]
+(ok if not any("/orch/win/orch-" in a for a in mapnodes) else ng)(f"(a2) 창맵에 orch 자신 미노출: {[a.split('/')[-1] for a in mapnodes]}")
+
 # (b) 핀 토글: 기본 off → 클릭 → on → 다시 클릭 → off
 (ok if w[orch].get("alwaysOnTop") is False else ng)("(b) 핀 기본 off (alwaysOnTop=False)")
 rpc("ui.input.click", {"address": f"win/{orch}/chrome/orch/pin"}, orch); time.sleep(0.8)
@@ -70,6 +74,15 @@ if mnode:
     foc = [l for l, x in wins().items() if x.get("focused")]
     # 케이스 2: 창맵 클릭 후 orch 가 다시 앞으로(포커스) — main 은 활성되되 orch 최상.
     (ok if foc == [orch] else ng)(f"(b) 창맵 클릭 후 orch가 앞으로 유지(케이스 2): focused={foc}")
+    # 창 선택 → 피드가 그 창으로 필터(전체 해제 버튼 노출). 전체 클릭 → 필터 해제.
+    def has(addr_suffix):
+        return any(n.get("address","").endswith(addr_suffix) for n in rpc("ui.tree", window=orch).get("nodes", []))
+    (ok if has("/orch/feed-all") else ng)("창 선택 시 피드 필터 활성(전체 해제 버튼 노출)")
+    for n in rpc("ui.tree", window=orch).get("nodes", []):
+        if n.get("address","").endswith("/orch/feed-all"):
+            rpc("ui.input.click", {"address": n["address"]}, orch); break
+    time.sleep(0.6)
+    (ok if not has("/orch/feed-all") else ng)("전체 클릭 → 필터 해제(버튼 사라짐)")
 else: ng("창맵 main 노드 없음")
 
 # 멱등 재열기

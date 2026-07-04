@@ -154,6 +154,7 @@ describe("UI 정렬 헌법 게이트 (docs/UI.md)", () => {
     ".orch-win", // 오케스트레이터 창맵 항목 카드(A3) — 폐곡선 윤곽
     ".orch-console input", // 오케스트레이터 콘솔 입력 — 폐곡선 윤곽
     ".orch-console button", // 오케스트레이터 실행 버튼 — 폐곡선 윤곽
+    ".orch-feed-all", // 피드 전체-필터 해제 버튼 — 폐곡선 윤곽
 
     ".dctl",
     ".dstepper",
