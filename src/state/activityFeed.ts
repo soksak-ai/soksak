@@ -44,6 +44,14 @@ export function startActivityFeed(): void {
   onPluginEvent("view.activated", (p) =>
     publish("view.activated", "ui", { projectId: p.projectId, viewId: p.viewId }),
   );
+  // 진행 델타(요청→응답 사이) — 사이드카 이벤트·AI thinking 을 소비 플러그인이 command.progress
+  // 로 발행하면 활동 스트림에 얹는다(MESSAGE-PROTOCOL.md §2). textdelta 개념.
+  onPluginEvent("command.progress", (p) =>
+    publish("command.progress", (p as { source?: string }).source ?? "plugin", {
+      command: (p as { command?: string }).command,
+      delta: (p as { delta?: unknown }).delta,
+    }),
+  );
   // 레지스트리 계측(P12 본체) — params 는 키 목록만 도착한다(registry 가 요약).
   // activity.recent 자체는 제외: 피드를 보는 행위가 피드를 늘리는 되먹임 방지.
   setCommandTraceSink((t) => {

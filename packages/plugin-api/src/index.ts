@@ -87,6 +87,8 @@ export interface PluginEventMap {
   "project.changed": { projectId: string; root: string | null };
   "project.created": { projectId: string; root: string | null };
   "view.activated": { projectId: string; viewId: string; kind: string; path?: string };
+  // 진행 델타(MESSAGE-PROTOCOL §2) — 사이드카 이벤트·AI thinking 을 소비 플러그인이 발행.
+  "command.progress": { command?: string; delta?: unknown; source?: string };
   "file.opened": { projectId: string; viewId: string; path: string };
   "file.closed": { projectId: string; viewId: string; path: string };
   "file.saved": { projectId: string; viewId: string; path: string };

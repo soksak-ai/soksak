@@ -46,6 +46,8 @@ export interface PluginEventMap {
   "file.closed": { projectId: string; viewId: string; path: string };
   "file.saved": { projectId: string; viewId: string; path: string };
   "theme.changed": { name: string; mode: "light" | "dark" };
+  // 진행 델타(MESSAGE-PROTOCOL §2) — 사이드카 이벤트·AI thinking 을 소비 플러그인이 발행.
+  "command.progress": { command?: string; delta?: unknown; source?: string };
   // 호스트 표시 언어 변경 — 플러그인 자체 i18n(뷰 내부 텍스트)의 갱신 신호.
   "locale.changed": { language: string };
   // 앱(메인 창) 활성 여부 — 코어 WindowEvent::Focused 중계. 다른 앱으로 전환하면 false,
