@@ -1597,7 +1597,7 @@ export function registerCatalog(): void {
   // ── 멀티 윈도우 ──────────────────────────────────────────────────────────
   register("window.new", {
     description:
-      "Open a new OS window (independent workspace). Without root it opens to the project picker. With root it boots straight into that project (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). mode orchestrator opens the orchestrator window (activity feed + window/monitor map + command console; label orch-<n>, idempotent — an existing orchestrator window is focused and returned as existingWindow).",
+      "Open a new OS window (independent workspace). Without root it opens to the project picker. With root it boots straight into that project (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). mode orchestrator opens the orchestrator window (activity feed + window/monitor map + command console; label orch-<n>, idempotent — an existing orchestrator window is focused and returned as existingWindow) and immediately places it via the spread strategy: a workspace-free monitor whole, or the right third beside the workspace on a single monitor.",
     triggers: { ko: "새 창 창 열기 새 윈도우 프로젝트 새 창 오케스트레이터 창" },
     params: {
       root: {
@@ -1639,6 +1639,33 @@ export function registerCatalog(): void {
           label: "orch-1",
           init: "mode=orchestrator",
         });
+        // 열리면 즉시 배치(수용 데모 1): 팩트(monitors)→전략(suggest spread)→실행(place).
+        // 보조 모니터가 있으면 오케스트레이터가 그 모니터 전체를, 단일 모니터면 우측 1/3 을
+        // 차지하고 워크스페이스 창은 좌측 2/3 로 나란히 — 겹쳐 떠서 모달처럼 보이는 것 방지.
+        // 배치 실패는 열기 자체를 막지 않는다.
+        try {
+          const facts = (await invoke("window_monitors")) as {
+            monitors: MonitorFact[];
+            windows: WindowFact[];
+          };
+          const placements = suggestLayout({
+            monitors: facts.monitors,
+            windows: facts.windows,
+            strategy: "spread",
+            roles: { [label]: "orchestrator" },
+          });
+          for (const pl of placements) {
+            await invoke("window_place", {
+              label: pl.label,
+              x: pl.x,
+              y: pl.y,
+              w: pl.w,
+              h: pl.h,
+            });
+          }
+        } catch (e) {
+          console.warn("오케스트레이터 배치 실패(창은 열림):", e);
+        }
         return { label };
       }
       let init: string | undefined;
