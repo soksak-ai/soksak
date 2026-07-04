@@ -8,9 +8,10 @@ REPO_ROOT="$(cd "$PERF_DIR/../.." && pwd)"
 
 identity_socket() {
   case "$1" in
-    debug)   echo "$HOME/.soksak/com.soksak.debug.sock" ;;
-    dev)     echo "$HOME/.soksak/com.soksak.dev.sock" ;;
-    release) echo "$HOME/.soksak/com.soksak.sock" ;;
+    # identity 홈 계약(docs/ARCHITECTURE.md): app=~/.soksak, 그 외 ~/.soksak-<identity>.
+    debug)   echo "$HOME/.soksak-debug/com.soksak.debug.sock" ;;
+    dev)     echo "$HOME/.soksak-dev/com.soksak.dev.sock" ;;
+    release) echo "$HOME/.soksak/com.soksak.app.sock" ;;
     *) echo "unknown identity: $1" >&2; return 1 ;;
   esac
 }

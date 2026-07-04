@@ -5,7 +5,7 @@
 #   ② 커맨드 왕복(관찰): state.tree 가 Noise KK + Ed25519 assertion + chunking 을 지나 온전히 돈다.
 #   ③ danger 게이트: --destructive 가 데스크톱 confirm 모달을 발동, 승인=실행·거부=미실행(fail-closed).
 #
-# 전제: debug 앱 실행 중(소켓 ~/.soksak/com.soksak.debug.sock) + remote-iroh 플러그인 dev 체크아웃의
+# 전제: debug 앱 실행 중(소켓 ~/.soksak-debug/com.soksak.debug.sock) + remote-iroh 플러그인 dev 체크아웃의
 # src-rust 가 빌드돼 있음(cargo build --bins). 사이드카는 이 스크립트가 임시 페어링으로 띄우고 내린다
 # (임시 신원·키는 매 실행 재생성 — 멱등, 프로덕션 페어링 무영향).
 #
@@ -14,7 +14,9 @@ set -uo pipefail
 
 IDENTITY=debug
 [ "${1:-}" = "--identity" ] && IDENTITY="$2"
-SOCK="$HOME/.soksak/com.soksak.${IDENTITY}.sock"
+# identity 홈 계약(docs/ARCHITECTURE.md): app=~/.soksak, 그 외 ~/.soksak-<identity>.
+if [ "$IDENTITY" = "app" ]; then _E2E_HOME="$HOME/.soksak"; else _E2E_HOME="$HOME/.soksak-$IDENTITY"; fi
+SOCK="$_E2E_HOME/com.soksak.${IDENTITY}.sock"
 RI="$HOME/.soksak/plugins/soksak-plugin-remote-iroh/src-rust/target/debug"
 WORK=$(mktemp -d)
 PORT=48620

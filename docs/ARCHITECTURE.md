@@ -65,7 +65,7 @@ Anything a plugin cannot express through these four seams, the plugin must not d
 
 ---
 
-## 4. Principles (A1–A13)
+## 4. Principles (A1–A17)
 
 These are HARD. They are stated absolutely on purpose.
 
@@ -121,6 +121,10 @@ When two backends genuinely differ (plain first-party HTTP vs browser-impersonat
 
 ### A16. Core→plugin extraction is a move, not a rewrite.
 When a subsystem leaves the skeleton its code **moves verbatim**; only the integration seam changes (an in-process call becomes a socket/capability call). The verified code and its tests travel intact — never re-implemented. The skeleton-side commit says **"separated from core"**; never "ported", "migrated", "transplanted", "realized", or "rewritten". (A8's separation test proves the removal; this rule governs how the code travels.)
+
+
+### A17. One identity, one home — nothing is shared across identities.
+Each app identity (`com.soksak.app` → `~/.soksak`, `com.soksak.dev` → `~/.soksak-dev`, `com.soksak.debug` → `~/.soksak-debug`) owns a complete, independent home: data DB, plugins, sidecars, themes, projects, secrets vault, backups, and the socket all derive from that one root (`home.rs soksak_home()` — the single truth; a new identity gets its own home automatically from the identifier's last segment). Sharing any of it lets state cross identity boundaries — measured: a shared Chromium profile's ProcessSingleton forwarded the second app's engine launch to the first (a stray native window there, blank browser views here). `SOKSAK_HOME` overrides the derivation (test isolation, same open-test mechanism as `SOKSAK_VAULT_PATH`). The `sok` CLI is a standalone busybox binary and implements the same contract (`cli/src/main.rs home_for_env`); this section is that contract's canonical statement.
 
 ---
 

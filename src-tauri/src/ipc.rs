@@ -92,11 +92,10 @@ fn clamp_timeout_ms(requested: Option<u64>) -> u64 {
 
 // 소켓 서버 기동. 잔존 소켓이 살아 있으면(다른 인스턴스) 에러, 죽었으면 제거 후 재바인드.
 pub fn start(app: AppHandle) -> Result<String, String> {
-    let home = std::env::var("HOME").map_err(|e| format!("HOME 없음: {e}"))?;
-    let dir = format!("{home}/.soksak");
+    let dir = crate::home::soksak_home();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let identifier = app.config().identifier.clone();
-    let path = format!("{dir}/{identifier}.sock");
+    let path = dir.join(format!("{identifier}.sock")).to_string_lossy().to_string();
 
     if std::path::Path::new(&path).exists() {
         if UnixStream::connect(&path).is_ok() {

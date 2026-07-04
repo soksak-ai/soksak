@@ -9,15 +9,13 @@ use serde::Serialize;
 // ── 디렉토리/식별자 ──────────────────────────────────────────────────────────
 
 fn plugins_dir() -> Result<PathBuf, String> {
-    let home = std::env::var("HOME").map_err(|e| format!("HOME 없음: {e}"))?;
-    let dir = PathBuf::from(home).join(".soksak").join("plugins");
+    let dir = crate::home::soksak_home().join("plugins");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
 
 fn plugins_data_dir() -> Result<PathBuf, String> {
-    let home = std::env::var("HOME").map_err(|e| format!("HOME 없음: {e}"))?;
-    let dir = PathBuf::from(home).join(".soksak").join("plugins-data");
+    let dir = crate::home::soksak_home().join("plugins-data");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }

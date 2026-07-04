@@ -138,12 +138,12 @@ fn override_env_key(name: &str) -> String {
     format!("SOKSAK_SIDECAR_{}_BIN", name.to_uppercase().replace('-', "_"))
 }
 
-// dylib 경로: env 오버라이드 > ~/.soksak/sidecars/soksak-sidecar-{name}/dist/soksak-sidecar-{name}.dylib
-fn module_path(name: &str, home: &std::path::Path, env_override: Option<&str>) -> std::path::PathBuf {
+// dylib 경로: env 오버라이드 > <identity 홈>/sidecars/soksak-sidecar-{name}/dist/soksak-sidecar-{name}.dylib
+fn module_path(name: &str, soksak_home: &std::path::Path, env_override: Option<&str>) -> std::path::PathBuf {
     if let Some(p) = env_override {
         return std::path::PathBuf::from(p);
     }
-    home.join(".soksak")
+    soksak_home
         .join("sidecars")
         .join(format!("soksak-sidecar-{name}"))
         .join("dist")
@@ -153,8 +153,7 @@ fn module_path(name: &str, home: &std::path::Path, env_override: Option<&str>) -
 fn resolve_module_path(name: &str) -> Result<std::path::PathBuf, String> {
     let key = override_env_key(name);
     let over = std::env::var(&key).ok();
-    let home = dirs_home().ok_or("홈 디렉토리를 찾을 수 없음")?;
-    let path = module_path(name, &home, over.as_deref());
+    let path = module_path(name, &crate::home::soksak_home(), over.as_deref());
     if !path.is_file() {
         return Err(format!(
             "사이드카 모듈 없음: {} (설치: 플러그인 reach 또는 dev 스테이징 `make sidecar-{name}`; 오버라이드 env {key})",
@@ -162,10 +161,6 @@ fn resolve_module_path(name: &str) -> Result<std::path::PathBuf, String> {
         ));
     }
     Ok(path)
-}
-
-fn dirs_home() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME").map(std::path::PathBuf::from)
 }
 
 // ── 로드 + ABI 검증 + init ───────────────────────────────────────────────────────────────────
@@ -387,11 +382,9 @@ pub fn sidecar_ensure(name: String, url: String, sha256: String) -> Result<Strin
     if !valid_name(&name) {
         return Err(format!("사이드카 이름 형식 오류: {name}"));
     }
-    let home = dirs_home().ok_or("홈 디렉토리를 찾을 수 없음")?;
     // dest = dist 디렉토리 자체(아카이브 = dist 내용물). 사이드카 루트는 이미 존재할 수 있다
     // (백업·데이터) — 원자 rename 의 대상은 항상 새로 생기는 dist 다.
-    let dest = home
-        .join(".soksak")
+    let dest = crate::home::soksak_home()
         .join("sidecars")
         .join(format!("soksak-sidecar-{name}"))
         .join("dist");
@@ -470,11 +463,12 @@ mod tests {
 
     #[test]
     fn module_path_default_layout_and_override() {
-        let home = std::path::Path::new("/Users/x");
+        // 인자는 identity 홈 자체(home.rs 파생) — 사이드카는 그 아래 sidecars/ 에 산다.
+        let home = std::path::Path::new("/Users/x/.soksak-debug");
         assert_eq!(
             module_path("browser-chromium", home, None),
             std::path::PathBuf::from(
-                "/Users/x/.soksak/sidecars/soksak-sidecar-browser-chromium/dist/soksak-sidecar-browser-chromium.dylib"
+                "/Users/x/.soksak-debug/sidecars/soksak-sidecar-browser-chromium/dist/soksak-sidecar-browser-chromium.dylib"
             )
         );
         assert_eq!(

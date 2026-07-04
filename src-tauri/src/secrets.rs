@@ -398,8 +398,7 @@ pub fn now_ms() -> i64 {
 // 프로덕션 볼트 경로: HOME → ~/.soksak/secrets.vault. data/mod.rs db_path 패턴.
 // '주어진 경로로 동작' 과 분리(이 함수는 경로 계산만, 디렉토리 생성 포함).
 pub fn default_vault_path() -> Result<PathBuf, String> {
-    let home = std::env::var("HOME").map_err(|e| format!("HOME 없음: {e}"))?;
-    let dir = PathBuf::from(home).join(".soksak");
+    let dir = crate::home::soksak_home();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.join("secrets.vault"))
 }

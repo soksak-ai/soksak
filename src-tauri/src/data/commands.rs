@@ -460,9 +460,7 @@ pub fn data_backup(path: Option<String>, state: State<'_, DbState>) -> Result<St
     let dest = match path {
         Some(p) => std::path::PathBuf::from(p),
         None => {
-            let home = std::env::var("HOME").map_err(|e| format!("HOME 없음: {e}"))?;
-            std::path::PathBuf::from(home)
-                .join(".soksak")
+            crate::home::soksak_home()
                 .join("backups")
                 .join(format!("soksak-{}.db", super::now_millis()))
         }

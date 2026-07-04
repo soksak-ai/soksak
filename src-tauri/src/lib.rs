@@ -1,4 +1,5 @@
 mod ai_session;
+mod home;
 mod sidecar;
 mod webview;
 mod clipboard;
@@ -98,6 +99,9 @@ pub fn run() {
         .manage(schedule::ScheduleState::default())
         .manage(project_registry::ProjectRegistry::default())
         .setup(|app| {
+            // identity 홈 확정 — 모든 경로(데이터·플러그인·사이드카·테마·프로젝트·소켓·시크릿)가
+            // 이 값에서 파생되므로 어떤 경로 사용보다 먼저 1회 고정한다(home.rs 원칙).
+            home::init(&app.config().identifier);
             // 범용 데이터 스토어(app.data) — 소켓 서버 이전에 연다(커맨드가 즉시 쓸 수 있도록).
             match data::db_path().and_then(|p| data::open(&p)) {
                 Ok(conn) => {

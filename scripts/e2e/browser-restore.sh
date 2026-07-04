@@ -19,8 +19,13 @@ IDENTITY=debug
 [ "${1:-}" = "--identity" ] && IDENTITY="$2"
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 APP="$ROOT_DIR/src-tauri/target/debug/bundle/macos/soksak-$IDENTITY.app"
-SOCK="$HOME/.soksak/com.soksak.$IDENTITY.sock"
+# identity 홈 계약(docs/ARCHITECTURE.md — home.rs·sok CLI 와 동일): app=~/.soksak, 그 외 -<identity>.
+if [ "$IDENTITY" = "app" ]; then SOKSAK_E2E_HOME="$HOME/.soksak"; else SOKSAK_E2E_HOME="$HOME/.soksak-$IDENTITY"; fi
+SOCK="$SOKSAK_E2E_HOME/com.soksak.$IDENTITY.sock"
 KEEP="${KEEP:-0}"
+
+# identity 홈 계약(docs/ARCHITECTURE.md — home.rs·sok CLI 와 동일): app=~/.soksak, 그 외 -<identity>.
+if [ "$IDENTITY" = "app" ]; then SOKSAK_E2E_HOME="$HOME/.soksak"; else SOKSAK_E2E_HOME="$HOME/.soksak-$IDENTITY"; fi
 
 export BR_SOCK="$SOCK" BR_APP="$APP" BR_KEEP="$KEEP"
 python3 - <<'PYEOF'
@@ -39,7 +44,10 @@ def rpc(method, params=None, window="main", timeout=25):
     buf = b""
     while b"\n" not in buf: buf += s.recv(1 << 20)
     s.close()
-    return json.loads(buf.split(b"\n")[0])
+    resp = json.loads(buf.split(b"\n")[0])
+    if isinstance(resp, dict) and isinstance(resp.get("data"), dict):
+        return {**resp["data"], **{k: v for k, v in resp.items() if k != "data"}}
+    return resp
 
 def wait_socket(secs=40):
     for _ in range(secs * 2):

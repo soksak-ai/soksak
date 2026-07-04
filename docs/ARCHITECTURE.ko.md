@@ -65,7 +65,7 @@ soksak 은 뼈대다. 공통 인터페이스를 관리하며, 그 외에는 아�
 
 ---
 
-## 4. 원칙 (A1–A16)
+## 4. 원칙 (A1–A17)
 
 전부 HARD 다. 일부러 절대문으로 서술한다.
 
@@ -121,6 +121,10 @@ soksak 은 뼈대다. 공통 인터페이스를 관리하며, 그 외에는 아�
 
 ### A16. 코어→플러그인 추출은 이동이지 재작성이 아니다.
 서브시스템이 뼈대를 떠날 때 코드는 **원문 그대로 이동**한다 — 통합 seam 만 바뀐다(in-process 호출이 소켓/capability 호출이 된다). 검증된 코드와 그 테스트는 온전히 여행한다 — 절대 재구현하지 않는다. 뼈대 쪽 커밋은 **"separated from core"** 라고 말한다 — "ported"·"migrated"·"transplanted"·"realized"·"rewritten" 은 금지. (A8 의 분리 테스트가 제거를 증명하고, 이 규칙은 코드가 여행하는 방식을 다스린다.)
+
+
+### A17. identity 하나, 홈 하나 — identity 간 공유는 없다.
+각 앱 identity(`com.soksak.app` → `~/.soksak`, `com.soksak.dev` → `~/.soksak-dev`, `com.soksak.debug` → `~/.soksak-debug`)는 완전히 독립된 홈을 소유한다: 데이터 DB·플러그인·사이드카·테마·프로젝트·시크릿 금고·백업·소켓이 전부 그 한 루트에서 파생된다(`home.rs soksak_home()` — 단일 진실; 새 identity 는 identifier 마지막 세그먼트에서 자동으로 자기 홈을 얻는다). 무엇이든 공유하면 상태가 identity 경계를 넘는다 — 실측: 공유 크로미움 프로필의 ProcessSingleton 이 두 번째 앱의 엔진 기동을 첫 앱으로 위임했다(그쪽엔 유령 네이티브 창, 이쪽엔 백지 브라우저 뷰). `SOKSAK_HOME` 이 파생을 오버라이드한다(테스트 격리 — `SOKSAK_VAULT_PATH` 와 같은 오픈 테스트 메커니즘). `sok` CLI 는 독립 busybox 바이너리라 같은 계약을 자체 구현한다(`cli/src/main.rs home_for_env`); 이 절이 그 계약의 정본이다.
 
 ---
 

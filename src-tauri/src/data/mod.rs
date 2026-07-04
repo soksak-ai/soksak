@@ -32,8 +32,7 @@ impl DbState {
 
 // ~/.soksak/data/soksak.db — 단일 파일(백업=파일 복사/VACUUM INTO).
 pub fn db_path() -> Result<PathBuf, String> {
-    let home = std::env::var("HOME").map_err(|e| format!("HOME 없음: {e}"))?;
-    let dir = PathBuf::from(home).join(".soksak").join("data");
+    let dir = crate::home::soksak_home().join("data");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.join("soksak.db"))
 }

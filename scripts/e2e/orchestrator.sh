@@ -10,7 +10,10 @@
 set -uo pipefail
 IDENTITY=debug
 [ "${1:-}" = "--identity" ] && IDENTITY="$2"
-export OR_SOCK="$HOME/.soksak/com.soksak.$IDENTITY.sock"
+# identity 홈 계약(docs/ARCHITECTURE.md — home.rs·sok CLI 와 동일): app=~/.soksak, 그 외 -<identity>.
+if [ "$IDENTITY" = "app" ]; then SOKSAK_E2E_HOME="$HOME/.soksak"; else SOKSAK_E2E_HOME="$HOME/.soksak-$IDENTITY"; fi
+
+export OR_SOCK="$SOKSAK_E2E_HOME/com.soksak.$IDENTITY.sock"
 
 python3 - <<'PYEOF'
 import json, os, socket, sys, time

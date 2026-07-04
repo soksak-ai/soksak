@@ -125,12 +125,23 @@ fn socket_name_for_env(env: &str) -> String {
 }
 
 // env 토큰 → 소켓 절대경로(존재·생존 검사 없음 — 핀 용도). validate_env 통과 전제.
+// identity 홈 계약(코어 home.rs 와 동일, docs/ARCHITECTURE.md): app=~/.soksak, 그 외
+// env=~/.soksak-<env>. 데이터·플러그인·소켓이 identity 별로 완전 분리되므로 소켓도 그 홈에 산다.
+// SOKSAK_HOME env 가 최우선(테스트 격리) — sok 는 독립 busybox 바이너리라 계약을 자체 구현한다.
+fn home_for_env(env: &str) -> Result<PathBuf, String> {
+    if let Ok(p) = std::env::var("SOKSAK_HOME") {
+        if !p.is_empty() {
+            return Ok(PathBuf::from(p));
+        }
+    }
+    let home = std::env::var("HOME").map_err(|_| "HOME 없음".to_string())?;
+    let suffix = if env == "app" { String::new() } else { format!("-{env}") };
+    Ok(PathBuf::from(home).join(format!(".soksak{suffix}")))
+}
+
 fn socket_path_for_env(env: &str) -> Result<PathBuf, String> {
     let env = validate_env(env)?;
-    let home = std::env::var("HOME").map_err(|_| "HOME 없음".to_string())?;
-    Ok(PathBuf::from(home)
-        .join(".soksak")
-        .join(socket_name_for_env(env)))
+    Ok(home_for_env(env)?.join(socket_name_for_env(env)))
 }
 
 // 소켓 타겟 결정(순수). 명시 소켓 경로 또는 env 토큰.

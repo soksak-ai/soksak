@@ -267,8 +267,7 @@ pub fn list_children(
 // 테마 엔진(단일 진실)이 담당 — 여기는 파일 입출력만.
 
 fn themes_dir() -> Result<PathBuf, String> {
-    let home = std::env::var("HOME").map_err(|e| format!("HOME 없음: {e}"))?;
-    let dir = PathBuf::from(home).join(".soksak").join("themes");
+    let dir = crate::home::soksak_home().join("themes");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
@@ -392,7 +391,7 @@ pub fn ensure_workspace_dir(folder: String) -> Result<String, String> {
             "폴더명 형식 위반: \"{folder}\" — ^[a-z0-9][a-z0-9-]*$"
         ));
     }
-    let dir = home_dir().join(".soksak").join("projects").join(&folder);
+    let dir = crate::home::soksak_home().join("projects").join(&folder);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.to_string_lossy().to_string())
 }
