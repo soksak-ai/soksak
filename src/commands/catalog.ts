@@ -1719,7 +1719,7 @@ export function registerCatalog(): void {
     triggers: { ko: "창 포커스 창 활성화 창 앞으로" },
     params: { label: { type: "string", description: "Window label (see window.list)" } },
     returns: "{ ok }",
-    examples: ['sok window.focus \'{"label":"win-1"}\''],
+    examples: ['sok window.focus \'{"label":"w-<uuid>"}\''],
     handler: async (p) => {
       await invoke("window_focus", { label: p.label as string });
       return { ok: true };
@@ -1731,7 +1731,7 @@ export function registerCatalog(): void {
     triggers: { ko: "창 닫기 윈도우 닫기" },
     params: { label: { type: "string", description: "Window label" } },
     returns: "{ ok }",
-    examples: ['sok window.close \'{"label":"win-1"}\''],
+    examples: ['sok window.close \'{"label":"w-<uuid>"}\''],
     handler: async (p) => {
       await invoke("window_close", { label: p.label as string });
       return { ok: true };

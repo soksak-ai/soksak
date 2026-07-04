@@ -28,6 +28,10 @@ git/clipboard/ai.session) and removes the violators.
    Every window-label pattern MUST be listed in `src-tauri/capabilities/default.json`
    `windows` — a label family missing from the capability is denied `event.listen` and
    every socket command to such a window dies as TIMEOUT with no error at the source.
+   Previous-generation labels (`win-<seq>`) no longer exist: a one-shot migration
+   (`scripts/migrations/20260704-window-label-uuid.sh`, git-tracked) rewrote old
+   manifests to uuid labels, respawn refuses to spawn a non-`w-*` slot (loud error,
+   data untouched), and the capability never re-lists the retired family.
 
 5. **Sidecar** = `soksak-sidecar-<domain>[-<engine>]` — the same artifact shape as
    plugins, so a plugin/sidecar pair is visible at a glance

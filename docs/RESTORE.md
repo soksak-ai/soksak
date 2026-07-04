@@ -35,7 +35,7 @@ A restored window paints all tabs and splits at once. Only views actually on scr
 
 ## Multi-window
 
-The manifest (core kv `windows`) lists one slot per window: label, roots, active root, logical frame, plus the last-focused label. On boot, main restores itself, respawns every other slot with its label and frame (ghost slots without snapshots are cleaned), then focuses the last-focused window. Each respawned window restores its own snapshot (`window/<label>`) through the single restore path, claiming project roots through the global single-open registry (P6).
+The manifest (core kv `windows`) lists one slot per window: label, roots, active root, logical frame, plus the last-focused label. On boot, main restores itself, respawns every other slot with its label and frame (ghost slots without snapshots are cleaned), then focuses the last-focused window. Respawn spawns `w-*` slots only (NAMING 4b): a slot with any other label is refused with a loud error and its data left untouched — outside the capability scope such a window would boot deaf (every socket command times out). Previous-generation data was corrected once by the git-tracked one-shot migration `scripts/migrations/20260704-window-label-uuid.sh` (snapshot key rename + manifest label swap, values untouched). Each respawned window restores its own snapshot (`window/<label>`) through the single restore path, claiming project roots through the global single-open registry (P6).
 
 ## Restore seam
 

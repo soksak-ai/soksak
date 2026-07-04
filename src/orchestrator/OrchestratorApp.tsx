@@ -216,7 +216,7 @@ export function OrchestratorApp() {
     void invoke("window_focus", { label }).catch(() => {});
   }, []);
 
-  // 피드 메타의 창 라벨(win-11 등)을 프로젝트명으로 — 창 라벨은 사람에게 무의미하다.
+  // 피드 메타의 창 라벨(w-<uuid>)을 프로젝트명으로 — 창 라벨은 사람에게 무의미하다.
   const nameOf = useCallback(
     (win: string) => projects.find((p) => p.window === win)?.name ?? win,
     [projects],

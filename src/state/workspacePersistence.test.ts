@@ -82,9 +82,9 @@ describe("upsertManifest", () => {
   });
 
   it("새 label 추가", () => {
-    const r = upsertManifest(base, { label: "win-1", roots: ["/y"], activeRoot: "/y" });
+    const r = upsertManifest(base, { label: "w-1", roots: ["/y"], activeRoot: "/y" });
     expect(r.slots).toHaveLength(2);
-    expect(r.slots.map((s) => s.label).sort()).toEqual(["main", "win-1"]);
+    expect(r.slots.map((s) => s.label).sort()).toEqual(["main", "w-1"]);
   });
 
   it("빈 roots = slot 제거(창 닫힘)", () => {
@@ -97,7 +97,7 @@ describe("manifest rect·focused (B2 멀티윈도우 복원)", () => {
   it("entry 에 rect 를 실으면 upsert 가 보존한다", () => {
     const m = upsertManifest(
       { slots: [] },
-      { label: "win-1", roots: ["/a"], activeRoot: "/a", rect: { x: 10, y: 20, w: 800, h: 600 } },
+      { label: "w-1", roots: ["/a"], activeRoot: "/a", rect: { x: 10, y: 20, w: 800, h: 600 } },
     );
     expect(m.slots[0].rect).toEqual({ x: 10, y: 20, w: 800, h: 600 });
   });
@@ -108,9 +108,9 @@ describe("manifest rect·focused (B2 멀티윈도우 복원)", () => {
     m = setManifestFocused(m, "main");
     expect(m.focusedLabel).toBe("main");
     // 다른 창 upsert 가 focusedLabel 을 지우지 않는다.
-    m = upsertManifest(m, { label: "win-1", roots: ["/a"], activeRoot: "/a" });
+    m = upsertManifest(m, { label: "w-1", roots: ["/a"], activeRoot: "/a" });
     expect(m.focusedLabel).toBe("main");
-    m = setManifestFocused(m, "win-1");
-    expect(m.focusedLabel).toBe("win-1");
+    m = setManifestFocused(m, "w-1");
+    expect(m.focusedLabel).toBe("w-1");
   });
 });

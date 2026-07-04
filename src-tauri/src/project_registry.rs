@@ -155,7 +155,7 @@ mod tests {
     fn 중복_claim_은_소유_창을_알린다() {
         let r = ProjectRegistry::default();
         assert!(r.claim("/a", "main").is_ok());
-        assert_eq!(r.claim("/a", "win-1"), Err("main".to_string()));
+        assert_eq!(r.claim("/a", "w-1"), Err("main".to_string()));
         assert_eq!(r.owner("/a").as_deref(), Some("main"));
     }
 
@@ -171,25 +171,25 @@ mod tests {
         let r = ProjectRegistry::default();
         assert!(r.claim("/a", "main").is_ok());
         assert!(r.release("/a", "main"));
-        assert!(r.claim("/a", "win-1").is_ok());
-        assert_eq!(r.owner("/a").as_deref(), Some("win-1"));
+        assert!(r.claim("/a", "w-1").is_ok());
+        assert_eq!(r.owner("/a").as_deref(), Some("w-1"));
     }
 
     #[test]
     fn 비소유_창의_release_는_무효() {
         let r = ProjectRegistry::default();
         assert!(r.claim("/a", "main").is_ok());
-        assert!(!r.release("/a", "win-1")); // 남의 점유는 못 푼다
+        assert!(!r.release("/a", "w-1")); // 남의 점유는 못 푼다
         assert_eq!(r.owner("/a").as_deref(), Some("main"));
     }
 
     #[test]
     fn 창_파괴는_그_창의_점유만_전부_해제() {
         let r = ProjectRegistry::default();
-        assert!(r.claim("/a", "win-1").is_ok());
-        assert!(r.claim("/b", "win-1").is_ok());
+        assert!(r.claim("/a", "w-1").is_ok());
+        assert!(r.claim("/b", "w-1").is_ok());
         assert!(r.claim("/c", "main").is_ok());
-        let mut freed = r.release_window("win-1");
+        let mut freed = r.release_window("w-1");
         freed.sort();
         assert_eq!(freed, vec!["/a".to_string(), "/b".to_string()]);
         assert_eq!(r.owner("/a"), None);

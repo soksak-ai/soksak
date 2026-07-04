@@ -330,19 +330,30 @@ mod mw_rules {
         }
     }
 
-    // MW5 — capability(권한) 스코프도 새 창을 덮어야 한다. windows 가 "main" 만이면 새 창(win-*)이
-    // 창-종속 권한(start-dragging·set-focus 등)을 못 받아 드래그조차 안 된다. 소스(.rs)만 보던 전수조사가
-    // 이 JSON 가정을 놓쳤던 회귀 — 빌드로 잡는다.
+    // MW5 — capability(권한) 스코프도 새 창을 덮어야 한다. windows 가 "main" 만이면 런타임 창(w-*)이
+    // 창-종속 권한(event.listen·start-dragging·set-focus 등)을 못 받아 소켓 명령 전부가 무언 TIMEOUT 이
+    // 된다(실측 회귀). 소스(.rs)만 보던 전수조사가 이 JSON 가정을 놓친다 — 빌드로 잡는다.
     #[test]
     fn capability_covers_new_windows() {
         let src = std::fs::read_to_string("capabilities/default.json").unwrap_or_default();
+        let doc: serde_json::Value = serde_json::from_str(&src).expect("capability JSON 파싱");
+        let windows: Vec<&str> = doc["windows"]
+            .as_array()
+            .expect("windows 배열")
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
         assert!(
-            src.contains("win-*") || src.contains("\"*\""),
-            "capability default.json 의 windows 스코프가 새 창(win-*)을 포함해야 한다 — \
-             \"main\" 단일 창 가정 금지(새 창이 드래그·포커스 권한을 못 받는다)"
+            windows.contains(&"w-*") || windows.contains(&"*"),
+            "capability windows 스코프가 런타임 창(w-*)을 포함해야 한다 — \
+             \"main\" 단일 창 가정 금지(새 창이 listen·드래그·포커스 권한을 못 받는다)"
         );
         assert!(
-            src.contains("orch-*") || src.contains("\"*\""),
+            !windows.contains(&"win-*"),
+            "구세대 라벨(win-*)은 일회용 마이그레이션으로 소멸했다 — capability 재등재 금지(NAMING 4b)"
+        );
+        assert!(
+            windows.contains(&"orch-*") || windows.contains(&"*"),
             "capability windows 스코프가 오케스트레이터 창(orch-*)을 포함해야 한다(A3)"
         );
     }
@@ -355,24 +366,24 @@ mod mw_rules {
         let set = |k: &str, v: serde_json::Value| {
             crate::data::store::kv_set(&c, "core", k, &v).unwrap()
         };
-        set("window/win-1", serde_json::json!({"activeId":"t1","projects":[{"id":"t1"}]}));
+        set("window/w-1", serde_json::json!({"activeId":"t1","projects":[{"id":"t1"}]}));
         set("window/main", serde_json::json!({"activeId":"t9","projects":[{"id":"t9"}]}));
         set(
             "windows",
             serde_json::json!({"slots":[
-                {"label":"win-1","roots":["/a"],"activeRoot":"/a"},
+                {"label":"w-1","roots":["/a"],"activeRoot":"/a"},
                 {"label":"main","roots":["/m"],"activeRoot":"/m"}
             ]}),
         );
-        super::prune_window_persistence(&c, "win-1").unwrap();
-        assert_eq!(crate::data::store::kv_get(&c, "core", "window/win-1").unwrap(), None);
+        super::prune_window_persistence(&c, "w-1").unwrap();
+        assert_eq!(crate::data::store::kv_get(&c, "core", "window/w-1").unwrap(), None);
         assert!(crate::data::store::kv_get(&c, "core", "window/main").unwrap().is_some());
         let m = crate::data::store::kv_get(&c, "core", "windows").unwrap().unwrap();
         let slots = m["slots"].as_array().unwrap();
         assert_eq!(slots.len(), 1);
         assert_eq!(slots[0]["label"], "main");
         // 멱등 — 없는 창 정리는 무해.
-        super::prune_window_persistence(&c, "win-1").unwrap();
+        super::prune_window_persistence(&c, "w-1").unwrap();
     }
 
 }

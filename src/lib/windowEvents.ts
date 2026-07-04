@@ -3,7 +3,7 @@ import type { EventCallback, EventName, UnlistenFn } from "@tauri-apps/api/event
 
 // 이 창(webview)으로 *타겟된* 이벤트만 구독한다. Rust 는 멀티 윈도우 신호를 emit_to(label) 로 보내므로
 // 각 창은 자기 신호만 받아야 한다. 전역 listen()(@tauri-apps/api/event)은 타겟과 무관하게 모든 창의
-// 이벤트를 받는다 — emit_to(win-2) 한 cmd-request 를 main 의 전역 listen 도 실행해 명령이 두 창에서
+// 이벤트를 받는다 — emit_to(다른 창) 한 cmd-request 를 main 의 전역 listen 도 실행해 명령이 두 창에서
 // 중복 실행된다(창별 독립 붕괴). getCurrentWebviewWindow().listen 은 "이 webview 에 emit 된 이벤트"만
 // 받으므로 emit_to 타겟팅이 플랫폼 레벨에서 격리된다 — JS 쪽 label 비교(꼼수) 불요.
 //

@@ -220,6 +220,16 @@ export async function respawnSavedWindows(): Promise<void> {
         console.warn(`[restore] 유령 slot 정리(스냅샷 없음): ${slot.label}`);
         continue;
       }
+      // 창 라벨 불변식(NAMING 4b) — 런타임 창은 w-<uuid> 뿐이다. 다른 라벨은 capability 밖이라
+      // 스폰하면 귀머거리 창(전 명령 TIMEOUT)이 된다. 스폰을 거부하고 데이터는 건드리지 않는다
+      // — 구세대 데이터 교정은 일회용 마이그레이션(scripts/migrations/20260704-window-label-uuid.sh).
+      if (!slot.label.startsWith("w-")) {
+        console.error(
+          `[restore] 구세대 라벨 slot 스폰 거부: ${slot.label} — ` +
+            `scripts/migrations/20260704-window-label-uuid.sh 실행 필요(NAMING 4b)`,
+        );
+        continue;
+      }
       await invoke("window_create", {
         label: slot.label,
         rect: slot.rect ?? null,
