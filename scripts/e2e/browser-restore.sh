@@ -42,7 +42,10 @@ def rpc(method, params=None, window="main", timeout=25):
     req = {"id": 1, "method": method, "params": params or {}, "window": window}
     s.sendall((json.dumps(req) + "\n").encode())
     buf = b""
-    while b"\n" not in buf: buf += s.recv(1 << 20)
+    while b"\n" not in buf:
+        chunk = s.recv(1 << 20)
+        if not chunk: raise ConnectionError("소켓 EOF(응답 없이 닫힘)")
+        buf += chunk
     s.close()
     resp = json.loads(buf.split(b"\n")[0])
     if isinstance(resp, dict) and isinstance(resp.get("data"), dict):
@@ -143,22 +146,25 @@ os.makedirs(ra, exist_ok=True); os.makedirs(rb, exist_ok=True)
 # 잔재 창 정리(멱등 재실행 대비): 이전 실행이 남긴 brestore 창을 먼저 닫는다.
 # 좀비(창은 목록에 있는데 웹뷰가 죽어 질의 타임아웃 — 실측: chromium child 창 close 미완)가
 # 있으면 조용히 건너뛰지 않고 앱을 재기동해 확정 상태에서 시작한다(claim 도 함께 소거).
-def owners():
+def owners(recovered=False):
     t = rpc("window.list"); labs = t["labels"]
     res = {}; zombies = []
     for l in labs:
         if l == "main" or l.startswith("orch-"): continue
         try:
-            tr = rpc("state.tree", window=l, t=4)
+            tr = rpc("state.tree", window=l, timeout=4)
             for p in tr.get("projects", []):
                 if "brestore" in p.get("root", ""): res[l] = p["root"]
         except Exception:
             zombies.append(l)
     if zombies:
-        print(f"  좀비 창 감지 {zombies} — 앱 재기동으로 회복")
+        # 회복은 정확히 1회 — 재기동 후에도 좀비면 하니스는 크게 실패한다.
+        # (무상한 재귀는 "좀비 → 재기동 → manifest 부활 → 좀비" 무한 재기동 루프가 된다 — 실증됨.)
+        assert not recovered, f"재기동 후에도 좀비 잔존 — 앱 결함, 하니스 중단: {zombies}"
+        print(f"  좀비 창 감지 {zombies} — 앱 재기동으로 회복(1회 한)")
         os.system("pkill -9 -f soksak-debug >/dev/null 2>&1")
         time.sleep(3); launch(); assert wait_socket(), "재기동 소켓 없음"
-        return owners()
+        return owners(recovered=True)
     return res
 for l in owners():
     rpc("window.close", {"label": l})

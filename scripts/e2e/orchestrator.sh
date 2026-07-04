@@ -25,7 +25,10 @@ def rpc(method, params=None, window="main", t=25):
     s = socket.socket(socket.AF_UNIX); s.settimeout(t); s.connect(SOCK)
     s.sendall((json.dumps({"id":1,"method":method,"params":params or {},"window":window})+"\n").encode())
     buf=b""
-    while b"\n" not in buf: buf+=s.recv(1<<20)
+    while b"\n" not in buf:
+        chunk=s.recv(1<<20)
+        if not chunk: raise ConnectionError("소켓 EOF(응답 없이 닫힘)")
+        buf+=chunk
     s.close()
     resp = json.loads(buf.split(b"\n")[0])
     # 표준 응답 봉투 {ok,code,message,data}: data 를 최상위로 펼쳐 기존 접근(r["labels"] 등) 유지.
