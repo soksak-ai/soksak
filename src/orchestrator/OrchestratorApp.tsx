@@ -110,6 +110,14 @@ function renderEntry(
           <div className="orch-bubble-body">
             {ok ? "✓" : `✗ ${String(p.code ?? "")}`} {String(p.message ?? "")}
           </div>
+          {/* 이미지 응답(window.snapshot pngBase64)은 원문 문자열이 아니라 이미지로 렌더한다. */}
+          {typeof (p.data as Record<string, unknown> | undefined)?.pngBase64 === "string" && (
+            <img
+              className="orch-shot"
+              alt=""
+              src={`data:image/png;base64,${String((p.data as Record<string, unknown>).pngBase64)}`}
+            />
+          )}
         </div>
         {raw}
       </div>

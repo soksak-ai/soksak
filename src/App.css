@@ -3885,3 +3885,12 @@ select.dctl {
 }
 .orch-bubble.res { cursor: pointer; }
 .orch-event-line { cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+
+/* 이미지 응답(캡처 등) — base64 원문 대신 썸네일 렌더. */
+.orch-shot {
+  display: block;
+  margin-top: 6px;
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 6px;
+}

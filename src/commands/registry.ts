@@ -293,7 +293,11 @@ function autoMessage(data: Record<string, unknown> | undefined): string | undefi
   const k = keys[0];
   const v = data[k];
   if (Array.isArray(v)) return `${k} ${v.length}`;
-  if (v === null || typeof v !== "object") return `${k}: ${String(v)}`;
+  if (v === null || typeof v !== "object") {
+    const sv = String(v);
+    // blob/장문(base64 등)은 원문 덤프 금지 — 길이만 답한다(이미지는 표시층이 data 로 렌더).
+    return sv.length > 96 ? `${k} ${sv.length}자` : `${k}: ${sv}`;
+  }
   return undefined;
 }
 

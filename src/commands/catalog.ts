@@ -1756,6 +1756,7 @@ export function registerCatalog(): void {
       },
     },
     returns: "{ saved } (file mode) | { pngBase64 } (base64/rect mode)",
+    summarize: (d) => (d.saved ? `저장했습니다: ${String(d.saved)}` : "화면을 캡처했습니다"),
     errors: ["INVALID_PARAMS"],
     examples: [
       "sok window.snapshot",
