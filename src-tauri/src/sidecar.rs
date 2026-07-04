@@ -403,6 +403,21 @@ pub fn sidecar_close(name: String, handle: u64) -> Result<(), String> {
 // ── 호스트→모듈 통지 / 종료 ──────────────────────────────────────────────────────────────────
 
 // 로드된 모든 엔진 모듈에 호스트 사실 통지(v1: surface-occluded). 모듈 0 개면 no-op.
+// 파괴 순서 계약(docs/SIDECARS.md) — 창이 닫히기 전에(CloseRequested, 메인 스레드) 그 창의
+// surface(content NSView)에 부모 지정된 엔진 child 를 엔진이 먼저 닫도록 통지한다. 살아있는
+// 엔진 NSView 위에서 창 dealloc 이 진행되는 것을 금지하는 수명주기 규칙 — 닫힘이 Destroyed 에
+// 못 도달하는 wedge(좀비 창: 목록엔 있는데 웹뷰 죽음·claim 미해제) 부류의 구조적 차단.
+#[cfg(target_os = "macos")]
+pub fn notify_surface_closing(window: &tauri::Window) {
+    match content_view_of(window) {
+        Ok(view) => {
+            eprintln!("[sidecar] surface-closing 통지 (window={}, view={view:#x})", window.label());
+            notify_all(&serde_json::json!({ "type": "surface-closing", "view": view }));
+        }
+        Err(e) => eprintln!("[sidecar] surface-closing: content view 실패 ({}): {e}", window.label()),
+    }
+}
+
 pub fn notify_all(evt: &serde_json::Value) {
     let modules: Vec<Arc<EngineModule>> = match MODULES.lock() {
         Ok(m) => m.values().cloned().collect(),

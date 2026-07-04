@@ -233,6 +233,9 @@ pub fn run() {
                 // 저장(pagehide)이 정리 뒤에 도착해 스냅샷을 부활시키지 않도록 순서를 보장한다.
                 // 앱 종료(Cmd+Q/app.exit)의 창 파괴는 이 이벤트를 지나지 않아 세션이 보존된다.
                 tauri::WindowEvent::CloseRequested { .. } => {
+                    // 파괴 순서 계약(SIDECARS) — dealloc 전에 엔진 child 부터 닫게 통지.
+                    #[cfg(target_os = "macos")]
+                    crate::sidecar::notify_surface_closing(window);
                     window::mark_user_closed(window.label());
                 }
                 tauri::WindowEvent::Destroyed => {

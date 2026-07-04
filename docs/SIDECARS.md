@@ -94,7 +94,12 @@ fn soksak_sidecar_engine_free(buf: SoksakBuf);
 fn soksak_sidecar_engine_shutdown();                            // app exit only, main thread
 ```
 
-Host notifications (v1): `{"type":"surface-occluded","window":<label>,"occluded":bool}`
+Host notifications (v1): `{"type":"surface-occluded","window":<label>,"occluded":bool}`;
+`{"type":"surface-closing","view":<usize>}` — teardown-order contract: the host sends this
+on the window's CloseRequested (main thread), and the engine MUST close every child parented
+to that surface before the window deallocates. A window never dies under a live engine view —
+this rule structurally prevents the wedged-close class (a zombie window that stays in the
+window list with a dead webview and unreleased project claims).
 — fanned out to every loaded module when a DOM overlay opens/closes over content.
 
 Versioning: additive JSON fields within a major; breaking protocol → interface
