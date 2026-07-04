@@ -28,7 +28,11 @@ def rpc(method, params=None, window="main", t=25):
     s.sendall((json.dumps({"id":1,"method":method,"params":params or {},"window":window})+"\n").encode())
     buf=b""
     while b"\n" not in buf: buf+=s.recv(1<<20)
-    s.close(); return json.loads(buf.split(b"\n")[0])
+    s.close()
+    resp = json.loads(buf.split(b"\n")[0])
+    if isinstance(resp, dict) and isinstance(resp.get("data"), dict):
+        return {**resp["data"], **{k: v for k, v in resp.items() if k != "data"}}
+    return resp
 
 def rail_recents(window="main"):
     return [n["address"].split("/")[-1] for n in rpc("ui.tree", window=window).get("nodes", [])

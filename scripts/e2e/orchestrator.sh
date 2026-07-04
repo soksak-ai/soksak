@@ -23,7 +23,12 @@ def rpc(method, params=None, window="main", t=25):
     s.sendall((json.dumps({"id":1,"method":method,"params":params or {},"window":window})+"\n").encode())
     buf=b""
     while b"\n" not in buf: buf+=s.recv(1<<20)
-    s.close(); return json.loads(buf.split(b"\n")[0])
+    s.close()
+    resp = json.loads(buf.split(b"\n")[0])
+    # 표준 응답 봉투 {ok,code,message,data}: data 를 최상위로 펼쳐 기존 접근(r["labels"] 등) 유지.
+    if isinstance(resp, dict) and isinstance(resp.get("data"), dict):
+        return {**resp["data"], **{k: v for k, v in resp.items() if k != "data"}}
+    return resp
 def wins(): return {w["label"]: w for w in rpc("window.monitors")["windows"]}
 def nodes(orch, sub):
     return [n["address"].split("/")[-1] for n in rpc("ui.tree", window=orch).get("nodes", [])
@@ -101,7 +106,7 @@ ce = [e for e in recent if e["kind"] == "command.executed"]
 (ok if ce else ng)("워크스페이스 명령이 활동 피드에 등장")
 if ce:
     p = ce[-1]["payload"]
-    (ok if ("startedAt" in p and "finishedAt" in p and "result" in p) else ng)(
+    (ok if ("startedAt" in p and "finishedAt" in p and "message" in p) else ng)(
         f"(피드) 대화 버블 데이터(시작/종료/결과) 존재: {sorted(p.keys())}")
 
 # 정리
