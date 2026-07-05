@@ -12,14 +12,7 @@ import { execute, getSpec } from "../commands/registry";
 import { Icon } from "../ui/icons/Icon";
 import { NewProjectModal, type CreateProjectArgs } from "../components/NewProjectModal";
 import { hasMessage, localize, useT, type MsgKey, type TFn } from "../i18n";
-
-interface ActivityEntry {
-  seq: number;
-  ts: number;
-  kind: string;
-  source: string;
-  payload: Record<string, unknown>;
-}
+import { foldFeed, itemWindow, type ActivityEntry, type ChatCard } from "./feedFold";
 
 const FEED_CAP = 500;
 
@@ -42,6 +35,11 @@ function lineOf(e: ActivityEntry): string {
       return `턴 종료${p.agentKind ? ` (${p.agentKind})` : ""}${p.command ? ` — ${p.command}` : ""}`;
     case "view.activated":
       return `뷰 활성화 ${p.viewId}`;
+    // 대화 세트 구성원 — 카드 렌더가 정상 경로. 여기 도달 = 부모가 밀려난 고아(단독 표시).
+    case "chat.prompt":
+      return `💬 ${p.text ?? ""}`;
+    case "chat.answer":
+      return `↩ ${p.text ?? ""}`;
     default:
       return e.kind;
   }
@@ -174,6 +172,69 @@ function renderEntry(
         <span className="orch-line">{lineOf(e)}</span>
       </div>
       {raw}
+    </div>
+  );
+}
+
+// 대화 세트 카드 — 질문(사용자) → 세트 구성원 seq 순(자식 명령은 그대로 renderEntry, 델타는
+// 진행 줄, 답변은 응답 버블) → 미닫힘이면 진행 표시 + 중지. 카드는 부모(prompt) 창에 정박한다.
+function renderChatCard(
+  card: ChatCard,
+  nameOf: (win: string) => string,
+  showWho: boolean,
+  onToggle: (seq: number) => void,
+  expanded: Set<number>,
+  t: TFn,
+  onZoom: (src: string) => void,
+  onStop: () => void,
+) {
+  const prompt = card.prompt;
+  return (
+    <div key={`chat-${prompt.seq}`} className="orch-chat" data-node="orch/chat">
+      <div className="orch-bubble req chat" data-node="orch/chat/prompt">
+        <div className="orch-bubble-meta">
+          {fmtTime(prompt.ts)}
+          {showWho ? ` · ${t("orch.console")}` : ""}
+        </div>
+        <div className="orch-bubble-body">{String(prompt.payload.text ?? "")}</div>
+      </div>
+      <div className="orch-chat-body">
+        {card.body.map((e) => {
+          if (e.kind === "command.progress") {
+            return (
+              <div key={e.seq} className="orch-delta" data-node="orch/chat/delta">
+                ⋯ {String((e.payload as { delta?: unknown }).delta ?? "")}
+              </div>
+            );
+          }
+          if (e.kind === "chat.answer") {
+            const ok = e.payload.ok !== false;
+            const open = expanded.has(e.seq);
+            return (
+              <div
+                key={e.seq}
+                className={`orch-bubble res chat ${ok ? "ok" : "err"}${open ? " open" : ""}`}
+                data-node="orch/chat/answer"
+                title="클릭: 원문 JSON"
+                onClick={() => onToggle(e.seq)}
+              >
+                <div className="orch-bubble-meta">{fmtTime(e.ts)}</div>
+                <div className="orch-bubble-body">{String(e.payload.text ?? "")}</div>
+                {open && <pre className="orch-raw">{JSON.stringify(e.payload, null, 2)}</pre>}
+              </div>
+            );
+          }
+          return renderEntry(e, nameOf, showWho, onToggle, expanded.has(e.seq), t, onZoom, undefined);
+        })}
+      </div>
+      {!card.closed && (
+        <div className="orch-chat-running" data-node="orch/chat/running">
+          <span>⋯ {t("orch.chatRunning")}</span>
+          <button type="button" data-node="orch/chat/stop" onClick={onStop}>
+            {t("orch.stop")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -337,21 +398,40 @@ export function OrchestratorApp() {
   const runCommand = useCallback(async () => {
     const trimmed = cmd.trim();
     if (!trimmed) return;
-    const sp = trimmed.indexOf(" ");
-    const name = sp < 0 ? trimmed : trimmed.slice(0, sp);
-    let params: Record<string, unknown> = {};
-    if (sp >= 0) {
-      try {
-        params = JSON.parse(trimmed.slice(sp + 1)) as Record<string, unknown>;
-      } catch (e) {
-        setResult(`파라미터 JSON 오류: ${String(e)}`);
-        return;
+    // `>` 접두 = raw 명령 직행(기존 콘솔 그대로 — 파워유저·E2E 경로). 기본은 자연어 턴.
+    if (trimmed.startsWith(">")) {
+      const rawCmd = trimmed.slice(1).trim();
+      if (!rawCmd) return;
+      const sp = rawCmd.indexOf(" ");
+      const name = sp < 0 ? rawCmd : rawCmd.slice(0, sp);
+      let params: Record<string, unknown> = {};
+      if (sp >= 0) {
+        try {
+          params = JSON.parse(rawCmd.slice(sp + 1)) as Record<string, unknown>;
+        } catch (e) {
+          setResult(`파라미터 JSON 오류: ${String(e)}`);
+          return;
+        }
       }
+      // 콘솔은 사람의 손 — ui 출처(danger 게이트는 remote 전용). 실행 사실은 계측이 피드에 남긴다.
+      const out = await execute(name, params, { remote: false });
+      setResult(JSON.stringify(out, null, 2));
+      return;
     }
-    // 콘솔은 사람의 손 — ui 출처(danger 게이트는 remote 전용). 실행 사실은 계측이 피드에 남긴다.
-    const out = await execute(name, params, { remote: false });
-    setResult(JSON.stringify(out, null, 2));
-  }, [cmd]);
+    // 자연어 턴 — 진행·답은 피드의 대화 카드가 보여준다(chat.prompt→…→chat.answer).
+    // 레일에서 선택한 프로젝트가 있으면 그 창이 턴의 기본 무대(SOKSAK_WINDOW)가 된다.
+    setCmd("");
+    setResult("");
+    const out = await execute(
+      "orchestrator.ask",
+      { text: trimmed, ...(selected ? { window: selected.window } : {}) },
+      { remote: false },
+    );
+    // 세트가 열리기 전의 거절(BUSY 등)만 결과 상자로 — 세트가 닫힌 오류는 카드가 보여준다.
+    if (!out.ok && (out.code === "BUSY" || out.code === "INVALID_PARAMS")) {
+      setResult(`${out.code}: ${out.message}`);
+    }
+  }, [cmd, selected]);
 
   return (
     <div className="orch-root" data-node="orch">
@@ -435,50 +515,39 @@ export function OrchestratorApp() {
           </h2>
           <div className="orch-feed" data-node="orch/feed" ref={feedRef} onScroll={onFeedScroll}>
             {(() => {
-              // 자기 행위는 항상 보인다 — 콘솔(이 창) 실행은 프로젝트 필터와 무관하게 표시.
+              // 접기는 필터 전 전체 피드에서(feedFold — parentId 정본 + 레거시 휴리스틱).
+              // 세트 가시성 = 부모 기준: 대화 카드(부모 window=main=own)는 어떤 프로젝트를
+              // 선택해도 자식(w-*)까지 완전체로 보인다 — "자기 행위는 항상 보인다"의 세트 확장.
               const own = currentWindowLabel();
+              const items = foldFeed(feed);
               const visible = selected
-                ? feed.filter((e) => e.payload.window === selected.window || e.payload.window === own)
-                : feed;
-              // 진행 델타를 그 명령의 턴에 접합(§2: 버블 = 요청→델타→응답). 매칭 = 같은 창 +
-              // 명령명(플러그인 발행은 짧은 이름) + 실행 시간창. 완료 전(진행 중) 델타는 단독 표시.
-              const matches = (full: string, short: string) =>
-                full === short || full.endsWith(`.${short}`);
-              const consumed = new Set<number>();
-              const deltasFor = new Map<number, ActivityEntry[]>();
-              for (const e of visible) {
-                if (e.kind !== "command.executed") continue;
-                const p = e.payload;
-                const started = Number(p.startedAt ?? 0);
-                const finished = Number(p.finishedAt ?? e.ts);
-                const list = visible.filter(
-                  (d) =>
-                    d.kind === "command.progress" &&
-                    !consumed.has(d.seq) &&
-                    String(d.payload.window ?? "") === String(p.window ?? "") &&
-                    matches(String(p.command ?? ""), String(d.payload.command ?? "")) &&
-                    d.ts >= started - 1500 &&
-                    d.ts <= finished + 1500,
-                );
-                if (list.length) {
-                  deltasFor.set(e.seq, list);
-                  for (const d of list) consumed.add(d.seq);
-                }
-              }
-              return visible
-                .filter((e) => !(e.kind === "command.progress" && consumed.has(e.seq)))
-                .map((e) =>
-                  renderEntry(
-                    e,
-                    nameOf,
-                    selected === null,
-                    toggleExpand,
-                    expanded.has(e.seq),
-                    t,
-                    setZoomSrc,
-                    deltasFor.get(e.seq),
-                  ),
-                );
+                ? items.filter(
+                    (it) => itemWindow(it) === selected.window || itemWindow(it) === own,
+                  )
+                : items;
+              return visible.map((it) =>
+                it.kind === "chat"
+                  ? renderChatCard(
+                      it,
+                      nameOf,
+                      selected === null,
+                      toggleExpand,
+                      expanded,
+                      t,
+                      setZoomSrc,
+                      () => void execute("orchestrator.stop", {}, { remote: false }),
+                    )
+                  : renderEntry(
+                      it.entry,
+                      nameOf,
+                      selected === null,
+                      toggleExpand,
+                      expanded.has(it.entry.seq),
+                      t,
+                      setZoomSrc,
+                      it.deltas,
+                    ),
+              );
             })()}
           </div>
           {unread > 0 && (

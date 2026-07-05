@@ -3912,3 +3912,39 @@ select.dctl {
   opacity: 0.55;
   font-family: var(--mono, monospace);
 }
+
+/* 대화 세트 카드 — 자연어 턴(질문→자식 명령·델타→답변)이 parentId 로 접힌 한 단위.
+   좌측 라인이 세트의 경계를 세운다(자식은 안쪽으로 들여쓰기). */
+.orch-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 9px 0;
+  padding-left: 8px;
+  border-left: 2px solid color-mix(in srgb, var(--acc) 45%, transparent);
+}
+.orch-bubble.req.chat {
+  background: color-mix(in srgb, var(--acc) 14%, transparent);
+  font-weight: 500;
+}
+.orch-chat-body { display: flex; flex-direction: column; gap: 3px; margin-left: 12px; }
+.orch-bubble.res.chat { margin-left: 0; }
+/* 진행 중 표시 + 중지 — 답변(chat.answer)이 닫기 전까지. */
+.orch-chat-running {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+.orch-chat-running button {
+  padding: 1px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.orch-chat-running button:hover { border-color: var(--acc); color: var(--acc); }
