@@ -31,6 +31,9 @@ export interface CommandSpec {
   // 표준 답변(message) 생성 — 성공 결과 data 를 사람이 읽는 한 줄로. 없으면 execute 가 code 를
   // message 로 에코("OK" 등, 변환 없음). docs/MESSAGE-PROTOCOL.md 의 응답 봉투 message 계약.
   summarize?: (data: Record<string, unknown>) => string;
+  // 낭독 문장(귀) 생성 — summarize(눈)와 대칭 seam(§3 귀의 문장 규칙). message 에 경로·식별자가
+  // 실리는 명령이 귀용 문장을 스펙으로 소유한다. 봉투 tts(응답별 동적 오버라이드)가 우선한다.
+  speak?: (data: Record<string, unknown>) => string;
   // 발생 가능한 에러 코드.
   errors?: readonly (CmdErrCode | "INTERNAL" | "TIMEOUT")[];
   // CLI 사용 예시(매뉴얼용).
@@ -381,10 +384,12 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
 
 // 유효 낭독 문장(지시어 스펙 × 리스폰스 스펙) — 활동 엔트리에 실리는 최종 값의 단일 계산점.
 // spec.tts===false → 금지(응답이 켜도 무시) / outcome.tts===false → 이번만 금지 /
-// outcome.tts(문자열) → 그 문장 / 그 외 → message(기본 낭독).
+// outcome.tts(문자열) → 그 문장(응답별 동적) / spec.speak → 스펙 소유 귀 문장(성공만 — 실패는
+// message 가 곧 진단) / 그 외 → message(기본 낭독).
 export function effectiveTts(spec: CommandSpec | undefined, out: CommandOutcome): string | undefined {
   if (spec?.tts === false) return undefined;
   if (out.tts === false) return undefined;
   if (typeof out.tts === "string") return out.tts;
+  if (out.ok && spec?.speak) return spec.speak(out.data ?? {}) || undefined;
   return out.message || undefined;
 }

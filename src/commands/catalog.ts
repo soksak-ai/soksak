@@ -1801,6 +1801,8 @@ export function registerCatalog(): void {
     returns:
       "{ saved, media:{kind,path} } (file mode) | { media:{kind:'image/png',base64} } (base64/rect mode)",
     summarize: (d) => (d.saved ? `저장했습니다: ${String(d.saved)}` : "화면을 캡처했습니다"),
+    // 귀의 문장(§3) — 경로는 message(눈)에만. summarize 와 나란한 스펙 소유.
+    speak: (d) => (d.saved ? "화면을 저장했어요." : "화면을 캡처했어요."),
     errors: ["INVALID_PARAMS"],
     examples: [
       "sok window.snapshot",
@@ -1845,8 +1847,7 @@ export function registerCatalog(): void {
         path,
       });
       // 파일 캡처도 media 로 선언 — 피드가 경로를 읽어 이미지로 렌더한다(경로 텍스트만 보이지 않게).
-      // 봉투 tts: 경로는 눈의 정보(message·클릭·복사) — 귀에는 싣지 않는다(§3 낭독 문장 규칙).
-      return { saved, media: { kind: "image/png", path: saved }, tts: "화면을 저장했어요." };
+      return { saved, media: { kind: "image/png", path: saved } };
     },
   });
 

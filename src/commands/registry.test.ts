@@ -94,6 +94,12 @@ describe("tts 스펙 — 유효 낭독 문장(지시어×리스폰스)", () => {
   it("outcome.tts 문자열 = message 대신 그 문장", () => {
     expect(effectiveTts(spec(true), out("완료", "석 줄 요약"))).toBe("석 줄 요약");
   });
+  it("spec.speak = 귀의 문장(§3) — 경로 실린 message 대신 스펙 소유 문장, 봉투 tts 가 우선", () => {
+    const withSpeak = { ...spec(), speak: () => "화면을 저장했어요." } as CommandSpec;
+    expect(effectiveTts(withSpeak, out("저장했습니다: /tmp/a.png"))).toBe("화면을 저장했어요.");
+    expect(effectiveTts(withSpeak, out("저장했습니다: /tmp/a.png", "이번만 이 문장"))).toBe("이번만 이 문장");
+    expect(effectiveTts(withSpeak, { ok: false, code: "INTERNAL", message: "실패 진단" } as Parameters<typeof effectiveTts>[1])).toBe("실패 진단");
+  });
   it("execute 계측(trace)에 유효 tts 가 실린다 — 기본 message, spec:false 는 부재", async () => {
     const traces: CommandTrace[] = [];
     setCommandTraceSink((t) => traces.push(t));
