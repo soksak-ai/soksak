@@ -74,7 +74,22 @@ export interface PluginCommandSpec {
   /** 계측 스펙(MESSAGE-PROTOCOL §4) — false=실행이 활동 트레이스에서 제외. 관찰의 부산물로
    *  스트림을 늘리는 명령(say 류)만 선언. */
   trace?: false;
-  handler: (params: Record<string, unknown>) => Promise<object> | object;
+  /** inv = 이 호출의 실행 컨텍스트(§5 상속) — 중첩 명령 실행은 반드시 inv.execute 로:
+   *  부모의 유래(origin)·상관(parentId)이 자식에 계승된다. */
+  handler: (
+    params: Record<string, unknown>,
+    inv?: PluginInvocation,
+  ) => Promise<object> | object;
+}
+
+/** 명령 핸들러에 주입되는 호출 컨텍스트 — 중첩 실행의 유래·상관 상속 통로(MESSAGE-PROTOCOL §5). */
+export interface PluginInvocation {
+  origin?: string;
+  parent?: string;
+  execute: (
+    name: string,
+    params?: Record<string, unknown>,
+  ) => Promise<{ ok: boolean; code: string; message: string; data?: Record<string, unknown> }>;
 }
 
 /** data.watch 가 받는 변경 페이로드. coll/scope/id 는 연산에 따라 null. */
