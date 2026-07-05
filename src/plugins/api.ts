@@ -129,6 +129,9 @@ export interface PluginCommandSpec {
   /** 낭독 스펙(MESSAGE-PROTOCOL 낭독 항) — 생략=true(실행 기록이 낭독 대상). false=절대 낭독
    *  금지: 낭독을 수행하는 명령(say 류)만 선언(무한 전파의 유일한 차단점). */
   tts?: boolean;
+  /** 계측 스펙(MESSAGE-PROTOCOL §4) — false=실행이 활동 트레이스에서 제외. 관찰의 부산물로
+   *  스트림을 늘리는 명령(say 류 — 낭독 1회당 실행 기록 1개가 쌓인다)만 선언. */
+  trace?: false;
   handler: (params: Record<string, unknown>) => Promise<object> | object;
 }
 
@@ -1143,6 +1146,7 @@ export function buildPluginApi(
               examples: spec.examples,
               summarize: spec.summarize, // 표준 답변(message) — execute 정규화가 주입
               tts: spec.tts, // 낭독 스펙(MESSAGE-PROTOCOL) — false=낭독 명령의 되먹임 차단
+              trace: spec.trace, // 계측 스펙(§4) — false=관찰 부산물 명령의 기록 제외
               danger, // 매니페스트 권위(없으면 런타임 fallback — 게이트 보존)
               // registry.execute 가 try/catch 로 INTERNAL 변환(§0-4).
               handler: (params) => spec.handler(params),

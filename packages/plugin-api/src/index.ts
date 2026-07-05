@@ -68,6 +68,12 @@ export interface PluginCommandSpec {
   /** 표준 답변(MESSAGE-PROTOCOL §3) — 성공 data 를 사람이 읽는 한 줄 message 로. 미제공이면
    *  code 에코("OK")로 열화하고 로더가 경고한다. */
   summarize?: (data: Record<string, unknown>) => string;
+  /** 낭독 스펙(MESSAGE-PROTOCOL 낭독 항) — 생략=true(실행 기록이 낭독 대상). false=절대 낭독
+   *  금지: 낭독을 수행하는 명령(say 류)만 선언(무한 전파의 유일한 차단점). */
+  tts?: boolean;
+  /** 계측 스펙(MESSAGE-PROTOCOL §4) — false=실행이 활동 트레이스에서 제외. 관찰의 부산물로
+   *  스트림을 늘리는 명령(say 류)만 선언. */
+  trace?: false;
   handler: (params: Record<string, unknown>) => Promise<object> | object;
 }
 

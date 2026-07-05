@@ -49,6 +49,9 @@ interface SettingsState {
   // 오케스트레이터 자연어 콘솔이 스폰하는 에이전트 CLI(로그인셸 PATH 에서 해소). 기본 claude —
   // E2E 는 각본 스텁 경로를 넣어 결정적으로 검증한다(orchestrator/agent.ts).
   orchestratorAgent: string;
+  // 에이전트 모델(--model). 명령 라우팅 턴은 왕복이 잦아 빠른 모델이 체감을 지배 — 기본 haiku.
+  // "" = 에이전트 CLI 의 기본 모델.
+  orchestratorModel: string;
   setLanguage: (l: Language) => void;
   setProjectTabPosition: (p: TabPosition) => void;
   setContentTabPosition: (p: TabPosition) => void;
@@ -64,6 +67,7 @@ interface SettingsState {
   setAppFontFamily: (v: string) => void;
   setAppFontSize: (v: number) => void;
   setOrchestratorAgent: (v: string) => void;
+  setOrchestratorModel: (v: string) => void;
 }
 
 const DEFAULTS = {
@@ -83,6 +87,7 @@ const DEFAULTS = {
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
   appFontSize: 13,
   orchestratorAgent: "claude",
+  orchestratorModel: "haiku",
 };
 
 const KEY = "soksak.settings";
@@ -107,6 +112,7 @@ function serialize(s: SettingsState): PersistedSettings {
     appFontFamily: s.appFontFamily,
     appFontSize: s.appFontSize,
     orchestratorAgent: s.orchestratorAgent,
+    orchestratorModel: s.orchestratorModel,
   };
 }
 
@@ -189,6 +195,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     },
     setOrchestratorAgent: (orchestratorAgent) => {
       set({ orchestratorAgent });
+      save();
+    },
+    setOrchestratorModel: (orchestratorModel) => {
+      set({ orchestratorModel });
       save();
     },
   };

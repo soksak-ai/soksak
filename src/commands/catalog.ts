@@ -1444,6 +1444,7 @@ export function registerCatalog(): void {
     "appFontFamily",
     "appFontSize",
     "orchestratorAgent",
+    "orchestratorModel",
   ] as const;
 
   register("settings.get", {
@@ -1463,6 +1464,7 @@ export function registerCatalog(): void {
         appFontFamily: s.appFontFamily,
         appFontSize: s.appFontSize,
         orchestratorAgent: s.orchestratorAgent,
+        orchestratorModel: s.orchestratorModel,
         // 선택 가능한 아이콘 셋 목록(내장 + 활성 플러그인 등록분).
         iconSets: Object.values(useIconRegistry.getState().sets).map((x) => ({
           id: x.id,
@@ -1487,7 +1489,7 @@ export function registerCatalog(): void {
       value: {
         type: "json",
         description:
-          "Value — language:ko|en, projectTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, appFontFamily:string (CSS font-family stack), appFontSize:number (6-40), orchestratorAgent:string (agent CLI command or path the natural-language console spawns)",
+          "Value — language:ko|en, projectTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, appFontFamily:string (CSS font-family stack), appFontSize:number (6-40), orchestratorAgent:string (agent CLI command or path the natural-language console spawns), orchestratorModel:string (--model alias for the agent; empty = CLI default)",
         required: true,
       },
     },
@@ -1542,6 +1544,10 @@ export function registerCatalog(): void {
           if (typeof v !== "string" || !v.trim())
             return bad("string(에이전트 CLI 명령 또는 경로)");
           s.setOrchestratorAgent(v.trim());
+          break;
+        case "orchestratorModel":
+          if (typeof v !== "string") return bad('string(모델 별칭 — "" = CLI 기본)');
+          s.setOrchestratorModel(v.trim());
           break;
       }
       return { key, value: v };

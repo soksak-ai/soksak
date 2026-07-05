@@ -14,7 +14,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../state/settings";
 import { publishActivity } from "../state/activityFeed";
 import { AgentStreamParser } from "./agentStream";
-import type { CommandOutcome } from "../commands/registry";
+import { execute, type CommandOutcome } from "../commands/registry";
 
 // 대화 연속성(--resume)·리로드 고아 기록 — 같은 앱 실행 안에서만 유효해야 하므로 sessionStorage
 // (window.reload 생존, 앱 재시작 시 소멸 — 재시작이면 process id 공간이 새것이라 기록이 무효).
@@ -93,24 +93,64 @@ async function runCapture(shellCmd: string, env?: Record<string, string>): Promi
   return out;
 }
 
-// system prompt — 역할·행동 규칙 + soksak-control 가르침 원문(sok skill print, 라이브 단일진실).
-// --setting-sources "" 헤드리스에선 스킬 자동로드가 없으므로 프롬프트에 직접 싣는 것이 정공법.
-// sokPath = sok 실행 절대경로(있으면) — 에이전트 Bash 의 PATH 는 신뢰 불가(실측: 자체 재구성).
-function buildSystemPrompt(skillDoc: string, sokPath: string, stageWindow?: string): string {
+// sok commands 응답(JSON 봉투)을 프롬프트용 한 줄 카탈로그로 압축(순수).
+// 발견 왕복 제거가 목적(실측: 카탈로그 없인 --help→commands→필터 Bash 6회에 30초+).
+export function compactCatalog(raw: string): string {
+  try {
+    const d = JSON.parse(raw) as {
+      data?: { commands?: unknown[] };
+      commands?: unknown[];
+    };
+    const cmds = (d.data?.commands ?? d.commands ?? []) as {
+      name?: string;
+      description?: string;
+      params?: Record<string, { required?: boolean }>;
+    }[];
+    return cmds
+      .filter((c) => typeof c.name === "string")
+      .map((c) => {
+        const ps = Object.entries(c.params ?? {})
+          .map(([k, v]) => (v?.required ? `${k}*` : k))
+          .join(", ");
+        const desc = String(c.description ?? "").split(/(?<=\.)\s/)[0].slice(0, 90);
+        return `${c.name}${ps ? ` {${ps}}` : ""} — ${desc}`;
+      })
+      .join("\n");
+  } catch {
+    return ""; // 카탈로그 실패는 발견 워크플로(느린 경로)로 자연 강등 — 턴은 계속된다
+  }
+}
+
+// system prompt — 역할·행동 규칙 + soksak-control 가르침 원문(sok skill print, 라이브 단일진실)
+// + 명령 카탈로그 전량(발견 왕복 제거). --setting-sources "" 헤드리스에선 스킬 자동로드가
+// 없으므로 프롬프트에 직접 싣는 것이 정공법. sokPath = sok 실행 절대경로(있으면) — 에이전트
+// Bash 의 PATH 는 신뢰 불가(실측: 자체 재구성). 가변부(무대)는 맨 뒤 — 앞부분이 턴 간 동일해야
+// 프롬프트 캐시가 탄다(5분 내 재질문 가속).
+function buildSystemPrompt(
+  skillDoc: string,
+  sokPath: string,
+  catalog: string,
+  stageWindow?: string,
+): string {
   const stage = stageWindow
     ? `기본 무대 창이 env SOKSAK_WINDOW=${stageWindow} 로 지정되어 있다 — 창을 생략한 sok 명령은 그 창에서 실행된다.`
-    : `기본 무대 창이 지정되지 않았다 — 먼저 \`${sokPath} window.projects\` 로 열린 창을 파악하고, 창을 다루는 명령은 \`${sokPath} --window <label> <command>\` 로 명시 타겟하라.`;
+    : `기본 무대 창이 지정되지 않았다 — 창을 다루는 명령은 \`${sokPath} window.projects\` 로 창을 찾아 \`${sokPath} --window <label> <command>\` 로 명시 타겟하라.`;
   return [
     "당신은 soksak(터미널 앱) 오케스트레이터의 자연어 콘솔 에이전트다. 사용자의 명령을 sok CLI 로 실행해 완수하고, 결과를 한국어 한두 문장으로 보고한다.",
     "",
     "행동 규칙:",
     `- 이 환경의 sok 실행 파일: \`${sokPath}\` — 아래 문서의 \`sok\` 은 항상 이 경로로 실행한다(예: \`${sokPath} state.tree\`). PATH 의 sok 을 기대하지 마라.`,
     "- 앱 조작은 반드시 단일 sok 명령으로 한다. 파이프·&&·환경변수 프리픽스·다른 프로그램은 권한상 자동 거부된다.",
-    `- ${stage}`,
+    "- 아래 카탈로그에서 명령을 바로 고른다 — 목록 재조회(sok commands) 금지. 파라미터 상세가 필요할 때만 `help <명령>` 1회.",
     "- 명령 응답(JSON 봉투)을 확인한 뒤 보고한다 — 추측 보고 금지.",
     "- 마지막 출력은 사용자에게 하는 답변이다: 간결한 한국어, 식별자(창 label 등) 나열 금지.",
     "",
     skillDoc.trim(),
+    ...(catalog
+      ? ["", "## 명령 카탈로그 (이름 {파라미터, *=필수} — 설명)", catalog]
+      : []),
+    "",
+    stage,
   ].join("\n");
 }
 
@@ -172,8 +212,24 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
       `sok CLI 를 찾지 못해 에이전트를 시작할 수 없어요 (${String(e instanceof Error ? e.message : e).slice(0, 200)})`,
     );
   }
+  // 명령 카탈로그 — 플러그인 명령은 워크스페이스 창에만 로드된다(main 은 컨트롤 플레인):
+  // 무대 창(없으면 첫 워크스페이스 창) 기준으로 전량을 뽑아 프롬프트에 싣는다. 실패 = 빈
+  // 카탈로그(발견 워크플로로 강등) — 턴은 계속된다.
+  const catalogWindow =
+    stageWindow ??
+    (await execute("window.projects", {}, { remote: false, parent: turnId })
+      .then((r) => (r.data as { projects?: { window?: string }[] } | undefined)?.projects?.[0]?.window)
+      .catch(() => undefined));
+  const catalog = compactCatalog(
+    await runCapture(
+      `exec sok ${catalogWindow ? `--window ${catalogWindow} ` : ""}commands`,
+      { ...baseEnv, SOKSAK_PARENT: turnId },
+    ).catch(() => ""),
+  );
 
   const agentBin = useSettings.getState().orchestratorAgent.trim() || "claude";
+  // 명령 라우팅 턴은 왕복이 잦다 — 빠른 모델이 체감을 지배(실측: opus 는 왕복당 4~6초).
+  const agentModel = useSettings.getState().orchestratorModel.trim();
   // sok 은 절대경로로 지시·허용한다 — 에이전트 Bash 의 PATH 는 자체 재구성이라 신뢰 불가(실측).
   // env(SOKSAK_*)는 완전 상속됨(실측) — 상관·소켓 바인딩은 env 로 전달된다.
   const sokPath = cliDir ? `${cliDir}/sok` : "sok";
@@ -200,10 +256,11 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
     "--setting-sources",
     "",
     "--system-prompt",
-    buildSystemPrompt(skillDoc, sokPath, stageWindow),
+    buildSystemPrompt(skillDoc, sokPath, catalog, stageWindow),
     "--allowedTools",
     "Bash(sok:*)",
     ...(cliDir ? [`Bash(${cliDir}/sok:*)`] : []),
+    ...(agentModel ? ["--model", agentModel] : []),
     ...(resume ? ["--resume", resume] : []),
   ];
 
