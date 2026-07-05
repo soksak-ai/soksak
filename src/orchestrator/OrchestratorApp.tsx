@@ -185,7 +185,10 @@ export function OrchestratorApp() {
   const [cmd, setCmd] = useState("");
   const [result, setResult] = useState<string>("");
   const [pinned, setPinned] = useState(false); // 핀 = always-on-top(이 창 로컬, 재열기 시 off)
-  const [selectedWindow, setSelectedWindow] = useState<string | null>(null); // 피드 필터 대상 창
+  // 피드 필터 선택 — 단위는 "프로젝트"(root). 하이라이트도 root 로 매긴다: 한 창이 여러
+  // 프로젝트를 호스트할 수 있어 창 단위 하이라이트는 동시 다중 선택처럼 보인다(버그 리포트).
+  // 피드 이벤트는 window 라벨만 실으므로 필터는 선택 프로젝트의 창으로 수행한다.
+  const [selected, setSelected] = useState<{ root: string; window: string } | null>(null);
   const [unread, setUnread] = useState(0); // 위로 스크롤해 보던 중 도착한 안읽은 항목 수
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set()); // 원문 JSON 펼친 항목(seq)
   const [zoomSrc, setZoomSrc] = useState<string | null>(null); // 이미지 확대(라이트박스)
@@ -367,9 +370,9 @@ export function OrchestratorApp() {
           {/* "전체" = 피드 필터 해제. 필터링 선택이므로 목록에 둔다(피드 우측 배지 대신). */}
           <button
             type="button"
-            className={`orch-proj all${selectedWindow === null ? " selected" : ""}`}
+            className={`orch-proj all${selected === null ? " selected" : ""}`}
             data-node="orch/proj/all"
-            onClick={() => setSelectedWindow(null)}
+            onClick={() => setSelected(null)}
           >
             {t("orch.allProjects")}
           </button>
@@ -379,7 +382,7 @@ export function OrchestratorApp() {
               <div
                 key={p.root}
                 className={`orch-proj${open ? "" : " closed"}${
-                  open && p.window === selectedWindow ? " selected" : ""
+                  selected?.root === p.root ? " selected" : ""
                 }`}
               >
                 {/* 라벨 클릭: 열린 것 = 그 창으로 피드 필터. 안 열린 것은 열지 않는다 —
@@ -389,7 +392,7 @@ export function OrchestratorApp() {
                   className="orch-proj-label"
                   data-node={`orch/proj/${p.name}`}
                   title={p.root}
-                  onClick={() => open && setSelectedWindow(p.window)}
+                  onClick={() => open && p.window && setSelected({ root: p.root, window: p.window })}
                 >
                   {p.name}
                 </button>
@@ -419,17 +422,17 @@ export function OrchestratorApp() {
         <section className="orch-feed-wrap">
           <h2>
             {t("orch.feed")}
-            {selectedWindow && (
+            {selected && (
               <span className="orch-feed-scope">
                 {" — "}
-                {projects.find((p) => p.window === selectedWindow)?.name ?? selectedWindow}
+                {projects.find((p) => p.root === selected.root)?.name ?? selected.window}
               </span>
             )}
           </h2>
           <div className="orch-feed" data-node="orch/feed" ref={feedRef} onScroll={onFeedScroll}>
             {(() => {
-              const visible = selectedWindow
-                ? feed.filter((e) => e.payload.window === selectedWindow)
+              const visible = selected
+                ? feed.filter((e) => e.payload.window === selected.window)
                 : feed;
               // 진행 델타를 그 명령의 턴에 접합(§2: 버블 = 요청→델타→응답). 매칭 = 같은 창 +
               // 명령명(플러그인 발행은 짧은 이름) + 실행 시간창. 완료 전(진행 중) 델타는 단독 표시.
@@ -462,7 +465,7 @@ export function OrchestratorApp() {
                   renderEntry(
                     e,
                     nameOf,
-                    selectedWindow === null,
+                    selected === null,
                     toggleExpand,
                     expanded.has(e.seq),
                     t,
