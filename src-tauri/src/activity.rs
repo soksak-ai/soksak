@@ -6,7 +6,9 @@
 //
 // 구조: Rust 싱글톤 링버퍼(크로스윈도우 단일진실, cap 초과 시 오래된 것 탈락) + 창 무관
 // app.emit("activity") 브로드캐스트 + app.data records(core/activity) 영속(retention trim).
-// seq 는 단조 증가 — since 커서(재접속 백필)의 기준. ts 는 epoch ms.
+// seq 는 단조 증가 — since 커서(재접속 백필)·소비자 읽음 커서(kv 영속)의 기준이므로 앱
+// 재시작을 넘어 단조여야 한다: 부트에서 영속 최댓값으로 재개(resume_from). 런마다 0 재시작이면
+// 영속 커서가 미래를 가리켜 소비자(낭독 등)가 전면 침묵하는 잠복 결함(실측).
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -124,6 +126,14 @@ impl ActivityHub {
         }
     }
 
+    /// seq 재개(부트 1회) — 영속 최댓값 위에서 이어간다(단조 보존, 뒤로는 절대 안 감).
+    pub fn resume_from(&self, last: u64) {
+        let mut g = self.inner.lock().unwrap();
+        if last > g.seq {
+            g.seq = last;
+        }
+    }
+
     /// since(exclusive) 이후 항목 — 재접속 백필 커서. None = 최신 limit 개.
     pub fn recent(&self, since: Option<u64>, limit: usize) -> Vec<Value> {
         let g = self.inner.lock().unwrap();
@@ -170,6 +180,26 @@ pub fn init_collection(conn: &rusqlite::Connection) {
     let _ = crate::data::store::define(conn, NS, COLL, &["kind".into(), "seq".into()], &[]);
 }
 
+/// 부트 1회 — 영속 최댓값에서 seq 재개(재시작을 넘는 단조). 레코드 없음(신선 설치) = 0 유지.
+pub fn resume_seq(app: &AppHandle, conn: &rusqlite::Connection) {
+    let last = crate::data::store::query(
+        conn,
+        NS,
+        COLL,
+        Some(SCOPE),
+        None,
+        Some("seq"),
+        true,
+        Some(1),
+        None,
+        None,
+    )
+    .ok()
+    .and_then(|rows| rows.first().and_then(|e| e.get("seq").and_then(Value::as_u64)))
+    .unwrap_or(0);
+    app.state::<ActivityHub>().resume_from(last);
+}
+
 // 프론트 공급자 진입점 — activityFeed.ts / registry.ts 계측이 invoke.
 #[tauri::command]
 pub fn activity_publish(
@@ -202,6 +232,17 @@ mod tests {
         assert_eq!(g.ring.len(), RING_CAP);
         // 앞이 잘리고 뒤가 남는다(오래된 것 탈락).
         assert_eq!(g.ring.front().unwrap()["seq"].as_u64().unwrap(), 51);
+    }
+
+    #[test]
+    fn resume_keeps_seq_monotonic_across_restart() {
+        let hub = ActivityHub::default();
+        hub.resume_from(500); // 부트: 영속 최댓값에서 재개
+        let e = hub.push("t", "test", json!({}));
+        assert_eq!(e["seq"].as_u64().unwrap(), 501);
+        hub.resume_from(10); // 뒤로는 절대 안 감(단조)
+        let e = hub.push("t", "test", json!({}));
+        assert_eq!(e["seq"].as_u64().unwrap(), 502);
     }
 
     #[test]

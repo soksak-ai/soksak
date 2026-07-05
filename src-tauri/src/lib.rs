@@ -107,6 +107,8 @@ pub fn run() {
                 Ok(conn) => {
                     // 활동 허브 컬렉션(core/activity) 정의 — 발행 즉시 영속 가능(A1).
                     activity::init_collection(&conn);
+                    // seq 를 영속 최댓값에서 재개 — 재시작을 넘는 단조(소비자 읽음 커서 보존).
+                    activity::resume_seq(app.handle(), &conn);
                     app.state::<data::DbState>().set(conn)
                 }
                 Err(e) => eprintln!("[data] DB 열기 실패: {e}"),
