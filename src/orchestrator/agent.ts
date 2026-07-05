@@ -173,8 +173,11 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
 
   const agentBin = useSettings.getState().orchestratorAgent.trim() || "claude";
   const sessionId = nsGet(SESSION_KEY);
+  // 프롬프트는 -p 바로 뒤(위치 인자) — --allowedTools 는 가변(<tools...>)이라 그 뒤에 두면
+  // 프롬프트를 도구명으로 삼킨다(실측: "Input must be provided" 즉사).
   const args = [
     "-p",
+    text,
     "--output-format",
     "stream-json",
     "--include-partial-messages",
@@ -186,7 +189,6 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
     "--allowedTools",
     "Bash(sok:*)",
     ...(sessionId ? ["--resume", sessionId] : []),
-    text,
   ];
   const env: Record<string, string> = {
     ...baseEnv,
