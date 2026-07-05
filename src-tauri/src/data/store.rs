@@ -623,8 +623,14 @@ fn bind_val(v: &Value) -> Box<dyn ToSql> {
 }
 
 // 필드 → SQL 컬럼식. created/updated 는 실제 컬럼, 그 외는 json_extract. 필드는 검증·선언 확인됨.
+// 내장 필드 = 레코드 컬럼 직행(선언 불요): id 는 PK, created/updated 는 타임스탬프 컬럼.
+// 그 외는 json 필드 — 선언 인덱스가 있어야 조회·정렬 가능(전면 스캔 차단).
+fn is_builtin_field(field: &str) -> bool {
+    field == "id" || field == "created" || field == "updated"
+}
+
 fn field_expr(field: &str) -> String {
-    if field == "created" || field == "updated" {
+    if is_builtin_field(field) {
         field.to_string()
     } else {
         format!("json_extract(doc, '$.{field}')")
@@ -643,8 +649,7 @@ fn build_where(
     let mut clauses = Vec::new();
     for (field, cond) in map {
         validate_field(field)?;
-        let is_builtin = field == "created" || field == "updated";
-        if !is_builtin && !allowed.iter().any(|a| a == field) {
+        if !is_builtin_field(field) && !allowed.iter().any(|a| a == field) {
             return Err(format!("필드가 인덱스로 선언되지 않음: {field}"));
         }
         let expr = field_expr(field);
@@ -738,8 +743,7 @@ pub fn query(
     // ORDER BY — created/updated 또는 선언 인덱스 필드. 기본 updated DESC.
     let order_field = order.unwrap_or("updated");
     validate_field(order_field)?;
-    if order_field != "created" && order_field != "updated" && !allowed.iter().any(|a| a == order_field)
-    {
+    if !is_builtin_field(order_field) && !allowed.iter().any(|a| a == order_field) {
         return Err(format!("정렬 필드가 인덱스로 선언되지 않음: {order_field}"));
     }
     sql.push_str(&format!(
@@ -888,6 +892,21 @@ mod tests {
         conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
         super::super::init_base(&conn).unwrap();
         conn
+    }
+
+    // id 는 내장 필드(PK) — 인덱스 선언 없이 where/order 가능(콘텐츠 주소 조회의 정본 경로).
+    #[test]
+    fn id_is_builtin_for_where_and_order() {
+        let c = mem();
+        define(&c, "kanban", "prompts", &[], &[]).unwrap();
+        put(&c, "kanban", "prompts", "app", Some("hash-a".into()), &json!({"value":"A"})).unwrap();
+        put(&c, "kanban", "prompts", "app", Some("hash-b".into()), &json!({"value":"B"})).unwrap();
+        let rows = query(
+            &c, "kanban", "prompts", Some("app"),
+            Some(&json!({"id": "hash-a"})), Some("id"), false, None, None, None,
+        ).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].get("value").and_then(Value::as_str), Some("A"));
     }
 
     // [단계②] put 봉인 경로 — scope 에 active key 등록 후 put 하면 doc 컬럼이 봉인되고(enc=1),
