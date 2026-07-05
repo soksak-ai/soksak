@@ -1845,7 +1845,8 @@ export function registerCatalog(): void {
         path,
       });
       // 파일 캡처도 media 로 선언 — 피드가 경로를 읽어 이미지로 렌더한다(경로 텍스트만 보이지 않게).
-      return { saved, media: { kind: "image/png", path: saved } };
+      // 봉투 tts: 경로는 눈의 정보(message·클릭·복사) — 귀에는 싣지 않는다(§3 낭독 문장 규칙).
+      return { saved, media: { kind: "image/png", path: saved }, tts: "화면을 저장했어요." };
     },
   });
 

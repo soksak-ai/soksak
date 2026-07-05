@@ -51,6 +51,7 @@ Every command execution is narration material by default: activity-log consumers
 - `CommandSpec.tts` — omitted = `true` (default: this command's executions are read; sentence = `message`). `false` = **never read, no matter what the response says**. Only commands that themselves perform narration (`say`-style) declare `false`; this is the single cut point that prevents infinite propagation (narration → activity entry → narration …).
 - envelope `tts` — a string replaces `message` as the spoken sentence for this response; `false` mutes this one response.
 - Consumers do not invent their own read/skip rules: an entry with `payload.tts` is read (in arrival order, no skipping), an entry without it is silent. `turn.ended` (AI utterances) never carries `tts`.
+- **The spoken-sentence rule**: narration never carries paths or identifiers (window labels, hashes, URLs) — those are for the eye (`message`). A command whose `message` contains them declares a separate ear-facing sentence via the envelope `tts` string (e.g. `window.snapshot` — message carries the saved path, tts says "saved the screen"). message (display) and tts (narration) are already separate axes; no new axis is introduced.
 
 ### Display media (optional)
 
