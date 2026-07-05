@@ -169,6 +169,9 @@ pub fn process_spawn(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // 앱 주입 컨텍스트(A17) — 플러그인 자식이 identity 홈을 파생할 유일한 상시 경로. PTY 의
+    // SOKSAK_SOCKET 주입과 같은 계열(소스주입 env 아님 — 앱이 자기 단일진실을 자식에 전파).
+    c.env("SOKSAK_HOME", crate::home::soksak_home());
     if let Some(cwd) = cwd {
         c.current_dir(cwd);
     }
@@ -302,6 +305,20 @@ mod tests {
 
     fn map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    // 앱 주입 컨텍스트(A17) — process_spawn 과 동일 구성으로 자식이 SOKSAK_HOME 을 실제 수신하는지.
+    // 플러그인 자식(사이드카 spawn 랩)이 identity 홈을 파생할 유일한 상시 경로의 실증.
+    #[test]
+    fn soksak_home_injected_into_child() {
+        let mut c = Command::new("/bin/sh");
+        c.args(["-c", "printf %s \"$SOKSAK_HOME\""]);
+        c.env("SOKSAK_HOME", crate::home::soksak_home());
+        let out = c.output().expect("spawn sh");
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout),
+            crate::home::soksak_home().to_string_lossy()
+        );
     }
 
     // resolve_secret_env + 실제 spawn — secret_env{SOKSAK_SECRET_0:apiKey} 를 자식 env 로 주입하고
