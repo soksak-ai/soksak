@@ -20,7 +20,7 @@ Long-running commands surface *what they are doing* as they do it — the textde
 { kind: "command.progress", command, seq, ts, delta }
 ```
 
-`delta` is a human-readable line or a structured fragment, published to the activity hub. Sources: ① sidecar events (the engine `event` channel; the service NDJSON `ev` stream) — **the consuming plugin translates them into standard progress and publishes** (the core stays a blind relay, honoring A14); ② terminal output; ③ AI thinking/stream. Single-shot commands emit none.
+`delta` carries the salient content only (a URL, a node title) with no frame word — the feed renders it as `<command>: <delta>`, so the command name gives the context and the delta needs no translation (P0). It is published to the activity hub. Sources: ① sidecar events (the engine `event` channel; the service NDJSON `ev` stream) — **the consuming plugin translates them into standard progress and publishes** (the core stays a blind relay, honoring A14); ② terminal output; ③ AI thinking/stream. Single-shot commands emit none.
 
 Deltas fold into their turn on two layers: with `payload.parentId` they attach by **exact correlation** (§4); without it, the consumer (the feed) folds by the window + command name + execution time-window heuristic — backward compatibility for the id-less world (plugin `events.progress`).
 

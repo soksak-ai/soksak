@@ -20,7 +20,7 @@ AI·원격 클라이언트가 1급 소비자다 — 그래서 모든 명령이 �
 { kind: "command.progress", command, seq, ts, delta }
 ```
 
-`delta`는 사람이 읽는 한 줄 또는 구조화 조각으로 활동 허브에 publish된다. 출처: ① 사이드카 이벤트(engine `event` 채널·service NDJSON `ev` 스트림) — **소비 플러그인이 표준 progress로 변환해 publish**(코어는 blind relay 유지, A14 준수); ② 터미널 출력; ③ AI thinking/stream. 단발 명령은 델타를 안 낸다.
+`delta`는 핵심 내용(URL·노드 제목)만 싣고 프레임 단어는 두지 않는다 — 피드가 `<명령>: <delta>`로 렌더하므로 명령명이 문맥을 주고 델타는 번역이 필요 없다(P0). 활동 허브에 publish된다. 출처: ① 사이드카 이벤트(engine `event` 채널·service NDJSON `ev` 스트림) — **소비 플러그인이 표준 progress로 변환해 publish**(코어는 blind relay 유지, A14 준수); ② 터미널 출력; ③ AI thinking/stream. 단발 명령은 델타를 안 낸다.
 
 델타의 턴 접합은 두 층이다: `payload.parentId`가 있으면 **정확 상관**(§4)으로 그 세트에 접히고, 없으면 소비자(피드)가 같은 창+명령명+실행 시간창 휴리스틱으로 접는다 — 상관 id 없는 세계(플러그인 `events.progress`)의 후방 호환.
 
