@@ -12,7 +12,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, LazyLock, Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -272,13 +272,65 @@ fn native_reload(app: &AppHandle, label: &str) -> bool {
 
 // 요청을 *타겟 창의* 프론트 registry 로 전달하고 응답을 기다린다. 타겟 = req.window ?? 활성 창 ??
 // "main". broadcast(app.emit) 가 아니라 emit_to(타겟)이라 멀티 윈도우에서 그 창만 응답 → seq 충돌 0.
+// 라우팅 계층의 실행 기록(§5 R2) — 창 라우팅에서 끝난 명령(WINDOW_NOT_FOUND·전달 실패·TIMEOUT·
+// 네이티브 reload)은 executor(창 JS)의 registry 계측에 도달하지 못해 활동 기록이 없는 사각지대였다
+// (실측: 닫힌 창으로 보낸 명령들이 무기록 — 관찰 공백). 여기서 동일 계약(command.executed)으로
+// 발행한다. 낭독 규칙도 registry 와 동일: 사람 유래(무 origin)만 message 를 낭독 후보로 싣는다.
+#[allow(clippy::too_many_arguments)]
+fn record_route_outcome(
+    app: &AppHandle,
+    method: &str,
+    params: &Value,
+    target: &str,
+    parent: &Option<String>,
+    origin: &Option<String>,
+    ok: bool,
+    code: &str,
+    message: &str,
+    started_ms: u64,
+) {
+    let finished = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(started_ms);
+    let param_keys: Vec<String> = params
+        .as_object()
+        .map(|o| o.keys().cloned().collect())
+        .unwrap_or_default();
+    let mut payload = serde_json::json!({
+        "command": method,
+        "ok": ok,
+        "code": code,
+        "message": message,
+        "paramKeys": param_keys,
+        "durationMs": finished.saturating_sub(started_ms),
+        "startedAt": started_ms,
+        "finishedAt": finished,
+        "window": target,
+    });
+    if let Some(pv) = parent {
+        payload["parentId"] = serde_json::json!(pv);
+    }
+    match origin {
+        Some(o) => payload["origin"] = serde_json::json!(o),
+        None => payload["tts"] = serde_json::json!(message),
+    }
+    crate::activity::publish(app, "command.executed", "remote", payload);
+}
+
 fn route(app: &AppHandle, req: Request) -> Value {
+    let started_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
     let target = req.window.clone().unwrap_or_else(active_window);
     // get_window(Window 레지스트리) — 브라우저 child 를 연 창은 멀티-webview 라 get_webview_window
     // (단일-webview 전용)에서 빠진다. 그걸 쓰면 브라우저 연 창의 모든 소켓 명령이 WINDOW_NOT_FOUND.
     // emit_to(label)은 멀티-webview 여도 그 창 메인 webview 로 도달하므로 라우팅은 정상.
     if app.get_window(&target).is_none() {
-        return error_reply("WINDOW_NOT_FOUND", &format!("창을 찾을 수 없음: {target}"));
+        let message = format!("창을 찾을 수 없음: {target}");
+        record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "WINDOW_NOT_FOUND", &message, started_ms);
+        return error_reply("WINDOW_NOT_FOUND", &message);
     }
 
     // window.reload 는 네이티브로 처리한다(프론트 registry 미경유). 모든 일반 명령은 emit_to 로
@@ -286,9 +338,12 @@ fn route(app: &AppHandle, req: Request) -> Value {
     // 수단이 사라진다. 네이티브 WKWebView.reload 는 JS 상태와 무관하게 동작 → 행에서도 리로드 가능.
     if req.method == "window.reload" {
         return if native_reload(app, &target) {
+            record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, true, "OK", "창을 다시 불러왔습니다", started_ms);
             json!({ "ok": true, "reloaded": true })
         } else {
-            error_reply("INTERNAL", &format!("네이티브 webview 리로드 실패: {target}"))
+            let message = format!("네이티브 webview 리로드 실패: {target}");
+            record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "INTERNAL", &message, started_ms);
+            error_reply("INTERNAL", &message)
         };
     }
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
@@ -307,6 +362,7 @@ fn route(app: &AppHandle, req: Request) -> Value {
     });
     if app.emit_to(&target, "cmd-request", payload).is_err() {
         bridge.pending.lock().unwrap().remove(&seq);
+        record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "INTERNAL", "프론트로 요청 전달 실패", started_ms);
         return error_reply("INTERNAL", "프론트로 요청 전달 실패");
     }
 
@@ -316,7 +372,12 @@ fn route(app: &AppHandle, req: Request) -> Value {
     bridge.pending.lock().unwrap().remove(&seq);
     match result {
         Ok(v) => v,
-        Err(_) => error_reply("TIMEOUT", "응답 시간 초과(앱 UI 미응답?)"),
+        Err(_) => {
+            // 호출자 관점의 사실(응답을 못 받았다) — executor 가 늦게 완주하면 그 실행 기록이
+            // 별도로 남는다(둘 다 사실 — code=TIMEOUT 이 구분자).
+            record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "TIMEOUT", "응답 시간 초과(앱 UI 미응답?)", started_ms);
+            error_reply("TIMEOUT", "응답 시간 초과(앱 UI 미응답?)")
+        }
     }
 }
 
