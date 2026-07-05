@@ -4,6 +4,7 @@
 // 변경 감시(clipboard-change emit)는 플러그인이 app.clipboard.onChange 로 구독 — 명령 표면이 아니다(스트림).
 
 import { invoke } from "@tauri-apps/api/core";
+import { tmsg } from "../i18n";
 import { register } from "./registry";
 
 export function registerClipboardCatalog(): void {
@@ -12,6 +13,7 @@ export function registerClipboardCatalog(): void {
     triggers: { ko: "클립보드 읽기 복사내용 붙여넣기확인" },
     params: {},
     returns: "{ text }",
+    message: (d) => tmsg("msg.clipboard.read", { n: String(d.text ?? "").length }),
     errors: ["INTERNAL"],
     examples: ["sok clipboard.read"],
     handler: async () => {
@@ -27,6 +29,7 @@ export function registerClipboardCatalog(): void {
       text: { type: "string", description: "Text to place in the clipboard", required: true },
     },
     returns: "{ ok }",
+    message: () => tmsg("msg.clipboard.write"),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok clipboard.write \'{"text":"복사할 내용"}\''],

@@ -5,6 +5,7 @@
 // 안전: 표현층 큐에 mock 요청을 **넣기만** 한다 — Rust 권위(remote::confirm)를 건드리지 않는다(폰
 // 우회 경로 아님 — 데스크톱 dev 빌드에서만 도달). danger:"inject" 로 분류해 원격 정책 게이트도 거친다.
 import { register } from "./registry";
+import { tmsg } from "../i18n";
 import { useRemoteConfirm } from "../state/remoteConfirm";
 
 let nextMockId = 900000; // Rust request_id(1부터)와 안 겹치는 높은 대역 — mock 임이 분명.
@@ -36,6 +37,7 @@ export function registerRemoteConfirmDevCatalog(): void {
       },
     },
     returns: "{ request_id }",
+    message: (d) => tmsg("msg.dev.remoteConfirmMock", { id: Number(d.request_id) }),
     examples: [
       "sok dev.remoteConfirmMock",
       'sok dev.remoteConfirmMock \'{"command":"terminal.clear","device_id":"Pixel-9"}\'',

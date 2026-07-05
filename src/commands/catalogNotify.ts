@@ -4,6 +4,7 @@
 // 자리를 메운다(코어 deeplink.rs on_open_url).
 
 import { invoke } from "@tauri-apps/api/core";
+import { tmsg } from "../i18n";
 import { register } from "./registry";
 
 export function registerNotifyCatalog(): void {
@@ -16,6 +17,7 @@ export function registerNotifyCatalog(): void {
       body: { type: "string", description: "Notification body text", required: true },
     },
     returns: "{ ok }",
+    message: () => tmsg("msg.notify.show"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok notify.show \'{"title":"배포 완료","body":"prod 배포가 끝났습니다"}\''],
     handler: async (p) => {

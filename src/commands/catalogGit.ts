@@ -2,6 +2,7 @@
 // Registered at the end of registerCatalog() (catalog split — prevents catalog.ts bloat).
 
 import { invoke } from "@tauri-apps/api/core";
+import { tmsg } from "../i18n";
 import { useSessions } from "../state/sessions";
 import { register } from "./registry";
 
@@ -30,6 +31,7 @@ export function registerGitCatalog(): void {
     triggers: { ko: "깃 초기화 저장소 생성 init" },
     params: { path: PATH_PARAM },
     returns: "{ initialized: whether init was performed, path }",
+    message: (d) => d.initialized ? tmsg("msg.git.init.created", { path: String(d.path) }) : tmsg("msg.git.init.exists"),
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
     examples: ['sok git.init \'{"path":"/Users/me/work"}\''],
     handler: async (p) => {
@@ -49,6 +51,7 @@ export function registerGitCatalog(): void {
       skip: { type: "number", description: "Number of commits to skip for pagination" },
     },
     returns: "{ commits: [{hash, short, author, date, subject}] }",
+    message: (d) => tmsg("msg.git.log", { n: ((d.commits as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
     examples: ["sok git.log", 'sok git.log \'{"limit":10,"skip":10}\''],
     handler: async (p) => {
@@ -75,6 +78,7 @@ export function registerGitCatalog(): void {
       path: PATH_PARAM,
     },
     returns: "{ meta, files: [{status, path}], patch }",
+    message: (d) => tmsg("msg.git.show", { n: ((d.files as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
     examples: ['sok git.show \'{"commit":"HEAD"}\''],
     handler: async (p) => {
@@ -99,6 +103,7 @@ export function registerGitCatalog(): void {
       staged: { type: "boolean", description: "Diff the index (staged changes) instead of the working tree", default: false },
     },
     returns: "{ diff: string }",
+    message: (d) => String(d.diff ?? "").trim() ? tmsg("msg.git.diff.changes") : tmsg("msg.git.diff.empty"),
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
     examples: ["sok git.diff", 'sok git.diff \'{"file":"src/main.ts","staged":true}\''],
     handler: async (p) => {

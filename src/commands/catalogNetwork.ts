@@ -5,6 +5,7 @@
 // Webview JS cannot do raw UDP or cross-origin HTTP; the core is the only path. Zero domain lock-in (generic).
 
 import { invoke } from "@tauri-apps/api/core";
+import { tmsg } from "../i18n";
 import { register } from "./registry";
 
 // hex string → byte array. Requires even length + [0-9a-fA-F] only; returns null otherwise (caller emits INVALID_PARAMS).
@@ -55,6 +56,7 @@ export function registerNetworkCatalog(): void {
       broadcast: { type: "boolean", description: "Allow broadcast addresses (255.255.255.255 etc.)" },
     },
     returns: "{ bytesSent }",
+    message: (d) => tmsg("msg.net.udp.send", { n: Number(d.bytesSent) }),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
@@ -95,6 +97,7 @@ export function registerNetworkCatalog(): void {
       maxPackets: { type: "number", description: "Max packets to collect (default 64)" },
     },
     returns: "{ packets: [{ address, port, data(hex), text }] }",
+    message: (d) => tmsg("msg.net.udp.request", { n: ((d.packets as unknown[]) ?? []).length }),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
@@ -148,6 +151,7 @@ export function registerNetworkCatalog(): void {
       },
     },
     returns: "{ status, headers, body }",
+    message: (d) => tmsg("msg.net.http.request", { status: Number(d.status) }),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [

@@ -8,6 +8,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { register } from "./registry";
+import { tmsg } from "../i18n";
 
 const NS_PARAM = {
   type: "string",
@@ -28,6 +29,7 @@ export function registerSecretsCatalog(): void {
     triggers: { ko: "시크릿 볼트 열기 잠금해제 unlock 마스터키" },
     params: { passphrase: { type: "string", description: "Master passphrase for the vault", required: true } },
     returns: "{ ok }",
+    message: () => tmsg("msg.secret.unlock"),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok secret.unlock \'{"passphrase":"correct horse battery staple"}\''],
@@ -45,6 +47,7 @@ export function registerSecretsCatalog(): void {
     triggers: { ko: "시크릿 볼트 잠금 lock 닫기" },
     params: {},
     returns: "{ ok }",
+    message: () => tmsg("msg.secret.lock"),
     errors: ["INTERNAL"],
     examples: ["sok secret.lock"],
     handler: async () => {
@@ -59,6 +62,7 @@ export function registerSecretsCatalog(): void {
     triggers: { ko: "자동잠금 유휴잠금 오토락 잠금시간" },
     params: { ms: { type: "number", description: "Idle timeout in milliseconds; 0 disables auto-lock", required: true } },
     returns: "{ ms }",
+    message: (d) => Number(d.ms) > 0 ? tmsg("msg.secret.autolock.on", { ms: Number(d.ms) }) : tmsg("msg.secret.autolock.off"),
     errors: ["INVALID_PARAMS"],
     examples: ['sok secret.autolock \'{"ms":300000}\''],
     handler: async (p) => {
@@ -76,6 +80,7 @@ export function registerSecretsCatalog(): void {
     triggers: { ko: "시크릿 볼트 상태 백엔드 잠금여부" },
     params: {},
     returns: "{ backend, unlocked }",
+    message: (d) => d.unlocked ? tmsg("msg.secret.backend.unlocked", { backend: String(d.backend) }) : tmsg("msg.secret.backend.locked", { backend: String(d.backend) }),
     errors: ["INTERNAL"],
     examples: ["sok secret.backend"],
     handler: async () => {
@@ -89,6 +94,7 @@ export function registerSecretsCatalog(): void {
     triggers: { ko: "시크릿 저장 설정 키 값 저장 set 보관" },
     params: { ns: NS_PARAM, key: KEY_PARAM, value: { type: "string", description: "Sensitive value to store", required: true } },
     returns: "{ ok }",
+    message: () => tmsg("msg.secret.set"),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok secret.set \'{"ns":"soksak-plugin-acp","key":"anthropicKey","value":"sk-ant-..."}\''],
@@ -106,6 +112,7 @@ export function registerSecretsCatalog(): void {
     triggers: { ko: "시크릿 존재 확인 있는지 has 체크" },
     params: { ns: NS_PARAM, key: KEY_PARAM },
     returns: "{ has }",
+    message: (d) => d.has ? tmsg("msg.secret.has.present") : tmsg("msg.secret.has.absent"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok secret.has \'{"ns":"soksak-plugin-acp","key":"anthropicKey"}\''],
     handler: async (p) => {
@@ -122,6 +129,7 @@ export function registerSecretsCatalog(): void {
     triggers: { ko: "시크릿 목록 키 리스트 조회" },
     params: { ns: NS_PARAM },
     returns: "{ keys: string[] }",
+    message: (d) => tmsg("msg.secret.keys", { n: ((d.keys as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok secret.keys \'{"ns":"soksak-plugin-acp"}\''],
     handler: async (p) => {
@@ -138,6 +146,7 @@ export function registerSecretsCatalog(): void {
     triggers: { ko: "시크릿 삭제 제거 지우기 delete" },
     params: { ns: NS_PARAM, key: KEY_PARAM },
     returns: "{ removed }",
+    message: (d) => d.removed ? tmsg("msg.secret.delete.removed") : tmsg("msg.secret.delete.absent"),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok secret.delete \'{"ns":"soksak-plugin-acp","key":"anthropicKey"}\''],

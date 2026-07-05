@@ -2,6 +2,7 @@
 // red→green 의 실행 단추: sok ui.validate 한 줄이 RED/GREEN 판정이다.
 // (ui.measure 는 catalog.ts 에 — R5 수치 검증. 여기는 §B 계약 전용.)
 
+import { tmsg } from "../i18n";
 import { expectForSelector, validateDom } from "../ui/borderValidate";
 import { register } from "./registry";
 
@@ -17,6 +18,10 @@ export function registerUiCatalog(): void {
       },
     },
     returns: "{ pass, rulesActive, elementsChecked, violations: [{rule, selector, index, edge, expected, actual}] }",
+    message: (d) =>
+      d.pass
+        ? tmsg("msg.ui.validate.pass", { n: Number(d.elementsChecked) })
+        : tmsg("msg.ui.validate.fail", { n: ((d.violations as unknown[]) ?? []).length }),
     examples: ["sok ui.validate", 'sok ui.validate \'{"rule":"status"}\''],
     handler: (p) => ({ ...validateDom(p.rule as string | undefined) }),
   });
@@ -29,6 +34,7 @@ export function registerUiCatalog(): void {
       selector: { type: "string", description: "CSS selector", required: true },
     },
     returns: "{ matchedElements, rules: [{id, active, kind, edges?, seam?, note}] }",
+    message: (d) => tmsg("msg.ui.expect", { n: ((d.rules as unknown[]) ?? []).length }),
     examples: ['sok ui.expect \'{"selector":".egroup-status"}\''],
     handler: (p) => ({ ...expectForSelector(p.selector as string) }),
   });

@@ -6,6 +6,7 @@
 // the caller (plugin) decides which URL + Referer to proxy. Backed by the media_proxy_info core executor.
 
 import { invoke } from "@tauri-apps/api/core";
+import { tmsg } from "../i18n";
 import { register } from "./registry";
 
 interface ProxyInfo {
@@ -35,6 +36,7 @@ export function registerMediaCatalog(): void {
     triggers: { ko: "미디어 프록시 스트리밍 엔드포인트 HLS 재생 Referer CORS" },
     params: {},
     returns: "{ base, port, token }",
+    message: (d) => tmsg("msg.media.proxy.info", { port: Number(d.port) }),
     danger: "inject",
     errors: ["INTERNAL"],
     examples: ["sok media.proxy.info"],
@@ -53,6 +55,7 @@ export function registerMediaCatalog(): void {
       userAgent: { type: "string", description: "User-Agent header to inject (defaults to a browser UA)" },
     },
     returns: "{ url }",
+    message: () => tmsg("msg.media.proxy.stream"),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
@@ -85,6 +88,7 @@ export function registerMediaCatalog(): void {
       userAgent: { type: "string", description: "User-Agent header to inject (defaults to a browser UA)" },
     },
     returns: "{ url }",
+    message: () => tmsg("msg.media.proxy.playlist"),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [

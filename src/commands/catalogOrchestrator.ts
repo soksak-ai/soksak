@@ -4,6 +4,7 @@
 
 import { register } from "./registry";
 import { ask, cleanupOrphanTurn, stop, watchPrepInvalidation } from "../orchestrator/agent";
+import { tmsg } from "../i18n";
 
 export function registerOrchestratorCatalog(): void {
   cleanupOrphanTurn();
@@ -21,7 +22,8 @@ export function registerOrchestratorCatalog(): void {
           "Stage window label for the turn (SOKSAK_WINDOW for the agent — its sok commands default there). Omit = no stage; the agent discovers windows itself.",
       },
     },
-    returns: "{ turnId } — message is the agent's final answer",
+    returns: "{ turnId, answer } — message is the agent's final answer",
+    message: (d) => (d.answer ? String(d.answer) : tmsg("msg.orchestrator.ask")),
     errors: ["INTERNAL", "TIMEOUT"],
     examples: ['sok --window main orchestrator.ask \'{"text":"열린 창을 알려줘","timeoutMs":300000}\''],
     // 세트는 chat.prompt/chat.answer 가 대표한다 — command.executed 중복 기록 제외.
@@ -35,7 +37,8 @@ export function registerOrchestratorCatalog(): void {
     description: "Cancel the in-flight natural-language turn (kills the agent process; the set closes as CANCELLED).",
     triggers: { ko: "중단 멈춰 취소 턴 중지" },
     params: {},
-    returns: "{ ok }",
+    returns: "{ stopped }",
+    message: (d) => (d.stopped ? tmsg("msg.orchestrator.stop.stopped") : tmsg("msg.orchestrator.stop.idle")),
     examples: ["sok --window main orchestrator.stop"],
     speak: () => "", // 침묵 — 세트(chat.prompt/answer)가 이 턴의 표면(§3 speak 룰)
     handler: () => stop(),

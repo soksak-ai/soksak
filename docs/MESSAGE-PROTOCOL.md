@@ -39,7 +39,7 @@ Success and failure share **one shape** — only `data` is optional.
 | `message` | the human-readable one-line **standard answer** (success *and* failure) — the bubble renders this. The command provides it; the core does not guess |
 | `data` | machine payload (optional, **nested** — no flat spread, so it never collides with the reserved envelope keys) |
 
-`message` comes from `CommandSpec.summarize?(data) => string`. When a command has no `summarize`, `execute` echoes the `code` into `message` (`"OK"`) — an echo, not a derived/parsed transformation. `execute` normalizes every handler return (free object or `{ok:false,…}`) into this envelope: reserved keys split off, the rest nests under `data`.
+`message` is **owned by the command** — the required `CommandSpec.message(data) => string`. There is no guessing layer (shape derivation) and no `code`-echo fallback: every command knows its own answer. The sentence is resolved from the keyed i18n table (`msg.<name>`) via `tmsg` in the conversation language — adding a language is one table column (P0). `execute` normalizes each handler return into the envelope: reserved keys split off, the rest nests under `data`, and `message` is `spec.message(data)`.
 
 Success and failure are symmetric because observation is first-class — a successful command still owes the observer a `code` and a `message`.
 
@@ -105,10 +105,11 @@ A sidecar's own wire (engine C-ABI / service stdio / iroh socket) is opaque to t
 ## Enforcement
 
 - **Core `execute`** normalizes handler returns into the envelope, injects `message` from `summarize` (or the `code` echo), and reserves `ok`/`code`/`message`.
-- **The plugin loader** warns at registration when a plugin command provides no `summarize` — the standard answer degrades to the `code` echo. runbook's `ok()/err()` pair is the reference. `PluginCommandSpec.summarize` flows into the core spec, so plugin answers ride the same normalization.
+- **A build gate** (`commandMessages.test.ts`) fails the build when a core command lacks its `msg.<name>` key, and the `en`/`ko` key sets must match (P0 language parity).
+- **The plugin loader** warns at registration when a plugin command provides no `message` — the answer degrades to the command label until the M5 sweep, when the warning becomes rejection.
 
 ## Migration
 
-M1 established the standard: envelope type, `summarize` contract, `command.progress` kind, orchestrator bubble (request→delta→message), docs. M2 filled all core commands. M4 wires sidecar adapters through the plugin API `events.progress(command, delta)` publisher: the workflow plugin translates exec-stage child events (`{ev:add}` lines) into live deltas, and the chromium plugin announces open/navigate loads. M3 (per-plugin `error`→`code`/`message` + `summarize` sweeps) proceeds plugin-by-plugin under the loader warning.
+M1 established the standard: envelope type, the `message` contract, `command.progress` kind, orchestrator bubble (request→delta→message), docs. M2 gave every core command its own `message` (the guessing layer and the `summarize` name are gone) resolved from the keyed i18n table. M4 wires sidecar adapters through the plugin API `events.progress(command, delta)` publisher: the workflow plugin translates exec-stage child events (`{ev:add}` lines) into live deltas, and the chromium plugin announces open/navigate loads. M3 (per-plugin `error`→`code`/`message` + `summarize` sweeps) proceeds plugin-by-plugin under the loader warning.
 
 Reserved-key rule (was: no top-level `id`/`ok`/`code`/`message` in handler data) is now structural — handlers return free data, `execute` nests it under `data`, and the envelope owns the reserved keys.

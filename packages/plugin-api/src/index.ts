@@ -66,7 +66,9 @@ export interface PluginCommandSpec {
   examples?: readonly string[];
   danger?: "destructive" | "inject";
   /** 표준 답변(MESSAGE-PROTOCOL §3) — 성공 data 를 사람이 읽는 한 줄 message 로. 미제공이면
-   *  code 에코("OK")로 열화하고 로더가 경고한다. */
+   *  답이 라벨로 열화하고 로더가 경고한다(M5 에서 필수화). */
+  message?: (data: Record<string, unknown>) => string;
+  /** @deprecated message 로 개명 — 전환기 구명. 새 플러그인은 message 를 쓴다. */
   summarize?: (data: Record<string, unknown>) => string;
   /** 낭독 문장(귀, §3) — 낭독 축은 이것 하나: speak 있으면 speak(outcome), 없으면 message 폴백, ""=침묵. */
   speak?: (out: { ok: boolean; code: string; message: string; data?: Record<string, unknown> }) => string;

@@ -9,6 +9,7 @@ import {
   idleTurnMs,
 } from "../terminal/idleTurnDetector";
 import { register } from "./registry";
+import { tmsg } from "../i18n";
 
 export function registerTurnCatalog(): void {
   register("turn.signal", {
@@ -26,6 +27,7 @@ export function registerTurnCatalog(): void {
       command: { type: "string", description: "Description of the completed task or command (optional, enriches event body)" },
     },
     returns: "{ emitted }",
+    message: () => tmsg("msg.turn.signal"),
     errors: ["INTERNAL"],
     examples: ['sok turn.signal \'{"source":"acp","root":"/Users/me/proj","command":"claude 응답 완료"}\''],
     handler: (p) => {
@@ -50,6 +52,7 @@ export function registerTurnCatalog(): void {
       ms: { type: "number", description: "No-output threshold in ms (default 2000, minimum 250)" },
     },
     returns: "{ enabled, ms }",
+    message: (d) => d.enabled ? tmsg("msg.turn.idleDetection.on", { ms: Number(d.ms) }) : tmsg("msg.turn.idleDetection.off"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok turn.idleDetection \'{"enabled":true,"ms":1500}\''],
     handler: (p) => {

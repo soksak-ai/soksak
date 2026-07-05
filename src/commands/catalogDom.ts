@@ -11,6 +11,7 @@ import { currentWindowLabel } from "../lib/webviewLabels";
 import { parseAddress, isParseError } from "./address";
 import { scanNodes, type ScannedNode } from "../plugins/nodeScan";
 import { register } from "./registry";
+import { tmsg } from "../i18n";
 
 const notExposed = (addr: string) => ({
   ok: false as const,
@@ -58,6 +59,7 @@ export function registerDomCatalog(): void {
     triggers: { ko: "DOM 트리 주소목록 노드목록 ui트리" },
     params: {},
     returns: "{ window, count, nodes: [{ address, nodePath }] }",
+    message: (d) => tmsg("msg.ui.tree", { n: Number(d.count ?? 0) }),
     examples: ["sok ui.tree"],
     handler: () => {
       const nodes = collectExposed().map((n) => ({ address: n.address, nodePath: n.nodePath }));
@@ -73,6 +75,11 @@ export function registerDomCatalog(): void {
       address: { type: "string", description: "Exposed node address from ui.tree", required: true },
     },
     returns: "{ address, rect:{x,y,w,h}, style }",
+    message: (d) =>
+      tmsg("msg.ui.measure", {
+        w: Number((d.rect as { w?: number })?.w ?? 0),
+        h: Number((d.rect as { h?: number })?.h ?? 0),
+      }),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
     examples: ['sok ui.measure \'{"address":"content/view/soksak-plugin-acp-studio.studio/node/send"}\''],
     handler: (p) => {
@@ -116,6 +123,12 @@ export function registerDomCatalog(): void {
       },
     },
     returns: "{ address, rect:{x,y,w,h}, dpr }",
+    message: (d) =>
+      tmsg("msg.ui.slot", {
+        w: Number((d.rect as { w?: number })?.w ?? 0),
+        h: Number((d.rect as { h?: number })?.h ?? 0),
+        dpr: Number(d.dpr ?? 1),
+      }),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
     examples: ['sok ui.slot \'{"address":"win/main/content/view/soksak-plugin-browser-native.content"}\''],
     handler: (p) => {
@@ -156,6 +169,7 @@ export function registerDomCatalog(): void {
       address: { type: "string", description: "Exposed node address from ui.tree", required: true },
     },
     returns: "{ clicked, address }",
+    message: () => tmsg("msg.ui.input.click"),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
     danger: "inject",
     examples: ['sok ui.input.click \'{"address":"win/main/chrome/modal/consent/agree"}\''],
@@ -185,6 +199,7 @@ export function registerDomCatalog(): void {
       address: { type: "string", description: "Exposed node address from ui.tree", required: true },
     },
     returns: "{ dblclicked, address }",
+    message: () => tmsg("msg.ui.input.dblclick"),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
     danger: "inject",
     examples: ['sok ui.input.dblclick \'{"address":"win/main/chrome/tab/left/a.x"}\''],
@@ -216,6 +231,7 @@ export function registerDomCatalog(): void {
       value: { type: "string", description: "Value to set into the field", required: true },
     },
     returns: "{ filled, address }",
+    message: () => tmsg("msg.ui.input.fill"),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
     danger: "inject",
     examples: [
@@ -258,6 +274,7 @@ export function registerDomCatalog(): void {
       dy: { type: "number", description: "Vertical drag distance in CSS px from `from` center (mode 2).", required: false },
     },
     returns: "{ dragged, from, to?, zone?, dx?, dy? }",
+    message: (d) => (d.dragged ? tmsg("msg.ui.input.drag.dragged") : tmsg("msg.ui.input.drag.tap")),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
     danger: "inject",
     examples: [
@@ -312,6 +329,7 @@ export function registerDomCatalog(): void {
       y: { type: "number", description: "viewport y", required: true },
     },
     returns: "{ tag, className, data, rect } | { tag: null }",
+    message: (d) => (d.tag ? tmsg("msg.ui.hit.found", { tag: String(d.tag) }) : tmsg("msg.ui.hit.none")),
     handler: (p) => {
       const el = document.elementFromPoint(Number(p.x), Number(p.y));
       if (!(el instanceof Element)) return { tag: null };
@@ -341,6 +359,7 @@ export function registerDomCatalog(): void {
       y: { type: "number", description: "viewport y", required: true },
     },
     returns: "{ ok, kind }",
+    message: (d) => tmsg("msg.webview.emitNative", { kind: String(d.kind) }),
     handler: async (p) => {
       await invoke("webview_emit_native", { kind: p.kind, x: p.x, y: p.y });
       return { ok: true, kind: p.kind };

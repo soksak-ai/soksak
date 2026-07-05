@@ -3,6 +3,7 @@
 // 은 후속 — 지금은 순수 식별(commandLine 이 에이전트인가 / 세션 파일의 sessionId·cwd)만 노출한다.
 
 import { invoke } from "@tauri-apps/api/core";
+import { tmsg } from "../i18n";
 import { register } from "./registry";
 
 export function registerAiSessionCatalog(): void {
@@ -12,6 +13,7 @@ export function registerAiSessionCatalog(): void {
     triggers: { ko: "에이전트탐지 세션탐지 ai탐지" },
     params: { command: { type: "string", description: "The shell command line to classify", required: true } },
     returns: "{ kind }",
+    message: (d) => (d.kind ? tmsg("msg.ai.session.detect.agent", { kind: String(d.kind) }) : tmsg("msg.ai.session.detect.none")),
     errors: ["INVALID_PARAMS"],
     examples: ['sok ai.session.detect \'{"command":"claude --resume"}\''],
     handler: async (p) => {
@@ -32,6 +34,7 @@ export function registerAiSessionCatalog(): void {
       viewId: { type: "string", description: "Limit to one terminal view; omit for all in this cwd" },
     },
     returns: "{ rows }",
+    message: (d) => tmsg("msg.ai.session.lineage", { n: ((d.rows as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok ai.session.lineage \'{"cwd":"/Users/me/proj"}\''],
     handler: async (p) => {
@@ -52,6 +55,7 @@ export function registerAiSessionCatalog(): void {
     triggers: { ko: "세션찾기 세션조회 현세션" },
     params: { cwd: { type: "string", description: "Working directory the agent ran in", required: true } },
     returns: "{ session }",
+    message: (d) => (d.session ? tmsg("msg.ai.session.find.found") : tmsg("msg.ai.session.find.none")),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok ai.session.find \'{"cwd":"/Users/me/proj"}\''],
     handler: async (p) => {
@@ -69,6 +73,7 @@ export function registerAiSessionCatalog(): void {
     triggers: { ko: "세션점검 세션식별 세션정보" },
     params: { path: { type: "string", description: "Path to the session .jsonl file", required: true } },
     returns: "{ session }",
+    message: (d) => (d.session ? tmsg("msg.ai.session.inspect.read") : tmsg("msg.ai.session.inspect.none")),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok ai.session.inspect \'{"path":"~/.claude/projects/-Users-me-proj/<id>.jsonl"}\''],
     handler: async (p) => {

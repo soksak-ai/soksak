@@ -24,6 +24,7 @@ function reg(name: string, spec: Partial<CommandSpec>): void {
     description: "테스트 명령",
     params: {},
     returns: "테스트",
+    message: () => "완료",
     handler: () => ({}),
     ...spec,
   });
@@ -44,7 +45,7 @@ describe("execute — 기본 계약", () => {
   it("핸들러 일반 객체 반환은 ok:true 로 래핑", async () => {
     reg(TEST_PREFIX + "plain", { handler: () => ({ value: 7 }) });
     const r = await execute(TEST_PREFIX + "plain", {}, {});
-    expect(r).toEqual({ ok: true, code: "OK", message: "value: 7", data: { value: 7 } });
+    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { value: 7 } });
   });
 
   it("핸들러의 CmdResult({ok:false}) 는 그대로 통과", async () => {
@@ -79,7 +80,7 @@ describe("execute — 기본 계약", () => {
 
 describe("낭독 축 — message(눈)/speak(귀) 둘뿐(§3)", () => {
   const spec = (speak?: (out: CommandOutcome) => string): CommandSpec =>
-    ({ description: "d", params: {}, returns: "r", handler: () => ({}), ...(speak ? { speak } : {}) }) as CommandSpec;
+    ({ description: "d", params: {}, returns: "r", message: () => "완료", handler: () => ({}), ...(speak ? { speak } : {}) }) as CommandSpec;
   const out = (message: string, ok = true): CommandOutcome =>
     ({ ok, code: ok ? "OK" : "INTERNAL", message }) as CommandOutcome;
 
@@ -97,7 +98,7 @@ describe("낭독 축 — message(눈)/speak(귀) 둘뿐(§3)", () => {
   it('execute 계측(trace)에 유효 tts 가 실린다 — 기본 message, speak "" 는 부재', async () => {
     const traces: CommandTrace[] = [];
     setCommandTraceSink((t) => traces.push(t));
-    reg("test.tts-on", { handler: () => ({ message: "읽는다" }) });
+    reg("test.tts-on", { message: () => "읽는다", handler: () => ({}) });
     reg("test.tts-off", { speak: () => "", handler: () => ({ message: "안읽는다" }) });
     await execute("test.tts-on", {}, { remote: false });
     await execute("test.tts-off", {}, { remote: false });
@@ -146,7 +147,7 @@ describe("execute — 파라미터 검증 매트릭스", () => {
       ok: false,
       code: "INVALID_PARAMS",
     });
-    expect(await execute(TEST_PREFIX + "enum", { mode: "a" }, {})).toEqual({ ok: true, code: "OK", message: "mode: a", data: { mode: "a" } });
+    expect(await execute(TEST_PREFIX + "enum", { mode: "a" }, {})).toEqual({ ok: true, code: "OK", message: "완료", data: { mode: "a" } });
   });
 
   it("json 타입은 임의 값 통과(핸들러 책임)", async () => {
@@ -155,7 +156,7 @@ describe("execute — 파라미터 검증 매트릭스", () => {
       handler: (p) => ({ got: p.v }),
     });
     const r = await execute(TEST_PREFIX + "json", { v: { deep: [1] } }, {});
-    expect(r).toEqual({ ok: true, code: "OK", message: "OK", data: { got: { deep: [1] } } });
+    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { got: { deep: [1] } } });
   });
 
   it("default 는 미지정 시 채워지고 지정 시 유지", async () => {
@@ -163,8 +164,8 @@ describe("execute — 파라미터 검증 매트릭스", () => {
       params: { n: { type: "number", description: "", default: 10 } },
       handler: (p) => ({ n: p.n }),
     });
-    expect(await execute(TEST_PREFIX + "def", {}, {})).toEqual({ ok: true, code: "OK", message: "n: 10", data: { n: 10 } });
-    expect(await execute(TEST_PREFIX + "def", { n: 3 }, {})).toEqual({ ok: true, code: "OK", message: "n: 3", data: { n: 3 } });
+    expect(await execute(TEST_PREFIX + "def", {}, {})).toEqual({ ok: true, code: "OK", message: "완료", data: { n: 10 } });
+    expect(await execute(TEST_PREFIX + "def", { n: 3 }, {})).toEqual({ ok: true, code: "OK", message: "완료", data: { n: 3 } });
   });
 });
 
@@ -180,21 +181,21 @@ describe("execute — 권한 게이트", () => {
     reg(TEST_PREFIX + "danger2", { danger: "inject", handler: () => ({ did: true }) });
     setPermissionGate(() => false);
     const r = await execute(TEST_PREFIX + "danger2", {}, {});
-    expect(r).toEqual({ ok: true, code: "OK", message: "did: true", data: { did: true } });
+    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { did: true } });
   });
 
   it("게이트 허용 시 remote danger 도 실행", async () => {
     reg(TEST_PREFIX + "danger3", { danger: "destructive", handler: () => ({ did: true }) });
     setPermissionGate(() => true);
     const r = await execute(TEST_PREFIX + "danger3", {}, { remote: true });
-    expect(r).toEqual({ ok: true, code: "OK", message: "did: true", data: { did: true } });
+    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { did: true } });
   });
 
   it("danger 미분류 명령은 게이트와 무관", async () => {
     reg(TEST_PREFIX + "safe", { handler: () => ({ did: true }) });
     setPermissionGate(() => false);
     const r = await execute(TEST_PREFIX + "safe", {}, { remote: true });
-    expect(r).toEqual({ ok: true, code: "OK", message: "did: true", data: { did: true } });
+    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { did: true } });
   });
 });
 
@@ -329,7 +330,7 @@ describe("execute — 계측 sink (A1 활동 허브)", () => {
     const traces: CommandTrace[] = [];
     setCommandTraceSink((t) => traces.push(t));
     try {
-      reg("trace.sys", { summarize: () => "읽을 문장" });
+      reg("trace.sys", { message: () => "읽을 문장" });
       await execute("trace.sys", {}, { remote: true, origin: "schedule" });
       await execute("trace.sys", {}, { remote: true });
       expect(traces[0].origin).toBe("schedule");

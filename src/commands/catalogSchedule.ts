@@ -4,6 +4,7 @@
 // Core holds no persistence — plugins store their own schedules and re-arm on activate.
 
 import { invoke } from "@tauri-apps/api/core";
+import { tmsg } from "../i18n";
 import { register } from "./registry";
 
 export function registerScheduleCatalog(): void {
@@ -18,6 +19,7 @@ export function registerScheduleCatalog(): void {
       id: { type: "string", description: "Existing schedule id to replace (a new id is issued when omitted)" },
     },
     returns: "{ scheduleId }",
+    message: (d) => tmsg("msg.schedule.set", { id: String(d.scheduleId) }),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
@@ -53,6 +55,7 @@ export function registerScheduleCatalog(): void {
       zombie_backstop_ms: { type: "number", description: "Process-lease zombie cap (ms). null=infinite, default 3h" },
     },
     returns: "{ jobId }",
+    message: (d) => tmsg("msg.schedule.register", { id: String(d.jobId) }),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
@@ -84,6 +87,7 @@ export function registerScheduleCatalog(): void {
     triggers: { ko: "스케줄 깨우기 poke 재평가 reconcile 틱" },
     params: { id: { type: "string", description: "Job id (omit = all reconcile jobs)" } },
     returns: "{ ok }",
+    message: () => tmsg("msg.schedule.poke"),
     danger: "inject",
     errors: ["INTERNAL"],
     examples: ["sok schedule.poke", 'sok schedule.poke \'{"id":"sch-3"}\''],
@@ -98,6 +102,7 @@ export function registerScheduleCatalog(): void {
     triggers: { ko: "스케줄 취소 삭제 예약취소 cancel" },
     params: { id: { type: "string", description: "Schedule id issued by schedule.set", required: true } },
     returns: "{ removed }",
+    message: (d) => d.removed ? tmsg("msg.schedule.cancel.removed") : tmsg("msg.schedule.cancel.missing"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok schedule.cancel \'{"id":"sch-3"}\''],
     handler: async (p) => {
@@ -115,6 +120,7 @@ export function registerScheduleCatalog(): void {
     triggers: { ko: "스케줄 목록 예약 리스트 조회" },
     params: {},
     returns: "{ schedules: [{ id, trigger, command, params, next_at, running, concurrency }] }",
+    message: (d) => tmsg("msg.schedule.list", { n: ((d.schedules as unknown[]) ?? []).length }),
     errors: ["INTERNAL"],
     examples: ["sok schedule.list"],
     handler: async () => {

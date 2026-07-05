@@ -28,12 +28,13 @@ export interface CommandSpec {
   title?: LocalizedText;
   // 성공 응답 형태 설명(매뉴얼용).
   returns: string;
-  // 표준 답변(message) 생성 — 성공 결과 data 를 사람이 읽는 한 줄로. 없으면 execute 가 code 를
-  // message 로 에코("OK" 등, 변환 없음). docs/MESSAGE-PROTOCOL.md 의 응답 봉투 message 계약.
-  summarize?: (data: Record<string, unknown>) => string;
-  // 낭독 문장(귀) 생성 — summarize(눈, →message)와 대칭 seam. 낭독 축은 이것 하나다(§3):
-  // speak 있으면 성공·실패 불문 speak(outcome)가 문장, 없으면 message 폴백, "" = 침묵.
-  // 낭독 수행 명령(say 류)은 speak: () => "" 로 되먹임을 끊는다.
+  // 표준 답변(message, 눈) — 성공 결과 data 를 사람이 읽는 한 줄로. **필수**: 모든 명령은 자기
+  // 답을 안다. 추측 계층(형태 파생)·code 에코 폴백은 없다. 문장은 tmsg(키 테이블) 로 현재 언어
+  // 해소된 문자열이다(P0 — 언어 추가 = 테이블 열 추가). docs/MESSAGE-PROTOCOL.md 응답 봉투 계약.
+  message: (data: Record<string, unknown>) => string;
+  // 낭독 문장(귀) — message(눈)와 대칭 seam. 낭독 축은 이것 하나다(§3): speak 있으면 성공·실패
+  // 불문 speak(outcome)가 문장, 없으면 message 폴백, "" = 침묵. 낭독 수행 명령(say 류)은
+  // speak: () => "" 로 되먹임을 끊는다. 문장은 message 와 같은 결로 tmsg 로 짓는다(P0).
   speak?: (out: CommandOutcome) => string;
   // 발생 가능한 에러 코드.
   errors?: readonly (CmdErrCode | "INTERNAL" | "TIMEOUT")[];
@@ -325,27 +326,9 @@ async function executeInner(
   }
 }
 
-// 결과 형태에서 기본 message 를 만든다 — 명령마다 summarize 를 다는 반복을 없앤다. 지배 형태
-// 한 줄만 뽑는다(humanize 처럼 모든 키를 raw 나열하지 않는다): 단일 배열키 → "키 N", 단일
-// 스칼라키 → "키: 값". 복합/불명은 undefined → code 로 폴백. 사람이 다듬을 특수 답변만 summarize.
-function autoMessage(data: Record<string, unknown> | undefined): string | undefined {
-  if (!data) return undefined;
-  const keys = Object.keys(data);
-  if (keys.length !== 1) return undefined;
-  const k = keys[0];
-  const v = data[k];
-  if (Array.isArray(v)) return `${k} ${v.length}`;
-  if (v === null || typeof v !== "object") {
-    const sv = String(v);
-    // blob/장문(base64 등)은 원문 덤프 금지 — 길이만 답한다(이미지는 표시층이 data 로 렌더).
-    return sv.length > 96 ? `${k} ${sv.length}자` : `${k}: ${sv}`;
-  }
-  return undefined;
-}
-
 // 핸들러 반환(자유 객체 또는 {ok:false,…})을 표준 응답 봉투 {ok,code,message,data?}로 정규화한다.
-// 성공: 예약키(ok/code/message) 분리 → 나머지는 data 로 중첩, message 는 summarize(data) → 형태
-// 기반 autoMessage → code 에코 순(변환 추측 없음). 실패: code/message 보존, error 방언 흡수.
+// 성공: 예약키(ok/code/message) 분리 → 나머지는 data 로 중첩, message 는 spec.message(data) 가
+// 소유한다(추측 계층·폴백 없음 — 모든 명령이 자기 답을 안다). 실패: code/message 보존, error 방언 흡수.
 function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): CommandOutcome {
   const raw: Record<string, unknown> =
     result && typeof result === "object" ? (result as Record<string, unknown>) : {};
@@ -360,11 +343,12 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
     const data = pickData(rest, rd);
     return data ? { ok: false, code, message, data } : { ok: false, code, message };
   }
-  const { ok: _ok, code: rc, message: rm, data: rd, media: rmedia, ...rest } = raw;
+  const { ok: _ok, code: rc, message: _rm, data: rd, media: rmedia, ...rest } = raw;
   const data = pickData(rest, rd);
   const code = typeof rc === "string" ? rc : "OK";
-  const message =
-    typeof rm === "string" ? rm : (spec?.summarize?.(data ?? {}) ?? autoMessage(data) ?? code);
+  // message 는 spec 이 소유한다(예약키라 핸들러 반환의 message 는 버린다). spec 은 execute 에서만
+  // 정규화를 부르므로 항상 존재한다 — undefined 는 타입가드일 뿐(도달 불가).
+  const message = spec ? spec.message(data ?? {}) : code;
   const media =
     rmedia && typeof rmedia === "object" && typeof (rmedia as MediaContent).kind === "string"
       ? (rmedia as MediaContent)

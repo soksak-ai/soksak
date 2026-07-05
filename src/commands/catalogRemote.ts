@@ -9,6 +9,7 @@
 // danger-gate(원격 권한 정책)는 그대로 적용된다(remote 호출 → setPermissionGate). 무결정/모달 미표시/
 // 권한 거부/TTL 만료는 전부 Deny 로 환원(fail-closed). 토큰/실행 로직은 코어에 없다 — 사이드카 floor 소유.
 import { register } from "./registry";
+import { tmsg } from "../i18n";
 import {
   useRemoteConfirm,
   awaitDecision,
@@ -51,6 +52,8 @@ export function registerRemoteCatalog(): void {
       },
     },
     returns: "{ approve }",
+    message: (d) =>
+      d.approve ? tmsg("msg.remote.confirm.approved") : tmsg("msg.remote.confirm.denied"),
     danger: "destructive",
     handler: async (p) => {
       const requestId = p.request_id as number;

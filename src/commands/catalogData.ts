@@ -5,6 +5,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { register } from "./registry";
+import { tmsg } from "../i18n";
 
 const NS_PARAM = {
   type: "string",
@@ -25,6 +26,7 @@ export function registerDataCatalog(): void {
     triggers: { ko: "백업 스냅샷 데이터백업" },
     params: { path: { type: "string", description: "Destination path; defaults to backup folder" } },
     returns: "{ path }",
+    message: (d) => tmsg("msg.data.backup", { path: String(d.path) }),
     errors: ["INTERNAL"],
     examples: ["sok data.backup", 'sok data.backup \'{"path":"/tmp/soksak.db"}\''],
     handler: async (p) => {
@@ -41,6 +43,7 @@ export function registerDataCatalog(): void {
     triggers: { ko: "복원 데이터복원 되돌리기" },
     params: { path: { type: "string", description: "Path to the backup .db file to restore from", required: true } },
     returns: "{ ok }",
+    message: () => tmsg("msg.data.restore"),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.restore \'{"path":"/tmp/soksak.db"}\''],
@@ -62,6 +65,7 @@ export function registerDataCatalog(): void {
       coll: { type: "string", description: "Limit to this collection; omit for all" },
     },
     returns: "{ jsonl }",
+    message: () => tmsg("msg.data.export"),
     errors: ["INTERNAL"],
     examples: ['sok data.export \'{"ns":"soksak-plugin-mailbox"}\''],
     handler: async (p) => {
@@ -79,6 +83,7 @@ export function registerDataCatalog(): void {
     triggers: { ko: "가져오기 임포트 데이터이식 복구" },
     params: { jsonl: { type: "string", description: "JSONL string output from data.export", required: true } },
     returns: "{ applied }",
+    message: (d) => tmsg("msg.data.import", { n: Number(d.applied) }),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.import \'{"jsonl":"..."}\''],
@@ -108,6 +113,7 @@ export function registerDataCatalog(): void {
       offset: { type: "number", description: "Rows to skip" },
     },
     returns: "{ rows }",
+    message: (d) => tmsg("msg.data.query", { n: ((d.rows as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.query \'{"ns":"soksak-plugin-mailbox","coll":"messages","scope":"projA"}\''],
     handler: async (p) => {
@@ -137,6 +143,7 @@ export function registerDataCatalog(): void {
       limit: { type: "number", description: "Max rows to return (default 50)" },
     },
     returns: "{ rows }",
+    message: (d) => tmsg("msg.data.search", { n: ((d.rows as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.search \'{"ns":"soksak-plugin-mailbox","coll":"messages","query":"빌드 실패"}\''],
     handler: async (p) => {
@@ -162,6 +169,7 @@ export function registerDataCatalog(): void {
       where: { type: "json", description: "Filter condition (same shape as data.query where)" },
     },
     returns: "{ count }",
+    message: (d) => tmsg("msg.data.count", { n: Number(d.count) }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.count \'{"ns":"soksak-plugin-mailbox","coll":"messages"}\''],
     handler: async (p) => {
@@ -183,6 +191,7 @@ export function registerDataCatalog(): void {
     triggers: { ko: "암호화상태 암호화확인 봉인상태" },
     params: { scope: { type: "string", description: "Scope partition key (e.g. projectId)", required: true } },
     returns: "{ enabled, keyId, algo, unlocked, tampered, keyMissing }",
+    message: (d) => d.enabled ? tmsg("msg.data.encrypt.status.on") : tmsg("msg.data.encrypt.status.off"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.encrypt.status \'{"scope":"projA"}\''],
     handler: async (p) => {
@@ -199,6 +208,7 @@ export function registerDataCatalog(): void {
     triggers: { ko: "암호화활성 암호화켜기 봉인활성" },
     params: { scope: { type: "string", description: "Scope partition key to encrypt", required: true } },
     returns: "{ keyId, recoveryCode }",
+    message: () => tmsg("msg.data.encrypt.enable"),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.encrypt.enable \'{"scope":"projA"}\''],
@@ -220,6 +230,7 @@ export function registerDataCatalog(): void {
       recoveryCode: { type: "string", description: "The recovery code issued at enable", required: true },
     },
     returns: "{ ok }",
+    message: () => tmsg("msg.data.encrypt.recover"),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.encrypt.recover \'{"scope":"projA","recoveryCode":"XXXX-XXXX-..."}\''],
@@ -238,6 +249,7 @@ export function registerDataCatalog(): void {
     triggers: { ko: "키회전 키교체 암호화회전" },
     params: { scope: { type: "string", description: "Scope partition key to rotate", required: true } },
     returns: "{ oldKeyId, newKeyId, rekeyed, oldDisposed }",
+    message: (d) => tmsg("msg.data.encrypt.rotate", { n: Number(d.rekeyed) }),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.encrypt.rotate \'{"scope":"projA"}\''],
@@ -259,6 +271,7 @@ export function registerDataCatalog(): void {
       scope: { type: "string", description: "Scope partition key to convert", required: true },
     },
     returns: "{ converted }",
+    message: (d) => tmsg("msg.data.encrypt.convert", { n: Number(d.converted) }),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: ['sok data.encrypt.convert \'{"ns":"soksak-plugin-terminal","coll":"command_blocks","scope":"projA"}\''],

@@ -6,6 +6,7 @@
 // import.meta.env.DEV 게이트 — 개발 빌드에서만 등록되고 프로덕션 번들엔 없다(dev.remoteConfirmMock 선례).
 // danger:"inject" 로 분류해 원격 정책 게이트도 거친다(소켓 e2e 는 remoteInject=allow dev 기본).
 import { register } from "./registry";
+import { tmsg } from "../i18n";
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -21,6 +22,7 @@ export function registerDebugCatalog(): void {
       fail: { type: "boolean", description: "Return ok:false instead of ok:true (exercises backoff/crash path)." },
     },
     returns: "{ slept } (ok:true) | { ok:false } when fail",
+    message: (d) => tmsg("msg.debug.sleep", { ms: Number(d.slept) }),
     danger: "inject",
     errors: ["INTERNAL"],
     examples: ['sok debug.sleep \'{"ms":5000}\'', 'sok debug.sleep \'{"ms":2000,"fail":true}\''],

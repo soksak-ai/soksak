@@ -124,7 +124,9 @@ export interface PluginCommandSpec {
   examples?: readonly string[];
   danger?: "destructive" | "inject";
   /** 표준 답변(MESSAGE-PROTOCOL §3) — 성공 data 를 사람이 읽는 한 줄 message 로. 미제공이면
-   *  code 에코("OK")로 열화하고 로더가 경고한다. 준거=runbook ok()/err(). */
+   *  답이 라벨로 열화하고 로더가 경고한다(M5 에서 필수화). 준거=runbook ok()/err(). */
+  message?: (data: Record<string, unknown>) => string;
+  /** @deprecated message 로 개명 — M5 sweep 전환기 구명. 새 플러그인은 message 를 쓴다. */
   summarize?: (data: Record<string, unknown>) => string;
   /** 낭독 문장(귀, §3) — 낭독 축은 이것 하나: speak 있으면 성공·실패 불문 speak(outcome)가
    *  문장, 없으면 message 폴백, "" = 침묵. say 류는 speak: () => "" 로 되먹임을 끊는다. */
@@ -1164,14 +1166,18 @@ export function buildPluginApi(
                 `[plugin:${id}] 명령 '${name}' 이 런타임 danger='${spec.danger}' 인데 매니페스트 contributes.commands 에 미선언 — 설치/동의 가시성 위해 매니페스트에 danger 선언 필요`,
               );
             }
-            // 응답 봉투 표준(MESSAGE-PROTOCOL): message 는 명령이 제공한다 — summarize 없는
-            // 명령은 code 에코("OK")만 남아 관찰자가 결과를 읽지 못한다. 준거=runbook ok()/err().
-            if (typeof spec.summarize !== "function") {
+            // 응답 봉투 표준(MESSAGE-PROTOCOL): message 는 명령이 제공한다. summarize 는 message 의
+            // 구명(전환기 호환 — M5 sweep 에서 제거). 둘 다 없으면 답을 라벨로 대신하고 경고한다
+            // — M5 완료 시 경고는 등록 거부로 승격(P2). 준거=runbook ok()/err().
+            const pluginAnswer = spec.message ?? spec.summarize;
+            if (typeof pluginAnswer !== "function") {
               console.warn(
-                `[plugin:${id}] 명령 '${name}' 에 summarize 미제공 — 표준 답변(message)이 code 에코로 열화(MESSAGE-PROTOCOL §3)`,
+                `[plugin:${id}] 명령 '${name}' 에 message 미제공 — 답이 라벨로 열화(MESSAGE-PROTOCOL §3, M5 에서 필수화)`,
               );
             }
             const full = pluginCommandName(id, name);
+            const labelAnswer = () =>
+              declared.title ? localize(declared.title) : name;
             deps.registerCommand(full, {
               description: spec.description,
               title: declared.title, // 사람 라벨(ko/en) — 매니페스트가 소유, 표시 표면이 해소
@@ -1179,7 +1185,7 @@ export function buildPluginApi(
               params: spec.params ?? {},
               returns: spec.returns ?? "object",
               examples: spec.examples,
-              summarize: spec.summarize, // 표준 답변(message) — execute 정규화가 주입
+              message: pluginAnswer ?? labelAnswer, // 표준 답변 — 없으면 라벨(전환 스캐폴드, 경고)
               speak: spec.speak, // 귀의 문장(§3) — 낭독 축의 전부(없으면 message 폴백)
               trace: spec.trace, // 계측 스펙(§4) — false=관찰 부산물 명령의 기록 제외
               danger, // 매니페스트 권위(없으면 런타임 fallback — 게이트 보존)
