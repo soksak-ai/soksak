@@ -46,6 +46,9 @@ interface SettingsState {
   // appFontFamily → --app-font(루트 font-family), appFontSize → --app-font-size(루트 font-size).
   appFontFamily: string;
   appFontSize: number;
+  // 오케스트레이터 자연어 콘솔이 스폰하는 에이전트 CLI(로그인셸 PATH 에서 해소). 기본 claude —
+  // E2E 는 각본 스텁 경로를 넣어 결정적으로 검증한다(orchestrator/agent.ts).
+  orchestratorAgent: string;
   setLanguage: (l: Language) => void;
   setProjectTabPosition: (p: TabPosition) => void;
   setContentTabPosition: (p: TabPosition) => void;
@@ -60,6 +63,7 @@ interface SettingsState {
   setRightSidebarMode: (v: RightSidebarMode) => void;
   setAppFontFamily: (v: string) => void;
   setAppFontSize: (v: number) => void;
+  setOrchestratorAgent: (v: string) => void;
 }
 
 const DEFAULTS = {
@@ -78,6 +82,7 @@ const DEFAULTS = {
   appFontFamily:
     '"JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Courier New", monospace',
   appFontSize: 13,
+  orchestratorAgent: "claude",
 };
 
 const KEY = "soksak.settings";
@@ -101,6 +106,7 @@ function serialize(s: SettingsState): PersistedSettings {
     rightSidebarMode: s.rightSidebarMode,
     appFontFamily: s.appFontFamily,
     appFontSize: s.appFontSize,
+    orchestratorAgent: s.orchestratorAgent,
   };
 }
 
@@ -179,6 +185,10 @@ export const useSettings = create<SettingsState>((set, get) => {
     setAppFontSize: (appFontSize) => {
       // 앱 UI 폰트 크기 클램프(터미널 폰트와 동일 안전 범위).
       set({ appFontSize: Math.max(6, Math.min(40, appFontSize)) });
+      save();
+    },
+    setOrchestratorAgent: (orchestratorAgent) => {
+      set({ orchestratorAgent });
       save();
     },
   };

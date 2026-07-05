@@ -1443,6 +1443,7 @@ export function registerCatalog(): void {
     "focusIndicator",
     "appFontFamily",
     "appFontSize",
+    "orchestratorAgent",
   ] as const;
 
   register("settings.get", {
@@ -1461,6 +1462,7 @@ export function registerCatalog(): void {
         focusIndicator: s.focusIndicator,
         appFontFamily: s.appFontFamily,
         appFontSize: s.appFontSize,
+        orchestratorAgent: s.orchestratorAgent,
         // 선택 가능한 아이콘 셋 목록(내장 + 활성 플러그인 등록분).
         iconSets: Object.values(useIconRegistry.getState().sets).map((x) => ({
           id: x.id,
@@ -1485,7 +1487,7 @@ export function registerCatalog(): void {
       value: {
         type: "json",
         description:
-          "Value — language:ko|en, projectTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, appFontFamily:string (CSS font-family stack), appFontSize:number (6-40)",
+          "Value — language:ko|en, projectTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, appFontFamily:string (CSS font-family stack), appFontSize:number (6-40), orchestratorAgent:string (agent CLI command or path the natural-language console spawns)",
         required: true,
       },
     },
@@ -1535,6 +1537,11 @@ export function registerCatalog(): void {
           if (typeof v !== "number" || !Number.isFinite(v))
             return bad("number(6~40 클램프)");
           s.setAppFontSize(v);
+          break;
+        case "orchestratorAgent":
+          if (typeof v !== "string" || !v.trim())
+            return bad("string(에이전트 CLI 명령 또는 경로)");
+          s.setOrchestratorAgent(v.trim());
           break;
       }
       return { key, value: v };

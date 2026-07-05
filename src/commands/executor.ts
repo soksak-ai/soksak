@@ -2,10 +2,12 @@
 // invoke(cmd_result) 로 회신한다(요청 id 매칭). 앱 시작 시 1회 startExecutor().
 
 import { invoke } from "@tauri-apps/api/core";
+import { currentWindowLabel } from "../lib/webviewLabels";
 import { listenThisWindow } from "../lib/windowEvents";
 import { useSettings } from "../state/settings";
 import { registerCatalog } from "./catalog";
 import { registerDebugCatalog } from "./catalogDebug";
+import { registerOrchestratorCatalog } from "./catalogOrchestrator";
 import { registerRemoteCatalog } from "./catalogRemote";
 import { registerRemoteConfirmDevCatalog } from "./catalogRemoteConfirmDev";
 import { execute, setPermissionGate } from "./registry";
@@ -51,6 +53,9 @@ export function startExecutor(): void {
   registerRemoteConfirmDevCatalog();
   // dev 전용 debug.* — 스케줄러 process_lease lease e2e 검증용 held-reply(debug.sleep). 프로덕션 0.
   registerDebugCatalog();
+  // 자연어 콘솔(orchestrator.*)은 컨트롤 플레인(main) 전용 — 워크스페이스 창엔 존재하지 않는
+  // capability 다(UNKNOWN_COMMAND 가 정답). 소켓은 --window main 으로 명시 타겟.
+  if (currentWindowLabel() === "main") registerOrchestratorCatalog();
   // 권한 게이트: 위험 분류별 정책을 설정 store 에서 읽어 allow/deny 판정.
   setPermissionGate((danger) => {
     const s = useSettings.getState();

@@ -8,7 +8,12 @@ import { currentWindowLabel } from "../lib/webviewLabels";
 import { onPluginEvent } from "../plugins/hooks";
 import { setCommandTraceSink } from "../commands/registry";
 
-function publish(kind: string, source: string, payload: Record<string, unknown>): void {
+/** 허브 발행(창 label 자동 동반) — 코어 공급자 공용(이 파일의 계측 + orchestrator 대화 세트). */
+export function publishActivity(
+  kind: string,
+  source: string,
+  payload: Record<string, unknown>,
+): void {
   void invoke("activity_publish", {
     kind,
     source,
@@ -17,6 +22,7 @@ function publish(kind: string, source: string, payload: Record<string, unknown>)
     // 허브 불능(테스트 하니스 등)은 라이브 동작을 막지 않는다.
   });
 }
+const publish = publishActivity;
 
 /** 부트 1회 — 이벤트 구독과 registry 계측 sink 를 허브로 잇는다. */
 export function startActivityFeed(): void {
