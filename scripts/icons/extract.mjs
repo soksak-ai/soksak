@@ -54,6 +54,11 @@ const MAPPING = {
   "arrow-right": { lucide: "arrow-right", tabler: "outline/arrow-right", codicons: "arrow-right" },
   "arrow-up": { lucide: "arrow-up", tabler: "outline/arrow-up", codicons: "arrow-up" },
   "arrow-down": { lucide: "arrow-down", tabler: "outline/arrow-down", codicons: "arrow-down" },
+  "arrow-up-right": {
+    lucide: "arrow-up-right",
+    tabler: "outline/arrow-up-right",
+    codicons: "link-external",
+  },
   terminal: { lucide: "terminal", tabler: "outline/terminal-2", codicons: "terminal" },
   file: { lucide: "file-text", tabler: "outline/file-text", codicons: "file" },
   browser: { lucide: "globe", tabler: "outline/world", codicons: "globe" },
