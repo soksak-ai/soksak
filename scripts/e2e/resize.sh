@@ -96,7 +96,9 @@ echo "── setup(resize-e2e: 좌|우 터미널, 명령 구동) ──"
 IDS="$(node "$DRIVER" setup "$REPO_ROOT")" || { echo "RED: setup 실패: $IDS" >&2; exit 1; }
 PL=$(echo "$IDS" | python3 -c "import json,sys;print(json.load(sys.stdin)['paneLeft'])")
 PR=$(echo "$IDS" | python3 -c "import json,sys;print(json.load(sys.stdin)['paneRight'])")
-echo "  panes: L=$PL R=$PR  (record=$RECORD_OK)"
+# 전용 워크스페이스 창 라벨을 이후 모든 드라이버 호출에 잇는다(main=컨트롤 플레인이라 필수).
+export SOKSAK_E2E_WINDOW="$(echo "$IDS" | python3 -c "import json,sys;print(json.load(sys.stdin)['window'])")"
+echo "  panes: L=$PL R=$PR  win=$SOKSAK_E2E_WINDOW  (record=$RECORD_OK)"
 trap 'node "$DRIVER" teardown >/dev/null 2>&1' EXIT
 TMP="$(mktemp -d)"; trap 'node "$DRIVER" teardown >/dev/null 2>&1; rm -rf "$TMP"' EXIT
 
@@ -106,7 +108,7 @@ node "$DRIVER" resize 0.2 >/dev/null 2>&1; CN=$(node "$DRIVER" cols "$PL")
 node "$DRIVER" resize 0.8 >/dev/null 2>&1; CW=$(node "$DRIVER" cols "$PL")
 echo "  좌패널 cols: 좁게(0.2)=$CN  넓게(0.8)=$CW"
 if [ "$CN" -gt 0 ] 2>/dev/null && [ "$CW" -gt "$CN" ] 2>/dev/null; then
-  ok "자기검증: 리사이즈가 cols 를 구동($CN→$CW) — 측정 유효"
+  ok "자기검증: 리사이즈가 cols 를 구동(${CN}→${CW}) — 측정 유효"
 else
   bad "자기검증: cols 불변/무효(narrow=$CN wide=$CW) — 패널 미표시? 측정 무효, 이하 결과 신뢰 불가"
   echo ""
@@ -147,7 +149,7 @@ node "$DRIVER" resize 0.3 >/dev/null 2>&1
 CNARROW=$(node "$DRIVER" read "$PL" 1 | python3 -c "import sys,re;m=re.search(r'TUIDIM=(\d+)x',sys.stdin.read());print(m.group(1) if m else -1)")
 echo "  TUIDIM cols: wide(0.7)=$CWIDE  narrow(0.3)=$CNARROW"
 if [ "$CWIDE" -gt 0 ] 2>/dev/null && [ "$CNARROW" -gt 0 ] 2>/dev/null && [ "$CNARROW" -lt "$CWIDE" ] 2>/dev/null; then
-  ok "T3 TUI 추종: cols $CWIDE→$CNARROW 감소(SIGWINCH 전달·재그리기 정상)"
+  ok "T3 TUI 추종: cols ${CWIDE}→${CNARROW} 감소(SIGWINCH 전달·재그리기 정상)"
 else
   bad "T3 TUI 추종: cols wide=$CWIDE narrow=$CNARROW (추종 실패/스테일)"
 fi

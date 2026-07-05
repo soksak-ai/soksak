@@ -12,9 +12,12 @@ trap cleanup INT TERM
 tput smcup 2>/dev/null
 
 redraw() {
-  local c l
-  c=$(tput cols 2>/dev/null || echo 80)
-  l=$(tput lines 2>/dev/null || echo 24)
+  # 실제 winsize(TIOCGWINSZ)를 직접 읽는다 — `tput cols` 는 terminfo 정적값(80)을 돌려줘
+  # SIGWINCH 추종을 검증하지 못한다(실측: stty=54 vs tput=80). stty size = "rows cols".
+  local c l sz
+  sz=$(stty size 2>/dev/null) || sz="24 80"
+  l=${sz% *}
+  c=${sz#* }
   tput clear 2>/dev/null
   # 본문 채움(마지막 줄은 마커용으로 비움).
   local r

@@ -28,6 +28,16 @@ if (!SOCKET) {
 }
 const ALIAS = "resize-e2e";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+// 이 하니스는 전용 워크스페이스 창(w-*)에서만 동작한다 — `main` 은 이제 컨트롤 플레인
+// (워크스페이스 없음, NAMING 4b)이라 창을 지정하지 않으면 명령이 거기 착지해 측정이 무효가
+// 된다. setup 이 창을 만들고 라벨을 출력하며, 이후 호출은 SOKSAK_E2E_WINDOW 로 그 창을 잇는다.
+let WIN = process.env.SOKSAK_E2E_WINDOW || null;
+// E2E 픽스처 루트는 재사용·멱등의 한 곳(~/.soksak-e2e) — app 홈(~/.soksak(-dev|-debug))과
+// 분리된 안정 고정처다. 매 실행 새로 만드는 임시 경로가 아니라, 존재를 보장(mkdir)하고 창
+// 라이프사이클(teardown=window.close)로만 상태를 회수한다.
+const E2E_HOME = path.join(process.env.HOME ?? "", ".soksak-e2e");
+const RESIZE_ROOT = path.join(E2E_HOME, "resize"); // 창 carrier(window.new 부트 프로젝트)
+const RESIZE_PROJ = path.join(E2E_HOME, "resize-proj"); // 실제 측정 대상(좌|우 터미널)
 
 // ── 소켓 RPC(perf/driver.mjs 와 동형) ────────────────────────────────────────
 function connect() {
@@ -69,7 +79,9 @@ function rpc(sock, method, params = {}) {
           : resp,
       ),
     );
-    sock.write(JSON.stringify({ id, method, params }) + "\n", (err) => {
+    // 전용 워크스페이스 창으로만 라우팅한다(WIN). 미설정(setup 의 window.new 직전)이면 생략.
+    const envelope = WIN ? { id, method, params, window: WIN } : { id, method, params };
+    sock.write(JSON.stringify(envelope) + "\n", (err) => {
       if (err) {
         pending.delete(id);
         reject(err);
@@ -120,15 +132,45 @@ function splitId(proj) {
   return s[0].split.id;
 }
 
+// 전용 워크스페이스 창을 확보한다 — 잔재(이전 실행) 정리 후 RESIZE_ROOT 로 새 창을 열고
+// 부트(프로젝트 hydrate)를 기다린다. 반환 = 창 라벨. 이후 모든 rpc 가 이 창으로 라우팅된다.
+async function ensureWindow(sock) {
+  const fs = await import("node:fs");
+  fs.mkdirSync(RESIZE_ROOT, { recursive: true });
+  fs.mkdirSync(RESIZE_PROJ, { recursive: true });
+  // 잔재 정리: 이 root 를 든 창(w-*)이 남아 있으면 닫는다(멱등 재실행).
+  const list = await rpc(sock, "window.list");
+  for (const l of list.labels ?? []) {
+    if (!String(l).startsWith("w-")) continue;
+    const tr = await rpc(sock, "state.tree", {}, l).catch(() => null);
+    if ((tr?.projects ?? []).some((p) => String(p.root ?? "").includes(RESIZE_ROOT))) {
+      await rpc(sock, "window.close", { label: l });
+      await sleep(400);
+    }
+  }
+  const r = await rpc(sock, "window.new", { root: RESIZE_ROOT });
+  const label = r.label ?? r.existingWindow;
+  if (!label) throw new Error(`창 생성 실패: ${JSON.stringify(r)}`);
+  WIN = label; // 이 프로세스의 후속 rpc + 출력용
+  // 부트(프로젝트 hydrate) 대기 — 소켓은 즉시 열리지만 executor 준비 게이트가 있다.
+  for (let i = 0; i < 40; i++) {
+    const tr = await rpc(sock, "state.tree").catch(() => null);
+    if (tr && tr.ok !== false && (tr.projects ?? []).length > 0) return label;
+    await sleep(300);
+  }
+  throw new Error(`창 부트 대기 초과: ${label}`);
+}
+
 // ── setup: 좌|우 터미널 2개. 생성 즉시 활성(렌더 대상)이어야 측정이 유효하다. ──
-async function setup(sock, repoRoot) {
+async function setup(sock, _repoRoot) {
+  await ensureWindow(sock);
   const tree0 = await getTree(sock);
   const prev = findProj(tree0);
   if (prev) must(await rpc(sock, "project.close", { project: prev.id }), "이전 제거");
 
   const created = must(
     await rpc(sock, "project.create", {
-      root: `${repoRoot}/scripts`,
+      root: RESIZE_PROJ,
       alias: ALIAS,
       program: "terminal",
     }),
@@ -157,6 +199,7 @@ async function setup(sock, repoRoot) {
   const panes = panesOf(proj);
   console.log(
     JSON.stringify({
+      window: WIN,
       project,
       contentId: content.id,
       rootSplitId: splitId(proj),
@@ -251,11 +294,10 @@ async function resize(sock, fracLeft) {
 }
 
 async function teardown(sock) {
-  const tree = await getTree(sock);
-  const prev = findProj(tree);
-  if (prev) {
-    must(await rpc(sock, "project.close", { project: prev.id }), "project.close");
-    console.log(JSON.stringify({ removed: prev.id }));
+  // 전용 창을 통째로 닫는다(창=측정 무대). WIN 은 env(SOKSAK_E2E_WINDOW)로 온다.
+  if (WIN) {
+    await rpc(sock, "window.close", { label: WIN }).catch(() => {});
+    console.log(JSON.stringify({ removed: WIN }));
   } else {
     console.log(JSON.stringify({ removed: null }));
   }

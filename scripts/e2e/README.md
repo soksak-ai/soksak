@@ -1,8 +1,10 @@
 # 리사이즈 E2E (기계 측정, GREEN/RED)
 
 빠른 창/디바이더 리사이즈에서 ① 본문 blank ② 프롬프트 잘림 ③ TUI 스테일 회귀를
-**사람·AI 개입 없이** 기계로 판정한다. 합성 입력(CGEvent)으로 빠른 드래그를 만들고,
-영상(screencapture)·터미널 버퍼(term.read)를 분석해 명확한 임계로 PASS/FAIL 한다.
+**사람·AI 개입 없이** 기계로 판정한다. `panel.resize` 명령으로 빠른 드래그와 동일 경로
+(resizeSplit → 렌더 → fit + PTY)를 구동하고, 터미널 버퍼(term.read)를 분석해 명확한
+임계로 PASS/FAIL 한다(본문 blank 판정만 opt-in 화면 녹화 사용). 전용 워크스페이스 창
+(w-*)에서만 동작한다 — `main` 은 컨트롤 플레인이라 창을 지정하지 않으면 측정이 무효다.
 
 ## 실행
 
