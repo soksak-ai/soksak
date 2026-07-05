@@ -307,6 +307,13 @@ pub fn cmd_result(bridge: State<CmdBridge>, id: u64, result: Value) {
     }
 }
 
+// 제어 소켓 경로(읽기 전용) — PTY 주입(pty.rs)과 같은 정본. 오케스트레이터가 스폰하는
+// 에이전트 서브프로세스(PTY 아님 — 자동주입 없음)의 SOKSAK_SOCKET env 로 쓴다.
+#[tauri::command]
+pub fn ipc_socket_path() -> Option<String> {
+    socket_path().map(str::to_string)
+}
+
 // Rust 내부에서 프론트 registry 명령을 실행한다(딥링크 라우팅·스케줄러 발화 공용 — 소켓 서버와 같은
 // CmdBridge 경로 재사용, 새 채널 발명 0). 활성 창으로 라우팅하고 결과를 동기 대기한다(route 가 [1s,3600s]
 // 클램프). registry 가 단일 실행 표면이므로 Rust 기능은 이 한 경로로만 명령을 부른다(R8 단일 경로).

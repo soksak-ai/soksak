@@ -17,6 +17,20 @@ use tauri::State;
 
 use crate::secrets::{self, SecretsState};
 
+// AI 세션 컨텍스트 env 정본 — 이걸 상속한 자식(claude 등)은 자기를 "에이전트 안의 에이전트"로
+// 인식해 세션 식별이 비정상이 된다(트랜스크립트·중첩 가드). PTY(pty.rs)와 서브프로세스
+// (scrub_ai_env)가 같은 목록을 쓴다 — 목록 추가는 여기 한 곳.
+pub const AI_SESSION_ENV: [&str; 8] = [
+    "CLAUDECODE",
+    "CLAUDE_CODE_SESSION_ID",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_CHILD_SESSION",
+    "CLAUDE_CODE_VERSION",
+    "CLAUDE_CODE_EXECPATH",
+    "CODEX_COMPANION_SESSION_ID",
+    "AI_AGENT",
+];
+
 struct ProcessSession {
     child: Arc<Mutex<Child>>, // kill(세션) + EOF 후 wait(reader) 공유
     stdin: Option<ChildStdin>,
@@ -113,6 +127,9 @@ pub fn process_spawn(
     // 부모 env 에서 제거할 키(설정 아닌 제거). 예: ACP 자식 에이전트에서 호스트 중첩 가드(CLAUDECODE)
     // 를 떼어내 "에디터가 띄운 독립 에이전트"로 동작시킨다. 병합(env)으론 못 하는 unset 전용 경로.
     env_remove: Option<Vec<String>>,
+    // true = AI 세션 컨텍스트 env 8종(AI_SESSION_ENV 정본, PTY 와 동일) 일괄 제거. 호출자가
+    // 목록을 복제하지 않게 하는 스위치 — env_remove 와 합산 적용.
+    scrub_ai_env: Option<bool>,
     // 시크릿 주입 — ns(보통 플러그인 id) + secret_env(envVar→secretKey). 평문은 여기 Rust 경계에서만
     // 해소돼 자식 env 로 들어간다(JS·셸 args·ps 미노출 R2). secret_env 가 있으면 ns 필수. 잠김/미존재면
     // spawn 하지 않고 Err — 미해소 시크릿이 자식으로 새지 않는다.
@@ -142,6 +159,11 @@ pub fn process_spawn(
     }
     if let Some(keys) = env_remove {
         for k in keys {
+            c.env_remove(k);
+        }
+    }
+    if scrub_ai_env.unwrap_or(false) {
+        for k in AI_SESSION_ENV {
             c.env_remove(k);
         }
     }

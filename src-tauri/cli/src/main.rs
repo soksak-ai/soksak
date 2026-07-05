@@ -76,6 +76,7 @@ fn print_usage() {
   sok events [--kinds a,b] [--since N] 활동 스트림 팔로우(JSONL, Ctrl-C 종료)
   sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]
                                       AI 에이전트 트리거 스킬 설치(soksak 제어법)
+  sok skill print                     라이브 SKILL.md 를 stdout 으로(프롬프트 재료)
   sok mcp install [--claude|--codex|--gemini|--all] [--env dev|debug|app]
                                       MCP 서버 등록(네이티브 mcp add, SOKSAK_SOCKET 핀)
 
@@ -989,8 +990,14 @@ fn skill_frontmatter_name(content: &str) -> Option<String> {
 }
 
 fn run_skill(args: &[String]) -> ExitCode {
+    // print = 라이브 SKILL.md 를 stdout 으로(파일 미접촉). 오케스트레이터가 스폰하는 에이전트의
+    // system prompt 재료 — --setting-sources "" 헤드리스에선 스킬 자동로드가 없어 프롬프트에 싣는다.
+    if args.first().map(String::as_str) == Some("print") {
+        print!("{}", skill_doc());
+        return ExitCode::SUCCESS;
+    }
     if args.first().map(String::as_str) != Some("install") {
-        eprintln!("사용: sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]");
+        eprintln!("사용: sok skill install [--claude|--gemini|--codex|--all] [--dir DIR] | sok skill print");
         return ExitCode::FAILURE;
     }
     let mut claude = false;

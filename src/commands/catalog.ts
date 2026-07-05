@@ -1721,6 +1721,27 @@ export function registerCatalog(): void {
     handler: async () => ({ labels: await invoke<string[]>("window_list") }),
   });
 
+  register("window.projects", {
+    description:
+      "Map open windows to the project each one hosts (root path + name + window label). The meaning layer over window.list — use it first to pick the right window before targeting commands with --window. Same answer from any window (process-wide registry).",
+    triggers: { ko: "창 프로젝트 매핑 어느 창 프로젝트 열림 창별 프로젝트" },
+    params: {},
+    returns: "{ projects: [{ root, name, window }] }",
+    summarize: (d) => `프로젝트 창 ${((d.projects as unknown[]) ?? []).length}개`,
+    examples: ["sok window.projects"],
+    handler: async () => {
+      const owners = await invoke<{ owners: { root: string; window: string }[] }>(
+        "project_owners",
+      );
+      const projects = owners.owners.map((o) => ({
+        root: o.root,
+        name: o.root.split("/").filter(Boolean).pop() ?? o.root,
+        window: o.window,
+      }));
+      return { projects };
+    },
+  });
+
   register("window.focus", {
     description: "Bring a specific window to the front (focus it).",
     triggers: { ko: "창 포커스 창 활성화 창 앞으로" },

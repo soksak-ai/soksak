@@ -407,6 +407,7 @@ pub fn run() {
             window::window_focus,
             window::window_close,
             ipc::cmd_result,
+            ipc::ipc_socket_path,
             titlebar::titlebar_backing,
             ime_debug,
             window_activate,
