@@ -43,8 +43,8 @@ export interface CommandSpec {
   //   낭독 실행이 다시 낭독되는 무한 전파의 유일한 차단점(docs/MESSAGE-PROTOCOL.md).
   tts?: boolean;
   // 실행 계측 선언 — false 면 이 명령의 실행이 활동 트레이스(command.executed)에서 제외된다.
-  // 관찰이 스트림을 늘리는 되먹임 명령(activity.recent)과, 세트가 별도 kind 로 대표되는 명령
-  // (orchestrator.ask — chat.prompt/answer 가 그 턴의 기록)만 선언한다. 생략 = 계측(기본).
+  // §5 R2: 유일한 정당 사유는 "동일 사실의 이중 기록 방지"(orchestrator.ask — chat.prompt/
+  // answer 가 그 턴의 대표 기록)뿐이다. 소음 억제 목적의 선언 금지 — 그건 origin(노출 축) 몫.
   trace?: false;
   // [RULE] 핸들러 반환 객체에 top-level "id" 를 쓰지 말 것 — 소켓 응답이 JSON-RPC 봉투의
   // 요청 id(숫자)와 한 객체로 합쳐져 덮어쓴다(식별자 유실). 식별자는 네임스페이스 필드로
@@ -263,10 +263,11 @@ export async function execute(
   const out = await executeInner(name, params, ctx);
   const finished = Date.now();
   try {
-    // 계측 제외 두 축(§5 기계의 맥동): ① spec.trace === false — 명령 성격(관찰 되먹임·별도
-    // kind 대표). ② ctx.origin === "internal" — 호출 성격(컴포넌트가 자기 화면을 채우는 내부
-    // 조회 — 사람 의도가 아니다). 미등록 명령의 실패 봉투는 그대로 계측된다.
-    if (registry.get(name)?.trace !== false && ctx.origin !== "internal") {
+    // 기록은 전량(§5 R2 — 사실은 전부 기록된다). 유일한 제외 = spec.trace === false:
+    // 동일 사실의 이중 기록 방지(orchestrator.ask — chat.prompt/answer 가 그 턴의 대표 기록,
+    // activity.recent 아님 주의: 조회도 사실이라 기록된다). 노출(흐림·무낭독)은 origin 축이
+    // 선별할 뿐 기록 여부를 정하지 않는다. 미등록 명령의 실패 봉투도 그대로 계측.
+    if (registry.get(name)?.trace !== false) {
       traceSink?.({
         command: name,
         title: registry.get(name)?.title,

@@ -77,27 +77,16 @@ chat.answer { text, parentId: turnId, ok, code }      ← closes the set (agent'
 - **Anchor**: the set's display unit is the parent (`chat.prompt`) — card visibility follows the parent, so the set shows whole even when children ran in other windows (w-*). Orphaned children whose parent fell off the ring/buffer display standalone (nothing is lost).
 - **Order is factual**: an execution already in flight when the turn is stopped lands after the answer and is shown as-is — the set is a seq-ordered record, not a staged narrative.
 - **Narration**: `chat.prompt` (the user's own words), `chat.answer` (AI utterance), and progress deltas never carry `tts` — silent. `command.executed` children narrate per their own tts spec (§3).
-- **Trace opt-out** `CommandSpec.trace: false` — a command whose executions are not instrumented as `command.executed`. Only two families declare it: observation that would feed back into the stream (`activity.recent`), and commands whose set is represented by a dedicated kind (`orchestrator.ask` — chat.prompt/answer are that turn's record).
+- **Trace opt-out** `CommandSpec.trace: false` — duplicate-record prevention only (§5 R2): declared solely by `orchestrator.ask` (chat.prompt/answer are that turn's canonical record).
 
-## 5. What qualifies as activity — what is recorded, what is spoken
+## 5. What qualifies as activity — recording and exposure are separate axes
 
-**First principle: the activity stream is a record of intent.** An entry's fate is decided by specs at the publish point (trace · tts · origin); consumers (feed, narrator) invent no filters of their own.
+- **R1 Falsehoods die at the emitter** — a mark for something that never happened is contamination, not a record: D (finished) is emitted only paired with C (executed) (shell-integration.zsh — the first prompt / empty Enter emits no D), and boot restore is not project.created (diff reseed).
+- **R2 Facts are always recorded** — everything that actually ran is recorded: component self-reads (project.recent, backfill activity.recent), narration runs (say), scheduled firings. The only legitimate use of `trace:false` is **duplicate-record prevention for the same fact** (`orchestrator.ask` — chat.prompt/answer are that turn's canonical record). trace:false for noise suppression is forbidden — that's the exposure axis's job.
+- **R3 Exposure selects** — origin (the actor) decides display and narration, never recording: omitted = human (normal display, narrated per tts spec) / `"schedule"` = scheduled intent (dimmed + "schedule" label, silent) / `"internal"` = automation & self-reads (dimmed, silent). System origins get tts erased at the registry instrumentation point — the narration→record→narration loop is cut on this axis (recording itself is linear, not feedback). Environment facts (view.activated, turn.ended) are quiet one-liners, silent.
+- **R4 No retention zero-sum** — low-signal entries (with an origin) never compete with the signal for retention: separate persistence scopes `app` (signal) / `app-low` (low signal), each capped at 5000. The ring (live view, 2000) stays mixed — liveness is a time window; history is persistence's job. seq resumes from the max across both scopes.
 
-| Class | Examples | Recorded | Display | Narration |
-|---|---|---|---|---|
-| **Intended acts** — human hands, human delegation (a turn and its children) | console runs, real terminal commands, an orchestrator turn's commands | ○ | signal (normal) | per tts spec |
-| **Scheduled intent** — firings of a schedule a human registered | scheduler-run reconcile etc. (`origin:"schedule"`) | ○ | dimmed | ✕ (not the present intent — never interrupt by voice) |
-| **Machine pulse** — integration/restore byproducts | shell-init prompt pulses, observation byproducts (say, activity.recent) | **✕ (never published)** | — | — |
-| **Environment facts** — state transitions | view.activated, turn.ended | ○ | quiet one-liner | ✕ |
-
-The machine pulse is **eliminated at the emitter** — not filtered by consumers:
-- **D (finished) is emitted only paired with C (executed)** (shell-integration.zsh, FinalTerm semantics). precmd on the first prompt / empty Enter emits no D — that fabricated "command finished" used to flood one per pane on every shell init/reload. Parsers trust the wire.
-- **Observation begets no activity** — narration runs (say) and feed reads (activity.recent) are `trace:false`.
-
-
-Actor (origin) enumeration and display: omitted = human (window name only), `"schedule"` = scheduled intent (a "schedule" label on the meta + dimmed), `"internal"` = component self-reads (never published — nothing to label). New automation classes extend by adding an origin value.
-
-origin carrier: Rust-internal firing (the scheduler) passes `request_command(origin:"schedule")`; it rides ctx → trace → entry payload.origin. System origins get tts erased at the registry instrumentation point (silent regardless of spec).
+origin carrier: Rust-internal firing (the scheduler) passes `request_command(origin:"schedule")`; plugin automation self-declares via `app.commands.execute(name, params, {origin:"internal"})`; a handler's nested executions inherit through `inv.execute` — riding ctx → trace → entry payload.origin. New automation classes extend by adding an origin value.
 
 ## Command labels
 

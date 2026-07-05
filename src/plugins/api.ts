@@ -185,9 +185,12 @@ export interface SoksakPluginApi {
   // 호스트 표시 언어(권한 불요 컨텍스트 §3.5) — 변경은 locale.changed 이벤트.
   locale: () => string;
   commands?: {
+    /** opts.origin — 자동 행위의 자기 선언(§5): 사람 의도가 아닌 실행(백필 조회·낭독 등)은
+     *  "internal" 을 선언한다. 기록은 그대로 되고 노출(흐림·무낭독)만 낮아진다. */
     execute: (
       name: string,
       params?: Record<string, unknown>,
+      opts?: { origin?: string },
     ) => Promise<CommandOutcome>;
     register: (name: string, spec: PluginCommandSpec) => Disposable;
   };
@@ -1036,7 +1039,8 @@ export function buildPluginApi(
   const executeGated = async (
     name: string,
     params?: Record<string, unknown>,
-    // 중첩 실행의 컨텍스트 상속(§5) — 게이트는 동일하게 타되 유래·상관만 계승한다.
+    // 유래·상관 운반(§5) — 중첩 실행의 상속(inv) 또는 자동 행위의 자기 선언(opts.origin).
+    // 게이트는 동일하게 탄다.
     inherit?: { origin?: string; parent?: string },
   ): Promise<CommandOutcome> => {
     if (isBlockedForPlugins(name)) {

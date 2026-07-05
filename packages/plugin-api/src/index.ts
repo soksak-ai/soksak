@@ -245,7 +245,13 @@ export interface SoksakPluginApi {
   pluginId: string;
   locale: () => string;
   commands?: {
-    execute: (name: string, params?: Record<string, unknown>) => Promise<CommandOutcome>;
+    /** opts.origin — 자동 행위의 자기 선언(§5): 사람 의도가 아닌 실행(백필 조회·낭독 등)은
+     *  "internal". 기록은 그대로, 노출(흐림·무낭독)만 낮아진다. */
+    execute: (
+      name: string,
+      params?: Record<string, unknown>,
+      opts?: { origin?: string },
+    ) => Promise<CommandOutcome>;
     register: (name: string, spec: PluginCommandSpec) => Disposable;
   };
   events: {

@@ -77,27 +77,16 @@ chat.answer { text, parentId: turnId, ok, code }      ← 세트 닫음(에이�
 - **정박**: 세트의 표시 단위는 부모(`chat.prompt`)다 — 카드 가시성은 부모 기준이며, 자식이 다른 창(w-*)의 실행이어도 세트는 완전체로 보인다. 부모가 링/버퍼 밖으로 밀려난 고아 자식은 단독 표시된다(유실 없음).
 - **순서는 사실 그대로**: 중단(stop) 뒤 이미 발사된 실행이 늦게 도착하면 답변 뒤에 그대로 표시된다 — 세트는 seq 순의 기록이지 연출이 아니다.
 - **낭독과의 관계**: `chat.prompt`(사용자 자신의 말)·`chat.answer`(AI 발화)·진행 델타에는 `tts`가 실리지 않는다 — 침묵. 턴 안의 `command.executed`는 각자의 tts 스펙(§3)대로 낭독된다.
-- **계측 제외 선언** `CommandSpec.trace: false` — 실행이 `command.executed`로 계측되지 않는 명령. 두 부류만 선언한다: 관찰이 스트림을 늘리는 되먹임(`activity.recent`), 세트가 별도 kind로 대표되는 명령(`orchestrator.ask` — chat.prompt/answer가 그 턴의 기록).
+- **계측 제외 선언** `CommandSpec.trace: false` — 동일 사실의 이중 기록 방지 전용(§5 R2): `orchestrator.ask`(chat.prompt/answer 가 그 턴의 대표 기록)만 선언한다.
 
-## 5. 활동의 자격 — 무엇이 기록되고 무엇이 읽히는가
+## 5. 활동의 자격 — 기록과 노출은 다른 축이다
 
-**제1원칙: 활동 스트림은 의도의 기록이다.** 엔트리의 운명은 발행 지점의 스펙(trace·tts·origin)이 결정하며, 소비자(피드·낭독기)는 임의 필터를 만들지 않는다.
+- **R1 거짓은 소멸** — 일어나지 않은 일의 표식은 기록이 아니라 오염이다. 방출기에서 원천 제거한다: D(종료)는 C(실행)와 짝일 때만(shell-integration.zsh — 첫 프롬프트·빈 Enter 는 D 를 내지 않는다), 부트 복원은 project.created 가 아니다(diff 재씨딩).
+- **R2 사실은 전량 기록** — 실제로 실행된 것은 전부 기록된다: 내부 조회(project.recent·백필 activity.recent)·낭독 실행(say)·스케줄 발화 포함. `trace:false` 의 유일한 정당 사유는 **동일 사실의 이중 기록 방지**(`orchestrator.ask` — chat.prompt/answer 가 그 턴의 대표 기록)다. 소음 억제 목적의 trace:false 는 금지 — 그건 노출 축의 몫.
+- **R3 노출이 선별** — origin(발화자)이 표시·낭독을 결정하지 기록을 결정하지 않는다: 생략=사람(정상 표시, tts 스펙대로 낭독) / `"schedule"`=예약된 의도(흐림+"스케줄" 라벨, 무낭독) / `"internal"`=자동 행위·자기 조회(흐림, 무낭독). 시스템 유래(origin 보유)는 registry 계측 지점에서 tts 가 소거된다 — 낭독→기록→낭독 루프는 이 축이 끊는다(기록 자체는 선형이라 되먹임이 아니다). 환경의 사실(view.activated·turn.ended)은 조용한 한 줄, 무낭독.
+- **R4 보관 제로섬 해소** — 저신호(origin 보유)는 신호와 영속 캡을 다투지 않는다: scope `app`(신호)/`app-low`(저신호) 별도 보관(각 5000). 링(라이브 뷰 2000)은 시간창이 본질이라 혼합 — 역사 보증은 영속의 몫. seq 재개는 전 scope 최댓값.
 
-| 부류 | 예 | 기록 | 표시 | 낭독 |
-|---|---|---|---|---|
-| **의도된 행위** — 사람 손·사람의 위임(대화 턴과 그 자식) | 콘솔 실행, 터미널 실명령, orchestrator 턴의 명령들 | ○ | 신호(정상) | tts 스펙대로 |
-| **예약된 의도** — 사람이 등록한 일정의 발화 | 스케줄러가 돌린 reconcile 등 (`origin:"schedule"`) | ○ | 흐림 | ✕ (지금의 의도가 아니다 — 소리로 개입하지 않는다) |
-| **기계의 맥동** — 통합·복원의 부산물 | 셸 초기화 프롬프트 펄스, 관찰의 부산물(say·activity.recent) | **✕ (발행되지 않는다)** | — | — |
-| **환경의 사실** — 상태 전이 | view.activated, turn.ended | ○ | 조용한 한 줄 | ✕ |
-
-기계의 맥동은 **방출기에서 원천 제거**한다 — 소비자 필터가 아니다:
-- **D(종료)는 C(실행)와 짝일 때만 방출된다**(shell-integration.zsh, FinalTerm 의미론). 첫 프롬프트·빈 Enter 의 precmd 는 D 를 내지 않는다 — 과거엔 여기서 가짜 "명령 종료"가 pane 수만큼 쏟아졌다(셸 초기화/리로드 연발의 원인). 파서는 wire 를 신뢰한다.
-- **관찰은 활동을 낳지 않는다** — 낭독 실행(say)·피드 조회(activity.recent)는 `trace:false`.
-
-
-발화자(origin) 열거와 표기: 생략=사람(창 이름만 표시), `"schedule"`=예약된 의도(메타에 "스케줄" 라벨+흐림), `"internal"`=컴포넌트 자기 조회(무발행 — 표기 대상 아님). 새 자동화 부류는 origin 값 추가로 확장한다.
-
-origin 운반: Rust 내부 발화(스케줄러)가 `request_command(origin:"schedule")` 로 싣고, ctx → trace → 엔트리 payload.origin 으로 관통한다. 시스템 유래는 registry 계측 지점에서 tts 를 소거한다(스펙과 무관하게 침묵).
+origin 운반: Rust 내부 발화(스케줄러)는 `request_command(origin:"schedule")`, 플러그인 자동 행위는 `app.commands.execute(name, params, {origin:"internal"})` 자기 선언, 핸들러의 중첩 실행은 `inv.execute` 상속 — ctx → trace → 엔트리 payload.origin 으로 관통한다. 새 자동화 부류는 origin 값 추가로 확장한다.
 
 ## 명령 라벨
 

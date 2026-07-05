@@ -2018,8 +2018,8 @@ export function registerCatalog(): void {
       'sok activity.recent \'{"limit":20}\'',
       'sok activity.recent \'{"since":1234}\'',
     ],
-    // 관찰이 스트림을 늘리는 되먹임 방지 — 피드를 보는 행위는 기록하지 않는다.
-    trace: false,
+    // §5 R2: 조회도 사실이다 — 기록된다(선형 증가일 뿐 되먹임 아님. 낭독 루프는 tts 축이
+    // 차단). 컴포넌트 자기 백필은 호출측이 origin:"internal" 로 선언(노출만 낮아짐).
     handler: async (p) => {
       const entries = await invoke("activity_recent", {
         since: p.since ?? null,

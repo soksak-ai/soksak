@@ -26,7 +26,10 @@ const SUB_CAP: usize = 256;
 const PERSIST_CAP: i64 = 5000;
 const NS: &str = "core";
 const COLL: &str = "activity";
+// 영속 보관 2계층(§5 R4) — 저신호(origin 보유: 스케줄·internal)가 신호(사람 유래·환경 사실)의
+// 보관 캡을 다투지 않는다. 링(라이브 뷰)은 시간창이 본질이라 혼합 유지 — 역사 보증은 영속의 몫.
 const SCOPE: &str = "app";
+const SCOPE_LOW: &str = "app-low";
 
 pub struct ActivityHub {
     inner: Mutex<HubInner>,
@@ -161,14 +164,25 @@ pub fn publish(app: &AppHandle, kind: &str, source: &str, payload: Value) -> Val
     hub.fan_out(&entry); // 소켓 스트리밍 구독자(A2)
     let _ = app.emit("activity", entry.clone());
     // 영속(retention trim) — 실패는 스트림을 막지 않는다(라이브 우선, 콘솔 보고).
+    // 저신호(payload.origin 보유)는 별도 scope 로 — 신호의 보관 캡을 다투지 않는다(§5 R4).
+    let scope = if entry
+        .get("payload")
+        .and_then(|p| p.get("origin"))
+        .and_then(Value::as_str)
+        .is_some_and(|s| !s.is_empty())
+    {
+        SCOPE_LOW
+    } else {
+        SCOPE
+    };
     let st = app.state::<crate::data::DbState>();
     if let Ok(guard) = st.conn.lock() {
         if let Some(conn) = guard.as_ref() {
             let id = entry.get("seq").and_then(Value::as_u64).map(|s| format!("a{s:016}"));
-            if let Err(e) = crate::data::store::put(conn, NS, COLL, SCOPE, id, &entry) {
+            if let Err(e) = crate::data::store::put(conn, NS, COLL, scope, id, &entry) {
                 eprintln!("[activity] 영속 실패: {e}");
             } else {
-                let _ = crate::data::store::retention_trim(conn, NS, COLL, SCOPE, PERSIST_CAP);
+                let _ = crate::data::store::retention_trim(conn, NS, COLL, scope, PERSIST_CAP);
             }
         }
     }
@@ -181,12 +195,13 @@ pub fn init_collection(conn: &rusqlite::Connection) {
 }
 
 /// 부트 1회 — 영속 최댓값에서 seq 재개(재시작을 넘는 단조). 레코드 없음(신선 설치) = 0 유지.
+/// 전 scope(신호+저신호) 최댓값 — 어느 쪽이 마지막이었든 뒤로 가지 않는다.
 pub fn resume_seq(app: &AppHandle, conn: &rusqlite::Connection) {
     let last = crate::data::store::query(
         conn,
         NS,
         COLL,
-        Some(SCOPE),
+        None,
         None,
         Some("seq"),
         true,
