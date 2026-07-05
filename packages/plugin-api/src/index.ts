@@ -243,6 +243,8 @@ export interface SoksakPluginApi {
   appVersion: string;
   pluginId: string;
   locale: () => string;
+  /** 이 플러그인 인스턴스가 사는 창 label(멀티윈도우 — 창별 상태·자격 기록용). */
+  windowLabel: () => string;
   commands?: {
     /** opts.origin — 자동 행위의 자기 선언(§5): 사람 의도가 아닌 실행(백필 조회·낭독 등)은
      *  "internal". 기록은 그대로, 노출(흐림·무낭독)만 낮아진다. */

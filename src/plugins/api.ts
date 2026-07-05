@@ -184,6 +184,8 @@ export interface SoksakPluginApi {
   pluginId: string;
   // 호스트 표시 언어(권한 불요 컨텍스트 §3.5) — 변경은 locale.changed 이벤트.
   locale: () => string;
+  /** 이 플러그인 인스턴스가 사는 창 label(멀티윈도우 — 창별 상태·자격 기록용). */
+  windowLabel: () => string;
   commands?: {
     /** opts.origin — 자동 행위의 자기 선언(§5): 사람 의도가 아닌 실행(백필 조회·낭독 등)은
      *  "internal" 을 선언한다. 기록은 그대로 되고 노출(흐림·무낭독)만 낮아진다. */
@@ -1074,6 +1076,7 @@ export function buildPluginApi(
     appVersion: deps.appVersion,
     pluginId: id,
     locale: () => useSettings.getState().language,
+    windowLabel: () => currentWindowLabel() || "main",
 
     events: {
       on: (event, fn) => {
