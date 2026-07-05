@@ -28,6 +28,7 @@ import {
 import { register, catalogJson } from "./registry";
 import { collectExposed } from "./catalogDom";
 import { pluginCommandName } from "../plugins/spec";
+import { commandsMissingMessage } from "../plugins/api";
 import { missingRegistrations, nodeConformance } from "../plugins/conformance";
 import { useUi } from "../state/ui";
 import { consentSummary } from "../plugins/consentSummary";
@@ -706,6 +707,10 @@ export function registerPluginCatalog(): void {
           declared: declaredCmds,
           registered: registeredCmds,
           missing: missingRegistrations(declaredCmds, registeredCmds),
+          // message 표준(§3): 자기 답을 제공하지 않고 라벨로 열화한 명령(발행 전 채워야 함).
+          messagesMissing: registeredCmds.filter((n) =>
+            commandsMissingMessage.has(pluginCommandName(id, n)),
+          ),
         },
         views: {
           declared: declaredViews,

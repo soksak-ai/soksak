@@ -105,8 +105,8 @@ A sidecar's own wire (engine C-ABI / service stdio / iroh socket) is opaque to t
 ## Enforcement
 
 - **Core `execute`** normalizes handler returns into the envelope, injects `message` from `summarize` (or the `code` echo), and reserves `ok`/`code`/`message`.
-- **A build gate** (`commandMessages.test.ts`) fails the build when a core command lacks its `msg.<name>` key, and the `en`/`ko` key sets must match (P0 language parity).
-- **The plugin loader** warns at registration when a plugin command provides no `message` — the answer degrades to the command label until the M5 sweep, when the warning becomes rejection.
+- **A build gate** (`commandMessages.test.ts`) fails the core build when a command lacks its `msg.<name>` key, and the `en`/`ko` key sets must match (P0 language parity).
+- **The plugin loader** warns at registration when a plugin command provides no `message` and its answer degrades to the command label — a load-time rejection would brick a plugin on any message regression, so the gate lives at the publish boundary instead: `sok plugin.conformance <id>` reports `commands.messagesMissing`, and `plugin-doctor` R5 rejects the retired `ok:false,error:` dialect.
 
 ## Migration
 

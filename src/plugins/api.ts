@@ -642,6 +642,10 @@ const BLOCKED_MANAGEMENT = new Set([
   "plugin.reload",
 ]);
 
+// message 미제공(라벨 폴백)으로 등록된 플러그인 명령 전역 집합 — plugin.conformance 가 정확히
+// 보고하는 게이트 소스(로드타임 거부 대신 발행/진단 경계에서 강제, MESSAGE-PROTOCOL §3).
+export const commandsMissingMessage = new Set<string>();
+
 export function isBlockedForPlugins(name: string): boolean {
   return BLOCKED_MANAGEMENT.has(name) || name.startsWith("plugin.dev.");
 }
@@ -1167,15 +1171,19 @@ export function buildPluginApi(
               );
             }
             // 응답 봉투 표준(MESSAGE-PROTOCOL): message 는 명령이 제공한다. summarize 는 message 의
-            // 구명(전환기 호환 — M5 sweep 에서 제거). 둘 다 없으면 답을 라벨로 대신하고 경고한다
-            // — M5 완료 시 경고는 등록 거부로 승격(P2). 준거=runbook ok()/err().
+            // 구명(전환기 호환 — M5 sweep 에서 제거). 둘 다 없으면 답을 라벨로 대신하고 경고하며,
+            // plugin.conformance 가 그 명령을 messagesMissing 으로 보고한다(정확한 저자 게이트 —
+            // 로드타임 거부는 message 회귀 시 플러그인을 벽돌로 만들어, 게이트 경계는 발행/진단이다).
             const pluginAnswer = spec.message ?? spec.summarize;
+            const full = pluginCommandName(id, name);
             if (typeof pluginAnswer !== "function") {
               console.warn(
-                `[plugin:${id}] 명령 '${name}' 에 message 미제공 — 답이 라벨로 열화(MESSAGE-PROTOCOL §3, M5 에서 필수화)`,
+                `[plugin:${id}] 명령 '${name}' 에 message 미제공 — 답이 라벨로 열화(MESSAGE-PROTOCOL §3)`,
               );
+              commandsMissingMessage.add(full);
+            } else {
+              commandsMissingMessage.delete(full);
             }
-            const full = pluginCommandName(id, name);
             const labelAnswer = () =>
               declared.title ? localize(declared.title) : name;
             deps.registerCommand(full, {
