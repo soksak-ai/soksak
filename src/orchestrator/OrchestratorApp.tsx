@@ -127,11 +127,22 @@ function renderEntry(
   deltas?: ActivityEntry[], // 이 턴에 접힌 진행 델타(MESSAGE-PROTOCOL §2 — 요청→델타→응답)
 ) {
   const win = String(e.payload.window ?? "");
-  // 발화자 표기(§5) — 어디서(창) + 누가(유래). 사람 유래는 창 이름만, 시스템 유래는 라벨 명시.
+  // 발화자 표기(§5 R3) — 어디서(창) + 누가. origin 우선(스케줄·내부), 없으면 유래 소스
+  // (remote=에이전트/CLI→"원격", terminal→"터미널"). 사람 손(ui)은 창·콘솔 이름이 곧 발화자.
   const origin = typeof e.payload.origin === "string" ? e.payload.origin : "";
-  const originLabel = origin === "schedule" ? t("orch.bySchedule") : origin;
-  const who = `${win ? nameOf(win) : e.source}${originLabel ? ` · ${originLabel}` : ""}`;
-  const meta = (t: number) => `${fmtTime(t)}${showWho || originLabel ? ` · ${who}` : ""}`;
+  const actorLabel =
+    origin === "schedule"
+      ? t("orch.bySchedule")
+      : origin === "internal"
+        ? t("orch.byInternal")
+        : origin ||
+          (e.source === "remote"
+            ? t("orch.byRemote")
+            : e.source === "terminal"
+              ? t("orch.byTerminal")
+              : "");
+  const who = `${win ? nameOf(win) : e.source}${actorLabel ? ` · ${actorLabel}` : ""}`;
+  const meta = (t: number) => `${fmtTime(t)}${showWho || actorLabel ? ` · ${who}` : ""}`;
   const raw = isExpanded ? (
     <pre className="orch-raw">{JSON.stringify(e.payload, null, 2)}</pre>
   ) : null;
