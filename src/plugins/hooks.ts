@@ -199,6 +199,13 @@ export function emitFileSaved(payload: PluginEventMap["file.saved"]): void {
   emitPluginEvent("file.saved", payload);
 }
 
+// 부트 복원 적용 직후 세션 diff 기준점을 현재로 재씨딩 — 복원은 생성이 아니다(§5).
+// startPluginHooks 가 실체를 주입한다(그 전 호출은 no-op — 훅 미기동 창은 diff 도 없다).
+let reseedSessions: (() => void) | null = null;
+export function reseedSessionsSnapshot(): void {
+  reseedSessions?.();
+}
+
 // ── 상태 diff 합성 ───────────────────────────────────────────────────────────
 
 interface ActiveViewKey {
@@ -312,6 +319,12 @@ export function startPluginHooks(): void {
     });
   };
   useSessions.subscribe(() => scheduleSessionsDiff());
+  // 복원 델타 삼킴(§5 "재생은 관찰이 아니다") — 부트 복원이 적용된 직후 workspaceBoot 가
+  // 호출한다. 복원으로 나타난 프로젝트를 diff 가 "생성"으로 오인해 project.created 를
+  // 창마다 발화하던 원천(실측: 창마다 git.init 자동 실행 + "OK" 낭독 연발).
+  reseedSessions = () => {
+    prevSessions = snapshotSessions(useSessions.getState());
+  };
 
   let prevTheme = {
     name: useTheme.getState().current,

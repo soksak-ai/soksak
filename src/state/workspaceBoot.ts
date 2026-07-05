@@ -18,6 +18,7 @@ import { makeCoreStore } from "./coreStore";
 import { validateProjectRoot, ensureDefaultWorkspace } from "../lib/workspace";
 import { claimRoots } from "./projectRegistry";
 import { beginRestoreHydration } from "./hydration";
+import { reseedSessionsSnapshot } from "../plugins/hooks";
 import { listRecentProjects } from "./recentProjects";
 import {
   useSessions,
@@ -134,6 +135,9 @@ export async function initWorkspacePersistence(
       reseedIdCounters(owned);
       if (owned.length > 0) {
         useSessions.getState().restoreProjects(owned, active);
+        // 복원은 생성이 아니다(§5 재생≠관찰) — diff 기준점을 지금으로 재씨딩해 복원 델타가
+        // project.created(→ 플러그인 git.init 자동 실행 등)로 오인 발화되는 것을 원천 차단.
+        reseedSessionsSnapshot();
         // B4 — 복원 hydration: 보이지 않는 복원 뷰의 본문 마운트를 미루고(PTY 동시
         // spawn 분산), idle 체인이 lastActivity 순으로 채운다. 외형은 즉시 전부.
         beginRestoreHydration();
