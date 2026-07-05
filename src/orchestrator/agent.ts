@@ -161,7 +161,8 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
   };
   let skillDoc: string;
   try {
-    skillDoc = await runCapture("exec sok skill print", baseEnv);
+    // 준비 실행(skill print → state.commands)도 이 턴의 소산 — parent 를 실어 세트에 접는다.
+    skillDoc = await runCapture("exec sok skill print", { ...baseEnv, SOKSAK_PARENT: turnId });
   } catch (e) {
     return close(
       false,
