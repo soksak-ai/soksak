@@ -177,7 +177,7 @@ pub fn run() {
                 app.deep_link().on_open_url(move |event| {
                     for u in event.urls() {
                         if let Some((cmd, params)) = deeplink::parse_command_url(u.as_str()) {
-                            let _ = ipc::request_command(&dl_handle, cmd, params, 10_000);
+                            let _ = ipc::request_command(&dl_handle, cmd, params, 10_000, None);
                         }
                     }
                 });

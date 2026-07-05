@@ -33,14 +33,16 @@ export function startActivityFeed(): void {
       cwd: p.cwd,
     }),
   );
-  onPluginEvent("command.finished", (p) =>
+  onPluginEvent("command.finished", (p) => {
+    // §5: 시작 없는 종료(셸 초기화 펄스)는 관찰 스토어가 이미 소멸시킨다 — 여기 도달 = 실명령.
     publish("terminal.command.finished", "terminal", {
       paneId: p.paneId,
       exitCode: (p as { exitCode?: number }).exitCode,
+      commandLine: (p as { commandLine?: string | null }).commandLine ?? null,
       // 낭독 대상(문장 합성은 소비자 — exitCode 로컬라이즈). turn.ended(AI 발화)는 tts 없음.
       tts: true,
-    }),
-  );
+    });
+  });
   onPluginEvent("turn.ended", (p) =>
     publish("turn.ended", p.source, {
       paneId: p.paneId,
@@ -78,6 +80,7 @@ export function startActivityFeed(): void {
       media: t.media,
       tts: t.tts,
       parentId: t.parentId,
+      origin: t.origin,
     });
   });
 }

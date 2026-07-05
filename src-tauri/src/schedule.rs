@@ -673,7 +673,7 @@ pub fn ensure_started(app: &AppHandle) {
 
 // 비-프로세스 발화 — f.timeout_ms 까지 단일 recv(route 가 [1s,3600s] 클램프). notify.show 등 즉시 완료.
 fn fire_simple(app: &AppHandle, f: Fire) {
-    let reply = ipc::request_command(app, f.command, f.params, f.timeout_ms);
+    let reply = ipc::request_command(app, f.command, f.params, f.timeout_ms, Some("schedule"));
     let ok = reply.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
     let c = app.state::<ScheduleState>().complete(&f.id, ok, now_ms(), f.epoch);
     if c.removed {
@@ -686,7 +686,7 @@ fn fire_simple(app: &AppHandle, f: Fire) {
 // zombie_backstop 에 거둔다. cancel 은 ipc::close_request 가 채널 끊어 즉시 깨움(누수 0).
 fn fire_process(app: &AppHandle, f: Fire) {
     let st = app.state::<ScheduleState>();
-    let Some((seq, rx)) = ipc::open_request(app, f.command, f.params) else {
+    let Some((seq, rx)) = ipc::open_request(app, f.command, f.params, Some("schedule")) else {
         // emit 실패 — 프론트 도달 불가. 실패로 완료(backoff 여지).
         let c = st.complete(&f.id, false, now_ms(), f.epoch);
         if c.removed {

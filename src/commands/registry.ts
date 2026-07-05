@@ -65,6 +65,9 @@ export interface CommandContext {
   // 상관 부모(대화 턴 id) — 에이전트 env SOKSAK_PARENT → sok 요청 meta 로 도착. trace 의
   // parentId 가 되어 이 실행을 그 턴의 활동 세트로 묶는다(docs/MESSAGE-PROTOCOL.md).
   parent?: string;
+  // 실행 유래(§5) — 생략=사람 유래(콘솔·터미널·에이전트 턴). "schedule" 등 시스템 유래는
+  // 낭독 후보에서 제외되고(아래 execute) 피드에서 흐리게 표시된다.
+  origin?: string;
 }
 
 // 권한 게이트 콜백(설정 store 를 registry 가 직접 알지 않게 주입).
@@ -242,6 +245,8 @@ export interface CommandTrace {
   media?: MediaContent; // 표시 미디어(이미지 등) — 피드가 그대로 렌더
   // 상관 부모(ctx.parent 관통) — 이 실행이 속한 대화 턴 id. 피드가 턴 세트로 폴딩한다.
   parentId?: string;
+  // 실행 유래(ctx.origin 관통) — 시스템 유래("schedule" 등)는 무낭독·흐림 표시(§5).
+  origin?: string;
 }
 let traceSink: ((t: CommandTrace) => void) | null = null;
 export function setCommandTraceSink(fn: ((t: CommandTrace) => void) | null): void {
@@ -275,8 +280,10 @@ export async function execute(
         finishedAt: finished,
         data: out.data,
         media: out.media,
-        tts: effectiveTts(registry.get(name), out),
+        // 낭독 후보는 사람 유래만(§5) — 시스템 유래(스케줄러 등)는 스펙과 무관하게 침묵.
+        tts: ctx.origin ? undefined : effectiveTts(registry.get(name), out),
         parentId: ctx.parent,
+        origin: ctx.origin,
       });
     }
   } catch {

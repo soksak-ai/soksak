@@ -81,8 +81,14 @@ export interface PluginEventMap {
     pid?: number | null;
   };
   // 터미널 명령 종료(OSC 133/633 셸 통합 탐지 — 폴링 없음). git 뷰 등의 자동
-  // 갱신 트리거. projectId 는 pane 의 소속 프로젝트(못 찾으면 null).
-  "command.finished": { projectId: string | null; paneId: string; exitCode?: number };
+  // 갱신 트리거. projectId 는 pane 의 소속 프로젝트(못 찾으면 null). commandLine = 관찰된
+  // 시작이 있던 실명령만(셸 초기화 부산물은 null — 부팅 시 pane 마다 발사되는 프롬프트 종료).
+  "command.finished": {
+    projectId: string | null;
+    paneId: string;
+    exitCode?: number;
+    commandLine?: string | null;
+  };
   // 오픈 토픽 "턴 종료" — provider 3종: shell(OSC133 명령 종료), idle(출력 유휴 휴리스틱,
   // 기본 OFF), acp(ACP 플러그인이 bus 로 발행 → 코어가 hooks 로 미러). 메일함 self-subscribe 가
   // 구독해 턴 종료 시 기계적으로 메시지 생성. 코어는 특정 플러그인을 모른다(결합 0) — 토픽 계약만.
@@ -380,7 +386,12 @@ export function startPluginHooks(): void {
   // coalesce 불필요 — 발생 빈도 = 사용자가 명령을 끝내는 빈도.
   subscribeAnyCommandFinished((paneId, commandLine, cwd, exitCode) => {
     const info = projectInfoOfPane(paneId);
-    emitPluginEvent("command.finished", { projectId: info?.id ?? null, paneId, exitCode });
+    emitPluginEvent("command.finished", {
+      projectId: info?.id ?? null,
+      paneId,
+      exitCode,
+      commandLine: commandLine ?? null,
+    });
     // B3 — 명령 종료 시점의 cwd(cd 후 종료 반영)·활동 시각.
     useSessions.getState().setViewRuntime(null, paneId, {
       ...(cwd ? { cwd } : {}),

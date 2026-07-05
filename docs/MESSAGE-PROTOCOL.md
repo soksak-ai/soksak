@@ -79,6 +79,23 @@ chat.answer { text, parentId: turnId, ok, code }      ← closes the set (agent'
 - **Narration**: `chat.prompt` (the user's own words), `chat.answer` (AI utterance), and progress deltas never carry `tts` — silent. `command.executed` children narrate per their own tts spec (§3).
 - **Trace opt-out** `CommandSpec.trace: false` — a command whose executions are not instrumented as `command.executed`. Only two families declare it: observation that would feed back into the stream (`activity.recent`), and commands whose set is represented by a dedicated kind (`orchestrator.ask` — chat.prompt/answer are that turn's record).
 
+## 5. What qualifies as activity — what is recorded, what is spoken
+
+**First principle: the activity stream is a record of intent.** An entry's fate is decided by specs at the publish point (trace · tts · origin); consumers (feed, narrator) invent no filters of their own.
+
+| Class | Examples | Recorded | Display | Narration |
+|---|---|---|---|---|
+| **Intended acts** — human hands, human delegation (a turn and its children) | console runs, real terminal commands, an orchestrator turn's commands | ○ | signal (normal) | per tts spec |
+| **Scheduled intent** — firings of a schedule a human registered | scheduler-run reconcile etc. (`origin:"schedule"`) | ○ | dimmed | ✕ (not the present intent — never interrupt by voice) |
+| **Machine pulse** — integration/restore byproducts | shell-init prompt pulses, observation byproducts (say, activity.recent) | **✕ (never published)** | — | — |
+| **Environment facts** — state transitions | view.activated, turn.ended | ○ | quiet one-liner | ✕ |
+
+The machine pulse is **eliminated at the emitter** — not filtered by consumers:
+- **D (finished) is emitted only paired with C (executed)** (shell-integration.zsh, FinalTerm semantics). precmd on the first prompt / empty Enter emits no D — that fabricated "command finished" used to flood one per pane on every shell init/reload. Parsers trust the wire.
+- **Observation begets no activity** — narration runs (say) and feed reads (activity.recent) are `trace:false`.
+
+origin carrier: Rust-internal firing (the scheduler) passes `request_command(origin:"schedule")`; it rides ctx → trace → entry payload.origin. System origins get tts erased at the registry instrumentation point (silent regardless of spec).
+
 ## Command labels
 
 Display surfaces (the orchestrator feed and any future consumer) never show a raw command key. The label ownership is structured to scale to any number of languages:

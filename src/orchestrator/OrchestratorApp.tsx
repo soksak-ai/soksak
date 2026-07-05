@@ -130,11 +130,13 @@ function renderEntry(
   const raw = isExpanded ? (
     <pre className="orch-raw">{JSON.stringify(e.payload, null, 2)}</pre>
   ) : null;
+  // 시스템 유래(§5 — 스케줄러 발화·부팅 부산물) — 기록은 보이되 흐림(사람 유래가 신호).
+  const sys = typeof e.payload.origin === "string" && e.payload.origin ? " sys" : "";
   if (e.kind === "command.executed") {
     const p = e.payload;
     const ok = p.ok !== false;
     return (
-      <div key={e.seq} className="orch-turn">
+      <div key={e.seq} className={`orch-turn${sys}`}>
         <div className="orch-bubble req" data-node="orch/turn/req">
           <div className="orch-bubble-meta">{meta(Number(p.startedAt))}</div>
           <div className="orch-bubble-body">{commandLabel(String(p.command), t, p.title)}</div>
@@ -166,7 +168,7 @@ function renderEntry(
     );
   }
   return (
-    <div key={e.seq} className={`orch-event k-${e.kind.split(".").join("-")}`}>
+    <div key={e.seq} className={`orch-event k-${e.kind.split(".").join("-")}${sys}`}>
       <div className="orch-event-line" onClick={() => onToggle(e.seq)} title="클릭: 원문 JSON">
         <span className="orch-bubble-meta">{meta(e.ts)}</span>
         <span className="orch-line">{lineOf(e)}</span>

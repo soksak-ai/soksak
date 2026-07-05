@@ -325,6 +325,22 @@ describe("execute — 계측 sink (A1 활동 허브)", () => {
     }
   });
 
+  it("시스템 유래(ctx.origin)는 낭독 후보에서 제외되고 origin 이 관통한다(§5)", async () => {
+    const traces: CommandTrace[] = [];
+    setCommandTraceSink((t) => traces.push(t));
+    try {
+      reg("trace.sys", { summarize: () => "읽을 문장" });
+      await execute("trace.sys", {}, { remote: true, origin: "schedule" });
+      await execute("trace.sys", {}, { remote: true });
+      expect(traces[0].origin).toBe("schedule");
+      expect(traces[0].tts).toBeUndefined(); // 시스템 유래 = 스펙과 무관하게 침묵
+      expect(traces[1].origin).toBeUndefined();
+      expect(traces[1].tts).toBe("읽을 문장"); // 사람 유래 = 기본 낭독
+    } finally {
+      setCommandTraceSink(null);
+    }
+  });
+
   it("spec trace:false 는 계측에서 제외된다(관찰 되먹임 차단 선언)", async () => {
     const traces: CommandTrace[] = [];
     setCommandTraceSink((t) => traces.push(t));

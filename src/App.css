@@ -3905,6 +3905,9 @@ select.dctl {
 }
 .orch-proj-new:hover { opacity: 1; border-color: var(--acc); color: var(--acc); }
 
+/* 시스템 유래(§5 — 스케줄러 발화·부팅 부산물) — 기록은 보이되 흐림(사람 유래가 신호). */
+.orch-turn.sys, .orch-event.sys { opacity: 0.38; }
+
 /* 턴에 접힌 진행 델타 — 요청·응답 사이의 실행 중 흔적(dimmed, 버블 아님). */
 .orch-delta {
   margin: 2px 0 2px 18px;

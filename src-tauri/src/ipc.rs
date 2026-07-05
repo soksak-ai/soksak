@@ -51,6 +51,10 @@ struct Request {
     // 상관 부모(대화 턴 id) — 오케스트레이터가 스폰한 에이전트의 SOKSAK_PARENT env 가 sok 을 타고
     // 도착한다. registry trace 를 거쳐 활동 엔트리 payload.parentId 로 실려 턴 세트를 묶는다.
     parent: Option<String>,
+    // 실행 유래(MESSAGE-PROTOCOL §5) — 사람 유래(생략)와 시스템 유래("schedule" 등)를 가른다.
+    // 시스템 유래는 낭독 후보에서 제외되고 피드에서 흐리게 표시된다. 소켓 클라이언트는 쓰지
+    // 않는다(사람/에이전트=사람 유래) — Rust 내부 발화(스케줄러)만 싣는다.
+    origin: Option<String>,
 }
 
 // 마지막으로 포커스된 창 label(활성 창 추적). lib.rs on_window_event 의 Focused(true) 가 갱신.
@@ -283,6 +287,7 @@ fn route(app: &AppHandle, req: Request) -> Value {
         "pane": req.pane,
         "window": target,
         "parent": req.parent,
+        "origin": req.origin,
     });
     if app.emit_to(&target, "cmd-request", payload).is_err() {
         bridge.pending.lock().unwrap().remove(&seq);
@@ -334,7 +339,15 @@ pub fn ipc_cli_dir() -> Option<String> {
 // Rust 내부에서 프론트 registry 명령을 실행한다(딥링크 라우팅·스케줄러 발화 공용 — 소켓 서버와 같은
 // CmdBridge 경로 재사용, 새 채널 발명 0). 활성 창으로 라우팅하고 결과를 동기 대기한다(route 가 [1s,3600s]
 // 클램프). registry 가 단일 실행 표면이므로 Rust 기능은 이 한 경로로만 명령을 부른다(R8 단일 경로).
-pub fn request_command(app: &AppHandle, method: String, params: Value, timeout_ms: u64) -> Value {
+// origin: 사람 유래(딥링크 = 사람 클릭)는 None, 시스템 유래(스케줄러)는 Some("schedule") —
+// 활동 스트림의 낭독·표시 규칙이 이 축을 소비한다(MESSAGE-PROTOCOL §5).
+pub fn request_command(
+    app: &AppHandle,
+    method: String,
+    params: Value,
+    timeout_ms: u64,
+    origin: Option<&str>,
+) -> Value {
     route(
         app,
         Request {
@@ -345,6 +358,7 @@ pub fn request_command(app: &AppHandle, method: String, params: Value, timeout_m
             window: None,
             timeout_ms: Some(timeout_ms),
             parent: None,
+            origin: origin.map(str::to_string),
         },
     )
 }
@@ -353,7 +367,12 @@ pub fn request_command(app: &AppHandle, method: String, params: Value, timeout_m
 // heartbeat 경로)가 직접 recv_timeout 루프로 staleness/backstop 을 관리한다(프로세스-생존 lease — 도는 중
 // 안 자름). 반환=(seq, rx). 호출자는 종료 시 close_request(seq)로 pending 을 회수해야 한다(cancel 도 호출 →
 // tx drop → rx Disconnected 로 대기 즉시 깨움). emit 실패면 None.
-pub fn open_request(app: &AppHandle, method: String, params: Value) -> Option<(u64, mpsc::Receiver<Value>)> {
+pub fn open_request(
+    app: &AppHandle,
+    method: String,
+    params: Value,
+    origin: Option<&str>,
+) -> Option<(u64, mpsc::Receiver<Value>)> {
     let target = active_window();
     if app.get_window(&target).is_none() {
         return None;
@@ -368,6 +387,7 @@ pub fn open_request(app: &AppHandle, method: String, params: Value) -> Option<(u
         "params": params,
         "pane": Value::Null,
         "window": target,
+        "origin": origin,
     });
     if app.emit_to(&target, "cmd-request", payload).is_err() {
         bridge.pending.lock().unwrap().remove(&seq);
