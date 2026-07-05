@@ -36,10 +36,19 @@ Success and failure share **one shape** — only `data` is optional.
 | `code` | result code — success `"OK"` (or domain `CREATED`/`NOOP`/`UNCHANGED`…), failure a closed `ErrCode` enum. The `error` string dialect is retired |
 | `message` | the human-readable one-line **standard answer** (success *and* failure) — the bubble renders this. The command provides it; the core does not guess |
 | `data` | machine payload (optional, **nested** — no flat spread, so it never collides with the reserved envelope keys) |
+| `tts` | narration override (optional) — a string speaks that sentence instead of `message`; `false` mutes this one response. See "Narration (tts)" below |
 
 `message` comes from `CommandSpec.summarize?(data) => string`. When a command has no `summarize`, `execute` echoes the `code` into `message` (`"OK"`) — an echo, not a derived/parsed transformation. `execute` normalizes every handler return (free object or `{ok:false,…}`) into this envelope: reserved keys split off, the rest nests under `data`.
 
 Success and failure are symmetric because observation is first-class — a successful command still owes the observer a `code` and a `message`.
+
+### Narration (tts)
+
+Every command execution is narration material by default: activity-log consumers (a TTS narrator plugin) read the entry's effective sentence aloud. The effective sentence is computed once, at the instrumentation point (`effectiveTts` in the registry), and rides the activity entry as `payload.tts`:
+
+- `CommandSpec.tts` — omitted = `true` (default: this command's executions are read; sentence = `message`). `false` = **never read, no matter what the response says**. Only commands that themselves perform narration (`say`-style) declare `false`; this is the single cut point that prevents infinite propagation (narration → activity entry → narration …).
+- envelope `tts` — a string replaces `message` as the spoken sentence for this response; `false` mutes this one response.
+- Consumers do not invent their own read/skip rules: an entry with `payload.tts` is read (in arrival order, no skipping), an entry without it is silent. `turn.ended` (AI utterances) never carries `tts`.
 
 ### Display media (optional)
 

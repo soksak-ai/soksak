@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   catalogJson,
   composeTriggers,
+  effectiveTts,
   execute,
   getSpec,
   register,
@@ -72,6 +73,37 @@ describe("execute — 기본 계약", () => {
     });
     const r = await execute(TEST_PREFIX + "reject", {}, {});
     expect(r).toMatchObject({ ok: false, code: "INTERNAL" });
+  });
+});
+
+describe("tts 스펙 — 유효 낭독 문장(지시어×리스폰스)", () => {
+  const spec = (tts?: boolean): CommandSpec =>
+    ({ description: "d", params: {}, returns: "r", handler: () => ({}), ...(tts === undefined ? {} : { tts }) }) as CommandSpec;
+  const out = (message: string, tts?: string | false) =>
+    ({ ok: true, code: "OK", message, ...(tts === undefined ? {} : { tts }) }) as Parameters<typeof effectiveTts>[1];
+
+  it("기본(스펙·응답 무선언) = message 낭독", () => {
+    expect(effectiveTts(spec(), out("완료"))).toBe("완료");
+  });
+  it("spec.tts=false 는 절대 금지 — 응답이 문자열을 줘도 무시", () => {
+    expect(effectiveTts(spec(false), out("완료", "읽어라"))).toBeUndefined();
+  });
+  it("outcome.tts=false 는 이번 응답만 금지", () => {
+    expect(effectiveTts(spec(), out("완료", false))).toBeUndefined();
+  });
+  it("outcome.tts 문자열 = message 대신 그 문장", () => {
+    expect(effectiveTts(spec(true), out("완료", "석 줄 요약"))).toBe("석 줄 요약");
+  });
+  it("execute 계측(trace)에 유효 tts 가 실린다 — 기본 message, spec:false 는 부재", async () => {
+    const traces: CommandTrace[] = [];
+    setCommandTraceSink((t) => traces.push(t));
+    reg("test.tts-on", { handler: () => ({ message: "읽는다" }) });
+    reg("test.tts-off", { tts: false, handler: () => ({ message: "안읽는다" }) });
+    await execute("test.tts-on", {}, { remote: false });
+    await execute("test.tts-off", {}, { remote: false });
+    setCommandTraceSink(null);
+    expect(traces.find((t) => t.command.endsWith("tts-on"))?.tts).toBe("읽는다");
+    expect(traces.find((t) => t.command.endsWith("tts-off"))?.tts).toBeUndefined();
   });
 });
 

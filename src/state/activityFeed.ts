@@ -31,6 +31,8 @@ export function startActivityFeed(): void {
     publish("terminal.command.finished", "terminal", {
       paneId: p.paneId,
       exitCode: (p as { exitCode?: number }).exitCode,
+      // 낭독 대상(문장 합성은 소비자 — exitCode 로컬라이즈). turn.ended(AI 발화)는 tts 없음.
+      tts: true,
     }),
   );
   onPluginEvent("turn.ended", (p) =>
@@ -69,6 +71,7 @@ export function startActivityFeed(): void {
       finishedAt: t.finishedAt,
       data: t.data,
       media: t.media,
+      tts: t.tts,
     });
   });
 }

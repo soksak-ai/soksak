@@ -37,6 +37,11 @@ export interface CommandSpec {
   examples?: readonly string[];
   // 위험 분류(원격/AI 호출 권한 게이트 대상): destructive=닫기·제거, inject=입력 주입.
   danger?: "destructive" | "inject";
+  // 낭독(TTS) 선언 — 활동로그 소비자(낭독 플러그인)가 이 명령의 실행 기록을 읽을지.
+  // 생략 = true(기본: 모든 실행이 낭독 대상, 문장 = 표준 답변 message).
+  // false = 어떤 경우에도 낭독 금지 — 낭독을 수행하는 명령(say 류)만 선언한다.
+  //   낭독 실행이 다시 낭독되는 무한 전파의 유일한 차단점(docs/MESSAGE-PROTOCOL.md).
+  tts?: boolean;
   // [RULE] 핸들러 반환 객체에 top-level "id" 를 쓰지 말 것 — 소켓 응답이 JSON-RPC 봉투의
   // 요청 id(숫자)와 한 객체로 합쳐져 덮어쓴다(식별자 유실). 식별자는 네임스페이스 필드로
   // (groupId/viewId/messageId/label …). 같은 이유로 "ok"/"code"/"message" 도 결과 의미로만 사용.
@@ -91,6 +96,9 @@ export interface CommandOutcome {
   message: string;
   data?: Record<string, unknown>;
   media?: MediaContent;
+  // 리스폰스 스펙의 낭독 오버라이드 — 문자열=message 대신 이 문장을 낭독, false=이번 응답만 금지.
+  // spec.tts===false 가 항상 우선(강제 금지). 생략=message 낭독(기본).
+  tts?: string | false;
 }
 // 하위호환 별칭 — 실패 봉투를 지칭하던 기존 참조 유지.
 export type CommandError = CommandOutcome & { ok: false };
@@ -222,6 +230,8 @@ export interface CommandTrace {
   startedAt: number;
   finishedAt: number;
   data?: Record<string, unknown>; // 기계 페이로드(hover 상세)
+  // 유효 낭독 문장 — effectiveTts(spec, outcome) 계산 결과. 없으면 낭독 금지 엔트리.
+  tts?: string;
   media?: MediaContent; // 표시 미디어(이미지 등) — 피드가 그대로 렌더
 }
 let traceSink: ((t: CommandTrace) => void) | null = null;
@@ -253,6 +263,7 @@ export async function execute(
       finishedAt: finished,
       data: out.data,
       media: out.media,
+      tts: effectiveTts(registry.get(name), out),
     });
   } catch {
     // 계측 실패는 명령 실행에 영향을 주지 않는다.
@@ -329,7 +340,7 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
     const data = pickData(rest, rd);
     return data ? { ok: false, code, message, data } : { ok: false, code, message };
   }
-  const { ok: _ok, code: rc, message: rm, data: rd, media: rmedia, ...rest } = raw;
+  const { ok: _ok, code: rc, message: rm, data: rd, media: rmedia, tts: rtts, ...rest } = raw;
   const data = pickData(rest, rd);
   const code = typeof rc === "string" ? rc : "OK";
   const message =
@@ -341,5 +352,16 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
   const out: CommandOutcome = { ok: true, code, message };
   if (data) out.data = data;
   if (media) out.media = media;
+  if (typeof rtts === "string" || rtts === false) out.tts = rtts;
   return out;
+}
+
+// 유효 낭독 문장(지시어 스펙 × 리스폰스 스펙) — 활동 엔트리에 실리는 최종 값의 단일 계산점.
+// spec.tts===false → 금지(응답이 켜도 무시) / outcome.tts===false → 이번만 금지 /
+// outcome.tts(문자열) → 그 문장 / 그 외 → message(기본 낭독).
+export function effectiveTts(spec: CommandSpec | undefined, out: CommandOutcome): string | undefined {
+  if (spec?.tts === false) return undefined;
+  if (out.tts === false) return undefined;
+  if (typeof out.tts === "string") return out.tts;
+  return out.message || undefined;
 }
