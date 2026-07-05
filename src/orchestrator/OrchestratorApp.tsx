@@ -127,8 +127,11 @@ function renderEntry(
   deltas?: ActivityEntry[], // 이 턴에 접힌 진행 델타(MESSAGE-PROTOCOL §2 — 요청→델타→응답)
 ) {
   const win = String(e.payload.window ?? "");
-  const who = win ? nameOf(win) : e.source;
-  const meta = (t: number) => `${fmtTime(t)}${showWho ? ` · ${who}` : ""}`;
+  // 발화자 표기(§5) — 어디서(창) + 누가(유래). 사람 유래는 창 이름만, 시스템 유래는 라벨 명시.
+  const origin = typeof e.payload.origin === "string" ? e.payload.origin : "";
+  const originLabel = origin === "schedule" ? t("orch.bySchedule") : origin;
+  const who = `${win ? nameOf(win) : e.source}${originLabel ? ` · ${originLabel}` : ""}`;
+  const meta = (t: number) => `${fmtTime(t)}${showWho || originLabel ? ` · ${who}` : ""}`;
   const raw = isExpanded ? (
     <pre className="orch-raw">{JSON.stringify(e.payload, null, 2)}</pre>
   ) : null;

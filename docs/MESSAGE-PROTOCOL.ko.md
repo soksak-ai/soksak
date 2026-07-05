@@ -94,6 +94,9 @@ chat.answer { text, parentId: turnId, ok, code }      ← 세트 닫음(에이�
 - **D(종료)는 C(실행)와 짝일 때만 방출된다**(shell-integration.zsh, FinalTerm 의미론). 첫 프롬프트·빈 Enter 의 precmd 는 D 를 내지 않는다 — 과거엔 여기서 가짜 "명령 종료"가 pane 수만큼 쏟아졌다(셸 초기화/리로드 연발의 원인). 파서는 wire 를 신뢰한다.
 - **관찰은 활동을 낳지 않는다** — 낭독 실행(say)·피드 조회(activity.recent)는 `trace:false`.
 
+
+발화자(origin) 열거와 표기: 생략=사람(창 이름만 표시), `"schedule"`=예약된 의도(메타에 "스케줄" 라벨+흐림), `"internal"`=컴포넌트 자기 조회(무발행 — 표기 대상 아님). 새 자동화 부류는 origin 값 추가로 확장한다.
+
 origin 운반: Rust 내부 발화(스케줄러)가 `request_command(origin:"schedule")` 로 싣고, ctx → trace → 엔트리 payload.origin 으로 관통한다. 시스템 유래는 registry 계측 지점에서 tts 를 소거한다(스펙과 무관하게 침묵).
 
 ## 명령 라벨

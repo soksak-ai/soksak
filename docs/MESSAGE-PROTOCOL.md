@@ -94,6 +94,9 @@ The machine pulse is **eliminated at the emitter** — not filtered by consumers
 - **D (finished) is emitted only paired with C (executed)** (shell-integration.zsh, FinalTerm semantics). precmd on the first prompt / empty Enter emits no D — that fabricated "command finished" used to flood one per pane on every shell init/reload. Parsers trust the wire.
 - **Observation begets no activity** — narration runs (say) and feed reads (activity.recent) are `trace:false`.
 
+
+Actor (origin) enumeration and display: omitted = human (window name only), `"schedule"` = scheduled intent (a "schedule" label on the meta + dimmed), `"internal"` = component self-reads (never published — nothing to label). New automation classes extend by adding an origin value.
+
 origin carrier: Rust-internal firing (the scheduler) passes `request_command(origin:"schedule")`; it rides ctx → trace → entry payload.origin. System origins get tts erased at the registry instrumentation point (silent regardless of spec).
 
 ## Command labels
