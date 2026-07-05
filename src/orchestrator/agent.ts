@@ -33,6 +33,8 @@ interface ActiveTurn {
 }
 
 let active: ActiveTurn | null = null;
+// BUSY 게이트 — active 는 spawn 해소 후에야 서므로(그 전 중복 ask 통과 레이스) 진입 즉시 세운다.
+let inFlight = false;
 let cancelled = false;
 let stopReason: string | null = null;
 
@@ -113,7 +115,7 @@ interface AskParams {
 
 /** 자연어 턴 실행 — orchestrator.ask 핸들러 본체. */
 export async function ask(p: AskParams): Promise<CommandOutcome> {
-  if (active) {
+  if (inFlight) {
     return {
       ok: false,
       code: "BUSY",
@@ -122,7 +124,15 @@ export async function ask(p: AskParams): Promise<CommandOutcome> {
   }
   const text = p.text.trim();
   if (!text) return { ok: false, code: "INVALID_PARAMS", message: "text: 비어 있지 않아야 함" };
+  inFlight = true;
+  try {
+    return await askInner(text, p.window);
+  } finally {
+    inFlight = false;
+  }
+}
 
+async function askInner(text: string, stageWindow?: string): Promise<CommandOutcome> {
   const turnId = crypto.randomUUID();
   publishActivity("chat.prompt", "orchestrator", { text, turnId });
   const close = (ok: boolean, code: string, answer: string): CommandOutcome => {
@@ -162,7 +172,7 @@ export async function ask(p: AskParams): Promise<CommandOutcome> {
     "--setting-sources",
     "",
     "--system-prompt",
-    buildSystemPrompt(skillDoc, p.window),
+    buildSystemPrompt(skillDoc, stageWindow),
     "--allowedTools",
     "Bash(sok:*)",
     ...(sessionId ? ["--resume", sessionId] : []),
@@ -171,7 +181,7 @@ export async function ask(p: AskParams): Promise<CommandOutcome> {
   const env: Record<string, string> = {
     SOKSAK_SOCKET: socket,
     SOKSAK_PARENT: turnId,
-    ...(p.window ? { SOKSAK_WINDOW: p.window } : {}),
+    ...(stageWindow ? { SOKSAK_WINDOW: stageWindow } : {}),
   };
 
   const parser = new AgentStreamParser();
@@ -231,6 +241,9 @@ export async function ask(p: AskParams): Promise<CommandOutcome> {
   onStderr.onmessage = (m) => {
     stderr.tail = (stderr.tail + dec.decode(new Uint8Array(m), { stream: true })).slice(-500);
   };
+  // 빠른 종료 레이스: 초단명 프로세스(스텁 등)는 spawn invoke 해소보다 exit 채널이 먼저 올 수
+  // 있다 — 종료 후 .then 이 active 를 되살리면 영구 BUSY. finished 게이트로 차단한다.
+  let finished = false;
   const exited = new Promise<number>((resolve) => {
     const onExit = new Channel<number>();
     onExit.onmessage = resolve;
@@ -249,6 +262,7 @@ export async function ask(p: AskParams): Promise<CommandOutcome> {
       onExit,
     }).then(
       (id) => {
+        if (finished) return; // 이미 끝난 턴 — 재점유 금지
         active = { turnId, proc: id };
         nsSet(TURN_KEY, JSON.stringify({ proc: id, turnId }));
       },
@@ -261,6 +275,7 @@ export async function ask(p: AskParams): Promise<CommandOutcome> {
     void stop("시간 상한(15분)으로 중단했어요.");
   }, TURN_CAP_MS);
   const code = await exited;
+  finished = true;
   clearTimeout(cap);
   flushDelta();
   const wasCancelled = cancelled;
