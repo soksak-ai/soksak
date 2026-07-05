@@ -123,6 +123,18 @@ spec-gate: ## 패키지 빌드(plugin-spec·plugin-api dist — 코어가 소비
 
 verify: spec-gate typecheck check test test-front ## 헤드리스 게이트(spec 빌드) + 타입체크 + Rust/프론트 테스트(커밋 전 검증)
 
+test-unit: spec-gate typecheck check test test-front ## 결정적 단위(LLM 0·앱 불요) — 전 repo 표준 타깃(docs/TESTING.md)
+
+test-e2e: ## 실행 중 앱 소켓 대상 E2E 스위트(멱등·자기정리). IDENTITY 기본 debug. 앱 실행+전면 필요
+	@IDENTITY=$${IDENTITY:-debug}; \
+	fail=0; \
+	for h in orchestrator project-rail nl-console browser-restore; do \
+		echo "── e2e: $$h ──"; SOKSAK_ENV=$$IDENTITY bash scripts/e2e/$$h.sh --identity $$IDENTITY || fail=1; \
+	done; \
+	echo "── e2e: multiwindow ──"; SOKSAK_SOCKET="$$HOME/.soksak-$$IDENTITY/com.soksak.$$IDENTITY.sock" node scripts/e2e/multiwindow.mjs || fail=1; \
+	echo "── e2e: resize ──"; bash scripts/e2e/resize.sh --identity $$IDENTITY || fail=1; \
+	[ $$fail = 0 ] && echo "✓ test-e2e 전체 GREEN" || { echo "✗ test-e2e 실패"; exit 1; }
+
 e2e-resize: ## 리사이즈 E2E(기계 측정 — blank/프롬프트/TUI). macOS+앱 실행+동의 필요
 	scripts/e2e/resize.sh --identity $${IDENTITY:-dev}
 
