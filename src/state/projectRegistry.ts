@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeListen } from "../lib/safeListen";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { recordRecentProject } from "./recentProjects";
 import { useSessions, type NewProjectOpts } from "./sessions";
@@ -79,7 +79,6 @@ export function useOtherWindowProjects(): { root: string; window: string }[] {
   const [others, setOthers] = useState<{ root: string; window: string }[]>([]);
   useEffect(() => {
     let disposed = false;
-    let un = () => {};
     const refresh = async () => {
       try {
         const r = await invoke<{ owners: { root: string; window: string }[] }>(
@@ -93,10 +92,7 @@ export function useOtherWindowProjects(): { root: string; window: string }[] {
       }
     };
     void refresh();
-    void listen("project-registry-change", refresh).then((u) => {
-      if (disposed) u();
-      else un = u;
-    });
+    const un = safeListen("project-registry-change", refresh);
     return () => {
       disposed = true;
       un();

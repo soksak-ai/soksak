@@ -7,7 +7,7 @@
 // coreStore 가 localStorage 동기캐시 + app.data 권위·broadcast 를 흡수하므로 여기선 직렬화/배선만.
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeListen } from "../lib/safeListen";
 import {
   getCurrentWindow,
   LogicalPosition,
@@ -59,18 +59,9 @@ async function currentFrame(): Promise<
 
 // core ns data-change → coreStore 가 기대하는 (key)=>void. kv 키는 페이로드 id 필드.
 function coreOnDataChange(cb: (key: string) => void): () => void {
-  let un = () => {};
-  let disposed = false;
-  void listen<{ ns: string; id: string | null }>("data-change", (e) => {
+  return safeListen<{ ns: string; id: string | null }>("data-change", (e) => {
     if (e.payload.ns === "core" && e.payload.id) cb(e.payload.id);
-  }).then((u) => {
-    if (disposed) u();
-    else un = u;
   });
-  return () => {
-    disposed = true;
-    un();
-  };
 }
 
 // core kv 저장 의존성(invoke/data-change/ls) — viewLabels 등 다른 core 영속 상태도 공유.

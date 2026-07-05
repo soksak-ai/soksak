@@ -5,7 +5,7 @@
 // 리스너 실패는 호스트를 죽이지 못한다(§0-4) — 콜백마다 try/catch.
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeListen } from "../lib/safeListen";
 import { listenThisWindow } from "../lib/windowEvents";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import {
@@ -433,9 +433,8 @@ export function startPluginHooks(): void {
   // 활동 허브 브로드캐스트(전 창 공통 스트림, activity.rs app.emit) → 플러그인 이벤트.
   // 오케스트레이터가 보는 피드와 동일 원천 — 활동 소비 플러그인(로그 뷰·낭독 등)의 표준 입구.
   // ownWindow = 이 창에서 발생한 엔트리인지(entry.payload.window 비교) — 창-스코프 필터용.
-  // 전역 listen 이 맞다(app.emit 브로드캐스트 수신). 백엔드 부재(테스트 하니스)는 무시 —
-  // listenThisWindow 와 같은 관용(lib/windowEvents).
-  void listen<{ seq: number; ts: number; kind: string; source: string; payload: Record<string, unknown> }>(
+  // 전역 listen 이 맞다(app.emit 브로드캐스트 수신) — safeListen(백엔드 부재·중복 해지 가드).
+  safeListen<{ seq: number; ts: number; kind: string; source: string; payload: Record<string, unknown> }>(
     "activity",
     (e) => {
       const entry = e.payload;
@@ -444,7 +443,7 @@ export function startPluginHooks(): void {
         ownWindow: String(entry.payload?.window ?? "") === currentWindowLabel(),
       });
     },
-  ).catch(() => {});
+  );
 
   // 앱(이 창) 활성 → 플러그인 이벤트. 이 창에 emit_to 된 "window-focus" 만 받는다(전역 listen 이면
   // 다른 창 포커스도 받아 app.focus 가 잘못 발화). lib/windowEvents 머리말 참조.

@@ -2,7 +2,7 @@
 // (테스트는 가짜 deps 를 주입 — 이 파일은 실제 registry/store/bridge 연결만 담당.)
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeListen } from "../lib/safeListen";
 import {
   execute,
   getSpec,
@@ -18,28 +18,9 @@ import {
 import { onPluginEvent } from "./hooks";
 import type { DataChangeEvent, PluginApiDeps } from "./api";
 
-// Tauri listen 을 즉시 해지 가능한 구독으로 감싼다. listen 은 async 라 해지가 도착 전에 올 수
-// 있고(중간 해지), 이미 해제된 리스너를 다시 해지하면(HMR 모듈 폐기·중복 dispose) Tauri 내부
-// 맵 접근이 TypeError 로 reject 된다 — un() 을 try/catch 로 가드해 무해한 no-op 으로 만든다.
+// 전역 listen 안전 구독 — lib/safeListen 단일 유틸로 통합(손구현 제거).
 function subscribe<T>(event: string, onPayload: (payload: T) => void): () => void {
-  let un = () => {};
-  let disposed = false;
-  const safeUnlisten = (u: () => void) => {
-    try {
-      u();
-    } catch {
-      // 이미 해제된 리스너(Tauri 내부 맵 소거) — 재해지는 no-op.
-    }
-  };
-  void listen<T>(event, (e) => onPayload(e.payload)).then((u) => {
-    if (disposed) safeUnlisten(u);
-    else un = () => safeUnlisten(u);
-  });
-  return () => {
-    disposed = true;
-    un();
-    un = () => {};
-  };
+  return safeListen<T>(event, (e) => onPayload(e.payload));
 }
 
 export function defaultPluginDeps(appVersion: string): PluginApiDeps {

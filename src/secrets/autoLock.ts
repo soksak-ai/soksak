@@ -3,7 +3,7 @@
 // DOM 이벤트로 재방출한다. UI·플러그인(터미널 폐기·잠금화면, R14)이 그 DOM 이벤트로 반응한다.
 // 활동 reset 은 any-window — 어느 창의 입력이든 전역 vault 타이머를 늦춘다.
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeListen } from "../lib/safeListen";
 
 // 활동을 최대 이 간격에 한 번만 백엔드에 통지(매 키 입력마다 invoke 하지 않게 스팸 방지).
 export const TOUCH_THROTTLE_MS = 10_000;
@@ -31,18 +31,16 @@ export function startAutoLock(): () => void {
   window.addEventListener("keydown", onActivity, opts);
   window.addEventListener("focus", onActivity, opts);
 
-  const unlisteners: Array<() => void> = [];
   // 잠금/해제 broadcast → DOM 이벤트 재방출. UI/플러그인이 듣고 반응(터미널 폐기↔재-hydrate).
-  void listen<number>("secrets-locked", (e) => {
-    window.dispatchEvent(new CustomEvent(VAULT_LOCKED_EVENT, { detail: { lockEpoch: e.payload } }));
-  })
-    .then((u) => unlisteners.push(u))
-    .catch(() => {});
-  void listen<number>("secrets-unlocked", (e) => {
-    window.dispatchEvent(new CustomEvent(VAULT_UNLOCKED_EVENT, { detail: { lockEpoch: e.payload } }));
-  })
-    .then((u) => unlisteners.push(u))
-    .catch(() => {});
+  // 구독/해지는 safeListen 단일 유틸(중복 해지 가드).
+  const unlisteners: Array<() => void> = [
+    safeListen<number>("secrets-locked", (e) => {
+      window.dispatchEvent(new CustomEvent(VAULT_LOCKED_EVENT, { detail: { lockEpoch: e.payload } }));
+    }),
+    safeListen<number>("secrets-unlocked", (e) => {
+      window.dispatchEvent(new CustomEvent(VAULT_UNLOCKED_EVENT, { detail: { lockEpoch: e.payload } }));
+    }),
+  ];
 
   return () => {
     window.removeEventListener("pointerdown", onActivity, opts);
