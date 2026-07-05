@@ -32,6 +32,17 @@ export type FeedItem = ChatCard | PlainItem;
 const parentIdOf = (e: ActivityEntry): string =>
   typeof e.payload.parentId === "string" ? e.payload.parentId : "";
 
+// 사람 손의 소스 — 발화자 라벨이 붙지 않는다(행의 주인이 곧 사람: 창·콘솔 이름이 발화자).
+const HUMAN_SOURCES = new Set(["ui", "orchestrator"]);
+
+/** 발화자 키(§5 R3, 단일 파생 규칙) — origin 우선, 없으면 비인간 소스가 곧 키. "" = 사람.
+ *  라벨은 소비자의 i18n 테이블 `actor.<키>` 가 해소한다(키 추가 = 테이블 1줄, 이 규칙 불변). */
+export function actorKeyOf(e: ActivityEntry): string {
+  const origin = typeof e.payload.origin === "string" ? e.payload.origin : "";
+  if (origin) return origin;
+  return HUMAN_SOURCES.has(e.source) ? "" : e.source;
+}
+
 /** 표시 단위의 창 label — 카드는 부모(prompt)의 창(세트 가시성=부모 기준). */
 export function itemWindow(it: FeedItem): string {
   const e = it.kind === "chat" ? it.prompt : it.entry;

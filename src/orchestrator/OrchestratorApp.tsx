@@ -12,7 +12,7 @@ import { execute, getSpec } from "../commands/registry";
 import { Icon } from "../ui/icons/Icon";
 import { NewProjectModal, type CreateProjectArgs } from "../components/NewProjectModal";
 import { hasMessage, localize, useT, type MsgKey, type TFn } from "../i18n";
-import { foldFeed, itemWindow, type ActivityEntry, type ChatCard } from "./feedFold";
+import { actorKeyOf, foldFeed, itemWindow, type ActivityEntry, type ChatCard } from "./feedFold";
 
 const FEED_CAP = 500;
 
@@ -127,22 +127,23 @@ function renderEntry(
   deltas?: ActivityEntry[], // 이 턴에 접힌 진행 델타(MESSAGE-PROTOCOL §2 — 요청→델타→응답)
 ) {
   const win = String(e.payload.window ?? "");
-  // 발화자 표기(§5 R3) — 어디서(창) + 누가. origin 우선(스케줄·내부), 없으면 유래 소스
-  // (remote=에이전트/CLI→"원격", terminal→"터미널"). 사람 손(ui)은 창·콘솔 이름이 곧 발화자.
-  const origin = typeof e.payload.origin === "string" ? e.payload.origin : "";
-  const actorLabel =
-    origin === "schedule"
-      ? t("orch.bySchedule")
-      : origin === "internal"
-        ? t("orch.byInternal")
-        : origin ||
-          (e.source === "remote"
-            ? t("orch.byRemote")
-            : e.source === "terminal"
-              ? t("orch.byTerminal")
-              : "");
-  const who = `${win ? nameOf(win) : e.source}${actorLabel ? ` · ${actorLabel}` : ""}`;
-  const meta = (t: number) => `${fmtTime(t)}${showWho || actorLabel ? ` · ${who}` : ""}`;
+  // 발화자 배지(§5 R3) — 파생은 actorKeyOf(단일 규칙), 라벨은 i18n 테이블 `actor.<키>` 해소
+  // (명령 라벨 cmd.* 와 동일 소유 구조 — 키 추가 = 테이블 1줄, 코드 불변). 사람 손은 무배지
+  // (창·콘솔 이름이 곧 발화자).
+  const actorKey = actorKeyOf(e);
+  const actorLabel = actorKey
+    ? hasMessage(`actor.${actorKey}`)
+      ? t(`actor.${actorKey}` as MsgKey)
+      : actorKey
+    : "";
+  const who = win ? nameOf(win) : e.source;
+  const meta = (ts: number) => (
+    <>
+      {fmtTime(ts)}
+      {showWho ? ` · ${who}` : ""}
+      {actorLabel && <span className="orch-actor">{actorLabel}</span>}
+    </>
+  );
   const raw = isExpanded ? (
     <pre className="orch-raw">{JSON.stringify(e.payload, null, 2)}</pre>
   ) : null;

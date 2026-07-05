@@ -3908,6 +3908,19 @@ select.dctl {
 /* 시스템 유래(§5 — 스케줄러 발화·부팅 부산물) — 기록은 보이되 흐림(사람 유래가 신호). */
 .orch-turn.sys, .orch-event.sys { opacity: 0.38; }
 
+/* 발화자 배지(§5 R3) — 메타 옆의 작은 칩. 라벨은 i18n actor.<키> 테이블이 해소. */
+.orch-actor {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  line-height: 14px;
+  vertical-align: middle;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
 /* 턴에 접힌 진행 델타 — 요청·응답 사이의 실행 중 흔적(dimmed, 버블 아님). */
 .orch-delta {
   margin: 2px 0 2px 18px;
