@@ -314,6 +314,23 @@ pub fn ipc_socket_path() -> Option<String> {
     socket_path().map(str::to_string)
 }
 
+// 앱과 짝인 `sok` CLI 가 든 디렉토리 — 스폰된 에이전트의 PATH 에 앞세워 `sok …` 이 어느 설치
+// 형태에서든 해소되게 한다(사용자 PATH 설치 미전제). 탐색: 실행 파일 디렉토리부터 조상 6단계
+// 안에서 `sok` 실물이 있는 첫 디렉토리 — dev(target/debug 직하), debug 번들(bundle/macos/….app/
+// Contents/MacOS → target/debug 5단계), 미래 번들 동봉(exe 옆) 모두 이 한 규칙으로 잡힌다.
+#[tauri::command]
+pub fn ipc_cli_dir() -> Option<String> {
+    let exe = std::env::current_exe().ok()?;
+    let mut dir = exe.parent()?.to_path_buf();
+    for _ in 0..=6 {
+        if dir.join("sok").is_file() {
+            return Some(dir.to_string_lossy().into_owned());
+        }
+        dir = dir.parent()?.to_path_buf();
+    }
+    None
+}
+
 // Rust 내부에서 프론트 registry 명령을 실행한다(딥링크 라우팅·스케줄러 발화 공용 — 소켓 서버와 같은
 // CmdBridge 경로 재사용, 새 채널 발명 0). 활성 창으로 라우팅하고 결과를 동기 대기한다(route 가 [1s,3600s]
 // 클램프). registry 가 단일 실행 표면이므로 Rust 기능은 이 한 경로로만 명령을 부른다(R8 단일 경로).

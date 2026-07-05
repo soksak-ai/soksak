@@ -54,6 +54,10 @@ const nsSet = (k: string, v: string | null): void => {
   }
 };
 
+// 로그인셸 래퍼 — GUI PATH 함정 회피 + 앱과 짝인 CLI 디렉토리(SOKSAK_CLI_DIR)를 PATH 에
+// 앞세운다: 사용자 PATH 에 sok 이 없어도(신선 설치·개발 트리) `sok …` 이 해소된다.
+const PATH_PRELUDE = `[ -n "$SOKSAK_CLI_DIR" ] && PATH="$SOKSAK_CLI_DIR:$PATH"; `;
+
 // 짧은 프로세스 실행 + stdout 수집(로그인셸 — GUI PATH 함정 회피). 실패는 Error 로.
 async function runCapture(shellCmd: string, env?: Record<string, string>): Promise<string> {
   let out = "";
@@ -72,7 +76,7 @@ async function runCapture(shellCmd: string, env?: Record<string, string>): Promi
     onExit.onmessage = resolve;
     void invoke("process_spawn", {
       cmd: "/bin/sh",
-      args: ["-lc", shellCmd],
+      args: ["-lc", PATH_PRELUDE + shellCmd],
       cwd: null,
       env: env ?? null,
       envRemove: null,
@@ -150,9 +154,14 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
   // 소켓·가르침 준비 — sok 부재/앱 소켓 불능은 있는 그대로 답으로 닫는다(무음 금지).
   const socket = await invoke<string | null>("ipc_socket_path").catch(() => null);
   if (!socket) return close(false, "INTERNAL", "제어 소켓이 없어 에이전트를 시작할 수 없어요.");
+  const cliDir = await invoke<string | null>("ipc_cli_dir").catch(() => null);
+  const baseEnv: Record<string, string> = {
+    SOKSAK_SOCKET: socket,
+    ...(cliDir ? { SOKSAK_CLI_DIR: cliDir } : {}),
+  };
   let skillDoc: string;
   try {
-    skillDoc = await runCapture("exec sok skill print", { SOKSAK_SOCKET: socket });
+    skillDoc = await runCapture("exec sok skill print", baseEnv);
   } catch (e) {
     return close(
       false,
@@ -179,7 +188,7 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
     text,
   ];
   const env: Record<string, string> = {
-    SOKSAK_SOCKET: socket,
+    ...baseEnv,
     SOKSAK_PARENT: turnId,
     ...(stageWindow ? { SOKSAK_WINDOW: stageWindow } : {}),
   };
@@ -250,7 +259,7 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
     void invoke<number>("process_spawn", {
       cmd: "/bin/sh",
       // claudeCli.ts 검증 형태: 로그인셸 PATH + $HOME 고정 + exec 치환. "$0"/"$@" 로 인자 무손실.
-      args: ["-lc", `cd "$HOME" 2>/dev/null; exec "$0" "$@"`, agentBin, ...args],
+      args: ["-lc", `${PATH_PRELUDE}cd "$HOME" 2>/dev/null; exec "$0" "$@"`, agentBin, ...args],
       cwd: null,
       env,
       envRemove: null,
