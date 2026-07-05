@@ -95,15 +95,17 @@ async function runCapture(shellCmd: string, env?: Record<string, string>): Promi
 
 // system prompt — 역할·행동 규칙 + soksak-control 가르침 원문(sok skill print, 라이브 단일진실).
 // --setting-sources "" 헤드리스에선 스킬 자동로드가 없으므로 프롬프트에 직접 싣는 것이 정공법.
-function buildSystemPrompt(skillDoc: string, stageWindow?: string): string {
+// sokPath = sok 실행 절대경로(있으면) — 에이전트 Bash 의 PATH 는 신뢰 불가(실측: 자체 재구성).
+function buildSystemPrompt(skillDoc: string, sokPath: string, stageWindow?: string): string {
   const stage = stageWindow
     ? `기본 무대 창이 env SOKSAK_WINDOW=${stageWindow} 로 지정되어 있다 — 창을 생략한 sok 명령은 그 창에서 실행된다.`
-    : "기본 무대 창이 지정되지 않았다 — 먼저 `sok window.projects` 로 열린 창을 파악하고, 창을 다루는 명령은 `sok --window <label> <command>` 로 명시 타겟하라.";
+    : `기본 무대 창이 지정되지 않았다 — 먼저 \`${sokPath} window.projects\` 로 열린 창을 파악하고, 창을 다루는 명령은 \`${sokPath} --window <label> <command>\` 로 명시 타겟하라.`;
   return [
     "당신은 soksak(터미널 앱) 오케스트레이터의 자연어 콘솔 에이전트다. 사용자의 명령을 sok CLI 로 실행해 완수하고, 결과를 한국어 한두 문장으로 보고한다.",
     "",
     "행동 규칙:",
-    "- 앱 조작은 반드시 단일 `sok` 명령으로 한다. 파이프·&&·환경변수 프리픽스·다른 프로그램은 권한상 자동 거부된다.",
+    `- 이 환경의 sok 실행 파일: \`${sokPath}\` — 아래 문서의 \`sok\` 은 항상 이 경로로 실행한다(예: \`${sokPath} state.tree\`). PATH 의 sok 을 기대하지 마라.`,
+    "- 앱 조작은 반드시 단일 sok 명령으로 한다. 파이프·&&·환경변수 프리픽스·다른 프로그램은 권한상 자동 거부된다.",
     `- ${stage}`,
     "- 명령 응답(JSON 봉투)을 확인한 뒤 보고한다 — 추측 보고 금지.",
     "- 마지막 출력은 사용자에게 하는 답변이다: 간결한 한국어, 식별자(창 label 등) 나열 금지.",
@@ -173,6 +175,9 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
 
   const agentBin = useSettings.getState().orchestratorAgent.trim() || "claude";
   const sessionId = nsGet(SESSION_KEY);
+  // sok 은 절대경로로 지시·허용한다 — 에이전트 Bash 의 PATH 는 자체 재구성이라 신뢰 불가(실측).
+  // env(SOKSAK_*)는 완전 상속됨(실측) — 상관·소켓 바인딩은 env 로 전달된다.
+  const sokPath = cliDir ? `${cliDir}/sok` : "sok";
   // 프롬프트는 -p 바로 뒤(위치 인자) — --allowedTools 는 가변(<tools...>)이라 그 뒤에 두면
   // 프롬프트를 도구명으로 삼킨다(실측: "Input must be provided" 즉사).
   const args = [
@@ -185,9 +190,10 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
     "--setting-sources",
     "",
     "--system-prompt",
-    buildSystemPrompt(skillDoc, stageWindow),
+    buildSystemPrompt(skillDoc, sokPath, stageWindow),
     "--allowedTools",
     "Bash(sok:*)",
+    ...(cliDir ? [`Bash(${cliDir}/sok:*)`] : []),
     ...(sessionId ? ["--resume", sessionId] : []),
   ];
   const env: Record<string, string> = {
