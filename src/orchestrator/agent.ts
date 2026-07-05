@@ -273,6 +273,7 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
       env,
       envRemove: null,
       scrubAiEnv: true, // 중첩 세션 가드 — AI 세션 env 정본(process.rs) 일괄 제거
+      group: true, // stop 이 에이전트의 자식 트리(Bash 손자)까지 회수 — 직계만 죽이면 EOF 볼모
       ns: null,
       secretEnv: null,
       onStdout,

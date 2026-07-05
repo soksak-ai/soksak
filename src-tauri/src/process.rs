@@ -34,6 +34,8 @@ pub const AI_SESSION_ENV: [&str; 8] = [
 struct ProcessSession {
     child: Arc<Mutex<Child>>, // kill(세션) + EOF 후 wait(reader) 공유
     stdin: Option<ChildStdin>,
+    // 신규 프로세스 그룹으로 스폰됨(group 옵션) — kill 이 그룹 전체(-pgid)를 겨눈다.
+    group: bool,
 }
 
 #[derive(Default)]
@@ -47,11 +49,26 @@ impl ProcessManager {
     pub fn kill_all(&self) {
         if let Ok(mut sessions) = self.sessions.lock() {
             for (_, sess) in sessions.drain() {
-                if let Ok(mut c) = sess.child.lock() {
-                    let _ = c.kill();
-                }
+                kill_session(&sess);
             }
         }
+    }
+}
+
+// 세션 종료 — group 스폰이면 그룹 전체(-pgid)를 먼저 겨눈다: 직계만 죽이면 손자(에이전트의
+// Bash 자식 등)가 stdout 파이프를 물고 살아 EOF·exit 가 그들 수명만큼 지연된다(실측: stop 후
+// CANCELLED 닫힘이 sleep 손자에 볼모). 직계 kill 은 폴백으로 항상 수행(멱등).
+fn kill_session(sess: &ProcessSession) {
+    #[cfg(unix)]
+    if sess.group {
+        if let Ok(c) = sess.child.lock() {
+            unsafe {
+                libc::killpg(c.id() as i32, libc::SIGKILL);
+            }
+        }
+    }
+    if let Ok(mut c) = sess.child.lock() {
+        let _ = c.kill();
     }
 }
 
@@ -130,6 +147,9 @@ pub fn process_spawn(
     // true = AI 세션 컨텍스트 env 8종(AI_SESSION_ENV 정본, PTY 와 동일) 일괄 제거. 호출자가
     // 목록을 복제하지 않게 하는 스위치 — env_remove 와 합산 적용.
     scrub_ai_env: Option<bool>,
+    // true = 신규 프로세스 그룹으로 스폰(Unix) — kill 이 자식 트리 전체를 회수한다. 손자를
+    // 낳는 자식(에이전트 CLI 등)에 선언; 기존 소비자는 무영향(기본 false).
+    group: Option<bool>,
     // 시크릿 주입 — ns(보통 플러그인 id) + secret_env(envVar→secretKey). 평문은 여기 Rust 경계에서만
     // 해소돼 자식 env 로 들어간다(JS·셸 args·ps 미노출 R2). secret_env 가 있으면 ns 필수. 잠김/미존재면
     // spawn 하지 않고 Err — 미해소 시크릿이 자식으로 새지 않는다.
@@ -166,6 +186,12 @@ pub fn process_spawn(
         for k in AI_SESSION_ENV {
             c.env_remove(k);
         }
+    }
+    let group = group.unwrap_or(false);
+    #[cfg(unix)]
+    if group {
+        use std::os::unix::process::CommandExt;
+        c.process_group(0); // pgid = 자식 pid — kill_session 이 그룹 전체를 겨눌 수 있게
     }
     // 시크릿 평문은 일반 env 뒤에 주입(같은 키면 시크릿 우선). 평문은 이 Command env 와 자식에만 존재.
     for (k, v) in &resolved_secrets {
@@ -219,7 +245,7 @@ pub fn process_spawn(
         .sessions
         .lock()
         .unwrap()
-        .insert(id, ProcessSession { child, stdin });
+        .insert(id, ProcessSession { child, stdin, group });
     Ok(id)
 }
 
@@ -249,11 +275,10 @@ pub fn process_stdin_close(id: u32, manager: State<'_, ProcessManager>) -> Resul
 
 #[tauri::command]
 pub fn process_kill(id: u32, manager: State<'_, ProcessManager>) -> Result<(), String> {
-    // 세션 제거 + 자식 kill. stdin 드롭 → stdin 닫힘. kill → stdout EOF → reader 가 on_exit 발신.
+    // 세션 제거 + 자식 kill(group 스폰이면 트리 전체). stdin 드롭 → stdin 닫힘. kill → stdout
+    // EOF → reader 가 on_exit 발신.
     if let Some(session) = manager.sessions.lock().unwrap().remove(&id) {
-        if let Ok(mut c) = session.child.lock() {
-            let _ = c.kill();
-        }
+        kill_session(&session);
     }
     Ok(())
 }

@@ -15,12 +15,14 @@ if [ "$IDENTITY" = "app" ]; then SOKSAK_E2E_HOME="$HOME/.soksak"; else SOKSAK_E2
 
 export NL_SOCK="$SOKSAK_E2E_HOME/com.soksak.$IDENTITY.sock"
 export NL_STUB="$(cd "$(dirname "$0")" && pwd)/fixtures/nl-agent-stub.sh"
-chmod +x "$NL_STUB"
+export NL_STUB_SLOW="$(cd "$(dirname "$0")" && pwd)/fixtures/nl-agent-stub-slow.sh"
+chmod +x "$NL_STUB" "$NL_STUB_SLOW"
 
 python3 - <<'PYEOF'
-import json, os, socket, sys
+import json, os, socket, sys, threading, time
 SOCK = os.environ["NL_SOCK"]
 STUB = os.environ["NL_STUB"]
+STUB_SLOW = os.environ["NL_STUB_SLOW"]
 PASS = []; FAIL = []
 def ok(m): PASS.append(m); print(f"  ✓ {m}")
 def ng(m): FAIL.append(m); print(f"  ✗ {m}")
@@ -92,6 +94,26 @@ try:
     # 재턴 = --resume 연속성 경로(세션 id 저장) — 두 번째 세트도 완결돼야 한다
     r2 = rpc("orchestrator.ask", {"text":"E2E 스텁 2턴"}, t=90)
     ok("2턴(resume 경로) ok") if r2.get("ok") else ng(f"2턴: {r2}")
+
+    # ── stop(중지) 경로: 느린 스텁 턴을 걸어두고 stop → CANCELLED 로 세트가 닫혀야 한다 ──
+    rpc("settings.set", {"key":"orchestratorAgent","value":STUB_SLOW})
+    box = {}
+    def slow_ask():
+        try: box["r"] = rpc("orchestrator.ask", {"text":"E2E 중지 대상 턴"}, t=90)
+        except Exception as e: box["r"] = {"ok": False, "code": "HARNESS", "message": str(e)}
+    th = threading.Thread(target=slow_ask); th.start()
+    # 진행 중(BUSY) 확인 후 중지 — 스폰·델타가 자리잡을 짧은 유예.
+    time.sleep(3)
+    busy = rpc("orchestrator.ask", {"text":"동시 턴"})
+    ok("진행 중 BUSY 거절") if (not busy.get("ok")) and busy.get("code")=="BUSY" else ng(f"BUSY: {busy}")
+    st = rpc("orchestrator.stop", {})
+    ok("stop ok") if st.get("ok") else ng(f"stop: {st}")
+    th.join(timeout=30)
+    r3 = box.get("r") or {}
+    ok("중지 턴 CANCELLED 봉투") if (not r3.get("ok")) and r3.get("code")=="CANCELLED" else ng(f"중지 응답: {r3}")
+    ents3 = rpc("activity.recent", {"limit":10}).get("entries") or []
+    canc = [e for e in ents3 if e.get("kind")=="chat.answer" and (e.get("payload") or {}).get("code")=="CANCELLED"]
+    ok("CANCELLED chat.answer 로 세트 닫힘") if canc else ng("CANCELLED answer 없음")
 finally:
     rpc("settings.set", {"key":"orchestratorAgent","value":prev})
 print(f"\n결과: PASS {len(PASS)} / FAIL {len(FAIL)}")
