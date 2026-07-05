@@ -68,13 +68,10 @@ export interface PluginCommandSpec {
   /** 표준 답변(MESSAGE-PROTOCOL §3) — 성공 data 를 사람이 읽는 한 줄 message 로. 미제공이면
    *  code 에코("OK")로 열화하고 로더가 경고한다. */
   summarize?: (data: Record<string, unknown>) => string;
-  /** 낭독 문장(귀) — summarize(눈)와 대칭. message 에 경로·식별자가 실리면 귀용 문장을 스펙으로 소유. */
-  speak?: (data: Record<string, unknown>) => string;
-  /** 낭독 스펙(MESSAGE-PROTOCOL 낭독 항) — 생략=true(실행 기록이 낭독 대상). false=절대 낭독
-   *  금지: 낭독을 수행하는 명령(say 류)만 선언(무한 전파의 유일한 차단점). */
-  tts?: boolean;
-  /** 계측 스펙(MESSAGE-PROTOCOL §4) — false=실행이 활동 트레이스에서 제외. 관찰의 부산물로
-   *  스트림을 늘리는 명령(say 류)만 선언. */
+  /** 낭독 문장(귀, §3) — 낭독 축은 이것 하나: speak 있으면 speak(outcome), 없으면 message 폴백, ""=침묵. */
+  speak?: (out: { ok: boolean; code: string; message: string; data?: Record<string, unknown> }) => string;
+  /** 계측 스펙(MESSAGE-PROTOCOL §4·§5 R2) — false=활동 트레이스 제외. 유일한 정당 사유는
+   *  동일 사실의 이중 기록 방지. */
   trace?: false;
   /** inv = 이 호출의 실행 컨텍스트(§5 상속) — 중첩 명령 실행은 반드시 inv.execute 로:
    *  부모의 유래(origin)·상관(parentId)이 자식에 계승된다. */

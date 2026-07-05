@@ -31,20 +31,16 @@ export interface CommandSpec {
   // 표준 답변(message) 생성 — 성공 결과 data 를 사람이 읽는 한 줄로. 없으면 execute 가 code 를
   // message 로 에코("OK" 등, 변환 없음). docs/MESSAGE-PROTOCOL.md 의 응답 봉투 message 계약.
   summarize?: (data: Record<string, unknown>) => string;
-  // 낭독 문장(귀) 생성 — summarize(눈)와 대칭 seam(§3 귀의 문장 규칙). message 에 경로·식별자가
-  // 실리는 명령이 귀용 문장을 스펙으로 소유한다. 봉투 tts(응답별 동적 오버라이드)가 우선한다.
-  speak?: (data: Record<string, unknown>) => string;
+  // 낭독 문장(귀) 생성 — summarize(눈, →message)와 대칭 seam. 낭독 축은 이것 하나다(§3):
+  // speak 있으면 성공·실패 불문 speak(outcome)가 문장, 없으면 message 폴백, "" = 침묵.
+  // 낭독 수행 명령(say 류)은 speak: () => "" 로 되먹임을 끊는다.
+  speak?: (out: CommandOutcome) => string;
   // 발생 가능한 에러 코드.
   errors?: readonly (CmdErrCode | "INTERNAL" | "TIMEOUT")[];
   // CLI 사용 예시(매뉴얼용).
   examples?: readonly string[];
   // 위험 분류(원격/AI 호출 권한 게이트 대상): destructive=닫기·제거, inject=입력 주입.
   danger?: "destructive" | "inject";
-  // 낭독(TTS) 선언 — 활동로그 소비자(낭독 플러그인)가 이 명령의 실행 기록을 읽을지.
-  // 생략 = true(기본: 모든 실행이 낭독 대상, 문장 = 표준 답변 message).
-  // false = 어떤 경우에도 낭독 금지 — 낭독을 수행하는 명령(say 류)만 선언한다.
-  //   낭독 실행이 다시 낭독되는 무한 전파의 유일한 차단점(docs/MESSAGE-PROTOCOL.md).
-  tts?: boolean;
   // 실행 계측 선언 — false 면 이 명령의 실행이 활동 트레이스(command.executed)에서 제외된다.
   // §5 R2: 유일한 정당 사유는 "동일 사실의 이중 기록 방지"(orchestrator.ask — chat.prompt/
   // answer 가 그 턴의 대표 기록)뿐이다. 소음 억제 목적의 선언 금지 — 그건 origin(노출 축) 몫.
@@ -109,9 +105,6 @@ export interface CommandOutcome {
   message: string;
   data?: Record<string, unknown>;
   media?: MediaContent;
-  // 리스폰스 스펙의 낭독 오버라이드 — 문자열=message 대신 이 문장을 낭독, false=이번 응답만 금지.
-  // spec.tts===false 가 항상 우선(강제 금지). 생략=message 낭독(기본).
-  tts?: string | false;
 }
 // 하위호환 별칭 — 실패 봉투를 지칭하던 기존 참조 유지.
 export type CommandError = CommandOutcome & { ok: false };
@@ -366,7 +359,7 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
     const data = pickData(rest, rd);
     return data ? { ok: false, code, message, data } : { ok: false, code, message };
   }
-  const { ok: _ok, code: rc, message: rm, data: rd, media: rmedia, tts: rtts, ...rest } = raw;
+  const { ok: _ok, code: rc, message: rm, data: rd, media: rmedia, ...rest } = raw;
   const data = pickData(rest, rd);
   const code = typeof rc === "string" ? rc : "OK";
   const message =
@@ -378,18 +371,12 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
   const out: CommandOutcome = { ok: true, code, message };
   if (data) out.data = data;
   if (media) out.media = media;
-  if (typeof rtts === "string" || rtts === false) out.tts = rtts;
   return out;
 }
 
-// 유효 낭독 문장(지시어 스펙 × 리스폰스 스펙) — 활동 엔트리에 실리는 최종 값의 단일 계산점.
-// spec.tts===false → 금지(응답이 켜도 무시) / outcome.tts===false → 이번만 금지 /
-// outcome.tts(문자열) → 그 문장(응답별 동적) / spec.speak → 스펙 소유 귀 문장(성공만 — 실패는
-// message 가 곧 진단) / 그 외 → message(기본 낭독).
+// 유효 낭독 문장 — 활동 엔트리에 실리는 최종 값의 단일 계산점(§3, 축은 message/speak 둘뿐):
+// speak 있으면 성공·실패 불문 speak(outcome)가 문장, 없으면 message 폴백. "" → 침묵(undefined).
 export function effectiveTts(spec: CommandSpec | undefined, out: CommandOutcome): string | undefined {
-  if (spec?.tts === false) return undefined;
-  if (out.tts === false) return undefined;
-  if (typeof out.tts === "string") return out.tts;
-  if (out.ok && spec?.speak) return spec.speak(out.data ?? {}) || undefined;
-  return out.message || undefined;
+  const s = spec?.speak ? spec.speak(out) : out.message;
+  return s || undefined;
 }

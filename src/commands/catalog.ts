@@ -1801,8 +1801,8 @@ export function registerCatalog(): void {
     returns:
       "{ saved, media:{kind,path} } (file mode) | { media:{kind:'image/png',base64} } (base64/rect mode)",
     summarize: (d) => (d.saved ? `저장했습니다: ${String(d.saved)}` : "화면을 캡처했습니다"),
-    // 귀의 문장(§3) — 경로는 message(눈)에만. summarize 와 나란한 스펙 소유.
-    speak: (d) => (d.saved ? "화면을 저장했어요." : "화면을 캡처했어요."),
+    // 귀의 문장(§3) — 경로는 message(눈)에만. 실패는 message(진단) 에코.
+    speak: (out) => (out.ok ? (out.data?.saved ? "화면을 저장했어요." : "화면을 캡처했어요.") : out.message),
     errors: ["INVALID_PARAMS"],
     examples: [
       "sok window.snapshot",

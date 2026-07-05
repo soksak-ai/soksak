@@ -11,6 +11,7 @@ import {
   setPermissionGate,
   unregister,
   type CommandSpec,
+  type CommandOutcome,
   setCommandTraceSink,
   type CommandTrace,
 } from "./registry";
@@ -76,35 +77,28 @@ describe("execute — 기본 계약", () => {
   });
 });
 
-describe("tts 스펙 — 유효 낭독 문장(지시어×리스폰스)", () => {
-  const spec = (tts?: boolean): CommandSpec =>
-    ({ description: "d", params: {}, returns: "r", handler: () => ({}), ...(tts === undefined ? {} : { tts }) }) as CommandSpec;
-  const out = (message: string, tts?: string | false) =>
-    ({ ok: true, code: "OK", message, ...(tts === undefined ? {} : { tts }) }) as Parameters<typeof effectiveTts>[1];
+describe("낭독 축 — message(눈)/speak(귀) 둘뿐(§3)", () => {
+  const spec = (speak?: (out: CommandOutcome) => string): CommandSpec =>
+    ({ description: "d", params: {}, returns: "r", handler: () => ({}), ...(speak ? { speak } : {}) }) as CommandSpec;
+  const out = (message: string, ok = true): CommandOutcome =>
+    ({ ok, code: ok ? "OK" : "INTERNAL", message }) as CommandOutcome;
 
-  it("기본(스펙·응답 무선언) = message 낭독", () => {
+  it("speak 없음 = message 폴백(기본 낭독)", () => {
     expect(effectiveTts(spec(), out("완료"))).toBe("완료");
   });
-  it("spec.tts=false 는 절대 금지 — 응답이 문자열을 줘도 무시", () => {
-    expect(effectiveTts(spec(false), out("완료", "읽어라"))).toBeUndefined();
+  it("speak 있음 = 성공·실패 불문 speak(outcome)가 문장 — 경로는 message(눈)에만", () => {
+    const s = spec((o) => (o.ok ? "화면을 저장했어요." : o.message));
+    expect(effectiveTts(s, out("저장했습니다: /tmp/a.png"))).toBe("화면을 저장했어요.");
+    expect(effectiveTts(s, out("실패 진단", false))).toBe("실패 진단");
   });
-  it("outcome.tts=false 는 이번 응답만 금지", () => {
-    expect(effectiveTts(spec(), out("완료", false))).toBeUndefined();
+  it('speak "" = 침묵 — say 류 되먹임의 유일한 차단점', () => {
+    expect(effectiveTts(spec(() => ""), out("무엇이든"))).toBeUndefined();
   });
-  it("outcome.tts 문자열 = message 대신 그 문장", () => {
-    expect(effectiveTts(spec(true), out("완료", "석 줄 요약"))).toBe("석 줄 요약");
-  });
-  it("spec.speak = 귀의 문장(§3) — 경로 실린 message 대신 스펙 소유 문장, 봉투 tts 가 우선", () => {
-    const withSpeak = { ...spec(), speak: () => "화면을 저장했어요." } as CommandSpec;
-    expect(effectiveTts(withSpeak, out("저장했습니다: /tmp/a.png"))).toBe("화면을 저장했어요.");
-    expect(effectiveTts(withSpeak, out("저장했습니다: /tmp/a.png", "이번만 이 문장"))).toBe("이번만 이 문장");
-    expect(effectiveTts(withSpeak, { ok: false, code: "INTERNAL", message: "실패 진단" } as Parameters<typeof effectiveTts>[1])).toBe("실패 진단");
-  });
-  it("execute 계측(trace)에 유효 tts 가 실린다 — 기본 message, spec:false 는 부재", async () => {
+  it('execute 계측(trace)에 유효 tts 가 실린다 — 기본 message, speak "" 는 부재', async () => {
     const traces: CommandTrace[] = [];
     setCommandTraceSink((t) => traces.push(t));
     reg("test.tts-on", { handler: () => ({ message: "읽는다" }) });
-    reg("test.tts-off", { tts: false, handler: () => ({ message: "안읽는다" }) });
+    reg("test.tts-off", { speak: () => "", handler: () => ({ message: "안읽는다" }) });
     await execute("test.tts-on", {}, { remote: false });
     await execute("test.tts-off", {}, { remote: false });
     setCommandTraceSink(null);

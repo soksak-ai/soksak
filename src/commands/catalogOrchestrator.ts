@@ -27,7 +27,7 @@ export function registerOrchestratorCatalog(): void {
     // 세트는 chat.prompt/chat.answer 가 대표한다 — command.executed 중복 기록 제외.
     trace: false,
     // 답변(AI 텍스트)은 낭독하지 않는다 — 턴 안의 명령들만 각자의 tts 스펙으로 낭독된다.
-    tts: false,
+    speak: () => "", // 침묵 — 세트(chat.prompt/answer)가 이 턴의 표면(§3 speak 룰)
     handler: (p) => ask({ text: String(p.text ?? ""), window: p.window as string | undefined }),
   });
 
@@ -37,7 +37,7 @@ export function registerOrchestratorCatalog(): void {
     params: {},
     returns: "{ ok }",
     examples: ["sok --window main orchestrator.stop"],
-    tts: false,
+    speak: () => "", // 침묵 — 세트(chat.prompt/answer)가 이 턴의 표면(§3 speak 룰)
     handler: () => stop(),
   });
 }

@@ -126,12 +126,9 @@ export interface PluginCommandSpec {
   /** 표준 답변(MESSAGE-PROTOCOL §3) — 성공 data 를 사람이 읽는 한 줄 message 로. 미제공이면
    *  code 에코("OK")로 열화하고 로더가 경고한다. 준거=runbook ok()/err(). */
   summarize?: (data: Record<string, unknown>) => string;
-  /** 낭독 문장(귀, §3 귀의 문장 규칙) — summarize(눈)와 대칭. message 에 경로·식별자가 실리는
-   *  명령이 귀용 문장을 스펙으로 소유한다. */
-  speak?: (data: Record<string, unknown>) => string;
-  /** 낭독 스펙(MESSAGE-PROTOCOL 낭독 항) — 생략=true(실행 기록이 낭독 대상). false=절대 낭독
-   *  금지: 낭독을 수행하는 명령(say 류)만 선언(무한 전파의 유일한 차단점). */
-  tts?: boolean;
+  /** 낭독 문장(귀, §3) — 낭독 축은 이것 하나: speak 있으면 성공·실패 불문 speak(outcome)가
+   *  문장, 없으면 message 폴백, "" = 침묵. say 류는 speak: () => "" 로 되먹임을 끊는다. */
+  speak?: (out: { ok: boolean; code: string; message: string; data?: Record<string, unknown> }) => string;
   /** 계측 스펙(MESSAGE-PROTOCOL §4) — false=실행이 활동 트레이스에서 제외. 관찰의 부산물로
    *  스트림을 늘리는 명령(say 류 — 낭독 1회당 실행 기록 1개가 쌓인다)만 선언. */
   trace?: false;
@@ -1178,8 +1175,7 @@ export function buildPluginApi(
               returns: spec.returns ?? "object",
               examples: spec.examples,
               summarize: spec.summarize, // 표준 답변(message) — execute 정규화가 주입
-              speak: spec.speak, // 귀의 문장(§3) — summarize 와 대칭 seam
-              tts: spec.tts, // 낭독 스펙(MESSAGE-PROTOCOL) — false=낭독 명령의 되먹임 차단
+              speak: spec.speak, // 귀의 문장(§3) — 낭독 축의 전부(없으면 message 폴백)
               trace: spec.trace, // 계측 스펙(§4) — false=관찰 부산물 명령의 기록 제외
               danger, // 매니페스트 권위(없으면 런타임 fallback — 게이트 보존)
               // registry.execute 가 try/catch 로 INTERNAL 변환(§0-4).

@@ -37,21 +37,21 @@ AI·원격 클라이언트가 1급 소비자다 — 그래서 모든 명령이 �
 | `ok` | 성공/실패 |
 | `code` | 결과 코드 — 성공 `"OK"`(또는 도메인 `CREATED`/`NOOP`/`UNCHANGED`…), 실패 닫힌 `ErrCode` 열거형. `error` 문자열 방언 폐기 |
 | `message` | 사람이 읽는 한 줄 **표준 답변**(성공·실패 모두) — 버블이 이걸 렌더. 명령이 제공하고, 코어는 추측하지 않는다 |
-| `tts` | 낭독 오버라이드(선택) — 문자열이면 `message` 대신 그 문장을 낭독, `false`면 이번 응답만 침묵. 아래 "낭독(tts)" 참조 |
 | `data` | 기계 페이로드(선택, **중첩** — 평면 스프레드 아님, 예약 봉투키와 충돌 없음) |
 
 `message`는 `CommandSpec.summarize?(data) => string`에서 온다. 없으면 `execute`가 `code`를 `message`로 에코(`"OK"`)한다 — 파생/파싱 변환이 아니라 코드 에코. `execute`는 모든 핸들러 반환(자유 객체 또는 `{ok:false,…}`)을 이 봉투로 정규화한다: 예약키 분리, 나머지는 `data`에 중첩.
 
 성공·실패는 대칭이다 — 관찰이 1급이라, 성공한 명령도 관찰자에게 `code`와 `message`를 진다.
 
-### 낭독(tts)
+### 낭독 — 축은 message(눈)/speak(귀) 둘뿐
 
 모든 명령 실행은 기본적으로 낭독 대상이다: 활동로그 소비자(TTS 낭독 플러그인)가 엔트리의 유효 문장을 소리 내어 읽는다. 유효 문장은 계측 지점에서 한 번 계산되어(`effectiveTts`, registry) 활동 엔트리 `payload.tts`로 흐른다.
 
-- `CommandSpec.tts` — 생략 = `true`(기본: 이 명령의 실행이 낭독됨, 문장 = `message`). `false` = **응답이 무엇을 말하든 절대 낭독 금지**. 낭독을 수행하는 명령(`say` 류)만 선언한다 — 낭독→활동 엔트리→낭독의 무한 전파를 끊는 유일한 차단점.
-- 봉투 `tts` — 문자열이면 이번 응답의 낭독 문장을 `message` 대신 교체, `false`면 이번 응답만 침묵.
+- **규칙 하나**: `CommandSpec.speak(outcome)`가 있으면 성공·실패 불문 그 반환이 낭독 문장, 없으면 `message` 폴백, 빈 문자열(`""`) = 침묵. `summarize`(눈, →message)와 대칭인 스펙 seam 이다.
+- **귀의 문장에는 경로·식별자(창 label·해시·URL)를 싣지 않는다** — 그것은 눈의 정보(`message`)다. 예: `window.snapshot` — summarize 는 저장 경로, speak 는 "화면을 저장했어요".
+- 낭독을 수행하는 명령(`say` 류)은 `speak: () => ""` — 낭독→기록→낭독 무한 전파의 유일한 차단점.
 - 소비자는 자체 읽기/건너뛰기 규칙을 만들지 않는다: `payload.tts`가 있으면 도착 순서대로 읽고(스킵 없음), 없으면 침묵. `turn.ended`(AI 발화)에는 `tts`가 실리지 않는다.
-- **귀의 문장 규칙**: 낭독 문장에는 경로·식별자(창 label·해시·URL)를 싣지 않는다 — 그것은 눈의 정보(`message`)다. 그런 명령은 `CommandSpec.speak(data)`(— `summarize`(눈)와 대칭인 스펙 seam)로 귀용 문장을 소유한다(예: `window.snapshot` — summarize 는 저장 경로, speak 는 "화면을 저장했어요"). 봉투 `tts`(문자열)는 응답별 동적 오버라이드로 speak 보다 우선한다. 우선순위: spec.tts=false > 봉투 tts > spec.speak(성공만) > message.
+- 과거의 `CommandSpec.tts`(boolean)와 봉투 `tts` 오버라이드는 폐기 — speak 하나가 대체한다(파편화 제거).
 
 ### 표시 미디어 (선택)
 
