@@ -411,6 +411,7 @@ pub fn run() {
             ipc::cmd_result,
             ipc::ipc_socket_path,
             ipc::ipc_cli_dir,
+            ipc::ipc_last_workspace_window,
             titlebar::titlebar_backing,
             ime_debug,
             window_activate,

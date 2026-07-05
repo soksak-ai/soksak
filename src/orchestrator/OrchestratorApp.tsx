@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeListen } from "../lib/safeListen";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { execute, getSpec } from "../commands/registry";
@@ -40,6 +40,8 @@ function lineOf(e: ActivityEntry): string {
       return `💬 ${p.text ?? ""}`;
     case "chat.answer":
       return `↩ ${p.text ?? ""}`;
+    case "boot.error":
+      return `창 부팅 오류 — ${(p as { msg?: string }).msg ?? ""}`;
     default:
       return e.kind;
   }
@@ -307,7 +309,8 @@ export function OrchestratorApp() {
       let recents: { root: string; alias?: string }[] = [];
       let owners: { root: string; window: string }[] = [];
       try {
-        const r = await execute("project.recent", {}, { remote: false });
+        // 내부 조회(레일 채우기) — 사람 의도가 아니다(§5 origin:"internal", 무계측).
+        const r = await execute("project.recent", {}, { remote: false, origin: "internal" });
         if (r.ok) recents = (r.data as { recents?: typeof recents } | undefined)?.recents ?? [];
       } catch {
         /* 무시 — 빈 목록 */
@@ -358,14 +361,11 @@ export function OrchestratorApp() {
   useEffect(() => {
     // 네이티브 타이틀(Dock 창 목록 구분) — 프로젝트 창과 같은 규칙: 이름만, 앱 이름 무접미.
     void getCurrentWindow().setTitle(t("orch.title")).catch(() => {});
-    // 백필(커서) 후 라이브 구독 — 폴링 0.
-    let un = () => {};
-    let unReg = () => {};
-    let disposed = false;
+    // 백필(커서) 후 라이브 구독 — 폴링 0. 구독/해지는 safeListen 단일 유틸(중복 해지 가드).
     void invoke<ActivityEntry[]>("activity_recent", { since: null, limit: 200 }).then(
       (entries) => setFeed(entries),
     );
-    void listen<ActivityEntry>("activity", (ev) => {
+    const un = safeListen<ActivityEntry>("activity", (ev) => {
       const e = ev.payload;
       setFeed((cur) => {
         if (cur.length && cur[cur.length - 1].seq >= e.seq) return cur; // 백필 겹침 dedup
@@ -373,18 +373,11 @@ export function OrchestratorApp() {
         return next.length > FEED_CAP ? next.slice(next.length - FEED_CAP) : next;
       });
       if (!atBottomRef.current) setUnread((u) => u + 1); // 위로 스크롤 중이면 안읽음 누적
-    }).then((u) => {
-      if (disposed) u();
-      else un = u;
     });
     // 프로젝트 열림/닫힘/소유 창 변경마다 코어가 broadcast — 좌측 프로젝트 목록을 자동 갱신한다.
-    void listen("project-registry-change", refreshProjects).then((u) => {
-      if (disposed) u();
-      else unReg = u;
-    });
+    const unReg = safeListen("project-registry-change", refreshProjects);
     refreshProjects();
     return () => {
-      disposed = true;
       un();
       unReg();
     };
@@ -421,19 +414,16 @@ export function OrchestratorApp() {
       return;
     }
     // 자연어 턴 — 진행·답은 피드의 대화 카드가 보여준다(chat.prompt→…→chat.answer).
-    // 레일에서 선택한 프로젝트가 있으면 그 창이 턴의 기본 무대(SOKSAK_WINDOW)가 된다.
+    // 무대는 넘기지 않는다: 레일 선택은 피드 필터일 뿐이다(필터≠의도). 기본 무대는
+    // 코어가 아는 "마지막 포커스 워크스페이스 창"(orchestrator/agent.ts).
     setCmd("");
     setResult("");
-    const out = await execute(
-      "orchestrator.ask",
-      { text: trimmed, ...(selected ? { window: selected.window } : {}) },
-      { remote: false },
-    );
+    const out = await execute("orchestrator.ask", { text: trimmed }, { remote: false });
     // 세트가 열리기 전의 거절(BUSY 등)만 결과 상자로 — 세트가 닫힌 오류는 카드가 보여준다.
     if (!out.ok && (out.code === "BUSY" || out.code === "INVALID_PARAMS")) {
       setResult(`${out.code}: ${out.message}`);
     }
-  }, [cmd, selected]);
+  }, [cmd]);
 
   return (
     <div className="orch-root" data-node="orch">

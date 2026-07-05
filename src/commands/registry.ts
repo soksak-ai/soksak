@@ -263,9 +263,10 @@ export async function execute(
   const out = await executeInner(name, params, ctx);
   const finished = Date.now();
   try {
-    // spec.trace === false = 계측 제외 선언(관찰 되먹임·별도 kind 대표 명령). 미등록 명령의
-    // 실패 봉투는 그대로 계측된다(spec 이 없으니 제외 선언도 없다).
-    if (registry.get(name)?.trace !== false) {
+    // 계측 제외 두 축(§5 기계의 맥동): ① spec.trace === false — 명령 성격(관찰 되먹임·별도
+    // kind 대표). ② ctx.origin === "internal" — 호출 성격(컴포넌트가 자기 화면을 채우는 내부
+    // 조회 — 사람 의도가 아니다). 미등록 명령의 실패 봉투는 그대로 계측된다.
+    if (registry.get(name)?.trace !== false && ctx.origin !== "internal") {
       traceSink?.({
         command: name,
         title: registry.get(name)?.title,

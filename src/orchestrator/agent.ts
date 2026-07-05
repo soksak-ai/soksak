@@ -11,6 +11,7 @@
 // --system-prompt(정체성 교체 — 유저 메시지로 주면 역할 거부). 도구는 Bash(sok:*) 만 허용.
 
 import { Channel, invoke } from "@tauri-apps/api/core";
+import { safeListen } from "../lib/safeListen";
 import { useSettings } from "../state/settings";
 import { publishActivity } from "../state/activityFeed";
 import { AgentStreamParser } from "./agentStream";
@@ -37,6 +38,20 @@ let active: ActiveTurn | null = null;
 let inFlight = false;
 let cancelled = false;
 let stopReason: string | null = null;
+
+// 준비물(가르침·카탈로그) 캐시 — 명령 표면은 플러그인 생명주기에서만 바뀐다: 턴마다 재조회하지
+// 않고, 활동 스트림에서 plugin.enable/disable/reload/... 실행이 관찰될 때만 무효화한다
+// (이벤트 기반 — TTL·폴링 없음). 준비 조회가 매 턴 세트를 채우던 소음의 제거.
+let prep: { key: string; skillDoc: string; catalog: string } | null = null;
+
+/** 부트 1회(main) — 명령 표면 변동 관찰로 준비물 캐시를 무효화한다. */
+export function watchPrepInvalidation(): void {
+  safeListen<{ kind: string; payload: Record<string, unknown> }>("activity", (e) => {
+    if (e.payload.kind !== "command.executed") return;
+    const cmd = String((e.payload.payload as { command?: unknown })?.command ?? "");
+    if (/^plugin\.(enable|disable|reload|install|remove|update)\b/.test(cmd)) prep = null;
+  });
+}
 
 const nsGet = (k: string): string | null => {
   try {
@@ -139,9 +154,10 @@ function buildSystemPrompt(
     "당신은 soksak(터미널 앱) 오케스트레이터의 자연어 콘솔 에이전트다. 사용자의 명령을 sok CLI 로 실행해 완수하고, 결과를 한국어 한두 문장으로 보고한다.",
     "",
     "행동 규칙:",
-    `- 이 환경의 sok 실행 파일: \`${sokPath}\` — 아래 문서의 \`sok\` 은 항상 이 경로로 실행한다(예: \`${sokPath} state.tree\`). PATH 의 sok 을 기대하지 마라.`,
+    `- 이 환경의 sok 실행 파일: \`${sokPath}\` — 아래 문서의 \`sok\` 은 항상 이 경로로 실행한다. PATH 의 sok 을 기대하지 마라.`,
+    `- 호출 형태는 정확히 \`${sokPath} <명령> '<JSON>'\` 하나다 — 파라미터는 JSON 한 덩이(작은따옴표)이며 --url 같은 플래그·키=값 인자는 존재하지 않는다(유일한 플래그: \`--window <label>\`). 예: \`${sokPath} panel.split '{"side":"right"}'\`.`,
     "- 앱 조작은 반드시 단일 sok 명령으로 한다. 파이프·&&·환경변수 프리픽스·다른 프로그램은 권한상 자동 거부된다.",
-    "- 아래 카탈로그에서 명령을 바로 고른다 — 목록 재조회(sok commands) 금지. 파라미터 상세가 필요할 때만 `help <명령>` 1회.",
+    "- 아래 카탈로그에서 명령을 바로 고른다 — 목록 재조회(sok commands) 금지. 명령이 거부되면 `help <명령>` 1회로 스키마를 확인해 고쳐 재시도한다.",
     "- 명령 응답(JSON 봉투)을 확인한 뒤 보고한다 — 추측 보고 금지.",
     "- 마지막 출력은 사용자에게 하는 답변이다: 간결한 한국어, 식별자(창 label 등) 나열 금지.",
     "",
@@ -178,7 +194,15 @@ export async function ask(p: AskParams): Promise<CommandOutcome> {
   }
 }
 
-async function askInner(text: string, stageWindow?: string): Promise<CommandOutcome> {
+async function askInner(text: string, explicitWindow?: string): Promise<CommandOutcome> {
+  // 무대(stage) = 사용자의 실제 작업 위치 — 명시(param) > 마지막 포커스 워크스페이스 창.
+  // 오케스트레이터 레일 선택은 피드 필터일 뿐 무대가 아니다(실측: 남은 선택이 남의 창에
+  // 명령을 흘렸다 — 필터와 의도의 혼동). 콘솔에서 칠 때 활성 창은 main 이므로, 무대는
+  // "마지막으로 일하던 워크스페이스"가 사용자 의도다.
+  const stageWindow =
+    explicitWindow ??
+    (await invoke<string | null>("ipc_last_workspace_window").catch(() => null)) ??
+    undefined;
   const turnId = crypto.randomUUID();
   publishActivity("chat.prompt", "orchestrator", { text, turnId });
   const close = (ok: boolean, code: string, answer: string): CommandOutcome => {
@@ -201,31 +225,38 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
     SOKSAK_SOCKET: socket,
     ...(cliDir ? { SOKSAK_CLI_DIR: cliDir } : {}),
   };
+  // 준비물(가르침·카탈로그) — 캐시가 유효하면 재조회하지 않는다(무효화 = 플러그인 생명주기
+  // 관찰). 최초/무효화 후 1회만 조회하고, 그 준비 실행은 이 턴의 소산으로 세트에 접힌다.
+  // 카탈로그는 무대 창 기준(플러그인 명령은 워크스페이스 창에만 로드 — main 은 컨트롤 플레인).
+  const prepKey = stageWindow ?? "";
   let skillDoc: string;
-  try {
-    // 준비 실행(skill print → state.commands)도 이 턴의 소산 — parent 를 실어 세트에 접는다.
-    skillDoc = await runCapture("exec sok skill print", { ...baseEnv, SOKSAK_PARENT: turnId });
-  } catch (e) {
-    return close(
-      false,
-      "INTERNAL",
-      `sok CLI 를 찾지 못해 에이전트를 시작할 수 없어요 (${String(e instanceof Error ? e.message : e).slice(0, 200)})`,
+  let catalog: string;
+  if (prep && prep.key === prepKey) {
+    ({ skillDoc, catalog } = prep);
+  } else {
+    try {
+      skillDoc = await runCapture("exec sok skill print", { ...baseEnv, SOKSAK_PARENT: turnId });
+    } catch (e) {
+      return close(
+        false,
+        "INTERNAL",
+        `sok CLI 를 찾지 못해 에이전트를 시작할 수 없어요 (${String(e instanceof Error ? e.message : e).slice(0, 200)})`,
+      );
+    }
+    const catalogWindow =
+      stageWindow ??
+      (await execute("window.projects", {}, { remote: false, parent: turnId })
+        .then((r) => (r.data as { projects?: { window?: string }[] } | undefined)?.projects?.[0]?.window)
+        .catch(() => undefined));
+    catalog = compactCatalog(
+      await runCapture(
+        `exec sok ${catalogWindow ? `--window ${catalogWindow} ` : ""}commands`,
+        { ...baseEnv, SOKSAK_PARENT: turnId },
+      ).catch(() => ""),
     );
+    // 빈 카탈로그(실패)는 캐시하지 않는다 — 다음 턴이 다시 시도(느린 발견 경로로 강등만).
+    if (catalog) prep = { key: prepKey, skillDoc, catalog };
   }
-  // 명령 카탈로그 — 플러그인 명령은 워크스페이스 창에만 로드된다(main 은 컨트롤 플레인):
-  // 무대 창(없으면 첫 워크스페이스 창) 기준으로 전량을 뽑아 프롬프트에 싣는다. 실패 = 빈
-  // 카탈로그(발견 워크플로로 강등) — 턴은 계속된다.
-  const catalogWindow =
-    stageWindow ??
-    (await execute("window.projects", {}, { remote: false, parent: turnId })
-      .then((r) => (r.data as { projects?: { window?: string }[] } | undefined)?.projects?.[0]?.window)
-      .catch(() => undefined));
-  const catalog = compactCatalog(
-    await runCapture(
-      `exec sok ${catalogWindow ? `--window ${catalogWindow} ` : ""}commands`,
-      { ...baseEnv, SOKSAK_PARENT: turnId },
-    ).catch(() => ""),
-  );
 
   const agentBin = useSettings.getState().orchestratorAgent.trim() || "claude";
   // 명령 라우팅 턴은 왕복이 잦다 — 빠른 모델이 체감을 지배(실측: opus 는 왕복당 4~6초).

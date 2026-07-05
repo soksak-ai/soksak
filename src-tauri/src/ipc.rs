@@ -65,6 +65,22 @@ pub fn note_focus(label: &str) {
     if let Ok(mut f) = LAST_FOCUSED.lock() {
         *f = label.to_string();
     }
+    // 마지막 워크스페이스(비-main) 포커스 — 자연어 턴의 기본 무대. 오케스트레이터에서 명령을
+    // 칠 때 활성 창은 main(컨트롤 플레인)이므로, "사용자가 실제로 일하던 창"은 이 값이다.
+    // main 은 플랫폼 예약어(NAMING §1-4b) — 예약어 비교이지 라벨에서 역할 파싱이 아니다.
+    if label != "main" {
+        if let Ok(mut w) = LAST_WORKSPACE.lock() {
+            *w = Some(label.to_string());
+        }
+    }
+}
+
+static LAST_WORKSPACE: Mutex<Option<String>> = Mutex::new(None);
+
+// 마지막 포커스 워크스페이스 창(읽기 전용) — orchestrator.ask 의 기본 무대(SOKSAK_WINDOW).
+#[tauri::command]
+pub fn ipc_last_workspace_window() -> Option<String> {
+    LAST_WORKSPACE.lock().ok().and_then(|w| w.clone())
 }
 
 fn active_window() -> String {

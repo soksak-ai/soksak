@@ -3,10 +3,11 @@
 // 소켓 호출은 `sok --window main orchestrator.ask …` 로 명시 타겟한다.
 
 import { register } from "./registry";
-import { ask, cleanupOrphanTurn, stop } from "../orchestrator/agent";
+import { ask, cleanupOrphanTurn, stop, watchPrepInvalidation } from "../orchestrator/agent";
 
 export function registerOrchestratorCatalog(): void {
   cleanupOrphanTurn();
+  watchPrepInvalidation();
 
   register("orchestrator.ask", {
     description:
