@@ -790,7 +790,7 @@ pub fn secret_touch(state: State<'_, SecretsState>) {
 
 // idle 자동잠금 타임아웃(ms, 0=비활성) 설정. 프론트 설정값 반영.
 #[tauri::command]
-pub fn secret_set_idle_timeout(ms: i64, state: State<'_, SecretsState>) {
+pub fn secret_autolock(ms: i64, state: State<'_, SecretsState>) {
     state.set_idle_timeout(ms);
 }
 

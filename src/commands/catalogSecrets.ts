@@ -70,7 +70,7 @@ export function registerSecretsCatalog(): void {
       if (!Number.isFinite(ms) || ms < 0) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ms 는 0 이상 숫자" };
       }
-      await invoke("secret_set_idle_timeout", { ms: Math.floor(ms) });
+      await invoke("secret_autolock", { ms: Math.floor(ms) });
       return { ms: Math.floor(ms) };
     },
   });

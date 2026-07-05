@@ -114,17 +114,13 @@ break the symmetry law (file = command prefix: `webview_open`, not `webview_host
 
 ## 5. Normalization Backlog (documented drift — separate pass, do not mix into feature work)
 
-Registry names are public and stay; invoke stems and file placement get aligned in a
-dedicated pass:
+Registry names are public and stay. The mechanical invoke-stem aligns are done
+(`network_*`→`net_*`, `data_encryption_*`→`data_encrypt_*`, `secret_set_idle_timeout`→`secret_autolock`,
+`plugins_scan`→`plugin_scan`). The rows below need a design decision, not a blind rename:
 
 | Current | Target | Note |
 |---|---|---|
-| `net.udp.*`/`net.http.*` ↔ `network_*` | align stem (`net` vs `network`) | pick one stem |
-| `data.encrypt.*` ↔ `data_encryption_*` | align stem | |
 | `term.*` ↔ `spawn_terminal`/`*_terminal` (pty.rs) | `term.*` ↔ `pty_*` or `term_*`, file = stem | 3 stems today (term/terminal/pty) |
-| `secret.autolock` ↔ `secret_set_idle_timeout` | align verb | |
-| `plugins_scan`/`plugin_install_git`/`dev_plugin_paths` | one prefix `plugin_*` | |
-| `network_http_request` lives in `http.rs` | move or rename to match file law | |
 | `git_status` lives in `fs.rs` | move to `git.rs` | |
 | `browserLabel`/`browserLabelPrefix` (webviewLabels.ts) | consider `webviewLabel` | label scheme (`b-` prefix) is persisted — rename needs a compat note |
 | `browser_media_extract` → `webview_media_extract` | done mechanically; **primitive purity suspect** (domain smell — playbox) | review whether it decomposes into eval/inject primitives |

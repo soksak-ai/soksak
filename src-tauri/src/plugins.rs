@@ -90,7 +90,7 @@ pub struct PluginScanEntry {
 // 제외). plugin.json·.soksak.json 원문만 나르고 내용 검증은 프론트 스펙(단일진실)이 담당.
 // 읽기 실패는 침묵 누락 대신 error 로 노출(§0-3 거부 사유 표시).
 #[tauri::command]
-pub fn plugins_scan() -> Result<Vec<PluginScanEntry>, String> {
+pub fn plugin_scan() -> Result<Vec<PluginScanEntry>, String> {
     let base = plugins_dir()?;
     let mut out = Vec::new();
     for entry in std::fs::read_dir(&base).map_err(|e| e.to_string())? {

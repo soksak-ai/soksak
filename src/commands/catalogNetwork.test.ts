@@ -31,7 +31,7 @@ describe("net.udp.send 등록", () => {
 });
 
 describe("net.udp.send 실행", () => {
-  it("hex data 를 바이트 배열로 디코드해 network_udp_send 호출", async () => {
+  it("hex data 를 바이트 배열로 디코드해 net_udp_send 호출", async () => {
     invoke.mockResolvedValueOnce(3);
     const r = await execute(
       "net.udp.send",
@@ -39,7 +39,7 @@ describe("net.udp.send 실행", () => {
       {},
     );
     expect(r).toEqual({ ok: true, code: "OK", message: "3 바이트를 전송했습니다", data: { bytesSent: 3 } });
-    expect(invoke).toHaveBeenCalledWith("network_udp_send", {
+    expect(invoke).toHaveBeenCalledWith("net_udp_send", {
       host: "255.255.255.255",
       port: 9,
       data: [255, 1, 2],
@@ -50,7 +50,7 @@ describe("net.udp.send 실행", () => {
   it("broadcast 생략 시 null 로 전달", async () => {
     invoke.mockResolvedValueOnce(2);
     await execute("net.udp.send", { host: "127.0.0.1", port: 9, data: "00ff" }, {});
-    expect(invoke).toHaveBeenCalledWith("network_udp_send", {
+    expect(invoke).toHaveBeenCalledWith("net_udp_send", {
       host: "127.0.0.1",
       port: 9,
       data: [0, 255],
@@ -85,7 +85,7 @@ describe("net.udp.request 등록/실행", () => {
       { host: "239.255.255.250", port: 1900, data: "4d2d", timeoutMs: 800 },
       {},
     );
-    expect(invoke).toHaveBeenCalledWith("network_udp_request", {
+    expect(invoke).toHaveBeenCalledWith("net_udp_request", {
       host: "239.255.255.250",
       port: 1900,
       data: [0x4d, 0x2d],
@@ -122,7 +122,7 @@ describe("net.http.request 등록/impersonate 배선", () => {
   it("impersonate 생략 시 null(=off 백엔드) 로 전달", async () => {
     invoke.mockResolvedValueOnce({ status: 200, headers: {}, body: "ok" });
     await execute("net.http.request", { method: "GET", url: "https://api.example/x" }, {});
-    expect(invoke).toHaveBeenCalledWith("network_http_request", {
+    expect(invoke).toHaveBeenCalledWith("net_http_request", {
       method: "GET",
       url: "https://api.example/x",
       headers: null,
@@ -143,7 +143,7 @@ describe("net.http.request 등록/impersonate 배선", () => {
       {},
     );
     expect(invoke).toHaveBeenCalledWith(
-      "network_http_request",
+      "net_http_request",
       expect.objectContaining({ impersonate: "chrome" }),
     );
   });

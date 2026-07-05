@@ -6,7 +6,7 @@
 use std::net::UdpSocket;
 
 #[tauri::command]
-pub fn network_udp_send(
+pub fn net_udp_send(
     host: String,
     port: u16,
     data: Vec<u8>,
@@ -32,7 +32,7 @@ pub struct UdpPacket {
 // SSDP(M-SEARCH→유니캐스트 응답)·mDNS·DNS 등 요청-응답 UDP 의 범용 실행기. 같은 소켓이라야
 // 응답이 송신 포트로 돌아온다(send/recv 를 다른 소켓으로 나누면 응답 유실). LG 무관 — 범용.
 #[tauri::command]
-pub fn network_udp_request(
+pub fn net_udp_request(
     host: String,
     port: u16,
     data: Vec<u8>,
@@ -84,7 +84,7 @@ mod tests {
         recv.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
 
         let payload = vec![1u8, 2, 3, 4, 5];
-        let sent = network_udp_send("127.0.0.1".to_string(), port, payload.clone(), None).unwrap();
+        let sent = net_udp_send("127.0.0.1".to_string(), port, payload.clone(), None).unwrap();
         assert_eq!(sent, payload.len());
 
         let mut buf = [0u8; 32];
@@ -95,7 +95,7 @@ mod tests {
     #[test]
     fn errors_on_invalid_host() {
         // 빈 호스트는 주소 해석에 실패해 Err 이어야 한다(조용한 성공 금지).
-        let r = network_udp_send("".to_string(), 9, vec![0u8], None);
+        let r = net_udp_send("".to_string(), 9, vec![0u8], None);
         assert!(r.is_err());
     }
 
@@ -116,7 +116,7 @@ mod tests {
         });
         std::thread::sleep(Duration::from_millis(100));
 
-        let pkts = network_udp_request(
+        let pkts = net_udp_request(
             "127.0.0.1".to_string(),
             echo_port,
             b"ping".to_vec(),
@@ -135,7 +135,7 @@ mod tests {
         let dead_port = dead.local_addr().unwrap().port();
         drop(dead); // 포트 닫음 — 응답 없음
         let pkts =
-            network_udp_request("127.0.0.1".to_string(), dead_port, b"x".to_vec(), Some(150), None)
+            net_udp_request("127.0.0.1".to_string(), dead_port, b"x".to_vec(), Some(150), None)
                 .unwrap();
         assert_eq!(pkts.len(), 0);
     }

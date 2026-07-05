@@ -280,7 +280,7 @@ pub struct EnableResult {
 // 공개키 P 를 테이블에 등록. 순서가 안전핀이다: S 를 vault 에 넣은 뒤에만 P 를 등록한다 — P(=봉인 트리거)만
 // 있고 S 가 없으면 이후 모든 put 이 봉인되는데 영원히 복호 불가(전손)다. vault 잠김이면 여기서 Err(P 미등록).
 #[tauri::command]
-pub fn data_encryption_enable(
+pub fn data_encrypt_enable(
     scope: String,
     state: State<'_, DbState>,
     secrets: State<'_, SecretsState>,
@@ -311,7 +311,7 @@ pub fn data_encryption_enable(
 // unlock 한 vault 가 전제(S 를 KEK 로 다시 wrap). 복구된 S 가 등록 P 와 일치(basepoint)해야 한다 — 코드가
 // 맞아도 P 불일치면 거부(무결성). 성공 시 그 scope 봉인 레코드가 다시 복호 가능.
 #[tauri::command]
-pub fn data_encryption_recover(
+pub fn data_encrypt_recover(
     scope: String,
     recovery_code: String,
     state: State<'_, DbState>,
@@ -355,7 +355,7 @@ pub struct RotateResult {
 // 키 회전(R18/B9) — 새 키페어로 scope 전체를 re-key. old S 로 개봉→new P 로 재봉인. 잔여 0 확인 후에만
 // old 키를 폐기한다(영구손실 0). unlock 필요(old 개봉). 중단 시 keyId=old 잔여만 다음 회전에서 이어받음.
 #[tauri::command]
-pub fn data_encryption_rotate(
+pub fn data_encrypt_rotate(
     scope: String,
     state: State<'_, DbState>,
     secrets: State<'_, SecretsState>,
@@ -405,7 +405,7 @@ pub fn data_encryption_rotate(
 // 기존 평문 레코드 봉인 변환(R17) — 암호화 활성 후 이미 쌓인 (ns,coll,scope) 평문을 active key 로 봉인.
 // 레코드별 단일 트랜잭션이라 크래시 재개 가능. 배치 반복으로 전부 변환, 반환=변환 수.
 #[tauri::command]
-pub fn data_encryption_convert(
+pub fn data_encrypt_convert(
     ns: String,
     coll: String,
     scope: String,
@@ -426,7 +426,7 @@ pub fn data_encryption_convert(
 
 // scope 암호화 상태 — enabled(트리거), keyId, algo, vault unlock 여부(복호 가능 조건).
 #[tauri::command]
-pub fn data_encryption_status(
+pub fn data_encrypt_status(
     scope: String,
     state: State<'_, DbState>,
     secrets: State<'_, SecretsState>,

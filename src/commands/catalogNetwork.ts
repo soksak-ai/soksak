@@ -1,7 +1,7 @@
 // net.* network commands — exposes core generic capabilities via the command registry (single source of truth).
-// net.udp.send: send a UDP datagram to any host:port (delegates to network_udp_send core executor).
+// net.udp.send: send a UDP datagram to any host:port (delegates to net_udp_send core executor).
 // net.udp.request: send UDP and collect responses on the same socket (SSDP / mDNS / DNS).
-// net.http.request: arbitrary-origin HTTP request (delegates to network_http_request — runbook api type).
+// net.http.request: arbitrary-origin HTTP request (delegates to net_http_request — runbook api type).
 // Webview JS cannot do raw UDP or cross-origin HTTP; the core is the only path. Zero domain lock-in (generic).
 
 import { invoke } from "@tauri-apps/api/core";
@@ -71,7 +71,7 @@ export function registerNetworkCatalog(): void {
           message: "data 는 짝수 길이 hex 문자열이어야 함",
         };
       }
-      const bytesSent = await invoke<number>("network_udp_send", {
+      const bytesSent = await invoke<number>("net_udp_send", {
         host: p.host,
         port: p.port,
         data: bytes,
@@ -112,7 +112,7 @@ export function registerNetworkCatalog(): void {
           message: "data 는 짝수 길이 hex 문자열이어야 함",
         };
       }
-      const raw = await invoke<CoreUdpPacket[]>("network_udp_request", {
+      const raw = await invoke<CoreUdpPacket[]>("net_udp_request", {
         host: p.host,
         port: p.port,
         data: bytes,
@@ -163,7 +163,7 @@ export function registerNetworkCatalog(): void {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "method·url 필요" };
       }
       return await invoke<{ status: number; headers: Record<string, string>; body: string }>(
-        "network_http_request",
+        "net_http_request",
         {
           method: p.method,
           url: p.url,

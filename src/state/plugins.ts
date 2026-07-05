@@ -477,7 +477,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
     reload: async () => {
       // 전체 재시작: 활성 인스턴스 전부 내리고 다시 스캔 — 부분 상태 금지(§0-3).
       await deactivateAll();
-      const entries = await invoke<PluginScanEntry[]>("plugins_scan");
+      const entries = await invoke<PluginScanEntry[]>("plugin_scan");
       const rejected: RejectedPlugin[] = [];
       const next: Record<string, PluginRuntime> = {};
 

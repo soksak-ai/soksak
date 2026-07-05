@@ -989,7 +989,7 @@ function createWsApi(deps: PluginApiDeps, tracker: DisposableTracker) {
   };
 }
 
-// app.network 구현 — http(req) → 코어 network_http_request 위임. ns=플러그인 id 주입(타 ns 시크릿
+// app.network 구현 — http(req) → 코어 net_http_request 위임. ns=플러그인 id 주입(타 ns 시크릿
 // 탈취 차단 R2/R6 — 호출자가 ns 를 못 정한다). secretSubst=placeholder→secretKey(평문 0, Rust 경계 치환).
 function createNetworkApi(deps: PluginApiDeps, ns: string) {
   return {
@@ -1003,7 +1003,7 @@ function createNetworkApi(deps: PluginApiDeps, ns: string) {
       secretSubst?: Record<string, string>;
       impersonate?: "off" | "chrome";
     }): Promise<{ status: number; headers: Record<string, string>; body: string }> => {
-      return (await deps.invoke("network_http_request", {
+      return (await deps.invoke("net_http_request", {
         method: req.method,
         url: req.url,
         headers: req.headers ?? null,

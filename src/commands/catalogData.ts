@@ -198,7 +198,7 @@ export function registerDataCatalog(): void {
       if (typeof p.scope !== "string" || !p.scope.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
       }
-      return await invoke("data_encryption_status", { scope: p.scope });
+      return await invoke("data_encrypt_status", { scope: p.scope });
     },
   });
 
@@ -216,7 +216,7 @@ export function registerDataCatalog(): void {
       if (typeof p.scope !== "string" || !p.scope.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
       }
-      const r = await invoke<{ key_id: string; recovery_code: string }>("data_encryption_enable", { scope: p.scope });
+      const r = await invoke<{ key_id: string; recovery_code: string }>("data_encrypt_enable", { scope: p.scope });
       return { keyId: r.key_id, recoveryCode: r.recovery_code };
     },
   });
@@ -238,7 +238,7 @@ export function registerDataCatalog(): void {
       if (typeof p.scope !== "string" || !p.scope.trim() || typeof p.recoveryCode !== "string" || !p.recoveryCode.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope·recoveryCode 필요" };
       }
-      await invoke("data_encryption_recover", { scope: p.scope, recoveryCode: p.recoveryCode });
+      await invoke("data_encrypt_recover", { scope: p.scope, recoveryCode: p.recoveryCode });
       return { ok: true };
     },
   });
@@ -257,7 +257,7 @@ export function registerDataCatalog(): void {
       if (typeof p.scope !== "string" || !p.scope.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
       }
-      return await invoke("data_encryption_rotate", { scope: p.scope });
+      return await invoke("data_encrypt_rotate", { scope: p.scope });
     },
   });
 
@@ -279,7 +279,7 @@ export function registerDataCatalog(): void {
       if (typeof p.scope !== "string" || !p.scope.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
       }
-      const converted = await invoke<number>("data_encryption_convert", {
+      const converted = await invoke<number>("data_encrypt_convert", {
         ns: p.ns,
         coll: p.coll,
         scope: p.scope,

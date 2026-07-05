@@ -124,7 +124,7 @@ fn send_http(
 // 시크릿은 ns 볼트에서만 해소한다 — ns 는 app.network.http 가 manifest.id 로 주입(타 ns 시크릿
 // 탈취 차단 R2/R6). CLI/E2E 는 명시 ns(운영자 신뢰).
 #[tauri::command]
-pub fn network_http_request(
+pub fn net_http_request(
     method: String,
     url: String,
     headers: Option<HashMap<String, String>>,
