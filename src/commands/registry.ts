@@ -235,7 +235,6 @@ export interface CommandTrace {
   durationMs: number;
   startedAt: number;
   finishedAt: number;
-  data?: Record<string, unknown>; // 기계 페이로드(hover 상세)
   // 유효 낭독 문장 — effectiveTts(spec, outcome) 계산 결과. 없으면 낭독 금지 엔트리.
   tts?: string;
   media?: MediaContent; // 표시 미디어(이미지 등) — 피드가 그대로 렌더
@@ -276,7 +275,9 @@ export async function execute(
         durationMs: finished - started,
         startedAt: started,
         finishedAt: finished,
-        data: out.data,
+        // 응답 data 는 싣지 않는다 — 기록은 관찰 요약(§5)이다. 실측: activity.recent 의 기록이
+        // 조회 결과(그 안의 이전 기록까지)를 통째로 물어 75MB 행으로 자기증식, retention 의
+        // json 파스가 226MB malloc → CEF PartitionAlloc 즉사(앱 전체 사망 5회의 원천).
         media: out.media,
         // 낭독 후보는 사람 유래만(§5) — 시스템 유래(스케줄러 등)는 스펙과 무관하게 침묵.
         tts: ctx.origin ? undefined : effectiveTts(registry.get(name), out),

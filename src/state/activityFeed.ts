@@ -76,7 +76,6 @@ export function startActivityFeed(): void {
       durationMs: t.durationMs,
       startedAt: t.startedAt,
       finishedAt: t.finishedAt,
-      data: t.data,
       media: t.media,
       tts: t.tts,
       parentId: t.parentId,

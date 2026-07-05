@@ -179,7 +179,12 @@ pub fn publish(app: &AppHandle, kind: &str, source: &str, payload: Value) -> Val
     if let Ok(guard) = st.conn.lock() {
         if let Some(conn) = guard.as_ref() {
             let id = entry.get("seq").and_then(Value::as_u64).map(|s| format!("a{s:016}"));
-            if let Err(e) = crate::data::store::put(conn, NS, COLL, scope, id, &entry) {
+            // 영속본은 관찰 요약(§5) — 대형 내용물은 라이브(링·이벤트)의 것이다.
+            // media.base64 는 kind 만 남기고 스트립, 그래도 상한 초과면 payload 를 강등한다.
+            // 불변식: 영속 행은 PERSIST_DOC_CAP 을 넘지 않는다(초대형 행 하나가 json 파스에서
+            // 수백 MB malloc 을 유발해 앱을 즉사시켰던 실측의 재발 방지 — 방어가 아니라 계약).
+            let persisted = summarize_for_persist(&entry);
+            if let Err(e) = crate::data::store::put(conn, NS, COLL, scope, id, &persisted) {
                 eprintln!("[activity] 영속 실패: {e}");
             } else {
                 let _ = crate::data::store::retention_trim(conn, NS, COLL, scope, PERSIST_CAP);
@@ -192,6 +197,39 @@ pub fn publish(app: &AppHandle, kind: &str, source: &str, payload: Value) -> Val
 /// 활동 컬렉션 정의(부트 1회, 멱등) — kind 인덱스(필터 조회).
 pub fn init_collection(conn: &rusqlite::Connection) {
     let _ = crate::data::store::define(conn, NS, COLL, &["kind".into(), "seq".into()], &[]);
+}
+
+/// 영속 행 크기 불변식(바이트) — 초과 payload 는 요약형으로 강등된다.
+const PERSIST_DOC_CAP: usize = 262_144;
+
+/// 영속본 요약(§5) — media.base64 스트립(kind·path 유지), 직렬화 크기 상한 강제.
+/// 링·이벤트(라이브)는 원본 그대로 — 이 함수는 영속 경로 전용이다.
+fn summarize_for_persist(entry: &Value) -> Value {
+    let mut doc = entry.clone();
+    if let Some(media) = doc
+        .get_mut("payload")
+        .and_then(|p| p.get_mut("media"))
+        .and_then(Value::as_object_mut)
+    {
+        media.remove("base64");
+    }
+    if serde_json::to_string(&doc).map(|s| s.len()).unwrap_or(0) > PERSIST_DOC_CAP {
+        let seq = doc.get("seq").cloned().unwrap_or(Value::Null);
+        let ts = doc.get("ts").cloned().unwrap_or(Value::Null);
+        let kind = doc.get("kind").cloned().unwrap_or(Value::Null);
+        let source = doc.get("source").cloned().unwrap_or(Value::Null);
+        let payload = doc.get("payload").and_then(Value::as_object);
+        let mut slim = serde_json::Map::new();
+        // 상관·노출 축(§4·§5)은 요약에도 살아남는다 — 세트 접합과 발화자 표기가 깨지지 않게.
+        for k in ["command", "title", "ok", "code", "message", "parentId", "origin", "window"] {
+            if let Some(v) = payload.and_then(|p| p.get(k)) {
+                slim.insert(k.to_string(), v.clone());
+            }
+        }
+        slim.insert("truncated".into(), Value::Bool(true));
+        return serde_json::json!({ "seq": seq, "ts": ts, "kind": kind, "source": source, "payload": slim });
+    }
+    doc
 }
 
 /// 부트 1회 — 영속 최댓값에서 seq 재개(재시작을 넘는 단조). 레코드 없음(신선 설치) = 0 유지.
@@ -235,6 +273,31 @@ pub fn activity_recent(app: AppHandle, since: Option<u64>, limit: Option<usize>)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn persist_summary_strips_base64_and_caps_doc() {
+        // media.base64 스트립(kind 유지) — 기록은 관찰 요약(§5).
+        let e = serde_json::json!({"seq":1,"ts":2,"kind":"command.executed","source":"ui",
+            "payload":{"command":"window.snapshot","ok":true,"message":"m",
+                       "media":{"kind":"image/png","base64":"AAAA"}}});
+        let p = summarize_for_persist(&e);
+        assert!(p["payload"]["media"].get("base64").is_none());
+        assert_eq!(p["payload"]["media"]["kind"], "image/png");
+
+        // 상한 초과 payload 는 요약형 강등 — 상관·노출 축(parentId/origin)은 살아남는다.
+        let big = "x".repeat(PERSIST_DOC_CAP + 1024);
+        let e2 = serde_json::json!({"seq":9,"ts":8,"kind":"command.executed","source":"remote",
+            "payload":{"command":"c","ok":true,"code":"OK","message":"m","huge":big,
+                       "parentId":"t1","origin":"schedule"}});
+        let p2 = summarize_for_persist(&e2);
+        let ser = serde_json::to_string(&p2).unwrap();
+        assert!(ser.len() < PERSIST_DOC_CAP);
+        assert_eq!(p2["payload"]["truncated"], true);
+        assert_eq!(p2["payload"]["parentId"], "t1");
+        assert_eq!(p2["payload"]["origin"], "schedule");
+        assert!(p2["payload"].get("huge").is_none());
+        assert_eq!(p2["seq"], 9);
+    }
 
     #[test]
     fn seq_monotonic_and_ring_trims() {

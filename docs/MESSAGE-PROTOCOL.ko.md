@@ -85,6 +85,7 @@ chat.answer { text, parentId: turnId, ok, code }      ← 세트 닫음(에이�
 - **R1 거짓은 소멸** — 일어나지 않은 일의 표식은 기록이 아니라 오염이다. 방출기에서 원천 제거한다: D(종료)는 C(실행)와 짝일 때만(shell-integration.zsh — 첫 프롬프트·빈 Enter 는 D 를 내지 않는다), 부트 복원은 project.created 가 아니다(diff 재씨딩).
 - **R2 사실은 전량 기록** — 실제로 실행된 것은 전부 기록된다: 내부 조회(project.recent·백필 activity.recent)·낭독 실행(say)·스케줄 발화 포함. `trace:false` 의 유일한 정당 사유는 **동일 사실의 이중 기록 방지**(`orchestrator.ask` — chat.prompt/answer 가 그 턴의 대표 기록)다. 소음 억제 목적의 trace:false 는 금지 — 그건 노출 축의 몫.
 - **R3 노출이 선별** — origin(발화자)이 표시·낭독을 결정하지 기록을 결정하지 않는다: 생략=사람(정상 표시, tts 스펙대로 낭독) / `"schedule"`=예약된 의도(흐림+"스케줄" 라벨, 무낭독) / `"internal"`=자동 행위·자기 조회(흐림, 무낭독). 시스템 유래(origin 보유)는 registry 계측 지점에서 tts 가 소거된다 — 낭독→기록→낭독 루프는 이 축이 끊는다(기록 자체는 선형이라 되먹임이 아니다). 환경의 사실(view.activated·turn.ended)은 조용한 한 줄, 무낭독.
+- **R2a 기록은 관찰 요약** — `command.executed` 는 응답 `data` 를 싣지 않는다(command·code·message·paramKeys·media 참조·상관 축이 전부다). 실측 사고: 조회 기록이 조회 결과(그 안의 이전 기록까지)를 물어 75MB/행으로 자기증식 → json 파스 226MB malloc → 앱 즉사. 영속본은 추가로 media.base64 를 스트립하고 행 크기 불변식(256KB, 초과 = 상관 축만 남긴 요약 강등)을 강제한다 — 라이브(링·이벤트)만 원본이다.
 - **R4 보관 제로섬 해소** — 저신호(origin 보유)는 신호와 영속 캡을 다투지 않는다: scope `app`(신호)/`app-low`(저신호) 별도 보관(각 5000). 링(라이브 뷰 2000)은 시간창이 본질이라 혼합 — 역사 보증은 영속의 몫. seq 재개는 전 scope 최댓값.
 
 origin 운반: Rust 내부 발화(스케줄러)는 `request_command(origin:"schedule")`, 플러그인 자동 행위는 `app.commands.execute(name, params, {origin:"internal"})` 자기 선언, 핸들러의 중첩 실행은 `inv.execute` 상속 — ctx → trace → 엔트리 payload.origin 으로 관통한다. 새 자동화 부류는 origin 값 추가로 확장한다.
