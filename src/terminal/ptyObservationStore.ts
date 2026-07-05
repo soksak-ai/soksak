@@ -71,6 +71,8 @@ export function registerPtyObservation(paneId: string): void {
     },
     onCommandFinished: (exitCode) => {
       // 삭제 직전 끝난 명령 캡처 → turn.ended 본문이 "어떤 명령이 끝났는지 + 종료코드(R2)" 를 담는다.
+      // D(종료 마크)는 방출기(shell-integration.zsh)가 C(실행)와 짝일 때만 낸다 — 파서는
+      // wire 를 신뢰한다(§5는 방출기에 새겨져 있다: 시작 없는 종료는 방출되지 않는다).
       const fin = obs.running;
       obs.running = null;
       for (const cb of [...obs.cmdFinishedSubs]) cb();

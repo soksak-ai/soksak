@@ -2,10 +2,12 @@
 // invoke(cmd_result) 로 회신한다(요청 id 매칭). 앱 시작 시 1회 startExecutor().
 
 import { invoke } from "@tauri-apps/api/core";
+import { currentWindowLabel } from "../lib/webviewLabels";
 import { listenThisWindow } from "../lib/windowEvents";
 import { useSettings } from "../state/settings";
 import { registerCatalog } from "./catalog";
 import { registerDebugCatalog } from "./catalogDebug";
+import { registerOrchestratorCatalog } from "./catalogOrchestrator";
 import { registerRemoteCatalog } from "./catalogRemote";
 import { registerRemoteConfirmDevCatalog } from "./catalogRemoteConfirmDev";
 import { execute, setPermissionGate } from "./registry";
@@ -16,6 +18,11 @@ interface CmdRequest {
   params?: Record<string, unknown> | null;
   pane?: string | null;
   window?: string | null;
+  // 상관 부모(대화 턴 id) — 에이전트 env SOKSAK_PARENT → sok → 소켓 요청 meta. ctx 로 관통해
+  // 활동 엔트리 payload.parentId 가 된다(턴 세트 묶음).
+  parent?: string | null;
+  // 실행 유래(§5) — Rust 내부 발화(스케줄러 "schedule")만 싣는다. 시스템 유래는 무낭독·흐림.
+  origin?: string | null;
 }
 
 let started = false;
@@ -48,6 +55,9 @@ export function startExecutor(): void {
   registerRemoteConfirmDevCatalog();
   // dev 전용 debug.* — 스케줄러 process_lease lease e2e 검증용 held-reply(debug.sleep). 프로덕션 0.
   registerDebugCatalog();
+  // 자연어 콘솔(orchestrator.*)은 컨트롤 플레인(main) 전용 — 워크스페이스 창엔 존재하지 않는
+  // capability 다(UNKNOWN_COMMAND 가 정답). 소켓은 --window main 으로 명시 타겟.
+  if (currentWindowLabel() === "main") registerOrchestratorCatalog();
   // 권한 게이트: 위험 분류별 정책을 설정 store 에서 읽어 allow/deny 판정.
   setPermissionGate((danger) => {
     const s = useSettings.getState();
@@ -62,7 +72,7 @@ export function startExecutor(): void {
   // 이 창에 emit_to 된 cmd-request 만 받는다(전역 listen 이면 emit_to(다른 창) 도 받아 명령이
   // 두 창에서 중복 실행 → 창별 독립 붕괴). lib/windowEvents 머리말 참조.
   listenThisWindow<CmdRequest>("cmd-request", async (e) => {
-    const { id, method, params, pane, window } = e.payload;
+    const { id, method, params, pane, window, parent, origin } = e.payload;
     // 호스트 미준비 = 플러그인 활성화 진행 중 — 완료까지 대기 후 실행.
     // (완료 후에도 미등록이면 그때의 UNKNOWN_COMMAND 가 진짜다.)
     if (!hostReady) await hostReadyGate;
@@ -72,6 +82,8 @@ export function startExecutor(): void {
       pane: pane ?? undefined,
       remote: true,
       window: window ? { label: window } : undefined,
+      parent: parent ?? undefined,
+      origin: origin ?? undefined,
     });
     invoke("cmd_result", { id, result }).catch((err) =>
       console.error("cmd_result 회신 실패:", err),

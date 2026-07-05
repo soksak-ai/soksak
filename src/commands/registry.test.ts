@@ -4,12 +4,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   catalogJson,
   composeTriggers,
+  effectiveTts,
   execute,
   getSpec,
   register,
   setPermissionGate,
   unregister,
   type CommandSpec,
+  type CommandOutcome,
   setCommandTraceSink,
   type CommandTrace,
 } from "./registry";
@@ -72,6 +74,36 @@ describe("execute — 기본 계약", () => {
     });
     const r = await execute(TEST_PREFIX + "reject", {}, {});
     expect(r).toMatchObject({ ok: false, code: "INTERNAL" });
+  });
+});
+
+describe("낭독 축 — message(눈)/speak(귀) 둘뿐(§3)", () => {
+  const spec = (speak?: (out: CommandOutcome) => string): CommandSpec =>
+    ({ description: "d", params: {}, returns: "r", handler: () => ({}), ...(speak ? { speak } : {}) }) as CommandSpec;
+  const out = (message: string, ok = true): CommandOutcome =>
+    ({ ok, code: ok ? "OK" : "INTERNAL", message }) as CommandOutcome;
+
+  it("speak 없음 = message 폴백(기본 낭독)", () => {
+    expect(effectiveTts(spec(), out("완료"))).toBe("완료");
+  });
+  it("speak 있음 = 성공·실패 불문 speak(outcome)가 문장 — 경로는 message(눈)에만", () => {
+    const s = spec((o) => (o.ok ? "화면을 저장했어요." : o.message));
+    expect(effectiveTts(s, out("저장했습니다: /tmp/a.png"))).toBe("화면을 저장했어요.");
+    expect(effectiveTts(s, out("실패 진단", false))).toBe("실패 진단");
+  });
+  it('speak "" = 침묵 — say 류 되먹임의 유일한 차단점', () => {
+    expect(effectiveTts(spec(() => ""), out("무엇이든"))).toBeUndefined();
+  });
+  it('execute 계측(trace)에 유효 tts 가 실린다 — 기본 message, speak "" 는 부재', async () => {
+    const traces: CommandTrace[] = [];
+    setCommandTraceSink((t) => traces.push(t));
+    reg("test.tts-on", { handler: () => ({ message: "읽는다" }) });
+    reg("test.tts-off", { speak: () => "", handler: () => ({ message: "안읽는다" }) });
+    await execute("test.tts-on", {}, { remote: false });
+    await execute("test.tts-off", {}, { remote: false });
+    setCommandTraceSink(null);
+    expect(traces.find((t) => t.command.endsWith("tts-on"))?.tts).toBe("읽는다");
+    expect(traces.find((t) => t.command.endsWith("tts-off"))?.tts).toBeUndefined();
   });
 });
 
@@ -274,6 +306,52 @@ describe("execute — 계측 sink (A1 활동 허브)", () => {
       reg("trace.safe", {});
       const r = await execute("trace.safe", {}, { remote: false });
       expect(r.ok).toBe(true);
+    } finally {
+      setCommandTraceSink(null);
+    }
+  });
+
+  it("ctx.parent 가 trace.parentId 로 관통한다(상관 스펙) — 없으면 미포함", async () => {
+    const traces: CommandTrace[] = [];
+    setCommandTraceSink((t) => traces.push(t));
+    try {
+      reg("trace.parent", {});
+      await execute("trace.parent", {}, { remote: true, parent: "turn-42" });
+      await execute("trace.parent", {}, { remote: true });
+      expect(traces[0].parentId).toBe("turn-42");
+      expect(traces[1].parentId).toBeUndefined();
+    } finally {
+      setCommandTraceSink(null);
+    }
+  });
+
+  it("시스템 유래(ctx.origin)는 낭독 후보에서 제외되고 origin 이 관통한다(§5)", async () => {
+    const traces: CommandTrace[] = [];
+    setCommandTraceSink((t) => traces.push(t));
+    try {
+      reg("trace.sys", { summarize: () => "읽을 문장" });
+      await execute("trace.sys", {}, { remote: true, origin: "schedule" });
+      await execute("trace.sys", {}, { remote: true });
+      expect(traces[0].origin).toBe("schedule");
+      expect(traces[0].tts).toBeUndefined(); // 시스템 유래 = 스펙과 무관하게 침묵
+      expect(traces[1].origin).toBeUndefined();
+      expect(traces[1].tts).toBe("읽을 문장"); // 사람 유래 = 기본 낭독
+    } finally {
+      setCommandTraceSink(null);
+    }
+  });
+
+  it("spec trace:false 는 계측에서 제외된다(관찰 되먹임 차단 선언)", async () => {
+    const traces: CommandTrace[] = [];
+    setCommandTraceSink((t) => traces.push(t));
+    try {
+      reg("trace.silent", { trace: false });
+      reg("trace.loud", {});
+      const r = await execute("trace.silent", {}, { remote: true, parent: "turn-1" });
+      await execute("trace.loud", {}, { remote: true });
+      expect(r.ok).toBe(true); // 실행 자체는 정상 — 계측만 제외
+      expect(traces).toHaveLength(1);
+      expect(traces[0].command).toBe("trace.loud");
     } finally {
       setCommandTraceSink(null);
     }

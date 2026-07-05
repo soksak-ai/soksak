@@ -24,6 +24,9 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 uuid = { version = "1", features = ["v4"] }
+# 프로세스 그룹 kill(process.rs group 스폰) — 직계 kill 은 손자(에이전트의 Bash 자식 등)를
+# 남겨 stdout EOF·exit 가 지연된다. Unix 전용 사용(killpg).
+libc = "0.2"
 # unstable: 창 안에 child webview 를 임베드(브라우저 패널)하는 Window::add_child 용.
 # devtools: 브라우저 인스펙트 버튼(open_devtools) — release 빌드에도 Web Inspector 활성(개발자 도구 앱이라 기능).
 tauri = { version = "2", features = ["protocol-asset", "unstable", "devtools"] }

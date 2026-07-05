@@ -1443,6 +1443,8 @@ export function registerCatalog(): void {
     "focusIndicator",
     "appFontFamily",
     "appFontSize",
+    "orchestratorAgent",
+    "orchestratorModel",
   ] as const;
 
   register("settings.get", {
@@ -1461,6 +1463,8 @@ export function registerCatalog(): void {
         focusIndicator: s.focusIndicator,
         appFontFamily: s.appFontFamily,
         appFontSize: s.appFontSize,
+        orchestratorAgent: s.orchestratorAgent,
+        orchestratorModel: s.orchestratorModel,
         // 선택 가능한 아이콘 셋 목록(내장 + 활성 플러그인 등록분).
         iconSets: Object.values(useIconRegistry.getState().sets).map((x) => ({
           id: x.id,
@@ -1485,7 +1489,7 @@ export function registerCatalog(): void {
       value: {
         type: "json",
         description:
-          "Value — language:ko|en, projectTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, appFontFamily:string (CSS font-family stack), appFontSize:number (6-40)",
+          "Value — language:ko|en, projectTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, appFontFamily:string (CSS font-family stack), appFontSize:number (6-40), orchestratorAgent:string (agent CLI command or path the natural-language console spawns), orchestratorModel:string (--model alias for the agent; empty = CLI default)",
         required: true,
       },
     },
@@ -1535,6 +1539,15 @@ export function registerCatalog(): void {
           if (typeof v !== "number" || !Number.isFinite(v))
             return bad("number(6~40 클램프)");
           s.setAppFontSize(v);
+          break;
+        case "orchestratorAgent":
+          if (typeof v !== "string" || !v.trim())
+            return bad("string(에이전트 CLI 명령 또는 경로)");
+          s.setOrchestratorAgent(v.trim());
+          break;
+        case "orchestratorModel":
+          if (typeof v !== "string") return bad('string(모델 별칭 — "" = CLI 기본)');
+          s.setOrchestratorModel(v.trim());
           break;
       }
       return { key, value: v };
@@ -1721,6 +1734,27 @@ export function registerCatalog(): void {
     handler: async () => ({ labels: await invoke<string[]>("window_list") }),
   });
 
+  register("window.projects", {
+    description:
+      "Map open windows to the project each one hosts (root path + name + window label). The meaning layer over window.list — use it first to pick the right window before targeting commands with --window. Same answer from any window (process-wide registry).",
+    triggers: { ko: "창 프로젝트 매핑 어느 창 프로젝트 열림 창별 프로젝트" },
+    params: {},
+    returns: "{ projects: [{ root, name, window }] }",
+    summarize: (d) => `프로젝트 창 ${((d.projects as unknown[]) ?? []).length}개`,
+    examples: ["sok window.projects"],
+    handler: async () => {
+      const owners = await invoke<{ owners: { root: string; window: string }[] }>(
+        "project_owners",
+      );
+      const projects = owners.owners.map((o) => ({
+        root: o.root,
+        name: o.root.split("/").filter(Boolean).pop() ?? o.root,
+        window: o.window,
+      }));
+      return { projects };
+    },
+  });
+
   register("window.focus", {
     description: "Bring a specific window to the front (focus it).",
     triggers: { ko: "창 포커스 창 활성화 창 앞으로" },
@@ -1767,6 +1801,8 @@ export function registerCatalog(): void {
     returns:
       "{ saved, media:{kind,path} } (file mode) | { media:{kind:'image/png',base64} } (base64/rect mode)",
     summarize: (d) => (d.saved ? `저장했습니다: ${String(d.saved)}` : "화면을 캡처했습니다"),
+    // 귀의 문장(§3) — 경로는 message(눈)에만. 실패는 message(진단) 에코.
+    speak: (out) => (out.ok ? (out.data?.saved ? "화면을 저장했어요." : "화면을 캡처했어요.") : out.message),
     errors: ["INVALID_PARAMS"],
     examples: [
       "sok window.snapshot",
@@ -1984,6 +2020,8 @@ export function registerCatalog(): void {
       'sok activity.recent \'{"limit":20}\'',
       'sok activity.recent \'{"since":1234}\'',
     ],
+    // §5 R2: 조회도 사실이다 — 기록된다(선형 증가일 뿐 되먹임 아님. 낭독 루프는 tts 축이
+    // 차단). 컴포넌트 자기 백필은 호출측이 origin:"internal" 로 선언(노출만 낮아짐).
     handler: async (p) => {
       const entries = await invoke("activity_recent", {
         since: p.since ?? null,

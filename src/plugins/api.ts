@@ -126,7 +126,33 @@ export interface PluginCommandSpec {
   /** 표준 답변(MESSAGE-PROTOCOL §3) — 성공 data 를 사람이 읽는 한 줄 message 로. 미제공이면
    *  code 에코("OK")로 열화하고 로더가 경고한다. 준거=runbook ok()/err(). */
   summarize?: (data: Record<string, unknown>) => string;
-  handler: (params: Record<string, unknown>) => Promise<object> | object;
+  /** 낭독 문장(귀, §3) — 낭독 축은 이것 하나: speak 있으면 성공·실패 불문 speak(outcome)가
+   *  문장, 없으면 message 폴백, "" = 침묵. say 류는 speak: () => "" 로 되먹임을 끊는다. */
+  speak?: (out: { ok: boolean; code: string; message: string; data?: Record<string, unknown> }) => string;
+  /** 계측 스펙(MESSAGE-PROTOCOL §4) — false=실행이 활동 트레이스에서 제외. 관찰의 부산물로
+   *  스트림을 늘리는 명령(say 류 — 낭독 1회당 실행 기록 1개가 쌓인다)만 선언. */
+  trace?: false;
+  /** inv = 이 호출의 실행 컨텍스트(§5 상속). 핸들러가 다른 명령을 중첩 실행할 땐 반드시
+   *  inv.execute 를 쓴다 — 부모의 유래(origin: 스케줄 발화 등)와 상관(parentId: 대화 턴)이
+   *  자식 실행에 계승된다. app.commands.execute 로 부르면 사람 유래로 위장돼 낭독·강조가
+   *  오염된다(실측: 스케줄 reconcile 의 중첩 조회가 매 발화 낭독됨). */
+  handler: (
+    params: Record<string, unknown>,
+    inv?: PluginInvocation,
+  ) => Promise<object> | object;
+}
+
+/** 명령 핸들러에 주입되는 호출 컨텍스트 — 중첩 실행의 유래·상관 상속 통로(§5). */
+export interface PluginInvocation {
+  /** 실행 유래 — 생략=사람, "schedule"=스케줄 발화 등. */
+  origin?: string;
+  /** 상관 부모(대화 턴 id) — 있으면 이 실행은 그 턴의 세트다. */
+  parent?: string;
+  /** 부모 컨텍스트를 계승하는 중첩 실행 — 핸들러 안에서의 명령 호출은 이걸로. */
+  execute: (
+    name: string,
+    params?: Record<string, unknown>,
+  ) => Promise<{ ok: boolean; code: string; message: string; data?: Record<string, unknown> }>;
 }
 
 // 스케줄러 트리거(코어 schedule.rs Trigger 와 동형 — wire 형태 그대로 전달). every_ms 는 코어 serde
@@ -159,9 +185,12 @@ export interface SoksakPluginApi {
   // 호스트 표시 언어(권한 불요 컨텍스트 §3.5) — 변경은 locale.changed 이벤트.
   locale: () => string;
   commands?: {
+    /** opts.origin — 자동 행위의 자기 선언(§5): 사람 의도가 아닌 실행(백필 조회·낭독 등)은
+     *  "internal" 을 선언한다. 기록은 그대로 되고 노출(흐림·무낭독)만 낮아진다. */
     execute: (
       name: string,
       params?: Record<string, unknown>,
+      opts?: { origin?: string },
     ) => Promise<CommandOutcome>;
     register: (name: string, spec: PluginCommandSpec) => Disposable;
   };
@@ -1010,6 +1039,9 @@ export function buildPluginApi(
   const executeGated = async (
     name: string,
     params?: Record<string, unknown>,
+    // 유래·상관 운반(§5) — 중첩 실행의 상속(inv) 또는 자동 행위의 자기 선언(opts.origin).
+    // 게이트는 동일하게 탄다.
+    inherit?: { origin?: string; parent?: string },
   ): Promise<CommandOutcome> => {
     if (isBlockedForPlugins(name)) {
       return denied(`플러그인은 관리 명령을 호출할 수 없음(§0-5): ${name}`);
@@ -1029,7 +1061,11 @@ export function buildPluginApi(
     if (crossDeny) {
       return denied(crossDeny);
     }
-    return deps.execute(name, params ?? {}, pluginCtx);
+    return deps.execute(name, params ?? {}, {
+      ...pluginCtx,
+      ...(inherit?.origin !== undefined ? { origin: inherit.origin } : {}),
+      ...(inherit?.parent !== undefined ? { parent: inherit.parent } : {}),
+    });
   };
 
   const api: SoksakPluginApi = {
@@ -1139,9 +1175,20 @@ export function buildPluginApi(
               returns: spec.returns ?? "object",
               examples: spec.examples,
               summarize: spec.summarize, // 표준 답변(message) — execute 정규화가 주입
+              speak: spec.speak, // 귀의 문장(§3) — 낭독 축의 전부(없으면 message 폴백)
+              trace: spec.trace, // 계측 스펙(§4) — false=관찰 부산물 명령의 기록 제외
               danger, // 매니페스트 권위(없으면 런타임 fallback — 게이트 보존)
               // registry.execute 가 try/catch 로 INTERNAL 변환(§0-4).
-              handler: (params) => spec.handler(params),
+              // inv = 호출 컨텍스트 상속 통로(§5): 핸들러의 중첩 실행이 부모의 유래(origin)와
+              // 상관(parent)을 계승한다 — 스케줄 발화의 자식이 사람으로 위장되지 않는다.
+              // 게이트(권한·cross-plugin)는 executeGated 그대로(우회 없음).
+              handler: (params, ctx) =>
+                spec.handler(params, {
+                  origin: ctx?.origin,
+                  parent: ctx?.parent,
+                  execute: (n, p) =>
+                    executeGated(n, p, { origin: ctx?.origin, parent: ctx?.parent }),
+                }),
             });
             return tracker.wrap(() => deps.unregisterCommand(full));
           },

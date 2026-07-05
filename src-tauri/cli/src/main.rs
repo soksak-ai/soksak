@@ -24,6 +24,9 @@ fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     // 전역 --env 추출(환경 묶임 P9). 명령 파싱 전에 제거 → 위치 인자 구조 보존.
     let _ = ENV_OVERRIDE.set(take_flag_value(&mut args, "--env"));
+    // 전역 --window 추출 — env(SOKSAK_WINDOW)보다 우선하는 창 명시 타겟. AI 에이전트는 셸 권한이
+    // `sok …` prefix 로만 열리므로(env 프리픽스 불가) 플래그가 유일한 창 지정 수단이다.
+    let _ = WINDOW_OVERRIDE.set(take_flag_value(&mut args, "--window"));
     match args.first().map(String::as_str) {
         None | Some("-h") | Some("--help") => {
             print_usage();
@@ -73,14 +76,16 @@ fn print_usage() {
   sok events [--kinds a,b] [--since N] 활동 스트림 팔로우(JSONL, Ctrl-C 종료)
   sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]
                                       AI 에이전트 트리거 스킬 설치(soksak 제어법)
+  sok skill print                     라이브 SKILL.md 를 stdout 으로(프롬프트 재료)
   sok mcp install [--claude|--codex|--gemini|--all] [--env dev|debug|app]
                                       MCP 서버 등록(네이티브 mcp add, SOKSAK_SOCKET 핀)
 
 컨텍스트:
   soksak 터미널 안에서는 $SOKSAK_PANE 이 자동 주입되어, 대상 id 를 생략하면
   호출한 pane 의 위치(패널/컨텐츠/프로젝트)가 기본 대상이 된다.
-  멀티 윈도우: $SOKSAK_WINDOW=win-1 sok <command> 로 특정 창을 지정(생략 시 활성 창).
-  창 목록은 sok window.list, 새 창은 sok window.new.
+  멀티 윈도우: sok --window <label> <command> 또는 $SOKSAK_WINDOW 로 특정 창을 지정
+  (생략 시 활성 창). 창 목록은 sok window.list, 새 창은 sok window.new.
+  상관: $SOKSAK_PARENT 가 있으면 요청에 parent 로 실려 활동 엔트리가 그 턴으로 묶인다.
 
 환경(한 sok 은 한 환경에만 묶인다 — 침묵 cross-env 금지):
   $SOKSAK_SOCKET(앱이 PTY 에 주입) > --env dev|debug|app > $SOKSAK_ENV > 설치명
@@ -98,6 +103,8 @@ fn print_usage() {
 
 // --env 전역 플래그(있으면). main 이 1회 설정.
 static ENV_OVERRIDE: OnceLock<Option<String>> = OnceLock::new();
+// --window 전역 플래그(있으면). main 이 1회 설정 — send_request 의 창 해소에서 env 보다 우선.
+static WINDOW_OVERRIDE: OnceLock<Option<String>> = OnceLock::new();
 
 // argv0 basename → 기본 env 토큰. busybox 패턴: 설치명이 곧 환경.
 fn env_from_prog(prog: &str) -> &'static str {
@@ -275,9 +282,17 @@ fn send_request(
     if let Some(p) = pane.or_else(|| std::env::var("SOKSAK_PANE").ok()) {
         req["pane"] = json!(p);
     }
-    // 멀티 윈도우 타겟 창(SOKSAK_WINDOW 또는 명시). 생략 시 코어가 활성 창으로 라우팅.
-    if let Some(w) = window.or_else(|| std::env::var("SOKSAK_WINDOW").ok()) {
+    // 멀티 윈도우 타겟 창: 명시 > --window > SOKSAK_WINDOW. 생략 시 코어가 활성 창으로 라우팅.
+    if let Some(w) = window
+        .or_else(|| WINDOW_OVERRIDE.get().cloned().flatten())
+        .or_else(|| std::env::var("SOKSAK_WINDOW").ok())
+    {
         req["window"] = json!(w);
+    }
+    // 상관 부모(SOKSAK_PARENT — 오케스트레이터가 스폰한 에이전트에 주입). 이 실행에서 비롯된
+    // 활동 엔트리가 그 대화 턴(parentId)으로 묶인다. pane/window 와 같은 env 컨텍스트 모델.
+    if let Some(p) = std::env::var("SOKSAK_PARENT").ok().filter(|s| !s.is_empty()) {
+        req["parent"] = json!(p);
     }
     if let Some(t) = timeout_ms {
         req["timeoutMs"] = json!(t);
@@ -975,8 +990,14 @@ fn skill_frontmatter_name(content: &str) -> Option<String> {
 }
 
 fn run_skill(args: &[String]) -> ExitCode {
+    // print = 라이브 SKILL.md 를 stdout 으로(파일 미접촉). 오케스트레이터가 스폰하는 에이전트의
+    // system prompt 재료 — --setting-sources "" 헤드리스에선 스킬 자동로드가 없어 프롬프트에 싣는다.
+    if args.first().map(String::as_str) == Some("print") {
+        print!("{}", skill_doc());
+        return ExitCode::SUCCESS;
+    }
     if args.first().map(String::as_str) != Some("install") {
-        eprintln!("사용: sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]");
+        eprintln!("사용: sok skill install [--claude|--gemini|--codex|--all] [--dir DIR] | sok skill print");
         return ExitCode::FAILURE;
     }
     let mut claude = false;

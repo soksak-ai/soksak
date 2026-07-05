@@ -8,7 +8,12 @@ import { currentWindowLabel } from "../lib/webviewLabels";
 import { onPluginEvent } from "../plugins/hooks";
 import { setCommandTraceSink } from "../commands/registry";
 
-function publish(kind: string, source: string, payload: Record<string, unknown>): void {
+/** 허브 발행(창 label 자동 동반) — 코어 공급자 공용(이 파일의 계측 + orchestrator 대화 세트). */
+export function publishActivity(
+  kind: string,
+  source: string,
+  payload: Record<string, unknown>,
+): void {
   void invoke("activity_publish", {
     kind,
     source,
@@ -17,6 +22,7 @@ function publish(kind: string, source: string, payload: Record<string, unknown>)
     // 허브 불능(테스트 하니스 등)은 라이브 동작을 막지 않는다.
   });
 }
+const publish = publishActivity;
 
 /** 부트 1회 — 이벤트 구독과 registry 계측 sink 를 허브로 잇는다. */
 export function startActivityFeed(): void {
@@ -27,12 +33,16 @@ export function startActivityFeed(): void {
       cwd: p.cwd,
     }),
   );
-  onPluginEvent("command.finished", (p) =>
+  onPluginEvent("command.finished", (p) => {
+    // §5: 시작 없는 종료(셸 초기화 펄스)는 관찰 스토어가 이미 소멸시킨다 — 여기 도달 = 실명령.
     publish("terminal.command.finished", "terminal", {
       paneId: p.paneId,
       exitCode: (p as { exitCode?: number }).exitCode,
-    }),
-  );
+      commandLine: (p as { commandLine?: string | null }).commandLine ?? null,
+      // 낭독 대상(문장 합성은 소비자 — exitCode 로컬라이즈). turn.ended(AI 발화)는 tts 없음.
+      tts: true,
+    });
+  });
   onPluginEvent("turn.ended", (p) =>
     publish("turn.ended", p.source, {
       paneId: p.paneId,
@@ -53,9 +63,8 @@ export function startActivityFeed(): void {
     }),
   );
   // 레지스트리 계측(P12 본체) — params 는 키 목록만 도착한다(registry 가 요약).
-  // activity.recent 자체는 제외: 피드를 보는 행위가 피드를 늘리는 되먹임 방지.
+  // 계측 제외는 spec.trace === false 선언이 담당한다(registry 가 sink 호출 자체를 건너뜀).
   setCommandTraceSink((t) => {
-    if (t.command === "activity.recent") return;
     publish("command.executed", t.source, {
       command: t.command,
       title: t.title,
@@ -67,8 +76,10 @@ export function startActivityFeed(): void {
       durationMs: t.durationMs,
       startedAt: t.startedAt,
       finishedAt: t.finishedAt,
-      data: t.data,
       media: t.media,
+      tts: t.tts,
+      parentId: t.parentId,
+      origin: t.origin,
     });
   });
 }

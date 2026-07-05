@@ -7,7 +7,7 @@
 // coreStore 가 localStorage 동기캐시 + app.data 권위·broadcast 를 흡수하므로 여기선 직렬화/배선만.
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeListen } from "../lib/safeListen";
 import {
   getCurrentWindow,
   LogicalPosition,
@@ -18,6 +18,7 @@ import { makeCoreStore } from "./coreStore";
 import { validateProjectRoot, ensureDefaultWorkspace } from "../lib/workspace";
 import { claimRoots } from "./projectRegistry";
 import { beginRestoreHydration } from "./hydration";
+import { reseedSessionsSnapshot } from "../plugins/hooks";
 import { listRecentProjects } from "./recentProjects";
 import {
   useSessions,
@@ -59,18 +60,9 @@ async function currentFrame(): Promise<
 
 // core ns data-change → coreStore 가 기대하는 (key)=>void. kv 키는 페이로드 id 필드.
 function coreOnDataChange(cb: (key: string) => void): () => void {
-  let un = () => {};
-  let disposed = false;
-  void listen<{ ns: string; id: string | null }>("data-change", (e) => {
+  return safeListen<{ ns: string; id: string | null }>("data-change", (e) => {
     if (e.payload.ns === "core" && e.payload.id) cb(e.payload.id);
-  }).then((u) => {
-    if (disposed) u();
-    else un = u;
   });
-  return () => {
-    disposed = true;
-    un();
-  };
 }
 
 // core kv 저장 의존성(invoke/data-change/ls) — viewLabels 등 다른 core 영속 상태도 공유.
@@ -143,6 +135,9 @@ export async function initWorkspacePersistence(
       reseedIdCounters(owned);
       if (owned.length > 0) {
         useSessions.getState().restoreProjects(owned, active);
+        // 복원은 생성이 아니다(§5 재생≠관찰) — diff 기준점을 지금으로 재씨딩해 복원 델타가
+        // project.created(→ 플러그인 git.init 자동 실행 등)로 오인 발화되는 것을 원천 차단.
+        reseedSessionsSnapshot();
         // B4 — 복원 hydration: 보이지 않는 복원 뷰의 본문 마운트를 미루고(PTY 동시
         // spawn 분산), idle 체인이 lastActivity 순으로 채운다. 외형은 즉시 전부.
         beginRestoreHydration();

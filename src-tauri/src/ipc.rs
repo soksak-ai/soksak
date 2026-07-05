@@ -45,9 +45,16 @@ struct Request {
     // tmux -t 관례 — 특정 창을 명시할 때 지정한다.
     window: Option<String>,
     // 프론트 응답 대기 상한(ms). 생략 시 10s(정상 커맨드의 빠른 행 감지 유지). 느린 커맨드(실 LLM
-    // 에이전트 턴 등)는 크게 지정. [1s, 600s] 로 클램프(무한대기 금지). camelCase(timeoutMs) 수용.
+    // 에이전트 턴 등)는 크게 지정. [1s, 3600s] 로 클램프(무한대기 금지). camelCase(timeoutMs) 수용.
     #[serde(default, rename = "timeoutMs")]
     timeout_ms: Option<u64>,
+    // 상관 부모(대화 턴 id) — 오케스트레이터가 스폰한 에이전트의 SOKSAK_PARENT env 가 sok 을 타고
+    // 도착한다. registry trace 를 거쳐 활동 엔트리 payload.parentId 로 실려 턴 세트를 묶는다.
+    parent: Option<String>,
+    // 실행 유래(MESSAGE-PROTOCOL §5) — 사람 유래(생략)와 시스템 유래("schedule" 등)를 가른다.
+    // 시스템 유래는 낭독 후보에서 제외되고 피드에서 흐리게 표시된다. 소켓 클라이언트는 쓰지
+    // 않는다(사람/에이전트=사람 유래) — Rust 내부 발화(스케줄러)만 싣는다.
+    origin: Option<String>,
 }
 
 // 마지막으로 포커스된 창 label(활성 창 추적). lib.rs on_window_event 의 Focused(true) 가 갱신.
@@ -58,6 +65,22 @@ pub fn note_focus(label: &str) {
     if let Ok(mut f) = LAST_FOCUSED.lock() {
         *f = label.to_string();
     }
+    // 마지막 워크스페이스(비-main) 포커스 — 자연어 턴의 기본 무대. 오케스트레이터에서 명령을
+    // 칠 때 활성 창은 main(컨트롤 플레인)이므로, "사용자가 실제로 일하던 창"은 이 값이다.
+    // main 은 플랫폼 예약어(NAMING §1-4b) — 예약어 비교이지 라벨에서 역할 파싱이 아니다.
+    if label != "main" {
+        if let Ok(mut w) = LAST_WORKSPACE.lock() {
+            *w = Some(label.to_string());
+        }
+    }
+}
+
+static LAST_WORKSPACE: Mutex<Option<String>> = Mutex::new(None);
+
+// 마지막 포커스 워크스페이스 창(읽기 전용) — orchestrator.ask 의 기본 무대(SOKSAK_WINDOW).
+#[tauri::command]
+pub fn ipc_last_workspace_window() -> Option<String> {
+    LAST_WORKSPACE.lock().ok().and_then(|w| w.clone())
 }
 
 fn active_window() -> String {
@@ -279,6 +302,8 @@ fn route(app: &AppHandle, req: Request) -> Value {
         "params": req.params,
         "pane": req.pane,
         "window": target,
+        "parent": req.parent,
+        "origin": req.origin,
     });
     if app.emit_to(&target, "cmd-request", payload).is_err() {
         bridge.pending.lock().unwrap().remove(&seq);
@@ -303,10 +328,42 @@ pub fn cmd_result(bridge: State<CmdBridge>, id: u64, result: Value) {
     }
 }
 
+// 제어 소켓 경로(읽기 전용) — PTY 주입(pty.rs)과 같은 정본. 오케스트레이터가 스폰하는
+// 에이전트 서브프로세스(PTY 아님 — 자동주입 없음)의 SOKSAK_SOCKET env 로 쓴다.
+#[tauri::command]
+pub fn ipc_socket_path() -> Option<String> {
+    socket_path().map(str::to_string)
+}
+
+// 앱과 짝인 `sok` CLI 가 든 디렉토리 — 스폰된 에이전트의 PATH 에 앞세워 `sok …` 이 어느 설치
+// 형태에서든 해소되게 한다(사용자 PATH 설치 미전제). 탐색: 실행 파일 디렉토리부터 조상 6단계
+// 안에서 `sok` 실물이 있는 첫 디렉토리 — dev(target/debug 직하), debug 번들(bundle/macos/….app/
+// Contents/MacOS → target/debug 5단계), 미래 번들 동봉(exe 옆) 모두 이 한 규칙으로 잡힌다.
+#[tauri::command]
+pub fn ipc_cli_dir() -> Option<String> {
+    let exe = std::env::current_exe().ok()?;
+    let mut dir = exe.parent()?.to_path_buf();
+    for _ in 0..=6 {
+        if dir.join("sok").is_file() {
+            return Some(dir.to_string_lossy().into_owned());
+        }
+        dir = dir.parent()?.to_path_buf();
+    }
+    None
+}
+
 // Rust 내부에서 프론트 registry 명령을 실행한다(딥링크 라우팅·스케줄러 발화 공용 — 소켓 서버와 같은
-// CmdBridge 경로 재사용, 새 채널 발명 0). 활성 창으로 라우팅하고 결과를 동기 대기한다(route 가 [1s,600s]
+// CmdBridge 경로 재사용, 새 채널 발명 0). 활성 창으로 라우팅하고 결과를 동기 대기한다(route 가 [1s,3600s]
 // 클램프). registry 가 단일 실행 표면이므로 Rust 기능은 이 한 경로로만 명령을 부른다(R8 단일 경로).
-pub fn request_command(app: &AppHandle, method: String, params: Value, timeout_ms: u64) -> Value {
+// origin: 사람 유래(딥링크 = 사람 클릭)는 None, 시스템 유래(스케줄러)는 Some("schedule") —
+// 활동 스트림의 낭독·표시 규칙이 이 축을 소비한다(MESSAGE-PROTOCOL §5).
+pub fn request_command(
+    app: &AppHandle,
+    method: String,
+    params: Value,
+    timeout_ms: u64,
+    origin: Option<&str>,
+) -> Value {
     route(
         app,
         Request {
@@ -316,6 +373,8 @@ pub fn request_command(app: &AppHandle, method: String, params: Value, timeout_m
             pane: None,
             window: None,
             timeout_ms: Some(timeout_ms),
+            parent: None,
+            origin: origin.map(str::to_string),
         },
     )
 }
@@ -324,7 +383,12 @@ pub fn request_command(app: &AppHandle, method: String, params: Value, timeout_m
 // heartbeat 경로)가 직접 recv_timeout 루프로 staleness/backstop 을 관리한다(프로세스-생존 lease — 도는 중
 // 안 자름). 반환=(seq, rx). 호출자는 종료 시 close_request(seq)로 pending 을 회수해야 한다(cancel 도 호출 →
 // tx drop → rx Disconnected 로 대기 즉시 깨움). emit 실패면 None.
-pub fn open_request(app: &AppHandle, method: String, params: Value) -> Option<(u64, mpsc::Receiver<Value>)> {
+pub fn open_request(
+    app: &AppHandle,
+    method: String,
+    params: Value,
+    origin: Option<&str>,
+) -> Option<(u64, mpsc::Receiver<Value>)> {
     let target = active_window();
     if app.get_window(&target).is_none() {
         return None;
@@ -339,6 +403,7 @@ pub fn open_request(app: &AppHandle, method: String, params: Value) -> Option<(u
         "params": params,
         "pane": Value::Null,
         "window": target,
+        "origin": origin,
     });
     if app.emit_to(&target, "cmd-request", payload).is_err() {
         bridge.pending.lock().unwrap().remove(&seq);

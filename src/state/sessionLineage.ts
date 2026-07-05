@@ -4,7 +4,7 @@
 // 방금 쓰인 세션)은 코어 ai_session_active(SessionTracker)가 단일진실로 수행하고, 여기선 배선만 한다.
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { safeListen } from "../lib/safeListen";
 
 const LINEAGE_NS = "core";
 const LINEAGE_COLL = "ai_session_lineage";
@@ -25,13 +25,9 @@ async function ensureDefined(): Promise<void> {
 function ensureFsListener(): void {
   if (fsUnlisten) return;
   // notify fs-change(변경 항목의 부모 디렉토리) — 우리가 watch 중인 세션 디렉토리면 그때만 확정.
-  void listen<string>("fs-change", (e) => {
+  fsUnlisten = safeListen<string>("fs-change", (e) => {
     if (byDir.has(e.payload)) void refresh(e.payload);
-  })
-    .then((u) => {
-      fsUnlisten = u;
-    })
-    .catch(() => {});
+  });
 }
 
 // fs-change 이벤트 시 — dir 의 활성 세션을 코어에 확정시키고(직전 스냅샷 비교), 직전과 다르면 전이로 기록.

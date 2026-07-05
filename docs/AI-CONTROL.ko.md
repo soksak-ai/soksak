@@ -94,10 +94,12 @@ soksak 의 모든 기능을 AI 에게 주는 방식의 정본 규칙. 세 가지
 
 ### CLI (`sok`)
 - **사용대상**: 터미널 안 사람 + 터미널 안 에이전트(claude/codex 가 PTY 안에서 `sok` 실행).
-- **제공기능**: 임의 명령 `sok <cmd> '{json}'`, 발견 `sok commands`/`help <cmd>`/`docs`, 스트림 팔로우 `sok events [--kinds] [--since]`(JSONL, Ctrl-C 종료), MCP 브리지 `sok mcp`, 교육 설치 `sok skill install`. SOKSAK_PANE/WINDOW/SOCKET 자동 인지로 자기 위치 기본 타겟.
+- **제공기능**: 임의 명령 `sok <cmd> '{json}'`, 발견 `sok commands`/`help <cmd>`/`docs`, 스트림 팔로우 `sok events [--kinds] [--since]`(JSONL, Ctrl-C 종료), MCP 브리지 `sok mcp`, 교육 설치 `sok skill install` / 출력 `sok skill print`(라이브 SKILL.md stdout — 헤드리스 에이전트의 프롬프트 재료). SOKSAK_PANE/WINDOW/SOCKET 자동 인지로 자기 위치 기본 타겟, `--window <label>` 은 타겟 창 명시 오버라이드(SOKSAK_WINDOW 보다 우선 — 셸 권한이 `sok …` 접두만 허용하는 에이전트의 창 지정 수단).
+- **상관**: `SOKSAK_PARENT`(오케스트레이터가 스폰한 에이전트에 주입)가 모든 요청에 meta `parent` 로 실려 활동 엔트리 `payload.parentId` 가 된다 — 실행들이 그 대화 턴으로 묶인다(MESSAGE-PROTOCOL §4). PANE/WINDOW 와 같은 env 컨텍스트 모델, MCP `soksak.run` 도 같은 지점을 지난다.
 - **제공방법**: 워크스페이스 `cli` 크레이트 → `sok` 바이너리. `resolve_socket`. `run_request`/`run_help`/`run_docs` 전부 `fetch_commands()`=`state.commands` 파생, `run_events` 는 연결을 push 스트림으로 전환.
 - **무엇**: 현 구현 유지. help/docs 가 `catalogJson` 파생임을 규칙으로 고정. 정적 명령 목록 하드코딩 금지.
 - **왜**: transport-1 — 터미널 내 저지연 동기 호출. 이미 발견형. 이 패턴을 MCP 에도 대칭 적용.
+- **주의 — 소켓 경유 `orchestrator.ask`**: 이 명령은 컨트롤 플레인(main)에만 등록되므로 명시 타겟(`sok --window main orchestrator.ask '{"text":"…","timeoutMs":300000}'`) + 큰 `timeoutMs` 지정 — 턴은 분 단위로 돌 수 있고 소켓 클램프 상한은 1시간(초과 턴은 계속 돌고 호출자만 TIMEOUT).
 
 ### MCP (`sok mcp`)
 - **사용대상**: 외부 MCP 클라이언트의 에이전트(Claude Desktop 등 stdio MCP 연결).

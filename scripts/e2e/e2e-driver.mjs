@@ -61,7 +61,14 @@ function attach(sock) {
 function rpc(sock, method, params = {}) {
   const id = ++seq;
   return new Promise((resolve, reject) => {
-    pending.set(id, resolve);
+    // 응답 봉투(MESSAGE-PROTOCOL): 기계 페이로드는 data 에 중첩 — 헬퍼에서 평탄화한다.
+    pending.set(id, (resp) =>
+      resolve(
+        resp && typeof resp === "object" && resp.data && typeof resp.data === "object"
+          ? { ...resp.data, ...Object.fromEntries(Object.entries(resp).filter(([k]) => k !== "data")) }
+          : resp,
+      ),
+    );
     sock.write(JSON.stringify({ id, method, params }) + "\n", (err) => {
       if (err) {
         pending.delete(id);

@@ -5,7 +5,9 @@
 // 리스너 실패는 호스트를 죽이지 못한다(§0-4) — 콜백마다 try/catch.
 
 import { invoke } from "@tauri-apps/api/core";
+import { safeListen } from "../lib/safeListen";
 import { listenThisWindow } from "../lib/windowEvents";
+import { currentWindowLabel } from "../lib/webviewLabels";
 import {
   currentSessionOf,
   isTracking,
@@ -79,11 +81,27 @@ export interface PluginEventMap {
     pid?: number | null;
   };
   // 터미널 명령 종료(OSC 133/633 셸 통합 탐지 — 폴링 없음). git 뷰 등의 자동
-  // 갱신 트리거. projectId 는 pane 의 소속 프로젝트(못 찾으면 null).
-  "command.finished": { projectId: string | null; paneId: string; exitCode?: number };
+  // 갱신 트리거. projectId 는 pane 의 소속 프로젝트(못 찾으면 null). commandLine = 관찰된
+  // 시작이 있던 실명령만(셸 초기화 부산물은 null — 부팅 시 pane 마다 발사되는 프롬프트 종료).
+  "command.finished": {
+    projectId: string | null;
+    paneId: string;
+    exitCode?: number;
+    commandLine?: string | null;
+  };
   // 오픈 토픽 "턴 종료" — provider 3종: shell(OSC133 명령 종료), idle(출력 유휴 휴리스틱,
   // 기본 OFF), acp(ACP 플러그인이 bus 로 발행 → 코어가 hooks 로 미러). 메일함 self-subscribe 가
   // 구독해 턴 종료 시 기계적으로 메시지 생성. 코어는 특정 플러그인을 모른다(결합 0) — 토픽 계약만.
+  // 활동 허브 엔트리(P12 실행 가시성) — 오케스트레이터 피드와 동일 스트림의 창-측 중계.
+  // 전 창 엔트리가 흐른다(payload.window=발생 창) — ownWindow 로 이 창 것만 필터 가능.
+  activity: {
+    seq: number;
+    ts: number;
+    kind: string;
+    source: string;
+    payload: Record<string, unknown>;
+    ownWindow: boolean;
+  };
   "turn.ended": {
     projectId: string | null;
     // 프로젝트 root(폴더 경로) — 창 무관 안정 식별자. 멀티창 같은 프로젝트 일관성의 스코프 키
@@ -120,6 +138,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "command.finished",
   "command.progress",
   "turn.ended",
+  "activity",
 ];
 
 // 권한 게이트가 필요한 이벤트 → 요구 권한. 여기 없는 이벤트는 권한 불요(범용 알림).
@@ -132,6 +151,8 @@ export const EVENT_PERMISSIONS: Partial<
   "command.finished": "terminal",
   // 턴 종료는 터미널 화면 활동(유휴 감지 포함)을 노출 → 화면 읽기 권한 게이트.
   "turn.ended": "terminal:read",
+  // 활동 허브엔 명령라인·턴 등 터미널 활동이 흐른다 → 같은 급의 게이트.
+  activity: "terminal",
 };
 
 type AnyListener = (payload: never) => void;
@@ -176,6 +197,13 @@ export function emitPluginEvent<K extends keyof PluginEventMap>(
 // FileViewer 저장 성공 시 1회 호출(저장 성공은 store 신호만으로 구분 불가).
 export function emitFileSaved(payload: PluginEventMap["file.saved"]): void {
   emitPluginEvent("file.saved", payload);
+}
+
+// 부트 복원 적용 직후 세션 diff 기준점을 현재로 재씨딩 — 복원은 생성이 아니다(§5).
+// startPluginHooks 가 실체를 주입한다(그 전 호출은 no-op — 훅 미기동 창은 diff 도 없다).
+let reseedSessions: (() => void) | null = null;
+export function reseedSessionsSnapshot(): void {
+  reseedSessions?.();
 }
 
 // ── 상태 diff 합성 ───────────────────────────────────────────────────────────
@@ -291,6 +319,12 @@ export function startPluginHooks(): void {
     });
   };
   useSessions.subscribe(() => scheduleSessionsDiff());
+  // 복원 델타 삼킴(§5 "재생은 관찰이 아니다") — 부트 복원이 적용된 직후 workspaceBoot 가
+  // 호출한다. 복원으로 나타난 프로젝트를 diff 가 "생성"으로 오인해 project.created 를
+  // 창마다 발화하던 원천(실측: 창마다 git.init 자동 실행 + "OK" 낭독 연발).
+  reseedSessions = () => {
+    prevSessions = snapshotSessions(useSessions.getState());
+  };
 
   let prevTheme = {
     name: useTheme.getState().current,
@@ -365,7 +399,12 @@ export function startPluginHooks(): void {
   // coalesce 불필요 — 발생 빈도 = 사용자가 명령을 끝내는 빈도.
   subscribeAnyCommandFinished((paneId, commandLine, cwd, exitCode) => {
     const info = projectInfoOfPane(paneId);
-    emitPluginEvent("command.finished", { projectId: info?.id ?? null, paneId, exitCode });
+    emitPluginEvent("command.finished", {
+      projectId: info?.id ?? null,
+      paneId,
+      exitCode,
+      commandLine: commandLine ?? null,
+    });
     // B3 — 명령 종료 시점의 cwd(cd 후 종료 반영)·활동 시각.
     useSessions.getState().setViewRuntime(null, paneId, {
       ...(cwd ? { cwd } : {}),
@@ -403,6 +442,21 @@ export function startPluginHooks(): void {
       emitPluginEvent("turn.ended", payload as PluginEventMap["turn.ended"]);
     }
   });
+
+  // 활동 허브 브로드캐스트(전 창 공통 스트림, activity.rs app.emit) → 플러그인 이벤트.
+  // 오케스트레이터가 보는 피드와 동일 원천 — 활동 소비 플러그인(로그 뷰·낭독 등)의 표준 입구.
+  // ownWindow = 이 창에서 발생한 엔트리인지(entry.payload.window 비교) — 창-스코프 필터용.
+  // 전역 listen 이 맞다(app.emit 브로드캐스트 수신) — safeListen(백엔드 부재·중복 해지 가드).
+  safeListen<{ seq: number; ts: number; kind: string; source: string; payload: Record<string, unknown> }>(
+    "activity",
+    (e) => {
+      const entry = e.payload;
+      emitPluginEvent("activity", {
+        ...entry,
+        ownWindow: String(entry.payload?.window ?? "") === currentWindowLabel(),
+      });
+    },
+  );
 
   // 앱(이 창) 활성 → 플러그인 이벤트. 이 창에 emit_to 된 "window-focus" 만 받는다(전역 listen 이면
   // 다른 창 포커스도 받아 app.focus 가 잘못 발화). lib/windowEvents 머리말 참조.

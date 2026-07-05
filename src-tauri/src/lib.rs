@@ -107,6 +107,8 @@ pub fn run() {
                 Ok(conn) => {
                     // 활동 허브 컬렉션(core/activity) 정의 — 발행 즉시 영속 가능(A1).
                     activity::init_collection(&conn);
+                    // seq 를 영속 최댓값에서 재개 — 재시작을 넘는 단조(소비자 읽음 커서 보존).
+                    activity::resume_seq(app.handle(), &conn);
                     app.state::<data::DbState>().set(conn)
                 }
                 Err(e) => eprintln!("[data] DB 열기 실패: {e}"),
@@ -175,7 +177,7 @@ pub fn run() {
                 app.deep_link().on_open_url(move |event| {
                     for u in event.urls() {
                         if let Some((cmd, params)) = deeplink::parse_command_url(u.as_str()) {
-                            let _ = ipc::request_command(&dl_handle, cmd, params, 10_000);
+                            let _ = ipc::request_command(&dl_handle, cmd, params, 10_000, None);
                         }
                     }
                 });
@@ -407,6 +409,9 @@ pub fn run() {
             window::window_focus,
             window::window_close,
             ipc::cmd_result,
+            ipc::ipc_socket_path,
+            ipc::ipc_cli_dir,
+            ipc::ipc_last_workspace_window,
             titlebar::titlebar_backing,
             ime_debug,
             window_activate,

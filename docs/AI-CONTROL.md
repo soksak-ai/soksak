@@ -96,10 +96,12 @@ Evidence: `catalogJson()` (registry.ts) is exposed as `state.commands`, and the 
 
 ### CLI (`sok`)
 - **Audience**: humans in the terminal + agents in the terminal (claude/codex running `sok` inside a PTY).
-- **Capability**: any command `sok <cmd> '{json}'`, discovery `sok commands`/`help <cmd>`/`docs`, stream follow `sok events [--kinds] [--since]` (JSONL, Ctrl-C to stop), MCP bridge `sok mcp`, teaching install `sok skill install`. SOKSAK_PANE/WINDOW/SOCKET auto-detection targets "where I am" by default.
+- **Capability**: any command `sok <cmd> '{json}'`, discovery `sok commands`/`help <cmd>`/`docs`, stream follow `sok events [--kinds] [--since]` (JSONL, Ctrl-C to stop), MCP bridge `sok mcp`, teaching install `sok skill install` / print `sok skill print` (live SKILL.md to stdout — prompt material for headless agents). SOKSAK_PANE/WINDOW/SOCKET auto-detection targets "where I am" by default; `--window <label>` overrides the target window explicitly (beats `SOKSAK_WINDOW` — the vehicle for agents whose shell permission only admits `sok …` prefixes).
+- **Correlation**: `SOKSAK_PARENT` (injected by the orchestrator into agents it spawns) rides every request as meta `parent` → activity entries carry `payload.parentId`, binding the executions to their conversation turn (MESSAGE-PROTOCOL §4). Same env-context model as PANE/WINDOW; MCP `soksak.run` passes the same point.
 - **Mechanism**: the workspace `cli` crate → `sok` binary. `resolve_socket` (env→`~/.soksak` scan). `run_request`/`run_help`/`run_docs` all derive from `fetch_commands()` = `state.commands`; `run_events` switches the connection into the push stream.
 - **What**: keep the current implementation. help/docs derive from `catalogJson` as a fixed rule. No hardcoded static command lists.
 - **Why**: transport 1 — low-latency synchronous calls inside the terminal. Already discovery-shaped; the same pattern applies to MCP.
+- **Note — `orchestrator.ask` over the socket**: the command registers only in the control plane, so target it explicitly (`sok --window main orchestrator.ask '{"text":"…","timeoutMs":300000}'`) and pass a large `timeoutMs` — a turn can run minutes; the socket clamp ceiling is one hour (a longer turn keeps running; only the caller times out).
 
 ### MCP (`sok mcp`)
 - **Audience**: agents on external MCP clients (Claude Desktop and other stdio MCP connections).

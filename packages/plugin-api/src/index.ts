@@ -68,7 +68,27 @@ export interface PluginCommandSpec {
   /** 표준 답변(MESSAGE-PROTOCOL §3) — 성공 data 를 사람이 읽는 한 줄 message 로. 미제공이면
    *  code 에코("OK")로 열화하고 로더가 경고한다. */
   summarize?: (data: Record<string, unknown>) => string;
-  handler: (params: Record<string, unknown>) => Promise<object> | object;
+  /** 낭독 문장(귀, §3) — 낭독 축은 이것 하나: speak 있으면 speak(outcome), 없으면 message 폴백, ""=침묵. */
+  speak?: (out: { ok: boolean; code: string; message: string; data?: Record<string, unknown> }) => string;
+  /** 계측 스펙(MESSAGE-PROTOCOL §4·§5 R2) — false=활동 트레이스 제외. 유일한 정당 사유는
+   *  동일 사실의 이중 기록 방지. */
+  trace?: false;
+  /** inv = 이 호출의 실행 컨텍스트(§5 상속) — 중첩 명령 실행은 반드시 inv.execute 로:
+   *  부모의 유래(origin)·상관(parentId)이 자식에 계승된다. */
+  handler: (
+    params: Record<string, unknown>,
+    inv?: PluginInvocation,
+  ) => Promise<object> | object;
+}
+
+/** 명령 핸들러에 주입되는 호출 컨텍스트 — 중첩 실행의 유래·상관 상속 통로(MESSAGE-PROTOCOL §5). */
+export interface PluginInvocation {
+  origin?: string;
+  parent?: string;
+  execute: (
+    name: string,
+    params?: Record<string, unknown>,
+  ) => Promise<{ ok: boolean; code: string; message: string; data?: Record<string, unknown> }>;
 }
 
 /** data.watch 가 받는 변경 페이로드. coll/scope/id 는 연산에 따라 null. */
@@ -115,6 +135,14 @@ export interface PluginEventMap {
     cwd: string | null;
   };
   "command.finished": { projectId: string | null; paneId: string };
+  activity: {
+    seq: number;
+    ts: number;
+    kind: string;
+    source: string;
+    payload: Record<string, unknown>;
+    ownWindow: boolean;
+  };
   "turn.ended": {
     projectId: string | null;
     root: string | null;
@@ -216,7 +244,13 @@ export interface SoksakPluginApi {
   pluginId: string;
   locale: () => string;
   commands?: {
-    execute: (name: string, params?: Record<string, unknown>) => Promise<CommandOutcome>;
+    /** opts.origin — 자동 행위의 자기 선언(§5): 사람 의도가 아닌 실행(백필 조회·낭독 등)은
+     *  "internal". 기록은 그대로, 노출(흐림·무낭독)만 낮아진다. */
+    execute: (
+      name: string,
+      params?: Record<string, unknown>,
+      opts?: { origin?: string },
+    ) => Promise<CommandOutcome>;
     register: (name: string, spec: PluginCommandSpec) => Disposable;
   };
   events: {

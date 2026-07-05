@@ -54,15 +54,16 @@ __vsterm_preexec() {
   __vsterm_preexec_ran=1
 }
 
-# precmd: a command finished (or first prompt) → emit D with exit code, cwd,
-# then re-wrap the prompt with A (start) / B (end) markers.
+# precmd: re-wrap the prompt (A/B) and report cwd every cycle. D (command finished)
+# is emitted ONLY when a command actually ran (preexec marked C) — FinalTerm semantics:
+# D pairs with C. The first prompt and empty-Enter cycles run precmd without preexec;
+# emitting D there fabricates "a command finished" out of nothing, and every consumer
+# downstream (activity stream, narration, turn detection) inherits the lie.
 __vsterm_precmd() {
   local exit_code=$?
   if [[ -n "${__vsterm_preexec_ran:-}" ]]; then
     __vsterm_osc133 "D;${exit_code}"
     unset __vsterm_preexec_ran
-  else
-    __vsterm_osc133 "D"
   fi
   __vsterm_osc7
   PS1="%{$(__vsterm_osc133 'A')%}${__vsterm_original_ps1}%{$(__vsterm_osc133 'B')%}"

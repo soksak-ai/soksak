@@ -31,12 +31,20 @@ export interface CommandSpec {
   // 표준 답변(message) 생성 — 성공 결과 data 를 사람이 읽는 한 줄로. 없으면 execute 가 code 를
   // message 로 에코("OK" 등, 변환 없음). docs/MESSAGE-PROTOCOL.md 의 응답 봉투 message 계약.
   summarize?: (data: Record<string, unknown>) => string;
+  // 낭독 문장(귀) 생성 — summarize(눈, →message)와 대칭 seam. 낭독 축은 이것 하나다(§3):
+  // speak 있으면 성공·실패 불문 speak(outcome)가 문장, 없으면 message 폴백, "" = 침묵.
+  // 낭독 수행 명령(say 류)은 speak: () => "" 로 되먹임을 끊는다.
+  speak?: (out: CommandOutcome) => string;
   // 발생 가능한 에러 코드.
   errors?: readonly (CmdErrCode | "INTERNAL" | "TIMEOUT")[];
   // CLI 사용 예시(매뉴얼용).
   examples?: readonly string[];
   // 위험 분류(원격/AI 호출 권한 게이트 대상): destructive=닫기·제거, inject=입력 주입.
   danger?: "destructive" | "inject";
+  // 실행 계측 선언 — false 면 이 명령의 실행이 활동 트레이스(command.executed)에서 제외된다.
+  // §5 R2: 유일한 정당 사유는 "동일 사실의 이중 기록 방지"(orchestrator.ask — chat.prompt/
+  // answer 가 그 턴의 대표 기록)뿐이다. 소음 억제 목적의 선언 금지 — 그건 origin(노출 축) 몫.
+  trace?: false;
   // [RULE] 핸들러 반환 객체에 top-level "id" 를 쓰지 말 것 — 소켓 응답이 JSON-RPC 봉투의
   // 요청 id(숫자)와 한 객체로 합쳐져 덮어쓴다(식별자 유실). 식별자는 네임스페이스 필드로
   // (groupId/viewId/messageId/label …). 같은 이유로 "ok"/"code"/"message" 도 결과 의미로만 사용.
@@ -53,6 +61,12 @@ export interface CommandContext {
   remote?: boolean;
   // 멀티 윈도우: 이 명령이 도착한 창 label(소켓 emit_to 타겟). 창 명령(window.*)·라우팅 확인용.
   window?: { label: string };
+  // 상관 부모(대화 턴 id) — 에이전트 env SOKSAK_PARENT → sok 요청 meta 로 도착. trace 의
+  // parentId 가 되어 이 실행을 그 턴의 활동 세트로 묶는다(docs/MESSAGE-PROTOCOL.md).
+  parent?: string;
+  // 실행 유래(§5) — 생략=사람 유래(콘솔·터미널·에이전트 턴). "schedule" 등 시스템 유래는
+  // 낭독 후보에서 제외되고(아래 execute) 피드에서 흐리게 표시된다.
+  origin?: string;
 }
 
 // 권한 게이트 콜백(설정 store 를 registry 가 직접 알지 않게 주입).
@@ -221,8 +235,13 @@ export interface CommandTrace {
   durationMs: number;
   startedAt: number;
   finishedAt: number;
-  data?: Record<string, unknown>; // 기계 페이로드(hover 상세)
+  // 유효 낭독 문장 — effectiveTts(spec, outcome) 계산 결과. 없으면 낭독 금지 엔트리.
+  tts?: string;
   media?: MediaContent; // 표시 미디어(이미지 등) — 피드가 그대로 렌더
+  // 상관 부모(ctx.parent 관통) — 이 실행이 속한 대화 턴 id. 피드가 턴 세트로 폴딩한다.
+  parentId?: string;
+  // 실행 유래(ctx.origin 관통) — 시스템 유래("schedule" 등)는 무낭독·흐림 표시(§5).
+  origin?: string;
 }
 let traceSink: ((t: CommandTrace) => void) | null = null;
 export function setCommandTraceSink(fn: ((t: CommandTrace) => void) | null): void {
@@ -239,21 +258,33 @@ export async function execute(
   const out = await executeInner(name, params, ctx);
   const finished = Date.now();
   try {
-    traceSink?.({
-      command: name,
-      title: registry.get(name)?.title,
-      source: ctx.remote ? "remote" : "ui",
-      danger: registry.get(name)?.danger,
-      paramKeys: Object.keys(params),
-      ok: out.ok,
-      code: out.code,
-      message: out.message,
-      durationMs: finished - started,
-      startedAt: started,
-      finishedAt: finished,
-      data: out.data,
-      media: out.media,
-    });
+    // 기록은 전량(§5 R2 — 사실은 전부 기록된다). 유일한 제외 = spec.trace === false:
+    // 동일 사실의 이중 기록 방지(orchestrator.ask — chat.prompt/answer 가 그 턴의 대표 기록,
+    // activity.recent 아님 주의: 조회도 사실이라 기록된다). 노출(흐림·무낭독)은 origin 축이
+    // 선별할 뿐 기록 여부를 정하지 않는다. 미등록 명령의 실패 봉투도 그대로 계측.
+    if (registry.get(name)?.trace !== false) {
+      traceSink?.({
+        command: name,
+        title: registry.get(name)?.title,
+        source: ctx.remote ? "remote" : "ui",
+        danger: registry.get(name)?.danger,
+        paramKeys: Object.keys(params),
+        ok: out.ok,
+        code: out.code,
+        message: out.message,
+        durationMs: finished - started,
+        startedAt: started,
+        finishedAt: finished,
+        // 응답 data 는 싣지 않는다 — 기록은 관찰 요약(§5)이다. 실측: activity.recent 의 기록이
+        // 조회 결과(그 안의 이전 기록까지)를 통째로 물어 75MB 행으로 자기증식, retention 의
+        // json 파스가 226MB malloc → CEF PartitionAlloc 즉사(앱 전체 사망 5회의 원천).
+        media: out.media,
+        // 낭독 후보는 사람 유래만(§5) — 시스템 유래(스케줄러 등)는 스펙과 무관하게 침묵.
+        tts: ctx.origin ? undefined : effectiveTts(registry.get(name), out),
+        parentId: ctx.parent,
+        origin: ctx.origin,
+      });
+    }
   } catch {
     // 계측 실패는 명령 실행에 영향을 주지 않는다.
   }
@@ -342,4 +373,11 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
   if (data) out.data = data;
   if (media) out.media = media;
   return out;
+}
+
+// 유효 낭독 문장 — 활동 엔트리에 실리는 최종 값의 단일 계산점(§3, 축은 message/speak 둘뿐):
+// speak 있으면 성공·실패 불문 speak(outcome)가 문장, 없으면 message 폴백. "" → 침묵(undefined).
+export function effectiveTts(spec: CommandSpec | undefined, out: CommandOutcome): string | undefined {
+  const s = spec?.speak ? spec.speak(out) : out.message;
+  return s || undefined;
 }
