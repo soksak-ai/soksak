@@ -145,8 +145,10 @@ Layout rule — one directory per artifact, names always derived the same way:
 
 Consumption contract (what a plugin may reference — nothing else):
 
-- Entry point: `~/.soksak/sidecars/soksak-sidecar-{name}/dist/soksak-sidecar-{name}`
-  (single binary) or `dist/soksak-sidecar-{name}.app` (bundle).
+- Entry point: `<identity home>/sidecars/soksak-sidecar-{name}/dist/soksak-sidecar-{name}`
+  (single binary) or `dist/soksak-sidecar-{name}.app` (bundle). Plugins never assemble this
+  path: spawn with cmd `sidecar:{name}` and the core resolves it from the identity home
+  (symmetric with the engine model's core-owned resolution in `sidecar.rs`).
 - Directory name = binary name = crate/package name = `soksak-sidecar-{name}`.
 - There is no ambient env binary override — the identity home's `sidecars/` directory is
   the only resolution path (A17); dev stages a fresh build into its own home via `stage.sh`.

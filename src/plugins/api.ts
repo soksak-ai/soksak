@@ -507,7 +507,9 @@ export interface SoksakPluginApi {
   process?: {
     /** 프로그램 spawn → handle(id). cwd/env 선택. envRemove=부모 env 에서 뗄 키(중첩 가드 제거 등).
      *  secretEnv=envVar→secretKey(이 플러그인 ns 의 시크릿). 평문은 JS 가 안 만진다 — 키 이름만 넘기면
-     *  Rust 경계가 볼트에서 해소해 자식 env 에 주입(셸 args·ps·history 무노출 R2). 잠김/미존재면 spawn 실패. */
+     *  Rust 경계가 볼트에서 해소해 자식 env 에 주입(셸 args·ps·history 무노출 R2). 잠김/미존재면 spawn 실패.
+     *  cmd "sidecar:{name}" = service 사이드카 이름 참조 — 코어가 identity 홈의 dist 진입점으로 해석
+     *  (플러그인은 경로를 조립하지 않는다, A17/SIDECARS.md). 미설치면 spawn 전 명시 에러. */
     spawn: (
       cmd: string,
       args: string[],

@@ -72,6 +72,31 @@ fn kill_session(sess: &ProcessSession) {
     }
 }
 
+// service 사이드카 이름 해석 — cmd "sidecar:{name}" → <identity 홈>/sidecars/soksak-sidecar-{name}/
+// dist/soksak-sidecar-{name}. engine 모델(sidecar.rs module_path)과 대칭: 해석 경로는 identity 홈
+// 하나뿐(A17 — env 바이너리 주입 없음), 이름은 traversal-safe 검증. 미존재는 spawn 전 명시 에러.
+// "sidecar:" 아닌 cmd 는 그대로(일반 프로세스).
+fn resolve_sidecar_cmd(cmd: &str) -> Result<String, String> {
+    let Some(name) = cmd.strip_prefix("sidecar:") else {
+        return Ok(cmd.to_string());
+    };
+    let valid = !name.is_empty()
+        && name.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if !valid {
+        return Err(format!("sidecar 이름 불법({name:?}) — ^[a-z0-9][a-z0-9-]*$"));
+    }
+    let path = crate::home::soksak_home()
+        .join("sidecars")
+        .join(format!("soksak-sidecar-{name}"))
+        .join("dist")
+        .join(format!("soksak-sidecar-{name}"));
+    if !path.is_file() {
+        return Err(format!("sidecar 미설치: {} — identity 홈에 dist 스테이징 필요(stage.sh)", path.display()));
+    }
+    Ok(path.to_string_lossy().into_owned())
+}
+
 // secret_env(envVar→secretKey)를 평문(envVar→평문)으로 해소 — spawn 전 일괄. 비어있으면 빈 벡터.
 // 비어있지 않으면 ns 필수. 하나라도 잠김/미존재면 Err(미해소 시크릿이 자식으로 새지 않는다).
 // 호출자가 결과를 Command env 로만 흘린다(평문은 Rust+자식 프로세스에만 — JS 반환 0, R2).
@@ -163,6 +188,10 @@ pub fn process_spawn(
 ) -> Result<u32, String> {
     // 시크릿 평문 해소 — spawn 전에 전부 해소(하나라도 잠김/미존재면 spawn 0). Rust 경계에서만 평문 보유.
     let resolved_secrets = resolve_secret_env(&secrets_state, ns.as_deref(), &secret_env)?;
+
+    // service 사이드카 해석 — cmd "sidecar:{name}" 을 identity 홈의 dist 진입점으로 치환(engine 의
+    // sidecar.rs 와 대칭: 경로 해석은 코어 단일진실 소유, 플러그인은 이름만 안다 — A17/SIDECARS.md).
+    let cmd = resolve_sidecar_cmd(&cmd)?;
 
     let mut c = Command::new(&cmd);
     c.args(&args)
@@ -305,6 +334,18 @@ mod tests {
 
     fn map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    // service 사이드카 스킴 — 비스킴 통과 / 불법 이름 거부 / 미설치 명시 에러(경로 형태 포함).
+    #[test]
+    fn sidecar_scheme_resolution() {
+        assert_eq!(resolve_sidecar_cmd("/bin/sh").unwrap(), "/bin/sh");
+        assert_eq!(resolve_sidecar_cmd("claude").unwrap(), "claude");
+        assert!(resolve_sidecar_cmd("sidecar:").is_err());
+        assert!(resolve_sidecar_cmd("sidecar:../evil").is_err());
+        assert!(resolve_sidecar_cmd("sidecar:UPPER").is_err());
+        let e = resolve_sidecar_cmd("sidecar:definitely-not-installed-xyz").unwrap_err();
+        assert!(e.contains("sidecars/soksak-sidecar-definitely-not-installed-xyz/dist/"), "{e}");
     }
 
     // 앱 주입 컨텍스트(A17) — process_spawn 과 동일 구성으로 자식이 SOKSAK_HOME 을 실제 수신하는지.
