@@ -41,6 +41,14 @@ const MAPPING = {
     tablerMode: "fill",
     codicons: "star-full",
   },
+  pin: { lucide: "pin", tabler: "outline/pin", codicons: "pin" },
+  "pin-filled": {
+    lucide: "pin",
+    lucideMode: "both",
+    tabler: "filled/pin",
+    tablerMode: "fill",
+    codicons: "pinned",
+  },
   menu: { lucide: "menu", tabler: "outline/menu-2", codicons: "menu" },
   "arrow-left": { lucide: "arrow-left", tabler: "outline/arrow-left", codicons: "arrow-left" },
   "arrow-right": { lucide: "arrow-right", tabler: "outline/arrow-right", codicons: "arrow-right" },
@@ -82,7 +90,7 @@ const SETS = {
       "Tabler Icons (https://tabler.io/icons) — MIT License. Copyright (c) Paweł Kuna.",
   },
   codicons: {
-    dir: join(ROOT, "node_modules/@editor/codicons/src/icons"),
+    dir: join(ROOT, "node_modules/@vscode/codicons/src/icons"),
     defaultMode: "fill",
     license:
       "Codicons (https://github.com/microsoft/editor-codicons) — CC-BY-4.0. Copyright (c) Microsoft Corporation.",
