@@ -174,10 +174,20 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
   }
 
   const agentBin = useSettings.getState().orchestratorAgent.trim() || "claude";
-  const sessionId = nsGet(SESSION_KEY);
   // sok 은 절대경로로 지시·허용한다 — 에이전트 Bash 의 PATH 는 자체 재구성이라 신뢰 불가(실측).
   // env(SOKSAK_*)는 완전 상속됨(실측) — 상관·소켓 바인딩은 env 로 전달된다.
   const sokPath = cliDir ? `${cliDir}/sok` : "sok";
+  const env: Record<string, string> = {
+    ...baseEnv,
+    SOKSAK_PARENT: turnId,
+    ...(stageWindow ? { SOKSAK_WINDOW: stageWindow } : {}),
+  };
+
+  // 대화 이어가기(--resume)는 잔재일 수 있다(에이전트 교체·claude 측 세션 정리 — 실측: 스텁이
+  // 남긴 id 로 실물이 기동 즉사 error_during_execution). 이어가기 즉사(자취 0)면 딱 한 번
+  // 세션을 버리고 새 대화로 재시도한다 — 자취가 있으면 재시도 금지(명령 이중 실행 위험).
+  let resume = nsGet(SESSION_KEY);
+  for (let attempt = 0; ; attempt++) {
   // 프롬프트는 -p 바로 뒤(위치 인자) — --allowedTools 는 가변(<tools...>)이라 그 뒤에 두면
   // 프롬프트를 도구명으로 삼킨다(실측: "Input must be provided" 즉사).
   const args = [
@@ -194,13 +204,8 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
     "--allowedTools",
     "Bash(sok:*)",
     ...(cliDir ? [`Bash(${cliDir}/sok:*)`] : []),
-    ...(sessionId ? ["--resume", sessionId] : []),
+    ...(resume ? ["--resume", resume] : []),
   ];
-  const env: Record<string, string> = {
-    ...baseEnv,
-    SOKSAK_PARENT: turnId,
-    ...(stageWindow ? { SOKSAK_WINDOW: stageWindow } : {}),
-  };
 
   const parser = new AgentStreamParser();
   const dec = new TextDecoder();
@@ -308,6 +313,19 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
     stopReason = null;
     return close(false, "CANCELLED", reason);
   }
+  // 이어가기 즉사 감지 — resume 을 썼고 아무 자취(스트림 텍스트) 없이 오류/무응답 종료.
+  // 세션을 버리고 새 대화로 1회 재시도(위 주석의 잔재 세션 자가치유).
+  const stillborn = !turn.streamed && (!turn.result || !turn.result.ok);
+  if (attempt === 0 && resume && stillborn) {
+    resume = null;
+    nsSet(SESSION_KEY, null);
+    publishActivity("command.progress", "orchestrator", {
+      command: "orchestrator.ask",
+      delta: "이전 대화를 이어갈 수 없어 새 대화로 다시 시작",
+      parentId: turnId,
+    });
+    continue;
+  }
   if (turn.result) {
     const answer = (turn.result.text || turn.streamed).trim() || "(빈 응답)";
     return close(turn.result.ok, turn.result.ok ? "OK" : "INTERNAL", answer);
@@ -319,6 +337,7 @@ async function askInner(text: string, stageWindow?: string): Promise<CommandOutc
     "INTERNAL",
     `에이전트가 답 없이 종료됐어요 (코드 ${code}${errTail ? ` — ${errTail.slice(-200)}` : ""})`,
   );
+  }
 }
 
 /** 진행 중 턴 중단 — orchestrator.stop 핸들러 본체. ask 쪽 exit 경로가 세트를 닫는다. */
