@@ -758,7 +758,20 @@ pub fn webview_divider_highlight(window: tauri::Window, rect: Option<HlRect>) {
     }
 }
 
+// bounds 기반 가시성 동기화 상태 — 마지막으로 적용한 visible 값(라벨별). 변화시에만 show/hide
+// 를 호출한다(bounds 는 드래그 중 ~30Hz — 매번 show 하면 WebKit 재합성 낭비). webview_close 가
+// 지운다(라벨 재사용 시 stale 판정 방지).
+static BOUNDS_VIS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<String, bool>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+
 // 패널 레이아웃 변화(분할/리사이즈/이동)에 맞춰 위치/크기 동기화.
+//
+// 가시성은 기하가 결정한다: frame 이 창과 전혀 겹치지 않으면(비활성 탭 파킹 = 화면 밖 이동,
+// layerPark.ts) 그 웹뷰는 사실상 안 보이는데, WKWebView 는 창 소속만으로 visible 로 판정해
+// 페이지가 visibilitychange(hidden) 를 받지 못하고 풀스피드로 돈다(실측: 비활성 브라우저 탭의
+// 광고·애니메이션이 상시 CPU ~10%). 교집합에 따라 hide/show 를 동기화해 웹 표준 시맨틱을
+// 복원한다 — 페이지 스스로 백그라운드 스로틀에 들어간다(임의 스로틀 발명이 아니라 사실 전달).
+// 의도적 오프스크린 웹뷰(media_extract)는 bounds 를 쓰지 않으므로 영향 없음.
 #[tauri::command]
 pub fn webview_bounds(
     app: AppHandle,
@@ -773,6 +786,20 @@ pub fn webview_bounds(
             .map_err(|e| e.to_string())?;
         wv.set_size(LogicalSize::new(w, h))
             .map_err(|e| e.to_string())?;
+        let win = wv.window();
+        if let (Ok(size), Ok(scale)) = (win.inner_size(), win.scale_factor()) {
+            let (ww, wh) = (size.width as f64 / scale, size.height as f64 / scale);
+            let visible = x + w > 0.0 && y + h > 0.0 && x < ww && y < wh;
+            let mut map = BOUNDS_VIS.lock().unwrap();
+            if map.get(&label).copied() != Some(visible) {
+                if visible {
+                    wv.show().map_err(|e| e.to_string())?;
+                } else {
+                    wv.hide().map_err(|e| e.to_string())?;
+                }
+                map.insert(label, visible);
+            }
+        }
     }
     Ok(())
 }
@@ -859,6 +886,7 @@ pub fn webview_close(app: AppHandle, label: String) -> Result<(), String> {
         }
         wv.close().map_err(|e| e.to_string())?;
     }
+    BOUNDS_VIS.lock().unwrap().remove(&label);
     Ok(())
 }
 
