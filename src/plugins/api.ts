@@ -126,6 +126,9 @@ export interface PluginCommandSpec {
   /** 표준 답변(MESSAGE-PROTOCOL §3) — 성공 data 를 사람이 읽는 한 줄 message 로. 미제공이면
    *  code 에코("OK")로 열화하고 로더가 경고한다. 준거=runbook ok()/err(). */
   summarize?: (data: Record<string, unknown>) => string;
+  /** 낭독 스펙(MESSAGE-PROTOCOL 낭독 항) — 생략=true(실행 기록이 낭독 대상). false=절대 낭독
+   *  금지: 낭독을 수행하는 명령(say 류)만 선언(무한 전파의 유일한 차단점). */
+  tts?: boolean;
   handler: (params: Record<string, unknown>) => Promise<object> | object;
 }
 
@@ -1139,6 +1142,7 @@ export function buildPluginApi(
               returns: spec.returns ?? "object",
               examples: spec.examples,
               summarize: spec.summarize, // 표준 답변(message) — execute 정규화가 주입
+              tts: spec.tts, // 낭독 스펙(MESSAGE-PROTOCOL) — false=낭독 명령의 되먹임 차단
               danger, // 매니페스트 권위(없으면 런타임 fallback — 게이트 보존)
               // registry.execute 가 try/catch 로 INTERNAL 변환(§0-4).
               handler: (params) => spec.handler(params),

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { currentWindowLabel } from "../lib/webviewLabels";
 import { execute, getSpec } from "../commands/registry";
 import { Icon } from "../ui/icons/Icon";
 import { NewProjectModal, type CreateProjectArgs } from "../components/NewProjectModal";
@@ -229,8 +230,11 @@ export function OrchestratorApp() {
 
   // 피드 메타의 창 라벨(w-<uuid>)을 프로젝트명으로 — 창 라벨은 사람에게 무의미하다.
   const nameOf = useCallback(
-    (win: string) => projects.find((p) => p.window === win)?.name ?? win,
-    [projects],
+    (win: string) =>
+      win === currentWindowLabel()
+        ? t("orch.console") // 이 창(콘솔) 실행 — 프로젝트가 아니라 관제 자신의 행위
+        : (projects.find((p) => p.window === win)?.name ?? win),
+    [projects, t],
   );
 
   // 좌측 프로젝트 목록 = 최근 연 것(project.recent) ∪ 지금 열린 것(project_owners). 열린 것은
@@ -431,8 +435,10 @@ export function OrchestratorApp() {
           </h2>
           <div className="orch-feed" data-node="orch/feed" ref={feedRef} onScroll={onFeedScroll}>
             {(() => {
+              // 자기 행위는 항상 보인다 — 콘솔(이 창) 실행은 프로젝트 필터와 무관하게 표시.
+              const own = currentWindowLabel();
               const visible = selected
-                ? feed.filter((e) => e.payload.window === selected.window)
+                ? feed.filter((e) => e.payload.window === selected.window || e.payload.window === own)
                 : feed;
               // 진행 델타를 그 명령의 턴에 접합(§2: 버블 = 요청→델타→응답). 매칭 = 같은 창 +
               // 명령명(플러그인 발행은 짧은 이름) + 실행 시간창. 완료 전(진행 중) 델타는 단독 표시.
