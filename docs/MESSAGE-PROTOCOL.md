@@ -22,6 +22,8 @@ Long-running commands surface *what they are doing* as they do it — the textde
 
 `delta` is a human-readable line or a structured fragment, published to the activity hub. Sources: ① sidecar events (the engine `event` channel; the service NDJSON `ev` stream) — **the consuming plugin translates them into standard progress and publishes** (the core stays a blind relay, honoring A14); ② terminal output; ③ AI thinking/stream. Single-shot commands emit none.
 
+Deltas fold into their turn on two layers: with `payload.parentId` they attach by **exact correlation** (§4); without it, the consumer (the feed) folds by the window + command name + execution time-window heuristic — backward compatibility for the id-less world (plugin `events.progress`).
+
 ## 3. Response envelope (symmetric)
 
 ```
@@ -59,6 +61,23 @@ media?: { kind: string /* MIME, e.g. "image/png" */, base64?: string, path?: str
 ```
 
 `window.snapshot` sets `media` in both modes (file mode carries `path`, base64/rect mode carries `base64`); the feed renders it inline (a saved screenshot shows as an image, not as a path string; `path` is loaded lazily via `read_file_base64`); clicking the inline image enlarges it (lightbox, click/ESC to close).
+
+## 4. Correlation (parentId) — the conversation set
+
+Every execution born from a conversation turn binds to that turn: **prompt → commands → answer form one activity set.**
+
+```
+chat.prompt { text, turnId }                          ← opens the set (user's natural language)
+command.progress { delta, parentId: turnId }          ← progress (agent stream, batched)
+command.executed { …, parentId: turnId }              ← the commands the turn spawned
+chat.answer { text, parentId: turnId, ok, code }      ← closes the set (agent's final answer)
+```
+
+- **Carrier**: when the orchestrator (`orchestrator.ask`) spawns the agent it injects env `SOKSAK_PARENT=turnId`. `sok` puts it on the request envelope as meta `parent` (same model as `SOKSAK_PANE`/`SOKSAK_WINDOW`), and it rides socket → executor `ctx.parent` → registry trace `parentId` → activity entry `payload.parentId`. MCP (`soksak.run`) passes the same point, so it is covered automatically.
+- **Anchor**: the set's display unit is the parent (`chat.prompt`) — card visibility follows the parent, so the set shows whole even when children ran in other windows (w-*). Orphaned children whose parent fell off the ring/buffer display standalone (nothing is lost).
+- **Order is factual**: an execution already in flight when the turn is stopped lands after the answer and is shown as-is — the set is a seq-ordered record, not a staged narrative.
+- **Narration**: `chat.prompt` (the user's own words), `chat.answer` (AI utterance), and progress deltas never carry `tts` — silent. `command.executed` children narrate per their own tts spec (§3).
+- **Trace opt-out** `CommandSpec.trace: false` — a command whose executions are not instrumented as `command.executed`. Only two families declare it: observation that would feed back into the stream (`activity.recent`), and commands whose set is represented by a dedicated kind (`orchestrator.ask` — chat.prompt/answer are that turn's record).
 
 ## Command labels
 
