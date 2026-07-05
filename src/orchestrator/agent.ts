@@ -75,23 +75,47 @@ const PATH_PRELUDE = `[ -n "$SOKSAK_CLI_DIR" ] && PATH="$SOKSAK_CLI_DIR:$PATH"; 
 
 // 짧은 프로세스 실행 + stdout 수집(로그인셸 — GUI PATH 함정 회피). 실패는 Error 로.
 async function runCapture(shellCmd: string, env?: Record<string, string>): Promise<string> {
+  // 완결 판정은 stdout 채널 하나로 — stdout 과 exit 는 서로 다른 채널이라 순서 보장이 없어,
+  // 큰 출력(카탈로그 313KB)에서 exit 가 먼저 도착하면 잘린 출력을 반환했다(실측: JSON 파싱
+  // 실패 → 빈 카탈로그 → 에이전트가 명령을 추측으로 더듬음). 셸이 출력 끝에 종결 sentinel
+  // (+종료코드)을 같은 stdout 으로 찍고, 채널 내 순서(보장됨)로 완결·코드를 함께 읽는다.
+  const SENTINEL = "__SOKSAK_CAPTURE_EOF__";
   let out = "";
   let err = "";
-  const onStdout = new Channel<ArrayBuffer>();
   const dec = new TextDecoder();
-  onStdout.onmessage = (m) => {
-    out += dec.decode(new Uint8Array(m), { stream: true });
-  };
   const onStderr = new Channel<ArrayBuffer>();
   onStderr.onmessage = (m) => {
     err += dec.decode(new Uint8Array(m), { stream: true });
   };
-  const exit = new Promise<number>((resolve) => {
+  const done = new Promise<number>((resolve) => {
+    let settled = false;
+    const settle = (code: number) => {
+      if (!settled) {
+        settled = true;
+        resolve(code);
+      }
+    };
+    const onStdout = new Channel<ArrayBuffer>();
+    onStdout.onmessage = (m) => {
+      out += dec.decode(new Uint8Array(m), { stream: true });
+      const at = out.lastIndexOf(SENTINEL);
+      if (at >= 0) {
+        const code = Number(out.slice(at + SENTINEL.length).trim() || "-1");
+        out = out.slice(0, at);
+        settle(Number.isFinite(code) ? code : -1);
+      }
+    };
     const onExit = new Channel<number>();
-    onExit.onmessage = resolve;
+    // exit 는 폴백(스폰 실패·sentinel 이전 사망)만 — 성공 판정 권위는 sentinel 단독.
+    // exit 가 마지막 stdout 배달보다 먼저 올 수 있으므로(채널 간 순서 미보장 — 이 함수가
+    // 고치는 바로 그 레이스) 폴백의 "실패 선언"만 짧게 유예해 전송 중 배달을 소화한다.
+    onExit.onmessage = (code) => {
+      setTimeout(() => settle(code === 0 ? -1 : code), 200);
+    };
     void invoke("process_spawn", {
       cmd: "/bin/sh",
-      args: ["-lc", PATH_PRELUDE + shellCmd],
+      // sentinel 은 명령의 성공/실패와 무관하게 찍힌다($? 동반) — exec 불가(뒤 명령 필요).
+      args: ["-lc", `${PATH_PRELUDE}{ ${shellCmd} ; }; printf '\\n${SENTINEL} %s\\n' "$?"`],
       cwd: null,
       env: env ?? null,
       envRemove: null,
@@ -101,9 +125,9 @@ async function runCapture(shellCmd: string, env?: Record<string, string>): Promi
       onStdout,
       onStderr,
       onExit,
-    }).catch(() => resolve(-1));
+    }).catch(() => settle(-1));
   });
-  const code = await exit;
+  const code = await done;
   if (code !== 0) throw new Error(err.trim() || `종료 코드 ${code}`);
   return out;
 }
@@ -235,7 +259,7 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
     ({ skillDoc, catalog } = prep);
   } else {
     try {
-      skillDoc = await runCapture("exec sok skill print", { ...baseEnv, SOKSAK_PARENT: turnId });
+      skillDoc = await runCapture("sok skill print", { ...baseEnv, SOKSAK_PARENT: turnId });
     } catch (e) {
       return close(
         false,
@@ -250,7 +274,7 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
         .catch(() => undefined));
     catalog = compactCatalog(
       await runCapture(
-        `exec sok ${catalogWindow ? `--window ${catalogWindow} ` : ""}commands`,
+        `sok ${catalogWindow ? `--window ${catalogWindow} ` : ""}commands`,
         { ...baseEnv, SOKSAK_PARENT: turnId },
       ).catch(() => ""),
     );
