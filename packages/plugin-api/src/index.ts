@@ -115,6 +115,14 @@ export interface PluginEventMap {
     cwd: string | null;
   };
   "command.finished": { projectId: string | null; paneId: string };
+  activity: {
+    seq: number;
+    ts: number;
+    kind: string;
+    source: string;
+    payload: Record<string, unknown>;
+    ownWindow: boolean;
+  };
   "turn.ended": {
     projectId: string | null;
     root: string | null;

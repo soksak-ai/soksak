@@ -5,7 +5,9 @@
 // 리스너 실패는 호스트를 죽이지 못한다(§0-4) — 콜백마다 try/catch.
 
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { listenThisWindow } from "../lib/windowEvents";
+import { currentWindowLabel } from "../lib/webviewLabels";
 import {
   currentSessionOf,
   isTracking,
@@ -84,6 +86,16 @@ export interface PluginEventMap {
   // 오픈 토픽 "턴 종료" — provider 3종: shell(OSC133 명령 종료), idle(출력 유휴 휴리스틱,
   // 기본 OFF), acp(ACP 플러그인이 bus 로 발행 → 코어가 hooks 로 미러). 메일함 self-subscribe 가
   // 구독해 턴 종료 시 기계적으로 메시지 생성. 코어는 특정 플러그인을 모른다(결합 0) — 토픽 계약만.
+  // 활동 허브 엔트리(P12 실행 가시성) — 오케스트레이터 피드와 동일 스트림의 창-측 중계.
+  // 전 창 엔트리가 흐른다(payload.window=발생 창) — ownWindow 로 이 창 것만 필터 가능.
+  activity: {
+    seq: number;
+    ts: number;
+    kind: string;
+    source: string;
+    payload: Record<string, unknown>;
+    ownWindow: boolean;
+  };
   "turn.ended": {
     projectId: string | null;
     // 프로젝트 root(폴더 경로) — 창 무관 안정 식별자. 멀티창 같은 프로젝트 일관성의 스코프 키
@@ -120,6 +132,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "command.finished",
   "command.progress",
   "turn.ended",
+  "activity",
 ];
 
 // 권한 게이트가 필요한 이벤트 → 요구 권한. 여기 없는 이벤트는 권한 불요(범용 알림).
@@ -132,6 +145,8 @@ export const EVENT_PERMISSIONS: Partial<
   "command.finished": "terminal",
   // 턴 종료는 터미널 화면 활동(유휴 감지 포함)을 노출 → 화면 읽기 권한 게이트.
   "turn.ended": "terminal:read",
+  // 활동 허브엔 명령라인·턴 등 터미널 활동이 흐른다 → 같은 급의 게이트.
+  activity: "terminal",
 };
 
 type AnyListener = (payload: never) => void;
@@ -403,6 +418,20 @@ export function startPluginHooks(): void {
       emitPluginEvent("turn.ended", payload as PluginEventMap["turn.ended"]);
     }
   });
+
+  // 활동 허브 브로드캐스트(전 창 공통 스트림, activity.rs app.emit) → 플러그인 이벤트.
+  // 오케스트레이터가 보는 피드와 동일 원천 — 활동 소비 플러그인(로그 뷰·낭독 등)의 표준 입구.
+  // ownWindow = 이 창에서 발생한 엔트리인지(entry.payload.window 비교) — 창-스코프 필터용.
+  listen<{ seq: number; ts: number; kind: string; source: string; payload: Record<string, unknown> }>(
+    "activity",
+    (e) => {
+      const entry = e.payload;
+      emitPluginEvent("activity", {
+        ...entry,
+        ownWindow: String(entry.payload?.window ?? "") === currentWindowLabel(),
+      });
+    },
+  );
 
   // 앱(이 창) 활성 → 플러그인 이벤트. 이 창에 emit_to 된 "window-focus" 만 받는다(전역 listen 이면
   // 다른 창 포커스도 받아 app.focus 가 잘못 발화). lib/windowEvents 머리말 참조.
