@@ -19,8 +19,9 @@ export function listenThisWindow<T>(
     void getCurrentWebviewWindow()
       .listen<T>(event, handler)
       .then((fn) => {
-        if (cancelled) fn();
-        else off = fn;
+        // 중간 해지: fn() 의 반환 promise 를 체인에 입양(return)해야 reject 가 아래 catch 로 간다.
+        if (cancelled) return fn();
+        off = fn;
       })
       .catch(() => {});
   } catch {
@@ -28,6 +29,18 @@ export function listenThisWindow<T>(
   }
   return () => {
     cancelled = true;
-    if (off) off();
+    if (off) {
+      // tauri v2 UnlistenFn 은 async — 이미 해제된 리스너의 TypeError 가 promise reject 로
+      // 온다(safeListen 과 동일 실측). 동기·비동기 모두 무해화(재해지 멱등).
+      try {
+        const r = off() as unknown;
+        if (r && typeof (r as Promise<unknown>).catch === "function") {
+          void (r as Promise<unknown>).catch(() => {});
+        }
+      } catch {
+        /* 이미 해제 — no-op */
+      }
+      off = null;
+    }
   };
 }

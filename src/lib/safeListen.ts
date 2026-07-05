@@ -14,7 +14,13 @@ export function safeListen<T>(event: string, handler: EventCallback<T>): () => v
   let disposed = false;
   const safeUnlisten = (u: () => void) => {
     try {
-      u();
+      // tauri v2 의 UnlistenFn 은 내부적으로 async — 이미 해제된 리스너의 TypeError 가
+      // 동기 throw 가 아니라 "반환된 promise 의 reject" 로 온다(실측 스택: _unlisten async →
+      // unhandledrejection → boot.error). 동기·비동기 양쪽을 모두 무해화해야 재해지가 멱등이다.
+      const r = u() as unknown;
+      if (r && typeof (r as Promise<unknown>).catch === "function") {
+        void (r as Promise<unknown>).catch(() => {});
+      }
     } catch {
       // 이미 해제된 리스너(tauri 내부 맵 소거) — 재해지는 no-op.
     }
