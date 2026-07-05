@@ -1984,6 +1984,8 @@ export function registerCatalog(): void {
       'sok activity.recent \'{"limit":20}\'',
       'sok activity.recent \'{"since":1234}\'',
     ],
+    // 관찰이 스트림을 늘리는 되먹임 방지 — 피드를 보는 행위는 기록하지 않는다.
+    trace: false,
     handler: async (p) => {
       const entries = await invoke("activity_recent", {
         since: p.since ?? null,

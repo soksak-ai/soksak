@@ -310,4 +310,34 @@ describe("execute — 계측 sink (A1 활동 허브)", () => {
       setCommandTraceSink(null);
     }
   });
+
+  it("ctx.parent 가 trace.parentId 로 관통한다(상관 스펙) — 없으면 미포함", async () => {
+    const traces: CommandTrace[] = [];
+    setCommandTraceSink((t) => traces.push(t));
+    try {
+      reg("trace.parent", {});
+      await execute("trace.parent", {}, { remote: true, parent: "turn-42" });
+      await execute("trace.parent", {}, { remote: true });
+      expect(traces[0].parentId).toBe("turn-42");
+      expect(traces[1].parentId).toBeUndefined();
+    } finally {
+      setCommandTraceSink(null);
+    }
+  });
+
+  it("spec trace:false 는 계측에서 제외된다(관찰 되먹임 차단 선언)", async () => {
+    const traces: CommandTrace[] = [];
+    setCommandTraceSink((t) => traces.push(t));
+    try {
+      reg("trace.silent", { trace: false });
+      reg("trace.loud", {});
+      const r = await execute("trace.silent", {}, { remote: true, parent: "turn-1" });
+      await execute("trace.loud", {}, { remote: true });
+      expect(r.ok).toBe(true); // 실행 자체는 정상 — 계측만 제외
+      expect(traces).toHaveLength(1);
+      expect(traces[0].command).toBe("trace.loud");
+    } finally {
+      setCommandTraceSink(null);
+    }
+  });
 });

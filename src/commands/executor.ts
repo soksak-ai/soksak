@@ -16,6 +16,9 @@ interface CmdRequest {
   params?: Record<string, unknown> | null;
   pane?: string | null;
   window?: string | null;
+  // 상관 부모(대화 턴 id) — 에이전트 env SOKSAK_PARENT → sok → 소켓 요청 meta. ctx 로 관통해
+  // 활동 엔트리 payload.parentId 가 된다(턴 세트 묶음).
+  parent?: string | null;
 }
 
 let started = false;
@@ -62,7 +65,7 @@ export function startExecutor(): void {
   // 이 창에 emit_to 된 cmd-request 만 받는다(전역 listen 이면 emit_to(다른 창) 도 받아 명령이
   // 두 창에서 중복 실행 → 창별 독립 붕괴). lib/windowEvents 머리말 참조.
   listenThisWindow<CmdRequest>("cmd-request", async (e) => {
-    const { id, method, params, pane, window } = e.payload;
+    const { id, method, params, pane, window, parent } = e.payload;
     // 호스트 미준비 = 플러그인 활성화 진행 중 — 완료까지 대기 후 실행.
     // (완료 후에도 미등록이면 그때의 UNKNOWN_COMMAND 가 진짜다.)
     if (!hostReady) await hostReadyGate;
@@ -72,6 +75,7 @@ export function startExecutor(): void {
       pane: pane ?? undefined,
       remote: true,
       window: window ? { label: window } : undefined,
+      parent: parent ?? undefined,
     });
     invoke("cmd_result", { id, result }).catch((err) =>
       console.error("cmd_result 회신 실패:", err),

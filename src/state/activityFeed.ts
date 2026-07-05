@@ -55,9 +55,8 @@ export function startActivityFeed(): void {
     }),
   );
   // 레지스트리 계측(P12 본체) — params 는 키 목록만 도착한다(registry 가 요약).
-  // activity.recent 자체는 제외: 피드를 보는 행위가 피드를 늘리는 되먹임 방지.
+  // 계측 제외는 spec.trace === false 선언이 담당한다(registry 가 sink 호출 자체를 건너뜀).
   setCommandTraceSink((t) => {
-    if (t.command === "activity.recent") return;
     publish("command.executed", t.source, {
       command: t.command,
       title: t.title,
@@ -72,6 +71,7 @@ export function startActivityFeed(): void {
       data: t.data,
       media: t.media,
       tts: t.tts,
+      parentId: t.parentId,
     });
   });
 }

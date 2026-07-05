@@ -42,6 +42,10 @@ export interface CommandSpec {
   // false = 어떤 경우에도 낭독 금지 — 낭독을 수행하는 명령(say 류)만 선언한다.
   //   낭독 실행이 다시 낭독되는 무한 전파의 유일한 차단점(docs/MESSAGE-PROTOCOL.md).
   tts?: boolean;
+  // 실행 계측 선언 — false 면 이 명령의 실행이 활동 트레이스(command.executed)에서 제외된다.
+  // 관찰이 스트림을 늘리는 되먹임 명령(activity.recent)과, 세트가 별도 kind 로 대표되는 명령
+  // (orchestrator.ask — chat.prompt/answer 가 그 턴의 기록)만 선언한다. 생략 = 계측(기본).
+  trace?: false;
   // [RULE] 핸들러 반환 객체에 top-level "id" 를 쓰지 말 것 — 소켓 응답이 JSON-RPC 봉투의
   // 요청 id(숫자)와 한 객체로 합쳐져 덮어쓴다(식별자 유실). 식별자는 네임스페이스 필드로
   // (groupId/viewId/messageId/label …). 같은 이유로 "ok"/"code"/"message" 도 결과 의미로만 사용.
@@ -58,6 +62,9 @@ export interface CommandContext {
   remote?: boolean;
   // 멀티 윈도우: 이 명령이 도착한 창 label(소켓 emit_to 타겟). 창 명령(window.*)·라우팅 확인용.
   window?: { label: string };
+  // 상관 부모(대화 턴 id) — 에이전트 env SOKSAK_PARENT → sok 요청 meta 로 도착. trace 의
+  // parentId 가 되어 이 실행을 그 턴의 활동 세트로 묶는다(docs/MESSAGE-PROTOCOL.md).
+  parent?: string;
 }
 
 // 권한 게이트 콜백(설정 store 를 registry 가 직접 알지 않게 주입).
@@ -233,6 +240,8 @@ export interface CommandTrace {
   // 유효 낭독 문장 — effectiveTts(spec, outcome) 계산 결과. 없으면 낭독 금지 엔트리.
   tts?: string;
   media?: MediaContent; // 표시 미디어(이미지 등) — 피드가 그대로 렌더
+  // 상관 부모(ctx.parent 관통) — 이 실행이 속한 대화 턴 id. 피드가 턴 세트로 폴딩한다.
+  parentId?: string;
 }
 let traceSink: ((t: CommandTrace) => void) | null = null;
 export function setCommandTraceSink(fn: ((t: CommandTrace) => void) | null): void {
@@ -249,22 +258,27 @@ export async function execute(
   const out = await executeInner(name, params, ctx);
   const finished = Date.now();
   try {
-    traceSink?.({
-      command: name,
-      title: registry.get(name)?.title,
-      source: ctx.remote ? "remote" : "ui",
-      danger: registry.get(name)?.danger,
-      paramKeys: Object.keys(params),
-      ok: out.ok,
-      code: out.code,
-      message: out.message,
-      durationMs: finished - started,
-      startedAt: started,
-      finishedAt: finished,
-      data: out.data,
-      media: out.media,
-      tts: effectiveTts(registry.get(name), out),
-    });
+    // spec.trace === false = 계측 제외 선언(관찰 되먹임·별도 kind 대표 명령). 미등록 명령의
+    // 실패 봉투는 그대로 계측된다(spec 이 없으니 제외 선언도 없다).
+    if (registry.get(name)?.trace !== false) {
+      traceSink?.({
+        command: name,
+        title: registry.get(name)?.title,
+        source: ctx.remote ? "remote" : "ui",
+        danger: registry.get(name)?.danger,
+        paramKeys: Object.keys(params),
+        ok: out.ok,
+        code: out.code,
+        message: out.message,
+        durationMs: finished - started,
+        startedAt: started,
+        finishedAt: finished,
+        data: out.data,
+        media: out.media,
+        tts: effectiveTts(registry.get(name), out),
+        parentId: ctx.parent,
+      });
+    }
   } catch {
     // 계측 실패는 명령 실행에 영향을 주지 않는다.
   }
