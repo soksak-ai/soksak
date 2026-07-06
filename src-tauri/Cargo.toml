@@ -29,7 +29,7 @@ uuid = { version = "1", features = ["v4"] }
 libc = "0.2"
 # unstable: 창 안에 child webview 를 임베드(브라우저 패널)하는 Window::add_child 용.
 # devtools: 브라우저 인스펙트 버튼(open_devtools) — release 빌드에도 Web Inspector 활성(개발자 도구 앱이라 기능).
-tauri = { version = "2", features = ["protocol-asset", "unstable", "devtools"] }
+tauri = { version = "2", features = ["protocol-asset", "unstable", "devtools", "webview-data-url"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
