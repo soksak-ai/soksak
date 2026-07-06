@@ -229,12 +229,14 @@ export async function respawnSavedWindows(): Promise<void> {
       await invoke("window_create", {
         label: slot.label,
         rect: slot.rect ?? null,
+        // 백그라운드 복원 — 포커스를 뺏지 않는다. 오케스트레이터를 열면 오케스트레이터가 포커스를
+        // 유지하고, 복원된 워크스페이스 창들은 뒤에 되살아난다(임의 포커스 이동 금지, 자연스러운 동작).
+        focus: false,
       }).catch((e) => console.error(`창 리스폰 실패(${slot.label}):`, e));
     }
     if (pruned) await manifestStore.save(manifest);
-    if (manifest.focusedLabel && manifest.focusedLabel !== "main") {
-      await invoke("window_focus", { label: manifest.focusedLabel }).catch(() => {});
-    }
+    // 복원은 포커스를 옮기지 않는다 — 직전 포커스 창으로 강제 이동하던 로직 제거. 부팅 시 활성 창
+    // (오케스트레이터 등)이 그대로 유지된다. 사용자가 원하면 창 목록의 포커스 아이콘으로 부른다.
     // 첫 실행(리스폰할 워크스페이스 slot 0 + 최근 프로젝트 0) — 기본 프로젝트 워크스페이스 창을
     // 하나 연다. 사용자가 창을 전부 닫아둔 경우(recents 존재)는 존중해 아무것도 열지 않는다.
     const hasSlots = manifest.slots.some((s) => s.label !== "main");

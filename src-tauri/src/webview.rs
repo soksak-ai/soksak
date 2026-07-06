@@ -865,8 +865,13 @@ pub fn webview_visible(app: AppHandle, label: String, visible: bool) -> Result<(
     if let Some(wv) = app.get_webview(&label) {
         if visible {
             wv.show().map_err(|e| e.to_string())?;
-            // hide→show 후 첫 클릭이 무시되지 않게 포커스 복구.
-            let _ = wv.set_focus();
+            // 포커스를 임의로 옮기지 않는다 — 부모 창이 이미 활성일 때만 webview 에 포커스를 준다.
+            // hide→show 첫 클릭 무시 방지는 활성 창 안(탭 전환)에서만 필요하고, 백그라운드 창의
+            // 뷰 mount(부팅 리스폰·플러그인 활성화 ~수초 뒤)가 그 창을 앞으로 끌어오는 지연 포커스
+            // 탈취를 없앤다. set_focus 는 child webview 지만 macOS 에서 부모 창을 key 로 만든다.
+            if wv.window().is_focused().unwrap_or(false) {
+                let _ = wv.set_focus();
+            }
         } else {
             wv.hide().map_err(|e| e.to_string())?;
         }

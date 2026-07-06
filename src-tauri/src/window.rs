@@ -46,9 +46,13 @@ pub fn window_create(
     init: Option<String>,
     label: Option<String>,
     rect: Option<serde_json::Value>,
+    // 창을 앞으로 가져와 포커스할지. 기본 true(사용자가 새 창을 열면 그 창이 자연스럽게 포커스).
+    // 재시작 복원(리스폰)은 false — 백그라운드로 되살리고 현재 포커스(오케스트레이터 등)를 뺏지 않는다.
+    focus: Option<bool>,
 ) -> Result<String, String> {
+    let focus = focus.unwrap_or(true);
     match label {
-        None => create_window_init(&app, init.as_deref()),
+        None => create_window_init(&app, init.as_deref(), focus),
         Some(label) => {
             if app.get_window(&label).is_some() {
                 return Ok(label); // 멱등 — 리스폰 재호출 무해
@@ -61,14 +65,14 @@ pub fn window_create(
                     v.get("h")?.as_f64()?,
                 ))
             });
-            create_window_labeled(&app, &label, r, init.as_deref())
+            create_window_labeled(&app, &label, r, init.as_deref(), focus)
         }
     }
 }
 
-// 새 창 생성(기존 시그니처 유지 — Dock 메뉴 등 init 불요 호출부).
+// 새 창 생성(기존 시그니처 유지 — Dock 메뉴 등 init 불요 호출부). 사용자 행위라 포커스한다.
 pub fn create_window(app: &AppHandle) -> Result<String, String> {
-    create_window_init(app, None)
+    create_window_init(app, None, true)
 }
 
 // 새 창 생성 본체. label = "w-<uuid4>" — 불투명·비재사용 식별자(NAMING). uuid 라 라벨이
@@ -81,7 +85,11 @@ pub fn create_window(app: &AppHandle) -> Result<String, String> {
 // init = 새 창 부트 지시 쿼리스트링("root=<enc>" 등, '?' 제외). 새 창의 main.tsx 부트가
 // location.search 로 읽는다 — 창 생성자가 프론트 상태에 직접 손대지 않는 유일한 전달 통로
 // (창별 JS 컨텍스트 분리 원칙). 코어는 쿼리의 의미를 강제하지 않는다(부트가 해석).
-pub fn create_window_init(app: &AppHandle, init: Option<&str>) -> Result<String, String> {
+pub fn create_window_init(
+    app: &AppHandle,
+    init: Option<&str>,
+    focus: bool,
+) -> Result<String, String> {
     // 새 창을 트리거한(현재 활성) 창의 위치·배율을 빌드 전에 캡처 — 빌드 후엔 새 창이 포커스를
     // 가져가 활성 창이 바뀐다. 단일 창("main") 하드코딩이 아니라 is_focused 로 동적 판정(MW1).
     // windows()(Window 레지스트리) — 브라우저 연 창도 포함해야 그 창에서 Cmd+N 한 경우 소스로 잡힌다.
@@ -92,7 +100,7 @@ pub fn create_window_init(app: &AppHandle, init: Option<&str>) -> Result<String,
         .and_then(|w| Some((w.outer_position().ok()?, w.scale_factor().ok()?)));
 
     let label = format!("w-{}", uuid::Uuid::new_v4());
-    create_window_core(app, &label, init)?;
+    create_window_core(app, &label, init, focus)?;
 
     // 활성 창에서 가로·세로 ~1cm(28pt) 캐스케이드 — 정확히 겹치면 새 창이 떴는지 눈으로 알 수 없다.
     // 물리 좌표를 배율로 나눠 논리 좌표로 환산 → 어느 DPI 든 시각적 1cm. 소스 창이 없으면 OS 기본 위치.
@@ -113,8 +121,9 @@ fn create_window_labeled(
     label: &str,
     rect: Option<(f64, f64, f64, f64)>,
     init: Option<&str>,
+    focus: bool,
 ) -> Result<String, String> {
-    create_window_core(app, label, init)?;
+    create_window_core(app, label, init, focus)?;
     if let (Some((x, y, w, h)), Some(win)) = (rect, app.get_window(label)) {
         let _ = win.set_position(tauri::LogicalPosition::new(x, y));
         let _ = win.set_size(tauri::LogicalSize::new(w, h));
@@ -123,7 +132,12 @@ fn create_window_labeled(
 }
 
 // 창 생성 공용 골격 — conf windows[0] 상속 + label 교체 + init 쿼리 + 네이티브 설치.
-fn create_window_core(app: &AppHandle, label: &str, init: Option<&str>) -> Result<(), String> {
+fn create_window_core(
+    app: &AppHandle,
+    label: &str,
+    init: Option<&str>,
+    focus: bool,
+) -> Result<(), String> {
     // 메인 창 설정(tauri.conf.json windows[0])을 통째로 상속하고 label 만 교체한다 — 타이틀·
     // titleBarStyle·hiddenTitle·신호등·decorations·transparent 등 모든 속성이 메인과 정합한다.
     // 수동 빌더로 일부 속성만 옮기면 conf 와 어긋난다(타이틀 "soksak" 고정, 드래그영역/장식 손실).
@@ -136,6 +150,9 @@ fn create_window_core(app: &AppHandle, label: &str, init: Option<&str>) -> Resul
         .cloned()
         .ok_or_else(|| "창 설정 없음(tauri.conf.json windows[0])".to_string())?;
     cfg.label = label.to_string();
+    // 포커스는 임의로 주지 않는다 — 리스폰(focus=false)은 백그라운드로 되살리고 현재 포커스를
+    // 뺏지 않는다. 사용자가 연 새 창(focus=true)만 자연스럽게 앞으로 온다(conf 기본 상속 대신 명시).
+    cfg.focus = focus;
     if let Some(q) = init {
         // conf url(App("index.html") | External(devUrl))에 부트 지시 쿼리 부여.
         use tauri::WebviewUrl;
