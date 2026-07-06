@@ -1840,7 +1840,7 @@ export function registerCatalog(): void {
   register("window.focus", {
     description: "Bring a specific window to the front (focus it).",
     triggers: { ko: "창 포커스 창 활성화 창 앞으로" },
-    params: { label: { type: "string", description: "Window label (see window.list)" } },
+    params: { label: { type: "string", description: "Window label (see window.list)", required: true } },
     returns: "{ ok }",
     message: () => tmsg("msg.window.focus"),
     examples: ['sok window.focus \'{"label":"w-<uuid>"}\''],

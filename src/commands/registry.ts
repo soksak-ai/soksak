@@ -359,9 +359,11 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
   return out;
 }
 
-// 유효 낭독 문장 — 활동 엔트리에 실리는 최종 값의 단일 계산점(§3, 축은 message/speak 둘뿐):
-// speak 있으면 성공·실패 불문 speak(outcome)가 문장, 없으면 message 폴백. "" → 침묵(undefined).
+// 유효 낭독 문장 — 활동 엔트리에 실리는 최종 값의 단일 계산점(§3, 축은 message/speak 둘뿐).
+// 낭독은 **opt-in**: 명령이 speak 를 선언해야만 귀로 나간다(message 폴백 없음). message(눈)는 피드에
+// 언제나 뜨지만, 읽기·진단 명령까지 전부 낭독하면 소음이 된다 — 낭독할 값어치는 명령이 speak 로
+// 선언한다. speak 있으면 성공·실패 불문 speak(outcome)가 문장, "" → 침묵. 없으면 침묵(undefined).
 export function effectiveTts(spec: CommandSpec | undefined, out: CommandOutcome): string | undefined {
-  const s = spec?.speak ? spec.speak(out) : out.message;
+  const s = spec?.speak ? spec.speak(out) : "";
   return s || undefined;
 }

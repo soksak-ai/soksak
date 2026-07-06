@@ -84,8 +84,8 @@ describe("낭독 축 — message(눈)/speak(귀) 둘뿐(§3)", () => {
   const out = (message: string, ok = true): CommandOutcome =>
     ({ ok, code: ok ? "OK" : "INTERNAL", message }) as CommandOutcome;
 
-  it("speak 없음 = message 폴백(기본 낭독)", () => {
-    expect(effectiveTts(spec(), out("완료"))).toBe("완료");
+  it("speak 없음 = 침묵(낭독 opt-in — message 폴백 없음)", () => {
+    expect(effectiveTts(spec(), out("완료"))).toBeUndefined();
   });
   it("speak 있음 = 성공·실패 불문 speak(outcome)가 문장 — 경로는 message(눈)에만", () => {
     const s = spec((o) => (o.ok ? "화면을 저장했어요." : o.message));
@@ -95,11 +95,11 @@ describe("낭독 축 — message(눈)/speak(귀) 둘뿐(§3)", () => {
   it('speak "" = 침묵 — say 류 되먹임의 유일한 차단점', () => {
     expect(effectiveTts(spec(() => ""), out("무엇이든"))).toBeUndefined();
   });
-  it('execute 계측(trace)에 유효 tts 가 실린다 — 기본 message, speak "" 는 부재', async () => {
+  it('execute 계측(trace) tts 는 speak 선언 명령만(낭독 opt-in)', async () => {
     const traces: CommandTrace[] = [];
     setCommandTraceSink((t) => traces.push(t));
-    reg("test.tts-on", { message: () => "읽는다", handler: () => ({}) });
-    reg("test.tts-off", { speak: () => "", handler: () => ({ message: "안읽는다" }) });
+    reg("test.tts-on", { message: () => "본다", speak: () => "읽는다", handler: () => ({}) });
+    reg("test.tts-off", { message: () => "본다", handler: () => ({}) }); // speak 없음 = 침묵(opt-in)
     await execute("test.tts-on", {}, { remote: false });
     await execute("test.tts-off", {}, { remote: false });
     setCommandTraceSink(null);
@@ -330,13 +330,13 @@ describe("execute — 계측 sink (A1 활동 허브)", () => {
     const traces: CommandTrace[] = [];
     setCommandTraceSink((t) => traces.push(t));
     try {
-      reg("trace.sys", { message: () => "읽을 문장" });
+      reg("trace.sys", { message: () => "본다", speak: () => "읽을 문장" });
       await execute("trace.sys", {}, { remote: true, origin: "schedule" });
       await execute("trace.sys", {}, { remote: true });
       expect(traces[0].origin).toBe("schedule");
       expect(traces[0].tts).toBeUndefined(); // 시스템 유래 = 스펙과 무관하게 침묵
       expect(traces[1].origin).toBeUndefined();
-      expect(traces[1].tts).toBe("읽을 문장"); // 사람 유래 = 기본 낭독
+      expect(traces[1].tts).toBe("읽을 문장"); // 사람 유래 + speak 선언 = 낭독
     } finally {
       setCommandTraceSink(null);
     }

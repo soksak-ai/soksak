@@ -47,7 +47,7 @@ Success and failure are symmetric because observation is first-class — a succe
 
 Every command execution is narration material by default: activity-log consumers (a TTS narrator plugin) read the entry's effective sentence aloud. The effective sentence is computed once, at the instrumentation point (`effectiveTts` in the registry), and rides the activity entry as `payload.tts`:
 
-- **One rule**: when `CommandSpec.speak(outcome)` exists its return is the spoken sentence — success and failure alike; without it, `message` is the fallback; an empty string (`""`) means silence. It is the seam symmetric to `summarize` (the eye, →message).
+- **Narration is opt-in**: a command is spoken only when it declares `CommandSpec.speak(outcome)` — there is no `message` fallback. `message` (the eye) always shows in the feed, but narrating every read and diagnostic would be noise, so a command decides what is worth hearing. When `speak` exists its return is the spoken sentence (success and failure alike); an empty string (`""`) means silence; no `speak` means silence.
 - **The ear never carries paths or identifiers** (window labels, hashes, URLs) — those are for the eye (`message`). E.g. `window.snapshot` — summarize carries the saved path, speak says "saved the screen".
 - Commands that themselves perform narration (`say`-style) declare `speak: () => ""` — the single cut point preventing infinite propagation (narration → record → narration).
 - Consumers do not invent their own read/skip rules: an entry with `payload.tts` is read (in arrival order, no skipping), an entry without it is silent. `turn.ended` (AI utterances) never carries `tts`.
