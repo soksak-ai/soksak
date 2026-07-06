@@ -93,6 +93,12 @@ pub struct JobSpec {
     // 프론트 wedge). None=무한(reply/cancel 까지). JS 가 process_lease 시 미지정이면 3h 를 주입한다.
     #[serde(default)]
     pub zombie_backstop_ms: Option<u64>,
+    // 소유자(플러그인 id) — 이 잡을 등록한 주체. Some(플러그인)이면 코어는 persist 하지 않는다:
+    // 플러그인 잡은 세션-스코프이고 플러그인이 activate 에서 재장전하며 deactivate 시 취소된다(api.ts
+    // tracker). 그래서 부팅 재장전(reload_persisted)은 코어 잡(owner=None)만 → 비활성 플러그인 잡의
+    // orphan 발화가 원천 차단된다. None=코어 등록(시간기반이면 persist).
+    #[serde(default)]
+    pub owner: Option<String>,
 }
 
 fn default_concurrency() -> u32 {
@@ -721,9 +727,15 @@ fn persist_key(id: &str) -> String {
     format!("schedule:{id}")
 }
 
-// 시간 기반(At/Every/Cron)만 보관 — Reconcile 은 무상태(칸반이 단일 진실).
+// 코어가 이 잡을 지속 저장하는가. 시간 기반(At/Every/Cron)이고 코어 소유(owner=None)일 때만 true.
+// Reconcile 은 무상태(칸반이 단일 진실)라 제외, 플러그인 소유(owner=Some)는 플러그인이 activate 에서
+// 재장전하므로 제외(B2) — 부팅 시 owner 없이 orphan 재장전하는 구멍을 닫는다.
+fn should_persist(spec: &JobSpec) -> bool {
+    spec.trigger.is_time_based() && spec.owner.is_none()
+}
+
 fn persist_save(app: &AppHandle, spec: &JobSpec) {
-    if !spec.trigger.is_time_based() {
+    if !should_persist(spec) {
         return;
     }
     let Some(id) = spec.id.as_ref() else { return };
@@ -785,6 +797,7 @@ pub fn schedule_register(
     timeout_ms: Option<u64>,
     process_lease: Option<bool>,
     zombie_backstop_ms: Option<u64>,
+    owner: Option<String>,
 ) -> Result<String, String> {
     if command.is_empty() {
         return Err("command 필요".into());
@@ -799,6 +812,7 @@ pub fn schedule_register(
         timeout_ms,
         process_lease: process_lease.unwrap_or(false),
         zombie_backstop_ms,
+        owner,
     };
     ensure_started(&app);
     let assigned = state.register(spec.clone(), now_ms());
@@ -858,6 +872,7 @@ pub fn schedule_set(
         None,
         None,
         None,
+        None, // owner — schedule.set 은 코어 shim
     )
 }
 // (인자: trigger, command, params, id, retry, concurrency, timeout_ms, process_lease, zombie_backstop_ms)
@@ -898,6 +913,7 @@ mod tests {
             timeout_ms: Some(600_000),
             process_lease: true,
             zombie_backstop_ms: Some(10_800_000),
+            owner: None,
         };
         let v = serde_json::to_value(&s).unwrap();
         let back: JobSpec = serde_json::from_value(v).unwrap();
@@ -1116,7 +1132,19 @@ mod tests {
             timeout_ms: None,
             process_lease: false,
             zombie_backstop_ms: None,
+            owner: None,
         }
+    }
+
+    // B2 — 코어 시간기반만 persist. Reconcile·플러그인 소유(owner)는 제외(부팅 orphan 재장전 차단).
+    #[test]
+    fn should_persist_only_core_time_based() {
+        let cron = || Trigger::Cron { expr: "*/5 * * * *".into() };
+        assert!(should_persist(&spec(cron()))); // 코어 + 시간기반 → 저장
+        assert!(!should_persist(&spec(Trigger::Reconcile))); // 무상태 → 제외
+        let mut owned = spec(cron());
+        owned.owner = Some("soksak-plugin-workflow".into());
+        assert!(!should_persist(&owned)); // 플러그인 소유 → 제외(activate 재장전)
     }
 
     // register → id 발급·next_at 무장, list 정렬, cancel 제거.

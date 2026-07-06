@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   catalogJson,
   composeTriggers,
-  effectiveTts,
+  effectiveSpeak,
   execute,
   getSpec,
   register,
@@ -78,22 +78,22 @@ describe("execute — 기본 계약", () => {
   });
 });
 
-describe("낭독 축 — message(눈)/speak(귀) 둘뿐(§3)", () => {
+describe("낭독 축 — 표시(message)/낭독(speak) 둘뿐(§3)", () => {
   const spec = (speak?: (out: CommandOutcome) => string): CommandSpec =>
     ({ description: "d", params: {}, returns: "r", message: () => "완료", handler: () => ({}), ...(speak ? { speak } : {}) }) as CommandSpec;
   const out = (message: string, ok = true): CommandOutcome =>
     ({ ok, code: ok ? "OK" : "INTERNAL", message }) as CommandOutcome;
 
   it("speak 없음 = 침묵(낭독 opt-in — message 폴백 없음)", () => {
-    expect(effectiveTts(spec(), out("완료"))).toBeUndefined();
+    expect(effectiveSpeak(spec(), out("완료"))).toBeUndefined();
   });
-  it("speak 있음 = 성공·실패 불문 speak(outcome)가 문장 — 경로는 message(눈)에만", () => {
+  it("speak 있음 = 성공·실패 불문 speak(outcome)가 문장 — 경로는 message(표시)에만", () => {
     const s = spec((o) => (o.ok ? "화면을 저장했어요." : o.message));
-    expect(effectiveTts(s, out("저장했습니다: /tmp/a.png"))).toBe("화면을 저장했어요.");
-    expect(effectiveTts(s, out("실패 진단", false))).toBe("실패 진단");
+    expect(effectiveSpeak(s, out("저장했습니다: /tmp/a.png"))).toBe("화면을 저장했어요.");
+    expect(effectiveSpeak(s, out("실패 진단", false))).toBe("실패 진단");
   });
   it('speak "" = 침묵 — say 류 되먹임의 유일한 차단점', () => {
-    expect(effectiveTts(spec(() => ""), out("무엇이든"))).toBeUndefined();
+    expect(effectiveSpeak(spec(() => ""), out("무엇이든"))).toBeUndefined();
   });
   it('execute 계측(trace) tts 는 speak 선언 명령만(낭독 opt-in)', async () => {
     const traces: CommandTrace[] = [];
@@ -103,8 +103,8 @@ describe("낭독 축 — message(눈)/speak(귀) 둘뿐(§3)", () => {
     await execute("test.tts-on", {}, { remote: false });
     await execute("test.tts-off", {}, { remote: false });
     setCommandTraceSink(null);
-    expect(traces.find((t) => t.command.endsWith("tts-on"))?.tts).toBe("읽는다");
-    expect(traces.find((t) => t.command.endsWith("tts-off"))?.tts).toBeUndefined();
+    expect(traces.find((t) => t.command.endsWith("tts-on"))?.speak).toBe("읽는다");
+    expect(traces.find((t) => t.command.endsWith("tts-off"))?.speak).toBeUndefined();
   });
 });
 
@@ -334,9 +334,9 @@ describe("execute — 계측 sink (A1 활동 허브)", () => {
       await execute("trace.sys", {}, { remote: true, origin: "schedule" });
       await execute("trace.sys", {}, { remote: true });
       expect(traces[0].origin).toBe("schedule");
-      expect(traces[0].tts).toBeUndefined(); // 시스템 유래 = 스펙과 무관하게 침묵
+      expect(traces[0].speak).toBeUndefined(); // 시스템 유래 = 스펙과 무관하게 침묵
       expect(traces[1].origin).toBeUndefined();
-      expect(traces[1].tts).toBe("읽을 문장"); // 사람 유래 + speak 선언 = 낭독
+      expect(traces[1].speak).toBe("읽을 문장"); // 사람 유래 + speak 선언 = 낭독
     } finally {
       setCommandTraceSink(null);
     }

@@ -7,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { onPluginEvent } from "../plugins/hooks";
 import { setCommandTraceSink } from "../commands/registry";
+import { tmsg } from "../i18n";
 
 /** 허브 발행(창 label 자동 동반) — 코어 공급자 공용(이 파일의 계측 + orchestrator 대화 세트). */
 export function publishActivity(
@@ -26,42 +27,41 @@ const publish = publishActivity;
 
 /** 부트 1회 — 이벤트 구독과 registry 계측 sink 를 허브로 잇는다. */
 export function startActivityFeed(): void {
-  onPluginEvent("command.started", (p) =>
-    publish("terminal.command.started", "terminal", {
-      paneId: p.paneId,
-      commandLine: p.commandLine,
-      cwd: p.cwd,
-    }),
-  );
-  onPluginEvent("command.finished", (p) => {
-    // §5: 시작 없는 종료(셸 초기화 펄스)는 관찰 스토어가 이미 소멸시킨다 — 여기 도달 = 실명령.
-    publish("terminal.command.finished", "terminal", {
-      paneId: p.paneId,
-      exitCode: (p as { exitCode?: number }).exitCode,
-      commandLine: (p as { commandLine?: string | null }).commandLine ?? null,
-      // 낭독 대상(문장 합성은 소비자 — exitCode 로컬라이즈). turn.ended(AI 발화)는 tts 없음.
-      tts: true,
-    });
-  });
-  onPluginEvent("turn.ended", (p) =>
+  // 산출자가 자기 표시 문장(message)·낭독(speak)을 소유한다(명령이 그러듯 — 소비자는 kind 무지).
+  // 터미널 명령 활동은 터미널 플러그인이 소유한다(자기 i18n 으로 app.activity.publish) — 코어는
+  // command.started/finished 를 브리지하지 않는다. 여기 남는 건 코어 도메인(턴 감지·뷰 관리·generic
+  // 진행 릴레이·registry 계측)뿐이고, 그 문장은 코어 i18n(activity.*)에 산다.
+  onPluginEvent("turn.ended", (p) => {
+    const agentKind = (p as { agentKind?: string | null }).agentKind;
     publish("turn.ended", p.source, {
       paneId: p.paneId,
       command: p.command,
-      agentKind: (p as { agentKind?: string | null }).agentKind,
+      agentKind,
       sessionId: (p as { sessionId?: string | null }).sessionId,
-    }),
-  );
+      message:
+        tmsg("activity.turn.ended") +
+        (agentKind ? ` (${agentKind})` : "") +
+        (p.command ? ` — ${p.command}` : ""),
+    });
+  });
   onPluginEvent("view.activated", (p) =>
-    publish("view.activated", "ui", { projectId: p.projectId, viewId: p.viewId }),
+    publish("view.activated", "ui", {
+      projectId: p.projectId,
+      viewId: p.viewId,
+      message: tmsg("activity.view.activated", { viewId: p.viewId }),
+    }),
   );
   // 진행 델타(요청→응답 사이) — 사이드카 이벤트·AI thinking 을 소비 플러그인이 command.progress
   // 로 발행하면 활동 스트림에 얹는다(MESSAGE-PROTOCOL.md §2). textdelta 개념.
-  onPluginEvent("command.progress", (p) =>
+  onPluginEvent("command.progress", (p) => {
+    const command = (p as { command?: string }).command;
+    const delta = (p as { delta?: unknown }).delta;
     publish("command.progress", (p as { source?: string }).source ?? "plugin", {
-      command: (p as { command?: string }).command,
-      delta: (p as { delta?: unknown }).delta,
-    }),
-  );
+      command,
+      delta,
+      message: `⋯ ${command ? `${command}: ` : ""}${delta ?? ""}`,
+    });
+  });
   // 레지스트리 계측(P12 본체) — params 는 키 목록만 도착한다(registry 가 요약).
   // 계측 제외는 spec.trace === false 선언이 담당한다(registry 가 sink 호출 자체를 건너뜀).
   setCommandTraceSink((t) => {
@@ -77,7 +77,7 @@ export function startActivityFeed(): void {
       startedAt: t.startedAt,
       finishedAt: t.finishedAt,
       media: t.media,
-      tts: t.tts,
+      speak: t.speak,
       parentId: t.parentId,
       origin: t.origin,
     });

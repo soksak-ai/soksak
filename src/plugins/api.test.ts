@@ -743,7 +743,22 @@ describe("app.scheduler — 범용 스케줄러 표면(schedule 권한)", () => 
       timeout_ms: 600_000,
       process_lease: null,
       zombie_backstop_ms: null,
+      owner: "demo", // B2 소유자 스탬프 — 코어가 persist 여부·생명주기를 이걸로 가른다
     });
+  });
+
+  it("스케줄 잡은 소유자 생명주기에 결속 — deactivate 시 자동 취소(B1, 명령 등록과 동형)", async () => {
+    const d = fakeDeps({ invoke: vi.fn(async () => "sch-life") });
+    const { api, tracker } = buildPluginApi(
+      manifestOf({ permissions: ["schedule"] }),
+      "/d",
+      d,
+    );
+    await api.scheduler!.register({ trigger: { kind: "reconcile" }, command: "workflow.reconcile" });
+    tracker.disposeAll(); // 플러그인 비활성화
+    await Promise.resolve(); // job-id 해소 후 cancel
+    await Promise.resolve();
+    expect(d.invoke).toHaveBeenCalledWith("schedule_cancel", { id: "sch-life" });
   });
 
   it("process_lease 작업 register — backstop 미지정 시 3h 기본 주입", async () => {

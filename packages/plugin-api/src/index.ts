@@ -266,6 +266,15 @@ export interface SoksakPluginApi {
      *  사이드카 이벤트 → 표준 progress 변환은 소비 플러그인 책임(A14). source=플러그인 id 고정. */
     progress: (command: string, delta: unknown) => void;
   };
+  /** 활동 로그 자기기술 발행 — 플러그인이 자기 도메인의 활동을 코어 브리지 없이 직접 싣는다.
+   *  표시 문장은 `message`(플러그인 i18n), 낭독은 선택적 `speak`. 소비자는 kind 를 열거하지 않고
+   *  이 두 필드만 렌더/낭독한다(MESSAGE-PROTOCOL §3). source=플러그인 id 고정(무권한 — 자기 엔트리만). */
+  activity: {
+    publish: (
+      kind: string,
+      entry: { message: string; speak?: string } & Record<string, unknown>,
+    ) => void;
+  };
   ui?: {
     registerView: (viewId: string, provider: PluginViewProvider) => Disposable;
     registerFileViewer: (viewerId: string, provider: FileViewerProvider) => Disposable;

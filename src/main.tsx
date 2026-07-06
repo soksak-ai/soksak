@@ -8,7 +8,8 @@ if (typeof window !== "undefined") {
     void bootInvoke("activity_publish", {
       kind: "boot.error",
       source: "boot",
-      payload: { msg, stack },
+      // 부트 크래시 경로(스토어 준비 전) — i18n 의존 없이 언어중립(punctuation + raw 오류). 자기기술 §3.
+      payload: { msg, stack, message: `⚠ ${msg}` },
     }).catch(() => {});
   window.addEventListener("error", (e) =>
     reportBootError(String(e.message), String((e.error && e.error.stack) || "")),

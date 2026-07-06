@@ -16,35 +16,15 @@ import { actorKeyOf, foldFeed, itemWindow, type ActivityEntry, type ChatCard } f
 
 const FEED_CAP = 500;
 
-// 피드 한 줄 요약 — kind 별 사람이 읽는 문장(전체 payload 는 title 로).
+// 피드 한 줄 — 자기기술 엔트리(MESSAGE-PROTOCOL §3). 소비자는 kind 를 열거하지 않는다:
+// 명령 트레이스(durationMs 보유)면 generic 프레이밍(도메인 무지), 그 외는 산출자가 실은 message.
 function lineOf(e: ActivityEntry): string {
   const p = e.payload;
-  switch (e.kind) {
-    case "command.executed": {
-      const head = `${p.command} ${p.ok ? "✓" : `✗ ${p.code ?? ""}`} (${p.durationMs}ms)`;
-      return p.message ? `${head} → ${p.message}` : head;
-    }
-    // 진행 델타(요청→응답 사이 세부 — 사이드카 이벤트·터미널·AI thinking). textdelta 개념.
-    case "command.progress":
-      return `⋯ ${p.command ? `${p.command}: ` : ""}${p.delta ?? ""}`;
-    case "terminal.command.started":
-      return `$ ${p.commandLine}`;
-    case "terminal.command.finished":
-      return `종료 ${p.exitCode ?? ""}`;
-    case "turn.ended":
-      return `턴 종료${p.agentKind ? ` (${p.agentKind})` : ""}${p.command ? ` — ${p.command}` : ""}`;
-    case "view.activated":
-      return `뷰 활성화 ${p.viewId}`;
-    // 대화 세트 구성원 — 카드 렌더가 정상 경로. 여기 도달 = 부모가 밀려난 고아(단독 표시).
-    case "chat.prompt":
-      return `💬 ${p.text ?? ""}`;
-    case "chat.answer":
-      return `↩ ${p.text ?? ""}`;
-    case "boot.error":
-      return `창 부팅 오류 — ${(p as { msg?: string }).msg ?? ""}`;
-    default:
-      return e.kind;
+  if (typeof p.durationMs === "number") {
+    const head = `${p.command} ${p.ok ? "✓" : `✗ ${p.code ?? ""}`} (${p.durationMs}ms)`;
+    return p.message ? `${head} → ${p.message}` : head;
   }
+  return typeof p.message === "string" && p.message ? p.message : e.kind;
 }
 
 // 명령을 사람이 읽는 라벨로 — raw 키(plugin.soksak-plugin-workflow.reconcile) 노출 금지.

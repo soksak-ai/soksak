@@ -28,11 +28,11 @@ export interface CommandSpec {
   title?: LocalizedText;
   // 성공 응답 형태 설명(매뉴얼용).
   returns: string;
-  // 표준 답변(message, 눈) — 성공 결과 data 를 사람이 읽는 한 줄로. **필수**: 모든 명령은 자기
+  // 표준 답변(message, 표시) — 성공 결과 data 를 사람이 읽는 한 줄로. **필수**: 모든 명령은 자기
   // 답을 안다. 추측 계층(형태 파생)·code 에코 폴백은 없다. 문장은 tmsg(키 테이블) 로 현재 언어
   // 해소된 문자열이다(P0 — 언어 추가 = 테이블 열 추가). docs/MESSAGE-PROTOCOL.md 응답 봉투 계약.
   message: (data: Record<string, unknown>) => string;
-  // 낭독 문장(귀) — message(눈)와 대칭 seam. 낭독 축은 이것 하나다(§3): speak 있으면 성공·실패
+  // 낭독 문장(speak, 낭독) — message(표시)와 대칭 seam. 낭독 축은 이것 하나다(§3): speak 있으면 성공·실패
   // 불문 speak(outcome)가 문장, 없으면 message 폴백, "" = 침묵. 낭독 수행 명령(say 류)은
   // speak: () => "" 로 되먹임을 끊는다. 문장은 message 와 같은 결로 tmsg 로 짓는다(P0).
   speak?: (out: CommandOutcome) => string;
@@ -83,7 +83,7 @@ export function setPermissionGate(
 // 표준 응답 봉투(요청·진행·응답 3부의 응답) — 성공/실패 대칭. docs/MESSAGE-PROTOCOL.md 단일진실.
 //   ok      성공/실패
 //   code    성공: "OK"/도메인(CREATED·NOOP·UNCHANGED…), 실패: ErrCode 닫힌 열거형
-//   message 사람이 읽는 한 줄 표준 답변(성공·실패 모두 — 버블이 이걸 렌더). 명령이 제공(summarize).
+//   message 사람이 읽는 한 줄 표준 답변(성공·실패 모두 — 버블이 이걸 렌더). 명령이 제공(spec.message).
 //   data    기계 페이로드(선택, 중첩 — 봉투 예약키와 충돌 원천 제거)
 export type ErrCode =
   | CmdErrCode
@@ -236,8 +236,9 @@ export interface CommandTrace {
   durationMs: number;
   startedAt: number;
   finishedAt: number;
-  // 유효 낭독 문장 — effectiveTts(spec, outcome) 계산 결과. 없으면 낭독 금지 엔트리.
-  tts?: string;
+  // 낭독 문장 — effectiveSpeak(spec, outcome) 해소 결과. 없으면 낭독 금지 엔트리.
+  // 표시 문장(message)과 대칭인 와이어 값: 스펙 필드 speak 와 같은 이름을 쓴다.
+  speak?: string;
   media?: MediaContent; // 표시 미디어(이미지 등) — 피드가 그대로 렌더
   // 상관 부모(ctx.parent 관통) — 이 실행이 속한 대화 턴 id. 피드가 턴 세트로 폴딩한다.
   parentId?: string;
@@ -281,7 +282,7 @@ export async function execute(
         // json 파스가 226MB malloc → CEF PartitionAlloc 즉사(앱 전체 사망 5회의 원천).
         media: out.media,
         // 낭독 후보는 사람 유래만(§5) — 시스템 유래(스케줄러 등)는 스펙과 무관하게 침묵.
-        tts: ctx.origin ? undefined : effectiveTts(registry.get(name), out),
+        speak: ctx.origin ? undefined : effectiveSpeak(registry.get(name), out),
         parentId: ctx.parent,
         origin: ctx.origin,
       });
@@ -359,11 +360,11 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
   return out;
 }
 
-// 유효 낭독 문장 — 활동 엔트리에 실리는 최종 값의 단일 계산점(§3, 축은 message/speak 둘뿐).
-// 낭독은 **opt-in**: 명령이 speak 를 선언해야만 귀로 나간다(message 폴백 없음). message(눈)는 피드에
+// 낭독 문장 해소 — 활동 엔트리에 실리는 speak 와이어 값의 단일 계산점(§3, 축은 message/speak 둘뿐).
+// 낭독은 **opt-in**: 명령이 speak 를 선언해야만 낭독된다(message 폴백 없음). message(표시)는 피드에
 // 언제나 뜨지만, 읽기·진단 명령까지 전부 낭독하면 소음이 된다 — 낭독할 값어치는 명령이 speak 로
 // 선언한다. speak 있으면 성공·실패 불문 speak(outcome)가 문장, "" → 침묵. 없으면 침묵(undefined).
-export function effectiveTts(spec: CommandSpec | undefined, out: CommandOutcome): string | undefined {
+export function effectiveSpeak(spec: CommandSpec | undefined, out: CommandOutcome): string | undefined {
   const s = spec?.speak ? spec.speak(out) : "";
   return s || undefined;
 }

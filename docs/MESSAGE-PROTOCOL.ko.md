@@ -43,15 +43,16 @@ AI·원격 클라이언트가 1급 소비자다 — 그래서 모든 명령이 �
 
 성공·실패는 대칭이다 — 관찰이 1급이라, 성공한 명령도 관찰자에게 `code`와 `message`를 진다.
 
-### 낭독 — 축은 message(눈)/speak(귀) 둘뿐
+### 표시와 낭독 — 두 축, 산출자 소유: message / speak
 
-모든 명령 실행은 기본적으로 낭독 대상이다: 활동로그 소비자(TTS 낭독 플러그인)가 엔트리의 유효 문장을 소리 내어 읽는다. 유효 문장은 계측 지점에서 한 번 계산되어(`effectiveTts`, registry) 활동 엔트리 `payload.tts`로 흐른다.
+모든 활동 엔트리는 **자기기술적**이다: 자기 표시 문장(`message`)과 선택적 낭독(`speak`)을 산출자가 자기 i18n으로 구성해 싣는다. 소비자(사이드바 피드·오케스트레이터 피드)는 kind를 열거하지 않는다 — `payload.message`를 렌더하고, 낭독자는 `payload.speak`를 읽는다. 명령·코어 이벤트·플러그인 기여 활동에 균일하게 성립한다 — 산출자나 kind를 더해도 코어 브리지도 피드도 안 건드린다.
 
-- **낭독은 opt-in**: 명령이 `CommandSpec.speak(outcome)`를 선언해야만 낭독된다 — `message` 폴백 없음. `message`(눈)는 피드에 언제나 뜨지만, 읽기·진단 명령까지 전부 낭독하면 소음이라 낭독할 값어치는 명령이 정한다. `speak` 있으면 성공·실패 불문 그 반환이 낭독 문장, 빈 문자열(`""`) = 침묵, `speak` 없으면 침묵.
-- **귀의 문장에는 경로·식별자(창 label·해시·URL)를 싣지 않는다** — 그것은 눈의 정보(`message`)다. 예: `window.snapshot` — summarize 는 저장 경로, speak 는 "화면을 저장했어요".
-- 낭독을 수행하는 명령(`say` 류)은 `speak: () => ""` — 낭독→기록→낭독 무한 전파의 유일한 차단점.
-- 소비자는 자체 읽기/건너뛰기 규칙을 만들지 않는다: `payload.tts`가 있으면 도착 순서대로 읽고(스킵 없음), 없으면 침묵. `turn.ended`(AI 발화)에는 `tts`가 실리지 않는다.
-- 과거의 `CommandSpec.tts`(boolean)와 봉투 `tts` 오버라이드는 폐기 — speak 하나가 대체한다(파편화 제거).
+- **각 산출자가 자기 문장을 소유한다.** 명령은 message(답)+speak(opt-in 낭독)를 소유하고 계측 지점에서 `tmsg`로 해소(`effectiveSpeak`)해 `payload.speak`로 싣는다; 명령 줄은 generic 트레이스 메타로 generic 프레이밍(`이름 ✓ (Nms) → message`)을 붙일 뿐 소비자에 명령별 지식이 없다. 터미널 활동은 **터미널 플러그인**이 발행(자기 i18n, `app.activity.publish`), 코어 도메인 이벤트(턴 감지·뷰 관리)는 코어가, 플러그인은 `app.activity.publish`로.
+- **낭독은 opt-in**: `speak`가 실린 엔트리만 낭독된다 — `message` 폴백 없음. `message`는 언제나 뜨지만, 읽기·진단까지 전부 낭독하면 소음이라 낭독할 값어치는 산출자가 정한다. 빈 `speak`(`""`)·부재 = 침묵.
+- **낭독은 경로·식별자를 담지 않는다**(창 라벨·해시·URL) — 그건 `message`. 예: `window.snapshot` — message 는 저장 경로, speak 는 "화면을 저장했어요".
+- 낭독을 수행하는 산출자(`say` 류 명령)는 `speak: () => ""` — 낭독→기록→낭독 차단점.
+- **`app.activity.publish(kind, { message, speak?, ...data })`** 가 산출자 표면: 플러그인이 코어 kind 열거 없이 자기 자기기술 엔트리를 싣는다(source=자기 id 스탬프).
+- 과거 `CommandSpec.tts`(boolean)와 `tts` 와이어 필드는 폐기 — 낭독 축은 `speak` 하나로 관통한다(스펙 필드와 활동 payload가 같은 이름, message 와 대칭).
 
 ### 표시 미디어 (선택)
 
@@ -77,14 +78,14 @@ chat.answer { text, parentId: turnId, ok, code }      ← 세트 닫음(에이�
 - **운반**: 오케스트레이터(`orchestrator.ask`)가 에이전트를 스폰할 때 env `SOKSAK_PARENT=turnId`를 주입한다. `sok`이 이를 요청 봉투 meta `parent`로 싣고(`SOKSAK_PANE`/`SOKSAK_WINDOW`와 같은 모델), 소켓 → executor `ctx.parent` → registry trace `parentId` → 활동 엔트리 `payload.parentId`로 관통한다. MCP(`soksak.run`)도 같은 지점을 지나므로 자동 커버.
 - **정박**: 세트의 표시 단위는 부모(`chat.prompt`)다 — 카드 가시성은 부모 기준이며, 자식이 다른 창(w-*)의 실행이어도 세트는 완전체로 보인다. 부모가 링/버퍼 밖으로 밀려난 고아 자식은 단독 표시된다(유실 없음).
 - **순서는 사실 그대로**: 중단(stop) 뒤 이미 발사된 실행이 늦게 도착하면 답변 뒤에 그대로 표시된다 — 세트는 seq 순의 기록이지 연출이 아니다.
-- **낭독과의 관계**: `chat.prompt`(사용자 자신의 말)·`chat.answer`(AI 발화)·진행 델타에는 `tts`가 실리지 않는다 — 침묵. 턴 안의 `command.executed`는 각자의 tts 스펙(§3)대로 낭독된다.
+- **낭독과의 관계**: `chat.prompt`(사용자 자신의 말)·`chat.answer`(AI 발화)·진행 델타에는 `speak`가 실리지 않는다 — 침묵. 턴 안의 `command.executed`는 각자의 speak 스펙(§3)대로 낭독된다.
 - **계측 제외 선언** `CommandSpec.trace: false` — 동일 사실의 이중 기록 방지 전용(§5 R2): `orchestrator.ask`(chat.prompt/answer 가 그 턴의 대표 기록)만 선언한다.
 
 ## 5. 활동의 자격 — 기록과 노출은 다른 축이다
 
 - **R1 거짓은 소멸** — 일어나지 않은 일의 표식은 기록이 아니라 오염이다. 방출기에서 원천 제거한다: D(종료)는 C(실행)와 짝일 때만(shell-integration.zsh — 첫 프롬프트·빈 Enter 는 D 를 내지 않는다), 부트 복원은 project.created 가 아니다(diff 재씨딩).
 - **R2 사실은 전량 기록** — 실제로 실행된 것은 전부 기록된다: 내부 조회(project.recent·백필 activity.recent)·낭독 실행(say)·스케줄 발화 포함. `trace:false` 의 유일한 정당 사유는 **동일 사실의 이중 기록 방지**(`orchestrator.ask` — chat.prompt/answer 가 그 턴의 대표 기록)다. 소음 억제 목적의 trace:false 는 금지 — 그건 노출 축의 몫.
-- **R3 노출이 선별** — origin(발화자)이 표시·낭독을 결정하지 기록을 결정하지 않는다: 생략=사람(정상 표시, tts 스펙대로 낭독) / `"schedule"`=예약된 의도(흐림+"스케줄" 라벨, 무낭독) / `"internal"`=자동 행위·자기 조회(흐림, 무낭독). 시스템 유래(origin 보유)는 registry 계측 지점에서 tts 가 소거된다 — 낭독→기록→낭독 루프는 이 축이 끊는다(기록 자체는 선형이라 되먹임이 아니다). 환경의 사실(view.activated·turn.ended)은 조용한 한 줄, 무낭독.
+- **R3 노출이 선별** — origin(발화자)이 표시·낭독을 결정하지 기록을 결정하지 않는다: 생략=사람(정상 표시, speak 스펙대로 낭독) / `"schedule"`=예약된 의도(흐림+"스케줄" 라벨, 무낭독) / `"internal"`=자동 행위·자기 조회(흐림, 무낭독). 시스템 유래(origin 보유)는 registry 계측 지점에서 speak 가 소거된다 — 낭독→기록→낭독 루프는 이 축이 끊는다(기록 자체는 선형이라 되먹임이 아니다). 환경의 사실(view.activated·turn.ended)은 조용한 한 줄, 무낭독.
 - **R2a 기록은 관찰 요약** — `command.executed` 는 응답 `data` 를 싣지 않는다(command·code·message·paramKeys·media 참조·상관 축이 전부다). 실측 사고: 조회 기록이 조회 결과(그 안의 이전 기록까지)를 물어 75MB/행으로 자기증식 → json 파스 226MB malloc → 앱 즉사. 영속본은 추가로 media.base64 를 스트립하고 행 크기 불변식(256KB, 초과 = 상관 축만 남긴 요약 강등)을 강제한다 — 라이브(링·이벤트)만 원본이다.
 - **R4 보관 제로섬 해소** — 저신호(origin 보유)는 신호와 영속 캡을 다투지 않는다: scope `app`(신호)/`app-low`(저신호) 별도 보관(각 5000). 링(라이브 뷰 2000)은 시간창이 본질이라 혼합 — 역사 보증은 영속의 몫. seq 재개는 전 scope 최댓값.
 

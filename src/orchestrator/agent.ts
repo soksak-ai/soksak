@@ -228,16 +228,17 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
     (await invoke<string | null>("ipc_last_workspace_window").catch(() => null)) ??
     undefined;
   const turnId = crypto.randomUUID();
-  publishActivity("chat.prompt", "orchestrator", { text, turnId });
+  publishActivity("chat.prompt", "orchestrator", { text, turnId, message: `💬 ${text}` });
   const close = (ok: boolean, code: string, answer: string): CommandOutcome => {
     publishActivity("chat.answer", "orchestrator", {
       text: answer,
       parentId: turnId,
       ok,
       code,
+      message: `↩ ${answer}`,
     });
     return ok
-      ? { ok, code, message: answer, data: { turnId } }
+      ? { ok, code, message: answer, data: { turnId, answer } }
       : { ok, code, message: answer };
   };
 
@@ -343,6 +344,7 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
         command: "orchestrator.ask",
         delta: chunk,
         parentId: turnId,
+        message: `⋯ orchestrator.ask: ${chunk}`,
       });
     }
   };
@@ -361,10 +363,12 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
         queueDelta(ev.text);
       } else if (ev.kind === "tool") {
         flushDelta();
+        const toolDelta = ev.detail ? `$ ${ev.detail}` : `도구 ${ev.name}`;
         publishActivity("command.progress", "orchestrator", {
           command: "orchestrator.ask",
-          delta: ev.detail ? `$ ${ev.detail}` : `도구 ${ev.name}`,
+          delta: toolDelta,
           parentId: turnId,
+          message: `⋯ orchestrator.ask: ${toolDelta}`,
         });
       } else {
         turn.result = { ok: ev.ok, text: ev.text };
@@ -435,6 +439,7 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
       command: "orchestrator.ask",
       delta: "이전 대화를 이어갈 수 없어 새 대화로 다시 시작",
       parentId: turnId,
+      message: "⋯ orchestrator.ask: 이전 대화를 이어갈 수 없어 새 대화로 다시 시작",
     });
     continue;
   }
@@ -454,11 +459,11 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
 
 /** 진행 중 턴 중단 — orchestrator.stop 핸들러 본체. ask 쪽 exit 경로가 세트를 닫는다. */
 export async function stop(reason?: string): Promise<CommandOutcome> {
-  if (!active) return { ok: true, code: "NOOP", message: "진행 중인 턴이 없어요." };
+  if (!active) return { ok: true, code: "NOOP", message: "진행 중인 턴이 없어요.", data: { stopped: false } };
   cancelled = true;
   stopReason = reason ?? "중단했어요.";
   await invoke("process_kill", { id: active.proc }).catch(() => {});
-  return { ok: true, code: "OK", message: "진행 중인 턴을 중단했어요." };
+  return { ok: true, code: "OK", message: "진행 중인 턴을 중단했어요.", data: { stopped: true } };
 }
 
 /** 부트 1회 — 리로드 고아 정리. 이 창(main)이 리로드되면 JS 핸들은 사라지지만 자식 claude 는
@@ -479,6 +484,7 @@ export function cleanupOrphanTurn(): void {
         parentId: rec.turnId,
         ok: false,
         code: "INTERRUPTED",
+        message: "↩ 창이 리로드되어 진행 중이던 턴을 중단했어요.",
       });
     }
   } catch {

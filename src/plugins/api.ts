@@ -128,7 +128,7 @@ export interface PluginCommandSpec {
   message?: (data: Record<string, unknown>) => string;
   /** @deprecated message 로 개명 — M5 sweep 전환기 구명. 새 플러그인은 message 를 쓴다. */
   summarize?: (data: Record<string, unknown>) => string;
-  /** 낭독 문장(귀, §3) — 낭독 축은 이것 하나: speak 있으면 성공·실패 불문 speak(outcome)가
+  /** 낭독 문장(speak, §3) — 낭독 축은 이것 하나: speak 있으면 성공·실패 불문 speak(outcome)가
    *  문장, 없으면 message 폴백, "" = 침묵. say 류는 speak: () => "" 로 되먹임을 끊는다. */
   speak?: (out: { ok: boolean; code: string; message: string; data?: Record<string, unknown> }) => string;
   /** 계측 스펙(MESSAGE-PROTOCOL §4) — false=실행이 활동 트레이스에서 제외. 관찰의 부산물로
@@ -207,6 +207,14 @@ export interface SoksakPluginApi {
      *  활동 스트림에 흘린다. 사이드카 이벤트를 표준 progress 로 변환하는 책임은 소비 플러그인에
      *  있다(A14 — 코어는 blind relay). source 는 플러그인 id 로 고정 — 발행 주체가 항상 보인다. */
     progress: (command: string, delta: unknown) => void;
+  };
+  /** 활동 로그 자기기술 발행 — 플러그인이 자기 도메인 활동을 코어 브리지 없이 직접 싣는다(§3).
+   *  표시=message(플러그인 i18n), 낭독=선택 speak. 소비자는 kind 무지로 이 둘만 렌더. source=id 고정. */
+  activity: {
+    publish: (
+      kind: string,
+      entry: { message: string; speak?: string } & Record<string, unknown>,
+    ) => void;
   };
   ui?: {
     registerView: (viewId: string, provider: PluginViewProvider) => Disposable;
@@ -1101,6 +1109,18 @@ export function buildPluginApi(
       },
     },
 
+    activity: {
+      // 자기기술 발행 — 플러그인이 자기 활동 엔트리를 코어 브리지 없이 허브에 싣는다. source=id 고정
+      // (자기 이름표만), payload 는 verbatim 저장(허브 schema-agnostic). events.progress 와 같은 급(무권한).
+      publish: (kind, entry) => {
+        void deps.invoke("activity_publish", {
+          kind,
+          source: id,
+          payload: { ...entry, window: currentWindowLabel() },
+        });
+      },
+    },
+
     project: {
       current: () => deps.currentProject(),
     },
@@ -1194,7 +1214,7 @@ export function buildPluginApi(
               returns: spec.returns ?? "object",
               examples: spec.examples,
               message: pluginAnswer ?? labelAnswer, // 표준 답변 — 없으면 라벨(전환 스캐폴드, 경고)
-              speak: spec.speak, // 귀의 문장(§3) — 낭독 축의 전부(없으면 message 폴백)
+              speak: spec.speak, // 낭독 문장(§3) — 낭독 축의 전부(없으면 침묵 — opt-in)
               trace: spec.trace, // 계측 스펙(§4) — false=관찰 부산물 명령의 기록 제외
               danger, // 매니페스트 권위(없으면 런타임 fallback — 게이트 보존)
               // registry.execute 가 try/catch 로 INTERNAL 변환(§0-4).
@@ -1477,7 +1497,7 @@ export function buildPluginApi(
             if (crossDeny) {
               return Promise.reject(new Error(crossDeny));
             }
-            return deps.invoke("schedule_register", {
+            const p = deps.invoke("schedule_register", {
               trigger: job.trigger,
               command: job.command,
               params: job.params ?? null,
@@ -1493,7 +1513,16 @@ export function buildPluginApi(
                   ? 10_800_000
                   : job.zombie_backstop_ms
                 : null,
+              // 소유자 스탬프(B2) — 코어는 owner 있는 잡을 persist 하지 않는다(플러그인이 activate 에서
+              // 재장전). 그래서 부팅 재장전은 코어 잡만 → 비활성 플러그인 잡의 orphan 발화 0.
+              owner: id,
             }) as Promise<string>;
+            // 생명주기 결속(B1) — 명령 등록(위)과 동일하게 deactivate 시 tracker 가 잡을 취소한다.
+            // 스케줄이 소유자(플러그인)보다 오래 사는 규칙 구멍을 닫는다(저자가 잊어도 안전).
+            tracker.wrap(() => {
+              void p.then((jid) => deps.invoke("schedule_cancel", { id: jid })).catch(() => {});
+            });
+            return p;
           },
           poke: async (jobId) => {
             await deps.invoke("schedule_poke", { id: jobId ?? null });
