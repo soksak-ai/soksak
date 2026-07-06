@@ -14,6 +14,7 @@ import { addProjectClaimed, closeProjectReleased, useOtherWindowProjects } from 
 import { removeRecentProject, useRecentProjects } from "./state/recentProjects";
 import { rafThrottle } from "./lib/rafThrottle";
 import { parkedStyle } from "./lib/layerPark";
+import { emitPluginEvent } from "./plugins/hooks";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
 import { PluginSidebar } from "./components/PluginSidebar";
 import { ContentTabs } from "./components/ContentTabs";
@@ -143,6 +144,14 @@ const ProjectPane = memo(function ProjectPane({
   startRightResize: (e: React.MouseEvent) => void;
 }) {
   const t = useT();
+  // 콘텐츠 탭 전환 시 비활성 슬롯은 화면 밖으로 파킹된다(parkedStyle transform). 그 파킹/언파킹은
+  // 이 렌더 커밋에서 DOM 에 반영되므로, 커밋 직후(useLayoutEffect, paint 전) 코어가 layout.reflow 를
+  // 발화한다 → 네이티브 webview 를 소유한 플러그인(브라우저)이 최종 앵커로 bounds 를 1회 재스냅해
+  // 클릭에 즉시 반응한다. 전환 신호(view.activated)는 store diff 마이크로태스크라 커밋 전이라 여기서
+  // 못 쓴다(그걸로 측정하면 옛 위치를 읽어 webview 가 한 박자 늦는다).
+  useLayoutEffect(() => {
+    emitPluginEvent("layout.reflow", { activeContentId: project.activeContentId });
+  }, [project.activeContentId]);
   return (
     <div
       className="terminal-pane"

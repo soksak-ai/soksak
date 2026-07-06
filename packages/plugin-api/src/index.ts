@@ -129,6 +129,10 @@ export interface PluginEventMap {
    *  bounds 커밋을 유예하고 시각 연속 스탠드인(freeze-frame)을 띄우는 근거 신호.
    *  끝(false)은 최종 레이아웃 커밋 이후에 도착한다 — 그 시점 슬롯 rect 가 최종값. 권한 불요. */
   "layout.resize-gesture": { active: boolean };
+  /** 콘텐츠 탭 전환 등으로 콘텐츠 슬롯이 파킹/언파킹된 뒤 코어가 발화(React 커밋 직후 useLayoutEffect).
+   *  네이티브 표면 제공자(브라우저 뷰 등)가 최종 앵커 rect 로 bounds 를 1회 재스냅하는 신호 — 위치
+   *  이동(크기 무변)이라 ResizeObserver 가 못 잡는 전환을 덮는다. 권한 불요. */
+  "layout.reflow": { activeContentId: string | null };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   "command.started": {
     projectId: string | null;
