@@ -106,6 +106,44 @@ describe("makeCoreStore", () => {
     expect(h.remote.get("settings")).toEqual({ a: 7 }); // 마이그레이션됨
   });
 
+  // [read-your-writes] stage = 이 창이 방금 기록한 값을 in-memory 권위로 즉시 세운다(디스크 flush 는 호출측
+  // 이 디바운스). 디스크(SQLite)가 아직 옛 값이어도 같은 창 hydrate 는 방금 쓴 값을 봐야 한다.
+  it("stage: 미flush 스테이징 값이 stale SQLite 보다 우선(read-your-writes — 디스크 flush 분리)", async () => {
+    const h = harness();
+    h.remote.set("settings", { a: 1 }); // 권위 SQLite = 옛 값(디바운스로 아직 갱신 전)
+    const store = makeCoreStore<{ a: number }>({
+      key: "settings",
+      lsKey: "soksak.settings",
+      fallback: { a: 0 },
+      invoke: h.invoke,
+      onDataChange: h.onDataChange,
+      localStorage: h.localStorage,
+    });
+    store.stage({ a: 2 }); // 이 창이 방금 기록(디스크 미flush)
+    expect(await store.hydrate()).toEqual({ a: 2 }); // stale {a:1} 아닌 방금 쓴 값
+    expect(JSON.parse(h.ls.get("soksak.settings")!)).toEqual({ a: 2 }); // 동기 캐시도 즉시
+  });
+
+  it("subscribe: 미flush 로컬 쓰기 중 stale echo 는 방금 쓴 값을 덮지 않는다(read-your-writes)", async () => {
+    const h = harness();
+    h.remote.set("settings", { a: 1 }); // 옛 값(SQLite)
+    const store = makeCoreStore<{ a: number }>({
+      key: "settings",
+      lsKey: "soksak.settings",
+      fallback: { a: 0 },
+      invoke: h.invoke,
+      onDataChange: h.onDataChange,
+      localStorage: h.localStorage,
+    });
+    const seen: Array<{ a: number }> = [];
+    store.subscribe((v) => seen.push(v));
+    store.stage({ a: 2 }); // 로컬 쓰기(디스크 미flush) — 권위는 {a:2}
+    h.fireRemoteChange("settings"); // SQLite 는 아직 {a:1}(stale) — 이 echo 가 덮으면 위반
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(seen).toEqual([]); // stale echo 로 인한 revert 없음
+  });
+
   it("subscribe: 다른 창의 data-change(같은 key) 시 콜백에 최신 권위값 전달", async () => {
     const h = harness();
     h.remote.set("settings", { a: 1 });
