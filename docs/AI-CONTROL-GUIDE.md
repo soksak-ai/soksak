@@ -31,7 +31,7 @@ sok state.tree               # 라이브 — 현재 창/패널 트리
 
 ## 1. Skill 주입 (셸 있는 에이전트)
 
-스킬 폴더는 환경별로 분리된다(`soksak`·`soksak-dev`·`soksak-debug`) — 환경마다 소켓·바이너리·플러그인 집합이 달라 내용 자체가 다르다. 저작 조각의 정본은 각 환경의 `<identity 홈>/skill/`(`_directives.md`+`references/`) — 대상 폴더는 순수 산출물로 전체 재생성된다. 플러그인 활성 집합이 변하면 앱이 `sok skill refresh`를 스폰해 자동 재생성한다(설치가 남긴 `skill-refresh.json` 매니페스트 기준).
+스킬 폴더는 환경별로 분리된다(`soksak`·`soksak-dev`·`soksak-debug`) — 환경마다 소켓·바이너리·플러그인 집합이 달라 내용 자체가 다르다. 저작 조각의 정본은 각 환경의 `<identity 홈>/skill/`(`SKILL.src.md`+`references/`) — 대상 폴더는 순수 산출물로 전체 재생성된다. 플러그인 활성 집합이 변하면 앱이 `sok skill refresh`를 스폰해 자동 재생성한다(설치가 남긴 `skill-refresh.json` 매니페스트 기준).
 
 트리거 스킬 `SKILL.md`(frontmatter `name`+`description`)를 설치한다. 본문은 라이브 도메인 지도 파생 —
 편집 금지(재설치 시 덮어씀), 단일 진실은 `sok commands`.

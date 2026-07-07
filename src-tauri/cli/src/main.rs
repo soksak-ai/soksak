@@ -855,7 +855,7 @@ fn run_mcp_install(args: &[String]) -> ExitCode {
 // frontmatter description 이 트리거(자연어 자동발동, P5). Claude·Codex·Gemini 동일 포맷.
 const SKILL_DESCRIPTION_DEFAULT: &str = "Control the soksak terminal app via the `sok` CLI — discover and run any soksak command. Reach for this whenever the user acts on anything inside soksak: split/merge/close panels & tabs, open terminals/browsers/editors, run and read terminal output, drive TUIs, automate the embedded browser (navigate/click/fill/eval), draw or annotate on the screen, manage windows/files/bookmarks/clipboard. If the user says they marked/drew/showed/annotated something \"on screen\" or \"in the browser\", it is almost certainly a soksak overlay or view — start here, not an external design tool. 화면/브라우저에 표시·낙서·주석·그림, 패널 나누기, 터미널 실행도 여기.";
 
-// frontmatter 조립 — 저작 조각(_directives.md)이 자기 frontmatter 를 가지면 그대로 채택하되
+// frontmatter 조립 — 저작 조각(SKILL.src.md)이 자기 frontmatter 를 가지면 그대로 채택하되
 // name 은 환경 이름으로 강제한다(세 환경 공존 시 발동 충돌 방지). 없으면 기본 description.
 fn skill_frontmatter(skill_name: &str, env: &str, directives_fm: Option<&str>) -> String {
     if let Some(fm) = directives_fm {
@@ -1035,7 +1035,7 @@ fn domain_map(cmds: &[Value]) -> String {
     out
 }
 
-// 저작 조각(_directives.md) 분해 — 선두 frontmatter(있으면)와 본문을 나눈다.
+// 저작 조각(SKILL.src.md) 분해 — 선두 frontmatter(있으면)와 본문을 나눈다.
 fn split_directives(text: &str) -> (Option<String>, String) {
     let t = text.trim_start_matches('\u{feff}');
     if let Some(rest) = t.strip_prefix("---\n") {
@@ -1049,7 +1049,7 @@ fn split_directives(text: &str) -> (Option<String>, String) {
 }
 
 // SKILL.md 전문 조립(순수) — frontmatter + 환경 핀 + 저작 지시어(있으면) + 오리엔테이션 + 지도.
-// 소유권: 이 파일(SKILL.md)만 생성기가 소유한다. 같은 폴더의 _directives.md·references/ 등
+// 소유권: 대상 폴더는 순수 산출물. 저작 정본(SKILL.src.md·references/)은 identity 홈 skill/ 에 살고
 // 저작물은 건드리지 않는다 — 저작 조각은 합성의 입력이다.
 fn skill_doc_with(map: &str, env: &str, directives: Option<&str>) -> String {
     let skill_name = server_name_for_env(env);
@@ -1063,7 +1063,7 @@ fn skill_doc_with(map: &str, env: &str, directives: Option<&str>) -> String {
     let directives_block = if body.trim().is_empty() {
         String::new()
     } else {
-        format!("## Project directives (authored — from `_directives.md`)\n\n{}\n\n", body.trim())
+        format!("## Project directives (authored — from `SKILL.src.md`)\n\n{}\n\n", body.trim())
     };
     format!(
         "{}\n{}{}{}{}{}",
@@ -1085,7 +1085,7 @@ fn skill_doc(env: &str, directives: Option<&str>) -> String {
     skill_doc_with(&map, env, directives)
 }
 
-// 제어 스킬 한 벌 생성 — 같은 폴더의 _directives.md(저작 조각)를 합성 입력으로 읽는다.
+// 제어 스킬 한 벌 생성 — 정본(identity 홈 skill/SKILL.src.md)에서 읽은 저작 조각을 합성한다.
 // 소유권은 SKILL.md 하나: 저작 조각·references/ 등 폴더의 다른 파일은 건드리지 않는다.
 // 저작 조각의 정본 위치 — 이 CLI 가 해석한 환경의 identity 홈 `skill/`(우리 영토, 환경:정본=1:1).
 // 소비자 폴더(.claude/.agents)는 순수 산출물: 지워져도 저작이 사라지지 않고 정본이 갈라질 일도 없다.
@@ -1096,7 +1096,7 @@ fn canonical_skill_dir(env: &str) -> Option<PathBuf> {
 }
 
 fn read_canonical_directives(env: &str) -> Option<String> {
-    canonical_skill_dir(env).and_then(|d| std::fs::read_to_string(d.join("_directives.md")).ok())
+    canonical_skill_dir(env).and_then(|d| std::fs::read_to_string(d.join("SKILL.src.md")).ok())
 }
 
 // 저작 부속(references/ 등) 미러 — 정본 skill/ 아래의 하위 폴더를 대상 폴더로 복사한다.
