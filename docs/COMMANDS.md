@@ -165,6 +165,157 @@ sok docs
 sok command.docs '{"lang":"ko"}'
 ```
 
+## `daemon.add`
+
+Register a long-running project process (dev server, watcher, database) as a daemon — appends a standard `name: command` line to the project's Procfile. If your project has such a process, register it: with autostart allowed it starts whenever the project opens. Container stacks work too (a foreground `docker compose up` cleans itself up on stop). | 데몬 등록 추가 서버 자동 시작
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `cmd` | string | ✓ | Shell command to run from the project root |
+| `name` | string | ✓ | Daemon name from the Procfile |
+| `project` | string |  | Project id (omit = active project) |
+
+**Returns**: { name, cmd }
+**Errors**: TARGET_NOT_FOUND, INVALID_PARAMS
+
+```bash
+sok daemon.add '{"name":"dev","cmd":"npm run dev"}'
+```
+
+## `daemon.autostart`
+
+Allow or revoke automatic start when this project opens (omit name = every declared daemon). This is a local, per-machine consent stored outside the repository — a cloned Procfile never runs anything by itself. | 데몬 자동 시작 허용
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string |  | Daemon name from the Procfile |
+| `on` | boolean | ✓ | true = start when the project opens |
+| `project` | string |  | Project id (omit = active project) |
+
+**Returns**: { autostart: Record<name, boolean> }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok daemon.autostart '{"name":"dev","on":true}'
+sok daemon.autostart '{"on":true}'
+```
+
+## `daemon.list`
+
+List the project's daemons — Procfile declarations merged with runtime state (running/stopped, pid, uptime) and local policy (autostart, managed stop command). A Procfile found in the project is only discovered, never auto-run, until the user allows it with daemon.autostart. | 데몬 목록 상시 프로세스 서버
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Project id (omit = active project) |
+
+**Returns**: { daemons: [{ name, cmd, running, pid?, uptimeMs?, autostart, managed, exitCode? }] }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok daemon.list
+```
+
+## `daemon.logs`
+
+Read a daemon's recent output from the in-memory ring buffer (last 500 lines at most; nothing is written to disk — redirect inside your command if you need persistence). | 데몬 로그 출력 보기
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `lines` | number |  | How many recent lines (default 100) |
+| `name` | string | ✓ | Daemon name from the Procfile |
+| `project` | string |  | Project id (omit = active project) |
+
+**Returns**: { name, lines: [string] }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok daemon.logs dev
+sok daemon.logs '{"name":"dev","lines":300}'
+```
+
+## `daemon.remove` (danger: destructive)
+
+Remove a daemon declaration from the project's Procfile. A running instance is stopped first. | 데몬 제거 삭제
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | ✓ | Daemon name from the Procfile |
+| `project` | string |  | Project id (omit = active project) |
+
+**Returns**: { name, removed }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok daemon.remove dev
+```
+
+## `daemon.restart`
+
+Restart a daemon — stop (tree kill or managed stop command) and start again. | 데몬 재시작
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | ✓ | Daemon name from the Procfile |
+| `project` | string |  | Project id (omit = active project) |
+
+**Returns**: { name, pid }
+**Errors**: TARGET_NOT_FOUND, INTERNAL
+
+```bash
+sok daemon.restart dev
+```
+
+## `daemon.set`
+
+Set per-daemon local options — currently the stop command for detached tools whose start and stop differ (e.g. start `docker compose up -d`, stop `docker compose down`). Stored locally, never in the Procfile. | 데몬 설정 종료 명령
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | ✓ | Daemon name from the Procfile |
+| `project` | string |  | Project id (omit = active project) |
+| `stop` | string |  | Command that shuts the daemon down (empty string clears it) |
+
+**Returns**: { name, stop? }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok daemon.set '{"name":"db","stop":"docker compose down"}'
+```
+
+## `daemon.start`
+
+Start a declared daemon (omit name = every declared daemon that is not running). Output goes to an in-memory ring buffer — read it with daemon.logs. | 데몬 시작 서버 기동
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string |  | Daemon name from the Procfile |
+| `project` | string |  | Project id (omit = active project) |
+
+**Returns**: { started: [{ name, pid }] }
+**Errors**: TARGET_NOT_FOUND, INTERNAL
+
+```bash
+sok daemon.start dev
+sok daemon.start
+```
+
+## `daemon.stop`
+
+Stop a running daemon (omit name = all). The whole process tree is terminated — SIGTERM first, SIGKILL after a grace period. A managed daemon (one with a stop command set via daemon.set) runs its stop command instead. | 데몬 정지 서버 중지
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string |  | Daemon name from the Procfile |
+| `project` | string |  | Project id (omit = active project) |
+
+**Returns**: { stopped: [name] }
+**Errors**: TARGET_NOT_FOUND, INTERNAL
+
+```bash
+sok daemon.stop dev
+sok daemon.stop
+```
+
 ## `data.backup`
 
 Snapshot the entire data store to a single .db file via VACUUM INTO (absorbs WAL). Omit path to write a timestamped file under ~/.soksak/backups/. | 백업 스냅샷 데이터백업
@@ -494,6 +645,24 @@ Show a single commit in full: metadata, changed file list, and the raw patch. Us
 
 ```bash
 sok git.show '{"commit":"HEAD"}'
+```
+
+## `layout.apply`
+
+Apply a layout by building fresh sheets — never destroys existing sheets. Hierarchy: first-level sheets are independent switchable screens; second-level panels are the splits inside each sheet. preset dev = a terminal plus a browser side by side (if no browser program is installed, that panel is skipped and reported in skipped). preset facets = build the named sheets you pass in (sheets required). Verify by switching to a sheet with sheet.activate, then capturing with window.snapshot. | 화면 구성 레이아웃 적용 시트 배치 개발 나란히 dev facets
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `preset` | string | ✓ | dev = a terminal plus a browser side by side; facets = build the named sheets passed in sheets (dev|facets) |
+| `project` | string |  | Target project id (omit = caller's context project) |
+| `sheets` | json |  | Named sheets to build (required for facets): [{ title, panels?: [{ program, side? }] }] |
+
+**Returns**: { sheets: [{ sheetId, title, panels: [{ panelId, program }] }], skipped? } — skipped lists panels dropped because their program is missing
+**Errors**: INVALID_PARAMS, TARGET_NOT_FOUND
+
+```bash
+sok layout.apply dev
+sok layout.apply '{"preset":"facets","sheets":[{"title":"docs","panels":[{"program":"browser"}]}]}'
 ```
 
 ## `layout.suggest`
@@ -954,9 +1123,9 @@ sok plugin.install '{"source":"user/repo","ref":"v1.0.0"}'
 
 ## `plugin.list`
 
-List all installed and dev plugins with their runtime status, permissions, and rejection reasons. Use to check which plugins exist and whether any failed to load. | 플러그인 목록 설치된 확장 상태
+List all installed and dev plugins with their runtime status, permissions, and rejection reasons. rejected holds one entry per directory whose manifest failed validation (dir = plugin folder, errors = the specific validation failures). Use to check which plugins exist and whether any failed to load. | 플러그인 목록 설치된 확장 상태
 
-**Returns**: { plugins: [{id, name, version, status, permissions, …}], rejected }
+**Returns**: { plugins: [{id, name, version, status, permissions, …}], rejected: [{dir, errors}] }
 
 ```bash
 sok plugin.list
@@ -964,13 +1133,13 @@ sok plugin.list
 
 ## `plugin.reload`
 
-Rescan the plugins directory and reactivate every plugin whose consent is still valid. With id, reload only that one plugin instead (disable then re-enable it — same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. Use after manually editing plugin files or adding new plugin folders. | 플러그인 재적재 리로드 새로고침
+Rescan the plugins directory and reactivate every plugin whose consent is still valid; the response reports which manifests were rejected during the rescan and why. With id, reload only that one plugin instead (disable then re-enable it — same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. Use after manually editing plugin files or adding new plugin folders. | 플러그인 재적재 리로드 새로고침
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string |  | Plugin id to reload individually. Omit to rescan the plugins directory and reactivate every plugin. |
 
-**Returns**: { count, rejected } (id omitted — full rescan) | { id, status } (id given — that plugin only)
+**Returns**: { reloaded, rejected: [{id, reason}] } (id omitted — full rescan; rejected lists directories whose manifest failed validation) | { id, status } (id given — that plugin only; a failure reason is in the response message)
 **Errors**: TARGET_NOT_FOUND, CONSENT_REQUIRED
 
 ```bash
@@ -1322,6 +1491,10 @@ Show the desktop human confirm modal for a destructive remote action and await t
 | `ttl_secs` | number |  | Countdown seconds before auto-deny (mirrors sidecar TTL). |
 
 **Returns**: { approve }
+
+```bash
+sok remote.confirm '{"request_id":42,"device_id":"iphone-15","command":"panel.close","danger":true,"ttl_secs":30}'
+```
 
 ## `schedule.cancel`
 
@@ -1786,7 +1959,7 @@ sok term.cwd
 
 ## `term.exec` (danger: inject)
 
-Execute a shell command in the terminal (sends text + Enter). Check output with term.read. | 명령 실행 터미널 셸 커맨드
+Execute a shell command in a terminal (sends the text plus Enter). Returns immediately — it does not wait for the command to finish, so read the output a moment later with term.read. | 명령 실행 터미널 셸 커맨드
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -1946,9 +2119,13 @@ Return the topmost DOM element at viewport x,y (tag, classes, data-* attrs, rect
 
 **Returns**: { tag, className, data, rect } | { tag: null }
 
+```bash
+sok ui.hit '{"x":200,"y":140}'
+```
+
 ## `ui.input.click` (danger: inject)
 
-Dispatch a real-click sequence (mousedown → mouseup → click) to an exposed node (E2E injection). Use to drive UI flows programmatically or in tests. Unexposed addresses return NOT_EXPOSED — no guessing. | 클릭 주입 ui클릭 버튼클릭 E2E
+Dispatch a real-click sequence (mousedown → mouseup → click) to an exposed node (E2E injection). Use to drive UI flows programmatically or in tests. Unexposed addresses return NOT_EXPOSED — no guessing. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first. | 클릭 주입 ui클릭 버튼클릭 E2E
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -1963,7 +2140,7 @@ sok ui.input.click '{"address":"win/main/chrome/modal/consent/agree"}'
 
 ## `ui.input.dblclick` (danger: inject)
 
-Dispatch a double-click (two clicks + a dblclick event) to an exposed node (E2E injection). Use to drive double-click UI flows like inline tab/label rename. Unexposed addresses return NOT_EXPOSED — no guessing. | 더블클릭 두번클릭 이름변경 rename 주입 E2E
+Dispatch a double-click (two clicks + a dblclick event) to an exposed node (E2E injection). Use to drive double-click UI flows like inline tab/label rename. Unexposed addresses return NOT_EXPOSED — no guessing. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first. | 더블클릭 두번클릭 이름변경 rename 주입 E2E
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -1978,7 +2155,7 @@ sok ui.input.dblclick '{"address":"win/main/chrome/tab/left/a.x"}'
 
 ## `ui.input.drag` (danger: inject)
 
-Drive a pointer drag (mousedown on `from` -> mousemove -> mouseup). Two modes: (1) drop onto a target — give `to` (+ optional zone: center default, left/right/top/bottom edge for directional split), drives drag-merge tab UIs; (2) drag by a pixel delta — give `dx`/`dy` instead of `to`, grabs `from` at its center and drags that many CSS px (for resize handles / split dividers). mousemove+mouseup dispatch on window so window-level drag listeners (divider resize) receive them. Unexposed addresses return NOT_EXPOSED. | 드래그 주입 드롭 탭이동 분할 합치기 리사이즈 디바이더 E2E 포인터드래그
+Drive a pointer drag (mousedown on `from` -> mousemove -> mouseup). Two modes: (1) drop onto a target — give `to` (+ optional zone: center default, left/right/top/bottom edge for directional split), drives drag-merge tab UIs; (2) drag by a pixel delta — give `dx`/`dy` instead of `to`, grabs `from` at its center and drags that many CSS px (for resize handles / split dividers). mousemove+mouseup dispatch on window so window-level drag listeners (divider resize) receive them. Unexposed addresses return NOT_EXPOSED. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first. | 드래그 주입 드롭 탭이동 분할 합치기 리사이즈 디바이더 E2E 포인터드래그
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -1998,7 +2175,7 @@ sok ui.input.drag '{"from":"win/main/chrome/divider/s0/0","dx":120}'
 
 ## `ui.input.fill` (danger: inject)
 
-Set the value of an exposed input/textarea node and dispatch input+change events (E2E injection). Uses the native value setter so React controlled inputs pick the value up. Unexposed addresses return NOT_EXPOSED. | 입력 주입 값입력 텍스트입력 폼입력 E2E
+Set the value of an exposed input/textarea node and dispatch input+change events (E2E injection). Uses the native value setter so React controlled inputs pick the value up. Unexposed addresses return NOT_EXPOSED. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first. | 입력 주입 값입력 텍스트입력 폼입력 E2E
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -2213,7 +2390,7 @@ sok view.restore
 
 ## `webview.emitNative`
 
-Emit a native mouse-bridge event (native-mousedown/move/up) at viewport x,y — drives divider drag/resize over a native child (browser) without a real mouse, for E2E. Pair with ui.input.drag (DOM path); this is the native path.
+Emit a native mouse-bridge event (native-mousedown/move/up) at viewport x,y — drives divider drag/resize over a native child (browser) without a real mouse, for E2E. Pair with ui.input.drag (DOM path); this is the native path. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -2222,6 +2399,10 @@ Emit a native mouse-bridge event (native-mousedown/move/up) at viewport x,y — 
 | `y` | number | ✓ | viewport y |
 
 **Returns**: { ok, kind }
+
+```bash
+sok webview.emitNative '{"kind":"native-mousedown","x":400,"y":300}'
+```
 
 ## `window.close`
 
@@ -2280,6 +2461,24 @@ List open window labels. Use to discover targets for commands that accept a wind
 
 ```bash
 sok window.list
+```
+
+## `window.maximize`
+
+Maximize a window to fill the screen (native window maximize — distinct from view.maximize, which only enlarges one view within a sheet). Without label, targets the window this command runs in; with label, targets that window (see window.list). Pass off:true to restore (unmaximize). | 창 최대화 전체화면 키우기 해제
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `label` | string |  | Window label (omit = this window) |
+| `off` | boolean |  | Restore (unmaximize) instead of maximizing |
+
+**Returns**: { maximized: boolean }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok window.maximize
+sok window.maximize '{"off":true}'
+sok window.maximize '{"label":"w-<uuid>"}'
 ```
 
 ## `window.monitors`

@@ -238,6 +238,13 @@ function terminalContextPane(
 // 브라우저 계열 프로그램 id 해석(layout.apply dev preset). 프로그램은 전부 플러그인 기여라
 // 코어는 브라우저 종류를 모른다(락인 0) — 등록 프로그램 id 관례("browser")로 식별한다. 없으면
 // undefined 를 돌려주고, 호출부가 그 패널을 건너뛰며 사유를 남긴다(은폐 금지).
+// hint 예시용 실존 프로그램 — 등록 목록에서 터미널 아닌 것을 우선(다양성), 없으면 terminal,
+// 그마저 없으면 목록의 첫 항목. 하드코딩 예시는 미설치 환경에서 깨진 안내가 된다(실측: claude).
+function exampleProgramId(): string {
+  const ids = listPrograms().map((p) => p.decl.id);
+  return ids.find((x) => x !== "terminal") ?? ids[0] ?? "terminal";
+}
+
 function findBrowserProgram(): string | undefined {
   const progs = listPrograms();
   const exact = progs.find((p) => p.decl.id === "browser");
@@ -842,7 +849,7 @@ export function registerCatalog(): void {
       if (d.code) return [];
       return [
         { cmd: "sok panel.split right", why: tmsg("hint.flow.sheet.create.split") },
-        { cmd: "sok view.open claude", why: tmsg("hint.flow.sheet.create.view") },
+        { cmd: `sok view.open ${exampleProgramId()}`, why: tmsg("hint.flow.sheet.create.view") },
         { cmd: "sok window.snapshot", why: tmsg("hint.flow.sheet.create.snapshot") },
       ];
     },
@@ -1069,7 +1076,7 @@ export function registerCatalog(): void {
       // 새로 생긴 패널에 다른 프로그램을 탭으로 더 열 수 있다 — 그 패널을 명시 겨냥한다.
       if (panel)
         out.push({
-          cmd: `sok view.open '{"panel":"${panel}","program":"claude"}'`,
+          cmd: `sok view.open '{"panel":"${panel}","program":"${exampleProgramId()}"}'`,
           why: tmsg("hint.flow.panel.split.view"),
         });
       out.push({ cmd: "sok window.snapshot", why: tmsg("hint.flow.panel.split.snapshot") });
