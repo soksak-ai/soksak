@@ -7,7 +7,7 @@
 //   sok commands                  # 전체 카탈로그(JSON)
 //   sok help <command>            # 단일 명령 매뉴얼
 //   sok docs                      # 전체 매뉴얼 마크다운(stdout)
-//   sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]
+//   sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]   (환경별 스킬: soksak(-dev|-debug))
 //
 // 컨텍스트: soksak 터미널 안에서는 $SOKSAK_PANE/$SOKSAK_SOCKET 이 자동 주입되어
 // 대상 id 를 생략하면 "내 위치"가 기본이 된다.
@@ -90,7 +90,7 @@ fn print_usage() {
   sok docs [--core] [--format md|json] [--lang en|ko]
                                       가능한 명령 전체 레퍼런스(기본 md/en; json=기계용)
   sok events [--kinds a,b] [--since N] 활동 스트림 팔로우(JSONL, Ctrl-C 종료)
-  sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]
+  sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]   (환경별 스킬: soksak(-dev|-debug))
                                       AI 에이전트 트리거 스킬 설치(soksak 제어법)
   sok skill print                     라이브 SKILL.md 를 stdout 으로(프롬프트 재료)
   sok mcp install [--claude|--codex|--gemini|--all] [--env dev|debug|app]
@@ -700,7 +700,7 @@ fn run_mcp() -> ExitCode {
                         json!({ "contents": [{
                             "uri": uri,
                             "mimeType": "text/markdown",
-                            "text": skill_doc(),
+                            "text": skill_doc(&pin_env().unwrap_or_else(|_| "app".into()), None),
                         }]}),
                     );
                 } else {
@@ -853,7 +853,58 @@ fn run_mcp_install(args: &[String]) -> ExitCode {
 // 도메인 지도는 손으로 나열(P1 위반)하지 않고 install/serve 시 라이브 카탈로그에서 파생한다.
 
 // frontmatter description 이 트리거(자연어 자동발동, P5). Claude·Codex·Gemini 동일 포맷.
-const SKILL_FRONTMATTER: &str = "---\nname: soksak-control\ndescription: Control the soksak terminal app via the `sok` CLI — discover and run any soksak command. Reach for this whenever the user acts on anything inside soksak: split/merge/close panels & tabs, open terminals/browsers/editors, run and read terminal output, drive TUIs, automate the embedded browser (navigate/click/fill/eval), draw or annotate on the screen, manage windows/files/bookmarks/clipboard. If the user says they marked/drew/showed/annotated something \"on screen\" or \"in the browser\", it is almost certainly a soksak overlay or view — start here, not an external design tool. 화면/브라우저에 표시·낙서·주석·그림, 패널 나누기, 터미널 실행도 여기.\n---\n";
+const SKILL_DESCRIPTION_DEFAULT: &str = "Control the soksak terminal app via the `sok` CLI — discover and run any soksak command. Reach for this whenever the user acts on anything inside soksak: split/merge/close panels & tabs, open terminals/browsers/editors, run and read terminal output, drive TUIs, automate the embedded browser (navigate/click/fill/eval), draw or annotate on the screen, manage windows/files/bookmarks/clipboard. If the user says they marked/drew/showed/annotated something \"on screen\" or \"in the browser\", it is almost certainly a soksak overlay or view — start here, not an external design tool. 화면/브라우저에 표시·낙서·주석·그림, 패널 나누기, 터미널 실행도 여기.";
+
+// frontmatter 조립 — 저작 조각(_directives.md)이 자기 frontmatter 를 가지면 그대로 채택하되
+// name 은 환경 이름으로 강제한다(세 환경 공존 시 발동 충돌 방지). 없으면 기본 description.
+fn skill_frontmatter(skill_name: &str, env: &str, directives_fm: Option<&str>) -> String {
+    if let Some(fm) = directives_fm {
+        let mut lines: Vec<String> = Vec::new();
+        let mut named = false;
+        for l in fm.lines() {
+            if l.trim_start().starts_with("name:") {
+                lines.push(format!("name: {skill_name}"));
+                named = true;
+            } else {
+                lines.push(l.to_string());
+            }
+        }
+        if !named {
+            lines.insert(0, format!("name: {skill_name}"));
+        }
+        return format!("---\n{}\n---\n", lines.join("\n"));
+    }
+    let env_tag = if env == "app" {
+        String::new()
+    } else {
+        format!(" This is the {env} environment (home ~/.soksak-{env}) — use it when working on projects inside that environment's app.")
+    };
+    format!("---\nname: {skill_name}\ndescription: {SKILL_DESCRIPTION_DEFAULT}{env_tag}\n---\n")
+}
+
+// 이 환경의 호출 방법 — 생성 시점의 CLI 실경로를 핀한다(미설치 개발 환경에서도 즉시 동작).
+// 재작성 때마다 갱신되므로 이사·리빌드에 썩지 않는다.
+fn env_pin_block(env: &str) -> String {
+    let alias = if env == "app" { "sok".to_string() } else { format!("sok-{env}") };
+    let exe = std::env::current_exe()
+        .ok()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "sok".into());
+    let sock = socket_path_for_env(env)
+        .map(|p| p.display().to_string())
+        .unwrap_or_default();
+    let pinned = if exe.ends_with("/sok") || exe.ends_with("\\sok") {
+        format!("SOKSAK_ENV={env} {exe}")
+    } else {
+        exe
+    };
+    format!(
+        "## This environment (pinned at generation)\n\n\
+         - Environment: **{env}** — socket `{sock}`\n\
+         - Invoke: `{alias}` if it is on PATH; otherwise the pinned CLI: `{pinned}`\n\
+         - Every `sok …` example below means this binary. Do not substitute another environment's binary — each environment has its own app, socket, and plugin set.\n\n"
+    )
+}
 
 const SKILL_BODY_HEAD: &str = r#"# Controlling soksak with `sok`
 
@@ -984,18 +1035,136 @@ fn domain_map(cmds: &[Value]) -> String {
     out
 }
 
-// 도메인 지도(주입)로 SKILL.md 전문 조립(순수). frontmatter + 오리엔테이션 본문 + 지도.
-fn skill_doc_with(map: &str) -> String {
-    format!("{SKILL_FRONTMATTER}\n{SKILL_BODY_HEAD}{map}{SKILL_BODY_TAIL}")
+// 저작 조각(_directives.md) 분해 — 선두 frontmatter(있으면)와 본문을 나눈다.
+fn split_directives(text: &str) -> (Option<String>, String) {
+    let t = text.trim_start_matches('\u{feff}');
+    if let Some(rest) = t.strip_prefix("---\n") {
+        if let Some(end) = rest.find("\n---") {
+            let fm = rest[..end].to_string();
+            let body = rest[end + 4..].trim_start_matches('\n').to_string();
+            return (Some(fm), body);
+        }
+    }
+    (None, t.to_string())
+}
+
+// SKILL.md 전문 조립(순수) — frontmatter + 환경 핀 + 저작 지시어(있으면) + 오리엔테이션 + 지도.
+// 소유권: 이 파일(SKILL.md)만 생성기가 소유한다. 같은 폴더의 _directives.md·references/ 등
+// 저작물은 건드리지 않는다 — 저작 조각은 합성의 입력이다.
+fn skill_doc_with(map: &str, env: &str, directives: Option<&str>) -> String {
+    let skill_name = server_name_for_env(env);
+    let (fm, body) = match directives {
+        Some(d) => {
+            let (fm, body) = split_directives(d);
+            (fm, body)
+        }
+        None => (None, String::new()),
+    };
+    let directives_block = if body.trim().is_empty() {
+        String::new()
+    } else {
+        format!("## Project directives (authored — from `_directives.md`)\n\n{}\n\n", body.trim())
+    };
+    format!(
+        "{}\n{}{}{}{}{}",
+        skill_frontmatter(&skill_name, env, fm.as_deref()),
+        env_pin_block(env),
+        directives_block,
+        SKILL_BODY_HEAD,
+        map,
+        SKILL_BODY_TAIL
+    )
 }
 
 // 라이브 SKILL.md. 앱 가동이면 카탈로그에서 도메인 지도 파생, 미가동이면 코어 지도 fallback.
-fn skill_doc() -> String {
+fn skill_doc(env: &str, directives: Option<&str>) -> String {
     let map = match fetch_commands() {
         Ok(cmds) => domain_map(&cmds),
         Err(_) => CORE_DOMAIN_MAP.to_string(),
     };
-    skill_doc_with(&map)
+    skill_doc_with(&map, env, directives)
+}
+
+// 제어 스킬 한 벌 생성 — 같은 폴더의 _directives.md(저작 조각)를 합성 입력으로 읽는다.
+// 소유권은 SKILL.md 하나: 저작 조각·references/ 등 폴더의 다른 파일은 건드리지 않는다.
+fn write_control_skill(path: &Path, env: &str, shared_directives: Option<&str>) -> Result<(), String> {
+    // 저작 조각: 자기 폴더 것이 우선, 없으면 공유분(첫 대상에서 발견) — 대상 간 내용이 갈라지지 않는다.
+    let own = path
+        .parent()
+        .map(|d| d.join("_directives.md"))
+        .and_then(|p| std::fs::read_to_string(p).ok());
+    let doc = skill_doc(env, own.as_deref().or(shared_directives));
+    write_skill(path, &doc)
+}
+
+// 대상 목록에서 저작 조각 정본을 찾는다 — 앞선 대상(.claude 쪽) 우선.
+fn find_directives(paths: &[PathBuf]) -> Option<String> {
+    paths
+        .iter()
+        .filter_map(|p| p.parent().map(|d| d.join("_directives.md")))
+        .find_map(|p| std::fs::read_to_string(p).ok())
+}
+
+// 재생성 매니페스트 — identity 홈(소켓 곁)에 {cli, env, targets[]} 를 남긴다. 앱이 레지스트리
+// 변화를 감지하면 이 CLI 를 `skill refresh` 로 스폰해 스킬을 다시 쓴다(렌더 단일 진실 = CLI).
+fn write_refresh_manifest(env: &str, targets: &[(&str, PathBuf)]) -> Result<(), String> {
+    let sock = socket_path_for_env(env)?;
+    let home = sock.parent().ok_or("홈 경로 해석 실패")?;
+    let cli = std::env::current_exe().map_err(|e| e.to_string())?;
+    let paths: Vec<String> = targets
+        .iter()
+        .filter_map(|(_, p)| p.canonicalize().ok().or_else(|| Some(p.clone())))
+        .map(|p| p.display().to_string())
+        .collect();
+    let v = serde_json::json!({ "cli": cli.display().to_string(), "env": env, "targets": paths });
+    std::fs::write(home.join("skill-refresh.json"), serde_json::to_string_pretty(&v).unwrap_or_default())
+        .map_err(|e| e.to_string())
+}
+
+// `sok skill refresh` — 매니페스트대로 제어 스킬을 재생성한다(앱이 변화 시 스폰).
+fn run_skill_refresh() -> ExitCode {
+    let env = match pin_env() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let Ok(sock) = socket_path_for_env(&env) else {
+        eprintln!("소켓 경로 해석 실패");
+        return ExitCode::FAILURE;
+    };
+    let manifest = sock.parent().map(|h| h.join("skill-refresh.json"));
+    let Some(manifest) = manifest.filter(|p| p.exists()) else {
+        eprintln!("매니페스트 없음 — 먼저 sok skill install 을 실행하십시오");
+        return ExitCode::FAILURE;
+    };
+    let Ok(txt) = std::fs::read_to_string(&manifest) else {
+        eprintln!("매니페스트 읽기 실패");
+        return ExitCode::FAILURE;
+    };
+    let Ok(v) = serde_json::from_str::<Value>(&txt) else {
+        eprintln!("매니페스트 형식 오류");
+        return ExitCode::FAILURE;
+    };
+    let mut failed = false;
+    let paths: Vec<PathBuf> = v["targets"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|t| t.as_str().map(PathBuf::from))
+        .collect();
+    let shared = find_directives(&paths);
+    for path in &paths {
+        match write_control_skill(path, &env, shared.as_deref()) {
+            Ok(_) => println!("✓ {}", path.display()),
+            Err(e) => {
+                eprintln!("✗ {e}");
+                failed = true;
+            }
+        }
+    }
+    if failed { ExitCode::FAILURE } else { ExitCode::SUCCESS }
 }
 
 // 트리거 스킬 SKILL.md 를 도구별 경로에 쓴다(P10 — 우리 전용 디렉토리, 전체 재생성).
@@ -1019,8 +1188,14 @@ struct PluginSkill {
 // (단일진실=registry, P1·docs/I18N.md §5). 코어는 플러그인 하드코딩 목록을 들지 않는다(매니페스트 선언만).
 fn discover_plugin_skills() -> Vec<PluginSkill> {
     let mut out: Vec<PluginSkill> = Vec::new();
-    let Ok(home) = std::env::var("HOME") else { return out };
-    let base = PathBuf::from(home).join(".soksak").join("plugins");
+    // identity 홈 준수 — 환경(dev/debug/app)마다 플러그인 폴더가 다르다(.soksak 고정은 옛 결함).
+    let env = pin_env().unwrap_or_else(|_| "app".into());
+    let Some(base) = socket_path_for_env(&env)
+        .ok()
+        .and_then(|s| s.parent().map(|h| h.join("plugins")))
+    else {
+        return out;
+    };
     let Ok(entries) = std::fs::read_dir(&base) else { return out };
     for e in entries.flatten() {
         let pdir = e.path();
@@ -1108,11 +1283,16 @@ fn run_skill(args: &[String]) -> ExitCode {
     // print = 라이브 SKILL.md 를 stdout 으로(파일 미접촉). 오케스트레이터가 스폰하는 에이전트의
     // system prompt 재료 — --setting-sources "" 헤드리스에선 스킬 자동로드가 없어 프롬프트에 싣는다.
     if args.first().map(String::as_str) == Some("print") {
-        print!("{}", skill_doc());
+        let env = pin_env().unwrap_or_else(|_| "app".into());
+        print!("{}", skill_doc(&env, None));
         return ExitCode::SUCCESS;
     }
+    // refresh = 설치 매니페스트(skill-refresh.json)대로 재생성 — 앱이 레지스트리 변화 시 스폰한다.
+    if args.first().map(String::as_str) == Some("refresh") {
+        return run_skill_refresh();
+    }
     if args.first().map(String::as_str) != Some("install") {
-        eprintln!("사용: sok skill install [--claude|--gemini|--codex|--all] [--dir DIR] | sok skill print");
+        eprintln!("사용: sok skill install [--claude|--gemini|--codex|--all] [--dir DIR] | sok skill print | sok skill refresh");
         return ExitCode::FAILURE;
     }
     let mut claude = false;
@@ -1149,11 +1329,18 @@ fn run_skill(args: &[String]) -> ExitCode {
         codex = true; // 기본 --all
     }
 
-    let doc = skill_doc();
+    let env = match pin_env() {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let skill_dir = server_name_for_env(&env); // soksak | soksak-dev | soksak-debug
     // codex·gemini 는 같은 .agents/skills/ 경로(공유) — 한 번만 쓰면 둘 다 커버.
     let mut targets: Vec<(&str, PathBuf)> = Vec::new();
     if claude {
-        targets.push(("claude", dir.join(".claude/skills/soksak-control/SKILL.md")));
+        targets.push(("claude", dir.join(format!(".claude/skills/{skill_dir}/SKILL.md"))));
     }
     if codex || gemini {
         let label = if codex && gemini {
@@ -1163,18 +1350,27 @@ fn run_skill(args: &[String]) -> ExitCode {
         } else {
             "gemini"
         };
-        targets.push((label, dir.join(".agents/skills/soksak-control/SKILL.md")));
+        targets.push((label, dir.join(format!(".agents/skills/{skill_dir}/SKILL.md"))));
     }
 
     let mut failed = false;
+    let shared = find_directives(&targets.iter().map(|(_, p)| p.clone()).collect::<Vec<_>>());
     for (label, path) in &targets {
-        match write_skill(path, &doc) {
+        // 옛 이름(soksak-control) 잔재 정리 — 발동 충돌 방지(전면 개명, 별칭 없음).
+        if let Some(root) = path.parent().and_then(Path::parent) {
+            let _ = std::fs::remove_dir_all(root.join("soksak-control"));
+        }
+        match write_control_skill(path, &env, shared.as_deref()) {
             Ok(_) => println!("{label}  ✓ {}", path.display()),
             Err(e) => {
                 eprintln!("{label}  ✗ {e}");
                 failed = true;
             }
         }
+    }
+    // 재생성 매니페스트 — 앱이 레지스트리 변화 때 `sok skill refresh` 를 스폰할 재료.
+    if let Err(e) = write_refresh_manifest(&env, &targets) {
+        eprintln!("매니페스트 기록 실패(재생성 자동화 불가): {e}");
     }
 
     // 동봉 플러그인 스킬 — 매니페스트 contributes.skill 선언분을 도구별 디렉토리(.claude/skills/,
@@ -1232,6 +1428,19 @@ mod tests {
         assert_eq!(env_from_prog("sok"), "app");
         assert_eq!(env_from_prog("/usr/local/bin/sok"), "app");
         assert_eq!(env_from_prog("sok-dev"), "dev");
+    }
+
+    #[test]
+    fn 저작_조각_분해와_이름_강제() {
+        let (fm, body) = split_directives("---\nname: x\ndescription: d\n---\n\n본문");
+        assert_eq!(fm.as_deref(), Some("name: x\ndescription: d"));
+        assert_eq!(body, "본문");
+        let out = skill_frontmatter("soksak-dev", "dev", fm.as_deref());
+        assert!(out.contains("name: soksak-dev"));
+        assert!(out.contains("description: d"));
+        let (fm2, body2) = split_directives("frontmatter 없는 본문");
+        assert!(fm2.is_none());
+        assert_eq!(body2, "frontmatter 없는 본문");
         assert_eq!(env_from_prog("/path/to/sok-dev"), "dev");
         assert_eq!(env_from_prog("sok-debug"), "debug");
         assert_eq!(env_from_prog("target/debug/sok-debug"), "debug");
@@ -1309,9 +1518,10 @@ mod tests {
     // skill_doc_with: frontmatter(name+description) + 주입된 도메인 지도. per-command 카탈로그 없음.
     #[test]
     fn skill_doc_has_frontmatter_and_map_no_catalog() {
-        let doc = skill_doc_with("- panel (2): merge, split\n");
-        assert!(doc.starts_with("---\nname: soksak-control\n"), "frontmatter 누락");
+        let doc = skill_doc_with("- panel (2): merge, split\n", "dev", None);
+        assert!(doc.starts_with("---\nname: soksak-dev\n"), "frontmatter 누락(환경 이름)");
         assert!(doc.contains("description:"), "description 트리거 누락");
+        assert!(doc.contains("Environment: **dev**"), "환경 핀 블록 누락");
         assert!(doc.contains("- panel (2): merge, split"), "도메인 지도 주입 누락");
         assert!(doc.contains("AUTO-GENERATED"), "생성 헤더 누락(P10)");
         assert!(doc.contains("`sok commands`"), "발견 명령 안내 누락(P5)");

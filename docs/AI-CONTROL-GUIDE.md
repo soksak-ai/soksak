@@ -8,7 +8,7 @@
 | 채널 | 대상 | 설치 | 트리거 |
 |---|---|---|---|
 | **CLI** (`sok`) | 터미널 안 사람·에이전트 | 빌드만(아래) | `sok <cmd>` 직접 |
-| **Skill** (soksak-control) | 셸 있는 에이전트(Claude Code·Codex·Gemini) | `sok skill install` | 자연어(SKILL.md description) |
+| **Skill** (soksak(-dev|-debug)) | 셸 있는 에이전트(Claude Code·Codex·Gemini) | `sok skill install` | 자연어(SKILL.md description) |
 | **MCP** (`sok mcp`) | 셸 없는 에이전트(Claude Desktop 등) | `<client> mcp add` | 자연어(메타툴 description) |
 
 세 채널 모두 한 substrate(Command Registry + Unix socket)로 수렴 — 명령 목록을 복제하지 않고
@@ -31,18 +31,20 @@ sok state.tree               # 라이브 — 현재 창/패널 트리
 
 ## 1. Skill 주입 (셸 있는 에이전트)
 
+스킬 폴더는 환경별로 분리된다(`soksak`·`soksak-dev`·`soksak-debug`) — 환경마다 소켓·바이너리·플러그인 집합이 달라 내용 자체가 다르다. 같은 폴더의 `_directives.md`(저작 조각)는 합성 입력으로 보존되고, `SKILL.md`만 생성기가 소유한다. 플러그인 활성 집합이 변하면 앱이 `sok skill refresh`를 스폰해 자동 재생성한다(설치가 남긴 `skill-refresh.json` 매니페스트 기준).
+
 트리거 스킬 `SKILL.md`(frontmatter `name`+`description`)를 설치한다. 본문은 라이브 도메인 지도 파생 —
 편집 금지(재설치 시 덮어씀), 단일 진실은 `sok commands`.
 
 ```
-sok skill install --claude       # .claude/skills/soksak-control/SKILL.md
-sok skill install --codex        # .agents/skills/soksak-control/ (codex·gemini 공유)
+sok skill install --claude       # .claude/skills/soksak(-dev|-debug)/SKILL.md
+sok skill install --codex        # .agents/skills/soksak(-dev|-debug)/ (codex·gemini 공유)
 sok skill install --gemini       # .agents/skills/  (Gemini skills: preview v0.23+)
 sok skill install --all          # 셋 다
 ```
 
 설치 후 에이전트는 "soksak 창 나눠줘" 같은 자연어에 `description` 매칭으로 자동 발동 → `sok` 호출.
-슬래시 `/soksak-control` 은 보조.
+슬래시 `/soksak(-dev|-debug)` 은 보조.
 
 ## 2. MCP 주입 (셸 없는 에이전트)
 

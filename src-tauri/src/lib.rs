@@ -1,5 +1,6 @@
 mod ai_session;
 mod daemon;
+mod skillgen;
 mod home;
 mod sidecar;
 mod webview;
@@ -292,6 +293,7 @@ pub fn run() {
             daemon::daemon_logs,
             daemon::daemon_reap,
             daemon::daemon_run_once,
+            skillgen::skill_refresh_spawn,
             pty::pty_pane_pid,
             pty::write_terminal,
             pty::resize_terminal,

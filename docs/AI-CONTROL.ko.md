@@ -12,7 +12,7 @@ soksak 의 모든 기능을 AI 에게 주는 방식의 정본 규칙. 세 가지
 
 ```
               ┌──────────────────────────────────────────────┐
-  TEACHING    │  Skill: soksak-control (SKILL.md)             │
+  TEACHING    │  Skill: soksak(-dev|-debug) (SKILL.md)             │
               │  에이전트에게 '채널 사용법·발견하는 법'을 교육 │
               │  (명령 목록 복제 금지 — 발견 안내만)          │
               └───────────────┬──────────────────────────────┘
@@ -43,7 +43,7 @@ soksak 의 모든 기능을 AI 에게 주는 방식의 정본 규칙. 세 가지
 
 - **Substrate(기반·단일 진실)** = Command Registry(`src/commands/registry.ts`) + Socket Server(`src-tauri/src/ipc.rs`) + Activity Hub(`src-tauri/src/activity.rs` — 실행 스트림, P11–P12). 명령의 존재·스키마·권한·실행의 유일한 진실. 코어 register()(~140) + 플러그인 contributes.commands 가 한 Map 으로 수렴한다.
 - **Channels(transport·접근 경로)** = CLI(`sok` 바이너리, 터미널 내 동기 호출) + MCP(`sok mcp`, 외부 에이전트 stdio 브리지). 둘 다 substrate 를 **호출만** 한다. 자기 명령 목록을 갖지 않고 전부 `catalogJson()`/`state.commands` 에서 파생한다.
-- **Teaching(교육·채널 위)** = Skill(soksak-control). 에이전트에게 채널을 **어떻게 쓰는지** — 명령 목록이 아니라 **발견하는 법** — 을 가르친다. transport 가 아니다.
+- **Teaching(교육·채널 위)** = Skill(soksak — 환경별 이름). 에이전트에게 채널을 **어떻게 쓰는지** — 명령 목록이 아니라 **발견하는 법** — 을 가르친다. transport 가 아니다.
 
 셋은 동등 형제가 아니라 substrate 를 정점으로 한 의존 계단이다. 어떤 채널도 substrate 를 우회해 명령을 정의하지 못하고, teaching 은 channel 을 통해서만 명령에 도달한다.
 
@@ -72,7 +72,7 @@ soksak 의 모든 기능을 AI 에게 주는 방식의 정본 규칙. 세 가지
 **P9 — `sok` 은 한 환경에만 묶인다. 침묵 cross-env 는 배신이다.** 앱 정체성은 3개(`com.soksak.{dev|debug|app}`)라 소켓이 분리된다. `sok` 은 정확히 한 환경에 묶이고, 다른 환경에 절대 침묵으로 붙지 않는다. 소켓 결정 우선순위: ① `SOKSAK_SOCKET`(앱이 PTY 에 주입, 권위) > ② `--env`/`SOKSAK_ENV` > ③ argv0 접미사. env 가 정해졌는데 그 소켓이 없으면 **에러** — 대체 금지. "살아있는-1개-잡기"는 폐기한다.
 
 **P10 — install 은 멱등하고 소유권으로 범위가 정해진다.** 우리 것은 통째로 재생성, 사용자 것은 보존.
-- **완전 소유 산출물**(`soksak-control/SKILL.md`)은 전체 덮어쓰기(재생성). "AUTO-GENERATED" 헤더로 손편집 무효를 고지한다.
+- **완전 소유 산출물** — 제어 스킬은 환경별 디렉토리(`soksak/`·`soksak-dev/`·`soksak-debug/`, identity 홈당 하나)에 살고, 생성 시점에 자기 바이너리 경로와 소켓을 핀한다. 소유는 `SKILL.md` 한 파일뿐: 같은 폴더의 저작 조각 `_directives.md`는 합성 입력이고(frontmatter 는 채택하되 `name:` 은 환경 이름으로 강제, 본문은 "Project directives" 절로), `references/` 등 다른 파일은 건드리지 않는다. 설치가 identity 홈에 `skill-refresh.json` 매니페스트를 남기고, 앱은 플러그인 활성 집합이 변할 때 `sok skill refresh` 를 스폰한다 — 파일 가로채기 없는 쓰기-스루(P8).
 - **공유 파일**(`.mcp.json`/codex `config.toml`/gemini `settings.json`)은 우리 항목만 upsert, 나머지 보존. MCP 등록은 네이티브 CLI(`claude/codex/gemini mcp add`)에 위임(P7).
 
 **P11 — 이벤트 스트림은 커맨드 표면과 대칭이다.** 코어가 커맨드 표면과 대칭인 구독 표면을 소유한다 — 폴링 금지 규칙의 완성형. 허브는 Rust 싱글톤(크로스윈도우 단일진실; 항목은 단조 `seq` + epoch-ms `ts`), 소켓은 `events.subscribe` 를 transport 레벨로 처리한다(연결이 곧 스트림 — 연결 수명 = 구독 수명). `kinds` 는 서버측 필터(prefix 매칭), `since` 는 링 백필(exclusive 커서). 구독자 큐는 bounded·drop-oldest — 느린 소비자가 발행을 막지 못하고, 유실은 `seq` gap 으로 드러나 클라이언트가 `since` 재접속으로 메꾼다. 셸-리스 MCP 클라이언트는 push 대신 `activity.recent {since}` 커서 조회를 쓴다 — 요청 시점 catch-up 조회는 폴링이 아니다(결정).
@@ -108,10 +108,10 @@ soksak 의 모든 기능을 AI 에게 주는 방식의 정본 규칙. 세 가지
 - **무엇**: eager 평탄 노출을 메타툴 3개로 교체 완료. app vs `sok mcp` 경계 문서화.
 - **왜**: transport-2 — 외부 에이전트 채널. eager 노출은 P3 위반·컨텍스트 폭증 → 발견형으로 CLI 와 일관.
 
-### Skill (soksak-control)
+### Skill (soksak — 환경별 이름)
 - **사용대상**: CLI/MCP 채널을 쓰는 코딩 에이전트(claude/gemini/codex). 채널 위에서 사용법을 배움.
 - **제공기능**: 주소 모델·검증 워크플로·도메인 지도·발견 명령 안내. 명령 목록이 아니라 '발견하는 법'.
-- **제공방법**: `sok skill install` 가 **트리거 스킬**(SKILL.md, frontmatter name+description)을 쓴다 — `--claude`→`.claude/skills/soksak-control/`, `--codex`/`--gemini`→`.agents/skills/soksak-control/`(공유). 본문은 `skill_doc()` 가 라이브 도메인 지도를 파생(앱 미가동 시 코어 fallback). description 자동발동.
+- **제공방법**: `sok skill install` 가 **트리거 스킬**(SKILL.md, frontmatter name+description)을 쓴다 — `--claude`→`.claude/skills/soksak(-dev|-debug)/`, `--codex`/`--gemini`→`.agents/skills/soksak(-dev|-debug)/`(공유). 본문은 `skill_doc()` 가 라이브 도메인 지도를 파생(앱 미가동 시 코어 fallback). description 자동발동.
 - **무엇**: 정적 카탈로그 → 발견형 오리엔테이션 교체 완료. 마커-블록 폐기(구식, P5).
 - **왜**: teaching — transport 가 아니라 교육 계층. 목록을 복제하면 substrate 와 표류. 트리거 스킬은 task-scoped.
 

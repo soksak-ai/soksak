@@ -28,6 +28,7 @@ import { claimRoots } from "./state/projectRegistry";
 import { recordRecentProject } from "./state/recentProjects";
 import { useSessions } from "./state/sessions";
 import { daemonOnProjectOpen } from "./commands/catalogDaemon";
+import { initSkillRefresh } from "./state/skillRefresh";
 import {
   initWorkspacePersistence,
   respawnSavedWindows,
@@ -148,6 +149,8 @@ async function boot(): Promise<void> {
     const root = useSessions.getState().tabs.find((t) => t.id === useSessions.getState().activeId)?.root;
     if (root) void daemonOnProjectOpen(root);
   }
+  // 스킬 쓰기-스루 — 플러그인 활성 집합이 변하면 SKILL.md 를 재생성한다(P8).
+  initSkillRefresh();
   // 리스폰·첫 실행 부트스트랩은 컨트롤 플레인(main)이 소유한다 — 워크스페이스 창은 자기 복원
   // (스냅샷 또는 initRoot)만 책임지고, 그 둘 다 없으면 빈 상태(예외)로 시작한다.
   // StrictMode 비활성: dev 에서 effect 이중 실행이 플러그인 마운트/PTY spawn 을 두 번 돌려
