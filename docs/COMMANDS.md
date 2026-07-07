@@ -719,6 +719,32 @@ Show an OS desktop notification (title + body). Behaves like a push notification
 sok notify.show '{"title":"배포 완료","body":"prod 배포가 끝났습니다"}'
 ```
 
+## `orchestrator.ask`
+
+Run one natural-language turn: spawns the configured agent CLI (settings orchestratorAgent) which drives the app through single `sok` commands. Every execution born from the turn carries payload.parentId=turnId, and the turn itself is recorded as chat.prompt → command.progress deltas → chat.answer — one conversation set in the activity stream. Long-running: pass a large timeoutMs when calling over the socket. | 자연어 명령 대화 실행 오케스트레이터 물어보기 시켜줘
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `text` | string | ✓ | Natural-language instruction |
+| `window` | string |  | Stage window label for the turn (SOKSAK_WINDOW for the agent — its sok commands default there). Omit = no stage; the agent discovers windows itself. |
+
+**Returns**: { turnId, answer } — message is the agent's final answer
+**Errors**: INTERNAL, TIMEOUT
+
+```bash
+sok --window main orchestrator.ask '{"text":"열린 창을 알려줘","timeoutMs":300000}'
+```
+
+## `orchestrator.stop`
+
+Cancel the in-flight natural-language turn (kills the agent process; the set closes as CANCELLED). | 중단 멈춰 취소 턴 중지
+
+**Returns**: { stopped }
+
+```bash
+sok --window main orchestrator.stop
+```
+
 ## `panel.close`
 
 Close a panel and all its tabs. Refuses to close the last panel. | 패널 닫기 제거
@@ -852,6 +878,21 @@ Split a panel — add a new panel beside the target on a given side (optionally 
 ```bash
 sok panel.split '{"side":"right"}'
 sok panel.split '{"side":"bottom","program":"browser"}'
+```
+
+## `plugin.catalog`
+
+List the official plugin registry (the installable catalog) merged with local install state. Use to discover plugins that are not installed yet — pass the returned repo to plugin.install. | 플러그인 카탈로그 레지스트리 설치 가능 목록 마켓 검색
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `refresh` | boolean |  | Refetch the live registry before listing (default: session cache / build snapshot) |
+
+**Returns**: { status(snapshot|live|error), plugins: [{id, name, version, description, repo, branch?, installed, runtimeStatus?}] }
+
+```bash
+sok plugin.catalog
+sok plugin.catalog '{"refresh":true}'
 ```
 
 ## `plugin.conformance`
@@ -1591,7 +1632,7 @@ sok secret.unlock '{"passphrase":"correct horse battery staple"}'
 
 Retrieve all application settings. | 설정 확인 앱 조회 환경설정
 
-**Returns**: { language, projectTabPosition, iconSet, iconBox, focusIndicator, appFontFamily, appFontSize, bg }
+**Returns**: { language, projectTabPosition, iconSet, iconBox, focusIndicator, appFontFamily, appFontSize, orchestratorAgent, orchestratorModel, bg }
 
 ```bash
 sok settings.get
@@ -1599,12 +1640,12 @@ sok settings.get
 
 ## `settings.set`
 
-Change an application setting. key: language|projectTabPosition|iconSet|iconBox|focusIndicator|appFontFamily|appFontSize | 설정 변경 바꾸기 환경설정 폰트 크기 언어
+Change an application setting. key: language|projectTabPosition|iconSet|iconBox|focusIndicator|appFontFamily|appFontSize|orchestratorAgent|orchestratorModel | 설정 변경 바꾸기 환경설정 폰트 크기 언어
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `key` | string | ✓ | Setting key (language|projectTabPosition|iconSet|iconBox|focusIndicator|appFontFamily|appFontSize) |
-| `value` | json | ✓ | Value — language:ko|en, projectTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, appFontFamily:string (CSS font-family stack), appFontSize:number (6-40) |
+| `key` | string | ✓ | Setting key (language|projectTabPosition|iconSet|iconBox|focusIndicator|appFontFamily|appFontSize|orchestratorAgent|orchestratorModel) |
+| `value` | json | ✓ | Value — language:ko|en, projectTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, appFontFamily:string (CSS font-family stack), appFontSize:number (6-40), orchestratorAgent:string (agent CLI command or path the natural-language console spawns), orchestratorModel:string (--model alias for the agent; empty = CLI default) |
 
 **Returns**: { key, value }
 **Errors**: INVALID_PARAMS
@@ -1909,7 +1950,7 @@ Return the topmost DOM element at viewport x,y (tag, classes, data-* attrs, rect
 
 ## `ui.input.click`
 
-Dispatch a click event to an exposed node (E2E injection). Use to drive UI flows programmatically or in tests. Unexposed addresses return NOT_EXPOSED — no guessing. | 클릭 주입 ui클릭 버튼클릭 E2E
+Dispatch a real-click sequence (mousedown → mouseup → click) to an exposed node (E2E injection). Use to drive UI flows programmatically or in tests. Unexposed addresses return NOT_EXPOSED — no guessing. | 클릭 주입 ui클릭 버튼클릭 E2E
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -2199,7 +2240,7 @@ Bring a specific window to the front (focus it). | 창 포커스 활성화 앞�
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `label` | string |  | Window label (see window.list) |
+| `label` | string | ✓ | Window label (see window.list) |
 
 **Returns**: { ok }
 
@@ -2311,6 +2352,16 @@ Place a window at an exact frame (physical px — the window.monitors coordinate
 
 ```bash
 sok window.place '{"label":"main","x":2560,"y":0,"w":2560,"h":1440}'
+```
+
+## `window.projects`
+
+Map open windows to the project each one hosts (root path + name + window label). The meaning layer over window.list — use it first to pick the right window before targeting commands with --window. Same answer from any window (process-wide registry). | 창 프로젝트 매핑 어느 열림 창별
+
+**Returns**: { projects: [{ root, name, window }] }
+
+```bash
+sok window.projects
 ```
 
 ## `window.record`

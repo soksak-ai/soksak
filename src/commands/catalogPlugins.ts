@@ -20,6 +20,7 @@ import {
   type ViewPlacement,
 } from "../plugins/spec";
 import { usePluginSettings } from "../state/pluginSettings";
+import { useRegistry } from "../state/registry";
 import {
   depSummary,
   versionIssues,
@@ -109,6 +110,43 @@ export function registerPluginCatalog(): void {
       return {
         plugins: Object.values(s.plugins).map(serializeRuntime),
         rejected: s.rejected,
+      };
+    },
+  });
+
+  register("plugin.catalog", {
+    description:
+      "List the official plugin registry (the installable catalog) merged with local install state. Use to discover plugins that are not installed yet — pass the returned repo to plugin.install.",
+    triggers: { ko: "플러그인 카탈로그 레지스트리 설치 가능 목록 마켓 검색" },
+    params: {
+      refresh: {
+        type: "boolean",
+        description: "Refetch the live registry before listing (default: session cache / build snapshot)",
+      },
+    },
+    returns:
+      "{ status(snapshot|live|error), plugins: [{id, name, version, description, repo, branch?, installed, runtimeStatus?}] }",
+    message: (d) =>
+      tmsg("msg.plugin.catalog", { n: ((d.plugins as unknown[]) ?? []).length }),
+    examples: ["sok plugin.catalog", 'sok plugin.catalog \'{"refresh":true}\''],
+    handler: async (p) => {
+      const reg = useRegistry.getState();
+      // 기본 = 세션 1회 원격 최신화(이미 했으면 캐시), refresh=true 는 강제 재조회.
+      await reg.refresh(p.refresh === true).catch(() => {});
+      const st = useRegistry.getState();
+      const installed = usePlugins.getState().plugins;
+      return {
+        status: st.status,
+        plugins: st.entries.map((e) => ({
+          id: e.id,
+          name: e.name,
+          version: e.version,
+          description: e.description,
+          repo: e.repo,
+          ...(e.branch ? { branch: e.branch } : {}),
+          installed: e.id in installed,
+          runtimeStatus: installed[e.id]?.status ?? null,
+        })),
       };
     },
   });
