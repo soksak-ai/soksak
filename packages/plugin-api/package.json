@@ -26,7 +26,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "prepublishOnly": "node -e \"if(!/pnpm/.test(process.env.npm_config_user_agent||''))throw new Error('workspace: 의존성은 pnpm publish 로만 발행합니다 — npm publish 는 깨진 패키지를 만듭니다(0.2.0 실측)')\" && npm run build"
+    "prepublishOnly": "node -e \"if(!/pnpm/.test(process.env.npm_config_user_agent||''))throw new Error('workspace: 의존성은 pnpm publish 로만 발행합니다 — npm publish 는 깨진 패키지를 만듭니다(0.2.0 실측)')\" && pnpm run build"
   },
   "dependencies": {
     "@soksak-ai/plugin-spec": "workspace:^"
