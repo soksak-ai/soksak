@@ -399,7 +399,24 @@ fn run_help(cmd: &str) -> ExitCode {
 
 fn run_docs(core_only: bool) -> ExitCode {
     // 원천 = 코어 자동화 명령 command.docs(전체 표면 단일 반환) — CLI 는 마크다운 표현만 담당.
-    let v = match request("command.docs", Value::Null) {
+    // 플러그인 명령 스키마는 창-로컬 등록이라, 창 미지정이면 워크스페이스 창(w-*)을 자동 선택해
+    // 어느 창(오케스트레이터 포함)에서 불러도 같은 전체 레퍼런스가 나온다.
+    let window = WINDOW_OVERRIDE.get().cloned().flatten().or_else(|| {
+        request("window.list", Value::Null)
+            .ok()
+            .and_then(|v| {
+                v.get("data")
+                    .and_then(|d| d.get("labels"))
+                    .and_then(Value::as_array)
+                    .and_then(|ls| {
+                        ls.iter()
+                            .filter_map(Value::as_str)
+                            .find(|l| l.starts_with("w-"))
+                            .map(String::from)
+                    })
+            })
+    });
+    let v = match send_request("command.docs", Value::Null, None, window, None) {
         Err(e) => {
             eprintln!("{e}");
             return ExitCode::FAILURE;
@@ -412,54 +429,54 @@ fn run_docs(core_only: bool) -> ExitCode {
     println!("> 자동 생성 문서 — 원천은 `command.docs`(앱 Command Registry + 레지스트리 카탈로그).\n");
     println!("모든 명령: `sok <command> ['{{JSON}}']`. 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.\n");
     if core_only {
-        println!("코어 명령만 수록한다(--core — 리포지토리 문서용, 설치본 무관). 전체(설치 플러그인 + 레지스트리)는 `sok docs`.\n");
+        println!("코어 명령만 수록한다(--core — 리포지토리 문서용, 설치본 무관). 전체는 `sok docs`.\n");
     } else {
-        println!("코어 → 설치된 플러그인(전체 사용법) → 레지스트리 미설치(명령+설명, 설치 후 `sok help` 로 전문) 순으로 전부 수록한다.\n");
+        println!("가능한 명령 전체(코어 + 모든 플러그인)를 하나의 목록으로 수록한다.\n");
     }
-    println!("# 1. 코어 명령\n");
     for c in &core {
         println!("{}", format_command_md(c));
     }
     if core_only {
         return ExitCode::SUCCESS;
     }
-    println!("# 2. 설치된 플러그인 명령\n");
+    // 플러그인 명령 — 가능한 전체를 하나의 흐름으로. 런타임 등록 스키마가 있으면 전문을,
+    // 아니면 카탈로그 선언(제목·위험 분류)과 호출형을 수록한다. 출처 구분은 두지 않는다.
+    let mut runtime: std::collections::BTreeMap<String, &Value> = std::collections::BTreeMap::new();
     if let Some(plugins) = data.get("plugins").and_then(Value::as_object) {
-        for (pid, list) in plugins {
-            println!("## {pid}\n");
+        for list in plugins.values() {
             for c in list.as_array().map(|a| a.iter()).into_iter().flatten() {
-                println!("{}", format_command_md(c));
+                if let Some(n) = c.get("name").and_then(Value::as_str) {
+                    runtime.insert(n.to_string(), c);
+                }
             }
         }
     }
     let entries = data.get("registry").and_then(Value::as_array).cloned().unwrap_or_default();
-    println!("# 3. 레지스트리 카탈로그(미설치 포함 {}종)\n", entries.len());
-    println!("설치: `sok plugin.install '{{\"source\":\"<repo>\"}}'` → enable → `sok help plugin.<id>.<명령>` 으로 전문 조회.\n");
+    let mut printed: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for e in &entries {
         let id = e["id"].as_str().unwrap_or("?");
-        let installed = e["installed"].as_bool().unwrap_or(false);
-        let desc = e["description"]["ko"]
-            .as_str()
-            .or_else(|| e["description"]["en"].as_str())
-            .unwrap_or("");
-        let mark = if installed { " (설치됨 — 위 2절에 전문)" } else { "" };
-        println!("## {id}{mark}\n\n{desc}\n");
-        println!("- repo: {}", e["repo"].as_str().unwrap_or("?"));
-        if let Some(cmds) = e["commands"].as_array() {
-            if !cmds.is_empty() {
-                println!("- 명령 {}개:", cmds.len());
-                for c in cmds {
-                    let n = c["name"].as_str().unwrap_or("?");
-                    let t = c["title"]["ko"]
-                        .as_str()
-                        .or_else(|| c["title"]["en"].as_str())
-                        .unwrap_or("");
-                    let dg = c["danger"].as_str().map(|d| format!(" [{d}]")).unwrap_or_default();
-                    println!("  - `{n}` — {t}{dg}");
-                }
+        for c in e["commands"].as_array().map(|a| a.iter()).into_iter().flatten() {
+            let n = c["name"].as_str().unwrap_or("?");
+            let full = format!("plugin.{id}.{n}");
+            printed.insert(full.clone());
+            if let Some(spec) = runtime.get(&full) {
+                println!("{}", format_command_md(spec));
+            } else {
+                let t = c["title"]["ko"]
+                    .as_str()
+                    .or_else(|| c["title"]["en"].as_str())
+                    .unwrap_or("");
+                let dg = c["danger"].as_str().map(|d| format!(" (danger: {d})")).unwrap_or_default();
+                println!("## `{full}`\n\n{t}{dg}\n");
+                println!("```bash\nsok {full} ['{{JSON}}']\n```\n");
             }
         }
-        println!();
+    }
+    // 카탈로그 밖 런타임 명령(dev 전용 플러그인 등)도 가능한 명령이다 — 빠짐없이.
+    for (name, spec) in &runtime {
+        if !printed.contains(name) {
+            println!("{}", format_command_md(spec));
+        }
     }
     ExitCode::SUCCESS
 }
