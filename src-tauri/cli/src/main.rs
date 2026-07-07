@@ -1087,22 +1087,48 @@ fn skill_doc(env: &str, directives: Option<&str>) -> String {
 
 // 제어 스킬 한 벌 생성 — 같은 폴더의 _directives.md(저작 조각)를 합성 입력으로 읽는다.
 // 소유권은 SKILL.md 하나: 저작 조각·references/ 등 폴더의 다른 파일은 건드리지 않는다.
-fn write_control_skill(path: &Path, env: &str, shared_directives: Option<&str>) -> Result<(), String> {
-    // 저작 조각: 자기 폴더 것이 우선, 없으면 공유분(첫 대상에서 발견) — 대상 간 내용이 갈라지지 않는다.
-    let own = path
-        .parent()
-        .map(|d| d.join("_directives.md"))
-        .and_then(|p| std::fs::read_to_string(p).ok());
-    let doc = skill_doc(env, own.as_deref().or(shared_directives));
-    write_skill(path, &doc)
+// 저작 조각의 정본 위치 — 이 CLI 가 해석한 환경의 identity 홈 `skill/`(우리 영토, 환경:정본=1:1).
+// 소비자 폴더(.claude/.agents)는 순수 산출물: 지워져도 저작이 사라지지 않고 정본이 갈라질 일도 없다.
+fn canonical_skill_dir(env: &str) -> Option<PathBuf> {
+    socket_path_for_env(env)
+        .ok()
+        .and_then(|s| s.parent().map(|h| h.join("skill")))
 }
 
-// 대상 목록에서 저작 조각 정본을 찾는다 — 앞선 대상(.claude 쪽) 우선.
-fn find_directives(paths: &[PathBuf]) -> Option<String> {
-    paths
-        .iter()
-        .filter_map(|p| p.parent().map(|d| d.join("_directives.md")))
-        .find_map(|p| std::fs::read_to_string(p).ok())
+fn read_canonical_directives(env: &str) -> Option<String> {
+    canonical_skill_dir(env).and_then(|d| std::fs::read_to_string(d.join("_directives.md")).ok())
+}
+
+// 저작 부속(references/ 등) 미러 — 정본 skill/ 아래의 하위 폴더를 대상 폴더로 복사한다.
+fn mirror_dir(src: &Path, dst: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    for e in std::fs::read_dir(src).map_err(|e| e.to_string())?.flatten() {
+        let p = e.path();
+        let to = dst.join(e.file_name());
+        if p.is_dir() {
+            mirror_dir(&p, &to)?;
+        } else {
+            std::fs::copy(&p, &to).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn write_control_skill(path: &Path, env: &str, directives: Option<&str>) -> Result<(), String> {
+    let doc = skill_doc(env, directives);
+    write_skill(path, &doc)?;
+    // 정본의 부속 폴더(references/ 등)를 대상에 미러 — 스킬 본문이 상대 경로로 참조할 수 있게.
+    if let (Some(canon), Some(target_dir)) = (canonical_skill_dir(env), path.parent()) {
+        if let Ok(entries) = std::fs::read_dir(&canon) {
+            for e in entries.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    mirror_dir(&p, &target_dir.join(e.file_name()))?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 // 재생성 매니페스트 — identity 홈(소켓 곁)에 {cli, env, targets[]} 를 남긴다. 앱이 레지스트리
@@ -1154,9 +1180,9 @@ fn run_skill_refresh() -> ExitCode {
         .flatten()
         .filter_map(|t| t.as_str().map(PathBuf::from))
         .collect();
-    let shared = find_directives(&paths);
+    let directives = read_canonical_directives(&env);
     for path in &paths {
-        match write_control_skill(path, &env, shared.as_deref()) {
+        match write_control_skill(path, &env, directives.as_deref()) {
             Ok(_) => println!("✓ {}", path.display()),
             Err(e) => {
                 eprintln!("✗ {e}");
@@ -1354,13 +1380,13 @@ fn run_skill(args: &[String]) -> ExitCode {
     }
 
     let mut failed = false;
-    let shared = find_directives(&targets.iter().map(|(_, p)| p.clone()).collect::<Vec<_>>());
+    let directives = read_canonical_directives(&env);
     for (label, path) in &targets {
         // 옛 이름(soksak-control) 잔재 정리 — 발동 충돌 방지(전면 개명, 별칭 없음).
         if let Some(root) = path.parent().and_then(Path::parent) {
             let _ = std::fs::remove_dir_all(root.join("soksak-control"));
         }
-        match write_control_skill(path, &env, shared.as_deref()) {
+        match write_control_skill(path, &env, directives.as_deref()) {
             Ok(_) => println!("{label}  ✓ {}", path.display()),
             Err(e) => {
                 eprintln!("{label}  ✗ {e}");
