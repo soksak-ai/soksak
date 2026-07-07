@@ -27,17 +27,19 @@ AI·원격 클라이언트가 1급 소비자다 — 그래서 모든 명령이 �
 ## 3. 응답 봉투 (대칭)
 
 ```
-{ ok: boolean, code: string, message: string, data?: object }
+{ ok: boolean, code: string, message: string, window: string, data?: object, hint?: [{ cmd, why }] }
 ```
 
-성공·실패가 **한 형태**를 공유한다 — `data`만 선택.
+성공·실패가 **한 형태**를 공유한다 — `data`와 `hint`만 선택.
 
 | 필드 | 의미 |
 |---|---|
 | `ok` | 성공/실패 |
 | `code` | 결과 코드 — 성공 `"OK"`(또는 도메인 `CREATED`/`NOOP`/`UNCHANGED`…), 실패 닫힌 `ErrCode` 열거형. `error` 문자열 방언 폐기 |
 | `message` | 사람이 읽는 한 줄 **표준 답변**(성공·실패 모두) — 버블이 이걸 렌더. 명령이 제공하고, 코어는 추측하지 않는다 |
+| `window` | 명령이 실행된 창 라벨 — 창마다 다른 답(플러그인 목록·pane)이 스스로를 설명한다 |
 | `data` | 기계 페이로드(선택, **중첩** — 평면 스프레드 아님, 예약 봉투키와 충돌 없음) |
+| `hint` | 이어서 할 수 있는 일 최대 3개 `{ cmd, why }` — 지시가 아니라 가능성의 제시. 성공 hint 는 명령 자신의 `CommandSpec.hint(data, ctx)`가, 실패 hint 는 명령(`{ code, message }`를 받음) 또는 폴백으로 오류 코드별 표준 안내가 짓는다. 미지의 명령은 레지스트리 카탈로그와 대조해 — 미설치 플러그인의 명령이면 정확한 설치 명령으로 답한다 |
 
 `message`는 **명령이 소유한다** — 필수 `CommandSpec.message(data) => string`. 추측 계층(형태 파생)·`code` 에코 폴백은 없다(모든 명령이 자기 답을 안다). 문장은 키 테이블(i18n `msg.<이름>`)에서 `tmsg` 로 현재 언어 해소한 값이다 — 언어 추가 = 테이블 열 추가(P0). `execute`는 핸들러 반환을 봉투로 정규화한다: 예약키 분리, 나머지는 `data`에 중첩, `message`는 `spec.message(data)`.
 

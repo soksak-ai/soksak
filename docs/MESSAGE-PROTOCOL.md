@@ -27,17 +27,19 @@ Deltas fold into their turn on two layers: with `payload.parentId` they attach b
 ## 3. Response envelope (symmetric)
 
 ```
-{ ok: boolean, code: string, message: string, data?: object }
+{ ok: boolean, code: string, message: string, window: string, data?: object, hint?: [{ cmd, why }] }
 ```
 
-Success and failure share **one shape** — only `data` is optional.
+Success and failure share **one shape** — only `data` and `hint` are optional.
 
 | field | meaning |
 |---|---|
 | `ok` | success / failure |
 | `code` | result code — success `"OK"` (or domain `CREATED`/`NOOP`/`UNCHANGED`…), failure a closed `ErrCode` enum. The `error` string dialect is retired |
 | `message` | the human-readable one-line **standard answer** (success *and* failure) — the bubble renders this. The command provides it; the core does not guess |
+| `window` | the window label the command ran in — window-scoped answers (plugin lists, panes) explain themselves |
 | `data` | machine payload (optional, **nested** — no flat spread, so it never collides with the reserved envelope keys) |
+| `hint` | up to three follow-up suggestions `{ cmd, why }` — possibilities, not orders. Success hints come from the command's own `CommandSpec.hint(data, ctx)`; failure hints come from the command (receiving `{ code, message }`) or, as fallback, a standard per-error-code guide. An unknown command is matched against the registry catalog, so calling a not-installed plugin's command answers with its exact install command |
 
 `message` is **owned by the command** — the required `CommandSpec.message(data) => string`. There is no guessing layer (shape derivation) and no `code`-echo fallback: every command knows its own answer. The sentence is resolved from the keyed i18n table (`msg.<name>`) via `tmsg` in the conversation language — adding a language is one table column (P0). `execute` normalizes each handler return into the envelope: reserved keys split off, the rest nests under `data`, and `message` is `spec.message(data)`.
 

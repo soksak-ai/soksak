@@ -106,6 +106,19 @@ export function registerPluginCatalog(): void {
     }),
   });
 
+  // 플러그인 단축 이름 해소 — 기본형 문법의 단일진실. "activity" ≡ "soksak-plugin-activity".
+  // 설치본이 있으면 설치본 id, 없으면 레지스트리 항목으로 해소한다. 못 찾으면 null.
+  const resolveShortId = (raw: string): string | null => {
+    const cands = raw.startsWith("soksak-plugin-") ? [raw] : [`soksak-plugin-${raw}`, raw];
+    const installed = usePlugins.getState().plugins;
+    const entries = useRegistry.getState().entries;
+    for (const c of cands) {
+      if (installed[c] || entries.some((e) => e.id === c)) return c;
+    }
+    return null;
+  };
+  const shortName = (id: string): string => id.replace(/^soksak-plugin-/, "");
+
   // UNKNOWN_COMMAND 지능형 안내 — 미지의 명령이 레지스트리 카탈로그의 선언 명령과 일치하면
   // 원인(미설치/비활성)에 맞는 설치·활성 명령을 hint 로 제시한다. 발견→설치→활성 사이클이
   // 오류 응답에서도 이어진다(사용자 확정 2026-07-07).
@@ -119,10 +132,10 @@ export function registerPluginCatalog(): void {
       const entry = entries.find((e) => e.id === pid);
       const runtime = installed[pid];
       if (runtime && runtime.status !== "enabled") {
-        return [{ cmd: `sok plugin.enable '{"id":"${pid}"}'`, why: tmsg("hint.error.pluginDisabled", { plugin: pid }) }];
+        return [{ cmd: `sok plugin.enable ${shortName(pid)}`, why: tmsg("hint.error.pluginDisabled", { plugin: pid }) }];
       }
       if (!runtime && entry) {
-        return [{ cmd: `sok plugin.install '{"source":"${entry.repo}"}'`, why: tmsg("hint.error.pluginNotInstalled", { plugin: pid, command: sub }) }];
+        return [{ cmd: `sok plugin.install ${shortName(pid)}`, why: tmsg("hint.error.pluginNotInstalled", { plugin: pid, command: sub }) }];
       }
       return [];
     }
@@ -135,9 +148,9 @@ export function registerPluginCatalog(): void {
       if (runtime?.status === "enabled") {
         hits.push({ cmd: `sok ${full}`, why: tmsg("hint.error.pluginCommandFullName", { plugin: e.id }) });
       } else if (runtime) {
-        hits.push({ cmd: `sok plugin.enable '{"id":"${e.id}"}'`, why: tmsg("hint.error.pluginDisabled", { plugin: e.id }) });
+        hits.push({ cmd: `sok plugin.enable ${shortName(e.id)}`, why: tmsg("hint.error.pluginDisabled", { plugin: e.id }) });
       } else {
-        hits.push({ cmd: `sok plugin.install '{"source":"${e.repo}"}'`, why: tmsg("hint.error.pluginNotInstalled", { plugin: e.id, command: name }) });
+        hits.push({ cmd: `sok plugin.install ${shortName(e.id)}`, why: tmsg("hint.error.pluginNotInstalled", { plugin: e.id, command: name }) });
       }
       if (hits.length >= 3) break;
     }
@@ -271,26 +284,52 @@ export function registerPluginCatalog(): void {
 
   register("plugin.install", {
     description:
-      'Install a plugin from a git source into ~/.soksak/plugins/<id>. Accepts a "user/repo" shorthand, a full git URL, or a local path. Use when adding a new plugin for the first time.',
+      'Install a plugin into ~/.soksak/plugins/<id>. Basic form: the registry short name (sok plugin.install activity). Fine-grained: a "user/repo" shorthand, a full git URL, or a local path in {"source":...}. Use when adding a new plugin for the first time.',
     triggers: { ko: "플러그인 설치 추가 install" },
     params: {
       source: {
         type: "string",
-        description: 'GitHub "user/repo" shorthand, git URL, or local directory path',
+        description: 'Registry short name (e.g. "activity"), GitHub "user/repo" shorthand, git URL, or local directory path',
         required: true,
       },
       ref: { type: "string", description: "Branch, tag, or commit to pin" },
     },
     returns: "{ id, dir }",
     message: (d) => tmsg("msg.plugin.install", { id: String(d.id) }),
-    errors: ["INVALID_PARAMS", "INTERNAL"],
+    errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND", "INTERNAL"],
     examples: [
-      'sok plugin.install \'{"source":"user/soksak-plugin-memo"}\'',
-      'sok plugin.install \'{"source":"/path/to/repo","ref":"v1.0.0"}\'',
+      "sok plugin.install activity",
+      'sok plugin.install \'{"source":"user/repo","ref":"v1.0.0"}\'',
     ],
     danger: "destructive",
-    handler: (p) =>
-      usePlugins.getState().install(p.source as string, p.ref as string | undefined),
+    hint: (d) => {
+      // 실패: 이름을 못 찾았으면 카탈로그 탐색을 제시. 성공: 다음 단계(활성화)를 제시(B4).
+      if (d.code === "TARGET_NOT_FOUND")
+        return [{ cmd: "sok plugin.catalog", why: tmsg("hint.plugin.catalogBrowse") }];
+      if (d.code) return [];
+      return [
+        { cmd: `sok plugin.enable ${shortName(String(d.id))}`, why: tmsg("hint.plugin.enableNext") },
+      ];
+    },
+    handler: (p) => {
+      const raw = String(p.source);
+      // 기본형: 단축 이름(경로·URL·user/repo 가 아닌 순수 이름) → 레지스트리에서 repo 로 해소.
+      if (/^[a-z0-9][a-z0-9-]*$/.test(raw)) {
+        const id = resolveShortId(raw);
+        const entry = id ? useRegistry.getState().entries.find((e) => e.id === id) : undefined;
+        if (!entry) {
+          return {
+            ok: false,
+            code: "TARGET_NOT_FOUND",
+            message: tmsg("msg.plugin.install.unknownName", { name: raw }),
+          };
+        }
+        return usePlugins
+          .getState()
+          .install(entry.repo, (p.ref as string | undefined) ?? entry.branch);
+      }
+      return usePlugins.getState().install(raw, p.ref as string | undefined);
+    },
   });
 
   register("plugin.update", {
@@ -305,7 +344,7 @@ export function registerPluginCatalog(): void {
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS", "INTERNAL"],
     examples: ['sok plugin.update \'{"id":"soksak-plugin-memo"}\''],
     danger: "destructive",
-    handler: (p) => usePlugins.getState().update(p.id as string),
+    handler: (p) => usePlugins.getState().update(resolveShortId(String(p.id)) ?? String(p.id)),
   });
 
   register("plugin.remove", {
@@ -328,7 +367,7 @@ export function registerPluginCatalog(): void {
     ],
     danger: "destructive",
     handler: (p) =>
-      usePlugins.getState().remove(p.id as string, { cascade: p.cascade as boolean | undefined }),
+      usePlugins.getState().remove(resolveShortId(String(p.id)) ?? String(p.id), { cascade: p.cascade as boolean | undefined }),
   });
 
   register("plugin.deps", {
@@ -351,7 +390,7 @@ export function registerPluginCatalog(): void {
     handler: (p) => {
       const nodes = depNodes();
       if (p.id) {
-        const summary = depSummary(p.id as string, nodes);
+        const summary = depSummary(resolveShortId(String(p.id)) ?? String(p.id), nodes);
         if (!summary) return notFound(`플러그인 없음: ${p.id}`);
         return { ok: true as const, summary };
       }
@@ -369,9 +408,12 @@ export function registerPluginCatalog(): void {
     returns: "{ id, status }",
     message: (d) => tmsg("msg.plugin.enable", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND", "CONSENT_REQUIRED", "INTERNAL"],
-    examples: ['sok plugin.enable \'{"id":"soksak-plugin-memo"}\''],
+    examples: ["sok plugin.enable memo", 'sok plugin.enable \'{"id":"soksak-plugin-memo"}\''],
     danger: "inject",
-    handler: (p) => usePlugins.getState().enable(p.id as string),
+    handler: (p) => {
+      const id = resolveShortId(String(p.id)) ?? String(p.id);
+      return usePlugins.getState().enable(id);
+    },
   });
 
   register("plugin.disable", {
@@ -386,7 +428,7 @@ export function registerPluginCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok plugin.disable \'{"id":"soksak-plugin-memo"}\''],
     danger: "destructive",
-    handler: (p) => usePlugins.getState().disable(p.id as string),
+    handler: (p) => usePlugins.getState().disable(resolveShortId(String(p.id)) ?? String(p.id)),
   });
 
   register("plugin.consent.summary", {
@@ -400,7 +442,7 @@ export function registerPluginCatalog(): void {
     examples: ['sok plugin.consent.summary \'{"id":"soksak-plugin-acp-orchestra"}\''],
     handler: (p) => {
       const s = usePlugins.getState();
-      const plug = s.plugins[p.id as string];
+      const plug = s.plugins[resolveShortId(String(p.id)) ?? String(p.id)];
       if (!plug) return notFound(`플러그인 없음: ${p.id}`);
       return consentSummary(plug.manifest, s.plugins);
     },
@@ -416,7 +458,7 @@ export function registerPluginCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok plugin.consent.revoke \'{"id":"soksak-plugin-acp-core"}\''],
     danger: "destructive",
-    handler: (p) => usePlugins.getState().revokeConsent(p.id as string),
+    handler: (p) => usePlugins.getState().revokeConsent(resolveShortId(String(p.id)) ?? String(p.id)),
   });
 
   register("plugin.consent.chain", {
@@ -433,8 +475,9 @@ export function registerPluginCatalog(): void {
     examples: ['sok plugin.consent.chain \'{"id":"soksak-plugin-acp-studio"}\''],
     handler: (p) => {
       const s = usePlugins.getState();
-      if (!s.plugins[p.id as string]) return notFound(`플러그인 없음: ${p.id}`);
-      return { id: p.id, pending: pendingConsentChain(p.id as string, s.plugins, s.consents) };
+      const pid = resolveShortId(String(p.id)) ?? String(p.id);
+      if (!s.plugins[pid]) return notFound(`플러그인 없음: ${pid}`);
+      return { id: pid, pending: pendingConsentChain(pid, s.plugins, s.consents) };
     },
   });
 

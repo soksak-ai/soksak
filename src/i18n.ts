@@ -441,6 +441,9 @@ const ko = {
   "hint.error.pluginNotInstalled": "{plugin} 플러그인의 명령입니다 — 설치하면 {command} 명령을 사용할 수 있습니다",
   "hint.error.pluginDisabled": "{plugin} 플러그인이 설치되어 있지만 활성화되지 않았습니다 — 활성화하면 명령이 등록됩니다",
   "hint.error.pluginCommandFullName": "플러그인 명령은 전체 이름으로 호출합니다 — 이 명령은 {plugin} 소속입니다",
+  "hint.plugin.catalogBrowse": "plugin.catalog 로 설치 가능한 플러그인 전체를 살펴볼 수 있습니다",
+  "hint.plugin.enableNext": "설치되었습니다 — 활성화하면 명령이 등록됩니다",
+  "msg.plugin.install.unknownName": "레지스트리에 없는 이름: {name}",
 
   // 명령 답변(message, MESSAGE-PROTOCOL §3) — tmsg 로 해소. 언어 추가 = 이 블록 1장(P0).
   "msg.activity.recent": "활동 {n}개",
@@ -1092,6 +1095,9 @@ const en: Record<MsgKey, string> = {
   "hint.error.pluginNotInstalled": "This command belongs to the {plugin} plugin, which is not installed — installing it makes {command} available",
   "hint.error.pluginDisabled": "The {plugin} plugin is installed but not enabled — enabling it registers its commands",
   "hint.error.pluginCommandFullName": "Plugin commands use their full name — this one belongs to {plugin}",
+  "hint.plugin.catalogBrowse": "You can browse every installable plugin with plugin.catalog",
+  "hint.plugin.enableNext": "Installed — enabling it registers its commands",
+  "msg.plugin.install.unknownName": "Not a registry name: {name}",
 
   // 명령 답변(message, MESSAGE-PROTOCOL §3) — tmsg 로 해소. 언어 추가 = 이 블록 1장(P0).
   "msg.activity.recent": "{n} activity entries",

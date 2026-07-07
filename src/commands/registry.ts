@@ -326,6 +326,19 @@ async function executeInner(
   if (!spec) {
     return { ok: false, code: "UNKNOWN_COMMAND", message: `알 수 없는 명령: ${name}` };
   }
+  // 기본형 문법 — CLI 가 JSON 아닌 단일 값을 {"_": 값} 으로 보낸다(sok plugin.install activity).
+  // 스펙이 진실이므로 해석은 여기 한 곳: 필수 매개변수가 정확히 하나일 때 그 이름으로 옮긴다.
+  // 둘 이상이거나 없으면 그대로 두어 validate 가 INVALID_PARAMS 로 도움말을 안내하게 한다.
+  if (params && Object.keys(params).length === 1 && "_" in params) {
+    const required = Object.entries(spec.params).filter(([, v]) => v.required);
+    if (required.length === 1) {
+      const [key, ps] = required[0];
+      let v: unknown = params._;
+      if (ps.type === "number") v = Number(v);
+      else if (ps.type === "boolean") v = v === true || v === "true";
+      params = { [key]: v };
+    }
+  }
   const invalid = validate(spec, params);
   if (invalid) return { ok: false, code: "INVALID_PARAMS", message: invalid };
   // 권한 게이트: 원격(AI/CLI) 호출에서 위험 명령은 정책 확인. UI(사람) 호출은 면제.
@@ -401,9 +414,21 @@ function withCommonFields(out: CommandOutcome, name: string, ctx: CommandContext
       }
     }
   } else {
-    // 실패 hint 는 오류 코드별 표준 안내 — 받은 쪽이 스스로 진단·회복할 길을 연다.
-    const std = standardErrorHints(out.code, name);
-    if (std) out.hint = std;
+    // 실패 hint 도 명령 자신이 먼저 짓는다(spec.hint 가 {code,message} 를 받아 원인별 안내 가능).
+    // 명령이 비우거나 던지면 오류 코드별 표준 안내로 돌아간다 — 받은 쪽이 스스로 회복할 길을 연다.
+    const spec = registry.get(name);
+    if (spec?.hint) {
+      try {
+        const own = spec.hint({ code: out.code, message: out.message }, ctx).slice(0, 3);
+        if (own.length) out.hint = own;
+      } catch {
+        /* 제시의 실패가 진단을 막지 않는다 */
+      }
+    }
+    if (!out.hint) {
+      const std = standardErrorHints(out.code, name);
+      if (std) out.hint = std;
+    }
   }
   return out;
 }

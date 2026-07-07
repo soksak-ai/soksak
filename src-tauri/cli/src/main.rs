@@ -3,7 +3,7 @@
 // 앱의 Command Registry 가 단일 진실이며, 이 CLI 는 전송 + 매뉴얼 포맷터일 뿐이다.
 //
 // 사용:
-//   sok <command> ['{"k":"v"}']   # 예: sok panel.split '{"side":"right"}'
+//   sok <command> [값 | '{"k":"v"}']   # 기본형: sok plugin.install activity / 세밀: JSON
 //   sok commands                  # 전체 카탈로그(JSON)
 //   sok help <command>            # 단일 명령 매뉴얼
 //   sok docs                      # 전체 매뉴얼 마크다운(stdout)
@@ -59,6 +59,11 @@ fn main() -> ExitCode {
         Some(method) => {
             let params = match args.get(1) {
                 None => Value::Null,
+                // 기본형 문법: JSON 이 아닌 단일 값은 {"_": 값} 으로 보낸다 — 코어가 스펙의
+                // 유일한 필수 매개변수로 해석한다(예: sok plugin.install activity).
+                Some(raw) if !raw.trim_start().starts_with(['{', '[']) => {
+                    serde_json::json!({ "_": raw })
+                }
                 Some(raw) => match serde_json::from_str::<Value>(raw) {
                     Ok(v) => v,
                     Err(e) => {
@@ -77,7 +82,8 @@ fn print_usage() {
         "sok — soksak 원격 제어 CLI
 
 사용:
-  sok <command> ['{{JSON params}}']    명령 실행 (예: sok panel.split '{{\"side\":\"right\"}}')
+  sok <command> [값 | '{{JSON}}']      명령 실행 — 값 하나면 유일한 필수 매개변수로 전달
+                                       (기본형: sok plugin.install activity)
   sok state.tree                      전체 구조(주소록): 모든 id + 패널 rect
   sok commands                        전체 명령 카탈로그(JSON)
   sok help <command>                  단일 명령 매뉴얼
@@ -448,7 +454,7 @@ fn run_docs(core_only: bool, format: &str, lang: &str) -> ExitCode {
     let core = data.get("core").and_then(Value::as_array).cloned().unwrap_or_default();
     println!("# soksak 명령 레퍼런스\n");
     println!("> 자동 생성 문서 — 원천은 `command.docs`(앱 Command Registry + 레지스트리 카탈로그).\n");
-    println!("모든 명령: `sok <command> ['{{JSON}}']`. 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.\n");
+    println!("모든 명령: `sok <command> [값 | '{{JSON}}']` — 값 하나는 유일한 필수 매개변수로 전달(기본형). 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.\n");
     if core_only {
         println!("코어 명령만 수록한다(--core — 리포지토리 문서용, 설치본 무관). 전체는 `sok docs`.\n");
     } else {

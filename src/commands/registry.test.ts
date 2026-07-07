@@ -469,3 +469,48 @@ describe("UNKNOWN_COMMAND 지능형 해석기 주입점", () => {
     setUnknownCommandResolver(() => []);
   });
 });
+
+describe("기본형 문법 — 위치 인자 {_} 해석", () => {
+  it("필수 매개변수가 하나면 그 이름으로 옮긴다(형 변환 포함)", async () => {
+    register(TEST_PREFIX + "pos1", {
+      description: "positional",
+      params: {
+        who: { type: "string", description: "", required: true },
+        extra: { type: "string", description: "" },
+      },
+      returns: "{}",
+      message: () => "",
+      handler: (p) => ({ got: p.who }),
+    });
+    const r = await execute(TEST_PREFIX + "pos1", { _: "activity" }, {});
+    expect(r).toMatchObject({ ok: true, data: { got: "activity" } });
+
+    register(TEST_PREFIX + "pos2", {
+      description: "positional number",
+      params: { n: { type: "number", description: "", required: true } },
+      returns: "{}",
+      message: () => "",
+      handler: (p) => ({ got: p.n }),
+    });
+    const r2 = await execute(TEST_PREFIX + "pos2", { _: "42" }, {});
+    expect(r2).toMatchObject({ ok: true, data: { got: 42 } });
+  });
+
+  it("필수 매개변수가 둘이면 그대로 INVALID_PARAMS(도움말 hint)", async () => {
+    register(TEST_PREFIX + "pos3", {
+      description: "two required",
+      params: {
+        a: { type: "string", description: "", required: true },
+        b: { type: "string", description: "", required: true },
+      },
+      returns: "{}",
+      message: () => "",
+      handler: () => ({}),
+    });
+    const r = await execute(TEST_PREFIX + "pos3", { _: "x" }, {});
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("INVALID_PARAMS");
+    expect(r.hint?.[0].cmd).toContain("sok help");
+  });
+});
+
