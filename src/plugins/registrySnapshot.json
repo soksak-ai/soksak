@@ -356,6 +356,13 @@
           }
         },
         {
+          "name": "gc",
+          "title": {
+            "ko": "잔존 child 회수",
+            "en": "Reclaim leftover engine children"
+          }
+        },
+        {
           "name": "navigate",
           "title": {
             "ko": "URL 이동",
