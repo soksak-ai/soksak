@@ -125,6 +125,12 @@ export function registerPluginCatalog(): void {
   setUnknownCommandResolver((name): CommandHint[] => {
     const entries = useRegistry.getState().entries;
     const installed = usePlugins.getState().plugins;
+    // 제어판(main)은 플러그인을 로드하지 않는다 — 여기서 플러그인 명령이 미지인 것은 설치
+    // 문제가 아니라 창 문제다. 설치 안내는 오진(실측: 외부 에이전트가 재시도 반복).
+    const controlPlane = currentWindowLabel() === "main";
+    const controlPlaneHint = (): CommandHint[] => [
+      { cmd: "sok window.projects", why: tmsg("hint.error.pluginControlPlane") },
+    ];
     // 형태 ①: plugin.<플러그인 id>.<명령> — id 로 직접 판별.
     const m = /^plugin\.(soksak-plugin-[a-z0-9-]+)\.(.+)$/.exec(name);
     if (m) {
@@ -134,6 +140,7 @@ export function registerPluginCatalog(): void {
       if (runtime && runtime.status !== "enabled") {
         return [{ cmd: `sok plugin.enable ${shortName(pid)}`, why: tmsg("hint.error.pluginDisabled", { plugin: pid }) }];
       }
+      if (entry && controlPlane) return controlPlaneHint();
       if (!runtime && entry) {
         return [{ cmd: `sok plugin.install ${shortName(pid)}`, why: tmsg("hint.error.pluginNotInstalled", { plugin: pid, command: sub }) }];
       }
@@ -143,6 +150,7 @@ export function registerPluginCatalog(): void {
     const hits: CommandHint[] = [];
     for (const e of entries) {
       if (!e.commands?.some((c) => c.name === name)) continue;
+      if (controlPlane) return controlPlaneHint();
       const runtime = installed[e.id];
       const full = `plugin.${e.id}.${name}`;
       if (runtime?.status === "enabled") {
