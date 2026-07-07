@@ -20,10 +20,11 @@ use std::sync::OnceLock;
 
 use serde_json::{json, Value};
 
-fn main() -> ExitCode {
+/// CLI 본체 — 이름별 실물 바이너리(sok/sok-dev/sok-debug)가 자기 기본 환경을 컴파일 타임에
+/// 넘긴다. 링크·복사·argv0 추론 없이, 이름은 곧 빌드 산출물이다(P9).
+pub fn run(default_env: &'static str) -> ExitCode {
+    let _ = DEFAULT_ENV.set(default_env);
     let mut args: Vec<String> = std::env::args().skip(1).collect();
-    // 전역 --env 추출(환경 묶임 P9). 명령 파싱 전에 제거 → 위치 인자 구조 보존.
-    let _ = ENV_OVERRIDE.set(take_flag_value(&mut args, "--env"));
     // 전역 --window 추출 — env(SOKSAK_WINDOW)보다 우선하는 창 명시 타겟. AI 에이전트는 셸 권한이
     // `sok …` prefix 로만 열리므로(env 프리픽스 불가) 플래그가 유일한 창 지정 수단이다.
     let _ = WINDOW_OVERRIDE.set(take_flag_value(&mut args, "--window"));
@@ -93,7 +94,7 @@ fn print_usage() {
   sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]   (환경별 스킬: soksak(-dev|-debug))
                                       AI 에이전트 트리거 스킬 설치(soksak 제어법)
   sok skill print                     라이브 SKILL.md 를 stdout 으로(프롬프트 재료)
-  sok mcp install [--claude|--codex|--gemini|--all] [--env dev|debug|app]
+  sok mcp install [--claude|--codex|--gemini|--all]
                                       MCP 서버 등록(네이티브 mcp add, SOKSAK_SOCKET 핀)
 
 컨텍스트:
@@ -117,22 +118,17 @@ fn print_usage() {
 // (sok-dev→dev, sok-debug→debug, sok→app). env 가 정해지면 그 소켓만 — 없으면 에러(다른 env 대체 금지).
 // "살아있는-1개-잡기" 는 폐기(어느 env 든 말없이 잡던 배신 지점).
 
-// --env 전역 플래그(있으면). main 이 1회 설정.
-static ENV_OVERRIDE: OnceLock<Option<String>> = OnceLock::new();
+/// 바이너리에 컴파일된 환경 — 이름이 곧 정체성이다. 사람이 바꾸는 채널(--env/SOKSAK_ENV)은 없다.
+/// 유일한 상위 권위는 앱이 자기 PTY 에 주입한 SOKSAK_SOCKET(호스트 앱의 소켓)뿐이다.
+static DEFAULT_ENV: OnceLock<&'static str> = OnceLock::new();
+fn default_env() -> &'static str {
+    DEFAULT_ENV.get().copied().unwrap_or("app")
+}
 // --window 전역 플래그(있으면). main 이 1회 설정 — send_request 의 창 해소에서 env 보다 우선.
 static WINDOW_OVERRIDE: OnceLock<Option<String>> = OnceLock::new();
 
 // argv0 basename → 기본 env 토큰. busybox 패턴: 설치명이 곧 환경.
-fn env_from_prog(prog: &str) -> &'static str {
-    let base = prog.rsplit(['/', '\\']).next().unwrap_or(prog);
-    if base.ends_with("-dev") {
-        "dev"
-    } else if base.ends_with("-debug") {
-        "debug"
-    } else {
-        "app"
-    }
-}
+
 
 // env 토큰 검증(dev|debug|app 만). 그 외는 에러.
 fn validate_env(env: &str) -> Result<&str, String> {
@@ -173,32 +169,16 @@ enum SockTarget {
     Env(String),
 }
 
-fn resolve_target(
-    soksak_socket: Option<String>,
-    env_flag: Option<String>,
-    soksak_env: Option<String>,
-    prog: &str,
-) -> SockTarget {
+fn resolve_target(soksak_socket: Option<String>) -> SockTarget {
     if let Some(p) = soksak_socket.filter(|s| !s.is_empty()) {
         return SockTarget::Explicit(p);
     }
-    if let Some(e) = env_flag.filter(|s| !s.is_empty()) {
-        return SockTarget::Env(e);
-    }
-    if let Some(e) = soksak_env.filter(|s| !s.is_empty()) {
-        return SockTarget::Env(e);
-    }
-    SockTarget::Env(env_from_prog(prog).to_string())
+    SockTarget::Env(default_env().to_string())
 }
 
 // 묶인 환경의 소켓 경로. env 가 정해졌으면 그 소켓만 — 살아있지 않으면 에러(다른 env 로 대체 안 함).
 fn resolve_socket() -> Result<PathBuf, String> {
-    let target = resolve_target(
-        std::env::var("SOKSAK_SOCKET").ok(),
-        ENV_OVERRIDE.get().cloned().flatten(),
-        std::env::var("SOKSAK_ENV").ok(),
-        &std::env::args().next().unwrap_or_default(),
-    );
+    let target = resolve_target(std::env::var("SOKSAK_SOCKET").ok());
     match target {
         SockTarget::Explicit(p) => Ok(PathBuf::from(p)),
         SockTarget::Env(env) => {
@@ -207,7 +187,7 @@ fn resolve_socket() -> Result<PathBuf, String> {
                 Ok(path)
             } else {
                 Err(format!(
-                    "soksak({env}) 미실행 — 소켓 없음: {}\n다른 환경은 SOKSAK_ENV=dev|debug|app 또는 설치명(sok-dev) 으로 지정.",
+                    "soksak({env}) 미실행 — 소켓 없음: {}\n다른 환경은 그 이름의 바이너리(sok / sok-dev / sok-debug)로 호출하십시오.",
                     path.display()
                 ))
             }
@@ -719,17 +699,9 @@ fn run_mcp() -> ExitCode {
 // 네이티브 CLI(`<tool> mcp add`)를 셸아웃 — 각 도구가 자기 config 포맷·병합·멱등을 소유(P7·P10).
 // 우리가 TOML/JSON 직접 병합하면 사용자 config 손상 위험. env SOKSAK_SOCKET 핀 = 환경 묶임(P9) 일관.
 
-// 설치 핀 환경(ENV_OVERRIDE=--env > SOKSAK_ENV > argv0). SOKSAK_SOCKET 절대경로는 핀 대상 아님(env 토큰 필요).
+// 설치 핀 환경 = 이 바이너리의 컴파일 환경. 환경은 정체성이라 다른 채널이 없다(P9).
 fn pin_env() -> Result<String, String> {
-    let e = ENV_OVERRIDE
-        .get()
-        .cloned()
-        .flatten()
-        .or_else(|| std::env::var("SOKSAK_ENV").ok().filter(|s| !s.is_empty()))
-        .unwrap_or_else(|| {
-            env_from_prog(&std::env::args().next().unwrap_or_default()).to_string()
-        });
-    validate_env(&e).map(String::from)
+    validate_env(default_env()).map(String::from)
 }
 
 // env 토큰 → MCP 서버 이름(클라이언트에서 세 환경 공존). app→soksak, dev→soksak-dev, debug→soksak-debug.
@@ -783,7 +755,7 @@ fn run_mcp_install(args: &[String]) -> ExitCode {
             }
             other => {
                 eprintln!("알 수 없는 옵션: {other}");
-                eprintln!("사용: sok mcp install [--claude|--codex|--gemini|--all] [--env dev|debug|app]");
+                eprintln!("사용: sok mcp install [--claude|--codex|--gemini|--all]");
                 return ExitCode::FAILURE;
             }
         }
@@ -899,11 +871,7 @@ fn env_pin_block(env: &str) -> String {
     let sock = socket_path_for_env(env)
         .map(|p| p.display().to_string())
         .unwrap_or_default();
-    let pinned = if exe.ends_with("/sok") || exe.ends_with("\\sok") {
-        format!("SOKSAK_ENV={env} {exe}")
-    } else {
-        exe
-    };
+    let pinned = exe; // 이름별 실물 바이너리 — 환경은 컴파일 고정이라 프리픽스가 없다.
     format!(
         "## This environment (pinned at generation)\n\n\
          - Environment: **{env}** — socket `{sock}`\n\
@@ -1425,12 +1393,11 @@ mod tests {
         assert_eq!(skill_frontmatter_name("---\nname: ../evil\n---\n"), None);
     }
 
-    // argv0 접미사 → env 토큰(busybox 디스패치). 경로 접두 무시.
+    // 기본 환경은 이름별 실물 바이너리가 컴파일 타임에 주입한다(P9) — argv0 추론은 폐기.
     #[test]
-    fn argv0_maps_to_env() {
-        assert_eq!(env_from_prog("sok"), "app");
-        assert_eq!(env_from_prog("/usr/local/bin/sok"), "app");
-        assert_eq!(env_from_prog("sok-dev"), "dev");
+    fn 기본_환경은_컴파일_타임_주입이다() {
+        let _ = DEFAULT_ENV.set("debug");
+        assert_eq!(default_env(), "debug");
     }
 
     #[test]
@@ -1444,9 +1411,6 @@ mod tests {
         let (fm2, body2) = split_directives("frontmatter 없는 본문");
         assert!(fm2.is_none());
         assert_eq!(body2, "frontmatter 없는 본문");
-        assert_eq!(env_from_prog("/path/to/sok-dev"), "dev");
-        assert_eq!(env_from_prog("sok-debug"), "debug");
-        assert_eq!(env_from_prog("target/debug/sok-debug"), "debug");
     }
 
     // env 토큰 검증 — dev|debug|app 만.
@@ -1470,31 +1434,21 @@ mod tests {
 
     // 소켓 타겟 우선순위: SOKSAK_SOCKET > --env > SOKSAK_ENV > argv0.
     #[test]
-    fn resolve_priority() {
-        // SOKSAK_SOCKET(명시 경로) 최우선.
-        match resolve_target(Some("/x.sock".into()), Some("dev".into()), Some("debug".into()), "sok-dev") {
+    fn 환경은_정체성이다() {
+        // 앱이 주입한 SOKSAK_SOCKET 만이 상위 권위 — 그 외 어떤 채널도 없다.
+        match resolve_target(Some("/x.sock".into())) {
             SockTarget::Explicit(p) => assert_eq!(p, "/x.sock"),
-            _ => panic!("SOKSAK_SOCKET 이 최우선이어야"),
+            _ => panic!("앱 주입 소켓이 권위여야"),
         }
-        // --env 가 SOKSAK_ENV·argv0 보다 우선.
-        match resolve_target(None, Some("dev".into()), Some("debug".into()), "sok-debug") {
-            SockTarget::Env(e) => assert_eq!(e, "dev"),
-            _ => panic!("--env 우선이어야"),
+        // 주입이 없으면 컴파일된 자기 환경(테스트 프로세스의 설정값).
+        match resolve_target(None) {
+            SockTarget::Env(e) => assert_eq!(e, default_env()),
+            _ => panic!("컴파일 환경이어야"),
         }
-        // SOKSAK_ENV 가 argv0 보다 우선.
-        match resolve_target(None, None, Some("debug".into()), "sok-dev") {
-            SockTarget::Env(e) => assert_eq!(e, "debug"),
-            _ => panic!("SOKSAK_ENV 우선이어야"),
-        }
-        // 아무것도 없으면 argv0 가 결정.
-        match resolve_target(None, None, None, "sok-dev") {
-            SockTarget::Env(e) => assert_eq!(e, "dev"),
-            _ => panic!("argv0 fallback 이어야"),
-        }
-        // 빈 문자열은 무시(설정 안 된 것으로 취급).
-        match resolve_target(Some(String::new()), Some(String::new()), None, "sok") {
-            SockTarget::Env(e) => assert_eq!(e, "app"),
-            _ => panic!("빈 값 무시 후 argv0 여야"),
+        // 빈 문자열 주입은 무시.
+        match resolve_target(Some(String::new())) {
+            SockTarget::Env(e) => assert_eq!(e, default_env()),
+            _ => panic!("빈 값 무시여야"),
         }
     }
 

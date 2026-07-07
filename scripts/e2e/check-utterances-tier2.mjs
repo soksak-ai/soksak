@@ -5,7 +5,7 @@
 // browser.open 발동 안 함), negative=NONE.
 //
 // 비결정적(실모델) → CI 하드 게이트 아님. pass-rate 로 본다. 토큰 소비.
-// 사용: SOKSAK_ENV=dev node scripts/e2e/check-utterances-tier2.mjs [--only pin,browser]
+// 사용: E2E_IDENTITY=dev node scripts/e2e/check-utterances-tier2.mjs [--only pin,browser]
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -14,13 +14,13 @@ import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SOK = join(here, "../../src-tauri/target/release/sok");
-const ENV = process.env.SOKSAK_ENV || "dev";
+const ENV = process.env.E2E_IDENTITY || "dev";
 const onlyArg = process.argv.indexOf("--only");
 const only = onlyArg !== -1 ? process.argv[onlyArg + 1].split(",") : null;
 
 function catalogText() {
   const out = execFileSync(SOK, ["commands"], {
-    env: { ...process.env, SOKSAK_ENV: ENV },
+    env: process.env,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });

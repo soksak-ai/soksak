@@ -69,7 +69,7 @@ soksak 의 모든 기능을 AI 에게 주는 방식의 정본 규칙. 세 가지
 
 **P8 — 교육 문서 전달은 채널로만. 파일시스템을 가로채지 마라.** 라이브 문서는 (a) MCP resource(`resources/read soksak://skill` stdio 서빙) 또는 (b) write-through 실파일(레지스트리 변경 시 재생성)로 전달한다. FUSE/유저스페이스 파일시스템 가로채기는 금지 — kext 마찰·플랫폼별 드라이버로 멀티플랫폼이 깨지고, "실재 안 하는 경로를 서버가 만든 내용으로 연다"는 트릭은 채택하지 않는다. 두 경로 모두 `sok commands`(P1)에서 파생하고 mac/linux/windows 동일하게 동작한다.
 
-**P9 — `sok` 은 한 환경에만 묶인다. 침묵 cross-env 는 배신이다.** 앱 정체성은 3개(`com.soksak.{dev|debug|app}`)라 소켓이 분리된다. `sok` 은 정확히 한 환경에 묶이고, 다른 환경에 절대 침묵으로 붙지 않는다. 소켓 결정 우선순위: ① `SOKSAK_SOCKET`(앱이 PTY 에 주입, 권위) > ② `--env`/`SOKSAK_ENV` > ③ argv0 접미사. env 가 정해졌는데 그 소켓이 없으면 **에러** — 대체 금지. "살아있는-1개-잡기"는 폐기한다.
+**P9 — 환경은 바이너리의 정체성이다. 침묵 cross-env 는 배신이다.** 앱 정체성은 3개(`com.soksak.{dev|debug|app}`)로 소켓이 분리되고, CLI 도 한 크레이트에서 함께 빌드되는 **실물 바이너리 3개**다(`sok`→app, `sok-dev`→dev, `sok-debug`→debug — 공용 lib 위의 작은 진입점이라 낡을 수 없고, 이름 기제 자체에 링크·복사가 없다(PATH 설치는 같은 이름의 실물을 심링크로 노출할 수 있다 — 제조가 아니라 노출)). 각 바이너리의 환경은 컴파일 시점에 고정된다: **사람이 바꾸는 채널은 없다**(`--env`·`SOKSAK_ENV` 폐지 — 그것이 곧 배신 통로였다). 유일한 상위 권위는 앱이 자기 PTY 에 주입하는 `SOKSAK_SOCKET`(호스트 앱의 기계적 선언)뿐이다. 그 바이너리의 환경이 미실행이면 **에러** — 대체는 없다. 다른 환경은 그 환경의 바이너리로 호출한다.
 
 **P10 — install 은 멱등하고 소유권으로 범위가 정해진다.** 우리 것은 통째로 재생성, 사용자 것은 보존.
 - **완전 소유 산출물** — 제어 스킬은 환경별 디렉토리(`soksak/`·`soksak-dev/`·`soksak-debug/`, identity 홈당 하나)에 살고, 생성 시점에 자기 바이너리 경로와 소켓을 핀한다. 대상 디렉토리는 순수 산출물로 전체 재생성된다. 저작 본문과 부속은 소스다 — 코어 레포 `src-tauri/cli/skill/`(BODY.md·references/)에 살고 CLI 에 내장(`include_str!`)되어 install/refresh 때 산출된다. 개명·표면 변화가 코드와 같은 커밋으로 함께 훑는다. 생성기가 frontmatter `name:` 을 환경 이름으로 강제하고 description 끝에 환경 문장을 잇는다. 본문은 "Working style (authored)" 절로 실린다. 설치가 identity 홈에 `skill-refresh.json` 매니페스트를 남기고, 앱은 플러그인 활성 집합이 변할 때 `sok skill refresh` 를 스폰한다 — 파일 가로채기 없는 쓰기-스루(P8).

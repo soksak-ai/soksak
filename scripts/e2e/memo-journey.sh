@@ -5,7 +5,7 @@
 #
 # 여정: 제어판(main)에서 project.open → 전용 창 라우팅 → 그 창에서 layout.apply(dev)
 #       → 데몬 등록(daemon.add)·기동(daemon.start)·로그(daemon.logs) → 스냅샷 확인.
-# 사용: SOKSAK_ENV=debug scripts/e2e/memo-journey.sh   (앱 실행 중이어야 한다)
+# 사용: scripts/e2e/memo-journey.sh   (debug 앱 실행 중이어야 한다 — sok-debug 이름 바이너리 사용)
 set -euo pipefail
 
 SOK="${SOK:-src-tauri/target/debug/sok-debug}"

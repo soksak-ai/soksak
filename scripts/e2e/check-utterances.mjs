@@ -6,7 +6,7 @@
 //
 // 이건 lexical 게이트(싸고 결정적). 실제 모델 라우팅(특히 ja·negative)은 Tier2(실모델) 몫.
 //
-// 사용: SOKSAK_ENV=dev node scripts/e2e/check-utterances.mjs [--sok <path>]
+// 사용: E2E_IDENTITY=dev node scripts/e2e/check-utterances.mjs [--sok <path>]
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -19,11 +19,11 @@ const SOK =
   sokArg !== -1
     ? process.argv[sokArg + 1]
     : join(here, "../../src-tauri/target/release/sok");
-const ENV = process.env.SOKSAK_ENV || "dev";
+const ENV = process.env.E2E_IDENTITY || "dev";
 
 function sokCommands() {
   const out = execFileSync(SOK, ["commands"], {
-    env: { ...process.env, SOKSAK_ENV: ENV },
+    env: process.env,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });

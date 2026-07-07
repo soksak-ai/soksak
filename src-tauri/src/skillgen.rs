@@ -12,10 +12,9 @@ pub fn skill_refresh_spawn() -> Result<bool, String> {
     };
     let v: serde_json::Value = serde_json::from_str(&txt).map_err(|e| e.to_string())?;
     let cli = v["cli"].as_str().ok_or("매니페스트에 cli 없음")?;
-    let env = v["env"].as_str().unwrap_or("app");
+    // 환경은 바이너리의 정체성(P9) — 매니페스트의 cli 가 이름별 실물이라 환경 전달이 없다.
     Command::new(cli)
         .args(["skill", "refresh"])
-        .env("SOKSAK_ENV", env)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

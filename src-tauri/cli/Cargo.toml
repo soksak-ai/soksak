@@ -5,9 +5,7 @@ name = "sok"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "sok"
-path = "src/main.rs"
+# 이름별 실물 바이너리 3개(src/bin/) — 공용 본체는 lib(src/lib.rs). 링크·복사 없음(P9).
 
 [dependencies]
 serde_json = "1"

@@ -62,16 +62,14 @@ run-debug: ## 디버그 soksak-debug.app 실행(새 인스턴스)
 
 # CLI 는 앱과 환경 짝으로 빌드된다(busybox 패턴 — 1 소스 바이너리, 설치명이 곧 환경: argv0 디스패치).
 # release→sok / debug 프로파일→sok-dev·sok-debug. cp 로 환경명 사본 생성(앱과 함께 빌드, 사용자 지시).
-cli: ## sok CLI 빌드(릴리스) → target/release/sok
-	cd src-tauri && cargo build --release -p sok
+cli: ## sok CLI(release 환경) — 빌드가 환경을 선택한다: 이 빌드는 sok 하나를 떨군다(P9)
+	cd src-tauri && cargo build --release -p sok --bin sok
 
-cli-dev: ## sok-dev 빌드(debug 프로파일, argv0=dev) → target/debug/sok-dev
-	cd src-tauri && cargo build -p sok
-	cp -f src-tauri/target/debug/sok src-tauri/target/debug/sok-dev
+cli-dev: ## sok-dev CLI(dev 환경, debug 프로파일) — 이 빌드는 sok-dev 하나를 떨군다(P9)
+	cd src-tauri && cargo build -p sok --bin sok-dev
 
-cli-debug: ## sok-debug 빌드(debug 프로파일, argv0=debug) → target/debug/sok-debug
-	cd src-tauri && cargo build -p sok
-	cp -f src-tauri/target/debug/sok src-tauri/target/debug/sok-debug
+cli-debug: ## sok-debug CLI(debug 환경, debug 프로파일) — 이 빌드는 sok-debug 하나를 떨군다(P9)
+	cd src-tauri && cargo build -p sok --bin sok-debug
 
 install-cli: cli ## sok(release) 를 /usr/local/bin 에 링크(멱등)
 	@mkdir -p /usr/local/bin 2>/dev/null || true
@@ -90,7 +88,7 @@ install-cli-debug: cli-debug ## sok-debug 를 /usr/local/bin 에 링크(argv0 �
 
 docs: ## 명령 레퍼런스 생성(docs/COMMANDS.md — 앱이 실행 중이어야 함)
 	@mkdir -p docs
-	src-tauri/target/release/sok docs --core > docs/COMMANDS.md
+	$(or $(DOCS_SOK),src-tauri/target/release/sok) docs --core > docs/COMMANDS.md
 	@echo "생성: docs/COMMANDS.md"
 
 # 발행(plugin-publish)은 코어에 두지 않는다(P1·P3) — 각 플러그인은 자기 독립 repo 에서
@@ -129,7 +127,7 @@ test-e2e: ## 실행 중 앱 소켓 대상 E2E 스위트(멱등·자기정리). I
 	@IDENTITY=$${IDENTITY:-debug}; \
 	fail=0; \
 	for h in orchestrator project-rail nl-console browser-restore; do \
-		echo "── e2e: $$h ──"; SOKSAK_ENV=$$IDENTITY bash scripts/e2e/$$h.sh --identity $$IDENTITY || fail=1; \
+		echo "── e2e: $$h ──"; bash scripts/e2e/$$h.sh --identity $$IDENTITY || fail=1; \
 	done; \
 	echo "── e2e: multiwindow ──"; SOKSAK_SOCKET="$$HOME/.soksak-$$IDENTITY/com.soksak.$$IDENTITY.sock" node scripts/e2e/multiwindow.mjs || fail=1; \
 	echo "── e2e: resize ──"; bash scripts/e2e/resize.sh --identity $$IDENTITY || fail=1; \
