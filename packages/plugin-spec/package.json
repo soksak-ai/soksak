@@ -20,7 +20,7 @@
     }
   },
   "bin": {
-    "soksak-validate": "./bin/validate.mjs"
+    "soksak-validate": "bin/validate.mjs"
   },
   "files": [
     "dist",
