@@ -12,7 +12,7 @@ git/clipboard/ai.session) and removes the violators.
    is canonical; the invoke stem follows it. A plugin command's first segment MUST NOT
    restate the plugin id's domain — neither an exact id-token nor a truncation or extension
    of one (`clip` ⊂ `clipboard`, `folder` ⊂ `folderpop` both stutter;
-   `soksak-plugin-agents-issue-create` forbids `create`). A bare name (no dot) is banned
+   an id like `soksak-plugin-agents-issue-create` would forbid `create` — that plugin was renamed to `soksak-plugin-agents-issue` for exactly this reason). A bare name (no dot) is banned
    only on exact id-token match — `playbox`'s `play` is the verb itself and is legal. A dot
    namespace names the OBJECT operated on (`node.*`, `page.*`), never the plugin. Enforced by
    `plugin-spec` (manifest reject) and `plugin-doctor` (R4).
