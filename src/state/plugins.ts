@@ -769,8 +769,20 @@ export const usePlugins = create<PluginsState>((set, get) => {
         );
       }
       const id = rt.manifest.id;
+      const wasEnabled = get().enabledIds.includes(id);
       if (isActive(id)) await deactivateById(id);
       set((s) => ({ plugins: { ...s.plugins, [id]: rt } }));
+      // 이전에 enabled 였다면 신선 코드로 자동 재활성화 — dev 반복(load→enable) 게이트 제거.
+      // dev 소스는 동의 면제(§0-5)라 같은 동의 지위. 템플릿은 활성화 대상 아님(reload 와 동일 방어).
+      // 처음 보는(enabledIds 밖) id 는 disabled 유지 — 최초 dev.load 는 현행 그대로.
+      if (wasEnabled && !rt.manifest.template) {
+        try {
+          await activateRuntime(rt);
+          setRuntime(id, { status: "enabled", error: undefined });
+        } catch (e) {
+          setRuntime(id, { status: "error", error: String(e) });
+        }
+      }
       return ok({ id, dir: path });
     },
   };
