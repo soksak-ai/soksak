@@ -2,6 +2,25 @@
   "spec": "soksak-registry@1",
   "plugins": [
     {
+      "id": "soksak-plugin-activity",
+      "name": {
+        "en": "Activity",
+        "ko": "활동"
+      },
+      "version": "1.0.0",
+      "description": {
+        "en": "The activity log in a project-window sidebar — the same hub stream the orchestrator feed shows. Entries whose spec carries tts are read aloud by the mascot (toggleable).",
+        "ko": "프로젝트 창 사이드바의 활동로그 — 오케스트레이터 피드와 동일한 허브 스트림. 스펙에 tts가 실린 엔트리는 마스코트가 소리 내어 읽는다(토글 가능)."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-activity.git",
+      "branch": "main",
+      "commands": [
+        "list",
+        "mascot.toggle",
+        "ping"
+      ]
+    },
+    {
       "id": "soksak-plugin-agent-claude",
       "name": {
         "en": "Claude Code",
@@ -13,7 +32,8 @@
         "en": "Adds Claude Code under the Agents category of the new-tab (+) menu — runs the official installer in a terminal if missing"
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-agent-claude.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
     },
     {
       "id": "soksak-plugin-agent-claude-gui",
@@ -27,7 +47,17 @@
         "ko": "터미널에서 claude(Claude Code CLI)가 실행되면 패널 상태바에 GUI 항목이 뜨고, 누르면 대화를 버블 UI로 보여주는 오버레이가 열린다. 활성 세션과 서브에이전트를 실시간 표시."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-agent-claude-gui.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "close",
+        "focus",
+        "open",
+        "queue",
+        "send",
+        "state",
+        "toggle",
+        "type"
+      ]
     },
     {
       "id": "soksak-plugin-agent-codex",
@@ -41,7 +71,8 @@
         "en": "Adds Codex CLI under the Agents category of the new-tab (+) menu — runs the official installer in a terminal if missing"
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-agent-codex.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
     },
     {
       "id": "soksak-plugin-agents-acp",
@@ -55,7 +86,17 @@
         "ko": "AI 코딩 에이전트를 다루는 라이브러리 플러그인(UI 없음). Claude·Codex·Gemini 같은 ACP 에이전트를 서브프로세스로 실행하고, 표준 프로토콜(ACP)로 통신하는 엔진을 커맨드·이벤트로 노출한다."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-agents-acp.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "cancel",
+        "connect",
+        "connections",
+        "disconnect",
+        "exec",
+        "ping",
+        "prompt",
+        "session-new"
+      ]
     },
     {
       "id": "soksak-plugin-agents-clubhouse",
@@ -69,21 +110,18 @@
         "ko": "여러 AI 코딩 에이전트(Claude·Codex·Gemini)를 한 워크스페이스에 모아주는 허브 — 체크박스로 1~3 선택, 탭 순서대로 턴제·자유·동시 모드로 함께 논의. 본문 '@이름' 으로 동료 직접 호출. 기본은 대화이고, 사용자가 요청할 때만 실파일 작업. 에이전트 실행은 agents-acp 런타임 경유."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-agents-clubhouse.git",
-      "branch": "main"
-    },
-    {
-      "id": "soksak-plugin-browser-native",
-      "name": {
-        "ko": "브라우저 (Webview)",
-        "en": "Browser (Webview)"
-      },
-      "version": "2.0.0",
-      "description": {
-        "ko": "콘텐츠 뷰로 브라우저를 렌더 — 코어 네이티브 child webview(OS 웹뷰) 를 직접 구동. URL 바·즐겨찾기·북마크·devtools 토글 내장.",
-        "en": "Renders the browser as a content view — drives the core native child webview (OS webview) directly. Built-in URL bar, bookmarks, and devtools toggle."
-      },
-      "repo": "https://github.com/soksak-ai/soksak-plugin-browser-native.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "ask",
+        "converse",
+        "send",
+        "state",
+        "tower.macro",
+        "tower.plan",
+        "tower.reflect",
+        "tower.scan",
+        "tower.trace"
+      ]
     },
     {
       "id": "soksak-plugin-browser-bookmarks",
@@ -97,7 +135,68 @@
         "ko": "브라우저 즐겨찾기 목록 패널 — 클릭으로 열고 ✕ 로 제거."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-browser-bookmarks.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
+    },
+    {
+      "id": "soksak-plugin-browser-chromium",
+      "name": {
+        "ko": "브라우저 (Chromium)",
+        "en": "Browser (Chromium)"
+      },
+      "version": "0.1.0",
+      "description": {
+        "ko": "콘텐츠 뷰로 브라우저를 렌더 — 번들 Chromium 엔진 사이드카를 앱 프로세스에 로드해 네이티브 child 로 구동(app.sidecar 채널). 네이티브 Chromium 속도, URL 바·북마크 내장. OS 웹뷰가 아니라 어디서나 동일한 번들 Chromium 엔진.",
+        "en": "Renders the browser as a content view — loads the bundled Chromium engine sidecar into the app process and drives a native child over the app.sidecar channel. Native Chromium speed, built-in URL bar and bookmarks. A uniform bundled Chromium engine, not the OS webview."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-browser-chromium.git",
+      "branch": "main",
+      "commands": [
+        "back",
+        "devtools",
+        "devtools-inline",
+        "devtools-tab",
+        "forward",
+        "navigate",
+        "open",
+        "ping",
+        "reload",
+        "stats"
+      ]
+    },
+    {
+      "id": "soksak-plugin-browser-native",
+      "name": {
+        "ko": "브라우저 (Webview)",
+        "en": "Browser (Webview)"
+      },
+      "version": "2.0.0",
+      "description": {
+        "ko": "콘텐츠 뷰로 브라우저를 렌더 — 코어 네이티브 child webview(OS 웹뷰) 를 직접 구동. URL 바·즐겨찾기·북마크·devtools 토글 내장.",
+        "en": "Renders the browser as a content view — drives the core native child webview (OS webview) directly. Built-in URL bar, bookmarks, and devtools toggle."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-browser-native.git",
+      "branch": "main",
+      "commands": [
+        "back",
+        "devtools",
+        "dom.click",
+        "dom.fill",
+        "dom.html",
+        "dom.query",
+        "dom.submit",
+        "dom.text",
+        "dom.wait-for",
+        "eval",
+        "forward",
+        "list",
+        "media.extract",
+        "media.sniff",
+        "navigate",
+        "open",
+        "ping",
+        "reload"
+      ]
     },
     {
       "id": "soksak-plugin-clipboard",
@@ -111,7 +210,27 @@
         "en": "Manages clipboard history and permanent memos grouped by category. Clips are auto-deleted after the configured retention period (default 3 days) unless starred or saved as memos; memos are permanent. Duplicate entries are merged and copy counts are tracked. Right sidebar tab."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-clipboard.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "category.add",
+        "category.delete",
+        "category.list",
+        "category.rename",
+        "clip.capture",
+        "clip.category",
+        "clip.clear",
+        "clip.count",
+        "clip.delete",
+        "clip.favorite",
+        "clip.list",
+        "clip.purge",
+        "clip.restore",
+        "clip.search",
+        "clip.state",
+        "memo.add",
+        "memo.delete",
+        "memo.update"
+      ]
     },
     {
       "id": "soksak-plugin-editor-codemirror",
@@ -125,7 +244,14 @@
         "en": "Code, text, markdown, and SVG file editor (CodeMirror). Find/replace, save, syntax highlighting. Registers as a soksak file viewer (engine-neutral — the core only routes)."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-editor-codemirror.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "find",
+        "format",
+        "ping",
+        "replace",
+        "save"
+      ]
     },
     {
       "id": "soksak-plugin-editor-codemirror-todo",
@@ -139,7 +265,8 @@
         "ko": "코드미러 확장: TODO/FIXME/XXX 토큰 강조 + mjs/cjs/svelte 확장자 문법 매핑 — 에디터 플러그인의 확장 프로토콜 경유."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-editor-codemirror-todo.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
     },
     {
       "id": "soksak-plugin-editor-format-json",
@@ -153,7 +280,8 @@
         "ko": "JSON 파일을 2칸 들여쓰기로 정리하는 포매터. 에디터 확장(에디터 플러그인에 포매터 등록). 파싱 실패 시 깨진 텍스트 대신 명확한 에러를 냅니다."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-editor-format-json.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
     },
     {
       "id": "soksak-plugin-erd",
@@ -167,7 +295,59 @@
         "ko": "멀티-DB ERD 에디터 — 스키마 설계·마이그레이션·SQL 생성을 GUI 와 CLI/MCP 로."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-erd.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "add-column",
+        "add-index",
+        "add-relationship",
+        "apply",
+        "auto-layout",
+        "create-table",
+        "diff",
+        "drop-column",
+        "drop-index",
+        "drop-relationship",
+        "drop-table",
+        "export-dbml",
+        "export-mermaid",
+        "export-prisma",
+        "export-sql",
+        "fit",
+        "get-columns",
+        "get-render-state",
+        "get-schema",
+        "get-table",
+        "get-viewport",
+        "import-dbml",
+        "import-mermaid",
+        "import-prisma",
+        "import-sql",
+        "list-relationships",
+        "list-tables",
+        "migration-apply",
+        "migration-generate",
+        "migration-lint",
+        "migration-list",
+        "migration-revert",
+        "migration-show",
+        "migration-sql",
+        "migration-status",
+        "ping",
+        "redo",
+        "rename-table",
+        "reorder-columns",
+        "select",
+        "set-color",
+        "set-pk",
+        "set-position",
+        "set-unique",
+        "set-viewport",
+        "stats",
+        "undo",
+        "update-column",
+        "update-relationship",
+        "validate"
+      ]
     },
     {
       "id": "soksak-plugin-file-tree",
@@ -181,7 +361,35 @@
         "en": "Left sidebar file explorer tree. Shell-cwd follow toggle and git decorations. Opening a file is delegated to the core editor.open command (editor / media viewers render it)."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-file-tree.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "follow",
+        "open",
+        "ping",
+        "refresh"
+      ]
+    },
+    {
+      "id": "soksak-plugin-folderpop",
+      "name": {
+        "ko": "폴더팝",
+        "en": "Folderpop"
+      },
+      "version": "0.1.0",
+      "description": {
+        "ko": "좌측 사이드바 폴더 탐색기 — 여러 폴더를 등록하고(각 이름 변경) 선택한 폴더의 파일/폴더를 보여준다. 파일 열기는 코어 editor.open 으로 위임.",
+        "en": "Left sidebar folder explorer — register multiple folders (each renamable) and browse the selected folder's files/folders. Opening a file is delegated to the core editor.open command."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-folderpop.git",
+      "branch": "main",
+      "commands": [
+        "folder.add",
+        "folder.list",
+        "folder.remove",
+        "folder.rename",
+        "folder.select",
+        "ping"
+      ]
     },
     {
       "id": "soksak-plugin-git-diff",
@@ -195,7 +403,8 @@
         "ko": "변경 파일 목록과 unified diff 를 보여주는 git 뷰. staged(index) 토글 지원."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-git-diff.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
     },
     {
       "id": "soksak-plugin-git-history",
@@ -209,7 +418,8 @@
         "ko": "프로젝트 커밋 이력 사이드바 — 커밋을 클릭하면 변경 파일 목록과 패치를 표시."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-git-history.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
     },
     {
       "id": "soksak-plugin-git-init",
@@ -223,7 +433,8 @@
         "en": "Runs git init automatically when a new project root has no .git"
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-git-init.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
     },
     {
       "id": "soksak-plugin-icons-codicons",
@@ -233,11 +444,12 @@
       },
       "version": "1.0.0",
       "description": {
-        "en": "editor Codicons icon set (CC-BY-4.0, microsoft/editor-codicons) — once enabled, select it under Settings > Icon Set.",
-        "ko": "editor Codicons 아이콘 셋(CC-BY-4.0, microsoft/editor-codicons) — 활성화하면 설정 > 아이콘 셋에서 선택할 수 있습니다"
+        "en": "VS Code Codicons icon set (CC-BY-4.0, microsoft/vscode-codicons) — once enabled, select it under Settings > Icon Set.",
+        "ko": "VS Code Codicons 아이콘 셋(CC-BY-4.0, microsoft/vscode-codicons) — 활성화하면 설정 > 아이콘 셋에서 선택할 수 있습니다"
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-icons-codicons.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
     },
     {
       "id": "soksak-plugin-icons-tabler",
@@ -251,7 +463,8 @@
         "ko": "Tabler Icons 아이콘 셋(MIT, tabler.io/icons) — 활성화하면 설정 > 아이콘 셋에서 선택할 수 있습니다"
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-icons-tabler.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
     },
     {
       "id": "soksak-plugin-kanban",
@@ -265,7 +478,33 @@
         "en": "Tree (outliner) based issue tracking — one tree projected as kanban, gantt, timeline, tree, table, and calendar. Nodes have infinite depth via parentId+order. Operated via CLI/MCP."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-kanban.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "board.move",
+        "board.reorder",
+        "board.sort",
+        "breadcrumb",
+        "column.list",
+        "focus.set",
+        "node.add",
+        "node.edit",
+        "node.get",
+        "node.list",
+        "node.remove",
+        "outline.indent",
+        "outline.move",
+        "outline.outdent",
+        "outline.reorder",
+        "ping",
+        "prompt.get",
+        "prompt.put",
+        "prompt.resolve",
+        "reset",
+        "seed",
+        "stats",
+        "timeline",
+        "view.get"
+      ]
     },
     {
       "id": "soksak-plugin-lgtv-remote",
@@ -279,7 +518,49 @@
         "ko": "LG webOS TV 리모컨 — 전원/볼륨/채널/방향키/입력/미디어/키보드를 모달 오버레이와 CLI/MCP 명령으로 조작한다. SSAP WebSocket 직결 + Wake-on-LAN(net.udp.send)."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-lgtv-remote.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "apps",
+        "button",
+        "channel-down",
+        "channel-up",
+        "connect",
+        "disconnect",
+        "discover",
+        "dpad",
+        "dump-log",
+        "find",
+        "foreground-app",
+        "hide",
+        "inputs",
+        "launch",
+        "media",
+        "minimize",
+        "mute",
+        "open-channel",
+        "pointer-click",
+        "pointer-move",
+        "power-off",
+        "power-on",
+        "scan-mac",
+        "screen-off",
+        "screen-on",
+        "set-ip",
+        "set-mac",
+        "set-volume",
+        "show",
+        "ssap",
+        "status",
+        "switch-input",
+        "text-delete",
+        "text-enter",
+        "text-input",
+        "toast",
+        "toggle",
+        "volume-down",
+        "volume-up",
+        "ws-probe"
+      ]
     },
     {
       "id": "soksak-plugin-mailbox",
@@ -293,21 +574,52 @@
         "en": "Per-project message inbox — send messages via CLI/MCP/API and receive them as push notifications (sound, deep-link, image). Self-subscribe to receive messages automatically at turn end. Unread badge shown on the left sidebar tab."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-mailbox.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "clear",
+        "delete",
+        "export",
+        "get",
+        "import",
+        "list",
+        "mark-read",
+        "open",
+        "search",
+        "send",
+        "subscribe",
+        "subscriptions",
+        "unsubscribe"
+      ]
     },
     {
-      "id": "soksak-plugin-playbox",
+      "id": "soksak-plugin-mascot",
       "name": {
-        "ko": "플레이박스",
-        "en": "Playbox"
+        "en": "Mascot",
+        "ko": "마스코트"
       },
-      "version": "0.1.0",
+      "version": "1.0.0",
       "description": {
-        "ko": "비디오 라이브러리·플레이어 — 즐겨찾기·클립. YouTube·로컬 파일·직접 미디어 URL·임의 웹페이지(yt-dlp 경유)를 재생하고, 보호된 HLS 는 코어 미디어 프록시로 스트리밍.",
-        "en": "Video library and player — favorites and clips. Plays YouTube, local files, direct media URLs, and arbitrary web pages (via yt-dlp); protected HLS is streamed through the core media proxy."
+        "en": "Character presentation engine — a Live2D mascot overlay with local neural TTS, measured lip-sync, expressions and motions. No views of its own: other plugins (activity log, chat UIs) drive it through commands (say/expression/motion/mascot).",
+        "ko": "캐릭터 표현 엔진 — Live2D 마스코트 오버레이 + 로컬 신경 TTS, 실측 립싱크, 표정·모션. 자체 뷰 없음: 다른 플러그인(활동로그·대화 UI)이 커맨드(say/expression/motion/mascot)로 구동한다."
       },
-      "repo": "https://github.com/soksak-ai/soksak-plugin-playbox.git",
-      "branch": "main"
+      "repo": "https://github.com/soksak-ai/soksak-plugin-mascot.git",
+      "branch": "main",
+      "commands": [
+        "cubism.install",
+        "emotion.map",
+        "expression.list",
+        "expression.set",
+        "model.list",
+        "model.load",
+        "motion.play",
+        "ping",
+        "release",
+        "say",
+        "state",
+        "stop",
+        "toggle",
+        "tts.toggle"
+      ]
     },
     {
       "id": "soksak-plugin-media-viewer",
@@ -321,7 +633,8 @@
         "en": "Viewers for image, PDF, video, and audio files. Registers as soksak file viewers (the core routes by extension)."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-media-viewer.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
     },
     {
       "id": "soksak-plugin-memo",
@@ -335,7 +648,8 @@
         "ko": "프로젝트별 메모 — 프로젝트 루트마다 분리 저장되는 간단한 메모장 패널"
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-memo.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": []
     },
     {
       "id": "soksak-plugin-overlay-draw",
@@ -349,7 +663,18 @@
         "ko": "화면 위에 연필로 자유롭게 적고 그리는 낙서 오버레이. 그리기 모드를 켜면 펜으로 낙서하고, 끄면 클릭은 통과하되 낙서는 화면에 남아 스크린샷에도 잡힌다. 색·굵기·지우개·되돌리기·지우기."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-overlay-draw.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "clear",
+        "color",
+        "eraser",
+        "state",
+        "stroke",
+        "toggle",
+        "tools",
+        "undo",
+        "width"
+      ]
     },
     {
       "id": "soksak-plugin-overlay-sakura",
@@ -363,7 +688,13 @@
         "ko": "앱 위로 벚꽃 잎이 흩날린다 — 좌우로 흔들리며 3D로 텀블해 떨어지고 바람에 옆으로 흐른다. 밀도·낙하속도·바람 조절."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-overlay-sakura.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "density",
+        "fall",
+        "toggle",
+        "wind"
+      ]
     },
     {
       "id": "soksak-plugin-overlay-shark",
@@ -377,7 +708,45 @@
         "ko": "앱 위를 유유자적 헤엄쳐 다니는 shork shark — SOKSAK 워드마크가 곧 상어(S=머리, K=꼬리). 마릿수·활기 조절."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-overlay-shark.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "count",
+        "mode",
+        "speed",
+        "toggle"
+      ]
+    },
+    {
+      "id": "soksak-plugin-playbox",
+      "name": {
+        "ko": "플레이박스",
+        "en": "Playbox"
+      },
+      "version": "0.1.0",
+      "description": {
+        "ko": "비디오 라이브러리·플레이어 — 즐겨찾기·클립. YouTube·로컬 파일·직접 미디어 URL·임의 웹페이지(yt-dlp 경유)를 재생하고, 보호된 HLS 는 코어 미디어 프록시로 스트리밍.",
+        "en": "Video library and player — favorites and clips. Plays YouTube, local files, direct media URLs, and arbitrary web pages (via yt-dlp); protected HLS is streamed through the core media proxy."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-playbox.git",
+      "branch": "main",
+      "commands": [
+        "clip.add",
+        "clip.list",
+        "clip.update",
+        "debug",
+        "doctor",
+        "download",
+        "favorite.add",
+        "favorite.remove",
+        "library.filter",
+        "library.list",
+        "ping",
+        "play",
+        "player.control",
+        "player.state",
+        "resolve",
+        "setup"
+      ]
     },
     {
       "id": "soksak-plugin-runbook",
@@ -391,7 +760,38 @@
         "en": "Store and run reusable commands (runbooks). Commands reference parameters, env vars, secrets, and other command outputs; linking resolves safely via pure evaluation, dependency graph, and cycle detection."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-runbook.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "command.add",
+        "command.delete",
+        "command.duplicate",
+        "command.favorite",
+        "command.get",
+        "command.list",
+        "command.refs",
+        "command.restore",
+        "command.run",
+        "command.search",
+        "command.set-group",
+        "command.update",
+        "editor.serialize",
+        "editor.tokens",
+        "export",
+        "group.add",
+        "group.delete",
+        "group.list",
+        "group.update",
+        "history.add",
+        "history.clear",
+        "history.delete",
+        "history.list",
+        "history.restore",
+        "history.search",
+        "import",
+        "ref.parse",
+        "ref.resolve",
+        "schedule.fire"
+      ]
     },
     {
       "id": "soksak-plugin-sidebar-sky",
@@ -405,7 +805,11 @@
         "en": "A window to the sky in the left sidebar — shifts with the time of day; trees sway, clouds drift by day, stars twinkle at night."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-sidebar-sky.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "set",
+        "state"
+      ]
     },
     {
       "id": "soksak-plugin-terminal",
@@ -413,13 +817,33 @@
         "ko": "터미널",
         "en": "Terminal"
       },
-      "version": "1.2.0",
+      "version": "0.1.0",
       "description": {
-        "ko": "새 탭(+) 메뉴에 터미널을 추가",
-        "en": "Adds Terminal to the new-tab (+) menu"
+        "ko": "xterm.js 터미널 패널 — 코어 PTY 를 직접 구동.",
+        "en": "xterm.js terminal pane driven by core PTY."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-terminal.git",
-      "branch": "main"
+      "branch": "main",
+      "commands": [
+        "clear",
+        "ping",
+        "resume",
+        "send"
+      ]
+    },
+    {
+      "id": "soksak-plugin-workflow",
+      "name": "Workflow",
+      "version": "0.1.0",
+      "description": "드래프트 파이프라인 — 아이디어를 LLM 저작 워크플로로 칸반 노드 DAG 에 발행하고, 코어 스케줄러 reconcile 로 실행·추적한다. item=exec-one 검증(badge o/x/f), task=exec-stage(generate/hunt/classify/audit 실행·자식 발행), blockedBy 의존.",
+      "branch": "main",
+      "commands": [
+        "issuerize",
+        "ping",
+        "reconcile",
+        "research",
+        "run"
+      ]
     }
   ]
 }
