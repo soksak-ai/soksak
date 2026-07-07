@@ -160,13 +160,13 @@ describe("layout.reflow 이벤트", () => {
   // 1회 재스냅하는 신호 — 파킹은 위치 이동(크기 무변)이라 ResizeObserver 가 못 잡고, 전환 신호
   // (view.activated)는 store diff 마이크로태스크라 커밋 전이라 옛 위치를 잰다. 이 채널이 커밋 후
   // 단일 반응의 근거. 이게 없으면 첫 클릭에 webview 가 안 따라오고 둘째 클릭이 필요했다.
-  it("activeContentId payload 를 전달하고, 해지 후엔 받지 않는다", () => {
+  it("activeSheetId payload 를 전달하고, 해지 후엔 받지 않는다", () => {
     const got: (string | null)[] = [];
-    const d = onPluginEvent("layout.reflow", (p) => got.push(p.activeContentId));
-    emitPluginEvent("layout.reflow", { activeContentId: "c1" });
-    emitPluginEvent("layout.reflow", { activeContentId: "c2" });
+    const d = onPluginEvent("layout.reflow", (p) => got.push(p.activeSheetId));
+    emitPluginEvent("layout.reflow", { activeSheetId: "c1" });
+    emitPluginEvent("layout.reflow", { activeSheetId: "c2" });
     d.dispose();
-    emitPluginEvent("layout.reflow", { activeContentId: "c3" });
+    emitPluginEvent("layout.reflow", { activeSheetId: "c3" });
     expect(got).toEqual(["c1", "c2"]);
   });
 });

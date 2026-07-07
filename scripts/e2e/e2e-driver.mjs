@@ -36,7 +36,7 @@ let WIN = process.env.SOKSAK_E2E_WINDOW || null;
 // 분리된 안정 고정처다. 매 실행 새로 만드는 임시 경로가 아니라, 존재를 보장(mkdir)하고 창
 // 라이프사이클(teardown=window.close)로만 상태를 회수한다.
 const E2E_HOME = path.join(process.env.HOME ?? "", ".soksak-e2e");
-const RESIZE_ROOT = path.join(E2E_HOME, "resize"); // 창 carrier(window.new 부트 프로젝트)
+const RESIZE_ROOT = path.join(E2E_HOME, "resize"); // 창 carrier(window.open 부트 프로젝트)
 const RESIZE_PROJ = path.join(E2E_HOME, "resize-proj"); // 실제 측정 대상(좌|우 터미널)
 
 // ── 소켓 RPC(perf/driver.mjs 와 동형) ────────────────────────────────────────
@@ -79,7 +79,7 @@ function rpc(sock, method, params = {}) {
           : resp,
       ),
     );
-    // 전용 워크스페이스 창으로만 라우팅한다(WIN). 미설정(setup 의 window.new 직전)이면 생략.
+    // 전용 워크스페이스 창으로만 라우팅한다(WIN). 미설정(setup 의 window.open 직전)이면 생략.
     const envelope = WIN ? { id, method, params, window: WIN } : { id, method, params };
     sock.write(JSON.stringify(envelope) + "\n", (err) => {
       if (err) {
@@ -119,14 +119,14 @@ function collectSplits(node, out = []) {
   return out;
 }
 function panesOf(proj) {
-  const content = proj.contents.find((c) => c.active) ?? proj.contents[0];
+  const content = proj.sheets.find((c) => c.active) ?? proj.sheets[0];
   return (content.panels ?? []).map((g) => {
     const v = (g.views ?? []).find((x) => x.kind === "terminal") ?? g.views?.[0];
-    return { group: g.id, view: v?.id, pane: v?.focusedPaneId ?? v?.id };
+    return { panel: g.id, view: v?.id, pane: v?.focusedPaneId ?? v?.id };
   });
 }
 function splitId(proj) {
-  const content = proj.contents.find((c) => c.active) ?? proj.contents[0];
+  const content = proj.sheets.find((c) => c.active) ?? proj.sheets[0];
   const s = collectSplits(content.layout);
   if (!s.length) throw new Error("분할 노드 없음");
   return s[0].split.id;
@@ -148,7 +148,7 @@ async function ensureWindow(sock) {
       await sleep(400);
     }
   }
-  const r = await rpc(sock, "window.new", { root: RESIZE_ROOT });
+  const r = await rpc(sock, "window.open", { root: RESIZE_ROOT });
   const label = r.label ?? r.existingWindow;
   if (!label) throw new Error(`창 생성 실패: ${JSON.stringify(r)}`);
   WIN = label; // 이 프로세스의 후속 rpc + 출력용
@@ -169,18 +169,18 @@ async function setup(sock, _repoRoot) {
   if (prev) must(await rpc(sock, "project.close", { project: prev.id }), "이전 제거");
 
   const created = must(
-    await rpc(sock, "project.create", {
+    await rpc(sock, "project.open", {
       root: RESIZE_PROJ,
       alias: ALIAS,
       program: "terminal",
     }),
-    "project.create",
+    "project.open",
   );
   const project = created.projectId;
   must(
     await rpc(sock, "panel.split", {
       project,
-      group: created.groupId,
+      panel: created.panelId,
       side: "right",
       program: "terminal",
     }),
@@ -195,13 +195,13 @@ async function setup(sock, _repoRoot) {
   if (!act || act.id !== proj.id) {
     throw new Error(`resize-e2e 가 활성이 아님(active=${act?.id}) — 측정 무효`);
   }
-  const content = proj.contents.find((c) => c.active) ?? proj.contents[0];
+  const content = proj.sheets.find((c) => c.active) ?? proj.sheets[0];
   const panes = panesOf(proj);
   console.log(
     JSON.stringify({
       window: WIN,
       project,
-      contentId: content.id,
+      sheetId: content.id,
       rootSplitId: splitId(proj),
       paneLeft: panes[0]?.pane,
       paneRight: panes[1]?.pane,

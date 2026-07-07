@@ -55,14 +55,29 @@ function resolveElement(addressStr: string): HTMLElement | null {
 export function registerDomCatalog(): void {
   register("ui.tree", {
     description:
-      "Return the exposed DOM address tree — absolute addresses of nodes declared via data-node by plugin views and host-chrome elements. Use to discover addressable targets before calling ui.measure or ui.input.click; unexposed elements are absent and unreachable.",
+      "Return the exposed DOM address tree — absolute addresses of nodes declared via data-node by plugin views and host-chrome elements. Use to discover addressable targets before calling ui.measure or ui.input.click; unexposed elements are absent and unreachable. Pass rects:true to include each node's viewport rect for coordinate work (drags, precision clicks).",
     triggers: { ko: "DOM 트리 주소목록 노드목록 ui트리" },
-    params: {},
-    returns: "{ window, count, nodes: [{ address, nodePath }] }",
+    params: {
+      rects: {
+        type: "boolean",
+        description: "Include each node's viewport rect {x,y,w,h} (px)",
+        default: false,
+      },
+    },
+    returns: "{ window, count, nodes: [{ address, nodePath, rect? }] }",
     message: (d) => tmsg("msg.ui.tree", { n: Number(d.count ?? 0) }),
-    examples: ["sok ui.tree"],
-    handler: () => {
-      const nodes = collectExposed().map((n) => ({ address: n.address, nodePath: n.nodePath }));
+    examples: ["sok ui.tree", 'sok ui.tree \'{"rects":true}\''],
+    handler: (p) => {
+      const withRects = p.rects === true;
+      const nodes = collectExposed().map((n) => {
+        if (!withRects) return { address: n.address, nodePath: n.nodePath };
+        const r = n.el.getBoundingClientRect();
+        return {
+          address: n.address,
+          nodePath: n.nodePath,
+          rect: { x: +r.x.toFixed(2), y: +r.y.toFixed(2), w: +r.width.toFixed(2), h: +r.height.toFixed(2) },
+        };
+      });
       return { window: currentWindowLabel(), count: nodes.length, nodes };
     },
   });

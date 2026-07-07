@@ -421,7 +421,7 @@ describe("execute — 응답 공통 필드(window·hint)", () => {
     expect(r.hint).toBeUndefined();
   });
 
-  it("hint 함수가 던져도 응답은 성공으로 온다(hint 만 생략)", async () => {
+  it("hint 함수가 예외를 일으켜도 응답은 성공으로 온다(hint 만 생략)", async () => {
     reg(TEST_PREFIX + "hint-throw", {
       handler: () => ({ v: 1 }),
       hint: () => {
@@ -460,7 +460,7 @@ describe("UNKNOWN_COMMAND 지능형 해석기 주입점", () => {
     setUnknownCommandResolver(() => []);
   });
 
-  it("해석기가 비거나 던지면 일반 탐색 안내로 돌아간다", async () => {
+  it("해석기가 비어 있거나 예외를 일으키면 일반 탐색 안내로 돌아간다", async () => {
     setUnknownCommandResolver(() => {
       throw new Error("boom");
     });

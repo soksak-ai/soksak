@@ -339,7 +339,7 @@ export function OrchestratorApp() {
 
   // 안 열린 프로젝트 클릭 = 열기(그 root 로 창 생성; 이미 열려 있으면 P6 로 그 창 포커스).
   const openProject = useCallback((root: string) => {
-    void execute("window.new", { root }, { remote: false }).catch(() => {});
+    void execute("window.open", { root }, { remote: false }).catch(() => {});
   }, []);
 
   // 프로젝트 생성 — 열기·생성의 단일 표면은 컨트롤 플레인이다(워크스페이스 픽커 소멸).
@@ -347,7 +347,7 @@ export function OrchestratorApp() {
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const createProject = useCallback(async (args: CreateProjectArgs) => {
     await execute(
-      "window.new",
+      "window.open",
       { root: args.root, ...(args.alias ? { alias: args.alias } : {}), ...(args.shell ? { shell: args.shell } : {}) },
       { remote: false },
     );

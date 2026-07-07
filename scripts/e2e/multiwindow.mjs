@@ -5,7 +5,7 @@
 //   SOKSAK_SOCKET=~/.soksak/com.soksak.dev.sock node scripts/e2e/multiwindow.mjs
 //
 // 검증:
-//   1) window.new → 새 창 label, window.list 가 +1
+//   1) window.open → 새 창 label, window.list 가 +1
 //   2) 명시 타겟: state.tree {window:win} 이 그 창 상태 반환(emit_to 라우팅)
 //   3) WINDOW_NOT_FOUND: 없는 창 타겟은 거부
 //   4) 활성 추적: window.focus(win) 후 window 생략 명령이 win 으로 라우팅
@@ -132,7 +132,7 @@ async function main() {
   const fs0 = await import("node:fs");
   const home = path.join(os.tmpdir(), "soksak-e2e-mw-home");
   fs0.mkdirSync(home, { recursive: true });
-  const rHome = await rpc("window.new", { root: home });
+  const rHome = await rpc("window.open", { root: home });
   const base = rHome.label || rHome.existingWindow;
   ok(typeof base === "string" && base.startsWith("w-"), `홈 워크스페이스 창 → ${base}`);
   await waitFor(
@@ -145,9 +145,9 @@ async function main() {
   // 1) 새 창(빈 창은 없다 — root 필수)
   const rootA = path.join(os.tmpdir(), "soksak-e2e-mw-a");
   fs0.mkdirSync(rootA, { recursive: true });
-  const created = await rpc("window.new", { root: rootA });
+  const created = await rpc("window.open", { root: rootA });
   const win = created.label;
-  ok(typeof win === "string" && win.startsWith("w-"), `window.new → ${win}`);
+  ok(typeof win === "string" && win.startsWith("w-"), `window.open → ${win}`);
 
   // 2) 부트 대기 + 명시 타겟 라우팅(win 의 state.tree 가 응답)
   await waitFor(
@@ -167,13 +167,13 @@ async function main() {
   const bad = await rpc("state.tree", {}, "w-nope-9999");
   ok(bad.ok === false && bad.code === "WINDOW_NOT_FOUND", "없는 창 타겟 → WINDOW_NOT_FOUND");
 
-  // 5) 창별 독립: win 에 콘텐츠 추가 → 홈 창 불변 + 두 창 상태 구분
+  // 5) 창별 독립: win 에 시트 추가 → 홈 창 불변 + 두 창 상태 구분
   const baseBefore = await tree(base);
-  await rpc("content.create", { program: "terminal" }, win);
+  await rpc("sheet.create", { program: "terminal" }, win);
   await sleep(400);
   const baseAfter = await tree(base);
   const winAfter = await tree(win);
-  ok(baseBefore === baseAfter, "창별 독립: win 콘텐츠 추가가 홈 창에 안 번짐");
+  ok(baseBefore === baseAfter, "창별 독립: win 시트 추가가 홈 창에 안 번짐");
   ok(winAfter !== baseAfter, "win 과 홈 창이 독립 상태(다름)");
 
   // 4) 활성 추적: focus(win) → window 생략 = win, focus(base) → = base
@@ -199,17 +199,17 @@ async function main() {
 
     const rootB = path.join(os.tmpdir(), "soksak-e2e-mw-b");
     fs.mkdirSync(rootB, { recursive: true });
-    const win2 = (await rpc("window.new", { root: rootB })).label;
+    const win2 = (await rpc("window.open", { root: rootB })).label;
     await waitFor(
       async () => (await rpc("state.tree", {}, win2)).ok !== false,
       12000,
       "P6 창 부트",
     );
 
-    const r1 = await rpc("project.create", { root }, base);
+    const r1 = await rpc("project.open", { root }, base);
     ok(r1.ok === true && !!r1.projectId, `P6: 홈 창에서 열기 (${r1.projectId})`);
 
-    const r2 = await rpc("project.create", { root }, win2);
+    const r2 = await rpc("project.open", { root }, win2);
     ok(
       r2.ok === true && r2.existingWindow === base && !r2.projectId,
       `P6: ${win2} 중복 열기 → existingWindow=${base}(새 탭 없음)`,
@@ -219,13 +219,13 @@ async function main() {
 
     await rpc("project.close", { project: r1.projectId }, base);
     await sleep(300);
-    const r3 = await rpc("project.create", { root }, win2);
+    const r3 = await rpc("project.open", { root }, win2);
     ok(r3.ok === true && !!r3.projectId, "P6: 홈에서 닫은 후(점유 해제) 다른 창 열기 성공");
 
     // 창 파괴 = 그 창 점유 전부 해제(release_window) — 닫고 홈에서 재열기.
     await rpc("window.close", { label: win2 });
     await sleep(500);
-    const r4 = await rpc("project.create", { root }, base);
+    const r4 = await rpc("project.open", { root }, base);
     ok(r4.ok === true && !!r4.projectId, "P6: 창 파괴 후 점유 해제 → 홈 재열기");
     await rpc("project.close", { project: r4.projectId }, base);
   }
@@ -236,7 +236,7 @@ async function main() {
   for (const r of [home, path.join(os.tmpdir(), "soksak-e2e-mw-a"),
                    path.join(os.tmpdir(), "soksak-e2e-mw-b"),
                    path.join(os.tmpdir(), "soksak-e2e-p6")]) {
-    await rpc("project.recent.forget", { root: r }, "main");
+    await rpc("project.recent.remove", { root: r }, "main");
   }
 
   console.log(`\n결과: ${pass} pass / ${fail} fail`);

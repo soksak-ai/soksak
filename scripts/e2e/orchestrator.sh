@@ -46,14 +46,14 @@ except Exception: print("FAIL: 앱 소켓 없음 — debug 앱 실행 필요"); 
 # 데모 프로젝트를 별도 창에(전용 프리픽스). 이미 열려 있으면 그 창을 재사용(P6).
 demo = "/private/tmp/soksak-e2e-orch-demo"
 os.makedirs(demo, exist_ok=True)
-r = rpc("window.new", {"root": demo}); time.sleep(3)
+r = rpc("window.open", {"root": demo}); time.sleep(3)
 w_demo = r.get("label") or r.get("existingWindow")
 
 # 기준: 호출 전 데모 창 rect(컨트롤 플레인 호출이 남의 창을 건드리지 않는지의 기준점)
 before = wins()[w_demo]; before_rect = (before["x"], before["y"], before["w"], before["h"])
 
 # 컨트롤 플레인 = main 예약어(NAMING 4b) — mode=orchestrator 는 창을 만들지 않고 main 을 앞으로.
-res = rpc("window.new", {"mode": "orchestrator"}); orch = res.get("label") or res.get("existingWindow")
+res = rpc("window.open", {"mode": "orchestrator"}); orch = res.get("label") or res.get("existingWindow")
 (ok if orch == "main" else ng)(f"컨트롤 플레인은 main 예약어: {orch}")
 time.sleep(2)
 w = wins()
@@ -99,7 +99,7 @@ lbl = next((n["address"] for n in rpc("ui.tree", window=orch).get("nodes", [])
 if lbl: rpc("ui.input.click", {"address": lbl}, orch); time.sleep(0.4)
 
 # 멱등 재열기
-r2 = rpc("window.new", {"mode": "orchestrator"})
+r2 = rpc("window.open", {"mode": "orchestrator"})
 (ok if r2.get("existingWindow") == orch else ng)(f"멱등 재열기 → existingWindow={r2.get('existingWindow')}")
 
 # 워크스페이스 명령이 활동 피드(대화 버블)에 — 시작/종료/결과가 payload 에 실린다
@@ -116,7 +116,7 @@ if ce:
 for pr in rpc("state.tree", window=w_demo).get("projects", []):
     if "soksak-e2e-orch-demo" in pr["root"]:
         rpc("project.close", {"project": pr["id"]}, w_demo); time.sleep(0.3)
-rpc("project.recent.forget", {"root": demo})  # recents 위생(T5)
+rpc("project.recent.remove", {"root": demo})  # recents 위생(T5)
 
 print()
 print(f"orchestrator: PASS={len(PASS)} FAIL={len(FAIL)}")

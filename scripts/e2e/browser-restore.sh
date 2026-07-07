@@ -169,15 +169,15 @@ def owners(recovered=False):
 for l in owners():
     rpc("window.close", {"label": l})
 # 닫힘 완료 대기 — close 는 비동기(claim 해제는 Destroyed 에서). 고정 sleep 은 레이스(실측:
-# 중간 살해된 이전 실행의 잔재 창이 미해제 상태로 남아 window.new 가 existingWindow 를 봄).
+# 중간 살해된 이전 실행의 잔재 창이 미해제 상태로 남아 window.open 이 existingWindow 를 봄).
 for _ in range(24):
     if not owners(): break
     time.sleep(0.5)
 assert not owners(), f"잔재 창 닫힘 미완료: {owners()}"
 
 # ── 1. 두 창 + 양 엔진 브라우저 3개 ──────────────────────────────────────────
-r_wa = rpc("window.new", {"root": ra}); time.sleep(4)
-r_wb = rpc("window.new", {"root": rb}); time.sleep(4)
+r_wa = rpc("window.open", {"root": ra}); time.sleep(4)
+r_wb = rpc("window.open", {"root": rb}); time.sleep(4)
 wa = r_wa.get("label"); wb = r_wb.get("label")
 assert wa and wb, f"창 생성 실패 — wa={r_wa} wb={r_wb}"
 ok(f"창 2개 생성({wa},{wb} — 임시 root, 사용자 워크스페이스 무접촉)")
@@ -226,7 +226,7 @@ labs = rpc("window.list")["labels"]
 (ok if wa not in labs and wb not in labs else ng)("정리: 테스트 창 닫힘(스냅샷 prune)")
 # recents 위생(T5) — 이 하니스의 임시 root 만 잊는다(사용자 recents 무접촉).
 for r0 in (ra, rb):
-    rpc("project.recent.forget", {"root": r0})
+    rpc("project.recent.remove", {"root": r0})
 
 print()
 print(f"browser-restore: PASS={len(PASS)} FAIL={len(FAIL)}" + (f"  캡처={TMP}" if KEEP or FAIL else ""))

@@ -61,7 +61,7 @@ except Exception: print("FAIL: 앱 소켓 없음 — debug 앱 실행 필요"); 
 for x in "abc": os.makedirs("/tmp/soksak-rail-"+x, exist_ok=True)
 # 홈 워크스페이스 창 — 레일·프로젝트 시나리오의 기본 무대(main 은 컨트롤 플레인).
 os.makedirs("/tmp/soksak-rail-home", exist_ok=True)
-_rh = rpc("window.new", {"root": "/tmp/soksak-rail-home"}, window="main")
+_rh = rpc("window.open", {"root": "/tmp/soksak-rail-home"}, window="main")
 W0 = _rh.get("label") or _rh.get("existingWindow"); time.sleep(4)
 # macOS /tmp → /private/tmp 심볼릭 — 코어가 canonicalize 하므로 realpath 로 비교한다.
 ra, rb, rc = [os.path.realpath("/tmp/soksak-rail-"+x) for x in "abc"]
@@ -80,7 +80,7 @@ for p in rpc("state.tree").get("projects", []):
 
 # ── ① 최근 3개 쌓기(열었다 닫기) → 레일 최근칩 노출 ──
 for r in (ra, rb, rc):
-    pid = rpc("project.create", {"root": r}).get("projectId"); time.sleep(0.5)
+    pid = rpc("project.open", {"root": r}).get("projectId"); time.sleep(0.5)
     rpc("project.close", {"project": pid}); time.sleep(0.4)
 time.sleep(0.6)
 rec = rail_recents()
@@ -102,10 +102,10 @@ if addr:
 else: ng("최근칩 노드 없음")
 
 # ── ③ 열기·생성의 단일 표면 = 컨트롤 플레인(픽커 소멸) ──
-# 빈 워크스페이스 창은 생성 경로가 없다 — root 없는 window.new 는 거부된다.
-r_bare = rpc("window.new", window="main")
+# 빈 워크스페이스 창은 생성 경로가 없다 — root 없는 window.open 은 거부된다.
+r_bare = rpc("window.open", window="main")
 (ok if r_bare.get("ok") is False and r_bare.get("code") == "INVALID_PARAMS"
- else ng)(f"root 없는 window.new 거부: {r_bare.get('code')}")
+ else ng)(f"root 없는 window.open 거부: {r_bare.get('code')}")
 # 컨트롤 플레인 프로젝트맵: 미개방 최근(rail-c)의 열기 화살표 클릭 → 새 워크스페이스 창.
 addr_c = None
 for n in rpc("ui.tree", window="main").get("nodes", []):
@@ -126,7 +126,7 @@ else: ng("컨트롤 플레인 프로젝트맵에 rail-c 화살표 없음")
 (ok if node("/orch/new-project", window="main") else ng)("컨트롤 플레인에 새 프로젝트 진입점")
 
 # ── ④ 타창 프로젝트가 이 창 레일에 + 클릭=그 창 포커스 ──
-wo = rpc("window.new", {"root": rb}).get("label"); time.sleep(4)  # rb 를 별도 창에
+wo = rpc("window.open", {"root": rb}).get("label"); time.sleep(4)  # rb 를 별도 창에
 others = rail_others()
 if "soksak-rail-b" in others:
     ok(f"타창 프로젝트가 레일에 노출: {others}")
@@ -143,9 +143,9 @@ else: ng(f"타창 프로젝트 레일 미노출: {others}")
 # ── 정리(멱등): 창·탭 + recents 의 테스트 root ──
 rpc("window.close", {"label": wo}); time.sleep(0.5)
 rpc("window.close", {"label": W0}); time.sleep(0.5)
-# recents 에서 이 테스트 root 만 제거(project.recent.forget — 정공법, raw sqlite 아님).
+# recents 에서 이 테스트 root 만 제거(project.recent.remove — 정공법, raw sqlite 아님).
 for r in (ra, rb, rc, os.path.realpath("/tmp/soksak-rail-home")):
-    rpc("project.recent.forget", {"root": r}, window="main")
+    rpc("project.recent.remove", {"root": r}, window="main")
 
 print()
 print(f"project-rail: PASS={len(PASS)} FAIL={len(FAIL)}")

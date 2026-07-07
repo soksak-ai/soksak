@@ -70,7 +70,7 @@ export interface PluginEventMap {
   // 콘텐츠 탭 전환 등으로 콘텐츠 슬롯이 파킹/언파킹된 뒤(코어 useLayoutEffect = React 커밋 후)
   // 코어가 발화한다 — 네이티브 webview 를 소유한 플러그인이 자기 앵커로 bounds 를 1회 재스냅하는
   // 신호. 위치 이동(크기 무변)이라 ResizeObserver 가 못 잡는 전환을 이 이벤트가 덮는다.
-  "layout.reflow": { activeContentId: string | null };
+  "layout.reflow": { activeSheetId: string | null };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   // 터미널 명령 시작(셸 preexec 의 OSC 633;E — 명령라인·cwd 동반, 폴링 없음).
   // [RULE] claude 등 "명령별" 도메인 처리는 코어가 아니라 이 이벤트를 구독하는

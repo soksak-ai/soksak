@@ -117,15 +117,15 @@ async function setup(sock, repoRoot) {
   // 프로젝트 루트 = node_modules: 파일트리가 수백 항목으로 오버플로해야
   // s6(트리 스크롤)이 유효한 시나리오가 된다(루트 ~20개면 스크롤 자체가 무효).
   const created = must(
-    await rpc(sock, "project.create", {
+    await rpc(sock, "project.open", {
       root: `${repoRoot}/node_modules`,
       alias: ALIAS,
       program: "terminal",
     }),
-    "project.create",
+    "project.open",
   );
   const project = created.projectId;
-  const gLeft = created.groupId;
+  const gLeft = created.panelId;
 
   // 우측 컬럼: 파일 에디터.
   const right = must(
@@ -137,7 +137,7 @@ async function setup(sock, repoRoot) {
     }),
     "panel.split right",
   );
-  const gRight = right.groupId;
+  const gRight = right.panelId;
 
   // 우상단 패널에 파일 에디터 열기(스크롤 시나리오 대상 — 충분히 긴 파일).
   // editor.open 은 활성 그룹에 열리므로 먼저 gRight 를 활성화한다.
@@ -160,7 +160,7 @@ async function setup(sock, repoRoot) {
     }),
     "panel.split bottom",
   );
-  const gBrowser = bottom.groupId;
+  const gBrowser = bottom.panelId;
   const browserView = must(
     await rpc(sock, "view.open", {
       group: gBrowser,
@@ -194,7 +194,7 @@ async function setup(sock, repoRoot) {
   const tree1 = await getTree(sock);
   const proj = findPerfProject(tree1);
   if (!proj) throw new Error("setup 후 perf-harness 프로젝트를 찾지 못함");
-  const content = proj.contents.find((c) => c.active) ?? proj.contents[0];
+  const sheet = proj.sheets.find((c) => c.active) ?? proj.sheets[0];
   const splits = collectSplits(content.layout);
   if (splits.length === 0) throw new Error("분할 노드 없음");
   // 루트 분할(트리 최상단) = 좌|우 경계.
@@ -202,7 +202,7 @@ async function setup(sock, repoRoot) {
 
   const ids = {
     project,
-    contentId: content.id,
+    sheetId: sheet.id,
     rootSplitId: rootSplit.split.id,
     rootSizes: rootSplit.split.sizes ?? [0.5, 0.5],
     gLeft,

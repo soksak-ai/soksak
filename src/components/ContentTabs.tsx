@@ -56,7 +56,7 @@ export const ContentTabs = memo(function ContentTabs({
         <div
           key={c.id}
           className={`ctab${c.id === project.activeContentId ? " active" : ""}${editingId === c.id ? " editing" : ""}`}
-          data-node={`tab/content/${idx}`}
+          data-node={`tab/sheet/${idx}`}
           onClick={() => setActiveContent(project.id, c.id)}
           onDoubleClick={() => setEditingId(c.id)}
           title={c.title}
@@ -83,8 +83,8 @@ export const ContentTabs = memo(function ContentTabs({
             <button
               type="button"
               className="icon-btn icon-btn--mini ctab-close"
-              data-node={`tab/content/${idx}/close`}
-              title={t("content.close")}
+              data-node={`tab/sheet/${idx}/close`}
+              title={t("sheet.close")}
               onClick={(e) => {
                 e.stopPropagation();
                 requestCloseContent(project.id, c.id);
@@ -101,7 +101,7 @@ export const ContentTabs = memo(function ContentTabs({
           ref={addBtnRef}
           type="button"
           className="icon-btn ctab-add"
-          title={t("content.new")}
+          title={t("sheet.new")}
           onClick={toggleMenu}
         >
           <Icon name="add" />

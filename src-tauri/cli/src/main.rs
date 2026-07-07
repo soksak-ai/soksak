@@ -100,7 +100,7 @@ fn print_usage() {
   soksak 터미널 안에서는 $SOKSAK_PANE 이 자동 주입되어, 대상 id 를 생략하면
   호출한 pane 의 위치(패널/컨텐츠/프로젝트)가 기본 대상이 된다.
   멀티 윈도우: sok --window <label> <command> 또는 $SOKSAK_WINDOW 로 특정 창을 지정
-  (생략 시 활성 창). 창 목록은 sok window.list, 새 창은 sok window.new.
+  (생략 시 활성 창). 창 목록은 sok window.list, 새 창은 sok window.open.
   상관: $SOKSAK_PARENT 가 있으면 요청에 parent 로 실려 활동 엔트리가 그 턴으로 묶인다.
 
 환경(한 sok 은 한 환경에만 묶인다 — 침묵 cross-env 금지):
@@ -355,7 +355,12 @@ fn fetch_commands() -> Result<Vec<Value>, String> {
 
 fn format_command_md(c: &Value) -> String {
     let name = c["name"].as_str().unwrap_or("?");
-    let mut out = format!("## `{name}`\n\n{}\n\n", c["description"].as_str().unwrap_or(""));
+    // danger(destructive/inject)는 헤딩 줄에 함께 표기 — 위험 명령을 한눈에 가려낼 수 있게.
+    let dg = c["danger"]
+        .as_str()
+        .map(|d| format!(" (danger: {d})"))
+        .unwrap_or_default();
+    let mut out = format!("## `{name}`{dg}\n\n{}\n\n", c["description"].as_str().unwrap_or(""));
     let params = c["params"].as_object();
     if params.is_some_and(|p| !p.is_empty()) {
         out.push_str("| Parameter | Type | Required | Description |\n|---|---|---|---|\n");
@@ -837,7 +842,7 @@ const SKILL_BODY_HEAD: &str = r#"# Controlling soksak with `sok`
 Orientation only. `sok commands` (catalog) and `sok help <cmd>` (one command's schema) are the
 live single source of truth — this file is a map, not the full catalog.
 
-soksak is a terminal app with a 3-level layout: projects (t*) -> contents (c*, tabs of split
+soksak is a terminal app with a 3-level layout: projects (t*) -> sheets (c*, tabs of split
 grids) -> panels (g*, split groups) holding views (v*: terminal / file editor / browser;
 terminals contain panes p*). Every feature is a `sok` command.
 
@@ -852,14 +857,14 @@ while on `main` routes to a new workspace window automatically (returns `routedW
 - `sok state.tree` returns every id plus each panel's on-screen rect (%) — the address book.
 - Inside a soksak terminal, `$SOKSAK_PANE` marks your pane. Omit target ids and commands
   default to your own location. `sok state.context` shows where you are.
-- Pass explicit ids to act anywhere: `sok panel.split '{"group":"g3","side":"right"}'`.
+- Pass explicit ids to act anywhere: `sok panel.split '{"panel":"g3","side":"right"}'`.
 
 ## Workflow — always verify
 
 1. `sok commands` (or `sok commands '{"domain":"panel"}'`) to discover; `sok help <cmd>` for one schema.
 2. `sok state.tree` to discover live targets.
 3. Run the command. Mutations return resulting ids/state, e.g. panel.split ->
-   `{"ok":true,"groupId":"g4","viewId":"v5","paneId":"p6"}`.
+   `{"ok":true,"panelId":"g4","viewId":"v5","paneId":"p6"}`.
 4. Verify from the response; cross-check with `sok state.tree` or `sok term.read`.
 5. Errors are structured: `{"ok":false,"code":"TARGET_NOT_FOUND|LAST_ITEM|INVALID_PARAMS|TIMEOUT","message":...}`.
 
@@ -877,9 +882,9 @@ const SKILL_BODY_TAIL: &str = r#"
 
 ## Orchestration (multi-window, monitors, live feed)
 
-- Windows are first-class: `sok window.new '{"root":"/abs/path"}'` opens a project in its own
+- Windows are first-class: `sok window.open '{"root":"/abs/path"}'` opens a project in its own
   window (P6 single-open: an already-open root focuses its window and returns `existingWindow`).
-  `sok window.new '{"mode":"orchestrator"}'` opens the observation window (idempotent).
+  `sok window.open '{"mode":"orchestrator"}'` opens the observation window (idempotent).
 - Placement: `sok window.monitors` (facts: monitor rects/scale + every window's frame) ->
   `sok layout.suggest '{"strategy":"spread","roles":{"orch-1":"orchestrator"}}'` (pure strategy)
   -> `sok window.place '{"label":...,"x":...,"y":...,"w":...,"h":...}'` (execute, physical px).
@@ -893,7 +898,7 @@ const SKILL_BODY_TAIL: &str = r#"
 
 ## Cautions
 
-- close commands are destructive: panel.close removes every tab in the panel; the last project/content/view/pane is protected (LAST_ITEM error).
+- close commands are destructive: panel.close removes every tab in the panel; the last project/sheet/view/pane is protected (LAST_ITEM error).
 - term.send writes raw bytes to the PTY; term.exec appends Enter.
 - browser.eval runs arbitrary JS in the page; `return` a JSON-serializable value.
 "#;
@@ -901,12 +906,12 @@ const SKILL_BODY_TAIL: &str = r#"
 // 앱 미가동(소켓 없음) 시 fallback 도메인 지도 — 코어 도메인만(플러그인은 라이브일 때만 발견).
 const CORE_DOMAIN_MAP: &str = "\
 - state: tree, context, commands
-- project: list, create, activate, ...
-- content: list, create, activate, ...
+- project: list, open, activate, ...
+- sheet: list, create, activate, ...
 - panel: split, merge, move, resize, ...
 - pane: split, focus, close, ...
 - view: open, activate, move, ...
-- window: new, list, focus, snapshot, ...
+- window: open, list, focus, snapshot, ...
 - term: read, send, exec, cwd
 - browser: open, navigate, eval, ...
 - browser.dom: query, text, click, fill, ...

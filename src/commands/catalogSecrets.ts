@@ -141,15 +141,15 @@ export function registerSecretsCatalog(): void {
     },
   });
 
-  register("secret.delete", {
-    description: "Delete ns/key from the vault (removed=true if the key existed). Rejected if the vault is locked.",
+  register("secret.remove", {
+    description: "Remove ns/key from the vault (removed=true if the key existed). Rejected if the vault is locked.",
     triggers: { ko: "시크릿 삭제 제거 지우기 delete" },
     params: { ns: NS_PARAM, key: KEY_PARAM },
     returns: "{ removed }",
-    message: (d) => d.removed ? tmsg("msg.secret.delete.removed") : tmsg("msg.secret.delete.absent"),
+    message: (d) => d.removed ? tmsg("msg.secret.remove.removed") : tmsg("msg.secret.remove.absent"),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok secret.delete \'{"ns":"soksak-plugin-acp","key":"anthropicKey"}\''],
+    examples: ['sok secret.remove \'{"ns":"soksak-plugin-acp","key":"anthropicKey"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || typeof p.key !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns·key 필요" };

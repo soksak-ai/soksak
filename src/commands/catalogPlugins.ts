@@ -685,13 +685,25 @@ export function registerPluginCatalog(): void {
 
   register("plugin.reload", {
     description:
-      "Rescan the plugins directory and reactivate all plugins whose consent is still valid. Use after manually editing plugin files or adding new plugin folders.",
+      "Rescan the plugins directory and reactivate every plugin whose consent is still valid. With id, reload only that one plugin instead (disable then re-enable it — same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. Use after manually editing plugin files or adding new plugin folders.",
     triggers: { ko: "플러그인 재적재 리로드 새로고침" },
-    params: {},
-    returns: "{ count, rejected }",
-    message: (d) => tmsg("msg.plugin.reload", { n: Number(d.count) }),
-    examples: ["sok plugin.reload"],
-    handler: async () => {
+    params: {
+      id: {
+        type: "string",
+        description: "Plugin id to reload individually. Omit to rescan the plugins directory and reactivate every plugin.",
+      },
+    },
+    returns: "{ count, rejected } (id omitted — full rescan) | { id, status } (id given — that plugin only)",
+    message: (d) => (d.id ? tmsg("msg.plugin.reload", { n: 1 }) : tmsg("msg.plugin.reload", { n: Number(d.count) })),
+    errors: ["TARGET_NOT_FOUND", "CONSENT_REQUIRED"],
+    examples: ["sok plugin.reload", 'sok plugin.reload \'{"id":"soksak-plugin-memo"}\''],
+    handler: async (p) => {
+      if (p.id) {
+        const id = resolveShortId(String(p.id)) ?? String(p.id);
+        if (!usePlugins.getState().plugins[id]) return notFound(`플러그인 없음: ${id}`);
+        await usePlugins.getState().disable(id);
+        return usePlugins.getState().enable(id);
+      }
       await usePlugins.getState().reload();
       const s = usePlugins.getState();
       return {
@@ -718,7 +730,8 @@ export function registerPluginCatalog(): void {
       },
       project: { type: "string", description: "Project id. Defaults to the active project." },
     },
-    returns: "{ view, placement, projectId }",
+    returns:
+      "{ view, placement, projectId } (sidebar placements) | { view, placement, projectId, viewId, panelId, existing } (content placement)",
     message: (d) => tmsg("msg.plugin.view.open", { view: String(d.view), placement: String(d.placement) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
@@ -765,7 +778,7 @@ export function registerPluginCatalog(): void {
         placement,
         projectId,
         viewId: r.viewId,
-        groupId: r.groupId,
+        panelId: r.groupId,
         existing: r.existing,
       };
     },
@@ -838,7 +851,7 @@ export function registerPluginCatalog(): void {
     handler: (p) => usePlugins.getState().devLoad(p.path as string),
   });
 
-  register("plugin.dev.new", {
+  register("plugin.dev.create", {
     description:
       "Scaffold a new dev plugin in place at ~/.soksak/plugins/<id>/. Creates the minimum plugin.json, main.js, and .soksak.json (version=dev), then runs git init. No external path or dev.load needed — the folder is the working artifact. Reloads plugins automatically after scaffolding.",
     triggers: { ko: "플러그인 개발 새로 만들기 스캐폴드 scaffold 생성" },
@@ -846,9 +859,9 @@ export function registerPluginCatalog(): void {
       id: { type: "string", description: "Plugin id (must match ^[a-z0-9][a-z0-9-]*$)", required: true },
     },
     returns: "{ ok, dir, pluginId }",
-    message: (d) => tmsg("msg.plugin.dev.new", { id: String(d.pluginId) }),
+    message: (d) => tmsg("msg.plugin.dev.create", { id: String(d.pluginId) }),
     errors: ["INVALID_PARAMS"],
-    examples: ['sok plugin.dev.new \'{"id":"soksak-plugin-myapp"}\''],
+    examples: ['sok plugin.dev.create \'{"id":"soksak-plugin-myapp"}\''],
     danger: "inject",
     handler: async (p) => {
       // release 는 설치본만(A17) — dev 스캐폴드 봉쇄.

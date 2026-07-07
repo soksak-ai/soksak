@@ -2,11 +2,9 @@
 
 > 자동 생성 문서 — 원천은 `command.docs`(앱 Command Registry + 레지스트리 카탈로그).
 
-모든 명령: `sok <command> ['{JSON}']`. 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.
+모든 명령: `sok <command> [값 | '{JSON}']` — 값 하나는 유일한 필수 매개변수로 전달(기본형). 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.
 
-코어 명령만 수록한다(--core — 리포지토리 문서용, 설치본 무관). 전체(설치 플러그인 + 레지스트리)는 `sok docs`.
-
-# 1. 코어 명령
+코어 명령만 수록한다(--core — 리포지토리 문서용, 설치본 무관). 전체는 `sok docs`.
 
 ## `activity.recent`
 
@@ -135,7 +133,7 @@ Read the current text from the system clipboard. Returns an empty string when th
 sok clipboard.read
 ```
 
-## `clipboard.write`
+## `clipboard.write` (danger: inject)
 
 Write text to the system clipboard, overwriting existing content. The core suppresses the self-write echo event once to prevent feedback loops. | 클립보드 쓰기 복사 클립보드저장
 
@@ -156,116 +154,15 @@ The whole command surface in one call: core command specs, installed plugin comm
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
+| `lang` | string |  | Language for human-facing text (default: en) (en|ko) |
 | `refresh` | boolean |  | Refetch the live registry before answering (default: session cache / snapshot) |
 
-**Returns**: { core: [spec], plugins: { [pluginId]: [spec] }, registry: [{id, name, description, repo, installed, commands: [{name,title,danger?}]}] }
+**Returns**: { core: [spec], plugins: { [pluginId]: [spec] }, registry: [{id, name, description, repo, installed, commands: [{name,title,danger?}]}] } — registry name/description/commands[].title resolved to plain strings in the requested lang
 
 ```bash
 sok command.docs
 sok docs
-```
-
-## `content.activate`
-
-Switch to a specific content tab, making it active. | 탭 이동 전환 바꾸기
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `content` | string | ✓ | Target content tab id |
-| `project` | string |  | Target project id (omit = caller's context project) |
-
-**Returns**: {}
-**Errors**: TARGET_NOT_FOUND
-
-```bash
-sok content.activate '{"content":"c2"}'
-```
-
-## `content.close`
-
-Close a content tab. Refuses to close the last remaining content. | 탭 닫기 컨텐츠
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `content` | string | ✓ | Target content tab id |
-| `project` | string |  | Target project id (omit = caller's context project) |
-
-**Returns**: { activeContentId }
-**Errors**: TARGET_NOT_FOUND, LAST_ITEM
-
-```bash
-sok content.close '{"content":"c2"}'
-```
-
-## `content.create`
-
-Create a new content tab. Program priority: explicit > project setting > global setting. | 새 탭 콘텐츠 추가 새로 열기
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `program` | string |  | Program id — plugin-registered only (see program.list; no built-in default). Unregistered id falls back to terminal view |
-| `project` | string |  | Target project id (omit = caller's context project) |
-
-**Returns**: { contentId, groupId, viewId, paneId? }
-**Errors**: TARGET_NOT_FOUND
-
-```bash
-sok content.create '{"program":"browser"}'
-```
-
-## `content.list`
-
-List content tabs in a project.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `project` | string |  | Target project id (omit = caller's context project) |
-
-**Returns**: { contents: [{id,title,program,active}] }
-**Errors**: TARGET_NOT_FOUND
-
-```bash
-sok content.list
-```
-
-## `content.rename`
-
-Rename a content tab.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `content` | string | ✓ | Target content tab id |
-| `project` | string |  | Target project id (omit = caller's context project) |
-| `title` | string | ✓ | New name |
-
-**Returns**: {}
-**Errors**: TARGET_NOT_FOUND
-
-```bash
-sok content.rename '{"content":"c1","title":"빌드"}'
-```
-
-## `content.switchScan`
-
-Measure a content-tab switch as the user sees it: record the switch and report whether the new content lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts. | 탭 전환 측정 깜빡임 jank 콘텐츠 검사 단일프레임
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `applyAtMs` | number |  | Delay after recording starts before switching (default 250) |
-| `frames` | number |  | Frames to capture (default 30) |
-| `from` | string |  | Content id to start on (default: current active) |
-| `intervalMs` | number |  | Frame interval ms (default 16) |
-| `project` | string |  | Target project id (omit = caller's context project) |
-| `region` | json |  | Content area fractional rect {x0,y0,x1,y1} (0..1). Default covers the main content pane. |
-| `settleMs` | number |  | Settle wait on the start content (default 600) |
-| `threshold` | number |  | Noise floor (changed-pixel fraction) below which no switch is reported (default 0.003). Detection above the floor is peak-relative, so it adapts to the switch's magnitude. |
-| `to` | string | ✓ | Target content tab id |
-
-**Returns**: { frames, frameMs, switchFrame, switchFrames (consecutive changed = jank spread), clean, diffsPct }
-
-```bash
-sok content.switchScan '{"from":"c1","to":"c3"}'
-sok content.switchScan '{"to":"c3","frames":40}'
+sok command.docs '{"lang":"ko"}'
 ```
 
 ## `data.backup`
@@ -302,7 +199,7 @@ Count records in a collection (read-only). Narrow the count with an optional whe
 sok data.count '{"ns":"soksak-plugin-mailbox","coll":"messages"}'
 ```
 
-## `data.encrypt.convert`
+## `data.encrypt.convert` (danger: destructive)
 
 Seal records already stored plaintext in a scope under the active key (one transaction per record, idempotent, resumable). Run after data.encrypt.enable to protect pre-existing data. | 암호화변환 봉인변환 기존암호화
 
@@ -319,7 +216,7 @@ Seal records already stored plaintext in a scope under the active key (one trans
 sok data.encrypt.convert '{"ns":"soksak-plugin-terminal","coll":"command_blocks","scope":"projA"}'
 ```
 
-## `data.encrypt.enable`
+## `data.encrypt.enable` (danger: destructive)
 
 Enable encryption for a scope: generate an X25519 keypair, wrap the private key in the vault (requires the vault to be unlocked first) AND under a one-time recovery code, then register the public key so every subsequent write is sealed. Returns the recovery code ONCE — store it safely; it is the only way to recover the data if the passphrase is lost, and it is never retrievable again. Run data.encrypt.convert afterward to seal records already stored. | 암호화활성 암호화켜기 봉인활성
 
@@ -334,7 +231,7 @@ Enable encryption for a scope: generate an X25519 keypair, wrap the private key 
 sok data.encrypt.enable '{"scope":"projA"}'
 ```
 
-## `data.encrypt.recover`
+## `data.encrypt.recover` (danger: destructive)
 
 Recover a scope's encryption private key from its one-time recovery code after a lost passphrase. Unlock the vault with a NEW passphrase first; this re-stores the recovered key under it. The recovered key must match the registered public key or recovery is refused. After success the scope's sealed records decrypt again. | 암호화복구 키복구 복구코드
 
@@ -350,7 +247,7 @@ Recover a scope's encryption private key from its one-time recovery code after a
 sok data.encrypt.recover '{"scope":"projA","recoveryCode":"XXXX-XXXX-..."}'
 ```
 
-## `data.encrypt.rotate`
+## `data.encrypt.rotate` (danger: destructive)
 
 Rotate a scope's encryption key: generate a new keypair, re-seal every record from the old key to the new one (one transaction each, resumable), then dispose the old key only once nothing references it. Requires the vault unlocked. | 키회전 키교체 암호화회전
 
@@ -396,7 +293,7 @@ Export data as JSONL (meta + record + kv rows). Scope by ns/coll; omit both for 
 sok data.export '{"ns":"soksak-plugin-mailbox"}'
 ```
 
-## `data.import`
+## `data.import` (danger: destructive)
 
 Import JSONL produced by data.export: meta rows call define, record rows upsert, kv rows set. Existing ids are overwritten. | 가져오기 임포트 데이터이식 복구
 
@@ -433,7 +330,7 @@ Query a collection (read-only). Filter fields must be declared as indexes in def
 sok data.query '{"ns":"soksak-plugin-mailbox","coll":"messages","scope":"projA"}'
 ```
 
-## `data.restore`
+## `data.restore` (danger: destructive)
 
 Restore the entire data store from a backup .db file: validates, safely copies the current store, then atomically swaps. Irreversible — use with caution. | 복원 데이터복원 되돌리기
 
@@ -475,7 +372,7 @@ Close an editor view (same as view.close).
 |---|---|---|---|
 | `view` | string | ✓ | Target view id (omit = caller's context view) |
 
-**Returns**: { activeGroupId, activeViewId }
+**Returns**: { activePanelId, activeViewId }
 **Errors**: TARGET_NOT_FOUND, LAST_ITEM
 
 ```bash
@@ -491,7 +388,7 @@ Open a file in an editor view. If already open, activates that tab instead. | �
 | `path` | string | ✓ | Absolute file path |
 | `project` | string |  | Target project id (omit = caller's context project) |
 
-**Returns**: { viewId, groupId, existing }
+**Returns**: { viewId, panelId, existing }
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
@@ -614,7 +511,7 @@ Suggest window placements from current monitor/window facts (pure strategy — n
 sok layout.suggest '{"strategy":"spread","roles":{"main":"orchestrator"}}'
 ```
 
-## `media.proxy.info`
+## `media.proxy.info` (danger: inject)
 
 Return the local media-stream proxy endpoint { base, port, token }. The proxy fetches Referer/CORS-protected media (HLS .m3u8/.ts, ranged .mp4) the webview cannot fetch cross-origin: it injects caller-supplied headers, streams binary with Range support, rewrites m3u8 segment/key URLs, and sets permissive CORS for hls.js / <video>. Build URLs as {base}/m3u8?url=&referer=&ua= or {base}/stream?url=&referer=&ua=. | 미디어 프록시 스트리밍 엔드포인트 HLS 재생 Referer CORS
 
@@ -625,7 +522,7 @@ Return the local media-stream proxy endpoint { base, port, token }. The proxy fe
 sok media.proxy.info
 ```
 
-## `media.proxy.playlist`
+## `media.proxy.playlist` (danger: inject)
 
 Build a proxied URL for an HLS playlist (.m3u8). The proxy fetches the playlist with the given Referer/User-Agent and rewrites every segment/key URL back through the proxy so hls.js can play it. Returns { url }. Generic: no site knowledge. | 미디어 프록시 HLS 플레이리스트 m3u8 URL
 
@@ -642,7 +539,7 @@ Build a proxied URL for an HLS playlist (.m3u8). The proxy fetches the playlist 
 sok media.proxy.playlist '{"url":"https://cdn.example/play.m3u8","referer":"https://page.example/"}'
 ```
 
-## `media.proxy.stream`
+## `media.proxy.stream` (danger: inject)
 
 Build a proxied URL for a single binary media resource (a .ts/fMP4 segment, key, or ranged .mp4). The proxy forwards Range and injects the given Referer/User-Agent. Returns { url } for use as a <video> src or hls.js segment. Generic: no site knowledge. | 미디어 프록시 세그먼트 바이너리 스트림 URL
 
@@ -659,7 +556,7 @@ Build a proxied URL for a single binary media resource (a .ts/fMP4 segment, key,
 sok media.proxy.stream '{"url":"https://cdn.example/seg0.ts","referer":"https://page.example/"}'
 ```
 
-## `net.http.request`
+## `net.http.request` (danger: inject)
 
 Send an arbitrary-origin HTTP request (method/url/headers/query/body) → {status,headers,body}. Core handles cross-origin requests that webview fetch cannot. Secrets are substituted at the Rust boundary from the ns vault (secretSubst: placeholder→secretKey, plaintext never exposed). ns must be explicit from CLI/E2E; plugin runtime uses app.network.http which injects ns automatically. impersonate:"chrome" routes the request through the browser-fingerprint (JA3/JA4) backend; "off" (default) uses the plain native-tls backend. | HTTP 요청 API호출 웹요청 GET POST 임퍼소네이션 핑거프린트
 
@@ -683,7 +580,7 @@ sok net.http.request '{"method":"GET","url":"https://api.example.com/v1/ping"}'
 sok net.http.request '{"method":"GET","url":"https://blocked.example.com","impersonate":"chrome"}'
 ```
 
-## `net.udp.request`
+## `net.udp.request` (danger: inject)
 
 UDP request-response on a single socket: send data (hex) to host:port, then collect replies for timeoutMs (SSDP discover, mDNS, DNS, etc.). Unicast replies return to the sending port. Each packet includes hex and decoded text. | UDP 요청 SSDP mDNS 디스커버리 네트워크검색
 
@@ -702,7 +599,7 @@ UDP request-response on a single socket: send data (hex) to host:port, then coll
 sok net.udp.request '{"host":"239.255.255.250","port":1900,"data":"...","timeoutMs":3000}'
 ```
 
-## `net.udp.send`
+## `net.udp.send` (danger: inject)
 
 Send a UDP datagram to any host:port, including broadcast addresses (e.g. Wake-on-LAN). data must be a hex string. Core handles raw UDP that webview JS cannot perform. | UDP 전송 네트워크 브로드캐스트 WOL
 
@@ -736,45 +633,19 @@ Show an OS desktop notification (title + body). Behaves like a push notification
 sok notify.show '{"title":"배포 완료","body":"prod 배포가 끝났습니다"}'
 ```
 
-## `orchestrator.ask`
-
-Run one natural-language turn: spawns the configured agent CLI (settings orchestratorAgent) which drives the app through single `sok` commands. Every execution born from the turn carries payload.parentId=turnId, and the turn itself is recorded as chat.prompt → command.progress deltas → chat.answer — one conversation set in the activity stream. Long-running: pass a large timeoutMs when calling over the socket. | 자연어 명령 대화 실행 오케스트레이터 물어보기 시켜줘
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `text` | string | ✓ | Natural-language instruction |
-| `window` | string |  | Stage window label for the turn (SOKSAK_WINDOW for the agent — its sok commands default there). Omit = no stage; the agent discovers windows itself. |
-
-**Returns**: { turnId, answer } — message is the agent's final answer
-**Errors**: INTERNAL, TIMEOUT
-
-```bash
-sok --window main orchestrator.ask '{"text":"열린 창을 알려줘","timeoutMs":300000}'
-```
-
-## `orchestrator.stop`
-
-Cancel the in-flight natural-language turn (kills the agent process; the set closes as CANCELLED). | 중단 멈춰 취소 턴 중지
-
-**Returns**: { stopped }
-
-```bash
-sok --window main orchestrator.stop
-```
-
-## `panel.close`
+## `panel.close` (danger: destructive)
 
 Close a panel and all its tabs. Refuses to close the last panel. | 패널 닫기 제거
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `group` | string | ✓ | Target panel (group) id (omit = caller's context panel) |
+| `panel` | string | ✓ | Target panel id (omit = caller's context panel) |
 
-**Returns**: { activeGroupId }
+**Returns**: { activePanelId }
 **Errors**: TARGET_NOT_FOUND, LAST_ITEM
 
 ```bash
-sok panel.close '{"group":"g2"}'
+sok panel.close '{"panel":"g2"}'
 ```
 
 ## `panel.equalize`
@@ -801,25 +672,25 @@ Focus (activate) a panel, making it the active group. | 패널 포커스 활성�
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `group` | string | ✓ | Target panel (group) id (omit = caller's context panel) |
+| `panel` | string | ✓ | Target panel id (omit = caller's context panel) |
 
 **Returns**: {}
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok panel.focus '{"group":"g2"}'
+sok panel.focus '{"panel":"g2"}'
 ```
 
 ## `panel.list`
 
-List panels (split panes) in a content area, including their rect (%) and the split tree.
+List panels (split panes) in a sheet, including their rect (%) and the split tree.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `content` | string |  | Target content tab id |
 | `project` | string |  | Target project id (omit = caller's context project) |
+| `sheet` | string |  | Target sheet tab id |
 
-**Returns**: { activeGroupId, layout, panels[] }
+**Returns**: { activePanelId, layout, panels[] }
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
@@ -836,7 +707,7 @@ Merge panels — move all tabs from src into dst; empty src panel is removed aut
 | `project` | string |  | Target project id (omit = caller's context project) |
 | `src` | string | ✓ | Source panel id |
 
-**Returns**: { groupId(merged panel) }
+**Returns**: { panelId(merged panel) }
 **Errors**: TARGET_NOT_FOUND, LAST_ITEM
 
 ```bash
@@ -854,7 +725,7 @@ Reposition a panel — move the entire src panel to the zone position relative t
 | `src` | string | ✓ | Source panel id |
 | `zone` | string | ✓ | Drop zone (center = move/merge; others = split in that direction) (center|left|right|top|bottom) |
 
-**Returns**: { groupId }
+**Returns**: { panelId }
 **Errors**: TARGET_NOT_FOUND, LAST_ITEM
 
 ```bash
@@ -884,12 +755,12 @@ Split a panel — add a new panel beside the target on a given side (optionally 
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `group` | string |  | Target panel (group) id (omit = caller's context panel) |
+| `panel` | string |  | Target panel id (omit = caller's context panel) |
 | `program` | string |  | Program id — plugin-registered only (see program.list; no built-in default). Unregistered id falls back to terminal view [default "terminal"] |
 | `project` | string |  | Target project id (omit = caller's context project) |
 | `side` | string | ✓ | Split direction (left|right|top|bottom) |
 
-**Returns**: { groupId(new panel), viewId, paneId? }
+**Returns**: { panelId(new panel), viewId, paneId? }
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
@@ -957,7 +828,7 @@ sok plugin.consent.preview '{"id":"soksak-plugin-acp-orchestra"}'
 sok plugin.consent.preview '{"id":""}'  # 닫기
 ```
 
-## `plugin.consent.revoke`
+## `plugin.consent.revoke` (danger: destructive)
 
 Revoke a recorded consent, putting the plugin back into a re-consent-required state. If active, the plugin and all transitive dependents are disabled first. Safe because it only reduces permissions. | 동의 철회 취소 revoke 권한 제거
 
@@ -1003,7 +874,22 @@ sok plugin.deps
 sok plugin.deps '{"id":"soksak-plugin-acp-core"}'
 ```
 
-## `plugin.dev.load`
+## `plugin.dev.create` (danger: inject)
+
+Scaffold a new dev plugin in place at ~/.soksak/plugins/<id>/. Creates the minimum plugin.json, main.js, and .soksak.json (version=dev), then runs git init. No external path or dev.load needed — the folder is the working artifact. Reloads plugins automatically after scaffolding. | 플러그인 개발 새로 만들기 스캐폴드 scaffold 생성
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | ✓ | Plugin id (must match ^[a-z0-9][a-z0-9-]*$) |
+
+**Returns**: { ok, dir, pluginId }
+**Errors**: INVALID_PARAMS
+
+```bash
+sok plugin.dev.create '{"id":"soksak-plugin-myapp"}'
+```
+
+## `plugin.dev.load` (danger: inject)
 
 Development mode: load a plugin from any directory without installing it. Dev-sourced plugins bypass the consent gate (spec §0-5 exception). The inject danger policy governs this command itself. | 플러그인 개발 로드 dev 임시 적재
 
@@ -1018,22 +904,7 @@ Development mode: load a plugin from any directory without installing it. Dev-so
 sok plugin.dev.load '{"path":"/path/to/my-plugin"}'
 ```
 
-## `plugin.dev.new`
-
-Scaffold a new dev plugin in place at ~/.soksak/plugins/<id>/. Creates the minimum plugin.json, main.js, and .soksak.json (version=dev), then runs git init. No external path or dev.load needed — the folder is the working artifact. Reloads plugins automatically after scaffolding. | 플러그인 개발 새로 만들기 스캐폴드 scaffold 생성
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `id` | string | ✓ | Plugin id (must match ^[a-z0-9][a-z0-9-]*$) |
-
-**Returns**: { ok, dir, pluginId }
-**Errors**: INVALID_PARAMS
-
-```bash
-sok plugin.dev.new '{"id":"soksak-plugin-myapp"}'
-```
-
-## `plugin.disable`
+## `plugin.disable` (danger: destructive)
 
 Deactivate a plugin and revoke all of its registered commands, views, and extensions (spec §0-4). Use when you want to stop a plugin without removing it. | 플러그인 비활성화 끄기 disable
 
@@ -1048,7 +919,7 @@ Deactivate a plugin and revoke all of its registered commands, views, and extens
 sok plugin.disable '{"id":"soksak-plugin-memo"}'
 ```
 
-## `plugin.enable`
+## `plugin.enable` (danger: inject)
 
 Activate a plugin so its code begins executing. Returns CONSENT_REQUIRED if the user has not yet consented via the UI consent modal — remote enable without recorded consent is always blocked. | 플러그인 활성화 켜기 enable
 
@@ -1060,24 +931,25 @@ Activate a plugin so its code begins executing. Returns CONSENT_REQUIRED if the 
 **Errors**: TARGET_NOT_FOUND, CONSENT_REQUIRED, INTERNAL
 
 ```bash
+sok plugin.enable memo
 sok plugin.enable '{"id":"soksak-plugin-memo"}'
 ```
 
-## `plugin.install`
+## `plugin.install` (danger: destructive)
 
-Install a plugin from a git source into ~/.soksak/plugins/<id>. Accepts a "user/repo" shorthand, a full git URL, or a local path. Use when adding a new plugin for the first time. | 플러그인 설치 추가 install
+Install a plugin into ~/.soksak/plugins/<id>. Basic form: the registry short name (sok plugin.install activity). Fine-grained: a "user/repo" shorthand, a full git URL, or a local path in {"source":...}. Use when adding a new plugin for the first time. | 플러그인 설치 추가 install
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `ref` | string |  | Branch, tag, or commit to pin |
-| `source` | string | ✓ | GitHub "user/repo" shorthand, git URL, or local directory path |
+| `source` | string | ✓ | Registry short name (e.g. "activity"), GitHub "user/repo" shorthand, git URL, or local directory path |
 
 **Returns**: { id, dir }
-**Errors**: INVALID_PARAMS, INTERNAL
+**Errors**: INVALID_PARAMS, TARGET_NOT_FOUND, INTERNAL
 
 ```bash
-sok plugin.install '{"source":"user/soksak-plugin-memo"}'
-sok plugin.install '{"source":"/path/to/repo","ref":"v1.0.0"}'
+sok plugin.install activity
+sok plugin.install '{"source":"user/repo","ref":"v1.0.0"}'
 ```
 
 ## `plugin.list`
@@ -1092,15 +964,21 @@ sok plugin.list
 
 ## `plugin.reload`
 
-Rescan the plugins directory and reactivate all plugins whose consent is still valid. Use after manually editing plugin files or adding new plugin folders. | 플러그인 재적재 리로드 새로고침
+Rescan the plugins directory and reactivate every plugin whose consent is still valid. With id, reload only that one plugin instead (disable then re-enable it — same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. Use after manually editing plugin files or adding new plugin folders. | 플러그인 재적재 리로드 새로고침
 
-**Returns**: { count, rejected }
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string |  | Plugin id to reload individually. Omit to rescan the plugins directory and reactivate every plugin. |
+
+**Returns**: { count, rejected } (id omitted — full rescan) | { id, status } (id given — that plugin only)
+**Errors**: TARGET_NOT_FOUND, CONSENT_REQUIRED
 
 ```bash
 sok plugin.reload
+sok plugin.reload '{"id":"soksak-plugin-memo"}'
 ```
 
-## `plugin.remove`
+## `plugin.remove` (danger: destructive)
 
 Remove a plugin and its directory. Plugin-owned data (plugins-data) is preserved. Blocked with CASCADE_REQUIRED if dependents exist unless cascade:true is passed to remove them transitively. | 플러그인 제거 삭제 uninstall
 
@@ -1205,7 +1083,7 @@ sok plugin.settings.set '{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent
 sok plugin.settings.set '{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent","value":"gemini","scope":"project"}'
 ```
 
-## `plugin.update`
+## `plugin.update` (danger: destructive)
 
 Update an installed plugin via git pull --ff-only. Re-consent is required after update because permissions may have changed. | 플러그인 업데이트 갱신 최신화
 
@@ -1246,7 +1124,7 @@ Open a plugin view in the specified placement. Defaults to the view's declared d
 | `project` | string |  | Project id. Defaults to the active project. |
 | `view` | string | ✓ | Global view key in the form "<pluginId>.<viewId>" |
 
-**Returns**: { view, placement, projectId }
+**Returns**: { view, placement, projectId } (sidebar placements) | { view, placement, projectId, viewId, panelId, existing } (content placement)
 **Errors**: TARGET_NOT_FOUND, INVALID_PARAMS
 
 ```bash
@@ -1279,7 +1157,7 @@ Switch to a different project, making it active. | 프로젝트 전환 바꾸기
 sok project.activate '{"project":"t2"}'
 ```
 
-## `project.close`
+## `project.close` (danger: destructive)
 
 Close a project. Refuses to close the last remaining project. | 프로젝트 닫기 제거
 
@@ -1310,26 +1188,6 @@ Set the accent color for a project (rail chip and tab highlight). Omit color to 
 sok project.color '{"project":"t1","color":"#4a8fe8"}'
 ```
 
-## `project.create`
-
-Create a new project. When root is omitted, folder (slug) is required — creates and uses ~/.soksak/projects/<folder>. Home (~) and root (/) are forbidden as root. Duplicate root activates the existing project instead. | 프로젝트 만들기 새 생성 열기
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `alias` | string |  | Tab alias (omit = folder name) |
-| `folder` | string |  | Required when root is omitted — ^[a-z0-9][a-z0-9-]*$, used as ~/.soksak/projects/<folder> |
-| `program` | string |  | Initial view program (omit = empty content tab) |
-| `root` | string |  | Project root directory (absolute path — home/root forbidden) |
-| `shell` | string |  | Terminal shell path (omit = global setting → $SHELL) |
-
-**Returns**: { projectId, contentId, groupId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — that window is focused instead)
-**Errors**: INVALID_PARAMS
-
-```bash
-sok project.create '{"root":"/Users/me/work","program":"claude"}'
-sok project.create '{"folder":"my-project"}'
-```
-
 ## `project.list`
 
 List all projects with id, title, root path, and active state. | 프로젝트 목록 리스트 열린
@@ -1338,6 +1196,26 @@ List all projects with id, title, root path, and active state. | 프로젝트 �
 
 ```bash
 sok project.list
+```
+
+## `project.open`
+
+Open a project (creates it if it doesn't exist yet). When root is omitted, folder (slug) is required — creates and uses ~/.soksak/projects/<folder>. Home (~) and root (/) are forbidden as root. Duplicate root activates the existing project instead. | 프로젝트 만들기 새 생성 열기
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `alias` | string |  | Tab alias (omit = folder name) |
+| `folder` | string |  | Required when root is omitted — ^[a-z0-9][a-z0-9-]*$, used as ~/.soksak/projects/<folder> |
+| `program` | string |  | Initial view program (omit = empty sheet tab) |
+| `root` | string |  | Project root directory (absolute path — home/root forbidden) |
+| `shell` | string |  | Terminal shell path (omit = global setting → $SHELL) |
+
+**Returns**: { projectId, sheetId, panelId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new workspace window instead)
+**Errors**: INVALID_PARAMS
+
+```bash
+sok project.open '{"root":"/Users/me/work","program":"claude"}'
+sok project.open '{"folder":"my-project"}'
 ```
 
 ## `project.recent`
@@ -1350,7 +1228,7 @@ List recent projects (the cross-window recents feeding the control-plane project
 sok project.recent
 ```
 
-## `project.recent.forget`
+## `project.recent.remove`
 
 Remove a project from the recents list (project map/rail). Does not touch the project on disk — only the recents entry. Idempotent (missing root is a no-op). | 최근 프로젝트 제거 목록에서 지우기 잊기
 
@@ -1361,7 +1239,7 @@ Remove a project from the recents list (project map/rail). Does not touch the pr
 **Returns**: { ok }
 
 ```bash
-sok project.recent.forget '{"root":"/Users/me/old"}'
+sok project.recent.remove '{"root":"/Users/me/old"}'
 ```
 
 ## `project.rename`
@@ -1430,7 +1308,7 @@ Batch-update project settings. Omitted fields are preserved; "" removes the over
 sok project.update '{"project":"t1","title":"백엔드","program":"claude"}'
 ```
 
-## `remote.confirm`
+## `remote.confirm` (danger: destructive)
 
 Show the desktop human confirm modal for a destructive remote action and await the decision (approve/deny). Called by the remote-iroh sidecar over the socket: the sidecar owns the confirm authority (parking, TTL, token issuance) and delegates only the human decision here. The phone cannot self-approve — the decision comes only from this desktop modal. Returns { approve }. | 원격 destructive 데스크톱 사람 confirm 모달 승인 거부
 
@@ -1471,7 +1349,7 @@ List all jobs sorted by next fire time ascending. Each: { id, trigger, command, 
 sok schedule.list
 ```
 
-## `schedule.poke`
+## `schedule.poke` (danger: inject)
 
 Fire a job immediately (completion trigger / external change). id given = that job; omitted = all reconcile jobs. Running jobs coalesce (re-fire once after completion). | 스케줄 깨우기 poke 재평가 reconcile 틱
 
@@ -1487,7 +1365,7 @@ sok schedule.poke
 sok schedule.poke '{"id":"sch-3"}'
 ```
 
-## `schedule.register`
+## `schedule.register` (danger: inject)
 
 Register a scheduler job (trigger + registry command to fire). trigger = { kind:'at', at } | { kind:'every', every_ms, anchor? } | { kind:'cron', expr } | { kind:'reconcile' }. process_lease=true holds the lease until the fired command's process exits (no kill while running, zombie_backstop_ms cap, default 3h). retry = { max, base_ms, max_ms } for ok:false backoff. Returns the assigned id. Generalizes schedule.set. | 스케줄 등록 register 트리거 reconcile cron every 프로세스
 
@@ -1511,7 +1389,7 @@ sok schedule.register '{"trigger":{"kind":"every","every_ms":60000},"command":"n
 sok schedule.register '{"trigger":{"kind":"reconcile"},"command":"plugin.soksak-plugin-workflow.workflow.reconcile","process_lease":true,"retry":{"max":5,"base_ms":2000,"max_ms":60000}}'
 ```
 
-## `schedule.set`
+## `schedule.set` (danger: inject)
 
 Schedule a registry command to fire once at an absolute epoch-ms timestamp. Generates a new id if omitted; replaces an existing schedule when id is supplied. For recurrence, re-arm after the command fires; compose with notify.show for reminders. | 스케줄 예약 타이머 알람 일정 등록
 
@@ -1553,22 +1431,6 @@ Query the vault backend type and current lock state. Use to check whether the va
 
 ```bash
 sok secret.backend
-```
-
-## `secret.delete`
-
-Delete ns/key from the vault (removed=true if the key existed). Rejected if the vault is locked. | 시크릿 삭제 제거 지우기 delete
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `key` | string | ✓ | Secret key name (alphanumeric, -, _, .) |
-| `ns` | string | ✓ | Namespace (plugin id or core) |
-
-**Returns**: { removed }
-**Errors**: INVALID_PARAMS, INTERNAL
-
-```bash
-sok secret.delete '{"ns":"soksak-plugin-acp","key":"anthropicKey"}'
 ```
 
 ## `secret.has`
@@ -1613,7 +1475,23 @@ Lock the secret vault by zeroing the in-memory KEK. All subsequent operations ar
 sok secret.lock
 ```
 
-## `secret.set`
+## `secret.remove` (danger: destructive)
+
+Remove ns/key from the vault (removed=true if the key existed). Rejected if the vault is locked. | 시크릿 삭제 제거 지우기 delete
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `key` | string | ✓ | Secret key name (alphanumeric, -, _, .) |
+| `ns` | string | ✓ | Namespace (plugin id or core) |
+
+**Returns**: { removed }
+**Errors**: INVALID_PARAMS, INTERNAL
+
+```bash
+sok secret.remove '{"ns":"soksak-plugin-acp","key":"anthropicKey"}'
+```
+
+## `secret.set` (danger: inject)
 
 Store a sensitive value under ns/key using envelope encryption (per-item DEK wrapped by the KEK). Overwrites the existing value if the key already exists. Rejected if the vault is locked. | 시크릿 저장 설정 키 값 set 보관
 
@@ -1630,7 +1508,7 @@ Store a sensitive value under ns/key using envelope encryption (per-item DEK wra
 sok secret.set '{"ns":"soksak-plugin-acp","key":"anthropicKey","value":"sk-ant-..."}'
 ```
 
-## `secret.unlock`
+## `secret.unlock` (danger: inject)
 
 Unlock the secret vault with a master passphrase (creates a new vault if one does not exist). Keeps the KEK in memory only — only ciphertext is on disk. For headless use, set SOKSAK_VAULT_KEY env to auto-unlock. | 시크릿 볼트 열기 잠금해제 unlock 마스터키
 
@@ -1670,6 +1548,109 @@ Change an application setting. key: language|projectTabPosition|iconSet|iconBox|
 ```bash
 sok settings.set '{"key":"projectTabPosition","value":"left"}'
 sok settings.set '{"key":"iconBox","value":true}'
+```
+
+## `sheet.activate`
+
+Switch to a specific sheet tab, making it active. | 탭 이동 전환 바꾸기
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Target project id (omit = caller's context project) |
+| `sheet` | string | ✓ | Target sheet tab id |
+
+**Returns**: {}
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok sheet.activate '{"sheet":"c2"}'
+```
+
+## `sheet.close` (danger: destructive)
+
+Close a sheet tab. Refuses to close the last remaining sheet. | 탭 닫기 시트
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Target project id (omit = caller's context project) |
+| `sheet` | string | ✓ | Target sheet tab id |
+
+**Returns**: { activeSheetId }
+**Errors**: TARGET_NOT_FOUND, LAST_ITEM
+
+```bash
+sok sheet.close '{"sheet":"c2"}'
+```
+
+## `sheet.create`
+
+Create a new sheet tab. Program priority: explicit > project setting > global setting. | 새 탭 시트 추가 새로 열기
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `program` | string |  | Program id — plugin-registered only (see program.list; no built-in default). Unregistered id falls back to terminal view |
+| `project` | string |  | Target project id (omit = caller's context project) |
+
+**Returns**: { sheetId, panelId, viewId, paneId? }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok sheet.create '{"program":"browser"}'
+```
+
+## `sheet.list`
+
+List sheet tabs in a project.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Target project id (omit = caller's context project) |
+
+**Returns**: { sheets: [{id,title,program,active}] }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok sheet.list
+```
+
+## `sheet.rename`
+
+Rename a sheet tab.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Target project id (omit = caller's context project) |
+| `sheet` | string | ✓ | Target sheet tab id |
+| `title` | string | ✓ | New name |
+
+**Returns**: {}
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok sheet.rename '{"sheet":"c1","title":"빌드"}'
+```
+
+## `sheet.switchScan`
+
+Measure a sheet-tab switch as the user sees it: record the switch and report whether the new sheet lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts. | 탭 전환 측정 깜빡임 jank 시트 검사 단일프레임
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `applyAtMs` | number |  | Delay after recording starts before switching (default 250) |
+| `frames` | number |  | Frames to capture (default 30) |
+| `from` | string |  | Sheet id to start on (default: current active) |
+| `intervalMs` | number |  | Frame interval ms (default 16) |
+| `project` | string |  | Target project id (omit = caller's context project) |
+| `region` | json |  | Content area fractional rect {x0,y0,x1,y1} (0..1). Default covers the main content pane. |
+| `settleMs` | number |  | Settle wait on the start sheet (default 600) |
+| `threshold` | number |  | Noise floor (changed-pixel fraction) below which no switch is reported (default 0.003). Detection above the floor is peak-relative, so it adapts to the switch's magnitude. |
+| `to` | string | ✓ | Target sheet tab id |
+
+**Returns**: { frames, frameMs, switchFrame, switchFrames (consecutive changed = jank spread), clean, diffsPct }
+
+```bash
+sok sheet.switchScan '{"from":"c1","to":"c3"}'
+sok sheet.switchScan '{"to":"c3","frames":40}'
 ```
 
 ## `sidebar.left.move`
@@ -1750,13 +1731,13 @@ sok commands
 
 ## `state.context`
 
-Resolve the caller's position: project/content/panel/view that $SOKSAK_PANE belongs to (falls back to active chain when called outside a terminal).
+Resolve the caller's position: project/sheet/panel/view that $SOKSAK_PANE belongs to (falls back to active chain when called outside a terminal).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `pane` | string |  | Target pane id (omit = caller's context pane, $SOKSAK_PANE) |
 
-**Returns**: { projectId, contentId, groupId, viewId, paneId? }
+**Returns**: { projectId, sheetId, panelId, viewId?, paneId? } — viewId is absent when the panel is empty
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
@@ -1765,7 +1746,7 @@ sok state.context
 
 ## `state.tree`
 
-Full layout snapshot (address book): all ids and active state across project → content → panel (rect %) → view → pane. Use to discover ids before targeting other commands.
+Full layout snapshot (address book): all ids and active state across project → sheet → panel (rect %) → view → pane. Use to discover ids before targeting other commands.
 
 **Returns**: { activeProjectId, projects[] } — panels[].rect is % of the content area
 
@@ -1803,7 +1784,7 @@ Get the current working directory of a terminal pane (requires shell integration
 sok term.cwd
 ```
 
-## `term.exec`
+## `term.exec` (danger: inject)
 
 Execute a shell command in the terminal (sends text + Enter). Check output with term.read. | 명령 실행 터미널 셸 커맨드
 
@@ -1836,7 +1817,7 @@ sok term.read
 sok term.read '{"lines":50}'
 ```
 
-## `term.send`
+## `term.send` (danger: inject)
 
 Inject raw key input into a terminal (for TUI control). Pass control characters via JSON escapes: \r=Enter, \u0003=^C, \u001b[A=↑. | 터미널 입력 키 주입 TUI 조작 보내기
 
@@ -1965,7 +1946,7 @@ Return the topmost DOM element at viewport x,y (tag, classes, data-* attrs, rect
 
 **Returns**: { tag, className, data, rect } | { tag: null }
 
-## `ui.input.click`
+## `ui.input.click` (danger: inject)
 
 Dispatch a real-click sequence (mousedown → mouseup → click) to an exposed node (E2E injection). Use to drive UI flows programmatically or in tests. Unexposed addresses return NOT_EXPOSED — no guessing. | 클릭 주입 ui클릭 버튼클릭 E2E
 
@@ -1980,7 +1961,7 @@ Dispatch a real-click sequence (mousedown → mouseup → click) to an exposed n
 sok ui.input.click '{"address":"win/main/chrome/modal/consent/agree"}'
 ```
 
-## `ui.input.dblclick`
+## `ui.input.dblclick` (danger: inject)
 
 Dispatch a double-click (two clicks + a dblclick event) to an exposed node (E2E injection). Use to drive double-click UI flows like inline tab/label rename. Unexposed addresses return NOT_EXPOSED — no guessing. | 더블클릭 두번클릭 이름변경 rename 주입 E2E
 
@@ -1995,7 +1976,7 @@ Dispatch a double-click (two clicks + a dblclick event) to an exposed node (E2E 
 sok ui.input.dblclick '{"address":"win/main/chrome/tab/left/a.x"}'
 ```
 
-## `ui.input.drag`
+## `ui.input.drag` (danger: inject)
 
 Drive a pointer drag (mousedown on `from` -> mousemove -> mouseup). Two modes: (1) drop onto a target — give `to` (+ optional zone: center default, left/right/top/bottom edge for directional split), drives drag-merge tab UIs; (2) drag by a pixel delta — give `dx`/`dy` instead of `to`, grabs `from` at its center and drags that many CSS px (for resize handles / split dividers). mousemove+mouseup dispatch on window so window-level drag listeners (divider resize) receive them. Unexposed addresses return NOT_EXPOSED. | 드래그 주입 드롭 탭이동 분할 합치기 리사이즈 디바이더 E2E 포인터드래그
 
@@ -2015,7 +1996,7 @@ sok ui.input.drag '{"from":"win/main/chrome/tab/left/a.x","to":"win/main/chrome/
 sok ui.input.drag '{"from":"win/main/chrome/divider/s0/0","dx":120}'
 ```
 
-## `ui.input.fill`
+## `ui.input.fill` (danger: inject)
 
 Set the value of an exposed input/textarea node and dispatch input+change events (E2E injection). Uses the native value setter so React controlled inputs pick the value up. Unexposed addresses return NOT_EXPOSED. | 입력 주입 값입력 텍스트입력 폼입력 E2E
 
@@ -2063,12 +2044,17 @@ sok ui.slot '{"address":"win/main/content/view/soksak-plugin-browser-native.cont
 
 ## `ui.tree`
 
-Return the exposed DOM address tree — absolute addresses of nodes declared via data-node by plugin views and host-chrome elements. Use to discover addressable targets before calling ui.measure or ui.input.click; unexposed elements are absent and unreachable. | DOM 트리 주소목록 노드목록 ui트리
+Return the exposed DOM address tree — absolute addresses of nodes declared via data-node by plugin views and host-chrome elements. Use to discover addressable targets before calling ui.measure or ui.input.click; unexposed elements are absent and unreachable. Pass rects:true to include each node's viewport rect for coordinate work (drags, precision clicks). | DOM 트리 주소목록 노드목록 ui트리
 
-**Returns**: { window, count, nodes: [{ address, nodePath }] }
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `rects` | boolean |  | Include each node's viewport rect {x,y,w,h} (px) [default false] |
+
+**Returns**: { window, count, nodes: [{ address, nodePath, rect? }] }
 
 ```bash
 sok ui.tree
+sok ui.tree '{"rects":true}'
 ```
 
 ## `ui.validate`
@@ -2101,15 +2087,15 @@ Activate (switch to) a specific view tab. | 탭 전환 선택 뷰 활성화
 sok view.activate '{"view":"v3"}'
 ```
 
-## `view.close`
+## `view.close` (danger: destructive)
 
-Close a view tab — if it was the last view in a panel, the panel is also removed. Refuses to close the last view in a content area. | 탭 닫기 뷰
+Close a view tab — if it was the last view in a panel, the panel is also removed. Refuses to close the last view in a sheet. | 탭 닫기 뷰
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `view` | string | ✓ | Target view id (omit = caller's context view) |
 
-**Returns**: { activeGroupId, activeViewId }
+**Returns**: { activePanelId, activeViewId }
 **Errors**: TARGET_NOT_FOUND, LAST_ITEM
 
 ```bash
@@ -2153,9 +2139,9 @@ List the views (tabs) inside a panel.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `group` | string |  | Target panel (group) id (omit = caller's context panel) |
+| `panel` | string |  | Target panel id (omit = caller's context panel) |
 
-**Returns**: { groupId, activeViewId, views[] }
+**Returns**: { panelId, activeViewId, views[] }
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
@@ -2164,7 +2150,7 @@ sok view.list
 
 ## `view.maximize`
 
-Maximize a view to fill the entire content area. The split tree is preserved; only the display is toggled. Same as double-clicking a tab. Omit view to maximize the active view. | 최대화 전체화면 탭 크게 보기
+Maximize a view to fill the entire sheet. The split tree is preserved; only the display is toggled. Same as double-clicking a tab. Omit view to maximize the active view. | 최대화 전체화면 탭 크게 보기
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -2188,7 +2174,7 @@ Move a view tab to the zone position of dst panel (center = move into panel; oth
 | `view` | string | ✓ | Target view id (omit = caller's context view) |
 | `zone` | string | ✓ | Drop zone (center = move/merge; others = split in that direction) (center|left|right|top|bottom) |
 
-**Returns**: { groupId(moved or created panel) }
+**Returns**: { panelId(moved or created panel) }
 **Errors**: TARGET_NOT_FOUND, LAST_ITEM
 
 ```bash
@@ -2201,10 +2187,10 @@ Open a new view tab in a panel by program id (terminal / claude / codex / a plug
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `group` | string |  | Target panel (group) id (omit = caller's context panel) |
+| `panel` | string |  | Target panel id (omit = caller's context panel) |
 | `program` | string | ✓ | Program id — plugin-registered only (see program.list; no built-in default). Unregistered id falls back to terminal view |
 
-**Returns**: { groupId, viewId, paneId? }
+**Returns**: { panelId, viewId, paneId? }
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
@@ -2213,7 +2199,7 @@ sok view.open '{"program":"claude"}'
 
 ## `view.restore`
 
-Exit view maximize mode and restore the original split layout for the active content. | 최대화 해제 원래대로 레이아웃 복원
+Exit view maximize mode and restore the original split layout for the active sheet. | 최대화 해제 원래대로 레이아웃 복원
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -2253,15 +2239,16 @@ sok window.close '{"label":"w-<uuid>"}'
 
 ## `window.focus`
 
-Bring a specific window to the front (focus it). | 창 포커스 활성화 앞으로
+Bring a window to the front and focus it. Without label, focuses the window this command runs in (clears inactive state for automation); with label, focuses that window (see window.list). | 창 포커스 활성화 앞으로
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `label` | string | ✓ | Window label (see window.list) |
+| `label` | string |  | Window label (omit = this window) |
 
-**Returns**: { ok }
+**Returns**: { focused: true }
 
 ```bash
+sok window.focus
 sok window.focus '{"label":"w-<uuid>"}'
 ```
 
@@ -2320,7 +2307,21 @@ Move the window to a screen position in physical pixels (for automation and mult
 sok window.move '{"x":0,"y":0}'
 ```
 
-## `window.new`
+## `window.occlusion`
+
+Toggle occlusion detection. When false, rendering continues even when fully covered by other apps (for continuous background capture — note battery cost). Not needed for normal use; snapshot/record disable it automatically during capture.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `enabled` | boolean | ✓ | Occlusion detection on (default) / off |
+
+**Returns**: { occlusion }
+
+```bash
+sok window.occlusion '{"enabled":false}'
+```
+
+## `window.open`
 
 Open a new workspace window for a project root (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). root is required unless mode orchestrator, which brings the control plane (main) forward instead — opening and creating projects live there; empty workspace windows do not exist. | 새 창 열기 윈도우 프로젝트 오케스트레이터
 
@@ -2335,22 +2336,8 @@ Open a new workspace window for a project root (P6: if the root is already open 
 **Errors**: INVALID_PARAMS
 
 ```bash
-sok window.new '{"root":"/Users/me/work"}'
-sok window.new '{"mode":"orchestrator"}'
-```
-
-## `window.occlusion`
-
-Toggle occlusion detection. When false, rendering continues even when fully covered by other apps (for continuous background capture — note battery cost). Not needed for normal use; snapshot/record disable it automatically during capture.
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `enabled` | boolean | ✓ | Occlusion detection on (default) / off |
-
-**Returns**: { occlusion }
-
-```bash
-sok window.occlusion '{"enabled":false}'
+sok window.open '{"root":"/Users/me/work"}'
+sok window.open '{"mode":"orchestrator"}'
 ```
 
 ## `window.place`

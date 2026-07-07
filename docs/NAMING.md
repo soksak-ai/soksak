@@ -52,6 +52,17 @@ git/clipboard/ai.session) and removes the violators.
    Sidecar-owned diagnostics use `SOKSAK_SIDECAR_<NAME>_<item>`.
 7. **Terminology**: a name states *what we provide*. The name of something we merely
    consume lives only inside its import boundary (see §2).
+8. **Command verbs and targets**: `open` = surface the target, reusing an existing instance
+   instead of minting a second one when the domain already has an identity to reuse
+   (`project.open`, `window.open`). `create` = mint a new instance unconditionally, no reuse
+   check (`sheet.create`, `plugin.dev.create`). `close` = detach without destroying the
+   underlying record. `remove` = destroy the target's own record permanently (`secret.remove`,
+   `project.recent.remove`). `list` / `get` / `set` = read-many, read-one, write — no side
+   effect beyond the named field. The target parameter names the domain object acted on
+   (`project`, `sheet`, `panel`, `view`, `pane`, `window`) — never a stage-specific or
+   implementation synonym (`group`, `content`). Bare `id` is reserved for domains whose own
+   identifier field is literally `id`; every other reference is `<domain>Id`
+   (`projectId`, `sheetId`, `panelId`).
 
 ## 2. Consumed-Library Names (the CEF/Chromium ruling)
 
@@ -111,6 +122,46 @@ break the symmetry law (file = command prefix: `webview_open`, not `webview_host
 | `soksak-engine-chromium@1` → `soksak-sidecar-browser@1` (both rejected) | `soksak-sidecar-browser-spec@1` | contract id — §8 |
 
 `webview_inject_script` already conformed and is unchanged.
+
+### 2026-07 command surface rename
+
+Applied under the verb law of §1.8. Reference for external users and existing plugins
+built against the prior surface.
+
+Commands:
+
+| Before | After |
+|---|---|
+| `content.list` | `sheet.list` |
+| `content.create` | `sheet.create` |
+| `content.close` | `sheet.close` |
+| `content.activate` | `sheet.activate` |
+| `content.rename` | `sheet.rename` |
+| `content.switchScan` | `sheet.switchScan` |
+| `project.create` | `project.open` |
+| `project.recent.forget` | `project.recent.remove` |
+| `window.new` | `window.open` |
+| `plugin.dev.new` | `plugin.dev.create` |
+| `secret.delete` | `secret.remove` |
+
+`plugin.reload` keeps its name; it gained an optional `{id?}` parameter (not a rename).
+
+Parameters: `group` → `panel` (`panel.split`, `panel.close`, `panel.focus`, `view.list`,
+`view.open`); `content` → `sheet` (`sheet.close`, `sheet.activate`, `sheet.rename`,
+`panel.list`). `sheet.switchScan`'s `to`/`from` parameters are unchanged.
+
+Return fields (surface only — internal store fields keep their own names and are converted
+at the command-handler boundary): `groupId` → `panelId`, `contentId` → `sheetId`,
+`activeGroupId` → `activePanelId`, `activeContentId` → `activeSheetId`, `contents` → `sheets`.
+
+Event: `layout.reflow`'s payload key `activeContentId` → `activeSheetId` (the event name
+itself is unchanged).
+
+Address: `ui.tree` node addresses `tab/content/N` and `tab/content/N/close` →
+`tab/sheet/N` and `tab/sheet/N/close`. The layout region named `content`
+(`win/<label>/content/view/…`, the central area that hosts the active sheet's panel
+tree) is a distinct namespace and is unaffected — it names a screen region, not the
+sheet concept.
 
 ## 5. Normalization Backlog (documented drift — separate pass, do not mix into feature work)
 

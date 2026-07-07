@@ -79,7 +79,7 @@ Codex·Gemini 도 동일 패턴: `codex mcp add` / `gemini mcp add` (네이티�
 ## 3. 검증 워크플로 (always verify)
 
 1. `sok state.tree` 로 타겟 발견(모든 id + 화면 rect).
-2. 명령 실행 → 응답에서 결과 id 확인(예 `panel.split` → `{groupId, viewId, paneId}`).
+2. 명령 실행 → 응답에서 결과 id 확인(예 `panel.split` → `{panelId, viewId, paneId}`).
 3. `sok state.tree` / `sok term.read` 로 교차검증.
 4. 에러는 구조적: `{ok:false, code:"TARGET_NOT_FOUND|LAST_ITEM|INVALID_PARAMS|TIMEOUT", message}`.
 

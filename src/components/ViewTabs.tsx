@@ -167,7 +167,7 @@ export const ViewTabs = memo(function ViewTabs({
             ref={addBtnRef}
             type="button"
             className="icon-btn view-add"
-            title={t("content.new")}
+            title={t("view.new")}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={() => {
               if (menuPos) {

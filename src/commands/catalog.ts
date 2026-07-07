@@ -1,7 +1,7 @@
 // 명령 카탈로그 — soksak 전 기능을 command 로 등록한다(단일 진실).
 // 타기팅 규칙(모든 명령 공통):
 //   - 대상 id 를 명시하면 그 위치(프로젝트 전체에서 검색), 생략하면 호출자 컨텍스트
-//     (SOKSAK_PANE → 그 pane 이 속한 뷰/패널/컨텐츠/프로젝트) 또는 활성 체인.
+//     (SOKSAK_PANE → 그 pane 이 속한 뷰/패널/시트/프로젝트) 또는 활성 체인.
 //   - 모든 변이는 결과(새 id/변경 후 상태)를 반환 — 호출자가 응답만으로 검증 가능.
 
 import { invoke } from "@tauri-apps/api/core";
@@ -57,11 +57,28 @@ const notFound = (what: string) => ({
   message: what,
 });
 
+// 표면 반환 경계 변환(단일 진실) — store(sessions.ts 등) 내부 필드는 표면이 아니므로 이름을
+// 바꾸지 않는다(§ 계약). 핸들러가 store 결과를 그대로 반환하는 지점에서만 이 경계를 지나
+// 공개 명칭으로 옮긴다: groupId→panelId, contentId→sheetId, activeGroupId→activePanelId,
+// activeContentId→activeSheetId, contents→sheets. 그 외 키는 그대로 통과(에러 응답도 무해).
+function asSurface(r: object): object {
+  const rec = r as Record<string, unknown>;
+  const { groupId, contentId, activeGroupId, activeContentId, contents, ...rest } = rec;
+  const out: Record<string, unknown> = rest;
+  if ("groupId" in rec) out.panelId = groupId;
+  if ("contentId" in rec) out.sheetId = contentId;
+  if ("activeGroupId" in rec) out.activePanelId = activeGroupId;
+  if ("activeContentId" in rec) out.activeSheetId = activeContentId;
+  if ("contents" in rec) out.sheets = contents;
+  return out;
+}
+
 interface Location {
   project: ProjectTab;
   content: ContentArea;
   group: ViewGroup;
-  view: View;
+  /** 빈 패널(뷰 0개)은 위치로 유효하되 view 만 없다 — view 를 전제하는 소비처는 부재를 처리한다. */
+  view?: View;
 }
 
 // paneId 가 속한 위치를 전 프로젝트에서 검색.
@@ -149,6 +166,8 @@ function activeChain(): Location | null {
   if (!group) return null;
   const view =
     group.views.find((v) => v.id === group.activeViewId) ?? group.views[0];
+  // 빈 패널(전부 이동·닫힘)도 유효한 위치다 — 패널 대상 명령(view.open 등)은 계속 동작해야
+  // 하므로 여기서 끊지 않고, view 를 전제하는 소비처가 부재를 처리한다(INTERNAL 사망 금지, 실측).
   return { project, content, group, view };
 }
 
@@ -173,12 +192,12 @@ function resolveProject(
   return resolveCtx(ctx)?.project ?? null;
 }
 
-// 대상 그룹: 명시 id(전 프로젝트 검색) > 컨텍스트 그룹.
+// 대상 패널: 명시 id(전 프로젝트 검색) > 컨텍스트 패널.
 function resolveGroup(
   params: Record<string, unknown>,
   ctx: CommandContext,
 ): Location | null {
-  const id = params.group as string | undefined;
+  const id = params.panel as string | undefined;
   if (id) return locateGroup(id);
   return resolveCtx(ctx);
 }
@@ -241,7 +260,7 @@ function serializeContent(c: ContentArea, activeContentId: string) {
     id: c.id,
     title: c.title,
     active: c.id === activeContentId,
-    activeGroupId: c.activeGroupId,
+    activePanelId: c.activeGroupId,
     maximizedViewId: c.maximizedViewId ?? null,
     layout: serializeLayout(c.layout),
     panels: cells.map(({ group, rect }) => ({
@@ -270,8 +289,8 @@ function serializeTree() {
       color: t.color ?? null,
       sidebarOpen: t.sidebarOpen,
       active: t.id === s.activeId,
-      activeContentId: t.activeContentId,
-      contents: t.contents.map((c) => serializeContent(c, t.activeContentId)),
+      activeSheetId: t.activeContentId,
+      sheets: t.contents.map((c) => serializeContent(c, t.activeContentId)),
     })),
   };
 }
@@ -283,10 +302,10 @@ const P = {
     type: "string",
     description: "Target project id (omit = caller's context project)",
   },
-  content: { type: "string", description: "Target content tab id" },
-  group: {
+  sheet: { type: "string", description: "Target sheet tab id" },
+  panel: {
     type: "string",
-    description: "Target panel (group) id (omit = caller's context panel)",
+    description: "Target panel id (omit = caller's context panel)",
   },
   view: { type: "string", description: "Target view id (omit = caller's context view)" },
   pane: {
@@ -320,7 +339,7 @@ export function registerCatalog(): void {
 
   register("state.tree", {
     description:
-      "Full layout snapshot (address book): all ids and active state across project → content → panel (rect %) → view → pane. Use to discover ids before targeting other commands.",
+      "Full layout snapshot (address book): all ids and active state across project → sheet → panel (rect %) → view → pane. Use to discover ids before targeting other commands.",
     params: {},
     returns: "{ activeProjectId, projects[] } — panels[].rect is % of the content area",
     message: (d) => tmsg("msg.state.tree", { n: ((d.projects as unknown[]) ?? []).length }),
@@ -339,10 +358,13 @@ export function registerCatalog(): void {
 
   register("state.context", {
     description:
-      "Resolve the caller's position: project/content/panel/view that $SOKSAK_PANE belongs to (falls back to active chain when called outside a terminal).",
+      "Resolve the caller's position: project/sheet/panel/view that $SOKSAK_PANE belongs to (falls back to active chain when called outside a terminal).",
     params: { pane: P.pane },
-    returns: "{ projectId, contentId, groupId, viewId, paneId? }",
-    message: (d) => tmsg("msg.state.context", { view: String(d.viewId) }),
+    returns: "{ projectId, sheetId, panelId, viewId?, paneId? } — viewId is absent when the panel is empty",
+    message: (d) =>
+      d.viewId
+        ? tmsg("msg.state.context", { view: String(d.viewId) })
+        : tmsg("msg.state.context.emptyPanel", { panel: String(d.panelId) }),
     errors: ["TARGET_NOT_FOUND"],
     examples: ["sok state.context"],
     handler: (p, ctx) => {
@@ -350,17 +372,18 @@ export function registerCatalog(): void {
         ? locatePane(p.pane as string)
         : resolveCtx(ctx);
       if (!loc) return notFound("컨텍스트를 해석할 수 없음");
-      return {
+      return asSurface({
         projectId: loc.project.id,
         contentId: loc.content.id,
         groupId: loc.group.id,
-        viewId: loc.view.id,
+        // 빈 패널이면 viewId 없이 패널까지의 위치를 답한다 — 빈 패널 위치도 위치다.
+        viewId: loc.view?.id,
         // 터미널 pane = 플러그인 터미널의 view.id(PTY 관찰을 가진 뷰). 명시 > 컨텍스트 > 활성 뷰.
         paneId:
           (p.pane as string) ??
           ctx.pane ??
-          (hasPtyObservation(loc.view.id) ? loc.view.id : undefined),
-      };
+          (loc.view && hasPtyObservation(loc.view.id) ? loc.view.id : undefined),
+      });
     },
   });
 
@@ -393,7 +416,7 @@ export function registerCatalog(): void {
     handler: async () => ({ recents: await listRecentProjects() }),
   });
 
-  register("project.recent.forget", {
+  register("project.recent.remove", {
     description:
       "Remove a project from the recents list (project map/rail). Does not touch the project on disk — only the recents entry. Idempotent (missing root is a no-op).",
     triggers: { ko: "최근 프로젝트 제거 최근 목록에서 지우기 잊기" },
@@ -401,17 +424,17 @@ export function registerCatalog(): void {
       root: { type: "string", description: "Project root to forget", required: true },
     },
     returns: "{ ok }",
-    message: () => tmsg("msg.project.recent.forget"),
-    examples: ['sok project.recent.forget \'{"root":"/Users/me/old"}\''],
+    message: () => tmsg("msg.project.recent.remove"),
+    examples: ['sok project.recent.remove \'{"root":"/Users/me/old"}\''],
     handler: async (p) => {
       await removeRecentProject(p.root as string);
       return {};
     },
   });
 
-  register("project.create", {
+  register("project.open", {
     description:
-      "Create a new project. When root is omitted, folder (slug) is required — creates and uses ~/.soksak/projects/<folder>. Home (~) and root (/) are forbidden as root. Duplicate root activates the existing project instead.",
+      "Open a project (creates it if it doesn't exist yet). When root is omitted, folder (slug) is required — creates and uses ~/.soksak/projects/<folder>. Home (~) and root (/) are forbidden as root. Duplicate root activates the existing project instead.",
     triggers: { ko: "프로젝트 만들기 새 프로젝트 프로젝트 생성 열기" },
     params: {
       root: { type: "string", description: "Project root directory (absolute path — home/root forbidden)" },
@@ -421,23 +444,23 @@ export function registerCatalog(): void {
           "Required when root is omitted — ^[a-z0-9][a-z0-9-]*$, used as ~/.soksak/projects/<folder>",
       },
       alias: { type: "string", description: "Tab alias (omit = folder name)" },
-      program: { ...P.program, description: "Initial view program (omit = empty content tab)" },
+      program: { ...P.program, description: "Initial view program (omit = empty sheet tab)" },
       shell: { type: "string", description: "Terminal shell path (omit = global setting → $SHELL)" },
     },
     returns:
-      "{ projectId, contentId, groupId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new workspace window instead)",
+      "{ projectId, sheetId, panelId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new workspace window instead)",
     message: (d) =>
       d.routedWindow
-        ? tmsg("msg.project.create.routed", { window: String(d.routedWindow) })
+        ? tmsg("msg.project.open.routed", { window: String(d.routedWindow) })
         : d.existingWindow
-          ? tmsg("msg.project.create.existingWindow")
+          ? tmsg("msg.project.open.existingWindow")
           : d.existing
-            ? tmsg("msg.project.create.existing")
-            : tmsg("msg.project.create.created"),
+            ? tmsg("msg.project.open.existing")
+            : tmsg("msg.project.open.created"),
     errors: ["INVALID_PARAMS"],
     examples: [
-      'sok project.create \'{"root":"/Users/me/work","program":"claude"}\'',
-      'sok project.create \'{"folder":"my-project"}\'',
+      'sok project.open \'{"root":"/Users/me/work","program":"claude"}\'',
+      'sok project.open \'{"folder":"my-project"}\'',
     ],
     handler: async (p) => {
       let root = p.root as string | undefined;
@@ -466,12 +489,14 @@ export function registerCatalog(): void {
       }
       // 루트 초기화 정책(git init 등)은 project.created 이벤트 구독 플러그인 소유.
       // P6(전역 단일 오픈) 게이트 경유 — 다른 창 소유면 그 창 포커스 + existingWindow 반환.
-      return addProjectClaimed({
-        alias,
-        root,
-        shell: p.shell as string | undefined,
-        program: p.program as Program | undefined,
-      });
+      return asSurface(
+        await addProjectClaimed({
+          alias,
+          root,
+          shell: p.shell as string | undefined,
+          program: p.program as Program | undefined,
+        }),
+      );
     },
   });
 
@@ -737,89 +762,89 @@ export function registerCatalog(): void {
     },
   });
 
-  // ----- content -----
-  register("content.list", {
-    description: "List content tabs in a project.",
+  // ----- sheet -----
+  register("sheet.list", {
+    description: "List sheet tabs in a project.",
     params: { project: P.project },
-    returns: "{ contents: [{id,title,program,active}] }",
-    message: (d) => tmsg("msg.content.list", { n: ((d.contents as unknown[]) ?? []).length }),
+    returns: "{ sheets: [{id,title,program,active}] }",
+    message: (d) => tmsg("msg.sheet.list", { n: ((d.sheets as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok content.list"],
+    examples: ["sok sheet.list"],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      return {
+      return asSurface({
         contents: t.contents.map((c) => ({
           id: c.id,
           title: c.title,
           active: c.id === t.activeContentId,
         })),
-      };
+      });
     },
   });
 
-  register("content.create", {
-    description: "Create a new content tab. Program priority: explicit > project setting > global setting.",
-    triggers: { ko: "새 탭 콘텐츠 탭 추가 새로 열기" },
+  register("sheet.create", {
+    description: "Create a new sheet tab. Program priority: explicit > project setting > global setting.",
+    triggers: { ko: "새 탭 시트 탭 추가 새로 열기" },
     params: { project: P.project, program: P.program },
-    returns: "{ contentId, groupId, viewId, paneId? }",
-    message: () => tmsg("msg.content.create"),
+    returns: "{ sheetId, panelId, viewId, paneId? }",
+    message: () => tmsg("msg.sheet.create"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok content.create \'{"program":"browser"}\''],
+    examples: ['sok sheet.create \'{"program":"browser"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      return S().addContent(t.id, p.program as Program | undefined);
+      return asSurface(S().addContent(t.id, p.program as Program | undefined));
     },
   });
 
-  register("content.close", {
+  register("sheet.close", {
     danger: "destructive",
-    description: "Close a content tab. Refuses to close the last remaining content.",
-    triggers: { ko: "탭 닫기 컨텐츠 닫기" },
+    description: "Close a sheet tab. Refuses to close the last remaining sheet.",
+    triggers: { ko: "탭 닫기 시트 닫기" },
     params: {
       project: P.project,
-      content: { ...P.content, required: true },
+      sheet: { ...P.sheet, required: true },
     },
-    returns: "{ activeContentId }",
-    message: () => tmsg("msg.content.close"),
+    returns: "{ activeSheetId }",
+    message: () => tmsg("msg.sheet.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok content.close \'{"content":"c2"}\''],
+    examples: ['sok sheet.close \'{"sheet":"c2"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      return S().closeContent(t.id, p.content as string);
+      return asSurface(S().closeContent(t.id, p.sheet as string));
     },
   });
 
-  register("content.activate", {
-    description: "Switch to a specific content tab, making it active.",
+  register("sheet.activate", {
+    description: "Switch to a specific sheet tab, making it active.",
     triggers: { ko: "탭 이동 탭 전환 탭 바꾸기" },
     params: {
       project: P.project,
-      content: { ...P.content, required: true },
+      sheet: { ...P.sheet, required: true },
     },
     returns: "{}",
-    message: () => tmsg("msg.content.activate"),
+    message: () => tmsg("msg.sheet.activate"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok content.activate \'{"content":"c2"}\''],
+    examples: ['sok sheet.activate \'{"sheet":"c2"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      return S().setActiveContent(t.id, p.content as string);
+      return S().setActiveContent(t.id, p.sheet as string);
     },
   });
 
-  register("content.switchScan", {
+  register("sheet.switchScan", {
     description:
-      "Measure a content-tab switch as the user sees it: record the switch and report whether the new content lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts.",
-    triggers: { ko: "탭 전환 측정 깜빡임 jank 콘텐츠 전환 검사 단일프레임" },
+      "Measure a sheet-tab switch as the user sees it: record the switch and report whether the new sheet lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts.",
+    triggers: { ko: "탭 전환 측정 깜빡임 jank 시트 전환 검사 단일프레임" },
     params: {
       project: P.project,
-      to: { ...P.content, required: true },
+      to: { ...P.sheet, required: true },
       from: {
         type: "string",
-        description: "Content id to start on (default: current active)",
+        description: "Sheet id to start on (default: current active)",
       },
       frames: { type: "number", description: "Frames to capture (default 30)" },
       intervalMs: { type: "number", description: "Frame interval ms (default 16)" },
@@ -829,7 +854,7 @@ export function registerCatalog(): void {
       },
       settleMs: {
         type: "number",
-        description: "Settle wait on the start content (default 600)",
+        description: "Settle wait on the start sheet (default 600)",
       },
       region: {
         type: "json",
@@ -846,11 +871,11 @@ export function registerCatalog(): void {
       "{ frames, frameMs, switchFrame, switchFrames (consecutive changed = jank spread), clean, diffsPct }",
     message: (d) =>
       d.clean
-        ? tmsg("msg.content.switchScan.clean")
-        : tmsg("msg.content.switchScan.jank", { n: Number(d.switchFrames) }),
+        ? tmsg("msg.sheet.switchScan.clean")
+        : tmsg("msg.sheet.switchScan.jank", { n: Number(d.switchFrames) }),
     examples: [
-      'sok content.switchScan \'{"from":"c1","to":"c3"}\'',
-      'sok content.switchScan \'{"to":"c3","frames":40}\'',
+      'sok sheet.switchScan \'{"from":"c1","to":"c3"}\'',
+      'sok sheet.switchScan \'{"to":"c3","frames":40}\'',
     ],
     handler: async (p, ctx) => {
       const t = resolveProject(p, ctx);
@@ -875,10 +900,10 @@ export function registerCatalog(): void {
       const { tempDir, join } = await import("@tauri-apps/api/path");
       const dir = await join(await tempDir(), "soksak", `switchscan-${Date.now()}`);
 
-      // 1) 시작 콘텐츠로 + settle.
+      // 1) 시작 시트로 + settle.
       S().setActiveContent(t.id, from);
       await sleep(settleMs);
-      // 2) 녹화 시작(비대기) → applyAtMs 후 대상 콘텐츠로 전환 → 완료 대기.
+      // 2) 녹화 시작(비대기) → applyAtMs 후 대상 시트로 전환 → 완료 대기.
       const recT0 = performance.now();
       const recP = invoke<number>("plugin:webview-capture|record", {
         dir,
@@ -894,11 +919,11 @@ export function registerCatalog(): void {
         "plugin:webview-capture|analyze_frame_diffs",
         { dir, regions: [region] },
       );
-      // 4) 원래 콘텐츠 복원.
+      // 4) 원래 시트 복원.
       S().setActiveContent(t.id, prev);
 
       const diffs = grid.map((r) => r[0] ?? 0);
-      // 자기적응 감지 — 전환 변화량은 콘텐츠 쌍마다 다르다(비슷한 두 터미널=0.5%, 터미널↔에디터=수%).
+      // 자기적응 감지 — 전환 변화량은 시트 쌍마다 다르다(비슷한 두 터미널=0.5%, 터미널↔에디터=수%).
       // 고정 임계값은 작은 전환을 놓치므로, peak 의 40% 이상인 프레임을 전환으로 본다(단 floor 미만이면
       // 노이즈로 보고 전환 없음). 깨끗 = 그런 프레임이 정확히 1개(연속/복수면 번짐=jank). floor 조절 가능.
       const peak = diffs.length ? Math.max(...diffs) : 0;
@@ -925,43 +950,43 @@ export function registerCatalog(): void {
     },
   });
 
-  register("content.rename", {
-    description: "Rename a content tab.",
+  register("sheet.rename", {
+    description: "Rename a sheet tab.",
     params: {
       project: P.project,
-      content: { ...P.content, required: true },
+      sheet: { ...P.sheet, required: true },
       title: { type: "string", description: "New name", required: true },
     },
     returns: "{}",
-    message: () => tmsg("msg.content.rename"),
+    message: () => tmsg("msg.sheet.rename"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok content.rename \'{"content":"c1","title":"빌드"}\''],
+    examples: ['sok sheet.rename \'{"sheet":"c1","title":"빌드"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      return S().renameContent(t.id, p.content as string, p.title as string);
+      return S().renameContent(t.id, p.sheet as string, p.title as string);
     },
   });
 
-  // ----- panel(그룹) -----
+  // ----- panel -----
   register("panel.list", {
-    description: "List panels (split panes) in a content area, including their rect (%) and the split tree.",
-    params: { project: P.project, content: P.content },
-    returns: "{ activeGroupId, layout, panels[] }",
+    description: "List panels (split panes) in a sheet, including their rect (%) and the split tree.",
+    params: { project: P.project, sheet: P.sheet },
+    returns: "{ activePanelId, layout, panels[] }",
     message: (d) => tmsg("msg.panel.list", { n: ((d.panels as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
     examples: ["sok panel.list"],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      const c = p.content
-        ? t.contents.find((x) => x.id === p.content)
+      const c = p.sheet
+        ? t.contents.find((x) => x.id === p.sheet)
         : (resolveCtx(ctx)?.content ??
           t.contents.find((x) => x.id === t.activeContentId));
-      if (!c) return notFound(`컨텐츠 없음: ${p.content}`);
+      if (!c) return notFound(`시트 없음: ${p.sheet}`);
       const out = serializeContent(c, t.activeContentId);
       return {
-        activeGroupId: out.activeGroupId,
+        activePanelId: out.activePanelId,
         layout: out.layout,
         panels: out.panels,
       };
@@ -974,22 +999,24 @@ export function registerCatalog(): void {
     triggers: { ko: "패널 나누기 분할 화면 분할 옆에 열기 나란히" },
     params: {
       project: P.project,
-      group: P.group,
+      panel: P.panel,
       side: { ...P.side, required: true },
       program: { ...P.program, default: "terminal" },
     },
-    returns: "{ groupId(new panel), viewId, paneId? }",
+    returns: "{ panelId(new panel), viewId, paneId? }",
     message: () => tmsg("msg.panel.split"),
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok panel.split \'{"side":"right"}\'', 'sok panel.split \'{"side":"bottom","program":"browser"}\''],
     handler: (p, ctx) => {
       const loc = resolveGroup(p, ctx);
       if (!loc) return notFound("대상 패널 없음");
-      return S().splitWithNewView(
-        loc.project.id,
-        loc.group.id,
-        p.side as Side,
-        p.program as Program,
+      return asSurface(
+        S().splitWithNewView(
+          loc.project.id,
+          loc.group.id,
+          p.side as Side,
+          p.program as Program,
+        ),
       );
     },
   });
@@ -1002,18 +1029,20 @@ export function registerCatalog(): void {
       src: { type: "string", description: "Source panel id", required: true },
       dst: { type: "string", description: "Destination panel id", required: true },
     },
-    returns: "{ groupId(merged panel) }",
+    returns: "{ panelId(merged panel) }",
     message: () => tmsg("msg.panel.merge"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
     examples: ['sok panel.merge \'{"src":"g2","dst":"g1"}\''],
     handler: (p, ctx) => {
       const loc = locateGroup(p.src as string) ?? resolveGroup(p, ctx);
       if (!loc) return notFound(`패널 없음: ${p.src}`);
-      return S().moveGroupToGroup(
-        loc.project.id,
-        p.src as string,
-        p.dst as string,
-        "center",
+      return asSurface(
+        S().moveGroupToGroup(
+          loc.project.id,
+          p.src as string,
+          p.dst as string,
+          "center",
+        ),
       );
     },
   });
@@ -1027,18 +1056,20 @@ export function registerCatalog(): void {
       dst: { type: "string", description: "Destination panel id", required: true },
       zone: { ...P.zone, required: true },
     },
-    returns: "{ groupId }",
+    returns: "{ panelId }",
     message: () => tmsg("msg.panel.move"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
     examples: ['sok panel.move \'{"src":"g2","dst":"g1","zone":"left"}\''],
     handler: (p) => {
       const loc = locateGroup(p.src as string);
       if (!loc) return notFound(`패널 없음: ${p.src}`);
-      return S().moveGroupToGroup(
-        loc.project.id,
-        p.src as string,
-        p.dst as string,
-        p.zone as DropZone,
+      return asSurface(
+        S().moveGroupToGroup(
+          loc.project.id,
+          p.src as string,
+          p.dst as string,
+          p.zone as DropZone,
+        ),
       );
     },
   });
@@ -1047,31 +1078,31 @@ export function registerCatalog(): void {
     danger: "destructive",
     description: "Close a panel and all its tabs. Refuses to close the last panel.",
     triggers: { ko: "패널 닫기 패널 제거" },
-    params: { group: { ...P.group, required: true } },
-    returns: "{ activeGroupId }",
+    params: { panel: { ...P.panel, required: true } },
+    returns: "{ activePanelId }",
     message: () => tmsg("msg.panel.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok panel.close \'{"group":"g2"}\''],
+    examples: ['sok panel.close \'{"panel":"g2"}\''],
     handler: (p) => {
-      const loc = locateGroup(p.group as string);
-      if (!loc) return notFound(`패널 없음: ${p.group}`);
-      return S().closeGroup(loc.project.id, p.group as string);
+      const loc = locateGroup(p.panel as string);
+      if (!loc) return notFound(`패널 없음: ${p.panel}`);
+      return asSurface(S().closeGroup(loc.project.id, p.panel as string));
     },
   });
 
   register("panel.focus", {
     description: "Focus (activate) a panel, making it the active group.",
     triggers: { ko: "패널 포커스 패널 활성화 선택" },
-    params: { group: { ...P.group, required: true } },
+    params: { panel: { ...P.panel, required: true } },
     returns: "{}",
     message: () => tmsg("msg.panel.focus"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok panel.focus \'{"group":"g2"}\''],
+    examples: ['sok panel.focus \'{"panel":"g2"}\''],
     handler: (p) => {
-      const loc = locateGroup(p.group as string);
-      if (!loc) return notFound(`패널 없음: ${p.group}`);
+      const loc = locateGroup(p.panel as string);
+      if (!loc) return notFound(`패널 없음: ${p.panel}`);
       // 그룹 활성화만 — 뷰 내부 포커스는 뷰(플러그인 터미널 등)가 마운트/활성 시 스스로 처리.
-      return S().setActiveGroup(loc.project.id, p.group as string);
+      return S().setActiveGroup(loc.project.id, p.panel as string);
     },
   });
 
@@ -1147,19 +1178,19 @@ export function registerCatalog(): void {
   // ----- view(탭) -----
   register("view.list", {
     description: "List the views (tabs) inside a panel.",
-    params: { group: P.group },
-    returns: "{ groupId, activeViewId, views[] }",
+    params: { panel: P.panel },
+    returns: "{ panelId, activeViewId, views[] }",
     message: (d) => tmsg("msg.view.list", { n: ((d.views as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
     examples: ["sok view.list"],
     handler: (p, ctx) => {
       const loc = resolveGroup(p, ctx);
       if (!loc) return notFound("패널 없음");
-      return {
+      return asSurface({
         groupId: loc.group.id,
         activeViewId: loc.group.activeViewId,
         views: loc.group.views.map(serializeView),
-      };
+      });
     },
   });
 
@@ -1167,37 +1198,39 @@ export function registerCatalog(): void {
     description: "Open a new view tab in a panel by program id (terminal / claude / codex / a plugin view program).",
     triggers: { ko: "뷰 열기 탭 추가 claude 열기 터미널 열기" },
     params: {
-      group: P.group,
+      panel: P.panel,
       program: { ...P.program, required: true },
     },
-    returns: "{ groupId, viewId, paneId? }",
+    returns: "{ panelId, viewId, paneId? }",
     message: () => tmsg("msg.view.open"),
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok view.open \'{"program":"claude"}\''],
     handler: (p, ctx) => {
       const loc = resolveGroup(p, ctx);
       if (!loc) return notFound("패널 없음");
-      return S().addViewToGroup(
-        loc.project.id,
-        p.program as Program,
-        loc.group.id,
+      return asSurface(
+        S().addViewToGroup(
+          loc.project.id,
+          p.program as Program,
+          loc.group.id,
+        ),
       );
     },
   });
 
   register("view.close", {
     danger: "destructive",
-    description: "Close a view tab — if it was the last view in a panel, the panel is also removed. Refuses to close the last view in a content area.",
+    description: "Close a view tab — if it was the last view in a panel, the panel is also removed. Refuses to close the last view in a sheet.",
     triggers: { ko: "탭 닫기 뷰 닫기" },
     params: { view: { ...P.view, required: true } },
-    returns: "{ activeGroupId, activeViewId }",
+    returns: "{ activePanelId, activeViewId }",
     message: () => tmsg("msg.view.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
     examples: ['sok view.close \'{"view":"v3"}\''],
     handler: (p) => {
       const loc = locateView(p.view as string);
       if (!loc) return notFound(`뷰 없음: ${p.view}`);
-      return S().closeView(loc.project.id, p.view as string);
+      return asSurface(S().closeView(loc.project.id, p.view as string));
     },
   });
 
@@ -1218,7 +1251,7 @@ export function registerCatalog(): void {
 
   register("view.maximize", {
     description:
-      "Maximize a view to fill the entire content area. The split tree is preserved; only the display is toggled. Same as double-clicking a tab. Omit view to maximize the active view.",
+      "Maximize a view to fill the entire sheet. The split tree is preserved; only the display is toggled. Same as double-clicking a tab. Omit view to maximize the active view.",
     triggers: { ko: "최대화 전체화면 탭 최대화 크게 보기" },
     params: { view: P.view },
     returns: "{ viewId }",
@@ -1227,13 +1260,13 @@ export function registerCatalog(): void {
     examples: ['sok view.maximize \'{"view":"v3"}\'', "sok view.maximize"],
     handler: (p, ctx) => {
       const loc = p.view ? locateView(p.view as string) : resolveCtx(ctx);
-      if (!loc) return notFound(`뷰 없음: ${p.view ?? "(활성)"}`);
+      if (!loc?.view) return notFound(`뷰 없음: ${p.view ?? "(활성)"}`);
       return S().maximizeView(loc.project.id, loc.view.id);
     },
   });
 
   register("view.restore", {
-    description: "Exit view maximize mode and restore the original split layout for the active content.",
+    description: "Exit view maximize mode and restore the original split layout for the active sheet.",
     triggers: { ko: "최대화 해제 원래대로 레이아웃 복원" },
     params: { project: P.project },
     returns: "{ viewId(restored view | null = was not maximized) }",
@@ -1255,18 +1288,20 @@ export function registerCatalog(): void {
       dst: { type: "string", description: "Destination panel id", required: true },
       zone: { ...P.zone, required: true },
     },
-    returns: "{ groupId(moved or created panel) }",
+    returns: "{ panelId(moved or created panel) }",
     message: () => tmsg("msg.view.move"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
     examples: ['sok view.move \'{"view":"v3","dst":"g1","zone":"right"}\''],
     handler: (p) => {
       const loc = locateView(p.view as string);
       if (!loc) return notFound(`뷰 없음: ${p.view}`);
-      return S().moveViewToGroup(
-        loc.project.id,
-        p.view as string,
-        p.dst as string,
-        p.zone as DropZone,
+      return asSurface(
+        S().moveViewToGroup(
+          loc.project.id,
+          p.view as string,
+          p.dst as string,
+          p.zone as DropZone,
+        ),
       );
     },
   });
@@ -1439,7 +1474,7 @@ export function registerCatalog(): void {
       project: P.project,
       path: { type: "string", description: "Absolute file path", required: true },
     },
-    returns: "{ viewId, groupId, existing }",
+    returns: "{ viewId, panelId, existing }",
     message: (d) =>
       d.existing ? tmsg("msg.editor.open.existing") : tmsg("msg.editor.open.opened"),
     errors: ["TARGET_NOT_FOUND"],
@@ -1447,21 +1482,21 @@ export function registerCatalog(): void {
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      return S().openFileView(t.id, p.path as string);
+      return asSurface(S().openFileView(t.id, p.path as string));
     },
   });
 
   register("editor.close", {
     description: "Close an editor view (same as view.close).",
     params: { view: { ...P.view, required: true } },
-    returns: "{ activeGroupId, activeViewId }",
+    returns: "{ activePanelId, activeViewId }",
     message: () => tmsg("msg.editor.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
     examples: ['sok editor.close \'{"view":"v4"}\''],
     handler: (p) => {
       const loc = locateView(p.view as string);
       if (!loc) return notFound(`뷰 없음: ${p.view}`);
-      return S().closeView(loc.project.id, p.view as string);
+      return asSurface(S().closeView(loc.project.id, p.view as string));
     },
   });
 
@@ -1692,12 +1727,20 @@ export function registerCatalog(): void {
   });
 
   register("window.focus", {
-    description: "Bring the app window to the front and focus it (clears inactive state for automation).",
-    params: {},
+    description:
+      "Bring a window to the front and focus it. Without label, focuses the window this command runs in (clears inactive state for automation); with label, focuses that window (see window.list).",
+    triggers: { ko: "창 포커스 창 활성화 창 앞으로" },
+    params: {
+      label: { type: "string", description: "Window label (omit = this window)" },
+    },
     returns: "{ focused: true }",
     message: () => tmsg("msg.window.focus"),
-    examples: ["sok window.focus"],
-    handler: async () => {
+    examples: ["sok window.focus", 'sok window.focus \'{"label":"w-<uuid>"}\''],
+    handler: async (p) => {
+      if (p.label) {
+        await invoke("window_focus", { label: p.label as string });
+        return { focused: true };
+      }
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       // setFocus 는 창을 key 로 만들 뿐 — 앱 전면 전환은 네이티브 자기 활성화로.
       await invoke("window_activate");
@@ -1722,7 +1765,7 @@ export function registerCatalog(): void {
   });
 
   // ── 멀티 윈도우 ──────────────────────────────────────────────────────────
-  register("window.new", {
+  register("window.open", {
     description:
       "Open a new workspace window for a project root (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). root is required unless mode orchestrator, which brings the control plane (main) forward instead — opening and creating projects live there; empty workspace windows do not exist.",
     triggers: { ko: "새 창 창 열기 새 윈도우 프로젝트 새 창 오케스트레이터 창" },
@@ -1748,11 +1791,11 @@ export function registerCatalog(): void {
     },
     returns: "{ label } | { existingWindow } (root already open — focused instead)",
     message: (d) =>
-      d.existingWindow ? tmsg("msg.window.new.existing") : tmsg("msg.window.new.created"),
+      d.existingWindow ? tmsg("msg.window.open.existing") : tmsg("msg.window.open.created"),
     errors: ["INVALID_PARAMS"],
     examples: [
-      'sok window.new \'{"root":"/Users/me/work"}\'',
-      'sok window.new \'{"mode":"orchestrator"}\'',
+      'sok window.open \'{"root":"/Users/me/work"}\'',
+      'sok window.open \'{"mode":"orchestrator"}\'',
     ],
     handler: async (p) => {
       if (p.mode === "orchestrator") {
@@ -1836,19 +1879,6 @@ export function registerCatalog(): void {
         window: o.window,
       }));
       return { projects };
-    },
-  });
-
-  register("window.focus", {
-    description: "Bring a specific window to the front (focus it).",
-    triggers: { ko: "창 포커스 창 활성화 창 앞으로" },
-    params: { label: { type: "string", description: "Window label (see window.list)", required: true } },
-    returns: "{ ok }",
-    message: () => tmsg("msg.window.focus"),
-    examples: ['sok window.focus \'{"label":"w-<uuid>"}\''],
-    handler: async (p) => {
-      await invoke("window_focus", { label: p.label as string });
-      return { ok: true };
     },
   });
 

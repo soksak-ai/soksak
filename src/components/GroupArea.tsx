@@ -447,7 +447,7 @@ export const GroupArea = memo(function GroupArea({
               /* title 모드(현재 비노출 — 재노출 대비 보존): 바 전체=그룹 드래그 핸들 */
               <div
                 className={`egroup-title${isActiveGroup ? " active" : ""}`}
-                title={t("group.move")}
+                title={t("panel.move")}
                 onMouseDown={startDrag("group", group.id)}
               >
                 <span className="egt-icon icon-inline">
@@ -463,7 +463,7 @@ export const GroupArea = memo(function GroupArea({
                 <button
                   type="button"
                   className="icon-btn egt-btn"
-                  title={t("group.split")}
+                  title={t("panel.split")}
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={() => splitWithNewView(projectId, group.id, "right")}
                 >

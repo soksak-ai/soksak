@@ -140,7 +140,7 @@ export interface PluginEventMap {
   /** 콘텐츠 탭 전환 등으로 콘텐츠 슬롯이 파킹/언파킹된 뒤 코어가 발화(React 커밋 직후 useLayoutEffect).
    *  네이티브 표면 제공자(브라우저 뷰 등)가 최종 앵커 rect 로 bounds 를 1회 재스냅하는 신호 — 위치
    *  이동(크기 무변)이라 ResizeObserver 가 못 잡는 전환을 덮는다. 권한 불요. */
-  "layout.reflow": { activeContentId: string | null };
+  "layout.reflow": { activeSheetId: string | null };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   "command.started": {
     projectId: string | null;

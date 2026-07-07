@@ -150,7 +150,7 @@ const ProjectPane = memo(function ProjectPane({
   // 클릭에 즉시 반응한다. 전환 신호(view.activated)는 store diff 마이크로태스크라 커밋 전이라 여기서
   // 못 쓴다(그걸로 측정하면 옛 위치를 읽어 webview 가 한 박자 늦는다).
   useLayoutEffect(() => {
-    emitPluginEvent("layout.reflow", { activeContentId: project.activeContentId });
+    emitPluginEvent("layout.reflow", { activeSheetId: project.activeContentId });
   }, [project.activeContentId]);
   return (
     <div
@@ -781,7 +781,7 @@ function App() {
             data-node="orch-open"
             title={t("orch.open")}
             aria-label={t("orch.open")}
-            onClick={() => void execute("window.new", { mode: "orchestrator" }, { remote: false })}
+            onClick={() => void execute("window.open", { mode: "orchestrator" }, { remote: false })}
           >
             <Icon name="browser" />
           </button>

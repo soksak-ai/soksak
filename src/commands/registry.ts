@@ -49,7 +49,7 @@ export interface CommandSpec {
   // 성공 hint(제시) — 이 명령이 통했을 때 받은 쪽이 다음에 둘 만한 수를 제시한다(최대 3, execute 가
   // 자른다). message/speak 와 같은 결의 자기서술 필드: 명령은 자기 후속을 안다. 응답 페이로드(data)와
   // 호출 ctx 를 받아 CommandHint[] 를 짓는다. [철학] 지시가 아니라 가능성의 제시 — 받은 쪽의 판단을
-  // 돕는다. 던지면 execute 가 응답을 깨지 않고 hint 만 생략한다.
+  // 돕는다. 예외가 발생하면 execute 가 응답을 깨지 않고 hint 만 생략한다.
   hint?: (data: Record<string, unknown>, ctx: CommandContext) => CommandHint[];
   // 발생 가능한 에러 코드.
   errors?: readonly (CmdErrCode | "INTERNAL" | "TIMEOUT")[];
@@ -132,6 +132,11 @@ export type CommandError = CommandOutcome & { ok: false };
 const registry = new Map<string, CommandSpec>();
 
 export function register(name: string, spec: CommandSpec): void {
+  // 같은 이름의 재등록은 프로그래밍 오류다 — Map 은 무언으로 덮어써 앞 등록을 죽은 코드로
+  // 만든다(window.focus 중복 실사례). 즉시 오류로 드러낸다. 정당한 교체는 unregister 가 먼저다.
+  if (registry.has(name)) {
+    throw new Error(`중복 등록: ${name} — unregister 후 등록해야 합니다`);
+  }
   registry.set(name, spec);
 }
 
@@ -403,7 +408,7 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
 function withCommonFields(out: CommandOutcome, name: string, ctx: CommandContext): CommandOutcome {
   out.window = currentWindowLabel();
   if (out.ok) {
-    // 성공 hint 는 명령 자신(spec.hint)이 짓는다. 최대 3개로 자른다. 던져도 응답을 깨지 않고
+    // 성공 hint 는 명령 자신(spec.hint)이 짓는다. 최대 3개로 자른다. 예외가 발생해도 응답을 깨지 않고
     // hint 만 생략한다 — 제시의 실패가 실행의 성공을 무를 수 없다.
     const spec = registry.get(name);
     if (spec?.hint) {
@@ -415,7 +420,7 @@ function withCommonFields(out: CommandOutcome, name: string, ctx: CommandContext
     }
   } else {
     // 실패 hint 도 명령 자신이 먼저 짓는다(spec.hint 가 {code,message} 를 받아 원인별 안내 가능).
-    // 명령이 비우거나 던지면 오류 코드별 표준 안내로 돌아간다 — 받은 쪽이 스스로 회복할 길을 연다.
+    // 명령이 비워 두거나 예외를 일으키면 오류 코드별 표준 안내로 돌아간다 — 받은 쪽이 스스로 회복할 길을 연다.
     const spec = registry.get(name);
     if (spec?.hint) {
       try {
