@@ -40,7 +40,7 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Some("docs") => run_docs(),
+        Some("docs") => run_docs(args[1..].iter().any(|a| a == "--core")),
         Some("events") => run_events(&args[1..]),
         Some("skill") => run_skill(&args[1..]),
         Some("mcp") => match args.get(1).map(String::as_str) {
@@ -72,7 +72,7 @@ fn print_usage() {
   sok state.tree                      전체 구조(주소록): 모든 id + 패널 rect
   sok commands                        전체 명령 카탈로그(JSON)
   sok help <command>                  단일 명령 매뉴얼
-  sok docs                            전체 매뉴얼 마크다운 출력
+  sok docs [--core]                   전체 매뉴얼(코어+설치 플러그인+레지스트리 미설치; --core=코어만)
   sok events [--kinds a,b] [--since N] 활동 스트림 팔로우(JSONL, Ctrl-C 종료)
   sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]
                                       AI 에이전트 트리거 스킬 설치(soksak 제어법)
@@ -397,29 +397,71 @@ fn run_help(cmd: &str) -> ExitCode {
     }
 }
 
-fn run_docs() -> ExitCode {
-    match fetch_commands() {
+fn run_docs(core_only: bool) -> ExitCode {
+    // 원천 = 코어 자동화 명령 command.docs(전체 표면 단일 반환) — CLI 는 마크다운 표현만 담당.
+    let v = match request("command.docs", Value::Null) {
         Err(e) => {
             eprintln!("{e}");
-            ExitCode::FAILURE
+            return ExitCode::FAILURE;
         }
-        Ok(cmds) => {
-            println!("# soksak 명령 레퍼런스\n");
-            println!("> 자동 생성 문서 — 원천은 앱 Command Registry(`sok docs` 로 재생성).\n");
-            println!("모든 명령: `sok <command> ['{{JSON}}']`. 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.\n");
-            println!("코어 명령만 수록한다. 플러그인 기여 명령(`plugin.<플러그인id>.*`)은 설치본마다 다르므로 `sok commands` 또는 각 플러그인 스킬에서 조회한다.\n");
-            for c in &cmds {
-                // 플러그인 기여 명령 제외 — 플러그인 id 는 명명법상 soksak-plugin- 접두 강제
-                // (NAMING.md). 코어 plugin.* 라이프사이클(list/install/view/consent/dev …)은 통과.
-                let name = c.get("name").and_then(Value::as_str).unwrap_or("");
-                if name.starts_with("plugin.soksak-plugin-") {
-                    continue;
-                }
+        Ok(v) => v,
+    };
+    let data = v.get("data").cloned().unwrap_or(Value::Null);
+    let core = data.get("core").and_then(Value::as_array).cloned().unwrap_or_default();
+    println!("# soksak 명령 레퍼런스\n");
+    println!("> 자동 생성 문서 — 원천은 `command.docs`(앱 Command Registry + 레지스트리 카탈로그).\n");
+    println!("모든 명령: `sok <command> ['{{JSON}}']`. 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.\n");
+    if core_only {
+        println!("코어 명령만 수록한다(--core — 리포지토리 문서용, 설치본 무관). 전체(설치 플러그인 + 레지스트리)는 `sok docs`.\n");
+    } else {
+        println!("코어 → 설치된 플러그인(전체 사용법) → 레지스트리 미설치(명령+설명, 설치 후 `sok help` 로 전문) 순으로 전부 수록한다.\n");
+    }
+    println!("# 1. 코어 명령\n");
+    for c in &core {
+        println!("{}", format_command_md(c));
+    }
+    if core_only {
+        return ExitCode::SUCCESS;
+    }
+    println!("# 2. 설치된 플러그인 명령\n");
+    if let Some(plugins) = data.get("plugins").and_then(Value::as_object) {
+        for (pid, list) in plugins {
+            println!("## {pid}\n");
+            for c in list.as_array().map(|a| a.iter()).into_iter().flatten() {
                 println!("{}", format_command_md(c));
             }
-            ExitCode::SUCCESS
         }
     }
+    let entries = data.get("registry").and_then(Value::as_array).cloned().unwrap_or_default();
+    println!("# 3. 레지스트리 카탈로그(미설치 포함 {}종)\n", entries.len());
+    println!("설치: `sok plugin.install '{{\"source\":\"<repo>\"}}'` → enable → `sok help plugin.<id>.<명령>` 으로 전문 조회.\n");
+    for e in &entries {
+        let id = e["id"].as_str().unwrap_or("?");
+        let installed = e["installed"].as_bool().unwrap_or(false);
+        let desc = e["description"]["ko"]
+            .as_str()
+            .or_else(|| e["description"]["en"].as_str())
+            .unwrap_or("");
+        let mark = if installed { " (설치됨 — 위 2절에 전문)" } else { "" };
+        println!("## {id}{mark}\n\n{desc}\n");
+        println!("- repo: {}", e["repo"].as_str().unwrap_or("?"));
+        if let Some(cmds) = e["commands"].as_array() {
+            if !cmds.is_empty() {
+                println!("- 명령 {}개:", cmds.len());
+                for c in cmds {
+                    let n = c["name"].as_str().unwrap_or("?");
+                    let t = c["title"]["ko"]
+                        .as_str()
+                        .or_else(|| c["title"]["en"].as_str())
+                        .unwrap_or("");
+                    let dg = c["danger"].as_str().map(|d| format!(" [{d}]")).unwrap_or_default();
+                    println!("  - `{n}` — {t}{dg}");
+                }
+            }
+        }
+        println!();
+    }
+    ExitCode::SUCCESS
 }
 
 // ── MCP stdio 서버 (Model Context Protocol 2024-11-05) ──────────────────────

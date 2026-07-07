@@ -1,10 +1,12 @@
 # soksak 명령 레퍼런스
 
-> 자동 생성 문서 — 원천은 앱 Command Registry(`sok docs` 로 재생성).
+> 자동 생성 문서 — 원천은 `command.docs`(앱 Command Registry + 레지스트리 카탈로그).
 
 모든 명령: `sok <command> ['{JSON}']`. 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.
 
-코어 명령만 수록한다. 플러그인 기여 명령(`plugin.<플러그인id>.*`)은 설치본마다 다르므로 `sok commands` 또는 각 플러그인 스킬에서 조회한다.
+코어 명령만 수록한다(--core — 리포지토리 문서용, 설치본 무관). 전체(설치 플러그인 + 레지스트리)는 `sok docs`.
+
+# 1. 코어 명령
 
 ## `activity.recent`
 
@@ -146,6 +148,21 @@ Write text to the system clipboard, overwriting existing content. The core suppr
 
 ```bash
 sok clipboard.write '{"text":"복사할 내용"}'
+```
+
+## `command.docs`
+
+The whole command surface in one call: core command specs, installed plugin command specs (grouped by plugin), and the registry catalog including not-installed plugins (declared commands with titles). The single source for generating a full reference — sok docs renders this. | 전체 명령 문서 레퍼런스 매뉴얼 한눈에 코어 플러그인 미설치
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `refresh` | boolean |  | Refetch the live registry before answering (default: session cache / snapshot) |
+
+**Returns**: { core: [spec], plugins: { [pluginId]: [spec] }, registry: [{id, name, description, repo, installed, commands: [{name,title,danger?}]}] }
+
+```bash
+sok command.docs
+sok docs
 ```
 
 ## `content.activate`
@@ -888,7 +905,7 @@ List the official plugin registry (the installable catalog) merged with local in
 |---|---|---|---|
 | `refresh` | boolean |  | Refetch the live registry before listing (default: session cache / build snapshot) |
 
-**Returns**: { status(snapshot|live|error), plugins: [{id, name, version, description, repo, branch?, installed, runtimeStatus?}] }
+**Returns**: { status(snapshot|live|error), plugins: [{id, name, version, description, repo, branch?, commands?, installed, runtimeStatus?}] }
 
 ```bash
 sok plugin.catalog

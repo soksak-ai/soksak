@@ -152,6 +152,54 @@ export function registerPluginCatalog(): void {
     },
   });
 
+  register("command.docs", {
+    description:
+      "The whole command surface in one call: core command specs, installed plugin command specs (grouped by plugin), and the registry catalog including not-installed plugins (declared commands with titles). The single source for generating a full reference — sok docs renders this.",
+    triggers: { ko: "전체 명령 문서 레퍼런스 매뉴얼 한눈에 코어 플러그인 미설치" },
+    params: {
+      refresh: {
+        type: "boolean",
+        description: "Refetch the live registry before answering (default: session cache / snapshot)",
+      },
+    },
+    returns:
+      "{ core: [spec], plugins: { [pluginId]: [spec] }, registry: [{id, name, description, repo, installed, commands: [{name,title,danger?}]}] }",
+    message: (d) =>
+      tmsg("msg.command.docs", {
+        core: ((d.core as unknown[]) ?? []).length,
+        registry: ((d.registry as unknown[]) ?? []).length,
+      }),
+    examples: ["sok command.docs", "sok docs"],
+    handler: async (p) => {
+      const reg = useRegistry.getState();
+      await reg.refresh(p.refresh === true).catch(() => {});
+      const st = useRegistry.getState();
+      const installed = usePlugins.getState().plugins;
+      const all = catalogJson() as { name: string }[];
+      const core: unknown[] = [];
+      const plugins: Record<string, unknown[]> = {};
+      for (const c of all) {
+        const rest = c.name.startsWith("plugin.") ? c.name.slice("plugin.".length) : null;
+        const pid = rest?.startsWith("soksak-plugin-") ? rest.slice(0, rest.indexOf(".", "soksak-plugin-".length)) : null;
+        if (pid) (plugins[pid] ??= []).push(c);
+        else core.push(c);
+      }
+      return {
+        core,
+        plugins,
+        registry: st.entries.map((e) => ({
+          id: e.id,
+          name: e.name,
+          description: e.description,
+          repo: e.repo,
+          ...(e.branch ? { branch: e.branch } : {}),
+          ...(e.commands ? { commands: e.commands } : {}),
+          installed: e.id in installed,
+        })),
+      };
+    },
+  });
+
   register("plugin.install", {
     description:
       'Install a plugin from a git source into ~/.soksak/plugins/<id>. Accepts a "user/repo" shorthand, a full git URL, or a local path. Use when adding a new plugin for the first time.',

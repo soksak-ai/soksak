@@ -90,7 +90,7 @@ install-cli-debug: cli-debug ## sok-debug 를 /usr/local/bin 에 링크(argv0 �
 
 docs: ## 명령 레퍼런스 생성(docs/COMMANDS.md — 앱이 실행 중이어야 함)
 	@mkdir -p docs
-	src-tauri/target/release/sok docs > docs/COMMANDS.md
+	src-tauri/target/release/sok docs --core > docs/COMMANDS.md
 	@echo "생성: docs/COMMANDS.md"
 
 # 발행(plugin-publish)은 코어에 두지 않는다(P1·P3) — 각 플러그인은 자기 독립 repo 에서
