@@ -178,7 +178,7 @@ export function registerDomCatalog(): void {
 
   register("ui.input.click", {
     description:
-      "Dispatch a real-click sequence (mousedown → mouseup → click) to an exposed node (E2E injection). Use to drive UI flows programmatically or in tests. Unexposed addresses return NOT_EXPOSED — no guessing.",
+      "Dispatch a real-click sequence (mousedown → mouseup → click) to an exposed node (E2E injection). Use to drive UI flows programmatically or in tests. Unexposed addresses return NOT_EXPOSED — no guessing. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first.",
     triggers: { ko: "클릭 주입 ui클릭 버튼클릭 E2E" },
     params: {
       address: { type: "string", description: "Exposed node address from ui.tree", required: true },
@@ -208,7 +208,7 @@ export function registerDomCatalog(): void {
 
   register("ui.input.dblclick", {
     description:
-      "Dispatch a double-click (two clicks + a dblclick event) to an exposed node (E2E injection). Use to drive double-click UI flows like inline tab/label rename. Unexposed addresses return NOT_EXPOSED — no guessing.",
+      "Dispatch a double-click (two clicks + a dblclick event) to an exposed node (E2E injection). Use to drive double-click UI flows like inline tab/label rename. Unexposed addresses return NOT_EXPOSED — no guessing. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first.",
     triggers: { ko: "더블클릭 두번클릭 이름변경 rename 주입 E2E" },
     params: {
       address: { type: "string", description: "Exposed node address from ui.tree", required: true },
@@ -239,7 +239,7 @@ export function registerDomCatalog(): void {
 
   register("ui.input.fill", {
     description:
-      "Set the value of an exposed input/textarea node and dispatch input+change events (E2E injection). Uses the native value setter so React controlled inputs pick the value up. Unexposed addresses return NOT_EXPOSED.",
+      "Set the value of an exposed input/textarea node and dispatch input+change events (E2E injection). Uses the native value setter so React controlled inputs pick the value up. Unexposed addresses return NOT_EXPOSED. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first.",
     triggers: { ko: "입력 주입 값입력 텍스트입력 폼입력 E2E" },
     params: {
       address: { type: "string", description: "Exposed node address from ui.tree", required: true },
@@ -275,7 +275,7 @@ export function registerDomCatalog(): void {
 
   register("ui.input.drag", {
     description:
-      "Drive a pointer drag (mousedown on `from` -> mousemove -> mouseup). Two modes: (1) drop onto a target — give `to` (+ optional zone: center default, left/right/top/bottom edge for directional split), drives drag-merge tab UIs; (2) drag by a pixel delta — give `dx`/`dy` instead of `to`, grabs `from` at its center and drags that many CSS px (for resize handles / split dividers). mousemove+mouseup dispatch on window so window-level drag listeners (divider resize) receive them. Unexposed addresses return NOT_EXPOSED.",
+      "Drive a pointer drag (mousedown on `from` -> mousemove -> mouseup). Two modes: (1) drop onto a target — give `to` (+ optional zone: center default, left/right/top/bottom edge for directional split), drives drag-merge tab UIs; (2) drag by a pixel delta — give `dx`/`dy` instead of `to`, grabs `from` at its center and drags that many CSS px (for resize handles / split dividers). mousemove+mouseup dispatch on window so window-level drag listeners (divider resize) receive them. Unexposed addresses return NOT_EXPOSED. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first.",
     triggers: { ko: "드래그 주입 드롭 탭이동 분할 합치기 리사이즈 디바이더 E2E 포인터드래그" },
     params: {
       from: { type: "string", description: "Source node address (the tab / divider / element to grab)", required: true },
@@ -345,6 +345,7 @@ export function registerDomCatalog(): void {
     },
     returns: "{ tag, className, data, rect } | { tag: null }",
     message: (d) => (d.tag ? tmsg("msg.ui.hit.found", { tag: String(d.tag) }) : tmsg("msg.ui.hit.none")),
+    examples: ['sok ui.hit \'{"x":200,"y":140}\''],
     handler: (p) => {
       const el = document.elementFromPoint(Number(p.x), Number(p.y));
       if (!(el instanceof Element)) return { tag: null };
@@ -367,7 +368,7 @@ export function registerDomCatalog(): void {
   // native 마우스 브릿지(App 의 native-mousedown/move/up)를 소켓으로 구동 — 브라우저(네이티브 child)
   // 위 divider 드래그를 실제 마우스 없이 E2E 자가검증. kind = native-mousedown|native-mousemove|native-mouseup.
   register("webview.emitNative", {
-    description: "Emit a native mouse-bridge event (native-mousedown/move/up) at viewport x,y — drives divider drag/resize over a native child (browser) without a real mouse, for E2E. Pair with ui.input.drag (DOM path); this is the native path.",
+    description: "Emit a native mouse-bridge event (native-mousedown/move/up) at viewport x,y — drives divider drag/resize over a native child (browser) without a real mouse, for E2E. Pair with ui.input.drag (DOM path); this is the native path. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first.",
     params: {
       kind: { type: "string", description: "native-mousedown | native-mousemove | native-mouseup", required: true },
       x: { type: "number", description: "viewport x", required: true },
@@ -375,6 +376,7 @@ export function registerDomCatalog(): void {
     },
     returns: "{ ok, kind }",
     message: (d) => tmsg("msg.webview.emitNative", { kind: String(d.kind) }),
+    examples: ['sok webview.emitNative \'{"kind":"native-mousedown","x":400,"y":300}\''],
     handler: async (p) => {
       await invoke("webview_emit_native", { kind: p.kind, x: p.x, y: p.y });
       return { ok: true, kind: p.kind };

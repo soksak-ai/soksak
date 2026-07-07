@@ -21,6 +21,7 @@ import {
   type ViewGroup,
 } from "../state/sessions";
 import { addProjectClaimed, closeProjectReleased } from "../state/projectRegistry";
+import { getRegisteredProgram, listPrograms } from "../plugins/programRegistry";
 import { useSettings } from "../state/settings";
 import { useViewLabels } from "../state/viewLabels";
 import { useBookmarks } from "../state/bookmarks";
@@ -29,7 +30,7 @@ import { useIconRegistry } from "../ui/icons/registry";
 import { hasPtyObservation } from "../terminal/ptyObservationStore";
 import { resolveTermPane } from "./termResolve";
 import { computeLayout } from "../components/GroupArea";
-import { catalogJson, register, type CommandContext } from "./registry";
+import { catalogJson, register, type CommandContext, type CommandHint } from "./registry";
 import { registerGitCatalog } from "./catalogGit";
 import { registerPluginCatalog } from "./catalogPlugins";
 import { registerUiCatalog } from "./catalogUi";
@@ -79,6 +80,16 @@ interface Location {
   group: ViewGroup;
   /** 빈 패널(뷰 0개)은 위치로 유효하되 view 만 없다 — view 를 전제하는 소비처는 부재를 처리한다. */
   view?: View;
+}
+
+// layout.apply 저작 형태 — 1차 시트, 2차 각 시트의 패널(분할). 표면 계약(sheet/panel)과 같은 결.
+interface LayoutPanelSpec {
+  program: string;
+  side?: Side;
+}
+interface LayoutSheetSpec {
+  title?: string;
+  panels?: LayoutPanelSpec[];
 }
 
 // paneId 가 속한 위치를 전 프로젝트에서 검색.
@@ -221,6 +232,16 @@ function terminalContextPane(
     }
   }
   return null;
+}
+
+// 브라우저 계열 프로그램 id 해석(layout.apply dev preset). 프로그램은 전부 플러그인 기여라
+// 코어는 브라우저 종류를 모른다(락인 0) — 등록 프로그램 id 관례("browser")로 식별한다. 없으면
+// undefined 를 돌려주고, 호출부가 그 패널을 건너뛰며 사유를 남긴다(은폐 금지).
+function findBrowserProgram(): string | undefined {
+  const progs = listPrograms();
+  const exact = progs.find((p) => p.decl.id === "browser");
+  if (exact) return exact.decl.id;
+  return progs.find((p) => p.decl.id.includes("browser"))?.decl.id;
 }
 
 // ── 직렬화(state.tree) ──────────────────────────────────────────────────────
@@ -458,6 +479,31 @@ export function registerCatalog(): void {
             ? tmsg("msg.project.open.existing")
             : tmsg("msg.project.open.created"),
     errors: ["INVALID_PARAMS"],
+    hint: (d) => {
+      // 실패는 표준 안내에 맡긴다(창 필드 없이 code 만 도착).
+      if (d.code) return [];
+      // 제어판이 새 워크스페이스 창으로 라우팅했다 — 그 창에서 이어가는 수를 제시한다.
+      const routed = d.routedWindow as string | undefined;
+      if (routed) {
+        return [
+          { cmd: `sok --window ${routed} state.tree`, why: tmsg("hint.flow.project.open.routedContinue") },
+          { cmd: `sok --window ${routed} layout.apply dev`, why: tmsg("hint.flow.project.open.routedLayout") },
+        ];
+      }
+      // 이미 다른 창에 열려 있어 그 창을 앞으로 가져왔다 — 그 창에서 이어간다.
+      const existingWin = d.existingWindow as string | undefined;
+      if (existingWin) {
+        return [
+          { cmd: `sok --window ${existingWin} state.tree`, why: tmsg("hint.flow.project.open.existingWindow") },
+        ];
+      }
+      // 이 창에서 열렸다 — 화면을 꾸미는 다음 수들을 제시한다(가능성의 제시, 3개 상한).
+      return [
+        { cmd: "sok layout.apply dev", why: tmsg("hint.flow.project.open.layout") },
+        { cmd: "sok window.maximize", why: tmsg("hint.flow.project.open.maximize") },
+        { cmd: "sok sheet.create", why: tmsg("hint.flow.project.open.sheet") },
+      ];
+    },
     examples: [
       'sok project.open \'{"root":"/Users/me/work","program":"claude"}\'',
       'sok project.open \'{"folder":"my-project"}\'',
@@ -790,6 +836,15 @@ export function registerCatalog(): void {
     returns: "{ sheetId, panelId, viewId, paneId? }",
     message: () => tmsg("msg.sheet.create"),
     errors: ["TARGET_NOT_FOUND"],
+    hint: (d) => {
+      // 새 시트는 활성 시트가 되므로 후속 수는 컨텍스트를 그대로 겨냥한다(대상 id 불요).
+      if (d.code) return [];
+      return [
+        { cmd: "sok panel.split right", why: tmsg("hint.flow.sheet.create.split") },
+        { cmd: "sok view.open claude", why: tmsg("hint.flow.sheet.create.view") },
+        { cmd: "sok window.snapshot", why: tmsg("hint.flow.sheet.create.snapshot") },
+      ];
+    },
     examples: ['sok sheet.create \'{"program":"browser"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
@@ -1006,6 +1061,19 @@ export function registerCatalog(): void {
     returns: "{ panelId(new panel), viewId, paneId? }",
     message: () => tmsg("msg.panel.split"),
     errors: ["TARGET_NOT_FOUND"],
+    hint: (d) => {
+      if (d.code) return [];
+      const out: CommandHint[] = [];
+      const panel = d.panelId as string | undefined;
+      // 새로 생긴 패널에 다른 프로그램을 탭으로 더 열 수 있다 — 그 패널을 명시 겨냥한다.
+      if (panel)
+        out.push({
+          cmd: `sok view.open '{"panel":"${panel}","program":"claude"}'`,
+          why: tmsg("hint.flow.panel.split.view"),
+        });
+      out.push({ cmd: "sok window.snapshot", why: tmsg("hint.flow.panel.split.snapshot") });
+      return out;
+    },
     examples: ['sok panel.split \'{"side":"right"}\'', 'sok panel.split \'{"side":"bottom","program":"browser"}\''],
     handler: (p, ctx) => {
       const loc = resolveGroup(p, ctx);
@@ -1172,6 +1240,125 @@ export function registerCatalog(): void {
       }
       const r = S().resizeSplit(t.id, p.split as string, sizes);
       return r.ok ? { sizes } : r;
+    },
+  });
+
+  register("layout.apply", {
+    description:
+      "Apply a layout by building fresh sheets — never destroys existing sheets. Hierarchy: first-level sheets are independent switchable screens; second-level panels are the splits inside each sheet. preset dev = a terminal plus a browser side by side (if no browser program is installed, that panel is skipped and reported in skipped). preset facets = build the named sheets you pass in (sheets required). Verify by switching to a sheet with sheet.activate, then capturing with window.snapshot.",
+    triggers: { ko: "화면 구성 레이아웃 적용 시트 배치 개발 화면 나란히 배치 dev facets" },
+    params: {
+      preset: {
+        type: "string",
+        enum: ["dev", "facets"],
+        required: true,
+        description:
+          "dev = a terminal plus a browser side by side; facets = build the named sheets passed in sheets",
+      },
+      sheets: {
+        type: "json",
+        description:
+          "Named sheets to build (required for facets): [{ title, panels?: [{ program, side? }] }]",
+      },
+      project: P.project,
+    },
+    returns:
+      "{ sheets: [{ sheetId, title, panels: [{ panelId, program }] }], skipped? } — skipped lists panels dropped because their program is missing",
+    message: (d) => tmsg("msg.layout.apply", { n: ((d.sheets as unknown[]) ?? []).length }),
+    errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
+    hint: (d) => {
+      if (d.code) return [];
+      const out: CommandHint[] = [];
+      const sheets = (d.sheets as { sheetId?: string }[] | undefined) ?? [];
+      const skipped = (d.skipped as unknown[] | undefined) ?? [];
+      // 건너뛴 패널이 있으면(브라우저 미설치 등) 설치 경로를 먼저 제시한다.
+      if (skipped.length)
+        out.push({ cmd: "sok plugin.catalog", why: tmsg("hint.flow.layout.apply.install") });
+      const first = sheets[0]?.sheetId;
+      if (first)
+        out.push({ cmd: `sok sheet.activate ${first}`, why: tmsg("hint.flow.layout.apply.activate") });
+      out.push({ cmd: "sok window.snapshot", why: tmsg("hint.flow.layout.apply.snapshot") });
+      return out;
+    },
+    examples: [
+      "sok layout.apply dev",
+      'sok layout.apply \'{"preset":"facets","sheets":[{"title":"docs","panels":[{"program":"browser"}]}]}\'',
+    ],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound("프로젝트 없음");
+      const skipped: {
+        sheet: string;
+        program: string;
+        side?: Side;
+        reason: string;
+      }[] = [];
+      let sheetSpecs: LayoutSheetSpec[];
+      if (p.preset === "dev") {
+        // dev 축약 — 터미널 + 브라우저(우측). 브라우저 미설치면 그 패널만 건너뛰고 사유를 남긴다.
+        const browserId = findBrowserProgram();
+        const panels: LayoutPanelSpec[] = [{ program: "terminal" }];
+        if (browserId) panels.push({ program: browserId, side: "right" });
+        else
+          skipped.push({
+            sheet: "dev",
+            program: "browser",
+            side: "right",
+            reason: tmsg("layout.skip.noBrowser"),
+          });
+        sheetSpecs = [{ title: "dev", panels }];
+      } else {
+        // facets — sheets 인자를 그대로 쓰는 별칭. sheets 필수.
+        const raw = p.sheets;
+        if (!Array.isArray(raw) || raw.length === 0) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: "preset=facets 는 sheets 필요([{title,panels}])",
+          };
+        }
+        sheetSpecs = raw as LayoutSheetSpec[];
+      }
+      const builtSheets: {
+        sheetId: string;
+        title: string;
+        panels: { panelId: string; program: string }[];
+      }[] = [];
+      for (const spec of sheetSpecs) {
+        const title = typeof spec.title === "string" ? spec.title : "";
+        // 새 시트(빈 시트) — 첫 패널을 명시 제어하려 program 없이 만든다. 기존 시트는 불변.
+        const created = S().addContent(t.id);
+        if (!created.ok) continue; // 프로젝트 확인 이후이므로 도달 불가(방어)
+        const sheetId = created.contentId;
+        const firstPanelId = created.groupId;
+        if (title) S().renameContent(t.id, sheetId, title);
+        const builtPanels: { panelId: string; program: string }[] = [];
+        let firstFilled = false;
+        for (const panel of spec.panels ?? []) {
+          const program = panel.program;
+          if (typeof program !== "string" || !getRegisteredProgram(program)) {
+            skipped.push({
+              sheet: title || sheetId,
+              program: String(program),
+              side: panel.side,
+              reason: tmsg("layout.skip.unregistered", { program: String(program) }),
+            });
+            continue;
+          }
+          if (!firstFilled) {
+            // 첫 패널 = 시트의 초기(빈) 그룹에 뷰를 넣는다.
+            S().addViewToGroup(t.id, program, firstPanelId);
+            builtPanels.push({ panelId: firstPanelId, program });
+            firstFilled = true;
+          } else {
+            // 이후 패널 = 첫 그룹 옆에 분할 생성.
+            const r = S().splitWithNewView(t.id, firstPanelId, panel.side ?? "right", program);
+            if (r.ok) builtPanels.push({ panelId: r.groupId, program });
+          }
+        }
+        builtSheets.push({ sheetId, title, panels: builtPanels });
+      }
+      return skipped.length ? { sheets: builtSheets, skipped } : { sheets: builtSheets };
     },
   });
 
@@ -1378,7 +1565,8 @@ export function registerCatalog(): void {
 
   register("term.exec", {
     danger: "inject",
-    description: "Execute a shell command in the terminal (sends text + Enter). Check output with term.read.",
+    description:
+      "Execute a shell command in a terminal (sends the text plus Enter). Returns immediately — it does not wait for the command to finish, so read the output a moment later with term.read.",
     triggers: { ko: "명령 실행 터미널 실행 셸 실행 커맨드 실행" },
     params: {
       pane: P.pane,
@@ -1387,6 +1575,17 @@ export function registerCatalog(): void {
     returns: "{ paneId }",
     message: () => tmsg("msg.term.exec"),
     errors: ["TARGET_NOT_FOUND"],
+    hint: (d) => {
+      if (d.code) return [];
+      // 실행은 즉시 돌아온다 — 출력은 잠시 후 그 pane 을 읽어 확인한다.
+      const pane = d.paneId as string | undefined;
+      return [
+        {
+          cmd: pane ? `sok term.read '{"pane":"${pane}"}'` : "sok term.read",
+          why: tmsg("hint.flow.term.exec.read"),
+        },
+      ];
+    },
     examples: ['sok term.exec \'{"cmd":"git status"}\''],
     handler: (p, ctx) => {
       const r = resolveTermPane(p, ctx, terminalContextPane);
@@ -1749,6 +1948,36 @@ export function registerCatalog(): void {
     },
   });
 
+  register("window.maximize", {
+    description:
+      "Maximize a window to fill the screen (native window maximize — distinct from view.maximize, which only enlarges one view within a sheet). Without label, targets the window this command runs in; with label, targets that window (see window.list). Pass off:true to restore (unmaximize).",
+    triggers: { ko: "창 최대화 전체화면 창 키우기 최대화 해제" },
+    params: {
+      label: { type: "string", description: "Window label (omit = this window)" },
+      off: { type: "boolean", description: "Restore (unmaximize) instead of maximizing" },
+    },
+    returns: "{ maximized: boolean }",
+    message: (d) =>
+      d.maximized ? tmsg("msg.window.maximize") : tmsg("msg.window.maximize.off"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: [
+      "sok window.maximize",
+      'sok window.maximize \'{"off":true}\'',
+      'sok window.maximize \'{"label":"w-<uuid>"}\'',
+    ],
+    handler: async (p) => {
+      const off = p.off === true;
+      const { getCurrentWindow, Window } = await import("@tauri-apps/api/window");
+      const win = p.label
+        ? await Window.getByLabel(p.label as string)
+        : getCurrentWindow();
+      if (!win) return notFound(`창 없음: ${p.label}`);
+      if (off) await win.unmaximize();
+      else await win.maximize();
+      return { maximized: !off };
+    },
+  });
+
   register("window.reload", {
     description:
       "Fully reload the app webview (location.reload). Picks up core/plugin code changes during development — including modules HMR misses (e.g. already-activated plugin API surfaces). Active plugins are re-activated automatically after reload (install and consent are persisted).",
@@ -1793,6 +2022,18 @@ export function registerCatalog(): void {
     message: (d) =>
       d.existingWindow ? tmsg("msg.window.open.existing") : tmsg("msg.window.open.created"),
     errors: ["INVALID_PARAMS"],
+    hint: (d) => {
+      if (d.code) return [];
+      // 새 창의 라벨을 겨냥해 명령을 보내는 법을 제시한다(--window <label>).
+      const label = (d.label as string | undefined) ?? (d.existingWindow as string | undefined);
+      if (!label) return [];
+      return [
+        {
+          cmd: `sok --window ${label} state.tree`,
+          why: tmsg("hint.flow.window.open.target", { label }),
+        },
+      ];
+    },
     examples: [
       'sok window.open \'{"root":"/Users/me/work"}\'',
       'sok window.open \'{"mode":"orchestrator"}\'',
@@ -1922,6 +2163,14 @@ export function registerCatalog(): void {
         : tmsg("msg.window.snapshot.captured"),
     // 귀의 문장(§3) — 경로는 message(눈)에만. 실패는 message(진단) 에코.
     speak: (out) => (out.ok ? (out.data?.saved ? "화면을 저장했어요." : "화면을 캡처했어요.") : out.message),
+    hint: (d) => {
+      if (d.code) return [];
+      // 재캡처의 두 갈래 — 뷰 최대화로 확대해 담거나, 다른 시트로 전환해 화면을 비교한다.
+      return [
+        { cmd: "sok view.maximize", why: tmsg("hint.flow.snapshot.maximize") },
+        { cmd: "sok sheet.list", why: tmsg("hint.flow.snapshot.switch") },
+      ];
+    },
     errors: ["INVALID_PARAMS"],
     examples: [
       "sok window.snapshot",

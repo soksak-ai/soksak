@@ -134,6 +134,12 @@ export interface PluginCommandSpec {
   /** 계측 스펙(MESSAGE-PROTOCOL §4) — false=실행이 활동 트레이스에서 제외. 관찰의 부산물로
    *  스트림을 늘리는 명령(say 류 — 낭독 1회당 실행 기록 1개가 쌓인다)만 선언. */
   trace?: false;
+  /** hint(가능성의 제시) — 성공 시 data, 실패 시 {code,message} 를 받아 이어서 할 수 있는
+   *  명령을 최대 3개 제안한다. 지시가 아니라 제시 — 받은 쪽의 판단을 돕는 정보다. */
+  hint?: (
+    data: Record<string, unknown>,
+    ctx: PluginInvocation,
+  ) => { cmd: string; why: string }[];
   /** inv = 이 호출의 실행 컨텍스트(§5 상속). 핸들러가 다른 명령을 중첩 실행할 땐 반드시
    *  inv.execute 를 쓴다 — 부모의 유래(origin: 스케줄 발화 등)와 상관(parentId: 대화 턴)이
    *  자식 실행에 계승된다. app.commands.execute 로 부르면 사람 유래로 위장돼 낭독·강조가
@@ -1215,6 +1221,17 @@ export function buildPluginApi(
               examples: spec.examples,
               message: pluginAnswer ?? labelAnswer, // 표준 답변 — 없으면 라벨(전환 스캐폴드, 경고)
               speak: spec.speak, // 낭독 문장(§3) — 낭독 축의 전부(없으면 침묵 — opt-in)
+              // hint(가능성의 제시) — handler 와 같은 컨텍스트 변환으로 흘린다. 상한·예외
+              // 안전은 execute 소유(응답을 깨지 않는다).
+              hint: spec.hint
+                ? (data, ctx) =>
+                    spec.hint!(data, {
+                      origin: ctx?.origin,
+                      parent: ctx?.parent,
+                      execute: (n, p) =>
+                        executeGated(n, p, { origin: ctx?.origin, parent: ctx?.parent }),
+                    })
+                : undefined,
               trace: spec.trace, // 계측 스펙(§4) — false=관찰 부산물 명령의 기록 제외
               danger, // 매니페스트 권위(없으면 런타임 fallback — 게이트 보존)
               // registry.execute 가 try/catch 로 INTERNAL 변환(§0-4).

@@ -496,6 +496,21 @@ describe("기본형 문법 — 위치 인자 {_} 해석", () => {
     expect(r2).toMatchObject({ ok: true, data: { got: 42 } });
   });
 
+  it("primary 선언이 있으면 필수 여부와 무관하게 그 이름으로 옮긴다(생략=전부 문법 공존)", async () => {
+    register(TEST_PREFIX + "pos4", {
+      description: "primary positional",
+      params: { name: { type: "string", description: "" }, project: { type: "string", description: "" } },
+      returns: "{}",
+      message: () => "",
+      primary: "name",
+      handler: (p) => ({ got: p.name ?? null }),
+    });
+    const r = await execute(TEST_PREFIX + "pos4", { _: "web" }, {});
+    expect(r).toMatchObject({ ok: true, data: { got: "web" } });
+    const r2 = await execute(TEST_PREFIX + "pos4", {}, {});
+    expect(r2.ok).toBe(true);
+  });
+
   it("필수 매개변수가 둘이면 그대로 INVALID_PARAMS(도움말 hint)", async () => {
     register(TEST_PREFIX + "pos3", {
       description: "two required",

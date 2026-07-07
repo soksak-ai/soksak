@@ -159,10 +159,10 @@ export function registerPluginCatalog(): void {
 
   register("plugin.list", {
     description:
-      "List all installed and dev plugins with their runtime status, permissions, and rejection reasons. Use to check which plugins exist and whether any failed to load.",
+      "List all installed and dev plugins with their runtime status, permissions, and rejection reasons. rejected holds one entry per directory whose manifest failed validation (dir = plugin folder, errors = the specific validation failures). Use to check which plugins exist and whether any failed to load.",
     triggers: { ko: "플러그인 목록 설치된 확장 상태" },
     params: {},
-    returns: "{ plugins: [{id, name, version, status, permissions, …}], rejected }",
+    returns: "{ plugins: [{id, name, version, status, permissions, …}], rejected: [{dir, errors}] }",
     message: (d) =>
       d.note
         ? tmsg("msg.list.controlPlane")
@@ -196,6 +196,18 @@ export function registerPluginCatalog(): void {
     message: (d) =>
       tmsg("msg.plugin.catalog", { n: ((d.plugins as unknown[]) ?? []).length }),
     examples: ["sok plugin.catalog", 'sok plugin.catalog \'{"refresh":true}\''],
+    hint: (d) => {
+      // 첫 미설치 항목을 설치 예시로 제시(가능성의 제시) — 전부 설치되어 있으면 생략.
+      const plugins = (d.plugins as { id: string; installed: boolean }[] | undefined) ?? [];
+      const notInstalled = plugins.find((p) => !p.installed);
+      if (!notInstalled) return [];
+      return [
+        {
+          cmd: `sok plugin.install ${shortName(notInstalled.id)}`,
+          why: tmsg("hint.plugin.installNext"),
+        },
+      ];
+    },
     handler: async (p) => {
       const reg = useRegistry.getState();
       // 기본 = 세션 1회 원격 최신화(이미 했으면 캐시), refresh=true 는 강제 재조회.
@@ -410,6 +422,22 @@ export function registerPluginCatalog(): void {
     errors: ["TARGET_NOT_FOUND", "CONSENT_REQUIRED", "INTERNAL"],
     examples: ["sok plugin.enable memo", 'sok plugin.enable \'{"id":"soksak-plugin-memo"}\''],
     danger: "inject",
+    hint: (d) => {
+      // CONSENT_REQUIRED 는 message 에 미동의 id 목록이 실린다("활성화 동의 필요: id1, id2 …") —
+      // 첫 id(종속 먼저 순서)를 뽑을 수 있으면 정밀 안내, 형식이 어긋나면 표준 안내로 폴백(무리한 파싱 금지).
+      if (d.code !== "CONSENT_REQUIRED") return [];
+      const prefix = "활성화 동의 필요: ";
+      const msg = String(d.message ?? "");
+      if (!msg.startsWith(prefix)) return [];
+      const first = msg.slice(prefix.length).split(" — ")[0]?.split(",")[0]?.trim();
+      if (!first) return [];
+      return [
+        {
+          cmd: `sok plugin.consent.preview '{"id":"${first}"}'`,
+          why: tmsg("hint.plugin.consentPreviewNext", { id: first }),
+        },
+      ];
+    },
     handler: (p) => {
       const id = resolveShortId(String(p.id)) ?? String(p.id);
       return usePlugins.getState().enable(id);
@@ -685,7 +713,7 @@ export function registerPluginCatalog(): void {
 
   register("plugin.reload", {
     description:
-      "Rescan the plugins directory and reactivate every plugin whose consent is still valid. With id, reload only that one plugin instead (disable then re-enable it — same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. Use after manually editing plugin files or adding new plugin folders.",
+      "Rescan the plugins directory and reactivate every plugin whose consent is still valid; the response reports which manifests were rejected during the rescan and why. With id, reload only that one plugin instead (disable then re-enable it — same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. Use after manually editing plugin files or adding new plugin folders.",
     triggers: { ko: "플러그인 재적재 리로드 새로고침" },
     params: {
       id: {
@@ -693,8 +721,9 @@ export function registerPluginCatalog(): void {
         description: "Plugin id to reload individually. Omit to rescan the plugins directory and reactivate every plugin.",
       },
     },
-    returns: "{ count, rejected } (id omitted — full rescan) | { id, status } (id given — that plugin only)",
-    message: (d) => (d.id ? tmsg("msg.plugin.reload", { n: 1 }) : tmsg("msg.plugin.reload", { n: Number(d.count) })),
+    returns:
+      "{ reloaded, rejected: [{id, reason}] } (id omitted — full rescan; rejected lists directories whose manifest failed validation) | { id, status } (id given — that plugin only; a failure reason is in the response message)",
+    message: (d) => (d.id ? tmsg("msg.plugin.reload", { n: 1 }) : tmsg("msg.plugin.reload", { n: Number(d.reloaded) })),
     errors: ["TARGET_NOT_FOUND", "CONSENT_REQUIRED"],
     examples: ["sok plugin.reload", 'sok plugin.reload \'{"id":"soksak-plugin-memo"}\''],
     handler: async (p) => {
@@ -707,8 +736,8 @@ export function registerPluginCatalog(): void {
       await usePlugins.getState().reload();
       const s = usePlugins.getState();
       return {
-        count: Object.keys(s.plugins).length,
-        rejected: s.rejected,
+        reloaded: Object.keys(s.plugins).length,
+        rejected: s.rejected.map((r) => ({ id: r.dir, reason: r.errors.join("; ") })),
       };
     },
   });

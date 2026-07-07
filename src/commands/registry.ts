@@ -51,6 +51,9 @@ export interface CommandSpec {
   // 호출 ctx 를 받아 CommandHint[] 를 짓는다. [철학] 지시가 아니라 가능성의 제시 — 받은 쪽의 판단을
   // 돕는다. 예외가 발생하면 execute 가 응답을 깨지 않고 hint 만 생략한다.
   hint?: (data: Record<string, unknown>, ctx: CommandContext) => CommandHint[];
+  /** 기본형 문법의 주 대상 매개변수 — 필수 매개변수가 하나가 아닐 때(예: 생략=전부 문법)
+   *  위치 인자(값 하나)를 받을 이름을 명시한다. 미선언이면 "유일한 필수 매개변수" 규칙만 적용. */
+  primary?: string;
   // 발생 가능한 에러 코드.
   errors?: readonly (CmdErrCode | "INTERNAL" | "TIMEOUT")[];
   // CLI 사용 예시(매뉴얼용).
@@ -336,8 +339,9 @@ async function executeInner(
   // 둘 이상이거나 없으면 그대로 두어 validate 가 INVALID_PARAMS 로 도움말을 안내하게 한다.
   if (params && Object.keys(params).length === 1 && "_" in params) {
     const required = Object.entries(spec.params).filter(([, v]) => v.required);
-    if (required.length === 1) {
-      const [key, ps] = required[0];
+    const key = spec.primary ?? (required.length === 1 ? required[0][0] : undefined);
+    const ps = key ? spec.params[key] : undefined;
+    if (key && ps) {
       let v: unknown = params._;
       if (ps.type === "number") v = Number(v);
       else if (ps.type === "boolean") v = v === true || v === "true";
