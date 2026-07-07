@@ -700,7 +700,7 @@ fn run_mcp() -> ExitCode {
                         json!({ "contents": [{
                             "uri": uri,
                             "mimeType": "text/markdown",
-                            "text": skill_doc(&pin_env().unwrap_or_else(|_| "app".into()), None),
+                            "text": skill_doc(&pin_env().unwrap_or_else(|_| "app".into()), Some(SKILL_AUTHORED_BODY)),
                         }]}),
                     );
                 } else {
@@ -855,7 +855,7 @@ fn run_mcp_install(args: &[String]) -> ExitCode {
 // frontmatter description 이 트리거(자연어 자동발동, P5). Claude·Codex·Gemini 동일 포맷.
 const SKILL_DESCRIPTION_DEFAULT: &str = "Control the soksak terminal app via the `sok` CLI — discover and run any soksak command. Reach for this whenever the user acts on anything inside soksak: split/merge/close panels & tabs, open terminals/browsers/editors, run and read terminal output, drive TUIs, automate the embedded browser (navigate/click/fill/eval), draw or annotate on the screen, manage windows/files/bookmarks/clipboard. If the user says they marked/drew/showed/annotated something \"on screen\" or \"in the browser\", it is almost certainly a soksak overlay or view — start here, not an external design tool. 화면/브라우저에 표시·낙서·주석·그림, 패널 나누기, 터미널 실행도 여기.";
 
-// frontmatter 조립 — 저작 조각(SKILL.src.md)이 자기 frontmatter 를 가지면 그대로 채택하되
+// frontmatter 조립 — 저작 본문(소스 BODY.md)이 자기 frontmatter 를 가지면 그대로 채택하되
 // name 은 환경 이름으로 강제한다(세 환경 공존 시 발동 충돌 방지). 없으면 기본 description.
 fn skill_frontmatter(skill_name: &str, env: &str, directives_fm: Option<&str>) -> String {
     if let Some(fm) = directives_fm {
@@ -871,6 +871,12 @@ fn skill_frontmatter(skill_name: &str, env: &str, directives_fm: Option<&str>) -
         }
         if !named {
             lines.insert(0, format!("name: {skill_name}"));
+        }
+        // 발동 구분은 생성기 책임(저작은 환경 중립) — 접힌 description 블록 끝에 환경 문장을 잇는다.
+        if env != "app" {
+            lines.push(format!(
+                "  This is the {env} environment (home ~/.soksak-{env}) — use it when working against that environment's app."
+            ));
         }
         return format!("---\n{}\n---\n", lines.join("\n"));
     }
@@ -1063,7 +1069,7 @@ fn skill_doc_with(map: &str, env: &str, directives: Option<&str>) -> String {
     let directives_block = if body.trim().is_empty() {
         String::new()
     } else {
-        format!("## Project directives (authored — from `SKILL.src.md`)\n\n{}\n\n", body.trim())
+        format!("## Working style (authored)\n\n{}\n\n", body.trim())
     };
     format!(
         "{}\n{}{}{}{}{}",
@@ -1087,46 +1093,19 @@ fn skill_doc(env: &str, directives: Option<&str>) -> String {
 
 // 제어 스킬 한 벌 생성 — 정본(identity 홈 skill/SKILL.src.md)에서 읽은 저작 조각을 합성한다.
 // 소유권은 SKILL.md 하나: 저작 조각·references/ 등 폴더의 다른 파일은 건드리지 않는다.
-// 저작 조각의 정본 위치 — 이 CLI 가 해석한 환경의 identity 홈 `skill/`(우리 영토, 환경:정본=1:1).
-// 소비자 폴더(.claude/.agents)는 순수 산출물: 지워져도 저작이 사라지지 않고 정본이 갈라질 일도 없다.
-fn canonical_skill_dir(env: &str) -> Option<PathBuf> {
-    socket_path_for_env(env)
-        .ok()
-        .and_then(|s| s.parent().map(|h| h.join("skill")))
-}
+// 저작 본문·부속은 소스다 — 레포(src-tauri/cli/skill/)에 살고 바이너리에 담겨, install/refresh 가
+// 산출한다. 레포 밖 파일은 개명 sweep 이 못 훑어 썩는다 — 소스면 코드와 같은 커밋으로 고쳐진다.
+const SKILL_AUTHORED_BODY: &str = include_str!("../skill/BODY.md");
+const SKILL_REF_COMMANDS: &str = include_str!("../skill/references/commands.md");
 
-fn read_canonical_directives(env: &str) -> Option<String> {
-    canonical_skill_dir(env).and_then(|d| std::fs::read_to_string(d.join("SKILL.src.md")).ok())
-}
-
-// 저작 부속(references/ 등) 미러 — 정본 skill/ 아래의 하위 폴더를 대상 폴더로 복사한다.
-fn mirror_dir(src: &Path, dst: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(dst).map_err(|e| e.to_string())?;
-    for e in std::fs::read_dir(src).map_err(|e| e.to_string())?.flatten() {
-        let p = e.path();
-        let to = dst.join(e.file_name());
-        if p.is_dir() {
-            mirror_dir(&p, &to)?;
-        } else {
-            std::fs::copy(&p, &to).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(())
-}
-
-fn write_control_skill(path: &Path, env: &str, directives: Option<&str>) -> Result<(), String> {
-    let doc = skill_doc(env, directives);
+fn write_control_skill(path: &Path, env: &str) -> Result<(), String> {
+    let doc = skill_doc(env, Some(SKILL_AUTHORED_BODY));
     write_skill(path, &doc)?;
-    // 정본의 부속 폴더(references/ 등)를 대상에 미러 — 스킬 본문이 상대 경로로 참조할 수 있게.
-    if let (Some(canon), Some(target_dir)) = (canonical_skill_dir(env), path.parent()) {
-        if let Ok(entries) = std::fs::read_dir(&canon) {
-            for e in entries.flatten() {
-                let p = e.path();
-                if p.is_dir() {
-                    mirror_dir(&p, &target_dir.join(e.file_name()))?;
-                }
-            }
-        }
+    // 부속(references/) 산출 — 스킬 본문이 상대 경로로 참조한다.
+    if let Some(target_dir) = path.parent() {
+        let refs = target_dir.join("references");
+        std::fs::create_dir_all(&refs).map_err(|e| e.to_string())?;
+        std::fs::write(refs.join("commands.md"), SKILL_REF_COMMANDS).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -1180,9 +1159,8 @@ fn run_skill_refresh() -> ExitCode {
         .flatten()
         .filter_map(|t| t.as_str().map(PathBuf::from))
         .collect();
-    let directives = read_canonical_directives(&env);
     for path in &paths {
-        match write_control_skill(path, &env, directives.as_deref()) {
+        match write_control_skill(path, &env) {
             Ok(_) => println!("✓ {}", path.display()),
             Err(e) => {
                 eprintln!("✗ {e}");
@@ -1310,7 +1288,7 @@ fn run_skill(args: &[String]) -> ExitCode {
     // system prompt 재료 — --setting-sources "" 헤드리스에선 스킬 자동로드가 없어 프롬프트에 싣는다.
     if args.first().map(String::as_str) == Some("print") {
         let env = pin_env().unwrap_or_else(|_| "app".into());
-        print!("{}", skill_doc(&env, None));
+        print!("{}", skill_doc(&env, Some(SKILL_AUTHORED_BODY)));
         return ExitCode::SUCCESS;
     }
     // refresh = 설치 매니페스트(skill-refresh.json)대로 재생성 — 앱이 레지스트리 변화 시 스폰한다.
@@ -1380,13 +1358,12 @@ fn run_skill(args: &[String]) -> ExitCode {
     }
 
     let mut failed = false;
-    let directives = read_canonical_directives(&env);
     for (label, path) in &targets {
         // 옛 이름(soksak-control) 잔재 정리 — 발동 충돌 방지(전면 개명, 별칭 없음).
         if let Some(root) = path.parent().and_then(Path::parent) {
             let _ = std::fs::remove_dir_all(root.join("soksak-control"));
         }
-        match write_control_skill(path, &env, directives.as_deref()) {
+        match write_control_skill(path, &env) {
             Ok(_) => println!("{label}  ✓ {}", path.display()),
             Err(e) => {
                 eprintln!("{label}  ✗ {e}");
