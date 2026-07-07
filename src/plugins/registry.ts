@@ -15,7 +15,15 @@ export interface RegistryEntry {
   author?: string;
   repo: string; // git URL — plugin.install 의 source
   branch?: string; // 설치 대상 브랜치 — 없으면 repo 기본 브랜치. master/main 가정 금지(설치 reference)
-  commands?: string[]; // 매니페스트 선언 명령 이름(집계 투영) — 설치 전 능력 조회용
+  // 매니페스트 선언 명령(집계 투영) — 설치 전 능력 조회용. title = 사람용 다국어 설명(매니페스트
+  // 단일진실), danger = 위험 분류(destructive|inject).
+  commands?: RegistryCommand[];
+}
+
+export interface RegistryCommand {
+  name: string;
+  title?: LocalizedText;
+  danger?: string;
 }
 
 export interface Registry {
@@ -48,8 +56,22 @@ function parseEntry(v: unknown): RegistryEntry | null {
   };
   if (typeof v.author === "string" && v.author.length > 0) e.author = v.author;
   if (typeof v.branch === "string" && v.branch.length > 0) e.branch = v.branch;
-  if (Array.isArray(v.commands) && v.commands.every((c) => typeof c === "string"))
-    e.commands = v.commands as string[];
+  if (Array.isArray(v.commands)) {
+    const cmds: RegistryCommand[] = [];
+    for (const c of v.commands) {
+      if (typeof c === "string") cmds.push({ name: c }); // 구형(이름만) 관용 수용
+      else if (isRecord(c) && typeof c.name === "string") {
+        const rc: RegistryCommand = { name: c.name };
+        if (isRecord(c.title)) rc.title = c.title as LocalizedText;
+        if (typeof c.danger === "string") rc.danger = c.danger;
+        cmds.push(rc);
+      } else {
+        cmds.length = 0; // 오염 — 필드 통째 생략(항목은 살림)
+        break;
+      }
+    }
+    if (cmds.length) e.commands = cmds;
+  }
   return e;
 }
 

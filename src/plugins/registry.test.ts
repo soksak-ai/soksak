@@ -43,14 +43,24 @@ describe("parseRegistry — 수용", () => {
     expect(r!.plugins[0].name).toEqual({ ko: "상어", en: "Shark" });
   });
 
-  it("commands(선언 명령 이름) 보존 — 설치 전 능력 조회의 근거", () => {
-    const r = parseRegistry(reg([entry({ commands: ["navigate", "open"] })]));
-    expect(r!.plugins[0].commands).toEqual(["navigate", "open"]);
+  it("commands(선언 명령: 이름+다국어 제목+danger) 보존 — 설치 전 능력 조회의 근거", () => {
+    const r = parseRegistry(
+      reg([entry({ commands: [{ name: "navigate", title: { ko: "URL 이동", en: "Navigate" } }, { name: "close", title: { en: "Close" }, danger: "destructive" }] })]),
+    );
+    expect(r!.plugins[0].commands).toEqual([
+      { name: "navigate", title: { ko: "URL 이동", en: "Navigate" } },
+      { name: "close", title: { en: "Close" }, danger: "destructive" },
+    ]);
   });
 
-  it("commands 없음/오염(비문자열 포함)은 필드 생략 — 항목 자체는 살림", () => {
+  it("구형(이름 문자열 배열)도 관용 수용 — {name}으로 승격", () => {
+    const r = parseRegistry(reg([entry({ commands: ["ping"] })]));
+    expect(r!.plugins[0].commands).toEqual([{ name: "ping" }]);
+  });
+
+  it("commands 없음/오염은 필드 생략 — 항목 자체는 살림", () => {
     expect(parseRegistry(reg([entry()]))!.plugins[0].commands).toBeUndefined();
-    const dirty = parseRegistry(reg([entry({ commands: ["ok", 3] })]));
+    const dirty = parseRegistry(reg([entry({ commands: [{ noName: true }] })]));
     expect(dirty!.plugins[0].commands).toBeUndefined();
   });
 });

@@ -15,9 +15,27 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-activity.git",
       "branch": "main",
       "commands": [
-        "list",
-        "mascot.toggle",
-        "ping"
+        {
+          "name": "list",
+          "title": {
+            "en": "Lists recent activity entries",
+            "ko": "최근 활동 엔트리를 나열합니다"
+          }
+        },
+        {
+          "name": "mascot.toggle",
+          "title": {
+            "en": "Toggles character narration",
+            "ko": "캐릭터 낭독을 켜고 끕니다"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "en": "Pings the plugin",
+            "ko": "플러그인 상태를 점검합니다"
+          }
+        }
       ]
     },
     {
@@ -49,14 +67,62 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-agent-claude-gui.git",
       "branch": "main",
       "commands": [
-        "close",
-        "focus",
-        "open",
-        "queue",
-        "send",
-        "state",
-        "toggle",
-        "type"
+        {
+          "name": "close",
+          "title": {
+            "en": "Close Claude GUI",
+            "ko": "Claude GUI 닫기"
+          }
+        },
+        {
+          "name": "focus",
+          "title": {
+            "en": "Focus GUI input box",
+            "ko": "GUI 입력창 포커스(화면 이동)"
+          }
+        },
+        {
+          "name": "open",
+          "title": {
+            "en": "Open Claude GUI",
+            "ko": "Claude GUI 열기"
+          }
+        },
+        {
+          "name": "queue",
+          "title": {
+            "en": "Get input queue snapshot",
+            "ko": "입력 큐 스냅샷 조회"
+          }
+        },
+        {
+          "name": "send",
+          "title": {
+            "en": "Send input (returns queue status)",
+            "ko": "입력 전송(큐 상태 반환)"
+          }
+        },
+        {
+          "name": "state",
+          "title": {
+            "en": "Get overlay render state (e2e)",
+            "ko": "오버레이 렌더 상태 조회(e2e)"
+          }
+        },
+        {
+          "name": "toggle",
+          "title": {
+            "en": "Toggle Claude GUI",
+            "ko": "Claude GUI 켜기/끄기"
+          }
+        },
+        {
+          "name": "type",
+          "title": {
+            "en": "Type into GUI input box + Enter",
+            "ko": "GUI 입력창에 입력+Enter"
+          }
+        }
       ]
     },
     {
@@ -88,14 +154,62 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-agents-acp.git",
       "branch": "main",
       "commands": [
-        "cancel",
-        "connect",
-        "connections",
-        "disconnect",
-        "exec",
-        "ping",
-        "prompt",
-        "session-new"
+        {
+          "name": "cancel",
+          "title": {
+            "en": "Cancel Turn",
+            "ko": "턴 취소"
+          }
+        },
+        {
+          "name": "connect",
+          "title": {
+            "en": "Connect Agent",
+            "ko": "ACP 에이전트 연결"
+          }
+        },
+        {
+          "name": "connections",
+          "title": {
+            "en": "Active Connections",
+            "ko": "활성 연결 목록"
+          }
+        },
+        {
+          "name": "disconnect",
+          "title": {
+            "en": "Disconnect",
+            "ko": "연결 종료"
+          }
+        },
+        {
+          "name": "exec",
+          "title": {
+            "en": "Exec (process primitive)",
+            "ko": "외부 프로그램 실행(process primitive)"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "en": "Ping (load/version check)",
+            "ko": "ACP 코어 적재/버전 확인(E2E)"
+          }
+        },
+        {
+          "name": "prompt",
+          "title": {
+            "en": "Send Prompt",
+            "ko": "프롬프트 전송"
+          }
+        },
+        {
+          "name": "session-new",
+          "title": {
+            "en": "New ACP Session",
+            "ko": "새 ACP 세션"
+          }
+        }
       ]
     },
     {
@@ -112,15 +226,69 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-agents-clubhouse.git",
       "branch": "main",
       "commands": [
-        "ask",
-        "converse",
-        "send",
-        "state",
-        "tower.macro",
-        "tower.plan",
-        "tower.reflect",
-        "tower.scan",
-        "tower.trace"
+        {
+          "name": "ask",
+          "title": {
+            "en": "Ask (single agent, headless)",
+            "ko": "프롬프트 1회(단일 에이전트, 헤드리스)"
+          }
+        },
+        {
+          "name": "converse",
+          "title": {
+            "en": "Converse (multi-agent, headless)",
+            "ko": "다중 에이전트 1교환(턴테이킹, 헤드리스 E2E)"
+          }
+        },
+        {
+          "name": "send",
+          "title": {
+            "en": "Send Message to Clubhouse",
+            "ko": "활성 Clubhouse 에 사람 메시지 전송(라이브 구동·자동화)"
+          }
+        },
+        {
+          "name": "state",
+          "title": {
+            "en": "Clubhouse Live State",
+            "ko": "활성 Clubhouse 라이브 상태(스트리밍 길이 등 — 관찰·E2E)"
+          }
+        },
+        {
+          "name": "tower.macro",
+          "title": {
+            "en": "Tower Macro (named fast-path: save/run/list/forget/propose)",
+            "ko": "컨트롤 타워 매크로(명명 fast-path: 저장·실행·목록·삭제·승격제안, M11)"
+          }
+        },
+        {
+          "name": "tower.plan",
+          "title": {
+            "en": "Tower Plan (slow-path, headless)",
+            "ko": "컨트롤 타워 계획(slow-path NL→3축 plan, dry-run/commit)"
+          }
+        },
+        {
+          "name": "tower.reflect",
+          "title": {
+            "en": "Tower Reflect (post-execution loop, headless)",
+            "ko": "컨트롤 타워 reflection(디스패치→검증→재계획→escalate, M8)"
+          }
+        },
+        {
+          "name": "tower.scan",
+          "title": {
+            "en": "Tower Scan (untrusted-content injection scanner, headless)",
+            "ko": "컨트롤 타워 스캔(비신뢰 콘텐츠 주입 시그니처 검사, M10)"
+          }
+        },
+        {
+          "name": "tower.trace",
+          "title": {
+            "en": "Tower Trace (session plan/step history)",
+            "ko": "컨트롤 타워 trace(세션 plan·step·결과 이력 조회)"
+          }
+        }
       ]
     },
     {
@@ -152,16 +320,76 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-browser-chromium.git",
       "branch": "main",
       "commands": [
-        "back",
-        "devtools",
-        "devtools-inline",
-        "devtools-tab",
-        "forward",
-        "navigate",
-        "open",
-        "ping",
-        "reload",
-        "stats"
+        {
+          "name": "back",
+          "title": {
+            "ko": "이전 페이지",
+            "en": "Go Back"
+          }
+        },
+        {
+          "name": "devtools",
+          "title": {
+            "ko": "개발자 도구 탭 열기",
+            "en": "Open devtools tab"
+          }
+        },
+        {
+          "name": "devtools-inline",
+          "title": {
+            "ko": "개발자 도구 탭 내부 분할 토글",
+            "en": "Toggle devtools inside the tab"
+          }
+        },
+        {
+          "name": "devtools-tab",
+          "title": {
+            "ko": "개발자 도구 독립 탭으로 열기",
+            "en": "Open devtools as independent tab"
+          }
+        },
+        {
+          "name": "forward",
+          "title": {
+            "ko": "다음 페이지",
+            "en": "Go Forward"
+          }
+        },
+        {
+          "name": "navigate",
+          "title": {
+            "ko": "URL 이동",
+            "en": "Navigate to URL"
+          }
+        },
+        {
+          "name": "open",
+          "title": {
+            "ko": "브라우저 뷰 열기",
+            "en": "Open browser view"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "ko": "플러그인 적재/버전 확인(E2E)",
+            "en": "Ping (load/version check)"
+          }
+        },
+        {
+          "name": "reload",
+          "title": {
+            "ko": "새로고침",
+            "en": "Reload"
+          }
+        },
+        {
+          "name": "stats",
+          "title": {
+            "ko": "엔진 child 진단",
+            "en": "Engine child stats"
+          }
+        }
       ]
     },
     {
@@ -178,24 +406,138 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-browser-native.git",
       "branch": "main",
       "commands": [
-        "back",
-        "devtools",
-        "dom.click",
-        "dom.fill",
-        "dom.html",
-        "dom.query",
-        "dom.submit",
-        "dom.text",
-        "dom.wait-for",
-        "eval",
-        "forward",
-        "list",
-        "media.extract",
-        "media.sniff",
-        "navigate",
-        "open",
-        "ping",
-        "reload"
+        {
+          "name": "back",
+          "title": {
+            "ko": "이전 페이지",
+            "en": "Go Back"
+          }
+        },
+        {
+          "name": "devtools",
+          "title": {
+            "ko": "개발자 도구 토글",
+            "en": "Toggle devtools"
+          }
+        },
+        {
+          "name": "dom.click",
+          "title": {
+            "ko": "DOM 클릭",
+            "en": "Click DOM element"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "dom.fill",
+          "title": {
+            "ko": "DOM 입력 채우기",
+            "en": "Fill DOM input"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "dom.html",
+          "title": {
+            "ko": "DOM HTML 읽기",
+            "en": "Get DOM HTML"
+          }
+        },
+        {
+          "name": "dom.query",
+          "title": {
+            "ko": "DOM 요소 조회",
+            "en": "Query DOM elements"
+          }
+        },
+        {
+          "name": "dom.submit",
+          "title": {
+            "ko": "폼 제출",
+            "en": "Submit form"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "dom.text",
+          "title": {
+            "ko": "DOM 텍스트 읽기",
+            "en": "Get DOM text"
+          }
+        },
+        {
+          "name": "dom.wait-for",
+          "title": {
+            "ko": "요소 대기",
+            "en": "Wait for element"
+          }
+        },
+        {
+          "name": "eval",
+          "title": {
+            "ko": "JS 실행",
+            "en": "Evaluate JS"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "forward",
+          "title": {
+            "ko": "다음 페이지",
+            "en": "Go Forward"
+          }
+        },
+        {
+          "name": "list",
+          "title": {
+            "ko": "브라우저 webview 목록",
+            "en": "List browser webviews"
+          }
+        },
+        {
+          "name": "media.extract",
+          "title": {
+            "ko": "미디어 추출(오프스크린)",
+            "en": "Extract media (offscreen)"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "media.sniff",
+          "title": {
+            "ko": "미디어 스니프",
+            "en": "Sniff media URLs"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "navigate",
+          "title": {
+            "ko": "URL 이동",
+            "en": "Navigate to URL"
+          }
+        },
+        {
+          "name": "open",
+          "title": {
+            "ko": "브라우저 뷰 열기",
+            "en": "Open browser view"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "ko": "플러그인 적재/버전 확인(E2E)",
+            "en": "Ping (load/version check)"
+          }
+        },
+        {
+          "name": "reload",
+          "title": {
+            "ko": "새로고침",
+            "en": "Reload"
+          }
+        }
       ]
     },
     {
@@ -212,24 +554,132 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-clipboard.git",
       "branch": "main",
       "commands": [
-        "category.add",
-        "category.delete",
-        "category.list",
-        "category.rename",
-        "clip.capture",
-        "clip.category",
-        "clip.clear",
-        "clip.count",
-        "clip.delete",
-        "clip.favorite",
-        "clip.list",
-        "clip.purge",
-        "clip.restore",
-        "clip.search",
-        "clip.state",
-        "memo.add",
-        "memo.delete",
-        "memo.update"
+        {
+          "name": "category.add",
+          "title": {
+            "ko": "카테고리 추가",
+            "en": "Add Category"
+          }
+        },
+        {
+          "name": "category.delete",
+          "title": {
+            "ko": "카테고리 삭제",
+            "en": "Delete Category"
+          }
+        },
+        {
+          "name": "category.list",
+          "title": {
+            "ko": "카테고리 목록",
+            "en": "List Categories"
+          }
+        },
+        {
+          "name": "category.rename",
+          "title": {
+            "ko": "카테고리 이름변경",
+            "en": "Rename Category"
+          }
+        },
+        {
+          "name": "clip.capture",
+          "title": {
+            "ko": "클립 캡처",
+            "en": "Capture Clip"
+          }
+        },
+        {
+          "name": "clip.category",
+          "title": {
+            "ko": "항목 카테고리 이동",
+            "en": "Move to Category"
+          }
+        },
+        {
+          "name": "clip.clear",
+          "title": {
+            "ko": "비우기",
+            "en": "Clear"
+          }
+        },
+        {
+          "name": "clip.count",
+          "title": {
+            "ko": "개수",
+            "en": "Count"
+          }
+        },
+        {
+          "name": "clip.delete",
+          "title": {
+            "ko": "삭제(휴지통)",
+            "en": "Delete (Trash)"
+          }
+        },
+        {
+          "name": "clip.favorite",
+          "title": {
+            "ko": "즐겨찾기 토글",
+            "en": "Toggle Favorite"
+          }
+        },
+        {
+          "name": "clip.list",
+          "title": {
+            "ko": "클립/메모 목록",
+            "en": "List Clips/Memos"
+          }
+        },
+        {
+          "name": "clip.purge",
+          "title": {
+            "ko": "보존 지난 클립 정리",
+            "en": "Purge Expired Clips"
+          }
+        },
+        {
+          "name": "clip.restore",
+          "title": {
+            "ko": "복원",
+            "en": "Restore"
+          }
+        },
+        {
+          "name": "clip.search",
+          "title": {
+            "ko": "검색",
+            "en": "Search"
+          }
+        },
+        {
+          "name": "clip.state",
+          "title": {
+            "ko": "상태 요약",
+            "en": "State Summary"
+          }
+        },
+        {
+          "name": "memo.add",
+          "title": {
+            "ko": "메모 추가",
+            "en": "Add Memo"
+          }
+        },
+        {
+          "name": "memo.delete",
+          "title": {
+            "ko": "메모 삭제(휴지통)",
+            "en": "Delete Memo (Trash)"
+          }
+        },
+        {
+          "name": "memo.update",
+          "title": {
+            "ko": "메모 수정",
+            "en": "Update Memo"
+          }
+        }
       ]
     },
     {
@@ -246,11 +696,41 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-editor-codemirror.git",
       "branch": "main",
       "commands": [
-        "find",
-        "format",
-        "ping",
-        "replace",
-        "save"
+        {
+          "name": "find",
+          "title": {
+            "ko": "찾기",
+            "en": "Find"
+          }
+        },
+        {
+          "name": "format",
+          "title": {
+            "ko": "문서 서식",
+            "en": "Format Document"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "ko": "적재/버전 확인(E2E)",
+            "en": "Ping (load/version check)"
+          }
+        },
+        {
+          "name": "replace",
+          "title": {
+            "ko": "바꾸기",
+            "en": "Replace"
+          }
+        },
+        {
+          "name": "save",
+          "title": {
+            "ko": "파일 저장",
+            "en": "Save File"
+          }
+        }
       ]
     },
     {
@@ -297,56 +777,356 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-erd.git",
       "branch": "main",
       "commands": [
-        "add-column",
-        "add-index",
-        "add-relationship",
-        "apply",
-        "auto-layout",
-        "create-table",
-        "diff",
-        "drop-column",
-        "drop-index",
-        "drop-relationship",
-        "drop-table",
-        "export-dbml",
-        "export-mermaid",
-        "export-prisma",
-        "export-sql",
-        "fit",
-        "get-columns",
-        "get-render-state",
-        "get-schema",
-        "get-table",
-        "get-viewport",
-        "import-dbml",
-        "import-mermaid",
-        "import-prisma",
-        "import-sql",
-        "list-relationships",
-        "list-tables",
-        "migration-apply",
-        "migration-generate",
-        "migration-lint",
-        "migration-list",
-        "migration-revert",
-        "migration-show",
-        "migration-sql",
-        "migration-status",
-        "ping",
-        "redo",
-        "rename-table",
-        "reorder-columns",
-        "select",
-        "set-color",
-        "set-pk",
-        "set-position",
-        "set-unique",
-        "set-viewport",
-        "stats",
-        "undo",
-        "update-column",
-        "update-relationship",
-        "validate"
+        {
+          "name": "add-column",
+          "title": {
+            "en": "Add column",
+            "ko": "컬럼 추가"
+          }
+        },
+        {
+          "name": "add-index",
+          "title": {
+            "en": "Add index",
+            "ko": "인덱스 추가"
+          }
+        },
+        {
+          "name": "add-relationship",
+          "title": {
+            "en": "Add relationship",
+            "ko": "관계 추가"
+          }
+        },
+        {
+          "name": "apply",
+          "title": {
+            "en": "Apply batch",
+            "ko": "배치 실행"
+          }
+        },
+        {
+          "name": "auto-layout",
+          "title": {
+            "en": "Auto layout",
+            "ko": "자동 레이아웃"
+          }
+        },
+        {
+          "name": "create-table",
+          "title": {
+            "en": "Create table",
+            "ko": "테이블 생성"
+          }
+        },
+        {
+          "name": "diff",
+          "title": {
+            "en": "Schema diff",
+            "ko": "스키마 차이"
+          }
+        },
+        {
+          "name": "drop-column",
+          "title": {
+            "en": "Drop column",
+            "ko": "컬럼 삭제"
+          }
+        },
+        {
+          "name": "drop-index",
+          "title": {
+            "en": "Drop index",
+            "ko": "인덱스 삭제"
+          }
+        },
+        {
+          "name": "drop-relationship",
+          "title": {
+            "en": "Drop relationship",
+            "ko": "관계 삭제"
+          }
+        },
+        {
+          "name": "drop-table",
+          "title": {
+            "en": "Drop table",
+            "ko": "테이블 삭제"
+          }
+        },
+        {
+          "name": "export-dbml",
+          "title": {
+            "en": "Export DBML",
+            "ko": "DBML 내보내기"
+          }
+        },
+        {
+          "name": "export-mermaid",
+          "title": {
+            "en": "Export Mermaid",
+            "ko": "Mermaid 내보내기"
+          }
+        },
+        {
+          "name": "export-prisma",
+          "title": {
+            "en": "Export Prisma",
+            "ko": "Prisma 내보내기"
+          }
+        },
+        {
+          "name": "export-sql",
+          "title": {
+            "en": "Export SQL",
+            "ko": "SQL 내보내기"
+          }
+        },
+        {
+          "name": "fit",
+          "title": {
+            "en": "Fit viewport",
+            "ko": "뷰포트 맞춤"
+          }
+        },
+        {
+          "name": "get-columns",
+          "title": {
+            "en": "List columns",
+            "ko": "컬럼 목록"
+          }
+        },
+        {
+          "name": "get-render-state",
+          "title": {
+            "en": "Render state",
+            "ko": "렌더 상태"
+          }
+        },
+        {
+          "name": "get-schema",
+          "title": {
+            "en": "Get schema",
+            "ko": "스키마 조회"
+          }
+        },
+        {
+          "name": "get-table",
+          "title": {
+            "en": "Get table",
+            "ko": "테이블 조회"
+          }
+        },
+        {
+          "name": "get-viewport",
+          "title": {
+            "en": "Get viewport",
+            "ko": "뷰포트 조회"
+          }
+        },
+        {
+          "name": "import-dbml",
+          "title": {
+            "en": "Import DBML",
+            "ko": "DBML 가져오기"
+          }
+        },
+        {
+          "name": "import-mermaid",
+          "title": {
+            "en": "Import Mermaid",
+            "ko": "Mermaid 가져오기"
+          }
+        },
+        {
+          "name": "import-prisma",
+          "title": {
+            "en": "Import Prisma",
+            "ko": "Prisma 가져오기"
+          }
+        },
+        {
+          "name": "import-sql",
+          "title": {
+            "en": "Import SQL",
+            "ko": "SQL 가져오기"
+          }
+        },
+        {
+          "name": "list-relationships",
+          "title": {
+            "en": "List relationships",
+            "ko": "관계 목록"
+          }
+        },
+        {
+          "name": "list-tables",
+          "title": {
+            "en": "List tables",
+            "ko": "테이블 목록"
+          }
+        },
+        {
+          "name": "migration-apply",
+          "title": {
+            "en": "Apply migration",
+            "ko": "마이그레이션 적용"
+          }
+        },
+        {
+          "name": "migration-generate",
+          "title": {
+            "en": "Generate migration",
+            "ko": "마이그레이션 생성"
+          }
+        },
+        {
+          "name": "migration-lint",
+          "title": {
+            "en": "Lint migration",
+            "ko": "마이그레이션 린트"
+          }
+        },
+        {
+          "name": "migration-list",
+          "title": {
+            "en": "List migrations",
+            "ko": "마이그레이션 목록"
+          }
+        },
+        {
+          "name": "migration-revert",
+          "title": {
+            "en": "Revert migration",
+            "ko": "마이그레이션 되돌리기"
+          }
+        },
+        {
+          "name": "migration-show",
+          "title": {
+            "en": "Show migration",
+            "ko": "마이그레이션 조회"
+          }
+        },
+        {
+          "name": "migration-sql",
+          "title": {
+            "en": "Migration SQL",
+            "ko": "마이그레이션 SQL"
+          }
+        },
+        {
+          "name": "migration-status",
+          "title": {
+            "en": "Migration status",
+            "ko": "마이그레이션 상태"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "en": "Plugin load / version check (E2E)",
+            "ko": "플러그인 적재/버전 확인(E2E)"
+          }
+        },
+        {
+          "name": "redo",
+          "title": {
+            "en": "Redo",
+            "ko": "다시실행"
+          }
+        },
+        {
+          "name": "rename-table",
+          "title": {
+            "en": "Rename table",
+            "ko": "테이블 이름변경"
+          }
+        },
+        {
+          "name": "reorder-columns",
+          "title": {
+            "en": "Reorder columns",
+            "ko": "컬럼 순서변경"
+          }
+        },
+        {
+          "name": "select",
+          "title": {
+            "en": "Select",
+            "ko": "선택"
+          }
+        },
+        {
+          "name": "set-color",
+          "title": {
+            "en": "Set color",
+            "ko": "색상 설정"
+          }
+        },
+        {
+          "name": "set-pk",
+          "title": {
+            "en": "Set primary key",
+            "ko": "기본키 설정"
+          }
+        },
+        {
+          "name": "set-position",
+          "title": {
+            "en": "Set position",
+            "ko": "위치 설정"
+          }
+        },
+        {
+          "name": "set-unique",
+          "title": {
+            "en": "Set UNIQUE",
+            "ko": "UNIQUE 설정"
+          }
+        },
+        {
+          "name": "set-viewport",
+          "title": {
+            "en": "Set viewport",
+            "ko": "뷰포트 설정"
+          }
+        },
+        {
+          "name": "stats",
+          "title": {
+            "en": "Stats",
+            "ko": "통계"
+          }
+        },
+        {
+          "name": "undo",
+          "title": {
+            "en": "Undo",
+            "ko": "실행취소"
+          }
+        },
+        {
+          "name": "update-column",
+          "title": {
+            "en": "Update column",
+            "ko": "컬럼 수정"
+          }
+        },
+        {
+          "name": "update-relationship",
+          "title": {
+            "en": "Update relationship",
+            "ko": "관계 수정"
+          }
+        },
+        {
+          "name": "validate",
+          "title": {
+            "en": "Validate schema",
+            "ko": "스키마 검증"
+          }
+        }
       ]
     },
     {
@@ -363,10 +1143,34 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-file-tree.git",
       "branch": "main",
       "commands": [
-        "follow",
-        "open",
-        "ping",
-        "refresh"
+        {
+          "name": "follow",
+          "title": {
+            "ko": "cwd 추종 토글",
+            "en": "Toggle cwd Follow"
+          }
+        },
+        {
+          "name": "open",
+          "title": {
+            "ko": "파일 열기",
+            "en": "Open File"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "ko": "적재/버전 확인(E2E)",
+            "en": "Ping (load/version check)"
+          }
+        },
+        {
+          "name": "refresh",
+          "title": {
+            "ko": "새로고침",
+            "en": "Refresh"
+          }
+        }
       ]
     },
     {
@@ -383,12 +1187,48 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-folderpop.git",
       "branch": "main",
       "commands": [
-        "folder.add",
-        "folder.list",
-        "folder.remove",
-        "folder.rename",
-        "folder.select",
-        "ping"
+        {
+          "name": "folder.add",
+          "title": {
+            "ko": "폴더 등록",
+            "en": "Add folder"
+          }
+        },
+        {
+          "name": "folder.list",
+          "title": {
+            "ko": "등록 폴더 목록",
+            "en": "List folders"
+          }
+        },
+        {
+          "name": "folder.remove",
+          "title": {
+            "ko": "폴더 제거",
+            "en": "Remove folder"
+          }
+        },
+        {
+          "name": "folder.rename",
+          "title": {
+            "ko": "폴더 이름 변경",
+            "en": "Rename folder"
+          }
+        },
+        {
+          "name": "folder.select",
+          "title": {
+            "ko": "활성 폴더 선택",
+            "en": "Select active folder"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "ko": "적재/버전 확인(E2E)",
+            "en": "Ping (load/version check)"
+          }
+        }
       ]
     },
     {
@@ -480,30 +1320,176 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-kanban.git",
       "branch": "main",
       "commands": [
-        "board.move",
-        "board.reorder",
-        "board.sort",
-        "breadcrumb",
-        "column.list",
-        "focus.set",
-        "node.add",
-        "node.edit",
-        "node.get",
-        "node.list",
-        "node.remove",
-        "outline.indent",
-        "outline.move",
-        "outline.outdent",
-        "outline.reorder",
-        "ping",
-        "prompt.get",
-        "prompt.put",
-        "prompt.resolve",
-        "reset",
-        "seed",
-        "stats",
-        "timeline",
-        "view.get"
+        {
+          "name": "board.move",
+          "title": {
+            "ko": "보드에서 항목을 옮깁니다",
+            "en": "Moves an item on the board"
+          }
+        },
+        {
+          "name": "board.reorder",
+          "title": {
+            "ko": "보드 순서를 바꿉니다",
+            "en": "Reorders the board"
+          }
+        },
+        {
+          "name": "board.sort",
+          "title": {
+            "ko": "보드를 정렬합니다",
+            "en": "Sorts the board"
+          }
+        },
+        {
+          "name": "breadcrumb",
+          "title": {
+            "ko": "경로를 조회합니다",
+            "en": "Reads the breadcrumb"
+          }
+        },
+        {
+          "name": "column.list",
+          "title": {
+            "ko": "컬럼을 조회합니다",
+            "en": "Lists columns"
+          }
+        },
+        {
+          "name": "focus.set",
+          "title": {
+            "ko": "포커스를 지정합니다",
+            "en": "Sets the focus"
+          }
+        },
+        {
+          "name": "node.add",
+          "title": {
+            "ko": "칸반 항목을 추가합니다",
+            "en": "Adds a kanban item"
+          }
+        },
+        {
+          "name": "node.edit",
+          "title": {
+            "ko": "칸반 항목을 수정합니다",
+            "en": "Edits a kanban item"
+          }
+        },
+        {
+          "name": "node.get",
+          "title": {
+            "ko": "칸반 항목을 조회합니다",
+            "en": "Reads a kanban item"
+          }
+        },
+        {
+          "name": "node.list",
+          "title": {
+            "ko": "칸반 항목을 나열합니다",
+            "en": "Lists kanban items"
+          }
+        },
+        {
+          "name": "node.remove",
+          "title": {
+            "ko": "칸반 항목을 삭제합니다",
+            "en": "Removes a kanban item"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "outline.indent",
+          "title": {
+            "ko": "항목을 들여씁니다",
+            "en": "Indents an item"
+          }
+        },
+        {
+          "name": "outline.move",
+          "title": {
+            "ko": "항목을 옮깁니다",
+            "en": "Moves an item"
+          }
+        },
+        {
+          "name": "outline.outdent",
+          "title": {
+            "ko": "항목을 내어씁니다",
+            "en": "Outdents an item"
+          }
+        },
+        {
+          "name": "outline.reorder",
+          "title": {
+            "ko": "항목 순서를 바꿉니다",
+            "en": "Reorders items"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "ko": "플러그인 상태를 점검합니다",
+            "en": "Pings the plugin"
+          }
+        },
+        {
+          "name": "prompt.get",
+          "title": {
+            "ko": "프롬프트를 조회합니다",
+            "en": "Reads a prompt"
+          }
+        },
+        {
+          "name": "prompt.put",
+          "title": {
+            "ko": "프롬프트를 저장합니다",
+            "en": "Stores a prompt"
+          }
+        },
+        {
+          "name": "prompt.resolve",
+          "title": {
+            "ko": "프롬프트를 조립합니다",
+            "en": "Resolves a prompt"
+          }
+        },
+        {
+          "name": "reset",
+          "title": {
+            "ko": "보드를 초기화합니다",
+            "en": "Resets the board"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "seed",
+          "title": {
+            "ko": "예시 데이터를 채웁니다",
+            "en": "Seeds sample data"
+          }
+        },
+        {
+          "name": "stats",
+          "title": {
+            "ko": "통계를 조회합니다",
+            "en": "Reads statistics"
+          }
+        },
+        {
+          "name": "timeline",
+          "title": {
+            "ko": "타임라인을 조회합니다",
+            "en": "Reads the timeline"
+          }
+        },
+        {
+          "name": "view.get",
+          "title": {
+            "ko": "뷰 상태를 조회합니다",
+            "en": "Reads the view state"
+          }
+        }
       ]
     },
     {
@@ -520,46 +1506,292 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-lgtv-remote.git",
       "branch": "main",
       "commands": [
-        "apps",
-        "button",
-        "channel-down",
-        "channel-up",
-        "connect",
-        "disconnect",
-        "discover",
-        "dpad",
-        "dump-log",
-        "find",
-        "foreground-app",
-        "hide",
-        "inputs",
-        "launch",
-        "media",
-        "minimize",
-        "mute",
-        "open-channel",
-        "pointer-click",
-        "pointer-move",
-        "power-off",
-        "power-on",
-        "scan-mac",
-        "screen-off",
-        "screen-on",
-        "set-ip",
-        "set-mac",
-        "set-volume",
-        "show",
-        "ssap",
-        "status",
-        "switch-input",
-        "text-delete",
-        "text-enter",
-        "text-input",
-        "toast",
-        "toggle",
-        "volume-down",
-        "volume-up",
-        "ws-probe"
+        {
+          "name": "apps",
+          "title": {
+            "en": "App List",
+            "ko": "앱 목록"
+          }
+        },
+        {
+          "name": "button",
+          "title": {
+            "en": "Remote Button",
+            "ko": "리모컨 버튼"
+          }
+        },
+        {
+          "name": "channel-down",
+          "title": {
+            "en": "Channel -",
+            "ko": "채널 -"
+          }
+        },
+        {
+          "name": "channel-up",
+          "title": {
+            "en": "Channel +",
+            "ko": "채널 +"
+          }
+        },
+        {
+          "name": "connect",
+          "title": {
+            "en": "Connect TV",
+            "ko": "TV 연결"
+          }
+        },
+        {
+          "name": "disconnect",
+          "title": {
+            "en": "Disconnect TV",
+            "ko": "TV 연결 해제"
+          }
+        },
+        {
+          "name": "discover",
+          "title": {
+            "en": "Discover TV",
+            "ko": "TV 자동 발견"
+          }
+        },
+        {
+          "name": "dpad",
+          "title": {
+            "en": "D-Pad / OK",
+            "ko": "방향키/OK"
+          }
+        },
+        {
+          "name": "dump-log",
+          "title": {
+            "en": "Dump Debug Log",
+            "ko": "디버그 로그 덤프"
+          }
+        },
+        {
+          "name": "find",
+          "title": {
+            "en": "Find TV (IP/MAC)",
+            "ko": "TV 찾기(IP/MAC 설정)"
+          }
+        },
+        {
+          "name": "foreground-app",
+          "title": {
+            "en": "Foreground App",
+            "ko": "현재 앱"
+          }
+        },
+        {
+          "name": "hide",
+          "title": {
+            "en": "Close Remote",
+            "ko": "리모컨 닫기"
+          }
+        },
+        {
+          "name": "inputs",
+          "title": {
+            "en": "Input List",
+            "ko": "입력 목록"
+          }
+        },
+        {
+          "name": "launch",
+          "title": {
+            "en": "Launch App",
+            "ko": "앱 실행"
+          }
+        },
+        {
+          "name": "media",
+          "title": {
+            "en": "Media Control",
+            "ko": "미디어 제어"
+          }
+        },
+        {
+          "name": "minimize",
+          "title": {
+            "en": "Minimize Remote",
+            "ko": "리모컨 최소화"
+          }
+        },
+        {
+          "name": "mute",
+          "title": {
+            "en": "Mute",
+            "ko": "음소거"
+          }
+        },
+        {
+          "name": "open-channel",
+          "title": {
+            "en": "Go to Channel",
+            "ko": "채널 이동"
+          }
+        },
+        {
+          "name": "pointer-click",
+          "title": {
+            "en": "Pointer Click",
+            "ko": "포인터 클릭"
+          }
+        },
+        {
+          "name": "pointer-move",
+          "title": {
+            "en": "Move Pointer",
+            "ko": "포인터 이동(마우스 네비)"
+          }
+        },
+        {
+          "name": "power-off",
+          "title": {
+            "en": "Power Off",
+            "ko": "전원 끄기(완전 종료)"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "power-on",
+          "title": {
+            "en": "Power On",
+            "ko": "전원 켜기"
+          }
+        },
+        {
+          "name": "scan-mac",
+          "title": {
+            "en": "Scan MAC",
+            "ko": "MAC 자동 탐색"
+          }
+        },
+        {
+          "name": "screen-off",
+          "title": {
+            "en": "Screen Off",
+            "ko": "화면 끄기"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "screen-on",
+          "title": {
+            "en": "Screen On",
+            "ko": "화면 켜기"
+          }
+        },
+        {
+          "name": "set-ip",
+          "title": {
+            "en": "Set TV IP",
+            "ko": "TV IP 설정"
+          }
+        },
+        {
+          "name": "set-mac",
+          "title": {
+            "en": "Set TV MAC",
+            "ko": "TV MAC 설정"
+          }
+        },
+        {
+          "name": "set-volume",
+          "title": {
+            "en": "Set Volume",
+            "ko": "볼륨 설정"
+          }
+        },
+        {
+          "name": "show",
+          "title": {
+            "en": "Open Remote",
+            "ko": "리모컨 열기"
+          }
+        },
+        {
+          "name": "ssap",
+          "title": {
+            "en": "SSAP Probe",
+            "ko": "SSAP 진단 요청"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "status",
+          "title": {
+            "en": "Connection Status",
+            "ko": "연결 상태"
+          }
+        },
+        {
+          "name": "switch-input",
+          "title": {
+            "en": "Switch Input",
+            "ko": "입력 전환"
+          }
+        },
+        {
+          "name": "text-delete",
+          "title": {
+            "en": "Delete Text",
+            "ko": "문자 삭제"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "text-enter",
+          "title": {
+            "en": "Enter Key",
+            "ko": "Enter 키"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "text-input",
+          "title": {
+            "en": "Text Input",
+            "ko": "텍스트 입력"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "toast",
+          "title": {
+            "en": "Show Toast",
+            "ko": "토스트 표시"
+          }
+        },
+        {
+          "name": "toggle",
+          "title": {
+            "en": "Toggle Remote",
+            "ko": "리모컨 토글"
+          }
+        },
+        {
+          "name": "volume-down",
+          "title": {
+            "en": "Volume -",
+            "ko": "볼륨 -"
+          }
+        },
+        {
+          "name": "volume-up",
+          "title": {
+            "en": "Volume +",
+            "ko": "볼륨 +"
+          }
+        },
+        {
+          "name": "ws-probe",
+          "title": {
+            "en": "WebSocket Probe",
+            "ko": "WebSocket 진단"
+          }
+        }
       ]
     },
     {
@@ -576,19 +1808,100 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-mailbox.git",
       "branch": "main",
       "commands": [
-        "clear",
-        "delete",
-        "export",
-        "get",
-        "import",
-        "list",
-        "mark-read",
-        "open",
-        "search",
-        "send",
-        "subscribe",
-        "subscriptions",
-        "unsubscribe"
+        {
+          "name": "clear",
+          "title": {
+            "ko": "메시지 비우기",
+            "en": "Clear Messages"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "delete",
+          "title": {
+            "ko": "메시지 삭제",
+            "en": "Delete Message"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "export",
+          "title": {
+            "ko": "내보내기",
+            "en": "Export"
+          }
+        },
+        {
+          "name": "get",
+          "title": {
+            "ko": "메시지 조회",
+            "en": "Get Message"
+          }
+        },
+        {
+          "name": "import",
+          "title": {
+            "ko": "가져오기",
+            "en": "Import"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "list",
+          "title": {
+            "ko": "메시지 목록",
+            "en": "List Messages"
+          }
+        },
+        {
+          "name": "mark-read",
+          "title": {
+            "ko": "읽음 표시",
+            "en": "Mark as Read"
+          }
+        },
+        {
+          "name": "open",
+          "title": {
+            "ko": "메시지 열기(딥링크)",
+            "en": "Open Message (Deep Link)"
+          }
+        },
+        {
+          "name": "search",
+          "title": {
+            "ko": "메시지 검색",
+            "en": "Search Messages"
+          }
+        },
+        {
+          "name": "send",
+          "title": {
+            "ko": "메시지 보내기",
+            "en": "Send Message"
+          }
+        },
+        {
+          "name": "subscribe",
+          "title": {
+            "ko": "자동 구독 켜기",
+            "en": "Enable Auto-Subscribe"
+          }
+        },
+        {
+          "name": "subscriptions",
+          "title": {
+            "ko": "구독 목록",
+            "en": "List Subscriptions"
+          }
+        },
+        {
+          "name": "unsubscribe",
+          "title": {
+            "ko": "자동 구독 끄기",
+            "en": "Disable Auto-Subscribe"
+          }
+        }
       ]
     },
     {
@@ -605,20 +1918,104 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-mascot.git",
       "branch": "main",
       "commands": [
-        "cubism.install",
-        "emotion.map",
-        "expression.list",
-        "expression.set",
-        "model.list",
-        "model.load",
-        "motion.play",
-        "ping",
-        "release",
-        "say",
-        "state",
-        "stop",
-        "toggle",
-        "tts.toggle"
+        {
+          "name": "cubism.install",
+          "title": {
+            "en": "Downloads Cubism Core after license consent",
+            "ko": "라이선스 동의 후 Cubism Core를 내려받습니다"
+          }
+        },
+        {
+          "name": "emotion.map",
+          "title": {
+            "en": "Sets emotion→expression mapping",
+            "ko": "감정-표정 매핑을 설정합니다"
+          }
+        },
+        {
+          "name": "expression.list",
+          "title": {
+            "en": "Lists model expressions",
+            "ko": "모델 표정 목록을 조회합니다"
+          }
+        },
+        {
+          "name": "expression.set",
+          "title": {
+            "en": "Applies a model expression",
+            "ko": "모델 표정을 적용합니다"
+          }
+        },
+        {
+          "name": "model.list",
+          "title": {
+            "en": "Lists characters in the models folder",
+            "ko": "캐릭터 폴더의 모델을 나열합니다"
+          }
+        },
+        {
+          "name": "model.load",
+          "title": {
+            "en": "Loads a Live2D model",
+            "ko": "Live2D 모델을 로드합니다"
+          }
+        },
+        {
+          "name": "motion.play",
+          "title": {
+            "en": "Plays a model motion",
+            "ko": "모델 모션을 재생합니다"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "en": "Pings the plugin",
+            "ko": "플러그인 상태를 점검합니다"
+          }
+        },
+        {
+          "name": "release",
+          "title": {
+            "en": "Releases engine resources",
+            "ko": "엔진 자원을 반납합니다"
+          }
+        },
+        {
+          "name": "say",
+          "title": {
+            "en": "Speaks text with expressions (no LLM)",
+            "ko": "텍스트를 표정과 함께 발화합니다"
+          }
+        },
+        {
+          "name": "state",
+          "title": {
+            "en": "Reads plugin state",
+            "ko": "플러그인 상태를 조회합니다"
+          }
+        },
+        {
+          "name": "stop",
+          "title": {
+            "en": "Stops speech and the current turn",
+            "ko": "발화와 진행 중 턴을 중단합니다"
+          }
+        },
+        {
+          "name": "toggle",
+          "title": {
+            "en": "Toggles the screen mascot overlay",
+            "ko": "화면 마스코트 오버레이를 켜고 끕니다"
+          }
+        },
+        {
+          "name": "tts.toggle",
+          "title": {
+            "en": "Toggles speech output",
+            "ko": "음성 출력을 켜고 끕니다"
+          }
+        }
       ]
     },
     {
@@ -665,15 +2062,69 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-overlay-draw.git",
       "branch": "main",
       "commands": [
-        "clear",
-        "color",
-        "eraser",
-        "state",
-        "stroke",
-        "toggle",
-        "tools",
-        "undo",
-        "width"
+        {
+          "name": "clear",
+          "title": {
+            "en": "Clear all",
+            "ko": "전부 지우기"
+          }
+        },
+        {
+          "name": "color",
+          "title": {
+            "en": "Pen color",
+            "ko": "펜 색"
+          }
+        },
+        {
+          "name": "eraser",
+          "title": {
+            "en": "Eraser",
+            "ko": "지우개"
+          }
+        },
+        {
+          "name": "state",
+          "title": {
+            "en": "Read state",
+            "ko": "상태 읽기"
+          }
+        },
+        {
+          "name": "stroke",
+          "title": {
+            "en": "Draw stroke (programmatic)",
+            "ko": "낙서 한 획(프로그램·AI·E2E)"
+          }
+        },
+        {
+          "name": "toggle",
+          "title": {
+            "en": "Toggle draw mode",
+            "ko": "그리기 모드 켜기/끄기"
+          }
+        },
+        {
+          "name": "tools",
+          "title": {
+            "en": "Hide/show tools (for capture)",
+            "ko": "도구 가리기/열기(캡처용)"
+          }
+        },
+        {
+          "name": "undo",
+          "title": {
+            "en": "Undo",
+            "ko": "되돌리기"
+          }
+        },
+        {
+          "name": "width",
+          "title": {
+            "en": "Pen width",
+            "ko": "펜 굵기"
+          }
+        }
       ]
     },
     {
@@ -690,10 +2141,34 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-overlay-sakura.git",
       "branch": "main",
       "commands": [
-        "density",
-        "fall",
-        "toggle",
-        "wind"
+        {
+          "name": "density",
+          "title": {
+            "en": "Petal density",
+            "ko": "꽃잎 밀도"
+          }
+        },
+        {
+          "name": "fall",
+          "title": {
+            "en": "Fall speed",
+            "ko": "낙하 속도"
+          }
+        },
+        {
+          "name": "toggle",
+          "title": {
+            "en": "Toggle petals",
+            "ko": "꽃잎 켜기/끄기"
+          }
+        },
+        {
+          "name": "wind",
+          "title": {
+            "en": "Wind",
+            "ko": "바람"
+          }
+        }
       ]
     },
     {
@@ -710,10 +2185,34 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-overlay-shark.git",
       "branch": "main",
       "commands": [
-        "count",
-        "mode",
-        "speed",
-        "toggle"
+        {
+          "name": "count",
+          "title": {
+            "en": "Shark count",
+            "ko": "상어 수"
+          }
+        },
+        {
+          "name": "mode",
+          "title": {
+            "en": "Interaction mode",
+            "ko": "인터랙션 모드"
+          }
+        },
+        {
+          "name": "speed",
+          "title": {
+            "en": "Liveliness",
+            "ko": "활기 설정"
+          }
+        },
+        {
+          "name": "toggle",
+          "title": {
+            "en": "Toggle shork",
+            "ko": "shork 켜기/끄기"
+          }
+        }
       ]
     },
     {
@@ -730,22 +2229,123 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-playbox.git",
       "branch": "main",
       "commands": [
-        "clip.add",
-        "clip.list",
-        "clip.update",
-        "debug",
-        "doctor",
-        "download",
-        "favorite.add",
-        "favorite.remove",
-        "library.filter",
-        "library.list",
-        "ping",
-        "play",
-        "player.control",
-        "player.state",
-        "resolve",
-        "setup"
+        {
+          "name": "clip.add",
+          "title": {
+            "ko": "클립 추가",
+            "en": "Add clip"
+          }
+        },
+        {
+          "name": "clip.list",
+          "title": {
+            "ko": "클립 목록",
+            "en": "List clips"
+          }
+        },
+        {
+          "name": "clip.update",
+          "title": {
+            "ko": "클립 수정",
+            "en": "Update clip"
+          }
+        },
+        {
+          "name": "debug",
+          "title": {
+            "ko": "인스턴스 진단",
+            "en": "Debug instance"
+          }
+        },
+        {
+          "name": "doctor",
+          "title": {
+            "ko": "의존성 점검",
+            "en": "Doctor"
+          }
+        },
+        {
+          "name": "download",
+          "title": {
+            "ko": "다운로드",
+            "en": "Download"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "favorite.add",
+          "title": {
+            "ko": "즐겨찾기 추가",
+            "en": "Add favorite"
+          }
+        },
+        {
+          "name": "favorite.remove",
+          "title": {
+            "ko": "항목 삭제",
+            "en": "Remove item"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "library.filter",
+          "title": {
+            "ko": "라이브러리 필터",
+            "en": "Filter library"
+          }
+        },
+        {
+          "name": "library.list",
+          "title": {
+            "ko": "라이브러리 목록",
+            "en": "List library"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "ko": "적재/버전 확인",
+            "en": "Ping"
+          }
+        },
+        {
+          "name": "play",
+          "title": {
+            "ko": "재생",
+            "en": "Play"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "player.control",
+          "title": {
+            "ko": "재생 제어",
+            "en": "Player control"
+          },
+          "danger": "inject"
+        },
+        {
+          "name": "player.state",
+          "title": {
+            "ko": "재생 상태",
+            "en": "Player state"
+          }
+        },
+        {
+          "name": "resolve",
+          "title": {
+            "ko": "URL 해석",
+            "en": "Resolve URL"
+          }
+        },
+        {
+          "name": "setup",
+          "title": {
+            "ko": "의존성 설치",
+            "en": "Setup deps"
+          },
+          "danger": "inject"
+        }
       ]
     },
     {
@@ -762,35 +2362,209 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-runbook.git",
       "branch": "main",
       "commands": [
-        "command.add",
-        "command.delete",
-        "command.duplicate",
-        "command.favorite",
-        "command.get",
-        "command.list",
-        "command.refs",
-        "command.restore",
-        "command.run",
-        "command.search",
-        "command.set-group",
-        "command.update",
-        "editor.serialize",
-        "editor.tokens",
-        "export",
-        "group.add",
-        "group.delete",
-        "group.list",
-        "group.update",
-        "history.add",
-        "history.clear",
-        "history.delete",
-        "history.list",
-        "history.restore",
-        "history.search",
-        "import",
-        "ref.parse",
-        "ref.resolve",
-        "schedule.fire"
+        {
+          "name": "command.add",
+          "title": {
+            "ko": "명령 추가",
+            "en": "Add Command"
+          }
+        },
+        {
+          "name": "command.delete",
+          "title": {
+            "ko": "명령 삭제(소프트)",
+            "en": "Delete Command (soft)"
+          }
+        },
+        {
+          "name": "command.duplicate",
+          "title": {
+            "ko": "명령 복제",
+            "en": "Duplicate Command"
+          }
+        },
+        {
+          "name": "command.favorite",
+          "title": {
+            "ko": "명령 즐겨찾기 토글",
+            "en": "Toggle Command Favorite"
+          }
+        },
+        {
+          "name": "command.get",
+          "title": {
+            "ko": "명령 조회",
+            "en": "Get Command"
+          }
+        },
+        {
+          "name": "command.list",
+          "title": {
+            "ko": "명령 목록",
+            "en": "List Commands"
+          }
+        },
+        {
+          "name": "command.refs",
+          "title": {
+            "ko": "명령 Reference 추출",
+            "en": "Extract Command Refs"
+          }
+        },
+        {
+          "name": "command.restore",
+          "title": {
+            "ko": "명령 복원",
+            "en": "Restore Command"
+          }
+        },
+        {
+          "name": "command.run",
+          "title": {
+            "ko": "명령 실행(링킹·셸/터미널/api)",
+            "en": "Run Command (link·shell/terminal/api)"
+          }
+        },
+        {
+          "name": "command.search",
+          "title": {
+            "ko": "명령 검색",
+            "en": "Search Commands"
+          }
+        },
+        {
+          "name": "command.set-group",
+          "title": {
+            "ko": "명령 그룹 이동",
+            "en": "Move Command to Group"
+          }
+        },
+        {
+          "name": "command.update",
+          "title": {
+            "ko": "명령 갱신",
+            "en": "Update Command"
+          }
+        },
+        {
+          "name": "editor.serialize",
+          "title": {
+            "ko": "에디터 직렬화(헤드리스)",
+            "en": "Editor Serialize (headless)"
+          }
+        },
+        {
+          "name": "editor.tokens",
+          "title": {
+            "ko": "에디터 토큰 역직렬화(헤드리스)",
+            "en": "Editor Deserialize Tokens (headless)"
+          }
+        },
+        {
+          "name": "export",
+          "title": {
+            "ko": "런북 내보내기(JSONL)",
+            "en": "Export Runbook (JSONL)"
+          }
+        },
+        {
+          "name": "group.add",
+          "title": {
+            "ko": "그룹 추가",
+            "en": "Add Group"
+          }
+        },
+        {
+          "name": "group.delete",
+          "title": {
+            "ko": "그룹 삭제",
+            "en": "Delete Group"
+          }
+        },
+        {
+          "name": "group.list",
+          "title": {
+            "ko": "그룹 목록",
+            "en": "List Groups"
+          }
+        },
+        {
+          "name": "group.update",
+          "title": {
+            "ko": "그룹 갱신",
+            "en": "Update Group"
+          }
+        },
+        {
+          "name": "history.add",
+          "title": {
+            "ko": "히스토리 기록",
+            "en": "Record History"
+          }
+        },
+        {
+          "name": "history.clear",
+          "title": {
+            "ko": "히스토리 전체 삭제",
+            "en": "Clear History"
+          }
+        },
+        {
+          "name": "history.delete",
+          "title": {
+            "ko": "히스토리 삭제(소프트)",
+            "en": "Delete History (soft)"
+          }
+        },
+        {
+          "name": "history.list",
+          "title": {
+            "ko": "히스토리 목록",
+            "en": "List History"
+          }
+        },
+        {
+          "name": "history.restore",
+          "title": {
+            "ko": "히스토리 복원",
+            "en": "Restore History"
+          }
+        },
+        {
+          "name": "history.search",
+          "title": {
+            "ko": "히스토리 검색",
+            "en": "Search History"
+          }
+        },
+        {
+          "name": "import",
+          "title": {
+            "ko": "런북 가져오기(JSONL)",
+            "en": "Import Runbook (JSONL)"
+          }
+        },
+        {
+          "name": "ref.parse",
+          "title": {
+            "ko": "Reference 파싱(엔진 검증)",
+            "en": "Parse Reference (engine)"
+          }
+        },
+        {
+          "name": "ref.resolve",
+          "title": {
+            "ko": "Reference 해석(엔진 검증)",
+            "en": "Resolve Reference (engine)"
+          }
+        },
+        {
+          "name": "schedule.fire",
+          "title": {
+            "ko": "일정 발화(스케줄러 호출)",
+            "en": "Fire Schedule"
+          }
+        }
       ]
     },
     {
@@ -807,8 +2581,20 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-sidebar-sky.git",
       "branch": "main",
       "commands": [
-        "set",
-        "state"
+        {
+          "name": "set",
+          "title": {
+            "ko": "시간대 강제/복귀",
+            "en": "Force / clear phase"
+          }
+        },
+        {
+          "name": "state",
+          "title": {
+            "ko": "현재 시간대 상태",
+            "en": "Time-of-day state"
+          }
+        }
       ]
     },
     {
@@ -825,10 +2611,34 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-terminal.git",
       "branch": "main",
       "commands": [
-        "clear",
-        "ping",
-        "resume",
-        "send"
+        {
+          "name": "clear",
+          "title": {
+            "ko": "지우기",
+            "en": "Clear"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "ko": "플러그인 적재/버전 확인(E2E)",
+            "en": "Ping (load/version check)"
+          }
+        },
+        {
+          "name": "resume",
+          "title": {
+            "ko": "세션 이어가기",
+            "en": "Resume Session"
+          }
+        },
+        {
+          "name": "send",
+          "title": {
+            "ko": "텍스트 전송",
+            "en": "Send Text"
+          }
+        }
       ]
     },
     {
@@ -838,11 +2648,41 @@
       "description": "드래프트 파이프라인 — 아이디어를 LLM 저작 워크플로로 칸반 노드 DAG 에 발행하고, 코어 스케줄러 reconcile 로 실행·추적한다. item=exec-one 검증(badge o/x/f), task=exec-stage(generate/hunt/classify/audit 실행·자식 발행), blockedBy 의존.",
       "branch": "main",
       "commands": [
-        "issuerize",
-        "ping",
-        "reconcile",
-        "research",
-        "run"
+        {
+          "name": "issuerize",
+          "title": {
+            "ko": "계획을 개발 이슈로 승격합니다",
+            "en": "Promotes plans to issues"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "ko": "프로바이더 상태를 점검합니다",
+            "en": "Probes the provider"
+          }
+        },
+        {
+          "name": "reconcile",
+          "title": {
+            "ko": "준비된 워크플로 노드를 실행합니다",
+            "en": "Runs ready workflow nodes"
+          }
+        },
+        {
+          "name": "research",
+          "title": {
+            "ko": "조사 워크플로를 발행합니다",
+            "en": "Publishes the research workflow"
+          }
+        },
+        {
+          "name": "run",
+          "title": {
+            "ko": "워크플로를 발행합니다",
+            "en": "Publishes the workflow"
+          }
+        }
       ]
     }
   ]
