@@ -343,8 +343,26 @@ fn run_request(method: &str, params: Value, pretty_only: bool) -> ExitCode {
 
 // ── 매뉴얼(카탈로그 → 포맷) ──────────────────────────────────────────────────
 
+/// 창 미지정 시 워크스페이스 창(w-*)을 자동 선택한다 — 플러그인 명령 스키마는 창-로컬
+/// 등록이라, 어느 창(오케스트레이터 포함)에서 불러도 같은 전체 카탈로그가 나오게 한다.
+fn pick_catalog_window() -> Option<String> {
+    WINDOW_OVERRIDE.get().cloned().flatten().or_else(|| {
+        request("window.list", Value::Null).ok().and_then(|v| {
+            v.get("data")
+                .and_then(|d| d.get("labels"))
+                .and_then(Value::as_array)
+                .and_then(|ls| {
+                    ls.iter()
+                        .filter_map(Value::as_str)
+                        .find(|l| l.starts_with("w-"))
+                        .map(String::from)
+                })
+        })
+    })
+}
+
 fn fetch_commands() -> Result<Vec<Value>, String> {
-    let v = request("state.commands", Value::Null)?;
+    let v = send_request("state.commands", Value::Null, None, pick_catalog_window(), None)?;
     // 응답 봉투(MESSAGE-PROTOCOL) — 기계 페이로드는 data 에 중첩된다.
     v.get("data")
         .and_then(|d| d.get("commands"))
@@ -410,6 +428,23 @@ fn run_help(cmd: &str) -> ExitCode {
         Ok(cmds) => match cmds.iter().find(|c| c["name"] == cmd) {
             Some(c) => {
                 println!("{}", format_command_md(c));
+                // 같은 도메인의 형제 명령 — help 는 명시적 탐색의 자리이므로 여기서만 넓힌다
+                // (응답 hint 는 문맥 신호 전용 — 불변 상식의 반복 부착은 소음).
+                // 플러그인 명령(plugin.<id>.…)은 그 플러그인 전체가 탐색 단위, 코어는 도메인.
+                let domain: String = if cmd.starts_with("plugin.") {
+                    cmd.splitn(3, '.').take(2).collect::<Vec<_>>().join(".")
+                } else {
+                    cmd.rsplit_once('.').map(|(d, _)| d).unwrap_or(cmd).to_string()
+                };
+                let prefix = format!("{domain}.");
+                let siblings: Vec<&str> = cmds
+                    .iter()
+                    .filter_map(|c| c["name"].as_str())
+                    .filter(|n| *n != cmd && n.starts_with(&prefix))
+                    .collect();
+                if !siblings.is_empty() {
+                    println!("같은 묶음의 명령: {}", siblings.join(", "));
+                }
                 ExitCode::SUCCESS
             }
             None => {
@@ -424,22 +459,7 @@ fn run_docs(core_only: bool, format: &str, lang: &str) -> ExitCode {
     // 원천 = 코어 자동화 명령 command.docs(전체 표면 단일 반환) — CLI 는 마크다운 표현만 담당.
     // 플러그인 명령 스키마는 창-로컬 등록이라, 창 미지정이면 워크스페이스 창(w-*)을 자동 선택해
     // 어느 창(오케스트레이터 포함)에서 불러도 같은 전체 레퍼런스가 나온다.
-    let window = WINDOW_OVERRIDE.get().cloned().flatten().or_else(|| {
-        request("window.list", Value::Null)
-            .ok()
-            .and_then(|v| {
-                v.get("data")
-                    .and_then(|d| d.get("labels"))
-                    .and_then(Value::as_array)
-                    .and_then(|ls| {
-                        ls.iter()
-                            .filter_map(Value::as_str)
-                            .find(|l| l.starts_with("w-"))
-                            .map(String::from)
-                    })
-            })
-    });
-    let v = match send_request("command.docs", json!({ "lang": lang }), None, window, None) {
+    let v = match send_request("command.docs", json!({ "lang": lang }), None, pick_catalog_window(), None) {
         Err(e) => {
             eprintln!("{e}");
             return ExitCode::FAILURE;
