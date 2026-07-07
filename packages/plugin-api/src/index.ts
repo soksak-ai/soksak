@@ -57,6 +57,12 @@ export interface CommandOutcome {
 }
 export type CommandError = CommandOutcome & { ok: false };
 
+/** hint 한 건 — 다음에 해볼 만한 명령의 제안. cmd=명령 이름, why=제안 사유(사람이 읽는 한 줄). */
+export interface CommandHint {
+  cmd: string;
+  why: string;
+}
+
 /** 플러그인이 register 하는 명령 스펙. description=영어 base(LLM 발견), triggers=언어별 트리거어. */
 export interface PluginCommandSpec {
   description: string;
@@ -75,6 +81,8 @@ export interface PluginCommandSpec {
   /** 계측 스펙(MESSAGE-PROTOCOL §4·§5 R2) — false=활동 트레이스 제외. 유일한 정당 사유는
    *  동일 사실의 이중 기록 방지. */
   trace?: false;
+  /** hint 는 지시가 아니라 가능성의 제시다. 응답에 최대 3개까지 실린다. */
+  hint?: (data: Record<string, unknown>, ctx: PluginInvocation) => CommandHint[];
   /** inv = 이 호출의 실행 컨텍스트(§5 상속) — 중첩 명령 실행은 반드시 inv.execute 로:
    *  부모의 유래(origin)·상관(parentId)이 자식에 계승된다. */
   handler: (

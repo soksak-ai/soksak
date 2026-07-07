@@ -16,6 +16,7 @@ import {
   VIEW_PLACEMENTS,
   configDefaults,
   configSettingOf,
+  resolveText,
   validateSettingValue,
   type ViewPlacement,
 } from "../plugins/spec";
@@ -27,7 +28,7 @@ import {
   versionIssues,
   type DepNode,
 } from "../plugins/dependencyGraph";
-import { register, catalogJson } from "./registry";
+import { register, catalogJson, setUnknownCommandResolver, type CommandHint } from "./registry";
 import { collectExposed } from "./catalogDom";
 import { pluginCommandName } from "../plugins/spec";
 import { commandsMissingMessage } from "../plugins/api";
@@ -105,6 +106,44 @@ export function registerPluginCatalog(): void {
     }),
   });
 
+  // UNKNOWN_COMMAND 지능형 안내 — 미지의 명령이 레지스트리 카탈로그의 선언 명령과 일치하면
+  // 원인(미설치/비활성)에 맞는 설치·활성 명령을 hint 로 제시한다. 발견→설치→활성 사이클이
+  // 오류 응답에서도 이어진다(사용자 확정 2026-07-07).
+  setUnknownCommandResolver((name): CommandHint[] => {
+    const entries = useRegistry.getState().entries;
+    const installed = usePlugins.getState().plugins;
+    // 형태 ①: plugin.<플러그인 id>.<명령> — id 로 직접 판별.
+    const m = /^plugin\.(soksak-plugin-[a-z0-9-]+)\.(.+)$/.exec(name);
+    if (m) {
+      const [, pid, sub] = m;
+      const entry = entries.find((e) => e.id === pid);
+      const runtime = installed[pid];
+      if (runtime && runtime.status !== "enabled") {
+        return [{ cmd: `sok plugin.enable '{"id":"${pid}"}'`, why: tmsg("hint.error.pluginDisabled", { plugin: pid }) }];
+      }
+      if (!runtime && entry) {
+        return [{ cmd: `sok plugin.install '{"source":"${entry.repo}"}'`, why: tmsg("hint.error.pluginNotInstalled", { plugin: pid, command: sub }) }];
+      }
+      return [];
+    }
+    // 형태 ②: 접두 없는 이름 — 카탈로그의 선언 명령에서 같은 이름을 찾는다(최대 3건).
+    const hits: CommandHint[] = [];
+    for (const e of entries) {
+      if (!e.commands?.some((c) => c.name === name)) continue;
+      const runtime = installed[e.id];
+      const full = `plugin.${e.id}.${name}`;
+      if (runtime?.status === "enabled") {
+        hits.push({ cmd: `sok ${full}`, why: tmsg("hint.error.pluginCommandFullName", { plugin: e.id }) });
+      } else if (runtime) {
+        hits.push({ cmd: `sok plugin.enable '{"id":"${e.id}"}'`, why: tmsg("hint.error.pluginDisabled", { plugin: e.id }) });
+      } else {
+        hits.push({ cmd: `sok plugin.install '{"source":"${e.repo}"}'`, why: tmsg("hint.error.pluginNotInstalled", { plugin: e.id, command: name }) });
+      }
+      if (hits.length >= 3) break;
+    }
+    return hits;
+  });
+
   register("plugin.list", {
     description:
       "List all installed and dev plugins with their runtime status, permissions, and rejection reasons. Use to check which plugins exist and whether any failed to load.",
@@ -176,20 +215,27 @@ export function registerPluginCatalog(): void {
         type: "boolean",
         description: "Refetch the live registry before answering (default: session cache / snapshot)",
       },
+      lang: {
+        type: "string",
+        enum: ["en", "ko"],
+        description: "Language for human-facing text (default: en)",
+      },
     },
     returns:
-      "{ core: [spec], plugins: { [pluginId]: [spec] }, registry: [{id, name, description, repo, installed, commands: [{name,title,danger?}]}] }",
+      "{ core: [spec], plugins: { [pluginId]: [spec] }, registry: [{id, name, description, repo, installed, commands: [{name,title,danger?}]}] } — registry name/description/commands[].title resolved to plain strings in the requested lang",
     message: (d) =>
       tmsg("msg.command.docs", {
         core: ((d.core as unknown[]) ?? []).length,
         registry: ((d.registry as unknown[]) ?? []).length,
       }),
-    examples: ["sok command.docs", "sok docs"],
+    examples: ["sok command.docs", "sok docs", 'sok command.docs \'{"lang":"ko"}\''],
     handler: async (p) => {
       const reg = useRegistry.getState();
       await reg.refresh(p.refresh === true).catch(() => {});
       const st = useRegistry.getState();
       const installed = usePlugins.getState().plugins;
+      // core/plugins 절은 이미 영어 평문이라 lang 무관 — registry 절만 다국어(LocalizedText) 해소 대상.
+      const lang = p.lang === "ko" ? "ko" : "en";
       const all = catalogJson() as { name: string }[];
       const core: unknown[] = [];
       const plugins: Record<string, unknown[]> = {};
@@ -204,11 +250,19 @@ export function registerPluginCatalog(): void {
         plugins,
         registry: st.entries.map((e) => ({
           id: e.id,
-          name: e.name,
-          description: e.description,
+          name: resolveText(e.name, lang),
+          description: resolveText(e.description, lang),
           repo: e.repo,
           ...(e.branch ? { branch: e.branch } : {}),
-          ...(e.commands ? { commands: e.commands } : {}),
+          ...(e.commands
+            ? {
+                commands: e.commands.map((c) => ({
+                  name: c.name,
+                  ...(c.title ? { title: resolveText(c.title, lang) } : {}),
+                  ...(c.danger ? { danger: c.danger } : {}),
+                })),
+              }
+            : {}),
           installed: e.id in installed,
         })),
       };

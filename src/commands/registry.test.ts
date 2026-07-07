@@ -13,6 +13,7 @@ import {
   type CommandSpec,
   type CommandOutcome,
   setCommandTraceSink,
+  setUnknownCommandResolver,
   type CommandTrace,
 } from "./registry";
 
@@ -45,7 +46,7 @@ describe("execute — 기본 계약", () => {
   it("핸들러 일반 객체 반환은 ok:true 로 래핑", async () => {
     reg(TEST_PREFIX + "plain", { handler: () => ({ value: 7 }) });
     const r = await execute(TEST_PREFIX + "plain", {}, {});
-    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { value: 7 } });
+    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { value: 7 }, window: "" });
   });
 
   it("핸들러의 CmdResult({ok:false}) 는 그대로 통과", async () => {
@@ -147,7 +148,7 @@ describe("execute — 파라미터 검증 매트릭스", () => {
       ok: false,
       code: "INVALID_PARAMS",
     });
-    expect(await execute(TEST_PREFIX + "enum", { mode: "a" }, {})).toEqual({ ok: true, code: "OK", message: "완료", data: { mode: "a" } });
+    expect(await execute(TEST_PREFIX + "enum", { mode: "a" }, {})).toEqual({ ok: true, code: "OK", message: "완료", data: { mode: "a" }, window: "" });
   });
 
   it("json 타입은 임의 값 통과(핸들러 책임)", async () => {
@@ -156,7 +157,7 @@ describe("execute — 파라미터 검증 매트릭스", () => {
       handler: (p) => ({ got: p.v }),
     });
     const r = await execute(TEST_PREFIX + "json", { v: { deep: [1] } }, {});
-    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { got: { deep: [1] } } });
+    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { got: { deep: [1] } }, window: "" });
   });
 
   it("default 는 미지정 시 채워지고 지정 시 유지", async () => {
@@ -164,8 +165,8 @@ describe("execute — 파라미터 검증 매트릭스", () => {
       params: { n: { type: "number", description: "", default: 10 } },
       handler: (p) => ({ n: p.n }),
     });
-    expect(await execute(TEST_PREFIX + "def", {}, {})).toEqual({ ok: true, code: "OK", message: "완료", data: { n: 10 } });
-    expect(await execute(TEST_PREFIX + "def", { n: 3 }, {})).toEqual({ ok: true, code: "OK", message: "완료", data: { n: 3 } });
+    expect(await execute(TEST_PREFIX + "def", {}, {})).toEqual({ ok: true, code: "OK", message: "완료", data: { n: 10 }, window: "" });
+    expect(await execute(TEST_PREFIX + "def", { n: 3 }, {})).toEqual({ ok: true, code: "OK", message: "완료", data: { n: 3 }, window: "" });
   });
 });
 
@@ -181,21 +182,21 @@ describe("execute — 권한 게이트", () => {
     reg(TEST_PREFIX + "danger2", { danger: "inject", handler: () => ({ did: true }) });
     setPermissionGate(() => false);
     const r = await execute(TEST_PREFIX + "danger2", {}, {});
-    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { did: true } });
+    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { did: true }, window: "" });
   });
 
   it("게이트 허용 시 remote danger 도 실행", async () => {
     reg(TEST_PREFIX + "danger3", { danger: "destructive", handler: () => ({ did: true }) });
     setPermissionGate(() => true);
     const r = await execute(TEST_PREFIX + "danger3", {}, { remote: true });
-    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { did: true } });
+    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { did: true }, window: "" });
   });
 
   it("danger 미분류 명령은 게이트와 무관", async () => {
     reg(TEST_PREFIX + "safe", { handler: () => ({ did: true }) });
     setPermissionGate(() => false);
     const r = await execute(TEST_PREFIX + "safe", {}, { remote: true });
-    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { did: true } });
+    expect(r).toEqual({ ok: true, code: "OK", message: "완료", data: { did: true }, window: "" });
   });
 });
 
@@ -356,5 +357,115 @@ describe("execute — 계측 sink (A1 활동 허브)", () => {
     } finally {
       setCommandTraceSink(null);
     }
+  });
+});
+
+describe("execute — 응답 공통 필드(window·hint)", () => {
+  it("모든 응답에 window 가 실린다(성공·실패)", async () => {
+    reg(TEST_PREFIX + "win-ok", { handler: () => ({ v: 1 }) });
+    const ok = await execute(TEST_PREFIX + "win-ok", {}, {});
+    const bad = await execute(TEST_PREFIX + "win-missing", {}, {}); // 미등록 = 실패 경로
+    expect(ok).toHaveProperty("window");
+    expect(bad).toHaveProperty("window");
+    expect(typeof ok.window).toBe("string");
+    expect(typeof bad.window).toBe("string");
+  });
+
+  it("성공 hint 는 최대 3개로 잘린다", async () => {
+    reg(TEST_PREFIX + "hint-many", {
+      handler: () => ({}),
+      hint: () => [
+        { cmd: "a", why: "1" },
+        { cmd: "b", why: "2" },
+        { cmd: "c", why: "3" },
+        { cmd: "d", why: "4" },
+      ],
+    });
+    const r = await execute(TEST_PREFIX + "hint-many", {}, {});
+    expect(r.ok).toBe(true);
+    expect(r.hint).toHaveLength(3);
+    expect(r.hint?.map((h) => h.cmd)).toEqual(["a", "b", "c"]);
+  });
+
+  it("성공 hint 는 data·ctx 를 받아 제시를 짓는다", async () => {
+    reg(TEST_PREFIX + "hint-data", {
+      handler: () => ({ id: "x7" }),
+      hint: (data) => [{ cmd: `sok open ${String(data.id)}`, why: "이어서 열 수 있습니다" }],
+    });
+    const r = await execute(TEST_PREFIX + "hint-data", {}, {});
+    expect(r.hint?.[0].cmd).toBe("sok open x7");
+  });
+
+  it("TARGET_NOT_FOUND 실패 응답에 표준 hint 가 실린다", async () => {
+    reg(TEST_PREFIX + "nf", {
+      handler: () => ({ ok: false, code: "TARGET_NOT_FOUND", message: "없음" }),
+    });
+    const r = await execute(TEST_PREFIX + "nf", {}, {});
+    expect(r.ok).toBe(false);
+    expect(r.hint).toHaveLength(1);
+    expect(r.hint?.[0].cmd).toBe("sok state.tree");
+    // why 는 tmsg 로 해소된 문장 — 키가 아니라 실제 문구가 실린다.
+    expect(typeof r.hint?.[0].why).toBe("string");
+    expect((r.hint?.[0].why ?? "").length).toBeGreaterThan(0);
+    expect(r.hint?.[0].why).not.toBe("hint.error.targetNotFound");
+  });
+
+  it("표준 매핑 없는 오류 코드는 hint 가 없다(과잉 안내 금지)", async () => {
+    reg(TEST_PREFIX + "boom-hint", {
+      handler: () => {
+        throw new Error("x");
+      },
+    });
+    const r = await execute(TEST_PREFIX + "boom-hint", {}, {}); // INTERNAL — 매핑 없음
+    expect(r).toMatchObject({ ok: false, code: "INTERNAL" });
+    expect(r.hint).toBeUndefined();
+  });
+
+  it("hint 함수가 던져도 응답은 성공으로 온다(hint 만 생략)", async () => {
+    reg(TEST_PREFIX + "hint-throw", {
+      handler: () => ({ v: 1 }),
+      hint: () => {
+        throw new Error("hint 폭발");
+      },
+    });
+    const r = await execute(TEST_PREFIX + "hint-throw", {}, {});
+    expect(r.ok).toBe(true);
+    expect(r.data).toEqual({ v: 1 });
+    expect(r.hint).toBeUndefined();
+  });
+
+  it("catalogJson 은 danger 를 선언된 스펙에만 싣는다", () => {
+    reg(TEST_PREFIX + "cat-danger", { danger: "destructive" });
+    reg(TEST_PREFIX + "cat-safe", {});
+    const danger = catalogJson().find((c) => c.name === TEST_PREFIX + "cat-danger");
+    const safe = catalogJson().find((c) => c.name === TEST_PREFIX + "cat-safe");
+    expect(danger?.danger).toBe("destructive");
+    expect("danger" in (safe as object)).toBe(false);
+  });
+});
+
+describe("UNKNOWN_COMMAND 지능형 해석기 주입점", () => {
+  it("해석기가 결과를 주면 그 안내가 표준 안내보다 우선하고, 상한 3개로 잘린다", async () => {
+    setUnknownCommandResolver((name) => [
+      { cmd: `sok plugin.install '{"source":"soksak-ai/${name}"}'`, why: "설치하면 사용할 수 있습니다" },
+      { cmd: "b", why: "b" },
+      { cmd: "c", why: "c" },
+      { cmd: "d", why: "d" },
+    ]);
+    const r = await execute("plugin.soksak-plugin-없는것.run", {}, {});
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("UNKNOWN_COMMAND");
+    expect(r.hint).toHaveLength(3);
+    expect(r.hint?.[0].cmd).toContain("plugin.install");
+    setUnknownCommandResolver(() => []);
+  });
+
+  it("해석기가 비거나 던지면 일반 탐색 안내로 돌아간다", async () => {
+    setUnknownCommandResolver(() => {
+      throw new Error("boom");
+    });
+    const r = await execute("정말없는명령", {}, {});
+    expect(r.hint?.[0].cmd).toBe("sok commands");
+    setUnknownCommandResolver(() => []);
   });
 });

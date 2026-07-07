@@ -4,6 +4,8 @@
 
 import type { CmdErrCode } from "../state/sessions";
 import type { LocalizedText } from "../plugins/spec";
+import { currentWindowLabel } from "../lib/webviewLabels";
+import { tmsg } from "../i18n";
 
 // 파라미터 스펙(JSON 직렬화 가능 — CLI/MCP/문서 생성에 그대로 쓰임).
 export interface ParamSpec {
@@ -13,6 +15,14 @@ export interface ParamSpec {
   required?: boolean;
   enum?: readonly string[];
   default?: unknown;
+}
+
+// 명령 hint(제시) — 실행 결과에 곁들이는 후속 명령 후보. cmd=제안하는 명령줄, why=왜 유용한지 한 줄.
+// [철학] hint 는 지시가 아니라 가능성의 제시다 — "이런 것이 가능하다"를 알려 받은 쪽(사람·AI)의
+// 판단을 돕는다. 강제가 아니다: 받은 쪽이 무시해도, 다른 수를 둬도 된다.
+export interface CommandHint {
+  cmd: string;
+  why: string;
 }
 
 export interface CommandSpec {
@@ -36,6 +46,11 @@ export interface CommandSpec {
   // 불문 speak(outcome)가 문장, 없으면 message 폴백, "" = 침묵. 낭독 수행 명령(say 류)은
   // speak: () => "" 로 되먹임을 끊는다. 문장은 message 와 같은 결로 tmsg 로 짓는다(P0).
   speak?: (out: CommandOutcome) => string;
+  // 성공 hint(제시) — 이 명령이 통했을 때 받은 쪽이 다음에 둘 만한 수를 제시한다(최대 3, execute 가
+  // 자른다). message/speak 와 같은 결의 자기서술 필드: 명령은 자기 후속을 안다. 응답 페이로드(data)와
+  // 호출 ctx 를 받아 CommandHint[] 를 짓는다. [철학] 지시가 아니라 가능성의 제시 — 받은 쪽의 판단을
+  // 돕는다. 던지면 execute 가 응답을 깨지 않고 hint 만 생략한다.
+  hint?: (data: Record<string, unknown>, ctx: CommandContext) => CommandHint[];
   // 발생 가능한 에러 코드.
   errors?: readonly (CmdErrCode | "INTERNAL" | "TIMEOUT")[];
   // CLI 사용 예시(매뉴얼용).
@@ -106,6 +121,10 @@ export interface CommandOutcome {
   message: string;
   data?: Record<string, unknown>;
   media?: MediaContent;
+  // 이 응답이 도착·조립된 창 label(멀티 윈도우 상관·라우팅). execute 가 모든 경로(성공·실패)에 얹는다.
+  window?: string;
+  // 후속 명령 후보(제시) — 성공 시 spec.hint, 실패 시 오류 코드별 표준 안내. 최대 3개.
+  hint?: CommandHint[];
 }
 // 하위호환 별칭 — 실패 봉투를 지칭하던 기존 참조 유지.
 export type CommandError = CommandOutcome & { ok: false };
@@ -162,6 +181,7 @@ export function catalogJson(): {
   returns: string;
   errors: readonly string[];
   examples: readonly string[];
+  danger?: "destructive" | "inject";
 }[] {
   return [...registry.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -172,6 +192,8 @@ export function catalogJson(): {
       returns: s.returns,
       errors: s.errors ?? [],
       examples: s.examples ?? [],
+      // 위험 분류는 선언된 스펙에만 싣는다(권한 게이트 표면이 카탈로그에서 danger 를 읽는다).
+      ...(s.danger ? { danger: s.danger } : {}),
     }));
 }
 
@@ -257,7 +279,9 @@ export async function execute(
   ctx: CommandContext,
 ): Promise<CommandOutcome> {
   const started = Date.now();
-  const out = await executeInner(name, params, ctx);
+  // 응답 공통 필드(window·hint)를 모든 경로에 얹는다 — 성공/실패 어느 지점에서 나온 응답이든
+  // 이 한 곳을 지난다(message 정규화가 normalizeOutcome 한 곳을 지나듯).
+  const out = withCommonFields(await executeInner(name, params, ctx), name, ctx);
   const finished = Date.now();
   try {
     // 기록은 전량(§5 R2 — 사실은 전부 기록된다). 유일한 제외 = spec.trace === false:
@@ -358,6 +382,65 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
   if (data) out.data = data;
   if (media) out.media = media;
   return out;
+}
+
+// 응답 공통 필드(창 label·hint)를 얹는 단일 지점 — execute 가 모든 경로를 여기로 통과시킨다.
+// window 는 언제나, hint 는 제시할 게 있을 때만. hint 는 지시가 아니라 가능성의 제시다:
+// "이런 것이 가능하다"를 알려 받은 쪽의 판단을 돕는다(강제 아님).
+function withCommonFields(out: CommandOutcome, name: string, ctx: CommandContext): CommandOutcome {
+  out.window = currentWindowLabel();
+  if (out.ok) {
+    // 성공 hint 는 명령 자신(spec.hint)이 짓는다. 최대 3개로 자른다. 던져도 응답을 깨지 않고
+    // hint 만 생략한다 — 제시의 실패가 실행의 성공을 무를 수 없다.
+    const spec = registry.get(name);
+    if (spec?.hint) {
+      try {
+        out.hint = spec.hint(out.data ?? {}, ctx).slice(0, 3);
+      } catch {
+        // hint 계산 실패는 응답과 무관 — 제시가 빠질 뿐이다.
+      }
+    }
+  } else {
+    // 실패 hint 는 오류 코드별 표준 안내 — 받은 쪽이 스스로 진단·회복할 길을 연다.
+    const std = standardErrorHints(out.code, name);
+    if (std) out.hint = std;
+  }
+  return out;
+}
+
+// 오류 코드별 표준 안내(제시). 매핑 없는 코드는 hint 없음 — 과잉 안내를 만들지 않는다.
+// cmd=제안 명령줄, why=왜 유용한지(tmsg 로 현재 언어 해소). INVALID_PARAMS 는 실제 명령 이름을 끼운다.
+// UNKNOWN_COMMAND 지능형 해석기 — 미지의 명령 이름을 레지스트리 카탈로그와 대조해 원인별
+// 안내(미설치→install, 비활성→enable)를 짓는다. 카탈로그·플러그인 상태는 상위 계층(catalogPlugins)
+// 소유이므로 여기서는 주입점만 둔다(순환 의존 방지 — registry 는 상태 저장소를 모른다).
+let unknownCommandResolver: ((name: string) => CommandHint[]) | null = null;
+export function setUnknownCommandResolver(fn: (name: string) => CommandHint[]): void {
+  unknownCommandResolver = fn;
+}
+
+function standardErrorHints(code: string, command: string): CommandHint[] | undefined {
+  switch (code) {
+    case "UNKNOWN_COMMAND": {
+      // 해석기가 원인을 알아내면 그 안내가 우선한다(설치·활성 경로). 실패·부재 시 일반 탐색 안내.
+      try {
+        const resolved = unknownCommandResolver?.(command);
+        if (resolved && resolved.length) return resolved.slice(0, 3);
+      } catch {
+        /* 해석 실패는 안내 품질 저하일 뿐 — 응답을 깨지 않는다 */
+      }
+      return [{ cmd: "sok commands", why: tmsg("hint.error.unknownCommand") }];
+    }
+    case "TARGET_NOT_FOUND":
+      return [{ cmd: "sok state.tree", why: tmsg("hint.error.targetNotFound") }];
+    case "INVALID_PARAMS":
+      return [{ cmd: `sok help ${command}`, why: tmsg("hint.error.invalidParams", { command }) }];
+    case "CONSENT_REQUIRED":
+      return [{ cmd: "sok plugin.consent.preview '{\"id\":...}'", why: tmsg("hint.error.consentRequired") }];
+    case "TIMEOUT":
+      return [{ cmd: "sok state.tree", why: tmsg("hint.error.timeout") }];
+    default:
+      return undefined;
+  }
 }
 
 // 낭독 문장 해소 — 활동 엔트리에 실리는 speak 와이어 값의 단일 계산점(§3, 축은 message/speak 둘뿐).

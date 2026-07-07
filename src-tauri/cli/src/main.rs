@@ -12,7 +12,7 @@
 // 컨텍스트: soksak 터미널 안에서는 $SOKSAK_PANE/$SOKSAK_SOCKET 이 자동 주입되어
 // 대상 id 를 생략하면 "내 위치"가 기본이 된다.
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, IsTerminal, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -43,7 +43,12 @@ fn main() -> ExitCode {
         Some("docs") => {
             let mut rest: Vec<String> = args[1..].to_vec();
             let format = take_flag_value(&mut rest, "--format");
-            run_docs(rest.iter().any(|a| a == "--core"), format.as_deref().unwrap_or("md"))
+            let lang = take_flag_value(&mut rest, "--lang");
+            run_docs(
+                rest.iter().any(|a| a == "--core"),
+                format.as_deref().unwrap_or("md"),
+                lang.as_deref().unwrap_or("en"),
+            )
         }
         Some("events") => run_events(&args[1..]),
         Some("skill") => run_skill(&args[1..]),
@@ -76,7 +81,8 @@ fn print_usage() {
   sok state.tree                      전체 구조(주소록): 모든 id + 패널 rect
   sok commands                        전체 명령 카탈로그(JSON)
   sok help <command>                  단일 명령 매뉴얼
-  sok docs [--core] [--format md|json] 가능한 명령 전체 레퍼런스(기본 md; json=기계용)
+  sok docs [--core] [--format md|json] [--lang en|ko]
+                                      가능한 명령 전체 레퍼런스(기본 md/en; json=기계용)
   sok events [--kinds a,b] [--since N] 활동 스트림 팔로우(JSONL, Ctrl-C 종료)
   sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]
                                       AI 에이전트 트리거 스킬 설치(soksak 제어법)
@@ -309,6 +315,24 @@ fn send_request(
     serde_json::from_str(&line).map_err(|e| format!("응답 파싱 실패: {e}"))
 }
 
+// 응답 봉투의 hint([{cmd,why}])를 사람용 줄로 stdout 에 덧붙인다. TTY 에서만 호출된다(파이프/
+// 리다이렉트는 순수 JSON 유지 — 기계 소비 보존). hint 필드는 다른 작업이 채운다 — 없으면 조용히 생략.
+fn print_hint(v: &Value) {
+    let Some(hints) = v.get("hint").and_then(Value::as_array) else { return };
+    if hints.is_empty() {
+        return;
+    }
+    println!("\n이어서 할 수 있는 명령:");
+    for h in hints {
+        let cmd = h.get("cmd").and_then(Value::as_str).unwrap_or("");
+        if cmd.is_empty() {
+            continue;
+        }
+        let why = h.get("why").and_then(Value::as_str).unwrap_or("");
+        println!("  {cmd}  — {why}");
+    }
+}
+
 fn run_request(method: &str, params: Value, pretty_only: bool) -> ExitCode {
     match request(method, params) {
         Err(e) => {
@@ -318,6 +342,9 @@ fn run_request(method: &str, params: Value, pretty_only: bool) -> ExitCode {
         Ok(v) => {
             let ok = v.get("ok").and_then(Value::as_bool).unwrap_or(false);
             println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
+            if std::io::stdout().is_terminal() {
+                print_hint(&v);
+            }
             if ok || pretty_only {
                 ExitCode::SUCCESS
             } else {
@@ -401,7 +428,7 @@ fn run_help(cmd: &str) -> ExitCode {
     }
 }
 
-fn run_docs(core_only: bool, format: &str) -> ExitCode {
+fn run_docs(core_only: bool, format: &str, lang: &str) -> ExitCode {
     // 원천 = 코어 자동화 명령 command.docs(전체 표면 단일 반환) — CLI 는 마크다운 표현만 담당.
     // 플러그인 명령 스키마는 창-로컬 등록이라, 창 미지정이면 워크스페이스 창(w-*)을 자동 선택해
     // 어느 창(오케스트레이터 포함)에서 불러도 같은 전체 레퍼런스가 나온다.
@@ -420,7 +447,7 @@ fn run_docs(core_only: bool, format: &str) -> ExitCode {
                     })
             })
     });
-    let v = match send_request("command.docs", Value::Null, None, window, None) {
+    let v = match send_request("command.docs", json!({ "lang": lang }), None, window, None) {
         Err(e) => {
             eprintln!("{e}");
             return ExitCode::FAILURE;
@@ -433,7 +460,7 @@ fn run_docs(core_only: bool, format: &str) -> ExitCode {
         return ExitCode::SUCCESS;
     }
     if format != "md" {
-        eprintln!("사용: sok docs [--core] [--format md|json]");
+        eprintln!("사용: sok docs [--core] [--format md|json] [--lang en|ko]");
         return ExitCode::FAILURE;
     }
     let data = v.get("data").cloned().unwrap_or(Value::Null);
@@ -475,10 +502,8 @@ fn run_docs(core_only: bool, format: &str) -> ExitCode {
             if let Some(spec) = runtime.get(&full) {
                 println!("{}", format_command_md(spec));
             } else {
-                let t = c["title"]["ko"]
-                    .as_str()
-                    .or_else(|| c["title"]["en"].as_str())
-                    .unwrap_or("");
+                // title 은 command.docs 가 요청 lang 으로 이미 평문 해소해 돌려준다(언어 맵 선택 불필요).
+                let t = c["title"].as_str().unwrap_or("");
                 let dg = c["danger"].as_str().map(|d| format!(" (danger: {d})")).unwrap_or_default();
                 println!("## `{full}`\n\n{t}{dg}\n");
                 println!("```bash\nsok {full} ['{{JSON}}']\n```\n");
