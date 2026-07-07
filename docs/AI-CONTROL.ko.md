@@ -120,7 +120,7 @@ soksak 의 모든 기능을 AI 에게 주는 방식의 정본 규칙. 세 가지
 ## 3.5 호출/트리거 모델 (자연어가 정석, 슬래시는 보조)
 
 트리거는 **description(자연어)** 으로 한다. 슬래시·명시 호출을 필수로 강제하지 않는다.
-- **Skill** — `SKILL.md` frontmatter `description` 이 트리거(Claude·Codex·Gemini 동일 — 2026 공식문서 확정). 모델이 작업 매칭 시 자동 발동. 슬래시 `/soksak-control` 은 보조.
+- **Skill** — `SKILL.md` frontmatter `description` 이 트리거(Claude·Codex·Gemini 동일 — 2026 공식문서 확정). 모델이 작업 매칭 시 자동 발동. 슬래시 `/soksak`(또는 `/soksak-dev`, `/soksak-debug`) 은 보조.
 - **MCP** — 메타툴 `description` 이 트리거. 모델이 자연어로 `soksak.commands`→`help`→`run` 호출. 슬래시 0.
 - 두 소비 맥락: 셸 있는 에이전트는 Skill→`sok`(Bash), 셸 없는(Claude Desktop)은 MCP 메타툴. 둘 다 자연어. 트리거 품질 = description 품질.
 
