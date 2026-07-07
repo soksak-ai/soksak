@@ -1330,13 +1330,22 @@ export function parseManifest(
         },
       }, errors);
       checkDuplicates(commands.map((v) => v.name), "contributes.commands.name", errors);
-      // 명명 중복 금지(NAMING §1) — 명령 첫 세그먼트가 플러그인 id 도메인 토큰과 exact 일치 금지
-      // (soksak-plugin-agents-issue-create.create 류 동어반복). 축약 네임스페이스(clip.*)는 허용.
+      // 명명 재진술 금지(NAMING §1) — 명령 첫 세그먼트는 플러그인 id 도메인을 재진술하지 못한다.
+      // 점 네임스페이스: id 토큰과 exact 일치, 또는 (첫 세그먼트 길이>=3 AND 토큰과 절단/확장 포함관계)
+      // 이면 stutter(clip ⊂ clipboard, folder ⊂ folderpop). 네임스페이스는 조작 객체를 명명하지
+      // 플러그인 자신을 명명하지 않는다. 맨이름(점 없음): id 토큰과 exact 일치만 거부(동사 자체는 합법).
+      // 축약 네임스페이스 예외는 폐지됐다.
       if (isNonEmptyString(raw.id)) {
-        const domainTokens = new Set(raw.id.replace(/^soksak-plugin-/, "").split("-"));
+        const idTokens = raw.id.replace(/^soksak-plugin-/, "").split("-");
         for (const v of commands) {
-          if (domainTokens.has(v.name.split(".")[0])) {
-            errors.push(`contributes.commands.name "${v.name}" 이 플러그인 도메인 토큰과 중복(NAMING §1)`);
+          const first = v.name.split(".")[0];
+          const dotted = v.name.includes(".");
+          const stutter = idTokens.some((tok) =>
+            first === tok ||
+            (dotted && first.length >= 3 && (tok.startsWith(first) || first.startsWith(tok))),
+          );
+          if (stutter) {
+            errors.push(`contributes.commands.name "${v.name}" 첫 세그먼트가 플러그인 id 도메인을 재진술(NAMING §1)`);
           }
         }
       }

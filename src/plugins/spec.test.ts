@@ -143,6 +143,68 @@ describe("parseManifest — 수용", () => {
     expect(errs.some((e) => e.includes("danger"))).toBe(true);
   });
 
+  it("명령 stutter — 점 네임스페이스가 id 도메인을 재진술하면 거부(NAMING §1)", () => {
+    // clip ⊂ clipboard: 절단형도 stutter.
+    expect(
+      errorsOf(
+        base({
+          id: "soksak-plugin-clipboard",
+          permissions: ["commands"],
+          contributes: { commands: [{ name: "clip.list", title: "목록" }] },
+        }),
+        "soksak-plugin-clipboard",
+      ).some((e) => e.includes("NAMING")),
+    ).toBe(true);
+    // folder ⊂ folderpop: 절단형도 stutter.
+    expect(
+      errorsOf(
+        base({
+          id: "soksak-plugin-folderpop",
+          permissions: ["commands"],
+          contributes: { commands: [{ name: "folder.open", title: "열기" }] },
+        }),
+        "soksak-plugin-folderpop",
+      ).some((e) => e.includes("NAMING")),
+    ).toBe(true);
+  });
+
+  it("명령 stutter — 점 네임스페이스가 조작 객체명이면 수용(NAMING §1)", () => {
+    // page 는 design-astryx 의 어느 토큰도 재진술하지 않는다 — 조작 객체.
+    const { validation } = parseManifest(
+      base({
+        id: "soksak-plugin-design-astryx",
+        permissions: ["commands"],
+        contributes: { commands: [{ name: "page.open", title: "열기" }] },
+      }),
+      "soksak-plugin-design-astryx",
+    );
+    expect(validation.ok).toBe(true);
+  });
+
+  it("명령 stutter — 맨이름은 id 토큰 정확일치만 거부(NAMING §1)", () => {
+    // playbox 의 bare 'play' 는 동사 자체 — 합법.
+    const { validation } = parseManifest(
+      base({
+        id: "soksak-plugin-playbox",
+        permissions: ["commands"],
+        contributes: { commands: [{ name: "play", title: "재생" }] },
+      }),
+      "soksak-plugin-playbox",
+    );
+    expect(validation.ok).toBe(true);
+    // agents-issue-create 의 bare 'create' 는 id 토큰 정확일치 — 거부.
+    expect(
+      errorsOf(
+        base({
+          id: "soksak-plugin-agents-issue-create",
+          permissions: ["commands"],
+          contributes: { commands: [{ name: "create", title: "생성" }] },
+        }),
+        "soksak-plugin-agents-issue-create",
+      ).some((e) => e.includes("NAMING")),
+    ).toBe(true);
+  });
+
   it("template:true 보존, 생략/false 는 미포함", () => {
     expect(parseManifest(base({ template: true }), "demo").manifest).toMatchObject(
       { template: true },

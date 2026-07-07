@@ -10,10 +10,12 @@ git/clipboard/ai.session) and removes the violators.
 1. **Registry command (public AI surface)** = `<capability>.<verb>` (dot-separated).
    `<capability>` names the *role*, never an implementation or engine. The registry name
    is canonical; the invoke stem follows it. A plugin command's first segment MUST NOT
-   exact-match a token of the plugin id's domain (`soksak-plugin-agents-issue-create`
-   forbids a command named `create` — that stutters); an abbreviated namespace is fine
-   (`soksak-plugin-clipboard` → `clip.*`). Enforced by `plugin-spec` (manifest reject) and
-   `plugin-doctor` (R4).
+   restate the plugin id's domain — neither an exact id-token nor a truncation or extension
+   of one (`clip` ⊂ `clipboard`, `folder` ⊂ `folderpop` both stutter;
+   `soksak-plugin-agents-issue-create` forbids `create`). A bare name (no dot) is banned
+   only on exact id-token match — `playbox`'s `play` is the verb itself and is legal. A dot
+   namespace names the OBJECT operated on (`node.*`, `page.*`), never the plugin. Enforced by
+   `plugin-spec` (manifest reject) and `plugin-doctor` (R4).
 2. **Tauri invoke command** = `<capability>_<verb>` (snake_case), same stem as the registry.
    Invoke is internal transport — renames are safe; the only public surface is the registry.
 3. **Core Rust file** = one file per capability, filename = capability = command prefix.
