@@ -70,7 +70,10 @@ export function createCoreSync<T>(opts: {
   const save = (value: T): void => {
     writeCache(value); // 즉시 — 동기 캐시(부트 crash-safe). localStorage 는 IPC 없이 싸다.
     if (!store) return; // 부트 전 — 캐시만(app.data 미접근).
-    // 권위(app.data: SQLite + 전 창 broadcast)는 디바운스 — 연타를 정착값 1회로 접는다.
+    // in-memory 권위 즉시 세운다(read-your-writes): 디스크(SQLite) flush 는 아래서 디바운스하지만, 그 창의
+    // 후속 권위 읽기(hydrate/subscribe)는 방금 쓴 값을 봐야 한다(디스크가 옛 값이어도 stale 로 안 덮음).
+    store.stage(value);
+    // 권위 디스크 flush(SQLite + 전 창 broadcast)만 디바운스 — 연타를 정착값 1회로 접는다.
     pending = { value };
     if (timer != null) clearTimeout(timer);
     timer = setTimeout(flush, PERSIST_DEBOUNCE_MS);

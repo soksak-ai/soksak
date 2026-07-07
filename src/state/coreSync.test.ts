@@ -97,6 +97,25 @@ describe("createCoreSync", () => {
     }
   });
 
+  // [read-your-writes RED] save 는 ls 캐시만 즉시 쓰고 권위(app.data) 기록은 300ms 디바운스로 미룬다.
+  // 그 창(디바운스 flush 전)에 권위 채널을 다시 읽으면(같은 key data-change → readRemote) SQLite 는 아직
+  // 옛 값이라 방금 쓴 값을 stale 로 덮는다(read-your-writes 위반 — 사용자 보고: dev.load 직후 stale, 1.5s
+  // 기다리면 생존 = 디바운스 flush 창). 디스크 flush 는 계속 디바운스하되 in-memory 권위는 즉시 보여야 한다.
+  it("read-your-writes: 디바운스 창 안 stale echo 가 방금 쓴 값을 되돌리지 않는다", async () => {
+    const h = harness();
+    h.remote.set("x", { n: 0 });
+    const applied: Array<{ n: number }> = [];
+    const cs = createCoreSync<{ n: number }>({ key: "x", lsKey: "soksak.x", fallback: { n: 0 }, apply: (v) => applied.push(v) });
+    cs.init(h.deps);
+    await flush(); // hydrate {n:0} → apply
+    cs.save({ n: 5 }); // pending(디바운스) — SQLite 는 아직 {n:0}
+    const mark = applied.length;
+    h.fire("x"); // stale echo(SQLite {n:0}) — 이게 apply 되면 방금 쓴 {n:5} 를 되돌림
+    await flush();
+    const after = applied.slice(mark);
+    expect(after.every((v) => v.n === 5)).toBe(true); // {n:0} 으로 revert 없음
+  });
+
   it("init: app.data 권위값을 apply 로 적용", async () => {
     const h = harness({ "soksak.x": JSON.stringify({ a: 1 }) });
     h.remote.set("x", { a: 42 });
