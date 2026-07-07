@@ -42,6 +42,17 @@ describe("parseRegistry — 수용", () => {
     expect(r!.plugins[0]).toMatchObject({ author: "soksak" });
     expect(r!.plugins[0].name).toEqual({ ko: "상어", en: "Shark" });
   });
+
+  it("commands(선언 명령 이름) 보존 — 설치 전 능력 조회의 근거", () => {
+    const r = parseRegistry(reg([entry({ commands: ["navigate", "open"] })]));
+    expect(r!.plugins[0].commands).toEqual(["navigate", "open"]);
+  });
+
+  it("commands 없음/오염(비문자열 포함)은 필드 생략 — 항목 자체는 살림", () => {
+    expect(parseRegistry(reg([entry()]))!.plugins[0].commands).toBeUndefined();
+    const dirty = parseRegistry(reg([entry({ commands: ["ok", 3] })]));
+    expect(dirty!.plugins[0].commands).toBeUndefined();
+  });
 });
 
 describe("parseRegistry — 거부/방어(신뢰 경계)", () => {

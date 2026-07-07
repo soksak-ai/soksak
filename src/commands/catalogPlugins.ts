@@ -125,7 +125,7 @@ export function registerPluginCatalog(): void {
       },
     },
     returns:
-      "{ status(snapshot|live|error), plugins: [{id, name, version, description, repo, branch?, installed, runtimeStatus?}] }",
+      "{ status(snapshot|live|error), plugins: [{id, name, version, description, repo, branch?, commands?, installed, runtimeStatus?}] }",
     message: (d) =>
       tmsg("msg.plugin.catalog", { n: ((d.plugins as unknown[]) ?? []).length }),
     examples: ["sok plugin.catalog", 'sok plugin.catalog \'{"refresh":true}\''],
@@ -144,6 +144,7 @@ export function registerPluginCatalog(): void {
           description: e.description,
           repo: e.repo,
           ...(e.branch ? { branch: e.branch } : {}),
+          ...(e.commands ? { commands: e.commands } : {}),
           installed: e.id in installed,
           runtimeStatus: installed[e.id]?.status ?? null,
         })),
