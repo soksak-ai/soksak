@@ -12,7 +12,7 @@
 // 컨텍스트: soksak 터미널 안에서는 $SOKSAK_PANE/$SOKSAK_SOCKET 이 자동 주입되어
 // 대상 id 를 생략하면 "내 위치"가 기본이 된다.
 
-use std::io::{BufRead, BufReader, IsTerminal, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -317,22 +317,6 @@ fn send_request(
 
 // 응답 봉투의 hint([{cmd,why}])를 사람용 줄로 stdout 에 덧붙인다. TTY 에서만 호출된다(파이프/
 // 리다이렉트는 순수 JSON 유지 — 기계 소비 보존). hint 필드는 다른 작업이 채운다 — 없으면 조용히 생략.
-fn print_hint(v: &Value) {
-    let Some(hints) = v.get("hint").and_then(Value::as_array) else { return };
-    if hints.is_empty() {
-        return;
-    }
-    println!("\n이어서 할 수 있는 명령:");
-    for h in hints {
-        let cmd = h.get("cmd").and_then(Value::as_str).unwrap_or("");
-        if cmd.is_empty() {
-            continue;
-        }
-        let why = h.get("why").and_then(Value::as_str).unwrap_or("");
-        println!("  {cmd}  — {why}");
-    }
-}
-
 fn run_request(method: &str, params: Value, pretty_only: bool) -> ExitCode {
     match request(method, params) {
         Err(e) => {
@@ -342,9 +326,6 @@ fn run_request(method: &str, params: Value, pretty_only: bool) -> ExitCode {
         Ok(v) => {
             let ok = v.get("ok").and_then(Value::as_bool).unwrap_or(false);
             println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
-            if std::io::stdout().is_terminal() {
-                print_hint(&v);
-            }
             if ok || pretty_only {
                 ExitCode::SUCCESS
             } else {
