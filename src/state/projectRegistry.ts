@@ -39,8 +39,30 @@ export async function addProjectClaimed(
   opts: NewProjectOpts,
 ): Promise<
   | { ok: true; existingWindow: string }
+  | { ok: true; routedWindow: string }
   | ReturnType<ReturnType<typeof useSessions.getState>["addProject"]>
 > {
+  // 제어판(main = 오케스트레이터) 라우팅 — 제어판은 플러그인/프로그램을 싣지 않으므로 여기 열린
+  // 프로젝트는 반쯤 죽은 워크스페이스가 된다(터미널·브라우저 없음). 제어판에서의 열기는 거부가
+  // 아니라 전용 워크스페이스 창으로 라우팅한다: 이미 자기(main)가 보유 중이던 잔재는 놓아준 뒤
+  // 새 창을 스폰한다. 다른 창 소유면 기존 P6 동작(그 창 포커스) 그대로.
+  if (currentWindowLabel() === "main") {
+    const c = await claimProject(opts.root);
+    if (!c.ok && c.ownedBy && c.ownedBy !== "main") {
+      await invoke("window_focus", { label: c.ownedBy }).catch(() => {});
+      return { ok: true as const, existingWindow: c.ownedBy };
+    }
+    const held = useSessions.getState().tabs.find((t) => t.root === opts.root);
+    if (held) {
+      useSessions.getState().closeTab(held.id);
+    }
+    await releaseProject(opts.root); // 새 창 부트가 자기 이름으로 재청구한다
+    const label = await invoke<string>("window_create", {
+      init: `root=${encodeURIComponent(opts.root)}`,
+    });
+    void recordRecentProject(opts.root, opts.alias);
+    return { ok: true as const, routedWindow: label };
+  }
   const c = await claimProject(opts.root);
   if (!c.ok && c.ownedBy) {
     await invoke("window_focus", { label: c.ownedBy }).catch(() => {});

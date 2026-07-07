@@ -21,6 +21,7 @@ import {
 } from "../plugins/spec";
 import { usePluginSettings } from "../state/pluginSettings";
 import { useRegistry } from "../state/registry";
+import { currentWindowLabel } from "../lib/webviewLabels";
 import {
   depSummary,
   versionIssues,
@@ -82,9 +83,16 @@ export function registerPluginCatalog(): void {
     triggers: { ko: "프로그램 목록 앱 메뉴 새탭" },
     params: {},
     returns: "{ programs: [{ id, title, path?, kind, pluginId }] }",
-    message: (d) => tmsg("msg.program.list", { n: ((d.programs as unknown[]) ?? []).length }),
+    message: (d) =>
+      d.note
+        ? tmsg("msg.list.controlPlane")
+        : tmsg("msg.program.list", { n: ((d.programs as unknown[]) ?? []).length }),
     examples: ["sok program.list"],
     handler: () => ({
+      // 제어판(main)은 플러그인을 싣지 않는다 — 빈 목록을 "미설치"로 오독하지 않게 스스로 설명한다.
+      ...(currentWindowLabel() === "main"
+        ? { note: "control-plane window loads no plugins — query a workspace window (w-*) or pass --window" }
+        : {}),
       programs: listPrograms().map((p) => ({
         id: p.decl.id,
         title: p.decl.title,
@@ -103,11 +111,18 @@ export function registerPluginCatalog(): void {
     triggers: { ko: "플러그인 목록 설치된 확장 상태" },
     params: {},
     returns: "{ plugins: [{id, name, version, status, permissions, …}], rejected }",
-    message: (d) => tmsg("msg.plugin.list", { n: ((d.plugins as unknown[]) ?? []).length }),
+    message: (d) =>
+      d.note
+        ? tmsg("msg.list.controlPlane")
+        : tmsg("msg.plugin.list", { n: ((d.plugins as unknown[]) ?? []).length }),
     examples: ["sok plugin.list"],
     handler: () => {
       const s = usePlugins.getState();
       return {
+        // 제어판(main)은 플러그인을 싣지 않는다 — 빈 목록의 이유를 응답이 스스로 설명한다.
+        ...(currentWindowLabel() === "main"
+          ? { note: "control-plane window loads no plugins — query a workspace window (w-*) or pass --window" }
+          : {}),
         plugins: Object.values(s.plugins).map(serializeRuntime),
         rejected: s.rejected,
       };

@@ -829,6 +829,12 @@ soksak is a terminal app with a 3-level layout: projects (t*) -> contents (c*, t
 grids) -> panels (g*, split groups) holding views (v*: terminal / file editor / browser;
 terminals contain panes p*). Every feature is a `sok` command.
 
+Two window kinds: workspace windows (label `w-*`) host projects and load plugins/programs;
+the control-plane window (label `main`, the orchestrator) loads none by design. If
+`program.list` / `plugin.list` return empty with a control-plane note, you queried `main` —
+target a workspace window (`--window w-…`) instead of installing anything. Opening a project
+while on `main` routes to a new workspace window automatically (returns `routedWindow`).
+
 ## Address model (targeting)
 
 - `sok state.tree` returns every id plus each panel's on-screen rect (%) — the address book.

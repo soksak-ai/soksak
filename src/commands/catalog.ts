@@ -425,13 +425,15 @@ export function registerCatalog(): void {
       shell: { type: "string", description: "Terminal shell path (omit = global setting → $SHELL)" },
     },
     returns:
-      "{ projectId, contentId, groupId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — that window is focused instead)",
+      "{ projectId, contentId, groupId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new workspace window instead)",
     message: (d) =>
-      d.existingWindow
-        ? tmsg("msg.project.create.existingWindow")
-        : d.existing
-          ? tmsg("msg.project.create.existing")
-          : tmsg("msg.project.create.created"),
+      d.routedWindow
+        ? tmsg("msg.project.create.routed", { window: String(d.routedWindow) })
+        : d.existingWindow
+          ? tmsg("msg.project.create.existingWindow")
+          : d.existing
+            ? tmsg("msg.project.create.existing")
+            : tmsg("msg.project.create.created"),
     errors: ["INVALID_PARAMS"],
     examples: [
       'sok project.create \'{"root":"/Users/me/work","program":"claude"}\'',
