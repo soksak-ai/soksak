@@ -27,6 +27,7 @@ import { currentWindowLabel } from "./lib/webviewLabels";
 import { claimRoots } from "./state/projectRegistry";
 import { recordRecentProject } from "./state/recentProjects";
 import { useSessions } from "./state/sessions";
+import { daemonOnProjectOpen } from "./commands/catalogDaemon";
 import {
   initWorkspacePersistence,
   respawnSavedWindows,
@@ -141,6 +142,12 @@ async function boot(): Promise<void> {
   // 창 네이티브 타이틀 = 활성 프로젝트(Dock 창 목록·Mission Control 구분 — 실측: 전 창이
   // 앱 이름 하나로 보였음). 자동 저장과 무관한 표시 전용 구독.
   void initWindowTitle();
+  // 프로젝트 데몬 열림 훅 — 기록된 잔존 pid 회수 후, 사용자가 허용한 데몬만 자동 기동한다
+  // (Procfile 발견만으로는 아무것도 실행하지 않는다 — 보안 계약). 실패해도 부트를 막지 않는다.
+  {
+    const root = useSessions.getState().tabs.find((t) => t.id === useSessions.getState().activeId)?.root;
+    if (root) void daemonOnProjectOpen(root);
+  }
   // 리스폰·첫 실행 부트스트랩은 컨트롤 플레인(main)이 소유한다 — 워크스페이스 창은 자기 복원
   // (스냅샷 또는 initRoot)만 책임지고, 그 둘 다 없으면 빈 상태(예외)로 시작한다.
   // StrictMode 비활성: dev 에서 effect 이중 실행이 플러그인 마운트/PTY spawn 을 두 번 돌려

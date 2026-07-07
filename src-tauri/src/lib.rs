@@ -1,4 +1,5 @@
 mod ai_session;
+mod daemon;
 mod home;
 mod sidecar;
 mod webview;
@@ -87,6 +88,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_deep_link::init())
         .manage(activity::ActivityHub::default())
+        .manage(daemon::DaemonManager::default())
         .manage(PtyManager::default())
         .manage(ProcessManager::default())
         .manage(ws::WsManager::default())
@@ -243,6 +245,8 @@ pub fn run() {
                 tauri::WindowEvent::Destroyed => {
                     crate::sidecar::forget_window(window.label()); // 사이드카 surface 캐시 무효화(stale NSView 방지)
                     let app = window.app_handle();
+                    // 창=프로젝트 수명(P6): 창이 파괴되면 그 창이 소유한 프로젝트 데몬도 함께 종료한다.
+                    app.state::<crate::daemon::DaemonManager>().kill_by_window(window.label());
                     // 프로젝트 전역 단일 오픈(P6): 죽은 창의 점유를 해제해 다른 창이 그 프로젝트를
                     // 열 수 있게 한다(해제 없으면 앱 재시작까지 유령 점유).
                     crate::project_registry::on_window_destroyed(&app, window.label());
@@ -282,6 +286,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             pty::spawn_terminal,
+            daemon::daemon_start,
+            daemon::daemon_stop,
+            daemon::daemon_status,
+            daemon::daemon_logs,
+            daemon::daemon_reap,
+            daemon::daemon_run_once,
             pty::pty_pane_pid,
             pty::write_terminal,
             pty::resize_terminal,
@@ -441,6 +451,7 @@ pub fn run() {
                     return;
                 }
                 app_handle.state::<PtyManager>().kill_all();
+                daemon::kill_all(app_handle);
                 app_handle.state::<ProcessManager>().kill_all();
                 app_handle.state::<ws::WsManager>().close_all();
                 ipc::cleanup();

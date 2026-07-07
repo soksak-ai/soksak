@@ -33,6 +33,7 @@ import { computeLayout } from "../components/GroupArea";
 import { catalogJson, register, type CommandContext, type CommandHint } from "./registry";
 import { registerGitCatalog } from "./catalogGit";
 import { registerPluginCatalog } from "./catalogPlugins";
+import { registerDaemonCatalog } from "./catalogDaemon";
 import { registerUiCatalog } from "./catalogUi";
 import { registerDomCatalog } from "./catalogDom";
 import { registerAiSessionCatalog } from "./catalogAiSession";
@@ -2679,6 +2680,7 @@ export function registerCatalog(): void {
   // ----- 분권 카탈로그(파일 분리 — 단일 진실은 동일 registry) -----
   registerGitCatalog();
   registerPluginCatalog();
+  registerDaemonCatalog();
   registerUiCatalog();
   registerDomCatalog();
   registerDataCatalog();
