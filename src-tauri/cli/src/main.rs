@@ -40,7 +40,11 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Some("docs") => run_docs(args[1..].iter().any(|a| a == "--core")),
+        Some("docs") => {
+            let mut rest: Vec<String> = args[1..].to_vec();
+            let format = take_flag_value(&mut rest, "--format");
+            run_docs(rest.iter().any(|a| a == "--core"), format.as_deref().unwrap_or("md"))
+        }
         Some("events") => run_events(&args[1..]),
         Some("skill") => run_skill(&args[1..]),
         Some("mcp") => match args.get(1).map(String::as_str) {
@@ -72,7 +76,7 @@ fn print_usage() {
   sok state.tree                      전체 구조(주소록): 모든 id + 패널 rect
   sok commands                        전체 명령 카탈로그(JSON)
   sok help <command>                  단일 명령 매뉴얼
-  sok docs [--core]                   전체 매뉴얼(코어+설치 플러그인+레지스트리 미설치; --core=코어만)
+  sok docs [--core] [--format md|json] 가능한 명령 전체 레퍼런스(기본 md; json=기계용)
   sok events [--kinds a,b] [--since N] 활동 스트림 팔로우(JSONL, Ctrl-C 종료)
   sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]
                                       AI 에이전트 트리거 스킬 설치(soksak 제어법)
@@ -397,7 +401,7 @@ fn run_help(cmd: &str) -> ExitCode {
     }
 }
 
-fn run_docs(core_only: bool) -> ExitCode {
+fn run_docs(core_only: bool, format: &str) -> ExitCode {
     // 원천 = 코어 자동화 명령 command.docs(전체 표면 단일 반환) — CLI 는 마크다운 표현만 담당.
     // 플러그인 명령 스키마는 창-로컬 등록이라, 창 미지정이면 워크스페이스 창(w-*)을 자동 선택해
     // 어느 창(오케스트레이터 포함)에서 불러도 같은 전체 레퍼런스가 나온다.
@@ -423,6 +427,15 @@ fn run_docs(core_only: bool) -> ExitCode {
         }
         Ok(v) => v,
     };
+    if format == "json" {
+        // 기계용 — 자동화 원천(command.docs)의 응답 그대로(md 와 동일 내용, 형식만 다름).
+        println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
+        return ExitCode::SUCCESS;
+    }
+    if format != "md" {
+        eprintln!("사용: sok docs [--core] [--format md|json]");
+        return ExitCode::FAILURE;
+    }
     let data = v.get("data").cloned().unwrap_or(Value::Null);
     let core = data.get("core").and_then(Value::as_array).cloned().unwrap_or_default();
     println!("# soksak 명령 레퍼런스\n");
