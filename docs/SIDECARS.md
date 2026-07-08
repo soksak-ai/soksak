@@ -231,6 +231,18 @@ Composition text comes from the DOM's native IME (the cell's hidden editable),
 bridged as `ime` messages — synthesizing key events to fake composition is
 prohibited.
 
-`caps` reports `{ok, modes:[…]}` for feature detection before `create`; a build
-without off-screen support reports `modes:["windowed"]` and consumers must not
-send `mode:"offscreen"` to it.
+`caps` reports `{ok, modes:[…], version}` for feature detection before `create`;
+a build without off-screen support reports `modes:["windowed"]` and consumers
+must not send `mode:"offscreen"` to it. `version` is the resident-module
+identity probe: a dylib replaced on disk never affects the already-loaded
+module (§4 never-unload), so E2E must verify `caps.version` matches the
+expected build before trusting results — do not assume disk state equals
+loaded state.
+
+v1 offscreen limitations (explicit, not silent): native popup widgets
+(`<select>` dropdowns) and the engine context menu are not composited — popup
+frames are dropped with a one-time log. In-page UI (anchor-positioned
+popovers, the design-canvas pattern) is unaffected. Composite popups before
+hosting arbitrary web content offscreen; browser panels stay `windowed`.
+Diagnostics: `stats.dbg.framesPresented` counts presented offscreen frames
+(0 while idle/hidden is correct — presents stop when nothing changes).

@@ -61,8 +61,14 @@ engine?: {
   capabilities?: string[]                               // 권장: 요구 능력 선언 ("webgpu", "wasm-threads", ...)
   require?: "chromium-grade"                            // 탈출구: 전 플랫폼 통째 요구
   when?: { platform?: ("linux"|"macos"|"windows")[] }   // 조건부 발동 (예: linux에서만)
+  compositing?: "windowed" | "offscreen"                // 호스팅 모드 — SIDECARS.md §8이 규범
 }
 ```
+
+compositing 축 실증(2026-07-08): offscreen 호스팅 모드(공유 텍스처 → 엔진 소유 레이어)가
+엔진 프로토콜의 additive 어휘로 구현됨 — **코어 변경 0**(A9 실증). 픽셀·입력(마우스/휠/키/
+한글 IME)·cefQuery 브리지는 엔진 E2E 하니스가 단언한다. 검증된 부정 지식(픽셀-over-IPC-
+into-DOM 불가)은 이 구현으로 대체되었다 — 픽셀은 프로세스 안에서 GPU 핸들로만 이동한다.
 
 - **R4 — "chromium-grade"는 CEF라는 산출물이 아니라 엔진 등급이다.** 플랫폼의 OS 웹뷰가 이미 등급을 충족하면(Windows WebView2 = Chromium) 승격은 no-op이다. 특정 엔진 버전 고정이 필요한 표면만 별도 선언으로 CEF를 강제한다.
 - **R5 — 판정은 스켈레톤의 라우팅 순수함수가 단독 소유한다.** 플러그인은 선언만 한다 — 런타임에 스스로 엔진을 고르지 않는다. 능력×플랫폼 지원표는 스켈레톤이 소유·갱신한다. (A13: 엔진 선택은 플러그인의 것, 라우팅은 스켈레톤의 것.)
