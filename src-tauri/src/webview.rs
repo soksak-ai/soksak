@@ -849,7 +849,31 @@ pub fn webview_devtools(app: AppHandle, label: String) -> Result<bool, String> {
     }
 }
 
-// 이전/이후: webview 의 세션 히스토리 사용.
+// 이전/이후: webview 세션 히스토리. 호출부는 전부 delta ±1(back/forward 버튼) — WKWebView.goBack/
+// goForward 네이티브를 직접 호출한다(eval 미경유, JS 가 멈춰도 동작). Tauri 는 크로스플랫폼 history
+// API 를 노출하지 않아 non-macos 는 플랫폼 native(WebView2/WebKitGTK) 배선 전까지 DOM history.go 로
+// 폴백한다 — delta 는 타입드 i32 라 인젝션 표면이 없다(문자열 조립 아님, 정수 파라미터).
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn webview_history(app: AppHandle, label: String, delta: i32) -> Result<(), String> {
+    if let Some(wv) = app.get_webview(&label) {
+        wv.with_webview(move |pw| unsafe {
+            use objc2_web_kit::WKWebView;
+            let wk = &*(pw.inner() as *const WKWebView);
+            if delta < 0 {
+                let _ = wk.goBack();
+            } else if delta > 0 {
+                let _ = wk.goForward();
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// non-macos 폴백(플랫폼 native 미배선) — WebView2 ICoreWebView2::GoBack/GoForward, WebKitGTK
+// webkit_web_view_go_back/forward 를 그 플랫폼에서 빌드·검증할 때 native 로 전환한다.
+#[cfg(not(target_os = "macos"))]
 #[tauri::command]
 pub fn webview_history(app: AppHandle, label: String, delta: i32) -> Result<(), String> {
     if let Some(wv) = app.get_webview(&label) {

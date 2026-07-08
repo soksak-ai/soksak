@@ -248,24 +248,12 @@ fn dispatch(app: &AppHandle, req: Request) -> Value {
     out
 }
 
-// 타겟 창의 메인 webview 를 네이티브로 리로드한다(JS 브리지/eval 미경유). webview JS 가 멈춰도
-// (행) AppKit 메인 스레드는 살아있어 WKWebView.reload 가 페이지를 다시 띄운다 → 행 복구.
-#[cfg(target_os = "macos")]
-fn native_reload(app: &AppHandle, label: &str) -> bool {
-    let Some(wv) = app.get_webview(label) else { return false };
-    wv.with_webview(|pw| unsafe {
-        use objc2_web_kit::WKWebView;
-        let wk = &*(pw.inner() as *const WKWebView);
-        let _ = wk.reload();
-    })
-    .is_ok()
-}
-
-// 비-macos 폴백: 플랫폼 webview 직접접근이 없어 eval 로 리로드한다(JS 가 살아있을 때만 동작).
-#[cfg(not(target_os = "macos"))]
+// 타겟 창의 메인 webview 를 네이티브로 리로드한다(JS 브리지/eval 미경유). Tauri(wry) reload 는
+// WKWebView.reload / WebView2.Reload / WebKitGTK 를 dispatcher 로 직접 호출 — webview JS 가 멈춰도
+// (행) 페이지를 다시 띄운다(행 복구). 전 플랫폼 동일 native 경로(cfg 분기·eval 폴백 제거).
 fn native_reload(app: &AppHandle, label: &str) -> bool {
     match app.get_webview(label) {
-        Some(wv) => wv.eval("location.reload()").is_ok(),
+        Some(wv) => wv.reload().is_ok(),
         None => false,
     }
 }
