@@ -3,7 +3,7 @@ import {
   autorunCommandOf,
   getRegisteredProgram,
 } from "../plugins/programRegistry";
-import { localize } from "../i18n";
+import { localize, tmsg } from "../i18n";
 import {
   type SplitTree,
   splitLeaf,
@@ -697,8 +697,22 @@ function mapViewEverywhere(
   };
 }
 
+// 시트 자동 타이틀의 번호 추출 — "시트 3"·"Sheet 3"·"3" 모두 후행 정수를 읽는다(로케일·접두 무관).
+// 접두 붙은 자동 타이틀에서도 nextNum 이 올바로 증가하도록(순수 parseInt("시트 3")=NaN 회피).
+export function sheetAutoNum(title: string): number {
+  const m = String(title).match(/(\d+)\s*$/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// 로드-타임 마이그레이션 — 구 버전의 순수 숫자 시트 타이틀("3")을 "시트 3"(i18n)으로 승격한다.
+// 엑셀식 명명으로 그것이 "시트"임을 명확히 한다. 순수 숫자만 대상이라 사용자가 이름 바꾼 타이틀은
+// 보존한다. 멱등(변환 후엔 순수 숫자가 아니라 재실행 무영향). workspaceBoot 복원 직후 1회 적용.
+export function migrateSheetTitle(title: string): string {
+  return /^\d+$/.test(title.trim()) ? tmsg("sheet.autoTitle", { n: title.trim() }) : title;
+}
+
 function makeProject(id: string, opts: NewProjectOpts): ProjectTab {
-  const c = makeContent("1", opts.program);
+  const c = makeContent(tmsg("sheet.autoTitle", { n: 1 }), opts.program);
   const alias = opts.alias.trim() || baseName(opts.root);
   return {
     id,
@@ -975,8 +989,8 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       const t = s.tabs.find((x) => x.id === projectId);
       if (!t) return s;
       const nextNum =
-        Math.max(0, ...t.contents.map((c) => parseInt(c.title, 10) || 0)) + 1;
-      const c = makeContent(String(nextNum), program);
+        Math.max(0, ...t.contents.map((c) => sheetAutoNum(c.title))) + 1;
+      const c = makeContent(tmsg("sheet.autoTitle", { n: nextNum }), program);
       const g = allGroups(c.layout)[0];
       const v = g.views[0];
       r = ok({ contentId: c.id, groupId: g.id, ...(v ? idsOfView(v) : {}) });

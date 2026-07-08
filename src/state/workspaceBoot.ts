@@ -24,6 +24,7 @@ import {
   useSessions,
   reseedIdCounters,
   nextSplitIdGen,
+  migrateSheetTitle,
   type ProjectTab,
 } from "./sessions";
 import {
@@ -124,7 +125,14 @@ export async function initWorkspacePersistence(
       // P6(전역 단일 오픈): 이 창 스냅샷의 root 들을 일괄 점유. 다른 창이 이미 점유한
       // root 의 탭은 이 창에서 드롭한다(같은 프로젝트 중복 창 금지 — 우아한 열화).
       const denied = await claimRoots(tabs.map((t) => t.root));
-      const owned = tabs.filter((t) => !denied.has(t.root));
+      const owned = tabs
+        .filter((t) => !denied.has(t.root))
+        // 로드-타임 마이그레이션 — 구 순수 숫자 시트 타이틀("3")을 "시트 3"(i18n)으로 승격(멱등,
+        // 엑셀식 명명으로 시트임을 명확히). 사용자가 바꾼 타이틀은 보존(순수 숫자만 대상).
+        .map((t) => ({
+          ...t,
+          contents: t.contents.map((c) => ({ ...c, title: migrateSheetTitle(c.title) })),
+        }));
       for (const t of tabs) {
         if (denied.has(t.root))
           console.warn(`[P6] 복원 탭 드롭(다른 창 점유): ${t.root}`);

@@ -497,6 +497,28 @@ export function registerPluginCatalog(): void {
     handler: (p) => usePlugins.getState().revokeConsent(resolveShortId(String(p.id)) ?? String(p.id)),
   });
 
+  register("plugin.consent.grant", {
+    description:
+      "Grant consent for a plugin's requested permissions — the CLI/headless equivalent of approving the consent modal. Records consent (manifest version + permissions) so the plugin can then be enabled without opening the webview. Review first with plugin.consent.summary. Dev-sourced plugins bypass consent and do not need this. Danger-gated: granting permissions is a deliberate, security-sensitive act.",
+    triggers: { ko: "동의 승인 허가 grant 권한 부여 부여" },
+    params: { id: { type: "string", description: "Plugin id", required: true } },
+    returns: "{ id, granted }",
+    message: (d) =>
+      d.granted
+        ? tmsg("msg.plugin.consent.grant", { id: String(d.id) })
+        : tmsg("msg.plugin.consent.grant.failed", { id: String(d.id) }),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['sok plugin.consent.grant \'{"id":"soksak-plugin-acp-core"}\''],
+    danger: "destructive",
+    handler: (p) => {
+      const s = usePlugins.getState();
+      const pid = resolveShortId(String(p.id)) ?? String(p.id);
+      if (!s.plugins[pid]) return notFound(`플러그인 없음: ${pid}`);
+      const granted = s.grantConsent(pid);
+      return { id: pid, granted };
+    },
+  });
+
   register("plugin.consent.chain", {
     description:
       "Return the ordered list of plugins still needing consent before the target plugin can be activated (dependencies first). Dev-sourced and already-consented plugins are excluded. An empty pending array means the plugin can be activated immediately.",
