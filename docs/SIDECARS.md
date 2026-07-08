@@ -185,10 +185,52 @@ Rules:
 
 ## 8. Chromium engine protocol — `soksak-sidecar-browser-spec@1`
 
-Requests: `create(x,y,w,h,url)→{id}`, `bounds(id,x,y,w,h)`, `load(id,url)`,
-`reload(id,ignoreCache)`, `back(id)`, `forward(id)`, `hidden(id,hidden)`,
-`focus(id)`, `devtools(id)` (toggle — opens a separate native DevTools window),
-`close(id)`, `popup-mode(asWindow)`.
-Events: `{event:"popup-url", url, id}` — new-link routing when popup-mode is
-"tab"; `id` is the source browser so multi-window adapters consume only their
-own. Reserved (follow-up): `nav`, `title` (urlbar sync).
+Requests: `caps()→{modes}`, `create(x,y,w,h,url[,mode,scale])→{id}`,
+`devtools-open(inspectedId,screencast,x,y,w,h)→{id}`, `bounds(id,x,y,w,h)`,
+`load(id,url)`, `reload(id,ignoreCache)`, `back(id)`, `forward(id)`,
+`hidden(id,hidden)`, `focus(id)`, `close(id)`, `stats()→{ids,dbg}`,
+`popup-mode(asWindow)`, `query-reply(queryId,success,response[,errorCode,keep])`.
+Events: `nav {id,url}`, `title {id,title}`, `popup-url {id,url}` (new-link
+routing when popup-mode is "tab"; `id` is the source browser so multi-window
+adapters consume only their own), `query {id,queryId,request}` /
+`query-canceled {queryId}` (page↔host bridge), `surface-created {view}` /
+`surface-destroyed {view}` (windowed only), `cursor {id,type}` (offscreen only).
+
+### Hosting modes
+
+`create.mode` selects the hosting mode (additive field; absent = `"windowed"`).
+The mode never appears in artifact/interface/env names — it is protocol
+vocabulary only (NAMING.md §5/§8).
+
+- **`windowed`** (default) — the engine owns a native child view attached under
+  the ambient `surface` and emits `surface-created`/`surface-destroyed` so the
+  core folds it into hit-testing; input reaches the engine view natively inside
+  DOM holes.
+- **`offscreen`** — the engine renders off-screen and presents into a
+  layer-backed view it owns, inserted under the ambient `surface` below the main
+  webview. Rules:
+  - `create.scale` (devicePixelRatio) sizes the backing store; `bounds` stays
+    logical px, identical to windowed.
+  - The pixel path never leaves the process: engine-internal GPU texture →
+    engine-owned layer. Frame data must not cross the host vtable, IPC, or JS.
+  - The engine does NOT emit `surface-created` — the view takes no part in
+    hit-testing. The DOM cell above keeps every input event and the consuming
+    plugin forwards input over the protocol (below). `cursor {id,type}` lets
+    the plugin mirror the engine cursor onto the cell.
+  - `surface-occluded`/`resize-gesture` notifies apply unchanged; occluded =
+    painting pauses.
+  - Every id-addressed request works identically on offscreen ids; `stats`
+    reports both modes.
+
+Input forwarding (offscreen only; coordinates are surface-local CSS px):
+`mouse(id,kind:"move"|"down"|"up",x,y[,button,clicks,mods])`,
+`wheel(id,x,y,dx,dy[,phase])` — momentum phase is forwarded, never synthesized,
+`key(id,kind:"down"|"up"|"char",code[,char,mods])`,
+`ime(id,kind:"set"|"commit"|"finish"|"cancel"[,text,caret])`.
+Composition text comes from the DOM's native IME (the cell's hidden editable),
+bridged as `ime` messages — synthesizing key events to fake composition is
+prohibited.
+
+`caps` reports `{ok, modes:[…]}` for feature detection before `create`; a build
+without off-screen support reports `modes:["windowed"]` and consumers must not
+send `mode:"offscreen"` to it.
