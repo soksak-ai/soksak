@@ -180,6 +180,8 @@ mod layer {
         main_ptr: usize,             // 메인 webview NSView 포인터(창 수명 동안 불변)
         overlay: bool,               // 오버레이(모달/메뉴) 활성 시 홀 통과 차단
         holes: Vec<super::Hole>,     // DOM 오버레이(사이드바 등) 영역 — 이 안은 DOM 이 이벤트를 갖는다
+        host_ptr: usize,             // 엔진 호스트 컨테이너 NSView 포인터(0=미생성). 격리 계약: 모듈은
+                                     // contentView 가 아니라 이 컨테이너를 surface 로 받고 그 안에만 붙는다.
     }
     static LAYERS: LazyLock<Mutex<HashMap<String, WinLayer>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -244,13 +246,13 @@ mod layer {
         // this 가 *어느 창의* 메인 view 인가 + 그 창 오버레이 활성/홀? 미등록(child/팝업)이거나
         // 맵 poisoned 면 원본 동작. (마우스 이벤트마다 호출 — lock 은 짧고 창 수는 적다.)
         // overlay 와 holes(클론)를 lock 한 번에 같이 꺼낸다.
-        let (overlay, holes) = {
+        let (overlay, holes, host_ptr) = {
             let Ok(layers) = LAYERS.lock() else {
                 return default;
             };
             match layers.values().find(|w| w.main_ptr == this as usize) {
                 None => return default, // child/팝업 webview — 원본 동작 그대로.
-                Some(w) => (w.overlay, w.holes.clone()),
+                Some(w) => (w.overlay, w.holes.clone(), w.host_ptr),
             }
         };
         // 등록된 Backend N surface 스냅샷(마우스 이벤트마다 — 탭 수만큼 작음, holes.clone 과 동일 층위).
@@ -286,21 +288,35 @@ mod layer {
                 return default;
             }
         }
-        for sub in superview.subviews().iter() {
-            if Retained::as_ptr(&sub) as *mut AnyObject == this || sub.isHidden() {
-                continue;
+        // 등록된 surface 가 point 를 덮으면 null 반환(형제 stack 아래 child 가 이벤트 수신). surface 는
+        // ① contentView 직속 형제(레거시/코어 webview) ② 엔진 호스트 컨테이너 안(격리 계약)에 있을 수
+        // 있다. 두 곳 모두 검사한다. 컨테이너는 contentView 전체크기·원점(0,0)이라 그 안 surface 의 frame
+        // 은 contentView(=point) 좌표와 identity — 형제와 동일 비교식이 성립한다.
+        let hit = |parent: &NSView| -> bool {
+            for sub in parent.subviews().iter() {
+                if Retained::as_ptr(&sub) as *mut AnyObject == this || sub.isHidden() {
+                    continue;
+                }
+                if !surfaces.contains(&(Retained::as_ptr(&sub) as usize)) {
+                    continue;
+                }
+                let f = sub.frame();
+                if point.x >= f.origin.x
+                    && point.x < f.origin.x + f.size.width
+                    && point.y >= f.origin.y
+                    && point.y < f.origin.y + f.size.height
+                {
+                    return true;
+                }
             }
-            // 형제 중 등록된 Backend N surface 만 홀이다(classname 대신 registry 멤버십 — 엔진 중립:
-            // WKWebView·Chromium surface 동일 취급). 미등록(장식 뷰·오프스크린 추출 webview)은 무시.
-            if !surfaces.contains(&(Retained::as_ptr(&sub) as usize)) {
-                continue;
-            }
-            let f = sub.frame();
-            if point.x >= f.origin.x
-                && point.x < f.origin.x + f.size.width
-                && point.y >= f.origin.y
-                && point.y < f.origin.y + f.size.height
-            {
+            false
+        };
+        if hit(&superview) {
+            return std::ptr::null_mut();
+        }
+        if host_ptr != 0 {
+            let host = &*(host_ptr as *const NSView);
+            if hit(host) {
                 return std::ptr::null_mut();
             }
         }
@@ -321,7 +337,12 @@ mod layer {
             if let Ok(mut layers) = LAYERS.lock() {
                 layers.insert(
                     label,
-                    WinLayer { main_ptr: obj as usize, overlay: false, holes: Vec::new() },
+                    WinLayer {
+                        main_ptr: obj as usize,
+                        overlay: false,
+                        holes: Vec::new(),
+                        host_ptr: 0,
+                    },
                 );
             }
 
@@ -348,6 +369,55 @@ mod layer {
                 objc2::ffi::method_getTypeEncoding(method as *const objc2::runtime::Method),
             );
         });
+    }
+
+    // 엔진 호스트 컨테이너 취득(격리 계약) — 창 label 의 contentView 안, 메인 webview 아래에 코어 소유
+    // 전체크기 NSView 를 1회 생성해 그 포인터를 반환한다. 모듈은 이 컨테이너를 surface 로 받아 그 안에만
+    // child/레이어를 붙인다 → 모듈 결함의 피해가 컨테이너로 국한되고 contentView(=코어 소유)는 불가침.
+    // **메인 스레드에서만 호출**(NSView 생성/삽입). 미설치 창(WinLayer 없음)·실패 시 None → 호출부가
+    // contentView 폴백(격리는 심층방어라, 폴백 시 hitTest 형제 경로가 그대로 동작한다).
+    #[cfg(target_os = "macos")]
+    pub fn ensure_engine_host(label: &str) -> Option<usize> {
+        use objc2::MainThreadOnly; // NSView::alloc(mtm) 제공.
+        use objc2_app_kit::NSAutoresizingMaskOptions;
+        let mtm = objc2_foundation::MainThreadMarker::new()?; // 메인 스레드 계약 확인.
+        unsafe {
+            let main_ptr = {
+                let layers = LAYERS.lock().ok()?;
+                let w = layers.get(label)?;
+                if w.host_ptr != 0 {
+                    return Some(w.host_ptr); // 이미 생성됨(멱등).
+                }
+                w.main_ptr
+            };
+            if main_ptr == 0 {
+                return None;
+            }
+            let main_view = &*(main_ptr as *const NSView);
+            let content = main_view.superview()?; // contentView(코어 소유) — 컨테이너의 부모.
+            let bounds = content.bounds();
+            let host = NSView::initWithFrame(NSView::alloc(mtm), bounds);
+            // 컨테이너는 콘텐츠 전면을 채우고 리사이즈를 따라간다(원점 0,0 유지 → 좌표 identity).
+            host.setAutoresizingMask(
+                NSAutoresizingMaskOptions::ViewWidthSizable
+                    | NSAutoresizingMaskOptions::ViewHeightSizable,
+            );
+            // 메인 webview 아래(형제 최하단)에 삽입 — DOM 이 항상 위, 엔진 콘텐츠가 그 아래로 비친다.
+            content.addSubview_positioned_relativeTo(
+                &host,
+                NSWindowOrderingMode::Below,
+                Some(main_view),
+            );
+            let host_ptr = Retained::as_ptr(&host) as usize;
+            // Retained 를 leak 해 컨테이너 수명을 뷰 계층에 위임(창이 소유; 창 파괴 시 함께 해제).
+            std::mem::forget(host);
+            if let Ok(mut layers) = LAYERS.lock() {
+                if let Some(w) = layers.get_mut(label) {
+                    w.host_ptr = host_ptr;
+                }
+            }
+            Some(host_ptr)
+        }
     }
 
     // child webview 를 메인(DOM) 아래로 강하. add_child 는 최상위에 붙이므로
@@ -420,6 +490,12 @@ pub(crate) fn register_engine_surface(ptr: usize) {
 #[cfg(target_os = "macos")]
 pub(crate) fn unregister_engine_surface(ptr: usize) {
     layer::unregister_surface(ptr);
+}
+// 엔진 호스트 컨테이너 취득(격리 계약) — sidecar content_view_of 가 모듈 surface 로 넘긴다.
+// 메인 스레드 전용(NSView 생성). 미설치 창·실패 시 None(호출부가 contentView 폴백).
+#[cfg(target_os = "macos")]
+pub(crate) fn layer_ensure_engine_host(label: &str) -> Option<usize> {
+    layer::ensure_engine_host(label)
 }
 
 // 오버레이(모달/메뉴/드롭다운) 상태 동기화 — 프론트 ui 스토어 카운터가 0↔1 을

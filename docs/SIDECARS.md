@@ -219,6 +219,15 @@ vocabulary only (NAMING.md §5/§8).
     the plugin mirror the engine cursor onto the cell.
   - `surface-occluded`/`resize-gesture` notifies apply unchanged; occluded =
     painting pauses.
+  - Frame driving: the engine invalidates off-screen surfaces while the render
+    loop is active (during load / input / animation) so frames land through
+    page load without a manual nudge; when activity settles the loop stops and
+    the last frame persists on the layer (zero idle cost). Purely animated
+    content therefore freezes on its last frame after the idle window until the
+    next input — acceptable for v1.
+  - Cell transparency: the consuming plugin's DOM cell and every ancestor up to
+    the webview root must be transparent, or the hole shows the opaque DOM
+    instead of the engine layer beneath the main webview.
   - Every id-addressed request works identically on offscreen ids; `stats`
     reports both modes.
 

@@ -259,12 +259,19 @@ fn content_view_of(window: &tauri::Window) -> Result<usize, String> {
     use std::sync::mpsc;
     let (tx, rx) = mpsc::sync_channel::<usize>(1);
     let win = window.clone();
+    let label_for_host = label.clone();
     window
         .run_on_main_thread(move || {
             let mut ptr = 0usize;
             #[cfg(target_os = "macos")]
             unsafe {
-                if let Ok(ns) = win.ns_window() {
+                // 격리 계약(webview.rs docs): 모듈에는 contentView 가 아니라 코어 소유 엔진 호스트
+                // 컨테이너를 넘긴다 — 모듈 결함의 피해가 컨테이너로 국한되고 contentView 는 불가침.
+                // 컨테이너 취득 실패(미설치 창 등) 시에만 contentView 로 폴백(hitTest 형제 경로가
+                // 그대로 동작 — 격리는 심층방어). 둘 다 메인 스레드 필수(이 클로저가 메인).
+                if let Some(host) = crate::webview::layer_ensure_engine_host(&label_for_host) {
+                    ptr = host;
+                } else if let Ok(ns) = win.ns_window() {
                     let win_obj = &*(ns as *const objc2::runtime::AnyObject);
                     let content: *mut objc2_app_kit::NSView = objc2::msg_send![win_obj, contentView];
                     ptr = content as usize;
