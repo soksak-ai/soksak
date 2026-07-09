@@ -228,8 +228,18 @@ vocabulary only (NAMING.md §5/§8).
   - Cell transparency: the consuming plugin's DOM cell and every ancestor up to
     the webview root must be transparent, or the hole shows the opaque DOM
     instead of the engine layer beneath the main webview.
-  - Every id-addressed request works identically on offscreen ids; `stats`
-    reports both modes.
+  - One surface per view. Offscreen views share the window content view as their
+    parent, so two surfaces with overlapping bounds stack and the older one
+    occludes the active cell — navigation moves the URL while the pixels stay
+    stale. The host re-mounts a view on reparent/re-activate; the consuming
+    plugin MUST close the view's prior surface before creating the next and drop
+    a create that a newer mount superseded. Never leave a view holding two.
+  - Parking a view (tab unpark/park) does not close its surface — send
+    `hidden(id,true)` when the cell leaves the viewport, or the parked surface
+    keeps compositing over whatever is shown. `hidden(id,false)` on return.
+  - Every id-addressed request works identically on offscreen ids, `close(id)`
+    included (a windowless browser reaps through the normal CEF close — no native
+    view to tear down); `stats` reports both modes.
 
 Input forwarding (offscreen only; coordinates are surface-local CSS px):
 `mouse(id,kind:"move"|"down"|"up",x,y[,button,clicks,mods])`,
