@@ -187,14 +187,17 @@ Rules:
 
 Requests: `caps()→{modes}`, `create(x,y,w,h,url[,mode,scale])→{id}`,
 `devtools-open(inspectedId,screencast,x,y,w,h)→{id}`, `bounds(id,x,y,w,h)`,
-`load(id,url)`, `reload(id,ignoreCache)`, `back(id)`, `forward(id)`,
+`load(id,url)`, `reload(id,ignoreCache)`, `stop(id)`, `back(id)`, `forward(id)`,
 `hidden(id,hidden)`, `focus(id)`, `close(id)`, `stats()→{ids,dbg}`,
 `popup-mode(asWindow)`, `query-reply(queryId,success,response[,errorCode,keep])`.
-Events: `nav {id,url}`, `title {id,title}`, `popup-url {id,url}` (new-link
-routing when popup-mode is "tab"; `id` is the source browser so multi-window
-adapters consume only their own), `query {id,queryId,request}` /
-`query-canceled {queryId}` (page↔host bridge), `surface-created {view}` /
-`surface-destroyed {view}` (windowed only), `cursor {id,type}` (offscreen only).
+Events: `nav {id,url}`, `title {id,title}`,
+`loading {id,loading,canBack,canForward}` (drives a consumer spinner / stop
+button and back/forward enablement — fires on every load-state transition),
+`popup-url {id,url}` (new-link routing when popup-mode is "tab"; `id` is the
+source browser so multi-window adapters consume only their own),
+`query {id,queryId,request}` / `query-canceled {queryId}` (page↔host bridge),
+`surface-created {view}` / `surface-destroyed {view}` (windowed only),
+`cursor {id,type}` (offscreen only).
 
 ### Hosting modes
 
