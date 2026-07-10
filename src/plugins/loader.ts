@@ -14,12 +14,18 @@ import {
 import { useProgramRegistry } from "./programRegistry";
 import {
   C2_ENFORCEMENT,
+  C3_ENFORCEMENT,
+  implementsViolations,
   missingRegistrations,
+  partitionEnforcement,
   partitionTransparency,
   transparencyViolations,
+  type EnforcementMode,
+  type ImplementsRule,
   type TransparencyMode,
   type TransparencyRule,
 } from "./conformance";
+import { rawImplements } from "./contractDiscovery";
 import type { PluginManifest } from "./spec";
 
 // entry 코드 문자열 → ESM 모듈. 상대 import 불가(스펙: 단일 번들 필수).
@@ -131,6 +137,27 @@ export function enforceTransparency(
   }
 }
 
+// 결합 법칙 C3(L2 계약-핀) implements generic 검사의 활성화 경계 시행 — C2 와 같은 결.
+// blocking 규칙 위반 = 활성화 거부(throw), warn 규칙 위반 = 경고(은폐 0). 모드 단일진실=C3_ENFORCEMENT.
+// 계약별 요구 표면의 검증은 계약 소유자 몫 — 여기는 선언 자체(형태·문법·중복)만 본다.
+export function enforceImplements(
+  manifest: PluginManifest,
+  enforcement: Readonly<Record<ImplementsRule, EnforcementMode>> = C3_ENFORCEMENT,
+): void {
+  const violations = implementsViolations(rawImplements(manifest));
+  const { blocking, warn } = partitionEnforcement(violations, enforcement);
+  for (const v of warn) {
+    console.warn(`[plugin:${manifest.id}] C3 ${v.rule}: ${v.detail}`);
+  }
+  if (blocking.length > 0) {
+    throw new Error(
+      `C3 위반(${manifest.id}): ${blocking
+        .map((v) => `${v.rule} — ${v.detail}`)
+        .join("; ")}`,
+    );
+  }
+}
+
 // 모듈 + 매니페스트 → 활성 인스턴스. activate 실패 시 등록분 전부 회수 후 throw.
 export async function activatePlugin(
   module: unknown,
@@ -145,6 +172,8 @@ export async function activatePlugin(
 
   // [C2] 투명성 3종 — 매니페스트 정적 규칙을 등록 전에 시행(blocking 위반이면 아무것도 만들지 않는다).
   enforceTransparency(manifest);
+  // [C3] L2 계약-핀 — implements 선언의 generic 검사(형태·문법·중복)를 같은 경계에서 시행.
+  enforceImplements(manifest);
 
   const { api, tracker, registered } = buildPluginApi(manifest, dir, deps);
 

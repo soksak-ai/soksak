@@ -4,6 +4,8 @@
 //  - missingRegistrations: declared-but-not-actual 감지(activate 후 inventory).
 // 앱/DOM 비의존 순수 로직 — vitest 단위검증 대상.
 
+import { CONTRACT_ID_RE } from "./contractDiscovery";
+
 // 선언(declared) 중 id 에 해당하는 엔트리를 찾아 반환. 없으면 fatal throw.
 // 메시지: 매니페스트 contributes.<contributesKey> 에 선언되지 않은 <noun>: <id>
 export function gateContribution<T>(opts: {
@@ -42,7 +44,9 @@ export function missingRegistrations(
 //   view-nodes      위반 6
 
 export type TransparencyRule = "command-surface" | "view-status" | "view-nodes";
-export type TransparencyMode = "blocking" | "warn";
+// 시행 모드 — C2·C3 가 공유하는 축(blocking=활성화 거부, warn=경고). TransparencyMode 는 기존 이름 호환.
+export type EnforcementMode = "blocking" | "warn";
+export type TransparencyMode = EnforcementMode;
 
 // 시행 입법표. 이 표의 변경은 재입법 커밋이며 conformance.test.ts 의 핀 테스트가 동행 개정을 강제한다.
 export const C2_ENFORCEMENT: Readonly<Record<TransparencyRule, TransparencyMode>> = {
@@ -92,17 +96,84 @@ export function unreportedStatusViews(
   return mountedViewIds.filter((id) => !reported.has(id));
 }
 
-// 위반을 시행 모드로 분류 — blocking 위반은 거부 대상, warn 위반은 경고 대상.
-export function partitionTransparency(
-  violations: readonly TransparencyViolation[],
-  enforcement: Readonly<Record<TransparencyRule, TransparencyMode>> = C2_ENFORCEMENT,
-): { blocking: TransparencyViolation[]; warn: TransparencyViolation[] } {
-  const blocking: TransparencyViolation[] = [];
-  const warn: TransparencyViolation[] = [];
+// 위반을 시행 모드로 분류 — blocking 위반은 거부 대상, warn 위반은 경고 대상. C2·C3 공용(단일진실).
+export function partitionEnforcement<R extends string, V extends { rule: R }>(
+  violations: readonly V[],
+  enforcement: Readonly<Record<R, EnforcementMode>>,
+): { blocking: V[]; warn: V[] } {
+  const blocking: V[] = [];
+  const warn: V[] = [];
   for (const v of violations) {
     (enforcement[v.rule] === "blocking" ? blocking : warn).push(v);
   }
   return { blocking, warn };
+}
+
+export function partitionTransparency(
+  violations: readonly TransparencyViolation[],
+  enforcement: Readonly<Record<TransparencyRule, TransparencyMode>> = C2_ENFORCEMENT,
+): { blocking: TransparencyViolation[]; warn: TransparencyViolation[] } {
+  return partitionEnforcement(violations, enforcement);
+}
+
+// ── 결합 법칙 C3 — L2 계약-핀: implements 선언의 generic 검사 ────────────────
+// 매니페스트 implements: ["<scope>-spec@<major>"] 는 이 플러그인이 구현하는 계약의 선언이고,
+// 소비자는 계약 id 로 구현체를 발견한다(contractDiscovery — 구현체 무차별). 계약이 요구하는 표면
+// (어떤 command/view 가 있어야 하나)의 정의·검증은 계약 소유자(플러그인) 몫 — 코어는 어떤 계약도
+// 모르므로(C1) 선언 자체의 성립만 generic 하게 본다: 형태·문법(NAMING §8)·중복.
+// C2 와 같은 결로 warn 출발(신설 축 — 스키마가 필드를 싣기 전이라 설치본 실측이 아직 없다).
+// blocking 승격은 스키마 랜딩 후 위반 0 실측 유지 + 명시 재입법 커밋으로만 한다(C4·C5 —
+// 무언 승격·무언 완화 둘 다 금지). conformance.test.ts 의 핀 테스트가 동행 개정을 강제한다.
+
+export type ImplementsRule =
+  | "implements-shape"
+  | "implements-grammar"
+  | "implements-duplicate";
+
+export const C3_ENFORCEMENT: Readonly<Record<ImplementsRule, EnforcementMode>> = {
+  "implements-shape": "warn",
+  "implements-grammar": "warn",
+  "implements-duplicate": "warn",
+};
+
+export interface ImplementsViolation {
+  rule: ImplementsRule;
+  detail: string; // 위반 사실 서술 — 경고/거부 메시지에 그대로 실림
+}
+
+// implements 원값(rawImplements) → 위반 목록. undefined = 무선언(합법 — L2 는 옵트인).
+// 비문자열 항목은 shape 위반으로 보고하되 문자열 항목의 문법·중복 검사는 계속한다(은폐 0).
+export function implementsViolations(raw: unknown): ImplementsViolation[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw)) {
+    return [{ rule: "implements-shape", detail: `implements 가 배열이 아님(${typeof raw})` }];
+  }
+  const out: ImplementsViolation[] = [];
+  const nonString = raw.filter((v) => typeof v !== "string");
+  if (nonString.length > 0) {
+    out.push({
+      rule: "implements-shape",
+      detail: `비문자열 항목 ${nonString.length}개 — implements 는 계약 id 문자열 배열`,
+    });
+  }
+  const entries = raw.filter((v): v is string => typeof v === "string");
+  const offGrammar = entries.filter((e) => !CONTRACT_ID_RE.test(e));
+  if (offGrammar.length > 0) {
+    out.push({
+      rule: "implements-grammar",
+      detail: `계약 id 문법(<scope>-spec@<major>, NAMING §8) 위반: ${offGrammar.join(", ")}`,
+    });
+  }
+  const seen = new Set<string>();
+  const dup = new Set<string>();
+  for (const e of entries) {
+    if (seen.has(e)) dup.add(e);
+    seen.add(e);
+  }
+  if (dup.size > 0) {
+    out.push({ rule: "implements-duplicate", detail: `중복 선언: ${[...dup].join(", ")}` });
+  }
+  return out;
 }
 
 // nodes 의 declared≡actual 진단. actual = DOM 의 data-node(scanNodes 의 nodePath).

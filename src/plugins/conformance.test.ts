@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   C2_ENFORCEMENT,
+  C3_ENFORCEMENT,
   gateContribution,
+  implementsViolations,
   missingRegistrations,
   nodeConformance,
+  partitionEnforcement,
   partitionTransparency,
   transparencyViolations,
   unreportedStatusViews,
@@ -203,5 +206,80 @@ describe("partitionTransparency — 시행 모드 분류", () => {
       "view-status": "warn",
       "view-nodes": "warn",
     });
+  });
+});
+
+// implementsViolations — 결합 법칙 C3(L2 계약-핀) implements 선언의 generic 검사.
+// 계약이 요구하는 표면의 정의·검증은 계약 소유자(플러그인) 몫 — 코어는 선언 자체의 성립만 본다:
+//   ① implements-shape: 문자열 배열이 아니다 ② implements-grammar: 계약 id 문법(NAMING §8) 위반
+//   ③ implements-duplicate: 같은 계약 중복 선언.
+describe("implementsViolations — C3 implements 선언 generic 검사", () => {
+  it("선언 없음(undefined) → 위반 없음(L2 계약-핀은 옵트인)", () => {
+    expect(implementsViolations(undefined)).toEqual([]);
+  });
+
+  it("정상 선언 → 위반 없음", () => {
+    expect(
+      implementsViolations(["fixture-notes-spec@1", "fixture-board-spec@2"]),
+    ).toEqual([]);
+  });
+
+  it("배열이 아님 → implements-shape(그 외 검사는 항목이 없어 침묵)", () => {
+    expect(implementsViolations("fixture-notes-spec@1").map((v) => v.rule)).toEqual([
+      "implements-shape",
+    ]);
+  });
+
+  it("비문자열 항목 → implements-shape, 문자열 항목 검사는 계속된다", () => {
+    const v = implementsViolations(["fixture-notes-spec@1", 7]);
+    expect(v.map((x) => x.rule)).toEqual(["implements-shape"]);
+  });
+
+  it("문법 위반 항목 → implements-grammar(위반 id 전부 나열)", () => {
+    const v = implementsViolations(["fixture-notes@1", "fixture-board-spec"]);
+    expect(v.map((x) => x.rule)).toEqual(["implements-grammar"]);
+    expect(v[0].detail).toContain("fixture-notes@1");
+    expect(v[0].detail).toContain("fixture-board-spec");
+  });
+
+  it("중복 선언 → implements-duplicate", () => {
+    const v = implementsViolations(["fixture-notes-spec@1", "fixture-notes-spec@1"]);
+    expect(v.map((x) => x.rule)).toEqual(["implements-duplicate"]);
+    expect(v[0].detail).toContain("fixture-notes-spec@1");
+  });
+
+  it("복합 위반이면 전부 보고한다(은폐 0)", () => {
+    const v = implementsViolations([7, "bad@1", "fixture-notes-spec@1", "fixture-notes-spec@1"]);
+    expect(v.map((x) => x.rule)).toEqual([
+      "implements-shape",
+      "implements-grammar",
+      "implements-duplicate",
+    ]);
+  });
+});
+
+// C3 시행 모드 — C2 와 같은 결(warn 출발). blocking 승격은 스키마 랜딩 후 설치본 위반 0 실측 유지
+// + 명시 재입법 커밋으로만 한다(C4·C5). 이 표를 고치면 아래 핀 테스트가 동행 개정을 강제한다.
+describe("C3_ENFORCEMENT·partitionEnforcement — 시행 모드", () => {
+  it("현행 입법표 핀 — 3종 전부 warn(신설 축, blocking 승격은 재입법으로만)", () => {
+    expect(C3_ENFORCEMENT).toEqual({
+      "implements-shape": "warn",
+      "implements-grammar": "warn",
+      "implements-duplicate": "warn",
+    });
+  });
+
+  it("partitionEnforcement 가 주입 표대로 blocking/warn 을 분류한다", () => {
+    const v = [
+      { rule: "implements-grammar" as const, detail: "a" },
+      { rule: "implements-duplicate" as const, detail: "b" },
+    ];
+    expect(
+      partitionEnforcement(v, {
+        "implements-shape": "warn",
+        "implements-grammar": "blocking",
+        "implements-duplicate": "warn",
+      }),
+    ).toEqual({ blocking: [v[0]], warn: [v[1]] });
   });
 });
