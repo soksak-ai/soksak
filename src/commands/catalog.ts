@@ -245,11 +245,12 @@ function exampleProgramId(): string {
   return ids.find((x) => x !== "terminal") ?? ids[0] ?? "terminal";
 }
 
+// dev 프리셋의 브라우저 패널 해석 — 관례 프로그램 id "browser"(terminal 과 동일 메커니즘)만 본다.
+// substring 매칭 폴백은 두지 않는다: "browser" 를 포함한 임의 id 를 기본 브라우저로 오인할 수 있고
+// (엔진 변형·도구 프로그램), terminal 은 그런 폴백 없이 관례 id 하나로 동작한다 — 대칭 유지.
+// 미등록이면 undefined — 호출부가 패널을 건너뛰고 사유를 남긴다(은폐 금지).
 function findBrowserProgram(): string | undefined {
-  const progs = listPrograms();
-  const exact = progs.find((p) => p.decl.id === "browser");
-  if (exact) return exact.decl.id;
-  return progs.find((p) => p.decl.id.includes("browser"))?.decl.id;
+  return listPrograms().find((p) => p.decl.id === "browser")?.decl.id;
 }
 
 // ── 직렬화(state.tree) ──────────────────────────────────────────────────────
