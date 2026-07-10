@@ -1,0 +1,33 @@
+# baseline-unwrap — 파일별 `.unwrap(` 봉인 수. 이 파일은 봉인이지 해소가 아니다.
+# 갱신은 --prune(축소)만. 값을 올리는 것은 명시 재입법 커밋으로만 한다(C5 — 무언 완화 금지).
+# 제거 조건: 해당 파일의 `.unwrap(` 를 에러 전파/명시 처리로 대체 → stale 실패 → --prune. 0이면 항목이 삭제된다.
+# 파일 개명 시 같은 커밋에서 항목 경로를 수기로 이전한다(값 불변).
+src-tauri/cli/src/lib.rs 4
+src-tauri/src/activity.rs 18
+src-tauri/src/ai_session.rs 7
+src-tauri/src/clipboard.rs 1
+src-tauri/src/daemon.rs 25
+src-tauri/src/data/backup.rs 23
+src-tauri/src/data/crypto.rs 45
+src-tauri/src/data/mod.rs 1
+src-tauri/src/data/ring.rs 14
+src-tauri/src/data/store.rs 116
+src-tauri/src/deeplink.rs 3
+src-tauri/src/fs.rs 5
+src-tauri/src/git.rs 13
+src-tauri/src/http.rs 12
+src-tauri/src/ipc.rs 9
+src-tauri/src/mediaproxy.rs 25
+src-tauri/src/network.rs 11
+src-tauri/src/plugins.rs 28
+src-tauri/src/process.rs 18
+src-tauri/src/project_registry.rs 5
+src-tauri/src/pty.rs 11
+src-tauri/src/runtime_dep.rs 8
+src-tauri/src/schedule.rs 26
+src-tauri/src/secrets.rs 66
+src-tauri/src/titlebar.rs 4
+src-tauri/src/watcher.rs 12
+src-tauri/src/webview.rs 2
+src-tauri/src/window.rs 13
+src-tauri/src/ws.rs 5
