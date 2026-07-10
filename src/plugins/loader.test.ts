@@ -156,25 +156,22 @@ describe("activatePlugin — 투명성 규칙(매니페스트 정적) 활성화 
     ).rejects.toThrow(/C2.*view-nodes/);
   });
 
-  it("콘텐츠 뷰 status 선언 부재 → C2 content-view-status 경고(warn — 활성화는 진행)", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await activatePlugin(
-      { activate: () => {} },
-      manifestOf({
-        permissions: ["ui", "commands"],
-        contributes: {
-          views: [{ id: "canvas", title: "캔버스", icon: "C", placements: ["content"] }],
-          commands: [{ name: "open", title: "열기" }],
-          nodes: [{ id: "send" }],
-        },
-      }),
-      "/d",
-      fakeDeps(),
-    );
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("C2 content-view-status"),
-    );
-    warn.mockRestore();
+  it("콘텐츠 뷰 status 선언 부재 → C2 content-view-status 거부(blocking 승격분)", async () => {
+    await expect(
+      activatePlugin(
+        { activate: () => {} },
+        manifestOf({
+          permissions: ["ui", "commands"],
+          contributes: {
+            views: [{ id: "canvas", title: "캔버스", icon: "C", placements: ["content"] }],
+            commands: [{ name: "open", title: "열기" }],
+            nodes: [{ id: "send" }],
+          },
+        }),
+        "/d",
+        fakeDeps(),
+      ),
+    ).rejects.toThrow(/C2.*content-view-status/);
   });
 
   it("세 표면을 갖춘 매니페스트 → C2 경고 없음", async () => {

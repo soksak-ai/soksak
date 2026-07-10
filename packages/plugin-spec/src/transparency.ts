@@ -30,12 +30,14 @@ export interface TransparencyViolation {
 //   2026-07-11 신설 — content-view-status 는 설치본 실측 위반 잔존(dev 홈 콘텐츠 뷰 10개 전부
 //     status 미선언)이라 warn 출발. 위반 0 실측 + 재입법 커밋으로 blocking 승격한다(래칫 —
 //     command-surface·view-nodes 가 밟은 같은 경로).
+//   2026-07-11 승격 — 콘텐츠 뷰 10개 전부 선언 도달(보고 뷰 6=실측 코드, 무상태 뷰 4=[] 명시,
+//     c2-transparency-scan 위반 0 실측) 후 content-view-status 를 blocking 으로 승격.
 export const C2_STATIC_ENFORCEMENT: Readonly<
   Record<StaticTransparencyRule, EnforcementMode>
 > = {
   "command-surface": "blocking",
   "view-nodes": "blocking",
-  "content-view-status": "warn",
+  "content-view-status": "blocking",
 };
 
 // 판정 입력 — 파싱된 매니페스트 contributes 의 구조 부분집합. PluginManifest["contributes"] 가

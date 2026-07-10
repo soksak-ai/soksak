@@ -196,11 +196,11 @@ describe("transparencyViolations — C2 정적 3규칙(M2)", () => {
 });
 
 describe("C2_STATIC_ENFORCEMENT — 현행 입법표 핀", () => {
-  it("정적 2종 blocking(위반 0 도달 승격 유지), content-view-status 는 warn 출발(설치본 위반 잔존 — 래칫)", () => {
+  it("정적 3종 전부 blocking — content-view-status 는 선언 sweep 완료(위반 0 실측) 후 승격", () => {
     expect(C2_STATIC_ENFORCEMENT).toEqual({
       "command-surface": "blocking",
       "view-nodes": "blocking",
-      "content-view-status": "warn",
+      "content-view-status": "blocking",
     });
   });
 });
@@ -226,9 +226,9 @@ describe("validate CLI — C2 판정 보고(M3)", () => {
     expect(r.out).not.toContain("C2");
   });
 
-  it("c2-status-undeclared: warn 규칙 위반은 경고로 보고하고 exit 0(래칫 — 저자 고지)", () => {
+  it("c2-status-undeclared: content-view-status 는 blocking 승격분 — exit 1 로 거부", () => {
     const r = runValidate("c2-status-undeclared");
-    expect(r.status).toBe(0);
+    expect(r.status).toBe(1);
     expect(r.out).toContain("content-view-status");
   });
 
