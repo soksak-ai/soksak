@@ -85,6 +85,13 @@ every contribution kind — commands, views, fileViewers, iconSets, nodes, libra
 - **Reach is for external state only.** A divergence in commands/views/nodes is an author bug — the
   core detects and rejects it, it does not "fix" it. Only `libraries` (external tools, which are
   system state) reconcile toward the declaration.
+- **`implements` is checked as a declaration, never as a capability.** A manifest-level
+  `implements: ["<scope>-spec@<major>"]` entry (coupling law C3, the L2 contract-pin) declares which
+  contracts this plugin implements. The core checks only that the declaration itself holds — shape
+  (string array), contract-id grammar (NAMING §8), duplicates. What surfaces a contract *requires*
+  is the contract owner's law; the core knows no contract (C1) and never verifies it. Consumers
+  resolve implementers by contract id (`sok plugin.implementers`) — discovery is contract-addressed
+  and implementation-blind. Do not pin a plugin id for a new coupling (that is L1, banned).
 
 ### Two enforcement surfaces — do not conflate them
 
@@ -92,6 +99,7 @@ every contribution kind — commands, views, fileViewers, iconSets, nodes, libra
 |---------|------|-------|-----------|
 | Schema gate | `parseManifest` rejects a malformed manifest | `@soksak-ai/plugin-spec` — `npx soksak-validate plugin.json` | No (headless) |
 | Runtime conformance | declared ≡ actual diff across every register-gated kind (commands/views/fileViewers/iconSets) + nodes | `sok plugin.conformance` | Yes (running app) |
+| `implements` (C3 L2) | declaration checks only — shape, contract-id grammar, duplicates. Schema gate rejects; the activation boundary re-judges at warn (`C3_ENFORCEMENT` — promotion to blocking only by re-legislation, C4/C5) | `npx soksak-validate` (reject) · activation warn · `sok plugin.conformance` (implements block) · `sok plugin.implementers` (discovery) | Both |
 
 `@soksak-ai/plugin-spec` ships the **same** `parseManifest` the core imports — one spec, no vendored
 copy. The schema gate runs headless (CI, pre-commit); the wiring diff needs a live app because
