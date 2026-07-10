@@ -6,6 +6,12 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     // scripts 짝 테스트(게이트 자가검사)도 같은 러너로 돈다 — 검사 메커니즘을 늘리지 않는다.
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx", "scripts/**/*.test.mjs"],
+    // packages 테스트는 각 패키지 test/ 소유(영역별 테스트 — 코어에 몰지 않는다). 러너는 하나.
+    include: [
+      "src/**/*.test.ts",
+      "src/**/*.test.tsx",
+      "scripts/**/*.test.mjs",
+      "packages/*/test/**/*.test.ts",
+    ],
   },
 });

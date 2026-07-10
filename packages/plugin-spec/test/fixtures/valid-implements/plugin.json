@@ -1,0 +1,9 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "valid-implements",
+  "name": "Valid Implements Fixture",
+  "version": "0.1.0",
+  "description": "headless gate fixture — implements contract pins must pass parseManifest",
+  "permissions": [],
+  "implements": ["soksak-fixture-tasks-spec@1"]
+}

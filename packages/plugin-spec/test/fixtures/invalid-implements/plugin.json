@@ -1,0 +1,9 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "invalid-implements",
+  "name": "Invalid Implements Fixture",
+  "version": "0.1.0",
+  "description": "headless gate fixture — an implementation name without the -spec marker is not a contract id and must be rejected",
+  "permissions": [],
+  "implements": ["soksak-fixture-tasks@1"]
+}

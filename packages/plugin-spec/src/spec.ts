@@ -41,6 +41,10 @@
 // P5. 코어 검증은 카탈로그 무결성과 매니페스트 파서뿐. 개별 플러그인의 스펙 준수는 각
 //     repo 가 보증한다 — 코어는 플러그인을 나열·검사하지 않는다.
 
+// 계약 id(C3 L2 계약-핀) 문법 — 단일진실은 contracts.ts(CONTRACT_ID_RE·validateImplements).
+import { validateImplements } from "./contracts.js";
+export * from "./contracts.js";
+
 // ── §1 권한 ──────────────────────────────────────────────────────────────────
 
 export type PluginPermission =
@@ -534,6 +538,11 @@ export interface PluginManifest {
   libraries?: LibraryDep[];
   // 사이드카(engine 모듈) 의존 — 선언된 것만 app.sidecar.open 가능. "sidecar" 권한 필수.
   sidecars?: SidecarDep[];
+  // 이 플러그인이 구현하는 계약 선언(C3 L2 계약-핀) — 각 항목은 계약 id <scope>-spec@<major>.
+  // 선언 = 발견 대상: 소비자는 계약 id 로만 발견한다(구현체 무차별). 구현 pluginId 를 핀하지
+  // 마라(L1 이름-핀 — 신규 결합 금지). 판올림은 major 별 id — @2 는 @1 을 대체하지 않는다(C4).
+  // 문법·의미 정본 = contracts.ts + NAMING §8.
+  implements?: string[];
   // 사용자 구성 설정 스키마(선택). 글로벌+프로젝트별 오버라이드. 무해(선언형) → 권한 불요.
   configuration?: ConfigSetting[];
   permissions: PluginPermission[];
@@ -853,6 +862,7 @@ export function parseManifest(
       "dependencies",
       "libraries",
       "sidecars",
+      "implements",
       "configuration",
       "permissions",
       "contributes",
@@ -1059,6 +1069,9 @@ export function parseManifest(
       }
     }
   }
+
+  // implements: 계약 구현 선언(선택) — L2 계약-핀. 문법·중복 검증은 contracts.ts 가 단일진실.
+  const implementsIds = validateImplements(raw.implements, errors);
 
   // configuration: 사용자 설정 스키마(선택). key·type·default 정합 + enum/enumLabels/min·max 검증.
   // 단일 진실 — UI·저장 기본값·CLI/MCP 가 전부 여기서 파생.
@@ -1635,6 +1648,7 @@ export function parseManifest(
       ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
       ...(libraries.length > 0 ? { libraries } : {}),
       ...(sidecars.length > 0 ? { sidecars } : {}),
+      ...(implementsIds.length > 0 ? { implements: implementsIds } : {}),
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
       contributes: { views, commands, iconSets, fileViewers, nodes, programs, events, ...(skill ? { skill } : {}) },
