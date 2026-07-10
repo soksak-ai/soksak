@@ -115,9 +115,12 @@ pub fn judge_client(declared: Option<u32>) -> soksak_protocol::Compat {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase")]
 pub enum Request {
-    /// Attach to the live session owning `pane_id`, or spawn a new shell for
-    /// it. The pane id is the reattach key — it is stable across app restarts
-    /// (workspace snapshot). Spawn parameters are ignored on attach.
+    /// Attach to the live session owning the pane, or spawn a new shell for
+    /// it. The reattach key is `(window_label, pane_id)` — pane ids are only
+    /// unique within their window (per-window sequential view ids), so the
+    /// window label namespaces them. Both halves are stable across app
+    /// restarts (workspace snapshot respawns `w-*` labels and view ids).
+    /// Spawn parameters are ignored on attach.
     #[serde(rename_all = "camelCase")]
     CreateOrAttach {
         pane_id: String,
@@ -130,8 +133,8 @@ pub enum Request {
         env: Vec<(String, String)>,
         /// Environment removed from the shell (inherited-context scrubbing).
         env_remove: Vec<String>,
-        /// Window that owns the pane — `killByWindow` reaps by this key when
-        /// a window is discarded by the user.
+        /// Window that owns the pane — half of the reattach key, and the
+        /// reap key of `killByWindow` when the user discards a window.
         window_label: Option<String>,
     },
     /// Shell input. Base64 keeps raw bytes NDJSON-safe; input volume is small.

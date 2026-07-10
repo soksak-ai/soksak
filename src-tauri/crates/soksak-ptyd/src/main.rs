@@ -104,12 +104,18 @@ mod unix {
     }
 
     impl Registry {
-        fn by_pane(&self, pane: &str) -> Option<Arc<Session>> {
+        // 재부착 키 = (window_label, pane_id). pane id 는 창 안에서만 유일하다(창별
+        // 순차 뷰 id — 실측: 여러 창이 각자 v2 를 가진다). 창 라벨이 네임스페이스다.
+        fn by_pane(&self, window: Option<&str>, pane: &str) -> Option<Arc<Session>> {
             self.sessions
                 .lock()
                 .unwrap()
                 .values()
-                .find(|s| s.pane_id == pane && !s.st.lock().unwrap().closed)
+                .find(|s| {
+                    s.pane_id == pane
+                        && s.window_label.as_deref() == window
+                        && !s.st.lock().unwrap().closed
+                })
                 .cloned()
         }
         fn get(&self, id: u64) -> Option<Arc<Session>> {
@@ -301,7 +307,7 @@ mod unix {
         use proto::Request as R;
         match req {
             R::CreateOrAttach { pane_id, cols, rows, cwd, shell, env, env_remove, window_label } => {
-                if let Some(s) = reg.by_pane(&pane_id) {
+                if let Some(s) = reg.by_pane(window_label.as_deref(), &pane_id) {
                     let mut d = serde_json::to_value(s.info()).unwrap_or_default();
                     d["attached"] = json!(true);
                     return proto::ok_reply(d);
@@ -384,13 +390,24 @@ mod unix {
                 buf.extend_from_slice(b);
                 Ok(json!({ "snapshotB64": base64::engine::general_purpose::STANDARD.encode(&buf) }))
             }),
-            R::PanePid { pane_id } => match reg.by_pane(&pane_id) {
-                None => proto::err_reply("NOT_FOUND", &format!("no session for pane {pane_id}")),
-                Some(s) => {
-                    let pid = s.master.lock().unwrap().process_group_leader();
-                    proto::ok_reply(json!({ "pid": pid }))
+            // pane id 첫 매치(창 무관) — 앱의 pty_pane_pid 명령이 창 문맥 없이 pane 만
+            // 받는 기존 의미론과 동형이다(교차 창 동명 pane 의 모호성도 그대로 승계).
+            R::PanePid { pane_id } => {
+                let found = reg
+                    .sessions
+                    .lock()
+                    .unwrap()
+                    .values()
+                    .find(|s| s.pane_id == pane_id && !s.st.lock().unwrap().closed)
+                    .cloned();
+                match found {
+                    None => proto::err_reply("NOT_FOUND", &format!("no session for pane {pane_id}")),
+                    Some(s) => {
+                        let pid = s.master.lock().unwrap().process_group_leader();
+                        proto::ok_reply(json!({ "pid": pid }))
+                    }
                 }
-            },
+            }
             R::Ping => {
                 let n = reg.sessions.lock().unwrap().len();
                 proto::ok_reply(json!({ "pid": std::process::id(), "sessions": n }))

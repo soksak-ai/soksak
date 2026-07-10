@@ -247,6 +247,43 @@ fn shell_survives_client_death_and_reattaches_with_replay() {
     assert_eq!(bye["ok"], true);
 }
 
+// ── 재부착 키 = (창, pane): pane id 는 창 안에서만 유일하다 ───────────────────
+// 실측 근거: 창별 순차 뷰 id 라 여러 창이 각자 "v2" pane 을 가진다. pane 만으로
+// 매칭하면 다른 창의 셸에 재부착한다(오부착 — 이 테스트가 그 회귀를 막는다).
+
+#[test]
+fn same_pane_id_in_two_windows_is_two_sessions() {
+    let d = start_daemon("panekey");
+    let mut control = Control::connect(&d.home);
+    let mk = |control: &mut Control, window: &str| {
+        control.request(&proto::Request::CreateOrAttach {
+            pane_id: "v2".into(),
+            cols: 80,
+            rows: 24,
+            cwd: None,
+            shell: "/bin/sh".into(),
+            env: vec![("PS1".into(), "$ ".into())],
+            env_remove: vec![],
+            window_label: Some(window.into()),
+        })
+    };
+    let a = mk(&mut control, "w-one");
+    let b = mk(&mut control, "w-two");
+    assert_eq!(a["data"]["attached"], false);
+    assert_eq!(b["data"]["attached"], false, "second window spawns its own shell: {b}");
+    assert_ne!(
+        a["data"]["session"].as_u64().unwrap(),
+        b["data"]["session"].as_u64().unwrap()
+    );
+    // 같은 (창, pane) 재요청만 재부착한다.
+    let again = mk(&mut control, "w-one");
+    assert_eq!(again["data"]["attached"], true, "{again}");
+    assert_eq!(
+        again["data"]["session"].as_u64().unwrap(),
+        a["data"]["session"].as_u64().unwrap()
+    );
+}
+
 // ── 창 폐기 reap: killByWindow 는 그 창의 세션만 죽인다 ──────────────────────
 
 #[test]
