@@ -8,7 +8,7 @@ import {
   nodeConformance,
   partitionEnforcement,
   partitionTransparency,
-  unreportedStatusViews,
+  viewStatusConformance,
 } from "./conformance";
 
 // gateContribution — declared≡actual 등록 게이트(통합). api.ts 4중 find+throw 를 하나로.
@@ -118,23 +118,74 @@ describe("nodeConformance — 선언(contributes.nodes) ≡ 배선(data-node)", 
 // 단위검증은 스펙 패키지 소유다(packages/plugin-spec/test/transparency.test.ts) — 판정이
 // 그 패키지로 이관됐고 코어는 소비자라 여기 판정 매트릭스를 두지 않는다(이중진실 금지).
 
-// unreportedStatusViews — C2 view-status(런타임 규칙)의 순수 판정. 캐퍼빌리티는 코어 실존
-// (viewRegistry PluginViewContext.setStatus). 활성화 시점엔 뷰 미마운트라 로더 판정 불가 —
-// 시행 지점은 런타임 진단(plugin.conformance)·발행 게이트(doctor).
-describe("unreportedStatusViews — status 축 미보고 뷰 감지", () => {
-  it("마운트된 뷰 전부 status 를 보고하면 빈 배열", () => {
-    expect(unreportedStatusViews(["diff", "log"], ["diff", "log"])).toEqual([]);
+// viewStatusConformance — C2 view-status(런타임 규칙)의 순수 판정, 선언≡보고.
+// 선언 = contributes.views[].status(보고 코드 목록, [] = 무상태 명시), 보고 = 마운트 인스턴스의
+// 실 status code. 활성화 시점엔 뷰 미마운트라 로더 판정 불가 — 시행 지점은 런타임 진단
+// (plugin.conformance)·발행 게이트(doctor). 판정 두 방향:
+//   선언 있고(비어있지 않음) 미보고 → unreported(view-status 위반)
+//   보고 코드가 선언에 없음(선언 부재·[]·목록 밖) → undeclared(선언 누락 경고)
+describe("viewStatusConformance — 선언≡보고", () => {
+  const decl = (status?: readonly string[]) => [{ id: "canvas", status }];
+
+  it("선언된 코드를 보고하면 적합", () => {
+    expect(
+      viewStatusConformance(decl(["ready", "error"]), [
+        { viewId: "v1", view: "canvas", code: "ready" },
+      ]),
+    ).toEqual({ unreported: [], undeclared: [] });
   });
 
-  it("미보고 뷰만 반환(마운트 순서 보존)", () => {
-    expect(unreportedStatusViews(["diff", "log", "tree"], ["log"])).toEqual([
-      "diff",
-      "tree",
-    ]);
+  it("선언 있고 미보고 → unreported(마운트 순서 보존)", () => {
+    expect(
+      viewStatusConformance(decl(["ready"]), [
+        { viewId: "v1", view: "canvas", code: null },
+        { viewId: "v2", view: "canvas", code: "ready" },
+        { viewId: "v3", view: "canvas", code: null },
+      ]),
+    ).toEqual({ unreported: ["v1", "v3"], undeclared: [] });
   });
 
-  it("보고만 있고 마운트 목록에 없는 id 는 다루지 않음(회수 지연 잔재)", () => {
-    expect(unreportedStatusViews(["diff"], ["diff", "stale"])).toEqual([]);
+  it("무상태 선언([]) + 미보고 → 적합(침묵이 선언과 일치)", () => {
+    expect(
+      viewStatusConformance(decl([]), [{ viewId: "v1", view: "canvas", code: null }]),
+    ).toEqual({ unreported: [], undeclared: [] });
+  });
+
+  it("선언 없이 보고 → undeclared(선언 누락 — 보고 코드 실측)", () => {
+    expect(
+      viewStatusConformance(decl(undefined), [
+        { viewId: "v1", view: "canvas", code: "idle" },
+      ]),
+    ).toEqual({
+      unreported: [],
+      undeclared: [{ viewId: "v1", view: "canvas", code: "idle" }],
+    });
+  });
+
+  it("무상태 선언([])인데 보고 → undeclared(선언이 코드를 안 실음)", () => {
+    expect(
+      viewStatusConformance(decl([]), [{ viewId: "v1", view: "canvas", code: "busy" }]),
+    ).toEqual({
+      unreported: [],
+      undeclared: [{ viewId: "v1", view: "canvas", code: "busy" }],
+    });
+  });
+
+  it("선언 목록 밖 코드 보고 → undeclared", () => {
+    expect(
+      viewStatusConformance(decl(["ready"]), [
+        { viewId: "v1", view: "canvas", code: "wat" },
+      ]),
+    ).toEqual({
+      unreported: [],
+      undeclared: [{ viewId: "v1", view: "canvas", code: "wat" }],
+    });
+  });
+
+  it("선언 없음 + 미보고 → 적합(선언 부재 자체는 정적 content-view-status 의 몫)", () => {
+    expect(
+      viewStatusConformance(decl(undefined), [{ viewId: "v1", view: "canvas", code: null }]),
+    ).toEqual({ unreported: [], undeclared: [] });
   });
 });
 

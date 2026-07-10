@@ -45,8 +45,9 @@ import {
   missingRegistrations,
   nodeConformance,
   transparencyViolations,
-  unreportedStatusViews,
+  viewStatusConformance,
   type TransparencyViolation,
+  type ViewStatusObservation,
 } from "../plugins/conformance";
 import { useUi } from "../state/ui";
 import { consentSummary } from "../plugins/consentSummary";
@@ -1019,7 +1020,7 @@ export function registerPluginCatalog(): void {
     triggers: { ko: "플러그인 정합성 선언 실제 conformance" },
     params: { id: { type: "string", required: true, description: "플러그인 id" } },
     returns:
-      "{ id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan }, implements: { declared, violations }, c2: { violations: [{ rule, detail }], viewStatus: { mounted, reported, unreported } } }",
+      "{ id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan }, implements: { declared, violations }, c2: { violations: [{ rule, detail }], viewStatus: { mounted, reported, unreported, undeclared: [{ viewId, view, code }] } } }",
     message: (d) => tmsg("msg.plugin.conformance", { id: String(d.id) }),
     examples: ["sok plugin.conformance soksak-plugin-<id>"],
     handler: (p) => {
@@ -1050,26 +1051,37 @@ export function registerPluginCatalog(): void {
       const regFv = registeredFileViewerIds(id);
       const regIcons = registeredIconSetIds(id);
       // ── 결합 법칙 C2(투명성 3종)의 런타임 판정면 ─────────────────────────────
-      // 정적 2종(command-surface·view-nodes)은 매니페스트 카운트로, view-status 는 마운트된
-      // 콘텐츠 뷰에서만 판정 가능하다 — 이 명령이 view-status 규칙의 유일한 시행 지점이다.
+      // 정적 3종은 매니페스트로, view-status 는 마운트된 콘텐츠 뷰에서만 판정 가능하다 —
+      // 이 명령이 view-status 규칙의 유일한 시행 지점이다. 판정은 선언≡보고(viewStatusConformance):
+      //   선언(contributes.views[].status) 있고 미보고 → view-status 위반,
+      //   선언 밖 보고(부재·[]·목록 밖 코드) → content-view-status 선언 누락 경고(런타임 실측 —
+      //   정적 판정은 선언 부재만 보고 코드 누락은 여기서만 드러난다).
       // 콘텐츠 배치 뷰만 sessions 레이아웃에 실린다(사이드바는 setStatus no-op) → 여기 걸린 건 전부 콘텐츠 뷰.
-      const mountedContentViews: { viewId: string; view: string; reports: boolean }[] = [];
+      const observed: ViewStatusObservation[] = [];
       for (const t of useSessions.getState().tabs)
         for (const ca of t.contents)
           for (const g of allGroups(ca.layout))
             for (const v of g.views)
               if (v.kind === "plugin" && v.pluginId === id)
-                mountedContentViews.push({ viewId: v.id, view: v.view, reports: v.status != null });
-      const mounted = mountedContentViews.map((v) => v.viewId);
-      const reported = mountedContentViews.filter((v) => v.reports).map((v) => v.viewId);
-      const unreported = unreportedStatusViews(mounted, reported);
+                observed.push({ viewId: v.id, view: v.view, code: v.status?.code ?? null });
+      const mounted = observed.map((v) => v.viewId);
+      const reported = observed.filter((v) => v.code !== null).map((v) => v.viewId);
+      const { unreported, undeclared } = viewStatusConformance(c.views, observed);
       const c2Violations: TransparencyViolation[] = [
         ...transparencyViolations(c),
       ];
       if (unreported.length > 0) {
         c2Violations.push({
           rule: "view-status",
-          detail: `마운트된 콘텐츠 뷰 ${unreported.length}개가 status 미보고: ${unreported.join(", ")}`,
+          detail: `status 선언 뷰의 마운트 인스턴스 ${unreported.length}개가 미보고: ${unreported.join(", ")}`,
+        });
+      }
+      if (undeclared.length > 0) {
+        c2Violations.push({
+          rule: "content-view-status",
+          detail: `보고된 status 코드가 선언에 없음(선언 누락): ${undeclared
+            .map((u) => `${u.viewId}(${u.view})=${u.code}`)
+            .join(", ")} — contributes.views[].status 에 실어라`,
         });
       }
       return {
@@ -1109,11 +1121,11 @@ export function registerPluginCatalog(): void {
           declared: manifestImplements(plug.manifest),
           violations: implementsViolations(rawImplements(plug.manifest)),
         },
-        // C2 투명성 3종의 이 플러그인 판정 — 정적(command-surface·view-nodes)+런타임(view-status).
-        // 헤드리스 정적 스캔은 scripts/gates/c2-transparency-scan.mjs, view-status 는 이 표면만 본다.
+        // C2 투명성 3종의 이 플러그인 판정 — 정적 3종+런타임(view-status, 선언≡보고).
+        // 헤드리스 정적 스캔은 scripts/gates/c2-transparency-scan.mjs, 선언≡보고는 이 표면만 본다.
         c2: {
           violations: c2Violations,
-          viewStatus: { mounted, reported, unreported },
+          viewStatus: { mounted, reported, unreported, undeclared },
         },
       };
     },

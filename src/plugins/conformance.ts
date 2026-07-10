@@ -47,7 +47,7 @@ export function missingRegistrations(
 // 모든 기능은 세 표면을 의무 노출한다. 정적 판정(매니페스트-전용: command-surface·view-nodes·
 // content-view-status)과 그 시행 입법표(C2_STATIC_ENFORCEMENT)의 단일진실은 스펙 패키지
 // transparency.ts 다 — 로더·설치본 게이트·validate CLI 가 전부 같은 함수·표를 소비한다(미러 금지).
-// 여기 남는 것은 런타임 증거가 필요한 판정(unreportedStatusViews)과 런타임 규칙을 합성한
+// 여기 남는 것은 런타임 증거가 필요한 판정(viewStatusConformance)과 런타임 규칙을 합성한
 // 전체 입법표(C2_ENFORCEMENT)뿐이다.
 // 재입법 이력(정적 규칙의 후속 이력은 스펙 패키지 transparency.ts 가 이어 적는다):
 //   2026-07-11 도입 — 위반 잔존이라 3종 전부 warn 출발(dev 홈 매니페스트 41개 실측):
@@ -57,11 +57,12 @@ export function missingRegistrations(
 //   2026-07-11 이관 — 정적 판정·입법표를 스펙 패키지로 이관(판정 단일화 — 게이트 미러 폐기),
 //     status 축에 매니페스트 선언(contributes.views[].status)을 신설하고 그 부재를
 //     content-view-status(warn 출발 — 래칫)로 판정한다.
-// view-status 는 매니페스트 선언이 아니라 런타임 속성(마운트된 콘텐츠 뷰가 status 를 보고하는가)이라
-// 헤드리스 매니페스트 스캔으로 실측 불가 — 시행·실측 지점은 plugin.conformance. 콘텐츠 뷰 4개
-// (browser-chromium·-offscreen·-native·git-diff)가 setStatus 미채택으로 잔존하므로 warn 유지한다.
-// 이는 무언 완화가 아니라 정적 규칙과 다른 강제 지점(런타임)에 대한 명시 유예다 — 4 플러그인 setStatus
-// 채택 후 blocking 승격 예정(별도 재입법 커밋).
+// view-status 는 매니페스트 선언이 아니라 런타임 속성(마운트된 콘텐츠 뷰가 선언한 status 코드를
+// 실보고하는가 — 선언≡보고)이라 헤드리스 매니페스트 스캔으로 실측 불가 — 시행·실측 지점은
+// plugin.conformance. 설치본 콘텐츠 뷰가 status 선언·setStatus 채택 전이라 warn 유지한다(dev 홈
+// 실측: 콘텐츠 뷰 10개 전부 선언 부재). 이는 무언 완화가 아니라 정적 규칙과 다른 강제 지점(런타임)에
+// 대한 명시 유예다 — 래칫 경로: 선언 sweep 완료 → 마운트 실보고 위반 0 실측 → blocking 승격
+// (별도 재입법 커밋, content-view-status 와 동행).
 
 // 전체 규칙 축 = 정적 3종(스펙 패키지) + 런타임 1종(view-status — 코어 소유).
 export type TransparencyRule = StaticTransparencyRule | "view-status";
@@ -80,15 +81,43 @@ export interface TransparencyViolation {
   detail: string; // 위반 사실 서술(무엇이 몇 개인지) — 경고/거부 메시지에 그대로 실림
 }
 
-// ② view-status 의 판정 — 런타임 입력. 캐퍼빌리티는 코어 실존(viewRegistry PluginViewContext.setStatus
-// → sessions view.status → status.query). 활성화 시점엔 뷰가 마운트 전이라 로더에서 판정 불가 —
-// 시행 지점은 런타임 진단(plugin.conformance)·발행 게이트(doctor)다. 여기는 순수 판정만 둔다.
-export function unreportedStatusViews(
-  mountedViewIds: readonly string[],
-  statusReportedViewIds: readonly string[],
-): string[] {
-  const reported = new Set(statusReportedViewIds);
-  return mountedViewIds.filter((id) => !reported.has(id));
+// ② view-status 의 판정 — 런타임 입력, 선언≡보고. 캐퍼빌리티는 코어 실존(viewRegistry
+// PluginViewContext.setStatus → sessions view.status → status.query). 활성화 시점엔 뷰가 마운트
+// 전이라 로더에서 판정 불가 — 시행 지점은 런타임 진단(plugin.conformance)·발행 게이트(doctor)다.
+// 여기는 순수 판정만 둔다(플러그인 id 무유입 — 선언 배열과 관찰 배열만 받는다).
+// 선언 = contributes.views[].status(보고 코드 목록, [] = 무상태 명시, undefined = 선언 부재).
+// 판정 두 방향(각각 다른 규칙 축으로 시행):
+//   unreported: 선언(비어있지 않음) 있고 미보고 → view-status 위반(약속 미이행).
+//   undeclared: 보고 코드가 선언에 없음(부재·[]·목록 밖) → content-view-status 선언 누락 경고
+//               (정적 판정은 선언 부재만 보고, 코드 누락은 런타임 실측으로만 드러난다).
+// 선언 부재 + 미보고는 여기서 침묵한다 — 그 사실 자체가 정적 content-view-status 위반이다(이중보고 금지).
+export interface ViewStatusObservation {
+  viewId: string; // 마운트 인스턴스 id
+  view: string; // 선언 뷰 id(contributes.views[].id)
+  code: string | null; // 보고된 status code, null = 미보고
+}
+
+export interface ViewStatusJudgment {
+  unreported: string[]; // 선언 있고 미보고 — view-status 위반 대상(마운트 순서 보존)
+  undeclared: { viewId: string; view: string; code: string }[]; // 선언 밖 보고 — 선언 누락 경고
+}
+
+export function viewStatusConformance(
+  declaredViews: readonly { id: string; status?: readonly string[] }[],
+  observed: readonly ViewStatusObservation[],
+): ViewStatusJudgment {
+  const declByView = new Map(declaredViews.map((v) => [v.id, v.status]));
+  const unreported: string[] = [];
+  const undeclared: ViewStatusJudgment["undeclared"] = [];
+  for (const o of observed) {
+    const decl = declByView.get(o.view);
+    if (o.code === null) {
+      if (decl !== undefined && decl.length > 0) unreported.push(o.viewId);
+    } else if (decl === undefined || !decl.includes(o.code)) {
+      undeclared.push({ viewId: o.viewId, view: o.view, code: o.code });
+    }
+  }
+  return { unreported, undeclared };
 }
 
 // 위반을 시행 모드로 분류 — blocking 위반은 거부 대상, warn 위반은 경고 대상. C2·C3 공용(단일진실).

@@ -1,6 +1,7 @@
-// plugin.conformance 계약 테스트 — declared≡actual 런타임 진단이 결합 법칙 C2 세 규칙 전부를
-// 판정하는지 확인한다. 특히 view-status(② 규칙)는 마운트된 콘텐츠 뷰에서만 판정 가능하므로
-// 활성화 경계가 아니라 이 런타임 표면이 시행 지점이다(unreportedStatusViews 의 유일한 배선).
+// plugin.conformance 계약 테스트 — declared≡actual 런타임 진단이 결합 법칙 C2 규칙 전부를
+// 판정하는지 확인한다. 특히 view-status(런타임 규칙)는 마운트된 콘텐츠 뷰에서만 판정 가능하므로
+// 활성화 경계가 아니라 이 런타임 표면이 시행 지점이다(viewStatusConformance 의 유일한 배선).
+// 판정은 선언≡보고: 선언(contributes.views[].status) 있고 미보고=위반, 선언 밖 보고=선언 누락 경고.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke } = vi.hoisted(() => ({
@@ -79,18 +80,39 @@ describe("plugin.conformance 등록(발견성)", () => {
   });
 });
 
-describe("plugin.conformance — C2 view-status(런타임 판정, unreportedStatusViews 배선)", () => {
-  it("마운트된 콘텐츠 뷰가 status 미보고면 view-status 위반을 낸다", async () => {
-    const id = "demo";
-    const manifest = manifestOf(id, {
+// 응답 c2.viewStatus 의 계약 형태(선언≡보고 판정: unreported=선언 있고 미보고, undeclared=선언 밖 보고).
+interface C2Result {
+  violations: { rule: string; detail: string }[];
+  viewStatus: {
+    mounted: string[];
+    reported: string[];
+    unreported: string[];
+    undeclared: { viewId: string; view: string; code: string }[];
+  };
+}
+
+describe("plugin.conformance — C2 view-status(런타임 판정, viewStatusConformance 배선 — 선언≡보고)", () => {
+  const declaredManifest = (id: string, status?: string[]) =>
+    manifestOf(id, {
       contributes: {
-        views: [{ id: "canvas", title: "캔버스", icon: "C", placements: ["content"] }],
+        views: [
+          {
+            id: "canvas",
+            title: "캔버스",
+            icon: "C",
+            placements: ["content"],
+            ...(status !== undefined ? { status } : {}),
+          },
+        ],
         commands: [{ name: "open", title: "열기" }],
         nodes: [{ id: "root" }],
       },
     });
-    usePlugins.setState({ plugins: { [id]: runtimeOf(manifest) } });
-    // 콘텐츠 뷰 두 인스턴스: v1 은 status 미보고, v2 는 보고.
+
+  it("status 선언 뷰가 마운트 후 미보고면 view-status 위반을 낸다", async () => {
+    const id = "demo";
+    usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["idle", "busy"])) } });
+    // 콘텐츠 뷰 두 인스턴스: v1 은 status 미보고(선언 있음 → 위반), v2 는 선언된 코드 보고.
     useSessions.setState({
       tabs: [
         tabWith([
@@ -102,40 +124,74 @@ describe("plugin.conformance — C2 view-status(런타임 판정, unreportedStat
 
     const r = await execute("plugin.conformance", { id }, {});
     expect(r.ok).toBe(true);
-    const data = (r as { data: Record<string, unknown> }).data;
-    const c2 = data.c2 as {
-      violations: { rule: string; detail: string }[];
-      viewStatus: { mounted: string[]; reported: string[]; unreported: string[] };
-    };
+    const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
     expect(c2).toBeDefined();
     expect(c2.viewStatus.mounted).toEqual(["v1", "v2"]);
     expect(c2.viewStatus.reported).toEqual(["v2"]);
     expect(c2.viewStatus.unreported).toEqual(["v1"]);
+    expect(c2.viewStatus.undeclared).toEqual([]);
     expect(c2.violations.map((v) => v.rule)).toContain("view-status");
   });
 
-  it("모든 콘텐츠 뷰가 status 를 보고하면 view-status 위반 없음", async () => {
+  it("모든 콘텐츠 뷰가 선언된 코드를 보고하면 view-status 위반 없음", async () => {
     const id = "demo";
-    const manifest = manifestOf(id, {
-      contributes: {
-        views: [{ id: "canvas", title: "캔버스", icon: "C", placements: ["content"] }],
-        commands: [{ name: "open", title: "열기" }],
-        nodes: [{ id: "root" }],
-      },
-    });
-    usePlugins.setState({ plugins: { [id]: runtimeOf(manifest) } });
+    usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["running"])) } });
     useSessions.setState({
       tabs: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas", status: { code: "running" } })])],
     });
 
     const r = await execute("plugin.conformance", { id }, {});
-    const data = (r as { data: Record<string, unknown> }).data;
-    const c2 = data.c2 as {
-      violations: { rule: string }[];
-      viewStatus: { unreported: string[] };
-    };
+    const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
     expect(c2.viewStatus.unreported).toEqual([]);
+    expect(c2.viewStatus.undeclared).toEqual([]);
     expect(c2.violations.map((v) => v.rule)).not.toContain("view-status");
+    expect(c2.violations.map((v) => v.rule)).not.toContain("content-view-status");
+  });
+
+  it("무상태 선언([]) 뷰의 침묵은 위반이 아니다(선언≡보고)", async () => {
+    const id = "demo";
+    usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, [])) } });
+    useSessions.setState({
+      tabs: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas" })])],
+    });
+
+    const r = await execute("plugin.conformance", { id }, {});
+    const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
+    expect(c2.viewStatus.unreported).toEqual([]);
+    expect(c2.viewStatus.undeclared).toEqual([]);
+    expect(c2.violations.map((v) => v.rule)).not.toContain("view-status");
+    expect(c2.violations.map((v) => v.rule)).not.toContain("content-view-status");
+  });
+
+  it("선언 없이 보고 → undeclared + content-view-status 에 보고 코드 실측(선언 누락 경고)", async () => {
+    const id = "demo";
+    usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, undefined)) } });
+    useSessions.setState({
+      tabs: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas", status: { code: "idle" } })])],
+    });
+
+    const r = await execute("plugin.conformance", { id }, {});
+    const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
+    expect(c2.viewStatus.undeclared).toEqual([{ viewId: "v1", view: "canvas", code: "idle" }]);
+    // 선언 없는 침묵이 아니라 보고 실측이므로 view-status 위반은 아니다 — 선언 축 경고다.
+    expect(c2.violations.map((v) => v.rule)).not.toContain("view-status");
+    const cvs = c2.violations.filter((v) => v.rule === "content-view-status");
+    expect(cvs.some((v) => v.detail.includes("idle"))).toBe(true);
+  });
+
+  it("선언 목록 밖 코드 보고 → undeclared + content-view-status(선언이 코드를 안 실음)", async () => {
+    const id = "demo";
+    usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["ready"])) } });
+    useSessions.setState({
+      tabs: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas", status: { code: "wat" } })])],
+    });
+
+    const r = await execute("plugin.conformance", { id }, {});
+    const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
+    expect(c2.viewStatus.undeclared).toEqual([{ viewId: "v1", view: "canvas", code: "wat" }]);
+    expect(c2.violations.map((v) => v.rule)).not.toContain("view-status");
+    const cvs = c2.violations.filter((v) => v.rule === "content-view-status");
+    expect(cvs.some((v) => v.detail.includes("wat"))).toBe(true);
   });
 });
 

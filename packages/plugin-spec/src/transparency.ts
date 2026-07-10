@@ -8,8 +8,8 @@
 //   ① command-surface     기능 보유(views>0 ∨ programs>0 ∨ fileViewers>0) ∧ commands=0 → 위반
 //   ② view-nodes          views>0 ∧ nodes=0 → 위반(ui.tree 부재 = 주소 기반 클릭 E2E 불가)
 //   ③ content-view-status 콘텐츠 뷰가 status 선언 부재 → 위반(무상태 뷰는 [] 로 명시 — 침묵 불가)
-// 런타임 규칙(마운트된 뷰가 실제 보고하는가 — view-status)은 매니페스트로 판정 불가라 코어
-// (src/plugins/conformance.ts unreportedStatusViews)에 남는다 — 여기는 런타임 증거 불요분만.
+// 런타임 규칙(마운트된 뷰가 선언한 코드를 실보고하는가 — view-status, 선언≡보고)은 매니페스트로
+// 판정 불가라 코어(src/plugins/conformance.ts viewStatusConformance)에 남는다 — 여기는 런타임 증거 불요분만.
 
 export type EnforcementMode = "blocking" | "warn";
 
