@@ -53,8 +53,12 @@ pub fn effective_protocol(declared: Option<u32>) -> u32 {
 /// still serve (one of the `MIN_COMPATIBLE_*` constants), `peer` = what the peer
 /// declared, normalized by [`effective_protocol`].
 pub fn evaluate_compat(own: u32, floor: u32, peer: u32) -> Compat {
-    // RED skeleton — encodes today's behavior: every peer is accepted, no window.
-    let _ = (own, floor, peer);
+    if peer < floor {
+        return Compat::PeerTooOld { peer, floor };
+    }
+    if peer > own {
+        return Compat::SelfTooOld { own, peer };
+    }
     Compat::Compatible
 }
 
@@ -69,9 +73,21 @@ pub fn skew_sentence(
     peer_name: &str,
     remedy: Option<&str>,
 ) -> Option<String> {
-    // RED skeleton — encodes today's behavior: no skew message is ever produced.
-    let _ = (compat, self_name, peer_name, remedy);
-    None
+    let (core, stale) = match compat {
+        Compat::Compatible => return None,
+        Compat::PeerTooOld { peer, floor } => (
+            format!("{peer_name} speaks socket protocol {peer} but {self_name} accepts {floor} at the oldest"),
+            format!("update {peer_name}"),
+        ),
+        Compat::SelfTooOld { own, peer } => (
+            format!("{peer_name} speaks socket protocol {peer} but {self_name} speaks up to {own}"),
+            format!("update {self_name}"),
+        ),
+    };
+    Some(match remedy {
+        Some(r) => format!("{core} — {stale} ({r})."),
+        None => format!("{core} — {stale}."),
+    })
 }
 
 #[cfg(test)]
