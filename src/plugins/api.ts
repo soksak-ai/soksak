@@ -464,6 +464,8 @@ export interface SoksakPluginApi {
     openWindow: (url: string) => Promise<void>;
     /** 세션 히스토리 이동(delta=-1 뒤/+1 앞). */
     history: (label: string, delta: number) => Promise<void>;
+    /** 로딩 정지(WKWebView stopLoading) — 툴바 reload↔stop 토글용. */
+    stop?: (label: string) => Promise<void>;
     /** OS 인스펙터(devtools) 토글 → 열림 여부. */
     devtools: (label: string) => Promise<boolean>;
     /** 페이지에서 JS 실행 후 결과 문자열 반환(AI/E2E DOM 제어). macOS 한정. */
@@ -478,7 +480,7 @@ export interface SoksakPluginApi {
     /** webview 이벤트 구독: "nav"({url})·"title"({title})·"status"·"open-external"({url}). 반환=해지. */
     on: (
       label: string,
-      event: "nav" | "title" | "status" | "open-external",
+      event: "nav" | "title" | "status" | "open-external" | "loading",
       cb: (payload: Record<string, unknown>) => void,
     ) => Disposable;
     /** 현재 살아있는 webview label 목록(prefix 필터). GC/정리용. */
@@ -1762,6 +1764,8 @@ export function buildPluginApi(
             deps.invoke("webview_open_window", { url }) as Promise<void>,
           history: (label, delta) =>
             deps.invoke("webview_history", { label, delta }) as Promise<void>,
+          stop: (label) =>
+            deps.invoke("webview_stop", { label }) as Promise<void>,
           devtools: (label) =>
             deps.invoke("webview_devtools", { label }) as Promise<boolean>,
           eval: (label, js) =>

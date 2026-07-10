@@ -50,7 +50,7 @@ export function defaultPluginDeps(appVersion: string): PluginApiDeps {
     subscribeCwd: (paneId, cb) => subscribeCwd(paneId, cb),
     subscribeCommandFinished: (paneId, cb) => subscribeCommandFinished(paneId, cb),
     // webview 이벤트(코어가 browser.rs 에서 emit 하는 `browser-<event>`) label 필터 구독 —
-    // app.webview.on 노출. event 는 "nav"|"title"|"status"|"open-external".
+    // app.webview.on 노출. event 는 "nav"|"title"|"status"|"open-external"|"loading".
     subscribeWebview: (label, event, cb) =>
       subscribe<{ label: string } & Record<string, unknown>>(`browser-${event}`, (p) => {
         if (p.label === label) cb(p);

@@ -395,6 +395,7 @@ pub fn run() {
             webview::webview_navigate,
             webview::webview_devtools,
             webview::webview_history,
+            webview::webview_stop,
             webview::webview_visible,
             webview::webview_close,
             webview::webview_divider_highlight,

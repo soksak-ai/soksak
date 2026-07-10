@@ -33,6 +33,17 @@ struct BrowserOpenPayload {
     url: String,
 }
 
+// 로딩 상태 + 히스토리 가능 여부 — 툴바 스피너/정지 토글·뒤로/앞으로 활성의 단일 소스.
+// didStartProvisionalNavigation(Started)/didFinish(Finished) 시점에 emit(soksak-browser-kit nav-state 소비).
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LoadingPayload {
+    label: String,
+    loading: bool,
+    can_back: bool,
+    can_forward: bool,
+}
+
 #[derive(Clone, Serialize)]
 struct TitlePayload {
     label: String,
@@ -756,8 +767,34 @@ pub fn webview_open(
                     },
                 );
             }
-            if payload.event() == tauri::webview::PageLoadEvent::Finished {
+            let finished = payload.event() == tauri::webview::PageLoadEvent::Finished;
+            if finished {
                 emit_page_title(&webview, webview.label());
+            }
+            // 로딩 상태 emit — canGoBack/canGoForward 는 WKWebView 속성(메인스레드 디스패치 안에서 읽음).
+            #[cfg(target_os = "macos")]
+            {
+                let ld_app = pl_app.clone();
+                let ld_label = pl_label.clone();
+                let _ = webview.with_webview(move |pw| unsafe {
+                    use objc2::msg_send;
+                    use objc2::runtime::AnyObject;
+                    let wk = pw.inner() as *mut AnyObject;
+                    if wk.is_null() {
+                        return;
+                    }
+                    let can_back: bool = msg_send![&*wk, canGoBack];
+                    let can_forward: bool = msg_send![&*wk, canGoForward];
+                    let _ = ld_app.emit(
+                        "browser-loading",
+                        LoadingPayload {
+                            label: ld_label.clone(),
+                            loading: !finished,
+                            can_back,
+                            can_forward,
+                        },
+                    );
+                });
             }
         });
     let webview = window
@@ -955,6 +992,27 @@ pub fn webview_history(app: AppHandle, label: String, delta: i32) -> Result<(), 
     if let Some(wv) = app.get_webview(&label) {
         wv.eval(format!("history.go({delta})"))
             .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+// 로딩 정지 — WKWebView stopLoading. 툴바 reload↔stop 토글(soksak-browser-kit nav-state)용.
+#[tauri::command]
+pub fn webview_stop(app: AppHandle, label: String) -> Result<(), String> {
+    if let Some(wv) = app.get_webview(&label) {
+        #[cfg(target_os = "macos")]
+        {
+            let _ = wv.with_webview(|pw| unsafe {
+                use objc2::msg_send;
+                use objc2::runtime::AnyObject;
+                let wk = pw.inner() as *mut AnyObject;
+                if !wk.is_null() {
+                    let _: () = msg_send![&*wk, stopLoading];
+                }
+            });
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = wv;
     }
     Ok(())
 }
