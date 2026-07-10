@@ -170,22 +170,58 @@ fn clamp_timeout_ms(requested: Option<u64>) -> u64 {
         .clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS)
 }
 
-// 소켓 서버 기동. 잔존 소켓이 살아 있으면(다른 인스턴스) 에러, 죽었으면 제거 후 재바인드.
+// ─── 전송 시임(transport seam) ──────────────────────────────────────────────
+// JSON-RPC 서버가 OS 전송을 만지는 유일한 경계. 오늘의 구현은 unix domain socket
+// 하나이고, Windows named pipe 전송(W2 M0)은 이 두 trait 를 구현해 같은 자리에
+// 꽂힌다 — handle_conn 이하 프로토콜 코드는 전송 종류를 모른다. 이 시임 밖에서
+// 플랫폼 소켓 타입을 쓰지 않는다.
+
+trait IpcConnection: std::io::Read + std::io::Write + Send {
+    // 같은 연결의 독립 핸들(handle_conn 의 reader/writer 분리용).
+    fn try_clone_conn(&self) -> std::io::Result<Box<dyn IpcConnection>>;
+}
+
+trait IpcListenerSeam: Send {
+    fn accept_conn(&self) -> std::io::Result<Box<dyn IpcConnection>>;
+}
+
+impl IpcConnection for UnixStream {
+    fn try_clone_conn(&self) -> std::io::Result<Box<dyn IpcConnection>> {
+        self.try_clone().map(|s| Box::new(s) as Box<dyn IpcConnection>)
+    }
+}
+
+struct UnixIpcListener(UnixListener);
+
+impl IpcListenerSeam for UnixIpcListener {
+    fn accept_conn(&self) -> std::io::Result<Box<dyn IpcConnection>> {
+        self.0.accept().map(|(s, _)| Box::new(s) as Box<dyn IpcConnection>)
+    }
+}
+
+// unix 전송 바인드. 죽은 소켓 정리·중복 인스턴스 거부·0600 퍼미션까지가 전송 소관 —
+// 잔존 소켓이 살아 있으면(다른 인스턴스) 에러, 죽었으면 제거 후 재바인드.
+fn bind_transport(path: &str) -> Result<Box<dyn IpcListenerSeam>, String> {
+    if std::path::Path::new(path).exists() {
+        if UnixStream::connect(path).is_ok() {
+            return Err(format!("이미 실행 중인 인스턴스가 소켓을 사용 중: {path}"));
+        }
+        let _ = std::fs::remove_file(path); // 죽은 소켓 정리
+    }
+    let listener = UnixListener::bind(path).map_err(|e| e.to_string())?;
+    // 로컬 사용자 전용(0600).
+    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    Ok(Box::new(UnixIpcListener(listener)))
+}
+
+// 소켓 서버 기동 — 전송은 bind_transport 시임 뒤에서 온다.
 pub fn start(app: AppHandle) -> Result<String, String> {
     let dir = crate::home::soksak_home();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let identifier = app.config().identifier.clone();
     let path = dir.join(format!("{identifier}.sock")).to_string_lossy().to_string();
 
-    if std::path::Path::new(&path).exists() {
-        if UnixStream::connect(&path).is_ok() {
-            return Err(format!("이미 실행 중인 인스턴스가 소켓을 사용 중: {path}"));
-        }
-        let _ = std::fs::remove_file(&path); // 죽은 소켓 정리
-    }
-    let listener = UnixListener::bind(&path).map_err(|e| e.to_string())?;
-    // 로컬 사용자 전용(0600).
-    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    let listener = bind_transport(&path)?;
     let _ = SOCKET_PATH.set(path.clone());
     // system.hello 의 startedAt — 서버 기동 시각을 1회 기록.
     let _ = STARTED_AT_MS.set(
@@ -195,12 +231,10 @@ pub fn start(app: AppHandle) -> Result<String, String> {
             .unwrap_or(0),
     );
 
-    std::thread::spawn(move || {
-        for stream in listener.incoming() {
-            let Ok(stream) = stream else { continue };
-            let app = app.clone();
-            std::thread::spawn(move || handle_conn(app, stream));
-        }
+    std::thread::spawn(move || loop {
+        let Ok(conn) = listener.accept_conn() else { continue };
+        let app = app.clone();
+        std::thread::spawn(move || handle_conn(app, conn));
     });
     Ok(path)
 }
@@ -212,16 +246,16 @@ pub fn cleanup() {
     }
 }
 
-fn handle_conn(app: AppHandle, stream: UnixStream) {
+fn handle_conn(app: AppHandle, conn: Box<dyn IpcConnection>) {
     let ctx = TransportCtx {
         identity: app.config().identifier.clone(),
         app_version: app.package_info().version.to_string(),
         pid: std::process::id(),
         started_at_ms: STARTED_AT_MS.get().copied().unwrap_or(0),
     };
-    let Ok(read_half) = stream.try_clone() else { return };
+    let Ok(read_half) = conn.try_clone_conn() else { return };
     let reader = BufReader::new(read_half);
-    let mut writer = stream;
+    let mut writer = conn;
     for line in reader.lines() {
         let Ok(line) = line else { break };
         if line.trim().is_empty() {
@@ -275,7 +309,7 @@ fn handle_conn(app: AppHandle, stream: UnixStream) {
 // since?=백필 커서(exclusive seq). 백필(링에서) 후 라이브 전환 — 구독자 큐는 bounded·drop-oldest
 // (느린 소비자가 발행을 못 막고, 유실은 seq gap 으로 드러나 클라이언트가 since 재접속으로 메꾼다).
 // 연결이 끊기면(write 실패) 구독 해지. 폴링 없음 — Condvar 대기.
-fn subscribe_stream(app: &AppHandle, req: Request, mut writer: UnixStream) {
+fn subscribe_stream(app: &AppHandle, req: Request, mut writer: Box<dyn IpcConnection>) {
     let kinds: Vec<String> = req
         .params
         .get("kinds")
@@ -663,6 +697,59 @@ mod tests {
         );
         let req = parse_request(&line).unwrap();
         assert!(transport_route(&req, &test_ctx()).is_none());
+    }
+
+    // ── 전송 시임 계약 ───────────────────────────────────────────────────────
+    // handle_conn 이하가 기대는 성질만 검사한다: accept 가 연결을 내주고, 클론 핸들로
+    // reader/writer 를 분리해 줄 단위 왕복이 성립한다. 플랫폼 전송(named pipe)이 이
+    // trait 쌍을 구현하면 같은 테스트 형태를 상속한다.
+
+    fn seam_test_path(tag: &str) -> String {
+        let p = std::env::temp_dir().join(format!("soksak-ipc-seam-{tag}-{}.sock", std::process::id()));
+        let s = p.to_string_lossy().to_string();
+        let _ = std::fs::remove_file(&s);
+        s
+    }
+
+    #[test]
+    fn transport_seam_round_trips_a_line() {
+        let path = seam_test_path("rt");
+        let listener = bind_transport(&path).expect("bind");
+        let server = std::thread::spawn(move || {
+            let conn = listener.accept_conn().expect("accept");
+            let mut reader = BufReader::new(conn.try_clone_conn().expect("clone"));
+            let mut line = String::new();
+            reader.read_line(&mut line).expect("read");
+            let mut writer = conn;
+            writeln!(writer, "echo:{}", line.trim()).expect("write");
+        });
+        let mut client = UnixStream::connect(&path).expect("connect");
+        writeln!(client, "ping").expect("client write");
+        let mut resp = String::new();
+        BufReader::new(client).read_line(&mut resp).expect("client read");
+        assert_eq!(resp.trim(), "echo:ping");
+        server.join().expect("server thread");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn stale_socket_file_is_replaced_on_bind() {
+        let path = seam_test_path("stale");
+        drop(bind_transport(&path).expect("first bind"));
+        // 리스너가 죽었지만 소켓 파일은 남는다 — 재바인드가 정리하고 성공해야 한다.
+        assert!(std::path::Path::new(&path).exists(), "socket file survives the listener");
+        let rebound = bind_transport(&path);
+        assert!(rebound.is_ok(), "stale socket must be cleaned and rebound: {:?}", rebound.err());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn live_socket_refuses_a_second_instance() {
+        let path = seam_test_path("live");
+        let _held = bind_transport(&path).expect("first bind");
+        let second = bind_transport(&path);
+        assert!(second.is_err(), "a live socket must refuse a second bind");
+        let _ = std::fs::remove_file(&path);
     }
 
     // timeout 클램프 경계 — 핵심: >600s(구 상한)가 그대로 통과해야 LLM 30분+ 턴을 끝까지 기다린다.
