@@ -90,16 +90,15 @@ describe("게이트 exit code — blocking 위반 0 실측", () => {
     expect(r.out).toContain("command-surface(blocking): 위반 1");
   });
 
-  it("warn 규칙(content-view-status)만 위반이면 보고하되 exit 0(래칫)", () => {
+  it("content-view-status 위반은 blocking 승격분 — exit 1 로 거부", () => {
     writePlugin("soksak-plugin-status-gap", {
       views: [{ id: "c", title: "C", icon: "C", placements: ["content"] }],
       commands: [{ name: "open", title: "O" }],
       nodes: [{ id: "root" }],
     });
     const r = runGate(root);
-    expect(r.status).toBe(0);
-    expect(r.out).toContain("content-view-status(warn): 위반 1");
-    expect(r.out).toContain("PASS");
+    expect(r.status).toBe(1);
+    expect(r.out).toContain("content-view-status(blocking): 위반 1");
   });
 
   it("위반 0 이면 exit 0", () => {
@@ -113,21 +112,21 @@ describe("게이트 exit code — blocking 위반 0 실측", () => {
     expect(r.out).toContain("PASS");
   });
 
-  it("blockingViolationCount — warn 규칙 카운트는 실패 조건에 안 들어간다", () => {
+  it("blockingViolationCount — 정적 3종 전부 blocking 이라 모두 실패 조건", () => {
     expect(
       blockingViolationCount({
         "command-surface": [],
         "view-nodes": [],
         "content-view-status": ["a", "b"],
       }),
-    ).toBe(0);
+    ).toBe(2);
     expect(
       blockingViolationCount({
         "command-surface": ["a"],
         "view-nodes": ["b"],
         "content-view-status": ["c"],
       }),
-    ).toBe(2);
+    ).toBe(3);
   });
 });
 
