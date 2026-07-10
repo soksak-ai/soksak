@@ -973,6 +973,44 @@ pub fn webview_visible(app: AppHandle, label: String, visible: bool) -> Result<(
                 let _ = wv.set_focus();
             }
         } else {
+            // 숨기기 전에, 이 webview(또는 그 자손)가 firstResponder 면 반납한다 — 숨은 WKWebView 가
+            // responder 를 쥔 채 남으면 다음 실클릭 한 번이 responder 전환에 소모되어 앱 DOM 의 첫
+            // 클릭(탭 전환 등)이 무시된다. show 쪽 set_focus(3d639a5)의 대칭: native↔native 전환은
+            // show 가 즉시 responder 를 가져가 가려졌지만, offscreen 탭처럼 아무도 네이티브 포커스를
+            // 가져가지 않는 전환에서 드러난다. makeFirstResponder(nil) 은 창 자신이 responder 가 되어
+            // 다음 클릭이 정상 hit-test 로 즉시 전달된다.
+            #[cfg(target_os = "macos")]
+            {
+                let _ = wv.with_webview(|pw| unsafe {
+                    use objc2::runtime::AnyObject;
+                    use objc2::{class, msg_send};
+                    let view = pw.inner() as *mut AnyObject;
+                    if view.is_null() {
+                        return;
+                    }
+                    let win: *mut AnyObject = msg_send![&*view, window];
+                    if win.is_null() {
+                        return;
+                    }
+                    let mut r: *mut AnyObject = msg_send![&*win, firstResponder];
+                    let mut is_ours = false;
+                    while !r.is_null() {
+                        if std::ptr::eq(r, view) {
+                            is_ours = true;
+                            break;
+                        }
+                        let is_view: bool = msg_send![&*r, isKindOfClass: class!(NSView)];
+                        if !is_view {
+                            break;
+                        }
+                        r = msg_send![&*r, superview];
+                    }
+                    if is_ours {
+                        let _: bool =
+                            msg_send![&*win, makeFirstResponder: std::ptr::null::<AnyObject>()];
+                    }
+                });
+            }
             wv.hide().map_err(|e| e.to_string())?;
         }
     }
