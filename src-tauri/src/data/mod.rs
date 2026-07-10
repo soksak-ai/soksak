@@ -15,6 +15,7 @@ use rusqlite::Connection;
 pub mod backup;
 pub mod commands;
 pub mod crypto;
+pub mod ring;
 pub mod store;
 
 // 단일 쓰기 커넥션(Mutex). SQLite WAL 은 읽기 동시·쓰기 단일 — 이 한 커넥션을 직렬화한다.
