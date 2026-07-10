@@ -4,7 +4,9 @@
 // the store so the run is idempotent and opens no windows:
 //   a. system.hello answers at the transport with the full negotiation payload.
 //   b. a request declaring protocol 999 is refused with VERSION_SKEW — a directional
-//      sentence (both version numbers + the stale side) and a data triple of numbers.
+//      sentence (both version numbers + the stale side) and a data triple of numbers;
+//      a skewed events.subscribe is gated before it converts the connection to a push
+//      stream, so the reply is VERSION_SKEW and never a `subscribed` ack (order pin).
 //   c. a legacy request (no protocol field) passes the gate and executes.
 //   d. system.hello is discoverable in the state.commands catalog.
 //   e. window.snapshot captures a live render (size reported for eyeball sizing).
@@ -129,6 +131,18 @@ async function main() {
   ok(d.appProtocol === hello.protocol, `data.appProtocol == app protocol (${d.appProtocol})`);
   ok(Number.isInteger(d.minClientProtocol), `data.minClientProtocol present (${d.minClientProtocol})`);
   ok(d.clientProtocol === 999, `data.clientProtocol == 999 (${d.clientProtocol})`);
+
+  // events.subscribe is a transport-level method: on a compatible peer it answers a
+  // `subscribed` ack and turns the connection into a push stream. The version gate must
+  // intercept it before that conversion, so a skewed subscribe comes back as a plain
+  // VERSION_SKEW envelope and never opens a stream. This pins the gate-before-subscribe
+  // order — a refactor that moves the subscribe branch ahead of the gate fails here.
+  // The skewed request stays a normal request/response (no stream), so the shared
+  // connection is undisturbed for the checks that follow.
+  const subSkew = await rpc("events.subscribe", {}, { protocol: 999 });
+  ok(subSkew.ok === false, "skewed events.subscribe refused (ok:false)");
+  ok(subSkew.code === "VERSION_SKEW", `events.subscribe skew code VERSION_SKEW (${subSkew.code})`);
+  ok(subSkew.subscribed !== true, "skewed events.subscribe opened no stream (no subscribed ack)");
 
   // ── c. legacy quadrant: no protocol field passes ───────────────────────────
   console.log("\nc. legacy passthrough (no protocol field)");
