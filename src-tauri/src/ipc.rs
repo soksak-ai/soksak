@@ -115,10 +115,45 @@ struct TransportCtx {
 }
 
 // transport 레벨 라우트: 프론트 미경유 즉답(webview 가 행이어도 답한다 — 진단 가치).
-// RED 상태 — 아직 아무것도 답하지 않는다: 모든 요청이 그대로 dispatch 로 흐른다.
+// ① system.hello — 협상 프리미티브. 스큐 게이트 면제: 스큐된 클라이언트가 두 판 숫자를
+//    배울 유일한 통로가 hello 다. capabilities 는 전송층 행위만 싣는다 — 기능 발견은
+//    state.commands 카탈로그가 단일진실.
+// ② VERSION_SKEW 게이트 — soksak-protocol 호환창 밖의 요청은 dispatch(프론트 registry)에
+//    도달하지 못한다. 부재=0 규칙으로 레거시(hello 생략) 클라이언트는 그대로 통과한다.
+//    거부 message 는 방향 명시 한 문장(낡은 쪽+두 판 숫자+해결 명령), data 에 숫자 3종 —
+//    에이전트가 파싱으로 자가 판정한다.
 fn transport_route(req: &Request, ctx: &TransportCtx) -> Option<Value> {
-    let _ = (req, ctx);
-    None
+    use soksak_protocol::{
+        effective_protocol, evaluate_compat, skew_sentence, Compat,
+        MIN_COMPATIBLE_CLIENT_PROTOCOL, SOCKET_PROTOCOL_VERSION,
+    };
+    if req.method == "system.hello" {
+        return Some(json!({
+            "ok": true,
+            "protocol": SOCKET_PROTOCOL_VERSION,
+            "minClientProtocol": MIN_COMPATIBLE_CLIENT_PROTOCOL,
+            "appVersion": ctx.app_version,
+            "identity": ctx.identity,
+            "pid": ctx.pid,
+            "startedAt": ctx.started_at_ms,
+            "capabilities": ["hello.v1"],
+        }));
+    }
+    let declared = effective_protocol(req.protocol);
+    let verdict = evaluate_compat(SOCKET_PROTOCOL_VERSION, MIN_COMPATIBLE_CLIENT_PROTOCOL, declared);
+    let remedy = match verdict {
+        Compat::Compatible => None,
+        Compat::PeerTooOld { .. } => Some("run the sok bundled with this app or rerun `sok mcp install`"),
+        Compat::SelfTooOld { .. } => Some("install the app build this client shipped with"),
+    };
+    let sentence = skew_sentence(verdict, "the app", "the client", remedy)?;
+    let mut reply = error_reply("VERSION_SKEW", &sentence);
+    reply["data"] = json!({
+        "appProtocol": SOCKET_PROTOCOL_VERSION,
+        "minClientProtocol": MIN_COMPATIBLE_CLIENT_PROTOCOL,
+        "clientProtocol": declared,
+    });
+    Some(reply)
 }
 
 // 명령 응답 대기 timeout(ms) 정규화. 미지정 시 기본 10s(빠른 행 감지). [1s, 3600s] 클램프:
@@ -152,6 +187,13 @@ pub fn start(app: AppHandle) -> Result<String, String> {
     // 로컬 사용자 전용(0600).
     let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     let _ = SOCKET_PATH.set(path.clone());
+    // system.hello 의 startedAt — 서버 기동 시각을 1회 기록.
+    let _ = STARTED_AT_MS.set(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0),
+    );
 
     std::thread::spawn(move || {
         for stream in listener.incoming() {
@@ -171,6 +213,12 @@ pub fn cleanup() {
 }
 
 fn handle_conn(app: AppHandle, stream: UnixStream) {
+    let ctx = TransportCtx {
+        identity: app.config().identifier.clone(),
+        app_version: app.package_info().version.to_string(),
+        pid: std::process::id(),
+        started_at_ms: STARTED_AT_MS.get().copied().unwrap_or(0),
+    };
     let Ok(read_half) = stream.try_clone() else { return };
     let reader = BufReader::new(read_half);
     let mut writer = stream;
@@ -188,6 +236,28 @@ fn handle_conn(app: AppHandle, stream: UnixStream) {
             }
             Ok(req) => req,
         };
+        // transport 선점(hello 즉답+스큐 게이트) — events.subscribe 포함 전 명령이 게이트를
+        // 지나도록 dispatch/subscribe 보다 먼저 평가한다. id echo 는 여기서 직접 박는다.
+        if let Some(mut reply) = transport_route(&req, &ctx) {
+            if reply["code"] == "VERSION_SKEW" {
+                // 스큐 거부는 registry 계측에 도달하지 못하는 실행이다 — 라우팅 계층 기록
+                // 계약(command.executed)과 동일하게 여기서 발행해 관찰 공백을 막는다.
+                let target = req.window.clone().unwrap_or_else(active_window);
+                let message = reply["message"].as_str().unwrap_or_default().to_string();
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+                record_route_outcome(&app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "VERSION_SKEW", &message, now);
+            }
+            if let (Some(cid), Some(obj)) = (req.id.clone(), reply.as_object_mut()) {
+                obj.insert("id".into(), cid);
+            }
+            if writeln!(writer, "{reply}").is_err() {
+                break;
+            }
+            continue;
+        }
         // events.subscribe 는 transport 레벨(A2 — window.reload 선례): 확인 응답 1회 후 이
         // 연결을 push 스트림으로 전환한다(요청-응답 프로토콜에서 이탈 — 연결 수명 = 구독 수명).
         if req.method == "events.subscribe" {
