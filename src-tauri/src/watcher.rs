@@ -3,7 +3,7 @@
 // 이뤄, 프론트가 "펼친(로드된) 디렉토리"만 비재귀로 watch 하고, 변경 시 그 디렉토리만
 // 다시 list 해 증분 반영한다. 거대 트리 전체를 재귀 감시하지 않으므로 폭주하지 않는다.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -14,14 +14,16 @@ use tauri::{AppHandle, Emitter, State};
 
 pub struct FsWatcher {
     debouncer: Mutex<Option<Debouncer<RecommendedWatcher>>>,
-    watched: Mutex<HashSet<PathBuf>>,
+    // 경로 → 소비자 refcount. OS watch 는 경로당 1개(0→1 에서 장착, 1→0 에서 해제).
+    // 여러 창·플러그인이 같은 경로를 watch 해도 서로의 해제에 깨지지 않는다(W8 M1 dedup 계약).
+    watched: Mutex<HashMap<PathBuf, usize>>,
 }
 
 impl Default for FsWatcher {
     fn default() -> Self {
         Self {
             debouncer: Mutex::new(None),
-            watched: Mutex::new(HashSet::new()),
+            watched: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -30,6 +32,13 @@ impl FsWatcher {
     // 앱 setup 에서 1회 초기화. 변경 이벤트의 "부모 디렉토리"를 프론트로 emit 한다
     // (디렉토리 D 안에 파일/폴더가 추가·삭제·이름변경되면 그 변화는 D 에서 관찰된다).
     pub fn init(&self, app: AppHandle) {
+        self.init_with(move |d| {
+            let _ = app.emit("fs-change", d);
+        });
+    }
+
+    // emit 싱크 주입판 — 코어는 AppHandle 로, 테스트는 채널로 관찰한다.
+    pub fn init_with(&self, sink: impl Fn(String) + Send + 'static) {
         let debouncer = new_debouncer(
             Duration::from_millis(250),
             move |res: DebounceEventResult| {
@@ -42,7 +51,7 @@ impl FsWatcher {
                     }
                 }
                 for d in dirs {
-                    let _ = app.emit("fs-change", d);
+                    sink(d);
                 }
             },
         );
@@ -50,39 +59,59 @@ impl FsWatcher {
             *self.debouncer.lock().unwrap() = Some(d);
         }
     }
+
+    // 감시 등록 — refcount 를 올리고, 첫 소비자(0→1)에서만 OS watch 를 장착한다.
+    // 반환 = 등록 후 refcount(관찰면 — 커맨드 응답으로 노출).
+    pub fn watch(&self, path: &str) -> Result<usize, String> {
+        let pb = PathBuf::from(path);
+        let mut watched = self.watched.lock().map_err(|e| e.to_string())?;
+        if let Some(n) = watched.get_mut(&pb) {
+            *n += 1;
+            return Ok(*n);
+        }
+        let mut guard = self.debouncer.lock().map_err(|e| e.to_string())?;
+        if let Some(d) = guard.as_mut() {
+            d.watcher()
+                .watch(&pb, RecursiveMode::NonRecursive)
+                .map_err(|e| e.to_string())?;
+            watched.insert(pb, 1);
+            return Ok(1);
+        }
+        Err("워처 미초기화".into())
+    }
+
+    // 감시 해제 — refcount 를 내리고, 마지막 소비자(1→0)에서만 OS watch 를 해제한다.
+    // 미등록 경로 해제는 no-op(멱등). 반환 = 해제 후 refcount.
+    pub fn unwatch(&self, path: &str) -> Result<usize, String> {
+        let pb = PathBuf::from(path);
+        let mut watched = self.watched.lock().map_err(|e| e.to_string())?;
+        let Some(n) = watched.get_mut(&pb) else {
+            return Ok(0);
+        };
+        *n -= 1;
+        if *n > 0 {
+            return Ok(*n);
+        }
+        watched.remove(&pb);
+        let mut guard = self.debouncer.lock().map_err(|e| e.to_string())?;
+        if let Some(d) = guard.as_mut() {
+            let _ = d.watcher().unwatch(&pb);
+        }
+        Ok(0)
+    }
 }
 
-// 디렉토리 하나를 비재귀로 감시(이미 감시 중이면 무시). lazy 트리가 폴더를 로드할 때 호출.
+// 디렉토리 하나를 비재귀로 감시. lazy 트리가 폴더를 로드할 때·플러그인이 fs.watch 로 호출.
+// 반환 = 등록 후 refcount.
 #[tauri::command]
-pub fn watch_dir(state: State<FsWatcher>, path: String) -> Result<(), String> {
-    let pb = PathBuf::from(&path);
-    let mut watched = state.watched.lock().map_err(|e| e.to_string())?;
-    if watched.contains(&pb) {
-        return Ok(());
-    }
-    let mut guard = state.debouncer.lock().map_err(|e| e.to_string())?;
-    if let Some(d) = guard.as_mut() {
-        d.watcher()
-            .watch(&pb, RecursiveMode::NonRecursive)
-            .map_err(|e| e.to_string())?;
-        watched.insert(pb);
-    }
-    Ok(())
+pub fn watch_dir(state: State<FsWatcher>, path: String) -> Result<usize, String> {
+    state.watch(&path)
 }
 
-// 디렉토리 감시 해제(트리 언마운트·서브트리 삭제 시 FSEvents 핸들 정리).
+// 디렉토리 감시 해제(트리 언마운트·서브트리 삭제 시 FSEvents 핸들 정리). 반환 = 해제 후 refcount.
 #[tauri::command]
-pub fn unwatch_dir(state: State<FsWatcher>, path: String) -> Result<(), String> {
-    let pb = PathBuf::from(&path);
-    let mut watched = state.watched.lock().map_err(|e| e.to_string())?;
-    if !watched.remove(&pb) {
-        return Ok(());
-    }
-    let mut guard = state.debouncer.lock().map_err(|e| e.to_string())?;
-    if let Some(d) = guard.as_mut() {
-        let _ = d.watcher().unwatch(&pb);
-    }
-    Ok(())
+pub fn unwatch_dir(state: State<FsWatcher>, path: String) -> Result<usize, String> {
+    state.unwatch(&path)
 }
 
 #[cfg(test)]
@@ -131,6 +160,54 @@ mod tests {
             .recv_timeout(Duration::from_secs(8))
             .expect("워처가 새 파일 이벤트를 보고하지 않음");
         assert_eq!(got, dir.to_string_lossy(), "보고된 부모 디렉토리가 감시 대상과 일치");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // W8 M1 dedup 계약 — 같은 경로를 두 소비자(창·플러그인)가 watch 하면, 한쪽의 unwatch 가
+    // 다른 쪽의 감시를 죽이지 못한다. OS watch 는 경로당 1개, 해제는 마지막 소비자에서만.
+    #[test]
+    fn shared_path_unwatch_keeps_other_consumer() {
+        let dir = std::env::temp_dir().join(format!(
+            "soksak-watch-ref-{}-{}",
+            std::process::id(),
+            Instant::now().elapsed().as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = dir.canonicalize().unwrap();
+        let path = dir.to_string_lossy().to_string();
+
+        let (tx, rx) = mpsc::channel::<String>();
+        let w = FsWatcher::default();
+        w.init_with(move |d| {
+            let _ = tx.send(d);
+        });
+
+        // 소비자 2명이 같은 경로를 watch — 두 번째는 OS watch 를 늘리지 않고 refcount 만 올린다.
+        assert_eq!(w.watch(&path).unwrap(), 1);
+        assert_eq!(w.watch(&path).unwrap(), 2);
+
+        // 한 소비자가 해제 — 남은 소비자의 감시는 살아 있어야 한다.
+        assert_eq!(w.unwatch(&path).unwrap(), 1);
+
+        std::thread::sleep(Duration::from_millis(300)); // 워처 무장 대기
+        std::fs::write(dir.join("still-watched.txt"), b"x").unwrap();
+        let got = rx
+            .recv_timeout(Duration::from_secs(8))
+            .expect("공유 경로 unwatch 후 남은 소비자의 이벤트가 유실됨");
+        assert_eq!(got, dir.to_string_lossy());
+
+        // 마지막 소비자 해제 → OS watch 도 해제. 이후 변경은 이벤트가 없어야 한다.
+        assert_eq!(w.unwatch(&path).unwrap(), 0);
+        // 미등록 경로 해제는 no-op 멱등.
+        assert_eq!(w.unwatch(&path).unwrap(), 0);
+        std::thread::sleep(Duration::from_millis(300));
+        std::fs::write(dir.join("no-longer-watched.txt"), b"x").unwrap();
+        assert!(
+            rx.recv_timeout(Duration::from_millis(1200)).is_err(),
+            "전원 해제 후에도 이벤트가 발화됨"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }
