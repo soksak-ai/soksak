@@ -272,6 +272,7 @@ function serializeView(v: View) {
     kind: v.kind,
     title: v.title,
     customLabel: v.customLabel,
+    icon: v.icon,
     plugin: v.pluginId,
     view: v.view,
   };
