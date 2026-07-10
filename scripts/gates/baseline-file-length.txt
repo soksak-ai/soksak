@@ -5,7 +5,7 @@
 packages/plugin-spec/src/spec.ts 1681
 src-tauri/cli/src/lib.rs 1694
 src-tauri/src/webview.rs 1538
-src/commands/catalog.ts 2729
-src/i18n.ts 1505
+src/commands/catalog.ts 2731
+src/i18n.ts 1507
 src/plugins/api.ts 1816
 src/state/sessions.ts 1721

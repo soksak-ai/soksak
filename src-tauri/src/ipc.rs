@@ -688,10 +688,10 @@ mod tests {
         let ctx = test_ctx();
         let facts = hello_facts(&ctx);
         assert!(facts.get("ok").is_none(), "hello_facts 는 사실만 — 봉투 ok 는 밖에서 얹는다");
-        let req = parse_request(r#"{"method":"system.hello"}"#).unwrap();
+        let req = parse_request(r#"{"method":"system.hello"}"#).expect("valid hello request");
         let reply = transport_route(&req, &ctx).expect("hello answered at transport");
         assert_eq!(reply["ok"], true);
-        for (k, v) in facts.as_object().unwrap() {
+        for (k, v) in facts.as_object().expect("hello_facts is a json object") {
             assert_eq!(&reply[k], v, "transport hello field {k} must derive from hello_facts");
         }
     }
