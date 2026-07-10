@@ -174,8 +174,8 @@ mod tests {
             Instant::now().elapsed().as_nanos()
         ));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let dir = dir.canonicalize().unwrap();
+        std::fs::create_dir_all(&dir).expect("픽스처 디렉토리 생성");
+        let dir = dir.canonicalize().expect("픽스처 경로 정규화");
         let path = dir.to_string_lossy().to_string();
 
         let (tx, rx) = mpsc::channel::<String>();
@@ -185,25 +185,25 @@ mod tests {
         });
 
         // 소비자 2명이 같은 경로를 watch — 두 번째는 OS watch 를 늘리지 않고 refcount 만 올린다.
-        assert_eq!(w.watch(&path).unwrap(), 1);
-        assert_eq!(w.watch(&path).unwrap(), 2);
+        assert_eq!(w.watch(&path).expect("첫 watch 등록"), 1);
+        assert_eq!(w.watch(&path).expect("둘째 watch 등록"), 2);
 
         // 한 소비자가 해제 — 남은 소비자의 감시는 살아 있어야 한다.
-        assert_eq!(w.unwatch(&path).unwrap(), 1);
+        assert_eq!(w.unwatch(&path).expect("부분 해제"), 1);
 
         std::thread::sleep(Duration::from_millis(300)); // 워처 무장 대기
-        std::fs::write(dir.join("still-watched.txt"), b"x").unwrap();
+        std::fs::write(dir.join("still-watched.txt"), b"x").expect("픽스처 파일 쓰기");
         let got = rx
             .recv_timeout(Duration::from_secs(8))
             .expect("공유 경로 unwatch 후 남은 소비자의 이벤트가 유실됨");
         assert_eq!(got, dir.to_string_lossy());
 
         // 마지막 소비자 해제 → OS watch 도 해제. 이후 변경은 이벤트가 없어야 한다.
-        assert_eq!(w.unwatch(&path).unwrap(), 0);
+        assert_eq!(w.unwatch(&path).expect("최종 해제"), 0);
         // 미등록 경로 해제는 no-op 멱등.
-        assert_eq!(w.unwatch(&path).unwrap(), 0);
+        assert_eq!(w.unwatch(&path).expect("멱등 해제"), 0);
         std::thread::sleep(Duration::from_millis(300));
-        std::fs::write(dir.join("no-longer-watched.txt"), b"x").unwrap();
+        std::fs::write(dir.join("no-longer-watched.txt"), b"x").expect("픽스처 파일 쓰기");
         assert!(
             rx.recv_timeout(Duration::from_millis(1200)).is_err(),
             "전원 해제 후에도 이벤트가 발화됨"
