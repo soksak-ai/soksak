@@ -240,5 +240,11 @@ the engine, plus `-spec`). The scope names the domain, never the implementation
 (a protocol-compatible replacement engine must not self-report someone else's
 name) and never the model (models are machine-encoded, banned from names —
 SIDECARS.md §1). Its sole job is the version handshake between
-independently-shipped artifacts (plugin JS ↔ engine dylib); it appears nowhere
-else.
+independently-shipped artifacts. It appears in exactly two declared surfaces:
+the sidecar handshake (`sidecars[].interface` — plugin JS ↔ engine dylib) and
+the plugin manifest's `implements` declaration (`implements:
+["<scope>-spec@<major>"]` — the L2 contract-pin, C3: a plugin declares the
+contracts it implements, and discovery is contract-addressed and
+implementation-blind). It appears nowhere else. A major bump mints a distinct
+id — `<scope>-spec@2` promises nothing about `@1`; revising this section's
+surface list is itself re-legislation (C4), never a silent addition.
