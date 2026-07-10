@@ -249,7 +249,8 @@ fn run_events(args: &[String]) -> ExitCode {
         }
     };
     let mut w = stream.try_clone().expect("소켓 클론 실패");
-    let req = json!({ "id": 1, "method": "events.subscribe", "params": params });
+    // 구독(장수 연결)도 같은 봉투 빌더를 지난다 — 봉투 계약의 단일 지점 유지.
+    let req = build_request("events.subscribe", params, None, None, None, None);
     if writeln!(w, "{req}").is_err() {
         eprintln!("구독 요청 전송 실패");
         return ExitCode::FAILURE;
@@ -260,6 +261,39 @@ fn run_events(args: &[String]) -> ExitCode {
         println!("{line}");
     }
     ExitCode::SUCCESS
+}
+
+// 요청 봉투 빌더(순수) — 모든 소켓 요청(단발 왕복·events 구독·MCP 위임)이 여기서 태어난다.
+// 봉투 계약의 단일 지점: 선택 필드(pane/window/parent/timeoutMs)는 값이 있을 때만 실린다.
+fn build_request(
+    method: &str,
+    params: Value,
+    pane: Option<String>,
+    window: Option<String>,
+    parent: Option<String>,
+    timeout_ms: Option<u64>,
+) -> Value {
+    let mut req = json!({ "id": 1, "method": method, "params": params });
+    if let Some(p) = pane {
+        req["pane"] = json!(p);
+    }
+    if let Some(w) = window {
+        req["window"] = json!(w);
+    }
+    if let Some(p) = parent {
+        req["parent"] = json!(p);
+    }
+    if let Some(t) = timeout_ms {
+        req["timeoutMs"] = json!(t);
+    }
+    req
+}
+
+// hello 응답 판정(순수) — 클라이언트 쪽 시선: sok 자신이 own, 앱이 peer.
+// RED 상태 — 아직 판정하지 않는다: 어떤 응답도 무언 통과한다.
+fn judge_hello_reply(reply: &Value) -> Result<String, String> {
+    let _ = reply;
+    Ok(String::new())
 }
 
 // 소켓 JSON-RPC 1회 왕복. pane/window/timeout 명시값이 있으면 우선, 없으면 env(SOKSAK_PANE/WINDOW) 사용.
@@ -274,25 +308,19 @@ fn send_request(
     let sock = resolve_socket()?;
     let mut stream =
         UnixStream::connect(&sock).map_err(|e| format!("소켓 연결 실패({}): {e}", sock.display()))?;
-    let mut req = json!({ "id": 1, "method": method, "params": params });
-    if let Some(p) = pane.or_else(|| std::env::var("SOKSAK_PANE").ok()) {
-        req["pane"] = json!(p);
-    }
-    // 멀티 윈도우 타겟 창: 명시 > --window > SOKSAK_WINDOW. 생략 시 코어가 활성 창으로 라우팅.
-    if let Some(w) = window
-        .or_else(|| WINDOW_OVERRIDE.get().cloned().flatten())
-        .or_else(|| std::env::var("SOKSAK_WINDOW").ok())
-    {
-        req["window"] = json!(w);
-    }
-    // 상관 부모(SOKSAK_PARENT — 오케스트레이터가 스폰한 에이전트에 주입). 이 실행에서 비롯된
-    // 활동 엔트리가 그 대화 턴(parentId)으로 묶인다. pane/window 와 같은 env 컨텍스트 모델.
-    if let Some(p) = std::env::var("SOKSAK_PARENT").ok().filter(|s| !s.is_empty()) {
-        req["parent"] = json!(p);
-    }
-    if let Some(t) = timeout_ms {
-        req["timeoutMs"] = json!(t);
-    }
+    let req = build_request(
+        method,
+        params,
+        pane.or_else(|| std::env::var("SOKSAK_PANE").ok()),
+        // 멀티 윈도우 타겟 창: 명시 > --window > SOKSAK_WINDOW. 생략 시 코어가 활성 창으로 라우팅.
+        window
+            .or_else(|| WINDOW_OVERRIDE.get().cloned().flatten())
+            .or_else(|| std::env::var("SOKSAK_WINDOW").ok()),
+        // 상관 부모(SOKSAK_PARENT — 오케스트레이터가 스폰한 에이전트에 주입). 이 실행에서 비롯된
+        // 활동 엔트리가 그 대화 턴(parentId)으로 묶인다. pane/window 와 같은 env 컨텍스트 모델.
+        std::env::var("SOKSAK_PARENT").ok().filter(|s| !s.is_empty()),
+        timeout_ms,
+    );
     writeln!(stream, "{req}").map_err(|e| format!("요청 전송 실패: {e}"))?;
     let mut line = String::new();
     BufReader::new(stream)
@@ -1411,6 +1439,65 @@ mod tests {
         let (fm2, body2) = split_directives("frontmatter 없는 본문");
         assert!(fm2.is_none());
         assert_eq!(body2, "frontmatter 없는 본문");
+    }
+
+    // ── 프로토콜 협상(판 선언 + system.hello 판정) ───────────────────────────
+
+    // 모든 소켓 요청 봉투는 자기 판을 선언한다 — 앱 쪽 VERSION_SKEW 게이트의 재료.
+    // 라이브 실측 RED(2026-07-11): 현행 sok 요청에 protocol 필드가 없다(레거시=0 취급만 가능).
+    #[test]
+    fn every_request_declares_protocol() {
+        let req = build_request("state.tree", Value::Null, None, None, None, None);
+        assert_eq!(req["protocol"], soksak_protocol::SOCKET_PROTOCOL_VERSION);
+        assert_eq!(req["method"], "state.tree");
+        // 구독(장수 연결)도 같은 빌더를 지난다 — 게이트에 빠짐없이 걸린다.
+        let sub = build_request("events.subscribe", json!({"kinds":["command"]}), None, None, None, None);
+        assert_eq!(sub["protocol"], soksak_protocol::SOCKET_PROTOCOL_VERSION);
+    }
+
+    // 봉투 계약: 선택 필드는 값이 있을 때만 — 빌더 추출이 기존 배선을 보존함을 고정한다.
+    #[test]
+    fn envelope_optional_fields_only_when_present() {
+        let bare = build_request("state.tree", Value::Null, None, None, None, None);
+        for k in ["pane", "window", "parent", "timeoutMs"] {
+            assert!(bare.get(k).is_none(), "{k} 는 값 없으면 실리지 않는다");
+        }
+        let full = build_request(
+            "term.read",
+            json!({"lines": 5}),
+            Some("p1".into()),
+            Some("w-abc".into()),
+            Some("turn-7".into()),
+            Some(30_000),
+        );
+        assert_eq!(full["pane"], "p1");
+        assert_eq!(full["window"], "w-abc");
+        assert_eq!(full["parent"], "turn-7");
+        assert_eq!(full["timeoutMs"], 30_000);
+    }
+
+    // 같은 판은 호환. 협상 이전 앱(hello 를 프론트로 흘려 ok:false)은 판 0 — floor 0 인 동안 호환.
+    #[test]
+    fn hello_verdict_compatible_for_current_and_legacy() {
+        let modern = json!({"ok": true, "protocol": soksak_protocol::SOCKET_PROTOCOL_VERSION});
+        let summary = judge_hello_reply(&modern).expect("같은 판은 호환");
+        assert!(summary.contains("compatible"), "요약에 판정 명시: {summary}");
+        let legacy = json!({"ok": false, "code": "UNKNOWN_COMMAND", "message": "unknown"});
+        let summary = judge_hello_reply(&legacy).expect("floor 0 인 동안 구세대 앱은 호환");
+        assert!(summary.contains('0'), "구세대=판 0 명시: {summary}");
+    }
+
+    // 앱이 더 새 판이면 sok 이 낡은 쪽 — 방향 명시 문장으로 거부.
+    #[test]
+    fn hello_verdict_rejects_newer_app() {
+        let reply = json!({"ok": true, "protocol": 999});
+        let err = judge_hello_reply(&reply).expect_err("판이 앞선 앱은 거부");
+        assert!(err.contains("999"), "앱 판 숫자: {err}");
+        assert!(
+            err.contains(&soksak_protocol::SOCKET_PROTOCOL_VERSION.to_string()),
+            "sok 판 숫자: {err}"
+        );
+        assert!(err.contains("update this sok"), "낡은 쪽 명시: {err}");
     }
 
     // env 토큰 검증 — dev|debug|app 만.

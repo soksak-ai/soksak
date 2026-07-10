@@ -8,4 +8,6 @@ edition = "2021"
 # 이름별 실물 바이너리 3개(src/bin/) — 공용 본체는 lib(src/lib.rs). 링크·복사 없음(P9).
 
 [dependencies]
+# 소켓 프로토콜 계약(버전 상수+호환창+순수 판정) — 앱과 공유하는 단일진실, 상수 사본 금지.
+soksak-protocol = { path = "../protocol" }
 serde_json = "1"
