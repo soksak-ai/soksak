@@ -18,7 +18,7 @@
 // 사용: node scripts/gates/baseline-gate.mjs [--init|--prune] [--root <dir>]
 // 짝 테스트: scripts/gates/baseline-gate.test.mjs (vitest)
 
-import { readdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -146,6 +146,7 @@ function readBaseline(root, metric) {
 function writeBaseline(root, metric, map) {
   const entries = [...map.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
   const body = entries.map(([f, v]) => `${f} ${v}`).join("\n");
+  mkdirSync(join(root, "scripts/gates"), { recursive: true });
   writeFileSync(baselinePath(root, metric), `${metric.headerLines.join("\n")}\n${body}${body ? "\n" : ""}`);
 }
 
