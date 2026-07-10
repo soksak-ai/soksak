@@ -1070,15 +1070,12 @@ export function registerPluginCatalog(): void {
       const c2Violations: TransparencyViolation[] = [
         ...transparencyViolations(c),
       ];
-      if (unreported.length > 0) {
-        c2Violations.push({
-          rule: "view-status",
-          detail: `status 선언 뷰의 마운트 인스턴스 ${unreported.length}개가 미보고: ${unreported.join(", ")}`,
-        });
-      }
+      // unreported 는 위반이 아니라 정보다 — status 축의 의미론은 null=보고할 것 없음(정상)이고,
+      // 순간 관찰의 null 은 transient(connecting 등)가 관측창보다 빨랐다는 뜻일 뿐이다. 위반은
+      // 선언 밖 코드 보고(undeclared) 하나 — 그것이 선언≡보고의 기계 판정 가능한 전부다.
       if (undeclared.length > 0) {
         c2Violations.push({
-          rule: "content-view-status",
+          rule: "view-status",
           detail: `보고된 status 코드가 선언에 없음(선언 누락): ${undeclared
             .map((u) => `${u.viewId}(${u.view})=${u.code}`)
             .join(", ")} — contributes.views[].status 에 실어라`,

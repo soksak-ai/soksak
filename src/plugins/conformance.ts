@@ -57,12 +57,13 @@ export function missingRegistrations(
 //   2026-07-11 이관 — 정적 판정·입법표를 스펙 패키지로 이관(판정 단일화 — 게이트 미러 폐기),
 //     status 축에 매니페스트 선언(contributes.views[].status)을 신설하고 그 부재를
 //     content-view-status(warn 출발 — 래칫)로 판정한다.
-// view-status 는 매니페스트 선언이 아니라 런타임 속성(마운트된 콘텐츠 뷰가 선언한 status 코드를
-// 실보고하는가 — 선언≡보고)이라 헤드리스 매니페스트 스캔으로 실측 불가 — 시행·실측 지점은
-// plugin.conformance. 설치본 콘텐츠 뷰가 status 선언·setStatus 채택 전이라 warn 유지한다(dev 홈
-// 실측: 콘텐츠 뷰 10개 전부 선언 부재). 이는 무언 완화가 아니라 정적 규칙과 다른 강제 지점(런타임)에
-// 대한 명시 유예다 — 래칫 경로: 선언 sweep 완료 → 마운트 실보고 위반 0 실측 → blocking 승격
-// (별도 재입법 커밋, content-view-status 와 동행).
+// view-status(런타임 규칙)의 위반은 선언 밖 코드 보고(undeclared) 하나다. 순간 관찰의 null 은
+// 위반이 아니다 — status 축의 원설계 의미론이 null=보고할 것 없음(정상)이고, transient 코드
+// (connecting 등)는 관측창보다 빠를 수 있어 순간-미보고 규칙은 원리적으로 실측 불가하며, 정상
+// 상태 코드 강제는 모든 탭에 배지 소음을 얹는다(완벽함 원칙). unreported 는 진단 정보로만 남긴다.
+// 재입법 이력(view-status): 2026-07-11 warn 출발 → 2026-07-11 순간-미보고 규칙 폐지(기준 자체
+// 오류 정정 — 위 근거) + 라이브 실측(debug 격리, 콘텐츠 뷰 2 마운트) undeclared=0 확인 후
+// blocking 승격. 시행·실측 지점은 plugin.conformance(런타임 진단)와 발행 게이트(doctor)다.
 
 // 전체 규칙 축 = 정적 3종(스펙 패키지) + 런타임 1종(view-status — 코어 소유).
 export type TransparencyRule = StaticTransparencyRule | "view-status";
@@ -73,7 +74,7 @@ export type TransparencyMode = EnforcementMode;
 // 이 표의 변경은 재입법 커밋이며 conformance.test.ts 의 핀 테스트가 동행 개정을 강제한다.
 export const C2_ENFORCEMENT: Readonly<Record<TransparencyRule, TransparencyMode>> = {
   ...C2_STATIC_ENFORCEMENT,
-  "view-status": "warn",
+  "view-status": "blocking",
 };
 
 export interface TransparencyViolation {

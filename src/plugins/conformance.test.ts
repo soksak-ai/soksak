@@ -219,12 +219,12 @@ describe("partitionTransparency — 시행 모드 분류", () => {
     ).toEqual({ blocking: [v[0]], warn: [v[1]] });
   });
 
-  it("현행 입법표 핀 — 정적 3종 blocking 승계(content-view-status 는 선언 sweep 후 승격), view-status warn(런타임 규칙 명시 유예)", () => {
+  it("현행 입법표 핀 — 4종 전부 blocking(view-status 는 순간-미보고 규칙 폐지+라이브 undeclared=0 실측 후 승격)", () => {
     expect(C2_ENFORCEMENT).toEqual({
       "command-surface": "blocking",
       "view-nodes": "blocking",
       "content-view-status": "blocking",
-      "view-status": "warn",
+      "view-status": "blocking",
     });
   });
 });

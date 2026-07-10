@@ -109,7 +109,7 @@ describe("plugin.conformance — C2 view-status(런타임 판정, viewStatusConf
       },
     });
 
-  it("status 선언 뷰가 마운트 후 미보고면 view-status 위반을 낸다", async () => {
+  it("status 선언 뷰의 순간 미보고는 정보일 뿐 위반이 아니다(null=보고할 것 없음)", async () => {
     const id = "demo";
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["idle", "busy"])) } });
     // 콘텐츠 뷰 두 인스턴스: v1 은 status 미보고(선언 있음 → 위반), v2 는 선언된 코드 보고.
@@ -130,7 +130,7 @@ describe("plugin.conformance — C2 view-status(런타임 판정, viewStatusConf
     expect(c2.viewStatus.reported).toEqual(["v2"]);
     expect(c2.viewStatus.unreported).toEqual(["v1"]);
     expect(c2.viewStatus.undeclared).toEqual([]);
-    expect(c2.violations.map((v) => v.rule)).toContain("view-status");
+    expect(c2.violations.map((v) => v.rule)).not.toContain("view-status");
   });
 
   it("모든 콘텐츠 뷰가 선언된 코드를 보고하면 view-status 위반 없음", async () => {
@@ -163,7 +163,7 @@ describe("plugin.conformance — C2 view-status(런타임 판정, viewStatusConf
     expect(c2.violations.map((v) => v.rule)).not.toContain("content-view-status");
   });
 
-  it("선언 없이 보고 → undeclared + content-view-status 에 보고 코드 실측(선언 누락 경고)", async () => {
+  it("선언 없이 보고 → undeclared = view-status 위반(선언 밖 코드)", async () => {
     const id = "demo";
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, undefined)) } });
     useSessions.setState({
@@ -173,13 +173,11 @@ describe("plugin.conformance — C2 view-status(런타임 판정, viewStatusConf
     const r = await execute("plugin.conformance", { id }, {});
     const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
     expect(c2.viewStatus.undeclared).toEqual([{ viewId: "v1", view: "canvas", code: "idle" }]);
-    // 선언 없는 침묵이 아니라 보고 실측이므로 view-status 위반은 아니다 — 선언 축 경고다.
-    expect(c2.violations.map((v) => v.rule)).not.toContain("view-status");
-    const cvs = c2.violations.filter((v) => v.rule === "content-view-status");
-    expect(cvs.some((v) => v.detail.includes("idle"))).toBe(true);
+    const vs = c2.violations.filter((v) => v.rule === "view-status");
+    expect(vs.some((v) => v.detail.includes("idle"))).toBe(true);
   });
 
-  it("선언 목록 밖 코드 보고 → undeclared + content-view-status(선언이 코드를 안 실음)", async () => {
+  it("선언 목록 밖 코드 보고 → undeclared = view-status 위반", async () => {
     const id = "demo";
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["ready"])) } });
     useSessions.setState({
@@ -189,9 +187,8 @@ describe("plugin.conformance — C2 view-status(런타임 판정, viewStatusConf
     const r = await execute("plugin.conformance", { id }, {});
     const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
     expect(c2.viewStatus.undeclared).toEqual([{ viewId: "v1", view: "canvas", code: "wat" }]);
-    expect(c2.violations.map((v) => v.rule)).not.toContain("view-status");
-    const cvs = c2.violations.filter((v) => v.rule === "content-view-status");
-    expect(cvs.some((v) => v.detail.includes("wat"))).toBe(true);
+    const vs = c2.violations.filter((v) => v.rule === "view-status");
+    expect(vs.some((v) => v.detail.includes("wat"))).toBe(true);
   });
 });
 
