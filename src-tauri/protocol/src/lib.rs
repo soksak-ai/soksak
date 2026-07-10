@@ -90,6 +90,30 @@ pub fn skew_sentence(
     })
 }
 
+/// The person's language for a human-facing sentence. The protocol crate holds
+/// this so the skew sentence can render in one language without a second source.
+/// LLM-facing text, logs, and identifiers stay English and never take a `Lang`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lang {
+    En,
+    Ko,
+}
+
+impl Lang {
+    /// One place interprets a language tag. The Korean family (`ko`, `ko_KR.UTF-8`,
+    /// `KO`) resolves to Korean; every other or absent tag resolves to English.
+    /// The caller owns the absent-tag default: a POSIX env with no `LANG` yields
+    /// `""` → English (the CLI default), while the app resolves an absent setting
+    /// to Korean on its own before reaching here.
+    pub fn from_tag(tag: &str) -> Lang {
+        if tag.trim().to_ascii_lowercase().starts_with("ko") {
+            Lang::Ko
+        } else {
+            Lang::En
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,5 +189,22 @@ mod tests {
         .expect("a skewed pair must produce a sentence");
         assert!(s.contains('1') && s.contains('3'), "both version numbers present: {s}");
         assert!(s.contains("update this app"), "stale side named explicitly: {s}");
+    }
+
+    // ── Lang::from_tag: one place interprets a language tag ──────────────────
+
+    #[test]
+    fn from_tag_maps_korean_family_to_ko_else_en() {
+        // Settings values are the bare tags the frontend persists.
+        assert_eq!(Lang::from_tag("ko"), Lang::Ko);
+        assert_eq!(Lang::from_tag("en"), Lang::En);
+        // POSIX locale envs (LANG/LC_ALL) carry a territory and encoding.
+        assert_eq!(Lang::from_tag("ko_KR.UTF-8"), Lang::Ko);
+        assert_eq!(Lang::from_tag("en_US.UTF-8"), Lang::En);
+        // Case-insensitive on the language subtag.
+        assert_eq!(Lang::from_tag("KO"), Lang::Ko);
+        // Absent or foreign tags fall to English — the CLI default when no LANG is set.
+        assert_eq!(Lang::from_tag(""), Lang::En);
+        assert_eq!(Lang::from_tag("ja_JP.UTF-8"), Lang::En);
     }
 }
