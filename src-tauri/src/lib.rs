@@ -4,6 +4,7 @@ mod skillgen;
 mod home;
 mod sidecar;
 mod webview;
+pub mod webview_health;
 mod clipboard;
 mod data;
 mod deeplink;
