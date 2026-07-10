@@ -1,7 +1,7 @@
 // 명령 카탈로그 — soksak 전 기능을 command 로 등록한다(단일 진실).
 // 타기팅 규칙(모든 명령 공통):
 //   - 대상 id 를 명시하면 그 위치(프로젝트 전체에서 검색), 생략하면 호출자 컨텍스트
-//     (SOKSAK_PANE → 그 pane 이 속한 뷰/패널/시트/프로젝트) 또는 활성 체인.
+//     (SOKSAK_PANE → 그 pane 이 속한 뷰/패널/스페이스/프로젝트) 또는 활성 체인.
 //   - 모든 변이는 결과(새 id/변경 후 상태)를 반환 — 호출자가 응답만으로 검증 가능.
 
 import { invoke } from "@tauri-apps/api/core";
@@ -46,10 +46,10 @@ import { registerClipboardCatalog } from "./catalogClipboard";
 import { registerNotifyCatalog } from "./catalogNotify";
 import { registerScheduleCatalog } from "./catalogSchedule";
 import {
-  ensureDefaultWorkspace,
+  ensureDefaultProjectRoot,
   FOLDER_NAME_RE,
   validateProjectRoot,
-} from "../lib/workspace";
+} from "../lib/projectRoot";
 
 // ── 공통 에러/헬퍼 ───────────────────────────────────────────────────────────
 
@@ -61,17 +61,17 @@ const notFound = (what: string) => ({
 
 // 표면 반환 경계 변환(단일 진실) — store(sessions.ts 등) 내부 필드는 표면이 아니므로 이름을
 // 바꾸지 않는다(§ 계약). 핸들러가 store 결과를 그대로 반환하는 지점에서만 이 경계를 지나
-// 공개 명칭으로 옮긴다: groupId→panelId, contentId→sheetId, activeGroupId→activePanelId,
-// activeContentId→activeSheetId, contents→sheets. 그 외 키는 그대로 통과(에러 응답도 무해).
+// 공개 명칭으로 옮긴다: groupId→panelId, contentId→spaceId, activeGroupId→activePanelId,
+// activeContentId→activeSpaceId, contents→spaces. 그 외 키는 그대로 통과(에러 응답도 무해).
 function asSurface(r: object): object {
   const rec = r as Record<string, unknown>;
   const { groupId, contentId, activeGroupId, activeContentId, contents, ...rest } = rec;
   const out: Record<string, unknown> = rest;
   if ("groupId" in rec) out.panelId = groupId;
-  if ("contentId" in rec) out.sheetId = contentId;
+  if ("contentId" in rec) out.spaceId = contentId;
   if ("activeGroupId" in rec) out.activePanelId = activeGroupId;
-  if ("activeContentId" in rec) out.activeSheetId = activeContentId;
-  if ("contents" in rec) out.sheets = contents;
+  if ("activeContentId" in rec) out.activeSpaceId = activeContentId;
+  if ("contents" in rec) out.spaces = contents;
   return out;
 }
 
@@ -83,12 +83,12 @@ interface Location {
   view?: View;
 }
 
-// layout.apply 저작 형태 — 1차 시트, 2차 각 시트의 패널(분할). 표면 계약(sheet/panel)과 같은 결.
+// layout.apply 저작 형태 — 1차 스페이스, 2차 각 스페이스의 패널(분할). 표면 계약(space/panel)과 같은 결.
 interface LayoutPanelSpec {
   program: string;
   side?: Side;
 }
-interface LayoutSheetSpec {
+interface LayoutSpaceSpec {
   title?: string;
   panels?: LayoutPanelSpec[];
 }
@@ -322,8 +322,8 @@ function serializeTree() {
       color: t.color ?? null,
       sidebarOpen: t.sidebarOpen,
       active: t.id === s.activeId,
-      activeSheetId: t.activeContentId,
-      sheets: t.contents.map((c) => serializeContent(c, t.activeContentId)),
+      activeSpaceId: t.activeContentId,
+      spaces: t.contents.map((c) => serializeContent(c, t.activeContentId)),
     })),
   };
 }
@@ -335,7 +335,7 @@ const P = {
     type: "string",
     description: "Target project id (omit = caller's context project)",
   },
-  sheet: { type: "string", description: "Target sheet tab id" },
+  space: { type: "string", description: "Target space tab id" },
   panel: {
     type: "string",
     description: "Target panel id (omit = caller's context panel)",
@@ -372,7 +372,7 @@ export function registerCatalog(): void {
 
   register("state.tree", {
     description:
-      "Full layout snapshot (address book): all ids and active state across project → sheet → panel (rect %) → view → pane. Use to discover ids before targeting other commands.",
+      "Full layout snapshot (address book): all ids and active state across project → space → panel (rect %) → view → pane. Use to discover ids before targeting other commands.",
     params: {},
     returns: "{ activeProjectId, projects[] } — panels[].rect is % of the content area",
     message: (d) => tmsg("msg.state.tree", { n: ((d.projects as unknown[]) ?? []).length }),
@@ -391,9 +391,9 @@ export function registerCatalog(): void {
 
   register("state.context", {
     description:
-      "Resolve the caller's position: project/sheet/panel/view that $SOKSAK_PANE belongs to (falls back to active chain when called outside a terminal).",
+      "Resolve the caller's position: project/space/panel/view that $SOKSAK_PANE belongs to (falls back to active chain when called outside a terminal).",
     params: { pane: P.pane },
-    returns: "{ projectId, sheetId, panelId, viewId?, paneId? } — viewId is absent when the panel is empty",
+    returns: "{ projectId, spaceId, panelId, viewId?, paneId? } — viewId is absent when the panel is empty",
     message: (d) =>
       d.viewId
         ? tmsg("msg.state.context", { view: String(d.viewId) })
@@ -477,11 +477,11 @@ export function registerCatalog(): void {
           "Required when root is omitted — ^[a-z0-9][a-z0-9-]*$, used as ~/.soksak/projects/<folder>",
       },
       alias: { type: "string", description: "Tab alias (omit = folder name)" },
-      program: { ...P.program, description: "Initial view program (omit = empty sheet tab)" },
+      program: { ...P.program, description: "Initial view program (omit = empty space tab)" },
       shell: { type: "string", description: "Terminal shell path (omit = global setting → $SHELL)" },
     },
     returns:
-      "{ projectId, sheetId, panelId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new workspace window instead)",
+      "{ projectId, spaceId, panelId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new project window instead)",
     message: (d) =>
       d.routedWindow
         ? tmsg("msg.project.open.routed", { window: String(d.routedWindow) })
@@ -513,7 +513,7 @@ export function registerCatalog(): void {
       return [
         { cmd: "sok layout.apply dev", why: tmsg("hint.flow.project.open.layout") },
         { cmd: "sok window.maximize", why: tmsg("hint.flow.project.open.maximize") },
-        { cmd: "sok sheet.create", why: tmsg("hint.flow.project.open.sheet") },
+        { cmd: "sok space.create", why: tmsg("hint.flow.project.open.space") },
       ];
     },
     examples: [
@@ -543,7 +543,7 @@ export function registerCatalog(): void {
             message: "root 생략 시 folder 필수(^[a-z0-9][a-z0-9-]*$)",
           };
         }
-        root = await ensureDefaultWorkspace(folder);
+        root = await ensureDefaultProjectRoot(folder);
       }
       // 루트 초기화 정책(git init 등)은 project.created 이벤트 구독 플러그인 소유.
       // P6(전역 단일 오픈) 게이트 경유 — 다른 창 소유면 그 창 포커스 + existingWindow 반환.
@@ -593,7 +593,7 @@ export function registerCatalog(): void {
     message: () => tmsg("msg.project.rename"),
     errors: ["TARGET_NOT_FOUND"],
     examples: ['sok project.rename \'{"project":"t1","title":"백엔드"}\''],
-    handler: (p) => S().renameTab(p.project as string, p.title as string),
+    handler: (p) => S().renameProject(p.project as string, p.title as string),
   });
 
   register("project.color", {
@@ -820,14 +820,14 @@ export function registerCatalog(): void {
     },
   });
 
-  // ----- sheet -----
-  register("sheet.list", {
-    description: "List sheet tabs in a project.",
+  // ----- space -----
+  register("space.list", {
+    description: "List space tabs in a project.",
     params: { project: P.project },
-    returns: "{ sheets: [{id,title,program,active}] }",
-    message: (d) => tmsg("msg.sheet.list", { n: ((d.sheets as unknown[]) ?? []).length }),
+    returns: "{ spaces: [{id,title,program,active}] }",
+    message: (d) => tmsg("msg.space.list", { n: ((d.spaces as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok sheet.list"],
+    examples: ["sok space.list"],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -841,23 +841,23 @@ export function registerCatalog(): void {
     },
   });
 
-  register("sheet.create", {
-    description: "Create a new sheet tab. Program priority: explicit > project setting > global setting.",
-    triggers: { ko: "새 탭 시트 탭 추가 새로 열기" },
+  register("space.create", {
+    description: "Create a new space tab. Program priority: explicit > project setting > global setting.",
+    triggers: { ko: "새 탭 스페이스 탭 추가 새로 열기" },
     params: { project: P.project, program: P.program },
-    returns: "{ sheetId, panelId, viewId, paneId? }",
-    message: () => tmsg("msg.sheet.create"),
+    returns: "{ spaceId, panelId, viewId, paneId? }",
+    message: () => tmsg("msg.space.create"),
     errors: ["TARGET_NOT_FOUND"],
     hint: (d) => {
-      // 새 시트는 활성 시트가 되므로 후속 수는 컨텍스트를 그대로 겨냥한다(대상 id 불요).
+      // 새 스페이스는 활성 스페이스가 되므로 후속 수는 컨텍스트를 그대로 겨냥한다(대상 id 불요).
       if (d.code) return [];
       return [
-        { cmd: "sok panel.split right", why: tmsg("hint.flow.sheet.create.split") },
-        { cmd: `sok view.open ${exampleProgramId()}`, why: tmsg("hint.flow.sheet.create.view") },
-        { cmd: "sok window.snapshot", why: tmsg("hint.flow.sheet.create.snapshot") },
+        { cmd: "sok panel.split right", why: tmsg("hint.flow.space.create.split") },
+        { cmd: `sok view.open ${exampleProgramId()}`, why: tmsg("hint.flow.space.create.view") },
+        { cmd: "sok window.snapshot", why: tmsg("hint.flow.space.create.snapshot") },
       ];
     },
-    examples: ['sok sheet.create \'{"program":"browser"}\''],
+    examples: ['sok space.create \'{"program":"browser"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -865,53 +865,53 @@ export function registerCatalog(): void {
     },
   });
 
-  register("sheet.close", {
+  register("space.close", {
     danger: "destructive",
-    description: "Close a sheet tab. Refuses to close the last remaining sheet.",
-    triggers: { ko: "탭 닫기 시트 닫기" },
+    description: "Close a space tab. Refuses to close the last remaining space.",
+    triggers: { ko: "탭 닫기 스페이스 닫기" },
     params: {
       project: P.project,
-      sheet: { ...P.sheet, required: true },
+      space: { ...P.space, required: true },
     },
-    returns: "{ activeSheetId }",
-    message: () => tmsg("msg.sheet.close"),
+    returns: "{ activeSpaceId }",
+    message: () => tmsg("msg.space.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok sheet.close \'{"sheet":"c2"}\''],
+    examples: ['sok space.close \'{"space":"c2"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      return asSurface(S().closeContent(t.id, p.sheet as string));
+      return asSurface(S().closeContent(t.id, p.space as string));
     },
   });
 
-  register("sheet.activate", {
-    description: "Switch to a specific sheet tab, making it active.",
+  register("space.activate", {
+    description: "Switch to a specific space tab, making it active.",
     triggers: { ko: "탭 이동 탭 전환 탭 바꾸기" },
     params: {
       project: P.project,
-      sheet: { ...P.sheet, required: true },
+      space: { ...P.space, required: true },
     },
     returns: "{}",
-    message: () => tmsg("msg.sheet.activate"),
+    message: () => tmsg("msg.space.activate"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok sheet.activate \'{"sheet":"c2"}\''],
+    examples: ['sok space.activate \'{"space":"c2"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      return S().setActiveContent(t.id, p.sheet as string);
+      return S().setActiveContent(t.id, p.space as string);
     },
   });
 
-  register("sheet.switchScan", {
+  register("space.switchScan", {
     description:
-      "Measure a sheet-tab switch as the user sees it: record the switch and report whether the new sheet lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts.",
-    triggers: { ko: "탭 전환 측정 깜빡임 jank 시트 전환 검사 단일프레임" },
+      "Measure a space-tab switch as the user sees it: record the switch and report whether the new space lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts.",
+    triggers: { ko: "탭 전환 측정 깜빡임 jank 스페이스 전환 검사 단일프레임" },
     params: {
       project: P.project,
-      to: { ...P.sheet, required: true },
+      to: { ...P.space, required: true },
       from: {
         type: "string",
-        description: "Sheet id to start on (default: current active)",
+        description: "Space id to start on (default: current active)",
       },
       frames: { type: "number", description: "Frames to capture (default 30)" },
       intervalMs: { type: "number", description: "Frame interval ms (default 16)" },
@@ -921,7 +921,7 @@ export function registerCatalog(): void {
       },
       settleMs: {
         type: "number",
-        description: "Settle wait on the start sheet (default 600)",
+        description: "Settle wait on the start space (default 600)",
       },
       region: {
         type: "json",
@@ -938,11 +938,11 @@ export function registerCatalog(): void {
       "{ frames, frameMs, switchFrame, switchFrames (consecutive changed = jank spread), clean, diffsPct }",
     message: (d) =>
       d.clean
-        ? tmsg("msg.sheet.switchScan.clean")
-        : tmsg("msg.sheet.switchScan.jank", { n: Number(d.switchFrames) }),
+        ? tmsg("msg.space.switchScan.clean")
+        : tmsg("msg.space.switchScan.jank", { n: Number(d.switchFrames) }),
     examples: [
-      'sok sheet.switchScan \'{"from":"c1","to":"c3"}\'',
-      'sok sheet.switchScan \'{"to":"c3","frames":40}\'',
+      'sok space.switchScan \'{"from":"c1","to":"c3"}\'',
+      'sok space.switchScan \'{"to":"c3","frames":40}\'',
     ],
     handler: async (p, ctx) => {
       const t = resolveProject(p, ctx);
@@ -967,10 +967,10 @@ export function registerCatalog(): void {
       const { tempDir, join } = await import("@tauri-apps/api/path");
       const dir = await join(await tempDir(), "soksak", `switchscan-${Date.now()}`);
 
-      // 1) 시작 시트로 + settle.
+      // 1) 시작 스페이스로 + settle.
       S().setActiveContent(t.id, from);
       await sleep(settleMs);
-      // 2) 녹화 시작(비대기) → applyAtMs 후 대상 시트로 전환 → 완료 대기.
+      // 2) 녹화 시작(비대기) → applyAtMs 후 대상 스페이스로 전환 → 완료 대기.
       const recT0 = performance.now();
       const recP = invoke<number>("plugin:webview-capture|record", {
         dir,
@@ -986,11 +986,11 @@ export function registerCatalog(): void {
         "plugin:webview-capture|analyze_frame_diffs",
         { dir, regions: [region] },
       );
-      // 4) 원래 시트 복원.
+      // 4) 원래 스페이스 복원.
       S().setActiveContent(t.id, prev);
 
       const diffs = grid.map((r) => r[0] ?? 0);
-      // 자기적응 감지 — 전환 변화량은 시트 쌍마다 다르다(비슷한 두 터미널=0.5%, 터미널↔에디터=수%).
+      // 자기적응 감지 — 전환 변화량은 스페이스 쌍마다 다르다(비슷한 두 터미널=0.5%, 터미널↔에디터=수%).
       // 고정 임계값은 작은 전환을 놓치므로, peak 의 40% 이상인 프레임을 전환으로 본다(단 floor 미만이면
       // 노이즈로 보고 전환 없음). 깨끗 = 그런 프레임이 정확히 1개(연속/복수면 번짐=jank). floor 조절 가능.
       const peak = diffs.length ? Math.max(...diffs) : 0;
@@ -1017,28 +1017,28 @@ export function registerCatalog(): void {
     },
   });
 
-  register("sheet.rename", {
-    description: "Rename a sheet tab.",
+  register("space.rename", {
+    description: "Rename a space tab.",
     params: {
       project: P.project,
-      sheet: { ...P.sheet, required: true },
+      space: { ...P.space, required: true },
       title: { type: "string", description: "New name", required: true },
     },
     returns: "{}",
-    message: () => tmsg("msg.sheet.rename"),
+    message: () => tmsg("msg.space.rename"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok sheet.rename \'{"sheet":"c1","title":"빌드"}\''],
+    examples: ['sok space.rename \'{"space":"c1","title":"빌드"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      return S().renameContent(t.id, p.sheet as string, p.title as string);
+      return S().renameContent(t.id, p.space as string, p.title as string);
     },
   });
 
   // ----- panel -----
   register("panel.list", {
-    description: "List panels (split panes) in a sheet, including their rect (%) and the split tree.",
-    params: { project: P.project, sheet: P.sheet },
+    description: "List panels (split panes) in a space, including their rect (%) and the split tree.",
+    params: { project: P.project, space: P.space },
     returns: "{ activePanelId, layout, panels[] }",
     message: (d) => tmsg("msg.panel.list", { n: ((d.panels as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
@@ -1046,11 +1046,11 @@ export function registerCatalog(): void {
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
-      const c = p.sheet
-        ? t.contents.find((x) => x.id === p.sheet)
+      const c = p.space
+        ? t.contents.find((x) => x.id === p.space)
         : (resolveCtx(ctx)?.content ??
           t.contents.find((x) => x.id === t.activeContentId));
-      if (!c) return notFound(`시트 없음: ${p.sheet}`);
+      if (!c) return notFound(`스페이스 없음: ${p.space}`);
       const out = serializeContent(c, t.activeContentId);
       return {
         activePanelId: out.activePanelId,
@@ -1257,55 +1257,55 @@ export function registerCatalog(): void {
 
   register("layout.apply", {
     description:
-      "Apply a layout by building fresh sheets — never destroys existing sheets. Hierarchy: first-level sheets are independent switchable screens; second-level panels are the splits inside each sheet. preset dev = a terminal plus a browser side by side (if no browser program is installed, that panel is skipped and reported in skipped). preset facets = build the named sheets you pass in (sheets required). Verify by switching to a sheet with sheet.activate, then capturing with window.snapshot.",
-    triggers: { ko: "화면 구성 레이아웃 적용 시트 배치 개발 화면 나란히 배치 dev facets" },
+      "Apply a layout by building fresh spaces — never destroys existing spaces. Hierarchy: first-level spaces are independent switchable screens; second-level panels are the splits inside each space. preset dev = a terminal plus a browser side by side (if no browser program is installed, that panel is skipped and reported in skipped). preset facets = build the named spaces you pass in (spaces required). Verify by switching to a space with space.activate, then capturing with window.snapshot.",
+    triggers: { ko: "화면 구성 레이아웃 적용 스페이스 배치 개발 화면 나란히 배치 dev facets" },
     params: {
       preset: {
         type: "string",
         enum: ["dev", "facets"],
         required: true,
         description:
-          "dev = a terminal plus a browser side by side; facets = build the named sheets passed in sheets",
+          "dev = a terminal plus a browser side by side; facets = build the named spaces passed in spaces",
       },
-      sheets: {
+      spaces: {
         type: "json",
         description:
-          "Named sheets to build (required for facets): [{ title, panels?: [{ program, side? }] }]",
+          "Named spaces to build (required for facets): [{ title, panels?: [{ program, side? }] }]",
       },
       project: P.project,
     },
     returns:
-      "{ sheets: [{ sheetId, title, panels: [{ panelId, program }] }], skipped? } — skipped lists panels dropped because their program is missing",
-    message: (d) => tmsg("msg.layout.apply", { n: ((d.sheets as unknown[]) ?? []).length }),
+      "{ spaces: [{ spaceId, title, panels: [{ panelId, program }] }], skipped? } — skipped lists panels dropped because their program is missing",
+    message: (d) => tmsg("msg.layout.apply", { n: ((d.spaces as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
     hint: (d) => {
       if (d.code) return [];
       const out: CommandHint[] = [];
-      const sheets = (d.sheets as { sheetId?: string }[] | undefined) ?? [];
+      const spaces = (d.spaces as { spaceId?: string }[] | undefined) ?? [];
       const skipped = (d.skipped as unknown[] | undefined) ?? [];
       // 건너뛴 패널이 있으면(브라우저 미설치 등) 설치 경로를 먼저 제시한다.
       if (skipped.length)
         out.push({ cmd: "sok plugin.catalog", why: tmsg("hint.flow.layout.apply.install") });
-      const first = sheets[0]?.sheetId;
+      const first = spaces[0]?.spaceId;
       if (first)
-        out.push({ cmd: `sok sheet.activate ${first}`, why: tmsg("hint.flow.layout.apply.activate") });
+        out.push({ cmd: `sok space.activate ${first}`, why: tmsg("hint.flow.layout.apply.activate") });
       out.push({ cmd: "sok window.snapshot", why: tmsg("hint.flow.layout.apply.snapshot") });
       return out;
     },
     examples: [
       "sok layout.apply dev",
-      'sok layout.apply \'{"preset":"facets","sheets":[{"title":"docs","panels":[{"program":"browser"}]}]}\'',
+      'sok layout.apply \'{"preset":"facets","spaces":[{"title":"docs","panels":[{"program":"browser"}]}]}\'',
     ],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
       const skipped: {
-        sheet: string;
+        space: string;
         program: string;
         side?: Side;
         reason: string;
       }[] = [];
-      let sheetSpecs: LayoutSheetSpec[];
+      let spaceSpecs: LayoutSpaceSpec[];
       if (p.preset === "dev") {
         // dev 축약 — 터미널 + 브라우저(우측). 브라우저 미설치면 그 패널만 건너뛰고 사유를 남긴다.
         const browserId = findBrowserProgram();
@@ -1313,44 +1313,44 @@ export function registerCatalog(): void {
         if (browserId) panels.push({ program: browserId, side: "right" });
         else
           skipped.push({
-            sheet: "dev",
+            space: "dev",
             program: "browser",
             side: "right",
             reason: tmsg("layout.skip.noBrowser"),
           });
-        sheetSpecs = [{ title: "dev", panels }];
+        spaceSpecs = [{ title: "dev", panels }];
       } else {
-        // facets — sheets 인자를 그대로 쓰는 별칭. sheets 필수.
-        const raw = p.sheets;
+        // facets — spaces 인자를 그대로 쓰는 별칭. spaces 필수.
+        const raw = p.spaces;
         if (!Array.isArray(raw) || raw.length === 0) {
           return {
             ok: false as const,
             code: "INVALID_PARAMS" as const,
-            message: "preset=facets 는 sheets 필요([{title,panels}])",
+            message: "preset=facets 는 spaces 필요([{title,panels}])",
           };
         }
-        sheetSpecs = raw as LayoutSheetSpec[];
+        spaceSpecs = raw as LayoutSpaceSpec[];
       }
-      const builtSheets: {
-        sheetId: string;
+      const builtSpaces: {
+        spaceId: string;
         title: string;
         panels: { panelId: string; program: string }[];
       }[] = [];
-      for (const spec of sheetSpecs) {
+      for (const spec of spaceSpecs) {
         const title = typeof spec.title === "string" ? spec.title : "";
-        // 새 시트(빈 시트) — 첫 패널을 명시 제어하려 program 없이 만든다. 기존 시트는 불변.
+        // 새 스페이스(빈 스페이스) — 첫 패널을 명시 제어하려 program 없이 만든다. 기존 스페이스는 불변.
         const created = S().addContent(t.id);
         if (!created.ok) continue; // 프로젝트 확인 이후이므로 도달 불가(방어)
-        const sheetId = created.contentId;
+        const spaceId = created.contentId;
         const firstPanelId = created.groupId;
-        if (title) S().renameContent(t.id, sheetId, title);
+        if (title) S().renameContent(t.id, spaceId, title);
         const builtPanels: { panelId: string; program: string }[] = [];
         let firstFilled = false;
         for (const panel of spec.panels ?? []) {
           const program = panel.program;
           if (typeof program !== "string" || !getRegisteredProgram(program)) {
             skipped.push({
-              sheet: title || sheetId,
+              space: title || spaceId,
               program: String(program),
               side: panel.side,
               reason: tmsg("layout.skip.unregistered", { program: String(program) }),
@@ -1358,7 +1358,7 @@ export function registerCatalog(): void {
             continue;
           }
           if (!firstFilled) {
-            // 첫 패널 = 시트의 초기(빈) 그룹에 뷰를 넣는다.
+            // 첫 패널 = 스페이스의 초기(빈) 그룹에 뷰를 넣는다.
             S().addViewToGroup(t.id, program, firstPanelId);
             builtPanels.push({ panelId: firstPanelId, program });
             firstFilled = true;
@@ -1368,9 +1368,9 @@ export function registerCatalog(): void {
             if (r.ok) builtPanels.push({ panelId: r.groupId, program });
           }
         }
-        builtSheets.push({ sheetId, title, panels: builtPanels });
+        builtSpaces.push({ spaceId, title, panels: builtPanels });
       }
-      return skipped.length ? { sheets: builtSheets, skipped } : { sheets: builtSheets };
+      return skipped.length ? { spaces: builtSpaces, skipped } : { spaces: builtSpaces };
     },
   });
 
@@ -1419,7 +1419,7 @@ export function registerCatalog(): void {
 
   register("view.close", {
     danger: "destructive",
-    description: "Close a view tab — if it was the last view in a panel, the panel is also removed. Refuses to close the last view in a sheet.",
+    description: "Close a view tab — if it was the last view in a panel, the panel is also removed. Refuses to close the last view in a space.",
     triggers: { ko: "탭 닫기 뷰 닫기" },
     params: { view: { ...P.view, required: true } },
     returns: "{ activePanelId, activeViewId }",
@@ -1473,7 +1473,7 @@ export function registerCatalog(): void {
 
   register("view.maximize", {
     description:
-      "Maximize a view to fill the entire sheet. The split tree is preserved; only the display is toggled. Same as double-clicking a tab. Omit view to maximize the active view.",
+      "Maximize a view to fill the entire space. The split tree is preserved; only the display is toggled. Same as double-clicking a tab. Omit view to maximize the active view.",
     triggers: { ko: "최대화 전체화면 탭 최대화 크게 보기" },
     params: { view: P.view },
     returns: "{ viewId }",
@@ -1488,7 +1488,7 @@ export function registerCatalog(): void {
   });
 
   register("view.restore", {
-    description: "Exit view maximize mode and restore the original split layout for the active sheet.",
+    description: "Exit view maximize mode and restore the original split layout for the active space.",
     triggers: { ko: "최대화 해제 원래대로 레이아웃 복원" },
     params: { project: P.project },
     returns: "{ viewId(restored view | null = was not maximized) }",
@@ -1985,7 +1985,7 @@ export function registerCatalog(): void {
 
   register("window.maximize", {
     description:
-      "Maximize a window to fill the screen (native window maximize — distinct from view.maximize, which only enlarges one view within a sheet). Without label, targets the window this command runs in; with label, targets that window (see window.list). Pass off:true to restore (unmaximize).",
+      "Maximize a window to fill the screen (native window maximize — distinct from view.maximize, which only enlarges one view within a space). Without label, targets the window this command runs in; with label, targets that window (see window.list). Pass off:true to restore (unmaximize).",
     triggers: { ko: "창 최대화 전체화면 창 키우기 최대화 해제" },
     params: {
       label: { type: "string", description: "Window label (omit = this window)" },
@@ -2031,7 +2031,7 @@ export function registerCatalog(): void {
   // ── 멀티 윈도우 ──────────────────────────────────────────────────────────
   register("window.open", {
     description:
-      "Open a new workspace window for a project root (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). root is required unless mode orchestrator, which brings the control plane (main) forward instead — opening and creating projects live there; empty workspace windows do not exist.",
+      "Open a new project window for a project root (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). root is required unless mode orchestrator, which brings the control plane (main) forward instead — opening and creating projects live there; empty project windows do not exist.",
     triggers: { ko: "새 창 창 열기 새 윈도우 프로젝트 새 창 오케스트레이터 창" },
     params: {
       root: {
@@ -2200,10 +2200,10 @@ export function registerCatalog(): void {
     speak: (out) => (out.ok ? (out.data?.saved ? "화면을 저장했어요." : "화면을 캡처했어요.") : out.message),
     hint: (d) => {
       if (d.code) return [];
-      // 재캡처의 두 갈래 — 뷰 최대화로 확대해 담거나, 다른 시트로 전환해 화면을 비교한다.
+      // 재캡처의 두 갈래 — 뷰 최대화로 확대해 담거나, 다른 스페이스로 전환해 화면을 비교한다.
       return [
         { cmd: "sok view.maximize", why: tmsg("hint.flow.snapshot.maximize") },
-        { cmd: "sok sheet.list", why: tmsg("hint.flow.snapshot.switch") },
+        { cmd: "sok space.list", why: tmsg("hint.flow.snapshot.switch") },
       ];
     },
     errors: ["INVALID_PARAMS"],
@@ -2373,7 +2373,7 @@ export function registerCatalog(): void {
 
   register("layout.suggest", {
     description:
-      "Suggest window placements from current monitor/window facts (pure strategy — nothing moves). strategy spread: orchestrator windows take a workspace-free monitor whole (or the right third alongside on a single monitor); workspaces fill their own monitor. strategy grid: tile all windows on the first monitor. Feed each placement to window.place to execute.",
+      "Suggest window placements from current monitor/window facts (pure strategy — nothing moves). strategy spread: orchestrator windows take a monitor free of project windows whole (or the right third alongside on a single monitor); project windows fill their own monitor. strategy grid: tile all windows on the first monitor. Feed each placement to window.place to execute.",
     triggers: {
       ko: "창 배치 제안 전략 모니터 분배 오케스트레이터 배치",
     },
@@ -2387,7 +2387,7 @@ export function registerCatalog(): void {
       roles: {
         type: "json",
         description:
-          'Optional label→role map, e.g. {"main":"orchestrator"} — unlisted windows count as workspaces',
+          'Optional label→role map, e.g. {"main":"orchestrator"} — unlisted windows count as project windows',
       },
     },
     returns: "{ placements: [{label,monitor,x,y,w,h}] }",
@@ -2404,7 +2404,7 @@ export function registerCatalog(): void {
         monitors: facts.monitors,
         windows: facts.windows,
         strategy: (p.strategy as "spread" | "grid") ?? "spread",
-        roles: (p.roles as Record<string, "orchestrator" | "workspace">) ?? undefined,
+        roles: (p.roles as Record<string, "orchestrator" | "project">) ?? undefined,
       });
       return { placements };
     },

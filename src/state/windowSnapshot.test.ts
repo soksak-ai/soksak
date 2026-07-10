@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { serializeProject, deserializeProject } from "./workspaceSnapshot";
+import { serializeProject, deserializeProject } from "./windowSnapshot";
 import type { ProjectTab, GroupNode, View } from "./sessions";
 
 // 직렬화 라운드트립 — GroupNode serializeSplitTree 경로. id 보존, split id 만 재생성,
@@ -70,7 +70,7 @@ const project: ProjectTab = {
   ],
 };
 
-describe("workspaceSnapshot 라운드트립", () => {
+describe("windowSnapshot 라운드트립", () => {
   it("구조·sizes·active·view 파라미터 보존, split id 만 재생성, 터미널 command 미영속", () => {
     sid = 0;
     const snap = serializeProject(project);

@@ -92,7 +92,7 @@ export function registerPluginCatalog(): void {
     handler: () => ({
       // 제어판(main)은 플러그인을 싣지 않는다 — 빈 목록을 "미설치"로 오독하지 않게 스스로 설명한다.
       ...(currentWindowLabel() === "main"
-        ? { note: "control-plane window loads no plugins — query a workspace window (w-*) or pass --window" }
+        ? { note: "control-plane window loads no plugins — query a project window (w-*) or pass --window" }
         : {}),
       programs: listPrograms().map((p) => ({
         id: p.decl.id,
@@ -181,7 +181,7 @@ export function registerPluginCatalog(): void {
       return {
         // 제어판(main)은 플러그인을 싣지 않는다 — 빈 목록의 이유를 응답이 스스로 설명한다.
         ...(currentWindowLabel() === "main"
-          ? { note: "control-plane window loads no plugins — query a workspace window (w-*) or pass --window" }
+          ? { note: "control-plane window loads no plugins — query a project window (w-*) or pass --window" }
           : {}),
         plugins: Object.values(s.plugins).map(serializeRuntime),
         rejected: s.rejected,

@@ -70,8 +70,8 @@ export interface PluginEventMap {
   // 콘텐츠 탭 전환 등으로 콘텐츠 슬롯이 파킹/언파킹된 뒤(코어 useLayoutEffect = React 커밋 후)
   // 코어가 발화한다 — 네이티브 webview 를 소유한 플러그인이 자기 앵커로 bounds 를 1회 재스냅하는
   // 신호. 위치 이동(크기 무변)이라 ResizeObserver 가 못 잡는 전환을 이 이벤트가 덮는다.
-  "layout.reflow": { activeSheetId: string | null };
-  // 뷰 본문 슬롯의 유효 가시성(시트 활성 && 탭 활성) 변화 — 코어가 단일 소유(R12 네이티브 층 확장).
+  "layout.reflow": { activeSpaceId: string | null };
+  // 뷰 본문 슬롯의 유효 가시성(스페이스 활성 && 탭 활성) 변화 — 코어가 단일 소유(R12 네이티브 층 확장).
   // 네이티브 표면(엔진 서피스·child webview)을 가진 플러그인이 표시/숨김과 재스냅을 이 사실에 맞춘다
   // (뷰포트 추측 IntersectionObserver 대체). parked=true 는 화면 밖 파킹, false 는 복귀.
   "view.parked": { viewId: string; parked: boolean };
@@ -329,7 +329,7 @@ export function startPluginHooks(): void {
     });
   };
   useSessions.subscribe(() => scheduleSessionsDiff());
-  // 복원 델타 삼킴(§5 "재생은 관찰이 아니다") — 부트 복원이 적용된 직후 workspaceBoot 가
+  // 복원 델타 삼킴(§5 "재생은 관찰이 아니다") — 부트 복원이 적용된 직후 windowBoot 가
   // 호출한다. 복원으로 나타난 프로젝트를 diff 가 "생성"으로 오인해 project.created 를
   // 창마다 발화하던 원천(실측: 창마다 git.init 자동 실행 + "OK" 낭독 연발).
   reseedSessions = () => {

@@ -649,20 +649,20 @@ sok git.show '{"commit":"HEAD"}'
 
 ## `layout.apply`
 
-Apply a layout by building fresh sheets — never destroys existing sheets. Hierarchy: first-level sheets are independent switchable screens; second-level panels are the splits inside each sheet. preset dev = a terminal plus a browser side by side (if no browser program is installed, that panel is skipped and reported in skipped). preset facets = build the named sheets you pass in (sheets required). Verify by switching to a sheet with sheet.activate, then capturing with window.snapshot. | 화면 구성 레이아웃 적용 시트 배치 개발 나란히 dev facets
+Apply a layout by building fresh spaces — never destroys existing spaces. Hierarchy: first-level spaces are independent switchable screens; second-level panels are the splits inside each space. preset dev = a terminal plus a browser side by side (if no browser program is installed, that panel is skipped and reported in skipped). preset facets = build the named spaces you pass in (spaces required). Verify by switching to a space with space.activate, then capturing with window.snapshot. | 화면 구성 레이아웃 적용 스페이스 배치 개발 나란히 dev facets
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `preset` | string | ✓ | dev = a terminal plus a browser side by side; facets = build the named sheets passed in sheets (dev|facets) |
+| `preset` | string | ✓ | dev = a terminal plus a browser side by side; facets = build the named spaces passed in spaces (dev|facets) |
 | `project` | string |  | Target project id (omit = caller's context project) |
-| `sheets` | json |  | Named sheets to build (required for facets): [{ title, panels?: [{ program, side? }] }] |
+| `spaces` | json |  | Named spaces to build (required for facets): [{ title, panels?: [{ program, side? }] }] |
 
-**Returns**: { sheets: [{ sheetId, title, panels: [{ panelId, program }] }], skipped? } — skipped lists panels dropped because their program is missing
+**Returns**: { spaces: [{ spaceId, title, panels: [{ panelId, program }] }], skipped? } — skipped lists panels dropped because their program is missing
 **Errors**: INVALID_PARAMS, TARGET_NOT_FOUND
 
 ```bash
 sok layout.apply dev
-sok layout.apply '{"preset":"facets","sheets":[{"title":"docs","panels":[{"program":"browser"}]}]}'
+sok layout.apply '{"preset":"facets","spaces":[{"title":"docs","panels":[{"program":"browser"}]}]}'
 ```
 
 ## `layout.suggest`
@@ -852,12 +852,12 @@ sok panel.focus '{"panel":"g2"}'
 
 ## `panel.list`
 
-List panels (split panes) in a sheet, including their rect (%) and the split tree.
+List panels (split panes) in a space, including their rect (%) and the split tree.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string |  | Target project id (omit = caller's context project) |
-| `sheet` | string |  | Target sheet tab id |
+| `space` | string |  | Target space tab id |
 
 **Returns**: { activePanelId, layout, panels[] }
 **Errors**: TARGET_NOT_FOUND
@@ -1375,11 +1375,11 @@ Open a project (creates it if it doesn't exist yet). When root is omitted, folde
 |---|---|---|---|
 | `alias` | string |  | Tab alias (omit = folder name) |
 | `folder` | string |  | Required when root is omitted — ^[a-z0-9][a-z0-9-]*$, used as ~/.soksak/projects/<folder> |
-| `program` | string |  | Initial view program (omit = empty sheet tab) |
+| `program` | string |  | Initial view program (omit = empty space tab) |
 | `root` | string |  | Project root directory (absolute path — home/root forbidden) |
 | `shell` | string |  | Terminal shell path (omit = global setting → $SHELL) |
 
-**Returns**: { projectId, sheetId, panelId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new workspace window instead)
+**Returns**: { projectId, spaceId, panelId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new workspace window instead)
 **Errors**: INVALID_PARAMS
 
 ```bash
@@ -1723,107 +1723,107 @@ sok settings.set '{"key":"projectTabPosition","value":"left"}'
 sok settings.set '{"key":"iconBox","value":true}'
 ```
 
-## `sheet.activate`
+## `space.activate`
 
-Switch to a specific sheet tab, making it active. | 탭 이동 전환 바꾸기
+Switch to a specific space tab, making it active. | 탭 이동 전환 바꾸기
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string |  | Target project id (omit = caller's context project) |
-| `sheet` | string | ✓ | Target sheet tab id |
+| `space` | string | ✓ | Target space tab id |
 
 **Returns**: {}
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok sheet.activate '{"sheet":"c2"}'
+sok space.activate '{"space":"c2"}'
 ```
 
-## `sheet.close` (danger: destructive)
+## `space.close` (danger: destructive)
 
-Close a sheet tab. Refuses to close the last remaining sheet. | 탭 닫기 시트
+Close a space tab. Refuses to close the last remaining space. | 탭 닫기 스페이스
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string |  | Target project id (omit = caller's context project) |
-| `sheet` | string | ✓ | Target sheet tab id |
+| `space` | string | ✓ | Target space tab id |
 
-**Returns**: { activeSheetId }
+**Returns**: { activeSpaceId }
 **Errors**: TARGET_NOT_FOUND, LAST_ITEM
 
 ```bash
-sok sheet.close '{"sheet":"c2"}'
+sok space.close '{"space":"c2"}'
 ```
 
-## `sheet.create`
+## `space.create`
 
-Create a new sheet tab. Program priority: explicit > project setting > global setting. | 새 탭 시트 추가 새로 열기
+Create a new space tab. Program priority: explicit > project setting > global setting. | 새 탭 스페이스 추가 새로 열기
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `program` | string |  | Program id — plugin-registered only (see program.list; no built-in default). Unregistered id falls back to terminal view |
 | `project` | string |  | Target project id (omit = caller's context project) |
 
-**Returns**: { sheetId, panelId, viewId, paneId? }
+**Returns**: { spaceId, panelId, viewId, paneId? }
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok sheet.create '{"program":"browser"}'
+sok space.create '{"program":"browser"}'
 ```
 
-## `sheet.list`
+## `space.list`
 
-List sheet tabs in a project.
+List space tabs in a project.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string |  | Target project id (omit = caller's context project) |
 
-**Returns**: { sheets: [{id,title,program,active}] }
+**Returns**: { spaces: [{id,title,program,active}] }
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok sheet.list
+sok space.list
 ```
 
-## `sheet.rename`
+## `space.rename`
 
-Rename a sheet tab.
+Rename a space tab.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `project` | string |  | Target project id (omit = caller's context project) |
-| `sheet` | string | ✓ | Target sheet tab id |
+| `space` | string | ✓ | Target space tab id |
 | `title` | string | ✓ | New name |
 
 **Returns**: {}
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok sheet.rename '{"sheet":"c1","title":"빌드"}'
+sok space.rename '{"space":"c1","title":"빌드"}'
 ```
 
-## `sheet.switchScan`
+## `space.switchScan`
 
-Measure a sheet-tab switch as the user sees it: record the switch and report whether the new sheet lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts. | 탭 전환 측정 깜빡임 jank 시트 검사 단일프레임
+Measure a space-tab switch as the user sees it: record the switch and report whether the new space lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts. | 탭 전환 측정 깜빡임 jank 스페이스 검사 단일프레임
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `applyAtMs` | number |  | Delay after recording starts before switching (default 250) |
 | `frames` | number |  | Frames to capture (default 30) |
-| `from` | string |  | Sheet id to start on (default: current active) |
+| `from` | string |  | Space id to start on (default: current active) |
 | `intervalMs` | number |  | Frame interval ms (default 16) |
 | `project` | string |  | Target project id (omit = caller's context project) |
 | `region` | json |  | Content area fractional rect {x0,y0,x1,y1} (0..1). Default covers the main content pane. |
-| `settleMs` | number |  | Settle wait on the start sheet (default 600) |
+| `settleMs` | number |  | Settle wait on the start space (default 600) |
 | `threshold` | number |  | Noise floor (changed-pixel fraction) below which no switch is reported (default 0.003). Detection above the floor is peak-relative, so it adapts to the switch's magnitude. |
-| `to` | string | ✓ | Target sheet tab id |
+| `to` | string | ✓ | Target space tab id |
 
 **Returns**: { frames, frameMs, switchFrame, switchFrames (consecutive changed = jank spread), clean, diffsPct }
 
 ```bash
-sok sheet.switchScan '{"from":"c1","to":"c3"}'
-sok sheet.switchScan '{"to":"c3","frames":40}'
+sok space.switchScan '{"from":"c1","to":"c3"}'
+sok space.switchScan '{"to":"c3","frames":40}'
 ```
 
 ## `sidebar.left.move`
@@ -1904,13 +1904,13 @@ sok commands
 
 ## `state.context`
 
-Resolve the caller's position: project/sheet/panel/view that $SOKSAK_PANE belongs to (falls back to active chain when called outside a terminal).
+Resolve the caller's position: project/space/panel/view that $SOKSAK_PANE belongs to (falls back to active chain when called outside a terminal).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `pane` | string |  | Target pane id (omit = caller's context pane, $SOKSAK_PANE) |
 
-**Returns**: { projectId, sheetId, panelId, viewId?, paneId? } — viewId is absent when the panel is empty
+**Returns**: { projectId, spaceId, panelId, viewId?, paneId? } — viewId is absent when the panel is empty
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
@@ -1919,7 +1919,7 @@ sok state.context
 
 ## `state.tree`
 
-Full layout snapshot (address book): all ids and active state across project → sheet → panel (rect %) → view → pane. Use to discover ids before targeting other commands.
+Full layout snapshot (address book): all ids and active state across project → space → panel (rect %) → view → pane. Use to discover ids before targeting other commands.
 
 **Returns**: { activeProjectId, projects[] } — panels[].rect is % of the content area
 
@@ -2266,7 +2266,7 @@ sok view.activate '{"view":"v3"}'
 
 ## `view.close` (danger: destructive)
 
-Close a view tab — if it was the last view in a panel, the panel is also removed. Refuses to close the last view in a sheet. | 탭 닫기 뷰
+Close a view tab — if it was the last view in a panel, the panel is also removed. Refuses to close the last view in a space. | 탭 닫기 뷰
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -2327,7 +2327,7 @@ sok view.list
 
 ## `view.maximize`
 
-Maximize a view to fill the entire sheet. The split tree is preserved; only the display is toggled. Same as double-clicking a tab. Omit view to maximize the active view. | 최대화 전체화면 탭 크게 보기
+Maximize a view to fill the entire space. The split tree is preserved; only the display is toggled. Same as double-clicking a tab. Omit view to maximize the active view. | 최대화 전체화면 탭 크게 보기
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -2376,7 +2376,7 @@ sok view.open '{"program":"claude"}'
 
 ## `view.restore`
 
-Exit view maximize mode and restore the original split layout for the active sheet. | 최대화 해제 원래대로 레이아웃 복원
+Exit view maximize mode and restore the original split layout for the active space. | 최대화 해제 원래대로 레이아웃 복원
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -2465,7 +2465,7 @@ sok window.list
 
 ## `window.maximize`
 
-Maximize a window to fill the screen (native window maximize — distinct from view.maximize, which only enlarges one view within a sheet). Without label, targets the window this command runs in; with label, targets that window (see window.list). Pass off:true to restore (unmaximize). | 창 최대화 전체화면 키우기 해제
+Maximize a window to fill the screen (native window maximize — distinct from view.maximize, which only enlarges one view within a space). Without label, targets the window this command runs in; with label, targets that window (see window.list). Pass off:true to restore (unmaximize). | 창 최대화 전체화면 키우기 해제
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

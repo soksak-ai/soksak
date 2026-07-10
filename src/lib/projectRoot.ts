@@ -23,8 +23,8 @@ import { invoke } from "@tauri-apps/api/core";
 export const FOLDER_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
 // ~/.soksak/projects/<폴더명> 생성(멱등) 후 절대경로 반환. 검증은 Rust 재확인.
-export function ensureDefaultWorkspace(folder: string): Promise<string> {
-  return invoke<string>("ensure_workspace_dir", { folder });
+export function ensureDefaultProjectRoot(folder: string): Promise<string> {
+  return invoke<string>("ensure_project_dir", { folder });
 }
 
 // P1/P2 검증 + 정규화 경로 반환(P5 중복 비교의 기준). 위반 시 사유로 reject.

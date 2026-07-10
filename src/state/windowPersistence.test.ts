@@ -6,7 +6,7 @@ import {
   windowManifestEntry,
   upsertManifest,
   type WindowManifest,
-} from "./workspacePersistence";
+} from "./windowPersistence";
 import type { ProjectTab, GroupNode } from "./sessions";
 
 let sid = 0;

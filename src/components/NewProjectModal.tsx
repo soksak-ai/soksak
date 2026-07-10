@@ -6,10 +6,10 @@ import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 import { useDraggableModal } from "./modalDrag";
 import {
-  ensureDefaultWorkspace,
+  ensureDefaultProjectRoot,
   FOLDER_NAME_RE,
   validateProjectRoot,
-} from "../lib/workspace";
+} from "../lib/projectRoot";
 
 // 새 프로젝트 모달 — 디자인 레퍼런스(soksak_final): 드래그 가능한 460px 카드,
 // 헤더(+ 아이콘·⠿·✕), 행 레이아웃.
@@ -18,7 +18,7 @@ import {
 //   자동 지정 = 입력은 만들 "폴더명"(슬러그 필수, 저장 안 함 — P4) →
 //     ~/.soksak/projects/<폴더명> 생성·사용, 별칭 기본 = 폴더명.
 //   직접 선택 = 폴더 picker(홈/루트 금지 — P2 검증) — 입력은 "별칭"(자유,
-//     비면 폴더명). 영속 정체성은 루트 경로 그 자체(P4, workspace.ts 헌법).
+//     비면 폴더명). 영속 정체성은 루트 경로 그 자체(P4, projectRoot.ts 헌법).
 
 const baseName = (p?: string) =>
   p ? (p.split("/").filter(Boolean).pop() ?? p) : "";
@@ -86,7 +86,7 @@ export function NewProjectModal({
   const create = async () => {
     if (createDisabled) return; // 버튼 disabled 와 이중 방어
     const finalRoot =
-      mode === "auto" ? await ensureDefaultWorkspace(nameValue) : root!;
+      mode === "auto" ? await ensureDefaultProjectRoot(nameValue) : root!;
     // 루트 초기화 정책(git init 등)은 코어가 아니라 project.created 이벤트를
     // 구독하는 플러그인 소유(soksak-plugin-git-init) — 여기선 생성만.
     const args = {

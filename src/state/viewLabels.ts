@@ -4,7 +4,7 @@
 // (folderpop 등) 특례가 아니라 모든 사이드바 뷰 공용이다(코어 락인 금지). 미지정이면 manifest
 // title(view.decl.title) 로 폴백한다 — manifest 가 기본 단일진실, 오버라이드는 사용자 의도만 담는다.
 //
-// 영속: app.data core ns "viewLabels"(멀티창 일관성). boot(workspaceBoot)가 hydrate+subscribe.
+// 영속: app.data core ns "viewLabels"(멀티창 일관성). boot(windowBoot)가 hydrate+subscribe.
 // 동기 부트는 localStorage 캐시(coreStore) — 다른 영속 상태와 동일 패턴.
 
 import { create } from "zustand";

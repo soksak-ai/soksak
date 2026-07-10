@@ -148,6 +148,8 @@ break the symmetry law (file = command prefix: `webview_open`, not `webview_host
 | `soksak-plugin-browser-cef` | `soksak-plugin-browser-chromium` | plugin |
 | `soksak-sidecar-chromium` (initial publish) | `soksak-sidecar-browser-chromium` | sidecar artifact — unified with the plugin shape |
 | `soksak-engine-chromium@1` → `soksak-sidecar-browser@1` (both rejected) | `soksak-sidecar-browser-spec@1` | contract id — §8 |
+| `sheet.*` registry family (activate/close/create/list/rename/switchScan), `tab/sheet/<n>` node addresses, `msg.sheet.*`/`cmd.sheet.*` keys, plugin event payload `activeSheetId`, UI word "시트" | `space.*`, `tab/space/<n>`, `msg.space.*`/`cmd.space.*`, `activeSpaceId`, "스페이스" | concept — a project's content tab is a Space (Studio rejected); `c*` ids and snapshot keys unchanged |
+| `sessions.renameTab` | `sessions.renameProject` | internal — it renames a ProjectTab; "tab" meant a different thing on every layer |
 | `soksak-browser-kit` | `soksak-kit-browser-common` | kit — unified with the unit grammar (§1.4a: kind-first + part name; intermediates burned: `-shell` terminal-shell collision, `-chassis` forced metaphor); registrar moved `~/ai/cli/` → `~/.soksak-dev/kits/` |
 
 `webview_inject_script` already conformed and is unchanged.

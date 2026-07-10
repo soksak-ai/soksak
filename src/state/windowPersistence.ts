@@ -6,13 +6,13 @@
 //
 // [RULE] 레이아웃은 창-로컬(window label 키). 같은 root 를 두 창에 띄우면 각자 키라 충돌 없음 —
 // 현재는 프로젝트 유니크 가드가 상위에서 막지만, 키 모델 자체는 멀티창을 이미 지원한다(A 결정).
-// live status/PTY/webview 세션은 직렬화하지 않는다(workspaceSnapshot 이 제외).
+// live status/PTY/webview 세션은 직렬화하지 않는다(windowSnapshot 이 제외).
 
 import {
   serializeProject,
   deserializeProject,
   type ProjectSnapshot,
-} from "./workspaceSnapshot";
+} from "./windowSnapshot";
 import type { ProjectTab } from "./sessions";
 
 export interface WindowSnapshot {

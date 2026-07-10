@@ -39,7 +39,7 @@ beforeEach(() => {
   });
 });
 
-/** 활성 시트의 활성 패널을 뷰 0개로 만든다(실측 상태의 재현). */
+/** 활성 스페이스의 활성 패널을 뷰 0개로 만든다(실측 상태의 재현). */
 function emptyActivePanel(): void {
   const tabs = structuredClone(useSessions.getState().tabs);
   const project = tabs.find((t) => t.id === useSessions.getState().activeId)!;
@@ -88,7 +88,7 @@ describe("빈 패널 컨텍스트", () => {
     expect(r.ok).toBe(true);
     expect(r.data).toMatchObject({
       projectId: expect.any(String),
-      sheetId: expect.any(String),
+      spaceId: expect.any(String),
       panelId: expect.any(String),
       viewId: expect.any(String),
     });

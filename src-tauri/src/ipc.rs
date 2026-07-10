@@ -79,7 +79,7 @@ static LAST_WORKSPACE: Mutex<Option<String>> = Mutex::new(None);
 
 // 마지막 포커스 워크스페이스 창(읽기 전용) — orchestrator.ask 의 기본 무대(SOKSAK_WINDOW).
 #[tauri::command]
-pub fn ipc_last_workspace_window() -> Option<String> {
+pub fn ipc_last_project_window() -> Option<String> {
     LAST_WORKSPACE.lock().ok().and_then(|w| w.clone())
 }
 

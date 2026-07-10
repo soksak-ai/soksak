@@ -161,7 +161,7 @@ export interface ProjectTab {
   // 좌측 사이드바 레이아웃(B2) — SplitTree<SidebarGroup>. 등록된 sidebar-left 뷰의 배치(탭 묶음 +
   // 세로 분할 + 활성). 콘텐츠 영역과 동일한 drag-merge. 등록 변화와 reconcile(LeftSidebarHost).
   leftLayout: SidebarLayout;
-  // 프로젝트 루트 디렉토리(P1 루트 필수 — workspace.ts 헌법). 정체성 = 이
+  // 프로젝트 루트 디렉토리(P1 루트 필수 — projectRoot.ts 헌법). 정체성 = 이
   // 경로(P4). 터미널 시작 위치이자 파일트리/git 의 기준.
   root: string;
   // 복원 시 root 가 파일시스템에 없음(휘발 — 직렬화 제외). 탭은 유지하되 배너로 알리고
@@ -208,7 +208,7 @@ interface SessionsStore {
   >;
   closeTab: (id: string) => CmdResult<{ activeProjectId: string }>;
   setActive: (id: string) => CmdResult;
-  renameTab: (id: string, title: string) => CmdResult;
+  renameProject: (id: string, title: string) => CmdResult;
   // 프로젝트 식별 색 설정(null = 제거).
   setProjectColor: (id: string, color: string | null) => CmdResult;
   // 프로젝트 설정 일괄 변경(undefined = 유지, null = 제거→기본). root 는 불변.
@@ -358,7 +358,7 @@ const newViewId = () => `v${nextViewId++}`;
 const newGroupId = () => `g${nextGroupId++}`;
 const newSplitId = () => `s${nextSplitId++}`;
 const newContentId = () => `c${nextContentId++}`;
-// split id 생성기(복원 시 workspaceSnapshot.deserialize 에 주입 — A2 는 split id 를 재생성한다).
+// split id 생성기(복원 시 windowSnapshot.deserialize 에 주입 — A2 는 split id 를 재생성한다).
 export const nextSplitIdGen = (): string => newSplitId();
 
 // 복원된 트리의 보존 id 위로 카운터를 올린다(신규 생성이 보존 id 와 충돌하지 않게). prefix 별로
@@ -715,22 +715,22 @@ function mapViewEverywhere(
   };
 }
 
-// 시트 자동 타이틀의 번호 추출 — "시트 3"·"Sheet 3"·"3" 모두 후행 정수를 읽는다(로케일·접두 무관).
-// 접두 붙은 자동 타이틀에서도 nextNum 이 올바로 증가하도록(순수 parseInt("시트 3")=NaN 회피).
-export function sheetAutoNum(title: string): number {
+// 스페이스 자동 타이틀의 번호 추출 — "스페이스 3"·"Space 3"·"3" 모두 후행 정수를 읽는다(로케일·접두 무관).
+// 접두 붙은 자동 타이틀에서도 nextNum 이 올바로 증가하도록(순수 parseInt("스페이스 3")=NaN 회피).
+export function spaceAutoNum(title: string): number {
   const m = String(title).match(/(\d+)\s*$/);
   return m ? parseInt(m[1], 10) : 0;
 }
 
-// 로드-타임 마이그레이션 — 구 버전의 순수 숫자 시트 타이틀("3")을 "시트 3"(i18n)으로 승격한다.
-// 엑셀식 명명으로 그것이 "시트"임을 명확히 한다. 순수 숫자만 대상이라 사용자가 이름 바꾼 타이틀은
-// 보존한다. 멱등(변환 후엔 순수 숫자가 아니라 재실행 무영향). workspaceBoot 복원 직후 1회 적용.
-export function migrateSheetTitle(title: string): string {
-  return /^\d+$/.test(title.trim()) ? tmsg("sheet.autoTitle", { n: title.trim() }) : title;
+// 로드-타임 마이그레이션 — 구 버전의 순수 숫자 스페이스 타이틀("3")을 "스페이스 3"(i18n)으로 승격한다.
+// 엑셀식 명명으로 그것이 "스페이스"임을 명확히 한다. 순수 숫자만 대상이라 사용자가 이름 바꾼 타이틀은
+// 보존한다. 멱등(변환 후엔 순수 숫자가 아니라 재실행 무영향). windowBoot 복원 직후 1회 적용.
+export function migrateSpaceTitle(title: string): string {
+  return /^\d+$/.test(title.trim()) ? tmsg("space.autoTitle", { n: title.trim() }) : title;
 }
 
 function makeProject(id: string, opts: NewProjectOpts): ProjectTab {
-  const c = makeContent(tmsg("sheet.autoTitle", { n: 1 }), opts.program);
+  const c = makeContent(tmsg("space.autoTitle", { n: 1 }), opts.program);
   const alias = opts.alias.trim() || baseName(opts.root);
   return {
     id,
@@ -834,7 +834,7 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     return r;
   },
 
-  renameTab: (id, title) => {
+  renameProject: (id, title) => {
     let r: CmdResult = noProject(id);
     set((s) => {
       if (!s.tabs.some((t) => t.id === id)) return s;
@@ -1007,8 +1007,8 @@ export const useSessions = create<SessionsStore>((set, get) => ({
       const t = s.tabs.find((x) => x.id === projectId);
       if (!t) return s;
       const nextNum =
-        Math.max(0, ...t.contents.map((c) => sheetAutoNum(c.title))) + 1;
-      const c = makeContent(tmsg("sheet.autoTitle", { n: nextNum }), program);
+        Math.max(0, ...t.contents.map((c) => spaceAutoNum(c.title))) + 1;
+      const c = makeContent(tmsg("space.autoTitle", { n: nextNum }), program);
       const g = allGroups(c.layout)[0];
       const v = g.views[0];
       r = ok({ contentId: c.id, groupId: g.id, ...(v ? idsOfView(v) : {}) });

@@ -15,7 +15,7 @@ import {
 } from "@tauri-apps/api/window";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { makeCoreStore } from "./coreStore";
-import { validateProjectRoot, ensureDefaultWorkspace } from "../lib/workspace";
+import { validateProjectRoot, ensureDefaultProjectRoot } from "../lib/projectRoot";
 import { claimRoots } from "./projectRegistry";
 import { beginRestoreHydration } from "./hydration";
 import { reseedSessionsSnapshot } from "../plugins/hooks";
@@ -24,7 +24,7 @@ import {
   useSessions,
   reseedIdCounters,
   nextSplitIdGen,
-  migrateSheetTitle,
+  migrateSpaceTitle,
   type ProjectTab,
 } from "./sessions";
 import {
@@ -35,7 +35,7 @@ import {
   setManifestFocused,
   type WindowSnapshot,
   type WindowManifest,
-} from "./workspacePersistence";
+} from "./windowPersistence";
 
 // 이 창의 프레임(논리 px) — manifest rect 기록용. 실패는 rect 생략(복원은 OS 기본 위치).
 async function currentFrame(): Promise<
@@ -127,11 +127,11 @@ export async function initWorkspacePersistence(
       const denied = await claimRoots(tabs.map((t) => t.root));
       const owned = tabs
         .filter((t) => !denied.has(t.root))
-        // 로드-타임 마이그레이션 — 구 순수 숫자 시트 타이틀("3")을 "시트 3"(i18n)으로 승격(멱등,
-        // 엑셀식 명명으로 시트임을 명확히). 사용자가 바꾼 타이틀은 보존(순수 숫자만 대상).
+        // 로드-타임 마이그레이션 — 구 순수 숫자 스페이스 타이틀("3")을 "스페이스 3"(i18n)으로 승격(멱등,
+        // 엑셀식 명명으로 스페이스임을 명확히). 사용자가 바꾼 타이틀은 보존(순수 숫자만 대상).
         .map((t) => ({
           ...t,
-          contents: t.contents.map((c) => ({ ...c, title: migrateSheetTitle(c.title) })),
+          contents: t.contents.map((c) => ({ ...c, title: migrateSpaceTitle(c.title) })),
         }));
       for (const t of tabs) {
         if (denied.has(t.root))
@@ -252,7 +252,7 @@ export async function respawnSavedWindows(): Promise<void> {
       const recents = await listRecentProjects().catch(() => []);
       if (recents.length === 0) {
         try {
-          const root = await ensureDefaultWorkspace("project1");
+          const root = await ensureDefaultProjectRoot("project1");
           await invoke("window_create", { init: `root=${encodeURIComponent(root)}` });
         } catch (e) {
           console.error("첫 실행 기본 워크스페이스 생성 실패:", e);

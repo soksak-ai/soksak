@@ -22,7 +22,7 @@ import { GroupArea } from "./components/GroupArea";
 import { NewProjectModal } from "./components/NewProjectModal";
 import { ProjectSettingsModal } from "./components/ProjectSettingsModal";
 import { Icon } from "./ui/icons/Icon";
-import { validateProjectRoot } from "./lib/workspace";
+import { validateProjectRoot } from "./lib/projectRoot";
 // 워드마크 로고 — fill 이 currentColor 상속이라 테마를 자동 추종(정적 신뢰 에셋).
 import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
@@ -150,7 +150,7 @@ const ProjectPane = memo(function ProjectPane({
   // 클릭에 즉시 반응한다. 전환 신호(view.activated)는 store diff 마이크로태스크라 커밋 전이라 여기서
   // 못 쓴다(그걸로 측정하면 옛 위치를 읽어 webview 가 한 박자 늦는다).
   useLayoutEffect(() => {
-    emitPluginEvent("layout.reflow", { activeSheetId: project.activeContentId });
+    emitPluginEvent("layout.reflow", { activeSpaceId: project.activeContentId });
   }, [project.activeContentId]);
   return (
     <div
@@ -209,7 +209,7 @@ const ProjectPane = memo(function ProjectPane({
                 // (GroupArea)과 동일 규칙을 같은 헬퍼로 적용(층 간 일치).
                 style={parkedStyle(isActiveContent)}
               >
-                <GroupArea content={c} projectId={project.id} sheetShown={isActiveContent} />
+                <GroupArea content={c} projectId={project.id} spaceShown={isActiveContent} />
               </div>
             );
           })}
@@ -844,8 +844,8 @@ function App() {
         {/* 프로젝트 0개 = 예외 상태(P6 열화·복원 드롭)뿐 — 열기·생성은 컨트롤 플레인의 표면이다.
             빈 워크스페이스 창은 생성 경로가 없으므로(window.new root 필수) 안내만 남긴다. */}
         {tabs.length === 0 && (
-          <div className="workspace-empty" data-node="workspace/empty">
-            {t("workspace.empty")}
+          <div className="window-empty" data-node="window/empty">
+            {t("window.empty")}
           </div>
         )}
         {/* 모든 프로젝트를 마운트해 세션 유지(비활성은 visibility 로 숨김). */}

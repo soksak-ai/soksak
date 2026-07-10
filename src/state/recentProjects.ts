@@ -4,7 +4,7 @@
 // 과 기본 부트 — 복원은 기록하지 않는다(이미 목록에 있던 것의 유지일 뿐).
 
 import { useEffect, useState } from "react";
-import { coreStoreDeps } from "./workspaceBoot";
+import { coreStoreDeps } from "./windowBoot";
 import { makeCoreStore } from "./coreStore";
 
 export interface RecentProject {

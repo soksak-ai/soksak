@@ -34,7 +34,7 @@ import {
   respawnSavedWindows,
   initControlPlaneFrame,
   coreStoreDeps,
-} from "./state/workspaceBoot";
+} from "./state/windowBoot";
 import { initWindowTitle } from "./state/windowTitle";
 import { initViewLabelsPersistence } from "./state/viewLabels";
 import { initSettingsPersistence } from "./state/settings";

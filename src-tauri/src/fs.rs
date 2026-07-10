@@ -380,7 +380,7 @@ pub fn git_status(path: String) -> Result<Vec<GitEntry>, String> {
 // 지정하지 않은 경우(P3). 앱이 만든 폴더는 앱 관리 영역(~/.soksak)에 둔다.
 // folder 는 디렉토리명 계약 — 슬러그만 허용(탈출/주입 차단).
 #[tauri::command]
-pub fn ensure_workspace_dir(folder: String) -> Result<String, String> {
+pub fn ensure_project_dir(folder: String) -> Result<String, String> {
     let valid = !folder.is_empty()
         && folder
             .chars()

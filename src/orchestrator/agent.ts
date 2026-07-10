@@ -225,7 +225,7 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
   // "마지막으로 일하던 워크스페이스"가 사용자 의도다.
   const stageWindow =
     explicitWindow ??
-    (await invoke<string | null>("ipc_last_workspace_window").catch(() => null)) ??
+    (await invoke<string | null>("ipc_last_project_window").catch(() => null)) ??
     undefined;
   const turnId = crypto.randomUUID();
   publishActivity("chat.prompt", "orchestrator", { text, turnId, message: `💬 ${text}` });

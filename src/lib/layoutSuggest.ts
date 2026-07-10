@@ -38,8 +38,8 @@ export interface SuggestInput {
   //         단일 모니터면 우측 1/3 나란히. 워크스페이스는 자기 모니터 전체.
   // grid:   전 창을 첫 모니터에 균등 그리드(관찰용 타일링).
   strategy: "spread" | "grid";
-  // 창 역할(선택) — label→역할. 미지정 창은 workspace 로 본다.
-  roles?: Record<string, "orchestrator" | "workspace">;
+  // 창 역할(선택) — label→역할. 미지정 창은 project 로 본다.
+  roles?: Record<string, "orchestrator" | "project">;
 }
 
 export function suggestLayout(input: SuggestInput): Placement[] {

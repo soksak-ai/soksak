@@ -84,7 +84,7 @@ export async function closeProjectReleased(projectId: string) {
 }
 
 /** 복원/부트 경로: 이 창 스냅샷의 root 들을 일괄 claim. 반환 = 점유 실패(다른 창 소유) root 집합
- *  — 호출부(workspaceBoot)는 해당 탭을 이 창에서 드롭한다(우아한 열화, 중복 창 금지). */
+ *  — 호출부(windowBoot)는 해당 탭을 이 창에서 드롭한다(우아한 열화, 중복 창 금지). */
 export async function claimRoots(roots: string[]): Promise<Set<string>> {
   const denied = new Set<string>();
   for (const root of roots) {
