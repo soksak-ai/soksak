@@ -206,11 +206,11 @@ describe("partitionTransparency — 시행 모드 분류", () => {
     ).toEqual({ blocking: [v[0]], warn: [v[1]] });
   });
 
-  it("현행 입법표 핀 — 3종 전부 warn(2026-07-11 설치본 실측 위반 잔존: 4·14·6)", () => {
+  it("현행 입법표 핀 — 정적 2종 blocking(위반 0 도달), view-status warn(런타임 규칙 명시 유예)", () => {
     expect(C2_ENFORCEMENT).toEqual({
-      "command-surface": "warn",
+      "command-surface": "blocking",
       "view-status": "warn",
-      "view-nodes": "warn",
+      "view-nodes": "blocking",
     });
   });
 });

@@ -38,13 +38,16 @@ export function missingRegistrations(
 // ── 결합 법칙 C2 — 투명성 3종(command·status·DOM) ────────────────────────────
 // 모든 기능은 세 표면을 의무 노출한다. 규칙은 순수 판정, 시행 모드는 C2_ENFORCEMENT 가 단일진실.
 // blocking 승격은 위반 0 실측 + 명시 재입법 커밋으로만 한다(C5 — 무언 완화·무언 승격 둘 다 금지).
-// 도입 시점 실측(2026-07-11, dev 홈 플러그인 매니페스트 41개, scripts/gates/c2-transparency-scan.mjs).
-// 위반 잔존이라 3종 전부 warn 출발. 개별 위반 목록은 코어에 두지 않는다(C1 — 코어는 generic만):
-//   command-surface 위반 5 (뷰축 2 / 프로그램축 2 / 파일뷰어축 1)
-//   view-status     위반 4/10 (콘텐츠 뷰 중 setStatus 미채택 — 런타임 실측, plugin.conformance)
-//   view-nodes      위반 6
-// 정적 2종의 승격 기계 조건 = c2-transparency-scan 헤드리스 게이트의 exit 0. view-status 는 런타임
-// 규칙이라 헤드리스 매니페스트 스캔 대상 밖 — 시행·실측 지점은 plugin.conformance(마운트된 콘텐츠 뷰).
+// 재입법 이력:
+//   2026-07-11 도입 — 위반 잔존이라 3종 전부 warn 출발(dev 홈 매니페스트 41개 실측):
+//     command-surface 5 · view-nodes 6 · view-status 4/10.
+//   2026-07-11 승격 — 정적 2종 위반 0 도달(11 플러그인 적합화 sweep) 후 command-surface·view-nodes 를
+//     blocking 으로 승격. 기계 조건 = c2-transparency-scan 헤드리스 게이트 exit 0(make gates 배선).
+// view-status 는 매니페스트 선언이 아니라 런타임 속성(마운트된 콘텐츠 뷰가 status 를 보고하는가)이라
+// 헤드리스 매니페스트 스캔으로 실측 불가 — 시행·실측 지점은 plugin.conformance. 콘텐츠 뷰 4개
+// (browser-chromium·-offscreen·-native·git-diff)가 setStatus 미채택으로 잔존하므로 warn 유지한다.
+// 이는 무언 완화가 아니라 위 두 종과 다른 강제 지점(런타임)에 대한 명시 유예다 — 4 플러그인 setStatus
+// 채택 후 blocking 승격 예정(별도 재입법 커밋).
 
 export type TransparencyRule = "command-surface" | "view-status" | "view-nodes";
 // 시행 모드 — C2·C3 가 공유하는 축(blocking=활성화 거부, warn=경고). TransparencyMode 는 기존 이름 호환.
@@ -53,9 +56,9 @@ export type TransparencyMode = EnforcementMode;
 
 // 시행 입법표. 이 표의 변경은 재입법 커밋이며 conformance.test.ts 의 핀 테스트가 동행 개정을 강제한다.
 export const C2_ENFORCEMENT: Readonly<Record<TransparencyRule, TransparencyMode>> = {
-  "command-surface": "warn",
+  "command-surface": "blocking",
   "view-status": "warn",
-  "view-nodes": "warn",
+  "view-nodes": "blocking",
 };
 
 export interface TransparencyViolation {
