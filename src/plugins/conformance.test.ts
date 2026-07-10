@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  C2_ENFORCEMENT,
   gateContribution,
   missingRegistrations,
   nodeConformance,
+  partitionTransparency,
+  transparencyViolations,
+  unreportedStatusViews,
 } from "./conformance";
 
 // gateContribution — declared≡actual 등록 게이트(통합). api.ts 4중 find+throw 를 하나로.
@@ -104,6 +108,100 @@ describe("nodeConformance — 선언(contributes.nodes) ≡ 배선(data-node)", 
     expect(nodeConformance(["send"], ["send", "extra"])).toEqual({
       missing: [],
       orphan: ["extra"],
+    });
+  });
+});
+
+// transparencyViolations — 결합 법칙 C2(투명성 3종) 중 매니페스트 정적 규칙 2종의 순수 판정.
+//   ① command-surface: 기능 보유(views>0 ∨ programs>0) ∧ commands=0 → 위반
+//   ③ view-nodes: views>0 ∧ nodes=0 → 위반(ui.tree 부재 = 클릭 E2E 불가)
+describe("transparencyViolations — 투명성 규칙(매니페스트 정적)", () => {
+  it("views>0 ∧ commands=0 → command-surface 위반", () => {
+    const v = transparencyViolations({ views: 1, programs: 0, commands: 0, nodes: 1 });
+    expect(v.map((x) => x.rule)).toEqual(["command-surface"]);
+  });
+
+  it("programs>0 ∧ commands=0 → command-surface 위반(뷰 없는 프로그램 플러그인도 기능 보유)", () => {
+    const v = transparencyViolations({ views: 0, programs: 1, commands: 0, nodes: 0 });
+    expect(v.map((x) => x.rule)).toEqual(["command-surface"]);
+  });
+
+  it("views>0 ∧ nodes=0 → view-nodes 위반", () => {
+    const v = transparencyViolations({ views: 1, programs: 0, commands: 2, nodes: 0 });
+    expect(v.map((x) => x.rule)).toEqual(["view-nodes"]);
+  });
+
+  it("두 규칙 동시 위반이면 둘 다 보고(은폐 0)", () => {
+    const v = transparencyViolations({ views: 1, programs: 0, commands: 0, nodes: 0 });
+    expect(v.map((x) => x.rule)).toEqual(["command-surface", "view-nodes"]);
+  });
+
+  it("기능 없음(views=0 ∧ programs=0) → commands=0 이어도 위반 아님(아이콘셋·테마류)", () => {
+    expect(
+      transparencyViolations({ views: 0, programs: 0, commands: 0, nodes: 0 }),
+    ).toEqual([]);
+  });
+
+  it("세 표면을 갖추면 위반 없음", () => {
+    expect(
+      transparencyViolations({ views: 1, programs: 1, commands: 3, nodes: 2 }),
+    ).toEqual([]);
+  });
+});
+
+// unreportedStatusViews — C2 ② view-status 의 순수 판정. 캐퍼빌리티는 코어 실존
+// (viewRegistry PluginViewContext.setStatus). 활성화 시점엔 뷰 미마운트라 로더 판정 불가 —
+// 시행 지점은 런타임 진단(plugin.conformance)·발행 게이트(doctor).
+describe("unreportedStatusViews — status 축 미보고 뷰 감지", () => {
+  it("마운트된 뷰 전부 status 를 보고하면 빈 배열", () => {
+    expect(unreportedStatusViews(["diff", "log"], ["diff", "log"])).toEqual([]);
+  });
+
+  it("미보고 뷰만 반환(마운트 순서 보존)", () => {
+    expect(unreportedStatusViews(["diff", "log", "tree"], ["log"])).toEqual([
+      "diff",
+      "tree",
+    ]);
+  });
+
+  it("보고만 있고 마운트 목록에 없는 id 는 다루지 않음(회수 지연 잔재)", () => {
+    expect(unreportedStatusViews(["diff"], ["diff", "stale"])).toEqual([]);
+  });
+});
+
+// partitionTransparency — 위반을 시행 모드(blocking/warn)로 분류. 모드 단일진실=C2_ENFORCEMENT.
+// blocking 승격은 위반 0 실측+재입법 커밋으로만(C5) — 이 표를 고치면 아래 핀 테스트가 함께 고쳐져야 한다.
+describe("partitionTransparency — 시행 모드 분류", () => {
+  it("warn 규칙 위반 → warn 으로 분류", () => {
+    const v = [{ rule: "command-surface" as const, detail: "d" }];
+    expect(
+      partitionTransparency(v, {
+        "command-surface": "warn",
+        "view-status": "warn",
+        "view-nodes": "warn",
+      }),
+    ).toEqual({ blocking: [], warn: v });
+  });
+
+  it("blocking 규칙 위반 → blocking 으로 분류(주입 표)", () => {
+    const v = [
+      { rule: "command-surface" as const, detail: "a" },
+      { rule: "view-nodes" as const, detail: "b" },
+    ];
+    expect(
+      partitionTransparency(v, {
+        "command-surface": "blocking",
+        "view-status": "warn",
+        "view-nodes": "warn",
+      }),
+    ).toEqual({ blocking: [v[0]], warn: [v[1]] });
+  });
+
+  it("현행 입법표 핀 — 3종 전부 warn(2026-07-11 설치본 실측 위반 잔존: 4·14·6)", () => {
+    expect(C2_ENFORCEMENT).toEqual({
+      "command-surface": "warn",
+      "view-status": "warn",
+      "view-nodes": "warn",
     });
   });
 });

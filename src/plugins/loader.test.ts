@@ -6,6 +6,7 @@ import {
   activatePlugin,
   deactivateAll,
   deactivateById,
+  enforceTransparency,
   isActive,
   setActive,
 } from "./loader";
@@ -95,6 +96,110 @@ describe("activatePlugin — conformance inventory(declared-but-not-registered)"
     );
     expect(warn).not.toHaveBeenCalledWith(
       expect.stringContaining("declared-but-not-registered"),
+    );
+    warn.mockRestore();
+  });
+});
+
+// 결합 법칙 C2(투명성 3종) — 매니페스트 정적 규칙(command-surface·view-nodes)의 활성화 경계 시행.
+// 현행 입법표(C2_ENFORCEMENT)는 전부 warn — 활성화는 막지 않되 위반을 표면화한다(은폐 0).
+describe("activatePlugin — 투명성 규칙 경고(매니페스트 정적)", () => {
+  it("views>0 ∧ commands=0 → C2 command-surface 경고", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await activatePlugin(
+      { activate: () => {} },
+      manifestOf({
+        permissions: ["ui"],
+        contributes: {
+          views: [{ id: "panel", title: "패널", icon: "P" }],
+          nodes: [{ id: "send" }],
+        },
+      }),
+      "/d",
+      fakeDeps(),
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("C2 command-surface"),
+    );
+    warn.mockRestore();
+  });
+
+  it("views>0 ∧ nodes=0 → C2 view-nodes 경고", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await activatePlugin(
+      { activate: () => {} },
+      manifestOf({
+        permissions: ["ui", "commands"],
+        contributes: {
+          views: [{ id: "panel", title: "패널", icon: "P" }],
+          commands: [{ name: "open", title: "열기" }],
+        },
+      }),
+      "/d",
+      fakeDeps(),
+    );
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("C2 view-nodes"));
+    warn.mockRestore();
+  });
+
+  it("세 표면을 갖춘 매니페스트 → C2 경고 없음", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await activatePlugin(
+      {
+        activate: (ctx: PluginContext) => {
+          ctx.app.commands!.register("open", {
+            description: "open",
+            handler: async () => ({ ok: true, code: "OK", message: "ok" }),
+          });
+          ctx.app.ui!.registerView("panel", { mount: () => {} });
+        },
+      },
+      manifestOf({
+        permissions: ["ui", "commands"],
+        contributes: {
+          views: [{ id: "panel", title: "패널", icon: "P" }],
+          commands: [{ name: "open", title: "열기" }],
+          nodes: [{ id: "send" }],
+        },
+      }),
+      "/d",
+      fakeDeps(),
+    );
+    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("C2 "));
+    warn.mockRestore();
+  });
+});
+
+// blocking 모드 — 입법표가 blocking 인 규칙의 위반은 활성화를 거부한다(주입 표로 기제 검증).
+// 현행 표는 전부 warn 이므로 이 경로는 승격(재입법 커밋) 시 살아난다 — 기제는 지금 실존해야 한다.
+describe("enforceTransparency — blocking 모드(주입 표)", () => {
+  const violating = () =>
+    manifestOf({
+      permissions: ["ui"],
+      contributes: { views: [{ id: "panel", title: "패널", icon: "P" }] },
+    });
+
+  it("blocking 규칙 위반 → throw(활성화 거부)", () => {
+    expect(() =>
+      enforceTransparency(violating(), {
+        "command-surface": "blocking",
+        "view-status": "blocking",
+        "view-nodes": "blocking",
+      }),
+    ).toThrow(/C2/);
+  });
+
+  it("warn 모드 위반은 throw 하지 않는다(경고만)", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(() =>
+      enforceTransparency(violating(), {
+        "command-surface": "warn",
+        "view-status": "warn",
+        "view-nodes": "warn",
+      }),
+    ).not.toThrow();
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("C2 command-surface"),
     );
     warn.mockRestore();
   });
