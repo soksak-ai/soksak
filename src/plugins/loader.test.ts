@@ -102,17 +102,69 @@ describe("activatePlugin — conformance inventory(declared-but-not-registered)"
   });
 });
 
-// 결합 법칙 C2(투명성 3종) — 매니페스트 정적 규칙(command-surface·view-nodes)의 활성화 경계 시행.
-// 현행 입법표(C2_ENFORCEMENT)는 전부 warn — 활성화는 막지 않되 위반을 표면화한다(은폐 0).
-describe("activatePlugin — 투명성 규칙 경고(매니페스트 정적)", () => {
-  it("views>0 ∧ commands=0 → C2 command-surface 경고", async () => {
+// 결합 법칙 C2(투명성 3종) — 매니페스트 정적 규칙의 활성화 경계 시행. 판정 단일진실은 스펙 패키지
+// (transparency.ts). 현행 입법표(C2_ENFORCEMENT): command-surface·view-nodes 는 blocking(활성화 거부),
+// content-view-status 는 warn 출발(선언 축 신설 래칫 — 활성화는 막지 않되 위반을 표면화, 은폐 0).
+describe("activatePlugin — 투명성 규칙(매니페스트 정적) 활성화 경계", () => {
+  it("views>0 ∧ commands=0 → C2 command-surface 위반으로 활성화 거부(blocking)", async () => {
+    await expect(
+      activatePlugin(
+        { activate: () => {} },
+        manifestOf({
+          permissions: ["ui"],
+          contributes: {
+            views: [{ id: "panel", title: "패널", icon: "P" }],
+            nodes: [{ id: "send" }],
+          },
+        }),
+        "/d",
+        fakeDeps(),
+      ),
+    ).rejects.toThrow(/C2.*command-surface/);
+  });
+
+  it("fileViewers>0 ∧ commands=0 → 활성화 거부(파일 뷰어만 기여해도 기능 보유)", async () => {
+    await expect(
+      activatePlugin(
+        { activate: () => {} },
+        manifestOf({
+          permissions: ["ui"],
+          contributes: {
+            fileViewers: [{ id: "image", extensions: ["png", "jpg"] }],
+          },
+        }),
+        "/d",
+        fakeDeps(),
+      ),
+    ).rejects.toThrow(/C2.*command-surface/);
+  });
+
+  it("views>0 ∧ nodes=0 → C2 view-nodes 위반으로 활성화 거부(blocking)", async () => {
+    await expect(
+      activatePlugin(
+        { activate: () => {} },
+        manifestOf({
+          permissions: ["ui", "commands"],
+          contributes: {
+            views: [{ id: "panel", title: "패널", icon: "P" }],
+            commands: [{ name: "open", title: "열기" }],
+          },
+        }),
+        "/d",
+        fakeDeps(),
+      ),
+    ).rejects.toThrow(/C2.*view-nodes/);
+  });
+
+  it("콘텐츠 뷰 status 선언 부재 → C2 content-view-status 경고(warn — 활성화는 진행)", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await activatePlugin(
       { activate: () => {} },
       manifestOf({
-        permissions: ["ui"],
+        permissions: ["ui", "commands"],
         contributes: {
-          views: [{ id: "panel", title: "패널", icon: "P" }],
+          views: [{ id: "canvas", title: "캔버스", icon: "C", placements: ["content"] }],
+          commands: [{ name: "open", title: "열기" }],
           nodes: [{ id: "send" }],
         },
       }),
@@ -120,45 +172,8 @@ describe("activatePlugin — 투명성 규칙 경고(매니페스트 정적)", (
       fakeDeps(),
     );
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("C2 command-surface"),
+      expect.stringContaining("C2 content-view-status"),
     );
-    warn.mockRestore();
-  });
-
-  it("fileViewers>0 ∧ commands=0 → C2 command-surface 경고(파일 뷰어만 기여해도 기능 보유)", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await activatePlugin(
-      { activate: () => {} },
-      manifestOf({
-        permissions: ["ui"],
-        contributes: {
-          fileViewers: [{ id: "image", extensions: ["png", "jpg"] }],
-        },
-      }),
-      "/d",
-      fakeDeps(),
-    );
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("C2 command-surface"),
-    );
-    warn.mockRestore();
-  });
-
-  it("views>0 ∧ nodes=0 → C2 view-nodes 경고", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await activatePlugin(
-      { activate: () => {} },
-      manifestOf({
-        permissions: ["ui", "commands"],
-        contributes: {
-          views: [{ id: "panel", title: "패널", icon: "P" }],
-          commands: [{ name: "open", title: "열기" }],
-        },
-      }),
-      "/d",
-      fakeDeps(),
-    );
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("C2 view-nodes"));
     warn.mockRestore();
   });
 
@@ -205,6 +220,7 @@ describe("enforceTransparency — blocking 모드(주입 표)", () => {
         "command-surface": "blocking",
         "view-status": "blocking",
         "view-nodes": "blocking",
+        "content-view-status": "blocking",
       }),
     ).toThrow(/C2/);
   });
@@ -216,6 +232,7 @@ describe("enforceTransparency — blocking 모드(주입 표)", () => {
         "command-surface": "warn",
         "view-status": "warn",
         "view-nodes": "warn",
+        "content-view-status": "warn",
       }),
     ).not.toThrow();
     expect(warn).toHaveBeenCalledWith(
@@ -350,10 +367,13 @@ describe("activatePlugin — 생명주기·수거", () => {
   });
 
   it("activate throw → 등록분(선언적 언어 포함) 전부 회수 후 전파", async () => {
+    // C2 blocking 게이트(활성화 전)를 통과하는 적합 매니페스트 — 회수 경로 자체를 겨눈다.
     const m = manifestOf({
-      permissions: ["ui"],
+      permissions: ["ui", "commands"],
       contributes: {
         views: [{ id: "panel", title: "패널", icon: "P" }],
+        commands: [{ name: "open", title: "열기" }],
+        nodes: [{ id: "send" }],
       },
     });
     await expect(

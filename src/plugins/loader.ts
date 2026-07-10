@@ -110,21 +110,15 @@ function reportDeclaredButNotRegistered(
   }
 }
 
-// 결합 법칙 C2(투명성 3종) 중 매니페스트 정적 규칙(command-surface·view-nodes)의 활성화 경계 시행.
+// 결합 법칙 C2(투명성 3종) 중 매니페스트 정적 규칙(command-surface·view-nodes·content-view-status)의
+// 활성화 경계 시행. 판정 단일진실 = 스펙 패키지 transparency.ts(conformance 경유 소비 — 미러 금지).
 // blocking 규칙 위반 = 활성화 거부(throw), warn 규칙 위반 = 경고(은폐 0). 모드 단일진실=C2_ENFORCEMENT.
 // view-status 규칙은 마운트 후에만 판정 가능(unreportedStatusViews) — 시행 지점이 여기가 아니다.
 export function enforceTransparency(
   manifest: PluginManifest,
   enforcement: Readonly<Record<TransparencyRule, TransparencyMode>> = C2_ENFORCEMENT,
 ): void {
-  const c = manifest.contributes;
-  const violations = transparencyViolations({
-    views: c.views.length,
-    programs: c.programs.length,
-    fileViewers: c.fileViewers.length,
-    commands: c.commands.length,
-    nodes: c.nodes.length,
-  });
+  const violations = transparencyViolations(manifest.contributes);
   const { blocking, warn } = partitionTransparency(violations, enforcement);
   for (const v of warn) {
     console.warn(`[plugin:${manifest.id}] C2 ${v.rule}: ${v.detail}`);

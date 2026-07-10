@@ -5,7 +5,15 @@
 // 앱/DOM 비의존 순수 로직 — vitest 단위검증 대상.
 
 // 계약 id 문법의 단일진실 = 스펙 패키지 contracts.ts (스키마 게이트와 같은 regex 를 본다).
-import { CONTRACT_ID_RE } from "./spec";
+// C2 정적 판정의 단일진실 = 스펙 패키지 transparency.ts (게이트·validate CLI 와 같은 함수를 본다).
+import {
+  C2_STATIC_ENFORCEMENT,
+  CONTRACT_ID_RE,
+  type EnforcementMode,
+  type StaticTransparencyRule,
+} from "./spec";
+export { C2_STATIC_ENFORCEMENT, isContentView, transparencyViolations } from "./spec";
+export type { EnforcementMode, StaticTransparencyRule } from "./spec";
 
 // 선언(declared) 중 id 에 해당하는 엔트리를 찾아 반환. 없으면 fatal throw.
 // 메시지: 매니페스트 contributes.<contributesKey> 에 선언되지 않은 <noun>: <id>
@@ -36,65 +44,40 @@ export function missingRegistrations(
 }
 
 // ── 결합 법칙 C2 — 투명성 3종(command·status·DOM) ────────────────────────────
-// 모든 기능은 세 표면을 의무 노출한다. 규칙은 순수 판정, 시행 모드는 C2_ENFORCEMENT 가 단일진실.
-// blocking 승격은 위반 0 실측 + 명시 재입법 커밋으로만 한다(C5 — 무언 완화·무언 승격 둘 다 금지).
-// 재입법 이력:
+// 모든 기능은 세 표면을 의무 노출한다. 정적 판정(매니페스트-전용: command-surface·view-nodes·
+// content-view-status)과 그 시행 입법표(C2_STATIC_ENFORCEMENT)의 단일진실은 스펙 패키지
+// transparency.ts 다 — 로더·설치본 게이트·validate CLI 가 전부 같은 함수·표를 소비한다(미러 금지).
+// 여기 남는 것은 런타임 증거가 필요한 판정(unreportedStatusViews)과 런타임 규칙을 합성한
+// 전체 입법표(C2_ENFORCEMENT)뿐이다.
+// 재입법 이력(정적 규칙의 후속 이력은 스펙 패키지 transparency.ts 가 이어 적는다):
 //   2026-07-11 도입 — 위반 잔존이라 3종 전부 warn 출발(dev 홈 매니페스트 41개 실측):
 //     command-surface 5 · view-nodes 6 · view-status 4/10.
 //   2026-07-11 승격 — 정적 2종 위반 0 도달(11 플러그인 적합화 sweep) 후 command-surface·view-nodes 를
 //     blocking 으로 승격. 기계 조건 = c2-transparency-scan 헤드리스 게이트 exit 0(make gates 배선).
+//   2026-07-11 이관 — 정적 판정·입법표를 스펙 패키지로 이관(판정 단일화 — 게이트 미러 폐기),
+//     status 축에 매니페스트 선언(contributes.views[].status)을 신설하고 그 부재를
+//     content-view-status(warn 출발 — 래칫)로 판정한다.
 // view-status 는 매니페스트 선언이 아니라 런타임 속성(마운트된 콘텐츠 뷰가 status 를 보고하는가)이라
 // 헤드리스 매니페스트 스캔으로 실측 불가 — 시행·실측 지점은 plugin.conformance. 콘텐츠 뷰 4개
 // (browser-chromium·-offscreen·-native·git-diff)가 setStatus 미채택으로 잔존하므로 warn 유지한다.
-// 이는 무언 완화가 아니라 위 두 종과 다른 강제 지점(런타임)에 대한 명시 유예다 — 4 플러그인 setStatus
+// 이는 무언 완화가 아니라 정적 규칙과 다른 강제 지점(런타임)에 대한 명시 유예다 — 4 플러그인 setStatus
 // 채택 후 blocking 승격 예정(별도 재입법 커밋).
 
-export type TransparencyRule = "command-surface" | "view-status" | "view-nodes";
+// 전체 규칙 축 = 정적 3종(스펙 패키지) + 런타임 1종(view-status — 코어 소유).
+export type TransparencyRule = StaticTransparencyRule | "view-status";
 // 시행 모드 — C2·C3 가 공유하는 축(blocking=활성화 거부, warn=경고). TransparencyMode 는 기존 이름 호환.
-export type EnforcementMode = "blocking" | "warn";
 export type TransparencyMode = EnforcementMode;
 
-// 시행 입법표. 이 표의 변경은 재입법 커밋이며 conformance.test.ts 의 핀 테스트가 동행 개정을 강제한다.
+// 전체 시행 입법표 — 정적 규칙 모드는 스펙 패키지 표를 승계(단일진실)하고 런타임 규칙만 더한다.
+// 이 표의 변경은 재입법 커밋이며 conformance.test.ts 의 핀 테스트가 동행 개정을 강제한다.
 export const C2_ENFORCEMENT: Readonly<Record<TransparencyRule, TransparencyMode>> = {
-  "command-surface": "blocking",
+  ...C2_STATIC_ENFORCEMENT,
   "view-status": "warn",
-  "view-nodes": "blocking",
 };
 
 export interface TransparencyViolation {
   rule: TransparencyRule;
   detail: string; // 위반 사실 서술(무엇이 몇 개인지) — 경고/거부 메시지에 그대로 실림
-}
-
-// 매니페스트 정적 규칙 2종의 판정(활성화 경계에서 카운트만으로 판정 가능).
-//   ① command-surface: 기능 보유(views>0 ∨ programs>0 ∨ fileViewers>0) ∧ commands=0 → 위반
-//   ③ view-nodes: views>0 ∧ nodes=0 → 위반(ui.tree 부재 = 주소 기반 클릭 E2E 불가)
-// 기능 보유 술어는 세 기여축(뷰·프로그램·파일 뷰어) 전부를 센다 — 파일 뷰어만 기여하는
-// 플러그인(콘텐츠로 파일을 여는 렌더러)도 command 로 조회·조작면을 노출해야 한다(false negative 제거).
-export function transparencyViolations(counts: {
-  views: number;
-  programs: number;
-  fileViewers: number;
-  commands: number;
-  nodes: number;
-}): TransparencyViolation[] {
-  const out: TransparencyViolation[] = [];
-  if (
-    (counts.views > 0 || counts.programs > 0 || counts.fileViewers > 0) &&
-    counts.commands === 0
-  ) {
-    out.push({
-      rule: "command-surface",
-      detail: `기능 보유(views=${counts.views}, programs=${counts.programs}, fileViewers=${counts.fileViewers})인데 commands=0`,
-    });
-  }
-  if (counts.views > 0 && counts.nodes === 0) {
-    out.push({
-      rule: "view-nodes",
-      detail: `views=${counts.views}인데 contributes.nodes=0 — ui.tree 노출 없음`,
-    });
-  }
-  return out;
 }
 
 // ② view-status 의 판정 — 런타임 입력. 캐퍼빌리티는 코어 실존(viewRegistry PluginViewContext.setStatus

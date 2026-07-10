@@ -132,7 +132,7 @@ npx soksak-validate plugin.json   # exit 0 = 통과, 1 = 거부(사유 출력), 
 | `entry` | | 기본 `main.js`. 내부 상대경로만(`..` 금지) |
 | `minAppVersion` | | 요구 앱 최소 버전(미달 시 거부) |
 | `permissions` | ✓ | 아래 권한 표. 빈 배열도 명시 필수 |
-| `contributes.views[]` | | `{id, title, icon, placements?, defaultPlacement?}` — `"ui"` 권한 필요 |
+| `contributes.views[]` | | `{id, title, icon, placements?, defaultPlacement?, status?}` — `"ui"` 권한 필요. `status` = 이 뷰가 `setStatus` 로 보고하는 상태 코드 목록(C2 status 축 선언). **콘텐츠 배치 뷰는 선언 의무 — 무상태면 `[]` 를 명시**(부재는 C2 `content-view-status` 판정 위반) |
 | `contributes.commands[]` | | `{name, title}` — `"commands"` 권한 필요. 등록명은 `plugin.<id>.<name>` |
 | `contributes.formatters[]` | | `{id, title, languages[]}` — `"editor"` 권한 필요. languages = 확장자(점 없이) |
 | `contributes.languages[]` | | `{ext, lang}` — `"editor"` 권한 필요. **선언만으로 자동 적용**(코드 불필요) |

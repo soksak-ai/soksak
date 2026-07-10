@@ -1064,13 +1064,7 @@ export function registerPluginCatalog(): void {
       const reported = mountedContentViews.filter((v) => v.reports).map((v) => v.viewId);
       const unreported = unreportedStatusViews(mounted, reported);
       const c2Violations: TransparencyViolation[] = [
-        ...transparencyViolations({
-          views: c.views.length,
-          programs: c.programs.length,
-          fileViewers: c.fileViewers.length,
-          commands: c.commands.length,
-          nodes: c.nodes.length,
-        }),
+        ...transparencyViolations(c),
       ];
       if (unreported.length > 0) {
         c2Violations.push({

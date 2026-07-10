@@ -8,7 +8,6 @@ import {
   nodeConformance,
   partitionEnforcement,
   partitionTransparency,
-  transparencyViolations,
   unreportedStatusViews,
 } from "./conformance";
 
@@ -115,50 +114,11 @@ describe("nodeConformance — 선언(contributes.nodes) ≡ 배선(data-node)", 
   });
 });
 
-// transparencyViolations — 결합 법칙 C2(투명성 3종) 중 매니페스트 정적 규칙 2종의 순수 판정.
-//   ① command-surface: 기능 보유(views>0 ∨ programs>0 ∨ fileViewers>0) ∧ commands=0 → 위반
-//   ③ view-nodes: views>0 ∧ nodes=0 → 위반(ui.tree 부재 = 클릭 E2E 불가)
-describe("transparencyViolations — 투명성 규칙(매니페스트 정적)", () => {
-  it("views>0 ∧ commands=0 → command-surface 위반", () => {
-    const v = transparencyViolations({ views: 1, programs: 0, fileViewers: 0, commands: 0, nodes: 1 });
-    expect(v.map((x) => x.rule)).toEqual(["command-surface"]);
-  });
+// C2 정적 판정(transparencyViolations — command-surface·view-nodes·content-view-status)의
+// 단위검증은 스펙 패키지 소유다(packages/plugin-spec/test/transparency.test.ts) — 판정이
+// 그 패키지로 이관됐고 코어는 소비자라 여기 판정 매트릭스를 두지 않는다(이중진실 금지).
 
-  it("programs>0 ∧ commands=0 → command-surface 위반(뷰 없는 프로그램 플러그인도 기능 보유)", () => {
-    const v = transparencyViolations({ views: 0, programs: 1, fileViewers: 0, commands: 0, nodes: 0 });
-    expect(v.map((x) => x.rule)).toEqual(["command-surface"]);
-  });
-
-  it("fileViewers>0 ∧ commands=0 → command-surface 위반(파일 뷰어 플러그인도 기능 보유)", () => {
-    // media-viewer 류: fileViewers 만 기여하고 command 0 → 클릭/상태 조회 E2E 불가.
-    const v = transparencyViolations({ views: 0, programs: 0, fileViewers: 4, commands: 0, nodes: 0 });
-    expect(v.map((x) => x.rule)).toEqual(["command-surface"]);
-  });
-
-  it("views>0 ∧ nodes=0 → view-nodes 위반", () => {
-    const v = transparencyViolations({ views: 1, programs: 0, fileViewers: 0, commands: 2, nodes: 0 });
-    expect(v.map((x) => x.rule)).toEqual(["view-nodes"]);
-  });
-
-  it("두 규칙 동시 위반이면 둘 다 보고(은폐 0)", () => {
-    const v = transparencyViolations({ views: 1, programs: 0, fileViewers: 0, commands: 0, nodes: 0 });
-    expect(v.map((x) => x.rule)).toEqual(["command-surface", "view-nodes"]);
-  });
-
-  it("기능 없음(views=0 ∧ programs=0 ∧ fileViewers=0) → commands=0 이어도 위반 아님(아이콘셋·테마류)", () => {
-    expect(
-      transparencyViolations({ views: 0, programs: 0, fileViewers: 0, commands: 0, nodes: 0 }),
-    ).toEqual([]);
-  });
-
-  it("세 표면을 갖추면 위반 없음", () => {
-    expect(
-      transparencyViolations({ views: 1, programs: 1, fileViewers: 1, commands: 3, nodes: 2 }),
-    ).toEqual([]);
-  });
-});
-
-// unreportedStatusViews — C2 ② view-status 의 순수 판정. 캐퍼빌리티는 코어 실존
+// unreportedStatusViews — C2 view-status(런타임 규칙)의 순수 판정. 캐퍼빌리티는 코어 실존
 // (viewRegistry PluginViewContext.setStatus). 활성화 시점엔 뷰 미마운트라 로더 판정 불가 —
 // 시행 지점은 런타임 진단(plugin.conformance)·발행 게이트(doctor).
 describe("unreportedStatusViews — status 축 미보고 뷰 감지", () => {
@@ -188,6 +148,7 @@ describe("partitionTransparency — 시행 모드 분류", () => {
         "command-surface": "warn",
         "view-status": "warn",
         "view-nodes": "warn",
+        "content-view-status": "warn",
       }),
     ).toEqual({ blocking: [], warn: v });
   });
@@ -202,15 +163,17 @@ describe("partitionTransparency — 시행 모드 분류", () => {
         "command-surface": "blocking",
         "view-status": "warn",
         "view-nodes": "warn",
+        "content-view-status": "warn",
       }),
     ).toEqual({ blocking: [v[0]], warn: [v[1]] });
   });
 
-  it("현행 입법표 핀 — 정적 2종 blocking(위반 0 도달), view-status warn(런타임 규칙 명시 유예)", () => {
+  it("현행 입법표 핀 — 정적 2종 blocking 승계, content-view-status warn(선언 축 신설 래칫), view-status warn(런타임 규칙 명시 유예)", () => {
     expect(C2_ENFORCEMENT).toEqual({
       "command-surface": "blocking",
-      "view-status": "warn",
       "view-nodes": "blocking",
+      "content-view-status": "warn",
+      "view-status": "warn",
     });
   });
 });
