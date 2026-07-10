@@ -6,7 +6,10 @@
 // 경로는 전부 db_path()(home::soksak_home() 파생)에서 나와 identity 홈 3종이 자동 분리된다.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime};
+
+use rusqlite::{Connection, OpenFlags};
 
 /// 링 슬롯 수 — .bak.0(최신) ~ .bak.4(최고령).
 pub const SLOTS: usize = 5;
@@ -22,14 +25,76 @@ pub fn slot_path(db_path: &Path, i: usize) -> PathBuf {
 /// 게이트(순수) — 최신 슬롯 mtime 과 now 주입으로 결정적. 슬롯 없음=즉시 due,
 /// 1시간 경과=due, 미래 mtime(시계 역행)=보류.
 pub fn due(slot0_mtime: Option<SystemTime>, now: SystemTime) -> bool {
-    let _ = (slot0_mtime, now);
-    false // 현행 재현: 앱은 어떤 쓰기에도 자동 백업하지 않는다.
+    match slot0_mtime {
+        None => true,
+        Some(m) => now
+            .duration_since(m)
+            .map(|d| d >= MIN_INTERVAL)
+            .unwrap_or(false),
+    }
+}
+
+fn slot0_mtime(db_path: &Path) -> Option<SystemTime> {
+    std::fs::metadata(slot_path(db_path, 0))
+        .ok()
+        .and_then(|m| m.modified().ok())
 }
 
 /// 쓰기 신호 1회 처리 — 게이트 통과 시 스냅샷+회전. 반환=수행 여부.
 pub fn tick(db_path: &Path, now: SystemTime) -> Result<bool, String> {
-    let _ = (db_path, now);
-    Ok(false) // 현행 재현: 쓰기가 백업을 만들지 않는다.
+    if !due(slot0_mtime(db_path), now) {
+        return Ok(false);
+    }
+    snapshot_rotate(db_path)?;
+    Ok(true)
+}
+
+/// 스냅샷+회전 — read-only 커넥션의 VACUUM INTO 가 .bak.tmp 를 만들고, 성공 쓰기
+/// 이후에만 회전(.bak.3→4 … .bak.0→1) 뒤 tmp→.bak.0 rename 으로 원자 편입한다.
+fn snapshot_rotate(db_path: &Path) -> Result<(), String> {
+    let tmp = PathBuf::from(format!("{}.bak.tmp", db_path.to_string_lossy()));
+    // 크래시 잔재 정리 — VACUUM INTO 는 기존 파일을 거부한다.
+    let _ = std::fs::remove_file(&tmp);
+    {
+        let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+            .map_err(|e| e.to_string())?;
+        conn.busy_timeout(Duration::from_secs(5)).map_err(|e| e.to_string())?;
+        let p = tmp.to_string_lossy().replace('\'', "''");
+        conn.execute_batch(&format!("VACUUM INTO '{p}';"))
+            .map_err(|e| e.to_string())?;
+    }
+    let _ = std::fs::remove_file(slot_path(db_path, SLOTS - 1));
+    for i in (0..SLOTS - 1).rev() {
+        let from = slot_path(db_path, i);
+        if from.exists() {
+            std::fs::rename(&from, slot_path(db_path, i + 1)).map_err(|e| e.to_string())?;
+        }
+    }
+    std::fs::rename(&tmp, slot_path(db_path, 0)).map_err(|e| e.to_string())
+}
+
+// 스냅샷 동시 수행 방지 — 진행 중이면 신규 쓰기 신호는 그냥 지나간다(다음 쓰기가 다시 신호).
+static IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+/// 쓰기 신호(emit_change) 진입 — stat 1회 선판정 후에만 백그라운드 스레드 1개가 스냅샷한다.
+/// 쓰기 커넥션은 블로킹하지 않는다(WAL 읽기 동시 + 별도 read-only 커넥션).
+pub fn on_write() {
+    let Ok(db) = super::db_path() else { return };
+    if !due(slot0_mtime(&db), SystemTime::now()) {
+        return;
+    }
+    if IN_FLIGHT
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+    std::thread::spawn(move || {
+        if let Err(e) = tick(&db, SystemTime::now()) {
+            eprintln!("[data] 백업 링 스냅샷 실패: {e}");
+        }
+        IN_FLIGHT.store(false, Ordering::SeqCst);
+    });
 }
 
 #[cfg(test)]

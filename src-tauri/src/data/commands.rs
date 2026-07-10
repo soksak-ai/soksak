@@ -38,6 +38,8 @@ fn emit_change(
             id: id.map(String::from),
         },
     );
+    // 쓰기 사실 = 백업 링의 유일한 트리거(폴링 0) — 게이트(1h mtime)와 회전은 ring 이 소유한다.
+    super::ring::on_write();
 }
 
 fn with_conn<T>(
