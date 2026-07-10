@@ -113,11 +113,12 @@ only then report. DOM presence ≠ visible; confirm with pixels.
 
 ## Browser
 Open a browser tab (`space.create '{"program":"browser"}'`) then drive/read it.
+Driving lives in the enabled browser plugin — find `<id>` with `plugin.list`.
 All commands take optional `viewId` (omit = active browser view).
 
 | Command | Args | Notes |
 |---|---|---|
-| `plugin.soksak-plugin-browser-native.navigate` | `url` ✓ | Go to a URL in the active browser view. |
+| `plugin.soksak-plugin-<id>.navigate` | `url` ✓ | Go to a URL in the active browser view. |
 | `…​.open` | `url` | Open a URL (new browser view). |
 | `…​.reload` / `.back` / `.forward` | — | History nav. |
 | `…​.dom.text` | `selector`, `maxLength` | Visible text of page/element. |
@@ -130,9 +131,9 @@ All commands take optional `viewId` (omit = active browser view).
 | `…​.eval` | `js` ✓ | Run JS, JSON-serialized return (macOS-only). |
 | `…​.devtools` | `viewId` | Toggle the OS web inspector. |
 
-(There is also a bundled-Chromium engine, `plugin.soksak-plugin-browser-chromium.*`,
-with `navigate/open/back/forward/reload/devtools/stats`. Use whichever browser
-plugin is enabled — check `plugin.list`.)
+(More than one browser engine plugin can be installed, and command sets can
+differ by engine. Use whichever browser plugin is enabled — `plugin.list` for
+the id, `state.commands` for its actual commands.)
 
 ## UI automation
 Drive the app's own chrome/plugin views by structural address (not CSS).

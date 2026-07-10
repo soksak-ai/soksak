@@ -190,7 +190,7 @@ pub fn run() {
                     }
                 });
             }
-            // 원격 제어(폰-링크) transport 는 코어에서 분리됐다 — soksak-plugin-remote-iroh 사이드카가
+            // 원격 제어(폰-링크) transport 는 코어에서 분리됐다 — 원격 전송 사이드카 플러그인이
             // 검증된 보안 하한선(remote::*)을 코어 밖 프로세스에서 구동하고, 인가된 명령을 SOKSAK_SOCKET
             // 으로 코어에 중계하며 destructive 는 코어 remote.confirm 사람 모달을 거친다. 코어는 모달
             // (RemoteConfirmModal + remote.confirm 커맨드)만 남긴다 — iroh/snow 트리는 코어에서 빠진다.

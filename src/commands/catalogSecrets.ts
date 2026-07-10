@@ -97,7 +97,7 @@ export function registerSecretsCatalog(): void {
     message: () => tmsg("msg.secret.set"),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok secret.set \'{"ns":"soksak-plugin-acp","key":"anthropicKey","value":"sk-ant-..."}\''],
+    examples: ['sok secret.set \'{"ns":"soksak-plugin-<id>","key":"anthropicKey","value":"sk-ant-..."}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || typeof p.key !== "string" || typeof p.value !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns·key·value 필요" };
@@ -114,7 +114,7 @@ export function registerSecretsCatalog(): void {
     returns: "{ has }",
     message: (d) => d.has ? tmsg("msg.secret.has.present") : tmsg("msg.secret.has.absent"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok secret.has \'{"ns":"soksak-plugin-acp","key":"anthropicKey"}\''],
+    examples: ['sok secret.has \'{"ns":"soksak-plugin-<id>","key":"anthropicKey"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || typeof p.key !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns·key 필요" };
@@ -131,7 +131,7 @@ export function registerSecretsCatalog(): void {
     returns: "{ keys: string[] }",
     message: (d) => tmsg("msg.secret.keys", { n: ((d.keys as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok secret.keys \'{"ns":"soksak-plugin-acp"}\''],
+    examples: ['sok secret.keys \'{"ns":"soksak-plugin-<id>"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns 필요" };
@@ -149,7 +149,7 @@ export function registerSecretsCatalog(): void {
     message: (d) => d.removed ? tmsg("msg.secret.remove.removed") : tmsg("msg.secret.remove.absent"),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok secret.remove \'{"ns":"soksak-plugin-acp","key":"anthropicKey"}\''],
+    examples: ['sok secret.remove \'{"ns":"soksak-plugin-<id>","key":"anthropicKey"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || typeof p.key !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns·key 필요" };

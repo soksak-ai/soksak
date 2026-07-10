@@ -111,7 +111,7 @@ export function registerDomCatalog(): void {
         h: Number((d.rect as { h?: number })?.h ?? 0),
       }),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
-    examples: ['sok ui.measure \'{"address":"content/view/soksak-plugin-acp-studio.studio/node/send"}\''],
+    examples: ['sok ui.measure \'{"address":"content/view/soksak-plugin-<id>.<view>/node/send"}\''],
     handler: (p) => {
       const addr = p.address as string;
       const el = resolveElement(addr);
@@ -160,7 +160,7 @@ export function registerDomCatalog(): void {
         dpr: Number(d.dpr ?? 1),
       }),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
-    examples: ['sok ui.slot \'{"address":"win/main/content/view/soksak-plugin-browser-native.content"}\''],
+    examples: ['sok ui.slot \'{"address":"win/main/content/view/soksak-plugin-<id>.<view>"}\''],
     handler: (p) => {
       const addr = (p.address as string) ?? "";
       const want = addr.replace(/^\/+|\/+$/g, "");

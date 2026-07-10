@@ -83,10 +83,11 @@ For a web app, put it in a browser view and drive/read the page:
 
 ```bash
 sok space.create '{"program":"browser"}'
-sok plugin.soksak-plugin-browser-native.navigate '{"url":"http://localhost:5173"}'
-sok plugin.soksak-plugin-browser-native.dom.text '{"selector":"h1"}'   # read
-sok plugin.soksak-plugin-browser-native.dom.click '{"selector":"button.submit"}'
-sok plugin.soksak-plugin-browser-native.eval '{"js":"return document.title"}'
+# Browser driving lives in a browser plugin — find its id with `sok plugin.list`.
+sok plugin.soksak-plugin-<id>.navigate '{"url":"http://localhost:5173"}'
+sok plugin.soksak-plugin-<id>.dom.text '{"selector":"h1"}'   # read
+sok plugin.soksak-plugin-<id>.dom.click '{"selector":"button.submit"}'
+sok plugin.soksak-plugin-<id>.eval '{"js":"return document.title"}'
 ```
 
 ### 4. Capture the window and LOOK at it — this is the point

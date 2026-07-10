@@ -27,7 +27,7 @@ function lineOf(e: ActivityEntry): string {
   return typeof p.message === "string" && p.message ? p.message : e.kind;
 }
 
-// 명령을 사람이 읽는 라벨로 — raw 키(plugin.soksak-plugin-workflow.reconcile) 노출 금지.
+// 명령을 사람이 읽는 라벨로 — raw 키(plugin.soksak-plugin-<id>.<command>) 노출 금지.
 // 소유 구조(18개 언어로 확장 가능한 유일한 형태):
 //   · 플러그인 명령 = 매니페스트 contributes.commands 의 title(LocalizedText) — 저자가 소유·번역.
 //   · 코어 명령 = 언어 테이블의 cmd.* 키(언어 추가 = 테이블 1장 추가, 정의 자리는 불변).

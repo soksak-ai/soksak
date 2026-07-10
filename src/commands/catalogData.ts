@@ -67,7 +67,7 @@ export function registerDataCatalog(): void {
     returns: "{ jsonl }",
     message: () => tmsg("msg.data.export"),
     errors: ["INTERNAL"],
-    examples: ['sok data.export \'{"ns":"soksak-plugin-mailbox"}\''],
+    examples: ['sok data.export \'{"ns":"soksak-plugin-<id>"}\''],
     handler: async (p) => {
       const jsonl = await invoke<string>("data_export", {
         ns: typeof p.ns === "string" ? p.ns : null,
@@ -115,7 +115,7 @@ export function registerDataCatalog(): void {
     returns: "{ rows }",
     message: (d) => tmsg("msg.data.query", { n: ((d.rows as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.query \'{"ns":"soksak-plugin-mailbox","coll":"messages","scope":"projA"}\''],
+    examples: ['sok data.query \'{"ns":"soksak-plugin-<id>","coll":"messages","scope":"projA"}\''],
     handler: async (p) => {
       const rows = await invoke<unknown[]>("data_query", {
         ns: p.ns,
@@ -145,7 +145,7 @@ export function registerDataCatalog(): void {
     returns: "{ rows }",
     message: (d) => tmsg("msg.data.search", { n: ((d.rows as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.search \'{"ns":"soksak-plugin-mailbox","coll":"messages","query":"빌드 실패"}\''],
+    examples: ['sok data.search \'{"ns":"soksak-plugin-<id>","coll":"messages","query":"빌드 실패"}\''],
     handler: async (p) => {
       const rows = await invoke<unknown[]>("data_search", {
         ns: p.ns,
@@ -171,7 +171,7 @@ export function registerDataCatalog(): void {
     returns: "{ count }",
     message: (d) => tmsg("msg.data.count", { n: Number(d.count) }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.count \'{"ns":"soksak-plugin-mailbox","coll":"messages"}\''],
+    examples: ['sok data.count \'{"ns":"soksak-plugin-<id>","coll":"messages"}\''],
     handler: async (p) => {
       const count = await invoke<number>("data_count", {
         ns: p.ns,
@@ -274,7 +274,7 @@ export function registerDataCatalog(): void {
     message: (d) => tmsg("msg.data.encrypt.convert", { n: Number(d.converted) }),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.encrypt.convert \'{"ns":"soksak-plugin-terminal","coll":"command_blocks","scope":"projA"}\''],
+    examples: ['sok data.encrypt.convert \'{"ns":"soksak-plugin-<id>","coll":"command_blocks","scope":"projA"}\''],
     handler: async (p) => {
       if (typeof p.scope !== "string" || !p.scope.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };

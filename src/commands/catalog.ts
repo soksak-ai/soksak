@@ -691,7 +691,7 @@ export function registerCatalog(): void {
         : tmsg("msg.view.label.set.cleared"),
     errors: ["INVALID_PARAMS"],
     examples: [
-      'sok view.label.set \'{"view":"soksak-plugin-folderpop.folders","label":"폴더팝"}\'',
+      'sok view.label.set \'{"view":"soksak-plugin-<id>.<view>","label":"내 라벨"}\'',
     ],
     handler: (p) => {
       const key = p.view as string;
@@ -781,7 +781,7 @@ export function registerCatalog(): void {
     message: () => tmsg("msg.sidebar.left.move"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sok sidebar.left.move \'{"view":"soksak-plugin-folderpop.folders","target":"soksak-plugin-file-tree.tree","zone":"right"}\'',
+      'sok sidebar.left.move \'{"view":"soksak-plugin-<id>.<view>","target":"soksak-plugin-<other-id>.<view>","zone":"right"}\'',
     ],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);

@@ -60,7 +60,7 @@ export function registerScheduleCatalog(): void {
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
       'sok schedule.register \'{"trigger":{"kind":"every","every_ms":60000},"command":"notify.show","params":{"title":"틱","body":"1분"}}\'',
-      'sok schedule.register \'{"trigger":{"kind":"reconcile"},"command":"plugin.soksak-plugin-workflow.workflow.reconcile","process_lease":true,"retry":{"max":5,"base_ms":2000,"max_ms":60000}}\'',
+      'sok schedule.register \'{"trigger":{"kind":"reconcile"},"command":"plugin.soksak-plugin-<id>.<command>","process_lease":true,"retry":{"max":5,"base_ms":2000,"max_ms":60000}}\'',
     ],
     handler: async (p) => {
       if (typeof p.command !== "string" || p.trigger == null || typeof p.trigger !== "object") {

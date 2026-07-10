@@ -106,7 +106,7 @@ export function registerPluginCatalog(): void {
     }),
   });
 
-  // 플러그인 단축 이름 해소 — 기본형 문법의 단일진실. "activity" ≡ "soksak-plugin-activity".
+  // 플러그인 단축 이름 해소 — 기본형 문법의 단일진실. "<name>" ≡ "soksak-plugin-<name>".
   // 설치본이 있으면 설치본 id, 없으면 레지스트리 항목으로 해소한다. 못 찾으면 null.
   const resolveShortId = (raw: string): string | null => {
     const cands = raw.startsWith("soksak-plugin-") ? [raw] : [`soksak-plugin-${raw}`, raw];
@@ -362,7 +362,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id, version }",
     message: (d) => tmsg("msg.plugin.update", { id: String(d.id), version: String(d.version) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok plugin.update \'{"id":"soksak-plugin-memo"}\''],
+    examples: ['sok plugin.update \'{"id":"soksak-plugin-<id>"}\''],
     danger: "destructive",
     handler: (p) => usePlugins.getState().update(resolveShortId(String(p.id)) ?? String(p.id)),
   });
@@ -382,8 +382,8 @@ export function registerPluginCatalog(): void {
     message: (d) => tmsg("msg.plugin.remove", { n: ((d.removed as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND", "CASCADE_REQUIRED", "INTERNAL"],
     examples: [
-      'sok plugin.remove \'{"id":"soksak-plugin-memo"}\'',
-      'sok plugin.remove \'{"id":"soksak-plugin-acp-core","cascade":true}\'',
+      'sok plugin.remove \'{"id":"soksak-plugin-<id>"}\'',
+      'sok plugin.remove \'{"id":"soksak-plugin-<id>","cascade":true}\'',
     ],
     danger: "destructive",
     handler: (p) =>
@@ -405,7 +405,7 @@ export function registerPluginCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: [
       "sok plugin.deps",
-      'sok plugin.deps \'{"id":"soksak-plugin-acp-core"}\'',
+      'sok plugin.deps \'{"id":"soksak-plugin-<id>"}\'',
     ],
     handler: (p) => {
       const nodes = depNodes();
@@ -428,7 +428,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id, status }",
     message: (d) => tmsg("msg.plugin.enable", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND", "CONSENT_REQUIRED", "INTERNAL"],
-    examples: ["sok plugin.enable memo", 'sok plugin.enable \'{"id":"soksak-plugin-memo"}\''],
+    examples: ["sok plugin.enable <name>", 'sok plugin.enable \'{"id":"soksak-plugin-<id>"}\''],
     danger: "inject",
     hint: (d) => {
       // CONSENT_REQUIRED 는 message 에 미동의 id 목록이 실린다("활성화 동의 필요: id1, id2 …") —
@@ -462,7 +462,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id, status }",
     message: (d) => tmsg("msg.plugin.disable", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.disable \'{"id":"soksak-plugin-memo"}\''],
+    examples: ['sok plugin.disable \'{"id":"soksak-plugin-<id>"}\''],
     danger: "destructive",
     handler: (p) => usePlugins.getState().disable(resolveShortId(String(p.id)) ?? String(p.id)),
   });
@@ -475,7 +475,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id, version, permissions, contributes, dependencies:{plugins,libraries} }",
     message: (d) => tmsg("msg.plugin.consent.summary", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.consent.summary \'{"id":"soksak-plugin-acp-orchestra"}\''],
+    examples: ['sok plugin.consent.summary \'{"id":"soksak-plugin-<id>"}\''],
     handler: (p) => {
       const s = usePlugins.getState();
       const plug = s.plugins[resolveShortId(String(p.id)) ?? String(p.id)];
@@ -492,7 +492,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id }",
     message: (d) => tmsg("msg.plugin.consent.revoke", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.consent.revoke \'{"id":"soksak-plugin-acp-core"}\''],
+    examples: ['sok plugin.consent.revoke \'{"id":"soksak-plugin-<id>"}\''],
     danger: "destructive",
     handler: (p) => usePlugins.getState().revokeConsent(resolveShortId(String(p.id)) ?? String(p.id)),
   });
@@ -508,7 +508,7 @@ export function registerPluginCatalog(): void {
         ? tmsg("msg.plugin.consent.grant", { id: String(d.id) })
         : tmsg("msg.plugin.consent.grant.failed", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.consent.grant \'{"id":"soksak-plugin-acp-core"}\''],
+    examples: ['sok plugin.consent.grant \'{"id":"soksak-plugin-<id>"}\''],
     danger: "destructive",
     handler: (p) => {
       const s = usePlugins.getState();
@@ -530,7 +530,7 @@ export function registerPluginCatalog(): void {
         ? tmsg("msg.plugin.consent.chain.ready", { id: String(d.id) })
         : tmsg("msg.plugin.consent.chain.pending", { n: ((d.pending as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.consent.chain \'{"id":"soksak-plugin-acp-studio"}\''],
+    examples: ['sok plugin.consent.chain \'{"id":"soksak-plugin-<id>"}\''],
     handler: (p) => {
       const s = usePlugins.getState();
       const pid = resolveShortId(String(p.id)) ?? String(p.id);
@@ -556,7 +556,7 @@ export function registerPluginCatalog(): void {
         : tmsg("msg.plugin.consent.preview.closed"),
     errors: ["TARGET_NOT_FOUND"],
     examples: [
-      'sok plugin.consent.preview \'{"id":"soksak-plugin-acp-orchestra"}\'',
+      'sok plugin.consent.preview \'{"id":"soksak-plugin-<id>"}\'',
       'sok plugin.consent.preview \'{"id":""}\'  # 닫기',
     ],
     handler: (p) => {
@@ -586,7 +586,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id, configuration: ConfigSetting[] }",
     message: (d) => tmsg("msg.plugin.settings.schema", { n: ((d.configuration as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.settings.schema \'{"id":"soksak-plugin-acp-orchestra"}\''],
+    examples: ['sok plugin.settings.schema \'{"id":"soksak-plugin-<id>"}\''],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
       if (!plug) return notFound(`플러그인 없음: ${p.id}`);
@@ -611,8 +611,8 @@ export function registerPluginCatalog(): void {
         : tmsg("msg.plugin.settings.get.all", { n: Object.keys((d.values as Record<string, unknown>) ?? {}).length }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sok plugin.settings.get \'{"id":"soksak-plugin-acp-orchestra"}\'',
-      'sok plugin.settings.get \'{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent","scope":"global"}\'',
+      'sok plugin.settings.get \'{"id":"soksak-plugin-<id>"}\'',
+      'sok plugin.settings.get \'{"id":"soksak-plugin-<id>","key":"defaultAgent","scope":"global"}\'',
     ],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
@@ -652,8 +652,8 @@ export function registerPluginCatalog(): void {
     message: (d) => tmsg("msg.plugin.settings.set", { key: String(d.key), value: String(d.value) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sok plugin.settings.set \'{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent","value":"codex"}\'',
-      'sok plugin.settings.set \'{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent","value":"gemini","scope":"project"}\'',
+      'sok plugin.settings.set \'{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"codex"}\'',
+      'sok plugin.settings.set \'{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"gemini","scope":"project"}\'',
     ],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
@@ -691,7 +691,7 @@ export function registerPluginCatalog(): void {
         ? tmsg("msg.plugin.settings.reset.one", { key: String(d.key) })
         : tmsg("msg.plugin.settings.reset.all"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
-    examples: ['sok plugin.settings.reset \'{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent"}\''],
+    examples: ['sok plugin.settings.reset \'{"id":"soksak-plugin-<id>","key":"defaultAgent"}\''],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
       if (!plug) return notFound(`플러그인 없음: ${p.id}`);
@@ -724,7 +724,7 @@ export function registerPluginCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: [
       "sok plugin.settings.open",
-      'sok plugin.settings.open \'{"id":"soksak-plugin-acp-orchestra"}\'',
+      'sok plugin.settings.open \'{"id":"soksak-plugin-<id>"}\'',
     ],
     handler: (p) => {
       const raw = p.id as string | undefined;
@@ -755,7 +755,7 @@ export function registerPluginCatalog(): void {
       "{ reloaded, rejected: [{id, reason}] } (id omitted — full rescan; rejected lists directories whose manifest failed validation) | { id, status } (id given — that plugin only; a failure reason is in the response message)",
     message: (d) => (d.id ? tmsg("msg.plugin.reload", { n: 1 }) : tmsg("msg.plugin.reload", { n: Number(d.reloaded) })),
     errors: ["TARGET_NOT_FOUND", "CONSENT_REQUIRED"],
-    examples: ["sok plugin.reload", 'sok plugin.reload \'{"id":"soksak-plugin-memo"}\''],
+    examples: ["sok plugin.reload", 'sok plugin.reload \'{"id":"soksak-plugin-<id>"}\''],
     handler: async (p) => {
       if (p.id) {
         const id = resolveShortId(String(p.id)) ?? String(p.id);
@@ -794,8 +794,8 @@ export function registerPluginCatalog(): void {
     message: (d) => tmsg("msg.plugin.view.open", { view: String(d.view), placement: String(d.placement) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sok plugin.view.open \'{"view":"soksak-plugin-memo.panel"}\'',
-      'sok plugin.view.open \'{"view":"soksak-plugin-git-diff.view","placement":"content"}\'',
+      'sok plugin.view.open \'{"view":"soksak-plugin-<id>.<view>"}\'',
+      'sok plugin.view.open \'{"view":"soksak-plugin-<id>.<view>","placement":"content"}\'',
     ],
     handler: (p) => {
       const s = useSessions.getState();
@@ -858,7 +858,7 @@ export function registerPluginCatalog(): void {
     returns: "{ view, closed: [placement list] }",
     message: (d) => tmsg("msg.plugin.view.close", { view: String(d.view), n: ((d.closed as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.view.close \'{"view":"soksak-plugin-memo.panel"}\''],
+    examples: ['sok plugin.view.close \'{"view":"soksak-plugin-<id>.<view>"}\''],
     handler: (p) => {
       const s = useSessions.getState();
       const projectId = (p.project as string | undefined) ?? s.activeId;
@@ -920,7 +920,7 @@ export function registerPluginCatalog(): void {
     returns: "{ ok, dir, pluginId }",
     message: (d) => tmsg("msg.plugin.dev.create", { id: String(d.pluginId) }),
     errors: ["INVALID_PARAMS"],
-    examples: ['sok plugin.dev.create \'{"id":"soksak-plugin-myapp"}\''],
+    examples: ['sok plugin.dev.create \'{"id":"soksak-plugin-<id>"}\''],
     danger: "inject",
     handler: async (p) => {
       // release 는 설치본만(A17) — dev 스캐폴드 봉쇄.
@@ -944,7 +944,7 @@ export function registerPluginCatalog(): void {
     params: { id: { type: "string", required: true, description: "플러그인 id" } },
     returns: "{ id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan } }",
     message: (d) => tmsg("msg.plugin.conformance", { id: String(d.id) }),
-    examples: ["sok plugin.conformance soksak-plugin-terminal"],
+    examples: ["sok plugin.conformance soksak-plugin-<id>"],
     handler: (p) => {
       const id = p.id as string;
       const plug = usePlugins.getState().plugins[id];
