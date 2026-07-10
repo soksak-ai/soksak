@@ -158,9 +158,9 @@ pub fn ipc_hello_info(app: AppHandle) -> Value {
 //    도달하지 못한다. 부재=0 규칙으로 레거시(hello 생략) 클라이언트는 그대로 통과한다.
 //    거부 message 는 방향 명시 한 문장(낡은 쪽+두 판 숫자+해결 명령), data 에 숫자 3종 —
 //    에이전트가 파싱으로 자가 판정한다.
-fn transport_route(req: &Request, ctx: &TransportCtx) -> Option<Value> {
+fn transport_route(req: &Request, ctx: &TransportCtx, lang: soksak_protocol::Lang) -> Option<Value> {
     use soksak_protocol::{
-        effective_protocol, evaluate_compat, skew_sentence, Compat,
+        effective_protocol, evaluate_compat, skew_sentence, Compat, Lang,
         MIN_COMPATIBLE_CLIENT_PROTOCOL, SOCKET_PROTOCOL_VERSION,
     };
     if req.method == "system.hello" {
@@ -172,12 +172,25 @@ fn transport_route(req: &Request, ctx: &TransportCtx) -> Option<Value> {
     }
     let declared = effective_protocol(req.protocol);
     let verdict = evaluate_compat(SOCKET_PROTOCOL_VERSION, MIN_COMPATIBLE_CLIENT_PROTOCOL, declared);
-    let remedy = match verdict {
-        Compat::Compatible => None,
-        Compat::PeerTooOld { .. } => Some("run the sok bundled with this app or rerun `sok mcp install`"),
-        Compat::SelfTooOld { .. } => Some("install the app build this client shipped with"),
+    // 스큐 거부 message 는 사람 표면(sok stderr) — 이 앱의 언어 설정으로 해소한다. 이 시선은 앱이
+    // 클라이언트를 판정하므로 self=앱, peer=클라이언트다. 명사와 해결 지시는 앱이 소유(크레이트는
+    // 문장 골격만 해소).
+    let (self_name, peer_name) = match lang {
+        Lang::En => ("the app", "the client"),
+        Lang::Ko => ("앱", "클라이언트"),
     };
-    let sentence = skew_sentence(verdict, "the app", "the client", remedy)?;
+    let remedy = match (verdict, lang) {
+        (Compat::Compatible, _) => None,
+        (Compat::PeerTooOld { .. }, Lang::En) => {
+            Some("run the sok bundled with this app or rerun `sok mcp install`")
+        }
+        (Compat::PeerTooOld { .. }, Lang::Ko) => {
+            Some("이 앱에 동봉된 sok 을 쓰거나 `sok mcp install` 을 다시 실행하세요")
+        }
+        (Compat::SelfTooOld { .. }, Lang::En) => Some("install the app build this client shipped with"),
+        (Compat::SelfTooOld { .. }, Lang::Ko) => Some("이 클라이언트가 함께 배포된 앱 빌드를 설치하세요"),
+    };
+    let sentence = skew_sentence(verdict, self_name, peer_name, remedy, lang)?;
     let mut reply = error_reply("VERSION_SKEW", &sentence);
     reply["data"] = json!({
         "appProtocol": SOCKET_PROTOCOL_VERSION,
@@ -279,6 +292,9 @@ pub fn cleanup() {
 
 fn handle_conn(app: AppHandle, conn: Box<dyn IpcConnection>) {
     let ctx = TransportCtx::from_app(&app);
+    // 스큐 거부 문장의 언어를 연결당 1회 조회한다(사람 표면 — 폴링 없음). 연결은 sok 호출당 하나라
+    // 잦지 않다. transport_route 는 순수 유지 — 해소된 언어만 넘긴다.
+    let lang = crate::i18n::app_language(&app);
     let Ok(read_half) = conn.try_clone_conn() else { return };
     let reader = BufReader::new(read_half);
     let mut writer = conn;
@@ -298,7 +314,7 @@ fn handle_conn(app: AppHandle, conn: Box<dyn IpcConnection>) {
         };
         // transport 선점(hello 즉답+스큐 게이트) — events.subscribe 포함 전 명령이 게이트를
         // 지나도록 dispatch/subscribe 보다 먼저 평가한다. id echo 는 여기서 직접 박는다.
-        if let Some(mut reply) = transport_route(&req, &ctx) {
+        if let Some(mut reply) = transport_route(&req, &ctx, lang) {
             if reply["code"] == "VERSION_SKEW" {
                 // 스큐 거부는 registry 계측에 도달하지 못하는 실행이다 — 라우팅 계층 기록
                 // 계약(command.executed)과 동일하게 여기서 발행해 관찰 공백을 막는다.
@@ -668,7 +684,7 @@ mod tests {
     #[test]
     fn hello_is_answered_at_transport_level() {
         let req = parse_request(r#"{"id":1,"method":"system.hello"}"#).unwrap();
-        let reply = transport_route(&req, &test_ctx())
+        let reply = transport_route(&req, &test_ctx(), soksak_protocol::Lang::En)
             .expect("system.hello must be answered by the transport, not forwarded to the front");
         assert_eq!(reply["ok"], true);
         assert_eq!(reply["protocol"], soksak_protocol::SOCKET_PROTOCOL_VERSION);
@@ -689,7 +705,8 @@ mod tests {
         let facts = hello_facts(&ctx);
         assert!(facts.get("ok").is_none(), "hello_facts 는 사실만 — 봉투 ok 는 밖에서 얹는다");
         let req = parse_request(r#"{"method":"system.hello"}"#).expect("valid hello request");
-        let reply = transport_route(&req, &ctx).expect("hello answered at transport");
+        let reply = transport_route(&req, &ctx, soksak_protocol::Lang::En)
+            .expect("hello answered at transport");
         assert_eq!(reply["ok"], true);
         for (k, v) in facts.as_object().expect("hello_facts is a json object") {
             assert_eq!(&reply[k], v, "transport hello field {k} must derive from hello_facts");
@@ -702,7 +719,7 @@ mod tests {
     #[test]
     fn skewed_request_is_rejected_before_dispatch() {
         let req = parse_request(r#"{"id":2,"method":"state.context","protocol":999}"#).unwrap();
-        let reply = transport_route(&req, &test_ctx())
+        let reply = transport_route(&req, &test_ctx(), soksak_protocol::Lang::En)
             .expect("a version-skewed request must be rejected at the transport");
         assert_eq!(reply["ok"], false);
         assert_eq!(reply["code"], "VERSION_SKEW");
@@ -719,13 +736,30 @@ mod tests {
         assert_eq!(reply["data"]["clientProtocol"], 999);
     }
 
+    // 스큐 거부 message 는 사람 표면 — 앱 언어가 ko 면 한국어로 해소한다. 봉투 data 의 숫자는
+    // 언어 독립(기계 자가 판정 보존).
+    #[test]
+    fn skew_message_resolves_to_app_language() {
+        let req = parse_request(r#"{"id":2,"method":"state.context","protocol":999}"#).unwrap();
+        let reply = transport_route(&req, &test_ctx(), soksak_protocol::Lang::Ko)
+            .expect("a version-skewed request must be rejected at the transport");
+        assert_eq!(reply["code"], "VERSION_SKEW");
+        let msg = reply["message"].as_str().expect("message string");
+        assert!(msg.contains("999"), "peer version number in the sentence: {msg}");
+        assert!(msg.contains("소켓 프로토콜"), "Korean grammar: {msg}");
+        assert!(msg.contains("업데이트하세요"), "stale side named in Korean: {msg}");
+        assert!(!msg.contains("speaks socket protocol"), "no English grammar leak: {msg}");
+        // data 숫자는 언어와 무관하게 그대로.
+        assert_eq!(reply["data"]["clientProtocol"], 999);
+    }
+
     // 부재=0 규칙: hello 를 모르는 구세대 클라이언트는 protocol 필드가 없고, 0 은 현행
     // 호환창(floor=0) 안이므로 그대로 dispatch 로 흐른다.
     #[test]
     fn legacy_request_without_protocol_reaches_dispatch() {
         let req = parse_request(r#"{"method":"state.tree"}"#).unwrap();
         assert!(
-            transport_route(&req, &test_ctx()).is_none(),
+            transport_route(&req, &test_ctx(), soksak_protocol::Lang::En).is_none(),
             "legacy peers are judged as protocol 0 and stay inside the window"
         );
     }
@@ -737,7 +771,7 @@ mod tests {
             soksak_protocol::SOCKET_PROTOCOL_VERSION
         );
         let req = parse_request(&line).unwrap();
-        assert!(transport_route(&req, &test_ctx()).is_none());
+        assert!(transport_route(&req, &test_ctx(), soksak_protocol::Lang::En).is_none());
     }
 
     // ── 전송 시임 계약 ───────────────────────────────────────────────────────

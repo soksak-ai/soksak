@@ -331,7 +331,7 @@ fn hello_summary(lang: soksak_protocol::Lang, own: u32, peer: u32, answered: boo
 
 fn judge_hello_reply(reply: &Value, lang: soksak_protocol::Lang) -> Result<String, String> {
     use soksak_protocol::{
-        effective_protocol, evaluate_compat, skew_sentence, Compat,
+        effective_protocol, evaluate_compat, skew_sentence, Compat, Lang,
         MIN_COMPATIBLE_SERVER_PROTOCOL, SOCKET_PROTOCOL_VERSION,
     };
     let answered = reply.get("ok").and_then(Value::as_bool).unwrap_or(false);
@@ -341,12 +341,20 @@ fn judge_hello_reply(reply: &Value, lang: soksak_protocol::Lang) -> Result<Strin
         0
     };
     let verdict = evaluate_compat(SOCKET_PROTOCOL_VERSION, MIN_COMPATIBLE_SERVER_PROTOCOL, peer);
-    let remedy = match verdict {
-        Compat::Compatible => None,
-        Compat::PeerTooOld { .. } => Some("update the app"),
-        Compat::SelfTooOld { .. } => Some("run the sok bundled with this app"),
+    // 스큐 문장의 명사와 해결 지시는 사람 표면 — 이 셸의 언어로 해소해 넘긴다(문장 골격은 크레이트가
+    // 해소). 이 시선은 sok 이 앱을 판정하므로 self=sok, peer=앱이다.
+    let (self_name, peer_name) = match lang {
+        Lang::En => ("this sok", "the app"),
+        Lang::Ko => ("이 sok", "앱"),
     };
-    match skew_sentence(verdict, "this sok", "the app", remedy) {
+    let remedy = match (verdict, lang) {
+        (Compat::Compatible, _) => None,
+        (Compat::PeerTooOld { .. }, Lang::En) => Some("update the app"),
+        (Compat::PeerTooOld { .. }, Lang::Ko) => Some("앱을 업데이트하세요"),
+        (Compat::SelfTooOld { .. }, Lang::En) => Some("run the sok bundled with this app"),
+        (Compat::SelfTooOld { .. }, Lang::Ko) => Some("이 앱에 동봉된 sok 을 실행하세요"),
+    };
+    match skew_sentence(verdict, self_name, peer_name, remedy, lang) {
         Some(sentence) => Err(sentence),
         None => Ok(hello_summary(lang, SOCKET_PROTOCOL_VERSION, peer, answered)),
     }
@@ -1597,6 +1605,18 @@ mod tests {
             "sok 판 숫자: {err}"
         );
         assert!(err.contains("update this sok"), "낡은 쪽 명시: {err}");
+    }
+
+    // 스큐 거부 문장도 사람 표면 — ko 로케일이면 한국어로 해소한다(영어 골격 미누출).
+    #[test]
+    fn hello_skew_sentence_resolves_to_korean() {
+        use soksak_protocol::Lang;
+        let reply = json!({"ok": true, "protocol": 999});
+        let err = judge_hello_reply(&reply, Lang::Ko).expect_err("판이 앞선 앱은 거부");
+        assert!(err.contains("999"), "앱 판 숫자: {err}");
+        assert!(err.contains("소켓 프로토콜"), "한국어 골격: {err}");
+        assert!(err.contains("업데이트하세요"), "낡은 쪽을 한국어로 명시: {err}");
+        assert!(!err.contains("speaks socket protocol"), "영어 골격 미누출: {err}");
     }
 
     // env 토큰 검증 — dev|debug|app 만.

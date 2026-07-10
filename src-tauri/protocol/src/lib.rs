@@ -63,27 +63,39 @@ pub fn evaluate_compat(own: u32, floor: u32, peer: u32) -> Compat {
 }
 
 /// One sentence naming the stale side, both version numbers, and (optionally) the
-/// concrete remedy. `self_name`/`peer_name` are the endpoint names as the reader
-/// should see them (the app judging a client: self = "this app", peer = "this
-/// client"). Returns None when compatible — no skew sentence exists for a healthy
-/// pair.
+/// concrete remedy — this is a human surface, so it renders in `lang`. The grammar
+/// (both languages) lives here, in one place. `self_name`/`peer_name`/`remedy` are
+/// contextual nouns the caller supplies already resolved to `lang` (the app judging
+/// a client: self = "the app"/"앱", peer = "the client"/"클라이언트"), because the
+/// remedy is a caller concern — the protocol crate holds no transport instructions.
+/// Returns None when compatible — no skew sentence exists for a healthy pair.
 pub fn skew_sentence(
     compat: Compat,
     self_name: &str,
     peer_name: &str,
     remedy: Option<&str>,
+    lang: Lang,
 ) -> Option<String> {
-    let (core, stale) = match compat {
-        Compat::Compatible => return None,
-        Compat::PeerTooOld { peer, floor } => (
+    let (core, stale) = match (lang, compat) {
+        (_, Compat::Compatible) => return None,
+        (Lang::En, Compat::PeerTooOld { peer, floor }) => (
             format!("{peer_name} speaks socket protocol {peer} but {self_name} accepts {floor} at the oldest"),
             format!("update {peer_name}"),
         ),
-        Compat::SelfTooOld { own, peer } => (
+        (Lang::En, Compat::SelfTooOld { own, peer }) => (
             format!("{peer_name} speaks socket protocol {peer} but {self_name} speaks up to {own}"),
             format!("update {self_name}"),
         ),
+        (Lang::Ko, Compat::PeerTooOld { peer, floor }) => (
+            format!("{peer_name} 이(가) 소켓 프로토콜 {peer} 을(를) 쓰지만 {self_name} 은(는) 최소 {floor} 까지만 받습니다"),
+            format!("{peer_name} 을(를) 업데이트하세요"),
+        ),
+        (Lang::Ko, Compat::SelfTooOld { own, peer }) => (
+            format!("{peer_name} 이(가) 소켓 프로토콜 {peer} 을(를) 쓰지만 {self_name} 은(는) 최대 {own} 까지 씁니다"),
+            format!("{self_name} 을(를) 업데이트하세요"),
+        ),
     };
+    // 조립(구분기호·괄호·마침표)은 언어 중립 — 두 언어가 같은 골격을 쓴다.
     Some(match remedy {
         Some(r) => format!("{core} — {stale} ({r})."),
         None => format!("{core} — {stale}."),
@@ -160,7 +172,15 @@ mod tests {
 
     #[test]
     fn compatible_pair_has_no_skew_sentence() {
-        assert_eq!(skew_sentence(Compat::Compatible, "this app", "this client", None), None);
+        assert_eq!(
+            skew_sentence(Compat::Compatible, "this app", "this client", None, Lang::En),
+            None
+        );
+        // 언어와 무관하게 건강한 쌍엔 스큐 문장이 없다.
+        assert_eq!(
+            skew_sentence(Compat::Compatible, "this app", "this client", None, Lang::Ko),
+            None
+        );
     }
 
     #[test]
@@ -170,6 +190,7 @@ mod tests {
             "this app",
             "this client",
             Some("rerun `sok mcp install`"),
+            Lang::En,
         )
         .expect("a skewed pair must produce a sentence");
         assert!(s.contains("this client") && s.contains("this app"), "both endpoints named: {s}");
@@ -185,10 +206,30 @@ mod tests {
             "this app",
             "this client",
             None,
+            Lang::En,
         )
         .expect("a skewed pair must produce a sentence");
         assert!(s.contains('1') && s.contains('3'), "both version numbers present: {s}");
         assert!(s.contains("update this app"), "stale side named explicitly: {s}");
+    }
+
+    // 사람 표면: 같은 판정을 ko 로 렌더하면 한국어 골격이 나오고 영어 골격은 새지 않는다.
+    // 판 숫자와 caller 명사는 언어 독립 — 문장 골격만 해소된다.
+    #[test]
+    fn skew_sentence_renders_korean_grammar() {
+        let s = skew_sentence(
+            Compat::SelfTooOld { own: 1, peer: 3 },
+            "앱",
+            "클라이언트",
+            Some("이 클라이언트가 함께 배포된 앱 빌드를 설치하세요"),
+            Lang::Ko,
+        )
+        .expect("a skewed pair must produce a sentence");
+        assert!(s.contains("소켓 프로토콜"), "한국어 골격: {s}");
+        assert!(s.contains("업데이트하세요"), "낡은 쪽을 한국어로 명시: {s}");
+        assert!(!s.contains("speaks socket protocol"), "영어 골격이 새면 안 된다: {s}");
+        assert!(s.contains('1') && s.contains('3'), "판 숫자는 언어 독립: {s}");
+        assert!(s.contains("앱") && s.contains("클라이언트"), "caller 명사 유지: {s}");
     }
 
     // ── Lang::from_tag: one place interprets a language tag ──────────────────
