@@ -185,11 +185,19 @@ Rules:
 
 ## 8. Chromium engine protocol — `soksak-sidecar-browser-spec@1`
 
-Requests: `caps()→{modes}`, `create(x,y,w,h,url[,mode,scale])→{id}`,
-`devtools-open(inspectedId,screencast,x,y,w,h)→{id}`, `bounds(id,x,y,w,h)`,
+Requests: `caps()→{modes}`, `create(x,y,w,h,url[,mode,scale,owner])→{id}`,
+`devtools-open(inspectedId,screencast,x,y,w,h[,owner])→{id}`, `bounds(id,x,y,w,h)`,
 `load(id,url)`, `reload(id,ignoreCache)`, `stop(id)`, `back(id)`, `forward(id)`,
-`hidden(id,hidden)`, `focus(id)`, `close(id)`, `stats()→{ids,dbg}`,
+`hidden(id,hidden)`, `focus(id)`, `close(id)`,
+`stats()→{ids,surfaces:[{id,owner,offscreen}],dbg}`,
 `popup-mode(asWindow)`, `query-reply(queryId,success,response[,errorCode,keep])`.
+
+Ownership: `owner` tags the creator (plugin id) and the engine records it —
+the engine is the single truth for which surfaces exist and who owns them.
+Consumers MUST reconcile from `stats.surfaces` filtered to their own owner;
+never reap from a consumer-local ledger (ledgers get lost across reloads and
+leave undead surfaces — observed live), and never close a surface owned by
+someone else. Empty owner = untagged legacy consumer.
 Events: `nav {id,url}`, `title {id,title}`,
 `loading {id,loading,canBack,canForward}` (drives a consumer spinner / stop
 button and back/forward enablement — fires on every load-state transition),
