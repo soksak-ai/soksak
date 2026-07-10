@@ -17,6 +17,22 @@ function pluginIconOf(pluginId: string, view: string): string | null {
   return getRegisteredView(`${pluginId}.${view}`)?.decl.icon ?? null;
 }
 
+// 탭 파비콘 — 보고된 콘텐츠 아이콘(v.icon)을 그리되, 로드 실패면 매니페스트 아이콘으로 폴백한다.
+// 실패를 숨김(빈칸)으로 두면 진단 불가 + 탭 정렬이 흔들린다. src 가 바뀌면 실패 상태를 리셋.
+function TabFavicon({ idx, src, fallback }: { idx: number; src: string; fallback: React.ReactNode }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  if (failed) return <>{fallback}</>;
+  return (
+    <img
+      data-node={`tab/view/${idx}/icon`}
+      src={src}
+      style={{ width: 14, height: 14, borderRadius: 3, objectFit: "contain" }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 // 한 에디터 그룹의 탭 바(터미널/파일 전환 + 뷰 드래그 소스). 드래그는 HTML5 DnD 가 아니라
 // 포인터(mousedown)로 시작한다(Tauri 네이티브 파일 drag-drop 과 충돌 회피 + 실제 동작).
 // 탭 클릭(이동 없이 떼면)=전환, 끌면=그 뷰 이동 — 판정은 GroupArea 가 한다.
@@ -134,13 +150,11 @@ export const ViewTabs = memo(function ViewTabs({
               {v.kind === "file" ? (
                 <Icon name="file" size="sm" />
               ) : v.icon ? (
-                // 콘텐츠 사실 아이콘(파비콘 등) — setIcon 보고가 있으면 매니페스트 아이콘보다 우선.
-                // 로드 실패 시 이미지를 숨겨 매니페스트 아이콘 경로로 자연 폴백하지 않고 빈 칸이 되지
-                // 않도록 alt 없이 크기 고정만 한다(깨진 아이콘 글리프 방지).
-                <img
+                // 콘텐츠 사실 아이콘(파비콘) — setIcon 보고가 있으면 매니페스트 아이콘보다 우선.
+                <TabFavicon
+                  idx={idx}
                   src={v.icon}
-                  style={{ width: 14, height: 14, borderRadius: 3, objectFit: "contain" }}
-                  onError={(e) => { (e.target as HTMLImageElement).style.visibility = "hidden"; }}
+                  fallback={pluginIconOf(v.pluginId, v.view) ?? <Icon name="plugin" size="sm" />}
                 />
               ) : (
                 // 플러그인 아이콘은 매니페스트 선언 문자열(외부 계약) — 미등록만 폴백.
