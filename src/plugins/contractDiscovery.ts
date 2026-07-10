@@ -7,10 +7,9 @@
 // 여기는 조회 기제만 있고 계약 목록·요구 표면 정의는 계약 소유자(플러그인) 몫이다.
 // dependencyGraph.ts 와 같은 결: 순수 함수, 노드는 호출부(카탈로그)가 활성 플러그인 상태에서 만든다.
 
-import type { PluginManifest } from "./spec";
-
-// 계약 id 문법(NAMING §8): <scope>-spec@<major>. scope 는 도메인이지 구현·모델이 아니다.
-export const CONTRACT_ID_RE = /^[a-z0-9][a-z0-9-]*-spec@[0-9]+$/;
+// 계약 id 문법(NAMING §8)의 단일진실은 스펙 패키지(contracts.ts — CONTRACT_ID_RE·validateImplements).
+// 여기서 재정의하지 않는다 — 스키마 게이트(parseManifest)와 코어 발견·conformance 가 같은 문법을 본다.
+import { CONTRACT_ID_RE, type PluginManifest } from "./spec";
 
 export interface ContractId {
   scope: string; // kind 마커(-spec) 앞의 도메인 스코프
@@ -63,10 +62,10 @@ export function allContracts(
 }
 
 // 매니페스트의 implements 원값 — 형태 판정(implementsViolations)과 읽기가 같은 접근자를 쓴다(단일진실).
-// [로컬 시임] plugin-spec 스키마에 implements 필드가 실리기 전까지 타입 밖 필드를 방어적으로 본다.
-// 스키마 랜딩 후에도 동작 동일(필드 직독) — 랜딩 시 이 캐스트만 걷어낸다.
+// unknown 반환 유지: 활성화 경계의 conformance 는 parseManifest 를 안 거친 입력(테스트 주입 등)도
+// 형태부터 본다 — 스키마 게이트가 있다고 런타임 경계 판정을 생략하지 않는다(두 시행면, PLUGIN-CONTRACT §3).
 export function rawImplements(manifest: PluginManifest): unknown {
-  return (manifest as { implements?: unknown }).implements;
+  return manifest.implements;
 }
 
 // 매니페스트 → implements 선언(문자열 항목만). 형태 위반의 보고는 conformance 몫 — 여기는 조회용.

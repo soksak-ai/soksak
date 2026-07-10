@@ -4,7 +4,8 @@
 //  - missingRegistrations: declared-but-not-actual 감지(activate 후 inventory).
 // 앱/DOM 비의존 순수 로직 — vitest 단위검증 대상.
 
-import { CONTRACT_ID_RE } from "./contractDiscovery";
+// 계약 id 문법의 단일진실 = 스펙 패키지 contracts.ts (스키마 게이트와 같은 regex 를 본다).
+import { CONTRACT_ID_RE } from "./spec";
 
 // 선언(declared) 중 id 에 해당하는 엔트리를 찾아 반환. 없으면 fatal throw.
 // 메시지: 매니페스트 contributes.<contributesKey> 에 선언되지 않은 <noun>: <id>

@@ -4,7 +4,6 @@
 // (L1 이름-핀)은 신규 결합에 금지다(C3 사다리).
 import { describe, expect, it } from "vitest";
 import {
-  CONTRACT_ID_RE,
   allContracts,
   contractsOf,
   implementersOf,
@@ -12,7 +11,8 @@ import {
   parseContractId,
   type ImplementsNode,
 } from "./contractDiscovery";
-import type { PluginManifest } from "./spec";
+// 문법 단일진실 = 스펙 패키지(contracts.ts) — 코어는 재정의하지 않고 같은 regex 를 소비한다.
+import { CONTRACT_ID_RE, type PluginManifest } from "./spec";
 
 // 픽스처 — 코어 테스트라 실 플러그인 id 금지(C1). 픽스처 전용 이름만 쓴다.
 const nodes: ImplementsNode[] = [
@@ -34,6 +34,13 @@ describe("CONTRACT_ID_RE·parseContractId — 계약 id 문법(NAMING §8)", () 
     expect(parseContractId("soksak-sidecar-browser-spec@2")).toEqual({
       scope: "soksak-sidecar-browser",
       major: 2,
+    });
+  });
+
+  it("scope 의 점(.)은 스펙 문법대로 수용한다(SIDECAR_INTERFACE_RE 동형 — 단일진실=스펙 패키지)", () => {
+    expect(parseContractId("fixture.notes-spec@1")).toEqual({
+      scope: "fixture.notes",
+      major: 1,
     });
   });
 
