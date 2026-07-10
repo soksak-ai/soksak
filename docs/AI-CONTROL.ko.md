@@ -41,7 +41,7 @@ soksak 의 모든 기능을 AI 에게 주는 방식의 정본 규칙. 세 가지
                코어 register()            플러그인 contributes.commands
 ```
 
-- **Substrate(기반·단일 진실)** = Command Registry(`src/commands/registry.ts`) + Socket Server(`src-tauri/src/ipc.rs`) + Activity Hub(`src-tauri/src/activity.rs` — 실행 스트림, P11–P12). 명령의 존재·스키마·권한·실행의 유일한 진실. 코어 register()(~140) + 플러그인 contributes.commands 가 한 Map 으로 수렴한다.
+- **Substrate(기반·단일 진실)** = Command Registry(`src/commands/registry.ts`) + Socket Server(`src-tauri/src/ipc.rs` — 와이어 계약·버전 협상 = [SOCKET-PROTOCOL.ko.md](SOCKET-PROTOCOL.ko.md)) + Activity Hub(`src-tauri/src/activity.rs` — 실행 스트림, P11–P12). 명령의 존재·스키마·권한·실행의 유일한 진실. 코어 register()(~140) + 플러그인 contributes.commands 가 한 Map 으로 수렴한다.
 - **Channels(transport·접근 경로)** = CLI(`sok` 바이너리, 터미널 내 동기 호출) + MCP(`sok mcp`, 외부 에이전트 stdio 브리지). 둘 다 substrate 를 **호출만** 한다. 자기 명령 목록을 갖지 않고 전부 `catalogJson()`/`state.commands` 에서 파생한다.
 - **Teaching(교육·채널 위)** = Skill(soksak — 환경별 이름). 에이전트에게 채널을 **어떻게 쓰는지** — 명령 목록이 아니라 **발견하는 법** — 을 가르친다. transport 가 아니다.
 

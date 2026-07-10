@@ -42,7 +42,7 @@ Korean copy: [AI-CONTROL.ko.md](./AI-CONTROL.ko.md) — the English text is cano
                core register()            plugin contributes.commands
 ```
 
-- **Substrate (single source of truth)** = Command Registry (`src/commands/registry.ts`: `Map<string,CommandSpec>`, `catalogJson()`) + Socket Server (`src-tauri/src/ipc.rs`: Unix domain socket JSON-RPC, multi-window routing, danger gate) + Activity Hub (`src-tauri/src/activity.rs`: the execution stream, P11–P12). The only truth for a command's existence, schema, permission, and execution. Core `register()` calls (~140) and plugin `contributes.commands` converge into one Map.
+- **Substrate (single source of truth)** = Command Registry (`src/commands/registry.ts`: `Map<string,CommandSpec>`, `catalogJson()`) + Socket Server (`src-tauri/src/ipc.rs`: Unix domain socket JSON-RPC, multi-window routing, danger gate; wire contract & version negotiation = [SOCKET-PROTOCOL.md](SOCKET-PROTOCOL.md)) + Activity Hub (`src-tauri/src/activity.rs`: the execution stream, P11–P12). The only truth for a command's existence, schema, permission, and execution. Core `register()` calls (~140) and plugin `contributes.commands` converge into one Map.
 - **Channels (transports)** = CLI (the `sok` binary, synchronous calls inside the terminal) + MCP (`sok mcp`, a stdio bridge for external agents). Both only **call** the substrate. Neither owns a command list; everything derives from `catalogJson()` / `state.commands`.
 - **Teaching (above the channels)** = the Skill (soksak — per environment). It teaches agents **how to use** the channels — how to discover, not a command list. It is not a transport.
 
