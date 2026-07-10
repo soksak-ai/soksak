@@ -35,11 +35,11 @@ export function missingRegistrations(
 // ── 결합 법칙 C2 — 투명성 3종(command·status·DOM) ────────────────────────────
 // 모든 기능은 세 표면을 의무 노출한다. 규칙은 순수 판정, 시행 모드는 C2_ENFORCEMENT 가 단일진실.
 // blocking 승격은 위반 0 실측 + 명시 재입법 커밋으로만 한다(C5 — 무언 완화·무언 승격 둘 다 금지).
-// 도입 시점 실측(2026-07-11, ~/.soksak-dev/plugins 매니페스트 40 — git-diff·git-history·git-init 은
-// 교정 브랜치 기준) 위반 잔존이라 3종 전부 warn 출발:
-//   command-surface 4 (agent-claude·agent-codex 프로그램축 / browser-bookmarks·memo 뷰축)
-//   view-status    14/21 (setStatus 채택 7 — clubhouse·design-astryx·erd·kanban·memo·playbox·terminal)
-//   view-nodes      6 (activity·erd·file-tree·folderpop·kanban·sidebar-sky)
+// 도입 시점 실측(2026-07-11, dev 홈 플러그인 매니페스트 40개 — 일부는 교정 브랜치 기준)
+// 위반 잔존이라 3종 전부 warn 출발. 개별 위반 목록은 코어에 두지 않는다(C1 — 코어는 generic만):
+//   command-surface 위반 4 (프로그램축 2 / 뷰축 2)
+//   view-status     위반 14/21 (setStatus 채택 7)
+//   view-nodes      위반 6
 
 export type TransparencyRule = "command-surface" | "view-status" | "view-nodes";
 export type TransparencyMode = "blocking" | "warn";
