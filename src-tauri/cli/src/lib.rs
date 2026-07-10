@@ -33,6 +33,7 @@ pub fn run(default_env: &'static str) -> ExitCode {
             print_usage();
             ExitCode::SUCCESS
         }
+        Some("hello") => run_hello(),
         Some("commands") => run_request("state.commands", Value::Null, true),
         Some("help") => match args.get(1) {
             Some(cmd) => run_help(cmd),
@@ -86,6 +87,8 @@ fn print_usage() {
   sok <command> [값 | '{{JSON}}']      명령 실행 — 값 하나면 유일한 필수 매개변수로 전달
                                        (기본형: sok plugin.install activity)
   sok state.tree                      전체 구조(주소록): 모든 id + 패널 rect
+  sok hello                           협상/생존 진단 — 앱이 프론트 미경유 즉답(판·버전·pid),
+                                      판이 어긋나면 실패 종료(방향 명시 문장)
   sok commands                        전체 명령 카탈로그(JSON)
   sok help <command>                  단일 명령 매뉴얼
   sok docs [--core] [--format md|json] [--lang en|ko]
@@ -264,7 +267,8 @@ fn run_events(args: &[String]) -> ExitCode {
 }
 
 // 요청 봉투 빌더(순수) — 모든 소켓 요청(단발 왕복·events 구독·MCP 위임)이 여기서 태어난다.
-// 봉투 계약의 단일 지점: 선택 필드(pane/window/parent/timeoutMs)는 값이 있을 때만 실린다.
+// 봉투 계약의 단일 지점: protocol 판 선언(soksak-protocol, 앱 VERSION_SKEW 게이트의 재료)을
+// 빠짐없이 싣고, 선택 필드(pane/window/parent/timeoutMs)는 값이 있을 때만 실린다.
 fn build_request(
     method: &str,
     params: Value,
@@ -273,7 +277,12 @@ fn build_request(
     parent: Option<String>,
     timeout_ms: Option<u64>,
 ) -> Value {
-    let mut req = json!({ "id": 1, "method": method, "params": params });
+    let mut req = json!({
+        "id": 1,
+        "method": method,
+        "params": params,
+        "protocol": soksak_protocol::SOCKET_PROTOCOL_VERSION,
+    });
     if let Some(p) = pane {
         req["pane"] = json!(p);
     }
@@ -290,10 +299,57 @@ fn build_request(
 }
 
 // hello 응답 판정(순수) — 클라이언트 쪽 시선: sok 자신이 own, 앱이 peer.
-// RED 상태 — 아직 판정하지 않는다: 어떤 응답도 무언 통과한다.
+// 협상 이전 앱은 hello 를 프론트로 흘려 ok:false 로 답한다 — 부재=0 규칙의 대칭으로 판 0
+// 취급(floor 0 인 동안 호환). 스큐면 방향 명시 한 문장(낡은 쪽+두 판 숫자+해결 명령)이 Err.
 fn judge_hello_reply(reply: &Value) -> Result<String, String> {
-    let _ = reply;
-    Ok(String::new())
+    use soksak_protocol::{
+        effective_protocol, evaluate_compat, skew_sentence, Compat,
+        MIN_COMPATIBLE_SERVER_PROTOCOL, SOCKET_PROTOCOL_VERSION,
+    };
+    let answered = reply.get("ok").and_then(Value::as_bool).unwrap_or(false);
+    let peer = if answered {
+        effective_protocol(reply.get("protocol").and_then(Value::as_u64).map(|v| v as u32))
+    } else {
+        0
+    };
+    let verdict = evaluate_compat(SOCKET_PROTOCOL_VERSION, MIN_COMPATIBLE_SERVER_PROTOCOL, peer);
+    let remedy = match verdict {
+        Compat::Compatible => None,
+        Compat::PeerTooOld { .. } => Some("update the app"),
+        Compat::SelfTooOld { .. } => Some("run the sok bundled with this app"),
+    };
+    match skew_sentence(verdict, "this sok", "the app", remedy) {
+        Some(sentence) => Err(sentence),
+        None => Ok(format!(
+            "compatible — sok protocol {SOCKET_PROTOCOL_VERSION}, app protocol {peer}{}",
+            if answered { "" } else { " (pre-hello app)" }
+        )),
+    }
+}
+
+// `sok hello` — transport 협상 프리미티브. 앱이 프론트 미경유로 즉답하므로 webview 가 행이어도
+// 응답한다: "앱이 살아있나 + 판이 맞나" 진단의 첫 명령. stdout 은 순수 JSON(기계 소비 보존),
+// 판정 문장은 stderr. 스큐면 실패 종료 — 스크립트가 종료코드로 자가 판정한다.
+fn run_hello() -> ExitCode {
+    match request("system.hello", Value::Null) {
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+        Ok(reply) => {
+            println!("{}", serde_json::to_string_pretty(&reply).unwrap_or_default());
+            match judge_hello_reply(&reply) {
+                Ok(summary) => {
+                    eprintln!("{summary}");
+                    ExitCode::SUCCESS
+                }
+                Err(sentence) => {
+                    eprintln!("{sentence}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+    }
 }
 
 // 소켓 JSON-RPC 1회 왕복. pane/window/timeout 명시값이 있으면 우선, 없으면 env(SOKSAK_PANE/WINDOW) 사용.
