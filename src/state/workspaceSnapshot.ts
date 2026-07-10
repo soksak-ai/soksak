@@ -33,6 +33,8 @@ type ViewSnapshot =
       customLabel?: string;
       pluginId: string;
       view: string;
+      // 탭 아이콘(콘텐츠 사실 — 파비콘 URL). 옵션(구 스냅샷 호환).
+      icon?: string;
       // B3 — 관찰된 cwd(복원 spawn 위치)·마지막 활동 시각(hydration 우선순위). 옵션(구 스냅샷 호환).
       cwd?: string;
       lastActivity?: number;
@@ -89,6 +91,7 @@ function serializeView(v: View): ViewSnapshot {
         kind: "plugin",
         title: v.title,
         ...(v.customLabel ? { customLabel: v.customLabel } : {}),
+        ...(v.icon ? { icon: v.icon } : {}),
         pluginId: v.pluginId,
         view: v.view,
         // B3 — 마지막 cwd·활동 시각·플러그인 상태는 복원의 실질.
@@ -150,6 +153,7 @@ function deserializeView(s: ViewSnapshot, _newSplitId: () => string): View {
         kind: "plugin",
         title: s.title,
         ...(s.customLabel ? { customLabel: s.customLabel } : {}),
+        ...(s.icon ? { icon: s.icon } : {}),
         pluginId: s.pluginId,
         view: s.view,
         ...(s.cwd ? { cwd: s.cwd } : {}),

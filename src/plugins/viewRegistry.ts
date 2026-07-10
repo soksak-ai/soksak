@@ -29,6 +29,9 @@ export interface PluginViewContext {
   setStatus: (status: { code: string; message?: string } | null) => void;
   // 이 뷰의 탭 제목 동적 갱신(콘텐츠 배치만 — 예: 브라우저 페이지 <title>). 빈 값 무시. 사이드바=no-op.
   setTitle: (title: string) => void;
+  // 이 뷰의 탭 아이콘 갱신(콘텐츠 배치만 — 예: 브라우저 파비콘 URL). 빈 값 = 해제(매니페스트
+  // 아이콘 폴백). title 과 동형의 콘텐츠 사실 채널. 사이드바=no-op.
+  setIcon: (icon: string) => void;
   // 플러그인 관찰 런타임 상태 보고(B3) — 뷰 레코드에 영속, 복원 마운트의 restore.state 로 돌아온다.
   // 플러그인 kv 에 viewId 키로 영속하지 마라(viewId 재사용 충돌 — 죽은 뷰의 잔재가 새 뷰에 유입).
   // JSON 직렬화 가능 값만. 콘텐츠 배치만 유효, 사이드바=no-op.

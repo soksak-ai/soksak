@@ -97,6 +97,9 @@ export type View =
       kind: "plugin";
       title: string;
       customLabel?: string;
+      // 탭 아이콘(콘텐츠 사실 — 예: 브라우저 파비콘 URL). title 동형: 플러그인이 setIcon 으로
+      // 보고, 빈 값 = 해제(매니페스트 아이콘 폴백). 표시 전용 — 의미는 코어가 모른다.
+      icon?: string;
       pluginId: string;
       view: string; // 플러그인 내 뷰 id
       // 이 뷰가 마운트 시 받을 자동 실행 명령(에이전트 프로그램 — 터미널 뷰가 PTY 로 1회 실행).
@@ -303,6 +306,8 @@ interface SessionsStore {
   ) => CmdResult;
   // 임의 뷰의 탭 제목 갱신(콘텐츠 플러그인이 동적 제목 — 예: 페이지 <title>). 빈 값은 무시.
   setViewTitle: (projectId: string, viewId: string, title: string) => void;
+  // 탭 아이콘 갱신(콘텐츠 사실 — 예: 파비콘 URL). 빈 값 = 해제(사실이 "아이콘 없음"으로 변한 것).
+  setViewIcon: (projectId: string, viewId: string, icon: string) => void;
   // 사용자 지정 탭 라벨 설정(view.rename). 빈 값 = 오버라이드 해제(동적 title 복귀).
   renameView: (projectId: string, viewId: string, label: string) => CmdResult<{ label: string }>;
   // 뷰 런타임 관찰값(B3) — cwd(OSC 관찰)·lastActivity(이벤트 근거)·state(플러그인 관찰 상태).
@@ -1463,6 +1468,22 @@ export const useSessions = create<SessionsStore>((set, get) => ({
     set((s) => ({
       tabs: mapProject(s.tabs, projectId, (x) =>
         mapViewEverywhere(x, viewId, (v) => ({ ...v, title: trimmed })),
+      ),
+    }));
+  },
+
+  setViewIcon: (projectId, viewId, icon) => {
+    const trimmed = icon.trim();
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (x) =>
+        mapViewEverywhere(x, viewId, (v) => {
+          if (v.kind !== "plugin") return v;
+          if (!trimmed) {
+            const { icon: _drop, ...rest } = v;
+            return rest as View;
+          }
+          return { ...v, icon: trimmed };
+        }),
       ),
     }));
   },

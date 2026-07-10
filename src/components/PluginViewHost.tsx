@@ -71,6 +71,11 @@ export const PluginViewHost = memo(function PluginViewHost({
       viewId
         ? useSessions.getState().setViewTitle(projectId, viewId, title)
         : undefined,
+    // 탭 아이콘(콘텐츠 사실 — 파비콘 등) — 콘텐츠 배치만. 빈 값 = 해제.
+    setIcon: (icon) =>
+      viewId
+        ? useSessions.getState().setViewIcon(projectId, viewId, icon)
+        : undefined,
     // 플러그인 관찰 상태(B3) — 뷰 레코드로 영속(뷰와 수명 동기). 콘텐츠 배치만.
     setRestoreState: (state) =>
       viewId

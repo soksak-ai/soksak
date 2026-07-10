@@ -133,6 +133,15 @@ export const ViewTabs = memo(function ViewTabs({
             <span className="view-tab-icon icon-inline">
               {v.kind === "file" ? (
                 <Icon name="file" size="sm" />
+              ) : v.icon ? (
+                // 콘텐츠 사실 아이콘(파비콘 등) — setIcon 보고가 있으면 매니페스트 아이콘보다 우선.
+                // 로드 실패 시 이미지를 숨겨 매니페스트 아이콘 경로로 자연 폴백하지 않고 빈 칸이 되지
+                // 않도록 alt 없이 크기 고정만 한다(깨진 아이콘 글리프 방지).
+                <img
+                  src={v.icon}
+                  style={{ width: 14, height: 14, borderRadius: 3, objectFit: "contain" }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.visibility = "hidden"; }}
+                />
               ) : (
                 // 플러그인 아이콘은 매니페스트 선언 문자열(외부 계약) — 미등록만 폴백.
                 (pluginIconOf(v.pluginId, v.view) ?? (

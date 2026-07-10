@@ -217,6 +217,7 @@ describe("B3 — cwd·lastActivity 영속 round-trip", () => {
                   kind: "plugin",
                   title: "NAVER",
                   customLabel: "내 브라우저",
+                  icon: "https://naver.com/favicon.ico",
                   pluginId: "soksak-plugin-browser-native",
                   view: "content",
                   state: { url: "https://naver.com/" },
@@ -234,6 +235,7 @@ describe("B3 — cwd·lastActivity 영속 round-trip", () => {
     const v2 = g.views.find((v) => v.id === "v2") as Extract<View, { kind: "plugin" }>;
     expect(v1.state).toEqual({ url: "https://naver.com/" });
     expect(v1.customLabel).toBe("내 브라우저");
+    expect(v1.icon).toBe("https://naver.com/favicon.ico");
     expect(v2.state).toBeUndefined();
     expect(v2.customLabel).toBeUndefined();
   });
