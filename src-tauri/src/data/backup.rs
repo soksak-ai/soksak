@@ -9,6 +9,13 @@ use serde_json::{json, Value};
 
 use super::store;
 
+// 부팅 복구 보고 — 격리한 손상본 경로와 복원 출처 슬롯. restored_from=None 은 전 슬롯 실패로 빈 DB
+// 재시작을 뜻한다. 무음 복구 금지 — 이 값이 호출 측 activity 고지의 재료다.
+pub struct Recovery {
+    pub quarantined: PathBuf,
+    pub restored_from: Option<usize>,
+}
+
 // VACUUM INTO — 일관된 단일 파일 스냅샷(WAL 체크포인트 포함). 경로는 작은따옴표 이스케이프.
 pub fn backup(conn: &Connection, dest: &Path) -> Result<(), String> {
     if let Some(parent) = dest.parent() {
@@ -231,6 +238,64 @@ mod tests {
         let conn2 = super::super::open(&db).unwrap();
         assert_eq!(store::search(&conn2, "mailbox", "messages", "백업", None, None, None).unwrap().len(), 1);
 
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn corrupt_db_recovers_from_slot() {
+        let root = std::env::temp_dir().join(format!("soksak-recover-slot-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let db = mem_file(&root, "soksak.db");
+
+        // 정상 DB + 슬롯 0 스냅샷(marker=42).
+        let conn = super::super::open(&db).unwrap();
+        store::kv_set(&conn, "core", "marker", &json!(42)).unwrap();
+        backup(&conn, &super::super::ring::slot_path(&db, 0)).unwrap();
+        drop(conn);
+
+        // 본체를 쓰레기 바이트로 덮고 사이드카 제거 — 손상 재현.
+        std::fs::write(&db, b"this is definitely not a sqlite database").unwrap();
+        for ext in ["-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{ext}", db.to_string_lossy()));
+        }
+        assert!(super::super::open(&db).is_err(), "쓰레기 바이트 본체는 개방 실패");
+
+        // 복구 — 슬롯 0 에서 복원, 손상본 격리, marker 보존.
+        let (conn, rec) = super::super::open_or_recover(&db).unwrap();
+        let rec = rec.expect("손상 본체는 복구를 유발해야 한다");
+        assert_eq!(rec.restored_from, Some(0), "슬롯 0 에서 복원");
+        assert!(rec.quarantined.is_file(), "손상본은 격리 파일로 보존(증거)");
+        assert_eq!(
+            store::kv_get(&conn, "core", "marker").unwrap(),
+            Some(json!(42)),
+            "복원본에 marker 보존"
+        );
+        drop(conn);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn corrupt_db_without_slots_starts_empty() {
+        let root = std::env::temp_dir().join(format!("soksak-recover-empty-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let db = mem_file(&root, "soksak.db");
+
+        std::fs::write(&db, b"garbage, and no valid backup slots exist").unwrap();
+        assert!(super::super::open(&db).is_err(), "쓰레기 바이트 본체는 개방 실패");
+
+        // 복구 — 정상 슬롯 없음 → 빈 DB 재시작, 손상본은 여전히 격리.
+        let (conn, rec) = super::super::open_or_recover(&db).unwrap();
+        let rec = rec.expect("손상 본체는 복구를 유발해야 한다");
+        assert_eq!(rec.restored_from, None, "정상 슬롯 없음 → 빈 DB 재시작");
+        assert!(rec.quarantined.is_file(), "손상본 격리 파일 실존");
+        assert_eq!(store::kv_get(&conn, "core", "marker").unwrap(), None, "빈 DB");
+        store::kv_set(&conn, "core", "marker", &json!(1)).unwrap();
+        assert_eq!(
+            store::kv_get(&conn, "core", "marker").unwrap(),
+            Some(json!(1)),
+            "빈 DB 는 쓰기 가능"
+        );
+        drop(conn);
         let _ = std::fs::remove_dir_all(&root);
     }
 

@@ -61,6 +61,13 @@ pub fn open(path: &Path) -> Result<Connection, String> {
     Ok(conn)
 }
 
+// 부팅 개방 — 정상이면 그대로, 손상이면 백업 슬롯에서 복구 후 재개방한다. 반환 Ok((conn, None))=정상,
+// Ok((conn, Some(rec)))=복구 발생(호출 측이 activity 로 고지). 파일 부재는 실패가 아니다(open 이 신규 생성).
+// 현행 재현: 아직 복구 없이 개방 실패를 그대로 전파한다(손상 DB → 영구 미초기화).
+pub fn open_or_recover(path: &Path) -> Result<(Connection, Option<backup::Recovery>), String> {
+    open(path).map(|conn| (conn, None))
+}
+
 // 기본 테이블(멱등). 컬렉션별 FTS/인덱스는 define() 이 동적 생성.
 // (테스트 픽스처에서 in-memory 스키마 초기화에 재사용 — window.rs prune 유닛)
 pub(crate) fn init_base(conn: &Connection) -> Result<(), String> {
