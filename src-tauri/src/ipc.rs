@@ -740,7 +740,8 @@ mod tests {
     // 언어 독립(기계 자가 판정 보존).
     #[test]
     fn skew_message_resolves_to_app_language() {
-        let req = parse_request(r#"{"id":2,"method":"state.context","protocol":999}"#).unwrap();
+        let req = parse_request(r#"{"id":2,"method":"state.context","protocol":999}"#)
+            .expect("valid skew request");
         let reply = transport_route(&req, &test_ctx(), soksak_protocol::Lang::Ko)
             .expect("a version-skewed request must be rejected at the transport");
         assert_eq!(reply["code"], "VERSION_SKEW");
