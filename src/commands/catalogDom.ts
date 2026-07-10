@@ -47,9 +47,24 @@ function resolveElement(addressStr: string): HTMLElement | null {
   // 정확 일치 우선. 입력 주소에 win 생략 시 현재 창으로 보정해 비교.
   const want = addressStr.replace(/^\/+|\/+$/g, "");
   const wantWithWin = want.startsWith("win/") ? want : `win/${currentWindowLabel()}/${want}`;
-  return (
-    exposed.find((n) => n.address === want || n.address === wantWithWin)?.el ?? null
-  );
+  const matches = exposed.filter((n) => n.address === want || n.address === wantWithWin);
+  if (matches.length === 0) return null;
+  // 같은 주소가 여러 요소에 붙을 수 있다(시트마다 반복되는 크롬 노드 — 뷰 탭바 등). 파킹된
+  // (화면 밖 translateX) 복제를 잡으면 클릭/측정이 보이지 않는 요소로 가서 "동작 없음"이 된다
+  // (실측: 탭 클릭 E2E 가 비활성 시트의 탭을 눌렀다). 사용자가 보는 요소 — 뷰포트와 교차하고
+  // 크기가 있는 것 — 를 우선하고, 보이는 게 없으면 첫 매치(기존 동작)로 폴백한다.
+  const visible = matches.find((n) => {
+    const r = n.el.getBoundingClientRect();
+    return (
+      r.width > 0 &&
+      r.height > 0 &&
+      r.right > 0 &&
+      r.bottom > 0 &&
+      r.left < window.innerWidth &&
+      r.top < window.innerHeight
+    );
+  });
+  return (visible ?? matches[0]).el;
 }
 
 export function registerDomCatalog(): void {
