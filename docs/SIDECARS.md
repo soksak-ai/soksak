@@ -275,10 +275,11 @@ module (§4 never-unload), so E2E must verify `caps.version` matches the
 expected build before trusting results — do not assume disk state equals
 loaded state.
 
-v1 offscreen limitations (explicit, not silent): native popup widgets
-(`<select>` dropdowns) and the engine context menu are not composited — popup
-frames are dropped with a one-time log. In-page UI (anchor-positioned
-popovers, the design-canvas pattern) is unaffected. Composite popups before
-hosting arbitrary web content offscreen; browser panels stay `windowed`.
+Popup widgets (`<select>` dropdowns, autocomplete) ARE composited: PET_POPUP
+frames land on a sublayer above the view layer, driven by on_popup_show/size
+(view-local DIP rect, y-flipped into layer geometry). Remaining v1 offscreen
+limitation (explicit, not silent): the engine context menu is not composited.
+In-page UI (anchor-positioned popovers, the design-canvas pattern) was never
+affected.
 Diagnostics: `stats.dbg.framesPresented` counts presented offscreen frames
 (0 while idle/hidden is correct — presents stop when nothing changes).
