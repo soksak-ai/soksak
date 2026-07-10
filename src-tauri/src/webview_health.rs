@@ -142,11 +142,9 @@ impl LabelBreaker {
         self.last_crash_ms = Some(now_ms);
         self.last_reason = reason;
         self.crash_times.push_back(now_ms);
-        if !recoverable(reason) {
+        if let Some(r) = reason.filter(|r| !recoverable(Some(*r))) {
             self.state = BreakerState::Open;
-            return Decision::NoRecover {
-                reason: reason.expect("복구 불가 판정은 사유 있는 경우만"),
-            };
+            return Decision::NoRecover { reason: r };
         }
         let n = self.crash_times.len();
         if n > WINDOW_CAP {
@@ -208,6 +206,247 @@ impl LabelBreaker {
     pub fn last_reason(&self) -> Option<TerminateReason> {
         self.last_reason
     }
+}
+
+// ── 런타임 셸(브레이커 소유 + 배선) ──────────────────────────────────────────
+// 순수 코어(위)의 판정을 실제 webview 에 집행한다. 시계는 여기서만 흐른다(now_ms).
+
+use serde::Serialize;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter, Manager};
+
+/// 프로세스 시작 기준 단조 ms — SystemTime 역행(시계 조정)에 면역.
+fn now_ms() -> u64 {
+    static EPOCH: OnceLock<Instant> = OnceLock::new();
+    EPOCH.get_or_init(Instant::now).elapsed().as_millis() as u64
+}
+
+/// Mutex poison 명시 처리 — 브레이커 맵은 판정 데이터뿐이라 패닉한 소유자가 남긴
+/// 상태도 그대로 유효하다(불변식 없음). poison 을 벗겨 계속 쓴다.
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// per-label 브레이커의 단일 소유자(managed state).
+#[derive(Default)]
+pub struct WebviewHealth {
+    breakers: Mutex<HashMap<String, LabelBreaker>>,
+    /// 창 메인 webview 복구 리로드 in-flight 창 label(1회 소모) — 리부트한 프론트의
+    /// webviewGc 가 세션 복원 적용 전 스윕으로 살아있는 child b-* 를 회수하지 않도록
+    /// 프론트가 webview_recovery_consume 으로 읽어 간다.
+    recovery_pending: Mutex<HashSet<String>>,
+}
+
+/// 의도된 파괴/reload 예고 — close·창 닫기·명시 reload 경로가 terminate 직전에 부른다.
+pub fn mark_expected_teardown(app: &AppHandle, label: &str) {
+    let health = app.state::<WebviewHealth>();
+    lock(&health.breakers)
+        .entry(label.to_string())
+        .or_default()
+        .mark_expected_teardown(now_ms());
+}
+
+/// 창(배지·플러그인 이벤트)으로 건강 전이를 중계 — hooks.ts 가 webview.health 로 미러한다.
+fn emit_health(app: &AppHandle, window_label: &str, label: &str, state: &str, attempt: Option<u32>) {
+    let _ = app.emit_to(
+        window_label,
+        "webview-health",
+        serde_json::json!({
+            "label": label,
+            "window": window_label,
+            "state": state,
+            "attempt": attempt,
+        }),
+    );
+}
+
+/// Builder::on_web_content_process_terminate 에 등록되는 유일한 진입점(macOS).
+/// 미등록 시 tauri-runtime-wry 가 무조건·무한·무고지 자동 reload 를 설치하므로(R1)
+/// 이 함수가 그 기본 핸들러를 대체한다. WKWebView 는 종료 사유를 주지 않는다 → None.
+pub fn on_web_content_process_terminate(webview: &tauri::Webview) {
+    let label = webview.label().to_string();
+    let window_label = webview.window().label().to_string();
+    handle_terminate(webview.app_handle(), &label, &window_label, None);
+}
+
+fn handle_terminate(app: &AppHandle, label: &str, window_label: &str, reason: Option<TerminateReason>) {
+    let health = app.state::<WebviewHealth>();
+    let decision = lock(&health.breakers)
+        .entry(label.to_string())
+        .or_default()
+        .on_terminate(now_ms(), reason);
+    // 복구 단위 이원화: 창 메인 webview(label == 창 label) 는 reload 로 부팅 경로 전체
+    // (coreSync 재수화·터미널 재-attach)가 다시 돈다 — PTY 는 Rust PtyManager 소유라 생존.
+    // child(b-<win>-<view> 등)는 그 webview 만 제자리 reload — close+재생성 금지(유령
+    // child sessionStorage 입양 함정 회피).
+    let is_main = label == window_label;
+    match decision {
+        Decision::ExpectedTeardown => {
+            eprintln!("[webview] 예고된 종료(크래시 아님): {label}");
+        }
+        Decision::Recover { attempt, delay_ms } => {
+            if is_main {
+                lock(&health.recovery_pending).insert(window_label.to_string());
+            }
+            eprintln!(
+                "[webview] 렌더러 프로세스 종료 — 자동 복구 {attempt}/{WINDOW_CAP} ({delay_ms}ms 후): {label}"
+            );
+            crate::activity::publish(
+                app,
+                "webview.crash.recovering",
+                "core",
+                serde_json::json!({
+                    "label": label,
+                    "window": window_label,
+                    "attempt": attempt,
+                    "delayMs": delay_ms,
+                    "target": if is_main { "window-main" } else { "child" },
+                }),
+            );
+            emit_health(app, window_label, label, "recovering", Some(attempt));
+            let app = app.clone();
+            let label = label.to_string();
+            // 1회성 지연 실행(백오프) — 폴링 아님. 지연 중 닫혔으면 대상 부재로 자연 종료.
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(delay_ms));
+                match app.get_webview(&label) {
+                    Some(wv) => {
+                        if let Err(e) = wv.reload() {
+                            eprintln!("[webview] 복구 reload 실패({label}): {e}");
+                        }
+                    }
+                    None => eprintln!("[webview] 복구 대상이 사라짐(지연 중 닫힘): {label}"),
+                }
+            });
+        }
+        Decision::Exhausted { crashes_in_window } => {
+            eprintln!(
+                "[webview] 복구 상한 소진({crashes_in_window}회/60s) — 자동 복구 중단, webview.recover 로 수동 복구: {label}"
+            );
+            crate::activity::publish(
+                app,
+                "webview.crash.exhausted",
+                "core",
+                serde_json::json!({
+                    "label": label,
+                    "window": window_label,
+                    "crashesInWindow": crashes_in_window,
+                    "windowMs": WINDOW_MS,
+                }),
+            );
+            emit_health(app, window_label, label, "open", None);
+        }
+        Decision::NoRecover { reason } => {
+            eprintln!(
+                "[webview] 복구 불가 종료({}) — 자동 복구 제외: {label}",
+                reason.as_str()
+            );
+            crate::activity::publish(
+                app,
+                "webview.crash.unrecoverable",
+                "core",
+                serde_json::json!({
+                    "label": label,
+                    "window": window_label,
+                    "reason": reason.as_str(),
+                }),
+            );
+            emit_health(app, window_label, label, "open", None);
+        }
+    }
+}
+
+/// Builder::on_page_load(Finished) 훅 — 복구 리로드가 실제 렌더에 도달했음을 확인한다.
+/// 브레이커가 없는 label(평시 내비게이션)은 엔트리를 만들지 않는다(무비용).
+pub fn on_page_load_finished(webview: &tauri::Webview) {
+    let app = webview.app_handle();
+    let label = webview.label();
+    let health = app.state::<WebviewHealth>();
+    let recovered = match lock(&health.breakers).get_mut(label) {
+        Some(b) => b.on_load_finished(),
+        None => return,
+    };
+    if let Some(attempt) = recovered {
+        eprintln!("[webview] 복구 완료(attempt {attempt}): {label}");
+        crate::activity::publish(
+            app,
+            "webview.crash.recovered",
+            "core",
+            serde_json::json!({ "label": label, "attempt": attempt }),
+        );
+        emit_health(app, webview.window().label(), label, "closed", Some(attempt));
+    }
+}
+
+/// webview.health.query 응답의 per-label 행.
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct LabelHealthView {
+    pub label: String,
+    pub state: String,
+    pub attempt: Option<u32>,
+    pub crashes_in_window: usize,
+    pub total_crashes: u64,
+    pub last_crash_ago_ms: Option<u64>,
+    /// None = 사유 미제공(WKWebView 는 종료 사유를 주지 않는다).
+    pub last_reason: Option<String>,
+}
+
+#[tauri::command]
+pub fn webview_health_query(app: AppHandle) -> Vec<LabelHealthView> {
+    let health = app.state::<WebviewHealth>();
+    let now = now_ms();
+    let map = lock(&health.breakers);
+    let mut rows: Vec<LabelHealthView> = map
+        .iter()
+        .map(|(label, b)| LabelHealthView {
+            label: label.clone(),
+            state: match b.state() {
+                BreakerState::Closed => "closed".into(),
+                BreakerState::Recovering(_) => "recovering".into(),
+                BreakerState::Open => "open".into(),
+            },
+            attempt: match b.state() {
+                BreakerState::Recovering(n) => Some(n),
+                _ => None,
+            },
+            crashes_in_window: b.crashes_in_window(now),
+            total_crashes: b.total_crashes(),
+            last_crash_ago_ms: b.last_crash_ms().map(|t| now.saturating_sub(t)),
+            last_reason: b.last_reason().map(|r| r.as_str().to_string()),
+        })
+        .collect();
+    rows.sort_by(|a, b| a.label.cmp(&b.label));
+    rows
+}
+
+/// 수동 복구 — 브레이커 reset(윈도우·상태 소거) + 그 webview 제자리 reload.
+#[tauri::command]
+pub fn webview_recover(app: AppHandle, label: String) -> Result<(), String> {
+    let health = app.state::<WebviewHealth>();
+    if let Some(b) = lock(&health.breakers).get_mut(&label) {
+        b.reset();
+    }
+    let wv = app
+        .get_webview(&label)
+        .ok_or_else(|| format!("webview 없음: {label}"))?;
+    let window_label = wv.window().label().to_string();
+    // 이 reload 가 행 프로세스를 죽이며 terminate 를 낼 수 있다 — 의도된 것으로 예고.
+    mark_expected_teardown(&app, &label);
+    wv.reload().map_err(|e| e.to_string())?;
+    emit_health(&app, &window_label, &label, "closed", None);
+    Ok(())
+}
+
+/// 복구 리로드 in-flight 1회 소모 — 리부트한 창 프론트(webviewGc)가 부팅 시 1회 읽어
+/// 세션 복원 적용 전 스윕을 보류한다(살아있는 child 오회수 방지).
+#[tauri::command]
+pub fn webview_recovery_consume(window: tauri::Window) -> bool {
+    let health = window.app_handle().state::<WebviewHealth>();
+    let consumed = lock(&health.recovery_pending).remove(window.label());
+    consumed
 }
 
 #[cfg(test)]

@@ -1079,6 +1079,8 @@ pub fn webview_visible(app: AppHandle, label: String, visible: bool) -> Result<(
 #[tauri::command]
 pub fn webview_close(app: AppHandle, label: String) -> Result<(), String> {
     if let Some(wv) = app.get_webview(&label) {
+        // 파괴 예고(webview_health) — 닫히는 webview 의 프로세스 종료를 크래시로 오분류하지 않는다.
+        crate::webview_health::mark_expected_teardown(&app, &label);
         // Backend N 레지스트리 회수 — close 전에 surface 포인터를 집합에서 제거(위생; 미제거여도
         // 형제 순회가 live subview 만 보므로 자가치유되나 누수 방지).
         #[cfg(target_os = "macos")]
@@ -1169,6 +1171,8 @@ pub async fn webview_media_extract(
         tokio::time::sleep(Duration::from_millis(400)).await;
     }
     if let Some(wv) = app.get_webview(&label) {
+        // 파괴 예고 — 추출용 임시 webview 의 close 를 크래시로 오분류하지 않는다.
+        crate::webview_health::mark_expected_teardown(&app, &label);
         let _ = wv.close();
     }
     Ok(hits)

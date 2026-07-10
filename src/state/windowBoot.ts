@@ -18,6 +18,7 @@ import { makeCoreStore } from "./coreStore";
 import { validateProjectRoot, ensureDefaultProjectRoot } from "../lib/projectRoot";
 import { claimRoots } from "./projectRegistry";
 import { beginRestoreHydration } from "./hydration";
+import { releaseWebviewGcHold } from "../lib/webviewGc";
 import { reseedSessionsSnapshot } from "../plugins/hooks";
 import { listRecentProjects } from "./recentProjects";
 import {
@@ -155,6 +156,9 @@ export async function initWorkspacePersistence(
   } catch (e) {
     console.error("워크스페이스 복원 실패 — 기본 부트로 폴백:", e);
   }
+  // 복원 시도 완료(성공·스냅샷 없음·실패 모두) — 이제 스토어가 이 창의 진실이므로
+  // webviewGc 의 복구 리부트 보류를 해제한다(webviewGc.ts gcGate 머리말).
+  releaseWebviewGcHold();
 
   // 2) 자동 저장 — 변경마다 디바운스(빠른 연속 변경 1회 저장). pagehide(창 닫힘·앱 종료
   // 직전)에 잔여 기록을 즉시 flush — 디바운스 창(≤400ms) 내 종료의 마지막 변경 유실 방지

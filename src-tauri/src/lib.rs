@@ -84,12 +84,13 @@ fn ime_debug(message: String) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_webview_capture::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_deep_link::init())
+        .manage(webview_health::WebviewHealth::default())
         .manage(activity::ActivityHub::default())
         .manage(daemon::DaemonManager::default())
         .manage(PtyManager::default())
@@ -102,7 +103,22 @@ pub fn run() {
         .manage(secrets::SecretsState::default())
         .manage(ai_session::SessionTracker::default())
         .manage(schedule::ScheduleState::default())
-        .manage(project_registry::ProjectRegistry::default())
+        .manage(project_registry::ProjectRegistry::default());
+    // 렌더러 프로세스 종료(process-gone)를 명시 감지한다(macOS per-webview) — 이 핸들러를
+    // 등록하지 않으면 핀 rev 의 tauri-runtime-wry 가 무조건·무한·무고지 자동 reload 기본
+    // 핸들러를 설치한다(R1 위반). webview_health 서킷 브레이커가 그 자리를 대체한다.
+    #[cfg(target_os = "macos")]
+    let builder = builder.on_web_content_process_terminate(|webview| {
+        webview_health::on_web_content_process_terminate(webview);
+    });
+    // 복구 리로드의 실제 렌더 도달 확인(Recovering→Closed) — 브레이커 윈도우는 건드리지
+    // 않는다(webview_health 머리말). 브레이커 엔트리 없는 평시 로드는 무비용 통과.
+    let builder = builder.on_page_load(|webview, payload| {
+        if payload.event() == tauri::webview::PageLoadEvent::Finished {
+            webview_health::on_page_load_finished(webview);
+        }
+    });
+    builder
         .setup(|app| {
             // identity 홈 확정 — 모든 경로(데이터·플러그인·사이드카·테마·프로젝트·소켓·시크릿)가
             // 이 값에서 파생되므로 어떤 경로 사용보다 먼저 1회 고정한다(home.rs 원칙).
@@ -290,6 +306,22 @@ pub fn run() {
                     // 파괴 순서 계약(SIDECARS) — dealloc 전에 엔진 child 부터 닫게 통지.
                     #[cfg(target_os = "macos")]
                     crate::sidecar::notify_surface_closing(window);
+                    // 파괴 예고(webview_health) — 창 닫기 중의 렌더러 프로세스 종료를
+                    // 크래시로 오분류해 죽어가는 webview 를 reload 하지 않는다.
+                    {
+                        let app = window.app_handle();
+                        webview_health::mark_expected_teardown(app, window.label());
+                        let prefix = format!("b-{}-", window.label());
+                        let children: Vec<String> = app
+                            .webviews()
+                            .keys()
+                            .filter(|l| l.starts_with(&prefix))
+                            .cloned()
+                            .collect();
+                        for label in children {
+                            webview_health::mark_expected_teardown(app, &label);
+                        }
+                    }
                     window::mark_user_closed(window.label());
                 }
                 tauri::WindowEvent::Destroyed => {
@@ -303,6 +335,9 @@ pub fn run() {
                     let _ = app.emit("window-changed", ()); // 오케스트레이터 창맵 자동 갱신
                     // 사용자 개별 닫기였다면 그 창의 세션 흔적(스냅샷 kv + manifest slot)을 폐기.
                     if window::take_user_closed(window.label()) {
+                        // 창 폐기 = 그 창의 PTY 세션도 폐기(B1) — 데몬 셸을 여기서 거두지
+                        // 않으면 창은 사라졌는데 셸만 soksak-ptyd 에 유령으로 남는다.
+                        app.state::<PtyManager>().kill_by_window(window.label());
                         let st = app.state::<data::DbState>();
                         let guard = st.conn.lock();
                         if let Ok(guard) = guard {
@@ -327,6 +362,8 @@ pub fn run() {
                         .collect();
                     for label in orphans {
                         if let Some(wv) = app.get_webview(&label) {
+                            // 파괴 예고 — 회수 close 의 프로세스 종료를 크래시로 오분류하지 않는다.
+                            webview_health::mark_expected_teardown(app, &label);
                             let _ = wv.close();
                         }
                     }
@@ -458,6 +495,9 @@ pub fn run() {
             webview::webview_resize_gesture,
             webview::webview_dom_holes,
             webview::webview_debug_hierarchy,
+            webview_health::webview_health_query,
+            webview_health::webview_recover,
+            webview_health::webview_recovery_consume,
             window_set_background,
             activity::activity_publish,
             activity::activity_recent,

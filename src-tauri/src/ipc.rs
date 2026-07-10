@@ -421,7 +421,12 @@ fn dispatch(app: &AppHandle, req: Request) -> Value {
 // (행) 페이지를 다시 띄운다(행 복구). 전 플랫폼 동일 native 경로(cfg 분기·eval 폴백 제거).
 fn native_reload(app: &AppHandle, label: &str) -> bool {
     match app.get_webview(label) {
-        Some(wv) => wv.reload().is_ok(),
+        Some(wv) => {
+            // 의도된 reload 예고(webview_health) — 행 프로세스를 죽이며 나는 종료를
+            // 크래시로 오분류하지 않는다(마크는 1회 소모·수 초 내 만료).
+            crate::webview_health::mark_expected_teardown(app, label);
+            wv.reload().is_ok()
+        }
         None => false,
     }
 }

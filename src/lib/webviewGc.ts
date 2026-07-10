@@ -55,12 +55,29 @@ function liveBrowserLabels(): Set<string> {
 
 let started = false;
 
+// 복구 리부트 가드(webview_health recovery-in-flight 1회 플래그) — 크래시한 메인 webview 의
+// 복구 리로드 직후 프론트는 스토어가 빈 채로 부팅하므로, 세션 복원이 적용되기 전의 스윕은
+// live=∅ 오판으로 살아있는 child b-* 를 회수할 수 있다. 코어 플래그를 1회 소모해 held 로
+// 시작하고, windowBoot 가 복원 적용 후 releaseWebviewGcHold 로 해제한다. 평시 부팅은
+// consume=false 로 즉시 released. (컨트롤 플레인 main 창은 windowBoot 를 돌지 않지만
+// child webview 도 없어 스윕이 무의미 — held 잔존이 무해하다.)
+let gcGate: "pending" | "held" | "released" = "pending";
+let sweepRef: (() => void) | null = null;
+
+export function releaseWebviewGcHold(): void {
+  const was = gcGate;
+  gcGate = "released";
+  if (was !== "released") sweepRef?.();
+}
+
 export function startWebviewGc(): void {
   if (started) return;
   started = true;
 
   let lastKey: string | null = null;
   const sweep = rafThrottle(() => {
+    // 복구 리부트 가드 — 복원 적용(release) 전 스윕 금지(위 gcGate 머리말).
+    if (gcGate !== "released") return;
     // 매니페스트 미적재(부팅 직후·플러그인 스캔 전) 동안은 판정 불가 — live=∅ 오판으로 HMR 생존
     // webview 를 잘못 회수할 수 있다. 선언이 실릴 때까지 보류(usePlugins 구독이 적재 시 재발화).
     if (Object.keys(usePlugins.getState().plugins).length === 0) return;
@@ -83,7 +100,20 @@ export function startWebviewGc(): void {
       .catch(() => {});
   });
 
+  sweepRef = sweep;
   useSessions.subscribe(() => sweep());
   usePlugins.subscribe(() => sweep()); // 매니페스트 적재/변경 시 재판정(부팅 보류 해제 포함)
-  sweep(); // 기동 직후 1회(HMR/이전 상태 잔재 회수 — 매니페스트 적재 전이면 보류)
+  // 복구 리부트 여부를 코어에서 1회 소모 — 아니면 즉시 released 로 평시 스윕 재개.
+  void invoke<boolean>("webview_recovery_consume")
+    .then((inFlight) => {
+      if (gcGate === "released") return; // windowBoot 해제가 먼저 도착
+      gcGate = inFlight ? "held" : "released";
+      if (gcGate === "released") sweep();
+    })
+    .catch(() => {
+      if (gcGate !== "released") {
+        gcGate = "released";
+        sweep();
+      }
+    });
 }

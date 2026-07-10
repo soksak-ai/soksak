@@ -272,6 +272,61 @@ function BuildBadge() {
   );
 }
 
+// webview 복구 소진 배지 — 코어(webview_health)가 이 창에 emit_to 한 건강 전이 중
+// open(자동 복구 상한 소진)만 비차단 배지로 알린다. 블로킹 다이얼로그 금지 — 멀티윈도우에서
+// 한 child 의 크래시가 전체를 모달로 막지 못하게 한다. "다시 불러오기" = webview.recover
+// 와 동일 코어 경로(브레이커 reset + 제자리 reload). recovering/closed 전이가 오면 그
+// label 의 배지를 걷는다(정상 복귀·복구 재개 모두 배지 사유 소멸).
+function WebviewHealthBadges() {
+  const t = useT();
+  const [openLabels, setOpenLabels] = useState<string[]>([]);
+  useEffect(() => {
+    return listenThisWindow<{ label: string; state: string }>(
+      "webview-health",
+      (e) => {
+        const { label, state } = e.payload;
+        setOpenLabels((prev) =>
+          state === "open"
+            ? prev.includes(label)
+              ? prev
+              : [...prev, label]
+            : prev.filter((l) => l !== label),
+        );
+      },
+    );
+  }, []);
+  if (openLabels.length === 0) return null;
+  return (
+    <div className="webview-health-badges">
+      {openLabels.map((label) => (
+        <div key={label} className="webview-health-badge">
+          <span>{t("webview.exhausted", { label })}</span>
+          <button
+            type="button"
+            data-node={`webview/recover/${label}`}
+            onClick={() => {
+              void invoke("webview_recover", { label }).catch((err) =>
+                console.error("webview 수동 복구 실패:", err),
+              );
+            }}
+          >
+            {t("webview.recoverAction")}
+          </button>
+          <button
+            type="button"
+            aria-label={t("common.cancel")}
+            onClick={() =>
+              setOpenLabels((prev) => prev.filter((l) => l !== label))
+            }
+          >
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function App() {
   const t = useT();
   const settingsSection = useUi((s) => s.settingsSection);
@@ -867,6 +922,8 @@ function App() {
       </div>
       {/* 인앱 알림 배너(포커스 시) — 앱 루트 최상단 오버레이. */}
       <NotifyHost />
+      {/* webview 복구 소진 배지(비차단) — 코어 webview_health 전이 구독. */}
+      <WebviewHealthBadges />
     </div>
   );
 }
