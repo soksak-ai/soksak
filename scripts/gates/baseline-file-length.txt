@@ -3,9 +3,9 @@
 # 제거 조건: 파일을 1500줄 이하로 분할 → stale 실패 → --prune 으로 항목이 삭제된다.
 # 파일 개명 시 같은 커밋에서 항목 경로를 수기로 이전한다(값 불변).
 packages/plugin-spec/src/spec.ts 1681
-src-tauri/cli/src/lib.rs 1551
+src-tauri/cli/src/lib.rs 1694
 src-tauri/src/webview.rs 1538
 src/commands/catalog.ts 2729
-src/i18n.ts 1503
+src/i18n.ts 1505
 src/plugins/api.ts 1816
 src/state/sessions.ts 1721
