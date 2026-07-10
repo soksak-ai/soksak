@@ -1,0 +1,18 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "c2-static-violation",
+  "name": "C2 Static Violation Fixture",
+  "version": "0.1.0",
+  "description": "headless gate fixture — a content view with no commands, no nodes and no status declaration violates all three C2 static rules; the two blocking rules must fail the validate CLI",
+  "permissions": ["ui"],
+  "contributes": {
+    "views": [
+      {
+        "id": "canvas",
+        "title": "Canvas",
+        "icon": "▣",
+        "placements": ["content"]
+      }
+    ]
+  }
+}

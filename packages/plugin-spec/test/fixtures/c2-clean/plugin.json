@@ -1,0 +1,27 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "c2-clean",
+  "name": "C2 Clean Fixture",
+  "version": "0.1.0",
+  "description": "headless gate fixture — content view with declared status codes, command and node surfaces present: zero C2 violations",
+  "permissions": ["ui", "commands"],
+  "contributes": {
+    "views": [
+      {
+        "id": "canvas",
+        "title": "Canvas",
+        "icon": "▣",
+        "placements": ["content"],
+        "status": ["dirty", "busy"]
+      },
+      {
+        "id": "panel",
+        "title": "Panel",
+        "icon": "★",
+        "placements": ["sidebar-right"]
+      }
+    ],
+    "commands": [{ "name": "open", "title": "Open" }],
+    "nodes": [{ "id": "root" }]
+  }
+}

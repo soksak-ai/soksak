@@ -1,0 +1,20 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "c2-status-undeclared",
+  "name": "C2 Status Undeclared Fixture",
+  "version": "0.1.0",
+  "description": "headless gate fixture — a content view without a status declaration violates content-view-status (warn mode: reported, exit 0)",
+  "permissions": ["ui", "commands"],
+  "contributes": {
+    "views": [
+      {
+        "id": "canvas",
+        "title": "Canvas",
+        "icon": "▣",
+        "placements": ["content"]
+      }
+    ],
+    "commands": [{ "name": "open", "title": "Open" }],
+    "nodes": [{ "id": "root" }]
+  }
+}

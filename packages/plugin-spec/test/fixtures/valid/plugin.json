@@ -3,7 +3,11 @@
   "id": "valid",
   "name": "Valid Fixture",
   "version": "0.1.0",
-  "description": "headless gate fixture — must pass parseManifest",
-  "permissions": ["ui"],
-  "contributes": { "views": [{ "id": "panel", "title": "Panel", "icon": "★" }] }
+  "description": "headless gate fixture — must pass parseManifest and the C2 static transparency judgment",
+  "permissions": ["ui", "commands"],
+  "contributes": {
+    "views": [{ "id": "panel", "title": "Panel", "icon": "★" }],
+    "commands": [{ "name": "open", "title": "Open" }],
+    "nodes": [{ "id": "root" }]
+  }
 }

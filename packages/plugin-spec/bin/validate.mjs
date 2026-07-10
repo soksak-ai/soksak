@@ -14,7 +14,11 @@
 
 import { readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { parseManifest } from "../dist/spec.js";
+import {
+  C2_STATIC_ENFORCEMENT,
+  parseManifest,
+  transparencyViolations,
+} from "../dist/spec.js";
 
 const USAGE = `사용: npx soksak-validate <플러그인 폴더 | plugin.json>...
   플러그인 폴더를 주면 그 안의 plugin.json 을 검증합니다.
@@ -50,15 +54,30 @@ for (const p of paths) {
   // dirName = 플러그인 디렉터리명(단일폴더 모델: ~/.soksak/plugins/<id>). parseManifest 가 id 검증에 사용.
   // resolve 로 절대화 — pre-commit 의 `soksak-validate plugin.json`(상대) 도 repo 루트명을 dirName 으로 얻는다.
   const dirName = basename(dirname(resolve(p)));
-  const { validation } = parseManifest(raw, dirName);
-  if (validation.ok) {
-    console.log(`✓ ${p}`);
-    for (const w of validation.warnings ?? []) console.log(`  ⚠ ${w}`);
-  } else {
+  const { manifest, validation } = parseManifest(raw, dirName);
+  if (!validation.ok) {
     console.error(`✗ ${p}`);
     for (const err of validation.errors) console.error(`  - ${err}`);
     failed++;
+    continue;
   }
+  // C2 정적 투명성 판정 — 문법과 별개 섹션(저자 경계). 판정·시행표의 단일진실은 패키지
+  // (transparency.ts) — 앱 로더·설치본 게이트와 같은 표를 본다. blocking 규칙 위반 = 실패
+  // (앱이 활성화를 거부할 매니페스트를 발행 전에 알린다), warn 규칙 위반 = 경고 + 통과(래칫).
+  const c2 = transparencyViolations(manifest.contributes);
+  const blocking = c2.filter((v) => C2_STATIC_ENFORCEMENT[v.rule] === "blocking");
+  const warned = c2.filter((v) => C2_STATIC_ENFORCEMENT[v.rule] === "warn");
+  if (blocking.length > 0) {
+    console.error(`✗ ${p}`);
+    console.error(`  C2 투명성 위반(blocking — 앱이 활성화를 거부한다):`);
+    for (const v of blocking) console.error(`  - ${v.rule} — ${v.detail}`);
+    for (const v of warned) console.error(`  ⚠ C2 ${v.rule}: ${v.detail}`);
+    failed++;
+    continue;
+  }
+  console.log(`✓ ${p}`);
+  for (const w of validation.warnings ?? []) console.log(`  ⚠ ${w}`);
+  for (const v of warned) console.log(`  ⚠ C2 ${v.rule}: ${v.detail}`);
 }
 
 process.exit(failed > 0 ? 1 : 0);

@@ -22,6 +22,13 @@ plugin repo so a broken manifest fails before publish:
 { "scripts": { "validate": "soksak-validate plugin.json" } }
 ```
 
+Beyond manifest syntax, the CLI reports the C2 static transparency judgment
+(`transparencyViolations` — the same function the soksak runtime enforces at activation).
+Rules in blocking mode (`command-surface`, `view-nodes`) fail the run — the app would refuse
+to activate that manifest. Rules in warn mode (`content-view-status`: a content-placed view
+must declare the status codes it reports via `contributes.views[].status`, `[]` for a
+stateless view) print a warning and pass — resolve them before publishing.
+
 ## Programmatic
 
 ```ts

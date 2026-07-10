@@ -116,14 +116,22 @@ spec-gate: ## 패키지 빌드(plugin-spec·plugin-api dist — 코어가 소비
 	@npx tsc -p packages/plugin-api/tsconfig.json
 	@node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/valid/plugin.json
 	@node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/valid-implements/plugin.json
+	@node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/c2-clean/plugin.json
+	@node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/c2-status-undeclared/plugin.json
 	@if node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/invalid/plugin.json >/dev/null 2>&1; then \
 		echo "spec-gate: 무효 매니페스트가 통과됨(게이트 깨짐)"; exit 1; \
 	else true; fi
 	@if node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/invalid-implements/plugin.json >/dev/null 2>&1; then \
 		echo "spec-gate: 무효 implements 계약 id 가 통과됨(게이트 깨짐)"; exit 1; \
-	else echo "✓ spec-gate(빌드+무효 거부 확인)"; fi
+	else true; fi
+	@if node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/invalid-status/plugin.json >/dev/null 2>&1; then \
+		echo "spec-gate: 무효 status 선언이 통과됨(게이트 깨짐)"; exit 1; \
+	else true; fi
+	@if node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/c2-static-violation/plugin.json >/dev/null 2>&1; then \
+		echo "spec-gate: C2 blocking 위반 매니페스트가 통과됨(게이트 깨짐)"; exit 1; \
+	else echo "✓ spec-gate(빌드+무효 거부+C2 판정 확인)"; fi
 
-gates: ## 코어 규율 게이트(blocking) — C1 결합 스캔 + 기준선 축소 게이트 + C2 투명성(정적 2종)
+gates: ## 코어 규율 게이트(blocking) — C1 결합 스캔 + 기준선 축소 게이트 + C2 투명성(정적 3종·blocking 규칙만 실패)
 	@node scripts/gates/core-decoupling-scan.mjs
 	@node scripts/gates/baseline-gate.mjs
 	@node scripts/gates/c2-transparency-scan.mjs --plugins $${SOKSAK_PLUGINS:-$$HOME/.soksak-dev/plugins}

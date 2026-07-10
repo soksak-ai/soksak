@@ -1,0 +1,21 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "invalid-status",
+  "name": "Invalid Status Fixture",
+  "version": "0.1.0",
+  "description": "headless gate fixture — status entries must be code-formatted strings without duplicates; this manifest must be rejected",
+  "permissions": ["ui", "commands"],
+  "contributes": {
+    "views": [
+      {
+        "id": "canvas",
+        "title": "Canvas",
+        "icon": "▣",
+        "placements": ["content"],
+        "status": ["dirty", "dirty", "Not A Code", 7]
+      }
+    ],
+    "commands": [{ "name": "open", "title": "Open" }],
+    "nodes": [{ "id": "root" }]
+  }
+}
