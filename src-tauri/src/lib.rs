@@ -163,7 +163,12 @@ pub fn run() {
             // app-internal command socket(JSON-RPC). sok CLI 가 직접 사용하고, `sok mcp` 서브프로세스가
             // stdio MCP↔이 소켓 브리지로 사용한다. app 은 MCP 서버가 아니다 — docs/AI-CONTROL.md P6.
             if let Err(e) = ipc::start(app.handle().clone()) {
-                eprintln!("[ipc] 소켓 서버 기동 실패: {e}");
+                // 소켓 선점 실패 = 살아있는 인스턴스가 이미 있다(connect 프로브 — 죽은 소켓은 재바인드).
+                // 소켓 없이 계속 뜨면 두 인스턴스가 같은 영속 kv(window/<label> 스냅샷)에 동시 쓰기해
+                // 마지막에 죽는 쪽이 덮어쓰고(실측 — 스페이스 제목 마이그레이션 클로버), 명령은 소켓
+                // 주인에게만 가서 화면의 창과 어긋난다. 단일 인스턴스가 규칙 — 즉시 종료한다.
+                eprintln!("[ipc] 소켓 서버 기동 실패: {e} — 이중 인스턴스 금지, 종료합니다");
+                std::process::exit(1);
             }
             // 범용 미디어 스트리밍 프록시(루프백 HTTP) — webview 가 못 받는 Referer/CORS 보호 미디어를
             // 헤더 주입해 바이너리 스트리밍한다. media.proxy.* 가 표면. 기동 실패는 재생만 실패(앱은 산다).
