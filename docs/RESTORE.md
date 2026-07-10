@@ -2,7 +2,18 @@
 
 Workspace persistence and restore. Facet of [ARCHITECTURE.md](ARCHITECTURE.md); Korean copy: [RESTORE.ko.md](RESTORE.ko.md). The English text is canonical.
 
-Restart brings the workspace back as it was: windows at their frames, tabs and splits, each terminal at its last working directory, with its recent command blocks repainted. The principles below govern every part of that path.
+Restart brings the workspace back as it was: windows at their frames, tabs and splits, each terminal at its last working directory, with its shell still running where possible. The principles below govern every part of that path.
+
+## Restore ladder
+
+A restored terminal pane takes the highest rung available. The judge only adds earlier rungs — the repaint path itself stays one path (R-PATH).
+
+1. **Live adoption** — the same app process remounts a still-live PTY (move-remounts within one run). Nothing is repainted.
+2. **Warm reattach** — `soksak-ptyd` (an independent binary in the core workspace, staged into the identity home's `bin/`) owns every shell, so the shell and its children survive an app exit with their pids. A pane respawn with the same pane id reattaches over the daemon socket instead of spawning: output that flowed while detached is replayed from the daemon's per-session scrollback ring ahead of live bytes. Explicit quit detaches; it never kills daemon sessions. In this generation the replay is the raw ring — the headless mirror serializer, the front replay-guard (suppressing re-answers to replayed DA1/DSR queries), and alt-screen rehydration are later rungs of the same work.
+3. **Cold byte restore** — sealed byte checkpoints re-render scrollback after the daemon itself died. Not built yet; today this rung is skipped.
+4. **Blocks repaint** — recent command blocks repaint as inert text (R-PATH). The only rung while the vault is locked, and the floor when every higher rung is unavailable.
+
+When the daemon cannot be staged or reached, terminals fall back to in-process PTYs — the pre-daemon behavior — and the app announces the degradation on the activity feed (`pty.daemon.fallback`); daemon death is announced the same way (`pty.daemon.lost`). Silent degradation is forbidden.
 
 ## Principles
 
@@ -28,7 +39,7 @@ A restored window paints all tabs and splits at once. Only views actually on scr
 
 ### R-CLEAN — Integrity
 
-- Explicit quit (Cmd+Q / `app.exit`) preserves every window's session. A user-initiated window close discards that window's snapshot and manifest slot — marked at `CloseRequested`, pruned at `Destroyed`, so the final unload save cannot resurrect it.
+- Explicit quit (Cmd+Q / `app.exit`) preserves every window's session — daemon-owned shells keep running detached. A user-initiated window close discards that window's snapshot, manifest slot, and PTY sessions (`kill_by_window` reaps the window's daemon shells, so no ghost shell outlives its window) — marked at `CloseRequested`, pruned at `Destroyed`, so the final unload save cannot resurrect it.
 - Autosave is debounced and flushed on `pagehide`; window moves and resizes also trigger it.
 - Runtime-created windows boot with `fresh=1` and never restore by label — reused `win-<seq>` labels must not revive crashed sessions.
 - A missing project root demotes its tab (banner, volatile flag) instead of deleting it.
