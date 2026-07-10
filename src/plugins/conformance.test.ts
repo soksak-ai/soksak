@@ -281,11 +281,11 @@ describe("implementsViolations — C3 implements 선언 generic 검사", () => {
 // C3 시행 모드 — C2 와 같은 결(warn 출발). blocking 승격은 스키마 랜딩 후 설치본 위반 0 실측 유지
 // + 명시 재입법 커밋으로만 한다(C4·C5). 이 표를 고치면 아래 핀 테스트가 동행 개정을 강제한다.
 describe("C3_ENFORCEMENT·partitionEnforcement — 시행 모드", () => {
-  it("현행 입법표 핀 — 3종 전부 warn(신설 축, blocking 승격은 재입법으로만)", () => {
+  it("현행 입법표 핀 — 3종 전부 blocking(설치본 선언 0 = 위반 0 실측 후 승격)", () => {
     expect(C3_ENFORCEMENT).toEqual({
-      "implements-shape": "warn",
-      "implements-grammar": "warn",
-      "implements-duplicate": "warn",
+      "implements-shape": "blocking",
+      "implements-grammar": "blocking",
+      "implements-duplicate": "blocking",
     });
   });
 

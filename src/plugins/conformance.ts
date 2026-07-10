@@ -145,9 +145,9 @@ export function partitionTransparency(
 // 소비자는 계약 id 로 구현체를 발견한다(contractDiscovery — 구현체 무차별). 계약이 요구하는 표면
 // (어떤 command/view 가 있어야 하나)의 정의·검증은 계약 소유자(플러그인) 몫 — 코어는 어떤 계약도
 // 모르므로(C1) 선언 자체의 성립만 generic 하게 본다: 형태·문법(NAMING §8)·중복.
-// C2 와 같은 결로 warn 출발(신설 축 — 스키마가 필드를 싣기 전이라 설치본 실측이 아직 없다).
-// blocking 승격은 스키마 랜딩 후 위반 0 실측 유지 + 명시 재입법 커밋으로만 한다(C4·C5 —
-// 무언 승격·무언 완화 둘 다 금지). conformance.test.ts 의 핀 테스트가 동행 개정을 강제한다.
+// 재입법 이력: 2026-07-11 warn 출발(신설 축) → 2026-07-11 blocking 승격 — 스키마 랜딩(P0.5)
+// 후 설치본 실측 위반 0(implements 선언 보유 플러그인 0, L2 는 옵트인이라 무선언=합법).
+// 이후 완화·재승격은 명시 재입법 커밋으로만 한다(C4·C5). 핀 테스트가 동행 개정을 강제한다.
 
 export type ImplementsRule =
   | "implements-shape"
@@ -155,9 +155,9 @@ export type ImplementsRule =
   | "implements-duplicate";
 
 export const C3_ENFORCEMENT: Readonly<Record<ImplementsRule, EnforcementMode>> = {
-  "implements-shape": "warn",
-  "implements-grammar": "warn",
-  "implements-duplicate": "warn",
+  "implements-shape": "blocking",
+  "implements-grammar": "blocking",
+  "implements-duplicate": "blocking",
 };
 
 export interface ImplementsViolation {

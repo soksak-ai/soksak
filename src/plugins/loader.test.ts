@@ -239,24 +239,21 @@ describe("enforceTransparency — blocking 모드(주입 표)", () => {
   });
 });
 
-// C3(L2 계약-핀) implements generic 검사의 활성화 경계 시행 — C2 와 같은 결(현행 표 전부 warn).
+// C3(L2 계약-핀) implements generic 검사의 활성화 경계 시행 — C2 와 같은 결(현행 표 전부 blocking).
 // parseManifest 는 아직 implements 를 모른다(스키마는 plugin-spec 몫) — 필드는 파싱 뒤 부착해 검증한다.
 describe("enforceImplements — C3 implements 활성화 경계", () => {
   const withImplements = (value: unknown) =>
     Object.assign(manifestOf(), { implements: value });
 
-  it("문법 위반 선언 → warn 모드에서 경고(활성화는 계속)", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await activatePlugin(
-      { activate: () => {} },
-      withImplements(["not-a-contract"]),
-      "/d",
-      fakeDeps(),
-    );
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining("C3 implements-grammar"),
-    );
-    warn.mockRestore();
+  it("문법 위반 선언 → 거부(blocking 승격분)", async () => {
+    await expect(
+      activatePlugin(
+        { activate: () => {} },
+        withImplements(["not-a-contract"]),
+        "/d",
+        fakeDeps(),
+      ),
+    ).rejects.toThrow(/C3.*implements-grammar/);
   });
 
   it("정상 선언·무선언 → C3 경고 없음", async () => {
