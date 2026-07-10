@@ -114,6 +114,42 @@ struct TransportCtx {
     started_at_ms: u64,
 }
 
+impl TransportCtx {
+    // 연결(handle_conn)과 ipc_hello_info 커맨드가 공유하는 앱 사실 수집 — hello 사실의 단일 출처.
+    fn from_app(app: &AppHandle) -> Self {
+        TransportCtx {
+            identity: app.config().identifier.clone(),
+            app_version: app.package_info().version.to_string(),
+            pid: std::process::id(),
+            started_at_ms: STARTED_AT_MS.get().copied().unwrap_or(0),
+        }
+    }
+}
+
+// system.hello 협상 사실 — 판 상수(soksak-protocol) + 앱 사실. transport 즉답과 ipc_hello_info
+// 커맨드가 같은 함수를 쓴다(이중 진실 없음): 봉투의 ok 는 각 계층이 얹는다(transport 는 여기서,
+// registry 는 execute 에서). capabilities 는 전송층 행위만 싣는다 — 기능 발견은 카탈로그가 정본.
+fn hello_facts(ctx: &TransportCtx) -> Value {
+    use soksak_protocol::{MIN_COMPATIBLE_CLIENT_PROTOCOL, SOCKET_PROTOCOL_VERSION};
+    json!({
+        "protocol": SOCKET_PROTOCOL_VERSION,
+        "minClientProtocol": MIN_COMPATIBLE_CLIENT_PROTOCOL,
+        "appVersion": ctx.app_version,
+        "identity": ctx.identity,
+        "pid": ctx.pid,
+        "startedAt": ctx.started_at_ms,
+        "capabilities": ["hello.v1"],
+    })
+}
+
+// 프론트 내부 경로(command palette·registry 핸들러)용 hello — transport 즉답과 같은 hello_facts
+// 를 반환한다. 소켓/MCP/CLI 는 transport 선점으로 답하고, catalog 의 system.hello 핸들러는 이
+// 커맨드로 위임한다 — 어느 경로로 발견해도 같은 사실로 실제 동작한다.
+#[tauri::command]
+pub fn ipc_hello_info(app: AppHandle) -> Value {
+    hello_facts(&TransportCtx::from_app(&app))
+}
+
 // transport 레벨 라우트: 프론트 미경유 즉답(webview 가 행이어도 답한다 — 진단 가치).
 // ① system.hello — 협상 프리미티브. 스큐 게이트 면제: 스큐된 클라이언트가 두 판 숫자를
 //    배울 유일한 통로가 hello 다. capabilities 는 전송층 행위만 싣는다 — 기능 발견은
@@ -128,16 +164,11 @@ fn transport_route(req: &Request, ctx: &TransportCtx) -> Option<Value> {
         MIN_COMPATIBLE_CLIENT_PROTOCOL, SOCKET_PROTOCOL_VERSION,
     };
     if req.method == "system.hello" {
-        return Some(json!({
-            "ok": true,
-            "protocol": SOCKET_PROTOCOL_VERSION,
-            "minClientProtocol": MIN_COMPATIBLE_CLIENT_PROTOCOL,
-            "appVersion": ctx.app_version,
-            "identity": ctx.identity,
-            "pid": ctx.pid,
-            "startedAt": ctx.started_at_ms,
-            "capabilities": ["hello.v1"],
-        }));
+        let mut reply = hello_facts(ctx);
+        if let Some(obj) = reply.as_object_mut() {
+            obj.insert("ok".into(), json!(true));
+        }
+        return Some(reply);
     }
     let declared = effective_protocol(req.protocol);
     let verdict = evaluate_compat(SOCKET_PROTOCOL_VERSION, MIN_COMPATIBLE_CLIENT_PROTOCOL, declared);
@@ -247,12 +278,7 @@ pub fn cleanup() {
 }
 
 fn handle_conn(app: AppHandle, conn: Box<dyn IpcConnection>) {
-    let ctx = TransportCtx {
-        identity: app.config().identifier.clone(),
-        app_version: app.package_info().version.to_string(),
-        pid: std::process::id(),
-        started_at_ms: STARTED_AT_MS.get().copied().unwrap_or(0),
-    };
+    let ctx = TransportCtx::from_app(&app);
     let Ok(read_half) = conn.try_clone_conn() else { return };
     let reader = BufReader::new(read_half);
     let mut writer = conn;
@@ -653,6 +679,21 @@ mod tests {
         assert_eq!(reply["startedAt"], 1_700_000_000_000u64);
         let caps = reply["capabilities"].as_array().expect("capabilities array");
         assert!(caps.iter().any(|c| c == "hello.v1"), "hello.v1 capability advertised");
+    }
+
+    // transport 즉답과 ipc_hello_info(프론트 경로)는 같은 hello_facts 에서 나온다 — 판 상수의
+    // 단일 출처. 봉투 ok 는 hello_facts 밖(각 계층이 얹음)임을 함께 고정한다.
+    #[test]
+    fn transport_hello_reply_is_hello_facts_plus_envelope_ok() {
+        let ctx = test_ctx();
+        let facts = hello_facts(&ctx);
+        assert!(facts.get("ok").is_none(), "hello_facts 는 사실만 — 봉투 ok 는 밖에서 얹는다");
+        let req = parse_request(r#"{"method":"system.hello"}"#).unwrap();
+        let reply = transport_route(&req, &ctx).expect("hello answered at transport");
+        assert_eq!(reply["ok"], true);
+        for (k, v) in facts.as_object().unwrap() {
+            assert_eq!(&reply[k], v, "transport hello field {k} must derive from hello_facts");
+        }
     }
 
     // 스큐 요청은 dispatch(프론트 registry)에 도달하기 전에 거부되어야 한다.

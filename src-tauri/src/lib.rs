@@ -454,6 +454,7 @@ pub fn run() {
             ipc::ipc_socket_path,
             ipc::ipc_cli_dir,
             ipc::ipc_last_project_window,
+            ipc::ipc_hello_info,
             titlebar::titlebar_backing,
             ime_debug,
             window_activate,

@@ -4,6 +4,7 @@
 // webview is wedged); the registry handler returns the same facts via the ipc_hello_info core command,
 // so the command is discoverable and actually runs on every path.
 
+import { invoke } from "@tauri-apps/api/core";
 import { tmsg } from "../i18n";
 import { register } from "./registry";
 
@@ -21,7 +22,7 @@ export function registerSystemCatalog(): void {
         version: String(d.appVersion ?? ""),
       }),
     examples: ["sok hello"],
-    // RED: 아직 transport 와 같은 소스로 위임하지 않는다 — 빈 사실을 낸다.
-    handler: () => ({}),
+    // transport 즉답과 같은 hello_facts 를 내는 코어 커맨드로 위임 — 판 상수 단일 출처, 위조 복제 없음.
+    handler: () => invoke("ipc_hello_info"),
   });
 }
