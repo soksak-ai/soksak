@@ -155,6 +155,10 @@ test-e2e: ## 실행 중 앱 소켓 대상 E2E 스위트(멱등·자기정리). I
 e2e-resize: ## 리사이즈 E2E(기계 측정 — blank/프롬프트/TUI). macOS+앱 실행+동의 필요
 	scripts/e2e/resize.sh --identity $${IDENTITY:-dev}
 
+perf-gate: ## 터미널 성능 게이트(W4) — 게이트 자체검증 후 t1/t2/t5/t6 실측 → budgets.json 위반 시 실패. 앱 실행+전면 필요
+	@$(PNPM) vitest run scripts/perf/check-budgets.test.mjs
+	@bash scripts/perf/run-t.sh --identity $${IDENTITY:-debug} --label gate --t1mb $${T1MB:-100}
+
 clean: ## dev 에 불필요한 재생성 산출물 제거(release 프로파일·번들·dist). 증분 빌드 자산(deps/.fingerprint/build/incremental/바이너리)은 보존 — 다음 dev 빌드 영향 0
 	cd src-tauri && cargo clean --release
 	rm -rf dist src-tauri/target/debug/bundle

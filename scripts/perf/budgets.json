@@ -1,0 +1,38 @@
+{
+  "meta": {
+    "source": "results/20260711-075708-baseline-debug.json — first measurement (W4 M3: initial values come from measurement, never invented)",
+    "protocol": "make perf-gate (run-t.sh --identity debug, t1=100MB fixtures, scenario order t5,t6,t2,t1_plain,t1_ansi)",
+    "conditions": {
+      "identity": "debug",
+      "machine": "Apple M1 Pro",
+      "windowsOpen": 7,
+      "note": "t5/t6 measure the whole app group (every open window) — compare only under the same window population; baselines below embed windowsOpen=7 ambient load"
+    },
+    "headroom": {
+      "throughput.min": "baseline x 0.7",
+      "cpu.max": "baseline x 1.3",
+      "latencyMs.max": "baseline x 1.5 + 3ms (timer resolution ~1ms)",
+      "rssMb.max": "baseline x 1.3"
+    },
+    "baseline": {
+      "t1_plain.mbps": 4.58,
+      "t1_plain.cpu.avg": 100.0,
+      "t1_ansi.mbps": 4.49,
+      "t1_ansi.cpu.avg": 97.9,
+      "t2.medianMs": 1,
+      "t2.p95Ms": 2,
+      "t5_idle.cpu.avg": 46.4,
+      "t6_memory.rssMb": 752.3
+    }
+  },
+  "budgets": {
+    "t1_plain.mbps": { "min": 3.2 },
+    "t1_plain.cpu.avg": { "max": 130 },
+    "t1_ansi.mbps": { "min": 3.1 },
+    "t1_ansi.cpu.avg": { "max": 127 },
+    "t2.medianMs": { "max": 4.5 },
+    "t2.p95Ms": { "max": 6 },
+    "t5_idle.cpu.avg": { "max": 60 },
+    "t6_memory.rssMb": { "max": 978 }
+  }
+}
