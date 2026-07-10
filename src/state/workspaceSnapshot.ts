@@ -17,16 +17,27 @@ import type { ProjectTab, ContentArea, ViewGroup, View } from "./sessions";
 // ── 스냅샷 타입 ───────────────────────────────────────────────────────────────
 
 type ViewSnapshot =
-  | { id: string; kind: "file"; title: string; path: string; mode: "code" | "preview" }
+  | {
+      id: string;
+      kind: "file";
+      title: string;
+      customLabel?: string;
+      path: string;
+      mode: "code" | "preview";
+    }
   | {
       id: string;
       kind: "plugin";
       title: string;
+      // 사용자 지정 탭 라벨(view.rename) — 사용자 의도라 영속한다. 옵션(구 스냅샷 호환).
+      customLabel?: string;
       pluginId: string;
       view: string;
       // B3 — 관찰된 cwd(복원 spawn 위치)·마지막 활동 시각(hydration 우선순위). 옵션(구 스냅샷 호환).
       cwd?: string;
       lastActivity?: number;
+      // B3 — 플러그인 관찰 상태(setRestoreState — 예: 브라우저 URL). 복원 마운트의 restore.state.
+      state?: unknown;
     };
 
 interface ViewGroupSnapshot {
@@ -62,7 +73,14 @@ export interface ProjectSnapshot {
 function serializeView(v: View): ViewSnapshot {
   switch (v.kind) {
     case "file":
-      return { id: v.id, kind: "file", title: v.title, path: v.path, mode: v.mode };
+      return {
+        id: v.id,
+        kind: "file",
+        title: v.title,
+        ...(v.customLabel ? { customLabel: v.customLabel } : {}),
+        path: v.path,
+        mode: v.mode,
+      };
     case "plugin":
       // command(자동 실행)는 영속하지 않는다 — 복원된 터미널은 명령을 재실행하지 않는다(A6:
       // live PTY 복원 불가, 재실행은 부작용). 새로 열 때만 autorun 한다.
@@ -70,11 +88,13 @@ function serializeView(v: View): ViewSnapshot {
         id: v.id,
         kind: "plugin",
         title: v.title,
+        ...(v.customLabel ? { customLabel: v.customLabel } : {}),
         pluginId: v.pluginId,
         view: v.view,
-        // B3 — 마지막 cwd·활동 시각은 복원의 실질(터미널이 그 자리에서 다시 시작).
+        // B3 — 마지막 cwd·활동 시각·플러그인 상태는 복원의 실질.
         ...(v.cwd ? { cwd: v.cwd } : {}),
         ...(v.lastActivity ? { lastActivity: v.lastActivity } : {}),
+        ...(v.state !== undefined ? { state: v.state } : {}),
       };
   }
 }
@@ -115,17 +135,26 @@ export function serializeProject(p: ProjectTab): ProjectSnapshot {
 function deserializeView(s: ViewSnapshot, _newSplitId: () => string): View {
   switch (s.kind) {
     case "file":
-      return { id: s.id, kind: "file", title: s.title, path: s.path, mode: s.mode };
+      return {
+        id: s.id,
+        kind: "file",
+        title: s.title,
+        ...(s.customLabel ? { customLabel: s.customLabel } : {}),
+        path: s.path,
+        mode: s.mode,
+      };
     case "plugin":
       // command 미복원 — 복원된 터미널은 명령을 재실행하지 않는다(A6).
       return {
         id: s.id,
         kind: "plugin",
         title: s.title,
+        ...(s.customLabel ? { customLabel: s.customLabel } : {}),
         pluginId: s.pluginId,
         view: s.view,
         ...(s.cwd ? { cwd: s.cwd } : {}),
         ...(s.lastActivity ? { lastActivity: s.lastActivity } : {}),
+        ...(s.state !== undefined ? { state: s.state } : {}),
       };
   }
 }

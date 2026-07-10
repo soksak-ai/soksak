@@ -105,6 +105,11 @@ export type View =
       status?: ViewStatus;
       // 관찰된 작업 디렉토리(OSC 7/633) — 영속 대상(B3): 복원 뷰가 마지막 cwd 에서 시작한다.
       cwd?: string;
+      // 플러그인 관찰 런타임 상태(B3 일반화) — 뷰 레코드에 실려 뷰와 수명을 같이한다(뷰 닫힘 =
+      // 상태 소멸, id 재사용 충돌 불가). 예: 브라우저 현재 URL. 플러그인 kv 에 viewId 키로 영속
+      // 금지 — viewId 는 세션 넘어 유일하지 않다(reseed 재사용). ctx.setRestoreState 가 기록,
+      // 복원 마운트의 ctx.restore.state 로 돌아온다. JSON 직렬화 가능 값만.
+      state?: unknown;
       // 마지막 활동 시각(epoch ms) — 근거는 이벤트만(명령 시작/종료·turn·활성화·PTY 출력).
       // 복원 hydration 우선순위(B4)와 "마지막 사용" 표시의 데이터.
       lastActivity?: number;
@@ -300,12 +305,13 @@ interface SessionsStore {
   setViewTitle: (projectId: string, viewId: string, title: string) => void;
   // 사용자 지정 탭 라벨 설정(view.rename). 빈 값 = 오버라이드 해제(동적 title 복귀).
   renameView: (projectId: string, viewId: string, label: string) => CmdResult<{ label: string }>;
-  // 뷰 런타임 관찰값(B3) — cwd(OSC 관찰)·lastActivity(이벤트 근거). undefined = 유지.
+  // 뷰 런타임 관찰값(B3) — cwd(OSC 관찰)·lastActivity(이벤트 근거)·state(플러그인 관찰 상태).
+  // undefined = 유지.
   // projectId null 허용: 이벤트가 프로젝트를 모르면 전 탭에서 뷰를 찾는다(pane→view 매핑 안정).
   setViewRuntime: (
     projectId: string | null,
     viewId: string,
-    patch: { cwd?: string; lastActivity?: number },
+    patch: { cwd?: string; lastActivity?: number; state?: unknown },
   ) => void;
   // 드래그/명령 분할·이동: viewId 를 targetGroup 의 zone 위치로.
   moveViewToGroup: (

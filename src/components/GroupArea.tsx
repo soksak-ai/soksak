@@ -563,9 +563,13 @@ export const GroupArea = memo(function GroupArea({
                   root={projectRoot}
                   region="content"
                   command={view.command ?? null}
-                  // B3 복원 seam — 관찰됐던 cwd(있으면). 터미널은 spawn 위치로 쓴다
-                  // (살아있는 PTY 입양이 우선이므로 재시작 복원에서만 실효).
-                  restore={view.cwd ? { cwd: view.cwd } : null}
+                  // B3 복원 seam — 관찰됐던 런타임(cwd·플러그인 state). 터미널은 spawn 위치,
+                  // 브라우저류는 state(URL 등) 복원. 관찰값이 하나도 없으면 null(새 뷰).
+                  restore={
+                    view.cwd || view.state !== undefined
+                      ? { cwd: view.cwd ?? null, state: view.state ?? null }
+                      : null
+                  }
                 />
               )}
             </div>

@@ -197,4 +197,44 @@ describe("B3 — cwd·lastActivity 영속 round-trip", () => {
     expect(v2.cwd).toBeUndefined();
     expect(v2.lastActivity).toBeUndefined();
   });
+
+  it("plugin 뷰의 state(관찰 상태)·customLabel(사용자 라벨)이 왕복을 통과한다", () => {
+    const tab: ProjectTab = {
+      ...project,
+      contents: [
+        {
+          id: "c1",
+          title: "1",
+          activeGroupId: "g1",
+          layout: {
+            type: "leaf",
+            value: {
+              id: "g1",
+              activeViewId: "v1",
+              views: [
+                {
+                  id: "v1",
+                  kind: "plugin",
+                  title: "NAVER",
+                  customLabel: "내 브라우저",
+                  pluginId: "soksak-plugin-browser-native",
+                  view: "content",
+                  state: { url: "https://naver.com/" },
+                },
+                { id: "v2", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
+              ],
+            },
+          },
+        },
+      ],
+    };
+    const back = deserializeProject(serializeProject(tab), newSplitId);
+    const g = (back.contents[0].layout as Extract<GroupNode, { type: "leaf" }>).value;
+    const v1 = g.views.find((v) => v.id === "v1") as Extract<View, { kind: "plugin" }>;
+    const v2 = g.views.find((v) => v.id === "v2") as Extract<View, { kind: "plugin" }>;
+    expect(v1.state).toEqual({ url: "https://naver.com/" });
+    expect(v1.customLabel).toBe("내 브라우저");
+    expect(v2.state).toBeUndefined();
+    expect(v2.customLabel).toBeUndefined();
+  });
 });

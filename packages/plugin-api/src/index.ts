@@ -189,14 +189,19 @@ export interface PluginViewContext {
    *  프로그램 선언(ContributedProgram.command)이 source. 뷰 종류 무관 채널 — 자동 실행 여부는
    *  뷰 구현이 결정한다(터미널 뷰만 PTY 로 실행). 명령 없으면 null. */
   command: string | null;
-  /** 복원 seam(B3) — 재시작 복원 마운트면 관찰됐던 런타임(cwd). 새 뷰는 null.
-   *  터미널 뷰는 restore.cwd 에서 spawn(마지막 작업 위치 복원). */
-  restore: { cwd: string | null } | null;
+  /** 복원 seam(B3) — 재시작 복원 마운트면 관찰됐던 런타임(cwd·state). 새 뷰는 null.
+   *  터미널 뷰는 restore.cwd 에서 spawn, state 는 setRestoreState 로 기록했던 플러그인
+   *  관찰 상태(예: 브라우저 URL). 새 뷰는 null — 잔재 유입이 구조적으로 불가. */
+  restore: { cwd: string | null; state: unknown } | null;
   setBadge: (badge: ViewBadge) => void;
   /** 이 뷰의 상태를 보고(R1) — null=회수. 콘텐츠 배치 뷰만 유효(close guard). */
   setStatus: (status: ViewStatus | null) => void;
   /** 이 뷰의 탭 제목 동적 갱신(콘텐츠 배치만 — 예: 브라우저 페이지 제목). 빈 값 무시. 사이드바=no-op. */
   setTitle: (title: string) => void;
+  /** 플러그인 관찰 런타임 상태 보고(B3) — 뷰 레코드에 영속, 복원 마운트의 restore.state 로 돌아온다.
+   *  플러그인 kv 에 viewId 키로 영속하지 마라 — viewId 는 세션 넘어 재사용되어 죽은 뷰의 잔재가
+   *  새 뷰에 유입된다. JSON 직렬화 가능 값만. 콘텐츠 배치만 유효, 사이드바=no-op. */
+  setRestoreState: (state: unknown) => void;
 }
 
 /** 플러그인이 구현하는 뷰. React 비요구 — 컨테이너 DOM 에 직접 그린다. */

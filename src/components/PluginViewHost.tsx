@@ -34,8 +34,8 @@ export const PluginViewHost = memo(function PluginViewHost({
   viewId?: string | null;
   // 이 뷰가 마운트 시 받을 자동 실행 명령(에이전트 프로그램 — 터미널 뷰가 PTY 로 실행). 없으면 null.
   command?: string | null;
-  // 복원 seam(B3) — 재시작 복원 마운트면 관찰됐던 런타임(cwd). 새 뷰는 미지정(null).
-  restore?: { cwd: string | null } | null;
+  // 복원 seam(B3) — 재시작 복원 마운트면 관찰됐던 런타임(cwd·state). 새 뷰는 미지정(null).
+  restore?: { cwd: string | null; state: unknown } | null;
 }) {
   // 이 뷰 컨테이너의 절대 주소(노드 스캔의 baseAddress). project 는 경로(슬래시 충돌)라 활성 기준 생략 —
   // <region>/view/<viewKey>. win 생략=현재 창. 안정 세그먼트(region·qualifiedViewId)라 멱등. ui.tree 가 읽는다.
@@ -70,6 +70,11 @@ export const PluginViewHost = memo(function PluginViewHost({
     setTitle: (title) =>
       viewId
         ? useSessions.getState().setViewTitle(projectId, viewId, title)
+        : undefined,
+    // 플러그인 관찰 상태(B3) — 뷰 레코드로 영속(뷰와 수명 동기). 콘텐츠 배치만.
+    setRestoreState: (state) =>
+      viewId
+        ? useSessions.getState().setViewRuntime(projectId, viewId, { state })
         : undefined,
   };
 
