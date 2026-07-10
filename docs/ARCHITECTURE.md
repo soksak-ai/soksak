@@ -250,6 +250,39 @@ Separation and combination are tested, not claimed.
 
 ---
 
+## 7. The Coupling Law (C1–C5)
+
+This section is law, not description. It gives the identity of Section 1 ("The skeleton IS NOT") and the weak-coupling model of Section 3 their enforcement clauses, and it extends the coupling discipline from the plugin↔skeleton seam to plugin↔plugin coupling. Every gate named here is blocking from the day it lands. Never accumulate experimental gates — a gate that cannot block is not a gate; it is backlog.
+
+> Legislated by the user (Korean original in [ARCHITECTURE.ko.md](ARCHITECTURE.ko.md) §7): "The core strongly couples to nothing. Everything is opened and rule-bound so that plugins interact through interfaces and fulfill their own roles. Expose every DOM, expose every command, expose every status, and connect and process data transparently. Plugins do not strongly couple to each other either."
+
+### C1. The core knows no specific plugin and no specific feature.
+Never write a plugin id into core source. The mechanical gate scans the execution-path code of `src/` and `src-tauri/` (handlers, constants, branches) for the string `soksak-plugin-` and must return zero matches. The scan carries an explicit allowlist — command `examples` strings (a real plugin id in an example is replaced by the placeholder `soksak-plugin-<id>`), spec package names in comments, and the single registry repo URL constant — and the allowlist never grows except through the C5 procedure. Core UI never computes feature data of its own: decorations, badges, and status displays act only as consumers of registry commands and events. Never park a primitive under a feature namespace. This clause adds enforcement to Section 1 and to A3/A4; it adds no new identity.
+
+### C2. Every feature exposes three surfaces — the transparency triple.
+- **command** — a plugin with views and zero commands does not pass (gate: views > 0 ∧ commands = 0 → fail).
+- **status** — every view reports its state through the status axis; a view the status axis cannot see does not pass.
+- **DOM** — every interactive UI is exposed through `contributes.nodes` / `ui.tree`, and the `ui.input.click` path is guaranteed. Never ship an element that can only be reached by guessing selectors.
+
+A feature missing any of the three surfaces is unfinished — don't ship it. The doctor/conformance gates for all three are blocking on introduction.
+
+### C3. Plugins couple through contracts only — the coupling ladder.
+Section 3 fixes the plugin↔skeleton seams; this ladder fixes plugin↔plugin coupling.
+- **L0 — internal trespass: forbidden.** Never reach into another plugin's private DOM, internal state, file locations, or load order. The runtime error stays.
+- **L1 — name-pin: transitional, demoted.** Never hardcode a pluginId for a new coupling. Existing name-pins are migration debt and enter the migration list the day L2 lands.
+- **L2 — contract-pin: the target.** The manifest declares `implements: ["<scope>-spec@<major>"]`; discovery is contract-addressed and implementation-blind; conformance proves declared ≡ actual.
+- **L3 — events/data: declared schemas only.** `contributes.events` is a verified target, not decoration. Never emit or consume an undeclared shape.
+
+### C4. A contract version bump is explicit re-legislation.
+The `<scope>-spec@<major>` grammar, version negotiation, and conformance follow the sidecar contract law ([SIDECARS.md](SIDECARS.md)), extended to the plugin layer. That extension amends NAMING.md §8 — never as a silent violation, only as an explicit re-legislation commit (the C5 procedure).
+
+### C5. Standards never weaken silently.
+> Legislated by the user (Korean original in [ARCHITECTURE.ko.md](ARCHITECTURE.ko.md) §7): "Building a standard, testing against it, and then tearing the standard down when it is not met is an act of betrayal. Never do it. But when the standard itself is wrong, raise the problem and correct it — without fail."
+
+Never lower a standard because the implementation fails to meet it. When a test is red against a correct standard, fix the implementation, the fixture, or the document — never the standard. When the standard itself is wrong, raise the problem explicitly: a standard changes only through an explicit problem statement followed by a re-legislation commit. No silent relaxation. No silent exception. Every gate addition and criterion change under this law — including the C1 allowlist — goes through this procedure.
+
+---
+
 Version: 1.0.0
 Status: AUTHORITATIVE
 Single source of truth: `src/plugins/spec.ts`, `src/commands/registry.ts`
