@@ -31,11 +31,17 @@ git/clipboard/ai.session) and removes the violators.
      engine/implementation name (rule 4); a unit that alone constitutes its domain may
      omit it (`soksak-sidecar-workflow`).
    - kit: ALWAYS required and names the PART of the domain the library provides
-     (`shell`, …). A bare-domain kit name is banned — a kit serves a domain's plugin
+     (`chassis`, …). A bare-domain kit name is banned — a kit serves a domain's plugin
      family, it never IS the domain. The name must cover the whole content: naming a
      kit after one module inside it (`-ui` for a package that also ships lifecycle and
      input forwarding) is the same defect as a stale label — the unnamed majority ends
      up living outside its name.
+   - Vocabulary-collision ban: a name token already meaning something else inside this
+     project is rejected even when it is the textbook term. Grep before naming. Burned
+     tokens (browser kit case): `chrome` (Chrome browser), `shell` (terminal shell —
+     sessions `shell` field), `skeleton` (template plugin + platform-skeleton strategy
+     doc), `frame` (paint frames + NSView frame). `chassis` won by zero collisions and
+     by naming the actual shape: the shared mount the replaceable engine bolts onto.
    Registrar folder = `~/.soksak-dev/<kind>s/<full-name>` (plugins/, sidecars/, kits/).
    Consumption is declare + discover: the consumer declares the unit NAME only (manifest
    `sidecars[]`, package.json dependencies) and resolution discovers it in the registrar
@@ -140,7 +146,7 @@ break the symmetry law (file = command prefix: `webview_open`, not `webview_host
 | `soksak-plugin-browser-cef` | `soksak-plugin-browser-chromium` | plugin |
 | `soksak-sidecar-chromium` (initial publish) | `soksak-sidecar-browser-chromium` | sidecar artifact — unified with the plugin shape |
 | `soksak-engine-chromium@1` → `soksak-sidecar-browser@1` (both rejected) | `soksak-sidecar-browser-spec@1` | contract id — §8 |
-| `soksak-browser-kit` | `soksak-kit-browser-shell` | kit — unified with the unit grammar (§1.4a: kind-first + part name); registrar moved `~/ai/cli/` → `~/.soksak-dev/kits/` |
+| `soksak-browser-kit` | `soksak-kit-browser-chassis` | kit — unified with the unit grammar (§1.4a: kind-first + part name; intermediate `-shell` burned on terminal-shell collision); registrar moved `~/ai/cli/` → `~/.soksak-dev/kits/` |
 
 `webview_inject_script` already conformed and is unchanged.
 
