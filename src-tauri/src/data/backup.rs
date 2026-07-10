@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use rusqlite::Connection;
 use serde_json::{json, Value};
 
-use super::store;
+use super::{ring, store};
 
 // 부팅 복구 보고 — 격리한 손상본 경로와 복원 출처 슬롯. restored_from=None 은 전 슬롯 실패로 빈 DB
 // 재시작을 뜻한다. 무음 복구 금지 — 이 값이 호출 측 activity 고지의 재료다.
@@ -66,6 +66,31 @@ pub fn restore_into(db_path: &Path, src: &Path) -> Result<PathBuf, String> {
         let _ = std::fs::remove_file(side);
     }
     Ok(backup_copy)
+}
+
+// 부팅 손상 복구 — 손상본을 격리(증거 보존)한 뒤 백업 슬롯을 신선순(0=최신)으로 validate 하며
+// 첫 정상 슬롯을 복원한다. 전 슬롯 실패면 restored_from=None 으로 반환(호출 측이 빈 DB 로 재개방).
+// 격리는 rename 이라 원본 바이트가 그대로 남는다 — 사후 조사·수동 추출용.
+pub fn recover(db_path: &Path) -> Result<Recovery, String> {
+    let quarantined = quarantine(db_path)?;
+    for i in 0..ring::SLOTS {
+        // restore_into 가 슬롯을 validate(integrity_check+스키마) 후에만 복사한다 — 실패 슬롯은 건너뛴다.
+        if restore_into(db_path, &ring::slot_path(db_path, i)).is_ok() {
+            return Ok(Recovery { quarantined, restored_from: Some(i) });
+        }
+    }
+    Ok(Recovery { quarantined, restored_from: None })
+}
+
+// 손상본을 `<db>.corrupt-<ms>` 로 옮기고 스테일 사이드카를 제거한다. rename 은 원본을 보존한다.
+fn quarantine(db_path: &Path) -> Result<PathBuf, String> {
+    let dst = PathBuf::from(format!("{}.corrupt-{}", db_path.to_string_lossy(), super::now_millis()));
+    std::fs::rename(db_path, &dst).map_err(|e| e.to_string())?;
+    // 손상 본체의 WAL/SHM 은 복원본·신규본과 불일치하므로 남기지 않는다.
+    for ext in ["-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{ext}", db_path.to_string_lossy()));
+    }
+    Ok(dst)
 }
 
 // ── JSONL export/import ───────────────────────────────────────────────────────

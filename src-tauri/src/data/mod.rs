@@ -62,10 +62,19 @@ pub fn open(path: &Path) -> Result<Connection, String> {
 }
 
 // 부팅 개방 — 정상이면 그대로, 손상이면 백업 슬롯에서 복구 후 재개방한다. 반환 Ok((conn, None))=정상,
-// Ok((conn, Some(rec)))=복구 발생(호출 측이 activity 로 고지). 파일 부재는 실패가 아니다(open 이 신규 생성).
-// 현행 재현: 아직 복구 없이 개방 실패를 그대로 전파한다(손상 DB → 영구 미초기화).
+// Ok((conn, Some(rec)))=복구 발생(호출 측이 activity 로 고지). 파일 부재는 실패가 아니다(open 이 신규 생성)
+// → 개방 실패 후 파일이 있을 때만 손상으로 보고 복구한다. 복구 후에도 개방 실패면 그대로 전파한다.
 pub fn open_or_recover(path: &Path) -> Result<(Connection, Option<backup::Recovery>), String> {
-    open(path).map(|conn| (conn, None))
+    match open(path) {
+        Ok(conn) => Ok((conn, None)),
+        Err(open_err) => {
+            if !path.exists() {
+                return Err(open_err);
+            }
+            let rec = backup::recover(path)?;
+            open(path).map(|conn| (conn, Some(rec)))
+        }
+    }
 }
 
 // 기본 테이블(멱등). 컬렉션별 FTS/인덱스는 define() 이 동적 생성.
