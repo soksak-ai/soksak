@@ -106,40 +106,58 @@ pub fn run() {
             // identity 홈 확정 — 모든 경로(데이터·플러그인·사이드카·테마·프로젝트·소켓·시크릿)가
             // 이 값에서 파생되므로 어떤 경로 사용보다 먼저 1회 고정한다(home.rs 원칙).
             home::init(&app.config().identifier);
+            // 백업 링 실패 고지에 쓸 앱 핸들을 심는다 — 이후 자동 백업 스냅샷 실패가 activity/알림으로
+            // 드러난다(무음 폴백 금지). 데이터 개방보다 먼저 심어 첫 쓰기 신호부터 커버한다.
+            data::ring::set_app(app.handle());
             // 범용 데이터 스토어(app.data) — 소켓 서버 이전에 연다(커맨드가 즉시 쓸 수 있도록).
             // open_or_recover: 본체 손상 시 손상본 격리→백업 슬롯 복원→재개방(무음 미초기화 제거).
-            match data::db_path().and_then(|p| data::open_or_recover(&p)) {
-                Ok((conn, recovery)) => {
-                    // 활동 허브 컬렉션(core/activity) 정의 — 발행 즉시 영속 가능(A1).
-                    activity::init_collection(&conn);
-                    // seq 를 영속 최댓값에서 재개 — 재시작을 넘는 단조(소비자 읽음 커서 보존).
-                    activity::resume_seq(app.handle(), &conn);
-                    app.state::<data::DbState>().set(conn);
-                    // 손상 복구가 일어났으면 무음 금지 — DbState 설정 뒤 activity(영속·스트림)+OS 알림으로
-                    // 고지한다. 격리 경로와 복원 슬롯이 사후 조사의 단서다.
-                    if let Some(rec) = recovery {
-                        let slot = rec.restored_from;
-                        let quarantined = rec.quarantined.to_string_lossy().to_string();
-                        eprintln!("[data] 손상 DB 복구: 격리={quarantined} 복원슬롯={slot:?}");
-                        activity::publish(
-                            app.handle(),
-                            "data.recovered",
-                            "core",
-                            serde_json::json!({
-                                "restoredFromSlot": slot,
-                                "quarantined": quarantined,
-                            }),
-                        );
-                        // 알림은 사람 표면 — 복원된(또는 빈) DB 에서 언어를 1회 조회해 해소한다.
-                        // 복원 성공이면 그 DB 의 설정을, 전 슬롯 실패면 빈 DB → 기본 ko(i18n.rs).
-                        let lang = i18n::app_language(app.handle());
-                        let body = i18n::recovery_body(lang, slot);
-                        if let Err(e) = notify::show(app.handle(), i18n::recovery_title(lang), &body) {
-                            eprintln!("[data] 복구 알림 표시 실패: {e}");
+            match data::db_path() {
+                Err(e) => eprintln!("[data] DB 경로 계산 실패: {e}"),
+                Ok(db_path) => match data::open_or_recover(&db_path) {
+                    Ok((conn, recovery)) => {
+                        // 활동 허브 컬렉션(core/activity) 정의 — 발행 즉시 영속 가능(A1).
+                        activity::init_collection(&conn);
+                        // seq 를 영속 최댓값에서 재개 — 재시작을 넘는 단조(소비자 읽음 커서 보존).
+                        activity::resume_seq(app.handle(), &conn);
+                        app.state::<data::DbState>().set(conn);
+                        // 손상 복구가 일어났으면 무음 금지 — DbState 설정 뒤 activity(영속·스트림)+OS 알림으로
+                        // 고지한다. 격리 경로와 복원 슬롯이 사후 조사의 단서다.
+                        if let Some(rec) = recovery {
+                            let slot = rec.restored_from;
+                            let quarantined = rec.quarantined.to_string_lossy().to_string();
+                            eprintln!("[data] 손상 DB 복구: 격리={quarantined} 복원슬롯={slot:?}");
+                            activity::publish(
+                                app.handle(),
+                                "data.recovered",
+                                "core",
+                                serde_json::json!({
+                                    "restoredFromSlot": slot,
+                                    "quarantined": quarantined,
+                                }),
+                            );
+                            // 알림은 사람 표면 — 복원된(또는 빈) DB 에서 언어를 1회 조회해 해소한다.
+                            // 복원 성공이면 그 DB 의 설정을, 전 슬롯 실패면 빈 DB → 기본 ko(i18n.rs).
+                            let lang = i18n::app_language(app.handle());
+                            let body = i18n::recovery_body(lang, slot);
+                            if let Err(e) = notify::show(app.handle(), i18n::recovery_title(lang), &body) {
+                                eprintln!("[data] 복구 알림 표시 실패: {e}");
+                            }
                         }
                     }
-                }
-                Err(e) => eprintln!("[data] DB 열기/복구 실패: {e}"),
+                    // 복구를 시도했으나 재개방까지 실패 — 앱은 DbState 없이 제한 동작한다. 무음 금지:
+                    // 격리 경로를 실었으면(손상본을 옮겼으면) 사람에게 고지해 사후 복구 단서를 남긴다.
+                    // DbState 가 비어 언어 조회는 기본 ko(i18n.rs)로 떨어진다.
+                    Err(e) => {
+                        eprintln!("[data] DB 열기/복구 실패: {}", e.detail);
+                        if let Some(q) = e.quarantined {
+                            let lang = i18n::app_language(app.handle());
+                            let body = i18n::open_failed_body(lang, &q.to_string_lossy());
+                            if let Err(err) = notify::show(app.handle(), i18n::open_failed_title(lang), &body) {
+                                eprintln!("[data] 열기 실패 알림 표시 실패: {err}");
+                            }
+                        }
+                    }
+                },
             }
             // 영속된 시간 기반(At/Every/Cron) 일정 재무장(crash 복구) — DB 열린 직후. 무상태 Reconcile 은
             // 플러그인이 activate 시 재등록한다. 일정 없으면 no-op(발화 스레드도 안 뜸).

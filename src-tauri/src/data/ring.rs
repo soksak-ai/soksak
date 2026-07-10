@@ -7,9 +7,11 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};
 
 use rusqlite::{Connection, OpenFlags};
+use tauri::AppHandle;
 
 /// 링 슬롯 수 — .bak.0(최신) ~ .bak.4(최고령).
 pub const SLOTS: usize = 5;
@@ -73,6 +75,63 @@ fn snapshot_rotate(db_path: &Path) -> Result<(), String> {
     std::fs::rename(&tmp, slot_path(db_path, 0)).map_err(|e| e.to_string())
 }
 
+// 백업 실패 고지 대상 — 무음 폴백 금지(전 폴백은 activity 고지). tick 실패(특히 손상 신호)를
+// 삼키지 않고 여기로 흘려 관찰 가능하게 만든다. 테스트는 기록형 double 을 주입해 발행 사실을
+// 단언한다(AppHandle 불요 — 이 seam 이 실패 보고를 검증 가능하게 만든다).
+pub trait BackupReporter {
+    fn failed(&self, detail: &str);
+}
+
+/// 백업 1주기 — 게이트 통과 시 스냅샷하고, 실패는 reporter 로 고지한다(삼킴 금지).
+pub fn run_cycle(db_path: &Path, now: SystemTime, reporter: &dyn BackupReporter) {
+    if let Err(e) = tick(db_path, now) {
+        reporter.failed(&e);
+    }
+}
+
+// 앱 발원 고지 reporter — 실패를 activity(data.backup.failed, 영속·스트림)로 발행하고 OS 알림을
+// 띄운다. 상세(에러)는 activity payload 에, 사람용 요약은 알림에 실린다.
+struct AppReporter {
+    app: AppHandle,
+}
+
+impl BackupReporter for AppReporter {
+    fn failed(&self, detail: &str) {
+        crate::activity::publish(
+            &self.app,
+            "data.backup.failed",
+            "core",
+            serde_json::json!({ "error": detail }),
+        );
+        let lang = crate::i18n::app_language(&self.app);
+        if let Err(e) = crate::notify::show(
+            &self.app,
+            crate::i18n::backup_failed_title(lang),
+            crate::i18n::backup_failed_body(lang),
+        ) {
+            eprintln!("[data] 백업 실패 알림 표시 실패: {e}");
+        }
+    }
+}
+
+// 앱 핸들 미설정(부팅 극초기) 대비 — 최소한 로그로 남긴다(무음 아님, 알림/activity 는 핸들 필요).
+struct LogReporter;
+
+impl BackupReporter for LogReporter {
+    fn failed(&self, detail: &str) {
+        eprintln!("[data] 백업 링 스냅샷 실패: {detail}");
+    }
+}
+
+// 부팅 1회(lib.rs setup)에 심는 앱 핸들 — on_write 스냅샷 스레드가 실패 고지에 쓴다. dockmenu 와
+// 동형(OnceLock<AppHandle>). 발견 가능한 seam 이라 숨은 상태가 아니다.
+static APP: OnceLock<AppHandle> = OnceLock::new();
+
+/// 부팅에서 앱 핸들을 심는다 — 이후 백업 실패가 activity/알림으로 드러난다.
+pub fn set_app(app: &AppHandle) {
+    let _ = APP.set(app.clone());
+}
+
 // 스냅샷 동시 수행 방지 — 진행 중이면 신규 쓰기 신호는 그냥 지나간다(다음 쓰기가 다시 신호).
 static IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
@@ -90,8 +149,9 @@ pub fn on_write() {
         return;
     }
     std::thread::spawn(move || {
-        if let Err(e) = tick(&db, SystemTime::now()) {
-            eprintln!("[data] 백업 링 스냅샷 실패: {e}");
+        match APP.get() {
+            Some(app) => run_cycle(&db, SystemTime::now(), &AppReporter { app: app.clone() }),
+            None => run_cycle(&db, SystemTime::now(), &LogReporter),
         }
         IN_FLIGHT.store(false, Ordering::SeqCst);
     });
@@ -110,6 +170,34 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         root
+    }
+
+    // 기록형 reporter — 발행 사실을 단언하는 test double(AppHandle 불요).
+    struct RecordingReporter {
+        failures: std::sync::Mutex<Vec<String>>,
+    }
+
+    impl BackupReporter for RecordingReporter {
+        fn failed(&self, detail: &str) {
+            self.failures.lock().unwrap().push(detail.to_string());
+        }
+    }
+
+    // [defect ①] 손상 DB 스냅샷 실패는 삼키지 않고 정확히 1회 고지된다(무음 폴백 금지). 이전엔
+    // on_write 가 eprintln 만 하고 activity/알림 0 — 손상 신호를 쥐고도 무음이었다.
+    #[test]
+    fn corrupt_snapshot_failure_is_reported_not_swallowed() {
+        let root = temp_root("failreport");
+        let db = root.join("soksak.db");
+        // 슬롯 없음 → due=true → tick 이 스냅샷을 시도한다. 본체는 SQLite 가 아니므로 VACUUM INTO 실패.
+        std::fs::write(&db, b"this is not a sqlite database, snapshot must fail").unwrap();
+        let reporter = RecordingReporter { failures: std::sync::Mutex::new(Vec::new()) };
+        run_cycle(&db, SystemTime::now(), &reporter);
+        let failures = reporter.failures.lock().unwrap();
+        assert_eq!(failures.len(), 1, "손상 DB 스냅샷 실패는 정확히 1회 고지되어야 한다");
+        assert!(!failures[0].is_empty(), "고지에 실패 상세가 실려야 한다: {failures:?}");
+        drop(failures);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

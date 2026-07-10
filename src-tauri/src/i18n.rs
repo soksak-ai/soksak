@@ -64,6 +64,42 @@ pub fn recovery_body(lang: Lang, restored_slot: Option<usize>) -> String {
     }
 }
 
+// 백업 링 실패 고지 — 런타임 자동 백업 스냅샷을 기록하지 못했음을 사람에게 알린다. 상세(에러)는
+// activity data.backup.failed 에 실리고, 이 문장은 OS 알림용 요약이다.
+pub fn backup_failed_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => "Backup failed",
+        Lang::Ko => "백업 실패",
+    }
+}
+
+pub fn backup_failed_body(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => "An automatic data backup could not be written. See the activity log for details.",
+        Lang::Ko => "자동 데이터 백업을 기록하지 못했습니다. 자세한 내용은 활동 로그를 확인하세요.",
+    }
+}
+
+// 복구 후 재개방 실패 고지 — 손상본은 격리했으나 데이터 저장소를 열지 못했다. 격리 경로를 알려
+// 사후 조사·수동 복구를 돕는다(무음 drop 금지).
+pub fn open_failed_title(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => "Data could not be opened",
+        Lang::Ko => "데이터를 열 수 없음",
+    }
+}
+
+pub fn open_failed_body(lang: Lang, quarantined: &str) -> String {
+    match lang {
+        Lang::En => format!(
+            "The data store could not be opened after recovery. The damaged file was set aside at {quarantined}."
+        ),
+        Lang::Ko => format!(
+            "복구 이후에도 데이터 저장소를 열지 못했습니다. 손상된 파일은 {quarantined}에 격리했습니다."
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,5 +148,29 @@ mod tests {
     fn recovery_title_splits_by_language() {
         assert_eq!(recovery_title(Lang::En), "Data recovery");
         assert_eq!(recovery_title(Lang::Ko), "데이터 복구");
+    }
+
+    // 백업 실패 고지는 언어로 갈리고 서로의 언어가 새지 않는다.
+    #[test]
+    fn backup_failed_splits_by_language() {
+        assert_eq!(backup_failed_title(Lang::En), "Backup failed");
+        assert_eq!(backup_failed_title(Lang::Ko), "백업 실패");
+        assert!(backup_failed_body(Lang::En).contains("backup"), "en 본문");
+        assert!(!backup_failed_body(Lang::En).contains('백'), "en 본문에 한글 누출 금지");
+        assert!(backup_failed_body(Lang::Ko).contains("백업"), "ko 본문");
+        assert!(!backup_failed_body(Lang::Ko).contains("backup"), "ko 본문에 영어 누출 금지");
+    }
+
+    // 열기 실패 고지는 언어로 갈리고 격리 경로를 그대로 싣는다.
+    #[test]
+    fn open_failed_carries_quarantine_path() {
+        let en = open_failed_body(Lang::En, "/x/soksak.db.corrupt-42");
+        assert!(en.contains("/x/soksak.db.corrupt-42"), "en 격리 경로: {en}");
+        assert!(!en.contains('격'), "en 본문에 한글 누출 금지");
+        let ko = open_failed_body(Lang::Ko, "/x/soksak.db.corrupt-42");
+        assert!(ko.contains("/x/soksak.db.corrupt-42"), "ko 격리 경로: {ko}");
+        assert!(!ko.contains("recovery"), "ko 본문에 영어 누출 금지");
+        assert_eq!(open_failed_title(Lang::En), "Data could not be opened");
+        assert_eq!(open_failed_title(Lang::Ko), "데이터를 열 수 없음");
     }
 }
