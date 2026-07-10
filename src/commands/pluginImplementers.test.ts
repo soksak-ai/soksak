@@ -81,6 +81,20 @@ describe("plugin.implementers — 계약 지정 발견", () => {
     expect(r.data.implementers[0]).toEqual({ id: ALPHA, version: "1.0.0", status: "enabled" });
   });
 
+  it("비활성 구현체도 status 와 함께 포함된다(발견은 상태 무차별 — 소비자가 status 로 거른다)", async () => {
+    usePlugins.setState({
+      plugins: {
+        [ALPHA]: fixtureRuntime(ALPHA, ["fixture-notes-spec@1"]),
+        [BETA]: fixtureRuntime(BETA, ["fixture-notes-spec@1"], "disabled"),
+      },
+    });
+    const r = (await execute("plugin.implementers", { contract: "fixture-notes-spec@1" }, {})) as unknown as {
+      data: { implementers: { id: string; status: string }[] };
+    };
+    expect(r.data.implementers.map((i) => i.id)).toEqual([ALPHA, BETA]);
+    expect(r.data.implementers[1].status).toBe("disabled");
+  });
+
   it("판까지 정확 일치 — @1 조회는 @2 선언을 잡지 않는다", async () => {
     const r = (await execute("plugin.implementers", { contract: "fixture-board-spec@1" }, {})) as unknown as {
       data: { implementers: unknown[] };

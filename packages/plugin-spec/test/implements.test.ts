@@ -68,6 +68,16 @@ describe("implements — 거부(계약 id 문법)", () => {
     expect(grammarError(errs)).toBe(true);
   });
 
+  it("선행 0 판 거부 — @01 별칭이 통과하면 정확-문자열 발견이 구현체를 놓친다", () => {
+    const errs = errorsOf(base({ implements: ["soksak-fixture-tasks-spec@01"] }));
+    expect(grammarError(errs)).toBe(true);
+  });
+
+  it("판 0 은 정규형이라 통과", () => {
+    const errs = errorsOf(base({ implements: ["soksak-fixture-tasks-spec@0"] }));
+    expect(errs).toEqual([]);
+  });
+
   it("대문자 거부(소문자 문법)", () => {
     const errs = errorsOf(base({ implements: ["Soksak-Fixture-Spec@1"] }));
     expect(grammarError(errs)).toBe(true);

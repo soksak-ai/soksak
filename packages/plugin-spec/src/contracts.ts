@@ -13,7 +13,9 @@
 //     이 implements 선언. 다른 곳에 계약 id 를 두지 마라(NAMING §8).
 
 // SIDECAR_INTERFACE_RE(^[a-z0-9][a-z0-9.-]*@[0-9]+$)와 동형 + 의무 kind 마커 "-spec".
-export const CONTRACT_ID_RE = /^[a-z0-9][a-z0-9.-]*-spec@[0-9]+$/;
+// major 는 정규형만 받는다(0 또는 선행 0 없는 십진수) — "@01" 같은 별칭 표기가 통과하면
+// 같은 계약이 두 문자열로 공존해 정확-문자열 발견(implementersOf)이 구현체를 놓친다.
+export const CONTRACT_ID_RE = /^[a-z0-9][a-z0-9.-]*-spec@(0|[1-9][0-9]*)$/;
 
 // implements 검증 — 문법 위반·중복은 전부 거부한다(§0-3 all-or-nothing, 부분 수용 금지).
 // 반환 = trim 정규화된 계약 id 목록(에러 시 빈 배열 — 호출자는 errors 로 거부한다).
