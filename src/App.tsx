@@ -209,7 +209,7 @@ const ProjectPane = memo(function ProjectPane({
                 // (GroupArea)과 동일 규칙을 같은 헬퍼로 적용(층 간 일치).
                 style={parkedStyle(isActiveContent)}
               >
-                <GroupArea content={c} projectId={project.id} />
+                <GroupArea content={c} projectId={project.id} sheetShown={isActiveContent} />
               </div>
             );
           })}

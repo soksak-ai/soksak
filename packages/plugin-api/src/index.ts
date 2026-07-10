@@ -141,6 +141,9 @@ export interface PluginEventMap {
    *  네이티브 표면 제공자(브라우저 뷰 등)가 최종 앵커 rect 로 bounds 를 1회 재스냅하는 신호 — 위치
    *  이동(크기 무변)이라 ResizeObserver 가 못 잡는 전환을 덮는다. 권한 불요. */
   "layout.reflow": { activeSheetId: string | null };
+  // 뷰 본문 슬롯의 유효 가시성(시트 활성 && 탭 활성) 변화 — 코어 단일 소유. 네이티브 표면(엔진
+  // 서피스·child webview) 플러그인이 표시/숨김·재스냅을 이 사실에 맞춘다(뷰포트 추측 대체).
+  "view.parked": { viewId: string; parked: boolean };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   "command.started": {
     projectId: string | null;
