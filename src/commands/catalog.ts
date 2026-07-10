@@ -47,6 +47,7 @@ import { registerClipboardCatalog } from "./catalogClipboard";
 import { registerNotifyCatalog } from "./catalogNotify";
 import { registerScheduleCatalog } from "./catalogSchedule";
 import { registerSystemCatalog } from "./catalogSystem";
+import { registerWebviewCatalog } from "./catalogWebview";
 import {
   ensureDefaultProjectRoot,
   FOLDER_NAME_RE,
@@ -2730,4 +2731,5 @@ export function registerCatalog(): void {
   registerNotifyCatalog();
   registerScheduleCatalog();
   registerSystemCatalog();
+  registerWebviewCatalog();
 }

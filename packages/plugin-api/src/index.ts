@@ -144,6 +144,17 @@ export interface PluginEventMap {
   // 뷰 본문 슬롯의 유효 가시성(스페이스 활성 && 탭 활성) 변화 — 코어 단일 소유. 네이티브 표면(엔진
   // 서피스·child webview) 플러그인이 표시/숨김·재스냅을 이 사실에 맞춘다(뷰포트 추측 대체).
   "view.parked": { viewId: string; parked: boolean };
+  /** webview 건강(서킷 브레이커) 전이 — 코어가 렌더러 프로세스 종료(process-gone)를 감지·복구하며
+   *  발화. state: recovering=자동 복구 예약(attempt 동반) / open=상한 소진(자동 복구 중단 —
+   *  webview.recover 로 수동 복구) / closed=정상 복귀. label = 창 label(그 창 메인 webview) 또는
+   *  b-<win>-<view>(브라우저 child). 네이티브 표면 플러그인이 자기 child 의 죽음/복귀에 맞춰
+   *  재스냅·재수화하는 신호. 권한 불요. per-window(이 창의 전이만 도착). */
+  "webview.health": {
+    label: string;
+    window: string;
+    state: "recovering" | "open" | "closed";
+    attempt: number | null;
+  };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   "command.started": {
     projectId: string | null;

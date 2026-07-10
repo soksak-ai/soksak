@@ -75,6 +75,17 @@ export interface PluginEventMap {
   // 네이티브 표면(엔진 서피스·child webview)을 가진 플러그인이 표시/숨김과 재스냅을 이 사실에 맞춘다
   // (뷰포트 추측 IntersectionObserver 대체). parked=true 는 화면 밖 파킹, false 는 복귀.
   "view.parked": { viewId: string; parked: boolean };
+  // webview 건강(서킷 브레이커) 전이 — 코어(webview_health.rs)가 렌더러 프로세스 종료를
+  // 감지·복구하며 그 창에 emit_to 한다. state: recovering=자동 복구 예약(attempt 동반),
+  // open=상한 소진(자동 복구 중단 — webview.recover 로 수동 복구), closed=정상 복귀.
+  // label 은 창 label(그 창 메인 webview) 또는 b-<win>-<view>(브라우저 child). 네이티브
+  // 표면을 소유한 플러그인이 자기 child 의 죽음/복귀에 맞춰 재스냅·재수화하는 신호.
+  "webview.health": {
+    label: string;
+    window: string;
+    state: "recovering" | "open" | "closed";
+    attempt: number | null;
+  };
   "bookmarks.changed": { bookmarks: Bookmark[] };
   // 터미널 명령 시작(셸 preexec 의 OSC 633;E — 명령라인·cwd 동반, 폴링 없음).
   // [RULE] claude 등 "명령별" 도메인 처리는 코어가 아니라 이 이벤트를 구독하는
@@ -143,6 +154,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "layout.resize-gesture",
   "layout.reflow",
   "view.parked",
+  "webview.health",
   "bookmarks.changed",
   "command.started",
   "command.finished",
@@ -480,6 +492,12 @@ export function startPluginHooks(): void {
   // 드래그만 받는다(프론트 필터 불필요). window-focus → app.focus 와 동형 배선.
   listenThisWindow<boolean>("window-live-resize", (e) => {
     emitPluginEvent("window.live-resize", { active: e.payload });
+  });
+
+  // webview 건강 전이(코어 webview_health emit_to) → 플러그인 이벤트. 이 창에 emit_to 된
+  // 신호만 받는다(per-window — window-focus 와 동형 배선). 권한 불요(비민감 라이프사이클).
+  listenThisWindow<PluginEventMap["webview.health"]>("webview-health", (e) => {
+    emitPluginEvent("webview.health", e.payload);
   });
 }
 
