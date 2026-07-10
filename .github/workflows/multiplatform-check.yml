@@ -1,0 +1,84 @@
+# 3-OS cargo check matrix. Today this measures the real multiplatform state:
+# Linux and Windows are expected to fail, and their output is the input for the
+# multiplatform backlog. continue-on-error keeps the matrix non-blocking while
+# it measures — a documented temporary relaxation. Removal condition: when all
+# three OS columns are green, drop continue-on-error and require this check.
+name: multiplatform-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  cargo-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    timeout-minutes: 60
+    steps:
+      - name: Check out the app repository
+        uses: actions/checkout@v4
+        with:
+          path: soksak
+
+      # Same sibling layout as verify.yml: src-tauri/Cargo.toml declares
+      # tauri-plugin-webview-capture by relative path, two levels up from
+      # src-tauri. CI_REPO_TOKEN must read soksak-ai/tauri-plugin-webview-capture.
+      - name: Check out the sibling path dependency
+        uses: actions/checkout@v4
+        with:
+          repository: soksak-ai/tauri-plugin-webview-capture
+          token: ${{ secrets.CI_REPO_TOKEN }}
+          path: tauri-plugin-webview-capture
+
+      - name: Install Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: soksak/src-tauri
+
+      # Mirrors `make check` (cd src-tauri && cargo check); invoked directly
+      # because GNU make is not present on the Windows runner.
+      - name: cargo check
+        id: check
+        shell: bash
+        working-directory: soksak/src-tauri
+        run: |
+          set -o pipefail
+          cargo check 2>&1 | tee cargo-check.log
+
+      - name: Write the result to the job summary
+        if: always()
+        shell: bash
+        working-directory: soksak/src-tauri
+        run: |
+          {
+            echo "## cargo check — ${{ matrix.os }}"
+            echo ""
+            echo "outcome: **${{ steps.check.outcome }}**"
+            echo ""
+            echo '```'
+            tail -n 100 cargo-check.log 2>/dev/null || echo "(no log produced)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the full log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-check-${{ matrix.os }}
+          path: soksak/src-tauri/cargo-check.log
+          if-no-files-found: warn
