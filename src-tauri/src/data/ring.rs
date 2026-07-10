@@ -179,7 +179,7 @@ mod tests {
 
     impl BackupReporter for RecordingReporter {
         fn failed(&self, detail: &str) {
-            self.failures.lock().unwrap().push(detail.to_string());
+            self.failures.lock().expect("reporter lock").push(detail.to_string());
         }
     }
 
@@ -190,10 +190,11 @@ mod tests {
         let root = temp_root("failreport");
         let db = root.join("soksak.db");
         // 슬롯 없음 → due=true → tick 이 스냅샷을 시도한다. 본체는 SQLite 가 아니므로 VACUUM INTO 실패.
-        std::fs::write(&db, b"this is not a sqlite database, snapshot must fail").unwrap();
+        std::fs::write(&db, b"this is not a sqlite database, snapshot must fail")
+            .expect("write corrupt body");
         let reporter = RecordingReporter { failures: std::sync::Mutex::new(Vec::new()) };
         run_cycle(&db, SystemTime::now(), &reporter);
-        let failures = reporter.failures.lock().unwrap();
+        let failures = reporter.failures.lock().expect("reporter lock");
         assert_eq!(failures.len(), 1, "손상 DB 스냅샷 실패는 정확히 1회 고지되어야 한다");
         assert!(!failures[0].is_empty(), "고지에 실패 상세가 실려야 한다: {failures:?}");
         drop(failures);

@@ -333,8 +333,8 @@ mod tests {
         let db = mem_file(&root, "soksak.db");
 
         // 정상 DB 를 다중 페이지로 키운다(레코드 다수) + 슬롯 0 스냅샷(복원 원천) + marker.
-        let conn = super::super::open(&db).unwrap();
-        store::define(&conn, "core", "notes", &[], &[]).unwrap();
+        let conn = super::super::open(&db).expect("open healthy db");
+        store::define(&conn, "core", "notes", &[], &[]).expect("define notes");
         for i in 0..400 {
             store::put(
                 &conn,
@@ -344,17 +344,17 @@ mod tests {
                 Some(format!("n{i}")),
                 &json!({ "body": format!("row {i} padding padding padding padding padding") }),
             )
-            .unwrap();
+            .expect("put note");
         }
-        store::kv_set(&conn, "core", "marker", &json!(7)).unwrap();
-        backup(&conn, &super::super::ring::slot_path(&db, 0)).unwrap();
+        store::kv_set(&conn, "core", "marker", &json!(7)).expect("set marker");
+        backup(&conn, &super::super::ring::slot_path(&db, 0)).expect("snapshot slot 0");
         // WAL 을 본체로 체크포인트 — 손상 주입이 실데이터 페이지에 닿도록.
-        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);").unwrap();
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);").expect("checkpoint");
         drop(conn);
 
         // 헤더(page 1)·메타(page 2)는 보존, 내부 페이지(page 3~)를 파손 — 헤더 기반 개방은 통과,
         // quick_check 는 실패. 8KB 를 0xAA 로 덮어 다중 btree 페이지를 확실히 오염시킨다.
-        let bytes = std::fs::read(&db).unwrap();
+        let bytes = std::fs::read(&db).expect("read db");
         assert!(bytes.len() > 8192 * 3, "다중 페이지 확보: {} bytes", bytes.len());
         let mut corrupt = bytes.clone();
         let start = 4096 * 2; // page 3 시작(page 1=header/schema, page 2=meta 보존)
@@ -362,27 +362,27 @@ mod tests {
         for b in &mut corrupt[start..end] {
             *b = 0xAA;
         }
-        std::fs::write(&db, &corrupt).unwrap();
+        std::fs::write(&db, &corrupt).expect("write corrupt db");
         for ext in ["-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{ext}", db.to_string_lossy()));
         }
 
         // 헤더는 멀쩡 → 순수 Connection::open + 스키마 조회는 통과(깊은 손상의 정의).
         {
-            let raw = Connection::open(&db).unwrap();
+            let raw = Connection::open(&db).expect("header open");
             let n: i64 = raw
                 .query_row("SELECT count(*) FROM sqlite_master", [], |r| r.get(0))
-                .unwrap();
+                .expect("schema query");
             assert!(n > 0, "스키마(page 1)는 보존");
         }
 
         // 게이트: open() 이 quick_check 로 손상을 잡아 Err → open_or_recover 가 복구를 발동한다.
-        let (conn, rec) = super::super::open_or_recover(&db).unwrap();
+        let (conn, rec) = super::super::open_or_recover(&db).expect("recover deep corruption");
         let rec = rec.expect("깊은 손상은 무음 통과가 아니라 복구를 발동해야 한다");
         assert_eq!(rec.restored_from, Some(0), "슬롯 0 에서 복원");
         assert!(rec.quarantined.is_file(), "손상본 격리(증거)");
         assert_eq!(
-            store::kv_get(&conn, "core", "marker").unwrap(),
+            store::kv_get(&conn, "core", "marker").expect("get marker"),
             Some(json!(7)),
             "복원본 marker 보존"
         );
@@ -400,7 +400,7 @@ mod tests {
         let db = mem_file(&root, "soksak.db");
 
         // 손상 본체(슬롯 없음) — 실제 recover 가 이 파일을 격리한다(restored_from=None).
-        std::fs::write(&db, b"garbage corrupt body, no valid slots").unwrap();
+        std::fs::write(&db, b"garbage corrupt body, no valid slots").expect("write corrupt body");
         // opener 를 항상 실패로 주입 → 초기 개방 실패 → recover 격리 → 재개방도 실패.
         let always_fail = |_p: &std::path::Path| Err::<Connection, String>("injected open failure".into());
         let err = match super::super::open_or_recover_with(&db, always_fail) {
