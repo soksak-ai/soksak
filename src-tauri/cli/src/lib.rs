@@ -301,7 +301,35 @@ fn build_request(
 // hello 응답 판정(순수) — 클라이언트 쪽 시선: sok 자신이 own, 앱이 peer.
 // 협상 이전 앱은 hello 를 프론트로 흘려 ok:false 로 답한다 — 부재=0 규칙의 대칭으로 판 0
 // 취급(floor 0 인 동안 호환). 스큐면 방향 명시 한 문장(낡은 쪽+두 판 숫자+해결 명령)이 Err.
-fn judge_hello_reply(reply: &Value) -> Result<String, String> {
+// sok 은 앱과 무관한 단독 실행 도구다 — 판정 문장의 언어는 이 셸의 로케일(LC_ALL 우선, 없으면
+// LANG)로 정한다. 소켓 연결 이전에도 정해지고(부재=영어), 앱 언어 설정과 독립이다(사람이 sok 을
+// 치는 터미널의 로케일이 그가 읽을 언어다). 메시지 생성 시점 1회 조회 — 폴링 없음.
+fn env_lang() -> soksak_protocol::Lang {
+    let tag = std::env::var("LC_ALL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .or_else(|| std::env::var("LANG").ok())
+        .unwrap_or_default();
+    soksak_protocol::Lang::from_tag(&tag)
+}
+
+// 호환 요약(순수) — 판정이 호환일 때 stderr 로 나가는 사람 표면. 판 숫자는 언어 독립,
+// 문장은 해소한다. 협상 이전 앱(hello 를 프론트로 흘림)은 판 0 으로 판별되므로 그 사실을 덧붙인다.
+fn hello_summary(lang: soksak_protocol::Lang, own: u32, peer: u32, answered: bool) -> String {
+    use soksak_protocol::Lang;
+    match lang {
+        Lang::En => format!(
+            "compatible — sok protocol {own}, app protocol {peer}{}",
+            if answered { "" } else { " (pre-hello app)" }
+        ),
+        Lang::Ko => format!(
+            "호환됨 — sok 프로토콜 {own}, 앱 프로토콜 {peer}{}",
+            if answered { "" } else { " (hello 이전 앱)" }
+        ),
+    }
+}
+
+fn judge_hello_reply(reply: &Value, lang: soksak_protocol::Lang) -> Result<String, String> {
     use soksak_protocol::{
         effective_protocol, evaluate_compat, skew_sentence, Compat,
         MIN_COMPATIBLE_SERVER_PROTOCOL, SOCKET_PROTOCOL_VERSION,
@@ -320,10 +348,7 @@ fn judge_hello_reply(reply: &Value) -> Result<String, String> {
     };
     match skew_sentence(verdict, "this sok", "the app", remedy) {
         Some(sentence) => Err(sentence),
-        None => Ok(format!(
-            "compatible — sok protocol {SOCKET_PROTOCOL_VERSION}, app protocol {peer}{}",
-            if answered { "" } else { " (pre-hello app)" }
-        )),
+        None => Ok(hello_summary(lang, SOCKET_PROTOCOL_VERSION, peer, answered)),
     }
 }
 
@@ -338,7 +363,7 @@ fn run_hello() -> ExitCode {
         }
         Ok(reply) => {
             println!("{}", serde_json::to_string_pretty(&reply).unwrap_or_default());
-            match judge_hello_reply(&reply) {
+            match judge_hello_reply(&reply, env_lang()) {
                 Ok(summary) => {
                     eprintln!("{summary}");
                     ExitCode::SUCCESS
@@ -1535,19 +1560,37 @@ mod tests {
     // 같은 판은 호환. 협상 이전 앱(hello 를 프론트로 흘려 ok:false)은 판 0 — floor 0 인 동안 호환.
     #[test]
     fn hello_verdict_compatible_for_current_and_legacy() {
+        use soksak_protocol::Lang;
         let modern = json!({"ok": true, "protocol": soksak_protocol::SOCKET_PROTOCOL_VERSION});
-        let summary = judge_hello_reply(&modern).expect("같은 판은 호환");
+        let summary = judge_hello_reply(&modern, Lang::En).expect("같은 판은 호환");
         assert!(summary.contains("compatible"), "요약에 판정 명시: {summary}");
         let legacy = json!({"ok": false, "code": "UNKNOWN_COMMAND", "message": "unknown"});
-        let summary = judge_hello_reply(&legacy).expect("floor 0 인 동안 구세대 앱은 호환");
+        let summary = judge_hello_reply(&legacy, Lang::En).expect("floor 0 인 동안 구세대 앱은 호환");
         assert!(summary.contains('0'), "구세대=판 0 명시: {summary}");
+    }
+
+    // 사람 표면: 요약 문장은 이 셸의 로케일로 해소한다 — ko 로케일이면 한국어.
+    // 판 숫자는 언어 독립(같은 자리에 그대로).
+    #[test]
+    fn hello_summary_resolves_to_shell_locale() {
+        use soksak_protocol::{Lang, SOCKET_PROTOCOL_VERSION};
+        let modern = json!({"ok": true, "protocol": SOCKET_PROTOCOL_VERSION});
+        let ko = judge_hello_reply(&modern, Lang::Ko).expect("같은 판은 호환");
+        assert!(ko.contains("호환됨"), "ko 로케일은 한국어로 해소: {ko}");
+        assert!(!ko.contains("compatible"), "ko 로케일에 영어 문장이 새면 안 된다: {ko}");
+        assert!(ko.contains(&SOCKET_PROTOCOL_VERSION.to_string()), "판 숫자는 언어 독립: {ko}");
+        // 협상 이전 앱(ok:false)은 판 0 으로 판별 — 그 사실도 해소된 언어로 붙는다.
+        let legacy = json!({"ok": false, "code": "UNKNOWN_COMMAND", "message": "unknown"});
+        let ko = judge_hello_reply(&legacy, Lang::Ko).expect("floor 0 인 동안 구세대 앱은 호환");
+        assert!(ko.contains("hello 이전 앱"), "구세대 앱 사실을 한국어로 고지: {ko}");
     }
 
     // 앱이 더 새 판이면 sok 이 낡은 쪽 — 방향 명시 문장으로 거부.
     #[test]
     fn hello_verdict_rejects_newer_app() {
+        use soksak_protocol::Lang;
         let reply = json!({"ok": true, "protocol": 999});
-        let err = judge_hello_reply(&reply).expect_err("판이 앞선 앱은 거부");
+        let err = judge_hello_reply(&reply, Lang::En).expect_err("판이 앞선 앱은 거부");
         assert!(err.contains("999"), "앱 판 숫자: {err}");
         assert!(
             err.contains(&soksak_protocol::SOCKET_PROTOCOL_VERSION.to_string()),
