@@ -106,7 +106,7 @@ check: ## Rust 컴파일 체크(cargo check)
 	cd src-tauri && cargo check
 
 test: ## Rust 단위 테스트
-	cd src-tauri && cargo test --lib
+	cd src-tauri && cargo test --workspace
 
 test-front: ## 프론트엔드 단위 테스트(vitest)
 	$(PNPM) test
