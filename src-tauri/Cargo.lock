@@ -4386,6 +4386,26 @@ name = "soksak-protocol"
 version = "0.1.0"
 
 [[package]]
+name = "soksak-pty-proto"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "soksak-protocol",
+]
+
+[[package]]
+name = "soksak-ptyd"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "libc",
+ "portable-pty",
+ "serde_json",
+ "soksak-pty-proto",
+]
+
+[[package]]
 name = "soup3"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
