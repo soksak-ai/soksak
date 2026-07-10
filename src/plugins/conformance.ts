@@ -32,6 +32,79 @@ export function missingRegistrations(
   return declaredIds.filter((id) => !reg.has(id));
 }
 
+// ── 결합 법칙 C2 — 투명성 3종(command·status·DOM) ────────────────────────────
+// 모든 기능은 세 표면을 의무 노출한다. 규칙은 순수 판정, 시행 모드는 C2_ENFORCEMENT 가 단일진실.
+// blocking 승격은 위반 0 실측 + 명시 재입법 커밋으로만 한다(C5 — 무언 완화·무언 승격 둘 다 금지).
+// 도입 시점 실측(2026-07-11, ~/.soksak-dev/plugins 매니페스트 40 — git-diff·git-history·git-init 은
+// 교정 브랜치 기준) 위반 잔존이라 3종 전부 warn 출발:
+//   command-surface 4 (agent-claude·agent-codex 프로그램축 / browser-bookmarks·memo 뷰축)
+//   view-status    14/21 (setStatus 채택 7 — clubhouse·design-astryx·erd·kanban·memo·playbox·terminal)
+//   view-nodes      6 (activity·erd·file-tree·folderpop·kanban·sidebar-sky)
+
+export type TransparencyRule = "command-surface" | "view-status" | "view-nodes";
+export type TransparencyMode = "blocking" | "warn";
+
+// 시행 입법표. 이 표의 변경은 재입법 커밋이며 conformance.test.ts 의 핀 테스트가 동행 개정을 강제한다.
+export const C2_ENFORCEMENT: Readonly<Record<TransparencyRule, TransparencyMode>> = {
+  "command-surface": "warn",
+  "view-status": "warn",
+  "view-nodes": "warn",
+};
+
+export interface TransparencyViolation {
+  rule: TransparencyRule;
+  detail: string; // 위반 사실 서술(무엇이 몇 개인지) — 경고/거부 메시지에 그대로 실림
+}
+
+// 매니페스트 정적 규칙 2종의 판정(활성화 경계에서 카운트만으로 판정 가능).
+//   ① command-surface: 기능 보유(views>0 ∨ programs>0) ∧ commands=0 → 위반
+//   ③ view-nodes: views>0 ∧ nodes=0 → 위반(ui.tree 부재 = 주소 기반 클릭 E2E 불가)
+export function transparencyViolations(counts: {
+  views: number;
+  programs: number;
+  commands: number;
+  nodes: number;
+}): TransparencyViolation[] {
+  const out: TransparencyViolation[] = [];
+  if ((counts.views > 0 || counts.programs > 0) && counts.commands === 0) {
+    out.push({
+      rule: "command-surface",
+      detail: `기능 보유(views=${counts.views}, programs=${counts.programs})인데 commands=0`,
+    });
+  }
+  if (counts.views > 0 && counts.nodes === 0) {
+    out.push({
+      rule: "view-nodes",
+      detail: `views=${counts.views}인데 contributes.nodes=0 — ui.tree 노출 없음`,
+    });
+  }
+  return out;
+}
+
+// ② view-status 의 판정 — 런타임 입력. 캐퍼빌리티는 코어 실존(viewRegistry PluginViewContext.setStatus
+// → sessions view.status → status.query). 활성화 시점엔 뷰가 마운트 전이라 로더에서 판정 불가 —
+// 시행 지점은 런타임 진단(plugin.conformance)·발행 게이트(doctor)다. 여기는 순수 판정만 둔다.
+export function unreportedStatusViews(
+  mountedViewIds: readonly string[],
+  statusReportedViewIds: readonly string[],
+): string[] {
+  const reported = new Set(statusReportedViewIds);
+  return mountedViewIds.filter((id) => !reported.has(id));
+}
+
+// 위반을 시행 모드로 분류 — blocking 위반은 거부 대상, warn 위반은 경고 대상.
+export function partitionTransparency(
+  violations: readonly TransparencyViolation[],
+  enforcement: Readonly<Record<TransparencyRule, TransparencyMode>> = C2_ENFORCEMENT,
+): { blocking: TransparencyViolation[]; warn: TransparencyViolation[] } {
+  const blocking: TransparencyViolation[] = [];
+  const warn: TransparencyViolation[] = [];
+  for (const v of violations) {
+    (enforcement[v.rule] === "blocking" ? blocking : warn).push(v);
+  }
+  return { blocking, warn };
+}
+
 // nodes 의 declared≡actual 진단. actual = DOM 의 data-node(scanNodes 의 nodePath).
 // 동적 리스트 노드는 "id/key" 형태라 base id(첫 세그먼트)로 매칭한다. nodes 는 register API 가 없는
 // contribution 이므로 게이트(throw)가 아니라 진단을 낸다:

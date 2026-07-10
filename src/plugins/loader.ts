@@ -12,7 +12,14 @@ import {
   type PluginContext,
 } from "./api";
 import { useProgramRegistry } from "./programRegistry";
-import { missingRegistrations } from "./conformance";
+import {
+  C2_ENFORCEMENT,
+  missingRegistrations,
+  partitionTransparency,
+  transparencyViolations,
+  type TransparencyMode,
+  type TransparencyRule,
+} from "./conformance";
 import type { PluginManifest } from "./spec";
 
 // entry 코드 문자열 → ESM 모듈. 상대 import 불가(스펙: 단일 번들 필수).
@@ -97,6 +104,33 @@ function reportDeclaredButNotRegistered(
   }
 }
 
+// 결합 법칙 C2(투명성 3종) 중 매니페스트 정적 규칙(command-surface·view-nodes)의 활성화 경계 시행.
+// blocking 규칙 위반 = 활성화 거부(throw), warn 규칙 위반 = 경고(은폐 0). 모드 단일진실=C2_ENFORCEMENT.
+// view-status 규칙은 마운트 후에만 판정 가능(unreportedStatusViews) — 시행 지점이 여기가 아니다.
+export function enforceTransparency(
+  manifest: PluginManifest,
+  enforcement: Readonly<Record<TransparencyRule, TransparencyMode>> = C2_ENFORCEMENT,
+): void {
+  const c = manifest.contributes;
+  const violations = transparencyViolations({
+    views: c.views.length,
+    programs: c.programs.length,
+    commands: c.commands.length,
+    nodes: c.nodes.length,
+  });
+  const { blocking, warn } = partitionTransparency(violations, enforcement);
+  for (const v of warn) {
+    console.warn(`[plugin:${manifest.id}] C2 ${v.rule}: ${v.detail}`);
+  }
+  if (blocking.length > 0) {
+    throw new Error(
+      `C2 위반(${manifest.id}): ${blocking
+        .map((v) => `${v.rule} — ${v.detail}`)
+        .join("; ")}`,
+    );
+  }
+}
+
 // 모듈 + 매니페스트 → 활성 인스턴스. activate 실패 시 등록분 전부 회수 후 throw.
 export async function activatePlugin(
   module: unknown,
@@ -108,6 +142,10 @@ export async function activatePlugin(
   if (!entry) {
     throw new Error("entry 모듈에 activate(ctx) 가 없음");
   }
+
+  // [C2] 투명성 3종 — 매니페스트 정적 규칙을 등록 전에 시행(blocking 위반이면 아무것도 만들지 않는다).
+  enforceTransparency(manifest);
+
   const { api, tracker, registered } = buildPluginApi(manifest, dir, deps);
 
   // 선언적 기여 자동 적용: programs 는 데이터만으로 충분(코드 바인딩 불요) —
