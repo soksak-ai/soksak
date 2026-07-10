@@ -1,0 +1,7 @@
+[package]
+name = "soksak-protocol"
+version = "0.1.0"
+edition = "2021"
+description = "Socket protocol contract shared by the app and its clients: version constants, the compatibility window, and the pure compatibility verdict. No transport code."
+
+[dependencies]
