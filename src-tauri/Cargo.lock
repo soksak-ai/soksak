@@ -4362,6 +4362,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "soksak-protocol",
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",
@@ -4378,6 +4379,10 @@ dependencies = [
  "x25519-dalek",
  "zeroize",
 ]
+
+[[package]]
+name = "soksak-protocol"
+version = "0.1.0"
 
 [[package]]
 name = "soup3"

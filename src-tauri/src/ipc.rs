@@ -55,6 +55,9 @@ struct Request {
     // 시스템 유래는 낭독 후보에서 제외되고 피드에서 흐리게 표시된다. 소켓 클라이언트는 쓰지
     // 않는다(사람/에이전트=사람 유래) — Rust 내부 발화(스케줄러)만 싣는다.
     origin: Option<String>,
+    // 클라이언트가 선언하는 소켓 프로토콜 판(soksak-protocol 계약). 부재=0(레거시) —
+    // effective_protocol 규칙 하나로 구세대 자동 수용과 미래 차단 스위치를 겸한다.
+    protocol: Option<u32>,
 }
 
 // 마지막으로 포커스된 창 label(활성 창 추적). lib.rs on_window_event 의 Focused(true) 가 갱신.
@@ -97,6 +100,25 @@ fn parse_request(line: &str) -> Result<Request, String> {
 
 fn error_reply(code: &str, message: &str) -> Value {
     json!({ "ok": false, "code": code, "message": message })
+}
+
+// 서버 기동 시각(ms) — system.hello 의 startedAt. start() 가 1회 기록한다.
+static STARTED_AT_MS: OnceLock<u64> = OnceLock::new();
+
+// transport 레벨 응답에 필요한 앱 사실 — 연결당 1회 수집해 transport_route 를 순수하게
+// 유지한다(AppHandle 없이 테스트 가능).
+struct TransportCtx {
+    identity: String,
+    app_version: String,
+    pid: u32,
+    started_at_ms: u64,
+}
+
+// transport 레벨 라우트: 프론트 미경유 즉답(webview 가 행이어도 답한다 — 진단 가치).
+// RED 상태 — 아직 아무것도 답하지 않는다: 모든 요청이 그대로 dispatch 로 흐른다.
+fn transport_route(req: &Request, ctx: &TransportCtx) -> Option<Value> {
+    let _ = (req, ctx);
+    None
 }
 
 // 명령 응답 대기 timeout(ms) 정규화. 미지정 시 기본 10s(빠른 행 감지). [1s, 3600s] 클램프:
@@ -424,6 +446,8 @@ pub fn request_command(
             timeout_ms: Some(timeout_ms),
             parent: None,
             origin: origin.map(str::to_string),
+            // Rust 내부 발화는 같은 빌드다 — 스큐가 구조적으로 불가능(게이트도 미경유).
+            protocol: None,
         },
     )
 }
@@ -497,6 +521,78 @@ mod tests {
         let reply = error_reply("INVALID_PARAMS", &msg);
         assert_eq!(reply["ok"], false);
         assert_eq!(reply["code"], "INVALID_PARAMS");
+    }
+
+    // ── transport 레벨 협상(system.hello + VERSION_SKEW 게이트) ──────────────
+
+    fn test_ctx() -> TransportCtx {
+        TransportCtx {
+            identity: "com.soksak.test".into(),
+            app_version: "0.9.9".into(),
+            pid: 4242,
+            started_at_ms: 1_700_000_000_000,
+        }
+    }
+
+    // system.hello 는 프론트 미경유 즉답이다(webview 가 행이어도 답한다 — 진단 가치).
+    #[test]
+    fn hello_is_answered_at_transport_level() {
+        let req = parse_request(r#"{"id":1,"method":"system.hello"}"#).unwrap();
+        let reply = transport_route(&req, &test_ctx())
+            .expect("system.hello must be answered by the transport, not forwarded to the front");
+        assert_eq!(reply["ok"], true);
+        assert_eq!(reply["protocol"], soksak_protocol::SOCKET_PROTOCOL_VERSION);
+        assert_eq!(reply["minClientProtocol"], soksak_protocol::MIN_COMPATIBLE_CLIENT_PROTOCOL);
+        assert_eq!(reply["appVersion"], "0.9.9");
+        assert_eq!(reply["identity"], "com.soksak.test");
+        assert_eq!(reply["pid"], 4242);
+        assert_eq!(reply["startedAt"], 1_700_000_000_000u64);
+        let caps = reply["capabilities"].as_array().expect("capabilities array");
+        assert!(caps.iter().any(|c| c == "hello.v1"), "hello.v1 capability advertised");
+    }
+
+    // 스큐 요청은 dispatch(프론트 registry)에 도달하기 전에 거부되어야 한다.
+    // 라이브 실측 RED(2026-07-11): {"method":"state.context","protocol":999} 가 ok:true 로
+    // 그대로 실행됐다 — 게이트 부재.
+    #[test]
+    fn skewed_request_is_rejected_before_dispatch() {
+        let req = parse_request(r#"{"id":2,"method":"state.context","protocol":999}"#).unwrap();
+        let reply = transport_route(&req, &test_ctx())
+            .expect("a version-skewed request must be rejected at the transport");
+        assert_eq!(reply["ok"], false);
+        assert_eq!(reply["code"], "VERSION_SKEW");
+        let msg = reply["message"].as_str().expect("message string");
+        assert!(msg.contains("999"), "peer version number in the sentence: {msg}");
+        assert!(
+            msg.contains(&soksak_protocol::SOCKET_PROTOCOL_VERSION.to_string()),
+            "own version number in the sentence: {msg}"
+        );
+        // 방향 명시: 이 사분면(클라이언트가 더 새것)에서 낡은 쪽은 앱이다.
+        assert!(msg.contains("update the app"), "stale side named explicitly: {msg}");
+        // 봉투 data 로 숫자도 반환 — 에이전트가 파싱으로 자가 판정할 수 있게.
+        assert_eq!(reply["data"]["appProtocol"], soksak_protocol::SOCKET_PROTOCOL_VERSION);
+        assert_eq!(reply["data"]["clientProtocol"], 999);
+    }
+
+    // 부재=0 규칙: hello 를 모르는 구세대 클라이언트는 protocol 필드가 없고, 0 은 현행
+    // 호환창(floor=0) 안이므로 그대로 dispatch 로 흐른다.
+    #[test]
+    fn legacy_request_without_protocol_reaches_dispatch() {
+        let req = parse_request(r#"{"method":"state.tree"}"#).unwrap();
+        assert!(
+            transport_route(&req, &test_ctx()).is_none(),
+            "legacy peers are judged as protocol 0 and stay inside the window"
+        );
+    }
+
+    #[test]
+    fn current_protocol_request_reaches_dispatch() {
+        let line = format!(
+            r#"{{"method":"state.tree","protocol":{}}}"#,
+            soksak_protocol::SOCKET_PROTOCOL_VERSION
+        );
+        let req = parse_request(&line).unwrap();
+        assert!(transport_route(&req, &test_ctx()).is_none());
     }
 
     // timeout 클램프 경계 — 핵심: >600s(구 상한)가 그대로 통과해야 LLM 30분+ 턴을 끝까지 기다린다.

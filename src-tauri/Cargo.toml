@@ -23,6 +23,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# 소켓 프로토콜 계약(버전 상수+호환창+순수 판정) — 앱과 sok 이 공히 의존, 상수 사본 금지.
+soksak-protocol = { path = "protocol" }
 uuid = { version = "1", features = ["v4"] }
 # 프로세스 그룹 kill(process.rs group 스폰) — 직계 kill 은 손자(에이전트의 Bash 자식 등)를
 # 남겨 stdout EOF·exit 가 지연된다. Unix 전용 사용(killpg).
@@ -90,7 +92,7 @@ sha2 = "0.10"
 x25519-dalek = { version = "2", features = ["static_secrets", "zeroize"] }
 hkdf = "0.12"
 # 폰-링크 원격 제어 스택(remote::* — iroh QUIC + snow Noise + Ed25519 기기 인증)은 코어에서
-# 분리됐다 → soksak-plugin-remote-iroh(vendor 사이드카). iroh/snow/ed25519-dalek 정적키 트리가
+# 분리됐다 → 원격 전송 사이드카 플러그인(vendor). iroh/snow/ed25519-dalek 정적키 트리가
 # 코어 바이너리에서 빠진다(슬리밍). chacha20poly1305/rand/zeroize 는 secrets 볼트가 쓰므로 유지.
 
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
