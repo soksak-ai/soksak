@@ -23,6 +23,15 @@ git/clipboard/ai.session) and removes the violators.
 4. **Plugin** = `soksak-plugin-<domain>-<name>`. A replaceable-seam plugin MUST carry the
    observable engine name (`browser-native` is the exception naming the provisioning axis —
    see §3; `browser-chromium`, `editor-codemirror`).
+4a. **Distributable unit** (generalization of rule 4) = `soksak-<kind>-<domain>[-<name>]`,
+   kind ∈ {plugin, sidecar, kit}. The kind ALWAYS follows the brand prefix — a domain-first
+   variant (`soksak-browser-kit`) is banned; it was minted once by following generic npm
+   suffix convention instead of this grammar and renamed (§4). Registrar folder =
+   `~/.soksak-dev/<kind>s/<full-name>` (plugins/, sidecars/, kits/). Consumption is
+   declare + discover: the consumer declares the unit NAME only (manifest `sidecars[]`,
+   package.json dependencies) and resolution discovers it in the registrar
+   (`SOKSAK_HOME` env, default `~/.soksak-dev`). Symlinks and relative-topology paths
+   (`../../`) are banned as resolution mechanisms — both break silently on relocation.
 4b. **Window identity** = opaque, never-reused. Runtime windows are labeled `w-<uuid4>` —
    an accidental label collision across sessions is impossible, so the ghost-restore class
    (a new window resurrecting a dead session's persisted slot) cannot exist. Intentional
@@ -122,6 +131,7 @@ break the symmetry law (file = command prefix: `webview_open`, not `webview_host
 | `soksak-plugin-browser-cef` | `soksak-plugin-browser-chromium` | plugin |
 | `soksak-sidecar-chromium` (initial publish) | `soksak-sidecar-browser-chromium` | sidecar artifact — unified with the plugin shape |
 | `soksak-engine-chromium@1` → `soksak-sidecar-browser@1` (both rejected) | `soksak-sidecar-browser-spec@1` | contract id — §8 |
+| `soksak-browser-kit` | `soksak-kit-browser` | kit — unified with the unit grammar (§1.4a); registrar moved `~/ai/cli/` → `~/.soksak-dev/kits/` |
 
 `webview_inject_script` already conformed and is unchanged.
 
