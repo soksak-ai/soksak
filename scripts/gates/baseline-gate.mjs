@@ -34,7 +34,7 @@ const METRICS = [
   {
     name: "unwrap",
     baselineFile: "baseline-unwrap.txt",
-    roots: ["src-tauri/src", "src-tauri/cli/src"],
+    roots: ["src-tauri/src", "src-tauri/cli/src", "src-tauri/protocol/src"],
     exts: [".rs"],
     // 파일 전문 계수(인라인 #[cfg(test)] 모듈 포함 — 보수적 봉인, 숨는 방향의 오차가 없다).
     measure: (text) => text.split(NEEDLE).length - 1,
@@ -54,6 +54,7 @@ const METRICS = [
       "src",
       "src-tauri/src",
       "src-tauri/cli/src",
+      "src-tauri/protocol/src",
       "packages/plugin-api/src",
       "packages/plugin-spec/src",
       "scripts",
