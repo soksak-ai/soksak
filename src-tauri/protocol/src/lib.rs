@@ -114,11 +114,19 @@ pub enum Lang {
 impl Lang {
     /// One place interprets a language tag. The Korean family (`ko`, `ko_KR.UTF-8`,
     /// `KO`) resolves to Korean; every other or absent tag resolves to English.
-    /// The caller owns the absent-tag default: a POSIX env with no `LANG` yields
-    /// `""` → English (the CLI default), while the app resolves an absent setting
-    /// to Korean on its own before reaching here.
+    /// The primary subtag alone decides — the tag is cut at the first BCP-47/POSIX
+    /// separator (`-`, `_`, `.`) and the leading segment is matched whole, so a tag
+    /// that merely starts with the letters `ko` (Konkani `kok`, Kosraean `kos`) is
+    /// not Korean. The caller owns the absent-tag default: a POSIX env with no `LANG`
+    /// yields `""` → English (the CLI default), while the app resolves an absent
+    /// setting to Korean on its own before reaching here.
     pub fn from_tag(tag: &str) -> Lang {
-        if tag.trim().to_ascii_lowercase().starts_with("ko") {
+        let normalized = tag.trim().to_ascii_lowercase();
+        let primary = normalized
+            .split(['-', '_', '.'])
+            .next()
+            .unwrap_or("");
+        if primary == "ko" {
             Lang::Ko
         } else {
             Lang::En
@@ -157,6 +165,24 @@ mod tests {
         assert_eq!(
             evaluate_compat(1, 0, 2),
             Compat::SelfTooOld { own: 1, peer: 2 }
+        );
+    }
+
+    // ── compatibility floors sit at or below our own protocol ────────────────
+
+    // A floor above our own protocol is unactionable: evaluate_compat would hand a
+    // peer that already speaks our exact version a `PeerTooOld` verdict pointing at a
+    // build older than the one it runs — an instruction it cannot follow. This guards
+    // a relegislation typo that raises a MIN_COMPATIBLE_* past SOCKET_PROTOCOL_VERSION.
+    #[test]
+    fn compatibility_floor_never_exceeds_own_protocol() {
+        assert!(
+            MIN_COMPATIBLE_CLIENT_PROTOCOL <= SOCKET_PROTOCOL_VERSION,
+            "client floor {MIN_COMPATIBLE_CLIENT_PROTOCOL} exceeds own protocol {SOCKET_PROTOCOL_VERSION}",
+        );
+        assert!(
+            MIN_COMPATIBLE_SERVER_PROTOCOL <= SOCKET_PROTOCOL_VERSION,
+            "server floor {MIN_COMPATIBLE_SERVER_PROTOCOL} exceeds own protocol {SOCKET_PROTOCOL_VERSION}",
         );
     }
 
@@ -247,5 +273,20 @@ mod tests {
         // Absent or foreign tags fall to English — the CLI default when no LANG is set.
         assert_eq!(Lang::from_tag(""), Lang::En);
         assert_eq!(Lang::from_tag("ja_JP.UTF-8"), Lang::En);
+    }
+
+    // Only the primary subtag decides — a tag that merely begins with the letters `ko`
+    // (Konkani `kok`, Kosraean `kos`) is a different language and resolves to English.
+    // A prefix match would hand every `ko*` language the Korean rendering.
+    #[test]
+    fn from_tag_matches_primary_subtag_not_prefix() {
+        assert_eq!(Lang::from_tag("kok"), Lang::En);
+        assert_eq!(Lang::from_tag("kok_IN.UTF-8"), Lang::En);
+        assert_eq!(Lang::from_tag("kok-Latn"), Lang::En);
+        assert_eq!(Lang::from_tag("kos"), Lang::En);
+        // The genuine Korean family still resolves, boundary by boundary.
+        assert_eq!(Lang::from_tag("ko"), Lang::Ko);
+        assert_eq!(Lang::from_tag("ko-KR"), Lang::Ko);
+        assert_eq!(Lang::from_tag("ko_KR.UTF-8"), Lang::Ko);
     }
 }
