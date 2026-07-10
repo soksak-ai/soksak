@@ -12,6 +12,7 @@ mod dockmenu;
 mod fs;
 mod git;
 mod http;
+mod i18n;
 pub mod ipc;
 mod mediaproxy;
 mod network;
@@ -129,11 +130,11 @@ pub fn run() {
                                 "quarantined": quarantined,
                             }),
                         );
-                        let body = match slot {
-                            Some(i) => format!("손상된 데이터를 백업 슬롯 {i}에서 복원했습니다."),
-                            None => "손상된 데이터를 복원할 백업이 없어 빈 저장소로 시작합니다.".to_string(),
-                        };
-                        if let Err(e) = notify::show(app.handle(), "데이터 복구", &body) {
+                        // 알림은 사람 표면 — 복원된(또는 빈) DB 에서 언어를 1회 조회해 해소한다.
+                        // 복원 성공이면 그 DB 의 설정을, 전 슬롯 실패면 빈 DB → 기본 ko(i18n.rs).
+                        let lang = i18n::app_language(app.handle());
+                        let body = i18n::recovery_body(lang, slot);
+                        if let Err(e) = notify::show(app.handle(), i18n::recovery_title(lang), &body) {
                             eprintln!("[data] 복구 알림 표시 실패: {e}");
                         }
                     }
