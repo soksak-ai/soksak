@@ -21,7 +21,7 @@ DEBUG_APP   := src-tauri/target/debug/bundle/macos/soksak-debug.app
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify clean stop cli cli-dev cli-debug install-cli install-cli-dev install-cli-debug docs registry
+.PHONY: help install icons dev build build-debug run run-debug typecheck check test test-front verify gates clean stop cli cli-dev cli-debug install-cli install-cli-dev install-cli-debug docs registry
 
 help: ## 사용 가능한 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -119,9 +119,13 @@ spec-gate: ## 패키지 빌드(plugin-spec·plugin-api dist — 코어가 소비
 		echo "spec-gate: 무효 매니페스트가 통과됨(게이트 깨짐)"; exit 1; \
 	else echo "✓ spec-gate(빌드+무효 거부 확인)"; fi
 
-verify: spec-gate typecheck check test test-front ## 헤드리스 게이트(spec 빌드) + 타입체크 + Rust/프론트 테스트(커밋 전 검증)
+gates: ## 코어 규율 게이트(blocking) — C1 결합 스캔 + 기준선 축소 게이트
+	@node scripts/gates/core-decoupling-scan.mjs
+	@node scripts/gates/baseline-gate.mjs
 
-test-unit: spec-gate typecheck check test test-front ## 결정적 단위(LLM 0·앱 불요) — 전 repo 표준 타깃(docs/TESTING.md)
+verify: spec-gate gates typecheck check test test-front ## 헤드리스 게이트(spec 빌드+규율 게이트) + 타입체크 + Rust/프론트 테스트(커밋 전 검증)
+
+test-unit: spec-gate gates typecheck check test test-front ## 결정적 단위(LLM 0·앱 불요) — 전 repo 표준 타깃(docs/TESTING.md)
 
 test-e2e: ## 실행 중 앱 소켓 대상 E2E 스위트(멱등·자기정리). IDENTITY 기본 debug. 앱 실행+전면 필요
 	@IDENTITY=$${IDENTITY:-debug}; \
