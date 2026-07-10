@@ -83,14 +83,14 @@ git/clipboard/ai.session) and removes the violators.
 8. **Command verbs and targets**: `open` = surface the target, reusing an existing instance
    instead of minting a second one when the domain already has an identity to reuse
    (`project.open`, `window.open`). `create` = mint a new instance unconditionally, no reuse
-   check (`sheet.create`, `plugin.dev.create`). `close` = detach without destroying the
+   check (`space.create`, `plugin.dev.create`). `close` = detach without destroying the
    underlying record. `remove` = destroy the target's own record permanently (`secret.remove`,
    `project.recent.remove`). `list` / `get` / `set` = read-many, read-one, write — no side
    effect beyond the named field. The target parameter names the domain object acted on
-   (`project`, `sheet`, `panel`, `view`, `pane`, `window`) — never a stage-specific or
+   (`project`, `space`, `panel`, `view`, `pane`, `window`) — never a stage-specific or
    implementation synonym (`group`, `content`). Bare `id` is reserved for domains whose own
    identifier field is literally `id`; every other reference is `<domain>Id`
-   (`projectId`, `sheetId`, `panelId`).
+   (`projectId`, `spaceId`, `panelId`).
 
 ## 2. Consumed-Library Names (the CEF/Chromium ruling)
 
