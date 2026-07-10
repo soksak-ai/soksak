@@ -1,13 +1,13 @@
 ---
 description: >-
   Drive the soksak / vsterm desktop workspace from the command line (the `sok`
-  binary) so you can open projects, arrange sheets and
+  binary) so you can open projects, arrange spaces and
   split panels, launch terminals and browsers, run the actual build, and — the
   whole point — SEE the result with a real screenshot before claiming anything
   works. Use this skill whenever you are working inside the soksak/vsterm
   app, or whenever a task involves
   `sok`, `plugin.catalog`, `state.tree`, `window.snapshot`,
-  `panel.split`, `sheet.create`, `term.exec`, or any `sok <namespace>.<command>`
+  `panel.split`, `space.create`, `term.exec`, or any `sok <namespace>.<command>`
   call. Reach for it eagerly any time you build something (a web page, a
   desktop UI, a CLI, a script) and need to verify it visually rather than
   guessing from logs — open it in a soksak view, capture the window, and look
@@ -82,7 +82,7 @@ Target a specific pane with `"pane":"<id>"`; omit to use the current one.
 For a web app, put it in a browser view and drive/read the page:
 
 ```bash
-sok sheet.create '{"program":"browser"}'
+sok space.create '{"program":"browser"}'
 sok plugin.soksak-plugin-browser-native.navigate '{"url":"http://localhost:5173"}'
 sok plugin.soksak-plugin-browser-native.dom.text '{"selector":"h1"}'   # read
 sok plugin.soksak-plugin-browser-native.dom.click '{"selector":"button.submit"}'
@@ -113,8 +113,8 @@ sequence and flip through the frames:
 sok window.record '{"dir":"/tmp/sok/rec","frames":60,"intervalMs":33}'
 ```
 
-Specialized visual checks worth knowing: `sheet.switchScan` (does switching to
-a sheet land in one clean frame or does it smear/jank?) and `window.themeScan`
+Specialized visual checks worth knowing: `space.switchScan` (does switching to
+a space land in one clean frame or does it smear/jank?) and `window.themeScan`
 (does a dark/light toggle apply atomically or tear?). Reach for these when the
 user reports flicker you need to reproduce and measure.
 
@@ -169,8 +169,8 @@ visible). Both, because either alone can lie.
 "program":"browser"}'` → `panel.resize` to taste → snapshot to confirm the
 layout landed.
 
-**"Something flickers when I switch sheets."**
-`sheet.list` for the ids → `sheet.switchScan '{"from":"c1","to":"c3"}'` →
+**"Something flickers when I switch spaces."**
+`space.list` for the ids → `space.switchScan '{"from":"c1","to":"c3"}'` →
 report `clean`/`switchFrames`; capture frames with `window.record` if you need
 to show the user.
 

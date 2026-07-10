@@ -194,7 +194,7 @@ async function setup(sock, repoRoot) {
   const tree1 = await getTree(sock);
   const proj = findPerfProject(tree1);
   if (!proj) throw new Error("setup 후 perf-harness 프로젝트를 찾지 못함");
-  const sheet = proj.sheets.find((c) => c.active) ?? proj.sheets[0];
+  const space = proj.spaces.find((c) => c.active) ?? proj.spaces[0];
   const splits = collectSplits(content.layout);
   if (splits.length === 0) throw new Error("분할 노드 없음");
   // 루트 분할(트리 최상단) = 좌|우 경계.
@@ -202,7 +202,7 @@ async function setup(sock, repoRoot) {
 
   const ids = {
     project,
-    sheetId: sheet.id,
+    spaceId: space.id,
     rootSplitId: rootSplit.split.id,
     rootSizes: rootSplit.split.sizes ?? [0.5, 0.5],
     gLeft,

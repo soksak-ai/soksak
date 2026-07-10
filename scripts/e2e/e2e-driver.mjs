@@ -119,14 +119,14 @@ function collectSplits(node, out = []) {
   return out;
 }
 function panesOf(proj) {
-  const content = proj.sheets.find((c) => c.active) ?? proj.sheets[0];
+  const content = proj.spaces.find((c) => c.active) ?? proj.spaces[0];
   return (content.panels ?? []).map((g) => {
     const v = (g.views ?? []).find((x) => x.kind === "terminal") ?? g.views?.[0];
     return { panel: g.id, view: v?.id, pane: v?.focusedPaneId ?? v?.id };
   });
 }
 function splitId(proj) {
-  const content = proj.sheets.find((c) => c.active) ?? proj.sheets[0];
+  const content = proj.spaces.find((c) => c.active) ?? proj.spaces[0];
   const s = collectSplits(content.layout);
   if (!s.length) throw new Error("분할 노드 없음");
   return s[0].split.id;
@@ -195,13 +195,13 @@ async function setup(sock, _repoRoot) {
   if (!act || act.id !== proj.id) {
     throw new Error(`resize-e2e 가 활성이 아님(active=${act?.id}) — 측정 무효`);
   }
-  const content = proj.sheets.find((c) => c.active) ?? proj.sheets[0];
+  const content = proj.spaces.find((c) => c.active) ?? proj.spaces[0];
   const panes = panesOf(proj);
   console.log(
     JSON.stringify({
       window: WIN,
       project,
-      sheetId: content.id,
+      spaceId: content.id,
       rootSplitId: splitId(proj),
       paneLeft: panes[0]?.pane,
       paneRight: panes[1]?.pane,

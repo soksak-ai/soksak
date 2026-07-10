@@ -167,13 +167,13 @@ async function main() {
   const bad = await rpc("state.tree", {}, "w-nope-9999");
   ok(bad.ok === false && bad.code === "WINDOW_NOT_FOUND", "없는 창 타겟 → WINDOW_NOT_FOUND");
 
-  // 5) 창별 독립: win 에 시트 추가 → 홈 창 불변 + 두 창 상태 구분
+  // 5) 창별 독립: win 에 스페이스 추가 → 홈 창 불변 + 두 창 상태 구분
   const baseBefore = await tree(base);
-  await rpc("sheet.create", { program: "terminal" }, win);
+  await rpc("space.create", { program: "terminal" }, win);
   await sleep(400);
   const baseAfter = await tree(base);
   const winAfter = await tree(win);
-  ok(baseBefore === baseAfter, "창별 독립: win 시트 추가가 홈 창에 안 번짐");
+  ok(baseBefore === baseAfter, "창별 독립: win 스페이스 추가가 홈 창에 안 번짐");
   ok(winAfter !== baseAfter, "win 과 홈 창이 독립 상태(다름)");
 
   // 4) 활성 추적: focus(win) → window 생략 = win, focus(base) → = base

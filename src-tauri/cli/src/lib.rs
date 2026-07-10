@@ -887,7 +887,7 @@ const SKILL_BODY_HEAD: &str = r#"# Controlling soksak with `sok`
 Orientation only. `sok commands` (catalog) and `sok help <cmd>` (one command's schema) are the
 live single source of truth — this file is a map, not the full catalog.
 
-soksak is a terminal app with a 3-level layout: projects (t*) -> sheets (c*, tabs of split
+soksak is a terminal app with a 3-level layout: projects (t*) -> spaces (c*, tabs of split
 grids) -> panels (g*, split groups) holding views (v*: terminal / file editor / browser;
 terminals contain panes p*). Every feature is a `sok` command.
 
@@ -943,7 +943,7 @@ const SKILL_BODY_TAIL: &str = r#"
 
 ## Cautions
 
-- close commands are destructive: panel.close removes every tab in the panel; the last project/sheet/view/pane is protected (LAST_ITEM error).
+- close commands are destructive: panel.close removes every tab in the panel; the last project/space/view/pane is protected (LAST_ITEM error).
 - term.send writes raw bytes to the PTY; term.exec appends Enter.
 - browser.eval runs arbitrary JS in the page; `return` a JSON-serializable value.
 "#;
@@ -952,7 +952,7 @@ const SKILL_BODY_TAIL: &str = r#"
 const CORE_DOMAIN_MAP: &str = "\
 - state: tree, context, commands
 - project: list, open, activate, ...
-- sheet: list, create, activate, ...
+- space: list, create, activate, ...
 - panel: split, merge, move, resize, ...
 - pane: split, focus, close, ...
 - view: open, activate, move, ...

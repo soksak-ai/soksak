@@ -32,12 +32,12 @@ Run these constantly. Never invent an id.
 | Command | Purpose |
 |---|---|
 | `state.tree` | Full address book: every project/content/panel/view/pane id + active state. Panels carry `rect` (%) and the split tree (`s*` ids). |
-| `state.context` | Where `$SOKSAK_PANE` sits: `{projectId, sheetId, panelId, viewId, paneId}`. |
+| `state.context` | Where `$SOKSAK_PANE` sits: `{projectId, spaceId, panelId, viewId, paneId}`. |
 | `window.list` | Open window labels. |
 | `window.projects` | Which project each window hosts (`{root, name, window}`). Use before `--window`. |
 | `window.monitors` | Monitors + window rects (physical px) for multi-monitor placement. |
 | `project.list` / `project.recent` | Open projects / recent roots. |
-| `sheet.list` | Tabs in a project: `{id,title,program,active}`. |
+| `space.list` | Tabs in a project: `{id,title,program,active}`. |
 | `panel.list` | Panels in a content area + split tree + rects. |
 | `view.list` | Views (tabs) in a panel. |
 | `program.list` | Launchable programs for a tab/panel (`terminal`, `claude`, `codex`, `browser`, plugin views). Nothing is built in — check here for valid `program` ids. |
@@ -60,10 +60,10 @@ Run these constantly. Never invent an id.
 
 | Command | Args | Notes |
 |---|---|---|
-| `sheet.create` | `program`, `project` | New top-level tab. Returns `{sheetId,panelId,viewId}`. |
-| `sheet.activate` | `content` ✓ | Switch to a tab. |
-| `sheet.close` | `content` ✓ | Refuses to close the last content. |
-| `sheet.rename` | `content` ✓,`title` ✓ | — |
+| `space.create` | `program`, `project` | New top-level tab. Returns `{spaceId,panelId,viewId}`. |
+| `space.activate` | `content` ✓ | Switch to a tab. |
+| `space.close` | `content` ✓ | Refuses to close the last content. |
+| `space.rename` | `content` ✓,`title` ✓ | — |
 
 ## Panels (splits)
 
@@ -102,7 +102,7 @@ Run these constantly. Never invent an id.
 |---|---|---|
 | `window.snapshot` | `path` \| `base64` \| `rect{x,y,w,h}` | Capture the window to PNG. File mode → **Read the PNG to see it.** `base64:true` returns it inline; `rect` (CSS px, `ui.measure` space) crops a region and implies base64. Captures even when occluded; includes the WebGL terminal. |
 | `window.record` | `dir` ✓, `frames`(≤600), `intervalMs` | Sequence of PNGs `f0000.png…` for motion/animation review. |
-| `sheet.switchScan` | `to` ✓, `from`, `frames` | Measures a tab switch: `clean` vs `switchFrames` (jank spread) via per-frame pixel change. |
+| `space.switchScan` | `to` ✓, `from`, `frames` | Measures a tab switch: `clean` vs `switchFrames` (jank spread) via per-frame pixel change. |
 | `window.themeScan` | `theme`, `from`, `to`, `frames` | Is a dark/light toggle atomic or torn across regions. |
 | `window.info` / `window.layers` | — | Window pos/size/scale / native view hierarchy (layer diagnostics). |
 | `ui.measure` | `address` ✓ | Rect (px) + computed style of an exposed node. |
@@ -112,7 +112,7 @@ Run these constantly. Never invent an id.
 only then report. DOM presence ≠ visible; confirm with pixels.
 
 ## Browser
-Open a browser tab (`sheet.create '{"program":"browser"}'`) then drive/read it.
+Open a browser tab (`space.create '{"program":"browser"}'`) then drive/read it.
 All commands take optional `viewId` (omit = active browser view).
 
 | Command | Args | Notes |
@@ -174,7 +174,7 @@ retry with a guessed string; use an address from `ui.tree`.
 | `plugin.enable` / `plugin.disable` | `id` ✓ | Enable needs recorded consent (UI modal). |
 | `plugin.view.open` / `.close` | `view` ✓ (`<pluginId>.<viewId>`), `placement` | Open a plugin view in a sidebar/content slot. |
 | `plugin.settings.get` / `.set` | `id` ✓,`key`,`value`,`scope` | Read/write plugin settings. |
-| `program.list` | — | Valid `program` ids for `sheet.create`/`panel.split`/`view.open`. |
+| `program.list` | — | Valid `program` ids for `space.create`/`panel.split`/`view.open`. |
 
 Plugin commands are also callable directly as
 `plugin.<pluginId>.<command>` (e.g. the browser `dom.*` calls above). Run

@@ -1,5 +1,5 @@
 // docs 전문 검사 — 생성된 명령 레퍼런스(sok docs)가 표면 계약을 충분히 노출하는지 자동 점검한다.
-// 검사 축: ① 확정 용어(시트/탭/패널 — 옛 용어 잔존 금지) ② danger 표기 ③ 사용 예시(examples)
+// 검사 축: ① 확정 용어(스페이스/탭/패널 — 옛 용어 잔존 금지) ② danger 표기 ③ 사용 예시(examples)
 // ④ 개명 잔존 ⑤ 매개변수 표 존재. 사람 눈검증을 대체하지 않고 앞단에서 기계 점검을 맡는다.
 // 사용: node scripts/docs-audit.mjs docs/COMMANDS.md
 import { readFileSync } from "node:fs";
@@ -25,7 +25,7 @@ for (const s of sections) {
 }
 
 // ② danger 명령의 헤딩 표기 — 알려진 파괴 명령 표본이 표기를 갖는지.
-const MUST_DANGER = ["plugin.install", "plugin.remove", "view.close", "sheet.close", "panel.close", "secret.remove"];
+const MUST_DANGER = ["plugin.install", "plugin.remove", "view.close", "space.close", "panel.close", "secret.remove"];
 for (const n of MUST_DANGER) {
   const s = sections.find((x) => x.name === n);
   if (!s) { warns.push(`명령 절 없음: ${n}`); continue; }
@@ -38,7 +38,7 @@ for (const s of sections) {
 }
 
 // ④ 신설 명령 노출 확인.
-for (const n of ["layout.apply", "window.maximize", "daemon.add", "daemon.list", "daemon.autostart", "sheet.create", "project.open"]) {
+for (const n of ["layout.apply", "window.maximize", "daemon.add", "daemon.list", "daemon.autostart", "space.create", "project.open"]) {
   if (!sections.some((x) => x.name === n)) failures.push(`레퍼런스에 없음: ${n}`);
 }
 
