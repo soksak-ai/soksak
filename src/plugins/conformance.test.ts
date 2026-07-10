@@ -116,38 +116,44 @@ describe("nodeConformance — 선언(contributes.nodes) ≡ 배선(data-node)", 
 });
 
 // transparencyViolations — 결합 법칙 C2(투명성 3종) 중 매니페스트 정적 규칙 2종의 순수 판정.
-//   ① command-surface: 기능 보유(views>0 ∨ programs>0) ∧ commands=0 → 위반
+//   ① command-surface: 기능 보유(views>0 ∨ programs>0 ∨ fileViewers>0) ∧ commands=0 → 위반
 //   ③ view-nodes: views>0 ∧ nodes=0 → 위반(ui.tree 부재 = 클릭 E2E 불가)
 describe("transparencyViolations — 투명성 규칙(매니페스트 정적)", () => {
   it("views>0 ∧ commands=0 → command-surface 위반", () => {
-    const v = transparencyViolations({ views: 1, programs: 0, commands: 0, nodes: 1 });
+    const v = transparencyViolations({ views: 1, programs: 0, fileViewers: 0, commands: 0, nodes: 1 });
     expect(v.map((x) => x.rule)).toEqual(["command-surface"]);
   });
 
   it("programs>0 ∧ commands=0 → command-surface 위반(뷰 없는 프로그램 플러그인도 기능 보유)", () => {
-    const v = transparencyViolations({ views: 0, programs: 1, commands: 0, nodes: 0 });
+    const v = transparencyViolations({ views: 0, programs: 1, fileViewers: 0, commands: 0, nodes: 0 });
+    expect(v.map((x) => x.rule)).toEqual(["command-surface"]);
+  });
+
+  it("fileViewers>0 ∧ commands=0 → command-surface 위반(파일 뷰어 플러그인도 기능 보유)", () => {
+    // media-viewer 류: fileViewers 만 기여하고 command 0 → 클릭/상태 조회 E2E 불가.
+    const v = transparencyViolations({ views: 0, programs: 0, fileViewers: 4, commands: 0, nodes: 0 });
     expect(v.map((x) => x.rule)).toEqual(["command-surface"]);
   });
 
   it("views>0 ∧ nodes=0 → view-nodes 위반", () => {
-    const v = transparencyViolations({ views: 1, programs: 0, commands: 2, nodes: 0 });
+    const v = transparencyViolations({ views: 1, programs: 0, fileViewers: 0, commands: 2, nodes: 0 });
     expect(v.map((x) => x.rule)).toEqual(["view-nodes"]);
   });
 
   it("두 규칙 동시 위반이면 둘 다 보고(은폐 0)", () => {
-    const v = transparencyViolations({ views: 1, programs: 0, commands: 0, nodes: 0 });
+    const v = transparencyViolations({ views: 1, programs: 0, fileViewers: 0, commands: 0, nodes: 0 });
     expect(v.map((x) => x.rule)).toEqual(["command-surface", "view-nodes"]);
   });
 
-  it("기능 없음(views=0 ∧ programs=0) → commands=0 이어도 위반 아님(아이콘셋·테마류)", () => {
+  it("기능 없음(views=0 ∧ programs=0 ∧ fileViewers=0) → commands=0 이어도 위반 아님(아이콘셋·테마류)", () => {
     expect(
-      transparencyViolations({ views: 0, programs: 0, commands: 0, nodes: 0 }),
+      transparencyViolations({ views: 0, programs: 0, fileViewers: 0, commands: 0, nodes: 0 }),
     ).toEqual([]);
   });
 
   it("세 표면을 갖추면 위반 없음", () => {
     expect(
-      transparencyViolations({ views: 1, programs: 1, commands: 3, nodes: 2 }),
+      transparencyViolations({ views: 1, programs: 1, fileViewers: 1, commands: 3, nodes: 2 }),
     ).toEqual([]);
   });
 });

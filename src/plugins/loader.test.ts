@@ -125,6 +125,25 @@ describe("activatePlugin — 투명성 규칙 경고(매니페스트 정적)", (
     warn.mockRestore();
   });
 
+  it("fileViewers>0 ∧ commands=0 → C2 command-surface 경고(파일 뷰어만 기여해도 기능 보유)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await activatePlugin(
+      { activate: () => {} },
+      manifestOf({
+        permissions: ["ui"],
+        contributes: {
+          fileViewers: [{ id: "image", extensions: ["png", "jpg"] }],
+        },
+      }),
+      "/d",
+      fakeDeps(),
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining("C2 command-surface"),
+    );
+    warn.mockRestore();
+  });
+
   it("views>0 ∧ nodes=0 → C2 view-nodes 경고", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await activatePlugin(

@@ -121,6 +121,7 @@ export function enforceTransparency(
   const violations = transparencyViolations({
     views: c.views.length,
     programs: c.programs.length,
+    fileViewers: c.fileViewers.length,
     commands: c.commands.length,
     nodes: c.nodes.length,
   });
