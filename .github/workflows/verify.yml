@@ -1,0 +1,71 @@
+# Remote mirror of the local gate. The Makefile is the single source of truth:
+# this workflow only calls make targets and never re-implements a check in YAML.
+# Runner is macos-14 — the platform the local gate runs on today.
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: soksak
+
+jobs:
+  verify:
+    runs-on: macos-14
+    timeout-minutes: 90
+    steps:
+      - name: Check out the app repository
+        uses: actions/checkout@v4
+        with:
+          path: soksak
+
+      # src-tauri/Cargo.toml declares a sibling crate by relative path
+      # (tauri-plugin-webview-capture, two levels up from src-tauri).
+      # Reproduce the same sibling layout the local checkout uses.
+      # The crate repository is private: CI_REPO_TOKEN must be a fine-grained
+      # token with read access to soksak-ai/tauri-plugin-webview-capture.
+      - name: Check out the sibling path dependency
+        uses: actions/checkout@v4
+        with:
+          repository: soksak-ai/tauri-plugin-webview-capture
+          token: ${{ secrets.CI_REPO_TOKEN }}
+          path: tauri-plugin-webview-capture
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # package.json carries no packageManager pin; track the major version
+          # used locally (pnpm 10).
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: soksak/.nvmrc
+          cache: pnpm
+          cache-dependency-path: soksak/pnpm-lock.yaml
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: soksak/src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run the local gate
+        run: make verify
+
+      # Packaging smoke: the debug bundle must build and the CLI it ships must run.
+      - name: Build the debug bundle
+        run: make build-debug
+
+      - name: Run the built CLI
+        run: ./src-tauri/target/debug/sok-debug --help
