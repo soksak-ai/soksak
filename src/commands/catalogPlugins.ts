@@ -28,6 +28,15 @@ import {
   versionIssues,
   type DepNode,
 } from "../plugins/dependencyGraph";
+import {
+  allContracts,
+  implementersOf,
+  manifestImplements,
+  rawImplements,
+  type ImplementsNode,
+} from "../plugins/contractDiscovery";
+import { CONTRACT_ID_RE } from "../plugins/spec";
+import { implementsViolations } from "../plugins/conformance";
 import { register, catalogJson, setUnknownCommandResolver, type CommandHint } from "./registry";
 import { collectExposed } from "./catalogDom";
 import { pluginCommandName } from "../plugins/spec";
@@ -42,6 +51,15 @@ function depNodes(): DepNode[] {
     id: p.manifest.id,
     version: p.manifest.version,
     dependencies: p.manifest.dependencies ?? {},
+  }));
+}
+
+// 설치/dev 런타임 → 계약 발견 노드(매니페스트 implements 기준). L2 계약-핀(C3)의 런타임 등록면 —
+// 발견 조회는 이 노드에 대고만 한다(구현체 무차별).
+function implementsNodes(): ImplementsNode[] {
+  return Object.values(usePlugins.getState().plugins).map((p) => ({
+    id: p.manifest.id,
+    implements: manifestImplements(p.manifest),
   }));
 }
 
@@ -415,6 +433,58 @@ export function registerPluginCatalog(): void {
         return { ok: true as const, summary };
       }
       return { ok: true as const, issues: versionIssues(nodes) };
+    },
+  });
+
+  register("plugin.implementers", {
+    description:
+      'Find plugins by the contract they implement (manifest implements, coupling law C3 L2 contract-pin). With contract, returns every installed plugin declaring that exact contract id "<scope>-spec@<major>" with its runtime status; without, maps every declared contract to its implementers. Discovery is contract-addressed and implementation-blind — resolve implementers here instead of hardcoding plugin ids.',
+    triggers: { ko: "플러그인 계약 구현체 발견 구현 스펙 컨트랙트" },
+    params: {
+      contract: {
+        type: "string",
+        description:
+          'Contract id "<scope>-spec@<major>" (exact major — @2 does not answer for @1). Omit to list every declared contract with its implementers.',
+      },
+    },
+    returns:
+      "{ contract, implementers: [{id, version, status}] } (contract given) | { contracts: [{contract, implementers}] } (omitted)",
+    message: (d) =>
+      d.contract !== undefined
+        ? tmsg("msg.plugin.implementers", {
+            n: ((d.implementers as unknown[]) ?? []).length,
+            contract: String(d.contract),
+          })
+        : tmsg("msg.plugin.implementers.all", {
+            n: ((d.contracts as unknown[]) ?? []).length,
+          }),
+    errors: ["INVALID_PARAMS"],
+    examples: [
+      "sok plugin.implementers",
+      'sok plugin.implementers \'{"contract":"<scope>-spec@1"}\'',
+    ],
+    handler: (p) => {
+      const nodes = implementsNodes();
+      const contract = p.contract as string | undefined;
+      // 제어판(main)은 플러그인을 싣지 않는다 — 빈 결과의 이유를 응답이 스스로 설명한다.
+      const note =
+        currentWindowLabel() === "main"
+          ? { note: "control-plane window loads no plugins — query a project window (w-*) or pass --window" }
+          : {};
+      if (contract === undefined) return { ...note, contracts: allContracts(nodes) };
+      if (!CONTRACT_ID_RE.test(contract)) {
+        return invalid(`계약 id 문법 위반(<scope>-spec@<major>): ${contract}`);
+      }
+      const installed = usePlugins.getState().plugins;
+      return {
+        ...note,
+        contract,
+        implementers: implementersOf(contract, nodes).map((id) => ({
+          id,
+          version: installed[id].manifest.version,
+          status: installed[id].status,
+        })),
+      };
     },
   });
 
@@ -942,7 +1012,7 @@ export function registerPluginCatalog(): void {
       "Report a plugin's declared-vs-actual conformance: manifest declarations vs what is actually registered/exposed at runtime, across every register-gated contribution (commands/views/fileViewers/iconSets) plus DOM nodes. Read-only diagnosis. The publish-time schema gate is soksak-validate (headless, @soksak-ai/plugin-spec); this is the in-app runtime surface.",
     triggers: { ko: "플러그인 정합성 선언 실제 conformance" },
     params: { id: { type: "string", required: true, description: "플러그인 id" } },
-    returns: "{ id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan } }",
+    returns: "{ id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan }, implements: { declared, violations } }",
     message: (d) => tmsg("msg.plugin.conformance", { id: String(d.id) }),
     examples: ["sok plugin.conformance soksak-plugin-<id>"],
     handler: (p) => {
@@ -1002,6 +1072,12 @@ export function registerPluginCatalog(): void {
           declared: declaredNodes,
           wired,
           ...nodeConformance(declaredNodes, wired),
+        },
+        // implements(C3 L2): 계약 요구 표면의 검증은 계약 소유자 몫 — 코어는 선언의 성립
+        // (형태·문법·중복)만 generic 하게 보고한다. 구현체 조회는 plugin.implementers.
+        implements: {
+          declared: manifestImplements(plug.manifest),
+          violations: implementsViolations(rawImplements(plug.manifest)),
         },
       };
     },
