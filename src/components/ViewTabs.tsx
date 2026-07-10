@@ -140,7 +140,7 @@ export const ViewTabs = memo(function ViewTabs({
                 ))
               )}
             </span>
-            <span className="view-tab-title">{v.title}</span>
+            <span className="view-tab-title">{v.customLabel ?? v.title}</span>
             {v.kind === "file" && v.status?.code === "dirty" && (
               <span className="view-tab-dirty" title={t("viewer.unsaved")}>
                 <Icon name="dirty" size="xs" />

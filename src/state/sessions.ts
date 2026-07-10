@@ -76,11 +76,15 @@ export interface ViewStatus {
 
 // 콘텐츠 뷰: 파일(뷰어 플러그인), 플러그인(콘텐츠 배치 — 터미널·브라우저·에디터 전부 여기).
 // 코어는 터미널 뷰를 소유하지 않는다(터미널도 플러그인 뷰).
+// title 은 콘텐츠 사실(파일명·페이지 <title> — setViewTitle 로 계속 갱신), customLabel 은
+// 사용자 의도(view.rename). 표시는 customLabel 우선 — 사이드바 viewLabels 와 동일 규칙
+// (기본=사실, 오버라이드=사용자 의도만 담는다). 빈 오버라이드는 저장하지 않는다.
 export type View =
   | {
       id: string;
       kind: "file";
       title: string;
+      customLabel?: string;
       path: string; // 절대 경로
       mode: "code" | "preview";
       // 미저장은 status.code "dirty" 로 표현(R5) — 별도 dirty 플래그 없음(이중진실 금지).
@@ -92,6 +96,7 @@ export type View =
       id: string;
       kind: "plugin";
       title: string;
+      customLabel?: string;
       pluginId: string;
       view: string; // 플러그인 내 뷰 id
       // 이 뷰가 마운트 시 받을 자동 실행 명령(에이전트 프로그램 — 터미널 뷰가 PTY 로 1회 실행).
@@ -293,6 +298,8 @@ interface SessionsStore {
   ) => CmdResult;
   // 임의 뷰의 탭 제목 갱신(콘텐츠 플러그인이 동적 제목 — 예: 페이지 <title>). 빈 값은 무시.
   setViewTitle: (projectId: string, viewId: string, title: string) => void;
+  // 사용자 지정 탭 라벨 설정(view.rename). 빈 값 = 오버라이드 해제(동적 title 복귀).
+  renameView: (projectId: string, viewId: string, label: string) => CmdResult<{ label: string }>;
   // 뷰 런타임 관찰값(B3) — cwd(OSC 관찰)·lastActivity(이벤트 근거). undefined = 유지.
   // projectId null 허용: 이벤트가 프로젝트를 모르면 전 탭에서 뷰를 찾는다(pane→view 매핑 안정).
   setViewRuntime: (
@@ -1452,6 +1459,24 @@ export const useSessions = create<SessionsStore>((set, get) => ({
         mapViewEverywhere(x, viewId, (v) => ({ ...v, title: trimmed })),
       ),
     }));
+  },
+
+  renameView: (projectId, viewId, label) => {
+    const trimmed = label.trim();
+    let r: CmdResult<{ label: string }> = err("TARGET_NOT_FOUND", `뷰 없음: ${viewId}`);
+    set((s) => ({
+      tabs: mapProject(s.tabs, projectId, (x) =>
+        mapViewEverywhere(x, viewId, (v) => {
+          r = ok({ label: trimmed });
+          if (!trimmed) {
+            const { customLabel: _drop, ...rest } = v;
+            return rest as View;
+          }
+          return { ...v, customLabel: trimmed };
+        }),
+      ),
+    }));
+    return r;
   },
 
   moveViewToGroup: (projectId, viewId, targetGroupId, zone) => {

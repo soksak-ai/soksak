@@ -261,6 +261,7 @@ function serializeView(v: View) {
       id: v.id,
       kind: v.kind,
       title: v.title,
+      customLabel: v.customLabel,
       path: v.path,
       mode: v.mode,
       dirty: v.status?.code === "dirty",
@@ -270,6 +271,7 @@ function serializeView(v: View) {
     id: v.id,
     kind: v.kind,
     title: v.title,
+    customLabel: v.customLabel,
     plugin: v.pluginId,
     view: v.view,
   };
@@ -1442,6 +1444,29 @@ export function registerCatalog(): void {
       const loc = locateView(p.view as string);
       if (!loc) return notFound(`뷰 없음: ${p.view}`);
       return S().setActiveView(loc.project.id, p.view as string);
+    },
+  });
+
+  register("view.rename", {
+    description:
+      "Set a custom label for a view tab (grid tab). Overrides the dynamic content title (e.g. a browser page <title> keeps updating underneath; the override wins on display). Empty title clears the override and the dynamic title returns. Sidebar views use view.label.set instead.",
+    triggers: { ko: "탭 이름변경 탭명 변경 뷰 이름 바꾸기 라벨" },
+    params: {
+      view: { ...P.view, required: true },
+      title: { type: "string", description: "Custom label; empty to clear the override", required: true },
+    },
+    returns: "{ label }",
+    message: (d) =>
+      d.label ? tmsg("msg.view.rename.set", { label: String(d.label) }) : tmsg("msg.view.rename.cleared"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: [
+      'sok view.rename \'{"view":"v3","title":"작업 브라우저"}\'',
+      'sok view.rename \'{"view":"v3","title":""}\'',
+    ],
+    handler: (p) => {
+      const loc = locateView(p.view as string);
+      if (!loc) return notFound(`뷰 없음: ${p.view}`);
+      return S().renameView(loc.project.id, p.view as string, p.title as string);
     },
   });
 
