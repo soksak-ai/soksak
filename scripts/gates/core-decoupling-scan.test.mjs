@@ -69,6 +69,15 @@ describe("scanFile — 위반 판정", () => {
     expect(scanFile("src/state/registry.ts", '"soksak-plugin-memo"')).toHaveLength(1);
   });
 
+  it("레지스트리 URL 줄에 놓인 다른 id 는 사면되지 않는다", () => {
+    // 같은 줄에 URL 과 다른 플러그인 id 가 함께 있어도, allowlist 는 registry 토큰만 통과시킨다.
+    const line =
+      '"https://raw.githubusercontent.com/soksak-ai/soksak-plugin-registry/main/registry.json" /* soksak-plugin-memo */';
+    const v = scanFile("src/state/registry.ts", line);
+    expect(v).toHaveLength(1);
+    expect(v[0].token).toBe("soksak-plugin-memo");
+  });
+
   it("테스트 파일은 픽스처 영역이라 스캔하지 않는다", () => {
     expect(scanFile("src/a.test.ts", '"soksak-plugin-memo"')).toEqual([]);
     expect(scanFile("src/b.test.tsx", '"soksak-plugin-memo"')).toEqual([]);
@@ -89,6 +98,41 @@ describe("stripRustTestModule — 러스트 테스트 모듈 절단", () => {
   it("들여쓴 #[cfg(test)] 아이템은 절단 지점이 아니다", () => {
     const rs = "impl A {\n    #[cfg(test)]\n    fn t(&self) {}\n}\nfn real() {}\n";
     expect(stripRustTestModule(rs)).toBe(rs);
+  });
+
+  it("파일 중간 테스트 모듈 뒤의 실행 경로 위반을 잡는다", () => {
+    // 테스트 모듈이 파일 말미가 아니라 중간에 오고, 그 뒤로 핸들러 코드가 재개되는 형태.
+    const rs = [
+      "fn a() {}",
+      "",
+      "#[cfg(test)]",
+      "mod mid_tests {",
+      '    const T: &str = "soksak-plugin-clip";', // 픽스처 참조 — 모듈 안이라 무시.
+      "}",
+      "",
+      'const OWNER: &str = "soksak-plugin-workflow";', // 모듈 뒤 실행 경로 — 위반.
+      "",
+    ].join("\n");
+    const v = scanFile("src-tauri/src/mid.rs", rs);
+    expect(v).toHaveLength(1);
+    expect(v[0].token).toBe("soksak-plugin-workflow");
+  });
+
+  it("복수 테스트 모듈 사이의 실행 경로도 스캔한다", () => {
+    const rs = [
+      "#[cfg(test)]",
+      "mod first {",
+      '    let _ = "soksak-plugin-a";',
+      "}",
+      'const BETWEEN: &str = "soksak-plugin-between";', // 두 모듈 사이 실행 경로 — 위반.
+      "#[cfg(test)]",
+      "mod second {",
+      '    let _ = "soksak-plugin-b";',
+      "}",
+    ].join("\n");
+    const v = scanFile("src-tauri/src/multi.rs", rs);
+    expect(v).toHaveLength(1);
+    expect(v[0].token).toBe("soksak-plugin-between");
   });
 });
 

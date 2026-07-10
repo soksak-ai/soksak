@@ -10,8 +10,8 @@
 //
 // 구조 제외(스코프 규칙 — allowlist 아님):
 //   - *.test.ts / *.test.tsx / *.test.mjs — 테스트 픽스처 영역, 실행 경로가 아니다.
-//   - Rust 파일 말미의 최상위 #[cfg(test)] mod — 같은 이유. 코어 관례상 테스트 모듈은
-//     파일 말미에만 둔다(현행 전 파일 실측). 말미가 아닌 위치의 테스트 모듈을 두지 마라.
+//   - Rust 최상위 #[cfg(test)] mod 블록 — 같은 이유. 위치 무관(말미·중간·복수) 각 모듈만
+//     brace 깊이로 건너뛰고, 그 앞뒤 최상위 실행 경로 코드는 계속 스캔한다.
 //   - src-tauri/target, src-tauri/gen, node_modules, .git — 산출물·외부물.
 //
 // ALLOWLIST 는 아래 목록이 전부다. 추가는 C5 절차(명시 문제 제기 → 재입법 커밋)로만 한다.
@@ -32,8 +32,10 @@ export const ALLOWLIST = [
   {
     file: "src/state/registry.ts",
     line: /soksak-ai\/soksak-plugin-registry\/main\/registry\.json/,
+    token: /^soksak-plugin-registry$/,
     reason:
-      "레지스트리 repo URL 상수 — 플러그인 카탈로그의 단일 발견 지점. 코어가 아는 유일한 외부 좌표다.",
+      "레지스트리 repo URL 상수 — 플러그인 카탈로그의 단일 발견 지점. 코어가 아는 유일한 외부 좌표다." +
+      " token 제한으로 같은 줄에 놓인 다른 플러그인 id 는 사면되지 않는다.",
   },
   {
     file: "src/plugins/registrySnapshot.json",
@@ -55,18 +57,102 @@ const SCAN_EXTS = new Set([
 ]);
 const TEST_FILE = /\.test\.(ts|tsx|mjs)$/;
 
-// Rust 말미 테스트 모듈 절단 — 최상위(#열0) #[cfg(test)] 직후 mod 가 오면 그 이후는 픽스처 영역.
+// Rust 테스트 모듈 제거 — 최상위(#열0) #[cfg(test)] 직후 mod 블록만 brace 깊이로 건너뛴다.
+// 파일 어디에 있든(말미·중간·복수) 각 모듈만 도려내고, 그 앞뒤 최상위 실행 경로 코드는 남긴다.
+// 모듈 줄은 빈 줄로 대체한다(삭제 아님) — 뒤따르는 실행 경로 코드의 줄 번호를 보존해
+// 위반 보고 위치가 원본 파일과 일치하게 한다.
 export function stripRustTestModule(content) {
   const lines = content.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    if (!/^#\[cfg\(test\)\]\s*$/.test(lines[i])) continue;
-    let j = i + 1;
-    while (j < lines.length && lines[j].trim() === "") j++;
-    if (j < lines.length && /^(pub\s+)?mod\b/.test(lines[j])) {
-      return lines.slice(0, i).join("\n");
+  const out = lines.slice();
+  let i = 0;
+  while (i < lines.length) {
+    if (/^#\[cfg\(test\)\]\s*$/.test(lines[i])) {
+      let j = i + 1;
+      while (j < lines.length && lines[j].trim() === "") j++;
+      if (j < lines.length && /^(pub\s+)?mod\b/.test(lines[j])) {
+        const end = skipBraceBlock(lines, j); // 블록 다음 줄 인덱스.
+        for (let k = i; k < end; k++) out[k] = ""; // #[cfg(test)]·mod 블록을 빈 줄로 폐기.
+        i = end;
+        continue;
+      }
     }
+    i++;
   }
-  return content;
+  return out.join("\n");
+}
+
+// mod 선언 줄(modLine)부터 brace 가 균형을 되찾는 줄 다음 인덱스를 돌려준다.
+// 문자열("...", raw r#"..."#)·문자 리터럴·라인/블록 주석 안의 중괄호는 세지 않는다.
+function skipBraceBlock(lines, modLine) {
+  let depth = 0;
+  let opened = false;
+  let inBlockComment = false;
+  let inString = false; // 일반 "..."
+  let rawHashes = -1; // raw 문자열 r#"..."# 이면 여는 # 개수, 아니면 -1.
+  for (let k = modLine; k < lines.length; k++) {
+    const line = lines[k];
+    for (let c = 0; c < line.length; c++) {
+      const ch = line[c];
+      if (inBlockComment) {
+        if (ch === "*" && line[c + 1] === "/") {
+          inBlockComment = false;
+          c++;
+        }
+        continue;
+      }
+      if (rawHashes >= 0) {
+        if (ch === '"') {
+          let h = 0;
+          while (line[c + 1 + h] === "#") h++;
+          if (h >= rawHashes) {
+            c += rawHashes;
+            rawHashes = -1;
+          }
+        }
+        continue;
+      }
+      if (inString) {
+        if (ch === "\\") c++;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === "/" && line[c + 1] === "/") break; // 라인 주석 — 줄 끝까지.
+      if (ch === "/" && line[c + 1] === "*") {
+        inBlockComment = true;
+        c++;
+        continue;
+      }
+      if (ch === "r" && !/[A-Za-z0-9_]/.test(line[c - 1] ?? "")) {
+        let h = 0;
+        while (line[c + 1 + h] === "#") h++;
+        if (line[c + 1 + h] === '"') {
+          rawHashes = h;
+          c += h + 1;
+          continue;
+        }
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+      if (ch === "'") {
+        // 문자 리터럴('\?.')만 건너뛴다 — 라이프타임('a)은 그냥 진행.
+        const m = /^'(\\.|[^'\\])'/.exec(line.slice(c));
+        if (m) {
+          c += m[0].length - 1;
+          continue;
+        }
+      }
+      if (ch === "{") {
+        depth++;
+        opened = true;
+      } else if (ch === "}") {
+        depth--;
+      }
+    }
+    if (opened && depth <= 0) return k + 1;
+  }
+  return lines.length;
 }
 
 function allowMatch(entry, relPath, token, lineText) {
