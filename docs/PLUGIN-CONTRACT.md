@@ -93,6 +93,20 @@ every contribution kind — commands, views, fileViewers, iconSets, nodes, libra
   resolve implementers by contract id (`sok plugin.implementers`) — discovery is contract-addressed
   and implementation-blind. Do not pin a plugin id for a new coupling (that is L1, banned).
 
+### One judge, many callers
+
+The transparency judgment (C2 — command/status/DOM) is defined **once**, in
+`@soksak-ai/plugin-spec` (`transparency.ts`): a pure function over the manifest plus optional
+runtime evidence. Absent evidence means *not judged* — never zero. Every boundary consumes that
+one function: `npx soksak-validate` at authoring, the registry doctor at publish, the
+`c2-transparency-scan` gate over an installed base, the activation boundary in the app, and
+`sok plugin.conformance` at runtime. **Never write judgment logic anywhere else.** A second
+implementation of any conformance rule — a scan that re-derives violations, a mirror kept equal
+by a pin test — is itself a violation of this contract. If a new boundary needs the verdict, it
+imports the function. Enforcement *modes* (warn/blocking) are legislation, kept beside their
+enforcement point and changed only by an explicit re-legislation commit (C5); the judgment never
+depends on the mode.
+
 ### Two enforcement surfaces — do not conflate them
 
 | Surface | What | Where | Needs app |
