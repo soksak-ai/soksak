@@ -1,32 +1,59 @@
-# 플러그인 서비스 (Plugin Service)
+# 플러그인 서비스 — 서비스 축 serve 표준 (Plugin Service)
 
-**플러그인 서비스** — 제3의 실행 형태 — 를 규정하는 규범법이다: 매니페스트로 선언되고,
-플러그인의 커맨드 구현을 소유하는 상주 프로세스. 코어가 스폰하고, 와이어를 프레이밍하고,
-커맨드를 네이티브로 라우팅한다. 플러그인은 커맨드 코드가 아니라 계약(매니페스트 데이터)을
-배포한다: 모든 커맨드가 서비스에 바인딩된 플러그인은 **entry 모듈을 갖지 않는다**.
+**서비스(stdio) 축**을 규정하는 규범법이다: soksak가 작성한 상주 프로세스가 stdio 위에서
+어떻게 통신하는가. 축 전체에 와이어는 하나 — `soksak-service-spec@1`, stdio 위 NDJSON —
+이고 serve 하니스도 하나이며 그런 사이드카는 전부 이를 빌려쓴다. 이 법을 낳은 전수 조사가
+밝힌 것: 같은 NDJSON dance(스폰 → 줄 버퍼 → 파싱 → 디스패치 → 쓰기 → close-stdin-EOF →
+파이프죽음종료)가 4개+ 플러그인(workflow ×4, mascot, sherpa)에 제각각, 프레임 모양만
+쓸데없이 다르게 손으로 짜여 있었다. 이 표준이 그 중복을 끝낸다 — 와이어와 루프를 한 번
+입법하고 공유한다.
 
-이 문서는 행동법이자 결합법이다. 와이어 상수와 serde 타입의 단일 원천은
-`soksak-service-proto` 크레이트(`src-tauri/crates/soksak-service-proto`)다 — 소비자는
-크레이트에 의존하며 상수를 절대 복사하지 않는다(`soksak-pty-proto` 규율). 매니페스트
-스키마의 단일 심판은 `@soksak-ai/plugin-spec`의 `parseManifest`다.
+와이어는 플러그인이 하듯 커맨드를 나른다 — `bind:"service"` 커맨드는 레지스트리
+커맨드(P1·§0-1: 플러그인 전용 호출 경로 없음)이고, 응답은 집 표준 봉투 `{ok,code,message,
+data}`(MESSAGE-PROTOCOL)다. 전송은 소켓 프로토콜이 아니라 집중된 stdio 와이어다: 소켓에서
+떼어 두면 서비스는 절대 소켓-addressable 되지 않는다(인증 표면 0). 서비스의 아웃바운드
+크로스-플러그인 호출은 같은 stdio 파이프의 `cmd` 프레임을 탄다(신원이 파이프에 내재) —
+절대 소켓 역호출이 아니다.
+
+와이어 상수·serde 타입과 참조 serve 하니스의 단일 원천은 `soksak-service-proto`
+크레이트(`src-tauri/crates/soksak-service-proto`)다 — 소비자는 크레이트에 의존하며 상수를
+절대 복사하지 않는다(`soksak-pty-proto` 규율). 매니페스트 스키마의 단일 심판은
+`@soksak-ai/plugin-spec`의 `parseManifest`다.
 
 인용하는 법은 참조하며 절대 재서술하지 않는다: 결합법 C1–C5(ARCHITECTURE §7), 사이드카
 택소노미(SIDECARS §1)와 사이드카 표준(PLUGIN-CONTRACT §5), 응답 봉투와 사이드카 경계
 A14(MESSAGE-PROTOCOL), 계약 id(NAMING §8), 기질 규칙 P1–P13(AI-CONTROL).
 
-## 1. 형태
+## 1. 축과 구동 모드
 
-| | 사이드카 `service` (SIDECARS §1) | 사이드카 `engine` (SIDECARS §1) | **플러그인 서비스 (이 법)** |
-|---|---|---|---|
-| 프로세스 | 분리, 플러그인 JS가 스폰 | in-process dylib | 분리, **코어가 스폰** |
-| 매니페스트 | 없음 | `sidecars[]` | `sidecars[]` + `service` 블록 |
-| 코어 인지 | 없음 | 모듈 로더만 | **bind·프레이밍·라우팅** |
-| 커맨드 표면 | 없음 | 없음 | **플러그인의 `bind:"service"` 커맨드를 소유** |
-| 와이어 | 사적 stdio | ABI 심볼 | `soksak-service-spec@1` NDJSON stdio |
+**두 축**(SIDECARS §1, 불변): **엔진** 축은 C ABI를 가진 in-process dylib(바이트 스트림이
+아니라 함수 호출 — browser-chromium)이고, **서비스** 축은 stdio 위 별도 프로세스다. 이 법은
+서비스 축만 다스린다. 엔진 축은 무접촉.
 
-기존 두 사이드카 모델은 불변이다. 플러그인 서비스는 별개의 제3 형태다; 절대 "서비스
-사이드카"라 부르지 않는다 — 택소노미 명칭 분리는 의도된 법이다(SIDECARS의 `service`
-모델은 매니페스트-없음·코어-무인지로 남는다).
+**서비스 축 안에서, 하나의 와이어에 두 구동 모드** — 차이는 오직 누가 stdio 연결을 쥐느냐다:
+
+| | plugin-driven (core-blind) | core-routed (이 법의 주 형태) |
+|---|---|---|
+| 누가 스폰/stdio 보유 | 플러그인 JS(`app.process`) | 코어(ServiceManager) |
+| 매니페스트 | `sidecars[]` | `sidecars[]` + `service` 블록 |
+| 커맨드 표면 | 플러그인 자기 레지스트리 커맨드가 호출 | 코어가 `bind:"service"` 커맨드를 네이티브 라우팅 |
+| entry | 플러그인이 entry 모듈 보유 | `entry: null` 합법(순수 계약) |
+| 예 | speech(mascot/sherpa) | workflow |
+| 와이어 | `soksak-service-spec@1` NDJSON stdio(공유 하니스) | 동일 |
+
+두 모드는 동일 와이어를 말하고 사이드카 쪽에서 동일 serve 하니스를 쓴다; plugin-driven은
+공유 JS 클라이언트를, core-routed는 ServiceManager를 쓴다. 이제 어떤 것도 플러그인별 사설
+와이어를 강제하지 않는다.
+
+**authored vs external 경계(표준의 범위).** 공유 serve 와이어는 **soksak가 작성한 상주
+서비스 사이드카**(우리가 바이너리를 씀 — workflow, speech)에 **의무**다. **외부 도구
+어댑터**에는 적용하지 않는다: 자기 프로토콜을 말하는 제3자 바이너리를 스폰하는
+플러그인(acp가 claude/codex의 ACP JSON-RPC를 브리지; playbox가 yt-dlp/ffmpeg를 exec-one)은
+사설 계약을 유지한다 — 스폰되는 바이너리의 프로토콜을 우리가 소유하지 않기 때문이다. 이건
+정당한 별개 범주이지, 닫아야 할 예외가 아니다.
+
+엔진 축과 plugin-driven 서비스 모델은 그 외에는 SIDECARS §1의 정의 그대로다; 이 문서는 두
+구동 모드가 공유하는 서비스 축 와이어·수명 법이다.
 
 ## 2. 규칙 (PS1–PS16)
 
@@ -152,6 +179,31 @@ ServiceManager 하나뿐이다; 프록시는 상태를 갖지 않는다.
 기준은 오직 C5 절차 — 명시적 문제 제기, 그 뒤 재입법 커밋 — 로만 변경된다. 재입법
 이력은 이 문서에 기록한다.
 
+**PS17 — serve 루프는 공유 하니스이지, 손으로 짜지 않는다.** 모든 서비스가 필요로 하는
+프레이밍 — 줄 버퍼 NDJSON 읽기, 한 줄에 JSON 하나 쓰기+flush, hello 발행, id-멀티플렉스
+req/res, 스트리밍 `ev`, close-stdin을 EOF로, 파이프죽음 시 종료, PS16의 상태변이 뮤텍스 —
+은 `soksak-service-proto`에 `serve(handlers)`로 한 번 산다. 사이드카 저자는 op 핸들러만
+쓰고 그 외엔 아무것도 안 쓴다; 루프는 빌려쓰지 절대 재구현하지 않는다. 코어
+쪽(ServiceManager 프레이밍/라우팅)과 사이드카 쪽(`serve`)이 같은 크레이트에 의존한다 —
+와이어는 원천이 하나이고 양끝에서 읽는다. 미래의 비-Rust 사이드카는 크레이트 스펙에 맞춰
+와이어를 직접 구현한다; Rust `serve`는 참조이고, 와이어가 표준이다.
+
+**PS18 — 하나의 와이어, 두 구동 모드.** 같은 와이어·같은 `serve` 하니스가 **core-routed**
+모드(코어가 stdio를 쥐고 `bind:"service"` 커맨드를 라우팅 — PS9/PS11)와 **plugin-driven**
+모드(플러그인 JS가 `app.process`로 stdio를 쥐고 공유 JS 클라이언트로 와이어를 구동)를 함께
+섬긴다. plugin-driven 모드는 SIDECARS `service` 모델이되, 플러그인별 사설 계약 대신 표준
+와이어 위에 있다. soksak가 작성한 상주 서비스 사이드카(speech, workflow)는 어느 모드로 돌든
+이 와이어를 **의무**로 말해야 한다; 사설 프레임 모양을 발명할 수 없다. 레거시 보완은 이
+구조의 일부다(R1): speech 사이드카와 그 플러그인 클라이언트가 공유 하니스로 이관한다 — 그
+이관이 이 와이어가 workflow 패치가 아니라 표준임을 증명한다.
+
+**PS19 — 외부 도구 어댑터는 예외가 아니라 원칙으로 범위 밖이다.** 자기 프로토콜을 말하는
+**제3자** 바이너리를 스폰하는 플러그인(acp → claude/codex의 ACP JSON-RPC; playbox →
+yt-dlp/ffmpeg one-shot)은 사설 계약을 유지한다 — 스폰되는 바이너리의 와이어를 우리가
+소유하지 않고 우리 것을 말하게 강제할 수 없기 때문이다. 이건 닫아야 할 예외가 아니라 별개
+범주다. authored-vs-external 선이 PS17/PS18의 범위 경계다: 공유 와이어는 soksak가 상주
+바이너리를 작성하는 곳에만 의무다.
+
 ## 3. 매니페스트 선언
 
 ```jsonc
@@ -196,6 +248,8 @@ ServiceManager 하나뿐이다; 프록시는 상태를 갖지 않는다.
 | PS5, PS12 | proto 크레이트 유닛 + ServiceManager 픽스처-서비스 테스트 | `cargo test` |
 | PS7 | 레지스트리 seam 테스트(서비스 한정 수용) | `pnpm test` |
 | PS9–PS15 | ServiceManager + route + schedule + 브리지 테스트, PS 번호 인용 | `cargo test` / `pnpm test` |
+| PS17 | `serve()` 하니스 픽스처-사이드카 테스트(루프·hello·멀티플렉스·EOF) | `cargo test` |
+| PS18 | 공유 JS 클라이언트 테스트 + speech 사이드카의 공유 하니스 이관 | `pnpm test` / `cargo test` |
 | PS2 (완결) | `sok plugin.*` 실경로 시나리오 게이트 | e2e |
 
 이 법을 강제하는 모든 RED 테스트는 조항 번호를 인용한다. `make verify`의 CI 원장 행은
@@ -206,9 +260,17 @@ ServiceManager 하나뿐이다; 프록시는 상태를 갖지 않는다.
 - 2026-07-11 — v1.0.0 입법 (PS1–PS16).
 - 2026-07-11 — PS4: 금지 목록에 `iconSets` 추가(구현 검증에서 런타임 provider 바인딩
   필요가 확인됨 — `registerIconSet`; 열거가 이를 누락했었다).
+- 2026-07-11 — v2.0.0: "제3 형태"에서 **서비스 축 serve 표준**으로 재저작. 문제(C5): 전수
+  조사(docs + chromium/sherpa 엔진 + 플러그인 out-of-process)가 같은 stdio-NDJSON serve
+  루프를 4개+ 플러그인에 프레임 모양만 쓸데없이 다르게 손짜기로 발견 — workflow 하나로
+  정한 것이 잘못된 범위였다. PS17(공유 `serve` 하니스)·PS18(하나의 와이어, 두 구동 모드 —
+  core-routed와 plugin-driven, 후자는 SIDECARS `service` 모델을 표준 와이어로 이관)·
+  PS19(authored-vs-external 어댑터 경계) 추가. 이는 SIDECARS §1의 `service` 모델
+  "private contract"를 soksak-작성 사이드카에 한해 개정한다(동반 커밋); 엔진 축은 무접촉,
+  A14의 "세 와이어 통일"은 범위 밖 유지 — 이건 stdio 축 내부만 정리한다.
 
 ---
 
-Version: 1.0.0
+Version: 2.0.0
 Status: AUTHORITATIVE
-단일 진실: `soksak-service-proto`(와이어), `@soksak-ai/plugin-spec`(매니페스트)
+단일 진실: `soksak-service-proto`(와이어·serve 하니스), `@soksak-ai/plugin-spec`(매니페스트)
