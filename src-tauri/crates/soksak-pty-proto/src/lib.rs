@@ -29,11 +29,21 @@ pub const PTYD_PROTOCOL_VERSION: u32 = 1;
 /// judged as protocol 0 (`soksak_protocol::effective_protocol`) and rejected.
 pub const PTYD_MIN_COMPATIBLE_CLIENT_PROTOCOL: u32 = 1;
 
-/// Flow-control watermarks — the same values the in-process PTY path uses
-/// (pty.rs). The daemon pauses its PTY reader while an attached client has
-/// this many unacked bytes, and resumes at the low mark.
-pub const HIGH_WATERMARK: usize = 100_000;
-pub const LOW_WATERMARK: usize = 5_000;
+/// Flow-control watermarks — the single source for both PTY backends
+/// (pty.rs in-process and soksak-ptyd). The reader pauses while an attached
+/// client has this many unacked bytes, and resumes at the low mark.
+///
+/// The high mark is the throughput ceiling: bulk output moves in
+/// pause/drain cycles, so sustained rate ≈ window / ack-loop round trip.
+/// The daemon leg lengthens that loop (front ack → app → control socket),
+/// and the previous 100k window capped t1 at ~3 MB/s against a ~4.5 MB/s
+/// in-process measurement under the same load (perf results
+/// 20260711-141852 / -142405 vs the ab-local run). 1 MB covers the longer
+/// loop; the low mark resumes at half-window so acks still in flight keep
+/// the pipe moving. Memory cost stays bounded per pane and the front still
+/// acks every 5k parsed bytes.
+pub const HIGH_WATERMARK: usize = 1_000_000;
+pub const LOW_WATERMARK: usize = 500_000;
 
 
 // ── Identity-home path contract ──────────────────────────────────────────────

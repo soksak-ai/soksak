@@ -12,11 +12,11 @@
 // 끊기고, control ping 한 번으로 "셸 정상 종료"와 "데몬 사망"을 가른 뒤 재스폰을
 // 시도하고 고지한다.
 //
-// Local 플로우 컨트롤은 editor FlowControlConstants 를 그대로 따른다:
-//   - 미확인(unacked) 바이트가 HIGH(100k) 이상이면 reader 일시정지
-//   - 프론트가 보낸 ack 로 unacked 가 LOW(5k) 이하로 떨어지면 재개
+// 플로우 컨트롤 워터마크는 soksak-pty-proto 가 단일진실이다(두 백엔드 공용):
+//   - 미확인(unacked) 바이트가 HIGH 이상이면 reader 일시정지
+//   - 프론트가 보낸 ack 로 unacked 가 LOW 이하로 떨어지면 재개
 // 프론트는 xterm.write 콜백(파싱 완료)에서 5k 바이트마다 ack 를 보낸다.
-// (데몬 백엔드는 같은 워터마크를 soksak-ptyd 가 시행한다 — soksak-pty-proto 상수.)
+// 값의 근거(윈도우=ack 루프 RTT 커버)는 proto 상수의 주석에 있다.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -26,8 +26,7 @@ use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize}
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::State;
 
-const HIGH_WATERMARK: usize = 100_000;
-const LOW_WATERMARK: usize = 5_000;
+use soksak_pty_proto::{HIGH_WATERMARK, LOW_WATERMARK};
 
 struct FlowState {
     unacked: usize,

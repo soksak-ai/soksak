@@ -161,9 +161,10 @@ else: ng(f"kind=meta 부재(수신 kinds={kinds})")
 if roots and roots <= {os.path.realpath(FIX)}: ok("payload.root = 픽스처 root 일치")
 elif roots: ng(f"payload.root 불일치: {roots}")
 
-# ── 4. 정리(멱등) ────────────────────────────────────────────────────────────
+# ── 4. 정리(멱등) — 프로브를 켠 채 남기지 않는다(상주 메모리 잔재 금지) ─────────
 try:
     rpc(f"plugin.{GITCORE}.watch.stop", {"path": FIX}, window=WIN)
+    rpc("plugin.disable", {"id": PROBE})
     rpc("window.close", {"label": WIN}); time.sleep(1)
     rpc("project.recent.remove", {"root": FIX})
 except Exception:

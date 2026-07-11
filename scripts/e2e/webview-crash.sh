@@ -259,8 +259,9 @@ if LABEL:
         ng(f"recover 후 health 불일치: {h}")
     snapshot(WIN, "recovered-surface")
 
-# ── 5. 정리(멱등) ────────────────────────────────────────────────────────────
+# ── 5. 정리(멱등) — 픽스처 플러그인을 켠 채 남기지 않는다(상주 메모리 잔재 금지) ──
 try:
+    rpc("plugin.disable", {"id": FIXTURE})
     rpc("window.close", {"label": WIN}); time.sleep(1)
     rpc("project.recent.remove", {"root": ROOT})
 except Exception:
