@@ -751,10 +751,16 @@ mod daemon {
     ) -> Result<u64, String> {
         // pane 없는 세션은 재부착 키가 없다 — 데몬에 실을 이유가 없어 로컬로 보낸다.
         let pane_id = p.pane_id.clone().ok_or("no pane id: local session")?;
+        let home = crate::home::soksak_home();
+        let window = p.window_label.clone().unwrap_or_default();
+        // cold 후보는 createOrAttach 전에 읽는다 — 파일이 남아 있다는 것 자체가 데몬
+        // 사망의 유산이고(정상 종료는 삭제한다), 새 세션의 첫 체크포인트가 같은 자리를
+        // 덮어쓰기 전의 안정 창이다.
+        let cold = read_checkpoint(&home, &window, &pane_id);
         let (checkpoint_pk, checkpoint_key_id) = checkpoint_recipient(app);
         let data = link.request(
             &proto::Request::CreateOrAttach {
-                pane_id,
+                pane_id: pane_id.clone(),
                 cols: p.cols,
                 rows: p.rows,
                 cwd: p.cwd,
@@ -768,9 +774,78 @@ mod daemon {
             true,
         )?;
         let session = data["session"].as_u64().ok_or("daemon reply missing session id")?;
+        let attached = data["attached"] == true;
 
-        let home = crate::home::soksak_home();
-        let mut stream = attach_stream(&home, session)?;
+        // cold byte restore(복원 사다리 3단, docs/RESTORE.md): 데몬이 죽어 재부착이
+        // 불가능했고(attached=false) 봉인 체크포인트가 남아 있으면, unlock 된 vault 의
+        // 개인키로 열어 화면 기록을 다시 그리고 live 자식 소실을 명시 고지한다(무음 금지).
+        // 잠금이면 파일을 남기고 blocks repaint 폴백에 맡긴다 — 평문 우회 경로는 없다.
+        let mut injected = false;
+        if !attached {
+            if let Some(ck) = cold {
+                match open_cold_checkpoint(app, &ck, &window, &pane_id) {
+                    Ok(paint) => {
+                        let lang = crate::i18n::app_language(app);
+                        let notice = format!(
+                            "\x1b[2m{}\x1b[0m\r\n",
+                            crate::i18n::cold_restore_notice(lang)
+                        );
+                        let mut bytes = paint;
+                        bytes.extend_from_slice(notice.as_bytes());
+                        let mut sent = true;
+                        for chunk in bytes.chunks(256 * 1024) {
+                            if on_output.send(InvokeResponseBody::Raw(chunk.to_vec())).is_err() {
+                                sent = false;
+                                break;
+                            }
+                        }
+                        if sent {
+                            let _ = std::fs::remove_file(&ck.path);
+                            injected = true;
+                            crate::activity::publish(
+                                app,
+                                "pty.cold.restored",
+                                "core",
+                                json!({
+                                    "window": window,
+                                    "pane": pane_id,
+                                    "altActive": ck.alt_active,
+                                }),
+                            );
+                        }
+                    }
+                    Err(reason) => {
+                        crate::activity::publish(
+                            app,
+                            "pty.cold.blocked",
+                            "core",
+                            json!({
+                                "window": window,
+                                "pane": pane_id,
+                                "reason": reason,
+                                "note": "a sealed checkpoint exists but cannot be opened; blocks repaint is the floor",
+                            }),
+                        );
+                    }
+                }
+            }
+        }
+
+        let (mut stream, replay_len) = attach_stream(&home, session)?;
+        if injected {
+            // 주입된 cold 페인트 위에 신선 세션의 절대주소(CUP) repaint 를 겹치면 화면이
+            // 어긋난다 — 신선 세션의 재생(프롬프트 한 줄 상당)은 버리고, 개행 하나로
+            // 새 프롬프트를 고지 아래에 다시 그리게 한다.
+            discard_exact(&mut stream, replay_len)?;
+            use base64::Engine as _;
+            let _ = link.request(
+                &proto::Request::Write {
+                    session,
+                    data_b64: base64::engine::general_purpose::STANDARD.encode("\n"),
+                },
+                false,
+            );
+        }
 
         // 세션 stream reader — 소켓 EOF/에러가 곧 이벤트다: 셸 종료(데몬이 닫음)거나
         // 데몬 사망. control ping 한 번으로 갈라 후자만 고지+재확보한다.
@@ -983,9 +1058,63 @@ mod daemon {
         matches!((hash(a), hash(b)), (Some(x), Some(y)) if x == y)
     }
 
+    // 디스크의 봉인 체크포인트 헤더 — cold restore 의 입력(개봉 전 메타).
+    struct ColdCheckpoint {
+        path: PathBuf,
+        key_id: String,
+        alt_active: bool,
+        sealed: soksak_seal::SealedBox,
+    }
+
+    fn read_checkpoint(home: &Path, window: &str, pane: &str) -> Option<ColdCheckpoint> {
+        let path = proto::checkpoint_path(home, window, pane);
+        let doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).ok()?).ok()?;
+        if doc["v"] != 1 {
+            return None; // 미래 판 — 이 세대는 열지 않는다(손대지 않고 남긴다)
+        }
+        Some(ColdCheckpoint {
+            path,
+            key_id: doc["keyId"].as_str()?.to_string(),
+            alt_active: doc["altActive"] == true,
+            sealed: serde_json::from_value(doc["sealed"].clone()).ok()?,
+        })
+    }
+
+    // 개봉 — unlock 된 vault 의 개인키 + 정합 AAD 만 연다. 실패 사유는 고지에 실린다.
+    fn open_cold_checkpoint(
+        app: &tauri::AppHandle,
+        ck: &ColdCheckpoint,
+        window: &str,
+        pane: &str,
+    ) -> Result<Vec<u8>, String> {
+        let secrets = tauri::Manager::state::<crate::secrets::SecretsState>(app);
+        if !secrets.is_unlocked() {
+            return Err("vault locked".into());
+        }
+        let sk = secrets
+            .get_data_key(&ck.key_id)?
+            .ok_or_else(|| format!("checkpoint key {} not in vault", ck.key_id))?;
+        let aad = proto::checkpoint_aad(window, pane, &ck.key_id);
+        crate::secrets::open_sealed(&sk, &ck.sealed, &aad)
+    }
+
+    // 정확히 n 바이트를 읽어 버린다 — cold 주입 후 신선 세션의 재생을 건너뛴다.
+    fn discard_exact(stream: &mut UnixStream, mut n: u64) -> Result<(), String> {
+        let mut buf = [0u8; 8192];
+        while n > 0 {
+            let want = (buf.len() as u64).min(n) as usize;
+            let got = stream.read(&mut buf[..want]).map_err(|e| e.to_string())?;
+            if got == 0 {
+                return Err("stream closed during replay discard".into());
+            }
+            n -= got as u64;
+        }
+        Ok(())
+    }
+
     // stream 부착: hello 1줄 교환 후 raw 전환. hello 응답 줄만 바이트 단위로 소비해
-    // 뒤따르는 재생/라이브 바이트를 잃지 않는다.
-    fn attach_stream(home: &Path, session: u64) -> Result<UnixStream, String> {
+    // 뒤따르는 재생/라이브 바이트를 잃지 않는다. 반환 = (소켓, 재생 바이트 수).
+    fn attach_stream(home: &Path, session: u64) -> Result<(UnixStream, u64), String> {
         let token = std::fs::read_to_string(proto::token_path(home))
             .map_err(|e| format!("token: {e}"))?
             .trim()
@@ -1022,6 +1151,7 @@ mod daemon {
                 v["message"].as_str().unwrap_or_default()
             ));
         }
-        Ok(conn)
+        let replay_len = v["data"]["replayBytes"].as_u64().unwrap_or(0);
+        Ok((conn, replay_len))
     }
 }

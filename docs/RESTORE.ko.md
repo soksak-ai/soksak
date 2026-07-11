@@ -9,8 +9,8 @@
 복원되는 터미널 pane 은 가능한 가장 높은 단을 탄다. 판정은 앞단만 추가한다 — repaint 경로 자체는 한 경로로 유지된다(R-PATH).
 
 1. **live adoption** — 같은 앱 프로세스가 살아있는 PTY 를 remount 한다(한 실행 안의 이동 remount). 아무것도 다시 그리지 않는다.
-2. **warm reattach** — `soksak-ptyd`(코어 workspace 의 독립 바이너리, identity 홈 `bin/` 에 스테이징)가 모든 셸을 소유하므로 셸과 그 자식은 앱 종료를 넘어 같은 pid 로 생존한다. 같은 pane id 의 재스폰은 스폰 대신 데몬 소켓에 재부착한다: detach 동안 흐른 출력이 세션별 스크롤백 링에서 라이브에 앞서 재생된다. 명시 종료는 detach 만 한다 — 데몬 세션을 죽이지 않는다. 이번 세대의 재생은 raw 링이다 — 헤드리스 미러 직렬화기, 프론트 replay-guard(재생분 속 DA1/DSR 질의 재응답 차단), alt-screen 재수화는 같은 작업의 후속 단이다.
-3. **cold byte restore** — 봉인된 바이트 체크포인트가 데몬 자체가 죽은 뒤의 스크롤백을 재현한다. 아직 없다 — 오늘 이 단은 건너뛴다.
+2. **warm reattach** — `soksak-ptyd`(코어 workspace 의 독립 바이너리, identity 홈 `bin/` 에 스테이징)가 모든 셸을 소유하므로 셸과 그 자식은 앱 종료를 넘어 같은 pid 로 생존한다. 같은 pane id 의 재스폰은 스폰 대신 데몬 소켓에 재부착한다. 재생은 세션별 헤드리스 미러(`soksak-pty-mirror`, alacritty_terminal 기반)의 직렬화 상태다: 스크롤백·보이는 화면·alt-screen 내용·private mode·커서가 그리드에서 SGR 런으로 합성된다. 미러는 절대 응답하지 않고, 재생이 합성물이므로 프론트 xterm 이 두 번 답할 DA1/DSR 질의가 실릴 수 없다 — replay guard 가 구조적으로 성립한다. 명시 종료는 detach 만 한다 — 데몬 세션을 죽이지 않는다.
+3. **cold byte restore** — 데몬이 세션의 평면화된 화면 페인트를 앱 소유 X25519 공개키(`soksak-seal` sealed box, 개인키는 vault 에만)로 봉인해 `<home>/pty/checkpoints` 에 쓴다. 출력 이벤트 디바운스(idle 300ms·상한 5s)+tmp+rename. 정상 세션 종료는 파일을 지우므로, 살아남은 체크포인트는 데몬 자신의 죽음의 증거다. 그 pane 의 다음 스폰에서 앱이 — vault 가 unlock 일 때만 — 봉인을 열어 기록을 비활성 텍스트로 다시 그리고(활성이던 alt-screen 은 텍스트 흐름으로 평면화한다: 죽은 세션의 TUI 는 라이브 화면이 아니라 잔상이다), 해소된 소실 고지("봉인 체크포인트에서 복원 — 실행 중이던 프로세스는 소실")를 찍고, 소비한 파일을 지운다. 화면 바이트 평문은 디스크에 닿지 않는다 — 잠금 중에는 파일이 봉인된 채 남고 이 단은 blocks repaint 에 양보한다.
 4. **blocks repaint** — 최근 명령 블록을 비활성 텍스트로 다시 그린다(R-PATH). vault 잠금 중의 유일한 단이자, 위 단이 전부 불가할 때의 바닥이다.
 
 데몬을 스테이징/연결하지 못하면 터미널은 in-process PTY 로 폴백한다 — 데몬 이전의 동작 그대로 — 그리고 앱이 activity 피드로 격하를 고지한다(`pty.daemon.fallback`). 데몬 사망도 같은 방식으로 고지된다(`pty.daemon.lost`). 무음 격하는 금지다.

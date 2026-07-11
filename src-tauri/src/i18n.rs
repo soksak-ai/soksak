@@ -100,6 +100,21 @@ pub fn open_failed_body(lang: Lang, quarantined: &str) -> String {
     }
 }
 
+// cold byte restore 고지 — 데몬 사망 후 봉인 체크포인트로 화면을 다시 그릴 때
+// 터미널에 찍는 문장(무음 금지). 블록 repaint 의 "[복원됨 …]" 마커와 구분되는
+// 고유 문구("봉인 체크포인트"/"sealed checkpoint")를 반드시 포함한다 — E2E 가
+// 이 문구로 cold 경로를 판별한다.
+pub fn cold_restore_notice(lang: Lang) -> &'static str {
+    match lang {
+        Lang::En => {
+            "[Restored from a sealed checkpoint — running processes could not be restored; only the screen history was repainted]"
+        }
+        Lang::Ko => {
+            "[봉인 체크포인트에서 복원 — 실행 중이던 프로세스는 종료되어 복원되지 않았고, 화면 기록만 다시 그렸습니다]"
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -159,6 +174,17 @@ mod tests {
         assert!(!backup_failed_body(Lang::En).contains('백'), "en 본문에 한글 누출 금지");
         assert!(backup_failed_body(Lang::Ko).contains("백업"), "ko 본문");
         assert!(!backup_failed_body(Lang::Ko).contains("backup"), "ko 본문에 영어 누출 금지");
+    }
+
+    // cold restore 고지는 언어로 갈리고, 판별 고유 문구를 두 언어 모두 포함한다.
+    #[test]
+    fn cold_restore_notice_splits_by_language_with_discriminator() {
+        let en = cold_restore_notice(Lang::En);
+        assert!(en.contains("sealed checkpoint"), "en 판별 문구: {en}");
+        assert!(!en.contains('봉'), "en 본문에 한글 누출 금지");
+        let ko = cold_restore_notice(Lang::Ko);
+        assert!(ko.contains("봉인 체크포인트에서 복원"), "ko 판별 문구: {ko}");
+        assert!(!ko.contains("sealed"), "ko 본문에 영어 누출 금지");
     }
 
     // 열기 실패 고지는 언어로 갈리고 격리 경로를 그대로 싣는다.
