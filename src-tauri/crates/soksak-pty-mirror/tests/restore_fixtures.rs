@@ -3,10 +3,11 @@
 // 먹이면, 원본 세션의 화면 상태(스크롤백·보이는 화면·alt-screen·private mode·커서)가 재현되고,
 // 재생 중 터미널이 PTY 에 되쓰는 바이트는 0 이어야 한다(이중응답 차단).
 //
-// RED 근거: 이 세대의 Mirror 실체 = raw 스크롤백 링(데몬 warm 재부착이 오늘 재생하는 그
-// 바이트 꼬리). 링은 바이트 단위로 잘리므로 ① 이스케이프 중간 절단 ② UTF-8 중간 절단
-// ③ alt-screen 진입점 유실 ④ private mode 세트 유실 ⑤ 재생분 안의 질의 재응답이 그대로
-// 드러난다. M2(미러+직렬화기)가 같은 계약을 GREEN 으로 만든다.
+// RED 근거(랜딩 당시): M1 세대의 Mirror 실체 = raw 스크롤백 링(당시 데몬 warm 재부착이
+// 재생하던 바이트 꼬리). 링은 바이트 단위로 잘리므로 ① 이스케이프 중간 절단 ② UTF-8
+// 중간 절단 ③ alt-screen 진입점 유실 ④ private mode 세트 유실 ⑤ 재생분 안의 질의
+// 재응답이 그대로 드러났다. M2(미러+직렬화기)가 같은 계약을 GREEN 으로 만들었다 —
+// 이 픽스처들이 그 회귀 감지망이다.
 
 use soksak_pty_mirror::{Mirror, Screen};
 
@@ -179,7 +180,8 @@ fn alt_screen_state_and_primary_scrollback_restore() {
     }
 
     let mut stream = Vec::new();
-    for n in 1..=5 {
+    // 화면(24행)보다 많은 줄 — 일부가 실제 스크롤백으로 밀려 들어간 상태에서 alt 진입.
+    for n in 1..=30 {
         stream.extend(format!("SCROLLBACK-MARK line{n}\r\n").into_bytes());
     }
     stream.extend_from_slice(b"\x1b[?1049h");
@@ -199,13 +201,21 @@ fn alt_screen_state_and_primary_scrollback_restore() {
     assert!(original.alt_active(), "픽스처 전제: 원본은 alt-screen 활성");
     let mut m = Mirror::new(COLS, ROWS);
     m.feed(&stream);
-    let restored = restored_of(&m);
+    let mut restored = restored_of(&m);
 
+    assert_state_restored(&original, &restored, "alt-screen active");
+
+    // alt 활성 중 프라임은 관찰 불가(비활성 그리드) — 복원본의 alt 를 벗겨서, 얼려
+    // 운반된 프라임 화면과 스크롤백이 실제로 그 밑에 깔려 있는지 확인한다.
+    restored.feed(b"\x1b[?1049l");
     assert!(
         Screen::text_of(&restored.history_rows()).iter().any(|l| l.contains("SCROLLBACK-MARK")),
         "alt 뒤에 얼어 있던 프라임 스크롤백이 복원되어야 한다"
     );
-    assert_state_restored(&original, &restored, "alt-screen active");
+    assert!(
+        Screen::text_of(&restored.visible_rows()).iter().any(|l| l.contains("SCROLLBACK-MARK line30")),
+        "alt 뒤에 얼어 있던 프라임 화면이 복원되어야 한다"
+    );
 
     // 이탈: alt 를 끝내면 프라임 화면과 스크롤백이 그대로 돌아온다.
     let exit: &[u8] = b"\x1b[?25h\x1b[?1049lBACK-MARK\r\n";

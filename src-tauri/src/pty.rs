@@ -691,12 +691,10 @@ mod daemon {
     }
 
     // 데몬 경유 스폰: createOrAttach → stream 부착 → reader 스레드(재생+라이브 →
-    // Channel). 반환 = 데몬 세션 id. 재부착이면 detach 동안의 출력(링)이 라이브에
-    // 앞서 도착한다 — 프론트 xterm 이 스크롤백으로 그린다.
-    //
-    // 정직한 한계(골격): 재생은 raw 링이라 재생분 안의 질의 시퀀스(DA1/DSR)에
-    // 프론트 xterm 이 재응답할 수 있다. 미러+직렬화기·replay-guard 가 후속 레인이다
-    // (플랜 §5.5 M2 전체 — docs/RESTORE.md 사다리 참조).
+    // Channel). 반환 = 데몬 세션 id. 재부착이면 데몬 미러의 직렬화 시퀀스(화면 상태
+    // 재현)가 라이브에 앞서 도착한다 — 전부 그리드 합성물이라 재생분에 질의(DA1/DSR)가
+    // 실릴 수 없고, 프론트 xterm 의 재응답도 원천 차단된다(플랜 §5.5 M2 —
+    // docs/RESTORE.md 사다리 2단).
     pub fn spawn_via_daemon(
         app: &tauri::AppHandle,
         link: &Link,

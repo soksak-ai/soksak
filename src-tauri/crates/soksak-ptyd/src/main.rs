@@ -15,11 +15,12 @@
 //   stream   <home>/run/ptyd-p<N>-stream.sock  hello 1줄 교환 후 raw PTY 출력
 // 인증: <home>/run/ptyd-p<N>.token (0600) 공유 토큰 — hello 에 실어 보낸다.
 //
-// 이 판(골격)의 정직한 한계 — 후속 레인 소유:
-//   - 재부착 재생은 raw 링 재생이다. 헤드리스 미러+ANSI 직렬화기·replay-guard
-//     (DA1/DSR 재응답 차단)·alt-screen 재수화는 후속(플랜 §5.5 M2 전체).
-//   - 봉인 바이트 체크포인트(cold restore)·Windows(named pipe/ConPTY)·데몬
-//     업그레이드 drain 은 후속(M3~M5).
+// 재부착 재생 = 세션당 헤드리스 미러(soksak-pty-mirror)의 직렬화 시퀀스다. 미러는
+// 절대 응답하지 않고(단일 응답자 = 프론트 xterm), 재생 바이트는 전부 그리드 합성물이라
+// 질의 재응답이 원천 차단된다. 스크롤백·alt-screen·private mode 가 재현된다(§5.5 M2).
+//
+// 이 판의 정직한 한계 — 후속 레인 소유:
+//   - Windows(named pipe/ConPTY)·데몬 업그레이드 drain 은 후속(M5·운명 3분기 b).
 
 fn main() {
     #[cfg(not(unix))]
@@ -33,7 +34,7 @@ fn main() {
 
 #[cfg(unix)]
 mod unix {
-    use std::collections::{HashMap, VecDeque};
+    use std::collections::HashMap;
     use std::io::{BufRead, BufReader, Read, Write};
     use std::os::unix::fs::PermissionsExt;
     use std::os::unix::net::{UnixListener, UnixStream};
@@ -44,13 +45,15 @@ mod unix {
     use base64::Engine as _;
     use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
     use serde_json::{json, Value};
+    use soksak_pty_mirror::Mirror;
     use soksak_pty_proto as proto;
 
     // ── 세션 ─────────────────────────────────────────────────────────────────
 
     struct SessState {
-        // detach 스크롤백 링(최근 출력) — attach 시 라이브에 앞서 재생된다.
-        ring: VecDeque<u8>,
+        // 헤드리스 화면 미러 — attach 시 직렬화 시퀀스가 라이브에 앞서 재생된다.
+        // 미러는 절대 응답하지 않는다(응답 요구는 관찰값으로만 삼킨다).
+        mirror: Mirror,
         // 부착된 stream 소켓(마지막 승자). None = detached.
         attached: Option<UnixStream>,
         // attach 세대 — stream 사망 감지 스레드가 자기 세대의 부착만 해제한다
@@ -335,6 +338,7 @@ mod unix {
                     .unwrap()
                     .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
                     .map_err(|e| e.to_string())?;
+                s.st.lock().unwrap().mirror.resize(cols, rows);
                 Ok(json!({}))
             }),
             R::Ack { session, bytes } => with_session(reg, session, |s| {
@@ -384,10 +388,7 @@ mod unix {
             }
             R::GetSnapshot { session } => with_session(reg, session, |s| {
                 let st = s.st.lock().unwrap();
-                let (a, b) = st.ring.as_slices();
-                let mut buf = Vec::with_capacity(st.ring.len());
-                buf.extend_from_slice(a);
-                buf.extend_from_slice(b);
+                let buf = st.mirror.rehydrate();
                 Ok(json!({ "snapshotB64": base64::engine::general_purpose::STANDARD.encode(&buf) }))
             }),
             // pane id 첫 매치(창 무관) — 앱의 pty_pane_pid 명령이 창 문맥 없이 pane 만
@@ -492,7 +493,7 @@ mod unix {
             writer: Mutex::new(writer),
             child: Mutex::new(child),
             st: Mutex::new(SessState {
-                ring: VecDeque::new(),
+                mirror: Mirror::new(cols, rows),
                 attached: None,
                 attach_seq: 0,
                 unacked: 0,
@@ -522,11 +523,8 @@ mod unix {
                         Ok(0) | Err(_) => break, // EOF = 셸 종료(또는 kill)
                         Ok(n) => {
                             let mut st = session.st.lock().unwrap();
-                            // 링 갱신(고정 용량 — 초과분은 앞에서 버린다).
-                            st.ring.extend(&buf[..n]);
-                            while st.ring.len() > proto::RING_CAPACITY {
-                                st.ring.pop_front();
-                            }
+                            // 미러 갱신 — 화면 상태(스크롤백·alt·모드)가 여기서 유지된다.
+                            st.mirror.feed(&buf[..n]);
                             // 부착 중이면 라이브 전달. 쓰기 실패 = 클라이언트 사망 → detach
                             // (소켓 에러 이벤트가 죽음 감지다).
                             if let Some(s) = st.attached.as_mut() {
@@ -583,10 +581,9 @@ mod unix {
                 let _ = writeln!(writer, "{}", proto::err_reply("NOT_FOUND", "session closed"));
                 return;
             }
-            let (a, b) = st.ring.as_slices();
-            let mut replay = Vec::with_capacity(st.ring.len());
-            replay.extend_from_slice(a);
-            replay.extend_from_slice(b);
+            // 재생 = 미러 직렬화(화면 상태 재현) — raw 바이트 꼬리가 아니라 그리드
+            // 합성물이다: 질의 재응답 불가, mid-escape 절단 불가(플랜 §5.5 M2).
+            let replay = st.mirror.rehydrate();
             let ok = proto::ok_reply(json!({
                 "session": sid,
                 "replayBytes": replay.len(),
@@ -594,7 +591,7 @@ mod unix {
             if writeln!(writer, "{ok}").is_err() {
                 return;
             }
-            // 재생과 부착 승계는 링 락 안에서 원자다 — reader 가 끼어들어 순서를 섞지 못한다.
+            // 재생과 부착 승계는 세션 락 안에서 원자다 — reader 가 끼어들어 순서를 섞지 못한다.
             if writer.write_all(&replay).is_err() {
                 return;
             }

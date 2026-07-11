@@ -4486,6 +4486,7 @@ dependencies = [
  "libc",
  "portable-pty",
  "serde_json",
+ "soksak-pty-mirror",
  "soksak-pty-proto",
 ]
 

@@ -35,11 +35,6 @@ pub const PTYD_MIN_COMPATIBLE_CLIENT_PROTOCOL: u32 = 1;
 pub const HIGH_WATERMARK: usize = 100_000;
 pub const LOW_WATERMARK: usize = 5_000;
 
-/// Detached scrollback ring capacity per session (bytes). While no client is
-/// attached the daemon keeps the most recent output here; on attach it is
-/// replayed ahead of live bytes. Older bytes fall off — byte checkpoints are a
-/// later rung of the restore ladder (docs/RESTORE.md).
-pub const RING_CAPACITY: usize = 1_048_576;
 
 // ── Identity-home path contract ──────────────────────────────────────────────
 // Every path derives from the identity home (home.rs / SOKSAK_HOME). The

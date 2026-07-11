@@ -247,6 +247,47 @@ fn shell_survives_client_death_and_reattaches_with_replay() {
     assert_eq!(bye["ok"], true);
 }
 
+// ── 재부착 재생 = 미러 직렬화: raw 꼬리가 아니라 그리드 합성물이다 ────────────
+// 세션 출력에 질의(DA1)와 private mode 세트가 흘렀어도, 재생 바이트에는 질의가
+// 실리지 않고(재응답 원천 차단) 모드는 재수화 시퀀스로 재현된다(플랜 §5.5 M2).
+
+#[test]
+fn reattach_replay_is_serialized_not_raw() {
+    let d = start_daemon("serialized");
+    let mut control = Control::connect(&d.home);
+    let created = create(&mut control, "pane-s");
+    let session = created["data"]["session"].as_u64().unwrap();
+    let (reply, mut stream) = attach_stream(&d.home, session);
+    assert_eq!(reply["ok"], true, "{reply}");
+
+    // 셸이 bracketed paste 를 켜고 DA1 질의를 출력에 흘린 뒤 마커를 찍는다.
+    let w = proto::Request::Write {
+        session,
+        data_b64: {
+            use base64::Engine as _;
+            base64::engine::general_purpose::STANDARD
+                .encode("printf '\\033[?2004h\\033[c'; echo SERIAL-MARK\n")
+        },
+    };
+    assert_eq!(control.request(&w)["ok"], true);
+    read_until(&mut stream, "SERIAL-MARK");
+
+    // 앱 사망 모사 후 재부착 — 재생을 raw 로 수집한다.
+    drop(stream);
+    std::thread::sleep(Duration::from_millis(200));
+    let (reply, mut stream) = attach_stream(&d.home, session);
+    assert!(reply["data"]["replayBytes"].as_u64().unwrap() > 0, "{reply}");
+    let replay = read_until(&mut stream, "SERIAL-MARK");
+
+    // 질의 바이트(ESC [ c)는 재생에 실리지 않는다 — 프론트 xterm 재응답 차단.
+    assert!(!replay.contains("\x1b[c"), "replay must not carry DA1: {replay:?}");
+    // private mode 는 재수화 시퀀스로 재현된다.
+    assert!(replay.contains("\x1b[?2004h"), "replay must rehydrate bracketed paste");
+
+    let bye = control.request(&proto::Request::Shutdown);
+    assert_eq!(bye["ok"], true);
+}
+
 // ── 재부착 키 = (창, pane): pane id 는 창 안에서만 유일하다 ───────────────────
 // 실측 근거: 창별 순차 뷰 id 라 여러 창이 각자 "v2" pane 을 가진다. pane 만으로
 // 매칭하면 다른 창의 셸에 재부착한다(오부착 — 이 테스트가 그 회귀를 막는다).
