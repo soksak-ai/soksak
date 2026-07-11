@@ -10,13 +10,18 @@
 #   (3) add 스트리밍 — 진행 ev 후 합=7.
 #   (4) 포커스 무관  — 창 조작 0 으로 서비스 커맨드가 route() 직행(PS11) — (2)(3) 이 그 경로다.
 #
-# 사용: scripts/e2e/service-roundtrip.sh   (debug 앱 실행 중 — sok-debug 바이너리 사용)
-#       KEEP=1 로 픽스처 비활성화 생략.
+# 사용: scripts/e2e/service-roundtrip.sh [--identity dev|debug]   (해당 앱 실행 중)
+#       기본 identity=debug. KEEP=1 로 픽스처 비활성화 생략.
 set -uo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-SOK="${SOK:-$ROOT_DIR/src-tauri/target/debug/sok-debug}"
-HOME_DIR="${SOKSAK_HOME:-$HOME/.soksak-debug}"
+
+# identity 파라미터화(browser-restore.sh / pty-survival.sh 관례) — 속한 환경 기준으로
+# sok·홈·소켓을 파생한다. app=~/.soksak, 그 외 -<identity>(home.rs·sok CLI 와 동일 계약).
+IDENTITY=debug
+[ "${1:-}" = "--identity" ] && IDENTITY="$2"
+SOK="${SOK:-$ROOT_DIR/src-tauri/target/debug/sok-$IDENTITY}"
+if [ "$IDENTITY" = "app" ]; then HOME_DIR="$HOME/.soksak"; else HOME_DIR="$HOME/.soksak-$IDENTITY"; fi
 PLUGIN_ID="soksak-plugin-e2e-service"
 FIXTURE="$ROOT_DIR/scripts/e2e/fixtures/$PLUGIN_ID"
 BIN_SRC="$ROOT_DIR/src-tauri/target/debug/soksak-sidecar-e2e-echo"
