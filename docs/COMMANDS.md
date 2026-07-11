@@ -347,7 +347,7 @@ Count records in a collection (read-only). Narrow the count with an optional whe
 **Errors**: INVALID_PARAMS, INTERNAL
 
 ```bash
-sok data.count '{"ns":"soksak-plugin-mailbox","coll":"messages"}'
+sok data.count '{"ns":"soksak-plugin-<id>","coll":"messages"}'
 ```
 
 ## `data.encrypt.convert` (danger: destructive)
@@ -364,7 +364,7 @@ Seal records already stored plaintext in a scope under the active key (one trans
 **Errors**: INVALID_PARAMS, INTERNAL
 
 ```bash
-sok data.encrypt.convert '{"ns":"soksak-plugin-terminal","coll":"command_blocks","scope":"projA"}'
+sok data.encrypt.convert '{"ns":"soksak-plugin-<id>","coll":"command_blocks","scope":"projA"}'
 ```
 
 ## `data.encrypt.enable` (danger: destructive)
@@ -441,7 +441,7 @@ Export data as JSONL (meta + record + kv rows). Scope by ns/coll; omit both for 
 **Errors**: INTERNAL
 
 ```bash
-sok data.export '{"ns":"soksak-plugin-mailbox"}'
+sok data.export '{"ns":"soksak-plugin-<id>"}'
 ```
 
 ## `data.import` (danger: destructive)
@@ -478,7 +478,7 @@ Query a collection (read-only). Filter fields must be declared as indexes in def
 **Errors**: INVALID_PARAMS, INTERNAL
 
 ```bash
-sok data.query '{"ns":"soksak-plugin-mailbox","coll":"messages","scope":"projA"}'
+sok data.query '{"ns":"soksak-plugin-<id>","coll":"messages","scope":"projA"}'
 ```
 
 ## `data.restore` (danger: destructive)
@@ -512,7 +512,7 @@ Full-text search a collection using FTS5 trigram (CJK-aware). Queries shorter th
 **Errors**: INVALID_PARAMS, INTERNAL
 
 ```bash
-sok data.search '{"ns":"soksak-plugin-mailbox","coll":"messages","query":"빌드 실패"}'
+sok data.search '{"ns":"soksak-plugin-<id>","coll":"messages","query":"빌드 실패"}'
 ```
 
 ## `editor.close`
@@ -577,6 +577,36 @@ List direct children of a directory (same view as the file tree). Omit path to u
 ```bash
 sok explorer.list
 sok explorer.list '{"path":"/tmp"}'
+```
+
+## `fs.unwatch`
+
+Release one fs.watch subscription for a directory. The OS watch is removed only when the last subscription is released; unwatching a path that is not watched is a no-op. | 디렉토리 감시 해제 폴더 변경 감지 중지 언워치
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | ✓ | Absolute directory path to stop watching |
+
+**Returns**: { path, watchers: remaining subscription count for the path }
+**Errors**: INTERNAL
+
+```bash
+sok fs.unwatch '{"path":"/Users/me/work"}'
+```
+
+## `fs.watch`
+
+Watch a directory for changes using OS-native file events (non-recursive, no polling). Changes emit the fs-change event with the changed directory. Watches are reference-counted per path — pair every fs.watch with a matching fs.unwatch. | 디렉토리 감시 폴더 변경 감지 워치 파일 구독
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | ✓ | Absolute directory path to watch |
+
+**Returns**: { path, watchers: subscription count for the path after registration }
+**Errors**: INTERNAL
+
+```bash
+sok fs.watch '{"path":"/Users/me/work"}'
 ```
 
 ## `git.diff`
@@ -667,11 +697,11 @@ sok layout.apply '{"preset":"facets","spaces":[{"title":"docs","panels":[{"progr
 
 ## `layout.suggest`
 
-Suggest window placements from current monitor/window facts (pure strategy — nothing moves). strategy spread: orchestrator windows take a workspace-free monitor whole (or the right third alongside on a single monitor); workspaces fill their own monitor. strategy grid: tile all windows on the first monitor. Feed each placement to window.place to execute. | 창 배치 제안 전략 모니터 분배 오케스트레이터
+Suggest window placements from current monitor/window facts (pure strategy — nothing moves). strategy spread: orchestrator windows take a monitor free of project windows whole (or the right third alongside on a single monitor); project windows fill their own monitor. strategy grid: tile all windows on the first monitor. Feed each placement to window.place to execute. | 창 배치 제안 전략 모니터 분배 오케스트레이터
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `roles` | json |  | Optional label→role map, e.g. {"main":"orchestrator"} — unlisted windows count as workspaces |
+| `roles` | json |  | Optional label→role map, e.g. {"main":"orchestrator"} — unlisted windows count as project windows |
 | `strategy` | string |  | Placement strategy (spread|grid) [default "spread"] |
 
 **Returns**: { placements: [{label,monitor,x,y,w,h}] }
@@ -960,10 +990,10 @@ Report a plugin's declared-vs-actual conformance: manifest declarations vs what 
 |---|---|---|---|
 | `id` | string | ✓ | 플러그인 id |
 
-**Returns**: { id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan } }
+**Returns**: { id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan }, implements: { declared, violations }, c2: { violations: [{ rule, detail }], viewStatus: { mounted, reported, unreported, undeclared: [{ viewId, view, code }] } } }
 
 ```bash
-sok plugin.conformance soksak-plugin-terminal
+sok plugin.conformance soksak-plugin-<id>
 ```
 
 ## `plugin.consent.chain`
@@ -978,7 +1008,22 @@ Return the ordered list of plugins still needing consent before the target plugi
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok plugin.consent.chain '{"id":"soksak-plugin-acp-studio"}'
+sok plugin.consent.chain '{"id":"soksak-plugin-<id>"}'
+```
+
+## `plugin.consent.grant` (danger: destructive)
+
+Grant consent for a plugin's requested permissions — the CLI/headless equivalent of approving the consent modal. Records consent (manifest version + permissions) so the plugin can then be enabled without opening the webview. Review first with plugin.consent.summary. Dev-sourced plugins bypass consent and do not need this. Danger-gated: granting permissions is a deliberate, security-sensitive act. | 동의 승인 허가 grant 권한 부여
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | ✓ | Plugin id |
+
+**Returns**: { id, granted }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok plugin.consent.grant '{"id":"soksak-plugin-<id>"}'
 ```
 
 ## `plugin.consent.preview`
@@ -993,7 +1038,7 @@ Open the consent modal for inspection without activating the plugin. Use when a 
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok plugin.consent.preview '{"id":"soksak-plugin-acp-orchestra"}'
+sok plugin.consent.preview '{"id":"soksak-plugin-<id>"}'
 sok plugin.consent.preview '{"id":""}'  # 닫기
 ```
 
@@ -1009,7 +1054,7 @@ Revoke a recorded consent, putting the plugin back into a re-consent-required st
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok plugin.consent.revoke '{"id":"soksak-plugin-acp-core"}'
+sok plugin.consent.revoke '{"id":"soksak-plugin-<id>"}'
 ```
 
 ## `plugin.consent.summary`
@@ -1024,7 +1069,7 @@ Fetch the consent display data for a plugin — permissions, contribution counts
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok plugin.consent.summary '{"id":"soksak-plugin-acp-orchestra"}'
+sok plugin.consent.summary '{"id":"soksak-plugin-<id>"}'
 ```
 
 ## `plugin.deps`
@@ -1040,7 +1085,7 @@ Inspect the plugin dependency graph. With an id, returns that plugin's dependenc
 
 ```bash
 sok plugin.deps
-sok plugin.deps '{"id":"soksak-plugin-acp-core"}'
+sok plugin.deps '{"id":"soksak-plugin-<id>"}'
 ```
 
 ## `plugin.dev.create` (danger: inject)
@@ -1055,7 +1100,7 @@ Scaffold a new dev plugin in place at ~/.soksak/plugins/<id>/. Creates the minim
 **Errors**: INVALID_PARAMS
 
 ```bash
-sok plugin.dev.create '{"id":"soksak-plugin-myapp"}'
+sok plugin.dev.create '{"id":"soksak-plugin-<id>"}'
 ```
 
 ## `plugin.dev.load` (danger: inject)
@@ -1085,7 +1130,7 @@ Deactivate a plugin and revoke all of its registered commands, views, and extens
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok plugin.disable '{"id":"soksak-plugin-memo"}'
+sok plugin.disable '{"id":"soksak-plugin-<id>"}'
 ```
 
 ## `plugin.enable` (danger: inject)
@@ -1100,8 +1145,24 @@ Activate a plugin so its code begins executing. Returns CONSENT_REQUIRED if the 
 **Errors**: TARGET_NOT_FOUND, CONSENT_REQUIRED, INTERNAL
 
 ```bash
-sok plugin.enable memo
-sok plugin.enable '{"id":"soksak-plugin-memo"}'
+sok plugin.enable <name>
+sok plugin.enable '{"id":"soksak-plugin-<id>"}'
+```
+
+## `plugin.implementers`
+
+Find plugins by the contract they implement (manifest implements, coupling law C3 L2 contract-pin). With contract, returns every installed plugin declaring that exact contract id "<scope>-spec@<major>" with its runtime status; without, maps every declared contract to its implementers. Discovery is contract-addressed and implementation-blind — resolve implementers here instead of hardcoding plugin ids. | 플러그인 계약 구현체 발견 구현 스펙 컨트랙트
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `contract` | string |  | Contract id "<scope>-spec@<major>" (exact major — @2 does not answer for @1). Omit to list every declared contract with its implementers. |
+
+**Returns**: { contract, implementers: [{id, version, status}] } (contract given) | { contracts: [{contract, implementers}] } (omitted)
+**Errors**: INVALID_PARAMS
+
+```bash
+sok plugin.implementers
+sok plugin.implementers '{"contract":"<scope>-spec@1"}'
 ```
 
 ## `plugin.install` (danger: destructive)
@@ -1144,7 +1205,7 @@ Rescan the plugins directory and reactivate every plugin whose consent is still 
 
 ```bash
 sok plugin.reload
-sok plugin.reload '{"id":"soksak-plugin-memo"}'
+sok plugin.reload '{"id":"soksak-plugin-<id>"}'
 ```
 
 ## `plugin.remove` (danger: destructive)
@@ -1160,8 +1221,8 @@ Remove a plugin and its directory. Plugin-owned data (plugins-data) is preserved
 **Errors**: TARGET_NOT_FOUND, CASCADE_REQUIRED, INTERNAL
 
 ```bash
-sok plugin.remove '{"id":"soksak-plugin-memo"}'
-sok plugin.remove '{"id":"soksak-plugin-acp-core","cascade":true}'
+sok plugin.remove '{"id":"soksak-plugin-<id>"}'
+sok plugin.remove '{"id":"soksak-plugin-<id>","cascade":true}'
 ```
 
 ## `plugin.settings.get`
@@ -1179,8 +1240,8 @@ Read plugin setting values at a given scope. Scope 'effective' (default) merges 
 **Errors**: TARGET_NOT_FOUND, INVALID_PARAMS
 
 ```bash
-sok plugin.settings.get '{"id":"soksak-plugin-acp-orchestra"}'
-sok plugin.settings.get '{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent","scope":"global"}'
+sok plugin.settings.get '{"id":"soksak-plugin-<id>"}'
+sok plugin.settings.get '{"id":"soksak-plugin-<id>","key":"defaultAgent","scope":"global"}'
 ```
 
 ## `plugin.settings.open`
@@ -1196,7 +1257,7 @@ Open the unified settings modal. With a plugin id, navigates directly to that pl
 
 ```bash
 sok plugin.settings.open
-sok plugin.settings.open '{"id":"soksak-plugin-acp-orchestra"}'
+sok plugin.settings.open '{"id":"soksak-plugin-<id>"}'
 ```
 
 ## `plugin.settings.reset`
@@ -1214,7 +1275,7 @@ Remove a setting override and restore the default value. Scope defaults to globa
 **Errors**: TARGET_NOT_FOUND, INVALID_PARAMS
 
 ```bash
-sok plugin.settings.reset '{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent"}'
+sok plugin.settings.reset '{"id":"soksak-plugin-<id>","key":"defaultAgent"}'
 ```
 
 ## `plugin.settings.schema`
@@ -1229,7 +1290,7 @@ Return the plugin's settings schema from its manifest configuration block. This 
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok plugin.settings.schema '{"id":"soksak-plugin-acp-orchestra"}'
+sok plugin.settings.schema '{"id":"soksak-plugin-<id>"}'
 ```
 
 ## `plugin.settings.set`
@@ -1248,8 +1309,8 @@ Write a plugin setting value after schema validation. Scope defaults to global; 
 **Errors**: TARGET_NOT_FOUND, INVALID_PARAMS
 
 ```bash
-sok plugin.settings.set '{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent","value":"codex"}'
-sok plugin.settings.set '{"id":"soksak-plugin-acp-orchestra","key":"defaultAgent","value":"gemini","scope":"project"}'
+sok plugin.settings.set '{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"codex"}'
+sok plugin.settings.set '{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"gemini","scope":"project"}'
 ```
 
 ## `plugin.update` (danger: destructive)
@@ -1264,7 +1325,7 @@ Update an installed plugin via git pull --ff-only. Re-consent is required after 
 **Errors**: TARGET_NOT_FOUND, INVALID_PARAMS, INTERNAL
 
 ```bash
-sok plugin.update '{"id":"soksak-plugin-memo"}'
+sok plugin.update '{"id":"soksak-plugin-<id>"}'
 ```
 
 ## `plugin.view.close`
@@ -1280,7 +1341,7 @@ Close a plugin view. Sidebar placements are deselected and revert to the file tr
 **Errors**: TARGET_NOT_FOUND
 
 ```bash
-sok plugin.view.close '{"view":"soksak-plugin-memo.panel"}'
+sok plugin.view.close '{"view":"soksak-plugin-<id>.<view>"}'
 ```
 
 ## `plugin.view.open`
@@ -1297,8 +1358,8 @@ Open a plugin view in the specified placement. Defaults to the view's declared d
 **Errors**: TARGET_NOT_FOUND, INVALID_PARAMS
 
 ```bash
-sok plugin.view.open '{"view":"soksak-plugin-memo.panel"}'
-sok plugin.view.open '{"view":"soksak-plugin-git-diff.view","placement":"content"}'
+sok plugin.view.open '{"view":"soksak-plugin-<id>.<view>"}'
+sok plugin.view.open '{"view":"soksak-plugin-<id>.<view>","placement":"content"}'
 ```
 
 ## `program.list`
@@ -1379,7 +1440,7 @@ Open a project (creates it if it doesn't exist yet). When root is omitted, folde
 | `root` | string |  | Project root directory (absolute path — home/root forbidden) |
 | `shell` | string |  | Terminal shell path (omit = global setting → $SHELL) |
 
-**Returns**: { projectId, spaceId, panelId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new workspace window instead)
+**Returns**: { projectId, spaceId, panelId, viewId, paneId?, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new project window instead)
 **Errors**: INVALID_PARAMS
 
 ```bash
@@ -1559,7 +1620,7 @@ Register a scheduler job (trigger + registry command to fire). trigger = { kind:
 
 ```bash
 sok schedule.register '{"trigger":{"kind":"every","every_ms":60000},"command":"notify.show","params":{"title":"틱","body":"1분"}}'
-sok schedule.register '{"trigger":{"kind":"reconcile"},"command":"plugin.soksak-plugin-workflow.workflow.reconcile","process_lease":true,"retry":{"max":5,"base_ms":2000,"max_ms":60000}}'
+sok schedule.register '{"trigger":{"kind":"reconcile"},"command":"plugin.soksak-plugin-<id>.<command>","process_lease":true,"retry":{"max":5,"base_ms":2000,"max_ms":60000}}'
 ```
 
 ## `schedule.set` (danger: inject)
@@ -1619,7 +1680,7 @@ Check whether ns/key exists in the vault without exposing the value (plaintext r
 **Errors**: INVALID_PARAMS, INTERNAL
 
 ```bash
-sok secret.has '{"ns":"soksak-plugin-acp","key":"anthropicKey"}'
+sok secret.has '{"ns":"soksak-plugin-<id>","key":"anthropicKey"}'
 ```
 
 ## `secret.keys`
@@ -1634,7 +1695,7 @@ List the secret key names stored under a namespace (values are never returned). 
 **Errors**: INVALID_PARAMS, INTERNAL
 
 ```bash
-sok secret.keys '{"ns":"soksak-plugin-acp"}'
+sok secret.keys '{"ns":"soksak-plugin-<id>"}'
 ```
 
 ## `secret.lock`
@@ -1661,7 +1722,7 @@ Remove ns/key from the vault (removed=true if the key existed). Rejected if the 
 **Errors**: INVALID_PARAMS, INTERNAL
 
 ```bash
-sok secret.remove '{"ns":"soksak-plugin-acp","key":"anthropicKey"}'
+sok secret.remove '{"ns":"soksak-plugin-<id>","key":"anthropicKey"}'
 ```
 
 ## `secret.set` (danger: inject)
@@ -1678,7 +1739,7 @@ Store a sensitive value under ns/key using envelope encryption (per-item DEK wra
 **Errors**: INVALID_PARAMS, INTERNAL
 
 ```bash
-sok secret.set '{"ns":"soksak-plugin-acp","key":"anthropicKey","value":"sk-ant-..."}'
+sok secret.set '{"ns":"soksak-plugin-<id>","key":"anthropicKey","value":"sk-ant-..."}'
 ```
 
 ## `secret.unlock` (danger: inject)
@@ -1721,6 +1782,72 @@ Change an application setting. key: language|projectTabPosition|iconSet|iconBox|
 ```bash
 sok settings.set '{"key":"projectTabPosition","value":"left"}'
 sok settings.set '{"key":"iconBox","value":true}'
+```
+
+## `sidebar.left.move`
+
+Drag-merge a left sidebar view — into=merge as a tab, left/right=horizontal split, top/bottom=vertical split (same 4 directions as the content area). viewKeys/targets come from sidebar.left.tree. | 좌측 사이드바 탭 이동 합치기 분할 드래그 머지
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Target project id (omit = caller's context project) |
+| `target` | string | ✓ | target viewKey (a view in the target group) |
+| `view` | string | ✓ | viewKey to move |
+| `zone` | string | ✓ | into | left | right | top | bottom (4-direction, same as content area) (into|left|right|top|bottom) |
+
+**Returns**: {}
+**Errors**: TARGET_NOT_FOUND, INVALID_PARAMS
+
+```bash
+sok sidebar.left.move '{"view":"soksak-plugin-<id>.<view>","target":"soksak-plugin-<other-id>.<view>","zone":"right"}'
+```
+
+## `sidebar.left.resize`
+
+Resize a left sidebar split by ratio — sizes parallel to the split's children (sum 1). Split ids from sidebar.left.tree. | 좌측 사이드바 분할 비율 크기 조절
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Target project id (omit = caller's context project) |
+| `sizes` | number[] | ✓ | Ratio per child, sum 1 |
+| `split` | string | ✓ | Sidebar split id |
+
+**Returns**: {}
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok sidebar.left.resize '{"split":"s7","sizes":[0.6,0.4]}'
+```
+
+## `sidebar.left.tree`
+
+Return the left sidebar layout tree (SplitTree of tab groups) — split ids, sizes, each leaf's viewKeys + active. Source for sidebar.left.move/resize targets. | 좌측 사이드바 레이아웃 트리 탭 분할 구조
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `project` | string |  | Target project id (omit = caller's context project) |
+
+**Returns**: { projectId, layout }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok sidebar.left.tree
+```
+
+## `sidebar.right.mode`
+
+Right sidebar layout mode — overlay (floats over content) or push (occupies area like the left sidebar). Global setting; omit mode to query current. | 우측 사이드바 밀기 영역차지 오버레이 모드 도킹
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `mode` | string |  | overlay | push — omit to query current |
+
+**Returns**: { mode }
+**Errors**: INVALID_PARAMS
+
+```bash
+sok sidebar.right.mode
+sok sidebar.right.mode '{"mode":"push"}'
 ```
 
 ## `space.activate`
@@ -1826,72 +1953,6 @@ sok space.switchScan '{"from":"c1","to":"c3"}'
 sok space.switchScan '{"to":"c3","frames":40}'
 ```
 
-## `sidebar.left.move`
-
-Drag-merge a left sidebar view — into=merge as a tab, left/right=horizontal split, top/bottom=vertical split (same 4 directions as the content area). viewKeys/targets come from sidebar.left.tree. | 좌측 사이드바 탭 이동 합치기 분할 드래그 머지
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `project` | string |  | Target project id (omit = caller's context project) |
-| `target` | string | ✓ | target viewKey (a view in the target group) |
-| `view` | string | ✓ | viewKey to move |
-| `zone` | string | ✓ | into | left | right | top | bottom (4-direction, same as content area) (into|left|right|top|bottom) |
-
-**Returns**: {}
-**Errors**: TARGET_NOT_FOUND, INVALID_PARAMS
-
-```bash
-sok sidebar.left.move '{"view":"soksak-plugin-folderpop.folders","target":"soksak-plugin-file-tree.tree","zone":"right"}'
-```
-
-## `sidebar.left.resize`
-
-Resize a left sidebar split by ratio — sizes parallel to the split's children (sum 1). Split ids from sidebar.left.tree. | 좌측 사이드바 분할 비율 크기 조절
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `project` | string |  | Target project id (omit = caller's context project) |
-| `sizes` | number[] | ✓ | Ratio per child, sum 1 |
-| `split` | string | ✓ | Sidebar split id |
-
-**Returns**: {}
-**Errors**: TARGET_NOT_FOUND
-
-```bash
-sok sidebar.left.resize '{"split":"s7","sizes":[0.6,0.4]}'
-```
-
-## `sidebar.left.tree`
-
-Return the left sidebar layout tree (SplitTree of tab groups) — split ids, sizes, each leaf's viewKeys + active. Source for sidebar.left.move/resize targets. | 좌측 사이드바 레이아웃 트리 탭 분할 구조
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `project` | string |  | Target project id (omit = caller's context project) |
-
-**Returns**: { projectId, layout }
-**Errors**: TARGET_NOT_FOUND
-
-```bash
-sok sidebar.left.tree
-```
-
-## `sidebar.right.mode`
-
-Right sidebar layout mode — overlay (floats over content) or push (occupies area like the left sidebar). Global setting; omit mode to query current. | 우측 사이드바 밀기 영역차지 오버레이 모드 도킹
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `mode` | string |  | overlay | push — omit to query current |
-
-**Returns**: { mode }
-**Errors**: INVALID_PARAMS
-
-```bash
-sok sidebar.right.mode
-sok sidebar.right.mode '{"mode":"push"}'
-```
-
 ## `state.commands`
 
 Full command catalog with parameter schemas, returns, errors, and examples — the source of truth for all available commands.
@@ -1940,6 +2001,16 @@ Query the status each view reports (R8 회신) — what setStatus / file dirty /
 ```bash
 sok status.query
 sok status.query '{"view":"v3"}'
+```
+
+## `system.hello`
+
+Greet the app and read the socket protocol version, the oldest client protocol still served, and app identity (version, pid, start time, capabilities). A client sends this first to detect version skew before issuing commands. Also answered at the transport, so it replies even when the front is wedged. | 협상 핸드셰이크 헬로 인사 프로토콜 버전 스큐 호환 접속
+
+**Returns**: { protocol, minClientProtocol, appVersion, identity, pid, startedAt, capabilities[] } — the socket protocol version, the oldest client protocol still served, and app identity.
+
+```bash
+sok hello
 ```
 
 ## `term.cwd`
@@ -2201,7 +2272,7 @@ Measure an exposed node — returns its viewport rect (px) and key computed styl
 **Errors**: NOT_EXPOSED, INVALID_PARAMS
 
 ```bash
-sok ui.measure '{"address":"content/view/soksak-plugin-acp-studio.studio/node/send"}'
+sok ui.measure '{"address":"content/view/soksak-plugin-<id>.<view>/node/send"}'
 ```
 
 ## `ui.slot`
@@ -2216,7 +2287,7 @@ Measure a content view's slot rectangle — the bare host container a view rende
 **Errors**: NOT_EXPOSED, INVALID_PARAMS
 
 ```bash
-sok ui.slot '{"address":"win/main/content/view/soksak-plugin-browser-native.content"}'
+sok ui.slot '{"address":"win/main/content/view/soksak-plugin-<id>.<view>"}'
 ```
 
 ## `ui.tree`
@@ -2307,7 +2378,7 @@ Set a custom tab label for a sidebar view (overrides the manifest title). Empty 
 **Errors**: INVALID_PARAMS
 
 ```bash
-sok view.label.set '{"view":"soksak-plugin-folderpop.folders","label":"폴더팝"}'
+sok view.label.set '{"view":"soksak-plugin-<id>.<view>","label":"내 라벨"}'
 ```
 
 ## `view.list`
@@ -2374,6 +2445,23 @@ Open a new view tab in a panel by program id (terminal / claude / codex / a plug
 sok view.open '{"program":"claude"}'
 ```
 
+## `view.rename`
+
+Set a custom label for a view tab (grid tab). Overrides the dynamic content title (e.g. a browser page <title> keeps updating underneath; the override wins on display). Empty title clears the override and the dynamic title returns. Sidebar views use view.label.set instead. | 탭 이름변경 탭명 변경 뷰 이름 바꾸기 라벨
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `title` | string | ✓ | Custom label; empty to clear the override |
+| `view` | string | ✓ | Target view id (omit = caller's context view) |
+
+**Returns**: { label }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok view.rename '{"view":"v3","title":"작업 브라우저"}'
+sok view.rename '{"view":"v3","title":""}'
+```
+
 ## `view.restore`
 
 Exit view maximize mode and restore the original split layout for the active space. | 최대화 해제 원래대로 레이아웃 복원
@@ -2402,6 +2490,31 @@ Emit a native mouse-bridge event (native-mousedown/move/up) at viewport x,y — 
 
 ```bash
 sok webview.emitNative '{"kind":"native-mousedown","x":400,"y":300}'
+```
+
+## `webview.health.query`
+
+Report webview renderer-process health per label: circuit-breaker state (closed / recovering / open), crash counts in the rolling 60s window, lifetime total, and the last termination reason if the platform provided one. Labels: a window label is that window's main webview, b-<win>-<view> is a browser child. state=open means automatic recovery is exhausted — recover it manually with webview.recover. | 웹뷰 건강 상태 크래시 조회 복구
+
+**Returns**: { count, entries: [{label, state, attempt, crashesInWindow, totalCrashes, lastCrashAgoMs, lastReason}] }
+
+```bash
+sok webview.health.query
+```
+
+## `webview.recover`
+
+Manually recover a webview: reset its circuit breaker (clears the crash window and the open state) and reload it in place. Use after webview.health.query shows state=open, or any time a webview is blank/wedged. The window's main webview reloads through the normal boot path (terminals survive — PTYs live in the core); a browser child (b-<win>-<view>) reloads in place without being re-created. | 웹뷰 복구 되살리기 크래시 화면
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `label` | string | ✓ | webview label — a window label for that window's main webview, or b-<win>-<view> for a browser child (list via webview.health.query or window.list) |
+
+**Returns**: { label, reloaded: true }
+**Errors**: TARGET_NOT_FOUND
+
+```bash
+sok webview.recover '{"label":"b-w-1234-v7"}'
 ```
 
 ## `window.close`
@@ -2522,7 +2635,7 @@ sok window.occlusion '{"enabled":false}'
 
 ## `window.open`
 
-Open a new workspace window for a project root (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). root is required unless mode orchestrator, which brings the control plane (main) forward instead — opening and creating projects live there; empty workspace windows do not exist. | 새 창 열기 윈도우 프로젝트 오케스트레이터
+Open a new project window for a project root (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). root is required unless mode orchestrator, which brings the control plane (main) forward instead — opening and creating projects live there; empty project windows do not exist. | 새 창 열기 윈도우 프로젝트 오케스트레이터
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
