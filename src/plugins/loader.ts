@@ -26,7 +26,12 @@ import {
   type TransparencyRule,
 } from "./conformance";
 import { rawImplements } from "./contractDiscovery";
-import { registerServiceProxies, type ServiceProxyDeps } from "./serviceProxy";
+import {
+  registerBusBridge,
+  registerServiceProxies,
+  type ServiceProxyDeps,
+} from "./serviceProxy";
+import { busOn } from "./bus";
 import { useSettings } from "../state/settings";
 import type { PluginManifest } from "./spec";
 
@@ -38,6 +43,14 @@ function serviceProxyDeps(deps: PluginApiDeps): ServiceProxyDeps {
     unregisterCommand: deps.unregisterCommand,
     locale: () => useSettings.getState().language,
   };
+}
+
+// 서비스 프록시 + bus 브리지를 함께 건다(PS11·PS15). 수명 = 활성 수명(tracker 수거).
+function wireService(manifest: PluginManifest, deps: PluginApiDeps, tracker: { wrap: (d: () => void) => void }, markRegistered: (bare: string) => void): void {
+  tracker.wrap(registerServiceProxies(manifest, serviceProxyDeps(deps), markRegistered));
+  if (manifest.service) {
+    tracker.wrap(registerBusBridge(manifest, { invoke: deps.invoke, busOn }));
+  }
 }
 
 // entry 코드 문자열 → ESM 모듈. 상대 import 불가(스펙: 단일 번들 필수).
@@ -189,11 +202,9 @@ export async function activatePlugin(
   for (const p of manifest.contributes.programs) {
     tracker.wrap(useProgramRegistry.getState().register(manifest.id, p));
   }
-  // bind:"service" 커맨드 프록시 — 매니페스트 데이터 합성 등록(PS3·PS11, docs/PLUGIN-SERVICE.md).
-  // 프록시 수명 = 활성 수명(서비스 재시작과 무관 — 재등록 금지, 레지스트리 중복-throw 유효).
-  tracker.wrap(
-    registerServiceProxies(manifest, serviceProxyDeps(deps), (bare) => registered.commands.add(bare)),
-  );
+  // bind:"service" 커맨드 프록시 + bus 브리지(PS3·PS11·PS15, docs/PLUGIN-SERVICE.md).
+  // 수명 = 활성 수명(서비스 재시작과 무관 — 재등록 금지, 레지스트리 중복-throw 유효).
+  wireService(manifest, deps, tracker, (bare) => registered.commands.add(bare));
 
   const subscriptions: Disposable[] = [];
   const ctx: PluginContext = { app: api, manifest, dir, subscriptions };
@@ -254,9 +265,7 @@ export async function activateContractPlugin(
   for (const p of manifest.contributes.programs) {
     tracker.wrap(useProgramRegistry.getState().register(manifest.id, p));
   }
-  tracker.wrap(
-    registerServiceProxies(manifest, serviceProxyDeps(deps), (bare) => registered.commands.add(bare)),
-  );
+  wireService(manifest, deps, tracker, (bare) => registered.commands.add(bare));
   reportDeclaredButNotRegistered(manifest, registered);
 
   let deactivated = false;

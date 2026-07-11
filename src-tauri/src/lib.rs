@@ -423,6 +423,7 @@ pub fn run() {
             schedule::schedule_register,
             service::service_dispatch,
             service::service_ledger_sync,
+            service::service_bus_push,
             schedule::schedule_poke,
             schedule::schedule_cancel,
             schedule::schedule_list,

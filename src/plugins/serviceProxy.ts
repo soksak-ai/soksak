@@ -72,6 +72,44 @@ export function registerServiceProxies(
   };
 }
 
+// ── bus→서비스 브리지(PS15) ──────────────────────────────────────────────────────
+// 서비스가 hello subscribe[] 로 선언한 bus 토픽을 이 창의 bus 에서 수집해 코어로 올린다
+// (service_bus_push). 코어가 seq dedup 후 구독 서비스로 1회 push. 여러 창이 같은 변경에
+// 반응해 같은 토픽을 발행해도, 발행 payload 의 dedupKey(플러그인이 실은 논리적 리비전)로
+// 창 간 중복이 제거된다 — 없으면 매 발행이 올라가고 서비스가 흡수(구독은 트리거).
+export interface BusBridgeDeps {
+  invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+  busOn: (topic: string, fn: (payload: unknown) => void) => () => void;
+}
+
+export function registerBusBridge(
+  manifest: PluginManifest,
+  deps: BusBridgeDeps,
+): () => void {
+  const svc = manifest.service;
+  const offs: Array<() => void> = [];
+  for (const sub of svc?.subscribe ?? []) {
+    // 선언 형식은 "bus:<topic>"(service.ts SUBSCRIBE_RE) — bus 축의 실제 토픽은 접두 제거.
+    const busTopic = sub.startsWith("bus:") ? sub.slice("bus:".length) : sub;
+    offs.push(
+      deps.busOn(busTopic, (payload) => {
+        const dedupKey =
+          payload && typeof payload === "object" && typeof (payload as { dedupKey?: unknown }).dedupKey === "string"
+            ? (payload as { dedupKey: string }).dedupKey
+            : undefined;
+        void deps.invoke("service_bus_push", {
+          topic: sub,
+          payload: payload ?? {},
+          ...(dedupKey !== undefined ? { dedupKey } : {}),
+        });
+      }),
+    );
+  }
+  return () => {
+    for (const off of offs.splice(0).reverse()) off();
+  };
+}
+
 // ── bind 원장 파생(PS9) ─────────────────────────────────────────────────────────
 // 원장은 파생물이다: 원본은 매니페스트(단일 심판 parseManifest 의 판정 결과)와 활성/동의
 // 상태. 여기서 이미-판정된 부분집합만 뽑아 코어(service_ledger_sync)에 내린다.

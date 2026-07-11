@@ -71,7 +71,17 @@ struct SvcInner {
     // 드레인/종료 의도 — reader EOF 를 크래시로 오분류하지 않는다.
     intent_stop: bool,
     attempt: u32,
+    // bus 브리지 dedup(PS15) — 이 서비스에 이미 push 한 (topic, dedupKey) 최근 집합.
+    // 여러 창이 같은 데이터 변경에 반응해 같은 토픽을 발행해도, 같은 dedupKey 는 1회만 전달된다.
+    // ring 상한으로 무한 증가 방지(오래된 키는 밀려난다 — 근접 중복만 제거하면 충분).
+    seen_bus: std::collections::VecDeque<String>,
+    seen_bus_set: std::collections::HashSet<String>,
+    // 이 서비스로 나간 push 의 단조 seq(서비스가 자기 Push 스트림을 dedup 할 수 있는 축).
+    push_seq: u64,
 }
+
+// bus dedup ring 상한 — 창 수 × 근접 발행을 넉넉히 덮는다.
+const BUS_DEDUP_RING: usize = 256;
 
 pub struct Service {
     binding: ServiceBinding,
@@ -157,6 +167,9 @@ impl ServiceManager {
                         pending: HashMap::new(),
                         intent_stop: false,
                         attempt: 0,
+                        seen_bus: std::collections::VecDeque::new(),
+                        seen_bus_set: std::collections::HashSet::new(),
+                        push_seq: 1,
                     }),
                     cv: Condvar::new(),
                 }),
@@ -301,6 +314,49 @@ impl ServiceManager {
         }
     }
 
+    // bus 이벤트를 구독 서비스로 push(PS15) — topic 을 hello subscribe[] 에 선언한 서비스에게
+    // seq dedup 후 1회 전달한다. dedup_key 는 논리적 이벤트 식별자(예: 데이터 리비전) — 여러 창이
+    // 같은 변경에 반응해 같은 토픽을 발행해도 같은 키는 1회만. dedup_key 부재면 항상 전달(코어 seq).
+    // Ready 아닌 서비스는 건너뛴다(스폰/드레인 중 push 유실은 서비스가 ready 후 재조회로 복구 — 구독은
+    // 트리거이지 상태 원천이 아니다). 반환 = 실제 push 한 서비스 수.
+    pub fn push_bus(&self, topic: &str, dedup_key: Option<&str>, payload: Value) -> usize {
+        let targets: Vec<Arc<Service>> = {
+            let services = lock_or_poisoned(&self.inner.services);
+            services
+                .values()
+                .filter(|s| s.binding.subscribe.iter().any(|t| t == topic))
+                .cloned()
+                .collect()
+        };
+        let mut delivered = 0;
+        for svc in targets {
+            let mut inner = lock_or_poisoned(&svc.inner);
+            if !matches!(inner.status, SvcStatus::Ready) {
+                continue;
+            }
+            if let Some(key) = dedup_key {
+                let combined = format!("{topic}\0{key}");
+                if inner.seen_bus_set.contains(&combined) {
+                    continue; // 근접 중복 — 1회만.
+                }
+                inner.seen_bus_set.insert(combined.clone());
+                inner.seen_bus.push_back(combined);
+                while inner.seen_bus.len() > BUS_DEDUP_RING {
+                    if let Some(old) = inner.seen_bus.pop_front() {
+                        inner.seen_bus_set.remove(&old);
+                    }
+                }
+            }
+            let seq = inner.push_seq;
+            inner.push_seq += 1;
+            let frame = ServiceIn::Push { topic: topic.to_string(), seq, payload: payload.clone() };
+            if send_frame(&mut inner, &frame).is_ok() {
+                delivered += 1;
+            }
+        }
+        delivered
+    }
+
     // 환경 변화(시크릿 set/unlock 이벤트)의 발효 — 드레인 재시작(PS10). in-flight 완료를 cv 로
     // 기다리고(백스톱 상한), shutdown → 유예 → kill → 새 세대 스폰. 이벤트 시점 호출 전용(폴링 0).
     pub fn drain_restart(&self, plugin: &str) -> bool {
@@ -332,6 +388,10 @@ impl ServiceManager {
                     .unwrap_or_else(|p| p.into_inner());
                 inner = guard;
             }
+            // 세대를 먼저 올려 옛 reader 를 stale 로 만든다 — kill 로 인한 옛 프로세스의 EOF 가
+            // on_stream_end 에서 generation != my_gen 으로 즉시 bail(신세대 크래시 오분류 방지).
+            // intent_stop 은 세대 간 공유라 이 race 를 막지 못한다 — 세대 가드가 근본 차단.
+            inner.generation += 1;
             inner.intent_stop = true;
             let _ = send_frame(&mut inner, &ServiceIn::Shutdown);
             if let Some(kill) = inner.kill.as_mut() {
@@ -865,6 +925,19 @@ pub fn service_dispatch(
     })
 }
 
+// 창 bus 이벤트를 서비스로 브리지(PS15) — 각 창의 로더가 구독 토픽에 리스너를 걸고 발행 시
+// 이 커맨드로 코어에 올린다. 코어(ServiceManager)가 seq dedup 후 구독 서비스로 1회 push.
+// dedup_key 는 논리적 이벤트 식별자(플러그인이 실으면 창 간 중복 제거) — 부재면 항상 전달.
+#[tauri::command]
+pub fn service_bus_push(
+    mgr: tauri::State<ServiceManager>,
+    topic: String,
+    payload: Value,
+    dedup_key: Option<String>,
+) -> usize {
+    mgr.push_bus(&topic, dedup_key.as_deref(), payload)
+}
+
 // bind 원장 동기화(PS9) — 프론트(단일 심판 parseManifest 의 판정 결과)가 파생 원장을 내리면
 // 코어가 원자 교체로 쓰고 bind 델타를 적용한다: 제거된 서비스는 unbind+owner 스케줄 회수,
 // 새 서비스는 스케줄 등록+bind. 내용 동일이면 no-op(멱등 — 창 여러 개가 불러도 무해).
@@ -916,542 +989,5 @@ pub fn service_ledger_sync(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::VecDeque;
-    use std::io::Read;
-    use std::sync::atomic::AtomicUsize;
-
-    // ── 인메모리 파이프(블로킹 Read/Write) — 프로세스 없는 결정적 유닛 ─────────
-
-    #[derive(Clone, Default)]
-    struct Pipe(Arc<(Mutex<PipeBuf>, Condvar)>);
-
-    #[derive(Default)]
-    struct PipeBuf {
-        buf: VecDeque<u8>,
-        closed: bool,
-    }
-
-    impl Pipe {
-        fn close(&self) {
-            let (m, cv) = &*self.0;
-            lock_or_poisoned(m).closed = true;
-            cv.notify_all();
-        }
-    }
-
-    impl Write for Pipe {
-        fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
-            let (m, cv) = &*self.0;
-            let mut b = lock_or_poisoned(m);
-            if b.closed {
-                return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "closed"));
-            }
-            b.buf.extend(data);
-            cv.notify_all();
-            Ok(data.len())
-        }
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    impl Read for Pipe {
-        fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
-            let (m, cv) = &*self.0;
-            let mut b = lock_or_poisoned(m);
-            loop {
-                if !b.buf.is_empty() {
-                    let n = out.len().min(b.buf.len());
-                    for slot in out.iter_mut().take(n) {
-                        *slot = b.buf.pop_front().unwrap_or(0);
-                    }
-                    return Ok(n);
-                }
-                if b.closed {
-                    return Ok(0);
-                }
-                b = cv.wait(b).unwrap_or_else(|p| p.into_inner());
-            }
-        }
-    }
-
-    // ── 가짜 서비스 — 스크립트 클로저가 per-spawn 프로토콜 상대역을 연기 ────────
-
-    struct FakeConn {
-        // 코어가 서비스 stdin 에 쓴 것(서비스가 읽는다).
-        from_core: std::io::BufReader<Pipe>,
-        // 서비스 stdout(코어가 읽는다).
-        to_core: Pipe,
-    }
-
-    // 스크립트 종료 = 프로세스 종료 — 파이프를 닫아 코어가 EOF(크래시/종료)를 본다.
-    impl Drop for FakeConn {
-        fn drop(&mut self) {
-            self.to_core.close();
-            self.from_core.get_ref().close();
-        }
-    }
-
-    impl FakeConn {
-        fn read_frame(&mut self) -> Option<ServiceIn> {
-            let mut line = String::new();
-            match self.from_core.read_line(&mut line) {
-                Ok(n) if n > 0 => serde_json::from_str(line.trim()).ok(),
-                _ => None,
-            }
-        }
-        fn write_out(&mut self, f: &ServiceOut) {
-            let line = serde_json::to_string(f).expect("frame serialize");
-            let _ = writeln!(self.to_core, "{line}");
-        }
-        fn hello(&mut self, ops: &[&str]) {
-            self.write_out(&ServiceOut::Hello {
-                version: Some(soksak_service_proto::SERVICE_PROTOCOL_VERSION),
-                interface: soksak_service_proto::SERVICE_INTERFACE.into(),
-                ops: ops.iter().map(|s| s.to_string()).collect(),
-                subscribe: vec![],
-                pid: 1,
-            });
-        }
-    }
-
-    type Script = Arc<dyn Fn(u64, FakeConn) + Send + Sync>;
-
-    struct FakeSpawner {
-        script: Script,
-        spawns: AtomicUsize,
-    }
-
-    impl ServiceSpawner for FakeSpawner {
-        fn spawn(&self, _b: &ServiceBinding, _env: &[(String, String)]) -> Result<SpawnedIo, String> {
-            let n = self.spawns.fetch_add(1, Ordering::SeqCst) as u64 + 1;
-            let stdin_pipe = Pipe::default();
-            let stdout_pipe = Pipe::default();
-            let conn = FakeConn {
-                from_core: std::io::BufReader::new(stdin_pipe.clone()),
-                to_core: stdout_pipe.clone(),
-            };
-            let script = self.script.clone();
-            std::thread::spawn(move || script(n, conn));
-            let kill_in = stdin_pipe.clone();
-            let kill_out = stdout_pipe.clone();
-            Ok(SpawnedIo {
-                stdin: Box::new(stdin_pipe),
-                stdout: Box::new(std::io::BufReader::new(stdout_pipe)),
-                pid: n as u32,
-                kill: Box::new(move || {
-                    kill_in.close();
-                    kill_out.close();
-                }),
-            })
-        }
-    }
-
-    #[derive(Default)]
-    struct MockHost {
-        events: Mutex<Vec<(String, String)>>,
-        pokes: Mutex<Vec<String>>,
-    }
-
-    impl ServiceHost for MockHost {
-        fn publish(&self, kind: &str, source: &str, _payload: Value) {
-            lock_or_poisoned(&self.events).push((kind.to_string(), source.to_string()));
-        }
-        fn poke_owner(&self, owner: &str) {
-            lock_or_poisoned(&self.pokes).push(owner.to_string());
-        }
-        fn resolve_secret(&self, _ns: &str, name: &str) -> Result<String, String> {
-            if name == "MISSING" {
-                return Err("볼트 잠김".into());
-            }
-            Ok(format!("plain-{name}"))
-        }
-    }
-
-    fn binding(ops: &[&str]) -> ServiceBinding {
-        ServiceBinding {
-            plugin: "demo".into(),
-            sidecar: "demo".into(),
-            interface: soksak_service_proto::SERVICE_INTERFACE.into(),
-            ops: ops.iter().map(|s| s.to_string()).collect(),
-            subscribe: vec![],
-            schedules: vec![],
-            secrets: vec![],
-        }
-    }
-
-    fn manager(script: Script) -> (ServiceManager, Arc<MockHost>, Arc<FakeSpawner>) {
-        let host = Arc::new(MockHost::default());
-        let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0) });
-        let mgr = ServiceManager::with_backoff(host.clone(), spawner.clone(), vec![20, 20, 20, 20, 20]);
-        (mgr, host, spawner)
-    }
-
-    fn wait_status(mgr: &ServiceManager, plugin: &str, want: fn(&SvcStatus) -> bool) -> SvcStatus {
-        for _ in 0..200 {
-            if let Some(s) = mgr.status_of(plugin) {
-                if want(&s) {
-                    return s;
-                }
-            }
-            std::thread::sleep(Duration::from_millis(5));
-        }
-        mgr.status_of(plugin).unwrap_or(SvcStatus::Stopped)
-    }
-
-    fn events_of(host: &MockHost) -> Vec<String> {
-        lock_or_poisoned(&host.events).iter().map(|(k, _)| k.clone()).collect()
-    }
-
-    // ── PS3·PS5: hello 양방향 대조 — 불일치=거부, 재시도 없음 ────────────────
-
-    #[test]
-    fn hello_ops_mismatch_refuses_the_bind() {
-        let (mgr, host, spawner) = manager(Arc::new(|_gen, mut conn: FakeConn| {
-            conn.hello(&["run", "extra"]);
-        }));
-        mgr.bind(binding(&["run"]));
-        let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Error(_)));
-        assert!(matches!(st, SvcStatus::Error(ref r) if r.contains("ops 불일치")), "{st:?}");
-        assert!(events_of(&host).contains(&"service.bind.refused".to_string()));
-        assert_eq!(spawner.spawns.load(Ordering::SeqCst), 1, "거부는 재시도 없음");
-    }
-
-    #[test]
-    fn hello_interface_mismatch_refuses_the_bind() {
-        let (mgr, _host, _sp) = manager(Arc::new(|_gen, mut conn: FakeConn| {
-            conn.write_out(&ServiceOut::Hello {
-                version: Some(1),
-                interface: "soksak-other-spec@1".into(),
-                ops: vec!["run".into()],
-                subscribe: vec![],
-                pid: 1,
-            });
-        }));
-        mgr.bind(binding(&["run"]));
-        let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Error(_)));
-        assert!(matches!(st, SvcStatus::Error(ref r) if r.contains("interface 불일치")), "{st:?}");
-    }
-
-    // ── PS7·PS5: 봉투 매핑 — message/hints 1급, 미지 코드는 INTERNAL 클램프 ──
-
-    fn echo_script() -> Script {
-        Arc::new(|_gen, mut conn: FakeConn| {
-            conn.hello(&["run", "fail"]);
-            loop {
-                match conn.read_frame() {
-                    Some(ServiceIn::Req { id, op, params, .. }) => {
-                        if op == "run" {
-                            conn.write_out(&ServiceOut::Res {
-                                id,
-                                ok: true,
-                                code: None,
-                                message: Some("완료했습니다".into()),
-                                hints: Some(vec![soksak_service_proto::Hint {
-                                    cmd: "plugin.demo.fail".into(),
-                                    why: "다음 단계".into(),
-                                }]),
-                                data: Some(json!({ "echo": params })),
-                            });
-                        } else {
-                            conn.write_out(&ServiceOut::Res {
-                                id,
-                                ok: false,
-                                code: Some("WEIRD_CODE".into()),
-                                message: Some("실패".into()),
-                                hints: None,
-                                data: None,
-                            });
-                        }
-                    }
-                    Some(ServiceIn::Shutdown) | None => return,
-                    _ => {}
-                }
-            }
-        })
-    }
-
-    #[test]
-    fn dispatch_maps_the_envelope_with_message_hints_and_code_clamp() {
-        let (mgr, _host, _sp) = manager(echo_script());
-        mgr.bind(binding(&["run", "fail"]));
-        assert!(mgr.owns("plugin.demo.run"), "데이터 주도 소유 판정(PS11)");
-        assert!(!mgr.owns("plugin.demo.ghost"));
-        let ok = mgr
-            .dispatch("plugin.demo.run", json!({ "doc": "a" }), None, "socket", None, 2_000, 10_000)
-            .expect("소유 커맨드");
-        assert_eq!(ok["ok"], true);
-        assert_eq!(ok["code"], "OK");
-        assert_eq!(ok["message"], "완료했습니다", "message 는 봉투 1급(PS7)");
-        assert_eq!(ok["hints"][0]["cmd"], "plugin.demo.fail");
-        assert_eq!(ok["data"]["echo"]["doc"], "a");
-        let err = mgr
-            .dispatch("plugin.demo.fail", json!({}), None, "socket", None, 2_000, 10_000)
-            .expect("소유 커맨드");
-        assert_eq!(err["ok"], false);
-        assert_eq!(err["code"], "INTERNAL", "미지 코드는 폐쇄 enum 클램프(PS5)");
-        assert_eq!(err["message"], "실패");
-    }
-
-    #[test]
-    fn dispatch_returns_none_for_unowned_methods() {
-        let (mgr, _host, _sp) = manager(echo_script());
-        mgr.bind(binding(&["run", "fail"]));
-        assert!(mgr
-            .dispatch("window.open", json!({}), None, "socket", None, 100, 100)
-            .is_none());
-    }
-
-    // ── 멀티플렉스 — 역순 응답도 각자에게 도착 ────────────────────────────────
-
-    #[test]
-    fn multiplexed_requests_resolve_out_of_order() {
-        let script: Script = Arc::new(|_gen, mut conn: FakeConn| {
-            conn.hello(&["a", "b"]);
-            let mut held: Option<u64> = None;
-            loop {
-                match conn.read_frame() {
-                    Some(ServiceIn::Req { id, op, .. }) => {
-                        if op == "a" {
-                            held = Some(id); // 첫 req 는 보류
-                        } else {
-                            conn.write_out(&ServiceOut::Res {
-                                id, ok: true, code: None,
-                                message: None, hints: None, data: Some(json!({ "op": "b" })),
-                            });
-                            if let Some(h) = held.take() {
-                                conn.write_out(&ServiceOut::Res {
-                                    id: h, ok: true, code: None,
-                                    message: None, hints: None, data: Some(json!({ "op": "a" })),
-                                });
-                            }
-                        }
-                    }
-                    Some(ServiceIn::Shutdown) | None => return,
-                    _ => {}
-                }
-            }
-        });
-        let (mgr, _host, _sp) = manager(script);
-        mgr.bind(binding(&["a", "b"]));
-        let mgr = Arc::new(mgr);
-        let m2 = mgr.clone();
-        let t = std::thread::spawn(move || {
-            m2.dispatch("plugin.demo.a", json!({}), None, "socket", None, 3_000, 10_000)
-        });
-        std::thread::sleep(Duration::from_millis(50)); // a 가 먼저 도착하도록
-        let b = mgr
-            .dispatch("plugin.demo.b", json!({}), None, "socket", None, 3_000, 10_000)
-            .expect("b");
-        assert_eq!(b["data"]["op"], "b");
-        let a = t.join().expect("join").expect("a");
-        assert_eq!(a["data"]["op"], "a", "역순 응답이 원 요청자에게 도착(멀티플렉스)");
-    }
-
-    // ── PS12: 진행 ev 가 마감을 연장한다 ─────────────────────────────────────
-
-    #[test]
-    fn progress_events_extend_the_deadline() {
-        let script: Script = Arc::new(|_gen, mut conn: FakeConn| {
-            conn.hello(&["slow"]);
-            loop {
-                match conn.read_frame() {
-                    Some(ServiceIn::Req { id, .. }) => {
-                        // 마감(200ms)보다 늦게 끝나지만 진행 ev 가 계속 연장한다.
-                        for _ in 0..4 {
-                            std::thread::sleep(Duration::from_millis(100));
-                            conn.write_out(&ServiceOut::Ev {
-                                id, kind: "progress".into(), payload: json!({}),
-                            });
-                        }
-                        std::thread::sleep(Duration::from_millis(100));
-                        conn.write_out(&ServiceOut::Res {
-                            id, ok: true, code: None, message: None, hints: None,
-                            data: Some(json!({ "done": true })),
-                        });
-                    }
-                    Some(ServiceIn::Shutdown) | None => return,
-                    _ => {}
-                }
-            }
-        });
-        let (mgr, _host, _sp) = manager(script);
-        mgr.bind(binding(&["slow"]));
-        let out = mgr
-            .dispatch("plugin.demo.slow", json!({}), None, "socket", None, 200, 60_000)
-            .expect("소유 커맨드");
-        assert_eq!(out["ok"], true, "진행 중 op 는 마감 연장으로 완주(PS12): {out}");
-    }
-
-    // ── PS10: 크래시 경로 — 결정적 즉사/백오프 리스폰/상한/의도 종료 ──────────
-
-    #[test]
-    fn immediate_exit_before_ready_goes_straight_to_error() {
-        let (mgr, host, spawner) = manager(Arc::new(|_gen, conn: FakeConn| {
-            drop(conn); // hello 없이 즉사
-        }));
-        mgr.bind(binding(&["run"]));
-        let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Error(_)));
-        assert!(matches!(st, SvcStatus::Error(ref r) if r.contains("기동 즉시 종료")), "{st:?}");
-        std::thread::sleep(Duration::from_millis(100));
-        assert_eq!(spawner.spawns.load(Ordering::SeqCst), 1, "결정적 즉사는 재시도 없음(PS10)");
-        assert!(events_of(&host).contains(&"service.error".to_string()), "loud(PS8)");
-    }
-
-    #[test]
-    fn crash_after_ready_respawns_with_backoff_and_pokes_owner() {
-        let script: Script = Arc::new(|generation, mut conn: FakeConn| {
-            conn.hello(&["run"]);
-            if generation == 1 {
-                // ready 수신 후 크래시.
-                let _ = conn.read_frame();
-                return;
-            }
-            loop {
-                match conn.read_frame() {
-                    Some(ServiceIn::Req { id, .. }) => {
-                        conn.write_out(&ServiceOut::Res {
-                            id, ok: true, code: None, message: None, hints: None,
-                            data: Some(json!({ "generation": generation })),
-                        });
-                    }
-                    Some(ServiceIn::Shutdown) | None => return,
-                    _ => {}
-                }
-            }
-        });
-        let (mgr, host, spawner) = manager(script);
-        mgr.bind(binding(&["run"]));
-        // 2세대가 Ready 될 때까지 — 크래시(1세대) → 백오프 → 리스폰.
-        let out = mgr
-            .dispatch("plugin.demo.run", json!({}), None, "socket", None, 5_000, 10_000)
-            .expect("소유 커맨드");
-        assert_eq!(out["data"]["generation"], 2, "리스폰 세대가 응답: {out}");
-        assert!(spawner.spawns.load(Ordering::SeqCst) >= 2);
-        let ev = events_of(&host);
-        assert!(ev.contains(&"service.backoff".to_string()), "백오프 발행(loud): {ev:?}");
-        let pokes = lock_or_poisoned(&host.pokes);
-        assert!(pokes.len() >= 2, "ready 마다 owner poke(부팅 스캔·리스폰 되먹임): {pokes:?}");
-    }
-
-    #[test]
-    fn crash_cap_lands_in_error_state_loudly() {
-        let host = Arc::new(MockHost::default());
-        let spawner = Arc::new(FakeSpawner {
-            script: Arc::new(|_gen, mut conn: FakeConn| {
-                conn.hello(&["run"]);
-                let _ = conn.read_frame(); // ready 받고 즉시 크래시(전 세대)
-            }),
-            spawns: AtomicUsize::new(0),
-        });
-        let mgr = ServiceManager::with_backoff(host.clone(), spawner.clone(), vec![5, 5]);
-        mgr.bind(binding(&["run"]));
-        let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Error(_)));
-        assert!(matches!(st, SvcStatus::Error(ref r) if r.contains("크래시 상한")), "{st:?}");
-        assert_eq!(spawner.spawns.load(Ordering::SeqCst), 3, "원 스폰 + 백오프 2회");
-    }
-
-    #[test]
-    fn crash_answers_inflight_pending_immediately() {
-        let script: Script = Arc::new(|_gen, mut conn: FakeConn| {
-            conn.hello(&["run"]);
-            let _ = conn.read_frame(); // ready
-            let _ = conn.read_frame(); // req 받고 응답 없이 크래시
-        });
-        let (mgr, _host, _sp) = manager(script);
-        mgr.bind(binding(&["run"]));
-        let started = std::time::Instant::now();
-        let out = mgr
-            .dispatch("plugin.demo.run", json!({}), None, "socket", None, 30_000, 60_000)
-            .expect("소유 커맨드");
-        assert_eq!(out["ok"], false);
-        assert_eq!(out["code"], "INTERNAL");
-        assert!(started.elapsed() < Duration::from_secs(5), "타임아웃 방치 금지 — 즉시 응답(PS12)");
-    }
-
-    // ── PS10: 드레인 재시작 — in-flight 완주 후 교체, 새 req 는 큐잉 ──────────
-
-    #[test]
-    fn drain_restart_completes_inflight_then_replaces_the_process() {
-        let script: Script = Arc::new(|generation, mut conn: FakeConn| {
-            conn.hello(&["work"]);
-            loop {
-                match conn.read_frame() {
-                    Some(ServiceIn::Req { id, .. }) => {
-                        std::thread::sleep(Duration::from_millis(80));
-                        conn.write_out(&ServiceOut::Res {
-                            id, ok: true, code: None, message: None, hints: None,
-                            data: Some(json!({ "generation": generation })),
-                        });
-                    }
-                    Some(ServiceIn::Shutdown) | None => return,
-                    _ => {}
-                }
-            }
-        });
-        let (mgr, host, _sp) = manager(script);
-        mgr.bind(binding(&["work"]));
-        wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Ready));
-        let mgr = Arc::new(mgr);
-        let m2 = mgr.clone();
-        let inflight = std::thread::spawn(move || {
-            m2.dispatch("plugin.demo.work", json!({}), None, "socket", None, 5_000, 10_000)
-        });
-        std::thread::sleep(Duration::from_millis(20)); // in-flight 진입 보장
-        assert!(mgr.drain_restart("demo"), "Ready 상태에서 드레인 수용");
-        let first = inflight.join().expect("join").expect("in-flight");
-        assert_eq!(first["data"]["generation"], 1, "in-flight 는 옛 세대에서 완주(도는 중 안 자름)");
-        let after = mgr
-            .dispatch("plugin.demo.work", json!({}), None, "socket", None, 5_000, 10_000)
-            .expect("소유 커맨드");
-        assert_eq!(after["data"]["generation"], 2, "드레인 후 요청은 새 세대로: {after}");
-        let ev = events_of(&host);
-        assert!(ev.contains(&"service.draining".to_string()) && ev.contains(&"service.restarted".to_string()), "{ev:?}");
-    }
-
-    // ── PS9: 시크릿 all-or-nothing — 미해소면 Error, 부분 주입 금지 ───────────
-
-    #[test]
-    fn unresolved_declared_secret_refuses_the_spawn() {
-        let (mgr, host, spawner) = manager(echo_script());
-        let mut b = binding(&["run", "fail"]);
-        b.secrets = vec!["OK_ONE".into(), "MISSING".into()];
-        mgr.bind(b);
-        let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Error(_)));
-        assert!(matches!(st, SvcStatus::Error(ref r) if r.contains("MISSING")), "{st:?}");
-        assert_eq!(spawner.spawns.load(Ordering::SeqCst), 0, "미해소 시크릿이면 스폰 자체가 없다");
-        assert!(events_of(&host).contains(&"service.error".to_string()));
-    }
-
-    // ── PS10: kill_all — pending 즉시 응답 + Stopped ─────────────────────────
-
-    #[test]
-    fn kill_all_answers_pending_and_stops() {
-        let script: Script = Arc::new(|_gen, mut conn: FakeConn| {
-            conn.hello(&["hang"]);
-            let _ = conn.read_frame(); // ready
-            let _ = conn.read_frame(); // req — 영영 무응답
-            loop {
-                match conn.read_frame() {
-                    Some(ServiceIn::Shutdown) | None => return,
-                    _ => {}
-                }
-            }
-        });
-        let (mgr, _host, _sp) = manager(script);
-        mgr.bind(binding(&["hang"]));
-        wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Ready));
-        let mgr = Arc::new(mgr);
-        let m2 = mgr.clone();
-        let hung = std::thread::spawn(move || {
-            m2.dispatch("plugin.demo.hang", json!({}), None, "socket", None, 30_000, 60_000)
-        });
-        std::thread::sleep(Duration::from_millis(50));
-        mgr.kill_all();
-        let out = hung.join().expect("join").expect("소유 커맨드");
-        assert_eq!(out["code"], "UNAVAILABLE", "종료 시 pending 즉시 응답: {out}");
-        assert_eq!(mgr.status_of("demo"), Some(SvcStatus::Stopped));
-    }
-}
+#[path = "service_tests.rs"]
+mod tests;

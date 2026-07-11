@@ -5,6 +5,7 @@ import { execute, register, unregister } from "../commands/registry";
 import { parseManifest, SERVICE_INTERFACE, type PluginManifest } from "./spec";
 import {
   buildBindLedger,
+  registerBusBridge,
   registerServiceProxies,
   type ServiceProxyDeps,
 } from "./serviceProxy";
@@ -144,5 +145,71 @@ describe("buildBindLedger — 원장 파생(PS9·PS14)", () => {
     expect(manifest).not.toBeNull();
     if (!manifest) return;
     expect(buildBindLedger([manifest]).services).toEqual([]);
+  });
+});
+
+describe("registerBusBridge — 창 bus → 코어 브리지(PS15)", () => {
+  type BusFn = (payload: unknown) => void;
+
+  function harness() {
+    const listeners = new Map<string, Set<BusFn>>();
+    const calls: Array<Record<string, unknown>> = [];
+    const busOn = (topic: string, fn: BusFn): (() => void) => {
+      const set = listeners.get(topic) ?? new Set<BusFn>();
+      set.add(fn);
+      listeners.set(topic, set);
+      return () => set.delete(fn);
+    };
+    const emit = (topic: string, payload: unknown) => {
+      for (const fn of listeners.get(topic) ?? []) fn(payload);
+    };
+    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
+      calls.push({ cmd, ...(args ?? {}) });
+      return 1;
+    };
+    return { busOn, emit, invoke, calls, listeners };
+  }
+
+  it("subscribe 토픽(bus: 접두 제거) 발행을 service_bus_push 로 올린다", () => {
+    const h = harness();
+    const off = registerBusBridge(demoManifest(), { invoke: h.invoke, busOn: h.busOn });
+    // 서비스는 "bus:kanban:changed" 구독 → bus 축 실토픽은 "kanban:changed".
+    h.emit("kanban:changed", { n: 1 });
+    expect(h.calls).toEqual([
+      { cmd: "service_bus_push", topic: "bus:kanban:changed", payload: { n: 1 } },
+    ]);
+    off();
+    h.emit("kanban:changed", { n: 2 });
+    expect(h.calls.length).toBe(1); // 해제 후 미전달
+  });
+
+  it("payload.dedupKey 는 dedupKey 인자로 실린다(창 간 dedup의 키)", () => {
+    const h = harness();
+    registerBusBridge(demoManifest(), { invoke: h.invoke, busOn: h.busOn });
+    h.emit("kanban:changed", { dedupKey: "rev-7", changed: true });
+    expect(h.calls[0]).toEqual({
+      cmd: "service_bus_push",
+      topic: "bus:kanban:changed",
+      payload: { dedupKey: "rev-7", changed: true },
+      dedupKey: "rev-7",
+    });
+  });
+
+  it("service 없는 매니페스트는 리스너를 걸지 않는다", () => {
+    const h = harness();
+    const { manifest } = parseManifest(
+      {
+        spec: "soksak-plugin-spec@1",
+        id: "plain",
+        name: "일반",
+        version: "1.0.0",
+        description: "no service",
+        permissions: [],
+      },
+      "plain",
+    );
+    if (!manifest) throw new Error("파싱 실패");
+    registerBusBridge(manifest, { invoke: h.invoke, busOn: h.busOn });
+    expect(h.listeners.size).toBe(0);
   });
 });
