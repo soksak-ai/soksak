@@ -133,6 +133,28 @@ pub fn run() {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || service::boot(&handle));
             }
+            // 시크릿 볼트 변경 → secrets 의존 서비스 드레인 재시작(PS10). secrets.rs 가 발행하는
+            // "secrets-unlocked"/"secrets-locked" 를 Rust 측에서 구독(secrets↔service 무결합 — R7).
+            // 드레인은 in-flight 완료를 최대 5s 대기하므로 리스너 스레드를 막지 않게 별 스레드로 던진다
+            // (이벤트 구동 — 폴링 0). unlock=새 세대가 토큰 획득(잠금 중 스폰 회복), lock=평문 env 소거.
+            {
+                use tauri::Listener;
+                for ev in ["secrets-unlocked", "secrets-locked"] {
+                    let h = app.handle().clone();
+                    app.listen_any(ev, move |_| {
+                        let h2 = h.clone();
+                        std::thread::spawn(move || {
+                            use tauri::Manager;
+                            if let Some(mgr) = h2.try_state::<service::ServiceManager>() {
+                                let n = mgr.drain_restart_secret_dependents();
+                                if n > 0 {
+                                    eprintln!("[service] 시크릿 변경 → 드레인 재시작 {n}개");
+                                }
+                            }
+                        });
+                    });
+                }
+            }
             // 백업 링 실패 고지에 쓸 앱 핸들을 심는다 — 이후 자동 백업 스냅샷 실패가 activity/알림으로
             // 드러난다(무음 폴백 금지). 데이터 개방보다 먼저 심어 첫 쓰기 신호부터 커버한다.
             data::ring::set_app(app.handle());
@@ -424,6 +446,7 @@ pub fn run() {
             service::service_dispatch,
             service::service_ledger_sync,
             service::service_bus_push,
+            service::service_status,
             schedule::schedule_poke,
             schedule::schedule_cancel,
             schedule::schedule_list,

@@ -76,6 +76,19 @@ pub enum SvcStatus {
     Stopped,
 }
 
+// 상태 라벨(관측 표면) — snapshot/service_status 가 노출하는 안정 문자열. Error 사유는 별도 필드로
+// 싣지 않고 라벨에 접미(무음 금지: 사유가 관측면에 드러나야 한다).
+fn status_label(s: &SvcStatus) -> String {
+    match s {
+        SvcStatus::Spawning => "spawning".into(),
+        SvcStatus::Ready => "ready".into(),
+        SvcStatus::Draining => "draining".into(),
+        SvcStatus::Backoff(n) => format!("backoff:{n}"),
+        SvcStatus::Error(reason) => format!("error:{reason}"),
+        SvcStatus::Stopped => "stopped".into(),
+    }
+}
+
 struct PendingSvc {
     tx: mpsc::SyncSender<Value>,
     // 진행 ev 가 갱신하는 절대 마감(ms) — PS12 의 마감 연장 축.
@@ -213,6 +226,28 @@ impl ServiceManager {
     pub fn status_of(&self, plugin: &str) -> Option<SvcStatus> {
         let services = lock_or_poisoned(&self.inner.services);
         services.get(plugin).map(|s| lock_or_poisoned(&s.inner).status.clone())
+    }
+
+    // 상주 서비스 상태 스냅샷(투명성) — 플러그인별 status·ops·in-flight 수. service_status 커맨드가
+    // 그대로 노출한다(무음 마비 금지 — 크래시/드레인/백오프가 관측 가능해야 한다, PS10).
+    pub fn snapshot(&self) -> Vec<Value> {
+        let services = lock_or_poisoned(&self.inner.services);
+        let mut out: Vec<Value> = services
+            .iter()
+            .map(|(plugin, s)| {
+                let inner = lock_or_poisoned(&s.inner);
+                json!({
+                    "plugin": plugin,
+                    "status": status_label(&inner.status),
+                    "ops": s.binding.ops,
+                    "inflight": inner.pending.len(),
+                    "generation": inner.generation,
+                    "secretDependent": !s.binding.secrets.is_empty(),
+                })
+            })
+            .collect();
+        out.sort_by(|a, b| a["plugin"].as_str().unwrap_or("").cmp(b["plugin"].as_str().unwrap_or("")));
+        out
     }
 
     // 커맨드 실행(PS11·PS12) — 창 무관·포커스 무관. None = 이 매니저 소유가 아님(호출자 폴백).
@@ -432,6 +467,21 @@ impl ServiceManager {
         self.inner.host.publish("service.restarted", plugin, json!({ "cause": "drain" }));
         spawn_generation(&self.inner, &svc);
         true
+    }
+
+    // 시크릿 볼트 변경(unlock/lock/set) → 스폰 env 에 시크릿을 주입받는 서비스만 드레인 재시작(PS10).
+    // 이벤트 구동(폴링 0) — secrets.rs 가 발행하는 볼트 변경 이벤트를 코어가 구독해 호출한다. 시크릿
+    // 무의존 서비스는 건드리지 않는다(불필요 재시작 0). 재시작한 플러그인 수를 반환(관측·테스트).
+    pub fn drain_restart_secret_dependents(&self) -> usize {
+        let targets: Vec<String> = {
+            let services = lock_or_poisoned(&self.inner.services);
+            services
+                .iter()
+                .filter(|(_, s)| !s.binding.secrets.is_empty())
+                .map(|(plugin, _)| plugin.clone())
+                .collect()
+        };
+        targets.iter().filter(|p| self.drain_restart(p)).count()
     }
 
     // unbind — 서비스 내림 + ops 소유 해제(스케줄 회수는 호출자가 cancel_by_owner 로).
@@ -973,6 +1023,20 @@ pub fn service_bus_push(
     dedup_key: Option<String>,
 ) -> usize {
     mgr.push_bus(&topic, dedup_key.as_deref(), payload)
+}
+
+// 상주 서비스 상태 조회(투명성) — 플러그인별 status·ops·in-flight·세대. 크래시/드레인/백오프가
+// 무음이 아니라 관측 가능해야 한다(PS10). AI/E2E 가 `sok service.status` 로 읽는다. plugin 지정 시
+// 그 하나의 상태만(대상 조회), 부재 시 전체 스냅샷.
+#[tauri::command]
+pub fn service_status(mgr: tauri::State<ServiceManager>, plugin: Option<String>) -> Value {
+    match plugin {
+        Some(p) => match mgr.status_of(&p) {
+            Some(s) => json!({ "plugin": p, "status": status_label(&s) }),
+            None => json!({ "ok": false, "code": "NOT_FOUND", "message": format!("상주 서비스 없음: {p}") }),
+        },
+        None => json!({ "services": mgr.snapshot() }),
+    }
 }
 
 // bind 원장 동기화(PS9) — 프론트(단일 심판 parseManifest 의 판정 결과)가 파생 원장을 내리면

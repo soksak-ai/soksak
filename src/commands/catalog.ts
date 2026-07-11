@@ -45,6 +45,7 @@ import { registerMediaCatalog } from "./catalogMedia";
 import { registerClipboardCatalog } from "./catalogClipboard";
 import { registerNotifyCatalog } from "./catalogNotify";
 import { registerScheduleCatalog } from "./catalogSchedule";
+import { registerServiceCatalog } from "./catalogService";
 import { registerSystemCatalog } from "./catalogSystem";
 import { registerWebviewCatalog } from "./catalogWebview";
 import {
@@ -2708,6 +2709,7 @@ export function registerCatalog(): void {
   registerClipboardCatalog();
   registerNotifyCatalog();
   registerScheduleCatalog();
+  registerServiceCatalog();
   registerSystemCatalog();
   registerWebviewCatalog();
 }

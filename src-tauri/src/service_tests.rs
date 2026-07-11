@@ -734,3 +734,50 @@ fn kill_all_answers_pending_and_stops() {
     assert_eq!(out["code"], "UNAVAILABLE", "종료 시 pending 즉시 응답: {out}");
     assert_eq!(mgr.status_of("demo"), Some(SvcStatus::Stopped));
 }
+
+// ── PS10: 시크릿 변경 → secrets 의존 서비스만 드레인 재시작 ────────────────
+
+fn binding_named_secrets(plugin: &str, ops: &[&str], secrets: &[&str]) -> ServiceBinding {
+    let mut b = binding(ops);
+    b.plugin = plugin.into();
+    b.sidecar = plugin.into();
+    b.secrets = secrets.iter().map(|s| s.to_string()).collect();
+    b
+}
+
+#[test]
+fn drain_restart_on_secret_change_respawns_only_secret_dependents() {
+    let (mgr, host, spawner) = manager(echo_script());
+    mgr.bind(binding_named_secrets("with-secret", &["run", "fail"], &["AUTH"]));
+    mgr.bind(binding_named_secrets("no-secret", &["run", "fail"], &[]));
+    wait_status(&mgr, "with-secret", |s| matches!(s, SvcStatus::Ready));
+    wait_status(&mgr, "no-secret", |s| matches!(s, SvcStatus::Ready));
+    assert_eq!(spawner.spawns.load(Ordering::SeqCst), 2, "두 서비스 각 1회 스폰");
+
+    // 시크릿 볼트 변경 이벤트가 코어에서 부르는 것과 동일 경로 — 의존 서비스만 새 세대로 교체.
+    let n = mgr.drain_restart_secret_dependents();
+    assert_eq!(n, 1, "secrets 비어있지 않은 1개만 재시작(무의존은 건너뜀)");
+
+    wait_status(&mgr, "with-secret", |s| matches!(s, SvcStatus::Ready));
+    assert_eq!(
+        spawner.spawns.load(Ordering::SeqCst),
+        3,
+        "의존 서비스만 재스폰 — 총 3(무의존은 그대로)"
+    );
+
+    // 드레인·재시작은 loud — 관측 이벤트 발행(무음 마비 금지, PS10).
+    let evs = events_of(&host);
+    assert!(evs.iter().any(|e| e == "service.draining"), "드레인 진입 발행: {evs:?}");
+    assert!(evs.iter().any(|e| e == "service.restarted"), "재시작 발행: {evs:?}");
+
+    // 대상 조회 API — 재시작 후 두 서비스 모두 Ready.
+    assert!(matches!(mgr.status_of("with-secret"), Some(SvcStatus::Ready)));
+    assert!(matches!(mgr.status_of("no-secret"), Some(SvcStatus::Ready)));
+
+    // 무의존만 있으면 재시작 0(불필요 재시작 없음).
+    let (mgr2, _h2, sp2) = manager(echo_script());
+    mgr2.bind(binding_named_secrets("plain", &["run", "fail"], &[]));
+    wait_status(&mgr2, "plain", |s| matches!(s, SvcStatus::Ready));
+    assert_eq!(mgr2.drain_restart_secret_dependents(), 0, "시크릿 의존 없음 → 재시작 0");
+    assert_eq!(sp2.spawns.load(Ordering::SeqCst), 1, "재스폰 없음");
+}
