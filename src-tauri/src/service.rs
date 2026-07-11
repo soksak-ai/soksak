@@ -27,6 +27,10 @@ pub trait ServiceHost: Send + Sync + 'static {
     fn poke_owner(&self, owner: &str);
     // 볼트 시크릿 해소(ns=플러그인 id) — 평문은 스폰 env 경계로만(PS9).
     fn resolve_secret(&self, ns: &str, name: &str) -> Result<String, String>;
+    // 플러그인 ns 의 "env:" 접두 볼트 키를 (환경변수명, 평문) 쌍으로 해소(PS9 — vault_env 동적 주입).
+    // 1판 buildSecretEnvMap 의 Rust 등가: 사용자 구성 env 시크릿을 매니페스트 하드코딩 없이 스폰 env
+    // 로 넣는다. 잠김/미존재면 빈 벡터(1판 세션-env 폴백과 동형 — loud 실패 아님). 평문 로그 금지.
+    fn secret_env(&self, ns: &str) -> Vec<(String, String)>;
     // 중개 아웃바운드 호출 라우팅(PS13) — 게이트(의존성)는 코어가 이미 통과시킨 뒤 호출한다.
     // origin/parent 는 코어가 스탬핑한 값(caller=서비스 플러그인 id) — 자기신고 불신. 응답 봉투 반환.
     fn mediate(&self, caller: &str, method: &str, params: Value, under: Option<&str>) -> Value;
@@ -242,7 +246,7 @@ impl ServiceManager {
                     "ops": s.binding.ops,
                     "inflight": inner.pending.len(),
                     "generation": inner.generation,
-                    "secretDependent": !s.binding.secrets.is_empty(),
+                    "secretDependent": s.binding.vault_env || !s.binding.secrets.is_empty(),
                 })
             })
             .collect();
@@ -477,7 +481,7 @@ impl ServiceManager {
             let services = lock_or_poisoned(&self.inner.services);
             services
                 .iter()
-                .filter(|(_, s)| !s.binding.secrets.is_empty())
+                .filter(|(_, s)| s.binding.vault_env || !s.binding.secrets.is_empty())
                 .map(|(plugin, _)| plugin.clone())
                 .collect()
         };
@@ -577,6 +581,11 @@ fn spawn_generation(mgr: &Arc<MgrInner>, svc: &Arc<Service>) {
                 return;
             }
         }
+    }
+    // vault_env — "secrets" 권한 서비스는 ns 의 env: 볼트 키를 동적 주입(PS9). 잠김이면 빈 벡터라
+    // 스폰은 계속되고(loud 실패 아님), unlock 시 드레인 재시작이 새 세대에 토큰을 되찾아준다(PS10).
+    if svc.binding.vault_env {
+        env.extend(mgr.host.secret_env(&plugin));
     }
     let spawned = match mgr.spawner.spawn(&svc.binding, &env) {
         Ok(s) => s,
@@ -869,6 +878,11 @@ impl ServiceHost for AppServiceHost {
         use tauri::Manager;
         let state = self.app.state::<crate::secrets::SecretsState>();
         crate::secrets::resolve(&state, ns, name)
+    }
+    fn secret_env(&self, ns: &str) -> Vec<(String, String)> {
+        use tauri::Manager;
+        let state = self.app.state::<crate::secrets::SecretsState>();
+        crate::secrets::env_secrets(&state, ns)
     }
     fn mediate(&self, caller: &str, method: &str, params: Value, under: Option<&str>) -> Value {
         // 게이트는 코어(reader_loop)가 이미 통과시킨 뒤 호출한다. 여기서는 라우팅만:

@@ -105,10 +105,13 @@ type Script = Arc<dyn Fn(u64, FakeConn) + Send + Sync>;
 struct FakeSpawner {
     script: Script,
     spawns: AtomicUsize,
+    // 각 스폰에 전달된 env(name→value) 기록 — vault_env 주입 단언용.
+    envs: Mutex<Vec<Vec<(String, String)>>>,
 }
 
 impl ServiceSpawner for FakeSpawner {
-    fn spawn(&self, _b: &ServiceBinding, _env: &[(String, String)]) -> Result<SpawnedIo, String> {
+    fn spawn(&self, _b: &ServiceBinding, env: &[(String, String)]) -> Result<SpawnedIo, String> {
+        lock_or_poisoned(&self.envs).push(env.to_vec());
         let n = self.spawns.fetch_add(1, Ordering::SeqCst) as u64 + 1;
         let stdin_pipe = Pipe::default();
         let stdout_pipe = Pipe::default();
@@ -138,6 +141,8 @@ struct MockHost {
     pokes: Mutex<Vec<String>>,
     // 중개 라우팅 기록 — (caller, method, origin은 여기선 caller). 에코 봉투 반환.
     mediated: Mutex<Vec<(String, String)>>,
+    // 볼트 잠김 시뮬레이션 — true 면 secret_env 가 빈 벡터(1판 세션-env 폴백 동형).
+    vault_locked: Mutex<bool>,
 }
 
 impl ServiceHost for MockHost {
@@ -152,6 +157,12 @@ impl ServiceHost for MockHost {
             return Err("볼트 잠김".into());
         }
         Ok(format!("plain-{name}"))
+    }
+    fn secret_env(&self, _ns: &str) -> Vec<(String, String)> {
+        if *lock_or_poisoned(&self.vault_locked) {
+            return vec![];
+        }
+        vec![("ANTHROPIC_AUTH_TOKEN".into(), "tok".into())]
     }
     fn mediate(&self, caller: &str, method: &str, params: Value, _under: Option<&str>) -> Value {
         lock_or_poisoned(&self.mediated).push((caller.to_string(), method.to_string()));
@@ -168,6 +179,7 @@ fn binding(ops: &[&str]) -> ServiceBinding {
         subscribe: vec![],
         schedules: vec![],
         secrets: vec![],
+        vault_env: false,
         dependencies: vec![],
     }
 }
@@ -186,7 +198,7 @@ fn binding_deps(ops: &[&str], deps: &[&str]) -> ServiceBinding {
 
 fn manager(script: Script) -> (ServiceManager, Arc<MockHost>, Arc<FakeSpawner>) {
     let host = Arc::new(MockHost::default());
-    let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0) });
+    let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0), envs: Mutex::new(vec![]) });
     let mgr = ServiceManager::with_backoff(host.clone(), spawner.clone(), vec![20, 20, 20, 20, 20]);
     (mgr, host, spawner)
 }
@@ -463,6 +475,7 @@ fn crash_cap_lands_in_error_state_loudly() {
             let _ = conn.read_frame(); // ready 받고 즉시 크래시(전 세대)
         }),
         spawns: AtomicUsize::new(0),
+        envs: Mutex::new(vec![]),
     });
     let mgr = ServiceManager::with_backoff(host.clone(), spawner.clone(), vec![5, 5]);
     mgr.bind(binding(&["run"]));
@@ -554,6 +567,7 @@ fn push_bus_reaches_only_subscribers_and_dedups_by_key() {
     let spawner = Arc::new(FakeSpawner {
         script: subscriber_script(seen.clone()),
         spawns: AtomicUsize::new(0),
+        envs: Mutex::new(vec![]),
     });
     let mgr = ServiceManager::with_backoff(host, spawner, vec![20]);
     mgr.bind(binding_sub(&["run"], &["bus:kanban:changed"]));
@@ -601,6 +615,7 @@ fn push_bus_skips_non_ready_service() {
             }
         }),
         spawns: AtomicUsize::new(0),
+        envs: Mutex::new(vec![]),
     });
     let mgr = ServiceManager::with_backoff(host, spawner, vec![20]);
     mgr.bind(binding_sub(&["run"], &["bus:kanban:changed"]));
@@ -651,7 +666,7 @@ fn mediated_cmd_routes_declared_target_and_returns_envelope() {
         }
     });
     let host = Arc::new(MockHost::default());
-    let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0) });
+    let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0), envs: Mutex::new(vec![]) });
     let mgr = ServiceManager::with_backoff(host.clone(), spawner, vec![20]);
     mgr.bind(binding_deps(&["run"], &["kanban"]));
     wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Ready));
@@ -691,7 +706,7 @@ fn mediated_cmd_refuses_undeclared_target_without_routing() {
         }
     });
     let host = Arc::new(MockHost::default());
-    let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0) });
+    let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0), envs: Mutex::new(vec![]) });
     let mgr = ServiceManager::with_backoff(host.clone(), spawner, vec![20]);
     mgr.bind(binding_deps(&["run"], &["kanban"])); // other 미선언
     wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Ready));
@@ -780,4 +795,46 @@ fn drain_restart_on_secret_change_respawns_only_secret_dependents() {
     wait_status(&mgr2, "plain", |s| matches!(s, SvcStatus::Ready));
     assert_eq!(mgr2.drain_restart_secret_dependents(), 0, "시크릿 의존 없음 → 재시작 0");
     assert_eq!(sp2.spawns.load(Ordering::SeqCst), 1, "재스폰 없음");
+}
+
+// vault_env — "secrets" 권한 서비스는 ns 의 env: 볼트 키를 스폰 env 로 동적 주입받고(1판 패리티),
+// 볼트 변경 시 드레인 재시작 대상이 된다(잠금 중 스폰→unlock 회복, PS9·PS10).
+fn binding_vault_env(plugin: &str, ops: &[&str]) -> ServiceBinding {
+    let mut b = binding(ops);
+    b.plugin = plugin.into();
+    b.sidecar = plugin.into();
+    b.vault_env = true;
+    b
+}
+
+#[test]
+fn vault_env_injects_env_secrets_and_recovers_on_unlock() {
+    let (mgr, host, spawner) = manager(echo_script());
+    // 잠금 상태로 스폰 — secret_env 빈 벡터(토큰 없이 뜬다, loud 실패 아님).
+    *lock_or_poisoned(&host.vault_locked) = true;
+    mgr.bind(binding_vault_env("wf", &["run", "fail"]));
+    wait_status(&mgr, "wf", |s| matches!(s, SvcStatus::Ready));
+    {
+        let envs = lock_or_poisoned(&spawner.envs);
+        assert!(
+            !envs[0].iter().any(|(k, _)| k == "ANTHROPIC_AUTH_TOKEN"),
+            "잠금 중 스폰엔 토큰 미주입: {:?}",
+            envs[0]
+        );
+    }
+
+    // unlock → 드레인 재시작 → 새 세대가 토큰을 스폰 env 로 획득(회복).
+    *lock_or_poisoned(&host.vault_locked) = false;
+    assert_eq!(mgr.drain_restart_secret_dependents(), 1, "vault_env 서비스 재시작");
+    wait_status(&mgr, "wf", |s| matches!(s, SvcStatus::Ready));
+    {
+        let envs = lock_or_poisoned(&spawner.envs);
+        let last = envs.last().expect("재스폰 env");
+        assert_eq!(
+            last.iter().find(|(k, _)| k == "ANTHROPIC_AUTH_TOKEN").map(|(_, v)| v.as_str()),
+            Some("tok"),
+            "unlock 후 새 세대에 토큰 주입: {last:?}"
+        );
+    }
+    let _ = &host;
 }

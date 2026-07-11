@@ -125,10 +125,37 @@ describe("buildBindLedger — 원장 파생(PS9·PS14)", () => {
             { name: "reconcile", command: "run", trigger: { reconcile: true }, timeoutMs: 1000 },
           ],
           secrets: [],
+          vaultEnv: false,
           dependencies: [],
         },
       ],
     });
+  });
+
+  it('"secrets" 권한을 선언하면 vaultEnv 가 파생된다(PS9 — env: 볼트 주입 대상)', () => {
+    const { manifest, validation } = parseManifest(
+      {
+        spec: "soksak-plugin-spec@1",
+        id: "vaulted",
+        name: "볼트",
+        version: "1.0.0",
+        description: "테스트",
+        entry: null,
+        permissions: ["commands", "sidecar", "service", "secrets"],
+        sidecars: [{ name: "vaulted-svc", interface: "soksak-fixture-wire-spec@1" }],
+        service: { sidecar: "vaulted-svc", interface: SERVICE_INTERFACE, subscribe: [] },
+        contributes: {
+          commands: [
+            { name: "run", title: { en: "Run", ko: "실행" }, bind: "service", description: "Run." },
+          ],
+        },
+      },
+      "vaulted",
+    );
+    expect(validation.errors).toEqual([]);
+    if (!manifest) throw new Error("픽스처 파싱 실패");
+    const ledger = buildBindLedger([manifest]);
+    expect(ledger.services[0].vaultEnv).toBe(true);
   });
 
   it("service 없는 매니페스트는 원장에 오르지 않는다", () => {

@@ -131,6 +131,9 @@ export interface LedgerServiceBinding {
   subscribe: string[];
   schedules: LedgerSchedule[];
   secrets: string[];
+  // "secrets" 권한 선언 → 코어가 ns 의 env: 볼트 키를 스폰 env 로 동적 주입 + 볼트 변경 시 드레인
+  // 재시작(PS9·PS10). 권한에서 파생 — 매니페스트가 재기술하지 않는다.
+  vaultEnv: boolean;
   dependencies: string[];
 }
 
@@ -157,6 +160,8 @@ export function buildServiceBinding(manifest: PluginManifest): LedgerServiceBind
       ...(s.zombieBackstopMs !== undefined ? { zombieBackstopMs: s.zombieBackstopMs } : {}),
     })),
     secrets: [],
+    // "secrets" 권한 → env: 볼트 키 동적 주입 대상(PS9). 명시 secret 이름 선언은 v1 미사용(빈 배열).
+    vaultEnv: (manifest.permissions ?? []).includes("secrets"),
     // 중개 아웃바운드 호출의 허용 대상(PS13, C3) — 매니페스트 dependencies(플러그인↔플러그인).
     dependencies: Object.keys(manifest.dependencies ?? {}),
   };

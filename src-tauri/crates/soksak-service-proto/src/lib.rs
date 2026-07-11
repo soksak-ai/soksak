@@ -128,6 +128,13 @@ pub struct ServiceBinding {
     /// secrets never cross stdio or disk in the clear.
     #[serde(default)]
     pub secrets: Vec<String>,
+    /// The plugin declared the `secrets` permission — it reads the vault. The
+    /// core injects the plugin's `env:`-prefixed vault keys into the spawn
+    /// environment (dynamic, user-configured — never manifest-hardcoded, PS9)
+    /// and drain-restarts the service on a vault change (PS10). Derived from the
+    /// permission, not a separate field, so the manifest never restates it.
+    #[serde(default)]
+    pub vault_env: bool,
     /// Plugin ids this service may call in a mediated `cmd` (PS13, C3 ladder) —
     /// the manifest `dependencies` declaration. The core refuses an outbound
     /// call to a plugin outside this set; core commands and self are exempt.
