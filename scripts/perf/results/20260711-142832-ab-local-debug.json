@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "identity": "debug",
+    "label": "ab-local",
+    "git": "ff5f679",
+    "date": "20260711-142832",
+    "t1mb": 100,
+    "windowsOpen": 7,
+    "machine": "Apple M1 Pro"
+  },
+  "scenarios": {
+    "t1_plain": {
+      "fixture": "plain-100mb.txt",
+      "bytes": 104857662,
+      "durationMs": 23540,
+      "mbps": 4.25,
+      "exitCode": 0,
+      "counters": {
+        "writtenBytesDelta": 106010973,
+        "ackSentDelta": 20518,
+        "writeCbLagMsDelta": 106880,
+        "rafFramesDelta": 1401,
+        "webglActive": true,
+        "scrollbackRows": 10000
+      },
+      "cpu": {
+        "avg": 85.3,
+        "max": 133.0,
+        "samples": 50
+      }
+    },
+    "t1_ansi": {
+      "fixture": "ansi-100mb.txt",
+      "bytes": 104857624,
+      "durationMs": 10,
+      "mbps": 10000,
+      "exitCode": 1,
+      "counters": {
+        "writtenBytesDelta": 765,
+        "ackSentDelta": 0,
+        "writeCbLagMsDelta": 70,
+        "rafFramesDelta": 3,
+        "webglActive": true,
+        "scrollbackRows": 10000
+      },
+      "cpu": {
+        "avg": 26.4,
+        "max": 75.3,
+        "samples": 21
+      }
+    }
+  }
+}
