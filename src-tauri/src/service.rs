@@ -27,6 +27,27 @@ pub trait ServiceHost: Send + Sync + 'static {
     fn poke_owner(&self, owner: &str);
     // 볼트 시크릿 해소(ns=플러그인 id) — 평문은 스폰 env 경계로만(PS9).
     fn resolve_secret(&self, ns: &str, name: &str) -> Result<String, String>;
+    // 중개 아웃바운드 호출 라우팅(PS13) — 게이트(의존성)는 코어가 이미 통과시킨 뒤 호출한다.
+    // origin/parent 는 코어가 스탬핑한 값(caller=서비스 플러그인 id) — 자기신고 불신. 응답 봉투 반환.
+    fn mediate(&self, caller: &str, method: &str, params: Value, under: Option<&str>) -> Value;
+}
+
+// 커맨드 이름에서 대상 플러그인 id 추출 — "plugin.<id>.<cmd>" → Some(id), 코어 커맨드 → None.
+fn target_plugin(method: &str) -> Option<&str> {
+    method.strip_prefix("plugin.").and_then(|rest| rest.split('.').next())
+}
+
+// 중개 게이트(순수, PS13·C3 사다리) — None=허용, Some=거부 사유.
+// 코어 커맨드(plugin. 접두 없음)·자기 자신·선언 의존성만 허용. 미선언 대상 플러그인은 거부.
+fn mediation_reason(caller: &str, deps: &[String], method: &str) -> Option<String> {
+    match target_plugin(method) {
+        None => None, // 코어 커맨드 — 허용(권한 게이트는 소켓 경계에서, 스케줄/원격과 동일 모델).
+        Some(target) if target == caller => None, // 자기 자신 — 허용.
+        Some(target) if deps.iter().any(|d| d == target) => None, // 선언 의존성 — 허용.
+        Some(target) => Some(format!(
+            "미선언 의존 플러그인 호출: {target} — 매니페스트 dependencies 에 \"{target}\" 선언 필요(C3)"
+        )),
+    }
 }
 
 // ── 스폰 seam — 실 프로세스/테스트 파이프 공용 ───────────────────────────────────
@@ -665,16 +686,23 @@ fn reader_loop(
             ServiceOut::Act { kind, payload } => {
                 mgr.host.publish(&kind, &plugin, payload);
             }
-            ServiceOut::Cmd { id, .. } => {
-                // 아웃바운드 중개(PS13)는 S1b 의 executor mediation 이 연다. 게이트 없는 중개를
-                // 코어에서 여는 것이 금지이므로 미개방이 올바른 기본값(fail-closed)이다 —
-                // 임시 회피가 아니라 개방 조건(게이트 전체 세트)이 아직 랜딩 전인 것.
-                let refusal = ServiceIn::CmdRes {
-                    id,
-                    envelope: envelope_err(ErrCode::Unavailable, "중개 미개방(mediation 게이트 미랜딩)"),
-                };
-                let mut inner = lock_or_poisoned(&svc.inner);
-                let _ = send_frame(&mut inner, &refusal);
+            ServiceOut::Cmd { id, method, params, under } => {
+                // 아웃바운드 중개(PS13) — 게이트(선언 의존성) → 코어가 origin/parent 스탬핑 →
+                // host.mediate 로 라우팅 → CmdRes 회신. 게이트는 스레드에서(라우팅이 블록될 수 있음).
+                let mgr2 = mgr.clone();
+                let svc2 = svc.clone();
+                let caller = plugin.clone();
+                let my_gen2 = my_gen;
+                std::thread::spawn(move || {
+                    let envelope = match mediation_reason(&caller, &svc2.binding.dependencies, &method) {
+                        Some(reason) => envelope_err(ErrCode::Unavailable, &reason),
+                        None => mgr2.host.mediate(&caller, &method, params, under.as_deref()),
+                    };
+                    let mut inner = lock_or_poisoned(&svc2.inner);
+                    if inner.generation == my_gen2 {
+                        let _ = send_frame(&mut inner, &ServiceIn::CmdRes { id, envelope });
+                    }
+                });
             }
         }
     }
@@ -791,6 +819,15 @@ impl ServiceHost for AppServiceHost {
         use tauri::Manager;
         let state = self.app.state::<crate::secrets::SecretsState>();
         crate::secrets::resolve(&state, ns, name)
+    }
+    fn mediate(&self, caller: &str, method: &str, params: Value, under: Option<&str>) -> Value {
+        // 게이트는 코어(reader_loop)가 이미 통과시킨 뒤 호출한다. 여기서는 라우팅만:
+        // request_command 가 bind:"service" 대상이면 route()에서 직행, 그 외엔 창 registry 로.
+        // origin 은 코어가 스탬핑한 "service:<caller>"(자기신고 불신) — 낭독 후보 제외·피드 흐림.
+        // parent 는 under(상관 문맥) — request_command 시그니처엔 없어 origin 에 상관만 싣는다.
+        let origin = format!("service:{caller}");
+        let _ = under; // under 는 서비스측 상관 라벨(로컬) — 코어 신원 스탬핑엔 불사용.
+        crate::ipc::request_command(&self.app, method.to_string(), params, 3_600_000, Some(&origin), None)
     }
 }
 

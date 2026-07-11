@@ -131,6 +131,7 @@ export interface LedgerServiceBinding {
   subscribe: string[];
   schedules: LedgerSchedule[];
   secrets: string[];
+  dependencies: string[];
 }
 
 export interface BindLedger {
@@ -156,6 +157,8 @@ export function buildServiceBinding(manifest: PluginManifest): LedgerServiceBind
       ...(s.zombieBackstopMs !== undefined ? { zombieBackstopMs: s.zombieBackstopMs } : {}),
     })),
     secrets: [],
+    // 중개 아웃바운드 호출의 허용 대상(PS13, C3) — 매니페스트 dependencies(플러그인↔플러그인).
+    dependencies: Object.keys(manifest.dependencies ?? {}),
   };
 }
 

@@ -136,6 +136,8 @@ impl ServiceSpawner for FakeSpawner {
 struct MockHost {
     events: Mutex<Vec<(String, String)>>,
     pokes: Mutex<Vec<String>>,
+    // 중개 라우팅 기록 — (caller, method, origin은 여기선 caller). 에코 봉투 반환.
+    mediated: Mutex<Vec<(String, String)>>,
 }
 
 impl ServiceHost for MockHost {
@@ -151,6 +153,10 @@ impl ServiceHost for MockHost {
         }
         Ok(format!("plain-{name}"))
     }
+    fn mediate(&self, caller: &str, method: &str, params: Value, _under: Option<&str>) -> Value {
+        lock_or_poisoned(&self.mediated).push((caller.to_string(), method.to_string()));
+        json!({ "ok": true, "code": "OK", "data": { "routed": method, "params": params } })
+    }
 }
 
 fn binding(ops: &[&str]) -> ServiceBinding {
@@ -162,12 +168,19 @@ fn binding(ops: &[&str]) -> ServiceBinding {
         subscribe: vec![],
         schedules: vec![],
         secrets: vec![],
+        dependencies: vec![],
     }
 }
 
 fn binding_sub(ops: &[&str], subscribe: &[&str]) -> ServiceBinding {
     let mut b = binding(ops);
     b.subscribe = subscribe.iter().map(|s| s.to_string()).collect();
+    b
+}
+
+fn binding_deps(ops: &[&str], deps: &[&str]) -> ServiceBinding {
+    let mut b = binding(ops);
+    b.dependencies = deps.iter().map(|s| s.to_string()).collect();
     b
 }
 
@@ -592,6 +605,106 @@ fn push_bus_skips_non_ready_service() {
     let mgr = ServiceManager::with_backoff(host, spawner, vec![20]);
     mgr.bind(binding_sub(&["run"], &["bus:kanban:changed"]));
     assert_eq!(mgr.push_bus("bus:kanban:changed", Some("k"), json!({})), 0, "Ready 아니면 전달 0");
+}
+
+// ── PS13: 중개 게이트(순수) — 선언 의존성만 허용, 코어/자기 예외 ────────────
+#[test]
+fn mediation_gate_allows_core_self_and_declared_deps() {
+    let deps = vec!["kanban".to_string()];
+    // 코어 커맨드(plugin. 접두 없음) — 허용.
+    assert!(mediation_reason("workflow", &deps, "state.tree").is_none());
+    // 자기 자신 — 허용.
+    assert!(mediation_reason("workflow", &deps, "plugin.workflow.next").is_none());
+    // 선언 의존성 — 허용.
+    assert!(mediation_reason("workflow", &deps, "plugin.kanban.node.add").is_none());
+    // 미선언 대상 — 거부.
+    let r = mediation_reason("workflow", &deps, "plugin.secrets-thief.grab");
+    assert!(r.is_some());
+    assert!(r.expect("거부 사유").contains("secrets-thief"), "거부 사유가 대상을 명시");
+}
+
+// ── PS13: 서비스 cmd → 게이트 → host.mediate → CmdRes 왕복 ────────────────
+#[test]
+fn mediated_cmd_routes_declared_target_and_returns_envelope() {
+    let seen_res = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let sr = seen_res.clone();
+    let script: Script = Arc::new(move |_gen, mut conn: FakeConn| {
+        conn.hello(&["run"]);
+        // ready 수신 후 cmd 발행(선언 의존성 kanban).
+        loop {
+            match conn.read_frame() {
+                Some(ServiceIn::Ready) => {
+                    conn.write_out(&ServiceOut::Cmd {
+                        id: 1,
+                        method: "plugin.kanban.node.add".into(),
+                        params: json!({ "title": "x" }),
+                        under: Some("run#1".into()),
+                    });
+                }
+                Some(ServiceIn::CmdRes { id, envelope }) => {
+                    assert_eq!(id, 1);
+                    lock_or_poisoned(&sr).push(envelope);
+                }
+                Some(ServiceIn::Shutdown) | None => return,
+                _ => {}
+            }
+        }
+    });
+    let host = Arc::new(MockHost::default());
+    let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0) });
+    let mgr = ServiceManager::with_backoff(host.clone(), spawner, vec![20]);
+    mgr.bind(binding_deps(&["run"], &["kanban"]));
+    wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Ready));
+    for _ in 0..100 {
+        if !lock_or_poisoned(&seen_res).is_empty() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let env = lock_or_poisoned(&seen_res).first().cloned().expect("CmdRes 도착");
+    assert_eq!(env["ok"], true);
+    assert_eq!(env["data"]["routed"], "plugin.kanban.node.add");
+    let mediated = lock_or_poisoned(&host.mediated).clone();
+    assert_eq!(mediated, vec![("demo".to_string(), "plugin.kanban.node.add".to_string())]);
+}
+
+#[test]
+fn mediated_cmd_refuses_undeclared_target_without_routing() {
+    let seen_res = Arc::new(Mutex::new(Vec::<Value>::new()));
+    let sr = seen_res.clone();
+    let script: Script = Arc::new(move |_gen, mut conn: FakeConn| {
+        conn.hello(&["run"]);
+        loop {
+            match conn.read_frame() {
+                Some(ServiceIn::Ready) => {
+                    conn.write_out(&ServiceOut::Cmd {
+                        id: 2,
+                        method: "plugin.other.grab".into(), // 미선언
+                        params: json!({}),
+                        under: None,
+                    });
+                }
+                Some(ServiceIn::CmdRes { envelope, .. }) => lock_or_poisoned(&sr).push(envelope),
+                Some(ServiceIn::Shutdown) | None => return,
+                _ => {}
+            }
+        }
+    });
+    let host = Arc::new(MockHost::default());
+    let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0) });
+    let mgr = ServiceManager::with_backoff(host.clone(), spawner, vec![20]);
+    mgr.bind(binding_deps(&["run"], &["kanban"])); // other 미선언
+    wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Ready));
+    for _ in 0..100 {
+        if !lock_or_poisoned(&seen_res).is_empty() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let env = lock_or_poisoned(&seen_res).first().cloned().expect("거부 CmdRes 도착");
+    assert_eq!(env["ok"], false);
+    assert!(env["message"].as_str().expect("message 문자열").contains("other"));
+    assert!(lock_or_poisoned(&host.mediated).is_empty(), "거부는 라우팅에 도달하지 않는다");
 }
 
 #[test]

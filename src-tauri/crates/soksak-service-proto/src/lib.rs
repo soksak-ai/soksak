@@ -128,6 +128,11 @@ pub struct ServiceBinding {
     /// secrets never cross stdio or disk in the clear.
     #[serde(default)]
     pub secrets: Vec<String>,
+    /// Plugin ids this service may call in a mediated `cmd` (PS13, C3 ladder) —
+    /// the manifest `dependencies` declaration. The core refuses an outbound
+    /// call to a plugin outside this set; core commands and self are exempt.
+    #[serde(default)]
+    pub dependencies: Vec<String>,
 }
 
 /// One declared schedule (mirror of `contributes.schedules` after judgment).
@@ -542,6 +547,7 @@ mod tests {
                     },
                 ],
                 secrets: vec!["ANTHROPIC_API_KEY".into()],
+                dependencies: vec!["kanban".into()],
             }],
         };
         let text = serde_json::to_string_pretty(&ledger).unwrap();

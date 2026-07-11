@@ -125,6 +125,7 @@ describe("buildBindLedger — 원장 파생(PS9·PS14)", () => {
             { name: "reconcile", command: "run", trigger: { reconcile: true }, timeoutMs: 1000 },
           ],
           secrets: [],
+          dependencies: [],
         },
       ],
     });
