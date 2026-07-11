@@ -20,6 +20,25 @@ git/clipboard/ai.session) and removes the violators.
    Invoke is internal transport — renames are safe; the only public surface is the registry.
 3. **Core Rust file** = one file per capability, filename = capability = command prefix.
    Example: `webview.rs` implements `webview_*`.
+3a. **Core companion binary** = a separately-shipped executable that IS the core, not a
+   plugin, sidecar, or kit. It is the lifetime-separated implementation of a *core*
+   capability — split out of the main binary only because its lifetime differs, never
+   because it is a distinct feature. Two exist:
+   - `sok` — the command registry's standalone CLI transport (a busybox binary, A17). Its
+     lifetime is the invoking shell's, separate from the app's; it surfaces the same
+     registry the app exposes.
+   - `soksak-ptyd` — the PTY capability's survival daemon (`soksak-` + capability + `d`).
+     Its lifetime outlives the app so shells survive an app exit; it is staged into the
+     identity home's `bin/`.
+   These are NOT sidecars (rule 5). A sidecar serves a *plugin* over a private protocol the
+   core never reads and is never in the `sok` registry; a core companion binary serves the
+   *core* — its capability is a normal registry command (`term.*`/`pty_*` behind `ptyd`;
+   the whole registry behind `sok`) and it consumes no plugin contract. They therefore sit
+   outside the distributable-unit grammar (§1.4a, `soksak-<kind>-<domain>`): the kind axis
+   names a plugin/sidecar/kit consumer, and these have none — they are the core wearing a
+   second process. Naming: `sok` is the one deliberate bare name (the CLI, brand-adjacent);
+   a daemon is `soksak-<capability>d`, never `soksak-sidecar-…` (a sidecar shape would
+   falsely promise a plugin contract that does not exist).
 4. **Plugin** = `soksak-plugin-<domain>-<name>`. A replaceable-seam plugin MUST carry the
    observable engine name (`browser-native` is the exception naming the provisioning axis —
    see §3; `browser-chromium`, `editor-codemirror`).
