@@ -421,6 +421,8 @@ pub fn run() {
             notify::notify_show,
             schedule::schedule_set,
             schedule::schedule_register,
+            service::service_dispatch,
+            service::service_ledger_sync,
             schedule::schedule_poke,
             schedule::schedule_cancel,
             schedule::schedule_list,

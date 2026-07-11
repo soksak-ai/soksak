@@ -353,6 +353,39 @@ impl ServiceManager {
         true
     }
 
+    // unbind — 서비스 내림 + ops 소유 해제(스케줄 회수는 호출자가 cancel_by_owner 로).
+    pub fn unbind(&self, plugin: &str) -> bool {
+        let svc = {
+            let mut services = lock_or_poisoned(&self.inner.services);
+            match services.remove(plugin) {
+                Some(s) => s,
+                None => return false,
+            }
+        };
+        {
+            let mut ops = lock_or_poisoned(&self.inner.ops);
+            ops.retain(|_, (p, _)| p != plugin);
+        }
+        let mut inner = lock_or_poisoned(&svc.inner);
+        inner.intent_stop = true;
+        let _ = send_frame(&mut inner, &ServiceIn::Shutdown);
+        if let Some(kill) = inner.kill.as_mut() {
+            kill();
+        }
+        inner.stdin = None;
+        inner.kill = None;
+        inner.status = SvcStatus::Stopped;
+        answer_all_pending(&mut inner, envelope_err(ErrCode::Unavailable, "서비스 unbind"));
+        svc.cv.notify_all();
+        drop(inner);
+        self.inner.host.publish("service.unbound", plugin, json!({}));
+        true
+    }
+
+    pub fn bound_plugins(&self) -> Vec<String> {
+        lock_or_poisoned(&self.inner.services).keys().cloned().collect()
+    }
+
     // 앱 종료 — 상주 서비스 프로세스 잔존 0(PS10).
     pub fn kill_all(&self) {
         let services: Vec<Arc<Service>> = {
@@ -803,6 +836,83 @@ fn register_binding_schedules(app: &tauri::AppHandle, binding: &ServiceBinding) 
         };
         crate::schedule::register_owned(app, spec);
     }
+}
+
+// ── Tauri 커맨드 ─────────────────────────────────────────────────────────────
+
+// 창 발원(프록시) 디스패치 — route() 직행과 같은 ServiceManager 로 수렴(실행 진실 1개, PS11).
+// origin 은 코어가 스탬핑한 실행 문맥을 그대로 물려받는다(프록시 핸들러의 ctx).
+#[tauri::command]
+pub fn service_dispatch(
+    mgr: tauri::State<ServiceManager>,
+    method: String,
+    params: Value,
+    parent: Option<String>,
+    origin: Option<String>,
+    timeout_ms: Option<u64>,
+) -> Value {
+    mgr.dispatch(
+        &method,
+        params,
+        None,
+        origin.as_deref().unwrap_or("window"),
+        parent,
+        timeout_ms.unwrap_or(soksak_service_proto::DEFAULT_REQ_TIMEOUT_MS),
+        3_600_000,
+    )
+    .unwrap_or_else(|| {
+        json!({ "ok": false, "code": "UNKNOWN_COMMAND", "message": format!("서비스 소유 커맨드가 아님: {method}") })
+    })
+}
+
+// bind 원장 동기화(PS9) — 프론트(단일 심판 parseManifest 의 판정 결과)가 파생 원장을 내리면
+// 코어가 원자 교체로 쓰고 bind 델타를 적용한다: 제거된 서비스는 unbind+owner 스케줄 회수,
+// 새 서비스는 스케줄 등록+bind. 내용 동일이면 no-op(멱등 — 창 여러 개가 불러도 무해).
+#[tauri::command]
+pub fn service_ledger_sync(
+    app: tauri::AppHandle,
+    mgr: tauri::State<ServiceManager>,
+    ledger: soksak_service_proto::BindLedger,
+) -> Result<(), String> {
+    use tauri::Manager;
+    let home = crate::home::soksak_home();
+    let path = soksak_service_proto::ledger_path(&home);
+    let next = serde_json::to_string_pretty(&ledger).map_err(|e| e.to_string())?;
+    if std::fs::read_to_string(&path).map(|cur| cur == next).unwrap_or(false) {
+        return Ok(()); // 내용 동일 — 멱등.
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    // 원자 교체(심링크 금지·실물 스테이징 규율) — 부팅이 절대 반쪽 원장을 읽지 않는다.
+    let tmp = path.with_extension("json.staging");
+    std::fs::write(&tmp, &next).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
+
+    let wanted: std::collections::HashSet<String> =
+        ledger.services.iter().map(|s| s.plugin.clone()).collect();
+    for plugin in mgr.bound_plugins() {
+        if !wanted.contains(&plugin) {
+            mgr.unbind(&plugin);
+            let n = app
+                .state::<crate::schedule::ScheduleState>()
+                .cancel_by_owner(&plugin);
+            crate::activity::publish(
+                &app,
+                "service.schedules.cancelled",
+                &plugin,
+                json!({ "count": n }),
+            );
+        }
+    }
+    let bound: std::collections::HashSet<String> = mgr.bound_plugins().into_iter().collect();
+    for binding in ledger.services {
+        if !bound.contains(&binding.plugin) {
+            register_binding_schedules(&app, &binding);
+            mgr.bind(binding);
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

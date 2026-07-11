@@ -17,6 +17,7 @@ import {
   type PluginPermission,
 } from "../plugins/spec";
 import {
+  activateContractPlugin,
   activatePlugin,
   deactivateAll,
   deactivateById,
@@ -24,6 +25,7 @@ import {
   isActive,
   setActive,
 } from "../plugins/loader";
+import { syncServiceLedger } from "../plugins/serviceProxy";
 import { defaultPluginDeps } from "../plugins/deps";
 import {
   activationChain,
@@ -124,6 +126,8 @@ interface PluginsState {
   // 동의 철회 — 권한을 줄이는 안전 작업(재동의 필요 상태로). 활성 중이면 비활성화. 명령 노출 가능.
   revokeConsent: (id: string) => Promise<CmdResult<{ id: string }>>;
   devLoad: (path: string) => Promise<CmdResult<{ id: string; dir: string }>>;
+  // bind 원장 동기화(PS9) — enabled∧service 매니페스트에서 파생해 코어에 내린다(멱등).
+  syncLedger: () => Promise<void>;
 }
 
 const KEY = "soksak.plugins";
@@ -417,6 +421,17 @@ export const usePlugins = create<PluginsState>((set, get) => {
 
   // entry 적재 → 활성화 → 인스턴스 보관. 실패는 throw(호출부가 상태 기록).
   const activateRuntime = async (p: PluginRuntime): Promise<void> => {
+    // 순수 계약 플러그인(PS4, docs/PLUGIN-SERVICE.md) — entry 없이 활성화. 코드 적재·크롬
+    // 스캔 없음(코드-필요 기여 0 은 parseManifest 가 강제) — 게이트+데이터 기여+서비스 프록시.
+    if (p.manifest.entry === null) {
+      const instance = await activateContractPlugin(
+        p.manifest,
+        p.dir,
+        defaultPluginDeps(get().appVersion),
+      );
+      setActive(p.manifest.id, instance);
+      return;
+    }
     const data = await invoke<{ content: string }>("read_text_file", {
       path: `${p.dir}/${p.manifest.entry}`,
     });
@@ -473,6 +488,20 @@ export const usePlugins = create<PluginsState>((set, get) => {
     rejected: [],
     consents: persisted.consents,
     enabledIds: persisted.enabledIds,
+
+    // bind 원장 동기화(PS9, docs/PLUGIN-SERVICE.md) — 활성(enabled)이고 service 를 선언한
+    // 매니페스트에서 파생해 코어에 내린다. 어느 창이 불러도 결과 동일(코어가 내용 동일이면
+    // no-op). 상태 전이(reload/enable/disable/revoke) 뒤 한 번씩 — 이벤트 시점, 폴링 0.
+    syncLedger: async () => {
+      try {
+        const manifests = Object.values(get().plugins)
+          .filter((p) => p.status === "enabled" && p.manifest.service !== undefined)
+          .map((p) => p.manifest);
+        await syncServiceLedger(manifests, (cmd, args) => invoke(cmd, args));
+      } catch (e) {
+        console.error("[service] bind 원장 동기화 실패:", e);
+      }
+    },
 
     reload: async () => {
       // 전체 재시작: 활성 인스턴스 전부 내리고 다시 스캔 — 부분 상태 금지(§0-3).
@@ -547,6 +576,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
           setRuntime(id, { status: "error", error: String(e) });
         }
       }
+      await get().syncLedger();
     },
 
     install: async (source, reference) => {
@@ -693,6 +723,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
         });
       }
       persist();
+      await get().syncLedger();
       return ok({ id, status: "enabled" });
     },
 
@@ -703,6 +734,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
       setRuntime(id, { status: "disabled", error: undefined });
       set((s) => ({ enabledIds: s.enabledIds.filter((x) => x !== id) }));
       persist();
+      await get().syncLedger();
       return ok({ id, status: "disabled" });
     },
 
@@ -742,6 +774,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
         };
       });
       persist();
+      await get().syncLedger();
       return ok({ id });
     },
 
