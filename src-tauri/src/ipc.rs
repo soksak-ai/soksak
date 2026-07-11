@@ -25,10 +25,57 @@ pub fn socket_path() -> Option<&'static str> {
     SOCKET_PATH.get().map(|s| s.as_str())
 }
 
+// pending 엔트리 — 응답 채널 + 소유 창 라벨(창 파괴 시 즉시 회수의 키).
+struct PendingEntry {
+    window: String,
+    tx: mpsc::SyncSender<Value>,
+}
+
 #[derive(Default)]
 pub struct CmdBridge {
     // 요청 seq → 응답 채널. 프론트의 cmd_result 가 채운다.
-    pending: Mutex<HashMap<u64, mpsc::SyncSender<Value>>>,
+    pending: Mutex<HashMap<u64, PendingEntry>>,
+}
+
+impl CmdBridge {
+    fn insert(&self, seq: u64, window: &str, tx: mpsc::SyncSender<Value>) {
+        if let Ok(mut p) = self.pending.lock() {
+            p.insert(seq, PendingEntry { window: window.to_string(), tx });
+        }
+    }
+
+    fn take(&self, seq: u64) -> Option<mpsc::SyncSender<Value>> {
+        self.pending.lock().ok().and_then(|mut p| p.remove(&seq).map(|e| e.tx))
+    }
+
+    fn remove(&self, seq: u64) {
+        if let Ok(mut p) = self.pending.lock() {
+            p.remove(&seq);
+        }
+    }
+
+    // 창 파괴 시 그 창의 pending 을 전부 즉시 회수한다 — 타임아웃까지 방치하면 호출자
+    // (route 대기 스레드·스케줄 lease 루프)가 이미 죽은 창의 응답을 기다린다. 회수는
+    // 구조적 에러 응답을 먼저 보내 대기자를 즉시 깨운다(무음 drop 금지).
+    pub fn cancel_window(&self, label: &str) -> usize {
+        let Ok(mut p) = self.pending.lock() else {
+            return 0;
+        };
+        let doomed: Vec<u64> = p
+            .iter()
+            .filter(|(_, e)| e.window == label)
+            .map(|(seq, _)| *seq)
+            .collect();
+        for seq in &doomed {
+            if let Some(e) = p.remove(seq) {
+                let _ = e.tx.try_send(error_reply(
+                    "WINDOW_DESTROYED",
+                    &format!("대상 창이 파괴됨: {label}"),
+                ));
+            }
+        }
+        doomed.len()
+    }
 }
 
 static SEQ: AtomicU64 = AtomicU64::new(1);
@@ -562,7 +609,7 @@ fn route(app: &AppHandle, req: Request) -> Value {
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     let (tx, rx) = mpsc::sync_channel::<Value>(1);
     let bridge = app.state::<CmdBridge>();
-    bridge.pending.lock().unwrap().insert(seq, tx);
+    bridge.insert(seq, &target, tx);
 
     let payload = json!({
         "id": seq,
@@ -574,7 +621,7 @@ fn route(app: &AppHandle, req: Request) -> Value {
         "origin": req.origin,
     });
     if app.emit_to(&target, "cmd-request", payload).is_err() {
-        bridge.pending.lock().unwrap().remove(&seq);
+        bridge.remove(seq);
         record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "INTERNAL", "프론트로 요청 전달 실패", started_ms);
         return error_reply("INTERNAL", "프론트로 요청 전달 실패");
     }
@@ -582,7 +629,7 @@ fn route(app: &AppHandle, req: Request) -> Value {
     // 기본 10s(빠른 행 감지). 요청이 timeoutMs 를 주면 그 값으로 — [1s, 3600s] 클램프(무한대기 금지).
     let timeout = Duration::from_millis(clamp_timeout_ms(req.timeout_ms));
     let result = rx.recv_timeout(timeout);
-    bridge.pending.lock().unwrap().remove(&seq);
+    bridge.remove(seq);
     match result {
         Ok(v) => v,
         Err(_) => {
@@ -597,7 +644,7 @@ fn route(app: &AppHandle, req: Request) -> Value {
 // 프론트 executor 의 회신(요청 seq 매칭).
 #[tauri::command]
 pub fn cmd_result(bridge: State<CmdBridge>, id: u64, result: Value) {
-    if let Some(tx) = bridge.pending.lock().unwrap().remove(&id) {
+    if let Some(tx) = bridge.take(id) {
         let _ = tx.try_send(result);
     }
 }
@@ -672,7 +719,7 @@ pub fn open_request(
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     let (tx, rx) = mpsc::sync_channel::<Value>(1);
     let bridge = app.state::<CmdBridge>();
-    bridge.pending.lock().unwrap().insert(seq, tx);
+    bridge.insert(seq, &target, tx);
     let payload = json!({
         "id": seq,
         "method": method,
@@ -682,7 +729,7 @@ pub fn open_request(
         "origin": origin,
     });
     if app.emit_to(&target, "cmd-request", payload).is_err() {
-        bridge.pending.lock().unwrap().remove(&seq);
+        bridge.remove(seq);
         return None;
     }
     Some((seq, rx))
@@ -690,7 +737,7 @@ pub fn open_request(
 
 // pending 회수(멱등) — 정상 완료·좀비 포기·cancel 공용. 남은 tx 를 drop 해 호출자 rx 를 깨운다.
 pub fn close_request(app: &AppHandle, seq: u64) {
-    app.state::<CmdBridge>().pending.lock().unwrap().remove(&seq);
+    app.state::<CmdBridge>().remove(seq);
 }
 
 #[cfg(test)]
@@ -883,6 +930,25 @@ mod tests {
         let second = bind_transport(&path);
         assert!(second.is_err(), "a live socket must refuse a second bind");
         let _ = std::fs::remove_file(&path);
+    }
+
+    // 창 파괴 시 pending 즉시 회수 — 타임아웃 방치(구 동작)는 죽은 창의 응답을
+    // 최대 1시간 기다리게 한다(스케줄 lease 루프 포함). PS12 의 코어측 반쪽.
+    #[test]
+    fn destroyed_window_pending_is_cancelled_immediately() {
+        let bridge = CmdBridge::default();
+        let (tx_a, rx_a) = mpsc::sync_channel::<Value>(1);
+        let (tx_b, rx_b) = mpsc::sync_channel::<Value>(1);
+        bridge.insert(1, "w-a", tx_a);
+        bridge.insert(2, "w-b", tx_b);
+        let n = bridge.cancel_window("w-a");
+        assert_eq!(n, 1, "w-a 소유 pending 1건이 회수되어야 함");
+        let got = rx_a.try_recv().expect("대기자는 즉시 구조적 에러를 받는다 — 무음 drop 금지");
+        assert_eq!(got["ok"], false);
+        assert_eq!(got["code"], "WINDOW_DESTROYED");
+        assert!(rx_b.try_recv().is_err(), "다른 창의 pending 은 불가침");
+        assert!(bridge.take(1).is_none(), "회수된 seq 는 cmd_result 가 더 찾지 못한다");
+        assert!(bridge.take(2).is_some(), "다른 창 엔트리는 남는다");
     }
 
     // 창 폴백 사다리 — 플러그인 명령은 컨트롤 플레인(main)으로 폴백하지 않는다.

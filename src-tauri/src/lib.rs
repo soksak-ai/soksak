@@ -328,6 +328,9 @@ pub fn run() {
                     // 브레이커 엔트리 폐기 — 창 label 은 재사용 안 되므로 남기면 맵이 무한 증가(느린 누수).
                     webview_health::forget_window(window.app_handle(), window.label());
                     let app = window.app_handle();
+                    // 파괴된 창의 pending 명령을 즉시 회수 — 대기자(route·스케줄 lease)를
+                    // 타임아웃까지 방치하지 않는다(WINDOW_DESTROYED 즉시 응답).
+                    app.state::<ipc::CmdBridge>().cancel_window(window.label());
                     // 창=프로젝트 수명(P6): 창이 파괴되면 그 창이 소유한 프로젝트 데몬도 함께 종료한다.
                     app.state::<crate::daemon::DaemonManager>().kill_by_window(window.label());
                     // 프로젝트 전역 단일 오픈(P6): 죽은 창의 점유를 해제해 다른 창이 그 프로젝트를
