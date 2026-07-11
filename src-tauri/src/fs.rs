@@ -316,66 +316,6 @@ pub fn theme_install(path: String) -> Result<String, String> {
     Ok(dst.to_string_lossy().to_string())
 }
 
-// 파일 트리 git 상태 데코레이션용. @pierre/trees 의 GitStatus 와 동일한 문자열.
-#[derive(Serialize)]
-pub struct GitEntry {
-    path: String,
-    status: String,
-}
-
-// git status --porcelain 의 XY 코드 → GitStatus 한 가지로 분류(우선순위).
-fn classify_git(x: u8, y: u8) -> &'static str {
-    if x == b'?' && y == b'?' {
-        return "untracked";
-    }
-    if x == b'D' || y == b'D' {
-        return "deleted";
-    }
-    if x == b'R' || y == b'R' || x == b'C' || y == b'C' {
-        return "renamed";
-    }
-    if x == b'A' || y == b'A' {
-        return "added";
-    }
-    "modified"
-}
-
-// 디렉토리의 git 변경 상태(트리 root 상대 경로). git repo 가 아니거나 git 실패면 빈 목록.
-#[tauri::command]
-pub fn git_status(path: String) -> Result<Vec<GitEntry>, String> {
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(&path)
-        .args(["status", "--porcelain", "-z"])
-        .output();
-    let output = match output {
-        Ok(o) if o.status.success() => o,
-        _ => return Ok(Vec::new()),
-    };
-    let mut entries = Vec::new();
-    let mut iter = output.stdout.split(|&b| b == 0);
-    while let Some(rec) = iter.next() {
-        if rec.len() < 4 {
-            continue; // "XY path" 최소 길이
-        }
-        let (x, y) = (rec[0], rec[1]);
-        // untracked 디렉토리는 git 이 'dir/' 로 보고 → 트리 노드(슬래시 없음)와 매칭되게 제거.
-        let rel = String::from_utf8_lossy(&rec[3..])
-            .replace('\\', "/")
-            .trim_end_matches('/')
-            .to_string();
-        // 이름변경/복사(R/C)는 다음 NUL 레코드가 원본 경로 → 소비.
-        if x == b'R' || y == b'R' || x == b'C' || y == b'C' {
-            iter.next();
-        }
-        entries.push(GitEntry {
-            path: rel,
-            status: classify_git(x, y).to_string(),
-        });
-    }
-    Ok(entries)
-}
-
 // 자동 지정 루트(~/.soksak/projects/<폴더명>) 생성 — 새 프로젝트에서 폴더를
 // 지정하지 않은 경우(P3). 앱이 만든 폴더는 앱 관리 영역(~/.soksak)에 둔다.
 // folder 는 디렉토리명 계약 — 슬러그만 허용(탈출/주입 차단).

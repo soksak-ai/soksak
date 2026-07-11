@@ -11,7 +11,6 @@ mod deeplink;
 #[cfg(target_os = "macos")]
 mod dockmenu;
 mod fs;
-mod git;
 mod http;
 mod i18n;
 pub mod ipc;
@@ -415,7 +414,6 @@ pub fn run() {
             fs::read_text_file,
             fs::write_text_file,
             fs::read_file_base64,
-            fs::git_status,
             fs::themes_scan,
             fs::theme_install,
             fs::ensure_project_dir,
@@ -468,10 +466,6 @@ pub fn run() {
             secrets::secret_delete,
             secrets::secret_keys,
             secrets::secret_backend,
-            git::git_log,
-            git::git_init_if_missing,
-            git::git_show,
-            git::git_diff,
             watcher::watch_dir,
             watcher::unwatch_dir,
             clipboard::clipboard_read,

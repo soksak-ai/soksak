@@ -33,14 +33,10 @@ export const PATTERNS = [
   { name: "git-permission-axis", re: /"git:(?:read|write)"/g },
 ];
 
-// 봉인 — 파일별 잔존 매칭 수. 이 표는 봉인이지 승인이 아니다. 방출(M3)이 진행되면
-// 값이 줄고, stale 실패 → 같은 커밋에서 이 표를 내린다. 목표 = 빈 표.
-export const SEALED = new Map([
-  ["src-tauri/src/fs.rs", 2],
-  ["src-tauri/src/git.rs", 6],
-  ["src-tauri/src/lib.rs", 5],
-  ["src/commands/catalogGit.ts", 8],
-]);
+// 봉인 — 파일별 잔존 매칭 수. 이 표는 봉인이지 승인이 아니다. 방출(M3) 완료로 표는 비었다(목표
+// 달성). 코어에 git 기능은 없다 — 어떤 신규 git 매칭도 유입으로 실패한다(plugins.rs 설치 스폰만
+// ALLOWLIST). 재입법(C5)이 필요하면 명시 문제 제기 후 이 표에 항목을 되살린다.
+export const SEALED = new Map([]);
 
 // 명시 allowlist — 기능이 아니라 플랫폼 메커니즘인 git 사용. 스캔에서 계수하지 않는다.
 export const ALLOWLIST = [
@@ -101,7 +97,9 @@ function* walk(dir) {
 // 루트 전체 스캔 → 봉인 대조. { added, stale, staleAllowlist, perFile } 를 돌려준다.
 //   added = 신규 유입(봉인에 없는 파일) 또는 봉인 수 초과.
 //   stale = 봉인보다 실측이 적다(방출 진행 — 같은 커밋에서 SEALED 축소 의무).
-export function scanRoot(rootDir) {
+// sealed 는 대조할 봉인 표(기본 = 이 repo 의 SEALED). 자가검사가 축소 메커니즘을 실측 봉인과
+// 무관하게 검증할 수 있게 주입 가능 — 방출 완료(SEALED 공표)여도 stale 판정 로직은 살아 있다.
+export function scanRoot(rootDir, sealed = SEALED) {
   const perFile = new Map();
   const allowUse = {};
   for (const scanRootName of SCAN_ROOTS) {
@@ -116,12 +114,12 @@ export function scanRoot(rootDir) {
   const added = [];
   const stale = [];
   for (const [file, hits] of perFile) {
-    const sealed = SEALED.get(file) ?? 0;
-    if (hits.length > sealed) added.push({ file, count: hits.length, sealed, hits });
+    const sealedCount = sealed.get(file) ?? 0;
+    if (hits.length > sealedCount) added.push({ file, count: hits.length, sealed: sealedCount, hits });
   }
-  for (const [file, sealed] of SEALED) {
+  for (const [file, sealedCount] of sealed) {
     const count = perFile.get(file)?.length ?? 0;
-    if (count < sealed) stale.push({ file, count, sealed });
+    if (count < sealedCount) stale.push({ file, count, sealed: sealedCount });
   }
   const staleAllowlist = ALLOWLIST.filter(
     (e, i) => existsSync(join(rootDir, e.file)) && !(allowUse[i] > 0),

@@ -103,16 +103,17 @@ describe("게이트 실행 — 신규 유입·봉인 대조", () => {
     expect(out).toContain("src/i18n.ts");
   });
 
-  it("봉인 미달(방출 진행)은 stale 로 실패한다 — SEALED 축소 의무", () => {
-    write("src/i18n.ts", '"msg.explorer.git": "x"'); // 봉인 4건 대비 1건
-    const { status, out } = runGate();
-    expect(status).toBe(1);
-    expect(out).toContain("stale 봉인");
+  // 축소(stale) 메커니즘은 방출이 끝나 SEALED 가 공표(空表)여도 살아 있어야 한다(C5 재입법 시
+  // 재가동). 실측 SEALED 와 무관하게, 주입 봉인으로 축소 판정 로직을 직접 검증한다.
+  it("봉인 미달(방출 진행)은 stale 로 잡힌다 — SEALED 축소 의무", () => {
+    write("src/i18n.ts", '"msg.explorer.git": "x"'); // 실측 1건
+    const { stale } = scanRoot(root, new Map([["src/i18n.ts", 4]])); // 봉인 4건 대비
+    expect(stale).toEqual([{ file: "src/i18n.ts", count: 1, sealed: 4 }]);
   });
 
   it("빈 트리는 봉인 전부가 stale 다 — 봉인은 실측과 일치해야만 산다", () => {
-    const { status } = runGate();
-    expect(status).toBe(1);
+    const { stale } = scanRoot(root, new Map([["src-tauri/src/git.rs", 6]]));
+    expect(stale).toEqual([{ file: "src-tauri/src/git.rs", count: 0, sealed: 6 }]);
   });
 });
 

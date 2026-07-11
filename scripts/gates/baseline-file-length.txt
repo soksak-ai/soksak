@@ -4,7 +4,7 @@
 # 파일 개명 시 같은 커밋에서 항목 경로를 수기로 이전한다(값 불변).
 src-tauri/cli/src/lib.rs 1757
 src-tauri/src/webview.rs 1542
-src/commands/catalog.ts 2715
-src/i18n.ts 1531
+src/commands/catalog.ts 2713
+src/i18n.ts 1507
 src/plugins/api.ts 1767
 src/state/sessions.ts 1745
