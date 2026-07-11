@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "protocol", "crates/soksak-pty-proto", "crates/soksak-ptyd", "crates/soksak-pty-mirror"]
+members = ["cli", "protocol", "crates/soksak-pty-proto", "crates/soksak-ptyd", "crates/soksak-pty-mirror", "crates/soksak-seal"]
 
 [package]
 # 기본(개발) 정체성. HMR(번들 안 됨)은 이 바이너리명이 독에 그대로 뜬다 → soksak-dev.
@@ -27,6 +27,8 @@ tauri-build = { version = "2", features = [] }
 soksak-protocol = { path = "protocol" }
 # PTY 데몬 계약(버전·경로·hello·메시지) — pty.rs 라우터가 soksak-ptyd 와 공유, 상수 사본 금지.
 soksak-pty-proto = { path = "crates/soksak-pty-proto" }
+# X25519 sealed box 단일 진실(secrets 에서 이식) — 앱 볼트와 soksak-ptyd 체크포인트 공용.
+soksak-seal = { path = "crates/soksak-seal" }
 uuid = { version = "1", features = ["v4"] }
 # 프로세스 그룹 kill(process.rs group 스폰) — 직계 kill 은 손자(에이전트의 Bash 자식 등)를
 # 남겨 stdout EOF·exit 가 지연된다. Unix 전용 사용(killpg).
@@ -87,12 +89,8 @@ rand = "0.8"
 zeroize = "1"
 # sha256 무결성 핀(runtime_dep: fetch reach 다운로드 검증). RustCrypto, 자체 crypto 0.
 sha2 = "0.10"
-# app.data 비대칭 봉투(단계②) — X25519 sealed box(libsodium crypto_box_seal 구조): 공개키 P 로
-# lock 중 at-rest 쓰기(개인키 불요), 개인키 S 로 unlock 시 복호. ephemeral 키 DH→HKDF-SHA256 으로
-# 대칭키 파생 후 기존 XChaCha20Poly1305(AAD 바인딩)로 봉인. static_secrets=StaticSecret(S 재사용),
-# zeroize=비밀 스칼라 메모리 소거. P=basepoint·S 검증(키스왑 거부)에 PublicKey::from(&S) 사용.
-x25519-dalek = { version = "2", features = ["static_secrets", "zeroize"] }
-hkdf = "0.12"
+# app.data 비대칭 봉투(단계②)의 X25519 sealed box 실체는 crates/soksak-seal 로 이식됐다
+# (x25519-dalek·hkdf 는 그 크레이트가 소유) — 앱은 soksak-seal 재수출만 소비한다.
 # 폰-링크 원격 제어 스택(remote::* — iroh QUIC + snow Noise + Ed25519 기기 인증)은 코어에서
 # 분리됐다 → 원격 전송 사이드카 플러그인(vendor). iroh/snow/ed25519-dalek 정적키 트리가
 # 코어 바이너리에서 빠진다(슬리밍). chacha20poly1305/rand/zeroize 는 secrets 볼트가 쓰므로 유지.

@@ -7,6 +7,8 @@ description = "PTY daemon protocol contract shared by the app and soksak-ptyd: v
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# 체크포인트 파일 stem(base64url(window|pane)) — 전단사 이름 파생(경로 규약의 일부).
+base64 = "0.22"
 # hello 협상 문법(버전 판정 Compat/effective_protocol)은 소켓 프로토콜 계약을 재사용한다 —
 # 판정 함수 사본 금지(soksak-protocol 이 정본).
 soksak-protocol = { path = "../../protocol" }

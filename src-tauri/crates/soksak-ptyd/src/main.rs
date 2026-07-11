@@ -41,6 +41,7 @@ mod unix {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Arc, Condvar, Mutex};
+    use std::time::{Duration, Instant};
 
     use base64::Engine as _;
     use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
@@ -63,6 +64,84 @@ mod unix {
         unacked: usize,
         paused: bool,
         closed: bool,
+        // 봉인 체크포인트 설정 — None 이면 이 세션은 체크포인트를 쓰지 않는다
+        // (fail closed: 데몬은 화면 바이트를 평문으로 디스크에 남기지 않는다).
+        ckpt: Option<CkptCfg>,
+        // 디바운스 상태 — 출력 이벤트가 세운다. 고정 틱 폴링 없음: 체크포인트
+        // 스레드는 cv 이벤트와 마감 시각(wait_timeout)으로만 깬다.
+        ckpt_dirty: bool,
+        ckpt_dirty_since: Option<Instant>,
+        ckpt_last_output: Instant,
+    }
+
+    // 체크포인트 봉인 설정 — 수신 공개키·볼트 키 id·경로·AAD(전부 soksak-pty-proto 규약).
+    #[derive(Clone)]
+    struct CkptCfg {
+        pk: [u8; 32],
+        key_id: String,
+        window: String,
+        pane: String,
+        path: PathBuf,
+        aad: Vec<u8>,
+    }
+
+    // 출력 이벤트 디바운스: idle 300ms, 상한 5s(플랜 §5.5 M3).
+    const CKPT_IDLE: Duration = Duration::from_millis(300);
+    const CKPT_CAP: Duration = Duration::from_secs(5);
+
+    fn make_ckpt_cfg(
+        home: &std::path::Path,
+        window_label: &Option<String>,
+        pane_id: &str,
+        pk_b64: &Option<String>,
+        key_id: &Option<String>,
+    ) -> Option<CkptCfg> {
+        let (pk_b64, key_id) = match (pk_b64, key_id) {
+            (Some(p), Some(k)) => (p, k),
+            _ => return None,
+        };
+        let raw = base64::engine::general_purpose::STANDARD.decode(pk_b64.as_bytes()).ok()?;
+        let pk: [u8; 32] = raw.try_into().ok()?;
+        let window = window_label.clone().unwrap_or_default();
+        Some(CkptCfg {
+            pk,
+            key_id: key_id.clone(),
+            window: window.clone(),
+            pane: pane_id.to_string(),
+            path: proto::checkpoint_path(home, &window, pane_id),
+            aad: proto::checkpoint_aad(&window, pane_id, key_id),
+        })
+    }
+
+    // 봉인 후 tmp+rename 원자 쓰기 — 찢어진 파일이 정본 자리를 차지하지 못한다.
+    fn write_checkpoint(
+        cfg: &CkptCfg,
+        session_id: u64,
+        paint: &[u8],
+        alt_active: bool,
+    ) -> Result<(), String> {
+        let sealed = soksak_seal::seal_to(&cfg.pk, paint, &cfg.aad)?;
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        let doc = json!({
+            "v": 1,
+            "keyId": cfg.key_id,
+            "window": cfg.window,
+            "pane": cfg.pane,
+            "altActive": alt_active,
+            "ts": ts,
+            "sealed": sealed,
+        });
+        let dir = cfg.path.parent().ok_or("checkpoint path has no parent")?;
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+        let tmp = dir.join(format!(".ckpt-tmp-{}-{session_id}", std::process::id()));
+        let body = serde_json::to_vec(&doc).map_err(|e| e.to_string())?;
+        std::fs::write(&tmp, body).map_err(|e| e.to_string())?;
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+        std::fs::rename(&tmp, &cfg.path).map_err(|e| e.to_string())
     }
 
     struct Session {
@@ -99,11 +178,12 @@ mod unix {
         }
     }
 
-    #[derive(Default)]
     struct Registry {
         sessions: Mutex<HashMap<u64, Arc<Session>>>,
         next_id: AtomicU64,
         next_gen: AtomicU64,
+        // identity 홈 — 체크포인트 경로 파생(proto 규약)의 입력.
+        home: PathBuf,
     }
 
     impl Registry {
@@ -186,7 +266,12 @@ mod unix {
             run_dir
         );
 
-        let reg = Arc::new(Registry::default());
+        let reg = Arc::new(Registry {
+            sessions: Mutex::new(HashMap::new()),
+            next_id: AtomicU64::new(0),
+            next_gen: AtomicU64::new(0),
+            home,
+        });
 
         // stream accept 루프(부착) — 별도 스레드.
         {
@@ -309,13 +394,37 @@ mod unix {
     fn handle_request(req: proto::Request, reg: &Arc<Registry>) -> Value {
         use proto::Request as R;
         match req {
-            R::CreateOrAttach { pane_id, cols, rows, cwd, shell, env, env_remove, window_label } => {
+            R::CreateOrAttach {
+                pane_id,
+                cols,
+                rows,
+                cwd,
+                shell,
+                env,
+                env_remove,
+                window_label,
+                checkpoint_pk,
+                checkpoint_key_id,
+            } => {
                 if let Some(s) = reg.by_pane(window_label.as_deref(), &pane_id) {
+                    // 재부착 — 키 없이 태어난 세션이면 지금 온 체크포인트 키를 입양한다
+                    // (암호화를 세션 도중 켠 경우의 공백 봉합).
+                    if let Some(cfg) =
+                        make_ckpt_cfg(&reg.home, &window_label, &pane_id, &checkpoint_pk, &checkpoint_key_id)
+                    {
+                        let mut st = s.st.lock().unwrap();
+                        if st.ckpt.is_none() {
+                            st.ckpt = Some(cfg);
+                        }
+                    }
                     let mut d = serde_json::to_value(s.info()).unwrap_or_default();
                     d["attached"] = json!(true);
                     return proto::ok_reply(d);
                 }
-                match spawn_session(reg, pane_id, cols, rows, cwd, shell, env, env_remove, window_label) {
+                let ckpt =
+                    make_ckpt_cfg(&reg.home, &window_label, &pane_id, &checkpoint_pk, &checkpoint_key_id);
+                match spawn_session(reg, pane_id, cols, rows, cwd, shell, env, env_remove, window_label, ckpt)
+                {
                     Ok(s) => {
                         let mut d = serde_json::to_value(s.info()).unwrap_or_default();
                         d["attached"] = json!(false);
@@ -456,6 +565,7 @@ mod unix {
         env: Vec<(String, String)>,
         env_remove: Vec<String>,
         window_label: Option<String>,
+        ckpt: Option<CkptCfg>,
     ) -> Result<Arc<Session>, String> {
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -499,6 +609,10 @@ mod unix {
                 unacked: 0,
                 paused: false,
                 closed: false,
+                ckpt,
+                ckpt_dirty: false,
+                ckpt_dirty_since: None,
+                ckpt_last_output: Instant::now(),
             }),
             cv: Condvar::new(),
         });
@@ -525,6 +639,17 @@ mod unix {
                             let mut st = session.st.lock().unwrap();
                             // 미러 갱신 — 화면 상태(스크롤백·alt·모드)가 여기서 유지된다.
                             st.mirror.feed(&buf[..n]);
+                            // 체크포인트 디바운스 이벤트 — 첫 dirty 전이만 스레드를 깨운다
+                            // (이후 연장은 wait_timeout 마감 재계산이 처리).
+                            if st.ckpt.is_some() {
+                                let first = st.ckpt_dirty_since.is_none();
+                                st.ckpt_dirty = true;
+                                st.ckpt_last_output = Instant::now();
+                                if first {
+                                    st.ckpt_dirty_since = Some(st.ckpt_last_output);
+                                    session.cv.notify_all();
+                                }
+                            }
                             // 부착 중이면 라이브 전달. 쓰기 실패 = 클라이언트 사망 → detach
                             // (소켓 에러 이벤트가 죽음 감지다).
                             if let Some(s) = st.attached.as_mut() {
@@ -543,15 +668,62 @@ mod unix {
                     }
                 }
                 // 세션 마감: 부착 스트림을 닫아 클라이언트에 EOF 를 전달하고 등록을 지운다.
+                // notify 로 체크포인트 스레드도 깨워 산출물 삭제·종료를 밟게 한다.
                 {
                     let mut st = session.st.lock().unwrap();
                     st.closed = true;
                     if let Some(s) = st.attached.take() {
                         let _ = s.shutdown(std::net::Shutdown::Both);
                     }
+                    session.cv.notify_all();
                 }
                 let _ = session.child.lock().unwrap().wait();
                 reg.remove(session.id);
+            });
+        }
+
+        // 체크포인트 스레드: 출력 이벤트 디바운스(idle 300ms·상한 5s)로 화면 페인트를
+        // 봉인해 tmp+rename 원자 쓰기. 고정 틱 폴링 없음 — cv 이벤트 + 마감 시각
+        // wait_timeout 으로만 깬다. 정상 종료(EOF/kill)면 산출물을 삭제한다: 파일이
+        // 남는 경우는 데몬 자신의 죽음뿐 — 그것이 cold restore 의 입력이다.
+        {
+            let session = session.clone();
+            std::thread::spawn(move || {
+                let mut st = session.st.lock().unwrap();
+                loop {
+                    if st.closed {
+                        break;
+                    }
+                    if !st.ckpt_dirty || st.ckpt.is_none() {
+                        st = session.cv.wait(st).unwrap();
+                        continue;
+                    }
+                    let now = Instant::now();
+                    let idle = st.ckpt_last_output + CKPT_IDLE;
+                    let cap = st.ckpt_dirty_since.unwrap_or(now) + CKPT_CAP;
+                    let deadline = idle.min(cap);
+                    if now < deadline {
+                        let (guard, _) = session.cv.wait_timeout(st, deadline - now).unwrap();
+                        st = guard;
+                        continue;
+                    }
+                    // 마감 도달 — 직렬화는 락 안(짧다), 봉인·디스크 쓰기는 락 밖.
+                    let paint = st.mirror.cold_paint();
+                    let alt = st.mirror.alt_active();
+                    let cfg = st.ckpt.clone();
+                    st.ckpt_dirty = false;
+                    st.ckpt_dirty_since = None;
+                    drop(st);
+                    if let Some(cfg) = &cfg {
+                        if let Err(e) = write_checkpoint(cfg, session.id, &paint, alt) {
+                            eprintln!("soksak-ptyd: checkpoint write failed: {e}");
+                        }
+                    }
+                    st = session.st.lock().unwrap();
+                }
+                if let Some(cfg) = &st.ckpt {
+                    let _ = std::fs::remove_file(&cfg.path);
+                }
             });
         }
         Ok(session)

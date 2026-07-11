@@ -4424,7 +4424,6 @@ dependencies = [
  "chacha20poly1305",
  "clipboard-rs",
  "futures-util",
- "hkdf",
  "libc",
  "libloading 0.8.9",
  "notify-debouncer-mini",
@@ -4441,6 +4440,7 @@ dependencies = [
  "sha2",
  "soksak-protocol",
  "soksak-pty-proto",
+ "soksak-seal",
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",
@@ -4454,7 +4454,6 @@ dependencies = [
  "uuid",
  "wreq",
  "wreq-util",
- "x25519-dalek",
  "zeroize",
 ]
 
@@ -4473,6 +4472,7 @@ dependencies = [
 name = "soksak-pty-proto"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "serde",
  "serde_json",
  "soksak-protocol",
@@ -4488,6 +4488,22 @@ dependencies = [
  "serde_json",
  "soksak-pty-mirror",
  "soksak-pty-proto",
+ "soksak-seal",
+]
+
+[[package]]
+name = "soksak-seal"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chacha20poly1305",
+ "hkdf",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "sha2",
+ "x25519-dalek",
+ "zeroize",
 ]
 
 [[package]]

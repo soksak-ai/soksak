@@ -1,0 +1,18 @@
+[package]
+name = "soksak-seal"
+version = "0.1.0"
+edition = "2021"
+description = "X25519 sealed box shared by the app vault and soksak-ptyd: seal to a public key without the private key at rest, open only with the vault-held secret. Moved from core secrets so the daemon seals byte checkpoints with the same scheme."
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+base64 = "0.22"
+x25519-dalek = { version = "2", features = ["static_secrets", "zeroize"] }
+hkdf = "0.12"
+sha2 = "0.10"
+chacha20poly1305 = "0.10"
+rand = "0.8"
+zeroize = "1"
+
+[dev-dependencies]
+serde_json = "1"

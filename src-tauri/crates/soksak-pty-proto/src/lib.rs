@@ -78,6 +78,53 @@ pub fn log_path(home: &Path) -> PathBuf {
     run_dir(home).join(format!("ptyd-p{PTYD_PROTOCOL_VERSION}.log"))
 }
 
+// ── Sealed byte checkpoints (restore ladder rung 3, docs/RESTORE.md) ─────────
+// The daemon seals each session's flattened screen paint to the app-supplied
+// X25519 public key (soksak-seal SealedBox) and writes it under the identity
+// home. Only the unlocked app can open one; a clean session end deletes it.
+// Everything both sides must agree on lives here: the directory, the file
+// name derivation, and the AAD context grammar.
+
+/// Checkpoint directory: `<home>/pty/checkpoints`.
+pub fn checkpoint_dir(home: &Path) -> PathBuf {
+    home.join("pty").join("checkpoints")
+}
+
+/// Cached checkpoint recipient key: `<home>/pty/checkpoint.pub` (JSON
+/// `{keyId, publicKey}`; the public half only — the secret lives in the
+/// vault under `keyId`).
+pub fn checkpoint_pubkey_path(home: &Path) -> PathBuf {
+    home.join("pty").join("checkpoint.pub")
+}
+
+// base64url of one key component — never contains the separators (`.`, `|`),
+// so component-wise encoding is bijective over arbitrary inputs.
+fn ckpt_component(s: &str) -> String {
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine as _;
+    URL_SAFE_NO_PAD.encode(s)
+}
+
+/// Checkpoint file for a `(window_label, pane_id)` reattach key. Each
+/// component is base64url-encoded separately — bijective, so distinct keys
+/// can never collide on a lossy sanitization or a separator ambiguity.
+pub fn checkpoint_path(home: &Path, window_label: &str, pane_id: &str) -> PathBuf {
+    checkpoint_dir(home)
+        .join(format!("ckpt-{}.{}.json", ckpt_component(window_label), ckpt_component(pane_id)))
+}
+
+/// AAD bound into every checkpoint seal — rejects relocating a sealed blob to
+/// another pane or key. Window and pane ride base64url-encoded (same rule as
+/// the file stem) so the `|` separators are unambiguous for any input.
+pub fn checkpoint_aad(window_label: &str, pane_id: &str, key_id: &str) -> Vec<u8> {
+    format!(
+        "soksak-pty-ckpt|{}|{}|{key_id}",
+        ckpt_component(window_label),
+        ckpt_component(pane_id)
+    )
+    .into_bytes()
+}
+
 // ── Hello ────────────────────────────────────────────────────────────────────
 
 /// First message on every connection, both sockets. `session` is present only
@@ -131,6 +178,17 @@ pub enum Request {
         /// Window that owns the pane — half of the reattach key, and the
         /// reap key of `killByWindow` when the user discards a window.
         window_label: Option<String>,
+        /// Recipient X25519 public key (base64, 32B) for sealed byte
+        /// checkpoints. Absent = no checkpoints for this session (fail
+        /// closed: the daemon never writes plaintext screen bytes). Additive
+        /// optional field — no protocol bump. On attach to a live session
+        /// that has no key yet, the daemon adopts this one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        checkpoint_pk: Option<String>,
+        /// Vault key id owning the secret half of `checkpoint_pk` — recorded
+        /// in the checkpoint header so the app opens with the right key.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        checkpoint_key_id: Option<String>,
     },
     /// Shell input. Base64 keeps raw bytes NDJSON-safe; input volume is small.
     #[serde(rename_all = "camelCase")]
@@ -196,6 +254,29 @@ mod tests {
         assert_eq!(log_path(home), home.join("run/ptyd-p1.log"));
     }
 
+    // ── checkpoint path/AAD contract: bijective stem, context-bound seal ────
+
+    #[test]
+    fn checkpoint_paths_and_aad_derive_from_the_reattach_key() {
+        let home = Path::new("/tmp/h");
+        assert_eq!(checkpoint_pubkey_path(home), home.join("pty/checkpoint.pub"));
+        let a = checkpoint_path(home, "w-1", "v2");
+        let b = checkpoint_path(home, "w-2", "v2");
+        assert!(a.starts_with(home.join("pty/checkpoints")), "{a:?}");
+        assert_ne!(a, b, "different windows never share a checkpoint file");
+        // 전단사: 손실 sanitize·구분자 모호성이면 충돌했을 키 쌍도 갈린다.
+        assert_ne!(
+            checkpoint_path(home, "w|x", "y"),
+            checkpoint_path(home, "w", "x|y"),
+            "stem is bijective over (window, pane)"
+        );
+        assert_ne!(
+            checkpoint_aad("w|x", "y", "k"),
+            checkpoint_aad("w", "x|y", "k"),
+            "AAD is unambiguous over (window, pane)"
+        );
+    }
+
     // ── hello judgment: mandatory from the first generation ─────────────────
 
     #[test]
@@ -250,6 +331,8 @@ mod tests {
                 env: vec![("TERM".into(), "xterm-256color".into())],
                 env_remove: vec!["CLAUDECODE".into()],
                 window_label: Some("w-x".into()),
+                checkpoint_pk: Some("cGs=".into()),
+                checkpoint_key_id: Some("ptyk-1".into()),
             },
             Request::Write { session: 1, data_b64: "aGk=".into() },
             Request::Resize { session: 1, cols: 100, rows: 30 },

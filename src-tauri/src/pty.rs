@@ -690,6 +690,54 @@ mod daemon {
         pub env_remove: Vec<String>,
     }
 
+    // ── 봉인 체크포인트 수신 키(restore 사다리 3단, docs/RESTORE.md) ─────────
+    // 봉인은 공개키만 필요하다 — P 는 평문 캐시(<home>/pty/checkpoint.pub, 공개값),
+    // S 는 vault 에만(put_data_key). 캐시가 없고 vault 도 잠겨 있으면 None — 데몬은
+    // 체크포인트를 쓰지 않는다(fail closed: 화면 바이트 평문 저장 경로는 존재하지 않는다).
+    // 동시 스폰 경쟁은 (a) 프로세스 내 뮤텍스 직렬화 (b) keyId 에 랜덤을 넣고 rename
+    // 승자의 파일을 재독해 채택 — S/P 짝이 항상 파일이 가리키는 쌍으로 정렬된다.
+    static CKPT_KEY_GATE: Mutex<()> = Mutex::new(());
+
+    pub fn checkpoint_recipient(app: &tauri::AppHandle) -> (Option<String>, Option<String>) {
+        let home = crate::home::soksak_home();
+        let path = proto::checkpoint_pubkey_path(&home);
+        let read = |p: &Path| -> Option<(String, String)> {
+            let v: Value = serde_json::from_str(&std::fs::read_to_string(p).ok()?).ok()?;
+            Some((v["publicKey"].as_str()?.to_string(), v["keyId"].as_str()?.to_string()))
+        };
+        let _gate = CKPT_KEY_GATE.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((pk, key_id)) = read(&path) {
+            return (Some(pk), Some(key_id));
+        }
+        let secrets = tauri::Manager::state::<crate::secrets::SecretsState>(app);
+        if !secrets.is_unlocked() {
+            return (None, None); // 잠김 + 캐시 없음 — 이번 세션은 체크포인트 없이
+        }
+        let (s, p) = crate::secrets::gen_asym_keypair();
+        let key_id = format!("ptyk-{}", uuid::Uuid::new_v4());
+        if let Err(e) = secrets.put_data_key(&key_id, &s) {
+            eprintln!("[pty] checkpoint key store failed: {e}");
+            return (None, None);
+        }
+        let pk_b64 = {
+            use base64::Engine as _;
+            base64::engine::general_purpose::STANDARD.encode(p)
+        };
+        let doc = json!({ "keyId": key_id, "publicKey": pk_b64 });
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+            let tmp = dir.join(format!(".ckpt-pub-{}", std::process::id()));
+            if std::fs::write(&tmp, doc.to_string()).is_ok() {
+                let _ = std::fs::rename(&tmp, &path);
+            }
+        }
+        // rename 승자의 쌍을 채택(교차 프로세스 경쟁 정렬) — 내 쌍이 졌으면 파일 쌍으로.
+        match read(&path) {
+            Some((pk, key_id)) => (Some(pk), Some(key_id)),
+            None => (Some(pk_b64), Some(key_id)),
+        }
+    }
+
     // 데몬 경유 스폰: createOrAttach → stream 부착 → reader 스레드(재생+라이브 →
     // Channel). 반환 = 데몬 세션 id. 재부착이면 데몬 미러의 직렬화 시퀀스(화면 상태
     // 재현)가 라이브에 앞서 도착한다 — 전부 그리드 합성물이라 재생분에 질의(DA1/DSR)가
@@ -703,6 +751,7 @@ mod daemon {
     ) -> Result<u64, String> {
         // pane 없는 세션은 재부착 키가 없다 — 데몬에 실을 이유가 없어 로컬로 보낸다.
         let pane_id = p.pane_id.clone().ok_or("no pane id: local session")?;
+        let (checkpoint_pk, checkpoint_key_id) = checkpoint_recipient(app);
         let data = link.request(
             &proto::Request::CreateOrAttach {
                 pane_id,
@@ -713,6 +762,8 @@ mod daemon {
                 env: p.env,
                 env_remove: p.env_remove,
                 window_label: p.window_label,
+                checkpoint_pk,
+                checkpoint_key_id,
             },
             true,
         )?;

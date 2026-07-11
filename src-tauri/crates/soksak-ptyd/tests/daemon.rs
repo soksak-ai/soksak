@@ -148,7 +148,30 @@ fn create(control: &mut Control, pane: &str) -> Value {
         env: vec![("TERM".into(), "dumb".into()), ("PS1".into(), "$ ".into())],
         env_remove: vec![],
         window_label: Some("w-test".into()),
+        checkpoint_pk: None,
+        checkpoint_key_id: None,
     })
+}
+
+fn write_line(control: &mut Control, session: u64, line: &str) {
+    use base64::Engine as _;
+    let w = proto::Request::Write {
+        session,
+        data_b64: base64::engine::general_purpose::STANDARD.encode(format!("{line}\n")),
+    };
+    assert_eq!(control.request(&w)["ok"], true);
+}
+
+// 조건 충족까지 유한 대기(테스트 부트스트랩 한정, 상한 명시) — 런타임 감시가 아니다.
+fn wait_until(what: &str, deadline: Duration, mut f: impl FnMut() -> bool) {
+    let end = Instant::now() + deadline;
+    while Instant::now() < end {
+        if f() {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    panic!("timed out waiting for {what}");
 }
 
 // ── hello 게이트 ─────────────────────────────────────────────────────────────
@@ -306,6 +329,8 @@ fn same_pane_id_in_two_windows_is_two_sessions() {
             env: vec![("PS1".into(), "$ ".into())],
             env_remove: vec![],
             window_label: Some(window.into()),
+            checkpoint_pk: None,
+            checkpoint_key_id: None,
         })
     };
     let a = mk(&mut control, "w-one");
@@ -340,6 +365,8 @@ fn kill_by_window_reaps_only_that_windows_sessions() {
         env: vec![("PS1".into(), "$ ".into())],
         env_remove: vec![],
         window_label: Some("w-dead".into()),
+        checkpoint_pk: None,
+        checkpoint_key_id: None,
     });
     let b = control.request(&proto::Request::CreateOrAttach {
         pane_id: "pane-b".into(),
@@ -350,6 +377,8 @@ fn kill_by_window_reaps_only_that_windows_sessions() {
         env: vec![("PS1".into(), "$ ".into())],
         env_remove: vec![],
         window_label: Some("w-alive".into()),
+        checkpoint_pk: None,
+        checkpoint_key_id: None,
     });
     let pid_a = a["data"]["shellPid"].as_u64().unwrap() as i32;
     let pid_b = b["data"]["shellPid"].as_u64().unwrap() as i32;
@@ -362,6 +391,84 @@ fn kill_by_window_reaps_only_that_windows_sessions() {
     }
     assert_ne!(unsafe { libc_kill(pid_a, 0) }, 0, "w-dead shell reaped");
     assert_eq!(unsafe { libc_kill(pid_b, 0) }, 0, "w-alive shell untouched");
+}
+
+// ── 봉인 바이트 체크포인트(플랜 §5.5 M3): 디스크 평문 0, 개봉은 개인키만, 정상 종료 삭제 ──
+
+#[test]
+fn checkpoint_sealed_written_and_removed() {
+    let d = start_daemon("ckpt");
+    let (sk, pk) = soksak_seal::gen_asym_keypair();
+    let pk_b64 = {
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD.encode(pk)
+    };
+    let mut control = Control::connect(&d.home);
+    let created = control.request(&proto::Request::CreateOrAttach {
+        pane_id: "pane-c".into(),
+        cols: 80,
+        rows: 24,
+        cwd: Some("/tmp".into()),
+        shell: "/bin/sh".into(),
+        env: vec![("TERM".into(), "dumb".into()), ("PS1".into(), "$ ".into())],
+        env_remove: vec![],
+        window_label: Some("w-test".into()),
+        checkpoint_pk: Some(pk_b64),
+        checkpoint_key_id: Some("k-test".into()),
+    });
+    assert_eq!(created["ok"], true, "{created}");
+    let session = created["data"]["session"].as_u64().unwrap();
+
+    // 비밀이 화면에 흐른다 — 체크포인트가 이 텍스트를 평문으로 디스크에 남기면 안 된다.
+    let marker = format!("CKPT-SECRET-{}", std::process::id());
+    write_line(&mut control, session, &format!("echo {marker}"));
+
+    // 디바운스(idle 300ms) 후 체크포인트 파일이 나타난다.
+    let path = proto::checkpoint_path(&d.home, "w-test", "pane-c");
+    wait_until("checkpoint file", Duration::from_secs(10), || path.exists());
+
+    // (a) 잠금 상태 디스크 평문 부재 — identity 홈 전체를 훑어 비밀 문자열이 없다.
+    let mut hits = Vec::new();
+    scan_for_plaintext(&d.home, marker.as_bytes(), &mut hits);
+    assert!(hits.is_empty(), "plaintext screen bytes on disk: {hits:?}");
+
+    // (b) 개인키 S + 정합 AAD 로만 열린다 — 열면 화면 페인트에 비밀이 들어 있다.
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(doc["v"], 1, "{doc}");
+    assert_eq!(doc["keyId"], "k-test");
+    let sealed: soksak_seal::SealedBox = serde_json::from_value(doc["sealed"].clone()).unwrap();
+    let aad = proto::checkpoint_aad("w-test", "pane-c", "k-test");
+    let paint = soksak_seal::open_sealed(&sk, &sealed, &aad).expect("unseal with S");
+    let text = String::from_utf8_lossy(&paint);
+    assert!(text.contains(&marker), "unsealed paint carries the screen: {text:?}");
+    // 다른 pane 의 AAD 로는 열리지 않는다(재배치 거부).
+    let wrong = proto::checkpoint_aad("w-test", "pane-x", "k-test");
+    assert!(soksak_seal::open_sealed(&sk, &sealed, &wrong).is_err());
+
+    // (c) 정상 종료(kill = pane 폐기) → 산출물 삭제.
+    assert_eq!(control.request(&proto::Request::Kill { session })["ok"], true);
+    wait_until("checkpoint removal", Duration::from_secs(10), || !path.exists());
+
+    let bye = control.request(&proto::Request::Shutdown);
+    assert_eq!(bye["ok"], true);
+}
+
+// 홈 아래 전 파일에서 평문 바이트 검색(재귀) — 소켓 등 특수 파일은 건너뛴다.
+fn scan_for_plaintext(dir: &Path, needle: &[u8], hits: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for e in entries.flatten() {
+        let p = e.path();
+        let Ok(ft) = e.file_type() else { continue };
+        if ft.is_dir() {
+            scan_for_plaintext(&p, needle, hits);
+        } else if ft.is_file() {
+            if let Ok(bytes) = std::fs::read(&p) {
+                if bytes.windows(needle.len()).any(|w| w == needle) {
+                    hits.push(p);
+                }
+            }
+        }
+    }
 }
 
 extern "C" {
