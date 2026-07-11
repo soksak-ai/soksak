@@ -537,6 +537,70 @@ pub fn close_terminal(id: u32, manager: State<'_, PtyManager>) -> Result<(), Str
     Ok(())
 }
 
+// ── PTY 세션 데몬 관측·재기동 — command registry(pty.daemon.*)의 실행기 ────────
+// 관측(status)은 데몬을 새로 띄우지 않는다(spawn_if_needed=false — 조회가 데몬을
+// 부풀리지 않는다). 재기동(restart)은 파괴적이다: 데몬 소유 셸과 그 자식 전부가
+// 죽는다 — 카탈로그의 danger 게이트 뒤에만 노출된다.
+
+#[tauri::command]
+pub fn pty_daemon_status(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(unix)]
+    {
+        use serde_json::json;
+        let manager = tauri::Manager::state::<PtyManager>(&app);
+        let home = crate::home::soksak_home();
+        let staged = soksak_pty_proto::staged_bin_path(&home);
+        let (running, pid, sessions) =
+            match manager.link.request(&soksak_pty_proto::Request::Ping, false) {
+                Ok(v) => (true, v["pid"].as_u64(), v["sessions"].as_u64()),
+                Err(_) => (false, None, None),
+            };
+        Ok(json!({
+            "running": running,
+            "pid": pid,
+            "sessions": sessions,
+            "protocol": soksak_pty_proto::PTYD_PROTOCOL_VERSION,
+            "staged": staged.exists(),
+            "stagedPath": staged.to_string_lossy(),
+        }))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = app;
+        Ok(serde_json::json!({
+            "running": false,
+            "supported": false,
+            "protocol": soksak_pty_proto::PTYD_PROTOCOL_VERSION,
+        }))
+    }
+}
+
+#[tauri::command]
+pub fn pty_daemon_restart(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(unix)]
+    {
+        use serde_json::json;
+        let manager = tauri::Manager::state::<PtyManager>(&app);
+        // 살아 있으면 종료(전 세션 kill — 파괴적임을 카탈로그가 게이트한다).
+        let killed = manager
+            .link
+            .request(&soksak_pty_proto::Request::Shutdown, false)
+            .ok()
+            .and_then(|v| v["killed"].as_u64())
+            .unwrap_or(0);
+        // 옛 데몬의 종료 유예(응답 후 150ms)를 넘겨 싱글턴 프로브 오인을 피한다 —
+        // 재기동 1회 한정의 유한 대기(상시 감시 아님).
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        let v = manager.link.request(&soksak_pty_proto::Request::Ping, true)?;
+        Ok(json!({ "killed": killed, "pid": v["pid"] }))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = app;
+        Err("the PTY daemon is unix-only in this generation".to_string())
+    }
+}
+
 // 사용자 로그인 셸 PATH 기준 바이너리 존재 확인 — GUI 앱의 좁은 PATH 로는
 // 사용자가 쓰는 CLI 를 못 찾는다(설치 판정의 단일 기준 = 사용자 셸).
 // 플러그인 프로그램 ensure(§2.6)가 활성화 시점에 호출한다.

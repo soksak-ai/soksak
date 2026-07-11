@@ -382,6 +382,8 @@ pub fn run() {
             daemon::daemon_run_once,
             skillgen::skill_refresh_spawn,
             pty::pty_pane_pid,
+            pty::pty_daemon_status,
+            pty::pty_daemon_restart,
             pty::write_terminal,
             pty::resize_terminal,
             pty::ack_terminal,

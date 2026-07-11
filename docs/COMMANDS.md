@@ -546,22 +546,6 @@ Open a file in an editor view. If already open, activates that tab instead. | �
 sok editor.open '{"path":"/Users/me/work/src/main.rs"}'
 ```
 
-## `explorer.git`
-
-Get git change status for a directory (matches file-tree decoration). | git 상태 변경 파일 수정됨
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `path` | string |  | Git repo directory (omit = project root) |
-| `project` | string |  | Target project id (omit = caller's context project) |
-
-**Returns**: { entries: [{path,status}] } — empty list if not a repo
-**Errors**: TARGET_NOT_FOUND, INTERNAL
-
-```bash
-sok explorer.git
-```
-
 ## `explorer.list`
 
 List direct children of a directory (same view as the file tree). Omit path to use the project root (falls back to HOME). | 파일 목록 디렉토리 폴더 내용 탐색
@@ -607,74 +591,6 @@ Watch a directory for changes using OS-native file events (non-recursive, no pol
 
 ```bash
 sok fs.watch '{"path":"/Users/me/work"}'
-```
-
-## `git.diff`
-
-Return the raw unified diff for the working tree (default), the index when staged=true, or a specific commit's patch when commit is supplied. Use to inspect uncommitted or committed changes. | 깃 diff 변경 차이 수정내용 스테이지
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `commit` | string |  | Commit hash or HEAD reference |
-| `file` | string |  | Limit diff to this file (repository-relative path) |
-| `path` | string |  | Repository path (defaults to active project root when omitted) |
-| `staged` | boolean |  | Diff the index (staged changes) instead of the working tree [default false] |
-
-**Returns**: { diff: string }
-**Errors**: TARGET_NOT_FOUND, INTERNAL
-
-```bash
-sok git.diff
-sok git.diff '{"file":"src/main.ts","staged":true}'
-```
-
-## `git.init`
-
-Run git init in a directory if .git is absent (no-op when already initialized, idempotent). Use with project.created event in a git-init policy plugin to auto-initialize repos on project creation. | 깃 초기화 저장소 생성 init
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `path` | string |  | Repository path (defaults to active project root when omitted) |
-
-**Returns**: { initialized: whether init was performed, path }
-**Errors**: TARGET_NOT_FOUND, INTERNAL
-
-```bash
-sok git.init '{"path":"/Users/me/work"}'
-```
-
-## `git.log`
-
-Retrieve commit history in reverse-chronological order. Supports pagination via limit (default 50, max 500) and skip. | 깃 로그 커밋 이력 히스토리
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `limit` | number |  | Maximum number of commits to return (default 50, max 500) |
-| `path` | string |  | Repository path (defaults to active project root when omitted) |
-| `skip` | number |  | Number of commits to skip for pagination |
-
-**Returns**: { commits: [{hash, short, author, date, subject}] }
-**Errors**: TARGET_NOT_FOUND, INTERNAL
-
-```bash
-sok git.log
-sok git.log '{"limit":10,"skip":10}'
-```
-
-## `git.show`
-
-Show a single commit in full: metadata, changed file list, and the raw patch. Use to inspect what a specific commit introduced. | 깃 커밋 상세 패치 변경내용 보기
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `commit` | string | ✓ | Commit hash (4–40 hex) or symbolic ref such as HEAD, HEAD~N, or HEAD^ |
-| `path` | string |  | Repository path (defaults to active project root when omitted) |
-
-**Returns**: { meta, files: [{status, path}], patch }
-**Errors**: TARGET_NOT_FOUND, INTERNAL
-
-```bash
-sok git.show '{"commit":"HEAD"}'
 ```
 
 ## `layout.apply`
@@ -1536,6 +1452,28 @@ Batch-update project settings. Omitted fields are preserved; "" removes the over
 
 ```bash
 sok project.update '{"project":"t1","title":"백엔드","program":"claude"}'
+```
+
+## `pty.daemon.restart` (danger: destructive)
+
+Restart the PTY session daemon. Destructive: every daemon-owned shell and its child processes are killed before a fresh daemon is staged and started — open terminals lose their sessions and respawn fresh shells. | pty데몬 재시작 터미널 데몬
+
+**Returns**: { killed, pid }
+**Errors**: INTERNAL
+
+```bash
+sok pty.daemon.restart
+```
+
+## `pty.daemon.status`
+
+Report the PTY session daemon (soksak-ptyd): whether it is running, its pid and protocol generation, how many shell sessions it owns, and whether the staged binary exists in the identity home. A dead daemon here means terminals fall back to in-process PTYs on their next spawn. | pty데몬 상태 터미널 데몬 세션
+
+**Returns**: { running, pid?, sessions?, protocol, staged, stagedPath }
+**Errors**: INTERNAL
+
+```bash
+sok pty.daemon.status
 ```
 
 ## `remote.confirm` (danger: destructive)

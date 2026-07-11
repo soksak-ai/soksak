@@ -370,6 +370,42 @@ export function registerDaemonCatalog(): void {
       return { name, stop: policy.stop[name] };
     },
   });
+
+  // ── PTY 세션 데몬(soksak-ptyd) — Procfile 데몬과 별개: 터미널 셸의 생존 기반 ──
+  // 셸과 자식 프로세스를 앱 밖에서 소유해 앱 재시작을 넘겨 살리는 데몬 자체의
+  // 관측·재기동 표면. 상태 조회는 데몬을 새로 띄우지 않는다(관찰이 대상을 안 부풀림).
+
+  register("pty.daemon.status", {
+    description:
+      "Report the PTY session daemon (soksak-ptyd): whether it is running, its pid and protocol generation, how many shell sessions it owns, and whether the staged binary exists in the identity home. A dead daemon here means terminals fall back to in-process PTYs on their next spawn.",
+    triggers: { ko: "pty데몬 상태 터미널 데몬 세션 데몬" },
+    params: {},
+    returns: "{ running, pid?, sessions?, protocol, staged, stagedPath }",
+    message: (d) =>
+      d.running
+        ? tmsg("msg.pty.daemon.status", { sessions: Number(d.sessions ?? 0) })
+        : tmsg("msg.pty.daemon.status.down"),
+    errors: ["INTERNAL"],
+    examples: ["sok pty.daemon.status"],
+    hint: (d) =>
+      d.running
+        ? []
+        : [{ cmd: "sok pty.daemon.restart", why: tmsg("hint.pty.daemon.restart") }],
+    handler: async () => (await invoke("pty_daemon_status")) as Record<string, unknown>,
+  });
+
+  register("pty.daemon.restart", {
+    description:
+      "Restart the PTY session daemon. Destructive: every daemon-owned shell and its child processes are killed before a fresh daemon is staged and started — open terminals lose their sessions and respawn fresh shells.",
+    triggers: { ko: "pty데몬 재시작 터미널 데몬 재시작" },
+    params: {},
+    returns: "{ killed, pid }",
+    message: (d) => tmsg("msg.pty.daemon.restart", { killed: Number(d.killed ?? 0) }),
+    danger: "destructive",
+    errors: ["INTERNAL"],
+    examples: ["sok pty.daemon.restart"],
+    handler: async () => (await invoke("pty_daemon_restart")) as Record<string, unknown>,
+  });
 }
 
 /** 프로젝트 열림 훅 — 기록된 pid 회수 후, 허용된 데몬만 자동 기동한다(보안 계약). */
