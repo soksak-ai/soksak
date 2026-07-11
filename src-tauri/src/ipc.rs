@@ -712,7 +712,18 @@ pub fn open_request(
     params: Value,
     origin: Option<&str>,
 ) -> Option<(u64, mpsc::Receiver<Value>)> {
-    let target = active_window();
+    // route 와 같은 폴백 사다리 — 플러그인 명령(스케줄 process 발화가 주 소비자)이
+    // 컨트롤 플레인으로 떨어져 상시 UNKNOWN_COMMAND 가 되던 같은 결함의 둘째 부위.
+    let live: Vec<String> = app
+        .windows()
+        .keys()
+        .filter(|l| l.starts_with("w-"))
+        .cloned()
+        .collect();
+    let target = match resolve_fallback_target(&method, active_window(), last_workspace_window(), &live) {
+        Ok(t) => t,
+        Err(()) => return None,
+    };
     if app.get_window(&target).is_none() {
         return None;
     }
