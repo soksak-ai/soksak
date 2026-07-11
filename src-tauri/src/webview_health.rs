@@ -248,6 +248,21 @@ pub fn mark_expected_teardown(app: &AppHandle, label: &str) {
         .mark_expected_teardown(now_ms());
 }
 
+/// 창 파괴 시 그 창의 브레이커 엔트리를 폐기한다 — 창 label(w-uuid)은 재사용되지 않으므로
+/// 남겨두면 창 개폐마다 맵이 무한 증가한다(느린 누수). 창 메인 webview(label==window)와
+/// 그 창의 child(b-<window>- 접두)를 함께 지운다. Destroyed 훅이 dealloc 시 1회 호출.
+pub fn forget_window(app: &AppHandle, window_label: &str) {
+    lock(&app.state::<WebviewHealth>().breakers)
+        .retain(|label, _| !belongs_to_window(label, window_label));
+    lock(&app.state::<WebviewHealth>().recovery_pending).remove(window_label);
+}
+
+/// label 이 window_label 창에 속하는가 — 창 메인 webview(label==window) 또는 그 창의
+/// child(b-<window>- 접두). 순수 술어(AppHandle 없이 단위검증).
+pub fn belongs_to_window(label: &str, window_label: &str) -> bool {
+    label == window_label || label.starts_with(&format!("b-{window_label}-"))
+}
+
 /// 창(배지·플러그인 이벤트)으로 건강 전이를 중계 — hooks.ts 가 webview.health 로 미러한다.
 fn emit_health(app: &AppHandle, window_label: &str, label: &str, state: &str, attempt: Option<u32>) {
     let _ = app.emit_to(
@@ -612,6 +627,19 @@ mod tests {
     }
 
     // ── Open 상태에서 윈도우 미만료 크래시는 계속 Open ──────────────────────
+
+    #[test]
+    fn belongs_to_window_matches_main_and_children_only() {
+        let win = "w-abc";
+        // 창 메인 webview + 그 창의 child 만.
+        assert!(belongs_to_window("w-abc", win));
+        assert!(belongs_to_window("b-w-abc-v3", win));
+        // 다른 창·다른 창의 child·접두 유사 창은 제외(교차 폐기 금지).
+        assert!(!belongs_to_window("w-abcd", win));
+        assert!(!belongs_to_window("w-xyz", win));
+        assert!(!belongs_to_window("b-w-abcd-v3", win));
+        assert!(!belongs_to_window("b-w-xyz-v3", win));
+    }
 
     #[test]
     fn open_stays_open_within_window() {

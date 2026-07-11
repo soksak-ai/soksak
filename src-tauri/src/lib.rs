@@ -326,6 +326,8 @@ pub fn run() {
                 }
                 tauri::WindowEvent::Destroyed => {
                     crate::sidecar::forget_window(window.label()); // 사이드카 surface 캐시 무효화(stale NSView 방지)
+                    // 브레이커 엔트리 폐기 — 창 label 은 재사용 안 되므로 남기면 맵이 무한 증가(느린 누수).
+                    webview_health::forget_window(window.app_handle(), window.label());
                     let app = window.app_handle();
                     // 창=프로젝트 수명(P6): 창이 파괴되면 그 창이 소유한 프로젝트 데몬도 함께 종료한다.
                     app.state::<crate::daemon::DaemonManager>().kill_by_window(window.label());
