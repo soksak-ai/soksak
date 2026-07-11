@@ -1760,26 +1760,6 @@ export function registerCatalog(): void {
     },
   });
 
-  register("explorer.git", {
-    description: "Get git change status for a directory (matches file-tree decoration).",
-    triggers: { ko: "git 상태 변경 파일 수정됨 git 변경" },
-    params: {
-      project: P.project,
-      path: { type: "string", description: "Git repo directory (omit = project root)" },
-    },
-    returns: "{ entries: [{path,status}] } — empty list if not a repo",
-    message: (d) => tmsg("msg.explorer.git", { n: ((d.entries as unknown[]) ?? []).length }),
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ["sok explorer.git"],
-    handler: async (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      const path = (p.path as string) ?? t?.root;
-      if (!path) return notFound("path 또는 프로젝트 root 필요");
-      const entries = await invoke<object[]>("git_status", { path });
-      return { entries };
-    },
-  });
-
   // ----- settings / theme -----
   // splitHeaderMode 는 탭 모드 고정(2026-06 결정)으로 표면에서 제외.
   // 터미널 외형(shell/font/cursor/scrollback/renderer)은 코어 설정이 아니다 — 터미널

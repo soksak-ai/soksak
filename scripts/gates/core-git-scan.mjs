@@ -39,9 +39,7 @@ export const SEALED = new Map([
   ["src-tauri/src/fs.rs", 2],
   ["src-tauri/src/git.rs", 6],
   ["src-tauri/src/lib.rs", 5],
-  ["src/commands/catalog.ts", 4],
   ["src/commands/catalogGit.ts", 8],
-  ["src/i18n.ts", 4],
 ]);
 
 // 명시 allowlist — 기능이 아니라 플랫폼 메커니즘인 git 사용. 스캔에서 계수하지 않는다.

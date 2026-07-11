@@ -261,7 +261,7 @@ Disposable 은 **자동 수거**된다(비활성화 시) — 직접 만든 리�
 ### app.commands (`"commands"`)
 
 ```js
-await app.commands.execute("explorer.git", { path: root });   // 기존 앱 명령(63종+)
+await app.commands.execute("explorer.list", { path: root });  // 기존 앱 명령(63종+)
 const d = app.commands.register("hello", {                    // contributes.commands 선언 필수
   description: "인사",
   params: { name: { type: "string", description: "이름" } },
