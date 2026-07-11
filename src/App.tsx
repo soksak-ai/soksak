@@ -15,6 +15,11 @@ import { removeRecentProject, useRecentProjects } from "./state/recentProjects";
 import { rafThrottle } from "./lib/rafThrottle";
 import { parkedStyle } from "./lib/layerPark";
 import { emitPluginEvent } from "./plugins/hooks";
+import {
+  activeSessionViewId,
+  startViewFocusSync,
+  transferViewFocus,
+} from "./plugins/viewFocus";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
 import { PluginSidebar } from "./components/PluginSidebar";
 import { ContentTabs } from "./components/ContentTabs";
@@ -371,6 +376,9 @@ function App() {
   // [단계③] auto-lock 배선 — 사용자 활동을 백엔드에 통지(idle 타이머 리셋)하고, vault 자동/수동 잠금
   // broadcast 를 DOM 이벤트로 재방출(UI·터미널이 반응). 부팅 1회.
   useEffect(() => startAutoLock(), []);
+  // 활성 project/space/panel/view 체인과 실제 키보드 포커스는 하나의 계약이다.
+  // 마운트 시 자동포커스하지 않고, 최신 활성 뷰 의도만 provider 에 전달한다.
+  useEffect(() => startViewFocusSync(), []);
 
   // dev 전용 mock 트리거 — 라이브 폰 없이 모달을 띄워 시각 검증(import.meta.env.DEV 게이트). 프로덕션
   // 번들(DEV=false)에선 아무것도 설치 안 한다. window.__soksakMockRemoteConfirm() 으로 mock 요청 emit.
@@ -432,7 +440,22 @@ function App() {
       const slot = el?.closest<HTMLElement>("[data-group-id]");
       const { groupId, projectId } = slot?.dataset ?? {};
       if (groupId && projectId) {
-        useSessions.getState().setActiveGroup(projectId, groupId);
+        const state = useSessions.getState();
+        const project = state.tabs.find((item) => item.id === projectId);
+        const space = project?.contents.find(
+          (item) => item.id === project.activeContentId,
+        );
+        const group = space
+          ? allGroups(space.layout).find((item) => item.id === groupId)
+          : null;
+        const targetViewId = group?.activeViewId;
+        if (targetViewId) {
+          transferViewFocus(activeSessionViewId(), targetViewId, () =>
+            state.setActiveGroup(projectId, groupId),
+          );
+        } else {
+          state.setActiveGroup(projectId, groupId);
+        }
       }
     });
     const offMove = listenThisWindow<{ x: number; y: number }>("native-mousemove", (e) => {

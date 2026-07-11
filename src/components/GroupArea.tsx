@@ -9,6 +9,10 @@ import { FileViewerHost } from "./FileViewerHost";
 import { GroupStatusBar } from "./GroupStatusBar";
 import { PluginViewHost } from "./PluginViewHost";
 import { getRegisteredView } from "../plugins/viewRegistry";
+import {
+  activeSessionViewId,
+  transferViewFocus,
+} from "../plugins/viewFocus";
 import { ViewTabs } from "./ViewTabs";
 import { computeSplitLayout, hitTestCells } from "./splitLayout";
 import { useT } from "../i18n";
@@ -290,9 +294,18 @@ export const GroupArea = memo(function GroupArea({
             else moveGroupToGroup(projectId, id, target.groupId, target.zone);
           }
         } else if (kind === "view") {
-          setActiveView(projectId, id); // 클릭 = 탭 전환
+          transferViewFocus(activeSessionViewId(), id, () =>
+            setActiveView(projectId, id),
+          ); // 클릭 = 탭 전환 + 실포커스
         } else {
-          setActiveGroup(projectId, id); // 클릭 = 그룹 활성
+          const targetViewId = sourceGroup?.activeViewId;
+          if (targetViewId) {
+            transferViewFocus(activeSessionViewId(), targetViewId, () =>
+              setActiveGroup(projectId, id),
+            );
+          } else {
+            setActiveGroup(projectId, id);
+          }
         }
         setDrag(null);
         setHover(null);
@@ -546,7 +559,15 @@ export const GroupArea = memo(function GroupArea({
               // 브라우저 홀로 비치는 것을 막는다. 콘텐츠 영역(App.tsx)과 동일 규칙·동일 헬퍼.
               style={{ ...cellVars(slotRect), ...parkedStyle(shown) }}
               onMouseDownCapture={() => {
-                setActiveGroup(projectId, group.id);
+                if (group.activeViewId) {
+                  transferViewFocus(
+                    activeSessionViewId(),
+                    group.activeViewId,
+                    () => setActiveGroup(projectId, group.id),
+                  );
+                } else {
+                  setActiveGroup(projectId, group.id);
+                }
               }}
             >
               {!hydrated ? null : view.kind === "file" ? (

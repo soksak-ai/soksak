@@ -20,6 +20,12 @@ const plugin: Plugin = {
       mount(el) {
         el.textContent = "hello";
       },
+      prepareFocusTransfer(el) {
+        // Commit this view's transient input synchronously; never inspect another view.
+      },
+      focus(el, _ctx, { signal }) {
+        if (!signal.aborted) el.querySelector("input")?.focus();
+      },
     });
   },
 };

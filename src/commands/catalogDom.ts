@@ -12,6 +12,7 @@ import { parseAddress, isParseError } from "./address";
 import { scanNodes, type ScannedNode } from "../plugins/nodeScan";
 import { register } from "./registry";
 import { tmsg } from "../i18n";
+import { viewFocusSnapshot } from "../plugins/viewFocus";
 
 const notExposed = (addr: string) => ({
   ok: false as const,
@@ -188,6 +189,45 @@ export function registerDomCatalog(): void {
         }
       }
       return notExposed(addr);
+    },
+  });
+
+  register("ui.focus.state", {
+    description:
+      "Return the keyboard-focus owner through the public view-host boundary: the requested view, whether its provider is mounted/delivered, and the view containing document.activeElement. Use after real-device input to verify that focus settled in the intended view without querying plugin-private DOM.",
+    triggers: { ko: "키보드 포커스 소유자 활성 뷰 포커스 상태" },
+    params: {},
+    returns:
+      "{ requestedViewId, mounted, delivered, activeViewId, settled, activeElement }",
+    message: (d) =>
+      tmsg("msg.ui.focus.state", {
+        view: String(d.activeViewId ?? "none"),
+      }),
+    examples: ["sok ui.focus.state"],
+    handler: () => {
+      const request = viewFocusSnapshot();
+      const active = document.activeElement;
+      const host =
+        active instanceof Element
+          ? active.closest<HTMLElement>(
+              ".plugin-view-container[data-pane-id]",
+            )
+          : null;
+      const activeViewId = host?.dataset.paneId ?? null;
+      return {
+        ...request,
+        activeViewId,
+        settled:
+          request.delivered && request.requestedViewId === activeViewId,
+        activeElement:
+          active instanceof HTMLElement
+            ? {
+                tag: active.tagName.toLowerCase(),
+                dataNode: active.dataset.node ?? null,
+                className: active.className,
+              }
+            : null,
+      };
     },
   });
 

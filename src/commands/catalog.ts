@@ -22,6 +22,10 @@ import {
 } from "../state/sessions";
 import { addProjectClaimed, closeProjectReleased } from "../state/projectRegistry";
 import { getRegisteredProgram, listPrograms } from "../plugins/programRegistry";
+import {
+  activeSessionViewId,
+  transferViewFocus,
+} from "../plugins/viewFocus";
 import { useSettings } from "../state/settings";
 import { useViewLabels } from "../state/viewLabels";
 import { useBookmarks } from "../state/bookmarks";
@@ -1184,8 +1188,13 @@ export function registerCatalog(): void {
     handler: (p) => {
       const loc = locateGroup(p.panel as string);
       if (!loc) return notFound(`패널 없음: ${p.panel}`);
-      // 그룹 활성화만 — 뷰 내부 포커스는 뷰(플러그인 터미널 등)가 마운트/활성 시 스스로 처리.
-      return S().setActiveGroup(loc.project.id, p.panel as string);
+      if (!loc.group.activeViewId)
+        return S().setActiveGroup(loc.project.id, p.panel as string);
+      return transferViewFocus(
+        activeSessionViewId(),
+        loc.group.activeViewId,
+        () => S().setActiveGroup(loc.project.id, p.panel as string),
+      );
     },
   });
 
@@ -1447,7 +1456,11 @@ export function registerCatalog(): void {
     handler: (p) => {
       const loc = locateView(p.view as string);
       if (!loc) return notFound(`뷰 없음: ${p.view}`);
-      return S().setActiveView(loc.project.id, p.view as string);
+      return transferViewFocus(
+        activeSessionViewId(),
+        p.view as string,
+        () => S().setActiveView(loc.project.id, p.view as string),
+      );
     },
   });
 

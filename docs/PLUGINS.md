@@ -21,6 +21,9 @@ soksak 의 기능을 JS 플러그인으로 확장한다. 플러그인은 뷰(우
 8. **선언 ≡ 실제 (conformance).** 매니페스트 선언과 런타임 실제 배선은 양방향으로 일치해야 한다 —
    미선언을 코드에서 바인딩하면 거부, 선언했는데 배선이 없으면 감지된다. 외부 런타임 의존성
    (`libraries`)도 같은 법칙의 한 종류 — `observe`(실제 실행)가 그 "실제"를 관찰한다.
+9. **활성화와 실포커스는 한 트랜잭션.** 코어가 안정 `viewId`로 목적지와 순서를 소유한다.
+   마운트는 포커스 의도가 아니다. 소스 provider 는 자기 컨테이너의 일시 입력만 동기 확정하고,
+   대상 provider 는 최신 요청의 `AbortSignal`이 유효할 때 자기 canonical input만 포커스한다.
 
 ## 빠른 시작
 
@@ -325,6 +328,8 @@ ctx.subscriptions.push(
 app.ui.registerView("panel", {
   mount(el, { projectId, root }) { /* el 에 직접 렌더(React 불요) */ },
   unmount(el) { /* 선택 — 미구현이면 호스트가 DOM 정리 */ },
+  prepareFocusTransfer(el) { /* 선택 — 조합/프리에딧을 동기 확정. el 밖 DOM 접근 금지 */ },
+  focus(el, _ctx, { signal }) { /* 선택 — signal.aborted 면 포커스 금지 */ },
 });
 await app.ui.openView("panel", "content");   // 배치: sidebar-right(기본)/sidebar-left/content
 ```
@@ -333,6 +338,12 @@ await app.ui.openView("panel", "content");   // 배치: sidebar-right(기본)/si
 우측 사이드바(아이콘 레일), 좌측 사이드바(파일 트리 옆 탭), 콘텐츠 영역(에디터 그룹 탭 —
 드래그/분할/닫기 동작 동일). 테마 적용을 위해 CSS 변수(`var(--fg)`, `var(--bd)`,
 `var(--inset)`, `var(--acc)` …)로 스타일하라.
+
+포커스 계약은 콘텐츠 뷰의 내부 구현을 코어에 누출하지 않는다. 코어는 클릭·명령·탭 전환을
+`prepareFocusTransfer(source) -> 활성 상태 변경 -> focus(target)` 순으로 실행하고, 마지막 단계는
+브라우저 기본 클릭이 끝난 다음 프레임에 확정한다. 그 사이 대상 내부 input/textarea/contenteditable이
+이미 포커스됐으면 그대로 보존한다. provider 가 비동기 준비를 기다리면 요청의 `AbortSignal`을
+보관해야 하며, abort 뒤 포커스는 계약 위반이다. 마운트 콜백의 무조건 자동포커스도 계약 위반이다.
 
 #### 아이콘 셋 등록 (`contributes.iconSets` + `app.ui.registerIconSet`)
 

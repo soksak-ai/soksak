@@ -42,7 +42,7 @@ soksak 은 뼈대다. 공통 인터페이스를 관리하며, 그 외에는 아�
 | **Capability API(`app.*`)** | `src/plugins/api.ts` | 플러그인이 받는 유일한 런타임 표면. 권한 게이트 — 미선언 권한은 부재(undefined) capability 가 된다. 플러그인별 네임스페이스(`data[ns=pluginId]`, `secrets[ns=pluginId]`, `plugin.<id>.<cmd>`). |
 | **이벤트 버스** | `src/plugins/hooks.ts`, `src/plugins/bus.ts` | 시스템 이벤트(`project.*`, `file.*`, `command.*`, `turn.ended`, `theme.changed`, `locale.changed`, `app.focus`, `bookmarks.changed`)는 권한 게이트다. `bus.*` 는 코어 상태와 무관한 플러그인 간 pub/sub 다. |
 | **프로그램(+메뉴) 레지스트리** | `src/plugins/programRegistry.ts` | 선언적 `contributes.programs[]`. 각 프로그램은 `kind` 를 선언한다. +메뉴와 `view.open` 이 `kind` 로 라우팅한다. 플러그인이 프로그램을 선언하고, 뼈대가 라우팅한다. |
-| **뷰 배치 레지스트리** | `src/plugins/viewRegistry.ts` | `registerView(viewId, provider)` + 배치(`content`, `sidebar-left`, `sidebar-right`, `footer`). 뼈대는 `provider.mount(container, ctx)` / `unmount(container)` 만 호출한다. |
+| **뷰 배치·포커스 레지스트리** | `src/plugins/viewRegistry.ts`, `src/plugins/viewFocus.ts` | `registerView(viewId, provider)` + 배치(`content`, `sidebar-left`, `sidebar-right`, `footer`). mount/unmount 는 수명만 소유한다. 선택적 `prepareFocusTransfer` / `focus` 가 유일한 키보드 포커스 경계다. 코어는 목적지와 순서를 소유하고 provider 는 자기 컨테이너만 다룬다. 마운트는 포커스 의도가 아니며 지연 포커스는 전달된 `AbortSignal`을 반드시 지킨다. |
 | **네이티브 범용 capability** | `src-tauri/src/*` | PTY spawn/IO/흐름제어(`pty.rs`), child-webview 수명 + 레이어 역전 + hole-punch(`browser.rs`), 미디어 프록시(`mediaproxy.rs`), 데이터 스토어(rusqlite + FTS5), 시크릿 볼트, 프로세스/WebSocket/HTTP 클라이언트, 파일시스템, git 읽기. 전부 범용 — 어떤 것도 구체 기능 소비자의 이름을 갖지 않는다. |
 
 네이티브 계층이 뼈대에 남는 이유는 PTY 커널 객체와 플랫폼 webview(WKWebView / WebView2)가 플러그인 경계를 넘을 수 없기 때문이다. 뼈대는 이를 범용 capability 로 노출하고, 플러그인은 얇은 클라이언트로 소비한다.
@@ -55,7 +55,7 @@ soksak 은 뼈대다. 공통 인터페이스를 관리하며, 그 외에는 아�
 
 1. **프로그램(+메뉴).** `contributes.programs[]` 가 `kind` 있는 항목을 선언한다. 뼈대가 선택을 맞는 capability 로 라우팅한다. 플러그인이 +메뉴에 나타나는 방법이다.
 
-2. **뷰(배치).** `contributes.views[]` + `registerView(viewId, provider)` 가 선언된 배치의 범용 슬롯에 provider 를 마운트한다. provider 는 뷰 컨텍스트(4장 A2)만 받는다.
+2. **뷰(배치·포커스).** `contributes.views[]` + `registerView(viewId, provider)` 가 선언된 배치의 범용 슬롯에 provider 를 마운트한다. provider 는 뷰 컨텍스트(4장 A2)만 받는다. 코어는 안정 `viewId`로 포커스 의도를 라우팅한다. 소스 provider 는 `prepareFocusTransfer`에서 일시 입력을 동기 확정하고, 그 다음 대상 provider 가 `focus`에서 자기 canonical input만 포커스한다. 다른 뷰 DOM 조회·포커스는 금지다.
 
 3. **커맨드.** `app.commands.register(name, spec)` 가 타입드 파라미터 스키마와 danger 게이트로 명령 하나를 등록한다. CLI/MCP 에 자동 노출된다. 매니페스트 `contributes.commands` 가 의도를 선언하고, 런타임이 바인딩한다.
 

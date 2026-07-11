@@ -10,6 +10,7 @@ import {
 } from "../plugins/viewRegistry";
 import { formatAddress, type Region } from "../commands/address";
 import { viewHostAnchors } from "../plugins/viewHostAnchors";
+import { registerMountedViewFocus } from "../plugins/viewFocus";
 import { useSessions } from "../state/sessions";
 import { useT } from "../i18n";
 
@@ -98,7 +99,18 @@ export const PluginViewHost = memo(function PluginViewHost({
       el.replaceChildren(); // 부분 렌더 잔재 제거
       return;
     }
+    const unregisterFocus = viewId
+      ? registerMountedViewFocus(
+          viewId,
+          el,
+          reg.provider,
+          () => ctxRef.current!,
+        )
+      : null;
     return () => {
+      // Abort deferred focus before provider teardown so a stale async mount can
+      // never focus after this container has ceased to own the view.
+      unregisterFocus?.();
       try {
         reg.provider.unmount?.(el);
       } catch (e) {

@@ -219,9 +219,21 @@ export interface PluginViewContext {
 }
 
 /** 플러그인이 구현하는 뷰. React 비요구 — 컨테이너 DOM 에 직접 그린다. */
+export interface PluginViewFocusRequest {
+  /** A newer focus intent or unmount aborts this signal. Deferred focus must honor it. */
+  signal: AbortSignal;
+}
+
 export interface PluginViewProvider {
   mount(container: HTMLElement, ctx: PluginViewContext): void;
   unmount?(container: HTMLElement): void;
+  prepareFocusTransfer?(container: HTMLElement, ctx: PluginViewContext): void;
+  focus?(
+    container: HTMLElement,
+    ctx: PluginViewContext,
+    request: PluginViewFocusRequest,
+  ): void;
+  update?(container: HTMLElement, ctx: PluginViewContext): void;
 }
 
 /** registerFileViewer provider 의 mount 가 받는 컨텍스트. */

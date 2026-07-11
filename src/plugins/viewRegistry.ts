@@ -40,10 +40,25 @@ export interface PluginViewContext {
 
 export type ViewBadge = number | "dot" | null;
 
+export interface PluginViewFocusRequest {
+  /** A newer focus intent or unmount aborts this signal. Deferred focus must honor it. */
+  signal: AbortSignal;
+}
+
 // 플러그인이 구현하는 뷰. React 비요구 — 컨테이너 DOM 에 직접 그린다.
 export interface PluginViewProvider {
   mount(container: HTMLElement, ctx: PluginViewContext): void;
   unmount?(container: HTMLElement): void;
+  // 다른 뷰로 떠나기 전 동기 경계. 조합/프리에딧 등 유실 가능한 일시 입력을 확정하되,
+  // 자기 container 밖 DOM 을 조회하거나 포커스하지 않는다.
+  prepareFocusTransfer?(container: HTMLElement, ctx: PluginViewContext): void;
+  // 코어의 최신 포커스 의도를 자기 canonical input 으로 시행한다. 비동기 준비가 필요하면
+  // request.signal 을 보존하고, aborted 뒤에는 절대 포커스하지 않는다.
+  focus?(
+    container: HTMLElement,
+    ctx: PluginViewContext,
+    request: PluginViewFocusRequest,
+  ): void;
   // 라이브 갱신 — 구조(projectId/viewKey)는 그대로인데 추종 대상(paneId=cwd 따라갈 터미널)만 바뀔 때,
   // 호스트가 remount 대신 이걸 호출해 같은 인스턴스에 새 ctx 를 전달한다. 탭 전환마다 활성 pane 이
   // 바뀌므로 paneId 로 remount 하면 매번 뷰를 통째 재생성(파일트리 canvas 재구축 ~36ms)하고 뷰 상태

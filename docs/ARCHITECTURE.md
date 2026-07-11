@@ -42,7 +42,7 @@ The skeleton owns exactly these common interfaces. Each line states the guarante
 | **Capability API (`app.*`)** | `src/plugins/api.ts` | The only runtime surface a plugin receives. Permission-gated: an undeclared permission yields an absent (undefined) capability. Namespaced per plugin (`data[ns=pluginId]`, `secrets[ns=pluginId]`, `plugin.<id>.<cmd>`). |
 | **Event bus** | `src/plugins/hooks.ts`, `src/plugins/bus.ts` | System events (`project.*`, `file.*`, `command.*`, `turn.ended`, `theme.changed`, `locale.changed`, `app.focus`, `bookmarks.changed`) are permission-gated. `bus.*` is plugin-to-plugin pub/sub independent of core state. |
 | **Program (+menu) registry** | `src/plugins/programRegistry.ts` | Declarative `contributes.programs[]`. Each program declares a `kind`. The +menu and `view.open` route by `kind`. Plugins declare programs; the skeleton routes them. |
-| **View placement registry** | `src/plugins/viewRegistry.ts` | `registerView(viewId, provider)` with placements (`content`, `sidebar-left`, `sidebar-right`, `footer`). The skeleton calls `provider.mount(container, ctx)` / `unmount(container)` and nothing more. |
+| **View placement & focus registry** | `src/plugins/viewRegistry.ts`, `src/plugins/viewFocus.ts` | `registerView(viewId, provider)` with placements (`content`, `sidebar-left`, `sidebar-right`, `footer`). Mount/unmount owns lifetime. Optional `prepareFocusTransfer` / `focus` form the only keyboard-focus boundary: core owns the destination and ordering; a provider may touch only its own container. Mount is never focus intent, and deferred focus must honor the supplied `AbortSignal`. |
 | **Native generic capabilities** | `src-tauri/src/*` | PTY spawn/IO/flow-control (`pty.rs`), child-webview lifecycle + layer inversion + hole-punch (`browser.rs`), media proxy (`mediaproxy.rs`), data store (rusqlite + FTS5), secrets vault, process/WebSocket/HTTP clients, filesystem, git read. All generic — none named after a concrete feature consumer. |
 
 The native layer stays in the skeleton because PTY kernel objects and platform webviews (WKWebView / WebView2) cannot cross the plugin boundary. The skeleton exposes them as generic capabilities; plugins consume them as thin clients.
@@ -55,7 +55,7 @@ A plugin attaches to the skeleton through exactly four seams. There are no other
 
 1. **Programs (+menu).** `contributes.programs[]` declares an entry with a `kind`. The skeleton routes selection to the matching capability. This is how a plugin appears in the +menu.
 
-2. **Views (placements).** `contributes.views[]` + `registerView(viewId, provider)` mounts a provider into a generic slot at a declared placement. The provider receives only the view context (Section 4, A2).
+2. **Views (placements and focus).** `contributes.views[]` + `registerView(viewId, provider)` mounts a provider into a generic slot at a declared placement. The provider receives only the view context (Section 4, A2). Core routes focus intent by stable `viewId`; source providers synchronously seal transient input through `prepareFocusTransfer`, then target providers focus their own canonical input through `focus`. Providers never inspect or focus another view's DOM.
 
 3. **Commands.** `app.commands.register(name, spec)` registers one command with a typed param schema and danger gate. It auto-exposes to CLI/MCP. Manifest `contributes.commands` declares intent; runtime binds.
 
