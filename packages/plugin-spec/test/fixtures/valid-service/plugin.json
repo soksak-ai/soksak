@@ -1,0 +1,39 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "valid-service",
+  "name": "Valid Service Fixture",
+  "version": "0.1.0",
+  "description": "headless gate fixture — a pure contract plugin (entry: null) must pass parseManifest (PS3, PS4)",
+  "entry": null,
+  "permissions": ["commands", "sidecar", "service"],
+  "sidecars": [
+    { "name": "echo", "interface": "soksak-fixture-wire-spec@1" }
+  ],
+  "service": {
+    "sidecar": "echo",
+    "interface": "soksak-service-spec@1",
+    "subscribe": ["bus:fixture:changed"]
+  },
+  "contributes": {
+    "commands": [
+      {
+        "name": "run",
+        "title": { "en": "Run", "ko": "실행" },
+        "bind": "service",
+        "description": "Start a fixture run.",
+        "params": {
+          "doc": { "type": "string", "description": "target document path", "required": true }
+        },
+        "returns": "object"
+      }
+    ],
+    "schedules": [
+      {
+        "name": "reconcile",
+        "command": "run",
+        "trigger": { "reconcile": true },
+        "timeoutMs": 1800000
+      }
+    ]
+  }
+}

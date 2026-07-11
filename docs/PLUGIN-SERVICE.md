@@ -52,7 +52,8 @@ manifest's `bind:"service"` set exactly; any mismatch in either direction refuse
 
 **PS4 — `entry: null` is lawful only for a pure contract plugin.** Conditions, enforced by
 `parseManifest`: the manifest declares `service`, every command carries `bind:"service"`,
-and no code-requiring contribution exists (`views`, `nodes`, `fileViewers` are forbidden;
+and no code-requiring contribution exists (`views`, `nodes`, `fileViewers`, `iconSets` are
+forbidden — each needs a runtime provider binding;
 data-only contributions — `programs`, `events`, `skill`, `configuration` — remain lawful).
 Any other `entry: null` combination is rejected. The loader activates such a plugin without
 reading an entry module; transparency gates (C2) apply unchanged.
@@ -210,6 +211,8 @@ Every RED test that enforces this law cites its clause number. The CI ledger row
 ## Re-legislation history
 
 - 2026-07-11 — v1.0.0 legislated (PS1–PS16).
+- 2026-07-11 — PS4: `iconSets` added to the forbidden list (implementation confirmed it
+  requires a runtime provider binding — `registerIconSet`; the enumeration had missed it).
 
 ---
 

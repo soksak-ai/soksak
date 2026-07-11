@@ -51,7 +51,8 @@ A14(MESSAGE-PROTOCOL), 계약 id(NAMING §8), 기질 규칙 P1–P13(AI-CONTROL)
 
 **PS4 — `entry: null`은 순수 계약 플러그인에만 합법이다.** 조건은 `parseManifest`가
 강제한다: 매니페스트가 `service`를 선언하고, 모든 커맨드가 `bind:"service"`를 지니며,
-코드가 필요한 기여가 존재하지 않는다(`views`, `nodes`, `fileViewers` 금지; 데이터만의
+코드가 필요한 기여가 존재하지 않는다(`views`, `nodes`, `fileViewers`, `iconSets` 금지 —
+각각 런타임 provider 바인딩이 필요하다; 데이터만의
 기여 — `programs`, `events`, `skill`, `configuration` — 는 합법으로 남는다). 그 외의
 `entry: null` 조합은 전부 거부한다. 로더는 이런 플러그인을 entry 모듈 없이 활성화한다;
 투명성 게이트(C2)는 불변 적용된다.
@@ -203,6 +204,8 @@ ServiceManager 하나뿐이다; 프록시는 상태를 갖지 않는다.
 ## 재입법 이력
 
 - 2026-07-11 — v1.0.0 입법 (PS1–PS16).
+- 2026-07-11 — PS4: 금지 목록에 `iconSets` 추가(구현 검증에서 런타임 provider 바인딩
+  필요가 확인됨 — `registerIconSet`; 열거가 이를 누락했었다).
 
 ---
 

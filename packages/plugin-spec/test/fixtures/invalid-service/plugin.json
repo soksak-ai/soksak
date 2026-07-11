@@ -1,0 +1,14 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "invalid-service",
+  "name": "Invalid Service Fixture",
+  "version": "0.1.0",
+  "description": "headless gate fixture — entry: null without a service declaration and with a JS-bound command must be rejected (PS4)",
+  "entry": null,
+  "permissions": ["commands"],
+  "contributes": {
+    "commands": [
+      { "name": "open", "title": "Open" }
+    ]
+  }
+}
