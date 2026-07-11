@@ -2,6 +2,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ProgramMenu } from "./ProgramMenu";
 import {
   useSessions,
+  viewDisplayTitle,
   type Program,
   type ViewGroup,
 } from "../state/sessions";
@@ -163,7 +164,7 @@ export const ViewTabs = memo(function ViewTabs({
                 ))
               )}
             </span>
-            <span className="view-tab-title">{v.customLabel ?? v.title}</span>
+            <span className="view-tab-title">{viewDisplayTitle(v)}</span>
             {v.kind === "file" && v.status?.code === "dirty" && (
               <span className="view-tab-dirty" title={t("viewer.unsaved")}>
                 <Icon name="dirty" size="xs" />

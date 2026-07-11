@@ -33,3 +33,10 @@ export function browserLabel(viewId: string): string {
 export function browserLabelPrefix(): string {
   return `b-${currentWindowLabel()}-`;
 }
+
+// browserLabel 의 역파생 — *이 창의* 브라우저 label 이면 viewId 를, 아니면 null.
+// 다른 창의 브라우저(b-<다른창>-…)와 비-브라우저 webview 는 이 창이 이름을 모른다.
+export function browserViewIdFromLabel(label: string): string | null {
+  const prefix = browserLabelPrefix();
+  return label.startsWith(prefix) ? label.slice(prefix.length) : null;
+}

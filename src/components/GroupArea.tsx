@@ -22,6 +22,7 @@ import {
   type ViewGroup,
   allGroups,
   useSessions,
+  viewDisplayTitle,
 } from "../state/sessions";
 import { useHydration } from "../state/hydration";
 
@@ -74,7 +75,7 @@ export function computeLayout(node: GroupNode): {
   };
 }
 
-const titleOf = (v: View | undefined): string => (v ? (v.customLabel ?? v.title) : "");
+const titleOf = (v: View | undefined): string => (v ? viewDisplayTitle(v) : "");
 
 // divider 리사이즈 드래그 중복 시작 가드. divider 가 네이티브 child 없는 gap 위면 실제 DOM mousedown
 // 과, 코어 네이티브-마우스 브릿지(App.tsx)가 재생하는 합성 mousedown 이 둘 다 도착할 수 있다 — 먼저

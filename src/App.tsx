@@ -41,6 +41,7 @@ import {
   allGroups,
   cwdPaneOf as resolveCwdPane,
   useSessions,
+  webviewDisplayName,
   type ProjectTab,
 } from "./state/sessions";
 import {
@@ -279,6 +280,9 @@ function BuildBadge() {
 // label 의 배지를 걷는다(정상 복귀·복구 재개 모두 배지 사유 소멸).
 function WebviewHealthBadges() {
   const t = useT();
+  // 배지는 사용자 표면 — raw label(b-<창>-<viewId>) 대신 탭 표시명으로 해소한다
+  // (webviewDisplayName). 식별(key·data-node·recover 인자)은 label 유지 — 기계 경로 불변.
+  const tabs = useSessions((s) => s.tabs);
   const [openLabels, setOpenLabels] = useState<string[]>([]);
   useEffect(() => {
     return listenThisWindow<{ label: string; state: string }>(
@@ -300,7 +304,9 @@ function WebviewHealthBadges() {
     <div className="webview-health-badges">
       {openLabels.map((label) => (
         <div key={label} className="webview-health-badge">
-          <span>{t("webview.exhausted", { label })}</span>
+          <span>
+            {t("webview.exhausted", { label: webviewDisplayName(label, tabs) })}
+          </span>
           <button
             type="button"
             data-node={`webview/recover/${label}`}

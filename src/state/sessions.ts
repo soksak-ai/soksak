@@ -22,6 +22,7 @@ import {
   moveSidebarView as moveSidebarViewT,
   hasSidebarView,
 } from "./sidebarLayout";
+import { browserViewIdFromLabel } from "../lib/webviewLabels";
 
 // 3단 구조:
 //   - 최상단 탭 = 프로젝트(ProjectTab): 자체 사이드바(파일트리) + 컨텐츠 탭들
@@ -644,6 +645,29 @@ export function cwdPaneOf(
     }
   }
   return undefined;
+}
+
+// 뷰 탭 표시명 단일 진실 — customLabel(사용자 의도) 우선, title(콘텐츠 사실) 폴백.
+// 탭·배지 등 모든 사용자 표면이 이 함수로 표시한다(inline `customLabel ?? title` 재정의 금지).
+export function viewDisplayTitle(v: View): string {
+  return v.customLabel ?? v.title;
+}
+
+// viewId 로 이 창의 뷰 레코드를 프로젝트 전체에서 검색. 없으면 null.
+export function findViewById(tabs: ProjectTab[], viewId: string): View | null {
+  for (const t of tabs)
+    for (const c of t.contents)
+      for (const v of allViews(c.layout)) if (v.id === viewId) return v;
+  return null;
+}
+
+// webview label 의 사람 표시명 — 사용자 표면(복구 배지 등) 전용. 이 창의 브라우저 뷰
+// (b-<창>-<viewId>)면 탭 표시명으로 해소하고, 대응 뷰가 없으면 label 그대로 둔다
+// (사람 이름이 없는 webview 는 식별자가 유일한 사실이다).
+export function webviewDisplayName(label: string, tabs: ProjectTab[]): string {
+  const viewId = browserViewIdFromLabel(label);
+  const v = viewId ? findViewById(tabs, viewId) : null;
+  return v ? viewDisplayTitle(v) : label;
 }
 
 // paneId(=플러그인 터미널 view.id) 의 {projectId, viewId}(M5 — terminal status 브리지용). 없으면 null.
