@@ -94,6 +94,39 @@ fn active_window() -> String {
         .unwrap_or_else(|| "main".to_string())
 }
 
+fn last_workspace_window() -> Option<String> {
+    LAST_WORKSPACE.lock().ok().and_then(|w| w.clone())
+}
+
+// 창 폴백 해석(순수) — 명령이 window 를 생략했을 때의 타겟 결정.
+// 플러그인 명령(plugin.* — 네임스페이스 문법이지 특정 id 가 아니다)은 컨트롤 플레인(main)으로
+// 폴백하지 않는다: main 은 설계상 플러그인을 싣지 않으므로 그 폴백은 상시 UNKNOWN_COMMAND 다
+// (main 포커스 중 스케줄 발화가 통째로 죽던 결함 — PLUGIN-SERVICE 입법 조사에서 확정).
+// 폴백 사다리: 마지막 워크스페이스 창(살아있으면) → 살아있는 워크스페이스 창 라벨 정렬 첫
+// 항목(결정적 — 포커스 무관) → NO_WORKSPACE_WINDOW. 비-플러그인 명령은 기존 규칙(마지막
+// 포커스, main 포함)을 유지한다.
+fn resolve_fallback_target(
+    method: &str,
+    focused: String,
+    last_workspace: Option<String>,
+    live_workspaces: &[String],
+) -> Result<String, ()> {
+    if !method.starts_with("plugin.") {
+        return Ok(focused);
+    }
+    if let Some(w) = last_workspace {
+        if live_workspaces.iter().any(|l| l == &w) {
+            return Ok(w);
+        }
+    }
+    let mut sorted: Vec<&String> = live_workspaces.iter().collect();
+    sorted.sort();
+    match sorted.first() {
+        Some(w) => Ok((*w).clone()),
+        None => Err(()),
+    }
+}
+
 fn parse_request(line: &str) -> Result<Request, String> {
     serde_json::from_str::<Request>(line).map_err(|e| format!("JSON 파싱 실패: {e}"))
 }
@@ -484,7 +517,26 @@ fn route(app: &AppHandle, req: Request) -> Value {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
-    let target = req.window.clone().unwrap_or_else(active_window);
+    let target = match req.window.clone() {
+        Some(w) => w,
+        None => {
+            // 워크스페이스 창 목록(w-* 라벨 문법 — NAMING) — 폴백 사다리의 결정적 후보 집합.
+            let live: Vec<String> = app
+                .windows()
+                .keys()
+                .filter(|l| l.starts_with("w-"))
+                .cloned()
+                .collect();
+            match resolve_fallback_target(&req.method, active_window(), last_workspace_window(), &live) {
+                Ok(t) => t,
+                Err(()) => {
+                    let message = "플러그인 명령을 받을 워크스페이스 창이 없음(컨트롤 플레인은 플러그인을 싣지 않음)";
+                    record_route_outcome(app, &req.method, &req.params, "", &req.parent, &req.origin, false, "NO_WORKSPACE_WINDOW", message, started_ms);
+                    return error_reply("NO_WORKSPACE_WINDOW", message);
+                }
+            }
+        }
+    };
     // get_window(Window 레지스트리) — 브라우저 child 를 연 창은 멀티-webview 라 get_webview_window
     // (단일-webview 전용)에서 빠진다. 그걸 쓰면 브라우저 연 창의 모든 소켓 명령이 WINDOW_NOT_FOUND.
     // emit_to(label)은 멀티-webview 여도 그 창 메인 webview 로 도달하므로 라우팅은 정상.
@@ -831,6 +883,57 @@ mod tests {
         let second = bind_transport(&path);
         assert!(second.is_err(), "a live socket must refuse a second bind");
         let _ = std::fs::remove_file(&path);
+    }
+
+    // 창 폴백 사다리 — 플러그인 명령은 컨트롤 플레인(main)으로 폴백하지 않는다.
+    // main 포커스 상태의 스케줄/소켓 발화가 UNKNOWN_COMMAND 로 죽던 결함의 재현 기준.
+    fn s(v: &[&str]) -> Vec<String> {
+        v.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn plugin_fallback_prefers_last_workspace_over_focused_main() {
+        let got = resolve_fallback_target(
+            "plugin.demo.run",
+            "main".into(),
+            Some("w-b".into()),
+            &s(&["w-a", "w-b"]),
+        );
+        assert_eq!(got, Ok("w-b".to_string()));
+    }
+
+    #[test]
+    fn plugin_fallback_uses_sorted_live_workspace_when_last_is_dead() {
+        let got = resolve_fallback_target(
+            "plugin.demo.run",
+            "main".into(),
+            Some("w-dead".into()),
+            &s(&["w-b", "w-a"]),
+        );
+        assert_eq!(got, Ok("w-a".to_string()), "결정적 선택 — 라벨 정렬 첫 항목(포커스 무관)");
+    }
+
+    #[test]
+    fn plugin_fallback_with_no_workspace_is_an_explicit_error() {
+        let got = resolve_fallback_target("plugin.demo.run", "main".into(), None, &[]);
+        assert_eq!(got, Err(()), "main 라우팅(상시 UNKNOWN_COMMAND) 대신 구조적 거부");
+    }
+
+    #[test]
+    fn plugin_fallback_keeps_focused_workspace_window() {
+        let got = resolve_fallback_target(
+            "plugin.demo.run",
+            "w-a".into(),
+            Some("w-a".into()),
+            &s(&["w-a"]),
+        );
+        assert_eq!(got, Ok("w-a".to_string()));
+    }
+
+    #[test]
+    fn non_plugin_fallback_keeps_the_focused_window_including_main() {
+        let got = resolve_fallback_target("window.open", "main".into(), Some("w-a".into()), &s(&["w-a"]));
+        assert_eq!(got, Ok("main".to_string()), "코어 명령의 기존 규칙 불변");
     }
 
     // timeout 클램프 경계 — 핵심: >600s(구 상한)가 그대로 통과해야 LLM 30분+ 턴을 끝까지 기다린다.
