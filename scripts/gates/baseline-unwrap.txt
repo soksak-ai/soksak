@@ -22,7 +22,7 @@ src-tauri/src/network.rs 11
 src-tauri/src/plugins.rs 28
 src-tauri/src/process.rs 18
 src-tauri/src/project_registry.rs 5
-src-tauri/src/pty.rs 11
+src-tauri/src/pty.rs 9
 src-tauri/src/runtime_dep.rs 8
 src-tauri/src/schedule.rs 26
 src-tauri/src/secrets.rs 66

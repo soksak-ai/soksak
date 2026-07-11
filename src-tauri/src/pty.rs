@@ -230,6 +230,23 @@ fn build_session_env(
     (env, env_remove)
 }
 
+// 세션 등록 단일 진실 — id 발급 + 세션 맵 삽입. 데몬/로컬 백엔드가 같은 경로를 쓴다.
+// lock 오염은 패닉 전파 대신 복구한다: 한 세션 스레드의 패닉이 매니저를 영구
+// 잠그지 않게(카운터·맵은 오염돼도 유효한 값이다).
+fn register_session(manager: &PtyManager, session: PtySession) -> u32 {
+    let id = {
+        let mut n = manager.next_id.lock().unwrap_or_else(|e| e.into_inner());
+        *n += 1;
+        *n
+    };
+    manager
+        .sessions
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(id, session);
+    id
+}
+
 #[tauri::command]
 pub fn spawn_terminal(
     app: tauri::AppHandle,
@@ -266,13 +283,8 @@ pub fn spawn_terminal(
             on_output.clone(),
         ) {
             Ok(session) => {
-                let id = {
-                    let mut n = manager.next_id.lock().unwrap();
-                    *n += 1;
-                    *n
-                };
-                manager.sessions.lock().unwrap().insert(
-                    id,
+                let id = register_session(
+                    manager.inner(),
                     PtySession {
                         backend: Backend::Daemon { session },
                         pane_id,
@@ -364,13 +376,8 @@ pub fn spawn_terminal(
         });
     }
 
-    let id = {
-        let mut n = manager.next_id.lock().unwrap();
-        *n += 1;
-        *n
-    };
-    manager.sessions.lock().unwrap().insert(
-        id,
+    let id = register_session(
+        manager.inner(),
         PtySession {
             backend: Backend::Local(LocalSession {
                 writer,
@@ -655,7 +662,7 @@ mod daemon {
             spawn_if_needed: bool,
         ) -> Result<Value, String> {
             let home = crate::home::soksak_home();
-            let mut guard = self.control.lock().unwrap();
+            let mut guard = self.control.lock().unwrap_or_else(|e| e.into_inner());
             if guard.is_none() {
                 *guard = Some(if spawn_if_needed {
                     ensure_daemon(&home).map_err(|e| e.to_string())?
@@ -663,7 +670,11 @@ mod daemon {
                     connect(&home).map_err(|e| e.to_string())?
                 });
             }
-            let conn = guard.as_mut().unwrap();
+            let conn = match guard.as_mut() {
+                Some(c) => c,
+                // 바로 위에서 Some 을 넣었으므로 도달 불가 — 패닉 대신 명시 에러.
+                None => return Err("pty link: control missing after connect".to_string()),
+            };
             match conn.request(req) {
                 Ok(v) => Ok(v),
                 Err(LinkError::Remote { code, message }) => Err(format!("{code}: {message}")),
