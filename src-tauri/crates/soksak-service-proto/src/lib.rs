@@ -554,6 +554,7 @@ mod tests {
                     },
                 ],
                 secrets: vec!["ANTHROPIC_API_KEY".into()],
+                vault_env: true,
                 dependencies: vec!["kanban".into()],
             }],
         };

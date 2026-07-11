@@ -988,10 +988,10 @@ mod tests {
     #[test]
     fn env_secrets_resolves_env_prefixed_keys() {
         let (s, dir) = state_with_tmp_vault("envsec");
-        s.unlock("pw").unwrap();
-        s.set("wf", "env:ANTHROPIC_AUTH_TOKEN", "tok").unwrap();
-        s.set("wf", "env:CLAUDE_ACCOUNT_NAME", "acct").unwrap();
-        s.set("wf", "apiKey", "not-env").unwrap(); // 비-env 키는 제외
+        s.unlock("pw").expect("unlock");
+        s.set("wf", "env:ANTHROPIC_AUTH_TOKEN", "tok").expect("set token");
+        s.set("wf", "env:CLAUDE_ACCOUNT_NAME", "acct").expect("set acct");
+        s.set("wf", "apiKey", "not-env").expect("set non-env"); // 비-env 키는 제외
         let got = env_secrets(&s, "wf");
         assert_eq!(
             got,
@@ -1002,7 +1002,7 @@ mod tests {
             "env: 키만, 접두 제거, 정렬"
         );
         // 잠금 → 빈 벡터(loud 실패 아님).
-        s.lock().unwrap();
+        s.lock().expect("lock");
         assert!(env_secrets(&s, "wf").is_empty(), "잠김이면 빈 벡터");
         let _ = std::fs::remove_dir_all(&dir);
     }
