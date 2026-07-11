@@ -10,7 +10,6 @@
     "data",
     "fs:read",
     "fs:write",
-    "git:read",
     "network",
     "notify",
     "process",

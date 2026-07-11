@@ -32,7 +32,6 @@ export type PluginPermission =
   | "terminal" // 터미널 명령 생명주기 관찰(command.started/finished — 명령라인·cwd)
   | "terminal:read" // 터미널 화면 버퍼 내용 읽기·변경 구독(명령 메타보다 강함 — 전 화면 텍스트)
   | "terminal:write" // 터미널 PTY 에 입력 전송(키 주입 — 관찰보다 강함, 별도 권한)
-  | "git:read" // git log/show/diff/status (읽기 전용)
   | "network"; // fetch 사용 고지 — 기술적 강제 불가(§0-2 전체신뢰), 동의 화면 고지용
 
 export const PERMISSIONS: readonly PluginPermission[] = [
@@ -61,7 +60,6 @@ export const PERMISSIONS: readonly PluginPermission[] = [
   "terminal",
   "terminal:read",
   "terminal:write",
-  "git:read",
   "network",
 ];
 
@@ -204,10 +202,6 @@ export const PERMISSION_INFO: Record<
     detail:
       "터미널 패널에 키 입력을 주입합니다(실행 중인 프로그램에 타이핑 — 셸 명령 실행 가능).",
     caution: true,
-  },
-  "git:read": {
-    label: "git 읽기",
-    detail: "저장소의 커밋 이력·변경 내용을 읽습니다(쓰기 없음).",
   },
   network: {
     label: "네트워크",

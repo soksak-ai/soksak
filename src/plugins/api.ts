@@ -401,21 +401,6 @@ export interface SoksakPluginApi {
     writeText?: (text: string) => Promise<void>;
     watch?: (cb: (e: { text: string }) => void) => Disposable;
   };
-  git?: {
-    log: (opts?: {
-      path?: string;
-      limit?: number;
-      skip?: number;
-    }) => Promise<unknown>;
-    show: (commit: string, path?: string) => Promise<unknown>;
-    diff: (opts?: {
-      path?: string;
-      file?: string;
-      commit?: string;
-      staged?: boolean;
-    }) => Promise<string>;
-    status: (path?: string) => Promise<unknown>;
-  };
   terminal?: {
     /** 지금 실행 중인 명령 스냅샷(pane 당 최대 1). command.started/finished 이벤트의
      *  현재-상태 버전 — 실행 중에 늦게 활성화된 플러그인이 즉시 동기화하는 용도(폴링 아님).
@@ -1672,40 +1657,6 @@ export function buildPluginApi(
               : undefined,
           }
         : undefined,
-
-    git: has("git:read")
-      ? {
-          log: (opts) => {
-            const path = opts?.path ?? deps.currentProject()?.root;
-            if (!path) return Promise.reject(new Error("프로젝트 루트 없음 — 폴더가 열린 프로젝트에서 사용하세요"));
-            return deps.invoke("git_log", {
-              path,
-              limit: opts?.limit,
-              skip: opts?.skip,
-            });
-          },
-          show: (commit, path) => {
-            const p = path ?? deps.currentProject()?.root;
-            if (!p) return Promise.reject(new Error("프로젝트 루트 없음 — 폴더가 열린 프로젝트에서 사용하세요"));
-            return deps.invoke("git_show", { path: p, commit });
-          },
-          diff: async (opts) => {
-            const path = opts?.path ?? deps.currentProject()?.root;
-            if (!path) throw new Error("프로젝트 루트 없음 — 폴더가 열린 프로젝트에서 사용하세요");
-            return (await deps.invoke("git_diff", {
-              path,
-              file: opts?.file,
-              commit: opts?.commit,
-              staged: opts?.staged,
-            })) as string;
-          },
-          status: (path) => {
-            const p = path ?? deps.currentProject()?.root;
-            if (!p) return Promise.reject(new Error("프로젝트 루트 없음 — 폴더가 열린 프로젝트에서 사용하세요"));
-            return deps.invoke("git_status", { path: p });
-          },
-        }
-      : undefined,
 
     // [RULE] 터미널 영역 — 능력이 다르면 권한도 분리: 관찰("terminal": command.* 스냅샷),
     // 화면 읽기("terminal:read": 버퍼 내용·갱신 — 전 화면 텍스트), 입력 쓰기("terminal:write":

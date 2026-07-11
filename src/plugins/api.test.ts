@@ -217,7 +217,6 @@ describe("권한 표면 게이트(§0-2)", () => {
     expect(api.ui).toBeUndefined();
     expect(api.storage).toBeUndefined();
     expect(api.fs).toBeUndefined();
-    expect(api.git).toBeUndefined();
     expect(api.events).toBeDefined();
     expect(api.project.current()).toEqual({ id: "p1", root: "/repo" });
     expect(api.appVersion).toBe("1.0.0");
@@ -685,30 +684,6 @@ describe("clipboard — read/write 권한별 게이트 + watch(전 창 시그널
     sub.dispose();
     expect(order).toContain("clipboard_watch_start");
     expect(order).toContain("clipboard_watch_stop");
-  });
-});
-
-describe("git — path 기본값(활성 프로젝트 루트)", () => {
-  it("path 생략 시 현재 프로젝트 루트, 루트 없으면 reject", async () => {
-    const d = fakeDeps({ invoke: vi.fn(async () => []) });
-    const { api } = buildPluginApi(
-      manifestOf({ permissions: ["git:read"] }),
-      "/d",
-      d,
-    );
-    await api.git!.log({ limit: 5 });
-    expect(d.invoke).toHaveBeenCalledWith("git_log", {
-      path: "/repo",
-      limit: 5,
-      skip: undefined,
-    });
-
-    const noRoot = buildPluginApi(
-      manifestOf({ permissions: ["git:read"] }),
-      "/d",
-      fakeDeps({ currentProject: () => null }),
-    ).api;
-    await expect(noRoot.git!.log()).rejects.toThrow(/루트 없음/);
   });
 });
 

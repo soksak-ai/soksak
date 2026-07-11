@@ -6,5 +6,5 @@ src-tauri/cli/src/lib.rs 1757
 src-tauri/src/webview.rs 1542
 src/commands/catalog.ts 2735
 src/i18n.ts 1535
-src/plugins/api.ts 1816
+src/plugins/api.ts 1767
 src/state/sessions.ts 1745
