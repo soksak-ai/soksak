@@ -308,3 +308,49 @@ fn replay_never_answers_queries() {
     // 내용은 그대로 재현된다(질의는 화면에 보이지 않는 바이트다).
     assert_state_restored(&original, &restored, "replay guard");
 }
+
+// ── ⑥ cold_paint — 죽은 세션 체크포인트가 alt-screen(TUI) 프레임을 텍스트로 담는다 ──
+// warm rehydrate 는 alt-screen 을 재현하지만(살아 있는 재부착), cold 는 프로세스 없는
+// alt-screen 을 만들지 않는다: 봉인 체크포인트(soksak-ptyd)가 봉인하는 화면 출처가
+// cold_paint 이며, TUI 프레임과 그 뒤 얼려 둔 프라임 스크롤백이 반드시 평면 텍스트로
+// 실려야 복원이 그 화면을 되살린다(플랜 §5.5 M4, docs/RESTORE.md 사다리 3단). alt 프레임을
+// 떨어뜨리면 재기동 후 TUI 가 소실된다 — 그 회귀를 이 크레이트 경계에서 못박는다.
+#[test]
+fn cold_paint_of_alt_screen_carries_the_tui_frame_and_primary_scrollback() {
+    let mut m = Mirror::new(COLS, ROWS);
+    // 프라임 화면(24행)보다 많은 스크롤백 마커 → 일부가 스크롤백으로 밀린 채 alt 진입.
+    for n in 1..=30 {
+        m.feed(format!("SCROLL-{n}\r\n").as_bytes());
+    }
+    m.feed(b"\x1b[?1049h");
+    m.feed(b"\x1b[2J\x1b[H");
+    for i in 1..=10 {
+        m.feed(format!("\x1b[{i};1HTUI-LINE-{i}").as_bytes());
+    }
+    assert!(m.alt_active(), "픽스처 전제: 원본 미러는 alt-screen 활성");
+
+    // cold_paint 는 평면 텍스트(alt-enter 없음) — 신선한 터미널에 먹여 텍스트를 읽는다.
+    let mut s = Screen::new(COLS, ROWS);
+    s.feed(&m.cold_paint());
+    let text = [
+        Screen::text_of(&s.history_rows()),
+        Screen::text_of(&s.visible_rows()),
+    ]
+    .concat()
+    .join("\n");
+
+    // alt-screen 프레임(TUI)이 반드시 실린다 — cold 복원이 되살리는 화면이다.
+    for i in 1..=10 {
+        assert!(text.contains(&format!("TUI-LINE-{i}")), "cold_paint 에 TUI-LINE-{i} 부재:\n{text}");
+    }
+    // alt 진입 직전 얼려 둔 프라임 스크롤백도 함께 실린다.
+    assert!(text.contains("SCROLL-30"), "cold_paint 에 프라임 스크롤백 마커(SCROLL-30) 부재:\n{text}");
+    // cold 는 프로세스 없는 alt-screen 을 만들지 않는다 — 평면 텍스트뿐(정직한 잔상).
+    assert!(!s.alt_active(), "cold_paint 는 alt-screen 을 활성화하지 않는다(평면 텍스트)");
+    // 재생 가드는 cold 에도 성립 — 평면 텍스트에 질의 바이트가 실리지 않는다.
+    assert_eq!(
+        s.captured_replies(),
+        Vec::<String>::new(),
+        "cold_paint 를 먹인 터미널의 PTY write 는 0바이트여야 한다"
+    );
+}
