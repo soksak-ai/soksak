@@ -67,6 +67,17 @@ pub struct PtyManager {
     link: daemon::Link,
 }
 
+// spawn_terminal 결과. screen_restored = 이 스폰이 PTY 세션의 화면을 복원했는가
+// (데몬 재부착 replay | cold 체크포인트 inject). 참이면 그 화면이 뷰포트 권위이므로
+// 플러그인의 명령-블록 repaint(floor)가 그 위로 이력을 쌓아 복원 프레임을 밀어내면
+// 안 된다 — 프론트 substrate 가 이 값을 pane 별로 보관해 app.pty.wasScreenRestored 로 노출한다.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpawnOutcome {
+    pub id: u32,
+    pub screen_restored: bool,
+}
+
 impl PtyManager {
     // 앱 종료 시 호출(B1: 종료=보존): Daemon 세션은 detach 만 한다 — 셸과 자식은
     // soksak-ptyd 에서 계속 살고, 다음 부팅의 같은 pane 스폰이 재부착한다. Local
@@ -257,7 +268,7 @@ pub fn spawn_terminal(
     window_label: Option<String>,
     on_output: Channel<InvokeResponseBody>,
     manager: State<'_, PtyManager>,
-) -> Result<u32, String> {
+) -> Result<SpawnOutcome, String> {
     let shell = shell.unwrap_or_else(default_shell);
     let (env, env_remove) = build_session_env(&shell, &pane_id, &window_label);
 
@@ -281,7 +292,7 @@ pub fn spawn_terminal(
             },
             on_output.clone(),
         ) {
-            Ok(session) => {
+            Ok((session, screen_restored)) => {
                 let id = register_session(
                     manager.inner(),
                     PtySession {
@@ -290,7 +301,7 @@ pub fn spawn_terminal(
                         window_label,
                     },
                 );
-                return Ok(id);
+                return Ok(SpawnOutcome { id, screen_restored });
             }
             Err(e) => daemon::notify_fallback(&app, &manager.link, &e),
         }
@@ -388,7 +399,8 @@ pub fn spawn_terminal(
             window_label,
         },
     );
-    Ok(id)
+    // 로컬 폴백(in-process) 은 신선 셸이다 — 복원한 화면이 없다.
+    Ok(SpawnOutcome { id, screen_restored: false })
 }
 
 // [R2] pane 의 foreground 프로세스 그룹 pid — 그 PTY 에서 지금 실행 중인 명령(claude/codex 등)의 pgid.
@@ -806,12 +818,14 @@ mod daemon {
     // 재현)가 라이브에 앞서 도착한다 — 전부 그리드 합성물이라 재생분에 질의(DA1/DSR)가
     // 실릴 수 없고, 프론트 xterm 의 재응답도 원천 차단된다(플랜 §5.5 M2 —
     // docs/RESTORE.md 사다리 2단).
+    // 반환 = (데몬 세션 id, screen_restored). screen_restored 는 이 스폰이 화면을 복원했는가
+    // = 데몬 재부착(attached, 미러 replay) 또는 cold 체크포인트 inject 성공(injected).
     pub fn spawn_via_daemon(
         app: &tauri::AppHandle,
         link: &Link,
         p: SpawnParams,
         on_output: Channel<InvokeResponseBody>,
-    ) -> Result<u64, String> {
+    ) -> Result<(u64, bool), String> {
         // pane 없는 세션은 재부착 키가 없다 — 데몬에 실을 이유가 없어 로컬로 보낸다.
         let pane_id = p.pane_id.clone().ok_or("no pane id: local session")?;
         let home = crate::home::soksak_home();
@@ -935,7 +949,9 @@ mod daemon {
 
         // 데몬 경로 성공 — 이후 폴백이 다시 일어나면 새 사건으로 고지한다.
         link.fallback_notified.store(false, Ordering::SeqCst);
-        Ok(session)
+        // 화면 복원 여부: 재부착 replay(attached) 또는 cold inject(injected). 둘 다면 화면이
+        // 이미 PTY 로 채워졌으니 플러그인 blocks-repaint 는 floor 로 겹쳐선 안 된다.
+        Ok((session, attached || injected))
     }
 
     // stream 종료의 원인 판별: control ping 이 살아 있으면 셸의 정상 종료다(프론트는

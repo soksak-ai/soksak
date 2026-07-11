@@ -499,6 +499,10 @@ export interface SoksakPluginApi {
     onData: (id: number, cb: (data: Uint8Array) => void) => Disposable;
     /** PATH 에서 셸/바이너리 경로 해소(없으면 null). */
     which: (bin: string) => Promise<string | null>;
+    /** 이 pane 의 스폰이 PTY 세션 화면을 복원했는가(데몬 재부착 replay | cold 체크포인트 inject).
+     *  spawn 을 await 한 뒤 조회하면 레이스-프리. 참이면 그 화면이 뷰포트 권위이므로, 복원 뷰는
+     *  명령-블록 repaint(이력 floor)를 건너뛴다 — 겹쳐 그리면 복원 프레임을 뷰포트 밖으로 민다. */
+    wasScreenRestored: (paneId: string) => boolean;
     /** 이 paneId 의 IO 핸들러(화면 읽기·입력 쓰기)를 substrate 에 등록 → app.terminal.readBuffer/
      *  sendText 가 이 터미널에 닿는다(코어 host-div 비의존). 터미널 플러그인이 마운트 시 자기
      *  TerminalInstance 의 readBuffer/sendInput 을 등록하고 언마운트 시 해지(반환 Disposable). */
@@ -869,6 +873,9 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     outBuf: Uint8Array[];
     // 이 PTY 를 substrate 관찰에 연결한 paneId(있으면 close 시 관찰도 회수). 없으면 undefined.
     paneId?: string;
+    // 이 스폰이 PTY 세션의 화면을 복원했는가(데몬 재부착 replay | cold 체크포인트 inject).
+    // 참이면 그 화면이 뷰포트 권위 — 복원 뷰는 blocks-repaint(이력 floor)를 겹치면 안 된다.
+    screenRestored: boolean;
   }
   const ptys = new Map<number, PtyState>();
   return {
@@ -885,7 +892,7 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
       // 동작하게 한다. 코어 터미널 뷰가 자기 OSC 를 파싱하던 것과 무관 — 같은 paneId 는 한
       // producer 만 채우므로 이중 발화가 없다(ptyObservationStore 단일 producer 불변식).
       if (paneId) registerPtyObservation(paneId);
-      const st: PtyState = { out: new Set(), outBuf: [], paneId };
+      const st: PtyState = { out: new Set(), outBuf: [], paneId, screenRestored: false };
       const onOutput = new Channel<ArrayBuffer>();
       onOutput.onmessage = (m) => {
         const b = new Uint8Array(m);
@@ -894,7 +901,7 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         else st.outBuf.push(b);
       };
       // windowLabel 은 코어가 현재 창으로 주입(멀티윈도우 sok 타겟 — webviewLabels 단일진실).
-      const id = (await deps.invoke("spawn_terminal", {
+      const res = (await deps.invoke("spawn_terminal", {
         cols: opts.cols,
         rows: opts.rows,
         cwd: opts.cwd ?? null,
@@ -902,9 +909,10 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         paneId: paneId ?? null,
         windowLabel: currentWindowLabel() || null,
         onOutput,
-      })) as number;
-      ptys.set(id, st);
-      return id;
+      })) as { id: number; screenRestored: boolean };
+      st.screenRestored = res.screenRestored;
+      ptys.set(res.id, st);
+      return res.id;
     },
     write: (id: number, data: string): Promise<void> =>
       deps.invoke("write_terminal", { id, data }) as Promise<void>,
@@ -927,6 +935,15 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     },
     which: (bin: string): Promise<string | null> =>
       deps.invoke("shell_which", { bin }) as Promise<string | null>,
+    // 이 pane 의 스폰이 PTY 세션 화면을 복원했는가(데몬 재부착 replay | cold 체크포인트 inject).
+    // spawn 반환 후 set 되므로 spawn 을 await 한 뒤 조회하면 레이스-프리다. 복원 뷰는 이 값이
+    // 참이면 명령-블록 repaint(이력 floor)를 건너뛴다 — 복원 프레임이 뷰포트 권위이기 때문.
+    wasScreenRestored: (paneId: string): boolean => {
+      for (const st of ptys.values()) {
+        if (st.paneId === paneId) return st.screenRestored;
+      }
+      return false;
+    },
     // PTY IO 핸들러 등록(substrate) — app.terminal.readBuffer/sendText 의 우선 경로. tracker 로
     // 비활성화 시 자동 해지(누수 0). 플러그인 언마운트가 직접 dispose 해도 멱등(같은 io 만 해지).
     registerIo: (
