@@ -270,6 +270,79 @@ describe("register / unregister — 플러그인 생명주기 기반", () => {
   });
 });
 
+describe("execute — 서비스 봉투 seam (PS7, docs/PLUGIN-SERVICE.md)", () => {
+  it("envelope:'service' 는 봉투의 message 를 1급으로 보존한다(spec.message 로 덮지 않음)", async () => {
+    reg(TEST_PREFIX + "svc.msg", {
+      envelope: "service",
+      message: () => "폴백 라벨",
+      handler: () => ({ ok: true, code: "OK", message: "서비스가 지은 문장", data: { n: 1 } }),
+    });
+    const r = await execute(TEST_PREFIX + "svc.msg", {}, {});
+    expect(r.ok).toBe(true);
+    expect(r.message).toBe("서비스가 지은 문장");
+    expect(r.data).toEqual({ n: 1 });
+  });
+
+  it("봉투 message 부재는 spec.message 폴백 — 라벨 열화, 거부 아님(MESSAGE-PROTOCOL §3)", async () => {
+    reg(TEST_PREFIX + "svc.nomsg", {
+      envelope: "service",
+      message: () => "폴백 라벨",
+      handler: () => ({ ok: true, code: "OK", data: { n: 2 } }),
+    });
+    const r = await execute(TEST_PREFIX + "svc.nomsg", {}, {});
+    expect(r.message).toBe("폴백 라벨");
+  });
+
+  it("봉투 hints 는 hint 로 실린다(최대 3·형식 검증·data 비오염)", async () => {
+    reg(TEST_PREFIX + "svc.hints", {
+      envelope: "service",
+      handler: () => ({
+        ok: true,
+        message: "됨",
+        data: { x: 1 },
+        hints: [
+          { cmd: "a", why: "1" },
+          { cmd: "b", why: "2" },
+          { cmd: "c", why: "3" },
+          { cmd: "d", why: "4" },
+        ],
+      }),
+    });
+    const r = await execute(TEST_PREFIX + "svc.hints", {}, {});
+    expect(r.hint).toEqual([
+      { cmd: "a", why: "1" },
+      { cmd: "b", why: "2" },
+      { cmd: "c", why: "3" },
+    ]);
+    // hints 는 data 로 새지 않는다(예약키 분리)
+    expect(r.data).toEqual({ x: 1 });
+  });
+
+  it("실패 봉투는 code·message·hints 전부 보존", async () => {
+    reg(TEST_PREFIX + "svc.fail", {
+      envelope: "service",
+      handler: () => ({
+        ok: false,
+        code: "CONFLICT",
+        message: "충돌했습니다",
+        hints: [{ cmd: "retry", why: "다시" }],
+      }),
+    });
+    const r = await execute(TEST_PREFIX + "svc.fail", {}, {});
+    expect(r).toMatchObject({ ok: false, code: "CONFLICT", message: "충돌했습니다" });
+    expect(r.hint).toEqual([{ cmd: "retry", why: "다시" }]);
+  });
+
+  it("일반 스펙의 기존 규칙 불변 — 핸들러 message 는 버려지고 spec.message 가 소유(회귀 봉인)", async () => {
+    reg(TEST_PREFIX + "svc.plainkeep", {
+      message: () => "스펙 소유 문장",
+      handler: () => ({ message: "핸들러가 낸 문장", n: 3 }),
+    });
+    const r = await execute(TEST_PREFIX + "svc.plainkeep", {}, {});
+    expect(r.message).toBe("스펙 소유 문장");
+  });
+});
+
 describe("execute — 계측 sink (A1 활동 허브)", () => {
   it("성공·실패·출처·danger·paramKeys 가 trace 로 흐른다(민감값 미포함)", async () => {
     const traces: CommandTrace[] = [];

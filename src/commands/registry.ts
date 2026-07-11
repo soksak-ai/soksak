@@ -51,6 +51,11 @@ export interface CommandSpec {
   // 호출 ctx 를 받아 CommandHint[] 를 짓는다. [철학] 지시가 아니라 가능성의 제시 — 받은 쪽의 판단을
   // 돕는다. 예외가 발생하면 execute 가 응답을 깨지 않고 hint 만 생략한다.
   hint?: (data: Record<string, unknown>, ctx: CommandContext) => CommandHint[];
+  // 서비스 봉투 seam(PS7, docs/PLUGIN-SERVICE.md) — bind:"service" 커맨드의 합성 프록시 전용.
+  // "service" 면 핸들러 봉투의 message·hints 를 1급으로 보존한다(사람 문장은 여전히 커맨드
+  // 구현이 소유하되 와이어로 전달 — MESSAGE-PROTOCOL §3 의 소유 규칙은 불변). 플러그인 JS 스펙에
+  // 절대 열지 않는다: 등록 경로가 serviceProxy(코어 합성)뿐이다. $-접두 우회 같은 비공식 seam 금지.
+  envelope?: "service";
   /** 기본형 문법의 주 대상 매개변수 — 필수 매개변수가 하나가 아닐 때(예: 생략=전부 문법)
    *  위치 인자(값 하나)를 받을 이름을 명시한다. 미선언이면 "유일한 필수 매개변수" 규칙만 적용. */
   primary?: string;
@@ -383,19 +388,45 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
     if (existing && typeof existing === "object") return existing as Record<string, unknown>;
     return Object.keys(rest).length ? rest : undefined;
   };
+  // 서비스 봉투(PS7) — 합성 프록시가 나른 와이어 봉투의 hints 를 예약키로 분리·검증한다.
+  // 일반 스펙에서는 hints 가 예약키가 아니다(기존 규칙 불변 — data 로 흐른다).
+  const takeServiceHints = (rest: Record<string, unknown>): [CommandHint[] | undefined, Record<string, unknown>] => {
+    if (spec?.envelope !== "service" || !("hints" in rest)) return [undefined, rest];
+    const { hints, ...restNoHints } = rest;
+    const valid = Array.isArray(hints)
+      ? hints
+          .filter(
+            (h): h is CommandHint =>
+              !!h && typeof h === "object" &&
+              typeof (h as CommandHint).cmd === "string" &&
+              typeof (h as CommandHint).why === "string",
+          )
+          .slice(0, 3)
+      : [];
+    return [valid.length ? valid : undefined, restNoHints];
+  };
   if (raw.ok === false) {
-    const { ok: _o, code: rc, message: rm, error: re, data: rd, ...rest } = raw;
+    const { ok: _o, code: rc, message: rm, error: re, data: rd, ...rest0 } = raw;
+    const [svcHints, rest] = takeServiceHints(rest0);
     const code = typeof rc === "string" ? rc : typeof re === "string" ? re : "INTERNAL";
     const message = typeof rm === "string" ? rm : typeof re === "string" ? re : "error";
     const data = pickData(rest, rd);
-    return data ? { ok: false, code, message, data } : { ok: false, code, message };
+    const out: CommandOutcome = { ok: false, code, message };
+    if (data) out.data = data;
+    if (svcHints) out.hint = svcHints;
+    return out;
   }
-  const { ok: _ok, code: rc, message: _rm, data: rd, media: rmedia, ...rest } = raw;
+  const { ok: _ok, code: rc, message: rm, data: rd, media: rmedia, ...rest0 } = raw;
+  const [svcHints, rest] = takeServiceHints(rest0);
   const data = pickData(rest, rd);
   const code = typeof rc === "string" ? rc : "OK";
   // message 는 spec 이 소유한다(예약키라 핸들러 반환의 message 는 버린다). spec 은 execute 에서만
   // 정규화를 부르므로 항상 존재한다 — undefined 는 타입가드일 뿐(도달 불가).
-  const message = spec ? spec.message(data ?? {}) : code;
+  // 예외 = 서비스 봉투(PS7): 커맨드 구현이 와이어로 지은 message 가 1급이고, 부재 시에만
+  // spec.message 폴백(라벨 열화 — MESSAGE-PROTOCOL §3 의 열화 규칙과 동형).
+  const wireMessage =
+    spec?.envelope === "service" && typeof rm === "string" && rm.trim() ? rm : undefined;
+  const message = wireMessage ?? (spec ? spec.message(data ?? {}) : code);
   const media =
     rmedia && typeof rmedia === "object" && typeof (rmedia as MediaContent).kind === "string"
       ? (rmedia as MediaContent)
@@ -403,6 +434,7 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
   const out: CommandOutcome = { ok: true, code, message };
   if (data) out.data = data;
   if (media) out.media = media;
+  if (svcHints) out.hint = svcHints;
   return out;
 }
 
