@@ -16,7 +16,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use serde_json::{json, Value};
 
 use crate::{
-    ErrCode, Hint, ReqCtx, ServiceIn, ServiceOut, SERVICE_INTERFACE, SERVICE_PROTOCOL_VERSION,
+    ErrCode, Hint, ServiceIn, ServiceOut, SERVICE_INTERFACE, SERVICE_PROTOCOL_VERSION,
 };
 
 /// Execution context the core stamped on a req (PS13) — read-only to the op.
@@ -299,6 +299,7 @@ fn res_from_cache(id: u64, cached: &Value) -> ServiceOut {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ReqCtx; // 코어측 프레임 타입 — 테스트가 core 역할을 연기하며 req 를 구성.
     use std::collections::VecDeque;
     use std::io::{BufReader, Read};
     use std::sync::Condvar;

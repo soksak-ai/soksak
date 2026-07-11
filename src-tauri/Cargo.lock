@@ -4408,6 +4408,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "soksak-service-fixture-echo"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "soksak-service-proto",
+]
+
+[[package]]
 name = "soksak-service-proto"
 version = "0.1.0"
 dependencies = [

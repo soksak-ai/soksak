@@ -1,0 +1,13 @@
+[package]
+name = "soksak-service-fixture-echo"
+version = "0.1.0"
+edition = "2021"
+description = "E2E fixture: the smallest plugin service — an echo op built on the shared serve harness (PS17/PS18). Proves the whole service-axis path end to end without any plugin logic."
+
+[[bin]]
+name = "soksak-sidecar-e2e-echo"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+soksak-service-proto = { path = "../soksak-service-proto" }
