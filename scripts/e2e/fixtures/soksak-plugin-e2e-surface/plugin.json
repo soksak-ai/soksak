@@ -1,0 +1,65 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-e2e-surface",
+  "name": {
+    "ko": "W6 표면 픽스처",
+    "en": "W6 surface fixture"
+  },
+  "version": "0.0.1",
+  "description": {
+    "ko": "webview 크래시 복구 검증용 네이티브 child 표면 뷰(e2e 픽스처)",
+    "en": "Native child surface view for webview crash-recovery verification (e2e fixture)"
+  },
+  "entry": "main.js",
+  "permissions": [
+    "ui",
+    "webview",
+    "programs",
+    "commands"
+  ],
+  "contributes": {
+    "views": [
+      {
+        "id": "content",
+        "title": {
+          "ko": "W6 표면",
+          "en": "W6 Surface"
+        },
+        "placements": [
+          "content"
+        ],
+        "defaultPlacement": "content",
+        "nativeSurface": true,
+        "status": [],
+        "icon": "🧪",
+        "transparent": true
+      }
+    ],
+    "programs": [
+      {
+        "id": "e2esurface",
+        "title": {
+          "ko": "W6 표면",
+          "en": "W6 Surface"
+        },
+        "kind": "view",
+        "view": "content"
+      }
+    ],
+    "commands": [
+      {
+        "name": "ping",
+        "title": {
+          "ko": "플러그인 적재 확인(E2E)",
+          "en": "Plugin load check (E2E)"
+        }
+      }
+    ],
+    "nodes": [
+      {
+        "id": "surface",
+        "description": "Content slot hosting the native child webview"
+      }
+    ]
+  }
+}
