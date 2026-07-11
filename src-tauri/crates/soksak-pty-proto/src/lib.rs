@@ -135,6 +135,35 @@ pub fn checkpoint_aad(window_label: &str, pane_id: &str, key_id: &str) -> Vec<u8
     .into_bytes()
 }
 
+// ── Tee subscription framing (subscribe stream) ──────────────────────────────
+// A subscribe stream carries length-prefixed frames after the hello exchange —
+// the attach stream stays raw (a single consumer needs no framing; a tee
+// interleaves data copies with gap markers). Frame = [kind: u8][len: u32 BE]
+// [payload]. The daemon frames byte copies and gap markers; it interprets no
+// byte. Both sides depend on this crate for the shape.
+
+/// Tee frame kind: a raw output copy.
+pub const TEE_FRAME_DATA: u8 = 0;
+/// Tee frame kind: a gap marker — bytes dropped under backpressure. Payload is
+/// [`TeeGap`] JSON. A slow subscriber loses data loudly, never silently.
+pub const TEE_FRAME_GAP: u8 = 1;
+
+/// Gap marker payload: the half-open sequence range `[from_seq, to_seq)` that
+/// the daemon dropped for this subscriber under backpressure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TeeGap {
+    pub from_seq: u64,
+    pub to_seq: u64,
+}
+
+/// Encode one tee frame (kind byte + big-endian u32 length + payload) onto `out`.
+pub fn encode_tee_frame(kind: u8, payload: &[u8], out: &mut Vec<u8>) {
+    out.push(kind);
+    out.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+    out.extend_from_slice(payload);
+}
+
 // ── Hello ────────────────────────────────────────────────────────────────────
 
 /// First message on every connection, both sockets. `session` is present only
@@ -147,8 +176,22 @@ pub struct Hello {
     pub version: Option<u32>,
     pub token: String,
     pub client_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub session: Option<u64>,
+    /// Attach stream only: replay the raw output ring from this sequence, then
+    /// go live — the race-free warm-handoff coordinate. Absent = the mirror
+    /// serialization replay (the unchanged warm path). Additive optional field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from_seq: Option<u64>,
+    /// Marks this stream connection a tee subscriber — a framed raw copy of the
+    /// session output, never the single live attach. The daemon never blocks
+    /// the live path on it. Absent/false = attach. Additive optional field.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub subscribe: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// Compatibility verdict for a client hello, judged with the shared socket
@@ -216,6 +259,19 @@ pub enum Request {
     ListSessions,
     /// Base64 of the current scrollback ring, without attaching.
     GetSnapshot { session: u64 },
+    /// Store an opaque sealed blob as the (window, pane) session's checkpoint.
+    /// The daemon seals `bytes_b64` with that session's recipient key and writes
+    /// it atomically — content-agnostic: the meaning of the bytes is the
+    /// caller's (a terminal screen paint is one such meaning; the daemon reads
+    /// none of it). Requires a live session with a checkpoint key (fail closed —
+    /// the daemon never writes plaintext screen bytes). Additive op.
+    #[serde(rename_all = "camelCase")]
+    StoreBlob { window_label: Option<String>, pane_id: String, bytes_b64: String },
+    /// Fetch the sealed blob stored for a (window, pane), if present. Returns the
+    /// sealed document as written; the caller opens it with the vault. No live
+    /// session needed — a surviving blob is read straight off disk. Additive op.
+    #[serde(rename_all = "camelCase")]
+    FetchSealed { window_label: Option<String>, pane_id: String },
     /// Foreground process-group pid of the pane's PTY (observation substrate).
     #[serde(rename_all = "camelCase")]
     PanePid { pane_id: String },
@@ -319,14 +375,43 @@ mod tests {
             token: "t".into(),
             client_id: "app-1".into(),
             session: Some(7),
+            from_seq: None,
+            subscribe: false,
         };
         let line = serde_json::to_string(&h).unwrap();
         assert!(line.contains("\"clientId\""), "camelCase on the wire: {line}");
         let back: Hello = serde_json::from_str(&line).unwrap();
         assert_eq!(back.session, Some(7));
-        // control hello omits session entirely
-        let c = Hello { session: None, ..h };
-        assert!(!serde_json::to_string(&c).unwrap().contains("session"));
+        // control hello omits session, from_seq, and subscribe entirely (additive
+        // optionals stay off the wire when unset — the unchanged shape).
+        let c = Hello { session: None, ..h.clone() };
+        let cline = serde_json::to_string(&c).unwrap();
+        assert!(!cline.contains("session"), "{cline}");
+        assert!(!cline.contains("fromSeq"), "{cline}");
+        assert!(!cline.contains("subscribe"), "{cline}");
+        // a warm-handoff attach carries fromSeq; a tee carries subscribe
+        let a = Hello { from_seq: Some(42), ..h.clone() };
+        assert!(serde_json::to_string(&a).unwrap().contains("\"fromSeq\":42"));
+        let s = Hello { subscribe: true, ..h };
+        assert!(serde_json::to_string(&s).unwrap().contains("\"subscribe\":true"));
+    }
+
+    #[test]
+    fn tee_frames_encode_kind_len_payload_and_gap_round_trips() {
+        let mut out = Vec::new();
+        encode_tee_frame(TEE_FRAME_DATA, b"hello", &mut out);
+        assert_eq!(out[0], TEE_FRAME_DATA);
+        assert_eq!(&out[1..5], &5u32.to_be_bytes());
+        assert_eq!(&out[5..], b"hello");
+        let gap = TeeGap { from_seq: 10, to_seq: 25 };
+        let payload = serde_json::to_vec(&gap).unwrap();
+        let mut g = Vec::new();
+        encode_tee_frame(TEE_FRAME_GAP, &payload, &mut g);
+        assert_eq!(g[0], TEE_FRAME_GAP);
+        let back: TeeGap = serde_json::from_slice(&g[5..]).unwrap();
+        assert_eq!(back, gap);
+        let line = serde_json::to_string(&gap).unwrap();
+        assert!(line.contains("\"fromSeq\":10") && line.contains("\"toSeq\":25"), "{line}");
     }
 
     #[test]
@@ -352,6 +437,12 @@ mod tests {
             Request::KillByWindow { window_label: "w-x".into() },
             Request::ListSessions,
             Request::GetSnapshot { session: 1 },
+            Request::StoreBlob {
+                window_label: Some("w-x".into()),
+                pane_id: "p1".into(),
+                bytes_b64: "cGFpbnQ=".into(),
+            },
+            Request::FetchSealed { window_label: Some("w-x".into()), pane_id: "p1".into() },
             Request::PanePid { pane_id: "p1".into() },
             Request::Ping,
             Request::Shutdown,
@@ -374,6 +465,18 @@ mod tests {
         assert!(line.contains("\"listSessions\""), "{line}");
         let line = serde_json::to_string(&Request::PanePid { pane_id: "p".into() }).unwrap();
         assert!(line.contains("\"panePid\"") && line.contains("\"paneId\""), "{line}");
+        let line = serde_json::to_string(&Request::StoreBlob {
+            window_label: Some("w".into()),
+            pane_id: "p".into(),
+            bytes_b64: "eA==".into(),
+        })
+        .unwrap();
+        assert!(line.contains("\"storeBlob\""), "{line}");
+        assert!(line.contains("\"windowLabel\"") && line.contains("\"bytesB64\""), "{line}");
+        let line =
+            serde_json::to_string(&Request::FetchSealed { window_label: None, pane_id: "p".into() })
+                .unwrap();
+        assert!(line.contains("\"fetchSealed\""), "{line}");
     }
 
     #[test]

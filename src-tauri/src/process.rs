@@ -36,6 +36,8 @@ struct ProcessSession {
     stdin: Option<ChildStdin>,
     // 신규 프로세스 그룹으로 스폰됨(group 옵션) — kill 이 그룹 전체(-pgid)를 겨눈다.
     group: bool,
+    // detach(setsid)로 스폰됨 — 앱 종료를 넘어 산다. kill_all(앱 종료 회수)에서 제외된다.
+    detached: bool,
 }
 
 #[derive(Default)]
@@ -45,11 +47,15 @@ pub struct ProcessManager {
 }
 
 impl ProcessManager {
-    // 앱 종료 시: 모든 자식 kill(좀비 방지).
+    // 앱 종료 시: 모든 자식 kill(좀비 방지). 단 detached(생존 서비스 사이드카)는 제외 —
+    // 앱보다 오래 사는 것이 그 존재 이유다(setsid 로 세션 분리됨, Child 핸들 드롭은 프로세스를
+    // 죽이지 않는다). 나머지만 회수한다.
     pub fn kill_all(&self) {
         if let Ok(mut sessions) = self.sessions.lock() {
             for (_, sess) in sessions.drain() {
-                kill_session(&sess);
+                if !sess.detached {
+                    kill_session(&sess);
+                }
             }
         }
     }
@@ -95,6 +101,21 @@ pub(crate) fn resolve_sidecar_cmd(cmd: &str) -> Result<String, String> {
         return Err(format!("sidecar 미설치: {} — identity 홈에 dist 스테이징 필요(stage.sh)", path.display()));
     }
     Ok(path.to_string_lossy().into_owned())
+}
+
+// detached danger 게이트 — detached(부모 사망을 넘어 생존하는 새 세션 리더)는 선언된
+// 사이드카("sidecar:{name}")에만 허용한다. 임의 프로그램의 detach 스폰은 앱 종료 후
+// 회수 불가 좀비의 문(kill_all 제외 대상이 되므로). 생존 프로세스는 곧 사이드카다
+// (SIDECARS.md — 상주 생존 서비스=서비스 사이드카)라, identity 홈에서 해석되는 사이드카
+// 대상만 detach 를 여는 것이 구조적 잠금이다(A17). 비-detached 는 무제한.
+pub(crate) fn detached_gate(cmd: &str, detached: bool) -> Result<(), String> {
+    if detached && !cmd.starts_with("sidecar:") {
+        return Err(
+            "detached spawn is limited to sidecar: targets — a survival service must be a declared sidecar (A17)"
+                .into(),
+        );
+    }
+    Ok(())
 }
 
 // secret_env(envVar→secretKey)를 평문(envVar→평문)으로 해소 — spawn 전 일괄. 비어있으면 빈 벡터.
@@ -175,6 +196,10 @@ pub fn process_spawn(
     // true = 신규 프로세스 그룹으로 스폰(Unix) — kill 이 자식 트리 전체를 회수한다. 손자를
     // 낳는 자식(에이전트 CLI 등)에 선언; 기존 소비자는 무영향(기본 false).
     group: Option<bool>,
+    // true = detach(setsid — 새 세션 리더)로 스폰. 부모(앱) 사망·터미널 시그널에서 분리돼
+    // 앱 종료를 넘어 산다. 생존 서비스 사이드카를 플러그인이 합법으로 detach 스폰하는 열쇠.
+    // danger 게이트: "sidecar:" 대상에만 허용(detached_gate). kill_all 에서 제외된다.
+    detached: Option<bool>,
     // 시크릿 주입 — ns(보통 플러그인 id) + secret_env(envVar→secretKey). 평문은 여기 Rust 경계에서만
     // 해소돼 자식 env 로 들어간다(JS·셸 args·ps 미노출 R2). secret_env 가 있으면 ns 필수. 잠김/미존재면
     // spawn 하지 않고 Err — 미해소 시크릿이 자식으로 새지 않는다.
@@ -188,6 +213,10 @@ pub fn process_spawn(
 ) -> Result<u32, String> {
     // 시크릿 평문 해소 — spawn 전에 전부 해소(하나라도 잠김/미존재면 spawn 0). Rust 경계에서만 평문 보유.
     let resolved_secrets = resolve_secret_env(&secrets_state, ns.as_deref(), &secret_env)?;
+
+    // detached danger 게이트 — 원본 cmd(스킴 해석 전)로 판정. "sidecar:" 대상만 detach 허용.
+    let detached = detached.unwrap_or(false);
+    detached_gate(&cmd, detached)?;
 
     // service 사이드카 해석 — cmd "sidecar:{name}" 을 identity 홈의 dist 진입점으로 치환(engine 의
     // sidecar.rs 와 대칭: 경로 해석은 코어 단일진실 소유, 플러그인은 이름만 안다 — A17/SIDECARS.md).
@@ -221,9 +250,20 @@ pub fn process_spawn(
     }
     let group = group.unwrap_or(false);
     #[cfg(unix)]
-    if group {
+    {
         use std::os::unix::process::CommandExt;
-        c.process_group(0); // pgid = 자식 pid — kill_session 이 그룹 전체를 겨눌 수 있게
+        if detached {
+            // setsid: 새 세션 리더 → 부모(앱) 사망·제어 터미널 시그널에서 분리. group 과
+            // 배타(setsid 자체가 새 세션·그룹 리더를 만든다 — group 리더면 setsid 는 EPERM).
+            unsafe {
+                c.pre_exec(|| {
+                    libc::setsid();
+                    Ok(())
+                });
+            }
+        } else if group {
+            c.process_group(0); // pgid = 자식 pid — kill_session 이 그룹 전체를 겨눌 수 있게
+        }
     }
     // 시크릿 평문은 일반 env 뒤에 주입(같은 키면 시크릿 우선). 평문은 이 Command env 와 자식에만 존재.
     for (k, v) in &resolved_secrets {
@@ -277,7 +317,7 @@ pub fn process_spawn(
         .sessions
         .lock()
         .unwrap()
-        .insert(id, ProcessSession { child, stdin, group });
+        .insert(id, ProcessSession { child, stdin, group, detached });
     Ok(id)
 }
 
@@ -455,5 +495,69 @@ mod tests {
         let bad = Some(map(&[("SOKSAK_SECRET_0", "nope")]));
         assert!(resolve_secret_env(&state, Some("plugin-a"), &bad).is_err());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    // detached danger 게이트 — detach 는 "sidecar:" 대상에만. 임의 프로그램 detach 거부.
+    #[test]
+    fn detached_gate_limits_detach_to_sidecar_targets() {
+        // 비-detached 는 무제한.
+        assert!(detached_gate("/bin/sh", false).is_ok());
+        assert!(detached_gate("claude", false).is_ok());
+        // detached 는 선언된 사이드카 대상만.
+        assert!(detached_gate("sidecar:terminal-mirror", true).is_ok());
+        assert!(detached_gate("/bin/sh", true).is_err());
+        assert!(detached_gate("claude", true).is_err());
+    }
+
+    // kill_all(앱 종료 회수)은 일반 자식은 죽이고 detached(생존 서비스 사이드카)는 살린다.
+    // 판정은 try_wait: 실행 중=None, 종료(킬됨)=Some. kill -0 은 좀비도 살아있다 보고하므로
+    // 킬-좀비와 실행을 못 가른다 — try_wait 가 그 구분을 준다.
+    #[cfg(unix)]
+    #[test]
+    fn kill_all_reaps_normal_but_spares_detached() {
+        use std::os::unix::process::CommandExt;
+        // 일반 자식.
+        let normal = Command::new("sleep").arg("30").spawn().expect("spawn sleep");
+        // detached 자식(setsid — process_spawn 의 detached 경로와 동일 기법).
+        let mut det = Command::new("sleep");
+        det.arg("30");
+        unsafe {
+            det.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            });
+        }
+        let detached = det.spawn().expect("spawn detached sleep");
+
+        // 판정용 Arc 핸들 클론을 남긴다(try_wait 로 상태 확인 + 정리).
+        let normal_child = Arc::new(Mutex::new(normal));
+        let detached_child = Arc::new(Mutex::new(detached));
+        let mgr = ProcessManager::default();
+        mgr.sessions.lock().unwrap().insert(
+            1,
+            ProcessSession { child: normal_child.clone(), stdin: None, group: false, detached: false },
+        );
+        mgr.sessions.lock().unwrap().insert(
+            2,
+            ProcessSession { child: detached_child.clone(), stdin: None, group: false, detached: true },
+        );
+
+        mgr.kill_all();
+        std::thread::sleep(std::time::Duration::from_millis(200));
+
+        // 일반 자식: 킬돼 종료 → try_wait 가 Some.
+        assert!(
+            normal_child.lock().unwrap().try_wait().unwrap().is_some(),
+            "일반 자식은 kill_all 이 회수한다"
+        );
+        // detached: 안 죽고 계속 실행 → try_wait 가 None.
+        assert!(
+            detached_child.lock().unwrap().try_wait().unwrap().is_none(),
+            "detached 는 kill_all 이 살린다(생존 서비스)"
+        );
+
+        // 정리 — 살아남은 detached 를 명시 종료·회수.
+        let _ = detached_child.lock().unwrap().kill();
+        let _ = detached_child.lock().unwrap().wait();
     }
 }

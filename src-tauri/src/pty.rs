@@ -1017,6 +1017,8 @@ mod daemon {
             token,
             client_id: format!("app-{}", std::process::id()),
             session: None,
+            from_seq: None,
+            subscribe: false,
         };
         let line = serde_json::to_string(&hello).map_err(|e| LinkError::Io(e.to_string()))?;
         writeln!(c.writer, "{line}").map_err(|e| LinkError::Io(e.to_string()))?;
@@ -1206,6 +1208,8 @@ mod daemon {
             token,
             client_id: format!("app-{}", std::process::id()),
             session: Some(session),
+            from_seq: None,
+            subscribe: false,
         };
         let line = serde_json::to_string(&hello).map_err(|e| e.to_string())?;
         writeln!(w, "{line}").map_err(|e| e.to_string())?;

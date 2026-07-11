@@ -71,6 +71,8 @@ impl Control {
             token: token_of(home),
             client_id: "test".into(),
             session: None,
+            from_seq: None,
+            subscribe: false,
         };
         let reply = c.roundtrip(&serde_json::to_value(&hello).unwrap());
         assert_eq!(reply["ok"], true, "hello accepted: {reply}");
@@ -89,8 +91,14 @@ impl Control {
     }
 }
 
-// stream 부착: hello 응답 줄까지 소비하고, 그 뒤 raw 바이트를 읽는 소켓을 돌려준다.
-fn attach_stream(home: &Path, session: u64) -> (Value, UnixStream) {
+// stream 열기: hello 응답 줄까지 바이트 단위로 소비하고, 그 뒤(raw 또는 프레임)를
+// 읽는 소켓을 돌려준다. from_seq/subscribe 로 attach·warm-handoff·tee 를 모두 연다.
+fn open_stream(
+    home: &Path,
+    session: u64,
+    from_seq: Option<u64>,
+    subscribe: bool,
+) -> (Value, UnixStream) {
     let conn = UnixStream::connect(proto::stream_socket_path(home)).unwrap();
     conn.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
     let mut w = conn.try_clone().unwrap();
@@ -99,9 +107,11 @@ fn attach_stream(home: &Path, session: u64) -> (Value, UnixStream) {
         token: token_of(home),
         client_id: "test-stream".into(),
         session: Some(session),
+        from_seq,
+        subscribe,
     };
     writeln!(w, "{}", serde_json::to_string(&hello).unwrap()).unwrap();
-    // hello 응답 1줄만 바이트 단위로 소비 — 이후 raw 재생/라이브를 잃지 않는다.
+    // hello 응답 1줄만 바이트 단위로 소비 — 이후 재생/라이브/프레임을 잃지 않는다.
     let mut line = Vec::new();
     let mut byte = [0u8; 1];
     let mut r = conn.try_clone().unwrap();
@@ -114,6 +124,21 @@ fn attach_stream(home: &Path, session: u64) -> (Value, UnixStream) {
     }
     let reply: Value = serde_json::from_slice(&line).unwrap();
     (reply, conn)
+}
+
+fn attach_stream(home: &Path, session: u64) -> (Value, UnixStream) {
+    open_stream(home, session, None, false)
+}
+
+// tee 프레임 하나를 읽는다: [kind u8][len u32 BE][payload]. (kind, payload) 반환.
+fn read_tee_frame(stream: &mut UnixStream) -> (u8, Vec<u8>) {
+    let mut head = [0u8; 5];
+    stream.read_exact(&mut head).unwrap();
+    let kind = head[0];
+    let len = u32::from_be_bytes([head[1], head[2], head[3], head[4]]) as usize;
+    let mut payload = vec![0u8; len];
+    stream.read_exact(&mut payload).unwrap();
+    (kind, payload)
 }
 
 // 스트림에서 패턴이 나올 때까지 누적 읽기(상한 5s).
@@ -451,6 +476,178 @@ fn checkpoint_sealed_written_and_removed() {
 
     let bye = control.request(&proto::Request::Shutdown);
     assert_eq!(bye["ok"], true);
+}
+
+// ── warm 핸드오프: Attach{from_seq} 는 원시 링을 재생한다(미러 합성이 아니다) ──
+// from_seq 재생은 raw 바이트라 질의(DA1)를 그대로 싣는다 — from_seq 이후는 진짜
+// 미응답 질의라 라이브 터미널이 답하는 게 옳다. 미러 재생(from_seq 없음)은 질의를
+// 삼킨 합성물이다. 두 경로가 additive 로 공존함을 증명한다.
+
+#[test]
+fn from_seq_attach_replays_raw_ring_while_mirror_path_stays_synthesized() {
+    let d = start_daemon("fromseq");
+    let mut control = Control::connect(&d.home);
+    let created = create(&mut control, "pane-fs");
+    let session = created["data"]["session"].as_u64().unwrap();
+
+    // 라이브로 출력을 흘려 링을 채운다: DA1 질의(ESC [ c) + 마커.
+    let (_r, mut live) = attach_stream(&d.home, session);
+    write_line(&mut control, session, "printf '\\033[c'; echo RAWMARK");
+    read_until(&mut live, "RAWMARK");
+    drop(live);
+    std::thread::sleep(Duration::from_millis(150));
+
+    // from_seq=0 재부착 → 원시 링 재생. servedFromSeq=0, 질의 바이트가 실린다.
+    let (reply, mut raw) = open_stream(&d.home, session, Some(0), false);
+    assert_eq!(reply["ok"], true, "{reply}");
+    assert_eq!(reply["data"]["servedFromSeq"].as_u64().unwrap(), 0, "{reply}");
+    assert!(reply["data"]["replayBytes"].as_u64().unwrap() > 0, "{reply}");
+    assert!(reply["data"].get("gap").is_none(), "no eviction within cap: {reply}");
+    let raw_replay = read_until(&mut raw, "RAWMARK");
+    assert!(raw_replay.contains("\x1b[c"), "raw ring replay carries the DA1 query: {raw_replay:?}");
+    drop(raw);
+    std::thread::sleep(Duration::from_millis(150));
+
+    // from_seq 없음 재부착 → 미러 합성(질의 삼킴). 기존 warm 경로는 그대로.
+    let (reply, mut synth) = attach_stream(&d.home, session);
+    assert_eq!(reply["ok"], true, "{reply}");
+    assert!(reply["data"].get("servedFromSeq").is_none(), "mirror path has no seq: {reply}");
+    let synth_replay = read_until(&mut synth, "RAWMARK");
+    assert!(
+        !synth_replay.contains("\x1b[c"),
+        "mirror serialization strips queries: {synth_replay:?}"
+    );
+
+    assert_eq!(control.request(&proto::Request::Shutdown)["ok"], true);
+}
+
+// ── tee 구독은 라이브를 막지 않는다: 굶주린 구독자가 있어도 라이브가 완주한다 ──
+// 느린(전혀 안 읽는) tee 구독자를 붙인 채 대용량을 흘려도, ack 로 배수하는 라이브
+// attach 는 DONE 까지 받는다. reader 는 tee 에 비차단 enqueue 만 하고(넘치면 gap
+// 드롭), 소켓 I/O 는 구독자 자기 스레드가 소유하기 때문이다. tee 가 라이브를 막으면
+// 이 테스트는 타임아웃한다(RED).
+
+#[test]
+fn a_starved_tee_subscriber_never_blocks_the_live_path() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    let d = start_daemon("teelive");
+    let mut control = Control::connect(&d.home);
+    let created = create(&mut control, "pane-tl");
+    let session = created["data"]["session"].as_u64().unwrap();
+
+    // 라이브 attach + 굶주린 tee 구독자(연결만 하고 절대 안 읽는다).
+    let (_r, live) = attach_stream(&d.home, session);
+    let (sub_reply, _starved) = open_stream(&d.home, session, None, true);
+    assert_eq!(sub_reply["ok"], true, "{sub_reply}");
+    assert_eq!(sub_reply["data"]["mode"], "subscribe", "{sub_reply}");
+
+    // 배경 스레드: 라이브를 읽으며 ack 로 배수(플로우가 안 멈추게). DONE 관측 플래그.
+    let saw_done = Arc::new(AtomicBool::new(false));
+    let home = d.home.clone();
+    let flag = saw_done.clone();
+    let drainer = std::thread::spawn(move || {
+        let mut ack = Control::connect(&home);
+        let mut live = live;
+        let mut acc = Vec::new();
+        let mut buf = [0u8; 65536];
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while Instant::now() < deadline {
+            match live.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let _ = ack.request(&proto::Request::Ack { session, bytes: n as u64 });
+                    acc.extend_from_slice(&buf[..n]);
+                    if acc.windows(4).any(|w| w == b"DONE") {
+                        flag.store(true, Ordering::SeqCst);
+                        break;
+                    }
+                    if acc.len() > 8_000_000 {
+                        acc.drain(..4_000_000); // 마커 경계는 남기고 메모리만 줄인다
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    });
+
+    // 굶주린 tee 버퍼(1MB)를 넘기고도 남는 대용량을 흘린다. tee 는 gap 드롭, 라이브는 완주.
+    write_line(
+        &mut control,
+        session,
+        "head -c 1500000 /dev/zero | tr '\\0' x; echo DONE",
+    );
+
+    wait_until("live path completes despite a starved tee", Duration::from_secs(20), || {
+        saw_done.load(Ordering::SeqCst)
+    });
+    let _ = drainer.join();
+    assert_eq!(control.request(&proto::Request::Shutdown)["ok"], true);
+}
+
+// ── 봉인-블롭 저장소(StoreBlob/FetchSealed): 내용 불가지, cold_paint 없이 임의 바이트 ──
+
+#[test]
+fn store_blob_seals_arbitrary_bytes_and_fetch_sealed_returns_them() {
+    use base64::Engine as _;
+    let d = start_daemon("blob");
+    let (sk, pk) = soksak_seal::gen_asym_keypair();
+    let pk_b64 = base64::engine::general_purpose::STANDARD.encode(pk);
+    let mut control = Control::connect(&d.home);
+
+    // 키 없는 세션 → StoreBlob 은 fail closed.
+    let no_key = create(&mut control, "pane-nokey");
+    let _ = no_key["data"]["session"].as_u64().unwrap();
+    let r = control.request(&proto::Request::StoreBlob {
+        window_label: Some("w-test".into()),
+        pane_id: "pane-nokey".into(),
+        bytes_b64: base64::engine::general_purpose::STANDARD.encode("x"),
+    });
+    assert_eq!(r["code"], "NO_CHECKPOINT_KEY", "no key → fail closed: {r}");
+
+    // 키 있는 세션 → 임의 바이트를 봉인해 저장. 미러 cold_paint 를 거치지 않는다.
+    let created = control.request(&proto::Request::CreateOrAttach {
+        pane_id: "pane-blob".into(),
+        cols: 80,
+        rows: 24,
+        cwd: Some("/tmp".into()),
+        shell: "/bin/sh".into(),
+        env: vec![("PS1".into(), "$ ".into())],
+        env_remove: vec![],
+        window_label: Some("w-test".into()),
+        checkpoint_pk: Some(pk_b64),
+        checkpoint_key_id: Some("k-blob".into()),
+    });
+    assert_eq!(created["ok"], true, "{created}");
+
+    let payload = format!("SIDECAR-PAINT-{}", std::process::id());
+    let r = control.request(&proto::Request::StoreBlob {
+        window_label: Some("w-test".into()),
+        pane_id: "pane-blob".into(),
+        bytes_b64: base64::engine::general_purpose::STANDARD.encode(&payload),
+    });
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["data"]["stored"].as_u64().unwrap(), payload.len() as u64);
+
+    // FetchSealed 로 봉인 문서를 받는다 — 내용 불가지 봉투(altActive 없음).
+    let f = control.request(&proto::Request::FetchSealed {
+        window_label: Some("w-test".into()),
+        pane_id: "pane-blob".into(),
+    });
+    assert_eq!(f["ok"], true, "{f}");
+    let doc = &f["data"]["sealed"];
+    assert_eq!(doc["v"], 1, "{doc}");
+    assert_eq!(doc["keyId"], "k-blob");
+    assert!(doc.get("altActive").is_none(), "content-agnostic envelope: {doc}");
+
+    // 개인키 + 정합 AAD 로 개봉하면 넣은 바이트가 그대로 나온다.
+    let sealed: soksak_seal::SealedBox = serde_json::from_value(doc["sealed"].clone()).unwrap();
+    let aad = proto::checkpoint_aad("w-test", "pane-blob", "k-blob");
+    let out = soksak_seal::open_sealed(&sk, &sealed, &aad).expect("unseal blob");
+    assert_eq!(String::from_utf8_lossy(&out), payload, "stored bytes round-trip");
+
+    assert_eq!(control.request(&proto::Request::Shutdown)["ok"], true);
 }
 
 // 홈 아래 전 파일에서 평문 바이트 검색(재귀) — 소켓 등 특수 파일은 건너뛴다.

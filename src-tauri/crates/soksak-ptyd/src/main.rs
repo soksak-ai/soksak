@@ -22,6 +22,11 @@
 // 이 판의 정직한 한계 — 후속 레인 소유:
 //   - Windows(named pipe/ConPTY)·데몬 업그레이드 drain 은 후속(M5·운명 3분기 b).
 
+// Pure plumbing substrate — platform-independent, unit-tested here. The unix
+// daemon body wires these into the reader/stream paths.
+mod ring;
+mod tee;
+
 fn main() {
     #[cfg(not(unix))]
     {
@@ -49,6 +54,29 @@ mod unix {
     use soksak_pty_mirror::Mirror;
     use soksak_pty_proto as proto;
 
+    use crate::ring::RawRing;
+    use crate::tee::{TeeBuf, TeeFrame};
+
+    // Raw ring retained per session — covers the warm-handoff window (the
+    // sidecar's last-consumed sequence to the plugin's attach). Kilobytes
+    // suffice; a burst past it surfaces as a loud gap on the attach reply, never
+    // a silent shift.
+    const RING_CAP: usize = 256 * 1024;
+    // Per tee-subscriber buffer — a slow subscriber past this loses data as a
+    // gap, never blocking the live path.
+    const TEE_BUF_CAP: usize = 1_000_000;
+
+    static NEXT_SUB_ID: AtomicU64 = AtomicU64::new(0);
+
+    // A tee subscriber — a framed raw copy of one session's output. Its own
+    // writer thread drains `buf` to the socket; the output reader only enqueues
+    // (bounded, non-blocking), so a slow subscriber never stalls the live path.
+    struct TeeSub {
+        id: u64,
+        buf: Mutex<TeeBuf>,
+        cv: Condvar,
+    }
+
     // ── 세션 ─────────────────────────────────────────────────────────────────
 
     struct SessState {
@@ -72,6 +100,12 @@ mod unix {
         ckpt_dirty: bool,
         ckpt_dirty_since: Option<Instant>,
         ckpt_last_output: Instant,
+        // 원시 출력 링 + 단조 seq — warm 핸드오프 substrate(additive). 미러 재생
+        // 경로와 병렬로 유지된다. Attach{from_seq} 가 이 링에서 재생한다.
+        ring: RawRing,
+        // tee 구독자 — 세션 출력의 프레임 사본 소비자. reader 는 여기에 비차단
+        // enqueue 만 한다(느린 구독자가 라이브를 못 막는다).
+        subscribers: Vec<Arc<TeeSub>>,
     }
 
     // 체크포인트 봉인 설정 — 수신 공개키·볼트 키 id·경로·AAD(전부 soksak-pty-proto 규약).
@@ -113,7 +147,27 @@ mod unix {
         })
     }
 
-    // 봉인 후 tmp+rename 원자 쓰기 — 찢어진 파일이 정본 자리를 차지하지 못한다.
+    fn ckpt_ts_ms() -> i64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0)
+    }
+
+    // 봉인 문서 tmp+rename 원자 쓰기 — 찢어진 파일이 정본 자리를 차지하지 못한다.
+    // write_checkpoint(미러 페인트)·store_sealed_blob(임의 바이트) 공통 하부.
+    fn write_sealed_doc_atomic(path: &std::path::Path, session_id: u64, doc: &Value) -> Result<(), String> {
+        let dir = path.parent().ok_or("checkpoint path has no parent")?;
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+        let tmp = dir.join(format!(".ckpt-tmp-{}-{session_id}", std::process::id()));
+        let body = serde_json::to_vec(doc).map_err(|e| e.to_string())?;
+        std::fs::write(&tmp, body).map_err(|e| e.to_string())?;
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+        std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+    }
+
+    // 미러 페인트를 봉인해 체크포인트로 쓴다(터미널 도메인 메타 altActive 동반).
     fn write_checkpoint(
         cfg: &CkptCfg,
         session_id: u64,
@@ -121,27 +175,33 @@ mod unix {
         alt_active: bool,
     ) -> Result<(), String> {
         let sealed = soksak_seal::seal_to(&cfg.pk, paint, &cfg.aad)?;
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as i64)
-            .unwrap_or(0);
         let doc = json!({
             "v": 1,
             "keyId": cfg.key_id,
             "window": cfg.window,
             "pane": cfg.pane,
             "altActive": alt_active,
-            "ts": ts,
+            "ts": ckpt_ts_ms(),
             "sealed": sealed,
         });
-        let dir = cfg.path.parent().ok_or("checkpoint path has no parent")?;
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
-        let tmp = dir.join(format!(".ckpt-tmp-{}-{session_id}", std::process::id()));
-        let body = serde_json::to_vec(&doc).map_err(|e| e.to_string())?;
-        std::fs::write(&tmp, body).map_err(|e| e.to_string())?;
-        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
-        std::fs::rename(&tmp, &cfg.path).map_err(|e| e.to_string())
+        write_sealed_doc_atomic(&cfg.path, session_id, &doc)
+    }
+
+    // 내용 불가지 봉인-블롭 쓰기 — 호출자가 준 임의 바이트를 봉인해 저장한다.
+    // write_checkpoint 과 달리 터미널 메타(altActive)를 기록하지 않는다: 바이트의
+    // 의미는 호출자(사이드카)의 것이고, 데몬은 봉인·원자쓰기만 소유한다. cold_paint
+    // 호출 없이 받은 바이트를 그대로 봉인한다(StoreBlob).
+    fn store_sealed_blob(cfg: &CkptCfg, session_id: u64, bytes: &[u8]) -> Result<(), String> {
+        let sealed = soksak_seal::seal_to(&cfg.pk, bytes, &cfg.aad)?;
+        let doc = json!({
+            "v": 1,
+            "keyId": cfg.key_id,
+            "window": cfg.window,
+            "pane": cfg.pane,
+            "ts": ckpt_ts_ms(),
+            "sealed": sealed,
+        });
+        write_sealed_doc_atomic(&cfg.path, session_id, &doc)
     }
 
     struct Session {
@@ -500,6 +560,43 @@ mod unix {
                 let buf = st.mirror.rehydrate();
                 Ok(json!({ "snapshotB64": base64::engine::general_purpose::STANDARD.encode(&buf) }))
             }),
+            // 봉인-블롭 저장(내용 불가지) — 라이브 세션의 봉인 키로 임의 바이트를 봉인해
+            // 원자 쓰기. 키 없는 세션은 fail closed(데몬은 평문 화면 바이트를 안 남긴다).
+            R::StoreBlob { window_label, pane_id, bytes_b64 } => {
+                let bytes = match base64::engine::general_purpose::STANDARD.decode(bytes_b64.as_bytes()) {
+                    Ok(b) => b,
+                    Err(e) => return proto::err_reply("INVALID_PARAMS", &format!("base64: {e}")),
+                };
+                match reg.by_pane(window_label.as_deref(), &pane_id) {
+                    None => proto::err_reply("NOT_FOUND", &format!("no live session for pane {pane_id}")),
+                    Some(s) => {
+                        let cfg = s.st.lock().unwrap().ckpt.clone();
+                        match cfg {
+                            None => proto::err_reply(
+                                "NO_CHECKPOINT_KEY",
+                                "session has no checkpoint key (fail closed)",
+                            ),
+                            Some(cfg) => match store_sealed_blob(&cfg, s.id, &bytes) {
+                                Ok(()) => proto::ok_reply(json!({ "stored": bytes.len() })),
+                                Err(e) => proto::err_reply("IO", &e),
+                            },
+                        }
+                    }
+                }
+            }
+            // 봉인-블롭 조회(내용 불가지) — 라이브 세션 없이 디스크에서 읽는다(살아남은
+            // 블롭이 cold restore 입력). 호출자가 vault 로 개봉한다.
+            R::FetchSealed { window_label, pane_id } => {
+                let path =
+                    proto::checkpoint_path(&reg.home, window_label.as_deref().unwrap_or(""), &pane_id);
+                match std::fs::read(&path) {
+                    Ok(body) => match serde_json::from_slice::<Value>(&body) {
+                        Ok(doc) => proto::ok_reply(json!({ "sealed": doc })),
+                        Err(e) => proto::err_reply("IO", &format!("sealed blob parse: {e}")),
+                    },
+                    Err(_) => proto::err_reply("NOT_FOUND", "no sealed blob"),
+                }
+            }
             // pane id 첫 매치(창 무관) — 앱의 pty_pane_pid 명령이 창 문맥 없이 pane 만
             // 받는 기존 의미론과 동형이다(교차 창 동명 pane 의 모호성도 그대로 승계).
             R::PanePid { pane_id } => {
@@ -613,6 +710,8 @@ mod unix {
                 ckpt_dirty: false,
                 ckpt_dirty_since: None,
                 ckpt_last_output: Instant::now(),
+                ring: RawRing::new(RING_CAP),
+                subscribers: Vec::new(),
             }),
             cv: Condvar::new(),
         });
@@ -639,6 +738,17 @@ mod unix {
                             let mut st = session.st.lock().unwrap();
                             // 미러 갱신 — 화면 상태(스크롤백·alt·모드)가 여기서 유지된다.
                             st.mirror.feed(&buf[..n]);
+                            // 원시 링 + seq(warm 핸드오프 substrate, additive) 그리고 tee
+                            // 사본. 둘 다 비차단 — reader(라이브 경로)는 여기서 소켓 I/O 를
+                            // 하지 않는다(tee 소켓 쓰기는 구독자 자기 스레드 소유).
+                            let seq0 = st.ring.seq();
+                            st.ring.push(&buf[..n]);
+                            if !st.subscribers.is_empty() {
+                                for sub in &st.subscribers {
+                                    sub.buf.lock().unwrap().push_data(seq0, &buf[..n]);
+                                    sub.cv.notify_one();
+                                }
+                            }
                             // 체크포인트 디바운스 이벤트 — 첫 dirty 전이만 스레드를 깨운다
                             // (이후 연장은 wait_timeout 마감 재계산이 처리).
                             if st.ckpt.is_some() {
@@ -745,7 +855,13 @@ mod unix {
             return;
         };
 
-        // hello 확인 응답 1줄 → 이후 raw 바이트로 전환(링 재생 → 라이브).
+        // 구독(tee) 스트림 — 라이브 attach 가 아니라 프레임 사본 소비자. 별 경로.
+        if hello.subscribe {
+            handle_subscribe(session, writer, reader);
+            return;
+        }
+
+        // hello 확인 응답 1줄 → 이후 raw 바이트로 전환(재생 → 라이브).
         let my_seq;
         {
             let mut st = session.st.lock().unwrap();
@@ -753,19 +869,42 @@ mod unix {
                 let _ = writeln!(writer, "{}", proto::err_reply("NOT_FOUND", "session closed"));
                 return;
             }
-            // 재생 = 미러 직렬화(화면 상태 재현) — raw 바이트 꼬리가 아니라 그리드
-            // 합성물이다: 질의 재응답 불가, mid-escape 절단 불가(플랜 §5.5 M2).
-            let replay = st.mirror.rehydrate();
-            let ok = proto::ok_reply(json!({
-                "session": sid,
-                "replayBytes": replay.len(),
-            }));
-            if writeln!(writer, "{ok}").is_err() {
-                return;
-            }
-            // 재생과 부착 승계는 세션 락 안에서 원자다 — reader 가 끼어들어 순서를 섞지 못한다.
-            if writer.write_all(&replay).is_err() {
-                return;
+            // 재생 두 경로(둘 다 세션 락 안에서 원자 — reader 가 끼어들어 순서를 섞지
+            // 못한다):
+            //   from_seq 없음 = 미러 직렬화(화면 상태 재현). raw 꼬리가 아니라 그리드
+            //     합성물이라 질의 재응답 불가·mid-escape 절단 불가. 기존 warm 경로.
+            //   from_seq 있음 = 원시 링을 그 seq 부터 재생(레이스-프리 핸드오프 좌표).
+            //     evict 로 그 seq 가 사라졌으면 gap 을 응답에 실어 유실을 고지한다.
+            match hello.from_seq {
+                None => {
+                    let replay = st.mirror.rehydrate();
+                    let ok = proto::ok_reply(json!({ "session": sid, "replayBytes": replay.len() }));
+                    if writeln!(writer, "{ok}").is_err() {
+                        return;
+                    }
+                    if writer.write_all(&replay).is_err() {
+                        return;
+                    }
+                }
+                Some(from) => {
+                    let (gap, tail) = st.ring.since(from);
+                    let served = st.ring.start_seq().max(from);
+                    let mut d = json!({
+                        "session": sid,
+                        "servedFromSeq": served,
+                        "replayBytes": tail.len(),
+                    });
+                    if let Some((f, t)) = gap {
+                        d["gap"] = json!({ "fromSeq": f, "toSeq": t });
+                    }
+                    let ok = proto::ok_reply(d);
+                    if writeln!(writer, "{ok}").is_err() {
+                        return;
+                    }
+                    if writer.write_all(&tail).is_err() {
+                        return;
+                    }
+                }
             }
             st.attach_seq += 1;
             my_seq = st.attach_seq;
@@ -795,5 +934,72 @@ mod unix {
             st.paused = false;
             session.cv.notify_all();
         }
+    }
+
+    // ── 구독(tee) 연결 ────────────────────────────────────────────────────────
+    // 세션 출력의 프레임 사본을 배달한다. reader 는 유계 버퍼에 비차단 enqueue 만
+    // 하고, 실제 소켓 쓰기는 이 스레드가 소유한다 — 느린 구독자가 라이브를 못 막는다.
+    // 버퍼가 차면 드롭+gap 프레임으로 유실을 고지한다(무음 유실 금지).
+    fn handle_subscribe(session: Arc<Session>, mut writer: UnixStream, mut reader: BufReader<UnixStream>) {
+        let ack = proto::ok_reply(json!({ "session": session.id, "mode": "subscribe" }));
+        if writeln!(writer, "{ack}").is_err() {
+            return;
+        }
+
+        let sub = Arc::new(TeeSub {
+            id: NEXT_SUB_ID.fetch_add(1, Ordering::SeqCst) + 1,
+            buf: Mutex::new(TeeBuf::new(TEE_BUF_CAP)),
+            cv: Condvar::new(),
+        });
+        session.st.lock().unwrap().subscribers.push(sub.clone());
+
+        // 구독자 사망 감지: 구독자는 hello 후 아무것도 쓰지 않으므로 read 반환 =
+        // EOF/에러 = 연결 종료 이벤트다(폴링 0). 버퍼를 닫아 writer 를 깨운다.
+        {
+            let sub = sub.clone();
+            std::thread::spawn(move || {
+                let mut sink = [0u8; 64];
+                loop {
+                    match reader.read(&mut sink) {
+                        Ok(0) | Err(_) => break,
+                        Ok(_) => continue,
+                    }
+                }
+                let mut b = sub.buf.lock().unwrap();
+                b.closed = true;
+                sub.cv.notify_all();
+            });
+        }
+
+        // writer 루프: 프레임 드레인 → 프레이밍 소켓 쓰기. 쓰기 실패로 종료.
+        loop {
+            let (frames, closed) = {
+                let mut b = sub.buf.lock().unwrap();
+                while !b.closed && b.is_empty() {
+                    b = sub.cv.wait(b).unwrap();
+                }
+                (b.drain(), b.closed)
+            };
+            let mut out = Vec::new();
+            for fr in frames {
+                match fr {
+                    TeeFrame::Data(d) => proto::encode_tee_frame(proto::TEE_FRAME_DATA, &d, &mut out),
+                    TeeFrame::Gap(f, t) => {
+                        let payload =
+                            serde_json::to_vec(&proto::TeeGap { from_seq: f, to_seq: t }).unwrap_or_default();
+                        proto::encode_tee_frame(proto::TEE_FRAME_GAP, &payload, &mut out);
+                    }
+                }
+            }
+            if !out.is_empty() && writer.write_all(&out).is_err() {
+                break;
+            }
+            if closed {
+                break;
+            }
+        }
+
+        // 등록 해제 — reader 가 사라진 구독자에 더는 사본을 밀지 않는다.
+        session.st.lock().unwrap().subscribers.retain(|s| s.id != sub.id);
     }
 }
