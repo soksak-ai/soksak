@@ -61,7 +61,16 @@ let started = false;
 // 시작하고, windowBoot 가 복원 적용 후 releaseWebviewGcHold 로 해제한다. 평시 부팅은
 // consume=false 로 즉시 released. (컨트롤 플레인 main 창은 windowBoot 를 돌지 않지만
 // child webview 도 없어 스윕이 무의미 — held 잔존이 무해하다.)
-let gcGate: "pending" | "held" | "released" = "pending";
+export type GcGateState = "pending" | "held" | "released";
+
+// 게이트 전이 순수 핵 — consume 응답 도착 시의 다음 상태. windowBoot 의 release 가 먼저
+// 도착했으면(released) 뒤늦은 consume 응답이 되돌리지 못한다(단방향 해제).
+export function gateAfterConsume(cur: GcGateState, inFlight: boolean): GcGateState {
+  if (cur === "released") return "released";
+  return inFlight ? "held" : "released";
+}
+
+let gcGate: GcGateState = "pending";
 let sweepRef: (() => void) | null = null;
 
 export function releaseWebviewGcHold(): void {
@@ -106,11 +115,13 @@ export function startWebviewGc(): void {
   // 복구 리부트 여부를 코어에서 1회 소모 — 아니면 즉시 released 로 평시 스윕 재개.
   void invoke<boolean>("webview_recovery_consume")
     .then((inFlight) => {
-      if (gcGate === "released") return; // windowBoot 해제가 먼저 도착
-      gcGate = inFlight ? "held" : "released";
-      if (gcGate === "released") sweep();
+      const next = gateAfterConsume(gcGate, inFlight);
+      if (gcGate === next) return;
+      gcGate = next;
+      if (next === "released") sweep();
     })
     .catch(() => {
+      // 코어 조회 실패(테스트 런타임 등) — 보류를 영구화하지 않는다.
       if (gcGate !== "released") {
         gcGate = "released";
         sweep();

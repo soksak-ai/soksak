@@ -206,6 +206,12 @@ impl LabelBreaker {
     pub fn last_reason(&self) -> Option<TerminateReason> {
         self.last_reason
     }
+
+    /// health.query 노출 여부 — 크래시 이력도 진행 상태도 없는 엔트리(소진 안 된
+    /// expected-teardown 마크 잔재)는 정보가 없다: 숨긴다.
+    pub fn observable(&self) -> bool {
+        self.total_crashes > 0 || self.state != BreakerState::Closed
+    }
 }
 
 // ── 런타임 셸(브레이커 소유 + 배선) ──────────────────────────────────────────
@@ -300,6 +306,12 @@ fn handle_terminate(app: &AppHandle, label: &str, window_label: &str, reason: Op
     match decision {
         Decision::ExpectedTeardown => {
             eprintln!("[webview] 예고된 종료(크래시 아님): {label}");
+            // 이력 없는 엔트리는 파괴 확인 시점에 제거 — 닫힌 뷰마다 맵이 증식하지 않는다
+            // (창 단위 잔재는 forget_window 가 Destroyed 에서 함께 걷는다).
+            let mut map = lock(&health.breakers);
+            if map.get(label).is_some_and(|b| !b.observable()) {
+                map.remove(label);
+            }
         }
         Decision::Recover { attempt, delay_ms } => {
             if is_main {
@@ -416,6 +428,7 @@ pub fn webview_health_query(app: AppHandle) -> Vec<LabelHealthView> {
     let map = lock(&health.breakers);
     let mut rows: Vec<LabelHealthView> = map
         .iter()
+        .filter(|(_, b)| b.observable())
         .map(|(label, b)| LabelHealthView {
             label: label.clone(),
             state: match b.state() {
@@ -627,6 +640,21 @@ mod tests {
     }
 
     // ── Open 상태에서 윈도우 미만료 크래시는 계속 Open ──────────────────────
+
+    #[test]
+    fn observable_hides_inert_entries_only() {
+        // teardown 마크만 있는 엔트리(이력 0·Closed) = 비노출 — 마크 소모 뒤에도 동일.
+        let mut b = LabelBreaker::default();
+        b.mark_expected_teardown(1_000);
+        assert!(!b.observable());
+        assert_eq!(b.on_terminate(1_500, None), Decision::ExpectedTeardown);
+        assert!(!b.observable());
+        // 실크래시 이력이 생기면 Closed 로 돌아와도 노출(윈도우·수명 카운트가 정보다).
+        assert!(matches!(b.on_terminate(2_000, None), Decision::Recover { .. }));
+        assert!(b.observable());
+        assert_eq!(b.on_load_finished(), Some(1));
+        assert!(b.observable());
+    }
 
     #[test]
     fn belongs_to_window_matches_main_and_children_only() {

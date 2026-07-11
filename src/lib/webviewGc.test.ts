@@ -6,7 +6,7 @@
 // 못 잡는다(고아 누수).
 
 import { describe, expect, it } from "vitest";
-import { collectWebviewLabels, type OwnsSurface } from "./webviewGc";
+import { collectWebviewLabels, gateAfterConsume, type OwnsSurface } from "./webviewGc";
 import { splitLeaf } from "../state/splitTree";
 import type { ProjectTab, View, ViewGroup, ContentArea } from "../state/sessions";
 
@@ -119,5 +119,23 @@ describe("collectWebviewLabels — 선언(nativeSurface) 기반 webview 소유 �
     t.contents[1] = { ...t.contents[1], id: "c2" };
     const live = collectWebviewLabels([t], ownsSurface, labelOf);
     expect(live).toEqual(new Set(["b-v1", "b-v2"]));
+  });
+});
+
+// 복구 리부트 게이트 전이 핵(gateAfterConsume) — 복구 리로드 직후 부팅의 스윕 보류가
+// 세션 복원 적용 전 live=∅ 오판 회수를 막는다. windowBoot 해제가 consume 응답보다
+// 먼저 도착해도 되돌아가지 않는다(단방향 해제).
+describe("webviewGc 복구 리부트 게이트", () => {
+  it("평시 부팅(consume=false) → 즉시 released", () => {
+    expect(gateAfterConsume("pending", false)).toBe("released");
+  });
+
+  it("복구 리부트(consume=true) → held(복원 적용까지 스윕 보류)", () => {
+    expect(gateAfterConsume("pending", true)).toBe("held");
+  });
+
+  it("release 가 먼저 도착했으면 뒤늦은 consume 응답이 되돌리지 못한다", () => {
+    expect(gateAfterConsume("released", true)).toBe("released");
+    expect(gateAfterConsume("released", false)).toBe("released");
   });
 });
