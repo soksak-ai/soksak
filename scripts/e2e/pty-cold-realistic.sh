@@ -1,12 +1,13 @@
 #!/bin/bash
-# PTY cold byte restore E2E (W5 M4/M5) — 데몬 사망(재부팅 모사) 후 봉인 체크포인트로
-# 화면이 복원되는지를 판정한다. 시나리오(플랜 §5.5 M3~M4, P1 게이트 문구):
-#   터미널 pane → 스크롤백 마커 → alt-screen TUI(less) → 체크포인트 파일 대기 →
-#   디스크 평문 부재 확인 → 앱 종료 + ptyd kill -9(재부팅 모사) → 재기동 복원 →
-#   스크롤백 마커 + TUI 내용 + 소실 고지 재현 단언 + window.snapshot 눈검증(R3).
-#
-# cold restore 랜딩 전에는 반드시 RED 다 — 데몬이 죽으면 세션이 소실되고 새 셸만
-# 뜬다(스크롤백·TUI·고지 부재). M4(cold 경로 배선) 후 GREEN 이 완료 판정이다.
+# PTY cold restore — 실사용 재오픈 뷰포트 게이트(P1 게이트②). pty-cold-restore.sh 가
+# cold 주입 "메커니즘"(버퍼에 프레임이 실리나)을 신선 프로젝트로 격리 검증한다면, 이
+# 하니스는 "실사용"을 재현한다: 사용자는 같은 프로젝트를 재오픈하고 그 터미널엔 명령
+# 이력(command_blocks)이 늘 쌓여 있다. 데몬 크래시 후 재기동 복원 때 그 이력의
+# blocks-repaint 가 cold 프레임 위로 쌓여 프레임과 소실 고지를 뷰포트 밖으로 밀면
+# 사용자는 복원 화면도 사망 고지도 못 본다(죽은 화면을 라이브로 오인 — 정확성·안전).
+# 시나리오: 이력 N블록 적재 → alt-screen TUI(less) → 체크포인트 대기 → 앱 종료 +
+# ptyd kill -9 → 재기동 → 복원 프레임+고지가 "보이는 뷰포트 안"에 있음을 단언 +
+# window.snapshot 눈검증(R3). 소유권 계약(app.pty.wasScreenRestored) 랜딩 전엔 RED 다.
 #
 # vault: SOKSAK_VAULT_PATH(격리 볼트) + SOKSAK_VAULT_KEY(자동 unlock) 오픈 메커니즘.
 # 볼트 파일은 런 간 보존한다(삭제 금지) — scope 암호화 키(app.data encryption_keys)가
@@ -40,14 +41,14 @@ KEEP = os.environ["PS_KEEP"] == "1"; PTYD_BIN = os.environ["PS_PTYD_BIN"]
 APP_HOME = os.environ["PS_APP_HOME"]
 E2E_HOME = os.path.join(os.environ["HOME"], ".soksak-e2e")
 ROOT = os.path.join(E2E_HOME, "pty-cold")         # 창 carrier(고정)
-# 이 하니스는 cold 주입 "메커니즘"을 격리 검증한다: 데몬 사망 후 봉인 체크포인트가
-# 화면(스크롤백·TUI·고지)을 버퍼에 복원하는가. 런마다 새 프로젝트(빈 이력)를 써
-# blocks-repaint 이력 누적이 오라클을 흐리지 않게 한다 — 실사용(이력 있는 재오픈)의
-# "뷰포트 안" 검증은 별도 하니스 pty-cold-realistic.sh 가 맡는다. 창 carrier(ROOT)·
-# 볼트는 고정 유지.
-GEN = f"{os.getpid()}-{int(time.time())}"
-PROJ = os.path.join(E2E_HOME, f"pty-cold-proj-{GEN}")  # 이 런 전용 프로젝트(빈 이력)
-ALIAS = f"pty-cold-e2e-{GEN}"
+# 고정 프로젝트 + 이력 축적으로 실사용을 재현한다: 사용자는 같은 프로젝트를 재오픈하고
+# 그 터미널엔 command_blocks 이력이 늘 있다. 데몬 크래시 후 재기동 복원 때, 그 이력의
+# blocks-repaint 가 cold 복원 프레임 위로 쌓여 프레임을 뷰포트 밖으로 밀면 사용자는
+# 복원 화면도 사망 고지도 못 본다 — 이 하니스가 "cold 프레임이 뷰포트 안"을 단언해 그
+# 회귀를 잡는다(신선 프로젝트만으론 이력이 없어 결함을 덮는다). 소유권 계약: PTY 가
+# 화면을 복원했으면 그 화면이 뷰포트 권위 → 플러그인 blocks-repaint 는 겹치지 않는다.
+PROJ = os.path.join(E2E_HOME, "pty-cold-realistic")  # 고정 — 이력 누적(실사용 재오픈)
+ALIAS = "pty-cold-realistic"
 MARK = f"PCOLD{os.getpid()}"
 TMP = os.path.join(E2E_HOME, "pty-cold-artifacts")
 VAULT = os.path.join(TMP, "vault.json")
@@ -184,11 +185,8 @@ def close_all_windows():
         time.sleep(0.3)
 close_all_windows()
 
-# 이전 세대 프로젝트 정리(멱등) — 지난 런들이 남긴 pty-cold-proj-<gen> 잔재를 걷는다.
-# 이 런 전용 PROJ(방금 makedirs)는 건너뛴다.
+# 옛 세대 픽스처 정리(멱등) — 과거 판이 런마다 만들던 pty-cold-proj-<gen> 잔재를 걷는다.
 for old in glob.glob(os.path.join(E2E_HOME, "pty-cold-proj-*")):
-    if old == PROJ:
-        continue
     try:
         rpc("project.recent.remove", {"root": old})
     except Exception:
@@ -215,6 +213,12 @@ elif enc.get("ok") is False:
     ng(f"data.encrypt.enable 실패(볼트 상태 확인): {enc}")
 else:
     print("  data.encrypt.enable OK(command_blocks 봉인)")
+
+# ── 1.5. 실사용 이력 축적 — 각 명령이 turn.ended → command_block 저장. 재기동 복원 때
+# 이 이력의 blocks-repaint 가 cold 프레임을 뷰포트 밖으로 밀 후보다(뷰포트 단언이 잡는다).
+for h in range(1, 7):
+    exec_and_wait(WIN, pane, f"for j in $(seq 1 6); do echo {MARK}-HIST{h}-line$j; done", f"{MARK}-HIST{h}-line6")
+print(f"  실사용 이력 축적(6 commands, scope={os.path.basename(PROJ)})")
 
 # ── 2. 스크롤백 마커 + alt-screen TUI ────────────────────────────────────────
 assert exec_and_wait(WIN, pane, f"for i in $(seq 1 30); do echo {MARK}-SCROLL-$i; done", f"{MARK}-SCROLL-30"), \
@@ -271,6 +275,17 @@ else:
     if "봉인 체크포인트에서 복원" in text or "sealed checkpoint" in text:
         ok("cold restore: 소실 고지 표시(무음 아님)")
     else: ng("cold restore: 소실 고지 부재(무음)")
+    # [뷰포트 계약] cold 복원 프레임+고지가 "보이는 뷰포트" 안에 있어야 한다 — PTY 가 화면을
+    # 복원했으면 그 화면이 뷰포트 권위이고, 명령-블록 repaint(이력 floor)가 그 위로 쌓여
+    # 프레임을 스크롤 밖으로 밀면 사용자는 복원 화면도 사망 고지도 못 본다(실사용 재현).
+    # 뷰포트 근사 = 마지막 24행(term.read 는 내용 있는 마지막 N행). ALIVE 명령 전에 본다.
+    snapshot(WIN, "cold-viewport")
+    viewport = term_read(WIN, pane2, lines=24)
+    if ("봉인 체크포인트에서 복원" in viewport or "sealed checkpoint" in viewport) \
+            and f"{MARK}-TUI-LINE-10" in viewport:
+        ok("cold restore: 복원 프레임+고지가 뷰포트 안(이력 blocks 에 안 밀림)")
+    else:
+        ng("cold restore: 복원 프레임/고지가 뷰포트 밖(blocks-repaint 가 밀어냄)")
     if exec_and_wait(WIN, pane2, f"echo {MARK}-ALIVE", f"{MARK}-ALIVE"):
         ok("복원 후 새 셸 라이브 동작")
     else:
@@ -295,7 +310,8 @@ except Exception:
 terminate()
 kill_daemon()
 subprocess.run(["rm", "-rf", os.path.join(APP_HOME, "pty")])
-subprocess.run(["rm", "-rf", PROJ])  # 이 런 전용 프로젝트 회수(세대 격리 — 빈 이력 유지)
+# PROJ 는 남긴다 — command_blocks 이력이 런 간 누적되어야 실사용(이력 있는 재오픈)을
+# 재현한다. retention(뷰당 1000)이 무한 증식을 막는다.
 
 print()
 print(f"pty-cold-restore: PASS={len(PASS)} FAIL={len(FAIL)}" + (f"  산출물={TMP}" if KEEP or FAIL else ""))
