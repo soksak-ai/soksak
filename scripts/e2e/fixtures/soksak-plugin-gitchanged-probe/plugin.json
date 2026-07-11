@@ -1,0 +1,17 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "soksak-plugin-gitchanged-probe",
+  "name": { "ko": "git.changed 프로브", "en": "git.changed probe" },
+  "version": "0.0.1",
+  "description": {
+    "ko": "git.changed 버스 이벤트 수신을 기록하는 e2e 프로브.",
+    "en": "e2e probe that records received git.changed bus events."
+  },
+  "entry": "main.js",
+  "permissions": ["commands"],
+  "contributes": {
+    "commands": [
+      { "name": "dump", "title": { "ko": "수신 이벤트 확인", "en": "Dump received events" } }
+    ]
+  }
+}
