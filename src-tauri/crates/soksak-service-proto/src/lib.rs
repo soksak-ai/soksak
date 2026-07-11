@@ -1,0 +1,562 @@
+//! Plugin service wire contract — the single source for everything the app and
+//! a plugin service binary must agree on: the protocol version, the contract
+//! id, the stdio NDJSON frame set, the closed error-code enum, the bind-ledger
+//! types and path derivation, and the supervision constants. This crate holds
+//! no transport code: constants, path derivation, and serde types only.
+//! Consumers depend on this crate — never copy a constant out.
+//!
+//! Behavioral and coupling law: docs/PLUGIN-SERVICE.md (PS clauses). Wire
+//! framing is NDJSON over stdio: one JSON value per line, both directions.
+//! The first service line is `hello`; the core answers `ready` (PS5).
+//! The manifest-side mirror of [`SERVICE_INTERFACE`] lives in
+//! `@soksak-ai/plugin-spec` (service.ts) — the service.test.ts / lib.rs test
+//! pair pins both sides to the same literal.
+
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+// hello 판정을 소비하는 쪽(서비스·앱)이 판정 타입과 스큐 문장을 이 크레이트 한 경로로
+// 받는다 — soksak-protocol 이중 의존 대신 재수출(정본은 그대로 soksak-protocol).
+pub use soksak_protocol::{skew_sentence, Compat, Lang};
+
+/// Version of the plugin service wire contract. Bump rules follow the socket
+/// protocol precedent (soksak-protocol): additive optional fields and new
+/// frame kinds never bump; a change in framing, the envelope, or the meaning
+/// of an existing field does. A breaking bump is C4 re-legislation (PS16).
+pub const SERVICE_PROTOCOL_VERSION: u32 = 1;
+
+/// Oldest service protocol the core still binds. The hello is mandatory from
+/// the first release: a hello without a version is judged as protocol 0 and
+/// rejected (PS5).
+pub const SERVICE_MIN_COMPATIBLE_PROTOCOL: u32 = 1;
+
+/// The wire contract id the manifest `service.interface` declares (PS5).
+/// Never mint a contract id the C1 plugin-id scanner would sanction — this id
+/// deliberately does not start with `soksak-plugin-` (PS6).
+pub const SERVICE_INTERFACE: &str = "soksak-service-spec@1";
+
+/// One NDJSON line never exceeds this many bytes, either direction (PS5).
+/// An oversized or unparseable line is a protocol fault — the restart path,
+/// never a silent skip.
+pub const MAX_LINE_BYTES: usize = 4 * 1024 * 1024;
+
+/// Crash respawn backoff schedule in seconds, then the cap (PS10). A
+/// deterministic immediate exit (death before `ready`) takes no retries.
+pub const RESTART_BACKOFF_SECS: [u64; 5] = [1, 2, 4, 8, 16];
+
+/// Grace between `shutdown` and SIGKILL (PS10).
+pub const SHUTDOWN_GRACE_MS: u64 = 5_000;
+
+/// Default req deadline when neither the caller nor a schedule declares one.
+/// Progress `ev` frames extend the deadline up to the zombie backstop (PS12).
+pub const DEFAULT_REQ_TIMEOUT_MS: u64 = 10_000;
+
+/// Compatibility verdict for a service hello, judged with the shared socket
+/// grammar. One rule carries both halves: absent = 0, floor decides.
+pub fn judge_hello(declared: Option<u32>) -> soksak_protocol::Compat {
+    soksak_protocol::evaluate_compat(
+        SERVICE_PROTOCOL_VERSION,
+        SERVICE_MIN_COMPATIBLE_PROTOCOL,
+        soksak_protocol::effective_protocol(declared),
+    )
+}
+
+// ── Identity-home path contract ──────────────────────────────────────────────
+
+/// Bind ledger path: `<home>/run/services-p<N>.json` (PS9). The ledger is a
+/// core-owned derived file — the app rewrites it on every enablement, consent,
+/// or install transition, and the core reads it at boot. It carries the
+/// already-judged subset of the manifest; the single manifest judge stays
+/// `@soksak-ai/plugin-spec`. Protocol-keyed so a breaking bump runs side by
+/// side with the previous generation.
+pub fn ledger_path(home: &Path) -> PathBuf {
+    home.join("run")
+        .join(format!("services-p{SERVICE_PROTOCOL_VERSION}.json"))
+}
+
+/// Service log file: `<home>/run/service-<plugin>-p<N>.log`.
+pub fn log_path(home: &Path, plugin: &str) -> PathBuf {
+    home.join("run")
+        .join(format!("service-{plugin}-p{SERVICE_PROTOCOL_VERSION}.log"))
+}
+
+// ── Bind ledger ──────────────────────────────────────────────────────────────
+
+/// The bind ledger — every plugin service the core must bind (PS9).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BindLedger {
+    /// Ledger schema version (independent of the wire version).
+    pub version: u32,
+    pub services: Vec<ServiceBinding>,
+}
+
+/// One bound plugin service — the already-judged subset of its manifest.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceBinding {
+    /// Plugin id — the schedule owner stamp and the command namespace.
+    pub plugin: String,
+    /// `sidecars[]` entry naming the resident binary (PS9 — distribution and
+    /// staging inherit the sidecar law).
+    pub sidecar: String,
+    /// Wire contract id the binary must self-report in its hello (PS5).
+    pub interface: String,
+    /// The manifest's `bind:"service"` command names, sorted — the hello
+    /// `ops[]` must equal this set exactly, both directions (PS3).
+    pub ops: Vec<String>,
+    /// Bus topics the core bridges and pushes (PS15).
+    #[serde(default)]
+    pub subscribe: Vec<String>,
+    /// Declared schedules — the core stamps `owner`, registers at bind, pokes
+    /// once, cancels by owner at unbind (PS14).
+    #[serde(default)]
+    pub schedules: Vec<LedgerSchedule>,
+    /// Secret NAMES to resolve from the vault and inject into the spawn
+    /// environment (PS9). Never values — the ledger is a plain file and
+    /// secrets never cross stdio or disk in the clear.
+    #[serde(default)]
+    pub secrets: Vec<String>,
+}
+
+/// One declared schedule (mirror of `contributes.schedules` after judgment).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerSchedule {
+    pub name: String,
+    /// Bare command name (the registry name is `plugin.<plugin>.<command>`).
+    pub command: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<serde_json::Value>,
+    pub trigger: LedgerTrigger,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub zombie_backstop_ms: Option<u64>,
+}
+
+/// Trigger variants — exactly one, mirroring the manifest grammar
+/// (`{reconcile:true} | {everyMs} | {cron}`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum LedgerTrigger {
+    Reconcile { reconcile: bool },
+    Every {
+        #[serde(rename = "everyMs")]
+        every_ms: u64,
+    },
+    Cron { cron: String },
+}
+
+/// Set equality between a hello `ops[]` and the ledger's declared ops —
+/// bidirectional declared ≡ actual (PS3). Order-blind, duplicate-hostile.
+pub fn ops_match(hello_ops: &[String], declared_ops: &[String]) -> bool {
+    let mut a: Vec<&String> = hello_ops.iter().collect();
+    let mut b: Vec<&String> = declared_ops.iter().collect();
+    a.sort();
+    b.sort();
+    a.dedup();
+    b.dedup();
+    a.len() == hello_ops.len() && b.len() == declared_ops.len() && a == b
+}
+
+// ── Frames ───────────────────────────────────────────────────────────────────
+// One JSON object per line, tagged by `t`. `ServiceOut` is what the service
+// writes to stdout; `ServiceIn` is what the core writes to its stdin.
+
+/// Service → core frames.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "t", rename_all = "camelCase")]
+pub enum ServiceOut {
+    /// First line after spawn (PS5). The core verifies protocol compatibility,
+    /// the interface id against the manifest declaration, and `ops[]` against
+    /// the ledger set — any mismatch refuses the bind (PS3).
+    #[serde(rename_all = "camelCase")]
+    Hello {
+        version: Option<u32>,
+        interface: String,
+        ops: Vec<String>,
+        #[serde(default)]
+        subscribe: Vec<String>,
+        pid: u32,
+    },
+    /// Command result — the envelope is the message seam (PS7): `message` and
+    /// `hints` are first-class here, owned by the command implementation.
+    #[serde(rename_all = "camelCase")]
+    Res {
+        id: u64,
+        ok: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        code: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hints: Option<Vec<Hint>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        data: Option<serde_json::Value>,
+    },
+    /// Progress tied to a running req — maps to standard `command.progress`
+    /// and extends the req deadline up to the zombie backstop (PS7, PS12).
+    Ev {
+        id: u64,
+        kind: String,
+        payload: serde_json::Value,
+    },
+    /// Standalone activity — maps to the activity hub (PS8).
+    Act {
+        kind: String,
+        payload: serde_json::Value,
+    },
+    /// Mediated outbound call (PS13). The core gates it with the full inbound
+    /// gate set and stamps origin/parent itself — `under` is advisory context,
+    /// never trusted identity.
+    Cmd {
+        id: u64,
+        method: String,
+        params: serde_json::Value,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        under: Option<String>,
+    },
+}
+
+/// Core → service frames.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "t", rename_all = "camelCase")]
+pub enum ServiceIn {
+    /// Hello accepted — the service may start receiving reqs (PS5).
+    Ready,
+    /// Command execution. `key` is the core-issued idempotency key — the
+    /// service deduplicates by key and replays the cached res (PS12).
+    #[serde(rename_all = "camelCase")]
+    Req {
+        id: u64,
+        op: String,
+        params: serde_json::Value,
+        key: String,
+        ctx: ReqCtx,
+    },
+    /// Reply to a mediated `cmd` call — the standard response envelope,
+    /// relayed opaquely (PS13).
+    CmdRes { id: u64, envelope: serde_json::Value },
+    /// Subscribed bus event — bridged, seq-deduplicated, delivered once (PS15).
+    Push {
+        topic: String,
+        seq: u64,
+        payload: serde_json::Value,
+    },
+    /// Drain and exit: finish in-flight ops, refuse new work, then exit.
+    /// SIGKILL follows after [`SHUTDOWN_GRACE_MS`] (PS10).
+    Shutdown,
+}
+
+/// Execution context the core stamps on every req (PS13 — identity is
+/// core-stamped, never self-reported).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReqCtx {
+    /// "schedule" | "socket" | "window" | ... — the originating channel.
+    pub origin: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// Deadline for this req in ms; progress `ev` frames extend it (PS12).
+    pub deadline_ms: u64,
+}
+
+/// Follow-up command suggestion — a possibility, not an order
+/// (MESSAGE-PROTOCOL hint semantics, delivered over the wire by PS7).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Hint {
+    pub cmd: String,
+    pub why: String,
+}
+
+// ── Error codes ──────────────────────────────────────────────────────────────
+
+/// Closed error-code set for service `res.code` (PS5). The core maps any code
+/// outside this enum to `INTERNAL` and never leaks a raw service string past
+/// the envelope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrCode {
+    InvalidParams,
+    UnknownOp,
+    Conflict,
+    Draining,
+    Timeout,
+    Unavailable,
+    Internal,
+}
+
+impl ErrCode {
+    pub const ALL: [ErrCode; 7] = [
+        ErrCode::InvalidParams,
+        ErrCode::UnknownOp,
+        ErrCode::Conflict,
+        ErrCode::Draining,
+        ErrCode::Timeout,
+        ErrCode::Unavailable,
+        ErrCode::Internal,
+    ];
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ErrCode::InvalidParams => "INVALID_PARAMS",
+            ErrCode::UnknownOp => "UNKNOWN_OP",
+            ErrCode::Conflict => "CONFLICT",
+            ErrCode::Draining => "DRAINING",
+            ErrCode::Timeout => "TIMEOUT",
+            ErrCode::Unavailable => "UNAVAILABLE",
+            ErrCode::Internal => "INTERNAL",
+        }
+    }
+
+    /// Parse a wire code. `None` = outside the closed set — the core maps it
+    /// to [`ErrCode::Internal`] (PS5).
+    pub fn parse(s: &str) -> Option<ErrCode> {
+        ErrCode::ALL.iter().copied().find(|c| c.as_str() == s)
+    }
+
+    /// The clamp the core applies to every service-reported code (PS5).
+    pub fn clamp(s: &str) -> ErrCode {
+        ErrCode::parse(s).unwrap_or(ErrCode::Internal)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soksak_protocol::Compat;
+
+    // ── path contract: protocol-keyed names under the identity home ─────────
+
+    #[test]
+    fn paths_are_protocol_keyed_under_home() {
+        let home = Path::new("/tmp/h");
+        assert_eq!(ledger_path(home), home.join("run/services-p1.json"));
+        assert_eq!(
+            log_path(home, "soksak-plugin-x"),
+            home.join("run/service-soksak-plugin-x-p1.log")
+        );
+    }
+
+    // ── hello judgment: mandatory from the first generation (PS5) ───────────
+
+    #[test]
+    fn hello_without_version_is_rejected() {
+        assert_eq!(
+            judge_hello(None),
+            Compat::PeerTooOld { peer: 0, floor: SERVICE_MIN_COMPATIBLE_PROTOCOL }
+        );
+    }
+
+    #[test]
+    fn hello_with_current_version_is_compatible() {
+        assert_eq!(judge_hello(Some(SERVICE_PROTOCOL_VERSION)), Compat::Compatible);
+    }
+
+    #[test]
+    fn hello_from_the_future_names_our_side_stale() {
+        assert_eq!(
+            judge_hello(Some(SERVICE_PROTOCOL_VERSION + 1)),
+            Compat::SelfTooOld {
+                own: SERVICE_PROTOCOL_VERSION,
+                peer: SERVICE_PROTOCOL_VERSION + 1
+            }
+        );
+    }
+
+    // ── contract id: PS6 — never a token the C1 plugin-id scanner sanctions ─
+
+    #[test]
+    fn interface_id_follows_naming_and_avoids_the_plugin_id_grammar() {
+        assert_eq!(SERVICE_INTERFACE, "soksak-service-spec@1");
+        assert!(
+            !SERVICE_INTERFACE.starts_with("soksak-plugin-"),
+            "PS6: the C1 scan flags soksak-plugin-* tokens in core source"
+        );
+        assert!(SERVICE_INTERFACE.contains("-spec@"), "NAMING §8 kind marker");
+    }
+
+    // ── ops equality: bidirectional declared ≡ actual (PS3) ─────────────────
+
+    #[test]
+    fn ops_match_is_order_blind_and_duplicate_hostile() {
+        let declared = vec!["next".to_string(), "run".to_string()];
+        assert!(ops_match(&["run".into(), "next".into()], &declared));
+        assert!(!ops_match(&["run".into()], &declared), "missing op = mismatch");
+        assert!(
+            !ops_match(&["run".into(), "next".into(), "extra".into()], &declared),
+            "undeclared op = mismatch"
+        );
+        assert!(
+            !ops_match(&["run".into(), "run".into()], &["run".into()]),
+            "duplicates never pass as coverage"
+        );
+        assert!(ops_match(&[], &[]), "an empty set only matches an empty set");
+    }
+
+    // ── frames: the wire shape is part of the contract (PS5) ────────────────
+
+    #[test]
+    fn service_out_frames_round_trip_with_t_tags() {
+        let frames: Vec<ServiceOut> = vec![
+            ServiceOut::Hello {
+                version: Some(1),
+                interface: SERVICE_INTERFACE.into(),
+                ops: vec!["run".into()],
+                subscribe: vec!["bus:kanban:changed".into()],
+                pid: 42,
+            },
+            ServiceOut::Res {
+                id: 7,
+                ok: true,
+                code: None,
+                message: Some("done".into()),
+                hints: Some(vec![Hint { cmd: "plugin.x.next".into(), why: "continue".into() }]),
+                data: Some(serde_json::json!({"n": 1})),
+            },
+            ServiceOut::Ev { id: 7, kind: "progress".into(), payload: serde_json::json!({"pct": 50}) },
+            ServiceOut::Act { kind: "service.tick".into(), payload: serde_json::json!({}) },
+            ServiceOut::Cmd {
+                id: 9,
+                method: "plugin.other.node.add".into(),
+                params: serde_json::json!({"title": "x"}),
+                under: Some("run#7".into()),
+            },
+        ];
+        for f in frames {
+            let line = serde_json::to_string(&f).unwrap();
+            assert!(line.contains("\"t\""), "t tag present: {line}");
+            let back: ServiceOut = serde_json::from_str(&line).unwrap();
+            assert_eq!(serde_json::to_string(&back).unwrap(), line, "round trip is identity");
+        }
+    }
+
+    #[test]
+    fn service_in_frames_round_trip_with_t_tags() {
+        let frames: Vec<ServiceIn> = vec![
+            ServiceIn::Ready,
+            ServiceIn::Req {
+                id: 7,
+                op: "run".into(),
+                params: serde_json::json!({"doc": "a.json"}),
+                key: "idem-1".into(),
+                ctx: ReqCtx { origin: "schedule".into(), parent: None, deadline_ms: 30_000 },
+            },
+            ServiceIn::CmdRes { id: 9, envelope: serde_json::json!({"ok": true, "code": "OK"}) },
+            ServiceIn::Push {
+                topic: "bus:kanban:changed".into(),
+                seq: 12,
+                payload: serde_json::json!({}),
+            },
+            ServiceIn::Shutdown,
+        ];
+        for f in frames {
+            let line = serde_json::to_string(&f).unwrap();
+            assert!(line.contains("\"t\""), "t tag present: {line}");
+            let back: ServiceIn = serde_json::from_str(&line).unwrap();
+            assert_eq!(serde_json::to_string(&back).unwrap(), line, "round trip is identity");
+        }
+    }
+
+    #[test]
+    fn req_ctx_and_hello_are_camel_case_on_the_wire() {
+        let req = ServiceIn::Req {
+            id: 1,
+            op: "run".into(),
+            params: serde_json::json!({}),
+            key: "k".into(),
+            ctx: ReqCtx { origin: "socket".into(), parent: None, deadline_ms: 5 },
+        };
+        let line = serde_json::to_string(&req).unwrap();
+        assert!(line.contains("\"deadlineMs\""), "{line}");
+        let hello = ServiceOut::Hello {
+            version: Some(1),
+            interface: SERVICE_INTERFACE.into(),
+            ops: vec![],
+            subscribe: vec![],
+            pid: 1,
+        };
+        let line = serde_json::to_string(&hello).unwrap();
+        assert!(line.contains("\"hello\""), "camelCase t tag: {line}");
+    }
+
+    // ── error codes: a closed set with an INTERNAL clamp (PS5) ──────────────
+
+    #[test]
+    fn err_codes_are_a_closed_set_with_internal_clamp() {
+        for c in ErrCode::ALL {
+            assert_eq!(ErrCode::parse(c.as_str()), Some(c), "round trip {c:?}");
+        }
+        assert_eq!(ErrCode::parse("SOMETHING_ELSE"), None);
+        assert_eq!(ErrCode::clamp("SOMETHING_ELSE"), ErrCode::Internal);
+        assert_eq!(ErrCode::clamp("TIMEOUT"), ErrCode::Timeout);
+    }
+
+    // ── ledger: round trip + trigger variants (PS9, PS14) ───────────────────
+
+    #[test]
+    fn ledger_round_trips_with_every_trigger_variant() {
+        let ledger = BindLedger {
+            version: 1,
+            services: vec![ServiceBinding {
+                plugin: "soksak-plugin-x".into(),
+                sidecar: "x".into(),
+                interface: SERVICE_INTERFACE.into(),
+                ops: vec!["run".into()],
+                subscribe: vec!["bus:kanban:changed".into()],
+                schedules: vec![
+                    LedgerSchedule {
+                        name: "reconcile".into(),
+                        command: "run".into(),
+                        params: None,
+                        trigger: LedgerTrigger::Reconcile { reconcile: true },
+                        timeout_ms: Some(1_800_000),
+                        zombie_backstop_ms: None,
+                    },
+                    LedgerSchedule {
+                        name: "hourly".into(),
+                        command: "run".into(),
+                        params: Some(serde_json::json!({"mode": "sweep"})),
+                        trigger: LedgerTrigger::Every { every_ms: 3_600_000 },
+                        timeout_ms: None,
+                        zombie_backstop_ms: None,
+                    },
+                    LedgerSchedule {
+                        name: "nightly".into(),
+                        command: "run".into(),
+                        params: None,
+                        trigger: LedgerTrigger::Cron { cron: "0 3 * * *".into() },
+                        timeout_ms: None,
+                        zombie_backstop_ms: None,
+                    },
+                ],
+                secrets: vec!["ANTHROPIC_API_KEY".into()],
+            }],
+        };
+        let text = serde_json::to_string_pretty(&ledger).unwrap();
+        assert!(text.contains("\"everyMs\""), "camelCase trigger key: {text}");
+        let back: BindLedger = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, ledger);
+    }
+
+    #[test]
+    fn ledger_defaults_tolerate_absent_optional_lists() {
+        let minimal = r#"{"version":1,"services":[{"plugin":"p","sidecar":"s",
+            "interface":"soksak-service-spec@1","ops":["run"]}]}"#;
+        let back: BindLedger = serde_json::from_str(minimal).unwrap();
+        assert_eq!(back.services[0].subscribe, Vec::<String>::new());
+        assert_eq!(back.services[0].schedules, Vec::<LedgerSchedule>::new());
+        assert_eq!(back.services[0].secrets, Vec::<String>::new());
+    }
+
+    // ── supervision constants (PS10, PS12) ──────────────────────────────────
+
+    #[test]
+    fn supervision_constants_hold_the_legislated_values() {
+        assert_eq!(RESTART_BACKOFF_SECS, [1, 2, 4, 8, 16]);
+        assert_eq!(MAX_LINE_BYTES, 4 * 1024 * 1024);
+        assert!(SHUTDOWN_GRACE_MS > 0);
+        assert!(DEFAULT_REQ_TIMEOUT_MS > 0);
+    }
+}
