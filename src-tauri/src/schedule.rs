@@ -320,6 +320,7 @@ struct Job {
     params: Value,
     retry: Option<Retry>,
     concurrency: u32,
+    owner: Option<String>,             // 소유자(플러그인 id) — owner 축 수명 관리(cancel_by_owner)의 키.
     timeout_ms: u64,                   // 비-프로세스 발화 응답 대기 상한.
     process_lease: bool,               // true=프로세스-생존 lease(reply=프로세스 exit 까지 대기).
     zombie_backstop_ms: Option<u64>,   // 프로세스 작업 좀비 backstop(None=무한).
@@ -412,6 +413,7 @@ impl ScheduleState {
                 job.params = spec.params;
                 job.retry = spec.retry;
                 job.concurrency = spec.concurrency.max(1);
+                job.owner = spec.owner;
                 job.timeout_ms = spec.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS);
                 job.process_lease = spec.process_lease;
                 job.zombie_backstop_ms = spec.zombie_backstop_ms;
@@ -435,6 +437,7 @@ impl ScheduleState {
                 params: spec.params,
                 retry: spec.retry,
                 concurrency: spec.concurrency.max(1),
+                owner: spec.owner,
                 timeout_ms: spec.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS),
                 process_lease: spec.process_lease,
                 zombie_backstop_ms: spec.zombie_backstop_ms,
@@ -460,6 +463,52 @@ impl ScheduleState {
             self.cv.notify_all();
         }
         removed
+    }
+
+    // owner(플러그인 id)의 잡 전부 취소 — 서비스 unbind·플러그인 소멸의 단일 수명 회수 경로
+    // (PS14: 서비스 스케줄은 절대 고아가 될 수 없다). 반환=제거 수.
+    pub fn cancel_by_owner(&self, owner: &str) -> usize {
+        let Ok(mut inner) = self.inner.lock() else {
+            return 0;
+        };
+        let doomed: Vec<String> = inner
+            .jobs
+            .values()
+            .filter(|j| j.owner.as_deref() == Some(owner))
+            .map(|j| j.id.clone())
+            .collect();
+        for id in &doomed {
+            inner.jobs.remove(id);
+        }
+        drop(inner);
+        if !doomed.is_empty() {
+            self.cv.notify_all();
+        }
+        doomed.len()
+    }
+
+    // owner 의 Reconcile 잡 즉시 발화 — bind 직후 부팅 스캔·리스폰 되먹임(PS10·PS14).
+    // 전역 poke(None)와 같은 의미론을 owner 로 스코프한다(running 이면 pending 합침).
+    pub fn poke_owner(&self, owner: &str, now: u64) {
+        let Ok(mut inner) = self.inner.lock() else {
+            return;
+        };
+        let mut woke = false;
+        for job in inner.jobs.values_mut() {
+            if job.owner.as_deref() != Some(owner) || !matches!(job.trigger, Trigger::Reconcile) {
+                continue;
+            }
+            if job.running {
+                job.pending = true;
+            } else {
+                job.next_at = Some(now);
+            }
+            woke = true;
+        }
+        drop(inner);
+        if woke {
+            self.cv.notify_all();
+        }
     }
 
     fn list(&self) -> Vec<JobView> {
@@ -925,6 +974,51 @@ mod tests {
         assert_eq!(back.timeout_ms, Some(600_000));
         assert!(back.process_lease);
         assert_eq!(back.zombie_backstop_ms, Some(10_800_000));
+    }
+
+    // ── owner 축 수명(PS14) — 서비스 unbind 의 단일 회수 경로·bind 부팅 poke ────
+    fn owned_spec(owner: Option<&str>, command: &str, trigger: Trigger) -> JobSpec {
+        JobSpec {
+            id: None,
+            trigger,
+            command: command.into(),
+            params: json!({}),
+            retry: None,
+            concurrency: 1,
+            timeout_ms: None,
+            process_lease: false,
+            zombie_backstop_ms: None,
+            owner: owner.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn cancel_by_owner_removes_only_that_owners_jobs() {
+        let st = ScheduleState::default();
+        st.register(owned_spec(Some("p1"), "a", Trigger::Reconcile), 0);
+        st.register(owned_spec(Some("p1"), "b", Trigger::Every { every_ms: 1000, anchor: None }), 0);
+        st.register(owned_spec(Some("p2"), "c", Trigger::Reconcile), 0);
+        st.register(owned_spec(None, "d", Trigger::Reconcile), 0);
+        assert_eq!(st.cancel_by_owner("p1"), 2, "p1 소유 2건 회수");
+        let left: Vec<String> = st.list().into_iter().map(|v| v.command).collect();
+        assert_eq!(left.len(), 2);
+        assert!(left.contains(&"c".to_string()) && left.contains(&"d".to_string()), "타 소유·코어 잡 불가침: {left:?}");
+        assert_eq!(st.cancel_by_owner("p1"), 0, "멱등");
+    }
+
+    #[test]
+    fn poke_owner_arms_only_that_owners_reconcile_jobs() {
+        let st = ScheduleState::default();
+        st.register(owned_spec(Some("p1"), "mine", Trigger::Reconcile), 0);
+        st.register(owned_spec(Some("p2"), "theirs", Trigger::Reconcile), 0);
+        st.poke_owner("p1", 42);
+        for v in st.list() {
+            match v.command.as_str() {
+                "mine" => assert_eq!(v.next_at, Some(42), "owner 잡은 즉시 무장"),
+                "theirs" => assert_eq!(v.next_at, None, "타 owner Reconcile 은 불가침"),
+                other => panic!("예상 밖 잡: {other}"),
+            }
+        }
     }
 
     // 프로세스 작업의 claim 이 Fire 에 process_lease·zombie_backstop·claimed_at 을 싣는다(fire_process 진입 조건).
