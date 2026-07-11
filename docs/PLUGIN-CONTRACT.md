@@ -158,7 +158,10 @@ owned by docs/SIDECARS.md):
   in its manifest (`sidecars[]` + the `"sidecar"` permission), verified at load
   (declared ≡ actual). See docs/SIDECARS.md §3–§7.
 
-The rest of this section is the **service** model:
+A third form — the **plugin service** (a resident service-model process whose
+manifest-declared commands the core routes natively, `entry: null` lawful) —
+is legislated in docs/PLUGIN-SERVICE.md; the `service` model below is unchanged
+by it. The rest of this section is the **service** model:
 
 Layout rule — one directory per artifact, names always derived the same way:
 

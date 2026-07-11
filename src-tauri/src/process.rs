@@ -76,7 +76,7 @@ fn kill_session(sess: &ProcessSession) {
 // dist/soksak-sidecar-{name}. engine 모델(sidecar.rs module_path)과 대칭: 해석 경로는 identity 홈
 // 하나뿐(A17 — env 바이너리 주입 없음), 이름은 traversal-safe 검증. 미존재는 spawn 전 명시 에러.
 // "sidecar:" 아닌 cmd 는 그대로(일반 프로세스).
-fn resolve_sidecar_cmd(cmd: &str) -> Result<String, String> {
+pub(crate) fn resolve_sidecar_cmd(cmd: &str) -> Result<String, String> {
     let Some(name) = cmd.strip_prefix("sidecar:") else {
         return Ok(cmd.to_string());
     };

@@ -4365,6 +4365,7 @@ dependencies = [
  "sha2",
  "soksak-protocol",
  "soksak-pty-proto",
+ "soksak-service-proto",
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",

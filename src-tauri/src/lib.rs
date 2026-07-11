@@ -21,6 +21,7 @@ mod plugins;
 mod process;
 mod pty;
 mod schedule;
+mod service;
 mod secrets;
 #[cfg(target_os = "macos")]
 mod titlebar;
@@ -122,6 +123,16 @@ pub fn run() {
             // identity 홈 확정 — 모든 경로(데이터·플러그인·사이드카·테마·프로젝트·소켓·시크릿)가
             // 이 값에서 파생되므로 어떤 경로 사용보다 먼저 1회 고정한다(home.rs 원칙).
             home::init(&app.config().identifier);
+            // plugin service 매니저(PS9·PS11) — bind 원장을 읽어 상주 서비스를 올린다. 창-무관이라
+            // 워크스페이스 창 유무와 상관없이 부팅 시 1회. 스폰은 스레드로(부팅 비차단).
+            app.manage(service::ServiceManager::new(
+                std::sync::Arc::new(service::AppServiceHost::new(app.handle().clone())),
+                std::sync::Arc::new(service::ProcessServiceSpawner::new(home::soksak_home())),
+            ));
+            {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || service::boot(&handle));
+            }
             // 백업 링 실패 고지에 쓸 앱 핸들을 심는다 — 이후 자동 백업 스냅샷 실패가 activity/알림으로
             // 드러난다(무음 폴백 금지). 데이터 개방보다 먼저 심어 첫 쓰기 신호부터 커버한다.
             data::ring::set_app(app.handle());
@@ -244,7 +255,7 @@ pub fn run() {
                 app.deep_link().on_open_url(move |event| {
                     for u in event.urls() {
                         if let Some((cmd, params)) = deeplink::parse_command_url(u.as_str()) {
-                            let _ = ipc::request_command(&dl_handle, cmd, params, 10_000, None);
+                            let _ = ipc::request_command(&dl_handle, cmd, params, 10_000, None, None);
                         }
                     }
                 });
@@ -545,6 +556,8 @@ pub fn run() {
                 app_handle.state::<PtyManager>().kill_all();
                 daemon::kill_all(app_handle);
                 app_handle.state::<ProcessManager>().kill_all();
+                // 상주 plugin service 잔존 0(PS10) — shutdown 통지 후 강제 종료.
+                app_handle.state::<service::ServiceManager>().kill_all();
                 app_handle.state::<ws::WsManager>().close_all();
                 ipc::cleanup();
                 mediaproxy::cleanup();

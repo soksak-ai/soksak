@@ -30,6 +30,12 @@ separate process cannot attach a child view to the app's windows, and the
 engine's message pump needs the app's main queue. Loaded into the app process,
 it still runs "not as a separate app" (no Dock, no own windows).
 
+A third form exists beside these two models: the **plugin service** — a
+service-model process that a plugin's manifest declares (`service` block) and
+whose commands the core routes natively. It is NOT the `service` model above
+(that stays manifest-less and core-blind, unchanged); it is legislated
+separately in docs/PLUGIN-SERVICE.md. Never call it "service sidecar".
+
 **Names never encode the model** (`soksak-sidecar-<name>` for both): the model is
 machine-encoded (attachment path, artifact kind, ABI self-report); putting it in
 the name would create a second, driftable truth.

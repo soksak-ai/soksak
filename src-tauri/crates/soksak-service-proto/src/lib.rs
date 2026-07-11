@@ -41,6 +41,12 @@ pub const SERVICE_INTERFACE: &str = "soksak-service-spec@1";
 /// never a silent skip.
 pub const MAX_LINE_BYTES: usize = 4 * 1024 * 1024;
 
+/// The argv the core passes when spawning the resident binary: `<bin> serve`.
+/// Part of the wire contract — the same binary keeps its standalone
+/// subcommands (repo-internal harnesses), and `serve` selects the resident
+/// protocol peer.
+pub const SERVE_ARG: &str = "serve";
+
 /// Crash respawn backoff schedule in seconds, then the cap (PS10). A
 /// deterministic immediate exit (death before `ready`) takes no retries.
 pub const RESTART_BACKOFF_SECS: [u64; 5] = [1, 2, 4, 8, 16];

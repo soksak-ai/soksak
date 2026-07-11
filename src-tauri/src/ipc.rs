@@ -105,6 +105,10 @@ struct Request {
     // 클라이언트가 선언하는 소켓 프로토콜 판(soksak-protocol 계약). 부재=0(레거시) —
     // effective_protocol 규칙 하나로 구세대 자동 수용과 미래 차단 스위치를 겸한다.
     protocol: Option<u32>,
+    // idempotency 키(PS12) — bind:"service" 커맨드 전용. 스케줄 발화는 job+due 로 안정 키를
+    // 싣고, 소켓 클라이언트도 명시할 수 있다. 서비스가 키로 dedup(res 캐시 재생)한다.
+    #[serde(default, rename = "idempotencyKey")]
+    key: Option<String>,
 }
 
 // 마지막으로 포커스된 창 label(활성 창 추적). lib.rs on_window_event 의 Focused(true) 가 갱신.
@@ -564,6 +568,34 @@ fn route(app: &AppHandle, req: Request) -> Value {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
+    // bind:"service" 커맨드 — Rust 직행 디스패치(PS11). 창 해석 이전이 핵심: 창 0 이어도,
+    // 무엇이 포커스를 쥐고 있어도 디스패치는 동일하다(포커스-무관은 구조가 보장). 실행 기록은
+    // 웹뷰 경로와 동일 계약(command.executed)으로 여기서 직접 남긴다(PS8·P12).
+    if let Some(mgr) = app.try_state::<crate::service::ServiceManager>() {
+        if mgr.owns(&req.method) {
+            let timeout = clamp_timeout_ms(req.timeout_ms);
+            let out = mgr
+                .dispatch(
+                    &req.method,
+                    req.params.clone(),
+                    req.key.clone(),
+                    req.origin.as_deref().unwrap_or("socket"),
+                    req.parent.clone(),
+                    timeout,
+                    3_600_000, // 진행 연장 상한(zombie backstop) — 스케줄 선언이 크면 timeout 이 이미 크다.
+                )
+                .unwrap_or_else(|| error_reply("INTERNAL", "서비스 소유 판정 불일치"));
+            let ok = out.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+            let code = out
+                .get("code")
+                .and_then(|v| v.as_str())
+                .unwrap_or(if ok { "OK" } else { "INTERNAL" })
+                .to_string();
+            let message = out.get("message").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            record_route_outcome(app, &req.method, &req.params, "service", &req.parent, &req.origin, ok, &code, &message, started_ms);
+            return out;
+        }
+    }
     let target = match req.window.clone() {
         Some(w) => w,
         None => {
@@ -684,6 +716,7 @@ pub fn request_command(
     params: Value,
     timeout_ms: u64,
     origin: Option<&str>,
+    key: Option<String>,
 ) -> Value {
     route(
         app,
@@ -698,6 +731,7 @@ pub fn request_command(
             origin: origin.map(str::to_string),
             // Rust 내부 발화는 같은 빌드다 — 스큐가 구조적으로 불가능(게이트도 미경유).
             protocol: None,
+            key,
         },
     )
 }

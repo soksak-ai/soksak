@@ -345,6 +345,7 @@ struct Fire {
     process_lease: bool, // true=fire_process(프로세스-생존 lease).
     zombie_backstop_ms: Option<u64>,
     claimed_at: u64, // claim 시각 = 좀비 backstop 기준.
+    due: u64,        // 예정 발화 시각 — 같은 due 의 재시도가 공유하는 idempotency 키 축(PS12).
     epoch: u64,      // claim 시 job 세대 — complete/set_seq 가 이걸로 교체된 job 을 건드리지 않는다.
 }
 
@@ -583,6 +584,7 @@ impl ScheduleState {
                         process_lease: job.process_lease,
                         zombie_backstop_ms: job.zombie_backstop_ms,
                         claimed_at: now,
+                        due: at,
                         epoch: job.epoch,
                     });
                 }
@@ -728,7 +730,10 @@ pub fn ensure_started(app: &AppHandle) {
 
 // 비-프로세스 발화 — f.timeout_ms 까지 단일 recv(route 가 [1s,3600s] 클램프). notify.show 등 즉시 완료.
 fn fire_simple(app: &AppHandle, f: Fire) {
-    let reply = ipc::request_command(app, f.command, f.params, f.timeout_ms, Some("schedule"));
+    // idempotency 키(PS12) — 같은 due 의 재시도는 같은 키를 나른다(서비스가 res 캐시로 dedup).
+    let key = format!("sch:{}:{}:{}", f.id, f.epoch, f.due);
+    let reply =
+        ipc::request_command(app, f.command, f.params, f.timeout_ms, Some("schedule"), Some(key));
     let ok = reply.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
     let c = app.state::<ScheduleState>().complete(&f.id, ok, now_ms(), f.epoch);
     if c.removed {
@@ -869,6 +874,17 @@ pub fn schedule_register(
     saved.id = Some(assigned.clone());
     persist_save(&app, &saved);
     Ok(assigned)
+}
+
+// 서비스 bind 가 원장 스케줄을 등록하는 Rust 내부 경로(PS14) — schedule_register 와 같은 규율
+// (ensure_started + 등록 + persist 자기게이트: owner=Some 은 B2 로 persist 대상이 아니다).
+pub fn register_owned(app: &AppHandle, spec: JobSpec) -> String {
+    ensure_started(app);
+    let assigned = app.state::<ScheduleState>().register(spec.clone(), now_ms());
+    let mut saved = spec;
+    saved.id = Some(assigned.clone());
+    persist_save(app, &saved);
+    assigned
 }
 
 // app.scheduler — 즉시 발화 요청(완료 트리거·외부 변화). id 미지정 시 모든 Reconcile 작업.
