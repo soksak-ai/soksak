@@ -504,7 +504,7 @@ mod tests {
         assert!(detached_gate("/bin/sh", false).is_ok());
         assert!(detached_gate("claude", false).is_ok());
         // detached 는 선언된 사이드카 대상만.
-        assert!(detached_gate("sidecar:terminal-mirror", true).is_ok());
+        assert!(detached_gate("sidecar:terminal-alacritty", true).is_ok());
         assert!(detached_gate("/bin/sh", true).is_err());
         assert!(detached_gate("claude", true).is_err());
     }
