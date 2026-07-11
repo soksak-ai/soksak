@@ -45,7 +45,7 @@ const project: ProjectTab = {
                   id: "v1",
                   kind: "plugin",
                   title: "T",
-                  pluginId: "soksak-plugin-terminal",
+                  pluginId: "soksak-plugin-terminal-xterm",
                   view: "content",
                   command: "claude", // 자동 실행 명령(영속 제외 — 복원 시 재실행 안 함)
                 },
@@ -101,7 +101,7 @@ describe("windowSnapshot 라운드트립", () => {
     expect(g1.activeViewId).toBe("v1");
     const term = g1.views[0] as Extract<View, { kind: "plugin" }>;
     expect(term.kind).toBe("plugin");
-    expect(term.pluginId).toBe("soksak-plugin-terminal");
+    expect(term.pluginId).toBe("soksak-plugin-terminal-xterm");
     expect(term.view).toBe("content");
     // 복원된 터미널은 command 를 갖지 않는다(자동 재실행 방지).
     expect(term.command).toBeUndefined();
@@ -138,7 +138,7 @@ describe("windowSnapshot 라운드트립", () => {
                   id: "v1",
                   kind: "plugin",
                   title: "T",
-                  pluginId: "soksak-plugin-terminal",
+                  pluginId: "soksak-plugin-terminal-xterm",
                   view: "content",
                   status: { code: "busy", message: "재생 중" },
                 },
@@ -175,7 +175,7 @@ describe("B3 — cwd·lastActivity 영속 round-trip", () => {
                   id: "v1",
                   kind: "plugin",
                   title: "Terminal",
-                  pluginId: "soksak-plugin-terminal",
+                  pluginId: "soksak-plugin-terminal-xterm",
                   view: "content",
                   cwd: "/tmp/somewhere",
                   lastActivity: 1234567890,
@@ -238,5 +238,44 @@ describe("B3 — cwd·lastActivity 영속 round-trip", () => {
     expect(v1.icon).toBe("https://naver.com/favicon.ico");
     expect(v2.state).toBeUndefined();
     expect(v2.customLabel).toBeUndefined();
+  });
+});
+
+describe("저장 세션 마이그레이션 — 터미널 rename(soksak-plugin-terminal → -xterm)", () => {
+  it("옛 pluginId 스냅샷은 새 id 로 복원된다(view id 는 그대로)", () => {
+    sid = 0;
+    const legacy: ProjectTab = {
+      ...project,
+      contents: [
+        {
+          id: "c1",
+          title: "1",
+          activeGroupId: "g1",
+          layout: {
+            type: "leaf",
+            value: {
+              id: "g1",
+              activeViewId: "v1",
+              views: [
+                {
+                  id: "v1",
+                  kind: "plugin",
+                  title: "T",
+                  pluginId: "soksak-plugin-terminal", // rename 전 옛 id
+                  view: "content",
+                },
+              ],
+            },
+          },
+        },
+      ],
+    };
+    // 직렬화는 옛 id 를 그대로 담는다 — 마이그레이션은 복원(deserialize) 시점에 일어난다.
+    const snap = serializeProject(legacy);
+    const back = deserializeProject(snap, newSplitId);
+    const g = (back.contents[0].layout as Extract<GroupNode, { type: "leaf" }>).value;
+    const term = g.views[0] as Extract<View, { kind: "plugin" }>;
+    expect(term.pluginId).toBe("soksak-plugin-terminal-xterm");
+    expect(term.view).toBe("content"); // view id(관례 content)는 rename 대상이 아니다
   });
 });

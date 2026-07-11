@@ -22,6 +22,7 @@ import {
 } from "../state/sessions";
 import { addProjectClaimed, closeProjectReleased } from "../state/projectRegistry";
 import { getRegisteredProgram, listPrograms } from "../plugins/programRegistry";
+import { resolveTerminalProgram, TERMINAL_CONTRACT } from "../plugins/terminalEngine";
 import {
   activeSessionViewId,
   transferViewFocus,
@@ -245,11 +246,11 @@ function terminalContextPane(
 // 브라우저 계열 프로그램 id 해석(layout.apply dev preset). 프로그램은 전부 플러그인 기여라
 // 코어는 브라우저 종류를 모른다(락인 0) — 등록 프로그램 id 관례("browser")로 식별한다. 없으면
 // undefined 를 돌려주고, 호출부가 그 패널을 건너뛰며 사유를 남긴다(은폐 금지).
-// hint 예시용 실존 프로그램 — 등록 목록에서 터미널 아닌 것을 우선(다양성), 없으면 terminal,
-// 그마저 없으면 목록의 첫 항목. 하드코딩 예시는 미설치 환경에서 깨진 안내가 된다(실측: claude).
+// hint 예시용 실존 프로그램 — 등록 목록의 첫 항목. 특정 program id 를 가정하지 않는다(코어
+// program-무지) — 하드코딩 예시는 미설치 환경에서 깨진 안내가 된다(실측: claude). 등록 프로그램이
+// 없으면 플레이스홀더(<program>) — 예시임이 드러난다.
 function exampleProgramId(): string {
-  const ids = listPrograms().map((p) => p.decl.id);
-  return ids.find((x) => x !== "terminal") ?? ids[0] ?? "terminal";
+  return listPrograms()[0]?.decl.id ?? "<program>";
 }
 
 // dev 프리셋의 브라우저 패널 해석 — 관례 프로그램 id "browser"(terminal 과 동일 메커니즘)만 본다.
@@ -355,7 +356,7 @@ const P = {
   program: {
     type: "string",
     description:
-      "Program id — plugin-registered only (see program.list; no built-in default). Unregistered id falls back to terminal view",
+      "Program id — plugin-registered only (see program.list; no built-in default). Omitted or unregistered id opens a blank panel",
   },
   side: {
     type: "string",
@@ -1075,7 +1076,7 @@ export function registerCatalog(): void {
       project: P.project,
       panel: P.panel,
       side: { ...P.side, required: true },
-      program: { ...P.program, default: "terminal" },
+      program: P.program,
     },
     returns: "{ panelId(new panel), viewId, paneId? }",
     message: () => tmsg("msg.panel.split"),
@@ -1319,9 +1320,19 @@ export function registerCatalog(): void {
       }[] = [];
       let spaceSpecs: LayoutSpaceSpec[];
       if (p.preset === "dev") {
-        // dev 축약 — 터미널 + 브라우저(우측). 브라우저 미설치면 그 패널만 건너뛰고 사유를 남긴다.
+        // dev 축약 — 터미널 + 브라우저(우측). 터미널은 계약(설정 엔진)으로, 브라우저는 관례 id 로
+        // 해소한다 — 코어는 특정 program 을 특권화하지 않는다. 어느 쪽이든 없으면 그 패널만 건너뛰고
+        // 사유를 남긴다(은폐 금지 — browser 와 대칭).
+        const terminalId = resolveTerminalProgram();
         const browserId = findBrowserProgram();
-        const panels: LayoutPanelSpec[] = [{ program: "terminal" }];
+        const panels: LayoutPanelSpec[] = [];
+        if (terminalId) panels.push({ program: terminalId });
+        else
+          skipped.push({
+            space: "dev",
+            program: TERMINAL_CONTRACT,
+            reason: tmsg("layout.skip.unregistered", { program: TERMINAL_CONTRACT }),
+          });
         if (browserId) panels.push({ program: browserId, side: "right" });
         else
           skipped.push({

@@ -154,6 +154,30 @@ break the symmetry law (file = command prefix: `webview_open`, not `webview_host
 
 `webview_inject_script` already conformed and is unchanged.
 
+### 2026-07 terminal/engine domain
+
+Symmetric to the browser/engine precedent above. The `ghostty` terminal plugin
+turned `terminal` into a replaceable seam, so rule 4 now forces the observable
+engine name on the incumbent — `terminal` alone no longer says which engine.
+
+| Before | After | Kind |
+|---|---|---|
+| `soksak-plugin-terminal` | `soksak-plugin-terminal-xterm` | plugin — rule 4 (engine name on a replaceable seam) |
+| program `terminal` | program `terminal-xterm` | program id |
+| (none — new seam contract) | `terminal-spec@1` | contract id — §8 |
+
+The plugin-id rename moves its registrar folder in lockstep
+(`~/.soksak-dev/plugins/soksak-plugin-terminal-xterm`, dir = id, §1.4a).
+
+`terminal-spec@1` is the terminal domain's view contract — a view that provides a
+`content` surface and supports `app.pty` PTY round-trip and `command` autorun.
+Consumers reference the contract, never a plugin id; the core resolves it to an
+implementer, so the core names no engine and a new engine joins by declaring
+`implements`, not by a core edit. The scope is the bare domain `terminal` (not
+`soksak-plugin-terminal-spec@1`): the id appears in core source as a program's
+`viewContract`, and §8/PS6 bars a core-source contract id from matching the
+plugin-id grammar.
+
 ### 2026-07 command surface rename
 
 Applied under the verb law of §1.8. Reference for external users and existing plugins

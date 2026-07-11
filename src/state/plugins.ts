@@ -26,6 +26,7 @@ import {
   setActive,
 } from "../plugins/loader";
 import { syncServiceLedger } from "../plugins/serviceProxy";
+import { resolveTerminalProgram } from "../plugins/terminalEngine";
 import { defaultPluginDeps } from "../plugins/deps";
 import {
   activationChain,
@@ -210,7 +211,16 @@ async function ensureProgramBinaries(manifest: PluginManifest): Promise<void> {
       });
       if (found) continue;
       const s = useSessions.getState();
-      s.addViewToGroup(s.activeId, "terminal", undefined, {
+      // 설치 명령은 설정된 터미널 엔진(계약 해소)에서 가시 실행한다 — 코어는 특정 엔진을 모른다.
+      // 활성 터미널 엔진이 없으면 가시 실행을 건너뛰되 침묵하지 않는다(§0-3 — 콘솔 고지).
+      const terminalProgram = resolveTerminalProgram();
+      if (!terminalProgram) {
+        console.warn(
+          `활성 터미널 엔진 없음 — ${prog.ensure.bin} 설치 명령을 가시 실행하지 못함(엔진 활성 후 + 메뉴로 실행)`,
+        );
+        continue;
+      }
+      s.addViewToGroup(s.activeId, terminalProgram, undefined, {
         command: `${install}; echo "[soksak] ${prog.ensure.bin} 설치 종료 — + 메뉴에서 선택해 실행하세요"`,
       });
     } catch (e) {
@@ -719,7 +729,13 @@ export const usePlugins = create<PluginsState>((set, get) => {
         void ensureProgramBinaries(cp.manifest);
         void reconcileDependencies(cp.manifest, get().plugins, (command) => {
           const s = useSessions.getState();
-          s.addViewToGroup(s.activeId, "terminal", undefined, { command });
+          // 라이브러리 설치 명령도 설정된 터미널 엔진에서 가시 실행(계약 해소). 엔진 없으면 침묵 금지.
+          const terminalProgram = resolveTerminalProgram();
+          if (!terminalProgram) {
+            console.warn("활성 터미널 엔진 없음 — 라이브러리 설치 명령을 가시 실행하지 못함:", command);
+            return;
+          }
+          s.addViewToGroup(s.activeId, terminalProgram, undefined, { command });
         });
       }
       persist();

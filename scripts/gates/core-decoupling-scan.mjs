@@ -43,6 +43,16 @@ export const ALLOWLIST = [
       "레지스트리 카탈로그 빌드 스냅샷 — 발견 지점 데이터의 오프라인 시드(첫 실행·오프라인 폴백). 실행 분기가 아니라 카탈로그 데이터다.",
   },
   {
+    file: "src/state/windowSnapshot.ts",
+    line: /"soksak-plugin-terminal":\s*"soksak-plugin-terminal-xterm"/,
+    token: /^soksak-plugin-terminal(?:-xterm)?$/,
+    reason:
+      "저장 세션 마이그레이션(deserializeView, LEGACY_PLUGIN_IDS) — 터미널 seam 정규화 rename(NAMING §4)" +
+      " 전에 저장된 스냅샷의 옛 pluginId 를 새 id 로 번역하는 1회성 데이터 훅. 실행 분기가 아니라 레거시" +
+      " 데이터 번역이며 rename 양끝 id 를 문법상 요구한다. line·token 제한으로 그 map 항목에만 적용된다." +
+      " 옛 스냅샷 소멸 시 제거(제거 조건은 코드 주석).",
+  },
+  {
     file: "*",
     token: /^soksak-plugin-spec(?:@[0-9]+)?$/,
     reason:

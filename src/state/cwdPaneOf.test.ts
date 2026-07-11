@@ -49,7 +49,7 @@ const tab = (views: View[], activeViewId?: string): ProjectTab => ({
 describe("cwdPaneOf", () => {
   // 플러그인 터미널: paneId = view.id. hasPty(view.id) 가 true 면 그 id 를 따라간다.
   it("플러그인 터미널(활성)을 view.id 로 따라간다 — pluginId 무관", () => {
-    const t = tab([plugin("v9", "soksak-plugin-terminal", "content")]);
+    const t = tab([plugin("v9", "soksak-plugin-terminal-xterm", "content")]);
     const hasPty = (id: string) => id === "v9";
     expect(cwdPaneOf(t, hasPty)).toBe("v9");
   });

@@ -3,6 +3,7 @@ import {
   autorunCommandOf,
   getRegisteredProgram,
 } from "../plugins/programRegistry";
+import { resolveContractImplementer } from "../plugins/contractResolve";
 import { localize, tmsg } from "../i18n";
 import {
   type SplitTree,
@@ -448,19 +449,28 @@ function newPluginViewFor(
 }
 
 // 프로그램 → 새 뷰. 내장 프로그램 개념은 없다(§2.6) — 등록 프로그램의 spec 으로 resolve.
-// 모든 프로그램은 kind:"view"(코어 터미널 제거 — 터미널도 플러그인 뷰)다. viewPlugin 으로
-// 다른 플러그인의 뷰를 열 수 있고(크로스 플러그인 — 에이전트 프로그램 → 터미널 플러그인 뷰),
-// command 는 그 뷰에 흘려보낼 자동 실행 명령이다. 미등록 id 는 뷰 생성 불가(null).
+// 모든 프로그램은 kind:"view"(코어 터미널 제거 — 터미널도 플러그인 뷰)다. 뷰 소유 플러그인은
+// 두 축으로 온다: viewPlugin(name-pin, 그 플러그인의 뷰) 또는 viewContract(계약-핀, 사용자가
+// 고른 구현체의 뷰). 미지정이면 프로그램 소유 플러그인. command 는 그 뷰에 흘려보낼 자동 실행
+// 명령이다. 미등록 id 는 뷰 생성 불가(null). 계약에 활성 구현체가 0 이어도 null(빈 그룹으로 열화).
 function newViewFor(
   program: Program,
   opts?: { command?: string },
 ): View | null {
   const reg = getRegisteredProgram(program);
   if (!reg || !reg.decl.view) return null;
-  // viewPlugin 명시 = 그 플러그인의 뷰(크로스 플러그인), 미지정 = 프로그램 소유 플러그인.
-  const pluginId = reg.decl.viewPlugin ?? reg.pluginId;
   // command 우선순위: 호출부 직접 지정(opts) > 프로그램 선언(autorun).
   const command = opts?.command ?? autorunCommandOf(reg.decl);
+  // viewContract(계약-핀) = 사용자 설정으로 구현체를 고른다(코어는 계약 의미 무지 — 조회만).
+  // view id 는 프로그램 선언값(관례 content)을 그대로 구현체 뷰로 연다 — 코어가 뷰 id 를 하드코딩
+  // 하지 않는다. 활성 구현체 0 이면 뷰 생성 불가(null → 빈 그룹).
+  if (reg.decl.viewContract) {
+    const impl = resolveContractImplementer(reg.decl.viewContract);
+    if (!impl) return null;
+    return newPluginViewFor(impl, reg.decl.view, localize(reg.decl.title), command);
+  }
+  // viewPlugin 명시 = 그 플러그인의 뷰(크로스 플러그인), 미지정 = 프로그램 소유 플러그인.
+  const pluginId = reg.decl.viewPlugin ?? reg.pluginId;
   return newPluginViewFor(pluginId, reg.decl.view, localize(reg.decl.title), command);
 }
 

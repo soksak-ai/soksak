@@ -20,7 +20,7 @@ const termGroup = (gid: string, vid: string): GroupNode => ({
         id: vid,
         kind: "plugin",
         title: "T",
-        pluginId: "soksak-plugin-terminal",
+        pluginId: "soksak-plugin-terminal-xterm",
         view: "content",
       },
     ],

@@ -38,6 +38,7 @@ import {
 import { initWindowTitle } from "./state/windowTitle";
 import { initViewLabelsPersistence } from "./state/viewLabels";
 import { initSettingsPersistence } from "./state/settings";
+import { initContractSelectionPersistence } from "./state/contractSelection";
 import { initThemePersistence } from "./state/theme";
 import { initBookmarksPersistence } from "./state/bookmarks";
 import { initPluginSettingsPersistence } from "./state/pluginSettings";
@@ -71,6 +72,7 @@ async function boot(): Promise<void> {
   // app.data hydrate + 다른 창 변경 구독을 켠다. 플러그인 호스트(enabledIds 소비)보다 먼저.
   try {
     initSettingsPersistence(coreStoreDeps);
+    initContractSelectionPersistence(coreStoreDeps);
     initThemePersistence(coreStoreDeps);
     initBookmarksPersistence(coreStoreDeps);
     initPluginSettingsPersistence(coreStoreDeps);

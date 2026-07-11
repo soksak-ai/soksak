@@ -7,7 +7,7 @@ const term = (viewId: string): View => ({
   id: viewId,
   kind: "plugin",
   title: "T",
-  pluginId: "soksak-plugin-terminal",
+  pluginId: "soksak-plugin-terminal-xterm",
   view: "content",
 });
 

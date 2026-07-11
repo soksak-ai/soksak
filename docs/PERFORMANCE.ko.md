@@ -131,5 +131,5 @@ WebKit 내부 합성 레이어라 우리가 contentsGravity 를 만질 수 없�
 - servo/webrender #1640 — macOS 는 "리사이즈 콜백에서 반환 전에 한 프레임을 그려야"
   한다(동기 페인트 부재 시 콘텐츠가 lag/scale): <https://github.com/servo/webrender/issues/1640>
 
-코드 앵커: 렌더러 선택은 터미널 플러그인(soksak-plugin-terminal,
+코드 앵커: 렌더러 선택은 터미널 플러그인(soksak-plugin-terminal-xterm,
 `src/terminal.ts` `xtermRenderer`) 소유.

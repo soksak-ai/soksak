@@ -765,6 +765,52 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     expect(errs.some((e) => e.includes("viewPlugin"))).toBe(true);
   });
 
+  it("viewContract(계약-핀) 는 계약 id 형식으로 통과(구현체 무차별 뷰 참조)", () => {
+    const { manifest, validation } = parseManifest(
+      base({
+        permissions: ["programs"],
+        contributes: {
+          programs: [
+            { id: "claude", title: "Claude", kind: "view", view: "content", viewContract: "terminal-spec@1", command: "claude" },
+          ],
+        },
+      }),
+      "demo",
+    );
+    expect(validation.errors).toEqual([]);
+    expect(manifest?.contributes.programs[0]).toMatchObject({
+      viewContract: "terminal-spec@1",
+      view: "content",
+      command: "claude",
+    });
+    // viewPlugin 은 핀되지 않는다(계약으로만 발견).
+    expect((manifest?.contributes.programs[0] as { viewPlugin?: string }).viewPlugin).toBeUndefined();
+  });
+
+  it("viewContract 계약 id 문법 위반 → 거부(<scope>-spec@<major>)", () => {
+    const errs = errorsOf(
+      base({
+        permissions: ["programs"],
+        contributes: { programs: [{ id: "a", title: "x", kind: "view", view: "content", viewContract: "soksak-plugin-terminal" }] },
+      }),
+    );
+    expect(errs.some((e) => e.includes("viewContract"))).toBe(true);
+  });
+
+  it("viewPlugin+viewContract 동시 선언 → 거부(name-pin vs 계약-핀 상호배타)", () => {
+    const errs = errorsOf(
+      base({
+        permissions: ["programs"],
+        contributes: {
+          programs: [
+            { id: "a", title: "x", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", viewContract: "terminal-spec@1" },
+          ],
+        },
+      }),
+    );
+    expect(errs.some((e) => e.includes("viewPlugin") && e.includes("viewContract"))).toBe(true);
+  });
+
   it("command/ensure 는 kind=view 에서 자동실행/설치로 동반 가능(에이전트 프로그램)", () => {
     const { manifest, validation } = parseManifest(
       base({

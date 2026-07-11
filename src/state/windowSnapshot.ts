@@ -135,6 +135,19 @@ export function serializeProject(p: ProjectTab): ProjectSnapshot {
 
 // ── deserialize (split id 만 재생성; 나머지 id·active 참조 보존) ────────────────
 
+// 저장 세션 마이그레이션 — 플러그인 rename 전 스냅샷의 옛 pluginId 를 새 id 로 치환한다. 훅이
+// 없으면 rename 후 옛 스냅샷 복원이 조용히 미해결 뷰로 열화한다(그리는 provider "<옛 id>.content"
+// 가 사라짐). view id(관례 content)는 rename 대상이 아니라 그대로 둔다.
+// [제거 조건] 옛 id 를 담은 스냅샷이 현장에서 소멸(재저장으로 새 id 로 갱신)하면 해당 항목 제거.
+const LEGACY_PLUGIN_IDS: Record<string, string> = {
+  // 터미널 seam 정규화(NAMING §4) — 엔진명 없는 옛 id → 엔진명(xterm) 단 새 id.
+  "soksak-plugin-terminal": "soksak-plugin-terminal-xterm",
+};
+
+function migratePluginId(id: string): string {
+  return LEGACY_PLUGIN_IDS[id] ?? id;
+}
+
 function deserializeView(s: ViewSnapshot, _newSplitId: () => string): View {
   switch (s.kind) {
     case "file":
@@ -154,7 +167,7 @@ function deserializeView(s: ViewSnapshot, _newSplitId: () => string): View {
         title: s.title,
         ...(s.customLabel ? { customLabel: s.customLabel } : {}),
         ...(s.icon ? { icon: s.icon } : {}),
-        pluginId: s.pluginId,
+        pluginId: migratePluginId(s.pluginId),
         view: s.view,
         ...(s.cwd ? { cwd: s.cwd } : {}),
         ...(s.lastActivity ? { lastActivity: s.lastActivity } : {}),
