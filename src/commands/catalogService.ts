@@ -33,7 +33,7 @@ export function registerServiceCatalog(): void {
             n: ((d.services as unknown[]) ?? []).length,
           }),
     errors: ["INTERNAL"],
-    examples: ["sok service.status", 'sok service.status \'{"plugin":"soksak-plugin-workflow"}\''],
+    examples: ["sok service.status", 'sok service.status \'{"plugin":"<plugin-id>"}\''],
     handler: async (params) => {
       const plugin = params.plugin as string | undefined;
       return await invoke<object>("service_status", plugin ? { plugin } : {});
