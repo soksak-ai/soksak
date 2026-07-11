@@ -330,11 +330,12 @@ reached over NDJSON on a UDS in the identity home. It owns the terminal domain's
 and a content-agnostic sealed-blob store (ARCHITECTURE A13; RESTORE.md). The full contract
 lives in the unit repo's `SPEC.md`; this entry is the core-doc index.
 
-- **Consumers:** the terminal plugin *family*, not one plugin. `soksak-plugin-terminal`
-  (xterm) declares `sidecars: [{ "name": "terminal-alacritty", "interface":
-  "soksak-sidecar-terminal-spec@1" }]`; a ghostty terminal plugin declares the
-  identical `interface`. One contract, one running engine unit, shared — input is a raw byte
-  stream and output is ANSI paint, so no consumer couples to the engine.
+- **Consumers:** the terminal plugin *family*, not one plugin — M3 wires **both**
+  `soksak-plugin-terminal` (xterm) and `soksak-plugin-terminal-ghostty`. Each declares the
+  identical entry `sidecars: [{ "name": "terminal-alacritty", "interface":
+  "soksak-sidecar-terminal-spec@1" }]`. One contract, one running engine unit, shared across
+  the family — input is a raw byte stream and output is ANSI paint, so no consumer couples to
+  the engine. The manifest's `sidecars[].name` is what selects which engine unit runs.
 - **Two faces:** a *server* face — plugins request `rehydrate`/`coldPaint`/`status` for
   warm/cold restore — and a *consumer* face — the sidecar subscribes to the daemon tee and
   pushes serialized plaintext to the daemon's sealed-blob store; it never touches a key.
