@@ -21,7 +21,7 @@ Sidecars come in two **models** (an orthogonal axis: runtime shape, not identity
 |---|---|---|
 | Runs as | separate process (`app.process` spawn) | in-process dylib (core dlopen) |
 | Surface | none (headless) | renders into pane surfaces (NSView) |
-| Channel | stdio (argv/stdin private contract) | opaque JSON over the hosting ABI |
+| Channel | stdio — see the wire rule below | opaque JSON over the hosting ABI |
 | Self-description | none (manifest-less, unchanged standard) | exported C symbols (binary is the single truth) |
 | Core awareness | none — core doesn't know it is a sidecar | loads + verifies + relays, understands nothing |
 
@@ -29,6 +29,24 @@ Why `engine` must be in-process: on macOS a parent NSView is process-local — a
 separate process cannot attach a child view to the app's windows, and the
 engine's message pump needs the app's main queue. Loaded into the app process,
 it still runs "not as a separate app" (no Dock, no own windows).
+
+**The service `Channel` wire (re-legislated, C4/C5 — 2026-07-11).** The stdio channel
+was originally "an argv/stdin private contract" — each plugin invented its own frame
+shape. A whole-body investigation found the same NDJSON serve loop hand-rolled across
+workflow, speech (mascot/sherpa), and others, with gratuitously different framing. The
+service axis now has **one wire and one serve harness**: `soksak-service-spec@1`,
+legislated in docs/PLUGIN-SERVICE.md, mandatory for **soksak-authored resident service
+sidecars**. **External-tool adapters** — a plugin spawning a third-party binary that
+speaks its own protocol (acp → claude/codex over ACP; media pipelines → yt-dlp/ffmpeg
+one-shot) — keep a private contract, because we do not own the spawned binary's wire.
+The engine axis is untouched, and A14's "unifying the three wires" stays out of scope —
+this consolidates only within the stdio-service axis.
+
+The service axis runs in two drive modes on that one wire: **plugin-driven** (core-blind
+— the plugin JS spawns and drives it, the row above) and **core-routed** (the core
+spawns, frames, and routes its `bind:"service"` commands — declared with a manifest
+`service` block, `entry: null` lawful). Both are legislated in docs/PLUGIN-SERVICE.md.
+"Plugin service" is the core-routed mode; never call it "service sidecar".
 
 **Names never encode the model** (`soksak-sidecar-<name>` for both): the model is
 machine-encoded (attachment path, artifact kind, ABI self-report); putting it in

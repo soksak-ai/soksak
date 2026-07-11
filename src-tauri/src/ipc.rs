@@ -25,10 +25,57 @@ pub fn socket_path() -> Option<&'static str> {
     SOCKET_PATH.get().map(|s| s.as_str())
 }
 
+// pending 엔트리 — 응답 채널 + 소유 창 라벨(창 파괴 시 즉시 회수의 키).
+struct PendingEntry {
+    window: String,
+    tx: mpsc::SyncSender<Value>,
+}
+
 #[derive(Default)]
 pub struct CmdBridge {
     // 요청 seq → 응답 채널. 프론트의 cmd_result 가 채운다.
-    pending: Mutex<HashMap<u64, mpsc::SyncSender<Value>>>,
+    pending: Mutex<HashMap<u64, PendingEntry>>,
+}
+
+impl CmdBridge {
+    fn insert(&self, seq: u64, window: &str, tx: mpsc::SyncSender<Value>) {
+        if let Ok(mut p) = self.pending.lock() {
+            p.insert(seq, PendingEntry { window: window.to_string(), tx });
+        }
+    }
+
+    fn take(&self, seq: u64) -> Option<mpsc::SyncSender<Value>> {
+        self.pending.lock().ok().and_then(|mut p| p.remove(&seq).map(|e| e.tx))
+    }
+
+    fn remove(&self, seq: u64) {
+        if let Ok(mut p) = self.pending.lock() {
+            p.remove(&seq);
+        }
+    }
+
+    // 창 파괴 시 그 창의 pending 을 전부 즉시 회수한다 — 타임아웃까지 방치하면 호출자
+    // (route 대기 스레드·스케줄 lease 루프)가 이미 죽은 창의 응답을 기다린다. 회수는
+    // 구조적 에러 응답을 먼저 보내 대기자를 즉시 깨운다(무음 drop 금지).
+    pub fn cancel_window(&self, label: &str) -> usize {
+        let Ok(mut p) = self.pending.lock() else {
+            return 0;
+        };
+        let doomed: Vec<u64> = p
+            .iter()
+            .filter(|(_, e)| e.window == label)
+            .map(|(seq, _)| *seq)
+            .collect();
+        for seq in &doomed {
+            if let Some(e) = p.remove(seq) {
+                let _ = e.tx.try_send(error_reply(
+                    "WINDOW_DESTROYED",
+                    &format!("대상 창이 파괴됨: {label}"),
+                ));
+            }
+        }
+        doomed.len()
+    }
 }
 
 static SEQ: AtomicU64 = AtomicU64::new(1);
@@ -58,6 +105,10 @@ struct Request {
     // 클라이언트가 선언하는 소켓 프로토콜 판(soksak-protocol 계약). 부재=0(레거시) —
     // effective_protocol 규칙 하나로 구세대 자동 수용과 미래 차단 스위치를 겸한다.
     protocol: Option<u32>,
+    // idempotency 키(PS12) — bind:"service" 커맨드 전용. 스케줄 발화는 job+due 로 안정 키를
+    // 싣고, 소켓 클라이언트도 명시할 수 있다. 서비스가 키로 dedup(res 캐시 재생)한다.
+    #[serde(default, rename = "idempotencyKey")]
+    key: Option<String>,
 }
 
 // 마지막으로 포커스된 창 label(활성 창 추적). lib.rs on_window_event 의 Focused(true) 가 갱신.
@@ -92,6 +143,39 @@ fn active_window() -> String {
         .ok()
         .map(|f| f.clone())
         .unwrap_or_else(|| "main".to_string())
+}
+
+fn last_workspace_window() -> Option<String> {
+    LAST_WORKSPACE.lock().ok().and_then(|w| w.clone())
+}
+
+// 창 폴백 해석(순수) — 명령이 window 를 생략했을 때의 타겟 결정.
+// 플러그인 명령(plugin.* — 네임스페이스 문법이지 특정 id 가 아니다)은 컨트롤 플레인(main)으로
+// 폴백하지 않는다: main 은 설계상 플러그인을 싣지 않으므로 그 폴백은 상시 UNKNOWN_COMMAND 다
+// (main 포커스 중 스케줄 발화가 통째로 죽던 결함 — PLUGIN-SERVICE 입법 조사에서 확정).
+// 폴백 사다리: 마지막 워크스페이스 창(살아있으면) → 살아있는 워크스페이스 창 라벨 정렬 첫
+// 항목(결정적 — 포커스 무관) → NO_WORKSPACE_WINDOW. 비-플러그인 명령은 기존 규칙(마지막
+// 포커스, main 포함)을 유지한다.
+fn resolve_fallback_target(
+    method: &str,
+    focused: String,
+    last_workspace: Option<String>,
+    live_workspaces: &[String],
+) -> Result<String, ()> {
+    if !method.starts_with("plugin.") {
+        return Ok(focused);
+    }
+    if let Some(w) = last_workspace {
+        if live_workspaces.iter().any(|l| l == &w) {
+            return Ok(w);
+        }
+    }
+    let mut sorted: Vec<&String> = live_workspaces.iter().collect();
+    sorted.sort();
+    match sorted.first() {
+        Some(w) => Ok((*w).clone()),
+        None => Err(()),
+    }
 }
 
 fn parse_request(line: &str) -> Result<Request, String> {
@@ -484,7 +568,54 @@ fn route(app: &AppHandle, req: Request) -> Value {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0);
-    let target = req.window.clone().unwrap_or_else(active_window);
+    // bind:"service" 커맨드 — Rust 직행 디스패치(PS11). 창 해석 이전이 핵심: 창 0 이어도,
+    // 무엇이 포커스를 쥐고 있어도 디스패치는 동일하다(포커스-무관은 구조가 보장). 실행 기록은
+    // 웹뷰 경로와 동일 계약(command.executed)으로 여기서 직접 남긴다(PS8·P12).
+    if let Some(mgr) = app.try_state::<crate::service::ServiceManager>() {
+        if mgr.owns(&req.method) {
+            let timeout = clamp_timeout_ms(req.timeout_ms);
+            let out = mgr
+                .dispatch(
+                    &req.method,
+                    req.params.clone(),
+                    req.key.clone(),
+                    req.origin.as_deref().unwrap_or("socket"),
+                    req.parent.clone(),
+                    timeout,
+                    3_600_000, // 진행 연장 상한(zombie backstop) — 스케줄 선언이 크면 timeout 이 이미 크다.
+                )
+                .unwrap_or_else(|| error_reply("INTERNAL", "서비스 소유 판정 불일치"));
+            let ok = out.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
+            let code = out
+                .get("code")
+                .and_then(|v| v.as_str())
+                .unwrap_or(if ok { "OK" } else { "INTERNAL" })
+                .to_string();
+            let message = out.get("message").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            record_route_outcome(app, &req.method, &req.params, "service", &req.parent, &req.origin, ok, &code, &message, started_ms);
+            return out;
+        }
+    }
+    let target = match req.window.clone() {
+        Some(w) => w,
+        None => {
+            // 워크스페이스 창 목록(w-* 라벨 문법 — NAMING) — 폴백 사다리의 결정적 후보 집합.
+            let live: Vec<String> = app
+                .windows()
+                .keys()
+                .filter(|l| l.starts_with("w-"))
+                .cloned()
+                .collect();
+            match resolve_fallback_target(&req.method, active_window(), last_workspace_window(), &live) {
+                Ok(t) => t,
+                Err(()) => {
+                    let message = "플러그인 명령을 받을 워크스페이스 창이 없음(컨트롤 플레인은 플러그인을 싣지 않음)";
+                    record_route_outcome(app, &req.method, &req.params, "", &req.parent, &req.origin, false, "NO_WORKSPACE_WINDOW", message, started_ms);
+                    return error_reply("NO_WORKSPACE_WINDOW", message);
+                }
+            }
+        }
+    };
     // get_window(Window 레지스트리) — 브라우저 child 를 연 창은 멀티-webview 라 get_webview_window
     // (단일-webview 전용)에서 빠진다. 그걸 쓰면 브라우저 연 창의 모든 소켓 명령이 WINDOW_NOT_FOUND.
     // emit_to(label)은 멀티-webview 여도 그 창 메인 webview 로 도달하므로 라우팅은 정상.
@@ -510,7 +641,7 @@ fn route(app: &AppHandle, req: Request) -> Value {
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     let (tx, rx) = mpsc::sync_channel::<Value>(1);
     let bridge = app.state::<CmdBridge>();
-    bridge.pending.lock().unwrap().insert(seq, tx);
+    bridge.insert(seq, &target, tx);
 
     let payload = json!({
         "id": seq,
@@ -522,7 +653,7 @@ fn route(app: &AppHandle, req: Request) -> Value {
         "origin": req.origin,
     });
     if app.emit_to(&target, "cmd-request", payload).is_err() {
-        bridge.pending.lock().unwrap().remove(&seq);
+        bridge.remove(seq);
         record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "INTERNAL", "프론트로 요청 전달 실패", started_ms);
         return error_reply("INTERNAL", "프론트로 요청 전달 실패");
     }
@@ -530,7 +661,7 @@ fn route(app: &AppHandle, req: Request) -> Value {
     // 기본 10s(빠른 행 감지). 요청이 timeoutMs 를 주면 그 값으로 — [1s, 3600s] 클램프(무한대기 금지).
     let timeout = Duration::from_millis(clamp_timeout_ms(req.timeout_ms));
     let result = rx.recv_timeout(timeout);
-    bridge.pending.lock().unwrap().remove(&seq);
+    bridge.remove(seq);
     match result {
         Ok(v) => v,
         Err(_) => {
@@ -545,7 +676,7 @@ fn route(app: &AppHandle, req: Request) -> Value {
 // 프론트 executor 의 회신(요청 seq 매칭).
 #[tauri::command]
 pub fn cmd_result(bridge: State<CmdBridge>, id: u64, result: Value) {
-    if let Some(tx) = bridge.pending.lock().unwrap().remove(&id) {
+    if let Some(tx) = bridge.take(id) {
         let _ = tx.try_send(result);
     }
 }
@@ -585,6 +716,7 @@ pub fn request_command(
     params: Value,
     timeout_ms: u64,
     origin: Option<&str>,
+    key: Option<String>,
 ) -> Value {
     route(
         app,
@@ -599,6 +731,7 @@ pub fn request_command(
             origin: origin.map(str::to_string),
             // Rust 내부 발화는 같은 빌드다 — 스큐가 구조적으로 불가능(게이트도 미경유).
             protocol: None,
+            key,
         },
     )
 }
@@ -613,14 +746,25 @@ pub fn open_request(
     params: Value,
     origin: Option<&str>,
 ) -> Option<(u64, mpsc::Receiver<Value>)> {
-    let target = active_window();
+    // route 와 같은 폴백 사다리 — 플러그인 명령(스케줄 process 발화가 주 소비자)이
+    // 컨트롤 플레인으로 떨어져 상시 UNKNOWN_COMMAND 가 되던 같은 결함의 둘째 부위.
+    let live: Vec<String> = app
+        .windows()
+        .keys()
+        .filter(|l| l.starts_with("w-"))
+        .cloned()
+        .collect();
+    let target = match resolve_fallback_target(&method, active_window(), last_workspace_window(), &live) {
+        Ok(t) => t,
+        Err(()) => return None,
+    };
     if app.get_window(&target).is_none() {
         return None;
     }
     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
     let (tx, rx) = mpsc::sync_channel::<Value>(1);
     let bridge = app.state::<CmdBridge>();
-    bridge.pending.lock().unwrap().insert(seq, tx);
+    bridge.insert(seq, &target, tx);
     let payload = json!({
         "id": seq,
         "method": method,
@@ -630,7 +774,7 @@ pub fn open_request(
         "origin": origin,
     });
     if app.emit_to(&target, "cmd-request", payload).is_err() {
-        bridge.pending.lock().unwrap().remove(&seq);
+        bridge.remove(seq);
         return None;
     }
     Some((seq, rx))
@@ -638,7 +782,7 @@ pub fn open_request(
 
 // pending 회수(멱등) — 정상 완료·좀비 포기·cancel 공용. 남은 tx 를 drop 해 호출자 rx 를 깨운다.
 pub fn close_request(app: &AppHandle, seq: u64) {
-    app.state::<CmdBridge>().pending.lock().unwrap().remove(&seq);
+    app.state::<CmdBridge>().remove(seq);
 }
 
 #[cfg(test)]
@@ -831,6 +975,76 @@ mod tests {
         let second = bind_transport(&path);
         assert!(second.is_err(), "a live socket must refuse a second bind");
         let _ = std::fs::remove_file(&path);
+    }
+
+    // 창 파괴 시 pending 즉시 회수 — 타임아웃 방치(구 동작)는 죽은 창의 응답을
+    // 최대 1시간 기다리게 한다(스케줄 lease 루프 포함). PS12 의 코어측 반쪽.
+    #[test]
+    fn destroyed_window_pending_is_cancelled_immediately() {
+        let bridge = CmdBridge::default();
+        let (tx_a, rx_a) = mpsc::sync_channel::<Value>(1);
+        let (tx_b, rx_b) = mpsc::sync_channel::<Value>(1);
+        bridge.insert(1, "w-a", tx_a);
+        bridge.insert(2, "w-b", tx_b);
+        let n = bridge.cancel_window("w-a");
+        assert_eq!(n, 1, "w-a 소유 pending 1건이 회수되어야 함");
+        let got = rx_a.try_recv().expect("대기자는 즉시 구조적 에러를 받는다 — 무음 drop 금지");
+        assert_eq!(got["ok"], false);
+        assert_eq!(got["code"], "WINDOW_DESTROYED");
+        assert!(rx_b.try_recv().is_err(), "다른 창의 pending 은 불가침");
+        assert!(bridge.take(1).is_none(), "회수된 seq 는 cmd_result 가 더 찾지 못한다");
+        assert!(bridge.take(2).is_some(), "다른 창 엔트리는 남는다");
+    }
+
+    // 창 폴백 사다리 — 플러그인 명령은 컨트롤 플레인(main)으로 폴백하지 않는다.
+    // main 포커스 상태의 스케줄/소켓 발화가 UNKNOWN_COMMAND 로 죽던 결함의 재현 기준.
+    fn s(v: &[&str]) -> Vec<String> {
+        v.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn plugin_fallback_prefers_last_workspace_over_focused_main() {
+        let got = resolve_fallback_target(
+            "plugin.demo.run",
+            "main".into(),
+            Some("w-b".into()),
+            &s(&["w-a", "w-b"]),
+        );
+        assert_eq!(got, Ok("w-b".to_string()));
+    }
+
+    #[test]
+    fn plugin_fallback_uses_sorted_live_workspace_when_last_is_dead() {
+        let got = resolve_fallback_target(
+            "plugin.demo.run",
+            "main".into(),
+            Some("w-dead".into()),
+            &s(&["w-b", "w-a"]),
+        );
+        assert_eq!(got, Ok("w-a".to_string()), "결정적 선택 — 라벨 정렬 첫 항목(포커스 무관)");
+    }
+
+    #[test]
+    fn plugin_fallback_with_no_workspace_is_an_explicit_error() {
+        let got = resolve_fallback_target("plugin.demo.run", "main".into(), None, &[]);
+        assert_eq!(got, Err(()), "main 라우팅(상시 UNKNOWN_COMMAND) 대신 구조적 거부");
+    }
+
+    #[test]
+    fn plugin_fallback_keeps_focused_workspace_window() {
+        let got = resolve_fallback_target(
+            "plugin.demo.run",
+            "w-a".into(),
+            Some("w-a".into()),
+            &s(&["w-a"]),
+        );
+        assert_eq!(got, Ok("w-a".to_string()));
+    }
+
+    #[test]
+    fn non_plugin_fallback_keeps_the_focused_window_including_main() {
+        let got = resolve_fallback_target("window.open", "main".into(), Some("w-a".into()), &s(&["w-a"]));
+        assert_eq!(got, Ok("main".to_string()), "코어 명령의 기존 규칙 불변");
     }
 
     // timeout 클램프 경계 — 핵심: >600s(구 상한)가 그대로 통과해야 LLM 30분+ 턴을 끝까지 기다린다.

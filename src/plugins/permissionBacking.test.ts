@@ -20,11 +20,15 @@ function apiGatedPermissions(): Set<string> {
 // api.ts has() 게이트가 없지만 정당한 권한(강제 지점이 api.ts 가 아닌 곳):
 //   - programs: loader 가 contributes.programs 를 선언적으로 자동 등록(api.ts 명령형 표면 없음 §2.6)
 //   - commands:destructive / commands:inject: executeGated 가 명령 danger 등급으로 매핑(has 아님)
+//   - service: 강제 지점이 매니페스트 판정(parseManifest validateServiceRules — service 선언에
+//     권한 필수)과 코어 bind 게이트다. 플러그인 JS 에 새 app.* 표면을 열지 않는다(PS2 — 서비스는
+//     독자 표면 0, 커맨드 소유는 코어 라우팅). 규범 docs/PLUGIN-SERVICE.md.
 // 이 allowlist 에 넣을 땐 "왜 api.ts 게이트가 없는지" 근거가 있어야 한다(임의 추가 금지).
 const NON_API_GATED: ReadonlySet<PluginPermission> = new Set([
   "programs",
   "commands:destructive",
   "commands:inject",
+  "service",
 ]);
 
 describe("권한 backing 불변식 (코어→플러그인 추출 후 죽은 권한 차단)", () => {

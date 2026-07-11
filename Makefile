@@ -116,6 +116,7 @@ spec-gate: ## 패키지 빌드(plugin-spec·plugin-api dist — 코어가 소비
 	@npx tsc -p packages/plugin-api/tsconfig.json
 	@node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/valid/plugin.json
 	@node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/valid-implements/plugin.json
+	@node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/valid-service/plugin.json
 	@node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/c2-clean/plugin.json
 	@if node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/c2-status-undeclared/plugin.json >/dev/null 2>&1; then \
 		echo "spec-gate: status 미선언 콘텐츠 뷰가 통과됨(content-view-status blocking 게이트 깨짐)"; exit 1; \
@@ -125,6 +126,9 @@ spec-gate: ## 패키지 빌드(plugin-spec·plugin-api dist — 코어가 소비
 	else true; fi
 	@if node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/invalid-implements/plugin.json >/dev/null 2>&1; then \
 		echo "spec-gate: 무효 implements 계약 id 가 통과됨(게이트 깨짐)"; exit 1; \
+	else true; fi
+	@if node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/invalid-service/plugin.json >/dev/null 2>&1; then \
+		echo "spec-gate: service 없는 entry:null 이 통과됨(PS4 게이트 깨짐)"; exit 1; \
 	else true; fi
 	@if node packages/plugin-spec/bin/validate.mjs packages/plugin-spec/test/fixtures/invalid-status/plugin.json >/dev/null 2>&1; then \
 		echo "spec-gate: 무효 status 선언이 통과됨(게이트 깨짐)"; exit 1; \

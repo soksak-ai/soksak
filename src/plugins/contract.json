@@ -17,6 +17,7 @@
     "pty",
     "schedule",
     "secrets",
+    "service",
     "sidecar",
     "storage",
     "terminal",

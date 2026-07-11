@@ -44,6 +44,28 @@
 // 계약 id(C3 L2 계약-핀) 문법 — 단일진실은 contracts.ts(CONTRACT_ID_RE·validateImplements).
 import { validateImplements } from "./contracts.js";
 export * from "./contracts.js";
+// plugin service(제3 형태) 선언 축 — 단일진실은 service.ts(규범 docs/PLUGIN-SERVICE.md).
+import {
+  type ContributedSchedule,
+  parseCommandServiceFields,
+  parseSchedules,
+  parseServiceDecl,
+  type ServiceCommandFields,
+  SERVICE_COMMAND_KEYS,
+  type ServiceDecl,
+  validateServiceRules,
+} from "./service.js";
+export * from "./service.js";
+// semver 비교 유틸 — 단일진실은 semver.ts(공개 API 는 여기서 재수출).
+import { SEMVER_RE } from "./semver.js";
+export * from "./semver.js";
+// 내부 검증 유틸(비공개) — spec.ts·service.ts 공용.
+import {
+  checkDuplicates,
+  checkKnownKeys,
+  isNonEmptyString,
+  isRecord,
+} from "./util.js";
 // C2 정적 투명성 판정(순수함수) — 단일진실은 transparency.ts. 코어 로더·conformance·게이트·CLI 가 소비.
 export * from "./transparency.js";
 // §1 권한 — 권한 어휘·동의 고지문의 단일진실은 permissions.ts.
@@ -154,12 +176,14 @@ export interface ContributedView {
   status?: string[];
 }
 
-export interface ContributedCommand {
+export interface ContributedCommand extends ServiceCommandFields {
   name: string; // 등록명은 plugin.<pluginId>.<name> — 선언 외 등록은 거부됨
   title: LocalizedText;
   // 위험 분류(설치·동의 시점 가시성). "destructive"=닫기/제거, "inject"=term.send/browser.eval 류.
   // 매니페스트 선언이 권위 — 런타임 register({danger}) 가 불일치하면 거부된다(api.ts). 동의 요약이 노출.
   danger?: "destructive" | "inject";
+  // bind:"service" 커맨드는 스펙 전문(description/params/returns/triggers)을 매니페스트
+  // 데이터로 선언한다(PS3 — ServiceCommandFields). JS 커맨드의 스펙 데이터 선언은 거부된다.
 }
 
 export interface ContributedIconSet {
@@ -326,7 +350,9 @@ export interface PluginManifest {
   // 이 플러그인의 git 레포(설치 source). 공식 레지스트리 생성이 추출하는 필드 — 저자가 자기
   // 레포를 명시한다. 임의 git URL(github/gitlab/self-host 다). plugin.install 이 이걸로 clone.
   repo?: string;
-  entry: string; // 파싱 시 기본 main.js 로 채움. 디렉토리 내부 상대경로만
+  // 파싱 시 기본 main.js 로 채움. 디렉토리 내부 상대경로만. null = entry 없는 순수 계약
+  // 플러그인(PS4 — service 선언 ∧ 전 커맨드 bind:"service" ∧ 코드-필요 기여 0 에서만 합법).
+  entry: string | null;
   minAppVersion?: string;
   template?: boolean; // true = 개발 템플릿(읽기 전용). 활성화 대상이 아니다 — 목록·상세만 노출하고 토글을 주지 않는다.
   // 플러그인↔플러그인 의존(라이브러리 플러그인). pluginId → semver 범위(예: "^0.1.0").
@@ -337,6 +363,9 @@ export interface PluginManifest {
   libraries?: LibraryDep[];
   // 사이드카(engine 모듈) 의존 — 선언된 것만 app.sidecar.open 가능. "sidecar" 권한 필수.
   sidecars?: SidecarDep[];
+  // plugin service 선언(제3 실행 형태 — 규범 docs/PLUGIN-SERVICE.md). sidecar 는 sidecars[]
+  // 의 상주 바이너리 참조, interface 는 와이어 계약 id(PS5·PS6). "service" 권한 필수.
+  service?: ServiceDecl;
   // 이 플러그인이 구현하는 계약 선언(C3 L2 계약-핀) — 각 항목은 계약 id <scope>-spec@<major>.
   // 선언 = 발견 대상: 소비자는 계약 id 로만 발견한다(구현체 무차별). 구현 pluginId 를 핀하지
   // 마라(L1 이름-핀 — 신규 결합 금지). 판올림은 major 별 id — @2 는 @1 을 대체하지 않는다(C4).
@@ -358,6 +387,8 @@ export interface PluginManifest {
     nodes: ContributedNode[];
     // 동봉 도메인 스킬(선택, 단일). 선언 = 전용 스킬 필요 자기기술(docs/I18N.md §5). 권한 불요(무해·선언형).
     skill?: ContributedSkill;
+    // 스케줄 데이터 선언(PS14) — service 선언 필수. 코어가 owner 스탬핑·bind 등록·poke·unbind 취소.
+    schedules?: ContributedSchedule[];
   };
 }
 
@@ -450,77 +481,14 @@ const SIDECAR_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 const SIDECAR_INTERFACE_RE = /^[a-z0-9][a-z0-9.-]*@[0-9]+$/;
 const COMMAND_NAME_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 const EXT_RE = /^[a-z0-9]+$/;
-const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/;
+// SEMVER_RE·semverGte·semverSatisfies 는 semver.ts 로 이관(상단 재수출) — 단일진실 이동.
 // 의존 범위(npm 류 부분집합): * | x.y.z | ^x.y.z | ~x.y.z | >=x.y.z. 락인 0(표준 의미론).
 const SEMVER_RANGE_RE = /^(?:\*|[\^~]?\d+\.\d+\.\d+|>=\d+\.\d+\.\d+)$/;
 // git URL: 스킴형(https/http/git/ssh ://…) 또는 scp-유사(git@host:path). clone 가능한 형태만.
 const GIT_URL_RE = /^(?:https?|git|ssh):\/\/\S+|^[\w.-]+@[\w.-]+:\S+/;
 
-// a ≥ b (major.minor.patch 비교, pre-release 무시). 형식 불량이면 null.
-export function semverGte(a: string, b: string): boolean | null {
-  const ma = SEMVER_RE.exec(a);
-  const mb = SEMVER_RE.exec(b);
-  if (!ma || !mb) return null;
-  for (let i = 1; i <= 3; i++) {
-    const da = Number(ma[i]);
-    const db = Number(mb[i]);
-    if (da !== db) return da > db;
-  }
-  return true;
-}
-
-// version 이 range 를 만족하는가(npm 류 부분집합: * | x.y.z | ^x.y.z | ~x.y.z | >=x.y.z).
-// 의존 시스템이 설치 버전 ↔ 의존 범위 매칭에 쓴다. 형식 불량이면 null(호출부가 거부 처리).
-export function semverSatisfies(version: string, range: string): boolean | null {
-  const v = SEMVER_RE.exec(version);
-  if (!v) return null;
-  const r = range.trim();
-  if (r === "*") return true;
-  const num = (m: RegExpExecArray, i: number) => Number(m[i]);
-  // lower(포함) ≤ version < upper(미포함). caret/tilde 상한 계산은 npm 의미론.
-  const lt = (a: string, b: string): boolean => semverGte(a, b) === false;
-  const cmp = />=(\d+\.\d+\.\d+)$/.exec(r);
-  if (cmp) return semverGte(version, cmp[1]) === true;
-  const exact = /^(\d+\.\d+\.\d+)$/.exec(r);
-  if (exact) return `${num(v, 1)}.${num(v, 2)}.${num(v, 3)}` === exact[1];
-  const caret = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(r);
-  if (caret) {
-    const [maj, min, pat] = [1, 2, 3].map((i) => Number(caret[i]));
-    const base = `${maj}.${min}.${pat}`;
-    const upper = maj > 0 ? `${maj + 1}.0.0` : min > 0 ? `0.${min + 1}.0` : `0.0.${pat + 1}`;
-    return semverGte(version, base) === true && lt(version, upper);
-  }
-  const tilde = /^~(\d+)\.(\d+)\.(\d+)$/.exec(r);
-  if (tilde) {
-    const [maj, min, pat] = [1, 2, 3].map((i) => Number(tilde[i]));
-    const base = `${maj}.${min}.${pat}`;
-    const upper = `${maj}.${min + 1}.0`;
-    return semverGte(version, base) === true && lt(version, upper);
-  }
-  return null;
-}
-
 // ── §4 검증 ──────────────────────────────────────────────────────────────────
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function isNonEmptyString(v: unknown): v is string {
-  return typeof v === "string" && v.trim().length > 0;
-}
-
-// 선언 안 된 키는 거부(registry.validate 와 동일 철학 — 오타 조기 발견).
-function checkKnownKeys(
-  obj: Record<string, unknown>,
-  allowed: readonly string[],
-  label: string,
-  errors: string[],
-): void {
-  for (const key of Object.keys(obj)) {
-    if (!allowed.includes(key)) errors.push(`${label}: 알 수 없는 키 "${key}"`);
-  }
-}
+// isRecord·isNonEmptyString·checkKnownKeys·checkDuplicates 는 util.ts 로 이관(내부 공용).
 
 // 플랫폼별 값 맵 검증(reach.command·fetch.url/sha256 공통) — 키는 PROGRAM_PLATFORMS, 값 비공백, 최소 1개.
 // true 반환 = 에러(호출자 return).
@@ -617,18 +585,6 @@ function parseEntries<T>(
   return out;
 }
 
-function checkDuplicates(
-  values: string[],
-  label: string,
-  errors: string[],
-): void {
-  const seen = new Set<string>();
-  for (const v of values) {
-    if (seen.has(v)) errors.push(`${label}: 중복 "${v}"`);
-    seen.add(v);
-  }
-}
-
 // 외부 JSON(unknown) → 검증된 PluginManifest. 실패 시 errors 에 전체 사유(§0-3).
 // dirName = 설치 디렉토리명 — id 와 불일치하면 거부(스캔/설치 경로의 단일진실).
 export function parseManifest(
@@ -663,6 +619,7 @@ export function parseManifest(
       "dependencies",
       "libraries",
       "sidecars",
+      "service",
       "implements",
       "configuration",
       "permissions",
@@ -871,6 +828,9 @@ export function parseManifest(
     }
   }
 
+  // service: plugin service 선언(선택) — 형식은 service.ts, 교차 정합은 contributes 파싱 뒤.
+  const service = parseServiceDecl(raw.service, errors);
+
   // implements: 계약 구현 선언(선택) — L2 계약-핀. 문법·중복 검증은 contracts.ts 가 단일진실.
   const implementsIds = validateImplements(raw.implements, errors);
 
@@ -991,10 +951,13 @@ export function parseManifest(
   }
 
   // entry: 디렉토리 내부 상대경로만(탈출 금지), ESM 단일 번들.
-  let entry = DEFAULT_ENTRY;
-  if (raw.entry !== undefined) {
+  // null = entry 없는 순수 계약 플러그인(PS4) — 합법 조건은 validateServiceRules 가 판정.
+  let entry: string | null = DEFAULT_ENTRY;
+  if (raw.entry === null) {
+    entry = null;
+  } else if (raw.entry !== undefined) {
     if (!isNonEmptyString(raw.entry)) {
-      errors.push("entry: 문자열이어야 함");
+      errors.push("entry: 문자열이어야 함(entry 없는 서비스 플러그인은 null — PS4)");
     } else {
       const e = raw.entry.trim();
       if (e.startsWith("/") || e.startsWith("\\") || /^[a-zA-Z]:/.test(e)) {
@@ -1034,6 +997,7 @@ export function parseManifest(
   let programs: ContributedProgram[] = [];
   let events: string[] = [];
   let skill: ContributedSkill | undefined;
+  let schedules: ContributedSchedule[] = [];
   if (raw.contributes !== undefined) {
     if (!isRecord(raw.contributes)) {
       errors.push("contributes: 객체여야 함");
@@ -1041,7 +1005,7 @@ export function parseManifest(
       const c = raw.contributes;
       checkKnownKeys(
         c,
-        ["views", "commands", "iconSets", "fileViewers", "nodes", "programs", "events", "skill"],
+        ["views", "commands", "iconSets", "fileViewers", "nodes", "programs", "events", "skill", "schedules"],
         "contributes",
         errors,
       );
@@ -1144,7 +1108,7 @@ export function parseManifest(
       commands = parseEntries(c.commands, {
         label: "contributes.commands",
         required: ["name", "title"],
-        optional: ["danger"],
+        optional: ["danger", ...SERVICE_COMMAND_KEYS],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.name) || !COMMAND_NAME_RE.test(v.name)) {
             errs.push(
@@ -1162,10 +1126,14 @@ export function parseManifest(
             }
             danger = v.danger;
           }
+          // bind:"service" 스펙 필드(PS3) — service.ts 가 단일진실.
+          const svc = parseCommandServiceFields(v, `contributes.commands["${v.name}"]`, errs);
+          if (svc === null) return null;
           return {
             name: v.name.trim(),
             title: normalizeText(v.title as LocalizedText),
             ...(danger ? { danger } : {}),
+            ...svc,
           };
         },
       }, errors);
@@ -1453,8 +1421,30 @@ export function parseManifest(
       if (programs.length > 0 && !has("programs")) {
         errors.push('contributes.programs: "programs" 권한 선언 필요');
       }
+
+      // schedules — 데이터 스케줄 선언(PS14). 형식은 service.ts, 참조 정합은 아래 교차 검증.
+      schedules = parseSchedules(c.schedules, errors);
     }
   }
+
+  // plugin service 교차 정합(PS3·PS4·PS9·PS14) — 단일진실은 service.ts.
+  validateServiceRules(
+    {
+      service,
+      commands,
+      schedules,
+      codeBoundCounts: {
+        views: views.length,
+        nodes: nodes.length,
+        fileViewers: fileViewers.length,
+        iconSets: iconSets.length,
+      },
+      sidecarNames: sidecars.map((s) => s.name),
+      permissions,
+      entryIsNull: entry === null,
+    },
+    errors,
+  );
 
   if (errors.length > 0) return reject();
   return {
@@ -1475,10 +1465,15 @@ export function parseManifest(
       ...(Object.keys(dependencies).length > 0 ? { dependencies } : {}),
       ...(libraries.length > 0 ? { libraries } : {}),
       ...(sidecars.length > 0 ? { sidecars } : {}),
+      ...(service !== undefined ? { service } : {}),
       ...(implementsIds.length > 0 ? { implements: implementsIds } : {}),
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
-      contributes: { views, commands, iconSets, fileViewers, nodes, programs, events, ...(skill ? { skill } : {}) },
+      contributes: {
+        views, commands, iconSets, fileViewers, nodes, programs, events,
+        ...(skill ? { skill } : {}),
+        ...(schedules.length > 0 ? { schedules } : {}),
+      },
     },
     validation: { ok: true, errors, warnings },
   };

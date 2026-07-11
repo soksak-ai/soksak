@@ -4441,6 +4441,7 @@ dependencies = [
  "soksak-protocol",
  "soksak-pty-proto",
  "soksak-seal",
+ "soksak-service-proto",
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",
@@ -4504,6 +4505,15 @@ dependencies = [
  "sha2",
  "x25519-dalek",
  "zeroize",
+]
+
+[[package]]
+name = "soksak-service-proto"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "soksak-protocol",
 ]
 
 [[package]]

@@ -26,7 +26,32 @@ import {
   type TransparencyRule,
 } from "./conformance";
 import { rawImplements } from "./contractDiscovery";
+import {
+  registerBusBridge,
+  registerServiceProxies,
+  type ServiceProxyDeps,
+} from "./serviceProxy";
+import { busOn } from "./bus";
+import { useSettings } from "../state/settings";
 import type { PluginManifest } from "./spec";
+
+// 프록시 합성에 필요한 최소 deps — PluginApiDeps 의 부분집합 + 로케일(라벨 폴백 해소).
+function serviceProxyDeps(deps: PluginApiDeps): ServiceProxyDeps {
+  return {
+    invoke: deps.invoke,
+    registerCommand: deps.registerCommand,
+    unregisterCommand: deps.unregisterCommand,
+    locale: () => useSettings.getState().language,
+  };
+}
+
+// 서비스 프록시 + bus 브리지를 함께 건다(PS11·PS15). 수명 = 활성 수명(tracker 수거).
+function wireService(manifest: PluginManifest, deps: PluginApiDeps, tracker: { wrap: (d: () => void) => void }, markRegistered: (bare: string) => void): void {
+  tracker.wrap(registerServiceProxies(manifest, serviceProxyDeps(deps), markRegistered));
+  if (manifest.service) {
+    tracker.wrap(registerBusBridge(manifest, { invoke: deps.invoke, busOn }));
+  }
+}
 
 // entry 코드 문자열 → ESM 모듈. 상대 import 불가(스펙: 단일 번들 필수).
 export async function importPluginModule(code: string): Promise<unknown> {
@@ -177,6 +202,9 @@ export async function activatePlugin(
   for (const p of manifest.contributes.programs) {
     tracker.wrap(useProgramRegistry.getState().register(manifest.id, p));
   }
+  // bind:"service" 커맨드 프록시 + bus 브리지(PS3·PS11·PS15, docs/PLUGIN-SERVICE.md).
+  // 수명 = 활성 수명(서비스 재시작과 무관 — 재등록 금지, 레지스트리 중복-throw 유효).
+  wireService(manifest, deps, tracker, (bare) => registered.commands.add(bare));
 
   const subscriptions: Disposable[] = [];
   const ctx: PluginContext = { app: api, manifest, dir, subscriptions };
@@ -216,6 +244,37 @@ export async function activatePlugin(
         console.error(`deactivate 실패(${manifest.id}):`, e);
       }
       disposeSubscriptions();
+      tracker.disposeAll();
+    },
+  };
+}
+
+// 순수 계약 플러그인 활성화(PS4 — entry: null). 코드 적재 없이 게이트+데이터 기여+서비스
+// 프록시만으로 활성 인스턴스를 만든다. 합법 조건(전 커맨드 bind:"service"·코드-필요 기여 0)은
+// parseManifest 가 이미 강제했다 — 여기서는 재판정하지 않는다(단일 심판).
+export async function activateContractPlugin(
+  manifest: PluginManifest,
+  dir: string,
+  deps: PluginApiDeps,
+): Promise<ActivePlugin> {
+  // [C2]/[C3] — entry 유무와 무관하게 같은 경계에서 시행(투명성 게이트 불변 적용, PS4).
+  enforceTransparency(manifest);
+  enforceImplements(manifest);
+
+  const { tracker, registered } = buildPluginApi(manifest, dir, deps);
+  for (const p of manifest.contributes.programs) {
+    tracker.wrap(useProgramRegistry.getState().register(manifest.id, p));
+  }
+  wireService(manifest, deps, tracker, (bare) => registered.commands.add(bare));
+  reportDeclaredButNotRegistered(manifest, registered);
+
+  let deactivated = false;
+  return {
+    manifest,
+    dir,
+    deactivate: async () => {
+      if (deactivated) return; // 멱등
+      deactivated = true;
       tracker.disposeAll();
     },
   };

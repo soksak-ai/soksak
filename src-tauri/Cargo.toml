@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "protocol", "crates/soksak-pty-proto", "crates/soksak-ptyd", "crates/soksak-pty-mirror", "crates/soksak-seal"]
+members = ["cli", "protocol", "crates/soksak-pty-proto", "crates/soksak-ptyd", "crates/soksak-pty-mirror", "crates/soksak-seal", "crates/soksak-service-proto"]
 
 [package]
 # 기본(개발) 정체성. HMR(번들 안 됨)은 이 바이너리명이 독에 그대로 뜬다 → soksak-dev.
@@ -29,6 +29,7 @@ soksak-protocol = { path = "protocol" }
 soksak-pty-proto = { path = "crates/soksak-pty-proto" }
 # X25519 sealed box 단일 진실(secrets 에서 이식) — 앱 볼트와 soksak-ptyd 체크포인트 공용.
 soksak-seal = { path = "crates/soksak-seal" }
+soksak-service-proto = { path = "crates/soksak-service-proto" }
 uuid = { version = "1", features = ["v4"] }
 # 프로세스 그룹 kill(process.rs group 스폰) — 직계 kill 은 손자(에이전트의 Bash 자식 등)를
 # 남겨 stdout EOF·exit 가 지연된다. Unix 전용 사용(killpg).

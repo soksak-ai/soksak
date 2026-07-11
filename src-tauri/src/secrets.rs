@@ -331,10 +331,12 @@ fn validate_ns(ns: &str) -> Result<(), String> {
 
 // 시크릿 key 검증 — 임의 식별자(영숫자·-·_·.). 빈 문자열 거부.
 fn validate_key(key: &str) -> Result<(), String> {
+    // ":" 허용 — "env:<VAR>" 규약(vault_env 동적 주입, PS9)의 접두 구분자. 키는 볼트 entries 맵의
+    // 키로만 쓰이고 ns:key 로 인코딩되지 않으며 aad 에 실리지 않아 안전(경로·셸 주입 면역).
     if !key.is_empty()
         && key
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == ':')
     {
         Ok(())
     } else {
@@ -633,6 +635,28 @@ pub fn resolve(state: &SecretsState, ns: &str, key: &str) -> Result<String, Stri
     state.resolve(ns, key)
 }
 
+// vault_env 주입(PS9) — ns 의 "env:" 접두 볼트 키를 (환경변수명, 평문) 쌍으로 해소한다. "env:" 규약은
+// 1판 buildSecretEnvMap 과 동형(사용자 구성 env 시크릿). 잠김/미존재/해소 실패면 그 키는 건너뛴다
+// (빈 벡터 가능 — loud 실패 아님, 1판 세션-env 폴백과 동형). 평문은 호출자(스폰 env 경계)만 만진다.
+pub fn env_secrets(state: &SecretsState, ns: &str) -> Vec<(String, String)> {
+    let keys = match state.keys(ns) {
+        Ok(k) => k,
+        Err(_) => return vec![],
+    };
+    let mut out = Vec::new();
+    for k in keys {
+        let Some(var) = k.strip_prefix("env:") else { continue };
+        if var.is_empty() {
+            continue;
+        }
+        if let Ok(plain) = state.resolve(ns, &k) {
+            out.push((var.to_string(), plain));
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0)); // 결정적 순서(테스트·재현).
+    out
+}
+
 // ── Tauri 커맨드 ─────────────────────────────────────────────────────────────
 
 #[derive(Serialize)]
@@ -853,6 +877,30 @@ mod tests {
         assert!(!s.has("plugin-b", "token").unwrap()); // A 의 key 가 B 에 안 보임
         assert!(s.keys("plugin-c").unwrap().is_empty());
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // env_secrets(PS9) — ns 의 "env:" 접두 키만 (환경변수명, 평문)으로, 접두 벗기고 정렬. 비-env 키·
+    // 잠김은 제외. 서비스 vault_env 동적 주입의 바닥(1판 buildSecretEnvMap 등가).
+    #[test]
+    fn env_secrets_resolves_env_prefixed_keys() {
+        let (s, dir) = state_with_tmp_vault("envsec");
+        s.unlock("pw").expect("unlock");
+        s.set("wf", "env:ANTHROPIC_AUTH_TOKEN", "tok").expect("set token");
+        s.set("wf", "env:CLAUDE_ACCOUNT_NAME", "acct").expect("set acct");
+        s.set("wf", "apiKey", "not-env").expect("set non-env"); // 비-env 키는 제외
+        let got = env_secrets(&s, "wf");
+        assert_eq!(
+            got,
+            vec![
+                ("ANTHROPIC_AUTH_TOKEN".to_string(), "tok".to_string()),
+                ("CLAUDE_ACCOUNT_NAME".to_string(), "acct".to_string()),
+            ],
+            "env: 키만, 접두 제거, 정렬"
+        );
+        // 잠금 → 빈 벡터(loud 실패 아님).
+        s.lock().expect("lock");
+        assert!(env_secrets(&s, "wf").is_empty(), "잠김이면 빈 벡터");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -21,6 +21,7 @@ mod plugins;
 mod process;
 mod pty;
 mod schedule;
+mod service;
 mod secrets;
 #[cfg(target_os = "macos")]
 mod titlebar;
@@ -122,6 +123,38 @@ pub fn run() {
             // identity 홈 확정 — 모든 경로(데이터·플러그인·사이드카·테마·프로젝트·소켓·시크릿)가
             // 이 값에서 파생되므로 어떤 경로 사용보다 먼저 1회 고정한다(home.rs 원칙).
             home::init(&app.config().identifier);
+            // plugin service 매니저(PS9·PS11) — bind 원장을 읽어 상주 서비스를 올린다. 창-무관이라
+            // 워크스페이스 창 유무와 상관없이 부팅 시 1회. 스폰은 스레드로(부팅 비차단).
+            app.manage(service::ServiceManager::new(
+                std::sync::Arc::new(service::AppServiceHost::new(app.handle().clone())),
+                std::sync::Arc::new(service::ProcessServiceSpawner::new(home::soksak_home())),
+            ));
+            {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || service::boot(&handle));
+            }
+            // 시크릿 볼트 변경 → secrets 의존 서비스 드레인 재시작(PS10). secrets.rs 가 발행하는
+            // "secrets-unlocked"/"secrets-locked" 를 Rust 측에서 구독(secrets↔service 무결합 — R7).
+            // 드레인은 in-flight 완료를 최대 5s 대기하므로 리스너 스레드를 막지 않게 별 스레드로 던진다
+            // (이벤트 구동 — 폴링 0). unlock=새 세대가 토큰 획득(잠금 중 스폰 회복), lock=평문 env 소거.
+            {
+                use tauri::Listener;
+                for ev in ["secrets-unlocked", "secrets-locked"] {
+                    let h = app.handle().clone();
+                    app.listen_any(ev, move |_| {
+                        let h2 = h.clone();
+                        std::thread::spawn(move || {
+                            use tauri::Manager;
+                            if let Some(mgr) = h2.try_state::<service::ServiceManager>() {
+                                let n = mgr.drain_restart_secret_dependents();
+                                if n > 0 {
+                                    eprintln!("[service] 시크릿 변경 → 드레인 재시작 {n}개");
+                                }
+                            }
+                        });
+                    });
+                }
+            }
             // 백업 링 실패 고지에 쓸 앱 핸들을 심는다 — 이후 자동 백업 스냅샷 실패가 activity/알림으로
             // 드러난다(무음 폴백 금지). 데이터 개방보다 먼저 심어 첫 쓰기 신호부터 커버한다.
             data::ring::set_app(app.handle());
@@ -244,7 +277,7 @@ pub fn run() {
                 app.deep_link().on_open_url(move |event| {
                     for u in event.urls() {
                         if let Some((cmd, params)) = deeplink::parse_command_url(u.as_str()) {
-                            let _ = ipc::request_command(&dl_handle, cmd, params, 10_000, None);
+                            let _ = ipc::request_command(&dl_handle, cmd, params, 10_000, None, None);
                         }
                     }
                 });
@@ -328,6 +361,9 @@ pub fn run() {
                     // 브레이커 엔트리 폐기 — 창 label 은 재사용 안 되므로 남기면 맵이 무한 증가(느린 누수).
                     webview_health::forget_window(window.app_handle(), window.label());
                     let app = window.app_handle();
+                    // 파괴된 창의 pending 명령을 즉시 회수 — 대기자(route·스케줄 lease)를
+                    // 타임아웃까지 방치하지 않는다(WINDOW_DESTROYED 즉시 응답).
+                    app.state::<ipc::CmdBridge>().cancel_window(window.label());
                     // 창=프로젝트 수명(P6): 창이 파괴되면 그 창이 소유한 프로젝트 데몬도 함께 종료한다.
                     app.state::<crate::daemon::DaemonManager>().kill_by_window(window.label());
                     // 프로젝트 전역 단일 오픈(P6): 죽은 창의 점유를 해제해 다른 창이 그 프로젝트를
@@ -409,6 +445,10 @@ pub fn run() {
             notify::notify_show,
             schedule::schedule_set,
             schedule::schedule_register,
+            service::service_dispatch,
+            service::service_ledger_sync,
+            service::service_bus_push,
+            service::service_status,
             schedule::schedule_poke,
             schedule::schedule_cancel,
             schedule::schedule_list,
@@ -544,6 +584,8 @@ pub fn run() {
                 app_handle.state::<PtyManager>().kill_all();
                 daemon::kill_all(app_handle);
                 app_handle.state::<ProcessManager>().kill_all();
+                // 상주 plugin service 잔존 0(PS10) — shutdown 통지 후 강제 종료.
+                app_handle.state::<service::ServiceManager>().kill_all();
                 app_handle.state::<ws::WsManager>().close_all();
                 ipc::cleanup();
                 mediaproxy::cleanup();
