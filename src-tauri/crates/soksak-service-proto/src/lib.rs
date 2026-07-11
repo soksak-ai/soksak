@@ -1,9 +1,10 @@
 //! Plugin service wire contract — the single source for everything the app and
 //! a plugin service binary must agree on: the protocol version, the contract
 //! id, the stdio NDJSON frame set, the closed error-code enum, the bind-ledger
-//! types and path derivation, and the supervision constants. This crate holds
-//! no transport code: constants, path derivation, and serde types only.
-//! Consumers depend on this crate — never copy a constant out.
+//! types and path derivation, the supervision constants, and the reference
+//! `serve` harness (the sidecar-side serve loop, PS17). The wire has one source,
+//! read from both ends — the core frames with the types here, the sidecar serves
+//! with [`serve`]. Consumers depend on this crate — never copy a constant out.
 //!
 //! Behavioral and coupling law: docs/PLUGIN-SERVICE.md (PS clauses). Wire
 //! framing is NDJSON over stdio: one JSON value per line, both directions.
@@ -11,6 +12,9 @@
 //! The manifest-side mirror of [`SERVICE_INTERFACE`] lives in
 //! `@soksak-ai/plugin-spec` (service.ts) — the service.test.ts / lib.rs test
 //! pair pins both sides to the same literal.
+
+mod serve;
+pub use serve::{serve, serve_stdio, Emit, OpCtx, Outcome, ServiceHandler};
 
 use std::path::{Path, PathBuf};
 
