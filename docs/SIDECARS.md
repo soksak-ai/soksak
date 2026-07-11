@@ -21,7 +21,7 @@ Sidecars come in two **models** (an orthogonal axis: runtime shape, not identity
 |---|---|---|
 | Runs as | separate process (`app.process` spawn) | in-process dylib (core dlopen) |
 | Surface | none (headless) | renders into pane surfaces (NSView) |
-| Channel | stdio — see the wire rule below | opaque JSON over the hosting ABI |
+| Channel | stdio (spawner-bound — see the wire rule below); or NDJSON over a UDS for a survival service (§1 survival clause) | opaque JSON over the hosting ABI |
 | Self-description | none (manifest-less, unchanged standard) | exported C symbols (binary is the single truth) |
 | Core awareness | none — core doesn't know it is a sidecar | loads + verifies + relays, understands nothing |
 
@@ -47,6 +47,19 @@ The service axis runs in two drive modes on that one wire: **plugin-driven** (co
 spawns, frames, and routes its `bind:"service"` commands — declared with a manifest
 `service` block, `entry: null` lawful). Both are legislated in docs/PLUGIN-SERVICE.md.
 "Plugin service" is the core-routed mode; never call it "service sidecar".
+
+**A survival service uses UDS, not stdio (legislated by the terminal-mirror plan, C4/C5 —
+2026-07-12).** Both drive modes above bind the service's lifetime to a pipe: a stdio
+service dies when the spawner's fd closes. A **survival service** must outlive every
+process that spawned it — `soksak-sidecar-terminal-mirror` (§9) checkpoints shells that
+themselves survive an app exit, so it cannot die with the app. It therefore does not use
+stdio; it binds a rendezvous socket in the identity home and is reached over NDJSON on that
+UDS, with a singleton probe on start and a detached spawn (`process.detached`) — the same
+transport shape as the core PTY daemon it peers with. This is a distinct point on the wire
+axis, not an exception to `soksak-service-spec@1`: that spec frames spawner-bound stdio
+services; a survival service is reached by socket precisely because its reason to exist is
+to not share the spawner's lifetime. Its own contract carries the message shapes
+(`soksak-sidecar-terminal-mirror-spec@1`), the `hello` handshake isomorphic to the daemon's.
 
 **Names never encode the model** (`soksak-sidecar-<name>` for both): the model is
 machine-encoded (attachment path, artifact kind, ABI self-report); putting it in
@@ -301,3 +314,33 @@ In-page UI (anchor-positioned popovers, the design-canvas pattern) was never
 affected.
 Diagnostics: `stats.dbg.framesPresented` counts presented offscreen frames
 (0 while idle/hidden is correct — presents stop when nothing changes).
+
+## 9. Terminal-mirror service — `soksak-sidecar-terminal-mirror-spec@1`
+
+A **service-model survival sidecar** (§1): headless, separate process, reached over NDJSON
+on a UDS in the identity home. It owns the terminal domain's screen work — the VT mirror,
+ANSI serialization, and checkpoint policy — while the core PTY daemon (`soksak-ptyd`) keeps
+byte survival, the raw ring with a monotonic sequence, the tee face, and a content-agnostic
+sealed-blob store (ARCHITECTURE A13; RESTORE.md). The full contract lives in the sidecar
+repo's `SPEC.md`; this entry is the core-doc index.
+
+- **Consumers:** the terminal plugin *family*, not one plugin. `soksak-plugin-terminal`
+  (xterm) declares `sidecars: [{ "name": "terminal-mirror", "interface":
+  "soksak-sidecar-terminal-mirror-spec@1" }]`; a ghostty terminal plugin declares the
+  identical entry. One binary, one contract, shared — input is a raw byte stream and output
+  is ANSI paint, so no consumer couples to the engine.
+- **Two faces:** a *server* face — plugins request `rehydrate`/`coldPaint`/`status` for
+  warm/cold restore — and a *consumer* face — the sidecar subscribes to the daemon tee and
+  pushes serialized plaintext to the daemon's sealed-blob store; it never touches a key.
+- **Discovery / spawn:** the consuming plugin spawns it through the `process` capability
+  with the detached option; the core resolves `cmd "sidecar:terminal-mirror"` via
+  `resolve_sidecar_cmd` (src-tauri/src/process.rs) to
+  `<home>/sidecars/soksak-sidecar-terminal-mirror/dist/soksak-sidecar-terminal-mirror` —
+  the identity home is the only resolution path (A17); no PATH, no `sok` registry (§2).
+- **Failure:** sidecar death leaves shells and the live path untouched (the daemon owns
+  byte survival); only restore fidelity degrades, announced loudly, with a fall to the seal
+  path (the plugin fetches the sealed blob from the daemon and opens it with the app vault)
+  and a respawn. Never silent.
+- **Engine:** the VT state machine (alacritty_terminal today) is an internal, replaceable
+  dependency — it names nothing in the contract, the messages, or the artifact (§1,
+  NAMING.md §2).
