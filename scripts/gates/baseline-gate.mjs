@@ -21,6 +21,7 @@
 import { readdirSync, readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, resolve, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { stripRustTestModule } from "./core-decoupling-scan.mjs";
 
 // ── 지표 정의 ──────────────────────────────────────────────────────────────
 
@@ -36,14 +37,19 @@ const METRICS = [
     baselineFile: "baseline-unwrap.txt",
     roots: ["src-tauri/src", "src-tauri/cli/src", "src-tauri/protocol/src"],
     exts: [".rs"],
-    // 파일 전문 계수(인라인 #[cfg(test)] 모듈 포함 — 보수적 봉인, 숨는 방향의 오차가 없다).
-    measure: (text) => text.split(NEEDLE).length - 1,
+    // 배포 코드만 계수 — 인라인 #[cfg(test)] 모듈은 stripRustTestModule 로 제외한다(C1·
+    // core-git-scan·core-terminal-scan 과 동일 제외 정책, 게이트 간 일관). 판정: unwrap 결함
+    // 기준은 배포 코드의 견고성 결함(패닉 경로)을 추적하려는 것이고, 테스트 unwrap 은 Rust
+    // idiom(테스트의 실패 메커니즘)이라 결함이 아니다. 테스트를 계수하면 게이트가 노이즈를
+    // 추적하고 테스트 추가마다 재입법 churn 을 강제해 신호가 약해진다 — 제외가 기준을 강화한다.
+    measure: (text) => stripRustTestModule(text).split(NEEDLE).length - 1,
     unit: "건",
     fixHint: `\`${NEEDLE}\` 를 에러 전파(\`?\`)·명시 처리로 대체한 뒤 --prune 으로 축소를 반영한다`,
     headerLines: [
-      `# baseline-unwrap — 파일별 \`${NEEDLE}\` 봉인 수. 이 파일은 봉인이지 해소가 아니다.`,
+      `# baseline-unwrap — 파일별 배포-코드 \`${NEEDLE}\` 봉인 수. 이 파일은 봉인이지 해소가 아니다.`,
+      "# 인라인 #[cfg(test)] 모듈은 계수하지 않는다(테스트 unwrap=idiom, 결함 아님 — 게이트 간 일관).",
       "# 갱신은 --prune(축소)만. 값을 올리는 것은 명시 재입법 커밋으로만 한다(C5 — 무언 완화 금지).",
-      `# 제거 조건: 해당 파일의 \`${NEEDLE}\` 를 에러 전파/명시 처리로 대체 → stale 실패 → --prune. 0이면 항목이 삭제된다.`,
+      `# 제거 조건: 해당 파일의 배포 \`${NEEDLE}\` 를 에러 전파/명시 처리로 대체 → stale 실패 → --prune. 0이면 항목이 삭제된다.`,
       "# 파일 개명 시 같은 커밋에서 항목 경로를 수기로 이전한다(값 불변).",
     ],
   },

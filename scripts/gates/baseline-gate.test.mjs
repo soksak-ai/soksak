@@ -85,6 +85,29 @@ describe("baseline-gate", () => {
     expect(r.out).toContain("신규 위반 unwrap: src-tauri/src/a.rs");
   });
 
+  it("unwrap 은 배포 코드만 계수한다 — 인라인 #[cfg(test)] 모듈 unwrap 은 제외(테스트 idiom)", () => {
+    // 배포 2건 + 테스트 모듈 3건 = 전문 5건이지만, unwrap 봉인은 배포 2건만 본다.
+    const shipTwoTestThree =
+      "fn ship() { x.unwrap(); y.unwrap(); }\n#[cfg(test)]\nmod tests {\n    fn t() { a.unwrap(); b.unwrap(); c.unwrap(); }\n}\n";
+    write("src-tauri/src/a.rs", shipTwoTestThree);
+    expect(runGate("--init").status).toBe(0);
+    expect(readFileSync(join(root, "scripts/gates/baseline-unwrap.txt"), "utf8")).toContain(
+      "src-tauri/src/a.rs 2",
+    );
+    expect(runGate().status).toBe(0);
+    // 테스트 모듈 unwrap 을 더 넣어도 위반이 아니다(계수 밖).
+    write(
+      "src-tauri/src/a.rs",
+      "fn ship() { x.unwrap(); y.unwrap(); }\n#[cfg(test)]\nmod tests {\n    fn t() { a.unwrap(); b.unwrap(); c.unwrap(); d.unwrap(); e.unwrap(); }\n}\n",
+    );
+    expect(runGate().status).toBe(0);
+    // 배포 코드 unwrap 이 늘면 여전히 잡힌다 — 신호는 살아 있다.
+    write("src-tauri/src/a.rs", "fn ship() { x.unwrap(); y.unwrap(); z.unwrap(); }\n");
+    const r = runGate();
+    expect(r.status).toBe(1);
+    expect(r.out).toContain("신규 위반 unwrap: src-tauri/src/a.rs");
+  });
+
   it("상한 초과 파일이 새로 생기면 실패한다", () => {
     expect(runGate("--init").status).toBe(0);
     write("src/huge.ts", longFile(LENGTH_LIMIT + 1));
