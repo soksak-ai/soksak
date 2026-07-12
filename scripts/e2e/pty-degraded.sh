@@ -40,17 +40,22 @@ restore_sidecar
 echo "  사이드카 무력화: $([ -f "$SIDECAR_BIN" ] && echo PRESENT || echo HIDDEN)"
 
 export PS_SOCK="$SOCK" PS_APP_BIN="$APP_BIN" PS_KEEP="${KEEP:-0}" PS_PTYD_BIN="$PTYD_BIN"
-export PS_PROGRAM="${SOKSAK_TERM_PROGRAM:-terminal-xterm}"
+export PS_PROGRAM="${SOKSAK_TERM_PROGRAM:-terminal-xterm}" PS_APP_HOME="$E2E_APP_HOME"
 python3 - <<'PYEOF'
-import base64, json, os, re, socket, subprocess, sys, time, hashlib
+import base64, glob, json, os, re, shutil, socket, subprocess, sys, time, hashlib
 
 SOCK = os.environ["PS_SOCK"]; APP_BIN = os.environ["PS_APP_BIN"]
 KEEP = os.environ["PS_KEEP"] == "1"; PTYD_BIN = os.environ["PS_PTYD_BIN"]
-PROGRAM = os.environ["PS_PROGRAM"]
+PROGRAM = os.environ["PS_PROGRAM"]; APP_HOME = os.environ["PS_APP_HOME"]
 E2E_HOME = os.path.join(os.environ["HOME"], ".soksak-e2e")
-ROOT = os.path.join(E2E_HOME, "pty-degraded")        # 창 carrier
-PROJ = os.path.join(E2E_HOME, "pty-degraded-proj")   # 대상(신선 터미널 1개)
-ALIAS = "pty-degraded-e2e"
+ROOT = os.path.join(E2E_HOME, "pty-degraded")        # 창 carrier(고정 — 터미널 없음)
+RUNS = os.path.join(E2E_HOME, "pty-degraded-runs")   # 런별 대상의 부모
+# 대상 프로젝트는 런마다 유일하다(team-lead ①: degraded 전용·불공유 pane id). 고정 루트는 세션·
+# command_blocks·봉인이 프로젝트 키로 누적돼 다음 establish 를 오염(warm 재부착·블록 repaint)시킨다.
+# 유일 루트면 establish 가 진짜 clean first-open, 재기동 복원은 이 런이 만든 세션에만 warm 후보가 된다.
+RUNID = f"{int(time.time() * 1000)}-{os.getpid()}"
+PROJ = os.path.join(RUNS, RUNID)
+ALIAS = f"pty-degraded-{RUNID}"
 TMP = os.path.join(E2E_HOME, "pty-degraded-artifacts")
 os.makedirs(ROOT, exist_ok=True); os.makedirs(PROJ, exist_ok=True); os.makedirs(TMP, exist_ok=True)
 
@@ -85,17 +90,43 @@ APP_PAT = "soksak-debug.app/Contents/MacOS"
 def app_alive():
     return subprocess.run(["pgrep", "-f", APP_PAT], capture_output=True).returncode == 0
 
-def terminate():
+def app_kill():
+    # 앱만 종료(ptyd 는 건드리지 않는다). 셸 세션이 앱 재시작을 넘어 살아남아야 재기동 복원이
+    # warm 재부착 후보(paneAlive=true)가 되어 degraded 경로를 탄다 — pty-survival 보존 경로와 동형.
+    # 세션 정리는 pkill 이 아니라 문서화된 데몬 제어(reap_all_sessions)가 한다(정공법).
     subprocess.run(["pkill", "-TERM", "-f", APP_PAT])
     for _ in range(60):
         if not app_alive(): break
         time.sleep(0.5)
     if app_alive():
         subprocess.run(["pkill", "-9", "-f", APP_PAT]); time.sleep(1)
-    # 생존 사이드카/데몬도 리셋 — 신선 기동에서 사이드카가 정말 미가동이도록.
-    subprocess.run(["pkill", "-9", "-f", "soksak-debug/sidecars/soksak-sidecar-terminal"])
-    subprocess.run(["pkill", "-9", "-f", "soksak-debug/bin/soksak-ptyd"])
     time.sleep(1)
+
+def daemon_sessions():
+    try:
+        r = rpc("pty.daemon.status"); return int(r.get("sessions") or 0)
+    except Exception:
+        return -1
+
+def reap_all_sessions():
+    # 정공법 reap — 문서화된 pty.daemon.restart(데몬-소유 전 셸 kill 후 신선 데몬 기동). 이전 런/
+    # 페이즈가 남긴 생존 세션을 결정적으로 없애 establish 페이즈가 진짜 clean first-open 이 되게 한다.
+    # 멱등: 세션 0 이면 killed 0 (no-op). destructive 게이트는 하니스가 배타 점유한 debug 홈이라 무해.
+    try:
+        r = rpc("pty.daemon.restart"); return int(r.get("killed") or 0)
+    except Exception as e:
+        print(f"  reap 경고(무시): {e}"); return -1
+
+def degraded_fresh_count():
+    # 활동 플러그인이 아직 안 뜬 소켓-업 직후엔 조회가 실패할 수 있다 → 0(이벤트 아직 없음).
+    try:
+        kinds, _ = activity_kinds()
+    except Exception:
+        return 0
+    return sum(1 for k in kinds if "restore.degraded-fresh" in k)
+
+def ptyd_alive():
+    return subprocess.run(["pgrep", "-f", "soksak-debug/bin/soksak-ptyd"], capture_output=True).returncode == 0
 
 def launch():
     env = dict(os.environ)
@@ -153,44 +184,117 @@ def activity_kinds(limit=60):
     blob = " ".join(json.dumps(e, ensure_ascii=False) for e in entries if isinstance(e, dict))
     return kinds, blob
 
-# ── 0. 준비: 사이드카 미가동 상태로 신선 기동 ────────────────────────────────────
+def launch_socket_only():
+    # 소켓만 확인하고 즉시 반환(hydration/복원 페인트 대기 없음) — 복원이 degraded-fresh 를 쏘기
+    # '전에' 활동 피드 기준선을 잡기 위해서다.
+    env = dict(os.environ)
+    if os.path.exists(PTYD_BIN): env["SOKSAK_PTYD_BIN"] = PTYD_BIN
+    log = open(os.path.join(TMP, "app.log"), "ab")
+    subprocess.Popen([APP_BIN], env=env, stdout=log, stderr=log, start_new_session=True)
+    assert wait_socket(), "앱 소켓 기동 실패"
+
+def find_degraded_window():
+    for l in rpc("window.list").get("labels", []):
+        if not str(l).startswith("w-"): continue
+        try:
+            tr = rpc("state.tree", window=l, timeout=4)
+            if any(str(p.get("alias")) == ALIAS or RUNID in str(p.get("root", "")) for p in tr.get("projects", [])):
+                return l
+        except Exception: pass
+    return None
+
+# ── 0. clean slate: 기동 → 이전 런/페이즈 생존 세션을 문서화된 데몬 제어로 reap ──────────────
+# degraded-fresh 는 소비자가 warm 후보(살아있는 세션)를 rehydrate 하려다 사이드카 미가동으로
+# 실패할 때만 발행된다(플러그인 orchestrateRestore: paneAlive=true + 사이드카 down + 봉인 없음).
+# 따라서 하니스는 pty-survival 처럼 세션을 '먼저 establish' 하고 앱만 재기동해 복원을 태워야 한다.
+# 오염(이전 런의 생존 세션에 warm 재부착 → stale 버퍼 재생으로 화면만 위양성)을 없애려면 시작 시
+# 전 세션을 reap 해 establish 가 진짜 clean first-open 이 되게 한다.
 if app_alive():
-    print("  기존 debug 앱 감지 — 종료 후 하니스 소유로 재기동"); terminate()
+    print("  기존 debug 앱 감지 — 종료 후 하니스 소유로 재기동"); app_kill()
+# 이전 런의 봉인-블롭/체크포인트 제거 → establish 가 진짜 '봉인 없음' clean first-open 이 된다.
+# 사이드카 down 이라 이 하니스는 새 봉인을 안 만들지만, 사이드카가 살아 있던 과거 런(예: cold-realistic)
+# 의 잔재 blob 이 establish 에서 cold 복원을 유발해 오염시킨다 — cold-realistic 과 동형으로 <home>/pty 를 걷는다.
+subprocess.run(["rm", "-rf", os.path.join(APP_HOME, "pty")])
 launch()
-for l in rpc("window.list").get("labels", []):
+killed = reap_all_sessions(); time.sleep(3)  # 문서화된 데몬 제어로 전 세션 reap + 재기동 안정화
+for l in list(rpc("window.list").get("labels", [])):
     if str(l).startswith("w-"):
         try:
             tr = rpc("state.tree", window=l, timeout=4)
             if any("pty-degraded" in str(p.get("root", "")) for p in tr.get("projects", [])):
                 rpc("window.close", {"label": l}); time.sleep(0.5)
         except Exception: pass
+# 이전 런의 유일-루트 잔재 정리(멱등) — recent 목록에서 제거 + 디렉토리 삭제(현재 런 제외).
+for old in glob.glob(os.path.join(RUNS, "*")):
+    if os.path.abspath(old) == os.path.abspath(PROJ): continue
+    try: rpc("project.recent.remove", {"root": old})
+    except Exception: pass
+    shutil.rmtree(old, ignore_errors=True)
+print(f"  clean slate: reap killed={killed}, 잔여 세션={daemon_sessions()}, blob store 제거, 유일 루트={RUNID}")
 
-# ── 1. 창 + 신선 터미널(복원할 것 없음, 사이드카 미가동) ──────────────────────────
+NOTICE = "복원 서비스 미가동"
+
+# ── 1. establish: degraded 전용 pane 에 세션 생성. clean slate 라 paneAlive=false → 조용한 fresh
+#      스폰(고지 없음). 이 세션이 앱 재시작을 넘어 살아남아야 복원이 warm 후보가 된다. ──────────
 r = rpc("window.open", {"root": ROOT}); time.sleep(4)
 WIN = r.get("label") or r.get("existingWindow")
-assert WIN, f"창 생성 실패: {r}"
+assert WIN, f"establish: 창 생성 실패: {r}"
 created = rpc("project.open", {"root": PROJ, "alias": ALIAS, "program": PROGRAM}, window=WIN)
-assert created.get("ok"), f"project.open 실패: {created}"
-# degraded 는 rehydrate 유계 재시도(사이드카가 끝내 안 뜸, 수 초)를 소진한 뒤에야 고지한다 —
-# 고정 sleep 대신 고지가 뜰 때까지 유계 폴링(재시도 지연 흡수). 종료 조건 = 고지 등장 or 상한.
-NOTICE = "복원 서비스 미가동"
-time.sleep(2)  # 마운트 시작
+assert created.get("ok"), f"establish: project.open 실패: {created}"
+time.sleep(3)
 pane = None
-for _ in range(28):  # ~14s 상한(재시도 데드라인 4s + 마운트/페인트 여유)
+for _ in range(24):
     time.sleep(0.5)
     pane = pane_of(WIN)
-    if pane and NOTICE in term_read(WIN, pane, lines=60): break
-assert pane, "터미널 pane 을 찾지 못함"
-print(f"  창={WIN} pane={pane} program={PROGRAM}")
+    if pane: break
+assert pane, "establish: 터미널 pane 을 찾지 못함"
+m0 = exec_and_read(WIN, pane, "echo PDEGR_EST=$$", r"PDEGR_EST=(\d+)", secs=12)
+assert m0, "establish: 셸이 명령에 응답 안 함(세션 미생성)"
+est_pid = m0.group(1)
+est_txt = term_read(WIN, pane, lines=60)
+if NOTICE not in est_txt: ok("establish: clean first-open 은 무음(degraded 고지 없음)")
+else: ng(f"establish 오염: clean 이어야 할 first-open 에 이미 degraded 고지 — reap 실패? {est_txt[:120]!r}")
+print(f"  establish: 창={WIN} pane={pane} 셸 pid={est_pid} 세션수={daemon_sessions()}")
+time.sleep(3)  # 자동저장 디바운스 정착 — establish 창/프로젝트가 세션에 저장돼야 재기동이 복원한다.
 
-# ── 2. degraded-fresh 판정 ───────────────────────────────────────────────────
-text = term_read(WIN, pane, lines=60)
+# ── 2. 앱 종료(ptyd 보존) — 세션이 detach 생존해야 복원이 warm 후보가 된다 ──────────────────
+# 앱이 죽으면 앱 소켓으로 세션수 조회 불가 → 생존 증거는 phase 5 의 재부착 pid 동일성이다.
+app_kill()
+if ptyd_alive(): ok("앱 종료 후 ptyd 데몬 생존(세션 detach 유지)")
+else: ng("앱 종료 후 ptyd 데몬 부재 — 세션 detach 실패로 degraded 전제 미성립")
+
+# ── 3. RED 판정선: 재기동 복원(사이드카 미가동) → orchestrateRestore warm+down → degraded-fresh.
+#      before_df 를 복원 발행 '전' 신선 피드에서 잡아, 이번 복원이 새로 쏜 이벤트만 인정한다 —
+#      생존 세션 stale 버퍼 재생은 활동 이벤트를 재발행하지 않으므로 화면 위양성을 이 단언이 막는다. ──
+launch_socket_only()
+before_df = degraded_fresh_count()
+time.sleep(6)  # hydration + 터미널 마운트 + rehydrate 데드라인(4s) 경과
+RWIN = WIN if WIN in rpc("window.list").get("labels", []) else find_degraded_window()
+assert RWIN, "복원: degraded 창을 못 찾음"
+pane = None
+for _ in range(28):  # ~14s 상한
+    time.sleep(0.5)
+    pane = pane_of(RWIN)
+    if pane and NOTICE in term_read(RWIN, pane, lines=60): break
+assert pane, "복원: 터미널 pane 을 찾지 못함"
+print(f"  복원: 창={RWIN} pane={pane} program={PROGRAM} before_df={before_df}")
+
+# ── 4. degraded-fresh 판정 ───────────────────────────────────────────────────
+text = term_read(RWIN, pane, lines=60)
 if NOTICE in text: ok("degraded: 화면에 loud 고지(무음 아님)")
 else: ng(f"degraded: 화면 고지 부재 — 버퍼 발췌 {text[:120]!r}")
 
+# 활동 로그 고지 — 이번 복원이 '새로' 쏜 degraded-fresh 여야 한다(전파 지연 흡수 유계 폴링).
+after_df = before_df
+for _ in range(16):
+    after_df = degraded_fresh_count()
+    if after_df > before_df: break
+    time.sleep(0.5)
 kinds, blob = activity_kinds()
-if any("restore.degraded-fresh" in k for k in kinds): ok("degraded: 활동 로그 고지(terminal.restore.degraded-fresh)")
-else: ng(f"degraded: 활동 고지 부재 — kinds {sorted(set(kinds))[:12]}")
+if after_df > before_df:
+    ok(f"degraded: 활동 로그 고지(terminal.restore.degraded-fresh, 이번 복원 신규 {before_df}->{after_df})")
+else:
+    ng(f"degraded: degraded-fresh 활동 이벤트 미발행(before={before_df} after={after_df}) — 복원 경로 미실행/stale 재생 의심. kinds {sorted(set(kinds))[:12]}")
 if any("sidecar" in k and "spawn-failed" in k for k in kinds): ok("degraded: 사이드카 스폰 실패도 고지")
 else: ng("degraded: 사이드카 스폰 실패 미고지")
 
@@ -201,18 +305,26 @@ if ("TypeError" in blob) or ("is not a function" in blob) or ("Cannot read" in b
     ng(f"degraded: 런타임 크래시 흔적 — {blob[:200]}")
 else: ok("degraded: TypeError/undefined 크래시 없음")
 
-# ── 3. 신선 셸이 실제로 산다(복원은 없어도 라이브는 동작) ─────────────────────────
-m = exec_and_read(WIN, pane, "echo PDEGR_LIVE=$$", r"PDEGR_LIVE=(\d+)")
-if m: ok(f"degraded: 신선 셸 라이브 동작(pid {m.group(1)})")
-else: ng("degraded: 신선 셸이 명령에 응답 안 함")
+# ── 5. 셸이 실제로 산다(복원이 degraded 라도 라이브 셸은 동작) — degraded-fresh 활동 이벤트가
+#      이미 warm 후보(paneAlive=true) 였음을 증명하므로 pid 동일성은 강제하지 않는다(고지 문구대로
+#      새 셸로 갈 수 있다). ────────────────────────────────────────────────────────────────
+m = exec_and_read(RWIN, pane, "echo PDEGR_LIVE=$$", r"PDEGR_LIVE=(\d+)")
+if m: ok(f"degraded: 셸 라이브 동작(pid {m.group(1)}, establish {est_pid})")
+else: ng("degraded: 셸이 명령에 응답 안 함")
 
-snapshot(WIN, "degraded-fresh")
+snapshot(RWIN, "degraded-fresh")
 
-# ── 4. 정리(멱등) ────────────────────────────────────────────────────────────
+# ── 6. 정리(멱등) — 창 닫기(KillByWindow reap) + 전 세션 reap + 앱 종료 ──────────────────────
 if not KEEP:
-    try: rpc("window.close", {"label": WIN})
+    try: rpc("window.close", {"label": RWIN})
     except Exception: pass
-    terminate()
+    time.sleep(0.5)
+    reap_all_sessions()
+    try:
+        rpc("project.recent.remove", {"root": PROJ}); rpc("project.recent.remove", {"root": ROOT})
+    except Exception: pass
+    app_kill()
+    subprocess.run(["rm", "-rf", os.path.join(APP_HOME, "pty")])  # 봉인-블롭 누수 방지(멱등)
 
 n = len(PASS); f = len(FAIL)
 print(f"pty-degraded: PASS={n} FAIL={f}  산출물={TMP}")
