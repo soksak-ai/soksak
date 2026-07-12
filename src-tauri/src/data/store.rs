@@ -166,6 +166,65 @@ fn select_and_delete(
 
 // [단계①·R5] retention count FIFO — (ns,coll,scope) 수가 cap 초과 시 oldest(created) 초과분 삭제. created
 // 정렬(updated 금지: 변환 UPDATE 가 updated 를 바꾸면 축출 순서 비결정). insert 시점 호출(주기 sweep 아님).
+// ns 통째 회수 — 그 네임스페이스가 만든 모든 것을 지운다(레코드·kv·컬렉션 정의·FTS 표·표현식 인덱스).
+// 이 표면이 없어서 회수 3축의 데이터 축이 뚫려 있었다: 하니스·플러그인이 ns 를 만들 수는 있는데
+// 걷을 수는 없어, 시험이 끝나도 남의 저장소에 흔적이 남았다(실측). 만드는 길이 있으면 걷는 길도 있어야 한다.
+// 반환 = 지운 레코드·kv 행 수와 컬렉션 수. 없는 ns 는 실패가 아니라 0 이다(멱등).
+pub struct NsRemoval {
+    pub collections: usize,
+    pub records: usize,
+    pub kv: usize,
+}
+
+pub fn drop_ns(conn: &Connection, ns: &str) -> Result<NsRemoval, String> {
+    let cids: Vec<i64> = {
+        let mut stmt = conn
+            .prepare("SELECT cid FROM meta_collections WHERE ns=?1")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([ns], |r| r.get::<_, i64>(0))
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?
+    };
+    let records = conn
+        .execute("DELETE FROM records WHERE ns=?1", [ns])
+        .map_err(|e| e.to_string())?;
+    let kv = conn
+        .execute("DELETE FROM kv WHERE ns=?1", [ns])
+        .map_err(|e| e.to_string())?;
+    for cid in &cids {
+        // FTS 표는 그 컬렉션 전용이라 통째로 버린다. 표현식 인덱스는 records(공유 표)에 붙어 있으므로
+        // 이름으로 찾아 떨어뜨린다 — 남기면 지운 컬렉션의 인덱스가 다른 ns 의 쓰기를 계속 무겁게 한다.
+        conn.execute_batch(&format!(
+            "DROP TABLE IF EXISTS {};",
+            fts_table(*cid)
+        ))
+        .map_err(|e| e.to_string())?;
+        let idx_names: Vec<String> = {
+            let mut stmt = conn
+                .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE ?1")
+                .map_err(|e| e.to_string())?;
+            let rows = stmt
+                .query_map([format!("idx_{cid}_%")], |r| r.get::<_, String>(0))
+                .map_err(|e| e.to_string())?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?
+        };
+        for name in idx_names {
+            conn.execute_batch(&format!("DROP INDEX IF EXISTS {name};"))
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    conn.execute("DELETE FROM meta_collections WHERE ns=?1", [ns])
+        .map_err(|e| e.to_string())?;
+    Ok(NsRemoval {
+        collections: cids.len(),
+        records,
+        kv,
+    })
+}
+
 pub fn retention_trim(conn: &Connection, ns: &str, coll: &str, scope: &str, cap: i64) -> Result<usize, String> {
     select_and_delete(
         conn,
@@ -938,6 +997,46 @@ mod tests {
         conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
         super::super::init_base(&conn).unwrap();
         conn
+    }
+
+    // ns 회수 — 만드는 길이 있으면 걷는 길도 있어야 한다. 이 표면이 없어서 시험이 남의 저장소에
+    // 흔적을 남겼다(실측). 남의 ns 는 절대 건드리지 않는다는 것이 이 삭제의 유일한 안전장치다.
+    #[test]
+    fn drop_ns_reclaims_everything_that_ns_made_and_nothing_else() {
+        let c = mem();
+        define(&c, "plugin:probe", "t", &["issue".into()], &["title".into()]).unwrap();
+        put(&c, "plugin:probe", "t", "s", Some("x1".into()), &json!({"issue":"i-1","title":"probe"})).unwrap();
+        kv_set(&c, "plugin:probe", "k", &json!({"a":1})).unwrap();
+
+        define(&c, "plugin:keeper", "t", &["issue".into()], &[]).unwrap();
+        put(&c, "plugin:keeper", "t", "s", Some("y1".into()), &json!({"issue":"i-2"})).unwrap();
+        kv_set(&c, "plugin:keeper", "k", &json!({"b":2})).unwrap();
+
+        let out = drop_ns(&c, "plugin:probe").unwrap();
+        assert_eq!((out.collections, out.records, out.kv), (1, 1, 1));
+
+        // 지운 ns 는 흔적이 없다 — 레코드·kv·컬렉션 정의·표현식 인덱스·FTS 표까지.
+        assert!(query(&c, "plugin:probe", "t", Some("s"), None, None, false, None, None, None).unwrap().is_empty());
+        assert!(kv_get(&c, "plugin:probe", "k").unwrap().is_none());
+        let leftovers: i64 = c
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE name LIKE 'idx_%' AND sql LIKE '%issue%'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(leftovers, 1, "남은 issue 인덱스는 keeper 것 하나뿐이다");
+
+        // 남의 ns 는 그대로다.
+        assert_eq!(
+            query(&c, "plugin:keeper", "t", Some("s"), None, None, false, None, None, None).unwrap().len(),
+            1
+        );
+        assert!(kv_get(&c, "plugin:keeper", "k").unwrap().is_some());
+
+        // 멱등 — 없는 ns 를 지우는 것은 실패가 아니다.
+        let again = drop_ns(&c, "plugin:probe").unwrap();
+        assert_eq!((again.collections, again.records, again.kv), (0, 0, 0));
     }
 
     // 파괴적 개명 후폭풍: ns=pluginId 라 개명하면 옛 이력이 새 id 에서 불가시하다. renamedFrom

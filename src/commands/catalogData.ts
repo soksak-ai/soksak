@@ -20,6 +20,33 @@ const COLL_PARAM = {
 } as const;
 
 export function registerDataCatalog(): void {
+  // ns 회수 — 만드는 길이 있으면 걷는 길도 있어야 한다. 이 표면이 없어서 시험(e2e·프로빙)이 만든
+  // 네임스페이스를 걷을 수 없었고, 회수 3축의 데이터 축이 뚫려 있었다.
+  register("data.ns.remove", {
+    description:
+      "Remove a data namespace and everything it made: its records, kv rows, collection definitions, FTS tables and expression indexes. Other namespaces are untouched. Removing a namespace that does not exist is not a failure — it reports zeros.",
+    triggers: { ko: "데이터 네임스페이스 삭제 회수" },
+    params: { ns: { type: "string", required: true, description: "Namespace to remove" } },
+    danger: "destructive",
+    returns: "{ ns, collections, records, kv }",
+    message: (d) =>
+      tmsg("msg.data.ns.remove", {
+        ns: String(d.ns),
+        n: Number(d.records) + Number(d.kv),
+      }),
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['sok data.ns.remove \'{"ns":"plugin:probe-lane"}\''],
+    handler: async (p) => {
+      if (typeof p.ns !== "string" || !p.ns) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns 필요" };
+      }
+      return invoke<{ ns: string; collections: number; records: number; kv: number }>(
+        "data_ns_remove",
+        { ns: p.ns },
+      );
+    },
+  });
+
   // 저장소 자기 진단 — 부팅 게이트(quick_check)는 인덱스↔테이블 대조를 하지 않아 인덱스 손상을
   // 통과시킨다. 그 상태의 저장소는 읽기는 멀쩡하고 쓰기만 무너진다(실측). 그래서 전수 대조를
   // 사람과 에이전트가 부를 수 있는 표면으로 둔다.

@@ -471,6 +471,20 @@ pub fn data_backup(path: Option<String>, state: State<'_, DbState>) -> Result<St
     Ok(dest.to_string_lossy().to_string())
 }
 
+// ns 회수 — 그 네임스페이스가 만든 모든 것을 지운다(레코드·kv·컬렉션 정의·FTS·인덱스). 만드는 길이
+// 있으면 걷는 길도 있어야 한다: 이 표면이 없어 시험이 남의 저장소에 흔적을 남겼다. 남의 ns 는 안 건드린다.
+#[tauri::command]
+pub fn data_ns_remove(ns: String, state: State<'_, DbState>) -> Result<serde_json::Value, String> {
+    validate_ns(&ns)?;
+    let out = with_conn(&state, |c| store::drop_ns(c, &ns))?;
+    Ok(serde_json::json!({
+        "ns": ns,
+        "collections": out.collections,
+        "records": out.records,
+        "kv": out.kv,
+    }))
+}
+
 // 저장소 자기 진단 — 전수 대조(integrity_check). 부팅 게이트(quick_check)는 인덱스↔테이블 대조를
 // 하지 않아 인덱스 손상을 통과시킨다(integrity.rs 머리말). 읽기 전용.
 #[tauri::command]

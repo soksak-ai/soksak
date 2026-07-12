@@ -28,10 +28,12 @@
 #   2026-07-13 — 저장소가 자기 무결성을 말하고 고칠 수 있게 됐다(data.verify·data.repair). 부팅 게이트는
 #     quick_check 라 인덱스↔테이블 대조를 하지 않아 인덱스 손상을 통과시킨다 — 그 저장소는 읽기는 멀쩡하고
 #     쓰기만 무너진다(실측). i18n.ts 1533→1541(키 4개, ko/en 두 테이블). 언어 테이블은 기능이 늘면 함께 자라는 표다.
+#   2026-07-13 — ns 회수 표면(data.ns.remove). 만드는 길만 있고 걷는 길이 없어 시험이 남의 저장소에 흔적을
+#     남겼다(회수 3축의 데이터 축 구멍). i18n.ts 1541→1545(키 2개, ko/en).
 packages/plugin-spec/src/spec.ts 1533
 src-tauri/cli/src/lib.rs 1757
 src-tauri/src/webview.rs 1542
 src/commands/catalog.ts 2739
-src/i18n.ts 1541
+src/i18n.ts 1545
 src/plugins/api.ts 1877
 src/state/sessions.ts 1755
