@@ -249,3 +249,53 @@ export function sidecarSpawnViolations(
   }
   return out;
 }
+
+// ── 부르는 이름이 실제로 해소되는가 ────────────────────────────────────────────
+// 플러그인이 `app.commands.execute("<이름>")` 로 부르는 이름은 아무도 검사하지 않았다. 그래서
+// 코어가 명령을 개명·방출하면 그 이름을 부르던 플러그인은 조용히 죽는다 — 죽은 호출은 예외도
+// 로그도 남기지 않고, 그 기능을 아무도 안 쓰면 몇 판이 지나도 드러나지 않는다(실측: 브라우저가
+// 플러그인으로 방출되면서 `browser.eval`·`browser.open` 이 사라졌고, 그것을 부르던 세 플러그인의
+// 기능이 죽은 채로 남았다). 선언≡실제의 나머지 절반이다: 등록하는 것만 보지 말고 **부르는 것**도 본다.
+export interface CommandCallScan {
+  /** 리터럴로 적힌 명령 이름(중복 제거). */
+  literals: string[];
+  /** 문자열 조립으로 만든 호출 수 — 정적으로 판정 불가라 세기만 한다(무음 은폐 금지). */
+  dynamic: number;
+}
+
+/** 번들 소스에서 execute 로 넘어가는 명령 이름을 걷는다. 번들러는 프로퍼티 이름을 보존하므로
+ *  minify 된 번들에서도 `.commands.execute(` 는 남는다. 템플릿 보간(${…})은 리터럴이 아니다. */
+export function executedCommandNames(bundle: string): CommandCallScan {
+  const literals = new Set<string>();
+  let dynamic = 0;
+  const re = /\.commands\s*\.\s*execute\s*\(\s*(?:(["'])([^"'\n]+)\1|`([^`]*)`)/g;
+  for (const m of bundle.matchAll(re)) {
+    const quoted = m[2];
+    const template = m[3];
+    // 조각을 이어 붙여 만든 이름은 정적으로 알 수 없다 — 앞 조각을 이름으로 세면 멀쩡한 호출을
+    // 죽은 호출로 고발한다(실측: `execute(PREFIX + name)` 의 PREFIX 가 미해소로 잡혔다).
+    const after = bundle.slice((m.index ?? 0) + m[0].length).trimStart();
+    if (after.startsWith("+")) {
+      dynamic += 1;
+      continue;
+    }
+    if (quoted !== undefined) {
+      literals.add(quoted);
+      continue;
+    }
+    if (template !== undefined) {
+      if (template.includes("${")) dynamic += 1;
+      else literals.add(template);
+    }
+  }
+  return { literals: [...literals].sort(), dynamic };
+}
+
+/** 해소되지 않는 호출 = 코어 카탈로그에도, 설치된 어떤 플러그인의 선언에도 없는 이름.
+ *  대상이 비활성이어도 선언은 남으므로, 여기 걸리는 것은 "어디에도 없는 이름"뿐이다. */
+export function unresolvedCommandCalls(
+  literals: readonly string[],
+  known: ReadonlySet<string>,
+): string[] {
+  return literals.filter((n) => !known.has(n));
+}

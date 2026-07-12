@@ -36,7 +36,7 @@ import {
   type ImplementsNode,
 } from "../plugins/contractDiscovery";
 import { CONTRACT_ID_RE } from "../plugins/spec";
-import { implementsViolations } from "../plugins/conformance";
+import { implementsViolations, executedCommandNames, unresolvedCommandCalls } from "../plugins/conformance";
 import { register, catalogJson, setUnknownCommandResolver, type CommandHint } from "./registry";
 import { collectExposed } from "./catalogDom";
 import { pluginCommandName } from "../plugins/spec";
@@ -1019,10 +1019,10 @@ export function registerPluginCatalog(): void {
     triggers: { ko: "플러그인 정합성 선언 실제 conformance" },
     params: { id: { type: "string", required: true, description: "플러그인 id" } },
     returns:
-      "{ id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan }, implements: { declared, violations }, c2: { violations: [{ rule, detail }], viewStatus: { mounted, reported, unreported, undeclared: [{ viewId, view, code }] } } }",
+      "{ id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan }, implements: { declared, violations }, c2: { violations: [{ rule, detail }], viewStatus: { mounted, reported, unreported, undeclared: [{ viewId, view, code }] } }, calls: { literals, dynamic, unresolved } }",
     message: (d) => tmsg("msg.plugin.conformance", { id: String(d.id) }),
     examples: ["sok plugin.conformance soksak-plugin-<id>"],
-    handler: (p) => {
+    handler: async (p) => {
       const id = p.id as string;
       const plug = usePlugins.getState().plugins[id];
       if (!plug) return notFound(`플러그인 없음: ${id}`);
@@ -1123,7 +1123,39 @@ export function registerPluginCatalog(): void {
           violations: c2Violations,
           viewStatus: { mounted, reported, unreported, undeclared },
         },
+        // 부르는 이름의 해소 — 선언≡실제의 나머지 절반. 등록하는 것만 보면 코어가 개명·방출한
+        // 이름을 부르는 플러그인이 조용히 죽는다(실측: 브라우저 방출 후 browser.eval 을 부르던
+        // 플러그인들이 죽은 채로 남았다). 조립 호출(dynamic)은 정적으로 못 보므로 세어서 드러낸다.
+        calls: await callConformance(plug),
       };
     },
   });
+}
+
+// 번들이 부르는 명령 이름을 걷어 해소 여부를 판정한다. known = 코어 카탈로그 + **설치된 모든
+// 플러그인의 선언**(대상이 비활성이어도 선언은 남는다) — 그래서 여기 걸리는 것은 어디에도 없는
+// 이름뿐이다. entry 없는 계약 플러그인은 부를 코드가 없으므로 빈 판정.
+async function callConformance(plug: {
+  dir: string;
+  manifest: { entry: string | null };
+}): Promise<{ literals: string[]; dynamic: number; unresolved: string[] }> {
+  const entry = plug.manifest.entry;
+  if (!entry) return { literals: [], dynamic: 0, unresolved: [] };
+  let bundle: string;
+  try {
+    const data = await invoke<{ content: string }>("read_text_file", {
+      path: `${plug.dir}/${entry}`,
+    });
+    bundle = data.content;
+  } catch {
+    return { literals: [], dynamic: 0, unresolved: [] };
+  }
+  const scan = executedCommandNames(bundle);
+  const known = new Set<string>(catalogJson().map((e) => e.name));
+  for (const other of Object.values(usePlugins.getState().plugins)) {
+    for (const cmd of other.manifest.contributes.commands) {
+      known.add(pluginCommandName(other.manifest.id, cmd.name));
+    }
+  }
+  return { ...scan, unresolved: unresolvedCommandCalls(scan.literals, known) };
 }

@@ -10,6 +10,8 @@ import {
   partitionTransparency,
   viewStatusConformance,
   sidecarSpawnViolations,
+  executedCommandNames,
+  unresolvedCommandCalls,
 } from "./conformance";
 
 // gateContribution — declared≡actual 등록 게이트(통합). api.ts 4중 find+throw 를 하나로.
@@ -327,5 +329,39 @@ describe("유닛 선택의 단일진실 — 번들이 유닛명을 굳혔는가"
     expect(sidecarSpawnViolations(bundle, declared)).toEqual([
       { unit: "terminal-wezterm", declared: false },
     ]);
+  });
+});
+
+// 부르는 이름의 해소 — 죽은 호출(코어가 방출한 이름)을 잡는 축.
+describe("명령 호출 스캔 — 부르는 이름도 선언≡실제의 일부다", () => {
+  it("리터럴 호출 이름을 걷고, 조립 호출은 세기만 한다", () => {
+    const bundle = `
+      app.commands.execute("browser.eval", { js });
+      x.commands.execute('plugin.soksak-plugin-kanban.node.add', p);
+      y.commands.execute(\`plugin.\${id}.node.get\`, q);
+      z.commands.execute(\`term.write\`, r);
+    `;
+    const scan = executedCommandNames(bundle);
+    expect(scan.literals).toEqual([
+      "browser.eval",
+      "plugin.soksak-plugin-kanban.node.add",
+      "term.write",
+    ]);
+    expect(scan.dynamic).toBe(1);
+  });
+
+  // 조각을 이어 붙인 이름은 앞 조각이 이름이 아니다 — 그것을 이름으로 세면 멀쩡한 호출이
+  // 죽은 호출로 고발된다(실측: execute(PREFIX + name)).
+  it("문자열 결합 호출은 리터럴이 아니라 dynamic 이다", () => {
+    const bundle = `app.commands.execute("plugin.soksak-plugin-agents-acp." + name, params);`;
+    const scan = executedCommandNames(bundle);
+    expect(scan.literals).toEqual([]);
+    expect(scan.dynamic).toBe(1);
+  });
+
+  it("어디에도 선언되지 않은 이름만 미해소로 잡는다(비활성 대상의 선언은 해소된다)", () => {
+    const known = new Set(["term.write", "plugin.soksak-plugin-kanban.node.add"]);
+    expect(unresolvedCommandCalls(["browser.eval", "term.write"], known)).toEqual(["browser.eval"]);
+    expect(unresolvedCommandCalls(["plugin.soksak-plugin-kanban.node.add"], known)).toEqual([]);
   });
 });
