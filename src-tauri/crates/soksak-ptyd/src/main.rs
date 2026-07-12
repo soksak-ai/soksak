@@ -144,7 +144,7 @@ mod unix {
     // 봉인 문서 tmp+rename 원자 쓰기 — 찢어진 파일이 정본 자리를 차지하지 못한다.
     // write_checkpoint(미러 페인트)·store_sealed_blob(임의 바이트) 공통 하부.
     fn write_sealed_doc_atomic(path: &std::path::Path, session_id: u64, doc: &Value) -> Result<(), String> {
-        let dir = path.parent().ok_or("checkpoint path has no parent")?;
+        let dir = path.parent().ok_or("sealed-blob path has no parent")?;
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
         let tmp = dir.join(format!(".ckpt-tmp-{}-{session_id}", std::process::id()));
@@ -535,7 +535,7 @@ mod unix {
                         match cfg {
                             None => proto::err_reply(
                                 "NO_CHECKPOINT_KEY",
-                                "session has no checkpoint key (fail closed)",
+                                "session has no seal key (fail closed)",
                             ),
                             Some(cfg) => match store_sealed_blob(&cfg, s.id, &bytes) {
                                 Ok(()) => proto::ok_reply(json!({ "stored": bytes.len() })),

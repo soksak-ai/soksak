@@ -68,7 +68,7 @@ pub struct PtyManager {
 }
 
 // spawn_terminal 결과. 화면 복원 판정은 코어를 떠났다(방출) — 소비자(플러그인)가 사이드카
-// rehydrate/봉인-블롭으로 스스로 그리고 스스로 안다. 코어는 세션 id 만 돌려준다.
+// 복원 요청/봉인-블롭으로 스스로 그리고 스스로 안다. 코어는 세션 id 만 돌려준다.
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpawnOutcome {
@@ -482,7 +482,7 @@ pub fn pty_sidecar_request(
     }
 }
 
-// 이 pane 의 봉인 체크포인트를 앱 볼트로 개봉해 평문 페인트(base64)+altActive 를 돌려준다.
+// 이 pane 의 봉인-블롭을 앱 볼트로 개봉해 평문 페인트(base64)를 돌려준다.
 // 잠금=명시 에러(fail-closed), 블롭 없음=None. 소비자(터미널 플러그인)가 죽은 세션 화면을
 // 다시 그리는 cold 경로(사이드카 불요). 코어는 봉인만 열고 바이트를 해석하지 않는다.
 #[tauri::command]
@@ -831,7 +831,7 @@ mod daemon {
     }
 
     // ── 봉인 체크포인트 수신 키(restore 사다리 3단, docs/RESTORE.md) ─────────
-    // 봉인은 공개키만 필요하다 — P 는 평문 캐시(<home>/pty/checkpoint.pub, 공개값),
+    // 봉인은 공개키만 필요하다 — P 는 평문 캐시(<home>/pty/seal.pub, 공개값),
     // S 는 vault 에만(put_data_key). 캐시가 없고 vault 도 잠겨 있으면 None — 데몬은
     // 체크포인트를 쓰지 않는다(fail closed: 화면 바이트 평문 저장 경로는 존재하지 않는다).
     // 동시 스폰 경쟁은 (a) 프로세스 내 뮤텍스 직렬화 (b) keyId 에 랜덤을 넣고 rename
@@ -856,7 +856,7 @@ mod daemon {
         let (s, p) = crate::secrets::gen_asym_keypair();
         let key_id = format!("ptyk-{}", uuid::Uuid::new_v4());
         if let Err(e) = secrets.put_data_key(&key_id, &s) {
-            eprintln!("[pty] checkpoint key store failed: {e}");
+            eprintln!("[pty] seal key store failed: {e}");
             return (None, None);
         }
         let pk_b64 = {
@@ -879,7 +879,7 @@ mod daemon {
     }
 
     // 데몬 경유 스폰: createOrAttach → stream 부착 → reader 스레드(라이브 → Channel). 반환 =
-    // 데몬 세션 id. 화면 복원은 코어를 떠났다(방출) — 소비자(플러그인)가 사이드카 rehydrate/
+    // 데몬 세션 id. 화면 복원은 코어를 떠났다(방출) — 소비자(플러그인)가 사이드카 복원 요청/
     // 봉인-블롭으로 스스로 그린다. 코어는 소비자의 replay 제어 두 갈래만 존중한다:
     //   plugin_owns("none" | 부재): 소비자가 화면을 그렸다 — 신선 세션 프롬프트만 개행으로
     //     아래에 다시 그린다(코어 재생 없음). 부재(undefined)는 방어적으로 "none" 동치다
@@ -1170,7 +1170,7 @@ mod daemon {
     }
 
     // 디스크의 봉인-블롭 헤더 — cold restore 의 입력(개봉 전 메타). 봉투는 내용 불가지라
-    // 터미널 메타(altActive 등)를 담지 않는다 — 화면 의미는 개봉된 바이트 안에 있고 소비자가 푼다.
+    // 터미널 메타(대체 화면 여부 등)를 담지 않는다 — 화면 의미는 개봉된 바이트 안에 있고 소비자가 푼다.
     struct ColdCheckpoint {
         path: PathBuf,
         key_id: String,
@@ -1203,7 +1203,7 @@ mod daemon {
         }
         let sk = secrets
             .get_data_key(&ck.key_id)?
-            .ok_or_else(|| format!("checkpoint key {} not in vault", ck.key_id))?;
+            .ok_or_else(|| format!("seal key {} not in vault", ck.key_id))?;
         let aad = proto::checkpoint_aad(window, pane, &ck.key_id);
         crate::secrets::open_sealed(&sk, &ck.sealed, &aad)
     }

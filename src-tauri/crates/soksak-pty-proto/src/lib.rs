@@ -100,11 +100,11 @@ pub fn checkpoint_dir(home: &Path) -> PathBuf {
     home.join("pty").join("checkpoints")
 }
 
-/// Cached checkpoint recipient key: `<home>/pty/checkpoint.pub` (JSON
+/// Cached seal recipient key: `<home>/pty/seal.pub` (JSON
 /// `{keyId, publicKey}`; the public half only — the secret lives in the
 /// vault under `keyId`).
 pub fn checkpoint_pubkey_path(home: &Path) -> PathBuf {
-    home.join("pty").join("checkpoint.pub")
+    home.join("pty").join("seal.pub")
 }
 
 // base64url of one key component — never contains the separators (`.`, `|`),
@@ -123,7 +123,7 @@ pub fn checkpoint_path(home: &Path, window_label: &str, pane_id: &str) -> PathBu
         .join(format!("ckpt-{}.{}.json", ckpt_component(window_label), ckpt_component(pane_id)))
 }
 
-/// AAD bound into every checkpoint seal — rejects relocating a sealed blob to
+/// AAD bound into every seal — rejects relocating a sealed blob to
 /// another pane or key. Window and pane ride base64url-encoded (same rule as
 /// the file stem) so the `|` separators are unambiguous for any input.
 pub fn checkpoint_aad(window_label: &str, pane_id: &str, key_id: &str) -> Vec<u8> {
@@ -239,7 +239,7 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         checkpoint_pk: Option<String>,
         /// Vault key id owning the secret half of `checkpoint_pk` — recorded
-        /// in the checkpoint header so the app opens with the right key.
+        /// in the sealed-blob header so the app opens with the right key.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         checkpoint_key_id: Option<String>,
     },
@@ -257,11 +257,11 @@ pub enum Request {
     #[serde(rename_all = "camelCase")]
     KillByWindow { window_label: String },
     ListSessions,
-    /// Store an opaque sealed blob as the (window, pane) session's checkpoint.
+    /// Store an opaque sealed blob keyed by the (window, pane) session.
     /// The daemon seals `bytes_b64` with that session's recipient key and writes
     /// it atomically — content-agnostic: the meaning of the bytes is the
     /// caller's (a terminal screen paint is one such meaning; the daemon reads
-    /// none of it). Requires a live session with a checkpoint key (fail closed —
+    /// none of it). Requires a live session with a seal key (fail closed —
     /// the daemon never writes plaintext screen bytes). Additive op.
     #[serde(rename_all = "camelCase")]
     StoreBlob { window_label: Option<String>, pane_id: String, bytes_b64: String },
@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn checkpoint_paths_and_aad_derive_from_the_reattach_key() {
         let home = Path::new("/tmp/h");
-        assert_eq!(checkpoint_pubkey_path(home), home.join("pty/checkpoint.pub"));
+        assert_eq!(checkpoint_pubkey_path(home), home.join("pty/seal.pub"));
         let a = checkpoint_path(home, "w-1", "v2");
         let b = checkpoint_path(home, "w-2", "v2");
         assert!(a.starts_with(home.join("pty/checkpoints")), "{a:?}");
