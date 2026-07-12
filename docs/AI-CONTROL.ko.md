@@ -133,7 +133,7 @@ soksak 의 모든 기능을 AI 에게 주는 방식의 정본 규칙. 세 가지
 ### 존재하는 것 (근거 확인)
 - Command Registry 단일 진실: `catalogJson()`(handler 제외 직렬화) = `sok commands`/`help`/`docs`/MCP tool 정의의 단일 원천.
 - Unix socket JSON-RPC 서버: `~/.soksak/{id}.sock` 0600 바인드. 봉투 `{id?,method,params?,pane?,window?,timeoutMs?}`.
-- 멀티윈도우 라우팅: `route()` = `window??LAST_FOCUSED??'main'`, `emit_to`(타겟창만), client id echo + 내부 seq u64 매칭.
+- 멀티윈도우 라우팅: `window` 를 명시하면 그 창으로 간다. 생략하면 **살아있는 창** 위에서만 사다리를 걷는다 — 포커스 기록은 창을 소유하지 않아 창보다 오래 살아남을 수 있기 때문이다. 플러그인 명령(`plugin.*`)은 플러그인을 싣지 않는 컨트롤 플레인으로 폴백하지 않는다: 마지막 포커스 워크스페이스 창(살아있으면) → 살아있는 워크스페이스 라벨 정렬 첫 항목(결정적) → `NO_WORKSPACE_WINDOW`. 그 밖의 명령: 마지막 포커스 창(살아있으면) → `main`(살아있으면) → 워크스페이스 정렬 첫 항목 → `NO_WINDOW`. 전달은 `emit_to`(타겟 창만), client id echo + 내부 seq u64 매칭.
 - danger 게이트(substrate): `ctx.remote && spec.danger` 시 permissionGate, UI 우회. 플러그인 명령도 end-to-end 게이트.
 - CLI 완비: `resolve_socket`/`request`/`run_request`/`run_help`/`run_docs`/`run_events`.
 - MCP 구현: `sok mcp` = stdio JSON-RPC 2.0, 발견형 메타툴.

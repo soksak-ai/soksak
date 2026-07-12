@@ -129,6 +129,22 @@ pub fn note_focus(label: &str) {
     }
 }
 
+// 창이 파괴되면 포커스 기록은 그 라벨을 놓는다 — 기록은 창을 소유하지 않는다. 죽은 라벨을
+// 계속 쥐고 있으면 window 를 생략한 다음 명령이 그 창으로 라우팅되어 WINDOW_NOT_FOUND 로 끝난다.
+// 라벨은 재사용되지 않으므로(NAMING §1-4b) 되살아날 일도 없다. lib.rs 의 Destroyed 가 부른다.
+pub fn note_closed(label: &str) {
+    if let Ok(mut f) = LAST_FOCUSED.lock() {
+        if *f == label {
+            *f = "main".to_string(); // 플랫폼 예약 부트스트랩 창 — 살아있는지는 해석기가 다시 확인한다.
+        }
+    }
+    if let Ok(mut w) = LAST_WORKSPACE.lock() {
+        if w.as_deref() == Some(label) {
+            *w = None;
+        }
+    }
+}
+
 static LAST_WORKSPACE: Mutex<Option<String>> = Mutex::new(None);
 
 // 마지막 포커스 워크스페이스 창(읽기 전용) — orchestrator.ask 의 기본 무대(SOKSAK_WINDOW).
@@ -149,33 +165,50 @@ fn last_workspace_window() -> Option<String> {
     LAST_WORKSPACE.lock().ok().and_then(|w| w.clone())
 }
 
+// 폴백이 갈 곳이 없을 때의 거부 — 코드가 둘인 이유는 사다리가 둘이기 때문이다.
+#[derive(Debug, PartialEq, Eq)]
+enum NoTarget {
+    // 플러그인 명령인데 워크스페이스 창이 하나도 없다(컨트롤 플레인은 플러그인을 싣지 않는다).
+    NoWorkspace,
+    // 어떤 명령도 받을 창이 하나도 없다(창 0).
+    NoWindow,
+}
+
 // 창 폴백 해석(순수) — 명령이 window 를 생략했을 때의 타겟 결정.
+// 사다리는 전부 **살아있는 창 집합** 위에서만 걷는다. 포커스 기록은 창의 소멸을 모를 수 있는
+// 값이고(기록은 창을 소유하지 않는다), 죽은 라벨을 타겟으로 내주면 그 명령은 WINDOW_NOT_FOUND
+// 로 끝난다 — 창이 멀쩡히 살아있는데도.
 // 플러그인 명령(plugin.* — 네임스페이스 문법이지 특정 id 가 아니다)은 컨트롤 플레인(main)으로
 // 폴백하지 않는다: main 은 설계상 플러그인을 싣지 않으므로 그 폴백은 상시 UNKNOWN_COMMAND 다
 // (main 포커스 중 스케줄 발화가 통째로 죽던 결함 — PLUGIN-SERVICE 입법 조사에서 확정).
-// 폴백 사다리: 마지막 워크스페이스 창(살아있으면) → 살아있는 워크스페이스 창 라벨 정렬 첫
-// 항목(결정적 — 포커스 무관) → NO_WORKSPACE_WINDOW. 비-플러그인 명령은 기존 규칙(마지막
-// 포커스, main 포함)을 유지한다.
+//   플러그인:   마지막 워크스페이스 창(살아있으면) → 워크스페이스 라벨 정렬 첫 항목 → NoWorkspace
+//   그 외:      포커스 창(살아있으면) → main(살아있으면) → 워크스페이스 정렬 첫 항목 → NoWindow
 fn resolve_fallback_target(
     method: &str,
     focused: String,
     last_workspace: Option<String>,
-    live_workspaces: &[String],
-) -> Result<String, ()> {
+    live: &[String],
+) -> Result<String, NoTarget> {
+    // 워크스페이스 창 = w-* (NAMING §1-4b). main 은 예약어이지 워크스페이스가 아니다.
+    let mut workspaces: Vec<&String> = live.iter().filter(|l| l.starts_with("w-")).collect();
+    workspaces.sort();
+    let first_workspace = workspaces.first().map(|w| (*w).clone());
+
     if !method.starts_with("plugin.") {
-        return Ok(focused);
+        if live.iter().any(|l| l == &focused) {
+            return Ok(focused);
+        }
+        if live.iter().any(|l| l == "main") {
+            return Ok("main".to_string());
+        }
+        return first_workspace.ok_or(NoTarget::NoWindow);
     }
     if let Some(w) = last_workspace {
-        if live_workspaces.iter().any(|l| l == &w) {
+        if workspaces.iter().any(|l| *l == &w) {
             return Ok(w);
         }
     }
-    let mut sorted: Vec<&String> = live_workspaces.iter().collect();
-    sorted.sort();
-    match sorted.first() {
-        Some(w) => Ok((*w).clone()),
-        None => Err(()),
-    }
+    first_workspace.ok_or(NoTarget::NoWorkspace)
 }
 
 fn parse_request(line: &str) -> Result<Request, String> {
@@ -599,19 +632,20 @@ fn route(app: &AppHandle, req: Request) -> Value {
     let target = match req.window.clone() {
         Some(w) => w,
         None => {
-            // 워크스페이스 창 목록(w-* 라벨 문법 — NAMING) — 폴백 사다리의 결정적 후보 집합.
-            let live: Vec<String> = app
-                .windows()
-                .keys()
-                .filter(|l| l.starts_with("w-"))
-                .cloned()
-                .collect();
+            // 살아있는 창 전부 — 사다리는 이 집합 위에서만 걷는다(죽은 포커스 기록 배제).
+            let live: Vec<String> = app.windows().keys().cloned().collect();
             match resolve_fallback_target(&req.method, active_window(), last_workspace_window(), &live) {
                 Ok(t) => t,
-                Err(()) => {
-                    let message = "플러그인 명령을 받을 워크스페이스 창이 없음(컨트롤 플레인은 플러그인을 싣지 않음)";
-                    record_route_outcome(app, &req.method, &req.params, "", &req.parent, &req.origin, false, "NO_WORKSPACE_WINDOW", message, started_ms);
-                    return error_reply("NO_WORKSPACE_WINDOW", message);
+                Err(no) => {
+                    let (code, message) = match no {
+                        NoTarget::NoWorkspace => (
+                            "NO_WORKSPACE_WINDOW",
+                            "플러그인 명령을 받을 워크스페이스 창이 없음(컨트롤 플레인은 플러그인을 싣지 않음)",
+                        ),
+                        NoTarget::NoWindow => ("NO_WINDOW", "명령을 받을 창이 없음"),
+                    };
+                    record_route_outcome(app, &req.method, &req.params, "", &req.parent, &req.origin, false, code, message, started_ms);
+                    return error_reply(code, message);
                 }
             }
         }
@@ -748,15 +782,10 @@ pub fn open_request(
 ) -> Option<(u64, mpsc::Receiver<Value>)> {
     // route 와 같은 폴백 사다리 — 플러그인 명령(스케줄 process 발화가 주 소비자)이
     // 컨트롤 플레인으로 떨어져 상시 UNKNOWN_COMMAND 가 되던 같은 결함의 둘째 부위.
-    let live: Vec<String> = app
-        .windows()
-        .keys()
-        .filter(|l| l.starts_with("w-"))
-        .cloned()
-        .collect();
+    let live: Vec<String> = app.windows().keys().cloned().collect();
     let target = match resolve_fallback_target(&method, active_window(), last_workspace_window(), &live) {
         Ok(t) => t,
-        Err(()) => return None,
+        Err(_) => return None,
     };
     if app.get_window(&target).is_none() {
         return None;
@@ -1008,7 +1037,7 @@ mod tests {
             "plugin.demo.run",
             "main".into(),
             Some("w-b".into()),
-            &s(&["w-a", "w-b"]),
+            &s(&["main", "w-a", "w-b"]),
         );
         assert_eq!(got, Ok("w-b".to_string()));
     }
@@ -1027,7 +1056,7 @@ mod tests {
     #[test]
     fn plugin_fallback_with_no_workspace_is_an_explicit_error() {
         let got = resolve_fallback_target("plugin.demo.run", "main".into(), None, &[]);
-        assert_eq!(got, Err(()), "main 라우팅(상시 UNKNOWN_COMMAND) 대신 구조적 거부");
+        assert_eq!(got, Err(NoTarget::NoWorkspace), "main 라우팅(상시 UNKNOWN_COMMAND) 대신 구조적 거부");
     }
 
     #[test]
@@ -1043,8 +1072,56 @@ mod tests {
 
     #[test]
     fn non_plugin_fallback_keeps_the_focused_window_including_main() {
-        let got = resolve_fallback_target("window.open", "main".into(), Some("w-a".into()), &s(&["w-a"]));
+        let got = resolve_fallback_target(
+            "window.open",
+            "main".into(),
+            Some("w-a".into()),
+            &s(&["main", "w-a"]),
+        );
         assert_eq!(got, Ok("main".to_string()), "코어 명령의 기존 규칙 불변");
+    }
+
+    // 죽은 창을 가리키는 포커스 기록 — 창이 살아있는데도 명령이 WINDOW_NOT_FOUND 로 죽던 결함.
+    // 기록은 창을 소유하지 않으므로 해석기가 살아있는 집합으로 다시 판정한다.
+    #[test]
+    fn non_plugin_fallback_leaves_a_dead_focused_window() {
+        let got = resolve_fallback_target(
+            "window.open",
+            "w-dead".into(),
+            Some("w-dead".into()),
+            &s(&["main"]),
+        );
+        assert_eq!(got, Ok("main".to_string()), "죽은 포커스 → 컨트롤 플레인");
+    }
+
+    #[test]
+    fn non_plugin_fallback_without_main_uses_a_live_workspace() {
+        let got = resolve_fallback_target("window.open", "w-dead".into(), None, &s(&["w-b", "w-a"]));
+        assert_eq!(got, Ok("w-a".to_string()), "main 도 없으면 결정적으로 정렬 첫 창");
+    }
+
+    #[test]
+    fn non_plugin_fallback_with_no_live_window_is_an_explicit_error() {
+        let got = resolve_fallback_target("window.open", "w-dead".into(), None, &[]);
+        assert_eq!(got, Err(NoTarget::NoWindow), "창 0 → 죽은 라벨 라우팅 대신 구조적 거부");
+    }
+
+    #[test]
+    fn plugin_fallback_ignores_the_control_plane_in_the_live_set() {
+        let got = resolve_fallback_target("plugin.demo.run", "main".into(), None, &s(&["main"]));
+        assert_eq!(got, Err(NoTarget::NoWorkspace), "main 은 워크스페이스가 아니다");
+    }
+
+    // 포커스 기록의 소유권 — 파괴 통지가 오면 기록은 그 라벨을 놓는다.
+    #[test]
+    fn note_closed_drops_the_dead_window_from_the_focus_records() {
+        note_focus("w-closing");
+        assert_eq!(active_window(), "w-closing");
+        assert_eq!(last_workspace_window(), Some("w-closing".to_string()));
+
+        note_closed("w-closing");
+        assert_eq!(active_window(), "main", "죽은 창은 더 이상 활성 창이 아니다");
+        assert_eq!(last_workspace_window(), None, "죽은 창은 마지막 워크스페이스도 아니다");
     }
 
     // timeout 클램프 경계 — 핵심: >600s(구 상한)가 그대로 통과해야 LLM 30분+ 턴을 끝까지 기다린다.

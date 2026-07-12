@@ -357,6 +357,7 @@ pub fn run() {
                     window::mark_user_closed(window.label());
                 }
                 tauri::WindowEvent::Destroyed => {
+                    ipc::note_closed(window.label()); // 포커스 기록이 죽은 창을 놓는다(다음 명령의 오배송 차단)
                     crate::sidecar::forget_window(window.label()); // 사이드카 surface 캐시 무효화(stale NSView 방지)
                     // 브레이커 엔트리 폐기 — 창 label 은 재사용 안 되므로 남기면 맵이 무한 증가(느린 누수).
                     webview_health::forget_window(window.app_handle(), window.label());

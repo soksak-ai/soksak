@@ -135,7 +135,7 @@ Client conventions (2026 official docs): trigger skills = Claude `.claude/skills
 ### Exists (verified)
 - Command Registry single truth: `catalogJson()` (handler-stripped serialization) = the single origin of `sok commands`/`help`/`docs`/MCP tool definitions.
 - Unix socket JSON-RPC server: `~/.soksak/{id}.sock` bound 0600; envelope `{id?,method,params?,pane?,window?,timeoutMs?}`.
-- Multi-window routing: `route()` = `window ?? LAST_FOCUSED ?? 'main'`, `emit_to` (target window only, not broadcast), client id echo + internal u64 seq matching.
+- Multi-window routing: an explicit `window` targets that window; omitting it walks a ladder over the **live** windows only, because a focus record does not own a window and may outlive one. Plugin commands (`plugin.*`) never fall back to the control plane, which loads no plugins: last focused workspace window (if live) → lowest-sorted live workspace label (deterministic) → `NO_WORKSPACE_WINDOW`. Every other command: last focused window (if live) → `main` (if live) → lowest-sorted live workspace → `NO_WINDOW`. Delivery is `emit_to` (target window only, not broadcast), client id echo + internal u64 seq matching.
 - Danger gate (substrate): `ctx.remote && spec.danger` → permissionGate, UI bypass. Plugin commands gate end-to-end via `PluginCommandSpec.danger`.
 - CLI complete: `resolve_socket`/`request` (SOKSAK_PANE/WINDOW injection)/`run_request`/`run_help`/`run_docs`/`run_events`.
 - MCP implemented: `sok mcp` = stdio JSON-RPC 2.0 (initialize/ping/tools/list/tools/call), discovery meta-tools.
