@@ -272,8 +272,9 @@ fn shell_survives_client_death_and_reattaches_with_replay() {
     assert_eq!(again["data"]["session"].as_u64().unwrap(), session);
     assert_eq!(again["data"]["shellPid"].as_u64().unwrap(), shell_pid);
 
-    // 링 재생: detach 전에 흘렀던 마커가 새 부착의 선두 재생에 들어 있다.
-    let (reply, mut stream) = attach_stream(&d.home, session);
+    // 링 재생: detach 전에 흘렀던 마커가 원시 링 재생(from_seq=0)에 들어 있다 — 미러
+    // 방출 후 재부착 재생은 원시 링이 나른다(from_seq 없는 부착은 재생 없이 라이브).
+    let (reply, mut stream) = open_stream(&d.home, session, Some(0), false);
     assert!(reply["data"]["replayBytes"].as_u64().unwrap() > 0, "{reply}");
     read_until(&mut stream, &marker);
 
@@ -291,47 +292,6 @@ fn shell_survives_client_death_and_reattaches_with_replay() {
     }
 
     // shutdown: 데몬 종료 확인.
-    let bye = control.request(&proto::Request::Shutdown);
-    assert_eq!(bye["ok"], true);
-}
-
-// ── 재부착 재생 = 미러 직렬화: raw 꼬리가 아니라 그리드 합성물이다 ────────────
-// 세션 출력에 질의(DA1)와 private mode 세트가 흘렀어도, 재생 바이트에는 질의가
-// 실리지 않고(재응답 원천 차단) 모드는 재수화 시퀀스로 재현된다(플랜 §5.5 M2).
-
-#[test]
-fn reattach_replay_is_serialized_not_raw() {
-    let d = start_daemon("serialized");
-    let mut control = Control::connect(&d.home);
-    let created = create(&mut control, "pane-s");
-    let session = created["data"]["session"].as_u64().unwrap();
-    let (reply, mut stream) = attach_stream(&d.home, session);
-    assert_eq!(reply["ok"], true, "{reply}");
-
-    // 셸이 bracketed paste 를 켜고 DA1 질의를 출력에 흘린 뒤 마커를 찍는다.
-    let w = proto::Request::Write {
-        session,
-        data_b64: {
-            use base64::Engine as _;
-            base64::engine::general_purpose::STANDARD
-                .encode("printf '\\033[?2004h\\033[c'; echo SERIAL-MARK\n")
-        },
-    };
-    assert_eq!(control.request(&w)["ok"], true);
-    read_until(&mut stream, "SERIAL-MARK");
-
-    // 앱 사망 모사 후 재부착 — 재생을 raw 로 수집한다.
-    drop(stream);
-    std::thread::sleep(Duration::from_millis(200));
-    let (reply, mut stream) = attach_stream(&d.home, session);
-    assert!(reply["data"]["replayBytes"].as_u64().unwrap() > 0, "{reply}");
-    let replay = read_until(&mut stream, "SERIAL-MARK");
-
-    // 질의 바이트(ESC [ c)는 재생에 실리지 않는다 — 프론트 xterm 재응답 차단.
-    assert!(!replay.contains("\x1b[c"), "replay must not carry DA1: {replay:?}");
-    // private mode 는 재수화 시퀀스로 재현된다.
-    assert!(replay.contains("\x1b[?2004h"), "replay must rehydrate bracketed paste");
-
     let bye = control.request(&proto::Request::Shutdown);
     assert_eq!(bye["ok"], true);
 }
@@ -418,73 +378,13 @@ fn kill_by_window_reaps_only_that_windows_sessions() {
     assert_eq!(unsafe { libc_kill(pid_b, 0) }, 0, "w-alive shell untouched");
 }
 
-// ── 봉인 바이트 체크포인트(플랜 §5.5 M3): 디스크 평문 0, 개봉은 개인키만, 정상 종료 삭제 ──
-
-#[test]
-fn checkpoint_sealed_written_and_removed() {
-    let d = start_daemon("ckpt");
-    let (sk, pk) = soksak_seal::gen_asym_keypair();
-    let pk_b64 = {
-        use base64::Engine as _;
-        base64::engine::general_purpose::STANDARD.encode(pk)
-    };
-    let mut control = Control::connect(&d.home);
-    let created = control.request(&proto::Request::CreateOrAttach {
-        pane_id: "pane-c".into(),
-        cols: 80,
-        rows: 24,
-        cwd: Some("/tmp".into()),
-        shell: "/bin/sh".into(),
-        env: vec![("TERM".into(), "dumb".into()), ("PS1".into(), "$ ".into())],
-        env_remove: vec![],
-        window_label: Some("w-test".into()),
-        checkpoint_pk: Some(pk_b64),
-        checkpoint_key_id: Some("k-test".into()),
-    });
-    assert_eq!(created["ok"], true, "{created}");
-    let session = created["data"]["session"].as_u64().unwrap();
-
-    // 비밀이 화면에 흐른다 — 체크포인트가 이 텍스트를 평문으로 디스크에 남기면 안 된다.
-    let marker = format!("CKPT-SECRET-{}", std::process::id());
-    write_line(&mut control, session, &format!("echo {marker}"));
-
-    // 디바운스(idle 300ms) 후 체크포인트 파일이 나타난다.
-    let path = proto::checkpoint_path(&d.home, "w-test", "pane-c");
-    wait_until("checkpoint file", Duration::from_secs(10), || path.exists());
-
-    // (a) 잠금 상태 디스크 평문 부재 — identity 홈 전체를 훑어 비밀 문자열이 없다.
-    let mut hits = Vec::new();
-    scan_for_plaintext(&d.home, marker.as_bytes(), &mut hits);
-    assert!(hits.is_empty(), "plaintext screen bytes on disk: {hits:?}");
-
-    // (b) 개인키 S + 정합 AAD 로만 열린다 — 열면 화면 페인트에 비밀이 들어 있다.
-    let doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    assert_eq!(doc["v"], 1, "{doc}");
-    assert_eq!(doc["keyId"], "k-test");
-    let sealed: soksak_seal::SealedBox = serde_json::from_value(doc["sealed"].clone()).unwrap();
-    let aad = proto::checkpoint_aad("w-test", "pane-c", "k-test");
-    let paint = soksak_seal::open_sealed(&sk, &sealed, &aad).expect("unseal with S");
-    let text = String::from_utf8_lossy(&paint);
-    assert!(text.contains(&marker), "unsealed paint carries the screen: {text:?}");
-    // 다른 pane 의 AAD 로는 열리지 않는다(재배치 거부).
-    let wrong = proto::checkpoint_aad("w-test", "pane-x", "k-test");
-    assert!(soksak_seal::open_sealed(&sk, &sealed, &wrong).is_err());
-
-    // (c) 정상 종료(kill = pane 폐기) → 산출물 삭제.
-    assert_eq!(control.request(&proto::Request::Kill { session })["ok"], true);
-    wait_until("checkpoint removal", Duration::from_secs(10), || !path.exists());
-
-    let bye = control.request(&proto::Request::Shutdown);
-    assert_eq!(bye["ok"], true);
-}
-
-// ── warm 핸드오프: Attach{from_seq} 는 원시 링을 재생한다(미러 합성이 아니다) ──
+// ── warm 핸드오프: Attach{from_seq} 는 원시 링을 재생한다 ─────────────────────
 // from_seq 재생은 raw 바이트라 질의(DA1)를 그대로 싣는다 — from_seq 이후는 진짜
-// 미응답 질의라 라이브 터미널이 답하는 게 옳다. 미러 재생(from_seq 없음)은 질의를
-// 삼킨 합성물이다. 두 경로가 additive 로 공존함을 증명한다.
+// 미응답 질의라 라이브 터미널이 답하는 게 옳다. 미러가 방출된 뒤 from_seq 없는 부착은
+// 재생 없이 라이브만(replayBytes 0) — 화면 복원 페인트는 사이드카·플러그인 소유다.
 
 #[test]
-fn from_seq_attach_replays_raw_ring_while_mirror_path_stays_synthesized() {
+fn from_seq_attach_replays_the_raw_ring() {
     let d = start_daemon("fromseq");
     let mut control = Control::connect(&d.home);
     let created = create(&mut control, "pane-fs");
@@ -508,15 +408,11 @@ fn from_seq_attach_replays_raw_ring_while_mirror_path_stays_synthesized() {
     drop(raw);
     std::thread::sleep(Duration::from_millis(150));
 
-    // from_seq 없음 재부착 → 미러 합성(질의 삼킴). 기존 warm 경로는 그대로.
-    let (reply, mut synth) = attach_stream(&d.home, session);
+    // from_seq 없음 재부착 → 재생 없이 라이브만(미러 방출 — 복원 페인트는 소비자 소유).
+    let (reply, _synth) = attach_stream(&d.home, session);
     assert_eq!(reply["ok"], true, "{reply}");
-    assert!(reply["data"].get("servedFromSeq").is_none(), "mirror path has no seq: {reply}");
-    let synth_replay = read_until(&mut synth, "RAWMARK");
-    assert!(
-        !synth_replay.contains("\x1b[c"),
-        "mirror serialization strips queries: {synth_replay:?}"
-    );
+    assert_eq!(reply["data"]["replayBytes"].as_u64().unwrap(), 0, "no mirror replay: {reply}");
+    assert!(reply["data"].get("servedFromSeq").is_none(), "live attach carries no seq: {reply}");
 
     assert_eq!(control.request(&proto::Request::Shutdown)["ok"], true);
 }
@@ -685,6 +581,14 @@ fn store_blob_seals_arbitrary_bytes_and_fetch_sealed_returns_them() {
     let aad = proto::checkpoint_aad("w-test", "pane-blob", "k-blob");
     let out = soksak_seal::open_sealed(&sk, &sealed, &aad).expect("unseal blob");
     assert_eq!(String::from_utf8_lossy(&out), payload, "stored bytes round-trip");
+
+    // 정상 종료(kill = pane 폐기) → 봉인-블롭 산출물 삭제. 파일이 남는 경우는 데몬
+    // 자신의 죽음뿐이고 그것이 cold restore 입력이다.
+    let path = proto::checkpoint_path(&d.home, "w-test", "pane-blob");
+    assert!(path.exists(), "sealed blob present before clean end");
+    let session = created["data"]["session"].as_u64().unwrap();
+    assert_eq!(control.request(&proto::Request::Kill { session })["ok"], true);
+    wait_until("sealed blob removal", Duration::from_secs(10), || !path.exists());
 
     assert_eq!(control.request(&proto::Request::Shutdown)["ok"], true);
 }

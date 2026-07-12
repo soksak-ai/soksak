@@ -15,9 +15,9 @@
 //   stream   <home>/run/ptyd-p<N>-stream.sock  hello 1줄 교환 후 raw PTY 출력
 // 인증: <home>/run/ptyd-p<N>.token (0600) 공유 토큰 — hello 에 실어 보낸다.
 //
-// 재부착 재생 = 세션당 헤드리스 미러(soksak-pty-mirror)의 직렬화 시퀀스다. 미러는
-// 절대 응답하지 않고(단일 응답자 = 프론트 xterm), 재생 바이트는 전부 그리드 합성물이라
-// 질의 재응답이 원천 차단된다. 스크롤백·alt-screen·private mode 가 재현된다(§5.5 M2).
+// 재부착 재생 = 원시 출력 링(RawRing)을 from_seq 좌표부터 재생한다 — VT 해석은 코어
+// 밖(사이드카)이 소유하므로 데몬은 바이트만 나른다. 화면 상태 복원(스크롤백·alt·모드)은
+// 사이드카가 tee 를 소비해 미러링하고, 봉인-블롭 저장소(StoreBlob)로 체크포인트한다.
 //
 // 이 판의 정직한 한계 — 후속 레인 소유:
 //   - Windows(named pipe/ConPTY)·데몬 업그레이드 drain 은 후속(M5·운명 3분기 b).
@@ -46,12 +46,10 @@ mod unix {
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Arc, Condvar, Mutex};
-    use std::time::{Duration, Instant};
 
     use base64::Engine as _;
     use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
     use serde_json::{json, Value};
-    use soksak_pty_mirror::Mirror;
     use soksak_pty_proto as proto;
 
     use crate::ring::RawRing;
@@ -80,9 +78,6 @@ mod unix {
     // ── 세션 ─────────────────────────────────────────────────────────────────
 
     struct SessState {
-        // 헤드리스 화면 미러 — attach 시 직렬화 시퀀스가 라이브에 앞서 재생된다.
-        // 미러는 절대 응답하지 않는다(응답 요구는 관찰값으로만 삼킨다).
-        mirror: Mirror,
         // 부착된 stream 소켓(마지막 승자). None = detached.
         attached: Option<UnixStream>,
         // attach 세대 — stream 사망 감지 스레드가 자기 세대의 부착만 해제한다
@@ -92,16 +87,12 @@ mod unix {
         unacked: usize,
         paused: bool,
         closed: bool,
-        // 봉인 체크포인트 설정 — None 이면 이 세션은 체크포인트를 쓰지 않는다
-        // (fail closed: 데몬은 화면 바이트를 평문으로 디스크에 남기지 않는다).
+        // 봉인-블롭 설정 — None 이면 이 세션은 봉인 키가 없어 StoreBlob 이 fail closed
+        // (데몬은 화면 바이트를 평문으로 디스크에 남기지 않는다). 봉인 정책(언제·무엇)은
+        // 사이드카 소유다 — 데몬은 StoreBlob 으로 받은 바이트만 봉인·저장한다.
         ckpt: Option<CkptCfg>,
-        // 디바운스 상태 — 출력 이벤트가 세운다. 고정 틱 폴링 없음: 체크포인트
-        // 스레드는 cv 이벤트와 마감 시각(wait_timeout)으로만 깬다.
-        ckpt_dirty: bool,
-        ckpt_dirty_since: Option<Instant>,
-        ckpt_last_output: Instant,
-        // 원시 출력 링 + 단조 seq — warm 핸드오프 substrate(additive). 미러 재생
-        // 경로와 병렬로 유지된다. Attach{from_seq} 가 이 링에서 재생한다.
+        // 원시 출력 링 + 단조 seq — warm 핸드오프 substrate. Attach{from_seq} 와 tee
+        // 구독 씨앗이 이 링에서 재생한다.
         ring: RawRing,
         // tee 구독자 — 세션 출력의 프레임 사본 소비자. reader 는 여기에 비차단
         // enqueue 만 한다(느린 구독자가 라이브를 못 막는다).
@@ -118,10 +109,6 @@ mod unix {
         path: PathBuf,
         aad: Vec<u8>,
     }
-
-    // 출력 이벤트 디바운스: idle 300ms, 상한 5s(플랜 §5.5 M3).
-    const CKPT_IDLE: Duration = Duration::from_millis(300);
-    const CKPT_CAP: Duration = Duration::from_secs(5);
 
     fn make_ckpt_cfg(
         home: &std::path::Path,
@@ -167,30 +154,9 @@ mod unix {
         std::fs::rename(&tmp, path).map_err(|e| e.to_string())
     }
 
-    // 미러 페인트를 봉인해 체크포인트로 쓴다(터미널 도메인 메타 altActive 동반).
-    fn write_checkpoint(
-        cfg: &CkptCfg,
-        session_id: u64,
-        paint: &[u8],
-        alt_active: bool,
-    ) -> Result<(), String> {
-        let sealed = soksak_seal::seal_to(&cfg.pk, paint, &cfg.aad)?;
-        let doc = json!({
-            "v": 1,
-            "keyId": cfg.key_id,
-            "window": cfg.window,
-            "pane": cfg.pane,
-            "altActive": alt_active,
-            "ts": ckpt_ts_ms(),
-            "sealed": sealed,
-        });
-        write_sealed_doc_atomic(&cfg.path, session_id, &doc)
-    }
-
-    // 내용 불가지 봉인-블롭 쓰기 — 호출자가 준 임의 바이트를 봉인해 저장한다.
-    // write_checkpoint 과 달리 터미널 메타(altActive)를 기록하지 않는다: 바이트의
-    // 의미는 호출자(사이드카)의 것이고, 데몬은 봉인·원자쓰기만 소유한다. cold_paint
-    // 호출 없이 받은 바이트를 그대로 봉인한다(StoreBlob).
+    // 내용 불가지 봉인-블롭 쓰기 — 호출자가 준 임의 바이트를 봉인해 저장한다. 바이트의
+    // 의미는 호출자(사이드카)의 것이고, 데몬은 봉인·원자쓰기만 소유한다(터미널 메타는
+    // 기록하지 않는다). 받은 바이트를 그대로 봉인한다(StoreBlob).
     fn store_sealed_blob(cfg: &CkptCfg, session_id: u64, bytes: &[u8]) -> Result<(), String> {
         let sealed = soksak_seal::seal_to(&cfg.pk, bytes, &cfg.aad)?;
         let doc = json!({
@@ -507,7 +473,7 @@ mod unix {
                     .unwrap()
                     .resize(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 })
                     .map_err(|e| e.to_string())?;
-                s.st.lock().unwrap().mirror.resize(cols, rows);
+                // 격자 크기는 사이드카 미러가 tee 소비 중 자체 추적한다(데몬은 바이트만).
                 Ok(json!({}))
             }),
             R::Ack { session, bytes } => with_session(reg, session, |s| {
@@ -555,11 +521,6 @@ mod unix {
                     reg.sessions.lock().unwrap().values().map(|s| s.info()).collect();
                 proto::ok_reply(json!({ "sessions": infos }))
             }
-            R::GetSnapshot { session } => with_session(reg, session, |s| {
-                let st = s.st.lock().unwrap();
-                let buf = st.mirror.rehydrate();
-                Ok(json!({ "snapshotB64": base64::engine::general_purpose::STANDARD.encode(&buf) }))
-            }),
             // 봉인-블롭 저장(내용 불가지) — 라이브 세션의 봉인 키로 임의 바이트를 봉인해
             // 원자 쓰기. 키 없는 세션은 fail closed(데몬은 평문 화면 바이트를 안 남긴다).
             R::StoreBlob { window_label, pane_id, bytes_b64 } => {
@@ -700,16 +661,12 @@ mod unix {
             writer: Mutex::new(writer),
             child: Mutex::new(child),
             st: Mutex::new(SessState {
-                mirror: Mirror::new(cols, rows),
                 attached: None,
                 attach_seq: 0,
                 unacked: 0,
                 paused: false,
                 closed: false,
                 ckpt,
-                ckpt_dirty: false,
-                ckpt_dirty_since: None,
-                ckpt_last_output: Instant::now(),
                 ring: RawRing::new(RING_CAP),
                 subscribers: Vec::new(),
             }),
@@ -736,28 +693,16 @@ mod unix {
                         Ok(0) | Err(_) => break, // EOF = 셸 종료(또는 kill)
                         Ok(n) => {
                             let mut st = session.st.lock().unwrap();
-                            // 미러 갱신 — 화면 상태(스크롤백·alt·모드)가 여기서 유지된다.
-                            st.mirror.feed(&buf[..n]);
-                            // 원시 링 + seq(warm 핸드오프 substrate, additive) 그리고 tee
-                            // 사본. 둘 다 비차단 — reader(라이브 경로)는 여기서 소켓 I/O 를
-                            // 하지 않는다(tee 소켓 쓰기는 구독자 자기 스레드 소유).
+                            // 원시 링 + seq(warm 핸드오프 substrate) 그리고 tee 사본. 둘 다
+                            // 비차단 — reader(라이브 경로)는 여기서 소켓 I/O 를 하지 않는다
+                            // (tee 소켓 쓰기는 구독자 자기 스레드 소유). VT 해석·체크포인트
+                            // 정책은 사이드카 소유다 — 데몬은 바이트만 나른다.
                             let seq0 = st.ring.seq();
                             st.ring.push(&buf[..n]);
                             if !st.subscribers.is_empty() {
                                 for sub in &st.subscribers {
                                     sub.buf.lock().unwrap().push_data(seq0, &buf[..n]);
                                     sub.cv.notify_one();
-                                }
-                            }
-                            // 체크포인트 디바운스 이벤트 — 첫 dirty 전이만 스레드를 깨운다
-                            // (이후 연장은 wait_timeout 마감 재계산이 처리).
-                            if st.ckpt.is_some() {
-                                let first = st.ckpt_dirty_since.is_none();
-                                st.ckpt_dirty = true;
-                                st.ckpt_last_output = Instant::now();
-                                if first {
-                                    st.ckpt_dirty_since = Some(st.ckpt_last_output);
-                                    session.cv.notify_all();
                                 }
                             }
                             // 부착 중이면 라이브 전달. 쓰기 실패 = 클라이언트 사망 → detach
@@ -778,62 +723,21 @@ mod unix {
                     }
                 }
                 // 세션 마감: 부착 스트림을 닫아 클라이언트에 EOF 를 전달하고 등록을 지운다.
-                // notify 로 체크포인트 스레드도 깨워 산출물 삭제·종료를 밟게 한다.
+                // 봉인-블롭이 남아 있으면 지운다 — 정상 종료(셸 exit/kill)는 산출물을 없앤다.
+                // 파일이 남는 경우는 데몬 자신의 죽음뿐이고, 그것이 cold restore 의 입력이다.
                 {
                     let mut st = session.st.lock().unwrap();
                     st.closed = true;
                     if let Some(s) = st.attached.take() {
                         let _ = s.shutdown(std::net::Shutdown::Both);
                     }
+                    if let Some(cfg) = &st.ckpt {
+                        let _ = std::fs::remove_file(&cfg.path);
+                    }
                     session.cv.notify_all();
                 }
                 let _ = session.child.lock().unwrap().wait();
                 reg.remove(session.id);
-            });
-        }
-
-        // 체크포인트 스레드: 출력 이벤트 디바운스(idle 300ms·상한 5s)로 화면 페인트를
-        // 봉인해 tmp+rename 원자 쓰기. 고정 틱 폴링 없음 — cv 이벤트 + 마감 시각
-        // wait_timeout 으로만 깬다. 정상 종료(EOF/kill)면 산출물을 삭제한다: 파일이
-        // 남는 경우는 데몬 자신의 죽음뿐 — 그것이 cold restore 의 입력이다.
-        {
-            let session = session.clone();
-            std::thread::spawn(move || {
-                let mut st = session.st.lock().unwrap();
-                loop {
-                    if st.closed {
-                        break;
-                    }
-                    if !st.ckpt_dirty || st.ckpt.is_none() {
-                        st = session.cv.wait(st).unwrap();
-                        continue;
-                    }
-                    let now = Instant::now();
-                    let idle = st.ckpt_last_output + CKPT_IDLE;
-                    let cap = st.ckpt_dirty_since.unwrap_or(now) + CKPT_CAP;
-                    let deadline = idle.min(cap);
-                    if now < deadline {
-                        let (guard, _) = session.cv.wait_timeout(st, deadline - now).unwrap();
-                        st = guard;
-                        continue;
-                    }
-                    // 마감 도달 — 직렬화는 락 안(짧다), 봉인·디스크 쓰기는 락 밖.
-                    let paint = st.mirror.cold_paint();
-                    let alt = st.mirror.alt_active();
-                    let cfg = st.ckpt.clone();
-                    st.ckpt_dirty = false;
-                    st.ckpt_dirty_since = None;
-                    drop(st);
-                    if let Some(cfg) = &cfg {
-                        if let Err(e) = write_checkpoint(cfg, session.id, &paint, alt) {
-                            eprintln!("soksak-ptyd: checkpoint write failed: {e}");
-                        }
-                    }
-                    st = session.st.lock().unwrap();
-                }
-                if let Some(cfg) = &st.ckpt {
-                    let _ = std::fs::remove_file(&cfg.path);
-                }
             });
         }
         Ok(session)
@@ -869,20 +773,15 @@ mod unix {
                 let _ = writeln!(writer, "{}", proto::err_reply("NOT_FOUND", "session closed"));
                 return;
             }
-            // 재생 두 경로(둘 다 세션 락 안에서 원자 — reader 가 끼어들어 순서를 섞지
-            // 못한다):
-            //   from_seq 없음 = 미러 직렬화(화면 상태 재현). raw 꼬리가 아니라 그리드
-            //     합성물이라 질의 재응답 불가·mid-escape 절단 불가. 기존 warm 경로.
+            // 재생 경로(세션 락 안에서 원자 — reader 가 끼어들어 순서를 섞지 못한다):
+            //   from_seq 없음 = 재생 없이 라이브 부착(미러 방출됨 — 화면 복원 페인트는
+            //     사이드카·플러그인 소유). replayBytes 0 을 알리고 곧장 라이브로 넘어간다.
             //   from_seq 있음 = 원시 링을 그 seq 부터 재생(레이스-프리 핸드오프 좌표).
             //     evict 로 그 seq 가 사라졌으면 gap 을 응답에 실어 유실을 고지한다.
             match hello.from_seq {
                 None => {
-                    let replay = st.mirror.rehydrate();
-                    let ok = proto::ok_reply(json!({ "session": sid, "replayBytes": replay.len() }));
+                    let ok = proto::ok_reply(json!({ "session": sid, "replayBytes": 0 }));
                     if writeln!(writer, "{ok}").is_err() {
-                        return;
-                    }
-                    if writer.write_all(&replay).is_err() {
                         return;
                     }
                 }

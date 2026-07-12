@@ -257,8 +257,6 @@ pub enum Request {
     #[serde(rename_all = "camelCase")]
     KillByWindow { window_label: String },
     ListSessions,
-    /// Base64 of the current scrollback ring, without attaching.
-    GetSnapshot { session: u64 },
     /// Store an opaque sealed blob as the (window, pane) session's checkpoint.
     /// The daemon seals `bytes_b64` with that session's recipient key and writes
     /// it atomically — content-agnostic: the meaning of the bytes is the
@@ -436,7 +434,6 @@ mod tests {
             Request::Detach { session: 1 },
             Request::KillByWindow { window_label: "w-x".into() },
             Request::ListSessions,
-            Request::GetSnapshot { session: 1 },
             Request::StoreBlob {
                 window_label: Some("w-x".into()),
                 pane_id: "p1".into(),
