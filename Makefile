@@ -137,11 +137,14 @@ spec-gate: ## 패키지 빌드(plugin-spec·plugin-api dist — 코어가 소비
 		echo "spec-gate: C2 blocking 위반 매니페스트가 통과됨(게이트 깨짐)"; exit 1; \
 	else echo "✓ spec-gate(빌드+무효 거부+C2 판정 확인)"; fi
 
-gates: ## 코어 규율 게이트(blocking) — C1 결합 스캔 + 기준선 축소 게이트 + C2 투명성(정적 3종·blocking 규칙만 실패) + W8 git 방출 스캔
+gates: ## 코어 규율 게이트(blocking) — C1 결합 스캔 + 기준선 축소 게이트 + C2 투명성(로컬 dev-home 사전점검·blocking 규칙만 실패) + W8 git 방출 스캔
 	@node scripts/gates/core-decoupling-scan.mjs
 	@node scripts/gates/baseline-gate.mjs
 	@node scripts/gates/c2-transparency-scan.mjs --plugins $${SOKSAK_PLUGINS:-$$HOME/.soksak-dev/plugins}
 	@node scripts/gates/core-git-scan.mjs
+
+gates-registry: ## C2 승격 권위 게이트(네트워크) — 배포 카탈로그(라이브 registry.json)의 GitHub 매니페스트를 실측. C2 규칙 blocking 승격 전 GREEN 필수(시행 모집단=측정 모집단). 로컬(make gates)은 개발 사전점검일 뿐.
+	@node scripts/gates/c2-transparency-scan.mjs --registry
 
 verify: spec-gate gates typecheck check test test-front ## 헤드리스 게이트(spec 빌드+규율 게이트) + 타입체크 + Rust/프론트 테스트(커밋 전 검증)
 
