@@ -282,6 +282,18 @@ Every RED test that enforces this law cites its clause number. The CI ledger row
   "private contract" for soksak-authored sidecars (companion commit); the engine axis is
   untouched, and A14's "unifying the three wires" stays out of scope — this consolidates
   only within the stdio axis.
+- 2026-07-12 — deploy gate supports the service class. PS7 verifies the *core seam* accepts
+  a service manifest, but the *deploy pipeline* (registry `update.sh` + `soksak-plugin-doctor`)
+  assumed every plugin ships a `main.js` entry artifact and dropped an `entry: null` service
+  plugin (`soksak-plugin-workflow`) as "build artifact missing". Absent entry is not a missing
+  build — it is the class's definition (logic lives in the sidecar service). So `update.sh`'s
+  entry fetch and the Doctor's `main.js` requirement are exempted for the service class
+  (`entry: null` + `service` declared); the manifest and `src/` are still checked, and the
+  **surface** requirement stands — a service still owns ≥1 `bind:"service"` command (PS3,
+  C2 command-surface); a surfaceless service is rejected at schema, never cataloged. Companion:
+  the Doctor's vendored `contract.json` had drifted from the core's published contract (missing
+  the `service` permission, stale `git:read`) and was re-synced — the vendored copy has no drift
+  gate (manually kept), a follow-up.
 
 ---
 
