@@ -14,8 +14,8 @@ describe("viewHostAnchors — 콘텐츠 뷰 호스트 DOM 앵커 계약", () => 
   it("콘텐츠 배치(viewId 有)는 paneId 역참조 앵커(data-pane-id)를 노출", () => {
     // command.started·statusBarItem 이 발급한 paneId(=콘텐츠 뷰 인스턴스 id)로 플러그인이
     // 이 host 를 querySelector('[data-pane-id="v8"]') 로 찾는다(대칭성).
-    expect(viewHostAnchors("content/view/soksak-plugin-terminal.content", "v8")).toEqual({
-      "data-view-addr": "content/view/soksak-plugin-terminal.content",
+    expect(viewHostAnchors("content/view/soksak-plugin-terminal-xterm.content", "v8")).toEqual({
+      "data-view-addr": "content/view/soksak-plugin-terminal-xterm.content",
       "data-pane-id": "v8",
     });
   });

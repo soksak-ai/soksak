@@ -22,7 +22,7 @@ const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().tabs));
 const pristineActive = useSessions.getState().activeId;
 
 // 터미널 프로그램 등록(코어 터미널 제거 — addViewToGroup("terminal")은 터미널 플러그인 뷰를 연다).
-useProgramRegistry.getState().register("soksak-plugin-terminal", {
+useProgramRegistry.getState().register("soksak-plugin-terminal-xterm", {
   id: "terminal",
   title: "Terminal",
   kind: "view",

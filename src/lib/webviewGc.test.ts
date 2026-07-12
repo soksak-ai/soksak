@@ -21,7 +21,7 @@ const decls: Record<string, Record<string, boolean>> = {
   "soksak-plugin-browser-native": { content: true },
   // 프레임 스트리밍류 엔진: 뷰는 있으나 native child surface 를 만들지 않음(DOM canvas) — 비소유 선언.
   "soksak-plugin-browser-canvas": { content: false },
-  "soksak-plugin-terminal": { content: false },
+  "soksak-plugin-terminal-xterm": { content: false },
 };
 const ownsSurface: OwnsSurface = (pluginId, viewId) =>
   decls[pluginId]?.[viewId] === true;
@@ -68,7 +68,7 @@ describe("collectWebviewLabels — 선언(nativeSurface) 기반 webview 소유 �
 
   it("비소유 선언 뷰(터미널·미선언 플러그인)는 세지 않는다", () => {
     const live = collectWebviewLabels(
-      [tab([pluginView("v3", "soksak-plugin-terminal"), pluginView("v4", "soksak-plugin-other")])],
+      [tab([pluginView("v3", "soksak-plugin-terminal-xterm"), pluginView("v4", "soksak-plugin-other")])],
       ownsSurface,
       labelOf,
     );

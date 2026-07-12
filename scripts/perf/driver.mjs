@@ -326,8 +326,8 @@ async function teardown(sock) {
 
 // ═══ t 시나리오 — 터미널 성능(W4) ══════════════════════════════════════════
 // 측정 채널: ① 완료 = terminal.command.finished 활동 이벤트(events.subscribe push — 폴링 0)
-//           ② 카운터 = plugin.soksak-plugin-terminal.perf.stats 두 스냅샷의 차분(pull)
-//           ③ 입력 레이턴시 = plugin.soksak-plugin-terminal.perf.echo(onData 도착이 해소)
+//           ② 카운터 = plugin.soksak-plugin-terminal-xterm.perf.stats 두 스냅샷의 차분(pull)
+//           ③ 입력 레이턴시 = plugin.soksak-plugin-terminal-xterm.perf.echo(onData 도착이 해소)
 
 const ALIAS_T = "perf-harness-t";
 const E2E_ROOT = path.join(os.homedir(), ".soksak-e2e", "perf");
@@ -427,8 +427,8 @@ async function subscribeEvents(kinds) {
   };
 }
 
-const PERF_STATS_CMD = "plugin.soksak-plugin-terminal.perf.stats";
-const PERF_ECHO_CMD = "plugin.soksak-plugin-terminal.perf.echo";
+const PERF_STATS_CMD = "plugin.soksak-plugin-terminal-xterm.perf.stats";
+const PERF_ECHO_CMD = "plugin.soksak-plugin-terminal-xterm.perf.echo";
 
 async function perfStats(sock, ids) {
   const r = must(
@@ -494,7 +494,7 @@ async function setupT(sock) {
             project ??= proj.id;
             panelId ??= p.id;
             for (const v of p.views ?? [])
-              if (v.plugin === "soksak-plugin-terminal" || v.kind === "terminal") {
+              if (v.plugin === "soksak-plugin-terminal-xterm" || v.kind === "terminal") {
                 termViewId = v.id;
                 project = proj.id;
               }

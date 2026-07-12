@@ -197,7 +197,7 @@ for old in glob.glob(os.path.join(E2E_HOME, "pty-cold-proj-*")):
 r = rpc("window.open", {"root": ROOT}); time.sleep(4)
 WIN = r.get("label") or r.get("existingWindow")
 assert WIN, f"창 생성 실패: {r}"
-created = rpc("project.open", {"root": PROJ, "alias": ALIAS, "program": "terminal"}, window=WIN)
+created = rpc("project.open", {"root": PROJ, "alias": ALIAS, "program": "terminal-xterm"}, window=WIN)
 assert created.get("ok"), f"project.open 실패: {created}"
 time.sleep(3)
 pane = pane_of(WIN)

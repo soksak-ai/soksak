@@ -77,7 +77,7 @@ assert es and all(e['seq']>$S1 for e in es) and any(e['kind']=='command.executed
 PANE=$(core state.tree | python3 -c "
 import json,sys
 v=json.load(sys.stdin)
-panes=[vv['id'] for p in v.get('projects',[]) for c in p['contents'] for g in c['panels'] for vv in g['views'] if vv.get('plugin')=='soksak-plugin-terminal']
+panes=[vv['id'] for p in v.get('projects',[]) for c in p['contents'] for g in c['panels'] for vv in g['views'] if vv.get('plugin')=='soksak-plugin-terminal-xterm']
 print(panes[0] if panes else '')")
 [ -n "$PANE" ] || { ng "터미널 pane 없음"; echo "PASS=$PASS FAIL=$((FAIL+2))"; exit 1; }
 

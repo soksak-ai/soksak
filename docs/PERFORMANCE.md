@@ -151,4 +151,4 @@ Evidence (2026-06 investigation, URLs verified):
   <https://github.com/servo/webrender/issues/1640>
 
 Code anchor: renderer selection lives in the terminal plugin
-(soksak-plugin-terminal, `src/terminal.ts` `xtermRenderer`).
+(soksak-plugin-terminal-xterm, `src/terminal.ts` `xtermRenderer`).

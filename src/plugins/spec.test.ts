@@ -739,8 +739,8 @@ describe("parseManifest — programs 기여(§2.6)", () => {
         permissions: ["programs"],
         contributes: {
           programs: [
-            { id: "claude", title: "Claude", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", command: "claude", path: "에이전트" },
-            { id: "exp", title: "실험", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", path: "에이전트/실험 채널" },
+            { id: "claude", title: "Claude", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal-xterm", command: "claude", path: "에이전트" },
+            { id: "exp", title: "실험", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal-xterm", path: "에이전트/실험 채널" },
             { id: "web", title: "뷰", kind: "view", view: "content" },
           ],
         },
@@ -749,8 +749,8 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     );
     expect(validation.errors).toEqual([]);
     expect(manifest?.contributes.programs).toEqual([
-      { id: "claude", title: "Claude", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", command: "claude", path: "에이전트" },
-      { id: "exp", title: "실험", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", path: "에이전트/실험 채널" },
+      { id: "claude", title: "Claude", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal-xterm", command: "claude", path: "에이전트" },
+      { id: "exp", title: "실험", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal-xterm", path: "에이전트/실험 채널" },
       { id: "web", title: "뷰", kind: "view", view: "content" },
     ]);
   });
@@ -796,7 +796,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
               title: "Claude",
               kind: "view",
               view: "content",
-              viewPlugin: "soksak-plugin-terminal",
+              viewPlugin: "soksak-plugin-terminal-xterm",
               command: "claude",
               ensure: { bin: "claude", install: { darwin: "curl … | bash" } },
             },

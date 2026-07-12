@@ -45,7 +45,7 @@ const project: ProjectTab = {
                   id: "v1",
                   kind: "plugin",
                   title: "T",
-                  pluginId: "soksak-plugin-terminal",
+                  pluginId: "soksak-plugin-terminal-xterm",
                   view: "content",
                   command: "claude", // 자동 실행 명령(영속 제외 — 복원 시 재실행 안 함)
                 },
@@ -101,7 +101,7 @@ describe("windowSnapshot 라운드트립", () => {
     expect(g1.activeViewId).toBe("v1");
     const term = g1.views[0] as Extract<View, { kind: "plugin" }>;
     expect(term.kind).toBe("plugin");
-    expect(term.pluginId).toBe("soksak-plugin-terminal");
+    expect(term.pluginId).toBe("soksak-plugin-terminal-xterm");
     expect(term.view).toBe("content");
     // 복원된 터미널은 command 를 갖지 않는다(자동 재실행 방지).
     expect(term.command).toBeUndefined();
@@ -138,7 +138,7 @@ describe("windowSnapshot 라운드트립", () => {
                   id: "v1",
                   kind: "plugin",
                   title: "T",
-                  pluginId: "soksak-plugin-terminal",
+                  pluginId: "soksak-plugin-terminal-xterm",
                   view: "content",
                   status: { code: "busy", message: "재생 중" },
                 },
@@ -175,7 +175,7 @@ describe("B3 — cwd·lastActivity 영속 round-trip", () => {
                   id: "v1",
                   kind: "plugin",
                   title: "Terminal",
-                  pluginId: "soksak-plugin-terminal",
+                  pluginId: "soksak-plugin-terminal-xterm",
                   view: "content",
                   cwd: "/tmp/somewhere",
                   lastActivity: 1234567890,

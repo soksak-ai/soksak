@@ -107,7 +107,7 @@ def pid_alive(pid):
         return False
 
 def pane_of(win):
-    # 터미널 뷰 = plugin 뷰(soksak-plugin-terminal). pane id 는 focusedPaneId(분할 시) 또는
+    # 터미널 뷰 = plugin 뷰(soksak-plugin-terminal-xterm). pane id 는 focusedPaneId(분할 시) 또는
     # 뷰 id — e2e-driver.mjs panesOf 와 같은 규칙.
     tr = rpc("state.tree", window=win)
     for p in tr.get("projects", []):
@@ -166,7 +166,7 @@ for l in leftover_windows():
 r = rpc("window.open", {"root": ROOT}); time.sleep(4)
 WIN = r.get("label") or r.get("existingWindow")
 assert WIN, f"창 생성 실패: {r}"
-created = rpc("project.open", {"root": PROJ, "alias": ALIAS, "program": "terminal"}, window=WIN)
+created = rpc("project.open", {"root": PROJ, "alias": ALIAS, "program": "terminal-xterm"}, window=WIN)
 assert created.get("ok"), f"project.open 실패: {created}"
 time.sleep(3)
 pane = pane_of(WIN)

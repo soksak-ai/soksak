@@ -149,7 +149,7 @@ describe("addContent — kind=view 프로그램", () => {
       path: "에이전트",
       kind: "view",
       view: "content",
-      viewPlugin: "soksak-plugin-terminal",
+      viewPlugin: "soksak-plugin-terminal-xterm",
       command: "claude",
       ensure: { bin: "claude", install: { darwin: "curl … | bash" } },
     });
@@ -162,7 +162,7 @@ describe("addContent — kind=view 프로그램", () => {
       const v = grp.views.find((x) => x.id === r.viewId)!;
       expect(v).toMatchObject({
         kind: "plugin",
-        pluginId: "soksak-plugin-terminal", // viewPlugin — 뷰 소유 플러그인(자기 plugin 아님)
+        pluginId: "soksak-plugin-terminal-xterm", // viewPlugin — 뷰 소유 플러그인(자기 plugin 아님)
         view: "content",
         title: "Claude",
         command: "claude", // 자동실행 명령이 plugin View 에 실린다
@@ -174,7 +174,7 @@ describe("addContent — kind=view 프로그램", () => {
 
   // viewPlugin 미지정이면 자기 플러그인 뷰(터미널 플러그인의 terminal 프로그램 — 후방호환).
   it("viewPlugin 미지정 = 자기 플러그인 뷰(후방호환)", () => {
-    const dispose = useProgramRegistry.getState().register("soksak-plugin-terminal", {
+    const dispose = useProgramRegistry.getState().register("soksak-plugin-terminal-xterm", {
       id: "terminal-prog-test",
       title: "Terminal",
       kind: "view",
@@ -189,7 +189,7 @@ describe("addContent — kind=view 프로그램", () => {
       const v = grp.views.find((x) => x.id === r.viewId)!;
       expect(v).toMatchObject({
         kind: "plugin",
-        pluginId: "soksak-plugin-terminal",
+        pluginId: "soksak-plugin-terminal-xterm",
         view: "content",
       });
       expect((v as { command?: string }).command).toBeUndefined();
@@ -204,7 +204,7 @@ describe("addContent — kind=view 프로그램", () => {
 // 보이던 결함의 재현·고정 — 생략 시 빈 스켈레톤은 기존 설계 그대로.)
 describe("addProject — 초기 program", () => {
   it("program 지정 시 첫 그룹에 그 프로그램 뷰 + activeViewId + viewId 반환", () => {
-    const dispose = useProgramRegistry.getState().register("soksak-plugin-terminal", {
+    const dispose = useProgramRegistry.getState().register("soksak-plugin-terminal-xterm", {
       id: "terminal-prog-test",
       title: "Terminal",
       kind: "view",
@@ -225,7 +225,7 @@ describe("addProject — 초기 program", () => {
       const v = grp.views.find((x) => x.id === r.viewId)!;
       expect(v).toMatchObject({
         kind: "plugin",
-        pluginId: "soksak-plugin-terminal",
+        pluginId: "soksak-plugin-terminal-xterm",
         view: "content",
         title: "Terminal",
       });

@@ -244,11 +244,11 @@ export interface ContributedProgram {
   // 같은 경로끼리 서브메뉴로 묶인다(플러그인 간 병합 — 표시 언어 기준).
   path?: LocalizedText;
   // 동작: view = 콘텐츠 탭으로 뷰를 연다(+view). 코어는 터미널 뷰를 소유하지 않는다 —
-  // 터미널도 플러그인 뷰다(soksak-plugin-terminal.content). 따라서 kind 는 view 하나로 수렴.
+  // 터미널도 플러그인 뷰다(soksak-plugin-terminal-xterm.content). 따라서 kind 는 view 하나로 수렴.
   kind: "view";
   view: string; // 열 뷰 id(contributes.views[].id). viewPlugin 미지정이면 자기 플러그인 뷰.
   // 뷰 소유 플러그인(크로스 플러그인 참조) — 다른 플러그인의 뷰를 열 때 명시(예: 에이전트
-  // 프로그램이 soksak-plugin-terminal 의 content 뷰를 연다). 미지정 = 자기 플러그인(this).
+  // 프로그램이 soksak-plugin-terminal-xterm 의 content 뷰를 연다). 미지정 = 자기 플러그인(this).
   viewPlugin?: string;
   // 연 뷰에 흘려보낼 자동 실행 명령(에이전트 프로그램: 터미널 뷰가 마운트 시 PTY 로 1회 실행).
   // 뷰 종류에 무관한 일반 채널(PluginViewContext.command) — 터미널 뷰만 이를 자동 실행한다.

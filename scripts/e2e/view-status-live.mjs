@@ -23,7 +23,7 @@
 // blocking. Programs that are absent from program.list are skipped (never mocked).
 //
 // Run: SOKSAK_SOCKET=~/.soksak-debug/com.soksak.debug.sock node scripts/e2e/view-status-live.mjs
-// Optional: VS_MOUNTS='terminal:soksak-plugin-terminal,erd:soksak-plugin-erd' overrides the
+// Optional: VS_MOUNTS='terminal:soksak-plugin-terminal-xterm,erd:soksak-plugin-erd' overrides the
 //           program:plugin pairs to mount. VS_SNAPSHOT_PATH overrides the capture location.
 // Exit: 0 = GREEN (>=2 content views mounted, undeclared=0 — unreported is informational:
 //       1 = RED (a mismatch remains, or fewer than two content views could be mounted).
@@ -42,7 +42,7 @@ const FIXTURE = path.join(os.homedir(), ".soksak-e2e", "viewstatus-fixture");
 const SNAPSHOT_PATH =
   process.env.VS_SNAPSHOT_PATH ||
   path.join(os.tmpdir(), "soksak-view-status-live.png");
-const MOUNTS = (process.env.VS_MOUNTS || "terminal:soksak-plugin-terminal,erd:soksak-plugin-erd")
+const MOUNTS = (process.env.VS_MOUNTS || "terminal:soksak-plugin-terminal-xterm,erd:soksak-plugin-erd")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean)
