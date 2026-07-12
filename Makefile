@@ -143,9 +143,10 @@ gates: ## 코어 규율 게이트(blocking) — C1 결합 스캔 + 기준선 축
 	@node scripts/gates/c2-transparency-scan.mjs --plugins $${SOKSAK_PLUGINS:-$$HOME/.soksak-dev/plugins}
 	@node scripts/gates/core-git-scan.mjs
 
-gates-registry: ## 배포 카탈로그 권위 게이트(네트워크) — 라이브 registry.json 의 GitHub 매니페스트 실측. C2 승격 소용돌이(시행 모집단=측정 모집단) + 의존 그래프 충족(의존 대상이 카탈로그에 함께 배포되는가). 카탈로그 발행 전 GREEN 필수. 로컬(make gates)은 개발 사전점검일 뿐.
+gates-registry: ## 배포 카탈로그 권위 게이트(네트워크) — 라이브 registry.json 의 GitHub 매니페스트 실측. C2 승격 소용돌이(시행 모집단=측정 모집단) + 의존 그래프 충족(의존 대상이 카탈로그에 함께 배포되는가) + 계약 동기(doctor 발행본 ≡ 코어 contract). 발행 전 GREEN 필수. 로컬(make gates)은 개발 사전점검일 뿐.
 	@node scripts/gates/c2-transparency-scan.mjs --registry
 	@node scripts/gates/dependency-graph-scan.mjs
+	@node scripts/gates/contract-sync-scan.mjs
 
 verify: spec-gate gates typecheck check test test-front ## 헤드리스 게이트(spec 빌드+규율 게이트) + 타입체크 + Rust/프론트 테스트(커밋 전 검증)
 

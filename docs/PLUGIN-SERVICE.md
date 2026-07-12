@@ -292,8 +292,10 @@ Every RED test that enforces this law cites its clause number. The CI ledger row
   **surface** requirement stands — a service still owns ≥1 `bind:"service"` command (PS3,
   C2 command-surface); a surfaceless service is rejected at schema, never cataloged. Companion:
   the Doctor's vendored `contract.json` had drifted from the core's published contract (missing
-  the `service` permission, stale `git:read`) and was re-synced — the vendored copy has no drift
-  gate (manually kept), a follow-up.
+  the `service` permission, stale `git:read`) and was re-synced. The vendored copy is now
+  **drift-gated**: `contract-sync-scan` (`make gates-registry`) fails loudly if the Doctor's
+  published `contract.json` diverges from the core's `src/plugins/contract.json` — the drift can
+  no longer happen silently.
 
 ---
 

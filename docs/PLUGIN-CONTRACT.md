@@ -179,7 +179,11 @@ Plugins are independent repos and must not import core source (skeleton rule M7)
 publishes contract **data** (`contract.json`), and the Doctor — a shared package every plugin
 depends on — consumes it. The detector logic lives once (in the core and mirrored in the Doctor);
 the contract data lives once (in the core). This is the same published-cache model the plugin
-registry uses (`registry.json` → `registrySnapshot.json`).
+registry uses (`registry.json` → `registrySnapshot.json`). The Doctor vendors a copy of
+`contract.json`, so it can drift from the core — `contract-sync-scan` (`make gates-registry`)
+gates it: the published Doctor contract must equal the core's, and a divergence (a permission the
+core added or removed) fails loudly. A vendored copy without a drift gate is how the `service`
+permission went missing in 2026-07.
 
 ## 5. Sidecar standard — two models
 
