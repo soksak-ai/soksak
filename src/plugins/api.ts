@@ -502,10 +502,6 @@ export interface SoksakPluginApi {
     onData: (id: number, cb: (data: Uint8Array) => void) => Disposable;
     /** PATH 에서 셸/바이너리 경로 해소(없으면 null). */
     which: (bin: string) => Promise<string | null>;
-    /** 이 pane 의 스폰이 PTY 세션 화면을 복원했는가(데몬 재부착 replay | cold 체크포인트 inject).
-     *  spawn 을 await 한 뒤 조회하면 레이스-프리. 참이면 그 화면이 뷰포트 권위이므로, 복원 뷰는
-     *  명령-블록 repaint(이력 floor)를 건너뛴다 — 겹쳐 그리면 복원 프레임을 뷰포트 밖으로 민다. */
-    wasScreenRestored: (paneId: string) => boolean;
     /** 이 paneId 의 IO 핸들러(화면 읽기·입력 쓰기)를 substrate 에 등록 → app.terminal.readBuffer/
      *  sendText 가 이 터미널에 닿는다(코어 host-div 비의존). 터미널 플러그인이 마운트 시 자기
      *  TerminalInstance 의 readBuffer/sendInput 을 등록하고 언마운트 시 해지(반환 Disposable). */
@@ -517,11 +513,12 @@ export interface SoksakPluginApi {
      *  코어가 다리). 코어 내용 불가지: 요청/응답 JSON 통과 + 현재 창 label(라우팅 좌표)만 찍는다.
      *  연결 실패 = 명시 에러(사이드카 사망 loud 신호). */
     sidecarRequest: (req: Record<string, unknown>) => Promise<Record<string, unknown>>;
-    /** 이 pane 의 봉인 체크포인트를 앱 볼트로 개봉해 평문(base64)을 돌려준다. 잠금=명시 에러
-     *  (fail-closed), 블롭 없음=null. 소비자가 {paint,altActive} 로 해석(사이드카 불요). "terminal:read". */
+    /** 이 pane 의 봉인-블롭을 앱 볼트로 개봉해 평문(base64)을 돌려준다. 잠금=명시 에러
+     *  (fail-closed), 블롭 없음=null. 코어는 바이트를 해석하지 않는다(소비자가 화면으로 해석).
+     *  "terminal:read". */
     readSealedScreen: (
       paneId: string,
-    ) => Promise<{ paintB64: string; altActive: boolean } | null>;
+    ) => Promise<{ paintB64: string } | null>;
   };
   /** 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합). "process" 권한.
    *  PTY 가 아니라 순수 파이프 → JSON-RPC 프레이밍 무손상. 이벤트 기반(폴링 0). */
@@ -892,9 +889,6 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     outBuf: Uint8Array[];
     // 이 PTY 를 substrate 관찰에 연결한 paneId(있으면 close 시 관찰도 회수). 없으면 undefined.
     paneId?: string;
-    // 이 스폰이 PTY 세션의 화면을 복원했는가(데몬 재부착 replay | cold 체크포인트 inject).
-    // 참이면 그 화면이 뷰포트 권위 — 복원 뷰는 blocks-repaint(이력 floor)를 겹치면 안 된다.
-    screenRestored: boolean;
   }
   const ptys = new Map<number, PtyState>();
   return {
@@ -912,7 +906,7 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
       // 동작하게 한다. 코어 터미널 뷰가 자기 OSC 를 파싱하던 것과 무관 — 같은 paneId 는 한
       // producer 만 채우므로 이중 발화가 없다(ptyObservationStore 단일 producer 불변식).
       if (paneId) registerPtyObservation(paneId);
-      const st: PtyState = { out: new Set(), outBuf: [], paneId, screenRestored: false };
+      const st: PtyState = { out: new Set(), outBuf: [], paneId };
       const onOutput = new Channel<ArrayBuffer>();
       onOutput.onmessage = (m) => {
         const b = new Uint8Array(m);
@@ -921,9 +915,9 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         else st.outBuf.push(b);
       };
       // windowLabel 은 코어가 현재 창으로 주입(멀티윈도우 sok 타겟 — webviewLabels 단일진실).
-      // replay = 코어의 화면 복원 제어(배관, 내용 불가지): 없음/기본 = 데몬 재생·cold 주입(코어 소유),
-      // "none" = 소비자가 화면을 소유(코어 복원 억제), {fromSeq} = raw 링을 그 seq 부터 부착(레이스-프리
-      // warm 핸드오프 — 소비자가 이미 그 seq 까지 그렸다). 코어는 페인트를 해석하지 않는다.
+      // replay = 소비자의 화면 복원 제어(배관, 내용 불가지): "none" = 소비자가 화면을 소유(코어
+      // 복원 없음), {fromSeq} = raw 링을 그 seq 부터 부착(레이스-프리 warm 핸드오프 — 소비자가 이미
+      // 그 seq 까지 그렸다). 부재는 코어가 "none" 동치로 방어 해석(legacy 코어-소유 재생은 방출됨).
       const res = (await deps.invoke("spawn_terminal", {
         cols: opts.cols,
         rows: opts.rows,
@@ -933,8 +927,7 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         windowLabel: currentWindowLabel() || null,
         replay: opts.replay ?? null,
         onOutput,
-      })) as { id: number; screenRestored: boolean };
-      st.screenRestored = res.screenRestored;
+      })) as { id: number };
       ptys.set(res.id, st);
       return res.id;
     },
@@ -959,15 +952,6 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
     },
     which: (bin: string): Promise<string | null> =>
       deps.invoke("shell_which", { bin }) as Promise<string | null>,
-    // 이 pane 의 스폰이 PTY 세션 화면을 복원했는가(데몬 재부착 replay | cold 체크포인트 inject).
-    // spawn 반환 후 set 되므로 spawn 을 await 한 뒤 조회하면 레이스-프리다. 복원 뷰는 이 값이
-    // 참이면 명령-블록 repaint(이력 floor)를 건너뛴다 — 복원 프레임이 뷰포트 권위이기 때문.
-    wasScreenRestored: (paneId: string): boolean => {
-      for (const st of ptys.values()) {
-        if (st.paneId === paneId) return st.screenRestored;
-      }
-      return false;
-    },
     // PTY IO 핸들러 등록(substrate) — app.terminal.readBuffer/sendText 의 우선 경로. tracker 로
     // 비활성화 시 자동 해지(누수 0). 플러그인 언마운트가 직접 dispose 해도 멱등(같은 io 만 해지).
     registerIo: (
@@ -982,16 +966,16 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
       deps.invoke("pty_sidecar_request", {
         request: { ...req, window: currentWindowLabel() || null },
       }) as Promise<Record<string, unknown>>,
-    // 이 pane 의 봉인 체크포인트 블롭을 읽어 앱 볼트로 개봉한 평문을 돌려준다(base64). 잠금이면
-    // 명시 에러(fail-closed — 평문 우회 없음), 블롭 없으면 null. 소비자가 {paint,altActive} 로 해석해
-    // 죽은 세션 화면을 다시 그린다(사이드카 불요 경로). 코어는 바이트를 해석하지 않는다. "terminal:read".
+    // 이 pane 의 봉인-블롭을 읽어 앱 볼트로 개봉한 평문을 돌려준다(base64). 잠금이면 명시 에러
+    // (fail-closed — 평문 우회 없음), 블롭 없으면 null. 소비자가 바이트를 화면으로 해석해 죽은
+    // 세션 화면을 다시 그린다(사이드카 불요 경로). 코어는 바이트를 해석하지 않는다. "terminal:read".
     readSealedScreen: (
       paneId: string,
-    ): Promise<{ paintB64: string; altActive: boolean } | null> =>
+    ): Promise<{ paintB64: string } | null> =>
       deps.invoke("pty_read_sealed_screen", {
         windowLabel: currentWindowLabel() || null,
         paneId,
-      }) as Promise<{ paintB64: string; altActive: boolean } | null>,
+      }) as Promise<{ paintB64: string } | null>,
   };
 }
 
