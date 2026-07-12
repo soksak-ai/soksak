@@ -103,6 +103,35 @@ describe("implements — 거부(계약 id 문법)", () => {
   });
 });
 
+describe("programs.viewContract — L2 계약-핀(계약 id 문법, implements 와 동일 규율)", () => {
+  // programs 기여는 "programs" 권한 필수 + command-surface(programs>0 이면 commands>0).
+  function withProgram(viewContract: unknown): Record<string, unknown> {
+    const program: Record<string, unknown> = { id: "agent", title: "Agent", kind: "view", view: "content" };
+    if (viewContract !== undefined) program.viewContract = viewContract;
+    return base({
+      permissions: ["programs", "commands"],
+      contributes: { commands: [{ name: "run", title: "Run" }], programs: [program] },
+    });
+  }
+
+  it("계약 id viewContract 통과 + manifest 로 정규화", () => {
+    const { manifest, validation } = parseManifest(withProgram("terminal-spec@1"), "demo");
+    expect(validation.ok).toBe(true);
+    expect(manifest?.contributes.programs[0].viewContract).toBe("terminal-spec@1");
+  });
+
+  it("viewContract 미선언이면 프로그램에 키가 없다(선택 필드 관례)", () => {
+    const { manifest } = parseManifest(withProgram(undefined), "demo");
+    const p = manifest?.contributes.programs[0];
+    expect(p && "viewContract" in p).toBe(false);
+  });
+
+  it("계약 id 아닌 viewContract 거부 — 구현체/엔진 이름은 계약 id 가 아니다", () => {
+    const errs = parseManifest(withProgram("not-a-contract"), "demo").validation.errors;
+    expect(errs.some((e) => e.includes("viewContract") && e.includes("계약 id 형식"))).toBe(true);
+  });
+});
+
 describe("CONTRACT_ID_RE — 문법 단일진실 export", () => {
   it("계약 id 문법과 일치(anchored)", () => {
     expect(CONTRACT_ID_RE.test("soksak-fixture-tasks-spec@1")).toBe(true);

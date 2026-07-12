@@ -1,0 +1,20 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "valid-viewcontract",
+  "name": "Valid ViewContract Fixture",
+  "version": "0.1.0",
+  "description": "headless gate fixture — a program's viewContract contract-id pin must pass parseManifest",
+  "permissions": ["programs", "commands"],
+  "contributes": {
+    "commands": [{ "name": "run", "title": "Run" }],
+    "programs": [
+      {
+        "id": "agent",
+        "title": "Agent",
+        "kind": "view",
+        "view": "content",
+        "viewContract": "terminal-spec@1"
+      }
+    ]
+  }
+}

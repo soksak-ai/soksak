@@ -1,0 +1,19 @@
+{
+  "spec": "soksak-plugin-spec@1",
+  "id": "invalid-viewcontract",
+  "name": "Invalid ViewContract Fixture",
+  "version": "0.1.0",
+  "description": "headless gate fixture — a viewContract that is not a contract id must be rejected",
+  "permissions": ["programs"],
+  "contributes": {
+    "programs": [
+      {
+        "id": "agent",
+        "title": "Agent",
+        "kind": "view",
+        "view": "content",
+        "viewContract": "not-a-contract"
+      }
+    ]
+  }
+}
