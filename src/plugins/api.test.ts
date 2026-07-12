@@ -835,6 +835,29 @@ describe("cross-plugin 의존 게이트 (executeGated + scheduler.register, §de
     expect(d.execute).toHaveBeenCalledWith("plugin.other-plugin.foo", {}, {});
   });
 
+  it("계약을 consumes 한 플러그인 → 그 계약의 구현체 호출 통과(구현체 id 를 선언하지 않는다)", async () => {
+    const d = fakeDeps({ implementsOf: (pid) => (pid === "board-x" ? ["soksak-issue-board-spec@1"] : []) });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["commands"], consumes: ["soksak-issue-board-spec@1"] }),
+      "/d",
+      d,
+    );
+    const out = await api.commands!.execute("plugin.board-x.card.upsert");
+    expect(out).toEqual({ ok: true, code: "OK", message: "ok" });
+  });
+
+  it("계약을 consumes 했어도 그 계약을 구현하지 않는 플러그인 호출 → 거부", async () => {
+    const d = fakeDeps({ implementsOf: () => [] });
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["commands"], consumes: ["soksak-issue-board-spec@1"] }),
+      "/d",
+      d,
+    );
+    const out = await api.commands!.execute("plugin.other-plugin.foo");
+    expect(out.ok).toBe(false);
+    expect(out.code).toBe("PERMISSION_DENIED");
+  });
+
   it("자기 명령·코어·plugin.view 는 의존 무관 허용", async () => {
     const d = fakeDeps();
     const { api } = buildPluginApi(manifestOf({ permissions: ["commands"] }), "/d", d);

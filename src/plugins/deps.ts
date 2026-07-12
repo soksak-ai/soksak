@@ -16,6 +16,8 @@ import {
   subscribeCommandFinished,
 } from "../terminal/paneHosts";
 import { onPluginEvent } from "./hooks";
+import { usePlugins } from "../state/plugins";
+import { manifestImplements } from "./contractDiscovery";
 import type { DataChangeEvent, PluginApiDeps } from "./api";
 
 // 전역 listen 안전 구독 — lib/safeListen 단일 유틸로 통합(손구현 제거).
@@ -31,6 +33,10 @@ export function defaultPluginDeps(appVersion: string): PluginApiDeps {
     registerCommand: register,
     unregisterCommand: unregister,
     getCommandDanger: (name) => getSpec(name)?.danger,
+    // 대상 플러그인이 선언한 계약(매니페스트 implements). 호출 경계의 계약-핀 판정이 이것만 본다 —
+    // 코어는 어느 구현체가 어느 계약을 채우는지 선언에서 읽을 뿐, 이름을 알지 않는다.
+    implementsOf: (pluginId) =>
+      manifestImplements(usePlugins.getState().plugins[pluginId]?.manifest),
     on: onPluginEvent,
     currentProject: () => {
       const s = useSessions.getState();

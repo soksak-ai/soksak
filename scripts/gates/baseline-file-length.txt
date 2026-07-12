@@ -16,10 +16,15 @@
 #     계약을 코어가 강제하게 됐다 — 플러그인이 자기 선언을 읽는 표면(sidecarName)과, 선언되지 않은
 #     유닛의 스폰을 거부하는 게이트. 이전엔 스폰 경로에 대조가 없어 번들 상수가 매니페스트를 이겼고,
 #     선언만 바꾼 교체가 무음으로 옛 엔진을 띄웠다. 게이트를 지우면 그 결함이 돌아오므로 축소 불가.
-packages/plugin-spec/src/spec.ts 1523
+#   2026-07-13 — 계약-핀의 소비자 축(C4 재입법). 발견은 계약으로 하는데 호출은 이름으로 해야 했다:
+#     cross-plugin 게이트가 manifest.dependencies(구현체 id)만 인정해, 계약으로 구현체를 찾아도
+#     부를 수가 없었다 — L2 계약-핀의 약속이 런타임에서 거짓이었다. manifest.consumes(계약 id) 를
+#     implements 의 대칭 축으로 신설하고 게이트가 그것을 인정한다. spec.ts 1523→1533(필드·검증),
+#     api.ts 1849→1877(게이트의 두 축·주입면). 경계는 그대로다 — 무선언 호출은 여전히 거부된다.
+packages/plugin-spec/src/spec.ts 1533
 src-tauri/cli/src/lib.rs 1757
 src-tauri/src/webview.rs 1542
 src/commands/catalog.ts 2739
 src/i18n.ts 1531
-src/plugins/api.ts 1849
+src/plugins/api.ts 1877
 src/state/sessions.ts 1755

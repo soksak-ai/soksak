@@ -42,7 +42,7 @@
 //     repo 가 보증한다 — 코어는 플러그인을 나열·검사하지 않는다.
 
 // 계약 id(C3 L2 계약-핀) 문법 — 단일진실은 contracts.ts(CONTRACT_ID_RE·validateImplements).
-import { CONTRACT_ID_RE, validateImplements } from "./contracts.js";
+import { CONTRACT_ID_RE, validateConsumes, validateImplements } from "./contracts.js";
 export * from "./contracts.js";
 // plugin service(제3 형태) 선언 축 — 단일진실은 service.ts(규범 docs/PLUGIN-SERVICE.md).
 import {
@@ -380,6 +380,11 @@ export interface PluginManifest {
   // 마라(L1 이름-핀 — 신규 결합 금지). 판올림은 major 별 id — @2 는 @1 을 대체하지 않는다(C4).
   // 문법·의미 정본 = contracts.ts + NAMING §8.
   implements?: string[];
+  // 이 플러그인이 부를 계약 선언(C3 L2 계약-핀의 소비자 축). implements 의 대칭 — 선언하는 것은
+  // 계약이지 구현체가 아니다. 코어의 cross-plugin 호출 경계가 이것으로 강제된다: 계약을 선언하면
+  // 그 계약의 구현체는 누구든 부를 수 있고(구현체 무차별), 밖은 거부된다. dependencies 로 구현체
+  // id 를 핀하는 것이 L1 이름-핀이고, 신규 결합에 금지다.
+  consumes?: string[];
   // 사용자 구성 설정 스키마(선택). 글로벌+프로젝트별 오버라이드. 무해(선언형) → 권한 불요.
   configuration?: ConfigSetting[];
   permissions: PluginPermission[];
@@ -631,6 +636,7 @@ export function parseManifest(
       "sidecars",
       "service",
       "implements",
+      "consumes",
       "configuration",
       "permissions",
       "contributes",
@@ -856,6 +862,9 @@ export function parseManifest(
 
   // implements: 계약 구현 선언(선택) — L2 계약-핀. 문법·중복 검증은 contracts.ts 가 단일진실.
   const implementsIds = validateImplements(raw.implements, errors);
+  // consumes: 계약 소비 선언(선택) — 호출 경계의 계약-핀 축. 구현체 id 를 적는 dependencies 와 달리
+  // 계약 id 만 적는다(구현체 무차별).
+  const consumesIds = validateConsumes(raw.consumes, errors);
 
   // configuration: 사용자 설정 스키마(선택). key·type·default 정합 + enum/enumLabels/min·max 검증.
   // 단일 진실 — UI·저장 기본값·CLI/MCP 가 전부 여기서 파생.
@@ -1506,6 +1515,7 @@ export function parseManifest(
       ...(sidecars.length > 0 ? { sidecars } : {}),
       ...(service !== undefined ? { service } : {}),
       ...(implementsIds.length > 0 ? { implements: implementsIds } : {}),
+      ...(consumesIds.length > 0 ? { consumes: consumesIds } : {}),
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
       contributes: {

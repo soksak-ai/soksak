@@ -81,6 +81,9 @@ export interface PluginApiDeps {
   registerCommand: (name: string, spec: CommandSpec) => void;
   unregisterCommand: (name: string) => boolean;
   getCommandDanger: (name: string) => "destructive" | "inject" | undefined;
+  // 대상 플러그인이 선언한 계약(매니페스트 implements) — 호출 경계의 계약-핀 판정에 쓴다.
+  // 코어는 여기서도 구현체를 이름으로 알지 않는다: 계약 id 집합만 비교한다.
+  implementsOf?: (pluginId: string) => string[];
   on: typeof onPluginEvent;
   currentProject: () => { id: string; root: string | null } | null;
   // 코어 fs watcher(fs-change) 구독 — 변경된 부모 디렉토리 문자열을 콜백. 반환=해지.
@@ -691,15 +694,28 @@ export function targetPluginId(name: string): string | null {
 // cross-plugin 호출 인가 — caller 가 target 플러그인을 manifest.dependencies 에 선언했는지(직접 의존 presence).
 // 자기 명령·코어·view 는 통과. 미선언 cross-plugin 이면 거부 사유 반환(없으면 null=허용). 호출경계 강제
 // (§ dependencyGraph 선언이 install cascade·consent 표시에만 쓰이던 갭을 닫음). 버전은 install-time 소관.
+// 호출 경계 — 다른 플러그인의 명령은 선언 없이 부를 수 없다. 선언은 두 축이고, 어느 쪽이든 통과한다:
+//   L2 계약-핀(consumes): 호출자가 계약을 선언하고 대상이 그 계약을 implements 한다 → 통과. 호출자는
+//     구현체 이름을 모른 채 부른다(구현체 무차별 — 다른 구현체로 갈아끼워도 매니페스트가 안 바뀐다).
+//   L1 이름-핀(dependencies): 호출자가 대상 플러그인 id 를 직접 선언한다 → 통과. 신규 결합엔 금지고,
+//     계약이 아직 없는 도메인의 과도기 결합만 이 축으로 남는다.
+// 둘 다 없으면 거부 — 경계 자체는 그대로다. 바뀌는 것은 무엇을 선언하느냐다(이름 → 계약).
 function crossPluginDenyReason(
   selfId: string,
   dependencies: Record<string, string> | undefined,
   commandName: string,
+  consumes?: string[],
+  implementsOf?: (pluginId: string) => string[],
 ): string | null {
   const target = targetPluginId(commandName);
   if (target === null || target === selfId) return null;
   if (target in (dependencies ?? {})) return null;
-  return `미선언 의존 플러그인 호출: ${target} — manifest.dependencies 에 "${target}" 선언 필요 (명령: ${commandName})`;
+  const wanted = consumes ?? [];
+  if (wanted.length > 0 && implementsOf) {
+    const provided = implementsOf(target);
+    if (wanted.some((c) => provided.includes(c))) return null;
+  }
+  return `미선언 의존 플러그인 호출: ${target} — manifest.consumes 에 그 계약 id 를(계약-핀), 또는 manifest.dependencies 에 "${target}" 을(이름-핀) 선언 필요 (명령: ${commandName})`;
 }
 
 // ── API 조립 ─────────────────────────────────────────────────────────────────
@@ -1150,7 +1166,13 @@ export function buildPluginApi(
       return denied(`매니페스트 미선언 권한: ${need} (명령: ${name})`);
     }
     // cross-plugin 호출은 의존 선언 필수 — 미선언이면 거부(호출경계 강제). 코어/자기/view 는 통과.
-    const crossDeny = crossPluginDenyReason(id, manifest.dependencies, name);
+    const crossDeny = crossPluginDenyReason(
+      id,
+      manifest.dependencies,
+      name,
+      manifest.consumes,
+      deps.implementsOf,
+    );
     if (crossDeny) {
       return denied(crossDeny);
     }
@@ -1579,7 +1601,13 @@ export function buildPluginApi(
           register: (job) => {
             // 스케줄 발화는 코어 remote 채널이라 executeGated 를 안 거친다 → cross-plugin 강제를
             // 우회할 수 있다(A 가 plugin.B.cmd 를 스케줄). 등록 시점(caller 식별 가능)에 동형 검사.
-            const crossDeny = crossPluginDenyReason(id, manifest.dependencies, job.command);
+            const crossDeny = crossPluginDenyReason(
+              id,
+              manifest.dependencies,
+              job.command,
+              manifest.consumes,
+              deps.implementsOf,
+            );
             if (crossDeny) {
               return Promise.reject(new Error(crossDeny));
             }

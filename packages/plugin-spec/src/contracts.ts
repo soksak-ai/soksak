@@ -20,9 +20,20 @@ export const CONTRACT_ID_RE = /^[a-z0-9][a-z0-9.-]*-spec@(0|[1-9][0-9]*)$/;
 // implements 검증 — 문법 위반·중복은 전부 거부한다(§0-3 all-or-nothing, 부분 수용 금지).
 // 반환 = trim 정규화된 계약 id 목록(에러 시 빈 배열 — 호출자는 errors 로 거부한다).
 export function validateImplements(raw: unknown, errors: string[]): string[] {
+  return validateContractIds(raw, "implements", errors);
+}
+
+// 소비자 축 — 이 플러그인이 부를 계약. implements 의 대칭이고 같은 문법을 쓴다: 선언하는 것은
+// 계약이지 구현체가 아니다. 호출 경계는 이것으로 강제된다(코어 crossPluginDenyReason) — 소비자가
+// 계약을 선언하면 그 계약을 구현한다고 선언한 플러그인은 누구든 부를 수 있고, 그 밖은 거부된다.
+export function validateConsumes(raw: unknown, errors: string[]): string[] {
+  return validateContractIds(raw, "consumes", errors);
+}
+
+function validateContractIds(raw: unknown, field: string, errors: string[]): string[] {
   if (raw === undefined) return [];
   if (!Array.isArray(raw)) {
-    errors.push("implements: 계약 id 문자열 배열이어야 함(<scope>-spec@<major>)");
+    errors.push(`${field}: 계약 id 문자열 배열이어야 함(<scope>-spec@<major>)`);
     return [];
   }
   const out: string[] = [];
@@ -31,14 +42,14 @@ export function validateImplements(raw: unknown, errors: string[]): string[] {
   raw.forEach((item, i) => {
     if (typeof item !== "string" || !CONTRACT_ID_RE.test(item.trim())) {
       errors.push(
-        `implements[${i}]: 계약 id <scope>-spec@<major> 필수(^[a-z0-9][a-z0-9.-]*-spec@[0-9]+$ — 예: soksak-agent-sessions-spec@1). 구현체 이름·판 없는 이름은 계약 id 가 아니다(NAMING §8)`,
+        `${field}[${i}]: 계약 id <scope>-spec@<major> 필수(^[a-z0-9][a-z0-9.-]*-spec@[0-9]+$ — 예: soksak-agent-sessions-spec@1). 구현체 이름·판 없는 이름은 계약 id 가 아니다(NAMING §8)`,
       );
       bad = true;
       return;
     }
     const id = item.trim();
     if (seen.has(id)) {
-      errors.push(`implements: 중복 "${id}"`);
+      errors.push(`${field}: 중복 "${id}"`);
       bad = true;
       return;
     }

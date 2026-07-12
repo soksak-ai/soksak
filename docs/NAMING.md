@@ -300,7 +300,7 @@ the engine, plus `-spec`). The scope names the domain, never the implementation
 (a protocol-compatible replacement engine must not self-report someone else's
 name) and never the model (models are machine-encoded, banned from names —
 SIDECARS.md §1). Its sole job is the version handshake between
-independently-shipped artifacts. It appears in exactly four declared surfaces:
+independently-shipped artifacts. It appears in exactly five declared surfaces:
 the sidecar handshake (`sidecars[].interface` — plugin JS ↔ engine dylib), the
 plugin manifest's `implements` declaration (`implements:
 ["<scope>-spec@<major>"]` — the L2 contract-pin PROVIDER side, C3: a plugin
@@ -313,8 +313,18 @@ contract-pin CONSUMER side, the counterpart to `implements`: a program targets
 a contract-view instead of a plugin id (`viewPlugin`), and the core resolves the
 contract to a user-selected active implementer, so the core names no engine and
 a new engine joins by declaring `implements`, not by a core edit — the terminal
-seam `terminal-spec@1`, §4). This sentence is that re-legislation (C4): adding
-`viewContract` as the fourth surface. A contract id that appears in core source
+seam `terminal-spec@1`, §4), and the plugin manifest's `consumes` declaration
+(`consumes: ["<scope>-spec@<major>"]` — the L2 contract-pin CALL side: the core's
+cross-plugin call boundary admits a call when the caller declares the contract and
+the target declares `implements` for it, so a consumer names the contract instead of
+the implementer and a second implementer needs no manifest edit anywhere). This
+sentence is that re-legislation (C4): adding `viewContract` as the fourth surface
+and `consumes` as the fifth. `consumes` exists because discovery without a call is
+decoration: a plugin could already find implementers by contract
+(`plugin.implementers`), but the call boundary only honoured `dependencies` — an
+implementer id — so every contract-pinned consumer still had to name one
+implementation, and a second one was denied at runtime. The boundary is unchanged;
+what it reads changed, from a name to a contract. A contract id that appears in core source
 must never match the plugin-id grammar the C1 scan sanctions (PS6 —
 `soksak-service-spec@1`, not `soksak-plugin-…`). It appears nowhere else. A
 major bump mints a distinct id — `<scope>-spec@2` promises nothing about `@1`;
