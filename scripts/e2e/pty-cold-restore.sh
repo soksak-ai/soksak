@@ -11,8 +11,8 @@
 # vault: SOKSAK_VAULT_PATH(격리 볼트) + SOKSAK_VAULT_KEY(자동 unlock) 오픈 메커니즘.
 # 볼트 파일은 런 간 보존한다(삭제 금지) — scope 암호화 키(app.data encryption_keys)가
 # 이 볼트의 S 와 짝이라, 볼트를 지우면 다음 런의 unlock 이 R23(키 등록됨+볼트 부재
-# = 새 볼트 생성 거부)에 막혀 하니스가 스스로를 오염시킨다(실측). 체크포인트 키
-# 캐시(<home>/pty/checkpoint.pub)만 시작·종료 시 정리한다(런 볼트와 재짝지음 — 멱등).
+# = 새 볼트 생성 거부)에 막혀 하니스가 스스로를 오염시킨다(실측). 봉인 키 캐시(seal.pub)와
+# 봉인-블롭을 담은 <home>/pty 를 시작·종료 시 정리한다(런 볼트와 재짝지음 — 멱등).
 #
 # 사용: bash scripts/e2e/pty-cold-restore.sh [--identity debug]   (KEEP=1: 캡처 보존)
 set -uo pipefail
