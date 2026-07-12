@@ -44,6 +44,9 @@ E2E_HOME = os.path.join(os.environ["HOME"], ".soksak-e2e")
 ROOT = os.path.join(E2E_HOME, "pty-survival")        # 창 carrier(window.open 부트 프로젝트)
 PROJ = os.path.join(E2E_HOME, "pty-survival-proj")   # 실제 대상(터미널 1개)
 ALIAS = "pty-survival-e2e"
+# 터미널 엔진 유닛(생존 사이드카 소비자). 기본 xterm — M3 는 두 엔진을 같은 사이드카에
+# 배선하므로 SOKSAK_TERM_PROGRAM 로 ghostty 를 겨눌 수 있다(pane_of 는 엔진 무관).
+PROGRAM = os.environ.get("SOKSAK_TERM_PROGRAM", "terminal-xterm")
 MARK = f"PSURV{os.getpid()}"
 TMP = os.path.join(E2E_HOME, "pty-survival-artifacts")
 os.makedirs(ROOT, exist_ok=True); os.makedirs(PROJ, exist_ok=True); os.makedirs(TMP, exist_ok=True)
@@ -133,13 +136,29 @@ def exec_and_read(win, pane, cmd, pattern, secs=8):
     return None
 
 def snapshot(win, name):
+    # 시각 검증(R3)은 대상 창이 '보여야' 유효하다 — 가려진 창은 OS 가 rAF 를 멈춰(WKWebView)
+    # 터미널/오버레이가 안 그려지고 스냅샷이 정지 프레임(백지)이 된다. 캡처 직전 창을 전면화해
+    # rAF 를 재개시킨 뒤 렌더 프레임이 나오길 md5 변화(사쿠라 애니메이션)로 확인하고 담는다.
+    # 전면화는 '의도된 명령'(스폰테이너스 아님) — 시각 검증 계약의 일부.
+    import hashlib
     try:
-        r = rpc("window.snapshot", {"base64": True}, window=win)
-        png = base64.b64decode(r["media"]["base64"])
-        p = os.path.join(TMP, f"{name}.png"); open(p, "wb").write(png)
-        print(f"  캡처: {p}")
-    except Exception as e:
-        print(f"  캡처 실패({name}): {e}")
+        rpc("window.focus", {"label": win})
+    except Exception:
+        pass
+    last = None
+    for _ in range(12):  # rAF 재개 대기(유계 — 12프레임 상당). 렌더 프레임 나오면 즉시 진행.
+        time.sleep(0.25)
+        try:
+            r = rpc("window.snapshot", {"base64": True}, window=win)
+            png = base64.b64decode(r["media"]["base64"])
+        except Exception as e:
+            print(f"  캡처 실패({name}): {e}"); return
+        h = hashlib.md5(png).hexdigest()
+        if last is not None and h != last:  # 프레임이 갱신됨 = rAF 동작 = 유효
+            break
+        last = h
+    p = os.path.join(TMP, f"{name}.png"); open(p, "wb").write(png)
+    print(f"  캡처: {p}")
 
 # ── 0. 준비: 앱 기동(이 하니스 소유 인스턴스) + 잔재 창 정리 ─────────────────
 if app_alive():
@@ -166,7 +185,7 @@ for l in leftover_windows():
 r = rpc("window.open", {"root": ROOT}); time.sleep(4)
 WIN = r.get("label") or r.get("existingWindow")
 assert WIN, f"창 생성 실패: {r}"
-created = rpc("project.open", {"root": PROJ, "alias": ALIAS, "program": "terminal-xterm"}, window=WIN)
+created = rpc("project.open", {"root": PROJ, "alias": ALIAS, "program": PROGRAM}, window=WIN)
 assert created.get("ok"), f"project.open 실패: {created}"
 time.sleep(3)
 pane = pane_of(WIN)

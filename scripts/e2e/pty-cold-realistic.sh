@@ -49,6 +49,9 @@ ROOT = os.path.join(E2E_HOME, "pty-cold")         # 창 carrier(고정)
 # 화면을 복원했으면 그 화면이 뷰포트 권위 → 플러그인 blocks-repaint 는 겹치지 않는다.
 PROJ = os.path.join(E2E_HOME, "pty-cold-realistic")  # 고정 — 이력 누적(실사용 재오픈)
 ALIAS = "pty-cold-realistic"
+# 터미널 엔진 유닛(봉인 복원 소비자). 기본 xterm — SOKSAK_TERM_PROGRAM 로 ghostty 를
+# 겨눌 수 있다(M3 는 두 엔진을 같은 사이드카에 배선; pane_of 는 엔진 무관).
+PROGRAM = os.environ.get("SOKSAK_TERM_PROGRAM", "terminal-xterm")
 MARK = f"PCOLD{os.getpid()}"
 TMP = os.path.join(E2E_HOME, "pty-cold-artifacts")
 VAULT = os.path.join(TMP, "vault.json")
@@ -134,13 +137,29 @@ def exec_and_wait(win, pane, cmd, pattern, secs=10):
     return False
 
 def snapshot(win, name):
+    # 시각 검증(R3)은 대상 창이 '보여야' 유효하다 — 가려진 창은 OS 가 rAF 를 멈춰(WKWebView)
+    # 터미널/오버레이가 안 그려지고 스냅샷이 정지 프레임(백지)이 된다. 캡처 직전 창을 전면화해
+    # rAF 를 재개시킨 뒤 렌더 프레임이 나오길 md5 변화(사쿠라 애니메이션)로 확인하고 담는다.
+    # 전면화는 '의도된 명령'(스폰테이너스 아님) — 시각 검증 계약의 일부.
+    import hashlib
     try:
-        r = rpc("window.snapshot", {"base64": True}, window=win)
-        png = base64.b64decode(r["media"]["base64"])
-        p = os.path.join(TMP, f"{name}.png"); open(p, "wb").write(png)
-        print(f"  캡처: {p}")
-    except Exception as e:
-        print(f"  캡처 실패({name}): {e}")
+        rpc("window.focus", {"label": win})
+    except Exception:
+        pass
+    last = None
+    for _ in range(12):  # rAF 재개 대기(유계 — 12프레임 상당). 렌더 프레임 나오면 즉시 진행.
+        time.sleep(0.25)
+        try:
+            r = rpc("window.snapshot", {"base64": True}, window=win)
+            png = base64.b64decode(r["media"]["base64"])
+        except Exception as e:
+            print(f"  캡처 실패({name}): {e}"); return
+        h = hashlib.md5(png).hexdigest()
+        if last is not None and h != last:
+            break
+        last = h
+    p = os.path.join(TMP, f"{name}.png"); open(p, "wb").write(png)
+    print(f"  캡처: {p}")
 
 # 이 pane 의 체크포인트 파일 — soksak-pty-proto 의 base64url(무패딩) 파생과 동형.
 # glob 로 아무 파일이나(형제 창의 것) 집으면 오라클을 흐린다: 반드시 (창,pane) 로 특정한다.
@@ -197,7 +216,7 @@ for old in glob.glob(os.path.join(E2E_HOME, "pty-cold-proj-*")):
 r = rpc("window.open", {"root": ROOT}); time.sleep(4)
 WIN = r.get("label") or r.get("existingWindow")
 assert WIN, f"창 생성 실패: {r}"
-created = rpc("project.open", {"root": PROJ, "alias": ALIAS, "program": "terminal-xterm"}, window=WIN)
+created = rpc("project.open", {"root": PROJ, "alias": ALIAS, "program": PROGRAM}, window=WIN)
 assert created.get("ok"), f"project.open 실패: {created}"
 time.sleep(3)
 pane = pane_of(WIN)
