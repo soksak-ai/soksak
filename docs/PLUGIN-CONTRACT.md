@@ -71,6 +71,27 @@ An author may run the same check before publishing — `npx soksak-validate plug
 wiring. Whether to put that in a git hook or CI is the *author's* choice; the core never forces git,
 npm, or a build on a plugin.
 
+## 2.6 The dependency graph gate
+
+Section 2.5 validates each manifest in isolation. But a catalog is a **graph**: a plugin's
+`dependencies` (plugin↔plugin, `depId → semver`) name other plugins it needs at install. A plugin
+whose dependency is not in the catalog — a renamed target still referenced by its old id, or a
+library plugin never published — is uninstallable, yet enrollment that validated manifests only in
+isolation shipped it anyway. The 2026-07 case: `soksak-plugin-browser` was renamed to `-native` but
+its dependents still pinned the old id, and `soksak-plugin-git-core` (a git library four plugins
+depend on) was never published — five cataloged plugins carried unresolvable dependencies.
+
+So enrollment validates the graph, not just each node: the deploy gate (registry `update.sh`) checks,
+after building the catalog, that every cataloged plugin's `dependencies` target is **co-cataloged**.
+This is cross-plugin integrity, not a per-plugin defect — a per-plugin schema failure skips that one
+plugin (resilient), but an unresolvable dependency means the catalog advertises a broken plugin, so
+it fails the **whole** publish **loudly** (fix the target: publish it, or correct the reference),
+never a silent cascade-drop that would hide the broken plugin (은폐 0). The core mirrors the check as
+`dependency-graph-scan` (`make gates-registry`) with semver satisfaction (the spec's
+`semverSatisfies`) over the deploy catalog. Contract-addressed coupling (`implements`/`viewContract`,
+§3) is rename-proof and is preferred over an id-pinned `dependencies` for exactly this reason — an id
+pin breaks the instant its target is renamed.
+
 ## 3. Conformance: declared ≡ actual
 
 Section 1 publishes the contract; section 2 checks one plugin's *declarations* against it. A
@@ -99,13 +120,29 @@ The transparency judgment (C2 — command/status/DOM) is defined **once**, in
 `@soksak-ai/plugin-spec` (`transparency.ts`): a pure function over the manifest plus optional
 runtime evidence. Absent evidence means *not judged* — never zero. Every boundary consumes that
 one function: `npx soksak-validate` at authoring, the registry doctor at publish, the
-`c2-transparency-scan` gate over an installed base, the activation boundary in the app, and
+`c2-transparency-scan` gate over a plugin base, the activation boundary in the app, and
 `sok plugin.conformance` at runtime. **Never write judgment logic anywhere else.** A second
 implementation of any conformance rule — a scan that re-derives violations, a mirror kept equal
 by a pin test — is itself a violation of this contract. If a new boundary needs the verdict, it
 imports the function. Enforcement *modes* (warn/blocking) are legislation, kept beside their
 enforcement point and changed only by an explicit re-legislation commit (C5); the judgment never
 depends on the mode.
+
+### Enforcement population — measurement population = enforcement population
+
+A C2 rule promoted to `blocking` refuses activation (loader) and enrollment (deploy gate). The
+promotion ratchet — a rule ships `warn`, then promotes to `blocking` only after the population it
+governs reaches **0 violations** — must measure the *deployed* population, because that is the
+population the gate enforces. Distribution is through GitHub: `~/.soksak-dev/plugins` is a
+developer's working copy that may run ahead of or behind the published catalog, so
+`c2-transparency-scan --plugins <dir>` (in `make gates`) is a **dev pre-check only, never the
+promotion authority**. The authority is `c2-transparency-scan --registry` (`make gates-registry`),
+which measures the live deploy catalog — the plugins in `registry.json` at their current GitHub
+manifests. Promoting a rule while the deploy catalog still violates it silently drops cataloged
+plugins: the 2026-07 `content-view-status` promotion measured dev-home (which had reached 0), but
+the public repos lagged by unpushed conformance commits, so 14 cataloged plugins were dropped the
+moment the deploy gate enforced the promotion. The fix restored the standard, not lowered it —
+the public repos were brought to 0 and the authority was moved to the deploy catalog.
 
 ### Two enforcement surfaces — do not conflate them
 

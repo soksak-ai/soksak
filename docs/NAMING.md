@@ -264,16 +264,23 @@ the engine, plus `-spec`). The scope names the domain, never the implementation
 (a protocol-compatible replacement engine must not self-report someone else's
 name) and never the model (models are machine-encoded, banned from names —
 SIDECARS.md §1). Its sole job is the version handshake between
-independently-shipped artifacts. It appears in exactly three declared surfaces:
+independently-shipped artifacts. It appears in exactly four declared surfaces:
 the sidecar handshake (`sidecars[].interface` — plugin JS ↔ engine dylib), the
 plugin manifest's `implements` declaration (`implements:
-["<scope>-spec@<major>"]` — the L2 contract-pin, C3: a plugin declares the
-contracts it implements, and discovery is contract-addressed and
-implementation-blind), and the plugin service declaration
+["<scope>-spec@<major>"]` — the L2 contract-pin PROVIDER side, C3: a plugin
+declares the contracts it implements, and discovery is contract-addressed and
+implementation-blind), the plugin service declaration
 (`service.interface` — the resident-process wire the core frames,
-docs/PLUGIN-SERVICE.md PS5/PS6; this sentence is that re-legislation). A
-contract id that appears in core source must never match the plugin-id grammar
-the C1 scan sanctions (PS6 — `soksak-service-spec@1`, not
-`soksak-plugin-…`). It appears nowhere else. A major bump mints a distinct
-id — `<scope>-spec@2` promises nothing about `@1`; revising this section's
-surface list is itself re-legislation (C4), never a silent addition.
+docs/PLUGIN-SERVICE.md PS5/PS6), and a program's `viewContract`
+(`contributes.programs[].viewContract: "<scope>-spec@<major>"` — the L2
+contract-pin CONSUMER side, the counterpart to `implements`: a program targets
+a contract-view instead of a plugin id (`viewPlugin`), and the core resolves the
+contract to a user-selected active implementer, so the core names no engine and
+a new engine joins by declaring `implements`, not by a core edit — the terminal
+seam `terminal-spec@1`, §4). This sentence is that re-legislation (C4): adding
+`viewContract` as the fourth surface. A contract id that appears in core source
+must never match the plugin-id grammar the C1 scan sanctions (PS6 —
+`soksak-service-spec@1`, not `soksak-plugin-…`). It appears nowhere else. A
+major bump mints a distinct id — `<scope>-spec@2` promises nothing about `@1`;
+revising this section's surface list is itself re-legislation (C4), never a
+silent addition.

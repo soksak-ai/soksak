@@ -142,7 +142,7 @@ npx soksak-validate plugin.json   # exit 0 = 통과, 1 = 거부(사유 출력), 
 | `contributes.programs[]` | | `{id, title, path?, kind, command?, url?, ensure?}` — `"programs"` 권한 필요. id 는 전역 평탄, path 는 "/" 구분 메뉴 카테고리(다단) |
 | `contributes.nodes[]` | | `{id, description?, danger?}` — `"ui"` 권한 필요. **DOM 노출 노드 종류** 선언(외부 주소 클릭/측정). 실제 요소엔 `data-node="<id>"`(동적 목록은 `<id>/<안정키>`). 선언하면 동의 화면에 표기, `danger:true` 는 ⚠ 강조 |
 | `libraries[]` | | 외부 CLI 종속성 — **top-level**(`contributes` 밖). 4-tuple `{name, bin, install, observe?, accept?, reach?}`. 권한 불요(설치는 활성화 동의가 게이트). → 아래 「외부 런타임 의존성」 |
-| `dependencies` | | 플러그인↔플러그인 의존 — **top-level**. `{pluginId: semver}`. 전이 동반 설치(동의 게이트)·삭제 cascade. `libraries`(외부 CLI)와는 별개 축 |
+| `dependencies` | | 플러그인↔플러그인 의존 — **top-level**. `{pluginId: semver}`. 전이 동반 설치(동의 게이트)·삭제 cascade. 배포 시 대상이 카탈로그에 **함께 있어야** 한다(의존 그래프 게이트 — 없으면 발행 실패, PLUGIN-CONTRACT §2.6). id-핀이라 대상 rename 에 부서진다 — 계약 결합(`viewContract`/`implements`)이 rename-불변이라 우선. `libraries`(외부 CLI)와는 별개 축 |
 
 기여 `title`/프로그램 `path` 도 전부 문자열 또는 언어 맵(§3.5). 뷰 내부 텍스트의
 다국어는 플러그인 소유 — `app.locale()`(권한 불요)로 현재 언어를 읽고
@@ -292,23 +292,36 @@ ctx.subscriptions.push(
 ### 프로그램 기여 (`"programs"`) — 완전 선언형, 코드 불필요
 
 새 탭(+) 메뉴에는 **내장 항목이 없다(§2.6)** — 터미널·에이전트·브라우저 전부
-플러그인이 기여한다. 코어가 소유하는 것은 뷰 능력(terminal/browser kind)뿐.
-프로그램은 languages 처럼 **매니페스트 선언만으로 자동 등록**된다(명령형 API
-없음) — 실행/설치 명령이 전부 선언에 있어 **동의 화면이 플러그인의 역할
-(코어 연결만 / 명령 실행 / 미설치 시 설치)을 명령 원문 그대로 고지**한다.
+플러그인이 기여한다. **코어는 어떤 program 도 특권화하지 않는다**(program-무지):
+지정 없는 `panel.split` 은 터미널이 아니라 **블랭크 패널**이고, 코어에 기본 program
+은 없다(새 엔진이 생길 때마다 코어를 고치지 않는다 — R7). 프로그램은 languages 처럼
+**매니페스트 선언만으로 자동 등록**된다(명령형 API 없음) — 실행/설치 명령이 전부
+선언에 있어 **동의 화면이 플러그인의 역할(코어 연결만 / 명령 실행 / 미설치 시
+설치)을 명령 원문 그대로 고지**한다.
+
+프로그램은 뷰를 연다(`kind: "view"`). 어느 뷰를 여는지는 세 방식:
+
+- **자기 뷰**: `view` 만 — 자기 플러그인의 그 뷰(터미널 엔진이 자기 `content` 뷰를 연다).
+- **다른 플러그인 뷰(`viewPlugin`)**: 플러그인 id 를 핀해 그 플러그인의 뷰를 연다.
+  name-pin(L1)이라 대상 rename 에 부서진다.
+- **계약 뷰(`viewContract`)**: 플러그인 id 대신 **계약 id**(NAMING §8)를 참조한다.
+  코어가 그 계약의 활성 구현체(사용자 설정)로 해소해 그 뷰를 연다 — L2 계약-핀(C3).
+  에이전트(claude/codex)가 터미널 엔진(xterm/ghostty)을 **플러그인-무지**하게 고르는
+  방식. `viewPlugin` 과 상호배타(둘 다 선언 금지).
 
 ```jsonc
 "contributes": {
   "programs": [{
-    "id": "claude",            // 전역 프로그램 id(평탄) — 충돌 시 활성화 에러
-    "title": "Claude",         // 메뉴 표시명
-    "path": "에이전트",         // "/" 구분 다단 카테고리(플러그인 간 병합). 생략=최상위
-    "kind": "terminal",        // "terminal" | "browser"
-    "command": "claude",       // kind=terminal: 자동 실행 셸 명령(생략=맨 터미널)
-    // "url": "https://…",     // kind=browser: 시작 URL(생략=설정 homeUrl)
-    "ensure": {                // kind=terminal 한정: 활성화 시점 선행 바이너리 보장
-      "bin": "claude",         // 사용자 셸 PATH 에서 확인할 실행 파일명(shell_which)
-      "install": {             // 활성화 시 미설치면 새 터미널 탭에서 가시 실행되는 공식 설치 명령
+    "id": "claude",                    // 전역 프로그램 id(평탄) — 충돌 시 활성화 에러
+    "title": "Claude",                 // 메뉴 표시명
+    "path": { "ko": "에이전트", "en": "Agents" }, // "/" 구분 다단 카테고리(다국어). 생략=최상위
+    "kind": "view",                    // 프로그램은 뷰를 연다
+    "viewContract": "terminal-spec@1", // 계약으로 뷰 참조 → 코어가 사용자 엔진으로 해소(viewPlugin 대안, 상호배타)
+    "view": "content",                 // 열 뷰 id(구현체의 contributes.views[].id)
+    "command": "claude",               // 터미널 계약 뷰 한정: 자동 실행 셸 명령
+    "ensure": {                        // 활성화 시점 선행 바이너리 보장
+      "bin": "claude",                 // 사용자 셸 PATH 에서 확인할 실행 파일명(shell_which)
+      "install": {                     // 미설치면 새 터미널 탭에서 가시 실행되는 공식 설치 명령
         "darwin": "curl -fsSL https://claude.ai/install.sh | bash",
         "linux": "curl -fsSL https://claude.ai/install.sh | bash",
         "win32": "irm https://claude.ai/install.ps1 | iex"
@@ -319,7 +332,8 @@ ctx.subscriptions.push(
 ```
 
 - 등록 즉시 + 메뉴·`program.list`·`view.open '{"program":"<id>"}'` 에 노출(§0-1).
-- 미등록 id 를 명령/설정이 참조하면 터미널 뷰 폴백(능력명 "browser" 는 그 능력).
+- `viewContract` 구현체가 ≥2 이면 사용자가 설정에서 엔진을 고른다(그 계약만 드롭다운
+  노출); 0개면 빈 그룹으로 열화한다 — 코어는 폴백 program 을 만들지 않는다.
 - 등록 프로그램이 0개면 + 버튼 자체가 렌더되지 않는다.
 
 ### app.ui (`"ui"`)
