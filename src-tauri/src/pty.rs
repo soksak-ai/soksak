@@ -465,7 +465,7 @@ pub fn pty_pane_pid(pane_id: String, manager: State<'_, PtyManager>) -> Option<i
 // 이 pane 에 라이브 데몬 세션이 있는가 — warm 복원 후보 판정. 데몬에 직접 물어(사이드카 무관,
 // 즉답) 앱 세션 추적을 거치지 않는다: 재시작 복원은 소비자가 스폰하기 '전'에 판정해야 하는데
 // 그 시점엔 앱이 아직 이 pane 세션을 안 잡았다(스폰이 잡는다). 데몬 미가동/세션 없음 = false
-// (spawn_if_needed=false — 조회가 데몬을 새로 안 띄운다). 소비자는 이걸로 사이드카 rehydrate
+// (spawn_if_needed=false — 조회가 데몬을 새로 안 띄운다). 소비자는 이걸로 사이드카 복원 재개
 // (부팅-레이스 유계 재시도)를 warm 후보에만 태운다 — 신선/cold 는 사이드카를 안 기다린다.
 #[tauri::command]
 pub fn pty_pane_alive(pane_id: String, manager: State<'_, PtyManager>) -> bool {

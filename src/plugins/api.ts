@@ -520,7 +520,7 @@ export interface SoksakPluginApi {
       paneId: string,
     ) => Promise<{ paintB64: string } | null>;
     /** 이 pane 에 라이브 데몬 세션이 있는가 — warm 복원 후보 판정(사이드카 무관, 즉답, 데몬 안
-     *  띄움). 소비자가 스폰 전에 물어 warm(세션 존재)만 사이드카 rehydrate(부팅-레이스 유계 재시도)
+     *  띄움). 소비자가 스폰 전에 물어 warm(세션 존재)만 사이드카 복원 재개(부팅-레이스 유계 재시도)
      *  를 태운다 — 신선/cold/데몬 미가동(false)은 사이드카를 안 기다리고 즉시 진행한다. */
     paneAlive: (paneId: string) => Promise<boolean>;
   };
