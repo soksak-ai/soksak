@@ -1338,6 +1338,160 @@
       ]
     },
     {
+      "id": "soksak-plugin-git-core",
+      "name": {
+        "ko": "git 라이브러리",
+        "en": "Git library"
+      },
+      "version": "0.1.0",
+      "description": {
+        "ko": "git 실행 규약과 저장소 프리미티브의 단일진실. 발견(root)·init·clone, porcelain v2 status 와 git.changed 변경 이벤트, worktree 프리미티브, stage/commit/discard 를 커맨드로 노출합니다.",
+        "en": "Single truth for the git execution convention and repository primitives. Exposes discovery (root), init, clone, porcelain v2 status with git.changed events, worktree primitives, and stage/commit/discard as commands."
+      },
+      "repo": "https://github.com/soksak-ai/soksak-plugin-git-core.git",
+      "branch": "main",
+      "commands": [
+        {
+          "name": "clone",
+          "title": {
+            "ko": "저장소 복제",
+            "en": "Clone a repository"
+          }
+        },
+        {
+          "name": "commit",
+          "title": {
+            "ko": "커밋 생성",
+            "en": "Create a commit"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "diff",
+          "title": {
+            "ko": "변경 내용 비교",
+            "en": "Show the diff"
+          }
+        },
+        {
+          "name": "discard",
+          "title": {
+            "ko": "변경 파기",
+            "en": "Discard changes"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "init",
+          "title": {
+            "ko": "저장소 초기화",
+            "en": "Initialize a repository"
+          }
+        },
+        {
+          "name": "log",
+          "title": {
+            "ko": "커밋 이력 조회",
+            "en": "Read the commit log"
+          }
+        },
+        {
+          "name": "root",
+          "title": {
+            "ko": "저장소 판별",
+            "en": "Locate repository root"
+          }
+        },
+        {
+          "name": "show",
+          "title": {
+            "ko": "커밋 상세 확인",
+            "en": "Show a commit"
+          }
+        },
+        {
+          "name": "stage",
+          "title": {
+            "ko": "변경 스테이지",
+            "en": "Stage changes"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "status",
+          "title": {
+            "ko": "저장소 상태 조회",
+            "en": "Read repository status"
+          }
+        },
+        {
+          "name": "unstage",
+          "title": {
+            "ko": "스테이지 해제",
+            "en": "Unstage changes"
+          },
+          "danger": "destructive"
+        },
+        {
+          "name": "watch.list",
+          "title": {
+            "ko": "변경 감시 목록",
+            "en": "List change watches"
+          }
+        },
+        {
+          "name": "watch.start",
+          "title": {
+            "ko": "변경 감시 시작",
+            "en": "Start change watch"
+          }
+        },
+        {
+          "name": "watch.stop",
+          "title": {
+            "ko": "변경 감시 중지",
+            "en": "Stop change watch"
+          }
+        },
+        {
+          "name": "worktree.add",
+          "title": {
+            "ko": "워크트리 추가",
+            "en": "Add a worktree"
+          }
+        },
+        {
+          "name": "worktree.list",
+          "title": {
+            "ko": "워크트리 목록",
+            "en": "List worktrees"
+          }
+        },
+        {
+          "name": "worktree.prune",
+          "title": {
+            "ko": "워크트리 정리",
+            "en": "Prune worktrees"
+          }
+        },
+        {
+          "name": "worktree.remove",
+          "title": {
+            "ko": "워크트리 제거",
+            "en": "Remove a worktree"
+          }
+        },
+        {
+          "name": "worktree.remove.force",
+          "title": {
+            "ko": "워크트리 강제 제거",
+            "en": "Force-remove a worktree"
+          },
+          "danger": "destructive"
+        }
+      ]
+    },
+    {
       "id": "soksak-plugin-git-diff",
       "name": {
         "en": "Git Changes",
