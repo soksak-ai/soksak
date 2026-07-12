@@ -9,6 +9,7 @@ import {
   partitionEnforcement,
   partitionTransparency,
   viewStatusConformance,
+  sidecarSpawnViolations,
 } from "./conformance";
 
 // gateContribution — declared≡actual 등록 게이트(통합). api.ts 4중 find+throw 를 하나로.
@@ -301,5 +302,30 @@ describe("C3_ENFORCEMENT·partitionEnforcement — 시행 모드", () => {
         "implements-duplicate": "warn",
       }),
     ).toEqual({ blocking: [v[0]], warn: [v[1]] });
+  });
+});
+
+describe("유닛 선택의 단일진실 — 번들이 유닛명을 굳혔는가", () => {
+  const declared = [{ name: "terminal-alacritty" }];
+
+  it("이름을 매니페스트에서 읽는 번들은 위반이 없다", () => {
+    // 유닛명이 리터럴로 없다 — app.process.sidecarName(계약)이 준 값을 스폰한다.
+    const bundle = 'const u = app.process.sidecarName(C); proc.spawn(`sidecar:${u}`, [], {});';
+    expect(sidecarSpawnViolations(bundle, declared)).toEqual([]);
+  });
+
+  it("굳어 있는 이름은 선언된 것이라도 위반이다", () => {
+    // 선언과 같아도 매니페스트를 바꾸는 순간 이 리터럴이 거짓이 된다 — 그때는 앱이 죽어야만 안다.
+    const bundle = 'proc.spawn("sidecar:terminal-alacritty", [], { detached: true });';
+    expect(sidecarSpawnViolations(bundle, declared)).toEqual([
+      { unit: "terminal-alacritty", declared: true },
+    ]);
+  });
+
+  it("선언되지 않은 이름은 declared=false 로 잡힌다", () => {
+    const bundle = 'proc.spawn("sidecar:terminal-wezterm", [], {});';
+    expect(sidecarSpawnViolations(bundle, declared)).toEqual([
+      { unit: "terminal-wezterm", declared: false },
+    ]);
   });
 });

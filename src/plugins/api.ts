@@ -527,6 +527,10 @@ export interface SoksakPluginApi {
   /** 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합). "process" 권한.
    *  PTY 가 아니라 순수 파이프 → JSON-RPC 프레이밍 무손상. 이벤트 기반(폴링 0). */
   process?: {
+    /** 매니페스트 sidecars[] 에서 이 계약(interface)을 구현한다고 선언한 유닛 이름. 어느 엔진 유닛을
+     *  쓸지는 **매니페스트가 정한다** — 번들 상수로 굳히면 매니페스트만 바꿨을 때 옛 유닛이 무음으로
+     *  스폰된다. 선언 부재/중복은 loud throw(조용히 고르지 않는다). */
+    sidecarName: (interfaceId: string) => string;
     /** 프로그램 spawn → handle(id). cwd/env 선택. envRemove=부모 env 에서 뗄 키(중첩 가드 제거 등).
      *  secretEnv=envVar→secretKey(이 플러그인 ns 의 시크릿). 평문은 JS 가 안 만진다 — 키 이름만 넘기면
      *  Rust 경계가 볼트에서 해소해 자식 env 에 주입(셸 args·ps·history 무노출 R2). 잠김/미존재면 spawn 실패.
@@ -708,7 +712,13 @@ const denied = (message: string): CommandOutcome => ({
 
 // app.process 구현 — handle(id)별 리스너 + 등록 전 도착분 버퍼(유실 0). spawn 시 Channel 3개
 // (stdout/stderr/exit)를 만들어 process_spawn 에 넘기고, onData/onStderr/onExit 가 그 스트림을 구독.
-function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker, ns: string) {
+function createProcessApi(
+  deps: PluginApiDeps,
+  tracker: DisposableTracker,
+  ns: string,
+  manifest: PluginManifest,
+) {
+  const declared = () => manifest.sidecars ?? [];
   type Bytes = (d: Uint8Array) => void;
   interface ProcState {
     stdout: Set<Bytes>;
@@ -729,6 +739,23 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker, ns: s
     return tracker.wrap(() => set.delete(cb));
   };
   return {
+    // 매니페스트가 이 계약을 구현한다고 선언한 사이드카 유닛의 이름. 어느 엔진 유닛을 쓸지는
+    // **매니페스트가 정한다** — 번들에 이름을 상수로 굳히면 매니페스트만 바꿨을 때 옛 유닛이 무음으로
+    // 스폰된다(declared ≠ actual). 선언이 없거나 둘 이상이면 조용히 고르지 않고 loud 하게 죽는다.
+    sidecarName(interfaceId: string): string {
+      const hits = declared().filter((s) => s.interface === interfaceId);
+      if (hits.length === 0) {
+        throw new Error(
+          `매니페스트 sidecars 에 ${interfaceId} 를 구현하는 유닛 선언이 없다 — 선언이 유닛 선택의 단일진실이다`,
+        );
+      }
+      if (hits.length > 1) {
+        throw new Error(
+          `매니페스트 sidecars 에 ${interfaceId} 구현이 ${hits.length} 개다 — 계약당 유닛 하나만 선언한다`,
+        );
+      }
+      return hits[0].name;
+    },
     async spawn(
       cmd: string,
       args: string[],
@@ -742,6 +769,12 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker, ns: s
         detached?: boolean;
       },
     ): Promise<number> {
+      // 선언≡실물 — app.sidecar(engine 모듈)가 지는 법을 service 사이드카 스폰도 진다. 매니페스트에
+      // 없는 유닛을 스폰하면 매니페스트가 유닛 선택의 단일진실이라는 계약이 거짓말이 된다.
+      const unit = cmd.startsWith("sidecar:") ? cmd.slice("sidecar:".length) : null;
+      if (unit !== null && !declared().some((s) => s.name === unit)) {
+        throw new Error(`매니페스트 sidecars 에 선언되지 않은 사이드카 스폰: ${unit}`);
+      }
       const st: ProcState = {
         stdout: new Set(),
         stderr: new Set(),
@@ -1801,7 +1834,7 @@ export function buildPluginApi(
         }
       : undefined,
     pty: has("pty") ? createPtyApi(deps, tracker) : undefined,
-    process: has("process") ? createProcessApi(deps, tracker, id) : undefined,
+    process: has("process") ? createProcessApi(deps, tracker, id, manifest) : undefined,
     sidecar: has("sidecar") ? createSidecarApi(deps, tracker, manifest) : undefined,
     network: has("network") ? createNetworkApi(deps, id) : undefined,
     ws: has("network") ? createWsApi(deps, tracker) : undefined,

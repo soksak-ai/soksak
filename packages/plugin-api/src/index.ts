@@ -435,6 +435,10 @@ export interface SoksakPluginApi {
     onCommandFinished?: (paneId: string, cb: () => void) => Disposable;
   };
   process?: {
+    /** 매니페스트 sidecars[] 에서 이 계약(interface)을 구현한다고 선언한 유닛 이름. 어느 엔진 유닛을
+     *  쓸지는 **매니페스트가 정한다** — 번들 상수로 굳히면 매니페스트만 바꿨을 때 옛 유닛이 무음으로
+     *  스폰된다. 선언 부재/중복은 loud throw(조용히 고르지 않는다). */
+    sidecarName: (interfaceId: string) => string;
     spawn: (
       cmd: string,
       args: string[],

@@ -216,3 +216,36 @@ export function nodeConformance(
     orphan: [...scannedBase].filter((id) => !declared.has(id)),
   };
 }
+
+// ── 유닛 선택의 단일진실 — 번들이 유닛명을 굳혔는가(발행 경계) ────────────────────
+// 어느 엔진 유닛을 스폰할지는 매니페스트 sidecars[] 가 정한다. 번들에 "sidecar:<이름>" 을 상수로
+// 굳히면 매니페스트만 바꿨을 때 declared ≠ actual 이 된다. 런타임 스폰 게이트가 그 어긋남을 loud
+// 하게 잡지만(app.process.spawn), 그건 실행해 봐야 안다 — 발행 전에 정적으로도 잡는다.
+//
+// 선언된 이름이라도 리터럴로 박혀 있으면 위반이다: 매니페스트를 바꾸는 순간 그 리터럴이 거짓이
+// 되고, 그때는 앱이 죽는 방식으로만 알게 된다. 이름은 app.process.sidecarName(계약)이 준다.
+
+export interface SidecarSpawnViolation {
+  /** 번들에 굳어 있는 유닛명. */
+  unit: string;
+  /** 매니페스트가 그 이름을 선언하고는 있는가(선언돼 있어도 리터럴은 위반이다 — 위 주석). */
+  declared: boolean;
+}
+
+/** 번들 소스에서 `sidecar:<이름>` 리터럴을 찾는다. 하나라도 있으면 유닛 선택이 매니페스트가 아니라
+ *  번들에 있다는 뜻이다. */
+export function sidecarSpawnViolations(
+  bundle: string,
+  declared: ReadonlyArray<{ name: string }>,
+): SidecarSpawnViolation[] {
+  const names = new Set(declared.map((d) => d.name));
+  const out: SidecarSpawnViolation[] = [];
+  const seen = new Set<string>();
+  for (const m of bundle.matchAll(/["'`]sidecar:([a-z0-9][a-z0-9-]*)["'`]/g)) {
+    const unit = m[1];
+    if (seen.has(unit)) continue;
+    seen.add(unit);
+    out.push({ unit, declared: names.has(unit) });
+  }
+  return out;
+}

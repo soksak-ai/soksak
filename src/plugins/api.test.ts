@@ -923,3 +923,37 @@ describe("app.sidecar — 권한 게이트 + 선언≡실물", () => {
     expect(closes.length).toBe(1);
   });
 });
+
+describe("유닛 선택의 단일진실 — 매니페스트 sidecars[]", () => {
+  const withSidecar = (name: string) =>
+    manifestOf({
+      permissions: ["process"],
+      sidecars: [{ name, interface: "soksak-sidecar-terminal-spec@1" }],
+    });
+
+  it("계약을 구현한다고 선언된 유닛 이름을 내준다", () => {
+    const { api } = buildPluginApi(withSidecar("terminal-wezterm"), "/d", fakeDeps());
+    expect(api.process?.sidecarName("soksak-sidecar-terminal-spec@1")).toBe("terminal-wezterm");
+  });
+
+  it("선언이 없는 계약을 물으면 조용히 고르지 않고 죽는다", () => {
+    const { api } = buildPluginApi(withSidecar("terminal-alacritty"), "/d", fakeDeps());
+    expect(() => api.process?.sidecarName("soksak-sidecar-browser-spec@1")).toThrow(/선언이 없다/);
+  });
+
+  it("매니페스트에 없는 유닛은 스폰할 수 없다(선언≡실물)", async () => {
+    // 번들이 유닛명을 상수로 굳혀 두면 매니페스트를 바꾼 순간 이 경로로 떨어진다 — 무음으로 옛
+    // 유닛이 뜨는 대신 loud 하게 죽는다.
+    const { api } = buildPluginApi(withSidecar("terminal-wezterm"), "/d", fakeDeps());
+    await expect(
+      api.process?.spawn("sidecar:terminal-alacritty", [], { detached: true }),
+    ).rejects.toThrow(/선언되지 않은 사이드카 스폰/);
+  });
+
+  it("선언된 유닛은 스폰된다", async () => {
+    const { api } = buildPluginApi(withSidecar("terminal-wezterm"), "/d", fakeDeps());
+    await expect(
+      api.process?.spawn("sidecar:terminal-wezterm", [], { detached: true }),
+    ).resolves.toBeDefined();
+  });
+});
