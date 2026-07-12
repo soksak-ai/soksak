@@ -318,24 +318,36 @@ Diagnostics: `stats.dbg.framesPresented` counts presented offscreen frames
 ## 9. Terminal service — `soksak-sidecar-terminal-spec@1`
 
 An engine-neutral, domain-scoped contract for the terminal domain's restore service. The
-contract carries the domain; the **unit** carries the engine — the browser-chromium symmetry:
-`soksak-sidecar-terminal-alacritty` (the Alacritty VT engine) is the shipping unit, and a
-future `soksak-sidecar-terminal-wezterm` would be a separate unit implementing the same
-`@1` contract, one engine unit behind a terminal plugin at a time.
+contract carries the domain; the **unit** carries the engine — the browser-chromium symmetry.
+Four engine units implement `@1` today: `soksak-sidecar-terminal-alacritty` (default),
+`-wezterm`, `-vt100`, `-ghostty`. One engine unit runs behind a terminal plugin at a time,
+selected by the plugin manifest.
 
 The running unit is a **service-model survival sidecar** (§1): headless, separate process,
 reached over NDJSON on a UDS in the identity home. It owns the terminal domain's screen work
 — the VT mirror, ANSI serialization, and checkpoint policy — while the core PTY daemon
 (`soksak-ptyd`) keeps byte survival, the raw ring with a monotonic sequence, the tee face,
-and a content-agnostic sealed-blob store (ARCHITECTURE A13; RESTORE.md). The full contract
-lives in the unit repo's `SPEC.md`; this entry is the core-doc index.
+and a content-agnostic sealed-blob store (ARCHITECTURE A13; RESTORE.md).
 
-- **Consumers:** the terminal plugin *family*, not one plugin — M3 wires **both**
-  `soksak-plugin-terminal` (xterm) and `soksak-plugin-terminal-ghostty`. Each declares the
-  identical entry `sidecars: [{ "name": "terminal-alacritty", "interface":
+The contract text, its acceptance suite, and its benchmarks live in **`soksak-contract-terminal`**
+(kind `contract` — NAMING §4a), never inside an implementation. Acceptance is decided by
+**declared golden screen states**, not by another engine: a unit passes when the screen it
+reports after feeding a fixture stream, and the screen it reports after feeding back its own
+restore paint, both equal the golden, and no byte reaches the PTY during replay. Every engine
+— the default included — is a candidate measured against that standard; none of them is the
+standard.
+
+- **Consumers:** the terminal plugin *family*, not one plugin — both
+  `soksak-plugin-terminal-xterm` and `soksak-plugin-terminal-ghostty` declare the identical
+  entry `sidecars: [{ "name": "terminal-alacritty", "interface":
   "soksak-sidecar-terminal-spec@1" }]`. One contract, one running engine unit, shared across
   the family — input is a raw byte stream and output is ANSI paint, so no consumer couples to
   the engine. The manifest's `sidecars[].name` is what selects which engine unit runs.
+  **Open gap:** the survival spawn path (`process.spawn "sidecar:{name}"`) carries no manifest
+  gate, and the consuming plugins still hold the unit name in a bundled constant — a manifest
+  edited alone selects nothing and the old engine spawns silently. Until the plugin reads the
+  name from its own manifest and doctor rejects a constant that disagrees with it, a unit swap
+  must change both (`scripts/e2e/terminal-unit-swap.sh` does).
 - **Two faces:** a *server* face — plugins request `rehydrate`/`coldPaint`/`status` for
   warm/cold restore — and a *consumer* face — the sidecar subscribes to the daemon tee and
   pushes serialized plaintext to the daemon's sealed-blob store; it never touches a key.
@@ -348,7 +360,9 @@ lives in the unit repo's `SPEC.md`; this entry is the core-doc index.
   byte survival); only restore fidelity degrades, announced loudly, with a fall to the seal
   path (the plugin fetches the sealed blob from the daemon and opens it with the app vault)
   and a respawn. Never silent.
-- **Engine:** the VT state machine is the Alacritty engine (crate `alacritty_terminal`,
-  Apache-2.0). Its name lives in the unit (`terminal-alacritty`) and its attribution, exactly
-  as Chromium's does in `browser-chromium` (NAMING §2/§5); the **contract** stays
-  engine-neutral, so a replacement engine ships as its own unit implementing the same `@1`.
+- **Engine:** each unit names its VT state machine and carries that engine's attribution,
+  exactly as Chromium's does in `browser-chromium` (NAMING §2/§5) — `alacritty_terminal`
+  (Apache-2.0), `wezterm-term` (MIT), `vt100` (MIT), `libghostty-vt` (MIT). The **contract**
+  stays engine-neutral, so a replacement engine ships as its own unit implementing the same
+  `@1`. A unit links its own engine only: the acceptance suite lives in the contract repo and
+  is a dev-dependency, so no engine is compiled into another engine's unit.

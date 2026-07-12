@@ -42,10 +42,14 @@ git/clipboard/ai.session) and removes the violators.
 4. **Plugin** = `soksak-plugin-<domain>-<name>`. A replaceable-seam plugin MUST carry the
    observable engine name (`browser-native` is the exception naming the provisioning axis —
    see §3; `browser-chromium`, `editor-codemirror`).
-4a. **Distributable unit** (generalization of rule 4) = `soksak-<kind>-<domain>[-<name>]`,
-   kind ∈ {plugin, sidecar, kit}. The kind ALWAYS follows the brand prefix — a domain-first
-   variant (`soksak-browser-kit`) is banned; it was minted once by following generic npm
-   suffix convention instead of this grammar and renamed (§4). The `<name>` segment:
+4a. **Repository unit** (generalization of rule 4) = `soksak-<kind>-<domain>[-<name>]`,
+   kind ∈ {plugin, sidecar, kit, contract}. The kind ALWAYS follows the brand prefix — a
+   domain-first variant (`soksak-browser-kit`, `soksak-terminal-contract`) is banned; it was
+   minted once by following generic npm suffix convention instead of this grammar and renamed
+   (§4). The kind states what the repository IS, and a repository that ships nothing at
+   runtime must never wear a shipping kind: `soksak-sidecar-…` on a test-and-text repository
+   reads as a sidecar to anyone scanning the registrar, whatever the tokens were meant to
+   convey. The `<name>` segment:
    - plugin/sidecar: required on a replaceable seam and MUST carry the observable
      engine/implementation name (rule 4); a unit that alone constitutes its domain may
      omit it (`soksak-sidecar-workflow`).
@@ -55,6 +59,13 @@ git/clipboard/ai.session) and removes the violators.
      kit after one module inside it (`-ui` for a package that also ships lifecycle and
      input forwarding) is the same defect as a stale label — the unnamed majority ends
      up living outside its name.
+   - contract: a bare domain (`soksak-contract-terminal`) — the contract IS the domain's
+     standard, so it takes no `<name>`. It holds the contract text, the acceptance suite that
+     decides conformance, and the domain's benchmarks; it ships no binary, enters no registry,
+     and is consumed only as a build-time dev-dependency by the units it governs. Nothing
+     runtime, nothing installed. The **contract id** it defines keeps the governed unit's
+     grammar (`soksak-sidecar-terminal-spec@1`, §8) — an identifier string, not a repository
+     name; the two differ on purpose.
    - Vocabulary-collision ban: a name token already meaning something else inside this
      project is rejected even when it is the textbook term. Grep before naming. Burned
      tokens (browser kit case): `chrome` (Chrome browser), `shell` (terminal shell —
@@ -63,7 +74,8 @@ git/clipboard/ai.session) and removes the violators.
    - Metaphor ban: do not escape a vocabulary collision by reaching for a figurative
      token (`chassis` was minted and rejected as forced). Prefer the plain role word —
      `common` for a domain family's shared part reads naturally to any developer.
-   Registrar folder = `~/.soksak-dev/<kind>s/<full-name>` (plugins/, sidecars/, kits/).
+   Registrar folder = `~/.soksak-dev/<kind>s/<full-name>` (plugins/, sidecars/, kits/,
+   contracts/).
    Consumption is declare + discover: the consumer declares the unit NAME only (manifest
    `sidecars[]`, package.json dependencies) and resolution discovers it in the registrar
    (`SOKSAK_HOME` env, default `~/.soksak-dev`). Symlinks and relative-topology paths
@@ -276,7 +288,11 @@ non-artifact — a contract string shaped like `soksak-sidecar-<x>` reads as a
 sidecar that does not exist.
 
 A contract id is therefore derived, never invented: **`<scope>-spec@<major>`** —
-the scope it governs plus the mandatory kind marker `-spec`. The archetype is
+the scope it governs plus the mandatory kind marker `-spec`. It is an identifier
+string, never a repository name: the repository that carries a contract's text
+and its acceptance suite is a `contract`-kind unit named after the domain it
+standardizes (`soksak-contract-terminal` holds `soksak-sidecar-terminal-spec@1`,
+§4a). The archetype is
 `soksak-plugin-spec@1` (the contract of soksak plugins). Applied here:
 `soksak-sidecar-browser-spec@1` = the contract of browser-domain sidecars, read
 directly off the artifact it pairs with (`soksak-sidecar-browser-chromium` minus
