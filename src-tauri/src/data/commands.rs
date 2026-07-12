@@ -475,7 +475,9 @@ pub fn data_backup(path: Option<String>, state: State<'_, DbState>) -> Result<St
 // 있으면 걷는 길도 있어야 한다: 이 표면이 없어 시험이 남의 저장소에 흔적을 남겼다. 남의 ns 는 안 건드린다.
 #[tauri::command]
 pub fn data_ns_remove(ns: String, state: State<'_, DbState>) -> Result<serde_json::Value, String> {
-    validate_ns(&ns)?;
+    // 삭제는 문법을 따지지 않는다. 만드는 길이 규칙을 어겨 앉힌 ns 를 걷지 못하면 그건 회수가 아니다
+    // (실측: 검증 없는 import 가 남긴 ns 를 삭제 표면이 "잘못된 ns" 로 거부했다). 지우는 것은
+    // 존재하는 것뿐이므로 문법 검증이 지킬 것이 없다.
     let out = with_conn(&state, |c| store::drop_ns(c, &ns))?;
     Ok(serde_json::json!({
         "ns": ns,

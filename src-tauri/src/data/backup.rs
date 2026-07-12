@@ -203,6 +203,10 @@ pub fn import(conn: &Connection, jsonl: &str) -> Result<i64, String> {
         let v: Value = serde_json::from_str(line).map_err(|e| e.to_string())?;
         let kind = v.get("kind").and_then(|k| k.as_str()).unwrap_or("");
         let ns = v.get("ns").and_then(|x| x.as_str()).unwrap_or("");
+        // 들어오는 길도 검증한다 — 안 하면 나머지 표면이 주소로 삼을 수 없는 ns 가 저장소에 앉는다.
+        // 실측: 검증 없는 import 가 "plugin:probe-lane" 을 만들었고, 그 뒤 어떤 명령도 그것을 읽지도
+        // 지우지도 못했다(전 명령이 validate_ns 를 지난다). 만든 길이 규칙을 안 지키면 규칙이 아니다.
+        super::validate_ns(ns)?;
         match kind {
             "meta" => {
                 let coll = v.get("coll").and_then(|x| x.as_str()).unwrap_or("");
@@ -232,6 +236,22 @@ pub fn import(conn: &Connection, jsonl: &str) -> Result<i64, String> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    // 들어오는 길의 규칙 — import 가 ns 를 검증하지 않으면 나머지 표면이 주소로 삼을 수 없는 데이터가
+    // 저장소에 앉는다(실측: "plugin:probe-lane"). 규칙은 모든 입구에서 같아야 규칙이다.
+    #[test]
+    fn import_refuses_a_namespace_the_rest_of_the_surface_cannot_address() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        super::super::init_base(&conn).unwrap();
+        let bad = r#"{"kind":"kv","ns":"plugin:probe-lane","k":"x","v":{"a":1}}"#;
+        let err = import(&conn, bad).unwrap_err();
+        assert!(err.contains("ns"), "거부 이유가 ns 를 지목한다: {err}");
+
+        let good = r#"{"kind":"kv","ns":"soksak-plugin-probe","k":"x","v":{"a":1}}"#;
+        assert_eq!(import(&conn, good).unwrap(), 1);
+    }
+
     use super::*;
     use serde_json::json;
 
