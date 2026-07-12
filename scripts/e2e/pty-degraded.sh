@@ -26,7 +26,10 @@ if [ "$IDENTITY" = "app" ]; then E2E_APP_HOME="$HOME/.soksak"; else E2E_APP_HOME
 SOCK="$E2E_APP_HOME/com.soksak.$IDENTITY.sock"
 PTYD_BIN="$TARGET_DIR/debug/soksak-ptyd"
 # 복원 사이드카 dist 진입점 — 코어 resolve_sidecar_cmd 규격(identity 홈/sidecars/<unit>/dist/<unit>).
-SIDECAR_BIN="$E2E_APP_HOME/sidecars/soksak-sidecar-terminal-alacritty/dist/soksak-sidecar-terminal-alacritty"
+# 소비 플러그인이 선택한 엔진 유닛을 무력화해야 스폰이 실패한다(그 유닛이 실제로 스폰되는 것).
+# SOKSAK_TERM_ENGINE 로 겨눈다(기본 alacritty — 유닛 교체 없는 기존 배터리와 정합).
+TERM_ENGINE="${SOKSAK_TERM_ENGINE:-alacritty}"
+SIDECAR_BIN="$E2E_APP_HOME/sidecars/soksak-sidecar-terminal-$TERM_ENGINE/dist/soksak-sidecar-terminal-$TERM_ENGINE"
 
 [ -x "$APP_BIN" ] || { echo "RED: 앱 번들 없음(make build-debug 먼저): $APP_BIN" >&2; exit 1; }
 
