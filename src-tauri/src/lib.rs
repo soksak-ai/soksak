@@ -420,6 +420,8 @@ pub fn run() {
             pty::pty_pane_pid,
             pty::pty_daemon_status,
             pty::pty_daemon_restart,
+            pty::pty_sidecar_request,
+            pty::pty_read_sealed_screen,
             pty::write_terminal,
             pty::resize_terminal,
             pty::ack_terminal,

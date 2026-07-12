@@ -78,6 +78,32 @@ pub struct SpawnOutcome {
     pub screen_restored: bool,
 }
 
+// 화면 복원 제어(배관, 내용 불가지) — spawn 의 replay 파라미터. 코어는 페인트를 만들지도
+// 해석하지도 않는다. 셋 중 하나:
+//   부재(None): 데몬 미러 재생 + cold 체크포인트 주입(코어 소유, 기존 동작).
+//   "none"(Mode): 소비자가 화면을 그렸다 — 코어는 복원하지 않고, 신선 세션의 재생을 버려
+//     소비자가 그린 화면을 덮지 않는다(죽은 세션 cold 소비 경로).
+//   {fromSeq}(FromSeq): 라이브 세션에 raw 링을 그 seq 부터 부착(레이스-프리 warm 핸드오프 —
+//     소비자가 이미 그 seq 까지 그렸다). 데몬 미러 재생·cold 주입 없음.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(untagged)]
+pub enum ReplayControl {
+    Mode(String),
+    FromSeq {
+        #[serde(rename = "fromSeq")]
+        from_seq: u64,
+    },
+}
+
+// 봉인 화면 블롭을 개봉한 평문(pty_read_sealed_screen 반환). 코어는 바이트를 해석하지
+// 않는다 — paintB64 는 소비자가 {paint,altActive} 로 해석한다(터미널 도메인).
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SealedScreen {
+    pub paint_b64: String,
+    pub alt_active: bool,
+}
+
 impl PtyManager {
     // 앱 종료 시 호출(B1: 종료=보존): Daemon 세션은 detach 만 한다 — 셸과 자식은
     // soksak-ptyd 에서 계속 살고, 다음 부팅의 같은 pane 스폰이 재부착한다. Local
@@ -266,6 +292,7 @@ pub fn spawn_terminal(
     shell: Option<String>,
     pane_id: Option<String>,
     window_label: Option<String>,
+    replay: Option<ReplayControl>,
     on_output: Channel<InvokeResponseBody>,
     manager: State<'_, PtyManager>,
 ) -> Result<SpawnOutcome, String> {
@@ -289,6 +316,7 @@ pub fn spawn_terminal(
                 shell: shell.clone(),
                 env: env.clone(),
                 env_remove: env_remove.clone(),
+                replay: replay.clone(),
             },
             on_output.clone(),
         ) {
@@ -437,6 +465,46 @@ pub fn pty_pane_pid(pane_id: String, manager: State<'_, PtyManager>) -> Option<i
     #[cfg(not(unix))]
     let _ = daemon_backed;
     None
+}
+
+// 서비스 사이드카(생존 미러) 서비스 소켓에 NDJSON 요청/응답 1왕복을 릴레이한다. 코어는
+// request/응답 JSON 을 해석하지 않는다(내용 불가지 다리 — 웹뷰 JS 가 UDS 를 못 여는 것을
+// 코어가 대신 연결). request 에 실린 window 는 소비자가 스탬프한 라우팅 좌표다(spawn 동형).
+#[tauri::command]
+pub fn pty_sidecar_request(
+    app: tauri::AppHandle,
+    request: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let _ = &app; // identity 홈은 SOKSAK_HOME 파생 — app 핸들은 시그니처 일관성용.
+    #[cfg(unix)]
+    {
+        daemon::sidecar_service_relay(&request)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = &request;
+        Err("service sidecar relay is unix-only".into())
+    }
+}
+
+// 이 pane 의 봉인 체크포인트를 앱 볼트로 개봉해 평문 페인트(base64)+altActive 를 돌려준다.
+// 잠금=명시 에러(fail-closed), 블롭 없음=None. 소비자(터미널 플러그인)가 죽은 세션 화면을
+// 다시 그리는 cold 경로(사이드카 불요). 코어는 봉인만 열고 바이트를 해석하지 않는다.
+#[tauri::command]
+pub fn pty_read_sealed_screen(
+    app: tauri::AppHandle,
+    window_label: Option<String>,
+    pane_id: String,
+) -> Result<Option<SealedScreen>, String> {
+    #[cfg(unix)]
+    {
+        daemon::read_sealed_screen(&app, window_label.as_deref().unwrap_or(""), &pane_id)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (&app, &window_label, &pane_id);
+        Ok(None)
+    }
 }
 
 #[tauri::command]
@@ -763,6 +831,8 @@ mod daemon {
         pub shell: String,
         pub env: Vec<(String, String)>,
         pub env_remove: Vec<String>,
+        // 화면 복원 제어(배관) — super::ReplayControl 참조. spawn_via_daemon 이 세 모드로 분기.
+        pub replay: Option<super::ReplayControl>,
     }
 
     // ── 봉인 체크포인트 수신 키(restore 사다리 3단, docs/RESTORE.md) ─────────
@@ -830,6 +900,15 @@ mod daemon {
         let pane_id = p.pane_id.clone().ok_or("no pane id: local session")?;
         let home = crate::home::soksak_home();
         let window = p.window_label.clone().unwrap_or_default();
+        // 화면 복원 제어(배관) — 소비자가 화면을 소유하면 코어 재생·주입을 억제한다.
+        //   plugin_owns("none"): cold 소비 — 소비자가 그렸으니 신선 재생을 버린다.
+        //   from_seq({fromSeq}): warm 핸드오프 — raw 링을 그 seq 부터 부착한다(미러 재생 없음).
+        let replay = p.replay.clone();
+        let plugin_owns = matches!(&replay, Some(super::ReplayControl::Mode(m)) if m == "none");
+        let from_seq = match &replay {
+            Some(super::ReplayControl::FromSeq { from_seq }) => Some(*from_seq),
+            _ => None,
+        };
         // cold 후보는 createOrAttach 전에 읽는다 — 파일이 남아 있다는 것 자체가 데몬
         // 사망의 유산이고(정상 종료는 삭제한다), 새 세션의 첫 체크포인트가 같은 자리를
         // 덮어쓰기 전의 안정 창이다.
@@ -857,8 +936,10 @@ mod daemon {
         // 불가능했고(attached=false) 봉인 체크포인트가 남아 있으면, unlock 된 vault 의
         // 개인키로 열어 화면 기록을 다시 그리고 live 자식 소실을 명시 고지한다(무음 금지).
         // 잠금이면 파일을 남기고 blocks repaint 폴백에 맡긴다 — 평문 우회 경로는 없다.
+        // 코어 소유 cold 주입은 기본 모드(replay 부재)에서만. 소비자가 화면을 소유하면
+        // (plugin_owns/from_seq) 코어는 주입하지 않는다 — 소비자가 봉인 블롭을 읽어 그린다.
         let mut injected = false;
-        if !attached {
+        if replay.is_none() && !attached {
             if let Some(ck) = cold {
                 match open_cold_checkpoint(app, &ck, &window, &pane_id) {
                     Ok(paint) => {
@@ -908,11 +989,28 @@ mod daemon {
             }
         }
 
-        let (mut stream, replay_len) = attach_stream(&home, session)?;
-        if injected {
-            // 주입된 cold 페인트 위에 신선 세션의 절대주소(CUP) repaint 를 겹치면 화면이
-            // 어긋난다 — 신선 세션의 재생(프롬프트 한 줄 상당)은 버리고, 개행 하나로
-            // 새 프롬프트를 고지 아래에 다시 그리게 한다.
+        // 부착: from_seq 있으면 raw 링을 그 seq 부터 재생(warm 핸드오프), 없으면 미러 직렬화.
+        let (mut stream, replay_len, gap) = attach_stream(&home, session, from_seq)?;
+        if let Some((from, to)) = gap {
+            // warm 핸드오프에서 evict 로 seq 구간 [from,to) 가 사라졌다 — 무음 유실 금지(loud 고지).
+            crate::activity::publish(
+                app,
+                "pty.warm.gap",
+                "core",
+                json!({
+                    "window": window,
+                    "pane": pane_id,
+                    "fromSeq": from,
+                    "toSeq": to,
+                    "note": "the raw ring evicted this range before the warm handoff attached; restore fidelity degraded",
+                }),
+            );
+        }
+        // cold 소비(injected 코어 주입 또는 plugin_owns 소비자 페인트) 위에 신선 세션의
+        // 절대주소(CUP) 재생을 겹치면 화면이 어긋난다 — 신선 재생을 버리고 개행 하나로
+        // 프롬프트를 고지/페인트 아래에 다시 그린다. from_seq(warm)는 재생 꼬리가 곧 소비자가
+        // 원하는 라이브 연속분이라 버리지 않는다.
+        if injected || plugin_owns {
             discard_exact(&mut stream, replay_len)?;
             use base64::Engine as _;
             let _ = link.request(
@@ -949,9 +1047,10 @@ mod daemon {
 
         // 데몬 경로 성공 — 이후 폴백이 다시 일어나면 새 사건으로 고지한다.
         link.fallback_notified.store(false, Ordering::SeqCst);
-        // 화면 복원 여부: 재부착 replay(attached) 또는 cold inject(injected). 둘 다면 화면이
-        // 이미 PTY 로 채워졌으니 플러그인 blocks-repaint 는 floor 로 겹쳐선 안 된다.
-        Ok((session, attached || injected))
+        // 코어가 화면을 복원했는가 — 기본 모드에서만(재부착 replay attached | cold inject injected).
+        // 소비자 소유(plugin_owns/from_seq)면 코어는 복원하지 않았다(소비자가 자기 페인트를 스스로 안다).
+        let core_restored = replay.is_none() && (attached || injected);
+        Ok((session, core_restored))
     }
 
     // stream 종료의 원인 판별: control ping 이 살아 있으면 셸의 정상 종료다(프론트는
@@ -1194,8 +1293,14 @@ mod daemon {
     }
 
     // stream 부착: hello 1줄 교환 후 raw 전환. hello 응답 줄만 바이트 단위로 소비해
-    // 뒤따르는 재생/라이브 바이트를 잃지 않는다. 반환 = (소켓, 재생 바이트 수).
-    fn attach_stream(home: &Path, session: u64) -> Result<(UnixStream, u64), String> {
+    // 뒤따르는 재생/라이브 바이트를 잃지 않는다. from_seq 있으면 raw 링을 그 seq 부터
+    // 재생하라고 데몬에 요청한다(warm 핸드오프), 없으면 미러 직렬화 재생. 반환 =
+    // (소켓, 재생 바이트 수, evict gap [from,to) — from_seq 재생에서 링이 잘렸을 때만).
+    fn attach_stream(
+        home: &Path,
+        session: u64,
+        from_seq: Option<u64>,
+    ) -> Result<(UnixStream, u64, Option<(u64, u64)>), String> {
         let token = std::fs::read_to_string(proto::token_path(home))
             .map_err(|e| format!("token: {e}"))?
             .trim()
@@ -1208,7 +1313,7 @@ mod daemon {
             token,
             client_id: format!("app-{}", std::process::id()),
             session: Some(session),
-            from_seq: None,
+            from_seq,
             subscribe: false,
         };
         let line = serde_json::to_string(&hello).map_err(|e| e.to_string())?;
@@ -1235,6 +1340,117 @@ mod daemon {
             ));
         }
         let replay_len = v["data"]["replayBytes"].as_u64().unwrap_or(0);
-        Ok((conn, replay_len))
+        // from_seq 재생에서 링이 그 seq 이전을 evict 했으면 gap 을 실어 준다(무음 유실 금지).
+        let gap = match (v["data"]["gap"]["fromSeq"].as_u64(), v["data"]["gap"]["toSeq"].as_u64()) {
+            (Some(f), Some(t)) => Some((f, t)),
+            _ => None,
+        };
+        Ok((conn, replay_len, gap))
+    }
+
+    // ── 서비스 사이드카 릴레이(생존 미러 사이드카 — SIDECARS.md) ──────────────────
+    // 웹뷰 JS 는 UDS 를 못 연다. 코어가 사이드카 서비스 소켓에 NDJSON 요청/응답 1왕복을
+    // 대신 연결해 준다(데몬 바이트 다리 pty.rs 와 같은 층위). 코어는 요청/응답 JSON 을
+    // 해석하지 않는다(내용 불가지 다리). 소켓은 데몬과 같은 run 디렉토리에 있고 identity-home
+    // 토큰을 공유한다(사이드카가 데몬과 피어링하는 계약). 연결 실패는 명시 에러(사이드카 사망 loud).
+    pub fn sidecar_service_relay(request: &Value) -> Result<Value, String> {
+        let home = crate::home::soksak_home();
+        let path = proto::run_dir(&home).join(format!(
+            "soksak-sidecar-terminal-p{}.sock",
+            proto::PTYD_PROTOCOL_VERSION
+        ));
+        let token = std::fs::read_to_string(proto::token_path(&home))
+            .map_err(|e| format!("token: {e}"))?
+            .trim()
+            .to_string();
+        let conn = UnixStream::connect(&path)
+            .map_err(|e| format!("no terminal sidecar at {}: {e}", path.display()))?;
+        let mut w = conn.try_clone().map_err(|e| e.to_string())?;
+        let mut r = BufReader::new(conn);
+        // hello{version, token} 1줄 → ok 1줄. 계약(SPEC §4)은 데몬 hello 와 동형이다.
+        let hello = json!({ "version": proto::PTYD_PROTOCOL_VERSION, "token": token });
+        writeln!(w, "{hello}").map_err(|e| e.to_string())?;
+        let mut line = String::new();
+        if r.read_line(&mut line).map_err(|e| format!("hello reply: {e}"))? == 0 {
+            return Err("terminal sidecar closed before hello ack".into());
+        }
+        let ack: Value = serde_json::from_str(line.trim()).map_err(|e| e.to_string())?;
+        if ack["ok"] != true {
+            return Err(format!(
+                "{}: {}",
+                ack["code"].as_str().unwrap_or("ERROR"),
+                ack["message"].as_str().unwrap_or_default()
+            ));
+        }
+        // 요청 릴레이 — 내용 불가지로 그대로 통과. 응답 1줄 파싱해 그대로 돌려준다.
+        let mut req_line = serde_json::to_vec(request).map_err(|e| e.to_string())?;
+        req_line.push(b'\n');
+        w.write_all(&req_line).map_err(|e| e.to_string())?;
+        line.clear();
+        if r.read_line(&mut line).map_err(|e| format!("reply: {e}"))? == 0 {
+            return Err("terminal sidecar closed before reply".into());
+        }
+        serde_json::from_str(line.trim()).map_err(|e| format!("reply parse: {e}"))
+    }
+
+    // ── 봉인 화면 블롭 읽기 관통(cold 소비 경로 — restore 사다리 3단) ─────────────
+    // 이 pane 의 봉인 체크포인트를 앱 볼트로 개봉해 평문 페인트(base64)와 altActive 를
+    // 돌려준다. 잠금이면 명시 에러(fail-closed — 평문 우회 없음), 블롭 없으면 None. 소비자가
+    // {paint,altActive} 로 해석해 죽은 세션 화면을 다시 그린다(사이드카 불요 경로, SPEC §7).
+    // 코어는 바이트를 해석하지 않는다(봉인만 열고 넘긴다 — cold 주입과 같은 개봉, 다른 소비자).
+    pub fn read_sealed_screen(
+        app: &tauri::AppHandle,
+        window: &str,
+        pane: &str,
+    ) -> Result<Option<super::SealedScreen>, String> {
+        let home = crate::home::soksak_home();
+        let ck = match read_checkpoint(&home, window, pane) {
+            Some(c) => c,
+            None => return Ok(None),
+        };
+        let paint = open_cold_checkpoint(app, &ck, window, pane)?;
+        use base64::Engine as _;
+        Ok(Some(super::SealedScreen {
+            paint_b64: base64::engine::general_purpose::STANDARD.encode(&paint),
+            alt_active: ck.alt_active,
+        }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ReplayControl;
+
+    // spawn 의 replay 파라미터 와이어 계약(배관) — 부재/none/{fromSeq} 셋을 정확히 가른다.
+    // 소비자 소유 판정과 warm 좌표가 여기서 갈리므로 세 형태의 역직렬화를 못박는다.
+    #[derive(serde::Deserialize)]
+    struct SpawnArg {
+        replay: Option<ReplayControl>,
+    }
+
+    fn parse(json: &str) -> Option<ReplayControl> {
+        serde_json::from_str::<SpawnArg>(json).expect("valid spawn arg").replay
+    }
+
+    #[test]
+    fn absent_or_null_replay_is_core_owned() {
+        assert!(matches!(parse(r#"{"replay":null}"#), None));
+        assert!(matches!(parse(r#"{}"#), None));
+    }
+
+    #[test]
+    fn none_mode_marks_consumer_owned() {
+        match parse(r#"{"replay":"none"}"#) {
+            Some(ReplayControl::Mode(m)) => assert_eq!(m, "none"),
+            other => panic!("expected Mode(\"none\"), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn from_seq_carries_the_warm_handoff_coordinate_in_camel_case() {
+        match parse(r#"{"replay":{"fromSeq":4096}}"#) {
+            Some(ReplayControl::FromSeq { from_seq }) => assert_eq!(from_seq, 4096),
+            other => panic!("expected FromSeq, got {other:?}"),
+        }
     }
 }

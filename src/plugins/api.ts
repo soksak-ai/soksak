@@ -479,13 +479,16 @@ export interface SoksakPluginApi {
   /** PTY 백드 터미널 세션 spawn + raw 바이트 IO(터미널 플러그인이 xterm 구동). "pty" 권한.
    *  process 와 달리 PTY(flow control·셸 통합·SOKSAK_* env 주입은 코어 pty.rs 소유). 출력은 onData 스트림. */
   pty?: {
-    /** PTY 세션 spawn → id. windowLabel 은 코어가 현재 창으로 주입. */
+    /** PTY 세션 spawn → id. windowLabel 은 코어가 현재 창으로 주입. replay = 화면 복원 제어(배관):
+     *  없음=기본(데몬 재생·cold 주입, 코어 소유), "none"=소비자가 화면 소유(코어 복원 억제),
+     *  {fromSeq}=raw 링을 그 seq 부터 부착(레이스-프리 warm 핸드오프). 코어는 페인트 불해석. */
     spawn: (opts: {
       cols: number;
       rows: number;
       cwd?: string;
       shell?: string;
       paneId?: string;
+      replay?: "none" | { fromSeq: number };
     }) => Promise<number>;
     /** PTY 에 입력 쓰기(키 입력·붙여넣기). */
     write: (id: number, data: string) => Promise<void>;
@@ -510,6 +513,15 @@ export interface SoksakPluginApi {
       paneId: string,
       io: { readBuffer: (lines?: number) => string; sendInput: (data: string) => void },
     ) => Disposable;
+    /** 생존 서비스 사이드카의 서비스 소켓에 NDJSON 요청/응답 1왕복 릴레이(웹뷰 JS 는 UDS 불가 —
+     *  코어가 다리). 코어 내용 불가지: 요청/응답 JSON 통과 + 현재 창 label(라우팅 좌표)만 찍는다.
+     *  연결 실패 = 명시 에러(사이드카 사망 loud 신호). */
+    sidecarRequest: (req: Record<string, unknown>) => Promise<Record<string, unknown>>;
+    /** 이 pane 의 봉인 체크포인트를 앱 볼트로 개봉해 평문(base64)을 돌려준다. 잠금=명시 에러
+     *  (fail-closed), 블롭 없음=null. 소비자가 {paint,altActive} 로 해석(사이드카 불요). "terminal:read". */
+    readSealedScreen: (
+      paneId: string,
+    ) => Promise<{ paintB64: string; altActive: boolean } | null>;
   };
   /** 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합). "process" 권한.
    *  PTY 가 아니라 순수 파이프 → JSON-RPC 프레이밍 무손상. 이벤트 기반(폴링 0). */
@@ -527,6 +539,9 @@ export interface SoksakPluginApi {
         env?: Record<string, string>;
         envRemove?: string[];
         secretEnv?: Record<string, string>;
+        /** setsid 로 스폰 — 부모(앱) 사망을 넘어 생존한다. "sidecar:{name}" 대상만 허용
+         *  (detached_gate), kill_all 제외. 생존 서비스 사이드카를 스폰하는 열쇠. */
+        detached?: boolean;
       },
     ) => Promise<number>;
     /** stdin 에 쓰기(JSON-RPC 프레임 등). */
@@ -721,6 +736,9 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker, ns: s
         env?: Record<string, string>;
         envRemove?: string[];
         secretEnv?: Record<string, string>;
+        // 부모(앱) 사망을 넘어 생존하는 새 세션 리더(setsid)로 스폰. "sidecar:{name}" 대상에만
+        // 허용된다(detached_gate) — 생존 서비스 사이드카가 그 존재 이유다. kill_all 제외.
+        detached?: boolean;
       },
     ): Promise<number> {
       const st: ProcState = {
@@ -750,6 +768,7 @@ function createProcessApi(deps: PluginApiDeps, tracker: DisposableTracker, ns: s
         envRemove: opts?.envRemove ?? null,
         ns,
         secretEnv: opts?.secretEnv ?? null,
+        detached: opts?.detached ?? null,
         onStdout,
         onStderr,
         onExit,
@@ -885,6 +904,7 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
       cwd?: string;
       shell?: string;
       paneId?: string;
+      replay?: "none" | { fromSeq: number };
     }): Promise<number> => {
       const paneId = opts.paneId;
       // [substrate 관찰 탭] paneId 가 있으면 이 PTY 의 출력을 관찰 파서에 흘려, app.terminal.*
@@ -901,6 +921,9 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         else st.outBuf.push(b);
       };
       // windowLabel 은 코어가 현재 창으로 주입(멀티윈도우 sok 타겟 — webviewLabels 단일진실).
+      // replay = 코어의 화면 복원 제어(배관, 내용 불가지): 없음/기본 = 데몬 재생·cold 주입(코어 소유),
+      // "none" = 소비자가 화면을 소유(코어 복원 억제), {fromSeq} = raw 링을 그 seq 부터 부착(레이스-프리
+      // warm 핸드오프 — 소비자가 이미 그 seq 까지 그렸다). 코어는 페인트를 해석하지 않는다.
       const res = (await deps.invoke("spawn_terminal", {
         cols: opts.cols,
         rows: opts.rows,
@@ -908,6 +931,7 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         shell: opts.shell ?? null,
         paneId: paneId ?? null,
         windowLabel: currentWindowLabel() || null,
+        replay: opts.replay ?? null,
         onOutput,
       })) as { id: number; screenRestored: boolean };
       st.screenRestored = res.screenRestored;
@@ -950,6 +974,24 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
       paneId: string,
       io: { readBuffer: (lines?: number) => string; sendInput: (data: string) => void },
     ): Disposable => tracker.wrap(registerPtyIo(paneId, io)),
+    // 생존 서비스 사이드카의 서비스 소켓에 NDJSON 요청/응답 1왕복을 릴레이한다(웹뷰 JS 는 UDS 를
+    // 못 열어 코어가 다리를 놓는다 — 데몬 바이트 다리 pty.rs 와 같은 층위). 코어는 내용 불가지:
+    // 요청/응답 JSON 을 그대로 통과시키고 현재 창 label(라우팅 좌표 — spawn 과 동일)만 찍는다.
+    // 연결 실패는 명시 에러(무음·행 아님) — 사이드카 사망의 loud 신호. "pty" 권한.
+    sidecarRequest: (req: Record<string, unknown>): Promise<Record<string, unknown>> =>
+      deps.invoke("pty_sidecar_request", {
+        request: { ...req, window: currentWindowLabel() || null },
+      }) as Promise<Record<string, unknown>>,
+    // 이 pane 의 봉인 체크포인트 블롭을 읽어 앱 볼트로 개봉한 평문을 돌려준다(base64). 잠금이면
+    // 명시 에러(fail-closed — 평문 우회 없음), 블롭 없으면 null. 소비자가 {paint,altActive} 로 해석해
+    // 죽은 세션 화면을 다시 그린다(사이드카 불요 경로). 코어는 바이트를 해석하지 않는다. "terminal:read".
+    readSealedScreen: (
+      paneId: string,
+    ): Promise<{ paintB64: string; altActive: boolean } | null> =>
+      deps.invoke("pty_read_sealed_screen", {
+        windowLabel: currentWindowLabel() || null,
+        paneId,
+      }) as Promise<{ paintB64: string; altActive: boolean } | null>,
   };
 }
 
