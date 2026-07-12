@@ -342,12 +342,12 @@ standard.
   entry `sidecars: [{ "name": "terminal-alacritty", "interface":
   "soksak-sidecar-terminal-spec@1" }]`. One contract, one running engine unit, shared across
   the family — input is a raw byte stream and output is ANSI paint, so no consumer couples to
-  the engine. The manifest's `sidecars[].name` is what selects which engine unit runs.
-  **Open gap:** the survival spawn path (`process.spawn "sidecar:{name}"`) carries no manifest
-  gate, and the consuming plugins still hold the unit name in a bundled constant — a manifest
-  edited alone selects nothing and the old engine spawns silently. Until the plugin reads the
-  name from its own manifest and doctor rejects a constant that disagrees with it, a unit swap
-  must change both (`scripts/e2e/terminal-unit-swap.sh` does).
+  the engine. The manifest's `sidecars[].name` is what selects which engine unit runs, and the
+  core holds that to be true: a plugin asks for the unit its own manifest declares for a contract
+  (`process.sidecarName(interface)`), and a spawn of an undeclared unit is refused. A bundle that
+  hardcodes the name cannot win over the manifest — the publish-boundary conformance check rejects
+  a `sidecar:<name>` literal in plugin code, and `scripts/e2e/terminal-unit-swap.sh` changes the
+  manifest alone.
 - **Two faces:** a *server* face — plugins request `rehydrate`/`coldPaint`/`status` for
   warm/cold restore — and a *consumer* face — the sidecar subscribes to the daemon tee and
   pushes serialized plaintext to the daemon's sealed-blob store; it never touches a key.
