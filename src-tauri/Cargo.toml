@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "protocol", "crates/soksak-pty-proto", "crates/soksak-ptyd", "crates/soksak-pty-mirror", "crates/soksak-seal", "crates/soksak-service-proto"]
+members = ["cli", "protocol", "crates/soksak-pty-proto", "crates/soksak-ptyd", "crates/soksak-seal", "crates/soksak-service-proto"]
 
 [package]
 # 기본(개발) 정체성. HMR(번들 안 됨)은 이 바이너리명이 독에 그대로 뜬다 → soksak-dev.
