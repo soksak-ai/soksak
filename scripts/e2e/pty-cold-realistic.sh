@@ -8,7 +8,7 @@
 # 시나리오: 이력 N블록 적재 → alt-screen TUI(less) → 체크포인트 대기 → 앱 종료 +
 # ptyd kill -9 → 재기동 → 복원 프레임+고지가 "보이는 뷰포트 안"에 있음을 단언 +
 # window.snapshot 눈검증(R3). 복원 소유권은 플러그인이다(사이드카 rehydrate/봉인-블롭 개봉) —
-# 코어 복원·wasScreenRestored 는 방출됐다(터미널 미러 코어 방출 M4).
+# 코어엔 복원 경로가 없다.
 #
 # vault: SOKSAK_VAULT_PATH(격리 볼트) + SOKSAK_VAULT_KEY(자동 unlock) 오픈 메커니즘.
 # 볼트 파일은 런 간 보존한다(삭제 금지) — scope 암호화 키(app.data encryption_keys)가

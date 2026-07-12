@@ -139,8 +139,8 @@ pub fn open_sealed(
 mod tests {
     use super::*;
 
-    // seal(P)→open(S) 라운드트립 + AAD/키/변조 거부 — 이식 후에도 스킴이 그대로임을
-    // 이 크레이트 자체에서 못박는다(세부 거부 스위트는 코어 secrets 테스트가 유지).
+    // seal(P)→open(S) 라운드트립 + AAD/키/변조 거부 — 스킴을 이 크레이트 자체에서
+    // 못박는다(세부 거부 스위트는 코어 secrets 테스트가 유지).
     #[test]
     fn seal_open_roundtrip_and_rejections() {
         let (s, p) = gen_asym_keypair();

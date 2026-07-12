@@ -27,7 +27,7 @@ tauri-build = { version = "2", features = [] }
 soksak-protocol = { path = "protocol" }
 # PTY 데몬 계약(버전·경로·hello·메시지) — pty.rs 라우터가 soksak-ptyd 와 공유, 상수 사본 금지.
 soksak-pty-proto = { path = "crates/soksak-pty-proto" }
-# X25519 sealed box 단일 진실(secrets 에서 이식) — 앱 볼트와 soksak-ptyd 체크포인트 공용.
+# X25519 sealed box 단일 진실 — 앱 볼트와 soksak-ptyd 체크포인트 공용.
 soksak-seal = { path = "crates/soksak-seal" }
 soksak-service-proto = { path = "crates/soksak-service-proto" }
 uuid = { version = "1", features = ["v4"] }
@@ -90,11 +90,11 @@ rand = "0.8"
 zeroize = "1"
 # sha256 무결성 핀(runtime_dep: fetch reach 다운로드 검증). RustCrypto, 자체 crypto 0.
 sha2 = "0.10"
-# app.data 비대칭 봉투(단계②)의 X25519 sealed box 실체는 crates/soksak-seal 로 이식됐다
-# (x25519-dalek·hkdf 는 그 크레이트가 소유) — 앱은 soksak-seal 재수출만 소비한다.
-# 폰-링크 원격 제어 스택(remote::* — iroh QUIC + snow Noise + Ed25519 기기 인증)은 코어에서
-# 분리됐다 → 원격 전송 사이드카 플러그인(vendor). iroh/snow/ed25519-dalek 정적키 트리가
-# 코어 바이너리에서 빠진다(슬리밍). chacha20poly1305/rand/zeroize 는 secrets 볼트가 쓰므로 유지.
+# app.data 비대칭 봉투의 X25519 sealed box 실체는 crates/soksak-seal 소유
+# (x25519-dalek·hkdf 포함) — 앱은 soksak-seal 재수출만 소비한다.
+# 폰-링크 원격 제어 스택(remote::* — iroh QUIC + snow Noise + Ed25519 기기 인증)은 원격 전송
+# 사이드카 플러그인(vendor) 소유 — iroh/snow/ed25519-dalek 정적키 트리는 코어 바이너리에 없다.
+# chacha20poly1305/rand/zeroize 는 secrets 볼트가 쓰므로 유지.
 
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.
