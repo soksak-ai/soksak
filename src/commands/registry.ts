@@ -374,7 +374,15 @@ async function executeInner(
     const result = await spec.handler(filled, ctx);
     return normalizeOutcome(spec, result);
   } catch (e) {
-    return { ok: false, code: "INTERNAL", message: String(e) };
+    // 던져진 원문은 엔진 방언이다(§3: message = 사람 문장, 명령이 소유). 그것을 사람 줄에 실으면
+    // 받는 쪽이 엔진의 말을 앱의 상태로 읽는다 — 저장소가 낸 "out of memory" 가 "앱이 죽었다" 로
+    // 읽힌 실측이 근거다. 원문은 버리지 않고 기계 페이로드(data.detail)로 내려보낸다.
+    return {
+      ok: false,
+      code: "INTERNAL",
+      message: tmsg("msg.command.internalFailure", { name }),
+      data: { detail: String(e) },
+    };
   }
 }
 

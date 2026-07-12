@@ -65,7 +65,24 @@ describe("execute — 기본 계약", () => {
     });
     const r = await execute(TEST_PREFIX + "boom", {}, {});
     expect(r).toMatchObject({ ok: false, code: "INTERNAL" });
-    expect((r as { message: string }).message).toContain("폭발");
+    expect((r as { data?: { detail?: string } }).data?.detail).toContain("폭발");
+  });
+
+  // 예외 원문은 엔진 방언이다 — 사람 줄(message)에 실으면 소비자가 그것을 앱 상태로 읽는다.
+  // 실측(2026-07-13): 머신 메모리 압박 중 SQLite 가 던진 "out of memory" 가 message 로 올라와
+  // "앱이 죽었다" 로 오독됐다. 원문은 버리지 않고 data.detail 로 보존한다(기계 페이로드).
+  it("엔진 원문은 사람 줄이 아니라 data.detail 로 간다", async () => {
+    reg(TEST_PREFIX + "nomem", {
+      handler: () => {
+        throw new Error("out of memory");
+      },
+    });
+    const r = await execute(TEST_PREFIX + "nomem", {}, {});
+    const out = r as { code: string; message: string; data?: { detail?: string } };
+    expect(out.code).toBe("INTERNAL");
+    expect(out.message).not.toContain("out of memory");
+    expect(out.message.length).toBeGreaterThan(0);
+    expect(out.data?.detail).toContain("out of memory");
   });
 
   it("async 핸들러 reject 도 INTERNAL", async () => {

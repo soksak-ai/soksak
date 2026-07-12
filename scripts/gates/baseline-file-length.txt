@@ -21,10 +21,14 @@
 #     부를 수가 없었다 — L2 계약-핀의 약속이 런타임에서 거짓이었다. manifest.consumes(계약 id) 를
 #     implements 의 대칭 축으로 신설하고 게이트가 그것을 인정한다. spec.ts 1523→1533(필드·검증),
 #     api.ts 1849→1877(게이트의 두 축·주입면). 경계는 그대로다 — 무선언 호출은 여전히 거부된다.
+#   2026-07-13 — 실패 응답의 사람 줄이 엔진 방언을 나르지 않는다. 예외 경로가 던져진 원문을 그대로
+#     message 로 올려, 저장소가 낸 "out of memory" 가 "앱이 죽었다" 로 읽혔다(실측). 원문은 data.detail
+#     로 내리고 사람 줄은 문장으로 짓는다 — i18n.ts 1531→1533(키 1개, ko/en 두 테이블). 언어 테이블은
+#     기능이 늘면 함께 자라는 표라 이 증가는 분할 대상이 아니다.
 packages/plugin-spec/src/spec.ts 1533
 src-tauri/cli/src/lib.rs 1757
 src-tauri/src/webview.rs 1542
 src/commands/catalog.ts 2739
-src/i18n.ts 1531
+src/i18n.ts 1533
 src/plugins/api.ts 1877
 src/state/sessions.ts 1755
