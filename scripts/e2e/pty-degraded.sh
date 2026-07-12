@@ -171,14 +171,20 @@ WIN = r.get("label") or r.get("existingWindow")
 assert WIN, f"창 생성 실패: {r}"
 created = rpc("project.open", {"root": PROJ, "alias": ALIAS, "program": PROGRAM}, window=WIN)
 assert created.get("ok"), f"project.open 실패: {created}"
-time.sleep(5)  # 마운트 + orchestrateRestore(rehydrate 사망 → degraded-fresh) 정착
-pane = pane_of(WIN)
+# degraded 는 rehydrate 유계 재시도(사이드카가 끝내 안 뜸, 수 초)를 소진한 뒤에야 고지한다 —
+# 고정 sleep 대신 고지가 뜰 때까지 유계 폴링(재시도 지연 흡수). 종료 조건 = 고지 등장 or 상한.
+NOTICE = "복원 서비스 미가동"
+time.sleep(2)  # 마운트 시작
+pane = None
+for _ in range(28):  # ~14s 상한(재시도 데드라인 4s + 마운트/페인트 여유)
+    time.sleep(0.5)
+    pane = pane_of(WIN)
+    if pane and NOTICE in term_read(WIN, pane, lines=60): break
 assert pane, "터미널 pane 을 찾지 못함"
 print(f"  창={WIN} pane={pane} program={PROGRAM}")
 
 # ── 2. degraded-fresh 판정 ───────────────────────────────────────────────────
 text = term_read(WIN, pane, lines=60)
-NOTICE = "복원 서비스 미가동"
 if NOTICE in text: ok("degraded: 화면에 loud 고지(무음 아님)")
 else: ng(f"degraded: 화면 고지 부재 — 버퍼 발췌 {text[:120]!r}")
 
