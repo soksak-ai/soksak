@@ -430,22 +430,22 @@ fn immediate_exit_before_ready_goes_straight_to_error() {
     assert!(events_of(&host).contains(&"service.error".to_string()), "loud(PS8)");
 }
 
-// LEDGERED EXCLUSION (not a silent skip): flaky by construction. gen 1 reads the
-// request frame then crashes, so the outcome races crash-detection against dispatch's
-// send: if the crash transitions status before send_frame (pre-accept window) dispatch
-// re-queues to gen 2 and the assertion holds; if send lands first (mid-request) dispatch
-// surfaces the stream-end error (service.rs ~L370, by design — no transparent mid-request
-// retry, idempotency-safe). Whether mid-request retry SHOULD be a guarantee is a service
-// dispatch design decision (owner: service axis). Un-ignore after that decision: either
-// crash gen 1 pre-accept (assert the documented pre-accept respawn guarantee) or add
-// mid-request retry to dispatch. Ignored so make verify is deterministic meanwhile.
-#[ignore = "flaky: mid-request crash-retry is an undecided service dispatch design point"]
+// Deterministic contract: gen 1 reaches Ready (reads the core's Ready frame, which keeps its
+// stdin open so the core's Ready send succeeds and ready_this_generation latches true) and
+// then crashes pre-accept — no dispatch is issued until gen 2 is confirmed, so gen 1's single
+// read is always the Ready frame, never a request. The manager therefore observes Ready → EOF
+// and takes the post-ready crash path — backoff, respawn — with zero dependency on dispatch
+// timing. The next (first) dispatch then lands on the respawned generation. We do NOT assert
+// transparent mid-request retry: a crash that lands after a request is accepted surfaces the
+// stream-end error (see crash_answers_inflight_pending_immediately), because re-dispatching a
+// possibly-executed request would risk a non-idempotent double-run. Waiting on spawns>=2 &&
+// Ready pins gen 2 as the only Ready generation before we dispatch, removing the former race.
 #[test]
 fn crash_after_ready_respawns_with_backoff_and_pokes_owner() {
     let script: Script = Arc::new(|generation, mut conn: FakeConn| {
         conn.hello(&["run"]);
         if generation == 1 {
-            // ready 수신 후 크래시.
+            // 코어의 Ready 프레임을 받아 ready 확정(그 사이 stdin 열림 유지) → 요청 전 크래시.
             let _ = conn.read_frame();
             return;
         }
@@ -464,12 +464,22 @@ fn crash_after_ready_respawns_with_backoff_and_pokes_owner() {
     });
     let (mgr, host, spawner) = manager(script);
     mgr.bind(binding(&["run"]));
-    // 2세대가 Ready 될 때까지 — 크래시(1세대) → 백오프 → 리스폰.
+    // gen1 이 Ready→자발 크래시→백오프→gen2 리스폰. gen2 Ready 를 spawns>=2 로 확정 —
+    // gen1 은 이미 죽었으니 (spawns>=2 && Ready) 는 gen2 Ready 만 의미(레이스 제거).
+    for _ in 0..400 {
+        if spawner.spawns.load(Ordering::SeqCst) >= 2
+            && matches!(mgr.status_of("demo"), Some(SvcStatus::Ready))
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(spawner.spawns.load(Ordering::SeqCst) >= 2, "gen1 크래시 후 리스폰");
+    // 그다음(신규) dispatch 는 리스폰 세대(gen2)로 간다 — 크래시 표면화는 별도 테스트 소관.
     let out = mgr
         .dispatch("plugin.demo.run", json!({}), None, "socket", None, 5_000, 10_000)
         .expect("소유 커맨드");
-    assert_eq!(out["data"]["generation"], 2, "리스폰 세대가 응답: {out}");
-    assert!(spawner.spawns.load(Ordering::SeqCst) >= 2);
+    assert_eq!(out["data"]["generation"], 2, "리스폰 세대(gen2)가 응답: {out}");
     let ev = events_of(&host);
     assert!(ev.contains(&"service.backoff".to_string()), "백오프 발행(loud): {ev:?}");
     let pokes = lock_or_poisoned(&host.pokes);
