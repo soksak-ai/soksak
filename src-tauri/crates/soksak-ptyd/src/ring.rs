@@ -31,6 +31,16 @@ impl RawRing {
         self.seq - self.buf.len() as u64
     }
 
+    /// The retained bytes `[start_seq, seq)`, in order — the full ring content.
+    /// A late tee subscriber seeds from this so output emitted before it
+    /// subscribed is not lost (bounded: only the retained window, never the
+    /// evicted prefix). Captured under the session lock at subscribe time, it is
+    /// exactly the backlog before the tee's start sequence — no overlap with the
+    /// live frames that follow.
+    pub fn snapshot(&self) -> Vec<u8> {
+        self.buf.iter().copied().collect()
+    }
+
     /// Append output bytes; advance the sequence; evict the oldest bytes past
     /// the cap.
     pub fn push(&mut self, bytes: &[u8]) {
@@ -87,6 +97,17 @@ mod tests {
         let (gap, tail) = r.since(10);
         assert_eq!(gap, None);
         assert!(tail.is_empty());
+    }
+
+    #[test]
+    fn snapshot_returns_the_retained_window_after_eviction() {
+        let mut r = RawRing::new(4);
+        r.push(b"abcdefgh"); // 8 bytes into a 4-cap ring — oldest 4 evicted
+        assert_eq!(r.start_seq(), 4);
+        assert_eq!(r.seq(), 8);
+        // the seed is exactly the retained tail [start_seq, seq) — the evicted
+        // prefix is gone (bounded partial seed), never wrong bytes.
+        assert_eq!(r.snapshot(), b"efgh");
     }
 
     #[test]

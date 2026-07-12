@@ -950,16 +950,22 @@ mod unix {
         // (seq >= start_seq) 이 구독자에 배달되므로 start_seq 가 이 tee 의 정확한 기점이다.
         // 소비자는 이걸 consumed_seq 앵커로 삼아(warm 핸드오프 좌표) 이후 프레임 길이만큼
         // 전진한다 — mid-session 구독이어도 좌표가 데몬 링과 어긋나지 않는다(무음 시프트 금지).
-        let start_seq = {
+        // 같은 락 안에서 링 backlog(seedB64, [ring.start_seq, start_seq))도 원자 캡처한다 —
+        // 미드-세션 구독의 근접-birth 씨앗이다. start_seq 이전 retained 출력이라 이후 라이브
+        // 프레임과 겹치지 않는다. 소비자가 이를 미러에 선주입해 구독 전 화면을 메운다(데몬
+        // 미러 직렬화 불필요 — 링이 씨앗 원천). 링은 유계라 부분 씨앗(evict 된 prefix 는 없음).
+        let (start_seq, seed) = {
             let mut st = session.st.lock().unwrap();
             let s = st.ring.seq();
+            let seed = st.ring.snapshot();
             st.subscribers.push(sub.clone());
-            s
+            (s, seed)
         };
         let ack = proto::ok_reply(json!({
             "session": session.id,
             "mode": "subscribe",
             "startSeq": start_seq,
+            "seedB64": base64::engine::general_purpose::STANDARD.encode(&seed),
         }));
         if writeln!(writer, "{ack}").is_err() {
             session.st.lock().unwrap().subscribers.retain(|s| s.id != sub.id);
