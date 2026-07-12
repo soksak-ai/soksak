@@ -820,7 +820,7 @@ export function registerPluginCatalog(): void {
 
   register("plugin.reload", {
     description:
-      "Rescan the plugins directory and reactivate every plugin whose consent is still valid; the response reports which manifests were rejected during the rescan and why. With id, reload only that one plugin instead (disable then re-enable it — same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. Use after manually editing plugin files or adding new plugin folders.",
+      "Rescan the plugins directory and reactivate every plugin whose consent is still valid; the response reports which manifests were rejected during the rescan and why. With id, reload only that one plugin instead: its plugin.json is read from disk again and re-validated, then the plugin is disabled and re-enabled (same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. A manifest that no longer validates is refused with its reason instead of activating fresh code against a stale declaration. Use after manually editing plugin files or adding new plugin folders.",
     triggers: { ko: "플러그인 재적재 리로드 새로고침" },
     params: {
       id: {
@@ -837,8 +837,7 @@ export function registerPluginCatalog(): void {
       if (p.id) {
         const id = resolveShortId(String(p.id)) ?? String(p.id);
         if (!usePlugins.getState().plugins[id]) return notFound(`플러그인 없음: ${id}`);
-        await usePlugins.getState().disable(id);
-        return usePlugins.getState().enable(id);
+        return usePlugins.getState().reloadOne(id);
       }
       await usePlugins.getState().reload();
       const s = usePlugins.getState();

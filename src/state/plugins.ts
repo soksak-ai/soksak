@@ -103,6 +103,8 @@ interface PluginsState {
   consents: Record<string, ConsentRecord>; // localStorage 영속
   enabledIds: string[]; // localStorage 영속 — 재시작 시 재활성화 대상
   reload: () => Promise<void>;
+  // id 지정 재적재 — 그 플러그인의 매니페스트를 디스크에서 다시 읽고 신선 코드로 켠다.
+  reloadOne: (id: string) => Promise<CmdResult<{ id: string; status: string }>>;
   install: (
     source: string,
     reference?: string,
@@ -792,6 +794,42 @@ export const usePlugins = create<PluginsState>((set, get) => {
       persist();
       await get().syncLedger();
       return ok({ id });
+    },
+
+    // 한 플러그인만 재적재 — 매니페스트를 **디스크에서 다시 읽는다**. 캐시된 선언으로 신선 코드를
+    // 켜면 그 코드가 새로 등록하는 명령이 "선언되지 않은 명령" 으로 거부되고, 저자는 파일이 아니라
+    // 메모리를 의심하게 된다(실측). 파일이 불량이면 옛 선언으로 조용히 켜지 않고 거부 이유를 답한다.
+    reloadOne: async (id) => {
+      const p = get().plugins[id];
+      if (!p) return err("TARGET_NOT_FOUND", `플러그인 없음: ${id}`);
+      let content: string;
+      try {
+        const data = await invoke<{ content: string }>("read_text_file", {
+          path: `${p.dir}/plugin.json`,
+        });
+        content = data.content;
+      } catch (e) {
+        return err("TARGET_NOT_FOUND", `plugin.json 읽기 실패: ${e}`);
+      }
+      const rejected: RejectedPlugin[] = [];
+      const fresh = parseRuntime(content, p.dir, basename(p.dir), p.source, rejected);
+      if (!fresh) {
+        set({ rejected: [...get().rejected.filter((x) => x.dir !== p.dir), ...rejected] });
+        return err("INVALID_PARAMS", `매니페스트 검증 실패: ${rejected[0]?.errors.join("; ")}`);
+      }
+      // 디스크의 id 가 바뀌었으면 그것은 다른 플러그인이다 — 이 경로로 갈아끼우지 않는다(전체 재스캔의 몫).
+      if (fresh.manifest.id !== id) {
+        return err(
+          "INVALID_PARAMS",
+          `매니페스트 id 가 바뀜(${id} → ${fresh.manifest.id}) — 전체 재적재(plugin.reload)로 처리하십시오`,
+        );
+      }
+      set((s) => ({
+        plugins: { ...s.plugins, [id]: { ...fresh, status: p.status } },
+        rejected: s.rejected.filter((x) => x.dir !== p.dir),
+      }));
+      await get().disable(id);
+      return get().enable(id);
     },
 
     devLoad: async (path) => {
