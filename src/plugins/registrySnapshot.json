@@ -51,7 +51,15 @@
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-agent-claude.git",
       "branch": "main",
-      "commands": []
+      "commands": [
+        {
+          "name": "status",
+          "title": {
+            "en": "Claude install status",
+            "ko": "Claude 설치 상태"
+          }
+        }
+      ]
     },
     {
       "id": "soksak-plugin-agent-claude-gui",
@@ -138,7 +146,22 @@
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-agent-codex.git",
       "branch": "main",
-      "commands": []
+      "commands": [
+        {
+          "name": "install",
+          "title": {
+            "ko": "지금 설치 실행",
+            "en": "Run installer now"
+          }
+        },
+        {
+          "name": "status",
+          "title": {
+            "ko": "설치 상태 조회",
+            "en": "Installation status"
+          }
+        }
+      ]
     },
     {
       "id": "soksak-plugin-agents-acp",
@@ -304,7 +327,30 @@
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-browser-bookmarks.git",
       "branch": "main",
-      "commands": []
+      "commands": [
+        {
+          "name": "add",
+          "title": {
+            "en": "Adds a bookmark",
+            "ko": "즐겨찾기를 추가합니다"
+          }
+        },
+        {
+          "name": "list",
+          "title": {
+            "en": "Lists bookmarks",
+            "ko": "즐겨찾기를 조회합니다"
+          }
+        },
+        {
+          "name": "remove",
+          "title": {
+            "en": "Removes a bookmark",
+            "ko": "즐겨찾기를 제거합니다"
+          },
+          "danger": "destructive"
+        }
+      ]
     },
     {
       "id": "soksak-plugin-browser-chromium",
@@ -349,6 +395,38 @@
           }
         },
         {
+          "name": "dom.click",
+          "title": "요소 클릭"
+        },
+        {
+          "name": "dom.fill",
+          "title": "입력 채우기"
+        },
+        {
+          "name": "dom.html",
+          "title": "페이지 HTML"
+        },
+        {
+          "name": "dom.query",
+          "title": "요소 조회"
+        },
+        {
+          "name": "dom.submit",
+          "title": "폼 제출"
+        },
+        {
+          "name": "dom.text",
+          "title": "페이지 텍스트"
+        },
+        {
+          "name": "dom.wait-for",
+          "title": "요소 대기"
+        },
+        {
+          "name": "eval",
+          "title": "페이지 JS 실행"
+        },
+        {
           "name": "forward",
           "title": {
             "ko": "다음 페이지",
@@ -360,6 +438,13 @@
           "title": {
             "ko": "잔존 child 회수",
             "en": "Reclaim leftover engine children"
+          }
+        },
+        {
+          "name": "home",
+          "title": {
+            "ko": "홈",
+            "en": "Home"
           }
         },
         {
@@ -395,6 +480,13 @@
           "title": {
             "ko": "엔진 child 진단",
             "en": "Engine child stats"
+          }
+        },
+        {
+          "name": "stop",
+          "title": {
+            "ko": "정지",
+            "en": "Stop"
           }
         }
       ]
@@ -495,6 +587,13 @@
           }
         },
         {
+          "name": "home",
+          "title": {
+            "ko": "홈",
+            "en": "Home"
+          }
+        },
+        {
           "name": "list",
           "title": {
             "ko": "브라우저 webview 목록",
@@ -553,7 +652,7 @@
         "ko": "클립",
         "en": "Clip"
       },
-      "version": "0.2.0",
+      "version": "0.3.0",
       "description": {
         "ko": "클립보드 복사 이력과 영구 메모를 카테고리로 묶어 관리한다. 클립은 즐겨찾기·메모가 아니면 설정한 보존일(기본 3일) 후 자동 삭제, 메모는 영구. 같은 내용은 합쳐 복사 횟수를 센다. 우측 사이드바 탭.",
         "en": "Manages clipboard history and permanent memos grouped by category. Clips are auto-deleted after the configured retention period (default 3 days) unless starred or saved as memos; memos are permanent. Duplicate entries are merged and copy counts are tracked. Right sidebar tab."
@@ -561,6 +660,20 @@
       "repo": "https://github.com/soksak-ai/soksak-plugin-clipboard.git",
       "branch": "main",
       "commands": [
+        {
+          "name": "capture",
+          "title": {
+            "ko": "클립 캡처",
+            "en": "Capture Clip"
+          }
+        },
+        {
+          "name": "category",
+          "title": {
+            "ko": "항목 카테고리 이동",
+            "en": "Move to Category"
+          }
+        },
         {
           "name": "category.add",
           "title": {
@@ -590,80 +703,38 @@
           }
         },
         {
-          "name": "clip.capture",
-          "title": {
-            "ko": "클립 캡처",
-            "en": "Capture Clip"
-          }
-        },
-        {
-          "name": "clip.category",
-          "title": {
-            "ko": "항목 카테고리 이동",
-            "en": "Move to Category"
-          }
-        },
-        {
-          "name": "clip.clear",
+          "name": "clear",
           "title": {
             "ko": "비우기",
             "en": "Clear"
           }
         },
         {
-          "name": "clip.count",
+          "name": "count",
           "title": {
             "ko": "개수",
             "en": "Count"
           }
         },
         {
-          "name": "clip.delete",
+          "name": "delete",
           "title": {
             "ko": "삭제(휴지통)",
             "en": "Delete (Trash)"
           }
         },
         {
-          "name": "clip.favorite",
+          "name": "favorite",
           "title": {
             "ko": "즐겨찾기 토글",
             "en": "Toggle Favorite"
           }
         },
         {
-          "name": "clip.list",
+          "name": "list",
           "title": {
             "ko": "클립/메모 목록",
             "en": "List Clips/Memos"
-          }
-        },
-        {
-          "name": "clip.purge",
-          "title": {
-            "ko": "보존 지난 클립 정리",
-            "en": "Purge Expired Clips"
-          }
-        },
-        {
-          "name": "clip.restore",
-          "title": {
-            "ko": "복원",
-            "en": "Restore"
-          }
-        },
-        {
-          "name": "clip.search",
-          "title": {
-            "ko": "검색",
-            "en": "Search"
-          }
-        },
-        {
-          "name": "clip.state",
-          "title": {
-            "ko": "상태 요약",
-            "en": "State Summary"
           }
         },
         {
@@ -685,6 +756,34 @@
           "title": {
             "ko": "메모 수정",
             "en": "Update Memo"
+          }
+        },
+        {
+          "name": "purge",
+          "title": {
+            "ko": "보존 지난 클립 정리",
+            "en": "Purge Expired Clips"
+          }
+        },
+        {
+          "name": "restore",
+          "title": {
+            "ko": "복원",
+            "en": "Restore"
+          }
+        },
+        {
+          "name": "search",
+          "title": {
+            "ko": "검색",
+            "en": "Search"
+          }
+        },
+        {
+          "name": "state",
+          "title": {
+            "ko": "상태 요약",
+            "en": "State Summary"
           }
         }
       ]
@@ -1195,38 +1294,17 @@
       "branch": "main",
       "commands": [
         {
-          "name": "folder.add",
+          "name": "add",
           "title": {
             "ko": "폴더 등록",
             "en": "Add folder"
           }
         },
         {
-          "name": "folder.list",
+          "name": "list",
           "title": {
             "ko": "등록 폴더 목록",
             "en": "List folders"
-          }
-        },
-        {
-          "name": "folder.remove",
-          "title": {
-            "ko": "폴더 제거",
-            "en": "Remove folder"
-          }
-        },
-        {
-          "name": "folder.rename",
-          "title": {
-            "ko": "폴더 이름 변경",
-            "en": "Rename folder"
-          }
-        },
-        {
-          "name": "folder.select",
-          "title": {
-            "ko": "활성 폴더 선택",
-            "en": "Select active folder"
           }
         },
         {
@@ -1234,6 +1312,27 @@
           "title": {
             "ko": "적재/버전 확인(E2E)",
             "en": "Ping (load/version check)"
+          }
+        },
+        {
+          "name": "remove",
+          "title": {
+            "ko": "폴더 제거",
+            "en": "Remove folder"
+          }
+        },
+        {
+          "name": "rename",
+          "title": {
+            "ko": "폴더 이름 변경",
+            "en": "Rename folder"
+          }
+        },
+        {
+          "name": "select",
+          "title": {
+            "ko": "활성 폴더 선택",
+            "en": "Select active folder"
           }
         }
       ]
@@ -1244,14 +1343,29 @@
         "en": "Git Changes",
         "ko": "깃 변경"
       },
-      "version": "1.0.2",
+      "version": "1.1.0",
       "description": {
         "en": "Git view showing changed file list and unified diff. Supports staged (index) toggle.",
         "ko": "변경 파일 목록과 unified diff 를 보여주는 git 뷰. staged(index) 토글 지원."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-git-diff.git",
       "branch": "main",
-      "commands": []
+      "commands": [
+        {
+          "name": "files",
+          "title": {
+            "en": "Lists changed files",
+            "ko": "변경 파일 목록을 조회합니다"
+          }
+        },
+        {
+          "name": "read",
+          "title": {
+            "en": "Reads the unified diff",
+            "ko": "unified diff 를 조회합니다"
+          }
+        }
+      ]
     },
     {
       "id": "soksak-plugin-git-history",
@@ -1259,14 +1373,29 @@
         "en": "Git History",
         "ko": "깃 히스토리"
       },
-      "version": "1.0.3",
+      "version": "1.1.0",
       "description": {
-        "en": "Project commit history sidebar — click a commit to show changed files and patch.",
-        "ko": "프로젝트 커밋 이력 사이드바 — 커밋을 클릭하면 변경 파일 목록과 패치를 표시."
+        "en": "Project commit history sidebar — click a commit to show changed files and patch. Commands return the same data headlessly (log, show).",
+        "ko": "프로젝트 커밋 이력 사이드바 — 커밋을 클릭하면 변경 파일 목록과 패치를 표시. 같은 데이터를 커맨드로도 헤드리스 반환(log, show)."
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-git-history.git",
       "branch": "main",
-      "commands": []
+      "commands": [
+        {
+          "name": "log",
+          "title": {
+            "en": "List Commits",
+            "ko": "커밋 목록"
+          }
+        },
+        {
+          "name": "show",
+          "title": {
+            "en": "Show Commit",
+            "ko": "커밋 상세"
+          }
+        }
+      ]
     },
     {
       "id": "soksak-plugin-git-init",
@@ -2038,7 +2167,22 @@
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-media-viewer.git",
       "branch": "main",
-      "commands": []
+      "commands": [
+        {
+          "name": "classify",
+          "title": {
+            "ko": "파일 뷰어 판별",
+            "en": "Classify a file to its viewer"
+          }
+        },
+        {
+          "name": "viewers",
+          "title": {
+            "ko": "파일 뷰어 목록 조회",
+            "en": "List file viewers"
+          }
+        }
+      ]
     },
     {
       "id": "soksak-plugin-memo",
@@ -2053,7 +2197,22 @@
       },
       "repo": "https://github.com/soksak-ai/soksak-plugin-memo.git",
       "branch": "main",
-      "commands": []
+      "commands": [
+        {
+          "name": "get",
+          "title": {
+            "en": "Reads the saved memo for a project",
+            "ko": "프로젝트에 저장된 메모를 조회합니다"
+          }
+        },
+        {
+          "name": "set",
+          "title": {
+            "en": "Saves the memo text for a project",
+            "ko": "프로젝트 메모 텍스트를 저장합니다"
+          }
+        }
+      ]
     },
     {
       "id": "soksak-plugin-overlay-draw",
@@ -2605,7 +2764,29 @@
       ]
     },
     {
-      "id": "soksak-plugin-terminal",
+      "id": "soksak-plugin-terminal-ghostty",
+      "name": {
+        "ko": "터미널(고스티)",
+        "en": "Terminal (Ghostty)"
+      },
+      "version": "0.1.0",
+      "description": {
+        "ko": "Ghostty VT 엔진 기반 터미널 — 기존 터미널과 나란히 추가되는 두 번째 터미널 프로그램.",
+        "en": "Terminal powered by the Ghostty VT engine — a second terminal program alongside the existing one."
+      },
+      "branch": "main",
+      "commands": [
+        {
+          "name": "ping",
+          "title": {
+            "ko": "핑",
+            "en": "Ping"
+          }
+        }
+      ]
+    },
+    {
+      "id": "soksak-plugin-terminal-xterm",
       "name": {
         "ko": "터미널",
         "en": "Terminal"
@@ -2615,7 +2796,7 @@
         "ko": "xterm.js 터미널 패널 — 코어 PTY 를 직접 구동.",
         "en": "xterm.js terminal pane driven by core PTY."
       },
-      "repo": "https://github.com/soksak-ai/soksak-plugin-terminal.git",
+      "repo": "https://github.com/soksak-ai/soksak-plugin-terminal-xterm.git",
       "branch": "main",
       "commands": [
         {
@@ -2623,6 +2804,20 @@
           "title": {
             "ko": "지우기",
             "en": "Clear"
+          }
+        },
+        {
+          "name": "perf.echo",
+          "title": {
+            "ko": "입력 에코 왕복 측정",
+            "en": "Measure Input Echo Roundtrip"
+          }
+        },
+        {
+          "name": "perf.stats",
+          "title": {
+            "ko": "성능 카운터 읽기",
+            "en": "Read Performance Counters"
           }
         },
         {
@@ -2644,50 +2839,6 @@
           "title": {
             "ko": "텍스트 전송",
             "en": "Send Text"
-          }
-        }
-      ]
-    },
-    {
-      "id": "soksak-plugin-workflow",
-      "name": "Workflow",
-      "version": "0.1.0",
-      "description": "드래프트 파이프라인 — 아이디어를 LLM 저작 워크플로로 칸반 노드 DAG 에 발행하고, 코어 스케줄러 reconcile 로 실행·추적한다. item=exec-one 검증(badge o/x/f), task=exec-stage(generate/hunt/classify/audit 실행·자식 발행), blockedBy 의존.",
-      "branch": "main",
-      "commands": [
-        {
-          "name": "issuerize",
-          "title": {
-            "ko": "계획을 개발 이슈로 승격합니다",
-            "en": "Promotes plans to issues"
-          }
-        },
-        {
-          "name": "ping",
-          "title": {
-            "ko": "프로바이더 상태를 점검합니다",
-            "en": "Probes the provider"
-          }
-        },
-        {
-          "name": "reconcile",
-          "title": {
-            "ko": "준비된 워크플로 노드를 실행합니다",
-            "en": "Runs ready workflow nodes"
-          }
-        },
-        {
-          "name": "research",
-          "title": {
-            "ko": "조사 워크플로를 발행합니다",
-            "en": "Publishes the research workflow"
-          }
-        },
-        {
-          "name": "run",
-          "title": {
-            "ko": "워크플로를 발행합니다",
-            "en": "Publishes the workflow"
           }
         }
       ]
