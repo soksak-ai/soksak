@@ -2996,6 +2996,71 @@
           }
         }
       ]
+    },
+    {
+      "id": "soksak-plugin-workflow",
+      "name": "Workflow",
+      "version": "0.1.0",
+      "description": "드래프트 파이프라인 — 아이디어를 LLM 저작 워크플로로 칸반 노드 DAG 에 발행하고, 코어 스케줄러 reconcile 로 실행·추적한다. item=exec-one 검증(badge o/x/f), task=exec-stage(generate/hunt/classify/audit 실행·자식 발행), blockedBy 의존.",
+      "branch": "main",
+      "commands": [
+        {
+          "name": "export",
+          "title": {
+            "ko": "확정 코드를 파일로 내보냅니다",
+            "en": "Exports confirmed code to files"
+          }
+        },
+        {
+          "name": "issuerize",
+          "title": {
+            "ko": "계획을 개발 이슈로 승격합니다",
+            "en": "Promotes plans to issues"
+          }
+        },
+        {
+          "name": "next",
+          "title": {
+            "ko": "검증 노드의 실행 패키지를 발급합니다",
+            "en": "Issues a verification work package"
+          }
+        },
+        {
+          "name": "ping",
+          "title": {
+            "ko": "프로바이더 상태를 점검합니다",
+            "en": "Probes the provider"
+          }
+        },
+        {
+          "name": "reconcile",
+          "title": {
+            "ko": "준비된 워크플로 노드를 실행합니다",
+            "en": "Runs ready workflow nodes"
+          }
+        },
+        {
+          "name": "research",
+          "title": {
+            "ko": "조사 워크플로를 발행합니다",
+            "en": "Publishes the research workflow"
+          }
+        },
+        {
+          "name": "run",
+          "title": {
+            "ko": "워크플로를 발행합니다",
+            "en": "Publishes the workflow"
+          }
+        },
+        {
+          "name": "submit",
+          "title": {
+            "ko": "검증 판정을 제출합니다",
+            "en": "Submits a verification verdict"
+          }
+        }
+      ]
     }
   ]
 }
