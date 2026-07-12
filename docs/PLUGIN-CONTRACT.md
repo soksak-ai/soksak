@@ -113,6 +113,16 @@ every contribution kind — commands, views, fileViewers, iconSets, nodes, libra
   is the contract owner's law; the core knows no contract (C1) and never verifies it. Consumers
   resolve implementers by contract id (`sok plugin.implementers`) — discovery is contract-addressed
   and implementation-blind. Do not pin a plugin id for a new coupling (that is L1, banned).
+- **`consumes` is the caller side of the same pin.** A manifest-level
+  `consumes: ["<scope>-spec@<major>"]` entry declares which contracts this plugin calls. The core's
+  cross-plugin call boundary admits `plugin.<targetId>.<cmd>` when the caller declares the contract
+  and the target declares `implements` for it — so a consumer names the contract, never an
+  implementation, and a second implementer needs no manifest edit anywhere. Without this axis the
+  boundary honoured only `dependencies` (an implementation id), which made discovery decorative: a
+  plugin could find implementers by contract and still be denied the call. The boundary is
+  unchanged — an undeclared cross-plugin call is still refused; what it reads changed, from a name
+  to a contract. `dependencies` remains the L1 name-pin: transitional couplings only, banned for new
+  ones.
 
 ### One judge, many callers
 
@@ -150,6 +160,7 @@ the public repos were brought to 0 and the authority was moved to the deploy cat
 |---------|------|-------|-----------|
 | Schema gate | `parseManifest` rejects a malformed manifest | `@soksak-ai/plugin-spec` — `npx soksak-validate plugin.json` | No (headless) |
 | Runtime conformance | declared ≡ actual diff across every register-gated kind (commands/views/fileViewers/iconSets) + nodes | `sok plugin.conformance` | Yes (running app) |
+| `consumes` (C3 L2, caller) | declaration checks only — shape, contract-id grammar, duplicates. The call boundary reads it at execute time: a call passes when the caller consumes a contract the target implements | `npx soksak-validate` (reject) · core call gate (`PERMISSION_DENIED` on an undeclared cross-plugin call) · `sok plugin.implementers` (discovery) | Both |
 | `implements` (C3 L2) | declaration checks only — shape, contract-id grammar, duplicates. Schema gate rejects; the activation boundary re-judges at warn (`C3_ENFORCEMENT` — promotion to blocking only by re-legislation, C4/C5) | `npx soksak-validate` (reject) · activation warn · `sok plugin.conformance` (implements block) · `sok plugin.implementers` (discovery) | Both |
 
 `@soksak-ai/plugin-spec` ships the **same** `parseManifest` the core imports — one spec, no vendored

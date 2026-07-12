@@ -142,7 +142,8 @@ npx soksak-validate plugin.json   # exit 0 = 통과, 1 = 거부(사유 출력), 
 | `contributes.programs[]` | | `{id, title, path?, kind, command?, url?, ensure?}` — `"programs"` 권한 필요. id 는 전역 평탄, path 는 "/" 구분 메뉴 카테고리(다단) |
 | `contributes.nodes[]` | | `{id, description?, danger?}` — `"ui"` 권한 필요. **DOM 노출 노드 종류** 선언(외부 주소 클릭/측정). 실제 요소엔 `data-node="<id>"`(동적 목록은 `<id>/<안정키>`). 선언하면 동의 화면에 표기, `danger:true` 는 ⚠ 강조 |
 | `libraries[]` | | 외부 CLI 종속성 — **top-level**(`contributes` 밖). 4-tuple `{name, bin, install, observe?, accept?, reach?}`. 권한 불요(설치는 활성화 동의가 게이트). → 아래 「외부 런타임 의존성」 |
-| `dependencies` | | 플러그인↔플러그인 의존 — **top-level**. `{pluginId: semver}`. 전이 동반 설치(동의 게이트)·삭제 cascade. 배포 시 대상이 카탈로그에 **함께 있어야** 한다(의존 그래프 게이트 — 없으면 발행 실패, PLUGIN-CONTRACT §2.6). id-핀이라 대상 rename 에 부서진다 — 계약 결합(`viewContract`/`implements`)이 rename-불변이라 우선. `libraries`(외부 CLI)와는 별개 축 |
+| `dependencies` | | 플러그인↔플러그인 의존 — **top-level**. `{pluginId: semver}`. 전이 동반 설치(동의 게이트)·삭제 cascade. 배포 시 대상이 카탈로그에 **함께 있어야** 한다(의존 그래프 게이트 — 없으면 발행 실패, PLUGIN-CONTRACT §2.6). id-핀이라 대상 rename 에 부서진다 — 계약 결합(`viewContract`/`implements`/`consumes`)이 rename-불변이라 우선. `libraries`(외부 CLI)와는 별개 축 |
+| `consumes` | | 이 플러그인이 **부를 계약** — **top-level**. `["<scope>-spec@<major>"]`. `implements` 의 대칭이고 계약-핀의 호출 축이다: 호출자가 계약을 선언하고 대상이 그 계약을 `implements` 하면 코어 호출 경계가 `plugin.<대상id>.<cmd>` 를 통과시킨다 — 구현체 id 를 매니페스트에 적지 않으므로 두 번째 구현체가 와도 고칠 곳이 없다. 발견은 `plugin.implementers {contract}`. 미선언 교차 호출은 여전히 거부(PERMISSION_DENIED) |
 
 기여 `title`/프로그램 `path` 도 전부 문자열 또는 언어 맵(§3.5). 뷰 내부 텍스트의
 다국어는 플러그인 소유 — `app.locale()`(권한 불요)로 현재 언어를 읽고
