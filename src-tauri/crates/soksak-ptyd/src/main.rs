@@ -941,17 +941,30 @@ mod unix {
     // 하고, 실제 소켓 쓰기는 이 스레드가 소유한다 — 느린 구독자가 라이브를 못 막는다.
     // 버퍼가 차면 드롭+gap 프레임으로 유실을 고지한다(무음 유실 금지).
     fn handle_subscribe(session: Arc<Session>, mut writer: UnixStream, mut reader: BufReader<UnixStream>) {
-        let ack = proto::ok_reply(json!({ "session": session.id, "mode": "subscribe" }));
-        if writeln!(writer, "{ack}").is_err() {
-            return;
-        }
-
         let sub = Arc::new(TeeSub {
             id: NEXT_SUB_ID.fetch_add(1, Ordering::SeqCst) + 1,
             buf: Mutex::new(TeeBuf::new(TEE_BUF_CAP)),
             cv: Condvar::new(),
         });
-        session.st.lock().unwrap().subscribers.push(sub.clone());
+        // 링 head seq 를 읽고 같은 락 안에서 구독자를 등록한다 — 그 뒤 push 되는 바이트만
+        // (seq >= start_seq) 이 구독자에 배달되므로 start_seq 가 이 tee 의 정확한 기점이다.
+        // 소비자는 이걸 consumed_seq 앵커로 삼아(warm 핸드오프 좌표) 이후 프레임 길이만큼
+        // 전진한다 — mid-session 구독이어도 좌표가 데몬 링과 어긋나지 않는다(무음 시프트 금지).
+        let start_seq = {
+            let mut st = session.st.lock().unwrap();
+            let s = st.ring.seq();
+            st.subscribers.push(sub.clone());
+            s
+        };
+        let ack = proto::ok_reply(json!({
+            "session": session.id,
+            "mode": "subscribe",
+            "startSeq": start_seq,
+        }));
+        if writeln!(writer, "{ack}").is_err() {
+            session.st.lock().unwrap().subscribers.retain(|s| s.id != sub.id);
+            return;
+        }
 
         // 구독자 사망 감지: 구독자는 hello 후 아무것도 쓰지 않으므로 read 반환 =
         // EOF/에러 = 연결 종료 이벤트다(폴링 0). 버퍼를 닫아 writer 를 깨운다.

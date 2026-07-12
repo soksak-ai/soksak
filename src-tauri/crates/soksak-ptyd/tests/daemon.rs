@@ -586,6 +586,45 @@ fn a_starved_tee_subscriber_never_blocks_the_live_path() {
     assert_eq!(control.request(&proto::Request::Shutdown)["ok"], true);
 }
 
+// tee 구독 ack 는 그 시점의 링 head 를 startSeq 로 싣는다 — mid-session 구독자의 정확한
+// consumed_seq 앵커(warm 핸드오프 좌표). 링이 전진한 뒤 구독하면 startSeq 도 그만큼 앞선다.
+// 이게 없으면 소비자가 0 기점으로 세어 데몬 링과 어긋나고 warm 재부착이 최근 출력을 이중
+// 재생한다(무음 시프트). RED: startSeq 부재면 as_u64 가 None → expect 패닉.
+#[test]
+fn a_tee_subscribe_ack_reports_the_ring_head_as_its_start_seq() {
+    let d = start_daemon("teeseq");
+    let mut control = Control::connect(&d.home);
+    let created = create(&mut control, "pane-ts");
+    let session = created["data"]["session"].as_u64().unwrap();
+
+    // 첫 구독 — 그 시점 링 head 를 startSeq 로 받는다.
+    let (first_ack, mut first_sub) = open_stream(&d.home, session, None, true);
+    assert_eq!(first_ack["ok"], true, "{first_ack}");
+    let first_start = first_ack["data"]["startSeq"].as_u64().expect("startSeq present in subscribe ack");
+
+    // 마커를 흘려 링을 전진시키고 첫 구독자로 관측(에코 도착 = 링 head 전진).
+    write_line(&mut control, session, "echo MARK-SEQ");
+    let mut seen = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline && !String::from_utf8_lossy(&seen).contains("MARK-SEQ") {
+        let (kind, payload) = read_tee_frame(&mut first_sub);
+        if kind == proto::TEE_FRAME_DATA {
+            seen.extend_from_slice(&payload);
+        }
+    }
+    assert!(String::from_utf8_lossy(&seen).contains("MARK-SEQ"), "tee carried the marker");
+
+    // 두 번째 구독 — 그 사이 흐른 바이트만큼 startSeq 가 앞선다(링 head 추종, 총 배출 바이트).
+    let (second_ack, _s2) = open_stream(&d.home, session, None, true);
+    let second_start = second_ack["data"]["startSeq"].as_u64().expect("startSeq present in subscribe ack");
+    assert!(
+        second_start >= first_start + seen.len() as u64,
+        "startSeq tracks total emitted bytes: {second_start} vs {first_start}+{}",
+        seen.len()
+    );
+    assert_eq!(control.request(&proto::Request::Shutdown)["ok"], true);
+}
+
 // ── 봉인-블롭 저장소(StoreBlob/FetchSealed): 내용 불가지, cold_paint 없이 임의 바이트 ──
 
 #[test]
