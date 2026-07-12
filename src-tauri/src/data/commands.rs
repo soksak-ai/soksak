@@ -501,3 +501,31 @@ pub fn data_import(app: AppHandle, jsonl: String, state: State<'_, DbState>) -> 
     emit_change(&app, "core", None, None, "import", None);
     Ok(n)
 }
+
+// ── 개명 데이터 이관(파괴적 플러그인 개명 후폭풍 방어) ────────────────────────
+// ns = 호출 pluginId 라, 플러그인 id 개명은 옛 id 의 kv/records/meta_collections 를 새 id
+// 에서 불가시하게 만든다 → 기존 사용자의 데이터(예: command_blocks) 전멸. 개명한 플러그인이
+// 매니페스트에 이전 id 를 선언(renamedFrom)하면 코어 로더가 활성화 시 이 커맨드를 1회 부른다.
+// 코어는 특정 id 를 모른다 — 선언된 from/to 만 옮긴다(C1: 코어에 특정 플러그인 이름 없음).
+// 멱등: 새 ns 에 데이터가 있으면 이관하지 않는다(이미 이관됨 또는 새 플러그인 자기 데이터 —
+// 이관 후 옛 ns 는 비어 다음 활성화가 source-empty 로 스킵). 옛 ns 가 비었으면 할 일 없음.
+// 양쪽 다 데이터가 있으면 안전 병합 불가 → 명시 에러(무음 유실 금지). 세 테이블 원자 이동은
+// store 가 소유(단위 테스트 가능). 코어는 선언된 from/to 만 옮긴다(C1: 특정 플러그인 이름 없음).
+#[tauri::command]
+pub fn data_migrate_ns(
+    app: AppHandle,
+    from_ns: String,
+    to_ns: String,
+    state: State<'_, DbState>,
+) -> Result<store::NsMigrateOutcome, String> {
+    validate_ns(&from_ns)?;
+    validate_ns(&to_ns)?;
+    if from_ns == to_ns {
+        return Ok(store::NsMigrateOutcome { migrated: false, reason: "same-ns".into() });
+    }
+    let outcome = with_conn(&state, |c| store::migrate_ns(c, &from_ns, &to_ns))?;
+    if outcome.migrated {
+        emit_change(&app, &to_ns, None, None, "ns-migrate", None);
+    }
+    Ok(outcome)
+}

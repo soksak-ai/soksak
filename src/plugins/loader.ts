@@ -219,6 +219,23 @@ export async function activatePlugin(
     }
   };
 
+  // 개명 데이터 ns 이관(파괴적 id 개명 후폭풍 방어) — activate 전에 옛 id 의 데이터를 새 id 로
+  // 옮겨 플러그인의 데이터 접근이 그 이력을 본다. 코어가 멱등하게 처리(선언된 from→to 만).
+  // 충돌(양쪽 데이터)은 loud 로그·활성화 비차단 — 플러그인은 새 ns 로 계속 동작하고, 옛 데이터를
+  // 병합 못 함을 알린다(무음 아님).
+  if (manifest.renamedFrom) {
+    try {
+      await deps.invoke("data_migrate_ns", {
+        fromNs: manifest.renamedFrom,
+        toNs: manifest.id,
+      });
+    } catch (e) {
+      console.error(
+        `[plugin:${manifest.id}] 개명 데이터 이관 실패(renamedFrom=${manifest.renamedFrom}): ${e}`,
+      );
+    }
+  }
+
   try {
     await entry.activate(ctx);
   } catch (e) {

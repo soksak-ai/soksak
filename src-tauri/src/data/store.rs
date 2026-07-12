@@ -882,6 +882,52 @@ fn search_collect(
     Ok(out)
 }
 
+// ── 개명 데이터 ns 이관(파괴적 플러그인 개명 후폭풍 방어) ──────────────────────
+// ns = pluginId 라 id 개명은 옛 id 의 kv/records/meta_collections 를 새 id 에서 불가시하게
+// 만든다. 선언된 from→to 만 옮긴다(코어는 특정 플러그인 이름 불가지). 멱등·충돌 명시 에러.
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NsMigrateOutcome {
+    pub migrated: bool,
+    pub reason: String,
+}
+
+fn ns_has_data(c: &Connection, ns: &str) -> Result<bool, String> {
+    let kv = c
+        .prepare("SELECT 1 FROM kv WHERE ns=?1 LIMIT 1")
+        .map_err(|e| e.to_string())?
+        .exists([ns])
+        .map_err(|e| e.to_string())?;
+    let rec = c
+        .prepare("SELECT 1 FROM records WHERE ns=?1 LIMIT 1")
+        .map_err(|e| e.to_string())?
+        .exists([ns])
+        .map_err(|e| e.to_string())?;
+    Ok(kv || rec)
+}
+
+/// 옛 ns 의 데이터를 새 ns 로 옮긴다(kv·records·meta_collections 원자 이동). 멱등:
+/// 새 ns 에 데이터가 있으면 스킵(이미 이관됨/새 플러그인 자기 데이터), 옛 ns 가 비면 할 일 없음.
+/// 양쪽 다 데이터가 있으면 병합 불가라 명시 에러(무음 유실 금지).
+pub fn migrate_ns(c: &Connection, from: &str, to: &str) -> Result<NsMigrateOutcome, String> {
+    if !ns_has_data(c, from)? {
+        return Ok(NsMigrateOutcome { migrated: false, reason: "source-empty".into() });
+    }
+    if ns_has_data(c, to)? {
+        return Err(format!(
+            "ns migration conflict: both {from:?} and {to:?} hold data — refusing to merge"
+        ));
+    }
+    let tx = c.unchecked_transaction().map_err(|e| e.to_string())?;
+    tx.execute("UPDATE kv SET ns=?2 WHERE ns=?1", (from, to)).map_err(|e| e.to_string())?;
+    tx.execute("UPDATE records SET ns=?2 WHERE ns=?1", (from, to)).map_err(|e| e.to_string())?;
+    tx.execute("UPDATE meta_collections SET ns=?2 WHERE ns=?1", (from, to))
+        .map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(NsMigrateOutcome { migrated: true, reason: "moved".into() })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -892,6 +938,46 @@ mod tests {
         conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
         super::super::init_base(&conn).unwrap();
         conn
+    }
+
+    // 파괴적 개명 후폭풍: ns=pluginId 라 개명하면 옛 이력이 새 id 에서 불가시하다. renamedFrom
+    // 이관이 없으면 사용자 command_blocks 전멸. RED: 개명 후 새 ns 조회가 빔 → GREEN: 이관 후 재현.
+    #[test]
+    fn migrate_ns_moves_renamed_history_and_is_idempotent() {
+        let c = mem();
+        define(&c, "soksak-plugin-terminal", "command_blocks", &["viewId".into()], &[]).unwrap();
+        put(&c, "soksak-plugin-terminal", "command_blocks", "proj-a", Some("b1".into()),
+            &json!({"viewId":"t1","commandLine":"echo hi"})).unwrap();
+        // RED 경계 — 개명한 새 id 에선 옛 이력이 안 보인다.
+        let before = query(&c, "soksak-plugin-terminal-xterm", "command_blocks", Some("proj-a"),
+            None, None, false, None, None, None).unwrap();
+        assert!(before.is_empty(), "개명 후 새 id 에서 옛 이력 불가시(재현)");
+        // 이관.
+        let out = migrate_ns(&c, "soksak-plugin-terminal", "soksak-plugin-terminal-xterm").unwrap();
+        assert!(out.migrated);
+        // GREEN — 새 ns 에서 보이고 옛 ns 는 비었다.
+        let after = query(&c, "soksak-plugin-terminal-xterm", "command_blocks", Some("proj-a"),
+            None, None, false, None, None, None).unwrap();
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].get("commandLine").and_then(Value::as_str), Some("echo hi"));
+        let old = query(&c, "soksak-plugin-terminal", "command_blocks", Some("proj-a"),
+            None, None, false, None, None, None).unwrap();
+        assert!(old.is_empty(), "옛 ns 는 이관 후 비어야 한다");
+        // 멱등 — 재이관은 source-empty no-op(옛 ns 가 이미 비었다).
+        let again = migrate_ns(&c, "soksak-plugin-terminal", "soksak-plugin-terminal-xterm").unwrap();
+        assert!(!again.migrated);
+        assert_eq!(again.reason, "source-empty");
+    }
+
+    // 양쪽 다 데이터가 있으면 안전 병합 불가 — 명시 에러(무음 유실 금지).
+    #[test]
+    fn migrate_ns_refuses_when_both_hold_data() {
+        let c = mem();
+        define(&c, "old-id", "c", &[], &[]).unwrap();
+        put(&c, "old-id", "c", "s", None, &json!({"x":1})).unwrap();
+        define(&c, "new-id", "c", &[], &[]).unwrap();
+        put(&c, "new-id", "c", "s", None, &json!({"x":2})).unwrap();
+        assert!(migrate_ns(&c, "old-id", "new-id").is_err(), "양쪽 데이터 → 명시 에러");
     }
 
     // id 는 내장 필드(PK) — 인덱스 선언 없이 where/order 가능(콘텐츠 주소 조회의 정본 경로).

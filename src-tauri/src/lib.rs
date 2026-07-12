@@ -484,6 +484,7 @@ pub fn run() {
             data::commands::data_count,
             data::commands::data_retention_trim,
             data::commands::data_retention_reap,
+            data::commands::data_migrate_ns,
             data::commands::data_encrypt_enable,
             data::commands::data_encrypt_convert,
             data::commands::data_encrypt_rotate,

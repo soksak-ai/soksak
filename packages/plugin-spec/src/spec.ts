@@ -350,6 +350,11 @@ export interface PluginManifest {
   // 이 플러그인의 git 레포(설치 source). 공식 레지스트리 생성이 추출하는 필드 — 저자가 자기
   // 레포를 명시한다. 임의 git URL(github/gitlab/self-host 다). plugin.install 이 이걸로 clone.
   repo?: string;
+  // 파괴적 id 개명 대비 — 이전 plugin id. 데이터 ns=pluginId 라 개명하면 옛 이력이 새 id 에서
+  // 불가시하다. 이걸 선언하면 코어 로더가 활성화 시 옛 ns 의 데이터를 새 id 로 1회 이관한다
+  // (멱등, 충돌 시 명시 에러). 값은 plugin id 문법(^[a-z0-9][a-z0-9-]*$). 범용 — 코어는 특정
+  // 이름을 모른다(C1). 개명이 없으면 미지정.
+  renamedFrom?: string;
   // 파싱 시 기본 main.js 로 채움. 디렉토리 내부 상대경로만. null = entry 없는 순수 계약
   // 플러그인(PS4 — service 선언 ∧ 전 커맨드 bind:"service" ∧ 코드-필요 기여 0 에서만 합법).
   entry: string | null;
@@ -613,6 +618,7 @@ export function parseManifest(
       "description",
       "author",
       "repo",
+      "renamedFrom",
       "entry",
       "minAppVersion",
       "template",
@@ -648,6 +654,14 @@ export function parseManifest(
   // repo: git URL(스킴 또는 scp-유사 git@host:path). 빈 문자열·비URL 거부.
   if (raw.repo !== undefined && (!isNonEmptyString(raw.repo) || !GIT_URL_RE.test(raw.repo))) {
     errors.push("repo: git URL(https://… 또는 git@…) 이어야 함");
+  }
+  // renamedFrom: 이전 plugin id(개명 데이터 ns 이관용). plugin id 문법·자기 참조 금지.
+  if (raw.renamedFrom !== undefined) {
+    if (!isNonEmptyString(raw.renamedFrom) || !PLUGIN_ID_RE.test(raw.renamedFrom)) {
+      errors.push("renamedFrom: ^[a-z0-9][a-z0-9-]*$ (이전 plugin id) 여야 함");
+    } else if (raw.renamedFrom === raw.id) {
+      errors.push("renamedFrom: 자기 id 와 같을 수 없음(개명 아님)");
+    }
   }
   if (
     raw.minAppVersion !== undefined &&
@@ -1461,6 +1475,7 @@ export function parseManifest(
       description: normalizeText(raw.description as LocalizedText),
       author: raw.author !== undefined ? (raw.author as string).trim() : undefined,
       ...(raw.repo !== undefined ? { repo: (raw.repo as string).trim() } : {}),
+      ...(raw.renamedFrom !== undefined ? { renamedFrom: (raw.renamedFrom as string).trim() } : {}),
       entry,
       minAppVersion:
         raw.minAppVersion !== undefined

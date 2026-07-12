@@ -29,6 +29,26 @@ function errorsOf(raw: unknown, dirName = "demo"): string[] {
   return parseManifest(raw, dirName).validation.errors;
 }
 
+describe("parseManifest — renamedFrom(개명 데이터 ns 이관)", () => {
+  it("유효한 이전 id 수용", () => {
+    const { manifest, validation } = parseManifest(
+      base({ id: "soksak-plugin-terminal-xterm", renamedFrom: "soksak-plugin-terminal" }),
+      "soksak-plugin-terminal-xterm",
+    );
+    expect(validation.ok).toBe(true);
+    expect(manifest?.renamedFrom).toBe("soksak-plugin-terminal");
+  });
+  it("미지정이면 키 부재(선택)", () => {
+    expect(parseManifest(base(), "demo").manifest).not.toHaveProperty("renamedFrom");
+  });
+  it("id 문법 위반 거부", () => {
+    expect(errorsOf(base({ renamedFrom: "Upper-Id" })).some((e) => e.includes("renamedFrom"))).toBe(true);
+  });
+  it("자기 id 와 같으면 거부(개명 아님)", () => {
+    expect(errorsOf(base({ id: "demo", renamedFrom: "demo" })).some((e) => e.includes("renamedFrom"))).toBe(true);
+  });
+});
+
 describe("parseManifest — 수용", () => {
   it("최소 매니페스트 통과 + 기본값 정규화(entry)", () => {
     const { manifest, validation } = parseManifest(base(), "demo");
