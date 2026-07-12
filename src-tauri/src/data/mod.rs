@@ -15,6 +15,7 @@ use rusqlite::Connection;
 pub mod backup;
 pub mod commands;
 pub mod crypto;
+pub mod integrity;
 pub mod ring;
 pub mod store;
 

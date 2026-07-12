@@ -25,10 +25,13 @@
 #     message 로 올려, 저장소가 낸 "out of memory" 가 "앱이 죽었다" 로 읽혔다(실측). 원문은 data.detail
 #     로 내리고 사람 줄은 문장으로 짓는다 — i18n.ts 1531→1533(키 1개, ko/en 두 테이블). 언어 테이블은
 #     기능이 늘면 함께 자라는 표라 이 증가는 분할 대상이 아니다.
+#   2026-07-13 — 저장소가 자기 무결성을 말하고 고칠 수 있게 됐다(data.verify·data.repair). 부팅 게이트는
+#     quick_check 라 인덱스↔테이블 대조를 하지 않아 인덱스 손상을 통과시킨다 — 그 저장소는 읽기는 멀쩡하고
+#     쓰기만 무너진다(실측). i18n.ts 1533→1541(키 4개, ko/en 두 테이블). 언어 테이블은 기능이 늘면 함께 자라는 표다.
 packages/plugin-spec/src/spec.ts 1533
 src-tauri/cli/src/lib.rs 1757
 src-tauri/src/webview.rs 1542
 src/commands/catalog.ts 2739
-src/i18n.ts 1533
+src/i18n.ts 1541
 src/plugins/api.ts 1877
 src/state/sessions.ts 1755

@@ -20,6 +20,42 @@ const COLL_PARAM = {
 } as const;
 
 export function registerDataCatalog(): void {
+  // 저장소 자기 진단 — 부팅 게이트(quick_check)는 인덱스↔테이블 대조를 하지 않아 인덱스 손상을
+  // 통과시킨다. 그 상태의 저장소는 읽기는 멀쩡하고 쓰기만 무너진다(실측). 그래서 전수 대조를
+  // 사람과 에이전트가 부를 수 있는 표면으로 둔다.
+  register("data.verify", {
+    description:
+      "Check the data store for corruption (full integrity check — it cross-checks every index against the table, which the boot check does not). Read-only. Returns the problems SQLite reports; an empty list means the store is sound.",
+    triggers: { ko: "데이터 무결성 점검 손상 확인" },
+    params: {},
+    returns: "{ ok, problems: string[] }",
+    message: (d) => tmsg("msg.data.verify", { n: Number(d.count) }),
+    errors: ["INTERNAL"],
+    examples: ["sok data.verify"],
+    handler: async () => {
+      const problems = await invoke<string[]>("data_verify");
+      return { sound: problems.length === 0, problems, count: problems.length };
+    },
+  });
+
+  // 치유 — 인덱스를 테이블에서 다시 만든다(REINDEX). 데이터 행은 건드리지 않으므로 파괴적이지
+  // 않지만, 저장소를 고쳐 쓰는 일이라 danger 로 둔다(원격 호출은 권한 게이트를 지난다).
+  register("data.repair", {
+    description:
+      "Rebuild the data store's indexes from the table rows (REINDEX) and report the problems before and after. Rows are neither created nor deleted. Use when data.verify reports index problems — a store whose indexes are broken reads fine and fails on write.",
+    triggers: { ko: "데이터 복구 인덱스 재생성 치유" },
+    params: {},
+    danger: "destructive",
+    returns: "{ before: string[], after: string[], healed }",
+    message: (d) => tmsg("msg.data.repair", { n: (d.after as string[]).length }),
+    errors: ["INTERNAL"],
+    examples: ["sok data.repair"],
+    handler: async () => {
+      const r = await invoke<{ before: string[]; after: string[] }>("data_repair");
+      return { ...r, healed: r.before.length - r.after.length };
+    },
+  });
+
   register("data.backup", {
     description:
       "Snapshot the entire data store to a single .db file via VACUUM INTO (absorbs WAL). Omit path to write a timestamped file under ~/.soksak/backups/.",

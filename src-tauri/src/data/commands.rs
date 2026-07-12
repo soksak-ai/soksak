@@ -471,6 +471,20 @@ pub fn data_backup(path: Option<String>, state: State<'_, DbState>) -> Result<St
     Ok(dest.to_string_lossy().to_string())
 }
 
+// 저장소 자기 진단 — 전수 대조(integrity_check). 부팅 게이트(quick_check)는 인덱스↔테이블 대조를
+// 하지 않아 인덱스 손상을 통과시킨다(integrity.rs 머리말). 읽기 전용.
+#[tauri::command]
+pub fn data_verify(state: State<'_, DbState>) -> Result<Vec<String>, String> {
+    with_conn(&state, |c| super::integrity::check(c))
+}
+
+// 저장소 치유 — 인덱스를 테이블에서 다시 만든다(REINDEX). 행은 만들지도 지우지도 않는다.
+// 치유 후 다시 진단해 남은 문제를 그대로 싣는다(나았다고 주장만 하지 않는다).
+#[tauri::command]
+pub fn data_repair(state: State<'_, DbState>) -> Result<super::integrity::Repair, String> {
+    with_conn(&state, |c| super::integrity::repair(c))
+}
+
 #[tauri::command]
 pub fn data_restore(app: AppHandle, path: String, state: State<'_, DbState>) -> Result<(), String> {
     let src = std::path::PathBuf::from(&path);
