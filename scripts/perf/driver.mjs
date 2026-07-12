@@ -132,7 +132,7 @@ async function setup(sock, repoRoot) {
     await rpc(sock, "project.open", {
       root: `${repoRoot}/node_modules`,
       alias: ALIAS,
-      program: "terminal",
+      program: "terminal-xterm",
     }),
     "project.open",
   );
@@ -145,7 +145,7 @@ async function setup(sock, repoRoot) {
       project,
       group: gLeft,
       side: "right",
-      program: "terminal",
+      program: "terminal-xterm",
     }),
     "panel.split right",
   );
@@ -168,7 +168,7 @@ async function setup(sock, repoRoot) {
       project,
       group: gRight,
       side: "bottom",
-      program: "terminal",
+      program: "terminal-xterm",
     }),
     "panel.split bottom",
   );
@@ -198,7 +198,7 @@ async function setup(sock, repoRoot) {
   // s2 용: 이동해도 그룹이 해체되지 않도록 우상단에 보조 터미널 뷰 1개 추가,
   // 그 뷰를 왕복 이동 대상으로 쓴다.
   const mover = must(
-    await rpc(sock, "view.open", { group: gRight, program: "terminal" }),
+    await rpc(sock, "view.open", { group: gRight, program: "terminal-xterm" }),
     "view.open mover",
   );
 
@@ -472,7 +472,7 @@ async function setupT(sock) {
   // ({routedWindow}) 측정 프로젝트가 항상 자기 창에 격리된다. window 미지정이면 "마지막 포커스
   // 창"에 탭으로 얹혀 기존 워크스페이스를 오염시킨다(실측).
   const openedRaw = must(
-    await rpc(sock, "project.open", { root: T_ROOT, alias: ALIAS_T, program: "terminal" }, "main"),
+    await rpc(sock, "project.open", { root: T_ROOT, alias: ALIAS_T, program: "terminal-xterm" }, "main"),
     "project.open",
   );
   const created = openedRaw.data ?? openedRaw;
@@ -506,7 +506,7 @@ async function setupT(sock) {
         const opened = await rpc(
           sock,
           "view.open",
-          { panel: panelId, program: "terminal" },
+          { panel: panelId, program: "terminal-xterm" },
           window ?? undefined,
         );
         const od = opened.data ?? opened;
