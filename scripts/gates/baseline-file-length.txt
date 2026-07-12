@@ -12,10 +12,14 @@
 #   2026-07-12 — 터미널 미러 코어 방출 브랜치를 main 에 병합. 두 재입법이 합류: api.ts 1784→1816
 #     (방출 소비자 배선 — paneAlive 세션-생존 조회, 코어 무해석 유지), spec.ts 1503→1523(양쪽이
 #     같은 viewContract 필드를 독립 추가 → 병합에서 중복 선언 제거 후 단일 계약-핀으로 수렴). 분할은 부채 패스.
+#   2026-07-13 — 사이드카 유닛 선택의 단일진실. api.ts 1816→1849: 매니페스트가 유닛을 고른다는
+#     계약을 코어가 강제하게 됐다 — 플러그인이 자기 선언을 읽는 표면(sidecarName)과, 선언되지 않은
+#     유닛의 스폰을 거부하는 게이트. 이전엔 스폰 경로에 대조가 없어 번들 상수가 매니페스트를 이겼고,
+#     선언만 바꾼 교체가 무음으로 옛 엔진을 띄웠다. 게이트를 지우면 그 결함이 돌아오므로 축소 불가.
 packages/plugin-spec/src/spec.ts 1523
 src-tauri/cli/src/lib.rs 1757
 src-tauri/src/webview.rs 1542
 src/commands/catalog.ts 2739
 src/i18n.ts 1531
-src/plugins/api.ts 1816
+src/plugins/api.ts 1849
 src/state/sessions.ts 1755
