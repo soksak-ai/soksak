@@ -462,6 +462,27 @@ pub fn pty_pane_pid(pane_id: String, manager: State<'_, PtyManager>) -> Option<i
     None
 }
 
+// 이 pane 에 라이브 데몬 세션이 있는가 — warm 복원 후보 판정. 데몬에 직접 물어(사이드카 무관,
+// 즉답) 앱 세션 추적을 거치지 않는다: 재시작 복원은 소비자가 스폰하기 '전'에 판정해야 하는데
+// 그 시점엔 앱이 아직 이 pane 세션을 안 잡았다(스폰이 잡는다). 데몬 미가동/세션 없음 = false
+// (spawn_if_needed=false — 조회가 데몬을 새로 안 띄운다). 소비자는 이걸로 사이드카 rehydrate
+// (부팅-레이스 유계 재시도)를 warm 후보에만 태운다 — 신선/cold 는 사이드카를 안 기다린다.
+#[tauri::command]
+pub fn pty_pane_alive(pane_id: String, manager: State<'_, PtyManager>) -> bool {
+    #[cfg(unix)]
+    {
+        return manager
+            .link
+            .request(&soksak_pty_proto::Request::PanePid { pane_id }, false)
+            .is_ok();
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (pane_id, manager);
+        false
+    }
+}
+
 // 서비스 사이드카(생존 미러) 서비스 소켓에 NDJSON 요청/응답 1왕복을 릴레이한다. 코어는
 // request/응답 JSON 을 해석하지 않는다(내용 불가지 다리 — 웹뷰 JS 가 UDS 를 못 여는 것을
 // 코어가 대신 연결). request 에 실린 window 는 소비자가 스탬프한 라우팅 좌표다(spawn 동형).

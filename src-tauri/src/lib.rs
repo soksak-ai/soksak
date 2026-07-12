@@ -418,6 +418,7 @@ pub fn run() {
             daemon::daemon_run_once,
             skillgen::skill_refresh_spawn,
             pty::pty_pane_pid,
+            pty::pty_pane_alive,
             pty::pty_daemon_status,
             pty::pty_daemon_restart,
             pty::pty_sidecar_request,

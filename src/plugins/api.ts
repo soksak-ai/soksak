@@ -519,6 +519,10 @@ export interface SoksakPluginApi {
     readSealedScreen: (
       paneId: string,
     ) => Promise<{ paintB64: string } | null>;
+    /** 이 pane 에 라이브 데몬 세션이 있는가 — warm 복원 후보 판정(사이드카 무관, 즉답, 데몬 안
+     *  띄움). 소비자가 스폰 전에 물어 warm(세션 존재)만 사이드카 rehydrate(부팅-레이스 유계 재시도)
+     *  를 태운다 — 신선/cold/데몬 미가동(false)은 사이드카를 안 기다리고 즉시 진행한다. */
+    paneAlive: (paneId: string) => Promise<boolean>;
   };
   /** 외부 서브프로세스 spawn + 양방향 raw stdio(범용 — LSP/MCP/ACP/임의 CLI 통합). "process" 권한.
    *  PTY 가 아니라 순수 파이프 → JSON-RPC 프레이밍 무손상. 이벤트 기반(폴링 0). */
@@ -976,6 +980,8 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         windowLabel: currentWindowLabel() || null,
         paneId,
       }) as Promise<{ paintB64: string } | null>,
+    paneAlive: (paneId: string): Promise<boolean> =>
+      deps.invoke("pty_pane_alive", { paneId }) as Promise<boolean>,
   };
 }
 
