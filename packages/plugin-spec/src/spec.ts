@@ -822,8 +822,13 @@ export function parseManifest(
         sidecars.push(dep);
       });
       checkDuplicates(sidecars.map((s) => s.name), "sidecars[].name", errors);
-      if (sidecars.length > 0 && !(raw.permissions as unknown[] | undefined)?.includes("sidecar")) {
-        errors.push('sidecars: "sidecar" 권한 선언 필요');
+      // 사이드카는 두 모델로 소비된다(SIDECARS.md §1): engine 모델은 앱 프로세스에 dlopen
+      // (app.sidecar → "sidecar" 권한), service 모델은 별도 프로세스로 스폰(app.process →
+      // "process" 권한, 예: soksak-sidecar-terminal). sidecars[] 선언은 둘 중 어느 소비 권한이든
+      // 있으면 정합이다 — 실제 채널 게이트는 app.sidecar/app.process 가 각자 권한으로 따로 건다.
+      const perms = (raw.permissions as unknown[] | undefined) ?? [];
+      if (sidecars.length > 0 && !perms.includes("sidecar") && !perms.includes("process")) {
+        errors.push('sidecars: "sidecar"(engine 모델) 또는 "process"(service 모델) 권한 선언 필요');
       }
     }
   }

@@ -923,10 +923,19 @@ describe("parseManifest — sidecars(engine 모듈 의존 선언)", () => {
   it("sidecars 없으면 키 자체가 없음(선택)", () => {
     expect(parseManifest(base(), "demo").manifest).not.toHaveProperty("sidecars");
   });
-  it("sidecar 권한 없이 sidecars 선언 = 거부", () => {
+  it("sidecar/process 권한 둘 다 없이 sidecars 선언 = 거부", () => {
     const { manifest, validation } = parseManifest(base({ sidecars: [sc] }), "demo");
     expect(manifest).toBeNull();
-    expect(validation.errors.join()).toContain('"sidecar" 권한');
+    expect(validation.errors.join()).toContain("권한 선언 필요");
+  });
+  it('service 모델 사이드카는 "process" 권한으로 sidecars 선언 수용(engine 아닌 별도 프로세스)', () => {
+    const svc = { name: "terminal-alacritty", interface: "soksak-sidecar-terminal-spec@1" };
+    const { manifest, validation } = parseManifest(
+      base({ permissions: ["process"], sidecars: [svc] }),
+      "demo",
+    );
+    expect(validation.ok).toBe(true);
+    expect(manifest?.sidecars).toEqual([svc]);
   });
   it("name 형식 위반 거부(경로 traversal 가드)", () => {
     for (const name of ["../evil", "Upper", "a/b", ""]) {
