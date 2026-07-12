@@ -21,9 +21,9 @@ useSessions.getState().bootstrapFirstProject("/tmp/soksak-termstatus");
 const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().tabs));
 const pristineActive = useSessions.getState().activeId;
 
-// 터미널 프로그램 등록(코어 터미널 제거 — addViewToGroup("terminal")은 터미널 플러그인 뷰를 연다).
+// 터미널 프로그램 등록(코어 터미널 제거 — addViewToGroup("terminal-xterm")은 터미널 플러그인 뷰를 연다).
 useProgramRegistry.getState().register("soksak-plugin-terminal-xterm", {
-  id: "terminal",
+  id: "terminal-xterm",
   title: "Terminal",
   kind: "view",
   view: "content",
@@ -54,7 +54,7 @@ describe("terminalStatus — command.started/finished → running status", () =>
   it("reportTerminalRunning → 그 터미널 뷰 status=running(명령라인), clear 로 회수", () => {
     const r = useSessions
       .getState()
-      .addViewToGroup("t1", "terminal", activeGroupId());
+      .addViewToGroup("t1", "terminal-xterm", activeGroupId());
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error("터미널 뷰 생성 실패");
     // 플러그인 터미널의 pane 키 = 그 콘텐츠 뷰의 view.id(코어 터미널 제거 후 단일 키).

@@ -9,13 +9,23 @@
 //
 // 판정·시행표의 단일진실은 스펙 패키지(@soksak-ai/plugin-spec transparency.ts)다 — 이 게이트는
 // 소비자일 뿐 판정 미러를 두지 않는다(코어 로더·validate CLI 와 같은 함수·표를 import 한다).
-// 코어에 플러그인 id 를 넣지 않는다(C1): 스캔은 런타임 디렉토리 순회다.
+// 코어에 플러그인 id 를 넣지 않는다(C1): 판정은 매니페스트 집계다.
 //
-// 사용: node scripts/gates/c2-transparency-scan.mjs [--plugins <dir>] [--json]
-// exit 0 = blocking 규칙 위반 0건, exit 1 = blocking 위반 또는 매니페스트 파싱 실패.
-// warn 규칙(content-view-status) 위반은 보고만 한다 — blocking 승격(재입법)의 기계 조건이
-// "이 게이트가 warn 카운트 0 을 실측"이다(command-surface·view-nodes 가 밟은 래칫과 동일).
-// make gates 에 편입되어 있다(blocking) — warn 규칙은 카운트가 남아도 게이트를 깨지 않는다.
+// [모집단 규칙] 배포·설치는 GitHub 를 통한다 — 로컬 dir 은 개발용 작업 사본일 뿐이다(public 보다
+// 앞/뒤설 수 있다). blocking 승격 래칫의 권위 실측 모집단은 "배포 카탈로그(라이브 registry.json)에
+// 실린 플러그인의 현재 GitHub 매니페스트"다(--registry) — 승격이 막아야 할 건 배포된 플러그인의
+// 드롭이지, 카탈로그 밖 미배포 WIP 가 아니다. 로컬 스캔(--plugins)은 개발자 사전점검이지 승격
+// 권위가 아니다. 이 규칙 이전엔 dev-home 을 승격 기준으로 삼아, 로컬이 public 보다 앞선 사이
+// 카탈로그된 플러그인들이 public 에서 위반을 안은 채 blocking 이 승격돼 배포 게이트가 그들을
+// 드롭했다(14종 사고). 재발 방지 = 이 게이트를 승격 전 GREEN 확인.
+//
+// 사용:
+//   node c2-transparency-scan.mjs --registry            # GitHub public(배포 진실) — 승격 권위
+//   node c2-transparency-scan.mjs [--plugins <dir>]     # 로컬 dev-home — 사전점검
+//   [--json] 로 기계 판독.
+// exit 0 = blocking 규칙 위반 0건, exit 1 = blocking 위반 또는 매니페스트 실측 불가.
+// warn 규칙 위반은 보고만 한다 — blocking 승격(재입법)의 기계 조건이 "--registry 가 warn 카운트
+// 0 을 실측"이다. make gates 는 로컬 사전점검, make gates-registry 가 승격 권위 게이트다.
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -25,31 +35,27 @@ import {
   parseManifest,
   transparencyViolations,
 } from "@soksak-ai/plugin-spec";
+import { REGISTRY_URL, fetchRegistryEntries } from "./deploy-catalog.mjs";
 
-// 플러그인 디렉토리 순회 → { perRule, plugins, scanned, parseErrors }.
+// 판정은 모집단 무관 — entries([{name,text}]) 를 스펙 패키지 표·함수로만 판정한다(소스 분리).
+// 로컬 dir 순회든 GitHub public fetch 든 같은 판정을 통과한다(판정 미러 0 — 이중진실 폐기).
 //   perRule: 규칙별 위반 플러그인 id 목록(규칙 축 = C2_STATIC_ENFORCEMENT 의 키 — 표가 곧 축).
-//   parseErrors: 매니페스트가 파싱 실패한 디렉토리(스캔 불가 = 실측 불가 = 실패로 취급).
-export function scanPlugins(pluginsDir) {
+//   parseErrors: 매니페스트가 파싱 실패한 항목(스캔 불가 = 실측 불가 = 실패로 취급).
+export function judgeManifests(entries) {
   const perRule = Object.fromEntries(
     Object.keys(C2_STATIC_ENFORCEMENT).map((rule) => [rule, []]),
   );
   const plugins = [];
   const parseErrors = [];
   let scanned = 0;
-  if (!existsSync(pluginsDir)) {
-    return { perRule, plugins, scanned, parseErrors, pluginsDir, missing: true };
-  }
-  for (const name of readdirSync(pluginsDir).sort()) {
-    const dir = join(pluginsDir, name);
-    if (!statSync(dir).isDirectory()) continue;
-    const manifestPath = join(dir, "plugin.json");
-    if (!existsSync(manifestPath)) continue;
+  for (const { name, text } of entries) {
     scanned++;
     let raw;
     try {
-      raw = JSON.parse(readFileSync(manifestPath, "utf8"));
+      if (text == null) throw new Error("매니페스트 본문 없음(fetch 실패)");
+      raw = JSON.parse(text);
     } catch (e) {
-      parseErrors.push({ dir: name, errors: [`plugin.json JSON 파싱 실패: ${e.message}`] });
+      parseErrors.push({ dir: name, errors: [`plugin.json 파싱 실패: ${e.message}`] });
       continue;
     }
     const { manifest, validation } = parseManifest(raw, name);
@@ -61,7 +67,36 @@ export function scanPlugins(pluginsDir) {
     plugins.push({ id: manifest.id, dir: name, violations });
     for (const v of violations) perRule[v.rule].push(manifest.id);
   }
-  return { perRule, plugins, scanned, parseErrors, pluginsDir, missing: false };
+  return { perRule, plugins, scanned, parseErrors };
+}
+
+// [로컬 = 개발 사전점검] 설치본 디렉토리 순회. dev-home 은 작업 사본일 뿐이라 public 보다
+// 앞/뒤설 수 있다 — 승격 권위가 아니다(권위는 scanRegistry). 개발자 자기 작업 확인용.
+export function scanPlugins(pluginsDir) {
+  if (!existsSync(pluginsDir)) {
+    return { ...judgeManifests([]), pluginsDir, missing: true };
+  }
+  const entries = [];
+  for (const name of readdirSync(pluginsDir).sort()) {
+    const dir = join(pluginsDir, name);
+    if (!statSync(dir).isDirectory()) continue;
+    const manifestPath = join(dir, "plugin.json");
+    if (!existsSync(manifestPath)) continue;
+    let text = null;
+    try {
+      text = readFileSync(manifestPath, "utf8");
+    } catch { /* text=null → parseErrors */ }
+    entries.push({ name, text });
+  }
+  return { ...judgeManifests(entries), pluginsDir, missing: false };
+}
+
+// 승격 래칫의 권위 실측 — 배포 카탈로그 모집단(deploy-catalog.fetchRegistryEntries)을 판정한다.
+// C2 규칙을 blocking 으로 승격하려면 이 게이트가 위반·실측불가 0 이어야 한다(시행 모집단 = 측정
+// 모집단). 카탈로그 fetch 는 deploy-catalog 단일진실. fetchEntries 주입 가능(테스트·무네트워크).
+export async function scanRegistry({ fetchEntries = fetchRegistryEntries } = {}) {
+  const entries = await fetchEntries();
+  return { ...judgeManifests(entries), source: "registry" };
 }
 
 // blocking 규칙 위반 총수 — 게이트 실패 조건(warn 규칙은 보고 전용, 래칫 측정치).
@@ -84,29 +119,46 @@ export function resolvePluginsDir(args = []) {
   return join(homedir(), `.soksak${suffix}`, "plugins");
 }
 
-function main() {
-  const args = process.argv.slice(2);
-  const asJson = args.includes("--json");
-  const pluginsDir = resolvePluginsDir(args);
-  const r = scanPlugins(pluginsDir);
+function report(r, asJson, label) {
   if (asJson) {
     console.log(JSON.stringify(r, null, 2));
-  } else {
-    console.log(`C2 투명성 스캔(정적 3종) — 대상 ${pluginsDir}`);
-    if (r.missing) {
-      console.log("  플러그인 디렉토리 없음 — SOKSAK_HOME/SOKSAK_ENV 또는 --plugins 로 지정하라.");
-    } else {
-      console.log(`  스캔 ${r.scanned}개, 위반 매니페스트 ${r.plugins.filter((p) => p.violations.length).length}개`);
-      for (const [rule, ids] of Object.entries(r.perRule)) {
-        const mode = C2_STATIC_ENFORCEMENT[rule];
-        console.log(`  ${rule}(${mode}): 위반 ${ids.length}${ids.length ? ` — ${ids.join(", ")}` : ""}`);
-      }
-      if (r.parseErrors.length) {
-        console.log(`\n매니페스트 파싱 실패 ${r.parseErrors.length}건(실측 불가):`);
-        for (const e of r.parseErrors) console.log(`  ✗ ${e.dir}: ${e.errors.join("; ")}`);
-      }
-    }
+    return;
   }
+  console.log(`C2 투명성 스캔(정적 3종) — 대상 ${label}`);
+  if (r.missing) {
+    console.log("  플러그인 디렉토리 없음 — SOKSAK_HOME/SOKSAK_ENV 또는 --plugins 로 지정하라.");
+    return;
+  }
+  console.log(`  스캔 ${r.scanned}개, 위반 매니페스트 ${r.plugins.filter((p) => p.violations.length).length}개`);
+  for (const [rule, ids] of Object.entries(r.perRule)) {
+    const mode = C2_STATIC_ENFORCEMENT[rule];
+    console.log(`  ${rule}(${mode}): 위반 ${ids.length}${ids.length ? ` — ${ids.join(", ")}` : ""}`);
+  }
+  if (r.parseErrors.length) {
+    console.log(`\n매니페스트 실측 불가 ${r.parseErrors.length}건:`);
+    for (const e of r.parseErrors) console.log(`  ✗ ${e.dir}: ${e.errors.join("; ")}`);
+  }
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const asJson = args.includes("--json");
+  let r, label;
+  if (args.includes("--registry")) {
+    // 승격 권위 — GitHub public(배포 진실) 실측.
+    try {
+      r = await scanRegistry();
+      label = `배포 카탈로그 (${REGISTRY_URL})`;
+    } catch (e) {
+      console.error(`FAIL: 배포 모집단 실측 불가 — ${e.message}`);
+      process.exit(1);
+    }
+  } else {
+    // 로컬 dev-home — 개발 사전점검.
+    label = resolvePluginsDir(args);
+    r = scanPlugins(label);
+  }
+  report(r, asJson, label);
   const failed = r.missing || blockingViolationCount(r.perRule) > 0 || r.parseErrors.length > 0;
   if (!asJson) {
     console.log(
@@ -118,4 +170,9 @@ function main() {
   process.exit(failed ? 1 : 0);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

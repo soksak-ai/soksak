@@ -42,7 +42,7 @@
 //     repo 가 보증한다 — 코어는 플러그인을 나열·검사하지 않는다.
 
 // 계약 id(C3 L2 계약-핀) 문법 — 단일진실은 contracts.ts(CONTRACT_ID_RE·validateImplements).
-import { validateImplements, CONTRACT_ID_RE } from "./contracts.js";
+import { CONTRACT_ID_RE, validateImplements } from "./contracts.js";
 export * from "./contracts.js";
 // plugin service(제3 형태) 선언 축 — 단일진실은 service.ts(규범 docs/PLUGIN-SERVICE.md).
 import {
@@ -250,14 +250,13 @@ export interface ContributedProgram {
   // 뷰 소유 플러그인(크로스 플러그인 참조) — 다른 플러그인의 뷰를 열 때 명시(예: 에이전트
   // 프로그램이 soksak-plugin-terminal-xterm 의 content 뷰를 연다). 미지정 = 자기 플러그인(this).
   viewPlugin?: string;
+  // 뷰를 계약으로 참조(viewPlugin 의 계약 대안, C3 L2) — 플러그인 id 를 핀하지 않고 계약 id 로
+  // 구현체를 발견한다(구현체 무차별). 코어가 사용자 설정으로 구현체 하나를 골라 그 플러그인의
+  // view(위 view id, 관례 content)를 연다. viewPlugin(name-pin)과 상호배타 — 둘 다 선언 금지.
+  viewContract?: string;
   // 연 뷰에 흘려보낼 자동 실행 명령(에이전트 프로그램: 터미널 뷰가 마운트 시 PTY 로 1회 실행).
   // 뷰 종류에 무관한 일반 채널(PluginViewContext.command) — 터미널 뷰만 이를 자동 실행한다.
   command?: string;
-  // 이 프로그램의 뷰가 구현하기를 요구하는 계약 id(L2 계약-핀) — 그 계약을 구현하는 임의
-  // 플러그인이 뷰를 제공한다(예: terminal-spec@1 을 구현하는 어느 터미널 플러그인이든). 문법은
-  // implements 와 동일 규율(CONTRACT_ID_RE). 해석·디스커버리 배선은 런타임 소유 레인 몫 —
-  // 스키마는 선언 문법만 수용한다.
-  viewContract?: string;
   // 선행 바이너리 보장: 사용자 셸 PATH 에서 bin 을 확인하고 미설치면 공식 설치 명령을
   // 활성화 시점에 가시 실행한다(은폐 금지). 뷰 종류 무관 — 활성화 시점에 동작한다.
   ensure?: {
@@ -1293,7 +1292,7 @@ export function parseManifest(
       programs = parseEntries(c.programs, {
         label: "contributes.programs",
         required: ["id", "title", "kind"],
-        optional: ["path", "command", "view", "viewPlugin", "ensure", "viewContract"],
+        optional: ["path", "command", "view", "viewPlugin", "viewContract", "ensure"],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
             errs.push("contributes.programs: id 는 ^[a-z0-9][a-z0-9-]*$");
@@ -1358,20 +1357,24 @@ export function parseManifest(
             );
             return null;
           }
+          // viewContract(계약-핀 뷰 참조, C3 L2) — 선택, 계약 id 형식(NAMING §8). viewPlugin 은
+          // 플러그인 id 를 핀(name-pin)하고 viewContract 는 계약으로 발견한다 — 둘은 상호배타다.
+          if (v.viewContract !== undefined && (!isNonEmptyString(v.viewContract) || !CONTRACT_ID_RE.test(v.viewContract.trim()))) {
+            errs.push(
+              `contributes.programs["${id}"].viewContract: 계약 id 형식(<scope>-spec@<major>)`,
+            );
+            return null;
+          }
+          if (v.viewPlugin !== undefined && v.viewContract !== undefined) {
+            errs.push(
+              `contributes.programs["${id}"]: viewPlugin(name-pin)과 viewContract(계약-핀)를 동시 선언할 수 없다 — 하나만`,
+            );
+            return null;
+          }
           // command(자동 실행, 선택) — 비공백 문자열. 터미널 뷰가 마운트 시 1회 실행한다.
           if (v.command !== undefined && !isNonEmptyString(v.command)) {
             errs.push(
               `contributes.programs["${id}"].command: 비공백 문자열`,
-            );
-            return null;
-          }
-          // viewContract(L2 계약-핀, 선택) — 계약 id 문법(implements 와 동일 규율).
-          if (
-            v.viewContract !== undefined &&
-            (!isNonEmptyString(v.viewContract) || !CONTRACT_ID_RE.test(v.viewContract.trim()))
-          ) {
-            errs.push(
-              `contributes.programs["${id}"].viewContract: 계약 id 형식(<domain>-spec@<판>)`,
             );
             return null;
           }
@@ -1429,8 +1432,8 @@ export function parseManifest(
             view: (v.view as string).trim(),
             ...(path !== undefined ? { path } : {}),
             ...(v.viewPlugin !== undefined ? { viewPlugin: (v.viewPlugin as string).trim() } : {}),
-            ...(v.command !== undefined ? { command: (v.command as string).trim() } : {}),
             ...(v.viewContract !== undefined ? { viewContract: (v.viewContract as string).trim() } : {}),
+            ...(v.command !== undefined ? { command: (v.command as string).trim() } : {}),
             ...(ensure !== undefined ? { ensure } : {}),
           };
         },

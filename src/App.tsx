@@ -15,6 +15,7 @@ import { removeRecentProject, useRecentProjects } from "./state/recentProjects";
 import { rafThrottle } from "./lib/rafThrottle";
 import { parkedStyle } from "./lib/layerPark";
 import { emitPluginEvent } from "./plugins/hooks";
+import { resolveTerminalProgram } from "./plugins/terminalEngine";
 import {
   activeSessionViewId,
   startViewFocusSync,
@@ -651,8 +652,10 @@ function App() {
         if (view) closeView(project.id, view.id);
       } else if (key === "t" && !e.shiftKey) {
         e.preventDefault();
-        // 분할 패널 헤더 = 탭 모드 고정: ⌘T 는 항상 새 터미널 탭(터미널 플러그인 뷰).
-        addViewToGroup(project.id, "terminal");
+        // ⌘T = 새 터미널 탭. 코어는 특정 엔진을 모른다 — 설정된 터미널 엔진(계약 해소)으로 연다.
+        // 활성 터미널 엔진이 없으면 아무것도 열지 않는다(빈 탭 남발 금지 — ⌘T 는 터미널 전용 의도).
+        const terminalProgram = resolveTerminalProgram();
+        if (terminalProgram) addViewToGroup(project.id, terminalProgram);
       } else if (key === "b" && !e.shiftKey) {
         e.preventDefault();
         toggleSidebar(project.id);

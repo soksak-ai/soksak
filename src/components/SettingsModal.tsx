@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePlugins } from "../state/plugins";
 import { PluginSettingsPanel } from "./PluginSettingsPanel";
+import { ContractEngineSettings } from "./ContractEngineSettings";
 import {
   useSettings,
   type Language,
@@ -303,6 +304,10 @@ export function SettingsModal({
           {/* 터미널 외형(글꼴/크기/커서/깜빡임/리사이즈 리플로우/렌더러/스크롤백/셸)은
               코어 설정이 아니다 — 터미널 플러그인의 설정 패널(아래 PluginSettingsPanel)이
               소유한다(manifest configuration 단일진실, 중복 제거). */}
+
+          {/* 계약별 구현체 선택(제네릭·계약-무지) — 활성 구현체 ≥2 계약만 자동 노출.
+              코어는 어떤 계약도 특권화하지 않는다(예: terminal-spec@1 → xterm/ghostty). */}
+          <ContractEngineSettings />
 
           <div className="dsec">{t("settings.permission")}</div>
           <div className="drow">

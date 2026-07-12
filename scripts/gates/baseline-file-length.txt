@@ -2,10 +2,20 @@
 # 갱신은 --prune(축소)만. 값을 올리는 것은 명시 재입법 커밋으로만 한다(C5 — 무언 완화 금지).
 # 제거 조건: 파일을 1500줄 이하로 분할 → stale 실패 → --prune 으로 항목이 삭제된다.
 # 파일 개명 시 같은 커밋에서 항목 경로를 수기로 이전한다(값 불변).
-packages/plugin-spec/src/spec.ts 1520
+#
+# 재입법 이력(C5 — 무언 완화 아님, 명시 커밋):
+#   2026-07-12 — 터미널 seam 계약화 + plugin-spec 0.3.0 이 4파일을 봉인 초과로 키움. 각 증가분은
+#     필요 기능이라 조용히 축소 불가: spec.ts 신규 봉인(0.3.0 viewContract/status 필드 — 단일진실
+#     spec 이라 분할이 오히려 단일진실을 훼손), catalog.ts 2715→2739(계약 해소 layout skip),
+#     i18n.ts 1525→1531(엔진 0 skip 메시지 — 번역 콘텐츠라 축소 불가), sessions.ts 1745→1755
+#     (계약 뷰 해소 newViewFor). 1500 이하 분할-축소는 별도 부채 정리 패스(이 세션 범위 밖).
+#   2026-07-12 — 터미널 미러 코어 방출 브랜치를 main 에 병합. 두 재입법이 합류: api.ts 1784→1816
+#     (방출 소비자 배선 — paneAlive 세션-생존 조회, 코어 무해석 유지), spec.ts 1503→1523(양쪽이
+#     같은 viewContract 필드를 독립 추가 → 병합에서 중복 선언 제거 후 단일 계약-핀으로 수렴). 분할은 부채 패스.
+packages/plugin-spec/src/spec.ts 1523
 src-tauri/cli/src/lib.rs 1757
 src-tauri/src/webview.rs 1542
-src/commands/catalog.ts 2728
-src/i18n.ts 1529
+src/commands/catalog.ts 2739
+src/i18n.ts 1531
 src/plugins/api.ts 1816
-src/state/sessions.ts 1745
+src/state/sessions.ts 1755

@@ -15,17 +15,30 @@ import { registerCatalog } from "./catalog";
 import { execute } from "./registry";
 import { useSessions } from "../state/sessions";
 import { useProgramRegistry } from "../plugins/programRegistry";
-import type { ContributedProgram } from "../plugins/spec";
+import { usePlugins, type PluginRuntime } from "../state/plugins";
+import type { ContributedProgram, PluginManifest } from "../plugins/spec";
 
-// 첫 패널이 쓰는 터미널 프로그램 — 상시 등록.
-useProgramRegistry
-  .getState()
-  .register("test-plugin", {
-    id: "terminal",
-    kind: "view",
-    view: "term",
-    title: { en: "Terminal", ko: "터미널" },
-  } as ContributedProgram);
+// dev 프리셋의 첫 패널은 터미널 계약(terminal-spec@1)을 설정 엔진으로 해소한다 — 특정 program id
+// 하드코딩이 아니다. 테스트 환경엔 플러그인 로더가 없으므로 계약 구현체를 직접 세운다:
+//   ① 엔진 program 을 useProgramRegistry 에 등록,
+//   ② implements 를 단 enabled 플러그인을 usePlugins 에 넣어 발견되게 한다.
+const XTERM = "soksak-plugin-terminal-xterm";
+const XTERM_PROGRAM = "terminal-xterm";
+useProgramRegistry.getState().register(XTERM, {
+  id: XTERM_PROGRAM,
+  kind: "view",
+  view: "content",
+  title: { en: "Terminal", ko: "터미널" },
+} as ContributedProgram);
+
+const terminalEnginePlugins: Record<string, PluginRuntime> = {
+  [XTERM]: {
+    manifest: { id: XTERM, implements: ["terminal-spec@1"] } as unknown as PluginManifest,
+    dir: "",
+    source: "dev",
+    status: "enabled",
+  },
+};
 
 useSessions.getState().bootstrapFirstProject("/tmp/soksak-layout-apply");
 registerCatalog();
@@ -51,6 +64,8 @@ beforeEach(() => {
     tabs: JSON.parse(JSON.stringify(pristineTabs)),
     activeId: pristineActive,
   });
+  // 터미널 엔진(계약 구현체)을 활성 상태로 되돌린다 — 개별 테스트가 지운 뒤 복구.
+  usePlugins.setState({ plugins: { ...terminalEnginePlugins } });
 });
 
 afterEach(() => {
@@ -64,14 +79,15 @@ function firstProject() {
 }
 
 describe("layout.apply", () => {
-  it("preset dev — 브라우저가 있으면 터미널+브라우저 2 패널을 한 스페이스로 짓는다", async () => {
+  it("preset dev — 터미널 엔진(계약)+브라우저가 있으면 2 패널을 한 스페이스로 짓는다", async () => {
     unregBrowser = registerBrowser();
     const r = await execute("layout.apply", { preset: "dev" }, {});
     expect(r.ok).toBe(true);
     const spaces = (r.data as { spaces: { title: string; panels: { program: string }[] }[] }).spaces;
     expect(spaces).toHaveLength(1);
     expect(spaces[0].title).toBe("dev");
-    expect(spaces[0].panels.map((p) => p.program)).toEqual(["terminal", "browser"]);
+    // 터미널 패널은 설정 엔진(계약 해소)의 program 으로 채워진다 — 특정 program id 가정 없음.
+    expect(spaces[0].panels.map((p) => p.program)).toEqual([XTERM_PROGRAM, "browser"]);
     expect((r.data as Record<string, unknown>).skipped).toBeUndefined();
   });
 
@@ -82,11 +98,29 @@ describe("layout.apply", () => {
       spaces: { panels: { program: string }[] }[];
       skipped?: { program: string; reason: string }[];
     };
-    expect(data.spaces[0].panels.map((p) => p.program)).toEqual(["terminal"]);
+    expect(data.spaces[0].panels.map((p) => p.program)).toEqual([XTERM_PROGRAM]);
     expect(data.skipped).toBeDefined();
     expect(data.skipped![0].program).toBe("browser");
     expect(typeof data.skipped![0].reason).toBe("string");
     expect(data.skipped![0].reason.length).toBeGreaterThan(0);
+  });
+
+  it("preset dev — 활성 터미널 엔진이 없으면 터미널 패널도 건너뛰고 skipped 에 계약을 담는다", async () => {
+    unregBrowser = registerBrowser();
+    // 활성 터미널 구현체 제거 — 계약 해소가 null 이 되어 터미널 패널을 짓지 못한다.
+    usePlugins.setState({ plugins: {} });
+    const r = await execute("layout.apply", { preset: "dev" }, {});
+    expect(r.ok).toBe(true);
+    const data = r.data as {
+      spaces: { panels: { program: string }[] }[];
+      skipped?: { program: string; reason: string }[];
+    };
+    // 브라우저는 있으므로 그 패널만 남고, 터미널은 skipped.
+    expect(data.spaces[0].panels.map((p) => p.program)).toEqual(["browser"]);
+    expect(data.skipped).toBeDefined();
+    const terminalSkip = data.skipped!.find((s) => s.program === "terminal-spec@1");
+    expect(terminalSkip).toBeDefined();
+    expect(terminalSkip!.reason.length).toBeGreaterThan(0);
   });
 
   it("기본형 문법 — 값 하나(dev)를 preset 위치 인자로 받는다", async () => {
@@ -102,8 +136,8 @@ describe("layout.apply", () => {
       {
         preset: "facets",
         spaces: [
-          { title: "a", panels: [{ program: "terminal" }] },
-          { title: "b", panels: [{ program: "terminal" }, { program: "terminal", side: "bottom" }] },
+          { title: "a", panels: [{ program: XTERM_PROGRAM }] },
+          { title: "b", panels: [{ program: XTERM_PROGRAM }, { program: XTERM_PROGRAM, side: "bottom" }] },
         ],
       },
       {},

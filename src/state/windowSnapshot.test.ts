@@ -240,3 +240,42 @@ describe("B3 — cwd·lastActivity 영속 round-trip", () => {
     expect(v2.customLabel).toBeUndefined();
   });
 });
+
+describe("저장 세션 마이그레이션 — 터미널 rename(soksak-plugin-terminal → -xterm)", () => {
+  it("옛 pluginId 스냅샷은 새 id 로 복원된다(view id 는 그대로)", () => {
+    sid = 0;
+    const legacy: ProjectTab = {
+      ...project,
+      contents: [
+        {
+          id: "c1",
+          title: "1",
+          activeGroupId: "g1",
+          layout: {
+            type: "leaf",
+            value: {
+              id: "g1",
+              activeViewId: "v1",
+              views: [
+                {
+                  id: "v1",
+                  kind: "plugin",
+                  title: "T",
+                  pluginId: "soksak-plugin-terminal", // rename 전 옛 id
+                  view: "content",
+                },
+              ],
+            },
+          },
+        },
+      ],
+    };
+    // 직렬화는 옛 id 를 그대로 담는다 — 마이그레이션은 복원(deserialize) 시점에 일어난다.
+    const snap = serializeProject(legacy);
+    const back = deserializeProject(snap, newSplitId);
+    const g = (back.contents[0].layout as Extract<GroupNode, { type: "leaf" }>).value;
+    const term = g.views[0] as Extract<View, { kind: "plugin" }>;
+    expect(term.pluginId).toBe("soksak-plugin-terminal-xterm");
+    expect(term.view).toBe("content"); // view id(관례 content)는 rename 대상이 아니다
+  });
+});

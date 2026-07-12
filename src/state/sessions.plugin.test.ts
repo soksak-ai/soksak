@@ -3,6 +3,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { allGroups, allViews, useSessions } from "./sessions";
 import { useProgramRegistry } from "../plugins/programRegistry";
+import { usePlugins, type PluginRuntime } from "./plugins";
+import { useContractSelection } from "./contractSelection";
+import { parseManifest } from "../plugins/spec";
 
 // 부트 모델(P3): 초기 tabs 는 비어 있고 main.tsx 가 bootstrapFirstProject 로
 // 첫 프로젝트를 만든다 — 테스트도 같은 경로로 t1 을 준비한 뒤 스냅샷.
@@ -255,5 +258,141 @@ describe("addProject — 초기 program", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.viewId).toBeUndefined();
+  });
+});
+
+// viewContract(계약-핀 C3) — 프로그램이 플러그인 id 대신 계약을 참조하면 코어는 활성 구현체를
+// 발견(implementersOf)하고 사용자 설정으로 하나를 골라 그 구현체의 뷰를 연다. 코어는 계약 의미
+// 무지 — 특정 플러그인 id 하드코딩 0(plugin-agnostic). view id 는 프로그램 선언값(관례 content).
+describe("addViewToGroup — viewContract(계약-핀) 해소", () => {
+  const XTERM = "soksak-plugin-terminal-xterm";
+  const GHOSTTY = "soksak-plugin-terminal-ghostty";
+  const CONTRACT = "terminal-spec@1";
+
+  // 픽스처 런타임 — 실 스키마 게이트(parseManifest)를 통과시킨다(implements 는 스펙 검증 필드).
+  function fixtureRuntime(
+    id: string,
+    implementsIds: string[],
+    status: PluginRuntime["status"] = "enabled",
+  ): PluginRuntime {
+    const { manifest, validation } = parseManifest(
+      {
+        spec: "soksak-plugin-spec@1",
+        id,
+        name: "픽스처",
+        version: "1.0.0",
+        description: "계약 픽스처",
+        permissions: [],
+        ...(implementsIds.length > 0 ? { implements: implementsIds } : {}),
+      },
+      id,
+    );
+    if (!manifest) throw new Error(`픽스처 매니페스트 불량: ${validation.errors.join("; ")}`);
+    return { manifest, dir: `/tmp/${id}`, source: "dev", status };
+  }
+
+  beforeEach(() => {
+    // 두 엔진이 같은 계약을 활성 상태로 구현(발견 순서 = xterm, ghostty).
+    usePlugins.setState({
+      plugins: {
+        [XTERM]: fixtureRuntime(XTERM, [CONTRACT]),
+        [GHOSTTY]: fixtureRuntime(GHOSTTY, [CONTRACT]),
+      },
+    });
+    useContractSelection.setState({ selected: {} });
+  });
+
+  // 계약 참조 프로그램 등록(에이전트 프로그램 결) — viewPlugin 없이 viewContract 로 뷰 소유를 발견한다.
+  function registerContractProgram() {
+    return useProgramRegistry.getState().register("soksak-plugin-agent-claude", {
+      id: "claude-contract-test",
+      title: "Claude",
+      kind: "view",
+      view: "content",
+      viewContract: CONTRACT,
+      command: "claude",
+    });
+  }
+
+  function viewOf(r: { groupId: string; viewId: string }): { pluginId?: string } & Record<string, unknown> {
+    const { groups } = activeLayout();
+    return groups.find((g) => g.id === r.groupId)!.views.find((x) => x.id === r.viewId)! as unknown as {
+      pluginId?: string;
+    } & Record<string, unknown>;
+  }
+
+  it("선택 없음 → 첫 활성 구현체(xterm) 뷰 + view id·autorun command 전달", () => {
+    const dispose = registerContractProgram();
+    try {
+      const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(viewOf(r)).toMatchObject({
+        kind: "plugin",
+        pluginId: XTERM, // 발견 순서 첫 항목 — 특정 id 하드코딩 아님
+        view: "content",
+        title: "Claude",
+        command: "claude",
+      });
+    } finally {
+      dispose();
+    }
+  });
+
+  it("사용자 선택 → 그 구현체(ghostty)로 해소(엔진 선택)", () => {
+    const dispose = registerContractProgram();
+    useContractSelection.getState().select(CONTRACT, GHOSTTY);
+    try {
+      const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(viewOf(r).pluginId).toBe(GHOSTTY);
+    } finally {
+      dispose();
+    }
+  });
+
+  it("stale 선택(구현체 아님) → 첫 항목으로 폴백(무시)", () => {
+    const dispose = registerContractProgram();
+    useContractSelection.getState().select(CONTRACT, "soksak-plugin-not-an-impl");
+    try {
+      const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(viewOf(r).pluginId).toBe(XTERM);
+    } finally {
+      dispose();
+    }
+  });
+
+  it("비활성(disabled) 구현체는 후보 제외 → 활성 구현체로만 해소", () => {
+    usePlugins.setState({
+      plugins: {
+        [XTERM]: fixtureRuntime(XTERM, [CONTRACT], "disabled"),
+        [GHOSTTY]: fixtureRuntime(GHOSTTY, [CONTRACT]),
+      },
+    });
+    const dispose = registerContractProgram();
+    try {
+      const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(viewOf(r).pluginId).toBe(GHOSTTY);
+    } finally {
+      dispose();
+    }
+  });
+
+  it("활성 구현체 0 → 뷰 생성 불가(TARGET_NOT_FOUND, 빈 그룹으로 열화)", () => {
+    usePlugins.setState({ plugins: {} });
+    const dispose = registerContractProgram();
+    try {
+      const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
+      expect(r.ok).toBe(false);
+      if (r.ok) return;
+      expect(r.code).toBe("TARGET_NOT_FOUND");
+    } finally {
+      dispose();
+    }
   });
 });

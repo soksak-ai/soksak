@@ -134,6 +134,13 @@ For each subsystem: what STAYS in the skeleton (the generic interface), what MOV
 
 ### Terminal → plugin
 
+**Status: extracted, and now a replaceable engine seam.** `soksak-plugin-terminal-xterm`
+(xterm.js) and `soksak-plugin-terminal-ghostty` both implement `terminal-spec@1`; the core
+names no terminal engine and hardcodes no default program (an unspecified `panel.split` is a
+blank panel, not a terminal). Consumers (agents, ⌘T) reference the contract via `viewContract`
+and the core resolves it to the user-selected implementer (NAMING §4, §8). The ruling below is
+the original extraction plan it was carried out under.
+
 **STAYS (skeleton):** PTY spawn/kill, reader thread, ACK flow control, ZSH integration injection, environment cleanup (`pty.rs`); pane host registry and DOM-preserving slot (`paneHosts.ts`, `GroupArea`); command-lifecycle and cwd event bridge (`hooks.ts`).
 
 **MOVES (plugin):** xterm.js instantiation, renderer selection (WebGL/DOM), font/cell-metric handling, IME/OSC-11 wiring, terminal theme palette, terminal-specific settings UI (`createTerminal.ts`, `theme.ts`).

@@ -94,3 +94,22 @@ describe("빈 패널 컨텍스트", () => {
     });
   });
 });
+
+describe("panel.split 기본 program 없음", () => {
+  it("program 미지정 시 빈 패널을 만든다 — 코어는 터미널을 기본으로 심지 않는다", async () => {
+    const r = await execute("panel.split", { side: "right" }, {});
+    expect(r.ok).toBe(true);
+    // 새 패널은 생기되(panelId) 뷰는 없다(viewId 부재 = 블랭크). 코어 program-무지.
+    expect(r.data).toMatchObject({ panelId: expect.any(String) });
+    expect((r.data as Record<string, unknown>).viewId).toBeUndefined();
+  });
+
+  it("program 을 명시하면 그 뷰로 채운다(블랭크 아님)", async () => {
+    const r = await execute("panel.split", { side: "right", program: "terminal" }, {});
+    expect(r.ok).toBe(true);
+    expect(r.data).toMatchObject({
+      panelId: expect.any(String),
+      viewId: expect.any(String),
+    });
+  });
+});

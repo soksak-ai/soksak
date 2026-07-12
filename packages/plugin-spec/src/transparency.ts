@@ -32,6 +32,14 @@ export interface TransparencyViolation {
 //     command-surface·view-nodes 가 밟은 같은 경로).
 //   2026-07-11 승격 — 콘텐츠 뷰 10개 전부 선언 도달(보고 뷰 6=실측 코드, 무상태 뷰 4=[] 명시,
 //     c2-transparency-scan 위반 0 실측) 후 content-view-status 를 blocking 으로 승격.
+//   2026-07-12 모집단 정정 — 위 승격의 0-실측이 dev-home(로컬 작업 사본)만 봤다. 배포·설치는
+//     GitHub 를 통하고 배포 게이트(registry update.sh)는 카탈로그 모집단을 시행하는데, 로컬이
+//     public 보다 앞선(적합화 커밋 미push) 사이 카탈로그된 14종이 public 에서 content-view-status
+//     를 안은 채 blocking 이 시행돼 배포 게이트가 그들을 드롭했다. 정정: (a) 14종 public 적합화
+//     반영으로 배포 모집단 0 도달, (b) 승격 권위 게이트를 배포 모집단(라이브 registry.json 의
+//     카탈로그된 플러그인의 GitHub 매니페스트)으로 이동 — c2-transparency-scan --registry
+//     (make gates-registry). 규칙: C2 규칙 blocking 승격은 "배포 모집단 0 실측"이 기계 조건이다
+//     (시행 모집단 = 측정 모집단). 로컬 --plugins 스캔은 개발 사전점검일 뿐 승격 권위가 아니다.
 export const C2_STATIC_ENFORCEMENT: Readonly<
   Record<StaticTransparencyRule, EnforcementMode>
 > = {
