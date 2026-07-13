@@ -158,14 +158,15 @@ const ProjectPane = memo(function ProjectPane({
   // 못 쓴다(그걸로 측정하면 옛 위치를 읽어 webview 가 한 박자 늦는다).
   useLayoutEffect(() => {
     emitPluginEvent("layout.reflow", { activeSpaceId: project.activeContentId });
-  }, [project.activeContentId]);
+  }, [project.activeContentId, isActiveProject]);
   return (
     <div
       className="terminal-pane"
-      style={{
-        visibility: isActiveProject ? "visible" : "hidden",
-        zIndex: isActiveProject ? 1 : 0,
-      }}
+      // 비활성 프로젝트도 화면 밖으로 파킹한다(R12 단일 진실) — visibility:hidden 은 DOM 만 감추고
+      // GPU 레이어(터미널 WebGL)와 네이티브 child(브라우저 webview)는 그대로 합성된다. 콘텐츠·뷰 슬롯과
+      // 같은 헬퍼를 쓰는 이유가 그것이다(층 간 일치). 프로젝트를 전환해도 이전 브라우저가 화면에
+      // 남던 결함이 이 층의 누락이었다.
+      style={parkedStyle(isActiveProject)}
     >
       {/* 좌측 파일 트리 사이드바. 닫히면 width 0(언마운트 X → 상태 유지).
           닫힐 때 우측 보더도 함께 제거 — 0폭이어도 보더는 1px 선으로 남아
@@ -216,7 +217,11 @@ const ProjectPane = memo(function ProjectPane({
                 // (GroupArea)과 동일 규칙을 같은 헬퍼로 적용(층 간 일치).
                 style={parkedStyle(isActiveContent)}
               >
-                <GroupArea content={c} projectId={project.id} spaceShown={isActiveContent} />
+                <GroupArea
+                  content={c}
+                  projectId={project.id}
+                  surfaceActive={isActiveProject && isActiveContent}
+                />
               </div>
             );
           })}

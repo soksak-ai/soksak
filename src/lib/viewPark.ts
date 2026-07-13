@@ -9,6 +9,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { emitPluginEvent } from "../plugins/hooks";
 import { browserLabel } from "./webviewLabels";
 
+// 뷰가 실제로 보이는가 — **세 층이 모두 참일 때만** 참이다: 프로젝트가 활성이고, 그 프로젝트 안에서
+// 그 스페이스가 활성이고, 그 스페이스 안에서 그 뷰가 활성 탭이다. 한 층이라도 빠지면 코어는 보이지 않는
+// 뷰를 "보인다"고 듣고 네이티브 child(브라우저 webview·엔진 서피스)를 화면에 남긴다 — 프로젝트를
+// 전환해도 이전 프로젝트의 브라우저가 그대로 떠 있던 결함이 정확히 이것이었다(프로젝트 층 누락).
+// CSS 는 이 층들을 각자 숨기지만 네이티브 층은 CSS 밖에 있으므로, 판정은 한 식으로 모은다.
+export function surfaceShown(projectActive: boolean, spaceActive: boolean, tabActive: boolean): boolean {
+  return projectActive && spaceActive && tabActive;
+}
+
 const visibleByView = new Map<string, boolean>();
 
 export function commitViewVisibility(viewId: string, visible: boolean): void {

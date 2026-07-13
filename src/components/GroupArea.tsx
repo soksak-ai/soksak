@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { rafThrottle } from "../lib/rafThrottle";
 import { emitPluginEvent } from "../plugins/hooks";
 import { parkedStyle } from "../lib/layerPark";
-import { commitViewVisibility } from "../lib/viewPark";
+import { commitViewVisibility, surfaceShown } from "../lib/viewPark";
 import { Icon } from "../ui/icons/Icon";
 import { FileViewerHost } from "./FileViewerHost";
 import { GroupStatusBar } from "./GroupStatusBar";
@@ -108,12 +108,13 @@ const dividerKey = (d: Divider): string => `${d.splitId}:${d.index}`;
 export const GroupArea = memo(function GroupArea({
   content,
   projectId,
-  spaceShown = true,
+  surfaceActive = true,
 }: {
   content: ContentArea;
   projectId: string;
   /** 이 스페이스(콘텐츠)가 활성인가 — 뷰 유효 가시성(스페이스 && 탭) 판정에 쓰인다. */
-  spaceShown?: boolean;
+  // 이 그룹이 실린 표면(프로젝트+스페이스)이 지금 화면에 있는가 — 뷰 가시성의 상위 두 층.
+  surfaceActive?: boolean;
 }) {
   const t = useT();
   // B4 — 복원 hydration cold 집합 구독(평상시 빈 집합 → 리렌더 없음).
@@ -181,13 +182,13 @@ export const GroupArea = memo(function GroupArea({
     : cells;
   // 드래그 콜백들이 참조 안정(useCallback)을 유지하면서 최신 cells 를 읽기 위한 ref.
   // (클로저가 cells 를 직접 캡처하면 렌더마다 새 함수 → memo 경계가 깨진다)
-  // 뷰 유효 가시성(스페이스 활성 && 탭 활성) 커밋 — 코어 단일 소유(lib/viewPark). 렌더 커밋 후(effect)
-  // 실행이라 파킹 스타일이 이미 적용된 시점이고, commit 은 멱등이라 매 렌더 호출 비용은 변화 시에만.
+  // 뷰 유효 가시성(표면 활성 && 탭 활성) 커밋 — 코어 단일 소유(lib/viewPark.surfaceShown). 렌더 커밋
+  // 후(effect) 실행이라 파킹 스타일이 이미 적용된 시점이고, commit 은 멱등이라 비용은 변화 시에만.
   useEffect(() => {
     for (const { group } of cells) {
       for (const v of group.views) {
-        const shown = maxCell ? v.id === maximizedId : v.id === group.activeViewId;
-        commitViewVisibility(v.id, spaceShown && shown);
+        const tabActive = maxCell ? v.id === maximizedId : v.id === group.activeViewId;
+        commitViewVisibility(v.id, surfaceShown(surfaceActive, true, tabActive));
       }
     }
   });
