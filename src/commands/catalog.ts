@@ -39,6 +39,7 @@ import { catalogJson, register, type CommandContext, type CommandHint } from "./
 import { registerFsWatchCatalog } from "./catalogFsWatch";
 import { registerPluginCatalog } from "./catalogPlugins";
 import { registerDaemonCatalog } from "./catalogDaemon";
+import { registerUpdateCatalog } from "./catalogUpdate";
 import { registerUiCatalog } from "./catalogUi";
 import { registerDomCatalog } from "./catalogDom";
 import { registerAiSessionCatalog } from "./catalogAiSession";
@@ -2722,6 +2723,7 @@ export function registerCatalog(): void {
   registerFsWatchCatalog();
   registerPluginCatalog();
   registerDaemonCatalog();
+  registerUpdateCatalog();
   registerUiCatalog();
   registerDomCatalog();
   registerDataCatalog();

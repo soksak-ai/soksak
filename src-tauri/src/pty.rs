@@ -696,6 +696,40 @@ pub fn pty_daemon_restart(app: tauri::AppHandle) -> Result<serde_json::Value, St
     }
 }
 
+// 데몬 무중단 업그레이드(HS1) — restart 와 달리 라이브 세션을 죽이지 않는다. 새 판(앱 형제
+// soksak-ptyd)을 홈 bin/ 에 원자 스테이징한 뒤 PrepareUpgrade 로 현 데몬이 새 데몬을 fd
+// 상속으로 스폰하게 한다. 셸은 SIGHUP 없이 새 데몬으로 넘어간다(ptyd do_handoff, HS2). updater
+// 오케스트레이터가 앱 relaunch 전에 호출하거나, ptyd 판올림만 반영할 때 단독 호출한다.
+#[tauri::command]
+pub fn pty_daemon_upgrade(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(unix)]
+    {
+        use serde_json::json;
+        let manager = tauri::Manager::state::<PtyManager>(&app);
+        let home = crate::home::soksak_home();
+        // 새 판을 홈 bin/ 에 원자 교체 — 새 데몬이 이 경로에서 실행된다(해시 동일이면 no-op).
+        let staged = daemon::stage_binary(&home)?;
+        let staged_str = staged.to_string_lossy().to_string();
+        // PrepareUpgrade — 데몬이 새 데몬을 fd 상속으로 스폰하고 exit(응답 없이 소켓 EOF).
+        // 라이브 세션은 SIGHUP 없이 넘어간다. err 은 무시(구 데몬은 op 미지원 → 재시작 폴백은
+        // 호출자 몫; 여기선 새 데몬 서빙 확인이 성공 판정이다).
+        let _ = manager.link.request(
+            &soksak_spec_pty::Request::PrepareUpgrade { new_bin: staged_str },
+            false,
+        );
+        // 이전 데몬이 exit 해 소켓을 놓고 새 데몬이 그 소켓을 bind 하도록 짧게 대기한 뒤,
+        // Ping 으로 새 데몬의 pid 를 확인한다(link 가 재연결).
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        let v = manager.link.request(&soksak_spec_pty::Request::Ping, true)?;
+        Ok(json!({ "upgraded": true, "pid": v["pid"], "sessions": v["sessions"] }))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = app;
+        Err("the PTY daemon is unix-only in this generation".to_string())
+    }
+}
+
 // 사용자 로그인 셸 PATH 기준 바이너리 존재 확인 — GUI 앱의 좁은 PATH 로는
 // 사용자가 쓰는 CLI 를 못 찾는다(설치 판정의 단일 기준 = 사용자 셸).
 // 플러그인 프로그램 ensure(§2.6)가 활성화 시점에 호출한다.
@@ -1135,7 +1169,7 @@ mod daemon {
     // 이름으로 놓인다 — 번들은 업데이터의 원자 교체 단위라 번들 내 장수 프로세스는
     // 세션 수명을 번들 수명에 강결합시킨다(R7). 배치는 staging → rename 원자
     // (실행 중 mach-o in-place 덮어쓰기는 서명 무효화로 SIGKILL — stage.sh 선례).
-    fn stage_binary(home: &Path) -> Result<PathBuf, String> {
+    pub(crate) fn stage_binary(home: &Path) -> Result<PathBuf, String> {
         let staged = proto::staged_bin_path(home);
         let source = resolve_source_binary();
         let Some(source) = source else {

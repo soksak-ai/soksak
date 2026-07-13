@@ -406,6 +406,18 @@ export function registerDaemonCatalog(): void {
     examples: ["sok pty.daemon.restart"],
     handler: async () => (await invoke("pty_daemon_restart")) as Record<string, unknown>,
   });
+
+  register("pty.daemon.upgrade", {
+    description:
+      "Hot-upgrade the PTY session daemon in place — no restart, no lost sessions. The running daemon stages the new binary, hands each live shell's master fd to a new daemon by fd inheritance (the shell never sees a SIGHUP), then exits. Distinct from pty.daemon.restart, which kills every shell. Use it to roll a new ptyd generation without disturbing open terminals.",
+    triggers: { ko: "pty데몬 판올림 무중단 업그레이드 데몬 핫스왑" },
+    params: {},
+    returns: "{ upgraded, pid, sessions }",
+    message: (d) => tmsg("msg.pty.daemon.upgrade", { sessions: Number(d.sessions ?? 0) }),
+    errors: ["INTERNAL"],
+    examples: ["sok pty.daemon.upgrade"],
+    handler: async () => (await invoke("pty_daemon_upgrade")) as Record<string, unknown>,
+  });
 }
 
 /** 프로젝트 열림 훅 — 기록된 pid 회수 후, 허용된 데몬만 자동 기동한다(보안 계약). */

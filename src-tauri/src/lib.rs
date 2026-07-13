@@ -21,6 +21,7 @@ mod plugins;
 mod process;
 mod pty;
 mod schedule;
+mod updater;
 mod service;
 mod secrets;
 #[cfg(target_os = "macos")]
@@ -90,6 +91,7 @@ pub fn run() {
         .plugin(tauri_plugin_webview_capture::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(webview_health::WebviewHealth::default())
         .manage(activity::ActivityHub::default())
         .manage(daemon::DaemonManager::default())
@@ -422,6 +424,10 @@ pub fn run() {
             pty::pty_pane_alive,
             pty::pty_daemon_status,
             pty::pty_daemon_restart,
+            pty::pty_daemon_upgrade,
+            updater::update_check,
+            updater::update_apply,
+            updater::app_relaunch,
             pty::pty_sidecar_request,
             pty::pty_read_sealed_screen,
             pty::write_terminal,

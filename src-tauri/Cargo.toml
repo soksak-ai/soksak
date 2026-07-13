@@ -57,6 +57,9 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 tauri-plugin-notification = "2"
 # 딥링크 soksak:// URL 스킴 — 알림/외부 진입을 command URI 로 라우팅(콜드스타트 포함).
 tauri-plugin-deep-link = "2"
+# 자동 업데이트(release 채널만, HOME) — endpoint=gh release latest.json, minisign 서명 검증.
+# 앱 본체 교체+relaunch 는 종료=보존(detach)+복원 사다리로 seamless. debug/dev 는 로컬 빌드라 미사용.
+tauri-plugin-updater = "2"
 # WebSocket capability(net.ws) — Origin 헤더 미전송(브라우저 WebSocket 은 Origin 강제 → webOS 등이 거부).
 # ws:// 평문만(default-features=false → TLS 미포함, 가벼움). 양방향은 split sink/stream + Channel 스트리밍.
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "io-util", "time", "macros"] }
