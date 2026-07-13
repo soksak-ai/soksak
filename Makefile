@@ -46,10 +46,13 @@ icons: ## 앱 아이콘 전체 재생성(SVG→마스터1024 + base/dev/debug �
 dev: cli-dev ## 개발 서버(HMR) + sok-dev. 독 "soksak-dev"+DEV 배지. 플러그인은 ~/.soksak-dev/plugins 단일 폴더(.soksak.json 자기기술) — 외부 폴더 일회 테스트는 plugin.dev.load
 	$(PNPM) tauri dev
 
-build: cli ## 릴리스 번들 빌드 → "soksak.app"(기본 아이콘) + sok
+# 번들 빌드는 spec-gate 를 선행한다 — 코어 프론트는 @soksak-ai/plugin-spec·plugin-api 의 **dist** 를
+# 소비하므로, 소스 타입만 고치고 dist 를 다시 안 빌드하면 tauri 의 pnpm build 가 옛 타입으로 깨진다
+# (typecheck 는 소스를 보고 통과하므로 verify 는 놓친다 — 실측: consumes 추가 후 build-debug 만 실패).
+build: spec-gate cli ## 릴리스 번들 빌드 → "soksak.app"(기본 아이콘) + sok
 	$(PNPM) tauri build --config $(RELEASE_CONFIG)
 
-build-debug: cli-debug ## 디버그 번들 빌드 → "soksak-debug.app"(주황 아이콘) + sok-debug
+build-debug: spec-gate cli-debug ## 디버그 번들 빌드 → "soksak-debug.app"(주황 아이콘) + sok-debug
 	$(PNPM) tauri build --debug --config $(DEBUG_CONFIG)
 
 run: ## 릴리스 soksak.app 실행(새 인스턴스)
