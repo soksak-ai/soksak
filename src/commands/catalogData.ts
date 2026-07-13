@@ -47,6 +47,46 @@ export function registerDataCatalog(): void {
     },
   });
 
+  // 저장소 실황 — 앱 **안의** SQLite 가 답한다. `out of memory` 가 났을 때 무엇이 굶겼는지는 프로세스
+  // 안의 한도·메모리로만 가려진다(밖에서 파일을 열어 보면 판이 달라 답이 갈린다).
+  register("data.stats", {
+    description:
+      "Report the data store as the app's own SQLite sees it: version, heap limits, memory used and highwater, page cache settings, page/freelist counts, and how many indexes sit on the shared records table. Read-only. Use this when a store call answers out of memory — the limits and memory figures say what starved it.",
+    triggers: { ko: "데이터 저장소 상태 통계 메모리 한도" },
+    params: {},
+    returns:
+      "{ sqliteVersion, softHeapLimit, hardHeapLimit, memoryUsed, memoryHighwater, cacheSize, pageSize, pageCount, freelistCount, recordsIndexes }",
+    message: (d) => tmsg("msg.data.stats", { n: Number(d.memoryUsed) }),
+    errors: ["INTERNAL"],
+    examples: ["sok data.stats"],
+    handler: async () => {
+      const s = await invoke<{
+        sqlite_version: string;
+        soft_heap_limit: number;
+        hard_heap_limit: number;
+        memory_used: number;
+        memory_highwater: number;
+        cache_size: number;
+        page_size: number;
+        page_count: number;
+        freelist_count: number;
+        records_indexes: number;
+      }>("data_stats");
+      return {
+        sqliteVersion: s.sqlite_version,
+        softHeapLimit: s.soft_heap_limit,
+        hardHeapLimit: s.hard_heap_limit,
+        memoryUsed: s.memory_used,
+        memoryHighwater: s.memory_highwater,
+        cacheSize: s.cache_size,
+        pageSize: s.page_size,
+        pageCount: s.page_count,
+        freelistCount: s.freelist_count,
+        recordsIndexes: s.records_indexes,
+      };
+    },
+  });
+
   // 저장소 자기 진단 — 부팅 게이트(quick_check)는 인덱스↔테이블 대조를 하지 않아 인덱스 손상을
   // 통과시킨다. 그 상태의 저장소는 읽기는 멀쩡하고 쓰기만 무너진다(실측). 그래서 전수 대조를
   // 사람과 에이전트가 부를 수 있는 표면으로 둔다.

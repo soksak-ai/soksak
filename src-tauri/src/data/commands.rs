@@ -494,6 +494,12 @@ pub fn data_verify(state: State<'_, DbState>) -> Result<Vec<String>, String> {
     with_conn(&state, |c| super::integrity::check(c))
 }
 
+// 저장소 실황 — 앱 안의 SQLite 가 자기 한도·메모리·페이지 상태를 답한다(integrity.rs 머리말).
+#[tauri::command]
+pub fn data_stats(state: State<'_, DbState>) -> Result<super::integrity::Stats, String> {
+    with_conn(&state, |c| super::integrity::stats(c))
+}
+
 // 저장소 치유 — 인덱스를 테이블에서 다시 만든다(REINDEX). 행은 만들지도 지우지도 않는다.
 // 치유 후 다시 진단해 남은 문제를 그대로 싣는다(나았다고 주장만 하지 않는다).
 #[tauri::command]

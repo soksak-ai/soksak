@@ -501,6 +501,7 @@ pub fn run() {
             ai_session::ai_session_lineage,
             data::commands::data_backup,
             data::commands::data_ns_remove,
+            data::commands::data_stats,
             data::commands::data_verify,
             data::commands::data_repair,
             data::commands::data_restore,

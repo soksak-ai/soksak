@@ -46,6 +46,47 @@ pub fn repair(conn: &Connection) -> Result<Repair, String> {
     Ok(Repair { before, after })
 }
 
+/// 저장소 실황 — 앱 **안의** SQLite 가 자기 상태를 답한다. 밖에서 파일을 열어 보는 것은 판이 달라
+/// 답이 갈리고(표현식 인덱스), 한도·메모리는 프로세스 안에서만 알 수 있다. `out of memory` 가 났을 때
+/// 무엇이 굶겼는지는 이 값들로만 가려진다: 힙 한도(누군가 sqlite3_soft/hard_heap_limit 을 걸었는가),
+/// 지금 쓰는 메모리와 최고치, 페이지 캐시 설정, 그리고 SQLite 판(밖의 CLI 와 다르다).
+#[derive(Debug, serde::Serialize)]
+pub struct Stats {
+    pub sqlite_version: String,
+    pub soft_heap_limit: i64,
+    pub hard_heap_limit: i64,
+    pub memory_used: i64,
+    pub memory_highwater: i64,
+    pub cache_size: i64,
+    pub page_size: i64,
+    pub page_count: i64,
+    pub freelist_count: i64,
+    pub records_indexes: i64,
+}
+
+pub fn stats(conn: &Connection) -> Result<Stats, String> {
+    let one = |sql: &str| -> i64 {
+        conn.query_row(sql, [], |r| r.get::<_, i64>(0)).unwrap_or(-1)
+    };
+    let version: String = conn
+        .query_row("SELECT sqlite_version()", [], |r| r.get(0))
+        .map_err(|e| e.to_string())?;
+    Ok(Stats {
+        sqlite_version: version,
+        soft_heap_limit: one("PRAGMA soft_heap_limit"),
+        hard_heap_limit: one("PRAGMA hard_heap_limit"),
+        memory_used: unsafe { rusqlite::ffi::sqlite3_memory_used() },
+        memory_highwater: unsafe { rusqlite::ffi::sqlite3_memory_highwater(0) },
+        cache_size: one("PRAGMA cache_size"),
+        page_size: one("PRAGMA page_size"),
+        page_count: one("PRAGMA page_count"),
+        freelist_count: one("PRAGMA freelist_count"),
+        records_indexes: one(
+            "SELECT count(*) FROM sqlite_master WHERE type='index' AND tbl_name='records'",
+        ),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
