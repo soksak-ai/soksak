@@ -459,6 +459,21 @@ Import JSONL produced by data.export: meta rows call define, record rows upsert,
 sok data.import '{"jsonl":"..."}'
 ```
 
+## `data.ns.remove` (danger: destructive)
+
+Remove a data namespace and everything it made: its records, kv rows, collection definitions, FTS tables and expression indexes. Other namespaces are untouched. Removing a namespace that does not exist is not a failure — it reports zeros. | 데이터 네임스페이스 삭제 회수
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `ns` | string | ✓ | Namespace to remove |
+
+**Returns**: { ns, collections, records, kv }
+**Errors**: INVALID_PARAMS, INTERNAL
+
+```bash
+sok data.ns.remove '{"ns":"plugin:probe-lane"}'
+```
+
 ## `data.query`
 
 Query a collection (read-only). Filter fields must be declared as indexes in define. Use to read or filter stored records. | 데이터 조회 쿼리 검색 목록
@@ -479,6 +494,17 @@ Query a collection (read-only). Filter fields must be declared as indexes in def
 
 ```bash
 sok data.query '{"ns":"soksak-plugin-<id>","coll":"messages","scope":"projA"}'
+```
+
+## `data.repair` (danger: destructive)
+
+Rebuild the data store's indexes from the table rows (REINDEX) and report the problems before and after. Rows are neither created nor deleted. Use when data.verify reports index problems — a store whose indexes are broken reads fine and fails on write. | 데이터 복구 인덱스 재생성 치유
+
+**Returns**: { before: string[], after: string[], healed }
+**Errors**: INTERNAL
+
+```bash
+sok data.repair
 ```
 
 ## `data.restore` (danger: destructive)
@@ -513,6 +539,63 @@ Full-text search a collection using FTS5 trigram (CJK-aware). Queries shorter th
 
 ```bash
 sok data.search '{"ns":"soksak-plugin-<id>","coll":"messages","query":"빌드 실패"}'
+```
+
+## `data.stats`
+
+Report the data store as the app's own SQLite sees it: version, heap limits, memory used and highwater, page cache settings, page/freelist counts, and how many indexes sit on the shared records table. Read-only. Use this when a store call answers out of memory — the limits and memory figures say what starved it. | 데이터 저장소 상태 통계 메모리 한도
+
+**Returns**: { sqliteVersion, softHeapLimit, hardHeapLimit, memoryUsed, memoryHighwater, cacheSize, pageSize, pageCount, freelistCount, recordsIndexes }
+**Errors**: INTERNAL
+
+```bash
+sok data.stats
+```
+
+## `data.verify`
+
+Check the data store for corruption (full integrity check — it cross-checks every index against the table, which the boot check does not). Read-only. Returns the problems SQLite reports; an empty list means the store is sound. | 데이터 무결성 점검 손상 확인
+
+**Returns**: { ok, problems: string[] }
+**Errors**: INTERNAL
+
+```bash
+sok data.verify
+```
+
+## `debug.sleep` (danger: inject)
+
+DEV-ONLY: hold the reply for `ms` then return (ok by default; ok:false when fail=true). Simulates a held-reply process (exec-one onExit) so the scheduler's process_lease lease — no-kill while running, single in-flight, cancel-wakes-wait — can be e2e-tested without a real LLM. Absent in production builds. | 디버그 슬립 대기 보류 테스트 lease 스케줄러
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `fail` | boolean |  | Return ok:false instead of ok:true (exercises backoff/crash path). |
+| `ms` | number |  | Milliseconds to hold the reply before returning (default 3000). |
+
+**Returns**: { slept } (ok:true) | { ok:false } when fail
+**Errors**: INTERNAL
+
+```bash
+sok debug.sleep '{"ms":5000}'
+sok debug.sleep '{"ms":2000,"fail":true}'
+```
+
+## `dev.remoteConfirmMock` (danger: inject)
+
+DEV-ONLY: emit a mock remote destructive confirm request so the desktop RemoteConfirmModal renders without a paired phone. For visual verification and headless E2E only; does not touch the Rust confirm authority. Absent in production builds. | 원격 confirm mock 데스크톱 테스트 모달
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string |  | Command summary to show (default panel.close). |
+| `device_id` | string |  | Requesting device label to show (default iPhone-mock). |
+| `params` | string |  | Optional params summary string to show. |
+| `ttl_secs` | number |  | Countdown seconds to show (default 120). |
+
+**Returns**: { request_id }
+
+```bash
+sok dev.remoteConfirmMock
+sok dev.remoteConfirmMock '{"command":"terminal.clear","device_id":"Pixel-9"}'
 ```
 
 ## `editor.close`
@@ -871,7 +954,7 @@ Split a panel — add a new panel beside the target on a given side (optionally 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `panel` | string |  | Target panel id (omit = caller's context panel) |
-| `program` | string |  | Program id — plugin-registered only (see program.list; no built-in default). Unregistered id falls back to terminal view [default "terminal"] |
+| `program` | string |  | Program id — plugin-registered only (see program.list; no built-in default). Omitted or unregistered id opens a blank panel |
 | `project` | string |  | Target project id (omit = caller's context project) |
 | `side` | string | ✓ | Split direction (left|right|top|bottom) |
 
@@ -906,7 +989,7 @@ Report a plugin's declared-vs-actual conformance: manifest declarations vs what 
 |---|---|---|---|
 | `id` | string | ✓ | 플러그인 id |
 
-**Returns**: { id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan }, implements: { declared, violations }, c2: { violations: [{ rule, detail }], viewStatus: { mounted, reported, unreported, undeclared: [{ viewId, view, code }] } } }
+**Returns**: { id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan }, implements: { declared, violations }, c2: { violations: [{ rule, detail }], viewStatus: { mounted, reported, unreported, undeclared: [{ viewId, view, code }] } }, calls: { literals, dynamic, unresolved } }
 
 ```bash
 sok plugin.conformance soksak-plugin-<id>
@@ -1067,18 +1150,18 @@ sok plugin.enable '{"id":"soksak-plugin-<id>"}'
 
 ## `plugin.implementers`
 
-Find plugins by the contract they implement (manifest implements, coupling law C3 L2 contract-pin). With contract, returns every installed plugin declaring that exact contract id "<scope>-spec@<major>" with its runtime status; without, maps every declared contract to its implementers. Discovery is contract-addressed and implementation-blind — resolve implementers here instead of hardcoding plugin ids. | 플러그인 계약 구현체 발견 구현 스펙 컨트랙트
+Find plugins by the contract they implement (manifest implements, coupling law C3 L2 contract-pin). With contract, returns every installed plugin declaring that exact contract id "soksak-spec-<kind>-<domain>@<major>" with its runtime status; without, maps every declared contract to its implementers. Discovery is contract-addressed and implementation-blind — resolve implementers here instead of hardcoding plugin ids. | 플러그인 계약 구현체 발견 구현 스펙 컨트랙트
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `contract` | string |  | Contract id "<scope>-spec@<major>" (exact major — @2 does not answer for @1). Omit to list every declared contract with its implementers. |
+| `contract` | string |  | Contract id "soksak-spec-<kind>-<domain>@<major>" (exact major — @2 does not answer for @1). Omit to list every declared contract with its implementers. |
 
 **Returns**: { contract, implementers: [{id, version, status}] } (contract given) | { contracts: [{contract, implementers}] } (omitted)
 **Errors**: INVALID_PARAMS
 
 ```bash
 sok plugin.implementers
-sok plugin.implementers '{"contract":"<scope>-spec@1"}'
+sok plugin.implementers '{"contract":"soksak-spec-plugin-git@1"}'
 ```
 
 ## `plugin.install` (danger: destructive)
@@ -1110,7 +1193,7 @@ sok plugin.list
 
 ## `plugin.reload`
 
-Rescan the plugins directory and reactivate every plugin whose consent is still valid; the response reports which manifests were rejected during the rescan and why. With id, reload only that one plugin instead (disable then re-enable it — same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. Use after manually editing plugin files or adding new plugin folders. | 플러그인 재적재 리로드 새로고침
+Rescan the plugins directory and reactivate every plugin whose consent is still valid; the response reports which manifests were rejected during the rescan and why. With id, reload only that one plugin instead: its plugin.json is read from disk again and re-validated, then the plugin is disabled and re-enabled (same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. A manifest that no longer validates is refused with its reason instead of activating fresh code against a stale declaration. Use after manually editing plugin files or adding new plugin folders. | 플러그인 재적재 리로드 새로고침
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -1476,6 +1559,17 @@ Report the PTY session daemon (soksak-ptyd): whether it is running, its pid and 
 sok pty.daemon.status
 ```
 
+## `pty.daemon.upgrade`
+
+Hot-upgrade the PTY session daemon in place — no restart, no lost sessions. The running daemon stages the new binary, hands each live shell's master fd to a new daemon by fd inheritance (the shell never sees a SIGHUP), then exits. Distinct from pty.daemon.restart, which kills every shell. Use it to roll a new ptyd generation without disturbing open terminals. | pty데몬 판올림 무중단 업그레이드 데몬 핫스왑
+
+**Returns**: { upgraded, pid, sessions }
+**Errors**: INTERNAL
+
+```bash
+sok pty.daemon.upgrade
+```
+
 ## `remote.confirm` (danger: destructive)
 
 Show the desktop human confirm modal for a destructive remote action and await the decision (approve/deny). Called by the remote-iroh sidecar over the socket: the sidecar owns the confirm authority (parking, TTL, token issuance) and delegates only the human decision here. The phone cannot self-approve — the decision comes only from this desktop modal. Returns { approve }. | 원격 destructive 데스크톱 사람 confirm 모달 승인 거부
@@ -1695,6 +1789,22 @@ Unlock the secret vault with a master passphrase (creates a new vault if one doe
 sok secret.unlock '{"passphrase":"correct horse battery staple"}'
 ```
 
+## `service.status`
+
+Report resident plugin services and their live status. Without `plugin`: { services: [{ plugin, status, ops, inflight, generation, secretDependent }] }. With `plugin`: { plugin, status } for that one. status is one of spawning|ready|draining|backoff:<n>|error:<reason>|stopped. Use to confirm a service is up, catch a crash/backoff loop, or watch a drain restart. | 상주 서비스 상태 조회 확인
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `plugin` | string |  | Plugin id to query one service; omit for all. |
+
+**Returns**: { services: [{ plugin, status, ops, inflight, generation, secretDependent }] } or { plugin, status }
+**Errors**: INTERNAL
+
+```bash
+sok service.status
+sok service.status '{"plugin":"<plugin-id>"}'
+```
+
 ## `settings.get`
 
 Retrieve all application settings. | 설정 확인 앱 조회 환경설정
@@ -1826,7 +1936,7 @@ Create a new space tab. Program priority: explicit > project setting > global se
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `program` | string |  | Program id — plugin-registered only (see program.list; no built-in default). Unregistered id falls back to terminal view |
+| `program` | string |  | Program id — plugin-registered only (see program.list; no built-in default). Omitted or unregistered id opens a blank panel |
 | `project` | string |  | Target project id (omit = caller's context project) |
 
 **Returns**: { spaceId, panelId, viewId, paneId? }
@@ -2117,6 +2227,16 @@ Look up which border rules apply to a given DOM selector according to the contra
 sok ui.expect '{"selector":".egroup-status"}'
 ```
 
+## `ui.focus.state`
+
+Return the keyboard-focus owner through the public view-host boundary: the requested view, whether its provider is mounted/delivered, and the view containing document.activeElement. Use after real-device input to verify that focus settled in the intended view without querying plugin-private DOM. | 키보드 포커스 소유자 활성 뷰 상태
+
+**Returns**: { requestedViewId, mounted, delivered, activeViewId, settled, activeElement }
+
+```bash
+sok ui.focus.state
+```
+
 ## `ui.hit`
 
 Return the topmost DOM element at viewport x,y (tag, classes, data-* attrs, rect) — hit-test diagnostics for drag/click E2E (what would elementFromPoint see?).
@@ -2258,6 +2378,36 @@ sok ui.validate
 sok ui.validate '{"rule":"status"}'
 ```
 
+## `update.apply` (danger: destructive)
+
+Apply updates across every hot axis, least-disruptive first: installed plugins (git pull + reload, zero restart), then any sidecar assets you name, then the PTY daemon (fd-handoff drain — live shells survive with no SIGHUP), then the app body last (download + install + relaunch — release channel only, the restoration ladder brings windows and terminals back). Each axis is announced on the activity bus. On a debug/dev home the app-body step is skipped (its build is local). Omit a flag to run that axis; set it false to skip it. The app body relaunches only when a newer release actually exists. | 업데이트 적용 설치 새 버전 갱신 핫스왑
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `app` | boolean |  | Update the app body (release channel only). Default true. |
+| `daemon` | boolean |  | Hot-upgrade the PTY daemon (fd-handoff drain). Default true. |
+| `plugins` | boolean |  | Update installed plugins (git pull + reload). Default true. |
+| `sidecars` | json |  | Sidecar assets to ensure: [{ name, url, sha256 }]. Default none. |
+
+**Returns**: { applied: [{ axis, ... }], skipped: [{ axis, reason }] }
+**Errors**: INTERNAL
+
+```bash
+sok update.apply
+sok update.apply '{"app":false}'
+```
+
+## `update.check`
+
+Survey what can be updated without applying anything. Reports the app body (release channel only — a debug/dev build has no remote updater and comes back available:false), plus a count of the hot axes update.apply can roll: installed plugins and the running PTY daemon. Read this first; update.apply does the work. | 업데이트 점검 확인 새 버전
+
+**Returns**: { channel, app: { available, version? }, plugins: { installed }, daemon: { running, sessions? } }
+**Errors**: INTERNAL
+
+```bash
+sok update.check
+```
+
 ## `view.activate`
 
 Activate (switch to) a specific view tab. | 탭 전환 선택 뷰 활성화
@@ -2374,7 +2524,7 @@ Open a new view tab in a panel by program id (terminal / claude / codex / a plug
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `panel` | string |  | Target panel id (omit = caller's context panel) |
-| `program` | string | ✓ | Program id — plugin-registered only (see program.list; no built-in default). Unregistered id falls back to terminal view |
+| `program` | string | ✓ | Program id — plugin-registered only (see program.list; no built-in default). Omitted or unregistered id opens a blank panel |
 
 **Returns**: { panelId, viewId, paneId? }
 **Errors**: TARGET_NOT_FOUND
