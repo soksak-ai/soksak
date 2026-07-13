@@ -63,9 +63,10 @@ git/clipboard/ai.session) and removes the violators.
      standard, so it takes no `<name>`. It holds the contract text, the acceptance suite that
      decides conformance, and the domain's benchmarks; it ships no binary, enters no registry,
      and is consumed only as a build-time dev-dependency by the units it governs. Nothing
-     runtime, nothing installed. The **contract id** it defines keeps the governed unit's
-     grammar (`soksak-sidecar-terminal-spec@1`, §8) — an identifier string, not a repository
-     name; the two differ on purpose.
+     runtime, nothing installed. The **contract id** it defines is `soksak-spec-<kind>-<domain>@<major>`
+     (§8) — a sidecar wire contract keeps the sidecar kind (`soksak-spec-sidecar-terminal@1`),
+     an L2 domain contract drops it (`soksak-spec-plugin-git@1`); either way it is an identifier
+     string, not a repository name, and the two differ on purpose.
    - Vocabulary-collision ban: a name token already meaning something else inside this
      project is rejected even when it is the textbook term. Grep before naming. Burned
      tokens (browser kit case): `chrome` (Chrome browser), `shell` (terminal shell —
@@ -178,7 +179,7 @@ break the symmetry law (file = command prefix: `webview_open`, not `webview_host
 | `SOKSAK_CEF`, `SOKSAK_CEF_NO_TICK`, `SOKSAK_CEF_FRAMEWORK`, `SOKSAK_CEF_HELPER`, `SOKSAK_CEF_MAIN_BUNDLE` | **deleted** (sidecar derives paths from its own location; diagnostics move to `SOKSAK_SIDECAR_BROWSER_CHROMIUM_*` — {NAME} is the full sidecar name) | env |
 | `soksak-plugin-browser-cef` | `soksak-plugin-browser-chromium` | plugin |
 | `soksak-sidecar-chromium` (initial publish) | `soksak-sidecar-browser-chromium` | sidecar artifact — unified with the plugin shape |
-| `soksak-engine-chromium@1` → `soksak-sidecar-browser@1` (both rejected) | `soksak-sidecar-browser-spec@1` | contract id — §8 |
+| `soksak-engine-chromium@1` → `soksak-sidecar-browser@1` (both rejected) | `soksak-spec-sidecar-browser@1` | contract id — §8 (sidecar wire) |
 | `sheet.*` registry family (activate/close/create/list/rename/switchScan), `tab/sheet/<n>` node addresses, `msg.sheet.*`/`cmd.sheet.*` keys, plugin event payload `activeSheetId`, UI word "시트" | `space.*`, `tab/space/<n>`, `msg.space.*`/`cmd.space.*`, `activeSpaceId`, "스페이스" | concept — a project's content tab is a Space (Studio rejected); `c*` ids and snapshot keys unchanged |
 | `sessions.renameTab` | `sessions.renameProject` | internal — it renames a ProjectTab; "tab" meant a different thing on every layer |
 | `soksak-browser-kit` | `soksak-kit-browser-common` | kit — unified with the unit grammar (§1.4a: kind-first + part name; intermediates burned: `-shell` terminal-shell collision, `-chassis` forced metaphor); registrar moved `~/ai/cli/` → `~/.soksak-dev/kits/` |
@@ -196,17 +197,17 @@ engine name on the incumbent — `terminal` alone no longer says which engine.
 |---|---|---|
 | `soksak-plugin-terminal` | `soksak-plugin-terminal-xterm` | plugin — rule 4 (engine name on a replaceable seam) |
 | program `terminal` | program `terminal-xterm` | program id |
-| (none — new seam contract) | `terminal-spec@1` | contract id — §8 |
+| (none — new seam contract) | `soksak-spec-plugin-terminal@1` | contract id — §8 |
 
 The plugin-id rename moves its registrar folder in lockstep
 (`~/.soksak-dev/plugins/soksak-plugin-terminal-xterm`, dir = id, §1.4a).
 
-`terminal-spec@1` is the terminal domain's view contract — a view that provides a
+`soksak-spec-plugin-terminal@1` is the terminal domain's view contract — a view that provides a
 `content` surface and supports `app.pty` PTY round-trip and `command` autorun.
 Consumers reference the contract, never a plugin id; the core resolves it to an
 implementer, so the core names no engine and a new engine joins by declaring
 `implements`, not by a core edit. The scope is the bare domain `terminal` (not
-`soksak-plugin-terminal-spec@1`): the id appears in core source as a program's
+`soksak-plugin-soksak-spec-plugin-terminal@1`): the id appears in core source as a program's
 `viewContract`, and §8/PS6 bars a core-source contract id from matching the
 plugin-id grammar.
 
@@ -287,34 +288,55 @@ without explanation. An artifact-family shape must never be used for a
 non-artifact — a contract string shaped like `soksak-sidecar-<x>` reads as a
 sidecar that does not exist.
 
-A contract id is therefore derived, never invented: **`<scope>-spec@<major>`** —
-the scope it governs plus the mandatory kind marker `-spec`. It is an identifier
-string, never a repository name: the repository that carries a contract's text
-and its acceptance suite is a `contract`-kind unit named after the domain it
-standardizes (`soksak-contract-terminal` holds `soksak-sidecar-terminal-spec@1`,
-§4a). The archetype is
-`soksak-plugin-spec@1` (the contract of soksak plugins). Applied here:
-`soksak-sidecar-browser-spec@1` = the contract of browser-domain sidecars, read
-directly off the artifact it pairs with (`soksak-sidecar-browser-chromium` minus
-the engine, plus `-spec`). The scope names the domain, never the implementation
-(a protocol-compatible replacement engine must not self-report someone else's
-name) and never the model (models are machine-encoded, banned from names —
-SIDECARS.md §1). Its sole job is the version handshake between
+A contract id is therefore derived, never invented: **`soksak-spec-<kind>-<domain>@<major>`**.
+The `soksak-spec-` prefix always comes first — it declares the string is a
+contract id; the `<kind>` that follows is one of `sidecar`, `plugin`, or `service`,
+and `<domain>` names what the contract governs. The regex enforces the kind
+vocabulary (`CONTRACT_ID_RE`, packages/plugin-spec/src/contracts.ts): an arbitrary
+token (say `fixture`) is not a kind and is rejected, and a new kind arrives only by
+amending the regex (C4 re-legislation). A contract id is an identifier string, never
+a repository name: the repository that carries a contract's text and its acceptance
+suite is a `contract`-kind unit named after the domain it standardizes
+(`soksak-contract-terminal`, §4a). So two layers nest — `soksak-contract-<domain>`
+(the repo that owns the spec, its golden, its bench) ⊃ `soksak-spec-<…>` (the
+contract's id string and its spec-as-code crate). `contract` is the owning home;
+`spec` is the contract's name and code. **The kind names what the contract
+standardizes, not who implements it:**
+
+- A **sidecar wire contract** — the handshake between a plugin's JS and a
+  specific sidecar dylib (`sidecars[].interface`) — carries kind `sidecar`:
+  `soksak-spec-sidecar-<domain>@<major>` (`soksak-spec-sidecar-terminal@1`). This
+  is the contract of one sidecar shape, not a domain-wide standard.
+- An **L2 domain contract** — the domain standard a conforming implementation
+  declares through `implements`/`consumes` — carries kind `plugin` (every domain
+  L2 is implemented by a plugin): `soksak-spec-plugin-<domain>@<major>`
+  (`soksak-spec-plugin-git@1`, `soksak-spec-plugin-browser@1`,
+  `soksak-spec-plugin-narration@1`, the terminal seam `soksak-spec-plugin-terminal@1`).
+  A domain can hold both at once: browser has a sidecar wire
+  (`soksak-spec-sidecar-browser@1`, chromium's dylib handshake) and a domain L2
+  (`soksak-spec-plugin-browser@1`); the kind segment keeps them distinct.
+
+The archetypes `soksak-spec-plugin@1` (the plugin manifest) and
+`soksak-spec-service@1` (the service wire) name a kind that IS its own domain, so
+the domain segment is omitted. The domain names the domain, never the
+implementation (a protocol-compatible replacement engine must not self-report
+someone else's name) and never the model (models are machine-encoded, banned from
+names — SIDECARS.md §1). Its sole job is the version handshake between
 independently-shipped artifacts. It appears in exactly five declared surfaces:
 the sidecar handshake (`sidecars[].interface` — plugin JS ↔ engine dylib), the
 plugin manifest's `implements` declaration (`implements:
-["<scope>-spec@<major>"]` — the L2 contract-pin PROVIDER side, C3: a plugin
-declares the contracts it implements, and discovery is contract-addressed and
-implementation-blind), the plugin service declaration
-(`service.interface` — the resident-process wire the core frames,
-docs/PLUGIN-SERVICE.md PS5/PS6), and a program's `viewContract`
-(`contributes.programs[].viewContract: "<scope>-spec@<major>"` — the L2
-contract-pin CONSUMER side, the counterpart to `implements`: a program targets
-a contract-view instead of a plugin id (`viewPlugin`), and the core resolves the
-contract to a user-selected active implementer, so the core names no engine and
-a new engine joins by declaring `implements`, not by a core edit — the terminal
-seam `terminal-spec@1`, §4), and the plugin manifest's `consumes` declaration
-(`consumes: ["<scope>-spec@<major>"]` — the L2 contract-pin CALL side: the core's
+["soksak-spec-<kind>-<domain>@<major>"]` — the L2 contract-pin PROVIDER side, C3: a
+plugin declares the contracts it implements, and discovery is contract-addressed
+and implementation-blind), the plugin service declaration (`service.interface` —
+the resident-process wire the core frames, docs/PLUGIN-SERVICE.md PS5/PS6), a
+program's `viewContract` (`contributes.programs[].viewContract:
+"soksak-spec-<kind>-<domain>@<major>"` — the L2 contract-pin CONSUMER side, the
+counterpart to `implements`: a program targets a contract-view instead of a plugin
+id (`viewPlugin`), and the core resolves the contract to a user-selected active
+implementer, so the core names no engine and a new engine joins by declaring
+`implements`, not by a core edit — the terminal seam `soksak-spec-plugin-terminal@1`,
+§4), and the plugin manifest's `consumes` declaration (`consumes:
+["soksak-spec-<kind>-<domain>@<major>"]` — the L2 contract-pin CALL side: the core's
 cross-plugin call boundary admits a call when the caller declares the contract and
 the target declares `implements` for it, so a consumer names the contract instead of
 the implementer and a second implementer needs no manifest edit anywhere). This
@@ -324,9 +346,20 @@ decoration: a plugin could already find implementers by contract
 (`plugin.implementers`), but the call boundary only honoured `dependencies` — an
 implementer id — so every contract-pinned consumer still had to name one
 implementation, and a second one was denied at runtime. The boundary is unchanged;
-what it reads changed, from a name to a contract. A contract id that appears in core source
-must never match the plugin-id grammar the C1 scan sanctions (PS6 —
-`soksak-service-spec@1`, not `soksak-plugin-…`). It appears nowhere else. A
-major bump mints a distinct id — `<scope>-spec@2` promises nothing about `@1`;
-revising this section's surface list is itself re-legislation (C4), never a
-silent addition.
+what it reads changed, from a name to a contract. Because every contract id begins
+with `soksak-spec-`, a contract id in core source never matches the plugin-id
+grammar the C1 scan sanctions (`soksak-plugin-<name>`), so the terminal seam id
+lives in core source (`soksak-spec-plugin-terminal@1`, terminalEngine.ts) without a
+C1 exception. It appears nowhere else. A major bump mints a distinct id —
+`soksak-spec-<…>@2` promises nothing about `@1`; revising this section's surface
+list, or the kind vocabulary, is itself re-legislation (C4), never a silent
+addition.
+
+**Wire-contract crates.** The Rust single-truth for a wire contract (version
+constants + serde types, no transport code) is a crate named `soksak-spec-<domain>`:
+`soksak-spec-socket` (the app↔client socket protocol), `soksak-spec-pty` (app↔ptyd),
+`soksak-spec-service` (app↔service binary). The crate carries no `@major` — a Cargo
+package name cannot — so it never collides with the contract id it defines
+(`soksak-spec-service` the crate ⊃ `soksak-spec-service@1` the id, told apart by the
+`@`). These crates are the spec written as Rust types, not an implementation, so
+`spec` is honest; the retired `proto`/`protocol` suffixes are gone.

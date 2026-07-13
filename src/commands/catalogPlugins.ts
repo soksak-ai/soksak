@@ -445,13 +445,13 @@ export function registerPluginCatalog(): void {
 
   register("plugin.implementers", {
     description:
-      'Find plugins by the contract they implement (manifest implements, coupling law C3 L2 contract-pin). With contract, returns every installed plugin declaring that exact contract id "<scope>-spec@<major>" with its runtime status; without, maps every declared contract to its implementers. Discovery is contract-addressed and implementation-blind — resolve implementers here instead of hardcoding plugin ids.',
+      'Find plugins by the contract they implement (manifest implements, coupling law C3 L2 contract-pin). With contract, returns every installed plugin declaring that exact contract id "soksak-spec-<kind>-<domain>@<major>" with its runtime status; without, maps every declared contract to its implementers. Discovery is contract-addressed and implementation-blind — resolve implementers here instead of hardcoding plugin ids.',
     triggers: { ko: "플러그인 계약 구현체 발견 구현 스펙 컨트랙트" },
     params: {
       contract: {
         type: "string",
         description:
-          'Contract id "<scope>-spec@<major>" (exact major — @2 does not answer for @1). Omit to list every declared contract with its implementers.',
+          'Contract id "soksak-spec-<kind>-<domain>@<major>" (exact major — @2 does not answer for @1). Omit to list every declared contract with its implementers.',
       },
     },
     returns:
@@ -468,7 +468,7 @@ export function registerPluginCatalog(): void {
     errors: ["INVALID_PARAMS"],
     examples: [
       "sok plugin.implementers",
-      'sok plugin.implementers \'{"contract":"<scope>-spec@1"}\'',
+      'sok plugin.implementers \'{"contract":"soksak-spec-plugin-git@1"}\'',
     ],
     handler: (p) => {
       const nodes = implementsNodes();
@@ -480,7 +480,7 @@ export function registerPluginCatalog(): void {
           : {};
       if (contract === undefined) return { ...note, contracts: allContracts(nodes) };
       if (!CONTRACT_ID_RE.test(contract)) {
-        return invalid(`계약 id 문법 위반(<scope>-spec@<major>): ${contract}`);
+        return invalid(`계약 id 문법 위반(soksak-spec-<kind>-<domain>@<major>): ${contract}`);
       }
       const installed = usePlugins.getState().plugins;
       return {

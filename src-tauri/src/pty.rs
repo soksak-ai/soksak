@@ -12,7 +12,7 @@
 // 끊기고, control ping 한 번으로 "셸 정상 종료"와 "데몬 사망"을 가른 뒤 재스폰을
 // 시도하고 고지한다.
 //
-// 플로우 컨트롤 워터마크는 soksak-pty-proto 가 단일진실이다(두 백엔드 공용):
+// 플로우 컨트롤 워터마크는 soksak-spec-pty 가 단일진실이다(두 백엔드 공용):
 //   - 미확인(unacked) 바이트가 HIGH 이상이면 reader 일시정지
 //   - 프론트가 보낸 ack 로 unacked 가 LOW 이하로 떨어지면 재개
 // 프론트는 xterm.write 콜백(파싱 완료)에서 5k 바이트마다 ack 를 보낸다.
@@ -26,7 +26,7 @@ use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize}
 use tauri::ipc::{Channel, InvokeResponseBody};
 use tauri::State;
 
-use soksak_pty_proto::{HIGH_WATERMARK, LOW_WATERMARK};
+use soksak_spec_pty::{HIGH_WATERMARK, LOW_WATERMARK};
 
 struct FlowState {
     unacked: usize,
@@ -122,7 +122,7 @@ impl PtyManager {
                         // 명시 detach(예의) — 앱 소켓이 곧 닫히므로 데몬은 어차피 EOF 로
                         // 부착을 해제한다. 실패해도 생존에는 영향 없다.
                         let _ = self.link.request(
-                            &soksak_pty_proto::Request::Detach { session },
+                            &soksak_spec_pty::Request::Detach { session },
                             false,
                         );
                     }
@@ -162,7 +162,7 @@ impl PtyManager {
         #[cfg(unix)]
         {
             let _ = self.link.request(
-                &soksak_pty_proto::Request::KillByWindow { window_label: label.to_string() },
+                &soksak_spec_pty::Request::KillByWindow { window_label: label.to_string() },
                 false,
             );
         }
@@ -453,7 +453,7 @@ pub fn pty_pane_pid(pane_id: String, manager: State<'_, PtyManager>) -> Option<i
     if daemon_backed {
         let v = manager
             .link
-            .request(&soksak_pty_proto::Request::PanePid { pane_id }, false)
+            .request(&soksak_spec_pty::Request::PanePid { pane_id }, false)
             .ok()?;
         return v.get("pid").and_then(|p| p.as_i64()).map(|p| p as i32);
     }
@@ -473,7 +473,7 @@ pub fn pty_pane_alive(pane_id: String, manager: State<'_, PtyManager>) -> bool {
     {
         return manager
             .link
-            .request(&soksak_pty_proto::Request::PanePid { pane_id }, false)
+            .request(&soksak_spec_pty::Request::PanePid { pane_id }, false)
             .is_ok();
     }
     #[cfg(not(unix))]
@@ -542,7 +542,7 @@ pub fn write_terminal(
         #[cfg(unix)]
         Backend::Daemon { session } => {
             use base64::Engine as _;
-            let req = soksak_pty_proto::Request::Write {
+            let req = soksak_spec_pty::Request::Write {
                 session: *session,
                 data_b64: base64::engine::general_purpose::STANDARD.encode(data.as_bytes()),
             };
@@ -573,7 +573,7 @@ pub fn resize_terminal(
             .map_err(|e| e.to_string()),
         #[cfg(unix)]
         Backend::Daemon { session } => {
-            let req = soksak_pty_proto::Request::Resize { session: *session, cols, rows };
+            let req = soksak_spec_pty::Request::Resize { session: *session, cols, rows };
             drop(sessions);
             manager.link.request(&req, false).map(|_| ())
         }
@@ -597,7 +597,7 @@ pub fn ack_terminal(id: u32, bytes: usize, manager: State<'_, PtyManager>) -> Re
         }
         #[cfg(unix)]
         Backend::Daemon { session } => {
-            let req = soksak_pty_proto::Request::Ack { session: *session, bytes: bytes as u64 };
+            let req = soksak_spec_pty::Request::Ack { session: *session, bytes: bytes as u64 };
             drop(sessions);
             manager.link.request(&req, false).map(|_| ())
         }
@@ -625,7 +625,7 @@ pub fn close_terminal(id: u32, manager: State<'_, PtyManager>) -> Result<(), Str
                 // (데몬도 함께 죽었다면 세션도 없다).
                 let _ = manager
                     .link
-                    .request(&soksak_pty_proto::Request::Kill { session }, false);
+                    .request(&soksak_spec_pty::Request::Kill { session }, false);
             }
         }
     }
@@ -644,9 +644,9 @@ pub fn pty_daemon_status(app: tauri::AppHandle) -> Result<serde_json::Value, Str
         use serde_json::json;
         let manager = tauri::Manager::state::<PtyManager>(&app);
         let home = crate::home::soksak_home();
-        let staged = soksak_pty_proto::staged_bin_path(&home);
+        let staged = soksak_spec_pty::staged_bin_path(&home);
         let (running, pid, sessions) =
-            match manager.link.request(&soksak_pty_proto::Request::Ping, false) {
+            match manager.link.request(&soksak_spec_pty::Request::Ping, false) {
                 Ok(v) => (true, v["pid"].as_u64(), v["sessions"].as_u64()),
                 Err(_) => (false, None, None),
             };
@@ -654,7 +654,7 @@ pub fn pty_daemon_status(app: tauri::AppHandle) -> Result<serde_json::Value, Str
             "running": running,
             "pid": pid,
             "sessions": sessions,
-            "protocol": soksak_pty_proto::PTYD_PROTOCOL_VERSION,
+            "protocol": soksak_spec_pty::PTYD_PROTOCOL_VERSION,
             "staged": staged.exists(),
             "stagedPath": staged.to_string_lossy(),
         }))
@@ -665,7 +665,7 @@ pub fn pty_daemon_status(app: tauri::AppHandle) -> Result<serde_json::Value, Str
         Ok(serde_json::json!({
             "running": false,
             "supported": false,
-            "protocol": soksak_pty_proto::PTYD_PROTOCOL_VERSION,
+            "protocol": soksak_spec_pty::PTYD_PROTOCOL_VERSION,
         }))
     }
 }
@@ -679,14 +679,14 @@ pub fn pty_daemon_restart(app: tauri::AppHandle) -> Result<serde_json::Value, St
         // 살아 있으면 종료(전 세션 kill — 파괴적임을 카탈로그가 게이트한다).
         let killed = manager
             .link
-            .request(&soksak_pty_proto::Request::Shutdown, false)
+            .request(&soksak_spec_pty::Request::Shutdown, false)
             .ok()
             .and_then(|v| v["killed"].as_u64())
             .unwrap_or(0);
         // 옛 데몬의 종료 유예(응답 후 150ms)를 넘겨 싱글턴 프로브 오인을 피한다 —
         // 재기동 1회 한정의 유한 대기(상시 감시 아님).
         std::thread::sleep(std::time::Duration::from_millis(400));
-        let v = manager.link.request(&soksak_pty_proto::Request::Ping, true)?;
+        let v = manager.link.request(&soksak_spec_pty::Request::Ping, true)?;
         Ok(json!({ "killed": killed, "pid": v["pid"] }))
     }
     #[cfg(not(unix))]
@@ -726,7 +726,7 @@ pub fn shell_which(bin: String) -> bool {
     }
 }
 
-// ── soksak-ptyd 클라이언트(전송) — 계약은 soksak-pty-proto 가 정본 ────────────
+// ── soksak-ptyd 클라이언트(전송) — 계약은 soksak-spec-pty 가 정본 ────────────
 #[cfg(unix)]
 mod daemon {
     use std::io::{BufRead, BufReader, Read, Write};
@@ -737,7 +737,7 @@ mod daemon {
     use std::sync::Mutex;
 
     use serde_json::{json, Value};
-    use soksak_pty_proto as proto;
+    use soksak_spec_pty as proto;
     use tauri::ipc::{Channel, InvokeResponseBody};
 
     // control 연결 1본(요청-응답 직렬) — 명령 빈도가 낮아(입력·리사이즈·ack) 충분하다.

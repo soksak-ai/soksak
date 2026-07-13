@@ -1,5 +1,5 @@
 {
-  "spec": "soksak-plugin-spec@1",
+  "spec": "soksak-spec-plugin@1",
   "id": "valid-viewcontract",
   "name": "Valid ViewContract Fixture",
   "version": "0.1.0",
@@ -13,7 +13,7 @@
         "title": "Agent",
         "kind": "view",
         "view": "content",
-        "viewContract": "terminal-spec@1"
+        "viewContract": "soksak-spec-plugin-terminal@1"
       }
     ]
   }

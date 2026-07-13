@@ -9,7 +9,7 @@
 
 use rusqlite::Connection;
 use serde_json::Value;
-use soksak_protocol::Lang;
+use soksak_spec_socket::Lang;
 use tauri::{AppHandle, Manager};
 
 use crate::data;

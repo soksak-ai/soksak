@@ -267,7 +267,7 @@ describe("addProject — 초기 program", () => {
 describe("addViewToGroup — viewContract(계약-핀) 해소", () => {
   const XTERM = "soksak-plugin-terminal-xterm";
   const GHOSTTY = "soksak-plugin-terminal-ghostty";
-  const CONTRACT = "terminal-spec@1";
+  const CONTRACT = "soksak-spec-plugin-terminal@1";
 
   // 픽스처 런타임 — 실 스키마 게이트(parseManifest)를 통과시킨다(implements 는 스펙 검증 필드).
   function fixtureRuntime(
@@ -277,7 +277,7 @@ describe("addViewToGroup — viewContract(계약-핀) 해소", () => {
   ): PluginRuntime {
     const { manifest, validation } = parseManifest(
       {
-        spec: "soksak-plugin-spec@1",
+        spec: "soksak-spec-plugin@1",
         id,
         name: "픽스처",
         version: "1.0.0",

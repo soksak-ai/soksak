@@ -267,7 +267,7 @@ fn run_events(args: &[String]) -> ExitCode {
 }
 
 // 요청 봉투 빌더(순수) — 모든 소켓 요청(단발 왕복·events 구독·MCP 위임)이 여기서 태어난다.
-// 봉투 계약의 단일 지점: protocol 판 선언(soksak-protocol, 앱 VERSION_SKEW 게이트의 재료)을
+// 봉투 계약의 단일 지점: protocol 판 선언(soksak-spec-socket, 앱 VERSION_SKEW 게이트의 재료)을
 // 빠짐없이 싣고, 선택 필드(pane/window/parent/timeoutMs)는 값이 있을 때만 실린다.
 fn build_request(
     method: &str,
@@ -281,7 +281,7 @@ fn build_request(
         "id": 1,
         "method": method,
         "params": params,
-        "protocol": soksak_protocol::SOCKET_PROTOCOL_VERSION,
+        "protocol": soksak_spec_socket::SOCKET_PROTOCOL_VERSION,
     });
     if let Some(p) = pane {
         req["pane"] = json!(p);
@@ -304,19 +304,19 @@ fn build_request(
 // sok 은 앱과 무관한 단독 실행 도구다 — 판정 문장의 언어는 이 셸의 로케일(LC_ALL 우선, 없으면
 // LANG)로 정한다. 소켓 연결 이전에도 정해지고(부재=영어), 앱 언어 설정과 독립이다(사람이 sok 을
 // 치는 터미널의 로케일이 그가 읽을 언어다). 메시지 생성 시점 1회 조회 — 폴링 없음.
-fn env_lang() -> soksak_protocol::Lang {
+fn env_lang() -> soksak_spec_socket::Lang {
     let tag = std::env::var("LC_ALL")
         .ok()
         .filter(|s| !s.is_empty())
         .or_else(|| std::env::var("LANG").ok())
         .unwrap_or_default();
-    soksak_protocol::Lang::from_tag(&tag)
+    soksak_spec_socket::Lang::from_tag(&tag)
 }
 
 // 호환 요약(순수) — 판정이 호환일 때 stderr 로 나가는 사람 표면. 판 숫자는 언어 독립,
 // 문장은 해소한다. 협상 이전 앱(hello 를 프론트로 흘림)은 판 0 으로 판별되므로 그 사실을 덧붙인다.
-fn hello_summary(lang: soksak_protocol::Lang, own: u32, peer: u32, answered: bool) -> String {
-    use soksak_protocol::Lang;
+fn hello_summary(lang: soksak_spec_socket::Lang, own: u32, peer: u32, answered: bool) -> String {
+    use soksak_spec_socket::Lang;
     match lang {
         Lang::En => format!(
             "compatible — sok protocol {own}, app protocol {peer}{}",
@@ -329,8 +329,8 @@ fn hello_summary(lang: soksak_protocol::Lang, own: u32, peer: u32, answered: boo
     }
 }
 
-fn judge_hello_reply(reply: &Value, lang: soksak_protocol::Lang) -> Result<String, String> {
-    use soksak_protocol::{
+fn judge_hello_reply(reply: &Value, lang: soksak_spec_socket::Lang) -> Result<String, String> {
+    use soksak_spec_socket::{
         effective_protocol, evaluate_compat, skew_sentence, Compat, Lang,
         MIN_COMPATIBLE_SERVER_PROTOCOL, SOCKET_PROTOCOL_VERSION,
     };
@@ -1537,11 +1537,11 @@ mod tests {
     #[test]
     fn every_request_declares_protocol() {
         let req = build_request("state.tree", Value::Null, None, None, None, None);
-        assert_eq!(req["protocol"], soksak_protocol::SOCKET_PROTOCOL_VERSION);
+        assert_eq!(req["protocol"], soksak_spec_socket::SOCKET_PROTOCOL_VERSION);
         assert_eq!(req["method"], "state.tree");
         // 구독(장수 연결)도 같은 빌더를 지난다 — 게이트에 빠짐없이 걸린다.
         let sub = build_request("events.subscribe", json!({"kinds":["command"]}), None, None, None, None);
-        assert_eq!(sub["protocol"], soksak_protocol::SOCKET_PROTOCOL_VERSION);
+        assert_eq!(sub["protocol"], soksak_spec_socket::SOCKET_PROTOCOL_VERSION);
     }
 
     // 봉투 계약: 선택 필드는 값이 있을 때만 — 빌더 추출이 기존 배선을 보존함을 고정한다.
@@ -1568,8 +1568,8 @@ mod tests {
     // 같은 판은 호환. 협상 이전 앱(hello 를 프론트로 흘려 ok:false)은 판 0 — floor 0 인 동안 호환.
     #[test]
     fn hello_verdict_compatible_for_current_and_legacy() {
-        use soksak_protocol::Lang;
-        let modern = json!({"ok": true, "protocol": soksak_protocol::SOCKET_PROTOCOL_VERSION});
+        use soksak_spec_socket::Lang;
+        let modern = json!({"ok": true, "protocol": soksak_spec_socket::SOCKET_PROTOCOL_VERSION});
         let summary = judge_hello_reply(&modern, Lang::En).expect("같은 판은 호환");
         assert!(summary.contains("compatible"), "요약에 판정 명시: {summary}");
         let legacy = json!({"ok": false, "code": "UNKNOWN_COMMAND", "message": "unknown"});
@@ -1581,7 +1581,7 @@ mod tests {
     // 판 숫자는 언어 독립(같은 자리에 그대로).
     #[test]
     fn hello_summary_resolves_to_shell_locale() {
-        use soksak_protocol::{Lang, SOCKET_PROTOCOL_VERSION};
+        use soksak_spec_socket::{Lang, SOCKET_PROTOCOL_VERSION};
         let modern = json!({"ok": true, "protocol": SOCKET_PROTOCOL_VERSION});
         let ko = judge_hello_reply(&modern, Lang::Ko).expect("같은 판은 호환");
         assert!(ko.contains("호환됨"), "ko 로케일은 한국어로 해소: {ko}");
@@ -1596,12 +1596,12 @@ mod tests {
     // 앱이 더 새 판이면 sok 이 낡은 쪽 — 방향 명시 문장으로 거부.
     #[test]
     fn hello_verdict_rejects_newer_app() {
-        use soksak_protocol::Lang;
+        use soksak_spec_socket::Lang;
         let reply = json!({"ok": true, "protocol": 999});
         let err = judge_hello_reply(&reply, Lang::En).expect_err("판이 앞선 앱은 거부");
         assert!(err.contains("999"), "앱 판 숫자: {err}");
         assert!(
-            err.contains(&soksak_protocol::SOCKET_PROTOCOL_VERSION.to_string()),
+            err.contains(&soksak_spec_socket::SOCKET_PROTOCOL_VERSION.to_string()),
             "sok 판 숫자: {err}"
         );
         assert!(err.contains("update this sok"), "낡은 쪽 명시: {err}");
@@ -1610,7 +1610,7 @@ mod tests {
     // 스큐 거부 문장도 사람 표면 — ko 로케일이면 한국어로 해소한다(영어 골격 미누출).
     #[test]
     fn hello_skew_sentence_resolves_to_korean() {
-        use soksak_protocol::Lang;
+        use soksak_spec_socket::Lang;
         let reply = json!({"ok": true, "protocol": 999});
         let err = judge_hello_reply(&reply, Lang::Ko).expect_err("판이 앞선 앱은 거부");
         assert!(err.contains("999"), "앱 판 숫자: {err}");

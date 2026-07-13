@@ -1,5 +1,5 @@
 #!/bin/bash
-# 터미널 엔진 유닛 교체(설치-시점) — soksak-sidecar-terminal-spec@1 은 한 도메인·여러 엔진 유닛이고,
+# 터미널 엔진 유닛 교체(설치-시점) — soksak-spec-sidecar-terminal@1 은 한 도메인·여러 엔진 유닛이고,
 # 소비 플러그인은 그중 하나를 스폰한다. 이 스텝은 한 identity 홈의 설치본을 한 엔진으로 정합시켜,
 # e2e 배터리가 그 엔진의 끝단(실앱 복원)을 실측하게 한다.
 #   ① 엔진 dist 를 identity 홈의 해석 경로에 원자 설치(코어 resolve_sidecar_cmd 규약:
@@ -69,7 +69,7 @@ p, name = os.environ["PLUGIN_JSON"], os.environ["NEW_NAME"]
 d = json.load(open(p))
 touched = 0
 for s in d.get("sidecars", []):
-    if str(s.get("interface", "")).startswith("soksak-sidecar-terminal-spec@"):
+    if str(s.get("interface", "")).startswith("soksak-spec-sidecar-terminal@"):
         s["name"] = name; touched += 1
 assert touched == 1, f"{p}: terminal-spec sidecar 선언 {touched}개(1 기대)"
 json.dump(d, open(p, "w"), ensure_ascii=False, indent=2)

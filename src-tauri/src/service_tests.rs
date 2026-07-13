@@ -91,8 +91,8 @@ impl FakeConn {
     }
     fn hello(&mut self, ops: &[&str]) {
         self.write_out(&ServiceOut::Hello {
-            version: Some(soksak_service_proto::SERVICE_PROTOCOL_VERSION),
-            interface: soksak_service_proto::SERVICE_INTERFACE.into(),
+            version: Some(soksak_spec_service::SERVICE_PROTOCOL_VERSION),
+            interface: soksak_spec_service::SERVICE_INTERFACE.into(),
             ops: ops.iter().map(|s| s.to_string()).collect(),
             subscribe: vec![],
             pid: 1,
@@ -174,7 +174,7 @@ fn binding(ops: &[&str]) -> ServiceBinding {
     ServiceBinding {
         plugin: "demo".into(),
         sidecar: "demo".into(),
-        interface: soksak_service_proto::SERVICE_INTERFACE.into(),
+        interface: soksak_spec_service::SERVICE_INTERFACE.into(),
         ops: ops.iter().map(|s| s.to_string()).collect(),
         subscribe: vec![],
         schedules: vec![],
@@ -254,7 +254,7 @@ fn hello_interface_mismatch_refuses_the_bind() {
     let (mgr, _host, _sp) = manager(Arc::new(|_gen, mut conn: FakeConn| {
         conn.write_out(&ServiceOut::Hello {
             version: Some(1),
-            interface: "soksak-other-spec@1".into(),
+            interface: "soksak-spec-other@1".into(),
             ops: vec!["run".into()],
             subscribe: vec![],
             pid: 1,
@@ -279,7 +279,7 @@ fn echo_script() -> Script {
                             ok: true,
                             code: None,
                             message: Some("완료했습니다".into()),
-                            hints: Some(vec![soksak_service_proto::Hint {
+                            hints: Some(vec![soksak_spec_service::Hint {
                                 cmd: "plugin.demo.fail".into(),
                                 why: "다음 단계".into(),
                             }]),

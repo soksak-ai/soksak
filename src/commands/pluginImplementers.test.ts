@@ -31,7 +31,7 @@ function fixtureRuntime(
 ): PluginRuntime {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-plugin-spec@1",
+      spec: "soksak-spec-plugin@1",
       id,
       name: "픽스처",
       version: "1.0.0",
@@ -52,8 +52,8 @@ const GAMMA = "soksak-plugin-fixture-gamma";
 beforeEach(() => {
   usePlugins.setState({
     plugins: {
-      [ALPHA]: fixtureRuntime(ALPHA, ["fixture-notes-spec@1"]),
-      [BETA]: fixtureRuntime(BETA, ["fixture-notes-spec@1", "fixture-board-spec@2"]),
+      [ALPHA]: fixtureRuntime(ALPHA, ["soksak-spec-plugin-fixture-notes@1"]),
+      [BETA]: fixtureRuntime(BETA, ["soksak-spec-plugin-fixture-notes@1", "soksak-spec-plugin-fixture-board@2"]),
       [GAMMA]: fixtureRuntime(GAMMA, []),
     },
   });
@@ -71,12 +71,12 @@ describe("plugin.implementers — 등록(발견성)", () => {
 
 describe("plugin.implementers — 계약 지정 발견", () => {
   it("[수용 기준] 같은 계약을 선언한 픽스처 2개를 둘 다 반환한다", async () => {
-    const r = (await execute("plugin.implementers", { contract: "fixture-notes-spec@1" }, {})) as unknown as {
+    const r = (await execute("plugin.implementers", { contract: "soksak-spec-plugin-fixture-notes@1" }, {})) as unknown as {
       ok: boolean;
       data: { contract: string; implementers: { id: string; version: string; status: string }[] };
     };
     expect(r.ok).toBe(true);
-    expect(r.data.contract).toBe("fixture-notes-spec@1");
+    expect(r.data.contract).toBe("soksak-spec-plugin-fixture-notes@1");
     expect(r.data.implementers.map((i) => i.id)).toEqual([ALPHA, BETA]);
     expect(r.data.implementers[0]).toEqual({ id: ALPHA, version: "1.0.0", status: "enabled" });
   });
@@ -84,11 +84,11 @@ describe("plugin.implementers — 계약 지정 발견", () => {
   it("비활성 구현체도 status 와 함께 포함된다(발견은 상태 무차별 — 소비자가 status 로 거른다)", async () => {
     usePlugins.setState({
       plugins: {
-        [ALPHA]: fixtureRuntime(ALPHA, ["fixture-notes-spec@1"]),
-        [BETA]: fixtureRuntime(BETA, ["fixture-notes-spec@1"], "disabled"),
+        [ALPHA]: fixtureRuntime(ALPHA, ["soksak-spec-plugin-fixture-notes@1"]),
+        [BETA]: fixtureRuntime(BETA, ["soksak-spec-plugin-fixture-notes@1"], "disabled"),
       },
     });
-    const r = (await execute("plugin.implementers", { contract: "fixture-notes-spec@1" }, {})) as unknown as {
+    const r = (await execute("plugin.implementers", { contract: "soksak-spec-plugin-fixture-notes@1" }, {})) as unknown as {
       data: { implementers: { id: string; status: string }[] };
     };
     expect(r.data.implementers.map((i) => i.id)).toEqual([ALPHA, BETA]);
@@ -96,7 +96,7 @@ describe("plugin.implementers — 계약 지정 발견", () => {
   });
 
   it("판까지 정확 일치 — @1 조회는 @2 선언을 잡지 않는다", async () => {
-    const r = (await execute("plugin.implementers", { contract: "fixture-board-spec@1" }, {})) as unknown as {
+    const r = (await execute("plugin.implementers", { contract: "soksak-spec-plugin-fixture-board@1" }, {})) as unknown as {
       data: { implementers: unknown[] };
     };
     expect(r.data.implementers).toEqual([]);
@@ -109,8 +109,8 @@ describe("plugin.implementers — 계약 지정 발견", () => {
     };
     expect(r.ok).toBe(true);
     expect(r.data.contracts).toEqual([
-      { contract: "fixture-board-spec@2", implementers: [BETA] },
-      { contract: "fixture-notes-spec@1", implementers: [ALPHA, BETA] },
+      { contract: "soksak-spec-plugin-fixture-board@2", implementers: [BETA] },
+      { contract: "soksak-spec-plugin-fixture-notes@1", implementers: [ALPHA, BETA] },
     ]);
   });
 
@@ -122,7 +122,7 @@ describe("plugin.implementers — 계약 지정 발견", () => {
     };
     expect(r.ok).toBe(false);
     expect(r.code).toBe("INVALID_PARAMS");
-    expect(r.message).toContain("<scope>-spec@<major>");
+    expect(r.message).toContain("soksak-spec-<kind>-<domain>@<major>");
   });
 });
 
@@ -134,8 +134,8 @@ describe("plugin.conformance — implements 절", () => {
     };
     expect(r.ok).toBe(true);
     expect(r.data.implements.declared).toEqual([
-      "fixture-notes-spec@1",
-      "fixture-board-spec@2",
+      "soksak-spec-plugin-fixture-notes@1",
+      "soksak-spec-plugin-fixture-board@2",
     ]);
     expect(r.data.implements.violations).toEqual([]);
   });

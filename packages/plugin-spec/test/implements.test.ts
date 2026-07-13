@@ -1,4 +1,4 @@
-// implements(C3 L2 계약-핀) 검증 매트릭스 — 계약 id 문법 <scope>-spec@<major> 를 all-or-nothing 으로 고정.
+// implements(C3 L2 계약-핀) 검증 매트릭스 — 계약 id 문법 soksak-spec-<kind>-<domain>@<major> 를 all-or-nothing 으로 고정.
 // 소스(src/spec.ts)가 단일진실 — dist 는 산출물이라 테스트는 소스를 직접 겨눈다.
 import { describe, expect, it } from "vitest";
 import { CONTRACT_ID_RE, parseManifest, SPEC_VERSION } from "../src/spec";
@@ -24,14 +24,14 @@ describe("implements — 수용", () => {
   it("계약 id 배열 통과 + manifest.implements 로 정규화", () => {
     const { manifest, validation } = parseManifest(
       base({
-        implements: ["soksak-fixture-tasks-spec@1", "soksak-fixture-io-spec@2"],
+        implements: ["soksak-spec-plugin-fixture-tasks@1", "soksak-spec-plugin-fixture-io@2"],
       }),
       "demo",
     );
     expect(validation).toEqual({ ok: true, errors: [], warnings: [] });
     expect(manifest?.implements).toEqual([
-      "soksak-fixture-tasks-spec@1",
-      "soksak-fixture-io-spec@2",
+      "soksak-spec-plugin-fixture-tasks@1",
+      "soksak-spec-plugin-fixture-io@2",
     ]);
   });
 
@@ -50,7 +50,7 @@ describe("implements — 수용", () => {
 
 describe("implements — 거부(계약 id 문법)", () => {
   const grammarError = (errs: string[]) =>
-    errs.some((e) => e.includes("<scope>-spec@<major>"));
+    errs.some((e) => e.includes("soksak-spec-<kind>-<domain>@<major>"));
 
   it('"-spec" 마커 없는 이름 거부 — 구현체/엔진 이름은 계약 id 가 아니다', () => {
     const errs = errorsOf(base({ implements: ["soksak-fixture-tasks@1"] }));
@@ -64,17 +64,17 @@ describe("implements — 거부(계약 id 문법)", () => {
   });
 
   it("숫자 아닌 판 거부", () => {
-    const errs = errorsOf(base({ implements: ["soksak-fixture-tasks-spec@one"] }));
+    const errs = errorsOf(base({ implements: ["soksak-spec-plugin-fixture-tasks@one"] }));
     expect(grammarError(errs)).toBe(true);
   });
 
   it("선행 0 판 거부 — @01 별칭이 통과하면 정확-문자열 발견이 구현체를 놓친다", () => {
-    const errs = errorsOf(base({ implements: ["soksak-fixture-tasks-spec@01"] }));
+    const errs = errorsOf(base({ implements: ["soksak-spec-plugin-fixture-tasks@01"] }));
     expect(grammarError(errs)).toBe(true);
   });
 
   it("판 0 은 정규형이라 통과", () => {
-    const errs = errorsOf(base({ implements: ["soksak-fixture-tasks-spec@0"] }));
+    const errs = errorsOf(base({ implements: ["soksak-spec-plugin-fixture-tasks@0"] }));
     expect(errs).toEqual([]);
   });
 
@@ -89,14 +89,14 @@ describe("implements — 거부(계약 id 문법)", () => {
   });
 
   it("배열 아닌 값 거부", () => {
-    const errs = errorsOf(base({ implements: "soksak-fixture-tasks-spec@1" }));
+    const errs = errorsOf(base({ implements: "soksak-spec-plugin-fixture-tasks@1" }));
     expect(errs.some((e) => e.startsWith("implements:"))).toBe(true);
   });
 
   it("중복 선언 거부", () => {
     const errs = errorsOf(
       base({
-        implements: ["soksak-fixture-tasks-spec@1", "soksak-fixture-tasks-spec@1"],
+        implements: ["soksak-spec-plugin-fixture-tasks@1", "soksak-spec-plugin-fixture-tasks@1"],
       }),
     );
     expect(errs.some((e) => e.includes("중복"))).toBe(true);
@@ -115,9 +115,9 @@ describe("programs.viewContract — L2 계약-핀(계약 id 문법, implements �
   }
 
   it("계약 id viewContract 통과 + manifest 로 정규화", () => {
-    const { manifest, validation } = parseManifest(withProgram("terminal-spec@1"), "demo");
+    const { manifest, validation } = parseManifest(withProgram("soksak-spec-plugin-terminal@1"), "demo");
     expect(validation.ok).toBe(true);
-    expect(manifest?.contributes.programs[0].viewContract).toBe("terminal-spec@1");
+    expect(manifest?.contributes.programs[0].viewContract).toBe("soksak-spec-plugin-terminal@1");
   });
 
   it("viewContract 미선언이면 프로그램에 키가 없다(선택 필드 관례)", () => {
@@ -134,11 +134,11 @@ describe("programs.viewContract — L2 계약-핀(계약 id 문법, implements �
 
 describe("CONTRACT_ID_RE — 문법 단일진실 export", () => {
   it("계약 id 문법과 일치(anchored)", () => {
-    expect(CONTRACT_ID_RE.test("soksak-fixture-tasks-spec@1")).toBe(true);
-    expect(CONTRACT_ID_RE.test("x-spec@12")).toBe(true);
-    expect(CONTRACT_ID_RE.test("soksak-fixture-tasks@1")).toBe(false); // 마커 없음
-    expect(CONTRACT_ID_RE.test("soksak-fixture-tasks-spec")).toBe(false); // 판 없음
-    expect(CONTRACT_ID_RE.test(" soksak-fixture-tasks-spec@1")).toBe(false); // 공백
-    expect(CONTRACT_ID_RE.test("soksak-fixture-tasks-spec@1 ")).toBe(false);
+    expect(CONTRACT_ID_RE.test("soksak-spec-plugin-fixture-tasks@1")).toBe(true);
+    expect(CONTRACT_ID_RE.test("soksak-spec-plugin-x@12")).toBe(true); // 판 여러자리
+    expect(CONTRACT_ID_RE.test("soksak-fixture-tasks@1")).toBe(false); // soksak-spec- 접두 없음
+    expect(CONTRACT_ID_RE.test("soksak-spec-plugin-fixture-tasks")).toBe(false); // 판 없음
+    expect(CONTRACT_ID_RE.test(" soksak-spec-plugin-fixture-tasks@1")).toBe(false); // 공백
+    expect(CONTRACT_ID_RE.test("soksak-spec-plugin-fixture-tasks@1 ")).toBe(false);
   });
 });

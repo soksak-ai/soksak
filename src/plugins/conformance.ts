@@ -142,7 +142,7 @@ export function partitionTransparency(
 }
 
 // ── 결합 법칙 C3 — L2 계약-핀: implements 선언의 generic 검사 ────────────────
-// 매니페스트 implements: ["<scope>-spec@<major>"] 는 이 플러그인이 구현하는 계약의 선언이고,
+// 매니페스트 implements: ["soksak-spec-<kind>-<domain>@<major>"] 는 이 플러그인이 구현하는 계약의 선언이고,
 // 소비자는 계약 id 로 구현체를 발견한다(contractDiscovery — 구현체 무차별). 계약이 요구하는 표면
 // (어떤 command/view 가 있어야 하나)의 정의·검증은 계약 소유자(플러그인) 몫 — 코어는 어떤 계약도
 // 모르므로(C1) 선언 자체의 성립만 generic 하게 본다: 형태·문법(NAMING §8)·중복.
@@ -186,7 +186,7 @@ export function implementsViolations(raw: unknown): ImplementsViolation[] {
   if (offGrammar.length > 0) {
     out.push({
       rule: "implements-grammar",
-      detail: `계약 id 문법(<scope>-spec@<major>, NAMING §8) 위반: ${offGrammar.join(", ")}`,
+      detail: `계약 id 문법(soksak-spec-<kind>-<domain>@<major>, NAMING §8) 위반: ${offGrammar.join(", ")}`,
     });
   }
   const seen = new Set<string>();

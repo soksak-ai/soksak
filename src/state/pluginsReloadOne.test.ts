@@ -47,7 +47,7 @@ import { parseManifest } from "../plugins/spec";
 
 function manifestJson(commands: string[]): Record<string, unknown> {
   return {
-    spec: "soksak-plugin-spec@1",
+    spec: "soksak-spec-plugin@1",
     id: ID,
     name: "데모",
     version: "1.0.0",
@@ -99,7 +99,7 @@ describe("reloadOne — id 지정 재적재는 디스크의 매니페스트를 �
   });
 
   it("파일이 불량이면 조용히 옛 매니페스트로 켜지 않고 거부 이유를 답한다", async () => {
-    onDisk = { spec: "soksak-plugin-spec@1", id: ID }; // 필수 필드 결손
+    onDisk = { spec: "soksak-spec-plugin@1", id: ID }; // 필수 필드 결손
 
     const r = await usePlugins.getState().reloadOne(ID);
     expect(r.ok).toBe(false);

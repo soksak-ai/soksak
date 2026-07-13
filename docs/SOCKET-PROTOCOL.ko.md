@@ -4,7 +4,7 @@
 MCP, 원격 포워더, E2E 하니스)가 이 계약을 말한다. 그 위에 실리는 명령 페이로드는
 [MESSAGE-PROTOCOL.ko.md](MESSAGE-PROTOCOL.ko.md)가 규정한다.
 
-**단일 진실**: `soksak-protocol` 크레이트(`src-tauri/protocol`). 버전 상수, 호환창, 순수 판정
+**단일 진실**: `soksak-spec-socket` 크레이트(`src-tauri/protocol`). 버전 상수, 호환창, 순수 판정
 함수가 여기 산다. 앱과 모든 클라이언트가 이 크레이트에 의존한다 — 아무도 상수를 베끼지
 않으므로, 와이어 양쪽이 무언으로 어긋날 수 없다.
 
@@ -68,7 +68,7 @@ MCP, 원격 포워더, E2E 하니스)가 이 계약을 말한다. 그 위에 실
 
 ## 4. 호환창
 
-상수(`soksak-protocol`):
+상수(`soksak-spec-socket`):
 
 | 상수 | 값 | 의미 |
 |---|---|---|

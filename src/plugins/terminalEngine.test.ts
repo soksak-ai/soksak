@@ -1,4 +1,4 @@
-// resolveTerminalProgram — 코어의 터미널 어포던스가 겨냥하는 계약(terminal-spec@1)을 설정 엔진의
+// resolveTerminalProgram — 코어의 터미널 어포던스가 겨냥하는 계약(soksak-spec-plugin-terminal@1)을 설정 엔진의
 // program id 로 해소한다. 특정 플러그인/ program id 하드코딩 없이 발견·선택으로만 결정한다.
 import { afterEach, describe, expect, it, vi } from "vitest";
 

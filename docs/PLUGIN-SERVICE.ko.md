@@ -1,7 +1,7 @@
 # 플러그인 서비스 — 서비스 축 serve 표준 (Plugin Service)
 
 **서비스(stdio) 축**을 규정하는 규범법이다: soksak가 작성한 상주 프로세스가 stdio 위에서
-어떻게 통신하는가. 축 전체에 와이어는 하나 — `soksak-service-spec@1`, stdio 위 NDJSON —
+어떻게 통신하는가. 축 전체에 와이어는 하나 — `soksak-spec-service@1`, stdio 위 NDJSON —
 이고 serve 하니스도 하나이며 그런 사이드카는 전부 이를 빌려쓴다. 이 법을 낳은 전수 조사가
 밝힌 것: 같은 NDJSON dance(스폰 → 줄 버퍼 → 파싱 → 디스패치 → 쓰기 → close-stdin-EOF →
 파이프죽음종료)가 4개+ 플러그인(workflow ×4, mascot, sherpa)에 제각각, 프레임 모양만
@@ -15,9 +15,9 @@ data}`(MESSAGE-PROTOCOL)다. 전송은 소켓 프로토콜이 아니라 집중�
 크로스-플러그인 호출은 같은 stdio 파이프의 `cmd` 프레임을 탄다(신원이 파이프에 내재) —
 절대 소켓 역호출이 아니다.
 
-와이어 상수·serde 타입과 참조 serve 하니스의 단일 원천은 `soksak-service-proto`
-크레이트(`src-tauri/crates/soksak-service-proto`)다 — 소비자는 크레이트에 의존하며 상수를
-절대 복사하지 않는다(`soksak-pty-proto` 규율). 매니페스트 스키마의 단일 심판은
+와이어 상수·serde 타입과 참조 serve 하니스의 단일 원천은 `soksak-spec-service`
+크레이트(`src-tauri/crates/soksak-spec-service`)다 — 소비자는 크레이트에 의존하며 상수를
+절대 복사하지 않는다(`soksak-spec-pty` 규율). 매니페스트 스키마의 단일 심판은
 `@soksak-ai/plugin-spec`의 `parseManifest`다.
 
 인용하는 법은 참조하며 절대 재서술하지 않는다: 결합법 C1–C5(ARCHITECTURE §7), 사이드카
@@ -39,7 +39,7 @@ A14(MESSAGE-PROTOCOL), 계약 id(NAMING §8), 기질 규칙 P1–P13(AI-CONTROL)
 | 커맨드 표면 | 플러그인 자기 레지스트리 커맨드가 호출 | 코어가 `bind:"service"` 커맨드를 네이티브 라우팅 |
 | entry | 플러그인이 entry 모듈 보유 | `entry: null` 합법(순수 계약) |
 | 예 | speech(mascot/sherpa) | workflow |
-| 와이어 | `soksak-service-spec@1` NDJSON stdio(공유 하니스) | 동일 |
+| 와이어 | `soksak-spec-service@1` NDJSON stdio(공유 하니스) | 동일 |
 
 두 모드는 동일 와이어를 말하고 사이드카 쪽에서 동일 serve 하니스를 쓴다; plugin-driven은
 공유 JS 클라이언트를, core-routed는 ServiceManager를 쓴다. 이제 어떤 것도 플러그인별 사설
@@ -84,11 +84,11 @@ A14(MESSAGE-PROTOCOL), 계약 id(NAMING §8), 기질 규칙 P1–P13(AI-CONTROL)
 `entry: null` 조합은 전부 거부한다. 로더는 이런 플러그인을 entry 모듈 없이 활성화한다;
 투명성 게이트(C2)는 불변 적용된다.
 
-**PS5 — 와이어는 `soksak-service-spec@1`이다.** stdio 위 양방향 NDJSON; 한 줄에 JSON
+**PS5 — 와이어는 `soksak-spec-service@1`이다.** stdio 위 양방향 NDJSON; 한 줄에 JSON
 프레임 하나; 줄은 절대 4 MB를 넘지 않는다 — 초과하거나 파싱 불가한 줄은 프로토콜
 결함이며 재시작 경로(PS10)로 들어간다, 절대 무음 스킵이 아니다. 서비스의 첫 줄은
 `hello`(프로토콜 버전, interface id, `ops[]`, `subscribe[]`)다; 코어는
-`soksak-protocol` 판정 문법과 매니페스트 선언으로 호환성을 검증한 뒤 `ready`로
+`soksak-spec-socket` 판정 문법과 매니페스트 선언으로 호환성을 검증한 뒤 `ready`로
 응답한다. 프레임: `req`/`res`(커맨드 실행, id 멀티플렉스), `ev`(진행, req id에 결속),
 `act`(활동, 단독), `cmd`/`cmdres`(중개 아웃바운드 호출), `push`(구독 이벤트,
 코어→서비스), `shutdown`. 에러 코드 집합은 proto 크레이트의 폐쇄 enum이다; 코어는
@@ -97,8 +97,8 @@ A14(MESSAGE-PROTOCOL), 계약 id(NAMING §8), 기질 규칙 P1–P13(AI-CONTROL)
 
 **PS6 — 코어 소스에 등장하는 계약 id는 플러그인-id 문법과 절대 충돌하지 않는다.** C1
 스캔은 코어의 `soksak-plugin-*` 토큰을 적발한다; 따라서 와이어 계약은
-`soksak-service-spec@1`이고 크레이트는 `soksak-service-proto`다. 플러그인-id 스캐너가
-제재할 계약 id를 절대 만들지 않는다. id는 NAMING §8(`<scope>-spec@<major>`)을 따른다;
+`soksak-spec-service@1`이고 크레이트는 `soksak-spec-service`다. 플러그인-id 스캐너가
+제재할 계약 id를 절대 만들지 않는다. id는 NAMING §8(`soksak-spec-<kind>-<domain>@<major>`)을 따른다;
 매니페스트 `service.interface` 선언에 등장한다 — 그 선언을 인정하도록 NAMING §8의 표면
 목록을 개정하는 것은 이 입법의 일부이며, 절대 무언 추가가 아니다(C4).
 
@@ -182,7 +182,7 @@ ServiceManager 하나뿐이다; 프록시는 상태를 갖지 않는다.
 **PS17 — serve 루프는 공유 하니스이지, 손으로 짜지 않는다.** 모든 서비스가 필요로 하는
 프레이밍 — 줄 버퍼 NDJSON 읽기, 한 줄에 JSON 하나 쓰기+flush, hello 발행, id-멀티플렉스
 req/res, 스트리밍 `ev`, close-stdin을 EOF로, 파이프죽음 시 종료, PS16의 상태변이 뮤텍스 —
-은 `soksak-service-proto`에 `serve(handlers)`로 한 번 산다. 사이드카 저자는 op 핸들러만
+은 `soksak-spec-service`에 `serve(handlers)`로 한 번 산다. 사이드카 저자는 op 핸들러만
 쓰고 그 외엔 아무것도 안 쓴다; 루프는 빌려쓰지 절대 재구현하지 않는다. 코어
 쪽(ServiceManager 프레이밍/라우팅)과 사이드카 쪽(`serve`)이 같은 크레이트에 의존한다 —
 와이어는 원천이 하나이고 양끝에서 읽는다. 미래의 비-Rust 사이드카는 크레이트 스펙에 맞춰
@@ -211,12 +211,12 @@ yt-dlp/ffmpeg one-shot)은 사설 계약을 유지한다 — 스폰되는 바이
   "entry": null,                          // PS4 — 순수 계약 플러그인
   "permissions": ["service", "..."],     // "service"는 caution 권한(동의 강조)
   "sidecars": [
-    { "name": "workflow", "interface": "soksak-sidecar-workflow-spec@1",
+    { "name": "workflow", "interface": "soksak-spec-sidecar-workflow@1",
       "reach": { "fetch": { "url": "...", "sha256": "..." } } }
   ],
   "service": {
     "sidecar": "workflow",                // 상주 바이너리인 sidecars[] 엔트리를 명명
-    "interface": "soksak-service-spec@1", // 이 법이 규율하는 와이어(PS5, PS6)
+    "interface": "soksak-spec-service@1", // 이 법이 규율하는 와이어(PS5, PS6)
     "subscribe": ["bus:kanban:changed"]   // PS15
   },
   "contributes": {
@@ -273,4 +273,4 @@ yt-dlp/ffmpeg one-shot)은 사설 계약을 유지한다 — 스폰되는 바이
 
 Version: 2.0.0
 Status: AUTHORITATIVE
-단일 진실: `soksak-service-proto`(와이어·serve 하니스), `@soksak-ai/plugin-spec`(매니페스트)
+단일 진실: `soksak-spec-service`(와이어·serve 하니스), `@soksak-ai/plugin-spec`(매니페스트)

@@ -102,7 +102,7 @@ struct Request {
     // 시스템 유래는 낭독 후보에서 제외되고 피드에서 흐리게 표시된다. 소켓 클라이언트는 쓰지
     // 않는다(사람/에이전트=사람 유래) — Rust 내부 발화(스케줄러)만 싣는다.
     origin: Option<String>,
-    // 클라이언트가 선언하는 소켓 프로토콜 판(soksak-protocol 계약). 부재=0(레거시) —
+    // 클라이언트가 선언하는 소켓 프로토콜 판(soksak-spec-socket 계약). 부재=0(레거시) —
     // effective_protocol 규칙 하나로 구세대 자동 수용과 미래 차단 스위치를 겸한다.
     protocol: Option<u32>,
     // idempotency 키(PS12) — bind:"service" 커맨드 전용. 스케줄 발화는 job+due 로 안정 키를
@@ -243,11 +243,11 @@ impl TransportCtx {
     }
 }
 
-// system.hello 협상 사실 — 판 상수(soksak-protocol) + 앱 사실. transport 즉답과 ipc_hello_info
+// system.hello 협상 사실 — 판 상수(soksak-spec-socket) + 앱 사실. transport 즉답과 ipc_hello_info
 // 커맨드가 같은 함수를 쓴다(이중 진실 없음): 봉투의 ok 는 각 계층이 얹는다(transport 는 여기서,
 // registry 는 execute 에서). capabilities 는 전송층 행위만 싣는다 — 기능 발견은 카탈로그가 정본.
 fn hello_facts(ctx: &TransportCtx) -> Value {
-    use soksak_protocol::{MIN_COMPATIBLE_CLIENT_PROTOCOL, SOCKET_PROTOCOL_VERSION};
+    use soksak_spec_socket::{MIN_COMPATIBLE_CLIENT_PROTOCOL, SOCKET_PROTOCOL_VERSION};
     json!({
         "protocol": SOCKET_PROTOCOL_VERSION,
         "minClientProtocol": MIN_COMPATIBLE_CLIENT_PROTOCOL,
@@ -271,12 +271,12 @@ pub fn ipc_hello_info(app: AppHandle) -> Value {
 // ① system.hello — 협상 프리미티브. 스큐 게이트 면제: 스큐된 클라이언트가 두 판 숫자를
 //    배울 유일한 통로가 hello 다. capabilities 는 전송층 행위만 싣는다 — 기능 발견은
 //    state.commands 카탈로그가 단일진실.
-// ② VERSION_SKEW 게이트 — soksak-protocol 호환창 밖의 요청은 dispatch(프론트 registry)에
+// ② VERSION_SKEW 게이트 — soksak-spec-socket 호환창 밖의 요청은 dispatch(프론트 registry)에
 //    도달하지 못한다. 부재=0 규칙으로 레거시(hello 생략) 클라이언트는 그대로 통과한다.
 //    거부 message 는 방향 명시 한 문장(낡은 쪽+두 판 숫자+해결 명령), data 에 숫자 3종 —
 //    에이전트가 파싱으로 자가 판정한다.
-fn transport_route(req: &Request, ctx: &TransportCtx, lang: soksak_protocol::Lang) -> Option<Value> {
-    use soksak_protocol::{
+fn transport_route(req: &Request, ctx: &TransportCtx, lang: soksak_spec_socket::Lang) -> Option<Value> {
+    use soksak_spec_socket::{
         effective_protocol, evaluate_compat, skew_sentence, Compat, Lang,
         MIN_COMPATIBLE_CLIENT_PROTOCOL, SOCKET_PROTOCOL_VERSION,
     };
@@ -862,11 +862,11 @@ mod tests {
     #[test]
     fn hello_is_answered_at_transport_level() {
         let req = parse_request(r#"{"id":1,"method":"system.hello"}"#).unwrap();
-        let reply = transport_route(&req, &test_ctx(), soksak_protocol::Lang::En)
+        let reply = transport_route(&req, &test_ctx(), soksak_spec_socket::Lang::En)
             .expect("system.hello must be answered by the transport, not forwarded to the front");
         assert_eq!(reply["ok"], true);
-        assert_eq!(reply["protocol"], soksak_protocol::SOCKET_PROTOCOL_VERSION);
-        assert_eq!(reply["minClientProtocol"], soksak_protocol::MIN_COMPATIBLE_CLIENT_PROTOCOL);
+        assert_eq!(reply["protocol"], soksak_spec_socket::SOCKET_PROTOCOL_VERSION);
+        assert_eq!(reply["minClientProtocol"], soksak_spec_socket::MIN_COMPATIBLE_CLIENT_PROTOCOL);
         assert_eq!(reply["appVersion"], "0.9.9");
         assert_eq!(reply["identity"], "com.soksak.test");
         assert_eq!(reply["pid"], 4242);
@@ -883,7 +883,7 @@ mod tests {
         let facts = hello_facts(&ctx);
         assert!(facts.get("ok").is_none(), "hello_facts 는 사실만 — 봉투 ok 는 밖에서 얹는다");
         let req = parse_request(r#"{"method":"system.hello"}"#).expect("valid hello request");
-        let reply = transport_route(&req, &ctx, soksak_protocol::Lang::En)
+        let reply = transport_route(&req, &ctx, soksak_spec_socket::Lang::En)
             .expect("hello answered at transport");
         assert_eq!(reply["ok"], true);
         for (k, v) in facts.as_object().expect("hello_facts is a json object") {
@@ -897,20 +897,20 @@ mod tests {
     #[test]
     fn skewed_request_is_rejected_before_dispatch() {
         let req = parse_request(r#"{"id":2,"method":"state.context","protocol":999}"#).unwrap();
-        let reply = transport_route(&req, &test_ctx(), soksak_protocol::Lang::En)
+        let reply = transport_route(&req, &test_ctx(), soksak_spec_socket::Lang::En)
             .expect("a version-skewed request must be rejected at the transport");
         assert_eq!(reply["ok"], false);
         assert_eq!(reply["code"], "VERSION_SKEW");
         let msg = reply["message"].as_str().expect("message string");
         assert!(msg.contains("999"), "peer version number in the sentence: {msg}");
         assert!(
-            msg.contains(&soksak_protocol::SOCKET_PROTOCOL_VERSION.to_string()),
+            msg.contains(&soksak_spec_socket::SOCKET_PROTOCOL_VERSION.to_string()),
             "own version number in the sentence: {msg}"
         );
         // 방향 명시: 이 사분면(클라이언트가 더 새것)에서 낡은 쪽은 앱이다.
         assert!(msg.contains("update the app"), "stale side named explicitly: {msg}");
         // 봉투 data 로 숫자도 반환 — 에이전트가 파싱으로 자가 판정할 수 있게.
-        assert_eq!(reply["data"]["appProtocol"], soksak_protocol::SOCKET_PROTOCOL_VERSION);
+        assert_eq!(reply["data"]["appProtocol"], soksak_spec_socket::SOCKET_PROTOCOL_VERSION);
         assert_eq!(reply["data"]["clientProtocol"], 999);
     }
 
@@ -920,7 +920,7 @@ mod tests {
     fn skew_message_resolves_to_app_language() {
         let req = parse_request(r#"{"id":2,"method":"state.context","protocol":999}"#)
             .expect("valid skew request");
-        let reply = transport_route(&req, &test_ctx(), soksak_protocol::Lang::Ko)
+        let reply = transport_route(&req, &test_ctx(), soksak_spec_socket::Lang::Ko)
             .expect("a version-skewed request must be rejected at the transport");
         assert_eq!(reply["code"], "VERSION_SKEW");
         let msg = reply["message"].as_str().expect("message string");
@@ -938,7 +938,7 @@ mod tests {
     fn legacy_request_without_protocol_reaches_dispatch() {
         let req = parse_request(r#"{"method":"state.tree"}"#).unwrap();
         assert!(
-            transport_route(&req, &test_ctx(), soksak_protocol::Lang::En).is_none(),
+            transport_route(&req, &test_ctx(), soksak_spec_socket::Lang::En).is_none(),
             "legacy peers are judged as protocol 0 and stay inside the window"
         );
     }
@@ -947,10 +947,10 @@ mod tests {
     fn current_protocol_request_reaches_dispatch() {
         let line = format!(
             r#"{{"method":"state.tree","protocol":{}}}"#,
-            soksak_protocol::SOCKET_PROTOCOL_VERSION
+            soksak_spec_socket::SOCKET_PROTOCOL_VERSION
         );
         let req = parse_request(&line).unwrap();
-        assert!(transport_route(&req, &test_ctx(), soksak_protocol::Lang::En).is_none());
+        assert!(transport_route(&req, &test_ctx(), soksak_spec_socket::Lang::En).is_none());
     }
 
     // ── 전송 시임 계약 ───────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 // plugin service ServiceManager — 상주 서비스의 bind·프레이밍·라우팅(규범 docs/PLUGIN-SERVICE.md).
-// 와이어 단일진실은 soksak-service-proto 크레이트(PS5). 코어는 매니페스트 파생 원장(bind ledger)
+// 와이어 단일진실은 soksak-spec-service 크레이트(PS5). 코어는 매니페스트 파생 원장(bind ledger)
 // 만 읽는다 — 특정 플러그인·특정 커맨드 문자열 0(PS1, C1).
 //
 // 구조: 실행 진실은 이 매니저 하나다(PS11). route()의 직행 분기와 창 프록시(S1b)가 전부 여기로
@@ -13,7 +13,7 @@ use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
-use soksak_service_proto::{
+use soksak_spec_service::{
     judge_hello, ops_match, Compat, ErrCode, ServiceBinding, ServiceIn, ServiceOut,
     MAX_LINE_BYTES, RESTART_BACKOFF_SECS, SHUTDOWN_GRACE_MS,
 };
@@ -321,7 +321,7 @@ impl ServiceManager {
                 op: op.clone(),
                 params: params.clone(),
                 key,
-                ctx: soksak_service_proto::ReqCtx {
+                ctx: soksak_spec_service::ReqCtx {
                     origin: origin.to_string(),
                     parent: parent.clone(),
                     deadline_ms: deadline,
@@ -734,7 +734,7 @@ fn reader_loop(
                 };
                 if let Some(d) = extend_to {
                     let mut d = lock_or_poisoned(&d);
-                    *d = now_ms() + soksak_service_proto::DEFAULT_REQ_TIMEOUT_MS;
+                    *d = now_ms() + soksak_spec_service::DEFAULT_REQ_TIMEOUT_MS;
                 }
                 mgr.host.publish(
                     "command.progress",
@@ -905,7 +905,7 @@ impl ServiceSpawner for ProcessServiceSpawner {
     fn spawn(&self, binding: &ServiceBinding, env: &[(String, String)]) -> Result<SpawnedIo, String> {
         use std::process::{Command, Stdio};
         let bin = crate::process::resolve_sidecar_cmd(&format!("sidecar:{}", binding.sidecar))?;
-        let log = soksak_service_proto::log_path(&self.home, &binding.plugin);
+        let log = soksak_spec_service::log_path(&self.home, &binding.plugin);
         if let Some(dir) = log.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
@@ -916,7 +916,7 @@ impl ServiceSpawner for ProcessServiceSpawner {
             .map(Stdio::from)
             .unwrap_or_else(|_| Stdio::null());
         let mut child = Command::new(&bin)
-            .arg(soksak_service_proto::SERVE_ARG)
+            .arg(soksak_spec_service::SERVE_ARG)
             .env("SOKSAK_HOME", &self.home)
             .envs(env.iter().cloned())
             .stdin(Stdio::piped())
@@ -947,8 +947,8 @@ impl ServiceSpawner for ProcessServiceSpawner {
 pub fn boot(app: &tauri::AppHandle) {
     use tauri::Manager;
     let home = crate::home::soksak_home();
-    let ledger_file = soksak_service_proto::ledger_path(&home);
-    let ledger: soksak_service_proto::BindLedger = match std::fs::read_to_string(&ledger_file) {
+    let ledger_file = soksak_spec_service::ledger_path(&home);
+    let ledger: soksak_spec_service::BindLedger = match std::fs::read_to_string(&ledger_file) {
         Ok(text) => match serde_json::from_str(&text) {
             Ok(l) => l,
             Err(e) => {
@@ -975,11 +975,11 @@ pub fn boot(app: &tauri::AppHandle) {
 fn register_binding_schedules(app: &tauri::AppHandle, binding: &ServiceBinding) {
     for s in &binding.schedules {
         let trigger = match &s.trigger {
-            soksak_service_proto::LedgerTrigger::Reconcile { .. } => crate::schedule::Trigger::Reconcile,
-            soksak_service_proto::LedgerTrigger::Every { every_ms } => {
+            soksak_spec_service::LedgerTrigger::Reconcile { .. } => crate::schedule::Trigger::Reconcile,
+            soksak_spec_service::LedgerTrigger::Every { every_ms } => {
                 crate::schedule::Trigger::Every { every_ms: *every_ms, anchor: None }
             }
-            soksak_service_proto::LedgerTrigger::Cron { cron } => {
+            soksak_spec_service::LedgerTrigger::Cron { cron } => {
                 crate::schedule::Trigger::Cron { expr: cron.clone() }
             }
         };
@@ -1018,7 +1018,7 @@ pub fn service_dispatch(
         None,
         origin.as_deref().unwrap_or("window"),
         parent,
-        timeout_ms.unwrap_or(soksak_service_proto::DEFAULT_REQ_TIMEOUT_MS),
+        timeout_ms.unwrap_or(soksak_spec_service::DEFAULT_REQ_TIMEOUT_MS),
         3_600_000,
     )
     .unwrap_or_else(|| {
@@ -1060,11 +1060,11 @@ pub fn service_status(mgr: tauri::State<ServiceManager>, plugin: Option<String>)
 pub fn service_ledger_sync(
     app: tauri::AppHandle,
     mgr: tauri::State<ServiceManager>,
-    ledger: soksak_service_proto::BindLedger,
+    ledger: soksak_spec_service::BindLedger,
 ) -> Result<(), String> {
     use tauri::Manager;
     let home = crate::home::soksak_home();
-    let path = soksak_service_proto::ledger_path(&home);
+    let path = soksak_spec_service::ledger_path(&home);
     let next = serde_json::to_string_pretty(&ledger).map_err(|e| e.to_string())?;
     if std::fs::read_to_string(&path).map(|cur| cur == next).unwrap_or(false) {
         return Ok(()); // 내용 동일 — 멱등.

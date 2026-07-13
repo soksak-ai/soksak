@@ -11,7 +11,7 @@ function mani(
   version = "0.1.0",
 ): PluginManifest {
   return {
-    spec: "soksak-plugin-spec@1",
+    spec: "soksak-spec-plugin@1",
     id,
     name: id,
     version,

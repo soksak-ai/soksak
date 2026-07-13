@@ -13,7 +13,7 @@ use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
-use soksak_pty_proto as proto;
+use soksak_spec_pty as proto;
 
 struct Daemon {
     child: Child,

@@ -13,14 +13,14 @@ import {
 function demoManifest(): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-plugin-spec@1",
+      spec: "soksak-spec-plugin@1",
       id: "demo",
       name: "데모",
       version: "1.0.0",
       description: "테스트",
       entry: null,
       permissions: ["commands", "sidecar", "service"],
-      sidecars: [{ name: "demo-svc", interface: "soksak-fixture-wire-spec@1" }],
+      sidecars: [{ name: "demo-svc", interface: "soksak-spec-sidecar-fixture-wire@1" }],
       service: {
         sidecar: "demo-svc",
         interface: SERVICE_INTERFACE,
@@ -135,14 +135,14 @@ describe("buildBindLedger — 원장 파생(PS9·PS14)", () => {
   it('"secrets" 권한을 선언하면 vaultEnv 가 파생된다(PS9 — env: 볼트 주입 대상)', () => {
     const { manifest, validation } = parseManifest(
       {
-        spec: "soksak-plugin-spec@1",
+        spec: "soksak-spec-plugin@1",
         id: "vaulted",
         name: "볼트",
         version: "1.0.0",
         description: "테스트",
         entry: null,
         permissions: ["commands", "sidecar", "service", "secrets"],
-        sidecars: [{ name: "vaulted-svc", interface: "soksak-fixture-wire-spec@1" }],
+        sidecars: [{ name: "vaulted-svc", interface: "soksak-spec-sidecar-fixture-wire@1" }],
         service: { sidecar: "vaulted-svc", interface: SERVICE_INTERFACE, subscribe: [] },
         contributes: {
           commands: [
@@ -161,7 +161,7 @@ describe("buildBindLedger — 원장 파생(PS9·PS14)", () => {
   it("service 없는 매니페스트는 원장에 오르지 않는다", () => {
     const { manifest } = parseManifest(
       {
-        spec: "soksak-plugin-spec@1",
+        spec: "soksak-spec-plugin@1",
         id: "plain",
         name: "일반",
         version: "1.0.0",
@@ -227,7 +227,7 @@ describe("registerBusBridge — 창 bus → 코어 브리지(PS15)", () => {
     const h = harness();
     const { manifest } = parseManifest(
       {
-        spec: "soksak-plugin-spec@1",
+        spec: "soksak-spec-plugin@1",
         id: "plain",
         name: "일반",
         version: "1.0.0",

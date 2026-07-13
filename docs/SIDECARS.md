@@ -34,7 +34,7 @@ it still runs "not as a separate app" (no Dock, no own windows).
 was originally "an argv/stdin private contract" — each plugin invented its own frame
 shape. A whole-body investigation found the same NDJSON serve loop hand-rolled across
 workflow, speech (mascot/sherpa), and others, with gratuitously different framing. The
-service axis now has **one wire and one serve harness**: `soksak-service-spec@1`,
+service axis now has **one wire and one serve harness**: `soksak-spec-service@1`,
 legislated in docs/PLUGIN-SERVICE.md, mandatory for **soksak-authored resident service
 sidecars**. **External-tool adapters** — a plugin spawning a third-party binary that
 speaks its own protocol (acp → claude/codex over ACP; media pipelines → yt-dlp/ffmpeg
@@ -56,10 +56,10 @@ themselves survive an app exit, so it cannot die with the app. It therefore does
 stdio; it binds a rendezvous socket in the identity home and is reached over NDJSON on that
 UDS, with a singleton probe on start and a detached spawn (`process.detached`) — the same
 transport shape as the core PTY daemon it peers with. This is a distinct point on the wire
-axis, not an exception to `soksak-service-spec@1`: that spec frames spawner-bound stdio
+axis, not an exception to `soksak-spec-service@1`: that spec frames spawner-bound stdio
 services; a survival service is reached by socket precisely because its reason to exist is
 to not share the spawner's lifetime. Its own contract carries the message shapes
-(`soksak-sidecar-terminal-spec@1`), the `hello` handshake isomorphic to the daemon's.
+(`soksak-spec-sidecar-terminal@1`), the `hello` handshake isomorphic to the daemon's.
 
 **Names never encode the model** (`soksak-sidecar-<name>` for both): the model is
 machine-encoded (attachment path, artifact kind, ABI self-report); putting it in
@@ -96,7 +96,7 @@ no unwinding crosses the boundary in either direction; a trapped panic returns -
 ```rust
 #[repr(C)] struct SoksakSidecarEngineAbi {
     abi: u32,                 // hosting ABI version — core accepts exactly 1
-    interface: *const c_char, // e.g. "soksak-sidecar-browser-spec@1"
+    interface: *const c_char, // e.g. "soksak-spec-sidecar-browser@1"
     version: *const c_char,   // crate semver (diagnostics)
 }
 fn soksak_sidecar_engine_abi() -> *const SoksakSidecarEngineAbi;    // self-description handshake
@@ -160,7 +160,7 @@ Plugins declare sidecars in the manifest (top-level, parallel to `libraries`):
 ```json
 "permissions": ["sidecar"],
 "sidecars": [
-  { "name": "chromium", "interface": "soksak-sidecar-browser-spec@1",
+  { "name": "chromium", "interface": "soksak-spec-sidecar-browser@1",
     "reach": { "fetch": { "url": { "darwin": "https://.../dist.tar.gz" },
                            "sha256": { "darwin": "<hex>" } } } }
 ]
@@ -214,7 +214,7 @@ Rules:
   renderers from the `" Helper (Renderer).app"` sibling bundle and fails
   silently without it.
 
-## 8. Chromium engine protocol — `soksak-sidecar-browser-spec@1`
+## 8. Chromium engine protocol — `soksak-spec-sidecar-browser@1`
 
 Requests: `caps()→{modes}`, `create(x,y,w,h,url[,mode,scale,owner])→{id}`,
 `devtools-open(inspectedId,screencast,x,y,w,h[,owner])→{id}`, `bounds(id,x,y,w,h)`,
@@ -315,7 +315,7 @@ affected.
 Diagnostics: `stats.dbg.framesPresented` counts presented offscreen frames
 (0 while idle/hidden is correct — presents stop when nothing changes).
 
-## 9. Terminal service — `soksak-sidecar-terminal-spec@1`
+## 9. Terminal service — `soksak-spec-sidecar-terminal@1`
 
 An engine-neutral, domain-scoped contract for the terminal domain's restore service. The
 contract carries the domain; the **unit** carries the engine — the browser-chromium symmetry.
@@ -340,7 +340,7 @@ standard.
 - **Consumers:** the terminal plugin *family*, not one plugin — both
   `soksak-plugin-terminal-xterm` and `soksak-plugin-terminal-ghostty` declare the identical
   entry `sidecars: [{ "name": "terminal-alacritty", "interface":
-  "soksak-sidecar-terminal-spec@1" }]`. One contract, one running engine unit, shared across
+  "soksak-spec-sidecar-terminal@1" }]`. One contract, one running engine unit, shared across
   the family — input is a raw byte stream and output is ANSI paint, so no consumer couples to
   the engine. The manifest's `sidecars[].name` is what selects which engine unit runs, and the
   core holds that to be true: a plugin asks for the unit its own manifest declares for a contract

@@ -1,4 +1,4 @@
-// 플러그인 API — activate(ctx) 로 전달되는 호스트 표면(soksak-plugin-spec v1 §0).
+// 플러그인 API — activate(ctx) 로 전달되는 호스트 표면(soksak-spec-plugin v1 §0).
 // 원칙:
 //   - 권한은 API 표면 게이트(§0-2): 미선언 권한의 표면은 undefined.
 //   - 명령은 registry 단일진실(§0-1): 등록 즉시 sok/MCP 에 자동 노출.

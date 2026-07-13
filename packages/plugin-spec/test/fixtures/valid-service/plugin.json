@@ -1,5 +1,5 @@
 {
-  "spec": "soksak-plugin-spec@1",
+  "spec": "soksak-spec-plugin@1",
   "id": "valid-service",
   "name": "Valid Service Fixture",
   "version": "0.1.0",
@@ -7,11 +7,11 @@
   "entry": null,
   "permissions": ["commands", "sidecar", "service"],
   "sidecars": [
-    { "name": "echo", "interface": "soksak-fixture-wire-spec@1" }
+    { "name": "echo", "interface": "soksak-spec-sidecar-fixture-wire@1" }
   ],
   "service": {
     "sidecar": "echo",
-    "interface": "soksak-service-spec@1",
+    "interface": "soksak-spec-service@1",
     "subscribe": ["bus:fixture:changed"]
   },
   "contributes": {

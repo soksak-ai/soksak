@@ -10,10 +10,10 @@ import {
 } from "./util.js";
 
 // 코어가 말하는 plugin service 와이어 계약 v1(PS5·PS6). Rust 측 단일진실은
-// soksak-service-proto 크레이트 — 이 상수는 TS 표면 미러이며 교차언어 골든 테스트가
-// 동치를 봉인한다. 계약 id 는 플러그인-id 문법(soksak-plugin-*)과 절대 충돌하지
-// 않는다(PS6 — C1 스캔이 코어 소스의 플러그인-id 토큰을 적발하므로).
-export const SERVICE_INTERFACE = "soksak-service-spec@1";
+// soksak-spec-service 크레이트 — 이 상수는 TS 표면 미러이며 교차언어 골든 테스트가
+// 동치를 봉인한다. 계약 id 는 "soksak-spec-" 로 시작해 플러그인 id(soksak-plugin-<name>)와
+// 절대 충돌하지 않는다(PS6 — C1 스캔이 코어 소스의 플러그인 id 토큰을 적발하나 계약 id 는 제외).
+export const SERVICE_INTERFACE = "soksak-spec-service@1";
 
 // 커맨드 파라미터 스펙 — 코어 레지스트리 ParamSpec(src/commands/registry.ts)과 동형.
 // bind:"service" 커맨드는 스펙 전문을 매니페스트 데이터로 선언한다(PS3) — 프록시 등록이
@@ -122,7 +122,7 @@ export function parseServiceDecl(
   }
   if (!isNonEmptyString(raw.interface) || !CONTRACT_ID_RE.test(raw.interface.trim())) {
     errors.push(
-      `service.interface: 계약 id <scope>-spec@<major> 필수(예: ${SERVICE_INTERFACE} — NAMING §8·PS6)`,
+      `service.interface: 계약 id soksak-spec-<kind>-<domain>@<major> 필수(예: ${SERVICE_INTERFACE} — NAMING §8·PS6)`,
     );
     bad = true;
   }

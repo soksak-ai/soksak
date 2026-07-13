@@ -20,7 +20,7 @@ import { parseManifest, type PluginManifest } from "../plugins/spec";
 function manifestOf(id: string, overrides: Record<string, unknown> = {}): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-plugin-spec@1",
+      spec: "soksak-spec-plugin@1",
       id,
       name: "데모",
       version: "1.0.0",

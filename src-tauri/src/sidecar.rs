@@ -25,7 +25,7 @@ pub const HOST_ABI_VERSION: u32 = 1;
 #[repr(C)]
 pub struct SoksakSidecarEngineAbi {
     pub abi: u32,                 // 호스팅 ABI 버전 — 정확 일치만 수용
-    pub interface: *const c_char, // "<protocol-domain>@<major>(예: soksak-sidecar-browser-spec@1)" — 메시지 프로토콜 id
+    pub interface: *const c_char, // "<protocol-domain>@<major>(예: soksak-spec-sidecar-browser@1)" — 메시지 프로토콜 id
     pub version: *const c_char,   // 크레이트 semver(진단용)
 }
 

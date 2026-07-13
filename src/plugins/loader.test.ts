@@ -18,7 +18,7 @@ import { useViewRegistry } from "./viewRegistry";
 function manifestOf(overrides: Record<string, unknown> = {}): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-plugin-spec@1",
+      spec: "soksak-spec-plugin@1",
       id: "demo",
       name: "데모",
       version: "1.0.0",
@@ -260,7 +260,7 @@ describe("enforceImplements — C3 implements 활성화 경계", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     await activatePlugin(
       { activate: () => {} },
-      withImplements(["fixture-notes-spec@1"]),
+      withImplements(["soksak-spec-plugin-fixture-notes@1"]),
       "/d",
       fakeDeps(),
     );
@@ -271,7 +271,7 @@ describe("enforceImplements — C3 implements 활성화 경계", () => {
 
   it("blocking 규칙 위반 → throw(활성화 거부 — 주입 표로 기제 검증)", () => {
     expect(() =>
-      enforceImplements(withImplements(["fixture-notes-spec@1", "fixture-notes-spec@1"]), {
+      enforceImplements(withImplements(["soksak-spec-plugin-fixture-notes@1", "soksak-spec-plugin-fixture-notes@1"]), {
         "implements-shape": "blocking",
         "implements-grammar": "blocking",
         "implements-duplicate": "blocking",

@@ -14,11 +14,11 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 // hello 판정을 소비하는 쪽(데몬·앱)이 판정 타입과 스큐 문장을 이 크레이트 한 경로로
-// 받는다 — soksak-protocol 이중 의존 대신 재수출(정본은 그대로 soksak-protocol).
-pub use soksak_protocol::{skew_sentence, Compat, Lang};
+// 받는다 — soksak-spec-socket 이중 의존 대신 재수출(정본은 그대로 soksak-spec-socket).
+pub use soksak_spec_socket::{skew_sentence, Compat, Lang};
 
 /// Version of the ptyd wire contract. Bump rules follow the socket protocol
-/// precedent (soksak-protocol): additive optional fields and new ops never
+/// precedent (soksak-spec-socket): additive optional fields and new ops never
 /// bump; a change in framing, the envelope, or the meaning of an existing
 /// field does. On a breaking bump only the previous generation stays
 /// serveable — no multi-generation adapters.
@@ -26,7 +26,7 @@ pub const PTYD_PROTOCOL_VERSION: u32 = 1;
 
 /// Oldest client protocol the daemon still serves. The hello is mandatory from
 /// the first release, so the floor starts at 1: a hello without a version is
-/// judged as protocol 0 (`soksak_protocol::effective_protocol`) and rejected.
+/// judged as protocol 0 (`soksak_spec_socket::effective_protocol`) and rejected.
 pub const PTYD_MIN_COMPATIBLE_CLIENT_PROTOCOL: u32 = 1;
 
 /// Flow-control watermarks — the single source for both PTY backends
@@ -196,11 +196,11 @@ fn is_false(b: &bool) -> bool {
 
 /// Compatibility verdict for a client hello, judged with the shared socket
 /// grammar. One rule carries both halves: absent = 0, floor decides.
-pub fn judge_client(declared: Option<u32>) -> soksak_protocol::Compat {
-    soksak_protocol::evaluate_compat(
+pub fn judge_client(declared: Option<u32>) -> soksak_spec_socket::Compat {
+    soksak_spec_socket::evaluate_compat(
         PTYD_PROTOCOL_VERSION,
         PTYD_MIN_COMPATIBLE_CLIENT_PROTOCOL,
-        soksak_protocol::effective_protocol(declared),
+        soksak_spec_socket::effective_protocol(declared),
     )
 }
 
@@ -304,7 +304,7 @@ pub fn err_reply(code: &str, message: &str) -> serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soksak_protocol::Compat;
+    use soksak_spec_socket::Compat;
 
     // ── path contract: protocol-keyed names under the identity home ─────────
 

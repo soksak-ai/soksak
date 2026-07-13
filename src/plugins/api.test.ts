@@ -21,7 +21,7 @@ import {
 function manifestOf(overrides: Record<string, unknown>): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-plugin-spec@1",
+      spec: "soksak-spec-plugin@1",
       id: "demo",
       name: "데모",
       version: "1.0.0",
@@ -836,9 +836,9 @@ describe("cross-plugin 의존 게이트 (executeGated + scheduler.register, §de
   });
 
   it("계약을 consumes 한 플러그인 → 그 계약의 구현체 호출 통과(구현체 id 를 선언하지 않는다)", async () => {
-    const d = fakeDeps({ implementsOf: (pid) => (pid === "board-x" ? ["soksak-issue-board-spec@1"] : []) });
+    const d = fakeDeps({ implementsOf: (pid) => (pid === "board-x" ? ["soksak-spec-plugin-issue-board@1"] : []) });
     const { api } = buildPluginApi(
-      manifestOf({ permissions: ["commands"], consumes: ["soksak-issue-board-spec@1"] }),
+      manifestOf({ permissions: ["commands"], consumes: ["soksak-spec-plugin-issue-board@1"] }),
       "/d",
       d,
     );
@@ -849,7 +849,7 @@ describe("cross-plugin 의존 게이트 (executeGated + scheduler.register, §de
   it("계약을 consumes 했어도 그 계약을 구현하지 않는 플러그인 호출 → 거부", async () => {
     const d = fakeDeps({ implementsOf: () => [] });
     const { api } = buildPluginApi(
-      manifestOf({ permissions: ["commands"], consumes: ["soksak-issue-board-spec@1"] }),
+      manifestOf({ permissions: ["commands"], consumes: ["soksak-spec-plugin-issue-board@1"] }),
       "/d",
       d,
     );
@@ -913,7 +913,7 @@ describe("app.sidecar — 권한 게이트 + 선언≡실물", () => {
   it("선언된 사이드카만 open — 미선언 이름은 거부", async () => {
     const m = manifestOf({
       permissions: ["sidecar"],
-      sidecars: [{ name: "chromium", interface: "soksak-engine-chromium@1" }],
+      sidecars: [{ name: "chromium", interface: "soksak-spec-sidecar-chromium@1" }],
     });
     const { api } = buildPluginApi(m, "/d", fakeDeps());
     await expect(api.sidecar!.open("undeclared")).rejects.toThrow(/선언되지 않은 사이드카/);
@@ -922,13 +922,13 @@ describe("app.sidecar — 권한 게이트 + 선언≡실물", () => {
     const invoke = vi.fn(async () => 7);
     const m = manifestOf({
       permissions: ["sidecar"],
-      sidecars: [{ name: "chromium", interface: "soksak-engine-chromium@1" }],
+      sidecars: [{ name: "chromium", interface: "soksak-spec-sidecar-chromium@1" }],
     });
     const { api } = buildPluginApi(m, "/d", fakeDeps({ invoke }));
     const h = await api.sidecar!.open("chromium");
     expect(invoke).toHaveBeenCalledWith(
       "sidecar_open",
-      expect.objectContaining({ name: "chromium", interface: "soksak-engine-chromium@1" }),
+      expect.objectContaining({ name: "chromium", interface: "soksak-spec-sidecar-chromium@1" }),
     );
     // send 는 handle 동반 sidecar_send 위임
     (invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
@@ -951,17 +951,17 @@ describe("유닛 선택의 단일진실 — 매니페스트 sidecars[]", () => {
   const withSidecar = (name: string) =>
     manifestOf({
       permissions: ["process"],
-      sidecars: [{ name, interface: "soksak-sidecar-terminal-spec@1" }],
+      sidecars: [{ name, interface: "soksak-spec-sidecar-terminal@1" }],
     });
 
   it("계약을 구현한다고 선언된 유닛 이름을 내준다", () => {
     const { api } = buildPluginApi(withSidecar("terminal-wezterm"), "/d", fakeDeps());
-    expect(api.process?.sidecarName("soksak-sidecar-terminal-spec@1")).toBe("terminal-wezterm");
+    expect(api.process?.sidecarName("soksak-spec-sidecar-terminal@1")).toBe("terminal-wezterm");
   });
 
   it("선언이 없는 계약을 물으면 조용히 고르지 않고 죽는다", () => {
     const { api } = buildPluginApi(withSidecar("terminal-alacritty"), "/d", fakeDeps());
-    expect(() => api.process?.sidecarName("soksak-sidecar-browser-spec@1")).toThrow(/선언이 없다/);
+    expect(() => api.process?.sidecarName("soksak-spec-sidecar-browser@1")).toThrow(/선언이 없다/);
   });
 
   it("매니페스트에 없는 유닛은 스폰할 수 없다(선언≡실물)", async () => {

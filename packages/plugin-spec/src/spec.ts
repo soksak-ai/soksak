@@ -272,7 +272,7 @@ export function programPathSegments(path: string): string[] {
 
 // ── §3 매니페스트 ────────────────────────────────────────────────────────────
 
-export const SPEC_VERSION = "soksak-plugin-spec@1";
+export const SPEC_VERSION = "soksak-spec-plugin@1";
 export const DEFAULT_ENTRY = "main.js";
 
 // 외부 CLI/라이브러리 종속성 — 플러그인이 process 로 실행하는 외부 도구(npm 글로벌 CLI 등).
@@ -293,11 +293,11 @@ export type ReachStrategy =
 // 외부 런타임 의존성 = 4-tuple: identity(name·bin) + observe(작동 관찰) + accept(수용 술어) + reach(공급).
 // observe/accept/reach 는 선택 — 미선언이면 레거시 동작(존재=수용, install=공급). reconcile 엔진(M3)이 실행.
 // 사이드카(engine 모델) 의존 선언 — 플러그인이 열 공유 네이티브 모듈. name 은 사이드카 이름
-// (soksak-sidecar-<name> 의 <name>), interface 는 메시지 프로토콜 id@major. 코어가 로드 시 바이너리
-// 자기보고(soksak_sidecar_abi)와 대조한다 — 불일치는 거부(선언≡실물). 분류·ABI 정본 docs/SIDECARS.md.
+// (soksak-sidecar-<name> 의 <name>), interface 는 계약 id(soksak-spec-sidecar-<domain>@<major>).
+// 로드 시 바이너리 자기보고(soksak_sidecar_abi)와 대조 — 불일치는 거부(선언≡실물). 정본 docs/SIDECARS.md.
 export interface SidecarDep {
   name: string; // ^[a-z0-9][a-z0-9-]*$
-  interface: string; // ^[a-z0-9][a-z0-9.-]*@[0-9]+$ (예: "soksak-sidecar-browser-spec@1")
+  interface: string; // 계약 id (예: "soksak-spec-sidecar-browser@1")
   // 공급(선택) — 미설치 시 sha256 핀 아카이브(dist tar.gz)를 받아 ~/.soksak/sidecars/에 설치.
   // fetch 전용(사이드카는 command/vendor 비적용). 미선언이면 dev 스테이징(make) 전제.
   reach?: {
@@ -375,7 +375,7 @@ export interface PluginManifest {
   // plugin service 선언(제3 실행 형태 — 규범 docs/PLUGIN-SERVICE.md). sidecar 는 sidecars[]
   // 의 상주 바이너리 참조, interface 는 와이어 계약 id(PS5·PS6). "service" 권한 필수.
   service?: ServiceDecl;
-  // 이 플러그인이 구현하는 계약 선언(C3 L2 계약-핀) — 각 항목은 계약 id <scope>-spec@<major>.
+  // 이 플러그인이 구현하는 계약 선언(C3 L2 계약-핀) — 각 항목은 계약 id soksak-spec-<kind>-<domain>@<major>.
   // 선언 = 발견 대상: 소비자는 계약 id 로만 발견한다(구현체 무차별). 구현 pluginId 를 핀하지
   // 마라(L1 이름-핀 — 신규 결합 금지). 판올림은 major 별 id — @2 는 @1 을 대체하지 않는다(C4).
   // 문법·의미 정본 = contracts.ts + NAMING §8.
@@ -491,8 +491,8 @@ const VIEW_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const STATUS_CODE_RE = /^[a-z0-9][a-z0-9-]*$/;
 // 사이드카 이름(soksak-sidecar-<name> 의 <name>) — 경로 조립에 쓰이므로 traversal 안전 형식.
 const SIDECAR_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
-// 사이드카 interface id — "<protocol-id>@<major>" (예: soksak-sidecar-browser-spec@1).
-const SIDECAR_INTERFACE_RE = /^[a-z0-9][a-z0-9.-]*@[0-9]+$/;
+// 사이드카 interface 도 계약 id 다(soksak-spec-sidecar-<domain>@<major>) — 별도 정규식 없이
+// CONTRACT_ID_RE 로 검증한다. wire 축이 하나의 계약 id 문법으로 수렴(NAMING §8).
 const COMMAND_NAME_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 const EXT_RE = /^[a-z0-9]+$/;
 // SEMVER_RE·semverGte·semverSatisfies 는 semver.ts 로 이관(상단 재수출) — 단일진실 이동.
@@ -821,8 +821,8 @@ export function parseManifest(
           errors.push(`sidecars[${i}].name: ^[a-z0-9][a-z0-9-]*$ 필수`);
           return;
         }
-        if (!isNonEmptyString(item.interface) || !SIDECAR_INTERFACE_RE.test(item.interface)) {
-          errors.push(`sidecars[${i}].interface: ^[a-z0-9][a-z0-9.-]*@[0-9]+$ 필수(예: soksak-sidecar-browser-spec@1)`);
+        if (!isNonEmptyString(item.interface) || !CONTRACT_ID_RE.test(item.interface.trim())) {
+          errors.push(`sidecars[${i}].interface: 계약 id soksak-spec-sidecar-<domain>@<major> 필수(예: soksak-spec-sidecar-browser@1)`);
           return;
         }
         const dep: SidecarDep = { name: item.name.trim(), interface: item.interface.trim() };
@@ -1370,7 +1370,7 @@ export function parseManifest(
           // 플러그인 id 를 핀(name-pin)하고 viewContract 는 계약으로 발견한다 — 둘은 상호배타다.
           if (v.viewContract !== undefined && (!isNonEmptyString(v.viewContract) || !CONTRACT_ID_RE.test(v.viewContract.trim()))) {
             errs.push(
-              `contributes.programs["${id}"].viewContract: 계약 id 형식(<scope>-spec@<major>)`,
+              `contributes.programs["${id}"].viewContract: 계약 id 형식(soksak-spec-<kind>-<domain>@<major>)`,
             );
             return null;
           }

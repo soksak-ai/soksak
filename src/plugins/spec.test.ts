@@ -1,4 +1,4 @@
-// soksak-plugin-spec v1 검증 매트릭스 — all-or-nothing(§0-3) 계약 고정.
+// soksak-spec-plugin v1 검증 매트릭스 — all-or-nothing(§0-3) 계약 고정.
 import { describe, expect, it } from "vitest";
 import {
   configDefaults,
@@ -311,7 +311,7 @@ describe("parseManifest — 거부(필수 필드)", () => {
   });
 
   it.each([
-    ["spec 불일치", base({ spec: "soksak-plugin-spec@2" }), "spec"],
+    ["spec 불일치", base({ spec: "soksak-spec-plugin@2" }), "spec"],
     ["id 형식 위반(대문자)", base({ id: "Demo" }), "id"],
     ["id 형식 위반(선행 하이픈)", base({ id: "-demo" }), "id"],
     ["name 누락", { ...base(), name: undefined }, "name"],
@@ -791,7 +791,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
         permissions: ["programs"],
         contributes: {
           programs: [
-            { id: "claude", title: "Claude", kind: "view", view: "content", viewContract: "terminal-spec@1", command: "claude" },
+            { id: "claude", title: "Claude", kind: "view", view: "content", viewContract: "soksak-spec-plugin-terminal@1", command: "claude" },
           ],
         },
       }),
@@ -799,7 +799,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     );
     expect(validation.errors).toEqual([]);
     expect(manifest?.contributes.programs[0]).toMatchObject({
-      viewContract: "terminal-spec@1",
+      viewContract: "soksak-spec-plugin-terminal@1",
       view: "content",
       command: "claude",
     });
@@ -807,7 +807,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     expect((manifest?.contributes.programs[0] as { viewPlugin?: string }).viewPlugin).toBeUndefined();
   });
 
-  it("viewContract 계약 id 문법 위반 → 거부(<scope>-spec@<major>)", () => {
+  it("viewContract 계약 id 문법 위반 → 거부(soksak-spec-<kind>-<domain>@<major>)", () => {
     const errs = errorsOf(
       base({
         permissions: ["programs"],
@@ -823,7 +823,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
         permissions: ["programs"],
         contributes: {
           programs: [
-            { id: "a", title: "x", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", viewContract: "terminal-spec@1" },
+            { id: "a", title: "x", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", viewContract: "soksak-spec-plugin-terminal@1" },
           ],
         },
       }),
@@ -977,7 +977,7 @@ describe("scanHostChromeViolations — 호스트 크롬 표준 정적 게이트"
 });
 
 describe("parseManifest — sidecars(engine 모듈 의존 선언)", () => {
-  const sc = { name: "browser-chromium", interface: "soksak-sidecar-browser-spec@1" };
+  const sc = { name: "browser-chromium", interface: "soksak-spec-sidecar-browser@1" };
   it("유효한 sidecars 수용(sidecar 권한 동반)", () => {
     const { manifest, validation } = parseManifest(
       base({ permissions: ["sidecar"], sidecars: [sc] }),
@@ -995,7 +995,7 @@ describe("parseManifest — sidecars(engine 모듈 의존 선언)", () => {
     expect(validation.errors.join()).toContain("권한 선언 필요");
   });
   it('service 모델 사이드카는 "process" 권한으로 sidecars 선언 수용(engine 아닌 별도 프로세스)', () => {
-    const svc = { name: "terminal-alacritty", interface: "soksak-sidecar-terminal-spec@1" };
+    const svc = { name: "terminal-alacritty", interface: "soksak-spec-sidecar-terminal@1" };
     const { manifest, validation } = parseManifest(
       base({ permissions: ["process"], sidecars: [svc] }),
       "demo",

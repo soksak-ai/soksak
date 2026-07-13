@@ -21,11 +21,11 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 // hello 판정을 소비하는 쪽(서비스·앱)이 판정 타입과 스큐 문장을 이 크레이트 한 경로로
-// 받는다 — soksak-protocol 이중 의존 대신 재수출(정본은 그대로 soksak-protocol).
-pub use soksak_protocol::{skew_sentence, Compat, Lang};
+// 받는다 — soksak-spec-socket 이중 의존 대신 재수출(정본은 그대로 soksak-spec-socket).
+pub use soksak_spec_socket::{skew_sentence, Compat, Lang};
 
 /// Version of the plugin service wire contract. Bump rules follow the socket
-/// protocol precedent (soksak-protocol): additive optional fields and new
+/// protocol precedent (soksak-spec-socket): additive optional fields and new
 /// frame kinds never bump; a change in framing, the envelope, or the meaning
 /// of an existing field does. A breaking bump is C4 re-legislation (PS16).
 pub const SERVICE_PROTOCOL_VERSION: u32 = 1;
@@ -38,7 +38,7 @@ pub const SERVICE_MIN_COMPATIBLE_PROTOCOL: u32 = 1;
 /// The wire contract id the manifest `service.interface` declares (PS5).
 /// Never mint a contract id the C1 plugin-id scanner would sanction — this id
 /// deliberately does not start with `soksak-plugin-` (PS6).
-pub const SERVICE_INTERFACE: &str = "soksak-service-spec@1";
+pub const SERVICE_INTERFACE: &str = "soksak-spec-service@1";
 
 /// One NDJSON line never exceeds this many bytes, either direction (PS5).
 /// An oversized or unparseable line is a protocol fault — the restart path,
@@ -64,11 +64,11 @@ pub const DEFAULT_REQ_TIMEOUT_MS: u64 = 10_000;
 
 /// Compatibility verdict for a service hello, judged with the shared socket
 /// grammar. One rule carries both halves: absent = 0, floor decides.
-pub fn judge_hello(declared: Option<u32>) -> soksak_protocol::Compat {
-    soksak_protocol::evaluate_compat(
+pub fn judge_hello(declared: Option<u32>) -> soksak_spec_socket::Compat {
+    soksak_spec_socket::evaluate_compat(
         SERVICE_PROTOCOL_VERSION,
         SERVICE_MIN_COMPATIBLE_PROTOCOL,
-        soksak_protocol::effective_protocol(declared),
+        soksak_spec_socket::effective_protocol(declared),
     )
 }
 
@@ -347,7 +347,7 @@ impl ErrCode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soksak_protocol::Compat;
+    use soksak_spec_socket::Compat;
 
     // ── path contract: protocol-keyed names under the identity home ─────────
 
@@ -391,12 +391,15 @@ mod tests {
 
     #[test]
     fn interface_id_follows_naming_and_avoids_the_plugin_id_grammar() {
-        assert_eq!(SERVICE_INTERFACE, "soksak-service-spec@1");
+        assert_eq!(SERVICE_INTERFACE, "soksak-spec-service@1");
         assert!(
             !SERVICE_INTERFACE.starts_with("soksak-plugin-"),
             "PS6: the C1 scan flags soksak-plugin-* tokens in core source"
         );
-        assert!(SERVICE_INTERFACE.contains("-spec@"), "NAMING §8 kind marker");
+        assert!(
+            SERVICE_INTERFACE.starts_with("soksak-spec-"),
+            "NAMING §8: a contract id begins with soksak-spec-"
+        );
     }
 
     // ── ops equality: bidirectional declared ≡ actual (PS3) ─────────────────
@@ -567,7 +570,7 @@ mod tests {
     #[test]
     fn ledger_defaults_tolerate_absent_optional_lists() {
         let minimal = r#"{"version":1,"services":[{"plugin":"p","sidecar":"s",
-            "interface":"soksak-service-spec@1","ops":["run"]}]}"#;
+            "interface":"soksak-spec-service@1","ops":["run"]}]}"#;
         let back: BindLedger = serde_json::from_str(minimal).unwrap();
         assert_eq!(back.services[0].subscribe, Vec::<String>::new());
         assert_eq!(back.services[0].schedules, Vec::<LedgerSchedule>::new());

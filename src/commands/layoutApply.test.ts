@@ -18,7 +18,7 @@ import { useProgramRegistry } from "../plugins/programRegistry";
 import { usePlugins, type PluginRuntime } from "../state/plugins";
 import type { ContributedProgram, PluginManifest } from "../plugins/spec";
 
-// dev 프리셋의 첫 패널은 터미널 계약(terminal-spec@1)을 설정 엔진으로 해소한다 — 특정 program id
+// dev 프리셋의 첫 패널은 터미널 계약(soksak-spec-plugin-terminal@1)을 설정 엔진으로 해소한다 — 특정 program id
 // 하드코딩이 아니다. 테스트 환경엔 플러그인 로더가 없으므로 계약 구현체를 직접 세운다:
 //   ① 엔진 program 을 useProgramRegistry 에 등록,
 //   ② implements 를 단 enabled 플러그인을 usePlugins 에 넣어 발견되게 한다.
@@ -33,7 +33,7 @@ useProgramRegistry.getState().register(XTERM, {
 
 const terminalEnginePlugins: Record<string, PluginRuntime> = {
   [XTERM]: {
-    manifest: { id: XTERM, implements: ["terminal-spec@1"] } as unknown as PluginManifest,
+    manifest: { id: XTERM, implements: ["soksak-spec-plugin-terminal@1"] } as unknown as PluginManifest,
     dir: "",
     source: "dev",
     status: "enabled",
@@ -118,7 +118,7 @@ describe("layout.apply", () => {
     // 브라우저는 있으므로 그 패널만 남고, 터미널은 skipped.
     expect(data.spaces[0].panels.map((p) => p.program)).toEqual(["browser"]);
     expect(data.skipped).toBeDefined();
-    const terminalSkip = data.skipped!.find((s) => s.program === "terminal-spec@1");
+    const terminalSkip = data.skipped!.find((s) => s.program === "soksak-spec-plugin-terminal@1");
     expect(terminalSkip).toBeDefined();
     expect(terminalSkip!.reason.length).toBeGreaterThan(0);
   });

@@ -243,18 +243,18 @@ describe("implementsViolations — C3 implements 선언 generic 검사", () => {
 
   it("정상 선언 → 위반 없음", () => {
     expect(
-      implementsViolations(["fixture-notes-spec@1", "fixture-board-spec@2"]),
+      implementsViolations(["soksak-spec-plugin-fixture-notes@1", "soksak-spec-plugin-fixture-board@2"]),
     ).toEqual([]);
   });
 
   it("배열이 아님 → implements-shape(그 외 검사는 항목이 없어 침묵)", () => {
-    expect(implementsViolations("fixture-notes-spec@1").map((v) => v.rule)).toEqual([
+    expect(implementsViolations("soksak-spec-plugin-fixture-notes@1").map((v) => v.rule)).toEqual([
       "implements-shape",
     ]);
   });
 
   it("비문자열 항목 → implements-shape, 문자열 항목 검사는 계속된다", () => {
-    const v = implementsViolations(["fixture-notes-spec@1", 7]);
+    const v = implementsViolations(["soksak-spec-plugin-fixture-notes@1", 7]);
     expect(v.map((x) => x.rule)).toEqual(["implements-shape"]);
   });
 
@@ -266,13 +266,13 @@ describe("implementsViolations — C3 implements 선언 generic 검사", () => {
   });
 
   it("중복 선언 → implements-duplicate", () => {
-    const v = implementsViolations(["fixture-notes-spec@1", "fixture-notes-spec@1"]);
+    const v = implementsViolations(["soksak-spec-plugin-fixture-notes@1", "soksak-spec-plugin-fixture-notes@1"]);
     expect(v.map((x) => x.rule)).toEqual(["implements-duplicate"]);
-    expect(v[0].detail).toContain("fixture-notes-spec@1");
+    expect(v[0].detail).toContain("soksak-spec-plugin-fixture-notes@1");
   });
 
   it("복합 위반이면 전부 보고한다(은폐 0)", () => {
-    const v = implementsViolations([7, "bad@1", "fixture-notes-spec@1", "fixture-notes-spec@1"]);
+    const v = implementsViolations([7, "bad@1", "soksak-spec-plugin-fixture-notes@1", "soksak-spec-plugin-fixture-notes@1"]);
     expect(v.map((x) => x.rule)).toEqual([
       "implements-shape",
       "implements-grammar",

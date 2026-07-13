@@ -24,7 +24,7 @@ function base(overrides: Record<string, unknown> = {}): Record<string, unknown> 
     description: "테스트용",
     entry: null,
     permissions: ["commands", "sidecar", "service"],
-    sidecars: [{ name: "demo-svc", interface: "soksak-fixture-wire-spec@1" }],
+    sidecars: [{ name: "demo-svc", interface: "soksak-spec-sidecar-fixture-wire@1" }],
     service: { sidecar: "demo-svc", interface: SERVICE_INTERFACE },
     contributes: {
       commands: [
@@ -188,7 +188,7 @@ describe("service — 거부(PS3·PS5·PS6)", () => {
   });
 
   it("service.interface 계약 문법 위반(-spec@ 부재·판 별칭) → 거부(PS6·NAMING §8)", () => {
-    for (const iface of ["soksak-service@1", "soksak-service-spec@01", "Service-Spec@1"]) {
+    for (const iface of ["soksak-service@1", "soksak-spec-service@01", "Service-Spec@1"]) {
       const errs = errorsOf(
         base({ service: { sidecar: "demo-svc", interface: iface } }),
       );

@@ -2,7 +2,7 @@
 // 앱 종료·재시작·크래시에도 같은 pid 로 생존시키고, 재부착 시 detach 동안의 출력
 // (스크롤백 링)을 재생한다. 프로세스 분리 3사유 중 "생존"(플랜 §2 축1).
 //
-// 경계 지불(축1): ① 버전 협상 = NDJSON hello(soksak-pty-proto judge_client)
+// 경계 지불(축1): ① 버전 협상 = NDJSON hello(soksak-spec-pty judge_client)
 // ② 죽음 감지 = 소켓 에러 이벤트(클라이언트/데몬 어느 쪽이 죽어도 상대 소켓이
 //    EOF/에러로 즉시 안다 — 폴링 0)
 // ③ 폴백+고지 = 앱 쪽 pty.rs 라우터가 소유(로컬 in-process 폴백 + activity 고지).
@@ -10,7 +10,7 @@
 // 제어 표면 아님: 이 소켓은 PTY 데이터 평면 전용이다. 명령 표면은 코어 command
 // registry 한 경로가 불변이다(플랜 §2 축1 — 수기 RPC 이중 제어 표면 금지).
 //
-// 소켓 2본(프로토콜별 경로, soksak-pty-proto 가 정본):
+// 소켓 2본(프로토콜별 경로, soksak-spec-pty 가 정본):
 //   control  <home>/run/ptyd-p<N>.sock         NDJSON 요청/응답(hello 선행)
 //   stream   <home>/run/ptyd-p<N>-stream.sock  hello 1줄 교환 후 raw PTY 출력
 // 인증: <home>/run/ptyd-p<N>.token (0600) 공유 토큰 — hello 에 실어 보낸다.
@@ -50,7 +50,7 @@ mod unix {
     use base64::Engine as _;
     use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
     use serde_json::{json, Value};
-    use soksak_pty_proto as proto;
+    use soksak_spec_pty as proto;
 
     use crate::ring::RawRing;
     use crate::tee::{TeeBuf, TeeFrame};
@@ -99,7 +99,7 @@ mod unix {
         subscribers: Vec<Arc<TeeSub>>,
     }
 
-    // 체크포인트 봉인 설정 — 수신 공개키·볼트 키 id·경로·AAD(전부 soksak-pty-proto 규약).
+    // 체크포인트 봉인 설정 — 수신 공개키·볼트 키 id·경로·AAD(전부 soksak-spec-pty 규약).
     #[derive(Clone)]
     struct CkptCfg {
         pk: [u8; 32],

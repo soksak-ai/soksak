@@ -2,10 +2,10 @@
 name = "soksak-ptyd"
 version = "0.1.0"
 edition = "2021"
-description = "PTY session daemon: owns shells and their children outside the app process so they survive app restarts, and serves attach/detach over identity-home sockets (soksak-pty-proto contract)."
+description = "PTY session daemon: owns shells and their children outside the app process so they survive app restarts, and serves attach/detach over identity-home sockets (soksak-spec-pty contract)."
 
 [dependencies]
-soksak-pty-proto = { path = "../soksak-pty-proto" }
+soksak-spec-pty = { path = "../soksak-spec-pty" }
 serde_json = "1"
 portable-pty = "0.9"
 base64 = "0.22"

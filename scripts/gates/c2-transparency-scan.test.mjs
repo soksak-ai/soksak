@@ -33,7 +33,7 @@ function writePlugin(id, contributes, permissions = ["ui", "commands"]) {
   writeFileSync(
     join(dir, "plugin.json"),
     JSON.stringify({
-      spec: "soksak-plugin-spec@1",
+      spec: "soksak-spec-plugin@1",
       id,
       name: id,
       version: "1.0.0",
@@ -140,8 +140,8 @@ describe("게이트 exit code — blocking 위반 0 실측", () => {
 describe("judgeManifests — 모집단-무관 판정(소스 분리)", () => {
   it("entries 를 규칙별로 집계한다(dir 순회와 동일 판정)", () => {
     const r = judgeManifests([
-      { name: "soksak-plugin-viewer", text: JSON.stringify({ spec: "soksak-plugin-spec@1", id: "soksak-plugin-viewer", name: "v", version: "1.0.0", description: "f", permissions: ["ui"], contributes: { fileViewers: [{ id: "img", extensions: ["png"] }] } }) },
-      { name: "soksak-plugin-clean", text: JSON.stringify({ spec: "soksak-plugin-spec@1", id: "soksak-plugin-clean", name: "c", version: "1.0.0", description: "f", permissions: ["ui", "commands"], contributes: { views: [{ id: "c", title: "C", icon: "C", placements: ["content"], status: [] }], commands: [{ name: "o", title: "O" }], nodes: [{ id: "root" }] } }) },
+      { name: "soksak-plugin-viewer", text: JSON.stringify({ spec: "soksak-spec-plugin@1", id: "soksak-plugin-viewer", name: "v", version: "1.0.0", description: "f", permissions: ["ui"], contributes: { fileViewers: [{ id: "img", extensions: ["png"] }] } }) },
+      { name: "soksak-plugin-clean", text: JSON.stringify({ spec: "soksak-spec-plugin@1", id: "soksak-plugin-clean", name: "c", version: "1.0.0", description: "f", permissions: ["ui", "commands"], contributes: { views: [{ id: "c", title: "C", icon: "C", placements: ["content"], status: [] }], commands: [{ name: "o", title: "O" }], nodes: [{ id: "root" }] } }) },
     ]);
     expect(r.scanned).toBe(2);
     expect(r.perRule["command-surface"]).toEqual(["soksak-plugin-viewer"]);
@@ -159,7 +159,7 @@ describe("scanRegistry — 배포 모집단 실측(주입 fetcher, 무네트워�
   it("public 매니페스트를 같은 판정으로 스캔한다 — blocking 위반이면 게이트 실패 조건", async () => {
     // dev-home 은 0 이어도 public 이 blocking 규칙을 위반하면 승격이 불건전 — 이 모드가 그걸 잡는다.
     const fetchEntries = async () => [
-      { name: "soksak-plugin-lagging", text: JSON.stringify({ spec: "soksak-plugin-spec@1", id: "soksak-plugin-lagging", name: "l", version: "1.0.0", description: "f", permissions: ["ui"], contributes: { fileViewers: [{ id: "img", extensions: ["png"] }] } }) },
+      { name: "soksak-plugin-lagging", text: JSON.stringify({ spec: "soksak-spec-plugin@1", id: "soksak-plugin-lagging", name: "l", version: "1.0.0", description: "f", permissions: ["ui"], contributes: { fileViewers: [{ id: "img", extensions: ["png"] }] } }) },
     ];
     const r = await scanRegistry({ fetchEntries });
     expect(r.source).toBe("registry");
@@ -169,7 +169,7 @@ describe("scanRegistry — 배포 모집단 실측(주입 fetcher, 무네트워�
 
   it("public 이 전부 적합하면 위반 0(승격 건전)", async () => {
     const fetchEntries = async () => [
-      { name: "soksak-plugin-ok", text: JSON.stringify({ spec: "soksak-plugin-spec@1", id: "soksak-plugin-ok", name: "o", version: "1.0.0", description: "f", permissions: ["ui", "commands"], contributes: { views: [{ id: "c", title: "C", icon: "C", placements: ["content"], status: [] }], commands: [{ name: "o", title: "O" }], nodes: [{ id: "root" }] } }) },
+      { name: "soksak-plugin-ok", text: JSON.stringify({ spec: "soksak-spec-plugin@1", id: "soksak-plugin-ok", name: "o", version: "1.0.0", description: "f", permissions: ["ui", "commands"], contributes: { views: [{ id: "c", title: "C", icon: "C", placements: ["content"], status: [] }], commands: [{ name: "o", title: "O" }], nodes: [{ id: "root" }] } }) },
     ];
     const r = await scanRegistry({ fetchEntries });
     expect(blockingViolationCount(r.perRule)).toBe(0);

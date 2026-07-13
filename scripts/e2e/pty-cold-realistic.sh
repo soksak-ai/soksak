@@ -162,7 +162,7 @@ def snapshot(win, name):
     p = os.path.join(TMP, f"{name}.png"); open(p, "wb").write(png)
     print(f"  캡처: {p}")
 
-# 이 pane 의 체크포인트 파일 — soksak-pty-proto 의 base64url(무패딩) 파생과 동형.
+# 이 pane 의 체크포인트 파일 — soksak-spec-pty 의 base64url(무패딩) 파생과 동형.
 # glob 로 아무 파일이나(형제 창의 것) 집으면 오라클을 흐린다: 반드시 (창,pane) 로 특정한다.
 def ckpt_path_for(window, pane):
     comp = lambda s: base64.urlsafe_b64encode(s.encode()).rstrip(b"=").decode()

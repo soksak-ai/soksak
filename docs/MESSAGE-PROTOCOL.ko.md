@@ -105,7 +105,7 @@ origin 운반: Rust 내부 발화(스케줄러)는 `request_command(origin:"sche
 
 사이드카 자체 wire(engine C-ABI / service stdio / iroh socket)는 코어가 계약상 해석하지 않는다 — 코어는 의미 모르는 바이트를 릴레이한다. **표준은 명령 표면**(코어+플러그인+사이드카노출명령)을 다스리지 사이드카 wire가 아니다. 사이드카를 앞세우는 플러그인 어댑터(`main.js`·`adapter.ts`)가 ① 사이드카 이벤트를 표준 `command.progress`로 변환, ② 최종 결과를 응답 봉투로 매핑한다. 세 사이드카 wire를 하나로 통일하는 건 범위 밖(A14); 진행 노출로 "사이드카가 무엇을 했는지"는 확보한다.
 
-**플러그인 서비스(PS7 재입법, docs/PLUGIN-SERVICE.md):** 제3 형태 — 상주 plugin service 가 소유하는 `bind:"service"` 커맨드 — 에서는 어댑터 역할이 와이어 계약(`soksak-service-spec@1`) 자체에 흡수된다: 진행 `ev` 프레임은 코어에서 표준 `command.progress`로 사상되고, `res` 봉투가 `message`·`hints`를 1급 필드로 나른다. 소유권은 불변이다 — 사람 문장은 여전히 커맨드 구현이 소유하되, JS 클로저 대신 와이어로 도착한다. 레지스트리는 봉투 제공 `message`/`hints`를 **오직** `envelope: "service"` 표시 스펙(코어 합성 프록시만 설정)에서만 수용한다; 다른 모든 커맨드는 런타임 함수 seam 을 유지한다. 와이어 message 부재는 로더 규칙과 정확히 같게 라벨로 열화한다 — 절대 거부가 아니다.
+**플러그인 서비스(PS7 재입법, docs/PLUGIN-SERVICE.md):** 제3 형태 — 상주 plugin service 가 소유하는 `bind:"service"` 커맨드 — 에서는 어댑터 역할이 와이어 계약(`soksak-spec-service@1`) 자체에 흡수된다: 진행 `ev` 프레임은 코어에서 표준 `command.progress`로 사상되고, `res` 봉투가 `message`·`hints`를 1급 필드로 나른다. 소유권은 불변이다 — 사람 문장은 여전히 커맨드 구현이 소유하되, JS 클로저 대신 와이어로 도착한다. 레지스트리는 봉투 제공 `message`/`hints`를 **오직** `envelope: "service"` 표시 스펙(코어 합성 프록시만 설정)에서만 수용한다; 다른 모든 커맨드는 런타임 함수 seam 을 유지한다. 와이어 message 부재는 로더 규칙과 정확히 같게 라벨로 열화한다 — 절대 거부가 아니다.
 
 ## 강제
 

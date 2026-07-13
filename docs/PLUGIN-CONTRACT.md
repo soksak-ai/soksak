@@ -107,14 +107,14 @@ every contribution kind — commands, views, fileViewers, iconSets, nodes, libra
   core detects and rejects it, it does not "fix" it. Only `libraries` (external tools, which are
   system state) reconcile toward the declaration.
 - **`implements` is checked as a declaration, never as a capability.** A manifest-level
-  `implements: ["<scope>-spec@<major>"]` entry (coupling law C3, the L2 contract-pin) declares which
+  `implements: ["soksak-spec-<kind>-<domain>@<major>"]` entry (coupling law C3, the L2 contract-pin) declares which
   contracts this plugin implements. The core checks only that the declaration itself holds — shape
   (string array), contract-id grammar (NAMING §8), duplicates. What surfaces a contract *requires*
   is the contract owner's law; the core knows no contract (C1) and never verifies it. Consumers
   resolve implementers by contract id (`sok plugin.implementers`) — discovery is contract-addressed
   and implementation-blind. Do not pin a plugin id for a new coupling (that is L1, banned).
 - **`consumes` is the caller side of the same pin.** A manifest-level
-  `consumes: ["<scope>-spec@<major>"]` entry declares which contracts this plugin calls. The core's
+  `consumes: ["soksak-spec-<kind>-<domain>@<major>"]` entry declares which contracts this plugin calls. The core's
   cross-plugin call boundary admits `plugin.<targetId>.<cmd>` when the caller declares the contract
   and the target declares `implements` for it — so a consumer names the contract, never an
   implementation, and a second implementer needs no manifest edit anywhere. Without this axis the

@@ -1,5 +1,5 @@
 {
-  "spec": "soksak-plugin-spec@1",
+  "spec": "soksak-spec-plugin@1",
   "id": "mismatch",
   "version": "not-semver",
   "permissions": "not-an-array",

@@ -10,7 +10,7 @@ import {
 
 function manifest(id, { version = "1.0.0", dependencies } = {}) {
   return JSON.stringify({
-    spec: "soksak-plugin-spec@1",
+    spec: "soksak-spec-plugin@1",
     id,
     name: id,
     version,

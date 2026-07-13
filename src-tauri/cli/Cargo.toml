@@ -9,5 +9,5 @@ edition = "2021"
 
 [dependencies]
 # 소켓 프로토콜 계약(버전 상수+호환창+순수 판정) — 앱과 공유하는 단일진실, 상수 사본 금지.
-soksak-protocol = { path = "../protocol" }
+soksak-spec-socket = { path = "../crates/soksak-spec-socket" }
 serde_json = "1"

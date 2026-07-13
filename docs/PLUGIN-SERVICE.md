@@ -1,7 +1,7 @@
 # Plugin Service — the service-axis serve standard
 
 Normative law for the **service axis**: how a soksak-authored resident process communicates
-over stdio. There is ONE wire for the whole axis — `soksak-service-spec@1`, NDJSON over
+over stdio. There is ONE wire for the whole axis — `soksak-spec-service@1`, NDJSON over
 stdio — and ONE serve harness that every such sidecar borrows. The investigation that
 produced this law found the same NDJSON dance (spawn → line-buffer → parse → dispatch →
 write → close-stdin-EOF → exit-on-pipe-death) hand-rolled independently across four+ plugins
@@ -16,8 +16,8 @@ the socket protocol: keeping it off the socket means a service is never socket-a
 `cmd` frame (identity inherent in the pipe) — never a socket callback.
 
 The wire constants and serde types, and the reference serve harness, have one source: the
-`soksak-service-proto` crate (`src-tauri/crates/soksak-service-proto`) — consumers depend on
-the crate and never copy a constant (the `soksak-pty-proto` discipline). The manifest schema
+`soksak-spec-service` crate (`src-tauri/crates/soksak-spec-service`) — consumers depend on
+the crate and never copy a constant (the `soksak-spec-pty` discipline). The manifest schema
 has one judge: `@soksak-ai/plugin-spec` `parseManifest`.
 
 Cited laws are referenced, never restated: the coupling law C1–C5 (ARCHITECTURE §7), the
@@ -42,7 +42,7 @@ the stdio connection:
 | Command surface | the plugin's own registry commands call it | the core routes `bind:"service"` commands natively |
 | Entry | plugin has an entry module | `entry: null` lawful (pure contract) |
 | Examples | speech (mascot/sherpa) | workflow |
-| Wire | `soksak-service-spec@1` NDJSON stdio (shared harness) | same |
+| Wire | `soksak-spec-service@1` NDJSON stdio (shared harness) | same |
 
 Both modes speak the identical wire and use the identical serve harness on the sidecar side;
 the plugin-driven mode uses the shared JS client, the core-routed mode uses the
@@ -88,11 +88,11 @@ data-only contributions — `programs`, `events`, `skill`, `configuration` — r
 Any other `entry: null` combination is rejected. The loader activates such a plugin without
 reading an entry module; transparency gates (C2) apply unchanged.
 
-**PS5 — The wire is `soksak-service-spec@1`.** NDJSON both directions over stdio; one JSON
+**PS5 — The wire is `soksak-spec-service@1`.** NDJSON both directions over stdio; one JSON
 frame per line; a line never exceeds 4 MB — an oversized or unparseable line is a protocol
 fault and enters the restart path (PS10), never a silent skip. The first service line is
 `hello` (protocol version, interface id, `ops[]`, `subscribe[]`); the core verifies
-compatibility with the `soksak-protocol` verdict grammar and the manifest declaration, then
+compatibility with the `soksak-spec-socket` verdict grammar and the manifest declaration, then
 answers `ready`. Frames: `req`/`res` (command execution, id-multiplexed), `ev` (progress,
 tied to a req id), `act` (activity, standalone), `cmd`/`cmdres` (mediated outbound call),
 `push` (subscribed events, core→service), `shutdown`. The error code set is a closed enum
@@ -100,9 +100,9 @@ in the proto crate; the core maps any unknown code to `INTERNAL` and never leaks
 service string past the envelope.
 
 **PS6 — Contract ids in core source never match the plugin-id grammar.** The C1 scan flags
-`soksak-plugin-*` tokens in core; therefore the wire contract is `soksak-service-spec@1`
-and the crate is `soksak-service-proto`. Never mint a contract id that the plugin-id
-scanner would sanction. The id follows NAMING §8 (`<scope>-spec@<major>`); it appears in
+`soksak-plugin-*` tokens in core; therefore the wire contract is `soksak-spec-service@1`
+and the crate is `soksak-spec-service`. Never mint a contract id that the plugin-id
+scanner would sanction. The id follows NAMING §8 (`soksak-spec-<kind>-<domain>@<major>`); it appears in
 the manifest `service.interface` declaration — amending NAMING §8's surface list to admit
 that declaration is part of this legislation, never a silent addition (C4).
 
@@ -192,7 +192,7 @@ recorded in this document.
 **PS17 — The serve loop is a shared harness, not hand-rolled.** The framing every service
 needs — line-buffered NDJSON read, one-JSON-per-line write with flush, hello emission,
 id-multiplexed req/res, streaming `ev`, close-stdin as EOF, exit on pipe death, the
-state-mutation mutex of PS16 — lives once in `soksak-service-proto` as `serve(handlers)`.
+state-mutation mutex of PS16 — lives once in `soksak-spec-service` as `serve(handlers)`.
 A sidecar author writes op handlers and nothing else; the loop is borrowed, never
 reimplemented. The core side (ServiceManager framing/routing) and the sidecar side
 (`serve`) depend on the same crate — the wire has one source, read from both ends. A future
@@ -223,12 +223,12 @@ the shared wire is mandatory only where soksak authors the resident binary.
   "entry": null,                          // PS4 — pure contract plugin
   "permissions": ["service", "..."],     // "service" is a caution permission (consent emphasis)
   "sidecars": [
-    { "name": "workflow", "interface": "soksak-sidecar-workflow-spec@1",
+    { "name": "workflow", "interface": "soksak-spec-sidecar-workflow@1",
       "reach": { "fetch": { "url": "...", "sha256": "..." } } }
   ],
   "service": {
     "sidecar": "workflow",                // names the sidecars[] entry that is the resident binary
-    "interface": "soksak-service-spec@1", // the wire this law governs (PS5, PS6)
+    "interface": "soksak-spec-service@1", // the wire this law governs (PS5, PS6)
     "subscribe": ["bus:kanban:changed"]   // PS15
   },
   "contributes": {
@@ -301,4 +301,4 @@ Every RED test that enforces this law cites its clause number. The CI ledger row
 
 Version: 2.0.0
 Status: AUTHORITATIVE
-Single source of truth: `soksak-service-proto` (wire + serve harness), `@soksak-ai/plugin-spec` (manifest)
+Single source of truth: `soksak-spec-service` (wire + serve harness), `@soksak-ai/plugin-spec` (manifest)

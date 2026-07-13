@@ -1,6 +1,7 @@
 // L2 계약-핀(C3)의 발견 축 — "계약 id → 구현 플러그인 id 목록" 해소(순수 함수, I/O 0).
-// 계약 id 문법은 NAMING §8(<scope>-spec@<major>)이 단일진실이고, 계약 id 의 등장면 2곳
-// (사이드카 핸드셰이크·매니페스트 implements)은 §8 재입법으로 입법됐다 — 이 파일은 그 문법의 기계화다.
+// 계약 id 문법은 NAMING §8(soksak-spec-<kind>-<domain>@<major>)이 단일진실이고, 계약 id 의
+// 등장면 다섯 곳(사이드카·서비스 wire·implements·consumes·viewContract)은 §8 재입법으로
+// 입법됐다 — 이 파일은 그 문법의 기계화다.
 //
 // 발견은 구현체 무차별(implementation-blind): 소비자는 계약 id 로만 찾고 플러그인 id 를
 // 하드코딩하지 않는다(L1 이름-핀은 신규 결합에 금지 — C3 사다리). 코어는 어떤 계약도 모른다(C1) —
@@ -12,16 +13,18 @@
 import { CONTRACT_ID_RE, type PluginManifest } from "./spec";
 
 export interface ContractId {
-  scope: string; // kind 마커(-spec) 앞의 도메인 스코프
+  scope: string; // "soksak-spec-" 접두 뒤의 kind+domain 스코프(예: "plugin-git", "sidecar-browser")
   major: number; // 판 — 판올림은 별도 계약(@2 는 @1 을 약속하지 않는다, NAMING §8)
 }
+
+const SPEC_PREFIX = "soksak-spec-";
 
 // 계약 id → { scope, major }. 문법 위반이면 null — 여기서 고쳐 주지 않는다(파생이지 발명이 아니다).
 export function parseContractId(raw: string): ContractId | null {
   if (!CONTRACT_ID_RE.test(raw)) return null;
   const at = raw.lastIndexOf("@");
   return {
-    scope: raw.slice(0, raw.lastIndexOf("-spec@")),
+    scope: raw.slice(SPEC_PREFIX.length, at),
     major: Number(raw.slice(at + 1)),
   };
 }

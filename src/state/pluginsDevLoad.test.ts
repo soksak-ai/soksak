@@ -32,7 +32,7 @@ const invoke = vi.fn(async (cmd: string, args?: { path?: string }) => {
     if (path.endsWith("/plugin.json")) {
       return {
         content: JSON.stringify({
-          spec: "soksak-plugin-spec@1",
+          spec: "soksak-spec-plugin@1",
           id: "soksak-plugin-demo",
           name: "데모",
           version: "1.0.0",
@@ -59,7 +59,7 @@ const ID = "soksak-plugin-demo";
 function demoRuntime(status: PluginRuntime["status"]): PluginRuntime {
   const { manifest } = parseManifest(
     {
-      spec: "soksak-plugin-spec@1",
+      spec: "soksak-spec-plugin@1",
       id: ID,
       name: "데모",
       version: "1.0.0",

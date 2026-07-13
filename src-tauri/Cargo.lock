@@ -4335,7 +4335,7 @@ name = "sok"
 version = "0.1.0"
 dependencies = [
  "serde_json",
- "soksak-protocol",
+ "soksak-spec-socket",
 ]
 
 [[package]]
@@ -4362,10 +4362,10 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "soksak-protocol",
- "soksak-pty-proto",
  "soksak-seal",
- "soksak-service-proto",
+ "soksak-spec-pty",
+ "soksak-spec-service",
+ "soksak-spec-socket",
  "tauri",
  "tauri-build",
  "tauri-plugin-deep-link",
@@ -4383,20 +4383,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "soksak-protocol"
-version = "0.1.0"
-
-[[package]]
-name = "soksak-pty-proto"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "serde",
- "serde_json",
- "soksak-protocol",
-]
-
-[[package]]
 name = "soksak-ptyd"
 version = "0.1.0"
 dependencies = [
@@ -4404,8 +4390,8 @@ dependencies = [
  "libc",
  "portable-pty",
  "serde_json",
- "soksak-pty-proto",
  "soksak-seal",
+ "soksak-spec-pty",
 ]
 
 [[package]]
@@ -4424,13 +4410,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "soksak-service-proto"
+name = "soksak-spec-pty"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
+ "soksak-spec-socket",
+]
+
+[[package]]
+name = "soksak-spec-service"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
- "soksak-protocol",
+ "soksak-spec-socket",
 ]
+
+[[package]]
+name = "soksak-spec-socket"
+version = "0.1.0"
 
 [[package]]
 name = "soup3"

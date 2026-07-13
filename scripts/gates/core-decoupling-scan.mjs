@@ -52,12 +52,6 @@ export const ALLOWLIST = [
       " 데이터 번역이며 rename 양끝 id 를 문법상 요구한다. line·token 제한으로 그 map 항목에만 적용된다." +
       " 옛 스냅샷 소멸 시 제거(제거 조건은 코드 주석).",
   },
-  {
-    file: "*",
-    token: /^soksak-plugin-spec(?:@[0-9]+)?$/,
-    reason:
-      "스펙 패키지명 — 계약 이름이지 플러그인 id 가 아니다. 매니페스트 spec 선언(scaffold·contract.json)과 주석이 이 이름을 문법상 요구한다.",
-  },
 ];
 
 const SCAN_ROOTS = ["src", "src-tauri"];

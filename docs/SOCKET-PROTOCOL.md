@@ -5,7 +5,7 @@ negotiation, and the compatibility window. Every socket consumer (`sok`, MCP, re
 forwarders, E2E harnesses) speaks this contract; the command payloads riding on it are
 specified in [MESSAGE-PROTOCOL.md](MESSAGE-PROTOCOL.md).
 
-**Single source of truth**: the `soksak-protocol` crate (`src-tauri/protocol`). It holds the
+**Single source of truth**: the `soksak-spec-socket` crate (`src-tauri/protocol`). It holds the
 version constants, the compatibility window, and the pure verdict functions. The app and every
 client depend on the crate — nobody copies a constant, so the two sides of the wire cannot
 drift apart silently.
@@ -71,7 +71,7 @@ A pre-negotiation app forwards `system.hello` to the front and answers
 
 ## 4. The compatibility window
 
-Constants (from `soksak-protocol`):
+Constants (from `soksak-spec-socket`):
 
 | constant | value | meaning |
 |---|---|---|

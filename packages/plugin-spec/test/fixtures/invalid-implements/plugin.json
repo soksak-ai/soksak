@@ -1,5 +1,5 @@
 {
-  "spec": "soksak-plugin-spec@1",
+  "spec": "soksak-spec-plugin@1",
   "id": "invalid-implements",
   "name": "Invalid Implements Fixture",
   "version": "0.1.0",
