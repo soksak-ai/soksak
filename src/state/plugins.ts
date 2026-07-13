@@ -524,6 +524,10 @@ export const usePlugins = create<PluginsState>((set, get) => {
 
       for (const e of entries) {
         if (e.manifest == null) {
+          // manifest 도 .soksak.json(설치/dev 상태)도 없는 폴더는 애초에 플러그인이 아니다 —
+          // 플러그인 폴더 아래 사는 코어 도구(검증 CLI 등)나 잡폴더다. 조용히 건너뛴다(에러 아님).
+          // 상태는 있는데 manifest 만 없으면 진짜 깨진 설치본이라 거부로 드러낸다(침묵 금지).
+          if (e.state == null) continue;
           rejected.push({ dir: e.dir, errors: [e.error ?? "manifest 없음"] });
           continue;
         }
