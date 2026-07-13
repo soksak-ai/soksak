@@ -20,7 +20,10 @@
 // 사이드카가 tee 를 소비해 미러링하고, 봉인-블롭 저장소(StoreBlob)로 체크포인트한다.
 //
 // 이 판의 정직한 한계 — 후속 레인 소유:
-//   - Windows(named pipe/ConPTY)·데몬 업그레이드 drain 은 후속(M5·운명 3분기 b).
+//   - Windows(named pipe/ConPTY)만 후속(M5·운명 3분기 b). 데몬 업그레이드 drain 은
+//     PrepareUpgrade 로 구현됐다: 새 데몬을 fd 상속(stdio dup)으로 스폰해 PTY master 를 넘기고,
+//     이전 데몬이 exit 해도 master 의 kernel refcount 가 새 데몬 dup 으로 남아 slave(셸)에
+//     SIGHUP 이 가지 않는다 — 무중단(HS1/HS2).
 
 // Pure plumbing substrate — platform-independent, unit-tested here. The unix
 // daemon body wires these into the reader/stream paths.
@@ -41,10 +44,12 @@ fn main() {
 mod unix {
     use std::collections::HashMap;
     use std::io::{BufRead, BufReader, Read, Write};
+    use std::fs::File;
     use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
     use std::os::unix::net::{UnixListener, UnixStream};
     use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     use std::sync::{Arc, Condvar, Mutex};
 
     use base64::Engine as _;
@@ -81,7 +86,7 @@ mod unix {
         // 부착된 stream 소켓(마지막 승자). None = detached.
         attached: Option<UnixStream>,
         // attach 세대 — stream 사망 감지 스레드가 자기 세대의 부착만 해제한다
-        // (새 attach 가 이미 승계했으면 no-op).
+        // (새 attach 가 이미 이어받았으면 no-op).
         attach_seq: u64,
         // 플로우 컨트롤(부착 중에만 유효) — pty.rs 와 같은 워터마크.
         unacked: usize,
@@ -170,15 +175,94 @@ mod unix {
         write_sealed_doc_atomic(&cfg.path, session_id, &doc)
     }
 
+    // A session's PTY master — owned (this daemon opened it via openpty) or
+    // adopted (inherited raw fd from a predecessor during a live handoff). The
+    // adopted arm reimplements the master ops directly on the raw fd, because
+    // portable_pty can't wrap an existing fd (it only forkpty's its own). HS2:
+    // the adopted fd IS the same kernel fd the predecessor held (an inherited
+    // dup), so the shell never sees a hangup across the daemon upgrade.
+    enum MasterHandle {
+        Owned(Box<dyn MasterPty + Send>),
+        Adopted(File),
+    }
+
+    impl MasterHandle {
+        fn resize(&self, size: PtySize) -> Result<(), String> {
+            match self {
+                MasterHandle::Owned(m) => m.resize(size).map_err(|e| e.to_string()),
+                MasterHandle::Adopted(f) => {
+                    let ws = libc::winsize {
+                        ws_row: size.rows,
+                        ws_col: size.cols,
+                        ws_xpixel: size.pixel_width,
+                        ws_ypixel: size.pixel_height,
+                    };
+                    let r = unsafe { libc::ioctl(f.as_raw_fd(), libc::TIOCSWINSZ, &ws) };
+                    if r == 0 { Ok(()) } else { Err(std::io::Error::last_os_error().to_string()) }
+                }
+            }
+        }
+        fn process_group_leader(&self) -> Option<libc::pid_t> {
+            match self {
+                MasterHandle::Owned(m) => m.process_group_leader(),
+                MasterHandle::Adopted(f) => {
+                    let pg = unsafe { libc::tcgetpgrp(f.as_raw_fd()) };
+                    if pg >= 0 { Some(pg) } else { None }
+                }
+            }
+        }
+        fn as_raw_fd(&self) -> Option<RawFd> {
+            match self {
+                MasterHandle::Owned(m) => m.as_raw_fd(),
+                MasterHandle::Adopted(f) => Some(f.as_raw_fd()),
+            }
+        }
+    }
+
+    // A session's child — owned (we spawned it; wait() reaps the zombie) or
+    // adopted (the shell was detached under init before this daemon existed, so
+    // this process is NOT its parent and can only observe liveness by pid).
+    enum ChildHandle {
+        Owned(Box<dyn Child + Send + Sync>),
+        Adopted(u32),
+    }
+
+    impl ChildHandle {
+        fn kill(&mut self) -> std::io::Result<()> {
+            match self {
+                ChildHandle::Owned(c) => c.kill(),
+                ChildHandle::Adopted(pid) => {
+                    let r = unsafe { libc::kill(*pid as libc::pid_t, libc::SIGKILL) };
+                    if r == 0 { Ok(()) } else { Err(std::io::Error::last_os_error()) }
+                }
+            }
+        }
+        // Reap/observe exit. Owned reaps the zombie; adopted polls pid liveness
+        // (the reader already saw EOF, so the shell is gone — returns promptly).
+        // Neither path's return value is consumed by callers.
+        fn wait(&mut self) {
+            match self {
+                ChildHandle::Owned(c) => {
+                    let _ = c.wait();
+                }
+                ChildHandle::Adopted(pid) => {
+                    while unsafe { libc::kill(*pid as libc::pid_t, 0) } == 0 {
+                        std::thread::sleep(std::time::Duration::from_millis(20));
+                    }
+                }
+            }
+        }
+    }
+
     struct Session {
         id: u64,
         pane_id: String,
         window_label: Option<String>,
         generation: u64,
         shell_pid: u32,
-        master: Mutex<Box<dyn MasterPty + Send>>,
+        master: Mutex<MasterHandle>,
         writer: Mutex<Box<dyn Write + Send>>,
-        child: Mutex<Box<dyn Child + Send + Sync>>,
+        child: Mutex<ChildHandle>,
         st: Mutex<SessState>,
         cv: Condvar,
     }
@@ -210,6 +294,9 @@ mod unix {
         next_gen: AtomicU64,
         // identity 홈 — 체크포인트 경로 파생(proto 규약)의 입력.
         home: PathBuf,
+        // 라이브 업그레이드(PrepareUpgrade) 진행 중 — mutation 요청을 거부해
+        // 새 데몬에 넘길 세션 집합을 고정한다(commit 전 rollback 가능).
+        handoff: AtomicBool,
     }
 
     impl Registry {
@@ -238,8 +325,15 @@ mod unix {
     // ── 부트 ─────────────────────────────────────────────────────────────────
 
     pub fn run() {
-        // identity 홈은 스폰한 앱이 명시한다 — 데몬이 identity 를 추측하지 않는다
-        // (경계에서 원인 제거: 홈 파생 규칙의 단일 소유자는 앱 home.rs 다).
+        // 라이브 업그레이드 새 데몬 진입 — 이전 데몬이 `--handoff <snapshot>` 로 스폰했다. 상속받은
+        // PTY master fd 로 세션을 adopt 하고, 이전 데몬의 exit 를 기다린 뒤 소켓을 넘겨받는다(§ do_handoff).
+        let args: Vec<String> = std::env::args().collect();
+        if args.get(1).map(|s| s == "--handoff").unwrap_or(false) {
+            run_handoff_adopt(args.get(2).map(|s| s.as_str()).unwrap_or(""));
+            return;
+        }
+
+        // identity 홈은 스폰한 앱이 명시한다 — 데몬이 identity 를 추측하지 않는다.
         let home = match std::env::var("SOKSAK_HOME") {
             Ok(h) if !h.is_empty() => PathBuf::from(h),
             _ => {
@@ -258,15 +352,27 @@ mod unix {
         let control_path = proto::control_socket_path(&home);
         let stream_path = proto::stream_socket_path(&home);
 
-        // 싱글턴: control 소켓에 살아있는 응답자가 있으면 내가 두 번째다 — 즉시 물러난다
-        // (연결 프로브 — 죽은 소켓 파일은 재바인드를 위해 제거).
+        // 싱글턴: control 소켓에 살아있는 응답자가 있으면 물러난다(연결 프로브).
         if UnixStream::connect(&control_path).is_ok() {
             eprintln!("soksak-ptyd: another daemon serves {control_path:?}; exiting");
             std::process::exit(0);
         }
+
+        let reg = Arc::new(Registry {
+            sessions: Mutex::new(HashMap::new()),
+            handoff: AtomicBool::new(false),
+            next_id: AtomicU64::new(0),
+            next_gen: AtomicU64::new(0),
+            home,
+        });
+        serve(reg, token, control_path, stream_path);
+    }
+
+    // 소켓 bind + accept 루프 — normal 부트와 handoff 새 데몬이 공유한다. 호출 전에 이전 데몬이
+    // 없음이 보장돼야 한다(normal=싱글턴 프로브, handoff=이전 데몬 exit 대기).
+    fn serve(reg: Arc<Registry>, token: String, control_path: PathBuf, stream_path: PathBuf) {
         let _ = std::fs::remove_file(&control_path);
         let _ = std::fs::remove_file(&stream_path);
-
         let control = match UnixListener::bind(&control_path) {
             Ok(l) => l,
             Err(e) => {
@@ -284,20 +390,12 @@ mod unix {
         for p in [&control_path, &stream_path] {
             let _ = std::fs::set_permissions(p, std::fs::Permissions::from_mode(0o600));
         }
-
         eprintln!(
             "soksak-ptyd: protocol {} pid {} serving {:?}",
             proto::PTYD_PROTOCOL_VERSION,
             std::process::id(),
-            run_dir
+            control_path.parent().unwrap_or(&control_path)
         );
-
-        let reg = Arc::new(Registry {
-            sessions: Mutex::new(HashMap::new()),
-            next_id: AtomicU64::new(0),
-            next_gen: AtomicU64::new(0),
-            home,
-        });
 
         // stream accept 루프(부착) — 별도 스레드.
         {
@@ -311,13 +409,106 @@ mod unix {
                 }
             });
         }
-
         // control accept 루프 — 메인 스레드.
         for conn in control.incoming().flatten() {
             let reg = reg.clone();
             let token = token.clone();
             std::thread::spawn(move || handle_control(conn, &reg, &token));
         }
+    }
+
+    // 라이브 업그레이드 새 데몬 진입점(§ do_handoff 의 상대). 이전 데몬이 상속시킨 PTY master
+    // fd(4..N)로 세션을 adopt 하고, IPC(fd 3)로 adopt-ack 를 보낸 뒤 이전 데몬의 exit(control 소켓
+    // 소멸)를 기다렸다가 소켓을 넘겨받는다. adopted 세션의 child 는 이 데몬의 자식이 아니므로 pid
+    // liveness 로 관찰한다(ChildHandle::Adopted). ring 은 새로 시작하고 앱 재부착의 warm gap 이 흡수한다.
+    fn run_handoff_adopt(snap_path: &str) {
+        let home = match std::env::var("SOKSAK_HOME") {
+            Ok(h) if !h.is_empty() => PathBuf::from(h),
+            _ => std::process::exit(2),
+        };
+        let doc = match std::fs::read(snap_path) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("soksak-ptyd: handoff snapshot read {snap_path}: {e}");
+                std::process::exit(2);
+            }
+        };
+        let snap: proto::HandoffSnapshot = match serde_json::from_slice(&doc) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("soksak-ptyd: handoff snapshot parse: {e}");
+                std::process::exit(2);
+            }
+        };
+        let max_id = snap.sessions.iter().map(|s| s.id).max().unwrap_or(0);
+        let max_gen = snap.sessions.iter().map(|s| s.generation).max().unwrap_or(0);
+        let reg = Arc::new(Registry {
+            sessions: Mutex::new(HashMap::new()),
+            handoff: AtomicBool::new(false),
+            next_id: AtomicU64::new(max_id),
+            next_gen: AtomicU64::new(max_gen),
+            home: home.clone(),
+        });
+        for hs in &snap.sessions {
+            // 상속받은 master fd 를 adopt — 이전 데몬이 가졌던 그 kernel fd(inherited dup)라 셸의
+            // slave 측은 master fd 소유자가 바뀐 것에 영향받지 않는다(HS2).
+            let master_file = unsafe { File::from_raw_fd(hs.fd_index as RawFd) };
+            let reader: Box<dyn Read + Send> = match master_file.try_clone() {
+                Ok(f) => Box::new(f),
+                Err(e) => {
+                    eprintln!("soksak-ptyd: adopt fd {} reader: {e}", hs.fd_index);
+                    continue;
+                }
+            };
+            let writer: Box<dyn Write + Send> = match master_file.try_clone() {
+                Ok(f) => Box::new(f),
+                Err(e) => {
+                    eprintln!("soksak-ptyd: adopt fd {} writer: {e}", hs.fd_index);
+                    continue;
+                }
+            };
+            let session = Arc::new(Session {
+                id: hs.id,
+                pane_id: hs.pane_id.clone(),
+                window_label: hs.window_label.clone(),
+                generation: hs.generation,
+                shell_pid: hs.shell_pid,
+                master: Mutex::new(MasterHandle::Adopted(master_file)),
+                writer: Mutex::new(writer),
+                child: Mutex::new(ChildHandle::Adopted(hs.shell_pid)),
+                st: Mutex::new(SessState {
+                    attached: None,
+                    attach_seq: 0,
+                    unacked: 0,
+                    paused: false,
+                    closed: false,
+                    ckpt: None,
+                    ring: RawRing::new(RING_CAP),
+                    subscribers: Vec::new(),
+                }),
+                cv: Condvar::new(),
+            });
+            reg.sessions.lock().unwrap().insert(hs.id, session.clone());
+            spawn_reader(&reg, session, reader);
+        }
+        // adopt-ack — 이전 데몬이 이걸 받고 exit 한다(fd 3 = 이전 데몬이 넘긴 IPC 소켓).
+        {
+            let mut ipc = unsafe { UnixStream::from_raw_fd(3) };
+            let _ = ipc.write_all(b"ok\n");
+            let _ = ipc.flush();
+        }
+        // 이전 데몬 exit 대기 — control 소켓 연결이 끊기면 이전 데몬이 물러난 것(소켓 bind race 회피).
+        let control_path = proto::control_socket_path(&home);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while UnixStream::connect(&control_path).is_ok() {
+            if std::time::Instant::now() >= deadline {
+                break; // 이전 데몬이 안 물러나도 강행 — bind 가 실패하면 그때 exit.
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let token = load_or_create_token(&home);
+        let stream_path = proto::stream_socket_path(&home);
+        serve(reg, token, control_path, stream_path);
     }
 
     fn load_or_create_token(home: &std::path::Path) -> String {
@@ -559,7 +750,7 @@ mod unix {
                 }
             }
             // pane id 첫 매치(창 무관) — 앱의 pty_pane_pid 명령이 창 문맥 없이 pane 만
-            // 받는 기존 의미론과 동형이다(교차 창 동명 pane 의 모호성도 그대로 승계).
+            // 받는 기존 의미론과 동형이다(교차 창 동명 pane 의 모호성도 그대로 이어진다).
             R::PanePid { pane_id } => {
                 let found = reg
                     .sessions
@@ -593,7 +784,109 @@ mod unix {
                 });
                 proto::ok_reply(json!({ "killed": victims.len() }))
             }
+            R::PrepareUpgrade { new_bin } => do_handoff(reg, &new_bin),
         }
+    }
+
+    // 라이브 업그레이드(PrepareUpgrade) — 이 세대의 라이브 PTY 세션을 새 데몬(스테이징된 새
+    // 바이너리)으로 넘긴다. HS1(무중단)·HS2(fd 소유 불변식). 각 세션의 PTY master fd 를 새 데몬에
+    // fd 상속(dup)으로 넘기고, 세션 메타+ring seq 스냅샷을 원자 기록한 뒤 새 데몬을 스폰한다. 새
+    // 데몬이 adopt-ack 하면 이 데몬은 exit 한다 — 이 데몬 쪽 fd 는 닫히지만 master 의 kernel refcount
+    // 가 새 데몬 dup 으로 남아 slave(셸)에 SIGHUP 이 가지 않는다. 미세 gap 은 소비자가 ring
+    // seq(from_seq)부터 이어 읽어 흡수하므로 reader pause 가 불필요하다. ack 전 실패면 handoff 를
+    // 해제하고 새 데몬을 종료한 뒤 계속 서빙한다(rollback, master fd 는 여전히 이 데몬 소유).
+    // supervisor 는 이 데몬의 소켓 EOF(exit)로 handoff 완료를 알고 재연결한다.
+    fn do_handoff(reg: &Arc<Registry>, new_bin: &str) -> Value {
+        use std::os::unix::process::CommandExt;
+        reg.handoff.store(true, Ordering::SeqCst);
+        // 세션 메타 스냅샷 + 새 데몬 상속 fd 맵(fd 4..N).
+        let mut snap = Vec::new();
+        let mut fd_map: Vec<(RawFd, RawFd)> = Vec::new(); // (target, source)
+        let mut fd_index = 4u32;
+        {
+            let sessions = reg.sessions.lock().unwrap();
+            for s in sessions.values() {
+                if s.st.lock().unwrap().closed {
+                    continue;
+                }
+                let raw = match s.master.lock().unwrap().as_raw_fd() {
+                    Some(fd) => fd,
+                    None => continue,
+                };
+                let ring_seq = s.st.lock().unwrap().ring.seq();
+                snap.push(proto::HandoffSession {
+                    id: s.id,
+                    pane_id: s.pane_id.clone(),
+                    window_label: s.window_label.clone(),
+                    generation: s.generation,
+                    shell_pid: s.shell_pid,
+                    fd_index,
+                    ring_seq,
+                });
+                fd_map.push((fd_index as RawFd, raw));
+                fd_index += 1;
+            }
+        }
+        let fail = |reg: &Arc<Registry>, msg: &str| -> Value {
+            reg.handoff.store(false, Ordering::SeqCst);
+            proto::err_reply("HANDOFF_FAILED", msg)
+        };
+        // 스냅샷 원자 기록(tmp+rename).
+        let snap_path = proto::run_dir(&reg.home).join("ptyd-handoff.json");
+        let tmp = snap_path.with_extension("tmp");
+        let doc = match serde_json::to_vec(&proto::HandoffSnapshot { sessions: snap }) {
+            Ok(d) => d,
+            Err(e) => return fail(reg, &format!("snapshot encode: {e}")),
+        };
+        if std::fs::write(&tmp, &doc)
+            .and_then(|_| std::fs::rename(&tmp, &snap_path))
+            .is_err()
+        {
+            return fail(reg, "snapshot write failed");
+        }
+        // IPC socketpair — 새 데몬 adopt-ack 채널(fd 3).
+        let (parent_ipc, child_ipc) = match UnixStream::pair() {
+            Ok(p) => p,
+            Err(e) => return fail(reg, &format!("socketpair: {e}")),
+        };
+        // 새 데몬 스폰 — pre_exec 로 IPC 를 fd 3, 각 master fd 를 4..N 에 dup2(exec 를 넘는 상속).
+        let child_ipc_raw = child_ipc.as_raw_fd();
+        let fd_map_c = fd_map.clone();
+        let mut cmd = std::process::Command::new(new_bin);
+        cmd.arg("--handoff").arg(&snap_path);
+        unsafe {
+            cmd.pre_exec(move || {
+                if libc::dup2(child_ipc_raw, 3) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                for (target, source) in &fd_map_c {
+                    if libc::dup2(*source, *target) < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                }
+                Ok(())
+            });
+        }
+        let mut child = match cmd.spawn() {
+            Ok(c) => c,
+            Err(e) => return fail(reg, &format!("spawn new daemon: {e}")),
+        };
+        drop(child_ipc); // 현 데몬은 IPC 의 자기 쪽 끝만 남긴다(자식 쪽은 spawn 이 fd 3 으로 상속시켰다).
+        // adopt-ack 대기(5s). 새 데몬이 모든 fd 를 adopt 하면 한 줄("ok\n")을 보낸다.
+        let _ = parent_ipc.set_read_timeout(Some(std::time::Duration::from_secs(5)));
+        let mut ack = String::new();
+        let acked = BufReader::new(parent_ipc)
+            .read_line(&mut ack)
+            .map(|n| n > 0)
+            .unwrap_or(false);
+        if !acked {
+            let _ = child.kill(); // rollback — 새 데몬 거두고 계속 서빙(master fd 는 우리 것, HS2).
+            return fail(reg, "new daemon did not ack");
+        }
+        // commit — 새 데몬이 fd 를 adopt 했다. exit(0) 시 이 데몬 쪽 fd 는 닫히지만 master 의 kernel
+        // refcount 는 새 데몬 dup 으로 남아 slave(셸)에 SIGHUP 이 없다. 어떤 세션에도 시그널을
+        // 보내지 않는다(HS2). supervisor 는 소켓 EOF 로 재연결한다.
+        std::process::exit(0);
     }
 
     fn with_session(
@@ -657,9 +950,9 @@ mod unix {
             window_label,
             generation,
             shell_pid,
-            master: Mutex::new(pair.master),
+            master: Mutex::new(MasterHandle::Owned(pair.master)),
             writer: Mutex::new(writer),
-            child: Mutex::new(child),
+            child: Mutex::new(ChildHandle::Owned(child)),
             st: Mutex::new(SessState {
                 attached: None,
                 attach_seq: 0,
@@ -674,73 +967,67 @@ mod unix {
         });
         reg.sessions.lock().unwrap().insert(id, session.clone());
 
-        // reader 스레드: PTY 출력 → 링 + (부착 시) stream 소켓. 종료(EOF)가 세션 정리의
-        // 단일 지점이다.
-        {
-            let session = session.clone();
-            let reg = reg.clone();
-            std::thread::spawn(move || {
-                let mut buf = vec![0u8; 8192];
-                loop {
-                    // 부착 중 플로우 정지면 ack/detach 로 깨어날 때까지 대기.
-                    {
-                        let mut st = session.st.lock().unwrap();
-                        while st.paused && st.attached.is_some() {
-                            st = session.cv.wait(st).unwrap();
-                        }
-                    }
-                    match reader.read(&mut buf) {
-                        Ok(0) | Err(_) => break, // EOF = 셸 종료(또는 kill)
-                        Ok(n) => {
-                            let mut st = session.st.lock().unwrap();
-                            // 원시 링 + seq(warm 핸드오프 substrate) 그리고 tee 사본. 둘 다
-                            // 비차단 — reader(라이브 경로)는 여기서 소켓 I/O 를 하지 않는다
-                            // (tee 소켓 쓰기는 구독자 자기 스레드 소유). VT 해석·체크포인트
-                            // 정책은 사이드카 소유다 — 데몬은 바이트만 나른다.
-                            let seq0 = st.ring.seq();
-                            st.ring.push(&buf[..n]);
-                            if !st.subscribers.is_empty() {
-                                for sub in &st.subscribers {
-                                    sub.buf.lock().unwrap().push_data(seq0, &buf[..n]);
-                                    sub.cv.notify_one();
-                                }
-                            }
-                            // 부착 중이면 라이브 전달. 쓰기 실패 = 클라이언트 사망 → detach
-                            // (소켓 에러 이벤트가 죽음 감지다).
-                            if let Some(s) = st.attached.as_mut() {
-                                if s.write_all(&buf[..n]).is_err() {
-                                    st.attached = None;
-                                    st.unacked = 0;
-                                    st.paused = false;
-                                } else {
-                                    st.unacked += n;
-                                    if st.unacked >= proto::HIGH_WATERMARK {
-                                        st.paused = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                // 세션 마감: 부착 스트림을 닫아 클라이언트에 EOF 를 전달하고 등록을 지운다.
-                // 봉인-블롭이 남아 있으면 지운다 — 정상 종료(셸 exit/kill)는 산출물을 없앤다.
-                // 파일이 남는 경우는 데몬 자신의 죽음뿐이고, 그것이 cold restore 의 입력이다.
+        spawn_reader(reg, session.clone(), reader);
+        Ok(session)
+    }
+
+    // reader 스레드: PTY master 출력 → 링(seq)+tee 사본+(부착 시) stream 소켓. EOF 가 세션 정리의
+    // 단일 지점이다. owned(spawn_session) 세션과 adopted(handoff 새 데몬) 세션이 공유한다 —
+    // adopted 도 같은 SessState/ring/tee 를 쓰므로 재부착 재생·체크포인트가 그대로 성립한다.
+    fn spawn_reader(reg: &Arc<Registry>, session: Arc<Session>, mut reader: Box<dyn Read + Send>) {
+        let reg = reg.clone();
+        std::thread::spawn(move || {
+            let mut buf = vec![0u8; 8192];
+            loop {
+                // 부착 중 플로우 정지면 ack/detach 로 깨어날 때까지 대기.
                 {
                     let mut st = session.st.lock().unwrap();
-                    st.closed = true;
-                    if let Some(s) = st.attached.take() {
-                        let _ = s.shutdown(std::net::Shutdown::Both);
+                    while st.paused && st.attached.is_some() {
+                        st = session.cv.wait(st).unwrap();
                     }
-                    if let Some(cfg) = &st.ckpt {
-                        let _ = std::fs::remove_file(&cfg.path);
-                    }
-                    session.cv.notify_all();
                 }
-                let _ = session.child.lock().unwrap().wait();
-                reg.remove(session.id);
-            });
-        }
-        Ok(session)
+                match reader.read(&mut buf) {
+                    Ok(0) | Err(_) => break, // EOF = 셸 종료(또는 kill)
+                    Ok(n) => {
+                        let mut st = session.st.lock().unwrap();
+                        let seq0 = st.ring.seq();
+                        st.ring.push(&buf[..n]);
+                        if !st.subscribers.is_empty() {
+                            for sub in &st.subscribers {
+                                sub.buf.lock().unwrap().push_data(seq0, &buf[..n]);
+                                sub.cv.notify_one();
+                            }
+                        }
+                        if let Some(s) = st.attached.as_mut() {
+                            if s.write_all(&buf[..n]).is_err() {
+                                st.attached = None;
+                                st.unacked = 0;
+                                st.paused = false;
+                            } else {
+                                st.unacked += n;
+                                if st.unacked >= proto::HIGH_WATERMARK {
+                                    st.paused = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // 세션 마감: 부착 스트림을 닫아 EOF 전달, 봉인-블롭 정리, 등록 제거.
+            {
+                let mut st = session.st.lock().unwrap();
+                st.closed = true;
+                if let Some(s) = st.attached.take() {
+                    let _ = s.shutdown(std::net::Shutdown::Both);
+                }
+                if let Some(cfg) = &st.ckpt {
+                    let _ = std::fs::remove_file(&cfg.path);
+                }
+                session.cv.notify_all();
+            }
+            session.child.lock().unwrap().wait();
+            reg.remove(session.id);
+        });
     }
 
     // ── stream 연결(부착) ─────────────────────────────────────────────────────

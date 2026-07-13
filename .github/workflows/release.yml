@@ -1,0 +1,97 @@
+# 릴리스 — tag(v*) push 시 서명·공증된 soksak.app 을 빌드해 GitHub Release + updater manifest(latest.json)로 배포.
+# HOME 정책: release 채널만 앱 본체를 원격 배포한다. debug 앱은 로컬 make build-debug(CI asset 없음), dev 는 로컬 빌드.
+# Makefile 이 단일 진실 — 이 워크플로는 make 를 호출할 뿐 빌드 로직을 YAML 에 재구현하지 않는다(verify.yml 동형).
+# 서명 인증서·Apple 공증·minisign 키는 secrets 로 배선돼 있고, 값 등록만 후속(등록되면 서명 배포가 즉시 활성).
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+defaults:
+  run:
+    working-directory: soksak
+
+jobs:
+  release-darwin-arm64:
+    runs-on: macos-14
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the app repository
+        uses: actions/checkout@v4
+        with:
+          path: soksak
+
+      # src-tauri/Cargo.toml 이 형제 크레이트를 상대 경로로 선언(verify.yml 과 동일 레이아웃 재현).
+      - name: Check out the sibling path dependency
+        uses: actions/checkout@v4
+        with:
+          repository: soksak-ai/tauri-plugin-webview-capture
+          token: ${{ secrets.CI_REPO_TOKEN }}
+          path: tauri-plugin-webview-capture
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: soksak/.nvmrc
+          cache: pnpm
+          cache-dependency-path: soksak/pnpm-lock.yaml
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: soksak/src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # tauri build 는 아래 env 가 있으면 codesign(Developer ID) + notarytool 공증 + staple +
+      # updater 아티팩트(.app.tar.gz + .sig, createUpdaterArtifacts)를 자동 수행한다.
+      # 값 미등록 시 서명·공증은 건너뛰고 미서명 번들이 나온다(빌드 자체는 통과 — 인증서만 후속).
+      - name: Build signed + notarized release (+ updater artifacts)
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: make build
+
+      - name: Publish GitHub Release + updater manifest (latest.json)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          bundle="src-tauri/target/release/bundle"
+          app_tar="$(ls "$bundle"/macos/*.app.tar.gz)"
+          app_sig="$(ls "$bundle"/macos/*.app.tar.gz.sig)"
+          dmg="$(ls "$bundle"/dmg/*.dmg 2>/dev/null || true)"
+          sig="$(cat "$app_sig")"
+          asset_name="$(basename "$app_tar")"
+          cat > latest.json <<EOF
+          {
+            "version": "$ver",
+            "notes": "soksak $ver",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "$sig",
+                "url": "https://github.com/soksak-ai/soksak/releases/download/${GITHUB_REF_NAME}/${asset_name}"
+              }
+            }
+          }
+          EOF
+          gh release create "$GITHUB_REF_NAME" --generate-notes \
+            "$app_tar" "$app_sig" latest.json ${dmg:+"$dmg"}

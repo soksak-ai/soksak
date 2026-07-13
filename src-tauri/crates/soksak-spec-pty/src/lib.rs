@@ -275,6 +275,24 @@ pub enum Request {
     PanePid { pane_id: String },
     Ping,
     Shutdown,
+    /// Live daemon upgrade — hand this generation's live PTY sessions to a
+    /// new daemon (the staged new binary) without the shells seeing
+    /// SIGHUP. The daemon enters handoff mode (new mutations refused, output
+    /// readers paused), snapshots session metadata, spawns the new daemon with
+    /// each PTY master fd inherited (kernel fd refcount keeps them alive across
+    /// this daemon's exit — a dup, never a close), waits for the new daemon's
+    /// ack, then exits without signaling any pane process group. Any failure
+    /// before the ack rolls back: readers resume, this daemon keeps ownership,
+    /// no master fd is closed. Additive op — a daemon predating this op replies
+    /// with an error envelope and the supervisor falls back to leave-running
+    /// (no upgrade this cycle). Behavioral law: HS1 (restart-minimize) + HS2
+    /// (the fd-ownership invariant — never close the final master fd).
+    #[serde(rename_all = "camelCase")]
+    PrepareUpgrade {
+        /// The staged new binary (stage_binary wrote it, hash-checked).
+        /// The daemon spawns this path with the master fds inherited.
+        new_bin: String,
+    },
 }
 
 /// One live session as reported by `createOrAttach` / `listSessions`.
@@ -288,6 +306,35 @@ pub struct SessionInfo {
     /// both observed "no session" cannot silently adopt different shells.
     pub generation: u64,
     pub window_label: Option<String>,
+}
+
+/// Handoff snapshot — the live session set a daemon hands to the new daemon
+/// during a live upgrade (`PrepareUpgrade`). Written to a tmp file (rename
+/// atomic, survives DCE, debuggable) and pointed at by the new daemon's
+/// `--snapshot` argv. Each session's PTY master fd is passed separately by fd
+/// inheritance (`fd_index` = its slot in the new daemon's inherited fd array,
+/// starting at 4; fd 3 = the IPC ack channel), never serialized here — the
+/// kernel's fd refcount keeps the master alive across the old daemon's exit so
+/// the shell never sees SIGHUP (HS2).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HandoffSnapshot {
+    pub sessions: Vec<HandoffSession>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HandoffSession {
+    pub id: u64,
+    pub pane_id: String,
+    pub window_label: Option<String>,
+    pub generation: u64,
+    pub shell_pid: u32,
+    /// Slot in the new daemon's inherited fd array (4..N). fd 3 is the IPC ack.
+    pub fd_index: u32,
+    /// Raw-ring sequence at handoff — the new daemon resumes the tee from here so
+    /// the warm-reattach window carries no gap (soksak's monotonic ring).
+    pub ring_seq: u64,
 }
 
 // ── Reply envelope ───────────────────────────────────────────────────────────

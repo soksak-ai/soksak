@@ -225,6 +225,71 @@ fn hello_gate_rejects_bad_token_and_missing_version() {
     assert_eq!(reply["code"], "VERSION_SKEW", "{reply}");
 }
 
+// ── 라이브 데몬 업그레이드: 셸이 SIGHUP 없이·같은 pid 로 새 데몬에게 넘어간다 ────
+// HS1(무중단)+HS2(fd 소유 불변식)의 증명. 이전 데몬이 PrepareUpgrade 로 새 데몬을 스폰하고
+// PTY master fd 를 상속시킨 뒤 exit 하면, 새 데몬이 소켓을 넘겨받고 셸은 살아 있어야 한다.
+#[test]
+fn daemon_upgrade_hands_off_live_sessions() {
+    let mut d = start_daemon("handoff");
+    let mut control = Control::connect(&d.home);
+
+    let created = create(&mut control, "pane-h");
+    assert_eq!(created["ok"], true, "{created}");
+    let session = created["data"]["session"].as_u64().unwrap();
+    let shell_pid = created["data"]["shellPid"].as_u64().unwrap();
+    assert!(shell_pid > 0);
+
+    // 업그레이드 전 라이브 출력 — 셸이 실제로 살아 있음.
+    let (_r, mut stream) = attach_stream(&d.home, session);
+    write_line(&mut control, session, "echo BEFORE_UPGRADE");
+    read_until(&mut stream, "BEFORE_UPGRADE");
+    drop(stream);
+
+    // 라이브 업그레이드 트리거 — 같은 바이너리를 새 데몬으로. 이전 데몬은 응답 없이 exit 한다(write 만).
+    let bin = env!("CARGO_BIN_EXE_soksak-ptyd").to_string();
+    writeln!(
+        control.writer,
+        "{}",
+        serde_json::to_value(&proto::Request::PrepareUpgrade { new_bin: bin }).unwrap()
+    )
+    .unwrap();
+
+    // 이전 데몬(A)이 commit 후 exit 할 때까지 — handoff 성공의 필요조건.
+    {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while d.child.try_wait().unwrap().is_none() {
+            assert!(Instant::now() < deadline, "old daemon did not exit after handoff");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+    // 새 데몬(B)이 control 소켓을 넘겨받을 때까지.
+    wait_until("new daemon to serve control socket", Duration::from_secs(10), || {
+        UnixStream::connect(proto::control_socket_path(&d.home)).is_ok()
+    });
+
+    // 새 데몬에 재연결 — 세션이 살아 있고 shell_pid 가 동일해야 한다(무손실·무재스폰).
+    let mut c2 = Control::connect(&d.home);
+    let list = c2.request(&proto::Request::ListSessions);
+    let sessions = list["data"]["sessions"].as_array().unwrap();
+    let found = sessions
+        .iter()
+        .find(|s| s["session"].as_u64() == Some(session))
+        .expect("session survived the daemon upgrade");
+    assert_eq!(
+        found["shellPid"].as_u64(),
+        Some(shell_pid),
+        "same shell pid across upgrade — no SIGHUP, no respawn (HS2)"
+    );
+
+    // 셸이 실제로 살아 입력에 응답하는지 — 새 데몬 소켓으로 write + stream read.
+    let (_r, mut stream2) = attach_stream(&d.home, session);
+    write_line(&mut c2, session, "echo AFTER_UPGRADE");
+    read_until(&mut stream2, "AFTER_UPGRADE");
+
+    // 새 데몬(B) 정리 — Daemon::drop 은 이전 데몬(A, 이미 죽음)만 정리하므로 B 를 명시 종료.
+    let _ = c2.request(&proto::Request::Shutdown);
+}
+
 // ── 생존 여정: 스폰 → 출력 → 앱 사망 모사 → 같은 pid 재부착 + 링 재생 ─────────
 
 #[test]
