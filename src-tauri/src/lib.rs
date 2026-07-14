@@ -16,6 +16,7 @@ mod i18n;
 pub mod ipc;
 mod mediaproxy;
 mod network;
+mod navigation_policy;
 mod notify;
 mod plugins;
 mod unit_dev;
@@ -88,6 +89,7 @@ fn ime_debug(message: String) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
+        .plugin(navigation_policy::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_webview_capture::init())
