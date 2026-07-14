@@ -241,6 +241,7 @@ export function scanPlatformBoundaries(root = REPO_ROOT) {
 
   const spec = readJson(resolve(root, "packages/plugin-spec/package.json"));
   const sdk = readJson(resolve(root, "packages/plugin-api/package.json"));
+  const rootPackage = readJson(resolve(root, "package.json"));
   const pnpmWorkspace = readFileSync(resolve(root, "pnpm-workspace.yaml"), "utf8");
   const pnpmLock = readFileSync(resolve(root, "pnpm-lock.yaml"), "utf8");
   if (!/^autoInstallPeers:\s*false$/m.test(pnpmWorkspace)) {
@@ -248,6 +249,17 @@ export function scanPlatformBoundaries(root = REPO_ROOT) {
   }
   if (/^\s{2}'@soksak-ai\/[a-z0-9-]+@\d/m.test(pnpmLock)) {
     errors.push("workspace: first-party package registry resolution is forbidden in pnpm-lock.yaml");
+  }
+  const platformBuild =
+    "pnpm --filter @soksak-ai/plugin-spec build && pnpm --filter @soksak-ai/plugin-api build";
+  if (rootPackage.scripts?.["build:platform"] !== platformBuild) {
+    errors.push("workspace: build:platform must build spec before SDK from a clean checkout");
+  }
+  if (rootPackage.scripts?.prebuild !== "pnpm run build:platform") {
+    errors.push("workspace: prebuild must materialize public platform contracts");
+  }
+  if (rootPackage.scripts?.pretest !== "pnpm run build:platform") {
+    errors.push("workspace: pretest must materialize public platform contracts");
   }
   errors.push(...packagePolicyViolations(spec, "plugin spec"));
   errors.push(...packagePolicyViolations(sdk, "plugin SDK"));

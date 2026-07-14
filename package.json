@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "build:platform": "pnpm --filter @soksak-ai/plugin-spec build && pnpm --filter @soksak-ai/plugin-api build",
+    "prebuild": "pnpm run build:platform",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "pretest": "pnpm run build:platform",
     "test": "vitest run",
     "tauri": "tauri",
     "icons:extract": "node scripts/icons/extract.mjs",

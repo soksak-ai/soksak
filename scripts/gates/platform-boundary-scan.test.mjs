@@ -43,6 +43,15 @@ describe("public platform boundary", () => {
     expect(lock).not.toMatch(/^\s{2}'@soksak-ai\/[a-z0-9-]+@\d/m);
   });
 
+  it("bootstraps spec then SDK before every root build and test", () => {
+    const rootPackage = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8"));
+    expect(rootPackage.scripts["build:platform"]).toBe(
+      "pnpm --filter @soksak-ai/plugin-spec build && pnpm --filter @soksak-ai/plugin-api build",
+    );
+    expect(rootPackage.scripts.prebuild).toBe("pnpm run build:platform");
+    expect(rootPackage.scripts.pretest).toBe("pnpm run build:platform");
+  });
+
   it("rejects extracting the private PTY contract", () => {
     const manifest = {
       schema: "ai.soksak/platform-extraction@1",
