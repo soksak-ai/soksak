@@ -1,0 +1,142 @@
+{
+  "schema": "ai.soksak/platform-extraction@1",
+  "repositories": [
+    {
+      "name": "soksak-spec",
+      "visibility": "public",
+      "url": "https://github.com/soksak-ai/soksak-spec",
+      "workspace": {
+        "cargoMembers": [
+          "crates/soksak-spec-service",
+          "crates/soksak-spec-socket"
+        ],
+        "nodePackages": [
+          "packages/plugin-spec"
+        ]
+      },
+      "units": [
+        {
+          "kind": "node",
+          "name": "@soksak-ai/plugin-spec",
+          "source": "packages/plugin-spec",
+          "destination": "packages/plugin-spec",
+          "artifact": "github-release-tarball+sha256",
+          "files": [
+            "LICENSE",
+            "README.md",
+            "bin/validate.mjs",
+            "package.json",
+            "src/contracts.ts",
+            "src/hostChrome.ts",
+            "src/permissions.ts",
+            "src/semver.ts",
+            "src/service.ts",
+            "src/spec.ts",
+            "src/transparency.ts",
+            "src/util.ts",
+            "test/fixtures/c2-clean/plugin.json",
+            "test/fixtures/c2-static-violation/plugin.json",
+            "test/fixtures/c2-status-undeclared/plugin.json",
+            "test/fixtures/invalid-implements/plugin.json",
+            "test/fixtures/invalid-service/plugin.json",
+            "test/fixtures/invalid-status/plugin.json",
+            "test/fixtures/invalid-viewcontract/plugin.json",
+            "test/fixtures/invalid/plugin.json",
+            "test/fixtures/valid-implements/plugin.json",
+            "test/fixtures/valid-service/plugin.json",
+            "test/fixtures/valid-viewcontract/plugin.json",
+            "test/fixtures/valid/plugin.json",
+            "test/implements.test.ts",
+            "test/semver.test.ts",
+            "test/service.test.ts",
+            "test/transparency.test.ts",
+            "tsconfig.json"
+          ]
+        },
+        {
+          "kind": "cargo",
+          "name": "soksak-spec-service",
+          "source": "src-tauri/crates/soksak-spec-service",
+          "destination": "crates/soksak-spec-service",
+          "artifact": "git-full-commit",
+          "files": [
+            "Cargo.toml",
+            "src/lib.rs",
+            "src/serve.rs"
+          ]
+        },
+        {
+          "kind": "cargo",
+          "name": "soksak-spec-socket",
+          "source": "src-tauri/crates/soksak-spec-socket",
+          "destination": "crates/soksak-spec-socket",
+          "artifact": "git-full-commit",
+          "files": [
+            "Cargo.toml",
+            "src/lib.rs"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "soksak-plugin-sdk",
+      "visibility": "public",
+      "url": "https://github.com/soksak-ai/soksak-plugin-sdk",
+      "workspace": {
+        "nodePackages": [
+          "packages/plugin-api"
+        ]
+      },
+      "units": [
+        {
+          "kind": "node",
+          "name": "@soksak-ai/plugin-api",
+          "source": "packages/plugin-api",
+          "destination": "packages/plugin-api",
+          "artifact": "github-release-tarball+sha256",
+          "requires": [
+            {
+              "name": "@soksak-ai/plugin-spec",
+              "mode": "peer",
+              "pin": "exact-github-release-tarball+integrity"
+            }
+          ],
+          "files": [
+            "LICENSE",
+            "README.md",
+            "package.json",
+            "src/index.ts",
+            "tsconfig.json"
+          ]
+        }
+      ]
+    }
+  ],
+  "excludedBoundaries": [
+    {
+      "kind": "domain-contract",
+      "name": "soksak-contract-browser"
+    },
+    {
+      "kind": "domain-contract",
+      "name": "soksak-contract-git"
+    },
+    {
+      "kind": "domain-contract",
+      "name": "soksak-contract-issue-board"
+    },
+    {
+      "kind": "domain-contract",
+      "name": "soksak-contract-prompt-store"
+    },
+    {
+      "kind": "domain-contract",
+      "name": "soksak-contract-terminal"
+    },
+    {
+      "kind": "private-core",
+      "name": "soksak-spec-pty",
+      "source": "src-tauri/crates/soksak-spec-pty"
+    }
+  ]
+}

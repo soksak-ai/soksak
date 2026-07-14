@@ -95,9 +95,9 @@ importers:
         version: 4.1.8(@types/node@25.9.3)(jsdom@29.1.1)(vite@7.3.5(@types/node@25.9.3))
 
   packages/plugin-api:
-    dependencies:
+    devDependencies:
       '@soksak-ai/plugin-spec':
-        specifier: workspace:^
+        specifier: workspace:0.3.0
         version: link:../plugin-spec
 
   packages/plugin-spec: {}

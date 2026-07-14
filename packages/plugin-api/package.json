@@ -1,13 +1,14 @@
 {
   "name": "@soksak-ai/plugin-api",
   "version": "0.2.1",
+  "private": true,
   "description": "soksak plugin runtime API contract types (ctx.app, Plugin, PluginContext) — the @types/editor equivalent for soksak.",
   "license": "MIT",
   "author": "soksak-ai",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/soksak-ai/soksak.git",
+    "url": "git+https://github.com/soksak-ai/soksak-plugin-sdk.git",
     "directory": "packages/plugin-api"
   },
   "engines": {
@@ -25,13 +26,12 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "prepublishOnly": "node -e \"if(!/pnpm/.test(process.env.npm_config_user_agent||''))throw new Error('workspace: 의존성은 pnpm publish 로만 발행합니다 — npm publish 는 깨진 패키지를 만듭니다(0.2.0 실측)')\" && pnpm run build"
+    "build": "tsc -p tsconfig.json"
   },
-  "dependencies": {
-    "@soksak-ai/plugin-spec": "workspace:^"
+  "peerDependencies": {
+    "@soksak-ai/plugin-spec": "0.3.0"
   },
-  "publishConfig": {
-    "access": "public"
+  "devDependencies": {
+    "@soksak-ai/plugin-spec": "workspace:0.3.0"
   }
 }

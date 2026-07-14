@@ -2,7 +2,10 @@
 name = "soksak-spec-service"
 version = "0.1.0"
 edition = "2021"
-description = "Plugin service wire contract (soksak-spec-service@1) shared by the app and every plugin service binary: protocol version, stdio NDJSON frame set, closed error-code enum, bind-ledger types and path derivation, and supervision constants. No transport code. Behavioral law: docs/PLUGIN-SERVICE.md."
+publish = false
+license = "MIT"
+repository = "https://github.com/soksak-ai/soksak-spec"
+description = "Plugin service wire contract (soksak-spec-service@1) and optional sidecar-side reference harness shared by the app and plugin service binaries."
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

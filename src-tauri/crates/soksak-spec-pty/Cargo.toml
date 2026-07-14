@@ -2,6 +2,7 @@
 name = "soksak-spec-pty"
 version = "0.1.0"
 edition = "2021"
+publish = false
 description = "PTY daemon protocol contract shared by the app and soksak-ptyd: version constant, socket/token/binary path derivation, hello grammar, message types, and the reply envelope. No transport code."
 
 [dependencies]
