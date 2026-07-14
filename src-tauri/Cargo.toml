@@ -93,6 +93,10 @@ rand = "0.8"
 zeroize = "1"
 # sha256 무결성 핀(runtime_dep: fetch reach 다운로드 검증). RustCrypto, 자체 crypto 0.
 sha2 = "0.10"
+# 검증된 tar.gz reader. 시스템 tar에 unpack을 위임하지 않고 archive entry를 코어가 하나씩
+# 판정·작성해 symlink/hardlink/path traversal을 구조적으로 거부한다.
+flate2 = "=1.1.9"
+tar = "=0.4.46"
 # app.data 비대칭 봉투의 X25519 sealed box 실체는 crates/soksak-seal 소유
 # (x25519-dalek·hkdf 포함) — 앱은 soksak-seal 재수출만 소비한다.
 # 폰-링크 원격 제어 스택(remote::* — iroh QUIC + snow Noise + Ed25519 기기 인증)은 원격 전송
@@ -126,4 +130,3 @@ tauri-utils = { git = "https://github.com/tauri-apps/tauri", rev = "a370f6533305
 strip = true       # 출하 바이너리에서 심볼 제거(가장 큰 단일 절감)
 lto = "thin"       # 크레이트 간 dead-code 제거(thin = fat 에 근접하면서 빌드 더 빠름)
 codegen-units = 1  # 단일 codegen unit → 최적화/중복제거 향상
-

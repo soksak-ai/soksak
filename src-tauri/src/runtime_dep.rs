@@ -3,8 +3,37 @@
 //   cleanup_stale:    화이트리스트 경로 안의 stale 만 안전 제거(PARTIAL/BROKEN reconcile 의 cleanup).
 //   download_verify:  fetch reach — url 다운로드 후 sha256 무결성 검증 + 실행권한.
 use sha2::{Digest, Sha256};
-use std::fs;
-use std::path::Path;
+use std::collections::HashSet;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
+use std::path::{Component, Path, PathBuf};
+
+const SHA256_HEX_LEN: usize = 64;
+
+fn sha256_hex(body: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(body);
+    hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+fn verify_sha256(body: &[u8], expected: &str) -> Result<(), String> {
+    if expected.len() != SHA256_HEX_LEN
+        || !expected
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("sha256 핀은 정확한 64자리 lowercase hex여야 합니다".into());
+    }
+    let actual = sha256_hex(body);
+    if actual != expected {
+        return Err(format!("sha256 불일치: 기대={expected} 실제={actual}"));
+    }
+    Ok(())
+}
 
 #[derive(serde::Serialize)]
 pub struct BinaryIntegrity {
@@ -23,13 +52,29 @@ pub fn binary_integrity(bin_path: String, lib_path: String) -> BinaryIntegrity {
         Ok(m) if m.file_type().is_symlink() => {
             // 심링크 — 대상 존재 여부(exists 는 심링크를 따라간다).
             if bin.exists() {
-                BinaryIntegrity { present: true, partial: false, broken: false }
+                BinaryIntegrity {
+                    present: true,
+                    partial: false,
+                    broken: false,
+                }
             } else {
-                BinaryIntegrity { present: false, partial: false, broken: true } // dangling
+                BinaryIntegrity {
+                    present: false,
+                    partial: false,
+                    broken: true,
+                } // dangling
             }
         }
-        Ok(_) => BinaryIntegrity { present: true, partial: false, broken: false }, // 일반 파일
-        Err(_) => BinaryIntegrity { present: false, partial: lib_exists, broken: false }, // bin 없음 → lib 있으면 partial
+        Ok(_) => BinaryIntegrity {
+            present: true,
+            partial: false,
+            broken: false,
+        }, // 일반 파일
+        Err(_) => BinaryIntegrity {
+            present: false,
+            partial: lib_exists,
+            broken: false,
+        }, // bin 없음 → lib 있으면 partial
     }
 }
 
@@ -48,7 +93,10 @@ pub fn probe_binary(bin: String, args: Vec<String>) -> ProbeResult {
             ok: o.status.success(),
             stdout: String::from_utf8_lossy(&o.stdout).to_string(),
         },
-        Err(_) => ProbeResult { ok: false, stdout: String::new() },
+        Err(_) => ProbeResult {
+            ok: false,
+            stdout: String::new(),
+        },
     }
 }
 
@@ -80,12 +128,7 @@ pub fn download_verify(url: String, dest: String, sha256: String) -> Result<(), 
         .map_err(|e| e.to_string())?
         .bytes()
         .map_err(|e| e.to_string())?;
-    let mut hasher = Sha256::new();
-    hasher.update(&body);
-    let got: String = hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect();
-    if got != sha256.to_lowercase() {
-        return Err(format!("sha256 불일치: 기대={} 실제={}", sha256, got));
-    }
+    verify_sha256(&body, &sha256)?;
     fs::write(&dest, &body).map_err(|e| e.to_string())?;
     #[cfg(unix)]
     {
@@ -123,12 +166,7 @@ pub fn npm_global_dirs() -> Result<NpmDirs, String> {
 #[tauri::command]
 pub fn verify_and_link(src: String, dest: String, sha256: String) -> Result<(), String> {
     let body = fs::read(&src).map_err(|e| e.to_string())?;
-    let mut hasher = Sha256::new();
-    hasher.update(&body);
-    let got: String = hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect();
-    if got != sha256.to_lowercase() {
-        return Err(format!("sha256 불일치(vendor): 기대={} 실제={}", sha256, got));
-    }
+    verify_sha256(&body, &sha256).map_err(|e| format!("vendor {e}"))?;
     let _ = fs::remove_file(&dest);
     fs::copy(&src, &dest).map_err(|e| e.to_string())?;
     #[cfg(unix)]
@@ -212,6 +250,157 @@ pub fn download_unpack_verify(
     unpack_verify_install(&body, sha256, dest_dir, entry)
 }
 
+const MAX_ARCHIVE_BYTES: usize = 512 * 1024 * 1024;
+const MAX_ARCHIVE_FILES: usize = 20_000;
+const MAX_ARCHIVE_FILE_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_ARCHIVE_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const MAX_ARCHIVE_PATH_BYTES: usize = 512;
+
+fn windows_reserved_name(segment: &str) -> bool {
+    let stem = segment.split('.').next().unwrap_or("").to_ascii_uppercase();
+    matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (stem.len() == 4
+            && (stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.as_bytes()[3].is_ascii_digit()
+            && stem.as_bytes()[3] != b'0')
+}
+
+/// One portable spelling for every archive path. No host normalization or filesystem lookup is
+/// allowed to reinterpret an owner-provided name.
+fn validate_archive_path(path: &str) -> Result<PathBuf, String> {
+    if path.is_empty()
+        || path.len() > MAX_ARCHIVE_PATH_BYTES
+        || path.starts_with('/')
+        || path.starts_with('\\')
+        || !path.is_ascii()
+    {
+        return Err(format!(
+            "archive path가 portable relative ASCII 경로가 아닙니다: {path:?}"
+        ));
+    }
+    let mut result = PathBuf::new();
+    for segment in path.split('/') {
+        if segment.is_empty()
+            || segment == "."
+            || segment == ".."
+            || segment.len() > 255
+            || segment.ends_with(' ')
+            || segment.ends_with('.')
+            || windows_reserved_name(segment)
+            || segment
+                .bytes()
+                .any(|byte| byte < 0x20 || byte == 0x7f || b"<>:\"\\|?*".contains(&byte))
+        {
+            return Err(format!("안전하지 않은 archive path segment: {segment:?}"));
+        }
+        result.push(segment);
+    }
+    if result.components().any(|component| {
+        matches!(
+            component,
+            Component::Prefix(_) | Component::RootDir | Component::ParentDir | Component::CurDir
+        )
+    }) {
+        return Err(format!("archive path traversal 거부: {path:?}"));
+    }
+    Ok(result)
+}
+
+fn set_installed_mode(path: &Path, source_mode: u32) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = if source_mode & 0o111 == 0 {
+            0o644
+        } else {
+            0o755
+        };
+        fs::set_permissions(path, fs::Permissions::from_mode(mode)).map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(unix))]
+    let _ = (path, source_mode);
+    Ok(())
+}
+
+fn extract_regular_archive(body: &[u8], destination: &Path) -> Result<(), String> {
+    let decoder = flate2::read::GzDecoder::new(std::io::Cursor::new(body));
+    let mut archive = tar::Archive::new(decoder);
+    let mut paths = HashSet::new();
+    let mut files = 0usize;
+    let mut total_bytes = 0u64;
+
+    let entries = archive
+        .entries()
+        .map_err(|e| format!("tar index 읽기 실패: {e}"))?;
+    for item in entries {
+        let mut entry = item.map_err(|e| format!("tar entry 읽기 실패: {e}"))?;
+        let entry_type = entry.header().entry_type();
+        if !entry_type.is_file() {
+            let label = if entry_type.is_symlink() {
+                "symlink"
+            } else if entry_type.is_hard_link() {
+                "hardlink"
+            } else {
+                "non-regular"
+            };
+            return Err(format!("archive {label} entry는 금지됩니다"));
+        }
+        files += 1;
+        if files > MAX_ARCHIVE_FILES {
+            return Err(format!("archive file 수 한도 초과: {MAX_ARCHIVE_FILES}"));
+        }
+
+        let raw_path = entry.path_bytes();
+        let path_text = std::str::from_utf8(raw_path.as_ref())
+            .map_err(|_| "archive path는 UTF-8이어야 합니다".to_string())?
+            .to_owned();
+        let relative = validate_archive_path(&path_text)?;
+        let portable_key = path_text.to_ascii_lowercase();
+        if !paths.insert(portable_key) {
+            return Err(format!("archive 중복/portable collision: {path_text}"));
+        }
+
+        let declared_size = entry.size();
+        if declared_size > MAX_ARCHIVE_FILE_BYTES {
+            return Err(format!("archive file 크기 한도 초과: {path_text}"));
+        }
+        total_bytes = total_bytes
+            .checked_add(declared_size)
+            .ok_or_else(|| "archive 전체 크기 overflow".to_string())?;
+        if total_bytes > MAX_ARCHIVE_TOTAL_BYTES {
+            return Err(format!(
+                "archive 전체 크기 한도 초과: {MAX_ARCHIVE_TOTAL_BYTES}"
+            ));
+        }
+
+        let output = destination.join(&relative);
+        let parent = output
+            .parent()
+            .ok_or_else(|| format!("archive entry 상위 경로 없음: {path_text}"))?;
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        crate::path_security::reject_symlink_components(parent)?;
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&output)
+            .map_err(|e| format!("archive entry 생성 실패 {path_text}: {e}"))?;
+        let copied = std::io::copy(&mut entry, &mut file)
+            .map_err(|e| format!("archive entry 쓰기 실패 {path_text}: {e}"))?;
+        file.flush().map_err(|e| e.to_string())?;
+        if copied != declared_size {
+            return Err(format!(
+                "archive entry 크기 불일치 {path_text}: 선언={declared_size} 실제={copied}"
+            ));
+        }
+        let mode = entry.header().mode().map_err(|e| e.to_string())?;
+        set_installed_mode(&output, mode)?;
+    }
+    if files == 0 {
+        return Err("archive에 regular file이 없습니다".into());
+    }
+    Ok(())
+}
+
 // 순수부(네트워크 분리 — 유닛테스트 대상). dest_dir 이 이미 있으면 거부(멱등은 호출자가 entry
 // 존재로 판정). tmp 는 dest 형제(같은 파일시스템 = rename 원자성 보장).
 pub fn unpack_verify_install(
@@ -220,72 +409,65 @@ pub fn unpack_verify_install(
     dest_dir: &Path,
     entry: &str,
 ) -> Result<(), String> {
-    let mut hasher = Sha256::new();
-    hasher.update(body);
-    let got: String = hasher.finalize().iter().map(|b| format!("{:02x}", b)).collect();
-    if got != sha256.to_lowercase() {
-        return Err(format!("sha256 불일치: 기대={sha256} 실제={got}"));
+    if body.len() > MAX_ARCHIVE_BYTES {
+        return Err(format!("archive 압축 크기 한도 초과: {MAX_ARCHIVE_BYTES}"));
     }
-    if dest_dir.exists() {
+    verify_sha256(body, sha256)?;
+    if !dest_dir.is_absolute() {
+        return Err(format!(
+            "설치 목적지는 절대경로여야 합니다: {}",
+            dest_dir.display()
+        ));
+    }
+    if fs::symlink_metadata(dest_dir).is_ok() {
         return Err(format!("목적지 이미 존재: {}", dest_dir.display()));
     }
     let parent = dest_dir.parent().ok_or("목적지 부모 없음")?;
+    crate::path_security::reject_symlink_components(parent)?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    let pid = std::process::id();
-    let tmp_archive = parent.join(format!(".fetch-{pid}.tar.gz"));
-    let tmp_dir = parent.join(format!(".unpack-{pid}"));
-    let cleanup = || {
-        let _ = fs::remove_file(&tmp_archive);
+    crate::path_security::reject_symlink_components(parent)?;
+    let expected_entry = validate_archive_path(entry)?;
+    let tmp_dir = parent.join(format!(".unpack-{}", uuid::Uuid::new_v4()));
+    fs::create_dir(&tmp_dir).map_err(|e| format!("임시 설치 디렉터리 생성 실패: {e}"))?;
+    let extracted = extract_regular_archive(body, &tmp_dir).and_then(|()| {
+        let installed_entry = tmp_dir.join(&expected_entry);
+        let metadata = fs::symlink_metadata(&installed_entry)
+            .map_err(|_| format!("아카이브에 entry 없음: {entry}"))?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return Err(format!("아카이브 entry가 regular file이 아닙니다: {entry}"));
+        }
+        Ok(())
+    });
+    if let Err(error) = extracted {
         let _ = fs::remove_dir_all(&tmp_dir);
-    };
-    fs::write(&tmp_archive, body).map_err(|e| e.to_string())?;
-    fs::create_dir_all(&tmp_dir).map_err(|e| e.to_string())?;
-    // 시스템 tar(bsdtar) — 프레임워크 내부 심링크·실행권한 보존.
-    let st = std::process::Command::new("/usr/bin/tar")
-        .arg("-xzf")
-        .arg(&tmp_archive)
-        .arg("-C")
-        .arg(&tmp_dir)
-        .status()
-        .map_err(|e| e.to_string())?;
-    if !st.success() {
-        cleanup();
-        return Err(format!("tar 해제 실패(exit {:?})", st.code()));
+        return Err(error);
     }
-    if !tmp_dir.join(entry).is_file() {
-        cleanup();
-        return Err(format!("아카이브에 entry 없음: {entry}"));
+    if let Err(error) = fs::rename(&tmp_dir, dest_dir) {
+        let _ = fs::remove_dir_all(&tmp_dir);
+        return Err(format!("설치 rename 실패: {error}"));
     }
-    fs::rename(&tmp_dir, dest_dir).map_err(|e| {
-        cleanup();
-        format!("설치 rename 실패: {e}")
-    })?;
-    let _ = fs::remove_file(&tmp_archive);
     Ok(())
 }
 
 #[cfg(test)]
 mod unpack_tests {
     use super::*;
+    use std::io::Cursor;
 
     fn tmp_root(name: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("soksak-unpack-{}-{}", name, std::process::id()));
+        // macOS의 /var는 /private/var symlink다. 제품 경계를 낮추지 않고 fixture만 물리 경로에 둔다.
+        let temp = std::env::temp_dir()
+            .canonicalize()
+            .unwrap_or_else(|_| std::env::temp_dir());
+        let d = temp.join(format!("soksak-unpack-{}-{}", name, std::process::id()));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d
     }
 
-    // dest 내용물(top-level entry) 구조의 tar.gz 바이트 생성(시스템 tar) — 사이드카 dist 아카이브 계약.
-    fn make_archive(root: &std::path::Path) -> Vec<u8> {
-        let src = root.join("payload");
-        fs::create_dir_all(&src).unwrap();
-        fs::write(src.join("mod.dylib"), b"fake").unwrap();
-        let ar = root.join("a.tar.gz");
-        let st = std::process::Command::new("/usr/bin/tar")
-            .arg("-czf").arg(&ar).arg("-C").arg(&src).arg(".")
-            .status().unwrap();
-        assert!(st.success());
-        fs::read(&ar).unwrap()
+    // dest 내용물(top-level entry) 구조의 canonical tar.gz 바이트 — 테스트도 host tar에 기대지 않는다.
+    fn make_archive(_root: &std::path::Path) -> Vec<u8> {
+        archive_with_raw_entries(&[("mod.dylib", tar::EntryType::Regular, b"fake")])
     }
 
     fn sha_of(b: &[u8]) -> String {
@@ -294,12 +476,58 @@ mod unpack_tests {
         h.finalize().iter().map(|x| format!("{:02x}", x)).collect()
     }
 
+    fn archive_with_link(entry_type: tar::EntryType) -> Vec<u8> {
+        let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        let mut builder = tar::Builder::new(encoder);
+
+        let target = b"real sidecar bytes";
+        let mut target_header = tar::Header::new_gnu();
+        target_header.set_size(target.len() as u64);
+        target_header.set_mode(0o755);
+        target_header.set_entry_type(tar::EntryType::Regular);
+        target_header.set_cksum();
+        builder
+            .append_data(&mut target_header, "real-binary", Cursor::new(target))
+            .unwrap();
+
+        let mut link_header = tar::Header::new_gnu();
+        link_header.set_size(0);
+        link_header.set_mode(0o755);
+        link_header.set_entry_type(entry_type);
+        link_header.set_link_name("real-binary").unwrap();
+        link_header.set_cksum();
+        builder
+            .append_data(&mut link_header, "mod.dylib", Cursor::new([]))
+            .unwrap();
+
+        builder.into_inner().unwrap().finish().unwrap()
+    }
+
+    fn archive_with_raw_entries(entries: &[(&str, tar::EntryType, &[u8])]) -> Vec<u8> {
+        let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        let mut builder = tar::Builder::new(encoder);
+        for (path, entry_type, bytes) in entries {
+            assert!(
+                path.len() < 100,
+                "test helper only writes the ustar name field"
+            );
+            let mut header = tar::Header::new_gnu();
+            header.as_mut_bytes()[..path.len()].copy_from_slice(path.as_bytes());
+            header.set_size(bytes.len() as u64);
+            header.set_mode(0o755);
+            header.set_entry_type(*entry_type);
+            header.set_cksum();
+            builder.append(&header, Cursor::new(*bytes)).unwrap();
+        }
+        builder.into_inner().unwrap().finish().unwrap()
+    }
+
     #[test]
     fn sha_mismatch_writes_nothing() {
         let root = tmp_root("sha");
         let body = make_archive(&root);
         let dest = root.join("installed");
-        let err = unpack_verify_install(&body, "deadbeef", &dest, "mod.dylib").unwrap_err();
+        let err = unpack_verify_install(&body, &"0".repeat(64), &dest, "mod.dylib").unwrap_err();
         assert!(err.contains("sha256 불일치"));
         assert!(!dest.exists());
     }
@@ -324,5 +552,101 @@ mod unpack_tests {
         let err = unpack_verify_install(&body, &sha_of(&body), &dest, "other.dylib").unwrap_err();
         assert!(err.contains("entry 없음"));
         assert!(!dest.exists());
+    }
+
+    #[test]
+    fn symlink_entry_is_rejected_without_installing_anything() {
+        let root = tmp_root("symlink-entry");
+        let body = archive_with_link(tar::EntryType::Symlink);
+        let dest = root.join("installed");
+        let err = unpack_verify_install(&body, &sha_of(&body), &dest, "mod.dylib")
+            .expect_err("archive symlink must never become an installed sidecar");
+        assert!(err.contains("symlink") || err.contains("링크"), "{err}");
+        assert!(!dest.exists());
+    }
+
+    #[test]
+    fn hardlink_entry_is_rejected_without_installing_anything() {
+        let root = tmp_root("hardlink-entry");
+        let body = archive_with_link(tar::EntryType::Link);
+        let dest = root.join("installed");
+        let err = unpack_verify_install(&body, &sha_of(&body), &dest, "mod.dylib")
+            .expect_err("archive hardlink must never become an installed sidecar");
+        assert!(err.contains("hardlink") || err.contains("링크"), "{err}");
+        assert!(!dest.exists());
+    }
+
+    #[test]
+    fn digest_pin_must_be_exact_lowercase_sha256() {
+        let root = tmp_root("sha-shape");
+        let body = make_archive(&root);
+        for invalid in [
+            "deadbeef".to_string(),
+            "A".repeat(64),
+            format!("{} ", sha_of(&body)),
+        ] {
+            let dest = root.join(format!("installed-{}", invalid.len()));
+            let err = unpack_verify_install(&body, &invalid, &dest, "mod.dylib")
+                .expect_err("non-canonical digest pin must be rejected before installation");
+            assert!(err.contains("sha256"), "{err}");
+            assert!(!dest.exists());
+        }
+    }
+
+    #[test]
+    fn traversal_absolute_and_non_regular_paths_are_rejected() {
+        for (name, path, entry_type) in [
+            ("parent", "../escape", tar::EntryType::Regular),
+            ("absolute", "/absolute", tar::EntryType::Regular),
+            ("directory", "nested", tar::EntryType::Directory),
+        ] {
+            let root = tmp_root(name);
+            let body = archive_with_raw_entries(&[(path, entry_type, b"x")]);
+            let dest = root.join("installed");
+            let err = unpack_verify_install(&body, &sha_of(&body), &dest, path)
+                .expect_err("unsafe/non-regular archive entry must be rejected");
+            assert!(
+                err.contains("archive path")
+                    || err.contains("segment")
+                    || err.contains("non-regular"),
+                "{err}"
+            );
+            assert!(!dest.exists());
+            assert!(!root.join("escape").exists());
+        }
+    }
+
+    #[test]
+    fn duplicate_and_case_colliding_paths_are_rejected() {
+        for (name, second) in [("duplicate", "mod.dylib"), ("case", "MOD.DYLIB")] {
+            let root = tmp_root(name);
+            let body = archive_with_raw_entries(&[
+                ("mod.dylib", tar::EntryType::Regular, b"one"),
+                (second, tar::EntryType::Regular, b"two"),
+            ]);
+            let dest = root.join("installed");
+            let err = unpack_verify_install(&body, &sha_of(&body), &dest, "mod.dylib")
+                .expect_err("portable path collision must reject the whole archive");
+            assert!(err.contains("collision") || err.contains("중복"), "{err}");
+            assert!(!dest.exists());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn destination_with_symlink_ancestor_is_rejected() {
+        use std::os::unix::fs::symlink;
+
+        let root = tmp_root("destination-symlink");
+        let physical = root.join("physical");
+        let linked = root.join("linked");
+        fs::create_dir_all(&physical).unwrap();
+        symlink(&physical, &linked).unwrap();
+        let body = archive_with_raw_entries(&[("mod.dylib", tar::EntryType::Regular, b"sidecar")]);
+        let dest = linked.join("installed");
+        let err = unpack_verify_install(&body, &sha_of(&body), &dest, "mod.dylib")
+            .expect_err("destination symlink ancestor must not be canonicalized through");
+        assert!(err.contains("symlink") || err.contains("junction"), "{err}");
+        assert!(!physical.join("installed").exists());
     }
 }

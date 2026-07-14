@@ -46,6 +46,7 @@ export function scanRoot(root = REPO_ROOT) {
   const releaseTool = read(root, "scripts/release/prepare-tauri-config.mjs");
   const appHome = read(root, "src-tauri/src/home.rs");
   const cliHome = read(root, "src-tauri/cli/src/lib.rs");
+  const runtimeDep = read(root, "src-tauri/src/runtime_dep.rs");
   const releaseSurface = `${release}\n${releaseWorkflow}\n${releaseTool}`;
 
   if (/(^|\s)ln\s+-(?:[^\n]*s|s[^\n]*)/.test(makefile)) {
@@ -74,6 +75,18 @@ export function scanRoot(root = REPO_ROOT) {
   }
   if (/std::env::var\("SOKSAK_(?:TEST_)?HOME"\)/.test(`${appHome}\n${cliHome}`)) {
     violations.push("identity home: 앱/CLI runtime 환경변수 override 금지");
+  }
+  if (/Command::new\("(?:\/usr\/bin\/)?tar"\)/.test(runtimeDep) || /\.unpack\s*\(/.test(runtimeDep)) {
+    violations.push("runtime archive: system/generic unpack 위임 금지(entry별 검증 필수)");
+  }
+  for (const [needle, label] of [
+    ["entry_type.is_file()", "regular-file entry gate"],
+    ["reject_symlink_components", "symlink/junction ancestor gate"],
+    ["create_new(true)", "duplicate-safe file creation"],
+  ]) {
+    if (!runtimeDep.includes(needle)) {
+      violations.push(`runtime archive: ${label} 필수`);
+    }
   }
 
   return violations;

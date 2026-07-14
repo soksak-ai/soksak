@@ -19,6 +19,7 @@ mod network;
 mod notify;
 mod plugins;
 mod unit_dev;
+mod path_security;
 mod process;
 mod pty;
 mod schedule;

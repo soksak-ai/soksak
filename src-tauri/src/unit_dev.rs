@@ -2,7 +2,7 @@
 // 각 identity 홈은 자기 config/development-units.json 을 소유하며, plugin/sidecar/kit의
 // 개발 checkout은 설치본과 분리된 절대경로로 선택한다. 경로 추측과 symlink는 허용하지 않는다.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
@@ -57,36 +57,6 @@ fn valid_id(id: &str) -> bool {
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
-// source 자신뿐 아니라 이미 존재하는 모든 조상도 검사한다. 마지막 경로만 검사하면
-// /real/link-parent/unit 같은 간접 symlink를 놓쳐 "symlink 금지"가 이름뿐인 기준이 된다.
-fn reject_symlink_components(path: &Path) -> Result<(), String> {
-    let mut current = PathBuf::new();
-    for component in path.components() {
-        match component {
-            Component::Prefix(_) | Component::RootDir => current.push(component.as_os_str()),
-            Component::CurDir => continue,
-            Component::ParentDir => {
-                return Err(format!(
-                    "개발 source에 '..'를 사용할 수 없습니다: {}",
-                    path.display()
-                ))
-            }
-            Component::Normal(part) => current.push(part),
-        }
-        if current.as_os_str().is_empty() || !current.exists() {
-            continue;
-        }
-        let meta = std::fs::symlink_metadata(&current).map_err(|e| e.to_string())?;
-        if meta.file_type().is_symlink() {
-            return Err(format!(
-                "개발 source에 symlink를 사용할 수 없습니다: {}",
-                current.display()
-            ));
-        }
-    }
-    Ok(())
-}
-
 fn validate_declared_source(kind: &str, id: &str, source: &Path) -> Result<(), String> {
     if !valid_kind(kind) {
         return Err(format!(
@@ -102,7 +72,7 @@ fn validate_declared_source(kind: &str, id: &str, source: &Path) -> Result<(), S
             source.display()
         ));
     }
-    reject_symlink_components(source)?;
+    crate::path_security::reject_symlink_components(source)?;
     Ok(())
 }
 
@@ -118,7 +88,7 @@ fn validate_source_path(source: &Path) -> Result<(), String> {
             source.display()
         ));
     }
-    reject_symlink_components(source)?;
+    crate::path_security::reject_symlink_components(source)?;
     if !source.is_dir() {
         return Err(format!(
             "개발 source 디렉터리가 없습니다: {}",
@@ -136,7 +106,7 @@ fn read_config_in(home: &Path) -> Result<UnitDevConfig, String> {
             units: Vec::new(),
         });
     }
-    reject_symlink_components(&path)?;
+    crate::path_security::reject_symlink_components(&path)?;
     let raw =
         std::fs::read_to_string(&path).map_err(|e| format!("{} 읽기 실패: {e}", path.display()))?;
     let mut config: UnitDevConfig =
@@ -171,7 +141,7 @@ fn write_config_in(home: &Path, config: &UnitDevConfig) -> Result<(), String> {
         .parent()
         .ok_or_else(|| "development config 상위 경로 없음".to_string())?;
     std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    reject_symlink_components(parent)?;
+    crate::path_security::reject_symlink_components(parent)?;
     let tmp = parent.join(format!(".{CONFIG_FILE}.tmp-{}", std::process::id()));
     let bytes = serde_json::to_vec_pretty(config).map_err(|e| e.to_string())?;
     std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;

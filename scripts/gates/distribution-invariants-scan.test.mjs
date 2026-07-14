@@ -25,6 +25,10 @@ function configs() {
   );
   write("src-tauri/src/home.rs", "fn fixed_identity_home() {}\n");
   write("src-tauri/cli/src/lib.rs", "fn fixed_identity_home() {}\n");
+  write(
+    "src-tauri/src/runtime_dep.rs",
+    "entry_type.is_file(); reject_symlink_components(); OpenOptions::new().create_new(true);\n",
+  );
 }
 
 beforeEach(() => {
@@ -64,6 +68,18 @@ describe("distribution invariants", () => {
       'fn bad() { let _ = std::env::var("SOKSAK_TEST_HOME"); }\n',
     );
     expect(scanRoot(root)).toContain("identity home: 앱/CLI runtime 환경변수 override 금지");
+  });
+
+  it("runtime archive를 system tar나 generic unpack에 위임하지 않는다", () => {
+    write(
+      "src-tauri/src/runtime_dep.rs",
+      'std::process::Command::new("/usr/bin/tar"); archive.unpack(dest);\n',
+    );
+    const violations = scanRoot(root).join("\n");
+    expect(violations).toContain("system/generic unpack 위임 금지");
+    expect(violations).toContain("regular-file entry gate 필수");
+    expect(violations).toContain("symlink/junction ancestor gate 필수");
+    expect(violations).toContain("duplicate-safe file creation 필수");
   });
 
   it("이 저장소도 불변식을 만족한다", () => {
