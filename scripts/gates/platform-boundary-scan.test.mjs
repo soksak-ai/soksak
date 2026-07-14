@@ -22,10 +22,25 @@ describe("public platform boundary", () => {
     ).toContain(
       "sdk: first-party dependencies.@soksak-ai/plugin-spec would resolve through a package registry (^1.0.0)",
     );
+    expect(
+      packagePolicyViolations(
+        { private: true, devDependencies: { "@soksak-ai/plugin-spec": "workspace:0.3.0" } },
+        "sdk",
+      ),
+    ).toContain(
+      "sdk: first-party devDependencies.@soksak-ai/plugin-spec belongs in the repository workspace root (workspace:0.3.0)",
+    );
   });
 
   it("keeps the repository extraction inventory and ownership boundary exact", () => {
     expect(scanPlatformBoundaries(REPO_ROOT)).toEqual([]);
+  });
+
+  it("never auto-installs first-party peers from a package registry", () => {
+    const workspace = readFileSync(join(REPO_ROOT, "pnpm-workspace.yaml"), "utf8");
+    const lock = readFileSync(join(REPO_ROOT, "pnpm-lock.yaml"), "utf8");
+    expect(workspace).toMatch(/^autoInstallPeers:\s*false$/m);
+    expect(lock).not.toMatch(/^\s{2}'@soksak-ai\/[a-z0-9-]+@\d/m);
   });
 
   it("rejects extracting the private PTY contract", () => {

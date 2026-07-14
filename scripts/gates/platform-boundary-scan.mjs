@@ -93,6 +93,14 @@ export function packagePolicyViolations(pkg, role) {
       }
     }
   }
+  for (const [name, spec] of Object.entries(pkg.devDependencies ?? {})) {
+    if (name.startsWith("@soksak-ai/")) {
+      errors.push(`${role}: first-party devDependencies.${name} belongs in the repository workspace root (${spec})`);
+    }
+    if (String(spec).startsWith("workspace:")) {
+      errors.push(`${role}: public package source may not depend on workspace topology (${name}=${spec})`);
+    }
+  }
   return errors;
 }
 
@@ -233,13 +241,21 @@ export function scanPlatformBoundaries(root = REPO_ROOT) {
 
   const spec = readJson(resolve(root, "packages/plugin-spec/package.json"));
   const sdk = readJson(resolve(root, "packages/plugin-api/package.json"));
+  const pnpmWorkspace = readFileSync(resolve(root, "pnpm-workspace.yaml"), "utf8");
+  const pnpmLock = readFileSync(resolve(root, "pnpm-lock.yaml"), "utf8");
+  if (!/^autoInstallPeers:\s*false$/m.test(pnpmWorkspace)) {
+    errors.push("workspace: autoInstallPeers must be false; every first-party peer source is explicit");
+  }
+  if (/^\s{2}'@soksak-ai\/[a-z0-9-]+@\d/m.test(pnpmLock)) {
+    errors.push("workspace: first-party package registry resolution is forbidden in pnpm-lock.yaml");
+  }
   errors.push(...packagePolicyViolations(spec, "plugin spec"));
   errors.push(...packagePolicyViolations(sdk, "plugin SDK"));
   if (sdk.peerDependencies?.[spec.name] !== spec.version) {
     errors.push(`plugin SDK: peerDependencies.${spec.name} must exactly equal ${spec.version}`);
   }
-  if (sdk.devDependencies?.[spec.name] !== `workspace:${spec.version}`) {
-    errors.push(`plugin SDK: devDependencies.${spec.name} must be workspace:${spec.version}`);
+  if (sdk.devDependencies?.[spec.name] !== undefined) {
+    errors.push(`plugin SDK: ${spec.name} development pin belongs in the SDK repository workspace root`);
   }
   if (spec.repository?.url !== "git+https://github.com/soksak-ai/soksak-spec.git") {
     errors.push("plugin spec: repository must point to public soksak-spec");
@@ -289,7 +305,7 @@ export function stageRepository(root, repositoryName, output) {
   if (nodePackages.length > 0) {
     writeFileSync(
       join(output, "pnpm-workspace.yaml"),
-      `packages:\n${nodePackages.map((item) => `  - "${item}"`).join("\n")}\n`,
+      `packages:\n${nodePackages.map((item) => `  - "${item}"`).join("\n")}\nautoInstallPeers: false\n`,
     );
   }
   return output;

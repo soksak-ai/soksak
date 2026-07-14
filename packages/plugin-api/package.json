@@ -30,8 +30,5 @@
   },
   "peerDependencies": {
     "@soksak-ai/plugin-spec": "0.3.0"
-  },
-  "devDependencies": {
-    "@soksak-ai/plugin-spec": "workspace:0.3.0"
   }
 }
