@@ -46,6 +46,7 @@ function goodManifest(id: string): string {
 }
 
 const installedState = '{"version":"1.0.0","repo":"https://x/y.git","branch":"main"}';
+const legacyDevState = '{"version":"dev"}';
 
 beforeEach(() => {
   invoke.mockClear();
@@ -94,5 +95,29 @@ describe("plugin_scan 견고성 — 비-플러그인 폴더는 에러가 아니�
     expect(
       usePlugins.getState().rejected.some((r) => r.dir.endsWith("soksak-plugin-broken")),
     ).toBe(true);
+  });
+
+  it("공식 설치 디렉터리의 legacy dev marker는 개발 source로 해석하지 않는다", async () => {
+    scan = [
+      {
+        dir: "/home/plugins/soksak-plugin-legacy-dev",
+        dir_name: "soksak-plugin-legacy-dev",
+        manifest: goodManifest("soksak-plugin-legacy-dev"),
+        state: legacyDevState,
+        error: null,
+      },
+    ];
+
+    await usePlugins.getState().reload();
+
+    expect(usePlugins.getState().plugins["soksak-plugin-legacy-dev"]).toBeUndefined();
+    expect(usePlugins.getState().rejected).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          dir: "/home/plugins/soksak-plugin-legacy-dev",
+          errors: [expect.stringContaining("unit.dev.set")],
+        }),
+      ]),
+    );
   });
 });

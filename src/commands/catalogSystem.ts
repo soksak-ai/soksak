@@ -25,4 +25,20 @@ export function registerSystemCatalog(): void {
     // transport 즉답과 같은 hello_facts 를 내는 코어 커맨드로 위임 — 판 상수 단일 출처, 위조 복제 없음.
     handler: () => invoke("ipc_hello_info"),
   });
+
+  register("app.environment", {
+    description:
+      "Read this app's compile-time core identity, isolated home, matching CLI name, build profile, updater channel, and explicitly selected development units.",
+    triggers: { ko: "앱 환경 코어 빌드 홈 CLI 개발 유닛 모드" },
+    params: {},
+    returns:
+      "{ coreBuild, identity, cli, home, buildProfile, updaterEnabled, unitMode, developmentUnits[] }",
+    message: (d) =>
+      tmsg("msg.app.environment", {
+        core: String(d.coreBuild),
+        mode: String(d.unitMode),
+      }),
+    examples: ["sok app.environment", "sok-dev app.environment", "sok-debug app.environment"],
+    handler: () => invoke("app_environment"),
+  });
 }

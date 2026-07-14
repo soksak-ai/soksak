@@ -10,7 +10,7 @@ import { useRegistry } from "../state/registry";
 export async function initPluginHost(): Promise<void> {
   startPluginHooks();
   try {
-    // release 게이트(A17) — reload 의 dev/local 거부 판정이 쓰므로 로드 이전에 확정한다.
+    // core build identity — 앱 updater 채널 판정용. plugin 개발 가능 여부와는 독립이다.
     usePlugins.setState({ release: await invoke<boolean>("app_is_release") });
   } catch (e) {
     console.warn("release 판정 조회 실패(false 유지):", e);

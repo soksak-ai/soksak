@@ -53,6 +53,7 @@ import { registerNotifyCatalog } from "./catalogNotify";
 import { registerScheduleCatalog } from "./catalogSchedule";
 import { registerServiceCatalog } from "./catalogService";
 import { registerSystemCatalog } from "./catalogSystem";
+import { registerUnitDevCatalog } from "./catalogUnitDev";
 import { registerWebviewCatalog } from "./catalogWebview";
 import {
   ensureDefaultProjectRoot,
@@ -2737,5 +2738,6 @@ export function registerCatalog(): void {
   registerScheduleCatalog();
   registerServiceCatalog();
   registerSystemCatalog();
+  registerUnitDevCatalog();
   registerWebviewCatalog();
 }

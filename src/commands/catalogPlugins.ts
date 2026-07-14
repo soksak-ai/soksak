@@ -972,7 +972,7 @@ export function registerPluginCatalog(): void {
 
   register("plugin.dev.load", {
     description:
-      "Development mode: load a plugin from any directory without installing it. Dev-sourced plugins bypass the consent gate (spec §0-5 exception). The inject danger policy governs this command itself.",
+      "Select an existing absolute plugin workspace as this identity home's development source, validate its plugin.json, and load it without replacing a separate official installation. Available from sok, sok-dev, and sok-debug. Dev-sourced plugins bypass the consent gate (spec §0-5 exception).",
     triggers: { ko: "플러그인 개발 로드 dev 임시 적재" },
     params: {
       path: { type: "string", description: "Absolute path to the plugin directory", required: true },
@@ -980,15 +980,18 @@ export function registerPluginCatalog(): void {
     returns: "{ id, dir }",
     message: (d) => tmsg("msg.plugin.dev.load", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
-    examples: ['sok plugin.dev.load \'{"path":"/path/to/my-plugin"}\''],
+    examples: [
+      'sok plugin.dev.load \'{"path":"/path/to/my-plugin"}\'',
+      'sok-dev plugin.dev.load \'{"path":"/path/to/my-plugin"}\'',
+      'sok-debug plugin.dev.load \'{"path":"/path/to/my-plugin"}\'',
+    ],
     danger: "inject",
-    // release 게이트는 devLoad 자체가 수행(A17) — 여기선 위임만.
     handler: (p) => usePlugins.getState().devLoad(p.path as string),
   });
 
   register("plugin.dev.create", {
     description:
-      "Scaffold a new dev plugin in place at ~/.soksak/plugins/<id>/. Creates the minimum plugin.json, main.js, and .soksak.json (version=dev), then runs git init. No external path or dev.load needed — the folder is the working artifact. Reloads plugins automatically after scaffolding.",
+      "Scaffold a new plugin in the current identity home's workspaces/plugins/<id> directory, register that absolute directory as its development source, initialize Git, and reload plugins. Available from sok, sok-dev, and sok-debug.",
     triggers: { ko: "플러그인 개발 새로 만들기 스캐폴드 scaffold 생성" },
     params: {
       id: { type: "string", description: "Plugin id (must match ^[a-z0-9][a-z0-9-]*$)", required: true },
@@ -996,13 +999,13 @@ export function registerPluginCatalog(): void {
     returns: "{ ok, dir, pluginId }",
     message: (d) => tmsg("msg.plugin.dev.create", { id: String(d.pluginId) }),
     errors: ["INVALID_PARAMS"],
-    examples: ['sok plugin.dev.create \'{"id":"soksak-plugin-<id>"}\''],
+    examples: [
+      'sok plugin.dev.create \'{"id":"soksak-plugin-<id>"}\'',
+      'sok-dev plugin.dev.create \'{"id":"soksak-plugin-<id>"}\'',
+      'sok-debug plugin.dev.create \'{"id":"soksak-plugin-<id>"}\'',
+    ],
     danger: "inject",
     handler: async (p) => {
-      // release 는 설치본만(A17) — dev 스캐폴드 봉쇄.
-      if (usePlugins.getState().release) {
-        return { ok: false, code: "INVALID_PARAMS", message: "release 에서는 dev 로더를 제공하지 않습니다(A17)" };
-      }
       const r = await invoke<{ dir: string; dir_name: string }>("plugin_dev_new", {
         id: p.id as string,
       });

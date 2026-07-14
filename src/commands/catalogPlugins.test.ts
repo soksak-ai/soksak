@@ -5,7 +5,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke } = vi.hoisted(() => ({
-  invoke: vi.fn((..._a: unknown[]) => Promise.resolve(null)),
+  invoke: vi.fn(async (..._a: unknown[]): Promise<unknown> => null),
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...a: unknown[]) => invoke(...a),
@@ -207,5 +207,41 @@ describe("plugin.conformance — C2 정적 규칙(command-surface·view-nodes)",
     const data = (r as { data: Record<string, unknown> }).data;
     const c2 = data.c2 as { violations: { rule: string }[] };
     expect(c2.violations.map((v) => v.rule)).toContain("command-surface");
+  });
+});
+
+describe("plugin.dev.create — core build identity와 무관한 확장 개발", () => {
+  it("release core에서도 workspace를 생성하고 reload한다", async () => {
+    const previousReload = usePlugins.getState().reload;
+    const reload = vi.fn(async () => {});
+    usePlugins.setState({ release: true, reload });
+    invoke.mockResolvedValueOnce({
+      dir: "/Users/test/.soksak/workspaces/plugins/weather",
+      dir_name: "weather",
+    });
+
+    const r = await execute("plugin.dev.create", { id: "weather" }, {});
+
+    expect(invoke).toHaveBeenCalledWith("plugin_dev_new", { id: "weather" });
+    expect(reload).toHaveBeenCalledOnce();
+    expect(r).toMatchObject({
+      ok: true,
+      data: { pluginId: "weather", dir: "/Users/test/.soksak/workspaces/plugins/weather" },
+    });
+    expect(getSpec("plugin.dev.create")?.examples).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^sok /),
+        expect.stringMatching(/^sok-dev /),
+        expect.stringMatching(/^sok-debug /),
+      ]),
+    );
+    expect(getSpec("plugin.dev.load")?.examples).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^sok /),
+        expect.stringMatching(/^sok-dev /),
+        expect.stringMatching(/^sok-debug /),
+      ]),
+    );
+    usePlugins.setState({ release: false, reload: previousReload });
   });
 });

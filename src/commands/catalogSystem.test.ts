@@ -15,6 +15,34 @@ beforeEach(() => {
 });
 afterEach(() => {
   unregister("system.hello");
+  unregister("app.environment");
+});
+
+describe("app.environment — core identity와 unit source mode를 분리해 노출", () => {
+  it("세 CLI에서 공통 발견되는 status command이고 core 단일 소스로 위임", async () => {
+    invoke.mockResolvedValueOnce({
+      coreBuild: "release",
+      identity: "com.soksak.app",
+      cli: "sok",
+      home: "/Users/test/.soksak",
+      buildProfile: "release",
+      updaterEnabled: true,
+      unitMode: "mixed",
+      developmentUnits: [{ kind: "plugin", id: "weather", source: "/work/weather" }],
+    });
+
+    const spec = getSpec("app.environment");
+    expect(spec).toBeDefined();
+    expect(spec!.examples).toEqual(
+      expect.arrayContaining(["sok app.environment", "sok-dev app.environment", "sok-debug app.environment"]),
+    );
+    const r = await execute("app.environment", {}, {});
+    expect(invoke).toHaveBeenCalledWith("app_environment");
+    expect(r).toMatchObject({
+      ok: true,
+      data: { coreBuild: "release", cli: "sok", unitMode: "mixed" },
+    });
+  });
 });
 
 describe("system.hello 등록(발견성)", () => {

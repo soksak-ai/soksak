@@ -53,7 +53,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 import { usePlugins, type PluginRuntime } from "./plugins";
 import { parseManifest } from "../plugins/spec";
 
-const PATH = "/tmp/soksak-plugin-demo";
+// 폴더명은 identity가 아니다. plugin.json id와 달라도 선언된 절대 source로 로드돼야 한다.
+const PATH = "/tmp/arbitrary-checkout";
 const ID = "soksak-plugin-demo";
 
 function demoRuntime(status: PluginRuntime["status"]): PluginRuntime {
@@ -86,6 +87,26 @@ beforeEach(() => {
 });
 
 describe("devLoad — enabled dev 플러그인 재적재", () => {
+  it("release core에서도 로컬 개발 플러그인을 로드한다", async () => {
+    usePlugins.setState({ release: true });
+
+    const r = await usePlugins.getState().devLoad(PATH);
+
+    expect(r.ok).toBe(true);
+    expect(usePlugins.getState().plugins[ID]).toMatchObject({
+      dir: PATH,
+      source: "dev",
+      status: "disabled",
+    });
+  });
+
+  it("generic unit id가 manifest와 다르면 기존 선택을 건드리기 전에 거부한다", async () => {
+    const r = await usePlugins.getState().devLoad(PATH, "different-plugin");
+
+    expect(r).toMatchObject({ ok: false, code: "INVALID_PARAMS" });
+    expect(invoke.mock.calls.some(([cmd]) => cmd === "unit_dev_set")).toBe(false);
+  });
+
   it("이전에 enabled 였다면 dev.load 후에도 enabled + 명령 재등록", async () => {
     // 사전: 이미 enabled·활성 상태(enabledIds 에 등록됨).
     usePlugins.setState({

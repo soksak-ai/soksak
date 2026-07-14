@@ -62,6 +62,12 @@ export interface PluginRuntime {
   error?: string;
 }
 
+export interface UnitDevSource {
+  kind: "plugin" | "sidecar" | "kit";
+  id: string;
+  source: string;
+}
+
 export interface RejectedPlugin {
   dir: string;
   errors: string[];
@@ -76,28 +82,25 @@ interface PluginScanEntry {
   dir: string;
   dir_name: string;
   manifest: string | null;
-  // .soksak.json 원문 — 폴더 자기 기술 상태(version="dev"|<semver>). 단일 폴더 모델:
-  // 같은 ~/.soksak/plugins 안에서 dev(작업물)/installed(릴리스)를 이 파일로 구분.
+  // .soksak.json 원문 — 공식 설치 상태. 과거 version=dev|local 단일-폴더 모델은
+  // development-units.json과 충돌하므로 loader가 명시적으로 거부한다.
   state: string | null;
   error: string | null;
 }
 
-// .soksak.json version 으로 판정 — "local"(그냥 돌아감)·"dev"(존재 체크) 는 둘 다 dev 소스
-// (동의 면제·update 클로버 방지=내 작업물). semver 는 installed(존재+버전 체크·갱신 대상). 없거나
-// 파싱 실패면 installed(레거시 설치본 호환).
-function sourceFromState(state: string | null): "installed" | "dev" {
-  if (!state) return "installed";
+function hasLegacyDevMarker(state: string | null): boolean {
+  if (!state) return false;
   try {
     const v = (JSON.parse(state) as { version?: string })?.version;
-    return v === "dev" || v === "local" ? "dev" : "installed";
+    return v === "dev" || v === "local";
   } catch {
-    return "installed";
+    return false;
   }
 }
 
 interface PluginsState {
   appVersion: string; // initPluginHost 가 채움("0.0.0" = 미확인)
-  release: boolean; // release identity(A17) — dev/local 플러그인 로드·dev 로더를 봉쇄
+  release: boolean; // release core identity — 앱 updater 채널 판정용. unit 개발 허용 여부와 무관.
   plugins: Record<string, PluginRuntime>;
   rejected: RejectedPlugin[];
   consents: Record<string, ConsentRecord>; // localStorage 영속
@@ -128,7 +131,7 @@ interface PluginsState {
   grantConsent: (id: string) => boolean;
   // 동의 철회 — 권한을 줄이는 안전 작업(재동의 필요 상태로). 활성 중이면 비활성화. 명령 노출 가능.
   revokeConsent: (id: string) => Promise<CmdResult<{ id: string }>>;
-  devLoad: (path: string) => Promise<CmdResult<{ id: string; dir: string }>>;
+  devLoad: (path: string, expectedId?: string) => Promise<CmdResult<{ id: string; dir: string }>>;
   // bind 원장 동기화(PS9) — enabled∧service 매니페스트에서 파생해 코어에 내린다(멱등).
   syncLedger: () => Promise<void>;
 }
@@ -474,6 +477,13 @@ export const usePlugins = create<PluginsState>((set, get) => {
     if (!p) return err("TARGET_NOT_FOUND", `플러그인 없음: ${id}`);
     if (p.source === "dev") {
       if (isActive(id)) await deactivateById(id);
+      try {
+        // workspace는 사용자의 소스이므로 삭제하지 않는다. 선택만 해제해야 다음 reload에서
+        // 다시 나타나지 않고, 별도 공식 설치본이 있으면 그쪽으로 복귀한다.
+        await invoke("unit_dev_remove", { kind: "plugin", id });
+      } catch (e) {
+        return err("INTERNAL", `개발 source 선택 해제 실패: ${e}`);
+      }
       set((s) => {
         const plugins = { ...s.plugins };
         delete plugins[id];
@@ -531,35 +541,43 @@ export const usePlugins = create<PluginsState>((set, get) => {
           rejected.push({ dir: e.dir, errors: [e.error ?? "manifest 없음"] });
           continue;
         }
-        // 폴더의 .soksak.json 으로 dev/installed 판정 — 단일 폴더 안에서 작업물/릴리스 구분.
-        const source = sourceFromState(e.state);
-        // release 는 설치본만(A17) — dev/local 소스는 로드 자체를 거부한다(파일이 있어도 실행 0).
-        if (get().release && source === "dev") {
-          rejected.push({ dir: e.dir, errors: ["release 는 설치본만 로드합니다(A17) — dev/local 거부"] });
+        if (hasLegacyDevMarker(e.state)) {
+          rejected.push({
+            dir: e.dir,
+            errors: [
+              "공식 설치 디렉터리의 legacy dev marker는 지원하지 않습니다 — workspace를 절대경로로 unit.dev.set 하십시오",
+            ],
+          });
           continue;
         }
-        const rt = parseRuntime(e.manifest, e.dir, e.dir_name, source, rejected);
+        const rt = parseRuntime(e.manifest, e.dir, e.dir_name, "installed", rejected);
         if (rt) next[rt.manifest.id] = rt;
       }
 
-      // dev 플러그인: 디렉토리에서 manifest 재독(개발 반복 반영). 실패 시 rejected.
-      for (const p of Object.values(get().plugins)) {
-        if (p.source !== "dev") continue;
+      // 선언된 개발 source는 설치본과 별도이며 같은 id의 공식 설치본을 명시적으로 덮는다.
+      // config가 정본이므로 앱 재시작 뒤에도 세 환경 모두 같은 방식으로 복원된다.
+      const developmentUnits =
+        (await invoke<UnitDevSource[]>("unit_dev_list")) ?? [];
+      for (const unit of developmentUnits) {
+        if (unit.kind !== "plugin") continue;
         try {
           const data = await invoke<{ content: string }>("read_text_file", {
-            path: `${p.dir}/plugin.json`,
+            path: `${unit.source}/plugin.json`,
           });
           const rt = parseRuntime(
             data.content,
-            p.dir,
-            basename(p.dir),
+            unit.source,
+            unit.id,
             "dev",
             rejected,
           );
-          // dev 가 동명 설치본을 가린다(테마의 외부 우선 모델과 동일 — 개발 편의).
+          // development source가 동명 설치본을 가린다. 실패하면 공식 설치본으로 조용히
+          // fallback하지 않도록 그 id의 installed 후보도 제거한다.
+          if (!rt) delete next[unit.id];
           if (rt) next[rt.manifest.id] = rt;
         } catch (e2) {
-          rejected.push({ dir: p.dir, errors: [`dev 재독 실패: ${e2}`] });
+          delete next[unit.id];
+          rejected.push({ dir: unit.source, errors: [`dev source 읽기 실패: ${e2}`] });
         }
       }
 
@@ -680,16 +698,14 @@ export const usePlugins = create<PluginsState>((set, get) => {
       // 삭제 순서 — 먼(잎) 의존자부터, 대상은 마지막. dev 가 섞여도 안전(removeSingle 이 분기).
       const order = opts?.cascade ? cascadeRemovalSet(id, nodes) : [id];
       const removed: string[] = [];
-      let sawInstalled = false;
       for (const rid of order) {
-        const wasDev = get().plugins[rid]?.source === "dev";
         const res = await removeSingle(rid);
         if (!res.ok) return res; // 부분 진행 — 발생 사유 구조화 반환(침묵 금지)
         removed.push(rid);
-        if (!wasDev) sawInstalled = true;
       }
-      // 디스크 삭제(installed)가 있었으면 1회 재스캔. dev-only 면 메모리 정리로 충분(reload 가 dev 보존).
-      if (sawInstalled) await get().reload();
+      // installed 삭제와 development 선택 해제 모두 1회 재스캔한다. 후자는 별도 보존된
+      // 공식 설치본으로 즉시 복귀해야 하며 workspace 자체는 삭제하지 않는다.
+      await get().reload();
       return ok({ id, removed });
     },
 
@@ -816,7 +832,10 @@ export const usePlugins = create<PluginsState>((set, get) => {
         return err("TARGET_NOT_FOUND", `plugin.json 읽기 실패: ${e}`);
       }
       const rejected: RejectedPlugin[] = [];
-      const fresh = parseRuntime(content, p.dir, basename(p.dir), p.source, rejected);
+      // development checkout의 폴더명은 identity가 아니다. 최초 선택·전체 reload와 동일하게
+      // config가 가리킨 기존 unit id를 검증 기대값으로 사용한다.
+      const expectedDirName = p.source === "dev" ? id : basename(p.dir);
+      const fresh = parseRuntime(content, p.dir, expectedDirName, p.source, rejected);
       if (!fresh) {
         set({ rejected: [...get().rejected.filter((x) => x.dir !== p.dir), ...rejected] });
         return err("INVALID_PARAMS", `매니페스트 검증 실패: ${rejected[0]?.errors.join("; ")}`);
@@ -836,23 +855,34 @@ export const usePlugins = create<PluginsState>((set, get) => {
       return get().enable(id);
     },
 
-    devLoad: async (path) => {
-      // release 는 설치본만(A17) — dev 로더 봉쇄.
-      if (get().release) {
-        return err("INVALID_PARAMS", "release 에서는 dev 로더를 제공하지 않습니다(A17)");
+    devLoad: async (path, expectedId) => {
+      let selectedPath: string;
+      try {
+        selectedPath =
+          (await invoke<string>("unit_dev_validate_path", { source: path })) ?? path;
+      } catch (e) {
+        return err("INVALID_PARAMS", `개발 source 경로 거부: ${e}`);
       }
-      const dirName = basename(path);
       let content: string;
       try {
         const data = await invoke<{ content: string }>("read_text_file", {
-          path: `${path}/plugin.json`,
+          path: `${selectedPath}/plugin.json`,
         });
         content = data.content;
       } catch (e) {
         return err("TARGET_NOT_FOUND", `plugin.json 읽기 실패: ${e}`);
       }
       const rejected: RejectedPlugin[] = [];
-      const rt = parseRuntime(content, path, dirName, "dev", rejected);
+      // 외부 checkout의 폴더명은 unit id가 아닐 수 있다. 개발 source는 절대경로 선언이고
+      // identity는 plugin.json이 소유하므로 basename을 추측 규칙으로 쓰지 않는다.
+      let declaredId = "";
+      try {
+        const raw = JSON.parse(content) as { id?: unknown };
+        if (typeof raw.id === "string") declaredId = raw.id;
+      } catch {
+        // parseRuntime가 동일 원문에 대한 정확한 파싱 오류를 rejected에 기록한다.
+      }
+      const rt = parseRuntime(content, selectedPath, declaredId, "dev", rejected);
       if (!rt) {
         return err(
           "INVALID_PARAMS",
@@ -860,6 +890,18 @@ export const usePlugins = create<PluginsState>((set, get) => {
         );
       }
       const id = rt.manifest.id;
+      if (expectedId !== undefined && id !== expectedId) {
+        return err(
+          "INVALID_PARAMS",
+          `unit id와 plugin.json id가 다릅니다: ${expectedId} != ${id}`,
+        );
+      }
+      try {
+        // 선택 상태는 매니페스트 version이나 폴더 위치가 아니라 identity 홈 config가 소유한다.
+        await invoke("unit_dev_set", { kind: "plugin", id, source: selectedPath });
+      } catch (e) {
+        return err("INVALID_PARAMS", `개발 source 등록 실패: ${e}`);
+      }
       const wasEnabled = get().enabledIds.includes(id);
       if (isActive(id)) await deactivateById(id);
       set((s) => ({ plugins: { ...s.plugins, [id]: rt } }));
@@ -874,7 +916,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
           setRuntime(id, { status: "error", error: String(e) });
         }
       }
-      return ok({ id, dir: path });
+      return ok({ id, dir: selectedPath });
     },
   };
 });
