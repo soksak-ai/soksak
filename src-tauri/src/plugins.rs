@@ -80,8 +80,8 @@ pub struct PluginScanEntry {
     dir: String,
     dir_name: String,
     manifest: Option<String>,
-    // .soksak.json 원문(있으면) — 폴더 자기 기술 설치/dev 상태(version="dev"|<semver>, repo, branch).
-    // 단일 폴더 모델: 같은 ~/.soksak/plugins 안에서 dev(작업물)와 installed(릴리스)를 이 파일로 구분.
+    // .soksak.json 원문(있으면) — 공식 설치 상태(version=<semver>, repo, branch).
+    // legacy version=dev|local은 프론트 loader가 거부하고 development-units.json으로 안내한다.
     state: Option<String>,
     error: Option<String>,
 }
@@ -117,8 +117,7 @@ pub fn plugin_scan() -> Result<Vec<PluginScanEntry>, String> {
     Ok(out)
 }
 
-// 설치/dev 상태 파일(.soksak.json) 기록 헬퍼 — version="dev"|<semver>, repo(원격 URL), branch.
-// 폴더가 자기 상태를 기술하므로 외부 env·전역 플래그가 불필요.
+// 공식 설치 상태 파일(.soksak.json) 기록 헬퍼 — version=<semver>, repo(원격 URL), branch.
 fn write_state(dir: &Path, version: &str, repo: &str, branch: &str) {
     let state = serde_json::json!({ "version": version, "repo": repo, "branch": branch });
     let _ = std::fs::write(
@@ -286,8 +285,8 @@ fn plugin_update_in(base: &Path, id: &str) -> Result<PluginInstallResult, String
     if !dir.is_dir() {
         return Err(format!("설치되지 않은 플러그인: {id}"));
     }
-    // 기존 .soksak.json 파싱 — dev 모드(자기 작업물)는 갱신 대상 아님(reset --hard 가 작업물을 날린다).
-    // 폴더가 자기 보호. 기록된 branch 로 fetch 해 master/main 무관하게 동작.
+    // 기존 .soksak.json 파싱. 과거 단일-폴더 모델의 dev marker는 reset --hard로 작업물을
+    // 훼손하지 않도록 계속 거부한다. 새 개발 source는 설치본 밖 config로 선택한다.
     let prev: Option<serde_json::Value> = std::fs::read_to_string(dir.join(".soksak.json"))
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok());
@@ -345,28 +344,45 @@ fn plugin_update_in(base: &Path, id: &str) -> Result<PluginInstallResult, String
     })
 }
 
-// 단일 폴더 dev 스캐폴드 — ~/.soksak/plugins/<id>/ 에 최소 plugin.json·main.js·.soksak.json
-// (version="dev") 생성 + git init. 폴더가 곧 작업물(외부 경로·dev.load 불필요). .soksak.json 은
-// 머신-로컬 설치/dev 상태라 .gitignore(플러그인 repo 에 안 들어간다).
+// 개발 스캐폴드 — <identity-home>/workspaces/plugins/<id>/ 에 최소 plugin.json·main.js 생성
+// + git init. 개발 source 상태는 workspace 안의 version 마커가 아니라 identity 홈의 선언적
+// development-units.json 이 소유한다. 공식 설치본(~/.soksak*/plugins)과 작업물을 섞지 않는다.
 fn plugin_dev_new_in(base: &Path, id: &str) -> Result<PluginInstallResult, String> {
     sanitize_id(id)?;
+    std::fs::create_dir_all(base).map_err(|e| e.to_string())?;
     let dir = base.join(id);
     if dir.exists() {
         return Err(format!("이미 존재하는 플러그인 폴더: {id}"));
     }
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let staging = base.join(format!(".tmp-{id}-{}-{nanos}", std::process::id()));
+    std::fs::create_dir(&staging).map_err(|e| e.to_string())?;
     let manifest = format!(
         "{{\n  \"spec\": \"soksak-spec-plugin@1\",\n  \"id\": \"{id}\",\n  \"name\": \"{id}\",\n  \"version\": \"0.0.0\",\n  \"description\": \"새 soksak 플러그인\",\n  \"entry\": \"main.js\",\n  \"permissions\": [],\n  \"contributes\": {{ \"views\": [], \"commands\": [], \"programs\": [] }}\n}}\n"
     );
-    std::fs::write(dir.join("plugin.json"), &manifest).map_err(|e| e.to_string())?;
-    std::fs::write(
-        dir.join("main.js"),
-        "export default { activate() {}, deactivate() {} };\n",
-    )
-    .map_err(|e| e.to_string())?;
-    std::fs::write(dir.join(".gitignore"), ".soksak.json\nnode_modules/\n").map_err(|e| e.to_string())?;
-    write_state(&dir, "dev", "", "main");
-    let _ = git_run(std::process::Command::new("git").args(["init", "-q"]).arg(&dir));
+    let staged = (|| {
+        std::fs::write(staging.join("plugin.json"), &manifest).map_err(|e| e.to_string())?;
+        std::fs::write(
+            staging.join("main.js"),
+            "export default { activate() {}, deactivate() {} };\n",
+        )
+        .map_err(|e| e.to_string())?;
+        std::fs::write(staging.join(".gitignore"), "node_modules/\n").map_err(|e| e.to_string())?;
+        git_run(
+            std::process::Command::new("git")
+                .args(["init", "-q"])
+                .arg(&staging),
+        )?;
+        std::fs::rename(&staging, &dir).map_err(|e| format!("workspace 원자 교체 실패: {e}"))?;
+        Ok::<(), String>(())
+    })();
+    if let Err(e) = staged {
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err(e);
+    }
     Ok(PluginInstallResult {
         dir: dir.to_string_lossy().to_string(),
         dir_name: id.to_string(),
@@ -376,7 +392,17 @@ fn plugin_dev_new_in(base: &Path, id: &str) -> Result<PluginInstallResult, Strin
 
 #[tauri::command]
 pub fn plugin_dev_new(id: String) -> Result<PluginInstallResult, String> {
-    plugin_dev_new_in(&plugins_dir()?, &id)
+    let base = crate::home::soksak_home()
+        .join("workspaces")
+        .join("plugins");
+    let result = plugin_dev_new_in(&base, &id)?;
+    let dir = PathBuf::from(&result.dir);
+    if let Err(e) = crate::unit_dev::set_source("plugin", &id, &dir) {
+        // source 선언까지가 한 트랜잭션이다. 선택되지 않은 반쪽 workspace를 남기지 않는다.
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err(e);
+    }
+    Ok(result)
 }
 
 // 플러그인 제거(디렉토리째). 전용 저장소(plugins-data)는 남긴다 — 재설치 시 데이터 보존.
@@ -576,8 +602,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    // 단일 폴더 모델: 설치 시 .soksak.json 기록, dev 모드면 update 거부(작업물 보호),
-    // 설치 모드면 기록 브랜치로 fetch+reset 후 version 갱신.
+    // 설치 시 .soksak.json 기록, legacy dev marker면 update 거부(작업물 보호),
+    // 정상 설치본이면 기록 브랜치로 fetch+reset 후 version 갱신.
     #[test]
     fn plugin_update_dev_refusal_and_branch_fetch() {
         let root = std::env::temp_dir().join(format!("soksak-plugupd-{}", std::process::id()));
@@ -636,7 +662,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    // dev 스캐폴드: plugin.json·main.js·.soksak.json(version="dev") 생성, 중복 거부.
+    // dev 스캐폴드: plugin.json·main.js 생성. source 상태는 외부 config 소유이므로
+    // workspace 안에 .soksak.json(version="dev")을 만들지 않는다.
     #[test]
     fn plugin_dev_new_scaffold() {
         let root = std::env::temp_dir().join(format!("soksak-devnew-{}", std::process::id()));
@@ -646,9 +673,7 @@ mod tests {
         let dir = base.join("my-plugin");
         assert!(dir.join("plugin.json").is_file());
         assert!(dir.join("main.js").is_file());
-        let state: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(dir.join(".soksak.json")).unwrap()).unwrap();
-        assert_eq!(state["version"], "dev");
+        assert!(!dir.join(".soksak.json").exists());
         assert!(r.manifest.contains("my-plugin"));
         // 이미 존재하면 거부.
         assert!(plugin_dev_new_in(&base, "my-plugin").is_err());

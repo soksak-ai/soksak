@@ -18,6 +18,7 @@ mod mediaproxy;
 mod network;
 mod notify;
 mod plugins;
+mod unit_dev;
 mod process;
 mod pty;
 mod schedule;
@@ -475,6 +476,11 @@ pub fn run() {
             plugins::plugin_install_git,
             plugins::plugin_update,
             plugins::plugin_dev_new,
+            unit_dev::unit_dev_list,
+            unit_dev::unit_dev_set,
+            unit_dev::unit_dev_validate_path,
+            unit_dev::unit_dev_remove,
+            unit_dev::app_environment,
             plugins::plugin_remove,
             plugins::plugin_data_read,
             plugins::plugin_data_write,
