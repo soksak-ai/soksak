@@ -23,6 +23,8 @@ function configs() {
     "scripts/release/prepare-tauri-config.mjs",
     'const key = process.env.TAURI_UPDATER_PUBLIC_KEY; // soksak-ai/soksak-app/releases\n',
   );
+  write("src-tauri/src/home.rs", "fn fixed_identity_home() {}\n");
+  write("src-tauri/cli/src/lib.rs", "fn fixed_identity_home() {}\n");
 }
 
 beforeEach(() => {
@@ -54,6 +56,14 @@ describe("distribution invariants", () => {
     const violations = scanRoot(root).join("\n");
     expect(violations).toContain("dev identity updater 금지");
     expect(violations).toContain("private core 저장소 updater/asset URL 금지");
+  });
+
+  it("debug/test 이름으로도 identity home runtime override를 허용하지 않는다", () => {
+    write(
+      "src-tauri/src/home.rs",
+      'fn bad() { let _ = std::env::var("SOKSAK_TEST_HOME"); }\n',
+    );
+    expect(scanRoot(root)).toContain("identity home: 앱/CLI runtime 환경변수 override 금지");
   });
 
   it("이 저장소도 불변식을 만족한다", () => {

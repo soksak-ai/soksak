@@ -44,6 +44,8 @@ export function scanRoot(root = REPO_ROOT) {
   const release = read(root, "src-tauri/tauri.release.conf.json");
   const releaseWorkflow = read(root, ".github/workflows/release.yml");
   const releaseTool = read(root, "scripts/release/prepare-tauri-config.mjs");
+  const appHome = read(root, "src-tauri/src/home.rs");
+  const cliHome = read(root, "src-tauri/cli/src/lib.rs");
   const releaseSurface = `${release}\n${releaseWorkflow}\n${releaseTool}`;
 
   if (/(^|\s)ln\s+-(?:[^\n]*s|s[^\n]*)/.test(makefile)) {
@@ -70,6 +72,9 @@ export function scanRoot(root = REPO_ROOT) {
   if (!releaseTool.includes("TAURI_UPDATER_PUBLIC_KEY")) {
     violations.push("release: TAURI_UPDATER_PUBLIC_KEY 입력 검증 도구 필수");
   }
+  if (/std::env::var\("SOKSAK_(?:TEST_)?HOME"\)/.test(`${appHome}\n${cliHome}`)) {
+    violations.push("identity home: 앱/CLI runtime 환경변수 override 금지");
+  }
 
   return violations;
 }
@@ -87,4 +92,3 @@ function main() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
-

@@ -108,8 +108,9 @@ fn print_usage() {
   상관: $SOKSAK_PARENT 가 있으면 요청에 parent 로 실려 활동 엔트리가 그 턴으로 묶인다.
 
 환경(한 sok 은 한 환경에만 묶인다 — 침묵 cross-env 금지):
-  $SOKSAK_SOCKET(앱이 PTY 에 주입) > --env dev|debug|app > $SOKSAK_ENV > 설치명
-  (sok-dev→dev, sok-debug→debug, sok→release). 그 환경 미실행이면 에러(다른 환경 대체 안 함)."
+  바이너리 identity가 환경을 고정한다(sok-dev→dev, sok-debug→debug, sok→release).
+  $SOKSAK_SOCKET은 위치 힌트일 뿐이며 system.hello identity가 다르면 거부한다.
+  그 환경 미실행이면 에러(다른 환경 대체 안 함)."
     );
 }
 
@@ -117,21 +118,19 @@ fn print_usage() {
 
 // 환경 묶임(배신 차단, docs/AI-CONTROL.md P9). 앱 정체성 3개(com.soksak.{dev|debug|app})로
 // 소켓이 분리된다. sok 은 정확히 한 환경에 묶이고, 의도치 않은 다른 환경에 침묵으로 붙지 않는다.
-// 우선순위: SOKSAK_SOCKET(앱이 PTY 에 주입, 권위) > --env/SOKSAK_ENV > argv0 접미사
-// (sok-dev→dev, sok-debug→debug, sok→app). env 가 정해지면 그 소켓만 — 없으면 에러(다른 env 대체 금지).
+// SOKSAK_SOCKET은 앱이 PTY에 주입하는 위치 힌트일 뿐이다. 연결 직후 system.hello의
+// identity가 컴파일된 바이너리 identity와 일치해야 한다. env가 정해지면 그 소켓만 —
+// 없으면 에러(다른 env 대체 금지).
 // "살아있는-1개-잡기" 는 폐기(어느 env 든 말없이 잡던 배신 지점).
 
 /// 바이너리에 컴파일된 환경 — 이름이 곧 정체성이다. 사람이 바꾸는 채널(--env/SOKSAK_ENV)은 없다.
-/// 유일한 상위 권위는 앱이 자기 PTY 에 주입한 SOKSAK_SOCKET(호스트 앱의 소켓)뿐이다.
+/// SOKSAK_SOCKET은 위치 힌트일 뿐이며 연결된 peer의 system.hello identity가 최종 권위다.
 static DEFAULT_ENV: OnceLock<&'static str> = OnceLock::new();
 fn default_env() -> &'static str {
     DEFAULT_ENV.get().copied().unwrap_or("app")
 }
 // --window 전역 플래그(있으면). main 이 1회 설정 — send_request 의 창 해소에서 env 보다 우선.
 static WINDOW_OVERRIDE: OnceLock<Option<String>> = OnceLock::new();
-
-// argv0 basename → 기본 env 토큰. busybox 패턴: 설치명이 곧 환경.
-
 
 // env 토큰 검증(dev|debug|app 만). 그 외는 에러.
 fn validate_env(env: &str) -> Result<&str, String> {
@@ -146,18 +145,35 @@ fn socket_name_for_env(env: &str) -> String {
     format!("com.soksak.{env}.sock")
 }
 
+fn identity_for_env(env: &str) -> Result<String, String> {
+    Ok(format!("com.soksak.{}", validate_env(env)?))
+}
+
+fn validate_peer_identity(reply: &Value, expected: &str) -> Result<(), String> {
+    let actual = reply
+        .get("identity")
+        .and_then(Value::as_str)
+        .unwrap_or("<missing>");
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(format!(
+            "ENVIRONMENT_MISMATCH: 이 CLI는 {expected} 전용이지만 소켓 앱은 {actual}입니다"
+        ))
+    }
+}
+
 // env 토큰 → 소켓 절대경로(존재·생존 검사 없음 — 핀 용도). validate_env 통과 전제.
 // identity 홈 계약(코어 home.rs 와 동일, docs/ARCHITECTURE.md): app=~/.soksak, 그 외
 // env=~/.soksak-<env>. 데이터·플러그인·소켓이 identity 별로 완전 분리되므로 소켓도 그 홈에 산다.
-// SOKSAK_HOME env 가 최우선(테스트 격리) — sok 는 독립 busybox 바이너리라 계약을 자체 구현한다.
+// runtime home override는 없다. 테스트도 순수 경로 함수와 fixture 입력으로 격리한다.
 fn home_for_env(env: &str) -> Result<PathBuf, String> {
-    if let Ok(p) = std::env::var("SOKSAK_HOME") {
-        if !p.is_empty() {
-            return Ok(PathBuf::from(p));
-        }
-    }
     let home = std::env::var("HOME").map_err(|_| "HOME 없음".to_string())?;
-    let suffix = if env == "app" { String::new() } else { format!("-{env}") };
+    let suffix = if env == "app" {
+        String::new()
+    } else {
+        format!("-{env}")
+    };
     Ok(PathBuf::from(home).join(format!(".soksak{suffix}")))
 }
 
@@ -244,13 +260,24 @@ fn run_events(args: &[String]) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let stream = match UnixStream::connect(&sock) {
+    let mut stream = match UnixStream::connect(&sock) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("소켓 연결 실패({}): {e}", sock.display());
             return ExitCode::FAILURE;
         }
     };
+    let expected = match identity_for_env(default_env()) {
+        Ok(identity) => identity,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if let Err(e) = verify_stream_identity(&mut stream, &expected) {
+        eprintln!("{e}");
+        return ExitCode::FAILURE;
+    }
     let mut w = stream.try_clone().expect("소켓 클론 실패");
     // 구독(장수 연결)도 같은 봉투 빌더를 지난다 — 봉투 계약의 단일 지점 유지.
     let req = build_request("events.subscribe", params, None, None, None, None);
@@ -336,11 +363,20 @@ fn judge_hello_reply(reply: &Value, lang: soksak_spec_socket::Lang) -> Result<St
     };
     let answered = reply.get("ok").and_then(Value::as_bool).unwrap_or(false);
     let peer = if answered {
-        effective_protocol(reply.get("protocol").and_then(Value::as_u64).map(|v| v as u32))
+        effective_protocol(
+            reply
+                .get("protocol")
+                .and_then(Value::as_u64)
+                .map(|v| v as u32),
+        )
     } else {
         0
     };
-    let verdict = evaluate_compat(SOCKET_PROTOCOL_VERSION, MIN_COMPATIBLE_SERVER_PROTOCOL, peer);
+    let verdict = evaluate_compat(
+        SOCKET_PROTOCOL_VERSION,
+        MIN_COMPATIBLE_SERVER_PROTOCOL,
+        peer,
+    );
     // 스큐 문장의 명사와 해결 지시는 사람 표면 — 이 셸의 언어로 해소해 넘긴다(문장 골격은 크레이트가
     // 해소). 이 시선은 sok 이 앱을 판정하므로 self=sok, peer=앱이다.
     let (self_name, peer_name) = match lang {
@@ -370,7 +406,10 @@ fn run_hello() -> ExitCode {
             ExitCode::FAILURE
         }
         Ok(reply) => {
-            println!("{}", serde_json::to_string_pretty(&reply).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&reply).unwrap_or_default()
+            );
             match judge_hello_reply(&reply, env_lang()) {
                 Ok(summary) => {
                     eprintln!("{summary}");
@@ -395,8 +434,6 @@ fn send_request(
     timeout_ms: Option<u64>,
 ) -> Result<Value, String> {
     let sock = resolve_socket()?;
-    let mut stream =
-        UnixStream::connect(&sock).map_err(|e| format!("소켓 연결 실패({}): {e}", sock.display()))?;
     let req = build_request(
         method,
         params,
@@ -407,15 +444,69 @@ fn send_request(
             .or_else(|| std::env::var("SOKSAK_WINDOW").ok()),
         // 상관 부모(SOKSAK_PARENT — 오케스트레이터가 스폰한 에이전트에 주입). 이 실행에서 비롯된
         // 활동 엔트리가 그 대화 턴(parentId)으로 묶인다. pane/window 와 같은 env 컨텍스트 모델.
-        std::env::var("SOKSAK_PARENT").ok().filter(|s| !s.is_empty()),
+        std::env::var("SOKSAK_PARENT")
+            .ok()
+            .filter(|s| !s.is_empty()),
         timeout_ms,
     );
+    let expected = identity_for_env(default_env())?;
+    authenticated_round_trip(&sock, &expected, method, &req)
+}
+
+// identity 확인과 본 명령은 반드시 같은 연결에서 수행한다. 확인 뒤 새 연결을 열면 그 사이
+// 소켓 경로가 다른 서버로 교체되는 TOCTOU가 생겨 compile-time environment 고정이 무너진다.
+fn authenticated_round_trip(
+    sock: &Path,
+    expected_identity: &str,
+    method: &str,
+    req: &Value,
+) -> Result<Value, String> {
+    let mut stream = UnixStream::connect(sock)
+        .map_err(|e| format!("소켓 연결 실패({}): {e}", sock.display()))?;
+    authenticated_exchange(expected_identity, method, req, |message| {
+        round_trip_stream(&mut stream, message)
+    })
+}
+
+// 단일 exchange closure가 한 연결의 수명을 소유한다. hello와 본 요청이 이 closure 밖으로
+// 빠져나갈 수 없으므로 identity 검증 뒤 다른 peer에 명령을 보내는 경로가 구조적으로 없다.
+fn authenticated_exchange<F>(
+    expected_identity: &str,
+    method: &str,
+    req: &Value,
+    mut exchange: F,
+) -> Result<Value, String>
+where
+    F: FnMut(&Value) -> Result<Value, String>,
+{
+    if method != "system.hello" {
+        let hello = build_request("system.hello", Value::Null, None, None, None, None);
+        let reply = exchange(&hello)?;
+        validate_peer_identity(&reply, expected_identity)?;
+    }
+    let reply = exchange(req)?;
+    if method == "system.hello" {
+        validate_peer_identity(&reply, expected_identity)?;
+    }
+    Ok(reply)
+}
+
+fn round_trip_stream(stream: &mut UnixStream, req: &Value) -> Result<Value, String> {
     writeln!(stream, "{req}").map_err(|e| format!("요청 전송 실패: {e}"))?;
     let mut line = String::new();
-    BufReader::new(stream)
+    let read_half = stream
+        .try_clone()
+        .map_err(|e| format!("소켓 읽기 핸들 복제 실패: {e}"))?;
+    BufReader::new(read_half)
         .read_line(&mut line)
         .map_err(|e| format!("응답 수신 실패: {e}"))?;
     serde_json::from_str(&line).map_err(|e| format!("응답 파싱 실패: {e}"))
+}
+
+fn verify_stream_identity(stream: &mut UnixStream, expected: &str) -> Result<(), String> {
+    let req = build_request("system.hello", Value::Null, None, None, None, None);
+    let reply = round_trip_stream(stream, &req)?;
+    validate_peer_identity(&reply, &expected)
 }
 
 // 응답 봉투의 hint([{cmd,why}])를 사람용 줄로 stdout 에 덧붙인다. TTY 에서만 호출된다(파이프/
@@ -459,7 +550,13 @@ fn pick_catalog_window() -> Option<String> {
 }
 
 fn fetch_commands() -> Result<Vec<Value>, String> {
-    let v = send_request("state.commands", Value::Null, None, pick_catalog_window(), None)?;
+    let v = send_request(
+        "state.commands",
+        Value::Null,
+        None,
+        pick_catalog_window(),
+        None,
+    )?;
     // 응답 봉투(MESSAGE-PROTOCOL) — 기계 페이로드는 data 에 중첩된다.
     v.get("data")
         .and_then(|d| d.get("commands"))
@@ -475,13 +572,20 @@ fn format_command_md(c: &Value) -> String {
         .as_str()
         .map(|d| format!(" (danger: {d})"))
         .unwrap_or_default();
-    let mut out = format!("## `{name}`{dg}\n\n{}\n\n", c["description"].as_str().unwrap_or(""));
+    let mut out = format!(
+        "## `{name}`{dg}\n\n{}\n\n",
+        c["description"].as_str().unwrap_or("")
+    );
     let params = c["params"].as_object();
     if params.is_some_and(|p| !p.is_empty()) {
         out.push_str("| Parameter | Type | Required | Description |\n|---|---|---|---|\n");
         for (k, p) in params.unwrap() {
             let ty = p["type"].as_str().unwrap_or("?");
-            let req = if p["required"].as_bool().unwrap_or(false) { "✓" } else { "" };
+            let req = if p["required"].as_bool().unwrap_or(false) {
+                "✓"
+            } else {
+                ""
+            };
             let mut desc = p["description"].as_str().unwrap_or("").to_string();
             if let Some(e) = p["enum"].as_array() {
                 let vals: Vec<_> = e.iter().filter_map(Value::as_str).collect();
@@ -496,7 +600,10 @@ fn format_command_md(c: &Value) -> String {
         }
         out.push('\n');
     }
-    out.push_str(&format!("**Returns**: {}\n", c["returns"].as_str().unwrap_or("{}")));
+    out.push_str(&format!(
+        "**Returns**: {}\n",
+        c["returns"].as_str().unwrap_or("{}")
+    ));
     if let Some(errs) = c["errors"].as_array() {
         if !errs.is_empty() {
             let list: Vec<_> = errs.iter().filter_map(Value::as_str).collect();
@@ -531,7 +638,10 @@ fn run_help(cmd: &str) -> ExitCode {
                 let domain: String = if cmd.starts_with("plugin.") {
                     cmd.splitn(3, '.').take(2).collect::<Vec<_>>().join(".")
                 } else {
-                    cmd.rsplit_once('.').map(|(d, _)| d).unwrap_or(cmd).to_string()
+                    cmd.rsplit_once('.')
+                        .map(|(d, _)| d)
+                        .unwrap_or(cmd)
+                        .to_string()
                 };
                 let prefix = format!("{domain}.");
                 let siblings: Vec<&str> = cmds
@@ -556,7 +666,13 @@ fn run_docs(core_only: bool, format: &str, lang: &str) -> ExitCode {
     // 원천 = 코어 자동화 명령 command.docs(전체 표면 단일 반환) — CLI 는 마크다운 표현만 담당.
     // 플러그인 명령 스키마는 창-로컬 등록이라, 창 미지정이면 워크스페이스 창(w-*)을 자동 선택해
     // 어느 창(오케스트레이터 포함)에서 불러도 같은 전체 레퍼런스가 나온다.
-    let v = match send_request("command.docs", json!({ "lang": lang }), None, pick_catalog_window(), None) {
+    let v = match send_request(
+        "command.docs",
+        json!({ "lang": lang }),
+        None,
+        pick_catalog_window(),
+        None,
+    ) {
         Err(e) => {
             eprintln!("{e}");
             return ExitCode::FAILURE;
@@ -573,12 +689,20 @@ fn run_docs(core_only: bool, format: &str, lang: &str) -> ExitCode {
         return ExitCode::FAILURE;
     }
     let data = v.get("data").cloned().unwrap_or(Value::Null);
-    let core = data.get("core").and_then(Value::as_array).cloned().unwrap_or_default();
+    let core = data
+        .get("core")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     println!("# soksak 명령 레퍼런스\n");
-    println!("> 자동 생성 문서 — 원천은 `command.docs`(앱 Command Registry + 레지스트리 카탈로그).\n");
+    println!(
+        "> 자동 생성 문서 — 원천은 `command.docs`(앱 Command Registry + 레지스트리 카탈로그).\n"
+    );
     println!("모든 명령: `sok <command> [값 | '{{JSON}}']` — 값 하나는 유일한 필수 매개변수로 전달(기본형). 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.\n");
     if core_only {
-        println!("코어 명령만 수록한다(--core — 리포지토리 문서용, 설치본 무관). 전체는 `sok docs`.\n");
+        println!(
+            "코어 명령만 수록한다(--core — 리포지토리 문서용, 설치본 무관). 전체는 `sok docs`.\n"
+        );
     } else {
         println!("가능한 명령 전체(코어 + 모든 플러그인)를 하나의 목록으로 수록한다.\n");
     }
@@ -600,11 +724,20 @@ fn run_docs(core_only: bool, format: &str, lang: &str) -> ExitCode {
             }
         }
     }
-    let entries = data.get("registry").and_then(Value::as_array).cloned().unwrap_or_default();
+    let entries = data
+        .get("registry")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let mut printed: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
     for e in &entries {
         let id = e["id"].as_str().unwrap_or("?");
-        for c in e["commands"].as_array().map(|a| a.iter()).into_iter().flatten() {
+        for c in e["commands"]
+            .as_array()
+            .map(|a| a.iter())
+            .into_iter()
+            .flatten()
+        {
             let n = c["name"].as_str().unwrap_or("?");
             let full = format!("plugin.{id}.{n}");
             printed.insert(full.clone());
@@ -613,7 +746,10 @@ fn run_docs(core_only: bool, format: &str, lang: &str) -> ExitCode {
             } else {
                 // title 은 command.docs 가 요청 lang 으로 이미 평문 해소해 돌려준다(언어 맵 선택 불필요).
                 let t = c["title"].as_str().unwrap_or("");
-                let dg = c["danger"].as_str().map(|d| format!(" (danger: {d})")).unwrap_or_default();
+                let dg = c["danger"]
+                    .as_str()
+                    .map(|d| format!(" (danger: {d})"))
+                    .unwrap_or_default();
                 println!("## `{full}`\n\n{t}{dg}\n");
                 println!("```bash\nsok {full} ['{{JSON}}']\n```\n");
             }
@@ -699,7 +835,10 @@ fn mcp_call_meta(name: &str, args: &Value) -> Result<(String, bool), String> {
             let cmds = fetch_commands()?;
             match cmds.iter().find(|c| c["name"] == cmd) {
                 Some(c) => Ok((format_command_md(c), false)),
-                None => Ok((format!("알 수 없는 명령: {cmd} (soksak_commands 로 목록 확인)"), true)),
+                None => Ok((
+                    format!("알 수 없는 명령: {cmd} (soksak_commands 로 목록 확인)"),
+                    true,
+                )),
             }
         }
         "soksak_run" => {
@@ -718,10 +857,7 @@ fn mcp_call_meta(name: &str, args: &Value) -> Result<(String, bool), String> {
 }
 
 fn mcp_reply(id: &Value, result: Value) {
-    println!(
-        "{}",
-        json!({"jsonrpc": "2.0", "id": id, "result": result})
-    );
+    println!("{}", json!({"jsonrpc": "2.0", "id": id, "result": result}));
     use std::io::Write as _;
     let _ = std::io::stdout().flush();
 }
@@ -842,7 +978,9 @@ fn mcp_add_argv(
         // claude mcp add --scope user --env K=V <name> -- <sok> mcp
         "claude" => Ok((
             "claude".into(),
-            v(&["mcp", "add", "--scope", "user", "--env", &envpair, server, "--", sok, "mcp"]),
+            v(&[
+                "mcp", "add", "--scope", "user", "--env", &envpair, server, "--", sok, "mcp",
+            ]),
         )),
         // codex mcp add <name> --env K=V -- <sok> mcp
         "codex" => Ok((
@@ -852,7 +990,9 @@ fn mcp_add_argv(
         // gemini mcp add <name> -e K=V -s user <sok> mcp  (flags before command, per docs)
         "gemini" => Ok((
             "gemini".into(),
-            v(&["mcp", "add", server, "-e", &envpair, "-s", "user", sok, "mcp"]),
+            v(&[
+                "mcp", "add", server, "-e", &envpair, "-s", "user", sok, "mcp",
+            ]),
         )),
         other => Err(format!("알 수 없는 도구: {other}")),
     }
@@ -980,7 +1120,11 @@ fn skill_frontmatter(skill_name: &str, env: &str, directives_fm: Option<&str>) -
 // 이 환경의 호출 방법 — 생성 시점의 CLI 실경로를 핀한다(미설치 개발 환경에서도 즉시 동작).
 // 재작성 때마다 갱신되므로 이사·리빌드에 썩지 않는다.
 fn env_pin_block(env: &str) -> String {
-    let alias = if env == "app" { "sok".to_string() } else { format!("sok-{env}") };
+    let alias = if env == "app" {
+        "sok".to_string()
+    } else {
+        format!("sok-{env}")
+    };
     let exe = std::env::current_exe()
         .ok()
         .map(|p| p.display().to_string())
@@ -1087,7 +1231,9 @@ fn domain_map(cmds: &[Value]) -> String {
     use std::collections::BTreeMap;
     let mut groups: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for c in cmds {
-        let Some(name) = c["name"].as_str() else { continue };
+        let Some(name) = c["name"].as_str() else {
+            continue;
+        };
         if name.is_empty() {
             continue;
         }
@@ -1207,8 +1353,11 @@ fn write_refresh_manifest(env: &str, targets: &[(&str, PathBuf)]) -> Result<(), 
         .map(|p| p.display().to_string())
         .collect();
     let v = serde_json::json!({ "cli": cli.display().to_string(), "env": env, "targets": paths });
-    std::fs::write(home.join("skill-refresh.json"), serde_json::to_string_pretty(&v).unwrap_or_default())
-        .map_err(|e| e.to_string())
+    std::fs::write(
+        home.join("skill-refresh.json"),
+        serde_json::to_string_pretty(&v).unwrap_or_default(),
+    )
+    .map_err(|e| e.to_string())
 }
 
 // `sok skill refresh` — 매니페스트대로 제어 스킬을 재생성한다(앱이 변화 시 스폰).
@@ -1253,7 +1402,11 @@ fn run_skill_refresh() -> ExitCode {
             }
         }
     }
-    if failed { ExitCode::FAILURE } else { ExitCode::SUCCESS }
+    if failed {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 // 트리거 스킬 SKILL.md 를 도구별 경로에 쓴다(P10 — 우리 전용 디렉토리, 전체 재생성).
@@ -1285,27 +1438,41 @@ fn discover_plugin_skills() -> Vec<PluginSkill> {
     else {
         return out;
     };
-    let Ok(entries) = std::fs::read_dir(&base) else { return out };
+    let Ok(entries) = std::fs::read_dir(&base) else {
+        return out;
+    };
     for e in entries.flatten() {
         let pdir = e.path();
         if !pdir.is_dir() {
             continue;
         }
-        let Ok(txt) = std::fs::read_to_string(pdir.join("plugin.json")) else { continue };
-        let Ok(v) = serde_json::from_str::<Value>(&txt) else { continue };
+        let Ok(txt) = std::fs::read_to_string(pdir.join("plugin.json")) else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_str::<Value>(&txt) else {
+            continue;
+        };
         let id = v["id"].as_str().unwrap_or("").trim().to_string();
         if id.is_empty() {
             continue;
         }
-        let Some(rel) = v["contributes"]["skill"]["path"].as_str() else { continue };
+        let Some(rel) = v["contributes"]["skill"]["path"].as_str() else {
+            continue;
+        };
         // 디렉토리 탈출 방어(스펙도 막지만 CLI 도 독립 방어).
         if rel.starts_with('/') || rel.split('/').any(|s| s == "..") {
             continue;
         }
-        let Ok(body) = std::fs::read_to_string(pdir.join(rel)) else { continue };
+        let Ok(body) = std::fs::read_to_string(pdir.join(rel)) else {
+            continue;
+        };
         // 설치 디렉토리 = SKILL.md frontmatter name(Claude 관례: dir==name). 없으면 플러그인 id.
         let dir_name = skill_frontmatter_name(&body).unwrap_or_else(|| id.clone());
-        out.push(PluginSkill { dir_name, plugin_id: id, body });
+        out.push(PluginSkill {
+            dir_name,
+            plugin_id: id,
+            body,
+        });
     }
     out.sort_by(|a, b| a.dir_name.cmp(&b.dir_name));
     out
@@ -1314,11 +1481,15 @@ fn discover_plugin_skills() -> Vec<PluginSkill> {
 // 플러그인 명령 맵 합성 — 라이브 카탈로그에서 plugin.<id>.* 만 추려 `- sub — base` 목록(단일진실=registry).
 // base = 합성 description 의 트리거어 앞부분(사람 가독). 카탈로그 미가용(앱 다운)이면 빈 문자열.
 fn plugin_command_map(plugin_id: &str) -> String {
-    let Ok(cmds) = fetch_commands() else { return String::new() };
+    let Ok(cmds) = fetch_commands() else {
+        return String::new();
+    };
     let prefix = format!("plugin.{plugin_id}.");
     let mut out = String::new();
     for c in &cmds {
-        let Some(name) = c["name"].as_str() else { continue };
+        let Some(name) = c["name"].as_str() else {
+            continue;
+        };
         if let Some(sub) = name.strip_prefix(&prefix) {
             let desc = c["description"].as_str().unwrap_or("");
             let base = desc.split(" | ").next().unwrap_or(desc).trim();
@@ -1359,7 +1530,9 @@ fn skill_frontmatter_name(content: &str) -> Option<String> {
         if let Some(rest) = t.strip_prefix("name:") {
             let name = rest.trim().trim_matches(['"', '\'']).trim();
             if !name.is_empty()
-                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                && name
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
             {
                 return Some(name.to_string());
             }
@@ -1426,10 +1599,13 @@ fn run_skill(args: &[String]) -> ExitCode {
         }
     };
     let skill_dir = server_name_for_env(&env); // soksak | soksak-dev | soksak-debug
-    // codex·gemini 는 같은 .agents/skills/ 경로(공유) — 한 번만 쓰면 둘 다 커버.
+                                               // codex·gemini 는 같은 .agents/skills/ 경로(공유) — 한 번만 쓰면 둘 다 커버.
     let mut targets: Vec<(&str, PathBuf)> = Vec::new();
     if claude {
-        targets.push(("claude", dir.join(format!(".claude/skills/{skill_dir}/SKILL.md"))));
+        targets.push((
+            "claude",
+            dir.join(format!(".claude/skills/{skill_dir}/SKILL.md")),
+        ));
     }
     if codex || gemini {
         let label = if codex && gemini {
@@ -1439,7 +1615,10 @@ fn run_skill(args: &[String]) -> ExitCode {
         } else {
             "gemini"
         };
-        targets.push((label, dir.join(format!(".agents/skills/{skill_dir}/SKILL.md"))));
+        targets.push((
+            label,
+            dir.join(format!(".agents/skills/{skill_dir}/SKILL.md")),
+        ));
     }
 
     let mut failed = false;
@@ -1469,7 +1648,9 @@ fn run_skill(args: &[String]) -> ExitCode {
         let doc = compose_plugin_skill(skill);
         for (label, control_path) in &targets {
             // control SKILL.md 의 부모의 부모 = skills 루트(.claude/skills 또는 .agents/skills).
-            let Some(skills_root) = control_path.parent().and_then(Path::parent) else { continue };
+            let Some(skills_root) = control_path.parent().and_then(Path::parent) else {
+                continue;
+            };
             let path = skills_root.join(&skill.dir_name).join("SKILL.md");
             match write_skill(&path, &doc) {
                 Ok(_) => println!("{label}  ✓ {} (plugin)", path.display()),
@@ -1540,7 +1721,14 @@ mod tests {
         assert_eq!(req["protocol"], soksak_spec_socket::SOCKET_PROTOCOL_VERSION);
         assert_eq!(req["method"], "state.tree");
         // 구독(장수 연결)도 같은 빌더를 지난다 — 게이트에 빠짐없이 걸린다.
-        let sub = build_request("events.subscribe", json!({"kinds":["command"]}), None, None, None, None);
+        let sub = build_request(
+            "events.subscribe",
+            json!({"kinds":["command"]}),
+            None,
+            None,
+            None,
+            None,
+        );
         assert_eq!(sub["protocol"], soksak_spec_socket::SOCKET_PROTOCOL_VERSION);
     }
 
@@ -1571,9 +1759,13 @@ mod tests {
         use soksak_spec_socket::Lang;
         let modern = json!({"ok": true, "protocol": soksak_spec_socket::SOCKET_PROTOCOL_VERSION});
         let summary = judge_hello_reply(&modern, Lang::En).expect("같은 판은 호환");
-        assert!(summary.contains("compatible"), "요약에 판정 명시: {summary}");
+        assert!(
+            summary.contains("compatible"),
+            "요약에 판정 명시: {summary}"
+        );
         let legacy = json!({"ok": false, "code": "UNKNOWN_COMMAND", "message": "unknown"});
-        let summary = judge_hello_reply(&legacy, Lang::En).expect("floor 0 인 동안 구세대 앱은 호환");
+        let summary =
+            judge_hello_reply(&legacy, Lang::En).expect("floor 0 인 동안 구세대 앱은 호환");
         assert!(summary.contains('0'), "구세대=판 0 명시: {summary}");
     }
 
@@ -1585,12 +1777,21 @@ mod tests {
         let modern = json!({"ok": true, "protocol": SOCKET_PROTOCOL_VERSION});
         let ko = judge_hello_reply(&modern, Lang::Ko).expect("같은 판은 호환");
         assert!(ko.contains("호환됨"), "ko 로케일은 한국어로 해소: {ko}");
-        assert!(!ko.contains("compatible"), "ko 로케일에 영어 문장이 새면 안 된다: {ko}");
-        assert!(ko.contains(&SOCKET_PROTOCOL_VERSION.to_string()), "판 숫자는 언어 독립: {ko}");
+        assert!(
+            !ko.contains("compatible"),
+            "ko 로케일에 영어 문장이 새면 안 된다: {ko}"
+        );
+        assert!(
+            ko.contains(&SOCKET_PROTOCOL_VERSION.to_string()),
+            "판 숫자는 언어 독립: {ko}"
+        );
         // 협상 이전 앱(ok:false)은 판 0 으로 판별 — 그 사실도 해소된 언어로 붙는다.
         let legacy = json!({"ok": false, "code": "UNKNOWN_COMMAND", "message": "unknown"});
         let ko = judge_hello_reply(&legacy, Lang::Ko).expect("floor 0 인 동안 구세대 앱은 호환");
-        assert!(ko.contains("hello 이전 앱"), "구세대 앱 사실을 한국어로 고지: {ko}");
+        assert!(
+            ko.contains("hello 이전 앱"),
+            "구세대 앱 사실을 한국어로 고지: {ko}"
+        );
     }
 
     // 앱이 더 새 판이면 sok 이 낡은 쪽 — 방향 명시 문장으로 거부.
@@ -1615,8 +1816,14 @@ mod tests {
         let err = judge_hello_reply(&reply, Lang::Ko).expect_err("판이 앞선 앱은 거부");
         assert!(err.contains("999"), "앱 판 숫자: {err}");
         assert!(err.contains("소켓 프로토콜"), "한국어 골격: {err}");
-        assert!(err.contains("업데이트하세요"), "낡은 쪽을 한국어로 명시: {err}");
-        assert!(!err.contains("speaks socket protocol"), "영어 골격 미누출: {err}");
+        assert!(
+            err.contains("업데이트하세요"),
+            "낡은 쪽을 한국어로 명시: {err}"
+        );
+        assert!(
+            !err.contains("speaks socket protocol"),
+            "영어 골격 미누출: {err}"
+        );
     }
 
     // env 토큰 검증 — dev|debug|app 만.
@@ -1638,13 +1845,48 @@ mod tests {
         assert_eq!(socket_name_for_env("app"), "com.soksak.app.sock");
     }
 
-    // 소켓 타겟 우선순위: SOKSAK_SOCKET > --env > SOKSAK_ENV > argv0.
+    #[test]
+    fn socket_peer_must_match_compiled_cli_identity() {
+        assert_eq!(identity_for_env("app").unwrap(), "com.soksak.app");
+        assert_eq!(identity_for_env("dev").unwrap(), "com.soksak.dev");
+        assert_eq!(identity_for_env("debug").unwrap(), "com.soksak.debug");
+
+        let app = json!({"ok": true, "identity": "com.soksak.app"});
+        assert!(validate_peer_identity(&app, "com.soksak.app").is_ok());
+        let err = validate_peer_identity(&app, "com.soksak.dev").unwrap_err();
+        assert!(err.contains("ENVIRONMENT_MISMATCH"));
+        assert!(err.contains("com.soksak.dev"));
+        assert!(err.contains("com.soksak.app"));
+
+        let unverified = json!({"ok": true});
+        assert!(validate_peer_identity(&unverified, "com.soksak.app").is_err());
+    }
+
+    #[test]
+    fn identity_preflight_and_command_use_one_session() {
+        let request = build_request("state.tree", Value::Null, None, None, None, None);
+        let mut methods = Vec::new();
+        let reply = authenticated_exchange("com.soksak.app", "state.tree", &request, |message| {
+            let method = message["method"].as_str().unwrap().to_string();
+            methods.push(method.clone());
+            match method.as_str() {
+                "system.hello" => Ok(json!({"ok": true, "identity": "com.soksak.app"})),
+                "state.tree" => Ok(json!({"ok": true, "data": {"tree": []}})),
+                _ => Err(format!("unexpected method: {method}")),
+            }
+        })
+        .expect("authenticated command");
+        assert_eq!(reply["ok"], true);
+        assert_eq!(methods, ["system.hello", "state.tree"]);
+    }
+
+    // 소켓 위치는 주입값 또는 컴파일 identity 홈에서 결정한다. 주입값도 identity 검증을 우회하지 못한다.
     #[test]
     fn 환경은_정체성이다() {
-        // 앱이 주입한 SOKSAK_SOCKET 만이 상위 권위 — 그 외 어떤 채널도 없다.
+        // 앱이 주입한 SOKSAK_SOCKET은 위치 힌트다. 실제 권위는 뒤따르는 hello identity 검증이다.
         match resolve_target(Some("/x.sock".into())) {
             SockTarget::Explicit(p) => assert_eq!(p, "/x.sock"),
-            _ => panic!("앱 주입 소켓이 권위여야"),
+            _ => panic!("앱 주입 소켓 위치가 선택되어야"),
         }
         // 주입이 없으면 컴파일된 자기 환경(테스트 프로세스의 설정값).
         match resolve_target(None) {
@@ -1674,21 +1916,36 @@ mod tests {
         assert!(map.contains("- browser (1): navigate"), "{map}");
         assert!(map.contains("- browser.dom (1): click"), "{map}");
         assert!(map.contains("- plugin (2): dynamic"), "{map}");
-        assert!(!map.contains("clip.capture"), "플러그인 per-command 가 새면 안 됨: {map}");
-        assert!(!map.contains("\"type\""), "params 가 지도에 포함되면 안 됨: {map}");
+        assert!(
+            !map.contains("clip.capture"),
+            "플러그인 per-command 가 새면 안 됨: {map}"
+        );
+        assert!(
+            !map.contains("\"type\""),
+            "params 가 지도에 포함되면 안 됨: {map}"
+        );
     }
 
     // skill_doc_with: frontmatter(name+description) + 주입된 도메인 지도. per-command 카탈로그 없음.
     #[test]
     fn skill_doc_has_frontmatter_and_map_no_catalog() {
         let doc = skill_doc_with("- panel (2): merge, split\n", "dev", None);
-        assert!(doc.starts_with("---\nname: soksak-dev\n"), "frontmatter 누락(환경 이름)");
+        assert!(
+            doc.starts_with("---\nname: soksak-dev\n"),
+            "frontmatter 누락(환경 이름)"
+        );
         assert!(doc.contains("description:"), "description 트리거 누락");
         assert!(doc.contains("Environment: **dev**"), "환경 핀 블록 누락");
-        assert!(doc.contains("- panel (2): merge, split"), "도메인 지도 주입 누락");
+        assert!(
+            doc.contains("- panel (2): merge, split"),
+            "도메인 지도 주입 누락"
+        );
         assert!(doc.contains("AUTO-GENERATED"), "생성 헤더 누락(P10)");
         assert!(doc.contains("`sok commands`"), "발견 명령 안내 누락(P5)");
-        assert!(!doc.contains("\"params\""), "per-command params 가 스킬에 새면 안 됨");
+        assert!(
+            !doc.contains("\"params\""),
+            "per-command params 가 스킬에 새면 안 됨"
+        );
     }
 
     // env 토큰 → MCP 서버 이름(세 환경 공존).
@@ -1707,8 +1964,16 @@ mod tests {
         assert_eq!(
             a,
             vec![
-                "mcp", "add", "--scope", "user", "--env", "SOKSAK_SOCKET=/s.sock", "soksak-dev",
-                "--", "/bin/sok", "mcp"
+                "mcp",
+                "add",
+                "--scope",
+                "user",
+                "--env",
+                "SOKSAK_SOCKET=/s.sock",
+                "soksak-dev",
+                "--",
+                "/bin/sok",
+                "mcp"
             ]
         );
 
@@ -1716,7 +1981,16 @@ mod tests {
         assert_eq!(p, "codex");
         assert_eq!(
             a,
-            vec!["mcp", "add", "soksak", "--env", "SOKSAK_SOCKET=/s.sock", "--", "/bin/sok", "mcp"]
+            vec![
+                "mcp",
+                "add",
+                "soksak",
+                "--env",
+                "SOKSAK_SOCKET=/s.sock",
+                "--",
+                "/bin/sok",
+                "mcp"
+            ]
         );
 
         let (p, a) = mcp_add_argv("gemini", "soksak-debug", "/s.sock", "/bin/sok").unwrap();
@@ -1724,8 +1998,15 @@ mod tests {
         assert_eq!(
             a,
             vec![
-                "mcp", "add", "soksak-debug", "-e", "SOKSAK_SOCKET=/s.sock", "-s", "user",
-                "/bin/sok", "mcp"
+                "mcp",
+                "add",
+                "soksak-debug",
+                "-e",
+                "SOKSAK_SOCKET=/s.sock",
+                "-s",
+                "user",
+                "/bin/sok",
+                "mcp"
             ]
         );
 
@@ -1740,7 +2021,12 @@ mod tests {
         assert_eq!(a, vec!["state.tree".to_string()]);
 
         // 명령 뒤에 와도 추출.
-        let mut b = vec!["mcp".to_string(), "install".into(), "--env".into(), "debug".into()];
+        let mut b = vec![
+            "mcp".to_string(),
+            "install".into(),
+            "--env".into(),
+            "debug".into(),
+        ];
         assert_eq!(take_flag_value(&mut b, "--env"), Some("debug".into()));
         assert_eq!(b, vec!["mcp".to_string(), "install".into()]);
 
