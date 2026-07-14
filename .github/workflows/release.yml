@@ -1,7 +1,7 @@
-# 릴리스 — tag(v*) push 시 서명·공증된 soksak.app 을 빌드해 GitHub Release + updater manifest(latest.json)로 배포.
+# 릴리스 — private core의 tag(v*)를 빌드하고 public soksak-app Release에만 게시한다.
 # HOME 정책: release 채널만 앱 본체를 원격 배포한다. debug 앱은 로컬 make build-debug(CI asset 없음), dev 는 로컬 빌드.
 # Makefile 이 단일 진실 — 이 워크플로는 make 를 호출할 뿐 빌드 로직을 YAML 에 재구현하지 않는다(verify.yml 동형).
-# 서명 인증서·Apple 공증·minisign 키는 secrets 로 배선돼 있고, 값 등록만 후속(등록되면 서명 배포가 즉시 활성).
+# 필요한 서명·공증·updater·GitHub App credential이 하나라도 없으면 배포 전에 실패한다.
 name: release
 on:
   push:
@@ -16,47 +16,61 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 90
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Check out the app repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           path: soksak
 
       # src-tauri/Cargo.toml 이 형제 크레이트를 상대 경로로 선언(verify.yml 과 동일 레이아웃 재현).
       - name: Check out the sibling path dependency
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: soksak-ai/tauri-plugin-webview-capture
           token: ${{ secrets.CI_REPO_TOKEN }}
           path: tauri-plugin-webview-capture
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 10
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: soksak/.nvmrc
           cache: pnpm
           cache-dependency-path: soksak/pnpm-lock.yaml
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
 
       - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: soksak/src-tauri
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # tauri build 는 아래 env 가 있으면 codesign(Developer ID) + notarytool 공증 + staple +
-      # updater 아티팩트(.app.tar.gz + .sig, createUpdaterArtifacts)를 자동 수행한다.
-      # 값 미등록 시 서명·공증은 건너뛰고 미서명 번들이 나온다(빌드 자체는 통과 — 인증서만 후속).
+      - name: Require every release credential
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+          SOKSAK_RELEASE_APP_ID: ${{ secrets.SOKSAK_RELEASE_APP_ID }}
+          SOKSAK_RELEASE_PRIVATE_KEY: ${{ secrets.SOKSAK_RELEASE_PRIVATE_KEY }}
+        run: |
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID TAURI_SIGNING_PRIVATE_KEY TAURI_UPDATER_PUBLIC_KEY SOKSAK_RELEASE_APP_ID SOKSAK_RELEASE_PRIVATE_KEY; do
+            test -n "${!name}" || { echo "missing release credential: $name" >&2; exit 1; }
+          done
+
       - name: Build signed + notarized release (+ updater artifacts)
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -67,11 +81,21 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
         run: make build
+
+      - name: Mint short-lived token for public release repository
+        id: release-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ secrets.SOKSAK_RELEASE_APP_ID }}
+          private-key: ${{ secrets.SOKSAK_RELEASE_PRIVATE_KEY }}
+          owner: soksak-ai
+          repositories: soksak-app
 
       - name: Publish GitHub Release + updater manifest (latest.json)
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
         run: |
           ver="${GITHUB_REF_NAME#v}"
           bundle="src-tauri/target/release/bundle"
@@ -88,10 +112,10 @@ jobs:
             "platforms": {
               "darwin-aarch64": {
                 "signature": "$sig",
-                "url": "https://github.com/soksak-ai/soksak/releases/download/${GITHUB_REF_NAME}/${asset_name}"
+                "url": "https://github.com/soksak-ai/soksak-app/releases/download/${GITHUB_REF_NAME}/${asset_name}"
               }
             }
           }
           EOF
-          gh release create "$GITHUB_REF_NAME" --generate-notes \
+          gh release create "$GITHUB_REF_NAME" --repo soksak-ai/soksak-app --generate-notes \
             "$app_tar" "$app_sig" latest.json ${dmg:+"$dmg"}

@@ -33,18 +33,11 @@
       "desktop": {
         "schemes": ["soksak"]
       }
-    },
-    "updater": {
-      "endpoints": [
-        "https://github.com/soksak-ai/soksak/releases/latest/download/latest.json"
-      ],
-      "pubkey": "UPDATER_PUBKEY_PLACEHOLDER"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "createUpdaterArtifacts": true,
     "icon": [
       "icons-dev/32x32.png",
       "icons-dev/128x128.png",

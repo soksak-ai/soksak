@@ -14,6 +14,7 @@ PNPM  := pnpm
 REGISTRY_URL := https://raw.githubusercontent.com/soksak-ai/soksak-plugin-registry/main/registry.json
 
 RELEASE_CONFIG := src-tauri/tauri.release.conf.json
+RELEASE_CONFIG_GENERATED := src-tauri/target/release-config/tauri.conf.json
 DEBUG_CONFIG   := src-tauri/tauri.debug.conf.json
 
 RELEASE_APP := src-tauri/target/release/bundle/macos/soksak.app
@@ -49,8 +50,9 @@ dev: cli-dev ## 개발 서버(HMR) + sok-dev. 독 "soksak-dev"+DEV 배지. 플�
 # 번들 빌드는 spec-gate 를 선행한다 — 코어 프론트는 @soksak-ai/plugin-spec·plugin-api 의 **dist** 를
 # 소비하므로, 소스 타입만 고치고 dist 를 다시 안 빌드하면 tauri 의 pnpm build 가 옛 타입으로 깨진다
 # (typecheck 는 소스를 보고 통과하므로 verify 는 놓친다 — 실측: consumes 추가 후 build-debug 만 실패).
-build: spec-gate cli ## 릴리스 번들 빌드 → "soksak.app"(기본 아이콘) + sok
-	$(PNPM) tauri build --config $(RELEASE_CONFIG)
+build: spec-gate cli ## 릴리스 번들 빌드 → "soksak.app"(기본 아이콘) + sok; updater 공개키 필수
+	node scripts/release/prepare-tauri-config.mjs --base $(RELEASE_CONFIG) --out $(RELEASE_CONFIG_GENERATED)
+	$(PNPM) tauri build --config $(RELEASE_CONFIG_GENERATED)
 
 build-debug: spec-gate cli-debug ## 디버그 번들 빌드 → "soksak-debug.app"(주황 아이콘) + sok-debug
 	$(PNPM) tauri build --debug --config $(DEBUG_CONFIG)
@@ -74,20 +76,20 @@ cli-dev: ## sok-dev CLI(dev 환경, debug 프로파일) — 이 빌드는 sok-de
 cli-debug: ## sok-debug CLI(debug 환경, debug 프로파일) — 이 빌드는 sok-debug 하나를 떨군다(P9)
 	cd src-tauri && cargo build -p sok --bin sok-debug
 
-install-cli: cli ## sok(release) 를 /usr/local/bin 에 링크(멱등)
+install-cli: cli ## sok(release) regular binary를 /usr/local/bin에 원자 설치(멱등)
 	@mkdir -p /usr/local/bin 2>/dev/null || true
-	ln -sf "$(abspath src-tauri/target/release/sok)" /usr/local/bin/sok
-	@echo "설치 완료: /usr/local/bin/sok → src-tauri/target/release/sok (release 환경)"
+	@bash scripts/install/install-regular-file.sh "$(abspath src-tauri/target/release/sok)" /usr/local/bin/sok
+	@echo "설치 완료: /usr/local/bin/sok (release regular binary)"
 
-install-cli-dev: cli-dev ## sok-dev 를 /usr/local/bin 에 링크(argv0 → dev 환경)
+install-cli-dev: cli-dev ## sok-dev regular binary를 /usr/local/bin에 원자 설치
 	@mkdir -p /usr/local/bin 2>/dev/null || true
-	ln -sf "$(abspath src-tauri/target/debug/sok-dev)" /usr/local/bin/sok-dev
-	@echo "설치 완료: /usr/local/bin/sok-dev → src-tauri/target/debug/sok-dev (dev 환경)"
+	@bash scripts/install/install-regular-file.sh "$(abspath src-tauri/target/debug/sok-dev)" /usr/local/bin/sok-dev
+	@echo "설치 완료: /usr/local/bin/sok-dev (dev regular binary)"
 
-install-cli-debug: cli-debug ## sok-debug 를 /usr/local/bin 에 링크(argv0 → debug 환경)
+install-cli-debug: cli-debug ## sok-debug regular binary를 /usr/local/bin에 원자 설치
 	@mkdir -p /usr/local/bin 2>/dev/null || true
-	ln -sf "$(abspath src-tauri/target/debug/sok-debug)" /usr/local/bin/sok-debug
-	@echo "설치 완료: /usr/local/bin/sok-debug → src-tauri/target/debug/sok-debug (debug 환경)"
+	@bash scripts/install/install-regular-file.sh "$(abspath src-tauri/target/debug/sok-debug)" /usr/local/bin/sok-debug
+	@echo "설치 완료: /usr/local/bin/sok-debug (debug regular binary)"
 
 docs: ## 명령 레퍼런스 생성(docs/COMMANDS.md — 앱이 실행 중이어야 함)
 	@mkdir -p docs
@@ -144,12 +146,13 @@ spec-gate: ## 패키지 빌드(plugin-spec·plugin-api dist — 코어가 소비
 		echo "spec-gate: C2 blocking 위반 매니페스트가 통과됨(게이트 깨짐)"; exit 1; \
 	else echo "✓ spec-gate(빌드+무효 거부+C2 판정 확인)"; fi
 
-gates: ## 코어 규율 게이트(blocking) — C1 결합 스캔 + 기준선 축소 게이트 + C2 투명성(로컬 dev-home 사전점검·blocking 규칙만 실패) + W8 git 방출 스캔 + 터미널 해석기 방출 스캔
+gates: ## 코어 규율 게이트(blocking) — 결합·투명성·배포·경로 불변식
 	@node scripts/gates/core-decoupling-scan.mjs
 	@node scripts/gates/baseline-gate.mjs
 	@node scripts/gates/c2-transparency-scan.mjs --plugins $${SOKSAK_PLUGINS:-$$HOME/.soksak-dev/plugins}
 	@node scripts/gates/core-git-scan.mjs
 	@node scripts/gates/core-terminal-scan.mjs
+	@node scripts/gates/distribution-invariants-scan.mjs
 
 gates-registry: ## 배포 카탈로그 권위 게이트(네트워크) — 라이브 registry.json 의 GitHub 매니페스트 실측. C2 승격 소용돌이(시행 모집단=측정 모집단) + 의존 그래프 충족(의존 대상이 카탈로그에 함께 배포되는가) + 계약 동기(doctor 발행본 ≡ 코어 contract). 발행 전 GREEN 필수. 로컬(make gates)은 개발 사전점검일 뿐.
 	@node scripts/gates/c2-transparency-scan.mjs --registry
@@ -198,10 +201,10 @@ SIDECAR_BROWSER_CHROMIUM_HOME := $(HOME)/.soksak/sidecars/soksak-sidecar-browser
 sidecar-browser-chromium: ## Chromium 엔진 사이드카 빌드+스테이지(dev) — 소스·dist 모두 사이드카 홈
 	@test -d "$(SIDECAR_BROWSER_CHROMIUM_HOME)/src" || { echo "사이드카 소스 없음 — git clone https://github.com/soksak-ai/soksak-sidecar-browser-chromium \"$(SIDECAR_BROWSER_CHROMIUM_HOME)\""; exit 1; }
 	cd "$(SIDECAR_BROWSER_CHROMIUM_HOME)" && cargo build --release && ./stage.sh dist
-sidecar-browser-chromium-archive: sidecar-browser-chromium ## 배포 아카이브(dist "내용물" tar.gz, 심링크 해소) + sha256 출력(매니페스트 핀용)
+sidecar-browser-chromium-archive: sidecar-browser-chromium ## 배포 아카이브(regular file 전용 staging) + sha256
 	@root="$$HOME/.soksak/sidecars/soksak-sidecar-browser-chromium"; \
 	ver=$$(grep '^version' "$(SIDECAR_BROWSER_CHROMIUM_HOME)/Cargo.toml" | head -1 | sed 's/.*"\(.*\)"/\1/'); \
 	out="$(SIDECAR_BROWSER_CHROMIUM_HOME)/target/soksak-sidecar-browser-chromium-$$ver-darwin-arm64.tar.gz"; \
-	/usr/bin/tar -czLf "$$out" -C "$$root/dist" .; \
+	bash scripts/release/archive-regular-files.sh "$$root/dist" "$$out"; \
 	echo "아카이브: $$out"; \
 	shasum -a 256 "$$out" | awk '{print "sha256: "$$1}'
