@@ -29,7 +29,10 @@ impl Write for Pipe {
         let (m, cv) = &*self.0;
         let mut b = lock_or_poisoned(m);
         if b.closed {
-            return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "closed"));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::BrokenPipe,
+                "closed",
+            ));
         }
         b.buf.extend(data);
         cv.notify_all();
@@ -90,13 +93,13 @@ impl FakeConn {
         let _ = writeln!(self.to_core, "{line}");
     }
     fn hello(&mut self, ops: &[&str]) {
-        self.write_out(&ServiceOut::Hello {
+        self.write_out(&ServiceOut::Hello(soksak_spec_service::Hello {
             version: Some(soksak_spec_service::SERVICE_PROTOCOL_VERSION),
-            interface: soksak_spec_service::SERVICE_INTERFACE.into(),
+            interface: soksak_spec_service::service_contract_provider(),
             ops: ops.iter().map(|s| s.to_string()).collect(),
             subscribe: vec![],
             pid: 1,
-        });
+        }));
     }
 }
 
@@ -174,7 +177,7 @@ fn binding(ops: &[&str]) -> ServiceBinding {
     ServiceBinding {
         plugin: "demo".into(),
         sidecar: "demo".into(),
-        interface: soksak_spec_service::SERVICE_INTERFACE.into(),
+        interface: soksak_spec_service::service_contract_requirement(),
         ops: ops.iter().map(|s| s.to_string()).collect(),
         subscribe: vec![],
         schedules: vec![],
@@ -198,7 +201,11 @@ fn binding_deps(ops: &[&str], deps: &[&str]) -> ServiceBinding {
 
 fn manager(script: Script) -> (ServiceManager, Arc<MockHost>, Arc<FakeSpawner>) {
     let host = Arc::new(MockHost::default());
-    let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0), envs: Mutex::new(vec![]) });
+    let spawner = Arc::new(FakeSpawner {
+        script,
+        spawns: AtomicUsize::new(0),
+        envs: Mutex::new(vec![]),
+    });
     let mgr = ServiceManager::with_backoff(host.clone(), spawner.clone(), vec![20, 20, 20, 20, 20]);
     (mgr, host, spawner)
 }
@@ -232,7 +239,10 @@ fn wait_status(mgr: &ServiceManager, plugin: &str, want: fn(&SvcStatus) -> bool)
 }
 
 fn events_of(host: &MockHost) -> Vec<String> {
-    lock_or_poisoned(&host.events).iter().map(|(k, _)| k.clone()).collect()
+    lock_or_poisoned(&host.events)
+        .iter()
+        .map(|(k, _)| k.clone())
+        .collect()
 }
 
 // ── PS3·PS5: hello 양방향 대조 — 불일치=거부, 재시도 없음 ────────────────
@@ -244,25 +254,92 @@ fn hello_ops_mismatch_refuses_the_bind() {
     }));
     mgr.bind(binding(&["run"]));
     let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Error(_)));
-    assert!(matches!(st, SvcStatus::Error(ref r) if r.contains("ops 불일치")), "{st:?}");
+    assert!(
+        matches!(st, SvcStatus::Error(ref r) if r.contains("ops 불일치")),
+        "{st:?}"
+    );
     assert!(events_of(&host).contains(&"service.bind.refused".to_string()));
-    assert_eq!(spawner.spawns.load(Ordering::SeqCst), 1, "거부는 재시도 없음");
+    assert_eq!(
+        spawner.spawns.load(Ordering::SeqCst),
+        1,
+        "거부는 재시도 없음"
+    );
 }
 
 #[test]
 fn hello_interface_mismatch_refuses_the_bind() {
     let (mgr, _host, _sp) = manager(Arc::new(|_gen, mut conn: FakeConn| {
-        conn.write_out(&ServiceOut::Hello {
+        conn.write_out(&ServiceOut::Hello(soksak_spec_service::Hello {
             version: Some(1),
-            interface: "soksak-spec-other@1".into(),
+            interface: soksak_spec_contract::ContractProviderRef::new(
+                "soksak-spec-service-other",
+                "0.0.1",
+            )
+            .unwrap(),
             ops: vec!["run".into()],
             subscribe: vec![],
             pid: 1,
-        });
+        }));
     }));
     mgr.bind(binding(&["run"]));
     let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Error(_)));
-    assert!(matches!(st, SvcStatus::Error(ref r) if r.contains("interface 불일치")), "{st:?}");
+    assert!(
+        matches!(st, SvcStatus::Error(ref r) if r.contains("interface 불일치")),
+        "{st:?}"
+    );
+}
+
+#[test]
+fn hello_provider_version_is_matched_against_the_declared_range() {
+    let (mgr, _host, _sp) = manager(Arc::new(|_gen, mut conn: FakeConn| {
+        conn.write_out(&ServiceOut::Hello(soksak_spec_service::Hello {
+            version: Some(1),
+            interface: soksak_spec_contract::ContractProviderRef::new(
+                "soksak-spec-service",
+                "0.0.2",
+            )
+            .unwrap(),
+            ops: vec!["run".into()],
+            subscribe: vec![],
+            pid: 1,
+        }));
+        while !matches!(conn.read_frame(), Some(ServiceIn::Shutdown) | None) {}
+    }));
+    let mut compatible = binding(&["run"]);
+    compatible.interface =
+        soksak_spec_contract::ContractRequirement::new("soksak-spec-service", ">=0.0.1 <0.1.0")
+            .unwrap();
+    mgr.bind(compatible);
+    let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Ready));
+    assert!(matches!(st, SvcStatus::Ready), "{st:?}");
+    mgr.kill_all();
+}
+
+#[test]
+fn hello_provider_outside_the_declared_range_refuses_the_bind() {
+    let (mgr, _host, _sp) = manager(Arc::new(|_gen, mut conn: FakeConn| {
+        conn.write_out(&ServiceOut::Hello(soksak_spec_service::Hello {
+            version: Some(1),
+            interface: soksak_spec_contract::ContractProviderRef::new(
+                "soksak-spec-service",
+                "0.1.0",
+            )
+            .unwrap(),
+            ops: vec!["run".into()],
+            subscribe: vec![],
+            pid: 1,
+        }));
+    }));
+    let mut incompatible = binding(&["run"]);
+    incompatible.interface =
+        soksak_spec_contract::ContractRequirement::new("soksak-spec-service", ">=0.0.1 <0.1.0")
+            .unwrap();
+    mgr.bind(incompatible);
+    let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Error(_)));
+    assert!(
+        matches!(st, SvcStatus::Error(ref r) if r.contains("interface 불일치")),
+        "{st:?}"
+    );
 }
 
 // ── PS7·PS5: 봉투 매핑 — message/hints 1급, 미지 코드는 INTERNAL 클램프 ──
@@ -310,7 +387,15 @@ fn dispatch_maps_the_envelope_with_message_hints_and_code_clamp() {
     assert!(mgr.owns("plugin.demo.run"), "데이터 주도 소유 판정(PS11)");
     assert!(!mgr.owns("plugin.demo.ghost"));
     let ok = mgr
-        .dispatch("plugin.demo.run", json!({ "doc": "a" }), None, "socket", None, 2_000, 10_000)
+        .dispatch(
+            "plugin.demo.run",
+            json!({ "doc": "a" }),
+            None,
+            "socket",
+            None,
+            2_000,
+            10_000,
+        )
         .expect("소유 커맨드");
     assert_eq!(ok["ok"], true);
     assert_eq!(ok["code"], "OK");
@@ -318,7 +403,15 @@ fn dispatch_maps_the_envelope_with_message_hints_and_code_clamp() {
     assert_eq!(ok["hints"][0]["cmd"], "plugin.demo.fail");
     assert_eq!(ok["data"]["echo"]["doc"], "a");
     let err = mgr
-        .dispatch("plugin.demo.fail", json!({}), None, "socket", None, 2_000, 10_000)
+        .dispatch(
+            "plugin.demo.fail",
+            json!({}),
+            None,
+            "socket",
+            None,
+            2_000,
+            10_000,
+        )
         .expect("소유 커맨드");
     assert_eq!(err["ok"], false);
     assert_eq!(err["code"], "INTERNAL", "미지 코드는 폐쇄 enum 클램프(PS5)");
@@ -348,13 +441,21 @@ fn multiplexed_requests_resolve_out_of_order() {
                         held = Some(id); // 첫 req 는 보류
                     } else {
                         conn.write_out(&ServiceOut::Res {
-                            id, ok: true, code: None,
-                            message: None, hints: None, data: Some(json!({ "op": "b" })),
+                            id,
+                            ok: true,
+                            code: None,
+                            message: None,
+                            hints: None,
+                            data: Some(json!({ "op": "b" })),
                         });
                         if let Some(h) = held.take() {
                             conn.write_out(&ServiceOut::Res {
-                                id: h, ok: true, code: None,
-                                message: None, hints: None, data: Some(json!({ "op": "a" })),
+                                id: h,
+                                ok: true,
+                                code: None,
+                                message: None,
+                                hints: None,
+                                data: Some(json!({ "op": "a" })),
                             });
                         }
                     }
@@ -369,15 +470,34 @@ fn multiplexed_requests_resolve_out_of_order() {
     let mgr = Arc::new(mgr);
     let m2 = mgr.clone();
     let t = std::thread::spawn(move || {
-        m2.dispatch("plugin.demo.a", json!({}), None, "socket", None, 3_000, 10_000)
+        m2.dispatch(
+            "plugin.demo.a",
+            json!({}),
+            None,
+            "socket",
+            None,
+            3_000,
+            10_000,
+        )
     });
     std::thread::sleep(Duration::from_millis(50)); // a 가 먼저 도착하도록
     let b = mgr
-        .dispatch("plugin.demo.b", json!({}), None, "socket", None, 3_000, 10_000)
+        .dispatch(
+            "plugin.demo.b",
+            json!({}),
+            None,
+            "socket",
+            None,
+            3_000,
+            10_000,
+        )
         .expect("b");
     assert_eq!(b["data"]["op"], "b");
     let a = t.join().expect("join").expect("a");
-    assert_eq!(a["data"]["op"], "a", "역순 응답이 원 요청자에게 도착(멀티플렉스)");
+    assert_eq!(
+        a["data"]["op"], "a",
+        "역순 응답이 원 요청자에게 도착(멀티플렉스)"
+    );
 }
 
 // ── PS12: 진행 ev 가 마감을 연장한다 ─────────────────────────────────────
@@ -393,12 +513,18 @@ fn progress_events_extend_the_deadline() {
                     for _ in 0..4 {
                         std::thread::sleep(Duration::from_millis(100));
                         conn.write_out(&ServiceOut::Ev {
-                            id, kind: "progress".into(), payload: json!({}),
+                            id,
+                            kind: "progress".into(),
+                            payload: json!({}),
                         });
                     }
                     std::thread::sleep(Duration::from_millis(100));
                     conn.write_out(&ServiceOut::Res {
-                        id, ok: true, code: None, message: None, hints: None,
+                        id,
+                        ok: true,
+                        code: None,
+                        message: None,
+                        hints: None,
                         data: Some(json!({ "done": true })),
                     });
                 }
@@ -410,9 +536,20 @@ fn progress_events_extend_the_deadline() {
     let (mgr, _host, _sp) = manager(script);
     mgr.bind(binding(&["slow"]));
     let out = mgr
-        .dispatch("plugin.demo.slow", json!({}), None, "socket", None, 200, 60_000)
+        .dispatch(
+            "plugin.demo.slow",
+            json!({}),
+            None,
+            "socket",
+            None,
+            200,
+            60_000,
+        )
         .expect("소유 커맨드");
-    assert_eq!(out["ok"], true, "진행 중 op 는 마감 연장으로 완주(PS12): {out}");
+    assert_eq!(
+        out["ok"], true,
+        "진행 중 op 는 마감 연장으로 완주(PS12): {out}"
+    );
 }
 
 // ── PS10: 크래시 경로 — 결정적 즉사/백오프 리스폰/상한/의도 종료 ──────────
@@ -424,10 +561,20 @@ fn immediate_exit_before_ready_goes_straight_to_error() {
     }));
     mgr.bind(binding(&["run"]));
     let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Error(_)));
-    assert!(matches!(st, SvcStatus::Error(ref r) if r.contains("기동 즉시 종료")), "{st:?}");
+    assert!(
+        matches!(st, SvcStatus::Error(ref r) if r.contains("기동 즉시 종료")),
+        "{st:?}"
+    );
     std::thread::sleep(Duration::from_millis(100));
-    assert_eq!(spawner.spawns.load(Ordering::SeqCst), 1, "결정적 즉사는 재시도 없음(PS10)");
-    assert!(events_of(&host).contains(&"service.error".to_string()), "loud(PS8)");
+    assert_eq!(
+        spawner.spawns.load(Ordering::SeqCst),
+        1,
+        "결정적 즉사는 재시도 없음(PS10)"
+    );
+    assert!(
+        events_of(&host).contains(&"service.error".to_string()),
+        "loud(PS8)"
+    );
 }
 
 // Deterministic contract: gen 1 reaches Ready (reads the core's Ready frame, which keeps its
@@ -453,7 +600,11 @@ fn crash_after_ready_respawns_with_backoff_and_pokes_owner() {
             match conn.read_frame() {
                 Some(ServiceIn::Req { id, .. }) => {
                     conn.write_out(&ServiceOut::Res {
-                        id, ok: true, code: None, message: None, hints: None,
+                        id,
+                        ok: true,
+                        code: None,
+                        message: None,
+                        hints: None,
                         data: Some(json!({ "generation": generation })),
                     });
                 }
@@ -474,16 +625,36 @@ fn crash_after_ready_respawns_with_backoff_and_pokes_owner() {
         }
         std::thread::sleep(Duration::from_millis(5));
     }
-    assert!(spawner.spawns.load(Ordering::SeqCst) >= 2, "gen1 크래시 후 리스폰");
+    assert!(
+        spawner.spawns.load(Ordering::SeqCst) >= 2,
+        "gen1 크래시 후 리스폰"
+    );
     // 그다음(신규) dispatch 는 리스폰 세대(gen2)로 간다 — 크래시 표면화는 별도 테스트 소관.
     let out = mgr
-        .dispatch("plugin.demo.run", json!({}), None, "socket", None, 5_000, 10_000)
+        .dispatch(
+            "plugin.demo.run",
+            json!({}),
+            None,
+            "socket",
+            None,
+            5_000,
+            10_000,
+        )
         .expect("소유 커맨드");
-    assert_eq!(out["data"]["generation"], 2, "리스폰 세대(gen2)가 응답: {out}");
+    assert_eq!(
+        out["data"]["generation"], 2,
+        "리스폰 세대(gen2)가 응답: {out}"
+    );
     let ev = events_of(&host);
-    assert!(ev.contains(&"service.backoff".to_string()), "백오프 발행(loud): {ev:?}");
+    assert!(
+        ev.contains(&"service.backoff".to_string()),
+        "백오프 발행(loud): {ev:?}"
+    );
     let pokes = lock_or_poisoned(&host.pokes);
-    assert!(pokes.len() >= 2, "ready 마다 owner poke(부팅 스캔·리스폰 되먹임): {pokes:?}");
+    assert!(
+        pokes.len() >= 2,
+        "ready 마다 owner poke(부팅 스캔·리스폰 되먹임): {pokes:?}"
+    );
 }
 
 #[test]
@@ -500,8 +671,15 @@ fn crash_cap_lands_in_error_state_loudly() {
     let mgr = ServiceManager::with_backoff(host.clone(), spawner.clone(), vec![5, 5]);
     mgr.bind(binding(&["run"]));
     let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Error(_)));
-    assert!(matches!(st, SvcStatus::Error(ref r) if r.contains("크래시 상한")), "{st:?}");
-    assert_eq!(spawner.spawns.load(Ordering::SeqCst), 3, "원 스폰 + 백오프 2회");
+    assert!(
+        matches!(st, SvcStatus::Error(ref r) if r.contains("크래시 상한")),
+        "{st:?}"
+    );
+    assert_eq!(
+        spawner.spawns.load(Ordering::SeqCst),
+        3,
+        "원 스폰 + 백오프 2회"
+    );
 }
 
 #[test]
@@ -515,11 +693,22 @@ fn crash_answers_inflight_pending_immediately() {
     mgr.bind(binding(&["run"]));
     let started = std::time::Instant::now();
     let out = mgr
-        .dispatch("plugin.demo.run", json!({}), None, "socket", None, 30_000, 60_000)
+        .dispatch(
+            "plugin.demo.run",
+            json!({}),
+            None,
+            "socket",
+            None,
+            30_000,
+            60_000,
+        )
         .expect("소유 커맨드");
     assert_eq!(out["ok"], false);
     assert_eq!(out["code"], "INTERNAL");
-    assert!(started.elapsed() < Duration::from_secs(5), "타임아웃 방치 금지 — 즉시 응답(PS12)");
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "타임아웃 방치 금지 — 즉시 응답(PS12)"
+    );
 }
 
 // ── PS10: 드레인 재시작 — in-flight 완주 후 교체, 새 req 는 큐잉 ──────────
@@ -533,7 +722,11 @@ fn drain_restart_completes_inflight_then_replaces_the_process() {
                 Some(ServiceIn::Req { id, .. }) => {
                     std::thread::sleep(Duration::from_millis(80));
                     conn.write_out(&ServiceOut::Res {
-                        id, ok: true, code: None, message: None, hints: None,
+                        id,
+                        ok: true,
+                        code: None,
+                        message: None,
+                        hints: None,
                         data: Some(json!({ "generation": generation })),
                     });
                 }
@@ -548,18 +741,44 @@ fn drain_restart_completes_inflight_then_replaces_the_process() {
     let mgr = Arc::new(mgr);
     let m2 = mgr.clone();
     let inflight = std::thread::spawn(move || {
-        m2.dispatch("plugin.demo.work", json!({}), None, "socket", None, 5_000, 10_000)
+        m2.dispatch(
+            "plugin.demo.work",
+            json!({}),
+            None,
+            "socket",
+            None,
+            5_000,
+            10_000,
+        )
     });
     std::thread::sleep(Duration::from_millis(20)); // in-flight 진입 보장
     assert!(mgr.drain_restart("demo"), "Ready 상태에서 드레인 수용");
     let first = inflight.join().expect("join").expect("in-flight");
-    assert_eq!(first["data"]["generation"], 1, "in-flight 는 옛 세대에서 완주(도는 중 안 자름)");
+    assert_eq!(
+        first["data"]["generation"], 1,
+        "in-flight 는 옛 세대에서 완주(도는 중 안 자름)"
+    );
     let after = mgr
-        .dispatch("plugin.demo.work", json!({}), None, "socket", None, 5_000, 10_000)
+        .dispatch(
+            "plugin.demo.work",
+            json!({}),
+            None,
+            "socket",
+            None,
+            5_000,
+            10_000,
+        )
         .expect("소유 커맨드");
-    assert_eq!(after["data"]["generation"], 2, "드레인 후 요청은 새 세대로: {after}");
+    assert_eq!(
+        after["data"]["generation"], 2,
+        "드레인 후 요청은 새 세대로: {after}"
+    );
     let ev = events_of(&host);
-    assert!(ev.contains(&"service.draining".to_string()) && ev.contains(&"service.restarted".to_string()), "{ev:?}");
+    assert!(
+        ev.contains(&"service.draining".to_string())
+            && ev.contains(&"service.restarted".to_string()),
+        "{ev:?}"
+    );
 }
 
 // ── PS9: 시크릿 all-or-nothing — 미해소면 Error, 부분 주입 금지 ───────────
@@ -571,8 +790,15 @@ fn unresolved_declared_secret_refuses_the_spawn() {
     b.secrets = vec!["OK_ONE".into(), "MISSING".into()];
     mgr.bind(b);
     let st = wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Error(_)));
-    assert!(matches!(st, SvcStatus::Error(ref r) if r.contains("MISSING")), "{st:?}");
-    assert_eq!(spawner.spawns.load(Ordering::SeqCst), 0, "미해소 시크릿이면 스폰 자체가 없다");
+    assert!(
+        matches!(st, SvcStatus::Error(ref r) if r.contains("MISSING")),
+        "{st:?}"
+    );
+    assert_eq!(
+        spawner.spawns.load(Ordering::SeqCst),
+        0,
+        "미해소 시크릿이면 스폰 자체가 없다"
+    );
     assert!(events_of(&host).contains(&"service.error".to_string()));
 }
 
@@ -594,12 +820,26 @@ fn push_bus_reaches_only_subscribers_and_dedups_by_key() {
     wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Ready));
 
     // 구독 안 한 토픽 → 0 전달.
-    assert_eq!(mgr.push_bus("bus:other:changed", None, json!({})), 0, "미구독 토픽은 전달 0");
+    assert_eq!(
+        mgr.push_bus("bus:other:changed", None, json!({})),
+        0,
+        "미구독 토픽은 전달 0"
+    );
     // 구독 토픽 + dedup_key → 1 전달, 같은 키 재발행 → 0(근접 중복 제거).
-    assert_eq!(mgr.push_bus("bus:kanban:changed", Some("rev-7"), json!({ "n": 1 })), 1);
-    assert_eq!(mgr.push_bus("bus:kanban:changed", Some("rev-7"), json!({ "n": 1 })), 0, "같은 키는 1회만");
+    assert_eq!(
+        mgr.push_bus("bus:kanban:changed", Some("rev-7"), json!({ "n": 1 })),
+        1
+    );
+    assert_eq!(
+        mgr.push_bus("bus:kanban:changed", Some("rev-7"), json!({ "n": 1 })),
+        0,
+        "같은 키는 1회만"
+    );
     // 다른 키 → 다시 전달.
-    assert_eq!(mgr.push_bus("bus:kanban:changed", Some("rev-8"), json!({})), 1);
+    assert_eq!(
+        mgr.push_bus("bus:kanban:changed", Some("rev-8"), json!({})),
+        1
+    );
     // dedup_key 부재 → 항상 전달(코어 seq).
     assert_eq!(mgr.push_bus("bus:kanban:changed", None, json!({})), 1);
     assert_eq!(mgr.push_bus("bus:kanban:changed", None, json!({})), 1);
@@ -639,7 +879,11 @@ fn push_bus_skips_non_ready_service() {
     });
     let mgr = ServiceManager::with_backoff(host, spawner, vec![20]);
     mgr.bind(binding_sub(&["run"], &["bus:kanban:changed"]));
-    assert_eq!(mgr.push_bus("bus:kanban:changed", Some("k"), json!({})), 0, "Ready 아니면 전달 0");
+    assert_eq!(
+        mgr.push_bus("bus:kanban:changed", Some("k"), json!({})),
+        0,
+        "Ready 아니면 전달 0"
+    );
 }
 
 // ── PS13: 중개 게이트(순수) — 선언 의존성만 허용, 코어/자기 예외 ────────────
@@ -655,7 +899,10 @@ fn mediation_gate_allows_core_self_and_declared_deps() {
     // 미선언 대상 — 거부.
     let r = mediation_reason("workflow", &deps, "plugin.secrets-thief.grab");
     assert!(r.is_some());
-    assert!(r.expect("거부 사유").contains("secrets-thief"), "거부 사유가 대상을 명시");
+    assert!(
+        r.expect("거부 사유").contains("secrets-thief"),
+        "거부 사유가 대상을 명시"
+    );
 }
 
 // ── PS13: 서비스 cmd → 게이트 → host.mediate → CmdRes 왕복 ────────────────
@@ -686,7 +933,11 @@ fn mediated_cmd_routes_declared_target_and_returns_envelope() {
         }
     });
     let host = Arc::new(MockHost::default());
-    let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0), envs: Mutex::new(vec![]) });
+    let spawner = Arc::new(FakeSpawner {
+        script,
+        spawns: AtomicUsize::new(0),
+        envs: Mutex::new(vec![]),
+    });
     let mgr = ServiceManager::with_backoff(host.clone(), spawner, vec![20]);
     mgr.bind(binding_deps(&["run"], &["kanban"]));
     wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Ready));
@@ -696,11 +947,17 @@ fn mediated_cmd_routes_declared_target_and_returns_envelope() {
         }
         std::thread::sleep(Duration::from_millis(5));
     }
-    let env = lock_or_poisoned(&seen_res).first().cloned().expect("CmdRes 도착");
+    let env = lock_or_poisoned(&seen_res)
+        .first()
+        .cloned()
+        .expect("CmdRes 도착");
     assert_eq!(env["ok"], true);
     assert_eq!(env["data"]["routed"], "plugin.kanban.node.add");
     let mediated = lock_or_poisoned(&host.mediated).clone();
-    assert_eq!(mediated, vec![("demo".to_string(), "plugin.kanban.node.add".to_string())]);
+    assert_eq!(
+        mediated,
+        vec![("demo".to_string(), "plugin.kanban.node.add".to_string())]
+    );
 }
 
 #[test]
@@ -726,7 +983,11 @@ fn mediated_cmd_refuses_undeclared_target_without_routing() {
         }
     });
     let host = Arc::new(MockHost::default());
-    let spawner = Arc::new(FakeSpawner { script, spawns: AtomicUsize::new(0), envs: Mutex::new(vec![]) });
+    let spawner = Arc::new(FakeSpawner {
+        script,
+        spawns: AtomicUsize::new(0),
+        envs: Mutex::new(vec![]),
+    });
     let mgr = ServiceManager::with_backoff(host.clone(), spawner, vec![20]);
     mgr.bind(binding_deps(&["run"], &["kanban"])); // other 미선언
     wait_status(&mgr, "demo", |s| matches!(s, SvcStatus::Ready));
@@ -736,10 +997,19 @@ fn mediated_cmd_refuses_undeclared_target_without_routing() {
         }
         std::thread::sleep(Duration::from_millis(5));
     }
-    let env = lock_or_poisoned(&seen_res).first().cloned().expect("거부 CmdRes 도착");
+    let env = lock_or_poisoned(&seen_res)
+        .first()
+        .cloned()
+        .expect("거부 CmdRes 도착");
     assert_eq!(env["ok"], false);
-    assert!(env["message"].as_str().expect("message 문자열").contains("other"));
-    assert!(lock_or_poisoned(&host.mediated).is_empty(), "거부는 라우팅에 도달하지 않는다");
+    assert!(env["message"]
+        .as_str()
+        .expect("message 문자열")
+        .contains("other"));
+    assert!(
+        lock_or_poisoned(&host.mediated).is_empty(),
+        "거부는 라우팅에 도달하지 않는다"
+    );
 }
 
 #[test]
@@ -761,12 +1031,23 @@ fn kill_all_answers_pending_and_stops() {
     let mgr = Arc::new(mgr);
     let m2 = mgr.clone();
     let hung = std::thread::spawn(move || {
-        m2.dispatch("plugin.demo.hang", json!({}), None, "socket", None, 30_000, 60_000)
+        m2.dispatch(
+            "plugin.demo.hang",
+            json!({}),
+            None,
+            "socket",
+            None,
+            30_000,
+            60_000,
+        )
     });
     std::thread::sleep(Duration::from_millis(50));
     mgr.kill_all();
     let out = hung.join().expect("join").expect("소유 커맨드");
-    assert_eq!(out["code"], "UNAVAILABLE", "종료 시 pending 즉시 응답: {out}");
+    assert_eq!(
+        out["code"], "UNAVAILABLE",
+        "종료 시 pending 즉시 응답: {out}"
+    );
     assert_eq!(mgr.status_of("demo"), Some(SvcStatus::Stopped));
 }
 
@@ -783,11 +1064,19 @@ fn binding_named_secrets(plugin: &str, ops: &[&str], secrets: &[&str]) -> Servic
 #[test]
 fn drain_restart_on_secret_change_respawns_only_secret_dependents() {
     let (mgr, host, spawner) = manager(echo_script());
-    mgr.bind(binding_named_secrets("with-secret", &["run", "fail"], &["AUTH"]));
+    mgr.bind(binding_named_secrets(
+        "with-secret",
+        &["run", "fail"],
+        &["AUTH"],
+    ));
     mgr.bind(binding_named_secrets("no-secret", &["run", "fail"], &[]));
     wait_status(&mgr, "with-secret", |s| matches!(s, SvcStatus::Ready));
     wait_status(&mgr, "no-secret", |s| matches!(s, SvcStatus::Ready));
-    assert_eq!(spawner.spawns.load(Ordering::SeqCst), 2, "두 서비스 각 1회 스폰");
+    assert_eq!(
+        spawner.spawns.load(Ordering::SeqCst),
+        2,
+        "두 서비스 각 1회 스폰"
+    );
 
     // 시크릿 볼트 변경 이벤트가 코어에서 부르는 것과 동일 경로 — 의존 서비스만 새 세대로 교체.
     let n = mgr.drain_restart_secret_dependents();
@@ -802,18 +1091,31 @@ fn drain_restart_on_secret_change_respawns_only_secret_dependents() {
 
     // 드레인·재시작은 loud — 관측 이벤트 발행(무음 마비 금지, PS10).
     let evs = events_of(&host);
-    assert!(evs.iter().any(|e| e == "service.draining"), "드레인 진입 발행: {evs:?}");
-    assert!(evs.iter().any(|e| e == "service.restarted"), "재시작 발행: {evs:?}");
+    assert!(
+        evs.iter().any(|e| e == "service.draining"),
+        "드레인 진입 발행: {evs:?}"
+    );
+    assert!(
+        evs.iter().any(|e| e == "service.restarted"),
+        "재시작 발행: {evs:?}"
+    );
 
     // 대상 조회 API — 재시작 후 두 서비스 모두 Ready.
-    assert!(matches!(mgr.status_of("with-secret"), Some(SvcStatus::Ready)));
+    assert!(matches!(
+        mgr.status_of("with-secret"),
+        Some(SvcStatus::Ready)
+    ));
     assert!(matches!(mgr.status_of("no-secret"), Some(SvcStatus::Ready)));
 
     // 무의존만 있으면 재시작 0(불필요 재시작 없음).
     let (mgr2, _h2, sp2) = manager(echo_script());
     mgr2.bind(binding_named_secrets("plain", &["run", "fail"], &[]));
     wait_status(&mgr2, "plain", |s| matches!(s, SvcStatus::Ready));
-    assert_eq!(mgr2.drain_restart_secret_dependents(), 0, "시크릿 의존 없음 → 재시작 0");
+    assert_eq!(
+        mgr2.drain_restart_secret_dependents(),
+        0,
+        "시크릿 의존 없음 → 재시작 0"
+    );
     assert_eq!(sp2.spawns.load(Ordering::SeqCst), 1, "재스폰 없음");
 }
 
@@ -845,13 +1147,19 @@ fn vault_env_injects_env_secrets_and_recovers_on_unlock() {
 
     // unlock → 드레인 재시작 → 새 세대가 토큰을 스폰 env 로 획득(회복).
     *lock_or_poisoned(&host.vault_locked) = false;
-    assert_eq!(mgr.drain_restart_secret_dependents(), 1, "vault_env 서비스 재시작");
+    assert_eq!(
+        mgr.drain_restart_secret_dependents(),
+        1,
+        "vault_env 서비스 재시작"
+    );
     wait_status(&mgr, "wf", |s| matches!(s, SvcStatus::Ready));
     {
         let envs = lock_or_poisoned(&spawner.envs);
         let last = envs.last().expect("재스폰 env");
         assert_eq!(
-            last.iter().find(|(k, _)| k == "ANTHROPIC_AUTH_TOKEN").map(|(_, v)| v.as_str()),
+            last.iter()
+                .find(|(k, _)| k == "ANTHROPIC_AUTH_TOKEN")
+                .map(|(_, v)| v.as_str()),
             Some("tok"),
             "unlock 후 새 세대에 토큰 주입: {last:?}"
         );

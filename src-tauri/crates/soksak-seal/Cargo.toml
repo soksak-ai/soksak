@@ -1,6 +1,7 @@
 [package]
 name = "soksak-seal"
-version = "0.1.0"
+version = "0.0.1"
+publish = false
 edition = "2021"
 description = "X25519 sealed box shared by the app vault and soksak-ptyd: seal to a public key without the private key at rest, open only with the vault-held secret. Moved from core secrets so the daemon seals byte checkpoints with the same scheme."
 

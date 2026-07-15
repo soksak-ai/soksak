@@ -7,8 +7,6 @@
 
 use tauri::{AppHandle, Manager, WebviewWindowBuilder};
 
-
-
 // 한 창의 네이티브를 설치하는 단일 진입점(MW1) — main(setup)·새 창(window_create)이 같은 함수를
 // 호출해 중복·누락을 막는다. 레이어 역전(hole-punch)과 신호등을 그 창에 건다. 앱 전역 모니터
 // (클릭·라이브리사이즈)는 창과 무관하게 1회만 설치되므로 여기 포함하지 않는다(lib.rs setup).
@@ -164,7 +162,11 @@ fn create_window_core(
             }
             WebviewUrl::App(p) => {
                 let s = p.to_string_lossy();
-                let joined = if s.contains('?') { format!("{s}&{q}") } else { format!("{s}?{q}") };
+                let joined = if s.contains('?') {
+                    format!("{s}&{q}")
+                } else {
+                    format!("{s}?{q}")
+                };
                 WebviewUrl::App(joined.into())
             }
             other => other.clone(),
@@ -194,7 +196,8 @@ static USER_CLOSED: std::sync::Mutex<Option<std::collections::HashSet<String>>> 
 /// CloseRequested — 사용자가 이 창을 닫는 중임을 기록.
 pub fn mark_user_closed(label: &str) {
     let mut g = USER_CLOSED.lock().unwrap();
-    g.get_or_insert_with(Default::default).insert(label.to_string());
+    g.get_or_insert_with(Default::default)
+        .insert(label.to_string());
 }
 
 /// Destroyed — 사용자 닫기였는지 회수(1회성). 앱 종료 경로는 false.
@@ -207,10 +210,7 @@ pub fn take_user_closed(label: &str) -> bool {
 // 지우는 것: ① 그 창의 워크스페이스 스냅샷(core kv "window/<label>") ② manifest("windows")의
 // 그 창 slot. 식별자가 uuid 라 유령 복원은 없지만, 닫힌 창의 흔적을 남기면 죽은 슬롯이
 // manifest 에 쌓여 respawn 대상을 오염시킨다 — 사용자 닫기 = 흔적 폐기가 위생이다.
-pub fn prune_window_persistence(
-    conn: &rusqlite::Connection,
-    label: &str,
-) -> Result<(), String> {
+pub fn prune_window_persistence(conn: &rusqlite::Connection, label: &str) -> Result<(), String> {
     crate::data::store::kv_delete(conn, "core", &format!("window/{label}"))?;
     if let Some(mut m) = crate::data::store::kv_get(conn, "core", "windows")? {
         if let Some(slots) = m.get_mut("slots").and_then(|s| s.as_array_mut()) {
@@ -236,8 +236,7 @@ pub fn window_list(app: AppHandle) -> Vec<String> {
 // 프론트에서 계산한다(팩트/전략 분리 — 확정 결정).
 #[tauri::command]
 pub fn window_monitors(app: AppHandle) -> Result<serde_json::Value, String> {
-    let monitors: Vec<tauri::Monitor> =
-        app.available_monitors().map_err(|e| e.to_string())?;
+    let monitors: Vec<tauri::Monitor> = app.available_monitors().map_err(|e| e.to_string())?;
     let mons: Vec<serde_json::Value> = monitors
         .iter()
         .enumerate()
@@ -380,11 +379,16 @@ mod mw_rules {
         let c = rusqlite::Connection::open_in_memory().unwrap();
         c.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
         crate::data::init_base(&c).unwrap();
-        let set = |k: &str, v: serde_json::Value| {
-            crate::data::store::kv_set(&c, "core", k, &v).unwrap()
-        };
-        set("window/w-1", serde_json::json!({"activeId":"t1","projects":[{"id":"t1"}]}));
-        set("window/main", serde_json::json!({"activeId":"t9","projects":[{"id":"t9"}]}));
+        let set =
+            |k: &str, v: serde_json::Value| crate::data::store::kv_set(&c, "core", k, &v).unwrap();
+        set(
+            "window/w-1",
+            serde_json::json!({"activeId":"t1","projects":[{"id":"t1"}]}),
+        );
+        set(
+            "window/main",
+            serde_json::json!({"activeId":"t9","projects":[{"id":"t9"}]}),
+        );
         set(
             "windows",
             serde_json::json!({"slots":[
@@ -393,14 +397,20 @@ mod mw_rules {
             ]}),
         );
         super::prune_window_persistence(&c, "w-1").unwrap();
-        assert_eq!(crate::data::store::kv_get(&c, "core", "window/w-1").unwrap(), None);
-        assert!(crate::data::store::kv_get(&c, "core", "window/main").unwrap().is_some());
-        let m = crate::data::store::kv_get(&c, "core", "windows").unwrap().unwrap();
+        assert_eq!(
+            crate::data::store::kv_get(&c, "core", "window/w-1").unwrap(),
+            None
+        );
+        assert!(crate::data::store::kv_get(&c, "core", "window/main")
+            .unwrap()
+            .is_some());
+        let m = crate::data::store::kv_get(&c, "core", "windows")
+            .unwrap()
+            .unwrap();
         let slots = m["slots"].as_array().unwrap();
         assert_eq!(slots.len(), 1);
         assert_eq!(slots[0]["label"], "main");
         // 멱등 — 없는 창 정리는 무해.
         super::prune_window_persistence(&c, "w-1").unwrap();
     }
-
 }

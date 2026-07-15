@@ -11,8 +11,9 @@
 // 두 백엔드, 한 인터페이스: impersonate 토글이 전송기를 고른다.
 //   "off"(기본)  = 여기 reqwest native-tls 경로 — first-party 호출은 평문(위조 안 함)이 올바른 기본값.
 //   "chrome"     = mediaproxy.rs 의 이미 떠 있는 wreq/BoringSSL 싱글톤(JA3/JA4 브라우저 위장) 재사용.
-// 어느 모드든 응답 shape({status,headers,body})·시크릿 치환·ns 격리·danger 게이트는 동일 — impersonate
-// 는 전송 백엔드만 바꾼다(보안 불변, 신규 client 인스턴스 0).
+// 어느 모드든 응답 shape({status,headers,body})·시크릿 치환·ns 격리·danger 게이트는 동일이다.
+// 단 Authorization 요청은 검증된 target에만 귀속되므로 native 경로에서 redirect를 전부 차단하고,
+// redirect 정책을 호출별로 고정할 수 없는 chrome 공유 client는 fail-closed 한다.
 
 use crate::secrets::{self, SecretsState};
 use std::collections::HashMap;
@@ -60,6 +61,12 @@ fn impersonate_chrome(impersonate: Option<&str>) -> bool {
     matches!(impersonate, Some("chrome"))
 }
 
+fn has_authorization_header(headers: &HashMap<String, String>) -> bool {
+    headers
+        .keys()
+        .any(|name| name.eq_ignore_ascii_case("authorization"))
+}
+
 // impersonate:"chrome" — 이미 떠 있는 mediaproxy wreq 싱글톤으로 전송하고 응답을 HttpResponse 로 맵핑
 // (off 경로와 동일 shape). 치환은 호출 전 완료됨 — 여기는 백엔드만 다르다(신규 client 0).
 fn send_http_impersonated(
@@ -90,9 +97,15 @@ fn send_http(
 ) -> Result<HttpResponse, String> {
     let m = reqwest::Method::from_bytes(method.to_uppercase().as_bytes())
         .map_err(|e| format!("HTTP method 불량: {e}"))?;
-    let client = reqwest::blocking::Client::builder()
-        .build()
-        .map_err(|e| e.to_string())?;
+    let builder = reqwest::blocking::Client::builder();
+    // Authorization belongs to the validated target URL only. A remote 3xx response must not
+    // choose a second destination (including HTTPS→HTTP downgrade) after that validation.
+    let builder = if has_authorization_header(headers) {
+        builder.redirect(reqwest::redirect::Policy::none())
+    } else {
+        builder
+    };
+    let client = builder.build().map_err(|e| e.to_string())?;
     let mut req = client.request(m, url);
     if !query.is_empty() {
         let q: Vec<(&String, &String)> = query.iter().collect();
@@ -152,6 +165,15 @@ pub fn net_http_request(
     // 치환·ns·danger 게이트는 위에서 끝났다(두 모드 동일). 백엔드만 impersonate 로 분기 — "chrome"=위장
     // 싱글톤 재사용, 그 외/absent="off"=reqwest native-tls. 보안 불변(impersonate 는 전송기일 뿐).
     if impersonate_chrome(impersonate.as_deref()) {
+        // The shared impersonation client owns its redirect policy and cannot provide the strict
+        // no-redirect invariant required by credential-bearing requests. Fail closed instead of
+        // silently weakening the boundary.
+        if has_authorization_header(&headers) {
+            return Err(
+                "Authorization 요청은 impersonate=chrome을 사용할 수 없음(redirect 차단 불가)"
+                    .to_string(),
+            );
+        }
         send_http_impersonated(
             &method,
             &url,
@@ -182,10 +204,11 @@ mod tests {
     use std::time::Duration;
 
     // 1회 요청을 받는 최소 HTTP 서버 — 받은 raw 요청을 채널로 돌려주고 고정 응답을 쓴다.
-    fn spawn_once_server(response: &'static str) -> (u16, mpsc::Receiver<String>) {
+    fn spawn_once_server(response: impl Into<String>) -> (u16, mpsc::Receiver<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let (tx, rx) = mpsc::channel();
+        let response = response.into();
         std::thread::spawn(move || {
             if let Ok((mut stream, _)) = listener.accept() {
                 let mut buf = [0u8; 8192];
@@ -231,11 +254,47 @@ mod tests {
         )
         .unwrap();
         assert_eq!(resp.status, 200);
-        let received = rx.recv_timeout(Duration::from_secs(3)).unwrap().to_lowercase();
+        let received = rx
+            .recv_timeout(Duration::from_secs(3))
+            .unwrap()
+            .to_lowercase();
         assert!(received.starts_with("post /x"));
         assert!(received.contains("x-test: abc"));
         assert!(received.contains("payload-123"));
         assert!(received.contains("content-type: application/json"));
+    }
+
+    // Credential-bearing requests must not delegate redirect decisions to a remote response.
+    // Otherwise an HTTPS registry endpoint can redirect Authorization to a downgraded or foreign
+    // URL after descriptor validation has already completed.
+    #[test]
+    fn authorization_request_does_not_follow_redirects() {
+        let (target_port, target_rx) = spawn_once_server(OK_RESP);
+        let redirect = format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{target_port}/leak\r\nContent-Length: 0\r\n\r\n"
+        );
+        let (source_port, _source_rx) = spawn_once_server(redirect);
+        let mut headers = HashMap::new();
+        headers.insert(
+            "Authorization".to_string(),
+            "Bearer registry-secret".to_string(),
+        );
+
+        let response = send_http(
+            "GET",
+            &format!("http://127.0.0.1:{source_port}/index.json"),
+            &headers,
+            &HashMap::new(),
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(response.status, 302);
+        assert!(
+            target_rx.recv_timeout(Duration::from_millis(200)).is_err(),
+            "authorization request must not reach redirect target"
+        );
     }
 
     // (c) 시크릿 치환 — secret_subst{placeholder→key} 가 ns 볼트의 실값으로 바뀌어 헤더로 나간다
@@ -259,8 +318,7 @@ mod tests {
 
         let mut subst_map = HashMap::new();
         subst_map.insert("\0secret:apiKey\0".to_string(), "apiKey".to_string());
-        let resolved =
-            resolve_secret_subst(&state, Some("plugin-a"), &Some(subst_map)).unwrap();
+        let resolved = resolve_secret_subst(&state, Some("plugin-a"), &Some(subst_map)).unwrap();
         let header_val = substitute("Bearer \0secret:apiKey\0", &resolved);
         assert_eq!(header_val, "Bearer sk-secret-xyz", "placeholder→실값");
 
@@ -270,7 +328,10 @@ mod tests {
         headers.insert("authorization".to_string(), header_val);
         let resp = send_http("GET", &url, &headers, &HashMap::new(), None, None).unwrap();
         assert_eq!(resp.status, 200);
-        let received = rx.recv_timeout(Duration::from_secs(3)).unwrap().to_lowercase();
+        let received = rx
+            .recv_timeout(Duration::from_secs(3))
+            .unwrap()
+            .to_lowercase();
         assert!(
             received.contains("authorization: bearer sk-secret-xyz"),
             "실값이 헤더로 전송됨(Rust 경계 주입)"

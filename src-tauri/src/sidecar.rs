@@ -16,6 +16,7 @@ use std::ffi::{c_char, c_void, CStr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
 
+use soksak_spec_contract::{is_sidecar_contract_id, ContractProviderRef, ContractRequirement};
 use tauri::ipc::Channel;
 
 // ── C ABI v1 (docs/SIDECARS.md §3 이 규범 — 여기와 사이드카 크레이트가 동일 레이아웃을 미러) ──────
@@ -24,9 +25,9 @@ pub const HOST_ABI_VERSION: u32 = 1;
 
 #[repr(C)]
 pub struct SoksakSidecarEngineAbi {
-    pub abi: u32,                 // 호스팅 ABI 버전 — 정확 일치만 수용
-    pub interface: *const c_char, // "<protocol-domain>@<major>(예: soksak-spec-sidecar-browser@1)" — 메시지 프로토콜 id
-    pub version: *const c_char,   // 크레이트 semver(진단용)
+    pub abi: u32,                         // 호스팅 ABI 버전 — 정확 일치만 수용
+    pub interface_id: *const c_char,      // 버전 없는 provider 계약 id
+    pub interface_version: *const c_char, // provider exact SemVer
 }
 
 #[repr(C)]
@@ -47,7 +48,11 @@ pub struct SoksakBuf {
 }
 
 type AbiFn = unsafe extern "C" fn() -> *const SoksakSidecarEngineAbi;
-type InitFn = unsafe extern "C" fn(host: *const SoksakSidecarEngineHost, cfg: *const u8, cfg_len: usize) -> i32;
+type InitFn = unsafe extern "C" fn(
+    host: *const SoksakSidecarEngineHost,
+    cfg: *const u8,
+    cfg_len: usize,
+) -> i32;
 type MessageFn =
     unsafe extern "C" fn(req: *const u8, len: usize, surface: usize, reply: *mut SoksakBuf) -> i32;
 type NotifyFn = unsafe extern "C" fn(evt: *const u8, len: usize);
@@ -59,7 +64,7 @@ type ShutdownFn = unsafe extern "C" fn();
 struct EngineModule {
     name: String,
     #[allow(dead_code)] // 진단용(로드 시 대조 후 보관)
-    interface: String, // 바이너리 자기보고(선언과 대조 완료된 값)
+    interface: ContractProviderRef, // 바이너리 자기보고(선언 range 대조 완료)
     message: MessageFn,
     notify: NotifyFn,
     free: FreeFn,
@@ -93,7 +98,9 @@ extern "C" fn host_emit(ctx: *mut c_void, json: *const u8, len: usize) {
         if let Some(ptr) = value.get("view").and_then(|v| v.as_u64()) {
             match value.get("event").and_then(|e| e.as_str()) {
                 Some("surface-created") => crate::webview::register_engine_surface(ptr as usize),
-                Some("surface-destroyed") => crate::webview::unregister_engine_surface(ptr as usize),
+                Some("surface-destroyed") => {
+                    crate::webview::unregister_engine_surface(ptr as usize)
+                }
                 _ => {}
             }
         }
@@ -129,8 +136,13 @@ extern "C" fn host_log(ctx: *mut c_void, level: i32, msg: *const u8, len: usize)
 // 사이드카 이름 검증 — 경로 조립에 들어가므로 traversal 가드를 겸한다(매니페스트 파서와 동일 규칙).
 fn valid_name(name: &str) -> bool {
     !name.is_empty()
-        && name.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
 // dylib 경로 = <identity 홈>/sidecars/soksak-sidecar-{name}/dist/… 하나뿐 — env 바이너리 주입은
@@ -164,11 +176,39 @@ unsafe fn cstr_of(p: *const c_char, what: &str) -> Result<String, String> {
     Ok(CStr::from_ptr(p).to_string_lossy().into_owned())
 }
 
+fn validate_sidecar_interface(
+    requirement: &ContractRequirement,
+    provider: &ContractProviderRef,
+) -> Result<(), String> {
+    if !is_sidecar_contract_id(requirement.id()) {
+        return Err(format!(
+            "사이드카 소비 계약 id 형식 오류: {}",
+            requirement.id()
+        ));
+    }
+    if !is_sidecar_contract_id(provider.id()) {
+        return Err(format!(
+            "사이드카 공급 계약 id 형식 오류: {}",
+            provider.id()
+        ));
+    }
+    if !requirement.matches(provider) {
+        return Err(format!(
+            "interface 불일치: 바이너리 자기보고 {{id:{},version:{}}}가 플러그인 선언 {{id:{},range:{}}}를 만족하지 않음",
+            provider.id(),
+            provider.version(),
+            requirement.id(),
+            requirement.range(),
+        ));
+    }
+    Ok(())
+}
+
 // 최초 open 시 1회 — dlopen → soksak_sidecar_engine_abi 대조 → 메인스레드 init(rendezvous). 성공 시 등록.
 fn load_module(
     window: &tauri::Window,
     name: &str,
-    declared_interface: &str,
+    declared_interface: &ContractRequirement,
 ) -> Result<Arc<EngineModule>, String> {
     let path = resolve_module_path(name)?;
     let lib = unsafe { libloading::Library::new(&path) }
@@ -194,18 +234,26 @@ fn load_module(
     if abi.is_null() {
         return Err("soksak_sidecar_engine_abi() 가 null 반환".into());
     }
-    let (abi_ver, iface) = unsafe { ((*abi).abi, cstr_of((*abi).interface, "interface")?) };
+    let (abi_ver, interface_id, interface_version) = unsafe {
+        (
+            (*abi).abi,
+            cstr_of((*abi).interface_id, "interface_id")?,
+            cstr_of((*abi).interface_version, "interface_version")?,
+        )
+    };
     if abi_ver != HOST_ABI_VERSION {
-        return Err(format!("호스팅 ABI 불일치: 모듈 {abi_ver}, 코어 {HOST_ABI_VERSION}"));
-    }
-    if iface != declared_interface {
         return Err(format!(
-            "interface 불일치: 플러그인 선언 \"{declared_interface}\" ↔ 바이너리 자기보고 \"{iface}\""
+            "호스팅 ABI 불일치: 모듈 {abi_ver}, 코어 {HOST_ABI_VERSION}"
         ));
     }
+    let provided_interface = ContractProviderRef::new(interface_id, interface_version)
+        .map_err(|e| format!("ABI interface 자기보고 형식 오류: {e}"))?;
+    validate_sidecar_interface(declared_interface, &provided_interface)?;
 
     // init 은 메인스레드 계약 — invoke 스레드에서 rendezvous 로 위임(타임아웃 10s).
-    let host_ctx = Box::into_raw(Box::new(HostCtx { name: name.to_string() }));
+    let host_ctx = Box::into_raw(Box::new(HostCtx {
+        name: name.to_string(),
+    }));
     let host = Box::into_raw(Box::new(SoksakSidecarEngineHost {
         abi: HOST_ABI_VERSION,
         ctx: host_ctx as *mut c_void,
@@ -221,7 +269,13 @@ fn load_module(
     window
         .run_on_main_thread(move || {
             let cfg = cfg; // move
-            let code = unsafe { init_fn(host_addr as *const SoksakSidecarEngineHost, cfg.as_ptr(), cfg.len()) };
+            let code = unsafe {
+                init_fn(
+                    host_addr as *const SoksakSidecarEngineHost,
+                    cfg.as_ptr(),
+                    cfg.len(),
+                )
+            };
             let _ = tx.try_send(code);
         })
         .map_err(|e| e.to_string())?;
@@ -236,7 +290,7 @@ fn load_module(
     std::mem::forget(lib);
     Ok(Arc::new(EngineModule {
         name: name.to_string(),
-        interface: iface,
+        interface: provided_interface,
         message,
         notify,
         free,
@@ -273,7 +327,8 @@ fn content_view_of(window: &tauri::Window) -> Result<usize, String> {
                     ptr = host;
                 } else if let Ok(ns) = win.ns_window() {
                     let win_obj = &*(ns as *const objc2::runtime::AnyObject);
-                    let content: *mut objc2_app_kit::NSView = objc2::msg_send![win_obj, contentView];
+                    let content: *mut objc2_app_kit::NSView =
+                        objc2::msg_send![win_obj, contentView];
                     ptr = content as usize;
                 }
             }
@@ -314,26 +369,48 @@ fn get_module(name: &str) -> Result<Arc<EngineModule>, String> {
 pub fn sidecar_open(
     window: tauri::Window,
     name: String,
-    interface: String,
+    requirement: ContractRequirement,
     on_event: Channel<serde_json::Value>,
 ) -> Result<u64, String> {
     if !valid_name(&name) {
-        return Err(format!("사이드카 이름 형식 오류: {name} (^[a-z0-9][a-z0-9-]*$)"));
+        return Err(format!(
+            "사이드카 이름 형식 오류: {name} (^[a-z0-9][a-z0-9-]*$)"
+        ));
     }
     let module = {
-        let existing = MODULES.lock().map_err(|e| e.to_string())?.get(&name).cloned();
+        let existing = MODULES
+            .lock()
+            .map_err(|e| e.to_string())?
+            .get(&name)
+            .cloned();
         match existing {
-            Some(m) => m, // 재open = 재사용(엔진은 프로세스당 1회 로드·초기화)
+            Some(m) => {
+                // 재open도 현재 소비자의 requirement를 검증한다. 먼저 연 소비자의
+                // compatible provider를 이름만 같다고 다른 range에 넘기지 않는다.
+                validate_sidecar_interface(&requirement, &m.interface)?;
+                m
+            }
             None => {
-                let m = load_module(&window, &name, &interface)?;
-                MODULES.lock().map_err(|e| e.to_string())?.insert(name.clone(), m.clone());
-                eprintln!("[sidecar:{name}] 로드 OK (interface {})", m.interface);
+                let m = load_module(&window, &name, &requirement)?;
+                MODULES
+                    .lock()
+                    .map_err(|e| e.to_string())?
+                    .insert(name.clone(), m.clone());
+                eprintln!(
+                    "[sidecar:{name}] 로드 OK (interface id={}, version={})",
+                    m.interface.id(),
+                    m.interface.version()
+                );
                 m
             }
         }
     };
     let handle = module.next_handle.fetch_add(1, Ordering::Relaxed);
-    module.clients.lock().map_err(|e| e.to_string())?.insert(handle, on_event);
+    module
+        .clients
+        .lock()
+        .map_err(|e| e.to_string())?
+        .insert(handle, on_event);
     eprintln!("[sidecar:{name}] 채널 open (handle={handle})");
     Ok(handle)
 }
@@ -346,12 +423,24 @@ pub fn sidecar_send(
     payload: String,
 ) -> Result<serde_json::Value, String> {
     let module = get_module(&name).inspect_err(|e| eprintln!("[sidecar:{name}] send 거부: {e}"))?;
-    if !module.clients.lock().map_err(|e| e.to_string())?.contains_key(&handle) {
-        eprintln!("[sidecar:{name}] send 거부: 무효 핸들 {handle} (payload {} bytes)", payload.len());
+    if !module
+        .clients
+        .lock()
+        .map_err(|e| e.to_string())?
+        .contains_key(&handle)
+    {
+        eprintln!(
+            "[sidecar:{name}] send 거부: 무효 핸들 {handle} (payload {} bytes)",
+            payload.len()
+        );
         return Err(format!("무효 핸들: {handle}"));
     }
     let surface = content_view_of(&window)?;
-    let mut reply = SoksakBuf { ptr: std::ptr::null_mut(), len: 0, cap: 0 };
+    let mut reply = SoksakBuf {
+        ptr: std::ptr::null_mut(),
+        len: 0,
+        cap: 0,
+    };
     let code = unsafe { (module.message)(payload.as_ptr(), payload.len(), surface, &mut reply) };
     let body = if reply.ptr.is_null() {
         Vec::new()
@@ -401,7 +490,11 @@ pub fn sidecar_ensure(name: String, url: String, sha256: String) -> Result<Strin
 #[tauri::command]
 pub fn sidecar_close(name: String, handle: u64) -> Result<(), String> {
     let module = get_module(&name)?;
-    module.clients.lock().map_err(|e| e.to_string())?.remove(&handle);
+    module
+        .clients
+        .lock()
+        .map_err(|e| e.to_string())?
+        .remove(&handle);
     eprintln!("[sidecar:{name}] 채널 close (handle={handle})");
     // 모듈 자체는 상주 유지(unload 금지) — 채널만 닫는다.
     Ok(())
@@ -418,10 +511,16 @@ pub fn sidecar_close(name: String, handle: u64) -> Result<(), String> {
 pub fn notify_surface_closing(window: &tauri::Window) {
     match content_view_of(window) {
         Ok(view) => {
-            eprintln!("[sidecar] surface-closing 통지 (window={}, view={view:#x})", window.label());
+            eprintln!(
+                "[sidecar] surface-closing 통지 (window={}, view={view:#x})",
+                window.label()
+            );
             notify_all(&serde_json::json!({ "type": "surface-closing", "view": view }));
         }
-        Err(e) => eprintln!("[sidecar] surface-closing: content view 실패 ({}): {e}", window.label()),
+        Err(e) => eprintln!(
+            "[sidecar] surface-closing: content view 실패 ({}): {e}",
+            window.label()
+        ),
     }
 }
 
@@ -478,6 +577,49 @@ mod tests {
             std::path::PathBuf::from(
                 "/Users/x/.soksak-debug/sidecars/soksak-sidecar-browser-chromium/dist/soksak-sidecar-browser-chromium.dylib"
             )
+        );
+    }
+
+    #[test]
+    fn sidecar_interface_matches_by_id_and_semver_range_not_exact_string() {
+        let requirement = soksak_spec_contract::ContractRequirement::new(
+            "soksak-spec-sidecar-browser",
+            ">=0.0.1 <0.1.0",
+        )
+        .unwrap();
+        let compatible =
+            soksak_spec_contract::ContractProviderRef::new("soksak-spec-sidecar-browser", "0.0.2")
+                .unwrap();
+        let incompatible =
+            soksak_spec_contract::ContractProviderRef::new("soksak-spec-sidecar-browser", "0.1.0")
+                .unwrap();
+        assert!(validate_sidecar_interface(&requirement, &compatible).is_ok());
+        assert!(validate_sidecar_interface(&requirement, &incompatible).is_err());
+    }
+
+    #[test]
+    fn sidecar_interface_rejects_non_sidecar_namespaces() {
+        let requirement =
+            soksak_spec_contract::ContractRequirement::new("soksak-spec-service", "0.0.1").unwrap();
+        let provider =
+            soksak_spec_contract::ContractProviderRef::new("soksak-spec-service", "0.0.1").unwrap();
+        assert!(validate_sidecar_interface(&requirement, &provider).is_err());
+    }
+
+    #[test]
+    fn engine_abi_v1_carries_provider_id_and_version_as_distinct_fields() {
+        let pointer_alignment = std::mem::align_of::<*const c_char>();
+        let first_pointer = (std::mem::size_of::<u32>() + pointer_alignment - 1)
+            / pointer_alignment
+            * pointer_alignment;
+        assert_eq!(std::mem::offset_of!(SoksakSidecarEngineAbi, abi), 0);
+        assert_eq!(
+            std::mem::offset_of!(SoksakSidecarEngineAbi, interface_id),
+            first_pointer
+        );
+        assert_eq!(
+            std::mem::offset_of!(SoksakSidecarEngineAbi, interface_version),
+            first_pointer + std::mem::size_of::<*const c_char>()
         );
     }
 }

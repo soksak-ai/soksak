@@ -91,14 +91,22 @@ pub fn install_global_observers(x: f64, y: f64) {
     // 폭증, 내용·제스처 무관 버벅임의 원인). 신호등 inset 유지(apply_inset — 파일 I/O 없는
     // 가벼운 재배치)는 resize 에도 계속 돈다. 진단(포커스 전환 유령)은 becomeKey/resignKey/
     // becomeMain/resignMain 같은 저빈도 이벤트에서만 기록한다.
-    let events: [(&'static str, bool, &'static objc2_foundation::NSNotificationName); 6] = unsafe {
+    let events: [(
+        &'static str,
+        bool,
+        &'static objc2_foundation::NSNotificationName,
+    ); 6] = unsafe {
         [
             ("becomeKey", true, NSWindowDidBecomeKeyNotification),
             ("resignKey", true, NSWindowDidResignKeyNotification),
             ("becomeMain", true, NSWindowDidBecomeMainNotification),
             ("resignMain", true, NSWindowDidResignMainNotification),
             ("resize", false, NSWindowDidResizeNotification),
-            ("exitFullScreen", true, NSWindowDidExitFullScreenNotification),
+            (
+                "exitFullScreen",
+                true,
+                NSWindowDidExitFullScreenNotification,
+            ),
         ]
     };
 
@@ -107,7 +115,9 @@ pub fn install_global_observers(x: f64, y: f64) {
             // 통지는 메인 스레드에서 게시된다(queue=None = 게시 스레드에서 실행).
             let note = unsafe { note.as_ref() };
             let Some(obj) = note.object() else { return };
-            let Ok(ns) = obj.downcast::<NSWindow>() else { return };
+            let Ok(ns) = obj.downcast::<NSWindow>() else {
+                return;
+            };
             unsafe {
                 if dump {
                     dump_state(&format!("{label}:before"), &ns);
@@ -154,10 +164,7 @@ unsafe fn apply_inset(window: &NSWindow, x: f64, y: f64) {
 
     // 비활성 위젯의 backdrop 합성 복원 — 점 모양 그대로의 원형 백킹 3개(§상단 주석).
     // 활성 상태에선 숨김(점이 불투명 컬러라 불필요 + 테마 전환 이질감 제거).
-    ensure_backing(
-        [&close, &miniaturize, &zoom],
-        window.isKeyWindow(),
-    );
+    ensure_backing([&close, &miniaturize, &zoom], window.isKeyWindow());
 
     for (i, button) in [close, miniaturize, zoom].into_iter().enumerate() {
         let mut rect = NSView::frame(&button);

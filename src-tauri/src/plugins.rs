@@ -250,7 +250,10 @@ fn install_git_into(
     }
 
     // .soksak.json 기록 — 설치본 자기 기술(version=설치 semver, repo, branch). dev 폴더와 구분되는 표식.
-    let version = parsed.get("version").and_then(|v| v.as_str()).unwrap_or("0.0.0");
+    let version = parsed
+        .get("version")
+        .and_then(|v| v.as_str())
+        .unwrap_or("0.0.0");
     write_state(&dest, version, &url, &current_branch(&dest));
 
     Ok(PluginInstallResult {
@@ -319,16 +322,15 @@ fn plugin_update_in(base: &Path, id: &str) -> Result<PluginInstallResult, String
     ) {
         return Err(format!("git fetch 실패: {e}"));
     }
-    if let Err(e) = git_run(
-        std::process::Command::new("git")
-            .arg("-C")
-            .arg(&dir)
-            .args(["reset", "--hard", "FETCH_HEAD"]),
-    ) {
+    if let Err(e) = git_run(std::process::Command::new("git").arg("-C").arg(&dir).args([
+        "reset",
+        "--hard",
+        "FETCH_HEAD",
+    ])) {
         return Err(format!("git reset 실패: {e}"));
     }
-    let manifest =
-        std::fs::read_to_string(dir.join("plugin.json")).map_err(|_| "plugin.json 없음".to_string())?;
+    let manifest = std::fs::read_to_string(dir.join("plugin.json"))
+        .map_err(|_| "plugin.json 없음".to_string())?;
     // .soksak.json version 갱신(새 manifest version). reset 는 미추적 .soksak.json 을 보존하므로 명시 갱신.
     let new_ver = serde_json::from_str::<serde_json::Value>(&manifest)
         .ok()
@@ -361,7 +363,7 @@ fn plugin_dev_new_in(base: &Path, id: &str) -> Result<PluginInstallResult, Strin
     let staging = base.join(format!(".tmp-{id}-{}-{nanos}", std::process::id()));
     std::fs::create_dir(&staging).map_err(|e| e.to_string())?;
     let manifest = format!(
-        "{{\n  \"spec\": \"soksak-spec-plugin@1\",\n  \"id\": \"{id}\",\n  \"name\": \"{id}\",\n  \"version\": \"0.0.0\",\n  \"description\": \"새 soksak 플러그인\",\n  \"entry\": \"main.js\",\n  \"permissions\": [],\n  \"contributes\": {{ \"views\": [], \"commands\": [], \"programs\": [] }}\n}}\n"
+        "{{\n  \"spec\": \"soksak-spec-plugin@0.0.1\",\n  \"id\": \"{id}\",\n  \"name\": \"{id}\",\n  \"version\": \"0.0.1\",\n  \"description\": \"새 soksak 플러그인\",\n  \"entry\": \"main.js\",\n  \"permissions\": [],\n  \"contributes\": {{ \"views\": [], \"commands\": [], \"programs\": [] }}\n}}\n"
     );
     let staged = (|| {
         std::fs::write(staging.join("plugin.json"), &manifest).map_err(|e| e.to_string())?;
@@ -551,7 +553,14 @@ mod tests {
         let out = std::process::Command::new("git")
             .arg("-C")
             .arg(dir)
-            .args(["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false"])
+            .args([
+                "-c",
+                "user.email=t@t",
+                "-c",
+                "user.name=t",
+                "-c",
+                "commit.gpgsign=false",
+            ])
             .args(args)
             .output()
             .unwrap();
@@ -572,7 +581,7 @@ mod tests {
         git_t(&src, &["init"]);
         std::fs::write(
             src.join("plugin.json"),
-            r#"{"spec":"soksak-spec-plugin@1","id":"fixture-plugin","name":"Fixture","version":"0.1.0"}"#,
+            r#"{"spec":"soksak-spec-plugin@0.0.1","id":"fixture-plugin","name":"Fixture","version":"0.1.0"}"#,
         )
         .unwrap();
         std::fs::write(src.join("main.js"), "export function activate() {}\n").unwrap();
@@ -615,7 +624,7 @@ mod tests {
             std::fs::write(
                 src.join("plugin.json"),
                 format!(
-                    r#"{{"spec":"soksak-spec-plugin@1","id":"upd-plugin","name":"Upd","version":"{ver}"}}"#
+                    r#"{{"spec":"soksak-spec-plugin@0.0.1","id":"upd-plugin","name":"Upd","version":"{ver}"}}"#
                 ),
             )
             .unwrap();
@@ -630,21 +639,28 @@ mod tests {
 
         // 설치가 .soksak.json 기록(version=manifest, repo=source, branch=현재).
         let state: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(dir.join(".soksak.json")).unwrap()).unwrap();
+            serde_json::from_str(&std::fs::read_to_string(dir.join(".soksak.json")).unwrap())
+                .unwrap();
         assert_eq!(state["version"], "0.1.0");
         assert_eq!(state["repo"].as_str().unwrap(), src.to_string_lossy());
         let branch = state["branch"].as_str().unwrap().to_string();
         assert!(!branch.is_empty());
 
         // dev 모드면 update 거부.
-        std::fs::write(dir.join(".soksak.json"), r#"{"version":"dev","repo":"x","branch":"main"}"#)
-            .unwrap();
+        std::fs::write(
+            dir.join(".soksak.json"),
+            r#"{"version":"dev","repo":"x","branch":"main"}"#,
+        )
+        .unwrap();
         let err = plugin_update_in(&base, "upd-plugin").unwrap_err();
         assert!(err.contains("update 대상이 아님"), "{err}");
 
         // local 모드(그냥 돌아감)도 update 거부 — 작업물 보호.
-        std::fs::write(dir.join(".soksak.json"), r#"{"version":"local","repo":"","branch":""}"#)
-            .unwrap();
+        std::fs::write(
+            dir.join(".soksak.json"),
+            r#"{"version":"local","repo":"","branch":""}"#,
+        )
+        .unwrap();
         let err = plugin_update_in(&base, "upd-plugin").unwrap_err();
         assert!(err.contains("update 대상이 아님"), "{err}");
 
@@ -656,7 +672,8 @@ mod tests {
         let r2 = plugin_update_in(&base, "upd-plugin").unwrap();
         assert!(r2.manifest.contains("0.2.0"), "{}", r2.manifest);
         let state2: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(dir.join(".soksak.json")).unwrap()).unwrap();
+            serde_json::from_str(&std::fs::read_to_string(dir.join(".soksak.json")).unwrap())
+                .unwrap();
         assert_eq!(state2["version"], "0.2.0");
 
         let _ = std::fs::remove_dir_all(&root);
@@ -675,6 +692,8 @@ mod tests {
         assert!(dir.join("main.js").is_file());
         assert!(!dir.join(".soksak.json").exists());
         assert!(r.manifest.contains("my-plugin"));
+        let manifest: serde_json::Value = serde_json::from_str(&r.manifest).unwrap();
+        assert_eq!(manifest["version"], "0.0.1");
         // 이미 존재하면 거부.
         assert!(plugin_dev_new_in(&base, "my-plugin").is_err());
         let _ = std::fs::remove_dir_all(&root);

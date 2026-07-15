@@ -203,7 +203,10 @@ fn wreq_rt() -> Option<&'static tokio::runtime::Runtime> {
 
 fn wreq_client() -> Option<&'static wreq::Client> {
     if WREQ_CLIENT.get().is_none() {
-        if let Ok(c) = wreq::Client::builder().emulation(Emulation::Chrome136).build() {
+        if let Ok(c) = wreq::Client::builder()
+            .emulation(Emulation::Chrome136)
+            .build()
+        {
             let _ = WREQ_CLIENT.set(c);
         }
     }
@@ -231,15 +234,20 @@ fn wreq_fetch(
         }
         let resp = rb.send().await.map_err(|e| e.to_string())?;
         let status = resp.status().as_u16();
-        let headers: Vec<(String, String)> = ["content-type", "content-length", "content-range", "accept-ranges"]
-            .iter()
-            .filter_map(|h| {
-                resp.headers()
-                    .get(*h)
-                    .and_then(|v| v.to_str().ok())
-                    .map(|v| ((*h).to_string(), v.to_string()))
-            })
-            .collect();
+        let headers: Vec<(String, String)> = [
+            "content-type",
+            "content-length",
+            "content-range",
+            "accept-ranges",
+        ]
+        .iter()
+        .filter_map(|h| {
+            resp.headers()
+                .get(*h)
+                .and_then(|v| v.to_str().ok())
+                .map(|v| ((*h).to_string(), v.to_string()))
+        })
+        .collect();
         let body = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
         Ok::<_, String>((status, headers, body))
     })
@@ -328,14 +336,21 @@ fn wreq_stream_to(
         let resp = rb.send().await.map_err(|_| WreqStreamErr::SendFailed)?;
         let status = resp.status().as_u16();
         let mut out = format!("HTTP/1.1 {status} {}\r\n", reason(status));
-        for h in ["content-type", "content-length", "content-range", "accept-ranges"] {
+        for h in [
+            "content-type",
+            "content-length",
+            "content-range",
+            "accept-ranges",
+        ] {
             if let Some(v) = resp.headers().get(h).and_then(|v| v.to_str().ok()) {
                 out.push_str(&format!("{h}: {v}\r\n"));
             }
         }
         out.push_str(CORS);
         out.push_str("Connection: close\r\n\r\n");
-        writer.write_all(out.as_bytes()).map_err(WreqStreamErr::Io)?;
+        writer
+            .write_all(out.as_bytes())
+            .map_err(WreqStreamErr::Io)?;
         if !head {
             use futures_util::StreamExt;
             let mut stream = resp.bytes_stream();
@@ -378,7 +393,12 @@ fn serve_stream(
     };
     let status = resp.status().as_u16();
     let mut out = format!("HTTP/1.1 {status} {}\r\n", reason(status));
-    for h in ["content-type", "content-length", "content-range", "accept-ranges"] {
+    for h in [
+        "content-type",
+        "content-length",
+        "content-range",
+        "accept-ranges",
+    ] {
         if let Some(v) = resp.headers().get(h).and_then(|v| v.to_str().ok()) {
             out.push_str(&format!("{h}: {v}\r\n"));
         }
@@ -445,7 +465,9 @@ fn enc(s: &str) -> String {
 }
 
 fn parse_query(q: &str) -> HashMap<String, String> {
-    url::form_urlencoded::parse(q.as_bytes()).into_owned().collect()
+    url::form_urlencoded::parse(q.as_bytes())
+        .into_owned()
+        .collect()
 }
 
 fn origin_of(u: &str) -> Option<String> {
@@ -633,7 +655,13 @@ mod tests {
                 .unwrap_or_default()
         }
         let peet = "https://tls.peet.ws/api/all";
-        let native = build_client().unwrap().get(peet).send().unwrap().text().unwrap();
+        let native = build_client()
+            .unwrap()
+            .get(peet)
+            .send()
+            .unwrap()
+            .text()
+            .unwrap();
         let (_st, _h, body) = wreq_fetch(peet, None, None).unwrap();
         let imp = String::from_utf8_lossy(&body).into_owned();
 
@@ -753,7 +781,10 @@ mod tests {
         wait_ready(up);
         wait_ready(px);
         let upstream_url = format!("http://127.0.0.1:{up}/seg.ts");
-        let proxy_url = format!("http://127.0.0.1:{px}/testtoken/stream?url={}", enc(&upstream_url));
+        let proxy_url = format!(
+            "http://127.0.0.1:{px}/testtoken/stream?url={}",
+            enc(&upstream_url)
+        );
         let resp = reqwest::blocking::Client::new()
             .get(proxy_url.as_str())
             .header("range", "bytes=0-3")
@@ -781,7 +812,10 @@ mod tests {
         wait_ready(up);
         wait_ready(px);
         let upstream_url = format!("http://127.0.0.1:{up}/seg.ts");
-        let proxy_url = format!("http://127.0.0.1:{px}/testtoken/stream?url={}", enc(&upstream_url));
+        let proxy_url = format!(
+            "http://127.0.0.1:{px}/testtoken/stream?url={}",
+            enc(&upstream_url)
+        );
         let resp = reqwest::blocking::get(proxy_url.as_str()).unwrap();
         assert_eq!(resp.status().as_u16(), 200);
         assert_eq!(resp.text().unwrap(), "0123456789A");
@@ -846,7 +880,10 @@ mod tests {
             .find(|l| l.starts_with("http") && l.contains("/livetoken/m3u8?url="))
             .expect("변형 .m3u8")
             .to_string();
-        let media_body = reqwest::blocking::get(variant.as_str()).unwrap().text().unwrap();
+        let media_body = reqwest::blocking::get(variant.as_str())
+            .unwrap()
+            .text()
+            .unwrap();
         assert!(
             media_body.contains("/livetoken/stream?url="),
             "세그먼트가 프록시로 리라이트됨"

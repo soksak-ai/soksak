@@ -103,7 +103,11 @@ pub fn parse_claude(content: &str) -> Option<SessionInfo> {
             break;
         }
     }
-    Some(SessionInfo { kind: AgentKind::Claude, session_id: session_id?, cwd: cwd? })
+    Some(SessionInfo {
+        kind: AgentKind::Claude,
+        session_id: session_id?,
+        cwd: cwd?,
+    })
 }
 
 // codex 세션 jsonl 내용 → SessionInfo. 첫 type="session_meta" 줄의 payload.{id, cwd}.
@@ -116,9 +120,19 @@ pub fn parse_codex(content: &str) -> Option<SessionInfo> {
             continue;
         }
         let p = v.get("payload")?;
-        let id = p.get("id").and_then(|x| x.as_str()).filter(|s| is_valid_session_id(s))?;
-        let cwd = p.get("cwd").and_then(|x| x.as_str()).filter(|c| !c.is_empty())?;
-        return Some(SessionInfo { kind: AgentKind::Codex, session_id: id.to_string(), cwd: cwd.to_string() });
+        let id = p
+            .get("id")
+            .and_then(|x| x.as_str())
+            .filter(|s| is_valid_session_id(s))?;
+        let cwd = p
+            .get("cwd")
+            .and_then(|x| x.as_str())
+            .filter(|c| !c.is_empty())?;
+        return Some(SessionInfo {
+            kind: AgentKind::Codex,
+            session_id: id.to_string(),
+            cwd: cwd.to_string(),
+        });
     }
     None
 }
@@ -135,7 +149,10 @@ pub fn parse(kind: AgentKind, content: &str) -> Option<SessionInfo> {
 // -Users-max-ai-cli-vsterm-tauri, /Users/x/soksak/.cache → -Users-x-soksak--cache, / → -). 이 디렉토리
 // 아래 <sessionId>.jsonl 이 생긴다. 터미널이 이 cwd 에서 claude 를 돌리면 여기 새 파일이 나타난다.
 pub fn claude_session_dir(home: &str, cwd: &str) -> PathBuf {
-    let enc: String = cwd.chars().map(|c| if c == '/' || c == '.' { '-' } else { c }).collect();
+    let enc: String = cwd
+        .chars()
+        .map(|c| if c == '/' || c == '.' { '-' } else { c })
+        .collect();
     Path::new(home).join(".claude").join("projects").join(enc)
 }
 
@@ -244,7 +261,9 @@ pub fn ai_session_dir(cwd: String) -> Result<String, String> {
         return Err("cwd 필요".to_string());
     }
     let home = std::env::var("HOME").map_err(|e| e.to_string())?;
-    Ok(claude_session_dir(&home, &cwd).to_string_lossy().into_owned())
+    Ok(claude_session_dir(&home, &cwd)
+        .to_string_lossy()
+        .into_owned())
 }
 
 // fs-change 이벤트 시 호출 — dir 에서 방금 쓰인 세션(직전 대비 새/갱신). 프론트가 직전 활성과 비교해
@@ -274,7 +293,9 @@ pub fn ai_session_lineage(
     }
     let guard = state.conn.lock().map_err(|e| e.to_string())?;
     let conn = guard.as_ref().ok_or("DB 미초기화")?;
-    let where_obj = view_id.filter(|v| !v.is_empty()).map(|v| serde_json::json!({ "viewId": v }));
+    let where_obj = view_id
+        .filter(|v| !v.is_empty())
+        .map(|v| serde_json::json!({ "viewId": v }));
     crate::data::store::query(
         conn,
         "core",
@@ -330,7 +351,11 @@ pub fn ai_session_inspect(path: String) -> Result<Option<SessionInfo>, String> {
     }
     let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
     let head: String = content.chars().take(65536).collect(); // 헤더만(전체 재파싱 금지)
-    let kind = if is_codex { AgentKind::Codex } else { AgentKind::Claude };
+    let kind = if is_codex {
+        AgentKind::Codex
+    } else {
+        AgentKind::Claude
+    };
     Ok(parse(kind, &head))
 }
 
@@ -356,7 +381,10 @@ mod tests {
     fn agent_detection() {
         assert_eq!(detect_agent("claude"), Some(AgentKind::Claude));
         assert_eq!(detect_agent("claude --resume"), Some(AgentKind::Claude));
-        assert_eq!(detect_agent("/usr/local/bin/codex --model gpt"), Some(AgentKind::Codex));
+        assert_eq!(
+            detect_agent("/usr/local/bin/codex --model gpt"),
+            Some(AgentKind::Codex)
+        );
         assert_eq!(detect_agent("codex"), Some(AgentKind::Codex));
         assert_eq!(detect_agent("vim file.txt"), None);
         assert_eq!(detect_agent("npm run claude"), None); // 첫 토큰만(npm) — false positive 방지
@@ -394,15 +422,27 @@ mod tests {
         // 시작: A 만 존재 → A 활성.
         let s0: BTreeMap<String, i64> = BTreeMap::new();
         let s1 = BTreeMap::from([(a.clone(), 1000)]);
-        assert_eq!(active_session(&s0, &s1), Some(a.clone()), "새 세션 A 등장 → 활성");
+        assert_eq!(
+            active_session(&s0, &s1),
+            Some(a.clone()),
+            "새 세션 A 등장 → 활성"
+        );
         // 변화 없음 → None(전이 아님).
         assert_eq!(active_session(&s1, &s1), None, "변화 없으면 전이 아님");
         // /clear: 새 파일 B 생성(A 그대로) → B 활성 = A→B 전이.
         let s2 = BTreeMap::from([(a.clone(), 1000), (b.clone(), 2000)]);
-        assert_eq!(active_session(&s1, &s2), Some(b.clone()), "새 세션 B → 전이");
+        assert_eq!(
+            active_session(&s1, &s2),
+            Some(b.clone()),
+            "새 세션 B → 전이"
+        );
         // /resume A: 기존 A 파일 갱신(mtime↑) → A 활성 = B→A 전이.
         let s3 = BTreeMap::from([(a.clone(), 3000), (b.clone(), 2000)]);
-        assert_eq!(active_session(&s2, &s3), Some(a.clone()), "기존 A 갱신 → 재활성 전이");
+        assert_eq!(
+            active_session(&s2, &s3),
+            Some(a.clone()),
+            "기존 A 갱신 → 재활성 전이"
+        );
     }
 
     // 스냅샷 — sessionId(UUID) 파일명만, 위조/잡파일 배제.
@@ -433,7 +473,10 @@ mod tests {
             Path::new("/h/.claude/projects/-Users-max-soksak--cache")
         );
         // 루트 cwd → "-".
-        assert_eq!(claude_session_dir("/h", "/"), Path::new("/h/.claude/projects/-"));
+        assert_eq!(
+            claude_session_dir("/h", "/"),
+            Path::new("/h/.claude/projects/-")
+        );
     }
 
     // 깨진 줄(truncated tail)·위조 sessionId 는 건너뛰고 유효 줄에서 sessionId+cwd 를 취한다.

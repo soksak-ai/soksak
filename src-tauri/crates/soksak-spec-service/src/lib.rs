@@ -9,7 +9,7 @@
 //! Behavioral and coupling law: docs/PLUGIN-SERVICE.md (PS clauses). Wire
 //! framing is NDJSON over stdio: one JSON value per line, both directions.
 //! The first service line is `hello`; the core answers `ready` (PS5).
-//! The manifest-side mirror of [`SERVICE_INTERFACE`] lives in
+//! The manifest-side mirror of [`service_contract_requirement`] lives in
 //! `@soksak-ai/plugin-spec` (service.ts) — the service.test.ts / lib.rs test
 //! pair pins both sides to the same literal.
 
@@ -18,7 +18,10 @@ pub use serve::{serve, serve_stdio, Emit, OpCtx, Outcome, ServiceHandler};
 
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use soksak_spec_contract::{
+    is_service_contract_id, ContractProviderRef, ContractRequirement,
+};
 
 // hello 판정을 소비하는 쪽(서비스·앱)이 판정 타입과 스큐 문장을 이 크레이트 한 경로로
 // 받는다 — soksak-spec-socket 이중 의존 대신 재수출(정본은 그대로 soksak-spec-socket).
@@ -27,7 +30,8 @@ pub use soksak_spec_socket::{skew_sentence, Compat, Lang};
 /// Version of the plugin service wire contract. Bump rules follow the socket
 /// protocol precedent (soksak-spec-socket): additive optional fields and new
 /// frame kinds never bump; a change in framing, the envelope, or the meaning
-/// of an existing field does. A breaking bump is C4 re-legislation (PS16).
+/// of an existing field does. A breaking change requires a new contract version
+/// and matching conformance fixtures (PS16).
 pub const SERVICE_PROTOCOL_VERSION: u32 = 1;
 
 /// Oldest service protocol the core still binds. The hello is mandatory from
@@ -35,10 +39,21 @@ pub const SERVICE_PROTOCOL_VERSION: u32 = 1;
 /// rejected (PS5).
 pub const SERVICE_MIN_COMPATIBLE_PROTOCOL: u32 = 1;
 
-/// The wire contract id the manifest `service.interface` declares (PS5).
-/// Never mint a contract id the C1 plugin-id scanner would sanction — this id
-/// deliberately does not start with `soksak-plugin-` (PS6).
-pub const SERVICE_INTERFACE: &str = "soksak-spec-service@1";
+/// Service-domain constants. Generic contract grammar and compatibility are owned
+/// by the public `soksak-spec-contract` crate.
+pub const SERVICE_CONTRACT_ID: &str = "soksak-spec-service";
+pub const SERVICE_CONTRACT_VERSION: &str = "0.0.1";
+pub const SERVICE_CONTRACT_RANGE: &str = "0.0.1";
+
+pub fn service_contract_provider() -> ContractProviderRef {
+    ContractProviderRef::new(SERVICE_CONTRACT_ID, SERVICE_CONTRACT_VERSION)
+        .expect("service provider constant is valid")
+}
+
+pub fn service_contract_requirement() -> ContractRequirement {
+    ContractRequirement::new(SERVICE_CONTRACT_ID, SERVICE_CONTRACT_RANGE)
+        .expect("service requirement constant is valid")
+}
 
 /// One NDJSON line never exceeds this many bytes, either direction (PS5).
 /// An oversized or unparseable line is a protocol fault — the restart path,
@@ -95,6 +110,7 @@ pub fn log_path(home: &Path, plugin: &str) -> PathBuf {
 
 /// The bind ledger — every plugin service the core must bind (PS9).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct BindLedger {
     /// Ledger schema version (independent of the wire version).
@@ -103,7 +119,7 @@ pub struct BindLedger {
 }
 
 /// One bound plugin service — the already-judged subset of its manifest.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ServiceBinding {
     /// Plugin id — the schedule owner stamp and the command namespace.
@@ -111,8 +127,9 @@ pub struct ServiceBinding {
     /// `sidecars[]` entry naming the resident binary (PS9 — distribution and
     /// staging inherit the sidecar law).
     pub sidecar: String,
-    /// Wire contract id the binary must self-report in its hello (PS5).
-    pub interface: String,
+    /// Consumer requirement declared by the manifest. The binary hello carries
+    /// exact provider evidence and must satisfy this range (PS5).
+    pub interface: ContractRequirement,
     /// The manifest's `bind:"service"` command names, sorted — the hello
     /// `ops[]` must equal this set exactly, both directions (PS3).
     pub ops: Vec<String>,
@@ -142,8 +159,53 @@ pub struct ServiceBinding {
     pub dependencies: Vec<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RawServiceBinding {
+    plugin: String,
+    sidecar: String,
+    interface: ContractRequirement,
+    ops: Vec<String>,
+    #[serde(default)]
+    subscribe: Vec<String>,
+    #[serde(default)]
+    schedules: Vec<LedgerSchedule>,
+    #[serde(default)]
+    secrets: Vec<String>,
+    #[serde(default)]
+    vault_env: bool,
+    #[serde(default)]
+    dependencies: Vec<String>,
+}
+
+impl<'de> Deserialize<'de> for ServiceBinding {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawServiceBinding::deserialize(deserializer)?;
+        if !is_service_contract_id(raw.interface.id()) {
+            return Err(serde::de::Error::custom(
+                "service binding interface id must use the soksak-spec-service namespace",
+            ));
+        }
+        Ok(Self {
+            plugin: raw.plugin,
+            sidecar: raw.sidecar,
+            interface: raw.interface,
+            ops: raw.ops,
+            subscribe: raw.subscribe,
+            schedules: raw.schedules,
+            secrets: raw.secrets,
+            vault_env: raw.vault_env,
+            dependencies: raw.dependencies,
+        })
+    }
+}
+
 /// One declared schedule (mirror of `contributes.schedules` after judgment).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct LedgerSchedule {
     pub name: String,
@@ -163,12 +225,16 @@ pub struct LedgerSchedule {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum LedgerTrigger {
-    Reconcile { reconcile: bool },
+    Reconcile {
+        reconcile: bool,
+    },
     Every {
         #[serde(rename = "everyMs")]
         every_ms: u64,
     },
-    Cron { cron: String },
+    Cron {
+        cron: String,
+    },
 }
 
 /// Set equality between a hello `ops[]` and the ledger's declared ops —
@@ -187,6 +253,51 @@ pub fn ops_match(hello_ops: &[String], declared_ops: &[String]) -> bool {
 // One JSON object per line, tagged by `t`. `ServiceOut` is what the service
 // writes to stdout; `ServiceIn` is what the core writes to its stdin.
 
+/// First service frame. `interface` is exact provider evidence; the consumer
+/// requirement lives in [`ServiceBinding`].
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Hello {
+    pub version: Option<u32>,
+    pub interface: ContractProviderRef,
+    pub ops: Vec<String>,
+    #[serde(default)]
+    pub subscribe: Vec<String>,
+    pub pid: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RawHello {
+    version: Option<u32>,
+    interface: ContractProviderRef,
+    ops: Vec<String>,
+    #[serde(default)]
+    subscribe: Vec<String>,
+    pid: u32,
+}
+
+impl<'de> Deserialize<'de> for Hello {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawHello::deserialize(deserializer)?;
+        if !is_service_contract_id(raw.interface.id()) {
+            return Err(serde::de::Error::custom(
+                "service hello interface id must use the soksak-spec-service namespace",
+            ));
+        }
+        Ok(Self {
+            version: raw.version,
+            interface: raw.interface,
+            ops: raw.ops,
+            subscribe: raw.subscribe,
+            pid: raw.pid,
+        })
+    }
+}
+
 /// Service → core frames.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "t", rename_all = "camelCase")]
@@ -194,15 +305,7 @@ pub enum ServiceOut {
     /// First line after spawn (PS5). The core verifies protocol compatibility,
     /// the interface id against the manifest declaration, and `ops[]` against
     /// the ledger set — any mismatch refuses the bind (PS3).
-    #[serde(rename_all = "camelCase")]
-    Hello {
-        version: Option<u32>,
-        interface: String,
-        ops: Vec<String>,
-        #[serde(default)]
-        subscribe: Vec<String>,
-        pid: u32,
-    },
+    Hello(Hello),
     /// Command result — the envelope is the message seam (PS7): `message` and
     /// `hints` are first-class here, owned by the command implementation.
     #[serde(rename_all = "camelCase")]
@@ -260,7 +363,10 @@ pub enum ServiceIn {
     },
     /// Reply to a mediated `cmd` call — the standard response envelope,
     /// relayed opaquely (PS13).
-    CmdRes { id: u64, envelope: serde_json::Value },
+    CmdRes {
+        id: u64,
+        envelope: serde_json::Value,
+    },
     /// Subscribed bus event — bridged, seq-deduplicated, delivered once (PS15).
     Push {
         topic: String,
@@ -367,13 +473,19 @@ mod tests {
     fn hello_without_version_is_rejected() {
         assert_eq!(
             judge_hello(None),
-            Compat::PeerTooOld { peer: 0, floor: SERVICE_MIN_COMPATIBLE_PROTOCOL }
+            Compat::PeerTooOld {
+                peer: 0,
+                floor: SERVICE_MIN_COMPATIBLE_PROTOCOL
+            }
         );
     }
 
     #[test]
     fn hello_with_current_version_is_compatible() {
-        assert_eq!(judge_hello(Some(SERVICE_PROTOCOL_VERSION)), Compat::Compatible);
+        assert_eq!(
+            judge_hello(Some(SERVICE_PROTOCOL_VERSION)),
+            Compat::Compatible
+        );
     }
 
     #[test]
@@ -391,15 +503,32 @@ mod tests {
 
     #[test]
     fn interface_id_follows_naming_and_avoids_the_plugin_id_grammar() {
-        assert_eq!(SERVICE_INTERFACE, "soksak-spec-service@1");
+        assert_eq!(SERVICE_CONTRACT_ID, "soksak-spec-service");
+        assert_eq!(SERVICE_CONTRACT_VERSION, "0.0.1");
+        assert_eq!(SERVICE_CONTRACT_RANGE, "0.0.1");
         assert!(
-            !SERVICE_INTERFACE.starts_with("soksak-plugin-"),
+            !SERVICE_CONTRACT_ID.starts_with("soksak-plugin-"),
             "PS6: the C1 scan flags soksak-plugin-* tokens in core source"
         );
         assert!(
-            SERVICE_INTERFACE.starts_with("soksak-spec-"),
+            SERVICE_CONTRACT_ID.starts_with("soksak-spec-"),
             "NAMING §8: a contract id begins with soksak-spec-"
         );
+    }
+
+    #[test]
+    fn generic_contract_grammar_is_not_owned_or_reexported_by_the_service_crate() {
+        let source = include_str!("lib.rs");
+        let lines = source.lines().map(str::trim).collect::<Vec<_>>();
+        assert!(!lines
+            .iter()
+            .any(|line| line.starts_with("pub struct ContractRequirement")));
+        assert!(!lines
+            .iter()
+            .any(|line| line.starts_with("pub struct ContractProviderRef")));
+        assert!(!lines
+            .iter()
+            .any(|line| line.starts_with("pub use soksak_spec_contract")));
     }
 
     // ── ops equality: bidirectional declared ≡ actual (PS3) ─────────────────
@@ -408,7 +537,10 @@ mod tests {
     fn ops_match_is_order_blind_and_duplicate_hostile() {
         let declared = vec!["next".to_string(), "run".to_string()];
         assert!(ops_match(&["run".into(), "next".into()], &declared));
-        assert!(!ops_match(&["run".into()], &declared), "missing op = mismatch");
+        assert!(
+            !ops_match(&["run".into()], &declared),
+            "missing op = mismatch"
+        );
         assert!(
             !ops_match(&["run".into(), "next".into(), "extra".into()], &declared),
             "undeclared op = mismatch"
@@ -417,7 +549,10 @@ mod tests {
             !ops_match(&["run".into(), "run".into()], &["run".into()]),
             "duplicates never pass as coverage"
         );
-        assert!(ops_match(&[], &[]), "an empty set only matches an empty set");
+        assert!(
+            ops_match(&[], &[]),
+            "an empty set only matches an empty set"
+        );
     }
 
     // ── frames: the wire shape is part of the contract (PS5) ────────────────
@@ -425,23 +560,33 @@ mod tests {
     #[test]
     fn service_out_frames_round_trip_with_t_tags() {
         let frames: Vec<ServiceOut> = vec![
-            ServiceOut::Hello {
+            ServiceOut::Hello(Hello {
                 version: Some(1),
-                interface: SERVICE_INTERFACE.into(),
+                interface: service_contract_provider(),
                 ops: vec!["run".into()],
                 subscribe: vec!["bus:kanban:changed".into()],
                 pid: 42,
-            },
+            }),
             ServiceOut::Res {
                 id: 7,
                 ok: true,
                 code: None,
                 message: Some("done".into()),
-                hints: Some(vec![Hint { cmd: "plugin.x.next".into(), why: "continue".into() }]),
+                hints: Some(vec![Hint {
+                    cmd: "plugin.x.next".into(),
+                    why: "continue".into(),
+                }]),
                 data: Some(serde_json::json!({"n": 1})),
             },
-            ServiceOut::Ev { id: 7, kind: "progress".into(), payload: serde_json::json!({"pct": 50}) },
-            ServiceOut::Act { kind: "service.tick".into(), payload: serde_json::json!({}) },
+            ServiceOut::Ev {
+                id: 7,
+                kind: "progress".into(),
+                payload: serde_json::json!({"pct": 50}),
+            },
+            ServiceOut::Act {
+                kind: "service.tick".into(),
+                payload: serde_json::json!({}),
+            },
             ServiceOut::Cmd {
                 id: 9,
                 method: "plugin.other.node.add".into(),
@@ -453,7 +598,11 @@ mod tests {
             let line = serde_json::to_string(&f).unwrap();
             assert!(line.contains("\"t\""), "t tag present: {line}");
             let back: ServiceOut = serde_json::from_str(&line).unwrap();
-            assert_eq!(serde_json::to_string(&back).unwrap(), line, "round trip is identity");
+            assert_eq!(
+                serde_json::to_string(&back).unwrap(),
+                line,
+                "round trip is identity"
+            );
         }
     }
 
@@ -466,9 +615,16 @@ mod tests {
                 op: "run".into(),
                 params: serde_json::json!({"doc": "a.json"}),
                 key: "idem-1".into(),
-                ctx: ReqCtx { origin: "schedule".into(), parent: None, deadline_ms: 30_000 },
+                ctx: ReqCtx {
+                    origin: "schedule".into(),
+                    parent: None,
+                    deadline_ms: 30_000,
+                },
             },
-            ServiceIn::CmdRes { id: 9, envelope: serde_json::json!({"ok": true, "code": "OK"}) },
+            ServiceIn::CmdRes {
+                id: 9,
+                envelope: serde_json::json!({"ok": true, "code": "OK"}),
+            },
             ServiceIn::Push {
                 topic: "bus:kanban:changed".into(),
                 seq: 12,
@@ -480,7 +636,11 @@ mod tests {
             let line = serde_json::to_string(&f).unwrap();
             assert!(line.contains("\"t\""), "t tag present: {line}");
             let back: ServiceIn = serde_json::from_str(&line).unwrap();
-            assert_eq!(serde_json::to_string(&back).unwrap(), line, "round trip is identity");
+            assert_eq!(
+                serde_json::to_string(&back).unwrap(),
+                line,
+                "round trip is identity"
+            );
         }
     }
 
@@ -491,19 +651,38 @@ mod tests {
             op: "run".into(),
             params: serde_json::json!({}),
             key: "k".into(),
-            ctx: ReqCtx { origin: "socket".into(), parent: None, deadline_ms: 5 },
+            ctx: ReqCtx {
+                origin: "socket".into(),
+                parent: None,
+                deadline_ms: 5,
+            },
         };
         let line = serde_json::to_string(&req).unwrap();
         assert!(line.contains("\"deadlineMs\""), "{line}");
-        let hello = ServiceOut::Hello {
+        let hello = ServiceOut::Hello(Hello {
             version: Some(1),
-            interface: SERVICE_INTERFACE.into(),
+            interface: service_contract_provider(),
             ops: vec![],
             subscribe: vec![],
             pid: 1,
-        };
+        });
         let line = serde_json::to_string(&hello).unwrap();
         assert!(line.contains("\"hello\""), "camelCase t tag: {line}");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&line).unwrap(),
+            serde_json::json!({
+                "t": "hello",
+                "version": 1,
+                "interface": { "id": "soksak-spec-service", "version": "0.0.1" },
+                "ops": [],
+                "subscribe": [],
+                "pid": 1,
+            })
+        );
+        assert!(serde_json::from_str::<ServiceOut>(
+            r#"{"t":"hello","version":1,"interface":"soksak-spec-service@0.0.1","ops":[],"pid":1}"#,
+        )
+        .is_err());
     }
 
     // ── error codes: a closed set with an INTERNAL clamp (PS5) ──────────────
@@ -527,7 +706,7 @@ mod tests {
             services: vec![ServiceBinding {
                 plugin: "soksak-plugin-x".into(),
                 sidecar: "x".into(),
-                interface: SERVICE_INTERFACE.into(),
+                interface: service_contract_requirement(),
                 ops: vec!["run".into()],
                 subscribe: vec!["bus:kanban:changed".into()],
                 schedules: vec![
@@ -543,7 +722,9 @@ mod tests {
                         name: "hourly".into(),
                         command: "run".into(),
                         params: Some(serde_json::json!({"mode": "sweep"})),
-                        trigger: LedgerTrigger::Every { every_ms: 3_600_000 },
+                        trigger: LedgerTrigger::Every {
+                            every_ms: 3_600_000,
+                        },
                         timeout_ms: None,
                         zombie_backstop_ms: None,
                     },
@@ -551,7 +732,9 @@ mod tests {
                         name: "nightly".into(),
                         command: "run".into(),
                         params: None,
-                        trigger: LedgerTrigger::Cron { cron: "0 3 * * *".into() },
+                        trigger: LedgerTrigger::Cron {
+                            cron: "0 3 * * *".into(),
+                        },
                         timeout_ms: None,
                         zombie_backstop_ms: None,
                     },
@@ -562,7 +745,10 @@ mod tests {
             }],
         };
         let text = serde_json::to_string_pretty(&ledger).unwrap();
-        assert!(text.contains("\"everyMs\""), "camelCase trigger key: {text}");
+        assert!(
+            text.contains("\"everyMs\""),
+            "camelCase trigger key: {text}"
+        );
         let back: BindLedger = serde_json::from_str(&text).unwrap();
         assert_eq!(back, ledger);
     }
@@ -570,11 +756,18 @@ mod tests {
     #[test]
     fn ledger_defaults_tolerate_absent_optional_lists() {
         let minimal = r#"{"version":1,"services":[{"plugin":"p","sidecar":"s",
-            "interface":"soksak-spec-service@1","ops":["run"]}]}"#;
+            "interface":{"id":"soksak-spec-service","range":"0.0.1"},"ops":["run"]}]}"#;
         let back: BindLedger = serde_json::from_str(minimal).unwrap();
         assert_eq!(back.services[0].subscribe, Vec::<String>::new());
         assert_eq!(back.services[0].schedules, Vec::<LedgerSchedule>::new());
         assert_eq!(back.services[0].secrets, Vec::<String>::new());
+    }
+
+    #[test]
+    fn legacy_string_interface_is_not_a_service_binding_wire_shape() {
+        let legacy = r#"{"version":1,"services":[{"plugin":"p","sidecar":"s",
+            "interface":"soksak-spec-service@0.0.1","ops":["run"]}]}"#;
+        assert!(serde_json::from_str::<BindLedger>(legacy).is_err());
     }
 
     // ── supervision constants (PS10, PS12) ──────────────────────────────────

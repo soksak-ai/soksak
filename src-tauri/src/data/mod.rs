@@ -98,14 +98,22 @@ fn open_or_recover_with(
         Ok(conn) => Ok((conn, None)),
         Err(open_err) => {
             if !path.exists() {
-                return Err(OpenError { detail: open_err, quarantined: None });
+                return Err(OpenError {
+                    detail: open_err,
+                    quarantined: None,
+                });
             }
-            let rec = backup::recover(path)
-                .map_err(|detail| OpenError { detail, quarantined: None })?;
+            let rec = backup::recover(path).map_err(|detail| OpenError {
+                detail,
+                quarantined: None,
+            })?;
             match opener(path) {
                 Ok(conn) => Ok((conn, Some(rec))),
                 // 재개방 실패 — 격리 경로를 실어 전파한다(호출 측 notify 의 재료).
-                Err(detail) => Err(OpenError { detail, quarantined: Some(rec.quarantined) }),
+                Err(detail) => Err(OpenError {
+                    detail,
+                    quarantined: Some(rec.quarantined),
+                }),
             }
         }
     }
@@ -179,13 +187,20 @@ pub fn gen_id() -> String {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
-    format!("{:013}-{}-{}", now_millis(), std::process::id(), nanos % 1_000_000)
+    format!(
+        "{:013}-{}-{}",
+        now_millis(),
+        std::process::id(),
+        nanos % 1_000_000
+    )
 }
 
 // ns = 호출 pluginId(또는 "core"). 경로/식별자 안전 문자만(plugins.rs sanitize_id 와 동형).
 pub fn validate_ns(ns: &str) -> Result<(), String> {
     let mut chars = ns.chars();
-    let head = chars.next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    let head = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
     let rest = chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
     if head && rest {
         Ok(())
@@ -211,7 +226,9 @@ pub fn validate_coll(coll: &str) -> Result<(), String> {
 // (SQL 주입 차단). created/updated 는 실제 컬럼이라 별도 허용.
 pub fn validate_field(field: &str) -> Result<(), String> {
     let mut chars = field.chars();
-    let head = chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
+    let head = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_');
     let rest = chars.all(|c| c.is_ascii_alphanumeric() || c == '_');
     if head && rest {
         Ok(())

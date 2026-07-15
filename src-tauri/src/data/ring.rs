@@ -60,7 +60,8 @@ fn snapshot_rotate(db_path: &Path) -> Result<(), String> {
     {
         let conn = Connection::open_with_flags(db_path, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .map_err(|e| e.to_string())?;
-        conn.busy_timeout(Duration::from_secs(5)).map_err(|e| e.to_string())?;
+        conn.busy_timeout(Duration::from_secs(5))
+            .map_err(|e| e.to_string())?;
         let p = tmp.to_string_lossy().replace('\'', "''");
         conn.execute_batch(&format!("VACUUM INTO '{p}';"))
             .map_err(|e| e.to_string())?;
@@ -179,7 +180,10 @@ mod tests {
 
     impl BackupReporter for RecordingReporter {
         fn failed(&self, detail: &str) {
-            self.failures.lock().expect("reporter lock").push(detail.to_string());
+            self.failures
+                .lock()
+                .expect("reporter lock")
+                .push(detail.to_string());
         }
     }
 
@@ -192,11 +196,20 @@ mod tests {
         // 슬롯 없음 → due=true → tick 이 스냅샷을 시도한다. 본체는 SQLite 가 아니므로 VACUUM INTO 실패.
         std::fs::write(&db, b"this is not a sqlite database, snapshot must fail")
             .expect("write corrupt body");
-        let reporter = RecordingReporter { failures: std::sync::Mutex::new(Vec::new()) };
+        let reporter = RecordingReporter {
+            failures: std::sync::Mutex::new(Vec::new()),
+        };
         run_cycle(&db, SystemTime::now(), &reporter);
         let failures = reporter.failures.lock().expect("reporter lock");
-        assert_eq!(failures.len(), 1, "손상 DB 스냅샷 실패는 정확히 1회 고지되어야 한다");
-        assert!(!failures[0].is_empty(), "고지에 실패 상세가 실려야 한다: {failures:?}");
+        assert_eq!(
+            failures.len(),
+            1,
+            "손상 DB 스냅샷 실패는 정확히 1회 고지되어야 한다"
+        );
+        assert!(
+            !failures[0].is_empty(),
+            "고지에 실패 상세가 실려야 한다: {failures:?}"
+        );
         drop(failures);
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -205,7 +218,10 @@ mod tests {
     fn gate_is_due_without_slot_and_after_interval() {
         let now = SystemTime::now();
         assert!(due(None, now), "첫 백업(슬롯 없음)은 즉시 due");
-        assert!(!due(Some(now - Duration::from_secs(600)), now), "10분 경과는 게이트 미달");
+        assert!(
+            !due(Some(now - Duration::from_secs(600)), now),
+            "10분 경과는 게이트 미달"
+        );
         assert!(due(Some(now - HOUR), now), "1시간 경과는 due");
         assert!(!due(Some(now + HOUR), now), "미래 mtime(시계 역행)은 보류");
     }
@@ -256,7 +272,9 @@ mod tests {
         for i in 0..SLOTS {
             let sc = rusqlite::Connection::open(slot_path(&db, i)).unwrap();
             let v: String = sc
-                .query_row("SELECT v FROM kv WHERE ns='core' AND k='marker'", [], |r| r.get(0))
+                .query_row("SELECT v FROM kv WHERE ns='core' AND k='marker'", [], |r| {
+                    r.get(0)
+                })
                 .unwrap();
             assert_eq!(v, (7 - i).to_string(), "bak.{i} 내용");
         }

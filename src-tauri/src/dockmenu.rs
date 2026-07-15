@@ -25,7 +25,8 @@ static APP: OnceLock<AppHandle> = OnceLock::new();
 static DOCK_MENU_PTR: AtomicUsize = AtomicUsize::new(0);
 
 // applicationDockMenu:(id self, SEL _cmd, NSApplication* sender) -> NSMenu*. 인코딩 "@@:@".
-type DockMenuFn = unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject) -> *mut AnyObject;
+type DockMenuFn =
+    unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject) -> *mut AnyObject;
 // sokNewWindow:(id self, SEL _cmd, id sender) -> void. 인코딩 "v@:@".
 type NewWindowFn = unsafe extern "C-unwind" fn(*mut AnyObject, Sel, *mut AnyObject);
 
@@ -39,11 +40,7 @@ unsafe extern "C-unwind" fn dock_menu(
 }
 
 // "새 창" 항목 액션. Dock 메뉴 클릭은 메인 스레드라 create_window(WebviewWindowBuilder) 안전.
-unsafe extern "C-unwind" fn new_window(
-    _this: *mut AnyObject,
-    _cmd: Sel,
-    _sender: *mut AnyObject,
-) {
+unsafe extern "C-unwind" fn new_window(_this: *mut AnyObject, _cmd: Sel, _sender: *mut AnyObject) {
     if let Some(app) = APP.get() {
         if let Err(e) = crate::window::create_window(app) {
             eprintln!("[dockmenu] 새 창 생성 실패: {e}");

@@ -16,7 +16,8 @@ use std::sync::{mpsc, Arc, Mutex};
 use serde_json::{json, Value};
 
 use crate::{
-    ErrCode, Hint, ServiceIn, ServiceOut, SERVICE_INTERFACE, SERVICE_PROTOCOL_VERSION,
+    service_contract_provider, ErrCode, Hello, Hint, ServiceIn, ServiceOut,
+    SERVICE_PROTOCOL_VERSION,
 };
 
 /// Execution context the core stamped on a req (PS13) — read-only to the op.
@@ -43,10 +44,22 @@ pub struct Outcome {
 
 impl Outcome {
     pub fn ok(data: Value) -> Self {
-        Self { ok: true, code: None, message: None, hints: Vec::new(), data: Some(data) }
+        Self {
+            ok: true,
+            code: None,
+            message: None,
+            hints: Vec::new(),
+            data: Some(data),
+        }
     }
     pub fn ok_msg(data: Value, message: impl Into<String>) -> Self {
-        Self { ok: true, code: None, message: Some(message.into()), hints: Vec::new(), data: Some(data) }
+        Self {
+            ok: true,
+            code: None,
+            message: Some(message.into()),
+            hints: Vec::new(),
+            data: Some(data),
+        }
     }
     pub fn err(code: ErrCode, message: impl Into<String>) -> Self {
         Self {
@@ -117,11 +130,18 @@ pub struct Emit {
 impl Emit {
     /// Stream progress tied to this req — maps to `command.progress` (PS7).
     pub fn progress(&self, kind: &str, payload: Value) {
-        self.sink.emit(&ServiceOut::Ev { id: self.req_id, kind: kind.to_string(), payload });
+        self.sink.emit(&ServiceOut::Ev {
+            id: self.req_id,
+            kind: kind.to_string(),
+            payload,
+        });
     }
     /// Standalone activity — maps to the activity hub (PS8).
     pub fn activity(&self, kind: &str, payload: Value) {
-        self.sink.emit(&ServiceOut::Act { kind: kind.to_string(), payload });
+        self.sink.emit(&ServiceOut::Act {
+            kind: kind.to_string(),
+            payload,
+        });
     }
     /// Mediated outbound call (PS13) — the core gates it and stamps identity.
     /// Blocks until the core relays the response envelope. `under` is advisory
@@ -140,7 +160,9 @@ impl Emit {
         });
         match rx.recv() {
             Ok(v) => v,
-            Err(_) => json!({ "ok": false, "code": "INTERNAL", "message": "mediated call channel closed" }),
+            Err(_) => {
+                json!({ "ok": false, "code": "INTERNAL", "message": "mediated call channel closed" })
+            }
         }
     }
 }
@@ -153,20 +175,22 @@ pub fn serve<R: BufRead, W: Write + Send + 'static>(
     writer: W,
 ) {
     let handler = Arc::new(handler);
-    let sink = Arc::new(Sink { writer: Mutex::new(Box::new(writer)) });
+    let sink = Arc::new(Sink {
+        writer: Mutex::new(Box::new(writer)),
+    });
     let cmd = Arc::new(CmdBus::default());
     let mutation = Arc::new(Mutex::new(())); // PS16 single mutex for mutating ops
     let idem: Arc<Mutex<HashMap<String, Value>>> = Arc::new(Mutex::new(HashMap::new()));
 
     // hello first (PS5) — the harness fills the wire interface; the author never
     // restates it. ops/subscribe come from the handler.
-    sink.emit(&ServiceOut::Hello {
+    sink.emit(&ServiceOut::Hello(Hello {
         version: Some(SERVICE_PROTOCOL_VERSION),
-        interface: SERVICE_INTERFACE.to_string(),
+        interface: service_contract_provider(),
         ops: handler.ops(),
         subscribe: handler.subscribe(),
         pid: std::process::id(),
-    });
+    }));
 
     let mut inflight: Vec<std::thread::JoinHandle<()>> = Vec::new();
     let mut lines = reader.lines();
@@ -192,11 +216,21 @@ pub fn serve<R: BufRead, W: Write + Send + 'static>(
                     }
                 }
             }
-            ServiceIn::Push { topic, seq, payload } => {
+            ServiceIn::Push {
+                topic,
+                seq,
+                payload,
+            } => {
                 let h = handler.clone();
                 std::thread::spawn(move || h.on_push(&topic, seq, payload));
             }
-            ServiceIn::Req { id, op, params, key, ctx } => {
+            ServiceIn::Req {
+                id,
+                op,
+                params,
+                key,
+                ctx,
+            } => {
                 // Idempotency replay (PS12) — same key returns the cached res.
                 if let Ok(cache) = idem.lock() {
                     if let Some(cached) = cache.get(&key) {
@@ -212,7 +246,11 @@ pub fn serve<R: BufRead, W: Write + Send + 'static>(
                 let read_only = h.read_only(&op);
                 inflight.retain(|j| !j.is_finished());
                 inflight.push(std::thread::spawn(move || {
-                    let emit = Emit { req_id: id, sink: sink2.clone(), cmd: cmd2 };
+                    let emit = Emit {
+                        req_id: id,
+                        sink: sink2.clone(),
+                        cmd: cmd2,
+                    };
                     let opctx = OpCtx {
                         origin: ctx.origin,
                         parent: ctx.parent,
@@ -262,7 +300,11 @@ impl Write for StdoutWriter {
 
 // Build a res frame + the value to cache for idempotency replay.
 fn res_frame(id: u64, o: &Outcome) -> (ServiceOut, Value) {
-    let hints = if o.hints.is_empty() { None } else { Some(o.hints.clone()) };
+    let hints = if o.hints.is_empty() {
+        None
+    } else {
+        Some(o.hints.clone())
+    };
     let frame = ServiceOut::Res {
         id,
         ok: o.ok,
@@ -289,8 +331,14 @@ fn res_from_cache(id: u64, cached: &Value) -> ServiceOut {
     ServiceOut::Res {
         id,
         ok: cached.get("ok").and_then(Value::as_bool).unwrap_or(false),
-        code: cached.get("code").and_then(Value::as_str).map(str::to_string),
-        message: cached.get("message").and_then(Value::as_str).map(str::to_string),
+        code: cached
+            .get("code")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        message: cached
+            .get("message")
+            .and_then(Value::as_str)
+            .map(str::to_string),
         hints,
         data: cached.get("data").cloned().filter(|v| !v.is_null()),
     }
@@ -356,7 +404,13 @@ mod tests {
     struct Fixture;
     impl ServiceHandler for Fixture {
         fn ops(&self) -> Vec<String> {
-            vec!["echo".into(), "slow".into(), "read".into(), "call".into(), "boom".into()]
+            vec![
+                "echo".into(),
+                "slow".into(),
+                "read".into(),
+                "call".into(),
+                "boom".into(),
+            ]
         }
         fn subscribe(&self) -> Vec<String> {
             vec!["bus:test:changed".into()]
@@ -398,13 +452,14 @@ mod tests {
             self.inner.lock().unwrap().push(t.to_string());
         }
     }
-    static PUSH_TOPIC: std::sync::LazyLock<PushObs> =
-        std::sync::LazyLock::new(|| PushObs { inner: Mutex::new(Vec::new()) });
+    static PUSH_TOPIC: std::sync::LazyLock<PushObs> = std::sync::LazyLock::new(|| PushObs {
+        inner: Mutex::new(Vec::new()),
+    });
 
     // Core-side driver: holds the two pipe ends and speaks the wire.
     struct Core {
-        to_service: Pipe,               // core writes ServiceIn here (service stdin)
-        from_service: BufReader<Pipe>,  // core reads ServiceOut here (service stdout)
+        to_service: Pipe,              // core writes ServiceIn here (service stdin)
+        from_service: BufReader<Pipe>, // core reads ServiceOut here (service stdout)
     }
     impl Core {
         fn new() -> (Core, std::thread::JoinHandle<()>) {
@@ -436,13 +491,21 @@ mod tests {
                 op: op.into(),
                 params,
                 key: key.into(),
-                ctx: ReqCtx { origin: "socket".into(), parent: None, deadline_ms: 5_000 },
+                ctx: ReqCtx {
+                    origin: "socket".into(),
+                    parent: None,
+                    deadline_ms: 5_000,
+                },
             });
         }
     }
 
     fn ctx() -> ReqCtx {
-        ReqCtx { origin: "socket".into(), parent: None, deadline_ms: 5_000 }
+        ReqCtx {
+            origin: "socket".into(),
+            parent: None,
+            deadline_ms: 5_000,
+        }
     }
 
     // ── PS17: hello is emitted by the harness with the wire interface + ops ──
@@ -450,11 +513,15 @@ mod tests {
     fn serve_emits_hello_with_wire_interface_and_declared_ops() {
         let (mut core, h) = Core::new();
         match core.recv() {
-            ServiceOut::Hello { version, interface, ops, subscribe, .. } => {
-                assert_eq!(version, Some(SERVICE_PROTOCOL_VERSION));
-                assert_eq!(interface, SERVICE_INTERFACE, "harness fills the wire id, author never restates");
-                assert!(ops.contains(&"echo".to_string()));
-                assert_eq!(subscribe, vec!["bus:test:changed".to_string()]);
+            ServiceOut::Hello(hello) => {
+                assert_eq!(hello.version, Some(SERVICE_PROTOCOL_VERSION));
+                assert_eq!(
+                    hello.interface,
+                    service_contract_provider(),
+                    "harness fills exact provider evidence; author never restates it"
+                );
+                assert!(hello.ops.contains(&"echo".to_string()));
+                assert_eq!(hello.subscribe, vec!["bus:test:changed".to_string()]);
             }
             other => panic!("first frame must be hello: {other:?}"),
         }
@@ -471,7 +538,13 @@ mod tests {
         core.send(&ServiceIn::Ready);
         core.req(1, "echo", json!({ "a": 1 }), "k1");
         match core.recv() {
-            ServiceOut::Res { id, ok, message, data, .. } => {
+            ServiceOut::Res {
+                id,
+                ok,
+                message,
+                data,
+                ..
+            } => {
                 assert_eq!(id, 1);
                 assert!(ok);
                 assert_eq!(message.as_deref(), Some("done"));
@@ -521,7 +594,14 @@ mod tests {
         core.req(11, "echo", json!({ "n": 999 }), "same"); // different params, same key
         let second = core.recv();
         let (d1, d2) = match (first, second) {
-            (ServiceOut::Res { data: a, id: i1, .. }, ServiceOut::Res { data: b, id: i2, .. }) => {
+            (
+                ServiceOut::Res {
+                    data: a, id: i1, ..
+                },
+                ServiceOut::Res {
+                    data: b, id: i2, ..
+                },
+            ) => {
                 assert_eq!(i1, 10);
                 assert_eq!(i2, 11, "replay re-stamps the current req id");
                 (a.unwrap(), b.unwrap())
@@ -529,7 +609,10 @@ mod tests {
             _ => panic!("expected two res"),
         };
         assert_eq!(d1["echo"]["n"], 1);
-        assert_eq!(d2["echo"]["n"], 1, "replay returns the FIRST result, op did not re-run");
+        assert_eq!(
+            d2["echo"]["n"], 1,
+            "replay returns the FIRST result, op did not re-run"
+        );
         core.send(&ServiceIn::Shutdown);
         let _ = h.join();
     }
@@ -543,7 +626,9 @@ mod tests {
         core.req(3, "call", json!({}), "k3");
         // service emits a cmd; core relays a response envelope back.
         let cmd_id = match core.recv() {
-            ServiceOut::Cmd { id, method, under, .. } => {
+            ServiceOut::Cmd {
+                id, method, under, ..
+            } => {
                 assert_eq!(method, "plugin.other.add");
                 assert_eq!(under.as_deref(), Some("echo#1"));
                 id
@@ -615,7 +700,10 @@ mod tests {
             }
             std::thread::sleep(Duration::from_millis(5));
         }
-        assert_eq!(PUSH_TOPIC.inner.lock().unwrap().as_slice(), &["bus:test:changed".to_string()]);
+        assert_eq!(
+            PUSH_TOPIC.inner.lock().unwrap().as_slice(),
+            &["bus:test:changed".to_string()]
+        );
         core.send(&ServiceIn::Shutdown);
         let _ = h.join();
     }
@@ -627,7 +715,7 @@ mod tests {
         let _hello = core.recv();
         core.send(&ServiceIn::Ready);
         core.to_service.close(); // pipe death
-        // serve() must return (join completes) — no shutdown frame needed.
+                                 // serve() must return (join completes) — no shutdown frame needed.
         h.join().expect("serve exits on stdin EOF");
     }
 
@@ -639,7 +727,9 @@ mod tests {
         core.send(&ServiceIn::Ready);
         core.req(4, "boom", json!({}), "k4");
         match core.recv() {
-            ServiceOut::Res { ok, code, message, .. } => {
+            ServiceOut::Res {
+                ok, code, message, ..
+            } => {
                 assert!(!ok);
                 assert_eq!(code.as_deref(), Some("CONFLICT"));
                 assert_eq!(message.as_deref(), Some("nope"));

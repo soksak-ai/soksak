@@ -128,7 +128,12 @@ pub fn init_keys_table(conn: &Connection) -> Result<(), String> {
 }
 
 // [R24] 키 행에 recovery blob 저장(JSON 문자열). enable 시 keypair 생성 직후 1회.
-pub fn set_recovery(conn: &Connection, scope: &str, key_id: &str, recovery_json: &str) -> Result<(), String> {
+pub fn set_recovery(
+    conn: &Connection,
+    scope: &str,
+    key_id: &str,
+    recovery_json: &str,
+) -> Result<(), String> {
     let n = conn
         .execute(
             "UPDATE encryption_keys SET recovery=?3 WHERE scope=?1 AND keyId=?2",
@@ -154,7 +159,9 @@ pub fn active_recovery(conn: &Connection, scope: &str) -> Result<Option<String>,
 }
 
 fn decode_pk(b64: &str) -> Result<[u8; 32], String> {
-    let raw = STANDARD.decode(b64).map_err(|e| format!("publicKey b64: {e}"))?;
+    let raw = STANDARD
+        .decode(b64)
+        .map_err(|e| format!("publicKey b64: {e}"))?;
     if raw.len() != 32 {
         return Err("publicKey 길이 오류(32B 아님)".to_string());
     }
@@ -167,9 +174,11 @@ fn decode_pk(b64: &str) -> Result<[u8; 32], String> {
 // vault 존재 증거). 부팅 시 이게 true 인데 vault 파일이 없으면(삭제·손실) secrets 가 새 vault 자동생성을
 // 거부한다 — 임의 passphrase 가 통과해 봉인 레코드가 영구 복호불가가 되는 footgun 차단(prevention).
 pub fn has_any_keys(conn: &Connection) -> Result<bool, String> {
-    conn.query_row("SELECT EXISTS(SELECT 1 FROM encryption_keys)", [], |r| r.get::<_, i64>(0))
-        .map(|n| n != 0)
-        .map_err(|e| e.to_string())
+    conn.query_row("SELECT EXISTS(SELECT 1 FROM encryption_keys)", [], |r| {
+        r.get::<_, i64>(0)
+    })
+    .map(|n| n != 0)
+    .map_err(|e| e.to_string())
 }
 
 // scope 의 active 키 — Some 이면 이 scope 의 put 은 반드시 봉인해야(fail-closed 트리거).
@@ -183,7 +192,10 @@ pub fn active_key(conn: &Connection, scope: &str) -> Result<Option<ActiveKey>, S
         .optional()
         .map_err(|e| e.to_string())?;
     match row {
-        Some((key_id, pk_b64)) => Ok(Some(ActiveKey { key_id, public_key: decode_pk(&pk_b64)? })),
+        Some((key_id, pk_b64)) => Ok(Some(ActiveKey {
+            key_id,
+            public_key: decode_pk(&pk_b64)?,
+        })),
         None => Ok(None),
     }
 }
@@ -215,7 +227,11 @@ pub fn register_active_key(
 // [blocker④] active key 의 publicKey P 가 vault 의 개인키 S 에서 파생됐는지 검증 — P==basepoint(S).
 // 공격자가 encryption_keys.publicKey 를 자기 키로 스왑하면 byte-eq 가 깨진다 → 탐지. S 는 vault 에서
 // (호출자가 unlock 후 get_data_key 로). 키 없으면 검증 대상 아님(true). 스왑 탐지 시 false.
-pub fn verify_active_key(conn: &Connection, scope: &str, secret: &[u8; 32]) -> Result<bool, String> {
+pub fn verify_active_key(
+    conn: &Connection,
+    scope: &str,
+    secret: &[u8; 32],
+) -> Result<bool, String> {
     match active_key(conn, scope)? {
         Some(ak) => Ok(crate::secrets::public_from_secret(secret) == ak.public_key),
         None => Ok(true),
@@ -237,7 +253,9 @@ pub fn count_sealed_with_key(conn: &Connection, scope: &str, key_id: &str) -> Re
 pub fn dispose_retired_key(conn: &Connection, scope: &str, key_id: &str) -> Result<(), String> {
     let remaining = count_sealed_with_key(conn, scope, key_id)?;
     if remaining != 0 {
-        return Err(format!("키 {key_id} 로 봉인된 레코드 {remaining}개 잔존 — 폐기 거부(R18)"));
+        return Err(format!(
+            "키 {key_id} 로 봉인된 레코드 {remaining}개 잔존 — 폐기 거부(R18)"
+        ));
     }
     conn.execute(
         "DELETE FROM encryption_keys WHERE scope=?1 AND keyId=?2 AND status='retired'",
@@ -301,7 +319,11 @@ mod tests {
         let aad = canonical_aad("terminal", "command_blocks", "proj-a", "rec-1", "key-1");
         let sealed = seal_doc(&sample(), &idx(), &p, "key-1", &aad).unwrap();
         let opened = open_doc(&sealed, &s, &aad).unwrap();
-        assert_eq!(opened, sample(), "개봉 doc 는 원본과 완전 동일(타입·값 보존)");
+        assert_eq!(
+            opened,
+            sample(),
+            "개봉 doc 는 원본과 완전 동일(타입·값 보존)"
+        );
     }
 
     // (c-c, R11) AAD 불일치(scope 변조) → open Err. 봉인을 타 scope 행으로 옮겨도 개봉 불가.
@@ -311,7 +333,10 @@ mod tests {
         let aad_a = canonical_aad("terminal", "command_blocks", "proj-a", "rec-1", "key-1");
         let aad_b = canonical_aad("terminal", "command_blocks", "proj-b", "rec-1", "key-1");
         let sealed = seal_doc(&sample(), &idx(), &p, "key-1", &aad_a).unwrap();
-        assert!(open_doc(&sealed, &s, &aad_b).is_err(), "타 scope AAD 로 개봉 거부");
+        assert!(
+            open_doc(&sealed, &s, &aad_b).is_err(),
+            "타 scope AAD 로 개봉 거부"
+        );
         assert!(open_doc(&sealed, &s, &aad_a).is_ok(), "정합 AAD 는 성공");
     }
 
@@ -321,7 +346,11 @@ mod tests {
         let (_s, p) = gen_asym_keypair();
         let aad = canonical_aad("terminal", "command_blocks", "proj-a", "rec-1", "key-9");
         let sealed = seal_doc(&sample(), &idx(), &p, "key-9", &aad).unwrap();
-        assert_eq!(sealed.get(ENC_FIELD).unwrap().get("k").unwrap(), "key-9", "봉투가 keyId 자기기술");
+        assert_eq!(
+            sealed.get(ENC_FIELD).unwrap().get("k").unwrap(),
+            "key-9",
+            "봉투가 keyId 자기기술"
+        );
         // doc 가 이미 __enc 를 담으면 거부(봉투 자리 충돌).
         let bad = json!({ "id": "x", "__enc": 1 });
         assert!(seal_doc(&bad, &[], &p, "key-9", &aad).is_err());
@@ -331,7 +360,10 @@ mod tests {
     #[test]
     fn active_key_trigger() {
         let c = mem();
-        assert!(active_key(&c, "proj-a").unwrap().is_none(), "키 없으면 트리거 0");
+        assert!(
+            active_key(&c, "proj-a").unwrap().is_none(),
+            "키 없으면 트리거 0"
+        );
         let (_s, p) = gen_asym_keypair();
         register_active_key(&c, "proj-a", "key-1", &p, 100).unwrap();
         let ak = active_key(&c, "proj-a").unwrap().unwrap();
@@ -366,7 +398,9 @@ mod tests {
     // (k-e, R24/B10) recovery blob 저장/조회 + 코드로 S 복구 — passphrase 분실 시 독립 복구 경로.
     #[test]
     fn recovery_blob_store_and_recover() {
-        use crate::secrets::{gen_recovery_code, public_from_secret, recovery_unwrap, recovery_wrap, RecoveryBlob};
+        use crate::secrets::{
+            gen_recovery_code, public_from_secret, recovery_unwrap, recovery_wrap, RecoveryBlob,
+        };
         let c = mem();
         let (s, p) = gen_asym_keypair();
         register_active_key(&c, "proj-a", "key-1", &p, 100).unwrap();
@@ -394,7 +428,10 @@ mod tests {
         let c = mem();
         let (s, p) = gen_asym_keypair();
         register_active_key(&c, "proj-a", "key-1", &p, 100).unwrap();
-        assert!(verify_active_key(&c, "proj-a", &s).unwrap(), "정상 키페어는 검증 통과");
+        assert!(
+            verify_active_key(&c, "proj-a", &s).unwrap(),
+            "정상 키페어는 검증 통과"
+        );
         // 공격자가 테이블의 publicKey 를 자기 P 로 스왑.
         let (_s_atk, p_atk) = gen_asym_keypair();
         c.execute(
@@ -402,7 +439,10 @@ mod tests {
             [base64::engine::general_purpose::STANDARD.encode(p_atk)],
         )
         .unwrap();
-        assert!(!verify_active_key(&c, "proj-a", &s).unwrap(), "스왑된 P 는 우리 S 와 불일치 → 탐지");
+        assert!(
+            !verify_active_key(&c, "proj-a", &s).unwrap(),
+            "스왑된 P 는 우리 S 와 불일치 → 탐지"
+        );
         // 키 없는 scope 는 검증 대상 아님(true).
         assert!(verify_active_key(&c, "proj-z", &s).unwrap());
     }
@@ -423,14 +463,25 @@ mod tests {
         .unwrap();
         register_active_key(&c, "proj-a", "key-2", &p2, 200).unwrap(); // key-1 retired
         assert_eq!(count_sealed_with_key(&c, "proj-a", "key-1").unwrap(), 1);
-        assert!(dispose_retired_key(&c, "proj-a", "key-1").is_err(), "잔존 레코드 → 폐기 거부");
+        assert!(
+            dispose_retired_key(&c, "proj-a", "key-1").is_err(),
+            "잔존 레코드 → 폐기 거부"
+        );
         // 레코드를 key-2 로 재봉인(변환)했다고 가정 → key-1 잔존 0.
-        c.execute("UPDATE records SET keyId='key-2' WHERE id='r1'", []).unwrap();
+        c.execute("UPDATE records SET keyId='key-2' WHERE id='r1'", [])
+            .unwrap();
         assert_eq!(count_sealed_with_key(&c, "proj-a", "key-1").unwrap(), 0);
-        assert!(dispose_retired_key(&c, "proj-a", "key-1").is_ok(), "잔존 0 → 폐기 성공");
+        assert!(
+            dispose_retired_key(&c, "proj-a", "key-1").is_ok(),
+            "잔존 0 → 폐기 성공"
+        );
         // 폐기 후 메타에서 사라짐.
         let n: i64 = c
-            .query_row("SELECT COUNT(*) FROM encryption_keys WHERE keyId='key-1'", [], |r| r.get(0))
+            .query_row(
+                "SELECT COUNT(*) FROM encryption_keys WHERE keyId='key-1'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
         assert_eq!(n, 0);
     }

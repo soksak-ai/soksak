@@ -1,6 +1,7 @@
 [package]
 name = "soksak-ptyd"
-version = "0.1.0"
+version = "0.0.1"
+publish = false
 edition = "2021"
 description = "PTY session daemon: owns shells and their children outside the app process so they survive app restarts, and serves attach/detach over identity-home sockets (soksak-spec-pty contract)."
 

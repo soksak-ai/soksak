@@ -101,7 +101,9 @@ mod b64 {
     }
     pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<u8>, D::Error> {
         let s = String::deserialize(d)?;
-        STANDARD.decode(s.as_bytes()).map_err(serde::de::Error::custom)
+        STANDARD
+            .decode(s.as_bytes())
+            .map_err(serde::de::Error::custom)
     }
 }
 
@@ -116,7 +118,8 @@ pub fn derive_kek(
     t: u32,
     p: u32,
 ) -> Result<Zeroizing<[u8; KEY_LEN]>, String> {
-    let params = Params::new(m, t, p, Some(KEY_LEN)).map_err(|e| format!("argon2 파라미터: {e}"))?;
+    let params =
+        Params::new(m, t, p, Some(KEY_LEN)).map_err(|e| format!("argon2 파라미터: {e}"))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut kek = Zeroizing::new([0u8; KEY_LEN]);
     argon2
@@ -133,7 +136,11 @@ fn random_nonce() -> [u8; NONCE_LEN] {
 }
 
 // XChaCha20Poly1305 AEAD 봉인. key(32B) + nonce(24B) + 평문 → 암호문(인증 태그 포함).
-fn aead_seal(key: &[u8; KEY_LEN], nonce: &[u8; NONCE_LEN], plaintext: &[u8]) -> Result<Vec<u8>, String> {
+fn aead_seal(
+    key: &[u8; KEY_LEN],
+    nonce: &[u8; NONCE_LEN],
+    plaintext: &[u8],
+) -> Result<Vec<u8>, String> {
     let cipher = XChaCha20Poly1305::new(key.into());
     cipher
         .encrypt(XNonce::from_slice(nonce), plaintext)
@@ -239,15 +246,31 @@ pub fn recovery_wrap(recovery_code: &str, secret: &[u8]) -> Result<(Vec<u8>, Sea
     }
     let mut salt = [0u8; SALT_LEN];
     OsRng.fill_bytes(&mut salt);
-    let rk = derive_kek(norm.as_bytes(), &salt, ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST)?;
+    let rk = derive_kek(
+        norm.as_bytes(),
+        &salt,
+        ARGON2_M_COST,
+        ARGON2_T_COST,
+        ARGON2_P_COST,
+    )?;
     let item = seal(&rk, secret)?;
     Ok((salt.to_vec(), item))
 }
 
 // recovery 코드로 secret 복구 — Argon2id(코드,salt)→RK, open(RK, item). 잘못된 코드면 AEAD Err.
-pub fn recovery_unwrap(recovery_code: &str, salt: &[u8], item: &SealedItem) -> Result<Vec<u8>, String> {
+pub fn recovery_unwrap(
+    recovery_code: &str,
+    salt: &[u8],
+    item: &SealedItem,
+) -> Result<Vec<u8>, String> {
     let norm = normalize_recovery(recovery_code);
-    let rk = derive_kek(norm.as_bytes(), salt, ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST)?;
+    let rk = derive_kek(
+        norm.as_bytes(),
+        salt,
+        ARGON2_M_COST,
+        ARGON2_T_COST,
+        ARGON2_P_COST,
+    )?;
     open(&rk, item)
 }
 
@@ -276,9 +299,9 @@ pub struct SecretsState {
     // 테스트는 임시 path 를 직접 주입(전역 HOME 변이 0 — data/store.rs·plugins.rs 주입형 선례).
     path: Mutex<Option<PathBuf>>,
     // [단계③] auto-lock — idle 타이머가 lock 을 건다(vault lock = 프로세스 전역 = app.data S 도 전부 무효화).
-    idle_timeout_ms: Mutex<i64>,  // 0 = 비활성. set_idle_timeout 으로 설정.
+    idle_timeout_ms: Mutex<i64>, // 0 = 비활성. set_idle_timeout 으로 설정.
     last_activity_ms: Mutex<i64>, // 프론트가 활동 시 touch. unlock 도 touch(즉시 재잠금 방지).
-    lock_epoch: Mutex<u64>,       // lock 마다 +1 — 프론트가 stale lock 상태 구분, broadcast 페이로드.
+    lock_epoch: Mutex<u64>, // lock 마다 +1 — 프론트가 stale lock 상태 구분, broadcast 페이로드.
     // [R23] true 면 vault 가 있어야 한다(app.data 에 봉투 키 등록됨). 부팅 시 setup 이 설정 — vault 파일이
     // 없는데 이게 true 면 unlock 의 새 vault 자동생성을 거부한다(임의 passphrase 통과+전손 차단).
     expect_vault: Mutex<bool>,
@@ -316,11 +339,15 @@ pub fn resolve_vault_path(env: impl Fn(&str) -> Option<String>) -> Result<PathBu
     }
 }
 
-// ns 검증 — data/mod.rs validate_ns 와 동형(경로/식별자 안전 문자만). 코어 단일 규칙 복제
-// (네임스페이스 격리의 바닥값 — 플러그인 id 또는 core).
+// ns 검증 — 일반 namespace는 plugin id와 동형(lower/digit/hyphen). `core_registry-*`는
+// 레지스트리 credential 전용 core-owned class다. `_`는 plugin id 문법에 없으므로 app.secrets의
+// ownership-fixed plugin namespace가 core credential owner와 alias될 수 없다.
 fn validate_ns(ns: &str) -> Result<(), String> {
-    let mut chars = ns.chars();
-    let head = chars.next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    let candidate = ns.strip_prefix("core_registry-").unwrap_or(ns);
+    let mut chars = candidate.chars();
+    let head = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
     let rest = chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
     if head && rest {
         Ok(())
@@ -362,7 +389,13 @@ impl SecretsState {
     fn new_vault(passphrase: &[u8]) -> Result<(VaultData, Zeroizing<[u8; KEY_LEN]>), String> {
         let mut salt = [0u8; SALT_LEN];
         OsRng.fill_bytes(&mut salt);
-        let kek = derive_kek(passphrase, &salt, ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST)?;
+        let kek = derive_kek(
+            passphrase,
+            &salt,
+            ARGON2_M_COST,
+            ARGON2_T_COST,
+            ARGON2_P_COST,
+        )?;
         let verifier = seal(&kek, VERIFIER_MARKER)?;
         // kek: &Zeroizing<[u8;32]> → seal 의 &[u8;32] 는 Deref 강제로 충족.
         let header = VaultHeader {
@@ -374,7 +407,13 @@ impl SecretsState {
             salt: salt.to_vec(),
             verifier,
         };
-        Ok((VaultData { header, entries: BTreeMap::new() }, kek))
+        Ok((
+            VaultData {
+                header,
+                entries: BTreeMap::new(),
+            },
+            kek,
+        ))
     }
 
     // 주어진 경로 → VaultData. 없으면 None. (경로 주입형 — 테스트가 임시 path 를 직접 준다.)
@@ -412,7 +451,8 @@ impl SecretsState {
                 let h = &vault.header;
                 let kek = derive_kek(pw, &h.salt, h.m_cost, h.t_cost, h.p_cost)?;
                 // verifier 복호로 passphrase 정합 검증(마커 일치까지 확인).
-                let marker = open(&kek, &h.verifier).map_err(|_| "잘못된 passphrase".to_string())?;
+                let marker =
+                    open(&kek, &h.verifier).map_err(|_| "잘못된 passphrase".to_string())?;
                 if marker != VERIFIER_MARKER {
                     return Err("잘못된 passphrase".to_string());
                 }
@@ -504,7 +544,10 @@ impl SecretsState {
     }
 
     // KEK 사본으로 클로저 실행(locked 면 Err). 락 가드 안에서 처리(누출 최소화).
-    fn with_kek<T>(&self, f: impl FnOnce(&[u8; KEY_LEN]) -> Result<T, String>) -> Result<T, String> {
+    fn with_kek<T>(
+        &self,
+        f: impl FnOnce(&[u8; KEY_LEN]) -> Result<T, String>,
+    ) -> Result<T, String> {
         let guard = self.kek.lock().map_err(|e| e.to_string())?;
         let kek = guard.as_ref().ok_or("vault locked")?;
         f(kek)
@@ -517,7 +560,11 @@ impl SecretsState {
         let path = self.vault_file()?;
         let mut guard = self.vault.lock().map_err(|e| e.to_string())?;
         let vault = guard.as_mut().ok_or("vault locked")?;
-        vault.entries.entry(ns.to_string()).or_default().insert(key.to_string(), item);
+        vault
+            .entries
+            .entry(ns.to_string())
+            .or_default()
+            .insert(key.to_string(), item);
         Self::flush(&path, vault)
     }
 
@@ -539,7 +586,10 @@ impl SecretsState {
         let path = self.vault_file()?;
         let mut guard = self.vault.lock().map_err(|e| e.to_string())?;
         let vault = guard.as_mut().ok_or("vault locked")?;
-        let removed = vault.entries.get_mut(ns).is_some_and(|m| m.remove(key).is_some());
+        let removed = vault
+            .entries
+            .get_mut(ns)
+            .is_some_and(|m| m.remove(key).is_some());
         if removed {
             Self::flush(&path, vault)?;
         }
@@ -584,7 +634,13 @@ impl SecretsState {
 // 테스트 전용 헬퍼 — 다른 모듈(process.rs)의 secret_env 주입 테스트가 임시 볼트를 세팅할 때 쓴다.
 // 프로덕션 경로는 unlock/set 이 private 이므로 IPC/CLI 로만 진입(평문 readback 차단 불변).
 #[cfg(test)]
-pub fn test_state_with_secret(path: PathBuf, passphrase: &str, ns: &str, key: &str, value: &str) -> SecretsState {
+pub fn test_state_with_secret(
+    path: PathBuf,
+    passphrase: &str,
+    ns: &str,
+    key: &str,
+    value: &str,
+) -> SecretsState {
     let s = SecretsState::default();
     s.set_path(path);
     s.unlock(passphrase).expect("test unlock");
@@ -645,7 +701,9 @@ pub fn env_secrets(state: &SecretsState, ns: &str) -> Vec<(String, String)> {
     };
     let mut out = Vec::new();
     for k in keys {
-        let Some(var) = k.strip_prefix("env:") else { continue };
+        let Some(var) = k.strip_prefix("env:") else {
+            continue;
+        };
         if var.is_empty() {
             continue;
         }
@@ -748,7 +806,11 @@ pub fn secret_has(ns: String, key: String, state: State<'_, SecretsState>) -> Re
 }
 
 #[tauri::command]
-pub fn secret_delete(ns: String, key: String, state: State<'_, SecretsState>) -> Result<bool, String> {
+pub fn secret_delete(
+    ns: String,
+    key: String,
+    state: State<'_, SecretsState>,
+) -> Result<bool, String> {
     state.delete(&ns, &key)
 }
 
@@ -772,8 +834,14 @@ mod tests {
     use super::*;
 
     fn kek_a() -> Zeroizing<[u8; KEY_LEN]> {
-        derive_kek(b"correct horse", b"salt-aaaa-bbbb-cc", ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST)
-            .unwrap()
+        derive_kek(
+            b"correct horse",
+            b"salt-aaaa-bbbb-cc",
+            ARGON2_M_COST,
+            ARGON2_T_COST,
+            ARGON2_P_COST,
+        )
+        .unwrap()
     }
 
     // 임시 볼트 path 주입 — 전역 HOME 변이 0(병렬 test-threads 레이스 제거).
@@ -796,7 +864,9 @@ mod tests {
     // 오픈 메커니즘: 헤드리스/E2E 가 사용자 실볼트를 오염하지 않게 경로를 격리한다(passphrase 비종속).
     #[test]
     fn vault_path_env_override() {
-        let iso = std::env::temp_dir().join("soksak-vault-override-test").join("secrets.vault");
+        let iso = std::env::temp_dir()
+            .join("soksak-vault-override-test")
+            .join("secrets.vault");
         let chosen = resolve_vault_path(|k| {
             if k == "SOKSAK_VAULT_PATH" {
                 Some(iso.to_string_lossy().into_owned())
@@ -810,7 +880,14 @@ mod tests {
         let fallback = resolve_vault_path(|_| None).unwrap();
         assert_eq!(fallback, default_vault_path().unwrap(), "미주입 → default");
         // 빈 문자열 → default(빈 env 를 '설정 안 함' 으로 취급).
-        let empty = resolve_vault_path(|k| if k == "SOKSAK_VAULT_PATH" { Some(String::new()) } else { None }).unwrap();
+        let empty = resolve_vault_path(|k| {
+            if k == "SOKSAK_VAULT_PATH" {
+                Some(String::new())
+            } else {
+                None
+            }
+        })
+        .unwrap();
         assert_eq!(empty, default_vault_path().unwrap(), "빈 env → default");
     }
 
@@ -828,9 +905,14 @@ mod tests {
     fn wrong_kek_rejected() {
         let kek = kek_a();
         let item = seal(&kek, b"value").unwrap();
-        let wrong =
-            derive_kek(b"wrong pass", b"salt-aaaa-bbbb-cc", ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST)
-                .unwrap();
+        let wrong = derive_kek(
+            b"wrong pass",
+            b"salt-aaaa-bbbb-cc",
+            ARGON2_M_COST,
+            ARGON2_T_COST,
+            ARGON2_P_COST,
+        )
+        .unwrap();
         assert!(open(&wrong, &item).is_err());
     }
 
@@ -880,14 +962,29 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // Registry credentials live in a core-owned namespace class containing `_`. Plugin ids
+    // cannot contain `_`, so a plugin's ownership-fixed app.secrets namespace can never alias it.
+    #[test]
+    fn core_registry_namespace_is_disjoint_and_supported() {
+        let (s, dir) = state_with_tmp_vault("core-registry-ns");
+        s.unlock("pw").unwrap();
+        s.set("core_registry-corp", "http-authorization", "Bearer private")
+            .expect("core registry namespace must be a valid vault owner");
+        assert!(s.has("core_registry-corp", "http-authorization").unwrap());
+        assert!(s.set("plugin_with_underscore", "token", "bad").is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     // env_secrets(PS9) — ns 의 "env:" 접두 키만 (환경변수명, 평문)으로, 접두 벗기고 정렬. 비-env 키·
     // 잠김은 제외. 서비스 vault_env 동적 주입의 바닥(1판 buildSecretEnvMap 등가).
     #[test]
     fn env_secrets_resolves_env_prefixed_keys() {
         let (s, dir) = state_with_tmp_vault("envsec");
         s.unlock("pw").expect("unlock");
-        s.set("wf", "env:ANTHROPIC_AUTH_TOKEN", "tok").expect("set token");
-        s.set("wf", "env:CLAUDE_ACCOUNT_NAME", "acct").expect("set acct");
+        s.set("wf", "env:ANTHROPIC_AUTH_TOKEN", "tok")
+            .expect("set token");
+        s.set("wf", "env:CLAUDE_ACCOUNT_NAME", "acct")
+            .expect("set acct");
         s.set("wf", "apiKey", "not-env").expect("set non-env"); // 비-env 키는 제외
         let got = env_secrets(&s, "wf");
         assert_eq!(
@@ -945,7 +1042,11 @@ mod tests {
         assert_eq!(public_from_secret(&s), p, "P 는 basepoint·S 와 일치해야");
         // 다른 S 의 P 는 다르다(스왑된 P 는 검증에서 탈락).
         let (s2, _p2) = gen_asym_keypair();
-        assert_ne!(public_from_secret(&s2), p, "다른 S → 다른 P(스왑 탐지 가능)");
+        assert_ne!(
+            public_from_secret(&s2),
+            p,
+            "다른 S → 다른 P(스왑 탐지 가능)"
+        );
     }
 
     // (asym-c, blocker high) AAD 불일치 → open Err. scope 만 바뀐 AAD 로 개봉 거부(교차-scope 누출 0).
@@ -953,7 +1054,10 @@ mod tests {
     fn asym_aad_mismatch_rejected() {
         let (s, p) = gen_asym_keypair();
         let boxed = seal_to(&p, b"value", AAD1).unwrap();
-        assert!(open_sealed(&s, &boxed, AAD2).is_err(), "다른 AAD 면 개봉 거부");
+        assert!(
+            open_sealed(&s, &boxed, AAD2).is_err(),
+            "다른 AAD 면 개봉 거부"
+        );
         assert!(open_sealed(&s, &boxed, b"").is_err(), "빈 AAD 면 개봉 거부");
         assert_eq!(open_sealed(&s, &boxed, AAD1).unwrap(), b"value"); // 정합 AAD 는 성공
     }
@@ -964,7 +1068,10 @@ mod tests {
         let (_s, p) = gen_asym_keypair();
         let (s_other, _p2) = gen_asym_keypair();
         let boxed = seal_to(&p, b"value", AAD1).unwrap();
-        assert!(open_sealed(&s_other, &boxed, AAD1).is_err(), "타 개인키 거부");
+        assert!(
+            open_sealed(&s_other, &boxed, AAD1).is_err(),
+            "타 개인키 거부"
+        );
         // ct 변조
         let (s, p) = gen_asym_keypair();
         let mut t1 = seal_to(&p, b"value", AAD1).unwrap();
@@ -985,18 +1092,35 @@ mod tests {
         // 코드 형식 — 대시 그룹, 혼동문자(I L O U) 없음.
         assert!(code.contains('-'), "그룹 구분 대시");
         for c in code.chars().filter(|c| *c != '-') {
-            assert!("0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(c), "Crockford 문자만: {c}");
+            assert!(
+                "0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(c),
+                "Crockford 문자만: {c}"
+            );
         }
         let (salt, sealed) = recovery_wrap(&code, &s).unwrap();
         // 정확한 코드 → 복구.
-        assert_eq!(recovery_unwrap(&code, &salt, &sealed).unwrap(), s, "코드로 S 복구");
+        assert_eq!(
+            recovery_unwrap(&code, &salt, &sealed).unwrap(),
+            s,
+            "코드로 S 복구"
+        );
         // 구분자/소문자 섞어도 동일(정규화).
         let messy = code.to_lowercase().replace('-', " ");
-        assert_eq!(recovery_unwrap(&messy, &salt, &sealed).unwrap(), s, "정규화 후 동일 복구");
+        assert_eq!(
+            recovery_unwrap(&messy, &salt, &sealed).unwrap(),
+            s,
+            "정규화 후 동일 복구"
+        );
         // 잘못된 코드 → 거부(AEAD).
-        assert!(recovery_unwrap("WRONG-CODE-0000", &salt, &sealed).is_err(), "잘못된 코드 거부");
+        assert!(
+            recovery_unwrap("WRONG-CODE-0000", &salt, &sealed).is_err(),
+            "잘못된 코드 거부"
+        );
         // blob 직렬화 라운드트립.
-        let blob = RecoveryBlob { salt: salt.clone(), sealed: sealed.clone() };
+        let blob = RecoveryBlob {
+            salt: salt.clone(),
+            sealed: sealed.clone(),
+        };
         let json = serde_json::to_string(&blob).unwrap();
         let back: RecoveryBlob = serde_json::from_str(&json).unwrap();
         assert_eq!(recovery_unwrap(&code, &back.salt, &back.sealed).unwrap(), s);
@@ -1015,7 +1139,10 @@ mod tests {
         std::fs::remove_file(&path).unwrap();
         s.set_expect_vault(true);
         // 임의 passphrase 로 unlock 시도 → 거부(새 vault 자동생성 안 함).
-        assert!(s.unlock("any-passphrase").is_err(), "vault 부재+키등록 → 자동생성 거부");
+        assert!(
+            s.unlock("any-passphrase").is_err(),
+            "vault 부재+키등록 → 자동생성 거부"
+        );
         // expect 끄면(키 없음) 다시 생성 허용.
         s.set_expect_vault(false);
         assert!(s.unlock("pw").is_ok(), "expect 없으면 새 vault 생성 허용");
@@ -1044,7 +1171,10 @@ mod tests {
         assert!(s.auto_lock_due(99_999), "한참 idle → 잠금");
         // touch 가 타이머 리셋.
         s.touch(99_000);
-        assert!(!s.auto_lock_due(99_500), "touch 후 0.5s → 잠금 아님(any-window 활동 reset)");
+        assert!(
+            !s.auto_lock_due(99_500),
+            "touch 후 0.5s → 잠금 아님(any-window 활동 reset)"
+        );
 
         // lock 하면 epoch +1, 이후 auto_lock_due false(이미 잠김).
         s.lock().unwrap();
@@ -1062,13 +1192,21 @@ mod tests {
         s.unlock("pw").unwrap();
         let (sk, _p) = gen_asym_keypair();
         s.put_data_key("key-1", &sk).unwrap();
-        assert_eq!(s.get_data_key("key-1").unwrap().unwrap(), sk, "KEK wrap/unwrap 라운드트립");
+        assert_eq!(
+            s.get_data_key("key-1").unwrap().unwrap(),
+            sk,
+            "KEK wrap/unwrap 라운드트립"
+        );
         assert!(s.get_data_key("key-2").unwrap().is_none(), "미존재 키 None");
         // lock 후 None, 재 unlock 시 디스크에서 복원(영속).
         s.lock().unwrap();
         assert!(s.get_data_key("key-1").unwrap().is_none(), "lock 후 None");
         s.unlock("pw").unwrap();
-        assert_eq!(s.get_data_key("key-1").unwrap().unwrap(), sk, "재 unlock 복원");
+        assert_eq!(
+            s.get_data_key("key-1").unwrap().unwrap(),
+            sk,
+            "재 unlock 복원"
+        );
         assert!(s.delete_data_key("key-1").unwrap());
         assert!(s.get_data_key("key-1").unwrap().is_none(), "삭제 후 None");
         let _ = std::fs::remove_dir_all(&dir);

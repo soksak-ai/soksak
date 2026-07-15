@@ -54,7 +54,11 @@ fn with_conn<T>(
 // ── KV ───────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn data_kv_get(ns: String, key: String, state: State<'_, DbState>) -> Result<Option<Value>, String> {
+pub fn data_kv_get(
+    ns: String,
+    key: String,
+    state: State<'_, DbState>,
+) -> Result<Option<Value>, String> {
     validate_ns(&ns)?;
     with_conn(&state, |c| store::kv_get(c, &ns, &key))
 }
@@ -125,7 +129,14 @@ pub fn data_put(
     validate_ns(&ns)?;
     let scope_s = scope.unwrap_or_default();
     let new_id = with_conn(&state, |c| store::put(c, &ns, &coll, &scope_s, id, &doc))?;
-    emit_change(&app, &ns, Some(coll.as_str()), Some(scope_s.as_str()), "put", Some(new_id.as_str()));
+    emit_change(
+        &app,
+        &ns,
+        Some(coll.as_str()),
+        Some(scope_s.as_str()),
+        "put",
+        Some(new_id.as_str()),
+    );
     Ok(new_id)
 }
 
@@ -141,7 +152,9 @@ pub fn data_get(
     validate_ns(&ns)?;
     // [단계②] 봉인(enc=1) 레코드는 vault 의 개인키 S 로 개봉(unlock 필요). 평문은 resolver 무관.
     let resolver = |key_id: &str| secrets.get_data_key(key_id);
-    with_conn(&state, |c| store::get(c, &ns, &coll, &id, scope.as_deref(), Some(&resolver)))
+    with_conn(&state, |c| {
+        store::get(c, &ns, &coll, &id, scope.as_deref(), Some(&resolver))
+    })
 }
 
 #[tauri::command]
@@ -154,9 +167,18 @@ pub fn data_delete(
     state: State<'_, DbState>,
 ) -> Result<bool, String> {
     validate_ns(&ns)?;
-    let removed = with_conn(&state, |c| store::delete(c, &ns, &coll, &id, scope.as_deref()))?;
+    let removed = with_conn(&state, |c| {
+        store::delete(c, &ns, &coll, &id, scope.as_deref())
+    })?;
     if removed {
-        emit_change(&app, &ns, Some(coll.as_str()), scope.as_deref(), "delete", Some(id.as_str()));
+        emit_change(
+            &app,
+            &ns,
+            Some(coll.as_str()),
+            scope.as_deref(),
+            "delete",
+            Some(id.as_str()),
+        );
     }
     Ok(removed)
 }
@@ -206,7 +228,15 @@ pub fn data_search(
     validate_ns(&ns)?;
     let resolver = |key_id: &str| secrets.get_data_key(key_id);
     with_conn(&state, |c| {
-        store::search(c, &ns, &coll, &query, scope.as_deref(), limit, Some(&resolver))
+        store::search(
+            c,
+            &ns,
+            &coll,
+            &query,
+            scope.as_deref(),
+            limit,
+            Some(&resolver),
+        )
     })
 }
 
@@ -236,7 +266,9 @@ pub fn data_retention_trim(
     state: State<'_, DbState>,
 ) -> Result<usize, String> {
     validate_ns(&ns)?;
-    with_conn(&state, |c| store::retention_trim(c, &ns, &coll, &scope, cap))
+    with_conn(&state, |c| {
+        store::retention_trim(c, &ns, &coll, &scope, cap)
+    })
 }
 
 // TTL reaper — created < cutoff_ms 삭제(시간축).
@@ -262,12 +294,12 @@ use super::crypto;
 
 #[derive(Serialize)]
 pub struct EncryptionStatus {
-    pub enabled: bool,        // scope 에 active key 존재(= 봉인 트리거 ON)
+    pub enabled: bool, // scope 에 active key 존재(= 봉인 트리거 ON)
     pub key_id: Option<String>,
     pub algo: Option<String>,
-    pub unlocked: bool,       // vault(개인키 S) 해제 여부 — 복호 가능 조건
-    pub tampered: bool,       // [blocker④] publicKey 가 vault S 와 불일치(키스왑 탐지). unlock 상태에서만 판정.
-    pub key_missing: bool,    // [R23] active P 있는데 vault 에 S 없음(vault 리셋/손실) — 레코드 복호 영구 불가 경고.
+    pub unlocked: bool,    // vault(개인키 S) 해제 여부 — 복호 가능 조건
+    pub tampered: bool, // [blocker④] publicKey 가 vault S 와 불일치(키스왑 탐지). unlock 상태에서만 판정.
+    pub key_missing: bool, // [R23] active P 있는데 vault 에 S 없음(vault 리셋/손실) — 레코드 복호 영구 불가 경고.
 }
 
 #[derive(Serialize)]
@@ -292,7 +324,9 @@ pub fn data_encrypt_enable(
     }
     // 이미 active key 있으면 재활성 거부(중복 트리거·키 혼선 방지 — 회전은 별도 커맨드).
     if with_conn(&state, |c| crypto::active_key(c, &scope))?.is_some() {
-        return Err(format!("scope {scope} 는 이미 암호화 활성(회전은 rotate 커맨드)"));
+        return Err(format!(
+            "scope {scope} 는 이미 암호화 활성(회전은 rotate 커맨드)"
+        ));
     }
     let (sk, pk) = crate::secrets::gen_asym_keypair();
     let key_id = crypto::new_key_id();
@@ -300,13 +334,19 @@ pub fn data_encrypt_enable(
     secrets.put_data_key(&key_id, &sk)?;
     // (2) P 를 테이블에 등록(봉인 트리거 ON). 실패해도 vault 의 S 는 orphan(무해 — 트리거 없음).
     let created = super::now_millis();
-    with_conn(&state, |c| crypto::register_active_key(c, &scope, &key_id, &pk, created))?;
+    with_conn(&state, |c| {
+        crypto::register_active_key(c, &scope, &key_id, &pk, created)
+    })?;
     // (3) [R24] recovery code 발급 + S 를 코드로 2중 wrap → blob 저장(평문 DB 안전, 코드로만 열림).
     let recovery_code = crate::secrets::gen_recovery_code();
     let (salt, sealed) = crate::secrets::recovery_wrap(&recovery_code, &sk)?;
-    let blob = serde_json::to_string(&crate::secrets::RecoveryBlob { salt, sealed }).map_err(|e| e.to_string())?;
+    let blob = serde_json::to_string(&crate::secrets::RecoveryBlob { salt, sealed })
+        .map_err(|e| e.to_string())?;
     with_conn(&state, |c| crypto::set_recovery(c, &scope, &key_id, &blob))?;
-    Ok(EnableResult { key_id, recovery_code })
+    Ok(EnableResult {
+        key_id,
+        recovery_code,
+    })
 }
 
 // [R24] passphrase 분실 복구 — recovery code 로 S 를 되찾아 현재 vault 에 재저장(re-wrap). 새 passphrase 로
@@ -323,13 +363,16 @@ pub fn data_encrypt_recover(
         return Err("scope 필요".to_string());
     }
     if !secrets.is_unlocked() {
-        return Err("vault 잠김 — 복구는 새 passphrase 로 unlock 후(S 재저장에 KEK 필요)".to_string());
+        return Err(
+            "vault 잠김 — 복구는 새 passphrase 로 unlock 후(S 재저장에 KEK 필요)".to_string(),
+        );
     }
     let ak = with_conn(&state, |c| crypto::active_key(c, &scope))?
         .ok_or("암호화 비활성 scope — 복구 대상 아님")?;
     let blob_json = with_conn(&state, |c| crypto::active_recovery(c, &scope))?
         .ok_or("recovery blob 없음 — 이 키는 복구 코드 미발급")?;
-    let blob: crate::secrets::RecoveryBlob = serde_json::from_str(&blob_json).map_err(|e| e.to_string())?;
+    let blob: crate::secrets::RecoveryBlob =
+        serde_json::from_str(&blob_json).map_err(|e| e.to_string())?;
     let s_vec = crate::secrets::recovery_unwrap(&recovery_code, &blob.salt, &blob.sealed)
         .map_err(|_| "복구 실패 — 잘못된 recovery code".to_string())?;
     if s_vec.len() != 32 {
@@ -382,7 +425,9 @@ pub fn data_encrypt_rotate(
     let new_key_id = crypto::new_key_id();
     secrets.put_data_key(&new_key_id, &new_s)?;
     let created = super::now_millis();
-    with_conn(&state, |c| crypto::register_active_key(c, &scope, &new_key_id, &new_p, created))?;
+    with_conn(&state, |c| {
+        crypto::register_active_key(c, &scope, &new_key_id, &new_p, created)
+    })?;
     // 전 레코드 re-key(배치 반복).
     let mut rekeyed = 0usize;
     loop {
@@ -395,13 +440,22 @@ pub fn data_encrypt_rotate(
         }
     }
     // 잔여 0(전 ns/coll) 확인 후에만 old 폐기(테이블 + vault). 잔여 있으면 다음 호출이 이어받음.
-    let remaining = with_conn(&state, |c| crypto::count_sealed_with_key(c, &scope, &old.key_id))?;
+    let remaining = with_conn(&state, |c| {
+        crypto::count_sealed_with_key(c, &scope, &old.key_id)
+    })?;
     let old_disposed = remaining == 0;
     if old_disposed {
-        with_conn(&state, |c| crypto::dispose_retired_key(c, &scope, &old.key_id))?;
+        with_conn(&state, |c| {
+            crypto::dispose_retired_key(c, &scope, &old.key_id)
+        })?;
         secrets.delete_data_key(&old.key_id)?;
     }
-    Ok(RotateResult { old_key_id: old.key_id, new_key_id, rekeyed, old_disposed })
+    Ok(RotateResult {
+        old_key_id: old.key_id,
+        new_key_id,
+        rekeyed,
+        old_disposed,
+    })
 }
 
 // 기존 평문 레코드 봉인 변환(R17) — 암호화 활성 후 이미 쌓인 (ns,coll,scope) 평문을 active key 로 봉인.
@@ -417,7 +471,9 @@ pub fn data_encrypt_convert(
     let mut total = 0usize;
     loop {
         // 암호화 활성 scope 에선 새 put 이 이미 봉인(enc=1)이라 enc=0 은 줄기만 한다 → n==0 = 잔여 0.
-        let n = with_conn(&state, |c| store::convert_pending(c, &ns, &coll, &scope, 512))?;
+        let n = with_conn(&state, |c| {
+            store::convert_pending(c, &ns, &coll, &scope, 512)
+        })?;
         total += n;
         if n == 0 {
             break;
@@ -461,11 +517,9 @@ pub fn data_encrypt_status(
 pub fn data_backup(path: Option<String>, state: State<'_, DbState>) -> Result<String, String> {
     let dest = match path {
         Some(p) => std::path::PathBuf::from(p),
-        None => {
-            crate::home::soksak_home()
-                .join("backups")
-                .join(format!("soksak-{}.db", super::now_millis()))
-        }
+        None => crate::home::soksak_home()
+            .join("backups")
+            .join(format!("soksak-{}.db", super::now_millis())),
     };
     with_conn(&state, |c| backup::backup(c, &dest))?;
     Ok(dest.to_string_lossy().to_string())
@@ -528,11 +582,17 @@ pub fn data_export(
     coll: Option<String>,
     state: State<'_, DbState>,
 ) -> Result<String, String> {
-    with_conn(&state, |c| backup::export(c, ns.as_deref(), coll.as_deref()))
+    with_conn(&state, |c| {
+        backup::export(c, ns.as_deref(), coll.as_deref())
+    })
 }
 
 #[tauri::command]
-pub fn data_import(app: AppHandle, jsonl: String, state: State<'_, DbState>) -> Result<i64, String> {
+pub fn data_import(
+    app: AppHandle,
+    jsonl: String,
+    state: State<'_, DbState>,
+) -> Result<i64, String> {
     let n = with_conn(&state, |c| backup::import(c, &jsonl))?;
     emit_change(&app, "core", None, None, "import", None);
     Ok(n)
@@ -557,7 +617,10 @@ pub fn data_migrate_ns(
     validate_ns(&from_ns)?;
     validate_ns(&to_ns)?;
     if from_ns == to_ns {
-        return Ok(store::NsMigrateOutcome { migrated: false, reason: "same-ns".into() });
+        return Ok(store::NsMigrateOutcome {
+            migrated: false,
+            reason: "same-ns".into(),
+        });
     }
     let outcome = with_conn(&state, |c| store::migrate_ns(c, &from_ns, &to_ns))?;
     if outcome.migrated {

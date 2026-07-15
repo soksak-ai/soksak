@@ -1,15 +1,16 @@
 [package]
 name = "soksak-spec-service"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 publish = false
 license = "MIT"
 repository = "https://github.com/soksak-ai/soksak-spec"
-description = "Plugin service wire contract (soksak-spec-service@1) and optional sidecar-side reference harness shared by the app and plugin service binaries."
+description = "Plugin service wire contract soksak-spec-service, provider version 0.0.1, and optional sidecar-side reference harness shared by the app and plugin service binaries."
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+soksak-spec-contract = { path = "../soksak-spec-contract" }
 # hello 협상 문법(버전 판정 Compat/effective_protocol)은 소켓 프로토콜 계약을 재사용한다 —
 # 판정 함수 사본 금지(soksak-spec-socket 이 정본).
 soksak-spec-socket = { path = "../soksak-spec-socket" }

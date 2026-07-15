@@ -76,15 +76,25 @@ pub fn recover(db_path: &Path) -> Result<Recovery, String> {
     for i in 0..ring::SLOTS {
         // restore_into 가 슬롯을 validate(integrity_check+스키마) 후에만 복사한다 — 실패 슬롯은 건너뛴다.
         if restore_into(db_path, &ring::slot_path(db_path, i)).is_ok() {
-            return Ok(Recovery { quarantined, restored_from: Some(i) });
+            return Ok(Recovery {
+                quarantined,
+                restored_from: Some(i),
+            });
         }
     }
-    Ok(Recovery { quarantined, restored_from: None })
+    Ok(Recovery {
+        quarantined,
+        restored_from: None,
+    })
 }
 
 // 손상본을 `<db>.corrupt-<ms>` 로 옮기고 스테일 사이드카를 제거한다. rename 은 원본을 보존한다.
 fn quarantine(db_path: &Path) -> Result<PathBuf, String> {
-    let dst = PathBuf::from(format!("{}.corrupt-{}", db_path.to_string_lossy(), super::now_millis()));
+    let dst = PathBuf::from(format!(
+        "{}.corrupt-{}",
+        db_path.to_string_lossy(),
+        super::now_millis()
+    ));
     std::fs::rename(db_path, &dst).map_err(|e| e.to_string())?;
     // 손상 본체의 WAL/SHM 은 복원본·신규본과 불일치하므로 남기지 않는다.
     for ext in ["-wal", "-shm"] {
@@ -107,9 +117,15 @@ pub fn export(conn: &Connection, ns: Option<&str>, coll: Option<&str>) -> Result
     {
         let mut sql = String::from("SELECT ns,coll,idx_fields,fts_fields FROM meta_collections");
         let mut conds = Vec::new();
-        if ns.is_some() { conds.push("ns=?1"); }
-        if coll.is_some() { conds.push(if ns.is_some() { "coll=?2" } else { "coll=?1" }); }
-        if !conds.is_empty() { sql.push_str(&format!(" WHERE {}", conds.join(" AND "))); }
+        if ns.is_some() {
+            conds.push("ns=?1");
+        }
+        if coll.is_some() {
+            conds.push(if ns.is_some() { "coll=?2" } else { "coll=?1" });
+        }
+        if !conds.is_empty() {
+            sql.push_str(&format!(" WHERE {}", conds.join(" AND ")));
+        }
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
         let map = |r: &rusqlite::Row| {
             Ok(json!({
@@ -119,15 +135,23 @@ pub fn export(conn: &Connection, ns: Option<&str>, coll: Option<&str>) -> Result
             }))
         };
         let rows = bind_query(&mut stmt, ns, coll, map)?;
-        for v in rows { push(&mut lines, v); }
+        for v in rows {
+            push(&mut lines, v);
+        }
     }
     // records
     {
         let mut sql = String::from("SELECT ns,coll,scope,id,doc FROM records");
         let mut conds = Vec::new();
-        if ns.is_some() { conds.push("ns=?1"); }
-        if coll.is_some() { conds.push(if ns.is_some() { "coll=?2" } else { "coll=?1" }); }
-        if !conds.is_empty() { sql.push_str(&format!(" WHERE {}", conds.join(" AND "))); }
+        if ns.is_some() {
+            conds.push("ns=?1");
+        }
+        if coll.is_some() {
+            conds.push(if ns.is_some() { "coll=?2" } else { "coll=?1" });
+        }
+        if !conds.is_empty() {
+            sql.push_str(&format!(" WHERE {}", conds.join(" AND ")));
+        }
         let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
         let map = |r: &rusqlite::Row| {
             Ok(json!({
@@ -137,12 +161,18 @@ pub fn export(conn: &Connection, ns: Option<&str>, coll: Option<&str>) -> Result
             }))
         };
         let rows = bind_query(&mut stmt, ns, coll, map)?;
-        for v in rows { push(&mut lines, v); }
+        for v in rows {
+            push(&mut lines, v);
+        }
     }
     // kv (coll 무관 — coll 지정 시 생략)
     if coll.is_none() {
         let mut stmt = conn
-            .prepare(if ns.is_some() { "SELECT ns,k,v FROM kv WHERE ns=?1" } else { "SELECT ns,k,v FROM kv" })
+            .prepare(if ns.is_some() {
+                "SELECT ns,k,v FROM kv WHERE ns=?1"
+            } else {
+                "SELECT ns,k,v FROM kv"
+            })
             .map_err(|e| e.to_string())?;
         let map = |r: &rusqlite::Row| {
             Ok(json!({
@@ -151,11 +181,19 @@ pub fn export(conn: &Connection, ns: Option<&str>, coll: Option<&str>) -> Result
             }))
         };
         let rows: Vec<Value> = if let Some(ns) = ns {
-            stmt.query_map([ns], map).map_err(|e| e.to_string())?.collect::<Result<_,_>>().map_err(|e| e.to_string())?
+            stmt.query_map([ns], map)
+                .map_err(|e| e.to_string())?
+                .collect::<Result<_, _>>()
+                .map_err(|e| e.to_string())?
         } else {
-            stmt.query_map([], map).map_err(|e| e.to_string())?.collect::<Result<_,_>>().map_err(|e| e.to_string())?
+            stmt.query_map([], map)
+                .map_err(|e| e.to_string())?
+                .collect::<Result<_, _>>()
+                .map_err(|e| e.to_string())?
         };
-        for v in rows { push(&mut lines, v); }
+        for v in rows {
+            push(&mut lines, v);
+        }
     }
     Ok(lines.join("\n"))
 }
@@ -210,8 +248,24 @@ pub fn import(conn: &Connection, jsonl: &str) -> Result<i64, String> {
         match kind {
             "meta" => {
                 let coll = v.get("coll").and_then(|x| x.as_str()).unwrap_or("");
-                let idx: Vec<String> = v.get("idx").and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect()).unwrap_or_default();
-                let fts: Vec<String> = v.get("fts").and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|s| s.as_str().map(String::from)).collect()).unwrap_or_default();
+                let idx: Vec<String> = v
+                    .get("idx")
+                    .and_then(|x| x.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|s| s.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let fts: Vec<String> = v
+                    .get("fts")
+                    .and_then(|x| x.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|s| s.as_str().map(String::from))
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 store::define(conn, ns, coll, &idx, &fts)?;
             }
             "record" => {
@@ -268,7 +322,15 @@ mod tests {
 
         let conn = super::super::open(&db).unwrap();
         store::define(&conn, "mailbox", "messages", &[], &["title".into()]).unwrap();
-        store::put(&conn, "mailbox", "messages", "p", None, &json!({"title":"백업 한글"})).unwrap();
+        store::put(
+            &conn,
+            "mailbox",
+            "messages",
+            "p",
+            None,
+            &json!({"title":"백업 한글"}),
+        )
+        .unwrap();
         let snap = root.join("snap.db");
         backup(&conn, &snap).unwrap();
         drop(conn);
@@ -281,7 +343,12 @@ mod tests {
         let bak = restore_into(&db, &snap).unwrap();
         assert!(bak.exists());
         let conn2 = super::super::open(&db).unwrap();
-        assert_eq!(store::search(&conn2, "mailbox", "messages", "백업", None, None, None).unwrap().len(), 1);
+        assert_eq!(
+            store::search(&conn2, "mailbox", "messages", "백업", None, None, None)
+                .unwrap()
+                .len(),
+            1
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -303,7 +370,10 @@ mod tests {
         for ext in ["-wal", "-shm"] {
             let _ = std::fs::remove_file(format!("{}{ext}", db.to_string_lossy()));
         }
-        assert!(super::super::open(&db).is_err(), "쓰레기 바이트 본체는 개방 실패");
+        assert!(
+            super::super::open(&db).is_err(),
+            "쓰레기 바이트 본체는 개방 실패"
+        );
 
         // 복구 — 슬롯 0 에서 복원, 손상본 격리, marker 보존.
         let (conn, rec) = super::super::open_or_recover(&db).unwrap();
@@ -321,19 +391,27 @@ mod tests {
 
     #[test]
     fn corrupt_db_without_slots_starts_empty() {
-        let root = std::env::temp_dir().join(format!("soksak-recover-empty-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("soksak-recover-empty-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let db = mem_file(&root, "soksak.db");
 
         std::fs::write(&db, b"garbage, and no valid backup slots exist").unwrap();
-        assert!(super::super::open(&db).is_err(), "쓰레기 바이트 본체는 개방 실패");
+        assert!(
+            super::super::open(&db).is_err(),
+            "쓰레기 바이트 본체는 개방 실패"
+        );
 
         // 복구 — 정상 슬롯 없음 → 빈 DB 재시작, 손상본은 여전히 격리.
         let (conn, rec) = super::super::open_or_recover(&db).unwrap();
         let rec = rec.expect("손상 본체는 복구를 유발해야 한다");
         assert_eq!(rec.restored_from, None, "정상 슬롯 없음 → 빈 DB 재시작");
         assert!(rec.quarantined.is_file(), "손상본 격리 파일 실존");
-        assert_eq!(store::kv_get(&conn, "core", "marker").unwrap(), None, "빈 DB");
+        assert_eq!(
+            store::kv_get(&conn, "core", "marker").unwrap(),
+            None,
+            "빈 DB"
+        );
         store::kv_set(&conn, "core", "marker", &json!(1)).unwrap();
         assert_eq!(
             store::kv_get(&conn, "core", "marker").unwrap(),
@@ -369,13 +447,18 @@ mod tests {
         store::kv_set(&conn, "core", "marker", &json!(7)).expect("set marker");
         backup(&conn, &super::super::ring::slot_path(&db, 0)).expect("snapshot slot 0");
         // WAL 을 본체로 체크포인트 — 손상 주입이 실데이터 페이지에 닿도록.
-        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);").expect("checkpoint");
+        conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")
+            .expect("checkpoint");
         drop(conn);
 
         // 헤더(page 1)·메타(page 2)는 보존, 내부 페이지(page 3~)를 파손 — 헤더 기반 개방은 통과,
         // quick_check 는 실패. 8KB 를 0xAA 로 덮어 다중 btree 페이지를 확실히 오염시킨다.
         let bytes = std::fs::read(&db).expect("read db");
-        assert!(bytes.len() > 8192 * 3, "다중 페이지 확보: {} bytes", bytes.len());
+        assert!(
+            bytes.len() > 8192 * 3,
+            "다중 페이지 확보: {} bytes",
+            bytes.len()
+        );
         let mut corrupt = bytes.clone();
         let start = 4096 * 2; // page 3 시작(page 1=header/schema, page 2=meta 보존)
         let end = (start + 8192).min(corrupt.len());
@@ -422,7 +505,8 @@ mod tests {
         // 손상 본체(슬롯 없음) — 실제 recover 가 이 파일을 격리한다(restored_from=None).
         std::fs::write(&db, b"garbage corrupt body, no valid slots").expect("write corrupt body");
         // opener 를 항상 실패로 주입 → 초기 개방 실패 → recover 격리 → 재개방도 실패.
-        let always_fail = |_p: &std::path::Path| Err::<Connection, String>("injected open failure".into());
+        let always_fail =
+            |_p: &std::path::Path| Err::<Connection, String>("injected open failure".into());
         let err = match super::super::open_or_recover_with(&db, always_fail) {
             Ok(_) => panic!("주입 opener 는 항상 실패이므로 Ok 일 수 없다"),
             Err(e) => e,
@@ -441,8 +525,23 @@ mod tests {
     fn export_import_roundtrip() {
         let c = Connection::open_in_memory().unwrap();
         super::super::init_base(&c).unwrap();
-        store::define(&c, "mailbox", "messages", &["read".into()], &["title".into()]).unwrap();
-        store::put(&c, "mailbox", "messages", "p", Some("m1".into()), &json!({"title":"이식 테스트","read":false})).unwrap();
+        store::define(
+            &c,
+            "mailbox",
+            "messages",
+            &["read".into()],
+            &["title".into()],
+        )
+        .unwrap();
+        store::put(
+            &c,
+            "mailbox",
+            "messages",
+            "p",
+            Some("m1".into()),
+            &json!({"title":"이식 테스트","read":false}),
+        )
+        .unwrap();
         store::kv_set(&c, "mailbox", "cfg", &json!({"on":true})).unwrap();
 
         let dump = export(&c, Some("mailbox"), None).unwrap();
@@ -454,8 +553,23 @@ mod tests {
         super::super::init_base(&c2).unwrap();
         let n = import(&c2, &dump).unwrap();
         assert_eq!(n, 2); // 1 record + 1 kv
-        assert_eq!(store::get(&c2, "mailbox", "messages", "m1", None, None).unwrap().unwrap().get("title").unwrap(), "이식 테스트");
-        assert_eq!(store::search(&c2, "mailbox", "messages", "이식", None, None, None).unwrap().len(), 1);
-        assert_eq!(store::kv_get(&c2, "mailbox", "cfg").unwrap(), Some(json!({"on":true})));
+        assert_eq!(
+            store::get(&c2, "mailbox", "messages", "m1", None, None)
+                .unwrap()
+                .unwrap()
+                .get("title")
+                .unwrap(),
+            "이식 테스트"
+        );
+        assert_eq!(
+            store::search(&c2, "mailbox", "messages", "이식", None, None, None)
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            store::kv_get(&c2, "mailbox", "cfg").unwrap(),
+            Some(json!({"on":true}))
+        );
     }
 }

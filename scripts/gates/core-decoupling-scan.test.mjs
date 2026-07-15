@@ -56,8 +56,8 @@ describe("scanFile — 위반 판정", () => {
   });
 
   it("계약 id(soksak-spec-*)는 soksak-plugin- 토큰이 아니므로 위반이 아니다(allowlist 불요)", () => {
-    expect(scanFile("src-tauri/src/x.rs", '"spec": "soksak-spec-plugin@1"')).toEqual([]);
-    expect(scanFile("src/plugins/y.ts", '// soksak-spec-plugin-terminal@1 계약을 소비')).toEqual([]);
+    expect(scanFile("src-tauri/src/x.rs", '"spec": "soksak-spec-plugin@0.0.1"')).toEqual([]);
+    expect(scanFile("src/plugins/y.ts", '// soksak-spec-plugin-terminal@0.0.1 계약을 소비')).toEqual([]);
   });
 
   it("레지스트리 URL allowlist 는 그 파일·그 줄에만 적용된다", () => {

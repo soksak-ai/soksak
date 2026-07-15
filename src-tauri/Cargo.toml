@@ -1,11 +1,12 @@
 [workspace]
-members = ["cli", "crates/soksak-spec-socket", "crates/soksak-spec-pty", "crates/soksak-ptyd", "crates/soksak-seal", "crates/soksak-spec-service"]
+members = ["cli", "crates/soksak-spec-contract", "crates/soksak-spec-socket", "crates/soksak-spec-pty", "crates/soksak-ptyd", "crates/soksak-seal", "crates/soksak-spec-service"]
 
 [package]
 # 기본(개발) 정체성. HMR(번들 안 됨)은 이 바이너리명이 독에 그대로 뜬다 → soksak-dev.
 # 릴리스/디버그 번들은 빌드 시 --config 로 productName 을 soksak / soksak-debug 로 푼다.
 name = "soksak-dev"
 version = "0.0.1"
+publish = false
 description = "soksak terminal"
 authors = ["you"]
 edition = "2021"
@@ -25,6 +26,8 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # 소켓 프로토콜 계약(버전 상수+호환창+순수 판정) — 앱과 sok 이 공히 의존, 상수 사본 금지.
 soksak-spec-socket = { path = "crates/soksak-spec-socket" }
+# 공개 계약 provider/consumer refs + SemVer range 판정 — sidecar/service가 공유하는 단일진실.
+soksak-spec-contract = { path = "crates/soksak-spec-contract" }
 # PTY 데몬 계약(버전·경로·hello·메시지) — pty.rs 라우터가 soksak-ptyd 와 공유, 상수 사본 금지.
 soksak-spec-pty = { path = "crates/soksak-spec-pty" }
 # X25519 sealed box 단일 진실 — 앱 볼트와 soksak-ptyd 체크포인트 공용.
@@ -62,7 +65,7 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-updater = "2"
 # WebSocket capability(net.ws) — Origin 헤더 미전송(브라우저 WebSocket 은 Origin 강제 → webOS 등이 거부).
 # ws:// 평문만(default-features=false → TLS 미포함, 가벼움). 양방향은 split sink/stream + Channel 스트리밍.
-tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "io-util", "time", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "io-util", "time", "macros", "process"] }
 tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect"] }
 futures-util = "0.3"
 # 클립보드 capability — 크로스플랫폼 텍스트 읽기/쓰기 + 변경 감시. 변경 감시는 OS별 네이티브 푸시
@@ -93,6 +96,11 @@ rand = "0.8"
 zeroize = "1"
 # sha256 무결성 핀(runtime_dep: fetch reach 다운로드 검증). RustCrypto, 자체 crypto 0.
 sha2 = "0.10"
+# 플러그인 코드는 메인 renderer가 아니라 플러그인별 종료 가능한 helper process의
+# raw Wry webview에서만 실행한다. tao는 helper의 이벤트 루프, wry는 opaque sandbox
+# frame을 소유한다. 앱과 동일한 lockfile 버전을 정확히 고정해 webview 런타임을 갈라놓지 않는다.
+tao = "=0.35.3"
+wry = "=0.55.1"
 # 검증된 tar.gz reader. 시스템 tar에 unpack을 위임하지 않고 archive entry를 코어가 하나씩
 # 판정·작성해 symlink/hardlink/path traversal을 구조적으로 거부한다.
 flate2 = "=1.1.9"

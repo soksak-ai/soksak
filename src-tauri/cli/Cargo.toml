@@ -2,7 +2,8 @@
 # (같은 패키지의 [[bin]] 으로 두면 tauri 번들러가 메인 바이너리를 오인한다).
 [package]
 name = "sok"
-version = "0.1.0"
+version = "0.0.1"
+publish = false
 edition = "2021"
 
 # 이름별 실물 바이너리 3개(src/bin/) — 공용 본체는 lib(src/lib.rs). 링크·복사 없음(P9).

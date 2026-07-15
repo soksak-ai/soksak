@@ -270,7 +270,13 @@ pub fn belongs_to_window(label: &str, window_label: &str) -> bool {
 }
 
 /// 창(배지·플러그인 이벤트)으로 건강 전이를 중계 — hooks.ts 가 webview.health 로 미러한다.
-fn emit_health(app: &AppHandle, window_label: &str, label: &str, state: &str, attempt: Option<u32>) {
+fn emit_health(
+    app: &AppHandle,
+    window_label: &str,
+    label: &str,
+    state: &str,
+    attempt: Option<u32>,
+) {
     let _ = app.emit_to(
         window_label,
         "webview-health",
@@ -292,7 +298,12 @@ pub fn on_web_content_process_terminate(webview: &tauri::Webview) {
     handle_terminate(webview.app_handle(), &label, &window_label, None);
 }
 
-fn handle_terminate(app: &AppHandle, label: &str, window_label: &str, reason: Option<TerminateReason>) {
+fn handle_terminate(
+    app: &AppHandle,
+    label: &str,
+    window_label: &str,
+    reason: Option<TerminateReason>,
+) {
     let health = app.state::<WebviewHealth>();
     let decision = lock(&health.breakers)
         .entry(label.to_string())
@@ -403,7 +414,13 @@ pub fn on_page_load_finished(webview: &tauri::Webview) {
             "core",
             serde_json::json!({ "label": label, "attempt": attempt }),
         );
-        emit_health(app, webview.window().label(), label, "closed", Some(attempt));
+        emit_health(
+            app,
+            webview.window().label(),
+            label,
+            "closed",
+            Some(attempt),
+        );
     }
 }
 
@@ -504,21 +521,32 @@ mod tests {
         // 1·2·3번째 크래시(60s 윈도우 내) — 지수 백오프로 복구.
         assert_eq!(
             b.on_terminate(1_000, None),
-            Decision::Recover { attempt: 1, delay_ms: 250 }
+            Decision::Recover {
+                attempt: 1,
+                delay_ms: 250
+            }
         );
         assert_eq!(b.state(), BreakerState::Recovering(1));
         assert_eq!(
             b.on_terminate(2_000, None),
-            Decision::Recover { attempt: 2, delay_ms: 500 }
+            Decision::Recover {
+                attempt: 2,
+                delay_ms: 500
+            }
         );
         assert_eq!(
             b.on_terminate(3_000, None),
-            Decision::Recover { attempt: 3, delay_ms: 1000 }
+            Decision::Recover {
+                attempt: 3,
+                delay_ms: 1000
+            }
         );
         // 4번째 = 상한 초과 → Open(자동 복구 중단).
         assert_eq!(
             b.on_terminate(4_000, None),
-            Decision::Exhausted { crashes_in_window: 4 }
+            Decision::Exhausted {
+                crashes_in_window: 4
+            }
         );
         assert_eq!(b.state(), BreakerState::Open);
         assert_eq!(b.total_crashes(), 4);
@@ -530,16 +558,28 @@ mod tests {
     fn load_success_does_not_reset_window() {
         let mut b = LabelBreaker::default();
         // 크래시 루프 시나리오: 매 사이클 정상 렌더(로드 성공) 후 다시 죽는다.
-        assert!(matches!(b.on_terminate(1_000, None), Decision::Recover { attempt: 1, .. }));
+        assert!(matches!(
+            b.on_terminate(1_000, None),
+            Decision::Recover { attempt: 1, .. }
+        ));
         assert_eq!(b.on_load_finished(), Some(1)); // 복구 완료 → Closed
         assert_eq!(b.state(), BreakerState::Closed);
-        assert!(matches!(b.on_terminate(2_000, None), Decision::Recover { attempt: 2, .. }));
+        assert!(matches!(
+            b.on_terminate(2_000, None),
+            Decision::Recover { attempt: 2, .. }
+        ));
         assert_eq!(b.on_load_finished(), Some(2));
-        assert!(matches!(b.on_terminate(3_000, None), Decision::Recover { attempt: 3, .. }));
+        assert!(matches!(
+            b.on_terminate(3_000, None),
+            Decision::Recover { attempt: 3, .. }
+        ));
         assert_eq!(b.on_load_finished(), Some(3));
         // 로드 성공이 윈도우를 리셋했다면 여기서 attempt 1 로 영원히 돌았을 것 —
         // 4번째는 Open 이어야 한다.
-        assert!(matches!(b.on_terminate(4_000, None), Decision::Exhausted { .. }));
+        assert!(matches!(
+            b.on_terminate(4_000, None),
+            Decision::Exhausted { .. }
+        ));
         assert_eq!(b.state(), BreakerState::Open);
     }
 
@@ -551,13 +591,19 @@ mod tests {
         b.on_terminate(1_000, None);
         b.on_terminate(2_000, None);
         b.on_terminate(3_000, None);
-        assert!(matches!(b.on_terminate(4_000, None), Decision::Exhausted { .. }));
+        assert!(matches!(
+            b.on_terminate(4_000, None),
+            Decision::Exhausted { .. }
+        ));
         assert_eq!(b.state(), BreakerState::Open);
         // 60s 경과 — 이전 크래시가 전부 만료되면 다음 terminate 는 attempt 1 부터 재개.
         let later = 4_000 + WINDOW_MS + 1;
         assert_eq!(
             b.on_terminate(later, None),
-            Decision::Recover { attempt: 1, delay_ms: 250 }
+            Decision::Recover {
+                attempt: 1,
+                delay_ms: 250
+            }
         );
         assert_eq!(b.state(), BreakerState::Recovering(1));
         assert_eq!(b.crashes_in_window(later), 1);
@@ -570,10 +616,13 @@ mod tests {
         let mut b = LabelBreaker::default();
         b.on_terminate(1_000, None); // t=1s — 만료될 것
         b.on_terminate(30_000, None); // t=30s — 잔존
-        // t=62s: 1s 크래시는 만료, 30s 는 잔존 → 이번이 윈도우 내 2번째.
+                                      // t=62s: 1s 크래시는 만료, 30s 는 잔존 → 이번이 윈도우 내 2번째.
         assert_eq!(
             b.on_terminate(62_000, None),
-            Decision::Recover { attempt: 2, delay_ms: 500 }
+            Decision::Recover {
+                attempt: 2,
+                delay_ms: 500
+            }
         );
     }
 
@@ -593,10 +642,13 @@ mod tests {
         assert_eq!(b.last_crash_ms(), None);
         assert_eq!(b.last_reason(), None);
         assert_eq!(b.total_crashes(), 4); // 수명 텔레메트리 보존
-        // reset 직후 크래시는 attempt 1 부터.
+                                          // reset 직후 크래시는 attempt 1 부터.
         assert_eq!(
             b.on_terminate(5_000, None),
-            Decision::Recover { attempt: 1, delay_ms: 250 }
+            Decision::Recover {
+                attempt: 1,
+                delay_ms: 250
+            }
         );
     }
 
@@ -611,7 +663,10 @@ mod tests {
         assert_eq!(b.total_crashes(), 0);
         assert_eq!(b.state(), BreakerState::Closed);
         // 1회 소모됨 — 바로 다음 terminate 는 실크래시.
-        assert!(matches!(b.on_terminate(1_600, None), Decision::Recover { attempt: 1, .. }));
+        assert!(matches!(
+            b.on_terminate(1_600, None),
+            Decision::Recover { attempt: 1, .. }
+        ));
         assert_eq!(b.total_crashes(), 1);
     }
 
@@ -621,7 +676,10 @@ mod tests {
         b.mark_expected_teardown(1_000);
         // 마크가 만료(EXPECTED_TEARDOWN_MS 경과)된 뒤의 terminate 는 실크래시로 기록.
         let late = 1_000 + EXPECTED_TEARDOWN_MS + 1;
-        assert!(matches!(b.on_terminate(late, None), Decision::Recover { attempt: 1, .. }));
+        assert!(matches!(
+            b.on_terminate(late, None),
+            Decision::Recover { attempt: 1, .. }
+        ));
         assert_eq!(b.total_crashes(), 1);
     }
 
@@ -632,7 +690,9 @@ mod tests {
         let mut b = LabelBreaker::default();
         assert_eq!(
             b.on_terminate(1_000, Some(TerminateReason::BootFailure)),
-            Decision::NoRecover { reason: TerminateReason::BootFailure }
+            Decision::NoRecover {
+                reason: TerminateReason::BootFailure
+            }
         );
         assert_eq!(b.state(), BreakerState::Open);
         assert_eq!(b.total_crashes(), 1);
@@ -650,7 +710,10 @@ mod tests {
         assert_eq!(b.on_terminate(1_500, None), Decision::ExpectedTeardown);
         assert!(!b.observable());
         // 실크래시 이력이 생기면 Closed 로 돌아와도 노출(윈도우·수명 카운트가 정보다).
-        assert!(matches!(b.on_terminate(2_000, None), Decision::Recover { .. }));
+        assert!(matches!(
+            b.on_terminate(2_000, None),
+            Decision::Recover { .. }
+        ));
         assert!(b.observable());
         assert_eq!(b.on_load_finished(), Some(1));
         assert!(b.observable());
@@ -676,7 +739,10 @@ mod tests {
             b.on_terminate(t, None);
         }
         assert_eq!(b.state(), BreakerState::Open);
-        assert!(matches!(b.on_terminate(5_000, None), Decision::Exhausted { .. }));
+        assert!(matches!(
+            b.on_terminate(5_000, None),
+            Decision::Exhausted { .. }
+        ));
         assert_eq!(b.state(), BreakerState::Open);
     }
 }

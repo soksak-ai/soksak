@@ -52,6 +52,27 @@ export const ALLOWLIST = [
       " 데이터 번역이며 rename 양끝 id 를 문법상 요구한다. line·token 제한으로 그 map 항목에만 적용된다." +
       " 옛 스냅샷 소멸 시 제거(제거 조건은 코드 주석).",
   },
+  {
+    file: "src-tauri/src/plugin_runtime/conformance.rs",
+    token: /^soksak-plugin-runtime-conformance$/,
+    reason:
+      "코어가 스폰하는 plugin-runtime 도우미의 자기 식별 CLI 플래그. 특정 플러그인 id 가 아니라 코어 소유" +
+      " 런타임 인프라의 고정 argv 마커다(어떤 플러그인에도 결합하지 않는다). token 제한으로 다른 id 는 사면되지 않는다.",
+  },
+  {
+    file: "src-tauri/src/plugin_runtime.rs",
+    token: /^soksak-plugin-runtime-helper$/,
+    reason:
+      "plugin-runtime 헬퍼 프로세스 진입 CLI 플래그. 코어 소유 런타임 인프라의 고정 argv 마커이지 특정" +
+      " 플러그인 결합이 아니다. token 제한으로 다른 id 는 사면되지 않는다.",
+  },
+  {
+    file: "src-tauri/src/plugin_runtime.rs",
+    token: /^soksak-plugin-root$/,
+    reason:
+      "플러그인 웹뷰 srcdoc 의 마운트 DOM id. 모든 플러그인 UI 가 붙는 generic 마운트점이지 특정 플러그인 id 가" +
+      " 아니다(코어 소유 런타임 인프라). token 제한으로 다른 id 는 사면되지 않는다.",
+  },
 ];
 
 const SCAN_ROOTS = ["src", "src-tauri"];

@@ -1,38 +1,40 @@
+mod activity;
 mod ai_session;
-mod daemon;
-mod skillgen;
-mod home;
-mod sidecar;
-mod webview;
-pub mod webview_health;
 mod clipboard;
+mod daemon;
 mod data;
 mod deeplink;
 #[cfg(target_os = "macos")]
 mod dockmenu;
 mod fs;
+mod home;
 mod http;
 mod i18n;
 pub mod ipc;
 mod mediaproxy;
-mod network;
 mod navigation_policy;
+mod network;
 mod notify;
-mod plugins;
-mod unit_dev;
 mod path_security;
+pub mod plugin_runtime;
+mod plugins;
 mod process;
+mod project_registry;
 mod pty;
+mod runtime_dep;
 mod schedule;
-mod updater;
-mod service;
 mod secrets;
+mod service;
+mod sidecar;
+mod skillgen;
 #[cfg(target_os = "macos")]
 mod titlebar;
+mod unit_dev;
+mod unit_installer;
+mod updater;
 mod watcher;
-mod runtime_dep;
-mod activity;
-mod project_registry;
+mod webview;
+pub mod webview_health;
 mod window;
 mod ws;
 
@@ -109,7 +111,8 @@ pub fn run() {
         .manage(secrets::SecretsState::default())
         .manage(ai_session::SessionTracker::default())
         .manage(schedule::ScheduleState::default())
-        .manage(project_registry::ProjectRegistry::default());
+        .manage(project_registry::ProjectRegistry::default())
+        .manage(plugin_runtime::PluginRuntimeManager::default());
     // 렌더러 프로세스 종료(process-gone)를 명시 감지한다(macOS per-webview) — 이 핸들러를
     // 등록하지 않으면 핀 rev 의 tauri-runtime-wry 가 무조건·무한·무고지 자동 reload 기본
     // 핸들러를 설치한다(R1 위반). webview_health 서킷 브레이커가 그 자리를 대체한다.
@@ -129,6 +132,10 @@ pub fn run() {
             // identity 홈 확정 — 모든 경로(데이터·플러그인·사이드카·테마·프로젝트·소켓·시크릿)가
             // 이 값에서 파생되므로 어떤 경로 사용보다 먼저 1회 고정한다(home.rs 원칙).
             home::init(&app.config().identifier);
+            app.manage(
+                unit_installer::UnitInstallManager::new(home::soksak_home())
+                    .map_err(std::io::Error::other)?,
+            );
             // plugin service 매니저(PS9·PS11) — bind 원장을 읽어 상주 서비스를 올린다. 창-무관이라
             // 워크스페이스 창 유무와 상관없이 부팅 시 1회. 스폰은 스레드로(부팅 비차단).
             app.manage(service::ServiceManager::new(
@@ -194,7 +201,9 @@ pub fn run() {
                             // 복원 성공이면 그 DB 의 설정을, 전 슬롯 실패면 빈 DB → 기본 ko(i18n.rs).
                             let lang = i18n::app_language(app.handle());
                             let body = i18n::recovery_body(lang, slot);
-                            if let Err(e) = notify::show(app.handle(), i18n::recovery_title(lang), &body) {
+                            if let Err(e) =
+                                notify::show(app.handle(), i18n::recovery_title(lang), &body)
+                            {
                                 eprintln!("[data] 복구 알림 표시 실패: {e}");
                             }
                         }
@@ -207,7 +216,9 @@ pub fn run() {
                         if let Some(q) = e.quarantined {
                             let lang = i18n::app_language(app.handle());
                             let body = i18n::open_failed_body(lang, &q.to_string_lossy());
-                            if let Err(err) = notify::show(app.handle(), i18n::open_failed_title(lang), &body) {
+                            if let Err(err) =
+                                notify::show(app.handle(), i18n::open_failed_title(lang), &body)
+                            {
                                 eprintln!("[data] 열기 실패 알림 표시 실패: {err}");
                             }
                         }
@@ -283,7 +294,8 @@ pub fn run() {
                 app.deep_link().on_open_url(move |event| {
                     for u in event.urls() {
                         if let Some((cmd, params)) = deeplink::parse_command_url(u.as_str()) {
-                            let _ = ipc::request_command(&dl_handle, cmd, params, 10_000, None, None);
+                            let _ =
+                                ipc::request_command(&dl_handle, cmd, params, 10_000, None, None);
                         }
                     }
                 });
@@ -365,19 +377,20 @@ pub fn run() {
                 tauri::WindowEvent::Destroyed => {
                     ipc::note_closed(window.label()); // 포커스 기록이 죽은 창을 놓는다(다음 명령의 오배송 차단)
                     crate::sidecar::forget_window(window.label()); // 사이드카 surface 캐시 무효화(stale NSView 방지)
-                    // 브레이커 엔트리 폐기 — 창 label 은 재사용 안 되므로 남기면 맵이 무한 증가(느린 누수).
+                                                                   // 브레이커 엔트리 폐기 — 창 label 은 재사용 안 되므로 남기면 맵이 무한 증가(느린 누수).
                     webview_health::forget_window(window.app_handle(), window.label());
                     let app = window.app_handle();
                     // 파괴된 창의 pending 명령을 즉시 회수 — 대기자(route·스케줄 lease)를
                     // 타임아웃까지 방치하지 않는다(WINDOW_DESTROYED 즉시 응답).
                     app.state::<ipc::CmdBridge>().cancel_window(window.label());
                     // 창=프로젝트 수명(P6): 창이 파괴되면 그 창이 소유한 프로젝트 데몬도 함께 종료한다.
-                    app.state::<crate::daemon::DaemonManager>().kill_by_window(window.label());
+                    app.state::<crate::daemon::DaemonManager>()
+                        .kill_by_window(window.label());
                     // 프로젝트 전역 단일 오픈(P6): 죽은 창의 점유를 해제해 다른 창이 그 프로젝트를
                     // 열 수 있게 한다(해제 없으면 앱 재시작까지 유령 점유).
                     crate::project_registry::on_window_destroyed(&app, window.label());
                     let _ = app.emit("window-changed", ()); // 오케스트레이터 창맵 자동 갱신
-                    // 사용자 개별 닫기였다면 그 창의 세션 흔적(스냅샷 kv + manifest slot)을 폐기.
+                                                            // 사용자 개별 닫기였다면 그 창의 세션 흔적(스냅샷 kv + manifest slot)을 폐기.
                     if window::take_user_closed(window.label()) {
                         // 창 폐기 = 그 창의 PTY 세션도 폐기(B1) — 데몬 셸을 여기서 거두지
                         // 않으면 창은 사라졌는데 셸만 soksak-ptyd 에 유령으로 남는다.
@@ -475,6 +488,9 @@ pub fn run() {
             fs::ensure_project_dir,
             fs::validate_project_root,
             plugins::plugin_scan,
+            plugin_runtime::plugin_runtime_start,
+            plugin_runtime::plugin_runtime_send,
+            plugin_runtime::plugin_runtime_stop,
             home::app_is_release,
             plugins::plugin_install_git,
             plugins::plugin_update,
@@ -484,6 +500,11 @@ pub fn run() {
             unit_dev::unit_dev_validate_path,
             unit_dev::unit_dev_remove,
             unit_dev::app_environment,
+            unit_installer::unit_install_begin,
+            unit_installer::unit_install_stage,
+            unit_installer::unit_install_read_utf8,
+            unit_installer::unit_install_commit,
+            unit_installer::unit_install_rollback,
             plugins::plugin_remove,
             plugins::plugin_data_read,
             plugins::plugin_data_write,

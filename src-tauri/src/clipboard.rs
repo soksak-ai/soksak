@@ -50,7 +50,12 @@ impl ClipboardState {
 //  - 신선·동일값: 마커 소비(None) 후 false — echo 1회만 억제.
 //  - 신선·다른값: stale 마커 정리(None) 후 true — 다른 값이 도착했으면 더 기다릴 이유 없음.
 // 마커가 없으면 항상 true.
-fn should_emit(marker: &mut Option<(String, Instant)>, text: &str, now: Instant, ttl: Duration) -> bool {
+fn should_emit(
+    marker: &mut Option<(String, Instant)>,
+    text: &str,
+    now: Instant,
+    ttl: Duration,
+) -> bool {
     match marker {
         Some((v, t)) => {
             if now.duration_since(*t) >= ttl {
@@ -203,6 +208,9 @@ mod tests {
     fn no_marker_always_emits() {
         let t0 = Instant::now();
         let mut lw: Option<(String, Instant)> = None;
-        assert!(should_emit(&mut lw, "world", t0, SELF_WRITE_TTL), "마커 없으면 항상 emit");
+        assert!(
+            should_emit(&mut lw, "world", t0, SELF_WRITE_TTL),
+            "마커 없으면 항상 emit"
+        );
     }
 }

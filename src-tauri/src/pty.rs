@@ -121,10 +121,9 @@ impl PtyManager {
                     Backend::Daemon { session } => {
                         // 명시 detach(예의) — 앱 소켓이 곧 닫히므로 데몬은 어차피 EOF 로
                         // 부착을 해제한다. 실패해도 생존에는 영향 없다.
-                        let _ = self.link.request(
-                            &soksak_spec_pty::Request::Detach { session },
-                            false,
-                        );
+                        let _ = self
+                            .link
+                            .request(&soksak_spec_pty::Request::Detach { session }, false);
                     }
                 }
             }
@@ -162,7 +161,9 @@ impl PtyManager {
         #[cfg(unix)]
         {
             let _ = self.link.request(
-                &soksak_spec_pty::Request::KillByWindow { window_label: label.to_string() },
+                &soksak_spec_pty::Request::KillByWindow {
+                    window_label: label.to_string(),
+                },
                 false,
             );
         }
@@ -257,8 +258,10 @@ fn build_session_env(
         env.push(("SOKSAK_SOCKET".into(), sock.to_string()));
     }
     env.extend(zsh_integration_env(shell));
-    let env_remove: Vec<String> =
-        crate::process::AI_SESSION_ENV.iter().map(|k| k.to_string()).collect();
+    let env_remove: Vec<String> = crate::process::AI_SESSION_ENV
+        .iter()
+        .map(|k| k.to_string())
+        .collect();
     (env, env_remove)
 }
 
@@ -355,10 +358,7 @@ pub fn spawn_terminal(
         cmd.cwd(cwd);
     }
 
-    let child = pair
-        .slave
-        .spawn_command(cmd)
-        .map_err(|e| e.to_string())?;
+    let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     // slave 핸들은 더 이상 필요 없다. 닫아야 자식 종료 시 master 가 EOF 를 받는다.
     drop(pair.slave);
 
@@ -524,11 +524,7 @@ pub fn pty_read_sealed_screen(
 }
 
 #[tauri::command]
-pub fn write_terminal(
-    id: u32,
-    data: String,
-    manager: State<'_, PtyManager>,
-) -> Result<(), String> {
+pub fn write_terminal(id: u32, data: String, manager: State<'_, PtyManager>) -> Result<(), String> {
     let mut sessions = manager.sessions.lock().unwrap();
     let session = sessions.get_mut(&id).ok_or("no such terminal")?;
     match &mut session.backend {
@@ -573,7 +569,11 @@ pub fn resize_terminal(
             .map_err(|e| e.to_string()),
         #[cfg(unix)]
         Backend::Daemon { session } => {
-            let req = soksak_spec_pty::Request::Resize { session: *session, cols, rows };
+            let req = soksak_spec_pty::Request::Resize {
+                session: *session,
+                cols,
+                rows,
+            };
             drop(sessions);
             manager.link.request(&req, false).map(|_| ())
         }
@@ -597,7 +597,10 @@ pub fn ack_terminal(id: u32, bytes: usize, manager: State<'_, PtyManager>) -> Re
         }
         #[cfg(unix)]
         Backend::Daemon { session } => {
-            let req = soksak_spec_pty::Request::Ack { session: *session, bytes: bytes as u64 };
+            let req = soksak_spec_pty::Request::Ack {
+                session: *session,
+                bytes: bytes as u64,
+            };
             drop(sessions);
             manager.link.request(&req, false).map(|_| ())
         }
@@ -686,7 +689,9 @@ pub fn pty_daemon_restart(app: tauri::AppHandle) -> Result<serde_json::Value, St
         // 옛 데몬의 종료 유예(응답 후 150ms)를 넘겨 싱글턴 프로브 오인을 피한다 —
         // 재기동 1회 한정의 유한 대기(상시 감시 아님).
         std::thread::sleep(std::time::Duration::from_millis(400));
-        let v = manager.link.request(&soksak_spec_pty::Request::Ping, true)?;
+        let v = manager
+            .link
+            .request(&soksak_spec_pty::Request::Ping, true)?;
         Ok(json!({ "killed": killed, "pid": v["pid"] }))
     }
     #[cfg(not(unix))]
@@ -714,13 +719,17 @@ pub fn pty_daemon_upgrade(app: tauri::AppHandle) -> Result<serde_json::Value, St
         // 라이브 세션은 SIGHUP 없이 넘어간다. err 은 무시(구 데몬은 op 미지원 → 재시작 폴백은
         // 호출자 몫; 여기선 새 데몬 서빙 확인이 성공 판정이다).
         let _ = manager.link.request(
-            &soksak_spec_pty::Request::PrepareUpgrade { new_bin: staged_str },
+            &soksak_spec_pty::Request::PrepareUpgrade {
+                new_bin: staged_str,
+            },
             false,
         );
         // 이전 데몬이 exit 해 소켓을 놓고 새 데몬이 그 소켓을 bind 하도록 짧게 대기한 뒤,
         // Ping 으로 새 데몬의 pid 를 확인한다(link 가 재연결).
         std::thread::sleep(std::time::Duration::from_millis(400));
-        let v = manager.link.request(&soksak_spec_pty::Request::Ping, true)?;
+        let v = manager
+            .link
+            .request(&soksak_spec_pty::Request::Ping, true)?;
         Ok(json!({ "upgraded": true, "pid": v["pid"], "sessions": v["sessions"] }))
     }
     #[cfg(not(unix))]
@@ -898,7 +907,10 @@ mod daemon {
         let path = proto::checkpoint_pubkey_path(&home);
         let read = |p: &Path| -> Option<(String, String)> {
             let v: Value = serde_json::from_str(&std::fs::read_to_string(p).ok()?).ok()?;
-            Some((v["publicKey"].as_str()?.to_string(), v["keyId"].as_str()?.to_string()))
+            Some((
+                v["publicKey"].as_str()?.to_string(),
+                v["keyId"].as_str()?.to_string(),
+            ))
         };
         let _gate = CKPT_KEY_GATE.lock().unwrap_or_else(|e| e.into_inner());
         if let Some((pk, key_id)) = read(&path) {
@@ -979,7 +991,9 @@ mod daemon {
             },
             true,
         )?;
-        let session = data["session"].as_u64().ok_or("daemon reply missing session id")?;
+        let session = data["session"]
+            .as_u64()
+            .ok_or("daemon reply missing session id")?;
 
         // 부착: from_seq 있으면 raw 링을 그 seq 부터 재생(warm 핸드오프), 없으면 재생 없이 라이브.
         let (mut stream, gap) = attach_stream(&home, session, from_seq)?;
@@ -1093,10 +1107,11 @@ mod daemon {
             .to_string();
         let conn = UnixStream::connect(proto::control_socket_path(home))
             .map_err(|e| LinkError::Io(format!("connect: {e}")))?;
-        let reader = BufReader::new(
-            conn.try_clone().map_err(|e| LinkError::Io(e.to_string()))?,
-        );
-        let mut c = Control { reader, writer: conn };
+        let reader = BufReader::new(conn.try_clone().map_err(|e| LinkError::Io(e.to_string()))?);
+        let mut c = Control {
+            reader,
+            writer: conn,
+        };
         let hello = proto::Hello {
             version: Some(proto::PTYD_PROTOCOL_VERSION),
             token,
@@ -1148,7 +1163,8 @@ mod daemon {
                 Ok(())
             });
         }
-        cmd.spawn().map_err(|e| LinkError::Io(format!("spawn ptyd: {e}")))?;
+        cmd.spawn()
+            .map_err(|e| LinkError::Io(format!("spawn ptyd: {e}")))?;
         // 부트스트랩 핸드셰이크 대기 한정의 유한 재시도(성공/2s 상한 종료) — 상시
         // 감시가 아니다(감시는 소켓 에러 이벤트가 담당).
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
@@ -1293,7 +1309,8 @@ mod daemon {
         let mut reply = Vec::new();
         let mut byte = [0u8; 1];
         loop {
-            r.read_exact(&mut byte).map_err(|e| format!("stream hello: {e}"))?;
+            r.read_exact(&mut byte)
+                .map_err(|e| format!("stream hello: {e}"))?;
             if byte[0] == b'\n' {
                 break;
             }
@@ -1311,7 +1328,10 @@ mod daemon {
             ));
         }
         // from_seq 재생에서 링이 그 seq 이전을 evict 했으면 gap 을 실어 준다(무음 유실 금지).
-        let gap = match (v["data"]["gap"]["fromSeq"].as_u64(), v["data"]["gap"]["toSeq"].as_u64()) {
+        let gap = match (
+            v["data"]["gap"]["fromSeq"].as_u64(),
+            v["data"]["gap"]["toSeq"].as_u64(),
+        ) {
             (Some(f), Some(t)) => Some((f, t)),
             _ => None,
         };
@@ -1341,7 +1361,10 @@ mod daemon {
         let hello = json!({ "version": proto::PTYD_PROTOCOL_VERSION, "token": token });
         writeln!(w, "{hello}").map_err(|e| e.to_string())?;
         let mut line = String::new();
-        if r.read_line(&mut line).map_err(|e| format!("hello reply: {e}"))? == 0 {
+        if r.read_line(&mut line)
+            .map_err(|e| format!("hello reply: {e}"))?
+            == 0
+        {
             return Err("terminal sidecar closed before hello ack".into());
         }
         let ack: Value = serde_json::from_str(line.trim()).map_err(|e| e.to_string())?;
@@ -1397,7 +1420,9 @@ mod tests {
     }
 
     fn parse(json: &str) -> Option<ReplayControl> {
-        serde_json::from_str::<SpawnArg>(json).expect("valid spawn arg").replay
+        serde_json::from_str::<SpawnArg>(json)
+            .expect("valid spawn arg")
+            .replay
     }
 
     #[test]

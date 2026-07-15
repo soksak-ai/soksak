@@ -87,10 +87,17 @@ pub(crate) fn resolve_sidecar_cmd(cmd: &str) -> Result<String, String> {
         return Ok(cmd.to_string());
     };
     let valid = !name.is_empty()
-        && name.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
-        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+        && name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
     if !valid {
-        return Err(format!("sidecar 이름 불법({name:?}) — ^[a-z0-9][a-z0-9-]*$"));
+        return Err(format!(
+            "sidecar 이름 불법({name:?}) — ^[a-z0-9][a-z0-9-]*$"
+        ));
     }
     let path = crate::home::soksak_home()
         .join("sidecars")
@@ -98,7 +105,10 @@ pub(crate) fn resolve_sidecar_cmd(cmd: &str) -> Result<String, String> {
         .join("dist")
         .join(format!("soksak-sidecar-{name}"));
     if !path.is_file() {
-        return Err(format!("sidecar 미설치: {} — identity 홈에 dist 스테이징 필요(stage.sh)", path.display()));
+        return Err(format!(
+            "sidecar 미설치: {} — identity 홈에 dist 스테이징 필요(stage.sh)",
+            path.display()
+        ));
     }
     Ok(path.to_string_lossy().into_owned())
 }
@@ -174,8 +184,8 @@ fn drain<R: Read>(src: &mut R) {
     let mut buf = vec![0u8; 8192];
     loop {
         match src.read(&mut buf) {
-            Ok(0) => break,     // EOF(자식 종료)
-            Ok(_) => continue,  // 버림
+            Ok(0) => break,    // EOF(자식 종료)
+            Ok(_) => continue, // 버림
             Err(_) => break,
         }
     }
@@ -313,11 +323,15 @@ pub fn process_spawn(
         *n += 1;
         *n
     };
-    manager
-        .sessions
-        .lock()
-        .unwrap()
-        .insert(id, ProcessSession { child, stdin, group, detached });
+    manager.sessions.lock().unwrap().insert(
+        id,
+        ProcessSession {
+            child,
+            stdin,
+            group,
+            detached,
+        },
+    );
     Ok(id)
 }
 
@@ -330,7 +344,9 @@ pub fn process_write(
     let mut sessions = manager.sessions.lock().unwrap();
     let session = sessions.get_mut(&id).ok_or("no such process")?;
     let stdin = session.stdin.as_mut().ok_or("stdin closed")?;
-    stdin.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+    stdin
+        .write_all(data.as_bytes())
+        .map_err(|e| e.to_string())?;
     stdin.flush().map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -373,7 +389,10 @@ mod tests {
     }
 
     fn map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
     }
 
     // service 사이드카 스킴 — 비스킴 통과 / 불법 이름 거부 / 미설치 명시 에러(경로 형태 포함).
@@ -385,7 +404,10 @@ mod tests {
         assert!(resolve_sidecar_cmd("sidecar:../evil").is_err());
         assert!(resolve_sidecar_cmd("sidecar:UPPER").is_err());
         let e = resolve_sidecar_cmd("sidecar:definitely-not-installed-xyz").unwrap_err();
-        assert!(e.contains("sidecars/soksak-sidecar-definitely-not-installed-xyz/dist/"), "{e}");
+        assert!(
+            e.contains("sidecars/soksak-sidecar-definitely-not-installed-xyz/dist/"),
+            "{e}"
+        );
     }
 
     // 앱 주입 컨텍스트(A17) — process_spawn 과 동일 구성으로 자식이 SOKSAK_HOME 을 실제 수신하는지.
@@ -429,7 +451,9 @@ mod tests {
     fn no_secret_env_is_empty() {
         let state = SecretsState::default();
         assert!(resolve_secret_env(&state, None, &None).unwrap().is_empty());
-        assert!(resolve_secret_env(&state, None, &Some(HashMap::new())).unwrap().is_empty());
+        assert!(resolve_secret_env(&state, None, &Some(HashMap::new()))
+            .unwrap()
+            .is_empty());
     }
 
     // secret_env 있는데 ns 없음 → Err(주입 0).
@@ -517,7 +541,10 @@ mod tests {
     fn kill_all_reaps_normal_but_spares_detached() {
         use std::os::unix::process::CommandExt;
         // 일반 자식.
-        let normal = Command::new("sleep").arg("30").spawn().expect("spawn sleep");
+        let normal = Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .expect("spawn sleep");
         // detached 자식(setsid — process_spawn 의 detached 경로와 동일 기법).
         let mut det = Command::new("sleep");
         det.arg("30");
@@ -535,11 +562,21 @@ mod tests {
         let mgr = ProcessManager::default();
         mgr.sessions.lock().unwrap().insert(
             1,
-            ProcessSession { child: normal_child.clone(), stdin: None, group: false, detached: false },
+            ProcessSession {
+                child: normal_child.clone(),
+                stdin: None,
+                group: false,
+                detached: false,
+            },
         );
         mgr.sessions.lock().unwrap().insert(
             2,
-            ProcessSession { child: detached_child.clone(), stdin: None, group: false, detached: true },
+            ProcessSession {
+                child: detached_child.clone(),
+                stdin: None,
+                group: false,
+                detached: true,
+            },
         );
 
         mgr.kill_all();

@@ -60,7 +60,9 @@ pub fn recovery_body(lang: Lang, restored_slot: Option<usize>) -> String {
                 .to_string()
         }
         (Lang::Ko, Some(i)) => format!("손상된 데이터를 백업 슬롯 {i}에서 복원했습니다."),
-        (Lang::Ko, None) => "손상된 데이터를 복원할 백업이 없어 빈 저장소로 시작합니다.".to_string(),
+        (Lang::Ko, None) => {
+            "손상된 데이터를 복원할 백업이 없어 빈 저장소로 시작합니다.".to_string()
+        }
     }
 }
 
@@ -75,7 +77,9 @@ pub fn backup_failed_title(lang: Lang) -> &'static str {
 
 pub fn backup_failed_body(lang: Lang) -> &'static str {
     match lang {
-        Lang::En => "An automatic data backup could not be written. See the activity log for details.",
+        Lang::En => {
+            "An automatic data backup could not be written. See the activity log for details."
+        }
         Lang::Ko => "자동 데이터 백업을 기록하지 못했습니다. 자세한 내용은 활동 로그를 확인하세요.",
     }
 }
@@ -108,10 +112,19 @@ mod tests {
     // 설정 블롭 → 언어: 필드가 있으면 해석하고, 없거나 설정 부재면 Korean 기본.
     #[test]
     fn language_from_settings_reads_field_else_defaults_ko() {
-        assert_eq!(language_from_settings(Some(&json!({"language": "en"}))), Lang::En);
-        assert_eq!(language_from_settings(Some(&json!({"language": "ko"}))), Lang::Ko);
+        assert_eq!(
+            language_from_settings(Some(&json!({"language": "en"}))),
+            Lang::En
+        );
+        assert_eq!(
+            language_from_settings(Some(&json!({"language": "ko"}))),
+            Lang::Ko
+        );
         // 다른 키만 있고 language 부재 → 기본 ko.
-        assert_eq!(language_from_settings(Some(&json!({"iconSet": "lucide"}))), Lang::Ko);
+        assert_eq!(
+            language_from_settings(Some(&json!({"iconSet": "lucide"}))),
+            Lang::Ko
+        );
         // 설정 자체가 없음(부팅 극초기·빈 DB) → 기본 ko.
         assert_eq!(language_from_settings(None), Lang::Ko);
     }
@@ -138,10 +151,19 @@ mod tests {
         assert!(!en.contains('손'), "en 본문에 한글이 새면 안 된다: {en}");
         let ko = recovery_body(Lang::Ko, Some(2));
         assert!(ko.contains("백업 슬롯 2"), "ko 본문: {ko}");
-        assert!(!ko.contains("backup"), "ko 본문에 영어가 새면 안 된다: {ko}");
+        assert!(
+            !ko.contains("backup"),
+            "ko 본문에 영어가 새면 안 된다: {ko}"
+        );
         // 전 슬롯 실패(빈 DB)도 두 언어로 갈린다.
-        assert!(recovery_body(Lang::En, None).contains("empty store"), "en 빈저장소");
-        assert!(recovery_body(Lang::Ko, None).contains("빈 저장소"), "ko 빈저장소");
+        assert!(
+            recovery_body(Lang::En, None).contains("empty store"),
+            "en 빈저장소"
+        );
+        assert!(
+            recovery_body(Lang::Ko, None).contains("빈 저장소"),
+            "ko 빈저장소"
+        );
     }
 
     #[test]
@@ -156,9 +178,15 @@ mod tests {
         assert_eq!(backup_failed_title(Lang::En), "Backup failed");
         assert_eq!(backup_failed_title(Lang::Ko), "백업 실패");
         assert!(backup_failed_body(Lang::En).contains("backup"), "en 본문");
-        assert!(!backup_failed_body(Lang::En).contains('백'), "en 본문에 한글 누출 금지");
+        assert!(
+            !backup_failed_body(Lang::En).contains('백'),
+            "en 본문에 한글 누출 금지"
+        );
         assert!(backup_failed_body(Lang::Ko).contains("백업"), "ko 본문");
-        assert!(!backup_failed_body(Lang::Ko).contains("backup"), "ko 본문에 영어 누출 금지");
+        assert!(
+            !backup_failed_body(Lang::Ko).contains("backup"),
+            "ko 본문에 영어 누출 금지"
+        );
     }
 
     // 열기 실패 고지는 언어로 갈리고 격리 경로를 그대로 싣는다.

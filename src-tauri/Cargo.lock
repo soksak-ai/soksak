@@ -4532,7 +4532,7 @@ dependencies = [
 
 [[package]]
 name = "sok"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "serde_json",
  "soksak-spec-socket",
@@ -4564,9 +4564,11 @@ dependencies = [
  "serde_json",
  "sha2",
  "soksak-seal",
+ "soksak-spec-contract",
  "soksak-spec-pty",
  "soksak-spec-service",
  "soksak-spec-socket",
+ "tao",
  "tar",
  "tauri",
  "tauri-build",
@@ -4582,12 +4584,13 @@ dependencies = [
  "uuid",
  "wreq",
  "wreq-util",
+ "wry",
  "zeroize",
 ]
 
 [[package]]
 name = "soksak-ptyd"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
  "libc",
@@ -4599,7 +4602,7 @@ dependencies = [
 
 [[package]]
 name = "soksak-seal"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
@@ -4613,8 +4616,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "soksak-spec-contract"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "soksak-spec-pty"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -4624,16 +4635,17 @@ dependencies = [
 
 [[package]]
 name = "soksak-spec-service"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "serde",
  "serde_json",
+ "soksak-spec-contract",
  "soksak-spec-socket",
 ]
 
 [[package]]
 name = "soksak-spec-socket"
-version = "0.1.0"
+version = "0.0.1"
 
 [[package]]
 name = "soup3"
@@ -5386,6 +5398,7 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",

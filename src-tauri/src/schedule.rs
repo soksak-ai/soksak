@@ -43,13 +43,17 @@ fn now_ms() -> u64 {
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Trigger {
-    At { at: u64 },
+    At {
+        at: u64,
+    },
     Every {
         every_ms: u64,
         #[serde(default)]
         anchor: Option<u64>,
     },
-    Cron { expr: String },
+    Cron {
+        expr: String,
+    },
     Reconcile,
 }
 
@@ -61,9 +65,9 @@ impl Trigger {
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Retry {
-    pub max: u32,      // 최대 재시도 횟수(0=재시도 없음).
-    pub base_ms: u64,  // backoff 기준(첫 재시도 지연).
-    pub max_ms: u64,   // backoff 상한.
+    pub max: u32,     // 최대 재시도 횟수(0=재시도 없음).
+    pub base_ms: u64, // backoff 기준(첫 재시도 지연).
+    pub max_ms: u64,  // backoff 상한.
 }
 
 // 등록 명세(영속 직렬화 단위이기도 하다 — 시간 기반만 저장).
@@ -320,19 +324,19 @@ struct Job {
     params: Value,
     retry: Option<Retry>,
     concurrency: u32,
-    owner: Option<String>,             // 소유자(플러그인 id) — owner 축 수명 관리(cancel_by_owner)의 키.
-    timeout_ms: u64,                   // 비-프로세스 발화 응답 대기 상한.
-    process_lease: bool,               // true=프로세스-생존 lease(reply=프로세스 exit 까지 대기).
-    zombie_backstop_ms: Option<u64>,   // 프로세스 작업 좀비 backstop(None=무한).
-    epoch: u64,                        // 이 job 인스턴스 세대. 전체 교체(재생성) 시 바뀜 — 발화 중 fire 가
-                                       // 자기 epoch 와 대조해 교체된 job 을 오염시키지 않게(complete/set_seq).
+    owner: Option<String>, // 소유자(플러그인 id) — owner 축 수명 관리(cancel_by_owner)의 키.
+    timeout_ms: u64,       // 비-프로세스 발화 응답 대기 상한.
+    process_lease: bool,   // true=프로세스-생존 lease(reply=프로세스 exit 까지 대기).
+    zombie_backstop_ms: Option<u64>, // 프로세스 작업 좀비 backstop(None=무한).
+    epoch: u64,            // 이 job 인스턴스 세대. 전체 교체(재생성) 시 바뀜 — 발화 중 fire 가
+    // 자기 epoch 와 대조해 교체된 job 을 오염시키지 않게(complete/set_seq).
     // 런타임:
-    next_at: Option<u64>,  // 다음 예정 발화(None=대기/완료).
-    last_due: u64,         // 마지막으로 claim 된 예정 시각(드리프트 없는 re-arm 기준).
-    seq: Option<u64>,      // 발화 중 ipc pending seq(cancel 이 채널 끊어 wait 깨움).
-    running: bool,         // lease 보유 중(중첩 차단).
-    pending: bool,         // 실행 중 다음 발화 요청 도착(완료 후 1회로 합침).
-    attempt: u32,          // 현재 backoff 재시도 회차.
+    next_at: Option<u64>, // 다음 예정 발화(None=대기/완료).
+    last_due: u64,        // 마지막으로 claim 된 예정 시각(드리프트 없는 re-arm 기준).
+    seq: Option<u64>,     // 발화 중 ipc pending seq(cancel 이 채널 끊어 wait 깨움).
+    running: bool,        // lease 보유 중(중첩 차단).
+    pending: bool,        // 실행 중 다음 발화 요청 도착(완료 후 1회로 합침).
+    attempt: u32,         // 현재 backoff 재시도 회차.
 }
 
 // 발화 대상(락 밖 dispatch 용).
@@ -346,7 +350,7 @@ struct Fire {
     zombie_backstop_ms: Option<u64>,
     claimed_at: u64, // claim 시각 = 좀비 backstop 기준.
     due: u64,        // 예정 발화 시각 — 같은 due 의 재시도가 공유하는 idempotency 키 축(PS12).
-    epoch: u64,      // claim 시 job 세대 — complete/set_seq 가 이걸로 교체된 job 을 건드리지 않는다.
+    epoch: u64, // claim 시 job 세대 — complete/set_seq 가 이걸로 교체된 job 을 건드리지 않는다.
 }
 
 // 완료 후 후처리 결과 — removed 면 영속에서도 제거해야 한다(At 1회 종료).
@@ -631,7 +635,7 @@ impl ScheduleState {
         }
         job.running = false;
         job.seq = None; // 발화 종료 — seq 정리(cancel 이 더는 이 fire 를 깨울 필요 없음).
-        // 실패 + 재시도 여력 → backoff 재시도 예약(정상 일정 대신 우선).
+                        // 실패 + 재시도 여력 → backoff 재시도 예약(정상 일정 대신 우선).
         if !ok {
             if let Some(retry) = job.retry.clone() {
                 if job.attempt < retry.max {
@@ -732,10 +736,18 @@ pub fn ensure_started(app: &AppHandle) {
 fn fire_simple(app: &AppHandle, f: Fire) {
     // idempotency 키(PS12) — 같은 due 의 재시도는 같은 키를 나른다(서비스가 res 캐시로 dedup).
     let key = format!("sch:{}:{}:{}", f.id, f.epoch, f.due);
-    let reply =
-        ipc::request_command(app, f.command, f.params, f.timeout_ms, Some("schedule"), Some(key));
+    let reply = ipc::request_command(
+        app,
+        f.command,
+        f.params,
+        f.timeout_ms,
+        Some("schedule"),
+        Some(key),
+    );
     let ok = reply.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
-    let c = app.state::<ScheduleState>().complete(&f.id, ok, now_ms(), f.epoch);
+    let c = app
+        .state::<ScheduleState>()
+        .complete(&f.id, ok, now_ms(), f.epoch);
     if c.removed {
         persist_delete(app, &f.id);
     }
@@ -759,11 +771,11 @@ fn fire_process(app: &AppHandle, f: Fire) {
     let reply: Option<Value> = match process_wait(now_ms(), f.claimed_at, f.zombie_backstop_ms) {
         ProcWait::Forever => rx.recv().ok(), // reply 또는 cancel(Disconnected→None).
         ProcWait::Wait(d) => rx.recv_timeout(Duration::from_millis(d.max(1))).ok(), // Timeout/Disconnect→None.
-        ProcWait::Backstop => None,          // 이미 좀비 backstop 초과(드묾).
+        ProcWait::Backstop => None, // 이미 좀비 backstop 초과(드묾).
     };
     ipc::close_request(app, seq); // pending 회수(멱등).
-    // reply 의 ok 로 완료(None=좀비/취소→ok:false). complete 가 epoch·존재를 검사 — 취소(제거)·재등록
-    // (전체교체)된 job 은 no-op(removed:false) 라 이중 처리·재생성 job 오염·seq steal 이 없다.
+                                  // reply 의 ok 로 완료(None=좀비/취소→ok:false). complete 가 epoch·존재를 검사 — 취소(제거)·재등록
+                                  // (전체교체)된 job 은 no-op(removed:false) 라 이중 처리·재생성 job 오염·seq steal 이 없다.
     let ok = reply
         .as_ref()
         .and_then(|v| v.get("ok"))
@@ -880,7 +892,9 @@ pub fn schedule_register(
 // (ensure_started + 등록 + persist 자기게이트: owner=Some 은 B2 로 persist 대상이 아니다).
 pub fn register_owned(app: &AppHandle, spec: JobSpec) -> String {
     ensure_started(app);
-    let assigned = app.state::<ScheduleState>().register(spec.clone(), now_ms());
+    let assigned = app
+        .state::<ScheduleState>()
+        .register(spec.clone(), now_ms());
     let mut saved = spec;
     saved.id = Some(assigned.clone());
     persist_save(app, &saved);
@@ -955,12 +969,30 @@ mod tests {
         let at: Trigger = serde_json::from_value(json!({"kind":"at","at":123})).unwrap();
         assert_eq!(at, Trigger::At { at: 123 });
         let ev: Trigger = serde_json::from_value(json!({"kind":"every","every_ms":1000})).unwrap();
-        assert_eq!(ev, Trigger::Every { every_ms: 1000, anchor: None });
+        assert_eq!(
+            ev,
+            Trigger::Every {
+                every_ms: 1000,
+                anchor: None
+            }
+        );
         let ev2: Trigger =
             serde_json::from_value(json!({"kind":"every","every_ms":1000,"anchor":50})).unwrap();
-        assert_eq!(ev2, Trigger::Every { every_ms: 1000, anchor: Some(50) });
-        let cr: Trigger = serde_json::from_value(json!({"kind":"cron","expr":"0 0 * * *"})).unwrap();
-        assert_eq!(cr, Trigger::Cron { expr: "0 0 * * *".into() });
+        assert_eq!(
+            ev2,
+            Trigger::Every {
+                every_ms: 1000,
+                anchor: Some(50)
+            }
+        );
+        let cr: Trigger =
+            serde_json::from_value(json!({"kind":"cron","expr":"0 0 * * *"})).unwrap();
+        assert_eq!(
+            cr,
+            Trigger::Cron {
+                expr: "0 0 * * *".into()
+            }
+        );
         let rc: Trigger = serde_json::from_value(json!({"kind":"reconcile"})).unwrap();
         assert_eq!(rc, Trigger::Reconcile);
     }
@@ -970,10 +1002,16 @@ mod tests {
     fn jobspec_persist_roundtrip() {
         let s = JobSpec {
             id: Some("sch-1".into()),
-            trigger: Trigger::Cron { expr: "*/5 * * * *".into() },
+            trigger: Trigger::Cron {
+                expr: "*/5 * * * *".into(),
+            },
             command: "notify.show".into(),
             params: json!({"title":"틱"}),
-            retry: Some(Retry { max: 3, base_ms: 1000, max_ms: 60_000 }),
+            retry: Some(Retry {
+                max: 3,
+                base_ms: 1000,
+                max_ms: 60_000,
+            }),
             concurrency: 2,
             timeout_ms: Some(600_000),
             process_lease: true,
@@ -1012,13 +1050,26 @@ mod tests {
     fn cancel_by_owner_removes_only_that_owners_jobs() {
         let st = ScheduleState::default();
         st.register(owned_spec(Some("p1"), "a", Trigger::Reconcile), 0);
-        st.register(owned_spec(Some("p1"), "b", Trigger::Every { every_ms: 1000, anchor: None }), 0);
+        st.register(
+            owned_spec(
+                Some("p1"),
+                "b",
+                Trigger::Every {
+                    every_ms: 1000,
+                    anchor: None,
+                },
+            ),
+            0,
+        );
         st.register(owned_spec(Some("p2"), "c", Trigger::Reconcile), 0);
         st.register(owned_spec(None, "d", Trigger::Reconcile), 0);
         assert_eq!(st.cancel_by_owner("p1"), 2, "p1 소유 2건 회수");
         let left: Vec<String> = st.list().into_iter().map(|v| v.command).collect();
         assert_eq!(left.len(), 2);
-        assert!(left.contains(&"c".to_string()) && left.contains(&"d".to_string()), "타 소유·코어 잡 불가침: {left:?}");
+        assert!(
+            left.contains(&"c".to_string()) && left.contains(&"d".to_string()),
+            "타 소유·코어 잡 불가침: {left:?}"
+        );
         assert_eq!(st.cancel_by_owner("p1"), 0, "멱등");
     }
 
@@ -1078,10 +1129,18 @@ mod tests {
         let f = st.claim_due(150); // running(epoch ep1).
         assert_eq!(f.len(), 1);
         // 발화 중 재등록 — 덮어쓰기였다면 running=false 로 리셋돼 재발화. Option B 는 보존.
-        st.register(spec_id(&id, Trigger::Cron { expr: "0 0 * * *".into() }), 200);
+        st.register(
+            spec_id(
+                &id,
+                Trigger::Cron {
+                    expr: "0 0 * * *".into(),
+                },
+            ),
+            200,
+        );
         assert_eq!(st.epoch_of(&id), Some(ep1)); // epoch 보존(같은 인스턴스).
         assert!(st.claim_due(300).is_empty()); // running 유지 → 2차 발화 0(lease).
-        // live fire 완료(같은 epoch) → 정상 동작. config 갱신(At→Cron)됐으니 rearm 됨(제거 X).
+                                               // live fire 완료(같은 epoch) → 정상 동작. config 갱신(At→Cron)됐으니 rearm 됨(제거 X).
         let c = st.complete(&id, true, 400, f[0].epoch);
         assert!(!c.removed);
         assert!(matches!(st.list()[0].trigger, Trigger::Cron { .. })); // 갱신된 config.
@@ -1182,10 +1241,16 @@ mod tests {
     // Every — anchor 격자 기준 strictly-after.
     #[test]
     fn every_grid() {
-        let t = Trigger::Every { every_ms: 1000, anchor: None };
+        let t = Trigger::Every {
+            every_ms: 1000,
+            anchor: None,
+        };
         assert_eq!(next_after(&t, 2500), Some(3000));
         assert_eq!(next_after(&t, 3000), Some(4000)); // 경계는 다음 슬롯.
-        let a = Trigger::Every { every_ms: 1000, anchor: Some(5000) };
+        let a = Trigger::Every {
+            every_ms: 1000,
+            anchor: Some(5000),
+        };
         assert_eq!(next_after(&a, 0), Some(5000)); // anchor 이전이면 anchor 가 첫 슬롯.
         assert_eq!(next_after(&a, 5000), Some(6000));
     }
@@ -1197,7 +1262,10 @@ mod tests {
         assert_eq!(first_fire(&at, 100), Some(999));
         assert_eq!(rearm(&at, 999), None); // At 은 재무장 없음.
 
-        let ev = Trigger::Every { every_ms: 100, anchor: None };
+        let ev = Trigger::Every {
+            every_ms: 100,
+            anchor: None,
+        };
         assert_eq!(rearm(&ev, 500), Some(600)); // last_due 기준 드리프트 없음.
 
         let rc = Trigger::Reconcile;
@@ -1222,13 +1290,25 @@ mod tests {
         assert_eq!(process_wait(0, 0, None), ProcWait::Forever);
         assert_eq!(process_wait(99_999_999, 0, None), ProcWait::Forever);
         // 유한 — claim+backstop 까지 남은 시간.
-        assert_eq!(process_wait(0, 0, Some(10_800_000)), ProcWait::Wait(10_800_000));
-        assert_eq!(process_wait(800_000, 0, Some(10_800_000)), ProcWait::Wait(10_000_000));
+        assert_eq!(
+            process_wait(0, 0, Some(10_800_000)),
+            ProcWait::Wait(10_800_000)
+        );
+        assert_eq!(
+            process_wait(800_000, 0, Some(10_800_000)),
+            ProcWait::Wait(10_000_000)
+        );
         // claim 오프셋 반영.
         assert_eq!(process_wait(1_000, 500, Some(2_000)), ProcWait::Wait(1_500)); // 500+2000=2500, -1000.
-        // backstop 경과(reply 영영 없음) → Backstop(좀비).
-        assert_eq!(process_wait(10_800_000, 0, Some(10_800_000)), ProcWait::Backstop); // 경계.
-        assert_eq!(process_wait(11_000_000, 0, Some(10_800_000)), ProcWait::Backstop);
+                                                                                  // backstop 경과(reply 영영 없음) → Backstop(좀비).
+        assert_eq!(
+            process_wait(10_800_000, 0, Some(10_800_000)),
+            ProcWait::Backstop
+        ); // 경계.
+        assert_eq!(
+            process_wait(11_000_000, 0, Some(10_800_000)),
+            ProcWait::Backstop
+        );
     }
 
     fn spec(trigger: Trigger) -> JobSpec {
@@ -1249,7 +1329,9 @@ mod tests {
     // B2 — 코어 시간기반만 persist. Reconcile·플러그인 소유(owner)는 제외(부팅 orphan 재장전 차단).
     #[test]
     fn should_persist_only_core_time_based() {
-        let cron = || Trigger::Cron { expr: "*/5 * * * *".into() };
+        let cron = || Trigger::Cron {
+            expr: "*/5 * * * *".into(),
+        };
         assert!(should_persist(&spec(cron()))); // 코어 + 시간기반 → 저장
         assert!(!should_persist(&spec(Trigger::Reconcile))); // 무상태 → 제외
         let mut owned = spec(cron());
@@ -1291,7 +1373,13 @@ mod tests {
     #[test]
     fn every_rearms_after_complete() {
         let st = ScheduleState::default();
-        let id = st.register(spec(Trigger::Every { every_ms: 100, anchor: Some(0) }), 50);
+        let id = st.register(
+            spec(Trigger::Every {
+                every_ms: 100,
+                anchor: Some(0),
+            }),
+            50,
+        );
         // first_fire(now=50) → 다음 슬롯 100.
         assert_eq!(st.list()[0].next_at, Some(100));
         let f = st.claim_due(120);
@@ -1306,7 +1394,11 @@ mod tests {
     fn retry_then_give_up() {
         let st = ScheduleState::default();
         let mut s = spec(Trigger::At { at: 100 });
-        s.retry = Some(Retry { max: 1, base_ms: 1000, max_ms: 60_000 });
+        s.retry = Some(Retry {
+            max: 1,
+            base_ms: 1000,
+            max_ms: 60_000,
+        });
         let id = st.register(s, 0);
         let ep = st.epoch_of(&id).unwrap(); // 재시도 내내 epoch 불변(Option B/재시도는 교체 아님).
         st.claim_due(150);

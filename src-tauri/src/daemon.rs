@@ -39,7 +39,10 @@ fn backoff_secs(restarts: u32) -> u64 {
 
 /// reap 안전 판정 — ps 명령줄이 선언 cmd 의 부분열을 담을 때만 종료한다(pid 재사용으로 다른 프로세스를 잘못 종료하는 일 방지).
 fn reap_matches(ps_command: &str, declared_cmd: &str) -> bool {
-    let needle = declared_cmd.split_whitespace().next().unwrap_or(declared_cmd);
+    let needle = declared_cmd
+        .split_whitespace()
+        .next()
+        .unwrap_or(declared_cmd);
     !needle.is_empty() && ps_command.contains(needle)
 }
 
@@ -112,7 +115,12 @@ fn kill_group(child: &Arc<Mutex<Child>>, force: bool) {
         {
             // 윈도우: 트리 종료는 taskkill /T — Job Object 도입 전의 표준 경로.
             let _ = Command::new("taskkill")
-                .args(["/PID", &c.id().to_string(), "/T", if force { "/F" } else { "" }])
+                .args([
+                    "/PID",
+                    &c.id().to_string(),
+                    "/T",
+                    if force { "/F" } else { "" },
+                ])
                 .output();
         }
     }
@@ -379,7 +387,11 @@ pub fn daemon_reap(entries: Vec<(u32, String)>) -> Vec<u32> {
 /// 일회 실행 — 분리 실행형 데몬의 종료 명령(docker compose down 등)을 돌리고 끝을 기다린다.
 /// 데몬 장부에 올리지 않으며, 상한 시간 안에 끝나지 않으면 트리를 종료하고 오류를 알린다.
 #[tauri::command]
-pub fn daemon_run_once(root: String, cmd: String, timeout_secs: Option<u64>) -> Result<serde_json::Value, String> {
+pub fn daemon_run_once(
+    root: String,
+    cmd: String,
+    timeout_secs: Option<u64>,
+) -> Result<serde_json::Value, String> {
     let mut child = spawn_shell(&root, &cmd)?;
     let ring: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
     if let Some(out) = child.stdout.take() {
@@ -458,7 +470,10 @@ mod tests {
         kill_group(&child, true);
         std::thread::sleep(std::time::Duration::from_millis(300));
         let mut c = child.lock().unwrap();
-        assert!(c.try_wait().expect("wait").is_some(), "본체가 종료되어야 한다");
+        assert!(
+            c.try_wait().expect("wait").is_some(),
+            "본체가 종료되어야 한다"
+        );
         // 그룹의 다른 구성원(sleep 손자)도 종료되었는지 — pgid 로 신호 0 확인.
         unsafe {
             assert_ne!(libc::killpg(pid as i32, 0), 0, "그룹이 비어야 한다");

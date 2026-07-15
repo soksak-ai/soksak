@@ -82,7 +82,10 @@ impl Subscriber {
 impl Default for ActivityHub {
     fn default() -> Self {
         Self {
-            inner: Mutex::new(HubInner { ring: VecDeque::new(), seq: 0 }),
+            inner: Mutex::new(HubInner {
+                ring: VecDeque::new(),
+                seq: 0,
+            }),
             subs: Mutex::new(Vec::new()),
         }
     }
@@ -178,7 +181,10 @@ pub fn publish(app: &AppHandle, kind: &str, source: &str, payload: Value) -> Val
     let st = app.state::<crate::data::DbState>();
     if let Ok(guard) = st.conn.lock() {
         if let Some(conn) = guard.as_ref() {
-            let id = entry.get("seq").and_then(Value::as_u64).map(|s| format!("a{s:016}"));
+            let id = entry
+                .get("seq")
+                .and_then(Value::as_u64)
+                .map(|s| format!("a{s:016}"));
             // 영속본은 관찰 요약(§5) — 대형 내용물은 라이브(링·이벤트)의 것이다.
             // media.base64 는 kind 만 남기고 스트립, 그래도 상한 초과면 payload 를 강등한다.
             // 불변식: 영속 행은 PERSIST_DOC_CAP 을 넘지 않는다(초대형 행 하나가 json 파스에서
@@ -221,7 +227,9 @@ fn summarize_for_persist(entry: &Value) -> Value {
         let payload = doc.get("payload").and_then(Value::as_object);
         let mut slim = serde_json::Map::new();
         // 상관·노출 축(§4·§5)은 요약에도 살아남는다 — 세트 접합과 발화자 표기가 깨지지 않게.
-        for k in ["command", "title", "ok", "code", "message", "parentId", "origin", "window"] {
+        for k in [
+            "command", "title", "ok", "code", "message", "parentId", "origin", "window",
+        ] {
             if let Some(v) = payload.and_then(|p| p.get(k)) {
                 slim.insert(k.to_string(), v.clone());
             }
@@ -248,26 +256,25 @@ pub fn resume_seq(app: &AppHandle, conn: &rusqlite::Connection) {
         None,
     )
     .ok()
-    .and_then(|rows| rows.first().and_then(|e| e.get("seq").and_then(Value::as_u64)))
+    .and_then(|rows| {
+        rows.first()
+            .and_then(|e| e.get("seq").and_then(Value::as_u64))
+    })
     .unwrap_or(0);
     app.state::<ActivityHub>().resume_from(last);
 }
 
 // 프론트 공급자 진입점 — activityFeed.ts / registry.ts 계측이 invoke.
 #[tauri::command]
-pub fn activity_publish(
-    app: AppHandle,
-    kind: String,
-    source: String,
-    payload: Value,
-) -> Value {
+pub fn activity_publish(app: AppHandle, kind: String, source: String, payload: Value) -> Value {
     publish(&app, &kind, &source, payload)
 }
 
 // 조회 — activity.recent 커맨드 핸들러(창 무관 단일진실이라 어느 창에서 물어도 같다).
 #[tauri::command]
 pub fn activity_recent(app: AppHandle, since: Option<u64>, limit: Option<usize>) -> Vec<Value> {
-    app.state::<ActivityHub>().recent(since, limit.unwrap_or(200).min(RING_CAP))
+    app.state::<ActivityHub>()
+        .recent(since, limit.unwrap_or(200).min(RING_CAP))
 }
 
 #[cfg(test)]
@@ -332,13 +339,17 @@ mod tests {
         // since=7 → 8,9,10
         let v = hub.recent(Some(7), 100);
         assert_eq!(
-            v.iter().map(|e| e["seq"].as_u64().unwrap()).collect::<Vec<_>>(),
+            v.iter()
+                .map(|e| e["seq"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
             vec![8, 9, 10]
         );
         // limit 은 최신 우선(꼬리 유지)
         let v = hub.recent(None, 2);
         assert_eq!(
-            v.iter().map(|e| e["seq"].as_u64().unwrap()).collect::<Vec<_>>(),
+            v.iter()
+                .map(|e| e["seq"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
             vec![9, 10]
         );
     }

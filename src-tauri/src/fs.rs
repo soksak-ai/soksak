@@ -200,10 +200,7 @@ mod write_tests {
 // meta=Some(true): 각 자식의 수정시각(unix 초)도 함께(여러 .jsonl 중 최신 세션 고르기 등).
 //   기본(None/false)은 stat 회피(TCC) — 트리 기본 동작 유지.
 #[tauri::command]
-pub fn list_children(
-    path: Option<String>,
-    meta: Option<bool>,
-) -> Result<ChildListing, String> {
+pub fn list_children(path: Option<String>, meta: Option<bool>) -> Result<ChildListing, String> {
     let root: PathBuf = match path {
         Some(p) if !p.is_empty() => expand_path(&p),
         _ => home_dir(),
@@ -224,11 +221,9 @@ pub fn list_children(
         // dirent 의 file_type 사용(stat 없음) → 보호 폴더(다운로드/데스크탑/문서)를 건드리지
         // 않아 TCC 프롬프트가 불필요하게 뜨지 않는다. 심링크만 대상 종류 확인차 stat.
         let dir = match entry.file_type() {
-            Ok(ft) if ft.is_symlink() => entry
-                .path()
-                .metadata()
-                .map(|m| m.is_dir())
-                .unwrap_or(false),
+            Ok(ft) if ft.is_symlink() => {
+                entry.path().metadata().map(|m| m.is_dir()).unwrap_or(false)
+            }
             Ok(ft) => ft.is_dir(),
             Err(_) => false,
         };

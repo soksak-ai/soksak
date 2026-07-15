@@ -14,8 +14,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 use soksak_spec_service::{
-    judge_hello, ops_match, Compat, ErrCode, ServiceBinding, ServiceIn, ServiceOut,
-    MAX_LINE_BYTES, RESTART_BACKOFF_SECS, SHUTDOWN_GRACE_MS,
+    judge_hello, ops_match, Compat, ErrCode, ServiceBinding, ServiceIn, ServiceOut, MAX_LINE_BYTES,
+    RESTART_BACKOFF_SECS, SHUTDOWN_GRACE_MS,
 };
 
 // ── 호스트 seam — 활동 발행·스케줄 poke·시크릿 해소(테스트 mock 대상) ────────────
@@ -38,7 +38,9 @@ pub trait ServiceHost: Send + Sync + 'static {
 
 // 커맨드 이름에서 대상 플러그인 id 추출 — "plugin.<id>.<cmd>" → Some(id), 코어 커맨드 → None.
 fn target_plugin(method: &str) -> Option<&str> {
-    method.strip_prefix("plugin.").and_then(|rest| rest.split('.').next())
+    method
+        .strip_prefix("plugin.")
+        .and_then(|rest| rest.split('.').next())
 }
 
 // 중개 게이트(순수, PS13·C3 사다리) — None=허용, Some=거부 사유.
@@ -65,7 +67,11 @@ pub struct SpawnedIo {
 }
 
 pub trait ServiceSpawner: Send + Sync + 'static {
-    fn spawn(&self, binding: &ServiceBinding, env: &[(String, String)]) -> Result<SpawnedIo, String>;
+    fn spawn(
+        &self,
+        binding: &ServiceBinding,
+        env: &[(String, String)],
+    ) -> Result<SpawnedIo, String>;
 }
 
 // ── 상태 기계(PS10) ──────────────────────────────────────────────────────────────
@@ -190,7 +196,10 @@ impl ServiceManager {
             }
             let mut ops = lock_or_poisoned(&self.inner.ops);
             for op in &binding.ops {
-                ops.insert(format!("plugin.{plugin}.{op}"), (plugin.clone(), op.clone()));
+                ops.insert(
+                    format!("plugin.{plugin}.{op}"),
+                    (plugin.clone(), op.clone()),
+                );
             }
             services.insert(
                 plugin.clone(),
@@ -229,7 +238,9 @@ impl ServiceManager {
 
     pub fn status_of(&self, plugin: &str) -> Option<SvcStatus> {
         let services = lock_or_poisoned(&self.inner.services);
-        services.get(plugin).map(|s| lock_or_poisoned(&s.inner).status.clone())
+        services
+            .get(plugin)
+            .map(|s| lock_or_poisoned(&s.inner).status.clone())
     }
 
     // 상주 서비스 상태 스냅샷(투명성) — 플러그인별 status·ops·in-flight 수. service_status 커맨드가
@@ -250,7 +261,12 @@ impl ServiceManager {
                 })
             })
             .collect();
-        out.sort_by(|a, b| a["plugin"].as_str().unwrap_or("").cmp(b["plugin"].as_str().unwrap_or("")));
+        out.sort_by(|a, b| {
+            a["plugin"]
+                .as_str()
+                .unwrap_or("")
+                .cmp(b["plugin"].as_str().unwrap_or(""))
+        });
         out
     }
 
@@ -298,7 +314,10 @@ impl ServiceManager {
                     SvcStatus::Spawning | SvcStatus::Draining | SvcStatus::Backoff(_) => {
                         let remain = deadline.saturating_sub(now_ms());
                         if remain == 0 {
-                            return Some(envelope_err(ErrCode::Timeout, "서비스 준비 대기 시간 초과"));
+                            return Some(envelope_err(
+                                ErrCode::Timeout,
+                                "서비스 준비 대기 시간 초과",
+                            ));
                         }
                         let (guard, _) = svc
                             .cv
@@ -315,7 +334,13 @@ impl ServiceManager {
                 .unwrap_or_else(|| format!("auto:{}:{}", inner.generation, id));
             let (tx, rx) = mpsc::sync_channel::<Value>(1);
             let extended = Arc::new(Mutex::new(deadline));
-            inner.pending.insert(id, PendingSvc { tx, extended_deadline: extended.clone() });
+            inner.pending.insert(
+                id,
+                PendingSvc {
+                    tx,
+                    extended_deadline: extended.clone(),
+                },
+            );
             let req = ServiceIn::Req {
                 id,
                 op: op.clone(),
@@ -409,7 +434,11 @@ impl ServiceManager {
             }
             let seq = inner.push_seq;
             inner.push_seq += 1;
-            let frame = ServiceIn::Push { topic: topic.to_string(), seq, payload: payload.clone() };
+            let frame = ServiceIn::Push {
+                topic: topic.to_string(),
+                seq,
+                payload: payload.clone(),
+            };
             if send_frame(&mut inner, &frame).is_ok() {
                 delivered += 1;
             }
@@ -435,7 +464,9 @@ impl ServiceManager {
             inner.status = SvcStatus::Draining;
             svc.cv.notify_all();
         }
-        self.inner.host.publish("service.draining", plugin, json!({}));
+        self.inner
+            .host
+            .publish("service.draining", plugin, json!({}));
         // in-flight 완료 대기 — complete/crash 가 pending 을 비우며 cv 를 울린다.
         let grace_deadline = now_ms() + SHUTDOWN_GRACE_MS;
         {
@@ -468,7 +499,9 @@ impl ServiceManager {
             inner.ready_this_generation = false;
             inner.attempt = 0;
         }
-        self.inner.host.publish("service.restarted", plugin, json!({ "cause": "drain" }));
+        self.inner
+            .host
+            .publish("service.restarted", plugin, json!({ "cause": "drain" }));
         spawn_generation(&self.inner, &svc);
         true
     }
@@ -510,15 +543,23 @@ impl ServiceManager {
         inner.stdin = None;
         inner.kill = None;
         inner.status = SvcStatus::Stopped;
-        answer_all_pending(&mut inner, envelope_err(ErrCode::Unavailable, "서비스 unbind"));
+        answer_all_pending(
+            &mut inner,
+            envelope_err(ErrCode::Unavailable, "서비스 unbind"),
+        );
         svc.cv.notify_all();
         drop(inner);
-        self.inner.host.publish("service.unbound", plugin, json!({}));
+        self.inner
+            .host
+            .publish("service.unbound", plugin, json!({}));
         true
     }
 
     pub fn bound_plugins(&self) -> Vec<String> {
-        lock_or_poisoned(&self.inner.services).keys().cloned().collect()
+        lock_or_poisoned(&self.inner.services)
+            .keys()
+            .cloned()
+            .collect()
     }
 
     // 앱 종료 — 상주 서비스 프로세스 잔존 0(PS10).
@@ -577,7 +618,8 @@ fn spawn_generation(mgr: &Arc<MgrInner>, svc: &Arc<Service>) {
                 inner.status = SvcStatus::Error(reason.clone());
                 svc.cv.notify_all();
                 drop(inner);
-                mgr.host.publish("service.error", &plugin, json!({ "reason": reason }));
+                mgr.host
+                    .publish("service.error", &plugin, json!({ "reason": reason }));
                 return;
             }
         }
@@ -595,7 +637,8 @@ fn spawn_generation(mgr: &Arc<MgrInner>, svc: &Arc<Service>) {
             inner.status = SvcStatus::Error(reason.clone());
             svc.cv.notify_all();
             drop(inner);
-            mgr.host.publish("service.error", &plugin, json!({ "reason": reason }));
+            mgr.host
+                .publish("service.error", &plugin, json!({ "reason": reason }));
             return;
         }
     };
@@ -642,28 +685,40 @@ fn reader_loop(
         Ok(f) => f,
         Err(e) => return refuse_bind(&mgr, &svc, &format!("hello 파싱 실패: {e}"), my_gen),
     };
-    let (version, interface, ops, _subscribe) = match hello {
-        ServiceOut::Hello { version, interface, ops, subscribe, .. } => {
-            (version, interface, ops, subscribe)
-        }
+    let hello = match hello {
+        ServiceOut::Hello(hello) => hello,
         _ => return refuse_bind(&mgr, &svc, "첫 프레임이 hello 가 아님", my_gen),
     };
-    if !matches!(judge_hello(version), Compat::Compatible) {
-        return refuse_bind(&mgr, &svc, &format!("프로토콜 비호환(선언 {version:?})"), my_gen);
-    }
-    if interface != svc.binding.interface {
+    if !matches!(judge_hello(hello.version), Compat::Compatible) {
         return refuse_bind(
             &mgr,
             &svc,
-            &format!("interface 불일치: 자기보고 {interface} ≠ 선언 {}", svc.binding.interface),
+            &format!("프로토콜 비호환(선언 {:?})", hello.version),
             my_gen,
         );
     }
-    if !ops_match(&ops, &svc.binding.ops) {
+    if !svc.binding.interface.matches(&hello.interface) {
         return refuse_bind(
             &mgr,
             &svc,
-            &format!("ops 불일치(declared ≡ actual 위반): hello {ops:?} ≠ 원장 {:?}", svc.binding.ops),
+            &format!(
+                "interface 불일치: 자기보고 {{id:{},version:{}}}가 선언 {{id:{},range:{}}}를 만족하지 않음",
+                hello.interface.id(),
+                hello.interface.version(),
+                svc.binding.interface.id(),
+                svc.binding.interface.range(),
+            ),
+            my_gen,
+        );
+    }
+    if !ops_match(&hello.ops, &svc.binding.ops) {
+        return refuse_bind(
+            &mgr,
+            &svc,
+            &format!(
+                "ops 불일치(declared ≡ actual 위반): hello {:?} ≠ 원장 {:?}",
+                hello.ops, svc.binding.ops
+            ),
             my_gen,
         );
     }
@@ -699,16 +754,25 @@ fn reader_loop(
             Err(e) => return on_stream_end(&mgr, &svc, &format!("프레임 파싱 실패: {e}"), my_gen),
         };
         match frame {
-            ServiceOut::Hello { .. } => {
+            ServiceOut::Hello(_) => {
                 return on_stream_end(&mgr, &svc, "중복 hello(프로토콜 결함)", my_gen);
             }
-            ServiceOut::Res { id, ok, code, message, hints, data } => {
+            ServiceOut::Res {
+                id,
+                ok,
+                code,
+                message,
+                hints,
+                data,
+            } => {
                 let mut envelope = json!({ "ok": ok });
                 let code = if ok {
                     "OK".to_string()
                 } else {
                     // 폐쇄 enum 클램프(PS5) — 미지 코드는 INTERNAL, raw 문자열 비누출.
-                    ErrCode::clamp(code.as_deref().unwrap_or("INTERNAL")).as_str().to_string()
+                    ErrCode::clamp(code.as_deref().unwrap_or("INTERNAL"))
+                        .as_str()
+                        .to_string()
                 };
                 envelope["code"] = json!(code);
                 if let Some(m) = message {
@@ -745,7 +809,12 @@ fn reader_loop(
             ServiceOut::Act { kind, payload } => {
                 mgr.host.publish(&kind, &plugin, payload);
             }
-            ServiceOut::Cmd { id, method, params, under } => {
+            ServiceOut::Cmd {
+                id,
+                method,
+                params,
+                under,
+            } => {
                 // 아웃바운드 중개(PS13) — 게이트(선언 의존성) → 코어가 origin/parent 스탬핑 →
                 // host.mediate 로 라우팅 → CmdRes 회신. 게이트는 스레드에서(라우팅이 블록될 수 있음).
                 let mgr2 = mgr.clone();
@@ -753,10 +822,13 @@ fn reader_loop(
                 let caller = plugin.clone();
                 let my_gen2 = my_gen;
                 std::thread::spawn(move || {
-                    let envelope = match mediation_reason(&caller, &svc2.binding.dependencies, &method) {
-                        Some(reason) => envelope_err(ErrCode::Unavailable, &reason),
-                        None => mgr2.host.mediate(&caller, &method, params, under.as_deref()),
-                    };
+                    let envelope =
+                        match mediation_reason(&caller, &svc2.binding.dependencies, &method) {
+                            Some(reason) => envelope_err(ErrCode::Unavailable, &reason),
+                            None => mgr2
+                                .host
+                                .mediate(&caller, &method, params, under.as_deref()),
+                        };
                     let mut inner = lock_or_poisoned(&svc2.inner);
                     if inner.generation == my_gen2 {
                         let _ = send_frame(&mut inner, &ServiceIn::CmdRes { id, envelope });
@@ -782,7 +854,8 @@ fn refuse_bind(mgr: &Arc<MgrInner>, svc: &Arc<Service>, reason: &str, my_gen: u6
     answer_all_pending(&mut inner, envelope_err(ErrCode::Unavailable, reason));
     svc.cv.notify_all();
     drop(inner);
-    mgr.host.publish("service.bind.refused", &plugin, json!({ "reason": reason }));
+    mgr.host
+        .publish("service.bind.refused", &plugin, json!({ "reason": reason }));
 }
 
 // 스트림 종료 — 의도(드레인/종료)면 조용히, 아니면 크래시 경로(PS10):
@@ -797,7 +870,10 @@ fn on_stream_end(mgr: &Arc<MgrInner>, svc: &Arc<Service>, cause: &str, my_gen: u
         if inner.intent_stop {
             return; // 드레인/종료 의도 — 크래시 아님.
         }
-        answer_all_pending(&mut inner, envelope_err(ErrCode::Internal, &format!("서비스 비정상 종료: {cause}")));
+        answer_all_pending(
+            &mut inner,
+            envelope_err(ErrCode::Internal, &format!("서비스 비정상 종료: {cause}")),
+        );
         if let Some(kill) = inner.kill.as_mut() {
             kill();
         }
@@ -809,7 +885,11 @@ fn on_stream_end(mgr: &Arc<MgrInner>, svc: &Arc<Service>, cause: &str, my_gen: u
             inner.status = SvcStatus::Error(reason.clone());
             svc.cv.notify_all();
             drop(inner);
-            mgr.host.publish("service.error", &plugin, json!({ "reason": reason, "deterministic": true }));
+            mgr.host.publish(
+                "service.error",
+                &plugin,
+                json!({ "reason": reason, "deterministic": true }),
+            );
             return;
         }
         inner.attempt += 1;
@@ -818,7 +898,8 @@ fn on_stream_end(mgr: &Arc<MgrInner>, svc: &Arc<Service>, cause: &str, my_gen: u
             inner.status = SvcStatus::Error(reason.clone());
             svc.cv.notify_all();
             drop(inner);
-            mgr.host.publish("service.error", &plugin, json!({ "reason": reason }));
+            mgr.host
+                .publish("service.error", &plugin, json!({ "reason": reason }));
             return;
         }
         let delay = mgr.backoff_ms[(inner.attempt - 1) as usize];
@@ -841,7 +922,11 @@ fn on_stream_end(mgr: &Arc<MgrInner>, svc: &Arc<Service>, cause: &str, my_gen: u
                 return;
             }
         }
-        mgr.host.publish("service.restarted", &svc.binding.plugin, json!({ "cause": "crash" }));
+        mgr.host.publish(
+            "service.restarted",
+            &svc.binding.plugin,
+            json!({ "cause": "crash" }),
+        );
         spawn_generation(&mgr, &svc);
     });
 }
@@ -891,7 +976,14 @@ impl ServiceHost for AppServiceHost {
         // parent 는 under(상관 문맥) — request_command 시그니처엔 없어 origin 에 상관만 싣는다.
         let origin = format!("service:{caller}");
         let _ = under; // under 는 서비스측 상관 라벨(로컬) — 코어 신원 스탬핑엔 불사용.
-        crate::ipc::request_command(&self.app, method.to_string(), params, 3_600_000, Some(&origin), None)
+        crate::ipc::request_command(
+            &self.app,
+            method.to_string(),
+            params,
+            3_600_000,
+            Some(&origin),
+            None,
+        )
     }
 }
 
@@ -902,7 +994,11 @@ pub struct ProcessServiceSpawner {
 }
 
 impl ServiceSpawner for ProcessServiceSpawner {
-    fn spawn(&self, binding: &ServiceBinding, env: &[(String, String)]) -> Result<SpawnedIo, String> {
+    fn spawn(
+        &self,
+        binding: &ServiceBinding,
+        env: &[(String, String)],
+    ) -> Result<SpawnedIo, String> {
         use std::process::{Command, Stdio};
         let bin = crate::process::resolve_sidecar_cmd(&format!("sidecar:{}", binding.sidecar))?;
         let log = soksak_spec_service::log_path(&self.home, &binding.plugin);
@@ -975,9 +1071,14 @@ pub fn boot(app: &tauri::AppHandle) {
 fn register_binding_schedules(app: &tauri::AppHandle, binding: &ServiceBinding) {
     for s in &binding.schedules {
         let trigger = match &s.trigger {
-            soksak_spec_service::LedgerTrigger::Reconcile { .. } => crate::schedule::Trigger::Reconcile,
+            soksak_spec_service::LedgerTrigger::Reconcile { .. } => {
+                crate::schedule::Trigger::Reconcile
+            }
             soksak_spec_service::LedgerTrigger::Every { every_ms } => {
-                crate::schedule::Trigger::Every { every_ms: *every_ms, anchor: None }
+                crate::schedule::Trigger::Every {
+                    every_ms: *every_ms,
+                    anchor: None,
+                }
             }
             soksak_spec_service::LedgerTrigger::Cron { cron } => {
                 crate::schedule::Trigger::Cron { expr: cron.clone() }
@@ -1047,7 +1148,9 @@ pub fn service_status(mgr: tauri::State<ServiceManager>, plugin: Option<String>)
     match plugin {
         Some(p) => match mgr.status_of(&p) {
             Some(s) => json!({ "plugin": p, "status": status_label(&s) }),
-            None => json!({ "ok": false, "code": "NOT_FOUND", "message": format!("상주 서비스 없음: {p}") }),
+            None => {
+                json!({ "ok": false, "code": "NOT_FOUND", "message": format!("상주 서비스 없음: {p}") })
+            }
         },
         None => json!({ "services": mgr.snapshot() }),
     }
@@ -1066,7 +1169,10 @@ pub fn service_ledger_sync(
     let home = crate::home::soksak_home();
     let path = soksak_spec_service::ledger_path(&home);
     let next = serde_json::to_string_pretty(&ledger).map_err(|e| e.to_string())?;
-    if std::fs::read_to_string(&path).map(|cur| cur == next).unwrap_or(false) {
+    if std::fs::read_to_string(&path)
+        .map(|cur| cur == next)
+        .unwrap_or(false)
+    {
         return Ok(()); // 내용 동일 — 멱등.
     }
     if let Some(dir) = path.parent() {

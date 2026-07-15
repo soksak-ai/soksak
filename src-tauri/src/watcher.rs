@@ -159,7 +159,11 @@ mod tests {
         let got = rx
             .recv_timeout(Duration::from_secs(8))
             .expect("워처가 새 파일 이벤트를 보고하지 않음");
-        assert_eq!(got, dir.to_string_lossy(), "보고된 부모 디렉토리가 감시 대상과 일치");
+        assert_eq!(
+            got,
+            dir.to_string_lossy(),
+            "보고된 부모 디렉토리가 감시 대상과 일치"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

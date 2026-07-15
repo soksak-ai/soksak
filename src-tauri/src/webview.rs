@@ -188,11 +188,11 @@ mod layer {
     // 메인인지 이 맵에서 판정하고, 홀 로직은 superview/형제 기준이라 창 독립적으로 그 창의 child
     // webview 만 검사한다 — 그래서 한 맵으로 모든 창이 서로 간섭 없이 동작한다.
     struct WinLayer {
-        main_ptr: usize,             // 메인 webview NSView 포인터(창 수명 동안 불변)
-        overlay: bool,               // 오버레이(모달/메뉴) 활성 시 홀 통과 차단
-        holes: Vec<super::Hole>,     // DOM 오버레이(사이드바 등) 영역 — 이 안은 DOM 이 이벤트를 갖는다
-        host_ptr: usize,             // 엔진 호스트 컨테이너 NSView 포인터(0=미생성). 격리 계약: 모듈은
-                                     // contentView 가 아니라 이 컨테이너를 surface 로 받고 그 안에만 붙는다.
+        main_ptr: usize,         // 메인 webview NSView 포인터(창 수명 동안 불변)
+        overlay: bool,           // 오버레이(모달/메뉴) 활성 시 홀 통과 차단
+        holes: Vec<super::Hole>, // DOM 오버레이(사이드바 등) 영역 — 이 안은 DOM 이 이벤트를 갖는다
+        host_ptr: usize,         // 엔진 호스트 컨테이너 NSView 포인터(0=미생성). 격리 계약: 모듈은
+                                 // contentView 가 아니라 이 컨테이너를 surface 로 받고 그 안에만 붙는다.
     }
     static LAYERS: LazyLock<Mutex<HashMap<String, WinLayer>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -447,8 +447,7 @@ mod layer {
             }
             let child = &*(pw.inner() as *const NSView);
             let main_view = &*(main_ptr as *const NSView);
-            let (Some(child_sv), Some(main_sv)) = (child.superview(), main_view.superview())
-            else {
+            let (Some(child_sv), Some(main_sv)) = (child.superview(), main_view.superview()) else {
                 return;
             };
             // 형제가 아니면(계층 가정 위반) 건드리지 않는다 — 진단만 남김.
@@ -798,11 +797,7 @@ pub fn webview_open(
             }
         });
     let webview = window
-        .add_child(
-            builder,
-            LogicalPosition::new(x, y),
-            LogicalSize::new(w, h),
-        )
+        .add_child(builder, LogicalPosition::new(x, y), LogicalSize::new(w, h))
         .map_err(|e| e.to_string())?;
     // 레이어 원칙: child 는 DOM(부모 창 메인 webview) 아래 — 생성 직후 z-순서 강하.
     #[cfg(target_os = "macos")]
@@ -842,7 +837,9 @@ pub fn webview_open(
 #[tauri::command]
 pub fn webview_emit_native(window: tauri::Window, kind: String, x: f64, y: f64) {
     use tauri::Emitter;
-    let _ = window.app_handle().emit(&kind, serde_json::json!({ "x": x, "y": y }));
+    let _ = window
+        .app_handle()
+        .emit(&kind, serde_json::json!({ "x": x, "y": y }));
 }
 
 // hover 중인 divider(리사이즈 경계) 강조 — 프론트가 그 요소의 화면 rect 를 넘기면 코어가 accent 바를
@@ -1110,7 +1107,10 @@ pub async fn webview_media_extract(
 ) -> Result<serde_json::Value, String> {
     use std::time::{Duration, Instant};
     let parsed = Url::parse(&url).map_err(|e| e.to_string())?;
-    let label = format!("media-extract-{}", POPUP_SEQ.fetch_add(1, Ordering::Relaxed));
+    let label = format!(
+        "media-extract-{}",
+        POPUP_SEQ.fetch_add(1, Ordering::Relaxed)
+    );
     let init_script = format!("{NEW_WINDOW_NAV}\n{MEDIA_SNIFF}");
     let builder = tauri::webview::WebviewBuilder::new(&label, WebviewUrl::External(parsed))
         .initialization_script(init_script)
@@ -1356,54 +1356,59 @@ pub fn install_click_monitor(app: &AppHandle) {
     }
 
     let handle = app.clone();
-    let block = block2::RcBlock::new(
-        move |event: std::ptr::NonNull<NSEvent>| -> *mut NSEvent {
-            unsafe {
-                let ev = event.as_ref();
-                // Down/Dragged/Up 을 각각 native-mousedown/native-mousemove/native-mouseup 으로 브릿지한다.
-                // 왜 3종인가: 네이티브 child(브라우저 등)는 OS 뷰라 그 위의 mousedown/move/up 이 DOM 에 오지
-                // 않는다 → 그 위를 지나는 분할 divider 를 드래그로 리사이즈할 수 없다. 좌표를 프론트에 넘겨
-                // 프론트가 divider 판정+합성 이벤트로 드래그를 구동하게 한다. 이벤트는 통과(동작 불변).
-                // move/up 은 버튼 누른 드래그(LeftMouseDragged) 동안만 흐르므로 IPC 폭주 없음(hover 는 제외).
-                let name = match ev.r#type() {
-                    NSEventType::LeftMouseDown => "native-mousedown",
-                    NSEventType::LeftMouseDragged => "native-mousemove",
-                    NSEventType::LeftMouseUp => "native-mouseup",
-                    // hover(버튼 안 누름) — divider 강조용. 브라우저 위 마우스 이동은 매우 빈번하므로
-                    // 25ms(~40Hz) 스로틀한다(드래그 Dragged 는 스로틀 없음 — 리사이즈 정밀).
-                    NSEventType::MouseMoved => {
-                        static LAST_MS: std::sync::atomic::AtomicU64 =
-                            std::sync::atomic::AtomicU64::new(0);
-                        static CLOCK: std::sync::LazyLock<std::time::Instant> =
-                            std::sync::LazyLock::new(std::time::Instant::now);
-                        let now = CLOCK.elapsed().as_millis() as u64;
-                        if now.saturating_sub(LAST_MS.load(Ordering::Relaxed)) < 25 {
-                            return event.as_ptr();
-                        }
-                        LAST_MS.store(now, Ordering::Relaxed);
-                        "native-mousemove"
+    let block = block2::RcBlock::new(move |event: std::ptr::NonNull<NSEvent>| -> *mut NSEvent {
+        unsafe {
+            let ev = event.as_ref();
+            // Down/Dragged/Up 을 각각 native-mousedown/native-mousemove/native-mouseup 으로 브릿지한다.
+            // 왜 3종인가: 네이티브 child(브라우저 등)는 OS 뷰라 그 위의 mousedown/move/up 이 DOM 에 오지
+            // 않는다 → 그 위를 지나는 분할 divider 를 드래그로 리사이즈할 수 없다. 좌표를 프론트에 넘겨
+            // 프론트가 divider 판정+합성 이벤트로 드래그를 구동하게 한다. 이벤트는 통과(동작 불변).
+            // move/up 은 버튼 누른 드래그(LeftMouseDragged) 동안만 흐르므로 IPC 폭주 없음(hover 는 제외).
+            let name = match ev.r#type() {
+                NSEventType::LeftMouseDown => "native-mousedown",
+                NSEventType::LeftMouseDragged => "native-mousemove",
+                NSEventType::LeftMouseUp => "native-mouseup",
+                // hover(버튼 안 누름) — divider 강조용. 브라우저 위 마우스 이동은 매우 빈번하므로
+                // 25ms(~40Hz) 스로틀한다(드래그 Dragged 는 스로틀 없음 — 리사이즈 정밀).
+                NSEventType::MouseMoved => {
+                    static LAST_MS: std::sync::atomic::AtomicU64 =
+                        std::sync::atomic::AtomicU64::new(0);
+                    static CLOCK: std::sync::LazyLock<std::time::Instant> =
+                        std::sync::LazyLock::new(std::time::Instant::now);
+                    let now = CLOCK.elapsed().as_millis() as u64;
+                    if now.saturating_sub(LAST_MS.load(Ordering::Relaxed)) < 25 {
+                        return event.as_ptr();
                     }
-                    _ => return event.as_ptr(),
-                };
-                // 모니터 콜백은 메인 스레드에서 호출된다(AppKit 이벤트 루프).
-                let Some(mtm) = MainThreadMarker::new() else {
-                    return event.as_ptr();
-                };
-                if let Some(win) = ev.window(mtm) {
-                    let ns_ptr = Retained::as_ptr(&win) as usize;
-                    if let Some(label) = label_for_nswindow(&handle, ns_ptr) {
-                        if let Some(view) = win.contentView() {
-                            let h = view.frame().size.height;
-                            let loc = ev.locationInWindow();
-                            // 그 창에만 emit_to — 프론트는 자기 창 이벤트만 받아 필터가 불필요.
-                            let _ = handle.emit_to(&label, name, ClickPayload { x: loc.x, y: h - loc.y });
-                        }
+                    LAST_MS.store(now, Ordering::Relaxed);
+                    "native-mousemove"
+                }
+                _ => return event.as_ptr(),
+            };
+            // 모니터 콜백은 메인 스레드에서 호출된다(AppKit 이벤트 루프).
+            let Some(mtm) = MainThreadMarker::new() else {
+                return event.as_ptr();
+            };
+            if let Some(win) = ev.window(mtm) {
+                let ns_ptr = Retained::as_ptr(&win) as usize;
+                if let Some(label) = label_for_nswindow(&handle, ns_ptr) {
+                    if let Some(view) = win.contentView() {
+                        let h = view.frame().size.height;
+                        let loc = ev.locationInWindow();
+                        // 그 창에만 emit_to — 프론트는 자기 창 이벤트만 받아 필터가 불필요.
+                        let _ = handle.emit_to(
+                            &label,
+                            name,
+                            ClickPayload {
+                                x: loc.x,
+                                y: h - loc.y,
+                            },
+                        );
                     }
                 }
-                event.as_ptr()
             }
-        },
-    );
+            event.as_ptr()
+        }
+    });
     let mask = NSEventMask(
         NSEventMask::LeftMouseDown.0
             | NSEventMask::LeftMouseDragged.0
@@ -1445,20 +1450,26 @@ thread_local! {
 // contentView 최상위 subview 라 브라우저(네이티브)를 덮어 flat 에서도 강조가 보인다.
 #[cfg(target_os = "macos")]
 pub fn set_divider_highlight(app: &AppHandle, label: String, rect: Option<(f64, f64, f64, f64)>) {
-    use objc2::{msg_send, MainThreadMarker};
     use objc2::rc::Retained;
+    use objc2::{msg_send, MainThreadMarker};
     use objc2_app_kit::{NSBoxType, NSColor, NSTitlePosition, NSView, NSWindow};
     use objc2_foundation::{NSPoint, NSRect, NSSize};
     let app = app.clone();
     let _ = app.clone().run_on_main_thread(move || {
-        let Some(mtm) = MainThreadMarker::new() else { return };
-        let Some(win) = app.get_window(&label) else { return };
+        let Some(mtm) = MainThreadMarker::new() else {
+            return;
+        };
+        let Some(win) = app.get_window(&label) else {
+            return;
+        };
         let Ok(ns) = win.ns_window() else { return };
         if ns.is_null() {
             return;
         }
         let ns_window: &NSWindow = unsafe { &*(ns as *const NSWindow) };
-        let Some(content) = ns_window.contentView() else { return };
+        let Some(content) = ns_window.contentView() else {
+            return;
+        };
         let ch = content.frame().size.height;
         HL_BARS.with(|cell| {
             let mut bars = cell.borrow_mut();

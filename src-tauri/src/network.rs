@@ -134,9 +134,14 @@ mod tests {
         let dead = UdpSocket::bind("127.0.0.1:0").unwrap();
         let dead_port = dead.local_addr().unwrap().port();
         drop(dead); // 포트 닫음 — 응답 없음
-        let pkts =
-            net_udp_request("127.0.0.1".to_string(), dead_port, b"x".to_vec(), Some(150), None)
-                .unwrap();
+        let pkts = net_udp_request(
+            "127.0.0.1".to_string(),
+            dead_port,
+            b"x".to_vec(),
+            Some(150),
+            None,
+        )
+        .unwrap();
         assert_eq!(pkts.len(), 0);
     }
 }

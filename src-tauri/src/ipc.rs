@@ -40,12 +40,21 @@ pub struct CmdBridge {
 impl CmdBridge {
     fn insert(&self, seq: u64, window: &str, tx: mpsc::SyncSender<Value>) {
         if let Ok(mut p) = self.pending.lock() {
-            p.insert(seq, PendingEntry { window: window.to_string(), tx });
+            p.insert(
+                seq,
+                PendingEntry {
+                    window: window.to_string(),
+                    tx,
+                },
+            );
         }
     }
 
     fn take(&self, seq: u64) -> Option<mpsc::SyncSender<Value>> {
-        self.pending.lock().ok().and_then(|mut p| p.remove(&seq).map(|e| e.tx))
+        self.pending
+            .lock()
+            .ok()
+            .and_then(|mut p| p.remove(&seq).map(|e| e.tx))
     }
 
     fn remove(&self, seq: u64) {
@@ -275,7 +284,11 @@ pub fn ipc_hello_info(app: AppHandle) -> Value {
 //    도달하지 못한다. 부재=0 규칙으로 레거시(hello 생략) 클라이언트는 그대로 통과한다.
 //    거부 message 는 방향 명시 한 문장(낡은 쪽+두 판 숫자+해결 명령), data 에 숫자 3종 —
 //    에이전트가 파싱으로 자가 판정한다.
-fn transport_route(req: &Request, ctx: &TransportCtx, lang: soksak_spec_socket::Lang) -> Option<Value> {
+fn transport_route(
+    req: &Request,
+    ctx: &TransportCtx,
+    lang: soksak_spec_socket::Lang,
+) -> Option<Value> {
     use soksak_spec_socket::{
         effective_protocol, evaluate_compat, skew_sentence, Compat, Lang,
         MIN_COMPATIBLE_CLIENT_PROTOCOL, SOCKET_PROTOCOL_VERSION,
@@ -288,7 +301,11 @@ fn transport_route(req: &Request, ctx: &TransportCtx, lang: soksak_spec_socket::
         return Some(reply);
     }
     let declared = effective_protocol(req.protocol);
-    let verdict = evaluate_compat(SOCKET_PROTOCOL_VERSION, MIN_COMPATIBLE_CLIENT_PROTOCOL, declared);
+    let verdict = evaluate_compat(
+        SOCKET_PROTOCOL_VERSION,
+        MIN_COMPATIBLE_CLIENT_PROTOCOL,
+        declared,
+    );
     // 스큐 거부 message 는 사람 표면(sok stderr) — 이 앱의 언어 설정으로 해소한다. 이 시선은 앱이
     // 클라이언트를 판정하므로 self=앱, peer=클라이언트다. 명사와 해결 지시는 앱이 소유(크레이트는
     // 문장 골격만 해소).
@@ -304,8 +321,12 @@ fn transport_route(req: &Request, ctx: &TransportCtx, lang: soksak_spec_socket::
         (Compat::PeerTooOld { .. }, Lang::Ko) => {
             Some("이 앱에 동봉된 sok 을 쓰거나 `sok mcp install` 을 다시 실행하세요")
         }
-        (Compat::SelfTooOld { .. }, Lang::En) => Some("install the app build this client shipped with"),
-        (Compat::SelfTooOld { .. }, Lang::Ko) => Some("이 클라이언트가 함께 배포된 앱 빌드를 설치하세요"),
+        (Compat::SelfTooOld { .. }, Lang::En) => {
+            Some("install the app build this client shipped with")
+        }
+        (Compat::SelfTooOld { .. }, Lang::Ko) => {
+            Some("이 클라이언트가 함께 배포된 앱 빌드를 설치하세요")
+        }
     };
     let sentence = skew_sentence(verdict, self_name, peer_name, remedy, lang)?;
     let mut reply = error_reply("VERSION_SKEW", &sentence);
@@ -348,7 +369,8 @@ trait IpcListenerSeam: Send {
 
 impl IpcConnection for UnixStream {
     fn try_clone_conn(&self) -> std::io::Result<Box<dyn IpcConnection>> {
-        self.try_clone().map(|s| Box::new(s) as Box<dyn IpcConnection>)
+        self.try_clone()
+            .map(|s| Box::new(s) as Box<dyn IpcConnection>)
     }
 }
 
@@ -356,7 +378,9 @@ struct UnixIpcListener(UnixListener);
 
 impl IpcListenerSeam for UnixIpcListener {
     fn accept_conn(&self) -> std::io::Result<Box<dyn IpcConnection>> {
-        self.0.accept().map(|(s, _)| Box::new(s) as Box<dyn IpcConnection>)
+        self.0
+            .accept()
+            .map(|(s, _)| Box::new(s) as Box<dyn IpcConnection>)
     }
 }
 
@@ -380,7 +404,10 @@ pub fn start(app: AppHandle) -> Result<String, String> {
     let dir = crate::home::soksak_home();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let identifier = app.config().identifier.clone();
-    let path = dir.join(format!("{identifier}.sock")).to_string_lossy().to_string();
+    let path = dir
+        .join(format!("{identifier}.sock"))
+        .to_string_lossy()
+        .to_string();
 
     let listener = bind_transport(&path)?;
     let _ = SOCKET_PATH.set(path.clone());
@@ -393,7 +420,9 @@ pub fn start(app: AppHandle) -> Result<String, String> {
     );
 
     std::thread::spawn(move || loop {
-        let Ok(conn) = listener.accept_conn() else { continue };
+        let Ok(conn) = listener.accept_conn() else {
+            continue;
+        };
         let app = app.clone();
         std::thread::spawn(move || handle_conn(app, conn));
     });
@@ -412,7 +441,9 @@ fn handle_conn(app: AppHandle, conn: Box<dyn IpcConnection>) {
     // 스큐 거부 문장의 언어를 연결당 1회 조회한다(사람 표면 — 폴링 없음). 연결은 sok 호출당 하나라
     // 잦지 않다. transport_route 는 순수 유지 — 해소된 언어만 넘긴다.
     let lang = crate::i18n::app_language(&app);
-    let Ok(read_half) = conn.try_clone_conn() else { return };
+    let Ok(read_half) = conn.try_clone_conn() else {
+        return;
+    };
     let reader = BufReader::new(read_half);
     let mut writer = conn;
     for line in reader.lines() {
@@ -441,7 +472,18 @@ fn handle_conn(app: AppHandle, conn: Box<dyn IpcConnection>) {
                     .duration_since(UNIX_EPOCH)
                     .map(|d| d.as_millis() as u64)
                     .unwrap_or(0);
-                record_route_outcome(&app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "VERSION_SKEW", &message, now);
+                record_route_outcome(
+                    &app,
+                    &req.method,
+                    &req.params,
+                    &target,
+                    &req.parent,
+                    &req.origin,
+                    false,
+                    "VERSION_SKEW",
+                    &message,
+                    now,
+                );
             }
             if let (Some(cid), Some(obj)) = (req.id.clone(), reply.as_object_mut()) {
                 obj.insert("id".into(), cid);
@@ -473,7 +515,12 @@ fn subscribe_stream(app: &AppHandle, req: Request, mut writer: Box<dyn IpcConnec
         .params
         .get("kinds")
         .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(Value::as_str)
+                .map(String::from)
+                .collect()
+        })
         .unwrap_or_default();
     let since = req.params.get("since").and_then(Value::as_u64);
     let matches = |e: &Value| -> bool {
@@ -481,7 +528,9 @@ fn subscribe_stream(app: &AppHandle, req: Request, mut writer: Box<dyn IpcConnec
             return true;
         }
         let k = e.get("kind").and_then(Value::as_str).unwrap_or("");
-        kinds.iter().any(|f| k == f || k.starts_with(&format!("{f}.")))
+        kinds
+            .iter()
+            .any(|f| k == f || k.starts_with(&format!("{f}.")))
     };
 
     let hub = app.state::<crate::activity::ActivityHub>();
@@ -624,8 +673,23 @@ fn route(app: &AppHandle, req: Request) -> Value {
                 .and_then(|v| v.as_str())
                 .unwrap_or(if ok { "OK" } else { "INTERNAL" })
                 .to_string();
-            let message = out.get("message").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            record_route_outcome(app, &req.method, &req.params, "service", &req.parent, &req.origin, ok, &code, &message, started_ms);
+            let message = out
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            record_route_outcome(
+                app,
+                &req.method,
+                &req.params,
+                "service",
+                &req.parent,
+                &req.origin,
+                ok,
+                &code,
+                &message,
+                started_ms,
+            );
             return out;
         }
     }
@@ -634,7 +698,12 @@ fn route(app: &AppHandle, req: Request) -> Value {
         None => {
             // 살아있는 창 전부 — 사다리는 이 집합 위에서만 걷는다(죽은 포커스 기록 배제).
             let live: Vec<String> = app.windows().keys().cloned().collect();
-            match resolve_fallback_target(&req.method, active_window(), last_workspace_window(), &live) {
+            match resolve_fallback_target(
+                &req.method,
+                active_window(),
+                last_workspace_window(),
+                &live,
+            ) {
                 Ok(t) => t,
                 Err(no) => {
                     let (code, message) = match no {
@@ -644,7 +713,18 @@ fn route(app: &AppHandle, req: Request) -> Value {
                         ),
                         NoTarget::NoWindow => ("NO_WINDOW", "명령을 받을 창이 없음"),
                     };
-                    record_route_outcome(app, &req.method, &req.params, "", &req.parent, &req.origin, false, code, message, started_ms);
+                    record_route_outcome(
+                        app,
+                        &req.method,
+                        &req.params,
+                        "",
+                        &req.parent,
+                        &req.origin,
+                        false,
+                        code,
+                        message,
+                        started_ms,
+                    );
                     return error_reply(code, message);
                 }
             }
@@ -655,7 +735,18 @@ fn route(app: &AppHandle, req: Request) -> Value {
     // emit_to(label)은 멀티-webview 여도 그 창 메인 webview 로 도달하므로 라우팅은 정상.
     if app.get_window(&target).is_none() {
         let message = format!("창을 찾을 수 없음: {target}");
-        record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "WINDOW_NOT_FOUND", &message, started_ms);
+        record_route_outcome(
+            app,
+            &req.method,
+            &req.params,
+            &target,
+            &req.parent,
+            &req.origin,
+            false,
+            "WINDOW_NOT_FOUND",
+            &message,
+            started_ms,
+        );
         return error_reply("WINDOW_NOT_FOUND", &message);
     }
 
@@ -664,11 +755,33 @@ fn route(app: &AppHandle, req: Request) -> Value {
     // 수단이 사라진다. 네이티브 WKWebView.reload 는 JS 상태와 무관하게 동작 → 행에서도 리로드 가능.
     if req.method == "window.reload" {
         return if native_reload(app, &target) {
-            record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, true, "OK", "창을 다시 불러왔습니다", started_ms);
+            record_route_outcome(
+                app,
+                &req.method,
+                &req.params,
+                &target,
+                &req.parent,
+                &req.origin,
+                true,
+                "OK",
+                "창을 다시 불러왔습니다",
+                started_ms,
+            );
             json!({ "ok": true, "reloaded": true })
         } else {
             let message = format!("네이티브 webview 리로드 실패: {target}");
-            record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "INTERNAL", &message, started_ms);
+            record_route_outcome(
+                app,
+                &req.method,
+                &req.params,
+                &target,
+                &req.parent,
+                &req.origin,
+                false,
+                "INTERNAL",
+                &message,
+                started_ms,
+            );
             error_reply("INTERNAL", &message)
         };
     }
@@ -688,7 +801,18 @@ fn route(app: &AppHandle, req: Request) -> Value {
     });
     if app.emit_to(&target, "cmd-request", payload).is_err() {
         bridge.remove(seq);
-        record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "INTERNAL", "프론트로 요청 전달 실패", started_ms);
+        record_route_outcome(
+            app,
+            &req.method,
+            &req.params,
+            &target,
+            &req.parent,
+            &req.origin,
+            false,
+            "INTERNAL",
+            "프론트로 요청 전달 실패",
+            started_ms,
+        );
         return error_reply("INTERNAL", "프론트로 요청 전달 실패");
     }
 
@@ -701,7 +825,18 @@ fn route(app: &AppHandle, req: Request) -> Value {
         Err(_) => {
             // 호출자 관점의 사실(응답을 못 받았다) — executor 가 늦게 완주하면 그 실행 기록이
             // 별도로 남는다(둘 다 사실 — code=TIMEOUT 이 구분자).
-            record_route_outcome(app, &req.method, &req.params, &target, &req.parent, &req.origin, false, "TIMEOUT", "응답 시간 초과(앱 UI 미응답?)", started_ms);
+            record_route_outcome(
+                app,
+                &req.method,
+                &req.params,
+                &target,
+                &req.parent,
+                &req.origin,
+                false,
+                "TIMEOUT",
+                "응답 시간 초과(앱 UI 미응답?)",
+                started_ms,
+            );
             error_reply("TIMEOUT", "응답 시간 초과(앱 UI 미응답?)")
         }
     }
@@ -783,10 +918,11 @@ pub fn open_request(
     // route 와 같은 폴백 사다리 — 플러그인 명령(스케줄 process 발화가 주 소비자)이
     // 컨트롤 플레인으로 떨어져 상시 UNKNOWN_COMMAND 가 되던 같은 결함의 둘째 부위.
     let live: Vec<String> = app.windows().keys().cloned().collect();
-    let target = match resolve_fallback_target(&method, active_window(), last_workspace_window(), &live) {
-        Ok(t) => t,
-        Err(_) => return None,
-    };
+    let target =
+        match resolve_fallback_target(&method, active_window(), last_workspace_window(), &live) {
+            Ok(t) => t,
+            Err(_) => return None,
+        };
     if app.get_window(&target).is_none() {
         return None;
     }
@@ -865,14 +1001,25 @@ mod tests {
         let reply = transport_route(&req, &test_ctx(), soksak_spec_socket::Lang::En)
             .expect("system.hello must be answered by the transport, not forwarded to the front");
         assert_eq!(reply["ok"], true);
-        assert_eq!(reply["protocol"], soksak_spec_socket::SOCKET_PROTOCOL_VERSION);
-        assert_eq!(reply["minClientProtocol"], soksak_spec_socket::MIN_COMPATIBLE_CLIENT_PROTOCOL);
+        assert_eq!(
+            reply["protocol"],
+            soksak_spec_socket::SOCKET_PROTOCOL_VERSION
+        );
+        assert_eq!(
+            reply["minClientProtocol"],
+            soksak_spec_socket::MIN_COMPATIBLE_CLIENT_PROTOCOL
+        );
         assert_eq!(reply["appVersion"], "0.9.9");
         assert_eq!(reply["identity"], "com.soksak.test");
         assert_eq!(reply["pid"], 4242);
         assert_eq!(reply["startedAt"], 1_700_000_000_000u64);
-        let caps = reply["capabilities"].as_array().expect("capabilities array");
-        assert!(caps.iter().any(|c| c == "hello.v1"), "hello.v1 capability advertised");
+        let caps = reply["capabilities"]
+            .as_array()
+            .expect("capabilities array");
+        assert!(
+            caps.iter().any(|c| c == "hello.v1"),
+            "hello.v1 capability advertised"
+        );
     }
 
     // transport 즉답과 ipc_hello_info(프론트 경로)는 같은 hello_facts 에서 나온다 — 판 상수의
@@ -881,13 +1028,19 @@ mod tests {
     fn transport_hello_reply_is_hello_facts_plus_envelope_ok() {
         let ctx = test_ctx();
         let facts = hello_facts(&ctx);
-        assert!(facts.get("ok").is_none(), "hello_facts 는 사실만 — 봉투 ok 는 밖에서 얹는다");
+        assert!(
+            facts.get("ok").is_none(),
+            "hello_facts 는 사실만 — 봉투 ok 는 밖에서 얹는다"
+        );
         let req = parse_request(r#"{"method":"system.hello"}"#).expect("valid hello request");
         let reply = transport_route(&req, &ctx, soksak_spec_socket::Lang::En)
             .expect("hello answered at transport");
         assert_eq!(reply["ok"], true);
         for (k, v) in facts.as_object().expect("hello_facts is a json object") {
-            assert_eq!(&reply[k], v, "transport hello field {k} must derive from hello_facts");
+            assert_eq!(
+                &reply[k], v,
+                "transport hello field {k} must derive from hello_facts"
+            );
         }
     }
 
@@ -902,15 +1055,24 @@ mod tests {
         assert_eq!(reply["ok"], false);
         assert_eq!(reply["code"], "VERSION_SKEW");
         let msg = reply["message"].as_str().expect("message string");
-        assert!(msg.contains("999"), "peer version number in the sentence: {msg}");
+        assert!(
+            msg.contains("999"),
+            "peer version number in the sentence: {msg}"
+        );
         assert!(
             msg.contains(&soksak_spec_socket::SOCKET_PROTOCOL_VERSION.to_string()),
             "own version number in the sentence: {msg}"
         );
         // 방향 명시: 이 사분면(클라이언트가 더 새것)에서 낡은 쪽은 앱이다.
-        assert!(msg.contains("update the app"), "stale side named explicitly: {msg}");
+        assert!(
+            msg.contains("update the app"),
+            "stale side named explicitly: {msg}"
+        );
         // 봉투 data 로 숫자도 반환 — 에이전트가 파싱으로 자가 판정할 수 있게.
-        assert_eq!(reply["data"]["appProtocol"], soksak_spec_socket::SOCKET_PROTOCOL_VERSION);
+        assert_eq!(
+            reply["data"]["appProtocol"],
+            soksak_spec_socket::SOCKET_PROTOCOL_VERSION
+        );
         assert_eq!(reply["data"]["clientProtocol"], 999);
     }
 
@@ -924,10 +1086,19 @@ mod tests {
             .expect("a version-skewed request must be rejected at the transport");
         assert_eq!(reply["code"], "VERSION_SKEW");
         let msg = reply["message"].as_str().expect("message string");
-        assert!(msg.contains("999"), "peer version number in the sentence: {msg}");
+        assert!(
+            msg.contains("999"),
+            "peer version number in the sentence: {msg}"
+        );
         assert!(msg.contains("소켓 프로토콜"), "Korean grammar: {msg}");
-        assert!(msg.contains("업데이트하세요"), "stale side named in Korean: {msg}");
-        assert!(!msg.contains("speaks socket protocol"), "no English grammar leak: {msg}");
+        assert!(
+            msg.contains("업데이트하세요"),
+            "stale side named in Korean: {msg}"
+        );
+        assert!(
+            !msg.contains("speaks socket protocol"),
+            "no English grammar leak: {msg}"
+        );
         // data 숫자는 언어와 무관하게 그대로.
         assert_eq!(reply["data"]["clientProtocol"], 999);
     }
@@ -959,7 +1130,8 @@ mod tests {
     // trait 쌍을 구현하면 같은 테스트 형태를 상속한다.
 
     fn seam_test_path(tag: &str) -> String {
-        let p = std::env::temp_dir().join(format!("soksak-ipc-seam-{tag}-{}.sock", std::process::id()));
+        let p =
+            std::env::temp_dir().join(format!("soksak-ipc-seam-{tag}-{}.sock", std::process::id()));
         let s = p.to_string_lossy().to_string();
         let _ = std::fs::remove_file(&s);
         s
@@ -980,7 +1152,9 @@ mod tests {
         let mut client = UnixStream::connect(&path).expect("connect");
         writeln!(client, "ping").expect("client write");
         let mut resp = String::new();
-        BufReader::new(client).read_line(&mut resp).expect("client read");
+        BufReader::new(client)
+            .read_line(&mut resp)
+            .expect("client read");
         assert_eq!(resp.trim(), "echo:ping");
         server.join().expect("server thread");
         let _ = std::fs::remove_file(&path);
@@ -991,9 +1165,16 @@ mod tests {
         let path = seam_test_path("stale");
         drop(bind_transport(&path).expect("first bind"));
         // 리스너가 죽었지만 소켓 파일은 남는다 — 재바인드가 정리하고 성공해야 한다.
-        assert!(std::path::Path::new(&path).exists(), "socket file survives the listener");
+        assert!(
+            std::path::Path::new(&path).exists(),
+            "socket file survives the listener"
+        );
         let rebound = bind_transport(&path);
-        assert!(rebound.is_ok(), "stale socket must be cleaned and rebound: {:?}", rebound.err());
+        assert!(
+            rebound.is_ok(),
+            "stale socket must be cleaned and rebound: {:?}",
+            rebound.err()
+        );
         let _ = std::fs::remove_file(&path);
     }
 
@@ -1017,11 +1198,16 @@ mod tests {
         bridge.insert(2, "w-b", tx_b);
         let n = bridge.cancel_window("w-a");
         assert_eq!(n, 1, "w-a 소유 pending 1건이 회수되어야 함");
-        let got = rx_a.try_recv().expect("대기자는 즉시 구조적 에러를 받는다 — 무음 drop 금지");
+        let got = rx_a
+            .try_recv()
+            .expect("대기자는 즉시 구조적 에러를 받는다 — 무음 drop 금지");
         assert_eq!(got["ok"], false);
         assert_eq!(got["code"], "WINDOW_DESTROYED");
         assert!(rx_b.try_recv().is_err(), "다른 창의 pending 은 불가침");
-        assert!(bridge.take(1).is_none(), "회수된 seq 는 cmd_result 가 더 찾지 못한다");
+        assert!(
+            bridge.take(1).is_none(),
+            "회수된 seq 는 cmd_result 가 더 찾지 못한다"
+        );
         assert!(bridge.take(2).is_some(), "다른 창 엔트리는 남는다");
     }
 
@@ -1050,13 +1236,21 @@ mod tests {
             Some("w-dead".into()),
             &s(&["w-b", "w-a"]),
         );
-        assert_eq!(got, Ok("w-a".to_string()), "결정적 선택 — 라벨 정렬 첫 항목(포커스 무관)");
+        assert_eq!(
+            got,
+            Ok("w-a".to_string()),
+            "결정적 선택 — 라벨 정렬 첫 항목(포커스 무관)"
+        );
     }
 
     #[test]
     fn plugin_fallback_with_no_workspace_is_an_explicit_error() {
         let got = resolve_fallback_target("plugin.demo.run", "main".into(), None, &[]);
-        assert_eq!(got, Err(NoTarget::NoWorkspace), "main 라우팅(상시 UNKNOWN_COMMAND) 대신 구조적 거부");
+        assert_eq!(
+            got,
+            Err(NoTarget::NoWorkspace),
+            "main 라우팅(상시 UNKNOWN_COMMAND) 대신 구조적 거부"
+        );
     }
 
     #[test]
@@ -1096,20 +1290,33 @@ mod tests {
 
     #[test]
     fn non_plugin_fallback_without_main_uses_a_live_workspace() {
-        let got = resolve_fallback_target("window.open", "w-dead".into(), None, &s(&["w-b", "w-a"]));
-        assert_eq!(got, Ok("w-a".to_string()), "main 도 없으면 결정적으로 정렬 첫 창");
+        let got =
+            resolve_fallback_target("window.open", "w-dead".into(), None, &s(&["w-b", "w-a"]));
+        assert_eq!(
+            got,
+            Ok("w-a".to_string()),
+            "main 도 없으면 결정적으로 정렬 첫 창"
+        );
     }
 
     #[test]
     fn non_plugin_fallback_with_no_live_window_is_an_explicit_error() {
         let got = resolve_fallback_target("window.open", "w-dead".into(), None, &[]);
-        assert_eq!(got, Err(NoTarget::NoWindow), "창 0 → 죽은 라벨 라우팅 대신 구조적 거부");
+        assert_eq!(
+            got,
+            Err(NoTarget::NoWindow),
+            "창 0 → 죽은 라벨 라우팅 대신 구조적 거부"
+        );
     }
 
     #[test]
     fn plugin_fallback_ignores_the_control_plane_in_the_live_set() {
         let got = resolve_fallback_target("plugin.demo.run", "main".into(), None, &s(&["main"]));
-        assert_eq!(got, Err(NoTarget::NoWorkspace), "main 은 워크스페이스가 아니다");
+        assert_eq!(
+            got,
+            Err(NoTarget::NoWorkspace),
+            "main 은 워크스페이스가 아니다"
+        );
     }
 
     // 포커스 기록의 소유권 — 파괴 통지가 오면 기록은 그 라벨을 놓는다.
@@ -1120,8 +1327,16 @@ mod tests {
         assert_eq!(last_workspace_window(), Some("w-closing".to_string()));
 
         note_closed("w-closing");
-        assert_eq!(active_window(), "main", "죽은 창은 더 이상 활성 창이 아니다");
-        assert_eq!(last_workspace_window(), None, "죽은 창은 마지막 워크스페이스도 아니다");
+        assert_eq!(
+            active_window(),
+            "main",
+            "죽은 창은 더 이상 활성 창이 아니다"
+        );
+        assert_eq!(
+            last_workspace_window(),
+            None,
+            "죽은 창은 마지막 워크스페이스도 아니다"
+        );
     }
 
     // timeout 클램프 경계 — 핵심: >600s(구 상한)가 그대로 통과해야 LLM 30분+ 턴을 끝까지 기다린다.

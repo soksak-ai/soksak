@@ -10,11 +10,9 @@ use super::{gen_id, now_millis, validate_coll, validate_field};
 
 pub fn kv_get(conn: &Connection, ns: &str, k: &str) -> Result<Option<Value>, String> {
     let row: Option<String> = conn
-        .query_row(
-            "SELECT v FROM kv WHERE ns=?1 AND k=?2",
-            (ns, k),
-            |r| r.get(0),
-        )
+        .query_row("SELECT v FROM kv WHERE ns=?1 AND k=?2", (ns, k), |r| {
+            r.get(0)
+        })
         .optional()
         .map_err(|e| e.to_string())?;
     match row {
@@ -49,7 +47,8 @@ pub fn kv_keys(conn: &Connection, ns: &str, prefix: Option<&str>) -> Result<Vec<
     let rows = stmt
         .query_map((ns, pat), |r| r.get::<_, String>(0))
         .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 // ── 컬렉션 메타 ────────────────────────────────────────────────────────────────
@@ -196,11 +195,8 @@ pub fn drop_ns(conn: &Connection, ns: &str) -> Result<NsRemoval, String> {
     for cid in &cids {
         // FTS 표는 그 컬렉션 전용이라 통째로 버린다. 표현식 인덱스는 records(공유 표)에 붙어 있으므로
         // 이름으로 찾아 떨어뜨린다 — 남기면 지운 컬렉션의 인덱스가 다른 ns 의 쓰기를 계속 무겁게 한다.
-        conn.execute_batch(&format!(
-            "DROP TABLE IF EXISTS {};",
-            fts_table(*cid)
-        ))
-        .map_err(|e| e.to_string())?;
+        conn.execute_batch(&format!("DROP TABLE IF EXISTS {};", fts_table(*cid)))
+            .map_err(|e| e.to_string())?;
         let idx_names: Vec<String> = {
             let mut stmt = conn
                 .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE ?1")
@@ -225,7 +221,13 @@ pub fn drop_ns(conn: &Connection, ns: &str) -> Result<NsRemoval, String> {
     })
 }
 
-pub fn retention_trim(conn: &Connection, ns: &str, coll: &str, scope: &str, cap: i64) -> Result<usize, String> {
+pub fn retention_trim(
+    conn: &Connection,
+    ns: &str,
+    coll: &str,
+    scope: &str,
+    cap: i64,
+) -> Result<usize, String> {
     select_and_delete(
         conn,
         ns,
@@ -247,7 +249,12 @@ pub fn incremental_vacuum(conn: &Connection, pages: i64) -> Result<(), String> {
 
 // [단계①·R5] retention TTL reaper — created < cutoff_ms 인 레코드 일괄 삭제(시간축, trim 과 별개). 부팅/주기
 // 호출. scope 무관(컬렉션 전체) — orphan(live scope 외) 판정은 commands 레벨이 live 목록으로 별도 수행.
-pub fn retention_reap_ttl(conn: &Connection, ns: &str, coll: &str, cutoff_ms: i64) -> Result<usize, String> {
+pub fn retention_reap_ttl(
+    conn: &Connection,
+    ns: &str,
+    coll: &str,
+    cutoff_ms: i64,
+) -> Result<usize, String> {
     select_and_delete(
         conn,
         ns,
@@ -368,12 +375,21 @@ pub fn put(
     }
     // [단계②] 예약 필드 거부 — 봉인 봉투 자리(__enc)와 충돌하면 후속 convert/회전이 그 레코드에서 실패한다.
     // 평문 시점에 막아 암호화 전환이 항상 안전하게(seal_doc 의 충돌 거부와 같은 불변).
-    if doc.as_object().unwrap().contains_key(super::crypto::ENC_FIELD) {
-        return Err(format!("doc 가 예약 필드 {} 를 포함함", super::crypto::ENC_FIELD));
+    if doc
+        .as_object()
+        .unwrap()
+        .contains_key(super::crypto::ENC_FIELD)
+    {
+        return Err(format!(
+            "doc 가 예약 필드 {} 를 포함함",
+            super::crypto::ENC_FIELD
+        ));
     }
     let id = id.unwrap_or_else(gen_id);
     // canonical id 주입(doc.id = 레코드 id 항상 일치).
-    doc.as_object_mut().unwrap().insert("id".to_string(), json!(id));
+    doc.as_object_mut()
+        .unwrap()
+        .insert("id".to_string(), json!(id));
     let now = now_millis();
     // [M0] records 쓰기 + FTS 동기화를 단일 트랜잭션으로 묶는다 — 과거엔 INSERT records → DELETE fts →
     // INSERT fts 가 별도 autocommit 이라, 중간 크래시 시 records 는 있고 FTS 는 stale 인 찢긴 상태가 남았다
@@ -385,14 +401,16 @@ pub fn put(
     // lock 중에도 at-rest 쓰기). 인덱스 필드(meta.idx)는 평문 top-level 로 남겨 query 가 그대로 탄다
     // (blocker①). enc/keyId 컬럼에 표식. active key 없으면 평문 항등(현재 전부) — 회귀 0.
     let idx_fields = meta.as_ref().map(|m| m.idx.clone()).unwrap_or_default();
-    let (doc_s, enc, key_id): (String, i64, Option<String>) = match super::crypto::active_key(&tx, scope)? {
-        Some(ak) => {
-            let aad = super::crypto::canonical_aad(ns, coll, scope, &id, &ak.key_id);
-            let sealed = super::crypto::seal_doc(&doc, &idx_fields, &ak.public_key, &ak.key_id, &aad)?;
-            (encode_doc(&sealed)?, 1, Some(ak.key_id))
-        }
-        None => (encode_doc(&doc)?, 0, None),
-    };
+    let (doc_s, enc, key_id): (String, i64, Option<String>) =
+        match super::crypto::active_key(&tx, scope)? {
+            Some(ak) => {
+                let aad = super::crypto::canonical_aad(ns, coll, scope, &id, &ak.key_id);
+                let sealed =
+                    super::crypto::seal_doc(&doc, &idx_fields, &ak.public_key, &ak.key_id, &aad)?;
+                (encode_doc(&sealed)?, 1, Some(ak.key_id))
+            }
+            None => (encode_doc(&doc)?, 0, None),
+        };
     tx.execute(
         "INSERT INTO records(ns,coll,scope,id,doc,created,updated,enc,keyId) VALUES(?1,?2,?3,?4,?5,?6,?6,?7,?8)\
          ON CONFLICT(ns,coll,id) DO UPDATE SET scope=excluded.scope, doc=excluded.doc, updated=excluded.updated, enc=excluded.enc, keyId=excluded.keyId",
@@ -433,14 +451,21 @@ fn sync_fts(
     tx.execute(&format!("DELETE FROM {tbl} WHERE rowid=?1"), [rowid])
         .map_err(|e| e.to_string())?;
     let fts_fields: Vec<String> = if enc == 1 {
-        meta.fts.iter().filter(|f| idx_fields.iter().any(|i| i == *f)).cloned().collect()
+        meta.fts
+            .iter()
+            .filter(|f| idx_fields.iter().any(|i| i == *f))
+            .cloned()
+            .collect()
     } else {
         meta.fts.clone()
     };
     let text = fts_text(doc, &fts_fields);
     if !text.is_empty() {
-        tx.execute(&format!("INSERT INTO {tbl}(rowid, text) VALUES(?1, ?2)"), (rowid, text))
-            .map_err(|e| e.to_string())?;
+        tx.execute(
+            &format!("INSERT INTO {tbl}(rowid, text) VALUES(?1, ?2)"),
+            (rowid, text),
+        )
+        .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -539,7 +564,11 @@ pub fn rekey_scope(
             .map_err(|e| e.to_string())?;
         let rows = stmt
             .query_map((scope, old_key_id, batch.max(0)), |r| {
-                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
             })
             .map_err(|e| e.to_string())?;
         let mut v = Vec::new();
@@ -568,7 +597,9 @@ pub fn rekey_scope(
         let stored = decode_doc(&doc_s)?;
         let aad_old = super::crypto::canonical_aad(&ns, &coll, scope, &id, old_key_id);
         let plain = super::crypto::open_doc(&stored, old_secret, &aad_old)?;
-        let idx_fields = get_meta(&tx, &ns, &coll)?.map(|m| m.idx).unwrap_or_default();
+        let idx_fields = get_meta(&tx, &ns, &coll)?
+            .map(|m| m.idx)
+            .unwrap_or_default();
         let aad_new = super::crypto::canonical_aad(&ns, &coll, scope, &id, new_key_id);
         let resealed = super::crypto::seal_doc(&plain, &idx_fields, new_pk, new_key_id, &aad_new)?;
         let resealed_s = encode_doc(&resealed)?;
@@ -614,7 +645,14 @@ pub fn get(
     .map_err(|e| e.to_string())?;
     match row {
         Some((doc_s, row_scope, enc, key_id)) => Ok(Some(decode_stored(
-            ns, coll, &row_scope, id, &doc_s, enc, key_id.as_deref(), resolve_sk,
+            ns,
+            coll,
+            &row_scope,
+            id,
+            &doc_s,
+            enc,
+            key_id.as_deref(),
+            resolve_sk,
         )?)),
         None => Ok(None),
     }
@@ -790,9 +828,11 @@ pub fn query(
 ) -> Result<Vec<Value>, String> {
     let allowed = get_meta(conn, ns, coll)?.map(|m| m.idx).unwrap_or_default();
 
-    let mut params: Vec<Box<dyn ToSql>> = vec![Box::new(ns.to_string()), Box::new(coll.to_string())];
+    let mut params: Vec<Box<dyn ToSql>> =
+        vec![Box::new(ns.to_string()), Box::new(coll.to_string())];
     // 봉인 행 개봉에 scope·id·enc·keyId 가 필요 — doc 만이 아니라 함께 가져온다(blocker① 필터는 평문 인덱스).
-    let mut sql = String::from("SELECT doc, scope, id, enc, keyId FROM records WHERE ns=?1 AND coll=?2");
+    let mut sql =
+        String::from("SELECT doc, scope, id, enc, keyId FROM records WHERE ns=?1 AND coll=?2");
     if let Some(s) = scope {
         sql.push_str(" AND scope=?3");
         params.push(Box::new(s.to_string()));
@@ -832,7 +872,14 @@ pub fn query(
     for row in rows {
         let (doc_s, row_scope, id, enc, key_id) = row.map_err(|e| e.to_string())?;
         out.push(decode_stored(
-            ns, coll, &row_scope, &id, &doc_s, enc, key_id.as_deref(), resolve_sk,
+            ns,
+            coll,
+            &row_scope,
+            &id,
+            &doc_s,
+            enc,
+            key_id.as_deref(),
+            resolve_sk,
         )?);
     }
     Ok(out)
@@ -846,7 +893,8 @@ pub fn count(
     where_obj: Option<&Value>,
 ) -> Result<i64, String> {
     let allowed = get_meta(conn, ns, coll)?.map(|m| m.idx).unwrap_or_default();
-    let mut params: Vec<Box<dyn ToSql>> = vec![Box::new(ns.to_string()), Box::new(coll.to_string())];
+    let mut params: Vec<Box<dyn ToSql>> =
+        vec![Box::new(ns.to_string()), Box::new(coll.to_string())];
     let mut sql = String::from("SELECT COUNT(*) FROM records WHERE ns=?1 AND coll=?2");
     if let Some(s) = scope {
         sql.push_str(" AND scope=?3");
@@ -872,16 +920,19 @@ pub fn search(
 ) -> Result<Vec<Value>, String> {
     let lim = limit.unwrap_or(50).clamp(0, 2000);
     let meta = get_meta(conn, ns, coll)?;
-    let use_fts = meta.as_ref().is_some_and(|m| !m.fts.is_empty())
-        && query_text.chars().count() >= 3;
+    let use_fts =
+        meta.as_ref().is_some_and(|m| !m.fts.is_empty()) && query_text.chars().count() >= 3;
 
     if use_fts {
         let cid = meta.unwrap().cid;
         let tbl = fts_table(cid);
         // trigram 부분일치 — 따옴표 구문(내부 따옴표는 이중화).
         let m = format!("\"{}\"", query_text.replace('"', "\"\""));
-        let mut params: Vec<Box<dyn ToSql>> =
-            vec![Box::new(m), Box::new(ns.to_string()), Box::new(coll.to_string())];
+        let mut params: Vec<Box<dyn ToSql>> = vec![
+            Box::new(m),
+            Box::new(ns.to_string()),
+            Box::new(coll.to_string()),
+        ];
         let mut sql = format!(
             "SELECT r.doc, r.scope, r.id, r.enc, r.keyId FROM {tbl} f JOIN records r ON r.rowid=f.rowid \
              WHERE f.text MATCH ?1 AND r.ns=?2 AND r.coll=?3"
@@ -898,8 +949,11 @@ pub fn search(
         // 폴백 — doc 전체 LIKE(짧은 쿼리·FTS 미선언 컬렉션). scope 로 좁힘. 봉인 doc 은 암호문이라 평문 LIKE 와
         // 매치 안 됨(자격증명 누출 0) — 매치는 평문 인덱스/id 뿐.
         let like = format!("%{}%", query_text);
-        let mut params: Vec<Box<dyn ToSql>> =
-            vec![Box::new(ns.to_string()), Box::new(coll.to_string()), Box::new(like)];
+        let mut params: Vec<Box<dyn ToSql>> = vec![
+            Box::new(ns.to_string()),
+            Box::new(coll.to_string()),
+            Box::new(like),
+        ];
         let mut sql = String::from(
             "SELECT doc, scope, id, enc, keyId FROM records WHERE ns=?1 AND coll=?2 AND doc LIKE ?3",
         );
@@ -936,7 +990,16 @@ fn search_collect(
     let mut out = Vec::new();
     for row in rows {
         let (doc_s, row_scope, id, enc, key_id) = row.map_err(|e| e.to_string())?;
-        out.push(decode_stored(ns, coll, &row_scope, &id, &doc_s, enc, key_id.as_deref(), resolve_sk)?);
+        out.push(decode_stored(
+            ns,
+            coll,
+            &row_scope,
+            &id,
+            &doc_s,
+            enc,
+            key_id.as_deref(),
+            resolve_sk,
+        )?);
     }
     Ok(out)
 }
@@ -971,7 +1034,10 @@ fn ns_has_data(c: &Connection, ns: &str) -> Result<bool, String> {
 /// 양쪽 다 데이터가 있으면 병합 불가라 명시 에러(무음 유실 금지).
 pub fn migrate_ns(c: &Connection, from: &str, to: &str) -> Result<NsMigrateOutcome, String> {
     if !ns_has_data(c, from)? {
-        return Ok(NsMigrateOutcome { migrated: false, reason: "source-empty".into() });
+        return Ok(NsMigrateOutcome {
+            migrated: false,
+            reason: "source-empty".into(),
+        });
     }
     if ns_has_data(c, to)? {
         return Err(format!(
@@ -979,12 +1045,17 @@ pub fn migrate_ns(c: &Connection, from: &str, to: &str) -> Result<NsMigrateOutco
         ));
     }
     let tx = c.unchecked_transaction().map_err(|e| e.to_string())?;
-    tx.execute("UPDATE kv SET ns=?2 WHERE ns=?1", (from, to)).map_err(|e| e.to_string())?;
-    tx.execute("UPDATE records SET ns=?2 WHERE ns=?1", (from, to)).map_err(|e| e.to_string())?;
+    tx.execute("UPDATE kv SET ns=?2 WHERE ns=?1", (from, to))
+        .map_err(|e| e.to_string())?;
+    tx.execute("UPDATE records SET ns=?2 WHERE ns=?1", (from, to))
+        .map_err(|e| e.to_string())?;
     tx.execute("UPDATE meta_collections SET ns=?2 WHERE ns=?1", (from, to))
         .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())?;
-    Ok(NsMigrateOutcome { migrated: true, reason: "moved".into() })
+    Ok(NsMigrateOutcome {
+        migrated: true,
+        reason: "moved".into(),
+    })
 }
 
 #[cfg(test)]
@@ -1004,19 +1075,55 @@ mod tests {
     #[test]
     fn drop_ns_reclaims_everything_that_ns_made_and_nothing_else() {
         let c = mem();
-        define(&c, "plugin:probe", "t", &["issue".into()], &["title".into()]).unwrap();
-        put(&c, "plugin:probe", "t", "s", Some("x1".into()), &json!({"issue":"i-1","title":"probe"})).unwrap();
+        define(
+            &c,
+            "plugin:probe",
+            "t",
+            &["issue".into()],
+            &["title".into()],
+        )
+        .unwrap();
+        put(
+            &c,
+            "plugin:probe",
+            "t",
+            "s",
+            Some("x1".into()),
+            &json!({"issue":"i-1","title":"probe"}),
+        )
+        .unwrap();
         kv_set(&c, "plugin:probe", "k", &json!({"a":1})).unwrap();
 
         define(&c, "plugin:keeper", "t", &["issue".into()], &[]).unwrap();
-        put(&c, "plugin:keeper", "t", "s", Some("y1".into()), &json!({"issue":"i-2"})).unwrap();
+        put(
+            &c,
+            "plugin:keeper",
+            "t",
+            "s",
+            Some("y1".into()),
+            &json!({"issue":"i-2"}),
+        )
+        .unwrap();
         kv_set(&c, "plugin:keeper", "k", &json!({"b":2})).unwrap();
 
         let out = drop_ns(&c, "plugin:probe").unwrap();
         assert_eq!((out.collections, out.records, out.kv), (1, 1, 1));
 
         // 지운 ns 는 흔적이 없다 — 레코드·kv·컬렉션 정의·표현식 인덱스·FTS 표까지.
-        assert!(query(&c, "plugin:probe", "t", Some("s"), None, None, false, None, None, None).unwrap().is_empty());
+        assert!(query(
+            &c,
+            "plugin:probe",
+            "t",
+            Some("s"),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None
+        )
+        .unwrap()
+        .is_empty());
         assert!(kv_get(&c, "plugin:probe", "k").unwrap().is_none());
         let leftovers: i64 = c
             .query_row(
@@ -1029,7 +1136,20 @@ mod tests {
 
         // 남의 ns 는 그대로다.
         assert_eq!(
-            query(&c, "plugin:keeper", "t", Some("s"), None, None, false, None, None, None).unwrap().len(),
+            query(
+                &c,
+                "plugin:keeper",
+                "t",
+                Some("s"),
+                None,
+                None,
+                false,
+                None,
+                None,
+                None
+            )
+            .unwrap()
+            .len(),
             1
         );
         assert!(kv_get(&c, "plugin:keeper", "k").unwrap().is_some());
@@ -1044,26 +1164,77 @@ mod tests {
     #[test]
     fn migrate_ns_moves_renamed_history_and_is_idempotent() {
         let c = mem();
-        define(&c, "soksak-plugin-terminal", "command_blocks", &["viewId".into()], &[]).unwrap();
-        put(&c, "soksak-plugin-terminal", "command_blocks", "proj-a", Some("b1".into()),
-            &json!({"viewId":"t1","commandLine":"echo hi"})).unwrap();
+        define(
+            &c,
+            "soksak-plugin-terminal",
+            "command_blocks",
+            &["viewId".into()],
+            &[],
+        )
+        .unwrap();
+        put(
+            &c,
+            "soksak-plugin-terminal",
+            "command_blocks",
+            "proj-a",
+            Some("b1".into()),
+            &json!({"viewId":"t1","commandLine":"echo hi"}),
+        )
+        .unwrap();
         // RED 경계 — 개명한 새 id 에선 옛 이력이 안 보인다.
-        let before = query(&c, "soksak-plugin-terminal-xterm", "command_blocks", Some("proj-a"),
-            None, None, false, None, None, None).unwrap();
+        let before = query(
+            &c,
+            "soksak-plugin-terminal-xterm",
+            "command_blocks",
+            Some("proj-a"),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert!(before.is_empty(), "개명 후 새 id 에서 옛 이력 불가시(재현)");
         // 이관.
         let out = migrate_ns(&c, "soksak-plugin-terminal", "soksak-plugin-terminal-xterm").unwrap();
         assert!(out.migrated);
         // GREEN — 새 ns 에서 보이고 옛 ns 는 비었다.
-        let after = query(&c, "soksak-plugin-terminal-xterm", "command_blocks", Some("proj-a"),
-            None, None, false, None, None, None).unwrap();
+        let after = query(
+            &c,
+            "soksak-plugin-terminal-xterm",
+            "command_blocks",
+            Some("proj-a"),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(after.len(), 1);
-        assert_eq!(after[0].get("commandLine").and_then(Value::as_str), Some("echo hi"));
-        let old = query(&c, "soksak-plugin-terminal", "command_blocks", Some("proj-a"),
-            None, None, false, None, None, None).unwrap();
+        assert_eq!(
+            after[0].get("commandLine").and_then(Value::as_str),
+            Some("echo hi")
+        );
+        let old = query(
+            &c,
+            "soksak-plugin-terminal",
+            "command_blocks",
+            Some("proj-a"),
+            None,
+            None,
+            false,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert!(old.is_empty(), "옛 ns 는 이관 후 비어야 한다");
         // 멱등 — 재이관은 source-empty no-op(옛 ns 가 이미 비었다).
-        let again = migrate_ns(&c, "soksak-plugin-terminal", "soksak-plugin-terminal-xterm").unwrap();
+        let again =
+            migrate_ns(&c, "soksak-plugin-terminal", "soksak-plugin-terminal-xterm").unwrap();
         assert!(!again.migrated);
         assert_eq!(again.reason, "source-empty");
     }
@@ -1076,7 +1247,10 @@ mod tests {
         put(&c, "old-id", "c", "s", None, &json!({"x":1})).unwrap();
         define(&c, "new-id", "c", &[], &[]).unwrap();
         put(&c, "new-id", "c", "s", None, &json!({"x":2})).unwrap();
-        assert!(migrate_ns(&c, "old-id", "new-id").is_err(), "양쪽 데이터 → 명시 에러");
+        assert!(
+            migrate_ns(&c, "old-id", "new-id").is_err(),
+            "양쪽 데이터 → 명시 에러"
+        );
     }
 
     // id 는 내장 필드(PK) — 인덱스 선언 없이 where/order 가능(콘텐츠 주소 조회의 정본 경로).
@@ -1084,12 +1258,37 @@ mod tests {
     fn id_is_builtin_for_where_and_order() {
         let c = mem();
         define(&c, "kanban", "prompts", &[], &[]).unwrap();
-        put(&c, "kanban", "prompts", "app", Some("hash-a".into()), &json!({"value":"A"})).unwrap();
-        put(&c, "kanban", "prompts", "app", Some("hash-b".into()), &json!({"value":"B"})).unwrap();
+        put(
+            &c,
+            "kanban",
+            "prompts",
+            "app",
+            Some("hash-a".into()),
+            &json!({"value":"A"}),
+        )
+        .unwrap();
+        put(
+            &c,
+            "kanban",
+            "prompts",
+            "app",
+            Some("hash-b".into()),
+            &json!({"value":"B"}),
+        )
+        .unwrap();
         let rows = query(
-            &c, "kanban", "prompts", Some("app"),
-            Some(&json!({"id": "hash-a"})), Some("id"), false, None, None, None,
-        ).unwrap();
+            &c,
+            "kanban",
+            "prompts",
+            Some("app"),
+            Some(&json!({"id": "hash-a"})),
+            Some("id"),
+            false,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].get("value").and_then(Value::as_str), Some("A"));
     }
@@ -1100,15 +1299,37 @@ mod tests {
     fn put_seals_when_active_key_present() {
         use super::super::crypto;
         let c = mem();
-        define(&c, "terminal", "command_blocks", &["viewId".into(), "startTs".into()], &["commandLine".into()]).unwrap();
+        define(
+            &c,
+            "terminal",
+            "command_blocks",
+            &["viewId".into(), "startTs".into()],
+            &["commandLine".into()],
+        )
+        .unwrap();
         // 평문 baseline — 키 없으면 평문(enc=0).
-        let id0 = put(&c, "terminal", "command_blocks", "proj-a", None,
-            &json!({"viewId":"t1","startTs":1,"output":"plain"})).unwrap();
-        let (doc0, enc0): (String, i64) = c.query_row(
-            "SELECT doc, enc FROM records WHERE id=?1", [&id0], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        let id0 = put(
+            &c,
+            "terminal",
+            "command_blocks",
+            "proj-a",
+            None,
+            &json!({"viewId":"t1","startTs":1,"output":"plain"}),
+        )
+        .unwrap();
+        let (doc0, enc0): (String, i64) = c
+            .query_row("SELECT doc, enc FROM records WHERE id=?1", [&id0], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
         assert_eq!(enc0, 0, "키 없으면 평문");
         assert!(doc0.contains("plain"), "평문 레코드는 output 노출");
-        assert_eq!(get(&c, "terminal", "command_blocks", &id0, None, None).unwrap().unwrap()["output"], "plain");
+        assert_eq!(
+            get(&c, "terminal", "command_blocks", &id0, None, None)
+                .unwrap()
+                .unwrap()["output"],
+            "plain"
+        );
 
         // active key 등록 → put 봉인.
         let (s, p) = crate::secrets::gen_asym_keypair();
@@ -1117,18 +1338,32 @@ mod tests {
             &json!({"viewId":"t2","startTs":1718900000000i64,"commandLine":"export T=sk-XYZ","output":"secret echo"})).unwrap();
 
         // 저장 형태 검증: enc=1, keyId, 인덱스 평문, 민감 필드 비노출.
-        let (doc1, enc1, kid): (String, i64, Option<String>) = c.query_row(
-            "SELECT doc, enc, keyId FROM records WHERE id=?1", [&id1],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
+        let (doc1, enc1, kid): (String, i64, Option<String>) = c
+            .query_row(
+                "SELECT doc, enc, keyId FROM records WHERE id=?1",
+                [&id1],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
         assert_eq!(enc1, 1, "active key 있으면 봉인");
         assert_eq!(kid.as_deref(), Some("key-1"));
-        assert!(doc1.contains("\"viewId\":\"t2\""), "인덱스 viewId 평문 유지");
+        assert!(
+            doc1.contains("\"viewId\":\"t2\""),
+            "인덱스 viewId 평문 유지"
+        );
         assert!(doc1.contains("1718900000000"), "인덱스 startTs 평문 유지");
         assert!(!doc1.contains("sk-XYZ"), "자격증명 평문 누출 0");
         assert!(!doc1.contains("secret echo"), "output 평문 누출 0");
 
         // blocker①: 봉인돼도 평문 인덱스 필터가 탄다(0 아님). count 는 디코드 없이 인덱스만 → R10 평문 프로젝션.
-        let n = count(&c, "terminal", "command_blocks", Some("proj-a"), Some(&json!({"viewId":"t2"}))).unwrap();
+        let n = count(
+            &c,
+            "terminal",
+            "command_blocks",
+            Some("proj-a"),
+            Some(&json!({"viewId":"t2"})),
+        )
+        .unwrap();
         assert_eq!(n, 1, "봉인 레코드도 평문 인덱스 필터로 1건(blocker①)");
 
         // 봉인 doc 을 S 로 개봉하면 원본 복원(쓰기 경로 정합).
@@ -1140,10 +1375,24 @@ mod tests {
         assert_eq!(opened["viewId"], "t2");
 
         // get 은 복호 경로 미배선이라 정직하게 Err(은닉 오반환 금지).
-        assert!(get(&c, "terminal", "command_blocks", &id1, None, None).is_err(), "복호 resolver 없으면 봉인 레코드 get 게이트");
+        assert!(
+            get(&c, "terminal", "command_blocks", &id1, None, None).is_err(),
+            "복호 resolver 없으면 봉인 레코드 get 게이트"
+        );
 
         // 예약 필드 __enc 를 담은 doc 은 put 거부(convert/회전 안전 불변).
-        assert!(put(&c, "terminal", "command_blocks", "proj-a", None, &json!({"__enc": 1})).is_err(), "예약 필드 __enc 거부");
+        assert!(
+            put(
+                &c,
+                "terminal",
+                "command_blocks",
+                "proj-a",
+                None,
+                &json!({"__enc": 1})
+            )
+            .is_err(),
+            "예약 필드 __enc 거부"
+        );
     }
 
     // [단계②] 읽기 경로 — resolver(S 공급)로 get/query 가 봉인 레코드를 개봉(R12). resolver 가 None(lock)이면
@@ -1155,28 +1404,89 @@ mod tests {
         define(&c, "terminal", "command_blocks", &["viewId".into()], &[]).unwrap();
         let (s, p) = crate::secrets::gen_asym_keypair();
         crypto::register_active_key(&c, "proj-a", "key-1", &p, 100).unwrap();
-        let id = put(&c, "terminal", "command_blocks", "proj-a", None,
-            &json!({"viewId":"t1","output":"secret echo","exitCode":0})).unwrap();
+        let id = put(
+            &c,
+            "terminal",
+            "command_blocks",
+            "proj-a",
+            None,
+            &json!({"viewId":"t1","output":"secret echo","exitCode":0}),
+        )
+        .unwrap();
 
         // unlock 모의 — resolver 가 key-1 의 S 를 돌려준다.
         let unlocked = |kid: &str| -> Result<Option<[u8; 32]>, String> {
-            if kid == "key-1" { Ok(Some(s)) } else { Ok(None) }
+            if kid == "key-1" {
+                Ok(Some(s))
+            } else {
+                Ok(None)
+            }
         };
         // lock 모의 — resolver 가 항상 None(vault locked).
         let locked = |_kid: &str| -> Result<Option<[u8; 32]>, String> { Ok(None) };
 
         // get: unlock 이면 개봉(원본 복원), lock 이면 Err.
-        let got = get(&c, "terminal", "command_blocks", &id, Some("proj-a"), Some(&unlocked)).unwrap().unwrap();
+        let got = get(
+            &c,
+            "terminal",
+            "command_blocks",
+            &id,
+            Some("proj-a"),
+            Some(&unlocked),
+        )
+        .unwrap()
+        .unwrap();
         assert_eq!(got["output"], "secret echo", "resolver 로 봉인 레코드 개봉");
         assert_eq!(got["viewId"], "t1");
         assert_eq!(got["exitCode"], 0);
-        assert!(get(&c, "terminal", "command_blocks", &id, Some("proj-a"), Some(&locked)).is_err(), "lock 이면 복호 불가 Err");
+        assert!(
+            get(
+                &c,
+                "terminal",
+                "command_blocks",
+                &id,
+                Some("proj-a"),
+                Some(&locked)
+            )
+            .is_err(),
+            "lock 이면 복호 불가 Err"
+        );
 
         // query: unlock 이면 개봉된 doc 반환.
-        let hits = query(&c, "terminal", "command_blocks", Some("proj-a"), None, None, true, None, None, Some(&unlocked)).unwrap();
+        let hits = query(
+            &c,
+            "terminal",
+            "command_blocks",
+            Some("proj-a"),
+            None,
+            None,
+            true,
+            None,
+            None,
+            Some(&unlocked),
+        )
+        .unwrap();
         assert_eq!(hits.len(), 1);
-        assert_eq!(hits[0]["output"], "secret echo", "query 도 resolver 로 개봉");
-        assert!(query(&c, "terminal", "command_blocks", Some("proj-a"), None, None, true, None, None, Some(&locked)).is_err(), "lock query Err");
+        assert_eq!(
+            hits[0]["output"], "secret echo",
+            "query 도 resolver 로 개봉"
+        );
+        assert!(
+            query(
+                &c,
+                "terminal",
+                "command_blocks",
+                Some("proj-a"),
+                None,
+                None,
+                true,
+                None,
+                None,
+                Some(&locked)
+            )
+            .is_err(),
+            "lock query Err"
+        );
     }
 
     // [단계②·R17] 변환 — 기존 평문(enc=0) 레코드를 active key 로 봉인. 멱등(재호출 no-op), 이중봉인 0,
@@ -1185,7 +1495,14 @@ mod tests {
     fn convert_pending_seals_existing_plaintext() {
         use super::super::crypto;
         let c = mem();
-        define(&c, "terminal", "command_blocks", &["viewId".into()], &["commandLine".into()]).unwrap();
+        define(
+            &c,
+            "terminal",
+            "command_blocks",
+            &["viewId".into()],
+            &["commandLine".into()],
+        )
+        .unwrap();
         // 평문 레코드 3개(키 없을 때 — enc=0).
         let mut ids = Vec::new();
         for i in 0..3 {
@@ -1193,10 +1510,31 @@ mod tests {
                 &json!({"viewId":format!("t{i}"),"commandLine":format!("cmd{i} secret{i}"),"output":format!("out{i}")})).unwrap());
         }
         // created 기록(변환이 안 바꿔야).
-        let created_before: Vec<i64> = ids.iter().map(|id|
-            c.query_row("SELECT created FROM records WHERE id=?1", [id], |r| r.get(0)).unwrap()).collect();
+        let created_before: Vec<i64> = ids
+            .iter()
+            .map(|id| {
+                c.query_row("SELECT created FROM records WHERE id=?1", [id], |r| {
+                    r.get(0)
+                })
+                .unwrap()
+            })
+            .collect();
         // FTS 가 commandLine 평문 색인 중 — search 로 확인.
-        assert_eq!(search(&c, "terminal", "command_blocks", "secret1", None, None, None).unwrap().len(), 1, "변환 전 FTS 검색 1건");
+        assert_eq!(
+            search(
+                &c,
+                "terminal",
+                "command_blocks",
+                "secret1",
+                None,
+                None,
+                None
+            )
+            .unwrap()
+            .len(),
+            1,
+            "변환 전 FTS 검색 1건"
+        );
 
         // 암호화 활성 후 변환.
         let (s, p) = crate::secrets::gen_asym_keypair();
@@ -1205,16 +1543,30 @@ mod tests {
         assert_eq!(n, 3, "평문 3건 봉인 변환");
 
         // 멱등 — 재호출 0건(이미 enc=1, WHERE enc=0 → no-op, 이중봉인 0).
-        assert_eq!(convert_pending(&c, "terminal", "command_blocks", "proj-a", 100).unwrap(), 0, "재변환 no-op");
+        assert_eq!(
+            convert_pending(&c, "terminal", "command_blocks", "proj-a", 100).unwrap(),
+            0,
+            "재변환 no-op"
+        );
 
         for (i, id) in ids.iter().enumerate() {
-            let (enc, kid, doc_s, created): (i64, Option<String>, String, i64) = c.query_row(
-                "SELECT enc, keyId, doc, created FROM records WHERE id=?1", [id],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))).unwrap();
+            let (enc, kid, doc_s, created): (i64, Option<String>, String, i64) = c
+                .query_row(
+                    "SELECT enc, keyId, doc, created FROM records WHERE id=?1",
+                    [id],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                )
+                .unwrap();
             assert_eq!(enc, 1, "변환 후 봉인");
             assert_eq!(kid.as_deref(), Some("key-1"));
-            assert_eq!(created, created_before[i], "created 보존(retention 순서 불변)");
-            assert!(!doc_s.contains(&format!("secret{i}")), "commandLine 평문 누출 0");
+            assert_eq!(
+                created, created_before[i],
+                "created 보존(retention 순서 불변)"
+            );
+            assert!(
+                !doc_s.contains(&format!("secret{i}")),
+                "commandLine 평문 누출 0"
+            );
             assert!(!doc_s.contains(&format!("out{i}")), "output 평문 누출 0");
             // S 로 개봉 → 원본 복원.
             let stored: Value = serde_json::from_str(&doc_s).unwrap();
@@ -1223,9 +1575,33 @@ mod tests {
             assert_eq!(opened["commandLine"], format!("cmd{i} secret{i}"));
         }
         // 봉인 후 FTS 에서 commandLine(봉인 필드) 제거 — search 0건(자격증명 평문 노출 0, R19).
-        assert_eq!(search(&c, "terminal", "command_blocks", "secret1", None, None, None).unwrap().len(), 0, "봉인 후 FTS 검색 0건");
+        assert_eq!(
+            search(
+                &c,
+                "terminal",
+                "command_blocks",
+                "secret1",
+                None,
+                None,
+                None
+            )
+            .unwrap()
+            .len(),
+            0,
+            "봉인 후 FTS 검색 0건"
+        );
         // 인덱스(viewId) query 는 여전히 탄다(blocker①).
-        assert_eq!(count(&c, "terminal", "command_blocks", Some("proj-a"), Some(&json!({"viewId":"t1"}))).unwrap(), 1);
+        assert_eq!(
+            count(
+                &c,
+                "terminal",
+                "command_blocks",
+                Some("proj-a"),
+                Some(&json!({"viewId":"t1"}))
+            )
+            .unwrap(),
+            1
+        );
     }
 
     // [단계②·R18/B9] 키 회전 re-key — old 로 봉인된 레코드를 new 로 재봉인. 재키 후 new S 로 개봉 가능,
@@ -1239,11 +1615,27 @@ mod tests {
         crypto::register_active_key(&c, "proj-a", "key-1", &p1, 10).unwrap();
         let mut ids = Vec::new();
         for i in 0..3 {
-            ids.push(put(&c, "terminal", "command_blocks", "proj-a", None,
-                &json!({"viewId":format!("t{i}"),"output":format!("payload{i}")})).unwrap());
+            ids.push(
+                put(
+                    &c,
+                    "terminal",
+                    "command_blocks",
+                    "proj-a",
+                    None,
+                    &json!({"viewId":format!("t{i}"),"output":format!("payload{i}")}),
+                )
+                .unwrap(),
+            );
         }
-        let created_before: Vec<i64> = ids.iter().map(|id|
-            c.query_row("SELECT created FROM records WHERE id=?1", [id], |r| r.get(0)).unwrap()).collect();
+        let created_before: Vec<i64> = ids
+            .iter()
+            .map(|id| {
+                c.query_row("SELECT created FROM records WHERE id=?1", [id], |r| {
+                    r.get(0)
+                })
+                .unwrap()
+            })
+            .collect();
 
         // 회전: 새 키 등록(old retired) → re-key.
         let (s2, p2) = crate::secrets::gen_asym_keypair();
@@ -1251,21 +1643,37 @@ mod tests {
         let n = rekey_scope(&c, "proj-a", "key-1", &s1, "key-2", &p2, 100).unwrap();
         assert_eq!(n, 3, "3건 재키");
         // 멱등 — 재호출 0(이미 key-2, WHERE keyId=old → no-op).
-        assert_eq!(rekey_scope(&c, "proj-a", "key-1", &s1, "key-2", &p2, 100).unwrap(), 0);
+        assert_eq!(
+            rekey_scope(&c, "proj-a", "key-1", &s1, "key-2", &p2, 100).unwrap(),
+            0
+        );
         // old 키로 봉인된 잔여 0 → dispose 안전.
-        assert_eq!(crypto::count_sealed_with_key(&c, "proj-a", "key-1").unwrap(), 0);
+        assert_eq!(
+            crypto::count_sealed_with_key(&c, "proj-a", "key-1").unwrap(),
+            0
+        );
 
         for (i, id) in ids.iter().enumerate() {
-            let (kid, doc_s, created): (Option<String>, String, i64) = c.query_row(
-                "SELECT keyId, doc, created FROM records WHERE id=?1", [id],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
+            let (kid, doc_s, created): (Option<String>, String, i64) = c
+                .query_row(
+                    "SELECT keyId, doc, created FROM records WHERE id=?1",
+                    [id],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .unwrap();
             assert_eq!(kid.as_deref(), Some("key-2"), "keyId 가 new 로 갱신");
             assert_eq!(created, created_before[i], "created 보존");
             let stored: Value = serde_json::from_str(&doc_s).unwrap();
             // new S(s2)로 개봉 성공, old S(s1)로는 실패(전이 완료).
             let aad = crypto::canonical_aad("terminal", "command_blocks", "proj-a", id, "key-2");
-            assert_eq!(crypto::open_doc(&stored, &s2, &aad).unwrap()["output"], format!("payload{i}"));
-            assert!(crypto::open_doc(&stored, &s1, &aad).is_err(), "old S 로는 개봉 불가");
+            assert_eq!(
+                crypto::open_doc(&stored, &s2, &aad).unwrap()["output"],
+                format!("payload{i}")
+            );
+            assert!(
+                crypto::open_doc(&stored, &s1, &aad).is_err(),
+                "old S 로는 개봉 불가"
+            );
         }
     }
 
@@ -1273,7 +1681,11 @@ mod tests {
     // 실제 반환(physical reclaim)되는지. in-memory 는 파일 truncate 의미 없어 실파일 open() 경로로.
     #[test]
     fn incremental_vacuum_reclaims_pages() {
-        let dir = std::env::temp_dir().join(format!("soksak-vac-{}-{:?}", std::process::id(), std::thread::current().id()));
+        let dir = std::env::temp_dir().join(format!(
+            "soksak-vac-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("d.db");
@@ -1281,14 +1693,32 @@ mod tests {
             let c = super::super::open(&path).unwrap(); // auto_vacuum=INCREMENTAL 적용(신규 DB)
             define(&c, "t", "c", &[], &[]).unwrap();
             for i in 0..300 {
-                put(&c, "t", "c", "s", None, &json!({"pad": "y".repeat(500), "i": i})).unwrap();
+                put(
+                    &c,
+                    "t",
+                    "c",
+                    "s",
+                    None,
+                    &json!({"pad": "y".repeat(500), "i": i}),
+                )
+                .unwrap();
             }
             retention_reap_ttl(&c, "t", "c", i64::MAX).unwrap(); // 전부 삭제(created < MAX)
-            let free_before: i64 = c.query_row("PRAGMA freelist_count", [], |r| r.get(0)).unwrap();
+            let free_before: i64 = c
+                .query_row("PRAGMA freelist_count", [], |r| r.get(0))
+                .unwrap();
             incremental_vacuum(&c, 100_000).unwrap();
-            let free_after: i64 = c.query_row("PRAGMA freelist_count", [], |r| r.get(0)).unwrap();
-            assert!(free_before > 0, "삭제 후 free 페이지 존재(auto_vacuum=INCREMENTAL)");
-            assert!(free_after < free_before, "incremental_vacuum 이 free 페이지 반환(physical reclaim)");
+            let free_after: i64 = c
+                .query_row("PRAGMA freelist_count", [], |r| r.get(0))
+                .unwrap();
+            assert!(
+                free_before > 0,
+                "삭제 후 free 페이지 존재(auto_vacuum=INCREMENTAL)"
+            );
+            assert!(
+                free_after < free_before,
+                "incremental_vacuum 이 free 페이지 반환(physical reclaim)"
+            );
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1308,20 +1738,69 @@ mod tests {
     #[test]
     fn records_crud_and_scope() {
         let c = mem();
-        define(&c, "mailbox", "messages", &["read".into(), "type".into()], &["title".into(), "body".into()]).unwrap();
-        let id1 = put(&c, "mailbox", "messages", "projA", None, &json!({"title":"빌드 완료","body":"성공","read":false,"type":"push"})).unwrap();
-        let _id2 = put(&c, "mailbox", "messages", "projB", None, &json!({"title":"테스트","body":"중문 测试","read":true,"type":"info"})).unwrap();
+        define(
+            &c,
+            "mailbox",
+            "messages",
+            &["read".into(), "type".into()],
+            &["title".into(), "body".into()],
+        )
+        .unwrap();
+        let id1 = put(
+            &c,
+            "mailbox",
+            "messages",
+            "projA",
+            None,
+            &json!({"title":"빌드 완료","body":"성공","read":false,"type":"push"}),
+        )
+        .unwrap();
+        let _id2 = put(
+            &c,
+            "mailbox",
+            "messages",
+            "projB",
+            None,
+            &json!({"title":"테스트","body":"중문 测试","read":true,"type":"info"}),
+        )
+        .unwrap();
 
         // get + canonical id 주입.
-        let got = get(&c, "mailbox", "messages", &id1, Some("projA"), None).unwrap().unwrap();
+        let got = get(&c, "mailbox", "messages", &id1, Some("projA"), None)
+            .unwrap()
+            .unwrap();
         assert_eq!(got.get("id").unwrap().as_str().unwrap(), id1);
         assert_eq!(got.get("title").unwrap(), "빌드 완료");
 
         // scope 파티션 — projA 조회는 projB 안 섞임.
-        let qa = query(&c, "mailbox", "messages", Some("projA"), None, None, true, None, None, None).unwrap();
+        let qa = query(
+            &c,
+            "mailbox",
+            "messages",
+            Some("projA"),
+            None,
+            None,
+            true,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(qa.len(), 1);
         // where: read=false.
-        let unread = query(&c, "mailbox", "messages", None, Some(&json!({"read":false})), None, true, None, None, None).unwrap();
+        let unread = query(
+            &c,
+            "mailbox",
+            "messages",
+            None,
+            Some(&json!({"read":false})),
+            None,
+            true,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(unread.len(), 1);
         // count.
         assert_eq!(count(&c, "mailbox", "messages", None, None).unwrap(), 2);
@@ -1337,20 +1816,57 @@ mod tests {
         define(&c, "terminal", "blocks", &["viewId".into()], &[]).unwrap();
         let mut ids = vec![];
         for i in 0..5 {
-            ids.push(put(&c, "terminal", "blocks", "projA", None, &json!({"viewId":"v1","n":i})).unwrap());
+            ids.push(
+                put(
+                    &c,
+                    "terminal",
+                    "blocks",
+                    "projA",
+                    None,
+                    &json!({"viewId":"v1","n":i}),
+                )
+                .unwrap(),
+            );
         }
-        assert_eq!(count(&c, "terminal", "blocks", Some("projA"), None).unwrap(), 5);
+        assert_eq!(
+            count(&c, "terminal", "blocks", Some("projA"), None).unwrap(),
+            5
+        );
         // cap=3 → oldest 2 축출.
-        assert_eq!(retention_trim(&c, "terminal", "blocks", "projA", 3).unwrap(), 2);
-        assert_eq!(count(&c, "terminal", "blocks", Some("projA"), None).unwrap(), 3);
-        assert!(get(&c, "terminal", "blocks", &ids[0], Some("projA"), None).unwrap().is_none()); // oldest 삭제
-        assert!(get(&c, "terminal", "blocks", &ids[4], Some("projA"), None).unwrap().is_some()); // newest 유지
-        // cap 미만 재호출 → 0(멱등).
-        assert_eq!(retention_trim(&c, "terminal", "blocks", "projA", 3).unwrap(), 0);
+        assert_eq!(
+            retention_trim(&c, "terminal", "blocks", "projA", 3).unwrap(),
+            2
+        );
+        assert_eq!(
+            count(&c, "terminal", "blocks", Some("projA"), None).unwrap(),
+            3
+        );
+        assert!(get(&c, "terminal", "blocks", &ids[0], Some("projA"), None)
+            .unwrap()
+            .is_none()); // oldest 삭제
+        assert!(get(&c, "terminal", "blocks", &ids[4], Some("projA"), None)
+            .unwrap()
+            .is_some()); // newest 유지
+                         // cap 미만 재호출 → 0(멱등).
+        assert_eq!(
+            retention_trim(&c, "terminal", "blocks", "projA", 3).unwrap(),
+            0
+        );
         // scope 격리 — projB 불변.
-        put(&c, "terminal", "blocks", "projB", None, &json!({"viewId":"v2"})).unwrap();
+        put(
+            &c,
+            "terminal",
+            "blocks",
+            "projB",
+            None,
+            &json!({"viewId":"v2"}),
+        )
+        .unwrap();
         retention_trim(&c, "terminal", "blocks", "projA", 1).unwrap();
-        assert_eq!(count(&c, "terminal", "blocks", Some("projB"), None).unwrap(), 1);
+        assert_eq!(
+            count(&c, "terminal", "blocks", Some("projB"), None).unwrap(),
+            1
+        );
     }
 
     // [단계①·R5] TTL reaper — created < cutoff 만 삭제, 신선분 유지. created 를 직접 써 시간 결정성 확보.
@@ -1361,22 +1877,52 @@ mod tests {
         // created 를 명시 주입(테스트 결정성): 오래된 3 + 신선 2.
         for (i, ts) in [(0, 1000_i64), (1, 1000), (2, 1500), (3, 5000), (4, 5000)] {
             let id = put(&c, "terminal", "blocks", "p", None, &json!({"n": i})).unwrap();
-            c.execute("UPDATE records SET created=?1 WHERE id=?2", (ts, &id)).unwrap();
+            c.execute("UPDATE records SET created=?1 WHERE id=?2", (ts, &id))
+                .unwrap();
         }
         assert_eq!(count(&c, "terminal", "blocks", Some("p"), None).unwrap(), 5);
         // cutoff=2000 → created<2000(1000·1000·1500) 3개 삭제, 5000·5000 유지.
-        assert_eq!(retention_reap_ttl(&c, "terminal", "blocks", 2000).unwrap(), 3);
+        assert_eq!(
+            retention_reap_ttl(&c, "terminal", "blocks", 2000).unwrap(),
+            3
+        );
         assert_eq!(count(&c, "terminal", "blocks", Some("p"), None).unwrap(), 2);
         // 재호출 멱등(이미 정리) → 0.
-        assert_eq!(retention_reap_ttl(&c, "terminal", "blocks", 2000).unwrap(), 0);
+        assert_eq!(
+            retention_reap_ttl(&c, "terminal", "blocks", 2000).unwrap(),
+            0
+        );
     }
 
     #[test]
     fn cjk_trigram_search() {
         let c = mem();
-        define(&c, "mailbox", "messages", &[], &["title".into(), "body".into()]).unwrap();
-        put(&c, "mailbox", "messages", "p", None, &json!({"title":"한글 테스트 메시지","body":"내용"})).unwrap();
-        put(&c, "mailbox", "messages", "p", None, &json!({"title":"中文测试","body":"日本語テスト"})).unwrap();
+        define(
+            &c,
+            "mailbox",
+            "messages",
+            &[],
+            &["title".into(), "body".into()],
+        )
+        .unwrap();
+        put(
+            &c,
+            "mailbox",
+            "messages",
+            "p",
+            None,
+            &json!({"title":"한글 테스트 메시지","body":"내용"}),
+        )
+        .unwrap();
+        put(
+            &c,
+            "mailbox",
+            "messages",
+            "p",
+            None,
+            &json!({"title":"中文测试","body":"日本語テスト"}),
+        )
+        .unwrap();
 
         // 한글 부분일치(≥3).
         let r = search(&c, "mailbox", "messages", "테스트", None, None, None).unwrap();
@@ -1396,38 +1942,145 @@ mod tests {
     fn update_and_delete_sync_fts() {
         let c = mem();
         define(&c, "mailbox", "messages", &[], &["title".into()]).unwrap();
-        let id = put(&c, "mailbox", "messages", "p", None, &json!({"title":"옛제목입니다"})).unwrap();
-        assert_eq!(search(&c, "mailbox", "messages", "옛제목", None, None, None).unwrap().len(), 1);
+        let id = put(
+            &c,
+            "mailbox",
+            "messages",
+            "p",
+            None,
+            &json!({"title":"옛제목입니다"}),
+        )
+        .unwrap();
+        assert_eq!(
+            search(&c, "mailbox", "messages", "옛제목", None, None, None)
+                .unwrap()
+                .len(),
+            1
+        );
         // 갱신 → 옛 텍스트는 더이상 검색 안 됨.
-        put(&c, "mailbox", "messages", "p", Some(id.clone()), &json!({"title":"새제목입니다"})).unwrap();
-        assert_eq!(search(&c, "mailbox", "messages", "옛제목", None, None, None).unwrap().len(), 0);
-        assert_eq!(search(&c, "mailbox", "messages", "새제목", None, None, None).unwrap().len(), 1);
+        put(
+            &c,
+            "mailbox",
+            "messages",
+            "p",
+            Some(id.clone()),
+            &json!({"title":"새제목입니다"}),
+        )
+        .unwrap();
+        assert_eq!(
+            search(&c, "mailbox", "messages", "옛제목", None, None, None)
+                .unwrap()
+                .len(),
+            0
+        );
+        assert_eq!(
+            search(&c, "mailbox", "messages", "새제목", None, None, None)
+                .unwrap()
+                .len(),
+            1
+        );
         // 삭제 → FTS 도 정리.
         assert!(delete(&c, "mailbox", "messages", &id, None).unwrap());
-        assert_eq!(search(&c, "mailbox", "messages", "새제목", None, None, None).unwrap().len(), 0);
+        assert_eq!(
+            search(&c, "mailbox", "messages", "새제목", None, None, None)
+                .unwrap()
+                .len(),
+            0
+        );
     }
 
     #[test]
     fn where_builder_rejects_undeclared_and_unknown_op() {
         let c = mem();
         define(&c, "mailbox", "messages", &["read".into()], &[]).unwrap();
-        put(&c, "mailbox", "messages", "p", None, &json!({"read":false,"secret":"x"})).unwrap();
+        put(
+            &c,
+            "mailbox",
+            "messages",
+            "p",
+            None,
+            &json!({"read":false,"secret":"x"}),
+        )
+        .unwrap();
         // 선언 안 된 필드 거부.
-        assert!(query(&c, "mailbox", "messages", None, Some(&json!({"secret":"x"})), None, true, None, None, None).is_err());
+        assert!(query(
+            &c,
+            "mailbox",
+            "messages",
+            None,
+            Some(&json!({"secret":"x"})),
+            None,
+            true,
+            None,
+            None,
+            None
+        )
+        .is_err());
         // 알 수 없는 연산자 거부.
-        assert!(query(&c, "mailbox", "messages", None, Some(&json!({"read":{"op":"xx","value":1}})), None, true, None, None, None).is_err());
+        assert!(query(
+            &c,
+            "mailbox",
+            "messages",
+            None,
+            Some(&json!({"read":{"op":"xx","value":1}})),
+            None,
+            true,
+            None,
+            None,
+            None
+        )
+        .is_err());
         // injection 문자열은 리터럴(매칭 0, 에러 아님).
-        let r = query(&c, "mailbox", "messages", None, Some(&json!({"read":"false' OR '1'='1"})), None, true, None, None, None).unwrap();
+        let r = query(
+            &c,
+            "mailbox",
+            "messages",
+            None,
+            Some(&json!({"read":"false' OR '1'='1"})),
+            None,
+            true,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         assert_eq!(r.len(), 0);
     }
 
     #[test]
     fn define_idempotent() {
         let c = mem();
-        define(&c, "mailbox", "messages", &["read".into()], &["title".into()]).unwrap();
+        define(
+            &c,
+            "mailbox",
+            "messages",
+            &["read".into()],
+            &["title".into()],
+        )
+        .unwrap();
         // 재호출 — 에러 없이 통과(CREATE ... IF NOT EXISTS).
-        define(&c, "mailbox", "messages", &["read".into(), "type".into()], &["title".into()]).unwrap();
-        put(&c, "mailbox", "messages", "p", None, &json!({"read":true,"type":"x","title":"제목제목"})).unwrap();
-        assert_eq!(search(&c, "mailbox", "messages", "제목제목", None, None, None).unwrap().len(), 1);
+        define(
+            &c,
+            "mailbox",
+            "messages",
+            &["read".into(), "type".into()],
+            &["title".into()],
+        )
+        .unwrap();
+        put(
+            &c,
+            "mailbox",
+            "messages",
+            "p",
+            None,
+            &json!({"read":true,"type":"x","title":"제목제목"}),
+        )
+        .unwrap();
+        assert_eq!(
+            search(&c, "mailbox", "messages", "제목제목", None, None, None)
+                .unwrap()
+                .len(),
+            1
+        );
     }
 }

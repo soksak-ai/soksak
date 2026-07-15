@@ -10,7 +10,7 @@ use std::path::{Component, Path, PathBuf};
 
 const SHA256_HEX_LEN: usize = 64;
 
-fn sha256_hex(body: &[u8]) -> String {
+pub(crate) fn sha256_hex(body: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(body);
     hasher
@@ -20,7 +20,7 @@ fn sha256_hex(body: &[u8]) -> String {
         .collect()
 }
 
-fn verify_sha256(body: &[u8], expected: &str) -> Result<(), String> {
+pub(crate) fn verify_sha256(body: &[u8], expected: &str) -> Result<(), String> {
     if expected.len() != SHA256_HEX_LEN
         || !expected
             .bytes()
@@ -243,11 +243,20 @@ pub fn download_unpack_verify(
     dest_dir: &Path,
     entry: &str,
 ) -> Result<(), String> {
+    let body = download_verified_bytes(url, sha256)?;
+    unpack_verify_install(&body, sha256, dest_dir, entry)
+}
+
+pub(crate) fn download_verified_bytes(url: &str, sha256: &str) -> Result<Vec<u8>, String> {
     let body = reqwest::blocking::get(url)
         .map_err(|e| e.to_string())?
         .bytes()
         .map_err(|e| e.to_string())?;
-    unpack_verify_install(&body, sha256, dest_dir, entry)
+    if body.len() > MAX_ARCHIVE_BYTES {
+        return Err(format!("archive 압축 크기 한도 초과: {MAX_ARCHIVE_BYTES}"));
+    }
+    verify_sha256(&body, sha256)?;
+    Ok(body.to_vec())
 }
 
 const MAX_ARCHIVE_BYTES: usize = 512 * 1024 * 1024;
@@ -267,7 +276,7 @@ fn windows_reserved_name(segment: &str) -> bool {
 
 /// One portable spelling for every archive path. No host normalization or filesystem lookup is
 /// allowed to reinterpret an owner-provided name.
-fn validate_archive_path(path: &str) -> Result<PathBuf, String> {
+pub(crate) fn validate_archive_path(path: &str) -> Result<PathBuf, String> {
     if path.is_empty()
         || path.len() > MAX_ARCHIVE_PATH_BYTES
         || path.starts_with('/')
@@ -409,6 +418,15 @@ pub fn unpack_verify_install(
     dest_dir: &Path,
     entry: &str,
 ) -> Result<(), String> {
+    unpack_verify_install_entries(body, sha256, dest_dir, &[entry.to_string()])
+}
+
+pub(crate) fn unpack_verify_install_entries(
+    body: &[u8],
+    sha256: &str,
+    dest_dir: &Path,
+    entries: &[String],
+) -> Result<(), String> {
     if body.len() > MAX_ARCHIVE_BYTES {
         return Err(format!("archive 압축 크기 한도 초과: {MAX_ARCHIVE_BYTES}"));
     }
@@ -426,15 +444,26 @@ pub fn unpack_verify_install(
     crate::path_security::reject_symlink_components(parent)?;
     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     crate::path_security::reject_symlink_components(parent)?;
-    let expected_entry = validate_archive_path(entry)?;
+    if entries.is_empty() {
+        return Err("최소 한 개의 선언 entrypoint가 필요합니다".into());
+    }
+    let expected_entries = entries
+        .iter()
+        .map(|entry| validate_archive_path(entry))
+        .collect::<Result<Vec<_>, _>>()?;
+    if expected_entries.iter().collect::<HashSet<_>>().len() != expected_entries.len() {
+        return Err("중복 선언 entrypoint는 금지됩니다".into());
+    }
     let tmp_dir = parent.join(format!(".unpack-{}", uuid::Uuid::new_v4()));
     fs::create_dir(&tmp_dir).map_err(|e| format!("임시 설치 디렉터리 생성 실패: {e}"))?;
     let extracted = extract_regular_archive(body, &tmp_dir).and_then(|()| {
-        let installed_entry = tmp_dir.join(&expected_entry);
-        let metadata = fs::symlink_metadata(&installed_entry)
-            .map_err(|_| format!("아카이브에 entry 없음: {entry}"))?;
-        if !metadata.is_file() || metadata.file_type().is_symlink() {
-            return Err(format!("아카이브 entry가 regular file이 아닙니다: {entry}"));
+        for (entry, expected_entry) in entries.iter().zip(expected_entries.iter()) {
+            let installed_entry = tmp_dir.join(expected_entry);
+            let metadata = fs::symlink_metadata(&installed_entry)
+                .map_err(|_| format!("아카이브에 entry 없음: {entry}"))?;
+            if !metadata.is_file() || metadata.file_type().is_symlink() {
+                return Err(format!("아카이브 entry가 regular file이 아닙니다: {entry}"));
+            }
         }
         Ok(())
     });

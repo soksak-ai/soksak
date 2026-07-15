@@ -66,7 +66,8 @@ pub struct Stats {
 
 pub fn stats(conn: &Connection) -> Result<Stats, String> {
     let one = |sql: &str| -> i64 {
-        conn.query_row(sql, [], |r| r.get::<_, i64>(0)).unwrap_or(-1)
+        conn.query_row(sql, [], |r| r.get::<_, i64>(0))
+            .unwrap_or(-1)
     };
     let version: String = conn
         .query_row("SELECT sqlite_version()", [], |r| r.get(0))
@@ -110,10 +111,8 @@ mod tests {
         use std::sync::atomic::{AtomicU32, Ordering};
         static N: AtomicU32 = AtomicU32::new(0);
         let n = N.fetch_add(1, Ordering::Relaxed);
-        let p = std::env::temp_dir().join(format!(
-            "soksak-integrity-{}-{n}.db",
-            std::process::id()
-        ));
+        let p =
+            std::env::temp_dir().join(format!("soksak-integrity-{}-{n}.db", std::process::id()));
         let _ = std::fs::remove_file(&p);
         p
     }
