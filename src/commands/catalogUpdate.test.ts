@@ -1,6 +1,5 @@
-// update.* 오케스트레이터 계약 테스트 — HS1 축 순서·release 채널 게이트·loud 고지·dev 스킵.
-// invoke(코어)·usePlugins(store)·publishActivity(허브)는 mock. 각 설치 프리미티브는 경계가
-// 소유하므로 여기선 "올바른 축을 올바른 순서·게이트로 부르는가"만 증명한다.
+// update.* 오케스트레이터 계약 테스트 — 중단 범위 순서, release identity 게이트,
+// 인증된 plugin closure 갱신, 이벤트 고지를 검증한다.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const invoke = vi.fn();
@@ -9,9 +8,12 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 const pluginUpdate = vi.fn();
-let pluginState: { plugins: Record<string, { source: string }>; release: boolean; update: typeof pluginUpdate };
+let pluginState: { plugins: Record<string, { source: string }>; release: boolean };
 vi.mock("../state/plugins", () => ({
   usePlugins: { getState: () => pluginState },
+}));
+vi.mock("../plugins/registryInstallService", () => ({
+  updateCertifiedRegistryPlugin: (...args: unknown[]) => pluginUpdate(...args),
 }));
 
 const publishActivity = vi.fn();
@@ -33,7 +35,7 @@ beforeEach(() => {
   invoke.mockReset();
   pluginUpdate.mockReset();
   publishActivity.mockClear();
-  pluginState = { plugins: {}, release: false, update: pluginUpdate };
+  pluginState = { plugins: {}, release: false };
   registerUpdateCatalog();
 });
 afterEach(() => {
@@ -77,8 +79,8 @@ describe("update.apply 채널 게이트 (HOME 정책: 앱 본체 원격은 relea
     pluginState.release = true;
     route({
       pty_daemon_upgrade: { sessions: 0 },
-      update_check: { available: true, version: "0.3.0", channel: "release" },
-      update_apply: { installed: true, version: "0.3.0" },
+      update_check: { available: true, version: "0.0.1", channel: "release" },
+      update_apply: { installed: true, version: "0.0.1" },
       app_relaunch: null,
     });
 
@@ -91,7 +93,7 @@ describe("update.apply 채널 게이트 (HOME 정책: 앱 본체 원격은 relea
     expect(order.indexOf("pty_daemon_upgrade")).toBeLessThan(order.indexOf("update_apply"));
     expect(order.indexOf("update_apply")).toBeLessThan(order.indexOf("app_relaunch"));
     const applied = (r.data as { applied: { axis: string; version?: string }[] }).applied;
-    expect(applied).toContainEqual({ axis: "app", version: "0.3.0" });
+    expect(applied).toContainEqual({ axis: "app", version: "0.0.1" });
   });
 
   it("release 라도 새 판 없으면 relaunch 안 함(UPTODATE 스킵)", async () => {
@@ -111,35 +113,35 @@ describe("update.apply 채널 게이트 (HOME 정책: 앱 본체 원격은 relea
   });
 });
 
-describe("update.apply 축 순서·선택 (HS1: 플러그인 → 사이드카 → ptyd → 앱)", () => {
-  it("플러그인은 installed 만(dev 스킵), 사이드카 뒤에, 지정 순서로 반영", async () => {
+describe("update.apply 축 순서·선택", () => {
+  it("installed plugin closure만 갱신하고 development source는 건너뛴다", async () => {
     pluginState.release = false;
     pluginState.plugins = {
       "soksak-plugin-a": { source: "installed" },
       "soksak-plugin-dev": { source: "dev" },
     };
-    pluginUpdate.mockResolvedValue({ ok: true, id: "soksak-plugin-a", version: "1.2.0" });
+    pluginUpdate.mockResolvedValue({
+      ok: true,
+      id: "soksak-plugin-a",
+      version: "0.0.1",
+      generation: "generation-1",
+    });
     route({});
 
     const r = await execute(
       "update.apply",
-      { sidecars: [{ name: "terminal-alacritty", url: "u", sha256: "s" }], daemon: false, app: false },
+      { daemon: false, app: false },
       {},
     );
 
     // dev 플러그인은 update 호출 대상 아님 — installed 만.
     expect(pluginUpdate).toHaveBeenCalledTimes(1);
     expect(pluginUpdate).toHaveBeenCalledWith("soksak-plugin-a");
-    expect(invoke).toHaveBeenCalledWith("sidecar_ensure", {
-      name: "terminal-alacritty",
-      url: "u",
-      sha256: "s",
-    });
     // daemon:false·app:false → 그 축은 아예 손대지 않는다.
     const called = invoke.mock.calls.map((c) => c[0]);
     expect(called).not.toContain("pty_daemon_upgrade");
     const applied = (r.data as { applied: { axis: string }[] }).applied;
-    expect(applied.map((a) => a.axis)).toEqual(["plugin", "sidecar"]);
+    expect(applied.map((a) => a.axis)).toEqual(["plugin"]);
   });
 
   it("플러그인 update 실패는 skipped 로 기록(축 진행은 계속)", async () => {

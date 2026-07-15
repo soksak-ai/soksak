@@ -1,4 +1,4 @@
-// resolveTerminalProgram — 코어의 터미널 어포던스가 겨냥하는 계약(soksak-spec-plugin-terminal@1)을 설정 엔진의
+// resolveTerminalProgram — 코어의 터미널 어포던스가 겨냥하는 계약(soksak-spec-plugin-terminal)을 설정 엔진의
 // program id 로 해소한다. 특정 플러그인/ program id 하드코딩 없이 발견·선택으로만 결정한다.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -24,7 +24,7 @@ function enginePlugin(
   status: "enabled" | "disabled" = "enabled",
 ): PluginRuntime {
   return {
-    manifest: { id, implements: [TERMINAL_CONTRACT] } as unknown as PluginManifest,
+    manifest: { id, implements: [{ id: TERMINAL_CONTRACT.id, version: "0.0.1" }] } as unknown as PluginManifest,
     dir: "",
     source: "dev",
     status,
@@ -54,6 +54,13 @@ afterEach(() => {
 });
 
 describe("resolveTerminalProgram", () => {
+  it("pins the first-party terminal requirement to the exact 0.0.1 contract", () => {
+    expect(TERMINAL_CONTRACT).toEqual({
+      id: "soksak-spec-plugin-terminal",
+      range: "0.0.1",
+    });
+  });
+
   it("활성 터미널 구현체가 없으면 null", () => {
     expect(resolveTerminalProgram()).toBeNull();
   });
@@ -70,7 +77,7 @@ describe("resolveTerminalProgram", () => {
     usePlugins.setState({
       plugins: { [XTERM]: enginePlugin(XTERM), [GHOSTTY]: enginePlugin(GHOSTTY) },
     });
-    useContractSelection.setState({ selected: { [TERMINAL_CONTRACT]: GHOSTTY } });
+    useContractSelection.setState({ selected: { [TERMINAL_CONTRACT.id]: GHOSTTY } });
     expect(resolveTerminalProgram()).toBe("terminal-ghostty");
   });
 
@@ -86,7 +93,7 @@ describe("resolveTerminalProgram", () => {
   it("stale 선택(비활성/미발견)은 첫 구현체로 폴백한다", () => {
     disposers.push(registerProgram(XTERM, "terminal-xterm"));
     usePlugins.setState({ plugins: { [XTERM]: enginePlugin(XTERM) } });
-    useContractSelection.setState({ selected: { [TERMINAL_CONTRACT]: GHOSTTY } });
+    useContractSelection.setState({ selected: { [TERMINAL_CONTRACT.id]: GHOSTTY } });
     expect(resolveTerminalProgram()).toBe("terminal-xterm");
   });
 

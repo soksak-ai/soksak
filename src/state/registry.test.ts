@@ -1,57 +1,137 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useRegistry } from "./registry";
-import { REGISTRY_SPEC } from "../plugins/registry";
 
-function remoteJson(ids: string[]) {
+const memory = new Map<string, string>();
+const storage = {
+  getItem: (key: string) => memory.get(key) ?? null,
+  setItem: (key: string, value: string) => void memory.set(key, value),
+  removeItem: (key: string) => void memory.delete(key),
+  clear: () => memory.clear(),
+};
+vi.stubGlobal("localStorage", storage);
+
+const { invoke } = vi.hoisted(() => ({
+  invoke: vi.fn<(command: string, args?: unknown) => Promise<unknown>>(async () => undefined),
+}));
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (command: string, args?: unknown) => invoke(command, args),
+}));
+
+import { OFFICIAL_REGISTRY_ID, type RegistryDescriptor } from "../plugins/registry";
+import { setRegistryRuntimeDeps, useRegistry } from "./registry";
+
+const FIXTURES = join(process.cwd(), "packages/plugin-spec/test/fixtures/platform-wire");
+
+function json(name: string): any {
+  return JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
+}
+
+function fixtureDescriptor(overrides: Partial<RegistryDescriptor> = {}): RegistryDescriptor {
   return {
-    ok: true,
-    json: async () => ({
-      spec: REGISTRY_SPEC,
-      plugins: ids.map((id) => ({
-        id,
-        name: id,
-        version: "9.9.9",
-        description: "원격",
-        repo: `https://github.com/soksak-ai/${id}.git`,
-      })),
-    }),
+    id: "fixture",
+    name: "Fixture",
+    indexUrl: "https://registry.example.test/index.json",
+    visibility: "public",
+    trustedPublicKey: json("registry-public-key.json"),
+    ...overrides,
   };
 }
 
-describe("useRegistry — fetch/머지/세션1회", () => {
+const initial = useRegistry.getState();
+const bootstrap = {
+  entries: [],
+  units: [],
+  descriptors: structuredClone(initial.descriptors),
+  registries: Object.fromEntries(initial.descriptors.map((descriptor) => [descriptor.id, {
+    descriptor,
+    status: "idle" as const,
+    fetchedOnce: false,
+    entries: [],
+  }])),
+  trustRecords: structuredClone(initial.trustRecords),
+  status: "idle" as const,
+  fetchedOnce: false,
+  events: [] as typeof initial.events,
+};
+
+let restore = () => {};
+
+describe("registry state", () => {
   beforeEach(() => {
-    // 매 테스트 store 초기화(스냅샷 상태로).
-    useRegistry.setState({ status: "snapshot", fetchedOnce: false });
-  });
-  afterEach(() => vi.unstubAllGlobals());
-
-  it("스냅샷으로 즉시 표시(엔트리 존재)", () => {
-    expect(useRegistry.getState().entries.length).toBeGreaterThanOrEqual(16);
-    expect(useRegistry.getState().status).toBe("snapshot");
-  });
-
-  it("원격 성공 → live + 원격 목록 채택", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => remoteJson(["soksak-remote-only"])));
-    await useRegistry.getState().refresh();
-    expect(useRegistry.getState().status).toBe("live");
-    expect(useRegistry.getState().entries.map((p) => p.id)).toEqual(["soksak-remote-only"]);
+    memory.clear();
+    invoke.mockReset();
+    useRegistry.setState(structuredClone(bootstrap));
+    restore = setRegistryRuntimeDeps({
+      load: vi.fn(async () => json("registry-signed.json")),
+      now: () => Date.parse("2026-07-14T12:00:00Z"),
+    });
   });
 
-  it("원격 실패 → error + 스냅샷 엔트리 유지", async () => {
-    const before = useRegistry.getState().entries;
-    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("offline"); }));
-    await useRegistry.getState().refresh();
-    expect(useRegistry.getState().status).toBe("error");
-    expect(useRegistry.getState().entries).toBe(before); // 불변
+  afterEach(() => restore());
+
+  it("keeps each registry independent when another source fails", async () => {
+    useRegistry.getState().add(fixtureDescriptor());
+    useRegistry.getState().add(fixtureDescriptor({
+      id: "offline",
+      name: "Offline",
+      indexUrl: "https://offline.example.test/index.json",
+    }));
+    restore();
+    restore = setRegistryRuntimeDeps({
+      load: vi.fn(async (descriptor) => {
+        if (descriptor.id === "offline") throw new Error("offline");
+        return json("registry-signed.json");
+      }),
+      now: () => Date.parse("2026-07-14T12:00:00Z"),
+    });
+
+    await useRegistry.getState().refresh(true);
+
+    expect(useRegistry.getState().registries.fixture.status).toBe("live");
+    expect(useRegistry.getState().registries.offline.status).toBe("error");
+    expect(useRegistry.getState().registries.fixture.entries).toHaveLength(3);
   });
 
-  it("세션 1회 — 두 번째 refresh 는 skip, force 면 재시도", async () => {
-    const fetchMock = vi.fn(async () => remoteJson(["a"]));
-    vi.stubGlobal("fetch", fetchMock);
-    await useRegistry.getState().refresh();
-    await useRegistry.getState().refresh(); // skip(fetchedOnce)
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    await useRegistry.getState().refresh(true); // force
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+  it("uses a core-derived vault slot for private registry authorization", async () => {
+    const privateDescriptor = fixtureDescriptor({ visibility: "private" });
+    useRegistry.getState().add(privateDescriptor);
+    useRegistry.getState().registries.fixture.descriptor.credentialRef = "another-owner/token";
+    invoke.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: JSON.stringify(json("registry-signed.json")),
+    });
+    restore();
+    restore = setRegistryRuntimeDeps({ now: () => Date.parse("2026-07-14T12:00:00Z") });
+
+    await useRegistry.getState().refresh(true, "fixture");
+
+    expect(invoke).toHaveBeenCalledWith("net_http_request", expect.objectContaining({
+      method: "GET",
+      url: privateDescriptor.indexUrl,
+      ns: "core_registry-fixture",
+    }));
+    const args = invoke.mock.calls[0][1] as {
+      headers: { authorization: string };
+      secretSubst: Record<string, string>;
+    };
+    expect(args.secretSubst).toEqual({ [args.headers.authorization]: "http-authorization" });
+    expect(useRegistry.getState().registries.fixture.status).toBe("live");
+  });
+
+  it("does not remove the built-in trust root", () => {
+    expect(useRegistry.getState().remove(OFFICIAL_REGISTRY_ID))
+      .toMatchObject({ ok: false, code: "INVALID_PARAMS" });
+  });
+
+  it("exposes explicit lifecycle events without polling", async () => {
+    useRegistry.getState().add(fixtureDescriptor());
+    await useRegistry.getState().refresh(true, "fixture");
+    expect(useRegistry.getState().events.map((event) => event.type)).toEqual([
+      "registry.added",
+      "registry.refresh.started",
+      "registry.refresh.succeeded",
+    ]);
   });
 });

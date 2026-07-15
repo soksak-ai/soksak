@@ -1332,8 +1332,8 @@ export function registerCatalog(): void {
         else
           skipped.push({
             space: "dev",
-            program: TERMINAL_CONTRACT,
-            reason: tmsg("layout.skip.unregistered", { program: TERMINAL_CONTRACT }),
+            program: TERMINAL_CONTRACT.id,
+            reason: tmsg("layout.skip.unregistered", { program: TERMINAL_CONTRACT.id }),
           });
         if (browserId) panels.push({ program: browserId, side: "right" });
         else

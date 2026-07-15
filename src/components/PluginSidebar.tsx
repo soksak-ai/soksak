@@ -1,11 +1,10 @@
 // 우측 플러그인 사이드바 — 아이콘 레일(등록된 sidebar-right 뷰들 + ⚙ 관리) + 활성 뷰.
 // keep-alive: 한 번 연 뷰는 숨김(display)으로 유지 — 프로젝트별 인스턴스(App.tsx 의
 // terminal-pane 안에서 렌더되므로 프로젝트 전환에도 세션 유지, 앱 관례 동일).
-// 관리 패널: 설치(git 소스)·동의·활성/비활성·갱신·제거·rejected 사유 — 설정 모달과
+// 관리 패널: 인증된 release 설치·동의·활성/비활성·갱신·제거·rejected 사유 — 설정 모달과
 // 분리된 플러그인 전용 관리 표면.
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { isComposingEnter } from "../lib/imeKeys";
 import { Icon } from "../ui/icons/Icon";
 import {
   useViewRegistry,
@@ -21,6 +20,7 @@ import { PluginViewHost } from "./PluginViewHost";
 import { ViewBadge } from "./ViewBadge";
 import { PluginConsentModal } from "./PluginConsentModal";
 import { localize, useT } from "../i18n";
+import { execute } from "../commands/registry";
 
 const MANAGER = "manager"; // 예약 키 — 뷰 전역 키는 항상 점을 포함하므로 충돌 없음.
 
@@ -164,8 +164,8 @@ function statusKey(p: PluginRuntime): "enabled" | "disabled" | "error" {
   return p.status;
 }
 
-// 설치 가능 목록(공식 레지스트리) — 빌드 스냅샷 + 세션1회 온라인 갱신(useRegistry). 각 엔트리는
-// repo 를 source 로 plugin.install, 이미 설치/업데이트가능은 설치본 버전과 비교(installState).
+// 설치 가능 목록은 인증된 release reference만 표시한다. 이름·설명·명령은 설치된 owner
+// manifest가 제공하며 registry가 복제하지 않는다.
 function RegistrySection({
   busy,
   run,
@@ -186,9 +186,12 @@ function RegistrySection({
   const stateOf = (e: RegistryEntry) =>
     installState(e, installed[e.id]?.manifest.version, installed[e.id]?.source);
   const doInstall = (e: RegistryEntry) =>
-    run(() => usePlugins.getState().install(e.repo, e.branch));
+    run(() => execute("plugin.install", {
+      registryId: e.registryId,
+      unitId: e.unitId,
+    }, {}));
   const doUpdate = (e: RegistryEntry) =>
-    run(() => usePlugins.getState().update(e.id));
+    doInstall(e);
 
   return (
     <>
@@ -216,10 +219,10 @@ function RegistrySection({
           return (
             <div key={e.id} className="plugin-row">
               <div className="plugin-row-title">
-                <span className="plugin-row-name">{localize(e.name)}</span>
+                <span className="plugin-row-name">{e.id}</span>
                 <span className="plugin-row-ver">v{e.version}</span>
               </div>
-              <div className="plugin-row-desc">{localize(e.description)}</div>
+              <div className="plugin-row-desc">{e.manifest.url}</div>
               <div className="plugin-row-actions">
                 {st === "available" && (
                   <button type="button" className="dbtn dbtn-acc" disabled={busy} onClick={() => doInstall(e)}>
@@ -250,8 +253,6 @@ function PluginManagerPanel() {
     () => new Set(registryEntries.map((e) => e.id)),
     [registryEntries],
   );
-  const [source, setSource] = useState("");
-  const [refName, setRefName] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   // 동의 큐 — 종속이 강력한 권한을 가지므로, 활성화에 필요한 미동의 체인(종속 먼저)을 큐로 받아
@@ -277,20 +278,6 @@ function PluginManagerPanel() {
       setBusy(false);
     }
   };
-
-  const doInstall = () =>
-    run(async () => {
-      const s = source.trim();
-      if (!s) return { ok: false, message: t("plugin.install.sourceRequired") };
-      const r = await usePlugins
-        .getState()
-        .install(s, refName.trim() || undefined);
-      if (r.ok) {
-        setSource("");
-        setRefName("");
-      }
-      return r;
-    });
 
   const doEnable = (p: PluginRuntime) =>
     run(async () => {
@@ -336,32 +323,6 @@ function PluginManagerPanel() {
 
   return (
     <div className="plugin-manager">
-      <div className="dsec">{t("plugin.install.section")}</div>
-      <div className="plugin-install-row">
-        <input
-          className="plugin-input"
-          placeholder={t("plugin.install.sourcePh")}
-          value={source}
-          disabled={busy}
-          onChange={(e) => setSource(e.target.value)}
-          onKeyDown={(e) =>
-            e.key === "Enter" && !isComposingEnter(e) && doInstall()
-          }
-        />
-        <input
-          className="plugin-input plugin-input-ref"
-          placeholder={t("plugin.install.refPh")}
-          value={refName}
-          disabled={busy}
-          onChange={(e) => setRefName(e.target.value)}
-          onKeyDown={(e) =>
-            e.key === "Enter" && !isComposingEnter(e) && doInstall()
-          }
-        />
-        <button type="button" className="dbtn" disabled={busy} onClick={doInstall}>
-          {t("plugin.install")}
-        </button>
-      </div>
       {msg && <div className="plugin-msg">{msg}</div>}
 
       <RegistrySection busy={busy} run={run} installed={plugins} />

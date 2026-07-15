@@ -16,7 +16,7 @@ import {
   VIEW_PLACEMENTS,
   configDefaults,
   configSettingOf,
-  resolveText,
+  parseContractRequirement,
   validateSettingValue,
   type ViewPlacement,
 } from "../plugins/spec";
@@ -35,7 +35,6 @@ import {
   rawImplements,
   type ImplementsNode,
 } from "../plugins/contractDiscovery";
-import { CONTRACT_ID_RE } from "../plugins/spec";
 import { implementsViolations, executedCommandNames, unresolvedCommandCalls } from "../plugins/conformance";
 import { register, catalogJson, setUnknownCommandResolver, type CommandHint } from "./registry";
 import { collectExposed } from "./catalogDom";
@@ -51,6 +50,17 @@ import {
 } from "../plugins/conformance";
 import { useUi } from "../state/ui";
 import { consentSummary } from "../plugins/consentSummary";
+import {
+  OFFICIAL_REGISTRY_ID,
+  parseRegistryDescriptor,
+  resolveRegistryUnit,
+  type QualifiedRegistryEntry,
+} from "../plugins/registry";
+import {
+  installQualifiedRegistryEntry,
+  updateCertifiedRegistryPlugin,
+} from "../plugins/registryInstallService";
+import { publishActivity } from "../state/activityFeed";
 
 // 설치/dev 런타임 → 의존 그래프 노드(매니페스트 dependencies 기준).
 function depNodes(): DepNode[] {
@@ -143,12 +153,30 @@ export function registerPluginCatalog(): void {
     return null;
   };
   const shortName = (id: string): string => id.replace(/^soksak-plugin-/, "");
+  const qualifiedInstallCommand = (entry: Pick<QualifiedRegistryEntry, "registryId" | "unitId">): string =>
+    `sok plugin.install '${JSON.stringify({ registryId: entry.registryId, unitId: entry.unitId })}'`;
 
-  // UNKNOWN_COMMAND 지능형 안내 — 미지의 명령이 레지스트리 카탈로그의 선언 명령과 일치하면
-  // 원인(미설치/비활성)에 맞는 설치·활성 명령을 hint 로 제시한다. 발견→설치→활성 사이클이
-  // 오류 응답에서도 이어진다(사용자 확정 2026-07-07).
+  const installResolution = (raw: string, registryId?: string) => {
+    const unitIds = raw.startsWith("soksak-plugin-") ? [raw] : [`soksak-plugin-${raw}`, raw];
+    for (const unitId of unitIds) {
+      const resolved = resolveRegistryUnit(useRegistry.getState().units, {
+        registryId,
+        unitId,
+        kind: "plugin",
+      });
+      if (resolved.ok || resolved.reason !== "not_found") return resolved;
+    }
+    return resolveRegistryUnit(useRegistry.getState().units, {
+      registryId,
+      unitId: unitIds[0],
+      kind: "plugin",
+    });
+  };
+
+  // Qualified plugin command names expose the owning unit id. The registry may suggest
+  // installing that unit, but it cannot copy or claim the owner's command declarations.
   setUnknownCommandResolver((name): CommandHint[] => {
-    const entries = useRegistry.getState().entries;
+    const entries = useRegistry.getState().units.filter((entry) => entry.kind === "plugin");
     const installed = usePlugins.getState().plugins;
     // 제어판(main)은 플러그인을 로드하지 않는다 — 여기서 플러그인 명령이 미지인 것은 설치
     // 문제가 아니라 창 문제다. 설치 안내는 오진(실측: 외부 에이전트가 재시도 반복).
@@ -160,34 +188,24 @@ export function registerPluginCatalog(): void {
     const m = /^plugin\.(soksak-plugin-[a-z0-9-]+)\.(.+)$/.exec(name);
     if (m) {
       const [, pid, sub] = m;
-      const entry = entries.find((e) => e.id === pid);
+      const matching = entries.filter((e) => e.unitId === pid);
       const runtime = installed[pid];
       if (runtime && runtime.status !== "enabled") {
         return [{ cmd: `sok plugin.enable ${shortName(pid)}`, why: tmsg("hint.error.pluginDisabled", { plugin: pid }) }];
       }
-      if (entry && controlPlane) return controlPlaneHint();
-      if (!runtime && entry) {
-        return [{ cmd: `sok plugin.install ${shortName(pid)}`, why: tmsg("hint.error.pluginNotInstalled", { plugin: pid, command: sub }) }];
+      if (matching.length && controlPlane) return controlPlaneHint();
+      if (!runtime && matching.length) {
+        return matching.slice(0, 3).map((entry) => ({
+          cmd:
+            matching.length === 1 && entry.registryId === OFFICIAL_REGISTRY_ID
+              ? `sok plugin.install ${shortName(pid)}`
+              : qualifiedInstallCommand(entry),
+          why: tmsg("hint.error.pluginNotInstalled", { plugin: pid, command: sub }),
+        }));
       }
       return [];
     }
-    // 형태 ②: 접두 없는 이름 — 카탈로그의 선언 명령에서 같은 이름을 찾는다(최대 3건).
-    const hits: CommandHint[] = [];
-    for (const e of entries) {
-      if (!e.commands?.some((c) => c.name === name)) continue;
-      if (controlPlane) return controlPlaneHint();
-      const runtime = installed[e.id];
-      const full = `plugin.${e.id}.${name}`;
-      if (runtime?.status === "enabled") {
-        hits.push({ cmd: `sok ${full}`, why: tmsg("hint.error.pluginCommandFullName", { plugin: e.id }) });
-      } else if (runtime) {
-        hits.push({ cmd: `sok plugin.enable ${shortName(e.id)}`, why: tmsg("hint.error.pluginDisabled", { plugin: e.id }) });
-      } else {
-        hits.push({ cmd: `sok plugin.install ${shortName(e.id)}`, why: tmsg("hint.error.pluginNotInstalled", { plugin: e.id, command: name }) });
-      }
-      if (hits.length >= 3) break;
-    }
-    return hits;
+    return [];
   });
 
   register("plugin.list", {
@@ -214,49 +232,205 @@ export function registerPluginCatalog(): void {
     },
   });
 
+  const serializeRegistrySource = (registryId: string) => {
+    const source = useRegistry.getState().registries[registryId];
+    if (!source) return null;
+    return {
+      ...source.descriptor,
+      status: source.status,
+      fetchedOnce: source.fetchedOnce,
+      unitCount: source.entries.length,
+      lastFetchedAt: source.lastFetchedAt ?? null,
+      error: source.error ?? null,
+    };
+  };
+
+  register("registry.list", {
+    description:
+      "List configured official, public, and private registry descriptors with pinned public-key metadata and per-registry status. A private credential is represented only by its core-derived opaque slot reference; secret values are never returned.",
+    triggers: { ko: "레지스트리 목록 공개 비공개 신뢰키 상태" },
+    params: {},
+    returns:
+      "{ registries: [{id,name,indexUrl,visibility,trustedPublicKey,credentialRef?,status,unitCount,lastFetchedAt,error}] }",
+    message: (d) => tmsg("msg.registry.list", { n: ((d.registries as unknown[]) ?? []).length }),
+    errors: [],
+    examples: ["sok registry.list"],
+    handler: () => ({
+      registries: useRegistry.getState().descriptors
+        .map((descriptor) => serializeRegistrySource(descriptor.id))
+        .filter(Boolean),
+    }),
+  });
+
+  register("registry.add", {
+    description:
+      "Add a public or private registry descriptor. The descriptor is strict: a credential-free HTTPS index URL and pinned Ed25519 public key. For private registries the core derives one vault credential slot from registry id; descriptors cannot select a namespace/key, and raw tokens, headers, passwords, URL userinfo, queries, and fragments are rejected.",
+    triggers: { ko: "레지스트리 추가 공개 비공개 신뢰키 vault" },
+    params: {
+      descriptor: {
+        type: "json",
+        required: true,
+        description:
+          "{id,name,indexUrl,visibility:'public'|'private',trustedPublicKey:{algorithm:'ed25519',keyId,value}}; private credentialRef is core-derived read-only metadata",
+      },
+    },
+    returns: "{ registryId }",
+    message: (d) => tmsg("msg.registry.add", { id: String(d.registryId) }),
+    errors: ["INVALID_PARAMS", "ALREADY_EXISTS"],
+    examples: [
+      `sok registry.add '${JSON.stringify({
+        descriptor: {
+          id: "community",
+          name: "Community",
+          indexUrl: "https://registry.example/index.json",
+          visibility: "public",
+          trustedPublicKey: { algorithm: "ed25519", keyId: "publisher-1", value: "<base64-32-byte-public-key>" },
+        },
+      })}'`,
+    ],
+    handler: (p) => {
+      const descriptor = parseRegistryDescriptor(p.descriptor);
+      if (!descriptor) {
+        return { ok: false, code: "INVALID_PARAMS", message: "invalid registry descriptor" };
+      }
+      const result = useRegistry.getState().add(descriptor);
+      if (result.ok) publishActivity("registry.added", "core", { registryId: result.registryId });
+      return result;
+    },
+  });
+
+  register("registry.remove", {
+    description:
+      "Remove a user-added registry descriptor and its cached units. The built-in official registry is immutable and cannot be removed.",
+    triggers: { ko: "레지스트리 제거 삭제" },
+    params: {
+      registryId: { type: "string", required: true, description: "Registry descriptor id" },
+    },
+    returns: "{ registryId }",
+    message: (d) => tmsg("msg.registry.remove", { id: String(d.registryId) }),
+    errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
+    examples: ['sok registry.remove \'{"registryId":"community"}\''],
+    danger: "destructive",
+    handler: (p) => {
+      const result = useRegistry.getState().remove(String(p.registryId));
+      if (result.ok) publishActivity("registry.removed", "core", { registryId: result.registryId });
+      return result;
+    },
+  });
+
+  register("registry.refresh", {
+    description:
+      "Fetch and verify one registry or all registries. Only an index signed by the descriptor-pinned Ed25519 key becomes live; unsigned or mismatched indexes remain uncertified and cached units are not replaced.",
+    triggers: { ko: "레지스트리 새로고침 서명 검증 인증" },
+    params: {
+      registryId: { type: "string", description: "Registry id; omit to refresh all" },
+      force: { type: "boolean", description: "Refetch even when this session already fetched", default: true },
+    },
+    returns: "{ results: [{registryId,status,error?,skipped?}] }",
+    message: (d) => tmsg("msg.registry.refresh", { n: ((d.results as unknown[]) ?? []).length }),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["sok registry.refresh", 'sok registry.refresh \'{"registryId":"community"}\''],
+    handler: async (p) => {
+      const registryId = typeof p.registryId === "string" ? p.registryId : undefined;
+      if (registryId && !useRegistry.getState().registries[registryId]) {
+        return { ok: false, code: "TARGET_NOT_FOUND", message: `registry not found: ${registryId}` };
+      }
+      const results = await useRegistry.getState().refresh(p.force !== false, registryId);
+      for (const result of results) {
+        publishActivity("registry.refreshed", "core", {
+          registryId: result.registryId,
+          status: result.status,
+          ...(result.error ? { error: result.error } : {}),
+        });
+      }
+      return { results };
+    },
+  });
+
+  register("registry.status", {
+    description:
+      "Read per-registry fetch, certification, error, last-fetch, and recent lifecycle-event state without performing network I/O.",
+    triggers: { ko: "레지스트리 상태 오류 이벤트 인증" },
+    params: {
+      registryId: { type: "string", description: "Registry id; omit for all" },
+    },
+    returns: "{ registries: [descriptor+status], events: [{seq,at,type,registryId,detail?}] }",
+    message: (d) => tmsg("msg.registry.status", { n: ((d.registries as unknown[]) ?? []).length }),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["sok registry.status", 'sok registry.status \'{"registryId":"official"}\''],
+    handler: (p) => {
+      const registryId = typeof p.registryId === "string" ? p.registryId : undefined;
+      if (registryId && !useRegistry.getState().registries[registryId]) {
+        return { ok: false, code: "TARGET_NOT_FOUND", message: `registry not found: ${registryId}` };
+      }
+      const state = useRegistry.getState();
+      const descriptors = registryId
+        ? state.descriptors.filter((descriptor) => descriptor.id === registryId)
+        : state.descriptors;
+      return {
+        registries: descriptors.map((descriptor) => serializeRegistrySource(descriptor.id)).filter(Boolean),
+        events: state.events.filter((event) => !registryId || event.registryId === registryId),
+      };
+    },
+  });
+
   register("plugin.catalog", {
     description:
-      "List the official plugin registry (the installable catalog) merged with local install state. Use to discover plugins that are not installed yet — pass the returned repo to plugin.install.",
+      "List authenticated plugin release references from configured registries, merged with local install state. Unit-owned display metadata and commands become available only after release verification.",
     triggers: { ko: "플러그인 카탈로그 레지스트리 설치 가능 목록 마켓 검색" },
     params: {
+      registryId: {
+        type: "string",
+        description: "Limit results and refresh to one registry id",
+      },
       refresh: {
         type: "boolean",
-        description: "Refetch the live registry before listing (default: session cache / build snapshot)",
+        description: "Refetch the signed live registry before listing (default: certified session state)",
       },
     },
     returns:
-      "{ status(snapshot|live|error), plugins: [{id, name, version, description, repo, branch?, commands?, installed, runtimeStatus?}] }",
+      "{ status, registries, plugins: [{registryId,unitId,id,kind,version,manifest,reports,installed,runtimeStatus?}] }",
     message: (d) =>
       tmsg("msg.plugin.catalog", { n: ((d.plugins as unknown[]) ?? []).length }),
+    errors: ["TARGET_NOT_FOUND"],
     examples: ["sok plugin.catalog", 'sok plugin.catalog \'{"refresh":true}\''],
     hint: (d) => {
       // 첫 미설치 항목을 설치 예시로 제시(가능성의 제시) — 전부 설치되어 있으면 생략.
-      const plugins = (d.plugins as { id: string; installed: boolean }[] | undefined) ?? [];
+      const plugins = (d.plugins as (QualifiedRegistryEntry & { installed: boolean })[] | undefined) ?? [];
       const notInstalled = plugins.find((p) => !p.installed);
       if (!notInstalled) return [];
       return [
         {
-          cmd: `sok plugin.install ${shortName(notInstalled.id)}`,
+          cmd: qualifiedInstallCommand(notInstalled),
           why: tmsg("hint.plugin.installNext"),
         },
       ];
     },
     handler: async (p) => {
       const reg = useRegistry.getState();
-      // 기본 = 세션 1회 원격 최신화(이미 했으면 캐시), refresh=true 는 강제 재조회.
-      await reg.refresh(p.refresh === true).catch(() => {});
+      const registryId = typeof p.registryId === "string" ? p.registryId : undefined;
+      if (registryId && !reg.registries[registryId]) {
+        return { ok: false, code: "TARGET_NOT_FOUND", message: `registry not found: ${registryId}` };
+      }
+      await reg.refresh(p.refresh === true, registryId).catch(() => {});
       const st = useRegistry.getState();
       const installed = usePlugins.getState().plugins;
+      const units = st.units.filter((entry) =>
+        entry.kind === "plugin" && (!registryId || entry.registryId === registryId)
+      );
       return {
         status: st.status,
-        plugins: st.entries.map((e) => ({
+        registries: st.descriptors
+          .filter((descriptor) => !registryId || descriptor.id === registryId)
+          .map((descriptor) => serializeRegistrySource(descriptor.id)),
+        plugins: units.map((e) => ({
+          registryId: e.registryId,
+          unitId: e.unitId,
           id: e.id,
-          name: e.name,
+          kind: e.kind,
           version: e.version,
-          description: e.description,
-          repo: e.repo,
-          ...(e.branch ? { branch: e.branch } : {}),
-          ...(e.commands ? { commands: e.commands } : {}),
+          manifest: e.manifest,
+          reports: e.reports,
           installed: e.id in installed,
           runtimeStatus: installed[e.id]?.status ?? null,
         })),
@@ -266,12 +440,12 @@ export function registerPluginCatalog(): void {
 
   register("command.docs", {
     description:
-      "The whole command surface in one call: core command specs, installed plugin command specs (grouped by plugin), and the registry catalog including not-installed plugins (declared commands with titles). The single source for generating a full reference — sok docs renders this.",
+      "The whole executable command surface in one call: core command specs, installed plugin command specs, and authenticated release references for units that are not installed. A registry never supplies unit command declarations.",
     triggers: { ko: "전체 명령 문서 레퍼런스 매뉴얼 한눈에 코어 플러그인 미설치" },
     params: {
       refresh: {
         type: "boolean",
-        description: "Refetch the live registry before answering (default: session cache / snapshot)",
+        description: "Refetch signed live registries before answering",
       },
       lang: {
         type: "string",
@@ -280,7 +454,7 @@ export function registerPluginCatalog(): void {
       },
     },
     returns:
-      "{ core: [spec], plugins: { [pluginId]: [spec] }, registry: [{id, name, description, repo, installed, commands: [{name,title,danger?}]}] } — registry name/description/commands[].title resolved to plain strings in the requested lang",
+      "{ core: [spec], plugins: { [pluginId]: [spec] }, registry: [{registryId,unitId,id,kind,version,manifest,reports,installed}] }",
     message: (d) =>
       tmsg("msg.command.docs", {
         core: ((d.core as unknown[]) ?? []).length,
@@ -292,8 +466,6 @@ export function registerPluginCatalog(): void {
       await reg.refresh(p.refresh === true).catch(() => {});
       const st = useRegistry.getState();
       const installed = usePlugins.getState().plugins;
-      // core/plugins 절은 이미 영어 평문이라 lang 무관 — registry 절만 다국어(LocalizedText) 해소 대상.
-      const lang = p.lang === "ko" ? "ko" : "en";
       const all = catalogJson() as { name: string }[];
       const core: unknown[] = [];
       const plugins: Record<string, unknown[]> = {};
@@ -306,21 +478,14 @@ export function registerPluginCatalog(): void {
       return {
         core,
         plugins,
-        registry: st.entries.map((e) => ({
+        registry: st.units.map((e) => ({
+          registryId: e.registryId,
+          unitId: e.unitId,
           id: e.id,
-          name: resolveText(e.name, lang),
-          description: resolveText(e.description, lang),
-          repo: e.repo,
-          ...(e.branch ? { branch: e.branch } : {}),
-          ...(e.commands
-            ? {
-                commands: e.commands.map((c) => ({
-                  name: c.name,
-                  ...(c.title ? { title: resolveText(c.title, lang) } : {}),
-                  ...(c.danger ? { danger: c.danger } : {}),
-                })),
-              }
-            : {}),
+          kind: e.kind,
+          version: e.version,
+          manifest: e.manifest,
+          reports: e.reports,
           installed: e.id in installed,
         })),
       };
@@ -329,22 +494,23 @@ export function registerPluginCatalog(): void {
 
   register("plugin.install", {
     description:
-      'Install a plugin into ~/.soksak/plugins/<id>. Basic form: the registry short name (sok plugin.install activity). Fine-grained: a "user/repo" shorthand, a full git URL, or a local path in {"source":...}. Use when adding a new plugin for the first time.',
+      "Install one authenticated plugin release and its complete plugin/sidecar/kit dependency closure from one registry. Git URLs, branches, package registries, and local paths are not installation sources.",
     triggers: { ko: "플러그인 설치 추가 install" },
     params: {
       source: {
         type: "string",
-        description: 'Registry short name (e.g. "activity"), GitHub "user/repo" shorthand, git URL, or local directory path',
-        required: true,
+        description: 'Official registry short name (for example "activity")',
       },
-      ref: { type: "string", description: "Branch, tag, or commit to pin" },
+      registryId: { type: "string", description: "Registry id for a qualified catalog install" },
+      unitId: { type: "string", description: "Unit id for a qualified catalog install" },
     },
-    returns: "{ id, dir }",
+    primary: "source",
+    returns: "{ id, generation }",
     message: (d) => tmsg("msg.plugin.install", { id: String(d.id) }),
-    errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND", "INTERNAL"],
+    errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND", "AMBIGUOUS_TARGET", "INTERNAL"],
     examples: [
       "sok plugin.install activity",
-      'sok plugin.install \'{"source":"user/repo","ref":"v1.0.0"}\'',
+      'sok plugin.install \'{"registryId":"community","unitId":"soksak-plugin-<id>"}\'',
     ],
     danger: "destructive",
     hint: (d) => {
@@ -356,40 +522,88 @@ export function registerPluginCatalog(): void {
         { cmd: `sok plugin.enable ${shortName(String(d.id))}`, why: tmsg("hint.plugin.enableNext") },
       ];
     },
-    handler: (p) => {
-      const raw = String(p.source);
-      // 기본형: 단축 이름(경로·URL·user/repo 가 아닌 순수 이름) → 레지스트리에서 repo 로 해소.
-      if (/^[a-z0-9][a-z0-9-]*$/.test(raw)) {
-        const id = resolveShortId(raw);
-        const entry = id ? useRegistry.getState().entries.find((e) => e.id === id) : undefined;
-        if (!entry) {
+    handler: async (p) => {
+      const registryId = typeof p.registryId === "string" ? p.registryId : undefined;
+      const explicitUnitId = typeof p.unitId === "string" ? p.unitId : undefined;
+      if ((registryId && !explicitUnitId) || (explicitUnitId && !registryId)) {
+        return {
+          ok: false,
+          code: "INVALID_PARAMS",
+          message: "registryId and unitId must be provided together",
+        };
+      }
+      if (explicitUnitId && p.source !== undefined) {
+        return {
+          ok: false,
+          code: "INVALID_PARAMS",
+          message: "source cannot be combined with registryId/unitId",
+        };
+      }
+      const raw = explicitUnitId ?? (typeof p.source === "string" ? p.source : "");
+      if (!raw) {
+        return { ok: false, code: "INVALID_PARAMS", message: "source or registryId/unitId is required" };
+      }
+      if (explicitUnitId || /^[a-z0-9][a-z0-9-]*$/.test(raw)) {
+        const resolved = explicitUnitId
+          ? resolveRegistryUnit(useRegistry.getState().units, {
+              registryId,
+              unitId: explicitUnitId,
+              kind: "plugin",
+            })
+          : installResolution(raw, registryId);
+        if (!resolved.ok) {
+          if (resolved.reason === "ambiguous") {
+            return {
+              ok: false,
+              code: "AMBIGUOUS_TARGET",
+              message: `unit exists in multiple registries: ${raw}`,
+              candidates: resolved.candidates,
+            };
+          }
+          if (resolved.reason === "qualification_required") {
+            return {
+              ok: false,
+              code: "INVALID_PARAMS",
+              message: `registryId is required for non-official unit: ${raw}`,
+              candidates: resolved.candidates,
+            };
+          }
           return {
             ok: false,
             code: "TARGET_NOT_FOUND",
             message: tmsg("msg.plugin.install.unknownName", { name: raw }),
           };
         }
-        return usePlugins
-          .getState()
-          .install(entry.repo, (p.ref as string | undefined) ?? entry.branch);
+        return await installQualifiedRegistryEntry(resolved.entry);
       }
-      return usePlugins.getState().install(raw, p.ref as string | undefined);
+      return {
+        ok: false,
+        code: "INVALID_PARAMS",
+        message: "plugin installation accepts only a registry unit identity",
+      };
     },
   });
 
   register("plugin.update", {
     description:
-      "Update an installed plugin via git pull --ff-only. Re-consent is required after update because permissions may have changed.",
+      "Replace an installed plugin and its complete dependency closure with the greatest authenticated release from its registry. Re-consent is required when the verified manifest changes permissions.",
     triggers: { ko: "플러그인 업데이트 갱신 최신화" },
     params: {
       id: { type: "string", description: "Plugin id", required: true },
+      registryId: { type: "string", description: "Origin registry id when the unit id exists in multiple registries" },
     },
-    returns: "{ id, version }",
+    returns: "{ id, version, generation }",
     message: (d) => tmsg("msg.plugin.update", { id: String(d.id), version: String(d.version) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS", "INTERNAL"],
     examples: ['sok plugin.update \'{"id":"soksak-plugin-<id>"}\''],
     danger: "destructive",
-    handler: (p) => usePlugins.getState().update(resolveShortId(String(p.id)) ?? String(p.id)),
+    handler: async (p) => {
+      const id = resolveShortId(String(p.id)) ?? String(p.id);
+      return await updateCertifiedRegistryPlugin(
+        id,
+        typeof p.registryId === "string" ? p.registryId : undefined,
+      );
+    },
   });
 
   register("plugin.remove", {
@@ -445,22 +659,25 @@ export function registerPluginCatalog(): void {
 
   register("plugin.implementers", {
     description:
-      'Find plugins by the contract they implement (manifest implements, coupling law C3 L2 contract-pin). With contract, returns every installed plugin declaring that exact contract id "soksak-spec-<kind>-<domain>@<major>" with its runtime status; without, maps every declared contract to its implementers. Discovery is contract-addressed and implementation-blind — resolve implementers here instead of hardcoding plugin ids.',
+      "Find plugins whose exact {id, version} provider declaration satisfies a consumer {id, range}. Omit both fields to list exact provider evidence. Domain ids never embed a version.",
     triggers: { ko: "플러그인 계약 구현체 발견 구현 스펙 컨트랙트" },
     params: {
-      contract: {
+      id: {
         type: "string",
-        description:
-          'Contract id "soksak-spec-<kind>-<domain>@<major>" (exact major — @2 does not answer for @1). Omit to list every declared contract with its implementers.',
+        description: "Version-free public domain contract id. Must be supplied together with range.",
+      },
+      range: {
+        type: "string",
+        description: "Supported SemVer range. Must be supplied together with id.",
       },
     },
     returns:
       "{ contract, implementers: [{id, version, status}] } (contract given) | { contracts: [{contract, implementers}] } (omitted)",
     message: (d) =>
-      d.contract !== undefined
+      d.requirement !== undefined
         ? tmsg("msg.plugin.implementers", {
             n: ((d.implementers as unknown[]) ?? []).length,
-            contract: String(d.contract),
+            contract: JSON.stringify(d.requirement),
           })
         : tmsg("msg.plugin.implementers.all", {
             n: ((d.contracts as unknown[]) ?? []).length,
@@ -468,25 +685,31 @@ export function registerPluginCatalog(): void {
     errors: ["INVALID_PARAMS"],
     examples: [
       "sok plugin.implementers",
-      'sok plugin.implementers \'{"contract":"soksak-spec-plugin-git@1"}\'',
+      'sok plugin.implementers \'{"id":"soksak-spec-plugin-git","range":"0.0.1"}\'',
     ],
     handler: (p) => {
       const nodes = implementsNodes();
-      const contract = p.contract as string | undefined;
+      const hasId = p.id !== undefined;
+      const hasRange = p.range !== undefined;
       // 제어판(main)은 플러그인을 싣지 않는다 — 빈 결과의 이유를 응답이 스스로 설명한다.
       const note =
         currentWindowLabel() === "main"
           ? { note: "control-plane window loads no plugins — query a project window (w-*) or pass --window" }
           : {};
-      if (contract === undefined) return { ...note, contracts: allContracts(nodes) };
-      if (!CONTRACT_ID_RE.test(contract)) {
-        return invalid(`계약 id 문법 위반(soksak-spec-<kind>-<domain>@<major>): ${contract}`);
-      }
+      if (!hasId && !hasRange) return { ...note, contracts: allContracts(nodes) };
+      if (hasId !== hasRange) return invalid("id and range must be supplied together");
+      const requirementErrors: string[] = [];
+      const requirement = parseContractRequirement(
+        { id: p.id, range: p.range },
+        "plugin.implementers",
+        requirementErrors,
+      );
+      if (!requirement) return invalid(requirementErrors.join("; "));
       const installed = usePlugins.getState().plugins;
       return {
         ...note,
-        contract,
-        implementers: implementersOf(contract, nodes).map((id) => ({
+        requirement,
+        implementers: implementersOf(requirement, nodes).map((id) => ({
           id,
           version: installed[id].manifest.version,
           status: installed[id].status,

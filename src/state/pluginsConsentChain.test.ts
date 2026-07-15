@@ -15,7 +15,7 @@ function rt(
   opts: { source?: "installed" | "dev"; version?: string } = {},
 ): PluginRuntime {
   const manifest = {
-    spec: "soksak-spec-plugin@1",
+    spec: "soksak-spec-plugin@0.0.1",
     id,
     name: id,
     version: opts.version ?? "0.1.0",

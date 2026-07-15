@@ -2,28 +2,29 @@
 // 원장 파생(PS9). 실제 commands/registry 를 통과시켜 검증한다(모조 레지스트리 금지).
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { execute, register, unregister } from "../commands/registry";
-import { parseManifest, SERVICE_INTERFACE, type PluginManifest } from "./spec";
+import { parseManifest, SERVICE_CONTRACT_REQUIREMENT, type PluginManifest } from "./spec";
 import {
   buildBindLedger,
   registerBusBridge,
   registerServiceProxies,
+  syncServiceLedger,
   type ServiceProxyDeps,
 } from "./serviceProxy";
 
 function demoManifest(): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-spec-plugin@1",
+      spec: "soksak-spec-plugin@0.0.1",
       id: "demo",
       name: "데모",
-      version: "1.0.0",
+      version: "0.0.1",
       description: "테스트",
       entry: null,
       permissions: ["commands", "sidecar", "service"],
-      sidecars: [{ name: "demo-svc", interface: "soksak-spec-sidecar-fixture-wire@1" }],
+      sidecars: [{ name: "demo-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", range: ">=0.0.1 <1.0.0" } }],
       service: {
         sidecar: "demo-svc",
-        interface: SERVICE_INTERFACE,
+        interface: SERVICE_CONTRACT_REQUIREMENT,
         subscribe: ["bus:kanban:changed"],
       },
       contributes: {
@@ -118,7 +119,7 @@ describe("buildBindLedger — 원장 파생(PS9·PS14)", () => {
         {
           plugin: "demo",
           sidecar: "demo-svc",
-          interface: SERVICE_INTERFACE,
+          interface: SERVICE_CONTRACT_REQUIREMENT,
           ops: ["run"],
           subscribe: ["bus:kanban:changed"],
           schedules: [
@@ -135,15 +136,15 @@ describe("buildBindLedger — 원장 파생(PS9·PS14)", () => {
   it('"secrets" 권한을 선언하면 vaultEnv 가 파생된다(PS9 — env: 볼트 주입 대상)', () => {
     const { manifest, validation } = parseManifest(
       {
-        spec: "soksak-spec-plugin@1",
+        spec: "soksak-spec-plugin@0.0.1",
         id: "vaulted",
         name: "볼트",
         version: "1.0.0",
         description: "테스트",
         entry: null,
         permissions: ["commands", "sidecar", "service", "secrets"],
-        sidecars: [{ name: "vaulted-svc", interface: "soksak-spec-sidecar-fixture-wire@1" }],
-        service: { sidecar: "vaulted-svc", interface: SERVICE_INTERFACE, subscribe: [] },
+        sidecars: [{ name: "vaulted-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", range: ">=0.0.1 <1.0.0" } }],
+        service: { sidecar: "vaulted-svc", interface: SERVICE_CONTRACT_REQUIREMENT, subscribe: [] },
         contributes: {
           commands: [
             { name: "run", title: { en: "Run", ko: "실행" }, bind: "service", description: "Run." },
@@ -161,7 +162,7 @@ describe("buildBindLedger — 원장 파생(PS9·PS14)", () => {
   it("service 없는 매니페스트는 원장에 오르지 않는다", () => {
     const { manifest } = parseManifest(
       {
-        spec: "soksak-spec-plugin@1",
+        spec: "soksak-spec-plugin@0.0.1",
         id: "plain",
         name: "일반",
         version: "1.0.0",
@@ -173,6 +174,24 @@ describe("buildBindLedger — 원장 파생(PS9·PS14)", () => {
     expect(manifest).not.toBeNull();
     if (!manifest) return;
     expect(buildBindLedger([manifest]).services).toEqual([]);
+  });
+
+  it("Tauri 원장 경계는 consumer {id,range} 객체만 전송한다", async () => {
+    const invoke = vi.fn<ServiceProxyDeps["invoke"]>(async () => undefined);
+    await syncServiceLedger([demoManifest()], invoke);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    const [command, args] = invoke.mock.calls[0];
+    expect(command).toBe("service_ledger_sync");
+    expect(args).toEqual({
+      ledger: expect.objectContaining({
+        services: [
+          expect.objectContaining({
+            interface: SERVICE_CONTRACT_REQUIREMENT,
+          }),
+        ],
+      }),
+    });
+    expect(JSON.stringify(args)).not.toContain("soksak-spec-service@0.0.1");
   });
 });
 
@@ -227,7 +246,7 @@ describe("registerBusBridge — 창 bus → 코어 브리지(PS15)", () => {
     const h = harness();
     const { manifest } = parseManifest(
       {
-        spec: "soksak-spec-plugin@1",
+        spec: "soksak-spec-plugin@0.0.1",
         id: "plain",
         name: "일반",
         version: "1.0.0",

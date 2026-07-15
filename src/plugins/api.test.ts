@@ -21,7 +21,7 @@ import {
 function manifestOf(overrides: Record<string, unknown>): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-spec-plugin@1",
+      spec: "soksak-spec-plugin@0.0.1",
       id: "demo",
       name: "데모",
       version: "1.0.0",
@@ -294,7 +294,17 @@ describe("commands.execute — danger ↔ 권한 매핑 + 관리 명령 차단(�
       "/d",
       d,
     );
-    for (const name of ["plugin.enable", "plugin.install", "plugin.dev.load"]) {
+    for (const name of [
+      "plugin.enable",
+      "plugin.install",
+      "plugin.dev.load",
+      "registry.list",
+      "registry.add",
+      "registry.remove",
+      "registry.refresh",
+      "registry.status",
+      "registry.future-management-command",
+    ]) {
       const r = await api.commands!.execute(name);
       expect(r).toMatchObject({ ok: false, code: "PERMISSION_DENIED" });
     }
@@ -302,6 +312,34 @@ describe("commands.execute — danger ↔ 권한 매핑 + 관리 명령 차단(�
     // 뷰 열기/플러그인 자체 명령은 관리 명령이 아님.
     expect(isBlockedForPlugins("plugin.view.open")).toBe(false);
     expect(isBlockedForPlugins("plugin.demo.go")).toBe(false);
+  });
+
+  it("registry credential에 닿는 raw secret/network 명령은 namespaced facade를 우회할 수 없다", async () => {
+    const d = deps();
+    const { api } = buildPluginApi(
+      manifestOf({
+        permissions: ["commands", "commands:destructive", "commands:inject", "network", "secrets"],
+      }),
+      "/d",
+      d,
+    );
+    for (const name of [
+      "secret.unlock",
+      "secret.lock",
+      "secret.autolock",
+      "secret.backend",
+      "secret.set",
+      "secret.has",
+      "secret.keys",
+      "secret.remove",
+      "net.http.request",
+    ]) {
+      expect(await api.commands!.execute(name)).toMatchObject({
+        ok: false,
+        code: "PERMISSION_DENIED",
+      });
+    }
+    expect(d.execute).not.toHaveBeenCalled();
   });
 });
 
@@ -606,6 +644,29 @@ describe("secrets — 권한 게이트 + ns 강제 주입 + get 부재", () => {
   });
 });
 
+describe("network — 권한 게이트 + ns 강제 주입", () => {
+  it("app.network.http는 호출자가 ns를 고를 수 없고 manifest.id로 고정한다", async () => {
+    const invoke = vi.fn(async () => ({ status: 200, headers: {}, body: "ok" }));
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["network"] }),
+      "/d",
+      fakeDeps({ invoke }),
+    );
+
+    await api.network!.http({
+      method: "GET",
+      url: "https://api.example.test/data",
+      headers: { authorization: "\u0000token\u0000" },
+      secretSubst: { "\u0000token\u0000": "api-token" },
+    });
+
+    expect(invoke).toHaveBeenCalledWith("net_http_request", expect.objectContaining({
+      ns: "demo",
+      secretSubst: { "\u0000token\u0000": "api-token" },
+    }));
+  });
+});
+
 describe("notify/sound — 권한 게이트", () => {
   it('"notify" 미선언 시 undefined, 선언 시 push/sound 표면', () => {
     const off = buildPluginApi(manifestOf({}), "/d", fakeDeps());
@@ -836,9 +897,9 @@ describe("cross-plugin 의존 게이트 (executeGated + scheduler.register, §de
   });
 
   it("계약을 consumes 한 플러그인 → 그 계약의 구현체 호출 통과(구현체 id 를 선언하지 않는다)", async () => {
-    const d = fakeDeps({ implementsOf: (pid) => (pid === "board-x" ? ["soksak-spec-plugin-issue-board@1"] : []) });
+    const d = fakeDeps({ implementsOf: (pid) => (pid === "board-x" ? [{ id: "soksak-spec-plugin-issue-board", version: "0.0.1" }] : []) });
     const { api } = buildPluginApi(
-      manifestOf({ permissions: ["commands"], consumes: ["soksak-spec-plugin-issue-board@1"] }),
+      manifestOf({ permissions: ["commands"], consumes: [{ id: "soksak-spec-plugin-issue-board", range: ">=0.0.1 <1.0.0" }] }),
       "/d",
       d,
     );
@@ -849,7 +910,7 @@ describe("cross-plugin 의존 게이트 (executeGated + scheduler.register, §de
   it("계약을 consumes 했어도 그 계약을 구현하지 않는 플러그인 호출 → 거부", async () => {
     const d = fakeDeps({ implementsOf: () => [] });
     const { api } = buildPluginApi(
-      manifestOf({ permissions: ["commands"], consumes: ["soksak-spec-plugin-issue-board@1"] }),
+      manifestOf({ permissions: ["commands"], consumes: [{ id: "soksak-spec-plugin-issue-board", range: ">=0.0.1 <1.0.0" }] }),
       "/d",
       d,
     );
@@ -883,6 +944,26 @@ describe("cross-plugin 의존 게이트 (executeGated + scheduler.register, §de
     expect(inv).not.toHaveBeenCalled(); // 등록 자체 차단.
   });
 
+  it.each([
+    "registry.list",
+    "registry.add",
+    "registry.remove",
+    "registry.refresh",
+    "registry.status",
+  ])("scheduler.register — 플러그인은 %s 관리 호출을 예약할 수 없다", async (command) => {
+    const inv = vi.fn(async () => "sch-registry");
+    const { api } = buildPluginApi(
+      manifestOf({ permissions: ["schedule"] }),
+      "/d",
+      fakeDeps({ invoke: inv }),
+    );
+
+    await expect(
+      api.scheduler!.register({ trigger: { kind: "reconcile" }, command }),
+    ).rejects.toThrow(/관리 명령/);
+    expect(inv).not.toHaveBeenCalled();
+  });
+
   it("scheduler.register — 선언된 cross-plugin·코어 명령은 통과", async () => {
     const inv = vi.fn(async () => "sch-1");
     const { api } = buildPluginApi(
@@ -913,25 +994,30 @@ describe("app.sidecar — 권한 게이트 + 선언≡실물", () => {
   it("선언된 사이드카만 open — 미선언 이름은 거부", async () => {
     const m = manifestOf({
       permissions: ["sidecar"],
-      sidecars: [{ name: "chromium", interface: "soksak-spec-sidecar-chromium@1" }],
+      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", range: ">=0.0.1 <1.0.0" } }],
     });
     const { api } = buildPluginApi(m, "/d", fakeDeps());
     await expect(api.sidecar!.open("undeclared")).rejects.toThrow(/선언되지 않은 사이드카/);
   });
-  it("선언된 이름 open 은 sidecar_open invoke 로 위임(선언 interface 동반)", async () => {
-    const invoke = vi.fn(async () => 7);
+  it("선언된 이름 open 은 sidecar_open invoke 로 위임(consumer requirement 동반)", async () => {
+    const invoke = vi.fn<PluginApiDeps["invoke"]>(async () => 7);
     const m = manifestOf({
       permissions: ["sidecar"],
-      sidecars: [{ name: "chromium", interface: "soksak-spec-sidecar-chromium@1" }],
+      sidecars: [{ name: "chromium", interface: { id: "soksak-spec-sidecar-chromium", range: ">=0.0.1 <1.0.0" } }],
     });
     const { api } = buildPluginApi(m, "/d", fakeDeps({ invoke }));
     const h = await api.sidecar!.open("chromium");
     expect(invoke).toHaveBeenCalledWith(
       "sidecar_open",
-      expect.objectContaining({ name: "chromium", interface: "soksak-spec-sidecar-chromium@1" }),
+      expect.objectContaining({
+        name: "chromium",
+        requirement: { id: "soksak-spec-sidecar-chromium", range: ">=0.0.1 <1.0.0" },
+      }),
     );
+    const openArgs = invoke.mock.calls.find((call) => call[0] === "sidecar_open")?.[1];
+    expect(openArgs).not.toHaveProperty("interface");
     // send 는 handle 동반 sidecar_send 위임
-    (invoke as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true });
+    invoke.mockResolvedValueOnce({ ok: true });
     await h.send({ type: "ping" });
     expect(invoke).toHaveBeenCalledWith(
       "sidecar_send",
@@ -951,17 +1037,17 @@ describe("유닛 선택의 단일진실 — 매니페스트 sidecars[]", () => {
   const withSidecar = (name: string) =>
     manifestOf({
       permissions: ["process"],
-      sidecars: [{ name, interface: "soksak-spec-sidecar-terminal@1" }],
+      sidecars: [{ name, interface: { id: "soksak-spec-sidecar-terminal", range: ">=0.0.1 <1.0.0" } }],
     });
 
   it("계약을 구현한다고 선언된 유닛 이름을 내준다", () => {
     const { api } = buildPluginApi(withSidecar("terminal-wezterm"), "/d", fakeDeps());
-    expect(api.process?.sidecarName("soksak-spec-sidecar-terminal@1")).toBe("terminal-wezterm");
+    expect(api.process?.sidecarName({ id: "soksak-spec-sidecar-terminal", range: ">=0.0.1 <1.0.0" })).toBe("terminal-wezterm");
   });
 
   it("선언이 없는 계약을 물으면 조용히 고르지 않고 죽는다", () => {
     const { api } = buildPluginApi(withSidecar("terminal-alacritty"), "/d", fakeDeps());
-    expect(() => api.process?.sidecarName("soksak-spec-sidecar-browser@1")).toThrow(/선언이 없다/);
+    expect(() => api.process?.sidecarName({ id: "soksak-spec-sidecar-browser", range: ">=0.0.1 <1.0.0" })).toThrow(/선언이 없다/);
   });
 
   it("매니페스트에 없는 유닛은 스폰할 수 없다(선언≡실물)", async () => {

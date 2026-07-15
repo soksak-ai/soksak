@@ -1,51 +1,517 @@
+import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
 import {
-  mergeRegistry,
-  parseRegistry,
-  REGISTRY_SPEC,
-  type Registry,
-  type RegistryEntry,
+  certifyRegistryIndex,
+  type CertifiedRegistryIndex,
+  type RegistryHighWater,
+  type RegistryPublicKey,
+} from "../plugins/spec";
+import {
+  OFFICIAL_REGISTRY_ID,
+  parseRegistryDescriptor,
+  qualifyRegistry,
+  registryCredentialSlot,
+  type QualifiedRegistryEntry,
+  type RegistryDescriptor,
 } from "../plugins/registry";
-import snapshotRaw from "../plugins/registrySnapshot.json";
+import { OFFICIAL_REGISTRY_TRUST } from "../plugins/registryOfficialTrust";
+import { createCoreSync } from "./coreSync";
+import type { CoreStoreDeps } from "./coreStore";
 
-// 공식 플러그인 "설치 가능 목록" store. 빌드 스냅샷으로 즉시 표시(첫 실행/오프라인), 세션 1회 +
-// 사용자 새로고침 시 원격 레지스트리(registry.json)를 fetch 해 최신화. 원격 실패면 스냅샷 유지.
-//
-// 원격 URL = 전용 레지스트리 레포의 raw registry.json. (Phase B 에서 레포 생성 후 실 배선 — 그 전엔
-// fetch 가 실패해 status="error" + 스냅샷 폴백으로 동작한다.)
-const REMOTE_URL =
+const OFFICIAL_REMOTE_URL =
   "https://raw.githubusercontent.com/soksak-ai/soksak-plugin-registry/main/registry.json";
 
-const SNAPSHOT: Registry = parseRegistry(snapshotRaw) ?? { spec: REGISTRY_SPEC, plugins: [] };
+export const OFFICIAL_REGISTRY_DESCRIPTOR: RegistryDescriptor = {
+  id: OFFICIAL_REGISTRY_ID,
+  name: "soksak official",
+  indexUrl: OFFICIAL_REMOTE_URL,
+  visibility: "public",
+  trustedPublicKey: OFFICIAL_REGISTRY_TRUST,
+};
 
-export type RegistryStatus = "snapshot" | "fetching" | "live" | "error";
+export type RegistryStatus = "idle" | "fetching" | "live" | "uncertified" | "error";
 
-interface RegistryState {
-  entries: RegistryEntry[];
-  status: RegistryStatus;
-  fetchedOnce: boolean;
-  // 원격 갱신. 기본은 세션 1회(이미 fetch 했으면 skip), force=true 면 사용자 새로고침으로 재시도.
-  refresh: (force?: boolean) => Promise<void>;
+export interface RegistryTrustRecord {
+  publicKey: RegistryPublicKey;
+  highWater?: RegistryHighWater;
 }
 
-export const useRegistry = create<RegistryState>((set, get) => ({
-  entries: SNAPSHOT.plugins,
-  status: "snapshot",
-  fetchedOnce: false,
-  refresh: async (force = false) => {
-    const s = get();
-    if (s.status === "fetching") return;
-    if (s.fetchedOnce && !force) return;
-    set({ status: "fetching" });
-    try {
-      const res = await fetch(REMOTE_URL, { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const raw: unknown = await res.json();
-      const merged = mergeRegistry(SNAPSHOT, raw);
-      set({ entries: merged.plugins, status: "live", fetchedOnce: true });
-    } catch {
-      // 오프라인/미배선/손상 — 스냅샷 유지(entries 불변), 상태만 error.
-      set({ status: "error", fetchedOnce: true });
+export interface RegistrySourceState {
+  descriptor: RegistryDescriptor;
+  status: RegistryStatus;
+  fetchedOnce: boolean;
+  entries: QualifiedRegistryEntry[];
+  certified?: CertifiedRegistryIndex;
+  error?: string;
+  lastFetchedAt?: number;
+}
+
+export type RegistryEventType =
+  | "registry.added"
+  | "registry.removed"
+  | "registry.refresh.started"
+  | "registry.refresh.succeeded"
+  | "registry.refresh.uncertified"
+  | "registry.refresh.failed";
+
+export interface RegistryEvent {
+  seq: number;
+  at: number;
+  type: RegistryEventType;
+  registryId: string;
+  detail?: string;
+}
+
+type RegistryMutationResult =
+  | { ok: true; registryId: string }
+  | {
+      ok: false;
+      code: "INVALID_PARAMS" | "ALREADY_EXISTS" | "TARGET_NOT_FOUND" | "TRUST_CONFLICT";
+      message: string;
+    };
+
+export interface RegistryRefreshResult {
+  registryId: string;
+  status: RegistryStatus;
+  error?: string;
+  skipped?: boolean;
+}
+
+export interface RegistryState {
+  /** Authenticated official plugin releases. */
+  entries: QualifiedRegistryEntry[];
+  /** Authenticated plugin, sidecar, and kit releases from every configured registry. */
+  units: QualifiedRegistryEntry[];
+  descriptors: RegistryDescriptor[];
+  registries: Record<string, RegistrySourceState>;
+  trustRecords: Record<string, RegistryTrustRecord>;
+  status: RegistryStatus;
+  fetchedOnce: boolean;
+  events: RegistryEvent[];
+  add: (descriptor: unknown) => RegistryMutationResult;
+  remove: (registryId: string) => RegistryMutationResult;
+  refresh: (force?: boolean, registryId?: string) => Promise<RegistryRefreshResult[]>;
+}
+
+interface PersistedRegistries {
+  descriptors: RegistryDescriptor[];
+  trustRecords: Record<string, RegistryTrustRecord>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function samePublicKey(left: RegistryPublicKey, right: RegistryPublicKey): boolean {
+  return left.algorithm === right.algorithm && left.keyId === right.keyId && left.value === right.value;
+}
+
+function parseHighWater(raw: unknown): RegistryHighWater | undefined {
+  if (
+    !isRecord(raw) ||
+    !Number.isSafeInteger(raw.sequence) ||
+    (raw.sequence as number) < 1 ||
+    typeof raw.digest !== "string" ||
+    !/^[a-f0-9]{64}$/.test(raw.digest)
+  ) return undefined;
+  return { sequence: raw.sequence as number, digest: raw.digest };
+}
+
+function parseTrustRecord(raw: unknown): RegistryTrustRecord | null {
+  if (!isRecord(raw)) return null;
+  const descriptor = parseRegistryDescriptor({
+    id: "trust-record",
+    name: "trust record",
+    indexUrl: "https://trust.invalid/index.json",
+    visibility: "public",
+    trustedPublicKey: raw.publicKey,
+  });
+  if (!descriptor) return null;
+  const highWater = parseHighWater(raw.highWater);
+  if (raw.highWater !== undefined && highWater === undefined) return null;
+  return {
+    publicKey: descriptor.trustedPublicKey,
+    ...(highWater ? { highWater } : {}),
+  };
+}
+
+function safePersisted(raw: unknown): PersistedRegistries {
+  const value = isRecord(raw) ? raw : {};
+  const rawTrust = isRecord(value.trustRecords) ? value.trustRecords : {};
+  const trustRecords: Record<string, RegistryTrustRecord> = {};
+  for (const [id, candidate] of Object.entries(rawTrust)) {
+    const parsed = parseTrustRecord(candidate);
+    if (parsed) trustRecords[id] = parsed;
+  }
+  const officialStored = trustRecords[OFFICIAL_REGISTRY_ID];
+  trustRecords[OFFICIAL_REGISTRY_ID] = {
+    publicKey: OFFICIAL_REGISTRY_TRUST,
+    ...(officialStored && samePublicKey(officialStored.publicKey, OFFICIAL_REGISTRY_TRUST) && officialStored.highWater
+      ? { highWater: officialStored.highWater }
+      : {}),
+  };
+
+  const descriptors: RegistryDescriptor[] = [];
+  const ids = new Set<string>([OFFICIAL_REGISTRY_ID]);
+  if (Array.isArray(value.descriptors)) {
+    for (const candidate of value.descriptors) {
+      const descriptor = parseRegistryDescriptor(candidate);
+      if (!descriptor || ids.has(descriptor.id)) continue;
+      const pinned = trustRecords[descriptor.id];
+      if (pinned && !samePublicKey(pinned.publicKey, descriptor.trustedPublicKey)) continue;
+      trustRecords[descriptor.id] = pinned ?? { publicKey: descriptor.trustedPublicKey };
+      ids.add(descriptor.id);
+      descriptors.push(descriptor);
     }
+  }
+  return { descriptors, trustRecords };
+}
+
+function initialSource(descriptor: RegistryDescriptor): RegistrySourceState {
+  return { descriptor, status: "idle", fetchedOnce: false, entries: [] };
+}
+
+function sourcesFor(
+  descriptors: readonly RegistryDescriptor[],
+  trustRecords: Readonly<Record<string, RegistryTrustRecord>>,
+  current: Readonly<Record<string, RegistrySourceState>> = {},
+): Record<string, RegistrySourceState> {
+  const result: Record<string, RegistrySourceState> = {};
+  for (const descriptor of descriptors) {
+    const prior = current[descriptor.id];
+    const highWater = trustRecords[descriptor.id]?.highWater;
+    const priorSequence = prior?.certified?.highWater.sequence;
+    result[descriptor.id] = prior &&
+        samePublicKey(prior.descriptor.trustedPublicKey, descriptor.trustedPublicKey) &&
+        (highWater === undefined || priorSequence === undefined || priorSequence >= highWater.sequence)
+      ? { ...prior, descriptor }
+      : initialSource(descriptor);
+  }
+  return result;
+}
+
+function projections(
+  descriptors: readonly RegistryDescriptor[],
+  registries: Readonly<Record<string, RegistrySourceState>>,
+): Pick<RegistryState, "entries" | "units" | "status" | "fetchedOnce"> {
+  const units = descriptors.flatMap((descriptor) => registries[descriptor.id]?.entries ?? []);
+  const official = registries[OFFICIAL_REGISTRY_ID] ?? initialSource(OFFICIAL_REGISTRY_DESCRIPTOR);
+  return {
+    entries: official.entries.filter((entry) => entry.kind === "plugin"),
+    units,
+    status: official.status,
+    fetchedOnce: official.fetchedOnce,
+  };
+}
+
+function persistedValue(
+  descriptors: readonly RegistryDescriptor[],
+  trustRecords: Readonly<Record<string, RegistryTrustRecord>>,
+): PersistedRegistries {
+  return {
+    descriptors: descriptors.filter((descriptor) => descriptor.id !== OFFICIAL_REGISTRY_ID),
+    trustRecords: Object.fromEntries(Object.entries(trustRecords).map(([id, record]) => [id, {
+      publicKey: { ...record.publicKey },
+      ...(record.highWater ? { highWater: { ...record.highWater } } : {}),
+    }])),
+  };
+}
+
+const REGISTRY_CACHE_KEY = "soksak.registries";
+const registrySync = createCoreSync<PersistedRegistries>({
+  key: "registries",
+  lsKey: REGISTRY_CACHE_KEY,
+  fallback: {
+    descriptors: [],
+    trustRecords: { official: { publicKey: OFFICIAL_REGISTRY_TRUST } },
+  },
+  apply: (raw) => {
+    const persisted = safePersisted(raw);
+    const descriptors = [OFFICIAL_REGISTRY_DESCRIPTOR, ...persisted.descriptors];
+    useRegistry.setState((state) => {
+      const registries = sourcesFor(descriptors, persisted.trustRecords, state.registries);
+      return {
+        descriptors,
+        registries,
+        trustRecords: persisted.trustRecords,
+        ...projections(descriptors, registries),
+      };
+    });
+  },
+});
+
+export const initRegistryPersistence = (deps: CoreStoreDeps): (() => void) => registrySync.init(deps);
+
+const CREDENTIAL_PLACEHOLDER = "\u0000soksak-registry-authorization\u0000";
+
+async function loadRegistryDocument(descriptor: RegistryDescriptor): Promise<unknown> {
+  if (descriptor.visibility === "public") {
+    const response = await fetch(descriptor.indexUrl, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  }
+  const credential = registryCredentialSlot(descriptor.id);
+  if (!credential) throw new Error("private registry identity is invalid");
+  const response = await invoke<{ status: number; headers: Record<string, string>; body: string }>(
+    "net_http_request",
+    {
+      method: "GET",
+      url: descriptor.indexUrl,
+      headers: { authorization: CREDENTIAL_PLACEHOLDER },
+      query: null,
+      body: null,
+      contentType: null,
+      ns: credential.namespace,
+      secretSubst: { [CREDENTIAL_PLACEHOLDER]: credential.key },
+      impersonate: null,
+    },
+  );
+  if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}`);
+  return JSON.parse(response.body) as unknown;
+}
+
+interface RegistryRuntimeDeps {
+  load: (descriptor: RegistryDescriptor) => Promise<unknown>;
+  now: () => number;
+}
+
+const defaultRuntimeDeps: RegistryRuntimeDeps = { load: loadRegistryDocument, now: Date.now };
+let runtimeDeps = defaultRuntimeDeps;
+
+export function setRegistryRuntimeDeps(patch: Partial<RegistryRuntimeDeps>): () => void {
+  const previous = runtimeDeps;
+  runtimeDeps = { ...runtimeDeps, ...patch };
+  return () => {
+    runtimeDeps = previous;
+  };
+}
+
+function withEvent(
+  events: readonly RegistryEvent[],
+  type: RegistryEventType,
+  registryId: string,
+  at: number,
+  detail?: string,
+): RegistryEvent[] {
+  return [...events, {
+    seq: (events[events.length - 1]?.seq ?? 0) + 1,
+    at,
+    type,
+    registryId,
+    ...(detail ? { detail } : {}),
+  }].slice(-100);
+}
+
+function sameHighWater(left?: RegistryHighWater, right?: RegistryHighWater): boolean {
+  return left?.sequence === right?.sequence && left?.digest === right?.digest;
+}
+
+const persisted = safePersisted(registrySync.loadSync());
+const initialDescriptors = [OFFICIAL_REGISTRY_DESCRIPTOR, ...persisted.descriptors];
+const initialRegistries = sourcesFor(initialDescriptors, persisted.trustRecords);
+
+export const useRegistry = create<RegistryState>((set, get) => ({
+  descriptors: initialDescriptors,
+  registries: initialRegistries,
+  trustRecords: persisted.trustRecords,
+  ...projections(initialDescriptors, initialRegistries),
+  events: [],
+
+  add: (raw) => {
+    const descriptor = parseRegistryDescriptor(raw);
+    if (!descriptor || descriptor.id === OFFICIAL_REGISTRY_ID) {
+      return { ok: false, code: "INVALID_PARAMS", message: "invalid registry descriptor" };
+    }
+    if (get().registries[descriptor.id]) {
+      return { ok: false, code: "ALREADY_EXISTS", message: `registry already exists: ${descriptor.id}` };
+    }
+    const pinned = get().trustRecords[descriptor.id];
+    if (pinned && !samePublicKey(pinned.publicKey, descriptor.trustedPublicKey)) {
+      return {
+        ok: false,
+        code: "TRUST_CONFLICT",
+        message: `registry trust key is already pinned: ${descriptor.id}`,
+      };
+    }
+    const now = runtimeDeps.now();
+    set((state) => {
+      const descriptors = [...state.descriptors, descriptor];
+      const trustRecords = {
+        ...state.trustRecords,
+        [descriptor.id]: pinned ?? { publicKey: descriptor.trustedPublicKey },
+      };
+      const registries = { ...state.registries, [descriptor.id]: initialSource(descriptor) };
+      registrySync.save(persistedValue(descriptors, trustRecords));
+      return {
+        descriptors,
+        registries,
+        trustRecords,
+        ...projections(descriptors, registries),
+        events: withEvent(state.events, "registry.added", descriptor.id, now),
+      };
+    });
+    return { ok: true, registryId: descriptor.id };
+  },
+
+  remove: (registryId) => {
+    if (registryId === OFFICIAL_REGISTRY_ID) {
+      return { ok: false, code: "INVALID_PARAMS", message: "official registry cannot be removed" };
+    }
+    if (!get().registries[registryId]) {
+      return { ok: false, code: "TARGET_NOT_FOUND", message: `registry not found: ${registryId}` };
+    }
+    const now = runtimeDeps.now();
+    set((state) => {
+      const descriptors = state.descriptors.filter((descriptor) => descriptor.id !== registryId);
+      const { [registryId]: _removed, ...registries } = state.registries;
+      registrySync.save(persistedValue(descriptors, state.trustRecords));
+      return {
+        descriptors,
+        registries,
+        ...projections(descriptors, registries),
+        events: withEvent(state.events, "registry.removed", registryId, now),
+      };
+    });
+    return { ok: true, registryId };
+  },
+
+  refresh: async (force = false, registryId) => {
+    const selected = registryId
+      ? get().descriptors.filter((descriptor) => descriptor.id === registryId)
+      : get().descriptors;
+    if (selected.length === 0) {
+      return [{ registryId: registryId ?? "", status: "error", error: "registry not found" }];
+    }
+    return await Promise.all(selected.map(async (descriptor): Promise<RegistryRefreshResult> => {
+      const source = get().registries[descriptor.id];
+      if (!source) return { registryId: descriptor.id, status: "error", error: "registry not found" };
+      if (source.status === "fetching" || (source.fetchedOnce && !force)) {
+        return { registryId: descriptor.id, status: source.status, skipped: true };
+      }
+      const startedAt = runtimeDeps.now();
+      set((state) => {
+        const current = state.registries[descriptor.id];
+        if (!current) return state;
+        const registries = {
+          ...state.registries,
+          [descriptor.id]: { ...current, status: "fetching" as const, error: undefined },
+        };
+        return {
+          registries,
+          ...projections(state.descriptors, registries),
+          events: withEvent(state.events, "registry.refresh.started", descriptor.id, startedAt),
+        };
+      });
+
+      try {
+        const raw = await runtimeDeps.load(descriptor);
+        let highWater = get().trustRecords[descriptor.id]?.highWater;
+        let certified: Awaited<ReturnType<typeof certifyRegistryIndex>>;
+        for (;;) {
+          certified = await certifyRegistryIndex(raw, {
+            expectedRegistryId: descriptor.id,
+            expectedKeyId: descriptor.trustedPublicKey.keyId,
+            publicKey: descriptor.trustedPublicKey,
+            now: runtimeDeps.now(),
+            ...(highWater ? { highWater } : {}),
+          });
+          const current = get();
+          const liveDescriptor = current.registries[descriptor.id]?.descriptor;
+          if (!liveDescriptor || !samePublicKey(liveDescriptor.trustedPublicKey, descriptor.trustedPublicKey)) {
+            throw new Error("registry descriptor changed during certification");
+          }
+          const currentHighWater = current.trustRecords[descriptor.id]?.highWater;
+          if (sameHighWater(highWater, currentHighWater)) break;
+          highWater = currentHighWater;
+        }
+        const finishedAt = runtimeDeps.now();
+        if (!certified.ok) {
+          const error = `${certified.code}: ${certified.errors.join("; ")}`;
+          set((state) => {
+            const current = state.registries[descriptor.id];
+            if (!current) return state;
+            const registries = {
+              ...state.registries,
+              [descriptor.id]: {
+                ...current,
+                status: "uncertified" as const,
+                fetchedOnce: true,
+                error,
+                lastFetchedAt: finishedAt,
+              },
+            };
+            return {
+              registries,
+              ...projections(state.descriptors, registries),
+              events: withEvent(
+                state.events,
+                "registry.refresh.uncertified",
+                descriptor.id,
+                finishedAt,
+                error,
+              ),
+            };
+          });
+          return { registryId: descriptor.id, status: "uncertified", error };
+        }
+
+        const beforePersist = get();
+        const trustRecords = {
+          ...beforePersist.trustRecords,
+          [descriptor.id]: {
+            publicKey: descriptor.trustedPublicKey,
+            highWater: certified.value.highWater,
+          },
+        };
+        await registrySync.saveNow(persistedValue(beforePersist.descriptors, trustRecords));
+        const entries = qualifyRegistry(certified.value);
+        set((state) => {
+          const current = state.registries[descriptor.id];
+          if (!current || !samePublicKey(current.descriptor.trustedPublicKey, descriptor.trustedPublicKey)) return state;
+          const registries = {
+            ...state.registries,
+            [descriptor.id]: {
+              ...current,
+              status: "live" as const,
+              fetchedOnce: true,
+              entries,
+              certified: certified.value,
+              error: undefined,
+              lastFetchedAt: finishedAt,
+            },
+          };
+          return {
+            registries,
+            trustRecords,
+            ...projections(state.descriptors, registries),
+            events: withEvent(state.events, "registry.refresh.succeeded", descriptor.id, finishedAt),
+          };
+        });
+        return { registryId: descriptor.id, status: "live" };
+      } catch (cause) {
+        const finishedAt = runtimeDeps.now();
+        const error = cause instanceof Error ? cause.message : String(cause);
+        set((state) => {
+          const current = state.registries[descriptor.id];
+          if (!current) return state;
+          const registries = {
+            ...state.registries,
+            [descriptor.id]: {
+              ...current,
+              status: "error" as const,
+              fetchedOnce: true,
+              error,
+              lastFetchedAt: finishedAt,
+            },
+          };
+          return {
+            registries,
+            ...projections(state.descriptors, registries),
+            events: withEvent(state.events, "registry.refresh.failed", descriptor.id, finishedAt, error),
+          };
+        });
+        return { registryId: descriptor.id, status: "error", error };
+      }
+    }));
   },
 }));

@@ -1,20 +1,14 @@
-// plugin.implementers — L2 계약-핀(C3) 발견 커맨드 통합. 첫 소비자 시나리오(수용 기준):
-// 같은 계약을 implements 한 픽스처 플러그인 2개 → 발견 커맨드가 둘 다 반환한다.
-// 발견은 구현체 무차별 — 소비자는 계약 id 로만 찾고 플러그인 id 를 하드코딩하지 않는다(L1 금지).
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ContractProviderRef } from "../plugins/spec";
 
-// catalog 가 import 시 settings(localStorage)를 참조할 수 있어 stub 을 먼저.
 const mem = new Map<string, string>();
 vi.stubGlobal("localStorage", {
-  getItem: (k: string) => mem.get(k) ?? null,
-  setItem: (k: string, v: string) => void mem.set(k, v),
-  removeItem: (k: string) => void mem.delete(k),
+  getItem: (key: string) => mem.get(key) ?? null,
+  setItem: (key: string, value: string) => void mem.set(key, value),
+  removeItem: (key: string) => void mem.delete(key),
   clear: () => mem.clear(),
 });
-
-vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(async () => undefined),
-}));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn(async () => undefined) }));
 
 import { registerPluginCatalog } from "./catalogPlugins";
 import { execute, getSpec } from "./registry";
@@ -23,120 +17,72 @@ import { parseManifest } from "../plugins/spec";
 
 registerPluginCatalog();
 
-// 픽스처 런타임 — 실 스키마 게이트(parseManifest)를 통과시킨다(implements 는 스펙이 검증하는 필드).
+const NOTES_001 = { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" };
+const NOTES_002 = { id: "soksak-spec-plugin-fixture-notes", version: "0.0.2" };
+const BOARD_001 = { id: "soksak-spec-plugin-fixture-board", version: "0.0.1" };
+const ALPHA = "soksak-plugin-fixture-alpha";
+const BETA = "soksak-plugin-fixture-beta";
+
 function fixtureRuntime(
   id: string,
-  implementsIds: string[],
+  providers: ContractProviderRef[],
   status: PluginRuntime["status"] = "enabled",
 ): PluginRuntime {
-  const { manifest, validation } = parseManifest(
-    {
-      spec: "soksak-spec-plugin@1",
-      id,
-      name: "픽스처",
-      version: "1.0.0",
-      description: "계약 픽스처",
-      permissions: [],
-      ...(implementsIds.length > 0 ? { implements: implementsIds } : {}),
-    },
+  const { manifest, validation } = parseManifest({
+    spec: "soksak-spec-plugin@0.0.1",
     id,
-  );
-  if (!manifest) throw new Error(`픽스처 매니페스트 불량: ${validation.errors.join("; ")}`);
+    name: "Fixture",
+    version: "0.0.1",
+    description: "contract fixture",
+    permissions: [],
+    ...(providers.length > 0 ? { implements: providers } : {}),
+  }, id);
+  if (!manifest) throw new Error(validation.errors.join("; "));
   return { manifest, dir: `/tmp/${id}`, source: "dev", status };
 }
 
-const ALPHA = "soksak-plugin-fixture-alpha";
-const BETA = "soksak-plugin-fixture-beta";
-const GAMMA = "soksak-plugin-fixture-gamma";
-
 beforeEach(() => {
-  usePlugins.setState({
-    plugins: {
-      [ALPHA]: fixtureRuntime(ALPHA, ["soksak-spec-plugin-fixture-notes@1"]),
-      [BETA]: fixtureRuntime(BETA, ["soksak-spec-plugin-fixture-notes@1", "soksak-spec-plugin-fixture-board@2"]),
-      [GAMMA]: fixtureRuntime(GAMMA, []),
-    },
-  });
+  usePlugins.setState({ plugins: {
+    [ALPHA]: fixtureRuntime(ALPHA, [NOTES_001]),
+    [BETA]: fixtureRuntime(BETA, [NOTES_002, BOARD_001]),
+  } });
 });
 
-describe("plugin.implementers — 등록(발견성)", () => {
-  it("영문 description·contract 파라미터·examples 를 선언한다(카탈로그 관례)", () => {
-    const spec = getSpec("plugin.implementers");
-    expect(spec).toBeDefined();
-    expect(spec!.params.contract).toBeDefined();
-    expect(spec!.params.contract.required).not.toBe(true); // 생략 = 전체 계약 지도
-    expect(spec!.examples?.length).toBeGreaterThan(0);
-  });
-});
-
-describe("plugin.implementers — 계약 지정 발견", () => {
-  it("[수용 기준] 같은 계약을 선언한 픽스처 2개를 둘 다 반환한다", async () => {
-    const r = (await execute("plugin.implementers", { contract: "soksak-spec-plugin-fixture-notes@1" }, {})) as unknown as {
-      ok: boolean;
-      data: { contract: string; implementers: { id: string; version: string; status: string }[] };
-    };
-    expect(r.ok).toBe(true);
-    expect(r.data.contract).toBe("soksak-spec-plugin-fixture-notes@1");
-    expect(r.data.implementers.map((i) => i.id)).toEqual([ALPHA, BETA]);
-    expect(r.data.implementers[0]).toEqual({ id: ALPHA, version: "1.0.0", status: "enabled" });
+describe("plugin.implementers", () => {
+  it("exposes id and range rather than a name@version parameter", () => {
+    const spec = getSpec("plugin.implementers")!;
+    expect(spec.params.id).toBeDefined();
+    expect(spec.params.range).toBeDefined();
+    expect(spec.params.contract).toBeUndefined();
   });
 
-  it("비활성 구현체도 status 와 함께 포함된다(발견은 상태 무차별 — 소비자가 status 로 거른다)", async () => {
-    usePlugins.setState({
-      plugins: {
-        [ALPHA]: fixtureRuntime(ALPHA, ["soksak-spec-plugin-fixture-notes@1"]),
-        [BETA]: fixtureRuntime(BETA, ["soksak-spec-plugin-fixture-notes@1"], "disabled"),
-      },
-    });
-    const r = (await execute("plugin.implementers", { contract: "soksak-spec-plugin-fixture-notes@1" }, {})) as unknown as {
-      data: { implementers: { id: string; status: string }[] };
-    };
-    expect(r.data.implementers.map((i) => i.id)).toEqual([ALPHA, BETA]);
-    expect(r.data.implementers[1].status).toBe("disabled");
+  it("returns every compatible provider and preserves runtime status", async () => {
+    const result = await execute("plugin.implementers", {
+      id: NOTES_001.id,
+      range: ">=0.0.1 <1.0.0",
+    }, {}) as any;
+    expect(result.ok).toBe(true);
+    expect(result.data.requirement).toEqual({ id: NOTES_001.id, range: ">=0.0.1 <1.0.0" });
+    expect(result.data.implementers.map((item: { id: string }) => item.id)).toEqual([ALPHA, BETA]);
+    expect(result.data.implementers[0]).toEqual({ id: ALPHA, version: "0.0.1", status: "enabled" });
   });
 
-  it("판까지 정확 일치 — @1 조회는 @2 선언을 잡지 않는다", async () => {
-    const r = (await execute("plugin.implementers", { contract: "soksak-spec-plugin-fixture-board@1" }, {})) as unknown as {
-      data: { implementers: unknown[] };
-    };
-    expect(r.data.implementers).toEqual([]);
+  it("filters by range instead of exact concatenated identity", async () => {
+    const result = await execute("plugin.implementers", { id: NOTES_001.id, range: "=0.0.2" }, {}) as any;
+    expect(result.data.implementers.map((item: { id: string }) => item.id)).toEqual([BETA]);
   });
 
-  it("contract 생략 → 선언된 전체 계약 지도", async () => {
-    const r = (await execute("plugin.implementers", {}, {})) as unknown as {
-      ok: boolean;
-      data: { contracts: { contract: string; implementers: string[] }[] };
-    };
-    expect(r.ok).toBe(true);
-    expect(r.data.contracts).toEqual([
-      { contract: "soksak-spec-plugin-fixture-board@2", implementers: [BETA] },
-      { contract: "soksak-spec-plugin-fixture-notes@1", implementers: [ALPHA, BETA] },
+  it("lists exact provider evidence when no consumer query is supplied", async () => {
+    const result = await execute("plugin.implementers", {}, {}) as any;
+    expect(result.data.contracts).toEqual([
+      { contract: BOARD_001, implementers: [BETA] },
+      { contract: NOTES_001, implementers: [ALPHA] },
+      { contract: NOTES_002, implementers: [BETA] },
     ]);
   });
 
-  it("계약 id 문법 위반 파라미터 → INVALID_PARAMS(문법을 답에 알려준다)", async () => {
-    const r = (await execute("plugin.implementers", { contract: "not-a-contract" }, {})) as unknown as {
-      ok: boolean;
-      code: string;
-      message: string;
-    };
-    expect(r.ok).toBe(false);
-    expect(r.code).toBe("INVALID_PARAMS");
-    expect(r.message).toContain("soksak-spec-<kind>-<domain>@<major>");
-  });
-});
-
-describe("plugin.conformance — implements 절", () => {
-  it("선언 목록과 generic 위반(현행 픽스처는 0)을 보고한다", async () => {
-    const r = (await execute("plugin.conformance", { id: BETA }, {})) as unknown as {
-      ok: boolean;
-      data: { implements: { declared: string[]; violations: unknown[] } };
-    };
-    expect(r.ok).toBe(true);
-    expect(r.data.implements.declared).toEqual([
-      "soksak-spec-plugin-fixture-notes@1",
-      "soksak-spec-plugin-fixture-board@2",
-    ]);
-    expect(r.data.implements.violations).toEqual([]);
+  it("rejects partial or retired exact-string queries", async () => {
+    expect((await execute("plugin.implementers", { id: NOTES_001.id }, {}) as any).code).toBe("INVALID_PARAMS");
+    expect((await execute("plugin.implementers", { contract: `${NOTES_001.id}@0.0.1` }, {}) as any).code).toBe("INVALID_PARAMS");
   });
 });

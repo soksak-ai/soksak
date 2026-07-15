@@ -12,11 +12,11 @@
 import { usePlugins } from "../state/plugins";
 import { useContractSelection } from "../state/contractSelection";
 import {
-  allContracts,
   implementersOf,
   manifestImplements,
   type ImplementsNode,
 } from "./contractDiscovery";
+import type { ContractRequirement } from "./spec";
 
 // 활성(enabled) 플러그인의 계약 발견 노드(매니페스트 implements). 비활성/에러는 제외 —
 // 뷰를 열 수 있는 구현체만 후보다.
@@ -27,20 +27,31 @@ function activeImplementsNodes(): ImplementsNode[] {
 }
 
 // 계약 id → 활성 구현체 pluginId 목록(노드 순서 보존, 정확 일치).
-export function contractImplementers(contract: string): string[] {
+export function contractImplementers(contract: ContractRequirement): string[] {
   return implementersOf(contract, activeImplementsNodes());
 }
 
 // 계약 id → 열 구현체 pluginId 하나. 사용자 선택이 유효(활성 목록의 원소)하면 그것, 아니면
 // 첫 항목(선택 없음·stale 선택·구현체 1개). 구현체 0 이면 null — 소비자는 빈 그룹으로 열화한다.
-export function resolveContractImplementer(contract: string): string | null {
+export function resolveContractImplementer(contract: ContractRequirement): string | null {
   const impls = contractImplementers(contract);
   if (impls.length === 0) return null;
-  const chosen = useContractSelection.getState().selected[contract];
+  const chosen = useContractSelection.getState().selected[contract.id];
   return chosen && impls.includes(chosen) ? chosen : impls[0];
 }
 
 // 선택 UI 노출 대상 — 활성 구현체가 둘 이상인 계약만(하나뿐이면 고를 게 없다). 계약 id 오름차순.
 export function selectableContracts(): { contract: string; implementers: string[] }[] {
-  return allContracts(activeImplementsNodes()).filter((c) => c.implementers.length >= 2);
+  const map = new Map<string, string[]>();
+  for (const node of activeImplementsNodes()) {
+    for (const provider of node.implements) {
+      const implementers = map.get(provider.id) ?? [];
+      if (!implementers.includes(node.id)) implementers.push(node.id);
+      map.set(provider.id, implementers);
+    }
+  }
+  return [...map.entries()]
+    .sort(([left], [right]) => left === right ? 0 : left < right ? -1 : 1)
+    .map(([contract, implementers]) => ({ contract, implementers }))
+    .filter(({ implementers }) => implementers.length >= 2);
 }

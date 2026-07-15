@@ -11,6 +11,7 @@ import {
   type ContributedSchedule,
   type PluginManifest,
 } from "./spec";
+import type { ContractRequirement } from "./spec";
 
 export interface ServiceProxyDeps {
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -126,7 +127,7 @@ interface LedgerSchedule {
 export interface LedgerServiceBinding {
   plugin: string;
   sidecar: string;
-  interface: string;
+  interface: ContractRequirement;
   ops: string[];
   subscribe: string[];
   schedules: LedgerSchedule[];

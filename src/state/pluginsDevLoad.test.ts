@@ -3,16 +3,11 @@
 // 같은 동의 지위로 자동 재활성화. 처음 보는(enabledIds 밖) id 는 여전히 disabled(현행 유지).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// blob ESM 은 jsdom 미실행(loader.ts 주석) — 로더를 주입해 활성화 경로를 계약 테스트한다.
+// Native helper transport is injected; the store test exercises activation state only.
 const activatedIds: string[] = [];
 const activeIds = new Set<string>();
 vi.mock("../plugins/loader", () => ({
-  importPluginModule: vi.fn(async () => ({ activate: () => {} })),
-  activatePlugin: vi.fn(async (_mod: unknown, manifest: { id: string }) => {
-    // activatePlugin 이 명령을 등록한다 — 이 호출이 "명령 재등록"의 런타임 지점.
-    activatedIds.push(manifest.id);
-    return { id: manifest.id, disposables: [], dispose: () => {} };
-  }),
+  activateContractPlugin: vi.fn(async () => ({ deactivate: async () => {} })),
   isActive: (id: string) => activeIds.has(id),
   setActive: (id: string) => {
     activeIds.add(id);
@@ -25,6 +20,12 @@ vi.mock("../plugins/loader", () => ({
     activeIds.clear();
   }),
 }));
+vi.mock("../plugins/nativeRuntime", () => ({
+  startNativePluginRuntime: vi.fn(async (manifest: { id: string }) => {
+    activatedIds.push(manifest.id);
+    return { manifest, dir: "/runtime", deactivate: async () => {} };
+  }),
+}));
 
 const invoke = vi.fn(async (cmd: string, args?: { path?: string }) => {
   if (cmd === "read_text_file") {
@@ -32,7 +33,7 @@ const invoke = vi.fn(async (cmd: string, args?: { path?: string }) => {
     if (path.endsWith("/plugin.json")) {
       return {
         content: JSON.stringify({
-          spec: "soksak-spec-plugin@1",
+          spec: "soksak-spec-plugin@0.0.1",
           id: "soksak-plugin-demo",
           name: "데모",
           version: "1.0.0",
@@ -60,7 +61,7 @@ const ID = "soksak-plugin-demo";
 function demoRuntime(status: PluginRuntime["status"]): PluginRuntime {
   const { manifest } = parseManifest(
     {
-      spec: "soksak-spec-plugin@1",
+      spec: "soksak-spec-plugin@0.0.1",
       id: ID,
       name: "데모",
       version: "1.0.0",
@@ -120,7 +121,7 @@ describe("devLoad — enabled dev 플러그인 재적재", () => {
 
     const after = usePlugins.getState().plugins[ID];
     expect(after.status).toBe("enabled");
-    // 신선 코드가 재활성화 = 명령 재등록 경로(activatePlugin) 실행됨.
+    // 신선 코드가 native runtime에서 다시 활성화된다.
     expect(activatedIds).toContain(ID);
     expect(activeIds.has(ID)).toBe(true);
   });

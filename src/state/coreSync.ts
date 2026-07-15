@@ -12,6 +12,8 @@ import { makeCoreStore, type CoreStore, type CoreStoreDeps } from "./coreStore";
 export interface CoreSync<T> {
   loadSync: () => T;
   save: (value: T) => void;
+  /** Persist before returning. Security continuity state uses this boundary. */
+  saveNow: (value: T) => Promise<void>;
   init: (deps: CoreStoreDeps) => () => void;
   /** 잔여 디바운스 권위 기록을 즉시 비운다(pagehide·해지·테스트). */
   flush: () => void;
@@ -79,6 +81,16 @@ export function createCoreSync<T>(opts: {
     timer = setTimeout(flush, PERSIST_DEBOUNCE_MS);
   };
 
+  const saveNow = async (value: T): Promise<void> => {
+    if (timer != null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    pending = null;
+    writeCache(value);
+    if (store) await store.save(value);
+  };
+
   const init = (deps: CoreStoreDeps): (() => void) => {
     store = makeCoreStore<T>({ key, lsKey, fallback, ...deps });
     void store.hydrate().then(apply);
@@ -93,5 +105,5 @@ export function createCoreSync<T>(opts: {
     };
   };
 
-  return { loadSync, save, init, flush };
+  return { loadSync, save, saveNow, init, flush };
 }

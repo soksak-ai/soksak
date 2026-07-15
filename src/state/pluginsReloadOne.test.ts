@@ -6,11 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const activatedIds: string[] = [];
 const activeIds = new Set<string>();
 vi.mock("../plugins/loader", () => ({
-  importPluginModule: vi.fn(async () => ({ activate: () => {} })),
-  activatePlugin: vi.fn(async (_mod: unknown, manifest: { id: string }) => {
-    activatedIds.push(manifest.id);
-    return { id: manifest.id, disposables: [], dispose: () => {} };
-  }),
+  activateContractPlugin: vi.fn(async () => ({ deactivate: async () => {} })),
   isActive: (id: string) => activeIds.has(id),
   setActive: (id: string) => {
     activeIds.add(id);
@@ -21,6 +17,12 @@ vi.mock("../plugins/loader", () => ({
   }),
   deactivateAll: vi.fn(async () => {
     activeIds.clear();
+  }),
+}));
+vi.mock("../plugins/nativeRuntime", () => ({
+  startNativePluginRuntime: vi.fn(async (manifest: { id: string }) => {
+    activatedIds.push(manifest.id);
+    return { manifest, dir: PATH, deactivate: async () => {} };
   }),
 }));
 
@@ -48,7 +50,7 @@ import { parseManifest } from "../plugins/spec";
 
 function manifestJson(commands: string[]): Record<string, unknown> {
   return {
-    spec: "soksak-spec-plugin@1",
+    spec: "soksak-spec-plugin@0.0.1",
     id: ID,
     name: "데모",
     version: "1.0.0",
@@ -100,7 +102,7 @@ describe("reloadOne — id 지정 재적재는 디스크의 매니페스트를 �
   });
 
   it("파일이 불량이면 조용히 옛 매니페스트로 켜지 않고 거부 이유를 답한다", async () => {
-    onDisk = { spec: "soksak-spec-plugin@1", id: ID }; // 필수 필드 결손
+    onDisk = { spec: "soksak-spec-plugin@0.0.1", id: ID }; // 필수 필드 결손
 
     const r = await usePlugins.getState().reloadOne(ID);
     expect(r.ok).toBe(false);

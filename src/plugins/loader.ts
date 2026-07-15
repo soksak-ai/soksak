@@ -1,9 +1,5 @@
-// 플러그인 로더 — 모듈 적재(Blob import)와 생명주기(activate/deactivate)를 분리.
-//   - importPluginModule: 외부 코드 문자열 → ESM 모듈. blob URL 은 매번 새로워
-//     ESM 캐시 문제가 없다(reload 공짜). jsdom 은 blob ESM 을 실행 못 하므로
-//     이 함수만 실제 환경 검증 대상이고, 생명주기는 모듈 주입으로 전수 테스트한다.
-//   - activatePlugin: 검증된 매니페스트 + 모듈 → 활성 인스턴스. 모든 등록은
-//     tracker 가 자동 수거 — 비활성화 시 누수 불가(§0-4).
+// Host-owned plugin contribution lifecycle. Executable plugin entry bytes are resolved and
+// evaluated only by the native helper runtime; this module owns declarative/service lifetimes.
 
 import {
   buildPluginApi,
@@ -50,17 +46,6 @@ function wireService(manifest: PluginManifest, deps: PluginApiDeps, tracker: { w
   tracker.wrap(registerServiceProxies(manifest, serviceProxyDeps(deps), markRegistered));
   if (manifest.service) {
     tracker.wrap(registerBusBridge(manifest, { invoke: deps.invoke, busOn }));
-  }
-}
-
-// entry 코드 문자열 → ESM 모듈. 상대 import 불가(스펙: 단일 번들 필수).
-export async function importPluginModule(code: string): Promise<unknown> {
-  const blob = new Blob([code], { type: "text/javascript" });
-  const url = URL.createObjectURL(blob);
-  try {
-    return await import(/* @vite-ignore */ url);
-  } finally {
-    URL.revokeObjectURL(url);
   }
 }
 

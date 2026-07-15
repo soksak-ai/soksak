@@ -1,128 +1,205 @@
-import { semverGte, type LocalizedText } from "./spec";
+import {
+  parseRegistryPublicKey,
+  semverCompare,
+  semverSatisfies,
+  type CertifiedRegistryIndex,
+  type LocalizedText,
+  type RegistryPublicKey,
+  type RegistryUnitIndexEntry,
+  type UnitKind,
+} from "./spec";
 
-// 공식 플러그인 레지스트리 — "설치 가능 목록"의 단일 진실. 각 엔트리는 한 플러그인의 표시용 메타 +
-// git 레포 URL(설치 source). 빌드에 스냅샷으로 포함(첫 실행/오프라인), 온라인이면 원격 registry.json
-// 으로 갱신. 실제 설치는 repo clone 후 plugin.install → parseManifest 가 엄격 재검증하므로, 여기 검증은
-// "목록에 표시 가능한가" 수준(신뢰 경계지만 가벼움 — 손상 엔트리만 스킵, 전체는 살린다).
+export const OFFICIAL_REGISTRY_ID = "official";
 
-export const REGISTRY_SPEC = "soksak-registry@1";
-
-export interface RegistryEntry {
+export interface RegistryDescriptor {
   id: string;
-  name: LocalizedText;
-  version: string; // 스냅샷/원격 시점의 게시 버전 — 설치본과 비교해 업데이트 표시
-  description: LocalizedText;
-  author?: string;
-  repo: string; // git URL — plugin.install 의 source
-  branch?: string; // 설치 대상 브랜치 — 없으면 repo 기본 브랜치. master/main 가정 금지(설치 reference)
-  // 매니페스트 선언 명령(집계 투영) — 설치 전 능력 조회용. title = 사람용 다국어 설명(매니페스트
-  // 단일진실), danger = 위험 분류(destructive|inject).
-  commands?: RegistryCommand[];
-}
-
-export interface RegistryCommand {
   name: string;
-  title?: LocalizedText;
-  danger?: string;
+  indexUrl: string;
+  visibility: "public" | "private";
+  trustedPublicKey: RegistryPublicKey;
+  /** Core-derived vault location. A descriptor cannot select this value. */
+  credentialRef?: string;
 }
 
-export interface Registry {
-  spec: typeof REGISTRY_SPEC;
-  plugins: RegistryEntry[];
+export interface RegistryCredentialSlot {
+  namespace: string;
+  key: "http-authorization";
+  ref: string;
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
+export interface QualifiedRegistryEntry extends RegistryUnitIndexEntry {
+  registryId: string;
+  unitId: string;
 }
 
-// name/description: 문자열 또는 {언어:문자열} 객체(LocalizedText). 표시용이라 내용 형식은 느슨히 본다.
-function isText(v: unknown): v is LocalizedText {
-  if (typeof v === "string") return v.length > 0;
-  return isRecord(v) && Object.values(v).some((x) => typeof x === "string");
+/** Catalog entries are authenticated release references, never repository locators. */
+export type RegistryEntry = QualifiedRegistryEntry;
+
+const REGISTRY_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const REGISTRY_CREDENTIAL_KEY = "http-authorization" as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parseEntry(v: unknown): RegistryEntry | null {
-  if (!isRecord(v)) return null;
-  if (typeof v.id !== "string" || v.id.length === 0) return null;
-  if (typeof v.repo !== "string" || v.repo.length === 0) return null;
-  if (typeof v.version !== "string" || v.version.length === 0) return null;
-  if (!isText(v.name) || !isText(v.description)) return null;
-  const e: RegistryEntry = {
-    id: v.id,
-    name: v.name,
-    version: v.version,
-    description: v.description,
-    repo: v.repo,
+function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
+  const keys = new Set(allowed);
+  return Object.keys(value).every((key) => keys.has(key));
+}
+
+export function registryCredentialSlot(registryId: string): RegistryCredentialSlot | null {
+  if (!REGISTRY_ID_RE.test(registryId)) return null;
+  const encodedId = [...registryId].map((character) => {
+    if (character === "-") return "--";
+    if (character === ".") return "-d";
+    if (character === "_") return "-u";
+    return character;
+  }).join("");
+  const namespace = `core_registry-${encodedId}`;
+  return {
+    namespace,
+    key: REGISTRY_CREDENTIAL_KEY,
+    ref: `${namespace}/${REGISTRY_CREDENTIAL_KEY}`,
   };
-  if (typeof v.author === "string" && v.author.length > 0) e.author = v.author;
-  if (typeof v.branch === "string" && v.branch.length > 0) e.branch = v.branch;
-  if (Array.isArray(v.commands)) {
-    const cmds: RegistryCommand[] = [];
-    for (const c of v.commands) {
-      if (typeof c === "string") cmds.push({ name: c }); // 구형(이름만) 관용 수용
-      else if (isRecord(c) && typeof c.name === "string") {
-        const rc: RegistryCommand = { name: c.name };
-        if (isRecord(c.title)) rc.title = c.title as LocalizedText;
-        if (typeof c.danger === "string") rc.danger = c.danger;
-        cmds.push(rc);
-      } else {
-        cmds.length = 0; // 오염 — 필드 통째 생략(항목은 살림)
-        break;
-      }
-    }
-    if (cmds.length) e.commands = cmds;
-  }
-  return e;
 }
 
-// 외부(빌드 스냅샷 / 원격 fetch) JSON → 검증된 Registry. spec 불일치·비배열이면 null(전체 거부),
-// 개별 엔트리 손상은 스킵(부분 살림 — 한 플러그인 오타가 목록 전체를 죽이지 않는다).
-export function parseRegistry(raw: unknown): Registry | null {
-  if (!isRecord(raw) || raw.spec !== REGISTRY_SPEC || !Array.isArray(raw.plugins)) {
-    return null;
+export function isRegistryIndexUrl(value: unknown): value is string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value !== value.trim() ||
+    /[\u0000-\u001f\u007f\\?#]/.test(value)
+  ) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" &&
+      url.hostname.length > 0 &&
+      url.username === "" &&
+      url.password === "" &&
+      url.search === "" &&
+      url.hash === "" &&
+      url.toString() === value;
+  } catch {
+    return false;
   }
-  const plugins: RegistryEntry[] = [];
-  for (const p of raw.plugins) {
-    const e = parseEntry(p);
-    if (e) plugins.push(e);
-  }
-  return { spec: REGISTRY_SPEC, plugins };
 }
 
-// 한 레지스트리 엔트리의 설치 상태(리스트 UI 배지·버튼 결정용). installedVersion 은 설치본 버전
-// (usePlugins 의 manifest.version), 미설치면 undefined. installedSource 는 설치본 출처(usePlugins 의
-// source), 미설치면 undefined.
-//  - "available"  : 미설치
-//  - "update"     : 설치됨 + 레지스트리 버전이 더 높음(semver)
-//  - "installed"  : 설치됨 + 최신(또는 버전 비교 불가, 또는 dev 소스)
+export function parseRegistryDescriptor(raw: unknown): RegistryDescriptor | null {
+  if (
+    !isRecord(raw) ||
+    !hasOnlyKeys(raw, ["credentialRef", "id", "indexUrl", "name", "trustedPublicKey", "visibility"]) ||
+    typeof raw.id !== "string" ||
+    !REGISTRY_ID_RE.test(raw.id) ||
+    typeof raw.name !== "string" ||
+    raw.name.trim().length === 0 ||
+    raw.name.length > 128 ||
+    !isRegistryIndexUrl(raw.indexUrl) ||
+    (raw.visibility !== "public" && raw.visibility !== "private")
+  ) return null;
+  const key = parseRegistryPublicKey(raw.trustedPublicKey);
+  if (!key.ok) return null;
+  if (raw.visibility === "public") {
+    if (raw.credentialRef !== undefined) return null;
+    return {
+      id: raw.id,
+      name: raw.name,
+      indexUrl: raw.indexUrl,
+      visibility: "public",
+      trustedPublicKey: key.value,
+    };
+  }
+  const credential = registryCredentialSlot(raw.id);
+  if (!credential || (raw.credentialRef !== undefined && raw.credentialRef !== credential.ref)) return null;
+  return {
+    id: raw.id,
+    name: raw.name,
+    indexUrl: raw.indexUrl,
+    visibility: "private",
+    trustedPublicKey: key.value,
+    credentialRef: credential.ref,
+  };
+}
+
+export function qualifyRegistry(
+  certified: CertifiedRegistryIndex,
+): QualifiedRegistryEntry[] {
+  return certified.index.units.map((entry) => ({
+    ...entry,
+    registryId: certified.index.registryId,
+    unitId: entry.id,
+  }));
+}
+
+export type RegistryUnitResolution =
+  | { ok: true; entry: QualifiedRegistryEntry }
+  | {
+      ok: false;
+      reason: "not_found" | "qualification_required" | "ambiguous";
+      candidates: { registryId: string; unitId: string; version: string }[];
+    };
+
+export function resolveRegistryUnit(
+  entries: readonly QualifiedRegistryEntry[],
+  target: {
+    registryId?: string;
+    unitId: string;
+    kind?: UnitKind;
+    range?: string;
+  },
+): RegistryUnitResolution {
+  const matches = entries.filter((entry) =>
+    entry.unitId === target.unitId &&
+    (target.registryId === undefined || entry.registryId === target.registryId) &&
+    (target.kind === undefined || entry.kind === target.kind) &&
+    (target.range === undefined || semverSatisfies(entry.version, target.range) === true)
+  );
+  const candidates = matches
+    .map(({ registryId, unitId, version }) => ({ registryId, unitId, version }))
+    .sort((left, right) =>
+      left.registryId.localeCompare(right.registryId) ||
+      -(semverCompare(left.version, right.version) ?? 0)
+    );
+  if (matches.length === 0) return { ok: false, reason: "not_found", candidates };
+  const registries = new Set(matches.map((entry) => entry.registryId));
+  if (registries.size > 1) return { ok: false, reason: "ambiguous", candidates };
+  const registryId = matches[0].registryId;
+  if (target.registryId === undefined && registryId !== OFFICIAL_REGISTRY_ID) {
+    return { ok: false, reason: "qualification_required", candidates };
+  }
+  const entry = [...matches].sort(
+    (left, right) => -(semverCompare(left.version, right.version) ?? 0),
+  )[0];
+  return { ok: true, entry };
+}
+
 export type InstallState = "available" | "installed" | "update";
 
 export function installState(
-  entry: RegistryEntry,
+  entry: Pick<RegistryUnitIndexEntry, "version">,
   installedVersion?: string,
   installedSource?: "installed" | "dev",
 ): InstallState {
   if (!installedVersion) return "available";
-  // dev 소스: 로컬 워크스페이스가 단일진실. 카탈로그 버전과 무관하게 install/update 권유 금지 —
-  // state.update() 가 dev 를 거부하므로(plugins.ts) 레지스트리에 dead 업데이트 버튼을 띄우면 불일치.
-  // dev 설치본은 "설치됨" 섹션에서 dev 배지로 노출되고, 레지스트리 actionable 목록에선 빠진다.
   if (installedSource === "dev") return "installed";
-  // 레지스트리 버전 ≥ 설치본이면서 같지 않음 = 업데이트 있음. 비교 불가(형식 불량)면 installed 로 보수.
-  if (entry.version !== installedVersion) {
-    const newer = semverGte(entry.version, installedVersion);
-    if (newer === true) return "update";
-  }
+  if (
+    entry.version !== installedVersion &&
+    semverCompare(entry.version, installedVersion) === 1
+  ) return "update";
   return "installed";
 }
 
-// 원격 fetch 결과를 빌드 스냅샷에 대해 채택. 원격이 valid(parse 성공)면 원격이 진실(교체),
-// 실패(null)면 스냅샷 유지 — 오프라인/손상에도 목록이 사라지지 않는다.
-export function mergeRegistry(snapshot: Registry, remoteRaw: unknown): Registry {
-  return parseRegistry(remoteRaw) ?? snapshot;
+export function isOfficial(
+  entries: readonly QualifiedRegistryEntry[],
+  id: string,
+): boolean {
+  return entries.some((entry) =>
+    entry.registryId === OFFICIAL_REGISTRY_ID &&
+    entry.kind === "plugin" &&
+    entry.unitId === id
+  );
 }
 
-// 설치본 id 가 공식 레지스트리에 등재됐나(출처 구분 — "설치됨" 섹션 배지). 등재=공식, 미등재=수동/
-// 서드파티(또는 옛 id 잔재). 미등재 설치본도 정상 — 출처만 구분하고 제거를 강제하지 않는다.
-export function isOfficial(entries: RegistryEntry[], id: string): boolean {
-  return entries.some((e) => e.id === id);
+/** A catalog has no authority to supply display metadata before its owner release is verified. */
+export function catalogLabel(entry: Pick<QualifiedRegistryEntry, "unitId">): LocalizedText {
+  return entry.unitId;
 }

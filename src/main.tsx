@@ -43,6 +43,7 @@ import { initThemePersistence } from "./state/theme";
 import { initBookmarksPersistence } from "./state/bookmarks";
 import { initPluginSettingsPersistence } from "./state/pluginSettings";
 import { initPluginsPersistence } from "./state/plugins";
+import { initRegistryPersistence } from "./state/registry";
 import { startTerminalStatusBridge } from "./terminal/terminalStatus";
 import { startActivityFeed } from "./state/activityFeed";
 import { OrchestratorApp } from "./orchestrator/OrchestratorApp";
@@ -77,6 +78,7 @@ async function boot(): Promise<void> {
     initBookmarksPersistence(coreStoreDeps);
     initPluginSettingsPersistence(coreStoreDeps);
     initPluginsPersistence(coreStoreDeps);
+    initRegistryPersistence(coreStoreDeps);
     initViewLabelsPersistence(coreStoreDeps);
   } catch (e) {
     console.error("코어 영속 동기화 초기화 실패:", e);

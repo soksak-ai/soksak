@@ -8,7 +8,8 @@
 // C2 정적 판정의 단일진실 = 스펙 패키지 transparency.ts (게이트·validate CLI 와 같은 함수를 본다).
 import {
   C2_STATIC_ENFORCEMENT,
-  CONTRACT_ID_RE,
+  parseContractProviderRef,
+  type ContractProviderRef,
   type EnforcementMode,
   type StaticTransparencyRule,
 } from "./spec";
@@ -142,7 +143,7 @@ export function partitionTransparency(
 }
 
 // ── 결합 법칙 C3 — L2 계약-핀: implements 선언의 generic 검사 ────────────────
-// 매니페스트 implements: ["soksak-spec-<kind>-<domain>@<major>"] 는 이 플러그인이 구현하는 계약의 선언이고,
+// 매니페스트 implements: [{ id: "soksak-spec-<kind>-<domain>", version }] 는 이 플러그인이 구현하는 계약의 선언이고,
 // 소비자는 계약 id 로 구현체를 발견한다(contractDiscovery — 구현체 무차별). 계약이 요구하는 표면
 // (어떤 command/view 가 있어야 하나)의 정의·검증은 계약 소유자(플러그인) 몫 — 코어는 어떤 계약도
 // 모르므로(C1) 선언 자체의 성립만 generic 하게 본다: 형태·문법(NAMING §8)·중복.
@@ -174,26 +175,34 @@ export function implementsViolations(raw: unknown): ImplementsViolation[] {
     return [{ rule: "implements-shape", detail: `implements 가 배열이 아님(${typeof raw})` }];
   }
   const out: ImplementsViolation[] = [];
-  const nonString = raw.filter((v) => typeof v !== "string");
-  if (nonString.length > 0) {
+  const nonObjects = raw.filter((value) => typeof value !== "object" || value === null || Array.isArray(value));
+  if (nonObjects.length > 0) {
     out.push({
       rule: "implements-shape",
-      detail: `비문자열 항목 ${nonString.length}개 — implements 는 계약 id 문자열 배열`,
+      detail: `non-object entries ${nonObjects.length} — implements requires { id, version } providers`,
     });
   }
-  const entries = raw.filter((v): v is string => typeof v === "string");
-  const offGrammar = entries.filter((e) => !CONTRACT_ID_RE.test(e));
-  if (offGrammar.length > 0) {
+  const entries = raw.filter((value): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value));
+  const providers: ContractProviderRef[] = [];
+  const invalid: number[] = [];
+  entries.forEach((entry, index) => {
+    const errors: string[] = [];
+    const parsed = parseContractProviderRef(entry, `implements[${index}]`, errors);
+    if (parsed) providers.push(parsed);
+    else invalid.push(index);
+  });
+  if (invalid.length > 0) {
     out.push({
       rule: "implements-grammar",
-      detail: `계약 id 문법(soksak-spec-<kind>-<domain>@<major>, NAMING §8) 위반: ${offGrammar.join(", ")}`,
+      detail: `invalid { id, version } provider entries: ${invalid.join(", ")}`,
     });
   }
   const seen = new Set<string>();
   const dup = new Set<string>();
-  for (const e of entries) {
-    if (seen.has(e)) dup.add(e);
-    seen.add(e);
+  for (const provider of providers) {
+    if (seen.has(provider.id)) dup.add(provider.id);
+    seen.add(provider.id);
   }
   if (dup.size > 0) {
     out.push({ rule: "implements-duplicate", detail: `중복 선언: ${[...dup].join(", ")}` });

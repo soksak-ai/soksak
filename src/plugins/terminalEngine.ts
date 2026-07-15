@@ -11,9 +11,13 @@
 
 import { resolveContractImplementer } from "./contractResolve";
 import { listPrograms } from "./programRegistry";
+import type { ContractRequirement } from "./spec";
 
-// 코어의 터미널 어포던스가 겨냥하는 터미널 계약 id(NAMING §8, soksak-spec-<kind>-<domain>@<major>).
-export const TERMINAL_CONTRACT = "soksak-spec-plugin-terminal@1";
+// 코어의 터미널 어포던스가 겨냥하는 계약 id와 정확한 first-party 기준선(NAMING §8).
+export const TERMINAL_CONTRACT: ContractRequirement = Object.freeze({
+  id: "soksak-spec-plugin-terminal",
+  range: "0.0.1",
+});
 
 // 설정된 터미널 엔진의 program id 를 해소한다 — addViewToGroup/split/layout 이 program id 로 뷰를 연다.
 // 계약 → 구현체 pluginId(설정·발견) → 그 구현체가 자기 뷰로 여는 program id.

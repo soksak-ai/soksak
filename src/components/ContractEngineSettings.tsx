@@ -3,7 +3,7 @@ import { useContractSelection } from "../state/contractSelection";
 import { selectableContracts } from "../plugins/contractResolve";
 import { localize, useT } from "../i18n";
 
-// 계약별 구현체 선택 — 활성 구현체가 둘 이상인 계약(예: soksak-spec-plugin-terminal@1 → xterm/ghostty)마다
+// 계약별 구현체 선택 — 활성 구현체가 둘 이상인 계약(예: soksak-spec-plugin-terminal → xterm/ghostty)마다
 // 드롭다운. 코어는 계약의 의미를 모른다 — selectableContracts 가 발견한 계약을 제네릭하게 열거하고
 // (계약 id 그대로 라벨), 사용자가 구현체를 고른다. 구현체가 하나뿐인 계약은 노출하지 않는다
 // (고를 게 없다). 선택 없음·stale 선택은 첫 항목으로 폴백(발견 순서).

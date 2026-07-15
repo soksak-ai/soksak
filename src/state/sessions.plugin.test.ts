@@ -267,20 +267,20 @@ describe("addProject — 초기 program", () => {
 describe("addViewToGroup — viewContract(계약-핀) 해소", () => {
   const XTERM = "soksak-plugin-terminal-xterm";
   const GHOSTTY = "soksak-plugin-terminal-ghostty";
-  const CONTRACT = "soksak-spec-plugin-terminal@1";
+  const CONTRACT = { id: "soksak-spec-plugin-terminal", range: ">=0.0.1 <1.0.0" };
 
   // 픽스처 런타임 — 실 스키마 게이트(parseManifest)를 통과시킨다(implements 는 스펙 검증 필드).
   function fixtureRuntime(
     id: string,
-    implementsIds: string[],
+    implementsIds: { id: string; version: string }[],
     status: PluginRuntime["status"] = "enabled",
   ): PluginRuntime {
     const { manifest, validation } = parseManifest(
       {
-        spec: "soksak-spec-plugin@1",
+        spec: "soksak-spec-plugin@0.0.1",
         id,
         name: "픽스처",
-        version: "1.0.0",
+        version: "0.0.1",
         description: "계약 픽스처",
         permissions: [],
         ...(implementsIds.length > 0 ? { implements: implementsIds } : {}),
@@ -295,8 +295,8 @@ describe("addViewToGroup — viewContract(계약-핀) 해소", () => {
     // 두 엔진이 같은 계약을 활성 상태로 구현(발견 순서 = xterm, ghostty).
     usePlugins.setState({
       plugins: {
-        [XTERM]: fixtureRuntime(XTERM, [CONTRACT]),
-        [GHOSTTY]: fixtureRuntime(GHOSTTY, [CONTRACT]),
+        [XTERM]: fixtureRuntime(XTERM, [{ id: CONTRACT.id, version: "0.0.1" }]),
+        [GHOSTTY]: fixtureRuntime(GHOSTTY, [{ id: CONTRACT.id, version: "0.0.1" }]),
       },
     });
     useContractSelection.setState({ selected: {} });
@@ -341,7 +341,7 @@ describe("addViewToGroup — viewContract(계약-핀) 해소", () => {
 
   it("사용자 선택 → 그 구현체(ghostty)로 해소(엔진 선택)", () => {
     const dispose = registerContractProgram();
-    useContractSelection.getState().select(CONTRACT, GHOSTTY);
+    useContractSelection.getState().select(CONTRACT.id, GHOSTTY);
     try {
       const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
       expect(r.ok).toBe(true);
@@ -354,7 +354,7 @@ describe("addViewToGroup — viewContract(계약-핀) 해소", () => {
 
   it("stale 선택(구현체 아님) → 첫 항목으로 폴백(무시)", () => {
     const dispose = registerContractProgram();
-    useContractSelection.getState().select(CONTRACT, "soksak-plugin-not-an-impl");
+    useContractSelection.getState().select(CONTRACT.id, "soksak-plugin-not-an-impl");
     try {
       const r = useSessions.getState().addViewToGroup("t1", "claude-contract-test");
       expect(r.ok).toBe(true);
@@ -368,8 +368,8 @@ describe("addViewToGroup — viewContract(계약-핀) 해소", () => {
   it("비활성(disabled) 구현체는 후보 제외 → 활성 구현체로만 해소", () => {
     usePlugins.setState({
       plugins: {
-        [XTERM]: fixtureRuntime(XTERM, [CONTRACT], "disabled"),
-        [GHOSTTY]: fixtureRuntime(GHOSTTY, [CONTRACT]),
+        [XTERM]: fixtureRuntime(XTERM, [{ id: CONTRACT.id, version: "0.0.1" }], "disabled"),
+        [GHOSTTY]: fixtureRuntime(GHOSTTY, [{ id: CONTRACT.id, version: "0.0.1" }]),
       },
     });
     const dispose = registerContractProgram();

@@ -4,6 +4,16 @@
 
 import type { CmdErrCode } from "../state/sessions";
 import type { LocalizedText } from "../plugins/spec";
+import {
+  PERMISSIONS,
+  contractRequirementSatisfiedBy,
+  parseContractProviderRef,
+  parseContractRequirement,
+  type ContractProviderRef,
+  type ContractRequirement,
+  type PluginPermission,
+  type PluginRuntimePrincipal,
+} from "@soksak-ai/plugin-spec";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { tmsg } from "../i18n";
 
@@ -23,6 +33,73 @@ export interface ParamSpec {
 export interface CommandHint {
   cmd: string;
   why: string;
+}
+
+// 플러그인 브로커의 결과 계약. `returns` 는 사람이 읽는 설명이고, 이 스키마는 정규화된
+// CommandOutcome.data 를 검사하는 기계 계약이다. 의도적으로 작고 닫힌 문법만 제공한다.
+// $ref/조건부/사용자 함수 같은 실행 가능한 스키마 seam 은 허용하지 않는다.
+export type CommandMachineSchema =
+  | { readonly type: "null" }
+  | { readonly type: "boolean" }
+  | {
+      readonly type: "number" | "integer";
+      readonly minimum?: number;
+      readonly maximum?: number;
+    }
+  | {
+      readonly type: "string";
+      readonly enum?: readonly string[];
+      readonly maxLength?: number;
+    }
+  | {
+      readonly type: "array";
+      readonly items: CommandMachineSchema;
+      readonly maxItems?: number;
+    }
+  | CommandMachineObjectSchema;
+
+export interface CommandMachineObjectSchema {
+  readonly type: "object";
+  readonly properties: Readonly<Record<string, CommandMachineSchema>>;
+  readonly required: readonly string[];
+  readonly additionalProperties: boolean;
+}
+
+export type CommandBrokerAuthoritySource =
+  | { readonly kind: "runtime-id" }
+  | { readonly kind: "session-id" }
+  | { readonly kind: "window-label" }
+  | { readonly kind: "plugin-id" }
+  | { readonly kind: "generation" }
+  | { readonly kind: "role" }
+  | { readonly kind: "contribution-id" }
+  | { readonly kind: "instance-id" }
+  | { readonly kind: "namespace" }
+  | { readonly kind: "path"; readonly key: string }
+  | { readonly kind: "label"; readonly key: string }
+  | { readonly kind: "coordinates"; readonly key: string };
+
+export interface CommandBrokerAuthorityBinding {
+  /** Command parameter owned by the host. Plugin payloads may not contain it. */
+  readonly param: string;
+  readonly source: CommandBrokerAuthoritySource;
+}
+
+export interface CommandBrokerSpec {
+  /** Every permission is explicit. `commands` is always required for command.execute. */
+  readonly permissions: readonly PluginPermission[];
+  /**
+   * requires: contracts the caller must provide (its manifest `implements`).
+   * provides: contracts this host command provides and the caller must require (`consumes`).
+   */
+  readonly contracts: {
+    readonly requires: readonly ContractRequirement[];
+    readonly provides: readonly ContractProviderRef[];
+  };
+  /** Host-owned selector/identity values injected after rejecting caller copies. */
+  readonly authority: readonly CommandBrokerAuthorityBinding[];
+  /** Schema for normalized successful CommandOutcome.data (`{}` when data is absent). */
+  readonly result: CommandMachineObjectSchema;
 }
 
 export interface CommandSpec {
@@ -60,11 +137,20 @@ export interface CommandSpec {
    *  위치 인자(값 하나)를 받을 이름을 명시한다. 미선언이면 "유일한 필수 매개변수" 규칙만 적용. */
   primary?: string;
   // 발생 가능한 에러 코드.
-  errors?: readonly (CmdErrCode | "INTERNAL" | "TIMEOUT")[];
+  errors?: readonly (
+    | CmdErrCode
+    | "INTERNAL"
+    | "TIMEOUT"
+    | "AMBIGUOUS_TARGET"
+    | "ALREADY_EXISTS"
+  )[];
   // CLI 사용 예시(매뉴얼용).
   examples?: readonly string[];
   // 위험 분류(원격/AI 호출 권한 게이트 대상): destructive=닫기·제거, inject=입력 주입.
   danger?: "destructive" | "inject";
+  // 격리 플러그인 호출은 opt-in. 이 선언이 완전하게 검증된 명령만 executeFromPlugin 으로 열린다.
+  // 미선언 legacy 명령은 결코 암묵적으로 노출하지 않는다.
+  broker?: CommandBrokerSpec;
   // 실행 계측 선언 — false 면 이 명령의 실행이 활동 트레이스(command.executed)에서 제외된다.
   // §5 R2: 유일한 정당 사유는 "동일 사실의 이중 기록 방지"(orchestrator.ask — chat.prompt/
   // answer 가 그 턴의 대표 기록)뿐이다. 소음 억제 목적의 선언 금지 — 그건 origin(노출 축) 몫.
@@ -91,6 +177,51 @@ export interface CommandContext {
   // 실행 유래(§5) — 생략=사람 유래(콘솔·터미널·에이전트 턴). "schedule" 등 시스템 유래는
   // 낭독 후보에서 제외되고(아래 execute) 피드에서 흐리게 표시된다.
   origin?: string;
+  // 격리 런타임 principal/grant. 오직 issuePluginCommandContext 가 발급한 객체만 인증된다.
+  // 플러그인 메시지에서 역직렬화한 객체를 직접 넣어도 WeakSet 인증을 통과하지 못한다.
+  readonly plugin?: AuthenticatedPluginCommandIdentity;
+}
+
+export type PluginAuthorityJson =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly PluginAuthorityJson[]
+  | { readonly [key: string]: PluginAuthorityJson };
+
+export interface PluginCommandGrants {
+  readonly permissions: readonly PluginPermission[];
+  readonly requiredContracts: readonly ContractRequirement[];
+  readonly providedContracts: readonly ContractProviderRef[];
+}
+
+export interface PluginCommandAuthority {
+  readonly namespace: string;
+  readonly paths: Readonly<Record<string, string>>;
+  readonly labels: Readonly<Record<string, string>>;
+  readonly coordinates: Readonly<Record<string, PluginAuthorityJson>>;
+}
+
+export interface AuthenticatedPluginCommandIdentity {
+  readonly principal: PluginRuntimePrincipal;
+  readonly grants: PluginCommandGrants;
+  readonly authority: PluginCommandAuthority;
+}
+
+export interface PluginCommandContext extends CommandContext {
+  readonly remote: true;
+  readonly window: { readonly label: string };
+  readonly origin: "plugin";
+  readonly plugin: AuthenticatedPluginCommandIdentity;
+}
+
+export interface PluginCommandContextInput {
+  readonly principal: PluginRuntimePrincipal;
+  readonly grants: PluginCommandGrants;
+  readonly authority: PluginCommandAuthority;
+  readonly pane?: string;
+  readonly parent?: string;
 }
 
 // 권한 게이트 콜백(설정 store 를 registry 가 직접 알지 않게 주입).
@@ -114,7 +245,16 @@ export type ErrCode =
   | "TIMEOUT"
   | "UNKNOWN_COMMAND"
   | "INVALID_PARAMS"
-  | "PERMISSION_DENIED";
+  | "AMBIGUOUS_TARGET"
+  | "ALREADY_EXISTS"
+  | "PERMISSION_DENIED"
+  | "PLUGIN_AUTH_REQUIRED"
+  | "PLUGIN_ENTRYPOINT_REQUIRED"
+  | "PLUGIN_CALL_FORBIDDEN"
+  | "PLUGIN_AUTHORITY_FORBIDDEN"
+  | "PLUGIN_AUTHORITY_UNAVAILABLE"
+  | "PLUGIN_CONTRACT_DENIED"
+  | "PLUGIN_RESULT_INVALID";
 // 표시 미디어(선택) — 이미지 등 "그대로 렌더할 내용"을 응답이 스스로 선언한다(MCP content 정합).
 // 소비자(피드·폰·미래 표면)는 키 냄새 맡기 없이 media 만 보고 렌더한다. base64 또는 path 중 하나.
 export interface MediaContent {
@@ -137,7 +277,347 @@ export interface CommandOutcome {
 // 하위호환 별칭 — 실패 봉투를 지칭하던 기존 참조 유지.
 export type CommandError = CommandOutcome & { ok: false };
 
+const MAX_MACHINE_SCHEMA_DEPTH = 16;
+const MAX_MACHINE_SCHEMA_NODES = 512;
+const MAX_MACHINE_RESULT_ERRORS = 16;
+const UNSAFE_RECORD_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+const PLUGIN_ROLES = new Set(["controller", "view", "file-viewer", "overlay", "preview"]);
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function cloneAndFreeze<T>(value: T): T {
+  return deepFreezeValue(structuredClone(value));
+}
+
+function deepFreezeValue<T>(value: T): T {
+  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
+    for (const child of Object.values(value as Record<string, unknown>)) deepFreezeValue(child);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+function machineSchemaDefinitionErrors(raw: unknown): string[] {
+  const errors: string[] = [];
+  const counter = { nodes: 0 };
+  const visit = (value: unknown, path: string, depth: number): void => {
+    if (depth > MAX_MACHINE_SCHEMA_DEPTH) {
+      errors.push(`${path}: schema depth exceeds ${MAX_MACHINE_SCHEMA_DEPTH}`);
+      return;
+    }
+    counter.nodes += 1;
+    if (counter.nodes > MAX_MACHINE_SCHEMA_NODES) {
+      if (counter.nodes === MAX_MACHINE_SCHEMA_NODES + 1) {
+        errors.push(`${path}: schema node count exceeds ${MAX_MACHINE_SCHEMA_NODES}`);
+      }
+      return;
+    }
+    if (!isPlainRecord(value) || typeof value.type !== "string") {
+      errors.push(`${path}: closed machine schema object required`);
+      return;
+    }
+    const allowed = new Set<string>(["type"]);
+    switch (value.type) {
+      case "null":
+      case "boolean":
+        break;
+      case "number":
+      case "integer": {
+        allowed.add("minimum");
+        allowed.add("maximum");
+        if (value.minimum !== undefined && (typeof value.minimum !== "number" || !Number.isFinite(value.minimum))) {
+          errors.push(`${path}.minimum: finite number required`);
+        }
+        if (value.maximum !== undefined && (typeof value.maximum !== "number" || !Number.isFinite(value.maximum))) {
+          errors.push(`${path}.maximum: finite number required`);
+        }
+        if (
+          typeof value.minimum === "number" &&
+          typeof value.maximum === "number" &&
+          value.minimum > value.maximum
+        ) errors.push(`${path}: minimum must not exceed maximum`);
+        break;
+      }
+      case "string": {
+        allowed.add("enum");
+        allowed.add("maxLength");
+        if (value.enum !== undefined && (
+          !Array.isArray(value.enum) ||
+          value.enum.length === 0 ||
+          value.enum.some((item) => typeof item !== "string") ||
+          new Set(value.enum).size !== value.enum.length
+        )) errors.push(`${path}.enum: non-empty unique string array required`);
+        if (
+          value.maxLength !== undefined &&
+          (!Number.isSafeInteger(value.maxLength) || (value.maxLength as number) < 0)
+        ) errors.push(`${path}.maxLength: non-negative safe integer required`);
+        break;
+      }
+      case "array": {
+        allowed.add("items");
+        allowed.add("maxItems");
+        if (!("items" in value)) errors.push(`${path}.items: required`);
+        else visit(value.items, `${path}.items`, depth + 1);
+        if (
+          value.maxItems !== undefined &&
+          (!Number.isSafeInteger(value.maxItems) || (value.maxItems as number) < 0)
+        ) errors.push(`${path}.maxItems: non-negative safe integer required`);
+        break;
+      }
+      case "object": {
+        allowed.add("properties");
+        allowed.add("required");
+        allowed.add("additionalProperties");
+        if (!isPlainRecord(value.properties)) {
+          errors.push(`${path}.properties: object required`);
+        } else {
+          for (const [key, child] of Object.entries(value.properties)) {
+            if (!key || UNSAFE_RECORD_KEYS.has(key)) errors.push(`${path}.properties: unsafe property "${key}"`);
+            visit(child, `${path}.properties.${key}`, depth + 1);
+          }
+        }
+        if (
+          !Array.isArray(value.required) ||
+          value.required.some((item) => typeof item !== "string") ||
+          new Set(value.required).size !== value.required.length
+        ) {
+          errors.push(`${path}.required: unique string array required`);
+        } else if (isPlainRecord(value.properties)) {
+          for (const key of value.required) {
+            if (!Object.prototype.hasOwnProperty.call(value.properties, key)) {
+              errors.push(`${path}.required: unknown property "${key}"`);
+            }
+          }
+        }
+        if (typeof value.additionalProperties !== "boolean") {
+          errors.push(`${path}.additionalProperties: boolean required`);
+        }
+        break;
+      }
+      default:
+        errors.push(`${path}.type: unsupported machine schema type`);
+    }
+    for (const key of Object.keys(value)) {
+      if (!allowed.has(key)) errors.push(`${path}: unknown schema keyword "${key}"`);
+    }
+  };
+  visit(raw, "$", 0);
+  return errors;
+}
+
+function validateMachineValue(
+  schema: CommandMachineSchema,
+  value: unknown,
+  path: string,
+  errors: string[],
+  depth = 0,
+  ancestors = new WeakSet<object>(),
+): void {
+  if (errors.length >= MAX_MACHINE_RESULT_ERRORS) return;
+  if (depth > MAX_MACHINE_SCHEMA_DEPTH) {
+    errors.push(`${path}: result depth exceeds ${MAX_MACHINE_SCHEMA_DEPTH}`);
+    return;
+  }
+  switch (schema.type) {
+    case "null":
+      if (value !== null) errors.push(`${path}: null required`);
+      return;
+    case "boolean":
+      if (typeof value !== "boolean") errors.push(`${path}: boolean required`);
+      return;
+    case "number":
+    case "integer":
+      if (
+        typeof value !== "number" ||
+        !Number.isFinite(value) ||
+        (schema.type === "integer" && !Number.isSafeInteger(value))
+      ) {
+        errors.push(`${path}: ${schema.type} required`);
+        return;
+      }
+      if (schema.minimum !== undefined && value < schema.minimum) errors.push(`${path}: below minimum`);
+      if (schema.maximum !== undefined && value > schema.maximum) errors.push(`${path}: above maximum`);
+      return;
+    case "string":
+      if (typeof value !== "string") {
+        errors.push(`${path}: string required`);
+        return;
+      }
+      if (schema.enum && !schema.enum.includes(value)) errors.push(`${path}: value is outside enum`);
+      if (schema.maxLength !== undefined && value.length > schema.maxLength) errors.push(`${path}: string too long`);
+      return;
+    case "array":
+      if (!Array.isArray(value)) {
+        errors.push(`${path}: array required`);
+        return;
+      }
+      if (schema.maxItems !== undefined && value.length > schema.maxItems) errors.push(`${path}: array too long`);
+      if (ancestors.has(value)) {
+        errors.push(`${path}: cyclic result forbidden`);
+        return;
+      }
+      ancestors.add(value);
+      value.forEach((item, index) => validateMachineValue(schema.items, item, `${path}[${index}]`, errors, depth + 1, ancestors));
+      ancestors.delete(value);
+      return;
+    case "object":
+      if (!isPlainRecord(value)) {
+        errors.push(`${path}: plain object required`);
+        return;
+      }
+      if (ancestors.has(value)) {
+        errors.push(`${path}: cyclic result forbidden`);
+        return;
+      }
+      ancestors.add(value);
+      for (const key of schema.required) {
+        if (!Object.prototype.hasOwnProperty.call(value, key)) errors.push(`${path}.${key}: required`);
+      }
+      for (const [key, item] of Object.entries(value)) {
+        const child = schema.properties[key];
+        if (!child) {
+          if (!schema.additionalProperties) errors.push(`${path}.${key}: additional property forbidden`);
+          continue;
+        }
+        validateMachineValue(child, item, `${path}.${key}`, errors, depth + 1, ancestors);
+      }
+      ancestors.delete(value);
+  }
+}
+
+function authorityParamType(source: CommandBrokerAuthoritySource): ParamSpec["type"] {
+  if (source.kind === "generation") return "number";
+  if (source.kind === "coordinates") return "json";
+  return "string";
+}
+
+function certifyBrokerSpec(name: string, command: CommandSpec): CommandBrokerSpec {
+  const raw = command.broker as unknown;
+  if (!isPlainRecord(raw)) throw new TypeError(`${name}.broker: object required`);
+  const errors: string[] = [];
+  const permissions = Array.isArray(raw.permissions) ? raw.permissions : [];
+  if (!Array.isArray(raw.permissions) || permissions.length === 0) {
+    errors.push("permissions: non-empty array required");
+  } else {
+    if (permissions.some((permission) => typeof permission !== "string" || !PERMISSIONS.includes(permission as PluginPermission))) {
+      errors.push("permissions: unknown plugin permission");
+    }
+    if (new Set(permissions).size !== permissions.length) errors.push("permissions: duplicates forbidden");
+    if (!permissions.includes("commands")) errors.push('permissions: "commands" required');
+    if (command.danger === "destructive" && !permissions.includes("commands:destructive")) {
+      errors.push('permissions: danger destructive requires "commands:destructive"');
+    }
+    if (command.danger === "inject" && !permissions.includes("commands:inject")) {
+      errors.push('permissions: danger inject requires "commands:inject"');
+    }
+  }
+
+  const contracts = isPlainRecord(raw.contracts) ? raw.contracts : null;
+  if (!contracts) errors.push("contracts: { requires, provides } required");
+  const requiresRaw = contracts && Array.isArray(contracts.requires) ? contracts.requires : [];
+  const providesRaw = contracts && Array.isArray(contracts.provides) ? contracts.provides : [];
+  if (contracts && !Array.isArray(contracts.requires)) errors.push("contracts.requires: array required");
+  if (contracts && !Array.isArray(contracts.provides)) errors.push("contracts.provides: array required");
+  const contractErrors: string[] = [];
+  const requires = requiresRaw.flatMap((item, index) => {
+    const parsed = parseContractRequirement(item, `broker.contracts.requires[${index}]`, contractErrors);
+    return parsed ? [parsed] : [];
+  });
+  const provides = providesRaw.flatMap((item, index) => {
+    const parsed = parseContractProviderRef(item, `broker.contracts.provides[${index}]`, contractErrors);
+    return parsed ? [parsed] : [];
+  });
+  errors.push(...contractErrors);
+  if (new Set(requires.map((contract) => contract.id)).size !== requires.length) {
+    errors.push("contracts.requires: duplicate ids forbidden");
+  }
+  if (new Set(provides.map((contract) => contract.id)).size !== provides.length) {
+    errors.push("contracts.provides: duplicate ids forbidden");
+  }
+
+  const authorityRaw = Array.isArray(raw.authority) ? raw.authority : [];
+  if (!Array.isArray(raw.authority)) errors.push("authority: array required");
+  const authority: CommandBrokerAuthorityBinding[] = [];
+  const boundParams = new Set<string>();
+  for (let index = 0; index < authorityRaw.length; index += 1) {
+    const binding = authorityRaw[index];
+    if (!isPlainRecord(binding) || typeof binding.param !== "string" || !isPlainRecord(binding.source)) {
+      errors.push(`authority[${index}]: { param, source } required`);
+      continue;
+    }
+    const param = binding.param;
+    const source = binding.source as Record<string, unknown>;
+    const kind = source.kind;
+    const keyed = kind === "path" || kind === "label" || kind === "coordinates";
+    const known = [
+      "runtime-id", "session-id", "window-label", "plugin-id", "generation", "role",
+      "contribution-id", "instance-id", "namespace", "path", "label", "coordinates",
+    ].includes(String(kind));
+    if (!known || (keyed && (typeof source.key !== "string" || !source.key))) {
+      errors.push(`authority[${index}].source: valid host authority source required`);
+      continue;
+    }
+    const allowedKeys = keyed ? ["kind", "key"] : ["kind"];
+    if (Object.keys(source).some((key) => !allowedKeys.includes(key))) {
+      errors.push(`authority[${index}].source: unknown field`);
+      continue;
+    }
+    if (!param || UNSAFE_RECORD_KEYS.has(param) || !Object.prototype.hasOwnProperty.call(command.params, param)) {
+      errors.push(`authority[${index}].param: declared safe command param required`);
+      continue;
+    }
+    if (boundParams.has(param)) {
+      errors.push(`authority[${index}].param: duplicate binding`);
+      continue;
+    }
+    const typedSource = source as unknown as CommandBrokerAuthoritySource;
+    if (command.params[param].type !== authorityParamType(typedSource)) {
+      errors.push(`authority[${index}].param: ${authorityParamType(typedSource)} param required`);
+      continue;
+    }
+    boundParams.add(param);
+    authority.push({ param, source: typedSource });
+  }
+
+  const resultErrors = machineSchemaDefinitionErrors(raw.result);
+  errors.push(...resultErrors.map((error) => `result${error.slice(1)}`));
+  if (isPlainRecord(raw.result) && raw.result.type !== "object") {
+    errors.push("result.type: object required for normalized CommandOutcome.data");
+  }
+  const allowedBrokerKeys = new Set(["permissions", "contracts", "authority", "result"]);
+  for (const key of Object.keys(raw)) if (!allowedBrokerKeys.has(key)) errors.push(`unknown broker field "${key}"`);
+  if (errors.length > 0) throw new TypeError(`${name}.broker: ${errors.join("; ")}`);
+
+  return cloneAndFreeze({
+    permissions: permissions as PluginPermission[],
+    contracts: { requires, provides },
+    authority,
+    result: raw.result as unknown as CommandMachineObjectSchema,
+  });
+}
+
 const registry = new Map<string, CommandSpec>();
+const authenticatedPluginContexts = new WeakSet<object>();
+
+function snapshotCommandSpec(spec: CommandSpec, broker: CommandBrokerSpec | undefined): CommandSpec {
+  // getSpec/catalog are read surfaces, not mutation seams. In particular, a caller must not add
+  // broker metadata to a legacy command or change a certified authority parameter after register.
+  const stored: CommandSpec = {
+    ...spec,
+    params: cloneAndFreeze(spec.params),
+    ...(spec.triggers ? { triggers: cloneAndFreeze(spec.triggers) } : {}),
+    ...(spec.title ? { title: cloneAndFreeze(spec.title) } : {}),
+    ...(spec.errors ? { errors: cloneAndFreeze(spec.errors) } : {}),
+    ...(spec.examples ? { examples: cloneAndFreeze(spec.examples) } : {}),
+    ...(broker ? { broker } : {}),
+  };
+  if (!broker) delete stored.broker;
+  return Object.freeze(stored);
+}
 
 export function register(name: string, spec: CommandSpec): void {
   // 같은 이름의 재등록은 프로그래밍 오류다 — Map 은 무언으로 덮어써 앞 등록을 죽은 코드로
@@ -145,7 +625,9 @@ export function register(name: string, spec: CommandSpec): void {
   if (registry.has(name)) {
     throw new Error(`중복 등록: ${name} — unregister 후 등록해야 합니다`);
   }
-  registry.set(name, spec);
+  const broker = spec.broker ? certifyBrokerSpec(name, spec) : undefined;
+  const stored = snapshotCommandSpec(spec, broker);
+  registry.set(name, stored);
 }
 
 // 등록 해제 — 플러그인 생명주기(비활성화/제거) 전용. 존재했으면 true.
@@ -155,6 +637,176 @@ export function unregister(name: string): boolean {
 
 export function getSpec(name: string): CommandSpec | undefined {
   return registry.get(name);
+}
+
+function validateAuthorityJson(
+  value: unknown,
+  path: string,
+  errors: string[],
+  depth = 0,
+  nodes = { count: 0 },
+  ancestors = new WeakSet<object>(),
+): void {
+  if (depth > MAX_MACHINE_SCHEMA_DEPTH) {
+    errors.push(`${path}: JSON depth exceeds ${MAX_MACHINE_SCHEMA_DEPTH}`);
+    return;
+  }
+  nodes.count += 1;
+  if (nodes.count > 8_192) {
+    if (nodes.count === 8_193) errors.push(`${path}: JSON node count exceeds 8192`);
+    return;
+  }
+  if (value === null || typeof value === "boolean" || typeof value === "string") return;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) errors.push(`${path}: finite JSON number required`);
+    return;
+  }
+  if (typeof value !== "object") {
+    errors.push(`${path}: JSON value required`);
+    return;
+  }
+  if (ancestors.has(value)) {
+    errors.push(`${path}: cyclic JSON forbidden`);
+    return;
+  }
+  ancestors.add(value);
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => validateAuthorityJson(item, `${path}[${index}]`, errors, depth + 1, nodes, ancestors));
+  } else if (isPlainRecord(value)) {
+    for (const [key, item] of Object.entries(value)) {
+      if (!key || UNSAFE_RECORD_KEYS.has(key)) errors.push(`${path}: unsafe JSON key "${key}"`);
+      validateAuthorityJson(item, `${path}.${key}`, errors, depth + 1, nodes, ancestors);
+    }
+  } else {
+    errors.push(`${path}: plain JSON object required`);
+  }
+  ancestors.delete(value);
+}
+
+function nonEmptyBounded(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 256;
+}
+
+/**
+ * Trusted host seam. Call only after the native runtime session authenticated the principal
+ * and the verified manifest/consent resolver produced the grant snapshot. The returned object
+ * is cloned, deeply frozen and WeakSet-certified; a deserialized plugin payload cannot forge it.
+ */
+export function issuePluginCommandContext(input: PluginCommandContextInput): PluginCommandContext {
+  let snapshot: PluginCommandContextInput;
+  try {
+    snapshot = structuredClone(input);
+  } catch {
+    throw new TypeError("plugin command context must be structured-cloneable");
+  }
+  const errors: string[] = [];
+  if (!isPlainRecord(snapshot.principal)) {
+    errors.push("principal: object required");
+  } else {
+    for (const key of [
+      "runtimeId", "sessionId", "windowLabel", "pluginId", "contributionId", "instanceId",
+    ] as const) {
+      if (!nonEmptyBounded(snapshot.principal[key])) errors.push(`principal.${key}: non-empty bounded string required`);
+    }
+    if (!Number.isSafeInteger(snapshot.principal.generation) || snapshot.principal.generation < 0) {
+      errors.push("principal.generation: non-negative safe integer required");
+    }
+    if (!PLUGIN_ROLES.has(snapshot.principal.role)) errors.push("principal.role: invalid runtime role");
+    if (snapshot.principal.domHandleId !== null && !nonEmptyBounded(snapshot.principal.domHandleId)) {
+      errors.push("principal.domHandleId: null or non-empty bounded string required");
+    }
+  }
+
+  const permissions = Array.isArray(snapshot.grants?.permissions) ? snapshot.grants.permissions : [];
+  if (!Array.isArray(snapshot.grants?.permissions)) errors.push("grants.permissions: array required");
+  if (permissions.some((permission) => !PERMISSIONS.includes(permission))) {
+    errors.push("grants.permissions: unknown permission");
+  }
+  if (new Set(permissions).size !== permissions.length) errors.push("grants.permissions: duplicates forbidden");
+
+  const requiredRaw = Array.isArray(snapshot.grants?.requiredContracts) ? snapshot.grants.requiredContracts : [];
+  const providedRaw = Array.isArray(snapshot.grants?.providedContracts) ? snapshot.grants.providedContracts : [];
+  if (!Array.isArray(snapshot.grants?.requiredContracts)) errors.push("grants.requiredContracts: array required");
+  if (!Array.isArray(snapshot.grants?.providedContracts)) errors.push("grants.providedContracts: array required");
+  const parsedRequired = requiredRaw.flatMap((item, index) => {
+    const parsed = parseContractRequirement(item, `grants.requiredContracts[${index}]`, errors);
+    return parsed ? [parsed] : [];
+  });
+  const parsedProvided = providedRaw.flatMap((item, index) => {
+    const parsed = parseContractProviderRef(item, `grants.providedContracts[${index}]`, errors);
+    return parsed ? [parsed] : [];
+  });
+  if (new Set(parsedRequired.map((contract) => contract.id)).size !== parsedRequired.length) {
+    errors.push("grants.requiredContracts: duplicate ids forbidden");
+  }
+  if (new Set(parsedProvided.map((contract) => contract.id)).size !== parsedProvided.length) {
+    errors.push("grants.providedContracts: duplicate ids forbidden");
+  }
+
+  const authority = snapshot.authority;
+  if (!isPlainRecord(authority) || !nonEmptyBounded(authority.namespace)) {
+    errors.push("authority.namespace: non-empty bounded string required");
+  }
+  for (const field of ["paths", "labels"] as const) {
+    const values = authority?.[field];
+    if (!isPlainRecord(values)) {
+      errors.push(`authority.${field}: object required`);
+      continue;
+    }
+    for (const [key, value] of Object.entries(values)) {
+      if (!key || UNSAFE_RECORD_KEYS.has(key) || !nonEmptyBounded(value)) {
+        errors.push(`authority.${field}.${key}: safe non-empty bounded string required`);
+      }
+    }
+  }
+  if (!isPlainRecord(authority?.coordinates)) {
+    errors.push("authority.coordinates: object required");
+  } else {
+    for (const [key, value] of Object.entries(authority.coordinates)) {
+      if (!key || UNSAFE_RECORD_KEYS.has(key)) errors.push(`authority.coordinates: unsafe key "${key}"`);
+      validateAuthorityJson(value, `authority.coordinates.${key}`, errors);
+    }
+  }
+  if (snapshot.pane !== undefined && !nonEmptyBounded(snapshot.pane)) errors.push("pane: non-empty bounded string required");
+  if (snapshot.parent !== undefined && !nonEmptyBounded(snapshot.parent)) errors.push("parent: non-empty bounded string required");
+  if (errors.length > 0) throw new TypeError(`invalid plugin command context: ${errors.join("; ")}`);
+
+  const ctx = cloneAndFreeze({
+    ...(snapshot.pane ? { pane: snapshot.pane } : {}),
+    remote: true as const,
+    window: { label: snapshot.principal.windowLabel },
+    ...(snapshot.parent ? { parent: snapshot.parent } : {}),
+    origin: "plugin" as const,
+    plugin: {
+      principal: snapshot.principal,
+      grants: {
+        permissions: [...permissions],
+        requiredContracts: parsedRequired,
+        providedContracts: parsedProvided,
+      },
+      authority: snapshot.authority,
+    },
+  }) as PluginCommandContext;
+  authenticatedPluginContexts.add(ctx);
+  return ctx;
+}
+
+export interface CommandBrokerStatus {
+  readonly registered: boolean;
+  readonly pluginCallable: boolean;
+  readonly broker?: CommandBrokerSpec;
+}
+
+function publicBrokerMetadata(broker: CommandBrokerSpec): CommandBrokerSpec {
+  // Never return the registry-owned frozen object: consumers may mutate catalog/status results.
+  return structuredClone(broker);
+}
+
+export function brokerStatus(name: string): CommandBrokerStatus {
+  const spec = registry.get(name);
+  if (!spec) return { registered: false, pluginCallable: false };
+  if (!spec.broker) return { registered: true, pluginCallable: false };
+  return { registered: true, pluginCallable: true, broker: publicBrokerMetadata(spec.broker) };
 }
 
 // LLM 발견 표면 합성(docs/I18N.md §3, 결정 8). 영어 base + 전 언어 트리거어를 한 문자열로.
@@ -195,6 +847,8 @@ export function catalogJson(): {
   errors: readonly string[];
   examples: readonly string[];
   danger?: "destructive" | "inject";
+  pluginCallable: boolean;
+  broker?: CommandBrokerSpec;
 }[] {
   return [...registry.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -205,6 +859,9 @@ export function catalogJson(): {
       returns: s.returns,
       errors: s.errors ?? [],
       examples: s.examples ?? [],
+      pluginCallable: s.broker !== undefined,
+      // 선언만 공개한다. 실제 principal/grant/authority 값은 컨텍스트에만 있고 카탈로그에 없다.
+      ...(s.broker ? { broker: publicBrokerMetadata(s.broker) } : {}),
       // 위험 분류는 선언된 스펙에만 싣는다(권한 게이트 표면이 카탈로그에서 danger 를 읽는다).
       ...(s.danger ? { danger: s.danger } : {}),
     }));
@@ -262,7 +919,7 @@ export interface CommandTrace {
   // 자기 언어로 해소한다. 플러그인 명령은 실행 창에만 로드되므로 스트림이 라벨을 날라야 다른
   // 창에서도 raw 키 없이 표시된다(스트림 자족성).
   title?: LocalizedText;
-  source: "ui" | "remote";
+  source: "ui" | "remote" | "plugin";
   danger?: "destructive" | "inject";
   paramKeys: string[];
   ok: boolean;
@@ -291,10 +948,31 @@ export async function execute(
   params: Record<string, unknown>,
   ctx: CommandContext,
 ): Promise<CommandOutcome> {
+  return executeTracked(name, params, ctx, "host");
+}
+
+/** The only command entry point for an isolated plugin runtime. */
+export async function executeFromPlugin(
+  name: string,
+  params: Record<string, unknown>,
+  ctx: PluginCommandContext,
+): Promise<CommandOutcome> {
+  return executeTracked(name, params, ctx, "plugin");
+}
+
+async function executeTracked(
+  name: string,
+  params: Record<string, unknown>,
+  ctx: CommandContext,
+  channel: "host" | "plugin",
+): Promise<CommandOutcome> {
   const started = Date.now();
   // 응답 공통 필드(window·hint)를 모든 경로에 얹는다 — 성공/실패 어느 지점에서 나온 응답이든
   // 이 한 곳을 지난다(message 정규화가 normalizeOutcome 한 곳을 지나듯).
-  const out = withCommonFields(await executeInner(name, params, ctx), name, ctx);
+  const inner = channel === "plugin"
+    ? await executePluginInner(name, params, ctx as PluginCommandContext)
+    : await executeInner(name, params, ctx);
+  const out = withCommonFields(inner, name, ctx);
   const finished = Date.now();
   try {
     // 기록은 전량(§5 R2 — 사실은 전부 기록된다). 유일한 제외 = spec.trace === false:
@@ -305,7 +983,7 @@ export async function execute(
       traceSink?.({
         command: name,
         title: registry.get(name)?.title,
-        source: ctx.remote ? "remote" : "ui",
+        source: channel === "plugin" ? "plugin" : ctx.remote ? "remote" : "ui",
         danger: registry.get(name)?.danger,
         paramKeys: Object.keys(params),
         ok: out.ok,
@@ -330,11 +1008,132 @@ export async function execute(
   return out;
 }
 
+function pluginFailure(code: ErrCode, message: string, data?: Record<string, unknown>): CommandOutcome {
+  return { ok: false, code, message, ...(data ? { data } : {}) };
+}
+
+function authorityValue(
+  source: CommandBrokerAuthoritySource,
+  identity: AuthenticatedPluginCommandIdentity,
+): { found: true; value: unknown } | { found: false } {
+  const principal = identity.principal;
+  switch (source.kind) {
+    case "runtime-id": return { found: true, value: principal.runtimeId };
+    case "session-id": return { found: true, value: principal.sessionId };
+    case "window-label": return { found: true, value: principal.windowLabel };
+    case "plugin-id": return { found: true, value: principal.pluginId };
+    case "generation": return { found: true, value: principal.generation };
+    case "role": return { found: true, value: principal.role };
+    case "contribution-id": return { found: true, value: principal.contributionId };
+    case "instance-id": return { found: true, value: principal.instanceId };
+    case "namespace": return { found: true, value: identity.authority.namespace };
+    case "path":
+      return Object.prototype.hasOwnProperty.call(identity.authority.paths, source.key)
+        ? { found: true, value: identity.authority.paths[source.key] }
+        : { found: false };
+    case "label":
+      return Object.prototype.hasOwnProperty.call(identity.authority.labels, source.key)
+        ? { found: true, value: identity.authority.labels[source.key] }
+        : { found: false };
+    case "coordinates":
+      return Object.prototype.hasOwnProperty.call(identity.authority.coordinates, source.key)
+        ? { found: true, value: structuredClone(identity.authority.coordinates[source.key]) }
+        : { found: false };
+  }
+}
+
+async function executePluginInner(
+  name: string,
+  params: Record<string, unknown>,
+  ctx: PluginCommandContext,
+): Promise<CommandOutcome> {
+  if (!isPlainRecord(ctx) || !authenticatedPluginContexts.has(ctx) || !ctx.plugin) {
+    return pluginFailure("PLUGIN_AUTH_REQUIRED", "인증된 플러그인 런타임 컨텍스트가 필요합니다");
+  }
+  const spec = registry.get(name);
+  if (!spec) return { ok: false, code: "UNKNOWN_COMMAND", message: `알 수 없는 명령: ${name}` };
+  if (!spec.broker) {
+    return pluginFailure("PLUGIN_CALL_FORBIDDEN", `플러그인 호출이 선언되지 않은 명령: ${name}`);
+  }
+  if (!isPlainRecord(params)) {
+    return { ok: false, code: "INVALID_PARAMS", message: "플러그인 명령 파라미터는 객체여야 합니다" };
+  }
+
+  const bound = new Set(spec.broker.authority.map((binding) => binding.param));
+  const selectedAuthority = Object.keys(params).filter((key) => bound.has(key));
+  if (selectedAuthority.length > 0) {
+    return pluginFailure(
+      "PLUGIN_AUTHORITY_FORBIDDEN",
+      `호스트 소유 파라미터를 플러그인이 지정할 수 없습니다: ${selectedAuthority.join(", ")}`,
+    );
+  }
+
+  const permissionSet = new Set(ctx.plugin.grants.permissions);
+  const missingPermissions = spec.broker.permissions.filter((permission) => !permissionSet.has(permission));
+  if (missingPermissions.length > 0) {
+    return pluginFailure(
+      "PERMISSION_DENIED",
+      `플러그인 권한이 부족한 명령: ${name}`,
+      { missingPermissions },
+    );
+  }
+
+  const missingRequiredContracts = spec.broker.contracts.requires.filter((requirement) =>
+    !ctx.plugin.grants.providedContracts.some((provider) => contractRequirementSatisfiedBy(requirement, provider))
+  );
+  const unconsumedProvidedContracts = spec.broker.contracts.provides.filter((provider) =>
+    !ctx.plugin.grants.requiredContracts.some((requirement) => contractRequirementSatisfiedBy(requirement, provider))
+  );
+  if (missingRequiredContracts.length > 0 || unconsumedProvidedContracts.length > 0) {
+    return pluginFailure(
+      "PLUGIN_CONTRACT_DENIED",
+      `플러그인 도메인 계약이 맞지 않는 명령: ${name}`,
+      {
+        missingRequiredContracts: missingRequiredContracts.map((contract) => contract.id),
+        unconsumedProvidedContracts: unconsumedProvidedContracts.map((contract) => contract.id),
+      },
+    );
+  }
+
+  const injected: Record<string, unknown> = { ...params };
+  for (const binding of spec.broker.authority) {
+    const resolved = authorityValue(binding.source, ctx.plugin);
+    if (!resolved.found) {
+      return pluginFailure(
+        "PLUGIN_AUTHORITY_UNAVAILABLE",
+        `호스트 권한값을 찾을 수 없는 명령: ${name}`,
+        { param: binding.param },
+      );
+    }
+    injected[binding.param] = resolved.value;
+  }
+
+  const outcome = await executeInner(name, injected, ctx, true);
+  if (!outcome.ok) return outcome;
+  const violations: string[] = [];
+  validateMachineValue(spec.broker.result, outcome.data ?? {}, "$.data", violations);
+  if (violations.length > 0) {
+    return pluginFailure(
+      "PLUGIN_RESULT_INVALID",
+      `명령 결과가 공개 기계 계약과 맞지 않습니다: ${name}`,
+      { violations: violations.slice(0, MAX_MACHINE_RESULT_ERRORS) },
+    );
+  }
+  return outcome;
+}
+
 async function executeInner(
   name: string,
   params: Record<string, unknown>,
   ctx: CommandContext,
+  allowPluginContext = false,
 ): Promise<CommandOutcome> {
+  if (ctx.plugin !== undefined && !allowPluginContext) {
+    return pluginFailure(
+      "PLUGIN_ENTRYPOINT_REQUIRED",
+      "플러그인 컨텍스트는 executeFromPlugin 경로로만 실행할 수 있습니다",
+    );
+  }
   const spec = registry.get(name);
   if (!spec) {
     return { ok: false, code: "UNKNOWN_COMMAND", message: `알 수 없는 명령: ${name}` };
@@ -507,6 +1306,9 @@ function standardErrorHints(code: string, command: string): CommandHint[] | unde
     case "TARGET_NOT_FOUND":
       return [{ cmd: "sok state.tree", why: tmsg("hint.error.targetNotFound") }];
     case "INVALID_PARAMS":
+      return [{ cmd: `sok help ${command}`, why: tmsg("hint.error.invalidParams", { command }) }];
+    case "AMBIGUOUS_TARGET":
+    case "ALREADY_EXISTS":
       return [{ cmd: `sok help ${command}`, why: tmsg("hint.error.invalidParams", { command }) }];
     case "CONSENT_REQUIRED":
       return [{ cmd: "sok plugin.consent.preview '{\"id\":...}'", why: tmsg("hint.error.consentRequired") }];

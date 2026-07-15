@@ -3,12 +3,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../plugins/loader", () => ({
-  importPluginModule: vi.fn(async () => ({ activate: () => {} })),
-  activatePlugin: vi.fn(async () => ({ disposables: [], dispose: () => {} })),
+  activateContractPlugin: vi.fn(async () => ({ deactivate: async () => {} })),
   isActive: () => false,
   setActive: () => {},
   deactivateById: vi.fn(async () => true),
   deactivateAll: vi.fn(async () => {}),
+}));
+vi.mock("../plugins/nativeRuntime", () => ({
+  startNativePluginRuntime: vi.fn(async () => ({ deactivate: async () => {} })),
 }));
 
 const ID = "weather";
@@ -18,7 +20,7 @@ let devReadable = true;
 
 function manifest(version: string): string {
   return JSON.stringify({
-    spec: "soksak-spec-plugin@1",
+    spec: "soksak-spec-plugin@0.0.1",
     id: ID,
     name: "Weather",
     version,

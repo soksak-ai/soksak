@@ -22,7 +22,6 @@ import {
   type PluginEventMap,
 } from "./hooks";
 import { gateContribution } from "./conformance";
-import { detectPlatform } from "./programRegistry";
 import {
   useViewRegistry,
   type PluginViewProvider,
@@ -55,8 +54,11 @@ import { EVENT_PERMISSIONS } from "./hooks";
 import type { IconSetData } from "../ui/icons/types";
 import {
   configDefaults,
+  contractRequirementSatisfiedBy,
   pluginCommandName,
   qualifiedViewId,
+  type ContractProviderRef,
+  type ContractRequirement,
   type PluginManifest,
   type PluginPermission,
   type ViewPlacement,
@@ -83,7 +85,7 @@ export interface PluginApiDeps {
   getCommandDanger: (name: string) => "destructive" | "inject" | undefined;
   // 대상 플러그인이 선언한 계약(매니페스트 implements) — 호출 경계의 계약-핀 판정에 쓴다.
   // 코어는 여기서도 구현체를 이름으로 알지 않는다: 계약 id 집합만 비교한다.
-  implementsOf?: (pluginId: string) => string[];
+  implementsOf?: (pluginId: string) => ContractProviderRef[];
   on: typeof onPluginEvent;
   currentProject: () => { id: string; root: string | null } | null;
   // 코어 fs watcher(fs-change) 구독 — 변경된 부모 디렉토리 문자열을 콜백. 반환=해지.
@@ -533,7 +535,7 @@ export interface SoksakPluginApi {
     /** 매니페스트 sidecars[] 에서 이 계약(interface)을 구현한다고 선언한 유닛 이름. 어느 엔진 유닛을
      *  쓸지는 **매니페스트가 정한다** — 번들 상수로 굳히면 매니페스트만 바꿨을 때 옛 유닛이 무음으로
      *  스폰된다. 선언 부재/중복은 loud throw(조용히 고르지 않는다). */
-    sidecarName: (interfaceId: string) => string;
+    sidecarName: (interfaceRef: ContractRequirement) => string;
     /** 프로그램 spawn → handle(id). cwd/env 선택. envRemove=부모 env 에서 뗄 키(중첩 가드 제거 등).
      *  secretEnv=envVar→secretKey(이 플러그인 ns 의 시크릿). 평문은 JS 가 안 만진다 — 키 이름만 넘기면
      *  Rust 경계가 볼트에서 해소해 자식 env 에 주입(셸 args·ps·history 무노출 R2). 잠김/미존재면 spawn 실패.
@@ -590,7 +592,8 @@ export interface SoksakPluginApi {
    *  시크릿 헤더/바디 주입을 코어가 대행. secretSubst=placeholder→secretKey(이 플러그인 ns). 평문은 JS 가
    *  안 만진다 — Rust 경계가 볼트에서 해소해 url/headers/body 의 placeholder 에 치환(history/응답 무노출 R2).
    *  impersonate="chrome" 은 브라우저 핑거프린트(JA3/JA4) 백엔드로 보낸다(핑거프린트 차단 CDN 통과용);
-   *  "off"(기본)은 평문 native-tls. 응답 shape·시크릿·ns 격리는 모드와 무관하게 동일. */
+   *  "off"(기본)은 평문 native-tls. Authorization 요청은 redirect 0이며 per-request redirect를 고정할 수
+   *  없는 chrome 모드에서는 fail-closed한다. 응답 shape·시크릿·ns 격리는 모드와 무관하게 동일. */
   network?: {
     http: (req: {
       method: string;
@@ -675,7 +678,19 @@ const BLOCKED_MANAGEMENT = new Set([
 export const commandsMissingMessage = new Set<string>();
 
 export function isBlockedForPlugins(name: string): boolean {
-  return BLOCKED_MANAGEMENT.has(name) || name.startsWith("plugin.dev.");
+  // registry.* 는 카탈로그 조회까지 descriptor/trust/credential metadata를 노출하는 운영자
+  // control plane이다. 개별 이름 열거는 새 관리 명령이 추가될 때 기본 허용으로 새는 구조이므로
+  // namespace 전체를 닫는다. 플러그인은 plugin.catalog로 설치 가능 unit만 읽는다.
+  return (
+    BLOCKED_MANAGEMENT.has(name) ||
+    name.startsWith("plugin.dev.") ||
+    name.startsWith("registry.") ||
+    // Plugins already receive ownership-fixed app.secrets/app.network facades. Exposing the
+    // operator commands as a second path would let commands.execute choose an arbitrary vault
+    // namespace and turn net.http.request into a credential confused deputy.
+    name.startsWith("secret.") ||
+    name === "net.http.request"
+  );
 }
 
 // 명령 이름에서 *대상 플러그인 id* 추출(cross-plugin 호출 판정용). pluginCommandName=plugin.<id>.<cmd>
@@ -704,8 +719,8 @@ function crossPluginDenyReason(
   selfId: string,
   dependencies: Record<string, string> | undefined,
   commandName: string,
-  consumes?: string[],
-  implementsOf?: (pluginId: string) => string[],
+  consumes?: ContractRequirement[],
+  implementsOf?: (pluginId: string) => ContractProviderRef[],
 ): string | null {
   const target = targetPluginId(commandName);
   if (target === null || target === selfId) return null;
@@ -713,7 +728,8 @@ function crossPluginDenyReason(
   const wanted = consumes ?? [];
   if (wanted.length > 0 && implementsOf) {
     const provided = implementsOf(target);
-    if (wanted.some((c) => provided.includes(c))) return null;
+    if (wanted.some((requirement) =>
+      provided.some((provider) => contractRequirementSatisfiedBy(requirement, provider)))) return null;
   }
   return `미선언 의존 플러그인 호출: ${target} — manifest.consumes 에 그 계약 id 를(계약-핀), 또는 manifest.dependencies 에 "${target}" 을(이름-핀) 선언 필요 (명령: ${commandName})`;
 }
@@ -758,16 +774,17 @@ function createProcessApi(
     // 매니페스트가 이 계약을 구현한다고 선언한 사이드카 유닛의 이름. 어느 엔진 유닛을 쓸지는
     // **매니페스트가 정한다** — 번들에 이름을 상수로 굳히면 매니페스트만 바꿨을 때 옛 유닛이 무음으로
     // 스폰된다(declared ≠ actual). 선언이 없거나 둘 이상이면 조용히 고르지 않고 loud 하게 죽는다.
-    sidecarName(interfaceId: string): string {
-      const hits = declared().filter((s) => s.interface === interfaceId);
+    sidecarName(interfaceRef: ContractRequirement): string {
+      const hits = declared().filter((sidecar) =>
+        sidecar.interface.id === interfaceRef.id && sidecar.interface.range === interfaceRef.range);
       if (hits.length === 0) {
         throw new Error(
-          `매니페스트 sidecars 에 ${interfaceId} 를 구현하는 유닛 선언이 없다 — 선언이 유닛 선택의 단일진실이다`,
+          `매니페스트 sidecars 에 ${interfaceRef.id} 요구를 가진 유닛 선언이 없다 — 선언이 유닛 선택의 단일진실이다`,
         );
       }
       if (hits.length > 1) {
         throw new Error(
-          `매니페스트 sidecars 에 ${interfaceId} 구현이 ${hits.length} 개다 — 계약당 유닛 하나만 선언한다`,
+          `매니페스트 sidecars 에 ${interfaceRef.id} 구현이 ${hits.length} 개다 — 계약당 유닛 하나만 선언한다`,
         );
       }
       return hits[0].name;
@@ -881,17 +898,6 @@ function createSidecarApi(
       if (!decl) {
         throw new Error(`매니페스트 sidecars 에 선언되지 않은 사이드카: ${name}`);
       }
-      // 공급(lazy) — 선언에 reach 가 있으면 open 직전에 ensure(설치돼 있으면 즉시 present).
-      // sha256 핀·원자 설치·경로 파생은 전부 Rust 경계(sidecar_ensure) 소유.
-      if (decl.reach) {
-        const platform = detectPlatform();
-        const url = decl.reach.fetch.url[platform];
-        const sha256 = decl.reach.fetch.sha256[platform];
-        if (!url || !sha256) {
-          throw new Error(`sidecars["${name}"].reach: 플랫폼 ${platform} 항목 없음`);
-        }
-        await deps.invoke("sidecar_ensure", { name, url, sha256 });
-      }
       const listeners = new Map<string, Set<(p: Record<string, unknown>) => void>>();
       const onEvent = new Channel<Record<string, unknown>>();
       onEvent.onmessage = (m) => {
@@ -900,7 +906,7 @@ function createSidecarApi(
       };
       const handle = (await deps.invoke("sidecar_open", {
         name,
-        interface: decl.interface,
+        requirement: decl.interface,
         onEvent,
       })) as number;
       let closed = false;
@@ -1599,6 +1605,13 @@ export function buildPluginApi(
     scheduler: has("schedule")
       ? {
           register: (job) => {
+            // 예약 실행도 플러그인이 만든 호출이다. 직접 commands.execute와 같은 관리 경계를
+            // 등록 시점에 적용하지 않으면 schedule이 시간차 권한 우회 통로가 된다.
+            if (isBlockedForPlugins(job.command)) {
+              return Promise.reject(
+                new Error(`플러그인은 관리 명령을 예약할 수 없음(§0-5): ${job.command}`),
+              );
+            }
             // 스케줄 발화는 코어 remote 채널이라 executeGated 를 안 거친다 → cross-plugin 강제를
             // 우회할 수 있다(A 가 plugin.B.cmd 를 스케줄). 등록 시점(caller 식별 가능)에 동형 검사.
             const crossDeny = crossPluginDenyReason(

@@ -243,36 +243,50 @@ describe("implementsViolations — C3 implements 선언 generic 검사", () => {
 
   it("정상 선언 → 위반 없음", () => {
     expect(
-      implementsViolations(["soksak-spec-plugin-fixture-notes@1", "soksak-spec-plugin-fixture-board@2"]),
+      implementsViolations([
+        { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
+        { id: "soksak-spec-plugin-fixture-board", version: "0.0.1" },
+      ]),
     ).toEqual([]);
   });
 
   it("배열이 아님 → implements-shape(그 외 검사는 항목이 없어 침묵)", () => {
-    expect(implementsViolations("soksak-spec-plugin-fixture-notes@1").map((v) => v.rule)).toEqual([
+    expect(implementsViolations("soksak-spec-plugin-fixture-notes@0.0.1").map((v) => v.rule)).toEqual([
       "implements-shape",
     ]);
   });
 
-  it("비문자열 항목 → implements-shape, 문자열 항목 검사는 계속된다", () => {
-    const v = implementsViolations(["soksak-spec-plugin-fixture-notes@1", 7]);
+  it("비객체 항목 → implements-shape, 객체 항목 검사는 계속된다", () => {
+    const v = implementsViolations([{ id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" }, 7]);
     expect(v.map((x) => x.rule)).toEqual(["implements-shape"]);
   });
 
   it("문법 위반 항목 → implements-grammar(위반 id 전부 나열)", () => {
-    const v = implementsViolations(["fixture-notes@1", "fixture-board-spec"]);
+    const v = implementsViolations([
+      { id: "fixture-notes", version: "0.0.1" },
+      { id: "soksak-spec-plugin-fixture-board", version: "bad" },
+    ]);
     expect(v.map((x) => x.rule)).toEqual(["implements-grammar"]);
-    expect(v[0].detail).toContain("fixture-notes@1");
-    expect(v[0].detail).toContain("fixture-board-spec");
+    expect(v[0].detail).toContain("0");
+    expect(v[0].detail).toContain("1");
   });
 
   it("중복 선언 → implements-duplicate", () => {
-    const v = implementsViolations(["soksak-spec-plugin-fixture-notes@1", "soksak-spec-plugin-fixture-notes@1"]);
+    const v = implementsViolations([
+      { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
+      { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
+    ]);
     expect(v.map((x) => x.rule)).toEqual(["implements-duplicate"]);
-    expect(v[0].detail).toContain("soksak-spec-plugin-fixture-notes@1");
+    expect(v[0].detail).toContain("soksak-spec-plugin-fixture-notes");
   });
 
   it("복합 위반이면 전부 보고한다(은폐 0)", () => {
-    const v = implementsViolations([7, "bad@1", "soksak-spec-plugin-fixture-notes@1", "soksak-spec-plugin-fixture-notes@1"]);
+    const v = implementsViolations([
+      7,
+      { id: "bad", version: "0.0.1" },
+      { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
+      { id: "soksak-spec-plugin-fixture-notes", version: "0.0.1" },
+    ]);
     expect(v.map((x) => x.rule)).toEqual([
       "implements-shape",
       "implements-grammar",

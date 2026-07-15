@@ -306,7 +306,7 @@ export function SettingsModal({
               소유한다(manifest configuration 단일진실, 중복 제거). */}
 
           {/* 계약별 구현체 선택(제네릭·계약-무지) — 활성 구현체 ≥2 계약만 자동 노출.
-              코어는 어떤 계약도 특권화하지 않는다(예: soksak-spec-plugin-terminal@1 → xterm/ghostty). */}
+              코어는 어떤 계약도 특권화하지 않는다(예: soksak-spec-plugin-terminal → xterm/ghostty). */}
           <ContractEngineSettings />
 
           <div className="dsec">{t("settings.permission")}</div>

@@ -10,7 +10,6 @@ import { createCoreSync } from "./coreSync";
 import type { CoreStoreDeps } from "./coreStore";
 import {
   parseManifest,
-  scanHostChromeViolations,
   semverGte,
   type LibraryDep,
   type PluginManifest,
@@ -18,24 +17,21 @@ import {
 } from "../plugins/spec";
 import {
   activateContractPlugin,
-  activatePlugin,
   deactivateAll,
   deactivateById,
-  importPluginModule,
   isActive,
   setActive,
 } from "../plugins/loader";
+import { startNativePluginRuntime } from "../plugins/nativeRuntime";
 import { syncServiceLedger } from "../plugins/serviceProxy";
 import { resolveTerminalProgram } from "../plugins/terminalEngine";
 import { defaultPluginDeps } from "../plugins/deps";
 import {
   activationChain,
-  allMissingDeps,
   cascadeRemovalSet,
   transitiveDependents,
   type DepNode,
 } from "../plugins/dependencyGraph";
-import { useRegistry } from "./registry";
 import { err, ok, useSessions, type CmdResult } from "./sessions";
 
 // 설치/dev 런타임 → 의존 그래프 노드(매니페스트 dependencies 기준). 리졸버가 소비.
@@ -108,18 +104,6 @@ interface PluginsState {
   reload: () => Promise<void>;
   // id 지정 재적재 — 그 플러그인의 매니페스트를 디스크에서 다시 읽고 신선 코드로 켠다.
   reloadOne: (id: string) => Promise<CmdResult<{ id: string; status: string }>>;
-  install: (
-    source: string,
-    reference?: string,
-  ) => Promise<
-    CmdResult<{
-      id: string;
-      dir: string;
-      installedDeps?: string[]; // 전이적으로 동반 설치된 의존 id
-      unresolvedDeps?: string[]; // 레지스트리에 없어 못 깐 의존 id(침묵 금지 — 보고)
-    }>
-  >;
-  update: (id: string) => Promise<CmdResult<{ id: string; version: string }>>;
   // cascade:true 면 의존자(전이)까지 함께 삭제. 미지정 + 의존자 존재 시 CASCADE_REQUIRED 로 차단.
   remove: (
     id: string,
@@ -447,26 +431,9 @@ export const usePlugins = create<PluginsState>((set, get) => {
       setActive(p.manifest.id, instance);
       return;
     }
-    const data = await invoke<{ content: string }>("read_text_file", {
-      path: `${p.dir}/${p.manifest.entry}`,
-    });
-    // 크롬 표준 게이트 — 번들 CSS 가 호스트 크롬 셀렉터/변수를 덮으면 탭 정렬이 깨진다. 명백한 정적 위반은
-    // 거부(침묵 실패 금지). 사이드바/컨텐츠 뷰가 있는 플러그인에만 적용 — 뷰 없는 플러그인은 크롬 무관.
-    if (p.manifest.contributes.views.length > 0) {
-      const violations = scanHostChromeViolations(data.content);
-      if (violations.length > 0) {
-        throw new Error(
-          `호스트 크롬 표준 위반(${p.manifest.id}): 플러그인 CSS 가 호스트 소유 셀렉터/변수를 덮습니다 — ${violations.join(", ")}. 자기 클래스만 스타일링하세요(탭/헤더 높이는 호스트가 소유).`,
-        );
-      }
-    }
-    const module = await importPluginModule(data.content);
-    const instance = await activatePlugin(
-      module,
-      p.manifest,
-      p.dir,
-      defaultPluginDeps(get().appVersion),
-    );
+    // Native core resolves and reads the selected source. Entry bytes never cross into this
+    // renderer; only the authenticated public runtime wire returns.
+    const instance = await startNativePluginRuntime(p.manifest, p.dir);
     setActive(p.manifest.id, instance);
   };
 
@@ -611,75 +578,6 @@ export const usePlugins = create<PluginsState>((set, get) => {
         }
       }
       await get().syncLedger();
-    },
-
-    install: async (source, reference) => {
-      const r = await invoke<{ dir: string; dir_name: string }>(
-        "plugin_install_git",
-        { source, reference },
-      );
-      await get().reload();
-      const rt = get().plugins[r.dir_name];
-      if (!rt) {
-        const rej = get().rejected.find((x) => x.dir === r.dir);
-        return err(
-          "INVALID_PARAMS",
-          `설치됨(${r.dir})이나 매니페스트 검증 실패: ${rej?.errors.join("; ") ?? "사유 불명"}`,
-        );
-      }
-      // 전이 의존 자동 동반 설치 — 미설치 의존을 레지스트리에서 찾아 clone. fixpoint(새 dep 의 dep 까지).
-      const registry = useRegistry.getState().entries;
-      const installedDeps: string[] = [];
-      for (let guard = 0; guard < 50; guard++) {
-        const missing = allMissingDeps(pluginDepNodes(get().plugins));
-        if (missing.length === 0) break;
-        let progressed = false;
-        for (const m of missing) {
-          const entry = registry.find((e) => e.id === m.id);
-          if (!entry) continue; // 소스 모름 — 루프 후 unresolved 로 보고
-          try {
-            const dr = await invoke<{ dir_name: string }>("plugin_install_git", {
-              source: entry.repo,
-              reference: entry.branch, // 레지스트리 명시 브랜치(없으면 기본 브랜치)
-            });
-            await get().reload();
-            if (get().plugins[dr.dir_name]) {
-              installedDeps.push(dr.dir_name);
-              progressed = true;
-            }
-          } catch {
-            // 설치 실패 — 다음 점검에서 여전히 missing 으로 잡혀 unresolved 보고됨.
-          }
-        }
-        if (!progressed) break; // 더 진전 없으면 종료(미해결은 아래 보고)
-      }
-      const unresolved = allMissingDeps(pluginDepNodes(get().plugins)).map((m) => m.id);
-      return ok({
-        id: r.dir_name,
-        dir: r.dir,
-        ...(installedDeps.length ? { installedDeps } : {}),
-        ...(unresolved.length ? { unresolvedDeps: unresolved } : {}),
-      });
-    },
-
-    update: async (id) => {
-      const p = get().plugins[id];
-      if (!p) return err("TARGET_NOT_FOUND", `플러그인 없음: ${id}`);
-      if (p.source === "dev") {
-        return err("INVALID_PARAMS", "dev 플러그인은 update 대상이 아님");
-      }
-      if (isActive(id)) await get().disable(id);
-      await invoke("plugin_update", { id });
-      await get().reload();
-      const after = get().plugins[id];
-      if (!after) {
-        const rej = get().rejected.find((x) => x.dir === p.dir);
-        return err(
-          "INVALID_PARAMS",
-          `갱신됐으나 검증 실패: ${rej?.errors.join("; ") ?? "사유 불명"}`,
-        );
-      }
-      return ok({ id, version: after.manifest.version });
     },
 
     remove: async (id, opts) => {

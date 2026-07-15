@@ -235,15 +235,12 @@ describe("parseManifest — 수용", () => {
     ).not.toHaveProperty("template");
   });
 
-  it("repo(git URL) 수용 + 매니페스트에 보존", () => {
-    const { manifest, validation } = parseManifest(
+  it("repo는 owner release가 단독 소유 — plugin.json에서 거부", () => {
+    const { manifest } = parseManifest(
       base({ repo: "https://github.com/soksak-ai/soksak-plugin-shark.git" }),
       "demo",
     );
-    expect(validation.ok).toBe(true);
-    expect(manifest).toMatchObject({
-      repo: "https://github.com/soksak-ai/soksak-plugin-shark.git",
-    });
+    expect(manifest).toBeNull();
   });
 });
 
@@ -318,7 +315,7 @@ describe("parseManifest — 거부(필수 필드)", () => {
     ["version 비semver", base({ version: "1.0" }), "version"],
     ["description 누락", { ...base(), description: undefined }, "description"],
     ["author 비문자열", base({ author: 3 }), "author"],
-    ["repo 비URL", base({ repo: "soksak-ai/shark" }), "repo"],
+    ["repo는 매니페스트 미지 키", base({ repo: "soksak-ai/shark" }), "manifest"],
     ["minAppVersion 비semver", base({ minAppVersion: "v1" }), "minAppVersion"],
     ["template 비boolean", base({ template: "yes" }), "template"],
   ])("%s → 거부", (_label, raw, field) => {
@@ -519,7 +516,7 @@ describe("이름 규칙·semver 헬퍼", () => {
     expect(semverGte("1.2.3", "1.2.3")).toBe(true);
     expect(semverGte("1.10.0", "1.9.9")).toBe(true);
     expect(semverGte("0.9.0", "1.0.0")).toBe(false);
-    expect(semverGte("1.0.0-beta", "1.0.0")).toBe(true); // pre-release 무시(v1 정책)
+    expect(semverGte("1.0.0-beta", "1.0.0")).toBe(false); // SemVer 2.0.0 precedence
     expect(semverGte("abc", "1.0.0")).toBeNull();
   });
 
@@ -791,7 +788,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
         permissions: ["programs"],
         contributes: {
           programs: [
-            { id: "claude", title: "Claude", kind: "view", view: "content", viewContract: "soksak-spec-plugin-terminal@1", command: "claude" },
+            { id: "claude", title: "Claude", kind: "view", view: "content", viewContract: { id: "soksak-spec-plugin-terminal", range: ">=0.0.1 <1.0.0" }, command: "claude" },
           ],
         },
       }),
@@ -799,7 +796,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
     );
     expect(validation.errors).toEqual([]);
     expect(manifest?.contributes.programs[0]).toMatchObject({
-      viewContract: "soksak-spec-plugin-terminal@1",
+      viewContract: { id: "soksak-spec-plugin-terminal", range: ">=0.0.1 <1.0.0" },
       view: "content",
       command: "claude",
     });
@@ -823,7 +820,7 @@ describe("parseManifest — programs 기여(§2.6)", () => {
         permissions: ["programs"],
         contributes: {
           programs: [
-            { id: "a", title: "x", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", viewContract: "soksak-spec-plugin-terminal@1" },
+            { id: "a", title: "x", kind: "view", view: "content", viewPlugin: "soksak-plugin-terminal", viewContract: { id: "soksak-spec-plugin-terminal", range: ">=0.0.1 <1.0.0" } },
           ],
         },
       }),
@@ -977,7 +974,7 @@ describe("scanHostChromeViolations — 호스트 크롬 표준 정적 게이트"
 });
 
 describe("parseManifest — sidecars(engine 모듈 의존 선언)", () => {
-  const sc = { name: "browser-chromium", interface: "soksak-spec-sidecar-browser@1" };
+  const sc = { name: "browser-chromium", interface: { id: "soksak-spec-sidecar-browser", range: ">=0.0.1 <1.0.0" } };
   it("유효한 sidecars 수용(sidecar 권한 동반)", () => {
     const { manifest, validation } = parseManifest(
       base({ permissions: ["sidecar"], sidecars: [sc] }),
@@ -995,7 +992,7 @@ describe("parseManifest — sidecars(engine 모듈 의존 선언)", () => {
     expect(validation.errors.join()).toContain("권한 선언 필요");
   });
   it('service 모델 사이드카는 "process" 권한으로 sidecars 선언 수용(engine 아닌 별도 프로세스)', () => {
-    const svc = { name: "terminal-alacritty", interface: "soksak-spec-sidecar-terminal@1" };
+    const svc = { name: "terminal-alacritty", interface: { id: "soksak-spec-sidecar-terminal", range: ">=0.0.1 <1.0.0" } };
     const { manifest, validation } = parseManifest(
       base({ permissions: ["process"], sidecars: [svc] }),
       "demo",
@@ -1039,16 +1036,15 @@ describe("parseManifest — sidecars(engine 모듈 의존 선언)", () => {
       ).manifest,
     ).toBeNull();
   });
-  it("reach.fetch(플랫폼 url+sha256) 수용", () => {
+  it("sidecar 공급 위치는 owner release만 소유 — reach 거부", () => {
     const reach = { fetch: { url: { darwin: "https://x/a.tar.gz" }, sha256: { darwin: "ab12" } } };
-    const { manifest, validation } = parseManifest(
+    const { manifest } = parseManifest(
       base({ permissions: ["sidecar"], sidecars: [{ ...sc, reach }] }),
       "demo",
     );
-    expect(validation.ok).toBe(true);
-    expect(manifest?.sidecars?.[0].reach).toEqual(reach);
+    expect(manifest).toBeNull();
   });
-  it("reach 는 fetch 전용 — command/vendor 거부", () => {
+  it("reach 변형 전부 거부", () => {
     for (const reach of [
       { command: { darwin: "brew install x" } },
       { vendor: { path: "v/x", sha256: "ab" } },
