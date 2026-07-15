@@ -42,9 +42,11 @@ in the artifact:
    hot axes in order and the restore ladder covers the one relaunch the app body
    needs.
 
-Steps 1–2 are per-repo CI (the unit and app workflows). Steps 3–4 are the core's
-job — the install primitives (`download_unpack_verify`, `install_git_into`,
-`tauri-plugin-updater`) and the `update.*` orchestrator. A build artifact the app
+Steps 1–2 are per-repo CI (the unit and app workflows). A unit that publishes a
+GitHub Release (spec, SDK, plugin, contract) cuts it from a manual main workflow
+through an owner-immutable App-token publisher, not a tag push — see §9. Steps 3–4
+are the core's job — the install primitives (`download_unpack_verify`,
+`install_git_into`, `tauri-plugin-updater`) and the `update.*` orchestrator. A build artifact the app
 consumes (a plugin's bundled `main.js`, a sidecar binary, the `@soksak-ai/
 plugin-spec` dist) must be rebuilt in step 2 whenever its source moves — unit
 tests read source and stay green while a running app reads the stale artifact, so
@@ -155,3 +157,31 @@ The app CI wires codesign (Developer ID) + notarytool + a minisign signature for
 ID/team/app-password, and the minisign keypair are registered as secret *values*
 separately — the code, the workflow, and the secret references are fully wired,
 so filling the values activates signed distribution with no further code change.
+
+## 9. Publication boundary — how a unit release is cut
+
+A unit that publishes a GitHub Release (the platform spec, the SDK, a plugin, a
+contract) cuts it from a manual `workflow_dispatch` on `main`, never a tag push.
+The version, tag, archive name, and manifest are derived from the owner manifest
+(`package.json` + the unit's `build-release`), so a later product version flows
+through by changing metadata alone — no version is pinned in the workflow or the
+build script. Contract schema ids (`soksak-spec-*@N`) and validator tool versions
+sit on their own axis and are never substituted. The workflow:
+
+1. checks out the exact source (`fetch-depth: 0`, `persist-credentials: false`);
+2. runs the unit's full gate from that clean checkout;
+3. binds publication to `main` at the exact checkout (`release-context.mjs`);
+4. mints a least-privilege GitHub App token (Administration read, Contents write)
+   — the built-in `GITHUB_TOKEN` is never used;
+5. drives a resumable fail-closed publisher (`publish-release.mjs`): it requires
+   owner-enforced immutable releases, creates the tag only after validating the
+   assets, uploads only the missing assets keyed on the release manifest, and
+   never deletes-and-replaces. Re-running an already-published release is
+   idempotent; a partial draft resumes its missing assets.
+
+The publisher validates every asset's sha256 against the release manifest and
+fails closed if the artifact directory diverges from the declared asset set. The
+declared set differs by unit kind — a plugin ships its tgz, `release.json`, and
+`conformance-*.json` reports; a contract ships its tgz, `release.json`, and a
+single `conformance.json` — but the boundary (owner manifest → validated assets →
+App-token immutable publish) is the same.

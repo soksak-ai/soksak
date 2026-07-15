@@ -38,7 +38,9 @@ soksak 은 유닛 단위로 배포되고, 실행 중인 앱을 최소한의 재�
 4. **런타임**이 최소 재시작으로 반영한다 (§6): `update.apply` 가 핫 축을 순서대로 굴리고,
    앱 본체가 필요로 하는 한 번의 재시작은 복원 사다리가 덮는다.
 
-1–2 단계는 repo 별 CI(유닛·앱 워크플로우)다. 3–4 단계는 코어의 몫 — 설치 프리미티브
+1–2 단계는 repo 별 CI(유닛·앱 워크플로우)다. GitHub Release 를 발행하는 유닛(spec, SDK,
+플러그인, 계약)은 태그 푸시가 아니라 owner-immutable App 토큰 publisher 를 통해 수동 main
+워크플로우로 릴리스를 자른다 — §9 참조. 3–4 단계는 코어의 몫 — 설치 프리미티브
 (`download_unpack_verify`, `install_git_into`, `tauri-plugin-updater`)와 `update.*`
 오케스트레이터다. **앱이 소비하는 빌드 산출물**(플러그인의 번들 `main.js`, 사이드카
 바이너리, `@soksak-ai/plugin-spec` dist)은 소스가 바뀔 때마다 2 단계에서 재빌드돼야 한다 —
@@ -134,3 +136,27 @@ warm 재부착하며, 미세 gap 은 소비자가 ring 을 재생해 흡수하�
 이름**으로 배선한다. 서명 인증서, Apple ID/team/app-password, minisign 키페어는 secret *값*
 으로 별도 등록한다 — 코드·워크플로우·secret 참조가 완전히 배선돼 있어 값만 채우면 추가
 코드 변경 없이 서명 배포가 활성된다.
+
+## 9. 발행 경계 — 유닛 릴리스를 어떻게 자르나
+
+GitHub Release 를 발행하는 유닛(플랫폼 spec, SDK, 플러그인, 계약)은 태그 푸시가 아니라
+`main` 에서의 수동 `workflow_dispatch` 로 릴리스를 자른다. 버전·태그·아카이브명·매니페스트는
+소유 매니페스트(`package.json` + 유닛의 `build-release`)에서 유도된다 — 그래서 이후 제품
+버전은 metadata 만 바꿔 통과한다. 워크플로우나 빌드 스크립트에 버전을 하드코딩하지 않는다.
+계약 schema id(`soksak-spec-*@N`)와 validator 도구 버전은 별개 축이라 치환하지 않는다.
+워크플로우는:
+
+1. 정확한 소스를 체크아웃한다(`fetch-depth: 0`, `persist-credentials: false`);
+2. 그 clean 체크아웃에서 유닛 전체 게이트를 돌린다;
+3. 발행을 `main` 의 정확한 체크아웃에 바인딩한다(`release-context.mjs`);
+4. 최소 권한 GitHub App 토큰을 발급한다(Administration read, Contents write) — 내장
+   `GITHUB_TOKEN` 은 쓰지 않는다;
+5. resumable fail-closed publisher(`publish-release.mjs`)를 돌린다: owner-enforced
+   immutable release 를 요구하고, 자산을 검증한 뒤에만 태그를 만들고, 릴리스 매니페스트를
+   키로 **누락 자산만** 업로드하며, 삭제-후-교체를 하지 않는다. 이미 발행된 릴리스 재실행은
+   idempotent 하고, 부분 draft 는 누락 자산을 이어 올린다.
+
+publisher 는 모든 자산의 sha256 을 릴리스 매니페스트와 대조하고, 아티팩트 디렉터리가 선언된
+자산 집합과 어긋나면 fail-closed 한다. 선언 집합은 유닛 종류로 다르다 — 플러그인은 tgz·
+`release.json`·`conformance-*.json` 보고서를, 계약은 tgz·`release.json`·단일 `conformance.json`
+을 배송한다 — 그러나 경계(소유 매니페스트 → 검증 자산 → App 토큰 immutable 발행)는 같다.
