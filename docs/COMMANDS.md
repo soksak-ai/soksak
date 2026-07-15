@@ -1161,7 +1161,7 @@ Find plugins by the contract they implement (manifest implements, coupling law C
 
 ```bash
 sok plugin.implementers
-sok plugin.implementers '{"contract":"soksak-spec-plugin-git@1"}'
+sok plugin.implementers '{"contract":"soksak-spec-plugin-git@0.0.1"}'
 ```
 
 ## `plugin.install` (danger: destructive)

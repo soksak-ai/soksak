@@ -2,22 +2,24 @@
 
 soksak 의 기능을 JS 플러그인으로 확장한다. 플러그인은 뷰(우측/좌측 사이드바·콘텐츠 탭)를
 띄울 수도 있고, 뷰 없이 기능(포메터·에디터 확장·명령)만 제공할 수도 있다.
-스펙의 단일진실은 코드다: [`src/plugins/spec.ts`](../src/plugins/spec.ts) (매니페스트·권한·원칙 §0),
-[`src/plugins/api.ts`](../src/plugins/api.ts) (API 표면). 이 문서는 그 안내서다.
+스펙의 단일진실은 공개 패키지 코드다: [`packages/plugin-spec/src/spec.ts`](../packages/plugin-spec/src/spec.ts)
+(매니페스트·권한)와 [`packages/plugin-spec/src/pluginRuntime.ts`](../packages/plugin-spec/src/pluginRuntime.ts)
+(MessagePort wire), [`packages/plugin-api/src/v1.ts`](../packages/plugin-api/src/v1.ts) (저자 SDK 타입). 이 문서는 그 안내서다.
 
 ## 원칙 (스펙 §0 요약)
 
 1. **단일진실 = Command Registry.** 플러그인이 등록한 명령은 즉시 `sok` CLI·MCP·문서에 자동 노출된다.
-2. **전체신뢰 + 정직한 고지.** main.js 는 앱 메인 컨텍스트에서 그대로 실행된다. 샌드박스 없음.
-   권한은 API 표면 게이트(미선언 권한의 API 는 `undefined`)이지 격리가 아니다.
-   **신뢰할 수 있는 소스만 설치·활성화하라.**
+2. **격리 + 최소권한.** 플러그인 번들은 opaque-origin sandbox document에서 실행된다. 호스트 DOM,
+   Tauri 전역, 직접 네트워크를 받지 않으며 principal이 찍힌 MessagePort operation만 호출한다.
+   권한은 동의 고지이자 호스트 capability broker의 허용 목록이다.
 3. **검증은 all-or-nothing.** 불량 매니페스트는 부분 수용 없이 사유와 함께 거부된다(관리 패널의 "검증 거부").
 4. **플러그인 실패는 호스트를 죽이지 못한다.** activate/mount/포맷/이벤트 콜백 실패는 격리되고 상태로 표시된다.
 5. **활성화 동의는 사람만 한다.** 원격(`sok`/MCP) `plugin.enable` 은 기록된 동의가 없으면
    `CONSENT_REQUIRED` 로 거부된다. 동의는 앱 UI(동의 모달)가 유일한 통로다.
-6. **뷰 구현과 배치는 직교.** `registerView` 하나로 등록하고, 우측/좌측 사이드바·콘텐츠 탭이 같은 뷰를 소비한다.
-7. **에디터 확장은 호스트의 CodeMirror 모듈만.** `@codemirror/*` 를 자체 번들하면 인스턴스
-   이중화로 동작이 깨진다 — 반드시 `app.editor.modules` 를 사용한다.
+6. **구현과 배치는 직교.** 매니페스트가 정적 기여와 배치를 선언하고 runtime module의 provider map이
+   exact-match한다. 호스트만 슬롯·가시성·입력 상태를 소유한다.
+7. **렌더 엔진 중립.** 파일 뷰어/에디터/터미널/브라우저 엔진은 정적 provider를 가진
+   플러그인이 소유한다. 코어는 슬롯과 brokered primitive만 소유하고 특정 엔진 모듈을 주입하지 않는다.
 8. **선언 ≡ 실제 (conformance).** 매니페스트 선언과 런타임 실제 배선은 양방향으로 일치해야 한다 —
    미선언을 코드에서 바인딩하면 거부, 선언했는데 배선이 없으면 감지된다. 외부 런타임 의존성
    (`libraries`)도 같은 법칙의 한 종류 — `observe`(실제 실행)가 그 "실제"를 관찰한다.
@@ -40,36 +42,42 @@ my-plugin/
 
 ```json
 {
-  "spec": "soksak-spec-plugin@1",
+  "spec": "soksak-spec-plugin@0.0.1",
   "id": "my-plugin",
   "name": "내 플러그인",
   "version": "0.1.0",
   "description": "한 줄 설명",
-  "permissions": ["ui"],
+  "permissions": ["ui", "commands"],
   "contributes": {
-    "views": [{ "id": "panel", "title": "내 패널", "icon": "★" }]
+    "views": [{ "id": "panel", "title": "내 패널", "icon": "★" }],
+    "commands": [{ "name": "open", "title": "열기" }],
+    "nodes": [{ "id": "root" }]
   }
 }
 ```
 
 `main.js`:
 
-```js
-export default {
-  activate(ctx) {
-    ctx.app.ui.registerView("panel", {
-      mount(el, { projectId, root }) {
-        el.innerHTML = `<div style="padding:12px">안녕, ${root ?? "(루트 없음)"}</div>`;
-      },
-    });
+```ts
+import { defineSoksakPlugin } from "@soksak-ai/plugin-api";
+
+export default defineSoksakPlugin({
+  commands: {
+    open: async () => ({ ok: true }),
   },
-  deactivate() {},
-};
+  views: {
+    panel: {
+      mount({ root, projectRoot }) {
+        root.innerHTML = `<div data-node="root">안녕, ${projectRoot ?? "(루트 없음)"}</div>`;
+      },
+    },
+  },
+});
 ```
 
-**TS+번들**로 짜면 `npm i -D @soksak-ai/plugin-api` 로 `ctx.app`·`Plugin`·`PluginContext` 타입을
-받는다(선택, 타입 전용 — 런타임 0). 코어가 `SoksakPluginApi ≡ 패키지` 양방향
-호환을 컴파일로 강제하므로 타입이 코어와 어긋나지 않는다. JS `main.js` 한 파일이면 불필요.
+**TS+번들**로 짜면 GitHub Release에서 SHA-256 검증한 `@soksak-ai/plugin-api` tarball로
+`defineSoksakPlugin`·`SoksakPluginModuleV1`·sandbox context 타입을 받는다(타입/저자 helper,
+런타임 구현 0). JS 단일 번들도 같은 정적 export shape를 지켜야 한다.
 
 개발 중 적재(설치 없이):
 
@@ -116,7 +124,7 @@ sok plugin.reload
 저자는 발행 전에 같은 검증을 손수 돌릴 수 있다(선택, 배선 0):
 
 ```bash
-npx soksak-validate plugin.json   # exit 0 = 통과, 1 = 거부(사유 출력), 2 = 사용법 오류
+soksak-validate plugin plugin.json  # GitHub Release tarball을 SHA-256 검증 후 설치한 CLI
 ```
 
 `@soksak-ai/plugin-spec` 패키지가 코어와 **같은** `parseManifest` 를 싣는다(사본/vendoring 금지).
@@ -127,7 +135,7 @@ npx soksak-validate plugin.json   # exit 0 = 통과, 1 = 거부(사유 출력), 
 
 | 필드 | 필수 | 설명 |
 |---|---|---|
-| `spec` | ✓ | `"soksak-spec-plugin@1"` 고정 |
+| `spec` | ✓ | `"soksak-spec-plugin@0.0.1"` 고정 |
 | `id` | ✓ | `^[a-z0-9][a-z0-9-]*$` + 설치 디렉토리명과 일치 |
 | `name` / `description` | ✓ | 표시명 / 기능을 적은 한 줄 설명 — 문자열 또는 언어 맵 `{"ko": …, "en": …}`(§3.5, 현재 언어 resolve·첫 값 폴백) |
 | `version` | ✓ | semver(`major.minor.patch`) |
@@ -137,26 +145,42 @@ npx soksak-validate plugin.json   # exit 0 = 통과, 1 = 거부(사유 출력), 
 | `permissions` | ✓ | 아래 권한 표. 빈 배열도 명시 필수 |
 | `contributes.views[]` | | `{id, title, icon, placements?, defaultPlacement?, status?}` — `"ui"` 권한 필요. `status` = 이 뷰가 `setStatus` 로 보고하는 상태 코드 목록(C2 status 축 선언). **콘텐츠 배치 뷰는 선언 의무 — 무상태면 `[]` 를 명시**(부재는 C2 `content-view-status` 판정 위반) |
 | `contributes.commands[]` | | `{name, title}` — `"commands"` 권한 필요. 등록명은 `plugin.<id>.<name>` |
-| `contributes.formatters[]` | | `{id, title, languages[]}` — `"editor"` 권한 필요. languages = 확장자(점 없이) |
-| `contributes.languages[]` | | `{ext, lang}` — `"editor"` 권한 필요. **선언만으로 자동 적용**(코드 불필요) |
+| `contributes.overlays[]` | | `{id,title,scope:"screen"|"pane",capturesInput}` — scope에 맞는 `ui:overlay:*` 권한. runtime의 정적 `overlays` map과 exact-match. 처음에는 숨김이며 호스트만 표시·입력 상태를 바꿈 |
+| `contributes.headerActions[]` | | `{id,title,icon,command}` — `ui:titlebar` + `commands`. command는 같은 `contributes.commands[].name`과 exact-match |
+| `contributes.statusItems[]` | | `{id,title,command}` — `ui:statusbar` + `commands`. command는 같은 `contributes.commands[].name`과 exact-match |
+| `contributes.fileViewers[]` | | `{id,extensions,priority?}` — `"ui"` 권한. 정적 `fileViewers` provider map과 exact-match |
+| `contributes.iconSets[]` | | `{id,title}` — `"ui"` 권한. 직렬화 가능한 정적 `iconSets` data map과 exact-match |
 | `contributes.programs[]` | | `{id, title, path?, kind, command?, url?, ensure?}` — `"programs"` 권한 필요. id 는 전역 평탄, path 는 "/" 구분 메뉴 카테고리(다단) |
 | `contributes.nodes[]` | | `{id, description?, danger?}` — `"ui"` 권한 필요. **DOM 노출 노드 종류** 선언(외부 주소 클릭/측정). 실제 요소엔 `data-node="<id>"`(동적 목록은 `<id>/<안정키>`). 선언하면 동의 화면에 표기, `danger:true` 는 ⚠ 강조 |
 | `libraries[]` | | 외부 CLI 종속성 — **top-level**(`contributes` 밖). 4-tuple `{name, bin, install, observe?, accept?, reach?}`. 권한 불요(설치는 활성화 동의가 게이트). → 아래 「외부 런타임 의존성」 |
-| `dependencies` | | 플러그인↔플러그인 의존 — **top-level**. `{pluginId: semver}`. 전이 동반 설치(동의 게이트)·삭제 cascade. 배포 시 대상이 카탈로그에 **함께 있어야** 한다(의존 그래프 게이트 — 없으면 발행 실패, PLUGIN-CONTRACT §2.6). id-핀이라 대상 rename 에 부서진다 — 계약 결합(`viewContract`/`implements`/`consumes`)이 rename-불변이라 우선. `libraries`(외부 CLI)와는 별개 축 |
+| `dependencies` | | 런타임 플러그인 관계/호출 권한 — **top-level** `{pluginId: semver}`. locator가 아니며 설치 URL을 만들지 않는다. plugin-kind conformance에서 owner release의 `kind:"plugin"` dependency와 정확히 같아야 한다. sidecar/kit 설치 closure는 release manifest만 소유한다. id-핀보다 계약 결합(`viewContract`/`implements`/`consumes`)을 우선한다 |
 | `consumes` | | 이 플러그인이 **부를 계약** — **top-level**. `["soksak-spec-<kind>-<domain>@<major>"]`. `implements` 의 대칭이고 계약-핀의 호출 축이다: 호출자가 계약을 선언하고 대상이 그 계약을 `implements` 하면 코어 호출 경계가 `plugin.<대상id>.<cmd>` 를 통과시킨다 — 구현체 id 를 매니페스트에 적지 않으므로 두 번째 구현체가 와도 고칠 곳이 없다. 발견은 `plugin.implementers {contract}`. 미선언 교차 호출은 여전히 거부(PERMISSION_DENIED) |
 
 기여 `title`/프로그램 `path` 도 전부 문자열 또는 언어 맵(§3.5). 뷰 내부 텍스트의
 다국어는 플러그인 소유 — `app.locale()`(권한 불요)로 현재 언어를 읽고
 `locale.changed` 이벤트로 변경을 구독한다.
 
-알 수 없는 키/권한/배치는 전부 거부된다(오타 조기 발견). `contributes` 에 선언하지 않은
-명령/뷰/포매터를 코드에서 바인딩하면 activate 시 예외가 난다 — **매니페스트가 선언의 단일진실**.
+알 수 없는 키/권한/배치는 전부 거부된다(오타 조기 발견). runtime module의 정적
+`commands/views/fileViewers/overlays/iconSets` key는 매니페스트 선언과 정확히 같아야 한다 —
+**매니페스트가 선언의 단일진실**이다.
 
-**선언 ≡ 실제 (양방향).** 코어는 선언과 런타임 실제 배선이 맞물리는지 양방향으로 본다:
-미선언을 바인딩하면 거부(undeclared), 선언했는데 등록/배선이 없으면 감지한다(activate 후
-inventory + `nodeScan` 의 `data-node` diff). `sok plugin.conformance` 가 register-gated 기여
-(commands·views·fileViewers·iconSets)와 nodes 의 declared vs actual diff 를 돌려준다 — actual 은
-각 registry 의 이 플러그인 등록분에서 관찰한다(앱 필요 — 런타임 게이트).
+### 격리 UI surface
+
+controller document는 비가시이며 앱 UI로 쓰지 않는다. 뷰·파일 뷰어·오버레이는 각 인스턴스가
+별도 sandbox document를 받고, 호스트가 trusted principal의 role/contribution id로 정적 provider를
+고른다. callback을 매니페스트에 넣거나 실행 중 새 surface를 등록하는 경로는 없다.
+
+오버레이는 항상 숨김으로 시작한다. runtime은 선언된 id의 상태 변경만 요청할 수 있고 실제
+`visible`/`interactive` 결정은 호스트가 한다. `capturesInput:false` 선언은 interactive 요청 자체를
+거부한다. 헤더/상태 항목은 provider가 아니라 호스트 선언 UI다. 클릭하면 같은 플러그인의 선언된
+command를 호스트가 실행하며 함수 callback을 받지 않는다. 따라서 service-bound command만 가진
+`entry:null` 플러그인도 헤더/상태 항목은 가질 수 있지만, provider 코드가 필요한 overlay는 가질 수 없다.
+
+**선언 ≡ 실제 (양방향).** 코어는 매니페스트와 runtime module inventory를 import 직후 대조한다.
+미선언 key와 선언했지만 provider/handler가 없는 key를 모두 거부한다. 대상은
+commands·views·fileViewers·overlays·iconSets다. nodes는 sandbox DOM snapshot의 선언 id와 대조한다.
+headerActions/statusItems는 runtime provider가 아니라 선언된 command를 호스트가 실행하는 UI라
+매니페스트 파서가 command 참조를 대조하고, runtime은 선언 id의 표시 상태만 갱신할 수 있다.
 
 ### 외부 런타임 의존성 (`libraries` — 4-tuple)
 
@@ -202,7 +226,8 @@ EEXIST 류)·`BROKEN`(dangling 심링크/probe 실패)·`VERSION_MISMATCH`(minVe
 ```json
 "permissions": ["sidecar"],
 "sidecars": [
-  { "name": "chromium", "interface": "soksak-spec-sidecar-browser@1",
+  { "name": "chromium", "interface": {
+      "id": "soksak-spec-sidecar-browser", "range": "0.0.1" },
     "reach": { "fetch": { "url": { "darwin": "https://…/dist.tar.gz" },
                            "sha256": { "darwin": "<hex>" } } } }
 ]
@@ -210,8 +235,9 @@ EEXIST 류)·`BROKEN`(dangling 심링크/probe 실패)·`VERSION_MISMATCH`(minVe
 
 - `"sidecar"` 권한(주의 등급) 필수 — 네이티브 코드를 앱 프로세스에 로드한다(동의 화면에
   선언된 사이드카 이름·interface 가 함께 표기된다).
-- `app.sidecar.open(name)` 은 **선언된 이름만** 연다(미선언 = throw). 로드 시 코어가 선언
-  `interface` 를 바이너리 자기보고(`soksak_sidecar_engine_abi`)와 대조한다 — 불일치는 거부(선언≡실물).
+- `app.sidecar.open(name)` 은 **선언된 이름만** 연다(미선언 = throw). 로드 시 코어가 소비자
+  `{id, range}`를 바이너리의 정확한 공급자 `{id, version}` 자기보고
+  (`soksak_sidecar_engine_abi`)와 SemVer로 대조한다 — 불일치는 거부(선언≡실물).
 - 채널은 불투명 JSON(`handle.send(msg)` / `handle.on(event, cb)`) — 메시지 의미는 플러그인↔
   사이드카 사적 계약이고 코어는 relay 만 한다. 모듈은 로드 후 상주(`close()`는 채널만 해제).
 - `reach` 는 fetch 전용(sha256 핀 아카이브 자동 설치, 실패 시 무기록). 미선언이면 dev
@@ -227,9 +253,13 @@ engine.on("popup-url", (p) => openInNewTab(String(p.url)));
 
 | 권한 | 부여 표면 | 주의 |
 |---|---|---|
-| `ui` | `app.ui` — 뷰 등록/열기 | |
+| `ui` | 정적 `views`/`fileViewers`/`iconSets` provider + brokered UI operation | |
+| `ui:titlebar` | 매니페스트 `headerActions`를 호스트 타이틀바에 표시 | |
+| `ui:statusbar` | 매니페스트 `statusItems`를 호스트 상태바에 표시 | |
+| `ui:overlay:pane` | 선언된 pane overlay provider를 격리 슬롯에 표시 | ⚠ |
+| `ui:overlay:screen` | 선언된 screen overlay provider를 격리 슬롯에 표시 | ⚠ |
 | `programs` | (표면 없음 — 선언만으로 자동 등록) 새 탭(+) 메뉴 프로그램 | ⚠ 선택 시 터미널 명령 자동 실행(설치 명령 포함) |
-| `commands` | `app.commands` — 명령 실행(danger 없는 것)+자기 명령 등록 | |
+| `commands` | brokered 명령 실행 + 매니페스트와 exact-match하는 정적 command handler | |
 | `commands:destructive` | danger=destructive 명령 실행(닫기·제거) | ⚠ |
 | `commands:inject` | danger=inject 명령 실행(term.send/exec, browser.eval…) | ⚠ |
 | `editor` | `app.editor` — CM6 확장·언어·포매터·버퍼 읽기/쓰기 | |
@@ -239,7 +269,7 @@ engine.on("popup-url", (p) => openInNewTab(String(p.url)));
 | `terminal:read` | `app.terminal.readBuffer·onOutput` — 화면 버퍼 내용 읽기·갱신 구독(전 화면 텍스트 — 명령 관찰보다 강함) | ⚠ |
 | `terminal:write` | `app.terminal.sendText` — PTY 키 주입(실행 중 프로그램에 타이핑) | ⚠ |
 | `git:read` | `app.git` — log/show/diff/status(읽기 전용) | |
-| `network` | (표면 없음) fetch 사용 **고지** — 기술적 강제 불가 | ⚠ |
+| `network` | sandbox 직접 연결은 차단; brokered network operation으로 외부 요청 | ⚠ |
 | `sidecar` | `app.sidecar` — 선언된 엔진 모듈(dylib)을 앱 프로세스에 로드+불투명 채널 | ⚠ 네이티브 코드 실행(sidecars[] 선언 필수) |
 
 영역/능력별로 권한이 분리된다 — UI: `ui`(콘텐츠)·`ui:statusbar`·`ui:overlay:pane`(패널 덮기)·
@@ -248,46 +278,55 @@ engine.on("popup-url", (p) => openInNewTab(String(p.url)));
 플러그인은 `plugin.*` 관리 명령(install/enable/…)을 호출할 수 없다(자기증식 금지, §0-5).
 `plugin.view.open/close` 와 자기·타 플러그인 명령(`plugin.<id>.*`)은 허용.
 
-## API 레퍼런스 (`activate(ctx)`)
+## 0.0.1 isolated-runtime SDK
 
 ```ts
-ctx = {
-  app: SoksakPluginApi,
-  manifest,             // 검증된 매니페스트
-  dir,                  // 설치 디렉토리 절대경로
-  subscriptions: [],    // Disposable 을 push 하면 비활성화 시 자동 dispose
+context = {
+  app,                   // 공개 Command Registry·event·bounded resource broker
+  role,                  // controller/view/file-viewer/overlay/preview
+  signal,                // 이 runtime session의 수명. abort 뒤 호출·DOM 변경 금지
+  context,               // revision이 단조 증가하는 theme/locale/slot/visibility 상태
 }
 ```
 
-`app.ui.registerView` / `app.commands.register` / `app.editor.register*` 가 돌려주는
-Disposable 은 **자동 수거**된다(비활성화 시) — 직접 만든 리소스만 `ctx.subscriptions` 에 넣으면 된다.
+controller/view/file-viewer/overlay는 각각 main renderer 밖의 종료 가능한 native runtime과
+그 안의 opaque sandbox document를 사용한다. 호스트가 trusted
+principal의 role과 contribution id를 정하고, plugin→host 메시지로 principal을 선택할 수 없다.
+기능 호출은 `app.commands.execute(name, params)` 하나로 공개 Command Registry를 통과한다.
+Registry가 params/result/danger/permission/domain contract를 검증하고 principal·namespace·path·
+label·placement 권한은 호스트가 주입한다. raw invoke, 동적 property traversal, 기능별 비공개
+operation 목록은 없다. preview role에는 command/event/resource capability가 전혀 없다.
 
-### app.commands (`"commands"`)
+### commands
 
-```js
-await app.commands.execute("explorer.list", { path: root });  // 기존 앱 명령(63종+)
-const d = app.commands.register("hello", {                    // contributes.commands 선언 필수
-  description: "인사",
-  params: { name: { type: "string", description: "이름" } },
-  handler: ({ name }) => ({ msg: `안녕 ${name}` }),
+```ts
+export default defineSoksakPlugin({
+  commands: {
+    hello: async ({ name }) => ({ message: `안녕 ${String(name)}` }),
+  },
 });
-// → sok plugin.my-plugin.hello '{"name":"soksak"}' / MCP tool 로 즉시 노출
+
+await context.app.call("commands.execute", {
+  command: "explorer.list",
+  params: { path: "/declared/domain/value" },
+});
 ```
 
-### app.events (권한 불필요)
+`commands` map key는 매니페스트 `contributes.commands[].name`과 exact-match한다. handler 함수와
+metadata를 한 객체에 섞지 않는다. title/description/params/returns/danger는 매니페스트 데이터다.
+
+### event subscription
 
 `project.changed` · `view.activated` · `file.opened` · `file.closed` · `file.saved`
 · `theme.changed` · `bookmarks.changed` · `command.finished`
 
-```js
-ctx.subscriptions.push(app.events.on("file.saved", ({ path }) => { … }));
-
-// command.finished: 터미널 명령 종료(OSC 133/633 셸 통합 탐지 — 폴링 없음).
-// git 뷰 등의 자동 갱신 트리거. payload = { projectId: string | null, paneId }.
-// 핸들러는 메인스레드 동기 실행 — 무거운 갱신은 debounce/defer 할 것.
-ctx.subscriptions.push(
-  app.events.on("command.finished", ({ projectId }) => { /* 갱신 예약 */ }),
+```ts
+const subscription = await context.app.subscribe(
+  "events.subscribe",
+  { topic: "file.saved" },
+  (payload) => { /* event-driven update; no polling */ },
 );
+context.signal.addEventListener("abort", () => subscription.dispose(), { once: true });
 ```
 
 ### 프로그램 기여 (`"programs"`) — 완전 선언형, 코드 불필요
@@ -317,7 +356,7 @@ ctx.subscriptions.push(
     "title": "Claude",                 // 메뉴 표시명
     "path": { "ko": "에이전트", "en": "Agents" }, // "/" 구분 다단 카테고리(다국어). 생략=최상위
     "kind": "view",                    // 프로그램은 뷰를 연다
-    "viewContract": "soksak-spec-plugin-terminal@1", // 계약으로 뷰 참조 → 코어가 사용자 엔진으로 해소(viewPlugin 대안, 상호배타)
+    "viewContract": "soksak-spec-plugin-terminal@0.0.1", // 계약으로 뷰 참조 → 코어가 사용자 엔진으로 해소(viewPlugin 대안, 상호배타)
     "view": "content",                 // 열 뷰 id(구현체의 contributes.views[].id)
     "command": "claude",               // 터미널 계약 뷰 한정: 자동 실행 셸 명령
     "ensure": {                        // 활성화 시점 선행 바이너리 보장
@@ -337,67 +376,72 @@ ctx.subscriptions.push(
   노출); 0개면 빈 그룹으로 열화한다 — 코어는 폴백 program 을 만들지 않는다.
 - 등록 프로그램이 0개면 + 버튼 자체가 렌더되지 않는다.
 
-### app.ui (`"ui"`)
+### view providers and brokered UI operations (`"ui"`)
 
-```js
-app.ui.registerView("panel", {
-  mount(el, { projectId, root }) { /* el 에 직접 렌더(React 불요) */ },
-  unmount(el) { /* 선택 — 미구현이면 호스트가 DOM 정리 */ },
-  prepareFocusTransfer(el) { /* 선택 — 조합/프리에딧을 동기 확정. el 밖 DOM 접근 금지 */ },
-  focus(el, _ctx, { signal }) { /* 선택 — signal.aborted 면 포커스 금지 */ },
+```ts
+export default defineSoksakPlugin({
+  views: {
+    panel: {
+      mount({ root, signal }) { /* root는 이 sandbox document 내부 요소 */ },
+      update(context) { /* 같은 instance의 host-owned context 갱신 */ },
+      unmount() {},
+    },
+  },
 });
-await app.ui.openView("panel", "content");   // 배치: sidebar-right(기본)/sidebar-left/content
+
+await context.app.call("ui.openView", { viewId: "panel", placement: "content" });
 ```
 
+`views` map key는 매니페스트 선언과 exact-match하며 실행 중 새 provider를 추가하지 않는다.
 뷰는 배치와 직교다. 매니페스트 `placements` 에 선언한 곳 어디든 열 수 있다:
 우측 사이드바(아이콘 레일), 좌측 사이드바(파일 트리 옆 탭), 콘텐츠 영역(에디터 그룹 탭 —
 드래그/분할/닫기 동작 동일). 테마 적용을 위해 CSS 변수(`var(--fg)`, `var(--bd)`,
 `var(--inset)`, `var(--acc)` …)로 스타일하라.
 
-포커스 계약은 콘텐츠 뷰의 내부 구현을 코어에 누출하지 않는다. 코어는 클릭·명령·탭 전환을
-`prepareFocusTransfer(source) -> 활성 상태 변경 -> focus(target)` 순으로 실행하고, 마지막 단계는
-브라우저 기본 클릭이 끝난 다음 프레임에 확정한다. 그 사이 대상 내부 input/textarea/contenteditable이
-이미 포커스됐으면 그대로 보존한다. provider 가 비동기 준비를 기다리면 요청의 `AbortSignal`을
-보관해야 하며, abort 뒤 포커스는 계약 위반이다. 마운트 콜백의 무조건 자동포커스도 계약 위반이다.
+provider는 자기 sandbox `root` 밖 DOM과 호스트 DOM을 볼 수 없다. 비동기 작업은 `signal`을
+따르며 abort 뒤 결과 적용은 계약 위반이다. DOM 투명성은 pre-import MutationObserver revision
+event와 on-demand snapshot/measure로 제공한다. 폴링과 closed shadow root는 금지다.
 
-#### 아이콘 셋 등록 (`contributes.iconSets` + `app.ui.registerIconSet`)
+#### icon sets (`contributes.iconSets` + static `iconSets` map)
 
 앱 크롬 아이콘 셋을 플러그인으로 제공할 수 있다(설정 → 아이콘 셋에 나타남).
-매니페스트에 선언하지 않은 셋 id 는 등록이 거부된다.
+매니페스트와 module map이 양방향 exact-match한다.
 
 ```json
 { "permissions": ["ui"], "contributes": { "iconSets": [{ "id": "tabler", "title": "Tabler Icons" }] } }
 ```
 
-```js
+```ts
 // data: 시맨틱 이름 전수(close/add/refresh/… — 누락 시 등록 거부) →
 //       { v: viewBox, b: SVG 내부 마크업, f: "stroke"|"fill"|"both" }
-ctx.subscriptions.push(ctx.app.ui.registerIconSet("tabler", data));
+export default defineSoksakPlugin({ iconSets: { tabler: data } });
 ```
 
 시맨틱 이름 목록과 추출 도구는 호스트 레포 `scripts/icons/extract.mjs` 참조
 (예제: `soksak-icons-tabler`, `soksak-icons-codicons` — main.js 가 생성물).
-전역 셋 id 는 `<pluginId>.<setId>`, 플러그인 비활성화 시 자동 해제되고 선택돼
+전역 셋 id 는 `<pluginId>.<setId>`, frame session 종료 시 자동 해제되고 선택돼
 있던 경우 내장 lucide 로 폴백된다.
 
-### app.editor (`"editor"`)
+### file viewers
 
-```js
-const { view, state, language } = app.editor.modules;  // 호스트 @codemirror/* (§0-7 — 자체 번들 금지)
-app.editor.registerExtension({ extension, languages: ["json"] }); // languages 생략 = 전역
-app.editor.registerFormatter({                          // contributes.formatters 의 id 에 바인딩
-  id: "json",
-  format(text, { path, ext }) { return JSON.stringify(JSON.parse(text), null, 2) + "\n"; },
+파일 렌더 엔진은 코어가 아니라 플러그인이 소유한다. 매니페스트가 확장자/우선순위를 선언하고,
+module의 `fileViewers` map이 provider를 제공한다. provider는 자기 sandbox DOM만 렌더한다.
+
+```ts
+export default defineSoksakPlugin({
+  fileViewers: {
+    json: {
+      async mount({ root, path, app }) {
+        const file = await app.call("fs.readText", { path });
+        root.textContent = JSON.stringify(file, null, 2);
+      },
+    },
+  },
 });
-app.editor.getActiveFile();           // { viewId, path, text } | null
-app.editor.setFileText(viewId, text); // 통째 치환 — undo 1회로 원복
 ```
 
-- 언어 매핑(`contributes.languages`)은 선언만으로 활성화 시 자동 적용된다.
-- 포매터는 `⇧⌥F` 또는 `sok editor.format` 으로 실행된다. 실패 시(예: JSON 파싱 실패)
-  **원본을 보존한 채** 명확한 에러를 던져라 — 깨진 텍스트 반환 금지.
-- 확장 등록/해제는 열린 모든 에디터에 즉시 반영된다(재시작 불필요).
-- 20MiB/30만 줄 초과 큰 파일에는 보호를 위해 플러그인 확장이 적용되지 않는다(언어 확장과 동일 기준).
+편집/포맷 같은 동작은 선언된 command handler와 공개 Registry command로 구성한다. 실행 중 editor
+extension/formatter를 등록하는 사설 API는 0.0.1 계약이 아니다.
 
 ### app.storage (`"storage"`)
 
@@ -456,19 +500,17 @@ sok editor.format
 
 ## 플러그인 = 독립 repo · 코어 = 플랫폼
 
-코어는 플러그인을 모른다. 각 플러그인은 독립 git repo 가 단일 진실이고, 코어는 레지스트리
-카탈로그 하나만 fetch 해 설치 목록을 만든다(스펙 §0 P1~P5).
+코어는 플러그인을 모른다. 각 플러그인은 독립 repo가 자기 구현·고유 계약·문서·테스트·release의
+단일 진실이고, 코어는 공개 platform wire만 안다(스펙 §0 P1~P5).
 
 - **소스·발행**: 각 플러그인 repo 안에서 끝낸다 — 소스·매니페스트·테스트·태그·push 전부 자기 repo.
-- **카탈로그**: `soksak-plugin-registry` repo 의 `registry.json` 이 설치 가능 목록의 단일 진실이다.
-  그 repo 의 `update.sh` 가 org 의 각 `plugin.json` 을 집계한다(template 제외). 코어의
-  `make registry` 는 이 카탈로그를 fetch 해 `src/plugins/registrySnapshot.json`(오프라인 폴백)으로 캐시한다.
-- **단일 폴더**: dev·installed·local 이 `~/.soksak/plugins/<id>/` 한 곳에 공존한다. 각 폴더가
-  `.soksak.json`(머신-로컬, 플러그인 repo 는 `.gitignore`)로 자기 상태를 기술한다 —
-  `{version, repo, branch}`. `version` 3모드: `"local"`(그냥 돌아감·레지스트리 미등록·repo 없음),
-  `"dev"`(작업 중·동의 면제), `"<semver>"`(레지스트리 설치본).
-- **설치**: 카탈로그 엔트리의 `repo` → `~/.soksak/plugins/<id>` 로 clone, `.soksak.json`(version=semver)
-  기록, 읽기전용 잠금. `plugin.update` 는 fetch + reset --hard 후 version 갱신.
+- **레지스트리**: official/private/third-party 모두 같은 Ed25519 서명 색인을 쓴다. 색인은 unit
+  내용을 복제하지 않고 owner release manifest와 conformance report의 URL+SHA-256만 가진다.
+- **선언 상태**: 각 identity home의 registrar가 unit id, 개발/설치 모드, 버전, 원본 registry,
+  owner-manifest digest를 명시한다. 경로를 상대 토폴로지로 추측하거나 symlink로 연결하지 않는다.
+  개발 source와 검증된 release receipt는 같은 필드인 척 섞지 않는다.
+- **설치**: 선택한 원본 registry를 인증하고 owner manifest/report/artifact SHA-256을 검증한 뒤
+  GitHub Release archive를 선언 경로에 추출한다. git clone/branch/latest/다른 registry fallback은 없다.
 - **dev**: `sok plugin.dev.new <id>` 가 단일 폴더에 스캐폴드(plugin.json·main.js·`.soksak.json`(version="dev")·git init)
   한다. 소스 편집은 앱 리로드에 즉시 반영. `dev`·`local` 은 `plugin.update` 가 거부한다(작업물 보호).
   폴더 밖 외부 폴더의 일회 테스트는 `plugin.dev.load`(명시적 명령)로 한다 — 지정 폴더가 유일한

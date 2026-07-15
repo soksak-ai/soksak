@@ -1,7 +1,8 @@
 # Plugin Service — the service-axis serve standard
 
 Normative law for the **service axis**: how a soksak-authored resident process communicates
-over stdio. There is ONE wire for the whole axis — `soksak-spec-service@1`, NDJSON over
+over stdio. There is ONE wire for the whole axis — `soksak-spec-service` (current exact
+provider version `0.0.1`), NDJSON over
 stdio — and ONE serve harness that every such sidecar borrows. The investigation that
 produced this law found the same NDJSON dance (spawn → line-buffer → parse → dispatch →
 write → close-stdin-EOF → exit-on-pipe-death) hand-rolled independently across four+ plugins
@@ -42,7 +43,7 @@ the stdio connection:
 | Command surface | the plugin's own registry commands call it | the core routes `bind:"service"` commands natively |
 | Entry | plugin has an entry module | `entry: null` lawful (pure contract) |
 | Examples | speech (mascot/sherpa) | workflow |
-| Wire | `soksak-spec-service@1` NDJSON stdio (shared harness) | same |
+| Wire | `soksak-spec-service` NDJSON stdio (shared harness; provider `0.0.1`) | same |
 
 Both modes speak the identical wire and use the identical serve harness on the sidecar side;
 the plugin-driven mode uses the shared JS client, the core-routed mode uses the
@@ -82,17 +83,20 @@ manifest's `bind:"service"` set exactly; any mismatch in either direction refuse
 
 **PS4 — `entry: null` is lawful only for a pure contract plugin.** Conditions, enforced by
 `parseManifest`: the manifest declares `service`, every command carries `bind:"service"`,
-and no code-requiring contribution exists (`views`, `nodes`, `fileViewers`, `iconSets` are
-forbidden — each needs a runtime provider binding;
+and no code-requiring contribution exists (`views`, `overlays`, `nodes`, `fileViewers`,
+`iconSets` are forbidden — each needs a runtime provider or sandbox DOM;
 data-only contributions — `programs`, `events`, `skill`, `configuration` — remain lawful).
+`headerActions` and `statusItems` are also lawful when they reference a service-bound command:
+the host renders them and routes the click, so no plugin callback/provider is required.
 Any other `entry: null` combination is rejected. The loader activates such a plugin without
 reading an entry module; transparency gates (C2) apply unchanged.
 
-**PS5 — The wire is `soksak-spec-service@1`.** NDJSON both directions over stdio; one JSON
+**PS5 — The wire id is `soksak-spec-service`; its provider version is `0.0.1`.** NDJSON both directions over stdio; one JSON
 frame per line; a line never exceeds 4 MB — an oversized or unparseable line is a protocol
 fault and enters the restart path (PS10), never a silent skip. The first service line is
-`hello` (protocol version, interface id, `ops[]`, `subscribe[]`); the core verifies
-compatibility with the `soksak-spec-socket` verdict grammar and the manifest declaration, then
+`hello` (transport protocol version, exact provider `{id, version}`, `ops[]`, `subscribe[]`);
+the core matches it against the manifest consumer `{id, range}` with the public SemVer rules,
+verifies transport compatibility with the `soksak-spec-socket` verdict grammar, then
 answers `ready`. Frames: `req`/`res` (command execution, id-multiplexed), `ev` (progress,
 tied to a req id), `act` (activity, standalone), `cmd`/`cmdres` (mediated outbound call),
 `push` (subscribed events, core→service), `shutdown`. The error code set is a closed enum
@@ -100,9 +104,9 @@ in the proto crate; the core maps any unknown code to `INTERNAL` and never leaks
 service string past the envelope.
 
 **PS6 — Contract ids in core source never match the plugin-id grammar.** The C1 scan flags
-`soksak-plugin-*` tokens in core; therefore the wire contract is `soksak-spec-service@1`
+`soksak-plugin-*` tokens in core; therefore the wire contract is `soksak-spec-service`
 and the crate is `soksak-spec-service`. Never mint a contract id that the plugin-id
-scanner would sanction. The id follows NAMING §8 (`soksak-spec-<kind>-<domain>@<major>`); it appears in
+scanner would sanction. The id follows NAMING §8 (`soksak-spec-<kind>-<domain>`); it appears in
 the manifest `service.interface` declaration — amending NAMING §8's surface list to admit
 that declaration is part of this legislation, never a silent addition (C4).
 
@@ -185,9 +189,8 @@ guarantee — never a documentation warning.
 **PS16 — Serialization is the service's law; standards never weaken.** State-mutating ops
 execute under a single mutex inside the service — concurrent mutation of shared state is
 forbidden by contract, read ops may run concurrently. Every gate this law names is
-blocking from the day it lands. A criterion here changes only through the C5 procedure:
-explicit problem statement, then a re-legislation commit. Re-legislation history is
-recorded in this document.
+blocking. A criterion changes only with an explicit problem statement, a versioned
+contract change, and matching conformance updates.
 
 **PS17 — The serve loop is a shared harness, not hand-rolled.** The framing every service
 needs — line-buffered NDJSON read, one-JSON-per-line write with flush, hello emission,
@@ -223,12 +226,14 @@ the shared wire is mandatory only where soksak authors the resident binary.
   "entry": null,                          // PS4 — pure contract plugin
   "permissions": ["service", "..."],     // "service" is a caution permission (consent emphasis)
   "sidecars": [
-    { "name": "workflow", "interface": "soksak-spec-sidecar-workflow@1",
+    { "name": "workflow", "interface": {
+        "id": "soksak-spec-sidecar-workflow", "range": "0.0.1" },
       "reach": { "fetch": { "url": "...", "sha256": "..." } } }
   ],
   "service": {
     "sidecar": "workflow",                // names the sidecars[] entry that is the resident binary
-    "interface": "soksak-spec-service@1", // the wire this law governs (PS5, PS6)
+    "interface": { "id": "soksak-spec-service", "range": "0.0.1" },
+                                                // compatible wire requirement (PS5, PS6)
     "subscribe": ["bus:kanban:changed"]   // PS15
   },
   "contributes": {
@@ -267,38 +272,16 @@ core-routing bind and nothing else.
 Every RED test that enforces this law cites its clause number. The CI ledger row for
 `make verify` gains the new gates in the same commit that adds them (CI-STATUS discipline).
 
-## Re-legislation history
+## Contract identity
 
-- 2026-07-11 — v1.0.0 legislated (PS1–PS16).
-- 2026-07-11 — PS4: `iconSets` added to the forbidden list (implementation confirmed it
-  requires a runtime provider binding — `registerIconSet`; the enumeration had missed it).
-- 2026-07-11 — v2.0.0: reframed from "the third form" to the **service-axis serve standard**.
-  Problem (C5): a whole-body investigation (docs + chromium/sherpa engines + plugin
-  out-of-process) found the same stdio-NDJSON serve loop hand-rolled across four+ plugins with
-  gratuitously different frame shapes — deciding it on workflow alone was the wrong scope.
-  Added PS17 (shared `serve` harness), PS18 (one wire, two drive modes — core-routed and
-  plugin-driven, the latter migrating the SIDECARS `service` model onto the standard wire),
-  PS19 (authored-vs-external-adapter boundary). This amends SIDECARS §1's `service`-model
-  "private contract" for soksak-authored sidecars (companion commit); the engine axis is
-  untouched, and A14's "unifying the three wires" stays out of scope — this consolidates
-  only within the stdio axis.
-- 2026-07-12 — deploy gate supports the service class. PS7 verifies the *core seam* accepts
-  a service manifest, but the *deploy pipeline* (registry `update.sh` + `soksak-plugin-doctor`)
-  assumed every plugin ships a `main.js` entry artifact and dropped an `entry: null` service
-  plugin (`soksak-plugin-workflow`) as "build artifact missing". Absent entry is not a missing
-  build — it is the class's definition (logic lives in the sidecar service). So `update.sh`'s
-  entry fetch and the Doctor's `main.js` requirement are exempted for the service class
-  (`entry: null` + `service` declared); the manifest and `src/` are still checked, and the
-  **surface** requirement stands — a service still owns ≥1 `bind:"service"` command (PS3,
-  C2 command-surface); a surfaceless service is rejected at schema, never cataloged. Companion:
-  the Doctor's vendored `contract.json` had drifted from the core's published contract (missing
-  the `service` permission, stale `git:read`) and was re-synced. The vendored copy is now
-  **drift-gated**: `contract-sync-scan` (`make gates-registry`) fails loudly if the Doctor's
-  published `contract.json` diverges from the core's `src/plugins/contract.json` — the drift can
-  no longer happen silently.
+- Version: `0.0.1`
+- Status: authoritative
+- Owner: the public `soksak-spec` repository
+- Rust service wire and harness: `soksak-spec-service`
+- Plugin manifest schema: the TypeScript platform-spec Git package
 
 ---
 
-Version: 2.0.0
+Version: 0.0.1
 Status: AUTHORITATIVE
-Single source of truth: `soksak-spec-service` (wire + serve harness), `@soksak-ai/plugin-spec` (manifest)
+Single source of truth: public `soksak-spec` source and release artifacts

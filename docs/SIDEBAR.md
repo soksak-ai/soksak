@@ -117,7 +117,7 @@ Sidebar conformance is a slice of the parent's separation and combination tests 
 
 ---
 
-Version: 1.0.0
+Version: 0.0.1
 Status: AUTHORITATIVE
 Parent: `docs/ARCHITECTURE.md` (A1–A13 inherited, not restated)
 Single source of truth: `src/plugins/spec.ts`, `src/plugins/viewRegistry.ts`, `src/commands/registry.ts`

@@ -30,36 +30,32 @@ separate process cannot attach a child view to the app's windows, and the
 engine's message pump needs the app's main queue. Loaded into the app process,
 it still runs "not as a separate app" (no Dock, no own windows).
 
-**The service `Channel` wire (re-legislated, C4/C5 — 2026-07-11).** The stdio channel
-was originally "an argv/stdin private contract" — each plugin invented its own frame
-shape. A whole-body investigation found the same NDJSON serve loop hand-rolled across
-workflow, speech (mascot/sherpa), and others, with gratuitously different framing. The
-service axis now has **one wire and one serve harness**: `soksak-spec-service@1`,
-legislated in docs/PLUGIN-SERVICE.md, mandatory for **soksak-authored resident service
-sidecars**. **External-tool adapters** — a plugin spawning a third-party binary that
+**The service `Channel` wire.** Soksak-authored resident service sidecars use one wire and
+one serve harness: `soksak-spec-service` at provider version `0.0.1`, owned by
+docs/PLUGIN-SERVICE.md. **External-tool adapters** — a plugin spawning a third-party binary that
 speaks its own protocol (acp → claude/codex over ACP; media pipelines → yt-dlp/ffmpeg
 one-shot) — keep a private contract, because we do not own the spawned binary's wire.
-The engine axis is untouched, and A14's "unifying the three wires" stays out of scope —
-this consolidates only within the stdio-service axis.
+The common service wire applies only to the stdio-service axis; engine and external-tool
+protocols remain independently owned.
 
 The service axis runs in two drive modes on that one wire: **plugin-driven** (core-blind
 — the plugin JS spawns and drives it, the row above) and **core-routed** (the core
 spawns, frames, and routes its `bind:"service"` commands — declared with a manifest
-`service` block, `entry: null` lawful). Both are legislated in docs/PLUGIN-SERVICE.md.
-"Plugin service" is the core-routed mode; never call it "service sidecar".
+`service` block, `entry: null` lawful). docs/PLUGIN-SERVICE.md owns both drive modes.
+"Plugin service" is the core-routed mode;
+never call it "service sidecar".
 
-**A survival service uses UDS, not stdio (legislated by the terminal-sidecar plan, C4/C5 —
-2026-07-12).** Both drive modes above bind the service's lifetime to a pipe: a stdio
+**A survival service uses UDS, not stdio.** Both drive modes above bind the service's lifetime to a pipe: a stdio
 service dies when the spawner's fd closes. A **survival service** must outlive every
 process that spawned it — `soksak-sidecar-terminal-alacritty` (§9) checkpoints shells that
 themselves survive an app exit, so it cannot die with the app. It therefore does not use
 stdio; it binds a rendezvous socket in the identity home and is reached over NDJSON on that
 UDS, with a singleton probe on start and a detached spawn (`process.detached`) — the same
 transport shape as the core PTY daemon it peers with. This is a distinct point on the wire
-axis, not an exception to `soksak-spec-service@1`: that spec frames spawner-bound stdio
+axis, not an exception to `soksak-spec-service`: that spec frames spawner-bound stdio
 services; a survival service is reached by socket precisely because its reason to exist is
 to not share the spawner's lifetime. Its own contract carries the message shapes
-(`soksak-spec-sidecar-terminal@1`), the `hello` handshake isomorphic to the daemon's.
+(`soksak-spec-sidecar-terminal`, provider `0.0.1`), the `hello` handshake isomorphic to the daemon's.
 
 **Names never encode the model** (`soksak-sidecar-<name>` for both): the model is
 machine-encoded (attachment path, artifact kind, ABI self-report); putting it in
@@ -86,9 +82,11 @@ the name would create a second, driftable truth.
 ## 3. Engine hosting ABI — `soksak-sidecar-engine ABI` v1 (normative)
 
 Two layers: the **hosting ABI** (u32 version, exact match — how any engine module
-is loaded and driven; the core validates this) and the **interface id**
-(`"<protocol>@<major>"` string — what the messages mean; the core only compares
-it against the plugin's declaration and relays).
+is loaded and driven; the core validates this) and the protocol contract. The
+plugin is a consumer and declares `{ "id", "range" }`; the module is a provider
+and self-reports exact `{ "id", "version" }` evidence through the two C strings
+below. The core accepts the module only when the ids match and its strict SemVer
+version satisfies the declared range.
 
 Module exports (all `#[no_mangle] extern "C"`, every body `catch_unwind`-wrapped —
 no unwinding crosses the boundary in either direction; a trapped panic returns -2):
@@ -96,8 +94,8 @@ no unwinding crosses the boundary in either direction; a trapped panic returns -
 ```rust
 #[repr(C)] struct SoksakSidecarEngineAbi {
     abi: u32,                 // hosting ABI version — core accepts exactly 1
-    interface: *const c_char, // e.g. "soksak-spec-sidecar-browser@1"
-    version: *const c_char,   // crate semver (diagnostics)
+    interface_id: *const c_char,      // e.g. "soksak-spec-sidecar-browser"
+    interface_version: *const c_char, // e.g. "0.0.1"
 }
 fn soksak_sidecar_engine_abi() -> *const SoksakSidecarEngineAbi;    // self-description handshake
 // The model declaration IS the symbol family itself: exporting soksak_sidecar_engine_* = engine
@@ -133,15 +131,21 @@ this rule structurally prevents the wedged-close class (a zombie window that sta
 window list with a dead webview and unreleased project claims).
 — fanned out to every loaded module when a DOM overlay opens/closes over content.
 
-Versioning: additive JSON fields within a major; breaking protocol → interface
-`@2`; new host capabilities → new optional symbols (resolved tolerantly).
+Versioning follows the public SemVer contract. Provider evidence always carries
+an exact version; compatibility belongs only to the consumer range. A
+concatenated `name@version` string is not a discovery or handshake shape. New
+host capabilities require a deliberately versioned ABI change or an enacted
+optional-symbol rule; missing required symbols are never tolerated.
 The `surface` parameter is ambient because every engine is surface-bound by
 definition — a future pdf/video engine reuses this ABI unchanged.
 
 Handshake order (core, on first `open`): dlopen → resolve **all** symbols (any
 missing = refuse, no partial load — the symbol family's presence IS the model claim) →
-`soksak_sidecar_engine_abi()` → check `abi == 1`, `interface ==` plugin declaration (mismatch names
-both strings) → `init` on the main thread (rendezvous, 10s timeout) → register.
+`soksak_sidecar_engine_abi()` → check `abi == 1` → validate provider
+`{interface_id, interface_version}` → match it against the plugin's
+`{id, range}` requirement → `init` on the main thread (rendezvous, 10s timeout)
+→ register. Every repeat `open` rechecks its requirement against the already
+loaded provider before issuing a channel handle.
 
 ## 4. Lifecycle
 
@@ -160,7 +164,8 @@ Plugins declare sidecars in the manifest (top-level, parallel to `libraries`):
 ```json
 "permissions": ["sidecar"],
 "sidecars": [
-  { "name": "chromium", "interface": "soksak-spec-sidecar-browser@1",
+  { "name": "chromium", "interface": {
+      "id": "soksak-spec-sidecar-browser", "range": "0.0.1" },
     "reach": { "fetch": { "url": { "darwin": "https://.../dist.tar.gz" },
                            "sha256": { "darwin": "<hex>" } } } }
 ]
@@ -214,7 +219,7 @@ Rules:
   renderers from the `" Helper (Renderer).app"` sibling bundle and fails
   silently without it.
 
-## 8. Chromium engine protocol — `soksak-spec-sidecar-browser@1`
+## 8. Chromium engine protocol — `soksak-spec-sidecar-browser` provider `0.0.1`
 
 Requests: `caps()→{modes}`, `create(x,y,w,h,url[,mode,scale,owner])→{id}`,
 `devtools-open(inspectedId,screencast,x,y,w,h[,owner])→{id}`, `bounds(id,x,y,w,h)`,
@@ -315,7 +320,7 @@ affected.
 Diagnostics: `stats.dbg.framesPresented` counts presented offscreen frames
 (0 while idle/hidden is correct — presents stop when nothing changes).
 
-## 9. Terminal service — `soksak-spec-sidecar-terminal@1`
+## 9. Terminal service — `soksak-spec-sidecar-terminal` provider `0.0.1`
 
 An engine-neutral, domain-scoped contract for the terminal domain's restore service. The
 contract carries the domain; the **unit** carries the engine — the browser-chromium symmetry.
@@ -340,7 +345,8 @@ standard.
 - **Consumers:** the terminal plugin *family*, not one plugin — both
   `soksak-plugin-terminal-xterm` and `soksak-plugin-terminal-ghostty` declare the identical
   entry `sidecars: [{ "name": "terminal-alacritty", "interface":
-  "soksak-spec-sidecar-terminal@1" }]`. One contract, one running engine unit, shared across
+  {"id":"soksak-spec-sidecar-terminal","range":"0.0.1"} }]`.
+  One contract, one running engine unit, shared across
   the family — input is a raw byte stream and output is ANSI paint, so no consumer couples to
   the engine. The manifest's `sidecars[].name` is what selects which engine unit runs, and the
   core holds that to be true: a plugin asks for the unit its own manifest declares for a contract
