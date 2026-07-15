@@ -1,11 +1,11 @@
-// 플러그인 스펙 — soksak-plugin-spec v1.
+// 플러그인 스펙 — soksak-spec-plugin@0.0.1.
 //
 // ── §0 불변 원칙 ─────────────────────────────────────────────────────────────
 // 1. 단일진실 = Command Registry. 플러그인 명령은 기존 registry 에 등록되고 그 즉시
 //    sok CLI/MCP/문서에 자동 노출된다. 플러그인 전용 호출 경로를 만들지 않는다.
-// 2. 전체신뢰 + 정직한 고지. main.js 는 메인 윈도우 컨텍스트에서 그대로 실행된다.
-//    샌드박스는 없다. 권한은 API 표면 게이트(미선언 권한의 API 는 제공되지 않음)이지
-//    격리가 아니다. 이 사실을 사용자 동의 화면에 그대로 알린다.
+// 2. 격리 + 최소권한. 플러그인 코드는 opaque-origin sandbox document에서 실행되고,
+//    호스트와는 principal이 찍힌 MessagePort capability broker로만 통신한다. 매니페스트
+//    권한은 동의 고지이자 broker 허용 목록이며, raw Tauri/host DOM/직접 네트워크는 노출하지 않는다.
 // 3. 검증은 all-or-nothing. 불량 매니페스트는 부분 수용 없이 사유와 함께 거부된다
 //    (테마 모델과 동일). 침묵 실패 금지 — 거부는 rejected 목록으로 노출된다.
 // 4. 플러그인 실패는 호스트를 죽이지 못한다. activate/mount/format/이벤트 콜백은
@@ -17,32 +17,39 @@
 //    두 경로 모두 로컬 사용자 행위다 — (a) ~/.soksak/plugins/<id>/.soksak.json 의
 //    version="dev" 마커(단일 폴더 모델: 폴더가 자기 상태 기술), (b) plugin.dev.load 로
 //    폴더 밖 경로 적재(danger:"inject"). 어느 쪽도 원격이 만들 수 없으므로 게이트는 로컬에 있다.
-// 6. 뷰 구현과 배치는 직교한다. 뷰 등록 API 는 registerView 하나이고, 우측/좌측
-//    사이드바·콘텐츠 영역 배치는 동일한 provider 를 소비한다.
+// 6. 구현과 배치는 직교한다. 매니페스트가 정적 기여와 배치를 선언하고 runtime module의
+//    provider map이 정확히 일치한다. 호스트만 실제 슬롯·가시성·입력 가능 상태를 소유한다.
 // 7. 콘텐츠 렌더 엔진은 코어가 소유하지 않는다(엔진 중립 A13). 에디터(CodeMirror/Monaco)·
 //    터미널(xterm)·브라우저(webview)는 교체 가능한 플러그인 선택이다. 코어는 raw 원시
 //    (파일 IO·PTY·webview 호스팅·content slot)만 노출하고, 엔진-특정 capability 는 두지 않는다.
 // 8. 기준 불변. 테스트/검증 기준 미달이면 코드를 고친다. 기준 자체가 잘못이면
 //    기준을 낮추는 대신 열린 질문으로 기록해 정정한다.
 //
-// ── 배포 모델 — 코어·플러그인·레지스트리 분리 (P1~P5, 불변) ───────────────────
-// 플러그인 = 독립 git repo 하나. 루트에 plugin.json + 단일 번들 entry(기본 main.js).
-// entry 는 ESM 단일 파일이어야 한다(Blob import 는 상대 import 를 해석 못 함 — 외부
-// 라이브러리는 저자가 번들에 포함). 설치는 ~/.soksak/plugins/<id>/ 로 clone — 테마
-// (~/.soksak/themes)와 동일한 외부 파일 모델이다.
+// ── 배포 모델 — unit 소유권·release·registry 분리 (P1~P5, 불변) ──────────────
+// 플러그인 = 독립 repo 하나. repo 는 plugin.json, 구현, 문서, 테스트와 owner release
+// manifest를 소유한다. entry는 release artifact 안의 plugin.json이 선언하며, 설치기가
+// checkout/branch/추측 경로로 대체하지 않는다.
 //
-// P1. 코어는 플러그인을 모른다. 코어 repo 는 플러그인 소스·디렉토리 목록·발행 도구를
-//     보유하지 않는다. 코어가 아는 단 하나는 레지스트리 카탈로그 URL 이다.
-// P2. 레지스트리 카탈로그가 단일 진실. 설치 가능 목록은 별도 repo 의 registry.json
-//     하나다(soksak-registry spec). 코어는 그것을 fetch 해 소비할 뿐, 생산하지 않는다.
-// P3. 플러그인은 독립 repo 가 단일 진실. 소스·매니페스트·테스트·발행이 전부 자기 repo
-//     안에서 끝난다. 코어 repo 하위에 플러그인 소스를 두지 않는다.
-// P4. 설치는 git clone. 카탈로그 엔트리의 repo → ~/.soksak/plugins/<id> 로 clone 한다.
-// P5. 코어 검증은 카탈로그 무결성과 매니페스트 파서뿐. 개별 플러그인의 스펙 준수는 각
-//     repo 가 보증한다 — 코어는 플러그인을 나열·검사하지 않는다.
+// P1. 코어는 개별 unit을 모른다. unit 목록·소스·발행 도구를 보유하지 않고 공개 wire만 안다.
+// P2. registry는 여러 개일 수 있는 서명된 발견/신뢰 색인이다. unit 내용을 복제하지 않고
+//     owner release manifest와 conformance report의 GitHub Release URL+SHA-256만 가리킨다.
+// P3. plugin/sidecar/kit의 repo가 자기 identity/source/dependency/artifact/entrypoint와
+//     고유 계약·문서·테스트의 최종 책임을 진다. 공유 domain 계약은 실제 다중 구현 때만 분리한다.
+// P4. 설치 입력은 정확한 GitHub Release asset bytes다. Ed25519 registry 인증, high-water
+//     연속성, owner manifest/report/artifact SHA-256을 모두 통과한 뒤 선언 entrypoint를 쓴다.
+//     git clone, branch, latest, package registry fallback, 상대 토폴로지 추측은 설치 계약이 아니다.
+// P5. dependency는 선택한 원본 registry 안에서만 전이적으로 해소한다. 다른 registry의
+//     같은 id로 조용히 fallback하지 않으며, 검증 실패를 다른 source로 가리지 않는다.
 
 // 계약 id(C3 L2 계약-핀) 문법 — 단일진실은 contracts.ts(CONTRACT_ID_RE·validateImplements).
-import { CONTRACT_ID_RE, validateConsumes, validateImplements } from "./contracts.js";
+import {
+  SIDECAR_CONTRACT_ID_RE,
+  type ContractProviderRef,
+  type ContractRequirement,
+  parseContractRequirement,
+  validateConsumes,
+  validateImplements,
+} from "./contracts.js";
 export * from "./contracts.js";
 // plugin service(제3 형태) 선언 축 — 단일진실은 service.ts(규범 docs/PLUGIN-SERVICE.md).
 import {
@@ -59,6 +66,28 @@ export * from "./service.js";
 // semver 비교 유틸 — 단일진실은 semver.ts(공개 API 는 여기서 재수출).
 import { SEMVER_RE } from "./semver.js";
 export * from "./semver.js";
+import { UNIT_ID_RE, UNIT_SPEC_BY_KIND, isUnitDependencyRange } from "./unit.js";
+export * from "./unit.js";
+export * from "./release.js";
+export * from "./conformanceWire.js";
+export * from "./pluginRuntime.js";
+import {
+  DEFAULT_PLUGIN_RUNTIME_POLICY,
+  parsePluginRuntimePolicy,
+  type PluginRuntimePolicy,
+} from "./pluginRuntime.js";
+import {
+  type ContributedHeaderAction,
+  type ContributedOverlay,
+  type ContributedStatusItem,
+  parseUiSurfaces,
+} from "./uiSurfaces.js";
+export type {
+  ContributedHeaderAction,
+  ContributedOverlay,
+  ContributedStatusItem,
+  OverlayScope,
+} from "./uiSurfaces.js";
 // 내부 검증 유틸(비공개) — spec.ts·service.ts 공용.
 import {
   checkDuplicates,
@@ -71,74 +100,21 @@ export * from "./transparency.js";
 // §1 권한 — 권한 어휘·동의 고지문의 단일진실은 permissions.ts.
 import { PERMISSIONS, type PluginPermission } from "./permissions.js";
 export * from "./permissions.js";
+// 서명된 다중 registry 설치 색인 — unit 고유 manifest/docs는 복제하지 않는 공개 wire 계약.
+export * from "./registry.js";
 // 크롬 표준 게이트(호스트 크롬 토큰·entry 정적 스캔) — 단일진실은 hostChrome.ts.
 export * from "./hostChrome.js";
+import {
+  type LocalizedText,
+  normalizeText,
+  validateLocalizedText,
+} from "./localizedText.js";
+export { resolveText } from "./localizedText.js";
+export type { LocalizedText } from "./localizedText.js";
 
 // ── §1 권한(이관) ─────────────────────────────────────────────────────────────
 // 권한 어휘(PluginPermission·PERMISSIONS)와 동의 고지문(PERMISSION_INFO)은 permissions.ts 가
 // 단일진실이다 — 상단 export * 가 그대로 노출한다.
-
-// ── §3.5 플러그인 텍스트 다국어 ──────────────────────────────────────────────
-// 텍스트 소유권: 호스트 화면 텍스트 = 호스트 i18n, 플러그인 텍스트 = 플러그인
-// 소유. 매니페스트의 사용자-노출 문자열(name/description/기여 title/프로그램
-// path)은 단일 문자열 또는 언어 맵 — 호스트가 현재 언어로 resolve 한다.
-// 뷰 내부 텍스트는 플러그인 코드 소유 — 호스트는 app.locale 과 locale.changed
-// 이벤트(권한 불요 컨텍스트)만 제공한다.
-
-export type LocalizedText = string | Record<string, string>;
-
-const LANG_KEY_RE = /^[a-z]{2}(-[A-Za-z0-9]{2,8})*$/;
-
-// 현재 언어로 resolve — 정확 일치 없으면 선언된 첫 값 폴백(언어 누락이 표시
-// 공백이 되지 않게). string 단일형은 그대로.
-export function resolveText(t: LocalizedText, lang: string): string {
-  if (typeof t === "string") return t;
-  if (t[lang] !== undefined) return t[lang];
-  const first = Object.values(t)[0];
-  return first ?? "";
-}
-
-function validateLocalizedText(
-  v: unknown,
-  label: string,
-  errors: string[],
-): v is LocalizedText {
-  if (typeof v === "string") {
-    if (!v.trim()) {
-      errors.push(`${label}: 비공백 문자열 필수`);
-      return false;
-    }
-    return true;
-  }
-  if (!isRecord(v)) {
-    errors.push(`${label}: 문자열 또는 언어 맵({ko: …, en: …})이어야 함`);
-    return false;
-  }
-  const entries = Object.entries(v);
-  if (entries.length === 0) {
-    errors.push(`${label}: 언어 맵은 최소 1개 언어 필요`);
-    return false;
-  }
-  for (const [k, val] of entries) {
-    if (!LANG_KEY_RE.test(k)) {
-      errors.push(`${label}: 언어 키 형식 위반("${k}" — 예: ko, en, zh-Hans)`);
-      return false;
-    }
-    if (typeof val !== "string" || !val.trim()) {
-      errors.push(`${label}.${k}: 비공백 문자열 필수`);
-      return false;
-    }
-  }
-  return true;
-}
-
-// 정규화(trim) — string 은 trim, 맵은 값 trim.
-function normalizeText(t: LocalizedText): LocalizedText {
-  if (typeof t === "string") return t.trim();
-  return Object.fromEntries(
-    Object.entries(t).map(([k, v]) => [k, v.trim()]),
-  );
-}
 
 // ── §2 뷰 배치 ───────────────────────────────────────────────────────────────
 // 뷰 구현(provider)과 배치는 직교(§0-6). placements = 지원 배치, 기본 우측 사이드바.
@@ -180,7 +156,7 @@ export interface ContributedCommand extends ServiceCommandFields {
   name: string; // 등록명은 plugin.<pluginId>.<name> — 선언 외 등록은 거부됨
   title: LocalizedText;
   // 위험 분류(설치·동의 시점 가시성). "destructive"=닫기/제거, "inject"=term.send/browser.eval 류.
-  // 매니페스트 선언이 권위 — 런타임 register({danger}) 가 불일치하면 거부된다(api.ts). 동의 요약이 노출.
+  // 매니페스트 선언이 권위 — runtime module의 commands map과 exact-match하며 동의 요약이 노출된다.
   danger?: "destructive" | "inject";
   // bind:"service" 커맨드는 스펙 전문(description/params/returns/triggers)을 매니페스트
   // 데이터로 선언한다(PS3 — ServiceCommandFields). JS 커맨드의 스펙 데이터 선언은 거부된다.
@@ -192,8 +168,8 @@ export interface ContributedIconSet {
 }
 
 // 파일 뷰어 — 파일을 콘텐츠로 열 때 확장자로 라우팅되는 렌더러(에디터=코드/텍스트, 미디어=이미지/영상…).
-// 엔진 중립(A13): 코어는 매칭·호스팅만, 렌더 엔진(CodeMirror/Monaco/…)은 플러그인 소유. provider 는
-// 런타임 app.ui.registerFileViewer 로 바인딩(선언 외 거부 §0-3).
+// 엔진 중립(A13): 코어는 매칭·호스팅만, 렌더 엔진(CodeMirror/Monaco/…)은 플러그인 소유.
+// runtime module의 fileViewers map이 선언 id와 exact-match한다(선언 외/누락 모두 거부 §0-3).
 export interface ContributedFileViewer {
   id: string; // 플러그인 내 고유. 전역 키는 "<pluginId>.<id>"
   extensions: string[]; // 처리할 확장자(점 없이). "*" = 폴백(더 구체적 매칭이 없을 때)
@@ -253,7 +229,7 @@ export interface ContributedProgram {
   // 뷰를 계약으로 참조(viewPlugin 의 계약 대안, C3 L2) — 플러그인 id 를 핀하지 않고 계약 id 로
   // 구현체를 발견한다(구현체 무차별). 코어가 사용자 설정으로 구현체 하나를 골라 그 플러그인의
   // view(위 view id, 관례 content)를 연다. viewPlugin(name-pin)과 상호배타 — 둘 다 선언 금지.
-  viewContract?: string;
+  viewContract?: ContractRequirement;
   // 연 뷰에 흘려보낼 자동 실행 명령(에이전트 프로그램: 터미널 뷰가 마운트 시 PTY 로 1회 실행).
   // 뷰 종류에 무관한 일반 채널(PluginViewContext.command) — 터미널 뷰만 이를 자동 실행한다.
   command?: string;
@@ -272,7 +248,7 @@ export function programPathSegments(path: string): string[] {
 
 // ── §3 매니페스트 ────────────────────────────────────────────────────────────
 
-export const SPEC_VERSION = "soksak-spec-plugin@1";
+export const SPEC_VERSION = UNIT_SPEC_BY_KIND.plugin;
 export const DEFAULT_ENTRY = "main.js";
 
 // 외부 CLI/라이브러리 종속성 — 플러그인이 process 로 실행하는 외부 도구(npm 글로벌 CLI 등).
@@ -293,19 +269,11 @@ export type ReachStrategy =
 // 외부 런타임 의존성 = 4-tuple: identity(name·bin) + observe(작동 관찰) + accept(수용 술어) + reach(공급).
 // observe/accept/reach 는 선택 — 미선언이면 레거시 동작(존재=수용, install=공급). reconcile 엔진(M3)이 실행.
 // 사이드카(engine 모델) 의존 선언 — 플러그인이 열 공유 네이티브 모듈. name 은 사이드카 이름
-// (soksak-sidecar-<name> 의 <name>), interface 는 계약 id(soksak-spec-sidecar-<domain>@<major>).
+// (soksak-sidecar-<name> 의 <name>), interface 는 계약 요구 `{ id, range }`.
 // 로드 시 바이너리 자기보고(soksak_sidecar_abi)와 대조 — 불일치는 거부(선언≡실물). 정본 docs/SIDECARS.md.
 export interface SidecarDep {
   name: string; // ^[a-z0-9][a-z0-9-]*$
-  interface: string; // 계약 id (예: "soksak-spec-sidecar-browser@1")
-  // 공급(선택) — 미설치 시 sha256 핀 아카이브(dist tar.gz)를 받아 ~/.soksak/sidecars/에 설치.
-  // fetch 전용(사이드카는 command/vendor 비적용). 미선언이면 dev 스테이징(make) 전제.
-  reach?: {
-    fetch: {
-      url: Partial<Record<ProgramPlatform, string>>;
-      sha256: Partial<Record<ProgramPlatform, string>>;
-    };
-  };
+  interface: ContractRequirement;
 }
 
 export interface LibraryDep {
@@ -351,9 +319,6 @@ export interface PluginManifest {
   version: string; // semver(major.minor.patch)
   description: LocalizedText;
   author?: string;
-  // 이 플러그인의 git 레포(설치 source). 공식 레지스트리 생성이 추출하는 필드 — 저자가 자기
-  // 레포를 명시한다. 임의 git URL(github/gitlab/self-host 다). plugin.install 이 이걸로 clone.
-  repo?: string;
   // 파괴적 id 개명 대비 — 이전 plugin id. 데이터 ns=pluginId 라 개명하면 옛 이력이 새 id 에서
   // 불가시하다. 이걸 선언하면 코어 로더가 활성화 시 옛 ns 의 데이터를 새 id 로 1회 이관한다
   // (멱등, 충돌 시 명시 에러). 값은 plugin id 문법(^[a-z0-9][a-z0-9-]*$). 범용 — 코어는 특정
@@ -362,6 +327,9 @@ export interface PluginManifest {
   // 파싱 시 기본 main.js 로 채움. 디렉토리 내부 상대경로만. null = entry 없는 순수 계약
   // 플러그인(PS4 — service 선언 ∧ 전 커맨드 bind:"service" ∧ 코드-필요 기여 0 에서만 합법).
   entry: string | null;
+  // Opaque frame 바깥으로 확장하는 동작은 코드 냄새로 추측하지 않고 명시적으로 선언한다.
+  // local srcdoc/data/blob iframe은 기본 허용; remote iframe·navigation·WebRTC만 이 정책이 연다.
+  runtime: PluginRuntimePolicy;
   minAppVersion?: string;
   template?: boolean; // true = 개발 템플릿(읽기 전용). 활성화 대상이 아니다 — 목록·상세만 노출하고 토글을 주지 않는다.
   // 플러그인↔플러그인 의존(라이브러리 플러그인). pluginId → semver 범위(예: "^0.1.0").
@@ -375,22 +343,25 @@ export interface PluginManifest {
   // plugin service 선언(제3 실행 형태 — 규범 docs/PLUGIN-SERVICE.md). sidecar 는 sidecars[]
   // 의 상주 바이너리 참조, interface 는 와이어 계약 id(PS5·PS6). "service" 권한 필수.
   service?: ServiceDecl;
-  // 이 플러그인이 구현하는 계약 선언(C3 L2 계약-핀) — 각 항목은 계약 id soksak-spec-<kind>-<domain>@<major>.
+  // 이 플러그인이 구현하는 계약 선언(C3 L2 계약-핀) — 각 항목은 exact `{ id, version }` provider.
   // 선언 = 발견 대상: 소비자는 계약 id 로만 발견한다(구현체 무차별). 구현 pluginId 를 핀하지
   // 마라(L1 이름-핀 — 신규 결합 금지). 판올림은 major 별 id — @2 는 @1 을 대체하지 않는다(C4).
   // 문법·의미 정본 = contracts.ts + NAMING §8.
-  implements?: string[];
+  implements?: ContractProviderRef[];
   // 이 플러그인이 부를 계약 선언(C3 L2 계약-핀의 소비자 축). implements 의 대칭 — 선언하는 것은
   // 계약이지 구현체가 아니다. 코어의 cross-plugin 호출 경계가 이것으로 강제된다: 계약을 선언하면
   // 그 계약의 구현체는 누구든 부를 수 있고(구현체 무차별), 밖은 거부된다. dependencies 로 구현체
   // id 를 핀하는 것이 L1 이름-핀이고, 신규 결합에 금지다.
-  consumes?: string[];
+  consumes?: ContractRequirement[];
   // 사용자 구성 설정 스키마(선택). 글로벌+프로젝트별 오버라이드. 무해(선언형) → 권한 불요.
   configuration?: ConfigSetting[];
   permissions: PluginPermission[];
   contributes: {
     views: ContributedView[]; // "ui" 권한 필수
     commands: ContributedCommand[]; // "commands" 권한 필수
+    overlays: ContributedOverlay[]; // scope별 ui:overlay:* 권한 필수, 정적 provider 바인딩
+    headerActions: ContributedHeaderAction[]; // ui:titlebar + commands, host-declarative command binding
+    statusItems: ContributedStatusItem[]; // ui:statusbar + commands, host-declarative command binding
     iconSets: ContributedIconSet[]; // "ui" 권한 필수
     fileViewers: ContributedFileViewer[]; // "ui" 권한 필수 — 확장자별 콘텐츠 뷰어(A13 엔진 중립)
     programs: ContributedProgram[]; // "programs" 권한 필수
@@ -485,22 +456,17 @@ export function validateSettingValue(
   }
 }
 
-export const PLUGIN_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
+export const PLUGIN_ID_RE = UNIT_ID_RE;
 const VIEW_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 // 뷰 상태 코드(ViewStatus.code — 기계 식별자) — id 와 같은 lexical 계열.
 const STATUS_CODE_RE = /^[a-z0-9][a-z0-9-]*$/;
 // 사이드카 이름(soksak-sidecar-<name> 의 <name>) — 경로 조립에 쓰이므로 traversal 안전 형식.
 const SIDECAR_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
-// 사이드카 interface 도 계약 id 다(soksak-spec-sidecar-<domain>@<major>) — 별도 정규식 없이
+// 사이드카 interface 도 계약 요구 `{ id, range }`다 — 별도 정규식 없이
 // CONTRACT_ID_RE 로 검증한다. wire 축이 하나의 계약 id 문법으로 수렴(NAMING §8).
 const COMMAND_NAME_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 const EXT_RE = /^[a-z0-9]+$/;
 // SEMVER_RE·semverGte·semverSatisfies 는 semver.ts 로 이관(상단 재수출) — 단일진실 이동.
-// 의존 범위(npm 류 부분집합): * | x.y.z | ^x.y.z | ~x.y.z | >=x.y.z. 락인 0(표준 의미론).
-const SEMVER_RANGE_RE = /^(?:\*|[\^~]?\d+\.\d+\.\d+|>=\d+\.\d+\.\d+)$/;
-// git URL: 스킴형(https/http/git/ssh ://…) 또는 scp-유사(git@host:path). clone 가능한 형태만.
-const GIT_URL_RE = /^(?:https?|git|ssh):\/\/\S+|^[\w.-]+@[\w.-]+:\S+/;
-
 // ── §4 검증 ──────────────────────────────────────────────────────────────────
 // isRecord·isNonEmptyString·checkKnownKeys·checkDuplicates 는 util.ts 로 이관(내부 공용).
 
@@ -626,9 +592,9 @@ export function parseManifest(
       "version",
       "description",
       "author",
-      "repo",
       "renamedFrom",
       "entry",
+      "runtime",
       "minAppVersion",
       "template",
       "dependencies",
@@ -661,10 +627,6 @@ export function parseManifest(
   if (raw.author !== undefined && !isNonEmptyString(raw.author)) {
     errors.push("author: 문자열이어야 함");
   }
-  // repo: git URL(스킴 또는 scp-유사 git@host:path). 빈 문자열·비URL 거부.
-  if (raw.repo !== undefined && (!isNonEmptyString(raw.repo) || !GIT_URL_RE.test(raw.repo))) {
-    errors.push("repo: git URL(https://… 또는 git@…) 이어야 함");
-  }
   // renamedFrom: 이전 plugin id(개명 데이터 ns 이관용). plugin id 문법·자기 참조 금지.
   if (raw.renamedFrom !== undefined) {
     if (!isNonEmptyString(raw.renamedFrom) || !PLUGIN_ID_RE.test(raw.renamedFrom)) {
@@ -683,7 +645,9 @@ export function parseManifest(
     errors.push("template: true/false 여야 함");
   }
 
-  // dependencies: 플러그인↔플러그인 의존(pluginId → semver 범위). 선택. 자기 의존 금지·빈 객체 무해.
+  // dependencies: 런타임 플러그인 관계/호출 권한(pluginId → semver 범위). locator나 설치 source가
+  // 아니다. owner release의 kind:plugin dependency projection과 정확히 같아야 하고, 설치 closure는
+  // release manifest만 소유한다. 선택. 자기 의존 금지·빈 객체 무해.
   const dependencies: Record<string, string> = {};
   if (raw.dependencies !== undefined) {
     if (!isRecord(raw.dependencies)) {
@@ -694,12 +658,12 @@ export function parseManifest(
           errors.push(`dependencies: 키 "${depId}" 는 플러그인 id 형식(^[a-z0-9][a-z0-9-]*$)`);
         } else if (isNonEmptyString(raw.id) && depId === raw.id) {
           errors.push(`dependencies: 자기 자신("${depId}") 의존 금지`);
-        } else if (!isNonEmptyString(range) || !SEMVER_RANGE_RE.test((range as string).trim())) {
+        } else if (typeof range !== "string" || !isUnitDependencyRange(range)) {
           errors.push(
-            `dependencies["${depId}"]: semver 범위(예: ^0.1.0, ~1.2.0, >=1.0.0, 1.2.3, *)`,
+            `dependencies["${depId}"]: 공통 unit semver 범위(예: ^0.1.0, >=1.0.0 <2.0.0, 1.2.3, *)`,
           );
         } else {
-          dependencies[depId] = (range as string).trim();
+          dependencies[depId] = range;
         }
       }
     }
@@ -816,34 +780,19 @@ export function parseManifest(
           errors.push(`sidecars[${i}]: 객체여야 함`);
           return;
         }
-        checkKnownKeys(item, ["name", "interface", "reach"], `sidecars[${i}]`, errors);
+        checkKnownKeys(item, ["name", "interface"], `sidecars[${i}]`, errors);
         if (!isNonEmptyString(item.name) || !SIDECAR_NAME_RE.test(item.name)) {
           errors.push(`sidecars[${i}].name: ^[a-z0-9][a-z0-9-]*$ 필수`);
           return;
         }
-        if (!isNonEmptyString(item.interface) || !CONTRACT_ID_RE.test(item.interface.trim())) {
-          errors.push(`sidecars[${i}].interface: 계약 id soksak-spec-sidecar-<domain>@<major> 필수(예: soksak-spec-sidecar-browser@1)`);
-          return;
-        }
-        const dep: SidecarDep = { name: item.name.trim(), interface: item.interface.trim() };
-        if (item.reach !== undefined) {
-          // 사이드카 공급은 fetch 전용 — command/vendor 는 라이브러리 축의 개념(사이드카 비적용).
-          if (
-            !isRecord(item.reach) ||
-            !("fetch" in item.reach) ||
-            Object.keys(item.reach).length !== 1 ||
-            !isRecord(item.reach.fetch) ||
-            validatePlatformMap(item.reach.fetch.url, `sidecars[${i}].reach.fetch.url`, errors) ||
-            validatePlatformMap(item.reach.fetch.sha256, `sidecars[${i}].reach.fetch.sha256`, errors)
-          ) {
-            if (!isRecord(item.reach) || !("fetch" in item.reach) || Object.keys(item.reach).length !== 1) {
-              errors.push(`sidecars[${i}].reach: { fetch: { url, sha256 } } 만 허용(fetch 전용)`);
-            }
-            return;
-          }
-          dep.reach = item.reach as SidecarDep["reach"];
-        }
-        sidecars.push(dep);
+        const interfaceRef = parseContractRequirement(
+          item.interface,
+          `sidecars[${i}].interface`,
+          errors,
+          SIDECAR_CONTRACT_ID_RE,
+        );
+        if (!interfaceRef) return;
+        sidecars.push({ name: item.name.trim(), interface: interfaceRef });
       });
       checkDuplicates(sidecars.map((s) => s.name), "sidecars[].name", errors);
       // 사이드카는 두 모델로 소비된다(SIDECARS.md §1): engine 모델은 앱 프로세스에 dlopen
@@ -1004,6 +953,10 @@ export function parseManifest(
     }
   }
 
+  const runtimeResult = parsePluginRuntimePolicy(raw.runtime);
+  if (!runtimeResult.ok) errors.push(...runtimeResult.errors);
+  const runtime = runtimeResult.ok ? runtimeResult.value : DEFAULT_PLUGIN_RUNTIME_POLICY;
+
   // permissions: 필수 배열(빈 배열 허용 — 아무 API 도 안 쓰는 플러그인).
   const permissions: PluginPermission[] = [];
   if (!Array.isArray(raw.permissions)) {
@@ -1023,6 +976,9 @@ export function parseManifest(
   // contributes — 권한-기여 정합성: 기여가 요구하는 권한이 선언되어야 한다.
   let views: ContributedView[] = [];
   let commands: ContributedCommand[] = [];
+  let overlays: ContributedOverlay[] = [];
+  let headerActions: ContributedHeaderAction[] = [];
+  let statusItems: ContributedStatusItem[] = [];
   let iconSets: ContributedIconSet[] = [];
   let fileViewers: ContributedFileViewer[] = [];
   let nodes: ContributedNode[] = [];
@@ -1037,7 +993,10 @@ export function parseManifest(
       const c = raw.contributes;
       checkKnownKeys(
         c,
-        ["views", "commands", "iconSets", "fileViewers", "nodes", "programs", "events", "skill", "schedules"],
+        [
+          "views", "commands", "overlays", "headerActions", "statusItems", "iconSets",
+          "fileViewers", "nodes", "programs", "events", "skill", "schedules",
+        ],
         "contributes",
         errors,
       );
@@ -1192,6 +1151,16 @@ export function parseManifest(
       if (commands.length > 0 && !has("commands")) {
         errors.push('contributes.commands: "commands" 권한 선언 필요');
       }
+
+      ({ overlays, headerActions, statusItems } = parseUiSurfaces(
+        c,
+        {
+          commandNames: new Set(commands.map((command) => command.name)),
+          permissions,
+          text: { validate: validateLocalizedText, normalize: normalizeText },
+        },
+        errors,
+      ));
 
       iconSets = parseEntries(c.iconSets, {
         label: "contributes.iconSets",
@@ -1368,11 +1337,15 @@ export function parseManifest(
           }
           // viewContract(계약-핀 뷰 참조, C3 L2) — 선택, 계약 id 형식(NAMING §8). viewPlugin 은
           // 플러그인 id 를 핀(name-pin)하고 viewContract 는 계약으로 발견한다 — 둘은 상호배타다.
-          if (v.viewContract !== undefined && (!isNonEmptyString(v.viewContract) || !CONTRACT_ID_RE.test(v.viewContract.trim()))) {
-            errs.push(
-              `contributes.programs["${id}"].viewContract: 계약 id 형식(soksak-spec-<kind>-<domain>@<major>)`,
+          let viewContract: ContractRequirement | undefined;
+          if (v.viewContract !== undefined) {
+            const parsed = parseContractRequirement(
+              v.viewContract,
+              `contributes.programs["${id}"].viewContract`,
+              errs,
             );
-            return null;
+            if (!parsed) return null;
+            viewContract = parsed;
           }
           if (v.viewPlugin !== undefined && v.viewContract !== undefined) {
             errs.push(
@@ -1441,7 +1414,7 @@ export function parseManifest(
             view: (v.view as string).trim(),
             ...(path !== undefined ? { path } : {}),
             ...(v.viewPlugin !== undefined ? { viewPlugin: (v.viewPlugin as string).trim() } : {}),
-            ...(v.viewContract !== undefined ? { viewContract: (v.viewContract as string).trim() } : {}),
+            ...(viewContract !== undefined ? { viewContract } : {}),
             ...(v.command !== undefined ? { command: (v.command as string).trim() } : {}),
             ...(ensure !== undefined ? { ensure } : {}),
           };
@@ -1482,6 +1455,7 @@ export function parseManifest(
       schedules,
       codeBoundCounts: {
         views: views.length,
+        overlays: overlays.length,
         nodes: nodes.length,
         fileViewers: fileViewers.length,
         iconSets: iconSets.length,
@@ -1502,9 +1476,9 @@ export function parseManifest(
       version: (raw.version as string).trim(),
       description: normalizeText(raw.description as LocalizedText),
       author: raw.author !== undefined ? (raw.author as string).trim() : undefined,
-      ...(raw.repo !== undefined ? { repo: (raw.repo as string).trim() } : {}),
       ...(raw.renamedFrom !== undefined ? { renamedFrom: (raw.renamedFrom as string).trim() } : {}),
       entry,
+      runtime,
       minAppVersion:
         raw.minAppVersion !== undefined
           ? (raw.minAppVersion as string).trim()
@@ -1519,7 +1493,8 @@ export function parseManifest(
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
       contributes: {
-        views, commands, iconSets, fileViewers, nodes, programs, events,
+        views, commands, overlays, headerActions, statusItems,
+        iconSets, fileViewers, nodes, programs, events,
         ...(skill ? { skill } : {}),
         ...(schedules.length > 0 ? { schedules } : {}),
       },

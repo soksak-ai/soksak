@@ -1,0 +1,9 @@
+{
+  "spec": "soksak-spec-plugin@0.0.1",
+  "id": "weather-plugin",
+  "name": "Weather Plugin",
+  "version": "0.0.1",
+  "description": "Language-neutral owner fixture for plugin release conformance.",
+  "permissions": [],
+  "contributes": {}
+}

@@ -1,7 +1,11 @@
 // plugin service(제3 실행 형태) 선언 축 — 규범은 docs/PLUGIN-SERVICE.md(PS 조항).
 // 매니페스트 스키마의 단일 심판은 parseManifest(spec.ts) — 이 모듈은 그 판정의 service
 // 축(선언 파싱·PS 정합 규칙)이다. spec.ts 가 재수출한다.
-import { CONTRACT_ID_RE } from "./contracts.js";
+import {
+  SERVICE_CONTRACT_ID_RE,
+  type ContractRequirement,
+  parseContractRequirement,
+} from "./contracts.js";
 import {
   checkDuplicates,
   checkKnownKeys,
@@ -9,11 +13,14 @@ import {
   isRecord,
 } from "./util.js";
 
-// 코어가 말하는 plugin service 와이어 계약 v1(PS5·PS6). Rust 측 단일진실은
+// 코어가 말하는 plugin service 와이어 계약(PS5·PS6). Rust 측 단일진실은
 // soksak-spec-service 크레이트 — 이 상수는 TS 표면 미러이며 교차언어 골든 테스트가
 // 동치를 봉인한다. 계약 id 는 "soksak-spec-" 로 시작해 플러그인 id(soksak-plugin-<name>)와
 // 절대 충돌하지 않는다(PS6 — C1 스캔이 코어 소스의 플러그인 id 토큰을 적발하나 계약 id 는 제외).
-export const SERVICE_INTERFACE = "soksak-spec-service@1";
+export const SERVICE_CONTRACT_REQUIREMENT: ContractRequirement = Object.freeze({
+  id: "soksak-spec-service",
+  range: "0.0.1",
+});
 
 // 커맨드 파라미터 스펙 — 코어 레지스트리 ParamSpec(src/commands/registry.ts)과 동형.
 // bind:"service" 커맨드는 스펙 전문을 매니페스트 데이터로 선언한다(PS3) — 프록시 등록이
@@ -57,7 +64,7 @@ export const SERVICE_COMMAND_KEYS = [
 // interface 는 와이어 계약 id, subscribe 는 코어가 브리지해 push 할 bus 토픽.
 export interface ServiceDecl {
   sidecar: string;
-  interface: string;
+  interface: ContractRequirement;
   subscribe: string[];
 }
 
@@ -120,12 +127,13 @@ export function parseServiceDecl(
     errors.push("service.sidecar: 사이드카 이름(^[a-z0-9][a-z0-9-]*$) 필수");
     bad = true;
   }
-  if (!isNonEmptyString(raw.interface) || !CONTRACT_ID_RE.test(raw.interface.trim())) {
-    errors.push(
-      `service.interface: 계약 id soksak-spec-<kind>-<domain>@<major> 필수(예: ${SERVICE_INTERFACE} — NAMING §8·PS6)`,
-    );
-    bad = true;
-  }
+  const interfaceRef = parseContractRequirement(
+    raw.interface,
+    "service.interface",
+    errors,
+    SERVICE_CONTRACT_ID_RE,
+  );
+  if (!interfaceRef) bad = true;
   const subscribe: string[] = [];
   if (raw.subscribe !== undefined) {
     if (
@@ -142,7 +150,7 @@ export function parseServiceDecl(
   if (bad) return undefined;
   return {
     sidecar: (raw.sidecar as string).trim(),
-    interface: (raw.interface as string).trim(),
+    interface: interfaceRef!,
     subscribe,
   };
 }
@@ -330,7 +338,8 @@ function parseTrigger(raw: unknown, label: string, errors: string[]): ScheduleTr
 // PS 정합 규칙(교차 검증) — parseManifest 가 contributes 파싱 뒤 1회 호출한다.
 // PS3: bind:"service" ⇔ service 선언 + 서비스는 커맨드를 소유(≥1).
 // PS4: entry:null ⇒ service 선언 ∧ 전 커맨드 bind:"service" ∧ 코드-필요 기여 0
-//      (views·nodes·fileViewers·iconSets — 런타임 provider 바인딩이 필요한 축).
+//      (views·overlays·nodes·fileViewers·iconSets — 런타임 provider 바인딩이 필요한 축).
+//      headerActions/statusItems는 host-declarative command binding이라 service command만으로 합법.
 // PS9: service.sidecar 는 sidecars[] 참조(배급·스테이징은 사이드카 법 상속).
 // PS14: schedules ⇒ service(수명 소유자), command 는 선언 참조.
 export function validateServiceRules(
@@ -338,7 +347,7 @@ export function validateServiceRules(
     service: ServiceDecl | undefined;
     commands: ServiceCommandView[];
     schedules: ContributedSchedule[];
-    codeBoundCounts: Record<string, number>; // views/nodes/fileViewers/iconSets → 개수
+    codeBoundCounts: Record<string, number>; // views/overlays/nodes/fileViewers/iconSets → 개수
     sidecarNames: string[];
     permissions: readonly string[];
     entryIsNull: boolean;

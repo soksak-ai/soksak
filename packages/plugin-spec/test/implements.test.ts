@@ -1,144 +1,95 @@
-// implements(C3 L2 계약-핀) 검증 매트릭스 — 계약 id 문법 soksak-spec-<kind>-<domain>@<major> 를 all-or-nothing 으로 고정.
-// 소스(src/spec.ts)가 단일진실 — dist 는 산출물이라 테스트는 소스를 직접 겨눈다.
 import { describe, expect, it } from "vitest";
-import { CONTRACT_ID_RE, parseManifest, SPEC_VERSION } from "../src/spec";
+import {
+  CONTRACT_ID_RE,
+  parseManifest,
+  SPEC_VERSION,
+} from "../src/spec";
 
-// 유효한 최소 매니페스트 — 각 테스트가 여기서 변형해 깨뜨린다(코어 spec.test.ts 관례 동형).
+const PROVIDER = { id: "soksak-spec-plugin-fixture-tasks", version: "0.0.1" };
+const REQUIREMENT = {
+  id: "soksak-spec-plugin-fixture-tasks",
+  range: ">=0.0.1 <1.0.0",
+};
+
 function base(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     spec: SPEC_VERSION,
     id: "demo",
-    name: "데모",
-    version: "1.0.0",
-    description: "테스트용",
+    name: "Demo",
+    version: "0.0.1",
+    description: "contract fixture",
     permissions: [],
     ...overrides,
   };
 }
 
-function errorsOf(raw: unknown, dirName = "demo"): string[] {
-  return parseManifest(raw, dirName).validation.errors;
+function errorsOf(raw: unknown): string[] {
+  return parseManifest(raw, "demo").validation.errors;
 }
 
-describe("implements — 수용", () => {
-  it("계약 id 배열 통과 + manifest.implements 로 정규화", () => {
-    const { manifest, validation } = parseManifest(
-      base({
-        implements: ["soksak-spec-plugin-fixture-tasks@1", "soksak-spec-plugin-fixture-io@2"],
-      }),
-      "demo",
-    );
+describe("domain contract references", () => {
+  it("keeps the base id independent from provider versions", () => {
+    expect(CONTRACT_ID_RE.test(PROVIDER.id)).toBe(true);
+    expect(CONTRACT_ID_RE.test(`${PROVIDER.id}@${PROVIDER.version}`)).toBe(false);
+  });
+
+  it("accepts exact provider declarations and ranged consumer declarations", () => {
+    const { manifest, validation } = parseManifest(base({
+      implements: [PROVIDER],
+      consumes: [REQUIREMENT],
+    }), "demo");
     expect(validation).toEqual({ ok: true, errors: [], warnings: [] });
-    expect(manifest?.implements).toEqual([
-      "soksak-spec-plugin-fixture-tasks@1",
-      "soksak-spec-plugin-fixture-io@2",
-    ]);
+    expect(manifest?.implements).toEqual([PROVIDER]);
+    expect(manifest?.consumes).toEqual([REQUIREMENT]);
   });
 
-  it("미선언이면 manifest 에 implements 키가 없다(선택 필드 관례)", () => {
-    const { manifest, validation } = parseManifest(base(), "demo");
-    expect(validation.ok).toBe(true);
-    expect(manifest && "implements" in manifest).toBe(false);
+  it("does not accept a name@version string in either direction", () => {
+    expect(errorsOf(base({ implements: [`${PROVIDER.id}@0.0.1`] }))).not.toEqual([]);
+    expect(errorsOf(base({ consumes: [`${PROVIDER.id}@0.0.1`] }))).not.toEqual([]);
   });
 
-  it("빈 배열 = 선언 없음(sidecars/libraries 관례 동형 — 출력에서 생략)", () => {
-    const { manifest, validation } = parseManifest(base({ implements: [] }), "demo");
-    expect(validation.ok).toBe(true);
-    expect(manifest && "implements" in manifest).toBe(false);
-  });
-});
-
-describe("implements — 거부(계약 id 문법)", () => {
-  const grammarError = (errs: string[]) =>
-    errs.some((e) => e.includes("soksak-spec-<kind>-<domain>@<major>"));
-
-  it('"-spec" 마커 없는 이름 거부 — 구현체/엔진 이름은 계약 id 가 아니다', () => {
-    const errs = errorsOf(base({ implements: ["soksak-fixture-tasks@1"] }));
-    expect(errs.length).toBeGreaterThan(0);
-    expect(grammarError(errs)).toBe(true);
-  });
-
-  it("판(@major) 없는 이름 거부", () => {
-    const errs = errorsOf(base({ implements: ["soksak-fixture-tasks-spec"] }));
-    expect(grammarError(errs)).toBe(true);
+  it("requires provider version and consumer range with no shadow fields", () => {
+    for (const implementsValue of [
+      [{ id: PROVIDER.id }],
+      [{ ...PROVIDER, range: "*" }],
+      [{ ...PROVIDER, version: "0.0" }],
+    ]) {
+      expect(errorsOf(base({ implements: implementsValue }))).not.toEqual([]);
+    }
+    for (const consumesValue of [
+      [{ id: REQUIREMENT.id }],
+      [{ ...REQUIREMENT, version: "0.0.1" }],
+      [{ ...REQUIREMENT, range: "latest" }],
+    ]) {
+      expect(errorsOf(base({ consumes: consumesValue }))).not.toEqual([]);
+    }
   });
 
-  it("숫자 아닌 판 거부", () => {
-    const errs = errorsOf(base({ implements: ["soksak-spec-plugin-fixture-tasks@one"] }));
-    expect(grammarError(errs)).toBe(true);
-  });
-
-  it("선행 0 판 거부 — @01 별칭이 통과하면 정확-문자열 발견이 구현체를 놓친다", () => {
-    const errs = errorsOf(base({ implements: ["soksak-spec-plugin-fixture-tasks@01"] }));
-    expect(grammarError(errs)).toBe(true);
-  });
-
-  it("판 0 은 정규형이라 통과", () => {
-    const errs = errorsOf(base({ implements: ["soksak-spec-plugin-fixture-tasks@0"] }));
-    expect(errs).toEqual([]);
-  });
-
-  it("대문자 거부(소문자 문법)", () => {
-    const errs = errorsOf(base({ implements: ["Soksak-Fixture-Spec@1"] }));
-    expect(grammarError(errs)).toBe(true);
-  });
-
-  it("문자열 아닌 항목 거부", () => {
-    const errs = errorsOf(base({ implements: [1] }));
-    expect(grammarError(errs)).toBe(true);
-  });
-
-  it("배열 아닌 값 거부", () => {
-    const errs = errorsOf(base({ implements: "soksak-spec-plugin-fixture-tasks@1" }));
-    expect(errs.some((e) => e.startsWith("implements:"))).toBe(true);
-  });
-
-  it("중복 선언 거부", () => {
-    const errs = errorsOf(
-      base({
-        implements: ["soksak-spec-plugin-fixture-tasks@1", "soksak-spec-plugin-fixture-tasks@1"],
-      }),
-    );
-    expect(errs.some((e) => e.includes("중복"))).toBe(true);
+  it("rejects duplicate provider ids and duplicate consumer ids", () => {
+    expect(errorsOf(base({ implements: [PROVIDER, { ...PROVIDER }] })).some((e) => e.includes("duplicate"))).toBe(true);
+    expect(errorsOf(base({ consumes: [REQUIREMENT, { ...REQUIREMENT }] })).some((e) => e.includes("duplicate"))).toBe(true);
   });
 });
 
-describe("programs.viewContract — L2 계약-핀(계약 id 문법, implements 와 동일 규율)", () => {
-  // programs 기여는 "programs" 권한 필수 + command-surface(programs>0 이면 commands>0).
+describe("programs.viewContract", () => {
   function withProgram(viewContract: unknown): Record<string, unknown> {
-    const program: Record<string, unknown> = { id: "agent", title: "Agent", kind: "view", view: "content" };
-    if (viewContract !== undefined) program.viewContract = viewContract;
     return base({
       permissions: ["programs", "commands"],
-      contributes: { commands: [{ name: "run", title: "Run" }], programs: [program] },
+      contributes: {
+        commands: [{ name: "run", title: "Run" }],
+        programs: [{ id: "agent", title: "Agent", kind: "view", view: "content", viewContract }],
+      },
     });
   }
 
-  it("계약 id viewContract 통과 + manifest 로 정규화", () => {
-    const { manifest, validation } = parseManifest(withProgram("soksak-spec-plugin-terminal@1"), "demo");
+  it("is a ranged consumer declaration", () => {
+    const { manifest, validation } = parseManifest(withProgram(REQUIREMENT), "demo");
     expect(validation.ok).toBe(true);
-    expect(manifest?.contributes.programs[0].viewContract).toBe("soksak-spec-plugin-terminal@1");
+    expect(manifest?.contributes.programs[0].viewContract).toEqual(REQUIREMENT);
   });
 
-  it("viewContract 미선언이면 프로그램에 키가 없다(선택 필드 관례)", () => {
-    const { manifest } = parseManifest(withProgram(undefined), "demo");
-    const p = manifest?.contributes.programs[0];
-    expect(p && "viewContract" in p).toBe(false);
-  });
-
-  it("계약 id 아닌 viewContract 거부 — 구현체/엔진 이름은 계약 id 가 아니다", () => {
-    const errs = parseManifest(withProgram("not-a-contract"), "demo").validation.errors;
-    expect(errs.some((e) => e.includes("viewContract") && e.includes("계약 id 형식"))).toBe(true);
-  });
-});
-
-describe("CONTRACT_ID_RE — 문법 단일진실 export", () => {
-  it("계약 id 문법과 일치(anchored)", () => {
-    expect(CONTRACT_ID_RE.test("soksak-spec-plugin-fixture-tasks@1")).toBe(true);
-    expect(CONTRACT_ID_RE.test("soksak-spec-plugin-x@12")).toBe(true); // 판 여러자리
-    expect(CONTRACT_ID_RE.test("soksak-fixture-tasks@1")).toBe(false); // soksak-spec- 접두 없음
-    expect(CONTRACT_ID_RE.test("soksak-spec-plugin-fixture-tasks")).toBe(false); // 판 없음
-    expect(CONTRACT_ID_RE.test(" soksak-spec-plugin-fixture-tasks@1")).toBe(false); // 공백
-    expect(CONTRACT_ID_RE.test("soksak-spec-plugin-fixture-tasks@1 ")).toBe(false);
+  it("rejects exact name@version and provider-shaped objects", () => {
+    expect(errorsOf(withProgram(`${REQUIREMENT.id}@0.0.1`))).not.toEqual([]);
+    expect(errorsOf(withProgram(PROVIDER))).not.toEqual([]);
   });
 });

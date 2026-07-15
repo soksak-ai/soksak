@@ -1,0 +1,24 @@
+{
+  "spec": "soksak-spec-release@0.0.1",
+  "kind": "kit",
+  "id": "terminal-common",
+  "version": "0.0.1",
+  "source": {
+    "repository": "https://github.com/example/terminal-common",
+    "commit": "cccccccccccccccccccccccccccccccccccccccc"
+  },
+  "releaseTag": "terminal-common-v0.0.1",
+  "dependencies": [],
+  "artifacts": [
+    {
+      "target": "any",
+      "url": "https://github.com/example/terminal-common/releases/download/terminal-common-v0.0.1/terminal-common-0.0.1.tgz",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+      "format": "tgz",
+      "entrypoint": {
+        "kind": "kit",
+        "packageManifest": "package.json"
+      }
+    }
+  ]
+}

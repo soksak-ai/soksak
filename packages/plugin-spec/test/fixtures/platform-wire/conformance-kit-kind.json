@@ -1,0 +1,21 @@
+{
+  "spec": "soksak-spec-conformance@0.0.1",
+  "subject": {
+    "kind": "kit",
+    "id": "terminal-common",
+    "version": "0.0.1",
+    "manifestSha256": "e1677008286d7cedfbf32cab03a85b3c32c6e798b8c0625da5ab4c5ba4281f72"
+  },
+  "contract": "soksak-spec-kit@0.0.1",
+  "result": "passed",
+  "validator": {
+    "name": "soksak-conformance",
+    "version": "0.0.1"
+  },
+  "artifacts": [
+    {
+      "target": "any",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  ]
+}

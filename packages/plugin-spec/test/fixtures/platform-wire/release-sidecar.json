@@ -1,0 +1,64 @@
+{
+  "spec": "soksak-spec-release@0.0.1",
+  "kind": "sidecar",
+  "id": "weather-sidecar",
+  "version": "0.0.1",
+  "source": {
+    "repository": "https://github.com/example/weather-sidecar",
+    "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "releaseTag": "weather-sidecar-v0.0.1",
+  "dependencies": [],
+  "artifacts": [
+    {
+      "target": "aarch64-apple-darwin",
+      "url": "https://github.com/example/weather-sidecar/releases/download/weather-sidecar-v0.0.1/weather-sidecar-aarch64-apple-darwin.tar.gz",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "format": "tar.gz",
+      "entrypoint": {
+        "kind": "sidecar",
+        "interface": {
+          "id": "soksak-spec-sidecar-weather",
+          "version": "0.0.1"
+        },
+        "process": [
+          {
+            "name": "weather-service",
+            "path": "bin/weather-service"
+          }
+        ],
+        "library": [
+          {
+            "name": "weather-engine",
+            "path": "lib/libweather_engine.dylib"
+          }
+        ]
+      }
+    },
+    {
+      "target": "x86_64-unknown-linux-gnu",
+      "url": "https://github.com/example/weather-sidecar/releases/download/weather-sidecar-v0.0.1/weather-sidecar-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "format": "tar.gz",
+      "entrypoint": {
+        "kind": "sidecar",
+        "interface": {
+          "id": "soksak-spec-sidecar-weather",
+          "version": "0.0.1"
+        },
+        "process": [
+          {
+            "name": "weather-service",
+            "path": "bin/weather-service"
+          }
+        ],
+        "library": [
+          {
+            "name": "weather-engine",
+            "path": "lib/libweather_engine.so"
+          }
+        ]
+      }
+    }
+  ]
+}

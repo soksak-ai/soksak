@@ -1,0 +1,25 @@
+{
+  "spec": "soksak-spec-conformance@0.0.1",
+  "subject": {
+    "kind": "sidecar",
+    "id": "weather-sidecar",
+    "version": "0.0.1",
+    "manifestSha256": "cb85e8b0e048dafad6464b1b56a84a733233e4a86b2b729f549b85a37998947b"
+  },
+  "contract": "soksak-spec-sidecar@0.0.1",
+  "result": "passed",
+  "validator": {
+    "name": "soksak-conformance",
+    "version": "0.0.1"
+  },
+  "artifacts": [
+    {
+      "target": "aarch64-apple-darwin",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+    },
+    {
+      "target": "x86_64-unknown-linux-gnu",
+      "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  ]
+}

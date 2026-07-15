@@ -1,5 +1,6 @@
 // §1 권한 — 플러그인 권한 어휘와 동의 화면 고지문의 단일진실.
-// 권한은 API 표면 게이트(미선언 권한의 API 는 제공되지 않음)이지 격리가 아니다(§0-2 전체신뢰).
+// 권한은 opaque sandbox와 native host 사이 capability broker의 허용 목록이다. 매니페스트
+// 동의와 런타임 principal 검증을 모두 통과한 명시 operation만 호스트가 실행한다.
 // PERMISSION_INFO 는 동의 화면용 정직한 고지 — caution = 강조 표시 대상.
 
 export type PluginPermission =
@@ -33,7 +34,7 @@ export type PluginPermission =
   | "terminal" // 터미널 명령 생명주기 관찰(command.started/finished — 명령라인·cwd)
   | "terminal:read" // 터미널 화면 버퍼 내용 읽기·변경 구독(명령 메타보다 강함 — 전 화면 텍스트)
   | "terminal:write" // 터미널 PTY 에 입력 전송(키 주입 — 관찰보다 강함, 별도 권한)
-  | "network"; // fetch 사용 고지 — 기술적 강제 불가(§0-2 전체신뢰), 동의 화면 고지용
+  | "network"; // sandbox 직접 네트워크는 차단; brokered network operation만 허용
 
 export const PERMISSIONS: readonly PluginPermission[] = [
   "ui",
@@ -76,23 +77,23 @@ export const PERMISSION_INFO: Record<
   },
   "ui:statusbar": {
     label: "상태바 항목",
-    detail: "상태바에 항목(버튼)을 추가합니다(크롬 영역).",
+    detail: "상태바에 정적 선언 항목을 추가하고, 클릭하면 선언된 자기 명령을 실행합니다(크롬 영역).",
   },
   "ui:titlebar": {
     label: "헤더 아이콘",
     detail:
-      "타이틀바 우측 컨트롤(사이드바·다크모드·설정) 옆에 토글 아이콘을 추가합니다(크롬 영역).",
+      "타이틀바 우측에 정적 선언 액션을 추가하고, 클릭하면 선언된 자기 명령을 실행합니다(크롬 영역).",
   },
   "ui:overlay:pane": {
     label: "패널 오버레이",
     detail:
-      "콘텐츠 패널 하나를 덮는 오버레이를 띄웁니다(그 패널의 본문만 가림 — 다른 패널·크롬은 그대로).",
+      "콘텐츠 패널 하나를 덮는 격리 오버레이를 제공할 수 있습니다. 처음에는 숨김이며 표시·입력 허용은 호스트가 제어합니다.",
     caution: true,
   },
   "ui:overlay:screen": {
     label: "전체화면 레이어",
     detail:
-      "앱 전체를 덮는 레이어를 띄웁니다(크롬·모든 패널 위 — 가장 침습적). 마스코트 효과 등.",
+      "앱 전체를 덮는 격리 레이어를 제공할 수 있습니다. 처음에는 숨김이며 표시·입력 허용은 호스트가 제어합니다(가장 침습적).",
     caution: true,
   },
   programs: {
@@ -214,7 +215,7 @@ export const PERMISSION_INFO: Record<
   network: {
     label: "네트워크",
     detail:
-      "외부 네트워크 요청을 사용한다고 밝힌 플러그인입니다. 전체신뢰 모델에서 기술적으로 막을 수는 없습니다.",
+      "격리 문서의 직접 네트워크는 차단되며, 허용된 호스트 네트워크 작업으로 외부 요청을 보낼 수 있습니다.",
     caution: true,
   },
 };

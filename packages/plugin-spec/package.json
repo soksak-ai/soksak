@@ -1,8 +1,8 @@
 {
   "name": "@soksak-ai/plugin-spec",
-  "version": "0.3.0",
+  "version": "0.0.1",
   "private": true,
-  "description": "soksak plugin manifest spec and headless parseManifest validator (single source of truth).",
+  "description": "Public soksak plugin, sidecar, kit, release, conformance, and signed-registry contracts.",
   "license": "MIT",
   "author": "soksak-ai",
   "type": "module",
@@ -26,10 +26,17 @@
   "files": [
     "dist",
     "bin",
+    "docs",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "schema",
+    "test/fixtures/platform-wire"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1"
   }
 }

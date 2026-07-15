@@ -1,509 +1,259 @@
-// @soksak-ai/plugin-api — soksak 플러그인 런타임 API 계약 타입(ctx.app·Plugin·PluginContext).
-// 타입 전용 패키지 — 순수 개발 편의(선택 devDep), 런타임 0.
-//
-// 코어를 import 하지 않고 타입을 *독립* 정의한다(발행 패키지는 코어 소스에 접근 불가). 단일진실은
-// 코어 api.ts 의 양방향 호환 테스트가 컴파일로 강제한다 — drift 가 나면 코어 tsc 가 RED. 매니페스트·
-// 배치 타입은 @soksak-ai/plugin-spec 한 곳에서 가져온다(중복 0).
-import type { PluginManifest, ViewPlacement, MapEntry } from "@soksak-ai/plugin-spec";
-export type { PluginManifest, ViewPlacement } from "@soksak-ai/plugin-spec";
+// Public 0.0.1 SDK root. This package exposes only the isolated plugin-runtime
+// author surface; private core same-realm APIs are deliberately absent.
+import type {
+  OverlayScope,
+  PluginManifest,
+  PluginRuntimeCommandOutcome,
+  PluginRuntimeJson,
+  PluginRuntimeRole,
+} from "@soksak-ai/plugin-spec";
 
-/** register* 가 돌려주는 해지 토큰. ctx.subscriptions 에 넣으면 비활성화 시 자동 dispose. */
-// 사이드카(engine 모듈) 채널 핸들 — 불투명 JSON 채널(의미는 플러그인↔사이드카 사적 계약).
-export interface SidecarHandle {
-  /** 불투명 요청 → 모듈의 동기 응답(JSON). */
-  send: (msg: Record<string, unknown>) => Promise<Record<string, unknown>>;
-  /** 모듈 이벤트 구독 — {event, ...payload} 의 event 필드로 demux. 반환=해지. */
-  on: (event: string, cb: (payload: Record<string, unknown>) => void) => Disposable;
-  /** 채널 해제(모듈은 상주 유지). 멱등. */
-  close: () => Promise<void>;
-}
+export type {
+  PluginManifest,
+  PluginRuntimeJson,
+  PluginRuntimeRole,
+} from "@soksak-ai/plugin-spec";
 
-export interface Disposable {
+/** The handler result is exactly the public runtime-wire command outcome. */
+export type PluginCommandOutcome = PluginRuntimeCommandOutcome;
+export type PluginJsonObject = { [key: string]: PluginRuntimeJson };
+
+declare const opaqueHandle: unique symbol;
+/** Host-minted, frame/session-owned handle; author code cannot construct one safely. */
+export type PluginHandle<Kind extends string> = string & {
+  readonly [opaqueHandle]: Kind;
+};
+
+export interface SandboxDisposable {
   dispose(): void;
 }
 
-/** 명령 파라미터 스펙(JSON 직렬화 — CLI/MCP/문서 생성에 그대로 쓰임). */
-export interface ParamSpec {
-  type: "string" | "number" | "boolean" | "string[]" | "number[]" | "json";
-  description: string;
-  required?: boolean;
-  enum?: readonly string[];
-  default?: unknown;
+export interface PluginCommandRegistryClient {
+  /**
+   * Executes one command through the public Command Registry. The host validates
+   * the registered params/returns/danger/permission/contract and injects the
+   * authenticated principal plus any namespace/path/label/placement authority.
+   */
+  execute(command: string, params?: PluginJsonObject): Promise<PluginCommandOutcome>;
 }
 
-export type CmdErrCode =
-  | "TARGET_NOT_FOUND"
-  | "LAST_ITEM"
-  | "INVALID_PARAMS"
-  | "CONSENT_REQUIRED"
-  | "CASCADE_REQUIRED"
-  | "NOT_EXPOSED";
-
-// 표준 응답 봉투 — 성공/실패 대칭. docs/MESSAGE-PROTOCOL.md 단일진실.
-//   ok=성공/실패, code=성공 "OK"/도메인·실패 ErrCode, message=사람이 읽는 한 줄 표준 답변,
-//   data=기계 페이로드(선택, 중첩). 버블은 message 를 렌더한다.
-export type ErrCode =
-  | CmdErrCode
-  | "INTERNAL"
-  | "TIMEOUT"
-  | "UNKNOWN_COMMAND"
-  | "INVALID_PARAMS"
-  | "PERMISSION_DENIED";
-export interface CommandOutcome {
-  ok: boolean;
-  code: string;
-  message: string;
-  data?: Record<string, unknown>;
-}
-export type CommandError = CommandOutcome & { ok: false };
-
-/** hint 한 건 — 다음에 해볼 만한 명령의 제안. cmd=명령 이름, why=제안 사유(사람이 읽는 한 줄). */
-export interface CommandHint {
-  cmd: string;
-  why: string;
+export interface PluginEventRegistryClient {
+  subscribe(
+    topic: string,
+    listener: (value: PluginRuntimeJson) => void,
+  ): Promise<SandboxDisposable>;
 }
 
-/** 플러그인이 register 하는 명령 스펙. description=영어 base(LLM 발견), triggers=언어별 트리거어. */
-export interface PluginCommandSpec {
-  description: string;
-  triggers?: Record<string, string>;
-  params?: Record<string, ParamSpec>;
-  returns?: string;
-  examples?: readonly string[];
-  danger?: "destructive" | "inject";
-  /** 표준 답변(MESSAGE-PROTOCOL §3) — 성공 data 를 사람이 읽는 한 줄 message 로. 미제공이면
-   *  답이 라벨로 열화하고 로더가 경고한다(M5 에서 필수화). */
-  message?: (data: Record<string, unknown>) => string;
-  /** @deprecated message 로 개명 — 전환기 구명. 새 플러그인은 message 를 쓴다. */
-  summarize?: (data: Record<string, unknown>) => string;
-  /** 낭독 문장(귀, §3) — 낭독 축은 이것 하나: speak 있으면 speak(outcome), 없으면 message 폴백, ""=침묵. */
-  speak?: (out: { ok: boolean; code: string; message: string; data?: Record<string, unknown> }) => string;
-  /** 계측 스펙(MESSAGE-PROTOCOL §4·§5 R2) — false=활동 트레이스 제외. 유일한 정당 사유는
-   *  동일 사실의 이중 기록 방지. */
-  trace?: false;
-  /** hint 는 지시가 아니라 가능성의 제시다. 응답에 최대 3개까지 실린다. */
-  hint?: (data: Record<string, unknown>, ctx: PluginInvocation) => CommandHint[];
-  /** inv = 이 호출의 실행 컨텍스트(§5 상속) — 중첩 명령 실행은 반드시 inv.execute 로:
-   *  부모의 유래(origin)·상관(parentId)이 자식에 계승된다. */
-  handler: (
-    params: Record<string, unknown>,
-    inv?: PluginInvocation,
-  ) => Promise<object> | object;
+export interface PluginReadableResource {
+  readonly handle: PluginHandle<"resource">;
+  readonly byteLength: number;
+  /** Bounded chunks arrive over the runtime MessagePort as transferable buffers. */
+  stream(options?: { readonly offset?: number; readonly length?: number }): AsyncIterable<Uint8Array>;
+  release(): Promise<void>;
 }
 
-/** 명령 핸들러에 주입되는 호출 컨텍스트 — 중첩 실행의 유래·상관 상속 통로(MESSAGE-PROTOCOL §5). */
-export interface PluginInvocation {
-  origin?: string;
-  parent?: string;
-  execute: (
-    name: string,
-    params?: Record<string, unknown>,
-  ) => Promise<{ ok: boolean; code: string; message: string; data?: Record<string, unknown> }>;
-}
-
-/** data.watch 가 받는 변경 페이로드. coll/scope/id 는 연산에 따라 null. */
-export interface DataChangeEvent {
-  ns: string;
-  coll: string | null;
-  scope: string | null;
-  op: string;
-  id: string | null;
-}
-
-export interface Bookmark {
-  url: string;
-  title: string;
-}
-
-/** 코어가 events.on 으로 알리는 호스트 상태 변화. */
-export interface PluginEventMap {
-  "project.changed": { projectId: string; root: string | null };
-  "project.created": { projectId: string; root: string | null };
-  "view.activated": { projectId: string; viewId: string; kind: string; path?: string };
-  // 진행 델타(MESSAGE-PROTOCOL §2) — 사이드카 이벤트·AI thinking 을 소비 플러그인이 발행.
-  "command.progress": { command?: string; delta?: unknown; source?: string };
-  "file.opened": { projectId: string; viewId: string; path: string };
-  "file.closed": { projectId: string; viewId: string; path: string };
-  "file.saved": { projectId: string; viewId: string; path: string };
-  "theme.changed": { name: string; mode: "light" | "dark" };
-  "locale.changed": { language: string };
-  "app.focus": { focused: boolean };
-  /** 창 가장자리 드래그 라이브 리사이즈 시작(true)/끝(false). 코어 네이티브 신호 중계 —
-   *  뷰 플러그인이 드래그 중 무거운 작업(fit·네이티브 재배치)의 빈도를 낮추고 끝에 1회
-   *  정확히 스냅하기 위한 채널. 권한 불요. per-window(이 창의 드래그만 도착). */
-  "window.live-resize": { active: boolean };
-  /** 패널 디바이더 드래그 제스처 시작(true)/끝(false) — window.live-resize(창 가장자리)와
-   *  동형의 레이아웃-내부 제스처 채널. 네이티브 표면 제공자(브라우저 뷰 등)가 드래그 중
-   *  bounds 커밋을 유예하고 시각 연속 스탠드인(freeze-frame)을 띄우는 근거 신호.
-   *  끝(false)은 최종 레이아웃 커밋 이후에 도착한다 — 그 시점 슬롯 rect 가 최종값. 권한 불요. */
-  "layout.resize-gesture": { active: boolean };
-  /** 콘텐츠 탭 전환 등으로 콘텐츠 슬롯이 파킹/언파킹된 뒤 코어가 발화(React 커밋 직후 useLayoutEffect).
-   *  네이티브 표면 제공자(브라우저 뷰 등)가 최종 앵커 rect 로 bounds 를 1회 재스냅하는 신호 — 위치
-   *  이동(크기 무변)이라 ResizeObserver 가 못 잡는 전환을 덮는다. 권한 불요. */
-  "layout.reflow": { activeSpaceId: string | null };
-  // 뷰 본문 슬롯의 유효 가시성(스페이스 활성 && 탭 활성) 변화 — 코어 단일 소유. 네이티브 표면(엔진
-  // 서피스·child webview) 플러그인이 표시/숨김·재스냅을 이 사실에 맞춘다(뷰포트 추측 대체).
-  "view.parked": { viewId: string; parked: boolean };
-  /** webview 건강(서킷 브레이커) 전이 — 코어가 렌더러 프로세스 종료(process-gone)를 감지·복구하며
-   *  발화. state: recovering=자동 복구 예약(attempt 동반) / open=상한 소진(자동 복구 중단 —
-   *  webview.recover 로 수동 복구) / closed=정상 복귀. label = 창 label(그 창 메인 webview) 또는
-   *  b-<win>-<view>(브라우저 child). 네이티브 표면 플러그인이 자기 child 의 죽음/복귀에 맞춰
-   *  재스냅·재수화하는 신호. 권한 불요. per-window(이 창의 전이만 도착). */
-  "webview.health": {
-    label: string;
-    window: string;
-    state: "recovering" | "open" | "closed";
-    attempt: number | null;
-  };
-  "bookmarks.changed": { bookmarks: Bookmark[] };
-  "command.started": {
-    projectId: string | null;
-    paneId: string;
-    commandLine: string;
-    cwd: string | null;
-  };
-  "command.finished": { projectId: string | null; paneId: string };
-  activity: {
-    seq: number;
-    ts: number;
-    kind: string;
-    source: string;
-    payload: Record<string, unknown>;
-    ownWindow: boolean;
-  };
-  "turn.ended": {
-    projectId: string | null;
-    root: string | null;
-    paneId: string | null;
-    source: "shell" | "idle" | "acp";
-    command?: string | null;
-    cwd?: string | null;
+/** Broker surface in controller and non-preview visual roles. */
+export interface SandboxedPluginApp {
+  readonly appVersion: string;
+  readonly pluginId: string;
+  readonly windowLabel: string;
+  readonly commands: PluginCommandRegistryClient;
+  readonly events: PluginEventRegistryClient;
+  readonly resources: {
+    open(handle: PluginHandle<"resource">): Promise<PluginReadableResource>;
   };
 }
 
-export type ViewBadge = number | "dot" | null;
-
-/** 뷰가 코어에 보고하는 상태(code=기계 식별자, message=사람 표시). blocking code(dirty/busy/running)는 닫기 가드를 발동. */
-export interface ViewStatus {
-  code: string;
-  message?: string;
+/** Preview receives no capability, host-command, event, or resource surface. */
+export interface PreviewPluginApp {
+  readonly commands?: never;
+  readonly events?: never;
+  readonly resources?: never;
 }
 
-/** registerView provider 의 mount 가 받는 컨텍스트. */
-export interface PluginViewContext {
-  projectId: string;
-  root: string | null;
-  paneId: string | null;
-  /** 콘텐츠 배치 뷰의 안정 인스턴스 키(예: app.webview.label(viewId)). 사이드바 배치는 null. */
-  viewId: string | null;
-  /** 이 뷰가 마운트 시 1회 자동 실행할 명령(에이전트 프로그램 — 터미널 뷰가 PTY 로 실행).
-   *  프로그램 선언(ContributedProgram.command)이 source. 뷰 종류 무관 채널 — 자동 실행 여부는
-   *  뷰 구현이 결정한다(터미널 뷰만 PTY 로 실행). 명령 없으면 null. */
-  command: string | null;
-  /** 복원 seam(B3) — 재시작 복원 마운트면 관찰됐던 런타임(cwd·state). 새 뷰는 null.
-   *  터미널 뷰는 restore.cwd 에서 spawn, state 는 setRestoreState 로 기록했던 플러그인
-   *  관찰 상태(예: 브라우저 URL). 새 뷰는 null — 잔재 유입이 구조적으로 불가. */
-  restore: { cwd: string | null; state: unknown } | null;
-  setBadge: (badge: ViewBadge) => void;
-  /** 이 뷰의 상태를 보고(R1) — null=회수. 콘텐츠 배치 뷰만 유효(close guard). */
-  setStatus: (status: ViewStatus | null) => void;
-  /** 이 뷰의 탭 제목 동적 갱신(콘텐츠 배치만 — 예: 브라우저 페이지 제목). 빈 값 무시. 사이드바=no-op. */
-  setTitle: (title: string) => void;
-  /** 이 뷰의 탭 아이콘 갱신(콘텐츠 배치만 — 예: 브라우저 파비콘 URL). 빈 값 = 해제(매니페스트
-   *  아이콘 폴백). title 과 동형의 콘텐츠 사실 채널. 사이드바=no-op. */
-  setIcon: (icon: string) => void;
-  /** 플러그인 관찰 런타임 상태 보고(B3) — 뷰 레코드에 영속, 복원 마운트의 restore.state 로 돌아온다.
-   *  플러그인 kv 에 viewId 키로 영속하지 마라 — viewId 는 세션 넘어 재사용되어 죽은 뷰의 잔재가
-   *  새 뷰에 유입된다. JSON 직렬화 가능 값만. 콘텐츠 배치만 유효, 사이드바=no-op. */
-  setRestoreState: (state: unknown) => void;
+export type PluginColorMode = "light" | "dark" | "system";
+
+export type PluginDeepReadonly<T> =
+  T extends (...args: never[]) => unknown
+    ? T
+    : T extends readonly (infer Item)[]
+      ? readonly PluginDeepReadonly<Item>[]
+      : T extends object
+        ? { readonly [Key in keyof T]: PluginDeepReadonly<T[Key]> }
+        : T;
+
+export interface PluginFrameSlot {
+  readonly width: number;
+  readonly height: number;
+  readonly scaleFactor: number;
 }
 
-/** 플러그인이 구현하는 뷰. React 비요구 — 컨테이너 DOM 에 직접 그린다. */
-export interface PluginViewFocusRequest {
-  /** A newer focus intent or unmount aborts this signal. Deferred focus must honor it. */
-  signal: AbortSignal;
+export interface PluginFrameState {
+  readonly revision: number;
+  readonly theme: {
+    readonly colorMode: PluginColorMode;
+    readonly tokens: Readonly<Record<string, string>>;
+  };
+  readonly locale: string;
+  readonly slot: PluginFrameSlot | null;
+  readonly visible: boolean;
+  readonly interactive: boolean;
+  readonly instance: PluginDeepReadonly<PluginRuntimeJson>;
 }
+
+interface PluginFrameContextBase<App, Role extends PluginRuntimeRole> {
+  readonly app: App;
+  readonly role: Role;
+  readonly signal: AbortSignal;
+  /** Full immutable snapshot selected by monotonic context revision. */
+  readonly context: Readonly<PluginFrameState>;
+}
+
+export type PluginControllerContext = PluginFrameContextBase<SandboxedPluginApp, "controller">;
+
+/** Controller runtimes are non-visual and never use their document as app UI. */
+export interface PluginController {
+  activate(context: PluginControllerContext): void | Promise<void>;
+  deactivate?(context: PluginControllerContext): void | Promise<void>;
+}
+
+export interface PluginCommandInvocation {
+  readonly origin: string;
+  readonly parent: string | null;
+  execute(command: string, params?: PluginJsonObject): Promise<PluginCommandOutcome>;
+}
+
+export interface PluginCommandContext extends PluginFrameContextBase<SandboxedPluginApp, "controller"> {
+  readonly invocation: PluginCommandInvocation;
+}
+
+export type PluginCommandHandler = (
+  params: PluginJsonObject,
+  context: PluginCommandContext,
+) => PluginCommandOutcome | Promise<PluginCommandOutcome>;
+
+interface ActiveVisualContext<Role extends "view" | "file-viewer" | "overlay">
+  extends PluginFrameContextBase<SandboxedPluginApp, Role> {
+  readonly root: HTMLElement;
+  readonly context: Readonly<PluginFrameState & { readonly slot: PluginFrameSlot }>;
+}
+
+interface PreviewVisualContext<Target extends "view" | "file-viewer" | "overlay">
+  extends PluginFrameContextBase<PreviewPluginApp, "preview"> {
+  readonly root: HTMLElement;
+  readonly previewTarget: Target;
+  readonly previewInput: PluginDeepReadonly<PluginRuntimeJson>;
+  readonly context: Readonly<PluginFrameState & {
+    readonly slot: PluginFrameSlot;
+    readonly interactive: false;
+  }>;
+}
+
+export type PluginViewInstanceContext =
+  | ActiveVisualContext<"view">
+  | PreviewVisualContext<"view">;
 
 export interface PluginViewProvider {
-  mount(container: HTMLElement, ctx: PluginViewContext): void;
-  unmount?(container: HTMLElement): void;
-  prepareFocusTransfer?(container: HTMLElement, ctx: PluginViewContext): void;
-  focus?(
-    container: HTMLElement,
-    ctx: PluginViewContext,
-    request: PluginViewFocusRequest,
-  ): void;
-  update?(container: HTMLElement, ctx: PluginViewContext): void;
+  mount(context: PluginViewInstanceContext): void | Promise<void>;
+  update?(context: PluginViewInstanceContext): void | Promise<void>;
+  unmount?(context: PluginViewInstanceContext): void | Promise<void>;
 }
 
-/** registerFileViewer provider 의 mount 가 받는 컨텍스트. */
-export interface FileViewerContext {
-  viewId: string;
-  path: string;
-  projectId: string;
-  root: string | null;
-  setDirty: (dirty: boolean) => void;
+export type PluginFileViewerContext =
+  | ActiveVisualContext<"file-viewer">
+  | PreviewVisualContext<"file-viewer">;
+
+export interface PluginFileViewerProvider {
+  mount(context: PluginFileViewerContext): void | Promise<void>;
+  update?(context: PluginFileViewerContext): void | Promise<void>;
+  unmount?(context: PluginFileViewerContext): void | Promise<void>;
 }
 
-export interface FileViewerProvider {
-  mount(container: HTMLElement, ctx: FileViewerContext): void;
-  unmount?(container: HTMLElement): void;
+export type PluginOverlayScope = OverlayScope;
+export type PluginPreviewTargetKind = "view" | "file-viewer" | "overlay";
+
+export type PluginOverlayContext = (
+  | ActiveVisualContext<"overlay">
+  | PreviewVisualContext<"overlay">
+) & {
+  readonly scope: PluginOverlayScope;
+};
+
+export interface PluginOverlayProvider {
+  mount(context: PluginOverlayContext): void | Promise<void>;
+  update?(context: PluginOverlayContext): void | Promise<void>;
+  unmount?(context: PluginOverlayContext): void | Promise<void>;
 }
 
-export interface StatusBarItem {
-  id: string;
-  paneId: string;
-  label: string;
-  title?: string;
-  active?: boolean;
-  onClick: () => void;
+/**
+ * Static executable providers only. Icon sets are manifest-declared, verified
+ * logical data assets and are intentionally absent from the executable module.
+ */
+export interface SoksakPluginModule {
+  readonly controller?: PluginController;
+  readonly commands?: Readonly<Record<string, PluginCommandHandler>>;
+  readonly views?: Readonly<Record<string, PluginViewProvider>>;
+  readonly fileViewers?: Readonly<Record<string, PluginFileViewerProvider>>;
+  readonly overlays?: Readonly<Record<string, PluginOverlayProvider>>;
 }
 
-export interface HeaderAction {
-  id: string;
-  label: string;
-  title?: string;
-  active?: boolean;
-  onClick: () => void;
+export function defineSoksakPlugin(module: SoksakPluginModule): SoksakPluginModule {
+  return module;
 }
 
-export interface NotifyAction {
-  label: string;
-  deepLink: string;
-}
-
-export interface NotificationInput {
-  title: string;
-  body?: string;
-  icon?: string;
-  image?: string;
-  sound?: string;
-  deepLink?: string;
-  tag?: string;
-  actions?: NotifyAction[];
-  data?: Record<string, unknown>;
-}
-
-export type SettingValue = boolean | number | string | string[] | MapEntry[];
-
-/** ctx.app — 플러그인이 받는 호스트 표면 전체. 옵셔널 필드는 해당 권한 미선언 시 undefined(권한 게이트). */
-export interface SoksakPluginApi {
-  appVersion: string;
-  pluginId: string;
-  locale: () => string;
-  /** 이 플러그인 인스턴스가 사는 창 label(멀티윈도우 — 창별 상태·자격 기록용). */
-  windowLabel: () => string;
-  commands?: {
-    /** opts.origin — 자동 행위의 자기 선언(§5): 사람 의도가 아닌 실행(백필 조회·낭독 등)은
-     *  "internal". 기록은 그대로, 노출(흐림·무낭독)만 낮아진다. */
-    execute: (
-      name: string,
-      params?: Record<string, unknown>,
-      opts?: { origin?: string },
-    ) => Promise<CommandOutcome>;
-    register: (name: string, spec: PluginCommandSpec) => Disposable;
-  };
-  events: {
-    on: <K extends keyof PluginEventMap>(
-      event: K,
-      fn: (payload: PluginEventMap[K]) => void,
-    ) => Disposable;
-    /** 진행 델타 발행(MESSAGE-PROTOCOL §2) — 장시간 명령의 실행 중 상태를 활동 스트림에 흘린다.
-     *  사이드카 이벤트 → 표준 progress 변환은 소비 플러그인 책임(A14). source=플러그인 id 고정. */
-    progress: (command: string, delta: unknown) => void;
-  };
-  /** 활동 로그 자기기술 발행 — 플러그인이 자기 도메인의 활동을 코어 브리지 없이 직접 싣는다.
-   *  표시 문장은 `message`(플러그인 i18n), 낭독은 선택적 `speak`. 소비자는 kind 를 열거하지 않고
-   *  이 두 필드만 렌더/낭독한다(MESSAGE-PROTOCOL §3). source=플러그인 id 고정(무권한 — 자기 엔트리만). */
-  activity: {
-    publish: (
-      kind: string,
-      entry: { message: string; speak?: string } & Record<string, unknown>,
-    ) => void;
-  };
-  ui?: {
-    registerView: (viewId: string, provider: PluginViewProvider) => Disposable;
-    registerFileViewer: (viewerId: string, provider: FileViewerProvider) => Disposable;
-    openView: (viewId: string, placement?: ViewPlacement) => Promise<CommandOutcome>;
-    registerIconSet: (setId: string, data: unknown) => Disposable;
-    statusBarItem: (item: StatusBarItem) => Disposable;
-    registerHeaderAction: (action: HeaderAction) => Disposable;
-    setOverlayActive: (active: boolean) => void;
-    setViewBadge: (viewId: string, badge: number | "dot" | null) => void;
-  };
-  storage?: {
-    read: (key: string) => Promise<unknown>;
-    write: (key: string, value: unknown) => Promise<void>;
-    list: () => Promise<string[]>;
-  };
-  data?: {
-    kv: {
-      get: (key: string) => Promise<unknown>;
-      set: (key: string, value: unknown) => Promise<void>;
-      delete: (key: string) => Promise<boolean>;
-      keys: (prefix?: string) => Promise<string[]>;
-      /** 이 플러그인 ns 의 kv 변경(set/delete) 전 창 구독 — 변경된 key 콜백. 해지 함수 반환. */
-      watch: (cb: (key: string | null) => void) => Disposable;
-    };
-    define: (collection: string, opts: { indexes?: string[]; fts?: string[] }) => Promise<void>;
-    put: (
-      collection: string,
-      doc: Record<string, unknown>,
-      opts?: { scope?: string; id?: string },
-    ) => Promise<string>;
-    get: (collection: string, id: string, opts?: { scope?: string }) => Promise<unknown>;
-    delete: (collection: string, id: string, opts?: { scope?: string }) => Promise<boolean>;
-    query: (
-      collection: string,
-      opts?: {
-        scope?: string;
-        where?: Record<string, unknown>;
-        order?: string;
-        desc?: boolean;
-        limit?: number;
-        offset?: number;
-      },
-    ) => Promise<unknown[]>;
-    search: (
-      collection: string,
-      text: string,
-      opts?: { scope?: string; limit?: number },
-    ) => Promise<unknown[]>;
-    count: (
-      collection: string,
-      opts?: { scope?: string; where?: Record<string, unknown> },
-    ) => Promise<number>;
-    /** retention(R5) — (coll,scope) 수가 cap 초과 시 oldest(created) 축출. 반환=삭제 수. */
-    retentionTrim: (collection: string, scope: string, cap: number) => Promise<number>;
-    /** retention(R5) — created < cutoffMs 인 레코드 삭제(시간축). 반환=삭제 수. */
-    retentionReap: (collection: string, cutoffMs: number) => Promise<number>;
-    watch: (
-      collection: string,
-      opts: { scope?: string } | undefined,
-      cb: (e: DataChangeEvent) => void,
-    ) => Disposable;
-  };
-  secrets?: {
-    set: (key: string, value: string) => Promise<void>;
-    has: (key: string) => Promise<boolean>;
-    delete: (key: string) => Promise<boolean>;
-    keys: () => Promise<string[]>;
-    backend: () => Promise<{ backend: string; unlocked: boolean }>;
-  };
-  notify?: {
-    push: (n: NotificationInput) => Promise<void>;
-  };
-  sound?: {
-    play: (sound: string) => Promise<void>;
-    builtins: () => string[];
-  };
-  fs?: {
-    readText?: (
-      path: string,
-      offset?: number,
-    ) => Promise<{ text: string; truncated: boolean; totalBytes: number }>;
-    readBinary?: (path: string) => Promise<{ mime: string; base64: string }>;
-    /** 로컬 파일 → webview 로드 가능 URL(코어 표준). 같은 path 멱등. "fs:read" 게이트. */
-    url?: (path: string) => Promise<string>;
-    writeText?: (path: string, content: string) => Promise<void>;
-    list?: (path: string, opts?: { meta?: boolean }) => Promise<unknown>;
-    watch?: (dir: string, cb: (dir: string) => void) => Disposable;
-  };
-  clipboard?: {
-    readText?: () => Promise<string>;
-    writeText?: (text: string) => Promise<void>;
-    watch?: (cb: (e: { text: string }) => void) => Disposable;
-  };
-  git?: {
-    log: (opts?: { path?: string; limit?: number; skip?: number }) => Promise<unknown>;
-    show: (commit: string, path?: string) => Promise<unknown>;
-    diff: (opts?: {
-      path?: string;
-      file?: string;
-      commit?: string;
-      staged?: boolean;
-    }) => Promise<string>;
-    status: (path?: string) => Promise<unknown>;
-  };
-  terminal?: {
-    runningCommands?: () => { paneId: string; commandLine: string; cwd: string | null }[];
-    sendText?: (paneId: string, text: string) => boolean;
-    readBuffer?: (paneId: string, lines?: number) => string | undefined;
-    onOutput?: (paneId: string, cb: () => void) => Disposable;
-    getCwd?: (paneId: string) => string | undefined;
-    onCwd?: (paneId: string, cb: (cwd: string) => void) => Disposable;
-    onCommandFinished?: (paneId: string, cb: () => void) => Disposable;
-  };
-  process?: {
-    /** 매니페스트 sidecars[] 에서 이 계약(interface)을 구현한다고 선언한 유닛 이름. 어느 엔진 유닛을
-     *  쓸지는 **매니페스트가 정한다** — 번들 상수로 굳히면 매니페스트만 바꿨을 때 옛 유닛이 무음으로
-     *  스폰된다. 선언 부재/중복은 loud throw(조용히 고르지 않는다). */
-    sidecarName: (interfaceId: string) => string;
-    spawn: (
-      cmd: string,
-      args: string[],
-      opts?: {
-        cwd?: string;
-        env?: Record<string, string>;
-        envRemove?: string[];
-        secretEnv?: Record<string, string>;
-      },
-    ) => Promise<number>;
-    write: (handle: number, data: string) => Promise<void>;
-    /** stdin 닫기(자식은 계속 실행) — 파이프 입력을 read-to-end 하는 자식에 EOF 전달. 멱등. */
-    closeStdin: (handle: number) => Promise<void>;
-    onData: (handle: number, cb: (data: Uint8Array) => void) => Disposable;
-    onStderr: (handle: number, cb: (data: Uint8Array) => void) => Disposable;
-    onExit: (handle: number, cb: (code: number) => void) => Disposable;
-    kill: (handle: number) => Promise<void>;
-  };
-  /** 사이드카(engine 모듈) 채널 — 매니페스트 sidecars[] 선언 필수, "sidecar" 권한(caution).
-   *  코어는 맹목 relay(메시지 의미는 플러그인↔사이드카 사적 계약 — docs/SIDECARS.md). */
-  sidecar?: {
-    open: (name: string) => Promise<SidecarHandle>;
-  };
-  ws?: {
-    connect: (url: string) => Promise<number>;
-    send: (handle: number, text: string) => Promise<void>;
-    onMessage: (handle: number, cb: (text: string) => void) => Disposable;
-    onClose: (handle: number, cb: () => void) => Disposable;
-    close: (handle: number) => Promise<void>;
-  };
-  network?: {
-    http: (req: {
-      method: string;
-      url: string;
-      headers?: Record<string, string>;
-      query?: Record<string, string>;
-      body?: string;
-      contentType?: string;
-      secretSubst?: Record<string, string>;
-    }) => Promise<{ status: number; headers: Record<string, string>; body: string }>;
-  };
-  bus: {
-    emit: (topic: string, payload: unknown) => void;
-    on: (topic: string, fn: (payload: any) => void) => Disposable;
-  };
-  project: {
-    current: () => { id: string; root: string | null } | null;
-  };
-  settings: {
-    get: (key: string) => SettingValue | undefined;
-    all: () => Record<string, SettingValue>;
-    onChange: (cb: (all: Record<string, SettingValue>) => void) => Disposable;
+export function pluginModuleInventory(module: SoksakPluginModule): {
+  readonly commands: readonly string[];
+  readonly views: readonly string[];
+  readonly fileViewers: readonly string[];
+  readonly overlays: readonly string[];
+} {
+  const keys = (record: object | undefined): string[] => record ? Object.keys(record).sort() : [];
+  return {
+    commands: keys(module.commands),
+    views: keys(module.views),
+    fileViewers: keys(module.fileViewers),
+    overlays: keys(module.overlays),
   };
 }
 
-/** activate(ctx) 로 전달되는 컨텍스트. */
-export interface PluginContext {
-  app: SoksakPluginApi;
-  manifest: PluginManifest;
-  dir: string;
-  subscriptions: Disposable[];
+/**
+ * The real parsed PluginManifest owns the command inventory. Service-bound
+ * declarations are implemented by the service bridge, never by JS handlers.
+ */
+export function derivePluginCommandInventory(
+  contributions: Pick<PluginManifest["contributes"], "commands">,
+): { readonly runtime: readonly string[]; readonly service: readonly string[] } {
+  const seen = new Set<string>();
+  const runtime: string[] = [];
+  const service: string[] = [];
+  for (const command of contributions.commands) {
+    if (seen.has(command.name)) throw new TypeError(`duplicate manifest command: ${command.name}`);
+    seen.add(command.name);
+    (command.bind === "service" ? service : runtime).push(command.name);
+  }
+  return { runtime: runtime.sort(), service: service.sort() };
 }
 
-/** 플러그인 entry — main.js 의 `export default`. 코어 loader 가 activate(ctx) 를 호출한다. */
-export interface Plugin {
-  activate(ctx: PluginContext): void | Promise<void>;
-  deactivate?(): void | Promise<void>;
+export function selectSoksakPluginProvider(
+  module: SoksakPluginModule,
+  selector: {
+    readonly role: "view" | "file-viewer" | "overlay" | "preview";
+    readonly contributionId: string;
+    readonly previewKind?: PluginPreviewTargetKind;
+  },
+): PluginViewProvider | PluginFileViewerProvider | PluginOverlayProvider {
+  const kind = selector.role === "preview" ? selector.previewKind : selector.role;
+  if (!kind) throw new Error("preview provider kind is required");
+  const table = kind === "view"
+    ? module.views
+    : kind === "file-viewer"
+      ? module.fileViewers
+      : module.overlays;
+  const provider = table?.[selector.contributionId];
+  if (!provider) throw new Error(`declared ${kind} provider not found: ${selector.contributionId}`);
+  return provider;
 }
+
+export type PreviewViewProvider = PluginViewProvider;
+export type PreviewFileViewerProvider = PluginFileViewerProvider;
+export type PreviewOverlayProvider = PluginOverlayProvider;

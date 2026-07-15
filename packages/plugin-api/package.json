@@ -1,8 +1,8 @@
 {
   "name": "@soksak-ai/plugin-api",
-  "version": "0.2.1",
+  "version": "0.0.1",
   "private": true,
-  "description": "soksak plugin runtime API contract types (ctx.app, Plugin, PluginContext) — the @types/editor equivalent for soksak.",
+  "description": "Public author SDK for the isolated soksak plugin runtime.",
   "license": "MIT",
   "author": "soksak-ai",
   "type": "module",
@@ -29,6 +29,6 @@
     "build": "tsc -p tsconfig.json"
   },
   "peerDependencies": {
-    "@soksak-ai/plugin-spec": "0.3.0"
+    "@soksak-ai/plugin-spec": "0.0.1"
   }
 }

@@ -3,11 +3,12 @@
 // PS5/PS6(service.interface 계약 문법), PS14(contributes.schedules 데이터 선언).
 // 소스(src/spec.ts)가 단일진실 — dist 는 산출물이라 테스트는 소스를 직접 겨눈다.
 import { describe, expect, it } from "vitest";
+import * as serviceSpecSurface from "../src/spec";
 import {
   PERMISSION_INFO,
   PERMISSIONS,
   parseManifest,
-  SERVICE_INTERFACE,
+  SERVICE_CONTRACT_REQUIREMENT,
   semverGte,
   semverSatisfies,
   serviceOps,
@@ -20,12 +21,15 @@ function base(overrides: Record<string, unknown> = {}): Record<string, unknown> 
     spec: SPEC_VERSION,
     id: "demo",
     name: "데모",
-    version: "1.0.0",
+    version: "0.0.1",
     description: "테스트용",
     entry: null,
     permissions: ["commands", "sidecar", "service"],
-    sidecars: [{ name: "demo-svc", interface: "soksak-spec-sidecar-fixture-wire@1" }],
-    service: { sidecar: "demo-svc", interface: SERVICE_INTERFACE },
+    sidecars: [{
+      name: "demo-svc",
+      interface: { id: "soksak-spec-sidecar-fixture-wire", range: ">=0.0.1 <1.0.0" },
+    }],
+    service: { sidecar: "demo-svc", interface: SERVICE_CONTRACT_REQUIREMENT },
     contributes: {
       commands: [
         {
@@ -47,6 +51,17 @@ function errorsOf(raw: unknown, dirName = "demo"): string[] {
 }
 
 describe("service — 수용(PS3·PS4)", () => {
+  it("pins the first-party service requirement to the exact 0.0.1 contract", () => {
+    expect(SERVICE_CONTRACT_REQUIREMENT).toEqual({
+      id: "soksak-spec-service",
+      range: "0.0.1",
+    });
+  });
+
+  it("does not export a concatenated-interface alias", () => {
+    expect(serviceSpecSurface).not.toHaveProperty("SERVICE_INTERFACE");
+  });
+
   it("서비스 선언 + bind:service 커맨드 + entry:null 통과, 정규화 보존", () => {
     const { manifest, validation } = parseManifest(base(), "demo");
     expect(validation.errors).toEqual([]);
@@ -54,7 +69,7 @@ describe("service — 수용(PS3·PS4)", () => {
     expect(manifest?.entry).toBeNull();
     expect(manifest?.service).toEqual({
       sidecar: "demo-svc",
-      interface: SERVICE_INTERFACE,
+      interface: SERVICE_CONTRACT_REQUIREMENT,
       subscribe: [],
     });
     const cmd = manifest?.contributes.commands[0];
@@ -102,7 +117,7 @@ describe("service — 수용(PS3·PS4)", () => {
       base({
         service: {
           sidecar: "demo-svc",
-          interface: SERVICE_INTERFACE,
+          interface: SERVICE_CONTRACT_REQUIREMENT,
           subscribe: ["bus:kanban:changed"],
         },
       }),
@@ -188,7 +203,12 @@ describe("service — 거부(PS3·PS5·PS6)", () => {
   });
 
   it("service.interface 계약 문법 위반(-spec@ 부재·판 별칭) → 거부(PS6·NAMING §8)", () => {
-    for (const iface of ["soksak-service@1", "soksak-spec-service@01", "Service-Spec@1"]) {
+    for (const iface of [
+      "soksak-service@1",
+      "soksak-spec-service@01",
+      "soksak-spec-plugin-terminal@0.0.1",
+      "Service-Spec@1",
+    ]) {
       const errs = errorsOf(
         base({ service: { sidecar: "demo-svc", interface: iface } }),
       );
@@ -198,7 +218,7 @@ describe("service — 거부(PS3·PS5·PS6)", () => {
 
   it("service.sidecar 가 sidecars[] 를 참조하지 않음 → 거부(PS9 — 배급은 사이드카 법 상속)", () => {
     const errs = errorsOf(
-      base({ service: { sidecar: "ghost", interface: SERVICE_INTERFACE } }),
+      base({ service: { sidecar: "ghost", interface: SERVICE_CONTRACT_REQUIREMENT } }),
     );
     expect(errs.some((e) => e.includes("sidecar"))).toBe(true);
   });
@@ -222,7 +242,7 @@ describe("service — 거부(PS3·PS5·PS6)", () => {
     expect(
       errorsOf(
         base({
-          service: { sidecar: "demo-svc", interface: SERVICE_INTERFACE, extra: 1 },
+          service: { sidecar: "demo-svc", interface: SERVICE_CONTRACT_REQUIREMENT, extra: 1 },
         }),
       ).length,
     ).toBeGreaterThan(0);
@@ -231,7 +251,7 @@ describe("service — 거부(PS3·PS5·PS6)", () => {
         base({
           service: {
             sidecar: "demo-svc",
-            interface: SERVICE_INTERFACE,
+            interface: SERVICE_CONTRACT_REQUIREMENT,
             subscribe: ["kanban:changed"],
           },
         }),

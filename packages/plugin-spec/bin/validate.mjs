@@ -1,83 +1,292 @@
 #!/usr/bin/env node
-// 헤드리스 매니페스트 검증 게이트 — 앱(소켓) 없이 plugin.json 을 검증한다.
-//
-// 왜 독립 스크립트인가(검증된 제약):
-//   - sok CLI 는 실행 중 앱의 Unix 소켓에 붙는 transport(src-tauri/cli) — 앱 없으면 동작 0.
-//     CI/pre-commit/발행 훅은 앱이 없으므로 sok 으로는 게이트할 수 없다.
-//   - spec.ts §0 P5: 코어는 플러그인을 나열·검사하지 않는다. 검증은 dev-kit(이 스크립트)·각 repo 몫.
-//   - 유일한 헤드리스 경로 = parseManifest 직접 import. 발행물은 빌드된 dist/spec.js(.d.ts 동봉)라
-//     의존성 0·모든 node(>=18)에서 로드된다. spec.ts(소스)는 단일진실이고 dist 는 산출물.
-//   이것이 vsce(editor)·검증 봇(notes-app)의 soksak 등가다.
-//
-// 사용: npx soksak-validate <plugin.json>...  (코어 회귀는 make spec-gate 가 빌드 후 실행)
-// 종료코드: 0 = 전부 통과, 1 = 하나라도 위반, 2 = 사용법 오류.
+// Public, headless validation boundary. Every mode calls the same parser/verifier that
+// consumers import from dist/spec.js; the CLI does not maintain a second wire grammar.
 
+import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import {
   C2_STATIC_ENFORCEMENT,
+  certifyRegistryIndex,
+  parseConformanceReport,
   parseManifest,
+  parseRegistryPublicKey,
+  parseReleaseManifest,
   transparencyViolations,
+  verifyConformanceReport,
+  verifyPluginRuntimeDependencyProjection,
 } from "../dist/spec.js";
 
-const USAGE = `사용: npx soksak-validate <플러그인 폴더 | plugin.json>...
-  플러그인 폴더를 주면 그 안의 plugin.json 을 검증합니다.
-  종료코드: 0 = 전부 통과, 1 = 위반 있음, 2 = 사용법 오류.`;
+const USAGE = `사용:
+  soksak-validate plugin <플러그인 폴더 | plugin.json>...
+  soksak-validate release <release.json>...
+  soksak-validate conformance <report.json>... --release <release.json> [--plugin-manifest <plugin.json>]
+  soksak-validate registry <registry.json> --public-key <key.json> --registry-id <id> --key-id <id> [--at <ISO-8601>] [--high-water <sequence>:<sha256>]
 
-const args = process.argv.slice(2);
-if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
+호환: 모드 없는 경로는 plugin 모드로 해석합니다.
+종료코드: 0 = 통과, 1 = 문서/무결성 위반, 2 = 사용법 오류.`;
+
+const MODES = new Set(["plugin", "release", "conformance", "registry"]);
+
+function usageExit(message) {
+  if (message) console.error(message);
   console.error(USAGE);
-  process.exit(args.length === 0 ? 2 : 0);
+  return 2;
 }
 
-// 저자는 폴더를 준다 — 폴더면 plugin.json 으로 해소한다(자기설명 표면).
-const paths = args.map((p) => {
+function readDocument(path, label = path) {
   try {
-    if (statSync(p).isDirectory()) return join(p, "plugin.json");
-  } catch {
-    /* 존재하지 않으면 아래 읽기에서 안내된다 */
+    const bytes = readFileSync(path);
+    return { bytes, raw: JSON.parse(bytes.toString("utf8")) };
+  } catch (error) {
+    console.error(`✗ ${label}: UTF-8 JSON 읽기 실패 — ${error.message}`);
+    return null;
   }
-  return p;
-});
-
-let failed = 0;
-for (const p of paths) {
-  let raw;
-  try {
-    raw = JSON.parse(readFileSync(p, "utf8"));
-  } catch (e) {
-    console.error(`✗ ${p}: JSON 파싱 실패 — ${e.message}`);
-    console.error(`  플러그인 폴더 또는 plugin.json 경로를 주십시오. (도움말: --help)`);
-    failed++;
-    continue;
-  }
-  // dirName = 플러그인 디렉터리명(단일폴더 모델: ~/.soksak/plugins/<id>). parseManifest 가 id 검증에 사용.
-  // resolve 로 절대화 — pre-commit 의 `soksak-validate plugin.json`(상대) 도 repo 루트명을 dirName 으로 얻는다.
-  const dirName = basename(dirname(resolve(p)));
-  const { manifest, validation } = parseManifest(raw, dirName);
-  if (!validation.ok) {
-    console.error(`✗ ${p}`);
-    for (const err of validation.errors) console.error(`  - ${err}`);
-    failed++;
-    continue;
-  }
-  // C2 정적 투명성 판정 — 문법과 별개 섹션(저자 경계). 판정·시행표의 단일진실은 패키지
-  // (transparency.ts) — 앱 로더·설치본 게이트와 같은 표를 본다. blocking 규칙 위반 = 실패
-  // (앱이 활성화를 거부할 매니페스트를 발행 전에 알린다), warn 규칙 위반 = 경고 + 통과(래칫).
-  const c2 = transparencyViolations(manifest.contributes);
-  const blocking = c2.filter((v) => C2_STATIC_ENFORCEMENT[v.rule] === "blocking");
-  const warned = c2.filter((v) => C2_STATIC_ENFORCEMENT[v.rule] === "warn");
-  if (blocking.length > 0) {
-    console.error(`✗ ${p}`);
-    console.error(`  C2 투명성 위반(blocking — 앱이 활성화를 거부한다):`);
-    for (const v of blocking) console.error(`  - ${v.rule} — ${v.detail}`);
-    for (const v of warned) console.error(`  ⚠ C2 ${v.rule}: ${v.detail}`);
-    failed++;
-    continue;
-  }
-  console.log(`✓ ${p}`);
-  for (const w of validation.warnings ?? []) console.log(`  ⚠ ${w}`);
-  for (const v of warned) console.log(`  ⚠ C2 ${v.rule}: ${v.detail}`);
 }
 
-process.exit(failed > 0 ? 1 : 0);
+function printErrors(path, errors) {
+  console.error(`✗ ${path}`);
+  for (const error of errors) console.error(`  - ${error}`);
+}
+
+function sha256(bytes) {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+function parseOptions(args, known) {
+  const positional = [];
+  const options = new Map();
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (!arg.startsWith("--")) {
+      positional.push(arg);
+      continue;
+    }
+    if (!known.has(arg) || options.has(arg)) {
+      return { ok: false, error: `알 수 없거나 중복된 옵션: ${arg}` };
+    }
+    const value = args[index + 1];
+    if (value === undefined || value.startsWith("--")) {
+      return { ok: false, error: `${arg}: 값이 필요합니다` };
+    }
+    options.set(arg, value);
+    index++;
+  }
+  return { ok: true, positional, options };
+}
+
+function resolvePluginPaths(paths) {
+  return paths.map((path) => {
+    try {
+      if (statSync(path).isDirectory()) return join(path, "plugin.json");
+    } catch {
+      // The read boundary below reports one canonical failure.
+    }
+    return path;
+  });
+}
+
+function validatePlugins(paths) {
+  let failed = 0;
+  for (const path of resolvePluginPaths(paths)) {
+    const document = readDocument(path);
+    if (!document) {
+      failed++;
+      continue;
+    }
+    const dirName = basename(dirname(resolve(path)));
+    const { manifest, validation } = parseManifest(document.raw, dirName);
+    if (!validation.ok) {
+      printErrors(path, validation.errors);
+      failed++;
+      continue;
+    }
+    const c2 = transparencyViolations(manifest.contributes);
+    const blocking = c2.filter((violation) => C2_STATIC_ENFORCEMENT[violation.rule] === "blocking");
+    const warned = c2.filter((violation) => C2_STATIC_ENFORCEMENT[violation.rule] === "warn");
+    if (blocking.length > 0) {
+      console.error(`✗ ${path}`);
+      console.error("  C2 투명성 위반(blocking — 앱이 활성화를 거부한다):");
+      for (const violation of blocking) console.error(`  - ${violation.rule} — ${violation.detail}`);
+      for (const violation of warned) console.error(`  ⚠ C2 ${violation.rule}: ${violation.detail}`);
+      failed++;
+      continue;
+    }
+    console.log(`✓ ${path}`);
+    for (const warning of validation.warnings ?? []) console.log(`  ⚠ ${warning}`);
+    for (const violation of warned) console.log(`  ⚠ C2 ${violation.rule}: ${violation.detail}`);
+  }
+  return failed > 0 ? 1 : 0;
+}
+
+function validateReleases(paths) {
+  let failed = 0;
+  for (const path of paths) {
+    const document = readDocument(path);
+    if (!document) {
+      failed++;
+      continue;
+    }
+    const parsed = parseReleaseManifest(document.raw);
+    if (!parsed.ok) {
+      printErrors(path, parsed.errors);
+      failed++;
+      continue;
+    }
+    console.log(`✓ ${path} (${parsed.value.kind}:${parsed.value.id}@${parsed.value.version})`);
+  }
+  return failed > 0 ? 1 : 0;
+}
+
+function validateConformance(args) {
+  const parsedArgs = parseOptions(args, new Set(["--release", "--plugin-manifest"]));
+  if (!parsedArgs.ok) return usageExit(parsedArgs.error);
+  const releasePath = parsedArgs.options.get("--release");
+  if (!releasePath || parsedArgs.positional.length === 0) {
+    return usageExit("conformance: report 경로와 --release가 필요합니다");
+  }
+  const releaseDocument = readDocument(releasePath, `owner release ${releasePath}`);
+  if (!releaseDocument) return 1;
+  const release = parseReleaseManifest(releaseDocument.raw);
+  if (!release.ok) {
+    printErrors(releasePath, release.errors);
+    return 1;
+  }
+  const manifestSha256 = sha256(releaseDocument.bytes);
+  const pluginManifestPath = parsedArgs.options.get("--plugin-manifest");
+  let ownerPlugin;
+  if (pluginManifestPath !== undefined) {
+    const document = readDocument(pluginManifestPath, `plugin manifest ${pluginManifestPath}`);
+    if (!document) return 1;
+    const parsed = parseManifest(document.raw, release.value.id);
+    if (!parsed.validation.ok || !parsed.manifest) {
+      printErrors(pluginManifestPath, parsed.validation.errors);
+      return 1;
+    }
+    if (
+      release.value.kind !== "plugin" ||
+      parsed.manifest.id !== release.value.id ||
+      parsed.manifest.version !== release.value.version
+    ) {
+      printErrors(pluginManifestPath, ["plugin manifest identity must exactly match the owner plugin release"]);
+      return 1;
+    }
+    const projection = verifyPluginRuntimeDependencyProjection(
+      parsed.manifest.dependencies,
+      release.value,
+    );
+    if (!projection.ok) {
+      printErrors(pluginManifestPath, projection.errors);
+      return 1;
+    }
+    ownerPlugin = parsed.manifest;
+  }
+  let failed = 0;
+  for (const path of parsedArgs.positional) {
+    const document = readDocument(path);
+    if (!document) {
+      failed++;
+      continue;
+    }
+    const report = parseConformanceReport(document.raw);
+    if (!report.ok) {
+      printErrors(path, report.errors);
+      failed++;
+      continue;
+    }
+    const verified = verifyConformanceReport(
+      report.value,
+      release.value,
+      manifestSha256,
+      ownerPlugin?.implements ?? [],
+    );
+    if (!verified.ok) {
+      printErrors(path, verified.errors);
+      failed++;
+      continue;
+    }
+    if (report.value.contract === "soksak-spec-plugin@0.0.1" && !ownerPlugin) {
+      printErrors(path, [
+        "soksak-spec-plugin@0.0.1 evidence requires --plugin-manifest so runtime plugin dependencies can be matched to the release closure",
+      ]);
+      failed++;
+      continue;
+    }
+    console.log(`✓ ${path} (${report.value.contract})`);
+  }
+  return failed > 0 ? 1 : 0;
+}
+
+function parseHighWater(value) {
+  if (value === undefined) return undefined;
+  const separator = value.indexOf(":");
+  if (separator < 1) return null;
+  const sequence = Number(value.slice(0, separator));
+  const digest = value.slice(separator + 1);
+  return { sequence, digest };
+}
+
+async function validateRegistry(args) {
+  const parsedArgs = parseOptions(
+    args,
+    new Set(["--public-key", "--registry-id", "--key-id", "--at", "--high-water"]),
+  );
+  if (!parsedArgs.ok) return usageExit(parsedArgs.error);
+  if (parsedArgs.positional.length !== 1) {
+    return usageExit("registry: registry.json 경로 하나가 필요합니다");
+  }
+  const publicKeyPath = parsedArgs.options.get("--public-key");
+  const expectedRegistryId = parsedArgs.options.get("--registry-id");
+  const expectedKeyId = parsedArgs.options.get("--key-id");
+  if (!publicKeyPath || !expectedRegistryId || !expectedKeyId) {
+    return usageExit("registry: --public-key, --registry-id, --key-id가 모두 필요합니다");
+  }
+  const atRaw = parsedArgs.options.get("--at");
+  const now = atRaw === undefined ? Date.now() : Date.parse(atRaw);
+  if (!Number.isFinite(now)) return usageExit("registry: --at은 유효한 ISO-8601 시각이어야 합니다");
+  const highWater = parseHighWater(parsedArgs.options.get("--high-water"));
+  if (highWater === null) return usageExit("registry: --high-water는 <sequence>:<sha256> 형식이어야 합니다");
+
+  const registryPath = parsedArgs.positional[0];
+  const registryDocument = readDocument(registryPath);
+  const publicKeyDocument = readDocument(publicKeyPath, `public key ${publicKeyPath}`);
+  if (!registryDocument || !publicKeyDocument) return 1;
+  const publicKey = parseRegistryPublicKey(publicKeyDocument.raw);
+  if (!publicKey.ok) {
+    printErrors(publicKeyPath, publicKey.errors);
+    return 1;
+  }
+  const certified = await certifyRegistryIndex(registryDocument.raw, {
+    expectedRegistryId,
+    expectedKeyId,
+    publicKey: publicKey.value,
+    now,
+    ...(highWater === undefined ? {} : { highWater }),
+  });
+  if (!certified.ok) {
+    printErrors(registryPath, [`${certified.code}: ${certified.errors.join("; ")}`]);
+    return 1;
+  }
+  console.log(
+    `✓ ${registryPath} (registry=${certified.value.index.registryId} sequence=${certified.value.index.sequence} digest=${certified.value.digest} continuity=${certified.value.continuity})`,
+  );
+  return 0;
+}
+
+async function main(argv) {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(USAGE);
+    return 0;
+  }
+  if (argv.length === 0) return usageExit();
+  const explicitMode = MODES.has(argv[0]);
+  const mode = explicitMode ? argv[0] : "plugin";
+  const args = explicitMode ? argv.slice(1) : argv;
+  if (args.length === 0) return usageExit(`${mode}: 입력 경로가 필요합니다`);
+  if (mode === "plugin") return validatePlugins(args);
+  if (mode === "release") return validateReleases(args);
+  if (mode === "conformance") return validateConformance(args);
+  return validateRegistry(args);
+}
+
+process.exitCode = await main(process.argv.slice(2));

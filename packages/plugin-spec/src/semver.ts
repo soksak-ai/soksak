@@ -1,76 +1,170 @@
-// semver 비교 유틸 — 의존 해석(플러그인↔플러그인 dependencies·accept.minVersion)의 단일진실.
-// spec.ts 가 재수출한다(패키지 공개 API 불변).
+// SemVer grammar, deterministic dependency-range subset, and precedence.
+// This module has no product or package baseline: each unit owns its version,
+// while repository policy/CI decides which version is current.
 
-export const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/;
+export const MAX_SEMVER_LENGTH = 256;
+const NUMERIC_IDENTIFIER = String.raw`(?:0|[1-9][0-9]*)`;
+const PRERELEASE_IDENTIFIER = String.raw`(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)`;
+export const STRICT_SEMVER_PATTERN =
+  NUMERIC_IDENTIFIER +
+  String.raw`\.` + NUMERIC_IDENTIFIER +
+  String.raw`\.` + NUMERIC_IDENTIFIER +
+  String.raw`(?:-` + PRERELEASE_IDENTIFIER + String.raw`(?:\.` + PRERELEASE_IDENTIFIER + String.raw`)*)?` +
+  String.raw`(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?`;
+export const STRICT_SEMVER_RE = new RegExp(
+  String.raw`^(?=.{1,` + MAX_SEMVER_LENGTH + String.raw`}$)` + STRICT_SEMVER_PATTERN + String.raw`$`,
+);
+export const SEMVER_RE = STRICT_SEMVER_RE;
 
-// a vs b: -1(a<b) | 0(a==b) | 1(a>b), major.minor.patch 비교(pre-release 무시). 형식 불량이면 null.
+export function isStrictSemver(value: unknown): value is string {
+  return typeof value === "string" && value.length <= MAX_SEMVER_LENGTH && STRICT_SEMVER_RE.test(value);
+}
+
+export const MAX_UNIT_DEPENDENCY_RANGE_LENGTH = 512;
+export const MAX_UNIT_DEPENDENCY_CLAUSES = 16;
+
+export function isUnitDependencyRange(value: unknown): value is string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > MAX_UNIT_DEPENDENCY_RANGE_LENGTH ||
+    value !== value.trim() ||
+    value.includes("||")
+  ) {
+    return false;
+  }
+  if (value === "*") return true;
+  const clauses = value.split(" ");
+  if (
+    clauses.length === 0 ||
+    clauses.length > MAX_UNIT_DEPENDENCY_CLAUSES ||
+    clauses.some((clause) => clause.length === 0 || clause === "*")
+  ) return false;
+  return clauses.every((clause) => {
+    const match = /^(\^|~|>=|<=|>|<|=)?(.+)$/.exec(clause);
+    return match !== null && isStrictSemver(match[2]);
+  });
+}
+
+interface ParsedSemver {
+  core: readonly [bigint, bigint, bigint];
+  prerelease: readonly string[] | null;
+}
+
+function parseSemver(value: string): ParsedSemver | null {
+  if (!isStrictSemver(value)) return null;
+  const withoutBuild = value.split("+", 1)[0];
+  const dash = withoutBuild.indexOf("-");
+  const coreRaw = dash < 0 ? withoutBuild : withoutBuild.slice(0, dash);
+  const prerelease = dash < 0 ? null : withoutBuild.slice(dash + 1).split(".");
+  const [major, minor, patch] = coreRaw.split(".").map((part) => BigInt(part));
+  return { core: [major, minor, patch], prerelease };
+}
+
+function compareIdentifier(left: string, right: string): number {
+  const leftNumeric = /^[0-9]+$/.test(left);
+  const rightNumeric = /^[0-9]+$/.test(right);
+  if (leftNumeric && rightNumeric) {
+    const a = BigInt(left);
+    const b = BigInt(right);
+    return a === b ? 0 : a < b ? -1 : 1;
+  }
+  if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+
+// a vs b: -1(a<b) | 0(a==b) | 1(a>b). Build metadata is intentionally ignored.
+// Invalid input returns null so callers cannot turn malformed versions into matches.
 export function semverCompare(a: string, b: string): number | null {
-  const ma = SEMVER_RE.exec(a);
-  const mb = SEMVER_RE.exec(b);
-  if (!ma || !mb) return null;
-  for (let i = 1; i <= 3; i++) {
-    const da = Number(ma[i]);
-    const db = Number(mb[i]);
-    if (da !== db) return da > db ? 1 : -1;
+  const left = parseSemver(a);
+  const right = parseSemver(b);
+  if (!left || !right) return null;
+  for (let index = 0; index < 3; index++) {
+    if (left.core[index] !== right.core[index]) {
+      return left.core[index] < right.core[index] ? -1 : 1;
+    }
+  }
+  if (left.prerelease === null || right.prerelease === null) {
+    return left.prerelease === right.prerelease ? 0 : left.prerelease === null ? 1 : -1;
+  }
+  const length = Math.max(left.prerelease.length, right.prerelease.length);
+  for (let index = 0; index < length; index++) {
+    const leftPart = left.prerelease[index];
+    const rightPart = right.prerelease[index];
+    if (leftPart === undefined || rightPart === undefined) {
+      return leftPart === rightPart ? 0 : leftPart === undefined ? -1 : 1;
+    }
+    const compared = compareIdentifier(leftPart, rightPart);
+    if (compared !== 0) return compared;
   }
   return 0;
 }
 
-// a ≥ b. 형식 불량이면 null. (하위호환 — 기존 재수출·호출부 유지.)
 export function semverGte(a: string, b: string): boolean | null {
-  const c = semverCompare(a, b);
-  return c === null ? null : c >= 0;
+  const compared = semverCompare(a, b);
+  return compared === null ? null : compared >= 0;
 }
 
-// 단일 절 판정: * | x.y.z | ^x.y.z | ~x.y.z | (>=|>|<=|<|=)x.y.z. 미인식/불량이면 null.
+function upperBound(base: ParsedSemver, operator: "^" | "~"): string {
+  const [major, minor, patch] = base.core;
+  if (operator === "~") return `${major}.${minor + 1n}.0`;
+  if (major > 0n) return `${major + 1n}.0.0`;
+  if (minor > 0n) return `0.${minor + 1n}.0`;
+  return `0.0.${patch + 1n}`;
+}
+
 function satisfiesClause(version: string, clause: string): boolean | null {
-  const r = clause.trim();
-  if (r === "*" || r === "") return true;
-  const caret = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(r);
-  if (caret) {
-    const [maj, min, pat] = [1, 2, 3].map((i) => Number(caret[i]));
-    // caret 상한(npm 의미론): 최상위 비-0 세그먼트를 고정.
-    const upper = maj > 0 ? `${maj + 1}.0.0` : min > 0 ? `0.${min + 1}.0` : `0.0.${pat + 1}`;
-    const gte = semverGte(version, `${maj}.${min}.${pat}`);
-    const c = semverCompare(version, upper);
-    return gte === null || c === null ? null : gte && c < 0;
+  if (clause === "*") return true;
+  const match = /^(\^|~|>=|<=|>|<|=)?(.+)$/.exec(clause);
+  if (!match) return null;
+  const operator = match[1] ?? "=";
+  const boundary = parseSemver(match[2]);
+  if (!boundary) return null;
+  const compared = semverCompare(version, match[2]);
+  if (compared === null) return null;
+  if (operator === "^" || operator === "~") {
+    const lower = compared >= 0;
+    const upper = semverCompare(version, upperBound(boundary, operator));
+    return upper === null ? null : lower && upper < 0;
   }
-  const tilde = /^~(\d+)\.(\d+)\.(\d+)$/.exec(r);
-  if (tilde) {
-    const [maj, min, pat] = [1, 2, 3].map((i) => Number(tilde[i]));
-    const gte = semverGte(version, `${maj}.${min}.${pat}`);
-    const c = semverCompare(version, `${maj}.${min + 1}.0`);
-    return gte === null || c === null ? null : gte && c < 0;
+  switch (operator) {
+    case ">=": return compared >= 0;
+    case ">": return compared > 0;
+    case "<=": return compared <= 0;
+    case "<": return compared < 0;
+    case "=": return compared === 0;
   }
-  // comparator(연산자 생략 = 정확 일치): >= | > | <= | < | = .
-  const comp = /^(>=|<=|>|<|=)?(\d+\.\d+\.\d+)$/.exec(r);
-  if (comp) {
-    const op = comp[1] || "=";
-    const c = semverCompare(version, comp[2]);
-    if (c === null) return null;
-    switch (op) {
-      case ">=": return c >= 0;
-      case ">": return c > 0;
-      case "<=": return c <= 0;
-      case "<": return c < 0;
-      case "=": return c === 0;
-    }
-  }
-  return null; // 미인식 절 형태
+  return null;
 }
 
-// version 이 range 를 만족하는가. 지원: * | x.y.z | ^x.y.z | ~x.y.z | 비교연산자(>= > <= < =) +
-// 공백 구분 복합 범위(AND, 예 ">=1.0.0 <2.0.0"). 의존 시스템이 설치 버전 ↔ 의존 범위 매칭에 쓴다.
-// 형식 불량이거나 미인식 절이 하나라도 있으면 null(호출부가 거부 처리 — 조용한 통과 없음).
+function clauseNamesSameCorePrerelease(version: ParsedSemver, clause: string): boolean {
+  if (clause === "*") return false;
+  const match = /^(\^|~|>=|<=|>|<|=)?(.+)$/.exec(clause);
+  if (!match) return false;
+  const boundary = parseSemver(match[2]);
+  return boundary?.prerelease !== null &&
+    boundary !== null &&
+    boundary.core.every((part, index) => part === version.core[index]);
+}
+
+// Supported deterministic subset: *; exact; ^; ~; >=, >, <=, <, =; and
+// whitespace-separated AND clauses. `||`, partial versions and tags are rejected.
 export function semverSatisfies(version: string, range: string): boolean | null {
-  if (!SEMVER_RE.exec(version)) return null;
-  const clauses = range.trim().split(/\s+/).filter(Boolean);
-  if (clauses.length === 0) return null;
+  const parsedVersion = parseSemver(version);
+  if (!parsedVersion || !isUnitDependencyRange(range)) return null;
+  const clauses = range.split(" ");
   let result = true;
   for (const clause of clauses) {
-    const s = satisfiesClause(version, clause);
-    if (s === null) return null; // 미인식/불량 절 → 전체 미판정(과잉통과 금지)
-    if (s === false) result = false; // AND — 계속 훑어 뒤의 미인식 절도 포착
+    const satisfied = satisfiesClause(version, clause);
+    if (satisfied === null) return null;
+    if (!satisfied) result = false;
+  }
+  if (
+    result &&
+    parsedVersion.prerelease !== null &&
+    !clauses.some((clause) => clauseNamesSameCorePrerelease(parsedVersion, clause))
+  ) {
+    return false;
   }
   return result;
 }

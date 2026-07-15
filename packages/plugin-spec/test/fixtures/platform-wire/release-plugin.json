@@ -1,0 +1,30 @@
+{
+  "spec": "soksak-spec-release@0.0.1",
+  "kind": "plugin",
+  "id": "weather-plugin",
+  "version": "0.0.1",
+  "source": {
+    "repository": "https://github.com/example/weather-plugin",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "releaseTag": "v0.0.1",
+  "dependencies": [
+    {
+      "kind": "kit",
+      "id": "terminal-common",
+      "range": ">=0.0.1 <1.0.0"
+    }
+  ],
+  "artifacts": [
+    {
+      "target": "any",
+      "url": "https://github.com/example/weather-plugin/releases/download/v0.0.1/weather-plugin-0.0.1.tgz",
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "format": "tgz",
+      "entrypoint": {
+        "kind": "plugin",
+        "manifest": "plugin.json"
+      }
+    }
+  ]
+}

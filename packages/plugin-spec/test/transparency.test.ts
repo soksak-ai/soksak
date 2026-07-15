@@ -84,6 +84,7 @@ describe("contributes.views[].status — 선언 축 파싱(M1)", () => {
 function contributes(overrides: Record<string, unknown> = {}) {
   return {
     views: [] as { id: string; placements: string[]; status?: string[] }[],
+    overlays: [] as unknown[],
     commands: [] as unknown[],
     fileViewers: [] as unknown[],
     programs: [] as unknown[],
@@ -115,13 +116,16 @@ describe("transparencyViolations — C2 정적 3규칙(M2)", () => {
     expect(v.map((x) => x.rule)).toEqual(["command-surface"]);
   });
 
-  it("programs·fileViewers 만 기여해도 기능 보유 — commands=0 이면 command-surface", () => {
+  it("programs·fileViewers·overlays 만 기여해도 기능 보유 — commands=0 이면 command-surface", () => {
     expect(
       transparencyViolations(contributes({ programs: [{}] })).map((x) => x.rule),
     ).toEqual(["command-surface"]);
     expect(
       transparencyViolations(contributes({ fileViewers: [{}, {}] })).map((x) => x.rule),
     ).toEqual(["command-surface"]);
+    expect(
+      transparencyViolations(contributes({ overlays: [{}] })).map((x) => x.rule),
+    ).toEqual(["command-surface", "view-nodes"]);
   });
 
   it("views>0 ∧ nodes=0 → view-nodes", () => {

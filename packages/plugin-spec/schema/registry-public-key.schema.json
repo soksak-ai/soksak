@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:soksak:spec:registry-public-key:0.0.1",
+  "title": "soksak registry Ed25519 trust key 0.0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["algorithm", "keyId", "value"],
+  "properties": {
+    "algorithm": { "const": "ed25519" },
+    "keyId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "value": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z0-9+/]{4}){10}[A-Za-z0-9+/]{3}=$"
+    }
+  }
+}
