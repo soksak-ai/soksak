@@ -1,5 +1,5 @@
 {
-  "spec": "soksak-spec-plugin@1",
+  "spec": "soksak-spec-plugin@0.0.1",
   "id": "soksak-plugin-e2e-surface",
   "name": {
     "ko": "W6 표면 픽스처",

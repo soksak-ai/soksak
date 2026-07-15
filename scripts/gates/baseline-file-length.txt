@@ -32,7 +32,6 @@
 #     의 원인은 프로세스 밖에서 가릴 수 없다. i18n.ts 1545→1549(키 2개, ko/en).
 #   2026-07-13 — ns 회수 표면(data.ns.remove). 만드는 길만 있고 걷는 길이 없어 시험이 남의 저장소에 흔적을
 #     남겼다(회수 3축의 데이터 축 구멍). i18n.ts 1541→1545(키 2개, ko/en).
-packages/plugin-spec/src/spec.ts 1533
 src-tauri/cli/src/lib.rs 1757
 src-tauri/src/webview.rs 1542
 src/commands/catalog.ts 2739

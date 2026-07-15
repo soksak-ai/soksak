@@ -1,5 +1,5 @@
 {
-  "spec": "soksak-spec-plugin@1",
+  "spec": "soksak-spec-plugin@0.0.1",
   "id": "soksak-plugin-gitchanged-probe",
   "name": { "ko": "git.changed 프로브", "en": "git.changed probe" },
   "version": "0.0.1",

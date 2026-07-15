@@ -54,7 +54,7 @@ describe("public platform boundary", () => {
 
   it("rejects extracting the private PTY contract", () => {
     const manifest = {
-      schema: "ai.soksak/platform-extraction@1",
+      schema: "ai.soksak/platform-extraction@0.0.1",
       repositories: [
         { name: "soksak-spec", units: [{ kind: "cargo", name: "soksak-spec-pty", source: "src-tauri/crates/soksak-spec-pty", destination: "crates/soksak-spec-pty", files: ["Cargo.toml", "src/lib.rs"] }] },
         { name: "soksak-plugin-sdk", units: [] },
@@ -87,6 +87,7 @@ describe("public platform boundary", () => {
     try {
       stageRepository(REPO_ROOT, "soksak-spec", root);
       const workspace = readFileSync(join(root, "Cargo.toml"), "utf8");
+      expect(workspace).toContain('"crates/soksak-spec-contract"');
       expect(workspace).toContain('"crates/soksak-spec-service"');
       expect(workspace).toContain('"crates/soksak-spec-socket"');
       expect(workspace).not.toContain("pty");

@@ -19,15 +19,28 @@ export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..
 export const EXTRACTION_MANIFEST = "platform/extraction-manifest.json";
 
 const PUBLIC_REPOSITORIES = new Set(["soksak-spec", "soksak-plugin-sdk"]);
-const PUBLIC_RUST = new Set(["soksak-spec-service", "soksak-spec-socket"]);
+const PUBLIC_RUST = new Set([
+  "soksak-spec-contract",
+  "soksak-spec-service",
+  "soksak-spec-socket",
+]);
 const PUBLIC_UNITS = new Map([
-  ["soksak-spec", new Set(["@soksak-ai/plugin-spec", "soksak-spec-service", "soksak-spec-socket"])],
+  [
+    "soksak-spec",
+    new Set([
+      "@soksak-ai/plugin-spec",
+      "soksak-spec-contract",
+      "soksak-spec-service",
+      "soksak-spec-socket",
+    ]),
+  ],
   ["soksak-plugin-sdk", new Set(["@soksak-ai/plugin-api"])],
 ]);
 const DOMAIN_CONTRACTS = new Set([
   "soksak-contract-browser",
   "soksak-contract-git",
   "soksak-contract-issue-board",
+  "soksak-contract-narration",
   "soksak-contract-prompt-store",
   "soksak-contract-terminal",
 ]);
@@ -141,7 +154,7 @@ function validateInventory(root, unit, errors) {
 
 export function manifestViolations(root, manifest) {
   const errors = [];
-  if (manifest.schema !== "ai.soksak/platform-extraction@1") {
+  if (manifest.schema !== "ai.soksak/platform-extraction@0.0.1") {
     errors.push("extraction manifest: unsupported schema");
   }
   const repositories = Array.isArray(manifest.repositories) ? manifest.repositories : [];
@@ -184,6 +197,7 @@ export function manifestViolations(root, manifest) {
   const specRepo = repositories.find((repo) => repo.name === "soksak-spec");
   const cargoMembers = new Set(specRepo?.workspace?.cargoMembers ?? []);
   const expectedCargoMembers = new Set([
+    "crates/soksak-spec-contract",
     "crates/soksak-spec-service",
     "crates/soksak-spec-socket",
   ]);
@@ -191,7 +205,9 @@ export function manifestViolations(root, manifest) {
     cargoMembers.size !== expectedCargoMembers.size ||
     [...expectedCargoMembers].some((member) => !cargoMembers.has(member))
   ) {
-    errors.push("extraction manifest: soksak-spec Cargo workspace must contain service/socket only");
+    errors.push(
+      "extraction manifest: soksak-spec Cargo workspace must contain contract/service/socket only",
+    );
   }
   for (const unit of units) validateInventory(root, unit, errors);
 
@@ -276,7 +292,11 @@ export function scanPlatformBoundaries(root = REPO_ROOT) {
     errors.push("plugin SDK: repository must point to public soksak-plugin-sdk");
   }
 
-  for (const crate of ["soksak-spec-service", "soksak-spec-socket"]) {
+  for (const crate of [
+    "soksak-spec-contract",
+    "soksak-spec-service",
+    "soksak-spec-socket",
+  ]) {
     const cargo = readFileSync(resolve(root, `src-tauri/crates/${crate}/Cargo.toml`), "utf8");
     if (!/^publish\s*=\s*false\s*$/m.test(cargo)) errors.push(`${crate}: publish = false is required`);
     if (!/^repository\s*=\s*"https:\/\/github\.com\/soksak-ai\/soksak-spec"\s*$/m.test(cargo)) {
@@ -433,21 +453,21 @@ export function verifyReleaseArtifacts(root = REPO_ROOT) {
     writeFileSync(
       join(consumer, "smoke.mjs"),
       'import { SPEC_VERSION, parseManifest } from "@soksak-ai/plugin-spec";\n' +
-        'if (SPEC_VERSION !== "soksak-spec-plugin@1") throw new Error(`unexpected spec ${SPEC_VERSION}`);\n' +
+        'if (SPEC_VERSION !== "soksak-spec-plugin@0.0.1") throw new Error(`unexpected spec ${SPEC_VERSION}`);\n' +
         'if (typeof parseManifest !== "function") throw new Error("validator missing");\n' +
         'await import("@soksak-ai/plugin-api");\n',
     );
     run(process.execPath, ["smoke.mjs"], { cwd: consumer });
     writeFileSync(
       join(consumer, "smoke.ts"),
-      'import type { Plugin } from "@soksak-ai/plugin-api";\n' +
+      'import type { SoksakPluginModule } from "@soksak-ai/plugin-api";\n' +
         'import type { PluginManifest } from "@soksak-ai/plugin-spec";\n' +
-        'declare const plugin: Plugin; declare const manifest: PluginManifest;\n' +
+        'declare const plugin: SoksakPluginModule; declare const manifest: PluginManifest;\n' +
         'void plugin; void manifest;\n',
     );
     writeFileSync(
       join(consumer, "tsconfig.json"),
-      `${JSON.stringify({ compilerOptions: { strict: true, noEmit: true, module: "ESNext", moduleResolution: "bundler", lib: ["ES2022", "DOM"] }, include: ["smoke.ts"] }, null, 2)}\n`,
+      `${JSON.stringify({ compilerOptions: { strict: true, noEmit: true, target: "ES2022", module: "ESNext", moduleResolution: "bundler", lib: ["ES2022", "DOM"] }, include: ["smoke.ts"] }, null, 2)}\n`,
     );
     run(process.execPath, [resolve(root, "node_modules/typescript/bin/tsc"), "-p", "tsconfig.json"], { cwd: consumer });
 
