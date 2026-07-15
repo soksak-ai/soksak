@@ -363,13 +363,16 @@ fn plugin_dev_new_in(base: &Path, id: &str) -> Result<PluginInstallResult, Strin
     let staging = base.join(format!(".tmp-{id}-{}-{nanos}", std::process::id()));
     std::fs::create_dir(&staging).map_err(|e| e.to_string())?;
     let manifest = format!(
-        "{{\n  \"spec\": \"soksak-spec-plugin@0.0.1\",\n  \"id\": \"{id}\",\n  \"name\": \"{id}\",\n  \"version\": \"0.0.1\",\n  \"description\": \"새 soksak 플러그인\",\n  \"entry\": \"main.js\",\n  \"permissions\": [],\n  \"contributes\": {{ \"views\": [], \"commands\": [], \"programs\": [] }}\n}}\n"
+        "{{\n  \"spec\": \"soksak-spec-plugin@0.0.1\",\n  \"id\": \"{id}\",\n  \"name\": \"{id}\",\n  \"version\": \"0.0.1\",\n  \"description\": \"새 soksak 플러그인\",\n  \"entry\": \"main.js\",\n  \"permissions\": [\"commands\"],\n  \"contributes\": {{ \"commands\": [{{ \"name\": \"hello\", \"title\": \"Hello\" }}] }}\n}}\n"
     );
     let staged = (|| {
         std::fs::write(staging.join("plugin.json"), &manifest).map_err(|e| e.to_string())?;
         std::fs::write(
             staging.join("main.js"),
-            "export default { activate() {}, deactivate() {} };\n",
+            "// New soksak plugin — the SDK reminder-demo is the canonical author pattern.\n\
+             export default {\n  \
+             controller: {\n    async activate() {},\n    async deactivate() {},\n  },\n  \
+             commands: {\n    async hello() {\n      return { ok: true };\n    },\n  },\n};\n",
         )
         .map_err(|e| e.to_string())?;
         std::fs::write(staging.join(".gitignore"), "node_modules/\n").map_err(|e| e.to_string())?;
@@ -694,6 +697,22 @@ mod tests {
         assert!(r.manifest.contains("my-plugin"));
         let manifest: serde_json::Value = serde_json::from_str(&r.manifest).unwrap();
         assert_eq!(manifest["version"], "0.0.1");
+        // DAG16: 스캐폴드는 SDK 정식 shape를 낸다 — commands 권한 + contributes.commands +
+        // main.js 의 controller/commands 모듈(SoksakPluginModule). 하드코딩 빈 스텁이 아니다.
+        assert!(
+            manifest["permissions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|p| p == "commands"),
+            "{}",
+            r.manifest
+        );
+        assert_eq!(manifest["contributes"]["commands"][0]["name"], "hello");
+        let main_js = std::fs::read_to_string(dir.join("main.js")).unwrap();
+        assert!(main_js.contains("controller:"), "{main_js}");
+        assert!(main_js.contains("commands:"), "{main_js}");
+        assert!(main_js.contains("async activate()"), "{main_js}");
         // 이미 존재하면 거부.
         assert!(plugin_dev_new_in(&base, "my-plugin").is_err());
         let _ = std::fs::remove_dir_all(&root);
