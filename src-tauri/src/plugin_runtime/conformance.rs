@@ -180,7 +180,12 @@ impl LiveHelper {
     }
 
     fn heartbeat_after(&mut self, baseline: usize) -> Result<(), String> {
-        self.receive_matching(HEARTBEAT_DEADLINE, |_| self.heartbeat_count > baseline)?;
+        // receive_matching increments self.heartbeat_count on every heartbeat, so a predicate
+        // cannot also borrow self. Loop on the count outside the call and let each pass wait for
+        // the next heartbeat — equivalent to "count exceeds baseline".
+        while self.heartbeat_count <= baseline {
+            self.receive_matching(HEARTBEAT_DEADLINE, |output| output.kind == "heartbeat")?;
+        }
         Ok(())
     }
 

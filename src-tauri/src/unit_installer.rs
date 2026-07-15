@@ -586,6 +586,7 @@ impl UnitInstallManager {
             (&left.root.kind, &left.root.id).cmp(&(&right.root.kind, &right.root.id))
         });
 
+        let prior_current = prior.as_ref().map(|state| state.current.clone());
         let mut available = prior
             .map(|state| {
                 state
@@ -656,7 +657,7 @@ impl UnitInstallManager {
             current: generation.to_string(),
             previous: roots
                 .first()
-                .and_then(|_| prior.as_ref().map(|state| state.current.clone())),
+                .and_then(|_| prior_current),
             roots,
             units: installed,
         };
@@ -966,7 +967,7 @@ mod tests {
             .unwrap();
 
         let active = read_active_state(&home.join("installed-units.json")).unwrap().unwrap();
-        let ids = active.units.iter().map(|unit| unit.id.as_str()).collect::<HashSet<_>>();
+        let ids = active.units.iter().map(|unit| unit.release.id.as_str()).collect::<HashSet<_>>();
         assert_eq!(ids, HashSet::from(["notes-plugin", "weather-plugin"]));
         fs::remove_dir_all(home).unwrap();
     }
