@@ -28,7 +28,7 @@ export function registerUpdateCatalog(): void {
       });
     },
     errors: ["INTERNAL"],
-    examples: ["sok update.check"],
+    examples: ["update.check"],
     handler: async () => {
       const app = await checkApp();
       const installed = Object.values(usePlugins.getState().plugins).filter(
@@ -74,7 +74,7 @@ export function registerUpdateCatalog(): void {
     danger: "destructive",
     message: (d) => tmsg("msg.update.apply", { n: ((d.applied as unknown[]) ?? []).length }),
     errors: ["INTERNAL"],
-    examples: ["sok update.apply", 'sok update.apply \'{"app":false}\''],
+    examples: ["update.apply", 'update.apply \'{"app":false}\''],
     handler: async (p) => {
       const applied: Record<string, unknown>[] = [];
       const skipped: Record<string, unknown>[] = [];

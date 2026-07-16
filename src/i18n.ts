@@ -458,11 +458,11 @@ const ko = {
 
   // 오류 hint(제시, MESSAGE-PROTOCOL) — 실패 응답에 얹히는 후속 명령 후보. 지시가 아니라
   // "이런 것이 가능하다"의 제시로 받은 쪽의 진단·회복을 돕는다. 제안 어조로 짓는다.
-  "hint.error.unknownCommand": "sok commands 로 전체 명령을 찾아볼 수 있습니다",
-  "hint.error.targetNotFound": "sok state.tree 로 현재 대상 트리를 확인할 수 있습니다",
-  "hint.error.invalidParams": "sok help {command} 로 파라미터 형식을 확인할 수 있습니다",
-  "hint.error.consentRequired": "sok plugin.consent.preview 로 요청할 동의 범위를 미리 볼 수 있습니다",
-  "hint.error.timeout": "sok state.tree 로 현재 상태를 확인하고 다시 시도할 수 있습니다",
+  "hint.error.unknownCommand": "전체 명령을 찾아볼 수 있습니다",
+  "hint.error.targetNotFound": "현재 대상 트리를 확인할 수 있습니다",
+  "hint.error.invalidParams": "파라미터 형식을 확인할 수 있습니다",
+  "hint.error.consentRequired": "요청할 동의 범위를 미리 볼 수 있습니다",
+  "hint.error.timeout": "현재 상태를 확인하고 다시 시도할 수 있습니다",
   "hint.error.pluginNotInstalled": "{plugin} 플러그인의 명령입니다 — 설치하면 {command} 명령을 사용할 수 있습니다",
   "hint.error.pluginDisabled": "{plugin} 플러그인이 설치되어 있지만 활성화되지 않았습니다 — 활성화하면 명령이 등록됩니다",
   "hint.error.pluginCommandFullName": "플러그인 명령은 전체 이름으로 호출합니다 — 이 명령은 {plugin} 소속입니다",
@@ -1231,11 +1231,11 @@ const en: Record<MsgKey, string> = {
 
   // 오류 hint(제시, MESSAGE-PROTOCOL) — 실패 응답에 얹히는 후속 명령 후보. 지시가 아니라
   // "이런 것이 가능하다"의 제시로 받은 쪽의 진단·회복을 돕는다. 제안 어조로 짓는다.
-  "hint.error.unknownCommand": "You can discover every command with sok commands",
-  "hint.error.targetNotFound": "You can inspect the current target tree with sok state.tree",
-  "hint.error.invalidParams": "You can check the parameter shape with sok help {command}",
-  "hint.error.consentRequired": "You can preview the consent scope with sok plugin.consent.preview",
-  "hint.error.timeout": "You can check the current state and retry with sok state.tree",
+  "hint.error.unknownCommand": "You can discover every command",
+  "hint.error.targetNotFound": "You can inspect the current target tree",
+  "hint.error.invalidParams": "You can check the parameter shape",
+  "hint.error.consentRequired": "You can preview the consent scope",
+  "hint.error.timeout": "You can check the current state and retry",
   "hint.error.pluginNotInstalled": "This command belongs to the {plugin} plugin, which is not installed — installing it makes {command} available",
   "hint.error.pluginDisabled": "The {plugin} plugin is installed but not enabled — enabling it registers its commands",
   "hint.error.pluginCommandFullName": "Plugin commands use their full name — this one belongs to {plugin}",

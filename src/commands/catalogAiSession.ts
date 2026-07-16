@@ -15,7 +15,7 @@ export function registerAiSessionCatalog(): void {
     returns: "{ kind }",
     message: (d) => (d.kind ? tmsg("msg.ai.session.detect.agent", { kind: String(d.kind) }) : tmsg("msg.ai.session.detect.none")),
     errors: ["INVALID_PARAMS"],
-    examples: ['sok ai.session.detect \'{"command":"claude --resume"}\''],
+    examples: ['ai.session.detect \'{"command":"claude --resume"}\''],
     handler: async (p) => {
       if (typeof p.command !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "command 필요" };
@@ -36,7 +36,7 @@ export function registerAiSessionCatalog(): void {
     returns: "{ rows }",
     message: (d) => tmsg("msg.ai.session.lineage", { n: ((d.rows as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok ai.session.lineage \'{"cwd":"/Users/me/proj"}\''],
+    examples: ['ai.session.lineage \'{"cwd":"/Users/me/proj"}\''],
     handler: async (p) => {
       if (typeof p.cwd !== "string" || !p.cwd.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "cwd 필요" };
@@ -57,7 +57,7 @@ export function registerAiSessionCatalog(): void {
     returns: "{ session }",
     message: (d) => (d.session ? tmsg("msg.ai.session.find.found") : tmsg("msg.ai.session.find.none")),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok ai.session.find \'{"cwd":"/Users/me/proj"}\''],
+    examples: ['ai.session.find \'{"cwd":"/Users/me/proj"}\''],
     handler: async (p) => {
       if (typeof p.cwd !== "string" || !p.cwd.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "cwd 필요" };
@@ -75,7 +75,7 @@ export function registerAiSessionCatalog(): void {
     returns: "{ session }",
     message: (d) => (d.session ? tmsg("msg.ai.session.inspect.read") : tmsg("msg.ai.session.inspect.none")),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok ai.session.inspect \'{"path":"~/.claude/projects/-Users-me-proj/<id>.jsonl"}\''],
+    examples: ['ai.session.inspect \'{"path":"~/.claude/projects/-Users-me-proj/<id>.jsonl"}\''],
     handler: async (p) => {
       if (typeof p.path !== "string" || !p.path.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "path 필요" };

@@ -15,6 +15,7 @@ import {
   type PluginRuntimePrincipal,
 } from "@soksak-ai/plugin-spec";
 import { currentWindowLabel } from "../lib/webviewLabels";
+import { cliName } from "../lib/cliIdentity";
 import { tmsg } from "../i18n";
 
 // 파라미터 스펙(JSON 직렬화 가능 — CLI/MCP/문서 생성에 그대로 쓰임).
@@ -1278,6 +1279,13 @@ function withCommonFields(out: CommandOutcome, name: string, ctx: CommandContext
       if (std) out.hint = std;
     }
   }
+  // 프리픽스는 데이터가 아니라 제시자의 정체성이다 — hint 생산자(spec.hint·표준안내·서비스 봉투)는
+  // 명령 형태만 짓고, 이 단일 지점에서 이 앱의 CLI 이름을 무조건 앞에 붙인다. dev 앱의 제안은
+  // sok-dev 로, release 는 sok 로 실행돼야 각자의 소켓에 닿는다. 조건부 감지는 없다 — 형태-only 계약.
+  if (out.hint && out.hint.length) {
+    const bin = cliName();
+    out.hint = out.hint.map((h) => ({ ...h, cmd: `${bin} ${h.cmd}` }));
+  }
   return out;
 }
 
@@ -1301,19 +1309,19 @@ function standardErrorHints(code: string, command: string): CommandHint[] | unde
       } catch {
         /* 해석 실패는 안내 품질 저하일 뿐 — 응답을 깨지 않는다 */
       }
-      return [{ cmd: "sok commands", why: tmsg("hint.error.unknownCommand") }];
+      return [{ cmd: "commands", why: tmsg("hint.error.unknownCommand") }];
     }
     case "TARGET_NOT_FOUND":
-      return [{ cmd: "sok state.tree", why: tmsg("hint.error.targetNotFound") }];
+      return [{ cmd: "state.tree", why: tmsg("hint.error.targetNotFound") }];
     case "INVALID_PARAMS":
-      return [{ cmd: `sok help ${command}`, why: tmsg("hint.error.invalidParams", { command }) }];
+      return [{ cmd: `help ${command}`, why: tmsg("hint.error.invalidParams", { command }) }];
     case "AMBIGUOUS_TARGET":
     case "ALREADY_EXISTS":
-      return [{ cmd: `sok help ${command}`, why: tmsg("hint.error.invalidParams", { command }) }];
+      return [{ cmd: `help ${command}`, why: tmsg("hint.error.invalidParams", { command }) }];
     case "CONSENT_REQUIRED":
-      return [{ cmd: "sok plugin.consent.preview '{\"id\":...}'", why: tmsg("hint.error.consentRequired") }];
+      return [{ cmd: "plugin.consent.preview '{\"id\":...}'", why: tmsg("hint.error.consentRequired") }];
     case "TIMEOUT":
-      return [{ cmd: "sok state.tree", why: tmsg("hint.error.timeout") }];
+      return [{ cmd: "state.tree", why: tmsg("hint.error.timeout") }];
     default:
       return undefined;
   }

@@ -97,16 +97,16 @@ export function registerDaemonCatalog(): void {
       "{ daemons: [{ name, cmd, running, pid?, uptimeMs?, autostart, managed, exitCode? }] }",
     message: (d) => tmsg("msg.daemon.list", { n: ((d.daemons as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok daemon.list"],
+    examples: ["daemon.list"],
     hint: (d) => {
       const list = (d.daemons as { name: string; running: boolean; autostart: boolean }[]) ?? [];
       const idle = list.find((x) => !x.running);
       const out: CommandHint[] = [];
       if (idle)
-        out.push({ cmd: `sok daemon.start ${idle.name}`, why: tmsg("hint.daemon.start") });
+        out.push({ cmd: `daemon.start ${idle.name}`, why: tmsg("hint.daemon.start") });
       if (list.length && list.some((x) => !x.autostart))
-        out.push({ cmd: "sok daemon.autostart '{\"on\":true}'", why: tmsg("hint.daemon.autostart") });
-      if (!list.length) out.push({ cmd: "sok daemon.add '{\"name\":\"dev\",\"cmd\":\"npm run dev\"}'", why: tmsg("hint.daemon.add") });
+        out.push({ cmd: "daemon.autostart '{\"on\":true}'", why: tmsg("hint.daemon.autostart") });
+      if (!list.length) out.push({ cmd: "daemon.add '{\"name\":\"dev\",\"cmd\":\"npm run dev\"}'", why: tmsg("hint.daemon.add") });
       return out;
     },
     handler: async (p) => {
@@ -146,13 +146,13 @@ export function registerDaemonCatalog(): void {
     returns: "{ name, cmd }",
     message: (d) => tmsg("msg.daemon.add", { name: String(d.name) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
-    examples: ["sok daemon.add '{\"name\":\"dev\",\"cmd\":\"npm run dev\"}'"],
+    examples: ["daemon.add '{\"name\":\"dev\",\"cmd\":\"npm run dev\"}'"],
     hint: (d) =>
       d.code
         ? []
         : [
-            { cmd: `sok daemon.start ${String(d.name)}`, why: tmsg("hint.daemon.start") },
-            { cmd: `sok daemon.autostart '{"name":"${String(d.name)}","on":true}'`, why: tmsg("hint.daemon.autostart") },
+            { cmd: `daemon.start ${String(d.name)}`, why: tmsg("hint.daemon.start") },
+            { cmd: `daemon.autostart '{"name":"${String(d.name)}","on":true}'`, why: tmsg("hint.daemon.autostart") },
           ],
     handler: async (p) => {
       const root = resolveRoot(p);
@@ -173,7 +173,7 @@ export function registerDaemonCatalog(): void {
     returns: "{ name, removed }",
     message: (d) => tmsg("msg.daemon.remove", { name: String(d.name) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok daemon.remove dev"],
+    examples: ["daemon.remove dev"],
     handler: async (p) => {
       const root = resolveRoot(p);
       if (!root) return noProject();
@@ -202,11 +202,11 @@ export function registerDaemonCatalog(): void {
     primary: "name",
     message: (d) => tmsg("msg.daemon.start", { n: ((d.started as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ["sok daemon.start dev", "sok daemon.start"],
+    examples: ["daemon.start dev", "daemon.start"],
     hint: (d) => {
       const started = (d.started as { name: string }[]) ?? [];
       return started.length
-        ? [{ cmd: `sok daemon.logs ${started[0].name}`, why: tmsg("hint.daemon.logs") }]
+        ? [{ cmd: `daemon.logs ${started[0].name}`, why: tmsg("hint.daemon.logs") }]
         : [];
     },
     handler: async (p) => {
@@ -237,7 +237,7 @@ export function registerDaemonCatalog(): void {
     primary: "name",
     message: (d) => tmsg("msg.daemon.stop", { n: ((d.stopped as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ["sok daemon.stop dev", "sok daemon.stop"],
+    examples: ["daemon.stop dev", "daemon.stop"],
     handler: async (p) => {
       const root = resolveRoot(p);
       if (!root) return noProject();
@@ -263,7 +263,7 @@ export function registerDaemonCatalog(): void {
     returns: "{ name, pid }",
     message: (d) => tmsg("msg.daemon.restart", { name: String(d.name) }),
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ["sok daemon.restart dev"],
+    examples: ["daemon.restart dev"],
     handler: async (p, ctx: CommandContext) => {
       void ctx;
       const root = resolveRoot(p);
@@ -294,7 +294,7 @@ export function registerDaemonCatalog(): void {
     returns: "{ name, lines: [string] }",
     message: (d) => tmsg("msg.daemon.logs", { n: ((d.lines as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok daemon.logs dev", "sok daemon.logs '{\"name\":\"dev\",\"lines\":300}'"],
+    examples: ["daemon.logs dev", "daemon.logs '{\"name\":\"dev\",\"lines\":300}'"],
     handler: async (p) => {
       const root = resolveRoot(p);
       if (!root) return noProject();
@@ -326,7 +326,7 @@ export function registerDaemonCatalog(): void {
         state: tmsg((d.on as boolean) ? "msg.daemon.autostart.on" : "msg.daemon.autostart.off"),
       }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok daemon.autostart '{\"name\":\"dev\",\"on\":true}'", "sok daemon.autostart '{\"on\":true}'"],
+    examples: ["daemon.autostart '{\"name\":\"dev\",\"on\":true}'", "daemon.autostart '{\"on\":true}'"],
     handler: async (p) => {
       const root = resolveRoot(p);
       if (!root) return noProject();
@@ -354,7 +354,7 @@ export function registerDaemonCatalog(): void {
     returns: "{ name, stop? }",
     message: (d) => tmsg("msg.daemon.set", { name: String(d.name) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok daemon.set '{\"name\":\"db\",\"stop\":\"docker compose down\"}'"],
+    examples: ["daemon.set '{\"name\":\"db\",\"stop\":\"docker compose down\"}'"],
     handler: async (p) => {
       const root = resolveRoot(p);
       if (!root) return noProject();
@@ -386,11 +386,11 @@ export function registerDaemonCatalog(): void {
         ? tmsg("msg.pty.daemon.status", { sessions: Number(d.sessions ?? 0) })
         : tmsg("msg.pty.daemon.status.down"),
     errors: ["INTERNAL"],
-    examples: ["sok pty.daemon.status"],
+    examples: ["pty.daemon.status"],
     hint: (d) =>
       d.running
         ? []
-        : [{ cmd: "sok pty.daemon.restart", why: tmsg("hint.pty.daemon.restart") }],
+        : [{ cmd: "pty.daemon.restart", why: tmsg("hint.pty.daemon.restart") }],
     handler: async () => (await invoke("pty_daemon_status")) as Record<string, unknown>,
   });
 
@@ -403,7 +403,7 @@ export function registerDaemonCatalog(): void {
     message: (d) => tmsg("msg.pty.daemon.restart", { killed: Number(d.killed ?? 0) }),
     danger: "destructive",
     errors: ["INTERNAL"],
-    examples: ["sok pty.daemon.restart"],
+    examples: ["pty.daemon.restart"],
     handler: async () => (await invoke("pty_daemon_restart")) as Record<string, unknown>,
   });
 
@@ -415,7 +415,7 @@ export function registerDaemonCatalog(): void {
     returns: "{ upgraded, pid, sessions }",
     message: (d) => tmsg("msg.pty.daemon.upgrade", { sessions: Number(d.sessions ?? 0) }),
     errors: ["INTERNAL"],
-    examples: ["sok pty.daemon.upgrade"],
+    examples: ["pty.daemon.upgrade"],
     handler: async () => (await invoke("pty_daemon_upgrade")) as Record<string, unknown>,
   });
 }

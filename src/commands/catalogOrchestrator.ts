@@ -25,7 +25,7 @@ export function registerOrchestratorCatalog(): void {
     returns: "{ turnId, answer } — message is the agent's final answer",
     message: (d) => (d.answer ? String(d.answer) : tmsg("msg.orchestrator.ask")),
     errors: ["INTERNAL", "TIMEOUT"],
-    examples: ['sok --window main orchestrator.ask \'{"text":"열린 창을 알려줘","timeoutMs":300000}\''],
+    examples: ['--window main orchestrator.ask \'{"text":"열린 창을 알려줘","timeoutMs":300000}\''],
     // 세트는 chat.prompt/chat.answer 가 대표한다 — command.executed 중복 기록 제외.
     trace: false,
     // 답변(AI 텍스트)은 낭독하지 않는다 — 턴 안의 명령들만 각자의 tts 스펙으로 낭독된다.
@@ -39,7 +39,7 @@ export function registerOrchestratorCatalog(): void {
     params: {},
     returns: "{ stopped }",
     message: (d) => (d.stopped ? tmsg("msg.orchestrator.stop.stopped") : tmsg("msg.orchestrator.stop.idle")),
-    examples: ["sok --window main orchestrator.stop"],
+    examples: ["--window main orchestrator.stop"],
     speak: () => "", // 침묵 — 세트(chat.prompt/answer)가 이 턴의 표면(§3 speak 룰)
     handler: () => stop(),
   });

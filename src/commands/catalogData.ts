@@ -35,7 +35,7 @@ export function registerDataCatalog(): void {
         n: Number(d.records) + Number(d.kv),
       }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.ns.remove \'{"ns":"plugin:probe-lane"}\''],
+    examples: ['data.ns.remove \'{"ns":"plugin:probe-lane"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || !p.ns) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns 필요" };
@@ -58,7 +58,7 @@ export function registerDataCatalog(): void {
       "{ sqliteVersion, softHeapLimit, hardHeapLimit, memoryUsed, memoryHighwater, cacheSize, pageSize, pageCount, freelistCount, recordsIndexes }",
     message: (d) => tmsg("msg.data.stats", { n: Number(d.memoryUsed) }),
     errors: ["INTERNAL"],
-    examples: ["sok data.stats"],
+    examples: ["data.stats"],
     handler: async () => {
       const s = await invoke<{
         sqlite_version: string;
@@ -98,7 +98,7 @@ export function registerDataCatalog(): void {
     returns: "{ ok, problems: string[] }",
     message: (d) => tmsg("msg.data.verify", { n: Number(d.count) }),
     errors: ["INTERNAL"],
-    examples: ["sok data.verify"],
+    examples: ["data.verify"],
     handler: async () => {
       const problems = await invoke<string[]>("data_verify");
       return { sound: problems.length === 0, problems, count: problems.length };
@@ -116,7 +116,7 @@ export function registerDataCatalog(): void {
     returns: "{ before: string[], after: string[], healed }",
     message: (d) => tmsg("msg.data.repair", { n: (d.after as string[]).length }),
     errors: ["INTERNAL"],
-    examples: ["sok data.repair"],
+    examples: ["data.repair"],
     handler: async () => {
       const r = await invoke<{ before: string[]; after: string[] }>("data_repair");
       return { ...r, healed: r.before.length - r.after.length };
@@ -131,7 +131,7 @@ export function registerDataCatalog(): void {
     returns: "{ path }",
     message: (d) => tmsg("msg.data.backup", { path: String(d.path) }),
     errors: ["INTERNAL"],
-    examples: ["sok data.backup", 'sok data.backup \'{"path":"/tmp/soksak.db"}\''],
+    examples: ["data.backup", 'data.backup \'{"path":"/tmp/soksak.db"}\''],
     handler: async (p) => {
       const path = await invoke<string>("data_backup", {
         path: typeof p.path === "string" ? p.path : null,
@@ -149,7 +149,7 @@ export function registerDataCatalog(): void {
     message: () => tmsg("msg.data.restore"),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.restore \'{"path":"/tmp/soksak.db"}\''],
+    examples: ['data.restore \'{"path":"/tmp/soksak.db"}\''],
     handler: async (p) => {
       if (typeof p.path !== "string" || !p.path.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "path 필요" };
@@ -170,7 +170,7 @@ export function registerDataCatalog(): void {
     returns: "{ jsonl }",
     message: () => tmsg("msg.data.export"),
     errors: ["INTERNAL"],
-    examples: ['sok data.export \'{"ns":"soksak-plugin-<id>"}\''],
+    examples: ['data.export \'{"ns":"soksak-plugin-<id>"}\''],
     handler: async (p) => {
       const jsonl = await invoke<string>("data_export", {
         ns: typeof p.ns === "string" ? p.ns : null,
@@ -189,7 +189,7 @@ export function registerDataCatalog(): void {
     message: (d) => tmsg("msg.data.import", { n: Number(d.applied) }),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.import \'{"jsonl":"..."}\''],
+    examples: ['data.import \'{"jsonl":"..."}\''],
     handler: async (p) => {
       if (typeof p.jsonl !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "jsonl 필요" };
@@ -218,7 +218,7 @@ export function registerDataCatalog(): void {
     returns: "{ rows }",
     message: (d) => tmsg("msg.data.query", { n: ((d.rows as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.query \'{"ns":"soksak-plugin-<id>","coll":"messages","scope":"projA"}\''],
+    examples: ['data.query \'{"ns":"soksak-plugin-<id>","coll":"messages","scope":"projA"}\''],
     handler: async (p) => {
       const rows = await invoke<unknown[]>("data_query", {
         ns: p.ns,
@@ -248,7 +248,7 @@ export function registerDataCatalog(): void {
     returns: "{ rows }",
     message: (d) => tmsg("msg.data.search", { n: ((d.rows as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.search \'{"ns":"soksak-plugin-<id>","coll":"messages","query":"빌드 실패"}\''],
+    examples: ['data.search \'{"ns":"soksak-plugin-<id>","coll":"messages","query":"빌드 실패"}\''],
     handler: async (p) => {
       const rows = await invoke<unknown[]>("data_search", {
         ns: p.ns,
@@ -274,7 +274,7 @@ export function registerDataCatalog(): void {
     returns: "{ count }",
     message: (d) => tmsg("msg.data.count", { n: Number(d.count) }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.count \'{"ns":"soksak-plugin-<id>","coll":"messages"}\''],
+    examples: ['data.count \'{"ns":"soksak-plugin-<id>","coll":"messages"}\''],
     handler: async (p) => {
       const count = await invoke<number>("data_count", {
         ns: p.ns,
@@ -296,7 +296,7 @@ export function registerDataCatalog(): void {
     returns: "{ enabled, keyId, algo, unlocked, tampered, keyMissing }",
     message: (d) => d.enabled ? tmsg("msg.data.encrypt.status.on") : tmsg("msg.data.encrypt.status.off"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.encrypt.status \'{"scope":"projA"}\''],
+    examples: ['data.encrypt.status \'{"scope":"projA"}\''],
     handler: async (p) => {
       if (typeof p.scope !== "string" || !p.scope.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
@@ -314,7 +314,7 @@ export function registerDataCatalog(): void {
     message: () => tmsg("msg.data.encrypt.enable"),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.encrypt.enable \'{"scope":"projA"}\''],
+    examples: ['data.encrypt.enable \'{"scope":"projA"}\''],
     handler: async (p) => {
       if (typeof p.scope !== "string" || !p.scope.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
@@ -336,7 +336,7 @@ export function registerDataCatalog(): void {
     message: () => tmsg("msg.data.encrypt.recover"),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.encrypt.recover \'{"scope":"projA","recoveryCode":"XXXX-XXXX-..."}\''],
+    examples: ['data.encrypt.recover \'{"scope":"projA","recoveryCode":"XXXX-XXXX-..."}\''],
     handler: async (p) => {
       if (typeof p.scope !== "string" || !p.scope.trim() || typeof p.recoveryCode !== "string" || !p.recoveryCode.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope·recoveryCode 필요" };
@@ -355,7 +355,7 @@ export function registerDataCatalog(): void {
     message: (d) => tmsg("msg.data.encrypt.rotate", { n: Number(d.rekeyed) }),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.encrypt.rotate \'{"scope":"projA"}\''],
+    examples: ['data.encrypt.rotate \'{"scope":"projA"}\''],
     handler: async (p) => {
       if (typeof p.scope !== "string" || !p.scope.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
@@ -377,7 +377,7 @@ export function registerDataCatalog(): void {
     message: (d) => tmsg("msg.data.encrypt.convert", { n: Number(d.converted) }),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok data.encrypt.convert \'{"ns":"soksak-plugin-<id>","coll":"command_blocks","scope":"projA"}\''],
+    examples: ['data.encrypt.convert \'{"ns":"soksak-plugin-<id>","coll":"command_blocks","scope":"projA"}\''],
     handler: async (p) => {
       if (typeof p.scope !== "string" || !p.scope.trim()) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };

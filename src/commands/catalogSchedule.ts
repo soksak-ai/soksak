@@ -23,7 +23,7 @@ export function registerScheduleCatalog(): void {
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
-      'sok schedule.set \'{"at":1750000000000,"command":"notify.show","params":{"title":"알림","body":"시간!"}}\'',
+      'schedule.set \'{"at":1750000000000,"command":"notify.show","params":{"title":"알림","body":"시간!"}}\'',
     ],
     handler: async (p) => {
       if (typeof p.at !== "number" || typeof p.command !== "string") {
@@ -59,8 +59,8 @@ export function registerScheduleCatalog(): void {
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
-      'sok schedule.register \'{"trigger":{"kind":"every","every_ms":60000},"command":"notify.show","params":{"title":"틱","body":"1분"}}\'',
-      'sok schedule.register \'{"trigger":{"kind":"reconcile"},"command":"plugin.soksak-plugin-<id>.<command>","process_lease":true,"retry":{"max":5,"base_ms":2000,"max_ms":60000}}\'',
+      'schedule.register \'{"trigger":{"kind":"every","every_ms":60000},"command":"notify.show","params":{"title":"틱","body":"1분"}}\'',
+      'schedule.register \'{"trigger":{"kind":"reconcile"},"command":"plugin.soksak-plugin-<id>.<command>","process_lease":true,"retry":{"max":5,"base_ms":2000,"max_ms":60000}}\'',
     ],
     handler: async (p) => {
       if (typeof p.command !== "string" || p.trigger == null || typeof p.trigger !== "object") {
@@ -90,7 +90,7 @@ export function registerScheduleCatalog(): void {
     message: () => tmsg("msg.schedule.poke"),
     danger: "inject",
     errors: ["INTERNAL"],
-    examples: ["sok schedule.poke", 'sok schedule.poke \'{"id":"sch-3"}\''],
+    examples: ["schedule.poke", 'schedule.poke \'{"id":"sch-3"}\''],
     handler: async (p) => {
       await invoke("schedule_poke", { id: (p.id as string | undefined) ?? null });
       return { ok: true as const };
@@ -104,7 +104,7 @@ export function registerScheduleCatalog(): void {
     returns: "{ removed }",
     message: (d) => d.removed ? tmsg("msg.schedule.cancel.removed") : tmsg("msg.schedule.cancel.missing"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok schedule.cancel \'{"id":"sch-3"}\''],
+    examples: ['schedule.cancel \'{"id":"sch-3"}\''],
     handler: async (p) => {
       if (typeof p.id !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "id 필요" };
@@ -122,7 +122,7 @@ export function registerScheduleCatalog(): void {
     returns: "{ schedules: [{ id, trigger, command, params, next_at, running, concurrency }] }",
     message: (d) => tmsg("msg.schedule.list", { n: ((d.schedules as unknown[]) ?? []).length }),
     errors: ["INTERNAL"],
-    examples: ["sok schedule.list"],
+    examples: ["schedule.list"],
     handler: async () => {
       const schedules = await invoke<unknown[]>("schedule_list");
       return { schedules };

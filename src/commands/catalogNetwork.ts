@@ -60,7 +60,7 @@ export function registerNetworkCatalog(): void {
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
-      'sok net.udp.send \'{"host":"255.255.255.255","port":9,"data":"ffffffffffff","broadcast":true}\'',
+      'net.udp.send \'{"host":"255.255.255.255","port":9,"data":"ffffffffffff","broadcast":true}\'',
     ],
     handler: async (p) => {
       const bytes = hexToBytes(p.data as string);
@@ -101,7 +101,7 @@ export function registerNetworkCatalog(): void {
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
-      'sok net.udp.request \'{"host":"239.255.255.250","port":1900,"data":"...","timeoutMs":3000}\'',
+      'net.udp.request \'{"host":"239.255.255.250","port":1900,"data":"...","timeoutMs":3000}\'',
     ],
     handler: async (p) => {
       const bytes = hexToBytes(p.data as string);
@@ -155,8 +155,8 @@ export function registerNetworkCatalog(): void {
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
-      'sok net.http.request \'{"method":"GET","url":"https://api.example.com/v1/ping"}\'',
-      'sok net.http.request \'{"method":"GET","url":"https://blocked.example.com","impersonate":"chrome"}\'',
+      'net.http.request \'{"method":"GET","url":"https://api.example.com/v1/ping"}\'',
+      'net.http.request \'{"method":"GET","url":"https://blocked.example.com","impersonate":"chrome"}\'',
     ],
     handler: async (p) => {
       if (typeof p.method !== "string" || typeof p.url !== "string") {

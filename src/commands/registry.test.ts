@@ -326,10 +326,11 @@ describe("execute — 서비스 봉투 seam (PS7, docs/PLUGIN-SERVICE.md)", () =
       }),
     });
     const r = await execute(TEST_PREFIX + "svc.hints", {}, {});
+    // 서비스(플러그인) 힌트도 형태-only 로 짓고, 중앙 지점에서 이 앱 CLI 이름이 붙는다(통일 계약).
     expect(r.hint).toEqual([
-      { cmd: "a", why: "1" },
-      { cmd: "b", why: "2" },
-      { cmd: "c", why: "3" },
+      { cmd: "sok a", why: "1" },
+      { cmd: "sok b", why: "2" },
+      { cmd: "sok c", why: "3" },
     ]);
     // hints 는 data 로 새지 않는다(예약키 분리)
     expect(r.data).toEqual({ x: 1 });
@@ -347,7 +348,7 @@ describe("execute — 서비스 봉투 seam (PS7, docs/PLUGIN-SERVICE.md)", () =
     });
     const r = await execute(TEST_PREFIX + "svc.fail", {}, {});
     expect(r).toMatchObject({ ok: false, code: "CONFLICT", message: "충돌했습니다" });
-    expect(r.hint).toEqual([{ cmd: "retry", why: "다시" }]);
+    expect(r.hint).toEqual([{ cmd: "sok retry", why: "다시" }]);
   });
 
   it("일반 스펙의 기존 규칙 불변 — 핸들러 message 는 버려지고 spec.message 가 소유(회귀 봉인)", async () => {
@@ -474,13 +475,15 @@ describe("execute — 응답 공통 필드(window·hint)", () => {
     const r = await execute(TEST_PREFIX + "hint-many", {}, {});
     expect(r.ok).toBe(true);
     expect(r.hint).toHaveLength(3);
-    expect(r.hint?.map((h) => h.cmd)).toEqual(["a", "b", "c"]);
+    // 3개로 자른 뒤 중앙 지점에서 이 앱 CLI 이름이 붙는다.
+    expect(r.hint?.map((h) => h.cmd)).toEqual(["sok a", "sok b", "sok c"]);
   });
 
   it("성공 hint 는 data·ctx 를 받아 제시를 짓는다", async () => {
     reg(TEST_PREFIX + "hint-data", {
       handler: () => ({ id: "x7" }),
-      hint: (data) => [{ cmd: `sok open ${String(data.id)}`, why: "이어서 열 수 있습니다" }],
+      // producer 는 명령 형태만 짓는다 — 프리픽스는 중앙 지점이 이 앱 이름으로 붙인다.
+      hint: (data) => [{ cmd: `open ${String(data.id)}`, why: "이어서 열 수 있습니다" }],
     });
     const r = await execute(TEST_PREFIX + "hint-data", {}, {});
     expect(r.hint?.[0].cmd).toBe("sok open x7");
@@ -536,8 +539,9 @@ describe("execute — 응답 공통 필드(window·hint)", () => {
 
 describe("UNKNOWN_COMMAND 지능형 해석기 주입점", () => {
   it("해석기가 결과를 주면 그 안내가 표준 안내보다 우선하고, 상한 3개로 잘린다", async () => {
+    // resolver 는 명령 형태만 짓는다(실제 resolver 와 동형) — 프리픽스는 중앙 지점이 붙인다.
     setUnknownCommandResolver((name) => [
-      { cmd: `sok plugin.install '{"source":"soksak-ai/${name}"}'`, why: "설치하면 사용할 수 있습니다" },
+      { cmd: `plugin.install '{"source":"soksak-ai/${name}"}'`, why: "설치하면 사용할 수 있습니다" },
       { cmd: "b", why: "b" },
       { cmd: "c", why: "c" },
       { cmd: "d", why: "d" },

@@ -18,7 +18,7 @@ export function registerFsWatchCatalog(): void {
     returns: "{ path, watchers: subscription count for the path after registration }",
     message: (d) => tmsg("msg.fs.watch", { n: Number(d.watchers ?? 0) }),
     errors: ["INTERNAL"],
-    examples: ['sok fs.watch \'{"path":"/Users/me/work"}\''],
+    examples: ['fs.watch \'{"path":"/Users/me/work"}\''],
     handler: async (p) => {
       const watchers = await invoke<number>("watch_dir", { path: p.path });
       return { path: p.path, watchers };
@@ -35,7 +35,7 @@ export function registerFsWatchCatalog(): void {
     returns: "{ path, watchers: remaining subscription count for the path }",
     message: (d) => tmsg("msg.fs.unwatch", { n: Number(d.watchers ?? 0) }),
     errors: ["INTERNAL"],
-    examples: ['sok fs.unwatch \'{"path":"/Users/me/work"}\''],
+    examples: ['fs.unwatch \'{"path":"/Users/me/work"}\''],
     handler: async (p) => {
       const watchers = await invoke<number>("unwatch_dir", { path: p.path });
       return { path: p.path, watchers };

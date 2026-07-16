@@ -80,7 +80,8 @@ describe("registerServiceProxies — 매니페스트 데이터 합성 등록(PS3
     });
     expect(out.ok).toBe(true);
     expect(out.message).toBe("서비스가 지은 문장");
-    expect(out.hint).toEqual([{ cmd: "plugin.demo.run", why: "재실행" }]);
+    // 서비스(플러그인) 힌트도 형태-only 로 짓고, 중앙 지점에서 이 앱 CLI 이름이 붙는다.
+    expect(out.hint).toEqual([{ cmd: "sok plugin.demo.run", why: "재실행" }]);
     expect(out.data).toEqual({ n: 1 });
   });
 

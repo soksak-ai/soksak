@@ -386,7 +386,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ activeProjectId, projects[] } — panels[].rect is % of the content area",
     message: (d) => tmsg("msg.state.tree", { n: ((d.projects as unknown[]) ?? []).length }),
-    examples: ["sok state.tree"],
+    examples: ["state.tree"],
     handler: () => serializeTree(),
   });
 
@@ -395,7 +395,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ commands: [{name,description,params,returns,errors,examples}] }",
     message: (d) => tmsg("msg.state.commands", { n: ((d.commands as unknown[]) ?? []).length }),
-    examples: ["sok commands"],
+    examples: ["commands"],
     handler: () => ({ commands: catalogJson() }),
   });
 
@@ -409,7 +409,7 @@ export function registerCatalog(): void {
         ? tmsg("msg.state.context", { view: String(d.viewId) })
         : tmsg("msg.state.context.emptyPanel", { panel: String(d.panelId) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok state.context"],
+    examples: ["state.context"],
     handler: (p, ctx) => {
       const loc = p.pane
         ? locatePane(p.pane as string)
@@ -437,7 +437,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ projects: [{id,title,root,active}] }",
     message: (d) => tmsg("msg.project.list", { n: ((d.projects as unknown[]) ?? []).length }),
-    examples: ["sok project.list"],
+    examples: ["project.list"],
     handler: () => ({
       projects: S().tabs.map((t) => ({
         id: t.id,
@@ -455,7 +455,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ recents: [{root, alias, lastOpenedAt}] }",
     message: (d) => tmsg("msg.project.recent", { n: ((d.recents as unknown[]) ?? []).length }),
-    examples: ["sok project.recent"],
+    examples: ["project.recent"],
     handler: async () => ({ recents: await listRecentProjects() }),
   });
 
@@ -468,7 +468,7 @@ export function registerCatalog(): void {
     },
     returns: "{ ok }",
     message: () => tmsg("msg.project.recent.remove"),
-    examples: ['sok project.recent.remove \'{"root":"/Users/me/old"}\''],
+    examples: ['project.recent.remove \'{"root":"/Users/me/old"}\''],
     handler: async (p) => {
       await removeRecentProject(p.root as string);
       return {};
@@ -508,27 +508,27 @@ export function registerCatalog(): void {
       const routed = d.routedWindow as string | undefined;
       if (routed) {
         return [
-          { cmd: `sok --window ${routed} state.tree`, why: tmsg("hint.flow.project.open.routedContinue") },
-          { cmd: `sok --window ${routed} layout.apply dev`, why: tmsg("hint.flow.project.open.routedLayout") },
+          { cmd: `--window ${routed} state.tree`, why: tmsg("hint.flow.project.open.routedContinue") },
+          { cmd: `--window ${routed} layout.apply dev`, why: tmsg("hint.flow.project.open.routedLayout") },
         ];
       }
       // 이미 다른 창에 열려 있어 그 창을 앞으로 가져왔다 — 그 창에서 이어간다.
       const existingWin = d.existingWindow as string | undefined;
       if (existingWin) {
         return [
-          { cmd: `sok --window ${existingWin} state.tree`, why: tmsg("hint.flow.project.open.existingWindow") },
+          { cmd: `--window ${existingWin} state.tree`, why: tmsg("hint.flow.project.open.existingWindow") },
         ];
       }
       // 이 창에서 열렸다 — 화면을 꾸미는 다음 수들을 제시한다(가능성의 제시, 3개 상한).
       return [
-        { cmd: "sok layout.apply dev", why: tmsg("hint.flow.project.open.layout") },
-        { cmd: "sok window.maximize", why: tmsg("hint.flow.project.open.maximize") },
-        { cmd: "sok space.create", why: tmsg("hint.flow.project.open.space") },
+        { cmd: "layout.apply dev", why: tmsg("hint.flow.project.open.layout") },
+        { cmd: "window.maximize", why: tmsg("hint.flow.project.open.maximize") },
+        { cmd: "space.create", why: tmsg("hint.flow.project.open.space") },
       ];
     },
     examples: [
-      'sok project.open \'{"root":"/Users/me/work","program":"claude"}\'',
-      'sok project.open \'{"folder":"my-project"}\'',
+      'project.open \'{"root":"/Users/me/work","program":"claude"}\'',
+      'project.open \'{"folder":"my-project"}\'',
     ],
     handler: async (p) => {
       let root = p.root as string | undefined;
@@ -576,7 +576,7 @@ export function registerCatalog(): void {
     returns: "{ activeProjectId }",
     message: () => tmsg("msg.project.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok project.close \'{"project":"t2"}\''],
+    examples: ['project.close \'{"project":"t2"}\''],
     // P6: 닫기 성공 시 전역 점유 해제(다른 창이 이 프로젝트를 열 수 있게).
     handler: (p) => closeProjectReleased(p.project as string),
   });
@@ -588,7 +588,7 @@ export function registerCatalog(): void {
     returns: "{}",
     message: () => tmsg("msg.project.activate"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok project.activate \'{"project":"t2"}\''],
+    examples: ['project.activate \'{"project":"t2"}\''],
     handler: (p) => S().setActive(p.project as string),
   });
 
@@ -602,7 +602,7 @@ export function registerCatalog(): void {
     returns: "{}",
     message: () => tmsg("msg.project.rename"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok project.rename \'{"project":"t1","title":"백엔드"}\''],
+    examples: ['project.rename \'{"project":"t1","title":"백엔드"}\''],
     handler: (p) => S().renameProject(p.project as string, p.title as string),
   });
 
@@ -619,7 +619,7 @@ export function registerCatalog(): void {
     returns: "{}",
     message: () => tmsg("msg.project.color"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok project.color \'{"project":"t1","color":"#4a8fe8"}\''],
+    examples: ['project.color \'{"project":"t1","color":"#4a8fe8"}\''],
     handler: (p) =>
       S().setProjectColor(p.project as string, (p.color as string) ?? null),
   });
@@ -637,7 +637,7 @@ export function registerCatalog(): void {
     message: () => tmsg("msg.project.update"),
     errors: ["TARGET_NOT_FOUND"],
     examples: [
-      'sok project.update \'{"project":"t1","title":"백엔드","program":"claude"}\'',
+      'project.update \'{"project":"t1","title":"백엔드","program":"claude"}\'',
     ],
     handler: (p) =>
       S().updateProject(p.project as string, {
@@ -657,7 +657,7 @@ export function registerCatalog(): void {
         ? tmsg("msg.project.sidebar.toggle.opened")
         : tmsg("msg.project.sidebar.toggle.closed"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok project.sidebar.toggle"],
+    examples: ["project.sidebar.toggle"],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -678,7 +678,7 @@ export function registerCatalog(): void {
         ? tmsg("msg.project.rightbar.toggle.opened")
         : tmsg("msg.project.rightbar.toggle.closed"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok project.rightbar.toggle", 'sok project.rightbar.toggle \'{"open":true}\''],
+    examples: ["project.rightbar.toggle", 'project.rightbar.toggle \'{"open":true}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -701,7 +701,7 @@ export function registerCatalog(): void {
         : tmsg("msg.view.label.set.cleared"),
     errors: ["INVALID_PARAMS"],
     examples: [
-      'sok view.label.set \'{"view":"soksak-plugin-<id>.<view>","label":"내 라벨"}\'',
+      'view.label.set \'{"view":"soksak-plugin-<id>.<view>","label":"내 라벨"}\'',
     ],
     handler: (p) => {
       const key = p.view as string;
@@ -724,7 +724,7 @@ export function registerCatalog(): void {
             n: Object.keys((d.labels as Record<string, unknown>) ?? {}).length,
           })
         : tmsg("msg.view.label.get.one", { label: String(d.label ?? "") }),
-    examples: ["sok view.label.get", 'sok view.label.get \'{"view":"x.y"}\''],
+    examples: ["view.label.get", 'view.label.get \'{"view":"x.y"}\''],
     handler: (p) => {
       const labels = useViewLabels.getState().labels;
       if (p.view !== undefined)
@@ -743,7 +743,7 @@ export function registerCatalog(): void {
     returns: "{ mode }",
     message: (d) => tmsg("msg.sidebar.right.mode", { mode: String(d.mode) }),
     errors: ["INVALID_PARAMS"],
-    examples: ["sok sidebar.right.mode", 'sok sidebar.right.mode \'{"mode":"push"}\''],
+    examples: ["sidebar.right.mode", 'sidebar.right.mode \'{"mode":"push"}\''],
     handler: (p) => {
       const s = useSettings.getState();
       if (p.mode !== undefined) {
@@ -764,7 +764,7 @@ export function registerCatalog(): void {
     returns: "{ projectId, layout }",
     message: () => tmsg("msg.sidebar.left.tree"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok sidebar.left.tree"],
+    examples: ["sidebar.left.tree"],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -791,7 +791,7 @@ export function registerCatalog(): void {
     message: () => tmsg("msg.sidebar.left.move"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sok sidebar.left.move \'{"view":"soksak-plugin-<id>.<view>","target":"soksak-plugin-<other-id>.<view>","zone":"right"}\'',
+      'sidebar.left.move \'{"view":"soksak-plugin-<id>.<view>","target":"soksak-plugin-<other-id>.<view>","zone":"right"}\'',
     ],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
@@ -822,7 +822,7 @@ export function registerCatalog(): void {
     returns: "{}",
     message: () => tmsg("msg.sidebar.left.resize"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok sidebar.left.resize \'{"split":"s7","sizes":[0.6,0.4]}\''],
+    examples: ['sidebar.left.resize \'{"split":"s7","sizes":[0.6,0.4]}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -837,7 +837,7 @@ export function registerCatalog(): void {
     returns: "{ spaces: [{id,title,program,active}] }",
     message: (d) => tmsg("msg.space.list", { n: ((d.spaces as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok space.list"],
+    examples: ["space.list"],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -862,12 +862,12 @@ export function registerCatalog(): void {
       // 새 스페이스는 활성 스페이스가 되므로 후속 수는 컨텍스트를 그대로 겨냥한다(대상 id 불요).
       if (d.code) return [];
       return [
-        { cmd: "sok panel.split right", why: tmsg("hint.flow.space.create.split") },
-        { cmd: `sok view.open ${exampleProgramId()}`, why: tmsg("hint.flow.space.create.view") },
-        { cmd: "sok window.snapshot", why: tmsg("hint.flow.space.create.snapshot") },
+        { cmd: "panel.split right", why: tmsg("hint.flow.space.create.split") },
+        { cmd: `view.open ${exampleProgramId()}`, why: tmsg("hint.flow.space.create.view") },
+        { cmd: "window.snapshot", why: tmsg("hint.flow.space.create.snapshot") },
       ];
     },
-    examples: ['sok space.create \'{"program":"browser"}\''],
+    examples: ['space.create \'{"program":"browser"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -886,7 +886,7 @@ export function registerCatalog(): void {
     returns: "{ activeSpaceId }",
     message: () => tmsg("msg.space.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok space.close \'{"space":"c2"}\''],
+    examples: ['space.close \'{"space":"c2"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -904,7 +904,7 @@ export function registerCatalog(): void {
     returns: "{}",
     message: () => tmsg("msg.space.activate"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok space.activate \'{"space":"c2"}\''],
+    examples: ['space.activate \'{"space":"c2"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -951,8 +951,8 @@ export function registerCatalog(): void {
         ? tmsg("msg.space.switchScan.clean")
         : tmsg("msg.space.switchScan.jank", { n: Number(d.switchFrames) }),
     examples: [
-      'sok space.switchScan \'{"from":"c1","to":"c3"}\'',
-      'sok space.switchScan \'{"to":"c3","frames":40}\'',
+      'space.switchScan \'{"from":"c1","to":"c3"}\'',
+      'space.switchScan \'{"to":"c3","frames":40}\'',
     ],
     handler: async (p, ctx) => {
       const t = resolveProject(p, ctx);
@@ -1037,7 +1037,7 @@ export function registerCatalog(): void {
     returns: "{}",
     message: () => tmsg("msg.space.rename"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok space.rename \'{"space":"c1","title":"빌드"}\''],
+    examples: ['space.rename \'{"space":"c1","title":"빌드"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -1052,7 +1052,7 @@ export function registerCatalog(): void {
     returns: "{ activePanelId, layout, panels[] }",
     message: (d) => tmsg("msg.panel.list", { n: ((d.panels as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok panel.list"],
+    examples: ["panel.list"],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -1090,13 +1090,13 @@ export function registerCatalog(): void {
       // 새로 생긴 패널에 다른 프로그램을 탭으로 더 열 수 있다 — 그 패널을 명시 겨냥한다.
       if (panel)
         out.push({
-          cmd: `sok view.open '{"panel":"${panel}","program":"${exampleProgramId()}"}'`,
+          cmd: `view.open '{"panel":"${panel}","program":"${exampleProgramId()}"}'`,
           why: tmsg("hint.flow.panel.split.view"),
         });
-      out.push({ cmd: "sok window.snapshot", why: tmsg("hint.flow.panel.split.snapshot") });
+      out.push({ cmd: "window.snapshot", why: tmsg("hint.flow.panel.split.snapshot") });
       return out;
     },
-    examples: ['sok panel.split \'{"side":"right"}\'', 'sok panel.split \'{"side":"bottom","program":"browser"}\''],
+    examples: ['panel.split \'{"side":"right"}\'', 'panel.split \'{"side":"bottom","program":"browser"}\''],
     handler: (p, ctx) => {
       const loc = resolveGroup(p, ctx);
       if (!loc) return notFound("대상 패널 없음");
@@ -1122,7 +1122,7 @@ export function registerCatalog(): void {
     returns: "{ panelId(merged panel) }",
     message: () => tmsg("msg.panel.merge"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok panel.merge \'{"src":"g2","dst":"g1"}\''],
+    examples: ['panel.merge \'{"src":"g2","dst":"g1"}\''],
     handler: (p, ctx) => {
       const loc = locateGroup(p.src as string) ?? resolveGroup(p, ctx);
       if (!loc) return notFound(`패널 없음: ${p.src}`);
@@ -1149,7 +1149,7 @@ export function registerCatalog(): void {
     returns: "{ panelId }",
     message: () => tmsg("msg.panel.move"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok panel.move \'{"src":"g2","dst":"g1","zone":"left"}\''],
+    examples: ['panel.move \'{"src":"g2","dst":"g1","zone":"left"}\''],
     handler: (p) => {
       const loc = locateGroup(p.src as string);
       if (!loc) return notFound(`패널 없음: ${p.src}`);
@@ -1172,7 +1172,7 @@ export function registerCatalog(): void {
     returns: "{ activePanelId }",
     message: () => tmsg("msg.panel.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok panel.close \'{"panel":"g2"}\''],
+    examples: ['panel.close \'{"panel":"g2"}\''],
     handler: (p) => {
       const loc = locateGroup(p.panel as string);
       if (!loc) return notFound(`패널 없음: ${p.panel}`);
@@ -1187,7 +1187,7 @@ export function registerCatalog(): void {
     returns: "{}",
     message: () => tmsg("msg.panel.focus"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok panel.focus \'{"panel":"g2"}\''],
+    examples: ['panel.focus \'{"panel":"g2"}\''],
     handler: (p) => {
       const loc = locateGroup(p.panel as string);
       if (!loc) return notFound(`패널 없음: ${p.panel}`);
@@ -1217,7 +1217,7 @@ export function registerCatalog(): void {
     returns: "{}",
     message: () => tmsg("msg.panel.resize"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
-    examples: ['sok panel.resize \'{"split":"s1","sizes":[0.7,0.3]}\''],
+    examples: ['panel.resize \'{"split":"s1","sizes":[0.7,0.3]}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -1241,8 +1241,8 @@ export function registerCatalog(): void {
     message: () => tmsg("msg.panel.equalize"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sok panel.equalize \'{"split":"s1"}\'',
-      'sok panel.equalize \'{"split":"s1","index":0}\'',
+      'panel.equalize \'{"split":"s1"}\'',
+      'panel.equalize \'{"split":"s1","index":0}\'',
     ],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
@@ -1300,16 +1300,16 @@ export function registerCatalog(): void {
       const skipped = (d.skipped as unknown[] | undefined) ?? [];
       // 건너뛴 패널이 있으면(브라우저 미설치 등) 설치 경로를 먼저 제시한다.
       if (skipped.length)
-        out.push({ cmd: "sok plugin.catalog", why: tmsg("hint.flow.layout.apply.install") });
+        out.push({ cmd: "plugin.catalog", why: tmsg("hint.flow.layout.apply.install") });
       const first = spaces[0]?.spaceId;
       if (first)
-        out.push({ cmd: `sok space.activate ${first}`, why: tmsg("hint.flow.layout.apply.activate") });
-      out.push({ cmd: "sok window.snapshot", why: tmsg("hint.flow.layout.apply.snapshot") });
+        out.push({ cmd: `space.activate ${first}`, why: tmsg("hint.flow.layout.apply.activate") });
+      out.push({ cmd: "window.snapshot", why: tmsg("hint.flow.layout.apply.snapshot") });
       return out;
     },
     examples: [
-      "sok layout.apply dev",
-      'sok layout.apply \'{"preset":"facets","spaces":[{"title":"docs","panels":[{"program":"browser"}]}]}\'',
+      "layout.apply dev",
+      'layout.apply \'{"preset":"facets","spaces":[{"title":"docs","panels":[{"program":"browser"}]}]}\'',
     ],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
@@ -1406,7 +1406,7 @@ export function registerCatalog(): void {
     returns: "{ panelId, activeViewId, views[] }",
     message: (d) => tmsg("msg.view.list", { n: ((d.views as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok view.list"],
+    examples: ["view.list"],
     handler: (p, ctx) => {
       const loc = resolveGroup(p, ctx);
       if (!loc) return notFound("패널 없음");
@@ -1428,7 +1428,7 @@ export function registerCatalog(): void {
     returns: "{ panelId, viewId, paneId? }",
     message: () => tmsg("msg.view.open"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok view.open \'{"program":"claude"}\''],
+    examples: ['view.open \'{"program":"claude"}\''],
     handler: (p, ctx) => {
       const loc = resolveGroup(p, ctx);
       if (!loc) return notFound("패널 없음");
@@ -1450,7 +1450,7 @@ export function registerCatalog(): void {
     returns: "{ activePanelId, activeViewId }",
     message: () => tmsg("msg.view.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok view.close \'{"view":"v3"}\''],
+    examples: ['view.close \'{"view":"v3"}\''],
     handler: (p) => {
       const loc = locateView(p.view as string);
       if (!loc) return notFound(`뷰 없음: ${p.view}`);
@@ -1465,7 +1465,7 @@ export function registerCatalog(): void {
     returns: "{}",
     message: () => tmsg("msg.view.activate"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok view.activate \'{"view":"v3"}\''],
+    examples: ['view.activate \'{"view":"v3"}\''],
     handler: (p) => {
       const loc = locateView(p.view as string);
       if (!loc) return notFound(`뷰 없음: ${p.view}`);
@@ -1490,8 +1490,8 @@ export function registerCatalog(): void {
       d.label ? tmsg("msg.view.rename.set", { label: String(d.label) }) : tmsg("msg.view.rename.cleared"),
     errors: ["TARGET_NOT_FOUND"],
     examples: [
-      'sok view.rename \'{"view":"v3","title":"작업 브라우저"}\'',
-      'sok view.rename \'{"view":"v3","title":""}\'',
+      'view.rename \'{"view":"v3","title":"작업 브라우저"}\'',
+      'view.rename \'{"view":"v3","title":""}\'',
     ],
     handler: (p) => {
       const loc = locateView(p.view as string);
@@ -1508,7 +1508,7 @@ export function registerCatalog(): void {
     returns: "{ viewId }",
     message: () => tmsg("msg.view.maximize"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok view.maximize \'{"view":"v3"}\'', "sok view.maximize"],
+    examples: ['view.maximize \'{"view":"v3"}\'', "view.maximize"],
     handler: (p, ctx) => {
       const loc = p.view ? locateView(p.view as string) : resolveCtx(ctx);
       if (!loc?.view) return notFound(`뷰 없음: ${p.view ?? "(활성)"}`);
@@ -1523,7 +1523,7 @@ export function registerCatalog(): void {
     returns: "{ viewId(restored view | null = was not maximized) }",
     message: (d) =>
       d.viewId ? tmsg("msg.view.restore.restored") : tmsg("msg.view.restore.none"),
-    examples: ["sok view.restore"],
+    examples: ["view.restore"],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -1542,7 +1542,7 @@ export function registerCatalog(): void {
     returns: "{ panelId(moved or created panel) }",
     message: () => tmsg("msg.view.move"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok view.move \'{"view":"v3","dst":"g1","zone":"right"}\''],
+    examples: ['view.move \'{"view":"v3","dst":"g1","zone":"right"}\''],
     handler: (p) => {
       const loc = locateView(p.view as string);
       if (!loc) return notFound(`뷰 없음: ${p.view}`);
@@ -1565,7 +1565,7 @@ export function registerCatalog(): void {
     params: { view: P.view },
     returns: "{ statuses: Array<{ viewId, code, message? }> }",
     message: (d) => tmsg("msg.status.query", { n: ((d.statuses as unknown[]) ?? []).length }),
-    examples: ["sok status.query", 'sok status.query \'{"view":"v3"}\''],
+    examples: ["status.query", 'status.query \'{"view":"v3"}\''],
     handler: (p) => {
       const only = p.view as string | undefined;
       const statuses: { viewId: string; code: string; message?: string }[] = [];
@@ -1595,7 +1595,7 @@ export function registerCatalog(): void {
     returns: "{ paneId, text }",
     message: (d) => tmsg("msg.term.read", { n: String(d.text ?? "").length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok term.read", 'sok term.read \'{"lines":50}\''],
+    examples: ["term.read", 'term.read \'{"lines":50}\''],
     handler: (p, ctx) => {
       const r = resolveTermPane(p, ctx, terminalContextPane);
       if (!r) return notFound("pane 없음");
@@ -1617,7 +1617,7 @@ export function registerCatalog(): void {
     returns: "{ paneId }",
     message: () => tmsg("msg.term.send"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok term.send \'{"text":"ls\\r"}\'', 'sok term.send \'{"text":"\\u0003"}\''],
+    examples: ['term.send \'{"text":"ls\\r"}\'', 'term.send \'{"text":"\\u0003"}\''],
     handler: (p, ctx) => {
       const r = resolveTermPane(p, ctx, terminalContextPane);
       if (!r) return notFound("pane 없음");
@@ -1645,12 +1645,12 @@ export function registerCatalog(): void {
       const pane = d.paneId as string | undefined;
       return [
         {
-          cmd: pane ? `sok term.read '{"pane":"${pane}"}'` : "sok term.read",
+          cmd: pane ? `term.read '{"pane":"${pane}"}'` : "term.read",
           why: tmsg("hint.flow.term.exec.read"),
         },
       ];
     },
-    examples: ['sok term.exec \'{"cmd":"git status"}\''],
+    examples: ['term.exec \'{"cmd":"git status"}\''],
     handler: (p, ctx) => {
       const r = resolveTermPane(p, ctx, terminalContextPane);
       if (!r) return notFound("pane 없음");
@@ -1668,7 +1668,7 @@ export function registerCatalog(): void {
     message: (d) =>
       d.cwd ? tmsg("msg.term.cwd.path", { path: String(d.cwd) }) : tmsg("msg.term.cwd.none"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok term.cwd"],
+    examples: ["term.cwd"],
     handler: (p, ctx) => {
       const r = resolveTermPane(p, ctx, terminalContextPane);
       if (!r) return notFound("pane 없음");
@@ -1683,7 +1683,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ bookmarks: [{url,title}] }",
     message: (d) => tmsg("msg.bookmark.list", { n: ((d.bookmarks as unknown[]) ?? []).length }),
-    examples: ["sok bookmark.list"],
+    examples: ["bookmark.list"],
     handler: () => ({ bookmarks: useBookmarks.getState().list }),
   });
 
@@ -1696,7 +1696,7 @@ export function registerCatalog(): void {
     },
     returns: "{}",
     message: () => tmsg("msg.bookmark.add"),
-    examples: ['sok bookmark.add \'{"url":"https://example.com"}\''],
+    examples: ['bookmark.add \'{"url":"https://example.com"}\''],
     handler: (p) => {
       const url = p.url as string;
       const bm = useBookmarks.getState();
@@ -1722,7 +1722,7 @@ export function registerCatalog(): void {
     params: { url: { type: "string", description: "URL", required: true } },
     returns: "{}",
     message: () => tmsg("msg.bookmark.remove"),
-    examples: ['sok bookmark.remove \'{"url":"https://example.com"}\''],
+    examples: ['bookmark.remove \'{"url":"https://example.com"}\''],
     handler: (p) => {
       useBookmarks.getState().remove(p.url as string);
       return {};
@@ -1741,7 +1741,7 @@ export function registerCatalog(): void {
     message: (d) =>
       d.existing ? tmsg("msg.editor.open.existing") : tmsg("msg.editor.open.opened"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok editor.open \'{"path":"/Users/me/work/src/main.rs"}\''],
+    examples: ['editor.open \'{"path":"/Users/me/work/src/main.rs"}\''],
     handler: (p, ctx) => {
       const t = resolveProject(p, ctx);
       if (!t) return notFound("프로젝트 없음");
@@ -1755,7 +1755,7 @@ export function registerCatalog(): void {
     returns: "{ activePanelId, activeViewId }",
     message: () => tmsg("msg.editor.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['sok editor.close \'{"view":"v4"}\''],
+    examples: ['editor.close \'{"view":"v4"}\''],
     handler: (p) => {
       const loc = locateView(p.view as string);
       if (!loc) return notFound(`뷰 없음: ${p.view}`);
@@ -1775,7 +1775,7 @@ export function registerCatalog(): void {
     returns: "{ root, children: [{name,dir}] }",
     message: (d) => tmsg("msg.explorer.list", { n: ((d.children as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ["sok explorer.list", 'sok explorer.list \'{"path":"/tmp"}\''],
+    examples: ["explorer.list", 'explorer.list \'{"path":"/tmp"}\''],
     handler: async (p, ctx) => {
       const t = resolveProject(p, ctx);
       const path = (p.path as string) ?? t?.root ?? null;
@@ -1808,7 +1808,7 @@ export function registerCatalog(): void {
     params: {},
     returns: `{ ${SETTING_KEYS.join(", ")}, bg }`,
     message: () => tmsg("msg.settings.get"),
-    examples: ["sok settings.get"],
+    examples: ["settings.get"],
     handler: () => {
       const s = useSettings.getState();
       return {
@@ -1853,8 +1853,8 @@ export function registerCatalog(): void {
     message: (d) => tmsg("msg.settings.set", { key: String(d.key) }),
     errors: ["INVALID_PARAMS"],
     examples: [
-      'sok settings.set \'{"key":"projectTabPosition","value":"left"}\'',
-      'sok settings.set \'{"key":"iconBox","value":true}\'',
+      'settings.set \'{"key":"projectTabPosition","value":"left"}\'',
+      'settings.set \'{"key":"iconBox","value":true}\'',
     ],
     handler: (p) => {
       const s = useSettings.getState();
@@ -1916,7 +1916,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ x, y, w, h, scale }",
     message: (d) => tmsg("msg.window.info", { w: Number(d.w), h: Number(d.h) }),
-    examples: ["sok window.info"],
+    examples: ["window.info"],
     handler: async () => {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
       const win = getCurrentWindow();
@@ -1937,7 +1937,7 @@ export function registerCatalog(): void {
     },
     returns: "{ x, y }",
     message: (d) => tmsg("msg.window.move", { x: Number(d.x), y: Number(d.y) }),
-    examples: ['sok window.move \'{"x":0,"y":0}\''],
+    examples: ['window.move \'{"x":0,"y":0}\''],
     handler: async (p) => {
       const { getCurrentWindow, PhysicalPosition } = await import(
         "@tauri-apps/api/window"
@@ -1957,7 +1957,7 @@ export function registerCatalog(): void {
     },
     returns: "{ w, h }",
     message: (d) => tmsg("msg.window.resize", { w: Number(d.w), h: Number(d.h) }),
-    examples: ['sok window.resize \'{"w":1200,"h":800}\''],
+    examples: ['window.resize \'{"w":1200,"h":800}\''],
     handler: async (p) => {
       const { getCurrentWindow, PhysicalSize } = await import(
         "@tauri-apps/api/window"
@@ -1978,7 +1978,7 @@ export function registerCatalog(): void {
     },
     returns: "{ focused: true }",
     message: () => tmsg("msg.window.focus"),
-    examples: ["sok window.focus", 'sok window.focus \'{"label":"w-<uuid>"}\''],
+    examples: ["window.focus", 'window.focus \'{"label":"w-<uuid>"}\''],
     handler: async (p) => {
       if (p.label) {
         await invoke("window_focus", { label: p.label as string });
@@ -2005,9 +2005,9 @@ export function registerCatalog(): void {
       d.maximized ? tmsg("msg.window.maximize") : tmsg("msg.window.maximize.off"),
     errors: ["TARGET_NOT_FOUND"],
     examples: [
-      "sok window.maximize",
-      'sok window.maximize \'{"off":true}\'',
-      'sok window.maximize \'{"label":"w-<uuid>"}\'',
+      "window.maximize",
+      'window.maximize \'{"off":true}\'',
+      'window.maximize \'{"label":"w-<uuid>"}\'',
     ],
     handler: async (p) => {
       const off = p.off === true;
@@ -2029,7 +2029,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ reloaded: true }",
     message: () => tmsg("msg.window.reload"),
-    examples: ["sok window.reload"],
+    examples: ["window.reload"],
     handler: async () => {
       // 소켓 응답을 먼저 흘려보낸 뒤 다음 틱에 리로드(응답 유실 방지).
       setTimeout(() => window.location.reload(), 30);
@@ -2073,14 +2073,14 @@ export function registerCatalog(): void {
       if (!label) return [];
       return [
         {
-          cmd: `sok --window ${label} state.tree`,
+          cmd: `--window ${label} state.tree`,
           why: tmsg("hint.flow.window.open.target", { label }),
         },
       ];
     },
     examples: [
-      'sok window.open \'{"root":"/Users/me/work"}\'',
-      'sok window.open \'{"mode":"orchestrator"}\'',
+      'window.open \'{"root":"/Users/me/work"}\'',
+      'window.open \'{"mode":"orchestrator"}\'',
     ],
     handler: async (p) => {
       if (p.mode === "orchestrator") {
@@ -2142,7 +2142,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ labels }",
     message: (d) => tmsg("msg.window.list", { n: ((d.labels as unknown[]) ?? []).length }),
-    examples: ["sok window.list"],
+    examples: ["window.list"],
     handler: async () => ({ labels: await invoke<string[]>("window_list") }),
   });
 
@@ -2153,7 +2153,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ projects: [{ root, name, window }] }",
     message: (d) => tmsg("msg.window.projects", { n: ((d.projects as unknown[]) ?? []).length }),
-    examples: ["sok window.projects"],
+    examples: ["window.projects"],
     handler: async () => {
       const owners = await invoke<{ owners: { root: string; window: string }[] }>(
         "project_owners",
@@ -2173,7 +2173,7 @@ export function registerCatalog(): void {
     params: { label: { type: "string", description: "Window label" } },
     returns: "{ ok }",
     message: () => tmsg("msg.window.close"),
-    examples: ['sok window.close \'{"label":"w-<uuid>"}\''],
+    examples: ['window.close \'{"label":"w-<uuid>"}\''],
     handler: async (p) => {
       await invoke("window_close", { label: p.label as string });
       return { ok: true };
@@ -2211,15 +2211,15 @@ export function registerCatalog(): void {
       if (d.code) return [];
       // 재캡처의 두 갈래 — 뷰 최대화로 확대해 담거나, 다른 스페이스로 전환해 화면을 비교한다.
       return [
-        { cmd: "sok view.maximize", why: tmsg("hint.flow.snapshot.maximize") },
-        { cmd: "sok space.list", why: tmsg("hint.flow.snapshot.switch") },
+        { cmd: "view.maximize", why: tmsg("hint.flow.snapshot.maximize") },
+        { cmd: "space.list", why: tmsg("hint.flow.snapshot.switch") },
       ];
     },
     errors: ["INVALID_PARAMS"],
     examples: [
-      "sok window.snapshot",
-      'sok window.snapshot \'{"path":"/tmp/shot.png"}\'',
-      'sok window.snapshot \'{"rect":{"x":100,"y":80,"w":400,"h":300},"base64":true}\'',
+      "window.snapshot",
+      'window.snapshot \'{"path":"/tmp/shot.png"}\'',
+      'window.snapshot \'{"rect":{"x":100,"y":80,"w":400,"h":300},"base64":true}\'',
     ],
     handler: async (p) => {
       const rect = p.rect as
@@ -2279,8 +2279,8 @@ export function registerCatalog(): void {
     returns: "{ dir, frames }",
     message: (d) => tmsg("msg.window.record", { n: Number(d.frames) }),
     examples: [
-      'sok window.record \'{"dir":"/tmp/rec"}\'',
-      'sok window.record \'{"dir":"/tmp/rec","frames":120,"intervalMs":33}\'',
+      'window.record \'{"dir":"/tmp/rec"}\'',
+      'window.record \'{"dir":"/tmp/rec","frames":120,"intervalMs":33}\'',
     ],
     handler: async (p) => {
       const dir = p.dir as string;
@@ -2308,7 +2308,7 @@ export function registerCatalog(): void {
     returns: "{ occlusion }",
     message: (d) =>
       d.occlusion ? tmsg("msg.window.occlusion.on") : tmsg("msg.window.occlusion.off"),
-    examples: ['sok window.occlusion \'{"enabled":false}\''],
+    examples: ['window.occlusion \'{"enabled":false}\''],
     handler: async (p) => {
       const enabled = !!p.enabled;
       await invoke("plugin:webview-capture|set_occlusion", { enabled });
@@ -2325,7 +2325,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ hierarchy } — indented text, one view per line",
     message: () => tmsg("msg.window.layers"),
-    examples: ["sok window.layers"],
+    examples: ["window.layers"],
     handler: async () => {
       const hierarchy = await invoke<string>("webview_debug_hierarchy");
       return { hierarchy };
@@ -2346,7 +2346,7 @@ export function registerCatalog(): void {
         n: ((d.monitors as unknown[]) ?? []).length,
         m: ((d.windows as unknown[]) ?? []).length,
       }),
-    examples: ["sok window.monitors"],
+    examples: ["window.monitors"],
     handler: async () => {
       return (await invoke("window_monitors")) as object;
     },
@@ -2367,7 +2367,7 @@ export function registerCatalog(): void {
     },
     returns: "{ ok }",
     message: () => tmsg("msg.window.place"),
-    examples: ['sok window.place \'{"label":"main","x":2560,"y":0,"w":2560,"h":1440}\''],
+    examples: ['window.place \'{"label":"main","x":2560,"y":0,"w":2560,"h":1440}\''],
     handler: async (p) => {
       await invoke("window_place", {
         label: p.label,
@@ -2402,7 +2402,7 @@ export function registerCatalog(): void {
     returns: "{ placements: [{label,monitor,x,y,w,h}] }",
     message: (d) => tmsg("msg.layout.suggest", { n: ((d.placements as unknown[]) ?? []).length }),
     examples: [
-      'sok layout.suggest \'{"strategy":"spread","roles":{"main":"orchestrator"}}\'',
+      'layout.suggest \'{"strategy":"spread","roles":{"main":"orchestrator"}}\'',
     ],
     handler: async (p) => {
       const facts = (await invoke("window_monitors")) as {
@@ -2439,8 +2439,8 @@ export function registerCatalog(): void {
     returns: "{ entries: [{ seq, ts, kind, source, payload }] }",
     message: (d) => tmsg("msg.activity.recent", { n: ((d.entries as unknown[]) ?? []).length }),
     examples: [
-      'sok activity.recent \'{"limit":20}\'',
-      'sok activity.recent \'{"since":1234}\'',
+      'activity.recent \'{"limit":20}\'',
+      'activity.recent \'{"since":1234}\'',
     ],
     // §5 R2: 조회도 사실이다 — 기록된다(선형 증가일 뿐 되먹임 아님. 낭독 루프는 tts 축이
     // 차단). 컴포넌트 자기 백필은 호출측이 origin:"internal" 로 선언(노출만 낮아짐).
@@ -2507,8 +2507,8 @@ export function registerCatalog(): void {
           : tmsg("msg.window.themeScan.torn", { n: Number(d.spreadFrames) })
         : tmsg("msg.window.themeScan"),
     examples: [
-      "sok window.themeScan",
-      'sok window.themeScan \'{"theme":"Midnight","frames":48}\'',
+      "window.themeScan",
+      'window.themeScan \'{"theme":"Midnight","frames":48}\'',
     ],
     handler: async (p) => {
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -2647,7 +2647,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ current, mode, themes:[{name,defaultMode,modes,source,warnings}], rejected }",
     message: (d) => tmsg("msg.theme.list", { n: ((d.themes as unknown[]) ?? []).length }),
-    examples: ["sok theme.list"],
+    examples: ["theme.list"],
     handler: () => {
       const s = useTheme.getState();
       return {
@@ -2675,7 +2675,7 @@ export function registerCatalog(): void {
     returns: "{ name, mode }",
     message: (d) => tmsg("msg.theme.apply", { name: String(d.name) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok theme.apply \'{"name":"Paper"}\'', 'sok theme.apply \'{"name":"Midnight","mode":"light"}\''],
+    examples: ['theme.apply \'{"name":"Paper"}\'', 'theme.apply \'{"name":"Midnight","mode":"light"}\''],
     handler: (p) => {
       const s = useTheme.getState();
       const ok2 = s.apply(p.name as string, p.mode as "light" | "dark" | undefined);
@@ -2691,7 +2691,7 @@ export function registerCatalog(): void {
     params: {},
     returns: "{ count, rejected }",
     message: (d) => tmsg("msg.theme.reload", { n: Number(d.count) }),
-    examples: ["sok theme.reload"],
+    examples: ["theme.reload"],
     handler: async () => {
       await useTheme.getState().reload();
       const s = useTheme.getState();
@@ -2711,7 +2711,7 @@ export function registerCatalog(): void {
         ? tmsg("msg.theme.install.rejected")
         : tmsg("msg.theme.install.installed", { path: String(d.installed) }),
     errors: ["INTERNAL"],
-    examples: ['sok theme.install \'{"path":"/tmp/dracula.json"}\''],
+    examples: ['theme.install \'{"path":"/tmp/dracula.json"}\''],
     handler: async (p) => {
       const installed = await useTheme.getState().install(p.path as string);
       const s = useTheme.getState();

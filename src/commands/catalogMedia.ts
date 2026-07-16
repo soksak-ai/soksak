@@ -39,7 +39,7 @@ export function registerMediaCatalog(): void {
     message: (d) => tmsg("msg.media.proxy.info", { port: Number(d.port) }),
     danger: "inject",
     errors: ["INTERNAL"],
-    examples: ["sok media.proxy.info"],
+    examples: ["media.proxy.info"],
     handler: async () => {
       return await invoke<ProxyInfo>("media_proxy_info");
     },
@@ -59,7 +59,7 @@ export function registerMediaCatalog(): void {
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
-      'sok media.proxy.stream \'{"url":"https://cdn.example/seg0.ts","referer":"https://page.example/"}\'',
+      'media.proxy.stream \'{"url":"https://cdn.example/seg0.ts","referer":"https://page.example/"}\'',
     ],
     handler: async (p) => {
       if (typeof p.url !== "string" || !p.url) {
@@ -92,7 +92,7 @@ export function registerMediaCatalog(): void {
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
     examples: [
-      'sok media.proxy.playlist \'{"url":"https://cdn.example/play.m3u8","referer":"https://page.example/"}\'',
+      'media.proxy.playlist \'{"url":"https://cdn.example/play.m3u8","referer":"https://page.example/"}\'',
     ],
     handler: async (p) => {
       if (typeof p.url !== "string" || !p.url) {

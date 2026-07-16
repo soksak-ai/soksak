@@ -82,7 +82,7 @@ export function registerDomCatalog(): void {
     },
     returns: "{ window, count, nodes: [{ address, nodePath, rect? }] }",
     message: (d) => tmsg("msg.ui.tree", { n: Number(d.count ?? 0) }),
-    examples: ["sok ui.tree", 'sok ui.tree \'{"rects":true}\''],
+    examples: ["ui.tree", 'ui.tree \'{"rects":true}\''],
     handler: (p) => {
       const withRects = p.rects === true;
       const nodes = collectExposed().map((n) => {
@@ -112,7 +112,7 @@ export function registerDomCatalog(): void {
         h: Number((d.rect as { h?: number })?.h ?? 0),
       }),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
-    examples: ['sok ui.measure \'{"address":"content/view/soksak-plugin-<id>.<view>/node/send"}\''],
+    examples: ['ui.measure \'{"address":"content/view/soksak-plugin-<id>.<view>/node/send"}\''],
     handler: (p) => {
       const addr = p.address as string;
       const el = resolveElement(addr);
@@ -161,7 +161,7 @@ export function registerDomCatalog(): void {
         dpr: Number(d.dpr ?? 1),
       }),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
-    examples: ['sok ui.slot \'{"address":"win/main/content/view/soksak-plugin-<id>.<view>"}\''],
+    examples: ['ui.slot \'{"address":"win/main/content/view/soksak-plugin-<id>.<view>"}\''],
     handler: (p) => {
       const addr = (p.address as string) ?? "";
       const want = addr.replace(/^\/+|\/+$/g, "");
@@ -203,7 +203,7 @@ export function registerDomCatalog(): void {
       tmsg("msg.ui.focus.state", {
         view: String(d.activeViewId ?? "none"),
       }),
-    examples: ["sok ui.focus.state"],
+    examples: ["ui.focus.state"],
     handler: () => {
       const request = viewFocusSnapshot();
       const active = document.activeElement;
@@ -242,7 +242,7 @@ export function registerDomCatalog(): void {
     message: () => tmsg("msg.ui.input.click"),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
     danger: "inject",
-    examples: ['sok ui.input.click \'{"address":"win/main/chrome/modal/consent/agree"}\''],
+    examples: ['ui.input.click \'{"address":"win/main/chrome/modal/consent/agree"}\''],
     handler: (p) => {
       const addr = p.address as string;
       const el = resolveElement(addr);
@@ -272,7 +272,7 @@ export function registerDomCatalog(): void {
     message: () => tmsg("msg.ui.input.dblclick"),
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
     danger: "inject",
-    examples: ['sok ui.input.dblclick \'{"address":"win/main/chrome/tab/left/a.x"}\''],
+    examples: ['ui.input.dblclick \'{"address":"win/main/chrome/tab/left/a.x"}\''],
     handler: (p) => {
       const addr = p.address as string;
       const el = resolveElement(addr);
@@ -305,7 +305,7 @@ export function registerDomCatalog(): void {
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
     danger: "inject",
     examples: [
-      'sok ui.input.fill \'{"address":"win/main/content/view/x/node/url-input","value":"/path/clip.mp4"}\'',
+      'ui.input.fill \'{"address":"win/main/content/view/x/node/url-input","value":"/path/clip.mp4"}\'',
     ],
     handler: (p) => {
       const addr = p.address as string;
@@ -348,8 +348,8 @@ export function registerDomCatalog(): void {
     errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
     danger: "inject",
     examples: [
-      'sok ui.input.drag \'{"from":"win/main/chrome/tab/left/a.x","to":"win/main/chrome/tab/left/b.y","zone":"center"}\'',
-      'sok ui.input.drag \'{"from":"win/main/chrome/divider/s0/0","dx":120}\'',
+      'ui.input.drag \'{"from":"win/main/chrome/tab/left/a.x","to":"win/main/chrome/tab/left/b.y","zone":"center"}\'',
+      'ui.input.drag \'{"from":"win/main/chrome/divider/s0/0","dx":120}\'',
     ],
     handler: (p) => {
       const fromEl = resolveElement(p.from as string);
@@ -400,7 +400,7 @@ export function registerDomCatalog(): void {
     },
     returns: "{ tag, className, data, rect } | { tag: null }",
     message: (d) => (d.tag ? tmsg("msg.ui.hit.found", { tag: String(d.tag) }) : tmsg("msg.ui.hit.none")),
-    examples: ['sok ui.hit \'{"x":200,"y":140}\''],
+    examples: ['ui.hit \'{"x":200,"y":140}\''],
     handler: (p) => {
       const el = document.elementFromPoint(Number(p.x), Number(p.y));
       if (!(el instanceof Element)) return { tag: null };
@@ -431,7 +431,7 @@ export function registerDomCatalog(): void {
     },
     returns: "{ ok, kind }",
     message: (d) => tmsg("msg.webview.emitNative", { kind: String(d.kind) }),
-    examples: ['sok webview.emitNative \'{"kind":"native-mousedown","x":400,"y":300}\''],
+    examples: ['webview.emitNative \'{"kind":"native-mousedown","x":400,"y":300}\''],
     handler: async (p) => {
       await invoke("webview_emit_native", { kind: p.kind, x: p.x, y: p.y });
       return { ok: true, kind: p.kind };

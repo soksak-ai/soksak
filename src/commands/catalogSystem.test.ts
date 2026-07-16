@@ -33,9 +33,8 @@ describe("app.environment — core identity와 unit source mode를 분리해 노
 
     const spec = getSpec("app.environment");
     expect(spec).toBeDefined();
-    expect(spec!.examples).toEqual(
-      expect.arrayContaining(["sok app.environment", "sok-dev app.environment", "sok-debug app.environment"]),
-    );
+    // 예제는 명령 형태만 담는다 — 바이너리 이름은 데이터가 아니라 표시자(CLI)의 정체성이다.
+    expect(spec!.examples).toEqual(["app.environment"]);
     const r = await execute("app.environment", {}, {});
     expect(invoke).toHaveBeenCalledWith("app_environment");
     expect(r).toMatchObject({
@@ -51,7 +50,7 @@ describe("system.hello 등록(발견성)", () => {
     expect(spec).toBeDefined();
     expect(Object.keys(spec!.params)).toHaveLength(0);
     expect(spec!.returns).toContain("protocol");
-    expect(spec!.examples).toContain("sok hello");
+    expect(spec!.examples).toContain("hello");
     // 이 커맨드 자체는 스큐를 내지 않는다(스큐는 transport 게이트의 봉투) — errors 에 없어야 한다.
     expect(spec!.errors ?? []).not.toContain("VERSION_SKEW");
   });

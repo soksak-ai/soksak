@@ -25,7 +25,7 @@ export function registerDebugCatalog(): void {
     message: (d) => tmsg("msg.debug.sleep", { ms: Number(d.slept) }),
     danger: "inject",
     errors: ["INTERNAL"],
-    examples: ['sok debug.sleep \'{"ms":5000}\'', 'sok debug.sleep \'{"ms":2000,"fail":true}\''],
+    examples: ['debug.sleep \'{"ms":5000}\'', 'debug.sleep \'{"ms":2000,"fail":true}\''],
     handler: async (p) => {
       const ms = typeof p.ms === "number" && p.ms >= 0 ? p.ms : 3000;
       await sleep(ms);

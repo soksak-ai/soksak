@@ -32,7 +32,7 @@ export function registerSecretsCatalog(): void {
     message: () => tmsg("msg.secret.unlock"),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok secret.unlock \'{"passphrase":"correct horse battery staple"}\''],
+    examples: ['secret.unlock \'{"passphrase":"correct horse battery staple"}\''],
     handler: async (p) => {
       if (typeof p.passphrase !== "string" || !p.passphrase) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "passphrase 필요" };
@@ -49,7 +49,7 @@ export function registerSecretsCatalog(): void {
     returns: "{ ok }",
     message: () => tmsg("msg.secret.lock"),
     errors: ["INTERNAL"],
-    examples: ["sok secret.lock"],
+    examples: ["secret.lock"],
     handler: async () => {
       await invoke("secret_lock");
       return { ok: true };
@@ -64,7 +64,7 @@ export function registerSecretsCatalog(): void {
     returns: "{ ms }",
     message: (d) => Number(d.ms) > 0 ? tmsg("msg.secret.autolock.on", { ms: Number(d.ms) }) : tmsg("msg.secret.autolock.off"),
     errors: ["INVALID_PARAMS"],
-    examples: ['sok secret.autolock \'{"ms":300000}\''],
+    examples: ['secret.autolock \'{"ms":300000}\''],
     handler: async (p) => {
       const ms = typeof p.ms === "number" ? p.ms : Number(p.ms);
       if (!Number.isFinite(ms) || ms < 0) {
@@ -82,7 +82,7 @@ export function registerSecretsCatalog(): void {
     returns: "{ backend, unlocked }",
     message: (d) => d.unlocked ? tmsg("msg.secret.backend.unlocked", { backend: String(d.backend) }) : tmsg("msg.secret.backend.locked", { backend: String(d.backend) }),
     errors: ["INTERNAL"],
-    examples: ["sok secret.backend"],
+    examples: ["secret.backend"],
     handler: async () => {
       return await invoke<{ backend: string; unlocked: boolean }>("secret_backend");
     },
@@ -97,7 +97,7 @@ export function registerSecretsCatalog(): void {
     message: () => tmsg("msg.secret.set"),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok secret.set \'{"ns":"soksak-plugin-<id>","key":"anthropicKey","value":"sk-ant-..."}\''],
+    examples: ['secret.set \'{"ns":"soksak-plugin-<id>","key":"anthropicKey","value":"sk-ant-..."}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || typeof p.key !== "string" || typeof p.value !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns·key·value 필요" };
@@ -114,7 +114,7 @@ export function registerSecretsCatalog(): void {
     returns: "{ has }",
     message: (d) => d.has ? tmsg("msg.secret.has.present") : tmsg("msg.secret.has.absent"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok secret.has \'{"ns":"soksak-plugin-<id>","key":"anthropicKey"}\''],
+    examples: ['secret.has \'{"ns":"soksak-plugin-<id>","key":"anthropicKey"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || typeof p.key !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns·key 필요" };
@@ -131,7 +131,7 @@ export function registerSecretsCatalog(): void {
     returns: "{ keys: string[] }",
     message: (d) => tmsg("msg.secret.keys", { n: ((d.keys as unknown[]) ?? []).length }),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok secret.keys \'{"ns":"soksak-plugin-<id>"}\''],
+    examples: ['secret.keys \'{"ns":"soksak-plugin-<id>"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns 필요" };
@@ -149,7 +149,7 @@ export function registerSecretsCatalog(): void {
     message: (d) => d.removed ? tmsg("msg.secret.remove.removed") : tmsg("msg.secret.remove.absent"),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok secret.remove \'{"ns":"soksak-plugin-<id>","key":"anthropicKey"}\''],
+    examples: ['secret.remove \'{"ns":"soksak-plugin-<id>","key":"anthropicKey"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || typeof p.key !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns·key 필요" };

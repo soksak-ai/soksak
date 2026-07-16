@@ -15,7 +15,7 @@ export function registerClipboardCatalog(): void {
     returns: "{ text }",
     message: (d) => tmsg("msg.clipboard.read", { n: String(d.text ?? "").length }),
     errors: ["INTERNAL"],
-    examples: ["sok clipboard.read"],
+    examples: ["clipboard.read"],
     handler: async () => {
       const text = await invoke<string>("clipboard_read");
       return { text };
@@ -32,7 +32,7 @@ export function registerClipboardCatalog(): void {
     message: () => tmsg("msg.clipboard.write"),
     danger: "inject",
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok clipboard.write \'{"text":"복사할 내용"}\''],
+    examples: ['clipboard.write \'{"text":"복사할 내용"}\''],
     handler: async (p) => {
       if (typeof p.text !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "text 필요" };

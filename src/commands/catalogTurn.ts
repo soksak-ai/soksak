@@ -29,7 +29,7 @@ export function registerTurnCatalog(): void {
     returns: "{ emitted }",
     message: () => tmsg("msg.turn.signal"),
     errors: ["INTERNAL"],
-    examples: ['sok turn.signal \'{"source":"acp","root":"/Users/me/proj","command":"claude 응답 완료"}\''],
+    examples: ['turn.signal \'{"source":"acp","root":"/Users/me/proj","command":"claude 응답 완료"}\''],
     handler: (p) => {
       emitPluginEvent("turn.ended", {
         projectId: typeof p.project === "string" ? p.project : null,
@@ -54,7 +54,7 @@ export function registerTurnCatalog(): void {
     returns: "{ enabled, ms }",
     message: (d) => d.enabled ? tmsg("msg.turn.idleDetection.on", { ms: Number(d.ms) }) : tmsg("msg.turn.idleDetection.off"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok turn.idleDetection \'{"enabled":true,"ms":1500}\''],
+    examples: ['turn.idleDetection \'{"enabled":true,"ms":1500}\''],
     handler: (p) => {
       if (typeof p.enabled !== "boolean") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "enabled(boolean) 필요" };

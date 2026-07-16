@@ -123,7 +123,7 @@ export function registerPluginCatalog(): void {
       d.note
         ? tmsg("msg.list.controlPlane")
         : tmsg("msg.program.list", { n: ((d.programs as unknown[]) ?? []).length }),
-    examples: ["sok program.list"],
+    examples: ["program.list"],
     handler: () => ({
       // 제어판(main)은 플러그인을 싣지 않는다 — 빈 목록을 "미설치"로 오독하지 않게 스스로 설명한다.
       ...(currentWindowLabel() === "main"
@@ -154,7 +154,7 @@ export function registerPluginCatalog(): void {
   };
   const shortName = (id: string): string => id.replace(/^soksak-plugin-/, "");
   const qualifiedInstallCommand = (entry: Pick<QualifiedRegistryEntry, "registryId" | "unitId">): string =>
-    `sok plugin.install '${JSON.stringify({ registryId: entry.registryId, unitId: entry.unitId })}'`;
+    `plugin.install '${JSON.stringify({ registryId: entry.registryId, unitId: entry.unitId })}'`;
 
   const installResolution = (raw: string, registryId?: string) => {
     const unitIds = raw.startsWith("soksak-plugin-") ? [raw] : [`soksak-plugin-${raw}`, raw];
@@ -182,7 +182,7 @@ export function registerPluginCatalog(): void {
     // 문제가 아니라 창 문제다. 설치 안내는 오진(실측: 외부 에이전트가 재시도 반복).
     const controlPlane = currentWindowLabel() === "main";
     const controlPlaneHint = (): CommandHint[] => [
-      { cmd: "sok window.projects", why: tmsg("hint.error.pluginControlPlane") },
+      { cmd: "window.projects", why: tmsg("hint.error.pluginControlPlane") },
     ];
     // 형태 ①: plugin.<플러그인 id>.<명령> — id 로 직접 판별.
     const m = /^plugin\.(soksak-plugin-[a-z0-9-]+)\.(.+)$/.exec(name);
@@ -191,14 +191,14 @@ export function registerPluginCatalog(): void {
       const matching = entries.filter((e) => e.unitId === pid);
       const runtime = installed[pid];
       if (runtime && runtime.status !== "enabled") {
-        return [{ cmd: `sok plugin.enable ${shortName(pid)}`, why: tmsg("hint.error.pluginDisabled", { plugin: pid }) }];
+        return [{ cmd: `plugin.enable ${shortName(pid)}`, why: tmsg("hint.error.pluginDisabled", { plugin: pid }) }];
       }
       if (matching.length && controlPlane) return controlPlaneHint();
       if (!runtime && matching.length) {
         return matching.slice(0, 3).map((entry) => ({
           cmd:
             matching.length === 1 && entry.registryId === OFFICIAL_REGISTRY_ID
-              ? `sok plugin.install ${shortName(pid)}`
+              ? `plugin.install ${shortName(pid)}`
               : qualifiedInstallCommand(entry),
           why: tmsg("hint.error.pluginNotInstalled", { plugin: pid, command: sub }),
         }));
@@ -218,7 +218,7 @@ export function registerPluginCatalog(): void {
       d.note
         ? tmsg("msg.list.controlPlane")
         : tmsg("msg.plugin.list", { n: ((d.plugins as unknown[]) ?? []).length }),
-    examples: ["sok plugin.list"],
+    examples: ["plugin.list"],
     handler: () => {
       const s = usePlugins.getState();
       return {
@@ -254,7 +254,7 @@ export function registerPluginCatalog(): void {
       "{ registries: [{id,name,indexUrl,visibility,trustedPublicKey,credentialRef?,status,unitCount,lastFetchedAt,error}] }",
     message: (d) => tmsg("msg.registry.list", { n: ((d.registries as unknown[]) ?? []).length }),
     errors: [],
-    examples: ["sok registry.list"],
+    examples: ["registry.list"],
     handler: () => ({
       registries: useRegistry.getState().descriptors
         .map((descriptor) => serializeRegistrySource(descriptor.id))
@@ -278,7 +278,7 @@ export function registerPluginCatalog(): void {
     message: (d) => tmsg("msg.registry.add", { id: String(d.registryId) }),
     errors: ["INVALID_PARAMS", "ALREADY_EXISTS"],
     examples: [
-      `sok registry.add '${JSON.stringify({
+      `registry.add '${JSON.stringify({
         descriptor: {
           id: "community",
           name: "Community",
@@ -309,7 +309,7 @@ export function registerPluginCatalog(): void {
     returns: "{ registryId }",
     message: (d) => tmsg("msg.registry.remove", { id: String(d.registryId) }),
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
-    examples: ['sok registry.remove \'{"registryId":"community"}\''],
+    examples: ['registry.remove \'{"registryId":"community"}\''],
     danger: "destructive",
     handler: (p) => {
       const result = useRegistry.getState().remove(String(p.registryId));
@@ -329,7 +329,7 @@ export function registerPluginCatalog(): void {
     returns: "{ results: [{registryId,status,error?,skipped?}] }",
     message: (d) => tmsg("msg.registry.refresh", { n: ((d.results as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok registry.refresh", 'sok registry.refresh \'{"registryId":"community"}\''],
+    examples: ["registry.refresh", 'registry.refresh \'{"registryId":"community"}\''],
     handler: async (p) => {
       const registryId = typeof p.registryId === "string" ? p.registryId : undefined;
       if (registryId && !useRegistry.getState().registries[registryId]) {
@@ -357,7 +357,7 @@ export function registerPluginCatalog(): void {
     returns: "{ registries: [descriptor+status], events: [{seq,at,type,registryId,detail?}] }",
     message: (d) => tmsg("msg.registry.status", { n: ((d.registries as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok registry.status", 'sok registry.status \'{"registryId":"official"}\''],
+    examples: ["registry.status", 'registry.status \'{"registryId":"official"}\''],
     handler: (p) => {
       const registryId = typeof p.registryId === "string" ? p.registryId : undefined;
       if (registryId && !useRegistry.getState().registries[registryId]) {
@@ -393,7 +393,7 @@ export function registerPluginCatalog(): void {
     message: (d) =>
       tmsg("msg.plugin.catalog", { n: ((d.plugins as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["sok plugin.catalog", 'sok plugin.catalog \'{"refresh":true}\''],
+    examples: ["plugin.catalog", 'plugin.catalog \'{"refresh":true}\''],
     hint: (d) => {
       // 첫 미설치 항목을 설치 예시로 제시(가능성의 제시) — 전부 설치되어 있으면 생략.
       const plugins = (d.plugins as (QualifiedRegistryEntry & { installed: boolean })[] | undefined) ?? [];
@@ -460,7 +460,7 @@ export function registerPluginCatalog(): void {
         core: ((d.core as unknown[]) ?? []).length,
         registry: ((d.registry as unknown[]) ?? []).length,
       }),
-    examples: ["sok command.docs", "sok docs", 'sok command.docs \'{"lang":"ko"}\''],
+    examples: ["command.docs", "docs", 'command.docs \'{"lang":"ko"}\''],
     handler: async (p) => {
       const reg = useRegistry.getState();
       await reg.refresh(p.refresh === true).catch(() => {});
@@ -509,17 +509,17 @@ export function registerPluginCatalog(): void {
     message: (d) => tmsg("msg.plugin.install", { id: String(d.id) }),
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND", "AMBIGUOUS_TARGET", "INTERNAL"],
     examples: [
-      "sok plugin.install activity",
-      'sok plugin.install \'{"registryId":"community","unitId":"soksak-plugin-<id>"}\'',
+      "plugin.install activity",
+      'plugin.install \'{"registryId":"community","unitId":"soksak-plugin-<id>"}\'',
     ],
     danger: "destructive",
     hint: (d) => {
       // 실패: 이름을 못 찾았으면 카탈로그 탐색을 제시. 성공: 다음 단계(활성화)를 제시(B4).
       if (d.code === "TARGET_NOT_FOUND")
-        return [{ cmd: "sok plugin.catalog", why: tmsg("hint.plugin.catalogBrowse") }];
+        return [{ cmd: "plugin.catalog", why: tmsg("hint.plugin.catalogBrowse") }];
       if (d.code) return [];
       return [
-        { cmd: `sok plugin.enable ${shortName(String(d.id))}`, why: tmsg("hint.plugin.enableNext") },
+        { cmd: `plugin.enable ${shortName(String(d.id))}`, why: tmsg("hint.plugin.enableNext") },
       ];
     },
     handler: async (p) => {
@@ -595,7 +595,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id, version, generation }",
     message: (d) => tmsg("msg.plugin.update", { id: String(d.id), version: String(d.version) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok plugin.update \'{"id":"soksak-plugin-<id>"}\''],
+    examples: ['plugin.update \'{"id":"soksak-plugin-<id>"}\''],
     danger: "destructive",
     handler: async (p) => {
       const id = resolveShortId(String(p.id)) ?? String(p.id);
@@ -621,8 +621,8 @@ export function registerPluginCatalog(): void {
     message: (d) => tmsg("msg.plugin.remove", { n: ((d.removed as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND", "CASCADE_REQUIRED", "INTERNAL"],
     examples: [
-      'sok plugin.remove \'{"id":"soksak-plugin-<id>"}\'',
-      'sok plugin.remove \'{"id":"soksak-plugin-<id>","cascade":true}\'',
+      'plugin.remove \'{"id":"soksak-plugin-<id>"}\'',
+      'plugin.remove \'{"id":"soksak-plugin-<id>","cascade":true}\'',
     ],
     danger: "destructive",
     handler: (p) =>
@@ -643,8 +643,8 @@ export function registerPluginCatalog(): void {
         : tmsg("msg.plugin.deps.issues", { n: ((d.issues as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
     examples: [
-      "sok plugin.deps",
-      'sok plugin.deps \'{"id":"soksak-plugin-<id>"}\'',
+      "plugin.deps",
+      'plugin.deps \'{"id":"soksak-plugin-<id>"}\'',
     ],
     handler: (p) => {
       const nodes = depNodes();
@@ -684,8 +684,8 @@ export function registerPluginCatalog(): void {
           }),
     errors: ["INVALID_PARAMS"],
     examples: [
-      "sok plugin.implementers",
-      'sok plugin.implementers \'{"id":"soksak-spec-plugin-git","range":"0.0.1"}\'',
+      "plugin.implementers",
+      'plugin.implementers \'{"id":"soksak-spec-plugin-git","range":"0.0.1"}\'',
     ],
     handler: (p) => {
       const nodes = implementsNodes();
@@ -728,7 +728,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id, status }",
     message: (d) => tmsg("msg.plugin.enable", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND", "CONSENT_REQUIRED", "INTERNAL"],
-    examples: ["sok plugin.enable <name>", 'sok plugin.enable \'{"id":"soksak-plugin-<id>"}\''],
+    examples: ["plugin.enable <name>", 'plugin.enable \'{"id":"soksak-plugin-<id>"}\''],
     danger: "inject",
     hint: (d) => {
       // CONSENT_REQUIRED 는 message 에 미동의 id 목록이 실린다("활성화 동의 필요: id1, id2 …") —
@@ -741,7 +741,7 @@ export function registerPluginCatalog(): void {
       if (!first) return [];
       return [
         {
-          cmd: `sok plugin.consent.preview '{"id":"${first}"}'`,
+          cmd: `plugin.consent.preview '{"id":"${first}"}'`,
           why: tmsg("hint.plugin.consentPreviewNext", { id: first }),
         },
       ];
@@ -762,7 +762,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id, status }",
     message: (d) => tmsg("msg.plugin.disable", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.disable \'{"id":"soksak-plugin-<id>"}\''],
+    examples: ['plugin.disable \'{"id":"soksak-plugin-<id>"}\''],
     danger: "destructive",
     handler: (p) => usePlugins.getState().disable(resolveShortId(String(p.id)) ?? String(p.id)),
   });
@@ -775,7 +775,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id, version, permissions, contributes, dependencies:{plugins,libraries} }",
     message: (d) => tmsg("msg.plugin.consent.summary", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.consent.summary \'{"id":"soksak-plugin-<id>"}\''],
+    examples: ['plugin.consent.summary \'{"id":"soksak-plugin-<id>"}\''],
     handler: (p) => {
       const s = usePlugins.getState();
       const plug = s.plugins[resolveShortId(String(p.id)) ?? String(p.id)];
@@ -792,7 +792,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id }",
     message: (d) => tmsg("msg.plugin.consent.revoke", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.consent.revoke \'{"id":"soksak-plugin-<id>"}\''],
+    examples: ['plugin.consent.revoke \'{"id":"soksak-plugin-<id>"}\''],
     danger: "destructive",
     handler: (p) => usePlugins.getState().revokeConsent(resolveShortId(String(p.id)) ?? String(p.id)),
   });
@@ -808,7 +808,7 @@ export function registerPluginCatalog(): void {
         ? tmsg("msg.plugin.consent.grant", { id: String(d.id) })
         : tmsg("msg.plugin.consent.grant.failed", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.consent.grant \'{"id":"soksak-plugin-<id>"}\''],
+    examples: ['plugin.consent.grant \'{"id":"soksak-plugin-<id>"}\''],
     danger: "destructive",
     handler: (p) => {
       const s = usePlugins.getState();
@@ -830,7 +830,7 @@ export function registerPluginCatalog(): void {
         ? tmsg("msg.plugin.consent.chain.ready", { id: String(d.id) })
         : tmsg("msg.plugin.consent.chain.pending", { n: ((d.pending as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.consent.chain \'{"id":"soksak-plugin-<id>"}\''],
+    examples: ['plugin.consent.chain \'{"id":"soksak-plugin-<id>"}\''],
     handler: (p) => {
       const s = usePlugins.getState();
       const pid = resolveShortId(String(p.id)) ?? String(p.id);
@@ -856,8 +856,8 @@ export function registerPluginCatalog(): void {
         : tmsg("msg.plugin.consent.preview.closed"),
     errors: ["TARGET_NOT_FOUND"],
     examples: [
-      'sok plugin.consent.preview \'{"id":"soksak-plugin-<id>"}\'',
-      'sok plugin.consent.preview \'{"id":""}\'  # 닫기',
+      'plugin.consent.preview \'{"id":"soksak-plugin-<id>"}\'',
+      'plugin.consent.preview \'{"id":""}\'  # 닫기',
     ],
     handler: (p) => {
       const id = (p.id as string | undefined) ?? "";
@@ -886,7 +886,7 @@ export function registerPluginCatalog(): void {
     returns: "{ id, configuration: ConfigSetting[] }",
     message: (d) => tmsg("msg.plugin.settings.schema", { n: ((d.configuration as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.settings.schema \'{"id":"soksak-plugin-<id>"}\''],
+    examples: ['plugin.settings.schema \'{"id":"soksak-plugin-<id>"}\''],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
       if (!plug) return notFound(`플러그인 없음: ${p.id}`);
@@ -911,8 +911,8 @@ export function registerPluginCatalog(): void {
         : tmsg("msg.plugin.settings.get.all", { n: Object.keys((d.values as Record<string, unknown>) ?? {}).length }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sok plugin.settings.get \'{"id":"soksak-plugin-<id>"}\'',
-      'sok plugin.settings.get \'{"id":"soksak-plugin-<id>","key":"defaultAgent","scope":"global"}\'',
+      'plugin.settings.get \'{"id":"soksak-plugin-<id>"}\'',
+      'plugin.settings.get \'{"id":"soksak-plugin-<id>","key":"defaultAgent","scope":"global"}\'',
     ],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
@@ -952,8 +952,8 @@ export function registerPluginCatalog(): void {
     message: (d) => tmsg("msg.plugin.settings.set", { key: String(d.key), value: String(d.value) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sok plugin.settings.set \'{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"codex"}\'',
-      'sok plugin.settings.set \'{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"gemini","scope":"project"}\'',
+      'plugin.settings.set \'{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"codex"}\'',
+      'plugin.settings.set \'{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"gemini","scope":"project"}\'',
     ],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
@@ -991,7 +991,7 @@ export function registerPluginCatalog(): void {
         ? tmsg("msg.plugin.settings.reset.one", { key: String(d.key) })
         : tmsg("msg.plugin.settings.reset.all"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
-    examples: ['sok plugin.settings.reset \'{"id":"soksak-plugin-<id>","key":"defaultAgent"}\''],
+    examples: ['plugin.settings.reset \'{"id":"soksak-plugin-<id>","key":"defaultAgent"}\''],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
       if (!plug) return notFound(`플러그인 없음: ${p.id}`);
@@ -1023,8 +1023,8 @@ export function registerPluginCatalog(): void {
         : tmsg("msg.plugin.settings.open.closed"),
     errors: ["TARGET_NOT_FOUND"],
     examples: [
-      "sok plugin.settings.open",
-      'sok plugin.settings.open \'{"id":"soksak-plugin-<id>"}\'',
+      "plugin.settings.open",
+      'plugin.settings.open \'{"id":"soksak-plugin-<id>"}\'',
     ],
     handler: (p) => {
       const raw = p.id as string | undefined;
@@ -1055,7 +1055,7 @@ export function registerPluginCatalog(): void {
       "{ reloaded, rejected: [{id, reason}] } (id omitted — full rescan; rejected lists directories whose manifest failed validation) | { id, status } (id given — that plugin only; a failure reason is in the response message)",
     message: (d) => (d.id ? tmsg("msg.plugin.reload", { n: 1 }) : tmsg("msg.plugin.reload", { n: Number(d.reloaded) })),
     errors: ["TARGET_NOT_FOUND", "CONSENT_REQUIRED"],
-    examples: ["sok plugin.reload", 'sok plugin.reload \'{"id":"soksak-plugin-<id>"}\''],
+    examples: ["plugin.reload", 'plugin.reload \'{"id":"soksak-plugin-<id>"}\''],
     handler: async (p) => {
       if (p.id) {
         const id = resolveShortId(String(p.id)) ?? String(p.id);
@@ -1093,8 +1093,8 @@ export function registerPluginCatalog(): void {
     message: (d) => tmsg("msg.plugin.view.open", { view: String(d.view), placement: String(d.placement) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sok plugin.view.open \'{"view":"soksak-plugin-<id>.<view>"}\'',
-      'sok plugin.view.open \'{"view":"soksak-plugin-<id>.<view>","placement":"content"}\'',
+      'plugin.view.open \'{"view":"soksak-plugin-<id>.<view>"}\'',
+      'plugin.view.open \'{"view":"soksak-plugin-<id>.<view>","placement":"content"}\'',
     ],
     handler: (p) => {
       const s = useSessions.getState();
@@ -1157,7 +1157,7 @@ export function registerPluginCatalog(): void {
     returns: "{ view, closed: [placement list] }",
     message: (d) => tmsg("msg.plugin.view.close", { view: String(d.view), n: ((d.closed as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok plugin.view.close \'{"view":"soksak-plugin-<id>.<view>"}\''],
+    examples: ['plugin.view.close \'{"view":"soksak-plugin-<id>.<view>"}\''],
     handler: (p) => {
       const s = useSessions.getState();
       const projectId = (p.project as string | undefined) ?? s.activeId;
@@ -1195,7 +1195,7 @@ export function registerPluginCatalog(): void {
 
   register("plugin.dev.load", {
     description:
-      "Select an existing absolute plugin workspace as this identity home's development source, validate its plugin.json, and load it without replacing a separate official installation. Available from sok, sok-dev, and sok-debug. Dev-sourced plugins bypass the consent gate (spec §0-5 exception).",
+      "Select an existing absolute plugin workspace as this identity home's development source, validate its plugin.json, and load it without replacing a separate official installation. Available in every build, not only development builds. Dev-sourced plugins bypass the consent gate (spec §0-5 exception).",
     triggers: { ko: "플러그인 개발 로드 dev 임시 적재" },
     params: {
       path: { type: "string", description: "Absolute path to the plugin directory", required: true },
@@ -1203,18 +1203,14 @@ export function registerPluginCatalog(): void {
     returns: "{ id, dir }",
     message: (d) => tmsg("msg.plugin.dev.load", { id: String(d.id) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
-    examples: [
-      'sok plugin.dev.load \'{"path":"/path/to/my-plugin"}\'',
-      'sok-dev plugin.dev.load \'{"path":"/path/to/my-plugin"}\'',
-      'sok-debug plugin.dev.load \'{"path":"/path/to/my-plugin"}\'',
-    ],
+    examples: ['plugin.dev.load \'{"path":"/path/to/my-plugin"}\''],
     danger: "inject",
     handler: (p) => usePlugins.getState().devLoad(p.path as string),
   });
 
   register("plugin.dev.create", {
     description:
-      "Scaffold a new plugin in the current identity home's workspaces/plugins/<id> directory, register that absolute directory as its development source, initialize Git, and reload plugins. Available from sok, sok-dev, and sok-debug.",
+      "Scaffold a new plugin in the current identity home's workspaces/plugins/<id> directory, register that absolute directory as its development source, initialize Git, and reload plugins. Available in every build, not only development builds.",
     triggers: { ko: "플러그인 개발 새로 만들기 스캐폴드 scaffold 생성" },
     params: {
       id: { type: "string", description: "Plugin id (must match ^[a-z0-9][a-z0-9-]*$)", required: true },
@@ -1222,11 +1218,7 @@ export function registerPluginCatalog(): void {
     returns: "{ ok, dir, pluginId }",
     message: (d) => tmsg("msg.plugin.dev.create", { id: String(d.pluginId) }),
     errors: ["INVALID_PARAMS"],
-    examples: [
-      'sok plugin.dev.create \'{"id":"soksak-plugin-<id>"}\'',
-      'sok-dev plugin.dev.create \'{"id":"soksak-plugin-<id>"}\'',
-      'sok-debug plugin.dev.create \'{"id":"soksak-plugin-<id>"}\'',
-    ],
+    examples: ['plugin.dev.create \'{"id":"soksak-plugin-<id>"}\''],
     danger: "inject",
     handler: async (p) => {
       const r = await invoke<{ dir: string; dir_name: string }>("plugin_dev_new", {
@@ -1247,7 +1239,7 @@ export function registerPluginCatalog(): void {
     returns:
       "{ id, commands/views/fileViewers/iconSets: { declared, registered, missing }, nodes: { declared, wired, missing, orphan }, implements: { declared, violations }, c2: { violations: [{ rule, detail }], viewStatus: { mounted, reported, unreported, undeclared: [{ viewId, view, code }] } }, calls: { literals, dynamic, unresolved } }",
     message: (d) => tmsg("msg.plugin.conformance", { id: String(d.id) }),
-    examples: ["sok plugin.conformance soksak-plugin-<id>"],
+    examples: ["plugin.conformance soksak-plugin-<id>"],
     handler: async (p) => {
       const id = p.id as string;
       const plug = usePlugins.getState().plugins[id];

@@ -33,11 +33,11 @@ export function registerWebviewCatalog(): void {
         .filter((e) => e.state === "open")
         .slice(0, 3)
         .map<CommandHint>((e) => ({
-          cmd: `sok webview.recover '{"label":"${e.label}"}'`,
+          cmd: `webview.recover '{"label":"${e.label}"}'`,
           why: `${e.label} 는 자동 복구가 중단된 상태(open)입니다 — 수동 복구로 되살립니다`,
         }));
     },
-    examples: ["sok webview.health.query"],
+    examples: ["webview.health.query"],
     handler: async () => {
       const entries = await invoke<LabelHealth[]>("webview_health_query");
       return { count: entries.length, entries };
@@ -60,7 +60,7 @@ export function registerWebviewCatalog(): void {
     returns: "{ label, reloaded: true }",
     message: (d) => tmsg("msg.webview.recover", { label: String(d.label) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['sok webview.recover \'{"label":"b-w-1234-v7"}\''],
+    examples: ['webview.recover \'{"label":"b-w-1234-v7"}\''],
     handler: async (p) => {
       try {
         await invoke("webview_recover", { label: p.label });

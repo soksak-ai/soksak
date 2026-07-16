@@ -21,12 +21,11 @@ afterEach(() => {
 });
 
 describe("unit.dev.* — 모든 core identity가 공유하는 개발 source 표면", () => {
-  it("세 CLI 예제를 노출하고 빈 config를 official로 보고", async () => {
+  it("형태-only 예제를 노출하고 빈 config를 official로 보고", async () => {
     invoke.mockResolvedValueOnce([]);
     const spec = getSpec("unit.dev.list");
-    expect(spec?.examples).toEqual(
-      expect.arrayContaining(["sok unit.dev.list", "sok-dev unit.dev.list", "sok-debug unit.dev.list"]),
-    );
+    // 예제는 명령 형태만 — 세 env 나열은 표시자(각 바이너리)가 자기 이름을 붙이므로 중복이었다.
+    expect(spec?.examples).toEqual(["unit.dev.list"]);
     const r = await execute("unit.dev.list", {}, {});
     expect(r).toMatchObject({ ok: true, data: { unitMode: "official", units: [] } });
   });

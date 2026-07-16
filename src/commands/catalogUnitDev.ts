@@ -21,7 +21,7 @@ export function registerUnitDevCatalog(): void {
         mode: String(d.unitMode),
         n: ((d.units as unknown[]) ?? []).length,
       }),
-    examples: ["sok unit.dev.list", "sok-dev unit.dev.list", "sok-debug unit.dev.list"],
+    examples: ["unit.dev.list"],
     handler: async () => {
       const units = (await invoke<UnitDevSource[]>("unit_dev_list")) ?? [];
       return { unitMode: units.length === 0 ? "official" : "mixed", units };
@@ -41,7 +41,7 @@ export function registerUnitDevCatalog(): void {
     message: (d) =>
       tmsg("msg.unit.dev.set", { kind: String(d.kind), id: String(d.id) }),
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
-    examples: ['sok unit.dev.set \'{"kind":"plugin","id":"weather","source":"/absolute/path/weather"}\''],
+    examples: ['unit.dev.set \'{"kind":"plugin","id":"weather","source":"/absolute/path/weather"}\''],
     danger: "inject",
     handler: async (p) => {
       const kind = p.kind as UnitKind;
@@ -75,7 +75,7 @@ export function registerUnitDevCatalog(): void {
         id: String(d.id),
         state: d.removed ? "removed" : "not-selected",
       }),
-    examples: ['sok unit.dev.remove \'{"kind":"plugin","id":"weather"}\''],
+    examples: ['unit.dev.remove \'{"kind":"plugin","id":"weather"}\''],
     handler: async (p) => {
       const kind = p.kind as UnitKind;
       const id = p.id as string;

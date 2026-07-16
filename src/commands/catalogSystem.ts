@@ -21,7 +21,7 @@ export function registerSystemCatalog(): void {
         protocol: Number(d.protocol ?? 0),
         version: String(d.appVersion ?? ""),
       }),
-    examples: ["sok hello"],
+    examples: ["hello"],
     // transport 즉답과 같은 hello_facts 를 내는 코어 커맨드로 위임 — 판 상수 단일 출처, 위조 복제 없음.
     handler: () => invoke("ipc_hello_info"),
   });
@@ -38,7 +38,7 @@ export function registerSystemCatalog(): void {
         core: String(d.coreBuild),
         mode: String(d.unitMode),
       }),
-    examples: ["sok app.environment", "sok-dev app.environment", "sok-debug app.environment"],
+    examples: ["app.environment"],
     handler: () => invoke("app_environment"),
   });
 }

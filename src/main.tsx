@@ -20,6 +20,7 @@ if (typeof window !== "undefined") {
 }
 import App from "./App";
 import { markCommandHostReady, startExecutor } from "./commands/executor";
+import { loadCliName } from "./lib/cliIdentity";
 import { startWebviewGc } from "./lib/webviewGc";
 import { initPluginHost } from "./plugins/host";
 import { initNotify } from "./lib/notify";
@@ -68,6 +69,10 @@ startActivityFeed();
 // (신규 환경에서 첫 프로젝트의 git init 이 유실되던 사고의 원인).
 // 실패 시에도 렌더는 진행(프로젝트 0개 = 부트 실패만의 예외 상태, 사유는 콘솔).
 async function boot(): Promise<void> {
+  // 이 앱의 CLI 이름(sok/sok-dev/sok-debug)을 창 종류 분기 전에 캐시한다 — 앱-전역 정체성이라
+  // 오케스트레이터(main)와 워크스페이스(w-*) 둘 다 필요하다(hint 프리픽스·에이전트 스폰 단일 출처).
+  // 실패해도 기본 sok 로 폴백(내부에서 흡수). 게이트가 아니라 준비물이므로 렌더를 막지 않는다.
+  await loadCliName();
   // 코어 영속 상태(설정·테마·즐겨찾기·플러그인 설정·플러그인 동의/활성)를 app.data 권위 +
   // 멀티창 broadcast 로 동기화(coreSync). 동기 초기상태는 이미 ls 캐시에서 로드됨 — 여기선
   // app.data hydrate + 다른 창 변경 구독을 켠다. 플러그인 호스트(enabledIds 소비)보다 먼저.

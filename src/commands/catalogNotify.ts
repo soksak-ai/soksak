@@ -19,7 +19,7 @@ export function registerNotifyCatalog(): void {
     returns: "{ ok }",
     message: () => tmsg("msg.notify.show"),
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['sok notify.show \'{"title":"배포 완료","body":"prod 배포가 끝났습니다"}\''],
+    examples: ['notify.show \'{"title":"배포 완료","body":"prod 배포가 끝났습니다"}\''],
     handler: async (p) => {
       if (typeof p.title !== "string" || typeof p.body !== "string") {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "title·body 필요" };

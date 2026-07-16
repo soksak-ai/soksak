@@ -39,8 +39,8 @@ export function registerRemoteConfirmDevCatalog(): void {
     returns: "{ request_id }",
     message: (d) => tmsg("msg.dev.remoteConfirmMock", { id: Number(d.request_id) }),
     examples: [
-      "sok dev.remoteConfirmMock",
-      'sok dev.remoteConfirmMock \'{"command":"terminal.clear","device_id":"Pixel-9"}\'',
+      "dev.remoteConfirmMock",
+      'dev.remoteConfirmMock \'{"command":"terminal.clear","device_id":"Pixel-9"}\'',
     ],
     danger: "inject",
     handler: (p) => {

@@ -22,7 +22,7 @@ export function registerUiCatalog(): void {
       d.pass
         ? tmsg("msg.ui.validate.pass", { n: Number(d.elementsChecked) })
         : tmsg("msg.ui.validate.fail", { n: ((d.violations as unknown[]) ?? []).length }),
-    examples: ["sok ui.validate", 'sok ui.validate \'{"rule":"status"}\''],
+    examples: ["ui.validate", 'ui.validate \'{"rule":"status"}\''],
     handler: (p) => ({ ...validateDom(p.rule as string | undefined) }),
   });
 
@@ -35,7 +35,7 @@ export function registerUiCatalog(): void {
     },
     returns: "{ matchedElements, rules: [{id, active, kind, edges?, seam?, note}] }",
     message: (d) => tmsg("msg.ui.expect", { n: ((d.rules as unknown[]) ?? []).length }),
-    examples: ['sok ui.expect \'{"selector":".egroup-status"}\''],
+    examples: ['ui.expect \'{"selector":".egroup-status"}\''],
     handler: (p) => ({ ...expectForSelector(p.selector as string) }),
   });
 }
