@@ -356,7 +356,7 @@ context.signal.addEventListener("abort", () => subscription.dispose(), { once: t
     "title": "Claude",                 // 메뉴 표시명
     "path": { "ko": "에이전트", "en": "Agents" }, // "/" 구분 다단 카테고리(다국어). 생략=최상위
     "kind": "view",                    // 프로그램은 뷰를 연다
-    "viewContract": "soksak-spec-plugin-terminal@0.0.1", // 계약으로 뷰 참조 → 코어가 사용자 엔진으로 해소(viewPlugin 대안, 상호배타)
+    "viewContract": { "id": "soksak-spec-plugin-terminal", "range": "0.0.1" }, // 계약으로 뷰 참조 → 코어가 사용자 엔진으로 해소(viewPlugin 대안, 상호배타)
     "view": "content",                 // 열 뷰 id(구현체의 contributes.views[].id)
     "command": "claude",               // 터미널 계약 뷰 한정: 자동 실행 셸 명령
     "ensure": {                        // 활성화 시점 선행 바이너리 보장
