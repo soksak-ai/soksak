@@ -45,7 +45,7 @@ my-plugin/
   "spec": "soksak-spec-plugin@0.0.1",
   "id": "my-plugin",
   "name": "내 플러그인",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "한 줄 설명",
   "permissions": ["ui", "commands"],
   "contributes": {
