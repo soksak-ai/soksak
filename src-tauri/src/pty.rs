@@ -438,7 +438,17 @@ pub fn pty_pane_pid(pane_id: String, manager: State<'_, PtyManager>) -> Option<i
         for s in sessions.values() {
             if s.pane_id.as_deref() == Some(pane_id.as_str()) {
                 match &s.backend {
-                    Backend::Local(l) => return l.master.process_group_leader(),
+                    Backend::Local(l) => {
+                        // process_group_leader 는 portable-pty 의 unix 전용 API. windows(ConPTY)엔
+                        // 프로세스 그룹 리더 개념이 없어 None(호출부는 fg 프로세스 조회 실패로 취급).
+                        #[cfg(unix)]
+                        return l.master.process_group_leader();
+                        #[cfg(not(unix))]
+                        {
+                            let _ = l;
+                            return None;
+                        }
+                    }
                     #[cfg(unix)]
                     Backend::Daemon { .. } => {
                         daemon_backed = true;

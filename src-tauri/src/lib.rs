@@ -315,8 +315,12 @@ pub fn run() {
                 webview::install_click_monitor(app.handle());
                 webview::install_live_resize_monitor(app.handle());
                 // 신호등 유지 옵저버 — 앱 전역 1회(모든 창). 창마다 달면 창 닫아도 안 빠져 누수.
-                let (tlx, tly) = window::traffic_light_inset(app.handle());
-                titlebar::install_global_observers(tlx, tly);
+                // 신호등/titlebar 는 macOS 전용 개념(창 데코 커스터마이즈) — 모듈이 macos-only 라 gate.
+                #[cfg(target_os = "macos")]
+                {
+                    let (tlx, tly) = window::traffic_light_inset(app.handle());
+                    titlebar::install_global_observers(tlx, tly);
+                }
                 // Dock 우클릭 "새 창"(Terminal.app 관례) — 앱 델리게이트 applicationDockMenu: 주입.
                 dockmenu::install(app.handle());
             }
@@ -598,6 +602,7 @@ pub fn run() {
             ipc::ipc_cli_dir,
             ipc::ipc_last_project_window,
             ipc::ipc_hello_info,
+            #[cfg(target_os = "macos")]
             titlebar::titlebar_backing,
             ime_debug,
             window_activate,
