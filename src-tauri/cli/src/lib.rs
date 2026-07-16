@@ -38,7 +38,9 @@ pub fn run(default_env: &'static str) -> ExitCode {
         Some("help") => match args.get(1) {
             Some(cmd) => run_help(cmd),
             None => {
-                eprintln!("사용: sok help <command>");
+                // run() 안에서는 파라미터 default_env 가 동명 함수를 가린다 — 이미 이 값이
+                // 곧 default_env() 의 원천(위에서 OnceLock 에 세팅)이므로 파라미터를 직접 쓴다.
+                eprintln!("사용: {} help <command>", bin_name_for_env(default_env));
                 ExitCode::FAILURE
             }
         },
@@ -80,34 +82,37 @@ pub fn run(default_env: &'static str) -> ExitCode {
 }
 
 fn print_usage() {
+    // 사용예 프리픽스는 이 바이너리의 정체성으로 — sok-dev 에서 `--help` 를 보면 예제도 sok-dev 다.
+    // 환경-모델 설명부(binary→env 매핑)만 세 이름을 그대로 둔다 — 거기선 이름 자체가 설명 대상이다.
+    let bin = bin_name_for_env(default_env());
     println!(
-        "sok — soksak 원격 제어 CLI
+        "{bin} — soksak 원격 제어 CLI
 
 사용:
-  sok <command> [값 | '{{JSON}}']      명령 실행 — 값 하나면 유일한 필수 매개변수로 전달
-                                       (기본형: sok plugin.install activity)
-  sok state.tree                      전체 구조(주소록): 모든 id + 패널 rect
-  sok hello                           협상/생존 진단 — 앱이 프론트 미경유 즉답(판·버전·pid),
+  {bin} <command> [값 | '{{JSON}}']      명령 실행 — 값 하나면 유일한 필수 매개변수로 전달
+                                       (기본형: {bin} plugin.install activity)
+  {bin} state.tree                      전체 구조(주소록): 모든 id + 패널 rect
+  {bin} hello                           협상/생존 진단 — 앱이 프론트 미경유 즉답(판·버전·pid),
                                       판이 어긋나면 실패 종료(방향 명시 문장)
-  sok commands                        전체 명령 카탈로그(JSON)
-  sok help <command>                  단일 명령 매뉴얼
-  sok docs [--core] [--format md|json] [--lang en|ko]
+  {bin} commands                        전체 명령 카탈로그(JSON)
+  {bin} help <command>                  단일 명령 매뉴얼
+  {bin} docs [--core] [--format md|json] [--lang en|ko]
                                       가능한 명령 전체 레퍼런스(기본 md/en; json=기계용)
-  sok events [--kinds a,b] [--since N] 활동 스트림 팔로우(JSONL, Ctrl-C 종료)
-  sok skill install [--claude|--gemini|--codex|--all] [--dir DIR]   (환경별 스킬: soksak(-dev|-debug))
+  {bin} events [--kinds a,b] [--since N] 활동 스트림 팔로우(JSONL, Ctrl-C 종료)
+  {bin} skill install [--claude|--gemini|--codex|--all] [--dir DIR]   (환경별 스킬: soksak(-dev|-debug))
                                       AI 에이전트 트리거 스킬 설치(soksak 제어법)
-  sok skill print                     라이브 SKILL.md 를 stdout 으로(프롬프트 재료)
-  sok mcp install [--claude|--codex|--gemini|--all]
+  {bin} skill print                     라이브 SKILL.md 를 stdout 으로(프롬프트 재료)
+  {bin} mcp install [--claude|--codex|--gemini|--all]
                                       MCP 서버 등록(네이티브 mcp add, SOKSAK_SOCKET 핀)
 
 컨텍스트:
   soksak 터미널 안에서는 $SOKSAK_PANE 이 자동 주입되어, 대상 id 를 생략하면
   호출한 pane 의 위치(패널/컨텐츠/프로젝트)가 기본 대상이 된다.
-  멀티 윈도우: sok --window <label> <command> 또는 $SOKSAK_WINDOW 로 특정 창을 지정
-  (생략 시 활성 창). 창 목록은 sok window.list, 새 창은 sok window.open.
+  멀티 윈도우: {bin} --window <label> <command> 또는 $SOKSAK_WINDOW 로 특정 창을 지정
+  (생략 시 활성 창). 창 목록은 {bin} window.list, 새 창은 {bin} window.open.
   상관: $SOKSAK_PARENT 가 있으면 요청에 parent 로 실려 활동 엔트리가 그 턴으로 묶인다.
 
-환경(한 sok 은 한 환경에만 묶인다 — 침묵 cross-env 금지):
+환경(한 바이너리는 한 환경에만 묶인다 — 침묵 cross-env 금지):
   바이너리 identity가 환경을 고정한다(sok-dev→dev, sok-debug→debug, sok→release).
   $SOKSAK_SOCKET은 위치 힌트일 뿐이며 system.hello identity가 다르면 거부한다.
   그 환경 미실행이면 에러(다른 환경 대체 안 함)."
@@ -129,6 +134,19 @@ static DEFAULT_ENV: OnceLock<&'static str> = OnceLock::new();
 fn default_env() -> &'static str {
     DEFAULT_ENV.get().copied().unwrap_or("app")
 }
+
+/// env → 그 환경의 실물 바이너리 이름. 이름은 argv0 추론이 아니라 컴파일 타임 env 에서
+/// 파생한다(P9 와 같은 원천) — help/docs/usage 의 예제 프리픽스가 이 이름을 쓴다. 규칙은 코어
+/// home.rs::cli_for_core_build(release→sok, 그 외→sok-{env}) 를 미러한다 — CLI 는 분리된
+/// 워크스페이스 멤버라 앱 크레이트를 링크할 수 없어 규칙을 여기서 다시 둔다(하드 바이너리 경계).
+fn bin_name_for_env(env: &str) -> &'static str {
+    match env {
+        "dev" => "sok-dev",
+        "debug" => "sok-debug",
+        _ => "sok",
+    }
+}
+
 // --window 전역 플래그(있으면). main 이 1회 설정 — send_request 의 창 해소에서 env 보다 우선.
 static WINDOW_OVERRIDE: OnceLock<Option<String>> = OnceLock::new();
 
@@ -612,10 +630,12 @@ fn format_command_md(c: &Value) -> String {
     }
     if let Some(ex) = c["examples"].as_array() {
         if !ex.is_empty() {
+            // 카탈로그 예제는 명령 형태만 담는다(프리픽스 없음) — 프로그램 이름은 데이터가 아니라
+            // 표시자의 정체성이다. 이 바이너리가 자기 이름을 붙여 복붙 그대로 이 앱에 닿게 한다.
+            let bin = bin_name_for_env(default_env());
             out.push_str("\n```bash\n");
             for e in ex.iter().filter_map(Value::as_str) {
-                out.push_str(e);
-                out.push('\n');
+                out.push_str(&format!("{bin} {e}\n"));
             }
             out.push_str("```\n");
         }
@@ -694,14 +714,15 @@ fn run_docs(core_only: bool, format: &str, lang: &str) -> ExitCode {
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
+    let bin = bin_name_for_env(default_env());
     println!("# soksak 명령 레퍼런스\n");
     println!(
         "> 자동 생성 문서 — 원천은 `command.docs`(앱 Command Registry + 레지스트리 카탈로그).\n"
     );
-    println!("모든 명령: `sok <command> [값 | '{{JSON}}']` — 값 하나는 유일한 필수 매개변수로 전달(기본형). 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.\n");
+    println!("모든 명령: `{bin} <command> [값 | '{{JSON}}']` — 값 하나는 유일한 필수 매개변수로 전달(기본형). 대상 id 생략 시 호출 컨텍스트($SOKSAK_PANE) 기본.\n");
     if core_only {
         println!(
-            "코어 명령만 수록한다(--core — 리포지토리 문서용, 설치본 무관). 전체는 `sok docs`.\n"
+            "코어 명령만 수록한다(--core — 리포지토리 문서용, 설치본 무관). 전체는 `{bin} docs`.\n"
         );
     } else {
         println!("가능한 명령 전체(코어 + 모든 플러그인)를 하나의 목록으로 수록한다.\n");
@@ -751,7 +772,7 @@ fn run_docs(core_only: bool, format: &str, lang: &str) -> ExitCode {
                     .map(|d| format!(" (danger: {d})"))
                     .unwrap_or_default();
                 println!("## `{full}`\n\n{t}{dg}\n");
-                println!("```bash\nsok {full} ['{{JSON}}']\n```\n");
+                println!("```bash\n{bin} {full} ['{{JSON}}']\n```\n");
             }
         }
     }
@@ -1689,6 +1710,32 @@ mod tests {
         assert_eq!(skill_frontmatter_name("# 제목\nname: x"), None);
         // 안전하지 않은 문자(경로 주입) 거부
         assert_eq!(skill_frontmatter_name("---\nname: ../evil\n---\n"), None);
+    }
+
+    // help/docs/usage 의 예제 프리픽스는 호출된 바이너리 이름이어야 한다 — sok-dev 로 실행했는데
+    // `sok …` 예제를 보여주면 복붙이 다른(또는 없는) 환경 바이너리로 간다. 이름은 argv0 추론이
+    // 아니라 컴파일 타임 env 에서 파생한다(P9와 동일 원천).
+    #[test]
+    fn example_prefix_follows_binary_identity() {
+        assert_eq!(bin_name_for_env("dev"), "sok-dev");
+        assert_eq!(bin_name_for_env("debug"), "sok-debug");
+        assert_eq!(bin_name_for_env("app"), "sok");
+        // 카탈로그 예제는 명령 형태만 담는다(프리픽스 없음) — format_command_md 가 이 바이너리 이름을
+        // 붙여 렌더한다. 프리픽스는 데이터가 아니라 표시자의 정체성이므로, 렌더 산물엔 bin 이 정확히
+        // 한 번(이중 프리픽스 없이) 붙는다.
+        let spec = json!({
+            "name": "window.snapshot",
+            "description": "capture the window",
+            "examples": ["window.snapshot '{\"path\":\"/tmp/s.png\"}'"],
+        });
+        let md = format_command_md(&spec);
+        let bin = bin_name_for_env(default_env());
+        assert!(
+            md.contains(&format!("{bin} window.snapshot '{{\"path\":\"/tmp/s.png\"}}'")),
+            "예제에 이 바이너리 프리픽스가 붙어야 한다: {md}"
+        );
+        // 데이터가 형태-only 라 이중 프리픽스(bin bin)가 생기지 않는다.
+        assert!(!md.contains(&format!("{bin} {bin}")), "이중 프리픽스: {md}");
     }
 
     // 기본 환경은 이름별 실물 바이너리가 컴파일 타임에 주입한다(P9) — argv0 추론은 폐기.
