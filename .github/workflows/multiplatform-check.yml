@@ -34,6 +34,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: soksak-ai/tauri-plugin-webview-capture
+          # feat/snapshot-region carries the multiplatform capture fixes until it lands on main.
+          ref: feat/snapshot-region
           path: tauri-plugin-webview-capture
 
       - name: Install Linux system libraries
