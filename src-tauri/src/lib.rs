@@ -97,7 +97,6 @@ pub fn run() {
         .plugin(tauri_plugin_webview_capture::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(webview_health::WebviewHealth::default())
         .manage(activity::ActivityHub::default())
         .manage(daemon::DaemonManager::default())
@@ -132,6 +131,14 @@ pub fn run() {
             // identity 홈 확정 — 모든 경로(데이터·플러그인·사이드카·테마·프로젝트·소켓·시크릿)가
             // 이 값에서 파생되므로 어떤 경로 사용보다 먼저 1회 고정한다(home.rs 원칙).
             home::init(&app.config().identifier);
+            // updater 는 설정(plugins.updater: pubkey·endpoints)이 실린 빌드에서만 등록한다 —
+            // 설정 없는 프로필에서 무조건 등록하면 부팅이 PluginInitialization(null)로 죽는다.
+            // 설정이 conf 에 실리는 순간 자동 활성. 커맨드(update_check 등)는 플러그인 부재 시
+            // app.updater() 가 Err 를 돌려 우아하게 실패한다(updater.rs).
+            if updater_configured(app.config().plugins.0.get("updater")) {
+                app.handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
             app.manage(
                 unit_installer::UnitInstallManager::new(home::soksak_home())
                     .map_err(std::io::Error::other)?,
@@ -637,4 +644,30 @@ pub fn run() {
                 sidecar::shutdown_all();
             }
         });
+}
+
+/// updater 등록 게이트 — plugins.updater 가 non-null 로 실려 있을 때만 true.
+/// 키 부재·null(설정 미주입 프로필)은 false: 등록을 건너뛰어 부팅을 살린다.
+fn updater_configured(v: Option<&serde_json::Value>) -> bool {
+    v.is_some_and(|v| !v.is_null())
+}
+
+#[cfg(test)]
+mod updater_gate_tests {
+    use super::updater_configured;
+    use serde_json::json;
+
+    #[test]
+    fn missing_or_null_config_skips_registration() {
+        // 설정 미주입(키 부재·null)이면 등록 금지 — 무조건 등록은 부팅을
+        // PluginInitialization("updater", … invalid type: null …) 으로 죽인다.
+        assert!(!updater_configured(None));
+        assert!(!updater_configured(Some(&serde_json::Value::Null)));
+    }
+
+    #[test]
+    fn present_config_registers() {
+        let cfg = json!({ "pubkey": "k", "endpoints": ["https://example.invalid/u"] });
+        assert!(updater_configured(Some(&cfg)));
+    }
 }
