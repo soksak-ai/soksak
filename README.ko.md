@@ -36,9 +36,19 @@ AI 네이티브 터미널 워크벤치. 터미널·듀얼 엔진 브라우저·�
 
 ## 요구사항
 
-- macOS(현재 빌드 타깃: aarch64) — OS 웹뷰·PTY 는 네이티브 제공
+- macOS(현재 빌드·런타임 타깃: aarch64) — OS 웹뷰·PTY 는 네이티브 제공
 - Rust 툴체인(`cargo`, `~/.cargo/bin` PATH 등록)
 - Node.js + `pnpm`
+
+## 멀티플랫폼 현황
+
+코드베이스는 macOS·Linux·Windows 에서 컴파일되며, 3-OS `cargo check` 매트릭스
+(`multiplatform-check`)가 blocking CI 게이트로 상시 검사합니다. IPC 서버는 하나의
+전송 시임 뒤에서 Unix 계열은 유닉스 도메인 소켓, Windows 는 네임드 파이프로
+동작하고, 코어는 브라우저 엔진에 OS 별 부모 핸들을 전달하며 macOS 밖에서는 Tauri
+런루프가 엔진 펌프를 구동합니다. Chromium 엔진 사이드카 자체는 세 플랫폼 모두에서
+빌드·런타임 검증되어 있습니다. macOS 외 네이티브 앱 런타임은 진행 중입니다
+([docs/multiplatform-engine-strategy.ko.md](docs/multiplatform-engine-strategy.ko.md)).
 
 ## 빠른 시작
 

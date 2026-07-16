@@ -38,9 +38,19 @@ Architecture rules live in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Requirements
 
-- macOS (current build target: aarch64) — the OS webview and PTY are provided natively
+- macOS (current build and runtime target: aarch64) — the OS webview and PTY are provided natively
 - Rust toolchain (`cargo`, `~/.cargo/bin` in PATH)
 - Node.js + `pnpm`
+
+## Multiplatform status
+
+The codebase compiles on macOS, Linux, and Windows, and a three-OS `cargo check`
+matrix (`multiplatform-check`) runs as a blocking CI gate. The IPC server speaks
+Unix domain sockets on Unix and named pipes on Windows behind one transport seam,
+the core hands the browser engine a per-OS parent handle and drives its pump from
+the Tauri run loop off macOS, and the Chromium engine sidecar itself is built and
+runtime-verified on all three platforms. Native app runtime outside macOS is in
+progress ([docs/multiplatform-engine-strategy.md](docs/multiplatform-engine-strategy.md)).
 
 ## Quick Start
 
