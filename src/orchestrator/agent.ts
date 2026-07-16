@@ -8,7 +8,8 @@
 //
 // 스폰 형태는 검증 선례(구 vtuber claudeCli.ts) 그대로: 로그인셸 -lc 랩(GUI PATH 함정),
 // cwd=$HOME(프로젝트 컨텍스트 누출 차단), --setting-sources ""(훅·플러그인 차단, OAuth 유지),
-// --system-prompt(정체성 교체 — 유저 메시지로 주면 역할 거부). 도구는 Bash(sok:*) 만 허용.
+// --system-prompt(정체성 교체 — 유저 메시지로 주면 역할 거부). 도구는 이 앱의 CLI 바이너리
+// (Bash(<bin>:*), <bin>=sok/sok-dev/sok-debug) 만 허용.
 
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { safeListen } from "../lib/safeListen";
@@ -16,6 +17,7 @@ import { useSettings } from "../state/settings";
 import { publishActivity } from "../state/activityFeed";
 import { AgentStreamParser } from "./agentStream";
 import { execute, type CommandOutcome } from "../commands/registry";
+import { cliName } from "../lib/cliIdentity";
 
 // 대화 연속성(--resume)·리로드 고아 기록 — 같은 앱 실행 안에서만 유효해야 하므로 sessionStorage
 // (window.reload 생존, 앱 재시작 시 소멸 — 재시작이면 process id 공간이 새것이라 기록이 무효).
@@ -246,6 +248,11 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
   const socket = await invoke<string | null>("ipc_socket_path").catch(() => null);
   if (!socket) return close(false, "INTERNAL", "제어 소켓이 없어 에이전트를 시작할 수 없어요.");
   const cliDir = await invoke<string | null>("ipc_cli_dir").catch(() => null);
+  // 이 앱과 대화하는 매칭 CLI 바이너리(sok/sok-dev/sok-debug). dev 앱은 sok-dev 만 존재하고(sok 부재),
+  // CLI 는 compile-time 정체성으로 묶여 다른 env 소켓을 거부한다(P9 배신차단). 그래서 스폰·권한·가르침을
+  // 모두 이 이름으로 통일한다 — sok 하드코딩은 dev/debug 에서 파일 부재·소켓 거부로 즉사한다.
+  const bin = cliName();
+  const sokPath = cliDir ? `${cliDir}/${bin}` : bin;
   const baseEnv: Record<string, string> = {
     SOKSAK_SOCKET: socket,
     ...(cliDir ? { SOKSAK_CLI_DIR: cliDir } : {}),
@@ -260,12 +267,12 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
     ({ skillDoc, catalog } = prep);
   } else {
     try {
-      skillDoc = await runCapture("sok skill print", { ...baseEnv, SOKSAK_PARENT: turnId });
+      skillDoc = await runCapture(`${sokPath} skill print`, { ...baseEnv, SOKSAK_PARENT: turnId });
     } catch (e) {
       return close(
         false,
         "INTERNAL",
-        `sok CLI 를 찾지 못해 에이전트를 시작할 수 없어요 (${String(e instanceof Error ? e.message : e).slice(0, 200)})`,
+        `${bin} CLI 를 찾지 못해 에이전트를 시작할 수 없어요 (${String(e instanceof Error ? e.message : e).slice(0, 200)})`,
       );
     }
     const catalogWindow =
@@ -275,7 +282,7 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
         .catch(() => undefined));
     catalog = compactCatalog(
       await runCapture(
-        `sok ${catalogWindow ? `--window ${catalogWindow} ` : ""}commands`,
+        `${sokPath} ${catalogWindow ? `--window ${catalogWindow} ` : ""}commands`,
         { ...baseEnv, SOKSAK_PARENT: turnId },
       ).catch(() => ""),
     );
@@ -287,8 +294,7 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
   // 명령 라우팅 턴은 왕복이 잦다 — 빠른 모델이 체감을 지배(실측: opus 는 왕복당 4~6초).
   const agentModel = useSettings.getState().orchestratorModel.trim();
   // sok 은 절대경로로 지시·허용한다 — 에이전트 Bash 의 PATH 는 자체 재구성이라 신뢰 불가(실측).
-  // env(SOKSAK_*)는 완전 상속됨(실측) — 상관·소켓 바인딩은 env 로 전달된다.
-  const sokPath = cliDir ? `${cliDir}/sok` : "sok";
+  // env(SOKSAK_*)는 완전 상속됨(실측) — 상관·소켓 바인딩은 env 로 전달된다. (sokPath 는 위에서 확정)
   const env: Record<string, string> = {
     ...baseEnv,
     SOKSAK_PARENT: turnId,
@@ -314,8 +320,8 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
     "--system-prompt",
     buildSystemPrompt(skillDoc, sokPath, catalog, stageWindow),
     "--allowedTools",
-    "Bash(sok:*)",
-    ...(cliDir ? [`Bash(${cliDir}/sok:*)`] : []),
+    `Bash(${bin}:*)`,
+    ...(cliDir ? [`Bash(${cliDir}/${bin}:*)`] : []),
     ...(agentModel ? ["--model", agentModel] : []),
     ...(resume ? ["--resume", resume] : []),
   ];
