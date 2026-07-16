@@ -121,6 +121,12 @@ fn soksak_sidecar_engine_message(req: *const u8, len: usize, surface: usize,
 fn soksak_sidecar_engine_notify(evt: *const u8, len: usize);   // host→module fact, fire-and-forget
 fn soksak_sidecar_engine_free(buf: SoksakBuf);
 fn soksak_sidecar_engine_shutdown();                            // app exit only, main thread
+// Non-macOS deliveries additionally export a pump tick. On macOS the engine marshals its
+// work onto the core's run loop through GCD; Windows/Linux have no such channel, so the
+// core resolves this symbol at load and calls it from the Tauri run-loop callback (main
+// thread = the engine's UI thread). The engine only does an atomic due-check unless work
+// is scheduled, so per-event ticking is near-free.
+fn soksak_sidecar_engine_tick();                                // non-macOS only, main thread
 ```
 
 Host notifications (v1): `{"type":"surface-occluded","window":<label>,"occluded":bool}`;
