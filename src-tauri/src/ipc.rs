@@ -8,7 +8,9 @@
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, LazyLock, Mutex, OnceLock};
@@ -358,24 +360,34 @@ fn clamp_timeout_ms(requested: Option<u64>) -> u64 {
 // 꽂힌다 — handle_conn 이하 프로토콜 코드는 전송 종류를 모른다. 이 시임 밖에서
 // 플랫폼 소켓 타입을 쓰지 않는다.
 
-trait IpcConnection: std::io::Read + std::io::Write + Send {
-    // 같은 연결의 독립 핸들(handle_conn 의 reader/writer 분리용).
-    fn try_clone_conn(&self) -> std::io::Result<Box<dyn IpcConnection>>;
+trait IpcConnection: Send {
+    // 연결을 reader/writer 로 분리(handle_conn 의 줄 단위 왕복 + subscribe push 스트림용).
+    // unix 소켓은 try_clone 으로, windows named pipe(interprocess)는 split() 으로 구현된다 —
+    // 소비처는 정확히 한 번 분리하므로(handle_conn 서두) 소유 이전 분리가 두 전송의 공통 형태다.
+    #[allow(clippy::type_complexity)]
+    fn split_conn(
+        self: Box<Self>,
+    ) -> std::io::Result<(Box<dyn std::io::Read + Send>, Box<dyn std::io::Write + Send>)>;
 }
 
 trait IpcListenerSeam: Send {
     fn accept_conn(&self) -> std::io::Result<Box<dyn IpcConnection>>;
 }
 
+#[cfg(unix)]
 impl IpcConnection for UnixStream {
-    fn try_clone_conn(&self) -> std::io::Result<Box<dyn IpcConnection>> {
-        self.try_clone()
-            .map(|s| Box::new(s) as Box<dyn IpcConnection>)
+    fn split_conn(
+        self: Box<Self>,
+    ) -> std::io::Result<(Box<dyn std::io::Read + Send>, Box<dyn std::io::Write + Send>)> {
+        let read = self.try_clone()?;
+        Ok((Box::new(read), self))
     }
 }
 
+#[cfg(unix)]
 struct UnixIpcListener(UnixListener);
 
+#[cfg(unix)]
 impl IpcListenerSeam for UnixIpcListener {
     fn accept_conn(&self) -> std::io::Result<Box<dyn IpcConnection>> {
         self.0
@@ -384,8 +396,34 @@ impl IpcListenerSeam for UnixIpcListener {
     }
 }
 
+// Windows named pipe 전송(W2 M0) — interprocess local_socket 이 named pipe 를 한 API 뒤에
+// 준다(터미널 사이드카 daemon/service 가 5플랫폼 CI 로 검증한 그 크레이트·그 패턴).
+#[cfg(windows)]
+impl IpcConnection for interprocess::local_socket::Stream {
+    fn split_conn(
+        self: Box<Self>,
+    ) -> std::io::Result<(Box<dyn std::io::Read + Send>, Box<dyn std::io::Write + Send>)> {
+        let (recv, send) = (*self).split();
+        Ok((Box::new(recv), Box::new(send)))
+    }
+}
+
+#[cfg(windows)]
+struct PipeIpcListener(interprocess::local_socket::Listener);
+
+#[cfg(windows)]
+impl IpcListenerSeam for PipeIpcListener {
+    fn accept_conn(&self) -> std::io::Result<Box<dyn IpcConnection>> {
+        use interprocess::local_socket::traits::Listener as _;
+        self.0
+            .accept()
+            .map(|s| Box::new(s) as Box<dyn IpcConnection>)
+    }
+}
+
 // unix 전송 바인드. 죽은 소켓 정리·중복 인스턴스 거부·0600 퍼미션까지가 전송 소관 —
 // 잔존 소켓이 살아 있으면(다른 인스턴스) 에러, 죽었으면 제거 후 재바인드.
+#[cfg(unix)]
 fn bind_transport(path: &str) -> Result<Box<dyn IpcListenerSeam>, String> {
     if std::path::Path::new(path).exists() {
         if UnixStream::connect(path).is_ok() {
@@ -397,6 +435,22 @@ fn bind_transport(path: &str) -> Result<Box<dyn IpcListenerSeam>, String> {
     // 로컬 사용자 전용(0600).
     let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
     Ok(Box::new(UnixIpcListener(listener)))
+}
+
+// windows 전송 바인드(named pipe). 파이프는 프로세스 소멸과 함께 사라져 죽은-소켓 파일 정리가
+// 불요하고 파일 퍼미션(0600) 개념도 없다(기본 ACL=로컬 사용자). 중복 인스턴스는 create_sync 의
+// 주소-사용-중 에러가 거부한다.
+#[cfg(windows)]
+fn bind_transport(path: &str) -> Result<Box<dyn IpcListenerSeam>, String> {
+    use interprocess::local_socket::{GenericFilePath, ListenerOptions, ToFsName};
+    let name = std::ffi::OsStr::new(path)
+        .to_fs_name::<GenericFilePath>()
+        .map_err(|e| e.to_string())?;
+    let listener = ListenerOptions::new()
+        .name(name)
+        .create_sync()
+        .map_err(|e| format!("파이프 바인드 실패(다른 인스턴스?): {e}"))?;
+    Ok(Box::new(PipeIpcListener(listener)))
 }
 
 // 소켓 서버 기동 — 전송은 bind_transport 시임 뒤에서 온다.
@@ -441,11 +495,10 @@ fn handle_conn(app: AppHandle, conn: Box<dyn IpcConnection>) {
     // 스큐 거부 문장의 언어를 연결당 1회 조회한다(사람 표면 — 폴링 없음). 연결은 sok 호출당 하나라
     // 잦지 않다. transport_route 는 순수 유지 — 해소된 언어만 넘긴다.
     let lang = crate::i18n::app_language(&app);
-    let Ok(read_half) = conn.try_clone_conn() else {
+    let Ok((read_half, mut writer)) = conn.split_conn() else {
         return;
     };
     let reader = BufReader::new(read_half);
-    let mut writer = conn;
     for line in reader.lines() {
         let Ok(line) = line else { break };
         if line.trim().is_empty() {
@@ -510,7 +563,7 @@ fn handle_conn(app: AppHandle, conn: Box<dyn IpcConnection>) {
 // since?=백필 커서(exclusive seq). 백필(링에서) 후 라이브 전환 — 구독자 큐는 bounded·drop-oldest
 // (느린 소비자가 발행을 못 막고, 유실은 seq gap 으로 드러나 클라이언트가 since 재접속으로 메꾼다).
 // 연결이 끊기면(write 실패) 구독 해지. 폴링 없음 — Condvar 대기.
-fn subscribe_stream(app: &AppHandle, req: Request, mut writer: Box<dyn IpcConnection>) {
+fn subscribe_stream(app: &AppHandle, req: Request, mut writer: Box<dyn std::io::Write + Send>) {
     let kinds: Vec<String> = req
         .params
         .get("kinds")
@@ -1137,19 +1190,34 @@ mod tests {
         s
     }
 
+    // 클라이언트 접속 — 전송별(unix 소켓 / windows named pipe). 파이프 구현이 같은 테스트를
+    // 상속하도록 서버 쪽은 seam 만 쓰고 클라이언트만 여기서 분기한다.
+    #[cfg(unix)]
+    fn seam_test_connect(path: &str) -> impl std::io::Read + std::io::Write {
+        UnixStream::connect(path).expect("connect")
+    }
+    #[cfg(windows)]
+    fn seam_test_connect(path: &str) -> impl std::io::Read + std::io::Write {
+        use interprocess::local_socket::{traits::Stream as _, GenericFilePath, Stream, ToFsName};
+        let name = std::ffi::OsStr::new(path)
+            .to_fs_name::<GenericFilePath>()
+            .expect("name");
+        Stream::connect(name).expect("connect")
+    }
+
     #[test]
     fn transport_seam_round_trips_a_line() {
         let path = seam_test_path("rt");
         let listener = bind_transport(&path).expect("bind");
         let server = std::thread::spawn(move || {
             let conn = listener.accept_conn().expect("accept");
-            let mut reader = BufReader::new(conn.try_clone_conn().expect("clone"));
+            let (read_half, mut writer) = conn.split_conn().expect("split");
+            let mut reader = BufReader::new(read_half);
             let mut line = String::new();
             reader.read_line(&mut line).expect("read");
-            let mut writer = conn;
             writeln!(writer, "echo:{}", line.trim()).expect("write");
         });
-        let mut client = UnixStream::connect(&path).expect("connect");
+        let mut client = seam_test_connect(&path);
         writeln!(client, "ping").expect("client write");
         let mut resp = String::new();
         BufReader::new(client)
@@ -1160,6 +1228,8 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    // 죽은-소켓 파일 정리는 unix 소켓 파일 의미론 — named pipe 는 프로세스와 함께 사라져 해당 없음.
+    #[cfg(unix)]
     #[test]
     fn stale_socket_file_is_replaced_on_bind() {
         let path = seam_test_path("stale");

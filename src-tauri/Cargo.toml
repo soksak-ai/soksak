@@ -114,6 +114,11 @@ tar = "=0.4.46"
 # 사이드카 플러그인(vendor) 소유 — iroh/snow/ed25519-dalek 정적키 트리는 코어 바이너리에 없다.
 # chacha20poly1305/rand/zeroize 는 secrets 볼트가 쓰므로 유지.
 
+# windows IPC 전송(W2 M0) — named pipe 를 한 API 뒤에 주는 크레이트(터미널 사이드카
+# daemon/service 가 5플랫폼 CI 로 검증한 그 패턴). unix 는 표준 UnixListener 그대로라 미의존.
+[target.'cfg(windows)'.dependencies]
+interprocess = "2"
+
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.
 [target.'cfg(target_os = "macos")'.dependencies]
