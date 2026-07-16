@@ -115,6 +115,9 @@ that declaration is part of this legislation, never a silent addition (C4).
 command implementation exactly as MESSAGE-PROTOCOL §3 rules, delivered over the wire
 instead of a JS closure. The registry accepts envelope-provided `message`/`hints` **only**
 for `bind:"service"` commands; every other command keeps the runtime-function seam. A
+hint's `cmd` carries the command shape only — never a `sok`/`sok-dev`/`sok-debug` prefix. The
+app prepends its own CLI name at the single response seam, so the suggestion runs against this
+app's socket, not another environment's; a producer that hardcodes the prefix double-stamps. A
 missing message degrades to the label and surfaces in conformance (`messagesMissing`),
 never a load-time refusal. Progress `ev` frames map to standard `command.progress`; this
 absorbs the A14 adapter role into the protocol for this form (MESSAGE-PROTOCOL amendment

@@ -110,7 +110,10 @@ id는 NAMING §8(`soksak-spec-<kind>-<domain>`)을 따른다;
 `data`를 1급 필드로 나른다 — 사람 문장은 MESSAGE-PROTOCOL §3의 규칙 그대로 커맨드
 구현이 소유하되, JS 클로저 대신 와이어로 전달된다. 레지스트리는 봉투가 제공한
 `message`/`hints`를 **오직** `bind:"service"` 커맨드에 대해서만 수용한다; 다른 모든
-커맨드는 런타임 함수 seam을 유지한다. message 부재는 라벨로 열화하고
+커맨드는 런타임 함수 seam을 유지한다. hint의 `cmd`는 명령 형태만 담는다 —
+`sok`/`sok-dev`/`sok-debug` 프리픽스를 붙이지 않는다. 앱이 응답 단일 seam에서 자기 CLI
+이름을 앞에 붙이므로, 제안은 다른 환경이 아니라 이 앱의 소켓에 닿는다; 프리픽스를
+하드코딩한 producer는 이중 stamp된다. message 부재는 라벨로 열화하고
 conformance(`messagesMissing`)에 표면화된다, 절대 로드타임 거부가 아니다. 진행 `ev`
 프레임은 표준 `command.progress`로 사상된다; 이 형태에서는 A14의 어댑터 역할이
 프로토콜에 흡수된다(MESSAGE-PROTOCOL 개정은 seam 커밋과 함께 랜딩한다).
