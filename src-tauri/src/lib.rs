@@ -614,9 +614,13 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            // 엔진 사이드카(예: Chromium)의 메시지펌프는 tao 콜백에서 돌리지 않는다 — NSApp 이벤트
-            // 펌프 재진입 데드락(실측). 모듈이 GCD 로 메인런루프 최상위에 비재진입 디스패치한다
-            // (soksak-sidecar-browser-chromium repo 참조).
+            // 엔진 사이드카(예: Chromium)의 메시지펌프: macOS 는 tao 콜백에서 돌리지 않는다 — NSApp
+            // 이벤트 펌프 재진입 데드락(실측). 모듈이 GCD 로 메인런루프 최상위에 비재진입 디스패치한다
+            // (soksak-sidecar-browser-chromium repo 참조). windows/linux 엔 그 GCD 채널이 없어 이
+            // 런루프 콜백(메인=CEF UI 스레드)이 이벤트마다 엔진 tick 을 호출한다(Phase F) — 엔진 쪽
+            // drive_pump 는 만기 검사(원자 로드 1회) 후 due 일 때만 일하므로 재진입·비용 문제가 없다.
+            #[cfg(not(target_os = "macos"))]
+            sidecar::engine_tick_all();
             // 멀티 윈도우 종료 규칙: 창이 하나라도 남아 있으면 앱을 종료하지 않는다 — 한 창을 닫아도
             // 다른 창은 살아야 한다. 실제 종료(PTY 자식 정리·소켓 정리)는 마지막 창이 닫혔을 때만.
             // (Tauri 기본은 ExitRequested 시 그대로 종료 — prevent_exit 로 비-마지막 창 종료를 막는다.)

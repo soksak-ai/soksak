@@ -61,6 +61,11 @@ type ShutdownFn = unsafe extern "C" fn();
 
 // ── 로드된 모듈 레지스트리 ────────────────────────────────────────────────────────────────────
 
+// 비-macOS 펌프 tick(엔진 drive_pump) — macOS 는 엔진이 GCD 로 코어 런루프에 자가 피기백하므로
+// 이 심볼 자체가 없다. windows/linux 는 Tauri 런루프가 engine_tick_all 로 구동한다(Phase F).
+#[cfg(not(target_os = "macos"))]
+type TickFn = unsafe extern "C" fn();
+
 struct EngineModule {
     name: String,
     #[allow(dead_code)] // 진단용(로드 시 대조 후 보관)
@@ -69,12 +74,28 @@ struct EngineModule {
     notify: NotifyFn,
     free: FreeFn,
     shutdown: ShutdownFn,
+    #[cfg(not(target_os = "macos"))]
+    tick: TickFn,
     clients: Mutex<HashMap<u64, Channel<serde_json::Value>>>,
     next_handle: AtomicU64,
 }
 
 static MODULES: LazyLock<Mutex<HashMap<String, Arc<EngineModule>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+// 로드된 모든 엔진의 펌프를 한 번 tick — Tauri 런루프 콜백(메인=CEF UI 스레드)에서 이벤트마다
+// 호출된다(lib.rs). 엔진 쪽 drive_pump 는 만기 검사(원자 로드 1회) 후 due 일 때만 일하므로
+// idle 비용이 0에 가깝다. 폴링 스레드를 따로 만들지 않는다 — 런루프가 곧 tick 원천(Tauri 재발명 금지).
+#[cfg(not(target_os = "macos"))]
+pub fn engine_tick_all() {
+    let mods: Vec<Arc<EngineModule>> = match MODULES.lock() {
+        Ok(m) => m.values().cloned().collect(),
+        Err(_) => return,
+    };
+    for m in mods {
+        unsafe { (m.tick)() };
+    }
+}
 
 // 호스트 vtable ctx — 모듈 이름만 담아 emit 시 레지스트리 역참조. 모듈과 함께 영구(leak).
 struct HostCtx {
@@ -228,6 +249,10 @@ fn load_module(
         .map_err(|e| format!("심볼 soksak_sidecar_engine_free 없음: {e}"))?;
     let shutdown: ShutdownFn = *unsafe { lib.get(b"soksak_sidecar_engine_shutdown\0") }
         .map_err(|e| format!("심볼 soksak_sidecar_engine_shutdown 없음: {e}"))?;
+    // 비-macOS 딜리버리는 tick 을 export 한다(사이드카 lib.rs cfg(not(macos))) — 부재 = 잘못된 빌드.
+    #[cfg(not(target_os = "macos"))]
+    let tick: TickFn = *unsafe { lib.get(b"soksak_sidecar_engine_tick\0") }
+        .map_err(|e| format!("심볼 soksak_sidecar_engine_tick 없음: {e}"))?;
 
     // 자기기술 대조 — 무매니페스트 원칙의 검증 지점: 바이너리가 곧 진실, 선언과 불일치 = 거부.
     let abi = unsafe { abi_fn() };
@@ -295,6 +320,8 @@ fn load_module(
         notify,
         free,
         shutdown,
+        #[cfg(not(target_os = "macos"))]
+        tick,
         clients: Mutex::new(HashMap::new()),
         next_handle: AtomicU64::new(1),
     }))
