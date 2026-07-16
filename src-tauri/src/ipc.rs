@@ -403,6 +403,8 @@ impl IpcConnection for interprocess::local_socket::Stream {
     fn split_conn(
         self: Box<Self>,
     ) -> std::io::Result<(Box<dyn std::io::Read + Send>, Box<dyn std::io::Write + Send>)> {
+        // split 은 traits::Stream 의 메서드 — trait 를 스코프에 들여야 해소된다(터미널 정본은 prelude::*).
+        use interprocess::local_socket::traits::Stream as _;
         let (recv, send) = (*self).split();
         Ok((Box::new(recv), Box::new(send)))
     }
