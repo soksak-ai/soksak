@@ -332,6 +332,23 @@ fn content_view_of(window: &tauri::Window) -> Result<usize, String> {
                     ptr = content as usize;
                 }
             }
+            // 비-macOS 부모 핸들 — windows=HWND·linux=X11 XID(Xlib). 브라우저 프레젠터가 이 핸들 아래
+            // child 창을 만든다(사이드카 하니스가 5플랫폼 CI 로 검증한 raw-window-handle 패턴과 동일).
+            // macOS 의 엔진호스트 컨테이너 격리(CALayer)는 비-macOS 엔 아직 없어 raw 부모 핸들을 직접 넘긴다.
+            // linux 는 X11 백엔드 전제(Wayland 는 GDK_BACKEND=x11) — 프레젠터가 x11-dl 로 child 를 만든다.
+            #[cfg(not(target_os = "macos"))]
+            {
+                use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+                if let Ok(h) = win.window_handle() {
+                    match h.as_raw() {
+                        #[cfg(target_os = "windows")]
+                        RawWindowHandle::Win32(w) => ptr = w.hwnd.get() as usize,
+                        #[cfg(target_os = "linux")]
+                        RawWindowHandle::Xlib(w) => ptr = w.window as usize,
+                        _ => {}
+                    }
+                }
+            }
             let _ = tx.try_send(ptr);
         })
         .map_err(|e| e.to_string())?;

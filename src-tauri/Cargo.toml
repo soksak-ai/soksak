@@ -45,6 +45,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 사이드카(engine 모델) dylib 로더 — docs/SIDECARS.md. 모듈은 로드 후 unload 금지(의도적 leak).
 libloading = "0.8"
+# 비-macOS 브라우저 사이드카 부모 핸들(windows HWND·linux X11 XID) 취득 — Tauri 2 Window 가 구현.
+# Tauri 가 이미 끌어오는 버전에 핀(직접 참조로 정합). macOS 는 ns_window 라 이 경로를 안 탄다.
+raw-window-handle = "0.6"
 portable-pty = "0.9"
 base64 = "0.22"
 tauri-plugin-dialog = "2.7.1"
