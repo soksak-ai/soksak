@@ -13,15 +13,18 @@ Four artifact classes, each with its own delivery:
 
 | Unit | Artifact | Delivery | CI gate |
 |------|----------|----------|---------|
-| Plugin | `main.js` (tracked in the repo) | `git clone` / `git pull --ff-only` | test + esbuild drift (`git diff --exit-code main.js`) |
+| Plugin | `<id>-<ver>-any.tgz` (bundled `main.js` + `plugin.json`) + `release.json` + conformance | signed registry index → verify owner manifest + artifact sha256 → extract archive to `<home>/plugins/<id>`. No git clone. | test + esbuild drift (`git diff --exit-code main.js`) → owner-immutable release |
 | Sidecar | release asset `…-<ver>-<os>-<arch>.tar.gz` + sha256 | `gh release`, pinned by the consuming plugin's `reach.fetch` | tag `v*` → build → stage → tar (`-L`) → release |
-| Contract | none | test gate only (declared ≡ actual) | `node --test` / `cargo test` |
+| Contract | `<id>-<ver>.tgz` + `release.json` + `conformance.json` | registry release receipt; consumed as a build-time pin, never installed to a home | `node --test` / `cargo test` → owner-immutable release |
 | App body | signed, notarized `.app` + `latest.json` + minisign `.sig` | `tauri-plugin-updater` (release channel) | build → codesign → notarytool → release |
 
-A plugin is source you clone — there is no release asset. A sidecar is a native
-binary you fetch by a sha256-pinned URL its consumer's manifest declares. A
-contract distributes nothing: it is a test gate both sides conform to. The app
-body is the only thing an updater downloads and installs.
+A plugin ships a verified `.tgz` its consumer extracts from the signed installation
+index — the app authenticates the Ed25519-signed index, verifies the owner manifest
+and artifact sha256, then extracts the archive; there is no git clone/branch/latest
+fallback. A sidecar is a native binary fetched by a sha256-pinned URL its consumer's
+manifest declares. A contract publishes a release receipt but distributes nothing that
+gets installed — both sides conform to it as a build-time pin. The app body is the only
+thing an updater downloads and installs.
 
 ## 2. The pipeline — commit to running app
 
