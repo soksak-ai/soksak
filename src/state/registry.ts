@@ -244,19 +244,38 @@ export const initRegistryPersistence = (deps: CoreStoreDeps): (() => void) => re
 
 const CREDENTIAL_PLACEHOLDER = "\u0000soksak-registry-authorization\u0000";
 
-async function loadRegistryDocument(descriptor: RegistryDescriptor): Promise<unknown> {
+// Registry egress belongs to the Rust boundary, never the webview. The webview is
+// CSP-isolated from external hosts, so a public index fetched with the webview
+// `fetch` fails closed as "Load failed"; the host transport reaches the same URL
+// with no credential. A private registry substitutes its namespaced key. Both
+// modes share one path so public and private cannot diverge.
+async function registryHttpGet(
+  descriptor: RegistryDescriptor,
+  url: string,
+): Promise<{ status: number; headers: Record<string, string>; body: string }> {
   if (descriptor.visibility === "public") {
-    const response = await fetch(descriptor.indexUrl, { cache: "no-store" });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+    return await invoke<{ status: number; headers: Record<string, string>; body: string }>(
+      "net_http_request",
+      {
+        method: "GET",
+        url,
+        headers: null,
+        query: null,
+        body: null,
+        contentType: null,
+        ns: null,
+        secretSubst: null,
+        impersonate: null,
+      },
+    );
   }
   const credential = registryCredentialSlot(descriptor.id);
   if (!credential) throw new Error("private registry identity is invalid");
-  const response = await invoke<{ status: number; headers: Record<string, string>; body: string }>(
+  return await invoke<{ status: number; headers: Record<string, string>; body: string }>(
     "net_http_request",
     {
       method: "GET",
-      url: descriptor.indexUrl,
+      url,
       headers: { authorization: CREDENTIAL_PLACEHOLDER },
       query: null,
       body: null,
@@ -266,6 +285,10 @@ async function loadRegistryDocument(descriptor: RegistryDescriptor): Promise<unk
       impersonate: null,
     },
   );
+}
+
+async function loadRegistryDocument(descriptor: RegistryDescriptor): Promise<unknown> {
+  const response = await registryHttpGet(descriptor, descriptor.indexUrl);
   if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}`);
   return JSON.parse(response.body) as unknown;
 }
@@ -281,27 +304,7 @@ export async function loadRegistryResourceBytes(
 ): Promise<Uint8Array> {
   const descriptor = useRegistry.getState().registries[registryId]?.descriptor;
   if (!descriptor) throw new Error(`registry not found: ${registryId}`);
-  if (descriptor.visibility === "public") {
-    const response = await fetch(url, { cache: "no-store" });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return new Uint8Array(await response.arrayBuffer());
-  }
-  const credential = registryCredentialSlot(descriptor.id);
-  if (!credential) throw new Error("private registry identity is invalid");
-  const response = await invoke<{ status: number; headers: Record<string, string>; body: string }>(
-    "net_http_request",
-    {
-      method: "GET",
-      url,
-      headers: { authorization: CREDENTIAL_PLACEHOLDER },
-      query: null,
-      body: null,
-      contentType: null,
-      ns: credential.namespace,
-      secretSubst: { [CREDENTIAL_PLACEHOLDER]: credential.key },
-      impersonate: null,
-    },
-  );
+  const response = await registryHttpGet(descriptor, url);
   if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}`);
   return new TextEncoder().encode(response.body);
 }
