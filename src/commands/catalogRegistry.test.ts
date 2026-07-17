@@ -90,7 +90,9 @@ beforeEach(() => {
   invoke.mockReset();
   publishActivity.mockReset();
   installRelease.mockClear();
-  usePlugins.setState({ plugins: {} });
+  // A successful install rescans the loader; this suite exercises the command layer,
+  // so stub the reload rather than drive a real native plugin scan.
+  usePlugins.setState({ plugins: {}, reload: vi.fn(async () => {}) });
   useRegistry.setState(structuredClone(bootstrap));
   restoreInstaller = setRegistryInstallRuntime(installRelease);
 });

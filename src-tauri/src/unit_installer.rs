@@ -356,6 +356,36 @@ fn read_active_state(path: &Path) -> Result<Option<ActiveInstallState>, String> 
     }
 }
 
+// A plugin directory is a dev working copy when its state marker declares an
+// unversioned source (`dev` scaffold or `local` build). Absent or release-versioned
+// markers are installs the release channel owns and may replace.
+fn is_dev_working_copy(dir: &Path) -> bool {
+    let Ok(raw) = fs::read_to_string(dir.join(".soksak.json")) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) else {
+        return false;
+    };
+    matches!(
+        value.get("version").and_then(serde_json::Value::as_str),
+        Some("dev") | Some("local")
+    )
+}
+
+// Mark a published plugin as release-sourced so the loader and UI read a concrete
+// version and its origin instead of treating it as a dev working copy.
+fn write_release_state(dir: &Path, unit: &VerifiedInstallUnit) {
+    let state = serde_json::json!({
+        "version": unit.version,
+        "repo": unit.source_repository,
+        "releaseTag": unit.release_tag,
+    });
+    let _ = fs::write(
+        dir.join(".soksak.json"),
+        serde_json::to_string_pretty(&state).unwrap_or_default(),
+    );
+}
+
 fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
     let parent = path.parent().ok_or("state path has no parent")?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -420,6 +450,62 @@ impl UnitInstallManager {
 
     fn active_state_path(&self) -> PathBuf {
         self.home.join("installed-units.json")
+    }
+
+    fn plugins_root(&self) -> PathBuf {
+        self.home.join("plugins")
+    }
+
+    // The plugin loader scans one directory: home/plugins/<id>. A dev working copy
+    // there is owned by its author (spec §0-5) and must never be clobbered by a
+    // release install. Refuse before any file moves so a rejected install leaves the
+    // filesystem untouched. Only units staged in this generation are inspected; units
+    // carried forward from a prior generation were published by their own commit.
+    fn reject_dev_collisions(&self, state: &ActiveInstallState, generation: &str) -> Result<(), String> {
+        let plugins_root = self.plugins_root();
+        for unit in &state.units {
+            if unit.release.kind != "plugin" || unit.generation != generation {
+                continue;
+            }
+            let target = plugins_root.join(&unit.release.id);
+            if is_dev_working_copy(&target) {
+                return Err(format!(
+                    "{} has a dev working copy at {} — remove it before installing the release",
+                    unit.release.id,
+                    target.display()
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    // Publish each newly installed plugin unit to its single active location,
+    // home/plugins/<id>. The generation store under unit-generations keeps the ledger;
+    // the extracted files live at one stable path, never behind a UUID. Same filesystem,
+    // so each swap is an atomic rename. Carried-forward units already sit at their path.
+    fn publish_plugin_units(
+        &self,
+        generation_dir: &Path,
+        state: &ActiveInstallState,
+        generation: &str,
+    ) -> Result<(), String> {
+        let plugins_root = self.plugins_root();
+        fs::create_dir_all(&plugins_root).map_err(|error| error.to_string())?;
+        crate::path_security::reject_symlink_components(&plugins_root)?;
+        for unit in &state.units {
+            if unit.release.kind != "plugin" || unit.generation != generation {
+                continue;
+            }
+            let source = generation_dir.join(&unit.release.staged_handle);
+            let target = plugins_root.join(&unit.release.id);
+            crate::path_security::reject_symlink_components(&source)?;
+            if target.exists() {
+                fs::remove_dir_all(&target).map_err(|error| error.to_string())?;
+            }
+            fs::rename(&source, &target).map_err(|error| error.to_string())?;
+            write_release_state(&target, &unit.release);
+        }
+        Ok(())
     }
 
     fn begin(&self, registry_id: String, root: UnitIdentity) -> Result<InstallTransactionReply, String> {
@@ -700,6 +786,15 @@ impl UnitInstallManager {
                 return Err(error);
             }
         };
+        // Refuse a release that would clobber a dev working copy before touching any
+        // active-state file — the staged transaction stays intact and rollback-able.
+        if let Err(error) = self.reject_dev_collisions(&state, &generation) {
+            self.transactions
+                .lock()
+                .map_err(|_| "unit installer lock poisoned".to_string())?
+                .insert(transaction_id.to_string(), transaction);
+            return Err(error);
+        }
         let generations = self.generations_root();
         fs::create_dir_all(&generations).map_err(|error| error.to_string())?;
         crate::path_security::reject_symlink_components(&generations)?;
@@ -718,6 +813,9 @@ impl UnitInstallManager {
             }
             return Err(error);
         }
+        // Publish plugins to the loader's single active location. The dev-collision
+        // gate above already cleared every target, so this only fails on IO.
+        self.publish_plugin_units(&destination, &state, &generation)?;
         Ok(CommitReply { generation })
     }
 
@@ -892,6 +990,62 @@ mod tests {
         assert_eq!(active.current, committed.generation);
         assert!(home.join("unit-generations").join(&committed.generation).is_dir());
         assert!(!home.join("install-staging").join(&transaction.transaction_id).exists());
+        fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn publishes_the_committed_plugin_to_the_single_active_location() {
+        let home = home("publish");
+        let manager = UnitInstallManager::new(home.clone()).unwrap();
+        let transaction = manager.begin("fixture".into(), identity()).unwrap();
+        let body = archive(&[("plugin.json", br#"{"id":"weather-plugin"}"#), ("main.js", b"export {}")]);
+        let sha256 = digest(&body);
+        let staged = manager
+            .stage_bytes(&transaction.transaction_id, "fixture", identity(), artifact(sha256.clone()), &body)
+            .unwrap();
+        manager
+            .commit(&transaction.transaction_id, vec![verified(staged.handle, sha256)])
+            .unwrap();
+        // The loader scans home/plugins/<id>; the release must be published there, not
+        // left behind a generation UUID.
+        let published = home.join("plugins").join("weather-plugin");
+        assert_eq!(
+            fs::read_to_string(published.join("plugin.json")).unwrap(),
+            r#"{"id":"weather-plugin"}"#
+        );
+        let state: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(published.join(".soksak.json")).unwrap()).unwrap();
+        assert_eq!(state.get("version").and_then(|v| v.as_str()), Some("0.0.1"));
+        fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn refuses_to_publish_over_a_dev_working_copy() {
+        let home = home("dev-guard");
+        let manager = UnitInstallManager::new(home.clone()).unwrap();
+        // A dev author owns home/plugins/<id>; a release install must not clobber it.
+        let dev = home.join("plugins").join("weather-plugin");
+        fs::create_dir_all(&dev).unwrap();
+        fs::write(dev.join(".soksak.json"), r#"{"version":"dev"}"#).unwrap();
+        fs::write(dev.join("plugin.json"), r#"{"id":"weather-plugin","unsaved":true}"#).unwrap();
+        let transaction = manager.begin("fixture".into(), identity()).unwrap();
+        let body = archive(&[("plugin.json", br#"{"id":"weather-plugin"}"#), ("main.js", b"export {}")]);
+        let sha256 = digest(&body);
+        let staged = manager
+            .stage_bytes(&transaction.transaction_id, "fixture", identity(), artifact(sha256.clone()), &body)
+            .unwrap();
+        let error = manager
+            .commit(&transaction.transaction_id, vec![verified(staged.handle, sha256)])
+            .unwrap_err();
+        assert!(error.contains("dev working copy"), "unexpected error: {error}");
+        // The dev copy is untouched and no active state was advertised.
+        assert_eq!(
+            fs::read_to_string(dev.join("plugin.json")).unwrap(),
+            r#"{"id":"weather-plugin","unsaved":true}"#
+        );
+        assert!(read_active_state(&home.join("installed-units.json")).unwrap().is_none());
+        // The transaction stays rollback-able after the refusal.
+        manager.rollback(&transaction.transaction_id).unwrap();
         fs::remove_dir_all(home).unwrap();
     }
 

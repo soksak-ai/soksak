@@ -20,10 +20,16 @@ export async function installQualifiedRegistryEntry(
       message: `registry is not certified: ${entry.registryId}`,
     };
   }
-  return await installCertifiedRegistryUnit({
+  const result = await installCertifiedRegistryUnit({
     certified: source.certified,
     root: { kind: entry.kind, id: entry.id, version: entry.version },
   });
+  if (result.ok) {
+    // The archive is now published at home/plugins/<id>. Rescan the loader so the
+    // freshly installed plugin becomes loadable without an app restart.
+    await usePlugins.getState().reload();
+  }
+  return result;
 }
 
 export async function updateCertifiedRegistryPlugin(
