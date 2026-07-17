@@ -34,7 +34,8 @@ sha256-핀 URL 로 받는 네이티브 바이너리다. 계약은 release 영수
    esbuild drift 검사. 사이드카: `v*` 태그에 build → `stage.sh` → tar (`-L`) + sha256 →
    `gh release`. 계약: 그 인수 스위트. 앱 본체: `v*` 태그에 build → codesign → notarytool
    → `latest.json` + minisign `.sig` 로 release (§8).
-3. **홈**이 종류별로 아티팩트를 받는다 (§4): 플러그인은 `git pull`, 사이드카는 소비자가
+3. **홈**이 종류별로 아티팩트를 받는다 (§4): 플러그인은 서명 설치 인덱스에서 sha256-검증된
+   릴리스 아카이브 추출, 사이드카는 소비자가
    선언한 sha256-핀 `reach.fetch` URL, 앱 본체는 `latest.json` 을 읽는
    `tauri-plugin-updater` — release 채널만.
 4. **런타임**이 최소 재시작으로 반영한다 (§6): `update.apply` 가 핫 축을 순서대로 굴리고,
@@ -108,7 +109,7 @@ dlclose 핫스왑은 살아있는 심볼을 댕글링시킨다. 그런 엔진의
 `update.apply` 는 모든 핫 축에 걸쳐, 덜 파괴적인 것부터, 각 축을 activity 버스로 고지하며
 (무음 금지) 반영한다:
 
-1. **플러그인** — `git pull` + reload. 재시작 0. dev 소스 플러그인은 건너뛴다(update 대상
+1. **플러그인** — 인덱스에서 새 릴리스 아카이브 재추출 + reload. 재시작 0. dev 소스 플러그인은 건너뛴다(update 대상
    아님).
 2. **사이드카** — `sidecar_ensure` 가 지정 asset 을 받고(sha256-핀·원자 설치), 엔진이
    재스폰돼 rehydrate 한다.
