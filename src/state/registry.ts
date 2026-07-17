@@ -270,6 +270,42 @@ async function loadRegistryDocument(descriptor: RegistryDescriptor): Promise<unk
   return JSON.parse(response.body) as unknown;
 }
 
+/**
+ * Load an arbitrary registry resource (owner manifest, conformance report) as raw
+ * bytes, so the caller can verify its sha256 against the certified index. The
+ * artifact archive itself is downloaded and verified natively, never here.
+ */
+export async function loadRegistryResourceBytes(
+  registryId: string,
+  url: string,
+): Promise<Uint8Array> {
+  const descriptor = useRegistry.getState().registries[registryId]?.descriptor;
+  if (!descriptor) throw new Error(`registry not found: ${registryId}`);
+  if (descriptor.visibility === "public") {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+  }
+  const credential = registryCredentialSlot(descriptor.id);
+  if (!credential) throw new Error("private registry identity is invalid");
+  const response = await invoke<{ status: number; headers: Record<string, string>; body: string }>(
+    "net_http_request",
+    {
+      method: "GET",
+      url,
+      headers: { authorization: CREDENTIAL_PLACEHOLDER },
+      query: null,
+      body: null,
+      contentType: null,
+      ns: credential.namespace,
+      secretSubst: { [CREDENTIAL_PLACEHOLDER]: credential.key },
+      impersonate: null,
+    },
+  );
+  if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}`);
+  return new TextEncoder().encode(response.body);
+}
+
 interface RegistryRuntimeDeps {
   load: (descriptor: RegistryDescriptor) => Promise<unknown>;
   now: () => number;
