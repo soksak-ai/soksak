@@ -38,9 +38,10 @@ in the artifact:
    `stage.sh` → tar (`-L`) + sha256 → `gh release`. A contract: its acceptance
    suite. The app body: on a `v*` tag, build → codesign → notarytool → release
    with `latest.json` + a minisign `.sig` (§8).
-3. **Home** receives the artifact by its class (§4): a plugin by `git pull`, a
-   sidecar by the sha256-pinned `reach.fetch` URL its consumer declares, the app
-   body by `tauri-plugin-updater` reading `latest.json` — release channel only.
+3. **Home** receives the artifact by its class (§4): a plugin by extracting its
+   sha256-verified release archive from the signed installation index, a sidecar by
+   the sha256-pinned `reach.fetch` URL its consumer declares, the app body by
+   `tauri-plugin-updater` reading `latest.json` — release channel only.
 4. **Runtime** applies it with the fewest restarts (§6): `update.apply` rolls the
    hot axes in order and the restore ladder covers the one relaunch the app body
    needs.
@@ -124,7 +125,7 @@ debug/dev build reports `available:false`), plus a count of the hot axes
 `update.apply` applies across every hot axis, least-disruptive first, and
 announces each on the activity bus (never silent):
 
-1. **Plugins** — `git pull` + reload. Zero restart. Dev-sourced plugins are
+1. **Plugins** — re-extract the newer release archive from the index + reload. Zero restart. Dev-sourced plugins are
    skipped (not update targets).
 2. **Sidecars** — `sidecar_ensure` fetches each named asset (sha256-pinned,
    atomic install), then the engine respawns and rehydrates.
