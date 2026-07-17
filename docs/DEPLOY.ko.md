@@ -13,14 +13,16 @@ soksak 은 유닛 단위로 배포되고, 실행 중인 앱을 최소한의 재�
 
 | 유닛 | 아티팩트 | 전달 | CI 게이트 |
 |------|----------|------|-----------|
-| 플러그인 | `main.js` (repo 에 추적) | `git clone` / `git pull --ff-only` | test + esbuild drift (`git diff --exit-code main.js`) |
+| 플러그인 | `<id>-<ver>-any.tgz`(번들 `main.js` + `plugin.json`) + `release.json` + conformance | 서명 레지스트리 인덱스 → owner 매니페스트+artifact sha256 검증 → `<home>/plugins/<id>` 로 아카이브 추출. git clone 없음. | test + esbuild drift (`git diff --exit-code main.js`) → owner-immutable release |
 | 사이드카 | release asset `…-<ver>-<os>-<arch>.tar.gz` + sha256 | `gh release`, 소비 플러그인의 `reach.fetch` 로 핀 | tag `v*` → build → stage → tar (`-L`) → release |
-| 계약 | 없음 | test 게이트만 (declared ≡ actual) | `node --test` / `cargo test` |
+| 계약 | `<id>-<ver>.tgz` + `release.json` + `conformance.json` | 레지스트리 release 영수증; 빌드-핀으로 소비되고 홈에 설치되지 않음 | `node --test` / `cargo test` → owner-immutable release |
 | 앱 본체 | 서명·공증된 `.app` + `latest.json` + minisign `.sig` | `tauri-plugin-updater` (release 채널) | build → codesign → notarytool → release |
 
-플러그인은 clone 하는 소스다 — release asset 이 없다. 사이드카는 소비자 매니페스트가
-선언한 sha256-핀 URL 로 받는 네이티브 바이너리다. 계약은 아무것도 배포하지 않는다 —
-양쪽이 준수하는 test 게이트다. 앱 본체만이 updater 가 내려받아 설치하는 대상이다.
+플러그인은 소비자가 서명 설치 인덱스에서 추출하는 검증된 `.tgz` 를 배포한다 — 앱이
+Ed25519-서명 인덱스를 인증하고 owner 매니페스트·artifact sha256 을 검증한 뒤 아카이브를
+추출한다. git clone/branch/latest fallback 은 없다. 사이드카는 소비자 매니페스트가 선언한
+sha256-핀 URL 로 받는 네이티브 바이너리다. 계약은 release 영수증을 발행하되 설치되는 것은
+아무것도 없다 — 양쪽이 빌드-핀으로 준수한다. 앱 본체만이 updater 가 내려받아 설치하는 대상이다.
 
 ## 2. 파이프라인 — 커밋에서 실행 앱까지
 
