@@ -4,6 +4,6 @@ import type { RegistryPublicKey } from "./spec";
 // the application embeds the public half and accepts no runtime override.
 export const OFFICIAL_REGISTRY_TRUST: RegistryPublicKey = {
   algorithm: "ed25519",
-  keyId: "5631e86079101fd2",
-  value: "0QCklKgLZ13rNAYCoyrICTVcPNfIvcCMvQ4gjYrHQ+o=",
+  keyId: "906dbfa9f13a0a75b305f0bda733e681",
+  value: "Um+ChvRm+9VLyTNP2jVL0zgxKzg6+8jEyEdpNwfLWVc=",
 };

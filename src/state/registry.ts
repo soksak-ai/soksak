@@ -19,7 +19,7 @@ import { createCoreSync } from "./coreSync";
 import type { CoreStoreDeps } from "./coreStore";
 
 const OFFICIAL_REMOTE_URL =
-  "https://raw.githubusercontent.com/soksak-ai/soksak-plugin-registry/main/registry.json";
+  "https://raw.githubusercontent.com/soksak-ai/soksak-plugin-registry/main/registry-signed.json";
 
 export const OFFICIAL_REGISTRY_DESCRIPTOR: RegistryDescriptor = {
   id: OFFICIAL_REGISTRY_ID,
