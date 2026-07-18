@@ -44,6 +44,7 @@ import { registerUiCatalog } from "./catalogUi";
 import { registerDomCatalog } from "./catalogDom";
 import { registerAiSessionCatalog } from "./catalogAiSession";
 import { registerDataCatalog } from "./catalogData";
+import { registerPtySessionCatalog } from "./catalogPtySession";
 import { registerSecretsCatalog } from "./catalogSecrets";
 import { registerTurnCatalog } from "./catalogTurn";
 import { registerNetworkCatalog } from "./catalogNetwork";
@@ -2728,6 +2729,7 @@ export function registerCatalog(): void {
   registerUiCatalog();
   registerDomCatalog();
   registerDataCatalog();
+  registerPtySessionCatalog();
   registerSecretsCatalog();
   registerAiSessionCatalog();
   registerTurnCatalog();

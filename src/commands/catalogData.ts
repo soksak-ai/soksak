@@ -1,7 +1,9 @@
 // data.* commands — core surface for the generic data store (Rust DbState). Exposes
-// backup/restore/export/import and read-only queries to CLI/MCP (single source of truth).
-// Plugins use the app.data surface; these commands are for ops and inspection.
-// Write mutations (put/delete/define) are intentionally excluded — plugin responsibility.
+// backup/restore/export/import, read-only queries, and the kv rows to CLI/MCP.
+// Record mutations (put/delete/define) stay excluded — plugin responsibility. kv IS
+// exposed for writes here because the native plugin runtime reaches the world through
+// the registry only (commands.execute); without a kv surface a runtime plugin has no
+// durable state at all. ns is explicit — callers own their partition, nothing is implied.
 
 import { invoke } from "@tauri-apps/api/core";
 import { register } from "./registry";
@@ -20,6 +22,93 @@ const COLL_PARAM = {
 } as const;
 
 export function registerDataCatalog(): void {
+  // kv 4종 — native 런타임 플러그인의 유일한 영속 통로(파일 머리말 참조). ns 명시 필수.
+  register("data.kv.get", {
+    description: "Read one kv value from a namespace. Returns null when absent.",
+    triggers: { ko: "키값 조회" },
+    params: {
+      ns: NS_PARAM,
+      key: { type: "string", required: true, description: "Key" },
+    },
+    returns: "{ ns, key, value }",
+    message: (d) => `kv ${d.ns}:${d.key}`,
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['data.kv.get \'{"ns":"soksak-plugin-tmux-fake","key":"team:t1"}\''],
+    handler: async (p) => {
+      if (typeof p.ns !== "string" || !p.ns || typeof p.key !== "string" || !p.key) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns, key 필요" };
+      }
+      const value = await invoke("data_kv_get", { ns: p.ns, key: p.key });
+      return { ns: p.ns, key: p.key, value: value ?? null };
+    },
+  });
+
+  register("data.kv.set", {
+    description:
+      "Write one kv value (JSON) into a namespace. The store is a core SQLite singleton — the row survives app restart and window close.",
+    triggers: { ko: "키값 저장" },
+    params: {
+      ns: NS_PARAM,
+      key: { type: "string", required: true, description: "Key" },
+      value: { type: "json", required: true, description: "JSON value to store" },
+    },
+    returns: "{ ns, key }",
+    message: (d) => `kv ${d.ns}:${d.key} saved`,
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['data.kv.set \'{"ns":"soksak-plugin-tmux-fake","key":"team:t1","value":{"agents":[]}}\''],
+    handler: async (p) => {
+      if (typeof p.ns !== "string" || !p.ns || typeof p.key !== "string" || !p.key) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns, key 필요" };
+      }
+      await invoke("data_kv_set", { ns: p.ns, key: p.key, value: p.value ?? null });
+      return { ns: p.ns, key: p.key };
+    },
+  });
+
+  register("data.kv.delete", {
+    description: "Delete one kv row from a namespace. Deleting an absent key reports deleted:false.",
+    triggers: { ko: "키값 삭제" },
+    params: {
+      ns: NS_PARAM,
+      key: { type: "string", required: true, description: "Key" },
+    },
+    danger: "destructive",
+    returns: "{ ns, key, deleted }",
+    message: (d) => `kv ${d.ns}:${d.key} ${d.deleted ? "deleted" : "absent"}`,
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['data.kv.delete \'{"ns":"soksak-plugin-tmux-fake","key":"team:t1"}\''],
+    handler: async (p) => {
+      if (typeof p.ns !== "string" || !p.ns || typeof p.key !== "string" || !p.key) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns, key 필요" };
+      }
+      const deleted = (await invoke("data_kv_delete", { ns: p.ns, key: p.key })) as boolean;
+      return { ns: p.ns, key: p.key, deleted };
+    },
+  });
+
+  register("data.kv.keys", {
+    description: "List kv keys in a namespace, optionally filtered by prefix.",
+    triggers: { ko: "키 목록" },
+    params: {
+      ns: NS_PARAM,
+      prefix: { type: "string", required: false, description: "Key prefix filter" },
+    },
+    returns: "{ ns, keys }",
+    message: (d) => `${(d.keys as unknown[]).length} key(s) in ${d.ns}`,
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['data.kv.keys \'{"ns":"soksak-plugin-tmux-fake","prefix":"team:"}\''],
+    handler: async (p) => {
+      if (typeof p.ns !== "string" || !p.ns) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns 필요" };
+      }
+      const keys = (await invoke("data_kv_keys", {
+        ns: p.ns,
+        prefix: typeof p.prefix === "string" ? p.prefix : null,
+      })) as string[];
+      return { ns: p.ns, keys };
+    },
+  });
+
   // ns 회수 — 만드는 길이 있으면 걷는 길도 있어야 한다. 이 표면이 없어서 시험(e2e·프로빙)이 만든
   // 네임스페이스를 걷을 수 없었고, 회수 3축의 데이터 축이 뚫려 있었다.
   register("data.ns.remove", {
