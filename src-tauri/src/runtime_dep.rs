@@ -369,6 +369,12 @@ fn extract_regular_archive(body: &[u8], destination: &Path) -> Result<(), String
         let path_text = std::str::from_utf8(raw_path.as_ref())
             .map_err(|_| "archive path는 UTF-8이어야 합니다".to_string())?
             .to_owned();
+        // 관례적 tar 는 엔트리를 "./name" 으로 싣는다 — 선두 "./" 는 구조 표기라 벗긴다.
+        // 이후 검증은 그대로("."·".." 세그먼트·절대경로 전부 거부).
+        let path_text = path_text
+            .strip_prefix("./")
+            .map(str::to_owned)
+            .unwrap_or(path_text);
         let relative = validate_archive_path(&path_text)?;
         let portable_key = path_text.to_ascii_lowercase();
         if !paths.insert(portable_key) {
@@ -656,8 +662,8 @@ mod unpack_tests {
         let root = tmp_root("dir-skip");
         let body = archive_with_raw_entries(&[
             ("./", tar::EntryType::Directory, b""),
-            ("bin", tar::EntryType::Directory, b""),
-            ("bin/tool", tar::EntryType::Regular, b"x"),
+            ("./bin", tar::EntryType::Directory, b""),
+            ("./bin/tool", tar::EntryType::Regular, b"x"),
         ]);
         let dest = root.join("installed");
         unpack_verify_install(&body, &sha_of(&body), &dest, "bin/tool")
