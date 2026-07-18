@@ -11,12 +11,13 @@ import { canonicalRegistryPayload } from "../packages/plugin-spec/dist/registry.
 function opt(name, def) { const i = process.argv.indexOf(name); return i >= 0 ? process.argv[i + 1] : def; }
 const ORG = opt("--org", "soksak-ai");
 const REGISTRY_ID = opt("--registry-id", "official");
+const SEQUENCE = Number(opt("--sequence", "1"));
 const OUT = opt("--out", ".");
 const NOW = Number(opt("--now", `${Date.now()}`));
 // 서명 인덱스는 홈-설치 유닛(kit|plugin|sidecar)만 싣는다. 계약은 빌드-핀 소비라 제외.
 const UNITS = JSON.parse(fs.readFileSync(opt("--units-json"), "utf8"))
   .filter((u) => ["kit", "plugin", "sidecar"].includes(u.kind)); // [{id,kind}]
-const KEY_PATH = opt("--key", path.resolve(process.env.HOME, "ai/cli/vsterm-tauri/secret/registry-signing-key.json"));
+const KEY_PATH = opt("--key", path.resolve(process.env.HOME, "soksak/core/secret/registry-signing-key.json"));
 
 // 1) 키페어
 let key;
@@ -45,20 +46,23 @@ async function fetchSha(url) {
   const buf = Buffer.from(await r.arrayBuffer());
   return { sha256: createHash("sha256").update(buf).digest("hex"), bytes: buf };
 }
-const base = (id) => `https://github.com/${ORG}/${id}/releases/download/v0.0.1`;
+const base = (id, version) => `https://github.com/${ORG}/${id}/releases/download/v${version}`;
 const units = [];
 for (const u of UNITS) {
-  const manifestUrl = `${base(u.id)}/release.json`;
+  const unitVersion = u.version ?? "0.0.1";
+  const manifestUrl = `${base(u.id, unitVersion)}/release.json`;
   const m = await fetchSha(manifestUrl);
   const release = JSON.parse(m.bytes.toString());
   const version = release.version ?? (release.contract && release.contract.version) ?? "0.0.1";
   // conformance 리포트: plugin=conformance-release.json+conformance-plugin.json, contract=conformance.json
   const reportNames = u.kind === "contract"
     ? ["conformance.json"]
-    : ["conformance-release.json", "conformance-plugin.json"];
+    : u.kind === "sidecar"
+      ? ["conformance-release.json", "conformance-sidecar.json"]
+      : ["conformance-release.json", "conformance-plugin.json"];
   const reports = [];
   for (const n of reportNames) {
-    try { const rr = await fetchSha(`${base(u.id)}/${n}`); reports.push({ sha256: rr.sha256, url: `${base(u.id)}/${n}` }); }
+    try { const rr = await fetchSha(`${base(u.id, unitVersion)}/${n}`); reports.push({ sha256: rr.sha256, url: `${base(u.id, unitVersion)}/${n}` }); }
     catch { /* 없는 리포트는 생략 */ }
   }
   reports.sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0)); // 결정적 서명 위해 정렬
@@ -72,7 +76,7 @@ const wholeSecond = (ms) => new Date(Math.floor(ms / 1000) * 1000).toISOString()
 const payload = {
   spec: "soksak-spec-registry@0.0.1",
   registryId: REGISTRY_ID,
-  sequence: 1,
+  sequence: SEQUENCE,
   issuedAt: wholeSecond(NOW),
   expiresAt: wholeSecond(NOW + 365 * 24 * 3600 * 1000),
   units,
