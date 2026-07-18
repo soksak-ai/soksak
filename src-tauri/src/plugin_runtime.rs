@@ -228,12 +228,15 @@ pub const WRAPPER_BOOTSTRAP_MODULE: &str = r#"(() => {
       webRtc: start.webRtc }, '*', [channel.port2]);
     start.entryCode = '';
     sendNative('ready');
-    const heartbeat = () => {
-      sendNative('heartbeat');
-      setTimeout(heartbeat, start.heartbeatIntervalMs);
-    };
-    setTimeout(heartbeat, start.heartbeatIntervalMs);
   }, { once: true });
+  // Liveness is ping-driven: the helper's native clock calls this every interval and a
+  // live webview answers at once. A JS setTimeout loop cannot carry liveness here — the
+  // helper window is never visible and hidden documents clamp timers to >=1s, starving
+  // the supervisor's heartbeat deadline on a perfectly healthy runtime.
+  Object.defineProperty(globalThis, '__soksakHeartbeatPing', {
+    configurable: false, enumerable: false,
+    value() { if (delivered) sendNative('heartbeat'); },
+  });
   const mount = () => (document.body || document.documentElement).append(frame);
   if (document.body) mount();
   else globalThis.addEventListener('DOMContentLoaded', mount, { once: true });
@@ -1206,7 +1209,7 @@ pub fn run_helper_from_stdio() -> Result<(), String> {
         event_loop::{ControlFlow, EventLoopBuilder},
         window::WindowBuilder,
     };
-    use wry::{http::Request, NewWindowResponse, WebViewBuilder};
+    use wry::{http::Request, BackgroundThrottlingPolicy, NewWindowResponse, WebViewBuilder};
 
     let event_loop = EventLoopBuilder::<HelperUserEvent>::with_user_event().build();
     let proxy = event_loop.create_proxy();
@@ -1316,6 +1319,11 @@ pub fn run_helper_from_stdio() -> Result<(), String> {
     };
     let webview = WebViewBuilder::new()
         .with_html(BOOTSTRAP_HTML)
+        // The helper window is never visible, and WebKit throttles timers in occluded
+        // webviews — measured heartbeat gaps grow from 250ms toward >1.5s, tripping the
+        // supervisor's HEARTBEAT_DEADLINE and killing healthy sessions. Liveness beats
+        // power saving here: scheduling must not slow down for an invisible runtime.
+        .with_background_throttling(BackgroundThrottlingPolicy::Disabled)
         .with_initialization_script_for_main_only(
             frame_document_guard_script(policy.web_rtc),
             false,
@@ -1329,8 +1337,20 @@ pub fn run_helper_from_stdio() -> Result<(), String> {
         .build(&window)
         .map_err(|error| error.to_string())?;
 
+    // Native heartbeat clock — hidden documents clamp JS timers to >=1s, so the
+    // supervisor's liveness signal is driven from here: ping the wrapper every
+    // interval, a live webview answers synchronously via the ipc handler.
+    let ping_interval = Duration::from_millis(start.heartbeat_interval_ms.max(50));
+    let mut next_ping = std::time::Instant::now() + ping_interval;
     event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
+        *control_flow = ControlFlow::WaitUntil(next_ping);
+        if std::time::Instant::now() >= next_ping {
+            next_ping = std::time::Instant::now() + ping_interval;
+            let _ = webview.evaluate_script(
+                "globalThis.__soksakHeartbeatPing && globalThis.__soksakHeartbeatPing();",
+            );
+            *control_flow = ControlFlow::WaitUntil(next_ping);
+        }
         match event {
             Event::UserEvent(HelperUserEvent::Envelope(envelope)) => {
                 if let Ok(encoded) = serde_json::to_string(&envelope) {
