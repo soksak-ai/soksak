@@ -8,6 +8,7 @@ import { pendingConsentChain, usePlugins, type PluginRuntime } from "../state/pl
 import { allGroups, useSessions } from "../state/sessions";
 import { hasSidebarView as hasSidebarViewKey } from "../state/sidebarLayout";
 import { getRegisteredView, registeredViewIds } from "../plugins/viewRegistry";
+import { nativeRuntimeState } from "../plugins/nativeRuntime";
 import { registeredFileViewerIds } from "../plugins/fileViewerRegistry";
 import { registeredIconSetIds } from "../ui/icons/registry";
 import { listPrograms } from "../plugins/programRegistry";
@@ -113,6 +114,21 @@ function serializeRuntime(p: PluginRuntime) {
 }
 
 export function registerPluginCatalog(): void {
+  // 런타임 세션 진단 — 세션은 비동기로 죽고(fault·heartbeat 소실·envelope 거부) 이유가
+  // 함께 사라진다. 활성 세션과 최근 종료 이유(postmortem)를 그대로 노출한다.
+  register("plugin.runtime.state", {
+    description:
+      "Inspect native plugin runtime sessions: active sessions and the last closing reason per plugin (postmortem). A session that died asynchronously leaves its reason here — later calls only report 'runtime is not active'.",
+    triggers: { ko: "플러그인 런타임 상태 진단 세션" },
+    params: {},
+    returns: "{ active: [{pluginId, runtimeId, pendingInvocations}], postmortems: [{pluginId, reason, at}] }",
+    message: (d) =>
+      `${(d.active as unknown[]).length} active session(s), ${(d.postmortems as unknown[]).length} postmortem(s)`,
+    errors: [],
+    examples: ["plugin.runtime.state"],
+    handler: async () => nativeRuntimeState(),
+  });
+
   register("program.list", {
     description:
       "List all programs available in the new-tab menu. Every entry is plugin-registered; nothing is built-in. Use to discover launchable programs and their menu category paths.",

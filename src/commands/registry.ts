@@ -110,6 +110,10 @@ export interface CommandSpec {
   // 영어 매칭은 base prose 가 담당하므로 en 은 보통 생략. 언어 추가(ja/zh)=이 맵에 키만 추가(docs/I18N.md §3).
   triggers?: Record<string, string>;
   params: Record<string, ParamSpec>;
+  // 파라미터 계약의 소유자. 기본 "registry" = 선언 기반 검증(미선언 키 거부 — 오타 조기 발견).
+  // "handler" = 계약이 핸들러 뒤(native 런타임 플러그인 안)에 살아 여기선 통과만 한다 —
+  // 런타임 명령 프록시 전용. 일반 명령이 검증 회피용으로 쓰는 것을 금지한다.
+  paramsAuthority?: "registry" | "handler";
   // 사람이 읽는 명령 라벨(아나운서체 — "git 저장소를 초기화합니다"). 표시 표면(피드 버블 등)이
   // raw 키 대신 이걸 현재 언어로 해소해 보인다. 플러그인 명령은 매니페스트 contributes.commands
   // 의 title 이 실린다(플러그인 소유). 라벨의 단일 진실은 명령 정의 자신 — 별도 표 금지.
@@ -873,6 +877,8 @@ function validate(
   spec: CommandSpec,
   params: Record<string, unknown>,
 ): string | null {
+  // 계약이 핸들러 소유(native 런타임 프록시)면 선언이 없으므로 통과 — 검증은 런타임이 한다.
+  if (spec.paramsAuthority === "handler") return null;
   for (const key of Object.keys(params)) {
     if (!(key in spec.params)) return `알 수 없는 파라미터: ${key}`;
   }

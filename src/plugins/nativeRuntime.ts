@@ -9,6 +9,7 @@ import { invoke } from "@tauri-apps/api/core";
 import {
   PluginRuntimeSessionValidator,
   comparePluginRuntimeInventory,
+  pluginCommandName,
   type ContractProviderRef,
   type ContractRequirement,
   type PluginManifest,
@@ -24,6 +25,8 @@ import {
   catalogJson,
   executeFromPlugin,
   issuePluginCommandContext,
+  register,
+  unregister,
   type PluginCommandContext,
 } from "../commands/registry";
 import { safeListen } from "../lib/safeListen";
@@ -108,9 +111,21 @@ function expectedInventory(manifest: PluginManifest): PluginRuntimeInventory {
   };
 }
 
+// Session postmortems — a session dies asynchronously (fault, heartbeat loss, envelope
+// rejection) and the closing reason used to vanish with it; every later call just said
+// "runtime is not active". Kept per plugin id, surfaced via plugin.runtime.state.
+const sessionPostmortems = new Map<string, { reason: string; at: number }>();
+
 function closeSession(session: RuntimeSession, error: Error): void {
   if (session.closed) return;
   session.closed = true;
+  sessionPostmortems.set(session.native.principal.pluginId, {
+    reason: error.message,
+    at: Date.now(),
+  });
+  console.error(
+    `[plugin-runtime] session closed: ${session.native.principal.pluginId} — ${error.message}`,
+  );
   session.validator.close();
   session.rejectReady(error);
   for (const pending of session.pendingInvocations.values()) {
@@ -119,6 +134,27 @@ function closeSession(session: RuntimeSession, error: Error): void {
   }
   session.pendingInvocations.clear();
   sessions.delete(session.native.principal.runtimeId);
+}
+
+// Read-only diagnostic snapshot for plugin.runtime.state.
+export function nativeRuntimeState(): {
+  active: Array<{ pluginId: string; runtimeId: string; pendingInvocations: number }>;
+  postmortems: Array<{ pluginId: string; reason: string; at: number }>;
+} {
+  return {
+    active: [...sessions.values()]
+      .filter((s) => !s.closed)
+      .map((s) => ({
+        pluginId: s.native.principal.pluginId,
+        runtimeId: s.native.principal.runtimeId,
+        pendingInvocations: s.pendingInvocations.size,
+      })),
+    postmortems: [...sessionPostmortems.entries()].map(([pluginId, p]) => ({
+      pluginId,
+      reason: p.reason,
+      at: p.at,
+    })),
+  };
 }
 
 function nextHostEnvelope(
@@ -324,6 +360,11 @@ export async function startNativePluginRuntime(
   } finally {
     cancelReadyDeadline();
   }
+  // Registry proxies — the runtime wire carries plugin-command.invoke, but nothing
+  // exposed the plugin's declared commands on the registry until now: without these
+  // proxies an activated native-runtime plugin is enabled yet unreachable
+  // (UNKNOWN_COMMAND). Manifest is the authority for names and danger.
+  const unregisterProxies = registerNativeCommandProxies(manifest, native.principal.runtimeId);
   return {
     manifest,
     dir,
@@ -332,6 +373,7 @@ export async function startNativePluginRuntime(
     entrySha256: native.entrySha256,
     sessionBindingSha256: native.sessionBindingSha256,
     deactivate: async () => {
+      unregisterProxies();
       if (!session.closed) {
         const teardown = nextHostEnvelope(session, {
           kind: "signal",
@@ -344,6 +386,37 @@ export async function startNativePluginRuntime(
       closeSession(session, new Error("plugin runtime deactivated"));
       await invoke("plugin_runtime_stop", { id: manifest.id });
     },
+  };
+}
+
+// Manifest-declared commands → registry proxies for a native-runtime plugin.
+// The manifest carries names/titles/danger only (spec prose lives plugin-side), so the
+// proxy passes params through untyped and relays the runtime's CmdResult verbatim; the
+// plugin handler owns ok/code/message. Returns the unregister closure.
+function registerNativeCommandProxies(manifest: PluginManifest, runtimeId: string): () => void {
+  const names: string[] = [];
+  for (const declared of manifest.contributes?.commands ?? []) {
+    const full = pluginCommandName(manifest.id, declared.name);
+    register(full, {
+      description: `${manifest.id} — ${declared.name} (native runtime)`,
+      title: declared.title,
+      params: {},
+      paramsAuthority: "handler",
+      returns: "object",
+      message: (d) => (typeof d.message === "string" ? d.message : declared.name),
+      ...(declared.danger ? { danger: declared.danger } : {}),
+      handler: async (params, ctx) => {
+        const outcome = await invokeNativePluginCommand(runtimeId, declared.name, params ?? {}, {
+          origin: ctx?.origin ?? "human",
+          parent: ctx?.parent ?? null,
+        });
+        return outcome as { ok: boolean; code: string; message: string; data?: Record<string, unknown> };
+      },
+    });
+    names.push(full);
+  }
+  return () => {
+    for (const name of names) unregister(name);
   };
 }
 
