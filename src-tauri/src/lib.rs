@@ -502,6 +502,7 @@ pub fn run() {
             unit_dev::unit_dev_validate_path,
             unit_dev::unit_dev_remove,
             unit_dev::app_environment,
+            unit_installer::host_unit_target,
             unit_installer::unit_install_begin,
             unit_installer::unit_install_stage,
             unit_installer::unit_install_read_utf8,

@@ -1126,3 +1126,19 @@ mod tests {
         fs::remove_dir_all(home).unwrap();
     }
 }
+
+// 이 코어 빌드가 실행 중인 호스트의 유닛 타깃 트리플. 설치 클로저가 sidecar 아티팩트를
+// per-(os,arch) 자산에서 고르는 단일 기준이다 — 프론트가 플랫폼을 추측하지 않는다.
+#[tauri::command]
+pub fn host_unit_target() -> &'static str {
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    return "aarch64-apple-darwin";
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    return "x86_64-apple-darwin";
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    return "aarch64-unknown-linux-gnu";
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    return "x86_64-unknown-linux-gnu";
+    #[cfg(target_os = "windows")]
+    return "x86_64-pc-windows-msvc";
+}
