@@ -1,8 +1,7 @@
-# 3-OS cargo check matrix. Today this measures the real multiplatform state:
-# Linux and Windows are expected to fail, and their output is the input for the
-# multiplatform backlog. continue-on-error keeps the matrix non-blocking while
-# it measures — a documented temporary relaxation. Removal condition: when all
-# three OS columns are green, drop continue-on-error and require this check.
+# 3-OS cargo check matrix. All three OS columns went green (run 29506546092:
+# sibling capture fixes + core titlebar/pty gates + the W2 M0 Windows IPC
+# transport), so the documented removal condition is met: continue-on-error is
+# dropped and this check now fails the workflow when any OS regresses.
 name: multiplatform-check
 
 on:
@@ -18,7 +17,6 @@ jobs:
       matrix:
         os: [macos-14, ubuntu-24.04, windows-2025]
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
     timeout-minutes: 60
     steps:
       - name: Check out the app repository
@@ -28,12 +26,12 @@ jobs:
 
       # Same sibling layout as verify.yml: src-tauri/Cargo.toml declares
       # tauri-plugin-webview-capture by relative path, two levels up from
-      # src-tauri. CI_REPO_TOKEN must read soksak-ai/tauri-plugin-webview-capture.
+      # src-tauri. The crate repository is public, so the default checkout
+      # (no token) resolves it — CI_REPO_TOKEN is no longer required.
       - name: Check out the sibling path dependency
         uses: actions/checkout@v4
         with:
           repository: soksak-ai/tauri-plugin-webview-capture
-          token: ${{ secrets.CI_REPO_TOKEN }}
           path: tauri-plugin-webview-capture
 
       - name: Install Linux system libraries
