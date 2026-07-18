@@ -61,7 +61,7 @@ describe("scanFile — 위반 판정", () => {
   });
 
   it("레지스트리 URL allowlist 는 그 파일·그 줄에만 적용된다", () => {
-    const url = '"https://raw.githubusercontent.com/soksak-ai/soksak-plugin-registry/main/registry.json"';
+    const url = '"https://raw.githubusercontent.com/soksak-ai/soksak-plugin-registry/main/registry-signed.json"';
     expect(scanFile("src/state/registry.ts", url)).toEqual([]);
     // 같은 URL 이라도 다른 파일이면 위반.
     expect(scanFile("src/other.ts", url)).toHaveLength(1);
@@ -72,7 +72,7 @@ describe("scanFile — 위반 판정", () => {
   it("레지스트리 URL 줄에 놓인 다른 id 는 사면되지 않는다", () => {
     // 같은 줄에 URL 과 다른 플러그인 id 가 함께 있어도, allowlist 는 registry 토큰만 통과시킨다.
     const line =
-      '"https://raw.githubusercontent.com/soksak-ai/soksak-plugin-registry/main/registry.json" /* soksak-plugin-memo */';
+      '"https://raw.githubusercontent.com/soksak-ai/soksak-plugin-registry/main/registry-signed.json" /* soksak-plugin-memo */';
     const v = scanFile("src/state/registry.ts", line);
     expect(v).toHaveLength(1);
     expect(v[0].token).toBe("soksak-plugin-memo");

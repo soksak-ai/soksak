@@ -31,16 +31,11 @@ const TOKEN = /soksak-plugin-[a-z0-9][a-z0-9-]*(?:@[0-9]+)?/g;
 export const ALLOWLIST = [
   {
     file: "src/state/registry.ts",
-    line: /soksak-ai\/soksak-plugin-registry\/main\/registry\.json/,
+    line: /soksak-ai\/soksak-plugin-registry\/main\/registry-signed\.json/,
     token: /^soksak-plugin-registry$/,
     reason:
       "레지스트리 repo URL 상수 — 플러그인 카탈로그의 단일 발견 지점. 코어가 아는 유일한 외부 좌표다." +
       " token 제한으로 같은 줄에 놓인 다른 플러그인 id 는 사면되지 않는다.",
-  },
-  {
-    file: "src/plugins/registrySnapshot.json",
-    reason:
-      "레지스트리 카탈로그 빌드 스냅샷 — 발견 지점 데이터의 오프라인 시드(첫 실행·오프라인 폴백). 실행 분기가 아니라 카탈로그 데이터다.",
   },
   {
     file: "src/state/windowSnapshot.ts",
@@ -51,27 +46,6 @@ export const ALLOWLIST = [
       " 전에 저장된 스냅샷의 옛 pluginId 를 새 id 로 번역하는 1회성 데이터 훅. 실행 분기가 아니라 레거시" +
       " 데이터 번역이며 rename 양끝 id 를 문법상 요구한다. line·token 제한으로 그 map 항목에만 적용된다." +
       " 옛 스냅샷 소멸 시 제거(제거 조건은 코드 주석).",
-  },
-  {
-    file: "src-tauri/src/plugin_runtime/conformance.rs",
-    token: /^soksak-plugin-runtime-conformance$/,
-    reason:
-      "코어가 스폰하는 plugin-runtime 도우미의 자기 식별 CLI 플래그. 특정 플러그인 id 가 아니라 코어 소유" +
-      " 런타임 인프라의 고정 argv 마커다(어떤 플러그인에도 결합하지 않는다). token 제한으로 다른 id 는 사면되지 않는다.",
-  },
-  {
-    file: "src-tauri/src/plugin_runtime.rs",
-    token: /^soksak-plugin-runtime-helper$/,
-    reason:
-      "plugin-runtime 헬퍼 프로세스 진입 CLI 플래그. 코어 소유 런타임 인프라의 고정 argv 마커이지 특정" +
-      " 플러그인 결합이 아니다. token 제한으로 다른 id 는 사면되지 않는다.",
-  },
-  {
-    file: "src-tauri/src/plugin_runtime.rs",
-    token: /^soksak-plugin-root$/,
-    reason:
-      "플러그인 웹뷰 srcdoc 의 마운트 DOM id. 모든 플러그인 UI 가 붙는 generic 마운트점이지 특정 플러그인 id 가" +
-      " 아니다(코어 소유 런타임 인프라). token 제한으로 다른 id 는 사면되지 않는다.",
   },
 ];
 

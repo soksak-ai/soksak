@@ -1,5 +1,5 @@
 {
-  "schema": "ai.soksak/platform-extraction@1",
+  "schema": "ai.soksak/platform-extraction@0.0.1",
   "repositories": [
     {
       "name": "soksak-spec",
@@ -7,6 +7,7 @@
       "url": "https://github.com/soksak-ai/soksak-spec",
       "workspace": {
         "cargoMembers": [
+          "crates/soksak-spec-contract",
           "crates/soksak-spec-service",
           "crates/soksak-spec-socket"
         ],
@@ -25,15 +26,29 @@
             "LICENSE",
             "README.md",
             "bin/validate.mjs",
+            "docs/PLATFORM-WIRE.md",
             "package.json",
+            "schema/conformance-report.schema.json",
+            "schema/registry-index.schema.json",
+            "schema/registry-public-key.schema.json",
+            "schema/unit-release.schema.json",
+            "src/conformanceWire.ts",
             "src/contracts.ts",
             "src/hostChrome.ts",
+            "src/localizedText.ts",
             "src/permissions.ts",
+            "src/pluginRuntime.ts",
+            "src/registry.ts",
+            "src/release.ts",
             "src/semver.ts",
             "src/service.ts",
             "src/spec.ts",
             "src/transparency.ts",
+            "src/uiSurfaces.ts",
+            "src/unit.ts",
             "src/util.ts",
+            "test/cliWire.test.ts",
+            "test/conformance.test.ts",
             "test/fixtures/c2-clean/plugin.json",
             "test/fixtures/c2-static-violation/plugin.json",
             "test/fixtures/c2-status-undeclared/plugin.json",
@@ -42,15 +57,48 @@
             "test/fixtures/invalid-status/plugin.json",
             "test/fixtures/invalid-viewcontract/plugin.json",
             "test/fixtures/invalid/plugin.json",
+            "test/fixtures/platform-wire/conformance-kit-kind.json",
+            "test/fixtures/platform-wire/conformance-kit-release.json",
+            "test/fixtures/platform-wire/conformance-plugin-kind.json",
+            "test/fixtures/platform-wire/conformance-plugin-release.json",
+            "test/fixtures/platform-wire/conformance-sidecar-interface.json",
+            "test/fixtures/platform-wire/conformance-sidecar-kind.json",
+            "test/fixtures/platform-wire/conformance-sidecar-release.json",
+            "test/fixtures/platform-wire/plugin.json",
+            "test/fixtures/platform-wire/registry-canonical.json",
+            "test/fixtures/platform-wire/registry-canonical.sha256",
+            "test/fixtures/platform-wire/registry-public-key.json",
+            "test/fixtures/platform-wire/registry-signed.json",
+            "test/fixtures/platform-wire/release-kit.json",
+            "test/fixtures/platform-wire/release-plugin.json",
+            "test/fixtures/platform-wire/release-sidecar.json",
             "test/fixtures/valid-implements/plugin.json",
             "test/fixtures/valid-service/plugin.json",
             "test/fixtures/valid-viewcontract/plugin.json",
             "test/fixtures/valid/plugin.json",
             "test/implements.test.ts",
+            "test/platformWireArtifacts.test.ts",
+            "test/pluginRuntime.test.ts",
+            "test/registry.test.ts",
+            "test/release.test.ts",
+            "test/releaseFixture.ts",
             "test/semver.test.ts",
             "test/service.test.ts",
             "test/transparency.test.ts",
+            "test/uiSurfaces.test.ts",
+            "test/unit.test.ts",
             "tsconfig.json"
+          ]
+        },
+        {
+          "kind": "cargo",
+          "name": "soksak-spec-contract",
+          "source": "src-tauri/crates/soksak-spec-contract",
+          "destination": "crates/soksak-spec-contract",
+          "artifact": "git-full-commit",
+          "files": [
+            "Cargo.toml",
+            "src/lib.rs"
           ]
         },
         {
@@ -106,6 +154,7 @@
             "README.md",
             "package.json",
             "src/index.ts",
+            "test/sdk.test.ts",
             "tsconfig.json"
           ]
         }
@@ -124,6 +173,10 @@
     {
       "kind": "domain-contract",
       "name": "soksak-contract-issue-board"
+    },
+    {
+      "kind": "domain-contract",
+      "name": "soksak-contract-narration"
     },
     {
       "kind": "domain-contract",
