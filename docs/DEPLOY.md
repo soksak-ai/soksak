@@ -90,6 +90,27 @@ debug app updates its body by a local rebuild (seamless via the restore ladder);
 **unit** hot-reload (fetch + reload / respawn) is common to debug and release,
 because both take units from GitHub.
 
+### 4a. Source workspace vs runtime home — the developer's tree
+
+A runtime home (`~/.soksak*`) holds installed artifacts; it is never where a repo
+is developed. Source lives in one place per role, so no two checkouts of the same
+repo drift apart:
+
+- **`~/soksak/<repo>`** — the source workspace for repos that are **not**
+  home-loaded: the core monorepo (`~/soksak/core`, the single canonical checkout),
+  spec, contracts, sidecar sources, and third-party forks the project modifies
+  (`~/soksak/vt100-rust`, `~/soksak/wezterm`, …). One checkout per repo; extra work
+  happens in a `git worktree`, not a second clone. A repo not under active
+  development is not kept here — the remote is canonical and it is re-cloned when
+  needed.
+- **`~/.soksak-dev/plugins/<id>`** — the development source of record for a
+  **plugin**. Plugins are home-loaded units, so their editable source lives in the
+  dev home, not `~/soksak/`.
+- **A removed source is archived, never deleted** — a redundant or retired checkout
+  moves (`mv`, preserving every branch) into the backup tree, gated by fsck
+  integrity and a branch-count check. The backup tree also holds the pre-cleanup
+  snapshot and per-repo `git bundle --all` mirrors, so no branch or commit is lost.
+
 ## 5. HS — the hotswap laws
 
 **HS1 — restart-minimize.** If a new build can take effect without a process
