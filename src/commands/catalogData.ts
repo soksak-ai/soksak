@@ -51,7 +51,7 @@ export function registerDataCatalog(): void {
     returns: "{ ns, key, value }",
     message: (d) => `kv ${d.ns}:${d.key}`,
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['data.kv.get \'{"ns":"soksak-plugin-tmux-fake","key":"team:t1"}\''],
+    examples: ['data.kv.get \'{"ns":"soksak-plugin-<id>","key":"team:t1"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || !p.ns || typeof p.key !== "string" || !p.key) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns, key 필요" };
@@ -79,7 +79,7 @@ export function registerDataCatalog(): void {
     returns: "{ ns, key }",
     message: (d) => `kv ${d.ns}:${d.key} saved`,
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['data.kv.set \'{"ns":"soksak-plugin-tmux-fake","key":"team:t1","value":{"agents":[]}}\''],
+    examples: ['data.kv.set \'{"ns":"soksak-plugin-<id>","key":"team:t1","value":{"agents":[]}}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || !p.ns || typeof p.key !== "string" || !p.key) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns, key 필요" };
@@ -110,7 +110,7 @@ export function registerDataCatalog(): void {
     returns: "{ ns, key, deleted }",
     message: (d) => `kv ${d.ns}:${d.key} ${d.deleted ? "deleted" : "absent"}`,
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['data.kv.delete \'{"ns":"soksak-plugin-tmux-fake","key":"team:t1"}\''],
+    examples: ['data.kv.delete \'{"ns":"soksak-plugin-<id>","key":"team:t1"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || !p.ns || typeof p.key !== "string" || !p.key) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns, key 필요" };
@@ -139,7 +139,7 @@ export function registerDataCatalog(): void {
     returns: "{ ns, keys }",
     message: (d) => `${(d.keys as unknown[]).length} key(s) in ${d.ns}`,
     errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['data.kv.keys \'{"ns":"soksak-plugin-tmux-fake","prefix":"team:"}\''],
+    examples: ['data.kv.keys \'{"ns":"soksak-plugin-<id>","prefix":"team:"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string" || !p.ns) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ns 필요" };
