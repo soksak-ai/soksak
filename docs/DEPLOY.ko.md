@@ -13,14 +13,16 @@ soksak 은 유닛 단위로 배포되고, 실행 중인 앱을 최소한의 재�
 
 | 유닛 | 아티팩트 | 전달 | CI 게이트 |
 |------|----------|------|-----------|
-| 플러그인 | `main.js` (repo 에 추적) | `git clone` / `git pull --ff-only` | test + esbuild drift (`git diff --exit-code main.js`) |
+| 플러그인 | `<id>-<ver>-any.tgz`(번들 `main.js` + `plugin.json`) + `release.json` + conformance | 서명 레지스트리 인덱스 → owner 매니페스트+artifact sha256 검증 → `<home>/plugins/<id>` 로 아카이브 추출. git clone 없음. | test + esbuild drift (`git diff --exit-code main.js`) → owner-immutable release |
 | 사이드카 | release asset `…-<ver>-<os>-<arch>.tar.gz` + sha256 | `gh release`, 소비 플러그인의 `reach.fetch` 로 핀 | tag `v*` → build → stage → tar (`-L`) → release |
-| 계약 | 없음 | test 게이트만 (declared ≡ actual) | `node --test` / `cargo test` |
+| 계약 | `<id>-<ver>.tgz` + `release.json` + `conformance.json` | 레지스트리 release 영수증; 빌드-핀으로 소비되고 홈에 설치되지 않음 | `node --test` / `cargo test` → owner-immutable release |
 | 앱 본체 | 서명·공증된 `.app` + `latest.json` + minisign `.sig` | `tauri-plugin-updater` (release 채널) | build → codesign → notarytool → release |
 
-플러그인은 clone 하는 소스다 — release asset 이 없다. 사이드카는 소비자 매니페스트가
-선언한 sha256-핀 URL 로 받는 네이티브 바이너리다. 계약은 아무것도 배포하지 않는다 —
-양쪽이 준수하는 test 게이트다. 앱 본체만이 updater 가 내려받아 설치하는 대상이다.
+플러그인은 소비자가 서명 설치 인덱스에서 추출하는 검증된 `.tgz` 를 배포한다 — 앱이
+Ed25519-서명 인덱스를 인증하고 owner 매니페스트·artifact sha256 을 검증한 뒤 아카이브를
+추출한다. git clone/branch/latest fallback 은 없다. 사이드카는 소비자 매니페스트가 선언한
+sha256-핀 URL 로 받는 네이티브 바이너리다. 계약은 release 영수증을 발행하되 설치되는 것은
+아무것도 없다 — 양쪽이 빌드-핀으로 준수한다. 앱 본체만이 updater 가 내려받아 설치하는 대상이다.
 
 ## 2. 파이프라인 — 커밋에서 실행 앱까지
 
@@ -32,7 +34,8 @@ soksak 은 유닛 단위로 배포되고, 실행 중인 앱을 최소한의 재�
    esbuild drift 검사. 사이드카: `v*` 태그에 build → `stage.sh` → tar (`-L`) + sha256 →
    `gh release`. 계약: 그 인수 스위트. 앱 본체: `v*` 태그에 build → codesign → notarytool
    → `latest.json` + minisign `.sig` 로 release (§8).
-3. **홈**이 종류별로 아티팩트를 받는다 (§4): 플러그인은 `git pull`, 사이드카는 소비자가
+3. **홈**이 종류별로 아티팩트를 받는다 (§4): 플러그인은 서명 설치 인덱스에서 sha256-검증된
+   릴리스 아카이브 추출, 사이드카는 소비자가
    선언한 sha256-핀 `reach.fetch` URL, 앱 본체는 `latest.json` 을 읽는
    `tauri-plugin-updater` — release 채널만.
 4. **런타임**이 최소 재시작으로 반영한다 (§6): `update.apply` 가 핫 축을 순서대로 굴리고,
@@ -106,7 +109,7 @@ dlclose 핫스왑은 살아있는 심볼을 댕글링시킨다. 그런 엔진의
 `update.apply` 는 모든 핫 축에 걸쳐, 덜 파괴적인 것부터, 각 축을 activity 버스로 고지하며
 (무음 금지) 반영한다:
 
-1. **플러그인** — `git pull` + reload. 재시작 0. dev 소스 플러그인은 건너뛴다(update 대상
+1. **플러그인** — 인덱스에서 새 릴리스 아카이브 재추출 + reload. 재시작 0. dev 소스 플러그인은 건너뛴다(update 대상
    아님).
 2. **사이드카** — `sidecar_ensure` 가 지정 asset 을 받고(sha256-핀·원자 설치), 엔진이
    재스폰돼 rehydrate 한다.

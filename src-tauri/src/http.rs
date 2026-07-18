@@ -97,7 +97,9 @@ fn send_http(
 ) -> Result<HttpResponse, String> {
     let m = reqwest::Method::from_bytes(method.to_uppercase().as_bytes())
         .map_err(|e| format!("HTTP method 불량: {e}"))?;
-    let builder = reqwest::blocking::Client::builder();
+    // 무한 대기 금지 — stall 한 원격이 호출자를 영원히 붙잡지 못한다(설치 클로저의 다중
+    // fetch 가 한 요청 stall 로 전체 행이 되는 실결함의 근치). 60s = 릴리스 자산 조회 상한.
+    let builder = reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(60));
     // Authorization belongs to the validated target URL only. A remote 3xx response must not
     // choose a second destination (including HTTPS→HTTP downgrade) after that validation.
     let builder = if has_authorization_header(headers) {

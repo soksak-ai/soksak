@@ -344,6 +344,12 @@ fn extract_regular_archive(body: &[u8], destination: &Path) -> Result<(), String
     for item in entries {
         let mut entry = item.map_err(|e| format!("tar entry 읽기 실패: {e}"))?;
         let entry_type = entry.header().entry_type();
+        // 디렉토리 엔트리는 구조 메타데이터다(관례적 tar 가 항상 싣는다) — 내용이 아니므로
+        // 건너뛴다. 파일 경로 검증이 상위 디렉토리를 만들 때 동일 규칙을 이미 강제한다.
+        // 심링크·하드링크·디바이스 등은 여전히 거부(정규 파일만 실체화).
+        if entry_type.is_dir() {
+            continue;
+        }
         if !entry_type.is_file() {
             let label = if entry_type.is_symlink() {
                 "symlink"
@@ -363,6 +369,12 @@ fn extract_regular_archive(body: &[u8], destination: &Path) -> Result<(), String
         let path_text = std::str::from_utf8(raw_path.as_ref())
             .map_err(|_| "archive path는 UTF-8이어야 합니다".to_string())?
             .to_owned();
+        // 관례적 tar 는 엔트리를 "./name" 으로 싣는다 — 선두 "./" 는 구조 표기라 벗긴다.
+        // 이후 검증은 그대로("."·".." 세그먼트·절대경로 전부 거부).
+        let path_text = path_text
+            .strip_prefix("./")
+            .map(str::to_owned)
+            .unwrap_or(path_text);
         let relative = validate_archive_path(&path_text)?;
         let portable_key = path_text.to_ascii_lowercase();
         if !paths.insert(portable_key) {
@@ -627,7 +639,6 @@ mod unpack_tests {
         for (name, path, entry_type) in [
             ("parent", "../escape", tar::EntryType::Regular),
             ("absolute", "/absolute", tar::EntryType::Regular),
-            ("directory", "nested", tar::EntryType::Directory),
         ] {
             let root = tmp_root(name);
             let body = archive_with_raw_entries(&[(path, entry_type, b"x")]);
@@ -643,6 +654,22 @@ mod unpack_tests {
             assert!(!dest.exists());
             assert!(!root.join("escape").exists());
         }
+    }
+
+    #[test]
+    fn directory_entries_are_structural_and_skipped() {
+        // 관례적 tar 는 디렉토리 엔트리를 싣는다 — 내용이 아니므로 건너뛰고 설치는 성공한다.
+        let root = tmp_root("dir-skip");
+        let body = archive_with_raw_entries(&[
+            ("./", tar::EntryType::Directory, b""),
+            ("./bin", tar::EntryType::Directory, b""),
+            ("./bin/tool", tar::EntryType::Regular, b"x"),
+        ]);
+        let dest = root.join("installed");
+        unpack_verify_install(&body, &sha_of(&body), &dest, "bin/tool")
+            .expect("directory entries must not fail a lawful archive");
+        assert!(dest.join("bin/tool").exists());
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

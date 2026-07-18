@@ -4,11 +4,15 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { startPluginHooks } from "./hooks";
+import { wireNativeRegistryInstall } from "./registryInstallRuntimeNative";
 import { usePlugins } from "../state/plugins";
 import { useRegistry } from "../state/registry";
 
 export async function initPluginHost(): Promise<void> {
   startPluginHooks();
+  // Install the certified archive-extraction handler so plugin.install resolves a
+  // real native installer instead of INSTALL_RUNTIME_UNAVAILABLE.
+  wireNativeRegistryInstall();
   try {
     // core build identity — 앱 updater 채널 판정용. plugin 개발 가능 여부와는 독립이다.
     usePlugins.setState({ release: await invoke<boolean>("app_is_release") });

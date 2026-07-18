@@ -6,13 +6,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../plugins/loader", () => ({
   activateContractPlugin: vi.fn(async () => ({ deactivate: async () => {} })),
+  importPluginModule: vi.fn(async () => ({})),
+  activatePlugin: vi.fn(async (_m: unknown, manifest: { id: string }, dir: string) => ({ manifest, dir, deactivate: async () => {} })),
   isActive: () => false,
   setActive: () => {},
   deactivateById: vi.fn(async () => true),
   deactivateAll: vi.fn(async () => {}),
-}));
-vi.mock("../plugins/nativeRuntime", () => ({
-  startNativePluginRuntime: vi.fn(async () => ({ deactivate: async () => {} })),
 }));
 
 interface ScanEntry {

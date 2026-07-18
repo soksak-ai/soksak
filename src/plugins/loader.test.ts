@@ -426,3 +426,149 @@ describe("활성 인스턴스 보관", () => {
     expect(d2).toHaveBeenCalledOnce();
   });
 });
+
+// 정적 모듈 계약({controller, commands, views}) — SDK 정본 형태를 창-realm 로더가 수용한다.
+// 등록은 전부 기존 게이트(gateContribution declared-only)와 tracker 수거를 그대로 통과한다.
+describe("activatePlugin — 정적 모듈 형태({controller, commands, views})", () => {
+  const staticManifest = () =>
+    manifestOf({
+      permissions: ["commands", "ui"],
+      contributes: {
+        commands: [{ name: "hello", title: "Hello" }],
+        views: [{ id: "panel", title: "패널", icon: "★" }],
+        nodes: [{ id: "root" }],
+      },
+    });
+
+  it("정적 모듈이 활성화되고 선언 뷰가 viewRegistry 에 등록된다", async () => {
+    const activateSpy = vi.fn();
+    await activatePlugin(
+      {
+        default: {
+          controller: { activate: activateSpy, deactivate: vi.fn() },
+          commands: { hello: async () => ({ ok: true }) },
+          views: { panel: { mount: vi.fn() } },
+        },
+      },
+      staticManifest(),
+      "/d",
+      fakeDeps(),
+    );
+    expect(useViewRegistry.getState().views["demo.panel"]).toBeTruthy();
+    expect(activateSpy).toHaveBeenCalledOnce();
+    const ctx = activateSpy.mock.calls[0][0] as { app?: unknown };
+    expect(ctx.app).toBeTruthy(); // controller.activate({app}) — SDK 계약
+  });
+
+  it("정적 mount 는 {root, projectRoot, restore, signal} 컨텍스트를 받는다(B3 복원 seam 보존)", async () => {
+    const mountSpy = vi.fn();
+    await activatePlugin(
+      {
+        default: {
+          commands: { hello: async () => ({ ok: true }) },
+          views: { panel: { mount: mountSpy } },
+        },
+      },
+      staticManifest(),
+      "/d",
+      fakeDeps(),
+    );
+    const reg = useViewRegistry.getState().views["demo.panel"];
+    const el = document.createElement("div");
+    const viewCtx = {
+      projectId: "p1",
+      root: "/proj",
+      paneId: null,
+      viewId: "v1",
+      command: null,
+      restore: { cwd: "/proj/sub", state: { url: "https://x" } },
+      setBadge: vi.fn(),
+      setStatus: vi.fn(),
+      setTitle: vi.fn(),
+      setRestoreState: vi.fn(),
+      requestFocus: vi.fn(),
+    };
+    reg.provider.mount(el, viewCtx as never);
+    expect(mountSpy).toHaveBeenCalledOnce();
+    const sctx = mountSpy.mock.calls[0][0] as {
+      root?: unknown;
+      projectRoot?: unknown;
+      restore?: unknown;
+      signal?: unknown;
+      app?: unknown;
+    };
+    expect(sctx.root).toBe(el); // DOM 루트
+    expect(sctx.projectRoot).toBe("/proj"); // 프로젝트 경로(구 ctx.root 개명)
+    expect(sctx.restore).toEqual({ cwd: "/proj/sub", state: { url: "https://x" } });
+    expect(sctx.signal).toBeInstanceOf(AbortSignal);
+    expect(sctx.app).toBeTruthy();
+  });
+
+  it("정적 commands 맵이 레지스트리에 등록되고 handler 가 invocation.execute 를 받는다", async () => {
+    const handler = vi.fn(async () => ({ ok: true, data: 1 }));
+    const deps = fakeDeps();
+    await activatePlugin(
+      {
+        default: {
+          commands: { hello: handler },
+          views: { panel: { mount: vi.fn() } },
+        },
+      },
+      staticManifest(),
+      "/d",
+      deps,
+    );
+    const call = (deps.registerCommand as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === "plugin.demo.hello",
+    );
+    expect(call).toBeTruthy();
+    const spec = call![1] as {
+      handler: (p: Record<string, unknown>, c?: unknown) => Promise<unknown>;
+    };
+    await spec.handler({ x: 1 }, { origin: "user", parent: null });
+    expect(handler).toHaveBeenCalledOnce();
+    const [params, hctx] = handler.mock.calls[0] as unknown as [
+      Record<string, unknown>,
+      { invocation?: { execute?: unknown } },
+    ];
+    expect(params).toEqual({ x: 1 });
+    expect(typeof hctx.invocation?.execute).toBe("function"); // SDK 계약
+  });
+
+  it("deactivate 가 controller.deactivate 를 부르고 등록을 수거한다", async () => {
+    const deactivateSpy = vi.fn();
+    const active = await activatePlugin(
+      {
+        default: {
+          controller: { activate: vi.fn(), deactivate: deactivateSpy },
+          commands: { hello: async () => ({ ok: true }) },
+          views: { panel: { mount: vi.fn() } },
+        },
+      },
+      staticManifest(),
+      "/d",
+      fakeDeps(),
+    );
+    await active.deactivate();
+    expect(deactivateSpy).toHaveBeenCalledOnce();
+    expect(useViewRegistry.getState().views["demo.panel"]).toBeUndefined();
+  });
+
+  it("미선언 정적 view 는 거부되고 아무것도 남지 않는다(declared-only)", async () => {
+    await expect(
+      activatePlugin(
+        {
+          default: {
+            commands: { hello: async () => ({ ok: true }) },
+            views: { panel: { mount: vi.fn() }, ghost: { mount: vi.fn() } },
+          },
+        },
+        staticManifest(),
+        "/d",
+        fakeDeps(),
+      ),
+    ).rejects.toThrow();
+    expect(useViewRegistry.getState().views["demo.panel"]).toBeUndefined();
+    expect(useViewRegistry.getState().views["demo.ghost"]).toBeUndefined();
+  });
+});

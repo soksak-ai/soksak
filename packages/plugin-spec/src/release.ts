@@ -40,8 +40,11 @@ export interface UnitSourceReference {
 export interface UnitDependency {
   kind: UnitKind;
   id: string;
-  /** Resolved only inside the originating registry. Cross-registry fallback is forbidden. */
-  range: string;
+  /** Resolved only inside the originating registry. Cross-registry fallback is forbidden.
+   *  plugin/kit dependencies declare the author's intended range. sidecar dependencies omit
+   *  range — the signed index decides the installed version and compatibility belongs to the
+   *  interface contract pin, so a unit-version bound here would be invented information. */
+  range?: string;
 }
 
 export interface NamedUnitPath {
@@ -135,14 +138,25 @@ function parseDependencies(raw: unknown, owner: { kind: UnitKind; id: string }, 
   raw.forEach((item, index) => {
     const label = `release.dependencies[${index}]`;
     const before = errors.length;
-    const value = strictObject(item, ["id", "kind", "range"], ["id", "kind", "range"], label, errors);
+    const value = strictObject(item, ["id", "kind", "range"], ["id", "kind"], label, errors);
     if (!value) return;
     if (!isUnitKind(value.kind)) errors.push(`${label}.kind: kit|plugin|sidecar required`);
     if (typeof value.id !== "string" || !UNIT_ID_RE.test(value.id)) errors.push(`${label}.id: flat unit id required`);
-    if (!isUnitDependencyRange(value.range)) errors.push(`${label}.range: strict supported SemVer range required`);
+    // sidecar 의존은 range 를 선언하지 않는다(버전=인덱스, 호환성=interface 계약-핀). 있으면 문법만 검증(기존 발행물 수용).
+    if (value.kind === "sidecar") {
+      if (value.range !== undefined && !isUnitDependencyRange(value.range)) {
+        errors.push(`${label}.range: strict supported SemVer range required`);
+      }
+    } else if (!isUnitDependencyRange(value.range)) {
+      errors.push(`${label}.range: strict supported SemVer range required`);
+    }
     if (value.kind === owner.kind && value.id === owner.id) errors.push(`${label}: self dependency forbidden`);
     if (errors.length === before) {
-      dependencies.push({ kind: value.kind as UnitKind, id: value.id as string, range: value.range as string });
+      dependencies.push({
+        kind: value.kind as UnitKind,
+        id: value.id as string,
+        ...(value.range !== undefined ? { range: value.range as string } : {}),
+      });
     }
   });
   sortedUnique(dependencies.map((dep) => `${dep.kind}\u0000${dep.id}`), "release.dependencies", errors);

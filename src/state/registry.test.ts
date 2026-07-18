@@ -120,6 +120,31 @@ describe("registry state", () => {
     expect(useRegistry.getState().registries.fixture.status).toBe("live");
   });
 
+  it("fetches a public registry through the host transport, not the webview", async () => {
+    // The webview is CSP-isolated from external hosts, so a public index reached with
+    // the webview fetch fails closed. Egress belongs to the Rust boundary for public
+    // and private alike — a public fetch simply carries no credential.
+    useRegistry.getState().add(fixtureDescriptor());
+    invoke.mockResolvedValue({
+      status: 200,
+      headers: {},
+      body: JSON.stringify(json("registry-signed.json")),
+    });
+    restore();
+    restore = setRegistryRuntimeDeps({ now: () => Date.parse("2026-07-14T12:00:00Z") });
+
+    await useRegistry.getState().refresh(true, "fixture");
+
+    expect(invoke).toHaveBeenCalledWith("net_http_request", expect.objectContaining({
+      method: "GET",
+      url: fixtureDescriptor().indexUrl,
+      headers: null,
+      ns: null,
+      secretSubst: null,
+    }));
+    expect(useRegistry.getState().registries.fixture.status).toBe("live");
+  });
+
   it("does not remove the built-in trust root", () => {
     expect(useRegistry.getState().remove(OFFICIAL_REGISTRY_ID))
       .toMatchObject({ ok: false, code: "INVALID_PARAMS" });

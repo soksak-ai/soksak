@@ -13,15 +13,18 @@ Four artifact classes, each with its own delivery:
 
 | Unit | Artifact | Delivery | CI gate |
 |------|----------|----------|---------|
-| Plugin | `main.js` (tracked in the repo) | `git clone` / `git pull --ff-only` | test + esbuild drift (`git diff --exit-code main.js`) |
+| Plugin | `<id>-<ver>-any.tgz` (bundled `main.js` + `plugin.json`) + `release.json` + conformance | signed registry index → verify owner manifest + artifact sha256 → extract archive to `<home>/plugins/<id>`. No git clone. | test + esbuild drift (`git diff --exit-code main.js`) → owner-immutable release |
 | Sidecar | release asset `…-<ver>-<os>-<arch>.tar.gz` + sha256 | `gh release`, pinned by the consuming plugin's `reach.fetch` | tag `v*` → build → stage → tar (`-L`) → release |
-| Contract | none | test gate only (declared ≡ actual) | `node --test` / `cargo test` |
+| Contract | `<id>-<ver>.tgz` + `release.json` + `conformance.json` | registry release receipt; consumed as a build-time pin, never installed to a home | `node --test` / `cargo test` → owner-immutable release |
 | App body | signed, notarized `.app` + `latest.json` + minisign `.sig` | `tauri-plugin-updater` (release channel) | build → codesign → notarytool → release |
 
-A plugin is source you clone — there is no release asset. A sidecar is a native
-binary you fetch by a sha256-pinned URL its consumer's manifest declares. A
-contract distributes nothing: it is a test gate both sides conform to. The app
-body is the only thing an updater downloads and installs.
+A plugin ships a verified `.tgz` its consumer extracts from the signed installation
+index — the app authenticates the Ed25519-signed index, verifies the owner manifest
+and artifact sha256, then extracts the archive; there is no git clone/branch/latest
+fallback. A sidecar is a native binary fetched by a sha256-pinned URL its consumer's
+manifest declares. A contract publishes a release receipt but distributes nothing that
+gets installed — both sides conform to it as a build-time pin. The app body is the only
+thing an updater downloads and installs.
 
 ## 2. The pipeline — commit to running app
 
@@ -35,9 +38,10 @@ in the artifact:
    `stage.sh` → tar (`-L`) + sha256 → `gh release`. A contract: its acceptance
    suite. The app body: on a `v*` tag, build → codesign → notarytool → release
    with `latest.json` + a minisign `.sig` (§8).
-3. **Home** receives the artifact by its class (§4): a plugin by `git pull`, a
-   sidecar by the sha256-pinned `reach.fetch` URL its consumer declares, the app
-   body by `tauri-plugin-updater` reading `latest.json` — release channel only.
+3. **Home** receives the artifact by its class (§4): a plugin by extracting its
+   sha256-verified release archive from the signed installation index, a sidecar by
+   the sha256-pinned `reach.fetch` URL its consumer declares, the app body by
+   `tauri-plugin-updater` reading `latest.json` — release channel only.
 4. **Runtime** applies it with the fewest restarts (§6): `update.apply` rolls the
    hot axes in order and the restore ladder covers the one relaunch the app body
    needs.
@@ -121,7 +125,7 @@ debug/dev build reports `available:false`), plus a count of the hot axes
 `update.apply` applies across every hot axis, least-disruptive first, and
 announces each on the activity bus (never silent):
 
-1. **Plugins** — `git pull` + reload. Zero restart. Dev-sourced plugins are
+1. **Plugins** — re-extract the newer release archive from the index + reload. Zero restart. Dev-sourced plugins are
    skipped (not update targets).
 2. **Sidecars** — `sidecar_ensure` fetches each named asset (sha256-pinned,
    atomic install), then the engine respawns and rehydrates.
