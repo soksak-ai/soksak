@@ -19,8 +19,11 @@ drift apart silently.
 - `events.subscribe` converts the connection into a push stream after one acknowledgement —
   connection lifetime becomes subscription lifetime.
 - The JSON-RPC server reaches the OS through a transport seam (`IpcListenerSeam` /
-  `IpcConnection` in `src-tauri/src/ipc.rs`). A Windows named-pipe transport plugs into the
-  same seam; no protocol code changes with the transport.
+  `IpcConnection` in `src-tauri/src/ipc.rs`). On Unix the transport is the Unix domain
+  socket above; on Windows the same seam is implemented with named pipes (through
+  `interprocess`'s local sockets — the crate the terminal sidecars validated across
+  their five-platform CI matrix). No protocol code changes with the transport, and the
+  seam's round-trip test runs against both.
 
 ## 2. Request envelope
 

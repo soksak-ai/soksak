@@ -17,8 +17,10 @@ MCP, 원격 포워더, E2E 하니스)가 이 계약을 말한다. 그 위에 실
 - `events.subscribe`는 확인 응답 1회 후 연결을 push 스트림으로 전환한다 — 연결 수명이 곧
   구독 수명이다.
 - JSON-RPC 서버는 전송 시임(`src-tauri/src/ipc.rs`의 `IpcListenerSeam` / `IpcConnection`)을
-  통해서만 OS에 닿는다. Windows named pipe 전송은 같은 시임에 꽂힌다 — 전송이 바뀌어도
-  프로토콜 코드는 변하지 않는다.
+  통해서만 OS에 닿는다. Unix 계열은 위의 유닉스 도메인 소켓, Windows 는 같은 시임의
+  named pipe 구현(`interprocess` 로컬 소켓 — 터미널 사이드카가 5플랫폼 CI 매트릭스로
+  검증한 그 크레이트)이다. 전송이 바뀌어도 프로토콜 코드는 변하지 않으며, 시임의 왕복
+  테스트는 두 전송 모두에서 돈다.
 
 ## 2. 요청 봉투
 
