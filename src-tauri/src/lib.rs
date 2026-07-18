@@ -16,7 +16,6 @@ mod navigation_policy;
 mod network;
 mod notify;
 mod path_security;
-pub mod plugin_runtime;
 mod plugins;
 mod process;
 mod project_registry;
@@ -110,8 +109,7 @@ pub fn run() {
         .manage(secrets::SecretsState::default())
         .manage(ai_session::SessionTracker::default())
         .manage(schedule::ScheduleState::default())
-        .manage(project_registry::ProjectRegistry::default())
-        .manage(plugin_runtime::PluginRuntimeManager::default());
+        .manage(project_registry::ProjectRegistry::default());
     // 렌더러 프로세스 종료(process-gone)를 명시 감지한다(macOS per-webview) — 이 핸들러를
     // 등록하지 않으면 핀 rev 의 tauri-runtime-wry 가 무조건·무한·무고지 자동 reload 기본
     // 핸들러를 설치한다(R1 위반). webview_health 서킷 브레이커가 그 자리를 대체한다.
@@ -495,9 +493,6 @@ pub fn run() {
             fs::ensure_project_dir,
             fs::validate_project_root,
             plugins::plugin_scan,
-            plugin_runtime::plugin_runtime_start,
-            plugin_runtime::plugin_runtime_send,
-            plugin_runtime::plugin_runtime_stop,
             home::app_is_release,
             plugins::plugin_install_git,
             plugins::plugin_update,

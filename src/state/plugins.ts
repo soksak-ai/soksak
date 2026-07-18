@@ -10,6 +10,7 @@ import { createCoreSync } from "./coreSync";
 import type { CoreStoreDeps } from "./coreStore";
 import {
   parseManifest,
+  scanHostChromeViolations,
   semverGte,
   type LibraryDep,
   type PluginManifest,
@@ -17,12 +18,13 @@ import {
 } from "../plugins/spec";
 import {
   activateContractPlugin,
+  activatePlugin,
   deactivateAll,
   deactivateById,
+  importPluginModule,
   isActive,
   setActive,
 } from "../plugins/loader";
-import { startNativePluginRuntime } from "../plugins/nativeRuntime";
 import { syncServiceLedger } from "../plugins/serviceProxy";
 import { resolveTerminalProgram } from "../plugins/terminalEngine";
 import { defaultPluginDeps } from "../plugins/deps";
@@ -431,9 +433,26 @@ export const usePlugins = create<PluginsState>((set, get) => {
       setActive(p.manifest.id, instance);
       return;
     }
-    // Native core resolves and reads the selected source. Entry bytes never cross into this
-    // renderer; only the authenticated public runtime wire returns.
-    const instance = await startNativePluginRuntime(p.manifest, p.dir);
+    const data = await invoke<{ content: string }>("read_text_file", {
+      path: `${p.dir}/${p.manifest.entry}`,
+    });
+    // 크롬 표준 게이트 — 번들 CSS 가 호스트 크롬 셀렉터/변수를 덮으면 탭 정렬이 깨진다. 명백한 정적 위반은
+    // 거부(침묵 실패 금지). 사이드바/컨텐츠 뷰가 있는 플러그인에만 적용 — 뷰 없는 플러그인은 크롬 무관.
+    if (p.manifest.contributes.views.length > 0) {
+      const violations = scanHostChromeViolations(data.content);
+      if (violations.length > 0) {
+        throw new Error(
+          `호스트 크롬 표준 위반(${p.manifest.id}): 플러그인 CSS 가 호스트 소유 셀렉터/변수를 덮습니다 — ${violations.join(", ")}. 자기 클래스만 스타일링하세요(탭/헤더 높이는 호스트가 소유).`,
+        );
+      }
+    }
+    const module = await importPluginModule(data.content);
+    const instance = await activatePlugin(
+      module,
+      p.manifest,
+      p.dir,
+      defaultPluginDeps(get().appVersion),
+    );
     setActive(p.manifest.id, instance);
   };
 

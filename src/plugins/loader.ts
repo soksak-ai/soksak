@@ -1,5 +1,12 @@
-// Host-owned plugin contribution lifecycle. Executable plugin entry bytes are resolved and
-// evaluated only by the native helper runtime; this module owns declarative/service lifetimes.
+// 플러그인 로더 — 모듈 적재(Blob import)와 생명주기를 분리. 엔트리는 창-realm 에서 평가된다(v1).
+//   - importPluginModule: 외부 코드 문자열 → ESM 모듈. blob URL 은 매번 새로워
+//     ESM 캐시 문제가 없다(reload 공짜). jsdom 은 blob ESM 을 실행 못 하므로
+//     이 함수만 실제 환경 검증 대상이고, 생명주기는 모듈 주입으로 전수 테스트한다.
+//   - activatePlugin: 검증된 매니페스트 + 모듈 → 활성 인스턴스. 모든 등록은
+//     tracker 가 자동 수거 — 비활성화 시 누수 불가(§0-4).
+//   - 엔트리 모듈 양형 수용: 레거시({activate,deactivate})와 SDK 정적({controller,commands,views}).
+//     정적 형태의 등록도 동일 게이트(gateContribution declared-only)와 tracker 를 통과한다.
+//     레거시 수용은 전 1st-party 유닛 발행본이 정적 형태가 된 시점에 제거한다(코리도 종료 게이트).
 
 import {
   buildPluginApi,
@@ -49,12 +56,140 @@ function wireService(manifest: PluginManifest, deps: PluginApiDeps, tracker: { w
   }
 }
 
+// entry 코드 문자열 → ESM 모듈. 상대 import 불가(스펙: 단일 번들 필수).
+export async function importPluginModule(code: string): Promise<unknown> {
+  const blob = new Blob([code], { type: "text/javascript" });
+  const url = URL.createObjectURL(blob);
+  try {
+    return await import(/* @vite-ignore */ url);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 interface EntryFns {
   activate: (ctx: PluginContext) => void | Promise<void>;
   deactivate?: () => void | Promise<void>;
 }
 
+// SDK 정적 모듈 계약(@soksak-ai/plugin-api SoksakPluginModule)의 provider 형태.
+interface StaticViewProvider {
+  mount(context: unknown): void | Promise<void>;
+  update?(context: unknown): void | Promise<void>;
+  unmount?(context: unknown): void | Promise<void>;
+}
+interface StaticModule {
+  controller?: {
+    activate?: (ctx: PluginContext) => void | Promise<void>;
+    deactivate?: () => void | Promise<void>;
+  };
+  commands?: Record<
+    string,
+    (params: Record<string, unknown>, context: unknown) => unknown
+  >;
+  views?: Record<string, StaticViewProvider>;
+}
+
+// 정적 view provider(새 mount({root,...}) 시그니처) → viewRegistry provider(구 mount(el,ctx)) 어댑터.
+// 인스턴스별 AbortSignal 로 teardown 을 알린다. root=DOM 루트, projectRoot=프로젝트 경로(구 ctx.root 개명),
+// 나머지 PluginViewContext 필드(restore·paneId·setBadge…)는 그대로 흐른다 — B3 복원 seam 보존.
+function adaptStaticView(
+  provider: StaticViewProvider,
+  appOf: () => PluginContext["app"],
+) {
+  const aborts = new Map<HTMLElement, AbortController>();
+  const staticCtx = (
+    el: HTMLElement,
+    vctx: Record<string, unknown> | undefined,
+    signal: AbortSignal,
+  ) => ({
+    ...(vctx ?? {}),
+    root: el,
+    projectRoot: (vctx?.root as string | null | undefined) ?? null,
+    app: appOf(),
+    signal,
+  });
+  return {
+    mount(el: HTMLElement, vctx: unknown) {
+      aborts.get(el)?.abort();
+      const ac = new AbortController();
+      aborts.set(el, ac);
+      void provider.mount(
+        staticCtx(el, vctx as Record<string, unknown>, ac.signal),
+      );
+    },
+    update: provider.update
+      ? (el: HTMLElement, vctx: unknown) => {
+          const ac = aborts.get(el);
+          void provider.update!(
+            staticCtx(
+              el,
+              vctx as Record<string, unknown>,
+              (ac ?? new AbortController()).signal,
+            ),
+          );
+        }
+      : undefined,
+    unmount(el: HTMLElement) {
+      const ac = aborts.get(el);
+      ac?.abort();
+      aborts.delete(el);
+      void provider.unmount?.({
+        root: el,
+        app: appOf(),
+        signal: ac?.signal,
+      });
+    },
+  };
+}
+
+// 정적 모듈 → EntryFns 합성. 등록은 전부 기존 api 게이트(gateContribution declared-only)를 통과하고
+// tracker 가 수거한다 — 정적 형태라고 검증·수명 규칙이 달라지지 않는다.
+function staticEntry(mod: StaticModule): EntryFns {
+  return {
+    activate: async (ctx) => {
+      for (const [id, provider] of Object.entries(mod.views ?? {})) {
+        if (!ctx.app.ui) {
+          throw new Error(`정적 views 는 "ui" 권한이 필요합니다: ${id}`);
+        }
+        ctx.app.ui.registerView(id, adaptStaticView(provider, () => ctx.app));
+      }
+      for (const [name, handler] of Object.entries(mod.commands ?? {})) {
+        if (!ctx.app.commands) {
+          throw new Error(`정적 commands 는 "commands" 권한이 필요합니다: ${name}`);
+        }
+        // 표시 스펙(title·danger)은 매니페스트가 권위(PS3) — 여기는 핸들러 바인딩만.
+        const decl = ctx.manifest.contributes.commands.find(
+          (c) => c.name === name,
+        );
+        const title = decl?.title;
+        const description =
+          typeof title === "string"
+            ? title
+            : (title?.en ?? (title ? Object.values(title)[0] : name));
+        ctx.app.commands.register(name, {
+          description: description ?? name,
+          handler: async (params, cctx) =>
+            (await handler(params, {
+              app: ctx.app,
+              invocation: {
+                origin: (cctx as { origin?: unknown } | undefined)?.origin,
+                parent: (cctx as { parent?: unknown } | undefined)?.parent,
+                execute: (cctx as { execute?: unknown } | undefined)?.execute,
+              },
+            })) as object,
+        });
+      }
+      await mod.controller?.activate?.(ctx);
+    },
+    deactivate: async () => {
+      await mod.controller?.deactivate?.();
+    },
+  };
+}
+
 // entry 모듈 형태 해석: default export 객체 우선, named export 폴백.
+// 레거시({activate}) 우선, 정적({controller|commands|views}) 폴백 — 양형 수용(코리도).
 function resolveEntry(module: unknown): EntryFns | null {
   const candidates: unknown[] = [];
   if (module && typeof module === "object") {
@@ -76,6 +211,15 @@ function resolveEntry(module: unknown): EntryFns | null {
           typeof obj.deactivate === "function" ? obj.deactivate : undefined,
       };
     }
+  }
+  for (const c of candidates) {
+    if (!c || typeof c !== "object") continue;
+    const mod = c as StaticModule;
+    const hasStatic =
+      (mod.controller && typeof mod.controller === "object") ||
+      (mod.commands && typeof mod.commands === "object") ||
+      (mod.views && typeof mod.views === "object");
+    if (hasStatic) return staticEntry(mod);
   }
   return null;
 }

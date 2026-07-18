@@ -7,6 +7,11 @@ const activatedIds: string[] = [];
 const activeIds = new Set<string>();
 vi.mock("../plugins/loader", () => ({
   activateContractPlugin: vi.fn(async () => ({ deactivate: async () => {} })),
+  importPluginModule: vi.fn(async () => ({})),
+  activatePlugin: vi.fn(async (_m: unknown, manifest: { id: string }, dir: string) => {
+    activatedIds.push(manifest.id);
+    return { manifest, dir, deactivate: async () => {} };
+  }),
   isActive: (id: string) => activeIds.has(id),
   setActive: (id: string) => {
     activeIds.add(id);
@@ -17,12 +22,6 @@ vi.mock("../plugins/loader", () => ({
   }),
   deactivateAll: vi.fn(async () => {
     activeIds.clear();
-  }),
-}));
-vi.mock("../plugins/nativeRuntime", () => ({
-  startNativePluginRuntime: vi.fn(async (manifest: { id: string }) => {
-    activatedIds.push(manifest.id);
-    return { manifest, dir: PATH, deactivate: async () => {} };
   }),
 }));
 
