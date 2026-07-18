@@ -6,8 +6,20 @@
 // interprets the bytes — readers strip/parse on their side.
 
 import { Channel, invoke } from "@tauri-apps/api/core";
-import { register } from "./registry";
+import { register, type CommandBrokerSpec, type CommandMachineObjectSchema } from "./registry";
 import { currentWindowLabel } from "../lib/webviewLabels";
+
+// broker = 플러그인 호출 허가 계약(pluginCallable). 이 표면의 존재 이유가 native 런타임
+// 플러그인(뷰 없는 세션 소유자)이므로 전 명령이 broker 를 연다. danger 는 요구 권한으로 짝.
+const brokerOf = (
+  permissions: CommandBrokerSpec["permissions"],
+  result: CommandMachineObjectSchema,
+): CommandBrokerSpec => ({
+  permissions,
+  contracts: { requires: [], provides: [] },
+  authority: [],
+  result,
+});
 
 const RING_CAP_BYTES = 256 * 1024;
 const DEFAULT_COLS = 200;
@@ -52,6 +64,12 @@ export function registerPtySessionCatalog(): void {
       },
     },
     danger: "inject",
+    broker: brokerOf(["commands", "commands:inject"], {
+      type: "object",
+      properties: { pane: { type: "string" }, attached: { type: "boolean" } },
+      required: ["pane", "attached"],
+      additionalProperties: false,
+    }),
     returns: "{ pane, attached }",
     message: (d) => `headless session ${d.pane} ${d.attached ? "attached" : "spawned"}`,
     errors: ["INVALID_PARAMS", "INTERNAL"],
@@ -112,6 +130,12 @@ export function registerPtySessionCatalog(): void {
       data: { type: "string", required: true, description: "Raw text to write" },
     },
     danger: "inject",
+    broker: brokerOf(["commands", "commands:inject"], {
+      type: "object",
+      properties: { pane: { type: "string" }, bytes: { type: "number" } },
+      required: ["pane", "bytes"],
+      additionalProperties: false,
+    }),
     returns: "{ pane, bytes }",
     message: (d) => `wrote ${d.bytes} byte(s) to ${d.pane}`,
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
@@ -137,6 +161,16 @@ export function registerPtySessionCatalog(): void {
       pane: { type: "string", required: true, description: "Session pane id" },
       lines: { type: "number", required: false, description: "Trailing lines to keep (default all buffered)" },
     },
+    broker: brokerOf(["commands"], {
+      type: "object",
+      properties: {
+        pane: { type: "string" },
+        tail: { type: "string" },
+        bytesSeen: { type: "number" },
+      },
+      required: ["pane", "tail", "bytesSeen"],
+      additionalProperties: false,
+    }),
     returns: "{ pane, tail, bytesSeen }",
     message: (d) => `read tail of ${d.pane}`,
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
@@ -161,6 +195,16 @@ export function registerPtySessionCatalog(): void {
       "Report whether the PTY daemon still holds a live shell for this pane id — true even across an app restart before anything reattaches. Distinct from being attached in this window (see pty.session.list).",
     triggers: { ko: "헤드리스 세션 생존 확인" },
     params: { pane: { type: "string", required: true, description: "Session pane id" } },
+    broker: brokerOf(["commands"], {
+      type: "object",
+      properties: {
+        pane: { type: "string" },
+        alive: { type: "boolean" },
+        attached: { type: "boolean" },
+      },
+      required: ["pane", "alive", "attached"],
+      additionalProperties: false,
+    }),
     returns: "{ pane, alive, attached }",
     message: (d) => `${d.pane}: ${d.alive ? "alive" : "gone"}`,
     errors: ["INVALID_PARAMS"],
@@ -178,6 +222,12 @@ export function registerPtySessionCatalog(): void {
     triggers: { ko: "헤드리스 세션 종료" },
     params: { pane: { type: "string", required: true, description: "Session pane id" } },
     danger: "destructive",
+    broker: brokerOf(["commands", "commands:destructive"], {
+      type: "object",
+      properties: { pane: { type: "string" } },
+      required: ["pane"],
+      additionalProperties: false,
+    }),
     returns: "{ pane }",
     message: (d) => `session ${d.pane} closed`,
     errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
@@ -199,6 +249,26 @@ export function registerPtySessionCatalog(): void {
     description: "List headless PTY sessions attached in this window.",
     triggers: { ko: "헤드리스 세션 목록" },
     params: {},
+    broker: brokerOf(["commands"], {
+      type: "object",
+      properties: {
+        sessions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              pane: { type: "string" },
+              bytesSeen: { type: "number" },
+              spawnedAt: { type: "number" },
+            },
+            required: ["pane", "bytesSeen", "spawnedAt"],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["sessions"],
+      additionalProperties: false,
+    }),
     returns: "{ sessions: [{pane, bytesSeen, spawnedAt}] }",
     message: (d) => `${(d.sessions as unknown[]).length} headless session(s)`,
     errors: [],

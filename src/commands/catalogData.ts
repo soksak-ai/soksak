@@ -6,8 +6,19 @@
 // durable state at all. ns is explicit — callers own their partition, nothing is implied.
 
 import { invoke } from "@tauri-apps/api/core";
-import { register } from "./registry";
+import { register, type CommandBrokerSpec, type CommandMachineObjectSchema } from "./registry";
 import { tmsg } from "../i18n";
+
+// kv 4종은 native 런타임 플러그인의 유일한 영속 통로 — broker 로 플러그인 호출을 연다.
+const kvBroker = (
+  permissions: CommandBrokerSpec["permissions"],
+  result: CommandMachineObjectSchema,
+): CommandBrokerSpec => ({
+  permissions,
+  contracts: { requires: [], provides: [] },
+  authority: [],
+  result,
+});
 
 const NS_PARAM = {
   type: "string",
@@ -30,6 +41,13 @@ export function registerDataCatalog(): void {
       ns: NS_PARAM,
       key: { type: "string", required: true, description: "Key" },
     },
+    broker: kvBroker(["commands"], {
+      // value 는 임의 JSON — 기계 스키마 프리미티브로 못 박지 않고 개방 필드로 둔다.
+      type: "object",
+      properties: { ns: { type: "string" }, key: { type: "string" } },
+      required: ["ns", "key"],
+      additionalProperties: true,
+    }),
     returns: "{ ns, key, value }",
     message: (d) => `kv ${d.ns}:${d.key}`,
     errors: ["INVALID_PARAMS", "INTERNAL"],
@@ -52,6 +70,12 @@ export function registerDataCatalog(): void {
       key: { type: "string", required: true, description: "Key" },
       value: { type: "json", required: true, description: "JSON value to store" },
     },
+    broker: kvBroker(["commands"], {
+      type: "object",
+      properties: { ns: { type: "string" }, key: { type: "string" } },
+      required: ["ns", "key"],
+      additionalProperties: false,
+    }),
     returns: "{ ns, key }",
     message: (d) => `kv ${d.ns}:${d.key} saved`,
     errors: ["INVALID_PARAMS", "INTERNAL"],
@@ -73,6 +97,16 @@ export function registerDataCatalog(): void {
       key: { type: "string", required: true, description: "Key" },
     },
     danger: "destructive",
+    broker: kvBroker(["commands", "commands:destructive"], {
+      type: "object",
+      properties: {
+        ns: { type: "string" },
+        key: { type: "string" },
+        deleted: { type: "boolean" },
+      },
+      required: ["ns", "key", "deleted"],
+      additionalProperties: false,
+    }),
     returns: "{ ns, key, deleted }",
     message: (d) => `kv ${d.ns}:${d.key} ${d.deleted ? "deleted" : "absent"}`,
     errors: ["INVALID_PARAMS", "INTERNAL"],
@@ -93,6 +127,15 @@ export function registerDataCatalog(): void {
       ns: NS_PARAM,
       prefix: { type: "string", required: false, description: "Key prefix filter" },
     },
+    broker: kvBroker(["commands"], {
+      type: "object",
+      properties: {
+        ns: { type: "string" },
+        keys: { type: "array", items: { type: "string" } },
+      },
+      required: ["ns", "keys"],
+      additionalProperties: false,
+    }),
     returns: "{ ns, keys }",
     message: (d) => `${(d.keys as unknown[]).length} key(s) in ${d.ns}`,
     errors: ["INVALID_PARAMS", "INTERNAL"],
