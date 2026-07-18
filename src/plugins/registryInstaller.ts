@@ -358,7 +358,8 @@ async function solveClosure(
           id: dependency.id,
           ranges: [],
         };
-        constraint.ranges.push(dependency.range);
+        // sidecar 의존은 range 를 싣지 않는다 — 버전은 인덱스가 결정, 호환성은 interface 계약-핀.
+        if (dependency.range !== undefined) constraint.ranges.push(dependency.range);
         constraints.set(key, constraint);
         const provisional = selected.get(key) ?? publicResolution.value;
         if (!queued.has(key)) {

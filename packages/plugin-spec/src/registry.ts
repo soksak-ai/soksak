@@ -506,11 +506,13 @@ export function resolveRegistryDependency(
   if (!certifiedRegistryIndexes.has(certified as object)) {
     return { ok: false, errors: ["uncertified registry index"] };
   }
+  // range 는 plugin/kit 저자 의도 선언에만 존재한다. 없으면(사이드카 의존) 인덱스가 버전을
+  // 결정하고 호환성 판정은 interface 계약-핀의 몫이다 — 여기서 버전 제약을 지어내지 않는다.
   if (
     !isUnitKind(dependency.kind) ||
     typeof dependency.id !== "string" ||
     !UNIT_ID_RE.test(dependency.id) ||
-    !isUnitDependencyRange(dependency.range)
+    (dependency.range !== undefined && !isUnitDependencyRange(dependency.range))
   ) {
     return { ok: false, errors: ["invalid unit dependency"] };
   }
@@ -518,14 +520,14 @@ export function resolveRegistryDependency(
     .filter((entry) =>
       entry.kind === dependency.kind &&
       entry.id === dependency.id &&
-      semverSatisfies(entry.version, dependency.range) === true
+      (dependency.range === undefined || semverSatisfies(entry.version, dependency.range) === true)
     )
     .sort((left, right) => -(semverCompare(left.version, right.version) ?? 0));
   if (candidates.length === 0) {
     return {
       ok: false,
       errors: [
-        `${dependency.kind}:${dependency.id}@${dependency.range} is absent from origin registry ${certified.index.registryId}`,
+        `${dependency.kind}:${dependency.id}${dependency.range !== undefined ? `@${dependency.range}` : ""} is absent from origin registry ${certified.index.registryId}`,
       ],
     };
   }
