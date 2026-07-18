@@ -172,6 +172,12 @@ function staticEntry(mod: StaticModule): EntryFns {
           // 정적 형태는 params 스펙 산문이 플러그인 쪽(핸들러)에 있다 — 레지스트리 validate 를
           // 건너뛰지 않으면 스펙 미선언 파라미터가 전부 INVALID_PARAMS 로 죽는다.
           paramsAuthority: "handler",
+          // 표준 답변(MESSAGE-PROTOCOL §3): 정적 핸들러는 봉투에 message 를 싣는다 — data 로
+          // 흘러온 그 문장을 답으로 쓰고, 없으면 매니페스트 title 로 열화한다.
+          message: (d) =>
+            typeof (d as { message?: unknown }).message === "string"
+              ? (d as { message: string }).message
+              : (description ?? name),
           handler: async (params, cctx) =>
             (await handler(params, {
               app: ctx.app,

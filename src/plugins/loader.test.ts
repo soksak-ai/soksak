@@ -480,6 +480,28 @@ describe("activatePlugin — 정적 모듈 형태({controller, commands, views})
     expect((call![1] as { paramsAuthority?: string }).paramsAuthority).toBe("handler");
   });
 
+  it("정적 commands 는 표준 답변을 data.message 로 합성한다(라벨 열화 방지)", async () => {
+    const deps = fakeDeps();
+    await activatePlugin(
+      {
+        default: {
+          commands: { hello: async () => ({ ok: true, message: "인사 완료" }) },
+          views: { panel: { mount: vi.fn() } },
+        },
+      },
+      staticManifest(),
+      "/d",
+      deps,
+    );
+    const call = (deps.registerCommand as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === "plugin.demo.hello",
+    );
+    const spec = call![1] as { message?: (d: Record<string, unknown>) => string };
+    expect(typeof spec.message).toBe("function");
+    expect(spec.message!({ message: "인사 완료" })).toBe("인사 완료");
+    expect(spec.message!({})).toBe("Hello");
+  });
+
   it("정적 mount 는 {root, projectRoot, restore, signal} 컨텍스트를 받는다(B3 복원 seam 보존)", async () => {
     const mountSpy = vi.fn();
     await activatePlugin(
