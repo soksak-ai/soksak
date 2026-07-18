@@ -356,7 +356,9 @@ standard.
   the family — input is a raw byte stream and output is ANSI paint, so no consumer couples to
   the engine. The manifest's `sidecars[].name` is what selects which engine unit runs, and the
   core holds that to be true: a plugin asks for the unit its own manifest declares for a contract
-  (`process.sidecarName(interface)`), and a spawn of an undeclared unit is refused. A bundle that
+  (`process.sidecarName(contractId)` — the versionless contract id string, since this is runtime
+  identification, not a version-pinned requirement; the range lives in the manifest declaration and
+  is resolved at fetch), and a spawn of an undeclared unit is refused. A bundle that
   hardcodes the name cannot win over the manifest — the publish-boundary conformance check rejects
   a `sidecar:<name>` literal in plugin code, and `scripts/e2e/terminal-unit-swap.sh` changes the
   manifest alone.

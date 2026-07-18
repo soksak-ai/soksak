@@ -292,6 +292,13 @@ params/result/danger/permission/domain contract를 검증하고 호출 origin(�
 권한은 호스트가 주입한다. raw invoke, 동적 property traversal, 기능별 비공개 operation
 목록은 없다.
 
+플러그인이 이 창 realm을 앱과 공유하므로(v1), 앱 realm의 `Object.prototype` 동결(Tauri
+`freezePrototype`)은 꺼둔다 — 동결된 prototype은 상속 메서드를 빈 객체에 재정의하는 표준
+라이브러리(예: xterm.js가 import 시 `o.toString = fn`)를 strict-mode ESM에서 "readonly 할당"으로
+깨 플러그인 활성화를 죽인다. full-trust 플러그인이 이 realm을 공유하고 CSP가 외부 스크립트를
+막으므로 이 하드닝의 marginal 가치는 낮다. realm별 하드닝은 격리 v2가 복원한다 — 그때 앱
+realm은 다시 동결하되 플러그인은 제 realm에서 돈다.
+
 ### 격리 v2 입법
 
 프로세스 격리(종료 가능 per-unit runtime + opaque sandbox document)는 미래의 완결 프로젝트다.
