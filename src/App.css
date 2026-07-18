@@ -2934,6 +2934,10 @@ select.dctl {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  /* 스태킹 격리 — 플러그인이 내부에서 어떤 z-index 를 쓰든 이 컨테이너 밖(호스트 크롬·
+     오버레이 패널)과 경쟁하지 못한다. 격리가 없으면 플러그인 캔버스의 z-index 가 앱 루트
+     스태킹으로 누출돼 크롬 패널 위에 그려진다. */
+  isolation: isolate;
   /* 빈 공간이 터미널 패널 본문과 같은 배경 — 사이드바 배경과 구분되는 콘텐츠면. */
   background: var(--bg);
 }
