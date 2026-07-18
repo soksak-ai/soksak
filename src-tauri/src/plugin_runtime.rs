@@ -220,7 +220,7 @@ pub const WRAPPER_BOOTSTRAP_MODULE: &str = r#"(() => {
   frame.setAttribute('aria-hidden', 'true');
   frame.style.cssText = 'position:fixed;inset:0;border:0;width:100%;height:100%';
   const escapedBootstrap = start.frameBootstrap;
-  frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${start.frameCsp}"></head><body><main id="soksak-plugin-root"></main><script>${escapedBootstrap}<\\/script></body></html>`;
+  frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${start.frameCsp}"></head><body><main id="soksak-plugin-root"></main><script>${escapedBootstrap}<\/script></body></html>`;
   frame.addEventListener('load', () => {
     if (delivered) return;
     delivered = true;
@@ -1439,6 +1439,21 @@ mod tests {
         assert!(guard.ends_with(FRAME_DOCUMENT_GUARD_MODULE));
         assert!(guard.contains("RTCPeerConnection"));
         assert!(guard.contains("__TAURI_INTERNALS__"));
+    }
+
+    // srcdoc 의 <script> 는 HTML 에 정확히 </script> 로 닫혀야 실행된다. JS 템플릿에서
+    // 태그 분리는 <\/script>(백슬래시 1) — raw string 에 \\ 를 쓰면 HTML 에 <\/script>
+    // 텍스트가 남아 script 가 영영 닫히지 않고, frame 부트스트랩 전체가 침묵 미실행된다.
+    #[test]
+    fn wrapper_srcdoc_script_closer_reaches_html_as_real_end_tag() {
+        assert!(
+            WRAPPER_BOOTSTRAP_MODULE.contains(r"<\/script>"),
+            "srcdoc closer must be the JS idiom <\\/script> (single backslash)"
+        );
+        assert!(
+            !WRAPPER_BOOTSTRAP_MODULE.contains(r"<\\/script>"),
+            "double backslash survives the raw string and corrupts the HTML end tag"
+        );
     }
 
     #[cfg(unix)]
