@@ -1042,12 +1042,12 @@ describe("유닛 선택의 단일진실 — 매니페스트 sidecars[]", () => {
 
   it("계약을 구현한다고 선언된 유닛 이름을 내준다", () => {
     const { api } = buildPluginApi(withSidecar("terminal-wezterm"), "/d", fakeDeps());
-    expect(api.process?.sidecarName({ id: "soksak-spec-sidecar-terminal", range: ">=0.0.1 <1.0.0" })).toBe("terminal-wezterm");
+    expect(api.process?.sidecarName("soksak-spec-sidecar-terminal")).toBe("terminal-wezterm");
   });
 
   it("선언이 없는 계약을 물으면 조용히 고르지 않고 죽는다", () => {
     const { api } = buildPluginApi(withSidecar("terminal-alacritty"), "/d", fakeDeps());
-    expect(() => api.process?.sidecarName({ id: "soksak-spec-sidecar-browser", range: ">=0.0.1 <1.0.0" })).toThrow(/선언이 없다/);
+    expect(() => api.process?.sidecarName("soksak-spec-sidecar-browser")).toThrow(/선언이 없다/);
   });
 
   it("매니페스트에 없는 유닛은 스폰할 수 없다(선언≡실물)", async () => {

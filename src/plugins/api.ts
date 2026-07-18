@@ -538,7 +538,7 @@ export interface SoksakPluginApi {
     /** 매니페스트 sidecars[] 에서 이 계약(interface)을 구현한다고 선언한 유닛 이름. 어느 엔진 유닛을
      *  쓸지는 **매니페스트가 정한다** — 번들 상수로 굳히면 매니페스트만 바꿨을 때 옛 유닛이 무음으로
      *  스폰된다. 선언 부재/중복은 loud throw(조용히 고르지 않는다). */
-    sidecarName: (interfaceRef: ContractRequirement) => string;
+    sidecarName: (contractId: string) => string;
     /** 프로그램 spawn → handle(id). cwd/env 선택. envRemove=부모 env 에서 뗄 키(중첩 가드 제거 등).
      *  secretEnv=envVar→secretKey(이 플러그인 ns 의 시크릿). 평문은 JS 가 안 만진다 — 키 이름만 넘기면
      *  Rust 경계가 볼트에서 해소해 자식 env 에 주입(셸 args·ps·history 무노출 R2). 잠김/미존재면 spawn 실패.
@@ -777,17 +777,20 @@ function createProcessApi(
     // 매니페스트가 이 계약을 구현한다고 선언한 사이드카 유닛의 이름. 어느 엔진 유닛을 쓸지는
     // **매니페스트가 정한다** — 번들에 이름을 상수로 굳히면 매니페스트만 바꿨을 때 옛 유닛이 무음으로
     // 스폰된다(declared ≠ actual). 선언이 없거나 둘 이상이면 조용히 고르지 않고 loud 하게 죽는다.
-    sidecarName(interfaceRef: ContractRequirement): string {
-      const hits = declared().filter((sidecar) =>
-        sidecar.interface.id === interfaceRef.id && sidecar.interface.range === interfaceRef.range);
+    sidecarName(contractId: string): string {
+      // 런타임 계약 식별은 계약 id(문자열) 하나로 한다 — 계약 id 는 버전 무배태(법)이고, 이건
+      // "이 계약을 구현한다고 내가 선언한 사이드카 유닛의 이름"을 묻는 식별이지 버전-핀이 아니다.
+      // range 는 매니페스트 선언이 쥔 호환 제약(설치 시 reach.fetch 가 그 range 로 실물 버전을
+      // 고른다)이라 이 lookup 의 키가 아니다. 계약당 사이드카 하나이므로 id 로 유일 해소된다.
+      const hits = declared().filter((sidecar) => sidecar.interface.id === contractId);
       if (hits.length === 0) {
         throw new Error(
-          `매니페스트 sidecars 에 ${interfaceRef.id} 요구를 가진 유닛 선언이 없다 — 선언이 유닛 선택의 단일진실이다`,
+          `매니페스트 sidecars 에 ${contractId} 요구를 가진 유닛 선언이 없다 — 선언이 유닛 선택의 단일진실이다`,
         );
       }
       if (hits.length > 1) {
         throw new Error(
-          `매니페스트 sidecars 에 ${interfaceRef.id} 구현이 ${hits.length} 개다 — 계약당 유닛 하나만 선언한다`,
+          `매니페스트 sidecars 에 ${contractId} 구현이 ${hits.length} 개다 — 계약당 유닛 하나만 선언한다`,
         );
       }
       return hits[0].name;
