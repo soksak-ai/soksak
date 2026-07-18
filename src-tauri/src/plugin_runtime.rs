@@ -55,6 +55,12 @@ pub const BOOTSTRAP_HTML: &str = r#"<!doctype html><html><head><meta charset="ut
 /// to transfer one MessagePort; all later traffic uses that port.
 pub const FRAME_BOOTSTRAP_MODULE: &str = r#"(() => {
   'use strict';
+  // Runs as a document-start init script in every child frame; act only in the plugin runtime
+  // iframe (a direct child of the wrapper). The wrapper is `top`; frames the plugin itself
+  // creates have a non-top parent and are left to the document guard alone. Injecting the runtime
+  // here instead of as an inline srcdoc script is deliberate: WKWebView does not execute inline
+  // scripts inside a sandboxed srcdoc frame even under script-src 'unsafe-inline'.
+  if (globalThis === top || parent !== top) return;
   const SafeObject = Object;
   const SafePromise = Promise;
   const SafeMap = Map;
@@ -132,9 +138,13 @@ pub const FRAME_BOOTSTRAP_MODULE: &str = r#"(() => {
       const code = globalThis.__soksakPluginEntryCode;
       globalThis.__soksakPluginEntryCode = undefined;
       const url = safeCreateObjectURL(new SafeBlob([code], { type: 'text/javascript' }));
-      try { moduleValue = await import(url); }
+      let loaded;
+      // Importing the plugin entry can fail (module syntax, CSP, unresolved import). Surface the
+      // real cause as a fault instead of swallowing it into a bare ready-deadline timeout.
+      try { loaded = await import(url); }
+      catch (error) { send('signal', 'runtime.fault', { code: 'ENTRY_IMPORT_FAILED', message: outcomeError(error).message }, 'runtime.fault.import'); return; }
       finally { safeRevokeObjectURL(url); }
-      moduleValue = moduleValue.default || moduleValue;
+      moduleValue = loaded.default || loaded;
       const app = makeApp(envelope);
       controllerContext = SafeObject.freeze({ app, role: 'controller', signal: abort.signal,
         context: SafeObject.freeze(safeStructuredClone(envelope.params.context)) });
@@ -219,8 +229,9 @@ pub const WRAPPER_BOOTSTRAP_MODULE: &str = r#"(() => {
   frame.setAttribute('sandbox', 'allow-scripts');
   frame.setAttribute('aria-hidden', 'true');
   frame.style.cssText = 'position:fixed;inset:0;border:0;width:100%;height:100%';
-  const escapedBootstrap = start.frameBootstrap;
-  frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${start.frameCsp}"></head><body><main id="soksak-plugin-root"></main><script>${escapedBootstrap}<\\/script></body></html>`;
+  // The runtime bootstrap runs as a document-start init script in this frame (see
+  // FRAME_BOOTSTRAP_MODULE); WKWebView will not run an inline srcdoc script under sandbox.
+  frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${start.frameCsp}"></head><body><main id="soksak-plugin-root"></main></body></html>`;
   frame.addEventListener('load', () => {
     if (delivered) return;
     delivered = true;
@@ -1320,6 +1331,7 @@ pub fn run_helper_from_stdio() -> Result<(), String> {
             frame_document_guard_script(policy.web_rtc),
             false,
         )
+        .with_initialization_script_for_main_only(FRAME_BOOTSTRAP_MODULE, false)
         .with_initialization_script_for_main_only(init_script, true)
         .with_ipc_handler(handler)
         .with_navigation_handler(navigation)
