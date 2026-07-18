@@ -108,8 +108,16 @@ def terminate():
     time.sleep(1)
 
 def kill_daemon():
-    # 재부팅 모사 — ptyd 를 SIGKILL(정상 종료 경로 없음 → 체크포인트 파일 잔존).
-    subprocess.run(["pkill", "-9", "-f", "soksak-ptyd"])
+    # 재부팅 모사 — 이 identity 홈의 ptyd 만 SIGKILL(정상 종료 경로 없음 → 체크포인트 잔존).
+    # 홈/바이너리로 스코프한다: 전역 pkill 은 병행 실행 중인 다른 identity(사용자 dev 앱)의
+    # ptyd 까지 죽여 그쪽 살아있는 터미널을 파괴한다(불가침 위반). ptyd 는 <home>/bin 에
+    # 복사돼 뜨거나(관측된 형태) 빌드 경로에서 직접 뜬다 — 둘 다 겨눈다.
+    out = subprocess.run(["pgrep", "-fl", "soksak-ptyd"], capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        pid, _, cmd = line.partition(" ")
+        if APP_HOME in cmd or PTYD_BIN in cmd:
+            try: os.kill(int(pid), signal.SIGKILL)
+            except Exception: pass
     time.sleep(1)
 
 def pane_of(win):
@@ -218,6 +226,16 @@ for old in glob.glob(os.path.join(E2E_HOME, "pty-cold-proj-*")):
 r = rpc("window.open", {"root": ROOT}); time.sleep(4)
 WIN = r.get("label") or r.get("existingWindow")
 assert WIN, f"창 생성 실패: {r}"
+# 터미널 엔진 플러그인은 홈에 설치만 되고 disabled 일 수 있다(설치≠활성). program 을 여는 전제로
+# 동의+활성을 멱등 보장한다 — 다른 e2e(webview-crash) 도 픽스처를 이렇게 세운다.
+TERM_PLUGIN = f"soksak-plugin-{PROGRAM}"
+st = next((p for p in rpc("plugin.list", window=WIN).get("plugins", []) if p.get("id") == TERM_PLUGIN), None)
+if not st or st.get("status") != "enabled":
+    rpc("plugin.consent.grant", {"id": TERM_PLUGIN}, window=WIN)
+    en = rpc("plugin.enable", {"id": TERM_PLUGIN}, window=WIN)
+    if en.get("ok") is False:
+        ng(f"터미널 플러그인 활성 실패({TERM_PLUGIN}): {en.get('message') or en.get('code')}")
+    time.sleep(2)
 created = rpc("project.open", {"root": PROJ, "alias": ALIAS, "program": PROGRAM}, window=WIN)
 assert created.get("ok"), f"project.open 실패: {created}"
 time.sleep(3)
