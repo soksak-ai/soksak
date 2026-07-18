@@ -125,6 +125,9 @@ export interface PluginCommandSpec {
   description: string;
   triggers?: Record<string, string>;
   params?: Record<string, ParamSpec>;
+  /** "handler" = 파라미터 검증을 핸들러가 소유(스펙 미선언 파라미터 통과). 정적 모듈처럼
+   *  스펙 산문이 플러그인 쪽에 있는 형태가 쓴다 — 레지스트리 validate 는 건너뛴다. */
+  paramsAuthority?: "handler";
   returns?: string;
   examples?: readonly string[];
   danger?: "destructive" | "inject";
@@ -1314,6 +1317,7 @@ export function buildPluginApi(
               title: declared.title, // 사람 라벨(ko/en) — 매니페스트가 소유, 표시 표면이 해소
               triggers: spec.triggers, // 호스트 catalogJson 이 base+triggers 합성(docs/I18N.md §3)
               params: spec.params ?? {},
+              paramsAuthority: spec.paramsAuthority,
               returns: spec.returns ?? "object",
               examples: spec.examples,
               message: pluginAnswer ?? labelAnswer, // 표준 답변 — 없으면 라벨(전환 스캐폴드, 경고)

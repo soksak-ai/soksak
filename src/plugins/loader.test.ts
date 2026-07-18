@@ -460,6 +460,26 @@ describe("activatePlugin — 정적 모듈 형태({controller, commands, views})
     expect(ctx.app).toBeTruthy(); // controller.activate({app}) — SDK 계약
   });
 
+  it("정적 commands 는 파라미터를 핸들러 권위로 등록한다(스펙 미선언 파라미터가 레지스트리 검증에 막히지 않게)", async () => {
+    const deps = fakeDeps();
+    await activatePlugin(
+      {
+        default: {
+          commands: { hello: async () => ({ ok: true }) },
+          views: { panel: { mount: vi.fn() } },
+        },
+      },
+      staticManifest(),
+      "/d",
+      deps,
+    );
+    const call = (deps.registerCommand as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c) => c[0] === "plugin.demo.hello",
+    );
+    expect(call).toBeTruthy();
+    expect((call![1] as { paramsAuthority?: string }).paramsAuthority).toBe("handler");
+  });
+
   it("정적 mount 는 {root, projectRoot, restore, signal} 컨텍스트를 받는다(B3 복원 seam 보존)", async () => {
     const mountSpy = vi.fn();
     await activatePlugin(

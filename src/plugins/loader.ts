@@ -169,6 +169,9 @@ function staticEntry(mod: StaticModule): EntryFns {
             : (title?.en ?? (title ? Object.values(title)[0] : name));
         ctx.app.commands.register(name, {
           description: description ?? name,
+          // 정적 형태는 params 스펙 산문이 플러그인 쪽(핸들러)에 있다 — 레지스트리 validate 를
+          // 건너뛰지 않으면 스펙 미선언 파라미터가 전부 INVALID_PARAMS 로 죽는다.
+          paramsAuthority: "handler",
           handler: async (params, cctx) =>
             (await handler(params, {
               app: ctx.app,
