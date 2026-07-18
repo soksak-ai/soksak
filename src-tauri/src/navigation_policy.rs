@@ -238,7 +238,13 @@ mod tests {
             security["assetProtocol"].get("scope").is_none(),
             "disabled asset protocol must not retain a misleading broad scope",
         );
-        assert_eq!(security["freezePrototype"], serde_json::Value::Bool(true));
+        // freezePrototype 는 꺼둔다. 플러그인은 full-trust 로 이 창의 realm 에 직접 적재되고(창-realm
+        // 실행), 동결된 Object.prototype 은 상속 속성에 쓰는 표준 라이브러리를 깬다 — xterm.js 의
+        // TS-namespace 산물이 `o.toString = fn` 을 빈 객체에 하는데, 동결 시 상속 toString 이 readonly 라
+        // strict-mode ESM 에서 throw(터미널 활성 사망). CSP 가 script-src 를 'self' blob: 로 막아 외부
+        // 주입 경로가 없으므로 이 하드닝의 marginal 가치는 낮다. realm 별 하드닝은 플러그인 격리(v2)에서
+        // 복원한다 — 그때 앱 realm 은 다시 동결하되 플러그인은 제 realm 에서 돈다.
+        assert_eq!(security["freezePrototype"], serde_json::Value::Bool(false));
 
         let cargo = std::fs::read_to_string("Cargo.toml").expect("Cargo manifest");
         assert!(

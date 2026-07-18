@@ -593,7 +593,10 @@ export const usePlugins = create<PluginsState>((set, get) => {
           await activateRuntime(p);
           setRuntime(id, { status: "enabled", error: undefined });
         } catch (e) {
-          setRuntime(id, { status: "error", error: String(e) });
+          setRuntime(id, {
+            status: "error",
+            error: e instanceof Error && e.stack ? e.stack : String(e),
+          });
         }
       }
       await get().syncLedger();
@@ -830,7 +833,10 @@ export const usePlugins = create<PluginsState>((set, get) => {
           await activateRuntime(rt);
           setRuntime(id, { status: "enabled", error: undefined });
         } catch (e) {
-          setRuntime(id, { status: "error", error: String(e) });
+          setRuntime(id, {
+            status: "error",
+            error: e instanceof Error && e.stack ? e.stack : String(e),
+          });
         }
       }
       return ok({ id, dir: selectedPath });
