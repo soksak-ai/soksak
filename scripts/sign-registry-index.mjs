@@ -58,7 +58,7 @@ for (const u of UNITS) {
   const reportNames = u.kind === "contract"
     ? ["conformance.json"]
     : u.kind === "sidecar"
-      ? ["conformance-release.json", "conformance-sidecar.json"]
+      ? ["conformance-release.json", "conformance-sidecar.json", "conformance-interface.json"]
       : ["conformance-release.json", "conformance-plugin.json"];
   const reports = [];
   for (const n of reportNames) {
