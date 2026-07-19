@@ -1,24 +1,25 @@
-// The canonical plugin release builder is the single source every plugin cuts its release through.
-// These fix its contract: identity/version derive from the unit's own manifests, the caller declares
-// only files, outputs are deterministic, and the boundary invariants refuse a malformed unit.
+// The canonical plugin release builder (release-template/build-release.mjs) is the single source every
+// plugin vendors byte-identical and runs to cut its release. These run the real artifact as a unit
+// would — a fixture unit that declares only its file set — and fix the contract: identity/version
+// derive from the unit's own manifests, outputs are deterministic, and the boundary invariants refuse
+// a malformed unit. Testing the vendored .mjs directly keeps it the single source (no parallel copy).
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { readRegularFileArchive } from "../src/releaseArchive.js";
-import { buildPluginRelease } from "../src/releaseBuild.js";
+import { readRegularFileArchive } from "../release-template/archive.mjs";
 
+const TEMPLATE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../release-template");
 const COMMIT = "a".repeat(40);
 const FILES = ["LICENSE", "NOTICE", "README.ko.md", "README.md", "main.js", "plugin.json"];
 
 let root = "";
 let outDir = "";
 
-function writeFixture(overrides: {
-  pkg?: Record<string, unknown>;
-  plugin?: Record<string, unknown>;
-} = {}): void {
+function writeFixture(overrides: { pkg?: Record<string, unknown>; plugin?: Record<string, unknown> } = {}): void {
   const pkg = {
     name: "soksak-plugin-example",
     version: "0.0.1",
@@ -36,6 +37,10 @@ function writeFixture(overrides: {
     permissions: ["data"],
     ...overrides.plugin,
   };
+  fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
+  fs.copyFileSync(path.join(TEMPLATE, "build-release.mjs"), path.join(root, "scripts", "build-release.mjs"));
+  fs.copyFileSync(path.join(TEMPLATE, "archive.mjs"), path.join(root, "scripts", "archive.mjs"));
+  fs.writeFileSync(path.join(root, "release-files.json"), `${JSON.stringify(FILES)}\n`);
   fs.writeFileSync(path.join(root, "package.json"), `${JSON.stringify(pkg, null, 2)}\n`);
   fs.writeFileSync(path.join(root, "plugin.json"), `${JSON.stringify(plugin, null, 2)}\n`);
   fs.writeFileSync(path.join(root, "main.js"), "export default { controller: {} };\n");
@@ -43,6 +48,13 @@ function writeFixture(overrides: {
   fs.writeFileSync(path.join(root, "NOTICE"), "soksak\n");
   fs.writeFileSync(path.join(root, "README.md"), "# example\n");
   fs.writeFileSync(path.join(root, "README.ko.md"), "# 예제\n");
+}
+
+function build(out = outDir): { status: number | null; stdout: string; stderr: string } {
+  const r = spawnSync("node", [path.join(root, "scripts", "build-release.mjs"), "--commit", COMMIT, "--out", out], {
+    encoding: "utf8",
+  });
+  return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
 beforeEach(() => {
@@ -55,13 +67,13 @@ afterEach(() => {
   fs.rmSync(outDir, { recursive: true, force: true });
 });
 
-describe("buildPluginRelease — canonical plugin release", () => {
+describe("release-template/build-release.mjs — canonical plugin release", () => {
   it("derives identity/version from the unit manifests and emits the declared artifacts", () => {
     writeFixture();
-    const result = buildPluginRelease({ root, commit: COMMIT, outDir, files: FILES });
-
-    expect(result.archive).toBe("soksak-plugin-example-0.0.1-any.tgz");
-    expect(fs.existsSync(path.join(outDir, result.archive))).toBe(true);
+    const r = build();
+    expect(r.status).toBe(0);
+    const out = JSON.parse(r.stdout);
+    expect(out.archive).toBe("soksak-plugin-example-0.0.1-any.tgz");
 
     const release = JSON.parse(fs.readFileSync(path.join(outDir, "release.json")).toString());
     expect(release).toMatchObject({
@@ -72,13 +84,10 @@ describe("buildPluginRelease — canonical plugin release", () => {
       releaseTag: "v0.0.1",
       source: { repository: "https://github.com/soksak-ai/soksak-plugin-example", commit: COMMIT },
     });
-    expect(release.artifacts[0]).toMatchObject({ target: "any", format: "tgz", sha256: result.sha256 });
+    expect(release.artifacts[0]).toMatchObject({ target: "any", format: "tgz", sha256: out.sha256 });
 
-    const names = readRegularFileArchive(fs.readFileSync(path.join(outDir, result.archive))).map(
-      (e) => e.name,
-    );
+    const names = readRegularFileArchive(fs.readFileSync(path.join(outDir, out.archive))).map((e) => e.name);
     expect(names).toEqual(FILES);
-
     for (const report of ["conformance-release.json", "conformance-plugin.json"]) {
       expect(fs.existsSync(path.join(outDir, report))).toBe(true);
     }
@@ -86,43 +95,45 @@ describe("buildPluginRelease — canonical plugin release", () => {
 
   it("is deterministic — same inputs produce the same archive sha256", () => {
     writeFixture();
-    const a = buildPluginRelease({ root, commit: COMMIT, outDir, files: FILES });
+    const a = JSON.parse(build().stdout);
     const out2 = fs.mkdtempSync(path.join(os.tmpdir(), "relbuild-out2-"));
-    const b = buildPluginRelease({ root, commit: COMMIT, outDir: out2, files: FILES });
+    const b = JSON.parse(build(out2).stdout);
     fs.rmSync(out2, { recursive: true, force: true });
     expect(a.sha256).toBe(b.sha256);
   });
 
   it("does not pin which contracts a unit relates to — any well-formed consumes passes", () => {
     writeFixture({ plugin: { consumes: [{ id: "soksak-spec-plugin-git", range: "0.0.1" }] } });
-    expect(() => buildPluginRelease({ root, commit: COMMIT, outDir, files: FILES })).not.toThrow();
+    expect(build().status).toBe(0);
   });
 
   it("refuses a malformed consumes entry (shape is validated)", () => {
     writeFixture({ plugin: { consumes: [{ id: "soksak-spec-plugin-git" }] } });
-    expect(() => buildPluginRelease({ root, commit: COMMIT, outDir, files: FILES })).toThrow(
-      /consumes\[0\] has invalid keys/,
-    );
+    const r = build();
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/consumes\[0\] has invalid keys/);
   });
 
   it("refuses a non-Apache-2.0 owner package (private product boundary)", () => {
     writeFixture({ pkg: { license: "MIT" } });
-    expect(() => buildPluginRelease({ root, commit: COMMIT, outDir, files: FILES })).toThrow(
-      /private product boundary/,
-    );
+    const r = build();
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/private product boundary/);
   });
 
   it("refuses a stale spec id (public plugin boundary)", () => {
     writeFixture({ plugin: { spec: "soksak-spec-plugin@1" } });
-    expect(() => buildPluginRelease({ root, commit: COMMIT, outDir, files: FILES })).toThrow(
-      /public plugin boundary/,
-    );
+    const r = build();
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/public plugin boundary/);
   });
 
   it("refuses a non-SHA commit", () => {
     writeFixture();
-    expect(() => buildPluginRelease({ root, commit: "v0.0.1", outDir, files: FILES })).toThrow(
-      /40-character Git commit/,
-    );
+    const r = spawnSync("node", [path.join(root, "scripts", "build-release.mjs"), "--commit", "v0.0.1", "--out", outDir], {
+      encoding: "utf8",
+    });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/40-character Git commit/);
   });
 });

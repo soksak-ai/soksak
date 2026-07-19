@@ -18,10 +18,6 @@
     ".": {
       "types": "./dist/spec.d.ts",
       "default": "./dist/spec.js"
-    },
-    "./release-build": {
-      "types": "./dist/releaseBuild.d.ts",
-      "default": "./dist/releaseBuild.js"
     }
   },
   "bin": {
