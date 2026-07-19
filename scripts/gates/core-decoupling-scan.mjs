@@ -54,7 +54,7 @@ const SKIP_DIRS = new Set(["target", "gen", "node_modules", ".git"]);
 const SCAN_EXTS = new Set([
   ".ts", ".tsx", ".js", ".mjs", ".cjs", ".rs", ".toml", ".json", ".md", ".html", ".css",
 ]);
-const TEST_FILE = /\.test\.(ts|tsx|mjs)$/;
+const TEST_FILE = /(\.test\.(ts|tsx|mjs)|_tests?\.rs)$/;
 
 // Rust 테스트 모듈 제거 — 최상위(#열0) #[cfg(test)] 직후 mod 블록만 brace 깊이로 건너뛴다.
 // 파일 어디에 있든(말미·중간·복수) 각 모듈만 도려내고, 그 앞뒤 최상위 실행 경로 코드는 남긴다.

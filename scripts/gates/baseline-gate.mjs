@@ -87,7 +87,7 @@ const METRICS = [
 // SELF 제외 — 게이트 자신·기준선 데이터·짝 테스트. 어느 지표에서도 스캔하지 않는다.
 const SELF_PREFIX = "scripts/gates/";
 const SKIP_DIRS = new Set(["node_modules", "dist", "target", ".git", "tests"]);
-const TEST_FILE = /(\.test\.(ts|tsx|mjs)|_test\.rs)$/;
+const TEST_FILE = /(\.test\.(ts|tsx|mjs)|_tests?\.rs)$/;
 
 function walk(absDir, relDir, exts, out) {
   let entries;

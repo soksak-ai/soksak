@@ -163,6 +163,12 @@ describe("baseline-gate", () => {
     expect(runGate().status).toBe(0);
   });
 
+  it("복수형 _tests.rs 도 테스트 파일이다 (#[path] mod tests 관례)", () => {
+    expect(runGate("--init").status).toBe(0);
+    write("src-tauri/src/service_tests.rs", rustWithUnwraps(5));
+    expect(runGate().status).toBe(0);
+  });
+
   it("--init 과 --prune 동시 지정은 거부한다", () => {
     expect(runGate("--init", "--prune").status).toBe(1);
   });
