@@ -153,7 +153,7 @@ soksak-validate plugin plugin.json  # GitHub Release tarball을 SHA-256 검증 �
 | `contributes.fileViewers[]` | | `{id,extensions,priority?}` — `"ui"` 권한. `registerFileViewer` 등록과 exact-match |
 | `contributes.iconSets[]` | | `{id,title}` — `"ui"` 권한. `registerIconSet` 등록(직렬화 가능 data)과 exact-match |
 | `contributes.programs[]` | | `{id, title, path?, kind, command?, url?, ensure?}` — `"programs"` 권한 필요. id 는 전역 평탄, path 는 "/" 구분 메뉴 카테고리(다단) |
-| `contributes.nodes[]` | | `{id, description?, danger?}` — `"ui"` 권한 필요. **DOM 노출 노드 종류** 선언(외부 주소 클릭/측정). 실제 요소엔 `data-node="<id>"`(동적 목록은 `<id>/<안정키>`). 선언하면 동의 화면에 표기, `danger:true` 는 ⚠ 강조 |
+| `contributes.nodes[]` | | `{id, description?, danger?}` — `"ui"` 권한 필요. **DOM 노출 노드 종류** 선언(외부 주소 클릭/측정). 실제 요소엔 `data-node="<id>"`(동적 목록은 `<id>/<안정키>`). **경로 문법은 소문자 슬러그만 합법** — 세그먼트는 `[a-z0-9][a-z0-9.-]*`(구분 `/`), 대문자·공백은 스캔이 경고와 함께 무시한다. 선언하면 동의 화면에 표기, `danger:true` 는 ⚠ 강조 |
 | `libraries[]` | | 외부 CLI 종속성 — **top-level**(`contributes` 밖). 4-tuple `{name, bin, install, observe?, accept?, reach?}`. 권한 불요(설치는 활성화 동의가 게이트). → 아래 「외부 런타임 의존성」 |
 | `dependencies` | | 런타임 플러그인 관계/호출 권한 — **top-level** `{pluginId: semver}`. locator가 아니며 설치 URL을 만들지 않는다. plugin-kind conformance에서 owner release의 `kind:"plugin"` dependency와 정확히 같아야 한다. sidecar/kit 설치 closure는 release manifest만 소유한다. id-핀보다 계약 결합(`viewContract`/`implements`/`consumes`)을 우선한다 |
 | `consumes` | | 이 플러그인이 **부를 계약** — **top-level**. `["soksak-spec-<kind>-<domain>@<major>"]`. `implements` 의 대칭이고 계약-핀의 호출 축이다: 호출자가 계약을 선언하고 대상이 그 계약을 `implements` 하면 코어 호출 경계가 `plugin.<대상id>.<cmd>` 를 통과시킨다 — 구현체 id 를 매니페스트에 적지 않으므로 두 번째 구현체가 와도 고칠 곳이 없다. 발견은 `plugin.implementers {contract}`. 미선언 교차 호출은 여전히 거부(PERMISSION_DENIED) |
@@ -350,8 +350,11 @@ await ctx.app.commands.execute("explorer.list", { path: "/abs/path" });
 
 `commands` map key는 매니페스트 `contributes.commands[].name`과 exact-match한다. handler는
 `(params, { app, invocation })`을 받는다 — `invocation` = `{ origin, parent, execute }`
-(호출 계보 + 계보 유지 재호출). handler 함수와 metadata를 한 객체에 섞지 않는다.
-title/description/params/returns/danger는 매니페스트 데이터다.
+(호출 계보 + 계보 유지 재호출). 표시 metadata(title·danger)는 매니페스트가 소유한다.
+**파라미터 검증은 handler 소유다** — 로더가 `paramsAuthority:"handler"` 로 등록하므로
+레지스트리는 미선언 파라미터를 거르지 않고 그대로 전달하고, handler 가 스스로 검증해
+`INVALID_PARAMS` 봉투로 거부한다. 반환은 `{ ok, code, message, data? }` 봉투이며 로더가
+그 `message` 를 표준 답변(MESSAGE-PROTOCOL §3)으로 합성한다 — 비우면 답이 title 로 열화한다.
 
 ### event subscription
 

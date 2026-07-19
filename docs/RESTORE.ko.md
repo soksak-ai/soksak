@@ -50,4 +50,4 @@ manifest(core kv `windows`)는 워크스페이스 창마다 slot 하나를 담�
 
 ## 복원 seam
 
-`PluginViewContext.restore { cwd }` 가 복원 마운트에서 관찰됐던 작업 디렉토리를 뷰 제공자에게 전달한다. 터미널 플러그인은 프로젝트 root 대신 그곳에서 spawn 한다. 이동 remount 에서는 살아있는 PTY 입양이 여전히 우선한다.
+`PluginViewContext.restore { cwd, state }` 가 복원 마운트에서 관찰됐던 런타임 사실을 뷰 제공자에게 전달한다. `cwd` 는 관찰된 작업 디렉토리 — 터미널 플러그인은 프로젝트 root 대신 그곳에서 spawn 하고, 이동 remount 에서는 살아있는 PTY 입양이 여전히 우선한다. `state` 는 뷰가 `setRestoreState` 로 마지막에 보고한 값 — 떠날 때 그대로 돌아와야 할 뷰-로컬 런타임 상태(선택·패널 접힘·활성 탭)다. 뷰 레코드에 영속되며 오직 이 seam 으로만 오간다 — 플러그인 kv 에 viewId 키로 영속하지 마라(viewId 재사용이 죽은 뷰의 상태를 새 뷰에 흘린다). 복원된 참조의 대상이 더 이상 없으면 부활시키지 말고 해제한다.

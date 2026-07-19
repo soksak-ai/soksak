@@ -50,4 +50,4 @@ The manifest (core kv `windows`) lists one slot per workspace window: label, roo
 
 ## Restore seam
 
-`PluginViewContext.restore { cwd }` carries the observed working directory to the view provider on a restored mount. The terminal plugin spawns there instead of the project root; live PTY adoption still wins on move-remounts.
+`PluginViewContext.restore { cwd, state }` carries observed runtime facts to the view provider on a restored mount. `cwd` is the observed working directory — the terminal plugin spawns there instead of the project root; live PTY adoption still wins on move-remounts. `state` is whatever the view last reported through `setRestoreState` — view-local runtime state (selection, panel folds, the active tab) that should come back exactly as left. It persists on the view record and travels only through this seam; never persist it under a viewId key in plugin kv, since viewId reuse would leak a dead view's state into a new one. A restored reference whose target no longer exists must be dropped, not resurrected.
