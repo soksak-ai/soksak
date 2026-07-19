@@ -294,7 +294,7 @@ export function registerDomCatalog(): void {
 
   register("ui.input.fill", {
     description:
-      "Set the value of an exposed input/textarea node and dispatch input+change events (E2E injection). Uses the native value setter so React controlled inputs pick the value up. Unexposed addresses return NOT_EXPOSED. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first.",
+      "Set the value of an exposed input/textarea node and dispatch input+change events (E2E injection). Uses the native value setter so React controlled inputs pick the value up. Contenteditable nodes are filled too: textContent is replaced and input+focusout fire, so blur-commit inline editors take the value. Unexposed addresses return NOT_EXPOSED. Occluded/unfocused windows pause rAF and may not respond — call window.focus to bring the window forward first.",
     triggers: { ko: "입력 주입 값입력 텍스트입력 폼입력 E2E" },
     params: {
       address: { type: "string", description: "Exposed node address from ui.tree", required: true },
