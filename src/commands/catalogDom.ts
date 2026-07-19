@@ -466,7 +466,9 @@ export function registerDomCatalog(): void {
       fire("dragenter", toEl, toPt.x, toPt.y);
       fire("dragover", toEl, toPt.x, toPt.y);
       await frame();
-      dt.dropEffect = "move"; // dragend 의 실패 판정(dropEffect==="none") 방지 — 성공 드롭 표기
+      // dragend 의 실패 판정(dropEffect==="none") 방지 — WebKit 은 드래그 세션 밖 setter 를
+      // 무시하므로 own 프로퍼티로 고정한다(성공 드롭 표기).
+      try { Object.defineProperty(dt, "dropEffect", { value: "move", configurable: true }); } catch { dt.dropEffect = "move"; }
       fire("drop", toEl, toPt.x, toPt.y);
       await frame();
       fire("dragend", fromEl ?? toEl, toPt.x, toPt.y);
