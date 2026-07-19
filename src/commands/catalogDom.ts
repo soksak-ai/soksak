@@ -446,7 +446,9 @@ export function registerDomCatalog(): void {
       const frame = () => new Promise((r) => setTimeout(r, 50));
       const fire = (type: string, target: EventTarget, x: number, y: number) => {
         const ev = new DragEvent(type, {
-          clientX: x, clientY: y, bubbles: true, cancelable: true, view: window,
+          // composed — 플러그인 뷰는 Shadow DOM 안이다. 네이티브 드래그 이벤트처럼 경계를 넘어야
+          // document 레벨 dragend 리스너(커밋/되돌림 판정)가 받는다.
+          clientX: x, clientY: y, bubbles: true, cancelable: true, composed: true, view: window,
         });
         // WebKit 은 생성자 init 의 dataTransfer 를 무시할 수 있다 — 인스턴스에 고정.
         if (!ev.dataTransfer) Object.defineProperty(ev, "dataTransfer", { value: dt });
