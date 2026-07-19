@@ -311,6 +311,15 @@ export function registerDomCatalog(): void {
       const addr = p.address as string;
       const el = resolveElement(addr);
       if (!el) return notExposed(addr);
+      // contenteditable 노드 — 인라인 편집면(blur 확정 계약)도 같은 명령으로 채운다.
+      // textContent 교체 후 input + focusout(React onBlur 는 focusout 을 듣는다)으로 확정을 유발.
+      if (el.isContentEditable) {
+        el.focus();
+        el.textContent = p.value as string;
+        el.dispatchEvent(new InputEvent("input", { bubbles: true }));
+        el.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+        return { filled: true, contentEditable: true, address: addr };
+      }
       if (
         !(el instanceof HTMLInputElement) &&
         !(el instanceof HTMLTextAreaElement)
@@ -388,6 +397,78 @@ export function registerDomCatalog(): void {
       return byDelta
         ? { dragged: dist >= 5, from: p.from, dx: p.dx ?? 0, dy: p.dy ?? 0 }
         : { dragged: dist >= 5, click: dist < 5, from: p.from, to: p.to, zone: p.zone ?? "center" };
+    },
+  });
+
+  register("ui.input.dnd", {
+    description:
+      "Synthesize an HTML5 drag-and-drop sequence (dragstart on `from` -> dragenter/dragover on `to` -> drop -> dragend) with a shared DataTransfer (E2E injection). ui.input.drag drives pointer(mouse) drags; this drives draggable/ondrop surfaces. Pass files to drop constructed File objects (base64 payload) onto a drop target — from is then optional. position picks the pointer y inside the target (before=upper quarter, after=lower quarter) for order-sensitive drop zones. Frames are yielded between steps so the UI can re-render (drop zones appearing after dragstart). Unexposed addresses return NOT_EXPOSED.",
+    triggers: { ko: "드래그앤드롭 주입 dnd 파일드롭 재정렬 드롭존 E2E" },
+    params: {
+      from: { type: "string", description: "Source node address (draggable). Optional when only dropping files.", required: false },
+      to: { type: "string", description: "Drop-target node address", required: true },
+      position: {
+        type: "string",
+        description: "center | before | after — pointer y within the target rect",
+        enum: ["center", "before", "after"],
+      },
+      files: {
+        type: "json",
+        description: '[{ name, type, base64 }] — constructed Files added to the DataTransfer (file drop)',
+        required: false,
+      },
+    },
+    returns: "{ dropped, from?, to, position }",
+    message: () => tmsg("msg.ui.input.dnd"),
+    errors: ["NOT_EXPOSED", "INVALID_PARAMS"],
+    danger: "inject",
+    examples: [
+      'ui.input.dnd \'{"from":".../node/section/s2","to":".../node/section/s5","position":"after"}\'',
+      'ui.input.dnd \'{"to":".../node/img/s2/hero","files":[{"name":"a.png","type":"image/png","base64":"…"}]}\'',
+    ],
+    handler: async (p) => {
+      const toEl = resolveElement(p.to as string);
+      if (!toEl) return notExposed(p.to as string);
+      let fromEl: HTMLElement | null = null;
+      if (p.from != null) {
+        fromEl = resolveElement(p.from as string);
+        if (!fromEl) return notExposed(p.from as string);
+      }
+      const dt = new DataTransfer();
+      if (Array.isArray(p.files)) {
+        for (const f of p.files as Array<{ name?: unknown; type?: unknown; base64?: unknown }>) {
+          const raw = atob(String(f.base64 ?? ""));
+          const bytes = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+          dt.items.add(new File([bytes], String(f.name ?? "file"), { type: String(f.type ?? "") }));
+        }
+      }
+      const frame = () => new Promise((r) => setTimeout(r, 50));
+      const fire = (type: string, target: EventTarget, x: number, y: number) => {
+        const ev = new DragEvent(type, {
+          clientX: x, clientY: y, bubbles: true, cancelable: true, view: window,
+        });
+        // WebKit 은 생성자 init 의 dataTransfer 를 무시할 수 있다 — 인스턴스에 고정.
+        if (!ev.dataTransfer) Object.defineProperty(ev, "dataTransfer", { value: dt });
+        target.dispatchEvent(ev);
+      };
+      const tr = toEl.getBoundingClientRect();
+      const position = (p.position as string) ?? "center";
+      const ty = position === "before" ? 0.2 : position === "after" ? 0.8 : 0.5;
+      const toPt = { x: tr.left + tr.width / 2, y: tr.top + tr.height * ty };
+      if (fromEl) {
+        const fr = fromEl.getBoundingClientRect();
+        fire("dragstart", fromEl, fr.left + fr.width / 2, fr.top + fr.height / 2);
+        await frame(); // dragstart 상태 반영(드롭존 렌더 등) 대기
+      }
+      fire("dragenter", toEl, toPt.x, toPt.y);
+      fire("dragover", toEl, toPt.x, toPt.y);
+      await frame();
+      dt.dropEffect = "move"; // dragend 의 실패 판정(dropEffect==="none") 방지 — 성공 드롭 표기
+      fire("drop", toEl, toPt.x, toPt.y);
+      await frame();
+      fire("dragend", fromEl ?? toEl, toPt.x, toPt.y);
+      return { dropped: true, from: p.from, to: p.to, position };
     },
   });
 
