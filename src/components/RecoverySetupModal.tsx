@@ -55,6 +55,7 @@ export function RecoverySetupModal() {
           <input
             type="checkbox"
             checked={saved}
+            data-node="modal/encrypt-setup/saved"
             onChange={(e) => setSaved(e.target.checked)}
           />
           <span>{t("encrypt.setup.savedGate")}</span>
