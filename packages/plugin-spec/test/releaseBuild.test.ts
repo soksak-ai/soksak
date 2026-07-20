@@ -51,8 +51,10 @@ function writeFixture(overrides: { pkg?: Record<string, unknown>; plugin?: Recor
 }
 
 function build(out = outDir): { status: number | null; stdout: string; stderr: string } {
+  // ROOT is process.cwd() — run from the fixture root (how the core/CI drives it: cwd=unitRoot).
   const r = spawnSync("node", [path.join(root, "scripts", "build-release.mjs"), "--commit", COMMIT, "--out", out], {
     encoding: "utf8",
+    cwd: root,
   });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
@@ -132,6 +134,7 @@ describe("release-template/build-release.mjs — canonical plugin release", () =
     writeFixture();
     const r = spawnSync("node", [path.join(root, "scripts", "build-release.mjs"), "--commit", "v0.0.1", "--out", outDir], {
       encoding: "utf8",
+      cwd: root,
     });
     expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/40-character Git commit/);

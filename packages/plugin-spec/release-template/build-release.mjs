@@ -7,11 +7,14 @@
 // the manifest is the single source of truth for which contracts it relates to.
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { createRegularFileArchive, readRegularFileArchive, sha256 } from "./archive.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// The UNIT repo root = the working directory the release runs in, NOT this script's location. Lets
+// the single-source script be run from soksak-spec (de-vendored) with cwd=unitRoot while still
+// reading the unit's own package.json/plugin.json. Vendored copies run from the repo root — same.
+// ESM relative imports (./archive.mjs) stay file-relative, so the LOGIC still comes from here.
+const root = process.cwd();
 const STRICT_SEMVER_RE =
   /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 
