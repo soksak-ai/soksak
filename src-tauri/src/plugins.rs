@@ -346,9 +346,12 @@ fn plugin_update_in(base: &Path, id: &str) -> Result<PluginInstallResult, String
     })
 }
 
-// 개발 스캐폴드 — <identity-home>/workspaces/plugins/<id>/ 에 최소 plugin.json·main.js 생성
-// + git init. 개발 source 상태는 workspace 안의 version 마커가 아니라 identity 홈의 선언적
-// development-units.json 이 소유한다. 공식 설치본(~/.soksak*/plugins)과 작업물을 섞지 않는다.
+// 개발 스캐폴드 — <identity-home>/workspaces/plugins/<id>/ 에 RELEASABLE 플러그인 생성 + git init.
+// 사이드카 스캐폴드(sidecar_dev_new_in)와 대칭: 신원(package.json·plugin.json·main.js) + 선언한
+// 배포 파일집합(release-files.json — 단일소스 빌더의 discovery 마커) + conformance 테스트 + THIN
+// release.yml/test.yml(soksak-spec 를 pin 으로 체크아웃해 단일소스 build-release/publish 를 돈다 —
+// 릴리즈 스크립트 vendor 0). 개발 source 상태는 workspace 안의 version 마커가 아니라 identity 홈의
+// 선언적 development-units.json 이 소유한다. 공식 설치본(~/.soksak*/plugins)과 작업물을 섞지 않는다.
 fn plugin_dev_new_in(base: &Path, id: &str) -> Result<PluginInstallResult, String> {
     sanitize_id(id)?;
     std::fs::create_dir_all(base).map_err(|e| e.to_string())?;
@@ -356,26 +359,39 @@ fn plugin_dev_new_in(base: &Path, id: &str) -> Result<PluginInstallResult, Strin
     if dir.exists() {
         return Err(format!("이미 존재하는 플러그인 폴더: {id}"));
     }
+    // 노드 주소 = "<id>-root". plugin.json contributes.nodes 가 선언하고 main.js 가 data-node 로
+    // 배선한다 — conformance 테스트가 이 둘의 1:1(선언≡배선)을 검사한다.
+    let node = format!("{id}-root");
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     let staging = base.join(format!(".tmp-{id}-{}-{nanos}", std::process::id()));
     std::fs::create_dir(&staging).map_err(|e| e.to_string())?;
-    let manifest = format!(
-        "{{\n  \"spec\": \"soksak-spec-plugin@0.0.1\",\n  \"id\": \"{id}\",\n  \"name\": \"{id}\",\n  \"version\": \"0.0.1\",\n  \"description\": \"새 soksak 플러그인\",\n  \"entry\": \"main.js\",\n  \"permissions\": [\"commands\"],\n  \"contributes\": {{ \"commands\": [{{ \"name\": \"hello\", \"title\": \"Hello\" }}] }}\n}}\n"
-    );
+    let manifest = render_plugin(PLUGIN_PLUGIN_JSON, id, &node);
     let staged = (|| {
-        std::fs::write(staging.join("plugin.json"), &manifest).map_err(|e| e.to_string())?;
-        std::fs::write(
-            staging.join("main.js"),
-            "// New soksak plugin — the SDK reminder-demo is the canonical author pattern.\n\
-             export default {\n  \
-             controller: {\n    async activate() {},\n    async deactivate() {},\n  },\n  \
-             commands: {\n    async hello() {\n      return { ok: true };\n    },\n  },\n};\n",
-        )
-        .map_err(|e| e.to_string())?;
-        std::fs::write(staging.join(".gitignore"), "node_modules/\n").map_err(|e| e.to_string())?;
+        let write = |rel: &str, body: String| -> Result<(), String> {
+            let p = staging.join(rel);
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            std::fs::write(&p, body).map_err(|e| e.to_string())
+        };
+        // package.json — private product boundary(단일소스 build-release 가 강제: name===id,
+        // private:true, license Apache-2.0, publish* 스크립트 금지) + soksakRelease 소유 블록.
+        write("package.json", render_plugin(PLUGIN_PACKAGE_JSON, id, &node))?;
+        write("plugin.json", manifest.clone())?;
+        write("main.js", render_plugin(PLUGIN_MAIN_JS, id, &node))?;
+        // release-files.json — 선언한 배포 파일집합 + discovery 마커(build-release.mjs 가 읽는다).
+        write("release-files.json", PLUGIN_RELEASE_FILES_JSON.to_string())?;
+        write("src/conformance.test.ts", PLUGIN_CONFORMANCE_TEST_TS.to_string())?;
+        write("tsconfig.json", PLUGIN_TSCONFIG_JSON.to_string())?;
+        write("README.md", render_plugin(PLUGIN_README, id, &node))?;
+        write(".gitignore", PLUGIN_GITIGNORE.to_string())?;
+        // THIN 워크플로 — 릴리즈 로직 vendor 0. release.yml 이 soksak-spec 를 pin 으로 체크아웃해
+        // 단일소스 release-template(build-release + publish) 를 discovery(=--unit-root 없음)로 돈다.
+        write(".github/workflows/release.yml", render_plugin(PLUGIN_RELEASE_YML, id, &node))?;
+        write(".github/workflows/test.yml", PLUGIN_TEST_YML.to_string())?;
         git_run(
             std::process::Command::new("git")
                 .args(["init", "-q"])
@@ -829,6 +845,328 @@ pub fn sidecar_dev_new(name: String, interface: Option<String>) -> Result<Plugin
     Ok(result)
 }
 
+// ── plugin.new — releasable plugin scaffold templates ────────────────────────
+// Mirrors the sidecar templates: the emission is a set of byte-verbatim files with __ID__/__NODE__/
+// __PIN__ placeholders. A plugin is platform-agnostic (one "any" artifact) so there is no build
+// matrix or targets.json; the shipped entry is the tracked hand-written main.js (canonical single-
+// source plugin pattern: soksak-plugin-reminder-demo). The release.yml vendors ZERO release scripts —
+// it checks out soksak-spec at the ONE shared pin (SIDECAR_SPEC_PIN) and runs the single-source
+// plugin release-template (build-release + publish), discovering the unit by its release-files.json
+// marker (no --unit-root, no cwd guessing).
+
+const PLUGIN_PACKAGE_JSON: &str = r#"{
+  "name": "__ID__",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "description": "A soksak plugin.",
+  "soksakRelease": {
+    "kind": "plugin",
+    "id": "__ID__",
+    "repository": "https://github.com/soksak-ai/__ID__",
+    "manifest": "release.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "~5.9.3",
+    "vitest": "^2.1.8"
+  }
+}
+"#;
+
+const PLUGIN_PLUGIN_JSON: &str = r#"{
+  "spec": "soksak-spec-plugin@0.0.1",
+  "id": "__ID__",
+  "name": { "ko": "__ID__", "en": "__ID__" },
+  "version": "0.0.1",
+  "description": { "ko": "새 soksak 플러그인", "en": "A new soksak plugin" },
+  "entry": "main.js",
+  "permissions": ["ui", "commands"],
+  "contributes": {
+    "views": [
+      {
+        "id": "main",
+        "title": { "ko": "__ID__", "en": "__ID__" },
+        "icon": "◆",
+        "placements": ["content"],
+        "status": []
+      }
+    ],
+    "commands": [
+      { "name": "hello", "title": { "ko": "Hello", "en": "Hello" } }
+    ],
+    "nodes": [
+      { "id": "__NODE__", "description": { "ko": "루트 노드", "en": "Root node" } }
+    ]
+  }
+}
+"#;
+
+// The tracked ESM entry — hand-written (no build step), the canonical minimal-plugin shape. Registers
+// one content view that mounts a single operable root element wired via data-node (dataset.node) to
+// the "__NODE__" address declared in plugin.json, plus a `hello` command. controller/commands is the
+// SDK module shape the loader consumes; the view registration degrades gracefully without ui.
+const PLUGIN_MAIN_JS: &str = r#"// __ID__ — a soksak plugin. One content view mounting an operable root node (C2: addressable via
+// ui.tree / ui.input.click) plus a `hello` command. The SDK reminder-demo is the canonical author
+// pattern; this seed is releasable as-is (release-files.json + .github/workflows).
+
+// The view's operable root. Its data-node id is declared in plugin.json contributes.nodes and the
+// conformance test asserts the two stay 1:1 (declared ≡ wired, both directions).
+function mountView(container) {
+  const root = document.createElement("div");
+  root.dataset.node = "__NODE__";
+  root.style.cssText = "display:flex;align-items:center;justify-content:center;height:100%;";
+  root.textContent = "__ID__";
+  container.replaceChildren(root);
+  return () => container.replaceChildren();
+}
+
+export default {
+  controller: {
+    async activate(ctx) {
+      const app = ctx.app;
+      // Register the content view when the host exposes the ui surface (graceful without it).
+      if (app.ui && app.ui.registerView) {
+        const cleanups = new WeakMap();
+        ctx.subscriptions.push(
+          app.ui.registerView("main", {
+            mount(container) {
+              cleanups.set(container, mountView(container));
+            },
+            unmount(container) {
+              const dispose = cleanups.get(container);
+              if (dispose) dispose();
+              cleanups.delete(container);
+            },
+          }),
+        );
+      }
+    },
+    async deactivate() {},
+  },
+  commands: {
+    async hello() {
+      return { ok: true };
+    },
+  },
+};
+"#;
+
+// The unit's own declaration: the exact, ordered file set it ships (the archive input) AND the
+// discovery marker build-release.mjs walks up to find. plugin.json + the tracked main.js entry.
+const PLUGIN_RELEASE_FILES_JSON: &str = r#"["plugin.json", "main.js"]
+"#;
+
+// declared ≡ wired, both directions — mirrors soksak-plugin-activity's nodes conformance test, but the
+// wiring source is the tracked entry (main.js) rather than a built bundle, since this plugin ships a
+// hand-written main.js. Pure (reads files + string match); runs on vitest, no build step.
+const PLUGIN_CONFORMANCE_TEST_TS: &str = r#"// C2 transparency — DOM axis. The view's operable nodes declared in plugin.json contributes.nodes
+// must equal the data-node ids actually wired in the shipped entry (main.js), both directions.
+// Neither side may lead: an undeclared data-node leaks a hidden control; a declared node with no
+// wiring is a phantom. Precedent: soksak-plugin-activity.
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const manifest = JSON.parse(readFileSync(path.join(root, "plugin.json"), "utf8")) as {
+  contributes?: { views?: unknown[]; nodes?: Array<{ id: string }> };
+};
+const entry = readFileSync(path.join(root, "main.js"), "utf8");
+
+const declared = (manifest.contributes?.nodes ?? []).map((n) => n.id);
+const wired = [...entry.matchAll(/dataset\.node\s*=\s*[`"']([a-z][a-z0-9-]*)/g)].map((m) => m[1]);
+const NODE_ID = /^[a-z][a-z0-9-]*$/;
+
+describe("C2 DOM axis — the view's operable elements are exposed as nodes", () => {
+  it("has a view → contributes.nodes is non-empty (view-nodes rule)", () => {
+    expect((manifest.contributes?.views ?? []).length).toBeGreaterThan(0);
+    expect(declared.length).toBeGreaterThan(0);
+  });
+
+  it("declared ≡ wired — plugin.json nodes ↔ main.js dataset.node (both directions)", () => {
+    expect([...new Set(wired)].sort()).toEqual([...new Set(declared)].sort());
+  });
+
+  it("node ids follow the nodeScan contract (lowercase, hyphen)", () => {
+    for (const id of declared) expect(id).toMatch(NODE_ID);
+  });
+});
+"#;
+
+const PLUGIN_TSCONFIG_JSON: &str = r#"{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["src"]
+}
+"#;
+
+const PLUGIN_README: &str = r#"# __ID__
+
+A soksak plugin. One content view (an operable root node addressable via `ui.tree` / `ui.input.click`)
+plus a `hello` command.
+
+- `npm test` — the C2 node conformance test (declared ≡ wired).
+- `npm run typecheck` — `tsc --noEmit`.
+- `main.js` is the tracked ESM entry (hand-written; no build step).
+- Release is driven by the single-source pipeline in `soksak-ai/soksak-spec`
+  (`.github/workflows/release.yml` checks it out at the pin and runs it — this repo vendors zero
+  release logic). Cut a release with the `release` workflow_dispatch on `main`.
+"#;
+
+const PLUGIN_GITIGNORE: &str = "node_modules/\ndist/\n.soksak.json\n*.log\n";
+
+const PLUGIN_TEST_YML: &str = r#"name: test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+"#;
+
+const PLUGIN_RELEASE_YML: &str = r#"# Release — the plugin is platform-agnostic (one "any" artifact), so there is no build matrix. This
+# repo vendors NO release logic: it checks out soksak-ai/soksak-spec at the pinned commit and runs the
+# single-source plugin release-template (build-release + publish) + the pinned public validator.
+name: release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the exact source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out the pinned single-source release pipeline
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: soksak-ai/soksak-spec
+          ref: __PIN__
+          path: .pipeline
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.12.0"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: "10.30.3"
+      - name: Install and test the plugin
+        run: |
+          npm install
+          npm run typecheck
+          npm test
+      - name: Build the pinned public validator
+        working-directory: .pipeline
+        run: |
+          pnpm --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile
+          pnpm --filter @soksak-ai/plugin-spec build
+      # The single-source scripts run at this checkout root and discover the unit by its
+      # release-files.json marker — no --unit-root argument, no cwd guessing (DEPLOY §1).
+      - name: Build + validate the release documents (single-source, unit discovered)
+        run: |
+          node .pipeline/packages/plugin-spec/release-template/build-release.mjs --commit "${{ github.sha }}" --out dist
+          node .pipeline/packages/plugin-spec/bin/validate.mjs release dist/release.json
+          node .pipeline/packages/plugin-spec/bin/validate.mjs conformance dist/conformance-release.json dist/conformance-plugin.json --release dist/release.json --plugin-manifest plugin.json
+          node .pipeline/packages/plugin-spec/bin/validate.mjs plugin plugin.json
+      - name: Mint a least-privilege installation token
+        id: release-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.SOKSAK_RELEASE_CLIENT_ID }}
+          private-key: ${{ secrets.SOKSAK_RELEASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: __ID__
+          permission-administration: read
+          permission-contents: write
+      - name: Publish the verified owner manifest and assets (single-source)
+        env:
+          SOKSAK_RELEASE_TOKEN: ${{ steps.release-token.outputs.token }}
+        run: >-
+          node .pipeline/packages/plugin-spec/release-template/publish-release.mjs
+          --repository "${{ github.repository }}"
+          --commit "${{ github.sha }}"
+          --artifacts "$GITHUB_WORKSPACE/dist"
+          --manifest "$GITHUB_WORKSPACE/dist/release.json"
+"#;
+
+fn render_plugin(template: &str, id: &str, node: &str) -> String {
+    template
+        .replace("__ID__", id)
+        .replace("__NODE__", node)
+        .replace("__PIN__", SIDECAR_SPEC_PIN)
+}
+
+/// Validate an unprefixed plugin name (the id is `soksak-plugin-<name>`). Mirrors sanitize_sidecar_name.
+fn sanitize_plugin_name(name: &str) -> Result<(), String> {
+    let mut chars = name.chars();
+    let head = chars
+        .next()
+        .is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    let rest = chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if head && rest {
+        Ok(())
+    } else {
+        Err(format!(
+            "잘못된 플러그인 이름: {name:?} (소문자·숫자·- 만, 접두사 없이)"
+        ))
+    }
+}
+
+/// Scaffold a releasable plugin under `base` from an unprefixed name (id = soksak-plugin-<name>).
+/// Mirrors sidecar_dev_new_in; the releasable emission itself lives in plugin_dev_new_in (shared with
+/// the id-addressed dev scaffolder, so plugin.dev.create and plugin.new emit the identical shape).
+fn plugin_dev_new2_in(base: &Path, name: &str) -> Result<PluginInstallResult, String> {
+    sanitize_plugin_name(name)?;
+    let id = format!("soksak-plugin-{name}");
+    plugin_dev_new_in(base, &id)
+}
+
+#[tauri::command]
+pub fn plugin_dev_new2(name: String) -> Result<PluginInstallResult, String> {
+    let base = crate::home::soksak_home()
+        .join("workspaces")
+        .join("plugins");
+    let result = plugin_dev_new2_in(&base, &name)?;
+    let dir = PathBuf::from(&result.dir);
+    if let Err(e) = crate::unit_dev::set_source("plugin", &result.dir_name, &dir) {
+        // source 선언까지가 한 트랜잭션이다. 선택되지 않은 반쪽 workspace를 남기지 않는다.
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err(e);
+    }
+    Ok(result)
+}
+
 // 플러그인 제거(디렉토리째). 전용 저장소(plugins-data)는 남긴다 — 재설치 시 데이터 보존.
 #[tauri::command]
 pub fn plugin_remove(id: String) -> Result<(), String> {
@@ -1154,39 +1492,185 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    // dev 스캐폴드: plugin.json·main.js 생성. source 상태는 외부 config 소유이므로
-    // workspace 안에 .soksak.json(version="dev")을 만들지 않는다.
+    // Releasable plugin scaffold — mirrors sidecar_scaffold_shape. name-addressed (plugin.new) and
+    // id-addressed (plugin.dev.create) emit the identical releasable shape; closed-key manifests, the
+    // single-source discovery marker + THIN workflows, git init, and refusals.
     #[test]
-    fn plugin_dev_new_scaffold() {
-        let root = std::env::temp_dir().join(format!("soksak-devnew-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let base = root.join("plugins");
-        let r = plugin_dev_new_in(&base, "my-plugin").unwrap();
-        let dir = base.join("my-plugin");
-        assert!(dir.join("plugin.json").is_file());
-        assert!(dir.join("main.js").is_file());
-        assert!(!dir.join(".soksak.json").exists());
-        assert!(r.manifest.contains("my-plugin"));
-        let manifest: serde_json::Value = serde_json::from_str(&r.manifest).unwrap();
-        assert_eq!(manifest["version"], "0.0.1");
-        // DAG16: 스캐폴드는 SDK 정식 shape를 낸다 — commands 권한 + contributes.commands +
-        // main.js 의 controller/commands 모듈(SoksakPluginModule). 하드코딩 빈 스텁이 아니다.
-        assert!(
-            manifest["permissions"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|p| p == "commands"),
-            "{}",
-            r.manifest
+    fn plugin_scaffold_shape() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let base = std::env::temp_dir().join(format!("pl-scaffold-{}-{nanos}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+
+        // name-addressed (plugin.new): id = soksak-plugin-<name>.
+        let r = plugin_dev_new2_in(&base, "widget").expect("scaffold");
+        assert_eq!(r.dir_name, "soksak-plugin-widget");
+        let dir = std::path::PathBuf::from(&r.dir);
+
+        // package.json — the private product boundary the single-source build-release enforces.
+        let pkg: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("package.json")).unwrap())
+                .unwrap();
+        assert_eq!(pkg["name"], "soksak-plugin-widget");
+        assert_eq!(pkg["private"], true);
+        assert_eq!(pkg["type"], "module");
+        assert_eq!(pkg["license"], "Apache-2.0");
+        assert_eq!(pkg["soksakRelease"]["kind"], "plugin");
+        assert_eq!(pkg["soksakRelease"]["id"], "soksak-plugin-widget");
+        assert_eq!(pkg["soksakRelease"]["manifest"], "release.json");
+        assert_eq!(
+            pkg["soksakRelease"]["repository"],
+            "https://github.com/soksak-ai/soksak-plugin-widget"
         );
-        assert_eq!(manifest["contributes"]["commands"][0]["name"], "hello");
+        // no publishConfig, no language-registry publish script (build-release forbids both).
+        assert!(pkg.get("publishConfig").is_none());
+        assert!(pkg["scripts"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .all(|k| !k.to_lowercase().contains("publish")));
+
+        // plugin.json — public plugin boundary + C2: a content view declares status (blocking rule),
+        // a "ui"/"commands" permission pair, a hello command, and a wired <id>-root node.
+        let plugin: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("plugin.json")).unwrap())
+                .unwrap();
+        assert_eq!(plugin["spec"], "soksak-spec-plugin@0.0.1");
+        assert_eq!(plugin["id"], "soksak-plugin-widget");
+        assert_eq!(plugin["version"], "0.0.1");
+        assert_eq!(plugin["version"], pkg["version"]);
+        assert_eq!(plugin["entry"], "main.js");
+        assert!(plugin.get("repo").is_none());
+        let perms: Vec<&str> = plugin["permissions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p.as_str().unwrap())
+            .collect();
+        assert!(perms.contains(&"ui") && perms.contains(&"commands"));
+        assert_eq!(plugin["contributes"]["views"][0]["placements"][0], "content");
+        // content-view-status (blocking) satisfied — status declared even if empty.
+        assert!(plugin["contributes"]["views"][0]["status"].is_array());
+        assert_eq!(plugin["contributes"]["commands"][0]["name"], "hello");
+        assert_eq!(
+            plugin["contributes"]["nodes"][0]["id"],
+            "soksak-plugin-widget-root"
+        );
+
+        // release-files.json — discovery marker + declared shipped set; plugin.json + main.js present.
+        let files: Vec<String> =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("release-files.json")).unwrap())
+                .unwrap();
+        assert!(
+            files.contains(&"plugin.json".to_string()) && files.contains(&"main.js".to_string())
+        );
+
+        // declared ≡ wired — the node id declared in plugin.json is wired in the tracked entry (main.js),
+        // and the SDK module shape (controller/commands, activate) survives.
         let main_js = std::fs::read_to_string(dir.join("main.js")).unwrap();
-        assert!(main_js.contains("controller:"), "{main_js}");
-        assert!(main_js.contains("commands:"), "{main_js}");
-        assert!(main_js.contains("async activate()"), "{main_js}");
-        // 이미 존재하면 거부.
+        assert!(
+            main_js.contains("soksak-plugin-widget-root"),
+            "node not wired in main.js: {main_js}"
+        );
+        assert!(main_js.contains("controller:") && main_js.contains("commands:"));
+        assert!(main_js.contains("async activate("), "{main_js}");
+
+        // conformance test + tsconfig ship; workflows are THIN single-source (vendor ZERO scripts).
+        assert!(dir.join("src/conformance.test.ts").exists());
+        assert!(dir.join("tsconfig.json").exists());
+        assert!(!dir.join("scripts").exists());
+        let rel = std::fs::read_to_string(dir.join(".github/workflows/release.yml")).unwrap();
+        assert!(rel.contains(SIDECAR_SPEC_PIN), "release.yml pins soksak-spec");
+        assert!(rel.contains("release-template/build-release.mjs"));
+        assert!(rel.contains("release-template/publish-release.mjs"));
+        assert!(dir.join(".github/workflows/test.yml").exists());
+
+        // git initialized; the workspace carries no install marker (source lives in the identity
+        // home's development-units.json, not inside the workspace).
+        assert!(dir.join(".git").exists());
+        assert!(!dir.join(".soksak.json").exists());
+
+        // id-addressed dev scaffolder (plugin.dev.create) emits the SAME releasable shape.
+        let r2 = plugin_dev_new_in(&base, "my-plugin").expect("id scaffold");
+        let dir2 = std::path::Path::new(&r2.dir);
+        assert!(dir2.join("package.json").exists() && dir2.join("release-files.json").exists());
+        let plugin2: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir2.join("plugin.json")).unwrap())
+                .unwrap();
+        assert_eq!(plugin2["contributes"]["nodes"][0]["id"], "my-plugin-root");
+
+        // refusals: existing dir, prefixed/uppercase/empty name, existing id, bad id.
+        assert!(plugin_dev_new2_in(&base, "widget").is_err());
+        assert!(plugin_dev_new2_in(&base, "Bad").is_err());
+        assert!(plugin_dev_new2_in(&base, "-x").is_err());
+        assert!(plugin_dev_new2_in(&base, "").is_err());
         assert!(plugin_dev_new_in(&base, "my-plugin").is_err());
-        let _ = std::fs::remove_dir_all(&root);
+        assert!(plugin_dev_new_in(&base, "Bad").is_err());
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    // Acid test (opt-in — runs node): the emitted plugin actually passes the pinned public validator
+    // and its own conformance test on vitest. Discovers the repo-root validator + vitest binary by a
+    // declared rule (CARGO_MANIFEST_DIR's parent), never cwd guessing. Run explicitly:
+    //   cargo test --lib "plugins::tests::plugin_scaffold_acid" -- --ignored
+    #[test]
+    #[ignore = "runs node: the pinned public validator + vitest against a real scaffold"]
+    fn plugin_scaffold_acid() {
+        let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let validator = repo.join("packages/plugin-spec/bin/validate.mjs");
+        let vitest = repo.join("node_modules/.bin/vitest");
+        assert!(validator.exists(), "validator missing: {}", validator.display());
+        assert!(
+            vitest.exists(),
+            "vitest missing (run pnpm install at repo root): {}",
+            vitest.display()
+        );
+
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let base = std::env::temp_dir().join(format!("pl-acid-{}-{nanos}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let r = plugin_dev_new2_in(&base, "widget").expect("scaffold");
+        let dir = std::path::PathBuf::from(&r.dir);
+
+        // ① the emitted manifest passes the pinned public validator (soksak-validate plugin).
+        let v = std::process::Command::new("node")
+            .arg(&validator)
+            .arg("plugin")
+            .arg(dir.join("plugin.json"))
+            .output()
+            .expect("run validator");
+        assert!(
+            v.status.success(),
+            "validator rejected the scaffold:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&v.stdout),
+            String::from_utf8_lossy(&v.stderr)
+        );
+
+        // ② the shipped conformance test (declared ≡ wired nodes) passes on vitest, run with the
+        // scaffold as the vitest root so the repo's own vitest config does not bleed in.
+        let t = std::process::Command::new(&vitest)
+            .arg("run")
+            .arg("--root")
+            .arg(&dir)
+            .env("CI", "1")
+            .output()
+            .expect("run vitest");
+        assert!(
+            t.status.success(),
+            "conformance test failed:\nstdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&t.stdout),
+            String::from_utf8_lossy(&t.stderr)
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
     }
 }

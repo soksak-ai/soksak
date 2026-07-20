@@ -118,6 +118,24 @@ export function registerReleaseCatalog(): void {
     },
   });
 
+  register("plugin.new", {
+    description:
+      "Scaffold a new releasable plugin under the plugins workspace: package.json (soksakRelease block + private product boundary) + plugin.json (a content view + a wired <id>-root node + a hello command) + the tracked main.js entry, release-files.json (the declared shipped set + single-source discovery marker), src/conformance.test.ts (declared≡wired nodes), tsconfig.json, and the THIN release.yml/test.yml that check out the pinned soksak-spec and run the single-source plugin build-release/publish — it vendors ZERO release scripts. git-inits + registers it as a dev unit. name is unprefixed (id = soksak-plugin-<name>).",
+    triggers: { ko: "플러그인 생성 새 플러그인 스캐폴드 scaffold" },
+    params: {
+      name: { type: "string", required: true, description: "Unprefixed name; id becomes soksak-plugin-<name>" },
+    },
+    returns: "{ ok, dir, id }",
+    message: (d) => `scaffolded ${typeof d.id === "string" ? d.id : "the plugin"}`,
+    examples: ['plugin.new \'{"name":"widget"}\''],
+    handler: async (p) => {
+      const r = await invoke<{ dir: string; dir_name: string }>("plugin_dev_new2", {
+        name: String(p.name),
+      });
+      return { ok: true, dir: r.dir, id: r.dir_name };
+    },
+  });
+
   register("sidecar.new", {
     description:
       "Scaffold a new releasable service sidecar under the sidecars workspace: Cargo.toml + release/unit.json (identity), the STATIC targets.json + spec-validator.json pins (byte-verbatim), a serve skeleton (src/{main,lib,service}.rs + tests/wire.rs), stage.sh, and the THIN release.yml that references the single-source pipeline in soksak-spec — it vendors ZERO release scripts. git-inits + registers it as a dev unit. name is unprefixed (id = soksak-sidecar-<name>).",

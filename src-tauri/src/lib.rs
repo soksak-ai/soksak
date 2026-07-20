@@ -508,6 +508,7 @@ pub fn run() {
             plugins::plugin_install_git,
             plugins::plugin_update,
             plugins::plugin_dev_new,
+            plugins::plugin_dev_new2,
             plugins::sidecar_dev_new,
             unit_dev::unit_dev_list,
             unit_dev::unit_dev_set,
