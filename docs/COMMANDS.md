@@ -1235,6 +1235,20 @@ List all installed and dev plugins with their runtime status, permissions, and r
 sok-debug plugin.list
 ```
 
+## `plugin.new`
+
+Scaffold a new releasable plugin under the plugins workspace: package.json (soksakRelease block + private product boundary) + plugin.json (a content view + a wired <id>-root node + a hello command) + the tracked main.js entry, release-files.json (the declared shipped set + single-source discovery marker), src/conformance.test.ts (declared≡wired nodes), tsconfig.json, and the THIN release.yml/test.yml that check out the pinned soksak-spec and run the single-source plugin build-release/publish — it vendors ZERO release scripts. git-inits + registers it as a dev unit. name is unprefixed (id = soksak-plugin-<name>). | 플러그인 생성 새 스캐폴드 scaffold
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | ✓ | Unprefixed name; id becomes soksak-plugin-<name> |
+
+**Returns**: { ok, dir, id }
+
+```bash
+sok-debug plugin.new '{"name":"widget"}'
+```
+
 ## `plugin.reload`
 
 Rescan the plugins directory and reactivate every plugin whose consent is still valid; the response reports which manifests were rejected during the rescan and why. With id, reload only that one plugin instead: its plugin.json is read from disk again and re-validated, then the plugin is disabled and re-enabled (same consent gate as plugin.enable) without rescanning the directory or touching any other plugin. A manifest that no longer validates is refused with its reason instead of activating fresh code against a stale declaration. Use after manually editing plugin files or adding new plugin folders. | 플러그인 재적재 리로드 새로고침
@@ -1780,6 +1794,61 @@ sok-debug registry.status
 sok-debug registry.status '{"registryId":"official"}'
 ```
 
+## `release.build`
+
+Build the owner release manifest (release.json) + 3 conformance reports for a unit from an artifacts dir holding exactly the 5-target archive set + their .sha256 sidecars. Runs the single-source release-template builder with --emit-summary and returns the parsed manifest + per-target digests. Every invariant (checksum match, exact matrix, version/tag lockstep) is enforced by the builder. Chain into release.validate. | 릴리즈 빌드 build 매니페스트 발행
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `artifacts` | string | ✓ | Dir with the 5 .tar.gz + 5 .sha256 |
+| `commit` | string | ✓ | Source commit — exact lowercase 40-char git SHA |
+| `out` | string | ✓ | Empty output dir for release.json + conformance reports |
+| `specRoot` | string | ✓ | soksak-ai/soksak-spec checkout providing the release-template |
+| `tag` | string | ✓ | Release tag, must equal v<version> |
+| `unitRoot` | string | ✓ | The unit repo root (cwd; holds Cargo.toml + release/) |
+
+**Returns**: { ok, releaseJson, manifestSha256, matrix }
+
+```bash
+sok-debug release.build '{"unitRoot":"…","specRoot":".pipeline","commit":"<40hex>","tag":"v0.0.1","artifacts":"dist","out":"dist-release"}'
+```
+
+## `release.publish` (danger: destructive)
+
+Cut the immutable GitHub release for a unit: require owner-enforced immutable releases, require EXACTLY the 5 platform archives + 5 checksums + release.json + 3 conformance reports, then create the release. IRREVERSIBLE — an immutable tag cannot be recut, only bumped. Requires confirm:true. gh auth comes from the token param (injected as GH_TOKEN into the child) or the operator's ambient gh. In CI the per-unit workflow's own gh step publishes; this command is for operator-with-gh use. | 릴리즈 발행 publish immutable 생성
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `artifactsDir` | string | ✓ | Dir with the 5 .tar.gz + 5 .sha256 |
+| `commit` | string | ✓ | Target commit SHA for the release |
+| `confirm` | boolean | ✓ | Must be true — this cuts an immutable, unrecuttable release |
+| `releaseDir` | string | ✓ | Dir with release.json + 3 conformance reports |
+| `repo` | string | ✓ | owner/name, e.g. soksak-ai/soksak-sidecar-db-studio |
+| `tag` | string | ✓ | Release tag (v<version>) |
+| `token` | string |  | GitHub token; injected as GH_TOKEN (else ambient gh) |
+
+**Returns**: { ok, url }
+
+```bash
+sok-debug release.publish '{"repo":"soksak-ai/soksak-sidecar-db-studio","tag":"v0.0.1","commit":"<sha>","artifactsDir":"dist","releaseDir":"dist-release","confirm":true}'
+```
+
+## `release.validate`
+
+Validate a built release directory (release.json + 3 conformance reports) against the pinned public soksak-spec validator. Read-only. specRoot MUST be a checkout of soksak-ai/soksak-spec at the pinned commit — validate-with-spec.mjs refuses any other checkout (the consumer-contract drift guard). Runs the single-source release-template logic; no algorithm lives in the command. | 릴리즈 검증 validate 발행 검증기
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `releaseDir` | string | ✓ | Dir holding release.json + 3 conformance reports |
+| `specRoot` | string | ✓ | Pinned soksak-ai/soksak-spec checkout root |
+| `unitRoot` | string | ✓ | The unit repo root (cwd for the script) |
+
+**Returns**: { ok, stdout }
+
+```bash
+sok-debug release.validate '{"unitRoot":"…","specRoot":".pipeline","releaseDir":"dist-release"}'
+```
+
 ## `remote.confirm` (danger: destructive)
 
 Show the desktop human confirm modal for a destructive remote action and await the decision (approve/deny). Called by the remote-iroh sidecar over the socket: the sidecar owns the confirm authority (parking, TTL, token issuance) and delegates only the human decision here. The phone cannot self-approve — the decision comes only from this desktop modal. Returns { approve }. | 원격 destructive 데스크톱 사람 confirm 모달 승인 거부
@@ -2106,6 +2175,21 @@ Right sidebar layout mode — overlay (floats over content) or push (occupies ar
 ```bash
 sok-debug sidebar.right.mode
 sok-debug sidebar.right.mode '{"mode":"push"}'
+```
+
+## `sidecar.new`
+
+Scaffold a new releasable service sidecar under the sidecars workspace: Cargo.toml + release/unit.json (identity), the STATIC targets.json + spec-validator.json pins (byte-verbatim), a serve skeleton (src/{main,lib,service}.rs + tests/wire.rs), stage.sh, and the THIN release.yml that references the single-source pipeline in soksak-spec — it vendors ZERO release scripts. git-inits + registers it as a dev unit. name is unprefixed (id = soksak-sidecar-<name>). | 사이드카 생성 새 스캐폴드 scaffold
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `interface` | string |  | Interface id (default soksak-spec-sidecar-<name>) |
+| `name` | string | ✓ | Unprefixed name; id becomes soksak-sidecar-<name> |
+
+**Returns**: { ok, dir, id }
+
+```bash
+sok-debug sidecar.new '{"name":"widget"}'
 ```
 
 ## `space.activate`
