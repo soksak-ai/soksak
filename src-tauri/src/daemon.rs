@@ -127,7 +127,7 @@ fn kill_group(child: &Arc<Mutex<Child>>, force: bool) {
 }
 
 /// 플랫폼 셸로 스폰 — GUI PATH 함정 대응(로그인 셸 래핑, npm_global_dirs 와 동일 기법).
-fn spawn_shell(root: &str, cmd: &str) -> Result<Child, String> {
+fn spawn_shell(root: &str, cmd: &str, env: Option<&HashMap<String, String>>) -> Result<Child, String> {
     #[cfg(unix)]
     let mut c = {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
@@ -145,6 +145,11 @@ fn spawn_shell(root: &str, cmd: &str) -> Result<Child, String> {
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // Caller-supplied env (e.g. GH_TOKEN for the publish gh child). Injected into the child's
+    // environment — not this process's — so a token never lands in the parent or its trace.
+    if let Some(vars) = env {
+        c.envs(vars);
+    }
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
@@ -183,7 +188,7 @@ fn launch(
     restart_on_crash: bool,
     restarts: u32,
 ) -> Result<u32, String> {
-    let mut child = spawn_shell(&root, &cmd)?;
+    let mut child = spawn_shell(&root, &cmd, None)?;
     let pid = child.id();
     let ring: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
     if let Some(out) = child.stdout.take() {
@@ -391,8 +396,9 @@ pub fn daemon_run_once(
     root: String,
     cmd: String,
     timeout_secs: Option<u64>,
+    env: Option<HashMap<String, String>>,
 ) -> Result<serde_json::Value, String> {
-    let mut child = spawn_shell(&root, &cmd)?;
+    let mut child = spawn_shell(&root, &cmd, env.as_ref())?;
     let ring: Arc<Mutex<VecDeque<String>>> = Arc::new(Mutex::new(VecDeque::new()));
     if let Some(out) = child.stdout.take() {
         pump_lines(out, ring.clone());
@@ -459,11 +465,58 @@ mod tests {
         ));
     }
 
+    // S2 — daemon_run_once is the spawn bridge the core release commands ride: the release summary
+    // is a multi-KB single line, and release.publish needs a token in the child env.
+    #[cfg(unix)]
+    #[test]
+    fn 대용량_단일_라인은_온전히_캡처된다() {
+        // BufRead::lines has no per-line cap; RING_CAP bounds line COUNT (keeps the last 500), so
+        // the trailing summary line survives intact — no truncation of a multi-KB release.json.
+        let out = daemon_run_once(
+            "/tmp".into(),
+            "head -c 50000 /dev/zero | tr '\\0' X".into(),
+            Some(10),
+            None,
+        )
+        .expect("run");
+        let lines = out["lines"].as_array().expect("lines");
+        assert!(
+            lines.iter().any(|l| l
+                .as_str()
+                .map(|s| s.len() == 50000 && s.bytes().all(|b| b == b'X'))
+                .unwrap_or(false)),
+            "a 50000-char single line must be captured intact"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn env_는_자식에만_주입된다() {
+        // release.publish's GH_TOKEN path — injected into the child, never the parent/trace.
+        let mut env = HashMap::new();
+        env.insert("SOKSAK_TEST_ENV".to_string(), "injected-marker-xyz".to_string());
+        let out = daemon_run_once(
+            "/tmp".into(),
+            "printf %s \"$SOKSAK_TEST_ENV\"".into(),
+            Some(10),
+            Some(env),
+        )
+        .expect("run");
+        let lines = out["lines"].as_array().expect("lines");
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.as_str().map(|s| s.contains("injected-marker-xyz")).unwrap_or(false)),
+            "the injected env var must reach the child"
+        );
+        assert!(std::env::var("SOKSAK_TEST_ENV").is_err(), "must not leak into the parent env");
+    }
+
     #[cfg(unix)]
     #[test]
     fn 스폰_그룹킬_수명() {
         // 손자를 낳는 셸 명령 — 그룹 킬이 트리 전체를 회수하는지.
-        let child = spawn_shell("/tmp", "sleep 30 & sleep 30").expect("spawn");
+        let child = spawn_shell("/tmp", "sleep 30 & sleep 30", None).expect("spawn");
         let pid = child.id();
         let child = Arc::new(Mutex::new(child));
         std::thread::sleep(std::time::Duration::from_millis(200));
