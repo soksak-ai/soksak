@@ -39,11 +39,10 @@ describe("RecoverySetupModal — 1회성 복구코드 게이트", () => {
       root = createRoot(host);
       root.render(<RecoverySetupModal />);
     });
-    const code = host.querySelector(
-      '[data-node="modal/encrypt-setup/code"]',
-    ) as HTMLInputElement | null;
+    // 코드는 줄바꿈 블록(input 아님)이라 전체가 잘리지 않고 보여야 한다 — textContent 로 전량 확인.
+    const code = host.querySelector('[data-node="modal/encrypt-setup/code"]');
     expect(code).not.toBeNull();
-    expect(code?.value).toBe("TEST-CODE-ABCD-1234");
+    expect(code?.textContent).toBe("TEST-CODE-ABCD-1234");
 
     const done = host.querySelector(
       '[data-node="modal/encrypt-setup/done"]',

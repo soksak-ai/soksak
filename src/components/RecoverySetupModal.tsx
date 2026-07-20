@@ -44,13 +44,33 @@ export function RecoverySetupModal() {
       >
         <div className="dconfirm-title">{t("encrypt.setup.title")}</div>
         <div className="plugin-consent-notice">{t("encrypt.setup.desc")}</div>
-        <input
+        {/* 복구코드는 8그룹(39자)이라 한 줄 input 은 넘쳐 잘린다 — 반드시 전부 보여야(1회성) 하므로 줄바꿈
+            블록으로 전체 표시하고, 전역 user-select:none 을 해제해 선택·복사 가능하게 한다. */}
+        <div
           className="dctl dctl-mono"
-          readOnly
-          value={pending.code}
           data-node="modal/encrypt-setup/code"
-          onFocus={(e) => e.currentTarget.select()}
-        />
+          style={{
+            height: "auto",
+            whiteSpace: "normal",
+            wordBreak: "break-all",
+            textAlign: "center",
+            lineHeight: 1.6,
+            userSelect: "text",
+            WebkitUserSelect: "text",
+          }}
+        >
+          {pending.code}
+        </div>
+        <button
+          type="button"
+          className="dbtn"
+          data-node="modal/encrypt-setup/copy"
+          onClick={() =>
+            void navigator.clipboard?.writeText(pending.code).catch(() => {})
+          }
+        >
+          {t("encrypt.setup.copy")}
+        </button>
         <label className="dctl dctl-check">
           <input
             type="checkbox"
