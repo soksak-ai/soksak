@@ -145,6 +145,17 @@ soksak-validate plugin plugin.json  # GitHub Release tarball을 SHA-256 검증 �
 한 줄이면 끝 — 그걸 git hook 에 넣을지 CI 에 넣을지는 *저자의 선택*이지 코어가 git·npm·빌드를
 강요하지 않는다. 런타임 conformance(선언 ≡ 실제 배선)는 앱이 필요하므로 `sok plugin.conformance` 로 확인한다.
 
+`plugin.conformance` 를 읽을 때 두 가지를 전제하라.
+
+- **플러그인 런타임은 창-로컬이다.** 적재·활성·conformance 는 그 창의 런타임에 묻는다. 창을 지정하지
+  않으면 다른 창으로 라우팅돼 `TARGET_NOT_FOUND`(플러그인 없음)가 난다 — 플러그인이 깨진 게 아니라
+  질문을 엉뚱한 창에 한 것이다. `sok --window <label> plugin.conformance …` 로 적재한 창을 지목하라.
+- **`nodes` 는 그 순간 렌더된 DOM 을 스캔한다.** commands·views 는 activate 시 등록되어 UI 상태와
+  무관하지만, 노드는 지금 화면에 있는 것만 잡힌다. 뷰를 안 열었으면 전부 missing 이고, 아코디언으로
+  상호배타인 두 그룹은 한쪽만, 탭 뒤의 노드는 그 탭일 때만, 문서에 없는 섹션의 슬롯은 아예 안 잡힌다.
+  따라서 `nodes.missing` 은 결함 신호가 아니라 **아직 그 상태를 만들지 않았다는 신호**다 — 선언한
+  노드로 상태를 몰아가며(`ui.input.click` 로 탭·그룹 전환) 각 종류가 자기 상태에서 배선되는지 확인하라.
+
 ## 매니페스트 레퍼런스
 
 | 필드 | 필수 | 설명 |
