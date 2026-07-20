@@ -39,6 +39,7 @@ export function registerReleaseCatalog(): void {
       releaseDir: { type: "string", required: true, description: "Dir holding release.json + 3 conformance reports" },
     },
     returns: "{ ok, stdout }",
+    message: () => "release directory validated against the pinned spec",
     examples: ['release.validate \'{"unitRoot":"…","specRoot":".pipeline","releaseDir":"dist-release"}\''],
     handler: async (p) => {
       const req = buildValidateRequest({
@@ -64,6 +65,7 @@ export function registerReleaseCatalog(): void {
       out: { type: "string", required: true, description: "Empty output dir for release.json + conformance reports" },
     },
     returns: "{ ok, releaseJson, manifestSha256, matrix }",
+    message: (d) => `built the release manifest — ${Array.isArray(d.matrix) ? d.matrix.length : 0} targets`,
     examples: ['release.build \'{"unitRoot":"…","specRoot":".pipeline","commit":"<40hex>","tag":"v0.0.1","artifacts":"dist","out":"dist-release"}\''],
     handler: async (p) => {
       const req = buildBuildRequest({
@@ -96,6 +98,7 @@ export function registerReleaseCatalog(): void {
       confirm: { type: "boolean", required: true, description: "Must be true — this cuts an immutable, unrecuttable release" },
     },
     returns: "{ ok, url }",
+    message: (d) => `published ${typeof d.url === "string" ? d.url : "the immutable release"}`,
     examples: ['release.publish \'{"repo":"soksak-ai/soksak-sidecar-db-studio","tag":"v0.0.1","commit":"<sha>","artifactsDir":"dist","releaseDir":"dist-release","confirm":true}\''],
     handler: async (p) => {
       if (p.confirm !== true) {
