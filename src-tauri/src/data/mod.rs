@@ -33,8 +33,25 @@ impl DbState {
 }
 
 // ~/.soksak/data/soksak.db — 단일 파일(백업=파일 복사/VACUUM INTO).
+// SOKSAK_DATA_DIR 오버라이드(debug 빌드 전용): 있으면 DB(+WAL/SHM/FTS)가 이 디렉토리에 산다. e2e·도구가
+// 홈의 설치본 플러그인·사이드카는 그대로 쓰면서 DB 만 disposable temp 로 격리하는 오픈-테스트 메커니즘
+// (SOKSAK_VAULT_PATH 의 DB 대칭, home.rs SOKSAK_HOME 과 동형 debug-gate). DB 위치를 옮기는 env 는 새
+// 프로덕션 표면이라 release 엔 이 분기를 컴파일하지 않는다.
+fn data_dir_from(data_dir_env: Option<&str>, home: &Path) -> PathBuf {
+    #[cfg(debug_assertions)]
+    if let Some(d) = data_dir_env.filter(|s| !s.is_empty()) {
+        return PathBuf::from(d);
+    }
+    #[cfg(not(debug_assertions))]
+    let _ = data_dir_env;
+    home.join("data")
+}
+
 pub fn db_path() -> Result<PathBuf, String> {
-    let dir = crate::home::soksak_home().join("data");
+    let dir = data_dir_from(
+        std::env::var("SOKSAK_DATA_DIR").ok().as_deref(),
+        &crate::home::soksak_home(),
+    );
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir.join("soksak.db"))
 }
@@ -268,6 +285,31 @@ mod tests {
         drop(conn);
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(mode, 0o600, "soksak.db 는 0600 이어야 한다(실제 {mode:o})");
+    }
+
+    // SOKSAK_DATA_DIR(debug 전용)이 데이터 디렉토리를 지정 — e2e 가 홈의 설치본 플러그인·사이드카는 그대로
+    // 두고 DB 만 disposable temp 로 격리한다. 빈 값·부재는 홈/data 폴백. release 엔 이 분기가 없어
+    // (cfg debug_assertions) 이 계약도 debug 에서만 검증한다(새 프로덕션 DB-override 표면 부재의 대칭).
+    #[cfg(debug_assertions)]
+    #[test]
+    fn data_dir_env_overrides_data_dir_in_debug() {
+        use super::data_dir_from;
+        use std::path::{Path, PathBuf};
+        assert_eq!(
+            data_dir_from(Some("/tmp/e2e-data"), Path::new("/home/max/.soksak-debug")),
+            PathBuf::from("/tmp/e2e-data"),
+            "SOKSAK_DATA_DIR 이 데이터 디렉토리를 그대로 지정"
+        );
+        assert_eq!(
+            data_dir_from(Some(""), Path::new("/home/max/.soksak-debug")),
+            PathBuf::from("/home/max/.soksak-debug/data"),
+            "빈 값은 무시 → 홈/data 폴백"
+        );
+        assert_eq!(
+            data_dir_from(None, Path::new("/home/max/.soksak-debug")),
+            PathBuf::from("/home/max/.soksak-debug/data"),
+            "부재 → 홈/data 폴백"
+        );
     }
 
     #[test]
