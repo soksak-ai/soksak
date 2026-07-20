@@ -10,11 +10,13 @@
 # window.snapshot 눈검증(R3). 복원 소유권은 플러그인이다(사이드카 rehydrate/봉인-블롭 개봉) —
 # 코어엔 복원 경로가 없다.
 #
-# vault: SOKSAK_VAULT_PATH(격리 볼트) + SOKSAK_VAULT_KEY(자동 unlock) 오픈 메커니즘.
-# 볼트 파일은 런 간 보존한다(삭제 금지) — scope 암호화 키(app.data encryption_keys)가
-# 이 볼트의 S 와 짝이라, 볼트를 지우면 다음 런의 unlock 이 R23(키 등록됨+볼트 부재
-# = 새 볼트 생성 거부)에 막혀 하니스가 스스로를 오염시킨다(실측). 봉인 키 캐시(seal.pub)와
-# 봉인-블롭을 담은 <home>/pty 를 시작·종료 시 정리한다(런 볼트와 재짝지음 — 멱등).
+# 격리: SOKSAK_HOME(debug 전용 오버라이드 — 데이터·볼트·소켓 전부를 disposable 홈으로) + SOKSAK_E2E_KEK
+# (결정적 KEK). P1 이 프로덕션 env 언락(SOKSAK_VAULT_KEY)을 제거했으므로, e2e 는 debug 빌드에만 컴파일되는
+# 결정적 KEK(SOKSAK_E2E_KEK → SHA-256, release 엔 부재)로 키체인 없이 볼트를 연다. SOKSAK_HOME 으로 홈을
+# 통째 격리하니 실홈(공유 DB·봉투 키)을 절대 안 건드린다 — 그래서 파괴적 리셋(DELETE)이 필요 없고, 정리는
+# 격리 홈 디렉터리만 지우면 안전하다. 격리 홈은 런 간 보존 — 같은 e2e KEK 로 볼트를 재오픈해 app1→app2
+# 재시작·다음 런에서 봉인 체크포인트를 복호한다(fresh/CI 는 첫 런이 새로 만든다). 플러그인 설치본만 실홈에서
+# 심링크 재사용(설치≠데이터). 봉인 키 캐시(seal.pub)·봉인-블롭(<home>/pty)은 시작·종료 시 정리한다(멱등).
 #
 # 사용: bash scripts/e2e/pty-cold-restore.sh [--identity debug]   (KEEP=1: 캡처 보존)
 set -uo pipefail
@@ -26,7 +28,13 @@ TARGET_DIR="$(cd "$ROOT_DIR/src-tauri" && cargo metadata --format-version 1 --no
   | python3 -c "import json,sys;print(json.load(sys.stdin)['target_directory'])")"
 APP_BUNDLE="$TARGET_DIR/debug/bundle/macos/soksak-$IDENTITY.app"
 APP_BIN="$APP_BUNDLE/Contents/MacOS/soksak-$IDENTITY"
-if [ "$IDENTITY" = "app" ]; then E2E_APP_HOME="$HOME/.soksak"; else E2E_APP_HOME="$HOME/.soksak-$IDENTITY"; fi
+if [ "$IDENTITY" = "app" ]; then REAL_HOME="$HOME/.soksak"; else REAL_HOME="$HOME/.soksak-$IDENTITY"; fi
+# 격리 홈(debug 전용 SOKSAK_HOME 오버라이드) — 데이터·볼트·소켓을 실홈과 분리해 공유 DB 를 안 건드리고
+# 봉투 키·레코드를 격리한다(안전 리셋 = 이 디렉터리만 정리). 플러그인 설치본만 실홈에서 심링크 재사용
+# (설치≠데이터 — 터미널 엔진 플러그인은 실홈에 설치돼 있고, 격리 홈은 그걸 읽어 활성화만 한다).
+E2E_APP_HOME="$HOME/.soksak-e2e/iso-$IDENTITY"
+mkdir -p "$E2E_APP_HOME"
+[ -d "$REAL_HOME/plugins" ] && [ ! -e "$E2E_APP_HOME/plugins" ] && ln -s "$REAL_HOME/plugins" "$E2E_APP_HOME/plugins"
 SOCK="$E2E_APP_HOME/com.soksak.$IDENTITY.sock"
 PTYD_BIN="$TARGET_DIR/debug/soksak-ptyd"
 
@@ -55,7 +63,6 @@ ALIAS = "pty-cold-realistic"
 PROGRAM = os.environ.get("SOKSAK_TERM_PROGRAM", "terminal-xterm")
 MARK = f"PCOLD{os.getpid()}"
 TMP = os.path.join(E2E_HOME, "pty-cold-artifacts")
-VAULT = os.path.join(TMP, "vault.json")
 for d in (ROOT, PROJ, TMP):
     os.makedirs(d, exist_ok=True)
 
@@ -93,8 +100,8 @@ def app_alive():
 def launch():
     env = dict(os.environ)
     env["SOKSAK_PTYD_BIN"] = PTYD_BIN
-    env["SOKSAK_VAULT_PATH"] = VAULT       # 격리 볼트(사용자 실볼트 비오염)
-    env["SOKSAK_VAULT_KEY"] = "pty-cold-e2e-pass"  # 자동 unlock(결정적)
+    env["SOKSAK_HOME"] = APP_HOME          # debug 격리 홈(데이터·볼트·소켓 전부 — 실홈 미오염, 안전 리셋)
+    env["SOKSAK_E2E_KEK"] = "pty-cold-e2e-pass"  # debug 빌드 전용 결정적 KEK(키체인 불요·CI·release 엔 부재)
     log = open(os.path.join(TMP, "app.log"), "ab")
     subprocess.Popen([APP_BIN], env=env, stdout=log, stderr=log, start_new_session=True)
     assert wait_socket(), "앱 소켓 기동 실패"
