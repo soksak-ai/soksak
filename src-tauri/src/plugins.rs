@@ -410,6 +410,423 @@ pub fn plugin_dev_new(id: String) -> Result<PluginInstallResult, String> {
     Ok(result)
 }
 
+// ── sidecar.new — releasable service-sidecar scaffold ────────────────────────
+// Mirrors plugin_dev_new_in's atomic-stage → git init → rename → set_source transaction, but emits
+// the sidecar shape: IDENTITY (Cargo.toml, release/unit.json) + STATIC pins (targets.json,
+// spec-validator.json — byte-verbatim, never templated) + a serve skeleton + the THIN release.yml
+// that references the single-source release-template in soksak-spec. It vendors ZERO release scripts
+// (the logic lives once in packages/plugin-spec/release-template). The pin below is the one commit
+// the soksak-spec-service Cargo dep, the validator checkout, and spec-validator.json all share.
+const SIDECAR_SPEC_PIN: &str = "d7f54852754195527f125d1fc11362316157d19b";
+
+const SIDECAR_TARGETS_JSON: &str = r#"[
+  {
+    "target": "aarch64-apple-darwin",
+    "runner": "macos-15"
+  },
+  {
+    "target": "aarch64-unknown-linux-gnu",
+    "runner": "ubuntu-24.04-arm"
+  },
+  {
+    "target": "x86_64-apple-darwin",
+    "runner": "macos-15-intel"
+  },
+  {
+    "target": "x86_64-pc-windows-msvc",
+    "runner": "windows-2025"
+  },
+  {
+    "target": "x86_64-unknown-linux-gnu",
+    "runner": "ubuntu-24.04"
+  }
+]
+"#;
+
+const SIDECAR_SERVICE_RS: &str = r#"//! Service handler skeleton — replace the `echo` op with the real ones. The wire framing (hello,
+//! req/res, idempotency, the mutation mutex) lives in the shared serve harness; this only
+//! implements op handlers (PS17).
+use serde_json::{json, Value};
+use soksak_spec_service::{serve_stdio, Emit, ErrCode, OpCtx, Outcome, ServiceHandler};
+
+pub struct Service;
+
+impl Service {
+    pub fn new() -> Self {
+        Service
+    }
+}
+
+impl Default for Service {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ServiceHandler for Service {
+    fn ops(&self) -> Vec<String> {
+        vec!["echo".to_string()]
+    }
+
+    fn read_only(&self, op: &str) -> bool {
+        op == "echo"
+    }
+
+    fn handle(&self, op: &str, params: Value, _ctx: &OpCtx, _emit: &Emit) -> Outcome {
+        match op {
+            "echo" => Outcome::ok(json!({ "echo": params })),
+            other => Outcome::err(ErrCode::UnknownOp, format!("unknown op: {other}")),
+        }
+    }
+}
+
+pub fn run_serve() {
+    serve_stdio(Service::new());
+}
+"#;
+
+const SIDECAR_CARGO_TOML: &str = r#"[package]
+name = "__ID__"
+version = "0.0.1"
+edition = "2021"
+publish = false
+repository = "https://github.com/soksak-ai/__ID__"
+
+[lib]
+name = "__CRATE__"
+
+[[bin]]
+name = "__ID__"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+soksak-spec-service = { git = "https://github.com/soksak-ai/soksak-spec.git", rev = "__PIN__", package = "soksak-spec-service" }
+"#;
+
+const SIDECAR_UNIT_JSON: &str = r#"{
+  "id": "__ID__",
+  "version": "0.0.1",
+  "releaseTag": "v0.0.1",
+  "repository": "https://github.com/soksak-ai/__ID__",
+  "interface": { "id": "__INTERFACE__", "version": "0.0.1" }
+}
+"#;
+
+const SIDECAR_SPEC_VALIDATOR_JSON: &str = r#"{
+  "repository": "https://github.com/soksak-ai/soksak-spec",
+  "commit": "__PIN__",
+  "validator": "packages/plugin-spec/bin/validate.mjs"
+}
+"#;
+
+const SIDECAR_MAIN_RS: &str = r#"//! __ID__ service sidecar. Spawned by the core ServiceManager with the `serve` subcommand; speaks
+//! the soksak-spec-service NDJSON wire over stdio.
+fn main() {
+    let argv: Vec<String> = std::env::args().skip(1).collect();
+    match argv.first().map(String::as_str) {
+        Some("serve") | None => __CRATE__::run_serve(),
+        Some(other) => {
+            eprintln!("__ID__: unknown subcommand '{other}' (expected: serve)");
+            std::process::exit(2);
+        }
+    }
+}
+"#;
+
+const SIDECAR_LIB_RS: &str = r#"//! __ID__ service sidecar library. Op handlers + the serve entry point.
+pub mod service;
+
+pub use service::run_serve;
+"#;
+
+const SIDECAR_WIRE_RS: &str = r#"//! Wire smoke test — spawns the real binary, speaks the NDJSON wire, asserts hello + one op.
+//! Extend as you add ops.
+use std::io::{BufRead, BufReader, Write};
+use std::process::{Command, Stdio};
+
+#[test]
+fn hello_then_echo() {
+    let mut child = Command::new(env!("CARGO_BIN_EXE___ID__"))
+        .arg("serve")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("spawn the sidecar");
+    let mut stdin = child.stdin.take().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let hello = lines.next().expect("a hello frame").expect("read hello");
+    assert!(hello.contains("\"t\":\"hello\""), "expected a hello frame, got: {hello}");
+    writeln!(stdin, "{{\"t\":\"req\",\"id\":\"1\",\"op\":\"echo\",\"params\":{{\"x\":1}}}}").expect("write req");
+    let res = lines.next().expect("a res frame").expect("read res");
+    assert!(res.contains("\"echo\""), "expected an echo res, got: {res}");
+    let _ = child.kill();
+}
+"#;
+
+const SIDECAR_STAGE_SH: &str = r#"#!/usr/bin/env bash
+# Build the sidecar and stage it into <dist>/ for local core-routed loading, or cross-build for a
+# release target (the 5-platform CI matrix calls `./stage.sh dist <triple>`). No native engine —
+# a service sidecar is a plain cargo build. Usage: stage.sh [<dist-dir>] [<target-triple>]
+set -euo pipefail
+export PATH="$HOME/.cargo/bin:$PATH"
+
+dist="${1:-dist}"
+target="${2:-}"
+name="__ID__"
+
+ext=""
+case "$target" in *windows*) ext=".exe" ;; esac
+
+if [ -n "$target" ]; then
+  cargo build --release --target "$target" --bin "$name"
+  reldir="$target/release"
+else
+  cargo build --release --bin "$name"
+  reldir="release"
+fi
+
+TARGET_DIR="${CARGO_TARGET_DIR:-target}"
+src="$TARGET_DIR/$reldir/$name$ext"
+[ -f "$src" ] || { echo "release binary not found at $src" >&2; exit 1; }
+
+mkdir -p "$dist"
+tmp="$dist/.$name.tmp.$$"
+cp "$src" "$tmp"
+chmod +x "$tmp"
+mv -f "$tmp" "$dist/$name$ext"
+echo "staged: $dist/$name$ext"
+"#;
+
+const SIDECAR_README: &str = r#"# __ID__
+
+A soksak service sidecar (interface `__INTERFACE__`). Spawned by the core ServiceManager; speaks the
+soksak-spec-service NDJSON wire over stdio.
+
+- `cargo test` — the wire smoke test.
+- `./stage.sh` — build + stage into `dist/` for local core-routed loading.
+- Release is driven by the single-source pipeline in `soksak-ai/soksak-spec`
+  (`.github/workflows/release.yml` checks it out at the pin and runs it — this repo vendors zero
+  release logic). Cut a release with the `release` workflow_dispatch on `main`.
+"#;
+
+const SIDECAR_GITIGNORE: &str = "/target\n/dist\n";
+
+const SIDECAR_RELEASE_YML: &str = r#"# Release — five-platform native build, then the single-source publish pipeline from soksak-spec.
+# This repo vendors NO release logic: the publish job checks out soksak-ai/soksak-spec at the pin
+# and runs its release-template scripts against this unit's artifacts.
+name: release
+on:
+  workflow_dispatch:
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: "1.96.0"
+          targets: ${{ matrix.target }}
+      - name: Build and stage the release binary
+        shell: bash
+        run: ./stage.sh dist "${{ matrix.target }}"
+      - id: archive
+        shell: bash
+        run: |
+          ver="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          out="__ID__-$ver-${{ matrix.target }}.tar.gz"
+          tar -czf "$out" -C dist .
+          if command -v sha256sum >/dev/null 2>&1; then sha256sum "$out" | tee "$out.sha256"; else shasum -a 256 "$out" | tee "$out.sha256"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dist-${{ matrix.target }}
+          path: |
+            __ID__-*.tar.gz
+            __ID__-*.tar.gz.sha256
+          if-no-files-found: error
+          compression-level: 0
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: soksak-ai/soksak-spec
+          ref: __PIN__
+          path: .pipeline
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22.12.0"
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
+        with:
+          version: "10.30.3"
+      - id: identity
+        run: |
+          ver="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          echo "tag=v$ver" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: Build the pinned public validator
+        working-directory: .pipeline
+        run: |
+          pnpm --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile
+          pnpm --filter @soksak-ai/plugin-spec build
+      - name: Build + validate the release documents (single-source scripts, cwd = this unit)
+        run: |
+          node .pipeline/packages/plugin-spec/release-template/sidecar/build-release.mjs --commit "${{ github.sha }}" --tag "${{ steps.identity.outputs.tag }}" --artifacts dist --out dist-release
+          node .pipeline/packages/plugin-spec/release-template/sidecar/validate-with-spec.mjs --spec-root .pipeline --release-dir dist-release
+      - name: Create least-privilege release token
+        id: release-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ vars.SOKSAK_RELEASE_CLIENT_ID }}
+          private-key: ${{ secrets.SOKSAK_RELEASE_PRIVATE_KEY }}
+          permission-administration: read
+          permission-contents: write
+      - name: Publish through owner-enforced immutable releases
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+        run: |
+          enforced="$(gh api "repos/${{ github.repository }}/immutable-releases" --jq '.enabled and .enforced_by_owner')"
+          test "$enforced" = "true" || { echo "owner-enforced immutable releases must be enabled before tagging" >&2; exit 1; }
+          tag="${{ steps.identity.outputs.tag }}"
+          assets="$(find dist dist-release -type f \( -name '*.tar.gz' -o -name '*.sha256' -o -name '*.json' \) | sort)"
+          test "$(printf '%s\n' "$assets" | grep -c '\.tar\.gz$')" -eq 5 || { echo "expected 5 platform archives" >&2; exit 1; }
+          test "$(printf '%s\n' "$assets" | grep -c '\.tar\.gz\.sha256$')" -eq 5 || { echo "expected 5 archive checksums" >&2; exit 1; }
+          test "$(printf '%s\n' "$assets" | grep -c '/release\.json$')" -eq 1 || { echo "expected the owner release manifest" >&2; exit 1; }
+          test "$(printf '%s\n' "$assets" | grep -c '/conformance-[a-z]*\.json$')" -eq 3 || { echo "expected 3 conformance reports" >&2; exit 1; }
+          gh release create "$tag" --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "$tag" --generate-notes $assets
+"#;
+
+/// Validate an unprefixed sidecar name (the id is `soksak-sidecar-<name>`).
+fn sanitize_sidecar_name(name: &str) -> Result<(), String> {
+    let mut chars = name.chars();
+    let head = chars.next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    let rest = chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if head && rest {
+        Ok(())
+    } else {
+        Err(format!("잘못된 사이드카 이름: {name:?} (소문자·숫자·- 만, 접두사 없이)"))
+    }
+}
+
+fn render_sidecar(template: &str, id: &str, crate_name: &str, interface: &str) -> String {
+    template
+        .replace("__ID__", id)
+        .replace("__CRATE__", crate_name)
+        .replace("__INTERFACE__", interface)
+        .replace("__PIN__", SIDECAR_SPEC_PIN)
+}
+
+/// Scaffold a releasable service sidecar under `base`. `name` is unprefixed; the id is
+/// `soksak-sidecar-<name>`, the default interface `soksak-spec-sidecar-<name>`. Atomic: stages into
+/// a temp dir, git-inits, then renames into place; any failure rolls back the staging dir.
+fn sidecar_dev_new_in(
+    base: &Path,
+    name: &str,
+    interface: Option<&str>,
+) -> Result<PluginInstallResult, String> {
+    sanitize_sidecar_name(name)?;
+    let id = format!("soksak-sidecar-{name}");
+    let interface = interface.map(str::to_string).unwrap_or_else(|| format!("soksak-spec-sidecar-{name}"));
+    if !interface.strip_prefix("soksak-spec-sidecar-").is_some_and(|r| {
+        !r.is_empty() && r.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    }) {
+        return Err(format!("잘못된 interface id: {interface:?} (soksak-spec-sidecar-<...>)"));
+    }
+    let crate_name = id.replace('-', "_");
+
+    std::fs::create_dir_all(base).map_err(|e| e.to_string())?;
+    let dir = base.join(&id);
+    if dir.exists() {
+        return Err(format!("이미 존재하는 사이드카 폴더: {id}"));
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let staging = base.join(format!(".tmp-{id}-{}-{nanos}", std::process::id()));
+    std::fs::create_dir(&staging).map_err(|e| e.to_string())?;
+
+    let r = &render_sidecar;
+    let staged = (|| {
+        let write = |rel: &str, body: String| -> Result<(), String> {
+            let p = staging.join(rel);
+            if let Some(parent) = p.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            std::fs::write(&p, body).map_err(|e| e.to_string())
+        };
+        write("Cargo.toml", r(SIDECAR_CARGO_TOML, &id, &crate_name, &interface))?;
+        write("release/unit.json", r(SIDECAR_UNIT_JSON, &id, &crate_name, &interface))?;
+        // targets.json + spec-validator.json are STATIC pins — byte-verbatim, never templated.
+        write("release/targets.json", SIDECAR_TARGETS_JSON.to_string())?;
+        write("validation/spec-validator.json", render_sidecar(SIDECAR_SPEC_VALIDATOR_JSON, &id, &crate_name, &interface))?;
+        write("src/main.rs", r(SIDECAR_MAIN_RS, &id, &crate_name, &interface))?;
+        write("src/lib.rs", r(SIDECAR_LIB_RS, &id, &crate_name, &interface))?;
+        write("src/service.rs", SIDECAR_SERVICE_RS.to_string())?;
+        write("tests/wire.rs", r(SIDECAR_WIRE_RS, &id, &crate_name, &interface))?;
+        write("stage.sh", r(SIDECAR_STAGE_SH, &id, &crate_name, &interface))?;
+        write("README.md", r(SIDECAR_README, &id, &crate_name, &interface))?;
+        write(".gitignore", SIDECAR_GITIGNORE.to_string())?;
+        write(".github/workflows/release.yml", r(SIDECAR_RELEASE_YML, &id, &crate_name, &interface))?;
+        // stage.sh executable bit — cosmetic on git but correct on disk.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(staging.join("stage.sh"), std::fs::Permissions::from_mode(0o755));
+        }
+        git_run(std::process::Command::new("git").args(["init", "-q"]).arg(&staging))?;
+        std::fs::rename(&staging, &dir).map_err(|e| format!("workspace 원자 교체 실패: {e}"))?;
+        Ok::<(), String>(())
+    })();
+    if let Err(e) = staged {
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err(e);
+    }
+    Ok(PluginInstallResult {
+        dir: dir.to_string_lossy().to_string(),
+        dir_name: id,
+        manifest: render_sidecar(SIDECAR_UNIT_JSON, "", "", &interface),
+    })
+}
+
+#[tauri::command]
+pub fn sidecar_dev_new(name: String, interface: Option<String>) -> Result<PluginInstallResult, String> {
+    let base = crate::home::soksak_home().join("workspaces").join("sidecars");
+    let result = sidecar_dev_new_in(&base, &name, interface.as_deref())?;
+    let dir = PathBuf::from(&result.dir);
+    if let Err(e) = crate::unit_dev::set_source("sidecar", &result.dir_name, &dir) {
+        let _ = std::fs::remove_dir_all(&dir);
+        return Err(e);
+    }
+    Ok(result)
+}
+
 // 플러그인 제거(디렉토리째). 전용 저장소(plugins-data)는 남긴다 — 재설치 시 데이터 보존.
 #[tauri::command]
 pub fn plugin_remove(id: String) -> Result<(), String> {
@@ -483,6 +900,59 @@ pub fn plugin_data_list(id: String) -> Result<Vec<String>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sidecar_scaffold_shape() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let base = std::env::temp_dir().join(format!("sc-scaffold-{}-{nanos}", std::process::id()));
+        let r = sidecar_dev_new_in(&base, "widget", None).expect("scaffold");
+        assert_eq!(r.dir_name, "soksak-sidecar-widget");
+        let dir = std::path::PathBuf::from(&r.dir);
+
+        // IDENTITY: Cargo publish=false + bin name, NO build.rs (a service sidecar has no engine).
+        let cargo = std::fs::read_to_string(dir.join("Cargo.toml")).unwrap();
+        assert!(cargo.contains("publish = false"));
+        assert!(cargo.contains("name = \"soksak-sidecar-widget\""));
+        assert!(cargo.contains(SIDECAR_SPEC_PIN));
+        assert!(!dir.join("build.rs").exists());
+
+        // unit.json — releaseTag/repository derive from id, interface.version === version.
+        let unit: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("release/unit.json")).unwrap()).unwrap();
+        assert_eq!(unit["id"], "soksak-sidecar-widget");
+        assert_eq!(unit["releaseTag"], "v0.0.1");
+        assert_eq!(unit["repository"], "https://github.com/soksak-ai/soksak-sidecar-widget");
+        assert_eq!(unit["interface"]["id"], "soksak-spec-sidecar-widget");
+        assert_eq!(unit["interface"]["version"], "0.0.1");
+
+        // STATIC pins present; spec-validator carries the shared commit.
+        assert!(dir.join("release/targets.json").exists());
+        let pin: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("validation/spec-validator.json")).unwrap()).unwrap();
+        assert_eq!(pin["commit"], SIDECAR_SPEC_PIN);
+
+        // git initialized; vendors ZERO release scripts (logic lives in soksak-spec).
+        assert!(dir.join(".git").exists());
+        assert!(!dir.join("scripts").exists());
+        assert!(dir.join(".github/workflows/release.yml").exists());
+        assert!(dir.join("src/service.rs").exists());
+
+        // custom interface honored.
+        let r2 = sidecar_dev_new_in(&base, "gauge", Some("soksak-spec-sidecar-metrics")).expect("scaffold2");
+        let unit2: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(std::path::Path::new(&r2.dir).join("release/unit.json")).unwrap()).unwrap();
+        assert_eq!(unit2["interface"]["id"], "soksak-spec-sidecar-metrics");
+
+        // refusals: existing dir, bad name, interface outside the sidecar namespace.
+        assert!(sidecar_dev_new_in(&base, "widget", None).is_err());
+        assert!(sidecar_dev_new_in(&base, "Bad", None).is_err());
+        assert!(sidecar_dev_new_in(&base, "ok", Some("soksak-browser-spec")).is_err());
+
+        std::fs::remove_dir_all(&base).ok();
+    }
 
     #[test]
     fn sanitize_id_rules() {
