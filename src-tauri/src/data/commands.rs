@@ -358,12 +358,9 @@ pub fn data_encrypt_recover(
     if scope.is_empty() {
         return Err("scope 필요".to_string());
     }
-    if !secrets.is_unlocked() {
-        return Err(
-            "KEK 취득 불가(no secret service) — 복구는 device 키체인 접근 필요(S 재저장에 KEK 필요)"
-                .to_string(),
-        );
-    }
+    // is_unlocked 게이트를 두지 않는다 — 복구 시나리오(키체인 분실/새 기계/폴더 sync)는 정의상 vault 가
+    // 안 열리는 상태다. 여기서 게이트하면 정확한 복구코드로도 영영 못 여는 deadlock(적대검증 확인). 코드
+    // 검증은 vault 없이 선행하고, 저장은 recover_into_vault 가 이 기계 KEK 로 vault 를 확보해 처리한다.
     let ak = with_conn(&state, |c| crypto::active_key(c, &scope))?
         .ok_or("암호화 비활성 scope — 복구 대상 아님")?;
     let blob_json = with_conn(&state, |c| crypto::active_recovery(c, &scope))?
@@ -381,8 +378,9 @@ pub fn data_encrypt_recover(
     if crate::secrets::public_from_secret(&s) != ak.public_key {
         return Err("복구된 키가 등록 publicKey 와 불일치 — 거부".to_string());
     }
-    // 현재 vault(새 passphrase)에 S 재저장 → 이제 KEK 로 열린다.
-    secrets.put_data_key(&ak.key_id, &s)?;
+    // 이 기계 KEK 로 vault 를 확보하고 S 저장 → 봉인 레코드가 여기서 다시 열린다. KEK 미도달(no secret
+    // service)이면 여기서 loud Err. 코드 검증(unwrap+P 일치)을 통과한 뒤라 잘못된 코드는 여기 못 온다.
+    secrets.recover_into_vault(&ak.key_id, &s)?;
     Ok(())
 }
 
@@ -515,10 +513,12 @@ pub fn data_encrypt_convert(
         }
     }
     // convert 는 평문 doc 을 in-place 로 봉인 전환한다. secure_delete=ON 이 freed 셀을 0 채우지만,
-    // 확실한 잔존 제거를 위해 실제 전환이 있었으면 full VACUUM(freelist 째 재기록) + WAL truncate 로
-    // 전환 이전 평문이 파일-carve 로 복원되는 경로를 닫는다.
+    // 확실한 잔존 제거를 위해 실제 전환이 있었으면 (1) FTS 그림자테이블의 tombstone 트라이그램을 rebuild 로
+    // purge 하고 (2) full VACUUM(freelist 째 재기록) + WAL truncate 로 전환 이전 평문이 파일-carve 로
+    // 복원되는 경로를 닫는다(doc 컬럼·FTS 세그먼트 양쪽).
     if total > 0 {
         with_conn(&state, |c| {
+            store::purge_fts_residual(c, &ns, &coll)?;
             c.execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")
                 .map_err(|e| e.to_string())
         })?;

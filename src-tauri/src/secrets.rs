@@ -797,6 +797,32 @@ impl SecretsState {
     pub fn delete_data_key(&self, key_id: &str) -> Result<bool, String> {
         self.delete(DATA_ENC_NS, key_id)
     }
+
+    // [R24] 복구 부트스트랩 — data_encrypt_recover 전용. expect_vault·verifier 가드를 우회해 이 기계 KEK 로
+    // vault 를 확보하고 복구된 S 를 심는다. 복구 시나리오(키체인 분실/새 기계/폴더 sync)는 정의상 vault 가
+    // 안 열리는 상태라, put_data_key 처럼 ensure_open 게이트를 타면 정확한 복구코드로도 영영 못 여는
+    // deadlock 이 된다(적대검증 확인). 복구코드로 S 를 이미 손에 쥔 sanctioned 경로라 "빈 vault 자동생성"
+    // footgun 이 아니다. vault 가 이미 열려 있으면(다른 scope 이미 복구) 그 vault 에 추가(기존 S 보존).
+    pub fn recover_into_vault(&self, key_id: &str, secret: &[u8; 32]) -> Result<(), String> {
+        if self.ensure_open().is_err() {
+            // vault 를 못 연다(파일 부재+키등록, 또는 옛 KEK 봉인) — 현재 기계 KEK 취득(새 기계면
+            // get-or-create). 키체인 미도달(no secret service)이면 여기서 loud Err(평문 폴백 0).
+            let kek = {
+                let guard = self.kek_source.lock().map_err(|e| e.to_string())?;
+                let source = guard
+                    .as_ref()
+                    .ok_or("secret backend 미구성 — KEK 취득 불가")?;
+                source.acquire().map_err(|e| e.to_string())?
+            };
+            // 현재 KEK 로 새 vault 강제 생성·캐시(R23 가드 우회). ensure_open 실패가 곧 기존 vault 개봉불가
+            // 증거라, 덮어써도 복구가능한 것을 잃지 않는다(옛 KEK 봉인 S 는 어차피 이 기계서 접근 불가였다).
+            let vault = Self::new_vault(&kek)?;
+            *self.kek.lock().map_err(|e| e.to_string())? = Some(*kek);
+            *self.vault.lock().map_err(|e| e.to_string())? = Some(vault);
+        }
+        // vault open — 복구된 S 저장(put_data_key 가 캐시된 open vault 를 fast-path 로 봉인·flush).
+        self.put_data_key(key_id, secret)
+    }
 }
 
 // ── 내부 평문 해소(Rust 전용 — process_spawn secret_env 주입) ────────────────
@@ -1323,6 +1349,62 @@ mod tests {
             s.set_expect_vault(false);
             assert!(s.is_unlocked(), "expect 없으면 새 vault 생성 허용");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // (r24, red-team) 복구 부트스트랩 — 파일 부재 + 봉투 키 등록(expect_vault)이라 투명 개방이 막힌
+    // deadlock 상태에서도 recover_into_vault 가 이 기계 KEK 로 vault 를 확보해 복구된 S 를 저장한다.
+    // is_unlocked 게이트로 막던 "정확한 코드로도 못 여는 이관 deadlock" 회귀를 이 테스트가 잡는다.
+    #[test]
+    fn recover_into_vault_bootstraps_when_absent() {
+        let (dir, path) = tmp_vault_dir("recboot");
+        let kek = [7u8; KEY_LEN];
+        let s = [9u8; 32];
+        let st = SecretsState::default();
+        st.set_path(path.clone());
+        st.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek)));
+        st.set_expect_vault(true);
+        assert!(!st.is_unlocked(), "복구 상태 — 투명 개방 불가(deadlock 전제)");
+        st.recover_into_vault("key-1", &s).unwrap();
+        assert!(st.is_unlocked(), "복구 후 vault 열림");
+        assert_eq!(st.get_data_key("key-1").unwrap().unwrap(), s, "복구된 S 저장·조회");
+        assert!(path.exists(), "복구가 vault 파일 확보");
+        // 둘째 scope 복구 — 이미 열린 vault 에 추가(기존 S 보존, 새로 만들지 않음).
+        let s2 = [11u8; 32];
+        st.recover_into_vault("key-2", &s2).unwrap();
+        assert_eq!(st.get_data_key("key-1").unwrap().unwrap(), s, "첫 S 보존");
+        assert_eq!(st.get_data_key("key-2").unwrap().unwrap(), s2, "둘째 S 추가");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // (r24, red-team) 폴더 통째 sync — vault 파일은 있으나 옛 기계 KEK 로 봉인돼 이 기계 KEK 로는 안 열린다.
+    // recover_into_vault 가 현재 KEK 로 vault 를 대체하고 복구된 S 를 저장한다. 옛 KEK 전용 S 는 코드 없이
+    // 어차피 접근 불가였으므로 대체돼도 복구가능한 것 손실 0.
+    #[test]
+    fn recover_into_vault_replaces_foreign_kek_vault() {
+        let (dir, path) = tmp_vault_dir("recforeign");
+        let kek_a = [1u8; KEY_LEN];
+        let kek_b = [2u8; KEY_LEN];
+        let s = [9u8; 32];
+        {
+            let a = SecretsState::default();
+            a.set_path(path.clone());
+            a.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek_a)));
+            a.put_data_key("old-a", &[3u8; 32]).unwrap();
+        }
+        assert!(path.exists());
+        let b = SecretsState::default();
+        b.set_path(path.clone());
+        b.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek_b)));
+        b.set_expect_vault(true);
+        assert!(!b.is_unlocked(), "외래 KEK vault — 못 엶(deadlock 전제)");
+        b.recover_into_vault("key-1", &s).unwrap();
+        assert!(b.is_unlocked(), "복구 후 이 기계 KEK vault 열림");
+        assert_eq!(b.get_data_key("key-1").unwrap().unwrap(), s, "복구된 S 저장");
+        assert!(
+            b.get_data_key("old-a").unwrap().is_none(),
+            "옛 KEK 전용 S 는 대체됨(어차피 이 기계서 복구 불가였다)"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

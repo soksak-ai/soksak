@@ -310,4 +310,54 @@ mod tests {
             "덮어쓴 평문이 DB 파일에 잔존한다(secure_delete/VACUUM 미작동)"
         );
     }
+
+    #[test]
+    fn fts_residual_is_scrubbed_after_convert() {
+        // 봉인 변환 후 FTS 그림자테이블(%_data)에 남던 봉인 필드의 옛 트라이그램이 purge_fts_residual
+        // ('rebuild') + VACUUM 으로 파일에서 사라짐을 증명한다 — sync_fts 의 DELETE 가 FTS5 tombstone 이라
+        // 트라이그램이 살아남아 파일-carve 로 키 없이 복원되던 적대검증 구멍(residual-carve)을 막는다.
+        use super::store;
+        let dir = std::env::temp_dir().join(format!(
+            "soksak-ftsscrub-{}-{}",
+            std::process::id(),
+            now_millis()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("soksak.db");
+        // 희귀 트라이그램 단어 — 정상 DB(스키마·sqlite 헤더)엔 안 나와 위양성 배제.
+        let secret = "qzvxwkjfby";
+        {
+            let conn = open(&path).unwrap();
+            // fts 전용 필드(idx 아님) — 봉인 대상이면서 평문 시점에 FTS 색인됨(누출 후보).
+            store::define(&conn, "t", "notes", &[], &["body".into()]).unwrap();
+            store::put(&conn, "t", "notes", "proj-a", None, &serde_json::json!({ "body": secret }))
+                .unwrap();
+            // 암호화 활성 후 변환 — 레코드 봉인, FTS 엔트리 DELETE(tombstone).
+            let (_s, p) = crate::secrets::gen_asym_keypair();
+            super::crypto::register_active_key(&conn, "proj-a", "key-1", &p, 50).unwrap();
+            assert_eq!(
+                store::convert_pending(&conn, "t", "notes", "proj-a", 100).unwrap(),
+                1,
+                "평문 1건 봉인 변환"
+            );
+            store::purge_fts_residual(&conn, "t", "notes").unwrap();
+            conn.execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")
+                .unwrap();
+        }
+        let mut hay = std::fs::read(&path).unwrap();
+        if let Ok(wal) = std::fs::read(format!("{}-wal", path.to_string_lossy())) {
+            hay.extend_from_slice(&wal);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        // 봉인된 fts 필드 값의 어떤 트라이그램도 파일에 남지 않아야 한다(평문 잔존 0).
+        let present = secret
+            .as_bytes()
+            .windows(3)
+            .filter(|w| hay.windows(3).any(|h| h == *w))
+            .count();
+        assert_eq!(
+            present, 0,
+            "봉인된 FTS 필드의 트라이그램이 DB 파일에 잔존(rebuild/VACUUM 미작동)"
+        );
+    }
 }

@@ -474,6 +474,22 @@ fn sync_fts(
 // 이미 봉인된 행은 0 rows, 이중봉인 불가, blocker②) + 동시 삭제와 무경합(삭제된 행은 UPDATE 0 rows, 부활
 // 0, blocker③). created/updated 미변경(retention FIFO 순서 불변, R5). 크래시 시 enc=0/1 혼재로 남고
 // 재호출이 이어받는다(records_pending 인덱스로 O(pending) 재개). batch 로 끊어 락 시간 바운드. 반환=변환 수.
+// [R17 잔존] 봉인 변환 후 FTS 그림자테이블 잔존 제거 — sync_fts 의 DELETE 는 FTS5 에서 tombstone 이라
+// 봉인된 fts 필드의 옛 트라이그램이 %_data 세그먼트에 살아남아 파일-carve 로 키 없이 복원된다(적대검증
+// residual-carve). 'rebuild' 는 %_content(봉인 레코드 행은 DELETE 로 이미 제거됨)에서 인덱스를 재생성해
+// tombstone 을 실제 purge 한다. 프리된 옛 세그먼트는 secure_delete=ON 으로 0 채워지고, 호출자 VACUUM 이
+// 파일을 압축한다. fts 미선언 컬렉션은 no-op.
+pub fn purge_fts_residual(conn: &Connection, ns: &str, coll: &str) -> Result<(), String> {
+    let meta = match get_meta(conn, ns, coll)? {
+        Some(m) if !m.fts.is_empty() => m,
+        _ => return Ok(()),
+    };
+    let tbl = fts_table(meta.cid);
+    conn.execute(&format!("INSERT INTO {tbl}({tbl}) VALUES('rebuild')"), [])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 pub fn convert_pending(
     conn: &Connection,
     ns: &str,
