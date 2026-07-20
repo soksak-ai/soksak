@@ -233,8 +233,8 @@ pub fn run() {
             // 영속된 시간 기반(At/Every/Cron) 일정 재무장(crash 복구) — DB 열린 직후. 무상태 Reconcile 은
             // 플러그인이 activate 시 재등록한다. 일정 없으면 no-op(발화 스레드도 안 뜸).
             schedule::reload_persisted(app.handle());
-            // 시크릿 볼트 — 프로덕션 경로 주입(init 1회) 후 헤드리스/e2e 자동 unlock
-            // (SOKSAK_VAULT_KEY env 있을 때만, 없으면 잠김 유지).
+            // 시크릿 볼트 — 프로덕션 경로 주입(init 1회). 부팅 시 항상 잠김 상태 —
+            // unlock 은 사용자 passphrase(IPC secret_unlock)로만, env 무음 언락 경로 없음.
             {
                 let st = app.state::<secrets::SecretsState>();
                 // SOKSAK_VAULT_PATH 있으면 격리 경로(헤드리스/E2E), 없으면 프로덕션 default.
@@ -252,7 +252,6 @@ pub fn run() {
                     Err(_) => false,
                 };
                 st.set_expect_vault(expect);
-                secrets::auto_unlock_from_env(&st);
             }
             // [단계③] auto-lock 틱 — idle 타임아웃 경과 시 vault 를 잠그고 전 창에 broadcast(터미널 폐기·
             // 잠금 UI 전환을 프론트가 반응). 단일 OS 스레드 15s tick(폴링 비용 무시 가능). 타임아웃 0(기본)

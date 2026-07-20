@@ -324,7 +324,7 @@ pub fn default_vault_path() -> Result<PathBuf, String> {
 }
 
 // 볼트 경로 해소 — SOKSAK_VAULT_PATH 가 있으면 그 경로(헤드리스/E2E 격리용 오픈 메커니즘:
-// 사용자 실볼트 비오염·실 passphrase 비종속), 없으면 default_vault_path(). SOKSAK_VAULT_KEY 와 대칭.
+// 사용자 실볼트 비오염·실 passphrase 비종속), 없으면 default_vault_path().
 // env 조회를 주입받아 테스트가 전역 env 변형 없이 검증한다(병렬 테스트 안전).
 pub fn resolve_vault_path(env: impl Fn(&str) -> Option<String>) -> Result<PathBuf, String> {
     match env("SOKSAK_VAULT_PATH") {
@@ -438,6 +438,14 @@ impl SecretsState {
             std::fs::create_dir_all(parent).map_err(|e| format!("볼트 디렉토리 생성 실패: {e}"))?;
         }
         std::fs::write(&tmp, &bytes).map_err(|e| format!("볼트 쓰기 실패: {e}"))?;
+        // 볼트는 암호문만 담지만 로컬 사용자 전용(0600) 로 잠근다 — 그룹/타 사용자 read 차단(ipc.rs 소켓 선례).
+        // rename 전 tmp 에 설정해 교체된 파일이 처음부터 0600(권한 창 없음). Windows 는 파일 퍼미션 개념 없어 no-op.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
+                .map_err(|e| format!("볼트 퍼미션 설정 실패: {e}"))?;
+        }
         std::fs::rename(&tmp, path).map_err(|e| format!("볼트 교체 실패: {e}"))
     }
 
@@ -721,18 +729,6 @@ pub fn env_secrets(state: &SecretsState, ns: &str) -> Vec<(String, String)> {
 pub struct BackendInfo {
     pub backend: String, // "vault"
     pub unlocked: bool,
-}
-
-// 헤드리스/e2e: SOKSAK_VAULT_KEY env 가 있으면 그 값으로 자동 unlock(GUI·생체 없이 결정적).
-// setup 에서 1회 호출 — 명령들이 즉시 쓸 수 있도록.
-pub fn auto_unlock_from_env(state: &SecretsState) {
-    if let Ok(key) = std::env::var("SOKSAK_VAULT_KEY") {
-        if !key.is_empty() {
-            if let Err(e) = state.unlock(&key) {
-                eprintln!("[secrets] SOKSAK_VAULT_KEY 자동 unlock 실패: {e}");
-            }
-        }
-    }
 }
 
 #[tauri::command]
@@ -1237,6 +1233,43 @@ mod tests {
         // lock 후 다시 잠김.
         s.lock().unwrap();
         assert!(s.resolve("plugin-a", "apiKey").is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // (no-env-unlock) 부팅 셋업 시퀀스(경로 주입 + expect_vault)는 vault 를 자동 unlock 하지 않는다 —
+    // 유일 unlock 경로는 사용자 passphrase(secret_unlock). 구 SOKSAK_VAULT_KEY env 무음 언락 백도어는 제거됐다.
+    // env::set_var 미사용(macOS setenv abort 회피) — 셋업 시퀀스를 재현해 잠김 유지를 단언한다.
+    #[test]
+    fn boot_setup_never_auto_unlocks() {
+        let (s, dir) = state_with_tmp_vault("no-env-unlock");
+        // lib.rs setup 이 하는 것 = 경로 주입 + expect_vault 설정. 그 어디에도 env unlock 이 없다.
+        s.set_expect_vault(false);
+        assert!(
+            !s.is_unlocked(),
+            "부팅 셋업 후 vault 는 잠김 유지(env 자동 unlock 없음)"
+        );
+        // 명시적 passphrase 만이 unlock 경로.
+        s.unlock("pw").unwrap();
+        assert!(s.is_unlocked(), "명시적 passphrase 만이 unlock 경로");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // (0600) flush 는 볼트 파일을 로컬 사용자 전용(0600)으로 잠근다 — 그룹/타 사용자 read 차단.
+    // unlock 이 새 vault 를 생성·flush 하므로 결과 파일 mode 를 단언. set(재-flush) 후에도 유지.
+    // Unix 전용 — Windows 는 파일 퍼미션 개념이 없어(기본 ACL) 이 단언이 무의미.
+    #[cfg(unix)]
+    #[test]
+    fn vault_file_is_mode_0600() {
+        use std::os::unix::fs::PermissionsExt;
+        let (s, dir) = state_with_tmp_vault("perm0600");
+        s.unlock("pw").unwrap(); // 새 vault 생성 → flush
+        let path = s.vault_file().unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600, "볼트 파일은 0600 이어야");
+        // 재-flush(set) 후에도 0600 유지(rename 이 tmp 퍼미션 보존).
+        s.set("plugin-a", "k", "v").unwrap();
+        let mode2 = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode2 & 0o777, 0o600, "재-flush 후에도 0600");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
