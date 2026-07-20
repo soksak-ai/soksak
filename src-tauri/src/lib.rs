@@ -7,6 +7,7 @@ mod deeplink;
 #[cfg(target_os = "macos")]
 mod dockmenu;
 mod fs;
+mod headless;
 mod home;
 mod http;
 mod i18n;
@@ -328,6 +329,12 @@ pub fn run() {
                 }
                 // Dock 우클릭 "새 창"(Terminal.app 관례) — 앱 델리게이트 applicationDockMenu: 주입.
                 dockmenu::install(app.handle());
+            }
+            // 헤드리스 부팅(CI·cron·무-GUI): main(control-plane) 창을 숨긴 채 소켓·레지스트리만
+            // 올린다(webview 유지). 프로젝트 창은 온디맨드라 여기서 아무것도 안 뜬다 — 오케스트라
+            // vs 프로젝트 창 구분이 그대로. 크로스플랫폼(macOS/Linux/Windows 러너 모두).
+            if headless::is_headless() {
+                headless::apply(app.handle());
             }
             Ok(())
         })
