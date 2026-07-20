@@ -14,13 +14,19 @@ import { register } from "./registry";
 import {
   assertOk,
   buildBuildRequest,
+  buildPublishScript,
   buildValidateRequest,
+  findReleaseUrl,
   parseReleaseSummary,
   type DaemonResult,
 } from "./releaseOrchestration";
 
-const runDaemon = (root: string, cmd: string, timeoutSecs: number): Promise<DaemonResult> =>
-  invoke<DaemonResult>("daemon_run_once", { root, cmd, timeoutSecs });
+const runDaemon = (
+  root: string,
+  cmd: string,
+  timeoutSecs: number,
+  env?: Record<string, string>,
+): Promise<DaemonResult> => invoke<DaemonResult>("daemon_run_once", { root, cmd, timeoutSecs, env });
 
 export function registerReleaseCatalog(): void {
   register("release.validate", {
@@ -72,6 +78,40 @@ export function registerReleaseCatalog(): void {
       assertOk("release.build", r);
       const summary = parseReleaseSummary(r.lines);
       return { ok: true, ...summary };
+    },
+  });
+
+  register("release.publish", {
+    description:
+      "Cut the immutable GitHub release for a unit: require owner-enforced immutable releases, require EXACTLY the 5 platform archives + 5 checksums + release.json + 3 conformance reports, then create the release. IRREVERSIBLE — an immutable tag cannot be recut, only bumped. Requires confirm:true. gh auth comes from the token param (injected as GH_TOKEN into the child) or the operator's ambient gh. In CI the per-unit workflow's own gh step publishes; this command is for operator-with-gh use.",
+    triggers: { ko: "릴리즈 발행 publish immutable 릴리즈 생성" },
+    danger: "destructive",
+    params: {
+      repo: { type: "string", required: true, description: "owner/name, e.g. soksak-ai/soksak-sidecar-db-studio" },
+      tag: { type: "string", required: true, description: "Release tag (v<version>)" },
+      commit: { type: "string", required: true, description: "Target commit SHA for the release" },
+      artifactsDir: { type: "string", required: true, description: "Dir with the 5 .tar.gz + 5 .sha256" },
+      releaseDir: { type: "string", required: true, description: "Dir with release.json + 3 conformance reports" },
+      token: { type: "string", required: false, description: "GitHub token; injected as GH_TOKEN (else ambient gh)" },
+      confirm: { type: "boolean", required: true, description: "Must be true — this cuts an immutable, unrecuttable release" },
+    },
+    returns: "{ ok, url }",
+    examples: ['release.publish \'{"repo":"soksak-ai/soksak-sidecar-db-studio","tag":"v0.0.1","commit":"<sha>","artifactsDir":"dist","releaseDir":"dist-release","confirm":true}\''],
+    handler: async (p) => {
+      if (p.confirm !== true) {
+        throw new Error("release.publish cuts an immutable release — pass confirm:true to proceed");
+      }
+      const script = buildPublishScript({
+        repo: String(p.repo),
+        tag: String(p.tag),
+        commit: String(p.commit),
+        artifactsDir: String(p.artifactsDir),
+        releaseDir: String(p.releaseDir),
+      });
+      const env = typeof p.token === "string" && p.token ? { GH_TOKEN: p.token } : undefined;
+      const r = await runDaemon(String(p.artifactsDir), script, 300, env);
+      assertOk("release.publish", r);
+      return { ok: true, url: findReleaseUrl(r.lines) };
     },
   });
 }

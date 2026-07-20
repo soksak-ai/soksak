@@ -62,3 +62,37 @@ export function assertOk(where: string, r: DaemonResult): string {
   if (r.code !== 0) throw new Error(`${where} failed (exit ${r.code}):\n${output}`);
   return output;
 }
+
+/**
+ * The publish shell script (mirrors the per-unit release.yml publish gate): require owner-enforced
+ * immutable releases, require EXACTLY the 5 archives + 5 checksums + release.json + 3 conformance
+ * reports, then cut the immutable release. Irreversible — the command gates this behind confirm+token.
+ * gh auth comes from GH_TOKEN in the child env (never interpolated into the script).
+ */
+export function buildPublishScript(p: {
+  repo: string;
+  tag: string;
+  commit: string;
+  artifactsDir: string;
+  releaseDir: string;
+}): string {
+  const api = shq(`repos/${p.repo}/immutable-releases`);
+  const dirs = `${shq(p.artifactsDir)} ${shq(p.releaseDir)}`;
+  return [
+    "set -eu",
+    `enforced="$(gh api ${api} --jq '.enabled and .enforced_by_owner')"`,
+    `test "$enforced" = "true" || { echo "owner-enforced immutable releases must be enabled before tagging" >&2; exit 1; }`,
+    `assets="$(find ${dirs} -type f \\( -name '*.tar.gz' -o -name '*.tar.gz.sha256' -o -name '*.json' \\) | sort)"`,
+    `test "$(printf '%s\\n' "$assets" | grep -c '\\.tar\\.gz$')" -eq 5 || { echo "expected 5 platform archives" >&2; exit 1; }`,
+    `test "$(printf '%s\\n' "$assets" | grep -c '\\.tar\\.gz\\.sha256$')" -eq 5 || { echo "expected 5 archive checksums" >&2; exit 1; }`,
+    `test "$(printf '%s\\n' "$assets" | grep -c '/release\\.json$')" -eq 1 || { echo "expected the owner release manifest" >&2; exit 1; }`,
+    `test "$(printf '%s\\n' "$assets" | grep -c '/conformance-[a-z]*\\.json$')" -eq 3 || { echo "expected 3 conformance reports" >&2; exit 1; }`,
+    `gh release create ${shq(p.tag)} --repo ${shq(p.repo)} --target ${shq(p.commit)} --title ${shq(p.tag)} --generate-notes $assets`,
+  ].join("\n");
+}
+
+/** The GitHub release URL `gh release create` prints on success (the last matching line). */
+export function findReleaseUrl(lines: string[]): string | null {
+  const url = [...lines].reverse().find((l) => /^https:\/\/github\.com\/\S+\/releases\/tag\/\S+$/.test(l.trim()));
+  return url ? url.trim() : null;
+}
