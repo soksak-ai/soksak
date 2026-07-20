@@ -62,12 +62,29 @@ fn suffix_for_identifier(identifier: &str) -> String {
     }
 }
 
+// 홈 베이스 경로 결정(순수 함수 — env 없이 인자로 검증). Windows 는 HOME 미설정이 흔해
+// 빈 값이 되면 볼트·DB 경로가 cwd 상대 ".soksak" 로 깨지므로 USERPROFILE 로 폴백한다(fs.rs
+// home_dir 선례와 동형). macOS/Linux 는 HOME 그대로(USERPROFILE 없음).
+fn home_base(is_windows: bool, home: Option<&str>, userprofile: Option<&str>) -> PathBuf {
+    fn non_empty(v: Option<&str>) -> Option<&str> {
+        v.filter(|s| !s.is_empty())
+    }
+    let base = if is_windows {
+        non_empty(home).or(non_empty(userprofile))
+    } else {
+        non_empty(home)
+    };
+    PathBuf::from(base.unwrap_or(""))
+}
+
 fn resolve(identifier: Option<&str>) -> PathBuf {
     // 모든 build profile에서 identity가 home을 결정한다. 테스트는 이 함수의 identifier
     // 입력과 경로를 받는 하위 함수를 사용하며 runtime override를 제품에 추가하지 않는다.
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = std::env::var("HOME").ok();
+    let userprofile = std::env::var("USERPROFILE").ok();
+    let base = home_base(cfg!(windows), home.as_deref(), userprofile.as_deref());
     let suffix = identifier.map(suffix_for_identifier).unwrap_or_default();
-    PathBuf::from(home).join(format!(".soksak{suffix}"))
+    base.join(format!(".soksak{suffix}"))
 }
 
 /// 앱 부트 1회(lib.rs setup 최상단) — 이후 모든 경로가 이 값에서 파생된다.
@@ -107,6 +124,37 @@ mod tests {
         assert_eq!(suffix_for_identifier("com.soksak.dev"), "-dev");
         assert_eq!(suffix_for_identifier("com.soksak.debug"), "-debug");
         assert_eq!(suffix_for_identifier("com.soksak.beta"), "-beta");
+    }
+
+    #[test]
+    fn home_base_falls_back_to_userprofile_on_windows() {
+        use super::home_base;
+        use std::path::PathBuf;
+        // 비Windows: HOME 사용, USERPROFILE 무시.
+        assert_eq!(
+            home_base(false, Some("/home/max"), Some("C:\\Users\\max")),
+            PathBuf::from("/home/max")
+        );
+        // Windows: HOME 있으면 그대로.
+        assert_eq!(
+            home_base(true, Some("H:\\home"), Some("C:\\Users\\max")),
+            PathBuf::from("H:\\home")
+        );
+        // Windows: HOME 미설정 → USERPROFILE 폴백(빈 HOME 의 cwd 상대 ".soksak" 붕괴 방지).
+        assert_eq!(
+            home_base(true, None, Some("C:\\Users\\max")),
+            PathBuf::from("C:\\Users\\max")
+        );
+        // Windows: HOME 빈 문자열도 USERPROFILE 폴백.
+        assert_eq!(
+            home_base(true, Some(""), Some("C:\\Users\\max")),
+            PathBuf::from("C:\\Users\\max")
+        );
+        // 비Windows: HOME 미설정 → 빈 베이스(기존 동작 유지 — USERPROFILE 로 새지 않는다).
+        assert_eq!(
+            home_base(false, None, Some("C:\\Users\\max")),
+            PathBuf::from("")
+        );
     }
 
     #[test]

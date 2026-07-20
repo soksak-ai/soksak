@@ -42,6 +42,13 @@ pub fn db_path() -> Result<PathBuf, String> {
 // 연결 + PRAGMA + 기본 스키마. 테스트는 임시 경로를 주입(plugins.rs 패턴).
 pub fn open(path: &Path) -> Result<Connection, String> {
     let conn = Connection::open(path).map_err(|e| e.to_string())?;
+    // 로컬 사용자 전용(0600) — DB 는 봉투 키·레코드를 담는 data-at-rest 저장소라 group/other 접근을
+    // 차단한다(ipc.rs 소켓 0600 선례와 동형). best-effort: :memory:·권한 미지원 FS 는 조용히 무시.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    }
     // WAL: 읽기-쓰기 비차단(사이드바 읽기 중 CLI 쓰기 → 락 스톨 회피). NORMAL: WAL 에서 안전·고성능.
     // execute_batch 는 sqlite3_exec 라 journal_mode 가 돌려주는 행을 버린다(pragma_update 보다 안전).
     conn.execute_batch(
@@ -234,5 +241,28 @@ pub fn validate_field(field: &str) -> Result<(), String> {
         Ok(())
     } else {
         Err(format!("잘못된 필드명: {field:?}"))
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::{now_millis, open};
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn open_creates_db_file_with_owner_only_mode() {
+        // DB 는 봉투 키·레코드를 담는 data-at-rest 저장소 — group/other 접근을 0600 으로 차단한다.
+        let dir = std::env::temp_dir().join(format!(
+            "soksak-dbperm-{}-{}",
+            std::process::id(),
+            now_millis()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("soksak.db");
+        let conn = open(&path).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        drop(conn);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(mode, 0o600, "soksak.db 는 0600 이어야 한다(실제 {mode:o})");
     }
 }
