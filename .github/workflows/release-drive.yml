@@ -51,11 +51,14 @@ jobs:
           path: spec
 
       # Build deps for the webkit app + xvfb to boot it without a physical display. Same list as
-      # multiplatform-check.yml (the -dev packages pull in the runtime libraries) plus xvfb.
+      # multiplatform-check.yml (the -dev packages pull in the runtime libraries) plus xvfb. pkg-config
+      # is REQUIRED here that multiplatform-check.yml does not need: this job full-LINKS the app (it only
+      # cargo-checks), and reqwest's native-tls links OpenSSL on Linux — openssl-sys uses pkg-config to
+      # emit the -L/-lssl/-lcrypto link flags. Without it the link fails with undefined SSL_* symbols.
       - name: Install Linux system libraries + xvfb
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential pkg-config curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
