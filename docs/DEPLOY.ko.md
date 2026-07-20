@@ -181,3 +181,32 @@ publisher 는 모든 자산의 sha256 을 릴리스 매니페스트와 대조하
 자산 집합과 어긋나면 fail-closed 한다. 선언 집합은 유닛 종류로 다르다 — 플러그인은 tgz·
 `release.json`·`conformance-*.json` 보고서를, 계약은 tgz·`release.json`·단일 `conformance.json`
 을 배송한다 — 그러나 경계(소유 매니페스트 → 검증 자산 → App 토큰 immutable 발행)는 같다.
+
+**단일 소스, 발견 — vendored 릴리스 로직 없음.** `build-release`·`publish-release` 는 각
+유닛에 복사되지 않는다. `soksak-spec`(`packages/plugin-spec/release-template/`)에 한 벌만
+있다. 유닛의 `release.yml` 이 그 repo 를 핀 커밋으로 체크아웃하고 — 그 커밋은 유닛의
+`validation/spec-validator.json`(사이드카는 추가로 `soksak-spec-service` Cargo rev)이 가리키는
+같은 커밋이다 — 템플릿을 유닛에 대해 돌린다. 템플릿은 cwd 에서 유닛 마커(사이드카는
+`release/unit.json`, 플러그인은 `release-files.json`)를 위로 걸어 올라가 발견한다 — cwd 추측도
+`--unit-root` 인자도 없다. 그래서 유닛은 자기 정체(`release/unit.json`·`targets.json`)와 thin
+`release.yml` 만 지니고, 릴리스 알고리즘은 딱 한 벌이다. 이 분리 이전에 발행된 유닛은
+byte-identical vendored 복사본을 아직 지니며 다음 버전 bump 때 이관된다.
+
+## 10. 스캐폴딩 & 헤드리스 드라이브
+
+새 유닛은 복사가 아니라 스캐폴더에서 시작한다. `sidecar.new` 는 releasable 서비스 사이드카를
+방출한다(`Cargo.toml` + `release/unit.json` 정체, static `targets.json`/`spec-validator.json`
+핀, serve 골격, `stage.sh`, thin `release.yml`). `plugin.new` 은 releasable 플러그인을
+방출한다(`package.json` `soksakRelease` 경계, `plugin.json` + 추적 `main.js`,
+`release-files.json` 발견 마커, conformance 테스트, thin `release.yml`/`test.yml`). 둘 다 유닛을
+git-init 하고 dev 유닛으로 등록하며, 릴리스 로직을 0 vendor 한다 — 방출된 `release.yml` 이 핀의
+단일 소스 템플릿을 참조한다. `sidecar.new`/`plugin.new` 는 `plugin.dev.create` 와 방출 코어를
+공유하므로, 스캐폴드와 손으로 저작한 유닛은 같은 shape 다.
+
+릴리스 단계 자체도 코어 명령이다. `release.build`·`release.validate`·`release.publish` 는 같은
+단일 소스 템플릿을 `daemon_run_once` 스폰 브리지로 오케스트레이션하는 thin 레지스트리 명령이다
+— 릴리스 알고리즘은 명령에 0 산다. 명령 레지스트리에 살기에 여느 명령처럼 `sok`/`sok-debug` 로
+돈다. `SOKSAK_HEADLESS` 는 메인 컨트롤플레인 창을 숨긴 채(창은 레지스트리 + 소켓을 계속 호스팅
+하므로 명령이 실행된다) 프로젝트 창 없이 앱을 부팅한다. `release-drive` CI 워크플로우가 debug
+앱을 그렇게 `xvfb` 아래 부팅해 `release.build` + `release.validate` 를 체크인된 fixture 에 대해
+구동하여, 전체 경로를 실 부팅으로 증명한다.

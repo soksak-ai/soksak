@@ -213,3 +213,41 @@ declared set differs by unit kind — a plugin ships its tgz, `release.json`, an
 `conformance-*.json` reports; a contract ships its tgz, `release.json`, and a
 single `conformance.json` — but the boundary (owner manifest → validated assets →
 App-token immutable publish) is the same.
+
+**Single source, discovered — no vendored release logic.** `build-release` and
+`publish-release` are not copied into each unit. They live once in `soksak-spec`
+(`packages/plugin-spec/release-template/`); a unit's `release.yml` checks that
+repo out at a pinned commit — the same commit the unit's
+`validation/spec-validator.json` (and, for a sidecar, its `soksak-spec-service`
+Cargo rev) names — and runs the template against the unit, which the template
+discovers by walking up from the cwd to the unit's marker (`release/unit.json`
+for a sidecar, `release-files.json` for a plugin), never a cwd guess or a
+`--unit-root` argument. A unit therefore carries only its identity
+(`release/unit.json`, `targets.json`) plus the thin `release.yml`; the release
+algorithm has exactly one copy. Units published before this split still carry
+byte-identical vendored copies and migrate on their next version bump.
+
+## 10. Scaffolding & the headless drive
+
+New units start from a scaffolder, not a copy. `sidecar.new` emits a releasable
+service sidecar (`Cargo.toml` + `release/unit.json` identity, the static
+`targets.json`/`spec-validator.json` pins, a serve skeleton, `stage.sh`, and the
+thin `release.yml`); `plugin.new` emits a releasable plugin (`package.json`
+`soksakRelease` boundary, `plugin.json` + the tracked `main.js`,
+`release-files.json` discovery marker, a conformance test, and the thin
+`release.yml`/`test.yml`). Both git-init the unit and register it as a dev unit,
+and both vendor zero release logic — the emitted `release.yml` references the
+single-source template at the pin. `sidecar.new`/`plugin.new` share their
+emission core with `plugin.dev.create`, so a scaffold and a hand-authored unit
+are the same shape.
+
+The release steps are also core commands. `release.build`, `release.validate`,
+and `release.publish` are thin registry commands that orchestrate the same
+single-source template through the `daemon_run_once` spawn bridge — zero release
+algorithm lives in the command. Living in the command registry, they run through
+`sok`/`sok-debug` like any command. `SOKSAK_HEADLESS` boots the app with the main
+control-plane window hidden (the window still hosts the registry + socket, so
+commands execute) and no project windows; the `release-drive` CI workflow boots
+the debug app that way under `xvfb` and drives `release.build` +
+`release.validate` against a checked-in fixture, proving the whole path on a real
+boot.
