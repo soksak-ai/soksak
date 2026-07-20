@@ -99,6 +99,7 @@ export function SecuritySettings() {
           className="dctl dctl-mono"
           value={scope}
           placeholder={t("settings.security.scopePlaceholder")}
+          data-node="settings/security/scope"
           onChange={(e) => setScope(e.target.value)}
         />
       </div>
@@ -118,6 +119,7 @@ export function SecuritySettings() {
           <button
             type="button"
             className="dbtn dbtn-acc"
+            data-node="settings/security/enable"
             disabled={busy || !scope.trim()}
             style={busy || !scope.trim() ? { opacity: 0.4 } : undefined}
             onClick={() => void onEnable()}
@@ -130,6 +132,7 @@ export function SecuritySettings() {
             <button
               type="button"
               className="dbtn"
+              data-node="settings/security/recover"
               disabled={busy}
               onClick={() => showEnter(scope.trim())}
             >
@@ -138,6 +141,7 @@ export function SecuritySettings() {
             <button
               type="button"
               className="dbtn"
+              data-node="settings/security/rotate"
               disabled={busy}
               style={busy ? { opacity: 0.4 } : undefined}
               onClick={() => void onRotate()}
@@ -147,6 +151,7 @@ export function SecuritySettings() {
             <button
               type="button"
               className="dbtn dbtn-danger"
+              data-node="settings/security/changeRecovery"
               disabled={busy}
               style={busy ? { opacity: 0.4 } : undefined}
               onClick={() => void onChangeRecovery()}
