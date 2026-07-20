@@ -1150,18 +1150,18 @@ sok plugin.enable '{"id":"soksak-plugin-<id>"}'
 
 ## `plugin.implementers`
 
-Find plugins by the contract they implement (manifest implements, coupling law C3 L2 contract-pin). With contract, returns every installed plugin declaring that exact contract id "soksak-spec-<kind>-<domain>@<major>" with its runtime status; without, maps every declared contract to its implementers. Discovery is contract-addressed and implementation-blind — resolve implementers here instead of hardcoding plugin ids. | 플러그인 계약 구현체 발견 구현 스펙 컨트랙트
+Find plugins by the contract they implement (manifest implements, coupling law C3 L2 contract-pin). Discover by identity: pass the version-free contract id `{"id":"soksak-spec-<kind>-<domain>"}` and get every installed plugin declaring that contract id with its runtime status; omit it to map every declared contract to its implementers. Never pass a version or range here — discovery is version-blind; the call boundary enforces version compatibility from the manifest (`consumes`/`implements`). Discovery is contract-addressed and implementation-blind — resolve implementers here instead of hardcoding plugin ids. | 플러그인 계약 구현체 발견 구현 스펙 컨트랙트
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `contract` | string |  | Contract id "soksak-spec-<kind>-<domain>@<major>" (exact major — @2 does not answer for @1). Omit to list every declared contract with its implementers. |
+| `id` | string |  | Version-free contract id "soksak-spec-<kind>-<domain>" — identity, never `@<major>`. Returns every implementer regardless of version; the call boundary enforces version compatibility from the manifest. Omit to list every declared contract with its implementers. |
 
-**Returns**: { contract, implementers: [{id, version, status}] } (contract given) | { contracts: [{contract, implementers}] } (omitted)
+**Returns**: { contract, implementers: [{id, version, status}] } (id given) | { contracts: [{contract, implementers}] } (omitted)
 **Errors**: INVALID_PARAMS
 
 ```bash
 sok plugin.implementers
-sok plugin.implementers '{"contract":"soksak-spec-plugin-git@0.0.1"}'
+sok plugin.implementers '{"id":"soksak-spec-plugin-git"}'
 ```
 
 ## `plugin.install` (danger: destructive)
