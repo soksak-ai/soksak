@@ -433,7 +433,7 @@ pub fn plugin_dev_new(id: String) -> Result<PluginInstallResult, String> {
 // that references the single-source release-template in soksak-spec. It vendors ZERO release scripts
 // (the logic lives once in packages/plugin-spec/release-template). The pin below is the one commit
 // the soksak-spec-service Cargo dep, the validator checkout, and spec-validator.json all share.
-const SIDECAR_SPEC_PIN: &str = "d7f54852754195527f125d1fc11362316157d19b";
+const SIDECAR_SPEC_PIN: &str = "24ff193f6f2c49cc76b610a58f5dbadabbdf639f";
 
 const SIDECAR_TARGETS_JSON: &str = r#"[
   {

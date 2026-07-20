@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: soksak-ai/soksak-spec
-          ref: d7f54852754195527f125d1fc11362316157d19b
+          ref: 24ff193f6f2c49cc76b610a58f5dbadabbdf639f
           path: spec
 
       # Build deps for the webkit app + xvfb to boot it without a physical display. Same list as

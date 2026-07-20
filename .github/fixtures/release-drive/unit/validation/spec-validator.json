@@ -1,5 +1,5 @@
 {
   "repository": "https://github.com/soksak-ai/soksak-spec",
-  "commit": "d7f54852754195527f125d1fc11362316157d19b",
+  "commit": "24ff193f6f2c49cc76b610a58f5dbadabbdf639f",
   "validator": "packages/plugin-spec/bin/validate.mjs"
 }
