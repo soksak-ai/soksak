@@ -127,11 +127,6 @@ keyring = { version = "3", features = ["windows-native"] }
 # 포터빌리티, "자체 crypto 0·RustCrypto" 정합). 헤드리스/무 D-Bus 는 os_key 가 StoreUnavailable 로 낸다.
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
-# reqwest's native-tls links OpenSSL on Linux. Vendor it (static, built from source) so the binary is
-# self-contained and the link never depends on the runner resolving system OpenSSL — even with
-# libssl-dev + pkg-config, rust-lld left SSL_* symbols undefined against the shared lib. Inert on
-# macOS/Windows (native-tls uses Secure Transport / SChannel there, so openssl-sys is not in the tree).
-openssl-sys = { version = "0.9", features = ["vendored"] }
 
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.

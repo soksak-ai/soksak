@@ -2,15 +2,17 @@
 #
 # The release.* commands live in the core FRONTEND registry (src/commands/catalogRelease.ts) and ride
 # the daemon_run_once spawn bridge into the single-source release-template. Unit tests cover the pure
-# orchestration; this workflow proves the whole path end to end on a real boot: it builds the debug
-# app + the sok-debug CLI, boots the app HEADLESS under a virtual display (the main control-plane
-# webview hosts the command registry + the socket), then drives `sok-debug release.build` and
-# `sok-debug release.validate` against a checked-in sidecar fixture and self-judges on the reply.ok
-# exit codes. No continue-on-error — a broken boot, a missing dep, or a failing command fails the job.
+# orchestration; this workflow proves the whole path end to end on a real boot: it builds the debug app
+# + the sok-debug CLI, boots the app HEADLESS (SOKSAK_HEADLESS hides the main control-plane window, which
+# still hosts the command registry + the socket), then drives `sok-debug release.build` and
+# `sok-debug release.validate` against a checked-in sidecar fixture and self-judges on the reply.ok exit
+# codes. No continue-on-error — a broken boot, a missing dep, or a failing command fails the job.
 #
-# Deps + boot/teardown are modeled on multiplatform-check.yml (webkit apt list, sibling checkout) and
-# verify.yml (pnpm/node/rust setup, the debug build). The pinned soksak-spec commit below is the ONE
-# commit the fixture's spec-validator.json, the soksak-spec-service Cargo rev, and this checkout share.
+# Runs on macOS: the app there uses WKWebView (no webkit apt list) and native-tls binds Secure Transport,
+# so it full-LINKS cleanly. (On Linux the app links reqwest's OpenSSL native-tls AND wreq's BoringSSL,
+# which export the same SSL_* symbols and collide — a separate latent defect a Linux runner would need a
+# TLS-stack decision to resolve.) The pinned soksak-spec commit below is the ONE commit the fixture's
+# spec-validator.json, the soksak-spec-service Cargo rev, and this checkout share.
 name: release-drive
 
 on:
@@ -23,7 +25,7 @@ permissions:
 
 jobs:
   drive:
-    runs-on: ubuntu-24.04
+    runs-on: macos-15
     timeout-minutes: 60
     steps:
       - name: Check out the app repository
@@ -49,16 +51,6 @@ jobs:
           repository: soksak-ai/soksak-spec
           ref: 24ff193f6f2c49cc76b610a58f5dbadabbdf639f
           path: spec
-
-      # Build deps for the webkit app + xvfb to boot it without a physical display. Same list as
-      # multiplatform-check.yml (the -dev packages pull in the runtime libraries) plus xvfb. pkg-config
-      # is REQUIRED here that multiplatform-check.yml does not need: this job full-LINKS the app (it only
-      # cargo-checks), and reqwest's native-tls links OpenSSL on Linux — openssl-sys uses pkg-config to
-      # emit the -L/-lssl/-lcrypto link flags. Without it the link fails with undefined SSL_* symbols.
-      - name: Install Linux system libraries + xvfb
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential pkg-config curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -94,7 +86,7 @@ jobs:
 
       # Build exactly what we boot: the plugin-spec/plugin-api dist the core frontend consumes
       # (spec-gate), the sok-debug CLI, and the debug app binary with the frontend embedded. --no-bundle
-      # skips OS packaging (deb/AppImage) — the raw binary is the control plane we drive.
+      # skips OS packaging (.app/.dmg) — the raw binary is the control plane we drive.
       - name: Build the debug app binary + sok-debug CLI
         working-directory: soksak
         run: |
@@ -134,9 +126,9 @@ jobs:
           SH="${SHELL:-/bin/sh}"
           "$SH" -lc 'command -v node && node --version'
 
-          # Boot headless under a virtual display. The main control-plane webview hosts the command
-          # registry + the socket; SOKSAK_HEADLESS hides the window. HOME selects the debug identity home.
-          SOKSAK_HEADLESS=1 HOME="$CI_HOME" xvfb-run -a "$BIN" > "$WS/app.log" 2>&1 &
+          # Boot headless. The main control-plane webview hosts the command registry + the socket;
+          # SOKSAK_HEADLESS hides the window (macOS Accessory). HOME selects the debug identity home.
+          SOKSAK_HEADLESS=1 HOME="$CI_HOME" "$BIN" > "$WS/app.log" 2>&1 &
           APP_PID=$!
           cleanup() {
             pkill -f "target/debug/soksak-debug" 2>/dev/null || true
@@ -174,11 +166,11 @@ jobs:
 
           # Synthesize the exact 5-target artifact set the fixture's release matrix declares. release.build
           # hashes these bytes (it never unpacks them), so opaque content + a matching sha256 sidecar is a
-          # faithful stand-in for the real per-platform archives.
+          # faithful stand-in for the real per-platform archives. shasum -a 256 is the macOS coreutils.
           for t in aarch64-apple-darwin aarch64-unknown-linux-gnu x86_64-apple-darwin x86_64-pc-windows-msvc x86_64-unknown-linux-gnu; do
             asset="$ID-$VER-$t.tar.gz"
             printf 'release-drive fixture artifact for %s\n' "$t" > "$ART/$asset"
-            ( cd "$ART" && sha256sum "$asset" > "$asset.sha256" )
+            ( cd "$ART" && shasum -a 256 "$asset" > "$asset.sha256" )
           done
 
           # Drive release.build via sok — the handler spawns the single-source builder against the pinned
