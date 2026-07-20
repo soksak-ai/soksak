@@ -34,6 +34,8 @@ import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConfirmCloseModal } from "./components/ConfirmCloseModal";
 import { RemoteConfirmModal } from "./components/RemoteConfirmModal";
+import { RecoverySetupModal } from "./components/RecoverySetupModal";
+import { RecoveryEnterModal } from "./components/RecoveryEnterModal";
 import { wireRemoteConfirm } from "./state/remoteConfirmWire";
 import { installRemoteConfirmDevTrigger } from "./state/remoteConfirmDev";
 import { ConsentPreviewHost } from "./components/ConsentPreviewHost";
@@ -914,6 +916,8 @@ function App() {
       )}
       <ConfirmCloseModal />
       <RemoteConfirmModal />
+      <RecoverySetupModal />
+      <RecoveryEnterModal />
 
       {/* 본문: 좌측 모드면 세로 프로젝트 레일 + 콘텐츠 행. */}
       <div className={`app-body${projectTabPosition === "left" ? " with-rail" : ""}`}>
