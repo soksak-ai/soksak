@@ -6,6 +6,7 @@ import {
   ROOT, SPEC_SHA, assertNoLinkPath, parseOptions,
 } from "./release-contract.mjs";
 
+// The unit ROOT is discovered (release-contract), not passed — no --unit-root to strip here.
 const options = parseOptions(process.argv.slice(2), ["spec-root", "release-dir"]);
 const specRoot = assertNoLinkPath(options["spec-root"], "directory");
 const releaseDir = assertNoLinkPath(options["release-dir"], "directory");

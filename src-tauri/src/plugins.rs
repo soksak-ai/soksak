@@ -695,7 +695,9 @@ jobs:
         run: |
           pnpm --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile
           pnpm --filter @soksak-ai/plugin-spec build
-      - name: Build + validate the release documents (single-source scripts, cwd = this unit)
+      # The single-source scripts run at this checkout root and discover the unit by its
+      # release/unit.json marker — no --unit-root argument, no cwd guessing (DEPLOY §1).
+      - name: Build + validate the release documents (single-source scripts, unit discovered)
         run: |
           node .pipeline/packages/plugin-spec/release-template/sidecar/build-release.mjs --commit "${{ github.sha }}" --tag "${{ steps.identity.outputs.tag }}" --artifacts dist --out dist-release
           node .pipeline/packages/plugin-spec/release-template/sidecar/validate-with-spec.mjs --spec-root .pipeline --release-dir dist-release

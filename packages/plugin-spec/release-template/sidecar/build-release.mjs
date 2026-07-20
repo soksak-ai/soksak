@@ -7,10 +7,10 @@ import {
   parseOptions, readRegularFile, readTargetMatrix, releaseAssetName, releaseIdentity, sha256, writeRegularFile,
 } from "./release-contract.mjs";
 
-// --emit-summary is an additive boolean flag: the core `release.build` command handler passes it
-// to read the manifest + per-target digests off stdout instead of re-hashing the bytes in TS. It
-// is stripped before parseOptions (which is a strict --name value parser) so the value-pair
-// contract is unchanged; without it stdout stays silent.
+// --emit-summary is an additive boolean flag: the core release.build handler passes it to read the
+// manifest + per-target digests off stdout instead of re-hashing in TS. Stripped before the strict
+// --name value parser; without it stdout stays silent. The unit ROOT is discovered (release-contract),
+// so no --unit-root argument is carried here.
 const rawArgs = process.argv.slice(2);
 const emitSummary = rawArgs.includes("--emit-summary");
 const options = parseOptions(rawArgs.filter((arg) => arg !== "--emit-summary"), ["commit", "tag", "artifacts", "out"]);

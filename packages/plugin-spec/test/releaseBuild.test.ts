@@ -51,7 +51,7 @@ function writeFixture(overrides: { pkg?: Record<string, unknown>; plugin?: Recor
 }
 
 function build(out = outDir): { status: number | null; stdout: string; stderr: string } {
-  // ROOT is process.cwd() — run from the fixture root (how the core/CI drives it: cwd=unitRoot).
+  // Run FROM the unit (fixture root) — ROOT is discovered by the release-files.json marker, not cwd-guessed.
   const r = spawnSync("node", [path.join(root, "scripts", "build-release.mjs"), "--commit", COMMIT, "--out", out], {
     encoding: "utf8",
     cwd: root,

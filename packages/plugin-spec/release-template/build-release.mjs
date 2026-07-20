@@ -10,11 +10,20 @@ import path from "node:path";
 
 import { createRegularFileArchive, readRegularFileArchive, sha256 } from "./archive.mjs";
 
-// The UNIT repo root = the working directory the release runs in, NOT this script's location. Lets
-// the single-source script be run from soksak-spec (de-vendored) with cwd=unitRoot while still
-// reading the unit's own package.json/plugin.json. Vendored copies run from the repo root — same.
-// ESM relative imports (./archive.mjs) stay file-relative, so the LOGIC still comes from here.
-const root = process.cwd();
+// The UNIT repo root, resolved by a DISCOVERABLE RULE — not cwd guessing, not a carried argument
+// (DEPLOY §1). A release always runs FROM its unit; we DISCOVER the plugin by finding its release
+// file-set marker (release-files.json) at or above the running directory. Works identically whether
+// this builder is vendored beside the unit or single-sourced from soksak-spec — ESM relative imports
+// keep the LOGIC file-relative, only the unit is discovered.
+const root = (() => {
+  let dir = path.resolve(process.cwd());
+  for (;;) {
+    if (fs.existsSync(path.join(dir, "release-files.json"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) throw new Error(`unit root not found: no release-files.json at or above ${process.cwd()}`);
+    dir = parent;
+  }
+})();
 const STRICT_SEMVER_RE =
   /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
 

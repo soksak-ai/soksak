@@ -68,11 +68,15 @@ function writeFixture(overrides: { unit?: Record<string, unknown>; cargoVersion?
   }
 }
 
-function build(tag = "v0.0.1", emitSummary = false): { status: number | null; stdout: string; stderr: string } {
-  const args = [path.join(root, "scripts", "build-release.mjs"), "--commit", COMMIT, "--tag", tag, "--artifacts", artifactsDir, "--out", outDir];
+// A release runs FROM its unit. deVendored runs the CANONICAL template script, vendored runs the copy
+// beside the unit — either way the unit ROOT is DISCOVERED by its marker from the run directory
+// (the fixture root), never cwd-guessed or passed as an argument (DEPLOY §1).
+function build(tag = "v0.0.1", emitSummary = false, deVendored = false): { status: number | null; stdout: string; stderr: string } {
+  const script = deVendored
+    ? path.join(TEMPLATE, "build-release.mjs")
+    : path.join(root, "scripts", "build-release.mjs");
+  const args = [script, "--commit", COMMIT, "--tag", tag, "--artifacts", artifactsDir, "--out", outDir];
   if (emitSummary) args.push("--emit-summary");
-  // ROOT is process.cwd() — run from the fixture root so the script reads the fixture's unit files
-  // (this is exactly how the core release command drives it: daemon cwd = unitRoot).
   const r = spawnSync("node", args, { encoding: "utf8", cwd: root });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
@@ -164,6 +168,18 @@ describe("release-template/sidecar — canonical sidecar release documents", () 
     const r = build();
     expect(r.status).toBe(0);
     expect(r.stdout).toBe("");
+  });
+
+  it("discovers the unit by its marker when run de-vendored from the single source (never cwd-guessed)", () => {
+    // The core release command runs the CANONICAL script (from soksak-spec) at the unit's directory;
+    // the builder discovers this unit by release/unit.json and produces its manifest without a copy.
+    writeFixture();
+    const r = build("v0.0.1", false, true);
+    expect(r.stderr).toBe("");
+    expect(r.status).toBe(0);
+    const release = JSON.parse(fs.readFileSync(path.join(outDir, "release.json"), "utf8"));
+    expect(release.id).toBe("soksak-sidecar-example");
+    expect(release.artifacts).toHaveLength(5);
   });
 
   it("refuses a checksum sidecar that does not state the exact archive digest", () => {

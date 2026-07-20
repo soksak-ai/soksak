@@ -2,13 +2,24 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-// ROOT is the UNIT repo root — the working directory the release runs in, NOT this script's
-// location. This lets the script be single-sourced (run from soksak-spec's release-template or the
-// app's bundled copy) while still reading the unit's own release/unit.json, targets.json, Cargo.toml
-// from cwd. A vendored copy run from the repo root, and a de-vendored run driven by the core release
-// command with cwd=unitRoot, both resolve identically. ESM relative imports stay file-relative, so
-// the LOGIC still comes from the script's own directory.
-export const ROOT = process.cwd();
+// ROOT is the UNIT repo root, resolved by a DISCOVERABLE RULE — not cwd guessing, not a --unit-root
+// argument to carry around (DEPLOY §1: "declare or resolve by a discoverable rule"). A release always
+// runs FROM its unit (the CI checks out the unit and runs at its root; the core release command runs
+// with the working directory set to the unit). So we DISCOVER the unit by finding its identity marker
+// (release/unit.json) at or above the running directory. Works identically whether the script is
+// vendored beside the unit or single-sourced from soksak-spec — the LOGIC is always file-relative
+// (ESM imports), only the unit it operates on is discovered. Absent marker → a clear error, not a
+// silent wrong root.
+export function findUnitRoot(startDir = process.cwd(), marker = path.join("release", "unit.json")) {
+  let dir = path.resolve(startDir);
+  for (;;) {
+    if (fs.existsSync(path.join(dir, marker))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) throw new Error(`unit root not found: no ${marker} at or above ${path.resolve(startDir)}`);
+    dir = parent;
+  }
+}
+export const ROOT = findUnitRoot();
 const SEMVER = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
 export function parseUnitMetadata(raw) {

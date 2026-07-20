@@ -21,6 +21,8 @@ export function buildValidateRequest(p: { unitRoot: string; specRoot: string; re
   cmd: string;
 } {
   const script = `${p.specRoot}/packages/plugin-spec/release-template/sidecar/validate-with-spec.mjs`;
+  // root = unitRoot: the daemon runs the script FROM the unit, so the canonical script discovers this
+  // unit's spec-validator.json pin by its marker (no --unit-root argument, no cwd guessing).
   return {
     root: p.unitRoot,
     cmd: `node ${shq(script)} --spec-root ${shq(p.specRoot)} --release-dir ${shq(p.releaseDir)}`,
@@ -37,6 +39,8 @@ export function buildBuildRequest(p: {
   out: string;
 }): { root: string; cmd: string } {
   const script = `${p.specRoot}/packages/plugin-spec/release-template/sidecar/build-release.mjs`;
+  // root = unitRoot: the daemon runs FROM the unit, so the canonical builder discovers this unit's
+  // Cargo.toml/release/*.json by its marker (no --unit-root argument, no cwd guessing).
   return {
     root: p.unitRoot,
     cmd:
