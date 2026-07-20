@@ -1,0 +1,64 @@
+// Pure orchestration for the release.* commands — shell-command construction, output parsing, exit
+// interpretation. Imports NOTHING (no registry, no tauri), so it is unit-testable in isolation and
+// carries zero release algorithm (that lives single-sourced in packages/plugin-spec/release-template).
+// catalogRelease.ts wires these to `register` + the daemon_run_once spawn bridge.
+
+/** POSIX single-quote a shell word so paths with spaces/metacharacters cannot break out. */
+export function shq(word: string): string {
+  return `'${word.replace(/'/g, `'\\''`)}'`;
+}
+
+const SUMMARY_MARK = "@@RELEASE_SUMMARY@@ ";
+
+export interface DaemonResult {
+  code: number | null;
+  lines: string[];
+}
+
+/** The daemon_run_once request for release.validate (runs the pinned validator twice). */
+export function buildValidateRequest(p: { unitRoot: string; specRoot: string; releaseDir: string }): {
+  root: string;
+  cmd: string;
+} {
+  const script = `${p.specRoot}/packages/plugin-spec/release-template/sidecar/validate-with-spec.mjs`;
+  return {
+    root: p.unitRoot,
+    cmd: `node ${shq(script)} --spec-root ${shq(p.specRoot)} --release-dir ${shq(p.releaseDir)}`,
+  };
+}
+
+/** The daemon_run_once request for release.build (emits release.json + 3 conformance + summary). */
+export function buildBuildRequest(p: {
+  unitRoot: string;
+  specRoot: string;
+  commit: string;
+  tag: string;
+  artifacts: string;
+  out: string;
+}): { root: string; cmd: string } {
+  const script = `${p.specRoot}/packages/plugin-spec/release-template/sidecar/build-release.mjs`;
+  return {
+    root: p.unitRoot,
+    cmd:
+      `node ${shq(script)} --commit ${shq(p.commit)} --tag ${shq(p.tag)} ` +
+      `--artifacts ${shq(p.artifacts)} --out ${shq(p.out)} --emit-summary`,
+  };
+}
+
+/** Pull the one @@RELEASE_SUMMARY@@ line out of captured output and parse it. */
+export function parseReleaseSummary(lines: string[]): {
+  releaseJson: unknown;
+  manifestSha256: string;
+  matrix: Array<{ target: string; url: string; sha256: string; format: string; entrypoint: unknown }>;
+} {
+  const line = lines.find((l) => l.startsWith(SUMMARY_MARK));
+  if (!line) throw new Error("release.build produced no @@RELEASE_SUMMARY@@ line");
+  return JSON.parse(line.slice(SUMMARY_MARK.length));
+}
+
+/** Fail unless the child exited 0; the captured output is the failure evidence. */
+export function assertOk(where: string, r: DaemonResult): string {
+  const output = r.lines.join("\n");
+  if (r.code !== 0) throw new Error(`${where} failed (exit ${r.code}):\n${output}`);
+  return output;
+}
