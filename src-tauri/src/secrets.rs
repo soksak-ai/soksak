@@ -814,8 +814,19 @@ impl SecretsState {
                     .ok_or("secret backend 미구성 — KEK 취득 불가")?;
                 source.acquire().map_err(|e| e.to_string())?
             };
+            // 옛 vault 가 있으나 안 열린 것(외래 KEK — 폴더 통째 sync)이면 삭제하지 않고 .superseded 로 밀어둔다.
+            // 무손실 원칙 — 훗날 옛 키체인을 되찾으면 그 백업에서 복구코드 없는 plugin app.secrets 를 살릴
+            // 여지를 남긴다. 최초 백업을 보존(재복구 시 이미 있으면 현재 것만 대체). 파일 부재면 no-op.
+            let path = self.vault_file()?;
+            if path.exists() {
+                let backup = PathBuf::from(format!("{}.superseded", path.to_string_lossy()));
+                if !backup.exists() {
+                    std::fs::rename(&path, &backup)
+                        .map_err(|e| format!("옛 vault 백업 실패: {e}"))?;
+                }
+            }
             // 현재 KEK 로 새 vault 강제 생성·캐시(R23 가드 우회). ensure_open 실패가 곧 기존 vault 개봉불가
-            // 증거라, 덮어써도 복구가능한 것을 잃지 않는다(옛 KEK 봉인 S 는 어차피 이 기계서 접근 불가였다).
+            // 증거라, 대체해도 이 기계서 복구가능한 것을 잃지 않는다(옛 KEK 봉인분은 옆으로 보존됨).
             let vault = Self::new_vault(&kek)?;
             *self.kek.lock().map_err(|e| e.to_string())? = Some(*kek);
             *self.vault.lock().map_err(|e| e.to_string())? = Some(vault);
@@ -1405,6 +1416,9 @@ mod tests {
             b.get_data_key("old-a").unwrap().is_none(),
             "옛 KEK 전용 S 는 대체됨(어차피 이 기계서 복구 불가였다)"
         );
+        // 무손실 — 옛 외래-KEK vault 는 삭제가 아니라 .superseded 로 보존(옛 키체인 복원 시 살릴 여지).
+        let backup = PathBuf::from(format!("{}.superseded", path.to_string_lossy()));
+        assert!(backup.exists(), "옛 vault 는 .superseded 로 보존되어야 한다");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
