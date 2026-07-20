@@ -5,11 +5,13 @@
 //   com.soksak.dev   → ~/.soksak-dev
 //   com.soksak.debug → ~/.soksak-debug
 // 파생 규칙 = identifier 마지막 세그먼트("app" 은 무접미, 그 외 "-<세그먼트>") — 새 identity 는
-// 자동으로 자기 홈을 갖는다(하드코딩 목록 없음). SOKSAK_HOME 이 있으면 그 경로가 홈 전체를 지정한다
-// (SOKSAK_VAULT_PATH 와 동형의 오픈-테스트 메커니즘, 모든 빌드 — docs/ARCHITECTURE.md A17 canonical): 실제
-// 바이너리를 돌리는 블랙박스 e2e/도구가 데이터·볼트·소켓을 disposable 홈으로 격리해 공유 identity 홈을 안
-// 건드리게 하는 유일 수단(내부 함수 격리가 안 되는 경계). 홈 relocation 은 데이터 유출이 아니고 release 는
-// dev/local 플러그인 로드를 거부한다. 유닛테스트는 여전히 경로-인자 내부 함수로 격리한다.
+// 자동으로 자기 홈을 갖는다(하드코딩 목록 없음).
+// SOKSAK_HOME 오버라이드(debug 빌드 전용): 이 env 가 있으면 identity 파생 대신 그 경로를 홈으로 쓴다. e2e 는
+// 실제 앱 바이너리를 통째 실행하니 유닛테스트처럼 함수 인자로 임시 경로를 못 준다 — env 만이 실행 중인
+// 바이너리에 "이 throwaway 폴더를 홈으로 써라"고 전할 수 있고, 그래야 테스트 데이터가 사용자 실홈과 안 섞인다.
+// #[cfg(debug_assertions)] 라 release 엔 이 분기가 컴파일되지 않는다 — 홈 전체(플러그인 로드 경로 포함)를 옮기는
+// env 는 새 프로덕션 표면이므로, SOKSAK_VAULT_KEY 를 프로덕션에서 없앤 것과 같은 취지로 debug 로 가둔다.
+// 격리 앱을 CLI 로 겨눌 땐 SOKSAK_SOCKET(명시 소켓 경로)를 쓴다.
 // 데이터·플러그인·사이드카·테마·프로젝트·
 // 소켓·시크릿·백업 전부가 이 한 값에서 파생된다(단일 진실).
 // sok CLI(cli/src/main.rs)는 독립 busybox 바이너리라 같은 계약을 자체 구현한다 — 계약 정본은
@@ -92,9 +94,12 @@ fn resolve_from(
     home: Option<&str>,
     userprofile: Option<&str>,
 ) -> PathBuf {
+    #[cfg(debug_assertions)]
     if let Some(h) = soksak_home.filter(|s| !s.is_empty()) {
         return PathBuf::from(h);
     }
+    #[cfg(not(debug_assertions))]
+    let _ = soksak_home;
     let base = home_base(is_windows, home, userprofile);
     let suffix = identifier.map(suffix_for_identifier).unwrap_or_default();
     base.join(format!(".soksak{suffix}"))
@@ -190,9 +195,11 @@ mod tests {
         assert_eq!(cli_for_core_build("debug"), "sok-debug");
     }
 
-    // SOKSAK_HOME 이 홈 전체를 지정(SOKSAK_VAULT_PATH 동형·모든 빌드, A17). 빈 값·부재는 identity 파생 폴백.
+    // SOKSAK_HOME(debug 전용)이 홈 전체를 지정. 빈 값·부재는 identity 파생 폴백. release 엔 이 분기가 없어
+    // (cfg debug_assertions) 이 계약도 debug 에서만 검증한다(새 프로덕션 홈-override 표면 부재의 대칭).
+    #[cfg(debug_assertions)]
     #[test]
-    fn soksak_home_env_overrides_home() {
+    fn soksak_home_env_overrides_home_in_debug() {
         use super::resolve_from;
         use std::path::PathBuf;
         assert_eq!(
