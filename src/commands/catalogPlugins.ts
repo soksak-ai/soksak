@@ -31,6 +31,7 @@ import {
 import {
   allContracts,
   implementersOf,
+  implementersOfId,
   manifestImplements,
   rawImplements,
   type ImplementsNode,
@@ -659,16 +660,16 @@ export function registerPluginCatalog(): void {
 
   register("plugin.implementers", {
     description:
-      "Find plugins whose exact {id, version} provider declaration satisfies a consumer {id, range}. Omit both fields to list exact provider evidence. Domain ids never embed a version.",
+      "Find plugins whose exact {id, version} provider declaration implements a domain contract. Pass id alone to discover every implementer regardless of version; add range to filter by SemVer. Omit both to list exact provider evidence. Domain ids never embed a version.",
     triggers: { ko: "플러그인 계약 구현체 발견 구현 스펙 컨트랙트" },
     params: {
       id: {
         type: "string",
-        description: "Version-free public domain contract id. Must be supplied together with range.",
+        description: "Version-free public domain contract id.",
       },
       range: {
         type: "string",
-        description: "Supported SemVer range. Must be supplied together with id.",
+        description: "Supported SemVer range. Optional — omit to discover every version.",
       },
     },
     returns:
@@ -697,7 +698,17 @@ export function registerPluginCatalog(): void {
           ? { note: "control-plane window loads no plugins — query a project window (w-*) or pass --window" }
           : {};
       if (!hasId && !hasRange) return { ...note, contracts: allContracts(nodes) };
-      if (hasId !== hasRange) return invalid("id and range must be supplied together");
+      const installed = usePlugins.getState().plugins;
+      const toImplementer = (id: string) => ({
+        id,
+        version: installed[id].manifest.version,
+        status: installed[id].status,
+      });
+      // id 단독 = identity 발견 — 버전 호환은 호출 경계가 매니페스트로 강제하므로 range 매칭을 건너뛴다.
+      if (hasId && !hasRange) {
+        const id = String(p.id);
+        return { ...note, requirement: { id }, implementers: implementersOfId(id, nodes).map(toImplementer) };
+      }
       const requirementErrors: string[] = [];
       const requirement = parseContractRequirement(
         { id: p.id, range: p.range },
@@ -705,15 +716,10 @@ export function registerPluginCatalog(): void {
         requirementErrors,
       );
       if (!requirement) return invalid(requirementErrors.join("; "));
-      const installed = usePlugins.getState().plugins;
       return {
         ...note,
         requirement,
-        implementers: implementersOf(requirement, nodes).map((id) => ({
-          id,
-          version: installed[id].manifest.version,
-          status: installed[id].status,
-        })),
+        implementers: implementersOf(requirement, nodes).map(toImplementer),
       };
     },
   });

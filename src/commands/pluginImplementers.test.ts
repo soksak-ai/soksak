@@ -81,8 +81,15 @@ describe("plugin.implementers", () => {
     ]);
   });
 
-  it("rejects partial or retired exact-string queries", async () => {
-    expect((await execute("plugin.implementers", { id: NOTES_001.id }, {}) as any).code).toBe("INVALID_PARAMS");
+  it("discovers every implementer by id alone regardless of version", async () => {
+    const result = await execute("plugin.implementers", { id: NOTES_001.id }, {}) as any;
+    expect(result.ok).toBe(true);
+    expect(result.data.requirement).toEqual({ id: NOTES_001.id });
+    expect(result.data.implementers.map((item: { id: string }) => item.id)).toEqual([ALPHA, BETA]);
+    expect(result.data.implementers[0]).toEqual({ id: ALPHA, version: "0.0.1", status: "enabled" });
+  });
+
+  it("rejects retired name@version concatenated queries", async () => {
     expect((await execute("plugin.implementers", { contract: `${NOTES_001.id}@0.0.1` }, {}) as any).code).toBe("INVALID_PARAMS");
   });
 });
