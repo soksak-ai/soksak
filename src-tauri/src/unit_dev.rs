@@ -57,7 +57,7 @@ fn valid_id(id: &str) -> bool {
         && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
-fn validate_declared_source(kind: &str, id: &str, source: &Path) -> Result<(), String> {
+fn validate_declared_source(home: &Path, kind: &str, id: &str, source: &Path) -> Result<(), String> {
     if !valid_kind(kind) {
         return Err(format!(
             "지원하지 않는 unit kind: {kind:?} (plugin|sidecar|kit)"
@@ -73,11 +73,27 @@ fn validate_declared_source(kind: &str, id: &str, source: &Path) -> Result<(), S
         ));
     }
     crate::path_security::reject_symlink_components(source)?;
+    // 봉쇄: dev source는 자기 identity 홈 밖으로 나갈 수 없다. 홈 밖 참조를 구조로 막아 한 identity(예:
+    // debug)가 다른 identity(dev) 홈의 unit을 dev-source로 끌어오는 누수를 차단한다 — 그건 발행→설치를
+    // 거쳐야 한다. `..` 상위 탐색도 금지해 렉시컬 escape를 봉쇄(symlink는 위에서 이미 거부).
+    if source
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err(format!("개발 source에 상위 탐색(..) 금지: {}", source.display()));
+    }
+    if !source.starts_with(home) {
+        return Err(format!(
+            "개발 source는 identity 홈 밖으로 나갈 수 없습니다(다른 identity/dev 홈 참조 차단): {} (홈: {})",
+            source.display(),
+            home.display()
+        ));
+    }
     Ok(())
 }
 
-fn validate_source(kind: &str, id: &str, source: &Path) -> Result<(), String> {
-    validate_declared_source(kind, id, source)?;
+fn validate_source(home: &Path, kind: &str, id: &str, source: &Path) -> Result<(), String> {
+    validate_declared_source(home, kind, id, source)?;
     validate_source_path(source)
 }
 
@@ -121,7 +137,7 @@ fn read_config_in(home: &Path) -> Result<UnitDevConfig, String> {
     for unit in &config.units {
         // checkout은 선택 뒤 이동/삭제될 수 있다. 선언 자체는 계속 노출해 loader가 unit별로
         // 명시적 오류를 보고하게 하고, 공식 설치본으로 fallback하지 않는다.
-        validate_declared_source(&unit.kind, &unit.id, Path::new(&unit.source))?;
+        validate_declared_source(home, &unit.kind, &unit.id, Path::new(&unit.source))?;
         if !keys.insert((unit.kind.as_str(), unit.id.as_str())) {
             return Err(format!(
                 "development unit config에 중복 key가 있습니다: {}/{}",
@@ -157,7 +173,7 @@ fn list_in(home: &Path) -> Result<Vec<UnitDevSource>, String> {
 }
 
 fn set_in(home: &Path, kind: &str, id: &str, source: &Path) -> Result<UnitDevSource, String> {
-    validate_source(kind, id, source)?;
+    validate_source(home, kind, id, source)?;
     // lexical 절대경로를 그대로 보존한다. canonicalize로 symlink를 숨기지 않는다.
     let selected = UnitDevSource {
         kind: kind.to_string(),
@@ -264,7 +280,7 @@ mod tests {
         let root = test_root("roundtrip");
         let _ = std::fs::remove_dir_all(&root);
         let home = root.join("home");
-        let source = root.join("weather");
+        let source = home.join("weather");
         std::fs::create_dir_all(&source).unwrap();
 
         let selected = set_in(&home, "plugin", "weather", &source).unwrap();
@@ -274,6 +290,39 @@ mod tests {
         assert!(remove_in(&home, "plugin", "weather").unwrap());
         assert!(list_in(&home).unwrap().is_empty());
         assert!(!remove_in(&home, "plugin", "weather").unwrap());
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn source_outside_identity_home_is_rejected() {
+        // 구멍 봉쇄: 한 identity 홈이 다른 identity(예: dev) 홈의 unit을 dev-source로 끌어오는 걸 막는다.
+        // debug 홈이 ~/.soksak-dev/plugins/... 를 참조하던 누수 — 홈 밖 절대경로는 loud하게 거부한다.
+        let root = test_root("outside-home");
+        let _ = std::fs::remove_dir_all(&root);
+        let home = root.join("home-debug");
+        let other = root.join("home-dev").join("plugins").join("weather");
+        std::fs::create_dir_all(&other).unwrap();
+
+        // set: 홈 밖 source 등록 거부.
+        let err = set_in(&home, "plugin", "weather", &other).unwrap_err();
+        assert!(err.contains("홈 밖"), "홈 밖 source는 거부되어야 한다: {err}");
+
+        // read: 이미 홈 밖 source가 박힌 config도 로드 시 거부(부팅 시 debug의 dev 누수 차단).
+        let path = config_path(&home);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            format!(
+                r#"{{"version":1,"units":[{{"kind":"plugin","id":"weather","source":"{}"}}]}}"#,
+                other.display()
+            ),
+        )
+        .unwrap();
+        assert!(
+            read_config_in(&home).is_err(),
+            "홈 밖 source가 박힌 config는 로드 시 거부되어야 한다"
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -295,7 +344,7 @@ mod tests {
         let root = test_root("strict-config");
         let _ = std::fs::remove_dir_all(&root);
         let home = root.join("home");
-        let source = root.join("weather");
+        let source = home.join("weather");
         std::fs::create_dir_all(&source).unwrap();
         let path = config_path(&home);
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -335,7 +384,7 @@ mod tests {
         let root = test_root("disappeared");
         let _ = std::fs::remove_dir_all(&root);
         let home = root.join("home");
-        let source = root.join("weather");
+        let source = home.join("weather");
         std::fs::create_dir_all(&source).unwrap();
         set_in(&home, "plugin", "weather", &source).unwrap();
         std::fs::remove_dir_all(&source).unwrap();
