@@ -364,7 +364,8 @@ pub fn data_encrypt_recover(
     }
     if !secrets.is_unlocked() {
         return Err(
-            "vault 잠김 — 복구는 새 passphrase 로 unlock 후(S 재저장에 KEK 필요)".to_string(),
+            "KEK 취득 불가(no secret service) — 복구는 device 키체인 접근 필요(S 재저장에 KEK 필요)"
+                .to_string(),
         );
     }
     let ak = with_conn(&state, |c| crypto::active_key(c, &scope))?
@@ -409,7 +410,9 @@ pub fn data_encrypt_rotate(
         return Err("scope 필요".to_string());
     }
     if !secrets.is_unlocked() {
-        return Err("vault 잠김 — 회전은 unlock 필요(old 키 개봉)".to_string());
+        return Err(
+            "KEK 취득 불가(no secret service) — 회전은 device 키체인 접근 필요(old 키 개봉)".to_string(),
+        );
     }
     let old = with_conn(&state, |c| crypto::active_key(c, &scope))?
         .ok_or("암호화 비활성 scope — 회전 대상 아님")?;
@@ -478,6 +481,15 @@ pub fn data_encrypt_convert(
         if n == 0 {
             break;
         }
+    }
+    // convert 는 평문 doc 을 in-place 로 봉인 전환한다. secure_delete=ON 이 freed 셀을 0 채우지만,
+    // 확실한 잔존 제거를 위해 실제 전환이 있었으면 full VACUUM(freelist 째 재기록) + WAL truncate 로
+    // 전환 이전 평문이 파일-carve 로 복원되는 경로를 닫는다.
+    if total > 0 {
+        with_conn(&state, |c| {
+            c.execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")
+                .map_err(|e| e.to_string())
+        })?;
     }
     Ok(total)
 }
@@ -627,4 +639,45 @@ pub fn data_migrate_ns(
         emit_change(&app, &to_ns, None, None, "ns-migrate", None);
     }
     Ok(outcome)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::crypto;
+    use crate::data::init_base;
+    use crate::secrets::{FailingKekSource, SecretsState};
+    use rusqlite::Connection;
+
+    // (신규 test7) enable fail-closed — no-secret-service(KEK 취득 불가)면 안전핀 순서(S 를
+    // put_data_key 로 먼저 → 성공해야 P 등록)가 자동 성립해 봉인 트리거(active P)가 등록되지 않는다.
+    // data_encrypt_enable 은 Tauri State 경계라 커맨드 대신 그 순서를 재현 — 무음 평문·orphan 트리거 0.
+    #[test]
+    fn enable_fail_closed_without_secret_service() {
+        let conn = Connection::open_in_memory().unwrap();
+        init_base(&conn).unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "soksak-enable-fc-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let secrets = SecretsState::default();
+        secrets.set_path(dir.join("secrets.vault"));
+        secrets.set_kek_source(Box::new(FailingKekSource));
+
+        let (sk, _pk) = crate::secrets::gen_asym_keypair();
+        let key_id = crypto::new_key_id();
+        // (1) S 를 vault 에 먼저 — KEK 취득 불가 → Err(여기서 중단, register 미도달).
+        assert!(
+            secrets.put_data_key(&key_id, &sk).is_err(),
+            "KEK 없으면 S 저장 실패(loud)"
+        );
+        // (2) 안전핀 — 위가 Err 라 register_active_key 미도달 → active P 없음(봉인 트리거 0).
+        assert!(
+            crypto::active_key(&conn, "proj-a").unwrap().is_none(),
+            "P 미등록 — orphan 봉인 트리거 0"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

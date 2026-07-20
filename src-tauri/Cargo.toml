@@ -118,6 +118,15 @@ tar = "=0.4.46"
 # daemon/service 가 5플랫폼 CI 로 검증한 그 패턴). unix 는 표준 UnixListener 그대로라 미의존.
 [target.'cfg(windows)'.dependencies]
 interprocess = "2"
+# OS 키체인(device KEK 투명 언락) — 볼트 KEK 를 OS 보안 저장소에 get-or-create(os_key.rs).
+# windows-native = Windows Credential Manager 백엔드.
+keyring = { version = "3", features = ["windows-native"] }
+
+# OS 키체인(device KEK) — Linux 는 D-Bus Secret Service(GNOME Keyring/KWallet). sync-secret-service =
+# 동기 dbus 백엔드, crypto-rust = D-Bus 세션 암호화를 순수 Rust AES 로(OpenSSL 시스템 의존 회피 →
+# 포터빌리티, "자체 crypto 0·RustCrypto" 정합). 헤드리스/무 D-Bus 는 os_key 가 StoreUnavailable 로 낸다.
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 
 # browser_eval: WKWebView callAsyncJavaScript 네이티브 콜백(결과 반환 eval — DOM 제어).
 # wry 의존 트리와 동일 버전 사용.
@@ -128,6 +137,9 @@ objc2-web-kit = { version = "0.3", features = ["block2"] }
 # 신호등(트래픽 라이트) 44px 타이틀바 중앙 재배치 — wry inset_traffic_lights 로직 복제.
 objc2-app-kit = "0.3"
 block2 = "0.6"
+# OS 키체인(device KEK 투명 언락) — 볼트 KEK 를 OS 보안 저장소에 get-or-create(os_key.rs).
+# apple-native = macOS Keychain(Security.framework) 백엔드. keyring::Entry 가 앱 신원 ACL 에 KEK 결속.
+keyring = { version = "3", features = ["apple-native"] }
 # wry with_webview ObjC retain 누수 수정 — 상류 머지됨(tauri-apps/tauri PR #15224, 2026-07-09 dev).
 # 릴리스 판이 나올 때까지 머지 커밋 rev 를 고정해 상류로 빌드한다(떠다니는 dev 금지 — 재현성).
 # tauri 는 모노레포(형제 크레이트 path 의존)라 한 크레이트만 patch 하면 버전이 갈려 충돌한다 →

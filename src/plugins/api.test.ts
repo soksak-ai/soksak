@@ -324,9 +324,7 @@ describe("commands.execute — danger ↔ 권한 매핑 + 관리 명령 차단(�
       d,
     );
     for (const name of [
-      "secret.unlock",
-      "secret.lock",
-      "secret.autolock",
+      "secret.status",
       "secret.backend",
       "secret.set",
       "secret.has",

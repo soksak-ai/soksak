@@ -55,7 +55,11 @@ pub fn open(path: &Path) -> Result<Connection, String> {
         // [R5] auto_vacuum=INCREMENTAL — retention 의 logical delete 후 incremental_vacuum 으로 free 페이지를
         // bounded 반환(physical reclaim, #8835 의 '삭제해도 파일 안 줄어듦' 방지). 첫 CREATE 전에 설정해야
         // 효과 — 기존 DB(auto_vacuum=NONE 으로 생성됨)는 변경이 무시되고 다음 풀 VACUUM(backup) 에 정리된다.
+        // secure_delete=ON — 삭제·덮어쓴 셀 내용을 0 으로 채운다. 봉인 전환(convert 의 in-place UPDATE)이
+        // 남기는 옛 평문 셀·FTS 텀이 freelist·WAL 에 잔존해 파일-carve 로 키 없이 복원되는 걸 막는다
+        // (도난-디스크 위협모델). 봉인 데이터의 at-rest 안전 전제.
         "PRAGMA auto_vacuum=INCREMENTAL;\
+         PRAGMA secure_delete=ON;\
          PRAGMA journal_mode=WAL;\
          PRAGMA synchronous=NORMAL;\
          PRAGMA busy_timeout=5000;\
@@ -264,5 +268,46 @@ mod tests {
         drop(conn);
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(mode, 0o600, "soksak.db 는 0600 이어야 한다(실제 {mode:o})");
+    }
+
+    #[test]
+    fn overwritten_plaintext_is_scrubbed_from_db_file() {
+        // 봉인 전환(convert 의 in-place UPDATE)이 남기는 옛 평문이 secure_delete=ON + VACUUM 으로 파일에서
+        // 사라짐을 증명한다 — 라이브 DB 를 훔친 자가 전환 이전 평문을 키 없이 carve 하는 경로(적대 프로브
+        // 앵글2)를 닫는다. 수정 전(secure_delete 부재·VACUUM 부재)엔 옛 평문이 freelist·WAL 에 잔존.
+        let dir = std::env::temp_dir().join(format!(
+            "soksak-scrub-{}-{}",
+            std::process::id(),
+            now_millis()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("soksak.db");
+        let secret = "SCRUB-SECRET-a1b2c3d4e5f6-do-not-leak";
+        {
+            let conn = open(&path).unwrap();
+            conn.execute(
+                "INSERT INTO kv(ns,k,v,updated) VALUES('t','k',?1,0)",
+                rusqlite::params![format!("{{\"body\":\"{secret}\"}}")],
+            )
+            .unwrap();
+            // 봉인 전환처럼 그 값을 암호문 자리표시자로 덮어쓴 뒤, data_encrypt_convert 완료와 동형으로 scrub.
+            conn.execute(
+                "UPDATE kv SET v='SEALED-CIPHERTEXT-PLACEHOLDER-0123456789abcdef' WHERE ns='t' AND k='k'",
+                [],
+            )
+            .unwrap();
+            conn.execute_batch("VACUUM; PRAGMA wal_checkpoint(TRUNCATE);")
+                .unwrap();
+        }
+        let mut hay = std::fs::read(&path).unwrap();
+        if let Ok(wal) = std::fs::read(format!("{}-wal", path.to_string_lossy())) {
+            hay.extend_from_slice(&wal);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+        let leaked = hay.windows(secret.len()).any(|w| w == secret.as_bytes());
+        assert!(
+            !leaked,
+            "덮어쓴 평문이 DB 파일에 잔존한다(secure_delete/VACUUM 미작동)"
+        );
     }
 }
