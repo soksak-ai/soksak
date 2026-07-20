@@ -111,6 +111,9 @@ fn print_usage() {
   멀티 윈도우: {bin} --window <label> <command> 또는 $SOKSAK_WINDOW 로 특정 창을 지정
   (생략 시 활성 창). 창 목록은 {bin} window.list, 새 창은 {bin} window.open.
   상관: $SOKSAK_PARENT 가 있으면 요청에 parent 로 실려 활동 엔트리가 그 턴으로 묶인다.
+  응답 대기: params 의 timeoutMs 가 상한이다 — {bin} plugin.install '{{\"source\":\"activity\",\"timeoutMs\":120000}}'.
+  code=TIMEOUT 은 회신을 못 받았다는 뜻이지 실패가 아니다. 다운로드·최초 활성화처럼 느린
+  명령은 상한을 올리고, 이미 TIMEOUT 을 받았다면 상태를 다시 읽어 완주 여부를 확인한다.
 
 환경(한 바이너리는 한 환경에만 묶인다 — 침묵 cross-env 금지):
   바이너리 identity가 환경을 고정한다(sok-dev→dev, sok-debug→debug, sok→release).

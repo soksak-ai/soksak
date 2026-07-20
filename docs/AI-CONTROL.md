@@ -101,6 +101,7 @@ Evidence: `catalogJson()` (registry.ts) is exposed as `state.commands`, and the 
 - **Mechanism**: the workspace `cli` crate → `sok` binary. `resolve_socket` (env→`~/.soksak` scan). `run_request`/`run_help`/`run_docs` all derive from `fetch_commands()` = `state.commands`; `run_events` switches the connection into the push stream.
 - **What**: keep the current implementation. help/docs derive from `catalogJson` as a fixed rule. No hardcoded static command lists.
 - **Why**: transport 1 — low-latency synchronous calls inside the terminal. Already discovery-shaped; the same pattern applies to MCP.
+- **Response wait**: `timeoutMs` in `params` is hoisted into the envelope and caps how long the caller waits. `code=TIMEOUT` says no reply arrived — never that the command failed. A slow executor keeps running and records its own outcome, so both entries are true and the code is what separates them. Raise the cap for commands that download or activate (`plugin.install`, the first `plugin.enable` of a released bundle), and after a TIMEOUT read the state back (`plugin.list`, `state.tree`) instead of assuming nothing happened.
 - **Note — `orchestrator.ask` over the socket**: the command registers only in the control plane, so target it explicitly (`sok --window main orchestrator.ask '{"text":"…","timeoutMs":300000}'`) and pass a large `timeoutMs` — a turn can run minutes; the socket clamp ceiling is one hour (a longer turn keeps running; only the caller times out).
 
 ### MCP (`sok mcp`)

@@ -99,6 +99,7 @@ soksak 의 모든 기능을 AI 에게 주는 방식의 정본 규칙. 세 가지
 - **제공방법**: 워크스페이스 `cli` 크레이트 → `sok` 바이너리. `resolve_socket`. `run_request`/`run_help`/`run_docs` 전부 `fetch_commands()`=`state.commands` 파생, `run_events` 는 연결을 push 스트림으로 전환.
 - **무엇**: 현 구현 유지. help/docs 가 `catalogJson` 파생임을 규칙으로 고정. 정적 명령 목록 하드코딩 금지.
 - **왜**: transport-1 — 터미널 내 저지연 동기 호출. 이미 발견형. 이 패턴을 MCP 에도 대칭 적용.
+- **응답 대기**: `params` 의 `timeoutMs` 가 envelope 으로 hoist 되어 호출자 대기 상한이 된다. `code=TIMEOUT` 은 회신을 못 받았다는 뜻이지 명령이 실패했다는 뜻이 아니다 — 느린 executor 는 계속 돌아 자기 실행 기록을 따로 남기므로 둘 다 사실이고 code 가 구분자다. 다운로드·활성화를 동반하는 명령(`plugin.install`, 발행 번들의 첫 `plugin.enable`)은 상한을 올리고, TIMEOUT 을 받았으면 아무 일도 없었다고 단정하지 말고 상태를 다시 읽어라(`plugin.list`, `state.tree`).
 - **주의 — 소켓 경유 `orchestrator.ask`**: 이 명령은 컨트롤 플레인(main)에만 등록되므로 명시 타겟(`sok --window main orchestrator.ask '{"text":"…","timeoutMs":300000}'`) + 큰 `timeoutMs` 지정 — 턴은 분 단위로 돌 수 있고 소켓 클램프 상한은 1시간(초과 턴은 계속 돌고 호출자만 TIMEOUT).
 
 ### MCP (`sok mcp`)
