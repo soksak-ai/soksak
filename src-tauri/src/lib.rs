@@ -253,7 +253,15 @@ pub fn run() {
                     Err(_) => false,
                 };
                 st.set_expect_vault(expect);
-                // KEK 출처 주입(경로·expect 확정 후). 프로덕션 OsKekSource — 앱 신원 ACL 결속.
+                // KEK 출처 주입(경로·expect 확정 후). 프로덕션 OsKekSource — 앱 신원 ACL 결속. debug 빌드에
+                // 한해 SOKSAK_E2E_KEK 가 있으면 e2e 결정적 KEK 를 먼저 쓴다(격리·CI). release 엔 이 분기 자체가
+                // 컴파일되지 않아 env-KEK 백도어가 없다.
+                #[cfg(debug_assertions)]
+                match secrets::E2eKekSource::from_env() {
+                    Some(src) => st.set_kek_source(Box::new(src)),
+                    None => st.set_kek_source(Box::new(secrets::OsKekSource::app())),
+                }
+                #[cfg(not(debug_assertions))]
                 st.set_kek_source(Box::new(secrets::OsKekSource::app()));
                 // 부팅 즉시 1회 투명 개방 시도(best-effort) 후 secrets-ready 방출 — 위 리스너가 서비스를
                 // 드레인 재시작해 토큰을 회복시킨다. StoreUnavailable(헤드리스)면 열리지 않고 조용히

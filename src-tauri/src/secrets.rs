@@ -352,6 +352,52 @@ impl KekSource for OsKekSource {
     }
 }
 
+// e2e/디버그 전용 결정적 KEK — SOKSAK_E2E_KEK 가 있으면 그 값을 도메인분리 SHA-256 해싱해 32B KEK 로 쓴다.
+// #[cfg(debug_assertions)] 라 release(프로덕션) 바이너리엔 이 코드가 아예 컴파일되지 않는다 — env-KEK 백도어
+// 0(P1 이 제거한 SOKSAK_VAULT_KEY 를 프로덕션에 되살리지 않는다). e2e 하니스가 키체인 없이 격리·결정적·CI
+// 가능한 볼트 언락을 얻는 유일 경로. env 부재면 None → OsKekSource 폴백(일반 dev 는 키체인 그대로).
+// 자식 프로세스엔 P0 자식-env 화이트리스트가 SOKSAK_E2E_KEK 를 벗겨 새지 않는다.
+#[cfg(debug_assertions)]
+pub struct E2eKekSource {
+    kek: [u8; KEY_LEN],
+}
+
+#[cfg(debug_assertions)]
+impl E2eKekSource {
+    // 값 → 32B KEK(도메인분리 SHA-256). 순수·결정적이라 env 없이 테스트 가능(set_var abort 회피).
+    fn derive(value: &str) -> [u8; KEY_LEN] {
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        h.update(b"soksak-e2e-kek:v1:");
+        h.update(value.as_bytes());
+        let mut kek = [0u8; KEY_LEN];
+        kek.copy_from_slice(&h.finalize()[..KEY_LEN]);
+        kek
+    }
+    pub fn from_env() -> Option<Self> {
+        let val = std::env::var("SOKSAK_E2E_KEK").ok()?;
+        if val.is_empty() {
+            return None;
+        }
+        Some(Self {
+            kek: Self::derive(&val),
+        })
+    }
+}
+
+#[cfg(debug_assertions)]
+impl KekSource for E2eKekSource {
+    fn acquire(&self) -> Result<Zeroizing<[u8; KEY_LEN]>, OsKeyError> {
+        Ok(Zeroizing::new(self.kek))
+    }
+    fn reachable(&self) -> bool {
+        true
+    }
+    fn backend(&self) -> &'static str {
+        "e2e"
+    }
+}
+
 // 테스트 seam — 실 키체인·CoreFoundation 미접촉(set_var 0). 모듈 레벨 #[cfg(test)] 라 test_state_with_secret
 // 및 타 모듈(data/commands.rs) 테스트가 crate::secrets:: 로 소비한다.
 #[cfg(test)]
@@ -968,6 +1014,21 @@ mod tests {
         s.set_path(path);
         s.set_kek_source(Box::new(InMemoryKekSource::empty()));
         (s, dir)
+    }
+
+    // (e2e) E2eKekSource 결정성 — 같은 값 → 같은 KEK(격리 볼트 런 간 재오픈 가능), 다른 값 → 다른 KEK.
+    // release 엔 이 타입이 컴파일되지 않으므로 이 테스트도 debug 에서만 돈다(백도어 부재의 대칭).
+    #[cfg(debug_assertions)]
+    #[test]
+    fn e2e_kek_is_deterministic() {
+        let a = E2eKekSource::derive("pty-cold-e2e-pass");
+        assert_eq!(
+            a,
+            E2eKekSource::derive("pty-cold-e2e-pass"),
+            "같은 값 → 같은 KEK"
+        );
+        assert_ne!(a, E2eKekSource::derive("other"), "다른 값 → 다른 KEK");
+        assert_ne!(a, [0u8; KEY_LEN], "0 KEK 아님");
     }
 
     // (a0) resolve_vault_path — SOKSAK_VAULT_PATH 주입 시 그 경로(격리), 없으면 default.

@@ -5,8 +5,12 @@
 //   com.soksak.dev   → ~/.soksak-dev
 //   com.soksak.debug → ~/.soksak-debug
 // 파생 규칙 = identifier 마지막 세그먼트("app" 은 무접미, 그 외 "-<세그먼트>") — 새 identity 는
-// 자동으로 자기 홈을 갖는다(하드코딩 목록 없음). runtime 환경변수 override는 없다.
-// 테스트도 경로를 받는 내부 함수로 격리하며 제품 경계를 열지 않는다. 데이터·플러그인·사이드카·테마·프로젝트·
+// 자동으로 자기 홈을 갖는다(하드코딩 목록 없음). SOKSAK_HOME 이 있으면 그 경로가 홈 전체를 지정한다
+// (SOKSAK_VAULT_PATH 와 동형의 오픈-테스트 메커니즘, 모든 빌드 — docs/ARCHITECTURE.md A17 canonical): 실제
+// 바이너리를 돌리는 블랙박스 e2e/도구가 데이터·볼트·소켓을 disposable 홈으로 격리해 공유 identity 홈을 안
+// 건드리게 하는 유일 수단(내부 함수 격리가 안 되는 경계). 홈 relocation 은 데이터 유출이 아니고 release 는
+// dev/local 플러그인 로드를 거부한다. 유닛테스트는 여전히 경로-인자 내부 함수로 격리한다.
+// 데이터·플러그인·사이드카·테마·프로젝트·
 // 소켓·시크릿·백업 전부가 이 한 값에서 파생된다(단일 진실).
 // sok CLI(cli/src/main.rs)는 독립 busybox 바이너리라 같은 계약을 자체 구현한다 — 계약 정본은
 // docs/ARCHITECTURE.md 의 identity 홈 절.
@@ -77,14 +81,33 @@ fn home_base(is_windows: bool, home: Option<&str>, userprofile: Option<&str>) ->
     PathBuf::from(base.unwrap_or(""))
 }
 
-fn resolve(identifier: Option<&str>) -> PathBuf {
-    // 모든 build profile에서 identity가 home을 결정한다. 테스트는 이 함수의 identifier
-    // 입력과 경로를 받는 하위 함수를 사용하며 runtime override를 제품에 추가하지 않는다.
-    let home = std::env::var("HOME").ok();
-    let userprofile = std::env::var("USERPROFILE").ok();
-    let base = home_base(cfg!(windows), home.as_deref(), userprofile.as_deref());
+// 순수 — env 값을 인자로 받아 홈을 결정(테스트 격리, 병렬 안전). SOKSAK_HOME 이 있으면 그 경로가 홈 전체를
+// 지정한다 — 블랙박스 e2e/도구가 데이터·볼트·소켓을 disposable 홈으로 격리하는 오픈-테스트 메커니즘
+// (SOKSAK_VAULT_PATH 와 동형, 모든 빌드에서 유효 — docs/ARCHITECTURE.md A17 canonical). 홈을 옮길 뿐
+// 데이터를 유출하지 않고, release 는 dev/local 플러그인 로드를 거부하므로 악성 플러그인 주입 경로가 아니다.
+fn resolve_from(
+    soksak_home: Option<&str>,
+    identifier: Option<&str>,
+    is_windows: bool,
+    home: Option<&str>,
+    userprofile: Option<&str>,
+) -> PathBuf {
+    if let Some(h) = soksak_home.filter(|s| !s.is_empty()) {
+        return PathBuf::from(h);
+    }
+    let base = home_base(is_windows, home, userprofile);
     let suffix = identifier.map(suffix_for_identifier).unwrap_or_default();
     base.join(format!(".soksak{suffix}"))
+}
+
+fn resolve(identifier: Option<&str>) -> PathBuf {
+    resolve_from(
+        std::env::var("SOKSAK_HOME").ok().as_deref(),
+        identifier,
+        cfg!(windows),
+        std::env::var("HOME").ok().as_deref(),
+        std::env::var("USERPROFILE").ok().as_deref(),
+    )
 }
 
 /// 앱 부트 1회(lib.rs setup 최상단) — 이후 모든 경로가 이 값에서 파생된다.
@@ -165,5 +188,27 @@ mod tests {
         assert_eq!(cli_for_core_build("release"), "sok");
         assert_eq!(cli_for_core_build("dev"), "sok-dev");
         assert_eq!(cli_for_core_build("debug"), "sok-debug");
+    }
+
+    // SOKSAK_HOME 이 홈 전체를 지정(SOKSAK_VAULT_PATH 동형·모든 빌드, A17). 빈 값·부재는 identity 파생 폴백.
+    #[test]
+    fn soksak_home_env_overrides_home() {
+        use super::resolve_from;
+        use std::path::PathBuf;
+        assert_eq!(
+            resolve_from(Some("/tmp/e2e-home"), Some("com.soksak.debug"), false, Some("/home/max"), None),
+            PathBuf::from("/tmp/e2e-home"),
+            "SOKSAK_HOME 이 홈을 그대로 지정(접미 없음)"
+        );
+        assert_eq!(
+            resolve_from(Some(""), Some("com.soksak.debug"), false, Some("/home/max"), None),
+            PathBuf::from("/home/max/.soksak-debug"),
+            "빈 값은 무시 → identity 파생"
+        );
+        assert_eq!(
+            resolve_from(None, Some("com.soksak.app"), false, Some("/home/max"), None),
+            PathBuf::from("/home/max/.soksak"),
+            "부재 → identity 파생(app 무접미)"
+        );
     }
 }
