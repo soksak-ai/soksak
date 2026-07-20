@@ -1,9 +1,14 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// ROOT is the UNIT repo root — the working directory the release runs in, NOT this script's
+// location. This lets the script be single-sourced (run from soksak-spec's release-template or the
+// app's bundled copy) while still reading the unit's own release/unit.json, targets.json, Cargo.toml
+// from cwd. A vendored copy run from the repo root, and a de-vendored run driven by the core release
+// command with cwd=unitRoot, both resolve identically. ESM relative imports stay file-relative, so
+// the LOGIC still comes from the script's own directory.
+export const ROOT = process.cwd();
 const SEMVER = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 
 export function parseUnitMetadata(raw) {

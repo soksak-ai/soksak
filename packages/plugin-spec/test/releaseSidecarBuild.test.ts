@@ -71,7 +71,9 @@ function writeFixture(overrides: { unit?: Record<string, unknown>; cargoVersion?
 function build(tag = "v0.0.1", emitSummary = false): { status: number | null; stdout: string; stderr: string } {
   const args = [path.join(root, "scripts", "build-release.mjs"), "--commit", COMMIT, "--tag", tag, "--artifacts", artifactsDir, "--out", outDir];
   if (emitSummary) args.push("--emit-summary");
-  const r = spawnSync("node", args, { encoding: "utf8" });
+  // ROOT is process.cwd() — run from the fixture root so the script reads the fixture's unit files
+  // (this is exactly how the core release command drives it: daemon cwd = unitRoot).
+  const r = spawnSync("node", args, { encoding: "utf8", cwd: root });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
 
