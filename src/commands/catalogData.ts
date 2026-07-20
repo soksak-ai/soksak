@@ -458,7 +458,7 @@ export function registerDataCatalog(): void {
 
   register("data.encrypt.recover", {
     description:
-      "Recover a scope's encryption private key from its one-time recovery code after a lost passphrase. Unlock the vault with a NEW passphrase first; this re-stores the recovered key under it. The recovered key must match the registered public key or recovery is refused. After success the scope's sealed records decrypt again.",
+      "Recover a scope's encryption private key from its one-time recovery code on a machine that lacks it — a fresh install, a different OS, or a lost keychain. Re-stores the key under this device's OS-keychain KEK, which must be reachable. The recovered key must match the registered public key or recovery is refused. After success the scope's sealed records decrypt again on this machine.",
     triggers: { ko: "암호화복구 키복구 복구코드" },
     params: {
       scope: { type: "string", description: "Scope partition key to recover", required: true },
@@ -480,10 +480,10 @@ export function registerDataCatalog(): void {
 
   register("data.encrypt.rotate", {
     description:
-      "Rotate a scope's encryption key: generate a new keypair, re-seal every record from the old key to the new one (one transaction each, resumable), then dispose the old key only once nothing references it. Requires the vault unlocked.",
+      "Rotate a scope's encryption key: generate a new keypair, re-seal every record from the old key to the new one (one transaction each, resumable), re-issue the recovery blob under a NEW recovery code, then dispose the old key only once nothing references it. Requires this device's OS-keychain KEK. Returns the new recovery code ONCE — store it; the previous code no longer opens the data.",
     triggers: { ko: "키회전 키교체 암호화회전" },
     params: { scope: { type: "string", description: "Scope partition key to rotate", required: true } },
-    returns: "{ oldKeyId, newKeyId, rekeyed, oldDisposed }",
+    returns: "{ oldKeyId, newKeyId, rekeyed, oldDisposed, recoveryCode }",
     message: (d) => tmsg("msg.data.encrypt.rotate", { n: Number(d.rekeyed) }),
     danger: "destructive",
     errors: ["INVALID_PARAMS", "INTERNAL"],
@@ -493,6 +493,25 @@ export function registerDataCatalog(): void {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
       }
       return await invoke("data_encrypt_rotate", { scope: p.scope });
+    },
+  });
+
+  register("data.encrypt.changeRecovery", {
+    description:
+      "Change a scope's recovery code WITHOUT re-encrypting data: re-wrap the active private key under a fresh recovery code and return it once. Use when the old code is lost or exposed. Requires this device's OS-keychain KEK. The previous code stops working; store the new one. Cheaper than rotate — the key and sealed records are untouched, only the recovery blob is replaced.",
+    triggers: { ko: "복구코드변경 복구코드재발급 복구코드교체" },
+    params: { scope: { type: "string", description: "Scope partition key", required: true } },
+    returns: "{ recoveryCode }",
+    message: () => tmsg("msg.data.encrypt.changeRecovery"),
+    danger: "destructive",
+    errors: ["INVALID_PARAMS", "INTERNAL"],
+    examples: ['data.encrypt.changeRecovery \'{"scope":"projA"}\''],
+    handler: async (p) => {
+      if (typeof p.scope !== "string" || !p.scope.trim()) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "scope 필요" };
+      }
+      const recoveryCode = await invoke<string>("data_encrypt_change_recovery", { scope: p.scope });
+      return { ok: true, recoveryCode };
     },
   });
 

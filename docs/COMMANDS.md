@@ -1192,19 +1192,18 @@ sok-debug plugin.enable '{"id":"soksak-plugin-<id>"}'
 
 ## `plugin.implementers`
 
-Find plugins whose exact {id, version} provider declaration satisfies a consumer {id, range}. Omit both fields to list exact provider evidence. Domain ids never embed a version. | 플러그인 계약 구현체 발견 구현 스펙 컨트랙트
+Find plugins by the contract they implement (manifest implements, coupling law C3 L2 contract-pin). Discover by identity: pass the version-free contract id `{"id":"soksak-spec-<kind>-<domain>"}` and get every installed plugin declaring that contract id with its runtime status; omit it to map every declared contract to its implementers. Never pass a version or range here — discovery is version-blind; the call boundary enforces version compatibility from the manifest (`consumes`/`implements`). Discovery is contract-addressed and implementation-blind — resolve implementers here instead of hardcoding plugin ids. | 플러그인 계약 구현체 발견 구현 스펙 컨트랙트
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `id` | string |  | Version-free public domain contract id. Must be supplied together with range. |
-| `range` | string |  | Supported SemVer range. Must be supplied together with id. |
+| `id` | string |  | Version-free contract id "soksak-spec-<kind>-<domain>" — identity, never `@<major>`. Returns every implementer regardless of version; the call boundary enforces version compatibility from the manifest. Omit to list every declared contract with its implementers. |
 
-**Returns**: { contract, implementers: [{id, version, status}] } (contract given) | { contracts: [{contract, implementers}] } (omitted)
+**Returns**: { contract, implementers: [{id, version, status}] } (id given) | { contracts: [{contract, implementers}] } (omitted)
 **Errors**: INVALID_PARAMS
 
 ```bash
 sok-debug plugin.implementers
-sok-debug plugin.implementers '{"id":"soksak-spec-plugin-git","range":"0.0.1"}'
+sok-debug plugin.implementers '{"id":"soksak-spec-plugin-git"}'
 ```
 
 ## `plugin.install` (danger: destructive)

@@ -34,8 +34,9 @@ import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
 import { ConfirmCloseModal } from "./components/ConfirmCloseModal";
 import { RemoteConfirmModal } from "./components/RemoteConfirmModal";
+import { RecoverySetupModal } from "./components/RecoverySetupModal";
+import { RecoveryEnterModal } from "./components/RecoveryEnterModal";
 import { wireRemoteConfirm } from "./state/remoteConfirmWire";
-import { startAutoLock } from "./secrets/autoLock";
 import { installRemoteConfirmDevTrigger } from "./state/remoteConfirmDev";
 import { ConsentPreviewHost } from "./components/ConsentPreviewHost";
 import { NotifyHost } from "./ui/NotifyHost";
@@ -379,9 +380,6 @@ function App() {
   // store 큐에 잇고, 결정 sink 를 remote_confirm_resolve 로 잇는다(데스크톱 단일 권위). 부팅 1회.
   useEffect(() => wireRemoteConfirm(), []);
 
-  // [단계③] auto-lock 배선 — 사용자 활동을 백엔드에 통지(idle 타이머 리셋)하고, vault 자동/수동 잠금
-  // broadcast 를 DOM 이벤트로 재방출(UI·터미널이 반응). 부팅 1회.
-  useEffect(() => startAutoLock(), []);
   // 활성 project/space/panel/view 체인과 실제 키보드 포커스는 하나의 계약이다.
   // 마운트 시 자동포커스하지 않고, 최신 활성 뷰 의도만 provider 에 전달한다.
   useEffect(() => startViewFocusSync(), []);
@@ -918,6 +916,8 @@ function App() {
       )}
       <ConfirmCloseModal />
       <RemoteConfirmModal />
+      <RecoverySetupModal />
+      <RecoveryEnterModal />
 
       {/* 본문: 좌측 모드면 세로 프로젝트 레일 + 콘텐츠 행. */}
       <div className={`app-body${projectTabPosition === "left" ? " with-rail" : ""}`}>

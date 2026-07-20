@@ -194,8 +194,42 @@ ctx.subscriptions.push(sub); // 비활성/리로드 시 자동 해지
 
 ---
 
-## 13. 안티패턴 (금지)
+## 13. 암호화 — 민감 필드 봉인 (컬럼에 암호화가 필요할 때)
 
+민감값(메모 속 비밀번호·토큰 등)이 **DB 파일이 새어나가도**(클라우드 백업·동기화, 버그 리포트, 다른 사용자, 비암호화 디스크 도난) 평문으로 안 보이게 하는 최소 안전.
+
+**핵심 규칙 — 필드가 평문인지 봉인인지는 `define` 이 정한다:**
+
+| 필드 | 저장 형태 |
+|---|---|
+| `indexes`/`fts` 로 선언한 필드 | **평문**(질의·정렬·검색되게 — 그래서 노출) |
+| `id`(내장) | **평문**(레코드 키) |
+| 그 외 doc 필드(선언 안 함) | **봉인**(암호문) — 그 scope 에 암호화가 켜져 있을 때 |
+
+```js
+await app.data.define("notes", {
+  indexes: ["folderId", "createdAt"],   // 평문 — 질의/정렬용(비민감만)
+  fts:     ["title"],                    // 평문 — 검색용(비민감만)
+});
+// secret·body 는 어디에도 선언 안 함 → 봉인 대상
+await app.data.put("notes", {
+  folderId: "f1", title: "배포 노트",     // 평문
+  token: "ghp_xxx", body: "…민감 메모…",  // 봉인(암호문으로 at-rest 저장)
+}, { scope });
+```
+
+- **컬럼(필드)에 암호화가 필요하면: `indexes`/`fts` 에 넣지 마라.** 선언 안 한 필드는 자동으로 봉인된다.
+- **민감값을 `indexes`/`fts` 로 선언하면 평문이 된다(금지).** 검색이 필요하면 비민감 필드(title 등)만 대상으로.
+- 봉인 필드는 **질의·정렬·검색 불가**(암호문이라) — 그게 목적. 비민감 인덱스로 좁힌 뒤 doc 을 받아 앱에서 처리한다.
+- **투명**: 봉인·복호는 코어가 자동으로 한다. 플러그인 `put`/`get` 코드는 그대로. 키는 **코어가 OS 시크릿 저장소**(macOS Keychain / Windows DPAPI / Linux libsecret)에서 관리 — 플러그인은 키를 안 만진다. keyId/버전·로테이션 자동.
+- **보호 범위(정직)**: DB/백업 유출 시 평문 금지(O). **동일-사용자 악성코드·OS 뚫림은 방어 안 함**(OS·디스크 암호화 몫). macOS 가 가장 강함(per-app), Win/Linux 는 per-user.
+- scope 에 암호화를 켜는 법·복구코드·한계 상세 → **`docs/PLUGIN-DATA-ENCRYPTION.md`**.
+
+---
+
+## 14. 안티패턴 (금지)
+
+- ❌ **민감값을 `indexes`/`fts` 로 선언**(→ at-rest 평문 노출; §13).
 - ❌ 플러그인/프론트에서 raw SQL·`rusqlite`·`prepare` 사용.
 - ❌ 선언하지 않은 필드로 `where`/`order`(런타임 거부).
 - ❌ `fts` 없이 대량 데이터를 `like` 로 부분검색(풀스캔).
@@ -205,7 +239,7 @@ ctx.subscriptions.push(sub); // 비활성/리로드 시 자동 해지
 
 ---
 
-## 14. RED → GREEN 검증
+## 15. RED → GREEN 검증
 
 - **권한 게이트(vitest)**: `"data"` 미선언 → `app.data === undefined`; 선언 → 표면 존재.
   선례: `src/plugins/api.test.ts`(가짜 deps 주입).

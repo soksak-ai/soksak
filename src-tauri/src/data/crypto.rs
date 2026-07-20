@@ -146,6 +146,23 @@ pub fn set_recovery(
     Ok(())
 }
 
+// enable·rotate·change-recovery 공유 — 지정 키의 S 를 새 복구코드로 감싸 blob 을 저장하고 코드를 돌려준다.
+// 키를 active 로 만든 모든 경로가 호출해야 한다: 회전이 이걸 빠뜨리면 새 active 키에 recovery 가 NULL 이라
+// active_recovery=None → 기계·키체인 분실 시 봉인 데이터가 영구 복호불가(무손실 위반). 코드는 앱 미저장.
+pub fn issue_recovery(
+    conn: &Connection,
+    scope: &str,
+    key_id: &str,
+    secret: &[u8],
+) -> Result<String, String> {
+    let code = crate::secrets::gen_recovery_code();
+    let (salt, sealed) = crate::secrets::recovery_wrap(&code, secret)?;
+    let blob = serde_json::to_string(&crate::secrets::RecoveryBlob { salt, sealed })
+        .map_err(|e| e.to_string())?;
+    set_recovery(conn, scope, key_id, &blob)?;
+    Ok(code)
+}
+
 // [R24] active 키의 recovery blob 조회 — 복구 흐름이 읽는다. 없으면 None.
 pub fn active_recovery(conn: &Connection, scope: &str) -> Result<Option<String>, String> {
     conn.query_row(
@@ -420,6 +437,41 @@ mod tests {
         assert_eq!(public_from_secret(&rs), p, "복구된 S 가 등록 P 와 일치");
         // recovery 없는 scope → None.
         assert!(active_recovery(&c, "proj-z").unwrap().is_none());
+    }
+
+    // (k-f, R24) 회전-복구 무손실 — 새 키를 active 로 올린 뒤 issue_recovery 를 부르지 않으면 active_recovery
+    // 가 None(옛 키 blob 은 retired 라 안 잡힘) → 기계 분실 시 영구 손실. issue_recovery 후엔 새 코드로 새 S
+    // 복구가 가능해야 한다. 회전이 recovery 재발급을 빠뜨리는 회귀를 이 테스트가 잡는다.
+    #[test]
+    fn rotation_reissues_recovery_or_loses_data() {
+        use crate::secrets::{public_from_secret, recovery_unwrap, RecoveryBlob};
+        let c = mem();
+        let (s1, p1) = gen_asym_keypair();
+        register_active_key(&c, "proj-a", "key-1", &p1, 100).unwrap();
+        let code1 = issue_recovery(&c, "proj-a", "key-1", &s1).unwrap();
+        // 회전 — 새 키를 active 로(옛 키 retired). 이 시점엔 새 키 recovery 미발급.
+        let (s2, p2) = gen_asym_keypair();
+        register_active_key(&c, "proj-a", "key-2", &p2, 200).unwrap();
+        // RED 조건: recovery 재발급 전엔 active(key-2) 의 blob 이 없어 복구 경로가 죽는다.
+        assert!(
+            active_recovery(&c, "proj-a").unwrap().is_none(),
+            "재발급 전엔 새 active 키에 recovery blob 이 없다(손실 위험)"
+        );
+        // GREEN: 회전 경로가 반드시 부르는 issue_recovery — 새 코드로 새 S 복구.
+        let code2 = issue_recovery(&c, "proj-a", "key-2", &s2).unwrap();
+        assert_ne!(code1, code2, "회전마다 새 복구코드");
+        let got = active_recovery(&c, "proj-a").unwrap().unwrap();
+        let blob: RecoveryBlob = serde_json::from_str(&got).unwrap();
+        let recovered = recovery_unwrap(&code2, &blob.salt, &blob.sealed).unwrap();
+        assert_eq!(recovered, s2.to_vec(), "회전 후 새 코드로 새 active S 복구");
+        let mut rs = [0u8; 32];
+        rs.copy_from_slice(&recovered);
+        assert_eq!(public_from_secret(&rs), p2, "복구된 S 가 새 active P 와 일치");
+        // 옛 코드로는 새 blob 이 안 열린다(무결성).
+        assert!(
+            recovery_unwrap(&code1, &blob.salt, &blob.sealed).is_err(),
+            "옛 복구코드로는 새 blob 개봉 불가"
+        );
     }
 
     // (k-d, blocker④) 키스왑 탐지 — publicKey 를 공격자 P 로 변조하면 verify_active_key 가 false.

@@ -8,13 +8,15 @@
 # cold restore 랜딩 전에는 반드시 RED 다 — 데몬이 죽으면 세션이 소실되고 새 셸만
 # 뜬다(스크롤백·TUI·고지 부재). M4(cold 경로 배선) 후 GREEN 이 완료 판정이다.
 #
-# vault: SOKSAK_VAULT_PATH(격리 볼트) + SOKSAK_VAULT_KEY(자동 unlock) 오픈 메커니즘.
-# 볼트 파일은 런 간 보존한다(삭제 금지) — scope 암호화 키(app.data encryption_keys)가
-# 이 볼트의 S 와 짝이라, 볼트를 지우면 다음 런의 unlock 이 R23(키 등록됨+볼트 부재
-# = 새 볼트 생성 거부)에 막혀 하니스가 스스로를 오염시킨다(실측). 봉인 키 캐시(seal.pub)와
-# 봉인-블롭을 담은 <home>/pty 를 시작·종료 시 정리한다(런 볼트와 재짝지음 — 멱등).
+# 격리 모델(테스트 표준): 실 identity 홈(설치본 플러그인+사이드카를 그대로 쓴다 — dev.load·홈 격리 없이)
+# 에서 돌되, DB·볼트는 런 전용 disposable temp(RUNDIR)로 격리한다: SOKSAK_DATA_DIR(DB)+SOKSAK_VAULT_PATH
+# (볼트). 매 런 fresh 라 실 DB 의 잔재 키에 R23(키 등록됨+볼트 부재=새 볼트 거부)로 막히지 않고, 끝나면
+# RUNDIR 통째 삭제 → 하니스가 스스로도 실홈도 오염 안 시킨다(파괴적 실-DB 리셋 불필요). 볼트 unlock 은
+# debug 전용 결정적 SOKSAK_E2E_KEK(SHA-256, release 엔 부재 — P0 이 프로덕션 env 언락 SOKSAK_VAULT_KEY
+# 를 제거). 봉인 키 캐시(seal.pub)·봉인-블롭을 담은 <home>/pty 는 실홈에 있으니(설치본 사이드카가 거기
+# 체크포인트한다) 시작·종료 시 정리한다(런 볼트와 재짝지음 — 멱등).
 #
-# 사용: bash scripts/e2e/pty-cold-restore.sh [--identity debug]   (KEEP=1: 캡처 보존)
+# 사용: bash scripts/e2e/pty-cold-restore.sh [--identity debug]   (KEEP=1: 캡처·RUNDIR 보존)
 set -uo pipefail
 
 IDENTITY=debug
@@ -43,8 +45,7 @@ ROOT = os.path.join(E2E_HOME, "pty-cold")         # 창 carrier(고정)
 # 이 하니스는 cold 주입 "메커니즘"을 격리 검증한다: 데몬 사망 후 봉인 체크포인트가
 # 화면(스크롤백·TUI·고지)을 버퍼에 복원하는가. 런마다 새 프로젝트(빈 이력)를 써
 # blocks-repaint 이력 누적이 오라클을 흐리지 않게 한다 — 실사용(이력 있는 재오픈)의
-# "뷰포트 안" 검증은 별도 하니스 pty-cold-realistic.sh 가 맡는다. 창 carrier(ROOT)·
-# 볼트는 고정 유지.
+# "뷰포트 안" 검증은 별도 하니스 pty-cold-realistic.sh 가 맡는다. 창 carrier(ROOT)는 고정.
 GEN = f"{os.getpid()}-{int(time.time())}"
 PROJ = os.path.join(E2E_HOME, f"pty-cold-proj-{GEN}")  # 이 런 전용 프로젝트(빈 이력)
 ALIAS = f"pty-cold-e2e-{GEN}"
@@ -52,9 +53,13 @@ ALIAS = f"pty-cold-e2e-{GEN}"
 # 겨눌 수 있다(M3 는 두 엔진을 같은 사이드카에 배선; pane_of 는 엔진 무관).
 PROGRAM = os.environ.get("SOKSAK_TERM_PROGRAM", "terminal-xterm")
 MARK = f"PCOLD{os.getpid()}"
-TMP = os.path.join(E2E_HOME, "pty-cold-artifacts")
-VAULT = os.path.join(TMP, "vault.json")
-for d in (ROOT, PROJ, TMP):
+TMP = os.path.join(E2E_HOME, "pty-cold-artifacts")   # 산출물(캡처·로그) — 보존
+# 런 전용 DB+볼트(disposable). SOKSAK_DATA_DIR 로 실홈 DB(잔재 키) 를 우회하고, 끝나면 통째 삭제한다 —
+# 테스트가 실 데이터를 안 건드리고 자기 상태만 자기정리한다(홈의 설치본 플러그인·사이드카는 그대로 쓴다).
+RUNDIR = os.path.join(E2E_HOME, f"pty-cold-rundb-{GEN}")
+DATA_DIR = os.path.join(RUNDIR, "data")
+VAULT = os.path.join(RUNDIR, "vault.json")
+for d in (ROOT, PROJ, TMP, DATA_DIR):
     os.makedirs(d, exist_ok=True)
 
 PASS = []; FAIL = []
@@ -91,8 +96,9 @@ def app_alive():
 def launch():
     env = dict(os.environ)
     env["SOKSAK_PTYD_BIN"] = PTYD_BIN
-    env["SOKSAK_VAULT_PATH"] = VAULT       # 격리 볼트(사용자 실볼트 비오염)
-    env["SOKSAK_VAULT_KEY"] = "pty-cold-e2e-pass"  # 자동 unlock(결정적)
+    env["SOKSAK_DATA_DIR"] = DATA_DIR      # 런 전용 DB(실홈 DB·잔재키 비오염 — fresh 라 R23 없음)
+    env["SOKSAK_VAULT_PATH"] = VAULT       # 런 전용 볼트(실볼트 비오염)
+    env["SOKSAK_E2E_KEK"] = "pty-cold-e2e-pass"  # debug 전용 결정적 KEK(키체인 불요·CI·release 엔 부재)
     log = open(os.path.join(TMP, "app.log"), "ab")
     subprocess.Popen([APP_BIN], env=env, stdout=log, stderr=log, start_new_session=True)
     assert wait_socket(), "앱 소켓 기동 실패"
@@ -170,21 +176,25 @@ def snapshot(win, name):
 
 # 이 pane 의 체크포인트 파일 — soksak-spec-pty 의 base64url(무패딩) 파생과 동형.
 # glob 로 아무 파일이나(형제 창의 것) 집으면 오라클을 흐린다: 반드시 (창,pane) 로 특정한다.
+# 체크포인트는 홈 파생(<home>/pty) — DB(RUNDIR)와 별개다(설치본 사이드카가 실홈에 봉인한다).
 def ckpt_path_for(window, pane):
     comp = lambda s: base64.urlsafe_b64encode(s.encode()).rstrip(b"=").decode()
     return os.path.join(APP_HOME, "pty", "checkpoints", f"ckpt-{comp(window)}.{comp(pane)}.json")
 
-def scan_home_for(needle: bytes):
+def scan_dirs_for(needle: bytes):
+    # 봉인 확인: command_blocks 는 런 DB(RUNDIR)에, 봉인 체크포인트는 실홈 <home>/pty 에 있어야 한다 —
+    # 둘 다 스캔해 화면 평문이 어느 쪽에도 안 남았음을 본다.
     hits = []
-    for base, _dirs, files in os.walk(APP_HOME):
-        for f in files:
-            p = os.path.join(base, f)
-            try:
-                with open(p, "rb") as fh:
-                    if needle in fh.read():
-                        hits.append(p)
-            except Exception:
-                pass
+    for root in (RUNDIR, APP_HOME):
+        for base, _dirs, files in os.walk(root):
+            for f in files:
+                p = os.path.join(base, f)
+                try:
+                    with open(p, "rb") as fh:
+                        if needle in fh.read():
+                            hits.append(p)
+                except Exception:
+                    pass
     return hits
 
 # ── 0. 준비: 잔재 정리(멱등) + 하니스 소유 앱 기동 ───────────────────────────
@@ -211,10 +221,10 @@ def close_all_windows():
         time.sleep(0.3)
 close_all_windows()
 
-# 이전 세대 프로젝트 정리(멱등) — 지난 런들이 남긴 pty-cold-proj-<gen> 잔재를 걷는다.
-# 이 런 전용 PROJ(방금 makedirs)는 건너뛴다.
-for old in glob.glob(os.path.join(E2E_HOME, "pty-cold-proj-*")):
-    if old == PROJ:
+# 이전 세대 프로젝트·런DB 정리(멱등) — 크래시로 정리 못 하고 남은 지난 런 잔재를 걷는다(post-launch:
+# project.recent.remove 는 rpc 를 쓰니 앱 기동 후). 이 런 전용(PROJ·RUNDIR)은 건너뛴다.
+for old in glob.glob(os.path.join(E2E_HOME, "pty-cold-proj-*")) + glob.glob(os.path.join(E2E_HOME, "pty-cold-rundb-*")):
+    if old in (PROJ, RUNDIR):
         continue
     try:
         rpc("project.recent.remove", {"root": old})
@@ -227,9 +237,12 @@ r = rpc("window.open", {"root": ROOT}); time.sleep(4)
 WIN = r.get("label") or r.get("existingWindow")
 assert WIN, f"창 생성 실패: {r}"
 # 터미널 엔진 플러그인은 홈에 설치만 되고 disabled 일 수 있다(설치≠활성). program 을 여는 전제로
-# 동의+활성을 멱등 보장한다 — 다른 e2e(webview-crash) 도 픽스처를 이렇게 세운다.
+# 동의+활성을 멱등 보장한다 — 다른 e2e(webview-crash) 도 픽스처를 이렇게 세운다. 실홈에 설치된
+# 플러그인·사이드카를 그대로 쓴다(dev.load 아님 — debug 빌드엔 dev.load 배선을 두지 않는다).
 TERM_PLUGIN = f"soksak-plugin-{PROGRAM}"
 st = next((p for p in rpc("plugin.list", window=WIN).get("plugins", []) if p.get("id") == TERM_PLUGIN), None)
+if not st:
+    ng(f"터미널 플러그인 미설치({TERM_PLUGIN}) — dev 유닛을 발행/설치한 debug 홈에서 실행해야 한다")
 if not st or st.get("status") != "enabled":
     rpc("plugin.consent.grant", {"id": TERM_PLUGIN}, window=WIN)
     en = rpc("plugin.enable", {"id": TERM_PLUGIN}, window=WIN)
@@ -244,10 +257,11 @@ assert pane, "터미널 pane 을 찾지 못함"
 print(f"  창={WIN} pane={pane}")
 
 # 이 프로젝트 scope 의 app.data 암호화 활성 — command_blocks(의미 축)도 봉인되어야
-# "잠금 상태 디스크 평문 부재"가 홈 전체 스캔으로 성립한다(P1 게이트 문구).
+# "잠금 상태 디스크 평문 부재"가 DB·홈 스캔으로 성립한다(P1 게이트 문구). 런 DB 는 fresh 라
+# 항상 새로 활성된다(누적 없음 — 끝에 RUNDIR 삭제).
 enc = rpc("data.encrypt.enable", {"scope": PROJ}, window=WIN)
 if enc.get("ok") is False and "이미 암호화" in str(enc.get("message", "")):
-    print("  data.encrypt.enable: 이미 활성(이전 런) — 멱등 통과")
+    print("  data.encrypt.enable: 이미 활성 — 멱등 통과")
 elif enc.get("ok") is False:
     ng(f"data.encrypt.enable 실패(볼트 상태 확인): {enc}")
 else:
@@ -281,8 +295,8 @@ for _ in range(30):
 if found_ckpt: ok(f"봉인 체크포인트 파일 생성({os.path.basename(OUR_CKPT)})")
 else: ng("체크포인트 파일 미생성(cold restore 의 입력 부재)")
 time.sleep(1)
-hits = scan_home_for(f"{MARK}-SCROLL-30".encode())
-if not hits: ok("identity 홈 디스크에 화면 평문 부재(봉인 확인)")
+hits = scan_dirs_for(f"{MARK}-SCROLL-30".encode())
+if not hits: ok("런 DB·identity 홈 디스크에 화면 평문 부재(봉인 확인)")
 else: ng(f"화면 평문이 디스크에 노출: {hits}")
 
 # ── 4. 재부팅 모사: 앱 종료(보존) + ptyd SIGKILL ─────────────────────────────
@@ -333,6 +347,8 @@ terminate()
 kill_daemon()
 subprocess.run(["rm", "-rf", os.path.join(APP_HOME, "pty")])
 subprocess.run(["rm", "-rf", PROJ])  # 이 런 전용 프로젝트 회수(세대 격리 — 빈 이력 유지)
+if not KEEP:
+    subprocess.run(["rm", "-rf", RUNDIR])  # 런 전용 DB+볼트 통째 삭제(자기정리 격리)
 
 print()
 print(f"pty-cold-restore: PASS={len(PASS)} FAIL={len(FAIL)}" + (f"  산출물={TMP}" if KEEP or FAIL else ""))

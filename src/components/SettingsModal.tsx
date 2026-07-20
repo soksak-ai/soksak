@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { usePlugins } from "../state/plugins";
 import { PluginSettingsPanel } from "./PluginSettingsPanel";
 import { ContractEngineSettings } from "./ContractEngineSettings";
+import { SecuritySettings } from "./SecuritySettings";
 import {
   useSettings,
   type Language,
@@ -336,6 +337,8 @@ export function SettingsModal({
               <option value="deny">{t("policy.deny")}</option>
             </select>
           </div>
+
+          <SecuritySettings />
               </>
             ) : (
               <PluginSettingsPanel pluginId={section} />

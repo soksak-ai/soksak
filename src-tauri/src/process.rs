@@ -31,6 +31,27 @@ pub const AI_SESSION_ENV: [&str; 8] = [
     "AI_AGENT",
 ];
 
+// 자식에 정당히 전달하는 SOKSAK_* 인터페이스(tmux $TMUX_PANE 계열 — 자식이 앱과 대화하는 핸들).
+// 이 목록 밖의 SOKSAK_* 는 전부 내부 전용(볼트 마스터키·시크릿 페이로드·격리 볼트 경로·테스트 훅)
+// 으로 간주해 상속 env 에서 벗긴다. 새 내부 SOKSAK_* 가 늘어도 기본 차단(fail-closed).
+const SOKSAK_CHILD_ALLOW: [&str; 6] = [
+    "SOKSAK_HOME",
+    "SOKSAK_SOCKET",
+    "SOKSAK_PANE",
+    "SOKSAK_WINDOW",
+    "SOKSAK_PARENT",
+    "SOKSAK_CLI_DIR",
+];
+
+// 부모 env 키 중 자식에서 제거할 내부 전용 SOKSAK_* 를 고른다. 순수 함수 — 실제 env 에 무관해
+// 단위 테스트가 결정적이다. process 자식은 임의 비대화형 프로그램(LSP/MCP/ACP/CLI)이라 셸처럼
+// 프로파일을 재소싱하지 않는다 — 그래서 전체 화이트리스트는 정당한 도구 env(프록시·언어 홈 등)를
+// 깨뜨릴 위험이 크고, 표준은 승계하되 내부 SOKSAK_* 만 확실히 벗기는 denylist 를 쓴다.
+fn internal_soksak_keys(keys: impl Iterator<Item = String>) -> Vec<String> {
+    keys.filter(|k| k.starts_with("SOKSAK_") && !SOKSAK_CHILD_ALLOW.contains(&k.as_str()))
+        .collect()
+}
+
 struct ProcessSession {
     child: Arc<Mutex<Child>>, // kill(세션) + EOF 후 wait(reader) 공유
     stdin: Option<ChildStdin>,
@@ -237,6 +258,12 @@ pub fn process_spawn(
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    // 내부 전용 SOKSAK_*(볼트 마스터키·시크릿 페이로드·격리 볼트 경로·테스트 훅)를 상속 env 에서
+    // 제거 — 자식(LSP/MCP/ACP/임의 CLI)이 앱 내부 시크릿을 물려받지 못하게 한다. 인터페이스
+    // SOKSAK_* 는 allowlist 로 보존. 아래 SOKSAK_HOME 명시 주입·secret_env 주입은 이 제거 뒤라 무영향.
+    for k in internal_soksak_keys(std::env::vars().map(|(k, _)| k)) {
+        c.env_remove(k);
+    }
     // 앱 주입 컨텍스트(A17) — 플러그인 자식이 identity 홈을 파생할 유일한 상시 경로. PTY 의
     // SOKSAK_SOCKET 주입과 같은 계열(소스주입 env 아님 — 앱이 자기 단일진실을 자식에 전파).
     c.env("SOKSAK_HOME", crate::home::soksak_home());
@@ -393,6 +420,61 @@ mod tests {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect()
+    }
+
+    // 내부 전용 SOKSAK_* denylist — 볼트 마스터키·시크릿·격리 경로·테스트 훅은 제거되고,
+    // 인터페이스 SOKSAK_* 와 표준(PATH 등)은 보존됨을 순수 함수 수준에서 못박는다. 자식(LSP/MCP/
+    // ACP)에 앱 마스터 시크릿이 새지 않는다는 계약의 실증(process_spawn 이 이 목록으로 env_remove).
+    #[test]
+    fn internal_soksak_keys_strips_secrets_keeps_interface_and_standard() {
+        let parent = [
+            // 표준
+            "PATH",
+            "HOME",
+            "USER",
+            // 인터페이스 SOKSAK_*(보존)
+            "SOKSAK_HOME",
+            "SOKSAK_SOCKET",
+            "SOKSAK_PANE",
+            "SOKSAK_WINDOW",
+            "SOKSAK_PARENT",
+            "SOKSAK_CLI_DIR",
+            // 내부 전용 SOKSAK_*(제거)
+            "SOKSAK_VAULT_KEY",
+            "SOKSAK_VAULT_PATH",
+            "SOKSAK_SECRET_0",
+            "SOKSAK_PTYD_BIN",
+            "SOKSAK_ENV",
+        ];
+        let strip: std::collections::HashSet<String> =
+            internal_soksak_keys(parent.iter().map(|s| s.to_string()))
+                .into_iter()
+                .collect();
+
+        // (a) 내부 전용은 전부 제거 대상이다.
+        for k in [
+            "SOKSAK_VAULT_KEY",
+            "SOKSAK_VAULT_PATH",
+            "SOKSAK_SECRET_0",
+            "SOKSAK_PTYD_BIN",
+            "SOKSAK_ENV",
+        ] {
+            assert!(strip.contains(k), "내부 전용 {k} 는 제거돼야 한다");
+        }
+        // (b) 인터페이스·표준은 보존(제거 목록에 없음).
+        for k in [
+            "PATH",
+            "HOME",
+            "USER",
+            "SOKSAK_HOME",
+            "SOKSAK_SOCKET",
+            "SOKSAK_PANE",
+            "SOKSAK_WINDOW",
+            "SOKSAK_PARENT",
+            "SOKSAK_CLI_DIR",
+        ] {
+            assert!(!strip.contains(k), "{k} 는 보존돼야 한다");
+        }
     }
 
     // service 사이드카 스킴 — 비스킴 통과 / 불법 이름 거부 / 미설치 명시 에러(경로 형태 포함).

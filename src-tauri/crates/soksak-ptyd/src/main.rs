@@ -905,6 +905,67 @@ mod unix {
 
     // ── 세션 스폰 + reader ────────────────────────────────────────────────────
 
+    // 세션 셸의 env 구성 — 먼저 데몬 env 를 통째 비운 뒤(env_clear) 앱이 넘긴 화이트리스트만
+    // 주입한다. 데몬은 앱보다 오래 살며 앱 내부 시크릿(SOKSAK_VAULT_KEY 등)을 물고 있을 수 있어,
+    // 이 fail-closed 순서가 데몬 env 를 타고 사용자 셸로 새는 경로를 끊는다(화이트리스트 정본은
+    // 앱의 build_session_env). env_remove 는 화이트리스트 뒤 belt-and-suspenders.
+    fn apply_session_env(cmd: &mut CommandBuilder, env: &[(String, String)], env_remove: &[String]) {
+        cmd.env_clear();
+        for k in env_remove {
+            cmd.env_remove(k);
+        }
+        for (k, v) in env {
+            cmd.env(k, v);
+        }
+    }
+
+    #[cfg(test)]
+    mod env_tests {
+        use super::{apply_session_env, CommandBuilder};
+
+        // apply_session_env 의 fail-closed 계약 — 부모(데몬) env 를 통째 비우고 앱이 넘긴
+        // 화이트리스트만 남긴다. (a) 상속으로 새던 내부 시크릿은 0, (b) 제공된 표준은 존재.
+        // env_clear 가 빠지면 부모 env 가 그대로 남아 이 테스트가 RED 가 된다(회귀 가드).
+        #[test]
+        fn env_clear_drops_inherited_leaves_only_provided() {
+            // 부모 env 에 마스터키가 있는 상황을 재현(데몬은 앱 시크릿을 물고 있을 수 있다).
+            std::env::set_var("SOKSAK_VAULT_KEY", "MASTER-LEAK");
+
+            let provided = [
+                ("PATH".to_string(), "/usr/bin".to_string()),
+                ("TERM".to_string(), "xterm-256color".to_string()),
+            ];
+            let mut cmd = CommandBuilder::new("/bin/sh");
+            // env_clear 전에는 부모 env 를 통째 상속한다(회귀 대비 사전 조건 확인).
+            assert!(
+                cmd.iter_full_env_as_str().count() > provided.len(),
+                "기본 CommandBuilder 는 부모 env 를 상속한다"
+            );
+
+            apply_session_env(&mut cmd, &provided, &[]);
+
+            let full: std::collections::HashMap<String, String> = cmd
+                .iter_full_env_as_str()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+
+            // (a) 상속 시크릿·나머지 부모 env 는 사라진다 — 제공 목록만 남는다.
+            assert!(
+                !full.contains_key("SOKSAK_VAULT_KEY"),
+                "env_clear 후 상속 마스터키가 새면 안 된다"
+            );
+            assert_eq!(full.len(), provided.len(), "제공한 화이트리스트만 남아야 한다");
+            // (b) 제공된 표준은 존재한다.
+            assert_eq!(full.get("PATH").map(String::as_str), Some("/usr/bin"));
+            assert_eq!(
+                full.get("TERM").map(String::as_str),
+                Some("xterm-256color")
+            );
+
+            std::env::remove_var("SOKSAK_VAULT_KEY");
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn spawn_session(
         reg: &Arc<Registry>,
@@ -924,12 +985,7 @@ mod unix {
             .map_err(|e| e.to_string())?;
 
         let mut cmd = CommandBuilder::new(&shell);
-        for k in &env_remove {
-            cmd.env_remove(k);
-        }
-        for (k, v) in &env {
-            cmd.env(k, v);
-        }
+        apply_session_env(&mut cmd, &env, &env_remove);
         if let Some(cwd) = &cwd {
             cmd.cwd(cwd);
         }

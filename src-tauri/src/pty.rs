@@ -232,6 +232,61 @@ fn zsh_integration_env(shell: &str) -> Vec<(String, String)> {
     ]
 }
 
+// env_clear 후 부모 env 에서 자식 셸로 승계할 표준 화이트리스트. 이 목록 밖(내부 시크릿
+// SOKSAK_VAULT_KEY·SOKSAK_SECRET_*·격리 볼트 경로, 그 밖의 임의 비밀)은 원천 차단된다. 대화형
+// 셸은 프로파일(.zshrc 등)을 재소싱하므로 최소 승계로도 정상 동작한다 — 그래서 프로파일이 세팅하지
+// 않는 런타임 핸들(SSH 에이전트·X/Wayland 세션)만 골라 담는다. SOKSAK_* 인터페이스와 TERM/COLORTERM
+// 은 build_session_env 가 명시 주입한다(여기 중복 불필요).
+const SHELL_ENV_ALLOW: &[&str] = &[
+    // 셸·계정 기본
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "SHELL",
+    // 터미널·로케일(TERM/COLORTERM 은 build_session_env 가 덮어씀)
+    "TERM",
+    "TERM_PROGRAM",
+    "TERM_PROGRAM_VERSION",
+    "COLORTERM",
+    "TERMINFO",
+    "LANG",
+    "LANGUAGE",
+    "TZ",
+    "TMPDIR",
+    // 에디터·페이저
+    "EDITOR",
+    "VISUAL",
+    "PAGER",
+    // SSH 사용 케이스 — 프로파일이 세팅하지 않는 에이전트·연결 핸들(SSH 세션에서 필수)
+    "SSH_AUTH_SOCK",
+    "SSH_AGENT_PID",
+    "SSH_CONNECTION",
+    "SSH_CLIENT",
+    "SSH_TTY",
+    // Linux 세션/디스플레이 — 프로파일이 세팅하지 않는 런타임 핸들
+    "DISPLAY",
+    "WAYLAND_DISPLAY",
+    "XAUTHORITY",
+    "XDG_RUNTIME_DIR",
+    "XDG_DATA_DIRS",
+    "XDG_CONFIG_DIRS",
+    "XDG_SESSION_TYPE",
+    "DBUS_SESSION_BUS_ADDRESS",
+    "GPG_TTY",
+];
+
+// 승계 대상 판정 — LC_* 로케일 카테고리는 접두 매칭, 나머지는 정확 일치.
+fn is_shell_safe_env_key(k: &str) -> bool {
+    SHELL_ENV_ALLOW.contains(&k) || k.starts_with("LC_")
+}
+
+// 부모 env 에서 대화형 셸에 정당한 표준 변수만 골라낸다. 순수 함수 — 실제 env 에 무관해 단위
+// 테스트가 결정적이다. 이것이 화이트리스트의 단일 진실(Local·Daemon 백엔드가 같은 목록을 쓴다).
+fn shell_safe_base_env<I: Iterator<Item = (String, String)>>(vars: I) -> Vec<(String, String)> {
+    vars.filter(|(k, _)| is_shell_safe_env_key(k)).collect()
+}
+
 // 세션 env 조립 — 두 백엔드의 단일 소스. 터미널은 신선한 셸 컨텍스트여야 한다:
 // soksak 을 claude(Claude Code) 세션 안에서 띄우면 claude 가 주입한 세션 env 가
 // PTY 로 새어 터미널의 claude 가 자기를 중첩 자식 세션으로 오인한다 — AI 세션
@@ -243,10 +298,12 @@ fn build_session_env(
     pane_id: &Option<String>,
     window_label: &Option<String>,
 ) -> (Vec<(String, String)>, Vec<String>) {
-    let mut env: Vec<(String, String)> = vec![
-        ("TERM".into(), "xterm-256color".into()),
-        ("COLORTERM".into(), "truecolor".into()),
-    ];
+    // env_clear 후 이 목록만 자식 셸에 주입된다(양 백엔드 공통). 부모 env 에서 표준 화이트리스트만
+    // 승계 — 내부 시크릿(SOKSAK_VAULT_KEY 등)은 목록 밖이라 자식으로 새지 않는다. TERM/COLORTERM 은
+    // 승계값을 무시하고 아래에서 고정 주입한다.
+    let mut env: Vec<(String, String)> = shell_safe_base_env(std::env::vars());
+    env.push(("TERM".into(), "xterm-256color".into()));
+    env.push(("COLORTERM".into(), "truecolor".into()));
     if let Some(pane) = pane_id {
         env.push(("SOKSAK_PANE".into(), pane.clone()));
     }
@@ -348,6 +405,10 @@ pub fn spawn_terminal(
         .map_err(|e| e.to_string())?;
 
     let mut cmd = CommandBuilder::new(shell.clone());
+    // 부모 env 를 통째 비운 뒤 화이트리스트(build_session_env)만 주입한다 — 상속으로 새던 내부
+    // 시크릿(SOKSAK_VAULT_KEY 등)을 원천 차단하는 fail-closed 순서. env_remove 는 뒤따르는
+    // belt-and-suspenders(화이트리스트 밖이라 이미 부재).
+    cmd.env_clear();
     for k in &env_remove {
         cmd.env_remove(k);
     }
@@ -1420,7 +1481,52 @@ mod daemon {
 
 #[cfg(test)]
 mod tests {
-    use super::ReplayControl;
+    use super::{shell_safe_base_env, ReplayControl};
+
+    // 셸 env 화이트리스트 — (a) 내부 시크릿·임의 비밀은 0, (b) 필수 표준·SSH 핸들은 승계.
+    // env_clear 후 자식 셸에 실제로 들어갈 목록을 순수 함수 수준에서 못박는다(Local·Daemon 공통).
+    #[test]
+    fn shell_safe_base_env_whitelists_standard_and_drops_secrets() {
+        let parent = [
+            // 필수 표준 — 승계돼야 함
+            ("PATH", "/usr/bin"),
+            ("HOME", "/home/x"),
+            ("USER", "x"),
+            ("SHELL", "/bin/zsh"),
+            ("LANG", "en_US.UTF-8"),
+            ("LC_ALL", "C"),
+            ("TZ", "UTC"),
+            ("TMPDIR", "/tmp"),
+            ("SSH_AUTH_SOCK", "/run/ssh-agent.sock"),
+            // 내부/민감 — 반드시 탈락
+            ("SOKSAK_VAULT_KEY", "MASTER-LEAK"),
+            ("SOKSAK_SECRET_0", "sk-real-9z"),
+            ("SOKSAK_VAULT_PATH", "/iso/secrets.vault"),
+            ("CLAUDECODE", "1"),
+            ("AWS_SECRET_ACCESS_KEY", "zzz"),
+        ];
+        let got: std::collections::HashMap<String, String> =
+            shell_safe_base_env(parent.iter().map(|(k, v)| (k.to_string(), v.to_string())))
+                .into_iter()
+                .collect();
+
+        // (b) 필수 표준·SSH 핸들은 승계된다.
+        for k in [
+            "PATH", "HOME", "USER", "SHELL", "LANG", "LC_ALL", "TZ", "TMPDIR", "SSH_AUTH_SOCK",
+        ] {
+            assert!(got.contains_key(k), "{k} 는 화이트리스트로 승계돼야 한다");
+        }
+        // (a) 내부/민감은 자식 env 에서 0.
+        for k in [
+            "SOKSAK_VAULT_KEY",
+            "SOKSAK_SECRET_0",
+            "SOKSAK_VAULT_PATH",
+            "CLAUDECODE",
+            "AWS_SECRET_ACCESS_KEY",
+        ] {
+            assert!(!got.contains_key(k), "{k} 는 화이트리스트에 탈락해야 한다");
+        }
+    }
 
     // spawn 의 replay 파라미터 와이어 계약(배관) — 부재/none/{fromSeq} 셋을 정확히 가른다.
     // 소비자 소유 판정과 warm 좌표가 여기서 갈리므로 세 형태의 역직렬화를 못박는다.

@@ -1,10 +1,13 @@
 // secret.* commands — exposes the encrypted secret vault (Rust SecretsState) through command registry
-// (single source of truth). Covers CLI/MCP e2e self-verification: vault ops (unlock/lock/backend)
+// (single source of truth). Covers CLI/MCP e2e self-verification: vault status (status/backend)
 // + ns·key management (set/has/keys/delete).
+//
+// Transparent unlock — the KEK comes from the OS key store (os_key), so there is no daily passphrase
+// unlock/lock/autolock command. no-secret-service (headless/no D-Bus) surfaces as seal_available=false
+// (sealing impossible), never a silent plaintext fallback.
 //
 // No get command — the core blocks plaintext readback (secretRef injection via 2b is the only plaintext path).
 // All management commands delegate to invoke (vault/crypto are Rust single source of truth).
-// Headless e2e opens the vault via SOKSAK_VAULT_KEY auto-unlock or secret.unlock.
 
 import { invoke } from "@tauri-apps/api/core";
 import { register } from "./registry";
@@ -23,61 +26,32 @@ const KEY_PARAM = {
 } as const;
 
 export function registerSecretsCatalog(): void {
-  register("secret.unlock", {
+  register("secret.status", {
     description:
-      "Unlock the secret vault with a master passphrase (creates a new vault if one does not exist). Keeps the KEK in memory only — only ciphertext is on disk. For headless use, set SOKSAK_VAULT_KEY env to auto-unlock.",
-    triggers: { ko: "시크릿 볼트 열기 잠금해제 unlock 마스터키" },
-    params: { passphrase: { type: "string", description: "Master passphrase for the vault", required: true } },
-    returns: "{ ok }",
-    message: () => tmsg("msg.secret.unlock"),
-    danger: "inject",
-    errors: ["INVALID_PARAMS", "INTERNAL"],
-    examples: ['secret.unlock \'{"passphrase":"correct horse battery staple"}\''],
-    handler: async (p) => {
-      if (typeof p.passphrase !== "string" || !p.passphrase) {
-        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "passphrase 필요" };
-      }
-      await invoke("secret_unlock", { passphrase: p.passphrase });
-      return { ok: true };
-    },
-  });
-
-  register("secret.lock", {
-    description: "Lock the secret vault by zeroing the in-memory KEK. All subsequent operations are rejected until unlock is called again.",
-    triggers: { ko: "시크릿 볼트 잠금 lock 닫기" },
+      "Query the transparent-unlock status: KEK backend label, seal_available (whether the OS key store is reachable, so sealing/opening works), expect_vault (app.data envelope keys registered), and the stored app.data key ids. Use to check whether secrets can be sealed before performing operations.",
+    triggers: { ko: "시크릿 볼트 상태 백엔드 봉인가능 status" },
     params: {},
-    returns: "{ ok }",
-    message: () => tmsg("msg.secret.lock"),
+    returns: "{ backend, seal_available, expect_vault, data_key_ids }",
+    message: (d) =>
+      d.seal_available
+        ? tmsg("msg.secret.backend.unlocked", { backend: String(d.backend) })
+        : tmsg("msg.secret.backend.locked", { backend: String(d.backend) }),
     errors: ["INTERNAL"],
-    examples: ["secret.lock"],
+    examples: ["secret.status"],
     handler: async () => {
-      await invoke("secret_lock");
-      return { ok: true };
-    },
-  });
-
-  register("secret.autolock", {
-    description:
-      "Set the idle auto-lock timeout in milliseconds (0 disables). When the vault stays idle past this, it locks itself and broadcasts secrets-locked to every window. Activity resets the timer via secret_touch.",
-    triggers: { ko: "자동잠금 유휴잠금 오토락 잠금시간" },
-    params: { ms: { type: "number", description: "Idle timeout in milliseconds; 0 disables auto-lock", required: true } },
-    returns: "{ ms }",
-    message: (d) => Number(d.ms) > 0 ? tmsg("msg.secret.autolock.on", { ms: Number(d.ms) }) : tmsg("msg.secret.autolock.off"),
-    errors: ["INVALID_PARAMS"],
-    examples: ['secret.autolock \'{"ms":300000}\''],
-    handler: async (p) => {
-      const ms = typeof p.ms === "number" ? p.ms : Number(p.ms);
-      if (!Number.isFinite(ms) || ms < 0) {
-        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "ms 는 0 이상 숫자" };
-      }
-      await invoke("secret_autolock", { ms: Math.floor(ms) });
-      return { ms: Math.floor(ms) };
+      return await invoke<{
+        backend: string;
+        seal_available: boolean;
+        expect_vault: boolean;
+        data_key_ids: string[];
+      }>("secret_status");
     },
   });
 
   register("secret.backend", {
-    description: "Query the vault backend type and current lock state. Use to check whether the vault is open before performing secret operations.",
-    triggers: { ko: "시크릿 볼트 상태 백엔드 잠금여부" },
+    description:
+      "Query the KEK backend label and whether sealing is available (compat shim over secret.status; unlocked = seal_available). Prefer secret.status.",
+    triggers: { ko: "시크릿 볼트 상태 백엔드 봉인가능" },
     params: {},
     returns: "{ backend, unlocked }",
     message: (d) => d.unlocked ? tmsg("msg.secret.backend.unlocked", { backend: String(d.backend) }) : tmsg("msg.secret.backend.locked", { backend: String(d.backend) }),
@@ -90,7 +64,7 @@ export function registerSecretsCatalog(): void {
 
   register("secret.set", {
     description:
-      "Store a sensitive value under ns/key using envelope encryption (per-item DEK wrapped by the KEK). Overwrites the existing value if the key already exists. Rejected if the vault is locked.",
+      "Store a sensitive value under ns/key using envelope encryption (per-item DEK wrapped by the device KEK). Overwrites the existing value if the key already exists. Rejected when the OS key store is unavailable (no secret service).",
     triggers: { ko: "시크릿 저장 설정 키 값 저장 set 보관" },
     params: { ns: NS_PARAM, key: KEY_PARAM, value: { type: "string", description: "Sensitive value to store", required: true } },
     returns: "{ ok }",
@@ -142,7 +116,7 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.remove", {
-    description: "Remove ns/key from the vault (removed=true if the key existed). Rejected if the vault is locked.",
+    description: "Remove ns/key from the vault (removed=true if the key existed). Rejected when the OS key store is unavailable (no secret service).",
     triggers: { ko: "시크릿 삭제 제거 지우기 delete" },
     params: { ns: NS_PARAM, key: KEY_PARAM },
     returns: "{ removed }",

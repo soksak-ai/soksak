@@ -25,6 +25,15 @@ export function implementersOf(
     .map((node) => node.id);
 }
 
+// Identity discovery — every node whose implements carries this contract id, any version.
+// Version compatibility is enforced at the call boundary by manifest declaration, so
+// discovery by id alone deliberately skips range matching.
+export function implementersOfId(id: string, nodes: ImplementsNode[]): string[] {
+  return nodes
+    .filter((node) => node.implements.some((provider) => provider.id === id))
+    .map((node) => node.id);
+}
+
 export function contractsOf(pluginId: string, nodes: ImplementsNode[]): ContractProviderRef[] {
   const node = nodes.find((candidate) => candidate.id === pluginId);
   if (!node) return [];

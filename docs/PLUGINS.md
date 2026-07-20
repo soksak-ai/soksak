@@ -179,7 +179,7 @@ soksak-validate plugin plugin.json  # GitHub Release tarball을 SHA-256 검증 �
 | `contributes.nodes[]` | | `{id, description?, danger?}` — `"ui"` 권한 필요. **DOM 노출 노드 종류** 선언(외부 주소 클릭/측정). 실제 요소엔 `data-node="<id>"`(동적 목록은 `<id>/<안정키>`). **경로 문법은 소문자 슬러그만 합법** — 세그먼트는 `[a-z0-9][a-z0-9.-]*`(구분 `/`), 대문자·공백은 스캔이 경고와 함께 무시한다. 선언하면 동의 화면에 표기, `danger:true` 는 ⚠ 강조 |
 | `libraries[]` | | 외부 CLI 종속성 — **top-level**(`contributes` 밖). 4-tuple `{name, bin, install, observe?, accept?, reach?}`. 권한 불요(설치는 활성화 동의가 게이트). → 아래 「외부 런타임 의존성」 |
 | `dependencies` | | 런타임 플러그인 관계/호출 권한 — **top-level** `{pluginId: semver}`. locator가 아니며 설치 URL을 만들지 않는다. plugin-kind conformance에서 owner release의 `kind:"plugin"` dependency와 정확히 같아야 한다. sidecar/kit 설치 closure는 release manifest만 소유한다. id-핀보다 계약 결합(`viewContract`/`implements`/`consumes`)을 우선한다 |
-| `consumes` | | 이 플러그인이 **부를 계약** — **top-level**. `["soksak-spec-<kind>-<domain>@<major>"]`. `implements` 의 대칭이고 계약-핀의 호출 축이다: 호출자가 계약을 선언하고 대상이 그 계약을 `implements` 하면 코어 호출 경계가 `plugin.<대상id>.<cmd>` 를 통과시킨다 — 구현체 id 를 매니페스트에 적지 않으므로 두 번째 구현체가 와도 고칠 곳이 없다. 발견은 `plugin.implementers {contract}`. 미선언 교차 호출은 여전히 거부(PERMISSION_DENIED) |
+| `consumes` | | 이 플러그인이 **부를 계약** — **top-level**. `[{"id":"soksak-spec-<kind>-<domain>","range":"0.0.1"}]` — 계약 id 는 버전-free, 버전 range 는 별도 필드(id 에 `@<major>` 안 박는다). `implements` 의 대칭이고 계약-핀의 호출 축이다: 호출자가 계약을 선언하고 대상이 그 계약을 `implements` 하면 코어 호출 경계가 `plugin.<대상id>.<cmd>` 를 통과시킨다 — 구현체 id 를 매니페스트에 적지 않으므로 두 번째 구현체가 와도 고칠 곳이 없다. 발견은 identity(계약 id)로 한다 — `plugin.implementers {"id":...}`; range/version 은 매니페스트 `consumes`/`implements` 에만 산다. 미선언 교차 호출은 여전히 거부(PERMISSION_DENIED) |
 
 기여 `title`/프로그램 `path` 도 전부 문자열 또는 언어 맵(§3.5). 뷰 내부 텍스트의
 다국어는 플러그인 소유 — `app.locale()`(권한 불요)로 현재 언어를 읽고

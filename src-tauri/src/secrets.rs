@@ -1,16 +1,17 @@
 // 시크릿 볼트(app.secrets) — API 키·토큰 같은 민감값을 암호화 저장하는 코어 capability.
-// 설계: 단일 암호화 볼트 파일 하나가 단일 진실, OS 키체인 비의존(순수 Rust crypto) —
-// 멀티플랫폼·헤드리스·백업이식 기준을 모두 만족(KeePassXC/1Password/Bitwarden 구조).
+// 설계: 단일 암호화 볼트 파일 하나가 단일 진실. KEK 는 os_key(OS 키체인)에서 device 단위로
+// get-or-create 한다 — 일상 passphrase 언락 없이 부팅 시 투명 개방(투명 언락). 마스터
+// passphrase 는 제거됐고, no-secret-service(헤드리스/무 D-Bus)는 무음 평문 폴백 없이 봉인 불가로 낸다.
 //
 // ── 키 계층(envelope) ────────────────────────────────────────────────────────
-// master passphrase ─Argon2id(salt,OWASP)→ KEK(32B, 메모리에만)
+// device KEK(32B) ←── os_key OS 키체인 get-or-create(secrets.rs 는 취득만, 저장은 os_key)
 //                                            │
 //   항목값마다 랜덤 DEK(32B) ─XChaCha20Poly1305(val_nonce)→ val_ct
 //   DEK ─XChaCha20Poly1305(dek_nonce, key=KEK)→ dek_ct(=wrap)
-// 디스크에는 암호문(dek_ct/val_ct + nonce)만 — KEK·DEK·평문은 절대 디스크에 없다.
+// 디스크에는 암호문(dek_ct/val_ct + nonce)만 — KEK·DEK·평문은 절대 볼트 파일에 없다(KEK 는 OS 저장소).
 //
-// verifier: 고정 마커를 KEK 로 AEAD 봉인한 헤더 필드 — unlock 시 복호 성공으로
-// passphrase 정합을 검증(KEK 자체는 저장하지 않으므로 이게 유일한 검증 채널).
+// verifier: 고정 마커를 KEK 로 AEAD 봉인한 헤더 필드 — ensure_open 시 복호 성공으로 vault↔device
+// KEK 정합을 검증(다른 기기 키체인 백업 복원·키체인 리셋을 loud Err 로 잡는 무결성 채널).
 //
 // get 명령 없음 — 평문 readback 을 코어가 차단한다(2b 의 secretRef 주입만이 평문 경로).
 //
@@ -41,8 +42,10 @@ use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 use zeroize::{Zeroize, Zeroizing};
+
+use crate::os_key::{self, OsKeyError, OsKeyStore, SecretStore};
 
 // OWASP Argon2id 권장(2024): m=19456 KiB, t=2, p=1. 헤더에 기록 — 미래 파라미터 변경 대비.
 const ARGON2_M_COST: u32 = 19456;
@@ -289,30 +292,189 @@ pub struct RecoveryBlob {
 // 키 수명(S 는 vault 에만, P 는 encryption_keys 평문 메타)은 이 모듈·data 계층이 소유.
 pub use soksak_seal::{gen_asym_keypair, open_sealed, public_from_secret, seal_to, SealedBox};
 
+// ── device KEK 취득 seam(os_key) ──────────────────────────────────────────────
+// KEK 출처를 SecretsState 밖으로 뺀 주입 슬롯 — 프로덕션은 OS 키체인(os_key), 테스트는 in-mem/failing.
+// Send+Sync 라 managed SecretsState 슬롯에 Box<dyn> 로 담긴다. os_key::get_or_create_kek 은 concrete
+// store 로만 호출(트레잇 오브젝트 비호환)하고, 이 seam 이 그 위에 backend 라벨·read-only 프로브를 얹는다.
+pub trait KekSource: Send + Sync {
+    // get-or-create — 없으면 생성(쓰기). 미도달(StoreUnavailable)은 Err 로 전파(무음 평문 폴백 0).
+    fn acquire(&self) -> Result<Zeroizing<[u8; KEY_LEN]>, OsKeyError>;
+    // read-only 도달성 프로브 — KEK 를 생성하지 않는다(부수효과 0). status 의 seal_available 판정용.
+    fn reachable(&self) -> bool;
+    // 진단 라벨 — status 표면. 프로덕션은 플랫폼 저장소명, 테스트는 "memory".
+    fn backend(&self) -> &'static str;
+}
+
+// 플랫폼별 저장소 라벨(진단 표면 전용). os_key 백엔드 피처와 대응.
+fn os_backend_label() -> &'static str {
+    #[cfg(target_os = "macos")]
+    {
+        "keychain"
+    }
+    #[cfg(target_os = "windows")]
+    {
+        "wincred"
+    }
+    #[cfg(target_os = "linux")]
+    {
+        "secret-service"
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        "os-key"
+    }
+}
+
+// 프로덕션 — os_key OS 키체인. app 신원 ACL 결속(OsKeyStore::app). keyring 은 이 구조 안에서만
+// 인스턴스화 → SecretsState::default()(store 미주입)는 키체인·CoreFoundation 을 절대 안 건드린다.
+pub struct OsKekSource {
+    store: OsKeyStore,
+}
+
+impl OsKekSource {
+    pub fn app() -> Self {
+        Self {
+            store: OsKeyStore::app(),
+        }
+    }
+}
+
+impl KekSource for OsKekSource {
+    fn acquire(&self) -> Result<Zeroizing<[u8; KEY_LEN]>, OsKeyError> {
+        os_key::get_or_create_kek(&self.store)
+    }
+    fn reachable(&self) -> bool {
+        // read-only — Some/None(=미도달 아님) 둘 다 도달=true, StoreUnavailable/Corrupt 만 false.
+        self.store.read().is_ok()
+    }
+    fn backend(&self) -> &'static str {
+        os_backend_label()
+    }
+}
+
+// e2e/디버그 전용 결정적 KEK — SOKSAK_E2E_KEK 가 있으면 그 값을 도메인분리 SHA-256 해싱해 32B KEK 로 쓴다.
+// #[cfg(debug_assertions)] 라 release(프로덕션) 바이너리엔 이 코드가 아예 컴파일되지 않는다 — env-KEK 백도어
+// 0(P1 이 제거한 SOKSAK_VAULT_KEY 를 프로덕션에 되살리지 않는다). e2e 하니스가 키체인 없이 격리·결정적·CI
+// 가능한 볼트 언락을 얻는 유일 경로. env 부재면 None → OsKekSource 폴백(일반 dev 는 키체인 그대로).
+// 자식 프로세스엔 P0 자식-env 화이트리스트가 SOKSAK_E2E_KEK 를 벗겨 새지 않는다.
+#[cfg(debug_assertions)]
+pub struct E2eKekSource {
+    kek: [u8; KEY_LEN],
+}
+
+#[cfg(debug_assertions)]
+impl E2eKekSource {
+    // 값 → 32B KEK(도메인분리 SHA-256). 순수·결정적이라 env 없이 테스트 가능(set_var abort 회피).
+    fn derive(value: &str) -> [u8; KEY_LEN] {
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        h.update(b"soksak-e2e-kek:v1:");
+        h.update(value.as_bytes());
+        let mut kek = [0u8; KEY_LEN];
+        kek.copy_from_slice(&h.finalize()[..KEY_LEN]);
+        kek
+    }
+    pub fn from_env() -> Option<Self> {
+        let val = std::env::var("SOKSAK_E2E_KEK").ok()?;
+        if val.is_empty() {
+            return None;
+        }
+        Some(Self {
+            kek: Self::derive(&val),
+        })
+    }
+}
+
+#[cfg(debug_assertions)]
+impl KekSource for E2eKekSource {
+    fn acquire(&self) -> Result<Zeroizing<[u8; KEY_LEN]>, OsKeyError> {
+        Ok(Zeroizing::new(self.kek))
+    }
+    fn reachable(&self) -> bool {
+        true
+    }
+    fn backend(&self) -> &'static str {
+        "e2e"
+    }
+}
+
+// 테스트 seam — 실 키체인·CoreFoundation 미접촉(set_var 0). 모듈 레벨 #[cfg(test)] 라 test_state_with_secret
+// 및 타 모듈(data/commands.rs) 테스트가 crate::secrets:: 로 소비한다.
+#[cfg(test)]
+pub struct InMemoryKekSource {
+    kek: Mutex<Option<[u8; KEY_LEN]>>,
+}
+
+#[cfg(test)]
+impl InMemoryKekSource {
+    // 빈 — 첫 acquire 에서 랜덤 32B 생성·고정(get-or-create 멱등).
+    pub fn empty() -> Self {
+        Self {
+            kek: Mutex::new(None),
+        }
+    }
+    // 특정 KEK 로 고정 — KEK↔vault 정합/불일치·재시작 영속 재현용.
+    pub fn with_kek(kek: [u8; KEY_LEN]) -> Self {
+        Self {
+            kek: Mutex::new(Some(kek)),
+        }
+    }
+}
+
+#[cfg(test)]
+impl KekSource for InMemoryKekSource {
+    fn acquire(&self) -> Result<Zeroizing<[u8; KEY_LEN]>, OsKeyError> {
+        let mut g = self.kek.lock().expect("kek mutex");
+        if g.is_none() {
+            let mut raw = [0u8; KEY_LEN];
+            OsRng.fill_bytes(&mut raw);
+            *g = Some(raw);
+        }
+        Ok(Zeroizing::new(g.expect("seeded above")))
+    }
+    fn reachable(&self) -> bool {
+        true
+    }
+    fn backend(&self) -> &'static str {
+        "memory"
+    }
+}
+
+// no-secret-service(헤드리스 Linux/무 D-Bus/잠긴 컬렉션) 재현 — 모든 취득 Err(무음 폴백 0).
+#[cfg(test)]
+pub struct FailingKekSource;
+
+#[cfg(test)]
+impl KekSource for FailingKekSource {
+    fn acquire(&self) -> Result<Zeroizing<[u8; KEY_LEN]>, OsKeyError> {
+        Err(OsKeyError::StoreUnavailable(
+            "no secret service (test)".to_string(),
+        ))
+    }
+    fn reachable(&self) -> bool {
+        false
+    }
+    fn backend(&self) -> &'static str {
+        "unavailable"
+    }
+}
+
 // ── 상태(lib.rs manage) ──────────────────────────────────────────────────────
 
 #[derive(Default)]
 pub struct SecretsState {
-    kek: Mutex<Option<[u8; KEY_LEN]>>, // unlock 시 메모리에만, lock 시 슬롯 in-place zeroize
+    kek: Mutex<Option<[u8; KEY_LEN]>>, // ensure_open 성공 시 캐시, lock 시 슬롯 in-place zeroize
     vault: Mutex<Option<VaultData>>,   // 디스크 동기화(None=미로딩)
     // 볼트 파일 경로 — init(lib.rs setup) 에서 1회 설정. 미설정이면 프로덕션 경로 계산으로 폴백.
     // 테스트는 임시 path 를 직접 주입(전역 HOME 변이 0 — data/store.rs·plugins.rs 주입형 선례).
     path: Mutex<Option<PathBuf>>,
-    // [단계③] auto-lock — idle 타이머가 lock 을 건다(vault lock = 프로세스 전역 = app.data S 도 전부 무효화).
-    idle_timeout_ms: Mutex<i64>, // 0 = 비활성. set_idle_timeout 으로 설정.
-    last_activity_ms: Mutex<i64>, // 프론트가 활동 시 touch. unlock 도 touch(즉시 재잠금 방지).
-    lock_epoch: Mutex<u64>, // lock 마다 +1 — 프론트가 stale lock 상태 구분, broadcast 페이로드.
+    // KEK 출처 주입 슬롯 — set_kek_source 로 1회 주입(프로덕션 OsKekSource, 테스트 InMemory/Failing).
+    // 미주입 Default = backend 미구성 = '잠김' 등가(is_unlocked false). keyring 은 KekSource 안에서만
+    // 인스턴스화 → Default 가 키체인·CoreFoundation 을 절대 안 건드린다(setenv abort 원천 차단).
+    kek_source: Mutex<Option<Box<dyn KekSource>>>,
     // [R23] true 면 vault 가 있어야 한다(app.data 에 봉투 키 등록됨). 부팅 시 setup 이 설정 — vault 파일이
-    // 없는데 이게 true 면 unlock 의 새 vault 자동생성을 거부한다(임의 passphrase 통과+전손 차단).
+    // 없는데 이게 true 면 ensure_open 의 새 vault 자동생성을 거부한다(전손 차단).
     expect_vault: Mutex<bool>,
-}
-
-// 현재 시각(ms) — auto-lock 판정·touch 용. data::now_millis 와 동일 계산(자기완결).
-pub fn now_ms() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0)
 }
 
 // 프로덕션 볼트 경로: HOME → ~/.soksak/secrets.vault. data/mod.rs db_path 패턴.
@@ -324,7 +486,7 @@ pub fn default_vault_path() -> Result<PathBuf, String> {
 }
 
 // 볼트 경로 해소 — SOKSAK_VAULT_PATH 가 있으면 그 경로(헤드리스/E2E 격리용 오픈 메커니즘:
-// 사용자 실볼트 비오염·실 passphrase 비종속), 없으면 default_vault_path(). SOKSAK_VAULT_KEY 와 대칭.
+// 사용자 실볼트 비오염·실 passphrase 비종속), 없으면 default_vault_path().
 // env 조회를 주입받아 테스트가 전역 env 변형 없이 검증한다(병렬 테스트 안전).
 pub fn resolve_vault_path(env: impl Fn(&str) -> Option<String>) -> Result<PathBuf, String> {
     match env("SOKSAK_VAULT_PATH") {
@@ -377,6 +539,11 @@ impl SecretsState {
         *self.path.lock().expect("secrets path mutex") = Some(path);
     }
 
+    // KEK 출처 주입 — lib.rs setup 1회(프로덕션 OsKekSource), 테스트 InMemory/Failing. set_path 와 동형.
+    pub fn set_kek_source(&self, source: Box<dyn KekSource>) {
+        *self.kek_source.lock().expect("kek_source mutex") = Some(source);
+    }
+
     // 이 State 가 쓸 볼트 경로 — 주입됐으면 그 path, 아니면 프로덕션 계산으로 폴백.
     fn vault_file(&self) -> Result<PathBuf, String> {
         if let Some(p) = self.path.lock().map_err(|e| e.to_string())?.as_ref() {
@@ -385,35 +552,24 @@ impl SecretsState {
         default_vault_path()
     }
 
-    // 새 볼트 헤더 생성 — salt 생성 + KEK 도출 + verifier 봉인. KEK 는 호출자가 보관.
-    fn new_vault(passphrase: &[u8]) -> Result<(VaultData, Zeroizing<[u8; KEY_LEN]>), String> {
-        let mut salt = [0u8; SALT_LEN];
-        OsRng.fill_bytes(&mut salt);
-        let kek = derive_kek(
-            passphrase,
-            &salt,
-            ARGON2_M_COST,
-            ARGON2_T_COST,
-            ARGON2_P_COST,
-        )?;
-        let verifier = seal(&kek, VERIFIER_MARKER)?;
-        // kek: &Zeroizing<[u8;32]> → seal 의 &[u8;32] 는 Deref 강제로 충족.
+    // 새 볼트 헤더 생성 — verifier 를 device KEK 로 봉인. KEK 는 호출자(ensure_open)가 os_key 에서
+    // 취득해 넘긴다(passphrase 인자 없음). salt/kdf/m/t/p 필드는 파일포맷 안정용으로 남기되
+    // kdf="os-keychain"·salt 미사용(무회귀 극대화 — VaultHeader serde 모양 불변).
+    fn new_vault(kek: &[u8; KEY_LEN]) -> Result<VaultData, String> {
+        let verifier = seal(kek, VERIFIER_MARKER)?;
         let header = VaultHeader {
             version: VAULT_VERSION,
-            kdf: "argon2id".to_string(),
+            kdf: "os-keychain".to_string(),
             m_cost: ARGON2_M_COST,
             t_cost: ARGON2_T_COST,
             p_cost: ARGON2_P_COST,
-            salt: salt.to_vec(),
+            salt: Vec::new(), // os-keychain 모드 미사용(파일포맷 안정용 잔존 필드)
             verifier,
         };
-        Ok((
-            VaultData {
-                header,
-                entries: BTreeMap::new(),
-            },
-            kek,
-        ))
+        Ok(VaultData {
+            header,
+            entries: BTreeMap::new(),
+        })
     }
 
     // 주어진 경로 → VaultData. 없으면 None. (경로 주입형 — 테스트가 임시 path 를 직접 준다.)
@@ -438,118 +594,121 @@ impl SecretsState {
             std::fs::create_dir_all(parent).map_err(|e| format!("볼트 디렉토리 생성 실패: {e}"))?;
         }
         std::fs::write(&tmp, &bytes).map_err(|e| format!("볼트 쓰기 실패: {e}"))?;
+        // 볼트는 암호문만 담지만 로컬 사용자 전용(0600) 로 잠근다 — 그룹/타 사용자 read 차단(ipc.rs 소켓 선례).
+        // rename 전 tmp 에 설정해 교체된 파일이 처음부터 0600(권한 창 없음). Windows 는 파일 퍼미션 개념 없어 no-op.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
+                .map_err(|e| format!("볼트 퍼미션 설정 실패: {e}"))?;
+        }
         std::fs::rename(&tmp, path).map_err(|e| format!("볼트 교체 실패: {e}"))
     }
 
-    // unlock: 볼트 없으면 새로 생성(salt·verifier), 있으면 KEK 도출 후 verifier 복호로 검증.
-    // 성공 시 KEK 를 메모리 보관. 잘못된 passphrase 면 verifier 개봉 실패 → Err.
-    fn unlock(&self, passphrase: &str) -> Result<(), String> {
-        let pw = passphrase.as_bytes();
-        let path = self.vault_file()?;
-        let (vault, kek) = match Self::load_from_disk(&path)? {
-            Some(vault) => {
-                let h = &vault.header;
-                let kek = derive_kek(pw, &h.salt, h.m_cost, h.t_cost, h.p_cost)?;
-                // verifier 복호로 passphrase 정합 검증(마커 일치까지 확인).
-                let marker =
-                    open(&kek, &h.verifier).map_err(|_| "잘못된 passphrase".to_string())?;
-                if marker != VERIFIER_MARKER {
-                    return Err("잘못된 passphrase".to_string());
-                }
-                (vault, kek)
+    // 투명 언락 — KEK 를 os_key 에서 취득해 vault 를 연다(캐시). 이미 열려 있으면 no-op.
+    // (1) kek_source 미주입 → Err(잠김 등가). (2) vault 파일 있으면 취득 KEK 로 verifier 개봉 검증
+    // (불일치=백업이식/키체인리셋 → loud Err). (3) 파일 없고 expect_vault 면 Err(R23). (4) 파일 없고
+    // 미등록이면 get-or-create KEK 로 새 vault 봉인·flush. StoreUnavailable 은 어느 분기서도 평문 폴백
+    // 없이 전파 — no-secret-service 시 봉인 불가만 남고 무음 평문 저장은 존재하지 않는다.
+    fn ensure_open(&self) -> Result<(), String> {
+        // fast-path — 이미 캐시(KEK+vault). 재-open 디스크 I/O 회피.
+        {
+            let kek = self.kek.lock().map_err(|e| e.to_string())?;
+            let vault = self.vault.lock().map_err(|e| e.to_string())?;
+            if kek.is_some() && vault.is_some() {
+                return Ok(());
             }
-            None => {
-                // [R23] vault 가 있어야 하는데(봉투 키 등록됨) 파일이 없으면 — 삭제·손실 의심. 임의
-                // passphrase 로 새 vault 를 자동생성하면 그게 통과해 봉인 레코드가 영구 복호불가가 된다.
-                // 거부하고 백업 vault 복원을 유도한다(전손 footgun 차단).
-                if self.expect_vault.lock().map(|g| *g).unwrap_or(false) {
-                    return Err(
-                        "vault 파일 부재 + 암호화 키 등록됨 — 손실/삭제 의심. 임의 passphrase 로 새 vault 생성 거부(백업 복원 필요)"
-                            .to_string(),
-                    );
+        }
+        let path = self.vault_file()?;
+        let (vault, kek) = {
+            let guard = self.kek_source.lock().map_err(|e| e.to_string())?;
+            let source = guard
+                .as_ref()
+                .ok_or("secret backend 미구성 — KEK 취득 불가(잠김)")?;
+            match Self::load_from_disk(&path)? {
+                Some(vault) => {
+                    // vault 존재 → device KEK 취득(미도달=Err, 평문 폴백 0).
+                    let kek = source.acquire().map_err(|e| e.to_string())?;
+                    // verifier 개봉으로 vault↔device KEK 정합 검증. 불일치면 다른 기기 키체인으로 만든
+                    // 백업 복원·키체인 리셋 신호 — loud Err(전손 footgun 차단).
+                    let marker = open(&kek, &vault.header.verifier).map_err(|_| {
+                        "vault↔keychain KEK 불일치 — 이 기기 키체인으로 만든 볼트가 아님(백업/키체인 복원 필요)"
+                            .to_string()
+                    })?;
+                    if marker != VERIFIER_MARKER {
+                        return Err("vault verifier 불일치 — KEK 손상".to_string());
+                    }
+                    (vault, kek)
                 }
-                let (vault, kek) = Self::new_vault(pw)?;
-                Self::flush(&path, &vault)?;
-                (vault, kek)
+                None => {
+                    // [R23] 파일 없는데 봉투 키가 등록됐으면(expect_vault) 자동생성 거부(전손 차단).
+                    if self.expect_vault.lock().map(|g| *g).unwrap_or(false) {
+                        return Err(
+                            "vault 파일 부재 + 암호화 키 등록됨 — 손실/삭제 의심. 자동생성 거부(백업 복원 필요)"
+                                .to_string(),
+                        );
+                    }
+                    // 첫 실행 — device KEK get-or-create 로 새 vault 봉인·flush.
+                    let kek = source.acquire().map_err(|e| e.to_string())?;
+                    let vault = Self::new_vault(&kek)?;
+                    Self::flush(&path, &vault)?;
+                    (vault, kek)
+                }
             }
         };
-        // Zeroizing 파생 KEK → 슬롯에 사본 저장(파생 본은 함수 끝에서 자동 스크럽).
+        // 캐시 채우기(취득 KEK 는 함수 끝에서 Zeroizing 자동 스크럽).
         *self.kek.lock().map_err(|e| e.to_string())? = Some(*kek);
         *self.vault.lock().map_err(|e| e.to_string())? = Some(vault);
-        self.touch(now_ms()); // unlock 직후 활동 기록 — idle 타이머가 즉시 재잠그지 않게.
         Ok(())
     }
 
-    // lock: KEK 슬롯을 in-place zeroize → None. take() 의 로컬 사본이 아니라
-    // Mutex 슬롯의 실제 32바이트를 직접 지운다(헤더의 '슬롯 in-place 스크럽' 보장과 일치).
-    // 볼트 데이터(암호문)는 메모리에 남겨도 무해하나 함께 비운다. lock_epoch +1(전 창 broadcast 표식).
-    pub fn lock(&self) -> Result<(), String> {
-        let mut guard = self.kek.lock().map_err(|e| e.to_string())?;
-        if let Some(k) = guard.as_mut() {
-            k.zeroize();
-        }
-        *guard = None;
-        *self.vault.lock().map_err(|e| e.to_string())? = None;
-        if let Ok(mut g) = self.lock_epoch.lock() {
-            *g = g.wrapping_add(1);
-        }
-        Ok(())
-    }
-
-    // [단계③] auto-lock — 활동 기록(프론트가 입력/포커스 시 touch). any-window 활동이 타이머를 리셋한다.
-    pub fn touch(&self, now: i64) {
-        if let Ok(mut g) = self.last_activity_ms.lock() {
-            *g = now;
-        }
-    }
-
-    // idle 타임아웃 설정(ms, 0=비활성). 음수는 0 으로 클램프.
-    pub fn set_idle_timeout(&self, ms: i64) {
-        if let Ok(mut g) = self.idle_timeout_ms.lock() {
-            *g = ms.max(0);
-        }
-    }
-
-    pub fn idle_timeout(&self) -> i64 {
-        self.idle_timeout_ms.lock().map(|g| *g).unwrap_or(0)
-    }
-
-    pub fn lock_epoch(&self) -> u64 {
-        self.lock_epoch.lock().map(|g| *g).unwrap_or(0)
-    }
-
-    // [R23] 부팅 시 app.data 에 봉투 키가 있으면 setup 이 true 로 — 그럼 vault 부재 시 새 vault 자동생성을 막는다.
+    // [R23] 부팅 시 app.data 에 봉투 키가 있으면 setup 이 true 로 — 그럼 vault 부재 시 자동생성을 막는다.
     pub fn set_expect_vault(&self, expect: bool) {
         if let Ok(mut g) = self.expect_vault.lock() {
             *g = expect;
         }
     }
 
-    // 지금 자동 잠금해야 하는가 — unlock 상태 + 타임아웃>0 + (now - 마지막활동) ≥ 타임아웃. 순수 판정
-    // (now 주입)이라 테스트 가능. lib.rs 백그라운드 틱이 이걸 호출해 lock + broadcast.
-    pub fn auto_lock_due(&self, now: i64) -> bool {
-        if !self.is_unlocked() {
-            return false;
-        }
-        let timeout = self.idle_timeout();
-        if timeout <= 0 {
-            return false;
-        }
-        let last = self.last_activity_ms.lock().map(|g| *g).unwrap_or(0);
-        now.saturating_sub(last) >= timeout
-    }
-
+    // 투명 언락 가능 여부 — ensure_open 성공(캐시 후 저비용). 이름 유지 → pty/http/process/data 소비자
+    // 배선 무변경. 주의: 첫 호출은 (미등록+파일부재) 분기서 vault 를 생성하는 부수효과가 있다 —
+    // read-only 판정이 필요한 status 는 이 함수 대신 KekSource::reachable 프로브를 쓴다.
     pub fn is_unlocked(&self) -> bool {
-        self.kek.lock().map(|g| g.is_some()).unwrap_or(false)
+        self.ensure_open().is_ok()
     }
 
-    // KEK 사본으로 클로저 실행(locked 면 Err). 락 가드 안에서 처리(누출 최소화).
+    // 진단 상태 — backend 라벨·seal_available(read-only 프로브)·expect_vault·보관 keyId 목록.
+    // seal_available 은 reachable 프로브라 vault 를 만들지 않는다(부수효과 0). data_key_ids 는 도달
+    // 가능할 때만 조회(미도달이면 빈 목록 — ensure_open 미시도).
+    pub fn status(&self) -> SecretStatus {
+        let (backend, seal_available) = {
+            let guard = self.kek_source.lock();
+            match guard.as_ref().ok().and_then(|g| g.as_ref()) {
+                Some(src) => (src.backend().to_string(), src.reachable()),
+                None => ("none".to_string(), false),
+            }
+        };
+        let expect_vault = self.expect_vault.lock().map(|g| *g).unwrap_or(false);
+        let data_key_ids = if seal_available {
+            self.keys(DATA_ENC_NS).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        SecretStatus {
+            backend,
+            seal_available,
+            expect_vault,
+            data_key_ids,
+        }
+    }
+
+    // KEK 사본으로 클로저 실행 — ensure_open 으로 투명 개방 후 캐시 KEK 로 f. 취득 불가면 Err.
     fn with_kek<T>(
         &self,
         f: impl FnOnce(&[u8; KEY_LEN]) -> Result<T, String>,
     ) -> Result<T, String> {
+        self.ensure_open()?;
         let guard = self.kek.lock().map_err(|e| e.to_string())?;
-        let kek = guard.as_ref().ok_or("vault locked")?;
+        let kek = guard.as_ref().ok_or("KEK 취득 불가(잠김)")?;
         f(kek)
     }
 
@@ -636,14 +795,16 @@ impl SecretsState {
 #[cfg(test)]
 pub fn test_state_with_secret(
     path: PathBuf,
-    passphrase: &str,
+    _passphrase: &str,
     ns: &str,
     key: &str,
     value: &str,
 ) -> SecretsState {
     let s = SecretsState::default();
     s.set_path(path);
-    s.unlock(passphrase).expect("test unlock");
+    // 투명 언락 — InMemory KEK 주입(키체인·CoreFoundation 미접촉). set 이 ensure_open 으로 vault 를
+    // 그 KEK 로 봉인 생성한다(passphrase 없음). 시그니처는 process.rs/http.rs 호출부 보존 위해 유지.
+    s.set_kek_source(Box::new(InMemoryKekSource::empty()));
     s.set(ns, key, value).expect("test set");
     s
 }
@@ -682,11 +843,48 @@ impl SecretsState {
     pub fn delete_data_key(&self, key_id: &str) -> Result<bool, String> {
         self.delete(DATA_ENC_NS, key_id)
     }
+
+    // [R24] 복구 부트스트랩 — data_encrypt_recover 전용. expect_vault·verifier 가드를 우회해 이 기계 KEK 로
+    // vault 를 확보하고 복구된 S 를 심는다. 복구 시나리오(키체인 분실/새 기계/폴더 sync)는 정의상 vault 가
+    // 안 열리는 상태라, put_data_key 처럼 ensure_open 게이트를 타면 정확한 복구코드로도 영영 못 여는
+    // deadlock 이 된다(적대검증 확인). 복구코드로 S 를 이미 손에 쥔 sanctioned 경로라 "빈 vault 자동생성"
+    // footgun 이 아니다. vault 가 이미 열려 있으면(다른 scope 이미 복구) 그 vault 에 추가(기존 S 보존).
+    pub fn recover_into_vault(&self, key_id: &str, secret: &[u8; 32]) -> Result<(), String> {
+        if self.ensure_open().is_err() {
+            // vault 를 못 연다(파일 부재+키등록, 또는 옛 KEK 봉인) — 현재 기계 KEK 취득(새 기계면
+            // get-or-create). 키체인 미도달(no secret service)이면 여기서 loud Err(평문 폴백 0).
+            let kek = {
+                let guard = self.kek_source.lock().map_err(|e| e.to_string())?;
+                let source = guard
+                    .as_ref()
+                    .ok_or("secret backend 미구성 — KEK 취득 불가")?;
+                source.acquire().map_err(|e| e.to_string())?
+            };
+            // 옛 vault 가 있으나 안 열린 것(외래 KEK — 폴더 통째 sync)이면 삭제하지 않고 .superseded 로 밀어둔다.
+            // 무손실 원칙 — 훗날 옛 키체인을 되찾으면 그 백업에서 복구코드 없는 plugin app.secrets 를 살릴
+            // 여지를 남긴다. 최초 백업을 보존(재복구 시 이미 있으면 현재 것만 대체). 파일 부재면 no-op.
+            let path = self.vault_file()?;
+            if path.exists() {
+                let backup = PathBuf::from(format!("{}.superseded", path.to_string_lossy()));
+                if !backup.exists() {
+                    std::fs::rename(&path, &backup)
+                        .map_err(|e| format!("옛 vault 백업 실패: {e}"))?;
+                }
+            }
+            // 현재 KEK 로 새 vault 강제 생성·캐시(R23 가드 우회). ensure_open 실패가 곧 기존 vault 개봉불가
+            // 증거라, 대체해도 이 기계서 복구가능한 것을 잃지 않는다(옛 KEK 봉인분은 옆으로 보존됨).
+            let vault = Self::new_vault(&kek)?;
+            *self.kek.lock().map_err(|e| e.to_string())? = Some(*kek);
+            *self.vault.lock().map_err(|e| e.to_string())? = Some(vault);
+        }
+        // vault open — 복구된 S 저장(put_data_key 가 캐시된 open vault 를 fast-path 로 봉인·flush).
+        self.put_data_key(key_id, secret)
+    }
 }
 
 // ── 내부 평문 해소(Rust 전용 — process_spawn secret_env 주입) ────────────────
 // pub fn 이지만 tauri::command 아님 → IPC/CLI 비노출. 평문은 호출자(process_spawn)가
-// 자식 env 로만 흘린다(JS 로 반환 0, R2). 잠김=Err(vault locked), 미존재=Err.
+// 자식 env 로만 흘린다(JS 로 반환 0, R2). KEK 미도달=Err, 미존재=Err.
 pub fn resolve(state: &SecretsState, ns: &str, key: &str) -> Result<String, String> {
     state.resolve(ns, key)
 }
@@ -717,77 +915,20 @@ pub fn env_secrets(state: &SecretsState, ns: &str) -> Vec<(String, String)> {
 
 // ── Tauri 커맨드 ─────────────────────────────────────────────────────────────
 
+// 투명 언락 상태 — backend 라벨·seal_available·expect_vault·보관 keyId 목록(secret.status).
+#[derive(Serialize)]
+pub struct SecretStatus {
+    pub backend: String,           // KEK 저장소 라벨(미구성 "none")
+    pub seal_available: bool,      // KEK 취득 가능(봉인/개봉 조건, read-only 프로브)
+    pub expect_vault: bool,        // [R23] app.data 봉투 키 등록됨(vault 필수)
+    pub data_key_ids: Vec<String>, // vault 에 보관된 app.data 봉투 개인키 keyId 목록
+}
+
+// 구 backend 조회(compat) — os_key 라벨 + seal_available(투명 언락에선 unlocked=seal 가능).
 #[derive(Serialize)]
 pub struct BackendInfo {
-    pub backend: String, // "vault"
+    pub backend: String,
     pub unlocked: bool,
-}
-
-// 헤드리스/e2e: SOKSAK_VAULT_KEY env 가 있으면 그 값으로 자동 unlock(GUI·생체 없이 결정적).
-// setup 에서 1회 호출 — 명령들이 즉시 쓸 수 있도록.
-pub fn auto_unlock_from_env(state: &SecretsState) {
-    if let Ok(key) = std::env::var("SOKSAK_VAULT_KEY") {
-        if !key.is_empty() {
-            if let Err(e) = state.unlock(&key) {
-                eprintln!("[secrets] SOKSAK_VAULT_KEY 자동 unlock 실패: {e}");
-            }
-        }
-    }
-}
-
-#[tauri::command]
-pub fn secret_unlock(
-    app: AppHandle,
-    passphrase: String,
-    state: State<'_, SecretsState>,
-) -> Result<(), String> {
-    state.unlock(&passphrase)?;
-    // [단계④] unlock 성공 → 전 창 broadcast. 프론트가 잠금 중 폐기한 화면을 sealed 기록에서 재-hydrate
-    // (R14 dispose↔re-hydrate 사이클). lock 과 대칭 채널.
-    let _ = app.emit("secrets-unlocked", state.lock_epoch());
-    Ok(())
-}
-
-// lock + 전 창 broadcast("secrets-locked", lock_epoch). 수동 lock 과 idle 자동 lock 모두 이 경로로 알린다
-// → 프론트가 잠금 UI 전환·터미널 폐기(R14) 등 반응. 단일 vault·단일 KEK 라 한 번 lock 이 프로세스 전역.
-pub fn lock_and_broadcast(app: &AppHandle, state: &SecretsState) -> Result<(), String> {
-    state.lock()?;
-    let _ = app.emit("secrets-locked", state.lock_epoch());
-    Ok(())
-}
-
-#[tauri::command]
-pub fn secret_lock(app: AppHandle, state: State<'_, SecretsState>) -> Result<(), String> {
-    lock_and_broadcast(&app, &state)
-}
-
-// [단계③] idle 활동 기록 — 프론트가 입력/포커스/명령 시 호출(디바운스). any-window 활동이 타이머 리셋.
-#[tauri::command]
-pub fn secret_touch(state: State<'_, SecretsState>) {
-    state.touch(now_ms());
-}
-
-// idle 자동잠금 타임아웃(ms, 0=비활성) 설정. 프론트 설정값 반영.
-#[tauri::command]
-pub fn secret_autolock(ms: i64, state: State<'_, SecretsState>) {
-    state.set_idle_timeout(ms);
-}
-
-#[derive(Serialize)]
-pub struct LockInfo {
-    pub unlocked: bool,
-    pub idle_timeout_ms: i64,
-    pub lock_epoch: u64,
-}
-
-// 잠금 상태 조회 — 프론트가 현재 unlock 여부·타임아웃·epoch 를 읽어 UI 동기화.
-#[tauri::command]
-pub fn secret_lock_info(state: State<'_, SecretsState>) -> LockInfo {
-    LockInfo {
-        unlocked: state.is_unlocked(),
-        idle_timeout_ms: state.idle_timeout(),
-        lock_epoch: state.lock_epoch(),
-    }
 }
 
 #[tauri::command]
@@ -819,11 +960,19 @@ pub fn secret_keys(ns: String, state: State<'_, SecretsState>) -> Result<Vec<Str
     state.keys(&ns)
 }
 
+// 투명 언락 상태(os_key 백엔드·seal_available·expect_vault·keyId 목록). 프론트 secret.status 표면.
+#[tauri::command]
+pub fn secret_status(state: State<'_, SecretsState>) -> SecretStatus {
+    state.status()
+}
+
+// 구 backend 조회(compat) — status 를 BackendInfo 로 축약. backend=os_key 라벨, unlocked=seal_available.
 #[tauri::command]
 pub fn secret_backend(state: State<'_, SecretsState>) -> Result<BackendInfo, String> {
+    let st = state.status();
     Ok(BackendInfo {
-        backend: "vault".to_string(),
-        unlocked: state.is_unlocked(),
+        backend: st.backend,
+        unlocked: st.seal_available,
     })
 }
 
@@ -844,9 +993,9 @@ mod tests {
         .unwrap()
     }
 
-    // 임시 볼트 path 주입 — 전역 HOME 변이 0(병렬 test-threads 레이스 제거).
-    // data/store.rs(&Connection)·plugins.rs(&Path base) 주입형 선례.
-    fn state_with_tmp_vault(tag: &str) -> (SecretsState, PathBuf) {
+    // 임시 볼트 dir+path — 전역 HOME 변이 0(병렬 test-threads 레이스 제거). KEK 출처는 미주입 —
+    // 호출자가 InMemory/Failing 을 골라 넣는다(같은 path 에 다른 KEK 재주입으로 정합/불일치 재현).
+    fn tmp_vault_dir(tag: &str) -> (PathBuf, PathBuf) {
         let dir = std::env::temp_dir().join(format!(
             "soksak-secrets-{tag}-{}-{:?}",
             std::process::id(),
@@ -855,9 +1004,31 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("secrets.vault");
+        (dir, path)
+    }
+
+    // 임시 볼트 + InMemory KEK 주입 state(투명 언락) — set_var 0·키체인 미접촉. 대부분의 왕복 테스트용.
+    fn state_with_tmp_vault(tag: &str) -> (SecretsState, PathBuf) {
+        let (dir, path) = tmp_vault_dir(tag);
         let s = SecretsState::default();
         s.set_path(path);
+        s.set_kek_source(Box::new(InMemoryKekSource::empty()));
         (s, dir)
+    }
+
+    // (e2e) E2eKekSource 결정성 — 같은 값 → 같은 KEK(격리 볼트 런 간 재오픈 가능), 다른 값 → 다른 KEK.
+    // release 엔 이 타입이 컴파일되지 않으므로 이 테스트도 debug 에서만 돈다(백도어 부재의 대칭).
+    #[cfg(debug_assertions)]
+    #[test]
+    fn e2e_kek_is_deterministic() {
+        let a = E2eKekSource::derive("pty-cold-e2e-pass");
+        assert_eq!(
+            a,
+            E2eKekSource::derive("pty-cold-e2e-pass"),
+            "같은 값 → 같은 KEK"
+        );
+        assert_ne!(a, E2eKekSource::derive("other"), "다른 값 → 다른 KEK");
+        assert_ne!(a, [0u8; KEY_LEN], "0 KEK 아님");
     }
 
     // (a0) resolve_vault_path — SOKSAK_VAULT_PATH 주입 시 그 경로(격리), 없으면 default.
@@ -930,26 +1101,47 @@ mod tests {
         assert!(open(&kek, &item2).is_err());
     }
 
-    // (d) unlock 잘못된 passphrase → Err. 임시 path 주입(HOME 변이 0), 다른 pass 로 재unlock.
+    // (d, 신규 test4) KEK↔vault 불일치 거부 + 정합 KEK 재주입 복원(재시작 영속). 다른 기기 키체인
+    // 백업 복원·키체인 리셋을 verifier 개봉 실패로 loud 하게 잡는다(전손 footgun 차단).
     #[test]
-    fn unlock_wrong_passphrase_rejected() {
-        let (s, dir) = state_with_tmp_vault("wrongpass");
-
-        s.unlock("right-passphrase").unwrap(); // 새 볼트 생성
-        s.lock().unwrap();
-        let bad = s.unlock("WRONG-passphrase");
-        assert!(bad.is_err(), "잘못된 passphrase 는 거부되어야 함");
-        s.unlock("right-passphrase").unwrap(); // 올바른 pass 는 다시 열림
-
+    fn kek_vault_mismatch_rejected_and_matching_reopens() {
+        let (dir, path) = tmp_vault_dir("mismatch");
+        let kek_a = [1u8; KEY_LEN];
+        let kek_b = [2u8; KEY_LEN];
+        // A 로 vault 생성·flush + 시크릿 저장.
+        {
+            let s = SecretsState::default();
+            s.set_path(path.clone());
+            s.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek_a)));
+            s.set("plugin-a", "k", "v").expect("A creates vault + stores");
+        }
+        // 다른 KEK(B) 주입 새 state, 같은 path → verifier 개봉 실패로 열림 거부.
+        {
+            let s = SecretsState::default();
+            s.set_path(path.clone());
+            s.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek_b)));
+            assert!(
+                !s.is_unlocked(),
+                "다른 KEK → vault↔keychain 불일치로 열림 거부"
+            );
+            assert!(s.resolve("plugin-a", "k").is_err(), "불일치면 개봉 불가");
+        }
+        // 같은 KEK(A) 재주입 새 state → 복원(재시작 영속).
+        {
+            let s = SecretsState::default();
+            s.set_path(path.clone());
+            s.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek_a)));
+            assert!(s.is_unlocked(), "같은 KEK → 복원");
+            assert_eq!(s.resolve("plugin-a", "k").unwrap(), "v", "재시작 영속");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    // (e) ns 격리 — ns A 의 key 가 ns B keys 에 안 보임.
+    // (e) ns 격리 — ns A 의 key 가 ns B keys 에 안 보임(투명 언락 — unlock 호출 없음).
     #[test]
     fn ns_isolation() {
         let (s, dir) = state_with_tmp_vault("ns");
 
-        s.unlock("pw").unwrap();
         s.set("plugin-a", "token", "aaa").unwrap();
         s.set("plugin-b", "key", "bbb").unwrap();
 
@@ -967,7 +1159,6 @@ mod tests {
     #[test]
     fn core_registry_namespace_is_disjoint_and_supported() {
         let (s, dir) = state_with_tmp_vault("core-registry-ns");
-        s.unlock("pw").unwrap();
         s.set("core_registry-corp", "http-authorization", "Bearer private")
             .expect("core registry namespace must be a valid vault owner");
         assert!(s.has("core_registry-corp", "http-authorization").unwrap());
@@ -979,8 +1170,10 @@ mod tests {
     // 잠김은 제외. 서비스 vault_env 동적 주입의 바닥(1판 buildSecretEnvMap 등가).
     #[test]
     fn env_secrets_resolves_env_prefixed_keys() {
-        let (s, dir) = state_with_tmp_vault("envsec");
-        s.unlock("pw").expect("unlock");
+        let (dir, path) = tmp_vault_dir("envsec");
+        let s = SecretsState::default();
+        s.set_path(path.clone());
+        s.set_kek_source(Box::new(InMemoryKekSource::with_kek([3u8; KEY_LEN])));
         s.set("wf", "env:ANTHROPIC_AUTH_TOKEN", "tok")
             .expect("set token");
         s.set("wf", "env:CLAUDE_ACCOUNT_NAME", "acct")
@@ -995,9 +1188,15 @@ mod tests {
             ],
             "env: 키만, 접두 제거, 정렬"
         );
-        // 잠금 → 빈 벡터(loud 실패 아님).
-        s.lock().expect("lock");
-        assert!(env_secrets(&s, "wf").is_empty(), "잠김이면 빈 벡터");
+        // no-secret-service → 빈 벡터(loud 실패 아님). 같은 path 에 Failing 주입 새 state — 디스크엔
+        // 키가 있으나 KEK 미도달이라 keys() Err → 빈 벡터(우아한 잠김).
+        let locked = SecretsState::default();
+        locked.set_path(path);
+        locked.set_kek_source(Box::new(FailingKekSource));
+        assert!(
+            env_secrets(&locked, "wf").is_empty(),
+            "KEK 미도달이면 빈 벡터"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1011,14 +1210,77 @@ mod tests {
         assert!(s.delete("ns", "k").is_err());
     }
 
-    // resolve(내부 평문 해소) — unlock 상태에서 저장값 평문 복원(process_spawn 주입 경로의 바닥).
+    // resolve(내부 평문 해소) — 투명 언락으로 저장값 평문 복원(process_spawn 주입 경로의 바닥).
     #[test]
     fn resolve_roundtrip() {
         let (s, dir) = state_with_tmp_vault("resolve");
-        s.unlock("pw").unwrap();
         s.set("plugin-a", "apiKey", "sk-token-xyz").unwrap();
         assert_eq!(s.resolve("plugin-a", "apiKey").unwrap(), "sk-token-xyz");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // (신규 test2) os_key seam 봉인/개봉 왕복 — unlock 호출 없이(투명) set→resolve·put_data_key→
+    // get_data_key 라운드트립(KEK 가 주입 store 에서 온다). 봉인 경로 정합 증명.
+    #[test]
+    fn os_key_seam_seal_open_roundtrip() {
+        let (s, dir) = state_with_tmp_vault("seam");
+        s.set("plugin-a", "apiKey", "sk-token").unwrap();
+        assert_eq!(s.resolve("plugin-a", "apiKey").unwrap(), "sk-token");
+        let (sk, _p) = gen_asym_keypair();
+        s.put_data_key("dk-1", &sk).unwrap();
+        assert_eq!(s.get_data_key("dk-1").unwrap().unwrap(), sk, "봉투 개인키 왕복");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // (신규 test3) no-secret-service — Failing 주입: 쓰기(set/put_data_key)는 loud Err(무음 평문 금지),
+    // 읽기(get_data_key)는 Ok(None)(우아한 잠김). vault 파일도 안 생긴다(평문 저장 경로 부재).
+    #[test]
+    fn no_secret_service_seals_impossible() {
+        let (dir, path) = tmp_vault_dir("no-service");
+        let s = SecretsState::default();
+        s.set_path(path.clone());
+        s.set_kek_source(Box::new(FailingKekSource));
+        assert!(!s.is_unlocked(), "KEK 미도달 → 잠김");
+        assert!(
+            s.set("plugin-a", "k", "v").is_err(),
+            "봉인 불가 → 무음 평문 금지(loud Err)"
+        );
+        let (sk, _p) = gen_asym_keypair();
+        assert!(s.put_data_key("dk-1", &sk).is_err(), "봉투 개인키 저장 loud Err");
+        assert!(
+            s.get_data_key("dk-1").unwrap().is_none(),
+            "읽기는 우아하게 None"
+        );
+        assert!(!path.exists(), "봉인 불가 시 vault 파일도 안 생김(평문 저장 0)");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // (신규 test6) secret_status — InMemory: seal_available·backend"memory"·data_key_ids 반영.
+    // Failing: seal_available false·backend"unavailable". expect_vault 반영.
+    #[test]
+    fn secret_status_reports_backend_and_keys() {
+        let (s, dir) = state_with_tmp_vault("status");
+        let (sk, _p) = gen_asym_keypair();
+        s.put_data_key("dk-1", &sk).unwrap();
+        let st = s.status();
+        assert!(st.seal_available, "InMemory 는 도달 가능");
+        assert_eq!(st.backend, "memory");
+        assert_eq!(st.data_key_ids, vec!["dk-1".to_string()], "보관 keyId 목록");
+        assert!(!st.expect_vault);
+        s.set_expect_vault(true);
+        assert!(s.status().expect_vault, "expect_vault 반영");
+
+        // Failing → seal_available false·backend unavailable·data_key_ids 빈(프로브가 vault 안 엶).
+        let (dir2, path2) = tmp_vault_dir("status-fail");
+        let f = SecretsState::default();
+        f.set_path(path2);
+        f.set_kek_source(Box::new(FailingKekSource));
+        let fs = f.status();
+        assert!(!fs.seal_available);
+        assert_eq!(fs.backend, "unavailable");
+        assert!(fs.data_key_ids.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&dir2);
     }
 
     // ── 비대칭 봉투(단계②) ──────────────────────────────────────────────────
@@ -1126,89 +1388,132 @@ mod tests {
         assert_eq!(recovery_unwrap(&code, &back.salt, &back.sealed).unwrap(), s);
     }
 
-    // (r23, B8) vault must-exist — 키가 등록된 상태(expect_vault)에서 vault 파일이 없으면 unlock 이 새
-    // vault 자동생성을 거부한다(임의 passphrase 통과+전손 차단). expect 없으면 정상 생성(첫 실행).
+    // (r23, B8, 신규 test5) vault must-exist — 봉투 키가 등록된 상태(expect_vault)에서 vault 파일이
+    // 없으면 ensure_open 이 새 vault 자동생성을 거부한다(전손 차단). expect 없으면 정상 생성(첫 실행).
     #[test]
     fn vault_must_exist_gate() {
-        let (s, dir) = state_with_tmp_vault("mustexist");
-        // 첫 실행 — expect 없음 → 새 vault 생성 정상.
-        s.unlock("pw").unwrap();
-        s.lock().unwrap();
-        // vault 파일 삭제(손실 모의) + expect_vault 켜기(키 등록됨 가정).
-        let path = s.vault_file().unwrap();
+        let (dir, path) = tmp_vault_dir("mustexist");
+        let kek = [5u8; KEY_LEN];
+        // 첫 실행 — expect 없음 → 새 vault 자동 생성.
+        {
+            let s = SecretsState::default();
+            s.set_path(path.clone());
+            s.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek)));
+            assert!(s.is_unlocked(), "첫 실행 — 투명 개방으로 자동 생성");
+        }
+        assert!(path.exists());
+        // vault 파일 삭제(손실 모의).
         std::fs::remove_file(&path).unwrap();
-        s.set_expect_vault(true);
-        // 임의 passphrase 로 unlock 시도 → 거부(새 vault 자동생성 안 함).
-        assert!(
-            s.unlock("any-passphrase").is_err(),
-            "vault 부재+키등록 → 자동생성 거부"
-        );
+        // 키 등록됨(expect_vault) + 파일 부재 → 새 state 는 자동생성 거부(R23).
+        {
+            let s = SecretsState::default();
+            s.set_path(path.clone());
+            s.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek)));
+            s.set_expect_vault(true);
+            assert!(!s.is_unlocked(), "vault 부재+키등록 → 자동생성 거부");
+            assert!(!path.exists(), "거부 시 파일 생성 안 함");
+        }
         // expect 끄면(키 없음) 다시 생성 허용.
-        s.set_expect_vault(false);
-        assert!(s.unlock("pw").is_ok(), "expect 없으면 새 vault 생성 허용");
+        {
+            let s = SecretsState::default();
+            s.set_path(path.clone());
+            s.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek)));
+            s.set_expect_vault(false);
+            assert!(s.is_unlocked(), "expect 없으면 새 vault 생성 허용");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    // (lock-a, 단계③) auto_lock_due 판정 — lock 이면 false, 타임아웃 0 이면 false, idle 경과 시 true,
-    // touch 가 타이머를 리셋. lock_epoch 가 lock 마다 증가.
+    // (r24, red-team) 복구 부트스트랩 — 파일 부재 + 봉투 키 등록(expect_vault)이라 투명 개방이 막힌
+    // deadlock 상태에서도 recover_into_vault 가 이 기계 KEK 로 vault 를 확보해 복구된 S 를 저장한다.
+    // is_unlocked 게이트로 막던 "정확한 코드로도 못 여는 이관 deadlock" 회귀를 이 테스트가 잡는다.
     #[test]
-    fn auto_lock_policy() {
-        let (s, dir) = state_with_tmp_vault("autolock");
-        // 잠김 상태 — 타임아웃 무관 false.
-        s.set_idle_timeout(1000);
-        assert!(!s.auto_lock_due(now_ms()), "lock 상태면 자동잠금 대상 아님");
-
-        s.unlock("pw").unwrap();
-        let e0 = s.lock_epoch();
-        // 타임아웃 0 = 비활성.
-        s.set_idle_timeout(0);
-        assert!(!s.auto_lock_due(1_000_000), "타임아웃 0 = 비활성");
-        // 타임아웃 1000ms, 마지막 활동 t=10_000.
-        s.set_idle_timeout(1000);
-        s.touch(10_000);
-        assert!(!s.auto_lock_due(10_500), "0.5s 경과 < 1s → 잠금 아님");
-        assert!(s.auto_lock_due(11_000), "1s 경과 = 1s → 잠금");
-        assert!(s.auto_lock_due(99_999), "한참 idle → 잠금");
-        // touch 가 타이머 리셋.
-        s.touch(99_000);
-        assert!(
-            !s.auto_lock_due(99_500),
-            "touch 후 0.5s → 잠금 아님(any-window 활동 reset)"
-        );
-
-        // lock 하면 epoch +1, 이후 auto_lock_due false(이미 잠김).
-        s.lock().unwrap();
-        assert_eq!(s.lock_epoch(), e0 + 1, "lock 마다 epoch 증가");
-        assert!(!s.auto_lock_due(99_999), "잠긴 뒤엔 대상 아님");
+    fn recover_into_vault_bootstraps_when_absent() {
+        let (dir, path) = tmp_vault_dir("recboot");
+        let kek = [7u8; KEY_LEN];
+        let s = [9u8; 32];
+        let st = SecretsState::default();
+        st.set_path(path.clone());
+        st.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek)));
+        st.set_expect_vault(true);
+        assert!(!st.is_unlocked(), "복구 상태 — 투명 개방 불가(deadlock 전제)");
+        st.recover_into_vault("key-1", &s).unwrap();
+        assert!(st.is_unlocked(), "복구 후 vault 열림");
+        assert_eq!(st.get_data_key("key-1").unwrap().unwrap(), s, "복구된 S 저장·조회");
+        assert!(path.exists(), "복구가 vault 파일 확보");
+        // 둘째 scope 복구 — 이미 열린 vault 에 추가(기존 S 보존, 새로 만들지 않음).
+        let s2 = [11u8; 32];
+        st.recover_into_vault("key-2", &s2).unwrap();
+        assert_eq!(st.get_data_key("key-1").unwrap().unwrap(), s, "첫 S 보존");
+        assert_eq!(st.get_data_key("key-2").unwrap().unwrap(), s2, "둘째 S 추가");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    // (asym-f) app.data 봉투 개인키 vault 보관 — wrap/unwrap 라운드트립, lock 게이트, 디스크 영속, 삭제.
+    // (r24, red-team) 폴더 통째 sync — vault 파일은 있으나 옛 기계 KEK 로 봉인돼 이 기계 KEK 로는 안 열린다.
+    // recover_into_vault 가 현재 KEK 로 vault 를 대체하고 복구된 S 를 저장한다. 옛 KEK 전용 S 는 코드 없이
+    // 어차피 접근 불가였으므로 대체돼도 복구가능한 것 손실 0.
+    #[test]
+    fn recover_into_vault_replaces_foreign_kek_vault() {
+        let (dir, path) = tmp_vault_dir("recforeign");
+        let kek_a = [1u8; KEY_LEN];
+        let kek_b = [2u8; KEY_LEN];
+        let s = [9u8; 32];
+        {
+            let a = SecretsState::default();
+            a.set_path(path.clone());
+            a.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek_a)));
+            a.put_data_key("old-a", &[3u8; 32]).unwrap();
+        }
+        assert!(path.exists());
+        let b = SecretsState::default();
+        b.set_path(path.clone());
+        b.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek_b)));
+        b.set_expect_vault(true);
+        assert!(!b.is_unlocked(), "외래 KEK vault — 못 엶(deadlock 전제)");
+        b.recover_into_vault("key-1", &s).unwrap();
+        assert!(b.is_unlocked(), "복구 후 이 기계 KEK vault 열림");
+        assert_eq!(b.get_data_key("key-1").unwrap().unwrap(), s, "복구된 S 저장");
+        assert!(
+            b.get_data_key("old-a").unwrap().is_none(),
+            "옛 KEK 전용 S 는 대체됨(어차피 이 기계서 복구 불가였다)"
+        );
+        // 무손실 — 옛 외래-KEK vault 는 삭제가 아니라 .superseded 로 보존(옛 키체인 복원 시 살릴 여지).
+        let backup = PathBuf::from(format!("{}.superseded", path.to_string_lossy()));
+        assert!(backup.exists(), "옛 vault 는 .superseded 로 보존되어야 한다");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // (asym-f) app.data 봉투 개인키 vault 보관 — wrap/unwrap 라운드트립, 재시작 디스크 영속, 삭제.
     #[test]
     fn data_key_vault_roundtrip() {
-        let (s, dir) = state_with_tmp_vault("datakey");
-        // lock 상태 — get 은 None(복호 불가).
-        assert!(s.get_data_key("key-1").unwrap().is_none(), "lock 이면 None");
-        s.unlock("pw").unwrap();
+        let (dir, path) = tmp_vault_dir("datakey");
+        let kek = [6u8; KEY_LEN];
         let (sk, _p) = gen_asym_keypair();
-        s.put_data_key("key-1", &sk).unwrap();
-        assert_eq!(
-            s.get_data_key("key-1").unwrap().unwrap(),
-            sk,
-            "KEK wrap/unwrap 라운드트립"
-        );
-        assert!(s.get_data_key("key-2").unwrap().is_none(), "미존재 키 None");
-        // lock 후 None, 재 unlock 시 디스크에서 복원(영속).
-        s.lock().unwrap();
-        assert!(s.get_data_key("key-1").unwrap().is_none(), "lock 후 None");
-        s.unlock("pw").unwrap();
-        assert_eq!(
-            s.get_data_key("key-1").unwrap().unwrap(),
-            sk,
-            "재 unlock 복원"
-        );
-        assert!(s.delete_data_key("key-1").unwrap());
-        assert!(s.get_data_key("key-1").unwrap().is_none(), "삭제 후 None");
+        {
+            let s = SecretsState::default();
+            s.set_path(path.clone());
+            s.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek)));
+            s.put_data_key("key-1", &sk).unwrap();
+            assert_eq!(
+                s.get_data_key("key-1").unwrap().unwrap(),
+                sk,
+                "KEK wrap/unwrap 라운드트립"
+            );
+            assert!(s.get_data_key("key-2").unwrap().is_none(), "미존재 키 None");
+        }
+        // 재시작 영속 — 같은 device KEK 새 state 가 디스크에서 복원.
+        {
+            let s = SecretsState::default();
+            s.set_path(path.clone());
+            s.set_kek_source(Box::new(InMemoryKekSource::with_kek(kek)));
+            assert_eq!(
+                s.get_data_key("key-1").unwrap().unwrap(),
+                sk,
+                "재시작 복원(디스크 영속)"
+            );
+            assert!(s.delete_data_key("key-1").unwrap());
+            assert!(s.get_data_key("key-1").unwrap().is_none(), "삭제 후 None");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1222,21 +1527,46 @@ mod tests {
         assert_eq!(open_sealed(&s, &back, AAD1).unwrap(), b"persisted");
     }
 
-    // resolve 잠금/미존재 게이트 — 잠김=Err(vault locked), 미존재 key/ns=Err(평문 누출 0).
+    // resolve 잠금/미존재 게이트 — KEK 미도달=Err, 미존재 key/ns=Err(평문 누출 0).
     #[test]
     fn resolve_locked_and_missing_rejected() {
-        let (s, dir) = state_with_tmp_vault("resolve-gate");
-        // 잠김 — unlock 전.
-        assert!(s.resolve("plugin-a", "apiKey").is_err());
-        s.unlock("pw").unwrap();
+        let (dir, path) = tmp_vault_dir("resolve-gate");
+        let s = SecretsState::default();
+        s.set_path(path.clone());
+        s.set_kek_source(Box::new(InMemoryKekSource::with_kek([7u8; KEY_LEN])));
+        // 미존재 key/ns → Err(평문 누출 0).
+        assert!(s.resolve("plugin-a", "apiKey").is_err(), "미존재 → Err");
         s.set("plugin-a", "apiKey", "v").unwrap();
-        // 미존재 key.
-        assert!(s.resolve("plugin-a", "nope").is_err());
-        // 미존재 ns.
-        assert!(s.resolve("plugin-z", "apiKey").is_err());
-        // lock 후 다시 잠김.
-        s.lock().unwrap();
-        assert!(s.resolve("plugin-a", "apiKey").is_err());
+        assert!(s.resolve("plugin-a", "nope").is_err(), "미존재 key");
+        assert!(s.resolve("plugin-z", "apiKey").is_err(), "미존재 ns");
+        assert_eq!(s.resolve("plugin-a", "apiKey").unwrap(), "v");
+        // no-secret-service(잠김) → Err. 같은 path 에 Failing 주입 새 state.
+        let locked = SecretsState::default();
+        locked.set_path(path);
+        locked.set_kek_source(Box::new(FailingKekSource));
+        assert!(
+            locked.resolve("plugin-a", "apiKey").is_err(),
+            "KEK 미도달 → Err"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // (0600) flush 는 볼트 파일을 로컬 사용자 전용(0600)으로 잠근다 — 그룹/타 사용자 read 차단.
+    // 투명 개방이 새 vault 를 생성·flush 하므로 결과 파일 mode 를 단언. set(재-flush) 후에도 유지.
+    // Unix 전용 — Windows 는 파일 퍼미션 개념이 없어(기본 ACL) 이 단언이 무의미.
+    #[cfg(unix)]
+    #[test]
+    fn vault_file_is_mode_0600() {
+        use std::os::unix::fs::PermissionsExt;
+        let (s, dir) = state_with_tmp_vault("perm0600");
+        assert!(s.is_unlocked(), "투명 개방으로 새 vault 생성 → flush");
+        let path = s.vault_file().unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600, "볼트 파일은 0600 이어야");
+        // 재-flush(set) 후에도 0600 유지(rename 이 tmp 퍼미션 보존).
+        s.set("plugin-a", "k", "v").unwrap();
+        let mode2 = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode2 & 0o777, 0o600, "재-flush 후에도 0600");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

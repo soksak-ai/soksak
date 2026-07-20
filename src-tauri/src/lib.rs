@@ -16,6 +16,7 @@ mod mediaproxy;
 mod navigation_policy;
 mod network;
 mod notify;
+mod os_key;
 mod path_security;
 mod plugins;
 mod process;
@@ -152,27 +153,25 @@ pub fn run() {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || service::boot(&handle));
             }
-            // 시크릿 볼트 변경 → secrets 의존 서비스 드레인 재시작(PS10). secrets.rs 가 발행하는
-            // "secrets-unlocked"/"secrets-locked" 를 Rust 측에서 구독(secrets↔service 무결합 — R7).
-            // 드레인은 in-flight 완료를 최대 5s 대기하므로 리스너 스레드를 막지 않게 별 스레드로 던진다
-            // (이벤트 구동 — 폴링 0). unlock=새 세대가 토큰 획득(잠금 중 스폰 회복), lock=평문 env 소거.
+            // 투명 언락 준비 완료(secrets-ready) → secrets 의존 서비스 드레인 재시작(PS10). os_key device
+            // KEK 로 부팅 즉시 vault 가 열리므로, 부팅 중 토큰 없이 스폰된 서비스를 1회 회복시킨다
+            // (secrets↔service 무결합 — R7). 드레인은 in-flight 완료를 최대 5s 대기하므로 별 스레드로
+            // 던진다(이벤트 구동 — 폴링 0). 리스너는 emit 보다 먼저 등록한다.
             {
                 use tauri::Listener;
-                for ev in ["secrets-unlocked", "secrets-locked"] {
-                    let h = app.handle().clone();
-                    app.listen_any(ev, move |_| {
-                        let h2 = h.clone();
-                        std::thread::spawn(move || {
-                            use tauri::Manager;
-                            if let Some(mgr) = h2.try_state::<service::ServiceManager>() {
-                                let n = mgr.drain_restart_secret_dependents();
-                                if n > 0 {
-                                    eprintln!("[service] 시크릿 변경 → 드레인 재시작 {n}개");
-                                }
+                let h = app.handle().clone();
+                app.listen_any("secrets-ready", move |_| {
+                    let h2 = h.clone();
+                    std::thread::spawn(move || {
+                        use tauri::Manager;
+                        if let Some(mgr) = h2.try_state::<service::ServiceManager>() {
+                            let n = mgr.drain_restart_secret_dependents();
+                            if n > 0 {
+                                eprintln!("[service] 시크릿 준비 → 드레인 재시작 {n}개");
                             }
-                        });
+                        }
                     });
-                }
+                });
             }
             // 백업 링 실패 고지에 쓸 앱 핸들을 심는다 — 이후 자동 백업 스냅샷 실패가 activity/알림으로
             // 드러난다(무음 폴백 금지). 데이터 개방보다 먼저 심어 첫 쓰기 신호부터 커버한다.
@@ -234,17 +233,19 @@ pub fn run() {
             // 영속된 시간 기반(At/Every/Cron) 일정 재무장(crash 복구) — DB 열린 직후. 무상태 Reconcile 은
             // 플러그인이 activate 시 재등록한다. 일정 없으면 no-op(발화 스레드도 안 뜸).
             schedule::reload_persisted(app.handle());
-            // 시크릿 볼트 — 프로덕션 경로 주입(init 1회) 후 헤드리스/e2e 자동 unlock
-            // (SOKSAK_VAULT_KEY env 있을 때만, 없으면 잠김 유지).
+            // 시크릿 볼트 — 경로 + KEK 출처(os_key OS 키체인) 주입. 투명 언락: 마스터 passphrase 없이
+            // device KEK 로 부팅 시 자동 개방(env 무음 언락 경로 없음 — P0 제거). keyring 은 os_key 안에서만
+            // 인스턴스화 → 여기 주입은 지연(첫 접근 때 키체인 접근). 경로·expect 확정을 DB open 뒤로 둔다.
             {
+                use tauri::Emitter;
                 let st = app.state::<secrets::SecretsState>();
                 // SOKSAK_VAULT_PATH 있으면 격리 경로(헤드리스/E2E), 없으면 프로덕션 default.
                 match secrets::resolve_vault_path(|k| std::env::var(k).ok()) {
                     Ok(p) => st.set_path(p),
                     Err(e) => eprintln!("[secrets] 볼트 경로 계산 실패: {e}"),
                 }
-                // [R23] app.data 에 봉투 키가 등록돼 있으면 vault 가 있어야 한다 — 부재 시 새 vault 자동생성
-                // 거부 플래그를 켠다(임의 passphrase 통과+전손 차단). data DB 가 열린 뒤라 조회 가능.
+                // [R23] app.data 에 봉투 키가 등록돼 있으면 vault 가 있어야 한다 — 부재 시 자동생성 거부
+                // 플래그(전손 차단). data DB 가 열린 뒤라 조회 가능.
                 let expect = match app.state::<data::DbState>().conn.lock() {
                     Ok(g) => g
                         .as_ref()
@@ -253,20 +254,21 @@ pub fn run() {
                     Err(_) => false,
                 };
                 st.set_expect_vault(expect);
-                secrets::auto_unlock_from_env(&st);
-            }
-            // [단계③] auto-lock 틱 — idle 타임아웃 경과 시 vault 를 잠그고 전 창에 broadcast(터미널 폐기·
-            // 잠금 UI 전환을 프론트가 반응). 단일 OS 스레드 15s tick(폴링 비용 무시 가능). 타임아웃 0(기본)
-            // 이면 auto_lock_due 가 항상 false → no-op. 활동 reset 은 프론트 secret_touch.
-            {
-                let lock_handle = app.handle().clone();
-                std::thread::spawn(move || loop {
-                    std::thread::sleep(std::time::Duration::from_secs(15));
-                    let st = lock_handle.state::<secrets::SecretsState>();
-                    if st.auto_lock_due(secrets::now_ms()) {
-                        let _ = secrets::lock_and_broadcast(&lock_handle, &st);
-                    }
-                });
+                // KEK 출처 주입(경로·expect 확정 후). 프로덕션 OsKekSource — 앱 신원 ACL 결속. debug 빌드에
+                // 한해 SOKSAK_E2E_KEK 가 있으면 e2e 결정적 KEK 를 먼저 쓴다(격리·CI). release 엔 이 분기 자체가
+                // 컴파일되지 않아 env-KEK 백도어가 없다.
+                #[cfg(debug_assertions)]
+                match secrets::E2eKekSource::from_env() {
+                    Some(src) => st.set_kek_source(Box::new(src)),
+                    None => st.set_kek_source(Box::new(secrets::OsKekSource::app())),
+                }
+                #[cfg(not(debug_assertions))]
+                st.set_kek_source(Box::new(secrets::OsKekSource::app()));
+                // 부팅 즉시 1회 투명 개방 시도(best-effort) 후 secrets-ready 방출 — 위 리스너가 서비스를
+                // 드레인 재시작해 토큰을 회복시킨다. StoreUnavailable(헤드리스)면 열리지 않고 조용히
+                // 넘어간다(무음 평문 0, 봉인만 불가).
+                let _ = st.is_unlocked();
+                let _ = app.emit("secrets-ready", ());
             }
             // 파일 워처 1회 초기화(이벤트 콜백에 앱 핸들 주입).
             let handle = app.handle().clone();
@@ -543,6 +545,7 @@ pub fn run() {
             data::commands::data_encrypt_convert,
             data::commands::data_encrypt_rotate,
             data::commands::data_encrypt_recover,
+            data::commands::data_encrypt_change_recovery,
             data::commands::data_encrypt_status,
             ai_session::ai_session_detect,
             ai_session::ai_session_inspect,
@@ -559,15 +562,11 @@ pub fn run() {
             data::commands::data_restore,
             data::commands::data_export,
             data::commands::data_import,
-            secrets::secret_unlock,
-            secrets::secret_lock,
-            secrets::secret_touch,
-            secrets::secret_autolock,
-            secrets::secret_lock_info,
             secrets::secret_set,
             secrets::secret_has,
             secrets::secret_delete,
             secrets::secret_keys,
+            secrets::secret_status,
             secrets::secret_backend,
             watcher::watch_dir,
             watcher::unwatch_dir,
