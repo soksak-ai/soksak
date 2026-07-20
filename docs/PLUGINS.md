@@ -89,6 +89,18 @@ sok plugin.dev.load '{"path":"/abs/path/my-plugin"}'
 # 코드 수정 후: sok plugin.reload
 ```
 
+**어느 홈에서 검증하는가** — identity 홈은 완전 독립이고 플러그인은 그 경계를 넘지 않는다
+(`src-tauri/src/home.rs`). 검증 경로는 홈마다 하나뿐이다.
+
+- `~/.soksak-dev` 의 플러그인·사이드카는 **dev 빌드**로 검증한다 — 개발 중 소스를 그대로 적재하거나
+  그 홈에 설치해서 돌린다.
+- `~/.soksak-debug` 를 홈으로 검증하려면 그 유닛을 **발행**한 뒤 **debug 빌드에 설치**해서 돌린다.
+
+다른 홈 안의 폴더를 이 홈의 개발 source 로 지정하는 것은 거부된다(`INVALID_PARAMS`). 허용하면
+debug 앱이 dev 홈의 작업 트리를 실행하고, dev source 는 동의 게이트 예외라 설치 경로가 통째로
+건너뛰어진다 — 검증했다고 믿는 것과 실제 발행되는 것이 달라진다. 홈 밖의 작업 checkout 은
+그대로 지정할 수 있다.
+
 ## 설치·배포
 
 설치 위치는 `~/.soksak/plugins/<id>/` (테마와 같은 외부 파일 모델).

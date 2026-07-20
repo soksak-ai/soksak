@@ -76,12 +76,16 @@ fn validate_declared_source(kind: &str, id: &str, source: &Path) -> Result<(), S
     Ok(())
 }
 
-fn validate_source(kind: &str, id: &str, source: &Path) -> Result<(), String> {
+fn validate_source(home: &Path, kind: &str, id: &str, source: &Path) -> Result<(), String> {
     validate_declared_source(kind, id, source)?;
-    validate_source_path(source)
+    validate_source_path_in(source, home)
 }
 
 fn validate_source_path(source: &Path) -> Result<(), String> {
+    validate_source_path_in(source, &crate::home::soksak_home())
+}
+
+fn validate_source_path_in(source: &Path, home: &Path) -> Result<(), String> {
     if !source.is_absolute() {
         return Err(format!(
             "개발 source는 절대경로여야 합니다: {}",
@@ -95,7 +99,35 @@ fn validate_source_path(source: &Path) -> Result<(), String> {
             source.display()
         ));
     }
+    if let Some(foreign) = foreign_identity_home(source, home) {
+        return Err(format!(
+            "다른 identity 홈({}) 안의 경로는 이 홈의 개발 source 가 될 수 없습니다: {}. \
+             그 홈의 앱으로 검증하거나, 발행한 뒤 이 홈에 설치해서 검증하십시오.",
+            foreign.display(),
+            source.display()
+        ));
+    }
     Ok(())
+}
+
+/// source 가 이 홈이 아닌 다른 identity 홈 안에 있으면 그 홈 경로를 돌려준다.
+///
+/// identity 홈은 `$HOME/.soksak`(release) 와 `$HOME/.soksak-<식별자>` 로 파생된다(home.rs).
+/// 새 identity 는 자동으로 자기 홈을 갖기 때문에 목록을 하드코딩하지 않고, 이 홈의 형제 중
+/// 같은 이름 규칙을 만족하는 디렉터리를 홈으로 본다. 홈 밖(작업 checkout)은 대상이 아니다.
+fn foreign_identity_home(source: &Path, home: &Path) -> Option<PathBuf> {
+    let parent = home.parent()?;
+    source
+        .ancestors()
+        .find(|anc| {
+            anc.parent() == Some(parent)
+                && *anc != home
+                && anc
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n == ".soksak" || n.starts_with(".soksak-"))
+        })
+        .map(Path::to_path_buf)
 }
 
 fn read_config_in(home: &Path) -> Result<UnitDevConfig, String> {
@@ -157,7 +189,7 @@ fn list_in(home: &Path) -> Result<Vec<UnitDevSource>, String> {
 }
 
 fn set_in(home: &Path, kind: &str, id: &str, source: &Path) -> Result<UnitDevSource, String> {
-    validate_source(kind, id, source)?;
+    validate_source(home, kind, id, source)?;
     // lexical 절대경로를 그대로 보존한다. canonicalize로 symlink를 숨기지 않는다.
     let selected = UnitDevSource {
         kind: kind.to_string(),
@@ -371,6 +403,37 @@ mod tests {
             &link.join("plugin")
         )
         .is_err());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn rejects_a_source_inside_another_identity_home() {
+        // home.rs 불변식: identity 홈은 완전 독립이고 플러그인은 경계를 넘지 않는다.
+        // 다른 홈의 plugins/<id> 를 이 홈의 개발 source 로 선언하면 debug 앱이 dev 홈의
+        // 작업 트리를 실행하게 된다(동의 게이트도 dev source 예외로 우회).
+        let root = test_root("foreign-home");
+        let _ = std::fs::remove_dir_all(&root);
+        let home = root.join(".soksak-debug");
+        let foreign = root.join(".soksak-dev").join("plugins").join("weather");
+        let own = home.join("workspaces").join("plugins").join("weather");
+        std::fs::create_dir_all(&foreign).unwrap();
+        std::fs::create_dir_all(&own).unwrap();
+
+        assert!(validate_source_path_in(&foreign, &home).is_err());
+        assert!(validate_source_path_in(&own, &home).is_ok());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn allows_a_source_outside_every_identity_home() {
+        let root = test_root("outside-home");
+        let _ = std::fs::remove_dir_all(&root);
+        let home = root.join(".soksak-debug");
+        let checkout = root.join("work").join("my-plugin");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&checkout).unwrap();
+
+        assert!(validate_source_path_in(&checkout, &home).is_ok());
         let _ = std::fs::remove_dir_all(&root);
     }
 }
