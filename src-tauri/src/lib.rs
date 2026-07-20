@@ -528,6 +528,7 @@ pub fn run() {
             data::commands::data_encrypt_convert,
             data::commands::data_encrypt_rotate,
             data::commands::data_encrypt_recover,
+            data::commands::data_encrypt_change_recovery,
             data::commands::data_encrypt_status,
             ai_session::ai_session_detect,
             ai_session::ai_session_inspect,

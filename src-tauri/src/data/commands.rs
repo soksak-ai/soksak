@@ -338,20 +338,16 @@ pub fn data_encrypt_enable(
         crypto::register_active_key(c, &scope, &key_id, &pk, created)
     })?;
     // (3) [R24] recovery code 발급 + S 를 코드로 2중 wrap → blob 저장(평문 DB 안전, 코드로만 열림).
-    let recovery_code = crate::secrets::gen_recovery_code();
-    let (salt, sealed) = crate::secrets::recovery_wrap(&recovery_code, &sk)?;
-    let blob = serde_json::to_string(&crate::secrets::RecoveryBlob { salt, sealed })
-        .map_err(|e| e.to_string())?;
-    with_conn(&state, |c| crypto::set_recovery(c, &scope, &key_id, &blob))?;
+    let recovery_code = with_conn(&state, |c| crypto::issue_recovery(c, &scope, &key_id, &sk))?;
     Ok(EnableResult {
         key_id,
         recovery_code,
     })
 }
 
-// [R24] passphrase 분실 복구 — recovery code 로 S 를 되찾아 현재 vault 에 재저장(re-wrap). 새 passphrase 로
-// unlock 한 vault 가 전제(S 를 KEK 로 다시 wrap). 복구된 S 가 등록 P 와 일치(basepoint)해야 한다 — 코드가
-// 맞아도 P 불일치면 거부(무결성). 성공 시 그 scope 봉인 레코드가 다시 복호 가능.
+// [R24] 복구 — recovery code 로 S 를 되찾아 이 기계의 vault 에 재저장(re-wrap). device OS 키체인의 KEK 취득이
+// 전제(S 를 KEK 로 다시 wrap). 복구된 S 가 등록 P 와 일치(basepoint)해야 한다 — 코드가 맞아도 P 불일치면
+// 거부(무결성). 성공 시 그 scope 봉인 레코드가 이 기계에서 다시 복호 가능(다른 기계/OS 이관 경로).
 #[tauri::command]
 pub fn data_encrypt_recover(
     scope: String,
@@ -396,6 +392,7 @@ pub struct RotateResult {
     pub new_key_id: String,
     pub rekeyed: usize,
     pub old_disposed: bool, // old 키로 봉인된 잔여 0 이라 폐기됨(아니면 다음 회전/재개에서)
+    pub recovery_code: String, // 새 키의 새 복구코드(1회 반환·앱 미저장) — 회전이 복구 blob 을 재발급해야 무손실
 }
 
 // 키 회전(R18/B9) — 새 키페어로 scope 전체를 re-key. old S 로 개봉→new P 로 재봉인. 잔여 0 확인 후에만
@@ -431,6 +428,10 @@ pub fn data_encrypt_rotate(
     with_conn(&state, |c| {
         crypto::register_active_key(c, &scope, &new_key_id, &new_p, created)
     })?;
+    // 새 active 키의 복구 blob 재발급 — 빠뜨리면 회전 후 active_recovery=None 이라 기계 분실 시 봉인 데이터
+    // 영구 손실. re-key 루프 전에 발급해 new_s 가 살아있는 동안 처리. 새 코드 1회 반환(앱 미저장).
+    let recovery_code =
+        with_conn(&state, |c| crypto::issue_recovery(c, &scope, &new_key_id, &new_s))?;
     // 전 레코드 re-key(배치 반복).
     let mut rekeyed = 0usize;
     loop {
@@ -458,7 +459,38 @@ pub fn data_encrypt_rotate(
         new_key_id,
         rekeyed,
         old_disposed,
+        recovery_code,
     })
+}
+
+// [R24] 복구코드 변경 — 데이터 재암호화 없이 active 키의 S 를 새 복구코드로 다시 감싼다(저렴). 코드 분실·노출
+// 시. device OS 키체인의 KEK 취득이 전제(active S 를 vault 에서 꺼내 새 코드로 재-wrap). 새 코드 1회 반환·앱
+// 미저장. rotate 와 달리 keyId·봉인 레코드는 그대로 — 복구 blob 만 새 코드로 교체.
+#[tauri::command]
+pub fn data_encrypt_change_recovery(
+    scope: String,
+    state: State<'_, DbState>,
+    secrets: State<'_, SecretsState>,
+) -> Result<String, String> {
+    if scope.is_empty() {
+        return Err("scope 필요".to_string());
+    }
+    if !secrets.is_unlocked() {
+        return Err(
+            "KEK 취득 불가(no secret service) — 복구코드 변경은 device 키체인 접근 필요(S 재-wrap)"
+                .to_string(),
+        );
+    }
+    let ak = with_conn(&state, |c| crypto::active_key(c, &scope))?
+        .ok_or("암호화 비활성 scope — 복구코드 변경 대상 아님")?;
+    let s = secrets
+        .get_data_key(&ak.key_id)?
+        .ok_or("active 개인키 부재 — 복구코드 변경 불가(무결성 이슈)")?;
+    // 무결성 — vault 의 S 가 등록 P 와 일치(스왑 거부).
+    if crate::secrets::public_from_secret(&s) != ak.public_key {
+        return Err("active publicKey 가 vault 키와 불일치(스왑 의심) — 복구코드 변경 거부".to_string());
+    }
+    with_conn(&state, |c| crypto::issue_recovery(c, &scope, &ak.key_id, &s))
 }
 
 // 기존 평문 레코드 봉인 변환(R17) — 암호화 활성 후 이미 쌓인 (ns,coll,scope) 평문을 active key 로 봉인.
