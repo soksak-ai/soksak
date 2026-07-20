@@ -7,7 +7,13 @@ import {
   parseOptions, readRegularFile, readTargetMatrix, releaseAssetName, releaseIdentity, sha256, writeRegularFile,
 } from "./release-contract.mjs";
 
-const options = parseOptions(process.argv.slice(2), ["commit", "tag", "artifacts", "out"]);
+// --emit-summary is an additive boolean flag: the core `release.build` command handler passes it
+// to read the manifest + per-target digests off stdout instead of re-hashing the bytes in TS. It
+// is stripped before parseOptions (which is a strict --name value parser) so the value-pair
+// contract is unchanged; without it stdout stays silent.
+const rawArgs = process.argv.slice(2);
+const emitSummary = rawArgs.includes("--emit-summary");
+const options = parseOptions(rawArgs.filter((arg) => arg !== "--emit-summary"), ["commit", "tag", "artifacts", "out"]);
 assertBaseline();
 assertCommit(options.commit);
 assertTag(options.tag);
@@ -65,3 +71,9 @@ writeRegularFile(path.join(out, "release.json"), releaseBytes);
 writeRegularFile(path.join(out, "conformance-release.json"), jsonBytes(report(RELEASE_SPEC)));
 writeRegularFile(path.join(out, "conformance-sidecar.json"), jsonBytes(report(SIDECAR_SPEC)));
 writeRegularFile(path.join(out, "conformance-interface.json"), jsonBytes(report(INTERFACE)));
+
+// The one machine-readable line — a sentinel prefix so the caller extracts it regardless of any
+// other output. Carries exactly what the handler would otherwise re-derive from the written files.
+if (emitSummary) {
+  process.stdout.write(`@@RELEASE_SUMMARY@@ ${JSON.stringify({ releaseJson: release, manifestSha256, matrix: artifacts })}\n`);
+}

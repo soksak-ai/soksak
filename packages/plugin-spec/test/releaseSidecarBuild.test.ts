@@ -68,14 +68,14 @@ function writeFixture(overrides: { unit?: Record<string, unknown>; cargoVersion?
   }
 }
 
-function build(tag = "v0.0.1"): { status: number | null; stdout: string; stderr: string } {
-  const r = spawnSync(
-    "node",
-    [path.join(root, "scripts", "build-release.mjs"), "--commit", COMMIT, "--tag", tag, "--artifacts", artifactsDir, "--out", outDir],
-    { encoding: "utf8" },
-  );
+function build(tag = "v0.0.1", emitSummary = false): { status: number | null; stdout: string; stderr: string } {
+  const args = [path.join(root, "scripts", "build-release.mjs"), "--commit", COMMIT, "--tag", tag, "--artifacts", artifactsDir, "--out", outDir];
+  if (emitSummary) args.push("--emit-summary");
+  const r = spawnSync("node", args, { encoding: "utf8" });
   return { status: r.status, stdout: r.stdout, stderr: r.stderr };
 }
+
+const SUMMARY_MARK = "@@RELEASE_SUMMARY@@ ";
 
 beforeEach(() => {
   // The canon refuses any symlink on the path walk — macOS tmpdir sits behind the /var symlink,
@@ -137,6 +137,31 @@ describe("release-template/sidecar — canonical sidecar release documents", () 
       });
       expect(report.artifacts).toHaveLength(5);
     }
+  });
+
+  // --emit-summary lets a caller (the core `release.build` command handler) parse the manifest +
+  // per-target digests from stdout instead of re-hashing the bytes itself. Additive: without the
+  // flag stdout stays silent, and every invariant above still fires.
+  it("with --emit-summary, prints a parseable summary matching the written manifest", () => {
+    writeFixture();
+    const r = build("v0.0.1", true);
+    expect(r.stderr).toBe("");
+    expect(r.status).toBe(0);
+    const line = r.stdout.split("\n").find((l) => l.startsWith(SUMMARY_MARK));
+    expect(line, "a @@RELEASE_SUMMARY@@ line must be printed").toBeDefined();
+    const summary = JSON.parse(line!.slice(SUMMARY_MARK.length));
+    const releaseBytes = fs.readFileSync(path.join(outDir, "release.json"));
+    expect(summary.manifestSha256).toBe(sha256(releaseBytes));
+    expect(summary.releaseJson).toEqual(JSON.parse(releaseBytes.toString("utf8")));
+    expect(summary.matrix).toHaveLength(5);
+    expect(summary.matrix.map((m: { target: string }) => m.target)).toEqual(TARGETS);
+  });
+
+  it("stays silent on stdout without --emit-summary (additive flag)", () => {
+    writeFixture();
+    const r = build();
+    expect(r.status).toBe(0);
+    expect(r.stdout).toBe("");
   });
 
   it("refuses a checksum sidecar that does not state the exact archive digest", () => {
