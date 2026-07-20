@@ -1,0 +1,198 @@
+# release-drive — prove the release.* control-plane commands run HEADLESS via `sok`.
+#
+# The release.* commands live in the core FRONTEND registry (src/commands/catalogRelease.ts) and ride
+# the daemon_run_once spawn bridge into the single-source release-template. Unit tests cover the pure
+# orchestration; this workflow proves the whole path end to end on a real boot: it builds the debug
+# app + the sok-debug CLI, boots the app HEADLESS under a virtual display (the main control-plane
+# webview hosts the command registry + the socket), then drives `sok-debug release.build` and
+# `sok-debug release.validate` against a checked-in sidecar fixture and self-judges on the reply.ok
+# exit codes. No continue-on-error — a broken boot, a missing dep, or a failing command fails the job.
+#
+# Deps + boot/teardown are modeled on multiplatform-check.yml (webkit apt list, sibling checkout) and
+# verify.yml (pnpm/node/rust setup, the debug build). The pinned soksak-spec commit below is the ONE
+# commit the fixture's spec-validator.json, the soksak-spec-service Cargo rev, and this checkout share.
+name: release-drive
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out the app repository
+        uses: actions/checkout@v4
+        with:
+          path: soksak
+
+      # src-tauri/Cargo.toml declares tauri-plugin-webview-capture by relative path, two levels up
+      # from src-tauri (same sibling layout as verify.yml / multiplatform-check.yml). The crate
+      # repository is public, so the default checkout (no token) resolves it.
+      - name: Check out the sibling path dependency
+        uses: actions/checkout@v4
+        with:
+          repository: soksak-ai/tauri-plugin-webview-capture
+          path: tauri-plugin-webview-capture
+
+      # The pinned single-source release pipeline + public validator. release.validate's git-pin guard
+      # (validate-with-spec.mjs) requires this checkout's HEAD to equal the pin; keep it ONE commit
+      # with the fixture's validation/spec-validator.json.
+      - name: Check out the pinned soksak-spec release pipeline
+        uses: actions/checkout@v4
+        with:
+          repository: soksak-ai/soksak-spec
+          ref: d7f54852754195527f125d1fc11362316157d19b
+          path: spec
+
+      # Build deps for the webkit app + xvfb to boot it without a physical display. Same list as
+      # multiplatform-check.yml (the -dev packages pull in the runtime libraries) plus xvfb.
+      - name: Install Linux system libraries + xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev xvfb
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: soksak/.nvmrc
+          cache: pnpm
+          cache-dependency-path: soksak/pnpm-lock.yaml
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: soksak/src-tauri
+
+      - name: Install core dependencies
+        working-directory: soksak
+        run: pnpm install --frozen-lockfile
+
+      # The pinned public validator release.validate invokes. Mirrors the per-unit release.yml gate:
+      # a hoisted, symlink-free install so the release scripts (which ban symlinked paths) are safe.
+      - name: Build the pinned public validator
+        working-directory: spec
+        run: |
+          pnpm --config.node-linker=hoisted --config.symlink=false install --frozen-lockfile
+          pnpm --filter @soksak-ai/plugin-spec build
+
+      # Build exactly what we boot: the plugin-spec/plugin-api dist the core frontend consumes
+      # (spec-gate), the sok-debug CLI, and the debug app binary with the frontend embedded. --no-bundle
+      # skips OS packaging (deb/AppImage) — the raw binary is the control plane we drive.
+      - name: Build the debug app binary + sok-debug CLI
+        working-directory: soksak
+        run: |
+          make spec-gate
+          make cli-debug
+          pnpm tauri build --debug --no-bundle --config src-tauri/tauri.debug.conf.json
+
+      - name: Boot headless and drive the release.* commands via sok
+        working-directory: soksak
+        env:
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          WS="$GITHUB_WORKSPACE"
+          CORE="$WS/soksak"
+          SPEC="$WS/spec"
+          FIXTURE="$CORE/.github/fixtures/release-drive/unit"
+          CI_HOME="$WS/ci-home"; mkdir -p "$CI_HOME"
+          ART="$WS/rd-artifacts"; OUTREL="$WS/rd-dist-release"
+          rm -rf "$ART" "$OUTREL"; mkdir -p "$ART"
+
+          # Locate the debug app binary. It was compiled with the debug config, so it carries the
+          # com.soksak.debug identity (→ ~/.soksak-debug home + socket) whatever its on-disk name. No
+          # fallback to another environment: fail loudly if neither name exists.
+          BIN=""
+          for name in soksak-debug soksak-dev; do
+            cand="$CORE/src-tauri/target/debug/$name"
+            if [ -x "$cand" ]; then BIN="$cand"; break; fi
+          done
+          test -n "$BIN" || { echo "debug app binary not found under src-tauri/target/debug"; ls -l "$CORE/src-tauri/target/debug" || true; exit 1; }
+          SOK="$CORE/src-tauri/target/debug/sok-debug"
+          test -x "$SOK" || { echo "sok-debug CLI not found: $SOK"; exit 1; }
+          echo "app binary: $BIN"
+
+          # The release scripts run `node` from the app's daemon child, which uses a login shell
+          # ($SHELL -lc). Prove node is on that shell's PATH now — fail here, not mid-drive.
+          SH="${SHELL:-/bin/sh}"
+          "$SH" -lc 'command -v node && node --version'
+
+          # Boot headless under a virtual display. The main control-plane webview hosts the command
+          # registry + the socket; SOKSAK_HEADLESS hides the window. HOME selects the debug identity home.
+          SOKSAK_HEADLESS=1 HOME="$CI_HOME" xvfb-run -a "$BIN" > "$WS/app.log" 2>&1 &
+          APP_PID=$!
+          cleanup() {
+            pkill -f "target/debug/soksak-debug" 2>/dev/null || true
+            pkill -f "target/debug/soksak-dev" 2>/dev/null || true
+            kill "$APP_PID" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          # Poll `sok-debug hello` until the socket answers (bounded, ~120s). hello answers without the
+          # frontend and self-judges protocol skew — the first liveness probe.
+          up=0
+          for _ in $(seq 1 60); do
+            if HOME="$CI_HOME" "$SOK" hello > "$WS/hello.json" 2>"$WS/hello.err"; then up=1; break; fi
+            kill -0 "$APP_PID" 2>/dev/null || { echo "app process exited during boot"; echo "--- app.log ---"; cat "$WS/app.log" || true; exit 1; }
+            sleep 2
+          done
+          if [ "$up" != 1 ]; then echo "socket never came up"; echo "--- hello.err ---"; cat "$WS/hello.err" || true; echo "--- app.log ---"; cat "$WS/app.log" || true; exit 1; fi
+          echo "=== sok-debug hello ==="; cat "$WS/hello.json"
+
+          # hello is answered by the Rust core before the frontend loads, but release.* live in the
+          # FRONTEND registry — poll until the catalog has them, so the drive never races the webview.
+          ready=0
+          for _ in $(seq 1 60); do
+            if HOME="$CI_HOME" "$SOK" help release.build >/dev/null 2>"$WS/ready.err"; then ready=1; break; fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then echo "release.* never registered in the frontend catalog"; cat "$WS/ready.err" || true; echo "--- app.log ---"; cat "$WS/app.log" || true; exit 1; fi
+
+          # Identity is the fixture's own — read it from release/unit.json, the same single source
+          # build-release.mjs derives the expected id/version/tag from. No literal is duplicated into this
+          # script, so bumping the fixture never drifts the drive (build-release asserts tag == v<version>).
+          ID="$(jq -r .id "$FIXTURE/release/unit.json")"
+          VER="$(jq -r .version "$FIXTURE/release/unit.json")"
+          TAG="$(jq -r .releaseTag "$FIXTURE/release/unit.json")"
+
+          # Synthesize the exact 5-target artifact set the fixture's release matrix declares. release.build
+          # hashes these bytes (it never unpacks them), so opaque content + a matching sha256 sidecar is a
+          # faithful stand-in for the real per-platform archives.
+          for t in aarch64-apple-darwin aarch64-unknown-linux-gnu x86_64-apple-darwin x86_64-pc-windows-msvc x86_64-unknown-linux-gnu; do
+            asset="$ID-$VER-$t.tar.gz"
+            printf 'release-drive fixture artifact for %s\n' "$t" > "$ART/$asset"
+            ( cd "$ART" && sha256sum "$asset" > "$asset.sha256" )
+          done
+
+          # Drive release.build via sok — the handler spawns the single-source builder against the pinned
+          # spec checkout. timeoutMs is the sok ENVELOPE response-wait cap (lib.rs request() hoists it out
+          # of params before the command sees it, so it never trips the registry's declared-param check);
+          # it raises the default 10s wait so a cold node start in CI never times the reply out. A false
+          # reply.ok makes sok-debug exit nonzero, which aborts the job (set -e).
+          echo "=== release.build ==="
+          HOME="$CI_HOME" "$SOK" release.build "$(jq -nc \
+            --arg u "$FIXTURE" --arg s "$SPEC" --arg c "$COMMIT" --arg tg "$TAG" --arg a "$ART" --arg o "$OUTREL" \
+            '{unitRoot:$u,specRoot:$s,commit:$c,tag:$tg,artifacts:$a,out:$o,timeoutMs:240000}')"
+
+          # Drive release.validate against the just-built release dir — the pinned public validator judges
+          # release.json + the 3 conformance reports; the git-pin guard requires spec checked out at <pin>.
+          echo "=== release.validate ==="
+          HOME="$CI_HOME" "$SOK" release.validate "$(jq -nc \
+            --arg u "$FIXTURE" --arg s "$SPEC" --arg r "$OUTREL" \
+            '{unitRoot:$u,specRoot:$s,releaseDir:$r,timeoutMs:180000}')"
+
+          echo "release-drive: release.build + release.validate both ran headlessly and returned ok"

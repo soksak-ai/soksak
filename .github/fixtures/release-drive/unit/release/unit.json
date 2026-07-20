@@ -1,0 +1,7 @@
+{
+  "id": "soksak-sidecar-drivefixture",
+  "version": "0.0.1",
+  "releaseTag": "v0.0.1",
+  "repository": "https://github.com/soksak-ai/soksak-sidecar-drivefixture",
+  "interface": { "id": "soksak-spec-sidecar-drivefixture", "version": "0.0.1" }
+}

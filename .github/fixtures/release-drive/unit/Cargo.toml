@@ -1,0 +1,13 @@
+# Release-drive CI fixture — a sidecar unit identity, complete enough for the single-source
+# release pipeline to build + validate its release documents. There is no `src/` and nothing is
+# compiled: release.build hashes the archive bytes handed to it (the CI synthesizes them) and never
+# builds this crate, so the fixture carries only the identity the pipeline reads —
+# release/unit.json, release/targets.json, validation/spec-validator.json, and this manifest, which
+# assertBaseline reads for the private release baseline (version + publish = false). The real
+# compilable sidecar shape is what `sidecar.new` emits.
+[package]
+name = "soksak-sidecar-drivefixture"
+version = "0.0.1"
+edition = "2021"
+publish = false
+repository = "https://github.com/soksak-ai/soksak-sidecar-drivefixture"
