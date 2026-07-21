@@ -2,7 +2,17 @@ import { useEffect, useState } from "react";
 import { execute } from "../commands/registry";
 import { useSessions } from "../state/sessions";
 import { useVault } from "../state/vault";
-import { useT } from "../i18n";
+import { useT, type MsgKey } from "../i18n";
+
+// 봉인 KEK 백엔드 원시값(secrets.rs)→현지화 라벨. 미매핑값(로딩중 "—" 등)은 원문 그대로 표시.
+const BACKEND_LABEL: Record<string, MsgKey> = {
+  keychain: "settings.security.kind.keychain",
+  wincred: "settings.security.kind.wincred",
+  "secret-service": "settings.security.kind.secretService",
+  "os-key": "settings.security.kind.osKey",
+  e2e: "settings.security.kind.e2e",
+  none: "settings.security.kind.none",
+};
 
 // 설정 보안 섹션 — 전역 봉인 상태(백엔드·가용, secret.status)와 범위 한계 고지 + scope 단위 관리(암호화
 // 켜기·복구·키 회전·복구코드 변경). 암호화는 scope 단위라 scope 를 투명하게 노출한다(기본값=활성 프로젝트
@@ -84,7 +94,9 @@ export function SecuritySettings() {
       <div className="dsec">{t("settings.security")}</div>
       <div className="drow">
         <span className="drow-label">{t("settings.security.backend")}</span>
-        <span className="dctl dctl-static dctl-mono">{backend}</span>
+        <span className="dctl dctl-static">
+          {BACKEND_LABEL[backend] ? t(BACKEND_LABEL[backend]) : backend}
+        </span>
       </div>
       <div className="drow">
         <span className="drow-label">{t("settings.security.seal")}</span>
