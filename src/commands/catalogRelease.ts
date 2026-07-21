@@ -11,6 +11,7 @@
 // validate-with-spec.mjs self-enforces against spec-validator.json.
 import { invoke } from "@tauri-apps/api/core";
 import { register } from "./registry";
+import { tmsg } from "../i18n";
 import {
   assertOk,
   buildBuildRequest,
@@ -39,7 +40,7 @@ export function registerReleaseCatalog(): void {
       releaseDir: { type: "string", required: true, description: "Dir holding release.json + 3 conformance reports" },
     },
     returns: "{ ok, stdout }",
-    message: () => "release directory validated against the pinned spec",
+    message: () => tmsg("msg.release.validate"),
     examples: ['release.validate \'{"unitRoot":"…","specRoot":".pipeline","releaseDir":"dist-release"}\''],
     handler: async (p) => {
       const req = buildValidateRequest({
@@ -65,7 +66,7 @@ export function registerReleaseCatalog(): void {
       out: { type: "string", required: true, description: "Empty output dir for release.json + conformance reports" },
     },
     returns: "{ ok, releaseJson, manifestSha256, matrix }",
-    message: (d) => `built the release manifest — ${Array.isArray(d.matrix) ? d.matrix.length : 0} targets`,
+    message: (d) => tmsg("msg.release.build", { n: Array.isArray(d.matrix) ? d.matrix.length : 0 }),
     examples: ['release.build \'{"unitRoot":"…","specRoot":".pipeline","commit":"<40hex>","tag":"v0.0.1","artifacts":"dist","out":"dist-release"}\''],
     handler: async (p) => {
       const req = buildBuildRequest({
@@ -98,7 +99,10 @@ export function registerReleaseCatalog(): void {
       confirm: { type: "boolean", required: true, description: "Must be true — this cuts an immutable, unrecuttable release" },
     },
     returns: "{ ok, url }",
-    message: (d) => `published ${typeof d.url === "string" ? d.url : "the immutable release"}`,
+    message: (d) =>
+      typeof d.url === "string" && d.url
+        ? tmsg("msg.release.publish.url", { url: d.url })
+        : tmsg("msg.release.publish"),
     examples: ['release.publish \'{"repo":"soksak-ai/soksak-sidecar-db-studio","tag":"v0.0.1","commit":"<sha>","artifactsDir":"dist","releaseDir":"dist-release","confirm":true}\''],
     handler: async (p) => {
       if (p.confirm !== true) {
@@ -126,7 +130,7 @@ export function registerReleaseCatalog(): void {
       name: { type: "string", required: true, description: "Unprefixed name; id becomes soksak-plugin-<name>" },
     },
     returns: "{ ok, dir, id }",
-    message: (d) => `scaffolded ${typeof d.id === "string" ? d.id : "the plugin"}`,
+    message: (d) => tmsg("msg.plugin.new", { id: typeof d.id === "string" ? d.id : "" }),
     examples: ['plugin.new \'{"name":"widget"}\''],
     handler: async (p) => {
       const r = await invoke<{ dir: string; dir_name: string }>("plugin_dev_new2", {
@@ -145,7 +149,7 @@ export function registerReleaseCatalog(): void {
       interface: { type: "string", required: false, description: "Interface id (default soksak-spec-sidecar-<name>)" },
     },
     returns: "{ ok, dir, id }",
-    message: (d) => `scaffolded ${typeof d.id === "string" ? d.id : "the sidecar"}`,
+    message: (d) => tmsg("msg.sidecar.new", { id: typeof d.id === "string" ? d.id : "" }),
     examples: ['sidecar.new \'{"name":"widget"}\''],
     handler: async (p) => {
       const r = await invoke<{ dir: string; dir_name: string }>("sidecar_dev_new", {
