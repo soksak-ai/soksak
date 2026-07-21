@@ -1,7 +1,8 @@
-# 3-OS cargo check matrix. All three OS columns went green (run 29506546092:
-# sibling capture fixes + core titlebar/pty gates + the W2 M0 Windows IPC
-# transport), so the documented removal condition is met: continue-on-error is
-# dropped and this check now fails the workflow when any OS regresses.
+# 3-OS cargo BUILD matrix — the gate must LINK the binary, not just type-check it. `cargo check`
+# stops before linking, so it silently passed a defect that only the link exposes: on Linux the app
+# linked two OpenSSL-ABI providers (reqwest's OpenSSL native-tls + wreq's BoringSSL) whose SSL_*
+# symbols collide. A build gate that never links cannot catch that class of defect — so this runs
+# `cargo build`. fail-fast:false keeps every OS column independent.
 name: multiplatform-check
 
 on:
@@ -48,15 +49,15 @@ jobs:
         with:
           workspaces: soksak/src-tauri
 
-      # Mirrors `make check` (cd src-tauri && cargo check); invoked directly
-      # because GNU make is not present on the Windows runner.
-      - name: cargo check
+      # cargo build (NOT check) — the binary must LINK on every OS. Invoked directly (not via make)
+      # because GNU make is absent on the Windows runner.
+      - name: cargo build
         id: check
         shell: bash
         working-directory: soksak/src-tauri
         run: |
           set -o pipefail
-          cargo check 2>&1 | tee cargo-check.log
+          cargo build 2>&1 | tee cargo-check.log
 
       - name: Write the result to the job summary
         if: always()
