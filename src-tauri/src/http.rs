@@ -5,12 +5,12 @@
 //
 // 시크릿은 Rust 경계에서만 치환한다(평문 JS·history·lastResponse 무노출 R2): secret_subst{placeholder→
 // secretKey} 를 ns 볼트에서 해소해 url/headers/body 의 placeholder 를 실값으로 바꾼 뒤 전송한다. 잠김/
-// 미존재면 전송 전에 Err(미해소 시크릿이 요청으로 안 나간다). reqwest blocking(자체 런타임) + native-tls
-// (reqwest 의 "native-tls" feature·기본 클라이언트 = OS 네이티브 TLS; rustls 는 코어에 없다).
+// 미존재면 전송 전에 Err(미해소 시크릿이 요청으로 안 나간다). 코어 HTTP 는 wreq(BoringSSL) 한 스택으로
+// 통일했다 — reqwest/OpenSSL 제거로 Linux 정적 링크 심볼 충돌 근절(mediaproxy.rs 머리말).
 //
-// 두 백엔드, 한 인터페이스: impersonate 토글이 전송기를 고른다.
-//   "off"(기본)  = 여기 reqwest native-tls 경로 — first-party 호출은 평문(위조 안 함)이 올바른 기본값.
-//   "chrome"     = mediaproxy.rs 의 이미 떠 있는 wreq/BoringSSL 싱글톤(JA3/JA4 브라우저 위장) 재사용.
+// 두 모드, 한 인터페이스: impersonate 토글이 전송기를 고른다(둘 다 mediaproxy 의 wreq 클라이언트).
+//   "off"(기본)  = 위장 없는 정직 wreq — first-party 호출은 위조 안 함이 올바른 기본값.
+//   "chrome"     = mediaproxy.rs 의 Chrome 위장 wreq 싱글톤(JA3/JA4 브라우저 위장) 재사용.
 // 어느 모드든 응답 shape({status,headers,body})·시크릿 치환·ns 격리·danger 게이트는 동일이다.
 // 단 Authorization 요청은 검증된 target에만 귀속되므로 native 경로에서 redirect를 전부 차단하고,
 // redirect 정책을 호출별로 고정할 수 없는 chrome 공유 client는 fail-closed 한다.
@@ -56,7 +56,7 @@ fn resolve_secret_subst(
     }
 }
 
-// 전송 백엔드 선택 — "off"(기본)=reqwest native-tls, "chrome"=mediaproxy wreq 임퍼소네이션 싱글톤.
+// 전송 백엔드 선택 — "off"(기본)=정직 wreq, "chrome"=mediaproxy wreq 임퍼소네이션 싱글톤.
 fn impersonate_chrome(impersonate: Option<&str>) -> bool {
     matches!(impersonate, Some("chrome"))
 }
@@ -86,7 +86,10 @@ fn send_http_impersonated(
     })
 }
 
-// 실제 HTTP 전송(reqwest blocking). 치환 완료된 순수 입력 → 응답. State 비의존(테스트 직접 호출).
+// 실제 HTTP 전송("off" 정직 백엔드). 치환 완료된 순수 입력 → 응답. State 비의존(테스트 직접 호출).
+// 전송기는 mediaproxy 의 정직 wreq 클라이언트(위장 없음) — 코어 HTTP 는 BoringSSL 스택 한 벌로 통일했다
+// (reqwest/OpenSSL 제거 → wreq 와의 SSL_* 심볼 충돌 근절). Authorization 이 실린 요청의 redirect-none 보안
+// 불변(자격증명이 검증된 대상 밖으로 새지 않음, HTTPS→HTTP 강등 포함)은 honest_request 가 그대로 시행한다.
 fn send_http(
     method: &str,
     url: &str,
@@ -95,43 +98,11 @@ fn send_http(
     body: Option<&str>,
     content_type: Option<&str>,
 ) -> Result<HttpResponse, String> {
-    let m = reqwest::Method::from_bytes(method.to_uppercase().as_bytes())
-        .map_err(|e| format!("HTTP method 불량: {e}"))?;
-    // 무한 대기 금지 — stall 한 원격이 호출자를 영원히 붙잡지 못한다(설치 클로저의 다중
-    // fetch 가 한 요청 stall 로 전체 행이 되는 실결함의 근치). 60s = 릴리스 자산 조회 상한.
-    let builder = reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(60));
-    // Authorization belongs to the validated target URL only. A remote 3xx response must not
-    // choose a second destination (including HTTPS→HTTP downgrade) after that validation.
-    let builder = if has_authorization_header(headers) {
-        builder.redirect(reqwest::redirect::Policy::none())
-    } else {
-        builder
-    };
-    let client = builder.build().map_err(|e| e.to_string())?;
-    let mut req = client.request(m, url);
-    if !query.is_empty() {
-        let q: Vec<(&String, &String)> = query.iter().collect();
-        req = req.query(&q);
-    }
-    for (k, v) in headers {
-        req = req.header(k, v);
-    }
-    if let Some(ct) = content_type {
-        req = req.header("content-type", ct);
-    }
-    if let Some(b) = body {
-        req = req.body(b.to_string());
-    }
-    let resp = req.send().map_err(|e| e.to_string())?;
-    let status = resp.status().as_u16();
-    let mut hmap = HashMap::new();
-    for (k, v) in resp.headers() {
-        hmap.insert(k.as_str().to_string(), v.to_str().unwrap_or("").to_string());
-    }
-    let body = resp.text().map_err(|e| e.to_string())?;
+    let (status, headers, body) =
+        crate::mediaproxy::honest_request(method, url, headers, query, body, content_type)?;
     Ok(HttpResponse {
         status,
-        headers: hmap,
+        headers,
         body,
     })
 }
@@ -165,7 +136,7 @@ pub fn net_http_request(
         .collect();
     let body = body.map(|b| substitute(&b, &subst));
     // 치환·ns·danger 게이트는 위에서 끝났다(두 모드 동일). 백엔드만 impersonate 로 분기 — "chrome"=위장
-    // 싱글톤 재사용, 그 외/absent="off"=reqwest native-tls. 보안 불변(impersonate 는 전송기일 뿐).
+    // 싱글톤 재사용, 그 외/absent="off"=정직 wreq. 보안 불변(impersonate 는 전송기일 뿐).
     if impersonate_chrome(impersonate.as_deref()) {
         // The shared impersonation client owns its redirect policy and cannot provide the strict
         // no-redirect invariant required by credential-bearing requests. Fail closed instead of
@@ -359,7 +330,7 @@ mod tests {
         assert!(resolve_secret_subst(&state, None, &Some(subst_map)).is_err());
     }
 
-    // (f) impersonate 백엔드 선택 — off=reqwest native-tls, chrome=wreq 위장. 두 전송기로 같은 JA3 에코
+    // (f) impersonate 백엔드 선택 — off=정직 wreq, chrome=wreq 위장. 두 전송기로 같은 JA3 에코
     //     (tls.peet.ws)를 쳐서 핑거프린트가 실제로 달라지는지 = net.http.request 인터페이스가 모드만으로
     //     백엔드를 바꾸는지 검증(네트워크 — 기본 제외: cargo test -- --ignored impersonate_off_vs_chrome).
     #[test]
@@ -374,7 +345,7 @@ mod tests {
         let peet = "https://tls.peet.ws/api/all";
         let h = HashMap::new();
         let q = HashMap::new();
-        // off: 기존 reqwest native-tls 경로.
+        // off: 기존 정직 wreq 경로.
         let off = send_http("GET", peet, &h, &q, None, None).unwrap();
         // chrome: mediaproxy wreq 싱글톤 재사용 경로.
         let chrome = send_http_impersonated("GET", peet, &h, &q, None, None).unwrap();

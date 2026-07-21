@@ -5,7 +5,7 @@
 // 전용이라 비어있던 바이너리/스트리밍/Range 자리를 메우는 범용 primitive다.
 //
 // 특정 사이트 지식 0(R3): url + referer/ua 만 받는다. 어떤 사이트를 프록시할지는 호출자(플러그인)가
-// 정한다. command registry 의 media.proxy.* 가 표면. 순수 std TcpListener + reqwest blocking 스트리밍
+// 정한다. command registry 의 media.proxy.* 가 표면. 순수 std TcpListener + wreq 스트리밍
 // (신규 의존성 0 — http.rs 와 같은 blocking 스택). 경로 토큰으로 로컬 타 프로세스 접근을 막는다(127.0.0.1
 // 바인드가 1차 방어, 토큰이 2차).
 
@@ -21,10 +21,6 @@ use wreq_util::Emulation;
 
 static PROXY_PORT: OnceLock<u16> = OnceLock::new();
 static PROXY_TOKEN: OnceLock<String> = OnceLock::new();
-
-// 실제 브라우저로 보이게 하는 기본 UA(범용 anti-block — 특정 사이트 비의존). 호출자가 ua 를 주면 그게 우선.
-const DEFAULT_UA: &str =
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 // 모든 응답 공통 CORS — hls.js xhr 가 cross-origin 프록시를 읽으려면 필수.
 const CORS: &str = "Access-Control-Allow-Origin: *\r\n\
@@ -151,44 +147,18 @@ fn handle_conn(stream: TcpStream, port: u16, token: &str) -> std::io::Result<()>
 
     match kind {
         "m3u8" => serve_m3u8(&mut writer, &url, referer, ua, port, token, head),
-        "stream" => serve_stream(&mut writer, &url, referer, ua, range.as_deref(), head),
+        "stream" => serve_stream(&mut writer, &url, referer, range.as_deref(), head),
         _ => write_simple(&mut writer, 404, "not found"),
     }
 }
 
-fn build_client() -> Result<reqwest::blocking::Client, String> {
-    // OS 네이티브 TLS — rustls 의 ClientHello 는 JA3 핑거프린트가 비-브라우저로 잡혀 hotlink/봇차단
-    // CDN 이 403 으로 막는다(라이브 검증). native-tls(macOS Secure Transport 등)는 브라우저에 가까워 통과.
-    reqwest::blocking::Client::builder()
-        .use_native_tls()
-        .connect_timeout(Duration::from_secs(15))
-        .build()
-        .map_err(|e| e.to_string())
-}
 
-// referer/origin/ua 주입 — webview 가 못 거는 헤더를 호출자 지정값으로 채운다(범용).
-fn apply_headers(
-    mut rb: reqwest::blocking::RequestBuilder,
-    referer: Option<&str>,
-    ua: Option<&str>,
-) -> reqwest::blocking::RequestBuilder {
-    rb = rb.header("user-agent", ua.unwrap_or(DEFAULT_UA));
-    if let Some(r) = referer {
-        rb = rb.header("referer", r);
-        if let Some(o) = origin_of(r) {
-            rb = rb.header("origin", o);
-        }
-    }
-    rb
-}
-
-// ── 임퍼소네이션 1차(wreq/BoringSSL) — fingerprint 봇차단 CDN(Cloudflare/Akamai)이 TLS(JA3)+HTTP/2 로 ──
-// 비-브라우저를 403. wreq 가 Chrome 핸드셰이크를 정밀 위조해 통과(라이브 증명: native-tls 403, wreq 200) —
-// 차단 CDN + 일반 CDN 모두 1요청에 통과한다. 그래서 wreq 를 1차로 둔다: 차단 사이트가 세그먼트마다 헛
-// native 403 왕복을 치지 않게(프록시를 쓰는 사이트가 곧 차단 사이트). native-tls 는 wreq 가 연결 자체를
-// 실패하는 드문 경우(BoringSSL 이 못 무는 TLS 설정)의 폴백 — wreq 가 403/404 같은 상태코드를 받으면 native
-// 는 더 막히므로 폴백 안 한다(연결 실패일 때만). wreq 는 모든 OS 동일 핑거프린트 + async 전용 → 공용 tokio
-// 런타임(OnceLock)으로 sync 프록시 스레드에서 block_on. UA·핑거프린트는 emulation 이 일관 주입(UA 안 덮음).
+// ── 임퍼소네이션 클라이언트(wreq/BoringSSL) — fingerprint 봇차단 CDN(Cloudflare/Akamai)이 TLS(JA3)+HTTP/2 ──
+// 로 비-브라우저를 403. wreq 가 Chrome 핸드셰이크를 정밀 위조해 통과(라이브 증명: 비-위장 403, wreq 200) —
+// 차단 CDN + 일반 CDN 모두 1요청에 통과하므로 미디어 프록시는 이 위장 클라이언트만 쓴다. wreq 가 연결 자체를
+// 못 한 드문 경우에 두 번째 TLS 스택(reqwest/OpenSSL)으로 폴백하지 않는다 — 그 이중 스택이 Linux 정적 링크를
+// 깨던 결함의 근치(SSL_* 심볼 충돌 제거). 연결 실패는 502 로 정직히 실패한다. wreq 는 모든 OS 동일 핑거프린트
+// (BoringSSL 벤더링) + async 전용 → 공용 tokio 런타임(OnceLock)으로 sync 프록시 스레드에서 block_on.
 static ASYNC_RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 static WREQ_CLIENT: OnceLock<wreq::Client> = OnceLock::new();
 
@@ -255,7 +225,7 @@ fn wreq_fetch(
 
 // net.http.request 의 impersonate:"chrome" 백엔드 — 위장 client 를 한 군데(여기)만 소유하고, http.rs 는
 // 이 helper 로 재사용한다(신규 wreq client 인스턴스 0, 이미 떠 있는 WREQ_CLIENT/ASYNC_RT 싱글톤 그대로).
-// http.rs 의 reqwest native-tls 경로와 응답 shape 동일: (status, 전체 헤더, 바디 문자열). 시크릿 치환은
+// http.rs 의 정직(off) 경로와 응답 shape 동일: (status, 전체 헤더, 바디 문자열). 시크릿 치환은
 // 호출 전 http.rs 가 이미 끝낸다 — 여기는 순수 전송기(임퍼소네이션 백엔드)일 뿐.
 pub(crate) fn impersonated_request(
     method: &str,
@@ -269,19 +239,7 @@ pub(crate) fn impersonated_request(
     let client = wreq_client().ok_or("wreq client")?;
     let m = wreq::Method::from_bytes(method.to_uppercase().as_bytes())
         .map_err(|e| format!("HTTP method 불량: {e}"))?;
-    // query 는 URL 에 직접 붙인다 — wreq 의 .query() 는 "query" feature 게이트라(현재 미활성) 새 feature
-    // 켜는 대신 이미 쓰는 url::form_urlencoded 로 인코딩(off 경로의 reqwest .query() 와 동등 결과).
-    let target = if query.is_empty() {
-        url.to_string()
-    } else {
-        let mut enc = url::form_urlencoded::Serializer::new(String::new());
-        for (k, v) in query {
-            enc.append_pair(k, v);
-        }
-        let qs = enc.finish();
-        let sep = if url.contains('?') { '&' } else { '?' };
-        format!("{url}{sep}{qs}")
-    };
+    let target = build_target(url, query);
     rt.block_on(async {
         let mut rb = client.request(m, target.as_str());
         for (k, v) in headers {
@@ -301,6 +259,87 @@ pub(crate) fn impersonated_request(
         }
         let text = resp.text().await.map_err(|e| e.to_string())?;
         Ok::<_, String>((status, hmap, text))
+    })
+}
+
+// query 를 URL 에 직접 붙인다 — wreq 의 .query() 는 "query" feature 게이트라(미활성) 새 feature 켜는 대신
+// 이미 쓰는 url::form_urlencoded 로 인코딩(정직/임퍼소네이션 두 경로 공용, 단일 진실).
+fn build_target(url: &str, query: &HashMap<String, String>) -> String {
+    if query.is_empty() {
+        return url.to_string();
+    }
+    let mut enc = url::form_urlencoded::Serializer::new(String::new());
+    for (k, v) in query {
+        enc.append_pair(k, v);
+    }
+    let qs = enc.finish();
+    let sep = if url.contains('?') { '&' } else { '?' };
+    format!("{url}{sep}{qs}")
+}
+
+// 정직("off") 전송 클라이언트 — emulation 없는 wreq(BoringSSL). first-party 호출은 브라우저 위장을 하지
+// 않는 게 올바른 기본값이다. cert 검증은 wreq 기본값(on). 코어는 이 BoringSSL 스택 한 벌만 쓴다 — reqwest
+// (OpenSSL)를 제거해 wreq 와의 SSL_* 심볼 충돌(Linux 정적 링크 불가)을 근절한다.
+static WREQ_HONEST_CLIENT: OnceLock<wreq::Client> = OnceLock::new();
+fn wreq_honest_client() -> Option<&'static wreq::Client> {
+    if WREQ_HONEST_CLIENT.get().is_none() {
+        // 무한 대기 금지 — stall 한 원격이 호출자를 영원히 붙잡지 못한다(설치 클로저 다중 fetch 의 근치).
+        if let Ok(c) = wreq::Client::builder().timeout(Duration::from_secs(60)).build() {
+            let _ = WREQ_HONEST_CLIENT.set(c);
+        }
+    }
+    WREQ_HONEST_CLIENT.get()
+}
+
+// net.http.request 의 "off"(정직) 백엔드 — impersonated_request 와 응답 shape 동일, 위장만 없다. Authorization
+// 이 실린 요청은 리다이렉트를 따르지 않는다(검증된 대상 URL 밖으로 자격증명이 새지 않게 — HTTPS→HTTP 강등 포함).
+pub(crate) fn honest_request(
+    method: &str,
+    url: &str,
+    headers: &HashMap<String, String>,
+    query: &HashMap<String, String>,
+    body: Option<&str>,
+    content_type: Option<&str>,
+) -> Result<(u16, HashMap<String, String>, String), String> {
+    let rt = wreq_rt().ok_or("wreq runtime")?;
+    let client = wreq_honest_client().ok_or("wreq client")?;
+    let m = wreq::Method::from_bytes(method.to_uppercase().as_bytes())
+        .map_err(|e| format!("HTTP method 불량: {e}"))?;
+    let target = build_target(url, query);
+    let no_redirect = headers.keys().any(|k| k.eq_ignore_ascii_case("authorization"));
+    rt.block_on(async {
+        let mut rb = client.request(m, target.as_str());
+        if no_redirect {
+            rb = rb.redirect(wreq::redirect::Policy::none());
+        }
+        for (k, v) in headers {
+            rb = rb.header(k.as_str(), v.as_str());
+        }
+        if let Some(ct) = content_type {
+            rb = rb.header("content-type", ct);
+        }
+        if let Some(b) = body {
+            rb = rb.body(b.to_string());
+        }
+        let resp = rb.send().await.map_err(|e| e.to_string())?;
+        let status = resp.status().as_u16();
+        let mut hmap = HashMap::new();
+        for (k, v) in resp.headers() {
+            hmap.insert(k.as_str().to_string(), v.to_str().unwrap_or("").to_string());
+        }
+        let text = resp.text().await.map_err(|e| e.to_string())?;
+        Ok::<_, String>((status, hmap, text))
+    })
+}
+
+// fetch reach 다운로드용 정직 GET(바디 바이트) — runtime_dep 이 sha256 핀 검증에 쓴다(무결성 우선).
+pub(crate) fn honest_get_bytes(url: &str) -> Result<Vec<u8>, String> {
+    let rt = wreq_rt().ok_or("wreq runtime")?;
+    let client = wreq_honest_client().ok_or("wreq client")?;
+    rt.block_on(async {
+        let resp = client.get(url).send().await.map_err(|e| e.to_string())?;
+        let body = resp.bytes().await.map_err(|e| e.to_string())?.to_vec();
+        Ok::<_, String>(body)
     })
 }
 
@@ -368,49 +407,17 @@ fn serve_stream(
     writer: &mut TcpStream,
     url: &str,
     referer: Option<&str>,
-    ua: Option<&str>,
     range: Option<&str>,
     head: bool,
 ) -> std::io::Result<()> {
-    // wreq(임퍼소네이션) 1차 — 차단 + 일반 CDN 모두 1요청 통과. 바디는 청크 스트리밍(버퍼링 0).
+    // wreq(임퍼소네이션 = Chrome JA3/UA) 로 청크 스트리밍(전체 버퍼링 0). 코어는 BoringSSL 스택 한 벌만 쓴다 —
+    // wreq 가 연결 자체를 못 한 드문 경우에 두 번째 TLS 스택(reqwest/OpenSSL)으로 폴백하지 않는다(502 로 정직히
+    // 실패). 이 이중 스택이 Linux 정적 링크를 깨던 결함의 근치(SSL_* 심볼 충돌 제거).
     match wreq_stream_to(writer, url, referer, range, head) {
-        Ok(()) => return Ok(()),
-        Err(WreqStreamErr::Io(e)) => return Err(e), // 이미 부분 전송 — 폴백 불가
-        Err(WreqStreamErr::SendFailed) => {}        // 연결 실패 → native-tls 폴백
+        Ok(()) => Ok(()),
+        Err(WreqStreamErr::Io(e)) => Err(e), // 이미 부분 전송 — 회복 불가
+        Err(WreqStreamErr::SendFailed) => write_simple(writer, 502, "upstream 연결 실패"),
     }
-    // native-tls 폴백(wreq BoringSSL 가 연결 못 한 드문 경우) — io::copy 스트리밍.
-    let client = match build_client() {
-        Ok(c) => c,
-        Err(e) => return write_simple(writer, 502, &e),
-    };
-    let mut rb = apply_headers(client.get(url), referer, ua);
-    if let Some(r) = range {
-        rb = rb.header("range", r);
-    }
-    let resp = match rb.send() {
-        Ok(r) => r,
-        Err(e) => return write_simple(writer, 502, &format!("upstream: {e}")),
-    };
-    let status = resp.status().as_u16();
-    let mut out = format!("HTTP/1.1 {status} {}\r\n", reason(status));
-    for h in [
-        "content-type",
-        "content-length",
-        "content-range",
-        "accept-ranges",
-    ] {
-        if let Some(v) = resp.headers().get(h).and_then(|v| v.to_str().ok()) {
-            out.push_str(&format!("{h}: {v}\r\n"));
-        }
-    }
-    out.push_str(CORS);
-    out.push_str("Connection: close\r\n\r\n");
-    writer.write_all(out.as_bytes())?;
-    if !head {
-        let mut resp = resp;
-        std::io::copy(&mut resp, writer)?; // 스트리밍(전체 버퍼링 0).
-    }
-    writer.flush()
 }
 
 // m3u8: 텍스트로 받아 세그먼트/키 URL 을 프록시 자기 자신으로 리라이트 후 반환.
@@ -423,25 +430,12 @@ fn serve_m3u8(
     token: &str,
     head: bool,
 ) -> std::io::Result<()> {
-    // wreq(임퍼소네이션) 1차로 본문 취득. 연결 실패(send 에러)면 native-tls 폴백. wreq 가 상태코드(403/404)를
-    // 받으면 native 는 더 막히므로 폴백 안 하고 그대로 에러.
+    // wreq(임퍼소네이션 = Chrome) 로 본문 취득. 코어 단일 BoringSSL 스택 — wreq 가 연결 자체를 못 한 드문
+    // 경우에 second-TLS-stack(reqwest/OpenSSL) 폴백을 두지 않는다(502). 상태코드(403/404)는 그대로 반환.
     let body = match wreq_fetch(url, referer, None) {
         Ok((st, _, b)) if (200..300).contains(&st) => String::from_utf8_lossy(&b).into_owned(),
         Ok((st, _, _)) => return write_simple(writer, st, "upstream m3u8"),
-        Err(_) => {
-            let client = match build_client() {
-                Ok(c) => c,
-                Err(e) => return write_simple(writer, 502, &e),
-            };
-            let resp = match apply_headers(client.get(url), referer, ua).send() {
-                Ok(r) => r,
-                Err(e) => return write_simple(writer, 502, &format!("upstream: {e}")),
-            };
-            if !resp.status().is_success() {
-                return write_simple(writer, resp.status().as_u16(), "upstream m3u8 error");
-            }
-            resp.text().unwrap_or_default()
-        }
+        Err(_) => return write_simple(writer, 502, "upstream m3u8 연결 실패"),
     };
     let proxy_base = format!("http://127.0.0.1:{port}/{token}");
     let rewritten = rewrite_m3u8(&body, url, &proxy_base, referer, ua);
@@ -655,19 +649,16 @@ mod tests {
                 .unwrap_or_default()
         }
         let peet = "https://tls.peet.ws/api/all";
-        let native = build_client()
-            .unwrap()
-            .get(peet)
-            .send()
-            .unwrap()
-            .text()
-            .unwrap();
+        // off = 정직 wreq(비-emulation BoringSSL), imp = Chrome 위장 wreq. 같은 BoringSSL 이라도 emulation 이
+        // ClientHello 를 Chrome 으로 정밀 위조하므로 JA3 가 달라진다(위장이 실제로 핑거프린트를 바꾸는지 검증).
+        let (_, _, nb) = proxy_req("GET", peet, &[]);
+        let honest = String::from_utf8_lossy(&nb).into_owned();
         let (_st, _h, body) = wreq_fetch(peet, None, None).unwrap();
         let imp = String::from_utf8_lossy(&body).into_owned();
 
-        let n = ja3(&native);
+        let n = ja3(&honest);
         let w = ja3(&imp);
-        assert!(!n.is_empty(), "native-tls JA3 비어있음");
+        assert!(!n.is_empty(), "off(정직 wreq) JA3 비어있음");
         assert!(!w.is_empty(), "wreq JA3 비어있음");
         assert_ne!(n, w, "임퍼소네이션이 JA3 를 안 바꿈(native={n}, wreq={w})");
     }
@@ -726,7 +717,7 @@ mod tests {
         assert!(out.contains(&format!("&ua={}", enc("UA/1"))));
     }
 
-    // ── 통합: 로컬 upstream → 프록시 → 클라이언트(reqwest). Range 중계 + CORS + 토큰 ──
+    // ── 통합: 로컬 upstream → 프록시 → 클라이언트(wreq honest). Range 중계 + CORS + 토큰 ──
 
     // Range 를 이해하는 최소 upstream(루프, 연결마다 1응답). 바디 "0123456789A"(11바이트).
     fn spawn_upstream() -> u16 {
@@ -774,6 +765,29 @@ mod tests {
         }
     }
 
+    // 테스트 HTTP 클라이언트 — 로컬 프록시(plain HTTP)에 요청. 코어와 같은 wreq 정직 클라이언트를 쓴다
+    // (reqwest 없음 — 코어 HTTP 는 wreq 한 스택으로 통일). (status, 헤더맵, 바디 바이트)를 돌려준다.
+    fn proxy_req(method: &str, url: &str, headers: &[(&str, &str)]) -> (u16, HashMap<String, String>, Vec<u8>) {
+        let rt = wreq_rt().unwrap();
+        let client = wreq_honest_client().unwrap();
+        let m = wreq::Method::from_bytes(method.as_bytes()).unwrap();
+        rt.block_on(async {
+            let mut rb = client.request(m, url);
+            for (k, v) in headers {
+                rb = rb.header(*k, *v);
+            }
+            let resp = rb.send().await.unwrap();
+            let status = resp.status().as_u16();
+            let hmap: HashMap<String, String> = resp
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect();
+            let body = resp.bytes().await.unwrap().to_vec();
+            (status, hmap, body)
+        })
+    }
+
     #[test]
     fn stream_relays_range_206_and_cors() {
         let up = spawn_upstream();
@@ -785,24 +799,11 @@ mod tests {
             "http://127.0.0.1:{px}/testtoken/stream?url={}",
             enc(&upstream_url)
         );
-        let resp = reqwest::blocking::Client::new()
-            .get(proxy_url.as_str())
-            .header("range", "bytes=0-3")
-            .send()
-            .unwrap();
-        assert_eq!(resp.status().as_u16(), 206, "206 중계");
-        assert_eq!(
-            resp.headers().get("access-control-allow-origin").unwrap(),
-            "*",
-            "CORS 헤더"
-        );
-        assert_eq!(
-            resp.headers().get("content-range").unwrap(),
-            "bytes 0-3/11",
-            "Content-Range 중계"
-        );
-        let body = resp.text().unwrap();
-        assert_eq!(body, "0123", "부분 바디 스트리밍");
+        let (status, headers, body) = proxy_req("GET", &proxy_url, &[("range", "bytes=0-3")]);
+        assert_eq!(status, 206, "206 중계");
+        assert_eq!(headers.get("access-control-allow-origin").unwrap(), "*", "CORS 헤더");
+        assert_eq!(headers.get("content-range").unwrap(), "bytes 0-3/11", "Content-Range 중계");
+        assert_eq!(String::from_utf8_lossy(&body), "0123", "부분 바디 스트리밍");
     }
 
     #[test]
@@ -816,9 +817,9 @@ mod tests {
             "http://127.0.0.1:{px}/testtoken/stream?url={}",
             enc(&upstream_url)
         );
-        let resp = reqwest::blocking::get(proxy_url.as_str()).unwrap();
-        assert_eq!(resp.status().as_u16(), 200);
-        assert_eq!(resp.text().unwrap(), "0123456789A");
+        let (status, _, body) = proxy_req("GET", &proxy_url, &[]);
+        assert_eq!(status, 200);
+        assert_eq!(String::from_utf8_lossy(&body), "0123456789A");
     }
 
     #[test]
@@ -826,8 +827,8 @@ mod tests {
         let px = spawn_proxy("testtoken");
         wait_ready(px);
         let proxy_url = format!("http://127.0.0.1:{px}/WRONG/stream?url=http://x/y.ts");
-        let resp = reqwest::blocking::get(proxy_url.as_str()).unwrap();
-        assert_eq!(resp.status().as_u16(), 404);
+        let (status, _, _) = proxy_req("GET", &proxy_url, &[]);
+        assert_eq!(status, 404);
     }
 
     #[test]
@@ -835,15 +836,9 @@ mod tests {
         let px = spawn_proxy("testtoken");
         wait_ready(px);
         let proxy_url = format!("http://127.0.0.1:{px}/testtoken/stream?url=http://x/y.ts");
-        let resp = reqwest::blocking::Client::new()
-            .request(reqwest::Method::OPTIONS, proxy_url.as_str())
-            .send()
-            .unwrap();
-        assert_eq!(resp.status().as_u16(), 204);
-        assert_eq!(
-            resp.headers().get("access-control-allow-methods").unwrap(),
-            "GET, HEAD, OPTIONS"
-        );
+        let (status, headers, _) = proxy_req("OPTIONS", &proxy_url, &[]);
+        assert_eq!(status, 204);
+        assert_eq!(headers.get("access-control-allow-methods").unwrap(), "GET, HEAD, OPTIONS");
     }
 
     #[test]
@@ -851,8 +846,8 @@ mod tests {
         let px = spawn_proxy("testtoken");
         wait_ready(px);
         let proxy_url = format!("http://127.0.0.1:{px}/testtoken/stream");
-        let resp = reqwest::blocking::get(proxy_url.as_str()).unwrap();
-        assert_eq!(resp.status().as_u16(), 400);
+        let (status, _, _) = proxy_req("GET", &proxy_url, &[]);
+        assert_eq!(status, 400);
     }
 
     // 라이브 종단 검증 — 외부 공개 HLS(Apple, 비성인/CORS 친화). 기본 suite 비포함(외부망 의존):
@@ -865,10 +860,8 @@ mod tests {
         wait_ready(px);
         let master = "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8";
         let proxied_master = format!("http://127.0.0.1:{px}/livetoken/m3u8?url={}", enc(master));
-        let master_body = reqwest::blocking::get(proxied_master.as_str())
-            .unwrap()
-            .text()
-            .unwrap();
+        let (_, _, mb) = proxy_req("GET", &proxied_master, &[]);
+        let master_body = String::from_utf8_lossy(&mb).into_owned();
         assert!(
             master_body.contains("/livetoken/m3u8?url="),
             "변형 플레이리스트가 프록시로 리라이트됨"
@@ -880,10 +873,8 @@ mod tests {
             .find(|l| l.starts_with("http") && l.contains("/livetoken/m3u8?url="))
             .expect("변형 .m3u8")
             .to_string();
-        let media_body = reqwest::blocking::get(variant.as_str())
-            .unwrap()
-            .text()
-            .unwrap();
+        let (_, _, mb2) = proxy_req("GET", &variant, &[]);
+        let media_body = String::from_utf8_lossy(&mb2).into_owned();
         assert!(
             media_body.contains("/livetoken/stream?url="),
             "세그먼트가 프록시로 리라이트됨"
@@ -894,13 +885,8 @@ mod tests {
             .find(|l| l.starts_with("http") && l.contains("/livetoken/stream?url="))
             .expect("세그먼트")
             .to_string();
-        let resp = reqwest::blocking::Client::new()
-            .get(seg.as_str())
-            .header("range", "bytes=0-1023")
-            .send()
-            .unwrap();
-        let s = resp.status().as_u16();
+        let (s, _, body) = proxy_req("GET", &seg, &[("range", "bytes=0-1023")]);
         assert!(s == 200 || s == 206, "세그먼트 스트리밍 status={s}");
-        assert!(!resp.bytes().unwrap().is_empty(), "세그먼트 바이트 수신");
+        assert!(!body.is_empty(), "세그먼트 바이트 수신");
     }
 }
