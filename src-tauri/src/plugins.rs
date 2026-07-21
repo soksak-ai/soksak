@@ -849,7 +849,7 @@ pub fn sidecar_dev_new(name: String, interface: Option<String>) -> Result<Plugin
 // Mirrors the sidecar templates: the emission is a set of byte-verbatim files with __ID__/__NODE__/
 // __PIN__ placeholders. A plugin is platform-agnostic (one "any" artifact) so there is no build
 // matrix or targets.json; the shipped entry is the tracked hand-written main.js (canonical single-
-// source plugin pattern: soksak-plugin-reminder-demo). The release.yml vendors ZERO release scripts —
+// source plugin pattern). The release.yml vendors ZERO release scripts —
 // it checks out soksak-spec at the ONE shared pin (SIDECAR_SPEC_PIN) and runs the single-source
 // plugin release-template (build-release + publish), discovering the unit by its release-files.json
 // marker (no --unit-root, no cwd guessing).
@@ -962,13 +962,13 @@ export default {
 const PLUGIN_RELEASE_FILES_JSON: &str = r#"["plugin.json", "main.js"]
 "#;
 
-// declared ≡ wired, both directions — mirrors soksak-plugin-activity's nodes conformance test, but the
+// declared ≡ wired, both directions — mirrors the installed-plugin nodes conformance test, but the
 // wiring source is the tracked entry (main.js) rather than a built bundle, since this plugin ships a
 // hand-written main.js. Pure (reads files + string match); runs on vitest, no build step.
 const PLUGIN_CONFORMANCE_TEST_TS: &str = r#"// C2 transparency — DOM axis. The view's operable nodes declared in plugin.json contributes.nodes
 // must equal the data-node ids actually wired in the shipped entry (main.js), both directions.
 // Neither side may lead: an undeclared data-node leaks a hidden control; a declared node with no
-// wiring is a phantom. Precedent: soksak-plugin-activity.
+// wiring is a phantom.
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
