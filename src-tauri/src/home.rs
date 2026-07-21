@@ -6,12 +6,10 @@
 //   com.soksak.debug → ~/.soksak-debug
 // 파생 규칙 = identifier 마지막 세그먼트("app" 은 무접미, 그 외 "-<세그먼트>") — 새 identity 는
 // 자동으로 자기 홈을 갖는다(하드코딩 목록 없음).
-// SOKSAK_HOME 오버라이드(debug 빌드 전용): 이 env 가 있으면 identity 파생 대신 그 경로를 홈으로 쓴다. e2e 는
-// 실제 앱 바이너리를 통째 실행하니 유닛테스트처럼 함수 인자로 임시 경로를 못 준다 — env 만이 실행 중인
-// 바이너리에 "이 throwaway 폴더를 홈으로 써라"고 전할 수 있고, 그래야 테스트 데이터가 사용자 실홈과 안 섞인다.
-// #[cfg(debug_assertions)] 라 release 엔 이 분기가 컴파일되지 않는다 — 홈 전체(플러그인 로드 경로 포함)를 옮기는
-// env 는 새 프로덕션 표면이므로, SOKSAK_VAULT_KEY 를 프로덕션에서 없앤 것과 같은 취지로 debug 로 가둔다.
-// 격리 앱을 CLI 로 겨눌 땐 SOKSAK_SOCKET(명시 소켓 경로)를 쓴다.
+// identity 홈은 identifier 에서만 파생되는 고정값이다 — runtime env 로 override 하지 않는다(distribution
+// 불변식: 다른 identity 홈을 runtime 에 지목하는 표면을 만들지 않는다, debug/test 이름도 예외 없음). 블랙박스
+// e2e 는 홈을 옮기는 대신 실 identity 홈 안에서 DB·볼트만 격리한다(SOKSAK_DATA_DIR·SOKSAK_VAULT_PATH — 실홈의
+// 설치 플러그인·사이드카는 그대로 쓰고 disposable 데이터만 분리). 격리 앱을 CLI 로 겨눌 땐 SOKSAK_SOCKET 을 쓴다.
 // 데이터·플러그인·사이드카·테마·프로젝트·
 // 소켓·시크릿·백업 전부가 이 한 값에서 파생된다(단일 진실).
 // sok CLI(cli/src/main.rs)는 독립 busybox 바이너리라 같은 계약을 자체 구현한다 — 계약 정본은
@@ -83,23 +81,14 @@ fn home_base(is_windows: bool, home: Option<&str>, userprofile: Option<&str>) ->
     PathBuf::from(base.unwrap_or(""))
 }
 
-// 순수 — env 값을 인자로 받아 홈을 결정(테스트 격리, 병렬 안전). SOKSAK_HOME 이 있으면 그 경로가 홈 전체를
-// 지정한다 — 블랙박스 e2e/도구가 데이터·볼트·소켓을 disposable 홈으로 격리하는 오픈-테스트 메커니즘
-// (SOKSAK_VAULT_PATH 와 동형, 모든 빌드에서 유효 — docs/ARCHITECTURE.md A17 canonical). 홈을 옮길 뿐
-// 데이터를 유출하지 않고, release 는 dev/local 플러그인 로드를 거부하므로 악성 플러그인 주입 경로가 아니다.
+// 순수 — env 값을 인자로 받아 홈을 결정(테스트 격리, 병렬 안전). identity 홈은 identifier 에서만 파생되며
+// runtime override 가 없다 — home_base(HOME/USERPROFILE 폴백)에 identity 접미를 붙일 뿐이다.
 fn resolve_from(
-    soksak_home: Option<&str>,
     identifier: Option<&str>,
     is_windows: bool,
     home: Option<&str>,
     userprofile: Option<&str>,
 ) -> PathBuf {
-    #[cfg(debug_assertions)]
-    if let Some(h) = soksak_home.filter(|s| !s.is_empty()) {
-        return PathBuf::from(h);
-    }
-    #[cfg(not(debug_assertions))]
-    let _ = soksak_home;
     let base = home_base(is_windows, home, userprofile);
     let suffix = identifier.map(suffix_for_identifier).unwrap_or_default();
     base.join(format!(".soksak{suffix}"))
@@ -107,7 +96,6 @@ fn resolve_from(
 
 fn resolve(identifier: Option<&str>) -> PathBuf {
     resolve_from(
-        std::env::var("SOKSAK_HOME").ok().as_deref(),
         identifier,
         cfg!(windows),
         std::env::var("HOME").ok().as_deref(),
@@ -195,27 +183,26 @@ mod tests {
         assert_eq!(cli_for_core_build("debug"), "sok-debug");
     }
 
-    // SOKSAK_HOME(debug 전용)이 홈 전체를 지정. 빈 값·부재는 identity 파생 폴백. release 엔 이 분기가 없어
-    // (cfg debug_assertions) 이 계약도 debug 에서만 검증한다(새 프로덕션 홈-override 표면 부재의 대칭).
-    #[cfg(debug_assertions)]
+    // identity 홈은 identifier 에서만 파생되고 runtime override 표면이 없다(distribution 불변식). 홈 relocate
+    // 없이도 블랙박스 e2e 는 실홈 안에서 DB·볼트만 격리한다(SOKSAK_DATA_DIR·SOKSAK_VAULT_PATH).
     #[test]
-    fn soksak_home_env_overrides_home_in_debug() {
+    fn home_derives_from_identifier_only() {
         use super::resolve_from;
         use std::path::PathBuf;
         assert_eq!(
-            resolve_from(Some("/tmp/e2e-home"), Some("com.soksak.debug"), false, Some("/home/max"), None),
-            PathBuf::from("/tmp/e2e-home"),
-            "SOKSAK_HOME 이 홈을 그대로 지정(접미 없음)"
-        );
-        assert_eq!(
-            resolve_from(Some(""), Some("com.soksak.debug"), false, Some("/home/max"), None),
+            resolve_from(Some("com.soksak.debug"), false, Some("/home/max"), None),
             PathBuf::from("/home/max/.soksak-debug"),
-            "빈 값은 무시 → identity 파생"
+            "debug identity → -debug 접미"
         );
         assert_eq!(
-            resolve_from(None, Some("com.soksak.app"), false, Some("/home/max"), None),
+            resolve_from(Some("com.soksak.app"), false, Some("/home/max"), None),
             PathBuf::from("/home/max/.soksak"),
-            "부재 → identity 파생(app 무접미)"
+            "app → 무접미"
+        );
+        assert_eq!(
+            resolve_from(Some("com.soksak.beta"), false, Some("/home/max"), None),
+            PathBuf::from("/home/max/.soksak-beta"),
+            "새 identity 자동 수용"
         );
     }
 }
