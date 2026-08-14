@@ -40,8 +40,17 @@ func newTerminalService(app *application.App) *TerminalService {
 }
 
 func closeTerminalSession(session *terminalSession) {
-	if session != nil && session.pty != nil {
+	if session == nil {
+		return
+	}
+	if session.cmd != nil && session.cmd.Process != nil {
+		terminateTerminalProcessGroup(session.cmd.Process.Pid)
+	}
+	if session.pty != nil {
 		_ = session.pty.Close()
+	}
+	if session.cmd != nil && session.cmd.Process != nil {
+		_ = session.cmd.Wait()
 	}
 }
 
@@ -111,7 +120,7 @@ func (service *TerminalService) read(handle TerminalHandle, file *os.File) {
 					ID: handle.ID, Generation: handle.Generation, Data: "\r\n[terminal closed]\r\n",
 				})
 			}
-			service.release(handle.ID, handle.Generation)
+			closeTerminalSession(service.release(handle.ID, handle.Generation))
 			return
 		}
 	}

@@ -18,6 +18,8 @@ Wails alpha CLI.
   selectable and copyable.
 - PTY sessions are owned by `(id, generation)`. Replacement is atomic and a
   stale close/read completion cannot remove the new process.
+- Closing or replacing a PTY kills its whole session process group and waits
+  for the leader. A terminal leaf cannot leave shell or child-process orphans.
 - xterm is measured only after its connected host receives layout. Disposal
   cancels queued measurement.
 - Browser leaves own native `WKWebView` child surfaces on macOS. DOM reports the
@@ -55,7 +57,8 @@ RED tests live beside their owners:
   ownership without a global text-selection ban.
 - `frontend/src/nativeBrowserFrame.test.ts`: ordered layout frame publication.
 - `frontend/src/terminalMount.test.ts`: post-layout xterm sizing and disposal.
-- `terminalservice_test.go`: generation-safe PTY ownership.
+- `terminalservice_test.go`: generation-safe PTY ownership plus synchronous
+  process-group termination and reaping on close.
 - `nativebrowser/service_test.go`: native browser frame and generation ownership.
 
 Visual evidence is stored outside the application repository in

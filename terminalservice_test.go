@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"syscall"
 	"testing"
 
 	"github.com/creack/pty"
@@ -60,7 +61,11 @@ func TestCloseTerminalSessionReapsItsProcess(t *testing.T) {
 	})
 
 	closeTerminalSession(&terminalSession{pty: file, cmd: cmd})
-	if cmd.ProcessState == nil || !cmd.ProcessState.Exited() {
+	if cmd.ProcessState == nil {
 		t.Fatalf("close must synchronously reap the PTY process: %+v", cmd.ProcessState)
+	}
+	status, ok := cmd.ProcessState.Sys().(syscall.WaitStatus)
+	if !ok || (!status.Exited() && !status.Signaled()) {
+		t.Fatalf("reaped PTY process must be terminal: %+v", cmd.ProcessState)
 	}
 }
