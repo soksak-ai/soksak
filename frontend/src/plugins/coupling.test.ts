@@ -5,9 +5,10 @@ import { describe, expect, it } from "vitest";
 
 const SRC = dirname(dirname(fileURLToPath(import.meta.url)));
 
-// Selecting which plugins exist is one decision and it lives in one file.
-// This gate names what it forbids, so it exempts itself.
-const EXEMPT = [join("boot", "plugins.ts"), join("plugins", "coupling.test.ts")];
+// Which plugins exist is one decision, and it lives in the composition root.
+// That directory is the whole cost of adding a plugin; everything above it
+// routes by opaque id. This gate names what it forbids, so it exempts itself.
+const EXEMPT = ["boot", join("plugins", "coupling.test.ts")];
 
 const PLUGIN_ID = /soksak-plugin-/;
 

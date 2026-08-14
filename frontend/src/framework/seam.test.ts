@@ -7,9 +7,11 @@ import { describe, expect, it } from "vitest";
 // violations and passes while enforcing nothing, so an empty scan fails loudly.
 const SRC = dirname(dirname(fileURLToPath(import.meta.url)));
 
-// The one leaf allowed to know the vendor, plus this gate, which cannot avoid
-// naming what it forbids. Nothing else joins this list without a stated reason.
-const EXEMPT = [join("framework", "wails"), join("framework", "seam.test.ts")];
+// Three exemptions, each for a different reason, and none of them grows without
+// one: the adapter leaf translates the vendor; the composition root chooses
+// which framework runs and is the file you rewrite to add another; this gate
+// cannot avoid naming what it forbids.
+const EXEMPT = [join("framework", "wails"), "boot", join("framework", "seam.test.ts")];
 
 const VENDOR = /wails/i;
 

@@ -1,10 +1,16 @@
-export type Program = "terminal" | "browser";
 export type Axis = "row" | "column";
 
+/**
+ * A leaf holds a program id and nothing more.
+ *
+ * The id is opaque here on purpose. The moment this file enumerates the
+ * programs that exist, adding one costs an edit to the layout — and the tree
+ * has no business knowing what fills its panes.
+ */
 export type LeafNode = {
   kind: "leaf";
   id: string;
-  program: Program;
+  programId: string;
 };
 
 export type SplitNode = {
@@ -18,15 +24,9 @@ export type SplitNode = {
 
 export type WorkspaceNode = LeafNode | SplitNode;
 
-export function createWorkspace(): WorkspaceNode {
-  return {
-    kind: "split",
-    id: "split-1",
-    axis: "row",
-    ratio: 0.5,
-    first: { kind: "leaf", id: "leaf-1", program: "terminal" },
-    second: { kind: "leaf", id: "leaf-2", program: "browser" },
-  };
+/** One pane running the given program. What runs there is the caller's choice. */
+export function createWorkspace(programId: string): WorkspaceNode {
+  return { kind: "leaf", id: "leaf-1", programId };
 }
 
 export function leaves(node: WorkspaceNode): LeafNode[] {
@@ -46,7 +46,7 @@ export function splitLeaf(
   root: WorkspaceNode,
   targetId: string,
   axis: Axis,
-  program: Program,
+  programId: string,
 ): WorkspaceNode {
   const targetExists = leaves(root).some((leaf) => leaf.id === targetId);
   if (!targetExists) throw new Error(`layout target does not exist: ${targetId}`);
@@ -63,7 +63,7 @@ export function splitLeaf(
         axis,
         ratio: 0.5,
         first: node,
-        second: { kind: "leaf", id: nextLeafId, program },
+        second: { kind: "leaf", id: nextLeafId, programId },
       };
     }
     return { ...node, first: replace(node.first), second: replace(node.second) };

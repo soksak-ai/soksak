@@ -1,9 +1,7 @@
-import { FormEvent, PointerEvent as ReactPointerEvent, useEffect, useRef, useState } from "react";
-import { mountTerminal } from "@soksak/soksak-plugin-terminal-xterm";
-import { nativeBrowserAttributes, normalizeBrowserURL } from "@soksak/soksak-plugin-browser-native";
-import type { Axis, Program, WorkspaceNode } from "./layout";
-import type { LeafNode } from "./layout";
-import { terminalBinding, terminalEvents } from "./pluginAdapters";
+import { Fragment, PointerEvent as ReactPointerEvent, useEffect, useRef } from "react";
+
+import type { Axis, LeafNode, WorkspaceNode } from "./layout";
+import { programs, views } from "./plugins";
 import { claimDividerPointer, ratioFromPointer } from "./splitDrag";
 
 type WorkspaceTreeProps = {
@@ -11,19 +9,32 @@ type WorkspaceTreeProps = {
   canClose: boolean;
   owners: ReadonlyMap<string, HTMLElement>;
   onClose: (id: string) => void;
-  onSplit: (id: string, axis: Axis, program: Program) => void;
+  onSplit: (id: string, axis: Axis, programId: string) => void;
   onResize: (id: string, ratio: number) => void;
 };
 
 function PanelActions({ id, canClose, onClose, onSplit }: Pick<WorkspaceTreeProps, "canClose" | "onClose" | "onSplit"> & { id: string }) {
+  // The add menu is a projection of the program registry. A hardcoded entry
+  // here would be the core deciding which plugins deserve to appear.
   return (
     <div className="panel-actions">
-      <button onClick={() => onSplit(id, "row", "terminal")} title="split right with terminal">T→</button>
-      <button onClick={() => onSplit(id, "column", "terminal")} title="split below with terminal">T↓</button>
-      <button onClick={() => onSplit(id, "row", "browser")} title="split right with browser">B→</button>
-      <button onClick={() => onSplit(id, "column", "browser")} title="split below with browser">B↓</button>
+      {programs.list().map((program) => (
+        <Fragment key={program.id}>
+          <button
+            data-node={`panel/${id}/split-right/${program.id}`}
+            onClick={() => onSplit(id, "row", program.id)}
+            title={`split right with ${program.title}`}
+          >{program.title} →</button>
+          <button
+            data-node={`panel/${id}/split-below/${program.id}`}
+            onClick={() => onSplit(id, "column", program.id)}
+            title={`split below with ${program.title}`}
+          >{program.title} ↓</button>
+        </Fragment>
+      ))}
       <button
         className="close-panel"
+        data-node={`panel/${id}/close`}
         disabled={!canClose}
         onClick={() => onClose(id)}
         title={canClose ? "close panel" : "the last panel cannot be closed"}
@@ -33,40 +44,29 @@ function PanelActions({ id, canClose, onClose, onSplit }: Pick<WorkspaceTreeProp
   );
 }
 
-function TerminalPanel({ id }: { id: string }) {
+/**
+ * The pane body: an empty container the core hands to whoever owns this program.
+ *
+ * A program with no registered view leaves the container empty and says so on
+ * the element. Throwing here would take the whole tree down instead of one pane,
+ * and a pane whose plugin is disabled is a legitimate state.
+ */
+function PanelBody({ leaf }: { leaf: LeafNode }) {
   const host = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const element = host.current;
     if (!element) return;
 
-    return mountTerminal(element, id, terminalBinding, terminalEvents);
-  }, [id]);
+    const program = programs.resolve(leaf.programId);
+    const provider = program ? views.resolve(program.viewId) : null;
+    element.dataset.viewState = provider ? "live" : "unavailable";
+    if (!provider) return;
 
-  return <div ref={host} className="terminal-host" data-terminal-id={id} />;
-}
+    return provider(element, { leafId: leaf.id });
+  }, [leaf.id, leaf.programId]);
 
-function BrowserPanel({ id }: { id: string }) {
-  const [draft, setDraft] = useState("https://example.com");
-  const [url, setURL] = useState("https://example.com");
-
-  const navigate = (event: FormEvent) => {
-    event.preventDefault();
-    const target = normalizeBrowserURL(draft);
-    setDraft(target);
-    setURL(target);
-  };
-
-  return (
-    <div className="browser-panel">
-      <form className="browser-bar" onSubmit={navigate}>
-        <input aria-label="browser address" value={draft} onChange={(event) => setDraft(event.target.value)} />
-        <button type="submit">Go</button>
-      </form>
-      <div className="native-browser-host" {...nativeBrowserAttributes({ id, generation: 1, url, layer: 10 })} />
-      <div className="browser-classification">soksak-plugin-browser-native · declarative surface</div>
-    </div>
-  );
+  return <div ref={host} className="panel-body" data-node={`panel/${leaf.id}/body`} />;
 }
 
 function SplitBranch({ node, canClose, owners, onClose, onSplit, onResize }: WorkspaceTreeProps & { node: Extract<WorkspaceNode, { kind: "split" }> }) {
@@ -138,17 +138,15 @@ export function WorkspacePanel({ leaf, canClose, onClose, onSplit }: {
   leaf: LeafNode;
   canClose: boolean;
   onClose: (id: string) => void;
-  onSplit: (id: string, axis: Axis, program: Program) => void;
+  onSplit: (id: string, axis: Axis, programId: string) => void;
 }) {
   return (
-    <article className="panel" data-leaf-id={leaf.id}>
+    <article className="panel" data-leaf-id={leaf.id} data-node={`panel/${leaf.id}`}>
       <header className="panel-header">
-        <span>{leaf.program} · {leaf.id}</span>
+        <span>{programs.resolve(leaf.programId)?.title ?? leaf.programId} · {leaf.id}</span>
         <PanelActions id={leaf.id} canClose={canClose} onClose={onClose} onSplit={onSplit} />
       </header>
-      <div className="panel-body">
-        {leaf.program === "terminal" ? <TerminalPanel id={leaf.id} /> : <BrowserPanel id={leaf.id} />}
-      </div>
+      <PanelBody leaf={leaf} />
     </article>
   );
 }

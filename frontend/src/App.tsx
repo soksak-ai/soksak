@@ -1,14 +1,25 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { nativeSurfaceDOMRuntime, startNativeSurfaceObserver } from "@soksak/wails-service-native-compositor";
 
-import { closeLeaf, createWorkspace, leaves, resizeSplit, splitLeaf, type Axis, type Program, type WorkspaceNode } from "./layout";
+import { closeLeaf, createWorkspace, leaves, resizeSplit, splitLeaf, type Axis, type WorkspaceNode } from "./layout";
 import { createLeafOwnerRegistry, publishLeafLayoutCommit } from "./leafOwners";
+import { programs } from "./plugins";
 import { WorkspacePanel, WorkspaceTree } from "./workspace";
-import { commitNativeSurfaceSnapshot } from "./pluginAdapters";
+
+/**
+ * The first pane runs whichever program registered first.
+ *
+ * The core has no opinion about which that is. Naming one here would make that
+ * plugin a premise of starting up.
+ */
+function firstProgramId(): string {
+  const first = programs.list()[0];
+  if (!first) throw new Error("no program is registered");
+  return first.id;
+}
 
 export default function App() {
-  const [workspace, setWorkspace] = useState<WorkspaceNode>(() => createWorkspace());
+  const [workspace, setWorkspace] = useState<WorkspaceNode>(() => createWorkspace(firstProgramId()));
   const ownerRegistry = useRef<ReturnType<typeof createLeafOwnerRegistry<HTMLElement>> | null>(null);
   if (!ownerRegistry.current) {
     ownerRegistry.current = createLeafOwnerRegistry((id) => {
@@ -21,11 +32,6 @@ export default function App() {
   const currentLeaves = leaves(workspace);
   const owners = ownerRegistry.current.reconcile(currentLeaves.map((leaf) => leaf.id));
 
-  useEffect(() => {
-    const controller = startNativeSurfaceObserver(nativeSurfaceDOMRuntime(document), commitNativeSurfaceSnapshot);
-    return () => controller.stop();
-  }, []);
-
   useLayoutEffect(() => {
     document.documentElement.dataset.bootStatus = "ready";
     delete document.documentElement.dataset.bootError;
@@ -37,8 +43,8 @@ export default function App() {
     publishLeafLayoutCommit(owners.values());
   }, [workspace]);
 
-  const split = (id: string, axis: Axis, program: Program) => {
-    setWorkspace((current) => splitLeaf(current, id, axis, program));
+  const split = (id: string, axis: Axis, programId: string) => {
+    setWorkspace((current) => splitLeaf(current, id, axis, programId));
   };
 
   const resize = (id: string, ratio: number) => {
@@ -53,7 +59,7 @@ export default function App() {
     <main className="app-shell">
       <header className="app-titlebar">
         <strong>soksak-core 0.0.1</strong>
-        <span>plugin-driven terminal + native browser workspace</span>
+        <span>plugin-driven recursive workspace</span>
       </header>
       <section className="workspace" aria-label="recursive workspace">
         <WorkspaceTree
