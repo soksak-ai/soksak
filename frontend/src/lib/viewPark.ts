@@ -1,0 +1,88 @@
+// Effective visibility of a view body slot (sheet active && tab active) — owned by the core in one
+// place (the native-layer extension of R12).
+// CSS parkedStyle covers the DOM layer only. The core handles the native layer directly:
+//   ① Show/hide the core-owned child webview (browserLabel scheme) — hiding also returns the
+//      responder (webview_visible), and the core command silently no-ops for an unknown label.
+//   ② Notify plugins of the view.parked fact — a plugin owning an engine surface matches its
+//      show/hide and re-snap to that fact. Each plugin's viewport guessing (IntersectionObserver)
+//      and re-snap races are replaced by one rule.
+// Idempotent: re-committing the same state is a no-op — calling it every render costs only on change.
+import { moduleState } from "../lib/moduleState";
+import { contentViewHost } from "./contentViews";
+import { emitPluginEvent } from "../plugins/hooks";
+import { browserLabel } from "./webviewLabels";
+import { parkedStyle } from "./layerPark";
+import type { PluginViewSurfacePlacement } from "../plugins/viewPresentationHost";
+
+// Whether a view is actually visible — true **only when all three layers are true**: the project is
+// active, that space is active within the project, and that view is the active tab within the
+// space. Miss one layer and the core receives "visible" for an invisible view and leaves the native
+// child (browser webview, engine surface) on screen — that was exactly the defect where the
+// previous project's browser stayed up after a project switch (missing project layer).
+// CSS hides these layers separately, but the native layer is outside CSS, so the judgment is
+// collected into one expression.
+export function surfaceShown(projectActive: boolean, spaceActive: boolean, tabActive: boolean): boolean {
+  return projectActive && spaceActive && tabActive;
+}
+
+/**
+ * DOM lifetime contract of a view slot. Normally an inactive tab keeps its box and only visibility
+ * is turned off, but in an exclusive state such as maximize, where only one surface may exist in
+ * the layout, the excluded slots are removed from the composition tree with display:none. The DOM
+ * and the plugin instance are not unmounted, and layout.reflow on the restore commit delivers the
+ * current slot size again.
+ */
+export function viewSurfaceStyle(visible: boolean, exclusive: boolean) {
+  return {
+    ...parkedStyle(visible),
+    display: exclusive && !visible ? "none" : undefined,
+  };
+}
+
+/**
+ * Layout topology owns whether a hidden surface retains its box or leaves composition entirely.
+ * Exclusive removal therefore declares its exact parking frame; presentation never waits for a
+ * ResizeObserver callback that `display:none` does not promise to produce.
+ */
+export function viewSurfacePlacement(
+  visible: boolean,
+  exclusive: boolean,
+): PluginViewSurfacePlacement {
+  if (visible) {
+    return { desiredVisible: true, topology: "visible", declaredPaneFrame: null };
+  }
+  if (exclusive) {
+    return {
+      desiredVisible: false,
+      topology: "exclusive-hidden",
+      declaredPaneFrame: { x: 0, y: 0, w: 0, h: 0 },
+    };
+  }
+  return { desiredVisible: false, topology: "retained-hidden", declaredPaneFrame: null };
+}
+
+// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
+// recorded the fill and does not fill again.
+const visibleByView = moduleState("lib/viewPark#visibleByView", () => new Map<string, boolean>());
+export function commitViewVisibility(viewId: string, visible: boolean): void {
+  if (visibleByView.get(viewId) === visible) return;
+  visibleByView.set(viewId, visible);
+  // **Go through the host.** Calling the name directly gets that name rejected as delegated
+  // (FRAMEWORK_DELEGATED) on a framework whose content is inside the DOM, and no parking happens at
+  // all — the previous view stays up after a tab switch and the new view is invisible (measured
+  // 2026-07-30: 301 such rejections in the request ledger).
+  // contentViews is the single owner of how the app presents content.
+  void contentViewHost()
+    .visible(browserLabel(viewId), visible)
+    .catch((e: unknown) => {
+      // Not swallowed — a parking that did not happen shows up only as "the previous browser does
+      // not disappear", and there is no path back from that symptom to this site.
+      console.warn(`[viewPark] parking commit failed: ${viewId} visible=${visible}`, e);
+    });
+  emitPluginEvent("view.parked", { viewId, parked: !visible });
+}
+
+/** Reclaims state when a view closes permanently (prevents map growth). */
+export function dropViewVisibility(viewId: string): void {
+  visibleByView.delete(viewId);
+}

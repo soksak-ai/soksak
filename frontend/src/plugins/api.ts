@@ -1,0 +1,2140 @@
+// Plugin API — the host surface passed to activate(ctx) (soksak-spec-plugin v1 §0).
+// Rules:
+//   - Permissions gate the API surface (§0-2): an undeclared permission leaves its surface undefined.
+//   - The registry is the single truth for commands (§0-1): registering exposes them to sok/MCP.
+//   - The manifest is the single truth for declarations: an undeclared command/view/formatter is
+//     rejected.
+//   - The internal tracker collects every registration — deactivation cannot leak (§0-4).
+//   - Dependencies are injected through deps (testable structure, not a workaround).
+
+import { moduleState } from "../lib/moduleState";
+import type {
+  CommandContext,
+  CommandOutcome,
+  CommandSpec,
+  ParamSpec,
+} from "../commands/registry";
+import { createStream, engineProvision } from "../framework";
+import { declarePluginRealm, type PluginRealm } from "./realm";
+import type { SurfacePointerInput } from "../lib/contentViews";
+import { contentViewHost } from "../lib/contentViews";
+import { registerSurfaceInputProvider } from "../lib/surfaceInputProviders";
+import {
+  browserLabel,
+  currentWindowLabel,
+} from "../lib/webviewLabels";
+import { busEmit, busOn } from "./bus";
+import {
+  onPluginEvent,
+  emitPluginEvent,
+  type Disposable,
+  type PluginEventMap,
+} from "./hooks";
+import { gateContribution } from "./conformance";
+import {
+  attachViewPresentationRuntime,
+  useViewRegistry,
+  type PluginViewProvider,
+} from "./viewRegistry";
+import {
+  useFileViewerRegistry,
+  type FileViewerProvider,
+} from "./fileViewerRegistry";
+import { useIconRegistry, validateIconSetData } from "../ui/icons/registry";
+import {
+  registerStatusBarItem,
+  type StatusBarItem,
+} from "../ui/statusBarItems";
+import { registerHeaderAction, type HeaderAction } from "../ui/headerActions";
+import { useUi } from "../state/ui";
+import { pushNotification, type NotificationInput } from "../lib/notify";
+import { playSound, BUILTIN_SOUNDS } from "../ui/sound";
+import {
+  runningCommands,
+  subscribeOutput,
+} from "../terminal/ptyBridge";
+import {
+  registerPtyObservation,
+  feedPtyOutput,
+  disposePtyObservation,
+  registerPtyIo,
+  getPtyIo,
+} from "../terminal/ptyObservationStore";
+import { EVENT_PERMISSIONS } from "./hooks";
+import type { IconSetData } from "../ui/icons/types";
+import {
+  configDefaults,
+  contractRequirementSatisfiedBy,
+  pluginCommandName,
+  qualifiedViewId,
+  type ContractProviderRef,
+  type ContractRequirement,
+  type PluginManifest,
+  type PluginPermission,
+  type ViewPlacement,
+} from "./spec";
+import { localize } from "../i18n";
+import { useSettings } from "../state/settings";
+import { usePluginSettings, type SettingValue } from "../state/pluginSettings";
+import { findViewById, useSessions } from "../state/sessions";
+
+export type { Disposable } from "./hooks";
+
+// ── Dependency injection surface ─────────────────────────────────────────────
+
+/** Short key the plugin passes. The deps table maps it to the wire name (canonical: core
+ *  spec-content-view). */
+export type ContentViewEventKey = "nav" | "title" | "status" | "open-external" | "loading";
+
+export interface PluginApiDeps {
+  appVersion: string;
+  invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+  execute: (
+    name: string,
+    params: Record<string, unknown>,
+    ctx: CommandContext,
+  ) => Promise<CommandOutcome>;
+  registerCommand: (name: string, spec: CommandSpec) => void;
+  unregisterCommand: (name: string) => boolean;
+  getCommandDanger: (name: string) => "destructive" | "inject" | undefined;
+  // Contracts the target plugin declared (manifest implements) — used for the contract-pin decision at
+  // the call boundary. The core does not identify implementations by name here either: it compares
+  // contract id sets only.
+  implementsOf?: (pluginId: string) => ContractProviderRef[];
+  on: typeof onPluginEvent;
+  currentProject: () => { id: string; root: string | null } | null;
+  // Core fs watcher (fs-change) subscription — callback receives the changed parent directory string.
+  // Returns the unsubscribe.
+  onFsChange: (cb: (dir: string) => void) => () => void;
+  // Core data store change (data-change) subscription — the core singleton broadcasts to every window
+  // (multi-window, same-project consistency). app.data.watch filters by ns/coll/scope. Returns the
+  // unsubscribe. (Precedent: onFsChange.)
+  onDataChange: (cb: (e: DataChangeEvent) => void) => () => void;
+  // All-window clipboard change (clipboard-change) subscription — callback receives the changed text.
+  // Returns the unsubscribe. (Precedent: onFsChange.) Polling is macOS-only (no NSPasteboard event);
+  // Win/X11/Wayland use native events — the core absorbs the difference.
+  onClipboardChange: (cb: (text: string) => void) => () => void;
+  // Terminal pane cwd snapshot/subscription plus command-finished subscription (bridged from core
+  // ptyBridge). Exposed by app.terminal.
+  getCwd: (paneId: string) => string | undefined;
+  subscribeCwd: (paneId: string, cb: (cwd: string) => void) => () => void;
+  subscribeCommandFinished: (paneId: string, cb: () => void) => () => void;
+  // Label-filtered content-view event subscription — app.webview.on.
+  //
+  // `event` is a value on a fixed axis. Typed as `string`, a typo compiles into an event that never
+  // arrives, and that absence never surfaces as an error. Use the same axis as the surface declaration.
+  subscribeWebview: (
+    label: string,
+    event: ContentViewEventKey,
+    cb: (payload: Record<string, unknown>) => void,
+  ) => () => void;
+}
+
+// data-change payload — isomorphic to the core DataChange. coll/scope/id are null depending on the
+// operation.
+export interface DataChangeEvent {
+  ns: string;
+  coll: string | null;
+  scope: string | null;
+  op: string;
+  id: string | null;
+}
+
+// ── Types the plugin sees ────────────────────────────────────────────────────
+
+export interface PluginCommandSpec {
+  // description = English base (LLM discovery surface — no stubs). triggers = non-English trigger words
+  // (language → word). Host catalogJson composes base+triggers (docs/I18N.md §3). Human UI uses
+  // contributes.commands.title.
+  description: string;
+  triggers?: Record<string, string>;
+  params?: Record<string, ParamSpec>;
+  /** "handler" = the handler owns parameter validation (parameters absent from the spec pass through).
+   *  Used where the spec text is on the plugin side, like a static module — registry validate is
+   *  skipped. */
+  paramsAuthority?: "handler";
+  returns?: string;
+  examples?: readonly string[];
+  danger?: "destructive" | "inject";
+  /** Standard answer (MESSAGE-PROTOCOL §3) — turns success data into a one-line human-readable message.
+   *  Without it the answer degrades to a label and the loader warns (required at M5). Reference: runbook
+   *  ok()/err(). */
+  message?: (data: Record<string, unknown>) => string;
+  /** @deprecated Renamed to message — transitional lifeline until the M5 sweep. New plugins use
+   *  message. */
+  summarize?: (data: Record<string, unknown>) => string;
+  /** Spoken sentence (speak, §3) — the only speech axis: with speak, speak(outcome) is the sentence on
+   *  success and failure alike; without it message is the fallback; "" = silence. say-type commands cut
+   *  feedback with speak: () => "". */
+  speak?: (out: { ok: boolean; code: string; message: string; data?: Record<string, unknown> }) => string;
+  /** Trace spec (MESSAGE-PROTOCOL §4) — false = the run is excluded from the activity trace. Declare it
+   *  only for commands that inflate the stream as a by-product of observation (say-type: one run record
+   *  per spoken line). */
+  trace?: false;
+  /** hint — takes data on success or {code,message} on failure and offers up to 3 follow-up commands.
+   *  An offer, not an instruction: information for the caller's own decision. */
+  hint?: (
+    data: Record<string, unknown>,
+    ctx: PluginInvocation,
+  ) => { cmd: string; why: string }[];
+  /** inv = the execution context of this call (§5 inheritance). A handler that nests another command
+   *  must use inv.execute — the parent's origin (schedule firing and such) and correlation (parentId:
+   *  conversation turn) are inherited by the child run. Calling app.commands.execute disguises it as
+   *  human origin and pollutes speech and emphasis (measured: the nested lookup in schedule reconcile
+   *  was spoken on every firing). */
+  handler: (
+    params: Record<string, unknown>,
+    inv?: PluginInvocation,
+  ) => Promise<object> | object;
+}
+
+/** Invocation context injected into a command handler — the channel that inherits origin and correlation
+ *  for nested runs (§5). */
+export interface PluginInvocation {
+  /** Run origin — omitted = human, "schedule" = schedule firing, and so on. */
+  origin?: string;
+  /** Correlation parent (conversation turn id) — when present, this run is part of that turn's set. */
+  parent?: string;
+  /** Nested run that inherits the parent context — use this for command calls inside a handler. */
+  execute: (
+    name: string,
+    params?: Record<string, unknown>,
+  ) => Promise<{ ok: boolean; code: string; message: string; data?: Record<string, unknown> }>;
+}
+
+// Scheduler trigger (isomorphic to the core schedule.rs Trigger — forwarded in wire form). every_ms
+// matches the core serde field name (a thin forward with no mapping). reconcile = a timerless poke event
+// trigger.
+export type SchedulerTrigger =
+  | { kind: "at"; at: number } // one shot at an absolute ms (immediate when already past).
+  | { kind: "every"; every_ms: number; anchor?: number } // fixed period (anchor grid).
+  | { kind: "cron"; expr: string } // 5-field cron (UTC).
+  | { kind: "reconcile" }; // once at registration (boot scan) + on poke.
+
+export interface SchedulerRetry {
+  max: number; // max retry count (0 = none).
+  base_ms: number; // backoff base.
+  max_ms: number; // backoff ceiling.
+}
+
+export interface SchedulerJobView {
+  id: string;
+  trigger: SchedulerTrigger;
+  command: string;
+  params: Record<string, unknown>;
+  next_at: number | null; // next scheduled firing (null = idle or finished).
+  running: boolean;
+  concurrency: number;
+}
+
+export interface SoksakPluginApi {
+  appVersion: string;
+  pluginId: string;
+  /** Identity and capability declaration of the realm this app runs in (§realm). Read it instead of
+   *  probing for a surface — the same bundle is evaluated in the window realm and the child renderer
+   *  realm, and their surfaces differ. */
+  realm: PluginRealm;
+  // Host display language (permission-free context §3.5) — changes arrive as the locale.changed event.
+  locale: () => string;
+  /** Window label of this plugin instance (multi-window — for per-window state and credential
+   *  records). */
+  windowLabel: () => string;
+  commands?: {
+    /** opts.origin — self-declaration for automatic behavior (§5): a run that is not human intent
+     *  (backfill lookup, speech) declares "internal". It is still recorded; only its exposure (dimmed,
+     *  not spoken) drops. */
+    execute: (
+      name: string,
+      params?: Record<string, unknown>,
+      opts?: { origin?: string },
+    ) => Promise<CommandOutcome>;
+    register: (name: string, spec: PluginCommandSpec) => Disposable;
+  };
+  events: {
+    on: <K extends keyof PluginEventMap>(
+      event: K,
+      fn: (payload: PluginEventMap[K]) => void,
+    ) => Disposable;
+    /** Publish a progress delta (MESSAGE-PROTOCOL §2) — a long-running command reports what it is doing
+     *  into the activity stream. Converting sidecar events into standard progress is the consuming
+     *  plugin's job (A14 — the core is a blind relay). source is fixed to the plugin id, so the
+     *  publisher is always visible. */
+    progress: (command: string, delta: unknown) => void;
+  };
+  /** Self-described activity-log publish — a plugin publishes its own domain activity without a core
+   *  bridge (§3). Display = message (plugin i18n), speech = optional speak. Consumers render only those
+   *  two, blind to kind. source is fixed to the id. */
+  activity: {
+    publish: (
+      kind: string,
+      entry: { message: string; speak?: string } & Record<string, unknown>,
+    ) => void;
+  };
+  ui?: {
+    registerView: (viewId: string, provider: PluginViewProvider) => Disposable;
+    /** Register a per-extension file viewer (contributes.fileViewers declaration required). When the
+     *  core opens a file as content it mounts the matching viewer's provider (engine-neutral A13 — the
+     *  render engine is the plugin's). Returns the unsubscribe. */
+    registerFileViewer: (
+      viewerId: string,
+      provider: FileViewerProvider,
+    ) => Disposable;
+    openView: (
+      viewId: string,
+      placement?: ViewPlacement,
+    ) => Promise<CommandOutcome>;
+    /** Register an icon set (contributes.iconSets declaration required). data must supply every semantic
+     *  name. */
+    registerIconSet: (setId: string, data: unknown) => Disposable;
+    /** Register or update a status bar item bound to a paneId (same id replaces — call again to toggle
+     *  active). Shown in the status bar of the group where that pane is the active terminal. Returns the
+     *  unsubscribe. */
+    statusBarItem: (item: StatusBarItem) => Disposable;
+    /** Register a toggle icon next to the right-hand titlebar controls (sidebar, dark mode, settings).
+     *  Same id replaces — call again to toggle active. Requires the "ui:titlebar" permission. Returns
+     *  the unsubscribe. */
+    registerHeaderAction: (action: HeaderAction) => Disposable;
+    /** Activate the input gate while a modal/overlay is shown, so clicks over the native content webview
+     *  area land. Requires a "ui:overlay:*" permission. Call true on show and false on hide/cleanup (the
+     *  caller balances the pair). */
+    setOverlayActive: (active: boolean) => void;
+    /** Sidebar tab badge for this plugin view (unread marker). number = count, "dot" = dot, null =
+     *  clear. Inside a view use mount ctx.setBadge; this one updates from outside the view.
+     *  Per-window. */
+    setViewBadge: (viewId: string, badge: number | "dot" | null) => void;
+  };
+  storage?: {
+    read: (key: string) => Promise<unknown>;
+    write: (key: string, value: unknown) => Promise<void>;
+    list: () => Promise<string[]>;
+  };
+  /** General-purpose embedded data store (core SQLite singleton). DB-agnostic — raw SQL is not exposed.
+   *  The namespace is forced to this plugin id (another plugin's data is invisible). scope = per-project
+   *  partition (e.g. projectId). watch = all-window change subscription (zero polling,
+   *  multi-window/same-project consistent). "data" permission only. */
+  data?: {
+    kv: {
+      get: (key: string) => Promise<unknown>;
+      set: (key: string, value: unknown) => Promise<void>;
+      delete: (key: string) => Promise<boolean>;
+      keys: (prefix?: string) => Promise<string[]>;
+      /** All-window subscription to kv changes (set/delete) in this plugin ns — applies CLI/MCP and
+       *  other-window changes with zero polling. The callback receives the changed key. Collection
+       *  changes are excluded (that is data.watch). Returns the unsubscribe. */
+      watch: (cb: (key: string | null) => void) => Disposable;
+    };
+    /** Define a collection (idempotent) — indexes = structured query fields, fts = CJK full-text search
+     *  fields. */
+    define: (
+      collection: string,
+      opts: { indexes?: string[]; fts?: string[] },
+    ) => Promise<void>;
+    /** Upsert a record. Without an id one is generated and returned. The canonical id is injected into
+     *  doc. */
+    put: (
+      collection: string,
+      doc: Record<string, unknown>,
+      opts?: { scope?: string; id?: string },
+    ) => Promise<string>;
+    get: (
+      collection: string,
+      id: string,
+      opts?: { scope?: string },
+    ) => Promise<unknown>;
+    delete: (
+      collection: string,
+      id: string,
+      opts?: { scope?: string },
+    ) => Promise<boolean>;
+    /** Structured query — where fields must be declared in define's indexes (or be created/updated). */
+    query: (
+      collection: string,
+      opts?: {
+        scope?: string;
+        where?: Record<string, unknown>;
+        order?: string;
+        desc?: boolean;
+        limit?: number;
+        offset?: number;
+      },
+    ) => Promise<unknown[]>;
+    /** CJK full-text search (FTS5 trigram). A query under 3 code points falls back to LIKE. */
+    search: (
+      collection: string,
+      text: string,
+      opts?: { scope?: string; limit?: number },
+    ) => Promise<unknown[]>;
+    count: (
+      collection: string,
+      opts?: { scope?: string; where?: Record<string, unknown> },
+    ) => Promise<number>;
+    /** retention (R5) — when the (coll,scope) count exceeds cap, evict the oldest by created. Returns
+     *  the delete count. Called by persistent collections. */
+    retentionTrim: (collection: string, scope: string, cap: number) => Promise<number>;
+    /** retention (R5) — delete records with created < cutoffMs (time axis). Returns the delete count. */
+    retentionReap: (collection: string, cutoffMs: number) => Promise<number>;
+    /** Change subscription — callback on put/delete in this ns and coll (and that scope when given),
+     *  across every window. Returns the unsubscribe. */
+    watch: (
+      collection: string,
+      opts: { scope?: string } | undefined,
+      cb: (e: DataChangeEvent) => void,
+    ) => Disposable;
+  };
+  /** Encrypted secret vault (core crypto, no OS keychain dependency). Seals sensitive values such as API
+   *  keys and tokens. The namespace is forced to this plugin id (same isolation as app.data). No get —
+   *  plaintext readback is blocked (injection only). While the vault is locked, calls reject("vault
+   *  locked"). "secrets" permission only. */
+  secrets?: {
+    /** Store a sealed value (envelope: a per-item DEK wrapped by the KEK). Same key replaces. */
+    set: (key: string, value: string) => Promise<void>;
+    /** Whether the key exists (the value is not exposed). */
+    has: (key: string) => Promise<boolean>;
+    /** Delete a key (true when it existed). */
+    delete: (key: string) => Promise<boolean>;
+    /** Key list for this ns only, not values (plaintext blocked). */
+    keys: () => Promise<string[]>;
+    /** Vault backend and lock state ({ backend:"vault", unlocked }). */
+    backend: () => Promise<{ backend: string; unlocked: boolean }>;
+  };
+  /** General-purpose scheduler (core — fires commands on at/every/cron, and state ticks on reconcile).
+   *  Time-based jobs are persistent (crash recovery). A job never runs twice concurrently with itself
+   *  (lease). Failures retry with backoff. "schedule" permission. */
+  scheduler?: {
+    /** Register a job (idempotent — a given id replaces). Returns the id. command = the registry command
+     *  to fire. retry/concurrency optional. */
+    register: (job: {
+      trigger: SchedulerTrigger;
+      command: string;
+      params?: Record<string, unknown>;
+      id?: string;
+      retry?: SchedulerRetry;
+      concurrency?: number;
+      /** Per-firing upper bound (ms) on waiting for the command reply — non-process jobs only
+       *  (notify.show and such). Defaults to 30s, clamped by the core to [1s,3600s]. process_lease jobs
+       *  ignore it (process-lifetime lease). */
+      timeout_ms?: number;
+      /** Opt-in to a process-lifetime lease. When true: if the fired command (exec-one) runs a process
+       *  and holds its reply until onExit, the core holds the lease and waits for that reply (= process
+       *  exit) — it never cuts a running process off, even a 1h search. Normal exit → ok, crash →
+       *  ok:false → backoff. Only a zombie (a reply that never comes) is reaped at
+       *  zombie_backstop_ms. */
+      process_lease?: boolean;
+      /** Zombie backstop for a process-lifetime job (ms after claim). Reaps only when the reply never
+       *  comes. null = unbounded (until reply/cancel, human intervention). With process_lease and no
+       *  value, defaults to 3h (10_800_000). */
+      zombie_backstop_ms?: number | null;
+    }) => Promise<string>;
+    /** Request an immediate firing — that job when an id is given, otherwise every reconcile job
+     *  (completion triggers, external changes). */
+    poke: (id?: string) => Promise<void>;
+    /** Cancel a job (also removes the persisted record; a firing process job's wait is woken at once).
+     *  True when it existed. */
+    cancel: (id: string) => Promise<boolean>;
+    /** List registered jobs (ascending next_at). */
+    list: () => Promise<SchedulerJobView[]>;
+  };
+  /** A notification is the same grade of object as a push (rich payload). In-app banner when focused, OS
+   *  notification when not, with the same payload. Click/action activates through a deepLink
+   *  (soksak://cmd/...) with the permission and danger gates intact. "notify" permission. */
+  notify?: {
+    push: (n: NotificationInput) => Promise<void>;
+  };
+  /** Notification sound (pure Web Audio). A builtin (default/ping/chime/success/alert) or a URL/asset
+   *  path. */
+  sound?: {
+    play: (sound: string) => Promise<void>;
+    builtins: () => string[];
+  };
+  fs?: {
+    /** Read text. With offset (bytes) it reads from that point to the end — an incremental tail of a
+     *  growing log. Track totalBytes as the next offset to read only the delta. truncated = the safety
+     *  limit was exceeded. */
+    readText?: (
+      path: string,
+      offset?: number,
+    ) => Promise<{ text: string; truncated: boolean; totalBytes: number }>;
+    /** Read binary → { mime, base64 } (for building a data URL). Used by media viewers
+     *  (image/PDF/video/audio) when a plugin renders a file. "fs:read" permission. */
+    readBinary?: (path: string) => Promise<{ mime: string; base64: string }>;
+    /** Local file → a URL a webview can load (core standard). Idempotent per path. Gated on
+     *  "fs:read". */
+    url?: (path: string) => Promise<string>;
+    writeText?: (path: string, content: string) => Promise<void>;
+    /** Direct children of a directory. With meta:true each child includes modified (unix seconds), for
+     *  picking the newest file. */
+    list?: (path: string, opts?: { meta?: boolean }) => Promise<unknown>;
+    /** Watch a directory (core watcher, no polling). Calls cb(dir) on a change inside dir. Non-recursive
+     *  — watch subfolders separately. Returns the unwatch. */
+    watch?: (dir: string, cb: (dir: string) => void) => Disposable;
+  };
+  /** System clipboard — each method is gated on its read/write permission. watch = all-window change
+   *  subscription (polling is macOS-only; the core absorbs the per-OS difference). The callback receives
+   *  the changed text; the subscription itself is what "clipboard:read" consents to. */
+  clipboard?: {
+    readText?: () => Promise<string>;
+    writeText?: (text: string) => Promise<void>;
+    watch?: (cb: (e: { text: string }) => void) => Disposable;
+  };
+  terminal?: {
+    /** Snapshot of the commands running now (at most 1 per pane). The current-state form of the
+     *  command.started/finished events — for a plugin activated mid-run to sync at once (not polling).
+     *  "terminal" permission only. */
+    runningCommands?: () => {
+      paneId: string;
+      commandLine: string;
+      cwd: string | null;
+    }[];
+    /** Inject raw input into the pane's terminal PTY (typing into the running program — a claude prompt,
+     *  for example). Enter is "\r". False before it is ready. "terminal:write" permission only. */
+    sendText?: (paneId: string, text: string) => boolean;
+    /** Screen text of the pane terminal (last `lines` lines; default is the whole viewport plus
+     *  scrollback). undefined before it is ready. "terminal:read" permission only. For live TUI stream
+     *  display and verifying input landed. */
+    readBuffer?: (paneId: string, lines?: number) => string | undefined;
+    /** Subscribe to pane terminal screen updates (coalesced to once per frame, no polling). Returns the
+     *  unsubscribe. "terminal:read" permission only — triggers a buffer re-read (live stream, input
+     *  verification). */
+    onOutput?: (paneId: string, cb: () => void) => Disposable;
+    /** Snapshot of this pane terminal's current working directory (cwd). undefined before shell
+     *  integration (OSC 7/633). "terminal" permission. Used with ctx.paneId by cwd-following views such
+     *  as a file explorer. */
+    getCwd?: (paneId: string) => string | undefined;
+    /** Subscribe to pane cwd changes (no polling). Fires once at registration when a value already
+     *  exists. Returns the unsubscribe. "terminal" permission. */
+    onCwd?: (paneId: string, cb: (cwd: string) => void) => Disposable;
+    /** Subscribe to command completion in the pane (OSC 133/633 D) — triggers refresh of derived state
+     *  such as git. Returns the unsubscribe. "terminal" permission. */
+    onCommandFinished?: (paneId: string, cb: () => void) => Disposable;
+  };
+  /**
+   * Declares to the core that this plugin delivers pointer input for its own surfaces.
+   *
+   * The core's own path has no route to a surface drawn by an engine sidecar — send a gesture to it and
+   * the core has no place to deliver it (measured 2026-08-08: only one of three browsers worked).
+   * Special-casing that engine in the core would couple them, so the owner answers for itself and the
+   * core only delivers.
+   *
+   * `owns` takes one label and answers whether it is this plugin's — the core never guesses from label
+   * syntax. The return value is the unsubscribe: when the view goes away so does the owner (leaving it
+   * keeps sending to a dead sidecar).
+   */
+  provideSurfaceInput?: (provider: {
+    owns: (label: string) => boolean;
+    sendInput: (label: string, input: {
+      x: number; y: number;
+      kind: "down" | "up" | "move" | "drag" | "enter" | "exit";
+      button: "left" | "right";
+      clickCount: number;
+    }) => Promise<void>;
+    inputState: (label: string, at?: { x: number; y: number }) => Promise<Record<string, unknown>>;
+  }) => () => void;
+
+  /** Child webview (WKWebView) the core embeds and drives — owned by a content view such as a browser.
+   *  "webview" permission. The core creates and owns the native webview under a label key; the plugin
+   *  drives it by label (JS cannot create a WKWebView). macOS first — eval/inject are macOS-only
+   *  (graceful error/no-op elsewhere). */
+  webview?: {
+    /** Public axis a product uses to decide optional features. Do not branch on the adapter name. */
+    capabilities: Readonly<{
+      supportsDocumentStart: boolean;
+      supportsInputInjection: boolean;
+    }>;
+    /** viewId → globally unique label (window namespace `brw-<win>-<view>`). webviewLabels is the single
+     *  truth. */
+    label: (viewId: string) => string;
+    /** Create a content view. With a published slot the adapter owns the rect; x/y/w/h apply only to a
+     *  slotless surface. */
+    open: (
+      label: string,
+      o: { url: string; x?: number; y?: number; w?: number; h?: number },
+    ) => Promise<void>;
+    /** Sync the slot rect (split/resize — once per frame recommended). */
+    bounds: (label: string, x: number, y: number, w: number, h: number) => Promise<void>;
+    /** Show or hide (the hidden slot of a tab switch or maximize). */
+    visible: (label: string, visible: boolean, focus?: boolean) => Promise<void>;
+    /** Real liveness — answers from the native view's window attachment, not the registry (the only
+     *  surface that identifies a zombie). */
+    alive: (label: string) => Promise<boolean>;
+    /** Navigate to a URL. */
+    navigate: (label: string, url: string) => Promise<void>;
+    /** Per-view page zoom (0.25..4.0) — effective scale = window zoom × this value. Returns the applied
+     *  view scale. */
+    zoom: (label: string, factor: number) => Promise<number>;
+    /** Open a URL in a standalone OS window (a new browser window). Unrelated to label-keyed webviews —
+     *  the core creates the popup window itself (a general webview host surface, used by plugins that
+     *  open a link in a new window). */
+    openWindow: (url: string) => Promise<void>;
+    /** Move through session history (delta = -1 back, +1 forward). */
+    history: (label: string, delta: number) => Promise<void>;
+    /** Stop loading (WKWebView stopLoading) — for the toolbar reload↔stop toggle. */
+    stop?: (label: string) => Promise<void>;
+    /** Reload — not the same as navigating to the current URL again (that pushes one more history
+     *  entry). */
+    reload: (label: string, ignoreCache?: boolean) => Promise<void>;
+    /** Toggle the OS inspector (devtools) → whether it is open. */
+    devtools: (label: string) => Promise<boolean>;
+    /** Run JS in the page and return the result string (AI/E2E DOM control). macOS only. */
+    eval: (label: string, js: string) => Promise<string>;
+    /** Inject an init script (document-start/end, re-injected on every navigation). macOS only (no-op
+     *  elsewhere). The returned Disposable is for tracking — removing an individual WKUserScript is
+     *  unsupported (it stays for the webview's lifetime). */
+    injectScript: (
+      label: string,
+      code: string,
+      phase?: "document-start" | "document-end",
+    ) => Disposable;
+    /** The real engine input path. When the capability is false the implementation rejects with its
+     *  name. */
+    sendInput: (label: string, input: SurfacePointerInput) => Promise<void>;
+    /** The real engine wheel input. Coordinates are view CSS px; delta signs match DOM WheelEvent. */
+    wheel: (label: string, x: number, y: number, dx: number, dy: number) => Promise<void>;
+    captureFull: (label: string, path: string, width: number, height: number) => Promise<{ path: string; bytes: number }>;
+    /** Put a committed string into the focused editable element through the engine's text input path. */
+    typeText: (label: string, text: string) => Promise<void>;
+    /** Subscribe to webview events: "nav"({url}), "title"({title}), "status", "open-external"({url}).
+     *  Returns the unsubscribe. */
+    on: (
+      label: string,
+      event: ContentViewEventKey,
+      cb: (payload: Record<string, unknown>) => void,
+    ) => Disposable;
+    /** List the currently live webview labels (prefix filter). For GC and cleanup. */
+    list: (prefix?: string) => Promise<string[]>;
+    /** Close the webview and clean up. */
+    close: (label: string) => Promise<void>;
+  };
+  /** Spawn a PTY-backed terminal session with raw byte IO (a terminal plugin drives xterm). "pty"
+   *  permission. Unlike process this is a PTY (flow control, shell integration, and SOKSAK_* env
+   *  injection are owned by core pty.rs). Output arrives on the onData stream. */
+  pty?: {
+    /** Spawn a PTY session → id. The core injects windowLabel as the current window. replay controls
+     *  screen restore (plumbing): absent = default (daemon replay and cold injection, core-owned),
+     *  "none" = the consumer owns the screen (core restore suppressed), {fromSeq} = attach the raw ring
+     *  from that seq (race-free warm handoff). The core does not interpret paint bytes. */
+    spawn: (opts: {
+      cols: number;
+      rows: number;
+      cwd?: string;
+      shell?: string;
+      paneId?: string;
+      replay?: "none" | { fromSeq: number };
+    }) => Promise<number>;
+    /** Write input to the PTY (keystrokes, paste). */
+    write: (id: number, data: string) => Promise<void>;
+    /** Resize the terminal (SIGWINCH). */
+    resize: (id: number, cols: number, rows: number) => Promise<void>;
+    /** flow control ack — report the bytes consumed (resumes the kernel reader). */
+    ack: (id: number, bytes: number) => Promise<void>;
+    /** Close the session and clean up. */
+    close: (id: number) => Promise<void>;
+    /** Subscribe to PTY output (raw bytes). Bytes arriving before registration are buffered, so nothing
+     *  is lost. Returns the unsubscribe. */
+    onData: (id: number, cb: (data: Uint8Array) => void) => Disposable;
+    /** Resolve a shell/binary path from PATH (null when absent). */
+    which: (bin: string) => Promise<string | null>;
+    /** Register this paneId's IO handlers (screen read, input write) with the substrate, so
+     *  app.terminal.readBuffer/ sendText route to this terminal (no core host-div dependency). A
+     *  terminal plugin registers its TerminalInstance's readBuffer/sendInput on mount and disposes them
+     *  on unmount (the returned Disposable). */
+    registerIo: (
+      paneId: string,
+      io: { readBuffer: (lines?: number) => string; sendInput: (data: string) => void },
+    ) => Disposable;
+    /** Relay one NDJSON request/response round trip to a live service sidecar's service socket (webview
+     *  JS cannot open a UDS — the core bridges it). The core is content-blind: it passes the
+     *  request/response JSON through and stamps only the current window label (the routing coordinate).
+     *  A connection failure is an explicit error (a loud signal that the sidecar died). */
+    sidecarRequest: (req: Record<string, unknown>) => Promise<Record<string, unknown>>;
+    /** Unseal this pane's sealed blob with the app vault and return the plaintext (base64). Locked =
+     *  explicit error (fail-closed), no blob = null. The core does not interpret the bytes (the consumer
+     *  turns them into a screen).
+     *  "terminal:read". */
+    readSealedScreen: (
+      paneId: string,
+    ) => Promise<{ paintB64: string } | null>;
+    /** Whether this pane has a live daemon session — the warm-restore candidacy test
+     *  (sidecar-independent, immediate, starts no daemon). A consumer checks before spawning and puts
+     *  only the warm case (session exists) through sidecar restore resume (bounded retry over the boot
+     *  race); fresh/cold/daemon-not-running (false) proceeds at once without waiting on the sidecar. */
+    paneAlive: (paneId: string) => Promise<boolean>;
+  };
+  /** Spawn an external subprocess with bidirectional raw stdio (general purpose — LSP/MCP/ACP/any CLI).
+   *  "process" permission. Pure pipes rather than a PTY, so JSON-RPC framing stays intact. Event-driven
+   *  (zero polling). */
+  process?: {
+    /** Name of the unit declared in manifest sidecars[] as implementing this contract (interface). The
+     *  manifest fixes which engine unit is used — freezing it as a bundle constant makes a manifest-only
+     *  change spawn the old unit silently. A missing or duplicate declaration throws loudly (no silent
+     *  pick). */
+    sidecarName: (contractId: string) => string;
+    /** Spawn a program → handle (id). cwd/env optional. envRemove = keys to strip from the parent env
+     *  (removing a nesting guard, for example). secretEnv = envVar → secretKey (a secret in this plugin
+     *  ns). JS never touches plaintext — pass key names only and the core boundary resolves them from
+     *  the vault into the child env (no exposure through shell args, ps, or history, R2). Locked or
+     *  missing keys fail the spawn. cmd "sidecar:{name}" references a service sidecar by name — the core
+     *  resolves it to the dist entry point in the identity home (the plugin does not assemble paths,
+     *  A17/SIDECARS.md). Not installed = an explicit error before spawn. */
+    spawn: (
+      cmd: string,
+      args: string[],
+      opts?: {
+        cwd?: string;
+        env?: Record<string, string>;
+        envRemove?: string[];
+        secretEnv?: Record<string, string>;
+      },
+    ) => Promise<number>;
+    /** Write to stdin (JSON-RPC frames and such). */
+    write: (handle: number, data: string) => Promise<void>;
+    /** Close stdin (the child keeps running) — delivers EOF to a child that reads its pipe input to end.
+     *  Idempotent. */
+    closeStdin: (handle: number) => Promise<void>;
+    /** Subscribe to stdout bytes (returns the unsubscribe). Bytes arriving before the listener registers
+     *  are buffered, so nothing is lost. */
+    onData: (handle: number, cb: (data: Uint8Array) => void) => Disposable;
+    /** Subscribe to stderr bytes (returns the unsubscribe). */
+    onStderr: (handle: number, cb: (data: Uint8Array) => void) => Disposable;
+    /** Subscribe to the exit code (returns the unsubscribe). When the exit came first, the callback
+     *  fires once immediately. */
+    onExit: (handle: number, cb: (code: number) => void) => Disposable;
+    /** Kill and clean up. */
+    kill: (handle: number) => Promise<void>;
+  };
+  /** Sidecar (engine module) channel — loads a shared native module declared in manifest sidecars[] into
+   *  the app process and exchanges opaque JSON messages. "sidecar" permission (caution). The core is a
+   *  blind relay (message meaning is a private plugin↔sidecar contract — docs/SIDECARS.md). A loaded
+   *  module stays resident (there is no unload). */
+  sidecar?: {
+    /** Open a declared sidecar → channel handle. An undeclared name is rejected (declaration ≡ reality).
+     *  The first open loads, validates, and inits. */
+    open: (name: string) => Promise<SidecarHandle>;
+  };
+  /** WebSocket client (plain ws://). "network" permission. Unlike the browser WebSocket it sends no
+   *  Origin header, so it connects to servers that check Origin (webOS TV SSAP and such). Event-driven
+   *  (zero polling). */
+  ws?: {
+    /** Connect to a ws:// URL → handle (id). Resolves after the connection is established. */
+    connect: (url: string) => Promise<number>;
+    /** Send a text frame. */
+    send: (handle: number, text: string) => Promise<void>;
+    /** Subscribe to received text (returns the unsubscribe). Text arriving before registration is
+     *  buffered, so nothing is lost. */
+    onMessage: (handle: number, cb: (text: string) => void) => Disposable;
+    /** Subscribe to close (returns the unsubscribe). Fires once immediately when already closed. */
+    onClose: (handle: number, cb: () => void) => Disposable;
+    /** Close the connection and clean up. */
+    close: (handle: number) => Promise<void>;
+  };
+  /** HTTP request (general purpose — the runbook api run type and such). "network" permission. The core
+   *  performs the arbitrary-origin requests webview fetch cannot, plus secret header/body injection.
+   *  secretSubst = placeholder → secretKey (this plugin ns). JS never touches plaintext — the core
+   *  boundary resolves from the vault and substitutes the placeholders in url/headers/body (no exposure
+   *  in history or the response, R2). impersonate="chrome" sends through a browser-fingerprint (JA3/JA4)
+   *  backend, for passing fingerprint-blocking CDNs; "off" (default) is plain native-tls. An
+   *  Authorization request uses redirect 0 and fails closed in chrome mode, where per-request redirect
+   *  cannot be pinned. Response shape, secrets, and ns isolation are identical in both modes. */
+  network?: {
+    http: (req: {
+      method: string;
+      url: string;
+      headers?: Record<string, string>;
+      query?: Record<string, string>;
+      body?: string;
+      contentType?: string;
+      secretSubst?: Record<string, string>;
+      impersonate?: "off" | "chrome";
+    }) => Promise<{ status: number; headers: Record<string, string>; body: string }>;
+  };
+  /** Plugin custom event bus — pub/sub on arbitrary topics (streaming coordination between plugins).
+   *  Separate from the core-defined events (events.on). Example: acp-core emits session/update and the
+   *  cockpit/lounge subscribe. No system access, so no permission is required (every plugin has it). */
+  bus: {
+    emit: (topic: string, payload: unknown) => void;
+    on: (topic: string, fn: (payload: any) => void) => Disposable;
+  };
+  project: {
+    current: () => { id: string; root: string | null } | null;
+  };
+  // User settings for this plugin (manifest configuration declaration). effective = project override ??
+  // global ?? schema default. Read and subscribe only; the user changes settings from the settings
+  // screen or a command.
+  settings: {
+    get: (key: string) => SettingValue | undefined;
+    all: () => Record<string, SettingValue>;
+    onChange: (cb: (all: Record<string, SettingValue>) => void) => Disposable;
+  };
+}
+
+export interface PluginContext {
+  app: SoksakPluginApi;
+  manifest: PluginManifest;
+  dir: string;
+  // Disposables the plugin created itself; pushing one here disposes it on deactivation.
+  subscriptions: Disposable[];
+}
+
+// ── Disposable collection ────────────────────────────────────────────────────
+
+export class DisposableTracker {
+  private items: Disposable[] = [];
+
+  add(d: Disposable): Disposable {
+    this.items.push(d);
+    return d;
+  }
+
+  wrap(dispose: () => void): Disposable {
+    return this.add({ dispose });
+  }
+
+  // Dispose in reverse order — an individual failure is isolated (§0-4).
+  disposeAll(): void {
+    const items = this.items.splice(0).reverse();
+    for (const d of items) {
+      try {
+        d.dispose();
+      } catch (e) {
+        console.error("plugin resource dispose failed:", e);
+      }
+    }
+  }
+}
+
+// ── Management command block (§0-5, no self-propagation) ─────────────────────
+// plugin.view.* is view open/close, not management, so it is allowed. plugin.<id>.* (plugin commands) is
+// allowed too.
+
+// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
+// recorded the fill and does not fill again.
+const BLOCKED_MANAGEMENT = moduleState("plugins/api#BLOCKED_MANAGEMENT", () => new Set([
+  "plugin.list",
+  "plugin.install",
+  "plugin.update",
+  "plugin.remove",
+  "plugin.enable",
+  "plugin.disable",
+  "plugin.reload",
+]));
+// Global set of plugin commands registered without message (label fallback) — the gate source
+// plugin.conformance reports from (enforced at the publish/diagnostic boundary instead of rejected at
+// load time, MESSAGE-PROTOCOL §3).
+export const commandsMissingMessage = new Set<string>();
+
+export function isBlockedForPlugins(name: string): boolean {
+  // registry.* is an operator control plane: even a catalog lookup exposes descriptor/trust/credential
+  // metadata. Enumerating individual names leaks by default whenever a new management command is added,
+  // so the whole namespace is closed. Plugins read installable units through plugin.catalog only.
+  return (
+    BLOCKED_MANAGEMENT.has(name) ||
+    name.startsWith("plugin.dev.") ||
+    name.startsWith("registry.") ||
+    // Plugins already receive ownership-fixed app.secrets/app.network facades. Exposing the
+    // operator commands as a second path would let commands.execute choose an arbitrary vault
+    // namespace and turn net.http.request into a credential confused deputy.
+    name.startsWith("secret.") ||
+    name === "net.http.request"
+  );
+}
+
+// Extract the target plugin id from a command name (for the cross-plugin call decision).
+// pluginCommandName = plugin.<id>.<cmd> (no dot in id). null = not cross-plugin: core commands (no
+// plugin. prefix), plugin.view.* (host view ops), plugin.dev.*, and management (plugin.list and such, 2
+// segments). Only plugin.<id>.<cmd> returns <id>.
+export function targetPluginId(name: string): string | null {
+  if (!name.startsWith("plugin.")) return null;
+  const rest = name.slice("plugin.".length);
+  const dot = rest.indexOf(".");
+  if (dot < 0) return null; // management (plugin.list and such) — isBlockedForPlugins blocks it.
+  const seg = rest.slice(0, dot);
+  if (seg === "view" || seg === "dev") return null; // view ops / dev.
+  return seg;
+}
+
+// Cross-plugin call authorization — whether the caller declared the target plugin in
+// manifest.dependencies (direct dependency presence). Own commands, core, and view pass. An undeclared
+// cross-plugin call returns the denial reason (null = allowed). Enforced at the call boundary, closing
+// the gap where a dependencyGraph declaration only drove the install cascade and the consent display.
+// Versions are install-time business.
+// Call boundary — another plugin's command cannot be called without a declaration. There are two
+// declaration axes, and either one passes:
+//   L2 contract pin (consumes): the caller declares a contract and the target implements it → pass. The
+//     caller calls without knowing the implementation name (implementation-blind — swapping
+//     implementations leaves the manifest unchanged).
+//   L1 name pin (dependencies): the caller declares the target plugin id directly → pass. Forbidden for
+//     new couplings; only transitional couplings in domains that have no contract yet remain on this
+//     axis.
+// Neither one = denied. The boundary itself is unchanged; what changes is what gets declared (name →
+// contract).
+function crossPluginDenyReason(
+  selfId: string,
+  dependencies: Record<string, string> | undefined,
+  commandName: string,
+  consumes?: ContractRequirement[],
+  implementsOf?: (pluginId: string) => ContractProviderRef[],
+): string | null {
+  const target = targetPluginId(commandName);
+  if (target === null || target === selfId) return null;
+  if (target in (dependencies ?? {})) return null;
+  const wanted = consumes ?? [];
+  if (wanted.length > 0 && implementsOf) {
+    const provided = implementsOf(target);
+    if (wanted.some((requirement) =>
+      provided.some((provider) => contractRequirementSatisfiedBy(requirement, provider)))) return null;
+  }
+  return tmsg("plugin.call.undeclaredDependency", { target, command: commandName });
+}
+
+// ── API assembly ─────────────────────────────────────────────────────────────
+
+const denied = (message: string): CommandOutcome => ({
+  ok: false,
+  code: "PERMISSION_DENIED",
+  message,
+});
+
+// app.process implementation — per-handle (id) listeners plus a buffer for bytes arriving before
+// registration (nothing lost). spawn builds 3 streams (stdout/stderr/exit), passes them to
+// process_spawn, and onData/onStderr/onExit subscribe to them.
+function createProcessApi(
+  deps: PluginApiDeps,
+  tracker: DisposableTracker,
+  ns: string,
+  manifest: PluginManifest,
+) {
+  const declared = () => manifest.sidecars ?? [];
+  type Bytes = (d: Uint8Array) => void;
+  interface ProcState {
+    stdout: Set<Bytes>;
+    stderr: Set<Bytes>;
+    exit: Set<(code: number) => void>;
+    stdoutBuf: Uint8Array[];
+    stderrBuf: Uint8Array[];
+    exitCode: number | null;
+  }
+  const procs = new Map<number, ProcState>();
+  const dispatch = (set: Set<Bytes>, buf: Uint8Array[], b: Uint8Array) => {
+    if (set.size) set.forEach((f) => f(b));
+    else buf.push(b);
+  };
+  const subscribe = (set: Set<Bytes>, buf: Uint8Array[], cb: Bytes): Disposable => {
+    set.add(cb);
+    for (const b of buf.splice(0)) cb(b); // replay the pre-subscribe buffer at once (0 loss)
+    return tracker.wrap(() => set.delete(cb));
+  };
+  return {
+    // Name of the sidecar unit the manifest declared as implementing this contract. The manifest fixes
+    // which engine unit is used — freezing the name as a bundle constant makes a manifest-only change
+    // spawn the old unit silently (declared ≠ actual). With no declaration or more than one, fail loudly
+    // instead of picking quietly.
+    sidecarName(contractId: string): string {
+      // Runtime contract identification uses the contract id (string) alone — a contract id has no
+      // version (rule), and this looks up the name of the sidecar unit declared as implementing this
+      // contract, not a version pin. range is the compatibility constraint held by the manifest
+      // declaration (reach.fetch picks the concrete version from that range at install time), so it is
+      // not a key for this lookup. One sidecar per contract, so the id resolves uniquely.
+      const hits = declared().filter((sidecar) => sidecar.interface.id === contractId);
+      if (hits.length === 0) {
+        throw new Error(
+          tmsg("plugin.sidecar.contractNoUnit", { contract: contractId }),
+        );
+      }
+      if (hits.length > 1) {
+        throw new Error(
+          tmsg("plugin.sidecar.contractManyUnits", { contract: contractId, n: hits.length }),
+        );
+      }
+      return hits[0].name;
+    },
+    async spawn(
+      cmd: string,
+      args: string[],
+      opts?: {
+        cwd?: string;
+        env?: Record<string, string>;
+        envRemove?: string[];
+        secretEnv?: Record<string, string>;
+      },
+    ): Promise<number> {
+      // Declaration ≡ reality — the rule app.sidecar (engine module) follows applies to service sidecar
+      // spawns too. Spawning a unit absent from the manifest makes the manifest's claim to be the single
+      // truth for unit selection false.
+      const unit = cmd.startsWith("sidecar:") ? cmd.slice("sidecar:".length) : null;
+      if (unit !== null && !declared().some((s) => s.name === unit)) {
+        throw new Error(tmsg("plugin.sidecar.spawnUndeclared", { unit }));
+      }
+      const st: ProcState = {
+        stdout: new Set(),
+        stderr: new Set(),
+        exit: new Set(),
+        stdoutBuf: [],
+        stderrBuf: [],
+        exitCode: null,
+      };
+      const onStdout = createStream<ArrayBuffer>();
+      onStdout.onmessage = (m) => dispatch(st.stdout, st.stdoutBuf, new Uint8Array(m));
+      const onStderr = createStream<ArrayBuffer>();
+      onStderr.onmessage = (m) => dispatch(st.stderr, st.stderrBuf, new Uint8Array(m));
+      const onExit = createStream<number>();
+      onExit.onmessage = (code) => {
+        if (st.exit.size) st.exit.forEach((f) => f(code));
+        else st.exitCode = code;
+      };
+      // JS never touches plaintext — pass key names only (secretEnv: envVar → secretKey). ns = plugin
+      // id. Plaintext resolution and child env injection happen only at the core boundary
+      // (process_spawn) (R2). Without secretEnv, null.
+      const id = (await deps.invoke("process_spawn", {
+        cmd,
+        args,
+        cwd: opts?.cwd ?? null,
+        env: opts?.env ?? null,
+        envRemove: opts?.envRemove ?? null,
+        ns,
+        secretEnv: opts?.secretEnv ?? null,
+        onStdout,
+        onStderr,
+        onExit,
+      })) as number;
+      procs.set(id, st);
+      // A plugin lifetime also owns its processes. On deactivation/unload, reclaim the children instead
+      // of waiting for the app generation to end. process_kill is idempotent and safe for an
+      // already-exited handle.
+      tracker.wrap(() => {
+        procs.delete(id);
+        void deps.invoke("process_kill", { id }).catch(() => {});
+      });
+      return id;
+    },
+    write: async (handle: number, data: string): Promise<void> => {
+      await deps.invoke("process_write", { id: handle, data });
+    },
+    closeStdin: async (handle: number): Promise<void> => {
+      await deps.invoke("process_stdin_close", { id: handle });
+    },
+    onData(handle: number, cb: Bytes): Disposable {
+      const st = procs.get(handle);
+      return st ? subscribe(st.stdout, st.stdoutBuf, cb) : tracker.wrap(() => {});
+    },
+    onStderr(handle: number, cb: Bytes): Disposable {
+      const st = procs.get(handle);
+      return st ? subscribe(st.stderr, st.stderrBuf, cb) : tracker.wrap(() => {});
+    },
+    onExit(handle: number, cb: (code: number) => void): Disposable {
+      const st = procs.get(handle);
+      if (!st) return tracker.wrap(() => {});
+      if (st.exitCode !== null) {
+        cb(st.exitCode); // exit landed before the subscription — fire once immediately
+        return tracker.wrap(() => {});
+      }
+      st.exit.add(cb);
+      return tracker.wrap(() => st.exit.delete(cb));
+    },
+    kill: async (handle: number): Promise<void> => {
+      await deps.invoke("process_kill", { id: handle });
+      procs.delete(handle);
+    },
+  };
+}
+
+// app.sidecar channel handle — an opaque JSON channel to an opened engine module. Meaning is a private
+// plugin↔sidecar contract (docs/SIDECARS.md); neither the core nor this API interprets the content.
+export interface SidecarHandle {
+  /** Opaque request → the module's synchronous response (JSON). */
+  send: (msg: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  /** Subscribe to module events — an event has the shape {event, ...payload} and demuxes on the event
+   *  field. Returns the unsubscribe. */
+  on: (event: string, cb: (payload: Record<string, unknown>) => void) => Disposable;
+  /** Release the channel (the module stays resident — there is no unload). Idempotent. */
+  close: () => Promise<void>;
+}
+
+// app.sidecar implementation — opens only engine modules declared in manifest sidecars[] (declaration ≡
+// reality: an undeclared open throws). Events are delivered by stream to this caller alone (no global
+// emit — code that never opened the channel receives nothing, and nothing leaks).
+function createSidecarApi(
+  deps: PluginApiDeps,
+  tracker: DisposableTracker,
+  manifest: PluginManifest,
+) {
+  return {
+    open: async (name: string): Promise<SidecarHandle> => {
+      const decl = (manifest.sidecars ?? []).find((s) => s.name === name);
+      if (!decl) {
+        throw new Error(tmsg("plugin.sidecar.undeclared", { name }));
+      }
+      const listeners = new Map<string, Set<(p: Record<string, unknown>) => void>>();
+      const onEvent = createStream<Record<string, unknown>>();
+      onEvent.onmessage = (m) => {
+        const ev = typeof m?.event === "string" ? (m.event as string) : "";
+        listeners.get(ev)?.forEach((f) => f(m));
+      };
+      const handle = (await deps.invoke("sidecar_open", {
+        name,
+        requirement: decl.interface,
+        onEvent,
+      })) as number;
+      let closed = false;
+      const close = async () => {
+        if (closed) return;
+        closed = true;
+        await deps.invoke("sidecar_close", { name, handle }).catch(() => {});
+      };
+      tracker.wrap(() => void close()); // reclaim the channel when the plugin is disabled
+      return {
+        send: async (msg) =>
+          (await deps.invoke("sidecar_send", {
+            name,
+            handle,
+            payload: JSON.stringify(msg),
+          })) as Record<string, unknown>,
+        on: (event, cb) => {
+          let set = listeners.get(event);
+          if (!set) {
+            set = new Set();
+            listeners.set(event, set);
+          }
+          set.add(cb);
+          return tracker.wrap(() => void listeners.get(event)?.delete(cb));
+        },
+        close,
+      };
+    },
+  };
+}
+
+// app.pty implementation — PTY session spawn plus raw byte IO (a terminal plugin drives xterm). The
+// native commands stay spawn/write/resize/ack/close_terminal (names unchanged). Output arrives on a
+// stream (same shape as createProcessApi — bytes arriving before onData registers are buffered, nothing
+// lost). SOKSAK_* env injection and the kernel side of flow control are owned by pty.rs.
+function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
+  type Bytes = (d: Uint8Array) => void;
+  interface PtyState {
+    out: Set<Bytes>;
+    outBuf: Uint8Array[];
+    // paneId that connected this PTY to substrate observation (when set, close reclaims the observation
+    // too). Otherwise undefined.
+    paneId?: string;
+  }
+  const ptys = new Map<number, PtyState>();
+  return {
+    spawn: async (opts: {
+      cols: number;
+      rows: number;
+      cwd?: string;
+      shell?: string;
+      paneId?: string;
+      replay?: "none" | { fromSeq: number };
+    }): Promise<number> => {
+      const paneId = opts.paneId;
+      // [substrate observation tap] With a paneId, feed this PTY's output to the observation parser so
+      // app.terminal.* (getCwd/onCwd/onCommandFinished) and command.*/turn.ended work on this plugin
+      // terminal too. Independent of the core terminal view parsing its own OSC — one paneId is filled
+      // by a single producer, so there is no double firing (the ptyObservationStore single-producer
+      // invariant).
+      if (paneId) registerPtyObservation(paneId);
+      const st: PtyState = { out: new Set(), outBuf: [], paneId };
+      const onOutput = createStream<ArrayBuffer>();
+      onOutput.onmessage = (m) => {
+        const b = new Uint8Array(m);
+        if (paneId) feedPtyOutput(paneId, b); // observation: independent of the onData subscription (automatic whoever subscribes).
+        if (st.out.size) st.out.forEach((f) => f(b));
+        else st.outBuf.push(b);
+      };
+      // The core injects windowLabel as the current window (multi-window sok target — webviewLabels is
+      // the single truth). replay is the consumer's screen-restore control (plumbing, content-blind):
+      // "none" = the consumer owns the screen (no core restore), {fromSeq} = attach the raw ring from
+      // that seq (race-free warm handoff — the consumer already painted up to that seq). Absence is read
+      // defensively by the core as equivalent to "none" (the legacy core-owned replay was removed).
+      const res = (await deps.invoke("spawn_terminal", {
+        cols: opts.cols,
+        rows: opts.rows,
+        cwd: opts.cwd ?? null,
+        shell: opts.shell ?? null,
+        paneId: paneId ?? null,
+        windowLabel: currentWindowLabel() || null,
+        replay: opts.replay ?? null,
+        onOutput,
+      })) as { id: number };
+      ptys.set(res.id, st);
+      return res.id;
+    },
+    write: (id: number, data: string): Promise<void> =>
+      deps.invoke("write_terminal", { id, data }) as Promise<void>,
+    resize: (id: number, cols: number, rows: number): Promise<void> =>
+      deps.invoke("resize_terminal", { id, cols, rows }) as Promise<void>,
+    ack: (id: number, bytes: number): Promise<void> =>
+      deps.invoke("ack_terminal", { id, bytes }) as Promise<void>,
+    close: (id: number): Promise<void> => {
+      const st = ptys.get(id);
+      if (st?.paneId) disposePtyObservation(st.paneId); // reclaim the substrate observation.
+      ptys.delete(id);
+      return deps.invoke("close_terminal", { id }) as Promise<void>;
+    },
+    onData: (id: number, cb: Bytes): Disposable => {
+      const st = ptys.get(id);
+      if (!st) return tracker.wrap(() => {});
+      st.out.add(cb);
+      for (const b of st.outBuf.splice(0)) cb(b); // replay the pre-subscribe buffer at once (0 loss)
+      return tracker.wrap(() => st.out.delete(cb));
+    },
+    which: (bin: string): Promise<string | null> =>
+      deps.invoke("shell_which", { bin }) as Promise<string | null>,
+    // Register the PTY IO handlers (substrate) — the primary path for app.terminal.readBuffer/sendText.
+    // The tracker disposes them on deactivation (no leak). Idempotent when the plugin disposes them on
+    // unmount (only the same io is released).
+    registerIo: (
+      paneId: string,
+      io: { readBuffer: (lines?: number) => string; sendInput: (data: string) => void },
+    ): Disposable => tracker.wrap(registerPtyIo(paneId, io)),
+    // Relay one NDJSON request/response round trip to a live service sidecar's service socket (webview
+    // JS cannot open a UDS, so the core bridges it — the same layer as the pty.rs daemon byte bridge).
+    // The core is content-blind: it passes the request/response JSON through unchanged and stamps only
+    // the current window label (the routing coordinate, same as spawn). A connection failure is an
+    // explicit error, never silence or a hang — a loud signal that the sidecar died. "pty" permission.
+    sidecarRequest: (req: Record<string, unknown>): Promise<Record<string, unknown>> =>
+      deps.invoke("pty_sidecar_request", {
+        request: { ...req, window: currentWindowLabel() || null },
+      }) as Promise<Record<string, unknown>>,
+    // Read this pane's sealed blob and return the plaintext unsealed with the app vault (base64). Locked
+    // = an explicit error (fail-closed — no plaintext bypass); no blob = null. The consumer turns the
+    // bytes into a screen and repaints a dead session (a path that needs no sidecar). The core does not
+    // interpret the bytes. "terminal:read".
+    readSealedScreen: (
+      paneId: string,
+    ): Promise<{ paintB64: string } | null> =>
+      deps.invoke("pty_read_sealed_screen", {
+        windowLabel: currentWindowLabel() || null,
+        paneId,
+        // Legacy key fallback (entity id migration) — the core looks up the old id the migration planted
+        // in the tab record. The plugin does not handle this coordinate; it is the core's.
+        legacyPaneId:
+          (() => {
+            const t = findViewById(useSessions.getState().projects, paneId);
+            return t && "legacyPaneId" in t ? (t.legacyPaneId ?? null) : null;
+          })(),
+      }) as Promise<{ paintB64: string } | null>,
+    paneAlive: (paneId: string): Promise<boolean> =>
+      deps.invoke("pty_pane_alive", { paneId }) as Promise<boolean>,
+  };
+}
+
+// app.ws implementation — per-handle message/close listeners plus a buffer for pre-registration arrivals
+// (nothing lost). Same shape as createProcessApi.
+function createWsApi(deps: PluginApiDeps, tracker: DisposableTracker) {
+  type Txt = (t: string) => void;
+  interface WsState {
+    msg: Set<Txt>;
+    close: Set<() => void>;
+    msgBuf: string[];
+    closed: boolean;
+  }
+  const conns = new Map<number, WsState>();
+  return {
+    async connect(url: string): Promise<number> {
+      const st: WsState = { msg: new Set(), close: new Set(), msgBuf: [], closed: false };
+      const onMessage = createStream<string>();
+      onMessage.onmessage = (t) => {
+        if (st.msg.size) st.msg.forEach((f) => f(t));
+        else st.msgBuf.push(t);
+      };
+      const onClose = createStream<null>();
+      onClose.onmessage = () => {
+        st.closed = true;
+        st.close.forEach((f) => f());
+      };
+      const id = (await deps.invoke("ws_connect", { url, onMessage, onClose })) as number;
+      conns.set(id, st);
+      return id;
+    },
+    send: async (handle: number, text: string): Promise<void> => {
+      await deps.invoke("ws_send", { id: handle, text });
+    },
+    onMessage(handle: number, cb: Txt): Disposable {
+      const st = conns.get(handle);
+      if (!st) return tracker.wrap(() => {});
+      st.msg.add(cb);
+      for (const t of st.msgBuf.splice(0)) cb(t); // replay the pre-subscribe buffer (0 loss)
+      return tracker.wrap(() => st.msg.delete(cb));
+    },
+    onClose(handle: number, cb: () => void): Disposable {
+      const st = conns.get(handle);
+      if (!st) return tracker.wrap(() => {});
+      if (st.closed) {
+        cb();
+        return tracker.wrap(() => {});
+      }
+      st.close.add(cb);
+      return tracker.wrap(() => st.close.delete(cb));
+    },
+    close: async (handle: number): Promise<void> => {
+      await deps.invoke("ws_close", { id: handle });
+      conns.delete(handle);
+    },
+  };
+}
+
+// app.network implementation — http(req) delegates to the core net_http_request. ns is injected as the
+// plugin id (blocks stealing another ns's secrets, R2/R6 — the caller cannot choose ns). secretSubst =
+// placeholder → secretKey (no plaintext; substituted at the core boundary).
+function createNetworkApi(deps: PluginApiDeps, ns: string) {
+  return {
+    http: async (req: {
+      method: string;
+      url: string;
+      headers?: Record<string, string>;
+      query?: Record<string, string>;
+      body?: string;
+      contentType?: string;
+      secretSubst?: Record<string, string>;
+      impersonate?: "off" | "chrome";
+    }): Promise<{ status: number; headers: Record<string, string>; body: string }> => {
+      return (await deps.invoke("net_http_request", {
+        method: req.method,
+        url: req.url,
+        headers: req.headers ?? null,
+        query: req.query ?? null,
+        body: req.body ?? null,
+        contentType: req.contentType ?? null,
+        ns,
+        secretSubst: req.secretSubst ?? null,
+        impersonate: req.impersonate ?? null,
+      })) as { status: number; headers: Record<string, string>; body: string };
+    },
+  };
+}
+
+export function buildPluginApi(
+  manifest: PluginManifest,
+  _dir: string,
+  deps: PluginApiDeps,
+  entrySource?: string,
+): {
+  api: SoksakPluginApi;
+  tracker: DisposableTracker;
+  registered: {
+    commands: Set<string>;
+    views: Set<string>;
+    fileViewers: Set<string>;
+    iconSets: Set<string>;
+  };
+} {
+  const tracker = new DisposableTracker();
+  // [conformance] Track the contribution ids actually registered — for the declared ≡ actual inventory
+  // after activate.
+  const registered = {
+    commands: new Set<string>(),
+    views: new Set<string>(),
+    fileViewers: new Set<string>(),
+    iconSets: new Set<string>(),
+  };
+  const id = manifest.id;
+  const has = (p: PluginPermission) => manifest.permissions.includes(p);
+
+  // Plugin call context: not remote (this API gate handles permissions — the documented §0-2 model).
+  const pluginCtx: CommandContext = {};
+
+  const executeGated = async (
+    name: string,
+    params?: Record<string, unknown>,
+    // Passes origin and correlation (§5) — inherited by a nested run (inv) or self-declared by automatic
+    // behavior (opts.origin). The gates apply identically either way.
+    inherit?: { origin?: string; parent?: string },
+  ): Promise<CommandOutcome> => {
+    if (isBlockedForPlugins(name)) {
+      return denied(tmsg("plugin.command.managementBlocked", { name }));
+    }
+    const danger = deps.getCommandDanger(name);
+    const need: PluginPermission =
+      danger === "destructive"
+        ? "commands:destructive"
+        : danger === "inject"
+          ? "commands:inject"
+          : "commands";
+    if (!has(need)) {
+      return denied(tmsg("plugin.permission.undeclared", { permission: need, name }));
+    }
+    // A cross-plugin call requires a dependency declaration — undeclared is denied (call-boundary
+    // enforcement). Core, self, and view pass.
+    const crossDeny = crossPluginDenyReason(
+      id,
+      manifest.dependencies,
+      name,
+      manifest.consumes,
+      deps.implementsOf,
+    );
+    if (crossDeny) {
+      return denied(crossDeny);
+    }
+    return deps.execute(name, params ?? {}, {
+      ...pluginCtx,
+      ...(inherit?.origin !== undefined ? { origin: inherit.origin } : {}),
+      ...(inherit?.parent !== undefined ? { parent: inherit.parent } : {}),
+    });
+  };
+
+  // The realm declaration is derived from the finished surface object — written by hand here, the
+  // declaration would still report surfaces the permission gate removed.
+  const draft: Omit<SoksakPluginApi, "realm"> = {
+    appVersion: deps.appVersion,
+    pluginId: id,
+    locale: () => useSettings.getState().language,
+    windowLabel: () => currentWindowLabel() || "main",
+
+    events: {
+      on: (event, fn) => {
+        // Permission gate: sensitive events (command.* and such) require the declared permission to
+        // subscribe. The consent screen shows that permission, so core/terminal access is disclosed to
+        // the user.
+        const need = EVENT_PERMISSIONS[event];
+        if (need && !has(need)) {
+          throw new Error(
+            tmsg("plugin.event.needPermission", { event: String(event), permission: need }),
+          );
+        }
+        return tracker.add(deps.on(event, fn));
+      },
+      progress: (command, delta) => {
+        emitPluginEvent("command.progress", { command, delta, source: id });
+      },
+    },
+
+    activity: {
+      // Self-described publish — the plugin puts its own activity entry into the hub without a core
+      // bridge. source is fixed to the plugin id (its own name tag only) and the payload is stored
+      // verbatim (the hub is schema-agnostic). Same grade as events.progress (no permission).
+      publish: (kind, entry) => {
+        void deps.invoke("activity_publish", {
+          kind,
+          source: id,
+          payload: { ...entry, window: currentWindowLabel() },
+        });
+      },
+    },
+
+    project: {
+      current: () => deps.currentProject(),
+    },
+
+    settings: {
+      get: (key) => {
+        const defs = configDefaults(manifest);
+        if (!(key in defs)) return undefined; // a key outside the schema is not exposed
+        return usePluginSettings
+          .getState()
+          .effective(id, key, defs[key], deps.currentProject()?.root ?? undefined);
+      },
+      all: () =>
+        usePluginSettings
+          .getState()
+          .allEffective(id, configDefaults(manifest), deps.currentProject()?.root ?? undefined),
+      onChange: (cb) => {
+        const fire = () =>
+          cb(
+            usePluginSettings
+              .getState()
+              .allEffective(
+                id,
+                configDefaults(manifest),
+                deps.currentProject()?.root ?? undefined,
+              ),
+          );
+        // Re-fires on a value change (global/project override) and on an active-project switch
+        // (different root → different effective).
+        const unSettings = usePluginSettings.subscribe(fire);
+        const unProject = useSessions.subscribe((s, prev) => {
+          if (s.activeId !== prev.activeId) fire();
+        });
+        return tracker.wrap(() => {
+          unSettings();
+          unProject();
+        });
+      },
+    },
+
+    commands: has("commands")
+      ? {
+          execute: executeGated,
+          register: (name, spec) => {
+            const declared = gateContribution({
+              contributesKey: "commands",
+              noun: tmsg("plugin.contrib.noun.command"),
+              id: name,
+              declared: manifest.contributes.commands,
+              idOf: (c) => c.name,
+            });
+            registered.commands.add(name);
+            // The manifest declaration is the authority for danger (visible at install and consent
+            // time). When runtime spec.danger and the manifest both exist and differ, that is a
+            // contradiction → reject. The manifest is the authority, but when only the runtime declares
+            // danger (legacy) the runtime value is used to preserve the gate, with a warning that the
+            // manifest must declare it.
+            if (
+              spec.danger !== undefined &&
+              declared.danger !== undefined &&
+              spec.danger !== declared.danger
+            ) {
+              throw new Error(
+                tmsg("plugin.command.dangerMismatch", { name, declared: declared.danger, runtime: spec.danger }),
+              );
+            }
+            const danger = declared.danger ?? spec.danger;
+            if (declared.danger === undefined && spec.danger !== undefined) {
+              console.warn(
+                `[plugin:${id}] command '${name}' declares runtime danger='${spec.danger}' but contributes.commands does not — declare danger in the manifest so install and consent show it`,
+              );
+            }
+            // Response envelope standard (MESSAGE-PROTOCOL): the command supplies message. summarize is
+            // a lifeline for message (transitional compatibility — removed in the M5 sweep). With
+            // neither, the answer falls back to a label with a warning, and plugin.conformance reports
+            // that command under messagesMissing (an author-precise gate — rejecting at load time would
+            // brick a plugin on a message regression, so the gate boundary is publish/diagnostics).
+            const pluginAnswer = spec.message ?? spec.summarize;
+            const full = pluginCommandName(id, name);
+            if (typeof pluginAnswer !== "function") {
+              console.warn(
+                `[plugin:${id}] command '${name}' supplies no message — the answer degrades to a label (MESSAGE-PROTOCOL §3)`,
+              );
+              commandsMissingMessage.add(full);
+            } else {
+              commandsMissingMessage.delete(full);
+            }
+            const labelAnswer = () =>
+              declared.title ? localize(declared.title) : name;
+            deps.registerCommand(full, {
+              description: spec.description,
+              title: declared.title, // human label (ko/en) — the manifest owns it, the display surface resolves it
+              triggers: spec.triggers, // the host catalogJson composes base+triggers (docs/I18N.md §3)
+              params: spec.params ?? {},
+              paramsAuthority: spec.paramsAuthority,
+              returns: spec.returns ?? "object",
+              examples: spec.examples,
+              message: pluginAnswer ?? labelAnswer, // standard answer — a label when absent (transition scaffold, warned)
+              speak: spec.speak, // spoken sentence (§3) — the whole speak axis (silent when absent — opt-in)
+              // hint — passed through the same context conversion as handler. The cap and exception
+              // safety belong to execute (a hint never breaks the response).
+              hint: spec.hint
+                ? (data, ctx) =>
+                    spec.hint!(data, {
+                      origin: ctx?.origin,
+                      parent: ctx?.parent,
+                      execute: (n, p) =>
+                        executeGated(n, p, { origin: ctx?.origin, parent: ctx?.parent }),
+                    })
+                : undefined,
+              trace: spec.trace, // instrumentation spec (§4) — false = keep an observation-byproduct command out of the record
+              danger, // manifest authority (runtime fallback when absent — the gate is preserved)
+              // registry.execute try/catches and converts to INTERNAL (§0-4). inv = the call-context
+              // inheritance channel (§5): a handler's nested run inherits the parent's origin and
+              // correlation (parent) — a child of a schedule firing is not disguised as human. The gates
+              // (permission, cross-plugin) stay executeGated (no bypass).
+              handler: (params, ctx) =>
+                spec.handler(params, {
+                  origin: ctx?.origin,
+                  parent: ctx?.parent,
+                  execute: (n, p) =>
+                    executeGated(n, p, { origin: ctx?.origin, parent: ctx?.parent }),
+                }),
+            });
+            return tracker.wrap(() => deps.unregisterCommand(full));
+          },
+        }
+      : undefined,
+
+    // The programs contribution is fully declarative — the loader registers it (no imperative API,
+    // §2.6).
+
+    ui: has("ui") || has("ui:statusbar") || has("ui:titlebar") || has("ui:overlay:screen") || has("ui:overlay:pane")
+      ? {
+          registerView: (viewId, provider) => {
+            const decl = gateContribution({
+              contributesKey: "views",
+              noun: tmsg("plugin.contrib.noun.view"),
+              id: viewId,
+              declared: manifest.contributes.views,
+              idOf: (v) => v.id,
+            });
+            registered.views.add(viewId);
+            const registeredProvider = entrySource
+              ? attachViewPresentationRuntime(provider, {
+                  source: entrySource,
+                  pluginId: id,
+                  app: () => api,
+                })
+              : provider;
+            const remove = useViewRegistry
+              .getState()
+              .register(id, decl, registeredProvider);
+            return tracker.wrap(remove);
+          },
+          registerFileViewer: (viewerId, provider) => {
+            const decl = gateContribution({
+              contributesKey: "fileViewers",
+              noun: tmsg("plugin.contrib.noun.fileViewer"),
+              id: viewerId,
+              declared: manifest.contributes.fileViewers,
+              idOf: (f) => f.id,
+            });
+            registered.fileViewers.add(viewerId);
+            const remove = useFileViewerRegistry
+              .getState()
+              .register(id, decl, provider);
+            return tracker.wrap(remove);
+          },
+          // Delegates to the placement command (plugin.view.open — registered at M_P5).
+          openView: (viewId, placement) =>
+            deps.execute(
+              "plugin.view.open",
+              {
+                viewKey: qualifiedViewId(id, viewId),
+                ...(placement ? { placement } : {}),
+              },
+              pluginCtx,
+            ),
+          // Icon set registration — rejects anything outside the declaration (contributes.iconSets) and
+          // validates the data in full (same pattern as registerView). Global set id =
+          // "<pluginId>.<setId>".
+          registerIconSet: (setId, data) => {
+            const decl = gateContribution({
+              contributesKey: "iconSets",
+              noun: tmsg("plugin.contrib.noun.iconSet"),
+              id: setId,
+              declared: manifest.contributes.iconSets,
+              idOf: (s) => s.id,
+            });
+            registered.iconSets.add(setId);
+            const invalid = validateIconSetData(data);
+            if (invalid) {
+              throw new Error(tmsg("plugin.iconSet.invalidData", { setId, reason: invalid }));
+            }
+            const globalId = qualifiedViewId(id, setId);
+            useIconRegistry.getState().register({
+              id: globalId,
+              name: localize(decl.title),
+              data: data as IconSetData,
+            });
+            return tracker.wrap(() =>
+              useIconRegistry.getState().unregister(globalId),
+            );
+          },
+          // Status bar item bound to a paneId (claude-GUI's "gui" and such). The id is namespaced by
+          // plugin to avoid collisions. Calling again with the same id replaces it (updating the active
+          // toggle). Returns the unsubscribe.
+          // [RULE] The status bar is a different area from content views ("ui") → requires the
+          // "ui:statusbar" permission.
+          statusBarItem: (item) => {
+            if (!has("ui:statusbar")) {
+              throw new Error(tmsg("plugin.ui.statusBarNeedsPermission"));
+            }
+            return tracker.wrap(
+              registerStatusBarItem({ ...item, id: `${id}:${item.id}` }),
+            );
+          },
+          // Toggle icon next to the right-hand titlebar controls. The id is namespaced by plugin to
+          // avoid collisions.
+          // [RULE] The titlebar is a different area from the status bar ("ui:statusbar") → requires the
+          // "ui:titlebar" permission.
+          registerHeaderAction: (action) => {
+            if (!has("ui:titlebar")) {
+              throw new Error(tmsg("plugin.ui.headerActionNeedsPermission"));
+            }
+            return tracker.wrap(
+              registerHeaderAction({ ...action, id: `${id}:${action.id}` }),
+            );
+          },
+          setViewBadge: (viewId, badge) =>
+            useViewRegistry
+              .getState()
+              .setViewBadge(qualifiedViewId(id, viewId), badge),
+          // Overlay input gate (useUi overlayCount → compositor plugin). Makes a click over the native
+          // content webview land. [RULE] The overlay area requires a "ui:overlay:*" permission.
+          setOverlayActive: (active) => {
+            if (!(has("ui:overlay:screen") || has("ui:overlay:pane"))) {
+              throw new Error(tmsg("plugin.ui.overlayNeedsPermission"));
+            }
+            if (active) useUi.getState().pushOverlay();
+            else useUi.getState().popOverlay();
+          },
+        }
+      : undefined,
+
+
+    storage: has("storage")
+      ? {
+          read: async (key) => {
+            const raw = (await deps.invoke("plugin_data_read", {
+              id,
+              key,
+            })) as string | null;
+            return raw == null ? null : (JSON.parse(raw) as unknown);
+          },
+          write: async (key, value) => {
+            await deps.invoke("plugin_data_write", {
+              id,
+              key,
+              value: JSON.stringify(value),
+            });
+          },
+          list: async () =>
+            (await deps.invoke("plugin_data_list", { id })) as string[],
+        }
+      : undefined,
+
+    // General-purpose data store — ns is always injected as this plugin id (same isolation rule as
+    // storage). Every call forwards to the core DbState (single truth). watch filters the all-window
+    // data-change by ns/coll/scope.
+    data: has("data")
+      ? {
+          kv: {
+            get: (key) => deps.invoke("data_kv_get", { ns: id, key }),
+            set: async (key, value) => {
+              await deps.invoke("data_kv_set", { ns: id, key, value });
+            },
+            delete: (key) =>
+              deps.invoke("data_kv_delete", { ns: id, key }) as Promise<boolean>,
+            keys: (prefix) =>
+              deps.invoke("data_kv_keys", { ns: id, prefix: prefix ?? null }) as Promise<
+                string[]
+              >,
+            // kv changes only (no coll) — filters the all-window broadcast of set/delete in this plugin
+            // ns (zero polling).
+            watch: (cb) => {
+              const un = deps.onDataChange((e) => {
+                if (e.ns === id && e.coll == null) cb(e.id);
+              });
+              return tracker.wrap(un);
+            },
+          },
+          define: async (collection, opts) => {
+            await deps.invoke("data_define", {
+              ns: id,
+              coll: collection,
+              indexes: opts.indexes ?? [],
+              fts: opts.fts ?? [],
+            });
+          },
+          put: (collection, doc, opts) =>
+            deps.invoke("data_put", {
+              ns: id,
+              coll: collection,
+              scope: opts?.scope ?? null,
+              id: opts?.id ?? null,
+              doc,
+            }) as Promise<string>,
+          get: (collection, recordId, opts) =>
+            deps.invoke("data_get", {
+              ns: id,
+              coll: collection,
+              id: recordId,
+              scope: opts?.scope ?? null,
+            }),
+          delete: (collection, recordId, opts) =>
+            deps.invoke("data_delete", {
+              ns: id,
+              coll: collection,
+              id: recordId,
+              scope: opts?.scope ?? null,
+            }) as Promise<boolean>,
+          query: (collection, opts) =>
+            deps.invoke("data_query", {
+              ns: id,
+              coll: collection,
+              scope: opts?.scope ?? null,
+              filter: opts?.where ?? null,
+              order: opts?.order ?? null,
+              desc: opts?.desc ?? null,
+              limit: opts?.limit ?? null,
+              offset: opts?.offset ?? null,
+            }) as Promise<unknown[]>,
+          search: (collection, text, opts) =>
+            deps.invoke("data_search", {
+              ns: id,
+              coll: collection,
+              query: text,
+              scope: opts?.scope ?? null,
+              limit: opts?.limit ?? null,
+            }) as Promise<unknown[]>,
+          count: (collection, opts) =>
+            deps.invoke("data_count", {
+              ns: id,
+              coll: collection,
+              scope: opts?.scope ?? null,
+              filter: opts?.where ?? null,
+            }) as Promise<number>,
+          // retention (R5) — count FIFO trim / TTL reaper. Returns the delete count. Called by
+          // persistent collections such as terminal blocks.
+          retentionTrim: (collection, scope, cap) =>
+            deps.invoke("data_retention_trim", {
+              ns: id,
+              coll: collection,
+              scope,
+              cap,
+            }) as Promise<number>,
+          retentionReap: (collection, cutoffMs) =>
+            deps.invoke("data_retention_reap", {
+              ns: id,
+              coll: collection,
+              cutoff_ms: cutoffMs,
+            }) as Promise<number>,
+          watch: (collection, opts, cb) => {
+            const un = deps.onDataChange((e) => {
+              if (e.ns !== id || e.coll !== collection) return;
+              if (opts?.scope != null && e.scope != null && e.scope !== opts.scope) {
+                return;
+              }
+              cb(e);
+            });
+            return tracker.wrap(un);
+          },
+        }
+      : undefined,
+
+    // Encrypted secret vault — ns is always injected as this plugin id (same isolation as app.data).
+    // Every call forwards to the core SecretsState (single truth). No get — plaintext readback is
+    // blocked (injection only, 2b).
+    secrets: has("secrets")
+      ? {
+          set: async (key, value) => {
+            await deps.invoke("secret_set", { ns: id, key, value });
+          },
+          has: (key) =>
+            deps.invoke("secret_has", { ns: id, key }) as Promise<boolean>,
+          delete: (key) =>
+            deps.invoke("secret_delete", { ns: id, key }) as Promise<boolean>,
+          keys: () => deps.invoke("secret_keys", { ns: id }) as Promise<string[]>,
+          backend: () =>
+            deps.invoke("secret_backend") as Promise<{
+              backend: string;
+              unlocked: boolean;
+            }>,
+        }
+      : undefined,
+
+    // General-purpose scheduler — forwards to the core ScheduleState (single truth) through a thin
+    // channel with no mapping (app.data precedent). register's command routes through the registry when
+    // it fires. A reconcile job runs its state tick on poke.
+    scheduler: has("schedule")
+      ? {
+          register: (job) => {
+            // A scheduled run is still a call the plugin made. Without applying the same management
+            // boundary as a direct commands.execute at registration time, schedule becomes a
+            // time-delayed permission bypass.
+            if (isBlockedForPlugins(job.command)) {
+              return Promise.reject(
+                new Error(tmsg("plugin.schedule.managementBlocked", { command: job.command })),
+              );
+            }
+            // A schedule firing goes through the core remote channel and skips executeGated, so it could
+            // bypass cross-plugin enforcement (A schedules plugin.B.cmd). Run the same check at
+            // registration time, where the caller is identifiable.
+            const crossDeny = crossPluginDenyReason(
+              id,
+              manifest.dependencies,
+              job.command,
+              manifest.consumes,
+              deps.implementsOf,
+            );
+            if (crossDeny) {
+              return Promise.reject(new Error(crossDeny));
+            }
+            const p = deps.invoke("schedule_register", {
+              trigger: job.trigger,
+              command: job.command,
+              params: job.params ?? null,
+              id: job.id ?? null,
+              retry: job.retry ?? null,
+              concurrency: job.concurrency ?? null,
+              timeout_ms: job.timeout_ms ?? null,
+              process_lease: job.process_lease ?? null,
+              // With process_lease and no backstop, inject the 3h default. null = unbounded (core None),
+              // so core None means only "unbounded" (JS owns the default). Ignored for non-process jobs,
+              // so null there.
+              zombie_backstop_ms: job.process_lease
+                ? job.zombie_backstop_ms === undefined
+                  ? 10_800_000
+                  : job.zombie_backstop_ms
+                : null,
+              // Owner stamp (B2) — the core does not persist a job that has an owner (the plugin re-arms
+              // it in activate). Boot re-arm therefore covers core jobs only, so a disabled plugin's job
+              // never fires orphaned.
+              owner: id,
+            }) as Promise<string>;
+            // Lifecycle binding (B1) — as with command registration above, the tracker cancels the job
+            // on deactivate. Closes the hole where a schedule outlasts its owning plugin (safe even when
+            // the author forgets).
+            tracker.wrap(() => {
+              void p.then((jid) => deps.invoke("schedule_cancel", { id: jid })).catch(() => {});
+            });
+            return p;
+          },
+          poke: async (jobId) => {
+            await deps.invoke("schedule_poke", { id: jobId ?? null });
+          },
+          cancel: (jobId) =>
+            deps.invoke("schedule_cancel", { id: jobId }) as Promise<boolean>,
+          list: () =>
+            deps.invoke("schedule_list") as Promise<SchedulerJobView[]>,
+        }
+      : undefined,
+
+    // Notification (= push) plus sound. System notifications are gated on the "notify" permission
+    // (disclosed on the consent screen). Sound shares that capability.
+    notify: has("notify")
+      ? {
+          push: (n) => pushNotification(n),
+        }
+      : undefined,
+    sound: has("notify")
+      ? {
+          play: (s) => playSound(s),
+          builtins: () => [...BUILTIN_SOUNDS],
+        }
+      : undefined,
+
+    fs:
+      has("fs:read") || has("fs:write")
+        ? {
+            readText: has("fs:read")
+              ? async (path, offset) => {
+                  const data = (await deps.invoke("read_text_file", {
+                    path,
+                    offset,
+                  })) as {
+                    content: string;
+                    truncated: boolean;
+                    total_bytes: number;
+                  };
+                  return {
+                    text: data.content,
+                    truncated: data.truncated,
+                    totalBytes: data.total_bytes,
+                  };
+                }
+              : undefined,
+            readBinary: has("fs:read")
+              ? (path) =>
+                  deps.invoke("read_file_base64", { path }) as Promise<{
+                    mime: string;
+                    base64: string;
+                  }>
+              : undefined,
+            // [RULE] Local file → a URL a webview can load directly. The core standard: every plugin
+            // that reads a file and displays it (editor, media, image viewer) uses this path. The
+            // asset:// protocol blocks the hidden directory (.soksak) from its scope, so this builds a
+            // blob URL over read_file_base64 (the validated path the editor uses). Idempotent: same path
+            // → same URL (no re-read, no re-creation). Revoked on unload. Shares the "fs:read" gate.
+            url: has("fs:read")
+              ? (() => {
+                  const urlCache = new Map<string, string>();
+                  return async (path: string): Promise<string> => {
+                    const hit = urlCache.get(path);
+                    if (hit) return hit;
+                    const { mime, base64 } = (await deps.invoke("read_file_base64", {
+                      path,
+                    })) as { mime: string; base64: string };
+                    const bin = atob(base64);
+                    const bytes = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    const objectUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+                    urlCache.set(path, objectUrl);
+                    tracker.wrap(() => {
+                      URL.revokeObjectURL(objectUrl);
+                      urlCache.delete(path);
+                    });
+                    return objectUrl;
+                  };
+                })()
+              : undefined,
+            writeText: has("fs:write")
+              ? async (path, content) => {
+                  await deps.invoke("write_text_file", { path, content });
+                }
+              : undefined,
+            list: has("fs:read")
+              ? (path, opts) =>
+                  deps.invoke("list_children", { path, meta: opts?.meta })
+              : undefined,
+            // Subscribes to the core watcher (no polling). Non-recursive — the caller calls watch per
+            // subfolder.
+            // [RULE] Watching is part of reading (when to read again) → shares the "fs:read" gate.
+            watch: has("fs:read")
+              ? (dir, cb) => {
+                  void deps.invoke("watch_dir", { path: dir });
+                  const un = deps.onFsChange((changed) => {
+                    if (changed === dir) cb(dir);
+                  });
+                  return tracker.wrap(() => {
+                    un();
+                    void deps.invoke("unwatch_dir", { path: dir });
+                  });
+                }
+              : undefined,
+          }
+        : undefined,
+
+    // [RULE] Clipboard area — different capabilities get different permissions: read ("clipboard:read":
+    // read the content plus subscribe to changes) and write ("clipboard:write": overwrite the content).
+    // watch is part of reading → shares the "clipboard:read" gate (fs.watch precedent). The core absorbs
+    // per-OS native events (Win/X11/Wayland) and macOS changeCount polling into a single
+    // clipboard-change signal — the plugin never sees the OS branch.
+    clipboard:
+      has("clipboard:read") || has("clipboard:write")
+        ? {
+            readText: has("clipboard:read")
+              ? () => deps.invoke("clipboard_read") as Promise<string>
+              : undefined,
+            writeText: has("clipboard:write")
+              ? async (text: string) => {
+                  await deps.invoke("clipboard_write", { text });
+                }
+              : undefined,
+            watch: has("clipboard:read")
+              ? (cb: (e: { text: string }) => void) => {
+                  // Some frameworks cannot watch (they emit no clipboard-change event). Such a framework
+                  // rejects with its name, and that rejection must be handled — left to `void`, an
+                  // unhandled reject fires on every boot (measured 2026-08-01: twice per Electron boot),
+                  // and that noise buries real errors.
+                  //
+                  // Do not swallow it: record the reason in the ledger. Without a record, "watching does
+                  // not work" appears nowhere and the plugin waits for a change that never comes.
+                  void deps
+                    .invoke("clipboard_watch_start")
+                    .catch((e) => {
+                      void deps
+                        .invoke("activity_publish", {
+                          kind: "plugin.capability",
+                          source: "plugin",
+                          payload: {
+                            capability: "clipboard.watch",
+                            available: false,
+                            // The visible line states what does not work and why. Stating only the
+                            // mechanism ("this app does not watch") leaves the reader without who lost
+                            // what — state who requested it and what consequently does not run. The
+                            // developer-facing reason the framework rejected with goes in the payload.
+                            plugin: id,
+                            message: tmsg("plugin.clipboard.watchUnavailable", { id }),
+                            reason: String(e).slice(0, 200),
+                          },
+                        })
+                        .catch(() => {});
+                    });
+                  const un = deps.onClipboardChange((text) => cb({ text }));
+                  return tracker.wrap(() => {
+                    un();
+                    // Stopping can be rejected for the same reason — handle it. Otherwise every dispose
+                    // creates one more unhandled reject.
+                    void deps.invoke("clipboard_watch_stop").catch(() => {});
+                  });
+                }
+              : undefined,
+          }
+        : undefined,
+
+    // [RULE] Terminal area — different capabilities get different permissions: observation ("terminal":
+    // command.* snapshots), screen read ("terminal:read": buffer content and updates — the whole screen
+    // text), and input write ("terminal:write": PTY key injection). All three are separate permissions.
+    terminal:
+      has("terminal") || has("terminal:read") || has("terminal:write")
+        ? {
+            ...(has("terminal")
+              ? {
+                  runningCommands: () => runningCommands(),
+                  getCwd: (paneId: string) => deps.getCwd(paneId),
+                  onCwd: (paneId: string, cb: (cwd: string) => void) =>
+                    tracker.wrap(deps.subscribeCwd(paneId, cb)),
+                  onCommandFinished: (paneId: string, cb: () => void) =>
+                    tracker.wrap(deps.subscribeCommandFinished(paneId, cb)),
+                }
+              : {}),
+            ...(has("terminal:read")
+              ? {
+                  // Reads the screen through the registered PTY IO (substrate) — the key a plugin
+                  // terminal registered with registerIo.
+                  readBuffer: (paneId: string, lines?: number) =>
+                    getPtyIo(paneId)?.readBuffer(lines),
+                  onOutput: (paneId: string, cb: () => void) =>
+                    tracker.wrap(subscribeOutput(paneId, cb)),
+                }
+              : {}),
+            ...(has("terminal:write")
+              ? {
+                  // sendText: substrate IO (plugin terminal registerIo). Absent = false (not ready).
+                  sendText: (paneId: string, text: string) => {
+                    const io = getPtyIo(paneId);
+                    if (io) {
+                      io.sendInput(text);
+                      return true;
+                    }
+                    return false;
+                  },
+                }
+              : {}),
+          }
+        : undefined,
+    // Where this plugin declares that it delivers pointer input for its own surfaces. The core has no
+    // notion of the engine — the owner takes a label and answers whether it is its own, and the core
+    // only delivers there.
+    provideSurfaceInput: has("webview")
+      ? (provider) => registerSurfaceInputProvider(id, provider)
+      : undefined,
+    // Drives the core-owned child webview (browser plugin). Native commands are webview_* (capability
+    // prefix, docs/NAMING.md rule). Labels are derived only from the webviewLabels single truth.
+    webview: has("webview")
+      ? {
+          capabilities: Object.freeze({
+            supportsDocumentStart: engineProvision.supportsDocumentStart,
+            supportsInputInjection: engineProvision.supportsInputInjection,
+          }),
+          label: (viewId: string) => browserLabel(viewId),
+          open: (label, o) => contentViewHost().open(label, o as Record<string, unknown>),
+          bounds: (label, x, y, w, h) =>
+            contentViewHost().bounds(label, x, y, w, h) as unknown as Promise<void>,
+          visible: (label, visible, focus) => {
+            return contentViewHost().visible(label, visible, focus);
+          },
+          alive: (label) => contentViewHost().alive(label),
+          navigate: (label, url) => contentViewHost().navigate(label, url),
+          zoom: (label, factor) => contentViewHost().zoom(label, factor),
+          openWindow: (url) =>
+            contentViewHost().openWindow(url),
+          history: (label, delta) => contentViewHost().history(label, delta),
+          stop: (label) => contentViewHost().stop(label),
+          reload: (label, ignoreCache) => contentViewHost().reload(label, ignoreCache),
+          devtools: (label) => contentViewHost().devtools(label),
+          eval: (label, js) => contentViewHost().evalJs(label, js),
+          injectScript: (label, code, phase) =>
+            tracker.wrap(
+              contentViewHost().injectScript(label, code, phase ?? "document-start"),
+            ),
+          sendInput: (label, input) => contentViewHost().sendInput(label, input),
+          wheel: (label, x, y, dx, dy) => contentViewHost().wheel(label, x, y, dx, dy),
+          captureFull: (label, path, width, height) => contentViewHost().captureFull(label, path, width, height),
+          typeText: (label, text) => contentViewHost().typeText(label, text),
+          on: (label, event, cb) =>
+            tracker.wrap(
+              deps.subscribeWebview(label, event, (payload) => {
+                cb(payload);
+              }),
+            ),
+          list: async (prefix) => {
+            const all = await contentViewHost().list();
+            return prefix ? all.filter((l) => l.startsWith(prefix)) : all;
+          },
+          close: (label) =>
+            contentViewHost().close(label),
+        }
+      : undefined,
+    pty: has("pty") ? createPtyApi(deps, tracker) : undefined,
+    process: has("process") ? createProcessApi(deps, tracker, id, manifest) : undefined,
+    sidecar: has("sidecar") ? createSidecarApi(deps, tracker, manifest) : undefined,
+    network: has("network") ? createNetworkApi(deps, id) : undefined,
+    ws: has("network") ? createWsApi(deps, tracker) : undefined,
+    bus: {
+      emit: (topic: string, payload: unknown) => busEmit(topic, payload),
+      on: (topic: string, fn: (payload: unknown) => void) =>
+        tracker.wrap(busOn(topic, fn)),
+    },
+  };
+  const api: SoksakPluginApi = declarePluginRealm("window", draft);
+
+  return { api, tracker, registered };
+}

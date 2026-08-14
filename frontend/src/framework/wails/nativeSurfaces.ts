@@ -1,8 +1,3 @@
-// The framework half of native child surfaces.
-//
-// The core declares surfaces in the DOM and never learns how they are composed.
-// Where content lives inside the document instead, this becomes a no-op and the
-// core is unchanged.
 import { nativeSurfaceDOMRuntime, startNativeSurfaceObserver } from "@soksak/wails-service-native-compositor";
 import type { NativeSurfaceCommit } from "@soksak/wails-service-native-compositor";
 
@@ -11,16 +6,23 @@ import { Snapshot } from "../../../bindings/github.com/soksak/wails-service-nati
 
 const commit: NativeSurfaceCommit = async (snapshot) => {
   const receipt = await CompositorService.Commit(Snapshot.createFrom(snapshot));
-  // The applied inventory is published on the document so a compositing verdict
-  // reads one receipt rather than recomputing geometry from a second source.
+  // Publish the applied inventory on the document, so the composition check reads this one receipt instead
+  // of recomputing the geometry from a second source.
   document.documentElement.dataset.nativeSnapshotSequence = String(receipt.sequence);
   document.documentElement.dataset.nativeSnapshotAccepted = String(receipt.accepted);
   document.documentElement.dataset.nativeSnapshotCount = String(receipt.surfaces.length);
   return receipt;
 };
 
-/** Begin observing declared surfaces. Returns a stopper. */
-export function startNativeSurfaces(root: Document = document): () => void {
-  const controller = startNativeSurfaceObserver(nativeSurfaceDOMRuntime(root), commit);
-  return () => controller.stop();
+let controller: { stop(): void } | null = null;
+
+export function startNativeSurfaces(root: Document = document): void {
+  controller?.stop();
+  controller = startNativeSurfaceObserver(nativeSurfaceDOMRuntime(root), commit);
+}
+
+/** Clears the native child inventory in one transaction. Only the next full DOM snapshot can show them again. */
+export async function suspendNativeSurfaces(): Promise<void> {
+  controller?.stop();
+  controller = null;
 }

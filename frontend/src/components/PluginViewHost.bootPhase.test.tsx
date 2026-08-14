@@ -1,0 +1,90 @@
+// Three-phase contract for an unregistered view — "empty" and "about to be filled" are different
+// facts (user decision 2026-07-27: the user must be able to tell which of the two it is).
+//
+// RED evidence: on a boot where restore runs before the plugin host (restore threshold 300ms), an
+// unregistered view rendered as "no plugin view" before activation finished — a slot about to be
+// filled reported as absent.
+// Contract: unregistered before ready = plugin-loading, unregistered after ready = plugin-empty
+// (genuine absence).
+import { describe, it, expect, beforeEach } from "vitest";
+import { createRoot, type Root } from "react-dom/client";
+import { act } from "react";
+import { PluginViewHost } from "./PluginViewHost";
+import { FileViewerHost } from "./FileViewerHost";
+import { useViewRegistry } from "../plugins/viewRegistry";
+import { useFileViewerRegistry } from "../plugins/fileViewerRegistry";
+import { useBootPhase } from "../state/bootPhase";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
+  true;
+
+function mountHost(host: HTMLElement): Root {
+  const root = createRoot(host);
+  act(() => {
+    root.render(
+      <PluginViewHost
+        viewKey="nope.canvas"
+        projectId="p1"
+        root={null}
+        region="content"
+      />,
+    );
+  });
+  return root;
+}
+
+describe("PluginViewHost — the three boot phases of an unregistered view", () => {
+  let host: HTMLDivElement;
+  let root: Root | null = null;
+
+  beforeEach(() => {
+    useViewRegistry.setState({ views: {}, version: 0, badges: {} });
+    useBootPhase.setState({ phase: "ready" });
+    root?.unmount();
+    host = document.createElement("div");
+    document.body.appendChild(host);
+  });
+
+  it("an unregistered view during boot (restoring/activating) is loading, not absent", () => {
+    for (const phase of ["restoring", "activating"] as const) {
+      act(() => useBootPhase.setState({ phase }));
+      root = mountHost(host);
+      expect(host.querySelector(".plugin-loading"), phase).not.toBeNull();
+      expect(host.querySelector(".plugin-empty"), phase).toBeNull();
+      act(() => root!.unmount());
+    }
+  });
+
+  it("only an unregistered view after ready is absent (plugin-empty)", () => {
+    root = mountHost(host);
+    expect(host.querySelector(".plugin-empty")).not.toBeNull();
+    expect(host.querySelector(".plugin-loading")).toBeNull();
+  });
+
+  it("on the transition to ready the loading marker resolves in place to absent or registered", () => {
+    act(() => useBootPhase.setState({ phase: "activating" }));
+    root = mountHost(host);
+    expect(host.querySelector(".plugin-loading")).not.toBeNull();
+    act(() => useBootPhase.setState({ phase: "ready" }));
+    expect(host.querySelector(".plugin-loading")).toBeNull();
+    expect(host.querySelector(".plugin-empty")).not.toBeNull();
+  });
+
+  it("the file view (FileViewerHost) holds the same contract — the editor slot is loading during boot too", () => {
+    // RED evidence (user measurement 2026-07-27): during boot a file tab showed "no plugin view" —
+    // an indicator that reads as an error must appear only on a real fault (unregistered after
+    // activation completed).
+    useFileViewerRegistry.setState({ viewers: {}, version: 0 });
+    act(() => useBootPhase.setState({ phase: "activating" }));
+    root = createRoot(host);
+    act(() => {
+      root!.render(
+        <FileViewerHost path="<local-evidence>/x.md" projectId="p1" root={null} viewId="v1" />,
+      );
+    });
+    expect(host.querySelector(".plugin-loading")).not.toBeNull();
+    expect(host.querySelector(".plugin-empty")).toBeNull();
+    act(() => useBootPhase.setState({ phase: "ready" }));
+    expect(host.querySelector(".plugin-empty")).not.toBeNull();
+  });
+});

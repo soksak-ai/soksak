@@ -1,0 +1,116 @@
+import { describe, it, expect } from "vitest";
+import {
+  setManifestFocused,
+  snapshotWindow,
+  restoreWindow,
+  windowManifestEntry,
+  upsertManifest,
+  type WindowManifest,
+} from "./windowPersistence";
+import type { Project, PaneNode } from "./sessions";
+
+let sid = 0;
+const newSplitId = () => `S${++sid}`;
+
+const leafGroup = (gid: string, vid: string): PaneNode => ({
+  type: "leaf",
+  value: {
+    id: gid,
+    activeTabId: vid,
+    tabs: [
+      { id: vid, kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
+    ],
+  },
+});
+
+const proj = (id: string, root: string): Project => ({
+  id,
+  title: id,
+  root,
+  sidebarOpen: true,
+  rightOpen: false,
+  rightView: null,
+  leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
+  activeSpaceId: "c1",
+  spaces: [{ id: "c1", title: "1", activePaneId: "g1", layout: leafGroup("g1", "v1") }],
+});
+
+describe("snapshot/restore round trip per window", () => {
+  it("projects and activeId are preserved", () => {
+    sid = 0;
+    const projects = [proj("t1", "/a"), proj("t2", "/b")];
+    const snap = snapshotWindow(projects, "t2");
+    const back = restoreWindow(snap, newSplitId);
+    expect(back.activeId).toBe("t2");
+    expect(back.projects.map((t) => t.root)).toEqual(["/a", "/b"]);
+    expect(back.projects.map((t) => t.id)).toEqual(["t1", "t2"]);
+  });
+
+  it("an activeId absent from the restored set falls back to the first project", () => {
+    sid = 0;
+    const snap = snapshotWindow([proj("t1", "/a")], "tZ");
+    expect(restoreWindow(snap, newSplitId).activeId).toBe("t1");
+  });
+
+  it("an empty window restores empty", () => {
+    const snap = snapshotWindow([], "");
+    const back = restoreWindow(snap, newSplitId);
+    expect(back.projects).toEqual([]);
+    expect(back.activeId).toBe("");
+  });
+});
+
+describe("windowManifestEntry", () => {
+  it("label + roots + activeRoot", () => {
+    const projects = [proj("t1", "/a"), proj("t2", "/b")];
+    expect(windowManifestEntry("main", projects, "t2")).toEqual({
+      label: "main",
+      roots: ["/a", "/b"],
+      activeRoot: "/b",
+    });
+  });
+});
+
+describe("upsertManifest", () => {
+  const base: WindowManifest = {
+    slots: [{ label: "main", roots: ["/a"], activeRoot: "/a" }],
+  };
+
+  it("a slot with the same label is replaced", () => {
+    const r = upsertManifest(base, { label: "main", roots: ["/x"], activeRoot: "/x" });
+    expect(r.slots).toEqual([{ label: "main", roots: ["/x"], activeRoot: "/x" }]);
+  });
+
+  it("a new label is appended", () => {
+    const r = upsertManifest(base, { label: "w-1", roots: ["/y"], activeRoot: "/y" });
+    expect(r.slots).toHaveLength(2);
+    expect(r.slots.map((s) => s.label).sort()).toEqual(["main", "w-1"]);
+  });
+
+  it("empty roots remove the slot (window closed)", () => {
+    const r = upsertManifest(base, { label: "main", roots: [], activeRoot: null });
+    expect(r.slots).toEqual([]);
+  });
+});
+
+describe("manifest rect and focused (B2 multi-window restore)", () => {
+  it("upsert preserves a rect set on the entry", () => {
+    const m = upsertManifest(
+      { slots: [] },
+      { label: "w-1", roots: ["/a"], activeRoot: "/a", rect: { x: 10, y: 20, w: 800, h: 600 } },
+    );
+    expect(m.slots[0].rect).toEqual({ x: 10, y: 20, w: 800, h: 600 });
+  });
+
+  it("focusedLabel is top level in the manifest — setManifestFocused updates and keeps it", () => {
+    let m: WindowManifest = { slots: [] };
+    m = upsertManifest(m, { label: "main", roots: ["/m"], activeRoot: "/m" });
+    m = setManifestFocused(m, "main");
+    expect(m.focusedLabel).toBe("main");
+    // upsert of another window does not clear focusedLabel.
+    m = upsertManifest(m, { label: "w-1", roots: ["/a"], activeRoot: "/a" });
+    expect(m.focusedLabel).toBe("main");
+    m = setManifestFocused(m, "w-1");
+    expect(m.focusedLabel).toBe("w-1");
+  });
+});

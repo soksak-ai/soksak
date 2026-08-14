@@ -1,0 +1,2450 @@
+// Command catalog — every soksak capability registers as a command (single source of truth).
+// Targeting rules (all commands):
+//   - An explicit target id selects that location (searched across every project); omitting it
+//     uses the caller context (SOKSAK_CALLER_TAB → the pane/space/project of that tab) or the
+//     active chain.
+//   - Every mutation returns its result (new id / state after the change) — the caller verifies
+//     from the response alone.
+
+import { registerCaptureCatalog } from "./catalogCapture";
+import { registerSettingsCatalog } from "./catalogSettings";
+import { registerHealthCatalog } from "./catalogHealth";
+import { registerBootCatalog } from "./catalogBoot";
+import { registerWindowCatalog } from "./catalogWindow";
+import { invoke, frameworkPath } from "../framework";
+import { recordWindowFrames } from "./windowRecorder";
+import { tmsg } from "../i18n";
+import {
+  DEFAULT_RAIL_PLACEMENT,
+  snapRailStation,
+  type RailPlacement,
+} from "../lib/railPlacement";
+import { listRecentProjects, removeRecentProject } from "../state/recentProjects";
+import {
+  allGroups,
+  projectArrangement,
+  useSessions,
+  type Space,
+  type DropZone,
+  type PaneNode,
+  type Program,
+  type Project,
+  type Side,
+  type Tab,
+  type Pane,
+} from "../state/sessions";
+import {
+  canonicalGutter,
+  isCanonicalSide,
+  resolveGutter,
+  type GutterSide,
+} from "../lib/gutterAddress";
+import type { SidebarLayout } from "../state/sidebarLayout";
+import type { SplitTree } from "../state/splitTree";
+import { addProjectClaimed, closeProjectReleased } from "../state/projectRegistry";
+import { getRegisteredProgram, listPrograms } from "../plugins/programRegistry";
+import { resolveTerminalProgram, TERMINAL_CONTRACT } from "../plugins/terminalEngine";
+import {
+  activeSessionViewId,
+  transferViewFocus,
+} from "../plugins/viewFocus";
+import { useSettings } from "../state/settings";
+import { currentWindowLabel } from "../lib/webviewLabels";
+import { awaitViewMounted } from "../plugins/viewFocus";
+import { useViewLabels } from "../state/viewLabels";
+import { useBookmarks } from "../state/bookmarks";
+import { hasPtyObservation } from "../terminal/ptyObservationStore";
+import { resolveTermTab } from "./termResolve";
+import { computeLayout } from "../components/GroupArea";
+import {
+  resolveEffectiveRailRelation,
+  type Arrangement,
+} from "../lib/railArrangement";
+import { catalogJson, register, type CommandContext, type CommandHint } from "./registry";
+import { notFound } from "./refuse";
+import { registerFsWatchCatalog } from "./catalogFsWatch";
+import { registerPluginCatalog } from "./catalogPlugins";
+import { registerDaemonCatalog } from "./catalogDaemon";
+import { registerUpdateCatalog } from "./catalogUpdate";
+import { registerUiCatalog } from "./catalogUi";
+import { registerProjectionCatalog } from "./catalogProjection";
+import { registerDomCatalog } from "./catalogDom";
+import { registerAiSessionCatalog } from "./catalogAiSession";
+import { registerDataCatalog } from "./catalogData";
+import { registerPtySessionCatalog } from "./catalogPtySession";
+import { registerSecretsCatalog } from "./catalogSecrets";
+import { registerTurnCatalog } from "./catalogTurn";
+import { registerNetworkCatalog } from "./catalogNetwork";
+import { registerMediaCatalog } from "./catalogMedia";
+import { registerClipboardCatalog } from "./catalogClipboard";
+import { registerNotifyCatalog } from "./catalogNotify";
+import { registerScheduleCatalog } from "./catalogSchedule";
+import { registerServiceCatalog } from "./catalogService";
+import { registerFrameworkCatalog } from "./catalogFramework";
+import { registerSystemCatalog } from "./catalogSystem";
+import {
+  declareLayoutCause,
+  layoutTransitionJournal,
+  waitForLayoutTransaction,
+} from "../lib/layoutTransitionJournal";
+import { registerUnitDevCatalog } from "./catalogUnitDev";
+import { registerReleaseCatalog } from "./catalogRelease";
+import { registerWebviewCatalog } from "./catalogWebview";
+import { registerPresentationClockCatalog } from "./catalogPresentationClock";
+import {
+  ensureDefaultProjectRoot,
+  FOLDER_NAME_RE,
+  validateProjectRoot,
+} from "../lib/projectRoot";
+import { contentViewHost, hasContentViewHost } from "../lib/contentViews";
+import { waitForDomCommit } from "./waitForDomCommit";
+
+// ── Shared errors and helpers ─────────────────────────────────────────────────
+
+// Echo the resolved target axes in the response — omitted axes are filled silently from the caller
+// context, so a response that omits them leaves the caller with no way to see where the command ran
+// (targetEcho gate). Not attached to failure envelopes — a failed call has no resolved target.
+function withTargets(result: object, targets: Record<string, string | undefined>): object {
+  const rec = result as Record<string, unknown>;
+  if (rec.ok === false || rec.code) return result;
+  return { ...rec, ...targets };
+}
+
+// Attach the landed arrangement to the response of a command that changed structure — the caller
+// does not have to query again to see where things aligned (the solve is already done right after
+// the change). Not attached to failure responses.
+function withArrangement(projectId: string, result: object): object {
+  const rec = result as Record<string, unknown>;
+  if (rec.ok === false || rec.code) return result;
+  const t = useSessions.getState().projects.find((item) => item.id === projectId);
+  const solved = t ? projectArrangement(t) : null;
+  if (!solved) return result;
+  return {
+    ...rec,
+    arrangement: {
+      station: solved.station,
+      switched: solved.swapped,
+      cleanLines: solved.cleanLines,
+      cells: solved.cells.map((cell) => ({ id: cell.id, rect: cell.rect })),
+    },
+  };
+}
+
+export interface Location {
+  project: Project;
+  space: Space;
+  pane: Pane;
+  /** An empty pane (0 tabs) is a valid location with no tab — consumers that require a tab handle the absence. */
+  tab?: Tab;
+}
+
+// layout.apply authoring shape — spaces first, then each space's panes (splits). Same grain as the surface contract (space/pane).
+interface LayoutPaneSpec {
+  program: string;
+  side?: Side;
+}
+interface LayoutSpaceSpec {
+  title?: string;
+  panes?: LayoutPaneSpec[];
+}
+
+// Gutter axis resolution and canonicalization is owned by lib/gutterAddress alone (the renderer's
+// data-node address and the command parameters take the same function — no second standard). Here
+// it only adds sizes to that result.
+const EDGES = ["right", "bottom", "left", "top"] as const satisfies readonly GutterSide[];
+const paneIdOf = (pane: Pane) => pane.id;
+
+// The canonical gutter the response names — the direction axis on the command surface is edge (side
+// means pane.split's split direction, a different axis, so one word never has two meanings here).
+function gutterEcho(
+  layout: PaneNode,
+  paneId: string,
+  edge: GutterSide,
+): { pane: string; edge: GutterSide } | null {
+  const canonical = canonicalGutter(layout, paneId, edge, paneIdOf);
+  return canonical ? { pane: canonical.pane, edge: canonical.side } : null;
+}
+
+// The split that directly wraps the leaf holding that viewKey — interior nodes of the sidebar tree
+// have no name, so the split to adjust is named by the view inside it (sidebar.left.resize). A leaf
+// root has no split (null).
+function sidebarSplitIdOf(layout: SidebarLayout, viewKey: string): string | null {
+  const walk = (node: SidebarLayout, parentId: string | null): string | null => {
+    if (node.type === "leaf") return node.value.viewKeys.includes(viewKey) ? parentId : null;
+    for (const c of node.children) {
+      const hit = walk(c, node.id);
+      if (hit !== null) return hit;
+    }
+    return null;
+  };
+  return walk(layout, null);
+}
+
+// Current sizes of the split containing the resolved gutter — this read exists because resizeSplit
+// requires the full sizes array (moving one gutter re-reads the other ratios and writes them back).
+// If that interface changes to take one gutter's ratio, this function disappears entirely — that is
+// the removal condition, and until then it stays a local read here (promoting it gives a home to
+// something that must vanish). If promotion becomes necessary, put it next to resizeSplitTree and
+// findSplitTree in splitTree.ts as a leaf generic — that file is the single abstraction for both the
+// pane tree and the sidebar tree, so a read that fits only one side breaks the symmetry.
+function splitSizesOf(node: PaneNode, splitId: string): number[] | null {
+  if (node.type === "leaf") return null;
+  if (node.id === splitId) return node.sizes;
+  for (const c of node.children) {
+    const hit = splitSizesOf(c, splitId);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+// Search every project for the location of a tab id. Terminal targets resolve through this function
+// too — a terminal is a plugin view and its instance is a tab (no core terminal).
+/** Tab location — other catalog files (capture etc.) use this same one (two copies answer different places for one id). */
+export function locateTab(tabId: string): Location | null {
+  const s = useSessions.getState();
+  for (const project of s.projects) {
+    for (const space of project.spaces) {
+      for (const pane of allGroups(space.layout)) {
+        const tab = pane.tabs.find((v) => v.id === tabId);
+        if (tab) return { project, space, pane, tab };
+      }
+    }
+  }
+  return null;
+}
+
+// Location of a pane id (tab = that pane's active tab).
+function locatePane(paneId: string): Location | null {
+  const s = useSessions.getState();
+  for (const project of s.projects) {
+    for (const space of project.spaces) {
+      const pane = allGroups(space.layout).find((g) => g.id === paneId);
+      if (pane) {
+        const tab =
+          pane.tabs.find((v) => v.id === pane.activeTabId) ?? pane.tabs[0];
+        return { project, space, pane, tab };
+      }
+    }
+  }
+  return null;
+}
+
+// Active chain (active project → active space → active pane → active tab).
+function activeChain(): Location | null {
+  const s = useSessions.getState();
+  const project = s.projects.find((t) => t.id === s.activeId);
+  if (!project) return null;
+  const space =
+    project.spaces.find((c) => c.id === project.activeSpaceId) ??
+    project.spaces[0];
+  if (!space) return null;
+  const pane =
+    allGroups(space.layout).find((g) => g.id === space.activePaneId) ??
+    allGroups(space.layout)[0];
+  if (!pane) return null;
+  const tab =
+    pane.tabs.find((v) => v.id === pane.activeTabId) ?? pane.tabs[0];
+  // An empty pane (everything moved or closed) is a valid location too — pane-target commands
+  // (tab.open etc.) must keep working, so it is not cut off here; consumers that require a tab handle
+  // the absence (no INTERNAL death, measured).
+  return { project, space, pane, tab };
+}
+
+// Call context resolution: caller tab ($SOKSAK_CALLER_TAB) first, else the active chain.
+function resolveCtx(ctx: CommandContext): Location | null {
+  if (ctx.pane) {
+    const loc = locateTab(ctx.pane);
+    if (loc) return loc;
+  }
+  return activeChain();
+}
+
+// Target project: explicit id > context.
+function resolveProject(
+  params: Record<string, unknown>,
+  ctx: CommandContext,
+): Project | null {
+  const id = params.project as string | undefined;
+  if (id) {
+    return useSessions.getState().projects.find((t) => t.id === id) ?? null;
+  }
+  return resolveCtx(ctx)?.project ?? null;
+}
+
+// Target pane: explicit id (searched across every project) > context pane.
+function resolvePane(
+  params: Record<string, unknown>,
+  ctx: CommandContext,
+): Location | null {
+  const id = params.pane as string | undefined;
+  if (id) return locatePane(id);
+  return resolveCtx(ctx);
+}
+
+// Context-based terminal tab resolution for term.* (when tab is omitted) — injected into resolveTermTab.
+// A terminal = an instance of a view with PTY observation (a plugin terminal, its instance is a tab).
+// Order: caller tab > active tab > first terminal tab in the same space. The substrate predicate
+// (hasPtyObservation) makes the judgement generic (zero core lock-in).
+function terminalContextTab(
+  _params: Record<string, unknown>,
+  ctx: CommandContext,
+): { tabId: string } | null {
+  if (ctx.pane && hasPtyObservation(ctx.pane)) return { tabId: ctx.pane };
+  const loc = activeChain();
+  if (!loc) return null;
+  if (loc.tab && hasPtyObservation(loc.tab.id)) {
+    return { tabId: loc.tab.id };
+  }
+  for (const g of allGroups(loc.space.layout)) {
+    for (const v of g.tabs) {
+      if (hasPtyObservation(v.id)) return { tabId: v.id };
+    }
+  }
+  return null;
+}
+
+// Browser-family program id resolution (layout.apply dev preset). Programs are all plugin
+// contributions, so the core has no notion of browser kinds (zero lock-in) — identification is by
+// the registered program id convention ("browser"). Missing returns undefined, and the caller skips
+// that panel and records the reason (no hiding).
+// A real program for hint examples — the first entry of the registered list. No specific program id
+// is assumed (the core is program-agnostic) — a hardcoded example becomes broken guidance where it
+// is not installed (measured: claude). With no registered program, the placeholder (<program>) makes
+// the example obvious.
+function exampleProgramId(): string {
+  return listPrograms()[0]?.decl.id ?? "<program>";
+}
+
+// Browser pane resolution for the dev preset — only the conventional program id "browser" (the same
+// mechanism as terminal). No substring-matching fallback: an arbitrary id containing "browser" could
+// be mistaken for the default browser (engine variants, tool programs), and terminal works off one
+// conventional id without such a fallback — symmetry kept.
+// Unregistered returns undefined — the caller skips that pane and records the reason (no hiding).
+function findBrowserProgram(): string | undefined {
+  return listPrograms().find((p) => p.decl.id === "browser")?.decl.id;
+}
+
+// ── Serialization (state.tree) ────────────────────────────────────────────────
+
+function serializeTab(v: Tab) {
+  if (v.kind === "file") {
+    return {
+      id: v.id,
+      kind: v.kind,
+      title: v.title,
+      customLabel: v.customLabel,
+      path: v.path,
+      mode: v.mode,
+      dirty: v.status?.code === "dirty",
+    };
+  }
+  return {
+    id: v.id,
+    kind: v.kind,
+    title: v.title,
+    customLabel: v.customLabel,
+    icon: v.icon,
+    plugin: v.pluginId,
+    view: v.view,
+  };
+}
+
+// Serialization of the split structure (shared by the pane tree and the sidebar tree). Interior nodes
+// are not real things, so they have no name — only dir/sizes and nested children, no id. Commands
+// that manipulate gutters (pane.resize, pane.equalize, sidebar.left.resize) name a gutter by leaf, so
+// an interior node is never named (IDENTITY §4).
+function serializeSplitStructure<L>(
+  node: SplitTree<L>,
+  leafOf: (value: L) => object,
+): object {
+  if (node.type === "leaf") return leafOf(node.value);
+  return {
+    split: { dir: node.dir, sizes: node.sizes },
+    children: node.children.map((c) => serializeSplitStructure(c, leafOf)),
+  };
+}
+
+function serializeLayout(node: PaneNode): object {
+  return serializeSplitStructure(node, (pane) => ({ pane: pane.id }));
+}
+
+function serializeSidebarLayout(node: SidebarLayout): object {
+  return serializeSplitStructure(node, (g) => ({
+    viewKeys: g.viewKeys,
+    active: g.activeViewKey,
+  }));
+}
+
+function serializeSpace(
+  c: Space,
+  activeSpaceId: string,
+  /** The solve for this space (arrangement solver). An inactive space with no rail is null — the canonical order as is. */
+  arrangement: Arrangement<Pane> | null,
+  railOpen = true,
+  railPlacement: RailPlacement["mode"] = "flow",
+) {
+  const displayLayout = arrangement?.displayLayout ?? c.layout;
+  const canonicalLayout = serializeLayout(c.layout);
+  const canonicalCells = computeLayout(c.layout).cells;
+  const projectedCells = computeLayout(displayLayout).cells;
+  const maximizedPane = c.maximizedTabId
+    ? (projectedCells.find(({ group }) => group.id === c.activePaneId) ??
+      projectedCells.find(({ group }) =>
+        group.tabs.some((tab) => tab.id === c.maximizedTabId),
+      ) ?? null)
+    : null;
+  const cells = maximizedPane
+    ? [{ group: maximizedPane.group, rect: { left: 0, top: 0, width: 100, height: 100 } }]
+    : projectedCells;
+  const canonicalOrder = canonicalCells.map(({ group }) => group.id);
+  const projectedOrder = projectedCells.map(({ group }) => group.id);
+  const swappedPanes = canonicalOrder.filter(
+    (id, index) => projectedOrder[index] !== id,
+  );
+  const projection = c.maximizedTabId
+    ? {
+        kind: "maximized" as const,
+        applied: true,
+        focusedPaneId: c.activePaneId,
+        swappedPanes: [] as string[],
+      }
+    : displayLayout !== c.layout
+      ? {
+          kind: "switched" as const,
+          applied: true,
+          focusedPaneId: c.activePaneId,
+          swappedPanes,
+        }
+      : {
+          kind: "canonical" as const,
+          applied: false,
+          focusedPaneId: c.activePaneId,
+          swappedPanes: [] as string[],
+        };
+  // Consumes the same solver as the screen. A missing explicit binding resolves to the active tab of
+  // the active pane; a closed rail or an empty pane is published as none/0, not hidden as nullable.
+  const railRelation = resolveEffectiveRailRelation({
+    contentId: c.id,
+    arrangement,
+    bindingTabId: c.railBindingTabId,
+    placement: railPlacement,
+    railOpen,
+  }).state;
+  return {
+    id: c.id,
+    title: c.title,
+    active: c.id === activeSpaceId,
+    activePaneId: c.activePaneId,
+    maximizedTabId: c.maximizedTabId ?? null,
+    // layout/panes = the screen right now. canonicalLayout = read-only serialization of the stored
+    // SplitTree. Consumers need not mistake the projection for the canonical state or read the private store.
+    layout: maximizedPane
+      ? { pane: maximizedPane.group.id }
+      : serializeLayout(displayLayout),
+    canonicalLayout,
+    projection,
+    railRelation,
+    panes: cells.map(({ group, rect }) => ({
+      id: group.id,
+      rect: {
+        left: Math.round(rect.left * 10) / 10,
+        top: Math.round(rect.top * 10) / 10,
+        width: Math.round(rect.width * 10) / 10,
+        height: Math.round(rect.height * 10) / 10,
+      },
+      active: group.id === c.activePaneId,
+      activeTabId: group.activeTabId,
+      tabs: group.tabs.map(serializeTab),
+    })),
+  };
+}
+
+// Public facts about the left rail position. The stored PIN station and the station actually applied
+// on the current grid are kept apart. Reading a stale snapshot's dirty PIN does not change the stored
+// value; only an explicit PIN command snaps to a valid line and stores it.
+function serializeLeftRailPosition(t: Project) {
+  const arrangement = projectArrangement(t);
+  const cleanLines = arrangement?.cleanLines ?? [0, 100];
+  const placement: RailPlacement = t.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
+  const effectiveStation = arrangement?.station ?? 0;
+  return placement.mode === "pin"
+    ? {
+        mode: placement.mode,
+        station: placement.station,
+        effectiveStation,
+        cleanLines,
+      }
+    : { mode: placement.mode, effectiveStation, cleanLines };
+}
+
+function serializeTree() {
+  const s = useSessions.getState();
+  return {
+    activeProjectId: s.activeId,
+    projects: s.projects.map((t) => {
+      const leftRailPosition = serializeLeftRailPosition(t);
+      const arrangement = projectArrangement(t);
+      return {
+        id: t.id,
+        title: t.title,
+        root: t.root ?? null,
+        color: t.color ?? null,
+        sidebarOpen: t.sidebarOpen,
+        leftRailPosition,
+        active: t.id === s.activeId,
+        activeSpaceId: t.activeSpaceId,
+        spaces: t.spaces.map((c) =>
+          serializeSpace(
+            c,
+            t.activeSpaceId,
+            c.id === t.activeSpaceId ? arrangement : null,
+            t.sidebarOpen,
+            leftRailPosition.mode,
+          ),
+        ),
+      };
+    }),
+  };
+}
+
+// ── Parameter fragments (reused) ──────────────────────────────────────────────
+
+/**
+ * Window axis resolution — four commands use the same shape.
+ *
+ * When the shape differs per command, "omitted = the addressed target" goes missing somewhere
+ * (measured: only window.close missed it and died on a missing argument). One resolution function
+ * makes that rule hold in the code — different from a test catching it afterwards.
+ */
+export function windowTarget(p: Record<string, unknown>): string {
+  return typeof p.label === "string" && p.label ? p.label : currentWindowLabel();
+}
+
+export const P = {
+  /**
+   * Window axis — the envelope (--window) already names the target, so omitting is the default.
+   *
+   * Why the definition is in one place: written per command, the meaning and the default drift apart.
+   * Measured defect — only window.close required label in practice, so a close called against its own
+   * window died on a missing argument and e2e piled up views on every run. The window axis cannot be
+   * required (windowAxis.test).
+   *
+   * The webview axis (webview.recover's label = b-<win>-<view>) is a different identifier space, outside this rule.
+   */
+  windowLabel: {
+    type: "string",
+    description: "Window label (omit = the addressed window; see window.list)",
+  },
+  project: {
+    type: "string",
+    description: "Target project id (omit = caller's context project)",
+  },
+  space: { type: "string", description: "Target space tab id" },
+  pane: {
+    type: "string",
+    description: "Target pane id (omit = caller's context pane)",
+  },
+  /**
+   * Tab axis — one axis has one name. Two names for the same id space make the caller guess which to
+   * use, and a fix touches only one of them. Terminal targets are this axis too (a terminal = an
+   * instance of a plugin view).
+   */
+  tab: {
+    type: "string",
+    description: "Target tab id (omit = caller's context tab, $SOKSAK_CALLER_TAB)",
+  },
+  program: {
+    type: "string",
+    description:
+      "Program id — plugin-registered only (see program.list; no built-in default). Omitted or unregistered id opens a blank pane",
+  },
+  side: {
+    type: "string",
+    description: "Split direction",
+    enum: ["left", "right", "top", "bottom"],
+  },
+  edge: {
+    type: "string",
+    description:
+      "Which of the pane's edges the gutter sits on — right|bottom are canonical, left|top name the same gutter from the neighbour's side",
+    enum: [...EDGES],
+  },
+  zone: {
+    type: "string",
+    description: "Drop zone (center = move/merge; others = split in that direction)",
+    enum: ["center", "left", "right", "top", "bottom"],
+  },
+} satisfies Record<string, import("./registry").ParamSpec>;
+
+// ── Registration ──────────────────────────────────────────────────────────────
+
+export function registerCatalog(): void {
+  registerBootCatalog();
+  registerPresentationClockCatalog();
+  const S = () => useSessions.getState();
+
+  // ----- state -----
+  // ui.measure / ui.tree / ui.input.* are in catalogDom.ts (address-based) — selector measurement is dropped (moved to the address scheme).
+
+  register("state.tree", {
+    description:
+      "Full layout snapshot (address book): all ids and active state across project → space → pane (display rect %) → tab. Each space exposes displayed and canonical stored layouts, projection provenance, and the effective rail relation; each project exposes its effective left-rail position and clean grid lines.",
+    params: {},
+    returns:
+      "{ activeProjectId, projects[].{ leftRailPosition, spaces[].{ layout, canonicalLayout, projection, railRelation:{boundTabId,boundPaneId,relationId,placement,connected,side:left|right|detached,borderMode:union|independent|none,pathCount:1|2|0}, panes[] } } } — layout/panes are displayed state; canonicalLayout is the stored SplitTree",
+    message: (d) => tmsg("msg.state.tree", { n: ((d.projects as unknown[]) ?? []).length }),
+    examples: ["state.tree"],
+    handler: () => serializeTree(),
+  });
+
+  // The arrangement solve — station, switching and travel distance are a pure function of (grid,
+  // focus), and this command exposes that solve as is. Comparing it against observation (ui.measure)
+  // shows whether the screen matches the contract.
+  // No command sets the arrangement directly — the solve comes out of the tree and the focus, so a
+  // surface that writes it directly becomes a second truth (position is owned by
+  // sidebar.left.position, structure by pane.*).
+  register("layout.arrangement", {
+    description:
+      "The solved arrangement of the active space: the rail station, whether the focused pane was switched to the front (row-mismatch rule), and the displayed cell rects. Read-only — the arrangement is a function of the split tree and the focus, so pane.*/sidebar.left.position are the ways to change it.",
+    triggers: {
+      ko: "배치 해 레일 스테이션 이동량 스위칭 정렬 계산 확인",
+    },
+    params: { project: P.project },
+    returns:
+      "{ projectId, spaceId, station, cleanLines[], switched, betweenIds[] (panes stranded between the rail and the focused pane when the rail could not reach it — they do not move, they dim), cells[].{id,rect,railSide} }",
+    message: (d) => tmsg("msg.layout.arrangement", { n: Number(d.station) }),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["layout.arrangement"],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const solved = projectArrangement(t);
+      if (!solved) return notFound(tmsg("msg.space.notFound"));
+      const railOpen = t.sidebarOpen;
+      return {
+        projectId: t.id,
+        spaceId: t.activeSpaceId,
+        station: solved.station,
+        cleanLines: solved.cleanLines,
+        switched: solved.swapped,
+        // Panes stranded between the rail and the focused pane when the rail could not travel there —
+        // they do not move, they dim. A hand-written list drops one entry every time the contract grows
+        // (measured 2026-08-02: this spot omitted betweenIds, so the command could not report that fact).
+        betweenIds: solved.betweenIds,
+        railOpen,
+        cells: solved.cells.map((cell) => ({
+          id: cell.id,
+          rect: {
+            left: cell.rect.left,
+            top: cell.rect.top,
+            width: cell.rect.width,
+            height: cell.rect.height,
+          },
+          railSide: cell.rect.left >= solved.station - 0.01 ? "after" : "before",
+        })),
+      };
+    },
+  });
+
+  register("layout.transactions", {
+    description:
+      "Read the finite layout transition journal. A transaction is published as preparing before adapter ACK, becomes prepared only after staged targets are declared, and then closes terminally. Snap rows bind the exact store settlement owner/revision and retain whether that revision is still pending or settled after projection commit. The journal retains at most 16 active and 64 terminal rows without evicting active work. Glide rows own a display-callback presentationStart; snap rows instead own the exact adapter projectionCommit bounds ACK and never run candidate negotiation. causeTraceId joins the stimulus to one terminal transaction. This is the numeric automation surface; recordings are human visual evidence only.",
+    triggers: { ko: "레이아웃 거래 장부 이동 위상 수치 추적" },
+    params: {},
+    returns:
+      "{ entries:[{transactionId,causeTraceId?,sequence,phase:'preparing'|'prepared'|'committed'|'failed'|'cancelled',openedAtUnixMs,preparedAtUnixMs?,domCommittedAtUnixMs?,closedAtUnixMs?,stagedTargetsStatus:'pending'|'declared',stagedTargets:null|[direct:<label>|pane:<host>],moves,panePresentationTargets:[{viewId}],paneSettlementParticipants:[{viewId}],settlement:{ownerKey,revision,status:'pending'|'settled'|'failed'|'cancelled'}|null,presentationFailure?:{candidateAttempts:[{candidate:{commandReceivedAtUnixUs,installedAtUnixUs,callbackReceivedAtUnixUs,callbackObservedAtUnixMs,callbackObservedAtUnixUs,startAtUnixUs,documentTimelineBridge:{producer:'display-callback-wall-bridge',clock:'unix-wall',callbackObservedAtUnixUs,startAtUnixUs}},armClock,armStartedAtUnixUs,armCompletedAtUnixUs,armDurationUs,armFailures:[{diagnostic?:{expectedDocumentStartTime?}}]}]},projectionFailure?:{transactionId,stagedTarget,paneBoundsAck:{transactionId,pane,targetMemberFrames,memberPlacements}}} & (preparing:{mode:null}|glide:{mode:'glide',presentationStart:{transactionId,producer:'display-callback',clock,sourceGeneration,frameSequence,commandReceivedAtUnixUs,installedAtUnixUs,callbackReceivedAtUnixUs,startAtUnixUs,durationMs,documentTimelineBridge:{producer:'display-callback-wall-bridge',clock:'unix-wall',callbackObservedAtUnixUs,startAtUnixUs},candidateAttempts:[...]},projectionCommit:absent}|snap:{mode:'snap',presentationStart:absent,projectionCommit:{transactionId,producer:'layout-adapter',targets:[{stagedTarget,owner:'pane-bounds'|'direct-bounds'|'external-surface',frame:{x,y,w,h},sourceGeneration?}]})] }",
+    message: (data) => `layout transactions ${String((data.entries as unknown[])?.length ?? 0)}`,
+    examples: ["layout.transactions"],
+    handler: () => ({ entries: layoutTransitionJournal() }),
+  });
+
+  register("layout.transaction.wait", {
+    description:
+      "Wait for the one terminal layout transaction opened by an exact causeTraceId after an ordered journal sequence. The command subscribes to journal events before reading its snapshot, rejects duplicate causes, and removes its listener at a finite timeout; it does not poll.",
+    triggers: { ko: "레이아웃 거래 종결 대기 원인 식별자 이벤트" },
+    params: {
+      causeTraceId: {
+        type: "string",
+        description: "Exact caller-owned causeTraceId passed to the stimulus.",
+        required: true,
+      },
+      afterSequence: {
+        type: "number",
+        description: "Ignore entries at or before this journal sequence.",
+        required: true,
+      },
+      timeoutMs: {
+        type: "number",
+        description: "Finite event-wait cleanup bound in milliseconds.",
+        required: true,
+      },
+    },
+    returns:
+      "{ causeStatus:'exact', entry:{panePresentationTargets:[{viewId}],paneSettlementParticipants:[{viewId}],settlement:{ownerKey,revision,status:'pending'|'settled'|'failed'|'cancelled'}|null,...} & (glide:{mode:'glide',presentationStart:{transactionId,producer:'display-callback',clock,sourceGeneration,frameSequence,commandReceivedAtUnixUs,installedAtUnixUs,callbackReceivedAtUnixUs,startAtUnixUs,durationMs,documentTimelineBridge:{producer:'display-callback-wall-bridge',clock:'unix-wall',callbackObservedAtUnixUs,startAtUnixUs},candidateAttempts:[{candidate:{commandReceivedAtUnixUs,installedAtUnixUs,callbackReceivedAtUnixUs,callbackObservedAtUnixMs,callbackObservedAtUnixUs,startAtUnixUs,documentTimelineBridge:{producer:'display-callback-wall-bridge',clock:'unix-wall',callbackObservedAtUnixUs,startAtUnixUs}},armClock,armStartedAtUnixUs,armCompletedAtUnixUs,armDurationUs,...}]},projectionCommit:absent,...}|snap:{mode:'snap',presentationStart:absent,projectionCommit:{transactionId,producer:'layout-adapter',targets:[{stagedTarget,owner,frame,sourceGeneration?}]},...}|failed:{mode:null|'glide'|'snap',failure,presentationFailure?,...}) }",
+    message: (data) => `layout transaction ${String((data.entry as { transactionId?: string })?.transactionId ?? "")}`,
+    errors: ["INVALID_PARAMS", "TIMEOUT", "AMBIGUOUS_TARGET"],
+    examples: ['layout.transaction.wait \'{"causeTraceId":"flow-1","afterSequence":12,"timeoutMs":8000}\''],
+    handler: (p) => waitForLayoutTransaction({
+      causeTraceId: p.causeTraceId as string,
+      afterSequence: p.afterSequence as number,
+      timeoutMs: p.timeoutMs as number,
+    }),
+  });
+
+  register("state.commands", {
+    description: "Full command catalog with parameter schemas, returns, errors, and examples — the source of truth for all available commands.",
+    params: {},
+    returns: "{ commands: [{name,description,params,returns,errors,examples}] }",
+    message: (d) => tmsg("msg.state.commands", { n: ((d.commands as unknown[]) ?? []).length }),
+    examples: ["commands"],
+    handler: () => ({ commands: catalogJson() }),
+  });
+
+  register("state.context", {
+    description:
+      "Resolve the caller's position: project/space/pane/tab that $SOKSAK_CALLER_TAB belongs to (falls back to active chain when called outside a terminal).",
+    params: { tab: P.tab },
+    returns:
+      "{ projectId, spaceId, paneId, tabId?, callerTab? } — tabId is absent when the pane is empty; callerTab is the terminal tab this call came from",
+    message: (d) =>
+      d.tabId
+        ? tmsg("msg.state.context", { view: String(d.tabId) })
+        : tmsg("msg.state.context.emptyPane", { pane: String(d.paneId) }),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["state.context"],
+    handler: (p, ctx) => {
+      const loc = p.tab ? locateTab(p.tab as string) : resolveCtx(ctx);
+      if (!loc) return notFound(tmsg("msg.state.context.unresolved"));
+      return {
+        projectId: loc.project.id,
+        spaceId: loc.space.id,
+        paneId: loc.pane.id,
+        // With an empty pane the answer stops at the pane and omits tabId — an empty pane location is a location.
+        tabId: loc.tab?.id,
+        // Caller context axis ("my position inside the terminal") — a different axis from the target
+        // axis (tabId), so it has a different name.
+        // Explicit > context > active tab (only when that tab has PTY observation).
+        callerTab:
+          (p.tab as string) ??
+          ctx.pane ??
+          (loc.tab && hasPtyObservation(loc.tab.id) ? loc.tab.id : undefined),
+      };
+    },
+  });
+
+  // ----- project -----
+  register("project.list", {
+    description: "List all projects with id, title, root path, and active state.",
+    triggers: { ko: "프로젝트 목록 프로젝트 리스트 열린 프로젝트" },
+    params: {},
+    returns: "{ projects: [{id,title,root,active}] }",
+    message: (d) => tmsg("msg.project.list", { n: ((d.projects as unknown[]) ?? []).length }),
+    examples: ["project.list"],
+    handler: () => ({
+      projects: S().projects.map((t) => ({
+        id: t.id,
+        title: t.title,
+        root: t.root ?? null,
+        active: t.id === S().activeId,
+      })),
+    }),
+  });
+
+  register("project.recent", {
+    description:
+      "List recent projects (the cross-window recents feeding the control-plane project map and the project rail): root, alias, last-opened timestamp. Same list from any window (core kv).",
+    triggers: { ko: "최근 프로젝트 목록 최근 연 프로젝트 픽커 레일" },
+    params: {},
+    returns: "{ recents: [{root, alias, lastOpenedAt}] }",
+    message: (d) => tmsg("msg.project.recent", { n: ((d.recents as unknown[]) ?? []).length }),
+    examples: ["project.recent"],
+    handler: async () => ({ recents: await listRecentProjects() }),
+  });
+
+  register("project.recent.remove", {
+    description:
+      "Remove a project from the recents list (project map/rail). Does not touch the project on disk — only the recents entry. Idempotent (missing root is a no-op).",
+    triggers: { ko: "최근 프로젝트 제거 최근 목록에서 지우기 잊기" },
+    params: {
+      root: { type: "string", description: "Project root to forget", required: true },
+    },
+    returns: "{ ok }",
+    message: () => tmsg("msg.project.recent.remove"),
+    examples: ['project.recent.remove \'{"root":"/Users/me/old"}\''],
+    handler: async (p) => {
+      await removeRecentProject(p.root as string);
+      return {};
+    },
+  });
+
+  register("project.open", {
+    description:
+      "Open a project (creates it if it doesn't exist yet). When root is omitted, folder (slug) is required — creates and uses ~/.soksak/projects/<folder>. Home (~) and root (/) are forbidden as root. Duplicate root activates the existing project instead.",
+    triggers: { ko: "프로젝트 만들기 새 프로젝트 프로젝트 생성 열기" },
+    params: {
+      root: { type: "string", description: "Project root directory (absolute path — home/root forbidden)" },
+      folder: {
+        type: "string",
+        description:
+          "Required when root is omitted — ^[a-z0-9][a-z0-9-]*$, used as ~/.soksak/projects/<folder>",
+      },
+      alias: { type: "string", description: "Tab alias (omit = folder name)" },
+      program: { ...P.program, description: "Initial view program (omit = empty space tab)" },
+      shell: { type: "string", description: "Terminal shell path (omit = global setting → $SHELL)" },
+    },
+    returns:
+      "{ projectId, spaceId, paneId, tabId, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new project window instead)",
+    message: (d) =>
+      d.routedWindow
+        ? tmsg("msg.project.open.routed", { window: String(d.routedWindow) })
+        : d.existingWindow
+          ? tmsg("msg.project.open.existingWindow")
+          : d.existing
+            ? tmsg("msg.project.open.existing")
+            : tmsg("msg.project.open.created"),
+    errors: ["INVALID_PARAMS"],
+    hint: (d) => {
+      // Failures go to the standard guidance (only code arrives, with no window fields).
+      if (d.code) return [];
+      // The control plane routed to a new workspace window — offer the moves that continue in that window.
+      const routed = d.routedWindow as string | undefined;
+      if (routed) {
+        return [
+          { cmd: `--window ${routed} state.tree`, why: tmsg("hint.flow.project.open.routedContinue") },
+          { cmd: `--window ${routed} layout.apply dev`, why: tmsg("hint.flow.project.open.routedLayout") },
+        ];
+      }
+      // Already open in another window, which was brought to the front — continue in that window.
+      const existingWin = d.existingWindow as string | undefined;
+      if (existingWin) {
+        return [
+          { cmd: `--window ${existingWin} state.tree`, why: tmsg("hint.flow.project.open.existingWindow") },
+        ];
+      }
+      // Opened in this window — offer the next moves that dress the screen (possibilities, max 3).
+      return [
+        { cmd: "layout.apply dev", why: tmsg("hint.flow.project.open.layout") },
+        { cmd: "window.maximize", why: tmsg("hint.flow.project.open.maximize") },
+        { cmd: "space.create", why: tmsg("hint.flow.project.open.space") },
+      ];
+    },
+    examples: [
+      'project.open \'{"root":"/Users/me/work","program":"claude"}\'',
+      'project.open \'{"folder":"my-project"}\'',
+    ],
+    handler: async (p) => {
+      let root = p.root as string | undefined;
+      const alias = (p.alias as string) ?? "";
+      if (root) {
+        // P2: home/root forbidden + normalization (the comparison basis for the P5 duplicate check).
+        try {
+          root = await validateProjectRoot(root);
+        } catch (e) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: String(e),
+          };
+        }
+      } else {
+        const folder = (p.folder as string | undefined)?.trim();
+        if (!folder || !FOLDER_NAME_RE.test(folder)) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: tmsg("msg.project.open.folderRequired"),
+          };
+        }
+        root = await ensureDefaultProjectRoot(folder);
+      }
+      // Root initialization policy (git init etc.) is owned by plugins that subscribe to project.created.
+      // Through the P6 gate (one global open) — if another window owns it, that window is focused and
+      // existingWindow is returned.
+      const r = await addProjectClaimed({
+        alias,
+        root,
+        shell: p.shell as string | undefined,
+        program: p.program as Program | undefined,
+      });
+      if (!r.ok || "existingWindow" in r || "routedWindow" in r) return r;
+      return {
+        projectId: r.projectId,
+        spaceId: r.contentId,
+        paneId: r.groupId,
+        tabId: r.viewId,
+        ...(r.existing ? { existing: r.existing } : {}),
+      };
+    },
+  });
+
+  register("project.close", {
+    danger: "destructive",
+    description: "Close a project. Refuses to close the last remaining project.",
+    triggers: { ko: "프로젝트 닫기 프로젝트 제거" },
+    params: { project: { ...P.project, required: true } },
+    returns: "{ activeProjectId }",
+    message: () => tmsg("msg.project.close"),
+    errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
+    examples: ['project.close \'{"project":"t2"}\''],
+    // P6: release the global claim on a successful close (so another window can open this project).
+    handler: (p) => closeProjectReleased(p.project as string),
+  });
+
+  register("project.activate", {
+    description: "Switch to a different project, making it active.",
+    triggers: { ko: "프로젝트 전환 프로젝트 바꾸기 이동" },
+    params: { project: { ...P.project, required: true } },
+    returns: "{}",
+    message: () => tmsg("msg.project.activate"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['project.activate \'{"project":"t2"}\''],
+    handler: (p) => S().setActive(p.project as string),
+  });
+
+  register("project.rename", {
+    description: "Rename a project tab.",
+    triggers: { ko: "프로젝트 이름 바꾸기 이름 변경 프로젝트 제목" },
+    params: {
+      project: { ...P.project, required: true },
+      title: { type: "string", description: "New project name", required: true },
+    },
+    returns: "{ projectId }",
+    message: () => tmsg("msg.project.rename"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['project.rename \'{"project":"pjt-a1b2c3","title":"backend"}\''],
+    handler: (p) =>
+      withTargets(S().renameProject(p.project as string, p.title as string), {
+        projectId: p.project as string,
+      }),
+  });
+
+  register("project.color", {
+    description: "Set the accent color for a project (rail chip and tab highlight). Omit color to remove.",
+    triggers: { ko: "프로젝트 색 색상 탭 색깔" },
+    params: {
+      project: { ...P.project, required: true },
+      color: {
+        type: "string",
+        description: "CSS color (e.g. #4a8fe8). Omit to revert to default.",
+      },
+    },
+    returns: "{ projectId }",
+    message: () => tmsg("msg.project.color"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['project.color \'{"project":"pjt-a2b3c4","color":"#4a8fe8"}\''],
+    handler: (p) =>
+      withTargets(
+        S().setProjectColor(p.project as string, (p.color as string) ?? null),
+        { projectId: p.project as string },
+      ),
+  });
+
+  register("project.update", {
+    description:
+      "Batch-update project settings. Omitted fields are preserved; \"\" removes the override. root is immutable.",
+    params: {
+      project: { ...P.project, required: true },
+      title: { type: "string", description: "Alias (empty string is ignored)" },
+      shell: { type: "string", description: 'Terminal shell path ("" = default)' },
+      color: { type: "string", description: 'Accent color ("" = remove)' },
+    },
+    returns: "{ projectId }",
+    message: () => tmsg("msg.project.update"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: [
+      'project.update \'{"project":"pjt-a2b3c4","title":"backend","shell":"/bin/zsh"}\'',
+    ],
+    handler: (p) =>
+      withTargets(
+        S().updateProject(p.project as string, {
+          title: p.title as string | undefined,
+          shell: p.shell === undefined ? undefined : (p.shell as string) || null,
+          color: p.color === undefined ? undefined : (p.color as string) || null,
+        }),
+        { projectId: p.project as string },
+      ),
+  });
+
+  register("project.sidebar.toggle", {
+    description: "Toggle the file-tree sidebar for a project.",
+    triggers: { ko: "사이드바 파일트리 열기 닫기 토글" },
+    params: { project: P.project },
+    returns: "{ projectId, sidebarOpen }",
+    message: (d) =>
+      d.sidebarOpen
+        ? tmsg("msg.project.sidebar.toggle.opened")
+        : tmsg("msg.project.sidebar.toggle.closed"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["project.sidebar.toggle"],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      return withTargets(S().toggleSidebar(t.id), { projectId: t.id });
+    },
+  });
+
+  // The core holds the child processes the app spawned, and there was no listing surface — a child
+  // that failed to be reclaimed was invisible from outside, so neither the user nor a tool could see
+  // them pile up. Read-only observation surface.
+  register("process.list", {
+    description:
+      "List the child processes the app spawned for plugins: handle id, OS pid, the window that spawned it, the command, and whether it is still alive. The handle id is a small counter and is not an OS pid — ask liveness with pid. An entry that is no longer alive but still listed is an orphan its owner failed to reclaim. Read-only.",
+    triggers: { ko: "프로세스 목록 자식 프로세스 고아 좀비 사이드카 스폰 생존" },
+    params: {
+      alive: { type: "boolean", description: "Only entries that are still running" },
+      window: { type: "string", description: "Only entries spawned by this window label" },
+    },
+    // The owner produces the answer — it is the same from whichever window it runs
+    // (registry.ts windowScoped).
+    windowScoped: false,
+    returns: "{ processes: [{id, pid, window, cmd, group, alive}], count }",
+    message: (d) => tmsg("msg.process.list", { n: Number(d.count ?? 0) }),
+    examples: ["process.list", 'process.list \'{"alive":true}\''],
+    handler: async (p) => {
+      const all = (await invoke("process_list")) as Array<Record<string, unknown>>;
+      const processes = all.filter(
+        (r) =>
+          (p.alive !== true || r.alive === true) &&
+          (typeof p.window !== "string" || r.window === p.window),
+      );
+      return { processes, count: processes.length };
+    },
+  });
+
+  register("project.rightbar.toggle", {
+    description: "Toggle the right plugin sidebar (⌥⌘B). Provide open to set state explicitly (idempotent).",
+    triggers: { ko: "우측 사이드바 오른쪽 패널 플러그인 바 열기 닫기" },
+    params: {
+      project: P.project,
+      open: { type: "boolean", description: "When provided, force open or closed" },
+    },
+    returns: "{ projectId, rightOpen }",
+    message: (d) =>
+      d.rightOpen
+        ? tmsg("msg.project.rightbar.toggle.opened")
+        : tmsg("msg.project.rightbar.toggle.closed"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["project.rightbar.toggle", 'project.rightbar.toggle \'{"open":true}\''],
+    handler: async (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const result = S().toggleRightSidebar(t.id, p.open as boolean | undefined);
+      if (!result.ok) return result;
+      await waitForDomCommit(() => {
+        const sidebar = [...document.querySelectorAll<HTMLElement>('[data-node="sidebar/right"]')]
+          .find((element) => element.closest<HTMLElement>("[data-project-plane]")?.dataset.projectPlane === t.id);
+        if (!sidebar) return false;
+        return sidebar.classList.contains("open") === result.rightOpen
+          && (sidebar.getBoundingClientRect().width > 0) === result.rightOpen;
+      });
+      if (hasContentViewHost()) await contentViewHost().chromePresentationSettled();
+      return withTargets(result, {
+        projectId: t.id,
+      });
+    },
+  });
+
+  // A rail tab label attaches to the view kind (viewKey) — not to one content tab, but to the tab slot
+  // for that kind. So the axis of these two commands is viewKey, not tab id, and the name follows.
+  register("tab.label.set", {
+    description:
+      "Set a custom tab label for a sidebar view (overrides the manifest title). Empty label clears the override (manifest fallback). viewKey = '<pluginId>.<viewId>' from ui.tree (tab/left/<key>).",
+    triggers: { ko: "사이드바 탭 이름변경 라벨 뷰 제목 변경" },
+    params: {
+      viewKey: { type: "string", description: "viewKey '<pluginId>.<viewId>'", required: true },
+      label: { type: "string", description: "Custom label; empty to clear", required: true },
+    },
+    returns: "{ viewKey, label }",
+    message: (d) =>
+      d.label
+        ? tmsg("msg.tab.label.set.set", { label: String(d.label) })
+        : tmsg("msg.tab.label.set.cleared"),
+    errors: ["INVALID_PARAMS"],
+    examples: [
+      'tab.label.set \'{"viewKey":"soksak-plugin-<id>.<view>","label":"my label"}\'',
+    ],
+    handler: (p) => {
+      const key = p.viewKey as string;
+      useViewLabels.getState().setLabel(key, p.label as string);
+      return { viewKey: key, label: useViewLabels.getState().labels[key] ?? "" };
+    },
+  });
+
+  register("tab.label.get", {
+    description:
+      "Get the custom tab label override for a sidebar view (empty = none, caller falls back to manifest title). Omit viewKey to list all overrides.",
+    triggers: { ko: "사이드바 탭 라벨 조회 뷰 제목" },
+    params: {
+      viewKey: { type: "string", description: "viewKey; omit to list all overrides" },
+    },
+    returns: "{ labels } or { viewKey, label }",
+    message: (d) =>
+      d.labels
+        ? tmsg("msg.tab.label.get.all", {
+            n: Object.keys((d.labels as Record<string, unknown>) ?? {}).length,
+          })
+        : tmsg("msg.tab.label.get.one", { label: String(d.label ?? "") }),
+    examples: ["tab.label.get", 'tab.label.get \'{"viewKey":"x.y"}\''],
+    handler: (p) => {
+      const labels = useViewLabels.getState().labels;
+      if (p.viewKey !== undefined)
+        return { viewKey: p.viewKey, label: labels[p.viewKey as string] ?? "" };
+      return { labels };
+    },
+  });
+
+  register("sidebar.right.mode", {
+    description:
+      "Right sidebar layout mode — overlay (floats over content) or push (occupies area like the left sidebar). Global setting; omit mode to query current.",
+    triggers: { ko: "우측 사이드바 밀기 영역차지 오버레이 모드 도킹" },
+    params: {
+      mode: { type: "string", description: "overlay | push — omit to query current" },
+    },
+    returns: "{ mode }",
+    message: (d) => tmsg("msg.sidebar.right.mode", { mode: String(d.mode) }),
+    errors: ["INVALID_PARAMS"],
+    examples: ["sidebar.right.mode", 'sidebar.right.mode \'{"mode":"push"}\''],
+    handler: (p) => {
+      const s = useSettings.getState();
+      if (p.mode !== undefined) {
+        if (p.mode !== "overlay" && p.mode !== "push")
+          return { ok: false as const, code: "INVALID_PARAMS", message: "mode: overlay | push" };
+        s.setRightSidebarMode(p.mode);
+        return { mode: p.mode };
+      }
+      return { mode: s.rightSidebarMode };
+    },
+  });
+
+  register("sidebar.left.tree", {
+    description:
+      "Return the left sidebar layout tree (SplitTree of tab groups) — direction, sizes, each leaf's viewKeys + active. Source for sidebar.left.move/resize targets, which name a viewKey (the tree's interior nodes have no name).",
+    triggers: { ko: "좌측 사이드바 레이아웃 트리 탭 분할 구조" },
+    params: { project: P.project },
+    returns: "{ projectId, layout }",
+    message: () => tmsg("msg.sidebar.left.tree"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["sidebar.left.tree"],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      return { projectId: t.id, layout: serializeSidebarLayout(t.leftLayout) };
+    },
+  });
+
+  register("sidebar.left.position", {
+    description:
+      "Read or set the project left rail position mode. Omit mode to query. flow (default) stands the rail at the focused pane's clean left line and travels with focus; pin without station freezes the current effective line; pin with station snaps to the nearest clean full-height grid line. The solved arrangement is what state.tree reports.",
+    triggers: {
+      ko: "좌측 사이드바 레일 위치 플로우 포커스 추종 핀 고정 그립 스냅",
+    },
+    params: {
+      project: P.project,
+      mode: {
+        type: "string",
+        description: "flow | pin; omit to query current position",
+        enum: ["flow", "pin"],
+      },
+      station: {
+        type: "number",
+        description:
+          "Requested logical station in 0..100 for pin; omitted pin freezes the current effective station",
+      },
+    },
+    returns:
+      "{ projectId, leftRailPosition:{ mode, station?(persisted), effectiveStation, cleanLines[] } }",
+    message: () => tmsg("msg.sidebar.left.position"),
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      "sidebar.left.position",
+      'sidebar.left.position \'{"mode":"pin"}\'',
+      'sidebar.left.position \'{"mode":"pin","station":50}\'',
+      'sidebar.left.position \'{"mode":"flow"}\'',
+    ],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+
+      const mode = p.mode as "flow" | "pin" | undefined;
+      const requested = p.station as number | undefined;
+      if (mode === undefined) {
+        if (requested !== undefined) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS",
+            message: tmsg("msg.sidebar.left.position.stationNeedsPin"),
+          };
+        }
+        return {
+          projectId: t.id,
+          leftRailPosition: serializeLeftRailPosition(t),
+        };
+      }
+
+      if (mode === "flow") {
+        if (requested !== undefined) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS",
+            message: tmsg("msg.sidebar.left.position.flowNoStation"),
+          };
+        }
+        const changed = S().setLeftRailPlacement(t.id, { mode: "flow" });
+        if (!changed.ok) return changed;
+      } else {
+        if (
+          requested !== undefined &&
+          (!Number.isFinite(requested) || requested < 0 || requested > 100)
+        ) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS",
+            message: tmsg("msg.sidebar.left.position.stationRange"),
+          };
+        }
+        const current = serializeLeftRailPosition(t);
+        const station = snapRailStation(
+          current.cleanLines,
+          requested ?? current.effectiveStation,
+        );
+        const changed = S().setLeftRailPlacement(t.id, {
+          mode: "pin",
+          station,
+        });
+        if (!changed.ok) return changed;
+      }
+
+      const updated = S().projects.find((item) => item.id === t.id);
+      if (!updated) return notFound(tmsg("msg.project.notFound"));
+      return {
+        projectId: updated.id,
+        leftRailPosition: serializeLeftRailPosition(updated),
+      };
+    },
+  });
+
+  register("sidebar.left.move", {
+    description:
+      "Drag-merge a left sidebar view — into=merge as a tab, left/right=horizontal split, top/bottom=vertical split (same 4 directions as the content area). viewKeys/targets come from sidebar.left.tree.",
+    triggers: { ko: "좌측 사이드바 탭 이동 합치기 분할 드래그 머지" },
+    params: {
+      project: P.project,
+      viewKey: { type: "string", description: "viewKey to move", required: true },
+      target: { type: "string", description: "target viewKey (a view in the target group)", required: true },
+      zone: {
+        type: "string",
+        description: "into | left | right | top | bottom (4-direction, same as content area)",
+        enum: ["into", "left", "right", "top", "bottom"],
+        required: true,
+      },
+    },
+    returns: "{ projectId }",
+    message: () => tmsg("msg.sidebar.left.move"),
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      'sidebar.left.move \'{"viewKey":"soksak-plugin-<id>.<view>","target":"soksak-plugin-<other-id>.<view>","zone":"right"}\'',
+    ],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const zone = p.zone as string;
+      const target = p.target as string;
+      let drop;
+      if (zone === "into") drop = { type: "into" as const, targetKey: target };
+      else if (zone === "left" || zone === "right")
+        drop = { type: "split" as const, targetKey: target, dir: "row" as const, before: zone === "left" };
+      else if (zone === "top" || zone === "bottom")
+        drop = { type: "split" as const, targetKey: target, dir: "col" as const, before: zone === "top" };
+      else
+        return { ok: false as const, code: "INVALID_PARAMS", message: "zone: into | left | right | top | bottom" };
+      return withTargets(S().moveSidebarView(t.id, p.viewKey as string, drop), {
+        projectId: t.id,
+      });
+    },
+  });
+
+  register("sidebar.left.resize", {
+    description:
+      "Resize the left sidebar split that holds a view — sizes are parallel to that split's children (sum 1). The tree's interior nodes have no name, so the split is named by one of the views inside it (viewKeys from sidebar.left.tree).",
+    triggers: { ko: "좌측 사이드바 분할 비율 크기 조절" },
+    params: {
+      project: P.project,
+      viewKey: {
+        type: "string",
+        description: "A viewKey inside the split to resize (its own tab group's split)",
+        required: true,
+      },
+      sizes: { type: "number[]", description: "Ratio per child, sum 1", required: true },
+    },
+    returns: "{ projectId, sizes }",
+    message: () => tmsg("msg.sidebar.left.resize"),
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      'sidebar.left.resize \'{"viewKey":"soksak-plugin-<id>.<view>","sizes":[0.6,0.4]}\'',
+    ],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const key = p.viewKey as string;
+      const splitId = sidebarSplitIdOf(t.leftLayout, key);
+      if (!splitId) {
+        return notFound(tmsg("msg.sidebar.left.resize.notSplit", { key }));
+      }
+      const sizes = p.sizes as number[];
+      const r = S().resizeSidebar(t.id, splitId, sizes);
+      return r.ok ? { projectId: t.id, sizes } : r;
+    },
+  });
+
+  // ----- space -----
+  register("space.list", {
+    description: "List space tabs in a project.",
+    params: { project: P.project },
+    returns: "{ projectId, spaces: [{id,title,active}] }",
+    message: (d) => tmsg("msg.space.list", { n: ((d.spaces as unknown[]) ?? []).length }),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["space.list"],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      return {
+        projectId: t.id,
+        spaces: t.spaces.map((c) => ({
+          id: c.id,
+          title: c.title,
+          active: c.id === t.activeSpaceId,
+        })),
+      };
+    },
+  });
+
+  register("space.create", {
+    description: "Create a new space tab. Program priority: explicit > project setting > global setting.",
+    triggers: { ko: "새 탭 스페이스 탭 추가 새로 열기" },
+    params: { project: P.project, program: P.program },
+    returns: "{ projectId, spaceId, paneId, tabId? }",
+    message: () => tmsg("msg.space.create"),
+    errors: ["TARGET_NOT_FOUND"],
+    hint: (d) => {
+      // A new space becomes the active space, so follow-up moves target the context as is (no target id needed).
+      if (d.code) return [];
+      return [
+        { cmd: "pane.split right", why: tmsg("hint.flow.space.create.split") },
+        { cmd: `tab.open ${exampleProgramId()}`, why: tmsg("hint.flow.space.create.view") },
+        { cmd: "window.snapshot", why: tmsg("hint.flow.space.create.snapshot") },
+      ];
+    },
+    examples: ['space.create \'{"program":"browser"}\''],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const r = S().addContent(t.id, p.program as Program | undefined);
+      if (!r.ok) return r;
+      return {
+        projectId: t.id,
+        spaceId: r.contentId,
+        paneId: r.groupId,
+        tabId: r.viewId,
+      };
+    },
+  });
+
+  register("space.close", {
+    danger: "destructive",
+    description: "Close a space tab. Refuses to close the last remaining space.",
+    triggers: { ko: "탭 닫기 스페이스 닫기" },
+    params: {
+      project: P.project,
+      space: { ...P.space, required: true },
+    },
+    returns: "{ projectId, spaceId(closed), activeSpaceId }",
+    message: () => tmsg("msg.space.close"),
+    errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
+    examples: ['space.close \'{"space":"spc-d5e6f7"}\''],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      return withTargets(S().closeContent(t.id, p.space as string), {
+        projectId: t.id,
+        spaceId: p.space as string,
+      });
+    },
+  });
+
+  register("space.activate", {
+    description: "Switch to a specific space tab, making it active.",
+    triggers: { ko: "탭 이동 탭 전환 탭 바꾸기" },
+    params: {
+      project: P.project,
+      space: { ...P.space, required: true },
+    },
+    returns: "{ projectId, spaceId }",
+    message: () => tmsg("msg.space.activate"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['space.activate \'{"space":"spc-d5e6f7"}\''],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      return withTargets(S().setActiveContent(t.id, p.space as string), {
+        projectId: t.id,
+        spaceId: p.space as string,
+      });
+    },
+  });
+
+  register("space.switchScan", {
+    description:
+      "Measure a space-tab switch as the user sees it: record the switch and report whether the new space lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts.",
+    triggers: { ko: "탭 전환 측정 깜빡임 jank 스페이스 전환 검사 단일프레임" },
+    params: {
+      project: P.project,
+      to: { ...P.space, required: true },
+      from: {
+        type: "string",
+        description: "Space id to start on (default: current active)",
+      },
+      frames: { type: "number", description: "Frames to capture (default 30)" },
+      intervalMs: { type: "number", description: "Frame interval ms (default 16)" },
+      applyAtMs: {
+        type: "number",
+        description: "Delay after recording starts before switching (default 250)",
+      },
+      settleMs: {
+        type: "number",
+        description: "Settle wait on the start space (default 600)",
+      },
+      region: {
+        type: "json",
+        description:
+          "Content area fractional rect {x0,y0,x1,y1} (0..1). Default covers the space's content area.",
+      },
+      threshold: {
+        type: "number",
+        description:
+          "Noise floor (changed-pixel fraction) below which no switch is reported (default 0.003). Detection above the floor is peak-relative, so it adapts to the switch's magnitude.",
+      },
+    },
+    returns:
+      "{ projectId, spaceId(measured), frames, frameMs, switchFrame, switchFrames (consecutive changed = jank spread), clean, diffsPct }",
+    message: (d) =>
+      d.clean
+        ? tmsg("msg.space.switchScan.clean")
+        : tmsg("msg.space.switchScan.jank", { n: Number(d.switchFrames) }),
+    examples: [
+      'space.switchScan \'{"from":"spc-d5e6f7","to":"spc-h2j3k4"}\'',
+      'space.switchScan \'{"to":"spc-h2j3k4","frames":40}\'',
+    ],
+    handler: async (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      const prev = t.activeSpaceId;
+      const to = p.to as string;
+      const from = (p.from as string | undefined) ?? prev;
+      const frames = (p.frames as number | undefined) ?? 30;
+      const intervalMs = (p.intervalMs as number | undefined) ?? 16;
+      const applyAtMs = (p.applyAtMs as number | undefined) ?? 250;
+      const settleMs = (p.settleMs as number | undefined) ?? 600;
+      const region =
+        (p.region as { x0: number; y0: number; x1: number; y1: number }) ?? {
+          // Body area excluding the left sidebar and the top chrome (where a tab switch changes pixels).
+          x0: 0.23,
+          y0: 0.1,
+          x1: 0.99,
+          y1: 0.96,
+        };
+
+      const { tempDir, join } = frameworkPath;
+      const dir = await join(await tempDir(), "soksak", `switchscan-${Date.now()}`);
+
+      // 1) Go to the starting space + settle.
+      S().setActiveContent(t.id, from);
+      await sleep(settleMs);
+      // 2) Start recording (no await) → switch to the target space after applyAtMs → wait for completion.
+      const recT0 = performance.now();
+      const recP = recordWindowFrames({
+        dir,
+        frames,
+        intervalMs,
+      });
+      await sleep(applyAtMs);
+      S().setActiveContent(t.id, to);
+      const n = await recP;
+      const realFrameMs = n > 0 ? (performance.now() - recT0) / n : intervalMs;
+      // 3) Per-frame pixel change rate → detect the switch frame.
+      const grid = await invoke<number[][]>(
+        "plugin:webview-capture|analyze_frame_diffs",
+        { dir, regions: [region] },
+      );
+      // 4) Restore the original space.
+      S().setActiveContent(t.id, prev);
+
+      const diffs = grid.map((r) => r[0] ?? 0);
+      // Self-adapting detection — the switch delta differs per space pair (two similar terminals=0.5%,
+      // terminal↔editor=several %). A fixed threshold misses small switches, so a frame at or above 40%
+      // of peak counts as the switch (below floor it counts as noise and there is no switch). Clean =
+      // exactly 1 such frame (consecutive/multiple = smear = jank). floor is adjustable.
+      const peak = diffs.length ? Math.max(...diffs) : 0;
+      const floor = (p.threshold as number | undefined) ?? 0.003;
+      let switchFrame = -1;
+      let switchFrames = 0;
+      if (peak >= floor) {
+        const hi = Math.max(floor, peak * 0.4);
+        for (let f = 0; f < diffs.length; f++) {
+          if (diffs[f] >= hi) {
+            if (switchFrame < 0) switchFrame = f;
+            switchFrames++;
+          }
+        }
+      }
+      return {
+        projectId: t.id,
+        spaceId: to,
+        frames: n,
+        frameMs: Math.round(realFrameMs),
+        switchFrame,
+        switchFrames,
+        clean: switchFrame >= 0 && switchFrames <= 1,
+        diffsPct: diffs.map((d) => +(d * 100).toFixed(1)),
+      };
+    },
+  });
+
+  register("space.rename", {
+    description: "Rename a space tab.",
+    params: {
+      project: P.project,
+      space: { ...P.space, required: true },
+      title: { type: "string", description: "New name", required: true },
+    },
+    returns: "{ projectId, spaceId }",
+    message: () => tmsg("msg.space.rename"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['space.rename \'{"space":"spc-d5e6f7","title":"build"}\''],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      return withTargets(
+        S().renameContent(t.id, p.space as string, p.title as string),
+        { projectId: t.id, spaceId: p.space as string },
+      );
+    },
+  });
+
+  // ----- pane -----
+  register("pane.list", {
+    description:
+      "List displayed panes in a space, including rect (%), displayed layout, immutable canonical layout, projection provenance, and the effective rail relation.",
+    params: { project: P.project, space: P.space },
+    returns:
+      "{ projectId, spaceId, activePaneId, layout, canonicalLayout, projection, railRelation:{boundTabId,boundPaneId,relationId,placement,connected,side:left|right|detached,borderMode:union|independent|none,pathCount:1|2|0}, panes[] }",
+    message: (d) => tmsg("msg.pane.list", { n: ((d.panes as unknown[]) ?? []).length }),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["pane.list"],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const c = p.space
+        ? t.spaces.find((x) => x.id === p.space)
+        : (resolveCtx(ctx)?.space ??
+          t.spaces.find((x) => x.id === t.activeSpaceId));
+      if (!c) return notFound(tmsg("msg.space.notFoundId", { id: String(p.space) }));
+      const arrangement =
+        c.id === t.activeSpaceId ? projectArrangement(t) : null;
+      const out = serializeSpace(
+        c,
+        t.activeSpaceId,
+        arrangement,
+        t.sidebarOpen,
+        (t.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT).mode,
+      );
+      return {
+        projectId: t.id,
+        spaceId: c.id,
+        activePaneId: out.activePaneId,
+        layout: out.layout,
+        canonicalLayout: out.canonicalLayout,
+        projection: out.projection,
+        railRelation: out.railRelation,
+        panes: out.panes,
+      };
+    },
+  });
+
+  register("pane.split", {
+    description:
+      "Split a pane — add a new pane beside the target on a given side (optionally running a program). Use when arranging the layout or opening something side by side.",
+    triggers: { ko: "칸 나누기 분할 화면 분할 옆에 열기 나란히" },
+    params: {
+      project: P.project,
+      pane: P.pane,
+      side: { ...P.side, required: true },
+      program: P.program,
+      mountTimeoutMs: {
+        type: "number",
+        description:
+          "When program is provided, wait until its view is actionable (default 5000). 0 only creates state and returns mounted:false.",
+      },
+    },
+    returns:
+      "{ projectId, paneId(new pane), tabId?, arrangement:{station,switched,cleanLines[],cells[]} }",
+    message: () => tmsg("msg.pane.split"),
+    errors: ["TARGET_NOT_FOUND"],
+    hint: (d) => {
+      if (d.code) return [];
+      const out: CommandHint[] = [];
+      const pane = d.paneId as string | undefined;
+      // More programs can be opened as tabs in the newly created pane — target that pane explicitly.
+      if (pane)
+        out.push({
+          cmd: `tab.open '{"pane":"${pane}","program":"${exampleProgramId()}"}'`,
+          why: tmsg("hint.flow.pane.split.view"),
+        });
+      out.push({ cmd: "window.snapshot", why: tmsg("hint.flow.pane.split.snapshot") });
+      return out;
+    },
+    examples: ['pane.split \'{"side":"right"}\'', 'pane.split \'{"side":"bottom","program":"browser"}\''],
+    handler: async (p, ctx) => {
+      const loc = resolvePane(p, ctx);
+      if (!loc) return notFound(tmsg("msg.pane.notFound"));
+      const r = S().splitWithNewView(
+        loc.project.id,
+        loc.pane.id,
+        p.side as Side,
+        p.program as Program,
+      );
+      if (!r.ok) return r;
+      const openedViewId = r.viewId;
+      let ready: boolean | undefined;
+      if (openedViewId) {
+        const timeout = typeof p.mountTimeoutMs === "number"
+          ? Math.max(0, p.mountTimeoutMs)
+          : 5000;
+        ready = timeout > 0 ? await awaitViewMounted(openedViewId, timeout) : false;
+      }
+      return withArrangement(loc.project.id, {
+        projectId: loc.project.id,
+        paneId: r.groupId,
+        tabId: r.viewId,
+        ...(ready === undefined ? {} : { mounted: ready }),
+      });
+    },
+  });
+
+  register("pane.merge", {
+    description: "Merge panes — move all tabs from src into dst; empty src pane is removed automatically.",
+    triggers: { ko: "칸 합치기 병합 탭 이동 합병" },
+    params: {
+      project: P.project,
+      src: { type: "string", description: "Source pane id", required: true },
+      dst: { type: "string", description: "Destination pane id", required: true },
+    },
+    returns: "{ projectId, paneId(merged pane) }",
+    message: () => tmsg("msg.pane.merge"),
+    errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
+    examples: ['pane.merge \'{"src":"pan-p2q3r4","dst":"pan-g2h3j4"}\''],
+    handler: (p, ctx) => {
+      const loc = locatePane(p.src as string) ?? resolvePane(p, ctx);
+      if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.src) }));
+      const r = S().moveGroupToGroup(
+        loc.project.id,
+        p.src as string,
+        p.dst as string,
+        "center",
+      );
+      if (!r.ok) return r;
+      return withArrangement(loc.project.id, {
+        projectId: loc.project.id,
+        paneId: r.groupId,
+      });
+    },
+  });
+
+  register("pane.move", {
+    description: "Reposition a pane — move the entire src pane to the zone position relative to dst.",
+    triggers: { ko: "칸 이동 재배치 위치 옮기기" },
+    params: {
+      project: P.project,
+      src: { type: "string", description: "Source pane id", required: true },
+      dst: { type: "string", description: "Destination pane id", required: true },
+      zone: { ...P.zone, required: true },
+    },
+    returns: "{ projectId, paneId }",
+    message: () => tmsg("msg.pane.move"),
+    errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
+    examples: ['pane.move \'{"src":"pan-p2q3r4","dst":"pan-g2h3j4","zone":"left"}\''],
+    handler: (p) => {
+      const loc = locatePane(p.src as string);
+      if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.src) }));
+      const r = S().moveGroupToGroup(
+        loc.project.id,
+        p.src as string,
+        p.dst as string,
+        p.zone as DropZone,
+      );
+      if (!r.ok) return r;
+      return withArrangement(loc.project.id, {
+        projectId: loc.project.id,
+        paneId: r.groupId,
+      });
+    },
+  });
+
+  register("pane.close", {
+    danger: "destructive",
+    description: "Close a pane and all its tabs. Refuses to close the last pane.",
+    triggers: { ko: "칸 닫기 칸 제거" },
+    params: { pane: { ...P.pane, required: true } },
+    returns: "{ paneId(closed), activePaneId }",
+    message: () => tmsg("msg.pane.close"),
+    errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
+    examples: ['pane.close \'{"pane":"pan-p2q3r4"}\''],
+    handler: (p) => {
+      const loc = locatePane(p.pane as string);
+      if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.pane) }));
+      return withArrangement(
+        loc.project.id,
+        withTargets(S().closeGroup(loc.project.id, p.pane as string), {
+          paneId: p.pane as string,
+        }),
+      );
+    },
+  });
+
+  register("pane.activate", {
+    description: "Activate a pane, making it the focused one.",
+    triggers: { ko: "칸 포커스 칸 활성화 선택" },
+    params: { pane: { ...P.pane, required: true } },
+    returns: "{ paneId }",
+    message: () => tmsg("msg.pane.activate"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['pane.activate \'{"pane":"pan-p2q3r4"}\''],
+    handler: (p) => {
+      const loc = locatePane(p.pane as string);
+      if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.pane) }));
+      const echo = { paneId: p.pane as string };
+      if (!loc.pane.activeTabId)
+        return withTargets(S().setActiveGroup(loc.project.id, p.pane as string), echo);
+      return withTargets(
+        transferViewFocus(activeSessionViewId(), loc.pane.activeTabId, () =>
+          S().setActiveGroup(loc.project.id, p.pane as string),
+        ),
+        echo,
+      );
+    },
+  });
+
+  register("pane.resize", {
+    description:
+      "Move one gutter — the seam on the given edge of a pane. ratio is the new share of the area on that pane's side of the seam; the neighbour on the other side takes the rest, and the panes further along keep their sizes. Every seam is some pane's right or bottom edge (left/top name the same seam from the neighbour's side), so no interior layout id is ever needed.",
+    triggers: { ko: "칸 크기 조절 비율 골 조정 크기 바꾸기 경계 끌기" },
+    params: {
+      pane: P.pane,
+      edge: { ...P.edge, required: true },
+      ratio: {
+        type: "number",
+        description:
+          "New share (0..1, exclusive) of the two adjacent areas for the side the pane sits on",
+        required: true,
+      },
+    },
+    returns: "{ paneId, gutter:{pane,edge}(canonical), sizes }",
+    message: () => tmsg("msg.pane.resize"),
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      'pane.resize \'{"edge":"right","ratio":0.7}\'',
+      'pane.resize \'{"pane":"pan-g2h3j4","edge":"bottom","ratio":0.35}\'',
+    ],
+    handler: (p, ctx) => {
+      const loc = resolvePane(p, ctx);
+      if (!loc) return notFound(tmsg("msg.pane.notFound"));
+      const edge = p.edge as GutterSide;
+      if (!EDGES.includes(edge)) {
+        return {
+          ok: false as const,
+          code: "INVALID_PARAMS" as const,
+          message: `edge: ${EDGES.join(" | ")}`,
+        };
+      }
+      const ratio = p.ratio as number;
+      if (!Number.isFinite(ratio) || ratio <= 0 || ratio >= 1) {
+        return {
+          ok: false as const,
+          code: "INVALID_PARAMS" as const,
+          message: tmsg("msg.pane.resize.ratioRange"),
+        };
+      }
+      const layout = loc.space.layout;
+      const gutter = resolveGutter(layout, loc.pane.id, edge, paneIdOf);
+      const current = gutter ? splitSizesOf(layout, gutter.splitId) : null;
+      if (!gutter || !current) {
+        return notFound(tmsg("msg.pane.noGutter", { pane: loc.pane.id, edge }));
+      }
+      const sizes = [...current];
+      const pair = sizes[gutter.index] + sizes[gutter.index + 1];
+      // One gutter moves only the two neighbouring slots (that is what dragging a gutter does) — the
+      // rest stay unchanged. A gutter named by left/top is the preceding sibling's forward gutter, so
+      // the requested pane is in the trailing slot.
+      sizes[gutter.index] = isCanonicalSide(edge) ? pair * ratio : pair * (1 - ratio);
+      sizes[gutter.index + 1] = pair - sizes[gutter.index];
+      const r = S().resizeSplit(loc.project.id, gutter.splitId, sizes);
+      return r.ok
+        ? {
+            paneId: loc.pane.id,
+            gutter: gutterEcho(layout, loc.pane.id, edge),
+            sizes,
+          }
+        : r;
+    },
+  });
+
+  register("pane.equalize", {
+    description:
+      "Even out a gutter — halves the two areas the seam divides (what double-clicking it does). Pass all:true to give every area along that seam's axis the same share instead of just the two neighbours.",
+    triggers: { ko: "칸 균등 같은 크기 반반 균등화" },
+    params: {
+      pane: P.pane,
+      edge: { ...P.edge, required: true },
+      all: {
+        type: "boolean",
+        description: "Equalize every area along that seam's axis, not just the two neighbours",
+      },
+    },
+    returns: "{ paneId, gutter:{pane,edge}(canonical), sizes }",
+    message: () => tmsg("msg.pane.equalize"),
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: [
+      'pane.equalize \'{"edge":"right"}\'',
+      'pane.equalize \'{"pane":"pan-g2h3j4","edge":"bottom","all":true}\'',
+    ],
+    handler: (p, ctx) => {
+      const loc = resolvePane(p, ctx);
+      if (!loc) return notFound(tmsg("msg.pane.notFound"));
+      const edge = p.edge as GutterSide;
+      if (!EDGES.includes(edge)) {
+        return {
+          ok: false as const,
+          code: "INVALID_PARAMS" as const,
+          message: `edge: ${EDGES.join(" | ")}`,
+        };
+      }
+      const layout = loc.space.layout;
+      const gutter = resolveGutter(layout, loc.pane.id, edge, paneIdOf);
+      const current = gutter ? splitSizesOf(layout, gutter.splitId) : null;
+      if (!gutter || !current) {
+        return notFound(tmsg("msg.pane.noGutter", { pane: loc.pane.id, edge }));
+      }
+      const sizes = [...current];
+      if (p.all === true) {
+        sizes.fill(1 / sizes.length);
+      } else {
+        const half = (sizes[gutter.index] + sizes[gutter.index + 1]) / 2;
+        sizes[gutter.index] = half;
+        sizes[gutter.index + 1] = half;
+      }
+      const r = S().resizeSplit(loc.project.id, gutter.splitId, sizes);
+      return r.ok
+        ? {
+            paneId: loc.pane.id,
+            gutter: gutterEcho(layout, loc.pane.id, edge),
+            sizes,
+          }
+        : r;
+    },
+  });
+
+  register("layout.apply", {
+    description:
+      "Apply a layout by building fresh spaces — never destroys existing spaces. Hierarchy: first-level spaces are independent switchable screens; second-level panes are the splits inside each space. preset dev = a terminal plus a browser side by side (if no browser program is installed, that pane is skipped and reported in skipped). preset facets = build the named spaces you pass in (spaces required). Verify by switching to a space with space.activate, then capturing with window.snapshot.",
+    triggers: { ko: "화면 구성 레이아웃 적용 스페이스 배치 개발 화면 나란히 배치 dev facets" },
+    params: {
+      preset: {
+        type: "string",
+        enum: ["dev", "facets"],
+        required: true,
+        description:
+          "dev = a terminal plus a browser side by side; facets = build the named spaces passed in spaces",
+      },
+      spaces: {
+        type: "json",
+        description:
+          "Named spaces to build (required for facets): [{ title, panes?: [{ program, side? }] }]",
+      },
+      project: P.project,
+    },
+    returns:
+      "{ projectId, spaces: [{ spaceId, title, panes: [{ paneId, program }] }], skipped? } — skipped lists panes dropped because their program is missing",
+    message: (d) => tmsg("msg.layout.apply", { n: ((d.spaces as unknown[]) ?? []).length }),
+    errors: ["INVALID_PARAMS", "TARGET_NOT_FOUND"],
+    hint: (d) => {
+      if (d.code) return [];
+      const out: CommandHint[] = [];
+      const spaces = (d.spaces as { spaceId?: string }[] | undefined) ?? [];
+      const skipped = (d.skipped as unknown[] | undefined) ?? [];
+      // When panes were skipped (browser not installed etc.), offer the install path first.
+      if (skipped.length)
+        out.push({ cmd: "plugin.catalog", why: tmsg("hint.flow.layout.apply.install") });
+      const first = spaces[0]?.spaceId;
+      if (first)
+        out.push({ cmd: `space.activate ${first}`, why: tmsg("hint.flow.layout.apply.activate") });
+      out.push({ cmd: "window.snapshot", why: tmsg("hint.flow.layout.apply.snapshot") });
+      return out;
+    },
+    examples: [
+      "layout.apply dev",
+      'layout.apply \'{"preset":"facets","spaces":[{"title":"docs","panes":[{"program":"browser"}]}]}\'',
+    ],
+    handler: (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const skipped: {
+        space: string;
+        program: string;
+        side?: Side;
+        reason: string;
+      }[] = [];
+      let spaceSpecs: LayoutSpaceSpec[];
+      if (p.preset === "dev") {
+        // dev shorthand — terminal + browser (right). The terminal resolves through the contract
+        // (settings engine), the browser through the conventional id — the core privileges no specific
+        // program. If either is missing, only that pane is skipped and the reason is recorded (no hiding
+        // — symmetric with browser).
+        const terminalId = resolveTerminalProgram();
+        const browserId = findBrowserProgram();
+        const panes: LayoutPaneSpec[] = [];
+        if (terminalId) panes.push({ program: terminalId });
+        else
+          skipped.push({
+            space: "dev",
+            program: TERMINAL_CONTRACT.id,
+            reason: tmsg("layout.skip.unregistered", { program: TERMINAL_CONTRACT.id }),
+          });
+        if (browserId) panes.push({ program: browserId, side: "right" });
+        else
+          skipped.push({
+            space: "dev",
+            program: "browser",
+            side: "right",
+            reason: tmsg("layout.skip.noBrowser"),
+          });
+        spaceSpecs = [{ title: "dev", panes }];
+      } else {
+        // facets — an alias that uses the spaces argument as is. spaces is required.
+        const raw = p.spaces;
+        if (!Array.isArray(raw) || raw.length === 0) {
+          return {
+            ok: false as const,
+            code: "INVALID_PARAMS" as const,
+            message: tmsg("msg.layout.apply.facetsNeedSpaces"),
+          };
+        }
+        spaceSpecs = raw as LayoutSpaceSpec[];
+      }
+      const builtSpaces: {
+        spaceId: string;
+        title: string;
+        panes: { paneId: string; program: string }[];
+      }[] = [];
+      for (const spec of spaceSpecs) {
+        const title = typeof spec.title === "string" ? spec.title : "";
+        // New space (empty) — created without a program so the first pane is controlled explicitly. Existing spaces are unchanged.
+        const created = S().addContent(t.id);
+        if (!created.ok) continue; // Unreachable after the project check — defensive.
+        const spaceId = created.contentId;
+        const firstPaneId = created.groupId;
+        if (title) S().renameContent(t.id, spaceId, title);
+        const builtPanes: { paneId: string; program: string }[] = [];
+        let firstFilled = false;
+        for (const pane of spec.panes ?? []) {
+          const program = pane.program;
+          if (typeof program !== "string" || !getRegisteredProgram(program)) {
+            skipped.push({
+              space: title || spaceId,
+              program: String(program),
+              side: pane.side,
+              reason: tmsg("layout.skip.unregistered", { program: String(program) }),
+            });
+            continue;
+          }
+          if (!firstFilled) {
+            // First pane = put the tab into the space's initial (empty) pane.
+            S().addViewToGroup(t.id, program, firstPaneId);
+            builtPanes.push({ paneId: firstPaneId, program });
+            firstFilled = true;
+          } else {
+            // Later panes = create a split next to the first pane.
+            const r = S().splitWithNewView(t.id, firstPaneId, pane.side ?? "right", program);
+            if (r.ok) builtPanes.push({ paneId: r.groupId, program });
+          }
+        }
+        builtSpaces.push({ spaceId, title, panes: builtPanes });
+      }
+      return skipped.length
+        ? { projectId: t.id, spaces: builtSpaces, skipped }
+        : { projectId: t.id, spaces: builtSpaces };
+    },
+  });
+
+  // ----- tab -----
+  register("tab.list", {
+    description: "List the tabs inside a pane.",
+    params: { pane: P.pane },
+    returns: "{ paneId, activeTabId, tabs[] }",
+    message: (d) => tmsg("msg.tab.list", { n: ((d.tabs as unknown[]) ?? []).length }),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["tab.list"],
+    handler: (p, ctx) => {
+      const loc = resolvePane(p, ctx);
+      if (!loc) return notFound(tmsg("msg.pane.notFound"));
+      return {
+        paneId: loc.pane.id,
+        activeTabId: loc.pane.activeTabId,
+        tabs: loc.pane.tabs.map(serializeTab),
+      };
+    },
+  });
+
+  register("tab.open", {
+    description:
+      "Open a new tab in a pane by program id (terminal / claude / codex / a plugin view program). The answer waits until the view is mounted, so the returned tabId can be acted on immediately; mounted:false means it did not come up in time and commands aimed at it will not find it yet.",
+    triggers: { ko: "탭 열기 탭 추가 claude 열기 터미널 열기" },
+    params: {
+      pane: P.pane,
+      program: { ...P.program, required: true },
+      mountTimeoutMs: {
+        type: "number",
+        description:
+          "How long to wait for the view to become actionable (default 5000). 0 answers as soon as the tab exists — mounted will be false and commands aimed at the tab may not find it yet.",
+      },
+    },
+    returns: "{ paneId, tabId, mounted }",
+    message: () => tmsg("msg.tab.open"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['tab.open \'{"program":"claude"}\''],
+    handler: async (p, ctx) => {
+      const loc = resolvePane(p, ctx);
+      if (!loc) return notFound(tmsg("msg.pane.notFound"));
+      const r = S().addViewToGroup(loc.project.id, p.program as Program, loc.pane.id);
+      if (!r.ok) return r; // Do not mix mounted into a failure envelope.
+      // When the answer is ok, its result must be usable. The state changes immediately but a plugin
+      // view mounts on the next render, so a command sent with this tabId in between finds the plugin
+      // without its view (measured: navigate right after tab.open returned NO_VIEW). The answer waits
+      // for the mount signal — the mount point wakes it, not polling.
+      const wait = typeof p.mountTimeoutMs === "number" ? Math.max(0, p.mountTimeoutMs) : 5000;
+      const mounted = wait > 0 ? await awaitViewMounted(r.viewId, wait) : false;
+      return { paneId: r.groupId, tabId: r.viewId, mounted };
+    },
+  });
+
+  register("tab.close", {
+    danger: "destructive",
+    description: "Close a tab — if it was the last tab in a pane, the pane is also removed. Refuses to close the last tab in a space.",
+    triggers: { ko: "탭 닫기" },
+    params: { tab: { ...P.tab, required: true } },
+    returns: "{ tabId(closed), activePaneId, activeTabId }",
+    message: () => tmsg("msg.tab.close"),
+    errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
+    examples: ['tab.close \'{"tab":"tab-k5m6n7"}\''],
+    handler: (p) => {
+      const loc = locateTab(p.tab as string);
+      if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
+      return withTargets(S().closeView(loc.project.id, p.tab as string), {
+        tabId: p.tab as string,
+      });
+    },
+  });
+
+  register("tab.activate", {
+    description: "Activate (switch to) a specific tab.",
+    triggers: { ko: "탭 전환 탭 선택 탭 활성화" },
+    params: { tab: { ...P.tab, required: true } },
+    returns: "{ tabId }",
+    message: () => tmsg("msg.tab.activate"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['tab.activate \'{"tab":"tab-k5m6n7"}\''],
+    handler: (p) => {
+      const loc = locateTab(p.tab as string);
+      if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
+      return withTargets(
+        transferViewFocus(activeSessionViewId(), p.tab as string, () =>
+          S().setActiveView(loc.project.id, p.tab as string),
+        ),
+        { tabId: p.tab as string },
+      );
+    },
+  });
+
+  register("tab.rename", {
+    description:
+      "Set a custom label for a content tab. Overrides the dynamic content title (e.g. a browser page <title> keeps updating underneath; the override wins on display). Empty title clears the override and the dynamic title returns. Sidebar views use tab.label.set instead.",
+    triggers: { ko: "탭 이름변경 탭명 변경 라벨" },
+    params: {
+      tab: { ...P.tab, required: true },
+      title: { type: "string", description: "Custom label; empty to clear the override", required: true },
+    },
+    returns: "{ tabId, label }",
+    message: (d) =>
+      d.label ? tmsg("msg.tab.rename.set", { label: String(d.label) }) : tmsg("msg.tab.rename.cleared"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: [
+      'tab.rename \'{"tab":"tab-k5m6n7","title":"work browser"}\'',
+      'tab.rename \'{"tab":"tab-k5m6n7","title":""}\'',
+    ],
+    handler: (p) => {
+      const loc = locateTab(p.tab as string);
+      if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
+      return withTargets(
+        S().renameView(loc.project.id, p.tab as string, p.title as string),
+        { tabId: p.tab as string },
+      );
+    },
+  });
+
+  register("tab.maximize", {
+    description:
+      "Maximize a tab to fill the entire space. The split tree is preserved; only the display is toggled. Same as double-clicking a tab. Omit tab to maximize the active one.",
+    triggers: { ko: "최대화 전체화면 탭 최대화 크게 보기" },
+    params: {
+      tab: P.tab,
+      causeTraceId: {
+        type: "string",
+        description: "Caller-owned cause identity stamped on the geometry-changing layout transaction.",
+      },
+    },
+    returns: "{ tabId, causeTraceId? }",
+    message: () => tmsg("msg.tab.maximize"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['tab.maximize \'{"tab":"tab-k5m6n7"}\'', "tab.maximize"],
+    handler: (p, ctx) => {
+      const causeTraceId = p.causeTraceId as string | undefined;
+      if (causeTraceId !== undefined && causeTraceId.length === 0) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "causeTraceId is required" };
+      }
+      const loc = p.tab ? locateTab(p.tab as string) : resolveCtx(ctx);
+      if (!loc?.tab)
+        return notFound(
+          p.tab ? tmsg("msg.tab.notFoundId", { id: String(p.tab) }) : tmsg("msg.tab.noActive"),
+        );
+      const changesGeometry = loc.space.maximizedTabId !== loc.tab.id;
+      const r = S().maximizeView(loc.project.id, loc.tab.id);
+      if (!r.ok) return r;
+      if (causeTraceId !== undefined && changesGeometry) declareLayoutCause(causeTraceId);
+      return {
+        tabId: r.viewId,
+        ...(causeTraceId === undefined ? {} : { causeTraceId }),
+      };
+    },
+  });
+
+  register("tab.restore", {
+    description: "Exit tab maximize mode and restore the original split layout for the active space.",
+    triggers: { ko: "최대화 해제 원래대로 레이아웃 복원" },
+    params: {
+      project: P.project,
+      causeTraceId: {
+        type: "string",
+        description: "Caller-owned cause identity stamped on the geometry-changing restore transaction.",
+      },
+    },
+    returns: "{ projectId, tabId(restored tab | null = was not maximized), causeTraceId? }",
+    message: (d) =>
+      d.tabId ? tmsg("msg.tab.restore.restored") : tmsg("msg.tab.restore.none"),
+    examples: ["tab.restore"],
+    handler: (p, ctx) => {
+      const causeTraceId = p.causeTraceId as string | undefined;
+      if (causeTraceId !== undefined && causeTraceId.length === 0) {
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: "causeTraceId is required" };
+      }
+      const t = resolveProject(p, ctx);
+      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const changesGeometry = t.spaces.some((space) => space.id === t.activeSpaceId && space.maximizedTabId !== null);
+      const r = S().restoreView(t.id);
+      if (!r.ok) return r;
+      if (causeTraceId !== undefined && changesGeometry) declareLayoutCause(causeTraceId);
+      return {
+        projectId: t.id,
+        tabId: r.viewId,
+        ...(causeTraceId === undefined ? {} : { causeTraceId }),
+      };
+    },
+  });
+
+  register("tab.move", {
+    description: "Move a tab to the zone position of the dst pane (center = move into that pane; other = split and create a new pane).",
+    triggers: { ko: "탭 이동 다른 칸으로" },
+    params: {
+      tab: { ...P.tab, required: true },
+      dst: { type: "string", description: "Destination pane id", required: true },
+      zone: { ...P.zone, required: true },
+    },
+    returns: "{ tabId, paneId(moved or created pane) }",
+    message: () => tmsg("msg.tab.move"),
+    errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
+    examples: ['tab.move \'{"tab":"tab-k5m6n7","dst":"pan-g2h3j4","zone":"right"}\''],
+    handler: (p) => {
+      const loc = locateTab(p.tab as string);
+      if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
+      const r = S().moveViewToGroup(
+        loc.project.id,
+        p.tab as string,
+        p.dst as string,
+        p.zone as DropZone,
+      );
+      return r.ok ? { tabId: p.tab as string, paneId: r.groupId } : r;
+    },
+  });
+
+  // ----- status (view report replies, R8) -----
+  register("status.query", {
+    description:
+    description: tmsg("cmd.status.query.desc"),
+    triggers: { ko: "상태 조회 뷰 상태 status 조회 무엇이 도는지" },
+    params: { tab: P.tab },
+    returns: "{ statuses: Array<{ tabId, code, message? }> }",
+    message: (d) => tmsg("msg.status.query", { n: ((d.statuses as unknown[]) ?? []).length }),
+    examples: ["status.query", 'status.query \'{"tab":"tab-k5m6n7"}\''],
+    handler: (p) => {
+      const only = p.tab as string | undefined;
+      const statuses: { tabId: string; code: string; message?: string }[] = [];
+      for (const t of S().projects)
+        for (const c of t.spaces)
+          for (const g of allGroups(c.layout))
+            for (const v of g.tabs)
+              if (v.status && (!only || v.id === only))
+                statuses.push({
+                  tabId: v.id,
+                  code: v.status.code,
+                  message: v.status.message,
+                });
+      return { statuses };
+    },
+  });
+
+  // ----- term (terminal I/O — the AI's read and write surface) -----
+  register("term.read", {
+    description:
+      "Read terminal screen and scrollback text (TUI shows current screen only). Use to check command output.",
+    triggers: { ko: "터미널 읽기 출력 확인 결과 보기" },
+    params: {
+      tab: { ...P.tab, description: "Target terminal tab id (omit = caller's context tab)" },
+      lines: { type: "number", description: "Last N lines only (omit = all)" },
+    },
+    returns: "{ tabId, text }",
+    message: (d) => tmsg("msg.term.read", { n: String(d.text ?? "").length }),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["term.read", 'term.read \'{"lines":50}\''],
+    handler: (p, ctx) => {
+      const r = resolveTermTab(p, ctx, terminalContextTab);
+      if (!r) return notFound(tmsg("msg.term.tabNotFound"));
+      const text = r.readBuffer(p.lines as number | undefined);
+      if (text === undefined) return notFound(tmsg("msg.term.notReady", { id: r.tabId }));
+      return { tabId: r.tabId, text };
+    },
+  });
+
+  register("term.send", {
+    danger: "inject",
+    description:
+      "Inject raw key input into a terminal (for TUI control). Pass control characters via JSON escapes: \\r=Enter, \\u0003=^C, \\u001b[A=↑.",
+    triggers: { ko: "터미널 입력 키 주입 TUI 조작 키 보내기" },
+    params: {
+      tab: { ...P.tab, description: "Target terminal tab id (omit = caller's context tab)" },
+      text: { type: "string", description: "Bytes to inject (escapes allowed)", required: true },
+    },
+    returns: "{ tabId }",
+    message: () => tmsg("msg.term.send"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ['term.send \'{"text":"ls\\r"}\'', 'term.send \'{"text":"\\u0003"}\''],
+    handler: (p, ctx) => {
+      const r = resolveTermTab(p, ctx, terminalContextTab);
+      if (!r) return notFound(tmsg("msg.term.tabNotFound"));
+      if (!r.sendInput(p.text as string))
+        return notFound(tmsg("msg.term.notReady", { id: r.tabId }));
+      return { tabId: r.tabId };
+    },
+  });
+
+  register("term.exec", {
+    danger: "inject",
+    description:
+      "Execute a shell command in a terminal (sends the text plus Enter). Returns immediately — it does not wait for the command to finish, so read the output a moment later with term.read.",
+    triggers: { ko: "명령 실행 터미널 실행 셸 실행 커맨드 실행" },
+    params: {
+      tab: { ...P.tab, description: "Target terminal tab id (omit = caller's context tab)" },
+      cmd: { type: "string", description: "Shell command to run", required: true },
+    },
+    returns: "{ tabId }",
+    message: () => tmsg("msg.term.exec"),
+    errors: ["TARGET_NOT_FOUND"],
+    hint: (d) => {
+      if (d.code) return [];
+      // exec returns immediately — read that tab shortly after to check the output.
+      const tab = d.tabId as string | undefined;
+      return [
+        {
+          cmd: tab ? `term.read '{"tab":"${tab}"}'` : "term.read",
+          why: tmsg("hint.flow.term.exec.read"),
+        },
+      ];
+    },
+    examples: ['term.exec \'{"cmd":"git status"}\''],
+    handler: (p, ctx) => {
+      const r = resolveTermTab(p, ctx, terminalContextTab);
+      if (!r) return notFound(tmsg("msg.term.tabNotFound"));
+      if (!r.sendInput(`${p.cmd as string}\r`))
+        return notFound(tmsg("msg.term.notReady", { id: r.tabId }));
+      return { tabId: r.tabId };
+    },
+  });
+
+  register("term.cwd", {
+    description: "Get the current working directory of a terminal tab (requires shell integration).",
+    triggers: { ko: "현재 디렉토리 cwd 작업 폴더 터미널 경로" },
+    params: {
+      tab: { ...P.tab, description: "Target terminal tab id (omit = caller's context tab)" },
+    },
+    returns: "{ tabId, cwd|null }",
+    message: (d) =>
+      d.cwd ? tmsg("msg.term.cwd.path", { path: String(d.cwd) }) : tmsg("msg.term.cwd.none"),
+    errors: ["TARGET_NOT_FOUND"],
+    examples: ["term.cwd"],
+    handler: (p, ctx) => {
+      const r = resolveTermTab(p, ctx, terminalContextTab);
+      if (!r) return notFound(tmsg("msg.term.tabNotFound"));
+      return { tabId: r.tabId, cwd: r.getCwd() ?? null };
+    },
+  });
+
+  // ----- bookmark -----
+  register("bookmark.list", {
+    description: "List saved browser bookmarks.",
+    triggers: { ko: "즐겨찾기 목록 북마크 목록" },
+    params: {},
+    returns: "{ bookmarks: [{url,title}] }",
+    message: (d) => tmsg("msg.bookmark.list", { n: ((d.bookmarks as unknown[]) ?? []).length }),
+    examples: ["bookmark.list"],
+    handler: () => ({ bookmarks: useBookmarks.getState().list }),
+  });
+
+  register("bookmark.add", {
+    description: "Add a URL to browser bookmarks.",
+    triggers: { ko: "즐겨찾기 추가 북마크 추가 저장" },
+    params: {
+      url: { type: "string", description: "URL", required: true },
+      title: { type: "string", description: "Display name (omit = hostname)" },
+    },
+    returns: "{}",
+    message: () => tmsg("msg.bookmark.add"),
+    examples: ['bookmark.add \'{"url":"https://example.com"}\''],
+    handler: (p) => {
+      const url = p.url as string;
+      const bm = useBookmarks.getState();
+      if (!bm.has(url)) {
+        const title =
+          (p.title as string) ??
+          (() => {
+            try {
+              return new URL(url).host;
+            } catch {
+              return url;
+            }
+          })();
+        bm.toggle(url, title);
+      }
+      return {};
+    },
+  });
+
+  register("bookmark.remove", {
+    description: "Remove a URL from browser bookmarks.",
+    triggers: { ko: "즐겨찾기 삭제 북마크 제거 삭제" },
+    params: { url: { type: "string", description: "URL", required: true } },
+    returns: "{}",
+    message: () => tmsg("msg.bookmark.remove"),
+    examples: ['bookmark.remove \'{"url":"https://example.com"}\''],
+    handler: (p) => {
+      useBookmarks.getState().remove(p.url as string);
+      return {};
+    },
+  });
+
+  // ui.intent.open is the only command that opens a file (it resolves placement from the binding
+  // context too). Closing is tab.close — a file tab is a tab.
+
+  // ----- explorer (file explorer) -----
+  register("explorer.list", {
+    description:
+      "List direct children of a directory (same view as the file tree). Omit path to use the project root (falls back to HOME).",
+    triggers: { ko: "파일 목록 디렉토리 목록 폴더 내용 파일 탐색" },
+    params: {
+      project: P.project,
+      path: { type: "string", description: "Absolute directory path" },
+    },
+    returns: "{ projectId|null, root, children: [{name,dir}] }",
+    message: (d) => tmsg("msg.explorer.list", { n: ((d.children as unknown[]) ?? []).length }),
+    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
+    examples: ["explorer.list", 'explorer.list \'{"path":"<local-evidence>"}\''],
+    handler: async (p, ctx) => {
+      const t = resolveProject(p, ctx);
+      const path = (p.path as string) ?? t?.root ?? null;
+      const r = await invoke<{ root: string; children: object[] }>(
+        "list_children",
+        { path },
+      );
+      // With an explicit path the answer works without a project (HOME fallback) — so this axis can be null.
+      return { projectId: t?.id ?? null, ...r };
+    },
+  });
+
+  // ----- Delegated catalogs (split into files — the single truth is the same registry) -----
+  registerFsWatchCatalog();
+  registerHealthCatalog();
+  registerWindowCatalog();
+  registerCaptureCatalog();
+  registerSettingsCatalog();
+  registerPluginCatalog();
+  registerDaemonCatalog();
+  registerUpdateCatalog();
+  registerUiCatalog();
+  registerProjectionCatalog();
+  registerDomCatalog();
+  registerDataCatalog();
+  registerPtySessionCatalog();
+  registerSecretsCatalog();
+  registerAiSessionCatalog();
+  registerTurnCatalog();
+  registerNetworkCatalog();
+  registerMediaCatalog();
+  registerClipboardCatalog();
+  registerNotifyCatalog();
+  registerScheduleCatalog();
+  registerServiceCatalog();
+  registerFrameworkCatalog();
+  registerSystemCatalog();
+  registerUnitDevCatalog();
+  registerReleaseCatalog();
+  registerWebviewCatalog();
+  reportOwnerAnswered();
+}
+
+/**
+ * Report the names in this window's catalog whose answer is the owner's.
+ *
+ * With two apps in one home, both hold a name like `main` (one orchestrator per app). Delivery then
+ * goes to all of them, which is correct for window-local commands. But when owner-answered commands
+ * go to all as well, **the same work runs twice** — measured 2026-08-01: `data.kv.set` ran in each of
+ * two processes. Which kind it is comes from the command itself (`CommandSpec.windowScoped`), and
+ * that fact is at the catalog — this window. So the window reports it.
+ *
+ * Failures are swallowed — without the report, delivery falls back to all as before and no feature
+ * dies. Not passed over silently: the fact is recorded.
+ */
+function reportOwnerAnswered(): void {
+  const names = catalogJson()
+    .filter((c) => !c.windowScoped)
+    .map((c) => c.name);
+  if (names.length === 0) return;
+  void invoke("control_owner_answered", { names }).catch((e) =>
+    console.warn(`[commands] owner-answered report failed — with two windows under one label the command executes twice: ${e}`),
+  );
+}

@@ -1,0 +1,450 @@
+// The public surface of arrangement. The solution is a pure function of (grid, focus), so the
+// command's answer must equal the solver result exactly — a divergence means either the screen or
+// the contract is wrong.
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mem = new Map<string, string>();
+vi.stubGlobal("localStorage", {
+  getItem: (key: string) => mem.get(key) ?? null,
+  setItem: (key: string, value: string) => void mem.set(key, value),
+  removeItem: (key: string) => void mem.delete(key),
+  clear: () => mem.clear(),
+});
+vi.mock("../framework", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../framework")>()), invoke: vi.fn(async () => undefined) }));
+
+import { registerCatalog } from "./catalog";
+import { execute, getSpec } from "./registry";
+import { projectArrangement, useSessions, type Project, type Pane } from "../state/sessions";
+import { initialSidebarLayout } from "../state/sidebarLayout";
+import { splitLeaf } from "../state/splitTree";
+import {
+  prepareLayoutChange,
+  prepareLayoutMove,
+  viewLayoutChange,
+  __resetLayoutTransitionHostForTest,
+} from "../lib/layoutTransitionHost";
+import { __resetLayoutTransitionJournalForTest } from "../lib/layoutTransitionJournal";
+import {
+  __resetLayoutSettlementForTest,
+  layoutSettlementFacts,
+  requestedLayoutRevision,
+  settleLayout,
+} from "../lib/layoutSettlement";
+import {
+  __resetLayoutTransitionIntentForTest,
+  claimLayoutTransitionIntent,
+  registerLayoutTransitionIntentHost,
+} from "../lib/layoutTransitionIntent";
+
+const group = (id: string): Pane => ({
+  id,
+  activeTabId: `v-${id}`,
+  tabs: [
+    { id: `v-${id}`, kind: "plugin", title: id, pluginId: "fixture", view: "content" },
+  ],
+});
+
+function project(activePaneId: string): Project {
+  return {
+    id: "t1",
+    title: "P",
+    root: "<local-evidence>/arrangement",
+    sidebarOpen: true,
+    leftRailPlacement: { mode: "flow" },
+    rightOpen: false,
+    rightView: null,
+    leftLayout: initialSidebarLayout([]),
+    spaces: [
+      {
+        id: "c1",
+        title: "1",
+        activePaneId,
+        layout: {
+          type: "split",
+          id: "s1",
+          dir: "row",
+          sizes: [0.5, 0.5],
+          children: [splitLeaf(group("g1")), splitLeaf(group("g2"))],
+        },
+      },
+    ],
+    activeSpaceId: "c1",
+  };
+}
+
+registerCatalog();
+
+beforeEach(() => {
+  __resetLayoutTransitionHostForTest();
+  __resetLayoutTransitionJournalForTest();
+  __resetLayoutSettlementForTest();
+  __resetLayoutTransitionIntentForTest();
+  useSessions.setState({ projects: [project("g2")], activeId: "t1" });
+});
+
+describe("layout.arrangement", () => {
+  it("tab.maximize opens the exact geometry revision before publishing and its transaction consumes the cause", async () => {
+    const pinned = {
+      ...project("g2"),
+      leftRailPlacement: { mode: "pin" as const, station: 50 },
+    };
+    useSessions.setState({ projects: [pinned], activeId: pinned.id });
+    const before = projectArrangement(pinned)!;
+    const published: Array<{ active: boolean; requested: number; station: number; cells: number }> = [];
+    const unsubscribe = useSessions.subscribe((state, previous) => {
+      if (state.projects[0] === previous.projects[0]) return;
+      const facts = layoutSettlementFacts("t1");
+      const arrangement = projectArrangement(state.projects[0])!;
+      published.push({
+        active: facts.active,
+        requested: facts.pending[0]?.requested ?? 0,
+        station: arrangement.station,
+        cells: arrangement.cells.length,
+      });
+    });
+
+    const result = await execute("tab.maximize", {
+      tab: "v-g1",
+      causeTraceId: "b08/maximize/left",
+    }, {});
+    unsubscribe();
+    expect(result).toMatchObject({ ok: true, data: { tabId: "v-g1" } });
+    expect(published).toEqual([{ active: true, requested: 1, station: 100, cells: 1 }]);
+
+    const after = projectArrangement(useSessions.getState().projects[0])!;
+    const change = viewLayoutChange(before, after, [
+      { id: "g1", viewIds: ["v-g1"], panePresentationViewIds: [] },
+      { id: "g2", viewIds: ["v-g2"], panePresentationViewIds: [] },
+    ], 800, 60);
+    expect(change).toEqual({
+      moves: [],
+      projectionParticipants: [{ viewId: "v-g1", kind: "projection-snap" }],
+      panePresentationTargets: [],
+      paneSettlementParticipants: [],
+    });
+    await (await prepareLayoutChange(change)).commit();
+    expect((await execute("layout.transactions", {}, {})).data).toMatchObject({
+      entries: [{ causeTraceId: "b08/maximize/left", moves: [] }],
+    });
+  });
+
+  it("tab.restore opens one geometry revision from station 100 back to the two-pane station 50 layout", async () => {
+    const pinned = project("g1");
+    pinned.leftRailPlacement = { mode: "pin", station: 50 };
+    pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "v-g1" };
+    useSessions.setState({ projects: [pinned], activeId: pinned.id });
+    expect(projectArrangement(pinned)).toMatchObject({ station: 100, cells: [{ id: "g1" }] });
+
+    const published: Array<{ active: boolean; requested: number; station: number; cells: number }> = [];
+    const unsubscribe = useSessions.subscribe((state, previous) => {
+      if (state.projects[0] === previous.projects[0]) return;
+      const facts = layoutSettlementFacts("t1");
+      const arrangement = projectArrangement(state.projects[0])!;
+      published.push({
+        active: facts.active,
+        requested: facts.pending[0]?.requested ?? 0,
+        station: arrangement.station,
+        cells: arrangement.cells.length,
+      });
+    });
+    expect(await execute("tab.restore", { project: "t1" }, {}))
+      .toMatchObject({ ok: true, data: { tabId: "v-g1" } });
+    unsubscribe();
+    expect(published).toEqual([{ active: true, requested: 1, station: 50, cells: 2 }]);
+  });
+
+  it("tab maximize no-op and missing targets do not open layout revisions", async () => {
+    const pinned = project("g1");
+    pinned.leftRailPlacement = { mode: "pin", station: 50 };
+    pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "v-g1" };
+    useSessions.setState({ projects: [pinned], activeId: pinned.id });
+
+    expect(await execute("tab.maximize", { tab: "v-g1", causeTraceId: "b08/no-op" }, {}))
+      .toMatchObject({ ok: true });
+    expect(await execute("tab.maximize", { tab: "missing", causeTraceId: "b08/missing" }, {}))
+      .toMatchObject({ ok: false, code: "TARGET_NOT_FOUND" });
+    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
+    await (await prepareLayoutMove([{ viewId: "v-g1", dx: 1 }])).commit();
+    expect((await execute("layout.transactions", {}, {})).data).toMatchObject({
+      entries: [expect.not.objectContaining({ causeTraceId: expect.any(String) })],
+    });
+  });
+
+  it("tab.maximize binds the caller cause to the response and to the next layout transaction", async () => {
+    const maximized = await execute("tab.maximize", {
+      tab: "v-g1",
+      causeTraceId: "b08/maximize/left",
+    }, {});
+    expect(maximized).toMatchObject({
+      ok: true,
+      data: { tabId: "v-g1", causeTraceId: "b08/maximize/left" },
+    });
+    expect(getSpec("tab.maximize")?.params.causeTraceId).toBeDefined();
+    expect(getSpec("tab.maximize")?.returns).toContain("causeTraceId?");
+
+    await (await prepareLayoutMove([{ viewId: "v-g1", dx: 120 }])).commit();
+    expect((await execute("layout.transactions", {}, {})).data).toMatchObject({
+      entries: [{ causeTraceId: "b08/maximize/left" }],
+    });
+  });
+
+  it("tab.maximize invents no cause when it is omitted and rejects an empty cause", async () => {
+    const omitted = await execute("tab.maximize", { tab: "v-g1" }, {});
+    expect(omitted.data).not.toHaveProperty("causeTraceId");
+    expect(await execute("tab.maximize", { tab: "v-g1", causeTraceId: "" }, {}))
+      .toMatchObject({ ok: false, code: "INVALID_PARAMS" });
+  });
+
+  it("tab.restore binds the caller cause of the geometry revision to the exact transaction", async () => {
+    const maximized = project("g1");
+    maximized.spaces[0] = { ...maximized.spaces[0], maximizedTabId: "v-g1" };
+    useSessions.setState({ projects: [maximized], activeId: maximized.id });
+
+    expect(await execute("tab.restore", {
+      project: "t1",
+      causeTraceId: "b08/restore/revision8",
+    }, {})).toMatchObject({
+      ok: true,
+      data: { tabId: "v-g1", causeTraceId: "b08/restore/revision8" },
+    });
+    expect(getSpec("tab.restore")?.params.causeTraceId).toBeDefined();
+    expect(getSpec("tab.restore")?.returns).toContain("causeTraceId?");
+
+    await (await prepareLayoutMove([])).commit();
+    expect((await execute("layout.transactions", {}, {})).data).toMatchObject({
+      entries: [{ causeTraceId: "b08/restore/revision8" }],
+    });
+  });
+
+  it("the returns contract does not promise movesFrom, which the response does not hold", () => {
+    expect(getSpec("layout.arrangement")?.returns).not.toContain("movesFrom");
+    expect(getSpec("layout.arrangement")?.description).not.toMatch(/move list/i);
+  });
+
+  it("exposes a finite layout transaction journal as a command, independent of recording", async () => {
+    const prepared = await prepareLayoutMove([{ viewId: "v-g1", dx: 120 }]);
+    await prepared.commit();
+    const result = await execute("layout.transactions", {}, {});
+    expect(result).toMatchObject({
+      ok: true,
+      data: {
+        entries: [{
+          transactionId: "layout-1",
+          phase: "committed",
+          domCommittedAtUnixMs: expect.any(Number),
+          moves: [{ viewId: "v-g1", dx: 120 }],
+        }],
+      },
+    });
+    expect(getSpec("layout.transactions")?.returns).toContain("domCommittedAtUnixMs");
+    expect(getSpec("layout.transactions")?.returns).toContain("candidateAttempts");
+    expect(getSpec("layout.transactions")?.returns).toContain("callbackObservedAtUnixUs");
+    expect(getSpec("layout.transactions")?.returns).toContain("documentTimelineBridge");
+    expect(getSpec("layout.transactions")?.returns).toContain("display-callback-wall-bridge");
+    expect(getSpec("layout.transactions")?.returns).toContain("armCompletedAtUnixUs");
+    expect(getSpec("layout.transactions")?.returns).toContain("armStartedAtUnixUs");
+    expect(getSpec("layout.transactions")?.returns).toContain("armDurationUs");
+    expect(getSpec("layout.transactions")?.returns).toContain("expectedDocumentStartTime");
+    expect(getSpec("layout.transactions")?.returns).toContain("stagedTargets");
+    expect(getSpec("layout.transactions")?.returns).toContain("panePresentationTargets");
+    expect(getSpec("layout.transactions")?.returns).toContain("paneSettlementParticipants");
+    expect(getSpec("layout.transactions")?.returns).toContain("settlement:{ownerKey,revision,status:'pending'|'settled'|'failed'|'cancelled'}");
+    expect(getSpec("layout.transactions")?.returns).toContain("phase:'preparing'");
+    expect(getSpec("layout.transactions")?.returns).toContain("openedAtUnixMs");
+    expect(getSpec("layout.transactions")?.returns).toContain("stagedTargetsStatus:'pending'|'declared'");
+    expect(getSpec("layout.transactions")?.returns).toContain("presentationStart");
+    expect(getSpec("layout.transactions")?.returns).toContain("sourceGeneration");
+    expect(getSpec("layout.transactions")?.returns).toContain("frameSequence");
+  });
+
+  it("layout.transaction.wait ACKs the terminal transaction of the exact cause without polling", async () => {
+    expect(getSpec("layout.transaction.wait")).toMatchObject({
+      params: expect.objectContaining({
+        causeTraceId: expect.anything(),
+        afterSequence: expect.anything(),
+        timeoutMs: expect.anything(),
+      }),
+    });
+    const waiting = execute("layout.transaction.wait", {
+      causeTraceId: "cause-command",
+      afterSequence: 0,
+      timeoutMs: 1_000,
+    }, {});
+    const journal = await import("../lib/layoutTransitionJournal");
+    journal.declareLayoutCause("cause-command");
+    const prepared = await prepareLayoutMove([{ viewId: "v-g1", dx: 120 }]);
+    await prepared.commit();
+
+    await expect(waiting).resolves.toMatchObject({
+      ok: true,
+      data: {
+        causeStatus: "exact",
+        entry: {
+          causeTraceId: "cause-command",
+          transactionId: expect.any(String),
+          phase: "committed",
+        },
+      },
+    });
+  });
+
+  it("exposes the solver answer unchanged — command and screen use the same computation", async () => {
+    const result = await execute("layout.arrangement", {}, {});
+    expect(result.ok).toBe(true);
+    const solved = projectArrangement(useSessions.getState().projects[0])!;
+    const data = result.data as {
+      station: number;
+      switched: boolean;
+      cleanLines: number[];
+      cells: Array<{ id: string; railSide: string }>;
+    };
+    expect(data.station).toBe(solved.station);
+    expect(data.cleanLines).toEqual(solved.cleanLines);
+    expect(data.switched).toBe(solved.swapped);
+    expect(data.cells.map((cell) => cell.id)).toEqual(solved.cells.map((cell) => cell.id));
+  });
+
+  it("focus is the station input — activating another pane moves the answer", async () => {
+    const at = (await execute("layout.arrangement", {}, {})) as { data?: { station: number } };
+    expect(at.data?.station).toBe(50); // g2 focus
+
+    useSessions.getState().setActiveGroup("t1", "g1");
+    const moved = (await execute("layout.arrangement", {}, {})) as { data?: { station: number } };
+    expect(moved.data?.station).toBe(0);
+  });
+
+  it("tab.activate on another pane publishes synchronously the layout revision ProjectPlane ACKs", async () => {
+    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
+
+    await expect(execute("tab.activate", { tab: "v-g1" }, {})).resolves.toMatchObject({
+      ok: true,
+      data: { tabId: "v-g1" },
+    });
+
+    expect(layoutSettlementFacts("t1")).toEqual({
+      active: true,
+      pending: [{ key: "t1", requested: 1, settled: 0 }],
+    });
+  });
+
+  it("a tab switch inside the same pane and a failed activation open no geometry revision", async () => {
+    const fixture = project("g2");
+    const g2 = fixture.spaces[0].layout.type === "split"
+      ? fixture.spaces[0].layout.children[1]
+      : null;
+    if (!g2 || g2.type !== "leaf") throw new Error("g2 fixture missing");
+    g2.value.tabs.push({
+      id: "v-g2-second",
+      kind: "plugin",
+      title: "g2 second",
+      pluginId: "fixture",
+      view: "content",
+    });
+    useSessions.setState({ projects: [fixture], activeId: "t1" });
+
+    await expect(execute("tab.activate", { tab: "v-g2-second" }, {})).resolves.toMatchObject({
+      ok: true,
+    });
+    await expect(execute("tab.activate", { tab: "missing" }, {})).resolves.toMatchObject({
+      ok: false,
+      code: "TARGET_NOT_FOUND",
+    });
+    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
+  });
+
+  it("cross-pane activation under PIN changes focus only and opens no geometry revision", async () => {
+    const fixture = project("g2");
+    fixture.leftRailPlacement = { mode: "pin", station: 50 };
+    useSessions.setState({ projects: [fixture], activeId: "t1" });
+
+    await expect(execute("tab.activate", { tab: "v-g1" }, {})).resolves.toMatchObject({ ok: true });
+    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
+  });
+
+  it("pane.activate under FLOW also opens exactly one geometry revision", async () => {
+    await expect(execute("pane.activate", { pane: "g1" }, {})).resolves.toMatchObject({ ok: true });
+    expect(layoutSettlementFacts("t1")).toEqual({
+      active: true,
+      pending: [{ key: "t1", requested: 1, settled: 0 }],
+    });
+  });
+
+  it("the geometry revision is open before the store subscriber renders the new ProjectPlane", async () => {
+    const observed: ReturnType<typeof layoutSettlementFacts>[] = [];
+    const unsubscribe = useSessions.subscribe(() => {
+      observed.push(layoutSettlementFacts("t1"));
+      // The same ACK boundary as ProjectPlane's layout effect. If the revision opens after the
+      // store publish, this ACK closes an empty ledger and the real revision stays pending forever.
+      settleLayout("t1", requestedLayoutRevision("t1"));
+    });
+    try {
+      await expect(execute("tab.activate", { tab: "v-g1" }, {})).resolves.toMatchObject({ ok: true });
+    } finally {
+      unsubscribe();
+    }
+
+    expect(observed[0]).toEqual({
+      active: true,
+      pending: [{ key: "t1", requested: 1, settled: 0 }],
+    });
+    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
+  });
+
+  it("a FLOW geometry intent starts the adapter prepare before the new project subscriber", async () => {
+    const order: string[] = [];
+    registerLayoutTransitionIntentHost("t1", {
+      prepare: async () => {
+        order.push("prepare");
+        return {
+          transactionId: "layout-intent",
+          mode: "glide",
+          requiresSharedStart: true,
+          stagedTargets: [],
+          start: async () => null,
+          commit: async () => {},
+          cancel: vi.fn(),
+        };
+      },
+    });
+    const unsubscribe = useSessions.subscribe(() => order.push("state-publish"));
+    try {
+      await expect(execute("tab.activate", { tab: "v-g1" }, {})).resolves.toMatchObject({ ok: true });
+    } finally {
+      unsubscribe();
+    }
+
+    expect(order.slice(0, 2)).toEqual(["prepare", "state-publish"]);
+    await expect(claimLayoutTransitionIntent("t1", 1)).resolves.toMatchObject({
+      transactionId: "layout-intent",
+    });
+  });
+
+  it("only the panes the rail crosses change railSide — width never changes", async () => {
+    const before = (await execute("layout.arrangement", {}, {})) as {
+      data?: { cells: Array<{ id: string; railSide: string; rect: { width: number } }> };
+    };
+    useSessions.getState().setActiveGroup("t1", "g1");
+    const after = (await execute("layout.arrangement", {}, {})) as {
+      data?: { cells: Array<{ id: string; railSide: string; rect: { width: number } }> };
+    };
+    const side = (
+      d: { cells: Array<{ id: string; railSide: string }> } | undefined,
+      id: string,
+    ) => d?.cells.find((cell) => cell.id === id)?.railSide;
+    expect(side(before.data, "pan-aaaaaa")).toBe("before");
+    expect(side(after.data, "pan-aaaaaa")).toBe("after"); // the rail crossed g1
+    expect(side(before.data, "pan-bbbbbb")).toBe("after");
+    expect(side(after.data, "pan-bbbbbb")).toBe("after"); // unrelated — no move
+    for (const id of ["pan-aaaaaa", "pan-bbbbbb"]) {
+      expect(after.data?.cells.find((c) => c.id === id)?.rect.width).toBe(
+        before.data?.cells.find((c) => c.id === id)?.rect.width,
+      );
+    }
+  });
+});
+
+// The live gate verifies that structural-change responses enclose the arrangement
+// (scripts/e2e/slot-freeze.mjs): split and merge require the real view registry, so in the jsdom
+// fixture the command drops to INTERNAL — rather than weakening the contract, it is judged in the
+// real app.

@@ -1,0 +1,4722 @@
+:root {
+  --bg: #1e1e1e;
+  --fg: #e6e6e6;
+  /* Border ownership (docs/UI.md §B): a structural line has two colour tokens and
+     no more — --bd (app chrome, outer edge, floating surface) and --bd-soft (a
+     line inside a panel), §B4. The theme engine injects --bd and soft derives
+     from it, so a theme gains no slot. A literal border colour fails the build
+     (cssContract). */
+  --bd-soft: color-mix(in srgb, var(--bd) 55%, transparent);
+  /* The mono font stack — **declared in one place.**
+     Copies of the stack drift, and the CJK fallback then goes missing from a few
+     of them: the same string draws correctly in one element and as tofu (□) in
+     another on the same screen. Measured 2026-08-01: in the tab title of
+     `터미널(고스티)` the syllables `고` and `스` were □□ while every other Korean
+     glyph in the UI was fine.
+     `system-ui` is last on purpose: none of the mono fonts in this stack carries
+     a Hangul glyph, so Hangul falls through to the engine's own last resort,
+     which differs per engine — WebKit picks a system Korean font, Chromium picks
+     `monospace`. One string drawn differently per framework is a defect, not a
+     matter of taste. */
+  --font-mono:
+    "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    system-ui, monospace;
+  /* Status colours (error, caution) derived here — not theme slots; the meaning is
+     the same in every theme. */
+  --danger: #e5534b;
+  --danger-soft: color-mix(in srgb, var(--danger) 50%, transparent);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Scrollbars: thin and close to the background, everywhere. The track is
+   transparent (the background shows through) and the thumb is a faint grey.
+   Without -webkit-appearance:none the macOS native overlay (a thick white bar)
+   draws over this and the custom style is ignored, so it has to be off.
+   The file tree is in a shadow DOM and out of reach here; the library injects
+   the same rules through unsafeCSS.
+   Measured A/B: removing the custom scrollbar (B) matches the current form (A)
+   — no cost to compositor scrolling (perf results 20260612 scroll-B2). */
+::-webkit-scrollbar {
+  -webkit-appearance: none;
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(127, 127, 127, 0.22);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(127, 127, 127, 0.42);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Tab rows (project and view tabs): the native overlay bar is removed outright.
+   A macOS overlay scrollbar ignores width, so it is hidden with display:none and
+   the row scrolls by trackpad or wheel. */
+.project-tabs,
+.tabs {
+  scrollbar-width: none;
+}
+.project-tabs::-webkit-scrollbar,
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* Layer rule (the native surface contract): the main webview does not paint its own
+   of its own (drawsBackground=false) and the browser child webview is "below" it. The root
+   chain is transparent — each surface owns its own opaque background, and the unpainted area is painted by the native window
+   the background (= theme bg, kept in step by the theme engine through window_set_background) paints it.
+   Restoring an opaque background here closes the browser slot (hole). */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  /* The app UI font is the one in settings (--app-font), falling back to the mono
+     stack.
+
+     `system-ui` is behind the mono fonts because none of them carries a Hangul
+     glyph. Hangul then falls through to the engine's last resort, which differs
+     per engine — WebKit picks a system Korean font, Chromium picks `monospace`
+     and some syllables draw as tofu (measured 2026-08-01: in `터미널(고스티)` only
+     `고` and `스` were □□; the rest was fine). One string drawn differently per
+     framework is a defect, not a font preference.
+
+     It does not go in the fallback slot of `var()`: there, the moment a user
+     picks a font the whole chain disappears and the defect returns. Only the
+     first entry is replaced; the rest of the chain always stands. */
+  font-family: var(--app-font, var(--font-mono));
+  /* The base type size for app UI. The size-variable axis (appFontSize) is gone —
+     density is the zoom's job (⌘±: view focused = view zoom, frame selected =
+     window zoom). */
+  font-size: 13px;
+}
+
+.app-root {
+  width: 100vw;
+  height: 100vh;
+  /* Transparent (the layer rule) — the colour comes from the native window
+     background, painted with the same theme bg. */
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  /* App chrome is not selectable, the same as an editor's — a drag on a divider,
+     a tab or the sidebar must not paint UI text and containers with the native
+     selection. Turning user-select off from JS after the drag starts is too
+     late: the selection began at mousedown. Content and inputs are turned back
+     on below. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Opted in only where selecting means something: input fields, editor body
+   (CodeMirror contenteditable), markdown preview, viewer messages. The terminal
+   (xterm) has its own selection model and is excluded. */
+.app-root input,
+.app-root textarea,
+.fv-cm .cm-content,
+.fv-markdown,
+.fv-msg {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Overlay titlebar: the same line as the macOS traffic lights on the left.
+   Dragging an empty part moves the window. The lights cover roughly 78px on the
+   left, so padding-left keeps that clear. */
+.titlebar {
+  /* 45 = padding 4 + ws slot 36 + padding 4 + divider 1 — every term whole, no
+     half pixels (R3). */
+  flex: 0 0 45px;
+  height: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 0 82px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.project-tabs {
+  display: flex;
+  /* The chrome row standard — the same horizontal line and height as the left
+     sidebar tabs (.sidebar-left-tabs) and the right header (.plugin-side-head).
+     The height belongs to the chrome row contract at the bottom of this file
+     (--chrome-row-h) and must not be set here (cssContract R3). Spacing is
+     --ws-pad; items stretch to fill. */
+  align-self: center;
+  align-items: stretch;
+  padding-block: var(--ws-pad, 5px);
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: visible;
+}
+
+.project-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: rgba(127, 127, 127, 0.95);
+  background: rgba(127, 127, 127, 0.12);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.project-tab.active {
+  background: rgba(127, 127, 127, 0.28);
+  color: var(--fg);
+}
+.project-tab:hover {
+  background: rgba(127, 127, 127, 0.22);
+}
+/* Close button: the same inline × as a view tab (.icon-btn--mini owns the
+     geometry). */
+.project-tab-close {
+  opacity: 0.55;
+}
+.project-tab:hover .project-tab-close,
+.project-tab-close:hover {
+  opacity: 1;
+  background: var(--inset);
+}
+.project-tab-add {
+  border: none;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 6px;
+  border-radius: 5px;
+}
+.project-tab-add:hover {
+  background: rgba(127, 127, 127, 0.18);
+}
+
+.titlebar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* The HMR development badge, absent from a release build. It separates dev from
+   release at a glance. */
+.dev-badge {
+  flex: 0 0 auto;
+  font-size: 10px;
+  /* Chip height = 12 + 2×2 = 16, an even number. A fixed line-height gives that
+     instead of the font metric (normal is an odd 15), so y stays a whole number
+     inside the 44px titlebar. */
+  line-height: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #0a3d20;
+  background: #2ec07a;
+  padding: 2px 6px;
+  border-radius: 4px;
+  user-select: none;
+}
+/* The badge is a button — the handle for the motion panel, development only.
+     It looks exactly like the chip. */
+.dev-badge {
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.dev-badge.on {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
+}
+.dev-badge-wrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+/* ── Motion panel ── present only in a development build. A person slows motion
+   down and stops it here, and ui.snapshot.dom reads that same moment. One owner
+   for the settings: lib/motionDebug. */
+.motion-debug {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--bd);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+}
+.motion-debug-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.motion-debug-label,
+.motion-debug-hint {
+  font-size: 11px;
+  color: var(--fg3);
+}
+.motion-debug button {
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid var(--bd);
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+}
+.motion-debug button.on {
+  border-color: var(--acc);
+  background: var(--accbg);
+}
+
+/* The debug bundle (soksak-debug) badge — orange, matching the debug icon. */
+.dev-badge.debug {
+  color: #3d220a;
+  background: #ff8c1a;
+}
+
+/* Strip the default color input's inner padding and border down to a small swatch. */
+
+.sidebar-toggle {
+  width: 22px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  opacity: 0.6;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
+}
+.sidebar-toggle:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.18);
+}
+.sidebar-toggle.active {
+  opacity: 1;
+  color: var(--fg);
+  background: rgba(127, 127, 127, 0.28);
+}
+
+.settings-toggle {
+  width: 22px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  opacity: 0.65;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
+}
+.settings-toggle:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.18);
+}
+
+/* Settings modal */
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.settings-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+.settings-close {
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.settings-close:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.2);
+}
+.settings-body {
+  padding: 12px 16px 18px;
+}
+.settings-section {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.55;
+  margin: 14px 0 6px;
+}
+.settings-row input[type="text"],
+.settings-row input[type="number"],
+
+/* New project modal */
+.np-path {
+  font-size: 10px;
+  opacity: 0.55;
+  margin: -2px 0 6px;
+  word-break: break-all;
+}
+.np-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+.np-cancel,
+.np-create {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.np-cancel {
+  background: rgba(127, 127, 127, 0.18);
+  color: var(--fg);
+}
+.np-cancel:hover {
+  background: rgba(127, 127, 127, 0.28);
+}
+.np-create {
+  background: #2ec07a;
+  color: #06311c;
+  font-weight: 600;
+}
+.np-create:hover {
+  filter: brightness(1.08);
+}
+
+.theme-toggle {
+  width: 22px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  opacity: 0.65;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
+}
+.theme-toggle:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.18);
+}
+
+/* Body row: the project rail (in left mode) plus the terminal stack. */
+.app-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+}
+
+/* Left-mode project rail, vertical tabs. Width is inline and set by dragging. */
+.project-rail {
+  position: relative;
+  /* Project switching and + are permanent chrome. A DOM browser later in document
+     order still does not paint over this rail. Sibling order for a native
+     surface belongs to the adapter (B09). */
+  z-index: 7;
+  flex: 0 0 auto;
+  border-right: 1px solid var(--bd); /* §B2 — the rail owns its right edge (§B6: no resizer border) */
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 6px;
+  overflow-y: auto;
+  background: var(--bg);
+}
+/* The drag handle on the rail/body boundary — an overlay of zero layout width
+   (see .sidebar-resizer). The 1px boundary line stays. */
+.project-rail-resizer {
+  flex: 0 0 auto;
+  width: 5px;
+  margin-left: -2px;
+  margin-right: -3px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.12s ease;
+  z-index: 3;
+}
+.project-rail-resizer:hover,
+.project-rail-resizer:active {
+  background: rgba(127, 127, 127, 0.4);
+}
+.project-rail .project-tab {
+  width: 100%;
+}
+/* The rail clips on overflow, so the close button goes inside the tab, top right. */
+.project-rail .project-tab-close {
+  top: 3px;
+  right: 3px;
+}
+.project-rail .project-tab-add {
+  width: 100%;
+  height: 24px;
+}
+
+.terminal-stack {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.project-plane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: row;
+}
+.left-rail-plane {
+  position: absolute;
+  inset: 0;
+  /* The left rail travels under the work surface. Where it crosses a tab view the
+     work surface owns hit testing and painting; in the empty corridor only the
+     real elements of this plane take input. Exemption from dimming is not
+     z-index — the FocusLightingPlane mask uses this same rail geometry. */
+  z-index: 0;
+  pointer-events: none;
+}
+/* The relation surface between rail and feature. It reuses no border, gap or
+   radius from paneStyle: one SVG over the union of the published rects owns it,
+   drawn from the theme relation tokens. flat, card and floating therefore keep
+   the same meaning and no real panel edge is drawn twice. */
+.rail-link-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+  overflow: hidden;
+}
+.rail-link-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.rail-link-shape {
+  fill: var(--relation-fill);
+  stroke: var(--relation-stroke);
+  stroke-width: var(--relation-stroke-w);
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+/* When a pinned rail and the selected pane are apart, the gap between them is
+   not filled. Only the active border of the two real boxes is drawn, with the
+   same token, so the pinned position and the selection are both visible. */
+.rail-link-independent {
+  fill: none !important;
+  stroke: var(--relation-stroke) !important;
+  stroke-width: var(--relation-stroke-w);
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+/* The seam of a swapped adjacency — the shared inner edge that a focus-near
+   projection produced. A dashed line of the same width as the relation stroke
+   (the user settled on "the same width"). A natural adjacency is one body and
+   has no seam. */
+.rail-link-seam {
+  stroke: var(--relation-stroke);
+  stroke-width: var(--relation-stroke-w);
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+}
+/* Swapped adjacency, railSeamStyle=edge — the default the user adopted: only the
+   outer right edge is dashed, the rest of the outline stays an open solid line
+   with its rounding, and a closed path owns the fill. Everything inside the seam
+   is a legitimate choice. */
+.rail-link-fill {
+  fill: var(--relation-fill);
+  stroke: none;
+}
+.rail-link-rest {
+  fill: none;
+  stroke: var(--relation-stroke);
+  stroke-width: var(--relation-stroke-w);
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+.rail-link-edge {
+  stroke: var(--relation-stroke);
+  stroke-width: var(--relation-stroke-w);
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+}
+/* Focus lighting — the work surface is dark and only the focused pane shows its
+   original brightness through an aperture. filter and opacity on content are
+   forbidden: changing a filter on a subtree that holds a WebGL canvas makes
+   WKWebView rebuild that composited surface, and a live texture atlas can break.
+
+   This one SVG paints black pixels over the DOM, over WebGL, and over a native
+   child outside the document. No adapter adds a second dim veil, so brightness
+   does not differ per framework. Input passes through. The mask subtracts focus
+   and blocked first, then paints blocked once at its own density, so alpha never
+   stacks. */
+.focus-lighting-plane {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 6;
+}
+.focus-lighting-mask {
+  /* White base keeps the veil; black aperture and cutout remove it. The meaning is
+     carried by lightness, so this is luminance and not alpha — in alpha both are
+     opaque (alpha=1) and the hole disappears. */
+  mask-type: luminance;
+}
+/* SVG2 geometry properties — the same variables and the same arithmetic as
+   pane and tab-body. Nothing is measured again or followed, so no second clock
+   appears. */
+.focus-lighting-region {
+  x: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
+  y: calc(var(--t) + var(--pane-inset));
+  width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
+  height: calc(var(--h) - var(--pane-inset) * 2);
+}
+:root[data-pane-style="card"] .focus-lighting-region {
+  rx: 11px;
+  ry: 11px;
+}
+:root[data-pane-style="floating"] .focus-lighting-region {
+  rx: 14px;
+  ry: 14px;
+}
+/* [temporary — a switch to compare two relation backgrounds] The railFill
+   setting (none | faint), asked for by the user: (1) remove it, (2) very faint.
+   Only the fill inside stroke branches; tint and moment are fill by nature and
+   are untouched. When the choice is made, the adopted one stays and this goes. */
+.rail-link-overlay.relation-stroke.fill-none .rail-link-shape,
+.rail-link-overlay.relation-stroke.fill-none .rail-link-fill {
+  fill: none;
+}
+.rail-link-overlay.relation-stroke.fill-faint .rail-link-shape,
+.rail-link-overlay.relation-stroke.fill-faint .rail-link-fill {
+  fill: color-mix(in srgb, var(--acc) 1%, transparent);
+}
+/* [temporary — a switch to compare three relation surfaces] The CSS branch for
+   the railRelation setting (tint | moment | stroke). Inside stroke the default
+   rules above are the baseline. Once one is chosen, the adopted branch stays and
+   this block, the mode classes and the setting axis go (removal condition: the
+   user settles it — RailLinkOverlay.relation.test goes with them). */
+.rail-link-overlay.relation-tint .rail-link-shape {
+  /* A very low accent tint that gives the rail and its bound panel the same floor
+   tone — no stroke, no success colour. */
+  fill: color-mix(in srgb, var(--acc) 5%, transparent);
+  stroke: none;
+}
+.rail-link-overlay.relation-moment .rail-link-shape {
+  /* At rest this equals tint; a released flash fades back to this value, and the
+   transition owns that. */
+  fill: color-mix(in srgb, var(--acc) 5%, transparent);
+  stroke: transparent;
+  transition: stroke 400ms ease-out, fill 400ms ease-out;
+}
+.rail-link-overlay.relation-moment[data-flash="true"] .rail-link-shape {
+  /* The theme relation token shows for 600ms (RELATION_MOMENT_MS) at the moment
+   the bound target changes, and no longer. */
+  fill: var(--relation-fill);
+  stroke: var(--relation-stroke);
+  transition: none;
+}
+/* §12-④ FLIP travel — the final layout is committed first, and only the
+   difference from the start is wound back as a compositor translate and
+   interpolated to zero. Interpolating left/width is forbidden: panels then paint
+   out of step and an intermediate frame tears. */
+@keyframes rail-flip-x {
+  from { transform: translateX(var(--flip-x, 0px)); }
+  to { transform: translateX(0px); }
+}
+/* The travel animation attaches only to elements that actually move
+   (GroupArea.flipMoves → .flip-move). Selecting everything under the phase put
+   zero-delta elements on a compositor layer with animation + will-change and
+   took them off again, re-rasterising every phase — that was the source of the
+   twitch in a stationary browser's own DOM (its address bar). Cells and slots
+   are gated by class; the frame inside a cell and the decorations (drop-ind-wrap,
+   gutter spans) keep their existing rules. */
+.space-body.rail-traveling .pane.flip-move,
+.space-body.rail-traveling .tab-body.flip-move,
+.space-body.rail-traveling .focus-lighting-region.flip-move,
+.space-body.rail-traveling .drop-ind-wrap.flip-move,
+.space-body.rail-traveling .pane-gutter.flip-move {
+  animation: rail-flip-x var(--rail-travel-ms) cubic-bezier(0.4, 0, 0.2, 1) backwards;
+  will-change: transform;
+}
+.sidebar[data-rail-role="traveling-hidden"] {
+  visibility: hidden;
+}
+.space-body.rail-traveling.rail-starting .flip-move {
+  animation-play-state: paused;
+}
+/* §12-④ revised — input stays open during travel. Straddling is prevented by
+   attributing the activation, not by blocking hits (slotGesture.armSlotActivation:
+   activation happens when the gesture completes, attributed to the slot it began
+   in). The earlier inert rule, narrowed from everything to moving elements, let a
+   real click that arrived mid-travel fall through to space-body and die (measured
+   in a trace) — do not reintroduce a rule that blocks the input surface. */
+
+/* The left file tree sidebar. Only the width toggles (0 ↔ SIDEBAR_W); it is not
+   unmounted when closed, so the tree keeps its expansion and scroll. overflow
+   hidden gives a clean edge while it collapses. */
+.sidebar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+  /* The rail's visual language, distinct from a split pane at a glance: a card
+     tint background with elevation on both sides. Standing mid-grid in FLOW it
+     still reads as furniture floating between panels. The palette is theme
+     variables only (S6 — a recolour follows automatically). */
+  background: color-mix(in srgb, var(--card) 55%, var(--bg));
+  box-shadow:
+    10px 0 24px -14px rgba(0, 0, 0, 0.35),
+    -10px 0 24px -14px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  /* The rail's marks at the departure and destination stations are covered by the
+     corridor the panes open and close. The rail itself gets no interpolation, no
+     fade and no z promotion. */
+}
+/* Ownership of the rail's vertical edges — which side it owns is set by railLook and station (§B2).
+   Until now .sidebar declared both edges unconditionally and JS covered it by forcing the width to 0: the declaration and the law in two
+   split in two, so the contract verified neither side (measured — the checker reported a violation at all times, and the violation was real).
+   Ownership is declared here per state (one to one with rail-ground-* and rail-pane-* in borderContract).
+   Do not write `*` or `/` after the prefix — the comment closes there and the next block disappears whole.
+   railEdges.railEdgeWidths puts the final width value inline — every frame during a station drag
+   the value changes, which a declaration cannot follow. The two state the same law and railEdgeContract.test compares them. */
+.sidebar.rail-ground {
+  border-left: 1px solid var(--bd);
+  border-right: 1px solid var(--bd);
+}
+.sidebar.rail-pane[data-station="0"] {
+  border-right: 1px solid var(--bd);
+}
+.sidebar.rail-pane[data-station="100"] {
+  border-left: 1px solid var(--bd);
+}
+.sidebar.rail-pane:not([data-station="0"]):not([data-station="100"]) {
+  border-left: 1px solid var(--bd);
+  border-right: 1px solid var(--bd);
+}
+/* Rail visual mode (§12-⑤) — ground: a plane lying on the floor rather than a
+   split window. Tint and shadow are removed and only the boundary line stays.
+   pane keeps the default above (card tint plus elevation). */
+.sidebar.rail-ground {
+  background: var(--bg);
+  box-shadow: none;
+}
+.ft-sidebar {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ft-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  /* The height belongs to the chrome row contract (--chrome-row-h, end of file)
+   and must not be set here. */
+  padding: 0 6px 0 10px;
+  font-size: 11px;
+  color: var(--fg);
+  opacity: 0.85;
+  border-bottom: 1px solid var(--bd);
+}
+.ft-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.ft-refresh {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.ft-refresh:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.18);
+}
+.ft-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.ft-body .ft {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The library's default inline padding (16px) reads as a gap on the left, so it
+   is reduced. */
+  --trees-padding-inline-override: 6px;
+}
+.ft-msg {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--fg);
+  opacity: 0.6;
+}
+/* The drag handle on the sidebar/terminal boundary — an overlay of zero layout
+   width. Taking layout width opens a gap between the panels through which the
+   app background shows (measured at 4px). A negative margin spans both panels so
+   they meet at the boundary line, and only a 5px hit area floats above.
+   Transparent at rest, highlighted on hover and drag. */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.12s ease;
+  z-index: 3;
+}
+.sidebar-resizer:hover,
+.sidebar-resizer:active {
+  background: rgba(127, 127, 127, 0.4);
+}
+.left-rail-controls {
+  position: absolute;
+  /* Whole-pixel centring inside the frame header row (--header-h under
+   --pane-inset) — the controls are 28 tall in total. */
+  top: calc(var(--pane-inset, 0px) + 2px);
+  right: 6px;
+  z-index: 30;
+  display: flex;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid var(--bd);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  box-shadow: var(--shadow);
+}
+.left-rail-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  opacity: 0.62;
+  cursor: pointer;
+}
+.left-rail-pin:hover,
+.left-rail-pin.active {
+  background: var(--accbg);
+  color: var(--acc);
+  opacity: 1;
+}
+
+/* The content area takes the remaining width: view tabs on top, view body
+   below. */
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.space-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.space-plane {
+  position: absolute;
+  inset: 0;
+  /* Position plus layer makes its own stacking context. This plane sits above the
+     left rail and confines the focus lighting (.focus-lighting-plane) inside
+     itself. The lighting mask excludes the rail's real geometry, so the rail is
+     not dimmed even when a tab view is above it (gate:
+     src/ui/focusVeilStacking.ts). A visibility change does not change z. A rail
+     in travel passes behind this grid of cards. The container itself is
+     transparent to hits — a click in the empty corridor belongs to the rail
+     below — and each real element owns its own events. */
+  z-index: 1;
+  pointer-events: none;
+}
+.space {
+  pointer-events: none;
+}
+.pane,
+.tab-body,
+.pane-gutter {
+  pointer-events: auto;
+}
+
+/* ── Content tab bar, the middle of the three rows ── */
+.space-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  /* The height belongs to the chrome row contract (--chrome-row-h = padding 5 +
+     chip 26 + padding 5 + line 1 = 37). With whole-pixel padding the chip's y is
+     always whole, so half-pixel centring cannot occur. */
+  padding: var(--ws-pad, 5px) 6px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--bd); /* §B3 — the content tab owns the bottom boundary */
+  overflow-x: auto;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.space-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 6px 6px 0 0;
+  font-size: 12px;
+  color: rgba(127, 127, 127, 0.9);
+  background: rgba(127, 127, 127, 0.1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.space-tab.active {
+  background: rgba(127, 127, 127, 0.24);
+  color: var(--fg);
+}
+/* While the name is edited the tab itself becomes the input box — no box inside
+   a box. An accent border marks editing, and a negative outline-offset keeps the
+   tab the same size so the label and the input have the same shape. */
+.space-tab.editing {
+  background: var(--inset);
+  outline: 1px solid var(--acc);
+  outline-offset: -1px;
+  color: var(--fg);
+}
+.space-tab:hover {
+  background: rgba(127, 127, 127, 0.18);
+}
+.space-tab-title {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.space-tab-rename {
+  /* No box inside a box — the input is only a transparent text field, and the tab
+     (.space-tab.editing) owns the editing box, its border and background. It
+     fills the label's place (.space-tab-title) so the shape matches the label. */
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font: inherit;
+  padding: 0;
+  margin: 0;
+}
+.space-tab-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.55;
+  border-radius: 3px;
+}
+.space-tab-close:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.3);
+}
+.space-tab-add-wrap {
+  position: relative;
+  align-self: center;
+}
+.space-tab-add {
+  border: none;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 8px;
+  border-radius: 5px;
+}
+.space-tab-add:hover {
+  background: rgba(127, 127, 127, 0.16);
+}
+/* The + menu: terminal / agent (hover submenu) / browser.
+   fixed, so it floats above regardless of the tab bar's overflow clipping and
+   stacking; JS sets the coordinates. */
+.space-tab-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 130px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--bd); /* §B4 floating surface */
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-size: 12px;
+  color: var(--fg);
+}
+/* The empty-menu line (no built-in programs, §2.6 — nothing installed yet) */
+.space-tab-menu-empty {
+  padding: 6px 10px;
+  color: var(--fg3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.space-tab-menu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.space-tab-menu-item:hover {
+  background: rgba(127, 127, 127, 0.18);
+}
+.space-tab-menu-caret {
+  margin-left: auto;
+  opacity: 0.6;
+  font-size: 10px;
+}
+.space-tab-submenu {
+  display: none;
+  position: absolute;
+  top: -5px;
+  left: 100%;
+  min-width: 110px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--bd); /* §B4 floating surface */
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.space-tab-menu-item.has-sub:hover > .space-tab-submenu,
+.space-tab-menu-item.has-sub.open > .space-tab-submenu {
+  display: block;
+}
+/* When the menu is at the right edge and a submenu has no room, it flips to the
+   left (ProgramMenu flip). */
+.space-tab-menu.flip-sub .space-tab-submenu {
+  left: auto;
+  right: 100%;
+}
+
+/* ── Editor group area, split by dragging ── */
+.space {
+  position: absolute;
+  inset: 0;
+}
+/* ── The coordinate rule, single owner — everything is computed from the cell
+   variables (--l/--t/--w/--h) and the size variables (--pane-inset, --header-h,
+   --status-h, injected once by the GroupArea container). Assembling a calc string
+   inline is forbidden. Inside a cell it is a flex column, so there is no
+   coordinate arithmetic for the header or the status bar. ── */
+
+/* The persistent body slot: moving it by viewId does not remount (a CodeMirror
+   or terminal session survives) — the only layer where positioning is
+   legitimate. The body area is the cell minus the header minus the status bar. */
+.tab-body {
+  position: absolute;
+  left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
+  top: calc(var(--t) + var(--pane-inset) + var(--header-h));
+  width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
+  height: calc(
+    var(--h) - (var(--pane-inset) * 2 + var(--header-h) + var(--status-h))
+  );
+  overflow: hidden;
+}
+/* The group titlebar (first flex row of the cell) is the group's drag handle.
+   The active group gets the blue accent line. */
+.pane-title {
+  flex: 0 0 var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  overflow: hidden;
+  background: rgba(127, 127, 127, 0.06);
+  border-bottom: 1px solid var(--bd-soft); /* §B2 */
+  cursor: grab;
+  font-size: 11px;
+  color: rgba(127, 127, 127, 0.9);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.pane-title:active {
+  cursor: grabbing;
+}
+.pane-title.active {
+  color: var(--fg);
+}
+.pane-title-icon {
+  font-size: 10px;
+  opacity: 0.7;
+}
+.pane-title-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Titlebar buttons on the right: split and close. */
+.pane-title-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 4px;
+  opacity: 0.55;
+  border-radius: 3px;
+}
+.pane-title-btn:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.3);
+}
+/* The group tab strip under the titlebar. Its height matches the inline TAB_PX. */
+.pane-tabs {
+  flex: 0 0 var(--header-h);
+  position: relative;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* The body space (middle flex row of the cell) stays empty; the persistent slot
+   floats over it. */
+.pane-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* The group status bar, the last flex row of the cell. */
+.pane-status-wrap {
+  flex: 0 0 var(--status-h);
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.pane-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 100%;
+  padding: 0 10px;
+  background: rgba(127, 127, 127, 0.08);
+  border-top: 1px solid var(--bd-soft); /* §B2 */
+  font-size: 11px;
+  color: rgba(127, 127, 127, 0.85);
+}
+.pane-status-left {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pane-status-right {
+  flex: 0 0 auto;
+  opacity: 0.8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* A plugin status bar item (for example "gui" from claude-GUI). It is a chip
+   with a widget outline (§B8 WIDGET_OUTLINE): off is transparent with a faint
+   border, on is a solid --acc fill with inverted text, so the toggle state reads
+   at a glance. The border uses tokens only (§B4). */
+.pane-status-item {
+  display: inline-flex;
+  align-items: center;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--bd-soft);
+  background: transparent;
+  color: inherit;
+  opacity: 0.85;
+  cursor: pointer;
+}
+.pane-status-item:hover {
+  background: var(--accbg);
+  border-color: var(--acc);
+  opacity: 1;
+}
+/* on — a solid accent fill with inverted text (--bg), clearly stronger than
+   hover. */
+.pane-status-item.active,
+.pane-status-item.active:hover {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--bg);
+  opacity: 1;
+  font-weight: 600;
+}
+/* The divider between a status bar item and the view kind label ("GUI | Terminal"). */
+.pane-status-sep {
+  opacity: 0.4;
+}
+/* The resizer between groups, absolutely positioned: a thin line plus a drag hit
+   area. */
+.pane-gutter {
+  position: absolute;
+  z-index: 4;
+  background: transparent;
+}
+.pane-gutter.row {
+  width: 6px;
+  transform: translateX(-3px);
+  cursor: col-resize;
+}
+.pane-gutter.col {
+  height: 6px;
+  transform: translateY(-3px);
+  cursor: row-resize;
+}
+/* §B6 exception — in the solid theme the group split seam takes a 1px centre
+   line, and ownership is delegated to it. */
+:root[data-gutter="solid"] .pane-gutter.row {
+  background-image: linear-gradient(var(--bd-soft), var(--bd-soft));
+  background-size: 1px 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+:root[data-gutter="solid"] .pane-gutter.col {
+  background-image: linear-gradient(var(--bd-soft), var(--bd-soft));
+  background-size: 100% 1px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+/* The drop indicator, drawn over the body area during a pointer drag. It takes
+   no events. */
+.drop-ind-wrap {
+  position: absolute;
+  left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
+  /* The drop offset belongs to --drop-top-h; by default it is --header-h, so
+     content is covered from the body down. The sidebar sets --drop-top-h:0 to
+     cover the whole cell without touching --header-h, which is the plugin row2
+     band height. */
+  top: calc(var(--t) + var(--pane-inset) + var(--drop-top-h, var(--header-h)));
+  width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
+  height: calc(
+    var(--h) - (var(--pane-inset) * 2 + var(--drop-top-h, var(--header-h)) + var(--status-h))
+  );
+  z-index: 10;
+  pointer-events: none;
+}
+.drop-ind {
+  position: absolute;
+  background: rgba(55, 148, 255, 0.26);
+  border: 1px solid var(--acc);
+  pointer-events: none;
+}
+.drop-ind.center {
+  inset: 0;
+}
+.drop-ind.left {
+  left: 0;
+  top: 0;
+  width: 50%;
+  height: 100%;
+}
+.drop-ind.right {
+  right: 0;
+  top: 0;
+  width: 50%;
+  height: 100%;
+}
+.drop-ind.top {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 50%;
+}
+.drop-ind.bottom {
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 50%;
+}
+
+/* The content view tab row (switching terminal and file) with the custom
+   horizontal scrollbar wrapper. */
+.tabs-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  border-bottom: 1px solid var(--bd-soft); /* §B2 — the panel header owns the boundary with the body */
+}
+.tabs {
+  height: 100%;
+  display: flex;
+  /* The band padding contract: the strip owns the vertical spacing through
+   --tab-pad and the items stretch. */
+  align-items: stretch;
+  padding: var(--tab-pad, 4px) 6px;
+  gap: 2px;
+  overflow-x: auto;
+}
+/* A custom 3px horizontal scrollbar. The native overlay is hidden globally with
+   display:none and this draws in its place, in a faint grey close to the
+   background. ViewTabs keeps its position and width in step. */
+.tabs-scrollbar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 3px;
+  pointer-events: none;
+}
+.tabs-scrollbar-thumb {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(127, 127, 127, 0.22);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.tabs-scrollbar-thumb:hover {
+  background: rgba(127, 127, 127, 0.4);
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  /* The attached tab shape, rounded on top only, is gone. The pill shape is the
+   standard and the strip centres it. */
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1;
+  color: rgba(127, 127, 127, 0.9);
+  background: rgba(127, 127, 127, 0.08);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 220px;
+}
+.tab.active {
+  background: rgba(127, 127, 127, 0.22);
+  color: var(--fg);
+}
+.tab:hover {
+  background: rgba(127, 127, 127, 0.16);
+}
+.tab.active:hover {
+  background: rgba(127, 127, 127, 0.26);
+}
+.tab-icon {
+  font-size: 10px;
+  opacity: 0.75;
+}
+.tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tab-dirty {
+  color: #c0a020;
+  font-size: 9px;
+  line-height: 1;
+  padding: 0 1px;
+}
+.tab-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.55;
+  border-radius: 3px;
+}
+.tab-close:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.3);
+}
+.tab-add {
+  align-self: center;
+  border: none;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 8px;
+  border-radius: 5px;
+}
+.tab-add:hover {
+  background: rgba(127, 127, 127, 0.16);
+}
+
+/* ── Browser panel: child webview, URL bar and bookmarks ──
+   The container is transparent (the layer rule) — .bv-area is the hole, and the
+   webview below shows through it. The URL bar and bookmarks each own an opaque
+   background. The container itself, the browser plugin's view root, is declared
+   in that plugin's own CSS; the core does not own a second copy of the same
+   declaration. */
+.bv-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--bd-soft);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.bv-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  opacity: 0.7;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  width: 24px;
+  height: 22px;
+  border-radius: 4px;
+}
+.bv-btn:hover {
+  opacity: 1;
+  background: rgba(127, 127, 127, 0.2);
+}
+.bv-btn.on {
+  opacity: 1;
+  color: #e2b93d;
+}
+.bv-url {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  padding: 0 10px;
+  background: rgba(127, 127, 127, 0.12);
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--fg);
+  font-size: 12px;
+  outline: none;
+}
+.bv-url:focus {
+  border-color: var(--acc);
+}
+/* The bookmarks list is a flex sibling, so opening it shrinks the webview body
+   (.bv-area) by the same amount. */
+.bv-bm-list {
+  flex: 0 0 auto;
+  max-height: 50%;
+  overflow-y: auto;
+  background: var(--bg);
+  border-bottom: 1px solid var(--bd-soft);
+  padding: 4px;
+}
+.bv-bm-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.bv-bm-item:hover {
+  background: rgba(127, 127, 127, 0.16);
+}
+.bv-bm-title {
+  flex: 0 0 auto;
+}
+.bv-bm-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.55;
+  font-size: 11px;
+}
+.bv-bm-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+/* The hole: only this area is transparent, and the child webview below shows
+   through it (the layer rule). The ancestor chain — html, #root, .app-root, the
+   slot — must paint no background here either. */
+.bv-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: transparent;
+}
+
+/* File viewer. */
+.file-viewer {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+}
+.fv-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  /* The toolbar row contract — the theme tokens own the sizes and nothing here
+     reinvents them. A toolbar is optional: a feature that uses one consumes these
+     variables, and a feature that does not omits the row. */
+  height: var(--toolbar-h);
+  padding: 0 var(--toolbar-pad-x);
+  border-bottom: 1px solid var(--bd-soft);
+}
+.fv-modes {
+  display: flex;
+  gap: 2px;
+}
+.fv-mode {
+  border: none;
+  background: transparent;
+  color: rgba(127, 127, 127, 0.9);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 5px;
+}
+.fv-mode.active {
+  background: rgba(127, 127, 127, 0.24);
+  color: var(--fg);
+}
+.fv-mode:hover {
+  background: rgba(127, 127, 127, 0.16);
+}
+.fv-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Code view: an optional truncation banner, and CodeMirror fills the remaining
+   height. */
+.fv-code {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.fv-banner {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  font-size: 11px;
+  color: var(--fg);
+  opacity: 0.85;
+  background: rgba(127, 127, 127, 0.16);
+  border-bottom: 1px solid var(--bd-soft);
+}
+.fv-banner-dirty {
+  color: #c0a020;
+}
+.fv-banner-err {
+  color: #e06c6c;
+}
+
+/* The in-editor find and replace widget, floating at the editor's top right. */
+.cm-find {
+  position: absolute;
+  top: 6px;
+  right: 18px;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--bd); /* §B4 floating surface */
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  color: var(--fg);
+}
+.cmf-chevron {
+  align-self: stretch;
+  width: 16px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  opacity: 0.7;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 10px;
+  transition: transform 0.12s ease;
+}
+.cmf-chevron.open {
+  transform: rotate(90deg);
+}
+.cmf-chevron:hover {
+  background: rgba(127, 127, 127, 0.2);
+  opacity: 1;
+}
+.cmf-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cmf-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.cmf-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.cmf-input {
+  width: 220px;
+  padding: 3px 70px 3px 6px;
+  background: rgba(127, 127, 127, 0.12);
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--fg);
+  font: inherit;
+  outline: none;
+}
+/* The replace input on the second row has no toggle, so its right padding goes
+   back to normal. */
+.cmf-row + .cmf-row .cmf-input {
+  padding-right: 6px;
+}
+.cmf-input:focus {
+  border-color: var(--acc);
+}
+.cmf-field.error .cmf-input {
+  border-color: var(--danger);
+}
+.cmf-opts {
+  position: absolute;
+  right: 3px;
+  display: flex;
+  gap: 1px;
+}
+.cmf-opt {
+  width: 20px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  opacity: 0.65;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1;
+  font-family: var(--font-mono);
+}
+.cmf-opt:hover {
+  background: rgba(127, 127, 127, 0.22);
+  opacity: 1;
+}
+.cmf-opt.on {
+  background: rgba(55, 148, 255, 0.35);
+  color: #fff;
+  opacity: 1;
+}
+.cmf-opt-word {
+  text-decoration: underline;
+}
+.cmf-count {
+  min-width: 58px;
+  text-align: center;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cmf-btn {
+  width: 22px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  opacity: 0.7;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 13px;
+  line-height: 1;
+}
+.cmf-btn:hover {
+  background: rgba(127, 127, 127, 0.22);
+  opacity: 1;
+}
+.cmf-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.fv-code .fv-cm {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.fv-cm,
+.fv-cm .cm-editor {
+  height: 100%;
+}
+.fv-cm .cm-editor {
+  font-size: 13px;
+}
+/* The editor background follows the app background from settings, overriding the
+   fixed background of the @uiw preset theme. Syntax colours stay as the theme has
+   them, matched for brightness; only the background and gutter take var(--bg). */
+.fv-cm .cm-editor,
+.fv-cm .cm-gutters {
+  background-color: var(--bg);
+}
+.fv-cm .cm-activeLine,
+.fv-cm .cm-activeLineGutter {
+  background-color: rgba(127, 127, 127, 0.08);
+}
+.fv-msg {
+  padding: 16px;
+  font-size: 13px;
+  color: var(--fg);
+  opacity: 0.7;
+  line-height: 1.6;
+}
+.fv-msg-sub {
+  opacity: 0.5;
+  font-size: 11px;
+}
+.fv-image-wrap,
+.fv-audio-wrap {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 16px;
+}
+.fv-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.fv-embed,
+.fv-media {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.fv-media {
+  object-fit: contain;
+  background: #000;
+}
+.fv-markdown {
+  height: 100%;
+  overflow: auto;
+  padding: 20px 28px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--fg);
+}
+.fv-markdown h1,
+.fv-markdown h2,
+.fv-markdown h3 {
+  font-weight: 600;
+  margin: 0.8em 0 0.4em;
+}
+.fv-markdown pre {
+  background: rgba(127, 127, 127, 0.14);
+  padding: 12px;
+  border-radius: 6px;
+  overflow: auto;
+}
+.fv-markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+.fv-markdown a {
+  color: #4ea1ff;
+}
+
+/* The focus mark has one owner: the state boundary (.pane-focus-boundary, the
+   focusIndicator setting). The earlier header inset shadow
+   (.pane-title.active box-shadow) and the full 1px outline were a second mark and
+   are gone — they were the cause of the red line that leaked across the top of a
+   maximised header. */
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   The layer that consumes theme tokens — the SKIN mapping of the design
+   product contract. Colour comes only from CSS variables the engine
+   fills, and shape only from :root data-* variants. Workspace tab (wsA/wsI) and
+   panel tab (pt) styles per tabShape are the reference values unchanged.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Titlebar, 44px ── */
+/* The base rules own the geometry (height); SKIN covers the surface only. */
+.titlebar {
+  gap: 10px;
+  padding: 0 14px 0 82px;
+  border-bottom: 1px solid var(--bd);
+  background: var(--side);
+}
+:root[data-titlebar="gradient"] .titlebar {
+  background: linear-gradient(180deg, var(--accbg), transparent);
+}
+:root[data-titlebar="transparent"] .titlebar {
+  background: transparent;
+}
+
+/* ── The workspace (content) tab bar. The base rules own the geometry, height
+   and padding-block, through the band padding contract; SKIN covers only the
+   surface: background, divider and spacing. ── */
+.space-tabs {
+  padding-inline: 10px;
+  gap: 6px;
+  background: var(--side);
+  border-bottom: 1px solid var(--bd);
+}
+:root[data-tab-bar="transparent"] .space-tabs {
+  background: transparent;
+}
+.tabs-wrap {
+  background: var(--side); /* base owns the inner line (§B2); only the surface colour is set here */
+}
+:root[data-tab-bar="transparent"] .tabs-wrap {
+  background: transparent;
+}
+
+/* ── Workspace-level tabs (.project-tab for a project, .space-tab for content)
+   — SKIN wsA/wsI ── */
+.project-tab,
+.space-tab {
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg2);
+}
+.project-tab:hover,
+.space-tab:hover {
+  background: var(--inset);
+}
+.project-tab.active,
+.space-tab.active {
+  font-weight: 600;
+  background: var(--card);
+  border-color: var(--bd);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  color: var(--fg);
+}
+/* pill (Midnight) — chip = 36 − 4×2 = 28 */
+:root[data-tab-shape="pill"] {
+  --ws-pad: 4px;
+}
+:root[data-tab-shape="pill"] .project-tab,
+:root[data-tab-shape="pill"] .space-tab {
+  border-radius: 8px;
+}
+:root[data-tab-shape="pill"] .project-tab.active,
+:root[data-tab-shape="pill"] .space-tab.active {
+  background: var(--inset);
+  border-color: var(--bd);
+  box-shadow: none;
+}
+/* underline (Bare) — padding 0, so the chip takes the whole band height */
+:root[data-tab-shape="underline"] {
+  --ws-pad: 0px;
+}
+:root[data-tab-shape="underline"] .project-tab,
+:root[data-tab-shape="underline"] .space-tab {
+  padding: 0 3px;
+  border-radius: 0;
+  font-size: 12.5px;
+  border: none;
+  border-bottom: 1.5px solid transparent;
+}
+:root[data-tab-shape="underline"] .project-tab:hover,
+:root[data-tab-shape="underline"] .space-tab:hover {
+  background: transparent;
+  color: var(--fg);
+}
+:root[data-tab-shape="underline"] .project-tab.active,
+:root[data-tab-shape="underline"] .space-tab.active {
+  background: transparent;
+  box-shadow: none;
+  border-bottom-color: var(--fg);
+}
+/* inverse (Phosphor) — chip = 36 − 6×2 = 24 */
+:root[data-tab-shape="inverse"] {
+  --ws-pad: 6px;
+}
+:root[data-tab-shape="inverse"] .project-tab,
+:root[data-tab-shape="inverse"] .space-tab {
+  padding: 0 10px;
+  border-radius: 0;
+  font-size: 12.5px;
+  border: none;
+}
+:root[data-tab-shape="inverse"] .project-tab.active,
+:root[data-tab-shape="inverse"] .space-tab.active {
+  font-weight: 700;
+  background: var(--acc);
+  color: var(--bg);
+  box-shadow: none;
+}
+/* round (Paper) — chip = 36 − 4×2 = 28 */
+:root[data-tab-shape="round"] {
+  --ws-pad: 4px;
+}
+:root[data-tab-shape="round"] .project-tab,
+:root[data-tab-shape="round"] .space-tab {
+  padding: 0 14px;
+  border-radius: 99px;
+}
+:root[data-tab-shape="round"] .project-tab.active,
+:root[data-tab-shape="round"] .space-tab.active {
+  background: var(--card);
+  border-color: var(--bd);
+  box-shadow: 0 1px 3px rgba(80, 65, 40, 0.08);
+}
+
+/* ── Panel (view) tabs, a 32px bar — SKIN pt: the base rules own the geometry
+   and this covers the surface only ── */
+.tabs {
+  gap: 5px;
+  padding-inline: 8px;
+}
+.tab {
+  padding: 0 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--fg2);
+}
+.tab:hover {
+  background: var(--inset);
+}
+.tab.active {
+  font-weight: 600;
+  background: var(--card);
+  border-color: var(--bd);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  color: var(--fg);
+}
+.tab.active:hover {
+  background: var(--card);
+}
+/* view chip = 32 − 3×2 = 26 */
+:root[data-tab-shape="pill"] {
+  --tab-pad: 3px;
+}
+:root[data-tab-shape="pill"] .tab {
+  border-radius: 7px;
+}
+:root[data-tab-shape="pill"] .tab.active {
+  background: var(--inset);
+  border-color: var(--bd);
+  box-shadow: none;
+}
+:root[data-tab-shape="underline"] .tab {
+  padding: 0 4px;
+  border-radius: 0;
+  font-size: 11.5px;
+  border: none;
+}
+:root[data-tab-shape="underline"] .tab.active {
+  background: transparent;
+  box-shadow: none;
+  color: var(--fg);
+}
+/* view chip = 32 − 5×2 = 22 */
+:root[data-tab-shape="inverse"] {
+  --tab-pad: 5px;
+}
+:root[data-tab-shape="inverse"] .tab {
+  padding: 0 10px;
+  border-radius: 0;
+  font-size: 11.5px;
+  border: none;
+}
+:root[data-tab-shape="inverse"] .tab.active {
+  font-weight: 700;
+  background: var(--inset);
+  box-shadow: none;
+  color: var(--fg);
+}
+/* view chip = 32 − 4×2 = 24, the same as the default and stated on purpose */
+:root[data-tab-shape="round"] {
+  --tab-pad: 4px;
+}
+:root[data-tab-shape="round"] .tab {
+  padding: 0 13px;
+  border-radius: 99px;
+}
+:root[data-tab-shape="round"] .tab.active {
+  background: var(--accbg);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--acc);
+}
+
+/* ── Split panel header (titlebar mode) and status bar ── */
+.pane-title {
+  background: var(--side);
+  color: var(--fg2);
+  font-size: 12px;
+}
+.pane-title.active {
+  color: var(--fg);
+}
+.pane-status {
+  font-size: 11.5px;
+  padding: 0 12px;
+  background: var(--side);
+  color: var(--fg3);
+}
+:root[data-status-bg="inset"] .pane-status {
+  background: var(--inset);
+}
+:root[data-status-bg="transparent"] .pane-status {
+  background: transparent;
+}
+
+/* ── Panel treatment (paneStyle, reference SKIN.pane): the whole panel is one
+   card. The group cell (.pane) is the only border, background and radius. The
+   chrome inside — title, tabs, body, status — is transparent and borderless, so
+   there is no double line at any edge. flat has no card and stays transparent. ── */
+/* The backing card (z:0): a --card background, rounding and, when floating, a
+   shadow. The border is not here — an opaque terminal covers it and the sides and
+   bottom disappear. flat has no background. */
+/* The group cell (z:0) is the only positioned layer: it owns the card background
+   and rounding and is a flex column inside ([header][body space][status bar]).
+   It takes header and status bar interaction, so pointer-events are not blocked;
+   the body area is taken by the slot layer above. */
+.pane {
+  position: absolute;
+  left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
+  top: calc(var(--t) + var(--pane-inset));
+  width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
+  height: calc(var(--h) - var(--pane-inset) * 2);
+  display: flex;
+  flex-direction: column;
+  z-index: 0;
+}
+/* Motion for a layout change that a command caused is interpolated in JS
+   (lib/layoutRectMotion — FLIP). CSS transitions and @property are not declared:
+   measured in WKWebView they do nothing — changing a variable does not start a
+   transition on a property that consumes it through calc, and a registered
+   variable is not interpolated either (confirmed from ui.trace samples).
+   Suppression during a phase and the hole exclusion belong to the same module. */
+:root[data-pane-style="card"] .pane,
+:root[data-pane-style="floating"] .pane {
+  background: var(--card);
+  border-radius: 11px;
+  overflow: hidden;
+}
+:root[data-pane-style="floating"] .pane {
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+
+/* The foreground frame (z:5) is the card's only border. It lies over the
+   terminal and the chrome so all four sides are one 1px line.
+   pointer-events:none lets clicks through. flat has no frame. */
+/* The focus frame marks the active group. It is a state mark, not a boundary
+   (§B4: outline or background plus --acc). outline and background take no layout
+   space and are outside the border gate, so the --bd contract is unchanged.
+   Its lifetime is separate from the structural frame: a selection is not a moving
+   object, so it is not FLIPped — the previous boundary is removed and a new one
+   is created on the committed active pane rect.
+   It works in a borderless style such as flat. The shape comes from settings
+   (focusIndicator → :root[data-focus-ind]): outline is a rectangular outline
+   following the frame radius, corners is four corner brackets inset by 2px to
+   avoid radius clipping. */
+:root[data-focus-ind="outline"] .pane-focus-boundary {
+  outline: 1px solid var(--acc);
+  outline-offset: -1px;
+}
+:root[data-focus-ind="corners"] .pane-focus-boundary {
+  --fk-len: 14px; /* Corner bracket arm length */
+  --fk-th: 1px; /* Bracket thickness equals the boundary width — the same lane */
+  /* The brackets sit at the four corners of the body, between header and status
+     bar, exactly on the existing 1px boundary lanes: the header's bottom line,
+     the status bar's top line and the frame's left and right borders (the user
+     settled this). Those lanes are outside the native webview (the body slot,
+     §B5 inset) and cannot be covered in any panel — growing the thickness inward
+     lets the webview cover half of it and it reads thin (measured in pixels). */
+  --fk-top: calc(var(--header-h) - 1px);
+  --fk-bot: calc(var(--status-h) - 1px);
+  /* Only the four horizontal arms come from the element's own background. The
+     position origin is pinned to border-box: the default padding-box shifts them
+     inward by the frame's 1px border, into the lane the webview covers (measured
+     in pixels). Vertical arms cannot be a background — the frame border paints
+     over it, since background comes before border — so a pseudo-element, a child
+     drawn above the parent's border, carries them. */
+  background-origin: border-box;
+  background-clip: border-box;
+  background-image: linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc));
+  background-position:
+    left 0 top var(--fk-top),
+    right 0 top var(--fk-top),
+    left 0 bottom var(--fk-bot),
+    right 0 bottom var(--fk-bot);
+  background-size: var(--fk-len) var(--fk-th);
+  background-repeat: no-repeat;
+}
+/* Vertical arms — a 1px strip over the frame's left and right border lanes
+   (::before is left, ::after is right). An absolute offset is relative to
+   padding-box, so -1px lands it on the border (flat has no border and uses 0).
+   The top and bottom arms are two gradients inside the strip. */
+:root[data-focus-ind="corners"] .pane-focus-boundary::before,
+:root[data-focus-ind="corners"] .pane-focus-boundary::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 1px;
+  background-image: linear-gradient(var(--acc), var(--acc)),
+    linear-gradient(var(--acc), var(--acc));
+  background-position:
+    left 0 top var(--fk-top),
+    left 0 bottom var(--fk-bot);
+  background-size: 1px var(--fk-len);
+  background-repeat: no-repeat;
+}
+:root[data-focus-ind="corners"] .pane-focus-boundary::before {
+  left: -1px;
+}
+:root[data-focus-ind="corners"] .pane-focus-boundary::after {
+  right: -1px;
+}
+:root[data-focus-ind="corners"][data-pane-style="flat"] .pane-focus-boundary::before {
+  left: 0;
+}
+:root[data-focus-ind="corners"][data-pane-style="flat"] .pane-focus-boundary::after {
+  right: 0;
+}
+:root[data-focus-ind="corners"][data-pane-style="flat"] .pane-focus-boundary::before,
+:root[data-focus-ind="corners"][data-pane-style="flat"] .pane-focus-boundary::after {
+  top: 0;
+  bottom: 0;
+}
+.pane-border,
+.pane-focus-boundary {
+  position: absolute;
+  left: calc(var(--l) + var(--rail-dx, 0px) + var(--pane-inset));
+  top: calc(var(--t) + var(--pane-inset));
+  width: calc(var(--w) + var(--rail-dw, 0px) - var(--pane-inset) * 2);
+  height: calc(var(--h) - var(--pane-inset) * 2);
+  pointer-events: none;
+  z-index: 5;
+}
+/* The lighting plane (z6) sinks the frame of an inactive pane with it; only the
+   focus frame stays above the lighting. These two are not decorative z-index —
+   they are the stated visual order: work surface, lighting, focus mark. */
+.pane-focus-boundary {
+  z-index: 7;
+}
+:root[data-pane-style="card"] .pane-focus-boundary {
+  border-radius: 11px;
+}
+:root[data-pane-style="floating"] .pane-focus-boundary {
+  border-radius: 14px;
+}
+:root[data-pane-style="card"] .pane-border {
+  border: 1px solid var(--bd);
+  border-radius: 11px;
+}
+/* Correction for the frame border overlay: the frame's 1px border (z:5) covers
+   the band's edge pixel — the first row of the top band, the last row of the
+   bottom status bar. Only a pane style that has a border corrects by 1px, so the
+   visible top and bottom spacing is symmetric. flat has no border, its box
+   spacing is already the visible spacing, and correcting there would make it
+   asymmetric. */
+:root[data-pane-style="card"] .tabs,
+:root[data-pane-style="floating"] .tabs {
+  padding-top: calc(var(--tab-pad, 4px) + 1px);
+}
+:root[data-pane-style="card"] .pane-title,
+:root[data-pane-style="floating"] .pane-title {
+  padding-top: 1px;
+}
+:root[data-pane-style="card"] .pane-status,
+:root[data-pane-style="floating"] .pane-status {
+  padding-bottom: 1px;
+}
+:root[data-pane-style="floating"] .pane-border {
+  border: 1px solid var(--bd);
+  border-radius: 14px;
+}
+/* card and floating: the chrome — title, tabs, status — is transparent so the
+   card's --card shows through, and the body slot is filled with the terminal
+   background --bg. Without that, the terminal's fit remainder of less than one
+   cell showed --card and the panel read as not filling its height. base owns the
+   inner line (§B2). */
+:root[data-pane-style="card"] .pane-title,
+:root[data-pane-style="card"] .pane-tabs,
+:root[data-pane-style="card"] .pane-status,
+:root[data-pane-style="floating"] .pane-title,
+:root[data-pane-style="floating"] .pane-tabs,
+:root[data-pane-style="floating"] .pane-status {
+  background: transparent; /* base owns the inner line (§B2); only the background is set here */
+}
+/* A DOM body always paints its own background. An implementation that has to
+   clear it for a surface outside the document redefines exactly that slot in its
+   own adapter stylesheet. */
+:root[data-pane-style="card"] .tab-body,
+:root[data-pane-style="floating"] .tab-body {
+  background: var(--bg);
+}
+:root[data-pane-style="card"] .tab-body,
+:root[data-pane-style="floating"] .tab-body {
+  border: none;
+}
+:root[data-pane-style="card"] .pane-tabs .tabs-wrap,
+:root[data-pane-style="floating"] .pane-tabs .tabs-wrap {
+  background: transparent;
+}
+
+/* ── Floating surfaces (card): menus, modals, the find widget ── */
+.space-tab-menu,
+.space-tab-submenu,
+.cm-find {
+  background: var(--card);
+  border-color: var(--bd);
+}
+.bv-bm-list {
+  background: var(--card);
+}
+
+/* ── Inset surfaces: inputs ── */
+.bv-url,
+.cmf-input {
+  background: var(--inset);
+  color: var(--fg);
+  border-color: var(--bd);
+}
+
+/* ── Side areas ── */
+.project-rail {
+  background: var(--side);
+}
+
+/* ── Accent, made consistent ── */
+.cmf-input:focus,
+.bv-url:focus {
+  border-color: var(--acc);
+}
+/* One state owns the highlight; GroupArea writes it as data-hover. With :hover,
+   a pointer that leaves into a native child (a browser surface) never sends
+   leave, the highlight sticks, and an accent vertical line stays drawn across the
+   browser for the full height of the window body (measured). :hover also cannot
+   be driven or released from a script, so it cannot be checked. A state solves
+   both. */
+.pane-gutter[data-hover] {
+  background: var(--accbg);
+}
+.drop-ind {
+  background: var(--accbg);
+  border-color: var(--acc);
+}
+
+/* ── Chrome font (font: mono → JetBrains Mono, reference fontFam) ── */
+:root[data-chrome-font="mono"] .titlebar,
+:root[data-chrome-font="mono"] .space-tabs,
+:root[data-chrome-font="mono"] .tabs-wrap,
+:root[data-chrome-font="mono"] .pane-title,
+:root[data-chrome-font="mono"] .pane-status,
+:root[data-chrome-font="mono"] .space-tab-menu,
+:root[data-chrome-font="mono"] .ft-sidebar {
+  font-family: var(--font-mono);
+}
+
+/* ── Effects: a glow on chrome text and a scanline overlay ── */
+.titlebar,
+.space-tabs,
+.tabs-wrap,
+.pane-title,
+.pane-status {
+  text-shadow: var(--glow, none);
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9000;
+  opacity: var(--scan, 0);
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.55) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+/* ── Draggable modal (reference: a 520/460px card with a ⠿ grip in the header) ── */
+.dmodal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.15);
+  z-index: 300;
+}
+.dmodal-card {
+  position: absolute;
+  left: 50%;
+  top: 48px;
+  transform: translateX(-50%);
+  width: 520px;
+  max-height: calc(100% - 64px);
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  color: var(--fg);
+}
+.dmodal-plugin-manager {
+  width: min(760px, 92vw);
+  max-height: calc(100% - 96px);
+}
+.dmodal-plugin-manager-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+.dmodal-project {
+  width: 460px;
+  top: 120px;
+}
+/* The close confirmation (R6) — a dmodal-card override for a smaller card, plus
+   its content. */
+.dconfirm {
+  width: 320px;
+  top: 140px;
+  padding: 18px;
+  gap: 14px;
+}
+.dconfirm-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.dconfirm-reasons {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--fg2);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dconfirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+/* Remote destructive confirmation over a phone link — it adds rows and labels on
+   top of dconfirm. Every colour is a core token. */
+.dremote-confirm {
+  width: 380px;
+}
+.dremote-confirm-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.dremote-confirm-danger {
+  color: var(--danger);
+  font-size: 15px;
+  line-height: 1;
+}
+.dremote-confirm-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dremote-confirm-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+}
+.dremote-confirm-label {
+  flex: 0 0 64px;
+  color: var(--fg3);
+}
+.dremote-confirm-value {
+  flex: 1 1 auto;
+  color: var(--fg);
+  word-break: break-all;
+}
+.dremote-confirm-mono {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+.dremote-confirm-params {
+  color: var(--fg2);
+}
+.dremote-confirm-notice {
+  font-size: 11.5px;
+  color: var(--fg3);
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: var(--inset);
+  border: 1px solid var(--bd-soft);
+}
+.dmodal-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--bd);
+  cursor: grab;
+  background: var(--side);
+  -webkit-user-select: none;
+  user-select: none;
+}
+.dmodal-head:active {
+  cursor: grabbing;
+}
+.dmodal-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.dmodal-spacer {
+  flex: 1;
+}
+.dmodal-grip {
+  color: var(--fg3);
+  letter-spacing: 2px;
+  font-size: 11px;
+}
+.dmodal-plus {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1px dashed var(--fg3);
+  color: var(--fg2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.dmodal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--fg3);
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 5px;
+}
+.dmodal-close:hover {
+  background: var(--inset);
+  color: var(--fg);
+}
+.dmodal-body {
+  padding: 14px 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  font-size: 13px;
+  overflow-y: auto;
+}
+
+/* The settings modal in two panes, editor style: navigation on the left (general
+   and plugins), the panel on the right. */
+.dmodal-settings {
+  width: 700px;
+  max-width: 92vw;
+}
+.dmodal-2pane {
+  display: flex;
+  min-height: 0;
+  max-height: 72vh;
+}
+.settings-nav {
+  flex: 0 0 168px;
+  border-right: 1px solid var(--bd-soft);
+  padding: 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.settings-nav-item {
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--fg2);
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.settings-nav-item:hover {
+  background: var(--inset);
+  color: var(--fg);
+}
+.settings-nav-item.on {
+  background: var(--inset);
+  color: var(--fg);
+  font-weight: 600;
+}
+.settings-nav-head {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--fg3);
+  padding: 12px 10px 4px;
+  text-transform: uppercase;
+}
+.settings-detail {
+  flex: 1;
+  min-width: 0;
+}
+.settings-plugin {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-scope {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--inset);
+  border-radius: 7px;
+  margin: 2px 0 8px;
+  align-self: flex-start;
+}
+.settings-scope button {
+  background: none;
+  border: 0;
+  color: var(--fg3);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.settings-scope button.on {
+  background: var(--bg);
+  color: var(--fg);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+.settings-scope button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  min-height: 38px;
+  border-bottom: 1px solid var(--bd-soft);
+}
+.settings-row-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-row-title {
+  font-size: 13px;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.settings-row-desc {
+  font-size: 11px;
+  color: var(--fg3);
+  line-height: 1.4;
+}
+.settings-row-control {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* A scalar setting row: the control area is a fixed width, right aligned, so the
+   right edge of every control lands in one column and does not shift with the
+   control type or the presence of a reset. input and select fill the area evenly,
+   a toggle aligns right, and the reset slot always takes the same width. A block
+   (list) row is excluded. */
+.settings-row:not(.settings-row--block) .settings-row-control {
+  flex-basis: 200px;
+  justify-content: flex-end;
+}
+.settings-row:not(.settings-row--block) .settings-row-control > input,
+.settings-row:not(.settings-row--block) .settings-row-control > select {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+.settings-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--acc, #4a8cff);
+  flex: 0 0 auto;
+}
+.settings-input {
+  background: var(--inset);
+  color: inherit;
+  border: 1px solid var(--bd);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  width: 84px;
+  height: 28px;
+  box-sizing: border-box;
+}
+.settings-input-text {
+  width: 160px;
+}
+.settings-select {
+  background: var(--inset);
+  color: inherit;
+  border: 1px solid var(--bd);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 12px;
+  width: 160px;
+  height: 28px;
+  box-sizing: border-box;
+}
+/* The reset (↺) slot always takes the same width whether or not the setting is
+   overridden, so the right edge of the control does not shift from row to row
+   (without it, a control with no reset moves further right). */
+.settings-reset-col {
+  flex: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* A list or map setting — a full-width stack under the label and description.
+   Separate from the single-line rhythm of the scalar settings. */
+.settings-row--block {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.settings-row--block .settings-row-title {
+  width: 100%;
+}
+.settings-row--block .settings-row-title .settings-reset {
+  margin-left: auto;
+}
+.settings-row--block .settings-row-control {
+  width: 100%;
+}
+
+/* Per-row input, delete (✕) and add. Cells stretch evenly across the full width
+   and the ✕ aligns vertically on the grid. */
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  width: 100%;
+}
+.settings-list-row,
+.settings-map-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+.settings-list-field {
+  flex: 1;
+  min-width: 0;
+}
+.settings-map-field {
+  flex: 1;
+  min-width: 0;
+}
+.settings-map-arrow {
+  flex: 0 0 auto;
+  color: var(--fg3, #888);
+  width: 12px;
+  text-align: center;
+}
+.settings-list-remove {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--bd);
+  background: var(--inset);
+  color: var(--fg2, #aaa);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.settings-list-remove:hover {
+  color: #f88;
+}
+.settings-list-add {
+  align-self: flex-end;
+  border: 1px solid var(--bd);
+  background: transparent;
+  color: var(--fg2, #aaa);
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.settings-list-add:hover {
+  background: var(--inset);
+}
+.settings-toggle {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  border: 0;
+  background: rgba(127, 127, 127, 0.4);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s;
+  flex: 0 0 auto;
+}
+.settings-toggle.on {
+  background: var(--acc, #4a8cff);
+}
+.settings-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+.settings-toggle.on .settings-toggle-knob {
+  left: 18px;
+}
+.settings-reset {
+  background: none;
+  border: 0;
+  color: var(--fg3);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.settings-reset:hover {
+  background: var(--inset);
+  color: var(--fg);
+}
+.dsec {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--fg3);
+  padding-top: 4px;
+}
+.dsec:first-child {
+  padding-top: 0;
+}
+.drow {
+  display: flex;
+  align-items: center;
+}
+.drow-label {
+  width: 130px;
+  color: var(--fg2);
+  flex: 0 0 auto;
+}
+.drow > .dctl,
+.drow > .dstepper {
+  margin-left: auto;
+}
+.dctl {
+  display: flex;
+  align-items: center;
+  min-width: 170px;
+  max-width: 240px;
+  background: var(--inset);
+  border: 1px solid var(--bd);
+  border-radius: 7px;
+  padding: 6px 11px;
+  font-size: 12.5px;
+  color: var(--fg);
+  font-family: inherit;
+  outline: none;
+}
+select.dctl {
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--fg3) 50%),
+    linear-gradient(135deg, var(--fg3) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 55%,
+    calc(100% - 11px) 55%;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+.dctl-mono {
+  font: 12px var(--font-mono);
+}
+.dctl-btn {
+  cursor: pointer;
+  justify-content: center;
+}
+.dctl-btn:hover {
+  border-color: var(--fg3);
+}
+.dctl:focus {
+  border-color: var(--acc);
+}
+.dstepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--inset);
+  border: 1px solid var(--bd);
+  border-radius: 7px;
+  padding: 6px 11px;
+  font-size: 12.5px;
+}
+.dstep-btn {
+  color: var(--fg3);
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.dstep-btn:hover {
+  color: var(--fg);
+}
+.dpath {
+  font: 11px var(--font-mono);
+  color: var(--fg3);
+  word-break: break-all;
+  padding-left: 130px;
+}
+.dpath-err {
+  color: var(--danger);
+}
+/* A modal row checkbox with its label, left aligned in the dctl slot */
+.dctl-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg2);
+}
+/* A segmented choice in a modal row (automatic, manual, …) — the two share the
+   dctl width */
+.dseg {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+.dseg-btn {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dseg-btn.active {
+  border-color: var(--acc);
+  color: var(--fg);
+}
+.dmodal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+.dbtn {
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--bd);
+  background: var(--inset);
+  color: var(--fg);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.dbtn-acc {
+  background: var(--acc);
+  border-color: var(--acc);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+/* Theme grid (reference: 86px cells, a 34px swatch with an accent dot, the active
+   one bordered in accent) */
+.th-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+  gap: 7px;
+}
+.th-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 9px;
+  border: 1.5px solid var(--bd);
+  cursor: pointer;
+}
+.th-item.active {
+  border-color: var(--acc);
+}
+.th-swatch {
+  display: block;
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid var(--bd-soft);
+  position: relative;
+  overflow: hidden;
+}
+.th-swatch-side {
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  bottom: 5px;
+  width: 34%;
+  border-radius: 3px;
+}
+.th-swatch-dot {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.th-name {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ── Project rail (reference 54px): a 34px number chip, a dotted line and + ── */
+.project-rail {
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+}
+/* The chip width follows the rail width. The label ellipsises, though at the
+   minimum width App renders only the first character so no ellipsis appears. The
+   identifying colour is applied inline as border and color. */
+.rail-chip {
+  width: calc(100% - 12px);
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  background: var(--card);
+  border: 1px solid var(--bd);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 13px var(--font-mono);
+  color: var(--fg2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  padding: 0 4px;
+}
+.rail-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* A read-only value, such as the folder in project settings — it occupies the
+   same place as an input but looks uneditable. */
+.dctl-static {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg3);
+  font: 11.5px var(--font-mono);
+  border: none;
+  background: transparent;
+}
+
+/* The project's identifying colour dot on the top tab, and the colour palette in
+   the project settings modal. */
+.project-tab-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 2px;
+}
+.color-palette {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--bd);
+  cursor: pointer;
+  padding: 0;
+}
+.color-swatch.on {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--acc);
+}
+.color-none {
+  background: transparent;
+  border-style: dashed;
+  color: var(--fg3);
+  font-size: 12px;
+  line-height: 1;
+}
+.rail-chip:hover {
+  border-color: var(--fg3);
+}
+.rail-chip.active {
+  border-color: var(--acc);
+  color: var(--fg);
+  box-shadow: 0 0 0 1px var(--acc);
+}
+.rail-add {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  /* Flex centring (R2) — the direct fix for baseline alignment lifting the glyph by
+     2px. Inside 32 (border excluded) minus a 16 icon leaves 8 and 8, whole and
+     symmetric. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 9px;
+  background: none;
+  border: 1px dashed var(--bd);
+  color: var(--fg3);
+  font-size: 15px;
+  cursor: pointer;
+}
+.rail-add:hover {
+  color: var(--fg2);
+  border-color: var(--fg3);
+}
+.rail-rename {
+  width: 38px;
+  height: 34px;
+  flex: 0 0 auto;
+  text-align: center;
+  border-radius: 9px;
+  border: 1px solid var(--acc);
+  background: var(--inset);
+  color: var(--fg);
+  font: 600 12px var(--font-mono);
+  outline: none;
+}
+
+/* ── Content tabs in left mode: content becomes a row and the tabs a vertical
+   strip (reference 138px) ── */
+.content.space-tabs-left {
+  flex-direction: row;
+}
+.space-tabs.vertical {
+  flex-direction: column;
+  align-items: stretch;
+  width: 138px;
+  flex: 0 0 auto;
+  height: auto;
+  border-right: 1px solid var(--bd);
+  border-bottom: none;
+  padding: 8px 8px;
+  gap: 4px;
+  overflow-y: auto;
+}
+/* A vertical list is outside the horizontal band contract (a gate exception) and
+   owns its item height directly. */
+.space-tabs.vertical .space-tab {
+  width: 100%;
+  height: 26px;
+  flex: 0 0 auto;
+  justify-content: flex-start;
+}
+.space-tabs.vertical .space-tab-add {
+  width: 100%;
+  height: 26px;
+  flex: 0 0 auto;
+}
+.content.space-tabs-left .space-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ── Right plugin sidebar (overlay) ─────────────────────────────────────────
+   It is an overlay above the content, not a flex split — toggling it does not
+   resize the body (terminal or editor). It is absolute against .project-plane
+   (position:absolute inset:0). */
+.sidebar-right {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  overflow: hidden;
+  border-left: 1px solid var(--bd); /* §B2 */
+  background: var(--bg);
+  /* Promoted to its own compositing layer. A WebGL canvas in plugin content is
+     composited on its own layer and rises above the page layer regardless of
+     z-index (WebKit). This panel needs its own layer for the compositor to
+     respect the order — the contract that host chrome is always above plugin
+     content, enforced at the compositor. */
+  will-change: transform;
+}
+/* Push mode — the overlay is released, it joins the flex flow and takes space,
+   pushing the body aside the way the left sidebar does. inset:auto clears the
+   absolute offsets and z-index is levelled. */
+.sidebar-right.push {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  flex: none;
+}
+/* The shadow only when open — closed it is zero wide, and the shadow would
+   linger at the edge. */
+.sidebar-right.open {
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
+}
+/* The width handle floating on the overlay's left edge; right is set inline and
+   is the sidebar's left edge. */
+.sidebar-right-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.12s ease;
+  z-index: 21;
+}
+.sidebar-right-resizer:hover,
+.sidebar-right-resizer:active {
+  background: rgba(127, 127, 127, 0.4);
+}
+
+.plugin-side {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+}
+.plugin-rail {
+  flex: 0 0 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  /* Centres the first icon (26px) in the top band (38px): (38-26)/2 = 6px. */
+  padding: 6px 0 8px;
+  border-right: 1px solid var(--bd); /* §B2 */
+}
+.plugin-rail-btn {
+  position: relative; /* The containing block for the absolutely positioned badge */
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg3);
+  /* Evens out a plugin's text glyph, the icon from its manifest. */
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* The unread badge on a sidebar tab (tab-badge). It has its own class, separate
+   from the manager chip (.plugin-badge, the origin and status chip): reusing the
+   same .plugin-badge overwrote the manager chip's background. On the rail (icon)
+   it is absolutely positioned top right; on a left tab it is an inline pin. The
+   background is the accent theme token. */
+.tab-badge {
+  box-sizing: border-box;
+  background: var(--acc);
+  color: #fff; /* Text on the accent colour — not a border, so B4 does not apply */
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: 999px;
+}
+.tab-badge-count {
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.tab-badge-dot {
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+}
+.plugin-rail-btn .tab-badge-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  /* A ring in the background colour separating it from the icon, drawn with
+   box-shadow so no literal border colour is used (§B4). */
+  box-shadow: 0 0 0 1.5px var(--bg2);
+}
+.plugin-rail-btn .tab-badge-dot {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+}
+.sidebar-left-tab .tab-badge {
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.plugin-rail-btn:hover {
+  background: rgba(127, 127, 127, 0.18);
+  color: var(--fg);
+}
+.plugin-rail-btn.active {
+  background: rgba(127, 127, 127, 0.28);
+  color: var(--fg);
+}
+.plugin-rail-spacer {
+  flex: 1;
+}
+.plugin-side-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.plugin-side-head {
+  flex: 0 0 auto;
+  /* The height belongs to the chrome row contract (--chrome-row-h, end of file)
+   and must not be set here. */
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--fg3);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--bd);
+}
+.plugin-side-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-right-body {
+  /* The sidebar-right plugin view slot — flex:1 takes the body height and
+     position:relative establishes the containing block, so .plugin-body
+     (absolute inset:0) fills this box. */
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+/* ── The plugin view slot contract: inheritance plus independence ────────────
+   Every placement (content, sidebar-left, sidebar-right) has a slot that holds a
+   PluginViewHost.
+   - Independence: each slot sets its own size and position (content in absolute
+     pixels, a sidebar with flex:1). One rule is shared — a slot must be a
+     positioned containing block (position:relative or absolute).
+       · content    .tab-body            = position:absolute + definite px (GroupArea)
+       · sidebar-R  .sidebar-right-body  = flex:1 + position:relative       (PluginSidebar)
+       · sidebar-L  .sidebar-left-body   = flex:1 + position:relative       (LeftSidebarHost)
+   - Inheritance: .plugin-body fills that slot with absolute inset:0, the same in
+     every placement. flex:1 only works when the parent is a flex container, so it
+     did nothing in the content slot, which is a block. absolute inset:0 gives
+     definite pixels in both axes under any positioned parent, so a plugin can
+     fill with 100% or with absolute. Adding a placement carries one obligation:
+     make its slot positioned. */
+.plugin-body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tab-viewer {
+  /* flex:1 inside a flex column host of definite height gives the container a
+     definite height too, and it stretches horizontally. position:relative is the
+     containing block for a plugin that positions its content absolutely. */
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* Stacking isolation — whatever z-index a plugin uses inside, it cannot compete
+     with anything outside this container (host chrome, overlay panels). Without
+     isolation a plugin canvas's z-index leaks into the app root stacking and
+     draws over a chrome panel. */
+  isolation: isolate;
+  /* Empty space takes the same background as a terminal panel body — a content
+   surface, distinct from the sidebar background. */
+  background: var(--bg);
+}
+.plugin-empty,
+.plugin-error {
+  padding: 14px;
+  color: var(--fg3);
+  font-size: 12px;
+}
+.plugin-error-title {
+  font-weight: 600;
+  color: #e5534b;
+}
+.plugin-error-msg {
+  margin-top: 4px;
+  font: 11px var(--font-mono);
+  word-break: break-all;
+  color: var(--fg2);
+}
+/* The bottom status bar — the same visual language as pane-status (24px, --side
+   background). */
+.plugin-side-status {
+  flex: 0 0 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px;
+  background: var(--side);
+  border-top: 1px solid var(--bd);
+  font-size: 11.5px;
+  color: var(--fg3);
+  text-shadow: var(--glow, none);
+}
+.pss-left {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pss-right {
+  flex: 0 0 auto;
+  opacity: 0.8;
+}
+
+.plugin-side-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--fg3);
+  font-size: 12.5px;
+}
+.plugin-side-empty-sub {
+  color: var(--fg3);
+  font-size: 12px;
+  padding: 2px 0;
+}
+
+/* Management panel */
+.plugin-manager {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 4px 12px 12px;
+  font-size: 12.5px;
+}
+.plugin-install-row {
+  display: flex;
+  gap: 6px;
+}
+.plugin-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--inset);
+  border: 1px solid var(--bd);
+  border-radius: 7px;
+  padding: 5px 9px;
+  font-size: 12px;
+  color: var(--fg);
+  font-family: inherit;
+  outline: none;
+}
+.plugin-input:focus {
+  border-color: var(--acc);
+}
+.plugin-input-ref {
+  flex: 0 0 72px;
+}
+.plugin-msg {
+  color: var(--fg2);
+  font-size: 11.5px;
+  word-break: break-all;
+}
+/* §B7 — the flex container (.dsec-row) owns row alignment; do not align on the
+   baseline. */
+.dsec-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.plugin-reload {
+  display: flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  color: var(--fg3);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+}
+.plugin-reload:hover {
+  color: var(--fg);
+}
+/* The plugin card in three rows: title, version and status; then the description
+   at full width; then the actions. Stacked vertically so a narrow sidebar does
+   not squeeze the description against the action column. */
+.plugin-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--bd);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.plugin-row-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.plugin-row-name {
+  font-weight: 600;
+  color: var(--fg);
+}
+.plugin-row-ver {
+  color: var(--fg3);
+  font-size: 11px;
+}
+.plugin-badge {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 99px;
+  border: 1px solid var(--bd);
+  color: var(--fg3);
+}
+.plugin-badge.enabled {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+.plugin-badge.error {
+  color: #e5534b;
+  border-color: var(--danger);
+}
+.plugin-badge.dev {
+  color: var(--acc);
+  border-color: var(--acc);
+}
+/* A template is a kind, not a runtime state, and is read only — a dotted border
+   separates it from a status badge. */
+.plugin-badge.template {
+  color: var(--fg3);
+  border-style: dashed;
+}
+/* Origin: official (listed in a registry) takes the accent; manual or
+   third-party (unlisted) is neutral with a dotted border. */
+.plugin-badge.official {
+  color: var(--acc);
+  border-color: var(--acc);
+}
+.plugin-badge.manual {
+  color: var(--fg3);
+  border-style: dashed;
+}
+.plugin-row-desc {
+  color: var(--fg2);
+  font-size: 11.5px;
+  line-height: 1.5;
+  /* Keeps a CJK word from breaking mid-word and forces a break only inside a long
+   code token. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+/* The role chip, derived from the checked declaration (contributes). A closed
+   widget outline (B8). */
+.plugin-row-contribs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.plugin-contrib-chip {
+  border: 1px solid var(--bd-soft);
+  border-radius: 99px;
+  padding: 1px 8px;
+  font-size: 10.5px;
+  color: var(--fg3);
+  white-space: nowrap;
+}
+.plugin-row-err {
+  color: #e5534b;
+  font-size: 11px;
+  word-break: break-all;
+}
+.plugin-row-actions {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.plugin-row-actions .dbtn {
+  padding: 4px 8px;
+  font-size: 11.5px;
+}
+/* The toggle slot on a template row — read-only wording; it cannot be enabled. */
+.plugin-row-note {
+  color: var(--fg3);
+  font-size: 11px;
+  font-style: italic;
+  align-self: center;
+}
+.dbtn-danger {
+  color: #e5534b;
+}
+.plugin-rejected {
+  border: 1px dashed var(--bd);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--fg2);
+}
+.plugin-rejected-dir {
+  font: 10.5px var(--font-mono);
+  color: var(--fg3);
+  word-break: break-all;
+}
+.plugin-rejected ul {
+  margin: 4px 0 0 16px;
+  padding: 0;
+}
+
+/* Consent modal */
+.plugin-consent-card {
+  width: 440px;
+}
+.plugin-consent-meta {
+  font: 11px var(--font-mono);
+  color: var(--fg3);
+}
+.plugin-consent-desc {
+  color: var(--fg2);
+}
+.plugin-consent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.plugin-consent-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--bd);
+  border-radius: 7px;
+  padding: 7px 10px;
+}
+.plugin-consent-item.caution {
+  border-color: var(--danger-soft);
+}
+.plugin-consent-label {
+  font-weight: 600;
+  font-size: 12px;
+}
+.plugin-consent-detail {
+  color: var(--fg2);
+  font-size: 11.5px;
+}
+.plugin-consent-none {
+  color: var(--fg3);
+}
+/* The command text in the contribution checklist, run or install, shown verbatim
+   without prose (§0-2) */
+.plugin-consent-cmd {
+  display: block;
+  margin-top: 4px;
+  padding: 4px 7px;
+  border: 1px solid var(--bd-soft);
+  border-radius: 5px;
+  background: var(--inset);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--fg2);
+  word-break: break-all;
+}
+.plugin-consent-revoke {
+  color: var(--fg3);
+  font-size: 11px;
+}
+.plugin-consent-notice {
+  border: 1px solid var(--danger-soft);
+  background: rgba(229, 83, 75, 0.07);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--fg2);
+}
+.plugin-consent-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+/* ── Left sidebar host: the file tree and sidebar-left plugin views ────────── */
+/* The projection slots (ProjectionSlots) — where a bound view's sidebar
+   declaration renders. It coexists with the pin grid (R4). */
+.projections {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.projection {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+/* The projection card on the left rail is the same kind of card as a content
+   cell (§B4 floating surface). It had neither border nor fill: the two vertical
+   lines were the resizers on either side, .project-rail-resizer and
+   .sidebar-resizer (measured). Inside and outside the card were therefore exactly
+   the same colour, and one 1px line was the only signal of an edge.
+   That is why it looked wrong only here. A content cell has a fill (--bg for the
+   body, --card for the backing) that differs from the ground, so the step marks
+   the edge even when the line blurs. On the rail card, at every window height
+   where the line blurred on the device pixel grid the edge signal fell to zero
+   and the card disappeared (measured: inside 57, outside 57, signal 0 — h=602,
+   603, 606, 607, size sweep in scripts/e2e/rail-border.mjs).
+   So the card owns the fill, under the same contract as .pane: --card backing,
+   --bg body, a 1px --bd border, radius 11. The edge is then two layers, step and
+   line, and no size makes it vanish.
+   Whether a border is drawn follows the pane style setting (flat has no line) —
+   the same rule as a content cell. */
+:root[data-pane-style="card"] .sidebar-left .projection,
+:root[data-pane-style="floating"] .sidebar-left .projection {
+  background: var(--card);
+  border: 1px solid var(--bd);
+  border-radius: 11px;
+  overflow: hidden;
+}
+:root[data-pane-style="floating"] .sidebar-left .projection {
+  border-radius: 14px;
+}
+/* The body slot takes the same --bg as .tab-body in a content cell — that step
+   between inside and outside is what makes the card's edge readable. */
+:root[data-pane-style="card"] .sidebar-left .projection-card,
+:root[data-pane-style="floating"] .sidebar-left .projection-card {
+  background: var(--bg);
+}
+/* The shared slot form (§12-①②): the host owns the header (what the feature is,
+   plus rail controls) and a feature replaces the body only. */
+.projection-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 10px;
+  /* The rail is furniture inside the pane grid — its neighbour is a pane group
+     header, so it follows the same row contract (--header-h). The top offset plus
+     the --pane-inset padding of .sidebar-left aligns it to the grid (R1c). */
+  height: var(--header-h, 33px);
+  font-size: 11px;
+  color: var(--fg);
+  opacity: 0.85;
+  border-bottom: 1px solid var(--bd);
+  user-select: none;
+  /* §12-① the whole header is the move handle — grabbing it starts a station drag
+   (delegated in App.tsx). */
+  cursor: grab;
+}
+.projection-header:active {
+  cursor: grabbing;
+}
+.projection-icon {
+  flex: 0 0 auto;
+  font-size: 12px;
+  line-height: 1;
+}
+.projection-bound {
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--fg);
+  opacity: 0.5;
+  font-size: 0.85em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.projection-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.proj-look-toggle {
+  flex: 0 0 auto;
+  border: none;
+  background: none;
+  color: var(--fg);
+  opacity: 0.5;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.proj-look-toggle:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+}
+.projection-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+.projection-degraded {
+  flex: 0 0 auto;
+  padding: 14px 12px;
+  font-size: 11px;
+  opacity: 0.55;
+  text-align: center;
+}
+.sidebar-left {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  min-width: 0;
+  /* A pane cell drops from the top of the grid by --pane-inset, and the rail's
+     content drops by the same amount so the frame header lands on the row of the
+     pane group header (R1c — it follows the theme's paneStyle automatically).
+     The bottom takes the same inset; asymmetry is not allowed. A content cell
+     takes --pane-inset on all four sides (height: calc(--h - --pane-inset*2 …)),
+     but the rail took it only at the top, so the card met the bottom of the
+     window with no room to draw its bottom border (measured 2026-07-27: card
+     bottom 1035 = window bottom — other placements on the same screen had all
+     four borders, which made it look local to this one). */
+  /* Left and right take the same inset — the other half of the reason above. A
+     content cell takes --pane-inset on all four sides (width: calc(--w -
+     --pane-inset*2)), but the rail took it vertically only, so its left side met
+     the window edge and only the right had spacing. */
+  padding-top: var(--pane-inset, 0px);
+  padding-bottom: var(--pane-inset, 0px);
+  padding-left: var(--pane-inset, 0px);
+  padding-right: var(--pane-inset, 0px);
+  /* The vertical boundary between sidebar and tabs — **the sidebar owns right**
+     (§B2: one edge, one owner), the same shape as the rail owning border-right.
+     A resizer cannot draw this line (§B6): it is a zero-width overlay that only
+     takes colour on hover, so at rest nobody drew it and the boundary was
+     missing. The colour is the panel inner line token (--bd-soft = --bd at 55%)
+     and follows the theme (§B4). */
+  border-right: 1px solid var(--bd-soft);
+}
+/* A grid whose cells are absolutely positioned in percentages — the same model
+   as a content space. The footer flows below it. */
+.left-panes {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+/* A leaf cell, absolutely positioned from the percentage rect of
+   computeSplitLayout — the same layout machine as the content area. */
+.left-pane {
+  position: absolute;
+  left: var(--l);
+  top: var(--t);
+  width: var(--w);
+  height: var(--h);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.sidebar-left-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar-left-stack {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* The body drops by the same pane-inset as a content group, so content row2 (the
+     view tabs) and sidebar row2 (the plugin header) land at the same y. */
+  padding-top: var(--pane-inset, 0);
+}
+.sidebar-left-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  /* Identical to the content tab row (.space-tabs) — stretch with 5px vertical
+     padding makes a 26px chip, matching the content tabs in size and alignment.
+     The height belongs to the --chrome-row-h contract; the padding sets the chip
+     height. */
+  align-items: stretch;
+  gap: 2px;
+  padding: var(--ws-pad, 5px) 6px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--bd);
+}
+/* A sidebar tab uses the .tab design of a content view tab as it is;
+   sidebar-left-tab is only a drag marker. .tab alone owns the visual properties,
+   so nothing is declared twice. */
+.sidebar-left-tab.dragging {
+  opacity: 0.5;
+}
+/* The inline rename input on a tab (B1) — the tab's own font and padding with
+   only an accent outline. No box inside a box. */
+/* Renaming a left tab reuses .space-tab.editing for the box and
+   .space-tab-rename for the transparent input, exactly as a content tab does. The
+   separate .left-host-tab-rename is gone so font and box are not defined twice. */
+.sidebar-left-body {
+  /* The sidebar-left plugin view slot — flex:1 with a position:relative containing
+     block, per the slot contract. .plugin-body (absolute inset:0) fills this box. */
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+/* The file tab body is a column: the file tree (flex:1) and a permanent bottom
+   slot (sidebar-footer, for example a mascot). */
+.sidebar-left-files {
+  display: flex;
+  flex-direction: column;
+}
+.sidebar-left-files > .ft-sidebar {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.sidebar-left-footer {
+  flex: 0 0 auto;
+  flex: 0 0 var(--status-h);
+  border-top: 1px solid var(--bd);
+  /* Always at the bottom of the sidebar — with no tabs or body above it (an empty
+   frame) the mascot still stays there (contract S5). */
+  margin-top: auto;
+}
+/* The view host in the footer slot is in normal flow, not absolute inset:0 — its
+   content makes the height. sidebar and content fill a parent flex:1 box, while
+   in the footer the content height is the slot height. */
+.sidebar-left-footer .plugin-body {
+  position: static;
+  inset: auto;
+}
+
+/* ══ The icon button base (the icon system standard) ═════════════════════════
+   Every icon button carries .icon-btn and its variant. Defined at the end of the
+   file, it beats an older width, height or font at the same specificity — the one
+   place where the differences converge.
+   <Icon size> owns the icon size (xs8/sm12/md14/lg16) and the colour is
+   currentColor. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg2);
+  opacity: 0.7;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  opacity: 1;
+  background: var(--inset);
+}
+.icon-btn.active {
+  opacity: 1;
+  color: var(--acc);
+}
+/* Setting: icon round box on — a permanent border and background instead of the
+   bare look. */
+:root[data-icon-box="on"] .icon-btn {
+  border-color: var(--bd);
+  background: var(--inset);
+}
+/* Variant: always a box, regardless of the iconBox setting (the plugin rail and
+   the like). */
+.icon-btn--boxed {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border-color: var(--bd);
+  background: var(--inset);
+}
+/* Variant: a small circle, for the close popover on tab hover. */
+.icon-btn--mini {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+/* The close × in three places: project-tab-close, space-tab-close and
+   tab-close. The icon-btn--mini box is 16px, so the glyph inside comes out small
+   too. The box is enlarged, and because the lucide x glyph only draws in the
+   middle half of its viewBox the svg is made larger than the box so the × reads
+   clearly. Opacity beats .icon-btn (0.7) on the same element by one step of
+   specificity: 0.85 bare, 100% on hover. All three follow the same rule — leave
+   one out and that tab alone stays small. */
+.icon-btn.project-tab-close,
+.icon-btn.space-tab-close,
+.icon-btn.tab-close {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  opacity: 0.85;
+}
+.icon-btn.project-tab-close svg,
+.icon-btn.space-tab-close svg,
+.icon-btn.tab-close svg {
+  width: 18px;
+  height: 18px;
+}
+.project-tab:hover .icon-btn.project-tab-close,
+.icon-btn.project-tab-close:hover,
+.icon-btn.space-tab-close:hover,
+.icon-btn.tab-close:hover {
+  opacity: 1;
+}
+/* A wrapper that aligns a non-button icon, such as a tab type icon. */
+.icon-inline {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+/* The titlebar wordmark, pinned first after the traffic lights; tabs always
+   stack after it. fill=currentColor is inherited so it follows the theme
+   (--fg2). It does not intercept the drag region. */
+.titlebar-logo {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+  color: var(--fg2);
+  margin-right: 4px;
+}
+.titlebar-logo svg {
+  /* 24 is even: inside the 44 titlebar (44−24)/2 = 10, a whole number. The width
+     is snapped to a whole 69 — an auto width lands on a fraction and would put the
+     x of the badge and tabs that follow on fractional pixels. */
+  height: 24px;
+  width: 69px;
+  display: block;
+}
+
+/* ── The band padding contract (2026-06, docs/UI.md R1) — free and exact ──────
+   The band (strip) owns the vertical spacing through a padding-block variable and
+   the items stretch to fill it: item height = band interior − padding×2.
+   - Sibling boxes (pill, +, ×) are the same height on the same axis by
+     construction, so a 1px mismatch cannot occur.
+   - With whole-pixel padding an item's y is always whole, so half-pixel centring
+     (unequal space above and below) cannot occur.
+   - A theme's freedom is the :root variables only (--tab-pad for a view band,
+     --ws-pad for a ws band). Setting height on an item is forbidden and a vitest
+     gate enforces it; vertical lists and the rail are the exceptions. */
+.tabs .tab,
+.tabs .tab-add,
+.project-tab,
+.space-tab,
+.project-tab-add,
+.space-tab-add {
+  height: auto;
+  align-self: stretch;
+  margin: 0;
+}
+.space-tab-add-wrap {
+  align-self: stretch;
+  display: flex;
+  align-items: stretch;
+}
+.tab-add,
+.project-tab-add,
+.space-tab-add {
+  width: auto;
+  padding: 0 10px;
+  border-radius: 6px;
+}
+
+/* ── Chrome row height standard — the owner is the single TS source (lib/chromeBands). R4: a size constant comes from one place
+   injects it once. A theme sets size through the R1 padding knobs (--tab-pad/--ws-pad), not through this value, and
+   the height derives from those — which is how a theme sets size without the sidebar and the content drifting apart.
+   (this comment used to read "the theme owns the value", and against docs/tech/UI-GEOMETRY.md R4 that was
+   wrong. No theme has ever set this value — the declaration existed with no owner.)
+   var() collapses when it is undefined, so the :root fallback is stated. */
+:root {
+  --chrome-row-h: 37px; /* 37 = padding 5 + chip 26 + padding 5 + divider 1 */
+  --header-h: 33px; /* Content group header (padding 5 + chip 26 + padding 2) — the fallback for what
+   GroupArea injects */
+  --status-h: 24px; /* Content group status bar — the fallback for what GroupArea injects */
+}
+
+/* ── The chrome row contract (docs/UI.md R1a): single-level bands that are
+   horizontal neighbours — the right header, the left host tabs, the project tabs
+   and the content tabs — are one row, and this rule owns the height. An
+   individual block must not set height (cssContract R3). */
+.plugin-side-head,
+.sidebar-left-tabs,
+.space-tabs,
+.project-tabs {
+  height: var(--chrome-row-h, 37px);
+}
+
+/* The file header (the project1 row) follows a different standard depending on
+   how many levels the left sidebar has. With a view tab row
+   (.sidebar-left-tabs) it is two levels and takes the titlebar line, the same
+   --header-h as the content view tabs; without one it is a single level and takes
+   --chrome-row-h. Both are theme standard variables and must not be hardcoded
+   (cssContract R3). */
+.ft-header {
+  height: var(--chrome-row-h, 37px);
+}
+.sidebar-left:has(.sidebar-left-tabs) .ft-header {
+  height: var(--header-h, 33px);
+}
+/* The shared row grid contract (PLUGIN-CONTRACT §Toolbar row): the auxiliary top
+   row of a rail projection body consumes the same token as a panel toolbar row
+   (--toolbar-h). A plugin renders that surface (the file tree's
+   .sk-files-header, which follows and tests the contract in its own repo), so the
+   core has no rule for it. */
+
+/* ── The in-app notification banner (NotifyHost) ── an overlay at the top right
+   while focused. A click follows the deep link. */
+.notifications {
+  position: fixed;
+  top: 44px;
+  right: 12px;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  pointer-events: none;
+}
+.notify-banner {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg2);
+  color: var(--fg);
+  border: 1px solid var(--bd); /* §B4 floating surface */
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  animation: notify-in 0.16s ease-out;
+}
+@keyframes notify-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.notify-banner-main {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  background: transparent;
+  border: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  padding-right: 16px;
+  width: 100%;
+}
+.notify-banner-image {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+.notify-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.notify-banner-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.notify-banner-body {
+  font-size: 11.5px;
+  color: var(--fg2);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.notify-banner-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.notify-banner-action {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--bd-soft);
+  background: rgba(127, 127, 127, 0.12);
+  color: inherit;
+  cursor: pointer;
+}
+.notify-banner-action:hover {
+  background: rgba(127, 127, 127, 0.24);
+}
+.notify-banner-close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  font-size: 15px;
+  border: none;
+  background: transparent;
+  color: var(--fg3);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.notify-banner-close:hover {
+  color: var(--fg);
+  background: rgba(127, 127, 127, 0.18);
+}
+
+/* ── The project picker: the first screen of a window with no projects (P6) ─── */
+/* The banner for a missing root (B1). The tab stays and the user decides what to
+   do with it — nothing is deleted without them. */
+.root-missing-banner {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--warn-fg, #b45309);
+  background: var(--warn-bg, rgba(245, 158, 11, 0.12));
+  border-bottom: 1px solid var(--bd-soft);
+}
+
+/* ── The orchestrator window (A3): feed, window map and console. A shell of its
+   own, unrelated to a workspace ── */
+.orch-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+}
+.orch-header {
+  /* The titlebar address of a window frame consumes the same physical policy in
+     every kind of window. The published geometry contract is a border-box 45px,
+     not whatever padding and child heights happen to add up to. */
+  box-sizing: border-box;
+  flex: 0 0 45px;
+  height: 45px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 8px 84px; /* Clear of the traffic lights */
+  border-bottom: 1px solid var(--bd-soft);
+}
+.orch-title { font-weight: 700; }
+.orch-body { flex: 1; display: flex; min-height: 0; }
+.orch-map {
+  flex: 0 0 240px;
+  overflow-y: auto;
+  padding: 10px;
+  border-right: 1px solid var(--bd-soft);
+}
+.orch-map h2, .orch-feed-wrap h2 {
+  font-size: 11px;
+  opacity: 0.6;
+  margin: 2px 0 8px;
+  text-transform: uppercase;
+}
+.orch-monitor { margin-bottom: 12px; }
+.orch-monitor-name { font-size: 11px; opacity: 0.7; margin-bottom: 6px; }
+.orch-win {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  margin: 3px 0;
+  border: 1px solid var(--bd-soft);
+  border-radius: 6px;
+  background: var(--inset);
+  color: inherit;
+  cursor: pointer;
+}
+.orch-win.selected { border-color: var(--acc); }
+.orch-feed-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; padding: 10px; }
+.orch-feed { flex: 1; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; }
+.orch-entry { display: flex; gap: 8px; padding: 2px 0; white-space: nowrap; }
+.orch-seq { opacity: 0.35; min-width: 42px; text-align: right; }
+.orch-src { opacity: 0.55; min-width: 110px; }
+.orch-line { overflow: hidden; text-overflow: ellipsis; }
+.orch-entry.k-command-executed .orch-line { color: var(--acc); }
+.orch-console {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--bd-soft);
+}
+.orch-console input {
+  flex: 1;
+  min-width: 200px;
+  padding: 7px 10px;
+  border: 1px solid var(--bd-soft);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+}
+.orch-console button {
+  padding: 7px 14px;
+  border: 1px solid var(--bd-soft);
+  border-radius: 6px;
+  background: var(--acc);
+  color: var(--bg);
+  font-weight: 600;
+  cursor: pointer;
+}
+.orch-result {
+  flex-basis: 100%;
+  max-height: 160px;
+  overflow: auto;
+  margin: 0;
+  font-size: 11px;
+  opacity: 0.85;
+}
+
+/* Rail: a project chip belonging to another window — a dotted border and dimming
+   separate it from this window's, and a click focuses that window. */
+.rail-chip.other {
+  opacity: 0.55;
+  border-style: dashed;
+}
+.rail-chip.other:hover { opacity: 0.9; }
+
+/* Rail: a recent project that is not open — quieter than another window's (no
+   dots, dimming only), and a click opens it in this window. */
+.rail-chip.recent { opacity: 0.4; }
+.rail-chip.recent:hover { opacity: 0.85; }
+
+/* The "all" button in the feed header that clears the filter, shown when a
+   window is selected. */
+.orch-feed-all {
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 11px;
+  border: 1px solid var(--bd-soft);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* The orchestrator activity feed — request and response bubbles with their start
+   and end times. */
+.orch-turn { display: flex; flex-direction: column; gap: 3px; margin: 7px 0; }
+.orch-bubble {
+  max-width: 92%;
+  padding: 4px 9px;
+  border-radius: 8px;
+}
+.orch-bubble.req { align-self: flex-start; background: rgba(127, 127, 127, 0.09); }
+.orch-bubble.res { align-self: flex-start; margin-left: 20px; background: rgba(127, 127, 127, 0.045); }
+.orch-bubble.res.ok { background: rgba(63, 185, 80, 0.12); }
+.orch-bubble.res.err { background: rgba(229, 83, 75, 0.14); }
+.orch-bubble-meta { font-size: 10px; opacity: 0.5; margin-bottom: 1px; }
+.orch-bubble-body { font-size: 12px; word-break: break-word; white-space: pre-wrap; }
+.orch-args { opacity: 0.7; }
+/* A single event (terminal, turn, view) — one line, not a bubble. */
+.orch-event { display: flex; gap: 8px; padding: 1px 0; font-size: 11px; opacity: 0.75; align-items: baseline; }
+.orch-event .orch-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The unread badge: while scrolled up, a new entry announces itself as a sticky
+   line. */
+.orch-unread {
+  position: sticky;
+  bottom: 6px;
+  align-self: center;
+  margin: 4px auto 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 12px;
+  border: 1px solid var(--acc);
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--acc);
+  font-size: 11px;
+  cursor: pointer;
+}
+/* Pinned (always on top) — colour and background make the state unambiguous. */
+.orch-pin.active { color: var(--acc); background: color-mix(in srgb, var(--acc) 16%, transparent); }
+
+/* The orchestrator's left side is a list of projects, not windows or monitors.
+   The label filters the feed; the icon on the right brings the window forward. */
+/* A project entry is one borderless row: a label and an icon on the right.
+   Background and colour are the only separation. */
+.orch-proj {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1px;
+  border-radius: 6px;
+}
+.orch-proj:hover { background: rgba(127, 127, 127, 0.07); }
+/* Selection is clearly separated from hover — in a dark theme the two were close
+   enough to read as two selections (measured): an accent bar on the left and a
+   darker background. */
+.orch-proj.selected {
+  background: color-mix(in srgb, var(--acc) 22%, transparent);
+  box-shadow: inset 3px 0 0 var(--acc);
+}
+.orch-proj.all {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  margin-bottom: 4px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.orch-proj.all:hover { background: rgba(127, 127, 127, 0.07); }
+.orch-proj.all.selected {
+  background: color-mix(in srgb, var(--acc) 22%, transparent);
+  box-shadow: inset 3px 0 0 var(--acc);
+  opacity: 1;
+}
+.orch-proj-label {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.orch-proj-call {
+  display: flex;
+  align-items: center;
+  padding: 5px 8px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+}
+.orch-proj-call:hover { opacity: 1; color: var(--acc); }
+.orch-feed-scope { opacity: 0.7; font-weight: 400; }
+
+/* A project that is not open is dimmed to separate it from an open one. Its
+   label is not selectable (there is no window) and does not open it — only the
+   arrow on the right does. The arrow keeps one shape and separates by colour:
+   accent on hover when open, neutral brightness when closed. */
+.orch-proj.closed .orch-proj-label { opacity: 0.45; cursor: default; }
+.orch-proj.closed .orch-proj-call { opacity: 0.35; }
+.orch-proj.closed .orch-proj-call:hover { opacity: 0.9; color: inherit; }
+
+/* Expanding the raw JSON from a response bubble or an event click — the whole
+   envelope, collapsible. */
+.orch-raw {
+  margin: 2px 0 6px 20px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: rgba(127, 127, 127, 0.08);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow: auto;
+}
+.orch-bubble.res { cursor: pointer; }
+.orch-event-line { cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+
+/* An image response such as a capture — rendered as a thumbnail rather than the
+   base64 text. */
+.orch-shot {
+  display: block;
+  margin-top: 6px;
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 6px;
+}
+
+/* The lightbox: clicking a thumbnail fills the window, and a click or ESC closes
+   it. */
+.orch-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  cursor: zoom-out;
+}
+.orch-lightbox img {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: 8px;
+}
+.orch-shot { cursor: zoom-in; }
+
+/* An empty workspace, an exceptional state (a P6 degradation or a dropped
+   restore) — it only states that opening and creating live in the control plane. */
+.workspace-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg);
+  opacity: 0.55;
+  font-size: 13px;
+  padding: 24px;
+  text-align: center;
+}
+
+/* The bottom of the control plane rail — where a project is created; one surface
+   for opening and creating. */
+.orch-proj-new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px dashed color-mix(in srgb, var(--fg) 25%, transparent);
+  border-radius: 6px;
+  color: var(--fg);
+  opacity: 0.7;
+  cursor: pointer;
+  width: 100%;
+}
+.orch-proj-new:hover { opacity: 1; border-color: var(--acc); color: var(--acc); }
+
+/* System origin (§5 — a scheduler emission, a boot by-product): the record is
+   visible but dimmed, because a human origin is the signal. */
+.orch-turn.sys, .orch-event.sys { opacity: 0.38; }
+
+/* The speaker badge (§5 R3), a small chip beside the meta. The label resolves
+   from the actor.<key> table. */
+.orch-actor {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 8px;
+  font-size: 9px;
+  line-height: 14px;
+  vertical-align: middle;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+/* Progress deltas folded into a turn — traces of execution between request and
+   response, dimmed and not bubbles. */
+.orch-delta {
+  margin: 2px 0 2px 18px;
+  font-size: 11px;
+  opacity: 0.55;
+  font-family: var(--font-mono);
+}
+
+/* A conversation set card — one natural-language turn (question, then child
+   commands and deltas, then answer) folded together by parentId. A line on the
+   left marks the set's boundary and children indent inside it. */
+.orch-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 9px 0;
+  padding-left: 8px;
+  border-left: 2px solid color-mix(in srgb, var(--acc) 45%, transparent);
+}
+.orch-bubble.req.chat {
+  background: color-mix(in srgb, var(--acc) 14%, transparent);
+  font-weight: 500;
+}
+.orch-chat-body { display: flex; flex-direction: column; gap: 3px; margin-left: 12px; }
+.orch-bubble.res.chat { margin-left: 0; }
+/* In-progress mark and stop, until the answer (chat.answer) closes it. */
+.orch-chat-running {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+  font-size: 11px;
+  opacity: 0.75;
+}
+.orch-chat-running button {
+  padding: 1px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.orch-chat-running button:hover { border-color: var(--acc); color: var(--acc); }
+
+/* The badge for exhausted webview recovery (App WebviewHealthBadges) — a
+   non-blocking overlay at the bottom right. A fixed stack shaped like the
+   notifications — the human surface of the no-dialog contract (webview_health). */
+/* The boot phase badge — a quiet progress mark at the bottom right that
+   disappears at ready. Deliberately unobtrusive: small type, translucent, no
+   shadow. It states the same fact as the view placeholder (.plugin-loading). */
+.boot-phase {
+  position: fixed;
+  bottom: 34px;
+  right: 12px;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  color: var(--fg-dim, var(--fg));
+  border: 1px solid var(--bd);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  opacity: 0.75;
+  pointer-events: none;
+}
+.boot-phase-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--acc);
+  animation: boot-phase-pulse 1.2s ease-in-out infinite;
+}
+@keyframes boot-phase-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+/* Loading in a view slot — not registered, but boot has not finished, so the
+   slot says "coming" rather than staying blank. The same place as plugin-empty
+   and a different fact. */
+.plugin-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--fg-dim, var(--fg));
+  font-size: 12px;
+  opacity: 0.55;
+  animation: boot-phase-pulse 1.6s ease-in-out infinite;
+}
+
+.webview-health-badges {
+  position: fixed;
+  bottom: 34px;
+  right: 12px;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+.webview-health-badge {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--bd);
+  border-left: 3px solid var(--danger);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.webview-health-badge button {
+  background: transparent;
+  border: 1px solid var(--bd);
+  border-radius: 4px;
+  color: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.webview-health-badge button:hover {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+
+/* ── Motion observation (lib/motionDebug) ───────────────────────────────────
+   The axis that actually slows motion and stops it is playbackRate in Web
+   Animations. CSS cannot multiply a duration that is already declared, so with a
+   custom property alone only the stop worked and the multiplier did nothing. What
+   remains here is the state surface: the current setting is written on :root so
+   it can be read from the screen. At the default (1, no stop) no rule applies.
+   Stopping with transition-duration:0 is not used — that does not pause a
+   transition, it finishes it at once and removes the intermediate state that was
+   the point of looking. */
+:root {
+  --motion-scale: 1;
+}
+
+
+/* The empty window notice — with no styles at all the text flowed outside the
+ * layout and was cut off on the left (measured 2026-07-28). The wording and the
+ * placement decision stand; this only makes it readable. */
+.window-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--fg3);
+  pointer-events: none;
+}

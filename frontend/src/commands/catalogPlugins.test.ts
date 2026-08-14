@@ -1,0 +1,343 @@
+// plugin.conformance contract test — checks that the declared≡actual runtime diagnosis judges
+// every C2 composition rule. view-status (a runtime rule) is judgeable only on a mounted content
+// view, so the enforcement point is this runtime surface, not the activation boundary (the only
+// wiring of viewStatusConformance).
+// Judgement is declared≡reported: declared (contributes.views[].status) but unreported = violation,
+// reported outside the declaration = missing-declaration warning.
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { invoke } = vi.hoisted(() => ({
+  invoke: vi.fn(async (..._a: unknown[]): Promise<unknown> => null),
+}));
+vi.mock("../framework", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../framework")>()),
+  invoke: (...a: unknown[]) => invoke(...a),
+}));
+
+import { registerPluginCatalog } from "./catalogPlugins";
+import { execute, getSpec } from "./registry";
+import { usePlugins, type PluginRuntime } from "../state/plugins";
+import { useSessions, type Project, type Tab } from "../state/sessions";
+import { parseManifest, type PluginManifest } from "../plugins/spec";
+import { useProgramRegistry } from "../plugins/programRegistry";
+
+function manifestOf(id: string, overrides: Record<string, unknown> = {}): PluginManifest {
+  const { manifest, validation } = parseManifest(
+    {
+      spec: "soksak-spec-plugin@0.0.1",
+      id,
+      name: "Demo",
+      version: "1.0.0",
+      description: "Test",
+      permissions: ["ui", "commands"],
+      ...overrides,
+    },
+    id,
+  );
+  if (!manifest) throw new Error(`invalid test manifest: ${validation.errors}`);
+  return manifest;
+}
+
+function runtimeOf(manifest: PluginManifest): PluginRuntime {
+  return { manifest, dir: "/d", source: "dev", status: "enabled" };
+}
+
+// Minimal tab holding plugin view instances in one content area (fills only the paths the handler reads).
+function tabWith(tabs: Tab[]): Project {
+  return {
+    id: "t1",
+    spaces: [
+      {
+        id: "c1",
+        title: "1",
+        layout: { type: "leaf", value: { id: "g1", tabs, activeTabId: tabs[0]?.id ?? "" } },
+        activePaneId: "g1",
+      },
+    ],
+    activeSpaceId: "c1",
+  } as unknown as Project;
+}
+
+const pluginView = (over: Partial<Tab> & { id: string; pluginId: string; view: string }): Tab =>
+  ({ kind: "plugin", title: "Canvas", ...over }) as Tab;
+
+beforeAll(() => {
+  if (!getSpec("plugin.conformance")) registerPluginCatalog();
+});
+
+beforeEach(() => {
+  invoke.mockClear();
+  usePlugins.setState({ plugins: {} });
+  useSessions.setState({ projects: [] });
+});
+
+afterEach(() => {
+  usePlugins.setState({ plugins: {} });
+  useSessions.setState({ projects: [] });
+});
+
+describe("plugin.conformance registration (discoverability)", () => {
+  it("the returns contract declares the c2 field", () => {
+    const spec = getSpec("plugin.conformance");
+    expect(spec).toBeDefined();
+    expect(spec!.returns).toContain("c2");
+  });
+});
+
+describe("program.wait — poll-free program readiness boundary", () => {
+  afterEach(() => {
+    useProgramRegistry.setState({ programs: {}, order: [], version: 0 });
+  });
+
+  it("subscribes to the registration event and completes the moment the named program registers", async () => {
+    const pending = execute("program.wait", { id: "browser", timeoutMs: 1_000 }, {});
+    const dispose = useProgramRegistry.getState().register("browser-plugin", {
+      id: "browser",
+      title: "Browser",
+      kind: "view",
+      view: "browser",
+    });
+
+    await expect(pending).resolves.toMatchObject({
+      ok: true,
+      data: { id: "browser", pluginId: "browser-plugin" },
+    });
+    dispose();
+  });
+});
+
+// Contract shape of the response c2.viewStatus (declared≡reported: unreported = declared but not reported, undeclared = reported outside the declaration).
+interface C2Result {
+  violations: { rule: string; detail: string }[];
+  viewStatus: {
+    mounted: string[];
+    reported: string[];
+    unreported: string[];
+    undeclared: { viewId: string; view: string; code: string }[];
+  };
+}
+
+describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConformance wiring — declaration ≡ report)", () => {
+  const declaredManifest = (id: string, status?: string[]) =>
+    manifestOf(id, {
+      contributes: {
+        views: [
+          {
+            id: "canvas",
+            title: "Canvas",
+            icon: "C",
+            placements: ["content"], decoration: true,
+            ...(status !== undefined ? { status } : {}),
+          },
+        ],
+        commands: [{ name: "open", title: "Open" }],
+        nodes: [{ id: "root" }],
+      },
+    });
+
+  it("a status-declaring view that has not reported yet is information, not a violation (null = nothing to report)", async () => {
+    const id = "demo";
+    usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["idle", "busy"])) } });
+    // Two content view instances: v1 does not report status (declared → violation), v2 reports a declared code.
+    useSessions.setState({
+      projects: [
+        tabWith([
+          pluginView({ id: "v1", pluginId: id, view: "canvas" }),
+          pluginView({ id: "v2", pluginId: id, view: "canvas", status: { code: "idle" } }),
+        ]),
+      ],
+    });
+
+    const r = await execute("plugin.conformance", { id }, {});
+    expect(r.ok).toBe(true);
+    const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
+    expect(c2).toBeDefined();
+    expect(c2.viewStatus.mounted).toEqual(["v1", "v2"]);
+    expect(c2.viewStatus.reported).toEqual(["v2"]);
+    expect(c2.viewStatus.unreported).toEqual(["v1"]);
+    expect(c2.viewStatus.undeclared).toEqual([]);
+    expect(c2.violations.map((v) => v.rule)).not.toContain("view-status");
+  });
+
+  it("no view-status violation when every content view reports a declared code", async () => {
+    const id = "demo";
+    usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["running"])) } });
+    useSessions.setState({
+      projects: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas", status: { code: "running" } })])],
+    });
+
+    const r = await execute("plugin.conformance", { id }, {});
+    const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
+    expect(c2.viewStatus.unreported).toEqual([]);
+    expect(c2.viewStatus.undeclared).toEqual([]);
+    expect(c2.violations.map((v) => v.rule)).not.toContain("view-status");
+    expect(c2.violations.map((v) => v.rule)).not.toContain("content-view-status");
+  });
+
+  it("silence from a stateless ([]) declaration is not a violation (declaration ≡ report)", async () => {
+    const id = "demo";
+    usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, [])) } });
+    useSessions.setState({
+      projects: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas" })])],
+    });
+
+    const r = await execute("plugin.conformance", { id }, {});
+    const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
+    expect(c2.viewStatus.unreported).toEqual([]);
+    expect(c2.viewStatus.undeclared).toEqual([]);
+    expect(c2.violations.map((v) => v.rule)).not.toContain("view-status");
+    expect(c2.violations.map((v) => v.rule)).not.toContain("content-view-status");
+  });
+
+  it("report without declaration → undeclared = view-status violation (code outside the declaration)", async () => {
+    const id = "demo";
+    usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, undefined)) } });
+    useSessions.setState({
+      projects: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas", status: { code: "idle" } })])],
+    });
+
+    const r = await execute("plugin.conformance", { id }, {});
+    const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
+    expect(c2.viewStatus.undeclared).toEqual([{ viewId: "v1", view: "canvas", code: "idle" }]);
+    const vs = c2.violations.filter((v) => v.rule === "view-status");
+    expect(vs.some((v) => v.detail.includes("idle"))).toBe(true);
+  });
+
+  it("reporting a code outside the declared list → undeclared = view-status violation", async () => {
+    const id = "demo";
+    usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["ready"])) } });
+    useSessions.setState({
+      projects: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas", status: { code: "wat" } })])],
+    });
+
+    const r = await execute("plugin.conformance", { id }, {});
+    const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
+    expect(c2.viewStatus.undeclared).toEqual([{ viewId: "v1", view: "canvas", code: "wat" }]);
+    const vs = c2.violations.filter((v) => v.rule === "view-status");
+    expect(vs.some((v) => v.detail.includes("wat"))).toBe(true);
+  });
+});
+
+describe("plugin.conformance — C2 static rules (command-surface, view-nodes)", () => {
+  it("file viewer only and command=0 → command-surface in c2.violations", async () => {
+    const id = "viewer";
+    const manifest = manifestOf(id, {
+      permissions: ["ui"],
+      contributes: {
+        fileViewers: [{ id: "image", extensions: ["png"], sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } }],
+      },
+    });
+    usePlugins.setState({ plugins: { [id]: runtimeOf(manifest) } });
+
+    const r = await execute("plugin.conformance", { id }, {});
+    const data = (r as { data: Record<string, unknown> }).data;
+    const c2 = data.c2 as { violations: { rule: string }[] };
+    expect(c2.violations.map((v) => v.rule)).toContain("command-surface");
+  });
+});
+
+describe("plugin.dev.create — extension development independent of core build identity", () => {
+  it("creates the workspace and reloads on a release core too", async () => {
+    const previousReload = usePlugins.getState().reload;
+    const reload = vi.fn(async () => {});
+    usePlugins.setState({ release: true, reload });
+    invoke.mockResolvedValueOnce({
+      dir: "/Users/test/.soksak/workspaces/plugins/weather",
+      dir_name: "weather",
+    });
+
+    const r = await execute("plugin.dev.create", { id: "weather" }, {});
+
+    expect(invoke).toHaveBeenCalledWith("plugin_dev_new", { id: "weather" });
+    expect(reload).toHaveBeenCalledOnce();
+    expect(r).toMatchObject({
+      ok: true,
+      data: { pluginId: "weather", dir: "/Users/test/.soksak/workspaces/plugins/weather" },
+    });
+    // Examples hold the command form only — the binary name is prepended by the presenter (each env binary); multi-env listing removed.
+    expect(getSpec("plugin.dev.create")?.examples).toEqual([
+      'plugin.dev.create \'{"id":"soksak-plugin-<id>"}\'',
+    ]);
+    expect(getSpec("plugin.dev.load")?.examples).toEqual([
+      'plugin.dev.load \'{"path":"/path/to/my-plugin"}\'',
+    ]);
+    usePlugins.setState({ release: false, reload: previousReload });
+  });
+});
+
+describe("plugin.dev.load — home lane gate (dev identity only)", () => {
+  it("INVALID_PARAMS when coreBuild is not dev", async () => {
+    invoke.mockImplementationOnce(async (cmd: unknown) =>
+      cmd === "app_environment" ? { coreBuild: "debug" } : undefined,
+    );
+    const r = (await execute("plugin.dev.load", { path: "<local-evidence>/x" }, {})) as {
+      ok: boolean;
+      code: string;
+    };
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("INVALID_PARAMS");
+  });
+});
+
+describe("plugin.view.open — a rail placement is not an open target (left rail projection only)", () => {
+  it("INVALID_PARAMS even for a resident rail view — it appears only through declaration-projection", async () => {
+    const { useViewRegistry } = await import("../plugins/viewRegistry");
+    useViewRegistry.getState().register(
+      "railplug",
+      {
+        id: "tree",
+        title: "tree",
+        icon: "x",
+        placements: ["rail"],
+        defaultPlacement: "rail",
+        transparent: false,
+        nativeSurface: false,
+        decoration: false,
+        resident: true,
+      },
+      { mount: () => {} },
+    );
+    useSessions.setState({ projects: [tabWith([])], activeId: "t1" } as never);
+    const r = (await execute("plugin.view.open", { viewKey: "railplug.tree" }, {})) as {
+      ok: boolean;
+      code: string;
+      message: string;
+    };
+    expect(r.ok).toBe(false);
+    expect(r.code).toBe("INVALID_PARAMS");
+    expect(String(r.message)).toBe(tmsg("msg.plugin.view.railNotOpenable", { key: "railplug.tree" }));
+  });
+});
+
+// Rule — a fact in the manifest must also be on the state surface.
+//
+// The contract implementation declaration (implements) is in the manifest, but plugin.list did not
+// emit it. There was no place to ask "who implements this contract", so the consumer (the E2E
+// harness) used a hand-written table of plugin ids — that table needs an edit whenever a plugin is
+// added, and it diverges silently whenever a plugin changes its contract.
+// Measured 2026-08-07: that silent divergence killed engine execution with a `traceId must be number` rejection.
+describe("plugin.list emits the contract implementation declaration", () => {
+  it("answers the manifest implements as is", async () => {
+    const id = "soksak-plugin-demo";
+    usePlugins.setState({
+      plugins: {
+        [id]: runtimeOf(manifestOf(id, {
+          implements: [{ id: "soksak-spec-plugin-browser", version: "0.0.1" }],
+        })),
+      },
+    });
+    const answer = await execute("plugin.list", {}, {});
+    const entry = (answer.data as { plugins: { id: string; implements: unknown }[] })
+      .plugins.find((p) => p.id === id);
+    expect(entry!.implements).toEqual([{ id: "soksak-spec-plugin-browser", version: "0.0.1" }]);
+  });
+
+  it("a plugin that declares no contract gets an empty list — nothing absent is invented", async () => {
+    const id = "soksak-plugin-plain";
+    usePlugins.setState({ plugins: { [id]: runtimeOf(manifestOf(id)) } });
+    const answer = await execute("plugin.list", {}, {});
+    const entry = (answer.data as { plugins: { id: string; implements: unknown }[] })
+      .plugins.find((p) => p.id === id);
+    expect(entry!.implements).toEqual([]);
+  });
+});
