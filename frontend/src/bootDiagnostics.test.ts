@@ -9,5 +9,7 @@ describe("bootstrap diagnostics", () => {
     expect(html).toContain('window.addEventListener("error"');
     expect(html).toContain('window.addEventListener("unhandledrejection"');
     expect(html).toContain("data-boot-error");
+    expect(html).toContain('document.documentElement.dataset.bootStatus !== "loading"');
+    expect(html).toContain("dataset.runtimeError");
   });
 });
