@@ -32,3 +32,21 @@ func TestBrowserFrameContract(t *testing.T) {
 		}
 	}
 }
+
+func TestBrowserFrameSequenceRejectsLateDragWriters(t *testing.T) {
+	service := NewService(nil)
+	handle := service.install("browser-1", nil)
+	newer := Frame{X: 400, Y: 100, Width: 500, Height: 600}
+	older := Frame{X: 200, Y: 100, Width: 700, Height: 600}
+
+	if !service.recordFrame(handle, 2, newer) {
+		t.Fatal("new frame sequence must be accepted")
+	}
+	if service.recordFrame(handle, 1, older) {
+		t.Fatal("late frame sequence must be rejected")
+	}
+	status := service.Status()
+	if len(status) != 1 || status[0].Sequence != 2 || status[0].Requested != newer {
+		t.Fatalf("status must retain the newest frame owner: %+v", status)
+	}
+}
