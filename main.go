@@ -22,6 +22,7 @@ func main() {
 	err := wails.Run(wails.Options{
 		Assets:             assets,
 		TraceTerminalInput: os.Getenv("SOKSAK_TERMINAL_INPUT_TRACE") == "1",
+		CaptureProbe:       os.Getenv("SOKSAK_CAPTURE_PROBE"),
 	})
 	if err != nil {
 		log.Fatal(err)

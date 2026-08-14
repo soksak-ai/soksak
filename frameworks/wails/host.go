@@ -7,6 +7,8 @@ package wails
 
 import (
 	"embed"
+	"log"
+	"time"
 	"unsafe"
 
 	nativebrowser "github.com/soksak/soksak-plugin-browser-native"
@@ -24,6 +26,10 @@ type Options struct {
 	// TraceTerminalInput mirrors raw terminal input to the log. The launcher
 	// reads the environment; this package never does.
 	TraceTerminalInput bool
+	// CaptureProbe, when set, captures the window to this path shortly after
+	// startup and exits. It is how the capture path is observed without a
+	// working frontend.
+	CaptureProbe string
 }
 
 const (
@@ -59,6 +65,7 @@ func Run(options Options) error {
 			application.NewService(terminal.NewService(sink, terminal.DefaultOptions())),
 			application.NewService(compositor.NewService(nativeWindow, browserBackend)),
 			application.NewService(nativebrowser.NewService(browserBackend)),
+			application.NewService(NewCaptureService(nativeWindow)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(options.Assets),
@@ -81,6 +88,24 @@ func Run(options Options) error {
 		BackgroundColour: application.NewRGB(6, 7, 15),
 		URL:              "/",
 	})
+
+	// A capture probe runs after the window has had a chance to paint, then
+	// exits. It does not depend on the frontend booting, so a capture defect and
+	// a boot defect stay separable — otherwise a failed boot hides whether the
+	// capture path works at all.
+	if target := options.CaptureProbe; target != "" {
+		capture := NewCaptureService(nativeWindow)
+		go func() {
+			time.Sleep(3 * time.Second)
+			path, err := capture.Snapshot(target)
+			if err != nil {
+				log.Printf("capture-probe error %v", err)
+			} else {
+				log.Printf("capture-probe wrote %s", path)
+			}
+			app.Quit()
+		}()
+	}
 
 	return app.Run()
 }
