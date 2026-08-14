@@ -3,10 +3,13 @@
 // One name, one registry. Frontend calls and socket calls resolve through the same table, so neither can
 // take a path that answers differently from the other.
 
-const requested: string[] = [];
+import * as Control from "../../../bindings/github.com/soksak/soksak-core/frameworks/wails/controlservice";
 
-export function requestedCommands(): string[] {
-  return [...requested];
+/** Commands refused in this boot — in order, preserving the time of the first call. */
+const refused: string[] = [];
+
+export function refusedCommands(): string[] {
+  return [...refused];
 }
 
 function record(cmd: string): void {
@@ -16,5 +19,18 @@ function record(cmd: string): void {
   if (typeof document !== "undefined") {
     document.documentElement.dataset.wailsUnservedCommands = refused.join(" ");
   }
-  throw new Error(`command ${cmd} is not served: the wails backend registry is not up yet`);
+}
+
+export async function invokeCommand<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  const encoded: Record<string, string> = {};
+  for (const [name, value] of Object.entries(args ?? {})) {
+    // The registry types each command, so this boundary passes only the envelope.
+    encoded[name] = JSON.stringify(value ?? null);
+  }
+  try {
+    return (await Control.Invoke(cmd, encoded)) as T;
+  } catch (cause) {
+    record(cmd);
+    throw cause;
+  }
 }

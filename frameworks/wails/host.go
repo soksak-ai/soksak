@@ -14,6 +14,8 @@ import (
 	nativebrowser "github.com/soksak/soksak-plugin-browser-native"
 	terminal "github.com/soksak/soksak-plugin-terminal-xterm"
 	compositor "github.com/soksak/wails-service-native-compositor"
+
+	"github.com/soksak/soksak-core/core/control"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -30,6 +32,10 @@ type Options struct {
 	// startup and exits. It is how the capture path is observed without a
 	// working frontend.
 	CaptureProbe string
+	// Registry answers every command this process serves. The host registers
+	// its window-owning commands onto it; everything else was registered by the
+	// launcher, which is what keeps those answerable with no window at all.
+	Registry *control.Registry
 }
 
 const (
@@ -66,6 +72,7 @@ func Run(options Options) error {
 			application.NewService(compositor.NewService(nativeWindow, browserBackend)),
 			application.NewService(nativebrowser.NewService(browserBackend)),
 			application.NewService(NewCaptureService(nativeWindow)),
+			application.NewService(NewControlService(options.Registry)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(options.Assets),
