@@ -1,6 +1,7 @@
 import ReactDOM from "react-dom/client";
 import {
   installFramework,
+  resolveWindowLabel,
   presentWindow,
   suspendNativeSurfaces,
   invoke as bootInvoke,
@@ -26,6 +27,8 @@ if (typeof window !== "undefined") {
 }
 import App from "./App";
 import { markCommandHostReady, startExecutor } from "./commands/executor";
+import { catalogJson, execute } from "./commands/registry";
+import { installControlDoor } from "./framework/wails/controlDoor";
 import { loadCliName } from "./lib/cliIdentity";
 import { startWebviewGc } from "./lib/webviewGc";
 import { initPluginHost } from "./plugins/host";
@@ -67,6 +70,10 @@ import { applySavedWindowZoom } from "./lib/zoomIntent";
 
 // AI command interface: catalog registration + socket request executor (once per app lifetime).
 startExecutor();
+
+// The door from outside to this window's commands. There is one registry and this is the transport in front of it —
+// a build without the door cannot be verified from outside, and "there was no command to call" is not a reason.
+installControlDoor({ scope: globalThis as never, execute, catalog: catalogJson });
 // Reclaims browser child webviews left after the parent window closed (invariant check — event-driven, no polling).
 startWebviewGc();
 // Terminal foreground command (shell integration OSC event) → that view's running status (M5, no polling).
@@ -121,6 +128,10 @@ async function boot(): Promise<void> {
   installErrorLedger(); // error ledger — first thing in boot (no later exception can stay silent)
   // The chosen framework installs its own parts — implementations, devices, styles. Not enumerated here.
   // Must be first in boot: with no content view implementation installed, a plugin opening a view is refused with the name.
+  // Read the window name first. This value is cached and becomes the first address segment, so reading it late
+  // freezes an empty label first and every later address becomes `win//...` — the creating side and the resolving
+  // side then point at different windows, and that mismatch appears only as NOT_EXPOSED (measured 2026-08-15).
+  await resolveWindowLabel();
   await installFramework();
   bootStamp("enter");
   // Caches this app's CLI name (sok/sok-dev/sok-debug) before the window kind branch — app-global identity, so

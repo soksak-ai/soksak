@@ -84,8 +84,10 @@ describe("A1 uniqueness — chrome addresses stay distinct with every project pl
     plane("t2", false, ["rail/left"]);
     const addrs = collectExposed().map((n) => n.address);
     expect(new Set(addrs).size).toBe(addrs.length);
-    expect(addrs.some((a) => a.includes("/proj/t1/chrome/rail/left"))).toBe(true);
-    expect(addrs.some((a) => a.includes("/proj/t2/chrome/rail/left"))).toBe(true);
+    // The window prefix is added only when a name exists, so the address may start with `proj/`. What this
+    // check pins down is that the project axis is present, not what precedes it.
+    expect(addrs.some((a) => a.endsWith("proj/t1/chrome/rail/left"))).toBe(true);
+    expect(addrs.some((a) => a.endsWith("proj/t2/chrome/rail/left"))).toBe(true);
   });
 
   it("the short form resolves to the active project — omitted means active in this syntax", () => {
@@ -102,6 +104,10 @@ describe("A1 uniqueness — chrome addresses stay distinct with every project pl
     const el = document.createElement("div");
     el.setAttribute("data-node", "window/empty");
     document.body.appendChild(el);
-    expect(collectExposed().some((n) => n.address.endsWith("/chrome/window/empty"))).toBe(true);
+    // What this pins down is that the project axis is **absent**. The window prefix is added only when a name
+    // exists, so the address may start with `chrome/`.
+    const addrs = collectExposed().map((n) => n.address);
+    expect(addrs.some((a) => a.endsWith("chrome/window/empty"))).toBe(true);
+    expect(addrs.every((a) => !a.includes("/proj/"))).toBe(true);
   });
 });

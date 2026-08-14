@@ -42,6 +42,8 @@ const (
 	appName        = "soksak-core"
 	appDescription = "Plugin-driven recursive terminal and browser workspace"
 	windowTitle    = appName
+	// The orchestrator window's reserved name. Workspaces are w-<uuid>.
+	controlPlaneWindow = "main"
 	// The window opens at the golden ratio (1000 / 618 ≈ 1.618).
 	windowWidth  = 1000
 	windowHeight = 618
@@ -88,6 +90,10 @@ func Run(options Options) error {
 	registerWindowCommands(options.Registry, app)
 
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
+		// The control plane's window is named by the product, not numbered by
+		// the framework: the application branches on this name, and a generated
+		// "window-1" would make that branch depend on creation order.
+		Name:   controlPlaneWindow,
 		Title:  windowTitle,
 		Width:  windowWidth,
 		Height: windowHeight,

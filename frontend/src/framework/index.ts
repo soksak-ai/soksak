@@ -39,6 +39,11 @@ export const framework: AppFramework = selectedFramework;
  * function" killed all 13 test suites). Boot calls it once (main.tsx). Neither this file nor the
  * caller inspects what gets installed.
  */
+/** Fix this window's label. Boot awaits it before install. */
+export function resolveWindowLabel(): Promise<string> {
+  return framework.resolveWindowLabel();
+}
+
 export function installFramework(): Promise<void> {
   return framework.install();
 }

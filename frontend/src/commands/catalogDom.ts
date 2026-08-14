@@ -665,13 +665,18 @@ const VIEW_CONTAINER = ".tab-viewer[data-view-addr]";
 // chrome). Direct DOM traversal.
 export function collectExposed(): ScannedNode[] {
   const out: ScannedNode[] = [];
-  const win = currentWindowLabel();
+  // The window prefix is added only when there is a name. An empty name is not a name, so `win//…` is a
+  // string the parser rejects, and then the side that produced the address (ui.tree) and the side that
+  // resolves it (ui.input.*) disagree over a string just built — the disagreement shows up only as "no
+  // such address" and points at the address rather than at the missing label (measured 2026-08-15).
+  const label = currentWindowLabel();
+  const win = label ? `win/${label}/` : "";
   // View containers — data-view-addr (<region>/view/<viewKey>) is the baseAddress. The win prefix is the
   // current window.
   for (const c of document.querySelectorAll<HTMLElement>(VIEW_CONTAINER)) {
     const base = c.dataset.viewAddr ?? "";
     if (!base) continue;
-    out.push(...scanNodes(c, `win/${win}/${base}`));
+    out.push(...scanNodes(c, `${win}${base}`));
   }
   // Host chrome — [data-node] outside a view container.
   //
@@ -686,15 +691,15 @@ export function collectExposed(): ScannedNode[] {
     const plane = el.closest<HTMLElement>("[data-project-plane]");
     const proj = plane?.dataset.projectPlane;
     if (!proj) {
-      out.push({ address: `win/${win}/chrome/${nodePath}`, nodePath, el });
+      out.push({ address: `${win}chrome/${nodePath}`, nodePath, el });
       continue;
     }
     out.push({
-      address: `win/${win}/proj/${proj}/chrome/${nodePath}`,
+      address: `${win}proj/${proj}/chrome/${nodePath}`,
       nodePath,
       el,
       ...(plane?.dataset.projectActive === "1"
-        ? { alias: `win/${win}/chrome/${nodePath}` }
+        ? { alias: `${win}chrome/${nodePath}` }
         : {}),
     });
   }

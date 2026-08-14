@@ -23,6 +23,22 @@ const unserved = (what: string) => (): never => {
   throw new Error(`wails adapter does not serve ${what} yet`);
 };
 
+// This window's name. The contract requires a synchronous `label` while the framework returns it
+// asynchronously, so boot reads it once. An empty label produces a `win//...` address, and that
+// address points the producer and the resolver at different windows — measured 2026-08-15:
+// ui.input.click rejected an address emitted by ui.tree with NOT_EXPOSED.
+let currentLabel = "";
+
+ *
+export async function resolveWindowLabel(): Promise<string> {
+  try {
+    currentLabel = await WailsWindow.Name();
+  } catch {
+    currentLabel = "";
+  }
+  return currentLabel;
+}
+
 function windowHandle(label: string): FrameworkWindowHandle {
   const win = label ? WailsWindow.Get(label) : WailsWindow;
   return {
@@ -86,6 +102,8 @@ export const wailsFramework: AppFramework = {
   unitFileUrl: async (path) =>
     `${window.location.origin}${UNIT_FILE_ROUTE}?path=${encodeURIComponent(path)}`,
 
+  resolveWindowLabel,
+
   install: async () => {
     const { installWailsSurfaces } = await import("./install");
     await installWailsSurfaces();
@@ -112,7 +130,7 @@ export const wailsFramework: AppFramework = {
   listen: async <T,>(event: string, cb: (e: FrameworkEvent<T>) => void): Promise<Unlisten> =>
     Events.On(event, (received) => cb({ payload: received.data as T })),
 
-  currentWindow: () => windowHandle(""),
+  currentWindow: () => windowHandle(currentLabel),
   windowByLabel: async (label) => windowHandle(label),
 
   app: {

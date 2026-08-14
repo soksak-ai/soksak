@@ -189,6 +189,17 @@ export interface AppFramework {
    * Boot **waits** for this — without the wait it becomes a timing guess ("nobody calls in between"), and
    * that guess is wrong eventually.
    */
+  /**
+   * Fix this window's label — boot waits for this before anything else.
+   *
+   * Why it is in the contract: the label is the first segment of an address and is cached once read. Read
+   * late, an empty label hardens first and every address after it becomes `win//...` — the side that
+   * builds the address and the side that resolves it then point at different windows, and that mismatch
+   * appears only as "no such address" (measured 2026-08-15). Frameworks answer the label at different
+   * times, so that difference is absorbed here.
+   */
+  resolveWindowLabel(): Promise<string>;
+
   install(): Promise<void>;
 
   /**

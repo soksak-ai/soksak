@@ -50,6 +50,7 @@ export const selectedFramework: AppFramework = {
   emitLocal: () => {},
   // The neutral adapter has no resource protocol — return the file address as is.
   assetUrl: async (path) => `file://${path}`,
+  resolveWindowLabel: async () => "",
   install: async () => {},
   presentWindow: async () => {},
   suspendNativeSurfaces: async () => {},
