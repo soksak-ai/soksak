@@ -1,6 +1,7 @@
 package control
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -8,7 +9,9 @@ import (
 	"github.com/soksak/soksak-core/core/activity"
 	"github.com/soksak/soksak-core/core/app"
 	"github.com/soksak/soksak-core/core/identity"
+	corenet "github.com/soksak/soksak-core/core/net"
 	"github.com/soksak/soksak-core/core/scan"
+	"github.com/soksak/soksak-core/core/service"
 	"github.com/soksak/soksak-core/core/store"
 )
 
@@ -128,6 +131,35 @@ func RegisterCore(registry *Registry, boot Boot) {
 			// Development units are declared under the home. A fresh home has
 			// none, which is an empty list rather than a failure.
 			return scan.Directory(filepath.Join(boot.Identity.Home, "units"), ".json")
+		},
+	})
+
+	registry.MustRegister(Command{
+		Name: "service_ledger_sync",
+		Handler: func(args Args) (any, error) {
+			ledger, present := args["ledger"]
+			if !present {
+				return nil, fmt.Errorf("missing argument %q", "ledger")
+			}
+			// Identical content is left alone, so the file's mtime only moves
+			// when the bindings actually changed.
+			_, err := service.WriteLedger(filepath.Join(boot.Identity.Home, "services", "ledger.json"), ledger)
+			return nil, err
+		},
+	})
+
+	registry.MustRegister(Command{
+		Name: "net_http_request",
+		Handler: func(args Args) (any, error) {
+			var request corenet.Request
+			encoded, err := json.Marshal(map[string]json.RawMessage(args))
+			if err != nil {
+				return nil, err
+			}
+			if err := json.Unmarshal(encoded, &request); err != nil {
+				return nil, fmt.Errorf("net_http_request: %w", err)
+			}
+			return corenet.Do(context.Background(), request)
 		},
 	})
 
