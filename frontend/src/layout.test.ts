@@ -3,8 +3,15 @@ import { describe, expect, it } from "vitest";
 import { createWorkspace, leaves, splitLeaf, type WorkspaceNode } from "./layout";
 
 describe("recursive terminal/browser workspace", () => {
-  it("starts with one terminal", () => {
-    expect(createWorkspace()).toEqual({ kind: "leaf", id: "leaf-1", program: "terminal" });
+  it("starts with a terminal and browser side by side", () => {
+    expect(createWorkspace()).toEqual({
+      kind: "split",
+      id: "split-1",
+      axis: "row",
+      ratio: 0.5,
+      first: { kind: "leaf", id: "leaf-1", program: "terminal" },
+      second: { kind: "leaf", id: "leaf-2", program: "browser" },
+    });
   });
 
   it("replaces the addressed leaf with a split", () => {
@@ -14,19 +21,26 @@ describe("recursive terminal/browser workspace", () => {
       id: "split-1",
       axis: "row",
       ratio: 0.5,
-      first: initial,
+      first: {
+        kind: "split",
+        id: "split-2",
+        axis: "row",
+        ratio: 0.5,
+        first: { kind: "leaf", id: "leaf-1", program: "terminal" },
+        second: { kind: "leaf", id: "leaf-3", program: "browser" },
+      },
       second: { kind: "leaf", id: "leaf-2", program: "browser" },
     });
   });
 
   it("has no artificial nesting limit", () => {
     let tree: WorkspaceNode = createWorkspace();
-    let target = "leaf-1";
+    let target = "leaf-2";
     for (let depth = 0; depth < 64; depth += 1) {
       tree = splitLeaf(tree, target, depth % 2 === 0 ? "row" : "column", depth % 2 === 0 ? "browser" : "terminal");
-      target = `leaf-${depth + 2}`;
+      target = `leaf-${depth + 3}`;
     }
-    expect(leaves(tree)).toHaveLength(65);
+    expect(leaves(tree)).toHaveLength(66);
   });
 
   it("rejects a stale target", () => {
