@@ -17,6 +17,53 @@ includes:
   linux: ./build/linux/Taskfile.yml
 
 tasks:
+  verify:
+    summary: Runs every gate. A commit that has not cleared this does not land.
+    desc: |
+      Gates increase monotonically — each one added stays added, and every later
+      commit clears all of them. A gate that cannot block is not a gate.
+
+      This runs where the work is rather than in CI, because the sibling modules
+      this workspace resolves through `replace` have no remotes yet: a workflow
+      file would look like a gate and never run. When they gain remotes, CI
+      calls this same task.
+    cmds:
+      - task: verify:go
+      - task: verify:headless
+      - task: verify:windows
+      - task: verify:frontend
+      - task: verify:modules
+
+  verify:go:
+    summary: Go build, vet, and tests for this module
+    cmds:
+      - go build ./...
+      - go vet ./...
+      - go test ./...
+
+  verify:headless:
+    summary: The core answers with no window — the boundary a second host needs
+    cmds:
+      - go test ./core/...
+
+  verify:windows:
+    summary: Windows stays cgo-free, so it cross-compiles from any host (N3)
+    cmds:
+      - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
+
+  verify:frontend:
+    summary: Frontend types and tests, including the seam and coupling gates
+    dir: frontend
+    cmds:
+      - "{{.PACKAGE_MANAGER}} typecheck"
+      - "{{.PACKAGE_MANAGER}} test"
+
+  verify:modules:
+    summary: The sibling modules this one resolves through `replace`
+    cmds:
+      - for: ["../wails-service-native-compositor", "../soksak-plugin-browser-native", "../soksak-plugin-terminal-xterm"]
+        cmd: cd {{.ITEM}} && go vet ./... && go test ./...
+
   build:
     summary: Builds the application
     cmds:
