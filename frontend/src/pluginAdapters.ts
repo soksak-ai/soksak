@@ -5,6 +5,7 @@ import type { TerminalBinding, TerminalEvents, TerminalOutput } from "@soksak/so
 import * as CompositorService from "../bindings/github.com/soksak/wails-service-native-compositor/service";
 import { Snapshot } from "../bindings/github.com/soksak/wails-service-native-compositor/models";
 import * as TerminalService from "../bindings/github.com/soksak/soksak-plugin-terminal-xterm/service";
+import { InputTrace } from "../bindings/github.com/soksak/soksak-plugin-terminal-xterm/models";
 
 export const commitNativeSurfaceSnapshot: NativeSurfaceCommit = async (snapshot) => {
   const receipt = await CompositorService.Commit(Snapshot.createFrom(snapshot));
@@ -19,6 +20,7 @@ export const terminalBinding: TerminalBinding = {
   write: (handle, data) => TerminalService.Write(handle, data),
   resize: (handle, cols, rows) => TerminalService.Resize(handle, cols, rows),
   close: (handle) => TerminalService.Close(handle),
+  traceInput: (handle, event) => TerminalService.TraceInput(handle, InputTrace.createFrom(event)),
 };
 
 export const terminalEvents: TerminalEvents = {

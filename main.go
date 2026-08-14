@@ -2,7 +2,9 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"log"
+	"os"
 	"unsafe"
 
 	nativebrowser "github.com/soksak/soksak-plugin-browser-native"
@@ -23,11 +25,27 @@ func init() {
 	application.RegisterEvent[terminal.Output]("terminal:output")
 }
 
-type terminalEventSink struct{ app *application.App }
+type terminalEventSink struct {
+	app        *application.App
+	traceInput bool
+}
 
 func (sink *terminalEventSink) EmitTerminalOutput(output terminal.Output) {
 	if sink.app != nil {
 		sink.app.Event.Emit("terminal:output", output)
+	}
+}
+
+func (sink *terminalEventSink) EmitTerminalInputTrace(handle terminal.Handle, event terminal.InputTrace) {
+	if !sink.traceInput {
+		return
+	}
+	encoded, err := json.Marshal(struct {
+		Handle terminal.Handle     `json:"handle"`
+		Event  terminal.InputTrace `json:"event"`
+	}{Handle: handle, Event: event})
+	if err == nil {
+		log.Printf("terminal-input-trace %s", encoded)
 	}
 }
 
@@ -41,7 +59,7 @@ func main() {
 	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
 	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
 	// 'Mac' options tailor the application when running an macOS.
-	sink := &terminalEventSink{}
+	sink := &terminalEventSink{traceInput: os.Getenv("SOKSAK_TERMINAL_INPUT_TRACE") == "1"}
 	terminalService := terminal.NewService(sink, terminal.DefaultOptions())
 	var window application.Window
 	browserBackend := nativebrowser.NewBackend()

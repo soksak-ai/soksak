@@ -41,6 +41,83 @@ export class Handle {
     }
 }
 
+export class InputTrace {
+    /**
+     * Creates a new InputTrace instance.
+     * @param {Partial<InputTrace>} [$$source = {}] - The source object to create the InputTrace.
+     */
+    constructor($$source = {}) {
+        if (!("sequence" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["sequence"] = 0;
+        }
+        if (!("kind" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["kind"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | null | undefined}
+             */
+            this["data"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["inputType"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | null | undefined}
+             */
+            this["isComposing"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["key"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["keyCode"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["message"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new InputTrace instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {InputTrace}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new InputTrace(/** @type {Partial<InputTrace>} */($$parsedSource));
+    }
+}
+
 export class Output {
     /**
      * Creates a new Output instance.
@@ -110,6 +187,13 @@ export class Status {
              */
             this["pid"] = 0;
         }
+        if (!("inputTrace" in $$source)) {
+            /**
+             * @member
+             * @type {InputTrace[]}
+             */
+            this["inputTrace"] = [];
+        }
 
         Object.assign(this, $$source);
     }
@@ -120,7 +204,15 @@ export class Status {
      * @returns {Status}
      */
     static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("inputTrace" in $$parsedSource) {
+            $$parsedSource["inputTrace"] = $$createField3_0($$parsedSource["inputTrace"]);
+        }
         return new Status(/** @type {Partial<Status>} */($$parsedSource));
     }
 }
+
+// Private type creation functions
+const $$createType0 = InputTrace.createFrom;
+const $$createType1 = $Create.Array($$createType0);

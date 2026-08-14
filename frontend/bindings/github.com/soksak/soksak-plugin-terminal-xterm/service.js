@@ -51,6 +51,15 @@ export function Status() {
 
 /**
  * @param {$models.Handle} handle
+ * @param {$models.InputTrace} event
+ * @returns {$CancellablePromise<void>}
+ */
+export function TraceInput(handle, event) {
+    return $Call.ByID(193933387, handle, event);
+}
+
+/**
+ * @param {$models.Handle} handle
  * @param {string} data
  * @returns {$CancellablePromise<void>}
  */
