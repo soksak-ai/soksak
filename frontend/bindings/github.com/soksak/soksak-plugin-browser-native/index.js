@@ -8,8 +8,5 @@ export {
 };
 
 export {
-    Frame,
-    Handle,
-    Receipt,
     SurfaceStatus
 } from "./models.js";

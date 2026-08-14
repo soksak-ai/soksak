@@ -7,12 +7,12 @@ import type { Events } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import type * as main$0 from "../../../../../local/soksak-wails3beta/models.js";
+import type * as terminal$0 from "../../../../soksak/soksak-plugin-terminal-xterm/models.js";
 
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
-            "terminal:output": main$0.TerminalOutput;
+            "terminal:output": terminal$0.Output;
         }
     }
 }

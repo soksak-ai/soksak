@@ -6,12 +6,12 @@ version: '3'
 # This information is used to generate the build assets.
 info:
   companyName: "soksak"
-  productName: "soksak-wails3beta"
-  productIdentifier: "com.soksak.wails3beta"
-  description: "Wails v3 beta recursive terminal and browser split compositor spike"
+  productName: "soksak-core"
+  productIdentifier: "com.soksak.core"
+  description: "Plugin-driven recursive terminal and browser workspace"
   copyright: "(c) 2026, soksak"
   comments: "Pinned to the official releases/v3-beta candidate branch"
-  version: "0.1.0"
+  version: "0.0.1"
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension
   #                               # If not set and Assets.car exists, defaults to "appicon"

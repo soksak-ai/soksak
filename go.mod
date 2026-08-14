@@ -1,15 +1,18 @@
-module local/soksak-wails3beta
+module github.com/soksak/soksak-core
 
 go 1.25.0
 
 require (
-	github.com/creack/pty v1.1.24
+	github.com/soksak/soksak-plugin-browser-native v0.0.1
+	github.com/soksak/soksak-plugin-terminal-xterm v0.0.1
+	github.com/soksak/wails-service-native-compositor v0.0.1
 	github.com/wailsapp/wails/v3 v3.0.0-dev
 )
 
 require (
 	github.com/adrg/xdg v0.5.3 // indirect
 	github.com/coder/websocket v1.8.14 // indirect
+	github.com/creack/pty v1.1.24 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
@@ -19,3 +22,9 @@ require (
 )
 
 replace github.com/wailsapp/wails/v3 => ../framework/v3
+
+replace github.com/soksak/wails-service-native-compositor => ../wails-service-native-compositor
+
+replace github.com/soksak/soksak-plugin-browser-native => ../soksak-plugin-browser-native
+
+replace github.com/soksak/soksak-plugin-terminal-xterm => ../soksak-plugin-terminal-xterm

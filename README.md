@@ -1,6 +1,6 @@
-# Wails v3 Beta terminal/browser workspace
+# soksak-core
 
-This repository is a desktop spike pinned to the official Wails
+This repository is the plugin-driven Wails desktop core, version `0.0.1`, pinned to the official Wails
 `releases/v3-beta` candidate at commit
 `3ae6893b9c119c4ddbf3cfc890a2f6fd6f9b4967`. The framework is resolved by the
 local `replace` directive in `go.mod`; it does not use the globally installed
@@ -16,17 +16,16 @@ Wails alpha CLI.
 - Dividers are pointer-captured and draggable. Only a pointer stream that
   begins on the divider is contained, so normal terminal/browser text remains
   selectable and copyable.
-- PTY sessions are owned by `(id, generation)`. Replacement is atomic and a
-  stale close/read completion cannot remove the new process.
-- Closing or replacing a PTY kills its whole session process group and waits
-  for the leader. A terminal leaf cannot leave shell or child-process orphans.
-- xterm is measured only after its connected host receives layout. Disposal
-  cancels queued measurement.
-- Browser leaves own native `WKWebView` child surfaces on macOS. DOM reports the
-  host rectangle; the native service applies that rectangle on the AppKit main
-  thread and returns the requested/applied frame with
-  `(id, generation, sequence)`. React layout commits and external window
-  resizes share that publisher; stale asynchronous frame writers are rejected.
+- `soksak-plugin-terminal-xterm` owns PTY generations, raw byte events, xterm mount,
+  input, resize, status, UTF-8/truecolor capability, and process-group reaping.
+- `wails-service-native-compositor` is registered through Wails v3's official
+  `application.Service` lifecycle, observes public DOM declarations, and serializes one
+  complete generation/sequence inventory with an applied receipt.
+- `soksak-plugin-browser-native` implements that public backend interface and owns the
+  WKWebView lifecycle, navigation, status, AppKit frame, visibility, alpha, and
+  layer order in one main-thread batch.
+- The core registers these plugins and declares DOM/layout only. It contains no
+  PTY, xterm, AppKit, or WKWebView implementation.
 - The implementation has no iframe compatibility path. Other Wails platforms
   require their own native child-surface backend before they can claim support.
 
@@ -36,7 +35,7 @@ The beta CLI is built outside this repository at `../bin/wails3` from the
 pinned framework checkout.
 
 ```sh
-cd ../app
+cd .
 go test ./...
 cd frontend && PATH=/opt/homebrew/bin:/usr/bin:/bin pnpm test
 cd .. && PATH=../bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin wails3 dev
@@ -55,11 +54,9 @@ RED tests live beside their owners:
   sibling promotion on close.
 - `frontend/src/splitDrag.test.ts`: divider geometry and contained pointer
   ownership without a global text-selection ban.
-- `frontend/src/nativeBrowserFrame.test.ts`: ordered layout frame publication.
-- `frontend/src/terminalMount.test.ts`: post-layout xterm sizing and disposal.
-- `terminalservice_test.go`: generation-safe PTY ownership plus synchronous
-  process-group termination and reaping on close.
-- `nativebrowser/service_test.go`: native browser frame and generation ownership.
+- `../wails-service-native-compositor`: snapshot, observer, stale rejection, receipt.
+- `../soksak-plugin-browser-native`: WKWebView inventory and browser commands/status.
+- `../soksak-plugin-terminal-xterm`: raw PTY bytes, terminal capabilities, lifecycle.
 
 Visual evidence is stored outside the application repository in
 `../evidence` so generated screenshots do not become

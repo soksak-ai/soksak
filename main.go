@@ -2,12 +2,12 @@ package main
 
 import (
 	"embed"
-
 	"log"
 	"unsafe"
 
-	"local/soksak-wails3beta/nativebrowser"
-
+	nativebrowser "github.com/soksak/soksak-plugin-browser-native"
+	terminal "github.com/soksak/soksak-plugin-terminal-xterm"
+	compositor "github.com/soksak/wails-service-native-compositor"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -20,7 +20,15 @@ import (
 var assets embed.FS
 
 func init() {
-	application.RegisterEvent[TerminalOutput]("terminal:output")
+	application.RegisterEvent[terminal.Output]("terminal:output")
+}
+
+type terminalEventSink struct{ app *application.App }
+
+func (sink *terminalEventSink) EmitTerminalOutput(output terminal.Output) {
+	if sink.app != nil {
+		sink.app.Event.Emit("terminal:output", output)
+	}
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
@@ -33,19 +41,23 @@ func main() {
 	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
 	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
 	// 'Mac' options tailor the application when running an macOS.
-	terminalService := newTerminalService(nil)
+	sink := &terminalEventSink{}
+	terminalService := terminal.NewService(sink)
 	var window application.Window
-	browserService := nativebrowser.NewService(func() unsafe.Pointer {
+	browserBackend := nativebrowser.NewBackend()
+	compositorService := compositor.NewService(func() unsafe.Pointer {
 		if window == nil {
 			return nil
 		}
 		return window.NativeWindow()
-	})
+	}, browserBackend)
+	browserService := nativebrowser.NewService(browserBackend)
 	app := application.New(application.Options{
-		Name:        "soksak-wails3beta",
-		Description: "Recursive terminal and browser workspace on the Wails v3 beta candidate",
+		Name:        "soksak-core",
+		Description: "Plugin-driven recursive terminal and browser workspace",
 		Services: []application.Service{
 			application.NewService(terminalService),
+			application.NewService(compositorService),
 			application.NewService(browserService),
 		},
 		Assets: application.AssetOptions{
@@ -55,7 +67,7 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
-	terminalService.app = app
+	sink.app = app
 
 	// Create a new window with the necessary options.
 	// 'Title' is the title of the window.
@@ -63,7 +75,7 @@ func main() {
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title: "Wails v3 Beta Workspace",
+		Title: "soksak-core",
 		// Window sized to the golden ratio (1000 / 618 ≈ 1.618).
 		Width:  1000,
 		Height: 618,

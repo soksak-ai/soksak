@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-boot-status="loading">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/wails.png" />
@@ -10,6 +10,27 @@
   <body>
     <div class="bg" aria-hidden="true"></div>
     <div id="root"></div>
+    <pre id="boot-error" data-boot-error hidden style="position:fixed;inset:24px;z-index:2147483647;overflow:auto;padding:20px;background:#170b0b;color:#ffb4b4;border:1px solid #ff6b6b;white-space:pre-wrap"></pre>
+    <script>
+      (() => {
+        const publish = (value) => {
+          const message = value instanceof Error ? (value.stack || value.message) : String(value);
+          if (document.documentElement.dataset.bootStatus !== "loading") {
+            document.documentElement.dataset.runtimeError = message;
+            return;
+          }
+          document.documentElement.dataset.bootStatus = "failed";
+          document.documentElement.dataset.bootError = message;
+          const output = document.querySelector("[data-boot-error]");
+          if (output) {
+            output.hidden = false;
+            output.textContent = `soksak-core bootstrap failed\n\n${message}`;
+          }
+        };
+        window.addEventListener("error", (event) => publish(event.error || event.message));
+        window.addEventListener("unhandledrejection", (event) => publish(event.reason));
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

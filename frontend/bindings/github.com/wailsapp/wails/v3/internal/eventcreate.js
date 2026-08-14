@@ -8,7 +8,7 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as main$0 from "../../../../../local/soksak-wails3beta/models.js";
+import * as terminal$0 from "../../../../soksak/soksak-plugin-terminal-xterm/models.js";
 
 function configure() {
     Object.freeze(Object.assign($Create.Events, {
@@ -17,6 +17,6 @@ function configure() {
 }
 
 // Private type creation functions
-const $$createType0 = main$0.TerminalOutput.createFrom;
+const $$createType0 = terminal$0.Output.createFrom;
 
 configure();
