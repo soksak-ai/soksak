@@ -35,10 +35,9 @@ The beta CLI is built outside this repository at `../bin/wails3` from the
 pinned framework checkout.
 
 ```sh
-cd .
 go test ./...
-cd frontend && PATH=/opt/homebrew/bin:/usr/bin:/bin pnpm test
-cd .. && PATH=../bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin wails3 dev
+(cd frontend && pnpm test)
+PATH="$PWD/../bin:$PATH" wails3 dev
 ```
 
 The generated beta template omitted its desktop `build/` tree and referenced
@@ -58,6 +57,5 @@ RED tests live beside their owners:
 - `../soksak-plugin-browser-native`: WKWebView inventory and browser commands/status.
 - `../soksak-plugin-terminal-xterm`: raw PTY bytes, terminal capabilities, lifecycle.
 
-Visual evidence is stored outside the application repository in
-`../evidence` so generated screenshots do not become
-source files.
+Visual evidence is stored outside the application repository in `../evidence`,
+so generated screenshots do not become source files.
