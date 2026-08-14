@@ -102,3 +102,22 @@ func TestMissingIdentifierFailsRatherThanGuessing(t *testing.T) {
 		t.Fatal("an empty identifier must fail by name")
 	}
 }
+
+func TestThisInstallationDoesNotShareThePredecessorsHome(t *testing.T) {
+	// Homes are separated by the environment axis alone: a framework axis is
+	// deliberately not part of it, because one home holds one backend and may
+	// have several frontends.
+	//
+	// Measured 2026-08-15: an identifier on the `dev` axis opened
+	// ~/.soksak-dev/soksak.db while an earlier build's sockets were live there.
+	// The store is single-writer by design and SQLite does not refuse a second
+	// writer — it serialises — so the collision would have stayed silent.
+	const ours = "com.soksak.wails"
+	home := HomeFor(ours, Environment{Home: "<local-evidence>/user"})
+
+	for _, taken := range []string{"com.soksak.app", "com.soksak.dev", "com.soksak.debug"} {
+		if HomeFor(taken, Environment{Home: "<local-evidence>/user"}) == home {
+			t.Errorf("%s shares a home with %s: %s", ours, taken, home)
+		}
+	}
+}

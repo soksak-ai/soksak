@@ -83,6 +83,10 @@ func Run(options Options) error {
 	})
 	sink.app = app
 
+	// Window-owning commands join the same registry the core filled. One table,
+	// two owners: the split is declared, not enforced by having two tables.
+	registerWindowCommands(options.Registry, app)
+
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:  windowTitle,
 		Width:  windowWidth,

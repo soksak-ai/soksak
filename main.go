@@ -12,7 +12,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
+	"github.com/soksak/soksak-core/core/activity"
 	"github.com/soksak/soksak-core/core/control"
 	"github.com/soksak/soksak-core/core/identity"
 	"github.com/soksak/soksak-core/core/store"
@@ -32,7 +34,17 @@ const buildProfile = "debug"
 
 // defaultIdentifier is what this build serves when the launcher names nothing.
 // It is a build fact, not a guess: the core still refuses to derive one.
-const defaultIdentifier = "com.soksak.dev"
+//
+// The environment axis is what separates homes: `~/.soksak-<env>`. A framework
+// axis deliberately does not, because one home holds one backend and may have
+// several frontends.
+//
+// So this build takes its own environment rather than a framework name.
+// Measured 2026-08-15: `com.soksak.dev` opened ~/.soksak-dev/soksak.db while
+// an earlier build's sockets were live in that directory. The store is
+// single-writer by design and SQLite does not refuse a second writer — it
+// serialises — so the collision would have stayed silent.
+const defaultIdentifier = "com.soksak.wails"
 
 func main() {
 	identifier := os.Getenv("SOKSAK_IDENTIFIER")
@@ -62,6 +74,8 @@ func main() {
 		Identity:     resolved,
 		BuildProfile: buildProfile,
 		KV:           kv,
+		Ledger:       activity.NewLedger(),
+		Now:          func() int64 { return time.Now().UnixMilli() },
 	})
 
 	err = wails.Run(wails.Options{
