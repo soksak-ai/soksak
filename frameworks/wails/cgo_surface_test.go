@@ -1,0 +1,89 @@
+package wails
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// cgoFiles is the fixed set of files in this package that import "C".
+//
+// N1 keeps the platform layer to one thin layer: everything that can be pure Go
+// is pure Go, and cgo carries only "apply this batch on the main thread and
+// report the frames that resulted". A new entry here needs a stated reason.
+var cgoFiles = map[string]string{
+	"capture_darwin.go": "the ScreenCaptureKit bridge; the capture itself lives in capture_darwin.m",
+}
+
+func TestCgoSurfaceIsFixed(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("reading the package: %v", err)
+	}
+
+	found := map[string]bool{}
+	for _, entry := range entries {
+		// Test files are excluded: this one names what it forbids, and a gate
+		// that cannot describe its own rule cannot state it.
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		source, err := os.ReadFile(entry.Name())
+		if err != nil {
+			t.Fatalf("reading %s: %v", entry.Name(), err)
+		}
+		if !strings.Contains(string(source), `import "C"`) {
+			continue
+		}
+		found[entry.Name()] = true
+		if _, declared := cgoFiles[entry.Name()]; !declared {
+			t.Errorf("%s imports \"C\" without a declared reason; add it to cgoFiles or keep it pure Go", entry.Name())
+		}
+	}
+
+	for name := range cgoFiles {
+		if !found[name] {
+			t.Errorf("%s is declared as a cgo file but no longer imports \"C\"; drop the entry", name)
+		}
+	}
+}
+
+func TestNativeSourceLivesOutsideTheCgoComment(t *testing.T) {
+	// N2. Inside a comment there is no syntax highlighting, no separate
+	// compilation unit, and no way to test the native code on its own terms.
+	// The preamble carries directives and an include of our own header.
+	for name := range cgoFiles {
+		source, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("reading %s: %v", name, err)
+		}
+		preamble := cgoPreamble(string(source))
+		for _, marker := range []string{"@interface", "@implementation", "static ", "dispatch_", "NSWindow", "CGImage"} {
+			if strings.Contains(preamble, marker) {
+				t.Errorf("%s holds native code in its cgo comment (%q); move it to a .m or .c file", name, marker)
+			}
+		}
+	}
+
+	// The header and implementation the preamble includes must exist, or the
+	// rule is satisfied by having no native code rather than by separating it.
+	for _, name := range []string{"capture_darwin.h", "capture_darwin.m"} {
+		if _, err := os.Stat(filepath.Clean(name)); err != nil {
+			t.Errorf("%s is missing: %v", name, err)
+		}
+	}
+}
+
+// cgoPreamble returns the comment block immediately preceding `import "C"`.
+func cgoPreamble(source string) string {
+	end := strings.Index(source, `import "C"`)
+	if end < 0 {
+		return ""
+	}
+	start := strings.LastIndex(source[:end], "/*")
+	if start < 0 {
+		return ""
+	}
+	return source[start:end]
+}
