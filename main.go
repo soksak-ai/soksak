@@ -4,7 +4,9 @@ import (
 	"embed"
 
 	"log"
-	"time"
+	"unsafe"
+
+	"local/soksak-wails3beta/nativebrowser"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -18,10 +20,7 @@ import (
 var assets embed.FS
 
 func init() {
-	// Register a custom event whose associated data type is string.
-	// This is not required, but the binding generator will pick up registered events
-	// and provide a strongly typed JS/TS API for them.
-	application.RegisterEvent[string]("time")
+	application.RegisterEvent[TerminalOutput]("terminal:output")
 }
 
 // main function serves as the application's entry point. It initializes the application, creates a window,
@@ -34,11 +33,20 @@ func main() {
 	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
 	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
 	// 'Mac' options tailor the application when running an macOS.
+	terminalService := newTerminalService(nil)
+	var window application.Window
+	browserService := nativebrowser.NewService(func() unsafe.Pointer {
+		if window == nil {
+			return nil
+		}
+		return window.NativeWindow()
+	})
 	app := application.New(application.Options{
-		Name:        "app",
-		Description: "A demo of using raw HTML & CSS",
+		Name:        "soksak-wails3beta",
+		Description: "Recursive terminal and browser workspace on the Wails v3 beta candidate",
 		Services: []application.Service{
-			application.NewService(&GreetService{}),
+			application.NewService(terminalService),
+			application.NewService(browserService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -47,14 +55,15 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
+	terminalService.app = app
 
 	// Create a new window with the necessary options.
 	// 'Title' is the title of the window.
 	// 'Mac' options tailor the window when running on macOS.
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title: "Window 1",
+	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title: "Wails v3 Beta Workspace",
 		// Window sized to the golden ratio (1000 / 618 ≈ 1.618).
 		Width:  1000,
 		Height: 618,
@@ -66,16 +75,6 @@ func main() {
 		BackgroundColour: application.NewRGB(6, 7, 15),
 		URL:              "/",
 	})
-
-	// Create a goroutine that emits an event containing the current time every second.
-	// The frontend can listen to this event and update the UI accordingly.
-	go func() {
-		for {
-			now := time.Now().Format(time.RFC1123)
-			app.Event.Emit("time", now)
-			time.Sleep(time.Second)
-		}
-	}()
 
 	// Run the application. This blocks until the application has been exited.
 	err := app.Run()

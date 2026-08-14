@@ -1,12 +1,28 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
+
+func testTerminalSession(t *testing.T) *terminalSession {
+	t.Helper()
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create test terminal pipe: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = reader.Close()
+		_ = writer.Close()
+	})
+	return &terminalSession{pty: writer}
+}
 
 func TestTerminalSessionIdentity(t *testing.T) {
 	service := newTerminalService(nil)
 
-	first := service.install("terminal-1", &terminalSession{})
-	second := service.install("terminal-1", &terminalSession{})
+	first := service.install("terminal-1", testTerminalSession(t))
+	second := service.install("terminal-1", testTerminalSession(t))
 	if first.Generation == second.Generation {
 		t.Fatal("replacement terminal session must have a fresh generation")
 	}

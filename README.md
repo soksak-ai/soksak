@@ -1,59 +1,63 @@
-# Welcome to Your New Wails3 Project!
+# Wails v3 Beta terminal/browser workspace
 
-Congratulations on generating your Wails3 application! This README will guide you through the next steps to get your project up and running.
+This repository is a desktop spike pinned to the official Wails
+`releases/v3-beta` candidate at commit
+`3ae6893b9c119c4ddbf3cfc890a2f6fd6f9b4967`. The framework is resolved by the
+local `replace` directive in `go.mod`; it does not use the globally installed
+Wails alpha CLI.
 
-## Getting Started
+## Current contract
 
-1. Navigate to your project directory in the terminal.
+- The workspace is one recursive `leaf | split` tree. A leaf is either a real
+  PTY terminal or a browser surface. There is no configured nesting limit.
+- Every leaf exposes right/below split actions for both terminal and browser,
+  plus close. Closing promotes the sibling subtree into the removed parent's
+  place; the final leaf cannot be closed.
+- Dividers are pointer-captured and draggable. Only a pointer stream that
+  begins on the divider is contained, so normal terminal/browser text remains
+  selectable and copyable.
+- PTY sessions are owned by `(id, generation)`. Replacement is atomic and a
+  stale close/read completion cannot remove the new process.
+- xterm is measured only after its connected host receives layout. Disposal
+  cancels queued measurement.
+- Browser leaves own native `WKWebView` child surfaces on macOS. DOM reports the
+  host rectangle; the native service applies that rectangle on the AppKit main
+  thread and returns the requested/applied frame with
+  `(id, generation, sequence)`. React layout commits and external window
+  resizes share that publisher; stale asynchronous frame writers are rejected.
+- The implementation has no iframe compatibility path. Other Wails platforms
+  require their own native child-surface backend before they can claim support.
 
-2. To run your application in development mode, use the following command:
+## Reproducible commands
 
-   ```
-   wails3 dev
-   ```
+The beta CLI is built outside this repository at `../bin/wails3` from the
+pinned framework checkout.
 
-   This will start your application and enable hot-reloading for both frontend and backend changes.
+```sh
+cd ../app
+go test ./...
+cd frontend && PATH=/opt/homebrew/bin:/usr/bin:/bin pnpm test
+cd .. && PATH=../bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin wails3 dev
+```
 
-3. To build your application for production, use:
+The generated beta template omitted its desktop `build/` tree and referenced
+mobile task files that were not generated. This repository vendors the build
+assets from the same pinned Wails commit and keeps only the desktop task
+includes. Package installation and scripts use the checked-in pnpm lockfile.
 
-   ```
-   wails3 build
-   ```
+## Verification
 
-   This will create a production-ready executable in the `build` directory.
+RED tests live beside their owners:
 
-## Exploring Wails3 Features
+- `frontend/src/layout.test.ts`: recursive layout, 64 successive splits, and
+  sibling promotion on close.
+- `frontend/src/splitDrag.test.ts`: divider geometry and contained pointer
+  ownership without a global text-selection ban.
+- `frontend/src/nativeBrowserFrame.test.ts`: ordered layout frame publication.
+- `frontend/src/terminalMount.test.ts`: post-layout xterm sizing and disposal.
+- `terminalservice_test.go`: generation-safe PTY ownership.
+- `nativebrowser/service_test.go`: native browser frame and generation ownership.
 
-Now that you have your project set up, it's time to explore the features that Wails3 offers:
-
-1. **Check out the examples**: The best way to learn is by example. Visit the `examples` directory in the `v3/examples` directory to see various sample applications.
-
-2. **Run an example**: To run any of the examples, navigate to the example's directory and use:
-
-   ```
-   go run .
-   ```
-
-   Note: Some examples may be under development during the alpha phase.
-
-3. **Explore the documentation**: Visit the [Wails3 documentation](https://v3.wails.io/) for in-depth guides and API references.
-
-4. **Join the community**: Have questions or want to share your progress? Join the [Wails Discord](https://discord.gg/JDdSxwjhGf) or visit the [Wails discussions on GitHub](https://github.com/wailsapp/wails/discussions).
-
-## Project Structure
-
-Take a moment to familiarize yourself with your project structure:
-
-- `frontend/`: Contains your frontend code (HTML, CSS, JavaScript/TypeScript)
-- `main.go`: The entry point of your Go backend
-- `app.go`: Define your application structure and methods here
-- `wails.json`: Configuration file for your Wails project
-
-## Next Steps
-
-1. Modify the frontend in the `frontend/` directory to create your desired UI.
-2. Add backend functionality in `main.go`.
-3. Use `wails3 dev` to see your changes in real-time.
-4. When ready, build your application with `wails3 build`.
-
-Happy coding with Wails3! If you encounter any issues or have questions, don't hesitate to consult the documentation or reach out to the Wails community.
+Visual evidence is stored outside the application repository in
+`../evidence` so generated screenshots do not become
+source files.

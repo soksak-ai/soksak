@@ -2,7 +2,10 @@ module local/soksak-wails3beta
 
 go 1.25.0
 
-require github.com/wailsapp/wails/v3 v3.0.0-dev
+require (
+	github.com/creack/pty v1.1.24
+	github.com/wailsapp/wails/v3 v3.0.0-dev
+)
 
 require (
 	github.com/adrg/xdg v0.5.3 // indirect
