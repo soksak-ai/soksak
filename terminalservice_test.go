@@ -2,7 +2,10 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"testing"
+
+	"github.com/creack/pty"
 )
 
 func testTerminalSession(t *testing.T) *terminalSession {
@@ -40,5 +43,24 @@ func TestTerminalSessionIdentity(t *testing.T) {
 	}
 	if _, err := service.session(second.ID, second.Generation); err == nil {
 		t.Fatal("closed current generation must no longer be addressable")
+	}
+}
+
+func TestCloseTerminalSessionReapsItsProcess(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "-c", "sleep 60")
+	file, err := pty.Start(cmd)
+	if err != nil {
+		t.Fatalf("start terminal process: %v", err)
+	}
+	t.Cleanup(func() {
+		if cmd.ProcessState == nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	})
+
+	closeTerminalSession(&terminalSession{pty: file, cmd: cmd})
+	if cmd.ProcessState == nil || !cmd.ProcessState.Exited() {
+		t.Fatalf("close must synchronously reap the PTY process: %+v", cmd.ProcessState)
 	}
 }
