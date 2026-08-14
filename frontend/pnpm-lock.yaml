@@ -906,6 +906,17 @@ packages:
     engines: {node: '>=8'}
     hasBin: true
 
+  xterm-addon-webkit-ime@file:../../xterm-addon-webkit-ime:
+    resolution: {directory: ../../xterm-addon-webkit-ime, type: directory}
+    peerDependencies:
+      '@xterm/xterm': '>=5.0.0'
+      xterm: '>=5.0.0'
+    peerDependenciesMeta:
+      '@xterm/xterm':
+        optional: true
+      xterm:
+        optional: true
+
 snapshots:
 
   '@esbuild/aix-ppc64@0.28.2':
@@ -1118,6 +1129,9 @@ snapshots:
     dependencies:
       '@xterm/addon-fit': 0.10.0(@xterm/xterm@5.5.0)
       '@xterm/xterm': 5.5.0
+      xterm-addon-webkit-ime: file:../../xterm-addon-webkit-ime(@xterm/xterm@5.5.0)
+    transitivePeerDependencies:
+      - xterm
 
   '@soksak/wails-service-native-compositor@file:../../wails-service-native-compositor/frontend': {}
 
@@ -1537,3 +1551,7 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  xterm-addon-webkit-ime@file:../../xterm-addon-webkit-ime(@xterm/xterm@5.5.0):
+    optionalDependencies:
+      '@xterm/xterm': 5.5.0
