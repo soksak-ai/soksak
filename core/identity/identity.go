@@ -1,0 +1,126 @@
+// Package identity derives everything a process needs to know about which
+// installation it belongs to, from one input.
+//
+// Nothing here reads the process environment. The caller passes what it read,
+// so the same rules answer the same way in a window, in a headless server, and
+// in a test — and so a misconfigured process cannot quietly inherit the release
+// user's home.
+package identity
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+)
+
+const product = "soksak"
+
+// Environment is the ambient the caller read, passed as a value.
+type Environment struct {
+	Windows     bool
+	Home        string
+	UserProfile string
+}
+
+// Resolved is one identity, derived once.
+//
+// An earlier build read the identifier and the home through separate paths, so
+// the pair ("A home, B identifier") was representable and a reconnect could
+// land on the wrong one. Deriving both together removes the combination rather
+// than checking for it afterwards.
+type Resolved struct {
+	Identifier string
+	Home       string
+	// Socket is where this installation's app binds. Derived here so two
+	// spellings cannot drift; a drift reads only as "connection failed".
+	Socket string
+	// CoreBuild is the environment axis: release, dev, debug, …
+	CoreBuild string
+	// CLI is the command name this installation answers to.
+	CLI     string
+	Release bool
+}
+
+// AxesOf splits an identifier into its framework and environment axes.
+//
+// `com.soksak.dev` has no framework axis: the `soksak` segment names the
+// product. `com.soksak.wails.dev` does.
+func AxesOf(identifier string) (framework string, env string) {
+	segments := make([]string, 0, 4)
+	for _, segment := range strings.Split(identifier, ".") {
+		if segment != "" {
+			segments = append(segments, segment)
+		}
+	}
+	switch len(segments) {
+	case 0:
+		return "", "release"
+	case 1:
+		return "", segments[0]
+	default:
+		env = segments[len(segments)-1]
+		candidate := segments[len(segments)-2]
+		if len(segments) >= 4 && candidate != product {
+			return candidate, env
+		}
+		return "", env
+	}
+}
+
+func isRelease(env string) bool { return env == "release" || env == "app" }
+
+// HomeFor derives the installation home. Identity homes live side by side
+// (~/.soksak, ~/.soksak-dev, …), so a new environment gets its own home without
+// anything being listed anywhere.
+//
+// There is no runtime override: the home follows from the identifier and
+// nothing else. A home that can be swapped at runtime is a home two processes
+// can disagree about.
+func HomeFor(identifier string, env Environment) string {
+	base := env.Home
+	if env.Windows && base == "" {
+		// Windows commonly leaves HOME unset. An empty base would put the vault
+		// and the database at a cwd-relative `.soksak`, making the store depend
+		// on the working directory.
+		base = env.UserProfile
+	}
+	_, axis := AxesOf(identifier)
+	suffix := ""
+	if !isRelease(axis) {
+		suffix = "-" + axis
+	}
+	return filepath.Join(base, ".soksak"+suffix)
+}
+
+// Resolve derives one identity. Callers that cannot supply an identifier should
+// use Require instead of passing an empty string.
+func Resolve(identifier string, env Environment) Resolved {
+	_, axis := AxesOf(identifier)
+	release := isRelease(axis)
+
+	cli := "sok"
+	if !release {
+		cli = "sok-" + axis
+	}
+
+	home := HomeFor(identifier, env)
+	return Resolved{
+		Identifier: identifier,
+		Home:       home,
+		Socket:     filepath.Join(home, identifier+".sock"),
+		CoreBuild:  axis,
+		CLI:        cli,
+		Release:    release,
+	}
+}
+
+// Require resolves an identity, refusing to invent one.
+//
+// A process that guesses its identity attaches to a different installation the
+// moment the guess is wrong, and it does so silently.
+func Require(identifier string, env Environment) (Resolved, error) {
+	if identifier == "" {
+		return Resolved{}, fmt.Errorf("identity: no identifier was given, and one is never derived")
+	}
+	return Resolve(identifier, env), nil
+}
