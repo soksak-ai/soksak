@@ -1,0 +1,86 @@
+// Package wails is the only Go package that knows this framework exists.
+//
+// Everything above it — the command registry, the workspace rules, the plugins —
+// receives what it needs through injected interfaces and never names a vendor.
+// Move a rule in here and it stops being true for any other host.
+package wails
+
+import (
+	"embed"
+	"unsafe"
+
+	nativebrowser "github.com/soksak/soksak-plugin-browser-native"
+	terminal "github.com/soksak/soksak-plugin-terminal-xterm"
+	compositor "github.com/soksak/wails-service-native-compositor"
+	"github.com/wailsapp/wails/v3/pkg/application"
+)
+
+// Options is everything the launcher knows and this package cannot derive.
+//
+// Assets arrives as a value because embed paths cannot climb out of the
+// directory that declares them; the frontend build lives above this package.
+type Options struct {
+	Assets embed.FS
+	// TraceTerminalInput mirrors raw terminal input to the log. The launcher
+	// reads the environment; this package never does.
+	TraceTerminalInput bool
+}
+
+const (
+	appName        = "soksak-core"
+	appDescription = "Plugin-driven recursive terminal and browser workspace"
+	windowTitle    = appName
+	// The window opens at the golden ratio (1000 / 618 ≈ 1.618).
+	windowWidth  = 1000
+	windowHeight = 618
+)
+
+// Run builds the application, registers the plugin services, opens the first
+// window, and blocks until the application exits.
+func Run(options Options) error {
+	sink := &terminalEventSink{traceInput: options.TraceTerminalInput}
+
+	// The window is captured by reference: the compositor needs a native handle,
+	// and that handle does not exist until the window is created below.
+	var window application.Window
+	nativeWindow := func() unsafe.Pointer {
+		if window == nil {
+			return nil
+		}
+		return window.NativeWindow()
+	}
+
+	browserBackend := nativebrowser.NewBackend()
+
+	app := application.New(application.Options{
+		Name:        appName,
+		Description: appDescription,
+		Services: []application.Service{
+			application.NewService(terminal.NewService(sink, terminal.DefaultOptions())),
+			application.NewService(compositor.NewService(nativeWindow, browserBackend)),
+			application.NewService(nativebrowser.NewService(browserBackend)),
+		},
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(options.Assets),
+		},
+		Mac: application.MacOptions{
+			ApplicationShouldTerminateAfterLastWindowClosed: true,
+		},
+	})
+	sink.app = app
+
+	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:  windowTitle,
+		Width:  windowWidth,
+		Height: windowHeight,
+		Mac: application.MacWindow{
+			InvisibleTitleBarHeight: 50,
+			Backdrop:                application.MacBackdropTranslucent,
+			TitleBar:                application.MacTitleBarHiddenInset,
+		},
+		BackgroundColour: application.NewRGB(6, 7, 15),
+		URL:              "/",
+	})
+
+	return app.Run()
+}
