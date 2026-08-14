@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createWorkspace, leaves, splitLeaf, type WorkspaceNode } from "./layout";
+import { createWorkspace, leaves, resizeSplit, splitLeaf, type WorkspaceNode } from "./layout";
 
 describe("recursive terminal/browser workspace", () => {
   it("starts with a terminal and browser side by side", () => {
@@ -47,5 +47,17 @@ describe("recursive terminal/browser workspace", () => {
     expect(() => splitLeaf(createWorkspace(), "missing", "row", "browser")).toThrow(
       "layout target does not exist: missing",
     );
+  });
+
+  it("resizes only the addressed split and clamps against collapsed leaves", () => {
+    const workspace = splitLeaf(createWorkspace(), "leaf-2", "column", "terminal");
+    const resized = resizeSplit(workspace, "split-2", 0.72);
+    expect(resized).toMatchObject({
+      id: "split-1",
+      ratio: 0.5,
+      second: { id: "split-2", ratio: 0.72 },
+    });
+    expect(resizeSplit(resized, "split-2", -1)).toMatchObject({ second: { ratio: 0.05 } });
+    expect(resizeSplit(resized, "split-2", 2)).toMatchObject({ second: { ratio: 0.95 } });
   });
 });
