@@ -16,9 +16,6 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as json$0 from "../../../../../encoding/json/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
 import * as control$0 from "../../core/control/models.js";
 
 /**
@@ -32,10 +29,14 @@ export function Commands(): $CancellablePromise<control$0.Table> {
 }
 
 /**
- * Invoke runs one command. Arguments arrive as a JSON object because the
- * registry is typed per command rather than at this boundary.
+ * Invoke runs one command.
+ * 
+ * Arguments arrive as ordinary values and are re-encoded here, once. The
+ * registry is typed per command rather than at this boundary, so each handler
+ * decodes what it needs; encoding on the frontend side instead would double-
+ * encode every string (measured 2026-08-15: "core" arrived as "\"core\"").
  */
-export function Invoke(name: string, args: { [_ in string]?: json$0.RawMessage }): $CancellablePromise<any> {
+export function Invoke(name: string, args: { [_ in string]?: any }): $CancellablePromise<any> {
     return $Call.ByID(806562942, name, args);
 }
 

@@ -78,11 +78,26 @@ export function makeCoreStore<T>(opts: CoreStoreOpts<T>): CoreStore<T> {
     }
   };
 
+  // The cache belongs to the webview's origin, not to this store: another build sharing that
+  // origin can leave a value of a different shape behind, and parsing says nothing about whether
+  //
+  // the value is this key's. readBootCache is the one reader — see it for what a discard means.
+  const loadSync = (): T => readBootCache(localStorage, lsKey, fallback);
+  const sameShape = (value: unknown): boolean => {
+    if (Array.isArray(fallback)) return Array.isArray(value);
+    if (fallback === null) return true;
+    if (typeof fallback === "object") {
+      return typeof value === "object" && value !== null && !Array.isArray(value);
+    }
+    return typeof value === typeof fallback;
+  };
+
   const loadSync = (): T => {
     try {
       const raw = localStorage.getItem(lsKey);
       if (raw == null) return fallback;
-      return JSON.parse(raw) as T;
+      const parsed: unknown = JSON.parse(raw);
+      return sameShape(parsed) ? (parsed as T) : fallback;
     } catch {
       return fallback;
     }

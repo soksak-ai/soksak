@@ -13,7 +13,12 @@
     <script>
       (() => {
         const publish = (value) => {
-          const message = value instanceof Error ? (value.stack || value.message) : String(value);
+          // Message and stack together. Some browsers leave the message out of
+          // stack, and the report is then "RuntimeError" alone, which diagnoses
+          // nothing (measured 2026-08-15).
+          const message = value instanceof Error
+            ? [value.name + ": " + value.message, value.stack].filter(Boolean).join("\n")
+            : String(value);
           if (document.documentElement.dataset.bootStatus !== "loading") {
             document.documentElement.dataset.runtimeError = message;
             return;

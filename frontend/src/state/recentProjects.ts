@@ -62,9 +62,26 @@ export async function recordRecentProject(root: string, alias: string): Promise<
 }
 
 /** Lookup for the rail and the project map. */
+/**
+ * Narrows a value to this list's contract.
+ *
+ * What the store returns is what the renderer iterates. Without a shape check where the type is
+ * asserted, the mismatch blows up at the use site and the error points at the consumer instead of
+ * the value — measured 2026-08-15: the persisted value was `{}` and the first render died with
+ * `recentAll.filter is not a function`. An entry without root cannot be matched, opened, or
+ * removed, so it is dropped too.
+ */
+export function asRecentProjects(value: unknown): RecentProject[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (entry): entry is RecentProject =>
+      typeof entry === "object" && entry !== null && typeof (entry as RecentProject).root === "string",
+  );
+}
+
 export async function listRecentProjects(): Promise<RecentProject[]> {
   try {
-    return await recentStore().hydrate();
+    return asRecentProjects(await recentStore().hydrate());
   } catch {
     return [];
   }

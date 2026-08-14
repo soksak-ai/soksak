@@ -22,13 +22,11 @@ function record(cmd: string): void {
 }
 
 export async function invokeCommand<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const encoded: Record<string, string> = {};
-  for (const [name, value] of Object.entries(args ?? {})) {
-    // The registry types each command, so this boundary passes only the envelope.
-    encoded[name] = JSON.stringify(value ?? null);
-  }
   try {
-    return (await Control.Invoke(cmd, encoded)) as T;
+    // Pass the arguments through as they are. The generated binding already serializes to JSON, so
+    // stringifying once more here double-encodes the value — measured 2026-08-15: `"core"` arrived as
+    // `"\"core\""` and failed the ns rule; the error was at this boundary, not in the store.
+    return (await Control.Invoke(cmd, args ?? {})) as T;
   } catch (cause) {
     record(cmd);
     throw cause;
