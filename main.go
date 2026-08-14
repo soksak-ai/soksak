@@ -42,7 +42,7 @@ func main() {
 	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
 	// 'Mac' options tailor the application when running an macOS.
 	sink := &terminalEventSink{}
-	terminalService := terminal.NewService(sink)
+	terminalService := terminal.NewService(sink, terminal.DefaultOptions())
 	var window application.Window
 	browserBackend := nativebrowser.NewBackend()
 	compositorService := compositor.NewService(func() unsafe.Pointer {
