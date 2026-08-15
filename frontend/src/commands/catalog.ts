@@ -644,6 +644,105 @@ export function registerCatalog(): void {
     },
   });
 
+  // The declared arrangement and the pixels on screen are two different facts. Only their difference
+  // answers whether the layout landed. layout.arrangement gives the first, ui.measure gives the second
+  // one node at a time — read apart, the subtraction is left to the caller, who then needs the CSS rule
+  // to do it. This command subtracts in one call so the judgement is a number.
+  //
+  // The arithmetic below repeats the .pane rule in App.css on purpose. A verifier that shares the
+  // renderer's arithmetic answers yes to every question; this one recomputes the position from the
+  // declared percentage and compares.
+  register("layout.verify", {
+    description:
+      "Compare the declared cell rect of every pane in the active space against its measured DOM rect. Declared rects are percentages of the space box; measured rects are viewport pixels. The answer carries both plus their difference in CSS pixels. Judgement: worst = 0 within one device pixel. Panes named by the arrangement but absent from the DOM come back in missing[], panes on screen that the arrangement does not name come back in unexpected[].",
+    triggers: { ko: "레이아웃 검증 선언 실측 차이 대조 셀 rect 픽셀" },
+    params: { workspace: P.workspace },
+    returns:
+      "{ projectId, spaceId, host:{left,top,width,height}, devicePixelRatio, tolerance, worst, panes[].{id,declared:{left,top,width,height},expected:{left,top,width,height},measured:{left,top,width,height},delta:{left,top,width,height},worst}, missing[], unexpected[] }",
+    message: (d) => tmsg("msg.layout.verify", { n: Number(d.worst) }),
+    errors: ["TARGET_NOT_FOUND", "NOT_EXPOSED"],
+    examples: ["layout.verify"],
+    handler: (p, ctx) => {
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      const solved = projectArrangement(t);
+      if (!solved) return notFound(tmsg("msg.space.notFound"));
+
+      const spaceId = t.activeSpaceId;
+      const host = document.querySelector<HTMLElement>(`[data-node="layout/space/${spaceId}"]`);
+      if (!host) return { ok: false, code: "NOT_EXPOSED", message: `layout/space/${spaceId}` };
+      const hostRect = host.getBoundingClientRect();
+
+      const read = (el: HTMLElement, name: string): number => {
+        const raw = getComputedStyle(el).getPropertyValue(name).trim();
+        const n = Number.parseFloat(raw);
+        return Number.isFinite(n) ? n : 0;
+      };
+      // The inset is declared once on the space container and every pane consumes it.
+      const inset = read(host, "--pane-inset");
+
+      const onScreen = new Map<string, HTMLElement>();
+      for (const el of document.querySelectorAll<HTMLElement>(`[data-node^="layout/pane/"]`)) {
+        const id = el.dataset.pane;
+        if (id && host.contains(el)) onScreen.set(id, el);
+      }
+
+      const missing: string[] = [];
+      const panes: unknown[] = [];
+      let worst = 0;
+
+      for (const cell of solved.cells) {
+        const el = onScreen.get(cell.id);
+        if (!el) {
+          missing.push(cell.id);
+          continue;
+        }
+        onScreen.delete(cell.id);
+        const measured = el.getBoundingClientRect();
+        // The rail shifts a pane sideways. The shift it was rendered with is on the pane itself.
+        const railDx = read(el, "--rail-dx");
+        const railDw = read(el, "--rail-dw");
+        const expected = {
+          left: hostRect.left + (hostRect.width * cell.rect.left) / 100 + railDx + inset,
+          top: hostRect.top + (hostRect.height * cell.rect.top) / 100 + inset,
+          width: (hostRect.width * cell.rect.width) / 100 + railDw - inset * 2,
+          height: (hostRect.height * cell.rect.height) / 100 - inset * 2,
+        };
+        const delta = {
+          left: measured.left - expected.left,
+          top: measured.top - expected.top,
+          width: measured.width - expected.width,
+          height: measured.height - expected.height,
+        };
+        const cellWorst = Math.max(...Object.values(delta).map(Math.abs));
+        worst = Math.max(worst, cellWorst);
+        panes.push({
+          id: cell.id,
+          declared: cell.rect,
+          expected,
+          measured: { left: measured.left, top: measured.top, width: measured.width, height: measured.height },
+          delta,
+          worst: cellWorst,
+        });
+      }
+
+      const dpr = window.devicePixelRatio || 1;
+      return {
+        projectId: t.id,
+        spaceId,
+        host: { left: hostRect.left, top: hostRect.top, width: hostRect.width, height: hostRect.height },
+        devicePixelRatio: dpr,
+        // A layout is laid out in CSS pixels and painted on device pixels, so a difference smaller than
+        // one device pixel cannot appear on screen. Anything larger is a real mismatch.
+        tolerance: 1 / dpr,
+        worst,
+        panes,
+        missing,
+        unexpected: [...onScreen.keys()],
+      };
+    },
+  });
+
   register("layout.transactions", {
     description:
       "Read the finite layout transition journal. A transaction is published as preparing before adapter ACK, becomes prepared only after staged targets are declared, and then closes terminally. Snap rows bind the exact store settlement owner/revision and retain whether that revision is still pending or settled after projection commit. The journal retains at most 16 active and 64 terminal rows without evicting active work. Glide rows own a display-callback presentationStart; snap rows instead own the exact adapter projectionCommit bounds ACK and never run candidate negotiation. causeTraceId joins the stimulus to one terminal transaction. This is the numeric automation surface; recordings are human visual evidence only.",
