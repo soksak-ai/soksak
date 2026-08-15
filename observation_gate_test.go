@@ -175,3 +175,40 @@ func isComment(line string) bool {
 		strings.HasPrefix(trimmed, "//") ||
 		strings.HasPrefix(trimmed, "*")
 }
+
+// This repository produces two binaries and both live in bin/. One built at the
+// repository root is a stray: it is not what any task produces, it is not what
+// `clean` removes, and it launches — which makes it another window on screen
+// that nobody meant to start.
+//
+// Measured 2026-08-15: a build at the root sat untracked beside four differently
+// named copies in bin/, and one of those was mistaken for the running
+// application.
+func TestNoApplicationBinaryLivesAtTheRepositoryRoot(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("reading the repository root: %v", err)
+	}
+
+	var stray []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil || info.Mode()&0o111 == 0 {
+			continue
+		}
+		if _, err := exec.Command("go", "version", "-m", entry.Name()).Output(); err != nil {
+			// Not a Go binary. A shell script at the root is somebody else's rule.
+			continue
+		}
+		stray = append(stray, entry.Name())
+	}
+
+	if len(stray) > 0 {
+		t.Errorf("these Go binaries are built at the repository root: %s\n\n"+
+			"Everything this repository builds goes to bin/, where `clean` can find it. A copy "+
+			"here is one nothing produces and nothing removes.", strings.Join(stray, ", "))
+	}
+}
