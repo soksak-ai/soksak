@@ -64,6 +64,9 @@ export type CmdErrCode =
   | "TARGET_NOT_FOUND"
   | "LAST_ITEM"
   | "INVALID_PARAMS"
+  // The request is valid, but the requested cell is smaller than the chrome that has to fit inside
+  // it. Performing it anyway leaves a pane the tree names and the screen draws at zero width.
+  | "TOO_SMALL"
   // The request itself is valid, but the layout change would make a panel cross the pinned rail line.
   | "LAYOUT_CONFLICT"
   | "PRESENTATION_PROVIDER_FAILED"
@@ -627,7 +630,12 @@ function removeGroup(
 
 // Split targetGroup with the fresh group (toward side) = insertBeside (avoids nesting when the
 // sibling has the same dir).
-function splitAtGroup(
+/**
+ * The tree a split would produce. Exported so a caller can ask what the split
+ * lands on before performing it — the answer has to come from this function,
+ * not from a second one that agrees with it today.
+ */
+export function splitAtGroup(
   node: PaneNode,
   targetGroupId: string,
   side: Side,

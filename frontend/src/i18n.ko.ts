@@ -675,6 +675,7 @@ export const ko = {
   "msg.pane.move": "칸을 이동했습니다",
   "msg.pane.resize": "골을 옮겼습니다",
   "msg.pane.split": "칸을 나눴습니다",
+  "msg.pane.split.tooSmall": "그 방향으로 판이 {along} px 입니다. 분할하려면 {floor} px 를 넘어야 하고, 그 아래는 반쪽에 내부가 없습니다",
   "msg.plugin.conformance": "{id} 정합성을 점검했습니다",
   "msg.plugin.consent.chain": "대기 중인 동의가 없습니다",
   "msg.plugin.consent.chain.pending": "먼저 동의가 필요한 플러그인 {n}개",

@@ -670,6 +670,7 @@ export const en: Record<MsgKey, string> = {
   "msg.pane.move": "Moved the pane",
   "msg.pane.resize": "Moved the gutter",
   "msg.pane.split": "Split the pane",
+  "msg.pane.split.tooSmall": "The pane is {along} px along that side; a split needs more than {floor} px, or the halves have no interior",
   "msg.plugin.conformance": "Conformance report for {id}",
   "msg.plugin.consent.chain": "No consents pending",
   "msg.plugin.consent.chain.pending": "{n} plugins need consent first",

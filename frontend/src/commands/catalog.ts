@@ -14,6 +14,7 @@ import { registerWindowCatalog } from "./catalogWindow";
 import { invoke, frameworkPath } from "../framework";
 import { recordWindowFrames } from "./windowRecorder";
 import { tmsg } from "../i18n";
+import { computeSplitLayout } from "../lib/splitLayout";
 import {
   DEFAULT_RAIL_PLACEMENT,
   snapRailStation,
@@ -22,7 +23,9 @@ import {
 import { listRecentWorkspaces, removeRecentWorkspace } from "../state/recentWorkspaces";
 import {
   allGroups,
+  err,
   projectArrangement,
+  splitAtGroup,
   useSessions,
   type Space,
   type DropZone,
@@ -32,6 +35,7 @@ import {
   type Side,
   type Tab,
   type Pane,
+  type CmdErr,
 } from "../state/sessions";
 import {
   canonicalGutter,
@@ -1666,6 +1670,54 @@ export function registerCatalog(): void {
     },
   });
 
+  // A split that cannot be drawn is refused instead of performed.
+  //
+  // The .pane rule takes --pane-inset off both edges of a cell, so a cell narrower than the inset pair
+  // has no interior: CSS clamps the negative width to 0, and the screen no longer shows the tree.
+  //
+  // Every resulting cell is checked, not the target alone. A split inserts a sibling and equalSizes
+  // redistributes the whole row, so the cell that runs out of room is usually one nobody touched.
+  // Measured 2026-08-16: checking only the halved target let a 999px space reach panes at 0.2% declared
+  // width, drawn at 0, with layout.verify reporting 10.4px of difference across 6 panes.
+  //
+  // splitAtGroup is the same function the store applies — the rule is reused here, not restated.
+  //
+  // The floor is a measurement, never an assumption: with nothing on screen — headless, or before the
+  // first paint — the split goes through, because a refusal there would be a guess. The rail is not in
+  // the arithmetic either; it only ever takes width away, so a cell that spans the station can still be
+  // clamped, and layout.verify is what reports that.
+  const splitFloor = (workspaceId: string, paneId: string, side: Side): CmdErr | null => {
+    const t = S().workspaces.find((w) => w.id === workspaceId);
+    const space = t?.spaces.find((c) => c.id === t.activeSpaceId);
+    if (!space) return null;
+    const host = document.querySelector<HTMLElement>(`[data-node="layout/space/${space.id}"]`);
+    if (!host) return null;
+    const inset = Number.parseFloat(getComputedStyle(host).getPropertyValue("--pane-inset"));
+    if (!Number.isFinite(inset)) return null;
+    const box = host.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0) return null;
+
+    const placeholder = { id: "pan-floor", activeTabId: undefined, tabs: [] } as unknown as Pane;
+    const { cells } = computeSplitLayout(splitAtGroup(space.layout, paneId, side, placeholder));
+    const floor = inset * 2;
+    let tightest = Infinity;
+    for (const cell of cells) {
+      tightest = Math.min(
+        tightest,
+        (box.width * cell.rect.width) / 100,
+        (box.height * cell.rect.height) / 100,
+      );
+    }
+    if (tightest > floor) return null;
+    return err(
+      "TOO_SMALL",
+      tmsg("msg.pane.split.tooSmall", {
+        along: String(Math.round(tightest * 10) / 10),
+        floor: String(Math.round(floor)),
+      }),
+    );
+  };
+
   register("pane.split", {
     description:
       "Split a pane — add a new pane beside the target on a given side (optionally running a program). Use when arranging the layout or opening something side by side.",
@@ -1684,7 +1736,7 @@ export function registerCatalog(): void {
     returns:
       "{ projectId, paneId(new pane), tabId?, arrangement:{station,switched,cleanLines[],cells[]} }",
     message: () => tmsg("msg.pane.split"),
-    errors: ["TARGET_NOT_FOUND"],
+    errors: ["TARGET_NOT_FOUND", "TOO_SMALL"],
     hint: (d) => {
       if (d.code) return [];
       const out: CommandHint[] = [];
@@ -1702,6 +1754,8 @@ export function registerCatalog(): void {
     handler: async (p, ctx) => {
       const loc = resolvePane(p, ctx);
       if (!loc) return notFound(tmsg("msg.pane.notFound"));
+      const wall = splitFloor(loc.workspace.id, loc.pane.id, p.side as Side);
+      if (wall) return wall;
       const r = S().splitWithNewView(
         loc.workspace.id,
         loc.pane.id,
