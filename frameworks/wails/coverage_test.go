@@ -1,4 +1,4 @@
-package boot
+package wails
 
 import (
 	"os"
@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/soksak/soksak-core/core/boot"
 	"github.com/soksak/soksak-core/core/control"
 )
 
@@ -62,13 +63,6 @@ var unserved = map[string]string{
 	"cleanup_stale":             "process",
 
 	// Windows.
-	"window_create":    "window",
-	"window_close":     "window",
-	"window_focus":     "window",
-	"window_activate":  "window",
-	"window_place":     "window",
-	"window_reload":    "window",
-	"window_monitors":  "window",
 	"titlebar_backing": "window",
 
 	// Native surfaces.
@@ -163,9 +157,6 @@ var unserved = map[string]string{
 	// Added by the gate on 2026-08-15.
 	"webview_health_query": "window",
 	"webview_list":         "window",
-	"window_census":        "window",
-	"window_is_key":        "window",
-	"window_list":          "window",
 
 	// Added by the gate on 2026-08-15.
 	"engine_surface_stats": "surface",
@@ -244,14 +235,23 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		t.Fatal("no invoke calls were found; the scan root is wrong")
 	}
 
+	// The whole command surface, assembled the way the running process
+	// assembles it. This gate lives beside the framework rather than beside the
+	// core because this is the only package that can import both, and a gate
+	// that reads a hand-written list of what the other half serves measures the
+	// list instead of the build.
 	registry := control.NewRegistry()
-	RegisterCore(registry, Boot{})
+	boot.RegisterCore(registry, boot.Boot{})
+	Register(registry, Deps{Host: startedHost(), NewID: counter("1")})
+
 	served := map[string]bool{}
 	for _, command := range registry.Describe().Commands {
 		served[command.Name] = true
 	}
-	// Framework-owned commands are registered by the host, which needs a window.
-	// They are named here so this test stays runnable with no framework present.
+	// The residue: commands whose handlers close over the vendor's App and
+	// Window directly, so there is no seam to hand a stub. Every name here is a
+	// command this gate cannot prove — shrinking the list means giving those
+	// handlers a host interface, the way the window group has one.
 	for _, name := range []string{
 		"window_set_background", "cmd_listener_ready", "webview_recovery_consume",
 		"project_owners", "control_owner_answered",
