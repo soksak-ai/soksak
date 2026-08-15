@@ -179,7 +179,7 @@ const rendererSource = "renderer"
 // DeclareFrom records what one window answers, from the payload its page sent.
 func (r *RendererCommands) DeclareFrom(window string, payload any) error {
 	if window == "" {
-		return fmt.Errorf("a command declaration arrived with no window to attribute it to")
+		return i18n.Errorf("wails.declare.noWindow", nil)
 	}
 	names, err := rendererDeclaredNames(payload)
 	if err != nil {
@@ -204,7 +204,7 @@ func rendererDeclaredNames(payload any) ([]string, error) {
 		// A page that declares an empty catalogue and a page that sent the
 		// wrong shape are different answers. Read as the first, the second
 		// would silently withdraw every command that window serves.
-		return nil, fmt.Errorf("the declaration carried no %q list", "names")
+		return nil, i18n.Errorf("wails.declare.noNames", map[string]string{"field": "names"})
 	}
 	return *declaration.Names, nil
 }
@@ -217,7 +217,7 @@ func rendererDeclaredNames(payload any) ([]string, error) {
 // answerable rather than point at a page that is gone.
 func (r *RendererCommands) Declare(window string, names []string) error {
 	if window == "" {
-		return fmt.Errorf("a command declaration arrived with no window to attribute it to")
+		return i18n.Errorf("wails.declare.noWindow", nil)
 	}
 	r.mu.Lock()
 	previous, known := r.windows[window]
@@ -390,7 +390,7 @@ func (r *RendererCommands) tell(receipts []RendererDeclaration) error {
 		}
 	}
 	if len(failures) > 0 {
-		return fmt.Errorf("these windows were not told what they hold: %s", strings.Join(failures, "; "))
+		return i18n.Errorf("wails.declare.notTold", map[string]string{"windows": strings.Join(failures, "; ")})
 	}
 	return nil
 }

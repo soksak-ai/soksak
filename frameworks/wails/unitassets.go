@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // The route this host serves unit files on, and the query it reads the path
@@ -67,13 +69,13 @@ func UnitFiles(root string, next http.Handler) http.Handler {
 // root never contains a resolved path.
 func unitFilePath(root, requested string) (string, error) {
 	if root == "" {
-		return "", errors.New("this build serves no unit root, so no unit file can be read")
+		return "", i18n.Errorf("wails.unitFile.noRoot", nil)
 	}
 	if requested == "" {
-		return "", fmt.Errorf("the request carries no %q, so there is nothing to read", unitFileQuery)
+		return "", i18n.Errorf("wails.unitFile.noPath", map[string]string{"field": unitFileQuery})
 	}
 	if !filepath.IsAbs(requested) {
-		return "", fmt.Errorf("%q is relative; a unit file is addressed by its absolute path", requested)
+		return "", i18n.Errorf("wails.unitFile.relative", map[string]string{"path": requested})
 	}
 	resolvedRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
@@ -106,7 +108,7 @@ func within(root, path string) bool {
 }
 
 func outside(path, root string) error {
-	return fmt.Errorf("%s is outside %s; this route reads unit files and nothing else", path, root)
+	return i18n.Errorf("wails.unitFile.outside", map[string]string{"path": path, "root": root})
 }
 
 // contentType is what the engine needs to execute a bundle.

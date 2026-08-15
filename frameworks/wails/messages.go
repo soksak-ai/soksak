@@ -286,4 +286,37 @@ func init() {
 			KO: "창 {window} 에 네이티브 수명이 없습니다",
 		},
 	})
+	i18n.Declare(map[string]i18n.Sentence{
+		// What a renderer is told when its command declaration cannot be taken.
+		"wails.declare.noWindow": {
+			EN: "a command declaration arrived with no window to attribute it to",
+			KO: "명령 선언이 도착했으나 귀속할 창이 없습니다",
+		},
+		"wails.declare.noNames": {
+			EN: `the declaration carried no "{field}" list`,
+			KO: `선언에 "{field}" 목록이 없습니다`,
+		},
+		"wails.declare.notTold": {
+			EN: "these windows were not told what they hold: {windows}",
+			KO: "다음 창들은 자기가 무엇을 가졌는지 통지받지 못했습니다: {windows}",
+		},
+		// What the unit file route refuses, and why.
+		"wails.unitFile.noRoot": {
+			EN: "this build serves no unit root, so no unit file can be read",
+			KO: "이 빌드는 유닛 루트를 서빙하지 않으므로 어떤 유닛 파일도 읽을 수 없습니다",
+		},
+		"wails.unitFile.noPath": {
+			EN: `the request carries no "{field}", so there is nothing to read`,
+			KO: `요청에 "{field}" 가 없어 읽을 대상이 없습니다`,
+		},
+		"wails.unitFile.relative": {
+			EN: "{path} is relative; a unit file is addressed by its absolute path",
+			KO: "{path} 이(가) 상대 경로입니다 — 유닛 파일은 절대 경로로 지정합니다",
+		},
+		"wails.unitFile.outside": {
+			EN: "{path} is outside {root}; this route reads unit files and nothing else",
+			KO: "{path} 이(가) {root} 밖입니다 — 이 경로는 유닛 파일만 읽습니다",
+		},
+	})
+
 }
