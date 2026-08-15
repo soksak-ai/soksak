@@ -3918,14 +3918,17 @@ select.dctl {
    (measured 2026-08-15: content 33px, sidebar 30px). */
 .sidebar-left-header {
   flex: 0 0 var(--header-h);
-  border-bottom: 1px solid var(--bd);
+  /* This is an inner line inside the same panel area as the sidebar body, not an
+     app chrome boundary (--bd, §B4). Measured 2026-08-15: drawn with --bd, and
+     ui.validate caught the colour difference against the contract. */
+  border-bottom: 1px solid var(--bd-soft);
 }
 
 .sidebar-left-footer {
   /* The same band as the content footer. It does not shrink when empty — the frame
    does not depend on its content. */
   flex: 0 0 var(--status-h);
-  border-top: 1px solid var(--bd);
+  border-top: 1px solid var(--bd-soft);
   /* Always at the bottom of the sidebar — with no tabs or body above it (an empty
    frame) the mascot still stays there (contract S5). */
   margin-top: auto;

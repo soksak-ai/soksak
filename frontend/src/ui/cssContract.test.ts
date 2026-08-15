@@ -44,6 +44,28 @@ const CHROME_ROW = /\.(ft-header|plugin-side-head|sidebar-left-tabs|space-tabs|p
 // (shared two-row grid, theme-owned). Do not invent a row height outside these three.
 const CHROME_HEIGHT_OK = /height\s*:\s*var\(--(chrome-row|header|toolbar)-h/;
 
+/** Is this selector listed in the contract — **there is exactly one judge.**
+ *
+ * A class name has an end. `.sidebar-left-header` starting with `.sidebar-left` does not put it under
+ * that rule — a different name is a different surface, and one the contract does not have. Measured
+ * 2026-08-15: substring matching let this gate pass while runtime `ui.expect` answered "no rule" for
+ * the same selector. When the static gate and the verifier split, the static gate is the silent one.
+ */
+async function inContractJudge(): Promise<(selector: string) => boolean> {
+  const { BORDER_RULES } = await import("./borderContract");
+  const heads = BORDER_RULES.flatMap((rule) =>
+    rule.selector.split(",").map((one) => one.trim().split(":")[0]),
+  );
+  return (selector: string) =>
+    heads.some((head) => {
+      const at = selector.indexOf(head);
+      if (at < 0) return false;
+      // A character continuing after the name means this is a different name.
+      const after = selector[at + head.length];
+      return after === undefined || !/[\w-]/.test(after);
+    });
+}
+
 describe("UI alignment constitution gate (docs/UI.md)", () => {
   it("R1: a band item declares no height (auto only) — the strip padding owns the spacing", () => {
     const violations: string[] = [];
@@ -340,15 +362,7 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
   ];
 
   it("B8: a structural border selector is listed in the contract or classified as a widget outline — no unknown seam", async () => {
-    const { BORDER_RULES } = await import("./borderContract");
-    const contractSelectors = BORDER_RULES.flatMap((r) =>
-      r.selector.split(",").map((s) => s.trim()),
-    );
-    const inContract = (selector: string) =>
-      contractSelectors.some((cs) => {
-        const head = cs.split(":")[0]; // ".space-tabs:not(...)" → ".space-tabs"
-        return selector.includes(head);
-      });
+    const inContract = await inContractJudge();
     const isWidget = (selector: string) =>
       WIDGET_OUTLINE.some((w) => selector.includes(w));
 
@@ -364,6 +378,28 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
       }
     }
     expect(unknown).toEqual([]);
+  });
+
+  it("B8: the listing verdict uses the whole class name — a shared prefix does not cover a different surface", async () => {
+    // `.sidebar-left-header` starts with `.sidebar-left`. Substring matching lets a new surface that
+    // is not in the contract pass under an already-listed neighbor's rule — measured 2026-08-15:
+    // this gate passed while runtime `ui.expect` answered "no rule" for the same selector. When the
+    // two split, the static side is the silent one.
+    //
+    // A contract selector with characters appended after it is a **different surface**, and the gate
+    // must treat it as unknown. This uses the same judge as the check above — with two judges this
+    // check measures nothing.
+    const { BORDER_RULES } = await import("./borderContract");
+    const contractSelectors = BORDER_RULES.flatMap((r) =>
+      r.selector.split(",").map((one) => one.trim()),
+    );
+    const covered = contractSelectors.find((one) => one.startsWith("."));
+    expect(covered, "the contract has no class selector at all").toBeDefined();
+
+    const inContract = await inContractJudge();
+    const head = (covered as string).split(":")[0];
+    expect(inContract(head)).toBe(true);
+    expect(inContract(`${head}-probe`)).toBe(false);
   });
 
   it("B8 exhaustiveness: a conditional surface covers the state space with no gap and no contradiction", async () => {

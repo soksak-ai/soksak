@@ -143,6 +143,28 @@ export const BORDER_RULES: readonly BorderRule[] = [
     note: tmsg("msg.ui.border.leftSidebarBodyEdge"),
   },
 
+  // Sidebar header/footer bands — one row with the content-side bands (R1a), and a band owns the
+  // body-side edge (§B2: header kind = bottom, footer kind = top). Tone is bd-soft — an inner line
+  // inside the same panel area as the sidebar body, not an app chrome boundary (§B4).
+  //
+  // Both were created on 2026-08-15 and went a day without being listed in the contract. The static
+  // gate judged listing by substring, so it read the `.sidebar-left` rule as covering them, and
+  // only the runtime `ui.expect` answered "no rules". Fixing the judge exposed this slot.
+  {
+    id: "left-sidebar-header-band",
+    selector: ".sidebar-left-header",
+    kind: "edges",
+    edges: { bottom: "bd-soft" },
+    note: tmsg("msg.ui.border.leftSidebarHeaderBand"),
+  },
+  {
+    id: "left-sidebar-footer-band",
+    selector: ".sidebar-left-footer",
+    kind: "edges",
+    edges: { top: "bd-soft" },
+    note: tmsg("msg.ui.border.leftSidebarFooterBand"),
+  },
+
   // ── B2 vertical chrome — owns the body-side edge, tone bd ─────────────────
   // Vertical boundary of the left rail — exactly one owner (the rail itself or the neighbor card).
   // The old rule (`.sidebar` right unconditionally bd) did not encode this law and produced a
