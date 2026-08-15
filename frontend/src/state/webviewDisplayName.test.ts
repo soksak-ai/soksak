@@ -33,29 +33,29 @@ const tab = (id: string, tabs: Tab[]): Project => ({
   root: "/r",
   spaces: [
     {
-      id: "c1",
+      id: "spc-aaaaaa",
       title: "1",
       layout: {
         type: "leaf",
-        value: { id: "g1", tabs, activeTabId: tabs[0]?.id ?? "" },
+        value: { id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" },
       },
-      activePaneId: "g1",
+      activePaneId: "pan-aaaaaa",
     },
   ],
-  activeSpaceId: "c1",
+  activeSpaceId: "spc-aaaaaa",
 });
 
 describe("viewDisplayTitle", () => {
   it("customLabel, the user's intent, wins over title, the content's fact", () => {
+    expect(viewDisplayTitle(browser("tab-aaaaaa", "Page", "My tab"))).toBe("My tab");
     expect(viewDisplayTitle(browser("tab-aaaaaa", "Page"))).toBe("Page");
-    expect(viewDisplayTitle(browser("v1", "Page"))).toBe("Page");
   });
 });
 
 describe("webviewDisplayName", () => {
   it("a browser label of this window resolves to the tab display name", () => {
-    const tabs = [tab("t1", [browser("v3", "GitHub")])];
-    expect(webviewDisplayName("b--v3", tabs)).toBe("GitHub");
+    const tabs = [tab("pjt-aaaaaa", [browser("tab-cccccc", "GitHub")])];
+    expect(webviewDisplayName("brw--tab-cccccc", tabs)).toBe("GitHub");
   });
 
   it("uses customLabel when there is one", () => {
@@ -64,8 +64,8 @@ describe("webviewDisplayName", () => {
   });
 
   it("with no matching view the label stays as it is", () => {
-    const tabs = [tab("t1", [browser("v3", "GitHub")])];
-    expect(webviewDisplayName("b--v9", tabs)).toBe("b--v9");
+    const tabs = [tab("pjt-aaaaaa", [browser("tab-cccccc", "GitHub")])];
+    expect(webviewDisplayName("brw--tab-iiiiii", tabs)).toBe("brw--tab-iiiiii");
   });
 
   it("a label without the browser prefix stays as it is", () => {

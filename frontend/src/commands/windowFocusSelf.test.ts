@@ -23,7 +23,7 @@ vi.mock("../framework", async (importOriginal) => ({
 }));
 vi.mock("../lib/webviewLabels", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/webviewLabels")>()),
-  currentWindowLabel: () => "w-1",
+  currentWindowLabel: () => "win-1",
 }));
 
 import { registerCatalog } from "./catalog";
@@ -34,17 +34,17 @@ registerCatalog();
 beforeEach(() => {
   calls.invoke.mockReset();
   win.setFocus.mockReset();
-  calls.invoke.mockImplementation(async (cmd: string) => (cmd === "window_list" ? ["w-1", "w-2"] : undefined));
+  calls.invoke.mockImplementation(async (cmd: string) => (cmd === "window_list" ? ["win-1", "win-2"] : undefined));
 });
 
 const named = (cmd: string) => calls.invoke.mock.calls.filter(([c]) => c === cmd);
 
 describe("window.focus — this window is addressed by label too", () => {
   it("brings the app to the front and focuses this window by its label", async () => {
-    const out = await execute("window.focus", { label: "w-1" }, {});
+    const out = await execute("window.focus", { label: "win-1" }, {});
     expect(out.ok).toBe(true);
     expect(named("window_activate").length, "the app was not brought to the front").toBe(1);
-    expect(named("window_focus")[0]?.[1]).toEqual({ label: "w-1" });
+    expect(named("window_focus")[0]?.[1]).toEqual({ label: "win-1" });
   });
 
   it("does not go through this web view — the workspace renderer is not a window", async () => {
@@ -53,13 +53,13 @@ describe("window.focus — this window is addressed by label too", () => {
   });
 
   it("does not bring the app to the front for another window", async () => {
-    await execute("window.focus", { label: "w-2" }, {});
+    await execute("window.focus", { label: "win-2" }, {});
     expect(named("window_activate").length).toBe(0);
-    expect(named("window_focus")[0]?.[1]).toEqual({ label: "w-2" });
+    expect(named("window_focus")[0]?.[1]).toEqual({ label: "win-2" });
   });
 
   it("refuses an absent window by name", async () => {
-    const out = await execute("window.focus", { label: "w-none" }, {});
+    const out = await execute("window.focus", { label: "win-none" }, {});
     expect(out.ok).toBe(false);
     expect(named("window_focus").length).toBe(0);
   });

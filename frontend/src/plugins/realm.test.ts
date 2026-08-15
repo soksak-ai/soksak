@@ -16,7 +16,7 @@ import { declarePluginRealm, pluginRealmCapabilities } from "./realm";
 describe("derives capability names from the app object", () => {
   it("lists every nested function as a dotted name", () => {
     const capabilities = pluginRealmCapabilities({
-      windowLabel: () => "w-1",
+      windowLabel: () => "win-1",
       commands: { execute: async () => {} },
       data: { kv: { get: async () => null, set: async () => {} } },
     });

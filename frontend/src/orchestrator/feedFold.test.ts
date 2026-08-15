@@ -33,14 +33,14 @@ describe("foldFeed — the conversation set (parentId is the source of truth)", 
 
   it("a card with no answer stays open (in progress) — a late child after stop is kept in seq order", () => {
     seq = 0;
-    const prompt = entry("chat.prompt", { text: "x", turnId: "t1", window: "main" });
-    const child = entry("command.executed", { command: "ping", ok: true, parentId: "t1", window: "main" });
+    const prompt = entry("chat.prompt", { text: "x", turnId: "pjt-aaaaaa", window: "main" });
+    const child = entry("command.executed", { command: "ping", ok: true, parentId: "pjt-aaaaaa", window: "main" });
     const open = foldFeed([prompt, child]);
     expect(open[0].kind).toBe("chat");
     expect((open[0] as { closed: boolean }).closed).toBe(false);
 
+    const answer = entry("chat.answer", { text: "stopped", parentId: "pjt-aaaaaa", ok: false, window: "main" });
     const late = entry("command.executed", { command: "late.cmd", ok: true, parentId: "pjt-aaaaaa", window: "main" });
-    const late = entry("command.executed", { command: "late.cmd", ok: true, parentId: "t1", window: "main" });
     const closed = foldFeed([prompt, child, answer, late]);
     const card = closed[0];
     if (card.kind !== "chat") throw new Error("card expected");
@@ -59,10 +59,10 @@ describe("foldFeed — the conversation set (parentId is the source of truth)", 
 describe("foldFeed — the legacy heuristic (a delta with no derived correlation)", () => {
   it("a delta with no parentId folds by window, command name and time window", () => {
     seq = 0;
-    const d = entry("command.progress", { command: "reconcile", delta: "50%", window: "w-1" }, 1000);
+    const d = entry("command.progress", { command: "reconcile", delta: "50%", window: "win-1" }, 1000);
     const done = entry(
       "command.executed",
-      { command: "plugin.soksak-plugin-workflow.reconcile", ok: true, window: "w-1", startedAt: 900, finishedAt: 1200 },
+      { command: "plugin.soksak-plugin-workflow.reconcile", ok: true, window: "win-1", startedAt: 900, finishedAt: 1200 },
       1200,
     );
     const items = foldFeed([d, done]);
@@ -74,7 +74,7 @@ describe("foldFeed — the legacy heuristic (a delta with no derived correlation
 
   it("a delta with a parentId is excluded from the heuristic (exact correlation wins)", () => {
     seq = 0;
-    const prompt = entry("chat.prompt", { text: "x", turnId: "t1", window: "main" });
+    const prompt = entry("chat.prompt", { text: "x", turnId: "pjt-aaaaaa", window: "main" });
     const d = entry(
       "command.progress",
       { command: "orchestrator.ask", delta: "thinking", parentId: "pjt-aaaaaa", window: "main" },

@@ -109,34 +109,34 @@ describe("layout transition public journal", () => {
     });
     const prepared = await prepareLayoutMove([]);
     transactionSettlementApi().bindLayoutTransactionSettlement(prepared.transactionId, {
-      ownerKey: "t1",
+      ownerKey: "pjt-aaaaaa",
       revision: 8,
     });
     await prepared.commit();
     expect(layoutTransitionJournal()[0]).toMatchObject({
       transactionId: "layout-1",
       phase: "committed",
-      settlement: { ownerKey: "t1", revision: 8, status: "pending" },
+      settlement: { ownerKey: "pjt-aaaaaa", revision: 8, status: "pending" },
     });
 
     transactionSettlementApi().finishLayoutTransactionSettlement(prepared.transactionId, {
-      ownerKey: "t1",
+      ownerKey: "pjt-aaaaaa",
       revision: 8,
       status: "settled",
     });
     expect(layoutTransitionJournal()[0]).toMatchObject({
-      settlement: { ownerKey: "t1", revision: 8, status: "settled" },
+      settlement: { ownerKey: "pjt-aaaaaa", revision: 8, status: "settled" },
     });
   });
 
   it("a DOM-only transaction exposes id, move, prepare, and commit too", async () => {
-    const prepared = await prepareLayoutMove([{ viewId: "v1", dx: 320 }]);
+    const prepared = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 320 }]);
     expect(layoutTransitionJournal()).toEqual([
       expect.objectContaining({
         transactionId: "layout-1",
         mode: "glide",
         phase: "prepared",
-        moves: [{ viewId: "v1", dx: 320 }],
+        moves: [{ viewId: "tab-aaaaaa", dx: 320 }],
       }),
     ]);
     await prepared.commit();
@@ -156,9 +156,9 @@ describe("layout transition public journal", () => {
     declareLayoutCause("cause-preparing");
 
     const pending = prepareLayoutChange({
-      moves: [{ viewId: "v1", dx: 320 }],
+      moves: [{ viewId: "tab-aaaaaa", dx: 320 }],
       projectionParticipants: [],
-      panePresentationTargets: [{ viewId: "v1" }],
+      panePresentationTargets: [{ viewId: "tab-aaaaaa" }],
       paneSettlementParticipants: [{ viewId: "sibling" }],
     });
 
@@ -173,9 +173,9 @@ describe("layout transition public journal", () => {
       openedAtUnixMs: expect.any(Number),
       stagedTargetsStatus: "pending",
       stagedTargets: null,
-      panePresentationTargets: [{ viewId: "v1" }],
+      panePresentationTargets: [{ viewId: "tab-aaaaaa" }],
       paneSettlementParticipants: [{ viewId: "sibling" }],
-      moves: [{ viewId: "v1", dx: 320 }],
+      moves: [{ viewId: "tab-aaaaaa", dx: 320 }],
     }]);
 
     resolvePrepare(buildPrepared({ transactionId: "layout-1" }));
@@ -197,7 +197,7 @@ describe("layout transition public journal", () => {
     });
     declareLayoutCause("cause-stage-failed");
 
-    await expect(prepareLayoutMove([{ viewId: "v1", dx: 320 }]))
+    await expect(prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 320 }]))
       .rejects.toThrow("pane stage rejected");
     expect(layoutTransitionJournal()).toEqual([expect.objectContaining({
       transactionId: "layout-1",
@@ -225,7 +225,7 @@ describe("layout transition public journal", () => {
       prepareChange: async (_change, identity) => buildPrepared(identity, { preparation }),
     });
 
-    await prepareLayoutMove([{ viewId: "v1", dx: 320 }]);
+    await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 320 }]);
 
     expect(layoutTransitionJournal()[0]).toEqual(expect.objectContaining({
       transactionId: "layout-1",
@@ -242,9 +242,9 @@ describe("layout transition public journal", () => {
       }),
     });
     declareLayoutCause("cause-first");
-    const first = prepareLayoutMove([{ viewId: "v1", dx: 120 }]);
+    const first = prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 120 }]);
     declareLayoutCause("cause-second");
-    const second = prepareLayoutMove([{ viewId: "v2", dx: -120 }]);
+    const second = prepareLayoutMove([{ viewId: "tab-bbbbbb", dx: -120 }]);
     expect(layoutTransitionJournal().map((entry) => ({
       id: entry.transactionId,
       cause: entry.causeTraceId,
@@ -339,7 +339,7 @@ describe("layout transition public journal", () => {
       prepareChange: async () => { throw new Error("stage rejected once"); },
     });
     try {
-      await expect(prepareLayoutMove([{ viewId: "v1", dx: 1 }]))
+      await expect(prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 1 }]))
         .rejects.toThrow("stage rejected once");
       expect(events.map((event) => (event as { type: string }).type)).toEqual([
         "preparing",
@@ -359,7 +359,7 @@ describe("layout transition public journal", () => {
         stagedTargets: ["pane:p-left"],
       }),
     });
-    await prepareLayoutMove([{ viewId: "v1", dx: 320 }]);
+    await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 320 }]);
 
     expect(layoutTransitionJournal()[0]).toEqual(expect.objectContaining({
       stagedTargets: ["pane:p-left"],
@@ -419,7 +419,7 @@ describe("layout transition public journal", () => {
         }),
       }),
     });
-    const transaction = await prepareLayoutMove([{ viewId: "v1", dx: 160 }]);
+    const transaction = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 160 }]);
     await transaction.start();
     expect(layoutTransitionJournal()[0]).toEqual(expect.objectContaining({
       presentationStart: expect.objectContaining({
@@ -449,7 +449,7 @@ describe("layout transition public journal", () => {
         } as never),
       }),
     });
-    const transaction = await prepareLayoutMove([{ viewId: "v1", dx: 160 }]);
+    const transaction = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 160 }]);
 
     await expect(transaction.start()).rejects.toThrow("candidateAttempts");
     expect(layoutTransitionJournal()[0]).toMatchObject({ phase: "failed" });
@@ -465,7 +465,7 @@ describe("layout transition public journal", () => {
       id: "dom-layout",
       prepare: vi.fn(),
     } as unknown as LayoutPresentationCandidateParticipant;
-    const transaction = await prepareLayoutMove([{ viewId: "v1", dx: 160 }]);
+    const transaction = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 160 }]);
 
     await transaction.start(participant);
 
@@ -622,8 +622,8 @@ describe("layout transition public journal", () => {
     registerLayoutTransitionHost({
       prepareChange: async (_moves, identity) => buildPrepared(identity, { commit, cancel }),
     });
-    const first = await prepareLayoutMove([{ viewId: "v1", dx: -100 }]);
-    const second = await prepareLayoutMove([{ viewId: "v2", dx: 100 }]);
+    const first = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: -100 }]);
+    const second = await prepareLayoutMove([{ viewId: "tab-bbbbbb", dx: 100 }]);
     expect(layoutTransitionJournal().map((row) => row.transactionId)).toEqual(["layout-1", "layout-2"]);
     await first.commit();
     await first.commit();
@@ -644,7 +644,7 @@ describe("layout transition public journal", () => {
     const events: unknown[] = [];
     const unsubscribe = onLayoutTransitionJournal((event) => events.push(event));
     try {
-      const prepared = await prepareLayoutMove([{ viewId: "v1", dx: 160 }]);
+      const prepared = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 160 }]);
       const committing = prepared.commit();
 
       expect(commit).toHaveBeenCalledOnce();
@@ -700,7 +700,7 @@ describe("layout transition public journal", () => {
         start: () => start,
       }),
     });
-    const transaction = await prepareLayoutMove([{ viewId: "v1", dx: -160 }]);
+    const transaction = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: -160 }]);
     const starting = transaction.start();
     const committing = transaction.commit();
     await Promise.resolve();
@@ -765,7 +765,7 @@ describe("layout transition public journal", () => {
         cancel: vi.fn(),
       }),
     });
-    const prepared = await prepareLayoutMove([{ viewId: "v1", dx: 160 }]);
+    const prepared = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 160 }]);
 
     await expect(prepared.commit()).rejects.toThrow("surface ACK rejected");
     expect(layoutTransitionJournal()[0]).toEqual(expect.objectContaining({
@@ -841,7 +841,7 @@ describe("layout transition public journal", () => {
         cancel,
       }),
     });
-    const prepared = await prepareLayoutMove([{ viewId: "v1", dx: 160 }]);
+    const prepared = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 160 }]);
 
     await expect(prepared.start()).rejects.toBe(failure);
     prepared.cancel();
@@ -866,7 +866,7 @@ describe("layout transition public journal", () => {
       timeoutMs: 1_000,
     });
     declareLayoutCause("cause-committed");
-    const committed = await prepareLayoutMove([{ viewId: "v1", dx: 160 }]);
+    const committed = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 160 }]);
     await committed.commit();
     await expect(committedWait).resolves.toEqual({
       causeStatus: "exact",
@@ -888,7 +888,7 @@ describe("layout transition public journal", () => {
       timeoutMs: 1_000,
     });
     declareLayoutCause("cause-failed");
-    const failed = await prepareLayoutMove([{ viewId: "v1", dx: -160 }]);
+    const failed = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: -160 }]);
     await expect(failed.commit()).rejects.toThrow("surface commit rejected");
     await expect(failedWait).resolves.toEqual({
       causeStatus: "exact",
@@ -904,7 +904,7 @@ describe("layout transition public journal", () => {
   it("an already closed transaction snapshot is not missed either, in one atomic boundary with listener installation", async () => {
     const { waitForLayoutTransaction } = transactionWaitApi();
     declareLayoutCause("cause-snapshot");
-    const transaction = await prepareLayoutMove([{ viewId: "v1", dx: 80 }]);
+    const transaction = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 80 }]);
     await transaction.commit();
 
     await expect(waitForLayoutTransaction({
@@ -945,7 +945,7 @@ describe("layout transition public journal", () => {
 
   it("two exact causes in the same sequence window are refused as ambiguous instead of picked arbitrarily", async () => {
     const { waitForLayoutTransaction } = transactionWaitApi();
-    for (const viewId of ["v1", "v2"]) {
+    for (const viewId of ["tab-aaaaaa", "tab-bbbbbb"]) {
       declareLayoutCause("cause-duplicate");
       const transaction = await prepareLayoutMove([{ viewId, dx: 1 }]);
       await transaction.commit();

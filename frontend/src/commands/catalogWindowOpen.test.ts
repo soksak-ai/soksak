@@ -34,7 +34,7 @@ it("window.open forwards focus:false to the native window contract so automation
 
   invoke.mockImplementation(async (command: string) => {
     if (command === "project_owners") return { owners: [] };
-    if (command === "window_create") return "w-test";
+    if (command === "window_create") return "win-test";
     throw new Error(`unexpected invoke: ${command}`);
   });
 
@@ -44,7 +44,7 @@ it("window.open forwards focus:false to the native window contract so automation
     {},
   );
 
-  expect(result).toMatchObject({ ok: true, data: { label: "w-test" } });
+  expect(result).toMatchObject({ ok: true, data: { label: "win-test" } });
   expect(invoke).toHaveBeenCalledWith("window_create", {
     init: "root=%2FUsers%2Fmax%2Fsoksak%2Fcore",
     focus: false,

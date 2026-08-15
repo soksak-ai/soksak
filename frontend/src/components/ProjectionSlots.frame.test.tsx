@@ -52,7 +52,7 @@ function pluginView(id: string, pluginId: string, view: string): Tab {
 
 function tab(tabs: Tab[], activeTabId: string): Project {
   return {
-    id: "p1",
+    id: "pjt-aaaaaa",
     title: "P",
     sidebarOpen: true,
     rightOpen: false,
@@ -61,13 +61,13 @@ function tab(tabs: Tab[], activeTabId: string): Project {
     root: "<local-evidence>/p1",
     spaces: [
       {
-        id: "c1",
+        id: "spc-aaaaaa",
         title: "1",
-        layout: { type: "leaf", value: { id: "g1", tabs, activeTabId } },
-        activePaneId: "g1",
+        layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs, activeTabId } },
+        activePaneId: "pan-aaaaaa",
       },
     ],
-    activeSpaceId: "c1",
+    activeSpaceId: "spc-aaaaaa",
   } as unknown as Project;
 }
 
@@ -112,7 +112,7 @@ const render = (commitProjection = true) =>
   act(() => {
     root.render(
       <ProjectionSlots
-        projectId="p1"
+        projectId="pjt-aaaaaa"
         root="<local-evidence>/p1"
         paneId={null}
         side="left"
@@ -124,7 +124,7 @@ const render = (commitProjection = true) =>
 describe("rail slot common form (§12)", () => {
   it("a live slot renders as a host header (icon and title) plus a body — only the inside is the feature's", () => {
     registerFn("termplug", "term", "tree");
-    useSessions.setState({ projects: [tab([pluginView("v1", "termplug", "term")], "v1")], activeId: "p1" });
+    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
     render();
     const header = host.querySelector<HTMLElement>(".projection-header");
     expect(header).not.toBeNull();
@@ -137,7 +137,7 @@ describe("rail slot common form (§12)", () => {
 
   it("the toggle in the first left slot header switches railLook pane↔ground and persists it", () => {
     registerFn("termplug", "term", "tree");
-    useSessions.setState({ projects: [tab([pluginView("v1", "termplug", "term")], "v1")], activeId: "p1" });
+    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
     render();
     expect(useSettings.getState().railLook).toBe("ground"); // the default = SIDEBAR-CHROME (the design canon)
     const toggle = host.querySelector<HTMLElement>('[data-node="projection/left/look"]');
@@ -154,11 +154,11 @@ describe("rail slot common form (§12)", () => {
     useSessions.setState({
       projects: [
         tab(
-          [pluginView("v1", "termplug", "term"), pluginView("v2", "kanplug", "board")],
-          "v1",
+          [pluginView("tab-aaaaaa", "termplug", "term"), pluginView("tab-bbbbbb", "kanplug", "board")],
+          "tab-aaaaaa",
         ),
       ],
-      activeId: "p1",
+      activeId: "pjt-aaaaaa",
     });
     render();
     // Active view switch → resolution changes from termplug.tree to kanplug.nav (rebinding).
@@ -168,7 +168,7 @@ describe("rail slot common form (§12)", () => {
           ...t,
           spaces: t.spaces.map((c) => ({
             ...c,
-            layout: { ...c.layout, value: { ...(c.layout as { value: object }).value, activeTabId: "v2" } },
+            layout: { ...c.layout, value: { ...(c.layout as { value: object }).value, activeTabId: "tab-bbbbbb" } },
           })),
         })),
       }) as never);
@@ -184,8 +184,8 @@ describe("host header binding name (§12-①)", () => {
     // the name in the host header is the single place that shows the sidebar's bound view.
     registerFn("termplug", "term", "tree");
     useSessions.setState({
-      projects: [tab([pluginView("v1", "termplug", "term")], "v1")],
-      activeId: "p1",
+      projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")],
+      activeId: "pjt-aaaaaa",
     });
     render();
     const bound = host.querySelector<HTMLElement>(".projection-bound");
@@ -200,11 +200,11 @@ describe("handover (§12-④)", () => {
     useSessions.setState({
       projects: [
         tab(
-          [pluginView("v1", "termplug", "term"), pluginView("v2", "kanplug", "board")],
-          "v1",
+          [pluginView("tab-aaaaaa", "termplug", "term"), pluginView("tab-bbbbbb", "kanplug", "board")],
+          "tab-aaaaaa",
         ),
       ],
-      activeId: "p1",
+      activeId: "pjt-aaaaaa",
     });
     render();
     render(false);
@@ -214,7 +214,7 @@ describe("handover (§12-④)", () => {
           ...t,
           spaces: t.spaces.map((c) => ({
             ...c,
-            layout: { ...c.layout, value: { ...(c.layout as { value: object }).value, activeTabId: "v2" } },
+            layout: { ...c.layout, value: { ...(c.layout as { value: object }).value, activeTabId: "tab-bbbbbb" } },
           })),
         })),
       }) as never);

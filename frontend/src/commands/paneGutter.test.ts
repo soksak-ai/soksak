@@ -35,7 +35,7 @@ const leaf = (id: string): PaneNode => ({ type: "leaf", value: pane(id) });
 /** row[ A | col[ B / C ] | D ] — nesting is required to observe the "nearest axis ancestor" rule. */
 function fixture(): Project {
   return {
-    id: "t1",
+    id: "pjt-aaaaaa",
     title: "P",
     root: "<local-evidence>/pane-gutter",
     sidebarOpen: false,
@@ -44,18 +44,18 @@ function fixture(): Project {
     leftLayout: initialSidebarLayout([]),
     spaces: [
       {
-        id: "c1",
+        id: "spc-aaaaaa",
         title: "1",
         layout: {
           type: "split",
-          id: "s1",
+          id: "spl-aaaaaa",
           dir: "row",
           sizes: [0.5, 0.3, 0.2],
           children: [
             leaf("pan-a"),
             {
               type: "split",
-              id: "s2",
+              id: "spl-bbbbbb",
               dir: "col",
               sizes: [0.6, 0.4],
               children: [leaf("pan-b"), leaf("pan-c")],
@@ -66,7 +66,7 @@ function fixture(): Project {
         activePaneId: "pan-b",
       },
     ],
-    activeSpaceId: "c1",
+    activeSpaceId: "spc-aaaaaa",
   };
 }
 
@@ -83,19 +83,19 @@ function nestedRowFixture(): Project {
         activePaneId: "pan-e",
         layout: {
           type: "split",
-          id: "s1",
+          id: "spl-aaaaaa",
           dir: "row",
           sizes: [0.7, 0.3],
           children: [
             {
               type: "split",
-              id: "s2",
+              id: "spl-bbbbbb",
               dir: "col",
               sizes: [0.5, 0.5],
               children: [
                 {
                   type: "split",
-                  id: "s3",
+                  id: "spl-cccccc",
                   dir: "row",
                   sizes: [0.4, 0.6],
                   children: [leaf("pan-e"), leaf("pan-f")],
@@ -114,7 +114,7 @@ function nestedRowFixture(): Project {
 registerCatalog();
 
 beforeEach(() => {
-  useSessions.setState({ projects: [fixture()], activeId: "t1" });
+  useSessions.setState({ projects: [fixture()], activeId: "pjt-aaaaaa" });
 });
 
 const sizesOf = (): number[] => {
@@ -193,8 +193,8 @@ describe("pane.resize — a seam is addressed as a pane edge", () => {
   it("the answer has no internal node id — a name the caller cannot address is not handed out", async () => {
     const r = await execute("pane.resize", { pane: "pan-a", edge: "right", ratio: 0.4 }, {});
     const text = JSON.stringify(r);
-    expect(text).not.toContain("s1");
-    expect(text).not.toContain("s2");
+    expect(text).not.toContain("spl-aaaaaa");
+    expect(text).not.toContain("spl-bbbbbb");
   });
 });
 
@@ -221,7 +221,7 @@ describe("pane.equalize — equalize around a seam", () => {
 
 describe("nearest axis ancestor — when there are two ancestors on the same axis", () => {
   beforeEach(() => {
-    useSessions.setState({ projects: [nestedRowFixture()], activeId: "t1" });
+    useSessions.setState({ projects: [nestedRowFixture()], activeId: "pjt-aaaaaa" });
   });
 
   it("moves the inner row's seam — it does not leak out to the outer row", async () => {

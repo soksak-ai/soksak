@@ -18,7 +18,7 @@ vi.mock("../framework", async (importOriginal) => ({
 }));
 vi.mock("../lib/webviewLabels", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/webviewLabels")>()),
-  currentWindowLabel: () => "w-1",
+  currentWindowLabel: () => "win-1",
 }));
 
 import { registerCatalog } from "./catalog";
@@ -28,17 +28,17 @@ registerCatalog();
 
 beforeEach(() => {
   calls.invoke.mockReset();
-  calls.invoke.mockImplementation(async (cmd: string) => (cmd === "window_list" ? ["w-1", "w-2"] : undefined));
+  calls.invoke.mockImplementation(async (cmd: string) => (cmd === "window_list" ? ["win-1", "win-2"] : undefined));
 });
 
 describe("window.focus answers the outcome", () => {
   it("answers whether the window became key — request and result are different facts", async () => {
     calls.invoke.mockImplementation(async (cmd: string) => {
-      if (cmd === "window_list") return ["w-1", "w-2"];
+      if (cmd === "window_list") return ["win-1", "win-2"];
       if (cmd === "window_is_key") return true;
       return undefined;
     });
-    const out = await execute("window.focus", { label: "w-1" }, {});
+    const out = await execute("window.focus", { label: "win-1" }, {});
     expect(out.ok).toBe(true);
     expect((out.data as { key?: boolean }).key).toBe(true);
     expect(getSpec("window.focus")?.returns).toContain("key");
@@ -48,11 +48,11 @@ describe("window.focus answers the outcome", () => {
   // that fact, since the caller has no other source for it.
   it("when the window did not become key, answers that fact and what to do", async () => {
     calls.invoke.mockImplementation(async (cmd: string) => {
-      if (cmd === "window_list") return ["w-1", "w-2"];
+      if (cmd === "window_list") return ["win-1", "win-2"];
       if (cmd === "window_is_key") return false;
       return undefined;
     });
-    const out = await execute("window.focus", { label: "w-1" }, {});
+    const out = await execute("window.focus", { label: "win-1" }, {});
     expect((out.data as { key?: boolean }).key).toBe(false);
     expect(String(out.message)).toBe(tmsg("msg.window.focus.notKey"));
   });

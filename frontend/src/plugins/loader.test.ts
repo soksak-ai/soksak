@@ -523,10 +523,10 @@ describe("activatePlugin — static module shape ({controller, commands, views})
     const reg = useViewRegistry.getState().views["demo.panel"];
     const el = document.createElement("div");
     const viewCtx = {
-      projectId: "p1",
+      projectId: "pjt-aaaaaa",
       root: "/proj",
       paneId: null,
-      viewId: "v1",
+      viewId: "tab-aaaaaa",
       command: null,
       restore: { cwd: "/proj/sub", state: { url: "https://x" } },
       setBadge: vi.fn(),

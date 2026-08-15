@@ -65,7 +65,7 @@ function pluginView(id: string, pluginId: string, view: string): Tab {
 
 function tab(tabs: Tab[], activeTabId: string): Project {
   return {
-    id: "p1",
+    id: "pjt-aaaaaa",
     title: "P",
     sidebarOpen: true,
     rightOpen: false,
@@ -74,13 +74,13 @@ function tab(tabs: Tab[], activeTabId: string): Project {
     root: "<local-evidence>/p1",
     spaces: [
       {
-        id: "c1",
+        id: "spc-aaaaaa",
         title: "1",
-        layout: { type: "leaf", value: { id: "g1", tabs, activeTabId } },
-        activePaneId: "g1",
+        layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs, activeTabId } },
+        activePaneId: "pan-aaaaaa",
       },
     ],
-    activeSpaceId: "c1",
+    activeSpaceId: "spc-aaaaaa",
   };
 }
 
@@ -105,9 +105,9 @@ describe("boundViewOf — session active chain → BoundView (A8)", () => {
       }),
       provider,
     );
-    const t = tab([pluginView("v1", "termplug", "term")], "v1");
+    const t = tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa");
     const bound = boundViewOf(t);
-    expect(bound).toMatchObject({ viewId: "v1", ownerPluginId: "termplug" });
+    expect(bound).toMatchObject({ viewId: "tab-aaaaaa", ownerPluginId: "termplug" });
     expect(bound?.sidebar?.left[0]).toMatchObject({ ref: "self.tree" });
   });
 
@@ -125,15 +125,15 @@ describe("boundViewOf — session active chain → BoundView (A8)", () => {
       },
       { mount: () => {} },
     );
-    const fileView: Tab = { id: "v2", kind: "file", title: "b.ts", path: "/a/b.ts", mode: "code" };
-    const bound = boundViewOf(tab([fileView], "v2"));
-    expect(bound).toMatchObject({ viewId: "v2", ownerPluginId: "edplug" });
+    const fileView: Tab = { id: "tab-bbbbbb", kind: "file", title: "b.ts", path: "/a/b.ts", mode: "code" };
+    const bound = boundViewOf(tab([fileView], "tab-bbbbbb"));
+    expect(bound).toMatchObject({ viewId: "tab-bbbbbb", ownerPluginId: "edplug" });
     expect(bound?.sidebar?.left[0]).toMatchObject({ ref: "self.outline" });
   });
 
   it("a file view with no owning viewer → no declaration (null sidebar)", () => {
-    const fileView: Tab = { id: "v3", kind: "file", title: "x.zzz", path: "/x.zzz", mode: "code" };
-    const bound = boundViewOf(tab([fileView], "v3"));
+    const fileView: Tab = { id: "tab-cccccc", kind: "file", title: "x.zzz", path: "/x.zzz", mode: "code" };
+    const bound = boundViewOf(tab([fileView], "tab-cccccc"));
     expect(bound?.sidebar).toBeNull();
   });
 });
@@ -162,11 +162,11 @@ describe("projectionFor — real deps (contract resolution, rail check, consumes
       decl("tree", { placements: ["rail"], defaultPlacement: "rail" }),
       provider,
     );
-    useSessions.setState({ projects: [tab([pluginView("v1", "termplug", "term")], "v1")], activeId: "p1" });
-    const p = projectionFor("p1");
+    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
+    const p = projectionFor("pjt-aaaaaa");
     expect(p?.left.slots[0]).toMatchObject({
       resolvedRef: "filetree.tree",
-      instanceKey: "p1|filetree.tree",
+      instanceKey: "pjt-aaaaaa|filetree.tree",
       status: "live",
     });
   });
@@ -194,8 +194,8 @@ describe("projectionFor — real deps (contract resolution, rail check, consumes
       decl("tree", { placements: ["rail"], defaultPlacement: "rail" }),
       provider,
     );
-    useSessions.setState({ projects: [tab([pluginView("v1", "termplug", "term")], "v1")], activeId: "p1" });
-    expect(projectionFor("p1")?.left.slots[0].status).toBe("degraded");
+    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
+    expect(projectionFor("pjt-aaaaaa")?.left.slots[0].status).toBe("degraded");
   });
 
   it("a project that does not exist → null", () => {
@@ -206,14 +206,14 @@ describe("projectionFor — real deps (contract resolution, rail check, consumes
 describe("startProjectionTracking — one binding per space", () => {
   it("sharing one rail instance still moves the binding to the current active view", () => {
     useViewRegistry.getState().register("termplug", decl("term"), provider);
-    const v1 = pluginView("v1", "termplug", "term");
-    const v2 = pluginView("v2", "termplug", "term");
-    useSessions.setState({ projects: [tab([v1, v2], "v1")], activeId: "p1" });
+    const v1 = pluginView("tab-aaaaaa", "termplug", "term");
+    const v2 = pluginView("tab-bbbbbb", "termplug", "term");
+    useSessions.setState({ projects: [tab([v1, v2], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
 
     const events: { projectId: string; viewId: string | null }[] = [];
     const off = onPluginEvent("projection.changed", (e) => void events.push(e));
     const stop = startProjectionTracking();
-    expect(projectionFor("p1")?.binding.viewId).toBe("v1");
+    expect(projectionFor("pjt-aaaaaa")?.binding.viewId).toBe("tab-aaaaaa");
 
     // Switching the active tab inside a group = binding change (A8).
     const t = useSessions.getState().projects[0];
@@ -224,16 +224,16 @@ describe("startProjectionTracking — one binding per space", () => {
           spaces: [
             {
               ...t.spaces[0],
-              layout: { type: "leaf", value: { id: "g1", tabs: [v1, v2], activeTabId: "v2" } },
+              layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [v1, v2], activeTabId: "tab-bbbbbb" } },
             },
           ],
         },
       ],
     });
 
-    expect(projectionFor("p1")?.binding.viewId).toBe("v2");
-    expect(events.some((e) => e.projectId === "p1" && e.viewId === "v2")).toBe(true);
-    expect(useProjection.getState().byProject.p1.focusHistory[0]).toBe("v2");
+    expect(projectionFor("pjt-aaaaaa")?.binding.viewId).toBe("tab-bbbbbb");
+    expect(events.some((e) => e.projectId === "pjt-aaaaaa" && e.viewId === "tab-bbbbbb")).toBe(true);
+    expect(useProjection.getState().byProject["pjt-aaaaaa"].focusHistory[0]).toBe("tab-bbbbbb");
 
     stop();
     off.dispose();
@@ -241,28 +241,28 @@ describe("startProjectionTracking — one binding per space", () => {
 
   it("a view goes away → focusHistory is cleaned, a project goes away → state is reclaimed", () => {
     useViewRegistry.getState().register("termplug", decl("term"), provider);
-    const v1 = pluginView("v1", "termplug", "term");
-    const v2 = pluginView("v2", "termplug", "term");
-    useSessions.setState({ projects: [tab([v1, v2], "v1")], activeId: "p1" });
+    const v1 = pluginView("tab-aaaaaa", "termplug", "term");
+    const v2 = pluginView("tab-bbbbbb", "termplug", "term");
+    useSessions.setState({ projects: [tab([v1, v2], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
     const stop = startProjectionTracking();
 
     const t = useSessions.getState().projects[0];
     // v2 active → back to v1 → history [v1, v2]
     useSessions.setState({
-      projects: [{ ...t, spaces: [{ ...t.spaces[0], layout: { type: "leaf", value: { id: "g1", tabs: [v1, v2], activeTabId: "v2" } } }] }],
+      projects: [{ ...t, spaces: [{ ...t.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [v1, v2], activeTabId: "tab-bbbbbb" } } }] }],
     });
     const t2 = useSessions.getState().projects[0];
     useSessions.setState({
-      projects: [{ ...t2, spaces: [{ ...t2.spaces[0], layout: { type: "leaf", value: { id: "g1", tabs: [v1, v2], activeTabId: "v1" } } }] }],
+      projects: [{ ...t2, spaces: [{ ...t2.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [v1, v2], activeTabId: "tab-aaaaaa" } } }] }],
     });
-    expect(useProjection.getState().byProject.p1.focusHistory).toEqual(["v1", "v2"]);
+    expect(useProjection.getState().byProject["pjt-aaaaaa"].focusHistory).toEqual(["tab-aaaaaa", "tab-bbbbbb"]);
 
     // v2 closed → removed from history (R6 material cleanup).
     const t3 = useSessions.getState().projects[0];
     useSessions.setState({
-      projects: [{ ...t3, spaces: [{ ...t3.spaces[0], layout: { type: "leaf", value: { id: "g1", tabs: [v1], activeTabId: "v1" } } }] }],
+      projects: [{ ...t3, spaces: [{ ...t3.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [v1], activeTabId: "tab-aaaaaa" } } }] }],
     });
-    expect(useProjection.getState().byProject.p1.focusHistory).toEqual(["v1"]);
+    expect(useProjection.getState().byProject["pjt-aaaaaa"].focusHistory).toEqual(["tab-aaaaaa"]);
 
     // Project closed → state reclaimed.
     useSessions.setState({ projects: [], activeId: "" });
@@ -286,7 +286,7 @@ describe("projection.changed fingerprint firing (§4.3) — slot resolution chan
       }),
       provider,
     );
-    useSessions.setState({ projects: [tab([pluginView("v1", "termplug", "term")], "v1")], activeId: "p1" });
+    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
 
     const events: { projectId: string; viewId: string | null }[] = [];
     const off = onPluginEvent("projection.changed", (e) => void events.push(e));
@@ -299,7 +299,7 @@ describe("projection.changed fingerprint firing (§4.3) — slot resolution chan
       decl("tree", { placements: ["rail"], defaultPlacement: "rail" }),
       provider,
     );
-    expect(events.some((e) => e.projectId === "p1" && e.viewId === "v1")).toBe(true);
+    expect(events.some((e) => e.projectId === "pjt-aaaaaa" && e.viewId === "tab-aaaaaa")).toBe(true);
 
     stop();
     off.dispose();
@@ -316,23 +316,23 @@ describe("R6 succession — on closing the bound view, the most recent surviving
       ...tab([], ""),
       spaces: [
         {
-          id: "c1",
+          id: "spc-aaaaaa",
           title: "1",
-          activePaneId: "g1",
+          activePaneId: "pan-aaaaaa",
           layout: {
             type: "split",
-            id: "s1",
+            id: "spl-aaaaaa",
             dir: "row",
             sizes: [0.5, 0.5],
             children: [
-              { type: "leaf", value: { id: "g1", tabs: [vA, vC], activeTabId: "vA" } },
-              { type: "leaf", value: { id: "g2", tabs: [vB], activeTabId: "vB" } },
+              { type: "leaf", value: { id: "pan-aaaaaa", tabs: [vA, vC], activeTabId: "vA" } },
+              { type: "leaf", value: { id: "pan-bbbbbb", tabs: [vB], activeTabId: "vB" } },
             ],
           },
         },
       ],
     };
-    useSessions.setState({ projects: [t], activeId: "p1" });
+    useSessions.setState({ projects: [t], activeId: "pjt-aaaaaa" });
     const stop = startProjectionTracking();
 
     // Build binding history: A → B → A (active group switch).
@@ -346,7 +346,7 @@ describe("R6 succession — on closing the bound view, the most recent surviving
     setActive("pan-aaaaaa"); // bind A
     expect(useProjection.getState().byProject["pjt-aaaaaa"].focusHistory.slice(0, 2)).toEqual(["vA", "vB"]);
 
-    const r = useSessions.getState().closeView("p1", "vA");
+    const r = useSessions.getState().closeView("pjt-aaaaaa", "vA");
     expect(r.ok).toBe(true);
     const content = useSessions.getState().projects[0].spaces[0];
     expect(content.activePaneId).toBe("pan-bbbbbb"); // R6: most recent survivor = B(g2)
@@ -375,16 +375,16 @@ describe("rebinding — the active content view sets the space binding (③)", (
 
     const vA = pluginView("vA", "kanplug", "board");
     const vB = pluginView("vB", "runplug", "runbook");
-    useSessions.setState({ projects: [tab([vA, vB], "vA")], activeId: "p1" });
+    useSessions.setState({ projects: [tab([vA, vB], "vA")], activeId: "pjt-aaaaaa" });
     const stop = startProjectionTracking();
-    expect(projectionFor("p1")?.left.slots[0]?.resolvedRef).toBe("kanplug.tree");
+    expect(projectionFor("pjt-aaaaaa")?.left.slots[0]?.resolvedRef).toBe("kanplug.tree");
 
     // Active tab switch = feature switch → binding and slots replaced.
     const t = useSessions.getState().projects[0];
     useSessions.setState({
-      projects: [{ ...t, spaces: [{ ...t.spaces[0], layout: { type: "leaf", value: { id: "g1", tabs: [vA, vB], activeTabId: "vB" } } }] }],
+      projects: [{ ...t, spaces: [{ ...t.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [vA, vB], activeTabId: "vB" } } }] }],
     });
-    expect(projectionFor("p1")?.left.slots[0]?.resolvedRef).toBe("runplug.list");
+    expect(projectionFor("pjt-aaaaaa")?.left.slots[0]?.resolvedRef).toBe("runplug.list");
     stop();
   });
 });

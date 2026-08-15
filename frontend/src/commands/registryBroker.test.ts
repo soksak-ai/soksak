@@ -72,7 +72,7 @@ function principal() {
   return {
     runtimeId: "runtime-1",
     sessionId: "session-1",
-    windowLabel: "w-trusted",
+    windowLabel: "win-trusted",
     pluginId: "soksak-plugin-fixture",
     generation: 7,
     role: "view" as const,
@@ -196,7 +196,7 @@ describe("Command Registry plugin broker — fail closed", () => {
       },
     });
 
-    expect(await executeFromPlugin("broker.authority", { window: "w-forged" }, pluginContext())).toMatchObject({
+    expect(await executeFromPlugin("broker.authority", { window: "win-forged" }, pluginContext())).toMatchObject({
       ok: false,
       code: "PLUGIN_AUTHORITY_FORBIDDEN",
     });
@@ -208,7 +208,7 @@ describe("Command Registry plugin broker — fail closed", () => {
       data: {
         plugin: "soksak-plugin-fixture",
         contribution: "canvas",
-        window: "w-trusted",
+        window: "win-trusted",
         namespace: "plugin/soksak-plugin-fixture",
         path: "/trusted/workspace",
         label: "g-trusted",

@@ -40,7 +40,7 @@ function project(
   placement?: Project["leftRailPlacement"],
 ): Project {
   return {
-    id: "t1",
+    id: "pjt-aaaaaa",
     title: "P",
     root: "<local-evidence>/rail-position",
     sidebarOpen: true,
@@ -50,22 +50,22 @@ function project(
     leftLayout: initialSidebarLayout([]),
     spaces: [
       {
-        id: "c1",
+        id: "spc-aaaaaa",
         title: "1",
         layout: {
           type: "split",
-          id: "s1",
+          id: "spl-aaaaaa",
           dir: "row",
           sizes: [0.5, 0.5],
           children: [
-            { type: "leaf", value: group("g1") },
-            { type: "leaf", value: group("g2") },
+            { type: "leaf", value: group("pan-aaaaaa") },
+            { type: "leaf", value: group("pan-bbbbbb") },
           ],
         },
-        activePaneId: "g2",
+        activePaneId: "pan-bbbbbb",
       },
     ],
-    activeSpaceId: "c1",
+    activeSpaceId: "spc-aaaaaa",
   };
 }
 
@@ -116,7 +116,7 @@ registerCatalog();
 
 beforeEach(() => {
   __resetLayoutSettlementForTest();
-  useSessions.setState({ projects: [project()], activeId: "t1" });
+  useSessions.setState({ projects: [project()], activeId: "pjt-aaaaaa" });
 });
 
 type Position = {
@@ -177,7 +177,7 @@ describe("sidebar.left.position", () => {
   it("an existing dirty PIN is not silently re-saved — persisted and effective are read apart", async () => {
     useSessions.setState({
       projects: [project({ mode: "pin", station: 31 })],
-      activeId: "t1",
+      activeId: "pjt-aaaaaa",
     });
 
     const result = await execute("sidebar.left.position", {}, {});
@@ -197,7 +197,7 @@ describe("sidebar.left.position", () => {
   it("a FLOW command removes the pinned station and restores focus following at once", async () => {
     useSessions.setState({
       projects: [project({ mode: "pin", station: 0 })],
-      activeId: "t1",
+      activeId: "pjt-aaaaaa",
     });
 
     const result = await execute("sidebar.left.position", { mode: "flow" }, {});
@@ -215,7 +215,7 @@ describe("sidebar.left.position", () => {
   it("PIN→FLOW with the same displayed solution opens no settlement revision, only a real station change", async () => {
     useSessions.setState({
       projects: [project({ mode: "pin", station: 50 })],
-      activeId: "t1",
+      activeId: "pjt-aaaaaa",
     });
 
     const unchanged = await execute("sidebar.left.position", { mode: "flow" }, {});
@@ -224,11 +224,11 @@ describe("sidebar.left.position", () => {
       mode: "flow",
       effectiveStation: 50,
     });
-    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
 
     useSessions.setState({
       projects: [project({ mode: "pin", station: 0 })],
-      activeId: "t1",
+      activeId: "pjt-aaaaaa",
     });
     const changed = await execute("sidebar.left.position", { mode: "flow" }, {});
     expect(changed.ok).toBe(true);
@@ -236,9 +236,9 @@ describe("sidebar.left.position", () => {
       mode: "flow",
       effectiveStation: 50,
     });
-    expect(layoutSettlementFacts("t1")).toEqual({
+    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({
       active: true,
-      pending: [{ key: "t1", requested: 1, settled: 0 }],
+      pending: [{ key: "pjt-aaaaaa", requested: 1, settled: 0 }],
     });
   });
 
@@ -264,27 +264,27 @@ describe("state.tree — the solution is a public fact", () => {
     const withBinding = project({ mode: "pin", station: 0 });
     withBinding.spaces[0] = {
       ...withBinding.spaces[0],
-      activePaneId: "g2",
-      railBindingTabId: "v-g2",
+      activePaneId: "pan-bbbbbb",
+      railBindingTabId: "tab-bbbbbb",
       layout: {
         type: "split",
-        id: "s1",
+        id: "spl-aaaaaa",
         dir: "row",
         sizes: [0.5, 0.5],
         children: [
-          { type: "leaf", value: group("g1", "v-g1") },
-          { type: "leaf", value: group("g2", "v-g2") },
+          { type: "leaf", value: group("pan-aaaaaa", "tab-aaaaaa") },
+          { type: "leaf", value: group("pan-bbbbbb", "tab-bbbbbb") },
         ],
       },
     };
-    useSessions.setState({ projects: [withBinding], activeId: "t1" });
+    useSessions.setState({ projects: [withBinding], activeId: "pjt-aaaaaa" });
     const detached = await execute("state.tree", {}, {});
     const relation = (detached.data as { projects: Array<{ spaces: Array<{ railRelation: unknown }> }> })
       .projects[0].spaces[0].railRelation;
     expect(relation).toEqual({
-      boundTabId: "v-g2",
-      boundPaneId: "g2",
-      relationId: "rail-relation/c1/g2/v-g2",
+      boundTabId: "tab-bbbbbb",
+      boundPaneId: "pan-bbbbbb",
+      relationId: "rail-relation/spc-aaaaaa/pan-bbbbbb/tab-bbbbbb",
       placement: "pin",
       connected: false,
       side: "detached",
@@ -297,19 +297,19 @@ describe("state.tree — the solution is a public fact", () => {
     const withoutLock = project({ mode: "pin", station: 0 });
     withoutLock.spaces[0] = {
       ...withoutLock.spaces[0],
-      activePaneId: "g1",
+      activePaneId: "pan-aaaaaa",
       layout: {
         type: "split",
-        id: "s1",
+        id: "spl-aaaaaa",
         dir: "row",
         sizes: [0.5, 0.5],
         children: [
-          { type: "leaf", value: group("g1", "v-g1") },
-          { type: "leaf", value: group("g2", "v-g2") },
+          { type: "leaf", value: group("pan-aaaaaa", "tab-aaaaaa") },
+          { type: "leaf", value: group("pan-bbbbbb", "tab-bbbbbb") },
         ],
       },
     };
-    useSessions.setState({ projects: [withoutLock], activeId: "t1" });
+    useSessions.setState({ projects: [withoutLock], activeId: "pjt-aaaaaa" });
 
     const tree = await execute("state.tree", {}, {});
     const treeRelation = (tree.data as {
@@ -319,9 +319,9 @@ describe("state.tree — the solution is a public fact", () => {
     const paneRelation = (panes.data as { railRelation: unknown }).railRelation;
 
     expect(treeRelation).toEqual({
-      boundTabId: "v-g1",
-      boundPaneId: "g1",
-      relationId: "rail-relation/c1/g1/v-g1",
+      boundTabId: "tab-aaaaaa",
+      boundPaneId: "pan-aaaaaa",
+      relationId: "rail-relation/spc-aaaaaa/pan-aaaaaa/tab-aaaaaa",
       placement: "pin",
       connected: true,
       side: "right",
@@ -336,13 +336,13 @@ describe("state.tree — the solution is a public fact", () => {
     closed.sidebarOpen = false;
     closed.spaces[0] = {
       ...closed.spaces[0],
-      activePaneId: "g1",
+      activePaneId: "pan-aaaaaa",
       layout: {
         type: "leaf",
-        value: group("g1", "v-g1"),
+        value: group("pan-aaaaaa", "tab-aaaaaa"),
       },
     };
-    useSessions.setState({ projects: [closed], activeId: "t1" });
+    useSessions.setState({ projects: [closed], activeId: "pjt-aaaaaa" });
 
     const tree = await execute("state.tree", {}, {});
     const relation = (tree.data as {
@@ -351,7 +351,7 @@ describe("state.tree — the solution is a public fact", () => {
     expect(relation).toEqual({
       boundTabId: null,
       boundPaneId: null,
-      relationId: "rail-relation/c1/none",
+      relationId: "rail-relation/spc-aaaaaa/none",
       placement: "pin",
       connected: false,
       side: "detached",
@@ -362,8 +362,8 @@ describe("state.tree — the solution is a public fact", () => {
 
   it("restores station, split and relation direction exactly after a two-way PIN maximize/restore", async () => {
     for (const [paneId, tabId, side] of [
-      ["g1", "v-g1", "left"],
-      ["g2", "v-g2", "right"],
+      ["pan-aaaaaa", "tab-aaaaaa", "left"],
+      ["pan-bbbbbb", "tab-bbbbbb", "right"],
     ] as const) {
       const pinned = project({ mode: "pin", station: 50 });
       pinned.spaces[0] = {
@@ -371,16 +371,16 @@ describe("state.tree — the solution is a public fact", () => {
         activePaneId: paneId,
         layout: {
           type: "split",
-          id: "s1",
+          id: "spl-aaaaaa",
           dir: "row",
           sizes: [0.5, 0.5],
           children: [
-            { type: "leaf", value: group("g1", "v-g1") },
-            { type: "leaf", value: group("g2", "v-g2") },
+            { type: "leaf", value: group("pan-aaaaaa", "tab-aaaaaa") },
+            { type: "leaf", value: group("pan-bbbbbb", "tab-bbbbbb") },
           ],
         },
       };
-      useSessions.setState({ projects: [pinned], activeId: "t1" });
+      useSessions.setState({ projects: [pinned], activeId: "pjt-aaaaaa" });
 
       const read = async () => {
         const result = await execute("state.tree", {}, {});
@@ -404,12 +404,12 @@ describe("state.tree — the solution is a public fact", () => {
       });
       expect(before.spaces[0].railRelation.side).toBe(side);
 
-      expect(useSessions.getState().maximizeView("t1", tabId)).toMatchObject({ ok: true });
+      expect(useSessions.getState().maximizeView("pjt-aaaaaa", tabId)).toMatchObject({ ok: true });
       const maximized = await read();
       expect(maximized.spaces[0].railRelation.side).toBe(side);
       expect(maximized.leftRailPosition.station).toBe(50);
 
-      expect(useSessions.getState().restoreView("t1")).toMatchObject({ ok: true });
+      expect(useSessions.getState().restoreView("pjt-aaaaaa")).toMatchObject({ ok: true });
       const restored = await read();
       expect(restored.leftRailPosition).toEqual(before.leftRailPosition);
       expect(restored.spaces[0].layout).toEqual(before.spaces[0].layout);
@@ -424,7 +424,7 @@ describe("state.tree — the solution is a public fact", () => {
   it("exposes the position with the same computation as the command query", async () => {
     useSessions.setState({
       projects: [project({ mode: "pin", station: 31 })],
-      activeId: "t1",
+      activeId: "pjt-aaaaaa",
     });
     const result = await execute("state.tree", {}, {});
     expect(result.ok).toBe(true);

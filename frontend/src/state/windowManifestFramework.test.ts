@@ -30,30 +30,30 @@ const slot = (label: string) => ({
 
 describe("what the window ledger restores", () => {
   it("restores a window no host holds — whichever framework wrote it", () => {
-    const m: WindowManifest = { slots: [slot("w-a"), slot("w-b")] };
-    expect(restorableSlots(m, new Set()).map((s) => s.label)).toEqual(["w-a", "w-b"]);
+    const m: WindowManifest = { slots: [slot("win-a"), slot("win-b")] };
+    expect(restorableSlots(m, new Set()).map((s) => s.label)).toEqual(["win-a", "win-b"]);
   });
 
   it("does not create a window that is already alive — whichever host holds it", () => {
     // A window held by the other framework is also a live window. Looking only at your own process creates it twice.
-    const m: WindowManifest = { slots: [slot("w-a"), slot("w-b")] };
-    expect(restorableSlots(m, new Set(["w-a"])).map((s) => s.label)).toEqual(["w-b"]);
+    const m: WindowManifest = { slots: [slot("win-a"), slot("win-b")] };
+    expect(restorableSlots(m, new Set(["win-a"])).map((s) => s.label)).toEqual(["win-b"]);
   });
 
   it("main is not restored — boot already created that window", () => {
-    const m: WindowManifest = { slots: [slot("main"), slot("w-a")] };
-    expect(restorableSlots(m, new Set()).map((s) => s.label)).toEqual(["w-a"]);
+    const m: WindowManifest = { slots: [slot("main"), slot("win-a")] };
+    expect(restorableSlots(m, new Set()).map((s) => s.label)).toEqual(["win-a"]);
   });
 
   it("occupancy unreadable — restore nothing", () => {
     // Creating without reading occupancy brings the overlap back silently. Not opening recovers on
     // the next boot, but an overlapped window stays on screen drawing nothing — the two failures weigh differently.
-    const m: WindowManifest = { slots: [slot("w-a")] };
+    const m: WindowManifest = { slots: [slot("win-a")] };
     expect(restorableSlots(m, null)).toEqual([]);
   });
 
   it("returns the ledger unchanged — a restore does not rewrite user intent", () => {
-    const m: WindowManifest = { slots: [slot("w-a")] };
+    const m: WindowManifest = { slots: [slot("win-a")] };
     expect(restorableSlots(m, new Set())[0]).toEqual(m.slots[0]);
   });
 });
@@ -64,23 +64,23 @@ describe("what the window ledger restores", () => {
 // open nothing). So the removal happens on the close command, not on the exit path.
 describe("the slot of a closed window", () => {
   it("is removed from the ledger", () => {
-    const m: WindowManifest = { slots: [slot("w-a"), slot("w-b")] };
-    expect(forgetWindow(m, "w-a").slots.map((s) => s.label)).toEqual(["w-b"]);
+    const m: WindowManifest = { slots: [slot("win-a"), slot("win-b")] };
+    expect(forgetWindow(m, "win-a").slots.map((s) => s.label)).toEqual(["win-b"]);
   });
 
   it("that window was the last focused — the record is cleared too", () => {
-    const m: WindowManifest = { slots: [slot("w-a")], focusedLabel: "w-a" };
-    expect(forgetWindow(m, "w-a").focusedLabel).toBeUndefined();
+    const m: WindowManifest = { slots: [slot("win-a")], focusedLabel: "win-a" };
+    expect(forgetWindow(m, "win-a").focusedLabel).toBeUndefined();
   });
 
   it("another window's focus record is left alone", () => {
-    const m: WindowManifest = { slots: [slot("w-a"), slot("w-b")], focusedLabel: "w-b" };
-    expect(forgetWindow(m, "w-a").focusedLabel).toBe("w-b");
+    const m: WindowManifest = { slots: [slot("win-a"), slot("win-b")], focusedLabel: "win-b" };
+    expect(forgetWindow(m, "win-a").focusedLabel).toBe("win-b");
   });
 
   it("an absent label changes nothing", () => {
-    const m: WindowManifest = { slots: [slot("w-a")] };
-    expect(forgetWindow(m, "w-zzz")).toEqual(m);
+    const m: WindowManifest = { slots: [slot("win-a")] };
+    expect(forgetWindow(m, "win-zzz")).toEqual(m);
   });
 });
 

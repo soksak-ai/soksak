@@ -6,7 +6,7 @@ import type {
 import { ViewFocusCoordinator } from "./viewFocus";
 
 const context = {
-  projectId: "t1",
+  projectId: "pjt-aaaaaa",
   root: null,
   paneId: null,
   viewId: null,
@@ -286,7 +286,7 @@ describe("delivery lands or reports", () => {
     document.body.append(container);
     let calls = 0;
     coordinator.registerMountedView(
-      "v1",
+      "tab-aaaaaa",
       container,
       provider({
         focus: () => {
@@ -296,7 +296,7 @@ describe("delivery lands or reports", () => {
       }),
       () => context,
     );
-    coordinator.requestFocus("v1");
+    coordinator.requestFocus("tab-aaaaaa");
     flushFrame(); // first delivery — does not land
     expect(document.activeElement).not.toBe(input);
     flushFrame(); // retry — must land
@@ -321,15 +321,15 @@ describe("delivery lands or reports", () => {
     const container = document.createElement("div");
     document.body.append(container);
     coordinator.registerMountedView(
-      "v9",
+      "tab-iiiiii",
       container,
       provider({ focus: () => {} }), // never lands
       () => context,
     );
-    coordinator.requestFocus("v9");
+    coordinator.requestFocus("tab-iiiiii");
     for (let i = 0; i < 31; i += 1) flushFrame(); // up to the finite retry cap
     expect(errors.length).toBe(1);
-    expect(String(errors[0])).toContain("v9");
+    expect(String(errors[0])).toContain("tab-iiiiii");
   });
 });
 
@@ -342,7 +342,7 @@ describe("readiness window", () => {
     document.body.append(container);
     let calls = 0;
     coordinator.registerMountedView(
-      "v1",
+      "tab-aaaaaa",
       container,
       provider({
         focus: () => {
@@ -352,7 +352,7 @@ describe("readiness window", () => {
       }),
       () => context,
     );
-    coordinator.requestFocus("v1");
+    coordinator.requestFocus("tab-aaaaaa");
     for (let i = 0; i < 5; i += 1) flushFrame();
     expect(document.activeElement).toBe(input);
     expect(coordinator.snapshot().delivered).toBe(true);
@@ -370,7 +370,7 @@ describe("readiness window", () => {
     document.body.append(container);
     let calls = 0;
     coordinator.registerMountedView(
-      "v1",
+      "tab-aaaaaa",
       container,
       provider({
         focus: () => {
@@ -380,7 +380,7 @@ describe("readiness window", () => {
       }),
       () => context,
     );
-    coordinator.requestFocus("v1");
+    coordinator.requestFocus("tab-aaaaaa");
     flushFrame();
     expect(document.activeElement).toBe(input);
     // Equivalent to the DOM move in a projection reorder — remove+insert drops focus to body.
@@ -401,7 +401,7 @@ describe("readiness window", () => {
     document.body.append(container);
     let calls = 0;
     coordinator.registerMountedView(
-      "v1",
+      "tab-aaaaaa",
       container,
       provider({
         focus: () => {
@@ -411,7 +411,7 @@ describe("readiness window", () => {
       }),
       () => context,
     );
-    coordinator.requestFocus("v1");
+    coordinator.requestFocus("tab-aaaaaa");
     flushFrame();
     expect(calls).toBe(1);
     // Still settled — no redelivery.

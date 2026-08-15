@@ -26,7 +26,7 @@ const REFRESH_60HZ = 16.680419921875;
 function surface(overrides: Record<string, unknown> = {}) {
   return {
     viewId: "tab-k6jivs",
-    surfaceId: "b-main-tab-k6jivs",
+    surfaceId: "brw-main-tab-k6jivs",
     generation: 1,
     live: true,
     visible: true,

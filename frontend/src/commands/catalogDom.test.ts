@@ -51,7 +51,7 @@ vi.mock("../lib/contentViews", () => ({
 }));
 vi.mock("../lib/webviewLabels", () => ({
   currentWindowLabel: () => "main",
-  browserLabel: (viewId: string) => `b-main-${viewId}`,
+  browserLabel: (viewId: string) => `brw-main-${viewId}`,
 }));
 // The framework is mocked at one boundary. Window geometry is kept in a holder so a test can swap it —
 // static imports are bound at module load, so doMock (a late replacement) does not apply.
@@ -129,7 +129,7 @@ describe("ui.layout.status — public layout barrier diagnosis", () => {
   });
 
   it("exposes the same motion, revision, animation, and content label facts as the wait command", async () => {
-    document.body.innerHTML = '<div data-content-view-body="b-current"></div>';
+    document.body.innerHTML = '<div data-content-view-body="brw-current"></div>';
     const result = await execute("ui.layout.status", {}, {});
     expect(result.data).toMatchObject({
       settled: true,
@@ -141,16 +141,16 @@ describe("ui.layout.status — public layout barrier diagnosis", () => {
       decorationPresentations: [],
       decorationClearance: { owners: [], events: [], maxEvents: 64 },
       animations: [],
-      contentViewLabels: ["b-current"],
+      contentViewLabels: ["brw-current"],
     });
   });
 
   it("returns a structured receipt instead of mislabeling a provider reject as TIMEOUT", async () => {
-    document.body.innerHTML = '<div data-content-view-body="b-current"></div>';
+    document.body.innerHTML = '<div data-content-view-body="brw-current"></div>';
     settlementBarrier.mockRejectedValueOnce({
       code: "NATIVE_PRESENTATION_REJECTED",
       message: "content surface rejected",
-      data: { label: "b-current" },
+      data: { label: "brw-current" },
     });
     const result = await execute("ui.layout.wait-settled", { timeoutMs: 4_000 }, {});
     expect(result).toMatchObject({
@@ -159,7 +159,7 @@ describe("ui.layout.status — public layout barrier diagnosis", () => {
       data: {
         command: "ui.layout.wait-settled",
         barrier: "content",
-        labels: ["b-current"],
+        labels: ["brw-current"],
         providerError: {
           code: "NATIVE_PRESENTATION_REJECTED",
           message: "content surface rejected",
@@ -2061,7 +2061,7 @@ describe("ui.input.click — pointing at a content view puts the input inside it
   function plantContentView() {
     mountNode(`<div data-node="layout/tab/tab-probe"></div>`);
     const view = document.createElement("div");
-    view.setAttribute("data-content-view", "b-main-tab-probe");
+    view.setAttribute("data-content-view", "brw-main-tab-probe");
     view.id = "cv";
     Object.defineProperty(view, "getBoundingClientRect", {
       value: () => ({ left: 100, top: 50, width: 200, height: 100, right: 300, bottom: 150 }),
@@ -2104,11 +2104,11 @@ describe("ui.input.click — pointing at a content view puts the input inside it
       data?: { surface?: string };
     };
     expect(r.ok).toBe(true);
-    expect(r.data?.surface).toBe("b-main-tab-probe");
+    expect(r.data?.surface).toBe("brw-main-tab-probe");
     // A press and a release must be paired for a click — sending only the press leaves that surface half-pressed.
     expect(sentInput).toEqual([
-      ["b-main-tab-probe", { x: 0, y: 0, kind: "down", button: "left", clickCount: 1 }],
-      ["b-main-tab-probe", { x: 0, y: 0, kind: "up", button: "left", clickCount: 1 }],
+      ["brw-main-tab-probe", { x: 0, y: 0, kind: "down", button: "left", clickCount: 1 }],
+      ["brw-main-tab-probe", { x: 0, y: 0, kind: "up", button: "left", clickCount: 1 }],
     ]);
     expect(domClicks).toBe(0);
   });
@@ -2120,8 +2120,8 @@ describe("ui.input.click — pointing at a content view puts the input inside it
     const address = await probeAddress();
     await execute("ui.input.click", { address, x: 7, y: 9 }, {});
     expect(sentInput).toEqual([
-      ["b-main-tab-probe", { x: 7, y: 9, kind: "down", button: "left", clickCount: 1 }],
-      ["b-main-tab-probe", { x: 7, y: 9, kind: "up", button: "left", clickCount: 1 }],
+      ["brw-main-tab-probe", { x: 7, y: 9, kind: "down", button: "left", clickCount: 1 }],
+      ["brw-main-tab-probe", { x: 7, y: 9, kind: "up", button: "left", clickCount: 1 }],
     ]);
   });
 });
@@ -2129,23 +2129,23 @@ describe("ui.input.click — pointing at a content view puts the input inside it
 describe("ui.input.click — projected realm coordinates use the producer's surface-local declaration", () => {
   it("sends the exact local center regardless of the projection container's screen position or DOM parent", async () => {
     mountNode(`
-      <div data-node="tauri/plugin-view/pv-realm/urlbar"
-        data-realm="pv-realm" data-wv-surface-input="pv-realm"
-        data-wv-surface-x="128" data-wv-surface-y="3"></div>
+      <div data-node="plugin-view/rlm-realm/urlbar"
+        data-realm="rlm-realm" data-realm-node="urlbar"
+        data-realm-x="128" data-realm-y="3"></div>
     `);
-    const el = document.querySelector<HTMLElement>("[data-realm=pv-realm]")!;
+    const el = document.querySelector<HTMLElement>("[data-realm=rlm-realm]")!;
     Object.defineProperty(el, "getBoundingClientRect", {
       value: () => ({ left: 348, top: 124, width: 228, height: 22, right: 576, bottom: 146 }),
     });
 
     const result = await execute("ui.input.click", {
-      address: "win/main/content/view/test.v/node/tauri/plugin-view/pv-realm/urlbar",
+      address: "win/main/content/view/test.v/node/plugin-view/rlm-realm/urlbar",
     }, {});
 
     expect(result.ok).toBe(true);
     expect(sentInput).toEqual([
-      ["pv-realm", { x: 242, y: 14, kind: "down", button: "left", clickCount: 1 }],
-      ["pv-realm", { x: 242, y: 14, kind: "up", button: "left", clickCount: 1 }],
+      ["rlm-realm", { x: 242, y: 14, kind: "down", button: "left", clickCount: 1 }],
+      ["rlm-realm", { x: 242, y: 14, kind: "up", button: "left", clickCount: 1 }],
     ]);
   });
 });

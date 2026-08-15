@@ -7,7 +7,7 @@ import {
 import type { Tab, TabStatus, Space } from "./sessions";
 
 // Test view/content factories — only status differs.
-const fileView = (status?: TabStatus, id = "v1"): Tab => ({
+const fileView = (status?: TabStatus, id = "tab-aaaaaa"): Tab => ({
   id,
   kind: "file",
   title: "a.ts",
@@ -17,29 +17,29 @@ const fileView = (status?: TabStatus, id = "v1"): Tab => ({
 });
 
 const leafContent = (tabs: Tab[]): Space => ({
-  id: "c1",
+  id: "spc-aaaaaa",
   title: "1",
   layout: {
     type: "leaf",
-    value: { id: "g1", tabs, activeTabId: tabs[0]?.id ?? "" },
+    value: { id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" },
   },
-  activePaneId: "g1",
+  activePaneId: "pan-aaaaaa",
 });
 
 const splitContent = (left: Tab[], right: Tab[]): Space => ({
-  id: "c1",
+  id: "spc-aaaaaa",
   title: "1",
   layout: {
     type: "split",
-    id: "s1",
+    id: "spl-aaaaaa",
     dir: "row",
     sizes: [0.5, 0.5],
     children: [
-      { type: "leaf", value: { id: "g1", tabs: left, activeTabId: left[0]?.id ?? "" } },
-      { type: "leaf", value: { id: "g2", tabs: right, activeTabId: right[0]?.id ?? "" } },
+      { type: "leaf", value: { id: "pan-aaaaaa", tabs: left, activeTabId: left[0]?.id ?? "" } },
+      { type: "leaf", value: { id: "pan-bbbbbb", tabs: right, activeTabId: right[0]?.id ?? "" } },
     ],
   },
-  activePaneId: "g1",
+  activePaneId: "pan-aaaaaa",
 });
 
 describe("STATUS_BLOCKING vocabulary (R2)", () => {

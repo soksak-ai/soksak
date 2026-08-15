@@ -6,11 +6,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { bootFactPayload } from "./bootFact";
 
-vi.mock("./webviewLabels", () => ({ currentWindowLabel: () => "w-test" }));
+vi.mock("./webviewLabels", () => ({ currentWindowLabel: () => "win-test" }));
 
 describe("boot.step payload", () => {
   it("includes the window label", () => {
-    expect(bootFactPayload("painted").window).toBe("w-test");
+    expect(bootFactPayload("painted").window).toBe("win-test");
   });
 
   it("includes step and message together — the human line and the machine field are the same fact", () => {
@@ -25,8 +25,8 @@ describe("boot.step payload", () => {
 
   it("extra cannot overwrite step or window", () => {
     // If overwrite were allowed, the same field name would mean something different at each publish site.
-    const p = bootFactPayload("real", { step: "fake", window: "w-fake" });
+    const p = bootFactPayload("real", { step: "fake", window: "win-fake" });
     expect(p.step).toBe("real");
-    expect(p.window).toBe("w-test");
+    expect(p.window).toBe("win-test");
   });
 });

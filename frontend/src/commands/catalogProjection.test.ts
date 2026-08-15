@@ -44,7 +44,7 @@ function pluginView(id: string, pluginId: string, view: string): Tab {
 
 function tab(tabs: Tab[], activeTabId: string): Project {
   return {
-    id: "p1",
+    id: "pjt-aaaaaa",
     title: "P",
     sidebarOpen: true,
     rightOpen: false,
@@ -53,13 +53,13 @@ function tab(tabs: Tab[], activeTabId: string): Project {
     root: "<local-evidence>/p1",
     spaces: [
       {
-        id: "c1",
+        id: "spc-aaaaaa",
         title: "1",
-        layout: { type: "leaf", value: { id: "g1", tabs, activeTabId } },
-        activePaneId: "g1",
+        layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs, activeTabId } },
+        activePaneId: "pan-aaaaaa",
       },
     ],
-    activeSpaceId: "c1",
+    activeSpaceId: "spc-aaaaaa",
   };
 }
 
@@ -87,13 +87,13 @@ describe("ui.projection.state", () => {
       decl("tree", { placements: ["rail"], defaultPlacement: "rail" }),
       provider,
     );
-    useSessions.setState({ projects: [tab([pluginView("v1", "termplug", "term")], "v1")], activeId: "p1" });
+    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
 
     const r = (await execute("ui.projection.state", {}, {})) as { ok: boolean; code: string; data: Record<string, unknown> };
     expect(r.ok).toBe(true);
     expect(r.data).toMatchObject({
-      projectId: "p1",
-      binding: { viewId: "v1" },
+      projectId: "pjt-aaaaaa",
+      binding: { viewId: "tab-aaaaaa" },
     });
     const left = r.data.left as { slots: { resolvedRef: string; status: string }[] };
     expect(left.slots[0]).toMatchObject({ resolvedRef: "termplug.tree", status: "live" });
@@ -113,7 +113,7 @@ describe("ui.projection.pin / unpin — the left rail is projection only (no pin
       decl("tree", { placements: ["rail"], defaultPlacement: "rail", resident: true }),
       provider,
     );
-    useSessions.setState({ projects: [tab([], "")], activeId: "p1" });
+    useSessions.setState({ projects: [tab([], "")], activeId: "pjt-aaaaaa" });
     const r = (await execute("ui.projection.pin", { ref: "termplug.tree" }, {})) as { ok: boolean; code: string; message: string };
     expect(r.ok).toBe(false);
     expect(r.code).toBe("INVALID_PARAMS");
@@ -121,8 +121,8 @@ describe("ui.projection.pin / unpin — the left rail is projection only (no pin
   });
 
   it("unpin stays for cleaning up a leftover pin (an old snapshot) and is idempotent", async () => {
-    useSessions.setState({ projects: [tab([], "")], activeId: "p1" });
     useSessions.setState({ projects: [tab([], "")], activeId: "pjt-aaaaaa" });
+    useProjection.getState().pin("pjt-aaaaaa", "left", "gone.tree"); // simulates a leftover old snapshot
     const r1 = (await execute("ui.projection.unpin", { ref: "gone.tree" }, {})) as { ok: boolean };
     expect(r1.ok).toBe(true);
     const st = (await execute("ui.projection.state", {}, {})) as { data: Record<string, unknown> };
@@ -137,7 +137,7 @@ describe("ui.intent.open — R2 (placement in the binding context, idempotent re
     // The contract is an absolute path (params.path: "Absolute file path"). A relative path that passes
     // persists that string in the tab, and restore wakes it as a dead "No such file or directory" tab
     // (measured 2026-07-26: a tab opened with "README.md" died after restart — found on the user's screen).
-    useSessions.setState({ projects: [tab([], "")], activeId: "p1" });
+    useSessions.setState({ projects: [tab([], "")], activeId: "pjt-aaaaaa" });
     const r = (await execute("ui.intent.open", { path: "README.md" }, {})) as {
       ok: boolean;
       code?: string;
@@ -147,7 +147,7 @@ describe("ui.intent.open — R2 (placement in the binding context, idempotent re
   });
 
   it("opens a file as a tab in the binding group, and reuses the existing view for the same resource", async () => {
-    useSessions.setState({ projects: [tab([], "")], activeId: "p1" });
+    useSessions.setState({ projects: [tab([], "")], activeId: "pjt-aaaaaa" });
     const r1 = (await execute("ui.intent.open", { path: "<local-evidence>/p1/a.md" }, {})) as { ok: boolean; data: Record<string, unknown> };
     expect(r1.ok).toBe(true);
     expect(r1.data.existing).toBe(false);
@@ -170,7 +170,7 @@ describe("batch 1 command consistency — right pin refusal, alias pin, expanded
       decl("tree", { placements: ["rail"], defaultPlacement: "rail" }),
       provider,
     );
-    useSessions.setState({ projects: [tab([], "")], activeId: "p1" });
+    useSessions.setState({ projects: [tab([], "")], activeId: "pjt-aaaaaa" });
     const r = (await execute("ui.projection.pin", { ref: "termplug.tree", side: "right" }, {})) as { ok: boolean; code: string };
     expect(r.ok).toBe(false);
     expect(r.code).toBe("INVALID_PARAMS");
@@ -179,11 +179,11 @@ describe("batch 1 command consistency — right pin refusal, alias pin, expanded
 
   it("state includes binding.groupId, contentId and focusHistory (§4.1)", async () => {
     useViewRegistry.getState().register("termplug", decl("term"), provider);
-    useSessions.setState({ projects: [tab([pluginView("v1", "termplug", "term")], "v1")], activeId: "p1" });
-    useProjection.getState().noteBinding("p1", "v1");
+    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
+    useProjection.getState().noteBinding("pjt-aaaaaa", "tab-aaaaaa");
     const r = (await execute("ui.projection.state", {}, {})) as { data: Record<string, unknown> };
-    expect(r.data.binding).toMatchObject({ viewId: "v1", groupId: "g1", contentId: "c1" });
-    expect(r.data.focusHistory).toEqual(["v1"]);
+    expect(r.data.binding).toMatchObject({ viewId: "tab-aaaaaa", groupId: "pan-aaaaaa", contentId: "spc-aaaaaa" });
+    expect(r.data.focusHistory).toEqual(["tab-aaaaaa"]);
   });
 });
 

@@ -27,12 +27,12 @@ describe("suggestLayout", () => {
   it("spread, two monitors — the orchestrator takes the whole secondary monitor, the workspace takes the primary", () => {
     const out = suggestLayout({
       monitors: [mon(0, 0), mon(1, 2560)],
-      windows: [win("w-1", 0), win("main", 0)],
+      windows: [win("win-1", 0), win("main", 0)],
       strategy: "spread",
       roles: { main: "orchestrator" },
     });
     const orch = out.find((p) => p.label === "main")!;
-    const work = out.find((p) => p.label === "w-1")!;
+    const work = out.find((p) => p.label === "win-1")!;
     // Orchestrator = all of the monitor with no workspace on it (1).
     expect(orch.monitor).toBe(1);
     expect([orch.x, orch.y, orch.w, orch.h]).toEqual([2560, 0, 2560, 1440]);
@@ -44,12 +44,12 @@ describe("suggestLayout", () => {
   it("spread, one monitor — the orchestrator takes the right third, the workspace the left two thirds, side by side with no overlap", () => {
     const out = suggestLayout({
       monitors: [mon(0, 0, 3000, 1500)],
-      windows: [win("w-1", 0), win("main", 0)],
+      windows: [win("win-1", 0), win("main", 0)],
       strategy: "spread",
       roles: { main: "orchestrator" },
     });
     const orch = out.find((p) => p.label === "main")!;
-    const work = out.find((p) => p.label === "w-1")!;
+    const work = out.find((p) => p.label === "win-1")!;
     expect(work.w).toBe(2000);
     expect(orch.x).toBe(2000);
     expect(orch.w).toBe(1000);

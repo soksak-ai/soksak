@@ -41,7 +41,7 @@ vi.mock("../lib/contentViews", async (importOriginal) => ({
 vi.mock("../lib/webviewLabels", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/webviewLabels")>()),
   currentWindowLabel: () => "main",
-  browserLabel: (viewId: string) => `b-main-${viewId}`,
+  browserLabel: (viewId: string) => `brw-main-${viewId}`,
 }));
 vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()),
@@ -63,19 +63,24 @@ const at = (el: Element, x: number, y: number, w: number, h: number) => {
 function mountSurface(): string {
   document.body.innerHTML =
     `<div class="tab-viewer" data-view-addr="${VIEW}">` +
-    `<div data-node="cv" data-content-view="b-main-t1"></div></div>`;
+    `<div data-node="cv" data-content-view="brw-main-t1"></div></div>`;
   at(document.querySelector("[data-node=cv]")!, 0, 0, 800, 600);
   return `win/main/${VIEW}/node/cv`;
 }
 
+/** Mounts one projection node — it **declares where inside that realm it is** itself.
  *
+ * The position in the host document (110,60) and the position inside that realm (10,10) are
+ * different facts. They are deliberately different here — deriving realm coordinates by
+ * subtraction diverges immediately in this fixture. */
 function mountProjection(node = "urlbar"): string {
   document.body.innerHTML =
-    `<div class="tab-viewer" data-view-addr="${VIEW}">` +
-    `<div id="box"><div data-realm="pv-main-2" data-node="tauri/plugin-view/pv-main-2/${node}"></div></div></div>`;
+    `<div class="tab-viewer" data-view-addr="${VIEW}"><div id="box">` +
+    `<div data-realm="rlm-main-2" data-realm-node="${node}" data-realm-x="10" data-realm-y="10"` +
+    ` data-node="plugin-view/rlm-main-2/${node}"></div></div></div>`;
   at(document.querySelector("#box")!, 100, 50, 400, 40);
-  at(document.querySelector("[data-node^='tauri/plugin-view']")!, 110, 60, 80, 20);
-  return `win/main/${VIEW}/node/tauri/plugin-view/pv-main-2/${node}`;
+  at(document.querySelector("[data-realm]")!, 110, 60, 80, 20);
+  return `win/main/${VIEW}/node/plugin-view/rlm-main-2/${node}`;
 }
 
 const sent = (label: string) =>
@@ -103,7 +108,7 @@ describe("gestures on a surface", () => {
     const addr = mountSurface();
     const out = await execute("ui.input.dblclick", { address: addr, x: 40, y: 12 }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
-    const seq = sent("b-main-t1");
+    const seq = sent("brw-main-t1");
     expect(seq.map((s) => `${s.kind}${s.clickCount}`)).toEqual(["down1", "up1", "down2", "up2"]);
     expect(seq.every((s) => s.x === 40 && s.y === 12)).toBe(true);
   });
@@ -112,7 +117,7 @@ describe("gestures on a surface", () => {
     const addr = mountSurface();
     const out = await execute("ui.input.click", { address: addr, x: 5, y: 6, button: "right" }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
-    expect(sent("b-main-t1").map((s) => `${s.kind}:${s.button}`)).toEqual(["down:right", "up:right"]);
+    expect(sent("brw-main-t1").map((s) => `${s.kind}:${s.button}`)).toEqual(["down:right", "up:right"]);
   });
 
   // No leading move — the press creates the hover at that spot, and on an engine that cannot take
@@ -121,7 +126,7 @@ describe("gestures on a surface", () => {
     const addr = mountSurface();
     const out = await execute("ui.input.drag", { from: addr, x: 10, y: 10, dx: 60, dy: 20, steps: 3 }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
-    const seq = sent("b-main-t1");
+    const seq = sent("brw-main-t1");
     expect(seq.map((s) => s.kind)).toEqual(["down", "drag", "drag", "drag", "up"]);
     expect(seq[0]).toMatchObject({ x: 10, y: 10 });
     expect(seq[seq.length - 1]).toMatchObject({ x: 70, y: 30 });
@@ -135,7 +140,7 @@ describe("gestures on a surface", () => {
     const out = await execute("ui.input.pointer", { address: addr, x: 33, y: 44 }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
     // Enter, then move — the order a human pointer follows, and the engine opens hover on that pair.
-    expect(sent("b-main-t1")).toEqual([
+    expect(sent("brw-main-t1")).toEqual([
       { x: 33, y: 44, kind: "enter", button: "left", clickCount: 1 },
       { x: 33, y: 44, kind: "move", button: "left", clickCount: 1 },
     ]);
@@ -147,32 +152,35 @@ describe("gestures on a projected node — a real pointer into that realm", () =
     const addr = mountProjection();
     const out = await execute("ui.input.click", { address: addr }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
+    // Declared realm position (10,10) + the center of its size (80x20) → (50,20). The host
+    // position (110,60) does not mix into the answer.
     expect(sent("rlm-main-2").map((s) => `${s.kind}@${s.x},${s.y}`)).toEqual(["down@50,20", "up@50,20"]);
-    expect(sent("pv-main-2").map((s) => `${s.kind}@${s.x},${s.y}`)).toEqual(["down@50,20", "up@50,20"]);
   });
 
   it("a double click is not refused either and holds in that realm", async () => {
     const addr = mountProjection();
     const out = await execute("ui.input.dblclick", { address: addr }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
-    expect(sent("pv-main-2").map((s) => s.clickCount)).toEqual([1, 1, 2, 2]);
+    expect(sent("rlm-main-2").map((s) => s.clickCount)).toEqual([1, 1, 2, 2]);
   });
 
   it("drags between two nodes inside one realm", async () => {
     document.body.innerHTML =
       `<div class="tab-viewer" data-view-addr="${VIEW}"><div id="box">` +
-      `<div data-realm="pv-main-2" data-node="tauri/plugin-view/pv-main-2/a"></div>` +
-      `<div data-realm="pv-main-2" data-node="tauri/plugin-view/pv-main-2/b"></div></div></div>`;
+      `<div data-realm="rlm-main-2" data-realm-node="a" data-realm-x="10" data-realm-y="10"` +
+      ` data-node="plugin-view/rlm-main-2/a"></div>` +
+      `<div data-realm="rlm-main-2" data-realm-node="b" data-realm-x="110" data-realm-y="10"` +
+      ` data-node="plugin-view/rlm-main-2/b"></div></div></div>`;
     at(document.querySelector("#box")!, 100, 50, 400, 40);
     at(document.querySelector("[data-node$='/a']")!, 110, 60, 20, 20);
     at(document.querySelector("[data-node$='/b']")!, 210, 60, 20, 20);
     const out = await execute("ui.input.drag", {
-      from: `win/main/${VIEW}/node/tauri/plugin-view/pv-main-2/a`,
-      to: `win/main/${VIEW}/node/tauri/plugin-view/pv-main-2/b`,
+      from: `win/main/${VIEW}/node/plugin-view/rlm-main-2/a`,
+      to: `win/main/${VIEW}/node/plugin-view/rlm-main-2/b`,
       steps: 2,
     }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
-    const seq = sent("pv-main-2");
+    const seq = sent("rlm-main-2");
     expect(seq.map((s) => s.kind)).toEqual(["down", "drag", "drag", "up"]);
     expect(seq[0]).toMatchObject({ x: 20, y: 20 });
     expect(seq[seq.length - 1]).toMatchObject({ x: 120, y: 20 });
@@ -182,7 +190,7 @@ describe("gestures on a projected node — a real pointer into that realm", () =
     const addr = mountProjection();
     const out = await execute("ui.input.pointer", { address: addr }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
-    expect(sent("pv-main-2").map((s) => s.kind)).toEqual(["enter", "move"]);
+    expect(sent("rlm-main-2").map((s) => s.kind)).toEqual(["enter", "move"]);
   });
 });
 
@@ -237,11 +245,11 @@ describe("a projection declares what it is", () => {
   it("addressing a slot projection goes to that content surface, in surface-relative coordinates", async () => {
     document.body.innerHTML =
       `<div class="tab-viewer" data-view-addr="${VIEW}"><div id="box">` +
-      `<div data-surface="chromium-tab-1" data-node="tauri/plugin-view/chromium-tab-1/surface"></div>` +
+      `<div data-surface="chromium-tab-1" data-node="plugin-view/chromium-tab-1/surface"></div>` +
       `</div></div>`;
     at(document.querySelector("#box")!, 100, 50, 900, 700);
     at(document.querySelector("[data-surface]")!, 220, 150, 800, 600);
-    const addr = `win/main/${VIEW}/node/tauri/plugin-view/chromium-tab-1/surface`;
+    const addr = `win/main/${VIEW}/node/plugin-view/chromium-tab-1/surface`;
     const out = await execute("ui.input.click", { address: addr }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
     // The top left inside the surface is (0,0) — where that surface was placed on screen is not
@@ -252,11 +260,11 @@ describe("a projection declares what it is", () => {
   it("a drag on a slot projection also goes in surface coordinates", async () => {
     document.body.innerHTML =
       `<div class="tab-viewer" data-view-addr="${VIEW}"><div id="box">` +
-      `<div data-surface="offscreen-tab-9" data-node="tauri/plugin-view/offscreen-tab-9/surface"></div>` +
+      `<div data-surface="offscreen-tab-9" data-node="plugin-view/offscreen-tab-9/surface"></div>` +
       `</div></div>`;
     at(document.querySelector("#box")!, 0, 0, 900, 700);
     at(document.querySelector("[data-surface]")!, 220, 150, 800, 600);
-    const addr = `win/main/${VIEW}/node/tauri/plugin-view/offscreen-tab-9/surface`;
+    const addr = `win/main/${VIEW}/node/plugin-view/offscreen-tab-9/surface`;
     const out = await execute("ui.input.drag", { from: addr, x: 10, y: 20, dx: 100, dy: 0, steps: 2 }, {});
     expect(out.ok, JSON.stringify(out)).toBe(true);
     const seq = sent("offscreen-tab-9");
@@ -279,7 +287,7 @@ describe("another owner's surface is refused with a name", () => {
     const out = await execute("ui.input.click", { address: addr }, {});
     expect(out.ok).toBe(false);
     expect(out.code).toBe("SURFACE_INPUT_UNAVAILABLE");
-    expect(String(out.message)).toContain("b-main-t1");
+    expect(String(out.message)).toContain("brw-main-t1");
     expect(String(out.message)).toContain("no webview");
   });
 
@@ -303,7 +311,7 @@ describe("delivery goes to the surface owner", () => {
   it("with an owner present the owner receives it, not the framework", async () => {
     const addr = mountSurface();
     const owner = {
-      owns: (label: string) => label === "b-main-t1",
+      owns: (label: string) => label === "brw-main-t1",
       sendInput: vi.fn(async () => {}),
       inputState: vi.fn(async () => ({ attached: true })),
     };

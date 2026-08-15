@@ -120,13 +120,13 @@ describe("core store cache", () => {
     // asked about.
     const store = makeCoreStore<{ slots: string[] }>({
       ...deps,
-      localStorage: storage({ "soksak.windows": `{"slots":["a"],"focused":"w-1"}` }),
+      localStorage: storage({ "soksak.windows": `{"slots":["a"],"focused":"win-1"}` }),
       key: "windows",
       lsKey: "soksak.windows",
       fallback: { slots: [] },
     });
 
-    expect(store.loadSync()).toEqual({ slots: ["a"], focused: "w-1" });
+    expect(store.loadSync()).toEqual({ slots: ["a"], focused: "win-1" });
   });
 
   it("null in an optional slot is kept when the fallback declares null", () => {

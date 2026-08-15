@@ -14,7 +14,7 @@ import { snapshotSize } from "./snapshotGeneration";
 
 // Built in the **stored shape** — the shape serialization actually leaves behind.
 const snap = (projects: number, tabsPerSpace = 1, spacesPerProject = 1) => ({
-  activeId: "p0",
+  activeId: "pjt-zzzzzz",
   projects: Array.from({ length: projects }, (_, i) => ({
     id: `p${i}`,
     root: `/r${i}`,

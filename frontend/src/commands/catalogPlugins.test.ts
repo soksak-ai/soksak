@@ -45,16 +45,16 @@ function runtimeOf(manifest: PluginManifest): PluginRuntime {
 // Minimal tab holding plugin view instances in one content area (fills only the paths the handler reads).
 function tabWith(tabs: Tab[]): Project {
   return {
-    id: "t1",
+    id: "pjt-aaaaaa",
     spaces: [
       {
-        id: "c1",
+        id: "spc-aaaaaa",
         title: "1",
-        layout: { type: "leaf", value: { id: "g1", tabs, activeTabId: tabs[0]?.id ?? "" } },
-        activePaneId: "g1",
+        layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" } },
+        activePaneId: "pan-aaaaaa",
       },
     ],
-    activeSpaceId: "c1",
+    activeSpaceId: "spc-aaaaaa",
   } as unknown as Project;
 }
 
@@ -142,8 +142,8 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
     useSessions.setState({
       projects: [
         tabWith([
-          pluginView({ id: "v1", pluginId: id, view: "canvas" }),
-          pluginView({ id: "v2", pluginId: id, view: "canvas", status: { code: "idle" } }),
+          pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas" }),
+          pluginView({ id: "tab-bbbbbb", pluginId: id, view: "canvas", status: { code: "idle" } }),
         ]),
       ],
     });
@@ -152,9 +152,9 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
     expect(r.ok).toBe(true);
     const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
     expect(c2).toBeDefined();
-    expect(c2.viewStatus.mounted).toEqual(["v1", "v2"]);
-    expect(c2.viewStatus.reported).toEqual(["v2"]);
-    expect(c2.viewStatus.unreported).toEqual(["v1"]);
+    expect(c2.viewStatus.mounted).toEqual(["tab-aaaaaa", "tab-bbbbbb"]);
+    expect(c2.viewStatus.reported).toEqual(["tab-bbbbbb"]);
+    expect(c2.viewStatus.unreported).toEqual(["tab-aaaaaa"]);
     expect(c2.viewStatus.undeclared).toEqual([]);
     expect(c2.violations.map((v) => v.rule)).not.toContain("view-status");
   });
@@ -163,7 +163,7 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
     const id = "demo";
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["running"])) } });
     useSessions.setState({
-      projects: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas", status: { code: "running" } })])],
+      projects: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas", status: { code: "running" } })])],
     });
 
     const r = await execute("plugin.conformance", { id }, {});
@@ -178,7 +178,7 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
     const id = "demo";
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, [])) } });
     useSessions.setState({
-      projects: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas" })])],
+      projects: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas" })])],
     });
 
     const r = await execute("plugin.conformance", { id }, {});
@@ -193,12 +193,12 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
     const id = "demo";
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, undefined)) } });
     useSessions.setState({
-      projects: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas", status: { code: "idle" } })])],
+      projects: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas", status: { code: "idle" } })])],
     });
 
     const r = await execute("plugin.conformance", { id }, {});
     const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
-    expect(c2.viewStatus.undeclared).toEqual([{ viewId: "v1", view: "canvas", code: "idle" }]);
+    expect(c2.viewStatus.undeclared).toEqual([{ viewId: "tab-aaaaaa", view: "canvas", code: "idle" }]);
     const vs = c2.violations.filter((v) => v.rule === "view-status");
     expect(vs.some((v) => v.detail.includes("idle"))).toBe(true);
   });
@@ -207,12 +207,12 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
     const id = "demo";
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["ready"])) } });
     useSessions.setState({
-      projects: [tabWith([pluginView({ id: "v1", pluginId: id, view: "canvas", status: { code: "wat" } })])],
+      projects: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas", status: { code: "wat" } })])],
     });
 
     const r = await execute("plugin.conformance", { id }, {});
     const c2 = (r as { data: Record<string, unknown> }).data.c2 as C2Result;
-    expect(c2.viewStatus.undeclared).toEqual([{ viewId: "v1", view: "canvas", code: "wat" }]);
+    expect(c2.viewStatus.undeclared).toEqual([{ viewId: "tab-aaaaaa", view: "canvas", code: "wat" }]);
     const vs = c2.violations.filter((v) => v.rule === "view-status");
     expect(vs.some((v) => v.detail.includes("wat"))).toBe(true);
   });
@@ -248,7 +248,7 @@ describe("plugin.dev.create — extension development independent of core build 
 
     const r = await execute("plugin.dev.create", { id: "weather" }, {});
 
-    expect(invoke).toHaveBeenCalledWith("plugin_dev_new", { id: "weather" });
+    expect(invoke).toHaveBeenCalledWith("plugin_scaffold", { id: "weather" });
     expect(reload).toHaveBeenCalledOnce();
     expect(r).toMatchObject({
       ok: true,
@@ -297,7 +297,7 @@ describe("plugin.view.open — a rail placement is not an open target (left rail
       },
       { mount: () => {} },
     );
-    useSessions.setState({ projects: [tabWith([])], activeId: "t1" } as never);
+    useSessions.setState({ projects: [tabWith([])], activeId: "pjt-aaaaaa" } as never);
     const r = (await execute("plugin.view.open", { viewKey: "railplug.tree" }, {})) as {
       ok: boolean;
       code: string;

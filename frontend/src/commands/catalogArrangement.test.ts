@@ -37,17 +37,20 @@ import {
   registerLayoutTransitionIntentHost,
 } from "../lib/layoutTransitionIntent";
 
+/** The tab id for that pane. Only the prefix changes from pan- to tab-. */
+const tabOf = (paneId: string) => paneId.replace("pan-", "tab-");
+
 const group = (id: string): Pane => ({
   id,
-  activeTabId: `v-${id}`,
+  activeTabId: tabOf(id),
   tabs: [
-    { id: `v-${id}`, kind: "plugin", title: id, pluginId: "fixture", view: "content" },
+    { id: tabOf(id), kind: "plugin", title: id, pluginId: "fixture", view: "content" },
   ],
 });
 
 function project(activePaneId: string): Project {
   return {
-    id: "t1",
+    id: "pjt-aaaaaa",
     title: "P",
     root: "<local-evidence>/arrangement",
     sidebarOpen: true,
@@ -57,19 +60,19 @@ function project(activePaneId: string): Project {
     leftLayout: initialSidebarLayout([]),
     spaces: [
       {
-        id: "c1",
+        id: "spc-aaaaaa",
         title: "1",
         activePaneId,
         layout: {
           type: "split",
-          id: "s1",
+          id: "spl-aaaaaa",
           dir: "row",
           sizes: [0.5, 0.5],
-          children: [splitLeaf(group("g1")), splitLeaf(group("g2"))],
+          children: [splitLeaf(group("pan-aaaaaa")), splitLeaf(group("pan-bbbbbb"))],
         },
       },
     ],
-    activeSpaceId: "c1",
+    activeSpaceId: "spc-aaaaaa",
   };
 }
 
@@ -80,13 +83,13 @@ beforeEach(() => {
   __resetLayoutTransitionJournalForTest();
   __resetLayoutSettlementForTest();
   __resetLayoutTransitionIntentForTest();
-  useSessions.setState({ projects: [project("g2")], activeId: "t1" });
+  useSessions.setState({ projects: [project("pan-bbbbbb")], activeId: "pjt-aaaaaa" });
 });
 
 describe("layout.arrangement", () => {
   it("tab.maximize opens the exact geometry revision before publishing and its transaction consumes the cause", async () => {
     const pinned = {
-      ...project("g2"),
+      ...project("pan-bbbbbb"),
       leftRailPlacement: { mode: "pin" as const, station: 50 },
     };
     useSessions.setState({ projects: [pinned], activeId: pinned.id });
@@ -94,7 +97,7 @@ describe("layout.arrangement", () => {
     const published: Array<{ active: boolean; requested: number; station: number; cells: number }> = [];
     const unsubscribe = useSessions.subscribe((state, previous) => {
       if (state.projects[0] === previous.projects[0]) return;
-      const facts = layoutSettlementFacts("t1");
+      const facts = layoutSettlementFacts("pjt-aaaaaa");
       const arrangement = projectArrangement(state.projects[0])!;
       published.push({
         active: facts.active,
@@ -105,22 +108,26 @@ describe("layout.arrangement", () => {
     });
 
     const result = await execute("tab.maximize", {
-      tab: "v-g1",
+      tab: "tab-aaaaaa",
       causeTraceId: "b08/maximize/left",
     }, {});
     unsubscribe();
-    expect(result).toMatchObject({ ok: true, data: { tabId: "v-g1" } });
+    expect(result).toMatchObject({ ok: true, data: { tabId: "tab-aaaaaa" } });
     expect(published).toEqual([{ active: true, requested: 1, station: 100, cells: 1 }]);
 
     const after = projectArrangement(useSessions.getState().projects[0])!;
+    // **Projection snap is for native surfaces.** Listing every view of a reshaped cell as a
+    // participant requests that the framework re-place panes that CSS already follows — those panes are
+    // already in position, and the request leaves only a one-frame mismatch. So only the native
+    // surfaces the cell actually presents (`panePresentationViewIds`) participate. Here g1 has one.
     const change = viewLayoutChange(before, after, [
-      { id: "g1", viewIds: ["v-g1"], panePresentationViewIds: [] },
-      { id: "g2", viewIds: ["v-g2"], panePresentationViewIds: [] },
+      { id: "pan-aaaaaa", viewIds: ["tab-aaaaaa"], panePresentationViewIds: ["tab-aaaaaa"] },
+      { id: "pan-bbbbbb", viewIds: ["tab-bbbbbb"], panePresentationViewIds: [] },
     ], 800, 60);
     expect(change).toEqual({
       moves: [],
-      projectionParticipants: [{ viewId: "v-g1", kind: "projection-snap" }],
-      panePresentationTargets: [],
+      projectionParticipants: [{ viewId: "tab-aaaaaa", kind: "projection-snap" }],
+      panePresentationTargets: [{ viewId: "tab-aaaaaa" }],
       paneSettlementParticipants: [],
     });
     await (await prepareLayoutChange(change)).commit();
@@ -130,16 +137,16 @@ describe("layout.arrangement", () => {
   });
 
   it("tab.restore opens one geometry revision from station 100 back to the two-pane station 50 layout", async () => {
-    const pinned = project("g1");
+    const pinned = project("pan-aaaaaa");
     pinned.leftRailPlacement = { mode: "pin", station: 50 };
-    pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "v-g1" };
+    pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "tab-aaaaaa" };
     useSessions.setState({ projects: [pinned], activeId: pinned.id });
-    expect(projectArrangement(pinned)).toMatchObject({ station: 100, cells: [{ id: "g1" }] });
+    expect(projectArrangement(pinned)).toMatchObject({ station: 100, cells: [{ id: "pan-aaaaaa" }] });
 
     const published: Array<{ active: boolean; requested: number; station: number; cells: number }> = [];
     const unsubscribe = useSessions.subscribe((state, previous) => {
       if (state.projects[0] === previous.projects[0]) return;
-      const facts = layoutSettlementFacts("t1");
+      const facts = layoutSettlementFacts("pjt-aaaaaa");
       const arrangement = projectArrangement(state.projects[0])!;
       published.push({
         active: facts.active,
@@ -148,24 +155,24 @@ describe("layout.arrangement", () => {
         cells: arrangement.cells.length,
       });
     });
-    expect(await execute("tab.restore", { project: "t1" }, {}))
-      .toMatchObject({ ok: true, data: { tabId: "v-g1" } });
+    expect(await execute("tab.restore", { project: "pjt-aaaaaa" }, {}))
+      .toMatchObject({ ok: true, data: { tabId: "tab-aaaaaa" } });
     unsubscribe();
     expect(published).toEqual([{ active: true, requested: 1, station: 50, cells: 2 }]);
   });
 
   it("tab maximize no-op and missing targets do not open layout revisions", async () => {
-    const pinned = project("g1");
+    const pinned = project("pan-aaaaaa");
     pinned.leftRailPlacement = { mode: "pin", station: 50 };
-    pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "v-g1" };
+    pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "tab-aaaaaa" };
     useSessions.setState({ projects: [pinned], activeId: pinned.id });
 
-    expect(await execute("tab.maximize", { tab: "v-g1", causeTraceId: "b08/no-op" }, {}))
+    expect(await execute("tab.maximize", { tab: "tab-aaaaaa", causeTraceId: "b08/no-op" }, {}))
       .toMatchObject({ ok: true });
     expect(await execute("tab.maximize", { tab: "missing", causeTraceId: "b08/missing" }, {}))
       .toMatchObject({ ok: false, code: "TARGET_NOT_FOUND" });
-    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
-    await (await prepareLayoutMove([{ viewId: "v-g1", dx: 1 }])).commit();
+    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
+    await (await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 1 }])).commit();
     expect((await execute("layout.transactions", {}, {})).data).toMatchObject({
       entries: [expect.not.objectContaining({ causeTraceId: expect.any(String) })],
     });
@@ -173,40 +180,40 @@ describe("layout.arrangement", () => {
 
   it("tab.maximize binds the caller cause to the response and to the next layout transaction", async () => {
     const maximized = await execute("tab.maximize", {
-      tab: "v-g1",
+      tab: "tab-aaaaaa",
       causeTraceId: "b08/maximize/left",
     }, {});
     expect(maximized).toMatchObject({
       ok: true,
-      data: { tabId: "v-g1", causeTraceId: "b08/maximize/left" },
+      data: { tabId: "tab-aaaaaa", causeTraceId: "b08/maximize/left" },
     });
     expect(getSpec("tab.maximize")?.params.causeTraceId).toBeDefined();
     expect(getSpec("tab.maximize")?.returns).toContain("causeTraceId?");
 
-    await (await prepareLayoutMove([{ viewId: "v-g1", dx: 120 }])).commit();
+    await (await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 120 }])).commit();
     expect((await execute("layout.transactions", {}, {})).data).toMatchObject({
       entries: [{ causeTraceId: "b08/maximize/left" }],
     });
   });
 
   it("tab.maximize invents no cause when it is omitted and rejects an empty cause", async () => {
-    const omitted = await execute("tab.maximize", { tab: "v-g1" }, {});
+    const omitted = await execute("tab.maximize", { tab: "tab-aaaaaa" }, {});
     expect(omitted.data).not.toHaveProperty("causeTraceId");
-    expect(await execute("tab.maximize", { tab: "v-g1", causeTraceId: "" }, {}))
+    expect(await execute("tab.maximize", { tab: "tab-aaaaaa", causeTraceId: "" }, {}))
       .toMatchObject({ ok: false, code: "INVALID_PARAMS" });
   });
 
   it("tab.restore binds the caller cause of the geometry revision to the exact transaction", async () => {
-    const maximized = project("g1");
-    maximized.spaces[0] = { ...maximized.spaces[0], maximizedTabId: "v-g1" };
+    const maximized = project("pan-aaaaaa");
+    maximized.spaces[0] = { ...maximized.spaces[0], maximizedTabId: "tab-aaaaaa" };
     useSessions.setState({ projects: [maximized], activeId: maximized.id });
 
     expect(await execute("tab.restore", {
-      project: "t1",
+      project: "pjt-aaaaaa",
       causeTraceId: "b08/restore/revision8",
     }, {})).toMatchObject({
       ok: true,
-      data: { tabId: "v-g1", causeTraceId: "b08/restore/revision8" },
+      data: { tabId: "tab-aaaaaa", causeTraceId: "b08/restore/revision8" },
     });
     expect(getSpec("tab.restore")?.params.causeTraceId).toBeDefined();
     expect(getSpec("tab.restore")?.returns).toContain("causeTraceId?");
@@ -223,7 +230,7 @@ describe("layout.arrangement", () => {
   });
 
   it("exposes a finite layout transaction journal as a command, independent of recording", async () => {
-    const prepared = await prepareLayoutMove([{ viewId: "v-g1", dx: 120 }]);
+    const prepared = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 120 }]);
     await prepared.commit();
     const result = await execute("layout.transactions", {}, {});
     expect(result).toMatchObject({
@@ -233,7 +240,7 @@ describe("layout.arrangement", () => {
           transactionId: "layout-1",
           phase: "committed",
           domCommittedAtUnixMs: expect.any(Number),
-          moves: [{ viewId: "v-g1", dx: 120 }],
+          moves: [{ viewId: "tab-aaaaaa", dx: 120 }],
         }],
       },
     });
@@ -273,7 +280,7 @@ describe("layout.arrangement", () => {
     }, {});
     const journal = await import("../lib/layoutTransitionJournal");
     journal.declareLayoutCause("cause-command");
-    const prepared = await prepareLayoutMove([{ viewId: "v-g1", dx: 120 }]);
+    const prepared = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 120 }]);
     await prepared.commit();
 
     await expect(waiting).resolves.toMatchObject({
@@ -309,27 +316,27 @@ describe("layout.arrangement", () => {
     const at = (await execute("layout.arrangement", {}, {})) as { data?: { station: number } };
     expect(at.data?.station).toBe(50); // g2 focus
 
-    useSessions.getState().setActiveGroup("t1", "g1");
+    useSessions.getState().setActiveGroup("pjt-aaaaaa", "pan-aaaaaa");
     const moved = (await execute("layout.arrangement", {}, {})) as { data?: { station: number } };
     expect(moved.data?.station).toBe(0);
   });
 
   it("tab.activate on another pane publishes synchronously the layout revision ProjectPlane ACKs", async () => {
-    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
 
-    await expect(execute("tab.activate", { tab: "v-g1" }, {})).resolves.toMatchObject({
+    await expect(execute("tab.activate", { tab: "tab-aaaaaa" }, {})).resolves.toMatchObject({
       ok: true,
-      data: { tabId: "v-g1" },
+      data: { tabId: "tab-aaaaaa" },
     });
 
-    expect(layoutSettlementFacts("t1")).toEqual({
+    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({
       active: true,
-      pending: [{ key: "t1", requested: 1, settled: 0 }],
+      pending: [{ key: "pjt-aaaaaa", requested: 1, settled: 0 }],
     });
   });
 
   it("a tab switch inside the same pane and a failed activation open no geometry revision", async () => {
-    const fixture = project("g2");
+    const fixture = project("pan-bbbbbb");
     const g2 = fixture.spaces[0].layout.type === "split"
       ? fixture.spaces[0].layout.children[1]
       : null;
@@ -341,7 +348,7 @@ describe("layout.arrangement", () => {
       pluginId: "fixture",
       view: "content",
     });
-    useSessions.setState({ projects: [fixture], activeId: "t1" });
+    useSessions.setState({ projects: [fixture], activeId: "pjt-aaaaaa" });
 
     await expect(execute("tab.activate", { tab: "v-g2-second" }, {})).resolves.toMatchObject({
       ok: true,
@@ -350,50 +357,50 @@ describe("layout.arrangement", () => {
       ok: false,
       code: "TARGET_NOT_FOUND",
     });
-    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
   });
 
   it("cross-pane activation under PIN changes focus only and opens no geometry revision", async () => {
-    const fixture = project("g2");
+    const fixture = project("pan-bbbbbb");
     fixture.leftRailPlacement = { mode: "pin", station: 50 };
-    useSessions.setState({ projects: [fixture], activeId: "t1" });
+    useSessions.setState({ projects: [fixture], activeId: "pjt-aaaaaa" });
 
-    await expect(execute("tab.activate", { tab: "v-g1" }, {})).resolves.toMatchObject({ ok: true });
-    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
+    await expect(execute("tab.activate", { tab: "tab-aaaaaa" }, {})).resolves.toMatchObject({ ok: true });
+    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
   });
 
   it("pane.activate under FLOW also opens exactly one geometry revision", async () => {
-    await expect(execute("pane.activate", { pane: "g1" }, {})).resolves.toMatchObject({ ok: true });
-    expect(layoutSettlementFacts("t1")).toEqual({
+    await expect(execute("pane.activate", { pane: "pan-aaaaaa" }, {})).resolves.toMatchObject({ ok: true });
+    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({
       active: true,
-      pending: [{ key: "t1", requested: 1, settled: 0 }],
+      pending: [{ key: "pjt-aaaaaa", requested: 1, settled: 0 }],
     });
   });
 
   it("the geometry revision is open before the store subscriber renders the new ProjectPlane", async () => {
     const observed: ReturnType<typeof layoutSettlementFacts>[] = [];
     const unsubscribe = useSessions.subscribe(() => {
-      observed.push(layoutSettlementFacts("t1"));
+      observed.push(layoutSettlementFacts("pjt-aaaaaa"));
       // The same ACK boundary as ProjectPlane's layout effect. If the revision opens after the
       // store publish, this ACK closes an empty ledger and the real revision stays pending forever.
-      settleLayout("t1", requestedLayoutRevision("t1"));
+      settleLayout("pjt-aaaaaa", requestedLayoutRevision("pjt-aaaaaa"));
     });
     try {
-      await expect(execute("tab.activate", { tab: "v-g1" }, {})).resolves.toMatchObject({ ok: true });
+      await expect(execute("tab.activate", { tab: "tab-aaaaaa" }, {})).resolves.toMatchObject({ ok: true });
     } finally {
       unsubscribe();
     }
 
     expect(observed[0]).toEqual({
       active: true,
-      pending: [{ key: "t1", requested: 1, settled: 0 }],
+      pending: [{ key: "pjt-aaaaaa", requested: 1, settled: 0 }],
     });
-    expect(layoutSettlementFacts("t1")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
   });
 
   it("a FLOW geometry intent starts the adapter prepare before the new project subscriber", async () => {
     const order: string[] = [];
-    registerLayoutTransitionIntentHost("t1", {
+    registerLayoutTransitionIntentHost("pjt-aaaaaa", {
       prepare: async () => {
         order.push("prepare");
         return {
@@ -409,13 +416,13 @@ describe("layout.arrangement", () => {
     });
     const unsubscribe = useSessions.subscribe(() => order.push("state-publish"));
     try {
-      await expect(execute("tab.activate", { tab: "v-g1" }, {})).resolves.toMatchObject({ ok: true });
+      await expect(execute("tab.activate", { tab: "tab-aaaaaa" }, {})).resolves.toMatchObject({ ok: true });
     } finally {
       unsubscribe();
     }
 
     expect(order.slice(0, 2)).toEqual(["prepare", "state-publish"]);
-    await expect(claimLayoutTransitionIntent("t1", 1)).resolves.toMatchObject({
+    await expect(claimLayoutTransitionIntent("pjt-aaaaaa", 1)).resolves.toMatchObject({
       transactionId: "layout-intent",
     });
   });
@@ -424,7 +431,7 @@ describe("layout.arrangement", () => {
     const before = (await execute("layout.arrangement", {}, {})) as {
       data?: { cells: Array<{ id: string; railSide: string; rect: { width: number } }> };
     };
-    useSessions.getState().setActiveGroup("t1", "g1");
+    useSessions.getState().setActiveGroup("pjt-aaaaaa", "pan-aaaaaa");
     const after = (await execute("layout.arrangement", {}, {})) as {
       data?: { cells: Array<{ id: string; railSide: string; rect: { width: number } }> };
     };

@@ -15,7 +15,7 @@ import type { Project, Tab, Pane, Space } from "../state/sessions";
 // Test label double: independent of the window namespace (currentWindowLabel) — viewId used as-is
 // for b-<id>. Built by string concatenation, not an inline template (the single-truth guard blocks
 // only inline templates — this is an injected test double, not a redefinition of the real label scheme).
-const labelOf = (viewId: string) => "b-".concat(viewId);
+const labelOf = (viewId: string) => "brw-".concat(viewId);
 
 // Declaration double — the exact shape of manifest contributes.views[].nativeSurface:
 // pluginId → (view id within the plugin → nativeSurface). The real runtime predicate derives from the usePlugins manifest.
@@ -29,16 +29,16 @@ const ownsSurface: OwnsSurface = (pluginId, viewId) =>
   decls[pluginId]?.[viewId] === true;
 
 function group(tabs: Tab[]): Pane {
-  return { id: "g1", tabs, activeTabId: tabs[0]?.id ?? "" };
+  return { id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" };
 }
 
 function content(views: Tab[]): Space {
-  return { id: "c1", title: "1", layout: splitLeaf(group(views)), activePaneId: "g1" };
+  return { id: "spc-aaaaaa", title: "1", layout: splitLeaf(group(views)), activePaneId: "pan-aaaaaa" };
 }
 
 function tab(views: Tab[]): Project {
   return {
-    id: "t1",
+    id: "pjt-aaaaaa",
     title: "p",
     sidebarOpen: false,
     rightOpen: false,
@@ -46,7 +46,7 @@ function tab(views: Tab[]): Project {
     leftLayout: splitLeaf({ viewKeys: [], activeViewKey: "" }),
     root: "<local-evidence>",
     spaces: [content(views)],
-    activeSpaceId: "c1",
+    activeSpaceId: "spc-aaaaaa",
   };
 }
 
@@ -61,16 +61,16 @@ const pluginView = (id: string, pluginId: string, view = "content"): Tab => ({
 describe("collectWebviewLabels — label set of webview-owning views, keyed on the nativeSurface declaration", () => {
   it("counts the label of a nativeSurface-declaring view (a miss reclaims it as a false orphan — regression guard)", () => {
     const live = collectWebviewLabels(
-      [tab([pluginView("v2", "soksak-plugin-browser-native")])],
+      [tab([pluginView("tab-bbbbbb", "soksak-plugin-browser-native")])],
       ownsSurface,
       labelOf,
     );
-    expect([...live]).toEqual(["b-v2"]);
+    expect([...live]).toEqual(["brw-tab-bbbbbb"]);
   });
 
   it("does not count a non-owning view (terminal, undeclared plugin)", () => {
     const live = collectWebviewLabels(
-      [tab([pluginView("v3", "soksak-plugin-terminal-xterm"), pluginView("v4", "soksak-plugin-other")])],
+      [tab([pluginView("tab-cccccc", "soksak-plugin-terminal-xterm"), pluginView("tab-dddddd", "soksak-plugin-other")])],
       ownsSurface,
       labelOf,
     );
@@ -81,19 +81,19 @@ describe("collectWebviewLabels — label set of webview-owning views, keyed on t
     const live = collectWebviewLabels(
       [
         tab([
-          pluginView("v1", "soksak-plugin-browser-native"),
-          pluginView("v2", "soksak-plugin-browser-canvas"),
+          pluginView("tab-aaaaaa", "soksak-plugin-browser-native"),
+          pluginView("tab-bbbbbb", "soksak-plugin-browser-canvas"),
         ]),
       ],
       ownsSurface,
       labelOf,
     );
-    expect(live).toEqual(new Set(["b-v1"]));
+    expect(live).toEqual(new Set(["brw-tab-aaaaaa"]));
   });
 
   it("does not count a nativeSurface=false view (DOM canvas — not a GC target)", () => {
     const live = collectWebviewLabels(
-      [tab([pluginView("v5", "soksak-plugin-browser-canvas")])],
+      [tab([pluginView("tab-eeeeee", "soksak-plugin-browser-canvas")])],
       ownsSurface,
       labelOf,
     );
@@ -102,7 +102,7 @@ describe("collectWebviewLabels — label set of webview-owning views, keyed on t
 
   it("does not count an undeclared view id even from the same plugin (declaration is per view)", () => {
     const live = collectWebviewLabels(
-      [tab([pluginView("v6", "soksak-plugin-browser-native", "settings")])],
+      [tab([pluginView("tab-ffffff", "soksak-plugin-browser-native", "settings")])],
       ownsSurface,
       labelOf,
     );
@@ -111,16 +111,16 @@ describe("collectWebviewLabels — label set of webview-owning views, keyed on t
 
   it("collects every owning view spread across spaces and groups", () => {
     const t: Project = {
-      ...tab([pluginView("v1", "soksak-plugin-browser-native")]),
+      ...tab([pluginView("tab-aaaaaa", "soksak-plugin-browser-native")]),
       spaces: [
-        content([pluginView("v1", "soksak-plugin-browser-native")]),
-        content([pluginView("v2", "soksak-plugin-browser-native")]),
+        content([pluginView("tab-aaaaaa", "soksak-plugin-browser-native")]),
+        content([pluginView("tab-bbbbbb", "soksak-plugin-browser-native")]),
       ],
     };
     // Avoid an id collision on the second content
-    t.spaces[1] = { ...t.spaces[1], id: "c2" };
+    t.spaces[1] = { ...t.spaces[1], id: "spc-bbbbbb" };
     const live = collectWebviewLabels([t], ownsSurface, labelOf);
-    expect(live).toEqual(new Set(["b-v1", "b-v2"]));
+    expect(live).toEqual(new Set(["brw-tab-aaaaaa", "brw-tab-bbbbbb"]));
   });
 });
 

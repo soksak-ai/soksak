@@ -18,8 +18,8 @@ import {
 
 describe("composition participant declaration", () => {
   it("participants of one view hold a single phase address — there is one place that builds it", () => {
-    expect(contentCompositionTopologyPath("w-1", "v-7", "b-w-1-v-7"))
-      .toBe("window/w-1/view/v-7/content/b-w-1-v-7");
+    expect(contentCompositionTopologyPath("win-1", "tab-gggggg", "brw-win-1-tab-gggggg"))
+      .toBe("window/win-1/view/tab-gggggg/content/brw-win-1-tab-gggggg");
     // A separator inside a value does not split the path.
     expect(contentCompositionTopologyPath("w/1", "v 7", "b/1"))
       .toBe("window/w%2F1/view/v%207/content/b%2F1");
@@ -29,15 +29,15 @@ describe("composition participant declaration", () => {
     const el = document.createElement("div");
     declareCompositionParticipant(el, {
       kind: "slot",
-      viewId: "v-7",
-      topologyPath: "window/w-1/view/v-7/content/b-1",
+      viewId: "tab-gggggg",
+      topologyPath: "window/win-1/view/tab-gggggg/content/brw-1",
       visible: true,
     });
     expect(el.getAttribute(COMPOSITION_KIND_ATTR)).toBe("slot");
     expect(readCompositionParticipant(el)).toEqual({
       kind: "slot",
-      viewId: "v-7",
-      topologyPath: "window/w-1/view/v-7/content/b-1",
+      viewId: "tab-gggggg",
+      topologyPath: "window/win-1/view/tab-gggggg/content/brw-1",
       visible: true,
     });
     expect(el.matches(compositionParticipantSelector("slot"))).toBe(true);
@@ -54,8 +54,8 @@ describe("composition participant declaration", () => {
     const unknownKind = document.createElement("div");
     declareCompositionParticipant(unknownKind, {
       kind: "slot",
-      viewId: "v-7",
-      topologyPath: "window/w-1/view/v-7/content/b-1",
+      viewId: "tab-gggggg",
+      topologyPath: "window/win-1/view/tab-gggggg/content/brw-1",
       visible: true,
     });
     unknownKind.setAttribute(COMPOSITION_KIND_ATTR, "surface");
@@ -66,15 +66,15 @@ describe("composition participant declaration", () => {
     const el = document.createElement("div");
     declareCompositionParticipant(el, {
       kind: "renderer",
-      viewId: "v-7",
-      topologyPath: "window/w-1/view/v-7/content/b-1",
+      viewId: "tab-gggggg",
+      topologyPath: "window/win-1/view/tab-gggggg/content/brw-1",
       visible: true,
     });
     setCompositionParticipantVisible(el, false);
     expect(readCompositionParticipant(el)).toEqual({
       kind: "renderer",
-      viewId: "v-7",
-      topologyPath: "window/w-1/view/v-7/content/b-1",
+      viewId: "tab-gggggg",
+      topologyPath: "window/win-1/view/tab-gggggg/content/brw-1",
       visible: false,
     });
   });
@@ -83,8 +83,8 @@ describe("composition participant declaration", () => {
     const el = document.createElement("div");
     declareCompositionParticipant(el, {
       kind: "slot",
-      viewId: "v-7",
-      topologyPath: "window/w-1/view/v-7/content/b-1",
+      viewId: "tab-gggggg",
+      topologyPath: "window/win-1/view/tab-gggggg/content/brw-1",
       visible: true,
     });
     clearCompositionParticipant(el);

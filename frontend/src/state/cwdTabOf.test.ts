@@ -21,8 +21,8 @@ const file = (viewId: string, path: string): Tab => ({
 
 // Tabs in a single group (g1); the active tab = activeTabId (defaults to the first tab).
 const tab = (tabs: Tab[], activeTabId?: string): Project => ({
-  id: "t1",
-  title: "t1",
+  id: "pjt-aaaaaa",
+  title: "pjt-aaaaaa",
   sidebarOpen: false,
   rightOpen: false,
   rightView: null,
@@ -30,50 +30,50 @@ const tab = (tabs: Tab[], activeTabId?: string): Project => ({
   root: "/r",
   spaces: [
     {
-      id: "c1",
+      id: "spc-aaaaaa",
       title: "1",
       layout: {
         type: "leaf",
         value: {
-          id: "g1",
+          id: "pan-aaaaaa",
           tabs,
           activeTabId: activeTabId ?? tabs[0]?.id ?? "",
         },
       },
-      activePaneId: "g1",
+      activePaneId: "pan-aaaaaa",
     },
   ],
-  activeSpaceId: "c1",
+  activeSpaceId: "spc-aaaaaa",
 });
 
 describe("cwdTabOf", () => {
   // Plugin terminal: paneId = view.id. When hasPty(view.id) is true, follow that id.
   it("follows an active plugin terminal by view.id — pluginId does not matter", () => {
-    const t = tab([plugin("v9", "soksak-plugin-terminal-xterm", "content")]);
-    const hasPty = (id: string) => id === "v9";
-    expect(cwdTabOf(t, hasPty)).toBe("v9");
+    const t = tab([plugin("tab-iiiiii", "soksak-plugin-terminal-xterm", "content")]);
+    const hasPty = (id: string) => id === "tab-iiiiii";
+    expect(cwdTabOf(t, hasPty)).toBe("tab-iiiiii");
   });
 
   // When the active view is a terminal, prefer it over an inactive terminal.
   it("prefers the pane of the active view when that view is a terminal", () => {
     const t = tab(
-      [plugin("v1", "p", "content"), plugin("v2", "p", "content")],
-      "v2",
+      [plugin("tab-aaaaaa", "p", "content"), plugin("tab-bbbbbb", "p", "content")],
+      "tab-bbbbbb",
     );
-    const hasPty = (id: string) => id === "v1" || id === "v2";
-    expect(cwdTabOf(t, hasPty)).toBe("v2");
+    const hasPty = (id: string) => id === "tab-aaaaaa" || id === "tab-bbbbbb";
+    expect(cwdTabOf(t, hasPty)).toBe("tab-bbbbbb");
   });
 
   // When the active view is not a terminal (a file), fall back to any terminal view in the group.
   it("falls back to any terminal view when the active view is not a terminal", () => {
-    const t = tab([file("v1", "/r/a.ts"), plugin("v2", "p", "content")], "v1");
-    const hasPty = (id: string) => id === "v2";
-    expect(cwdTabOf(t, hasPty)).toBe("v2");
+    const t = tab([file("tab-aaaaaa", "/r/a.ts"), plugin("tab-bbbbbb", "p", "content")], "tab-aaaaaa");
+    const hasPty = (id: string) => id === "tab-bbbbbb";
+    expect(cwdTabOf(t, hasPty)).toBe("tab-bbbbbb");
   });
 
   // A plugin view with no PTY observation (not a terminal) is ignored — the generic signal is the point.
   it("answers undefined when only views without PTY observation are present", () => {
-    const t = tab([file("v1", "/r/a.ts"), plugin("v2", "other", "panel")]);
+    const t = tab([file("tab-aaaaaa", "/r/a.ts"), plugin("tab-bbbbbb", "other", "panel")]);
     const hasPty = () => false;
     expect(cwdTabOf(t, hasPty)).toBeUndefined();
   });

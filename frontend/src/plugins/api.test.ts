@@ -67,7 +67,7 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
     unregisterCommand: vi.fn(() => true),
     getCommandDanger: () => undefined,
     on: vi.fn(() => ({ dispose: () => {} })),
-    currentProject: () => ({ id: "p1", root: "/repo" }),
+    currentProject: () => ({ id: "pjt-aaaaaa", root: "/repo" }),
     onFsChange: () => () => {},
     onDataChange: () => () => {},
     onClipboardChange: () => () => {},
@@ -210,7 +210,7 @@ describe("terminal readBuffer/sendText — substrate IO first (GAP2, plugin term
 
   it("routes readBuffer/sendText to a registered PTY IO handler, independent of the core host-div", () => {
     const sends: string[] = [];
-    registerPtyIo("v9", {
+    registerPtyIo("tab-iiiiii", {
       readBuffer: (lines) => `buf:${lines ?? "all"}`,
       sendInput: (data) => sends.push(data),
     });
@@ -219,8 +219,8 @@ describe("terminal readBuffer/sendText — substrate IO first (GAP2, plugin term
       "/d",
       fakeDeps(),
     );
-    expect(api.terminal?.readBuffer?.("v9", 3)).toBe("buf:3");
-    expect(api.terminal?.sendText?.("v9", "ls\r")).toBe(true);
+    expect(api.terminal?.readBuffer?.("tab-iiiiii", 3)).toBe("buf:3");
+    expect(api.terminal?.sendText?.("tab-iiiiii", "ls\r")).toBe(true);
     expect(sends).toEqual(["ls\r"]);
   });
 
@@ -244,14 +244,14 @@ describe("app.pty.registerIo — substrate IO registration", () => {
       "/d",
       fakeDeps(),
     );
-    const reg = api.pty?.registerIo?.("v9", {
+    const reg = api.pty?.registerIo?.("tab-iiiiii", {
       readBuffer: () => "hello",
       sendInput: () => {},
     });
     expect(reg).toBeDefined();
-    expect(api.terminal?.readBuffer?.("v9")).toBe("hello");
+    expect(api.terminal?.readBuffer?.("tab-iiiiii")).toBe("hello");
     reg!.dispose();
-    expect(api.terminal?.readBuffer?.("v9")).toBeUndefined();
+    expect(api.terminal?.readBuffer?.("tab-iiiiii")).toBeUndefined();
   });
 });
 
@@ -263,7 +263,7 @@ describe("permission surface gate (§0-2)", () => {
     expect(api.storage).toBeUndefined();
     expect(api.fs).toBeUndefined();
     expect(api.events).toBeDefined();
-    expect(api.project.current()).toEqual({ id: "p1", root: "/repo" });
+    expect(api.project.current()).toEqual({ id: "pjt-aaaaaa", root: "/repo" });
     expect(api.appVersion).toBe("1.0.0");
     expect(api.pluginId).toBe("demo");
   });

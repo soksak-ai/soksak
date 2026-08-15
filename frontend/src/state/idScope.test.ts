@@ -50,12 +50,16 @@ const IN_SCOPE: Record<string, string> = {
   space: "spc-",
   pane: "pan-",
   tab: "tab-",
-  shellSession: "sh-",
+  split: "spl-",
+  shellSession: "shl-",
+  window: "win-",
 };
+
+/** Prefixes issued in this module. `win-` is absent: the host issues it. */
+const ISSUED_HERE = new Set(["pjt", "spc", "pan", "tab", "spl", "shl"]);
 
 /** §1-4d ② axes that keep a natural key — issuing a prefixed id here is a violation. */
 const NATURAL_KEY_AXES = [
-  "ai.session",
   "daemon",
   "data.encrypt",
   "data.kv",
@@ -76,7 +80,7 @@ const NATURAL_KEY_AXES = [
  *   b = webview label (`brw-<win>-<tab>`, derived from window and tab, §1-4d ②)
  * Neither issues a new identity — each only points at something that already exists.
  */
-const DERIVED_LABEL_PREFIXES = new Set(["w", "b"]);
+const DERIVED_LABEL_PREFIXES = new Set(["win", "brw"]);
 
 interface Site {
   file: string;
@@ -155,6 +159,18 @@ describe("id scope — a prefixed id is used only for layout entities and shell 
     expect(declaredPrefixTable()).toEqual(IN_SCOPE);
   });
 
+  // **A prefix is exactly three letters** (user rule 2026-08-15). One or two letters cannot separate the kinds —
+  // a single `s-` does not separate space, split and session. Then the kind cannot be determined from the id
+  // alone and the reader must check the context every time. Derived labels (window, browser
+  // child webview) fall under the same rule — a label is also a name that must identify what it is by itself.
+  it("every prefix is exactly three letters — issued ids and derived labels alike", () => {
+    const short = [
+      ...Object.entries(declaredPrefixTable()).map(([kind, p]) => `${kind}=${p}`),
+      ...[...DERIVED_LABEL_PREFIXES].map((p) => `label=${p}-`),
+    ].filter((row) => !/=[a-z]{3}-$/.test(row));
+    expect(short).toEqual([]);
+  });
+
   it("the issuer has the natural-key axes as a table — there is one place to ask what is out of scope", () => {
     expect(declaredNaturalAxes()).toEqual([...NATURAL_KEY_AXES].sort());
   });
@@ -168,11 +184,10 @@ describe("id scope — a prefixed id is used only for layout entities and shell 
 
   it("a prefixed id is issued only inside the issuer", () => {
     const sites = issuanceSites();
-    const inScope = new Set(Object.values(IN_SCOPE).map((p) => p.slice(0, -1)));
     const outside = sites
-      .filter((s) => s.file !== "ids.ts" && inScope.has(s.prefix))
+      .filter((s) => s.file !== "ids.ts" && ISSUED_HERE.has(s.prefix))
       .map(at);
-    const inside = sites.filter((s) => s.file === "ids.ts" && inScope.has(s.prefix));
+    const inside = sites.filter((s) => s.file === "ids.ts" && ISSUED_HERE.has(s.prefix));
     // inside anchor — with 0 issuance sites, "0 issuances outside" counted nothing.
     expect({ outside, issued: inside.length >= 1 }).toEqual({ outside: [], issued: true });
   });

@@ -24,7 +24,7 @@ describe("layoutTransitionHost", () => {
   });
 
   it("with no adapter installed the move is a DOM glide, and an installed adapter's readiness is awaited unchanged", async () => {
-    const dom = await prepareLayoutMove([{ viewId: "v1", dx: 120 }]);
+    const dom = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 120 }]);
     expect(dom.mode).toBe("glide");
     const commit = vi.fn(async () => {});
     const cancel = vi.fn();
@@ -44,14 +44,14 @@ describe("layoutTransitionHost", () => {
       cancel,
     }));
     registerLayoutTransitionHost({ prepareChange });
-    const native = await prepareLayoutMove([{ viewId: "v1", dx: 120 }]);
+    const native = await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 120 }]);
     expect(native.mode).toBe("snap");
     await native.commit();
     expect(commit).toHaveBeenCalledOnce();
     expect(cancel).not.toHaveBeenCalled();
     expect(prepareChange).toHaveBeenCalledWith(
       {
-        moves: [{ viewId: "v1", dx: 120 }],
+        moves: [{ viewId: "tab-aaaaaa", dx: 120 }],
         projectionParticipants: [],
         panePresentationTargets: [],
         paneSettlementParticipants: [],
@@ -62,10 +62,10 @@ describe("layoutTransitionHost", () => {
 
   it("every view in a moving group is published with the same physical displacement", () => {
     expect(viewLayoutMoves(
-      [{ id: "g1", dLeftPct: 25, dRailUnits: -1 }],
+      [{ id: "pan-aaaaaa", dLeftPct: 25, dRailUnits: -1 }],
       [
-        { id: "g1", viewIds: ["terminal-1", "browser-1"], panePresentationViewIds: [] },
-        { id: "g2", viewIds: ["browser-2"], panePresentationViewIds: [] },
+        { id: "pan-aaaaaa", viewIds: ["terminal-1", "browser-1"], panePresentationViewIds: [] },
+        { id: "pan-bbbbbb", viewIds: ["browser-2"], panePresentationViewIds: [] },
       ],
       800,
       60,
@@ -77,19 +77,19 @@ describe("layoutTransitionHost", () => {
 
   it("projection-only delta keeps translation empty and declares the retained target owner", () => {
     const before = {
-      station: 50, focusId: "g1",
+      station: 50, focusId: "pan-aaaaaa",
       cells: [
-        { id: "g1", rect: { left: 0, top: 0, width: 50, height: 100 } },
-        { id: "g2", rect: { left: 50, top: 0, width: 50, height: 100 } },
+        { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 50, height: 100 } },
+        { id: "pan-bbbbbb", rect: { left: 50, top: 0, width: 50, height: 100 } },
       ],
     };
     const after = {
-      station: 100, focusId: "g1",
-      cells: [{ id: "g1", rect: { left: 0, top: 0, width: 100, height: 100 } }],
+      station: 100, focusId: "pan-aaaaaa",
+      cells: [{ id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 100, height: 100 } }],
     };
     expect(viewLayoutChange(before, after, [
-      { id: "g1", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
-      { id: "g2", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
+      { id: "pan-aaaaaa", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
+      { id: "pan-bbbbbb", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
     ], 800, 60)).toEqual({
       moves: [],
       projectionParticipants: [{ viewId: "browser-left", kind: "projection-snap" }],
@@ -100,19 +100,19 @@ describe("layoutTransitionHost", () => {
 
   it("right maximize is projection snap even when the retained target also has a translation", () => {
     const before = {
-      station: 50, focusId: "g1",
+      station: 50, focusId: "pan-aaaaaa",
       cells: [
-        { id: "g1", rect: { left: 0, top: 0, width: 50, height: 100 } },
-        { id: "g2", rect: { left: 50, top: 0, width: 50, height: 100 } },
+        { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 50, height: 100 } },
+        { id: "pan-bbbbbb", rect: { left: 50, top: 0, width: 50, height: 100 } },
       ],
     };
     const after = {
-      station: 0, focusId: "g2",
-      cells: [{ id: "g2", rect: { left: 0, top: 0, width: 100, height: 100 } }],
+      station: 0, focusId: "pan-bbbbbb",
+      cells: [{ id: "pan-bbbbbb", rect: { left: 0, top: 0, width: 100, height: 100 } }],
     };
     expect(viewLayoutChange(before, after, [
-      { id: "g1", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
-      { id: "g2", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
+      { id: "pan-aaaaaa", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
+      { id: "pan-bbbbbb", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
     ], 2000, 160)).toEqual({
       moves: [{ viewId: "browser-right", dx: 920 }],
       projectionParticipants: [{ viewId: "browser-right", kind: "projection-snap" }],
@@ -123,22 +123,22 @@ describe("layoutTransitionHost", () => {
 
   it("equal-size FLOW translation remains a glide without projection participants", () => {
     const before = {
-      station: 50, focusId: "g1",
+      station: 50, focusId: "pan-aaaaaa",
       cells: [
-        { id: "g1", rect: { left: 0, top: 0, width: 50, height: 100 } },
-        { id: "g2", rect: { left: 50, top: 0, width: 50, height: 100 } },
+        { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 50, height: 100 } },
+        { id: "pan-bbbbbb", rect: { left: 50, top: 0, width: 50, height: 100 } },
       ],
     };
     const after = {
-      station: 50, focusId: "g2",
+      station: 50, focusId: "pan-bbbbbb",
       cells: [
-        { id: "g2", rect: { left: 0, top: 0, width: 50, height: 100 } },
-        { id: "g1", rect: { left: 50, top: 0, width: 50, height: 100 } },
+        { id: "pan-bbbbbb", rect: { left: 0, top: 0, width: 50, height: 100 } },
+        { id: "pan-aaaaaa", rect: { left: 50, top: 0, width: 50, height: 100 } },
       ],
     };
     const change = viewLayoutChange(before, after, [
-      { id: "g1", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
-      { id: "g2", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
+      { id: "pan-aaaaaa", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
+      { id: "pan-bbbbbb", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
     ], 2000, 160);
     expect(change.moves).toHaveLength(2);
     expect(change.projectionParticipants).toEqual([]);
@@ -193,16 +193,16 @@ describe("layoutTransitionHost", () => {
 
   it("a translation publishes the moving target and the non-target settlement sibling identity separately", () => {
     const before = {
-      station: 50, focusId: "g2",
+      station: 50, focusId: "pan-bbbbbb",
       cells: [
-        { id: "g1", rect: { left: 0, top: 0, width: 50, height: 100 } },
-        { id: "g2", rect: { left: 50, top: 0, width: 50, height: 100 } },
+        { id: "pan-aaaaaa", rect: { left: 0, top: 0, width: 50, height: 100 } },
+        { id: "pan-bbbbbb", rect: { left: 50, top: 0, width: 50, height: 100 } },
       ],
     };
-    const after = { ...before, station: 0, focusId: "g1" };
+    const after = { ...before, station: 0, focusId: "pan-aaaaaa" };
     expect(viewLayoutChange(before, after, [
-      { id: "g1", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
-      { id: "g2", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
+      { id: "pan-aaaaaa", viewIds: ["browser-left"], panePresentationViewIds: ["browser-left"] },
+      { id: "pan-bbbbbb", viewIds: ["browser-right"], panePresentationViewIds: ["browser-right"] },
     ], 2000, 160)).toMatchObject({
       panePresentationTargets: [{ viewId: "browser-left" }],
       paneSettlementParticipants: [{ viewId: "browser-right" }],
@@ -232,7 +232,7 @@ describe("layoutTransitionHost", () => {
       }),
     });
 
-    await expect(prepareLayoutMove([{ viewId: "v1", dx: 120 }]))
+    await expect(prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 120 }]))
       .rejects.toThrow("layout staged target identity is invalid");
     expect(cancel).toHaveBeenCalledOnce();
   });

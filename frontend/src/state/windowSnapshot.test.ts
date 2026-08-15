@@ -15,7 +15,7 @@ const leafOf = (n: PaneNode, i: number) => {
 };
 
 const project: Project = {
-  id: "t1",
+  id: "pjt-aaaaaa",
   title: "proj",
   root: "/repo",
   shell: "/bin/zsh",
@@ -24,27 +24,27 @@ const project: Project = {
   rightOpen: false,
   rightView: null,
   leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
-  activeSpaceId: "c1",
+  activeSpaceId: "spc-aaaaaa",
   spaces: [
     {
-      id: "c1",
+      id: "spc-aaaaaa",
       title: "build",
-      activePaneId: "g2",
-      railBindingTabId: "v1",
+      activePaneId: "pan-bbbbbb",
+      railBindingTabId: "tab-aaaaaa",
       layout: {
         type: "split",
-        id: "gs1",
+        id: "spl-gaaaaa",
         dir: "row",
         sizes: [0.6, 0.4],
         children: [
           {
             type: "leaf",
             value: {
-              id: "g1",
-              activeTabId: "v1",
+              id: "pan-aaaaaa",
+              activeTabId: "tab-aaaaaa",
               tabs: [
                 {
-                  id: "v1",
+                  id: "tab-aaaaaa",
                   kind: "plugin",
                   title: "T",
                   pluginId: "soksak-plugin-terminal-xterm",
@@ -57,12 +57,12 @@ const project: Project = {
           {
             type: "leaf",
             value: {
-              id: "g2",
-              activeTabId: "v3",
+              id: "pan-bbbbbb",
+              activeTabId: "tab-cccccc",
               tabs: [
-                { id: "v2", kind: "file", title: "a.ts", path: "/repo/a.ts", mode: "code" },
-                { id: "v3", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
-                { id: "v4", kind: "plugin", title: "ERD", pluginId: "soksak-plugin-erd", view: "studio" },
+                { id: "tab-bbbbbb", kind: "file", title: "a.ts", path: "/repo/a.ts", mode: "code" },
+                { id: "tab-cccccc", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
+                { id: "tab-dddddd", kind: "plugin", title: "ERD", pluginId: "soksak-plugin-erd", view: "studio" },
               ],
             },
           },
@@ -77,7 +77,7 @@ describe("windowSnapshot round trip", () => {
     sid = 0;
     const snap = serializeProject(project);
     // The split id is not stored in the serialization (regenerated on restore).
-    expect(JSON.stringify(snap)).not.toContain("gs1");
+    expect(JSON.stringify(snap)).not.toContain("spl-gaaaaa");
     // command (auto-run) is not persisted (A6: a restored terminal does not re-run).
     expect(JSON.stringify(snap)).not.toContain("claude");
 
@@ -87,13 +87,13 @@ describe("windowSnapshot round trip", () => {
     expect(back.shell).toBe("/bin/zsh");
     expect(back.sidebarOpen).toBe(true);
     expect(back.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
-    expect(back.activeSpaceId).toBe("c1");
+    expect(back.activeSpaceId).toBe("spc-aaaaaa");
 
     const c = back.spaces[0];
-    expect(c.id).toBe("c1");
+    expect(c.id).toBe("spc-aaaaaa");
     expect(c.title).toBe("build");
-    expect(c.activePaneId).toBe("g2");
-    expect(c.railBindingTabId).toBe("v1");
+    expect(c.activePaneId).toBe("pan-bbbbbb");
+    expect(c.railBindingTabId).toBe("tab-aaaaaa");
 
     const gl = c.layout as Extract<PaneNode, { type: "split" }>;
     expect(gl.dir).toBe("row");
@@ -101,8 +101,8 @@ describe("windowSnapshot round trip", () => {
     expect(gl.id).not.toBe("spl-gaaaaa"); // split id regenerated
 
     const g1 = leafOf(c.layout, 0);
-    expect(g1.id).toBe("g1");
-    expect(g1.activeTabId).toBe("v1");
+    expect(g1.id).toBe("pan-aaaaaa");
+    expect(g1.activeTabId).toBe("tab-aaaaaa");
     const term = g1.tabs[0] as Extract<Tab, { kind: "plugin" }>;
     expect(term.kind).toBe("plugin");
     expect(term.pluginId).toBe("soksak-plugin-terminal-xterm");
@@ -129,17 +129,17 @@ describe("windowSnapshot round trip", () => {
       ...project,
       spaces: [
         {
-          id: "c1",
+          id: "spc-aaaaaa",
           title: "1",
-          activePaneId: "g1",
+          activePaneId: "pan-aaaaaa",
           layout: {
             type: "leaf",
             value: {
-              id: "g1",
-              activeTabId: "v1",
+              id: "pan-aaaaaa",
+              activeTabId: "tab-aaaaaa",
               tabs: [
                 {
-                  id: "v1",
+                  id: "tab-aaaaaa",
                   kind: "plugin",
                   title: "T",
                   pluginId: "soksak-plugin-terminal-xterm",
@@ -217,17 +217,17 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
       ...project,
       spaces: [
         {
-          id: "c1",
+          id: "spc-aaaaaa",
           title: "1",
-          activePaneId: "g1",
+          activePaneId: "pan-aaaaaa",
           layout: {
             type: "leaf",
             value: {
-              id: "g1",
-              activeTabId: "v1",
+              id: "pan-aaaaaa",
+              activeTabId: "tab-aaaaaa",
               tabs: [
                 {
-                  id: "v1",
+                  id: "tab-aaaaaa",
                   kind: "plugin",
                   title: "Terminal",
                   pluginId: "soksak-plugin-terminal-xterm",
@@ -235,7 +235,7 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
                   cwd: "<local-evidence>/somewhere",
                   lastActivity: 1234567890,
                 },
-                { id: "v2", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
+                { id: "tab-bbbbbb", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
               ],
             },
           },
@@ -245,8 +245,8 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
     const snap = serializeProject(tab);
     const back = deserializeProject(snap, newSplitId);
     const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
-    const v1 = g.tabs.find((v) => v.id === "v1") as Extract<Tab, { kind: "plugin" }>;
-    const v2 = g.tabs.find((v) => v.id === "v2") as Extract<Tab, { kind: "plugin" }>;
+    const v1 = g.tabs.find((v) => v.id === "tab-aaaaaa") as Extract<Tab, { kind: "plugin" }>;
+    const v2 = g.tabs.find((v) => v.id === "tab-bbbbbb") as Extract<Tab, { kind: "plugin" }>;
     expect(v1.cwd).toBe("<local-evidence>/somewhere");
     expect(v1.lastActivity).toBe(1234567890);
     expect(v2.cwd).toBeUndefined();
@@ -258,17 +258,17 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
       ...project,
       spaces: [
         {
-          id: "c1",
+          id: "spc-aaaaaa",
           title: "1",
-          activePaneId: "g1",
+          activePaneId: "pan-aaaaaa",
           layout: {
             type: "leaf",
             value: {
-              id: "g1",
-              activeTabId: "v1",
+              id: "pan-aaaaaa",
+              activeTabId: "tab-aaaaaa",
               tabs: [
                 {
-                  id: "v1",
+                  id: "tab-aaaaaa",
                   kind: "plugin",
                   title: "NAVER",
                   customLabel: "My browser",
@@ -277,7 +277,7 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
                   view: "content",
                   state: { url: "https://naver.com/" },
                 },
-                { id: "v2", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
+                { id: "tab-bbbbbb", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
               ],
             },
           },
@@ -286,8 +286,8 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
     };
     const back = deserializeProject(serializeProject(tab), newSplitId);
     const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
-    const v1 = g.tabs.find((v) => v.id === "v1") as Extract<Tab, { kind: "plugin" }>;
-    const v2 = g.tabs.find((v) => v.id === "v2") as Extract<Tab, { kind: "plugin" }>;
+    const v1 = g.tabs.find((v) => v.id === "tab-aaaaaa") as Extract<Tab, { kind: "plugin" }>;
+    const v2 = g.tabs.find((v) => v.id === "tab-bbbbbb") as Extract<Tab, { kind: "plugin" }>;
     expect(v1.state).toEqual({ url: "https://naver.com/" });
     expect(v1.customLabel).toBe("My browser");
     expect(v1.icon).toBe("https://naver.com/favicon.ico");
@@ -303,17 +303,17 @@ describe("saved session migration — terminal rename (soksak-plugin-terminal �
       ...project,
       spaces: [
         {
-          id: "c1",
+          id: "spc-aaaaaa",
           title: "1",
-          activePaneId: "g1",
+          activePaneId: "pan-aaaaaa",
           layout: {
             type: "leaf",
             value: {
-              id: "g1",
-              activeTabId: "v1",
+              id: "pan-aaaaaa",
+              activeTabId: "tab-aaaaaa",
               tabs: [
                 {
-                  id: "v1",
+                  id: "tab-aaaaaa",
                   kind: "plugin",
                   title: "T",
                   pluginId: "soksak-plugin-terminal", // the old id, before the rename
@@ -346,7 +346,7 @@ describe("restore normalization — one migration per snapshot (the no-vertical-
     ...project,
     spaces: [
       {
-        id: "c1",
+        id: "spc-aaaaaa",
         title: "1",
         activePaneId: "g-a",
         layout: {
@@ -409,11 +409,11 @@ describe("projection pin persistence (§4.5) — snapshot round trip", () => {
   it("a projection put on serializeProject stays in the snapshot and an old snapshot has no such field", async () => {
     const { serializeProject } = await import("./windowSnapshot");
     const tab = {
-      id: "t9", title: "P", root: "<local-evidence>/p", sidebarOpen: true, rightOpen: false,
+      id: "pjt-iiiiii", title: "P", root: "<local-evidence>/p", sidebarOpen: true, rightOpen: false,
       rightView: null,
       leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
-      activeSpaceId: "c1",
-      spaces: [{ id: "c1", title: "1", activePaneId: "g1", layout: { type: "leaf", value: { id: "g1", tabs: [], activeTabId: "" } } }],
+      activeSpaceId: "spc-aaaaaa",
+      spaces: [{ id: "spc-aaaaaa", title: "1", activePaneId: "pan-aaaaaa", layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [], activeTabId: "" } } }],
     } as never;
     const withProj = serializeProject(tab, {
       pins: { left: ["a.t"], right: [] },

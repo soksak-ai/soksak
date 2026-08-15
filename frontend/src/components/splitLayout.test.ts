@@ -15,7 +15,7 @@ describe("computeSplitLayout", () => {
   it("col split = 2 stacked cells + 1 gutter", () => {
     const t: T = {
       type: "split",
-      id: "s1",
+      id: "spl-aaaaaa",
       dir: "col",
       sizes: [0.7, 0.3],
       children: [
@@ -28,13 +28,13 @@ describe("computeSplitLayout", () => {
     expect(cells[0].rect).toEqual({ left: 0, top: 0, width: 100, height: 70 });
     expect(cells[1].rect).toEqual({ left: 0, top: 70, width: 100, height: 30 });
     expect(gutters).toHaveLength(1);
-    expect(gutters[0]).toMatchObject({ splitId: "s1", dir: "col", index: 0 });
+    expect(gutters[0]).toMatchObject({ splitId: "spl-aaaaaa", dir: "col", index: 0 });
   });
 
   it("row split = 2 side-by-side cells", () => {
     const t: T = {
       type: "split",
-      id: "s1",
+      id: "spl-aaaaaa",
       dir: "row",
       sizes: [0.5, 0.5],
       children: [

@@ -25,7 +25,7 @@ vi.mock("../state/plugins", () => ({
 vi.mock("../state/registry", () => ({
   useRegistry: { setState: () => {}, getState: () => ({ refresh: async () => {} }) },
 }));
-vi.mock("../lib/webviewLabels", () => ({ currentWindowLabel: () => "w-test" }));
+vi.mock("../lib/webviewLabels", () => ({ currentWindowLabel: () => "win-test" }));
 
 describe("reclaiming the previous runtime's children", () => {
   beforeEach(() => {
@@ -51,7 +51,7 @@ describe("reclaiming the previous runtime's children", () => {
     const reclaim = calls.filter(([c]) => c.startsWith("process_reclaim"));
     expect(reclaim).toHaveLength(1);
     expect(reclaim[0][0]).toBe("process_reclaim_by_window");
-    expect(reclaim[0][1]).toEqual({ window: "w-test" });
+    expect(reclaim[0][1]).toEqual({ window: "win-test" });
   });
 
   /** Without the window label, reclaim no window's children — an empty label reclaims another window's. */

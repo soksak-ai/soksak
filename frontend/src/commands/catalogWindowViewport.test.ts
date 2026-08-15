@@ -14,7 +14,7 @@ vi.mock("../i18n", () => ({ tmsg: () => "window viewport" }));
 vi.mock("../lib/projectRoot", () => ({ validateProjectRoot: vi.fn() }));
 vi.mock("../lib/webviewLabels", () => ({
   browserLabelPrefix: vi.fn(),
-  currentWindowLabel: () => "w-retina",
+  currentWindowLabel: () => "win-retina",
 }));
 vi.mock("../state/windowBoot", () => ({ forgetWindowSlot: vi.fn() }));
 
@@ -45,7 +45,7 @@ afterAll(() => {
 describe("window.viewport native/DOM root receipt", () => {
   it("records the AppKit content, the main WKWebView, and the DOM viewport/root in one generation", async () => {
     invoke.mockResolvedValue({
-      window: "w-retina",
+      window: "win-retina",
       generation: 7,
       sequence: 19,
       trigger: "attach",
@@ -68,7 +68,7 @@ describe("window.viewport native/DOM root receipt", () => {
     expect(result).toMatchObject({
       ok: true,
       data: {
-        window: "w-retina",
+        window: "win-retina",
         generation: 7,
         sequence: 19,
         trigger: "attach",
@@ -88,6 +88,6 @@ describe("window.viewport native/DOM root receipt", () => {
         fill: { widthRatio: 1, heightRatio: 1, areaRatio: 1, matched: true },
       },
     });
-    expect(invoke).toHaveBeenCalledWith("window_viewport_native", { label: "w-retina" });
+    expect(invoke).toHaveBeenCalledWith("window_viewport_native", { label: "win-retina" });
   });
 });

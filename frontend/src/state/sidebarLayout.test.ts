@@ -41,7 +41,7 @@ describe("reconcileSidebarLayout", () => {
     sid = 0;
     const split: SidebarLayout = {
       type: "split",
-      id: "s1",
+      id: "spl-aaaaaa",
       dir: "col",
       sizes: [0.5, 0.5],
       children: [single(["a.x"]), single(["b.y"])],
@@ -75,7 +75,7 @@ describe("moveSidebarView (drag-merge)", () => {
     sid = 0;
     const split: SidebarLayout = {
       type: "split",
-      id: "s1",
+      id: "spl-aaaaaa",
       dir: "col",
       sizes: [0.5, 0.5],
       children: [single(["a.x", "b.y"]), single(["c.z"])],
@@ -119,7 +119,7 @@ describe("activeKeysOf", () => {
   it("collects the active viewKey of each leaf, the views to render", () => {
     const split: SidebarLayout = {
       type: "split",
-      id: "s1",
+      id: "spl-aaaaaa",
       dir: "col",
       sizes: [0.5, 0.5],
       children: [

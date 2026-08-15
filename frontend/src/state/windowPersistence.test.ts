@@ -31,25 +31,25 @@ const proj = (id: string, root: string): Project => ({
   rightOpen: false,
   rightView: null,
   leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
-  activeSpaceId: "c1",
-  spaces: [{ id: "c1", title: "1", activePaneId: "g1", layout: leafGroup("g1", "v1") }],
+  activeSpaceId: "spc-aaaaaa",
+  spaces: [{ id: "spc-aaaaaa", title: "1", activePaneId: "pan-aaaaaa", layout: leafGroup("pan-aaaaaa", "tab-aaaaaa") }],
 });
 
 describe("snapshot/restore round trip per window", () => {
   it("projects and activeId are preserved", () => {
     sid = 0;
-    const projects = [proj("t1", "/a"), proj("t2", "/b")];
-    const snap = snapshotWindow(projects, "t2");
+    const projects = [proj("pjt-aaaaaa", "/a"), proj("pjt-bbbbbb", "/b")];
+    const snap = snapshotWindow(projects, "pjt-bbbbbb");
     const back = restoreWindow(snap, newSplitId);
-    expect(back.activeId).toBe("t2");
+    expect(back.activeId).toBe("pjt-bbbbbb");
     expect(back.projects.map((t) => t.root)).toEqual(["/a", "/b"]);
-    expect(back.projects.map((t) => t.id)).toEqual(["t1", "t2"]);
+    expect(back.projects.map((t) => t.id)).toEqual(["pjt-aaaaaa", "pjt-bbbbbb"]);
   });
 
   it("an activeId absent from the restored set falls back to the first project", () => {
     sid = 0;
-    const snap = snapshotWindow([proj("t1", "/a")], "tZ");
-    expect(restoreWindow(snap, newSplitId).activeId).toBe("t1");
+    const snap = snapshotWindow([proj("pjt-aaaaaa", "/a")], "tZ");
+    expect(restoreWindow(snap, newSplitId).activeId).toBe("pjt-aaaaaa");
   });
 
   it("an empty window restores empty", () => {
@@ -62,8 +62,8 @@ describe("snapshot/restore round trip per window", () => {
 
 describe("windowManifestEntry", () => {
   it("label + roots + activeRoot", () => {
-    const projects = [proj("t1", "/a"), proj("t2", "/b")];
-    expect(windowManifestEntry("main", projects, "t2")).toEqual({
+    const projects = [proj("pjt-aaaaaa", "/a"), proj("pjt-bbbbbb", "/b")];
+    expect(windowManifestEntry("main", projects, "pjt-bbbbbb")).toEqual({
       label: "main",
       roots: ["/a", "/b"],
       activeRoot: "/b",
@@ -82,9 +82,9 @@ describe("upsertManifest", () => {
   });
 
   it("a new label is appended", () => {
-    const r = upsertManifest(base, { label: "w-1", roots: ["/y"], activeRoot: "/y" });
+    const r = upsertManifest(base, { label: "win-1", roots: ["/y"], activeRoot: "/y" });
     expect(r.slots).toHaveLength(2);
-    expect(r.slots.map((s) => s.label).sort()).toEqual(["main", "w-1"]);
+    expect(r.slots.map((s) => s.label).sort()).toEqual(["main", "win-1"]);
   });
 
   it("empty roots remove the slot (window closed)", () => {
@@ -97,7 +97,7 @@ describe("manifest rect and focused (B2 multi-window restore)", () => {
   it("upsert preserves a rect set on the entry", () => {
     const m = upsertManifest(
       { slots: [] },
-      { label: "w-1", roots: ["/a"], activeRoot: "/a", rect: { x: 10, y: 20, w: 800, h: 600 } },
+      { label: "win-1", roots: ["/a"], activeRoot: "/a", rect: { x: 10, y: 20, w: 800, h: 600 } },
     );
     expect(m.slots[0].rect).toEqual({ x: 10, y: 20, w: 800, h: 600 });
   });
@@ -108,9 +108,9 @@ describe("manifest rect and focused (B2 multi-window restore)", () => {
     m = setManifestFocused(m, "main");
     expect(m.focusedLabel).toBe("main");
     // upsert of another window does not clear focusedLabel.
-    m = upsertManifest(m, { label: "w-1", roots: ["/a"], activeRoot: "/a" });
+    m = upsertManifest(m, { label: "win-1", roots: ["/a"], activeRoot: "/a" });
     expect(m.focusedLabel).toBe("main");
-    m = setManifestFocused(m, "w-1");
-    expect(m.focusedLabel).toBe("w-1");
+    m = setManifestFocused(m, "win-1");
+    expect(m.focusedLabel).toBe("win-1");
   });
 });

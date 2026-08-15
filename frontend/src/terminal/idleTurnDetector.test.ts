@@ -49,7 +49,7 @@ describe("idleTurnDetector", () => {
 
   it("N ms with no output after an output burst emits turn.ended(idle) once", () => {
     const emitted: unknown[] = [];
-    configureIdleTurnDetector({ emit: (p) => emitted.push(p), projectInfoOf: () => ({ id: "t1", root: "projA" }) });
+    configureIdleTurnDetector({ emit: (p) => emitted.push(p), projectInfoOf: () => ({ id: "pjt-aaaaaa", root: "projA" }) });
     setIdleTurnDetection(true, 1000);
     expect(isIdleTurnDetectionOn()).toBe(true);
 
@@ -61,7 +61,7 @@ describe("idleTurnDetector", () => {
     vi.advanceTimersByTime(999);
     expect(emitted).toHaveLength(0);
     vi.advanceTimersByTime(1); // 1000ms with no output → fire
-    expect(emitted).toEqual([{ projectId: "t1", root: "projA", paneId: "tab-aaaaaa", source: "idle" }]);
+    expect(emitted).toEqual([{ projectId: "pjt-aaaaaa", root: "projA", paneId: "tab-aaaaaa", source: "idle" }]);
   });
 
   it("the monitor is released when the command finishes (later output is ignored)", () => {

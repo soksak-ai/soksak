@@ -22,31 +22,31 @@ const tab = (id: string, tabs: Tab[]): Project => ({
   root: "/r",
   spaces: [
     {
-      id: "c1",
+      id: "spc-aaaaaa",
       title: "1",
       layout: {
         type: "leaf",
-        value: { id: "g1", tabs, activeTabId: tabs[0]?.id ?? "" },
+        value: { id: "pan-aaaaaa", tabs, activeTabId: tabs[0]?.id ?? "" },
       },
-      activePaneId: "g1",
+      activePaneId: "pan-aaaaaa",
     },
   ],
-  activeSpaceId: "c1",
+  activeSpaceId: "spc-aaaaaa",
 });
 
 describe("locateTab", () => {
   it("finds that terminal tab by tab id", () => {
-    const tabs = [tab("t1", [term("v1")])];
-    expect(locateTab(tabs, "v1")).toEqual({ projectId: "t1", viewId: "v1" });
+    const tabs = [tab("pjt-aaaaaa", [term("tab-aaaaaa")])];
+    expect(locateTab(tabs, "tab-aaaaaa")).toEqual({ projectId: "pjt-aaaaaa", viewId: "tab-aaaaaa" });
   });
 
   it("finds the matching view.id among several views", () => {
-    const tabs = [tab("t1", [term("v1"), term("v2")])];
-    expect(locateTab(tabs, "v2")).toEqual({ projectId: "t1", viewId: "v2" });
+    const tabs = [tab("pjt-aaaaaa", [term("tab-aaaaaa"), term("tab-bbbbbb")])];
+    expect(locateTab(tabs, "tab-bbbbbb")).toEqual({ projectId: "pjt-aaaaaa", viewId: "tab-bbbbbb" });
   });
 
   it("a tab that is not there is null", () => {
-    const tabs = [tab("t1", [term("v1")])];
+    const tabs = [tab("pjt-aaaaaa", [term("tab-aaaaaa")])];
     expect(locateTab(tabs, "nope")).toBeNull();
   });
 });

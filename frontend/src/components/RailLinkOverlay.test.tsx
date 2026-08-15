@@ -26,9 +26,9 @@ let hostSize = { width: 1200, height: 800 };
 const relation = (
   over: Partial<RailRelationState> = {},
 ): RailRelationState => ({
-  boundTabId: "v2",
-  boundPaneId: "g2",
-  relationId: "rail-relation/c1/g2/v2",
+  boundTabId: "tab-bbbbbb",
+  boundPaneId: "pan-bbbbbb",
+  relationId: "rail-relation/spc-aaaaaa/pan-bbbbbb/tab-bbbbbb",
   placement: "flow",
   connected: true,
   side: "right",
@@ -63,7 +63,7 @@ describe("RailLinkOverlay — live grid tracking", () => {
     const root = createRoot(host);
     const render = (width: number) => (
       <RailLinkOverlay
-        contentId="c1"
+        contentId="spc-aaaaaa"
         relation={relation()}
         railWidth={300}
         railStation={50}
@@ -75,9 +75,9 @@ describe("RailLinkOverlay — live grid tracking", () => {
     const overlay = host.querySelector<HTMLElement>(".rail-link-overlay")!;
     const first = host.querySelector<SVGPathElement>(".rail-link-shape")!.getAttribute("d");
     expect(overlay.dataset).toMatchObject({
-      node: "relation/rail/c1",
-      boundTab: "v2",
-      boundPane: "g2",
+      node: "relation/rail/spc-aaaaaa",
+      boundTab: "tab-bbbbbb",
+      boundPane: "pan-bbbbbb",
       connected: "true",
     });
     expect(host.querySelectorAll(".rail-link-shape")).toHaveLength(1);
@@ -103,11 +103,11 @@ describe("RailLinkOverlay — live grid tracking", () => {
     const root = createRoot(host);
     act(() => root.render(
       <RailLinkOverlay
-        contentId="c1"
+        contentId="spc-aaaaaa"
         relation={relation({
           boundTabId: null,
           boundPaneId: null,
-          relationId: "rail-relation/c1/none",
+          relationId: "rail-relation/spc-aaaaaa/none",
           connected: false,
           side: "detached",
           borderMode: "none",
@@ -127,7 +127,7 @@ describe("RailLinkOverlay — live grid tracking", () => {
 describe("projected-adjacency marking", () => {
   const renderProps = (projected: boolean) => (
     <RailLinkOverlay
-      contentId="c1"
+      contentId="spc-aaaaaa"
       relation={relation()}
       railWidth={300}
       railStation={50}

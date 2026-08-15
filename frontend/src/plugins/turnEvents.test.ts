@@ -8,8 +8,8 @@ describe("turn.ended open contract", () => {
     startPluginHooks(); // bus→hooks mirror wiring (guarded to run once per module lifetime)
     const got: unknown[] = [];
     const sub = onPluginEvent("turn.ended", (p) => got.push(p));
-    busEmit("turn.ended", { projectId: "p1", root: "/r", paneId: null, source: "acp" });
-    expect(got).toEqual([{ projectId: "p1", root: "/r", paneId: null, source: "acp" }]);
+    busEmit("turn.ended", { projectId: "pjt-aaaaaa", root: "/r", paneId: null, source: "acp" });
+    expect(got).toEqual([{ projectId: "pjt-aaaaaa", root: "/r", paneId: null, source: "acp" }]);
     sub.dispose();
   });
 

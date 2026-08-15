@@ -166,10 +166,10 @@ describe("layout.reflow event", () => {
   it("delivers the activeSpaceId payload, and delivers nothing after disposal", () => {
     const got: (string | null)[] = [];
     const d = onPluginEvent("layout.reflow", (p) => got.push(p.activeSpaceId));
-    emitPluginEvent("layout.reflow", { activeSpaceId: "c1" });
-    emitPluginEvent("layout.reflow", { activeSpaceId: "c2" });
+    emitPluginEvent("layout.reflow", { activeSpaceId: "spc-aaaaaa" });
+    emitPluginEvent("layout.reflow", { activeSpaceId: "spc-bbbbbb" });
     d.dispose();
-    emitPluginEvent("layout.reflow", { activeSpaceId: "c3" });
-    expect(got).toEqual(["c1", "c2"]);
+    emitPluginEvent("layout.reflow", { activeSpaceId: "spc-cccccc" });
+    expect(got).toEqual(["spc-aaaaaa", "spc-bbbbbb"]);
   });
 });

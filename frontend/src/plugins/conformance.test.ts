@@ -138,7 +138,7 @@ describe("viewStatusConformance — declared ≡ reported", () => {
   it("reporting a declared code conforms", () => {
     expect(
       viewStatusConformance(decl(["ready", "error"]), [
-        { viewId: "v1", view: "canvas", code: "ready" },
+        { viewId: "tab-aaaaaa", view: "canvas", code: "ready" },
       ]),
     ).toEqual({ unreported: [], undeclared: [] });
   });
@@ -146,53 +146,53 @@ describe("viewStatusConformance — declared ≡ reported", () => {
   it("declared and not reported → unreported, in mount order", () => {
     expect(
       viewStatusConformance(decl(["ready"]), [
-        { viewId: "v1", view: "canvas", code: null },
-        { viewId: "v2", view: "canvas", code: "ready" },
-        { viewId: "v3", view: "canvas", code: null },
+        { viewId: "tab-aaaaaa", view: "canvas", code: null },
+        { viewId: "tab-bbbbbb", view: "canvas", code: "ready" },
+        { viewId: "tab-cccccc", view: "canvas", code: null },
       ]),
-    ).toEqual({ unreported: ["v1", "v3"], undeclared: [] });
+    ).toEqual({ unreported: ["tab-aaaaaa", "tab-cccccc"], undeclared: [] });
   });
 
   it("stateless declaration ([]) with no report conforms — silence matches the declaration", () => {
     expect(
-      viewStatusConformance(decl([]), [{ viewId: "v1", view: "canvas", code: null }]),
+      viewStatusConformance(decl([]), [{ viewId: "tab-aaaaaa", view: "canvas", code: null }]),
     ).toEqual({ unreported: [], undeclared: [] });
   });
 
   it("reported with no declaration → undeclared — the declaration is missing, measured from the reported code", () => {
     expect(
       viewStatusConformance(decl(undefined), [
-        { viewId: "v1", view: "canvas", code: "idle" },
+        { viewId: "tab-aaaaaa", view: "canvas", code: "idle" },
       ]),
     ).toEqual({
       unreported: [],
-      undeclared: [{ viewId: "v1", view: "canvas", code: "idle" }],
+      undeclared: [{ viewId: "tab-aaaaaa", view: "canvas", code: "idle" }],
     });
   });
 
   it("stateless declaration ([]) with a report → undeclared — the declaration omits the code", () => {
     expect(
-      viewStatusConformance(decl([]), [{ viewId: "v1", view: "canvas", code: "busy" }]),
+      viewStatusConformance(decl([]), [{ viewId: "tab-aaaaaa", view: "canvas", code: "busy" }]),
     ).toEqual({
       unreported: [],
-      undeclared: [{ viewId: "v1", view: "canvas", code: "busy" }],
+      undeclared: [{ viewId: "tab-aaaaaa", view: "canvas", code: "busy" }],
     });
   });
 
   it("a code outside the declared list → undeclared", () => {
     expect(
       viewStatusConformance(decl(["ready"]), [
-        { viewId: "v1", view: "canvas", code: "wat" },
+        { viewId: "tab-aaaaaa", view: "canvas", code: "wat" },
       ]),
     ).toEqual({
       unreported: [],
-      undeclared: [{ viewId: "v1", view: "canvas", code: "wat" }],
+      undeclared: [{ viewId: "tab-aaaaaa", view: "canvas", code: "wat" }],
     });
   });
 
   it("no declaration and no report conforms — a missing declaration is the static content-view-status rule", () => {
     expect(
-      viewStatusConformance(decl(undefined), [{ viewId: "v1", view: "canvas", code: null }]),
+      viewStatusConformance(decl(undefined), [{ viewId: "tab-aaaaaa", view: "canvas", code: null }]),
     ).toEqual({ unreported: [], undeclared: [] });
   });
 });

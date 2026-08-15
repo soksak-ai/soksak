@@ -28,42 +28,42 @@ describe("ptyObservationStore", () => {
   beforeEach(() => resetPtyObservationStoreForTest());
 
   it("feeding OSC 7 output updates that paneId's cwd and notifies subscribers", () => {
-    registerPtyObservation("p1");
+    registerPtyObservation("pan-aaaaaa");
     const seen: string[] = [];
-    subscribeObservedCwd("p1", (c) => seen.push(c));
-    feedPtyOutput("p1", "\x1b]7;file://<local-evidence>/work\x07");
-    expect(getObservedCwd("p1")).toBe("<local-evidence>/work");
+    subscribeObservedCwd("pan-aaaaaa", (c) => seen.push(c));
+    feedPtyOutput("pan-aaaaaa", "\x1b]7;file://<local-evidence>/work\x07");
+    expect(getObservedCwd("pan-aaaaaa")).toBe("<local-evidence>/work");
     expect(seen).toEqual(["<local-evidence>/work"]);
   });
 
   it("a subscription with a current value notifies once immediately (no polling)", () => {
-    registerPtyObservation("p1");
-    feedPtyOutput("p1", "\x1b]7;file:///a\x07");
+    registerPtyObservation("pan-aaaaaa");
+    feedPtyOutput("pan-aaaaaa", "\x1b]7;file:///a\x07");
     const seen: string[] = [];
-    subscribeObservedCwd("p1", (c) => seen.push(c));
+    subscribeObservedCwd("pan-aaaaaa", (c) => seen.push(c));
     expect(seen).toEqual(["/a"]);
   });
 
   it("command start (633;E) — global subscribers get paneId, command line and cwd, plus a runningCommands snapshot", () => {
-    registerPtyObservation("p1");
-    feedPtyOutput("p1", "\x1b]633;P;Cwd=/proj\x07");
+    registerPtyObservation("pan-aaaaaa");
+    feedPtyOutput("pan-aaaaaa", "\x1b]633;P;Cwd=/proj\x07");
     const starts: { paneId: string; cmd: string; cwd: string | null }[] = [];
     subscribeAnyCommandStarted((paneId, cmd, cwd) =>
       starts.push({ paneId, cmd, cwd }),
     );
-    feedPtyOutput("p1", "\x1b]633;E;npm%20test\x07");
-    expect(starts).toEqual([{ paneId: "p1", cmd: "npm test", cwd: "/proj" }]);
+    feedPtyOutput("pan-aaaaaa", "\x1b]633;E;npm%20test\x07");
+    expect(starts).toEqual([{ paneId: "pan-aaaaaa", cmd: "npm test", cwd: "/proj" }]);
     expect(observedRunningCommands()).toEqual([
-      { paneId: "p1", commandLine: "npm test", cwd: "/proj" },
+      { paneId: "pan-aaaaaa", commandLine: "npm test", cwd: "/proj" },
     ]);
   });
 
   it("command finish (133;D) — the pane subscription and the global subscription (with the finished command line and cwd), and runningCommands clears", () => {
-    registerPtyObservation("p1");
-    feedPtyOutput("p1", "\x1b]633;P;Cwd=/proj\x07");
-    feedPtyOutput("p1", "\x1b]633;E;build\x07");
+    registerPtyObservation("pan-aaaaaa");
+    feedPtyOutput("pan-aaaaaa", "\x1b]633;P;Cwd=/proj\x07");
+    feedPtyOutput("pan-aaaaaa", "\x1b]633;E;build\x07");
     let tabFinished = 0;
-    subscribeObservedCommandFinished("p1", () => tabFinished++);
+    subscribeObservedCommandFinished("pan-aaaaaa", () => tabFinished++);
     const fins: {
       paneId: string;
       cmd: string | null | undefined;
@@ -72,24 +72,24 @@ describe("ptyObservationStore", () => {
     subscribeAnyCommandFinished((paneId, cmd, cwd) =>
       fins.push({ paneId, cmd, cwd }),
     );
-    feedPtyOutput("p1", "\x1b]133;D;0\x07");
+    feedPtyOutput("pan-aaaaaa", "\x1b]133;D;0\x07");
     expect(tabFinished).toBe(1);
-    expect(fins).toEqual([{ paneId: "p1", cmd: "build", cwd: "/proj" }]);
+    expect(fins).toEqual([{ paneId: "pan-aaaaaa", cmd: "build", cwd: "/proj" }]);
     expect(observedRunningCommands()).toEqual([]);
   });
 
   it("output notifies the output subscribers (live stream, for input verification)", () => {
-    registerPtyObservation("p1");
+    registerPtyObservation("pan-aaaaaa");
     let n = 0;
-    subscribeObservedOutput("p1", () => n++);
-    feedPtyOutput("p1", "some output\n");
-    feedPtyOutput("p1", "more\n");
+    subscribeObservedOutput("pan-aaaaaa", () => n++);
+    feedPtyOutput("pan-aaaaaa", "some output\n");
+    feedPtyOutput("pan-aaaaaa", "more\n");
     expect(n).toBe(2);
   });
 
   it("after dispose there is no notification and the cwd snapshot is gone (leak blocked)", () => {
-    registerPtyObservation("p1");
-    feedPtyOutput("p1", "\x1b]7;file:///x\x07");
+    registerPtyObservation("pan-aaaaaa");
+    feedPtyOutput("pan-aaaaaa", "\x1b]7;file:///x\x07");
     let n = 0;
     subscribeObservedCwd("pan-aaaaaa", () => n++);
     disposePtyObservation("pan-aaaaaa");
@@ -115,21 +115,21 @@ describe("ptyObservationStore", () => {
 // hasPtyObservation = does this id drive a PTY substrate (generic terminal signal, independent of
 // pluginId). File tree cwdTabOf uses it to follow core and plugin terminals without distinguishing them.
   it("hasPtyObservation is true only for a registered paneId, and false after dispose", () => {
-    expect(hasPtyObservation("p1")).toBe(false);
-    registerPtyObservation("p1");
-    expect(hasPtyObservation("p1")).toBe(true);
+    expect(hasPtyObservation("pan-aaaaaa")).toBe(false);
+    registerPtyObservation("pan-aaaaaa");
+    expect(hasPtyObservation("pan-aaaaaa")).toBe(true);
     expect(hasPtyObservation("p2")).toBe(false);
-    disposePtyObservation("p1");
-    expect(hasPtyObservation("p1")).toBe(false);
+    disposePtyObservation("pan-aaaaaa");
+    expect(hasPtyObservation("pan-aaaaaa")).toBe(false);
   });
 
 // PTY IO handler registration (GAP2) — a pty-driver (core host or plugin terminal) registers
 // readBuffer/sendInput keyed by paneId. app.terminal.readBuffer/sendText prefer these.
   it("IO registered with registerPtyIo is read back with getPtyIo and reclaimed on dispose", () => {
-    expect(getPtyIo("p1")).toBeUndefined();
+    expect(getPtyIo("pan-aaaaaa")).toBeUndefined();
     const reads: (number | undefined)[] = [];
     const sends: string[] = [];
-    const off = registerPtyIo("p1", {
+    const off = registerPtyIo("pan-aaaaaa", {
       readBuffer: (lines) => {
         reads.push(lines);
         return "buffer-text";
@@ -138,13 +138,13 @@ describe("ptyObservationStore", () => {
         sends.push(data);
       },
     });
-    const io = getPtyIo("p1");
+    const io = getPtyIo("pan-aaaaaa");
     expect(io?.readBuffer(5)).toBe("buffer-text");
     expect(reads).toEqual([5]);
     io?.sendInput("ls\r");
     expect(sends).toEqual(["ls\r"]);
     off();
-    expect(getPtyIo("p1")).toBeUndefined();
+    expect(getPtyIo("pan-aaaaaa")).toBeUndefined();
   });
 
   it("registerPtyIo registers on its own with no prior observation (no pre-registration needed) and keeps keys isolated", () => {

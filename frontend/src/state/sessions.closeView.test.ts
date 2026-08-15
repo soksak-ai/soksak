@@ -14,38 +14,38 @@ describe("closeView — one side of the split is an empty tab", () => {
   it("closing the view split against an empty group keeps an empty tab, not a false no-project", () => {
     // First project created by bootstrap, content = splitLeaf(empty group) — empty tab (bare skeleton)
     useSessions.getState().bootstrapFirstProject("/test/root");
-    const base = useSessions.getState().projects.find((x) => x.id === "t1")!;
+    const base = useSessions.getState().projects[0]!;
     const content = base.spaces[0];
     const emptyGroup = leavesOf(content.layout)[0]; // { tabs:[], activeTabId:"" }
 
     // Build content.layout directly as split(empty group, one-view group) — same shape as a real split.
     const view = {
-      id: "v99",
+      id: "tab-yyyyyy",
       kind: "plugin" as const,
       title: "T",
       pluginId: "p",
       view: "content",
     };
-    const viewGroup = { id: "g99", tabs: [view], activeTabId: "v99" };
+    const viewGroup = { id: "pan-yyyyyy", tabs: [view], activeTabId: "tab-yyyyyy" };
     const layout = {
       type: "split" as const,
-      id: "s1",
+      id: "spl-aaaaaa",
       dir: "row" as const,
       sizes: [0.5, 0.5],
       children: [splitLeaf(emptyGroup), splitLeaf(viewGroup)],
     };
     useSessions.setState({
       projects: [
-        { ...base, spaces: [{ ...content, layout, activePaneId: "g99" }] },
+        { ...base, spaces: [{ ...content, layout, activePaneId: "pan-yyyyyy" }] },
       ],
     });
 
     // Closing the new view empties content entirely and tree=null — it must stay an empty tab, project intact.
-    const r = useSessions.getState().closeView("t1", "v99");
+    const r = useSessions.getState().closeView(base.id, "tab-yyyyyy");
     expect(r.ok).toBe(true);
 
     // Project and content remain (empty tab = a valid skeleton state).
-    const after = useSessions.getState().projects.find((x) => x.id === "t1");
+    const after = useSessions.getState().projects.find((x) => x.id === base.id);
     expect(after).toBeTruthy();
     expect(after!.spaces.length).toBe(1);
   });

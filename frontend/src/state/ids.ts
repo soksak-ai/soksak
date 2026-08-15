@@ -24,7 +24,14 @@ export const ID_PREFIX = {
   space: "spc-",
   pane: "pan-",
   tab: "tab-",
-  shellSession: "sh-",
+  // A split node also carries an id, and that id is stored and returned in
+  // `state.tree` as part of canonicalLayout. It was once a counter, on the
+  // ground that an internal node appears in no address, command or document.
+  // That was not true of canonicalLayout.
+  split: "spl-",
+  shellSession: "shl-",
+  // Issued by the host, not here. `WINDOW_ID_RE` below is its format.
+  window: "win-",
 } as const;
 
 export type IdKind = keyof typeof ID_PREFIX;
@@ -34,7 +41,6 @@ export type IssuedKind = Exclude<IdKind, "window">;
 
 /** Axes that keep natural keys. Issuing a prefixed id for one fails the idScope gate. */
 export const NATURAL_KEY_AXES = [
-  "ai.session",
   "daemon",
   "data.encrypt",
   "data.kv",
@@ -83,8 +89,10 @@ export function issueId(kind: IssuedKind): string {
       return `pan-${body}`;
     case "tab":
       return `tab-${body}`;
+    case "split":
+      return `spl-${body}`;
     case "shellSession":
-      return `sh-${body}`;
+      return `shl-${body}`;
   }
 }
 
