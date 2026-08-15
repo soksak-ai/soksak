@@ -8,6 +8,7 @@ import {
   useProgramRegistry,
 } from "./programRegistry";
 import type { ContributedProgram } from "./spec";
+import { tmsg } from "../i18n";
 
 // Every program is kind:"view" (core terminal removed — the terminal is a plugin view too). A view program may
 // come with command/ensure (agent program: terminal plugin view + autorun command + install).

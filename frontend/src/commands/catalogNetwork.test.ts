@@ -10,6 +10,7 @@ vi.mock("../framework", async (importOriginal) => ({
 
 import { registerNetworkCatalog } from "./catalogNetwork";
 import { execute, getSpec, unregister } from "./registry";
+import { tmsg } from "../i18n";
 
 beforeEach(() => {
   invoke.mockClear();
