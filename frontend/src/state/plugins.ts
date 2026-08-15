@@ -6,7 +6,7 @@
 
 import { moduleState } from "../lib/moduleState";
 import { create } from "zustand";
-import { assetUrl, invoke } from "../framework";
+import { invoke, unitFileUrl } from "../framework";
 import { bootFactPayload } from "../lib/bootFact";
 import { createCoreSync } from "./coreSync";
 import type { CoreStoreDeps } from "./coreStore";
@@ -461,7 +461,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
     const prefetched = prefetchedSources.get(p.manifest.id);
     const data = prefetched !== undefined
       ? { content: prefetched }
-      : { content: await (await fetch(await assetUrl(`${p.dir}/${p.manifest.entry}`))).text() };
+      : { content: await (await fetch(await unitFileUrl(`${p.dir}/${p.manifest.entry}`))).text() };
     if (prefetched === undefined) {
       reloadStep(`read:${p.manifest.id}:${Math.round(performance.now() - readStart)}ms:${data.content.length}b`);
     }
@@ -501,7 +501,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       try {
         // The workspace is the user's source, so it is not deleted. Only the selection is cleared, so the next reload
         // does not bring it back, and a separate official install takes over when one exists.
-        await invoke("unit_dev_remove", { kind: "plugin", id });
+        await invoke("unit_source_remove", { kind: "plugin", id });
       } catch (e) {
         return err("INTERNAL", tmsg("plugin.dev.deselectFailed", { error: String(e) }));
       }
@@ -571,7 +571,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       // A declared development source is separate from the install and explicitly overrides the official install of the same id.
       // config is canonical, so all three environments restore the same way after an app restart.
       const developmentUnits =
-        (await invoke<UnitDevSource[]>("unit_dev_list")) ?? [];
+        (await invoke<UnitDevSource[]>("unit_source_list")) ?? [];
       reloadStep(`units:${developmentUnits.length}`);
       for (const unit of developmentUnits) {
         if (unit.kind !== "plugin") continue;
@@ -646,7 +646,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       const fetched: Bundle[] = await Promise.all(
         wanted.map(async (w): Promise<Bundle> => {
           try {
-            const res = await fetch(await assetUrl(w.path));
+            const res = await fetch(await unitFileUrl(w.path));
             if (!res.ok) return { id: w.id, why: `HTTP ${res.status}` };
             return { id: w.id, content: await res.text() };
           } catch (error) {
@@ -887,7 +887,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       let selectedPath: string;
       try {
         selectedPath =
-          (await invoke<string>("unit_dev_validate_path", { source: path })) ?? path;
+          (await invoke<string>("unit_source_validate", { source: path })) ?? path;
       } catch (e) {
         return err("INVALID_PARAMS", tmsg("plugin.dev.pathRejected", { error: String(e) }));
       }
@@ -928,7 +928,7 @@ export const usePlugins = moduleState("state/plugins#store", () =>
       }
       try {
         // Selection state comes from the identity home config, not the manifest version or the folder location.
-        await invoke("unit_dev_set", { kind: "plugin", id, source: selectedPath });
+        await invoke("unit_source_set", { kind: "plugin", id, source: selectedPath });
       } catch (e) {
         return err("INVALID_PARAMS", tmsg("plugin.dev.registerFailed", { error: String(e) }));
       }

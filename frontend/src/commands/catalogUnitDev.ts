@@ -27,7 +27,7 @@ export function registerUnitDevCatalog(): void {
       }),
     examples: ["unit.dev.list"],
     handler: async () => {
-      const units = (await invoke<UnitDevSource[]>("unit_dev_list")) ?? [];
+      const units = (await invoke<UnitDevSource[]>("unit_source_list")) ?? [];
       return { unitMode: units.length === 0 ? "official" : "mixed", units };
     },
   });
@@ -57,7 +57,7 @@ export function registerUnitDevCatalog(): void {
         return { kind, id, source };
       }
       try {
-        return await invoke<UnitDevSource>("unit_dev_set", { kind, id, source });
+        return await invoke<UnitDevSource>("unit_source_set", { kind, id, source });
       } catch (e) {
         return { ok: false, code: "INVALID_PARAMS", message: String(e) };
       }
@@ -85,7 +85,7 @@ export function registerUnitDevCatalog(): void {
       const id = p.id as string;
       let removed: boolean;
       try {
-        removed = await invoke<boolean>("unit_dev_remove", { kind, id });
+        removed = await invoke<boolean>("unit_source_remove", { kind, id });
       } catch (e) {
         return { ok: false, code: "INVALID_PARAMS", message: String(e) };
       }

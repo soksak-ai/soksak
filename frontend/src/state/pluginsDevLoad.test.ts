@@ -107,7 +107,7 @@ describe("devLoad — reload of an enabled dev plugin", () => {
     const r = await usePlugins.getState().devLoad(PATH, "different-plugin");
 
     expect(r).toMatchObject({ ok: false, code: "INVALID_PARAMS" });
-    expect(invoke.mock.calls.some(([cmd]) => cmd === "unit_dev_set")).toBe(false);
+    expect(invoke.mock.calls.some(([cmd]) => cmd === "unit_source_set")).toBe(false);
   });
 
   it("stays enabled after dev.load and re-registers commands when it was enabled before", async () => {

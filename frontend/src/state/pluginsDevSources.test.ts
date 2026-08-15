@@ -54,7 +54,7 @@ beforeEach(() => {
         },
       ];
     }
-    if (cmd === "unit_dev_list") return [{ kind: "plugin", id: ID, source: DEVELOPMENT }];
+    if (cmd === "unit_source_list") return [{ kind: "plugin", id: ID, source: DEVELOPMENT }];
     if (cmd === "read_text_file" && args?.path === `${DEVELOPMENT}/plugin.json`) {
       if (!devReadable) throw new Error("missing workspace");
       return { content: manifest("2.0.0") };

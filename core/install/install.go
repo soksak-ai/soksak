@@ -7,7 +7,7 @@
 // and pure process, and every input arrives as an argument. Acquisition (fetch a
 // release archive, extract it, publish a generation, scaffold a unit and declare
 // it) needs two things this build does not have: a loader that reads a unit
-// directory, and a served unit_dev_set. Those refusals live in unbuilt.go with
+// directory, and a served unit_source_set. Those refusals live in unbuilt.go with
 // the fact that blocks each one.
 //
 // Nothing here reads the environment. The home, the platform, the login shell,
@@ -121,7 +121,7 @@ func Register(registry *control.Registry, deps Deps) {
 	})
 
 	registry.MustRegister(control.Command{
-		Name: "unit_dev_validate_path",
+		Name: "unit_source_validate",
 		Handler: func(args control.Args) (any, error) {
 			source, err := control.Arg[string](args, "source")
 			if err != nil {

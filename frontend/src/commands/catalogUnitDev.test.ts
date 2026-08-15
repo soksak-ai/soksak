@@ -38,7 +38,7 @@ describe("unit.dev.* — the development source surface every core identity shar
       { kind: "kit", id: "browser-common", source: "/work/kit" },
       {},
     );
-    expect(invoke).toHaveBeenCalledWith("unit_dev_set", {
+    expect(invoke).toHaveBeenCalledWith("unit_source_set", {
       kind: "kit",
       id: "browser-common",
       source: "/work/kit",
@@ -65,7 +65,7 @@ describe("unit.dev.* — the development source surface every core identity shar
     usePlugins.setState({ reload });
     invoke.mockResolvedValueOnce(true);
     const r = await execute("unit.dev.remove", { kind: "plugin", id: "weather" }, {});
-    expect(invoke).toHaveBeenCalledWith("unit_dev_remove", { kind: "plugin", id: "weather" });
+    expect(invoke).toHaveBeenCalledWith("unit_source_remove", { kind: "plugin", id: "weather" });
     expect(reload).toHaveBeenCalledOnce();
     expect(r).toMatchObject({ ok: true, data: { removed: true } });
   });
