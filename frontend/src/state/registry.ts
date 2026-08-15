@@ -245,7 +245,7 @@ export const initRegistryPersistence = (deps: CoreStoreDeps): (() => void) => re
 
 const CREDENTIAL_PLACEHOLDER = "\u0000soksak-registry-authorization\u0000";
 
-// Registry egress belongs to the Rust boundary, never the webview. The webview is
+// Registry egress is the core boundary's, never the webview's. The webview is
 // CSP-isolated from external hosts, so a public index fetched with the webview
 // `fetch` fails closed as "Load failed"; the host transport reaches the same URL
 // with no credential. A private registry substitutes its namespaced key. Both

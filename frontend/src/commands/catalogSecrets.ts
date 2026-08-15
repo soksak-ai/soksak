@@ -1,4 +1,4 @@
-// secret.* commands — exposes the encrypted secret vault (Rust SecretsState) through command registry
+// secret.* commands — exposes the encrypted secret vault (core SecretsState) through command registry
 // (single source of truth). Covers CLI/MCP e2e self-verification: vault status (status/backend)
 // + ns·key management (set/has/keys/delete).
 //
@@ -7,7 +7,7 @@
 // (sealing impossible), never a silent plaintext fallback.
 //
 // No get command — the core blocks plaintext readback (secretRef injection via 2b is the only plaintext path).
-// All management commands delegate to invoke (vault/crypto are Rust single source of truth).
+// All management commands delegate to invoke (vault/crypto are the core single source of truth).
 
 import { invoke } from "../framework";
 import { register } from "./registry";

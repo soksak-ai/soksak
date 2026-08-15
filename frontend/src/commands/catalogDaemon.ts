@@ -17,7 +17,7 @@ interface DaemonPolicy {
   pids?: Record<string, { pid: number; cmd: string }>;
 }
 
-interface RustDaemonStatus {
+interface CoreDaemonStatus {
   root: string;
   name: string;
   pid: number;
@@ -64,8 +64,8 @@ async function writePolicy(root: string, p: DaemonPolicy): Promise<void> {
   await invoke("data_kv_set", { ns: NS, key: policyKey(root), value: p });
 }
 
-async function rustStatus(root: string): Promise<RustDaemonStatus[]> {
-  return (await invoke("daemon_status", { root })) as RustDaemonStatus[];
+async function coreStatus(root: string): Promise<CoreDaemonStatus[]> {
+  return (await invoke("daemon_status", { root })) as CoreDaemonStatus[];
 }
 
 /** Start one daemon — record the pid in the policy (for reaping). A detached one (with stop set) differs only in being marked managed. */
@@ -121,7 +121,7 @@ export function registerDaemonCatalog(): void {
       const [{ entries }, policy, status] = await Promise.all([
         readProcfile(root),
         readPolicy(root),
-        rustStatus(root),
+        coreStatus(root),
       ]);
       const daemons = entries.map((e) => {
         const st = status.find((x) => x.name === e.name);
@@ -226,7 +226,7 @@ export function registerDaemonCatalog(): void {
       const { id: projectId, root } = target;
       const { entries } = await readProcfile(root);
       const policy = await readPolicy(root);
-      const status = await rustStatus(root);
+      const status = await coreStatus(root);
       const targets = p.name
         ? entries.filter((e) => e.name === p.name)
         : entries.filter((e) => !status.find((s) => s.name === e.name)?.running);

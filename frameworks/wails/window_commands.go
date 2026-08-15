@@ -52,6 +52,15 @@ func Register(registry *control.Registry, deps Deps) {
 		})
 	}
 
+	// A name the frontend calls that this host does not answer. Declared so a
+	// caller reads the reason instead of "unknown command".
+	if err := registry.DeclareUnserved(
+		"titlebar_backing",
+		"this host draws no native backing behind the titlebar",
+	); err != nil {
+		panic(err)
+	}
+
 	command("window_create", func(args control.Args) (any, error) { return createWindow(deps, args) })
 
 	command("window_close", func(args control.Args) (any, error) {

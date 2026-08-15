@@ -51,7 +51,7 @@ export function registerSystemCatalog(): void {
     returns: "{ quit, framework }",
     message: (d) =>
       d.quit ? tmsg("msg.app.quit") : tmsg("msg.app.quit.notMine", { framework: String(d.framework) }),
-    examples: ["app.shutdown.commit", 'app.shutdown.commit \'{"framework":"tauri"}\''],
+    examples: ["app.shutdown.commit", 'app.shutdown.commit \'{"framework":"wails"}\''],
     // Quitting is an irreversible side effect that can destroy the result reply. The native boundary
     // is called only after the socket executor finished delivering cmd_result. No renderer timer, no
     // per-framework delay.

@@ -29,10 +29,10 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 )
 
-replace github.com/wailsapp/wails/v3 => ../framework/v3
+replace github.com/wailsapp/wails/v3 => ../frameworks/wails3/v3
 
-replace github.com/soksak/wails-service-native-compositor => ../wails-service-native-compositor
+replace github.com/soksak/wails-service-native-compositor => ../wails-services/wails-service-native-compositor
 
-replace github.com/soksak/soksak-plugin-browser-native => ../soksak-plugin-browser-native
+replace github.com/soksak/soksak-plugin-browser-native => ../soksak-plugins/soksak-plugin-browser-native
 
-replace github.com/soksak/soksak-plugin-terminal-xterm => ../soksak-plugin-terminal-xterm
+replace github.com/soksak/soksak-plugin-terminal-xterm => ../soksak-plugins/soksak-plugin-terminal-xterm

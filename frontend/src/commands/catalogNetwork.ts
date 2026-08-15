@@ -137,7 +137,7 @@ export function registerNetworkCatalog(): void {
 
   register("net.http.request", {
     description:
-      "Send an arbitrary-origin HTTP request (method/url/headers/query/body) → {status,headers,body}. Core handles cross-origin requests that webview fetch cannot. Secrets are substituted at the Rust boundary from the ns vault (secretSubst: placeholder→secretKey, plaintext never exposed). ns must be explicit from CLI/E2E; plugin runtime uses app.network.http which injects ns automatically. impersonate:\"chrome\" routes the request through the browser-fingerprint (JA3/JA4) backend; \"off\" (default) uses the plain native-tls backend. Authorization requests never follow redirects and are rejected with chrome impersonation because that shared client cannot guarantee a per-request no-redirect policy.",
+      "Send an arbitrary-origin HTTP request (method/url/headers/query/body) → {status,headers,body}. Core handles cross-origin requests that webview fetch cannot. Secrets are substituted at the core boundary from the ns vault (secretSubst: placeholder→secretKey, plaintext never exposed). ns must be explicit from CLI/E2E; plugin runtime uses app.network.http which injects ns automatically. impersonate:\"chrome\" routes the request through the browser-fingerprint (JA3/JA4) backend; \"off\" (default) uses the plain native-tls backend. Authorization requests never follow redirects and are rejected with chrome impersonation because that shared client cannot guarantee a per-request no-redirect policy.",
     triggers: { ko: "HTTP 요청 API호출 웹요청 GET POST 임퍼소네이션 핑거프린트" },
     params: {
       method: { type: "string", description: "HTTP method: GET, POST, PUT, DELETE, PATCH, etc.", required: true },
@@ -149,7 +149,7 @@ export function registerNetworkCatalog(): void {
       ns: { type: "string", description: "Secret resolution namespace (required when secretSubst is provided)" },
       secretSubst: {
         type: "json",
-        description: "placeholder→secretKey map; values are resolved from the ns vault at the Rust boundary, never exposed as plaintext",
+        description: tmsg("cmd.net.http.request.param.secretSubst"),
       },
       impersonate: {
         type: "string",

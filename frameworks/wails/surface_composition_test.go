@@ -303,7 +303,6 @@ func TestTheCommandsTheInventoryOwnsAreRefusedWithSomewhereToGo(t *testing.T) {
 
 	for name, mustSay := range map[string]string{
 		"webview_close":   "data-native-surface",
-		"webview_visible": "data-native-visible",
 		"webview_recover": "crash",
 	} {
 		if served[name] {

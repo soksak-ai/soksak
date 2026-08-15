@@ -70,11 +70,12 @@
   display: none;
 }
 
-/* Layer rule (the native surface contract): the main webview does not paint its own
-   of its own (drawsBackground=false) and the browser child webview is "below" it. The root
-   chain is transparent — each surface owns its own opaque background, and the unpainted area is painted by the native window
-   the background (= theme bg, kept in step by the theme engine through window_set_background) paints it.
-   Restoring an opaque background here closes the browser slot (hole). */
+/* Layer rule (the native surface contract): the main webview paints no
+   background of its own (drawsBackground=false) and a browser child webview sits
+   under it. The root chain is transparent — each surface owns its own opaque
+   background, and anything unpainted is the native window background (theme bg,
+   kept in step by the theme engine through window_set_background).
+   Restoring an opaque background here closes the browser slot. */
 html,
 body,
 #root {

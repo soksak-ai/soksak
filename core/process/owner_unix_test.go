@@ -64,7 +64,7 @@ func TestKillReapsRatherThanOnlySignalling(t *testing.T) {
 }
 
 // A child looping on stdout with nobody listening: the reader drains and the
-// kill is not held up by it. The Rust regression this pins had a reader holding
+// kill is not held up by it. The regression this pins had a reader holding
 // the child mutex inside wait(), so a kill blocked forever, the child became a
 // zombie and swap ran to 32 GB.
 func TestKillIsNotBlockedByADrainingReader(t *testing.T) {

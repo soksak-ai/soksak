@@ -254,3 +254,20 @@ func TestCascadeOffsetsFromTheSourceAndKeepsTheFreshSize(t *testing.T) {
 		t.Fatalf("cascadeFrom = %+v, want %+v", got, want)
 	}
 }
+
+// Every identifier prefix in this product is exactly three letters, so that the
+// string alone says what kind of thing it names. One letter cannot: "w-" is
+// window, webview and workspace at once, and a reader who has to ask is reading
+// a name that failed at its only job. The frontend issues its own identifiers
+// under the same law (frontend/src/state/ids.ts), and this is the half of it
+// that lives on the host.
+func TestTheWindowNamePrefixIsThreeLetters(t *testing.T) {
+	if got := workspaceWindowPrefix; len(got) != 4 || got[3] != '-' {
+		t.Fatalf("prefix %q is not three letters and a dash", got)
+	}
+	for _, c := range workspaceWindowPrefix[:3] {
+		if c < 'a' || c > 'z' {
+			t.Fatalf("prefix %q holds %q, which is not a lowercase letter", workspaceWindowPrefix, c)
+		}
+	}
+}

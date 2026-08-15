@@ -8,21 +8,15 @@ importers:
 
   .:
     dependencies:
-      '@soksak-ai/plugin-api':
-        specifier: file:../../soksak-plugin-api
-        version: file:../../soksak-plugin-api(@soksak-ai/plugin-spec@file:../../soksak-plugin-spec)
-      '@soksak-ai/plugin-spec':
-        specifier: file:../../soksak-plugin-spec
-        version: file:../../soksak-plugin-spec
       '@soksak/soksak-plugin-browser-native':
-        specifier: file:../../soksak-plugin-browser-native/frontend
-        version: file:../../soksak-plugin-browser-native/frontend
+        specifier: file:../../soksak-plugins/soksak-plugin-browser-native/frontend
+        version: file:../../soksak-plugins/soksak-plugin-browser-native/frontend
       '@soksak/soksak-plugin-terminal-xterm':
-        specifier: file:../../soksak-plugin-terminal-xterm/frontend
-        version: file:../../soksak-plugin-terminal-xterm/frontend
+        specifier: file:../../soksak-plugins/soksak-plugin-terminal-xterm/frontend
+        version: file:../../soksak-plugins/soksak-plugin-terminal-xterm/frontend
       '@soksak/wails-service-native-compositor':
-        specifier: file:../../wails-service-native-compositor/frontend
-        version: file:../../wails-service-native-compositor/frontend
+        specifier: file:../../wails-services/wails-service-native-compositor/frontend
+        version: file:../../wails-services/wails-service-native-compositor/frontend
       '@wailsio/runtime':
         specifier: latest
         version: 3.0.0-beta.8
@@ -550,25 +544,14 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@soksak-ai/plugin-api@file:../../soksak-plugin-api':
-    resolution: {directory: ../../soksak-plugin-api, type: directory}
-    engines: {node: '>=18'}
-    peerDependencies:
-      '@soksak-ai/plugin-spec': 0.1.0
+  '@soksak/soksak-plugin-browser-native@file:../../soksak-plugins/soksak-plugin-browser-native/frontend':
+    resolution: {directory: ../../soksak-plugins/soksak-plugin-browser-native/frontend, type: directory}
 
-  '@soksak-ai/plugin-spec@file:../../soksak-plugin-spec':
-    resolution: {directory: ../../soksak-plugin-spec, type: directory}
-    engines: {node: '>=18'}
-    hasBin: true
+  '@soksak/soksak-plugin-terminal-xterm@file:../../soksak-plugins/soksak-plugin-terminal-xterm/frontend':
+    resolution: {directory: ../../soksak-plugins/soksak-plugin-terminal-xterm/frontend, type: directory}
 
-  '@soksak/soksak-plugin-browser-native@file:../../soksak-plugin-browser-native/frontend':
-    resolution: {directory: ../../soksak-plugin-browser-native/frontend, type: directory}
-
-  '@soksak/soksak-plugin-terminal-xterm@file:../../soksak-plugin-terminal-xterm/frontend':
-    resolution: {directory: ../../soksak-plugin-terminal-xterm/frontend, type: directory}
-
-  '@soksak/wails-service-native-compositor@file:../../wails-service-native-compositor/frontend':
-    resolution: {directory: ../../wails-service-native-compositor/frontend, type: directory}
+  '@soksak/wails-service-native-compositor@file:../../wails-services/wails-service-native-compositor/frontend':
+    resolution: {directory: ../../wails-services/wails-service-native-compositor/frontend, type: directory}
 
   '@tabler/icons@3.46.0':
     resolution: {integrity: sha512-f2RYFl3fzPwj5WO82x6en0dmkjefxEfOm16D1ByM6cj/McNiwOkL4VaPUoP9VVIrXAD9WnTSVFr70px703b//A==}
@@ -1148,8 +1131,8 @@ packages:
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
-  xterm-addon-webkit-ime@file:../../xterm-addon-webkit-ime:
-    resolution: {directory: ../../xterm-addon-webkit-ime, type: directory}
+  xterm-addon-webkit-ime@file:../../externals/xterm-addon-webkit-ime:
+    resolution: {directory: ../../externals/xterm-addon-webkit-ime, type: directory}
     peerDependencies:
       '@xterm/xterm': '>=5.0.0'
       xterm: '>=5.0.0'
@@ -1428,23 +1411,17 @@ snapshots:
   '@rollup/rollup-win32-x64-msvc@4.62.4':
     optional: true
 
-  '@soksak-ai/plugin-api@file:../../soksak-plugin-api(@soksak-ai/plugin-spec@file:../../soksak-plugin-spec)':
-    dependencies:
-      '@soksak-ai/plugin-spec': file:../../soksak-plugin-spec
+  '@soksak/soksak-plugin-browser-native@file:../../soksak-plugins/soksak-plugin-browser-native/frontend': {}
 
-  '@soksak-ai/plugin-spec@file:../../soksak-plugin-spec': {}
-
-  '@soksak/soksak-plugin-browser-native@file:../../soksak-plugin-browser-native/frontend': {}
-
-  '@soksak/soksak-plugin-terminal-xterm@file:../../soksak-plugin-terminal-xterm/frontend':
+  '@soksak/soksak-plugin-terminal-xterm@file:../../soksak-plugins/soksak-plugin-terminal-xterm/frontend':
     dependencies:
       '@xterm/addon-fit': 0.10.0(@xterm/xterm@5.5.0)
       '@xterm/xterm': 5.5.0
-      xterm-addon-webkit-ime: file:../../xterm-addon-webkit-ime(@xterm/xterm@5.5.0)
+      xterm-addon-webkit-ime: file:../../externals/xterm-addon-webkit-ime(@xterm/xterm@5.5.0)
     transitivePeerDependencies:
       - xterm
 
-  '@soksak/wails-service-native-compositor@file:../../wails-service-native-compositor/frontend': {}
+  '@soksak/wails-service-native-compositor@file:../../wails-services/wails-service-native-compositor/frontend': {}
 
   '@tabler/icons@3.46.0': {}
 
@@ -1993,7 +1970,7 @@ snapshots:
 
   xmlchars@2.2.0: {}
 
-  xterm-addon-webkit-ime@file:../../xterm-addon-webkit-ime(@xterm/xterm@5.5.0):
+  xterm-addon-webkit-ime@file:../../externals/xterm-addon-webkit-ime(@xterm/xterm@5.5.0):
     optionalDependencies:
       '@xterm/xterm': 5.5.0
 

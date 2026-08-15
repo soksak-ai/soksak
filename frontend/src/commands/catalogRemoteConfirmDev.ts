@@ -21,7 +21,7 @@ export function registerRemoteConfirmDevCatalog(): void {
 
   register("dev.remoteConfirmMock", {
     description:
-      "DEV-ONLY: emit a mock remote destructive confirm request so the desktop RemoteConfirmModal renders without a paired phone. For visual verification and headless E2E only; does not touch the Rust confirm authority. Absent in production builds.",
+    description: tmsg("cmd.dev.remoteConfirmMock.desc"),
     triggers: { ko: "원격 confirm mock 데스크톱 confirm 테스트 모달" },
     params: {
       device_id: {

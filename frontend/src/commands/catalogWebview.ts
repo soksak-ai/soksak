@@ -189,7 +189,7 @@ export function registerWebviewCatalog(): void {
     returns: "{ label, reloaded: true }",
     message: (d) => tmsg("msg.webview.recover", { label: String(d.label) }),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['webview.recover \'{"label":"b-w-1234-v7"}\''],
+    examples: ['webview.recover \'{"label":"brw-w-1234-v7"}\''],
     handler: async (p) => {
       try {
         await invoke("webview_recover", { label: p.label });

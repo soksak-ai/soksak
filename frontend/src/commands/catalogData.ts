@@ -1,4 +1,4 @@
-// data.* commands — core surface for the generic data store (Rust DbState). Exposes
+// data.* commands — core surface for the generic data store (core DbState). Exposes
 // backup/restore/export/import, read-only queries, and the kv rows to CLI/MCP.
 // Record mutations (put/delete/define) stay excluded — plugin responsibility. kv IS
 // exposed for writes here because the native plugin runtime reaches the world through

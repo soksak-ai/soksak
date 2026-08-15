@@ -42,7 +42,7 @@ function tagEvent(name: string, fields: Record<string, unknown>): Event {
 /** Element faking the events the <webview> tag emits — jsdom has no such element. */
 function fakeTag() {
   const el = document.createElement("div");
-  el.setAttribute("data-content-view", "b-1");
+  el.setAttribute("data-content-view", "brw-1");
   Object.assign(el, {
     canGoBack: () => true,
     canGoForward: () => false,
@@ -61,10 +61,10 @@ describe("content view event bridge", () => {
   it("navigation goes out as content-view-navigated — name and fields unchanged from the original", async () => {
     const m = await load();
     const el = fakeTag();
-    m.bridgeContentViewEvents(el, "b-1");
+    m.bridgeContentViewEvents(el, "brw-1");
     el.dispatchEvent(tagEvent("did-navigate", { url: "https://x/page" }));
     expect(emit).toHaveBeenCalledWith("content-view-navigated", {
-      label: "b-1",
+      label: "brw-1",
       url: "https://x/page",
       inPage: false,
     });
@@ -77,10 +77,10 @@ describe("content view event bridge", () => {
   it("a move inside the same document is separated by inPage", async () => {
     const m = await load();
     const el = fakeTag();
-    m.bridgeContentViewEvents(el, "b-1");
+    m.bridgeContentViewEvents(el, "brw-1");
     el.dispatchEvent(tagEvent("did-navigate-in-page", { url: "https://x/page#a" }));
     expect(emit).toHaveBeenCalledWith("content-view-navigated", {
-      label: "b-1",
+      label: "brw-1",
       url: "https://x/page#a",
       inPage: true,
     });
@@ -89,9 +89,9 @@ describe("content view event bridge", () => {
   it("the title goes out as content-view-title", async () => {
     const m = await load();
     const el = fakeTag();
-    m.bridgeContentViewEvents(el, "b-1");
+    m.bridgeContentViewEvents(el, "brw-1");
     el.dispatchEvent(tagEvent("page-title-updated", { title: "T" }));
-    expect(emit).toHaveBeenCalledWith("content-view-title", { label: "b-1", title: "T" });
+    expect(emit).toHaveBeenCalledWith("content-view-title", { label: "brw-1", title: "T" });
   });
 
   // canBack and canForward are camelCase — the core payload is `rename_all = "camelCase"`, so those
@@ -101,25 +101,25 @@ describe("content view event bridge", () => {
   it("loading state goes out as content-view-loading with back and forward availability", async () => {
     const m = await load();
     const el = fakeTag();
-    m.bridgeContentViewEvents(el, "b-1");
+    m.bridgeContentViewEvents(el, "brw-1");
     el.dispatchEvent(new Event("did-start-loading"));
     expect(emit).toHaveBeenCalledWith("content-view-loading", {
-      label: "b-1", loading: true, canBack: true, canForward: false,
+      label: "brw-1", loading: true, canBack: true, canForward: false,
     });
     el.dispatchEvent(new Event("did-stop-loading"));
     expect(emit).toHaveBeenCalledWith("content-view-loading", {
-      label: "b-1", loading: false, canBack: true, canForward: false,
+      label: "brw-1", loading: false, canBack: true, canForward: false,
     });
   });
 
   it("a link hover emits content-view-status, and leaving it emits an empty string", async () => {
     const m = await load();
     const el = fakeTag();
-    m.bridgeContentViewEvents(el, "b-1");
+    m.bridgeContentViewEvents(el, "brw-1");
     el.dispatchEvent(tagEvent("update-target-url", { url: "https://y" }));
-    expect(emit).toHaveBeenCalledWith("content-view-status", { label: "b-1", url: "https://y" });
+    expect(emit).toHaveBeenCalledWith("content-view-status", { label: "brw-1", url: "https://y" });
     el.dispatchEvent(tagEvent("update-target-url", { url: "" }));
-    expect(emit).toHaveBeenCalledWith("content-view-status", { label: "b-1", url: "" });
+    expect(emit).toHaveBeenCalledWith("content-view-status", { label: "brw-1", url: "" });
   });
 
   /** A window-open request **is not reported by the tag.** The `new-window` event is gone in this
@@ -130,7 +130,7 @@ describe("content view event bridge", () => {
   it("the tag's new-window is not subscribed — this engine has no such event", async () => {
     const m = await load();
     const el = fakeTag();
-    m.bridgeContentViewEvents(el, "b-1");
+    m.bridgeContentViewEvents(el, "brw-1");
     el.dispatchEvent(tagEvent("new-window", { url: "https://z" }));
     expect(emit).not.toHaveBeenCalledWith(
       "content-view-open-external",
@@ -144,7 +144,7 @@ describe("content view event bridge", () => {
   it("a framework report keyed by handle is converted to a label and emitted under the contract name", async () => {
     const m = await load();
     const el = document.createElement("div");
-    el.setAttribute("data-content-view", "b-9");
+    el.setAttribute("data-content-view", "brw-9");
     Object.assign(el, { getWebContentsId: () => 42 });
     document.body.appendChild(el);
     let raw: ((p: Record<string, unknown>) => void) | null = null;
@@ -155,7 +155,7 @@ describe("content view event bridge", () => {
     });
     raw!({ id: 42, url: "https://z" });
     expect(emit).toHaveBeenCalledWith("content-view-open-external", {
-      label: "b-9",
+      label: "brw-9",
       url: "https://z",
     });
     off();
@@ -178,7 +178,7 @@ describe("content view event bridge", () => {
   it("after unsubscribe nothing goes out — a subscription left behind a closed view emits under a dead label", async () => {
     const m = await load();
     const el = fakeTag();
-    const off = m.bridgeContentViewEvents(el, "b-1");
+    const off = m.bridgeContentViewEvents(el, "brw-1");
     off();
     el.dispatchEvent(tagEvent("did-navigate", { url: "https://x" }));
     expect(emit).not.toHaveBeenCalled();

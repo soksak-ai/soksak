@@ -171,6 +171,17 @@ func RegisterSurface(registry *control.Registry, deps SurfaceDeps) {
 		panic("wails: the surface commands need to be able to ask whether the native parent is there")
 	}
 
+	// Names the frontend calls that this host does not answer. Declared here so
+	// a caller reads the reason instead of "unknown command".
+	for name, because := range map[string]string{
+		"webview_list":         "surfaces are read from the composition receipt; this host enumerates none",
+		"webview_health_query": "this host keeps no per-surface health record",
+	} {
+		if err := registry.DeclareUnserved(name, because); err != nil {
+			panic(err)
+		}
+	}
+
 	registry.MustRegister(control.Command{
 		Name:  "engine_surface_stats",
 		Owner: control.OwnerFramework,
@@ -200,9 +211,6 @@ func registerInventoryRefusals(registry *control.Registry) {
 		"webview_close": "a native surface's lifetime is owned by its declaration; " +
 			"remove the element carrying data-native-surface and the next inventory commit destroys it. " +
 			"Closing one from here is a second writer the next commit reverts",
-		"webview_visible": "a native surface's visibility is owned by its declaration; " +
-			"set data-native-visible on the element and the next inventory commit applies it. " +
-			"Hiding one from here is a second writer the next commit reverts",
 		"webview_recover": "nothing in this build records a native surface crash, " +
 			"so there is no breaker state to reset and no per-surface reload to run. " +
 			"Re-declare the surface with a higher data-native-generation to have it rebuilt",

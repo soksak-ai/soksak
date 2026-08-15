@@ -12,11 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@soksak-ai/plugin-api": "file:../../soksak-plugin-api",
-    "@soksak-ai/plugin-spec": "file:../../soksak-plugin-spec",
-    "@soksak/soksak-plugin-browser-native": "file:../../soksak-plugin-browser-native/frontend",
-    "@soksak/soksak-plugin-terminal-xterm": "file:../../soksak-plugin-terminal-xterm/frontend",
-    "@soksak/wails-service-native-compositor": "file:../../wails-service-native-compositor/frontend",
+    "@soksak/wails-service-native-compositor": "file:../../wails-services/wails-service-native-compositor/frontend",
     "@wailsio/runtime": "latest",
     "@xterm/addon-clipboard": "^0.2.0",
     "@xterm/addon-fit": "^0.11.0",

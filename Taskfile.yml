@@ -66,7 +66,7 @@ tasks:
   verify:modules:
     summary: The sibling modules this one resolves through `replace`
     cmds:
-      - for: ["../wails-service-native-compositor", "../soksak-plugin-browser-native", "../soksak-plugin-terminal-xterm"]
+      - for: ["../wails-services/wails-service-native-compositor", "../soksak-plugins/soksak-plugin-browser-native", "../soksak-plugins/soksak-plugin-terminal-xterm"]
         cmd: cd {{.ITEM}} && go vet ./... && go test ./...
 
   build:

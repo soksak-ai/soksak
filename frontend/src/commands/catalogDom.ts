@@ -1283,6 +1283,14 @@ function projectedRealmNode(el: Element): boolean {
   return el instanceof HTMLElement && el.dataset.realm !== undefined;
 }
 
+/** The realm a projection names, and the node's address inside that realm.
+ *  Both are declared values, not derived ones. */
+function projectedTarget(el: Element): { realm: string; node: string } | null {
+  if (!(el instanceof HTMLElement)) return null;
+  const realm = el.dataset.realm;
+  const node = el.dataset.realmNode;
+  return realm && node ? { realm, node } : null;
+}
 
 /** A projection missing a declaration that input needs.
  *
@@ -1297,6 +1305,10 @@ function undeclaredProjection(addr: string, screen: string, missing: string) {
     message: tmsg("msg.ui.projection.undeclared", { screen, missing, address: addr }),
   };
 }
+
+/** The result of meeting a projection with a missing declaration. It differs
+ *  from a surface by having `ok`. */
+type UndeclaredProjection = ReturnType<typeof undeclaredProjection>;
 
 /** The surface a pointer goes into, and the place this node occupies inside it (surface-local CSS
  *  px). */
@@ -1320,7 +1332,7 @@ interface GestureSurface {
  * soon as the realm is scrolled, the container has a border or padding, or the
  * projection is not a direct child. Only the producer has the realm coordinate.
  */
-function gestureSurface(el: Element): GestureSurface | null {
+function gestureSurface(el: Element, addr: string): GestureSurface | UndeclaredProjection | null {
   const declared = el instanceof HTMLElement ? el.dataset : undefined;
   // Whole-surface projection: this node is the content surface. Its top-left is
   // (0,0) in surface coordinates, not the position it occupies on screen.
@@ -1332,9 +1344,11 @@ function gestureSurface(el: Element): GestureSurface | null {
   // where it is in that realm.
   if (declared?.realm !== undefined) {
     const r = el.getBoundingClientRect();
-    const x = Number(declared.wvSurfaceX);
-    const y = Number(declared.wvSurfaceY);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    const x = Number(declared.realmX);
+    const y = Number(declared.realmY);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return undeclaredProjection(addr, declared.realm, "data-realm-x / data-realm-y");
+    }
     return {
       label: declared.realm,
       x, y, w: r.width, h: r.height,
@@ -1450,7 +1464,12 @@ async function inProjectedRealm(
   action: { kind: "fill"; value: string },
 ) {
   const target = projectedTarget(el);
-  if (target === null) return null;
+  // The realm is declared and the node inside it is not. Stop here: passing this
+  // on writes the value into the host's transparent div, and the code that reads
+  // that value is in the other realm.
+  if (target === null) {
+    return undeclaredProjection(addr, (el as HTMLElement).dataset.realm ?? "", "data-realm-node");
+  }
   if (!hasContentViewHost()) return noGesturePath(addr);
   const host = contentViewHost();
   const pick = `document.querySelector(${JSON.stringify(`[data-node="${target.node}"]`)})`;
@@ -1543,7 +1562,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     },
     returns: "{ clicked, address, atUnixMs, clock, causeTraceId?, phase?, surface?, recording:{status:'not-requested'|'complete'|'failed',mode:'realtime',dir?,requestedFrames?,frames?,reason?}, trace?:{frames,samples} }",
     message: () => tmsg("msg.ui.input.click"),
-    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE"],
+    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
     danger: "inject",
     examples: ['ui.input.click \'{"address":"win/main/chrome/modal/consent/agree"}\''],
     handler: async (p) => {
@@ -1654,7 +1673,10 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // has no route to it, and even when it does land, the absence of user activation makes the engine
       // block things such as window opening (measured 2026-08-02: pressing a `_blank` link by script
       // produced 0 window-open requests). It must be real engine input.
-      const surface = gestureSurface(el);
+      const surface = gestureSurface(el, addr);
+      // A projection with a missing declaration stops here. Falling through to the
+      // host DOM reaches nothing and still answers success.
+      if (surface && "ok" in surface) return surface;
       if (surface) {
         if (!hasContentViewHost()) return noGesturePath(addr);
         const at = gesturePoint(surface, p);
@@ -1721,7 +1743,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     },
     returns: "{ address, surface, composing }",
     message: (d) => tmsg(d.composing == null ? "msg.ui.input.compose.end" : "msg.ui.input.compose"),
-    errors: ["NOT_EXPOSED", "AMBIGUOUS", "NOT_A_SURFACE", "SURFACE_INPUT_UNAVAILABLE"],
+    errors: ["NOT_EXPOSED", "AMBIGUOUS", "NOT_A_SURFACE", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
     danger: "inject",
     examples: [
       'ui.input.compose \'{"address":"win/main/…/surface","text":"한"}\'',
@@ -1731,7 +1753,8 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       const addr = p.address as string;
       const found = resolveExposed(addr);
       if (!("el" in found)) return found;
-      const surface = gestureSurface(found.el);
+      const surface = gestureSurface(found.el, addr);
+      if (surface && "ok" in surface) return surface;
       if (surface === null) {
         return {
           ok: false as const,
@@ -1773,13 +1796,14 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     },
     returns: "{ address, surface, state:{ attached, hidden?, windowIsKey?, acceptsMouseMovedEvents?, isFirstResponder?, bounds?, visibleRect?, askedPoint?, topWindowAtPoint?, windowTopmostAtPoint? } }",
     message: () => tmsg("msg.ui.input.state"),
-    errors: ["NOT_EXPOSED", "AMBIGUOUS", "NOT_A_SURFACE", "SURFACE_INPUT_UNAVAILABLE"],
-    examples: ['ui.input.state \'{"address":"win/main/content/view/x/tab/t1/node/tauri/plugin-view/b-main-t1/surface"}\''],
+    errors: ["NOT_EXPOSED", "AMBIGUOUS", "NOT_A_SURFACE", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
+    examples: ['ui.input.state \'{"address":"win/main/content/view/x/tab/t1/node/plugin-view/b-main-t1/surface"}\''],
     handler: async (p) => {
       const addr = p.address as string;
       const found = resolveExposed(addr);
       if (!("el" in found)) return found;
-      const surface = gestureSurface(found.el);
+      const surface = gestureSurface(found.el, addr);
+      if (surface && "ok" in surface) return surface;
       if (surface === null) {
         return {
           ok: false as const,
@@ -1824,7 +1848,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     },
     returns: "{ key, address, defaultPrevented }",
     message: (d) => tmsg("msg.ui.input.key", { key: String(d.key ?? "") }),
-    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS"],
+    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
     danger: "inject",
     examples: [
       'ui.input.key \'{"address":"win/main/content/view/x/node/composer-input","key":"r","ctrl":true}\'',
@@ -1842,7 +1866,8 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // A node on another surface takes real keys injected into that surface — a key event built on the
       // host has no route inside, and even when it does land, the absence of user activation makes the
       // engine block it.
-      const keySurface = gestureSurface(el);
+      const keySurface = gestureSurface(el, addr);
+      if (keySurface && "ok" in keySurface) return keySurface;
       if (keySurface) {
         if (!hasContentViewHost()) return noGesturePath(addr);
         try {
@@ -1904,7 +1929,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     },
     returns: "{ address, surface?, gutterHover }",
     message: () => tmsg("msg.ui.input.pointer"),
-    errors: ["NOT_EXPOSED", "AMBIGUOUS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE"],
+    errors: ["NOT_EXPOSED", "AMBIGUOUS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
     danger: "inject",
     examples: [
       'ui.input.pointer \'{"address":"win/main/chrome/gutter/pan-g2h3j4/right"}\'',
@@ -1921,7 +1946,10 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       const el = found.el;
       // A move to a place on another surface is injected into that surface — a move planted on the host
       // cannot create hover inside it.
-      const surface = gestureSurface(el);
+      const surface = gestureSurface(el, addr);
+      // A projection with a missing declaration stops here. Falling through to the
+      // host DOM reaches nothing and still answers success.
+      if (surface && "ok" in surface) return surface;
       if (surface) {
         if (!hasContentViewHost()) return noGesturePath(addr);
         const at = gesturePoint(surface, p);
@@ -1963,7 +1991,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       "Check this window's structural invariants and report each by name. Answers whether the window is coherent right now: every exposed address resolves to exactly one node, no rail layer is left behind after a travel, no visible tab body has collapsed to nothing, and the motion clocks agree. Use after any layout change, and as the assertion in end-to-end gates — read passed (the verdict) and checks[].detail, which names the invariant and shows the offending addresses; the envelope only says the query ran.",
     triggers: { ko: "창 점검 불변식 검증 무결성 주소중복 레일잔존 빈슬롯 자가진단" },
     params: {},
-    returns: "{ passed, failed, checks: [{ name, ok, detail }] }",
+    returns: "{ passed, failed, unanswered, checks: [{ name, ok, answered, detail }] }",
     message: (d) =>
       tmsg("msg.ui.verify", {
         failed: String(d.failed ?? 0),
@@ -1972,7 +2000,12 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     examples: ["ui.verify"],
     handler: async () => {
       const scanned = collectExposed();
-      const checks: { name: string; ok: boolean; detail: string }[] = [];
+      // A check has three answers: passed, violated, and not measurable. Folding
+      // three into two makes one of them false. Reporting a check that could not
+      // run as passed is a fake GREEN; reporting it as violated sends someone to
+      // fix a defect that was never measured. A check that could not run carries
+      // `answered:false`, and `passed` is false while any check is unanswered.
+      const checks: { name: string; ok: boolean; detail: string; answered?: boolean }[] = [];
 
       // A1 uniqueness — when one address resolves to two, neither a measurement nor a click has a known
       // destination.
@@ -2063,6 +2096,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         checks.push({
           name: "surface-inside-window",
           ok: false,
+          answered: false,
           detail: `surface geometry unreadable: ${error instanceof Error ? error.message : String(error)}`,
         });
       }
@@ -2090,6 +2124,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
           checks.push({
             name: "viewport-fits-window",
             ok: false,
+            answered: false,
             detail: `the framework did not report this window's content size (${label})`,
           });
         } else {
@@ -2109,15 +2144,28 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         checks.push({
           name: "viewport-fits-window",
           ok: false,
+          answered: false,
           detail: `window geometry unreadable: ${error instanceof Error ? error.message : String(error)}`,
         });
       }
 
-      const failed = checks.filter((c) => !c.ok);
+      // Measured violations and unmeasurable axes are counted apart. `failed` is
+      // the number of observed violations, so it is the number of places to fix.
+      // `unanswered` is the number of axes this build cannot judge yet, which is
+      // a wiring gap. One combined number sends the caller after defects that
+      // were never measured.
+      const answered = checks.map((c) => ({ ...c, answered: c.answered !== false }));
+      const failed = answered.filter((c) => c.answered && !c.ok);
+      const unanswered = answered.filter((c) => !c.answered);
       // The verdict is passed in the payload — ok is a reserved envelope key, so putting it here gets it
       // swallowed and the caller reads "the command ran" as "the check passed" (the check itself becomes
       // a fake GREEN).
-      return { passed: failed.length === 0, failed: failed.length, checks };
+      return {
+        passed: failed.length === 0 && unanswered.length === 0,
+        failed: failed.length,
+        unanswered: unanswered.length,
+        checks: answered,
+      };
     },
   });
 
@@ -2656,7 +2704,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     },
     returns: "{ dblclicked, address, surface? }",
     message: () => tmsg("msg.ui.input.dblclick"),
-    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE"],
+    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
     danger: "inject",
     examples: ['ui.input.dblclick \'{"address":"win/main/chrome/tab/left/a.x"}\''],
     handler: async (p) => {
@@ -2667,7 +2715,10 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // A node on another surface is pressed twice inside that surface — the engine reads a double click
       // only when the second press has click count 2. These four events go out back to back inside one
       // call.
-      const surface = gestureSurface(el);
+      const surface = gestureSurface(el, addr);
+      // A projection with a missing declaration stops here. Falling through to the
+      // host DOM reaches nothing and still answers success.
+      if (surface && "ok" in surface) return surface;
       if (surface) {
         if (!hasContentViewHost()) return noGesturePath(addr);
         const at = gesturePoint(surface, p);
@@ -2702,7 +2753,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     },
     returns: "{ filled, address }",
     message: () => tmsg("msg.ui.input.fill"),
-    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM"],
+    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM", "PROJECTION_UNDECLARED"],
     danger: "inject",
     examples: [
       'ui.input.fill \'{"address":"win/main/content/view/x/node/url-input","value":"/path/clip.mp4"}\'',
@@ -2802,7 +2853,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
     },
     returns: "{ dragged, click?, from, to?, zone?, dx?, dy?, steps, durationMs, surface?, recording:{status:'not-requested'|'complete'|'failed',dir?,requestedFrames?,frames?,mode:'realtime',reason?} }",
     message: (d) => (d.dragged ? tmsg("msg.ui.input.drag.dragged") : tmsg("msg.ui.input.drag.tap")),
-    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE"],
+    errors: ["NOT_EXPOSED", "AMBIGUOUS", "INVALID_PARAMS", "OTHER_REALM", "SURFACE_INPUT_UNAVAILABLE", "PROJECTION_UNDECLARED"],
     danger: "inject",
     examples: [
       'ui.input.drag \'{"from":"win/main/chrome/tab/left/a.x","to":"win/main/chrome/tab/left/b.y","zone":"center"}\'',
@@ -2844,7 +2895,8 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       if (!("el" in fromR)) return fromR;
       // Whether the drag happens on another surface — inside a content view, or inside the realm a
       // projection shows. A move/up fired at the host window is not inside it.
-      const dragSurface = gestureSurface(fromR.el);
+      const dragSurface = gestureSurface(fromR.el, p.from as string);
+      if (dragSurface && "ok" in dragSurface) return dragSurface;
       let toSurfacePt: { x: number; y: number } | null = null;
       const fr = fromR.el.getBoundingClientRect();
       const fromPt = { x: fr.left + fr.width / 2, y: fr.top + fr.height / 2 };
@@ -2860,7 +2912,8 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         if (dragSurface) {
           // A drag is an event inside one surface — with the two ends on different surfaces there is no
           // path between them.
-          const toSurface = gestureSurface(toR.el);
+          const toSurface = gestureSurface(toR.el, p.to as string);
+          if (toSurface && "ok" in toSurface) return toSurface;
           if (toSurface === null || toSurface.label !== dragSurface.label) {
             return {
               ok: false as const,
