@@ -27,7 +27,7 @@ type Deps struct {
 	// must be testable with no window at all.
 	Host WindowHost
 	// NewID supplies the opaque, non-reusable half of a workspace name. The
-	// "w-" prefix is this package's rule; the entropy belongs to the process.
+	// "win-" prefix is this package's rule; the entropy belongs to the process.
 	NewID func() string
 }
 

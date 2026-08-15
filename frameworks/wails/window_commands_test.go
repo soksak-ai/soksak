@@ -266,15 +266,15 @@ func TestEveryCommandRefusesBeforeTheRunLoopStarts(t *testing.T) {
 // host resolves a duplicate name by map order, so the two would be
 // indistinguishable and one of them unreachable forever.
 func TestCreatingAHeldNameCreatesNothingAndReturnsTheName(t *testing.T) {
-	host := startedHost(liveWindow("w-1"))
+	host := startedHost(liveWindow("win-1"))
 	registry := registryFor(t, host, counter("2"))
 
-	result, err := registry.Invoke("window_create", callArgs(t, map[string]any{"label": "w-1"}))
+	result, err := registry.Invoke("window_create", callArgs(t, map[string]any{"label": "win-1"}))
 	if err != nil {
 		t.Fatalf("a held name must be idempotent: %v", err)
 	}
-	if result != "w-1" {
-		t.Fatalf("window_create returned %v, want w-1", result)
+	if result != "win-1" {
+		t.Fatalf("window_create returned %v, want win-1", result)
 	}
 	if len(host.calls) != 0 {
 		t.Fatalf("a held name produced effects: %v", host.calls)
@@ -284,14 +284,14 @@ func TestCreatingAHeldNameCreatesNothingAndReturnsTheName(t *testing.T) {
 // A name this process holds but cannot reach still blocks creation, because
 // creating a second window under it is what makes both unreachable.
 func TestCreatingAHeldButUnreachableNameStillCreatesNothing(t *testing.T) {
-	host := startedHost(&fakeWindow{name: "w-1", live: false})
+	host := startedHost(&fakeWindow{name: "win-1", live: false})
 	registry := registryFor(t, host, counter("2"))
 
-	result, err := registry.Invoke("window_create", callArgs(t, map[string]any{"label": "w-1"}))
+	result, err := registry.Invoke("window_create", callArgs(t, map[string]any{"label": "win-1"}))
 	if err != nil {
 		t.Fatalf("a held name must be idempotent whether or not it answers: %v", err)
 	}
-	if result != "w-1" || len(host.calls) != 0 {
+	if result != "win-1" || len(host.calls) != 0 {
 		t.Fatalf("window_create returned %v with effects %v", result, host.calls)
 	}
 }
@@ -307,13 +307,13 @@ func TestAWindowThatNeverBecomesAnAddressIsRolledBack(t *testing.T) {
 	if err == nil {
 		t.Fatalf("a window that never became an address was reported created: %v", result)
 	}
-	if !strings.Contains(err.Error(), "w-1") {
+	if !strings.Contains(err.Error(), "win-1") {
 		t.Errorf("the failure did not name the window: %v", err)
 	}
-	if host.find("w-1") != nil {
+	if host.find("win-1") != nil {
 		t.Error("the addressless window was left behind for the next name to collide with")
 	}
-	if !contains(host.calls, "discard w-1") {
+	if !contains(host.calls, "discard win-1") {
 		t.Errorf("the window was not discarded: %v", host.calls)
 	}
 }
@@ -327,7 +327,7 @@ func TestFocusFalseRevealsWithoutTakingTheKeyboard(t *testing.T) {
 	if _, err := registry.Invoke("window_create", callArgs(t, map[string]any{"focus": false})); err != nil {
 		t.Fatalf("window_create: %v", err)
 	}
-	if !contains(host.calls, "reveal w-1 key=false") {
+	if !contains(host.calls, "reveal win-1 key=false") {
 		t.Fatalf("a background restore asked for the keyboard: %v", host.calls)
 	}
 
@@ -337,7 +337,7 @@ func TestFocusFalseRevealsWithoutTakingTheKeyboard(t *testing.T) {
 		if _, err := registry.Invoke("window_create", callArgs(t, args)); err != nil {
 			t.Fatalf("window_create %v: %v", args, err)
 		}
-		if !contains(fresh.calls, "reveal w-2 key=true") {
+		if !contains(fresh.calls, "reveal win-2 key=true") {
 			t.Fatalf("window_create %v did not bring the window forward: %v", args, fresh.calls)
 		}
 	}
@@ -356,8 +356,8 @@ func TestTheFrameIsAppliedBeforeTheWindowIsRevealed(t *testing.T) {
 		t.Fatalf("window_create: %v", err)
 	}
 
-	place := indexOf(host.calls, "place w-1 {100 200 800 600}")
-	reveal := indexOf(host.calls, "reveal w-1 key=true")
+	place := indexOf(host.calls, "place win-1 {100 200 800 600}")
+	reveal := indexOf(host.calls, "reveal win-1 key=true")
 	if place < 0 || reveal < 0 {
 		t.Fatalf("expected a place and a reveal, got %v", host.calls)
 	}
@@ -381,10 +381,10 @@ func TestARequestedRectSuppressesTheCascade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("window_create: %v", err)
 	}
-	if contains(host.calls, "place w-1 {68 88 1000 618}") {
+	if contains(host.calls, "place win-1 {68 88 1000 618}") {
 		t.Fatalf("a restored window was cascaded off its saved position: %v", host.calls)
 	}
-	if !contains(host.calls, "place w-1 {100 200 800 600}") {
+	if !contains(host.calls, "place win-1 {100 200 800 600}") {
 		t.Fatalf("the saved position was not applied: %v", host.calls)
 	}
 }
@@ -429,7 +429,7 @@ func TestACascadeNeedsASourceWindow(t *testing.T) {
 	if _, err := registry.Invoke("window_create", control.Args{}); err != nil {
 		t.Fatalf("window_create: %v", err)
 	}
-	if !contains(host.calls, "place w-1 {68 88 1000 618}") {
+	if !contains(host.calls, "place win-1 {68 88 1000 618}") {
 		t.Fatalf("the fresh window did not cascade from the focused window: %v", host.calls)
 	}
 
@@ -450,7 +450,7 @@ func TestACascadeNeedsASourceWindow(t *testing.T) {
 func TestTheCascadeSourceIsTheFocusedWindow(t *testing.T) {
 	orchestrator := liveWindow("main")
 	orchestrator.frame = Frame{X: 0, Y: 0, W: 1000, H: 618}
-	workspace := liveWindow("w-a")
+	workspace := liveWindow("win-a")
 	workspace.focused = true
 	workspace.frame = Frame{X: 500, Y: 300, W: 900, H: 700}
 
@@ -459,7 +459,7 @@ func TestTheCascadeSourceIsTheFocusedWindow(t *testing.T) {
 	if _, err := registry.Invoke("window_create", control.Args{}); err != nil {
 		t.Fatalf("window_create: %v", err)
 	}
-	if !contains(host.calls, "place w-1 {528 328 1000 618}") {
+	if !contains(host.calls, "place win-1 {528 328 1000 618}") {
 		t.Fatalf("the cascade did not start from the focused window: %v", host.calls)
 	}
 }
@@ -467,7 +467,7 @@ func TestTheCascadeSourceIsTheFocusedWindow(t *testing.T) {
 // Handing back a name that belongs to somebody else's window hands back
 // somebody else's window.
 func TestAGeneratedNameThatIsAlreadyHeldIsRefused(t *testing.T) {
-	host := startedHost(liveWindow("w-1"))
+	host := startedHost(liveWindow("win-1"))
 	registry := registryFor(t, host, counter("1"))
 
 	result, err := registry.Invoke("window_create", control.Args{})
@@ -490,7 +490,7 @@ func TestTheBootInstructionReachesTheNewWindowsURL(t *testing.T) {
 	})); err != nil {
 		t.Fatalf("window_create: %v", err)
 	}
-	if !contains(host.calls, "open w-1 /?root=%2Fx&fresh=1") {
+	if !contains(host.calls, "open win-1 /?root=%2Fx&fresh=1") {
 		t.Fatalf("the boot instruction did not reach the window: %v", host.calls)
 	}
 
@@ -499,7 +499,7 @@ func TestTheBootInstructionReachesTheNewWindowsURL(t *testing.T) {
 	if _, err := registry.Invoke("window_create", control.Args{}); err != nil {
 		t.Fatalf("window_create: %v", err)
 	}
-	if !contains(bare.calls, "open w-2 /") {
+	if !contains(bare.calls, "open win-2 /") {
 		t.Fatalf("a window with no boot instruction opened at %v", bare.calls)
 	}
 }
@@ -533,7 +533,7 @@ func TestAnEffectThatFailsAfterTheWindowExistsWithdrawsIt(t *testing.T) {
 	})); err == nil {
 		t.Fatal("a window whose frame could not be applied was reported created")
 	}
-	if placing.find("w-1") != nil || !contains(placing.calls, "discard w-1") {
+	if placing.find("win-1") != nil || !contains(placing.calls, "discard win-1") {
 		t.Fatalf("the window was left behind: %v", placing.calls)
 	}
 
@@ -543,13 +543,13 @@ func TestAnEffectThatFailsAfterTheWindowExistsWithdrawsIt(t *testing.T) {
 	if _, err := registry.Invoke("window_create", callArgs(t, map[string]any{"focus": false})); err == nil {
 		t.Fatal("a window that could not be revealed was reported created")
 	}
-	if revealing.find("w-2") != nil || !contains(revealing.calls, "discard w-2") {
+	if revealing.find("win-2") != nil || !contains(revealing.calls, "discard win-2") {
 		t.Fatalf("the window was left behind: %v", revealing.calls)
 	}
 }
 
 func TestAnUnaddressableRequestedNameIsRefused(t *testing.T) {
-	for _, name := range []string{"w-a/b", "window-1", "", "w-"} {
+	for _, name := range []string{"win-a/b", "windowin-1", "", "win-"} {
 		host := startedHost()
 		registry := registryFor(t, host, counter("1"))
 		result, err := registry.Invoke("window_create", callArgs(t, map[string]any{"label": name}))
@@ -572,13 +572,13 @@ func TestATargetedCommandOnAnUnknownWindowFailsByName(t *testing.T) {
 		host := startedHost(liveWindow("main"))
 		registry := registryFor(t, host, counter("1"))
 		_, err := registry.Invoke(command, callArgs(t, map[string]any{
-			"label": "w-gone", "x": 0, "y": 0, "w": 100, "h": 100,
+			"label": "win-gone", "x": 0, "y": 0, "w": 100, "h": 100,
 		}))
 		if err == nil {
 			t.Errorf("%s answered for a window that does not exist", command)
 			continue
 		}
-		if !strings.Contains(err.Error(), "w-gone") {
+		if !strings.Contains(err.Error(), "win-gone") {
 			t.Errorf("%s refused with %q, which does not name the window", command, err)
 		}
 		if len(host.calls) != 0 {
@@ -592,10 +592,10 @@ func TestATargetedCommandOnAnUnknownWindowFailsByName(t *testing.T) {
 // not do.
 func TestATargetedCommandOnAnUnreachableWindowFailsRatherThanSucceeding(t *testing.T) {
 	for _, command := range windowTargetedCommands {
-		host := startedHost(&fakeWindow{name: "w-dead", live: false})
+		host := startedHost(&fakeWindow{name: "win-dead", live: false})
 		registry := registryFor(t, host, counter("1"))
 		_, err := registry.Invoke(command, callArgs(t, map[string]any{
-			"label": "w-dead", "x": 0, "y": 0, "w": 100, "h": 100,
+			"label": "win-dead", "x": 0, "y": 0, "w": 100, "h": 100,
 		}))
 		if err == nil {
 			t.Errorf("%s reported success against a window that answers nothing", command)
@@ -611,15 +611,15 @@ func TestATargetedCommandOnAnUnreachableWindowFailsRatherThanSucceeding(t *testi
 // closing a window would reload it, and the caller would be told it closed.
 func TestEachTargetedCommandPerformsExactlyItsOwnEffect(t *testing.T) {
 	for command, effect := range map[string]string{
-		"window_close":  "close w-1",
-		"window_focus":  "focus w-1",
-		"window_reload": "reload w-1",
-		"window_place":  "place w-1 {10 20 800 600}",
+		"window_close":  "close win-1",
+		"window_focus":  "focus win-1",
+		"window_reload": "reload win-1",
+		"window_place":  "place win-1 {10 20 800 600}",
 	} {
-		host := startedHost(liveWindow("w-1"))
+		host := startedHost(liveWindow("win-1"))
 		registry := registryFor(t, host, counter("2"))
 		result, err := registry.Invoke(command, callArgs(t, map[string]any{
-			"label": "w-1", "x": 10, "y": 20, "w": 800, "h": 600,
+			"label": "win-1", "x": 10, "y": 20, "w": 800, "h": 600,
 		}))
 		if err != nil {
 			t.Errorf("%s: %v", command, err)
@@ -637,18 +637,18 @@ func TestEachTargetedCommandPerformsExactlyItsOwnEffect(t *testing.T) {
 // A window can be raised successfully and still not receive the keyboard, so
 // the request and the result must stay askable separately.
 func TestKeyStateIsAnAnswerSeparateFromTheFocusRequest(t *testing.T) {
-	window := liveWindow("w-1")
+	window := liveWindow("win-1")
 	host := startedHost(window)
 	registry := registryFor(t, host, counter("2"))
 
-	if _, err := registry.Invoke("window_focus", callArgs(t, map[string]any{"label": "w-1"})); err != nil {
+	if _, err := registry.Invoke("window_focus", callArgs(t, map[string]any{"label": "win-1"})); err != nil {
 		t.Fatalf("window_focus: %v", err)
 	}
-	if !contains(host.calls, "focus w-1") {
+	if !contains(host.calls, "focus win-1") {
 		t.Fatalf("window_focus did not reach the host: %v", host.calls)
 	}
 
-	key, err := registry.Invoke("window_is_key", callArgs(t, map[string]any{"label": "w-1"}))
+	key, err := registry.Invoke("window_is_key", callArgs(t, map[string]any{"label": "win-1"}))
 	if err != nil {
 		t.Fatalf("window_is_key: %v", err)
 	}
@@ -657,7 +657,7 @@ func TestKeyStateIsAnAnswerSeparateFromTheFocusRequest(t *testing.T) {
 	}
 
 	window.focused = true
-	key, err = registry.Invoke("window_is_key", callArgs(t, map[string]any{"label": "w-1"}))
+	key, err = registry.Invoke("window_is_key", callArgs(t, map[string]any{"label": "win-1"}))
 	if err != nil || key != true {
 		t.Fatalf("window_is_key on the key window = %v, %v", key, err)
 	}
@@ -669,7 +669,7 @@ func TestKeyStateForAVanishedWindowIsAnErrorAndNotFalse(t *testing.T) {
 	host := startedHost(liveWindow("main"))
 	registry := registryFor(t, host, counter("1"))
 
-	result, err := registry.Invoke("window_is_key", callArgs(t, map[string]any{"label": "w-gone"}))
+	result, err := registry.Invoke("window_is_key", callArgs(t, map[string]any{"label": "win-gone"}))
 	if err == nil {
 		t.Fatalf("window_is_key answered %v for a window that does not exist", result)
 	}
@@ -679,10 +679,10 @@ func TestKeyStateForAVanishedWindowIsAnErrorAndNotFalse(t *testing.T) {
 // nothing changed. The caller renders this.
 func TestTheWindowListIsSortedAndHoldsOnlyAddresses(t *testing.T) {
 	host := startedHost(
-		liveWindow("w-b"),
-		&fakeWindow{name: "w-queued", live: false},
+		liveWindow("win-b"),
+		&fakeWindow{name: "win-queued", live: false},
 		liveWindow("main"),
-		liveWindow("w-a"),
+		liveWindow("win-a"),
 	)
 	registry := registryFor(t, host, counter("1"))
 
@@ -694,7 +694,7 @@ func TestTheWindowListIsSortedAndHoldsOnlyAddresses(t *testing.T) {
 	if !ok {
 		t.Fatalf("window_list answered %T, want []string", result)
 	}
-	want := []string{"main", "w-a", "w-b"}
+	want := []string{"main", "win-a", "win-b"}
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("window_list = %v, want %v (a name no command can reach must not be offered as a target)", names, want)
 	}
@@ -724,9 +724,9 @@ func TestAnEmptyWindowListIsAListAndNotNull(t *testing.T) {
 // still holds it, and hiding it would send a restore into creating a second
 // window under the same name.
 func TestTheCensusCountsEveryHeldNameOnce(t *testing.T) {
-	focused := liveWindow("w-a")
+	focused := liveWindow("win-a")
 	focused.focused = true
-	host := startedHost(liveWindow("main"), focused, &fakeWindow{name: "w-queued", live: false})
+	host := startedHost(liveWindow("main"), focused, &fakeWindow{name: "win-queued", live: false})
 	registry := registryFor(t, host, counter("1"))
 
 	result, err := registry.Invoke("window_census", control.Args{})
@@ -745,7 +745,7 @@ func TestTheCensusCountsEveryHeldNameOnce(t *testing.T) {
 		if row.Hosts != 1 {
 			t.Errorf("%s reported %d holders in a process that holds it once", row.Label, row.Hosts)
 		}
-		if row.Focused != (row.Label == "w-a") {
+		if row.Focused != (row.Label == "win-a") {
 			t.Errorf("%s reported focused=%v", row.Label, row.Focused)
 		}
 	}
@@ -769,10 +769,10 @@ func TestMonitorsReportsOneSpaceAndNoMonitorForAnOffscreenWindow(t *testing.T) {
 	onScreen := liveWindow("main")
 	onScreen.focused = true
 	onScreen.frame = Frame{X: 100, Y: 100, W: 800, H: 600}
-	offScreen := liveWindow("w-a")
+	offScreen := liveWindow("win-a")
 	offScreen.frame = Frame{X: -9000, Y: -9000, W: 200, H: 200}
 
-	host := startedHost(onScreen, offScreen, &fakeWindow{name: "w-queued", live: false})
+	host := startedHost(onScreen, offScreen, &fakeWindow{name: "win-queued", live: false})
 	host.displays = []Display{leftDisplay, rightDisplay}
 	registry := registryFor(t, host, counter("1"))
 
@@ -816,7 +816,7 @@ func TestMonitorsReportsOneSpaceAndNoMonitorForAnOffscreenWindow(t *testing.T) {
 			if !window.Focused {
 				t.Error("main holds the keyboard and reported otherwise")
 			}
-		case "w-a":
+		case "win-a":
 			if window.Monitor != nil {
 				t.Errorf("an off-screen window answered monitor %d rather than none", *window.Monitor)
 			}
@@ -838,7 +838,7 @@ func TestTheReportedMonitorIndexIsThePositionTheVerdictCounts(t *testing.T) {
 	right := rightDisplay
 	right.Index = 3
 
-	window := liveWindow("w-a")
+	window := liveWindow("win-a")
 	window.frame = Frame{X: 2000, Y: 200, W: 800, H: 600}
 	host := startedHost(window)
 	host.displays = []Display{left, right}
@@ -881,13 +881,13 @@ func TestTheReportedMonitorIndexIsThePositionTheVerdictCounts(t *testing.T) {
 // One coordinate space, no hidden conversion: a frame handed to window_place
 // comes back from window_monitors unchanged.
 func TestPlaceAndMonitorsShareOneCoordinateSpace(t *testing.T) {
-	window := liveWindow("w-a")
+	window := liveWindow("win-a")
 	host := startedHost(window)
 	host.displays = []Display{leftDisplay, rightDisplay}
 	registry := registryFor(t, host, counter("1"))
 
 	_, err := registry.Invoke("window_place", callArgs(t, map[string]any{
-		"label": "w-a", "x": 1930, "y": 40, "w": 1200, "h": 900,
+		"label": "win-a", "x": 1930, "y": 40, "w": 1200, "h": 900,
 	}))
 	if err != nil {
 		t.Fatalf("window_place: %v", err)
@@ -926,20 +926,20 @@ func TestPlaceAndMonitorsShareOneCoordinateSpace(t *testing.T) {
 // told it worked.
 func TestPlaceRefusesARectThatIsNotOne(t *testing.T) {
 	cases := []map[string]any{
-		{"label": "w-a", "x": "left", "y": 0, "w": 100, "h": 100},
-		{"label": "w-a", "x": 0, "y": 0, "w": 0, "h": 100},
-		{"label": "w-a", "x": 0, "y": 0, "w": 100, "h": -1},
-		{"label": "w-a", "y": 0, "w": 100, "h": 100},
-		{"label": "w-a", "x": nil, "y": 0, "w": 100, "h": 100},
-		{"label": "w-a", "x": 0, "y": 0, "w": nil, "h": 100},
+		{"label": "win-a", "x": "left", "y": 0, "w": 100, "h": 100},
+		{"label": "win-a", "x": 0, "y": 0, "w": 0, "h": 100},
+		{"label": "win-a", "x": 0, "y": 0, "w": 100, "h": -1},
+		{"label": "win-a", "y": 0, "w": 100, "h": 100},
+		{"label": "win-a", "x": nil, "y": 0, "w": 100, "h": 100},
+		{"label": "win-a", "x": 0, "y": 0, "w": nil, "h": 100},
 		{"label": nil, "x": 0, "y": 0, "w": 100, "h": 100},
 		// Too large to arrive: the number wraps at the platform edge, so the
 		// window lands somewhere nobody chose and the caller is told it worked.
-		{"label": "w-a", "x": 1e300, "y": 0, "w": 100, "h": 100},
-		{"label": "w-a", "x": 0, "y": 0, "w": 1e300, "h": 100},
+		{"label": "win-a", "x": 1e300, "y": 0, "w": 100, "h": 100},
+		{"label": "win-a", "x": 0, "y": 0, "w": 1e300, "h": 100},
 	}
 	for _, args := range cases {
-		host := startedHost(liveWindow("w-a"))
+		host := startedHost(liveWindow("win-a"))
 		registry := registryFor(t, host, counter("1"))
 		if _, err := registry.Invoke("window_place", callArgs(t, args)); err == nil {
 			t.Errorf("window_place accepted %v", args)
@@ -954,7 +954,7 @@ func TestPlaceRefusesARectThatIsNotOne(t *testing.T) {
 // the same request fail when a workspace renderer asked for it, and with it
 // went every keystroke that window's children were waiting for.
 func TestActivationTakesNoWindowAndNeedsNoKeyWindow(t *testing.T) {
-	host := startedHost(&fakeWindow{name: "w-a", live: true})
+	host := startedHost(&fakeWindow{name: "win-a", live: true})
 	registry := registryFor(t, host, counter("1"))
 
 	if _, err := registry.Invoke("window_activate", control.Args{}); err != nil {
@@ -1098,7 +1098,7 @@ func TestAGeneratedNameIsNeverTheControlPlanes(t *testing.T) {
 func TestTheCensusCarriesWhatEachWindowSaysItIs(t *testing.T) {
 	main := liveWindow(controlPlaneWindow)
 	main.title = "boot:render"
-	workspace := liveWindow("w-a")
+	workspace := liveWindow("win-a")
 	workspace.title = "boot:persist-init"
 	registry := registryFor(t, startedHost(main, workspace), counter("1"))
 
@@ -1122,8 +1122,8 @@ func TestTheCensusCarriesWhatEachWindowSaysItIs(t *testing.T) {
 	if titles[controlPlaneWindow] != "boot:render" {
 		t.Errorf("%s reported %q", controlPlaneWindow, titles[controlPlaneWindow])
 	}
-	if titles["w-a"] != "boot:persist-init" {
-		t.Errorf("w-a reported %q", titles["w-a"])
+	if titles["win-a"] != "boot:persist-init" {
+		t.Errorf("win-a reported %q", titles["win-a"])
 	}
 }
 
@@ -1132,7 +1132,7 @@ func TestTheCensusCarriesWhatEachWindowSaysItIs(t *testing.T) {
 // census because one window is unreachable hides the count this command exists
 // to report.
 func TestAWindowWithNoTitleLeavesTheFieldNullAndKeepsTheCount(t *testing.T) {
-	host := startedHost(liveWindow(controlPlaneWindow), deadWindow("w-gone"))
+	host := startedHost(liveWindow(controlPlaneWindow), deadWindow("win-gone"))
 	registry := registryFor(t, host, counter("1"))
 
 	reply, err := registry.Invoke("window_census", nil)
@@ -1144,7 +1144,7 @@ func TestAWindowWithNoTitleLeavesTheFieldNullAndKeepsTheCount(t *testing.T) {
 		t.Fatalf("the census reported %d windows, want both held names", len(census.Windows))
 	}
 	for _, row := range census.Windows {
-		if row.Label == "w-gone" && row.Title != nil {
+		if row.Label == "win-gone" && row.Title != nil {
 			t.Errorf("an unreachable window reported the title %q", *row.Title)
 		}
 	}

@@ -15,7 +15,7 @@ func TestAnUnfilledBridgeAnswersRatherThanPanics(t *testing.T) {
 }
 
 func TestABridgeReportsTheHostsWindows(t *testing.T) {
-	bridge := Bridge{host: startedHost(liveWindow("main"), liveWindow("w-a"))}
+	bridge := Bridge{host: startedHost(liveWindow("main"), liveWindow("win-a"))}
 
 	live := bridge.Live()
 	if len(live) != 2 {

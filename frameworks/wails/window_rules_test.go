@@ -22,22 +22,22 @@ func showMonitor(index *int) string {
 // slot key in the restore manifest. A separator inside it lets one window's
 // snapshot address another namespace's path.
 func TestAWindowNameWithASeparatorIsRefused(t *testing.T) {
-	for _, name := range []string{"w-a/b", "w-../main", "w-a.b", "w- a", `w-a"b`, "w-a\\b"} {
+	for _, name := range []string{"win-a/b", "win-../main", "win-a.b", "win- a", `win-a"b`, "win-a\\b"} {
 		if validWindowName(name) {
 			t.Errorf("%q was accepted; it addresses a path outside its own snapshot key", name)
 		}
 	}
 }
 
-// A name outside the "w-" family is outside the capability glob the frontend
+// A name outside the "win-" family is outside the capability glob the frontend
 // assumes, and a window built under it answers no command at all.
 func TestANameThatIsNeitherReservedNorAWorkspaceIsRefused(t *testing.T) {
-	for _, name := range []string{"", "w-", "win-1", "window-1", "orchestrator", "W-1"} {
+	for _, name := range []string{"", "win-", "w-1", "window-1", "orchestrator", "WIN-1"} {
 		if validWindowName(name) {
-			t.Errorf("%q was accepted; only the reserved name and w-<id> are addressable", name)
+			t.Errorf("%q was accepted; only the reserved name and win-<id> are addressable", name)
 		}
 	}
-	for _, name := range []string{"main", "w-1", "w-2f1c-4a", "w-A_b-9"} {
+	for _, name := range []string{"main", "win-1", "win-2f1c-4a", "win-A_b-9"} {
 		if !validWindowName(name) {
 			t.Errorf("%q was refused; it is a name this build must address", name)
 		}
@@ -54,8 +54,8 @@ func TestTheReservedNameIsAcceptedButNeverGenerated(t *testing.T) {
 	if got := workspaceName(controlPlaneWindow); got == controlPlaneWindow {
 		t.Fatalf("the generator produced the reserved name %q", got)
 	}
-	if got := workspaceName("2f1c"); got != "w-2f1c" {
-		t.Fatalf("workspaceName(2f1c) = %q, want w-2f1c", got)
+	if got := workspaceName("2f1c"); got != "win-2f1c" {
+		t.Fatalf("workspaceName(2f1c) = %q, want win-2f1c", got)
 	}
 	if !validWindowName(workspaceName("2f1c")) {
 		t.Fatal("a generated name must be addressable")
@@ -232,7 +232,7 @@ func TestCensusFoldsASharedNameIntoOneRowWithTwoHosts(t *testing.T) {
 	folded := foldCensus([]censusRow{
 		{Label: "main", Hosts: 1, Focused: false},
 		{Label: "main", Hosts: 1, Focused: true},
-		{Label: "w-1", Hosts: 1, Focused: false},
+		{Label: "win-1", Hosts: 1, Focused: false},
 	})
 	if len(folded) != 2 {
 		t.Fatalf("folded to %d rows, want 2: %+v", len(folded), folded)

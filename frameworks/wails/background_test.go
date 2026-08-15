@@ -16,20 +16,20 @@ import (
 // captured at registration, so a workspace window's theme repainted the
 // orchestrator and left itself alone.
 func TestEachWindowColoursItself(t *testing.T) {
-	host := startedHost(liveWindow(controlPlaneWindow), liveWindow("w-a"))
+	host := startedHost(liveWindow(controlPlaneWindow), liveWindow("win-a"))
 	registry := control.NewRegistry()
 	RegisterBackground(registry, host)
 
 	if _, err := registry.InvokeFrom(
-		control.Caller{Window: "w-a"},
+		control.Caller{Window: "win-a"},
 		"window_set_background",
 		callArgs(t, map[string]any{"color": "#101014"}),
 	); err != nil {
 		t.Fatalf("window_set_background: %v", err)
 	}
 
-	if got := host.background("w-a"); got != "#101014" {
-		t.Errorf("w-a is %q, want the colour it asked for", got)
+	if got := host.background("win-a"); got != "#101014" {
+		t.Errorf("win-a is %q, want the colour it asked for", got)
 	}
 	if got := host.background(controlPlaneWindow); got != "" {
 		t.Errorf("the orchestrator was repainted to %q by another window", got)
@@ -60,14 +60,14 @@ func TestColouringAWindowThatIsGoneFailsByName(t *testing.T) {
 	RegisterBackground(registry, host)
 
 	_, err := registry.InvokeFrom(
-		control.Caller{Window: "w-gone"},
+		control.Caller{Window: "win-gone"},
 		"window_set_background",
 		callArgs(t, map[string]any{"color": "#101014"}),
 	)
 	if err == nil {
 		t.Fatal("a vanished window was coloured")
 	}
-	if !strings.Contains(err.Error(), "w-gone") {
+	if !strings.Contains(err.Error(), "win-gone") {
 		t.Errorf("the refusal did not name the window: %v", err)
 	}
 }

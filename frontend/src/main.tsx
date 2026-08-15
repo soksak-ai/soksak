@@ -5,6 +5,8 @@ import {
   presentWindow,
   suspendNativeSurfaces,
   invoke as bootInvoke,
+  emitLocal,
+  listen,
 } from "./framework";
 import { bootFactPayload } from "./lib/bootFact";
 import { setWindowBackgroundSink } from "./theme/engine";
@@ -30,11 +32,16 @@ import App from "./App";
 import { markCommandHostReady, startExecutor } from "./commands/executor";
 import { catalogJson, execute } from "./commands/registry";
 import { installControlDoor } from "./framework/wails/controlDoor";
+import {
+  installRendererDoor,
+  type RendererDeclaration,
+} from "./framework/wails/rendererDoor";
 import { loadCliName } from "./lib/cliIdentity";
 import { startWebviewGc } from "./lib/webviewGc";
 import { initPluginHost } from "./plugins/host";
 import { initNotify } from "./lib/notify";
 import { currentWindowLabel } from "./lib/webviewLabels";
+import { onBootCacheDiscarded } from "./state/coreStore";
 import { claimRoots } from "./state/projectRegistry";
 import { recordRecentProject } from "./state/recentProjects";
 import { useSessions } from "./state/sessions";
@@ -105,6 +112,36 @@ function bootStamp(step: string): void {
   }).catch(() => {});
 }
 
+// Declares the commands this window answers to the backend registry — that is how `sok ui.tree` works with no window.
+// Called after the command host is ready: reading before that declares a catalog missing every plugin command,
+// and a missing name looks like "no such command" from outside.
+async function declareCommandsToBackend(): Promise<void> {
+  await installRendererDoor({
+    names: () => catalogJson().map((entry) => entry.name),
+    emit: (event, payload) => emitLocal(event, payload),
+    listen: async (event, handler) => {
+      await listen<RendererDeclaration>(event, (received) => handler(received.payload));
+    },
+    onPageHide: (run) => window.addEventListener("pagehide", run),
+    // The receipt goes to the ledger — a refusal (another window already answers that name, this process
+    // answers it directly) left in the console alone cannot be read from outside.
+    report: (declaration) => {
+      void bootInvoke("activity_publish", {
+        kind: "renderer.commands",
+        source: "renderer",
+        payload: {
+          ...declaration,
+          message: `· ${tmsg("msg.renderer.commands", {
+            window: declaration.window,
+            held: declaration.held.length,
+            refused: declaration.refused.length,
+          })}`,
+        },
+      }).catch(() => {});
+    },
+  });
+}
+
 // Boot complete — restores the title so no stamp remains (initWindowTitle takes over after this).
 function bootDone(): void {
   try {
@@ -127,6 +164,10 @@ async function boot(): Promise<void> {
   }
   bootStamp("module-loaded"); // the point the whole module graph finished running — before it is webview load time
   installErrorLedger(); // error ledger — first thing in boot (no later exception can stay silent)
+  // A boot cache this build could not read is a defect, not a first run, and the two are fixed in
+  // different places. Reported as they happen rather than drained once: the reads that matter most
+  // are during restore, which is later than any single drain point would be.
+  onBootCacheDiscarded((lsKey, why) => bootStamp(`cache-discarded:${lsKey}:${why}`));
   // The chosen framework installs its own parts — implementations, devices, styles. Not enumerated here.
   // Must be first in boot: with no content view implementation installed, a plugin opening a view is refused with the name.
   // Read the window name first. This value is cached and becomes the first address segment, so reading it late
@@ -177,6 +218,11 @@ async function boot(): Promise<void> {
     // The plugin host is not run — the registry is already final, so the readiness gate is released immediately
     // (left locked, an unregistered command sent to this window waits until timeout).
     markCommandHostReady();
+    try {
+      await declareCommandsToBackend();
+    } catch (e) {
+      console.error("command catalog declaration failed:", e);
+    }
     bootStamp("main-ready");
     // Fixes the hidden native window's final position and size first. Restoring after the first visible frame
     // makes the whole window jump once even when the traffic lights and the DOM agree.
@@ -280,6 +326,11 @@ async function boot(): Promise<void> {
   // Releases the boot readiness gate — unregistered (plugin) command requests that arrived earlier and waited now run.
   // Released even when exiting through a failure (a permanently locked gate kills remote requests by timeout only).
   markCommandHostReady();
+  try {
+    await declareCommandsToBackend();
+  } catch (e) {
+    console.error("command catalog declaration failed:", e);
+  }
   // Notification click (OS) and external/cold-start deep link routing — once, after the command registry and plugins are ready.
   try {
     await initNotify();

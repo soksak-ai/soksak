@@ -21,8 +21,8 @@ import (
 // The identifier after it is opaque and never reused: a closed window's name on
 // a new window makes that window inherit the dead one's restored state. The
 // prefix itself cannot change — an earlier generation used "win-" and the
-// frontend's capability glob still assumes "w-*".
-const workspaceWindowPrefix = "w-"
+// frontend's capability glob still assumes "win-*".
+const workspaceWindowPrefix = "win-"
 
 // cascadePoints is the offset a fresh window takes from the one that opened it.
 // 28pt is roughly a centimetre (72pt to the inch). Landing exactly on top makes
@@ -35,7 +35,7 @@ const cascadePoints = 28
 
 // validWindowName reports whether this name may address a window.
 //
-// Two rules, for two different failures. A name outside the "w-" family (the
+// Two rules, for two different failures. A name outside the "win-" family (the
 // reserved orchestrator name aside) falls outside the capability glob the
 // frontend assumes, and every command sent to such a window times out rather
 // than failing. And the name becomes the key "window/<name>" in the snapshot

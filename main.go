@@ -72,12 +72,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	kv, err := store.OpenKV(filepath.Join(resolved.Home, "soksak.db"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() { _ = kv.Close() }()
-
 	// The half of the host that does not exist yet. The registry is filled
 	// before the framework starts, so the commands that need to reach a window
 	// are handed this and Run fills it in.
@@ -92,42 +86,53 @@ func main() {
 	)
 
 	registry := control.NewRegistry()
-	boot.RegisterCore(registry, boot.Boot{
-		Identity:     resolved,
-		BuildProfile: buildProfile,
-		KV:           kv,
-		Ledger:       activity.NewLedger(),
-		Recent:       activity.NewTail(0),
-		Now:          func() int64 { return time.Now().UnixMilli() },
+	// Filled once the home is ours. Nothing this installation owns — least of
+	// all its database — is touched by a process that has not claimed it.
+	fill := func(kv *store.KV) {
+		boot.RegisterCore(registry, boot.Boot{
+			Identity:     resolved,
+			BuildProfile: buildProfile,
+			KV:           kv,
+			Ledger:       activity.NewLedger(),
+			Recent:       activity.NewTail(0),
+			Now:          func() int64 { return time.Now().UnixMilli() },
 
-		UserHome:    userHome,
-		LoginShell:  os.Getenv("SHELL"),
-		Windows:     runtime.GOOS == "windows",
-		PID:         os.Getpid(),
-		Environment: os.Environ(),
-		PidAlive:    pidAlive,
+			UserHome:    userHome,
+			LoginShell:  os.Getenv("SHELL"),
+			Windows:     runtime.GOOS == "windows",
+			PID:         os.Getpid(),
+			Environment: os.Environ(),
+			PidAlive:    pidAlive,
 
-		Emit:        bridge.Emit,
-		LiveWindows: bridge.Live,
+			Emit:        bridge.Emit,
+			LiveWindows: bridge.Live,
 
-		Run: files.SystemRunner{},
-		// No filesystem watcher is built into this binary yet, so watch_dir is
-		// refused by name rather than accepting a subscription that can never
-		// fire.
-		Watch:   nil,
-		Spawner: process.OSSpawner{},
-		// This host holds no vault. A spawn that asks for a secret is refused
-		// by name; handing back an empty value would surface later as the
-		// child's own authentication failure.
-		Secrets:     nil,
-		ProcessSink: processEventSink{bridge: bridge},
-		Sessions:    terminalSessions{service: terminals},
-	})
+			Run: files.SystemRunner{},
+			// No filesystem watcher is built into this binary yet, so watch_dir is
+			// refused by name rather than accepting a subscription that can never
+			// fire.
+			Watch:   nil,
+			Spawner: process.OSSpawner{},
+			// This host holds no vault. A spawn that asks for a secret is refused
+			// by name; handing back an empty value would surface later as the
+			// child's own authentication failure.
+			Secrets:     nil,
+			ProcessSink: processEventSink{bridge: bridge},
+			Sessions:    terminalSessions{service: terminals},
+		})
+	}
 
 	// The home is claimed before anything is drawn — see launch. Everything this
 	// application can do is reachable from outside it, which is what makes a
 	// feature verifiable rather than only clickable.
 	err = launch(resolved, control.Listen, func(listener net.Listener) error {
+		kv, err := store.OpenKV(filepath.Join(resolved.Home, "soksak.db"))
+		if err != nil {
+			return err
+		}
+		defer func() { _ = kv.Close() }()
+		fill(kv)
+
 		serveControl(listener, registry, resolved.Identifier, func(err error) {
 			log.Printf("control plane stopped: %v", err)
 		})

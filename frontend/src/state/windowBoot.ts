@@ -325,7 +325,7 @@ export async function respawnSavedWindows(): Promise<void> {
       // Window label invariant (NAMING 4b) — a runtime window is w-<uuid> only. Any other label is outside capability,
       // so spawning it produces a deaf window (every command TIMEOUT). Refuse the spawn and leave the data alone
       // — old-generation data is corrected by a one-shot migration (scripts/migrations/20260704-window-label-uuid.sh).
-      if (!slot.label.startsWith("w-")) {
+      if (!slot.label.startsWith("win-")) {
         console.error(
           `[restore] refused to spawn an old-generation label slot: ${slot.label} — ` +
             `run scripts/migrations/20260704-window-label-uuid.sh (NAMING 4b)`,

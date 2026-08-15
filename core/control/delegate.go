@@ -89,3 +89,13 @@ func (registry *Registry) Delegated(source string) []string {
 	copy(out, held)
 	return out
 }
+
+// ServedLocally says this process answers the name itself, rather than handing
+// it on. A delegation asking for it would be refused, and the source deserves
+// to hear which name rather than a verdict about the whole set.
+func (registry *Registry) ServedLocally(name string) bool {
+	registry.mu.RLock()
+	defer registry.mu.RUnlock()
+	_, local := registry.served[name]
+	return local
+}

@@ -122,9 +122,6 @@ var unserved = map[string]string{
 	"webview_list":         "window",
 
 	// Added by the gate on 2026-08-15.
-	"engine_surface_stats": "surface",
-
-	// Added by the gate on 2026-08-15.
 	"data_canary":                  "storage",
 	"data_encrypt_change_recovery": "storage",
 	"data_encrypt_convert":         "storage",
@@ -220,6 +217,13 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		Sessions:    idleSessions{},
 	})
 	Register(registry, Deps{Host: startedHost(), NewID: counter("1")})
+	// The surface group reads a composition rather than holding one, so the
+	// gate hands it one that was never committed. Which names register depends
+	// on the dependencies being present, never on what they answer.
+	RegisterSurface(registry, SurfaceDeps{
+		Composition:  stubComposition{},
+		NativeParent: func() bool { return false },
+	})
 	// The renderer command bridge registers the one name a page answers with.
 	// A gate that assembled everything but this would read cmd_result as
 	// missing while the running process serves it.
