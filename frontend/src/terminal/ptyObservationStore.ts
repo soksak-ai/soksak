@@ -51,8 +51,8 @@ const observations = moduleState(
 const anyCmdStartSubs = moduleState("terminal/ptyObservationStore#anyCmdStartSubs", () => new Set<
   (paneId: string, commandLine: string, cwd: string | null) => void
 >());
-// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
-// recorded the fill and does not fill again.
+// Outside the hot-swap boundary — when this table is replaced, the filling side treats it as
+// already filled and does not fill again.
 const anyCmdFinishedSubs = moduleState("terminal/ptyObservationStore#anyCmdFinishedSubs", () => new Set<
   (paneId: string, commandLine?: string | null, cwd?: string | null, exitCode?: number) => void
 >());
@@ -280,7 +280,7 @@ export function subscribeAnyCommandFinished(
   };
 }
 
-// Test only — clears everything.
+// For tests — full reset.
 export function resetPtyObservationStoreForTest(): void {
   observations.clear();
   anyCmdStartSubs.clear();

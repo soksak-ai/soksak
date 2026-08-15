@@ -32,7 +32,7 @@ export async function suspendNativeSurfaces(): Promise<void> {
  *
  * The observer has one writer, and events that arrive during a commit collect into the next full snapshot.
  * So settled means "the applied sequence has caught up with the declared sequence and nothing is pending" —
- * decide on a fact that does not exist.
+ * the sequence is the test, not elapsed time.
  */
 export async function nativeSurfacesSettled(): Promise<void> {
   for (;;) {

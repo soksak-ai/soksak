@@ -345,11 +345,9 @@ export type CommandError = CommandOutcome & { ok: false };
 const MAX_MACHINE_SCHEMA_DEPTH = 16;
 const MAX_MACHINE_SCHEMA_NODES = 512;
 const MAX_MACHINE_RESULT_ERRORS = 16;
-// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
-// recorded the fill and does not fill again.
+// Outside the hot-swap boundary — a fresh table is never refilled: the filler already recorded that it filled one.
 const UNSAFE_RECORD_KEYS = moduleState("commands/registry#UNSAFE_RECORD_KEYS", () => new Set(["__proto__", "prototype", "constructor"]));
-// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
-// recorded the fill and does not fill again.
+// Outside the hot-swap boundary — a fresh table is never refilled: the filler already recorded that it filled one.
 const PLUGIN_ROLES = moduleState("commands/registry#PLUGIN_ROLES", () => new Set(["controller", "view", "file-viewer", "overlay", "preview"]));
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
@@ -1496,9 +1494,8 @@ function withCommonFields(out: CommandOutcome, name: string, ctx: CommandContext
 // UNKNOWN_COMMAND resolver — matches an unknown command name against the registry catalog and builds per-cause guidance
 // (not installed → install, disabled → enable). The catalog and plugin state are owned by the layer above (catalogPlugins),
 // so only the injection point is here (avoids a dependency cycle — the registry holds no reference to the state store).
-// The injection point must cross the hot-swap boundary — when only this slot is empty, the side
-// that filled it treats it as already filled and does not refill. What remains is "nobody
-// answers", and that silence is not an error.
+// The injection point must survive the hot-swap boundary — if only this slot is emptied, the filler treats it as already
+// filled and does not fill again. What remains is "nobody answers", and that silence is not an error.
 const unknownCommandResolverSlot = moduleState(
   "commands/registry#unknownCommandResolver",
   () => ({ v: null as ((name: string) => CommandHint[]) | null }),

@@ -36,7 +36,7 @@ export const ko = {
   "orch.open": "오케스트레이터 열기",
   "project.rootMissing": "프로젝트 폴더를 찾을 수 없습니다: {root} — 경로를 복구하거나 이 프로젝트를 닫으세요.",
   "window.empty": "이 창에 열린 프로젝트가 없습니다 — 오케스트레이터에서 프로젝트를 열거나 만드세요.",
-  // Webview recovery-exhausted badge (App WebviewHealthBadges) — notice that auto-recovery stopped + the manual recovery action.
+  // Webview recovery exhausted badge (App WebviewHealthBadges) — notice that auto recovery stopped, plus the manual recovery action.
   "webview.exhausted": "화면 복구가 중단되었습니다: {label}",
   "webview.recoverAction": "다시 불러오기",
 
@@ -508,8 +508,8 @@ export const ko = {
   "cmd.window.pixels": "칠해진 픽셀을 잽니다",
   "cmd.window.themeScan": "테마 전환을 측정합니다",
 
-  // Error hints (suggestions, MESSAGE-PROTOCOL) — follow-up command candidates attached to a failure response. Not a directive:
-  // phrase each as "this is possible" so the caller can diagnose and recover. Write them in a suggesting tone.
+  // Error hints (suggestion, MESSAGE-PROTOCOL) — follow-up command candidates attached to a failure
+  // response. Not an instruction but a "this is possible" suggestion aiding diagnosis and recovery. Suggesting tone.
   "hint.error.unknownCommand": "전체 명령을 찾아볼 수 있습니다",
   "hint.error.targetNotFound": "현재 대상 트리를 확인할 수 있습니다",
   "hint.error.invalidParams": "파라미터 형식을 확인할 수 있습니다",
@@ -598,7 +598,7 @@ export const ko = {
 
   "msg.plugin.install.unknownName": "레지스트리에 없는 이름: {name}",
 
-  // Command replies (message, MESSAGE-PROTOCOL §3) — resolved through tmsg. Adding a language = this one block (P0).
+  // Command replies (message, MESSAGE-PROTOCOL §3) — resolved through tmsg. Adding a language = one copy of this block (P0).
   "msg.activity.recent": "활동 {n}개",
   "msg.bookmark.add": "북마크를 추가했습니다",
   "msg.bookmark.list": "북마크 {n}개",

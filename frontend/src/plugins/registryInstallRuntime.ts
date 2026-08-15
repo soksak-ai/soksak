@@ -23,9 +23,8 @@ const unavailable: RegistryInstallRuntimeHandler = async () => ({
   message: "the native atomic release installer is not available in this build",
 });
 
-// The injection point must cross the hot-swap boundary — when only this slot is empty, the side
-// that filled it treats it as already filled and does not refill. What remains is "nobody
-// answers", and that silence is not an error.
+// The injection point must survive the module swap boundary — if only this slot is cleared, the
+// side that already set it does not set it again; nothing responds, and that silence is not an error.
 const handlerSlot = moduleState("plugins/registryInstallRuntime#handlerSlot.v", () => ({ v: unavailable }));
 export function setRegistryInstallRuntime(
   next: RegistryInstallRuntimeHandler,

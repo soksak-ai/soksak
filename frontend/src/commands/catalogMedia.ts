@@ -35,8 +35,7 @@ export function registerMediaCatalog(): void {
       "Return the local media-stream proxy endpoint { base, port, token }. The proxy fetches Referer/CORS-protected media (HLS .m3u8/.ts, ranged .mp4) the webview cannot fetch cross-origin: it injects caller-supplied headers, streams binary with Range support, rewrites m3u8 segment/key URLs, and sets permissive CORS for hls.js / <video>. Build URLs as {base}/m3u8?url=&referer=&ua= or {base}/stream?url=&referer=&ua=.",
     triggers: { ko: "미디어 프록시 스트리밍 엔드포인트 HLS 재생 Referer CORS" },
     params: {},
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner produces the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ base, port, token }",
     message: (d) => tmsg("msg.media.proxy.info", { port: Number(d.port) }),

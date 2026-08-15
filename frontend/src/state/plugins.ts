@@ -365,9 +365,8 @@ function basename(path: string): string {
   return parts[parts.length - 1] ?? path;
 }
 
-// The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
-// filled and never refills (empty forever).
+// The store is outside the module boundary — if hot swap replaces it, registration, subscription and view state all
+// become new, while the filling side treats them as already filled and never refills (empty forever).
 /** One load step — the machine answers where the time goes.
  *
  * Measured 2026-08-08: 760ms between `painted` and the first plugin activation, with no split point inside it.

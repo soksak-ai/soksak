@@ -209,8 +209,8 @@ function withPin(entry: ProjectEntry, side: "left" | "right", ref: string): Proj
   };
 }
 
-// The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
+// The store is outside the module boundary — if hot-swapping replaces it, registrations,
+// subscriptions and screen state all become new, while the filling side treats them as already
 // filled and never refills (empty forever).
 export const useProjection = moduleState("state/projection#store", () =>
   create<ProjectionStore>((set) => ({

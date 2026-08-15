@@ -31,8 +31,8 @@ function activeScope(): Set<string> | null {
   for (const s of scopes) for (const v of s ?? []) u.add(v);
   return u;
 }
-// Outside the hot-swap boundary — if these values are replaced, the "already done" record, the lazy init
-// and the unsubscribe slot disappear together, and the filling side does not fill again.
+// Outside the hot-swap boundary — when these values are replaced, the "already done" record and
+// the lazy-init and unsubscribe slots go with them, and the filling side does not fill again.
 /** Duplicate-emit suppression — the last emitted state (active+kinds). */
 const emitted = moduleState("lib/layoutMotion#emitted", () => ({
   lastEmittedKey: null as string | null,
@@ -42,8 +42,8 @@ type MotionListener = (
   kinds: LayoutMotionKind[],
   scope: Set<string> | null,
 ) => void;
-// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
-// recorded the fill and does not fill again.
+// Outside the hot-swap boundary — when this table is replaced, the filling side treats it as
+// already filled and does not fill again.
 const listeners = moduleState("lib/layoutMotion#listeners", () => new Set<MotionListener>());
 /** Subscribe to motion edges (start/end). Call the returned function to unsubscribe. */
 export function onLayoutMotion(listener: MotionListener): () => void {

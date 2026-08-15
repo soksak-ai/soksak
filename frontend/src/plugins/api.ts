@@ -805,8 +805,8 @@ export class DisposableTracker {
 // plugin.view.* is view open/close, not management, so it is allowed. plugin.<id>.* (plugin commands) is
 // allowed too.
 
-// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
-// recorded the fill and does not fill again.
+// Outside the hot-swap boundary — a fresh table is never refilled, because the code that fills it treats
+// it as already filled.
 const BLOCKED_MANAGEMENT = moduleState("plugins/api#BLOCKED_MANAGEMENT", () => new Set([
   "plugin.list",
   "plugin.install",

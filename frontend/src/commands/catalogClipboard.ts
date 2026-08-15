@@ -12,8 +12,7 @@ export function registerClipboardCatalog(): void {
     description: "Read the current text from the system clipboard. Returns an empty string when the clipboard holds non-text content. Use to inspect a command result or the last copied value.",
     triggers: { ko: "클립보드 읽기 복사내용 붙여넣기확인" },
     params: {},
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The answer is home-wide, not per-window — same in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ text }",
     message: (d) => tmsg("msg.clipboard.read", { n: String(d.text ?? "").length }),

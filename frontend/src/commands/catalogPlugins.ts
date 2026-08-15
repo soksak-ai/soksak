@@ -653,8 +653,7 @@ export function registerPluginCatalog(): void {
       id: { type: "string", description: "Plugin id", required: true },
       registryId: { type: "string", description: "Origin registry id when the unit id exists in multiple registries" },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — it is the same from any window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ id, version, generation }",
     message: (d) => tmsg("msg.plugin.update", { id: String(d.id), version: String(d.version) }),

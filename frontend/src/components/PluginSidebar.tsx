@@ -260,7 +260,7 @@ function RegistrySection({
                 <span className="plugin-row-name">{e.id}</span>
                 <span className="plugin-row-ver">v{e.version}</span>
               </div>
-              {/* A catalog carries no description: it supplies no display metadata
+              {/* A catalog has no description: it supplies no display metadata
                   before the release it points at is verified (catalogLabel). What
                   it does state is where the entry came from, which is what a
                   person needs before installing. The download URL was here and is

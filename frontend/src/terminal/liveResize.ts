@@ -10,13 +10,12 @@ import { listenThisWindow } from "../lib/windowEvents";
 // over this channel ("window-live-resize"), so each window receives only its own resize (no frontend
 // filter needed).
 
-// Outside the hot-swap boundary — a fresh value drops both the "already done" memory and the lazy initialization,
-// and the filler does not fill again.
+// Outside the hot swap boundary — if these values become new, the "already done" record and the
+// lazy init disappear together, and the filling side never refills.
 const ms = moduleState("terminal/liveResize#state", () => ({
   liveResizing: false,
 }));
-// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
-// recorded the fill and does not fill again.
+// Outside the hot swap boundary — if this table becomes new, the filling side never refills because it already ran.
 const endCallbacks = moduleState("terminal/liveResize#endCallbacks", () => new Set<() => void>());
 // Subscribed once per app lifetime (at module load). Receives only signals emit_to'd to this window
 // (a global listen would also receive another window's resize and apply it wrongly). Outside the Tauri

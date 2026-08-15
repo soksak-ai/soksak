@@ -24,7 +24,7 @@ export interface ImeDecision {
   composing: boolean;
 }
 
-// Distinct things stand apart — put them in one bag and it is a bag, not state.
+// Distinct things stay separate — put in one bag it is a bag, not state.
 /** Previous key and repeat count — one unit (whether the same key repeats). */
 const lastKey = moduleState("lib/imeLedger#lastKey", () => ({
   lastKey: "",

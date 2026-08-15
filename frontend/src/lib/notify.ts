@@ -21,8 +21,8 @@ export interface NotificationInput {
   data?: Record<string, unknown>;
 }
 
-// Outside the hot-swap boundary — a fresh value drops both the "already done" memory and the lazy initialization,
-// and the filler does not fill again.
+// Outside the swap boundary — if these values become new, the "already done" record and the lazy
+// initialization disappear together, and the filling side never refills.
 const ms = moduleState("lib/notify#state", () => ({
   seq: 0,
 }));

@@ -34,7 +34,7 @@ const notify = () => {
     try {
       cb();
     } catch {
-      // Subscriber failure isolation — never propagated to another subscriber or to the host.
+      // Isolate subscriber failure — never propagate it to another subscriber or the host.
     }
   }
 };

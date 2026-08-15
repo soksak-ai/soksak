@@ -38,7 +38,7 @@ import {
 const ms = moduleState("components/PluginViewHost.#state", () => ({
   containerGeneration: 0,
 }));
-// memo boundary(principle 2).
+// memo boundary (principle 2).
 export const PluginViewHost = memo(function PluginViewHost({
   viewKey,
   projectId,

@@ -55,8 +55,7 @@ export function registerNetworkCatalog(): void {
       },
       broadcast: { type: "boolean", description: "Allow broadcast addresses (255.255.255.255 etc.)" },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The answer comes from the owner — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ bytesSent }",
     message: (d) => tmsg("msg.net.udp.send", { n: Number(d.bytesSent) }),
@@ -99,8 +98,7 @@ export function registerNetworkCatalog(): void {
       timeoutMs: { type: "number", description: "Response collection window in ms (default 3000)" },
       maxPackets: { type: "number", description: "Max packets to collect (default 64)" },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The answer comes from the owner — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ packets: [{ address, port, data(hex), text }] }",
     message: (d) => tmsg("msg.net.udp.request", { n: ((d.packets as unknown[]) ?? []).length }),
@@ -156,8 +154,7 @@ export function registerNetworkCatalog(): void {
         description: "Transport backend: \"off\" (default, plain native-tls) or \"chrome\" (browser JA3/JA4 fingerprint via the wreq backend, to pass fingerprint-blocking CDNs). Same response shape, secret/ns/danger gates either way.",
       },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The answer comes from the owner — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ status, headers, body }",
     message: (d) => tmsg("msg.net.http.request", { status: Number(d.status) }),

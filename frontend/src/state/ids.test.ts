@@ -13,7 +13,7 @@
 //     (project is `t`, space is `c`), and it reseeds on every run so the same value reappears
 //     across windows. So `{"panel":"g5"}` alone cannot determine which g5.
 //
-// (c) The shell queries that produced those counts
+// (c) The shell query that produced those numbers
 //     $ grep -nE '`[a-z]\$\{next[A-Za-z]*Id' src/state/sessions.ts | wc -l   # → 10
 //       (5 issuers: newViewId, newGroupId, newSplitId, newContentId, project `t${nextProjectId++}`
 //        + 5 previews: project, view, group, split, content in newIds())
@@ -21,7 +21,7 @@
 //
 // The rule stands without a registry or a window, so the app is not launched. Issued values are
 // read through newIds() (a non-destructive preview — exactly the next value to be issued), and the
-// the app, so the source is read instead (same method as commandMessages.test).
+// shape of the issuers is counted by reading the source (the commandMessages.test approach).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";

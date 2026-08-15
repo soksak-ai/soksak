@@ -1,6 +1,6 @@
 // pane invariant gate — the layout exposes exactly two entities: pane and tab.
 //
-// (a) The rule this gate enforces
+// (a) What this gate enforces
 //   ① A tab can exist only in a pane. Internal (split) nodes of the layout tree hold no tabs.
 //   ② An empty pane is valid. A pane holds 0 or more tabs, and having no tab does not remove the position.
 //      (This already holds — catalog.ts activeChain's "an empty panel is a valid position" and

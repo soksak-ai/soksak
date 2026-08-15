@@ -18,9 +18,8 @@ interface HydrationStore {
   promote: (viewId: string) => void;
 }
 
-// The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
-// filled and never refills (empty forever).
+// The store is outside the module boundary — if a hot swap replaces it, registration, subscription
+// and screen state all become new, and the filling side never refills because it already ran (empty forever).
 export const useHydration = moduleState("state/hydration#store", () =>
   create<HydrationStore>((set, get) => ({
   cold: new Set(),

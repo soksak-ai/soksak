@@ -113,8 +113,7 @@ export function registerSystemCatalog(): void {
       "Read this app's compile-time core identity, isolated home, matching CLI name, build profile, updater channel, and explicitly selected development units.",
     triggers: { ko: "앱 환경 코어 빌드 홈 CLI 개발 유닛 모드" },
     params: {},
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner defines the answer — identical from any window (registry.ts windowScoped).
     windowScoped: false,
     returns:
       "{ coreBuild, identity, cli, home, buildProfile, updaterEnabled, unitMode, developmentUnits[] }",

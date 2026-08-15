@@ -223,8 +223,8 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
     const i = d.index;
     const minFrac = 0.1;
     // Pair presentation and action in one place — preview runs every frame (straight to the store; that is
-    // commit runs once on landing (through a command). Forcing the pair makes "the screen changed but the
-    // ledger has nothing" structurally impossible.
+    // presentation), commit runs once on landing (through the command). The pairing is forced, so "the screen
+    // changed but the ledger has nothing" is structurally impossible.
     const gesture = beginGesture<number[]>({
       preview: (sizes) =>
         // Presentation touches the store directly — it runs every frame, which is no place for a command. This
@@ -232,7 +232,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
         // unrelated to render).
         useSessions.getState().resizeSidebar(project.id, d.splitId, sizes),
       commit: (sizes) => {
-        // Name the gutter by its address — the internal split id never leaves (IDENTITY §4).
+        // Address the gutter by name — the internal split id never goes outside (IDENTITY §4).
         const owner = gutterOwnerOf(layout, d.splitId, d.index, cellId);
         const key = owner?.pane.split("|")[0];
         if (key) {

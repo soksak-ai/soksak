@@ -28,9 +28,9 @@ interface UiState {
   setSettingsSection: (s: string | null) => void;
 }
 
-// The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
-// filled and never refills (empty forever).
+// The store is outside the module boundary — a hot swap replacing it makes registration,
+// subscriptions and screen state all new, and the side that filled it treats it as already
+// filled and does not refill (empty forever).
 export const useUi = moduleState("state/ui#store", () =>
   create<UiState>((set) => ({
   overlayCount: 0,

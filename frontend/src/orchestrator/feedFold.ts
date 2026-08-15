@@ -35,8 +35,7 @@ const parentIdOf = (e: ActivityEntry): string =>
   typeof e.payload.parentId === "string" ? e.payload.parentId : "";
 
 // Human-hand sources — no speaker label is attached (the row's owner is the human: the window/console name is the speaker).
-// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
-// recorded the fill and does not fill again.
+// Outside the hot-swap boundary — a fresh table stays empty, since the populating side records it as already populated and does not repopulate.
 const HUMAN_SOURCES = moduleState("orchestrator/feedFold#HUMAN_SOURCES", () => new Set(["ui", "orchestrator"]));
 /** Speaker key (§5 R3, single derivation rule) — origin first, otherwise a non-human source is the key. "" = human.
  *  The consumer's i18n table `actor.<key>` resolves the label (adding a key = 1 table line, this rule unchanged). */

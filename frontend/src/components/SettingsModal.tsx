@@ -46,7 +46,7 @@ export function SettingsModal({
   const configPlugins = Object.values(usePlugins((x) => x.plugins))
     .filter((p) => (p.manifest.configuration?.length ?? 0) > 0)
     .sort((a, b) => localize(a.manifest.name).localeCompare(localize(b.manifest.name)));
-  // Overlay registration — blocks mouse pass-through in the browser hole while the modal is up.
+  // Overlay registration — blocks mouse pass-through in the browser hole while the modal is open.
   useOverlayActive();
   // Whole-store subscription exception (within the intent of principle 1): this modal renders almost every
   // field of settings and is mounted only while open (App's settingsOpen gate).

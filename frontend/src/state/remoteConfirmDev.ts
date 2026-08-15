@@ -20,8 +20,8 @@ declare global {
   }
 }
 
-// Outside the hot-swap boundary — if these values are replaced, the "already done" record, the lazy init
-// and the unsubscribe slot disappear together, and the filling side does not fill again.
+// Outside the hot-swap boundary — new values here drop the "already done" record together with
+// the lazy-init and unsubscribe slots, and the filling side never fills again.
 const ms = moduleState("state/remoteConfirmDev#state", () => ({
   nextMockId: 900000, // High band, no overlap with core request_id (from 1) — plainly a mock.
 }));

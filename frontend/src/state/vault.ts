@@ -22,9 +22,9 @@ interface VaultUiState {
   close: () => void;
 }
 
-// The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
-// filled and never refills (empty forever).
+// The store is outside the module boundary — if a hot swap replaces it, registrations,
+// subscriptions, and screen state all become new, while the filling side treats its earlier fill as
+// done and never fills again (empty forever).
 export const useVault = moduleState("state/vault#store", () =>
   create<VaultUiState>((set) => ({
   openModal: null,

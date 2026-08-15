@@ -22,7 +22,7 @@
 //   The registry cannot be built without the app, so the sources are read instead
 //   (the commandMessages.test · windowAxis.test approach).
 //
-// (c) The shell queries that produced those counts
+// (c) The shell query that produced those numbers
 //   npx vitest run src/commands/targetEcho.test.ts        # canonical — same numbers as the query below
 //
 //   node --input-type=module -e '

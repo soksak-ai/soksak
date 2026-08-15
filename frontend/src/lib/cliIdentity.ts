@@ -14,8 +14,8 @@
 import { moduleState } from "../lib/moduleState";
 import { invoke } from "../framework";
 
-// Outside the hot-swap boundary — a fresh value drops both the "already done" memory and the lazy initialization,
-// and the filler does not fill again.
+// Outside the hot-swap boundary — if these values are recreated, the "already done" record and
+// the lazy initialization disappear together, and the side that filled them does not refill.
 const ms = moduleState("lib/cliIdentity#state", () => ({
   cached: "sok",
 }));

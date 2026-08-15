@@ -9,8 +9,7 @@
 import { moduleState } from "../lib/moduleState";
 import { invoke } from "../framework";
 
-// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
-// recorded the fill and does not fill again.
+// Outside the hot swap boundary — if this table becomes new, the filling side skips refilling because it recorded the fill.
 const seen = moduleState("lib/errorLedger#seen", () => new Map<string, number>());
 const CAP = 8;
 

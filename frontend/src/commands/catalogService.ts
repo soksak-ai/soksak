@@ -21,8 +21,7 @@ export function registerServiceCatalog(): void {
         description: "Plugin id to query one service; omit for all.",
       },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner produces the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns:
       "{ services: [{ plugin, status, ops, inflight, generation, pid, owner, secretDependent }] } or { plugin, status }",

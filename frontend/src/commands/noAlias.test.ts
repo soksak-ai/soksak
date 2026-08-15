@@ -88,7 +88,17 @@ function topLevelEntries(inner: string): string[] {
   let start = 0;
   for (let i = 0; i < inner.length; i += 1) {
     const c = inner[i];
-    if (c === '"' || c === "'" || c === "`") {
+    // Comments are skipped before anything else, the way balanced() does it. An
+    // English comment holds apostrophes (webview.recover's), and reading one as
+    // a quote swallows every comma and brace until the next apostrophe — the
+    // entries then merge and a parameter resolves to unknown. Measured
+    // 2026-08-15: tab.close read (tab:unknown!) after its neighbouring comment
+    // was translated, with the code byte-identical.
+    if (c === "/" && inner[i + 1] === "/") {
+      while (i < inner.length && inner[i] !== "\n") i += 1;
+    } else if (c === "/" && inner[i + 1] === "*") {
+      i = inner.indexOf("*/", i) + 1;
+    } else if (c === '"' || c === "'" || c === "`") {
       const quote = c;
       i += 1;
       while (i < inner.length && inner[i] !== quote) {

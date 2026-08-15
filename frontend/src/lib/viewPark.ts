@@ -61,8 +61,7 @@ export function viewSurfacePlacement(
   return { desiredVisible: false, topology: "retained-hidden", declaredPaneFrame: null };
 }
 
-// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
-// recorded the fill and does not fill again.
+// Outside the hot swap boundary — a new table here leaves the filling side treating it as already filled and never refilling.
 const visibleByView = moduleState("lib/viewPark#visibleByView", () => new Map<string, boolean>());
 export function commitViewVisibility(viewId: string, visible: boolean): void {
   if (visibleByView.get(viewId) === visible) return;

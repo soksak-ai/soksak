@@ -112,7 +112,7 @@ export interface TabStatus {
 }
 
 // Content view: file (viewer plugin), plugin (content placement — terminal, browser, editor all here).
-// passed to app.pty.spawn). The core does not own terminal views (a terminal is a plugin view too).
+// The core does not own the terminal view (a terminal is a plugin view too).
 // title is the content fact (file name, page <title> — kept current by setViewTitle), customLabel is
 // user intent (view.rename). Display prefers customLabel — the same rule as sidebar viewLabels
 // (default = fact, override = user intent only). An empty override is not stored.
@@ -952,9 +952,9 @@ function makeProject(id: string, opts: NewProjectOpts): Project {
 const noProject = (id: string): CmdErr =>
   err("TARGET_NOT_FOUND", tmsg("project.notFound", { id }));
 
-// The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
-// filled and never refills (empty forever).
+// The store is outside the module boundary — if a hot swap replaced it, registration, subscription,
+// and screen state would all become new, while the filling side treats the fill as already done and
+// never refills (empty forever).
 export const useSessions = moduleState("state/sessions#store", () =>
   create<SessionsStore>((set, get) => ({
   // The boot (main.tsx) prepares the default root (~/.soksak/projects/project1) and then creates the

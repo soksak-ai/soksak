@@ -50,8 +50,7 @@ export function registerDataCatalog(): void {
       required: ["ns", "key"],
       additionalProperties: true,
     }),
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ ns, key, value }",
     message: (d) => `kv ${d.ns}:${d.key}`,
@@ -81,8 +80,7 @@ export function registerDataCatalog(): void {
       required: ["ns", "key"],
       additionalProperties: false,
     }),
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ ns, key }",
     message: (d) => `kv ${d.ns}:${d.key} saved`,
@@ -115,8 +113,7 @@ export function registerDataCatalog(): void {
       required: ["ns", "key", "deleted"],
       additionalProperties: false,
     }),
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ ns, key, deleted }",
     message: (d) => `kv ${d.ns}:${d.key} ${d.deleted ? "deleted" : "absent"}`,
@@ -147,8 +144,7 @@ export function registerDataCatalog(): void {
       required: ["ns", "keys"],
       additionalProperties: false,
     }),
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ ns, keys }",
     message: (d) => `${(d.keys as unknown[]).length} key(s) in ${d.ns}`,
@@ -266,8 +262,7 @@ export function registerDataCatalog(): void {
     triggers: { ko: "데이터 네임스페이스 삭제 회수" },
     params: { ns: { type: "string", required: true, description: "Namespace to remove" } },
     danger: "destructive",
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ ns, collections, records, kv }",
     message: (d) =>
@@ -296,8 +291,7 @@ export function registerDataCatalog(): void {
       "Report the data store as the app's own SQLite sees it: the boot write-gate verdict, version, heap limits, memory used and highwater, page cache settings, page/freelist counts, and how many indexes sit on the shared records table. Read-only. Use this when a store call answers out of memory — bootGate says whether writes worked at startup, and the limits and memory figures say what starved it.",
     triggers: { ko: "데이터 저장소 상태 통계 메모리 한도" },
     params: {},
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns:
       "{ bootGate, openTimings, sqliteLog, sqliteVersion, softHeapLimit, hardHeapLimit, memoryUsed, memoryHighwater, cacheSize, pageSize, pageCount, freelistCount, recordsIndexes }",
@@ -318,8 +312,7 @@ export function registerDataCatalog(): void {
       "Check the data store for corruption (full integrity check — it cross-checks every index against the table, which the boot check does not). Read-only. Returns the problems SQLite reports; an empty list means the store is sound.",
     triggers: { ko: "데이터 무결성 점검 손상 확인" },
     params: {},
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ ok, problems: string[] }",
     message: (d) => tmsg("msg.data.verify", { n: Number(d.count) }),
@@ -337,8 +330,7 @@ export function registerDataCatalog(): void {
       "Check whether the store can actually be written: inserts one row and rolls it back, leaving nothing. The integrity check only reads, so a store that reads fine and fails every write passes it — this is the surface that catches that. Failures carry the diagnosis and the process's memory figures.",
     triggers: { ko: "데이터 쓰기 확인 저장 가능" },
     params: {},
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ writable }",
     message: () => tmsg("msg.data.canary"),
@@ -357,8 +349,7 @@ export function registerDataCatalog(): void {
       "Delete backup scratch files whose owning process is gone, and report how many. Each backup builds a file the size of the store, so a run that dies mid-snapshot leaves that size behind. Scratch files carry their owner's pid, and a live owner's file is never touched. Rotation reclaims on its own schedule; call this when backups are not running or the space is needed now.",
     triggers: { ko: "백업 임시 파일 회수 정리 공간" },
     params: {},
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ reclaimed: number }",
     message: (d) => tmsg("msg.data.reclaim", { n: Number(d.reclaimed) }),
@@ -375,8 +366,7 @@ export function registerDataCatalog(): void {
     triggers: { ko: "데이터 복구 인덱스 재생성 치유" },
     params: {},
     danger: "destructive",
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ before: string[], after: string[], healed, reindexError? }",
     message: (d) =>
@@ -403,8 +393,7 @@ export function registerDataCatalog(): void {
       "Snapshot the entire data store to a single .db file via VACUUM INTO (absorbs WAL). Omit path to write a timestamped file under ~/.soksak/backups/.",
     triggers: { ko: "백업 스냅샷 데이터백업" },
     params: { path: { type: "string", description: "Destination path; defaults to backup folder" } },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ path }",
     message: (d) => tmsg("msg.data.backup", { path: String(d.path) }),
@@ -423,8 +412,7 @@ export function registerDataCatalog(): void {
       "Restore the entire data store from a backup .db file: validates, safely copies the current store, then atomically swaps. Irreversible — use with caution.",
     triggers: { ko: "복원 데이터복원 되돌리기" },
     params: { path: { type: "string", description: "Path to the backup .db file to restore from", required: true } },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ ok }",
     message: () => tmsg("msg.data.restore"),
@@ -448,8 +436,7 @@ export function registerDataCatalog(): void {
       ns: { type: "string", description: "Limit to this namespace; omit for all" },
       coll: { type: "string", description: "Limit to this collection; omit for all" },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ jsonl }",
     message: () => tmsg("msg.data.export"),
@@ -469,8 +456,7 @@ export function registerDataCatalog(): void {
       "Import JSONL produced by data.export: meta rows call define, record rows upsert, kv rows set. Existing ids are overwritten.",
     triggers: { ko: "가져오기 임포트 데이터이식 복구" },
     params: { jsonl: { type: "string", description: "JSONL string output from data.export", required: true } },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ applied }",
     message: (d) => tmsg("msg.data.import", { n: Number(d.applied) }),
@@ -502,8 +488,7 @@ export function registerDataCatalog(): void {
       limit: { type: "number", description: "Max rows to return (default 200)" },
       offset: { type: "number", description: "Rows to skip" },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ rows }",
     message: (d) => tmsg("msg.data.query", { n: ((d.rows as unknown[]) ?? []).length }),
@@ -535,8 +520,7 @@ export function registerDataCatalog(): void {
       scope: { type: "string", description: "Scope partition key" },
       limit: { type: "number", description: "Max rows to return (default 50)" },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ rows }",
     message: (d) => tmsg("msg.data.search", { n: ((d.rows as unknown[]) ?? []).length }),
@@ -564,8 +548,7 @@ export function registerDataCatalog(): void {
       scope: { type: "string", description: "Scope partition key" },
       where: { type: "json", description: "Filter condition (same shape as data.query where)" },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ count }",
     message: (d) => tmsg("msg.data.count", { n: Number(d.count) }),
@@ -589,8 +572,7 @@ export function registerDataCatalog(): void {
       "Report encryption state for a scope: enabled (an active key = sealing trigger), keyId, algo, whether the vault is unlocked (decryption possible), tampered (publicKey no longer matches the vault private key), and keyMissing (the public key exists but its private key is gone from the vault — sealed records are unrecoverable).",
     triggers: { ko: "암호화상태 암호화확인 봉인상태" },
     params: { scope: { type: "string", description: "Scope partition key (e.g. projectId)", required: true } },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ enabled, keyId, algo, unlocked, tampered, keyMissing }",
     message: (d) => d.enabled ? tmsg("msg.data.encrypt.status.on") : tmsg("msg.data.encrypt.status.off"),
@@ -609,8 +591,7 @@ export function registerDataCatalog(): void {
       "Enable encryption for a scope: generate an X25519 keypair, wrap the private key in the vault (requires the vault to be unlocked first) AND under a one-time recovery code, then register the public key so every subsequent write is sealed. Returns the recovery code ONCE — store it safely; it is the only way to recover the data if the passphrase is lost, and it is never retrievable again. Run data.encrypt.convert afterward to seal records already stored.",
     triggers: { ko: "암호화활성 암호화켜기 봉인활성" },
     params: { scope: { type: "string", description: "Scope partition key to encrypt", required: true } },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ keyId, recoveryCode }",
     message: () => tmsg("msg.data.encrypt.enable"),
@@ -634,8 +615,7 @@ export function registerDataCatalog(): void {
       scope: { type: "string", description: "Scope partition key to recover", required: true },
       recoveryCode: { type: "string", description: "The recovery code issued at enable", required: true },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ ok }",
     message: () => tmsg("msg.data.encrypt.recover"),
@@ -656,8 +636,7 @@ export function registerDataCatalog(): void {
       "Rotate a scope's encryption key: generate a new keypair, re-seal every record from the old key to the new one (one transaction each, resumable), re-issue the recovery blob under a NEW recovery code, then dispose the old key only once nothing references it. Requires this device's OS-keychain KEK. Returns the new recovery code ONCE — store it; the previous code no longer opens the data.",
     triggers: { ko: "키회전 키교체 암호화회전" },
     params: { scope: { type: "string", description: "Scope partition key to rotate", required: true } },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ oldKeyId, newKeyId, rekeyed, oldDisposed, recoveryCode }",
     message: (d) => tmsg("msg.data.encrypt.rotate", { n: Number(d.rekeyed) }),
@@ -700,8 +679,7 @@ export function registerDataCatalog(): void {
       coll: COLL_PARAM,
       scope: { type: "string", description: "Scope partition key to convert", required: true },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner determines the answer — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ converted }",
     message: (d) => tmsg("msg.data.encrypt.convert", { n: Number(d.converted) }),

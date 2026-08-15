@@ -992,8 +992,7 @@ export function registerCatalog(): void {
       alive: { type: "boolean", description: "Only entries that are still running" },
       window: { type: "string", description: "Only entries spawned by this window label" },
     },
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The owner produces the answer — the same from whichever window it runs (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ processes: [{id, pid, window, cmd, group, alive}], count }",
     message: (d) => tmsg("msg.process.list", { n: Number(d.count ?? 0) }),

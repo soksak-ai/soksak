@@ -19,7 +19,7 @@ export interface IdleTurnPayload {
   source: "idle";
 }
 
-// Distinct things stand apart — put them in one bag and it is a bag, not state.
+// Different things are declared separately — put them in one bag and it is a bag, not state.
 /** Injected wiring — the emit and lookup sites (avoids a circular import). Distinct from tuning and lifetime. */
 const wiring = moduleState("terminal/idleTurnDetector#wiring", () => ({
   emitFn: null as ((p: IdleTurnPayload) => void) | null,
@@ -114,7 +114,7 @@ function startDetector(): { dispose: () => void } {
   };
 }
 
-// Test only — clears everything.
+// Test only — full reset.
 export function resetIdleTurnDetectorForTest(): void {
   if (running.active) {
     running.active.dispose();

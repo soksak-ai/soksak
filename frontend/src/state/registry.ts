@@ -316,9 +316,8 @@ interface RegistryRuntimeDeps {
 }
 
 const defaultRuntimeDeps: RegistryRuntimeDeps = { load: loadRegistryDocument, now: Date.now };
-// The injection point must cross the hot-swap boundary — when only this slot is empty, the side
-// that filled it treats it as already filled and does not refill. What remains is "nobody
-// answers", and that silence is not an error.
+// The injection slot must survive the module-swap boundary — if only this slot resets, the injector
+// treats it as already filled and does not refill it. What is left is silence, and silence is not an error.
 const runtimeDepsSlot = moduleState("state/registry#runtimeDepsSlot.v", () => ({ v: defaultRuntimeDeps }));
 export function setRegistryRuntimeDeps(patch: Partial<RegistryRuntimeDeps>): () => void {
   const previous = runtimeDepsSlot.v;
@@ -352,9 +351,9 @@ const persisted = safePersisted(registrySync.loadSync());
 const initialDescriptors = [OFFICIAL_REGISTRY_DESCRIPTOR, ...persisted.descriptors];
 const initialRegistries = sourcesFor(initialDescriptors, persisted.trustRecords);
 
-// The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
-// filled and never refills (empty forever).
+// moduleState keeps the store outside the module boundary — a swap would replace registration,
+// subscription, and screen state wholesale, and the injector treats it as already filled and never
+// refills it (empty forever).
 export const useRegistry = moduleState("state/registry#store", () =>
   create<RegistryState>((set, get) => ({
   descriptors: initialDescriptors,

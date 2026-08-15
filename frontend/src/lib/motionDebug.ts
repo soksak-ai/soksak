@@ -712,8 +712,7 @@ interface Waiting {
   timer: number;
 }
 
-// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
-// recorded the fill and does not fill again.
+// Outside the hot-swap boundary — if this table becomes new, the side that filled it treats it as filled and does not fill it again.
 const waiting = moduleState("lib/motionDebug#waiting", () => new Set<Waiting>());
 function nowMs(): number {
   return typeof performance === "undefined" ? 0 : performance.now();

@@ -44,8 +44,8 @@
 //     arriving via terminal.onData is ALWAYS noise — a mid-composition poll
 //     artifact or the first jamo of a new word after a space, where _composing
 //     is still false. shouldSkip drops it unconditionally. Legitimate lone-jamo
-//     (the ㅋ in "ㅋㅋㅋ") is delivered to the pty via _flush() -> onData, bypassing
-//     shouldSkip entirely, so nothing is lost.
+//     (the lone U+314B jamo in a U+314B U+314B U+314B laugh run) is delivered to the
+//     pty via _flush() -> onData, bypassing shouldSkip entirely, so nothing is lost.
 //
 //   GUARD 2 (resyllabification echo dedup): at a syllable boundary like
 //     U+C77D + U+3150 -> U+C774 | U+B300 the new syllable arrives as a full-syllable

@@ -31,11 +31,6 @@ var bannedKorean = []string{
 var bannedEnglish = regexp.MustCompile(
 	`\b(lives|sits|says|tells|knows|asks|reaches|carries|belongs|learns|decides|reflects)\b`)
 
-// commentLine matches a line that is only a comment. A banned word inside a
-// string literal is data — a refusal message, a test fixture — and rewriting it
-// would change what the program does.
-var commentLine = regexp.MustCompile(`^\s*(//|\*|/\*)`)
-
 // scannedCode is every extension whose comments this repository authors.
 var scannedCode = map[string]bool{
 	".go": true, ".ts": true, ".tsx": true,
@@ -47,17 +42,6 @@ var skippedTrees = map[string]bool{
 	"node_modules": true, "dist": true, ".git": true, "bin": true,
 	"bindings": true,
 }
-
-// koreanCommentDebt is how many Korean comment lines in the frontend still use
-// the banned register, measured 2026-08-15.
-//
-// It is a ratchet, not an exemption. Every one of these is already a violation
-// of a different rule — comments are English (§6-1) — and they disappear as that
-// translation lands. Until then the number may only go down: a new one fails
-// this gate, and lowering the register in an existing file fails it too.
-//
-// Zero here means the debt is gone and this constant goes with it.
-const koreanCommentDebt = 212
 
 func TestDocumentsAreWrittenDry(t *testing.T) {
 	roots := []string{
@@ -133,16 +117,15 @@ func TestCommentsAreWrittenDry(t *testing.T) {
 			return readErr
 		}
 		scanned++
-		for index, line := range strings.Split(string(body), "\n") {
-			if !commentLine.MatchString(line) {
-				continue
-			}
-			if word := bannedEnglish.FindString(line); word != "" {
-				found = append(found, path+":"+itoa(index+1)+" "+word)
+		byLine := commentText(string(body))
+		for _, number := range sortedLines(byLine) {
+			text := byLine[number]
+			if word := bannedEnglish.FindString(text); word != "" {
+				found = append(found, path+":"+itoa(number)+" "+word)
 			}
 			for _, word := range bannedKorean {
-				if strings.Contains(line, word) {
-					korean = append(korean, path+":"+itoa(index+1)+" "+word)
+				if strings.Contains(text, word) {
+					korean = append(korean, path+":"+itoa(number)+" "+word)
 				}
 			}
 		}
@@ -160,14 +143,9 @@ func TestCommentsAreWrittenDry(t *testing.T) {
 			"State what a thing is, what is missing, and what to do about it.",
 			len(found), strings.Join(found, "\n"))
 	}
-	if len(korean) > koreanCommentDebt {
-		t.Errorf("Korean comments in the banned register went from %d to %d.\n%s\n"+
-			"The count may only go down. Rewrite the comment in English, dry.",
-			koreanCommentDebt, len(korean), strings.Join(korean[koreanCommentDebt:], "\n"))
-	}
-	if len(korean) < koreanCommentDebt {
-		t.Errorf("Korean comments in the banned register are down to %d from %d.\n"+
-			"Lower koreanCommentDebt to %d so the ratchet holds the new floor.",
-			len(korean), koreanCommentDebt, len(korean))
+	if len(korean) > 0 {
+		t.Errorf("these Korean comments use the banned register in %d places:\n%s\n"+
+			"State the fact. The verb is what carries the register here.",
+			len(korean), strings.Join(korean, "\n"))
 	}
 }

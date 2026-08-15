@@ -16,8 +16,7 @@ export function registerUnitDevCatalog(): void {
       "List development source selections for plugins, sidecars, and kits in this CLI identity home. Core build and unit source mode are independent.",
     triggers: { ko: "유닛 개발 소스 목록 플러그인 사이드카 키트 작업공간" },
     params: {},
-    // The owner produces the answer — it is the same from whichever window it runs
-    // (registry.ts windowScoped).
+    // The answer comes from the owner — identical in every window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ unitMode: official|mixed, units: Array<{kind,id,source}> }",
     message: (d) =>

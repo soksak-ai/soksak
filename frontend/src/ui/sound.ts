@@ -4,8 +4,8 @@ import { moduleState } from "../lib/moduleState";
 // lazily and resumed when suspended (desktop web views usually allow it — silence if blocked,
 // best-effort). Notifications use 0 system access, so the permission gate is on the api surface.
 
-// Outside the hot-swap boundary — a fresh value drops both the "already done" memory and the lazy initialization,
-// and the filler does not fill again.
+// Outside the hot-swap boundary — if these values are replaced, the "already done" record and the
+// lazy init are dropped together, and the populating side does not populate again.
 const ms = moduleState("ui/sound#state", () => ({
   ctx: null as AudioContext | null,
 }));
@@ -73,8 +73,8 @@ const BUILTINS: Record<string, Note[]> = {
 
 export const BUILTIN_SOUNDS = Object.keys(BUILTINS);
 
-// Outside the hot-swap boundary — a replaced map would stay empty: the filling side has already
-// recorded the fill and does not fill again.
+// Outside the hot-swap boundary — if this map is replaced, the populating side treats it as already
+// populated and does not refill it.
 const bufCache = moduleState("ui/sound#bufCache", () => new Map<string, AudioBuffer>());
 // Builtin name: synthesize. Otherwise treat as a URL/asset path, load and play (cached). Failure is
 // silent (best-effort).

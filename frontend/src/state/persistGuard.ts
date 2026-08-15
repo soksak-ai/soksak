@@ -1,4 +1,4 @@
-// Do not overwrite what is known with what is unknown — after a failed restore, do not persist.
+// The unknown does not overwrite the known — **a failed restore does not persist.**
 //
 // An empty state has two faces: "the user closed everything" and "the restore failed". The first
 // is user intent and must be saved; the second is a state where nothing is known yet, and saving

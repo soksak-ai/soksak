@@ -33,9 +33,8 @@ function load(): Bookmark[] {
   return Array.isArray(v) ? v : [];
 }
 
-// The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
-// filled and never refills (empty forever).
+// The store is held outside the module boundary — a hot swap that replaces it makes registration, subscription,
+// and screen state all new, while the filling side has already recorded the fill and never repeats it (empty forever).
 export const useBookmarks = moduleState("state/bookmarks#store", () =>
   create<BookmarksState>((set, get) => {
   const save = (list: Bookmark[]) => {

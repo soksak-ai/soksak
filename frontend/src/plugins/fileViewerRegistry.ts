@@ -38,9 +38,8 @@ interface FileViewerRegistryState {
   ) => () => void;
 }
 
-// The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
-// filled and never refills (empty forever).
+// The store is outside the module boundary — a module swap replaces registration, subscription, and screen
+// state wholesale, and the populating side does not populate again (empty forever).
 export const useFileViewerRegistry = moduleState("plugins/fileViewerRegistry#store", () =>
   create<FileViewerRegistryState>(
   (set, get) => ({

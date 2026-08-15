@@ -1,13 +1,13 @@
 // Owner of a surface's input — whoever created the surface delivers that surface's pointer events.
 //
-// Pointer input arrived only at the surfaces the core held (framework child webviews). A surface a
-// plugin draws through an engine sidecar was not covered by the core's path and was rejected as
-// "no webview" — measured 2026-08-08: of three browsers only one took gestures, and the other two
-// got rejections that differed only in name.
+// Pointer events went only into surfaces the core holds (framework child webviews). A surface a
+// plugin draws through an engine sidecar is outside the core's path and was refused with "no webview"
+// — measured 2026-08-08: of three browsers only one accepted gestures, and the other two got refusals
+// that differed only in name.
 //
-// The core must not identify the engine. The plugin that created the surface identifies it, and
-// the core's only job is to provide **the place to ask who the owner is**. With an owner, input
-// goes there; without one, to the framework.
+// The core must hold no reference to that engine. The plugin that created the surface holds it, and
+// the core's only job is the lookup point for the owner. With an owner, delivery goes there; without
+// one, it goes to the framework.
 import { moduleState } from "./moduleState";
 import type { SurfacePointerInput } from "./contentViews";
 
@@ -84,7 +84,7 @@ export function surfaceInputOwners(): string[] {
   return [...state.byOwner.keys()].sort();
 }
 
-/** Test-only reset — the registry is outside the hot-swap boundary, so module re-evaluation does not clear it. */
+/** Test-only reset — the registry is outside the hot-swap boundary, so re-evaluating the module does not clear it. */
 export function __resetSurfaceInputProvidersForTest(): void {
   state.byOwner.clear();
 }

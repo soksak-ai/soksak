@@ -75,8 +75,8 @@ function bagDelete(bag: Bag, pluginId: string, key?: string): Bag {
 }
 
 // The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
-// filled and never refills (empty forever).
+// subscriptions, and screen state all new, while the filling side treats it as already filled
+// and never fills again (empty forever).
 export const usePluginSettings = moduleState("state/pluginSettings#store", () =>
   create<PluginSettingsState>((set, get) => {
   const persist = () => {

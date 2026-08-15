@@ -32,7 +32,7 @@ export function ProjectSettingsModal({
   onClose: () => void;
 }) {
   const t = useT();
-  // Overlay registration — blocks mouse pass-through in the browser hole while the modal is up.
+  // Overlay registration — blocks mouse pass-through into the browser hole while the modal is up.
   useOverlayActive();
   const project = useSessions((s) => s.projects.find((x) => x.id === projectId));
   const defaultProjectRoot = useSettings((s) => s.defaultProjectRoot);

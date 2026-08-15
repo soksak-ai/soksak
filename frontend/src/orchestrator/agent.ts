@@ -39,8 +39,8 @@ interface ActiveTurn {
   proc: number;
 }
 
-// Outside the hot-swap boundary — a fresh value drops both the "already done" memory and the lazy initialization,
-// and the filler does not fill again.
+// Outside the hot-swap boundary — if these values become new ones, the "already done" memory and the lazy
+// initialization disappear together, and the side that filled them does not fill them again.
 /** The turn in progress — there is only one, and cancel and stop reasons attach to it. */
 const liveTurn = moduleState("orchestrator/agent#turn", () => ({
   active: null as ActiveTurn | null,

@@ -56,8 +56,8 @@ export function resolveViewLabel(viewKey: string, fallback: string): string {
 // ── Persistence wiring (once at boot) ──────────────────────────────────────────
 // coreStore uses async invoke, so it cannot be injected at module load — boot inits it with deps.
 
-// Outside the hot-swap boundary — if these values are replaced, the "already done" record, the lazy init
-// and the unsubscribe slot disappear together, and the filling side does not fill again.
+// Outside the hot-swap boundary — if these values become new, the "already done" record and the
+// lazy-init and unsubscribe slots disappear with it, and the side that filled them never refills.
 const ms = moduleState("state/viewLabels#state", () => ({
   persist: null as ((labels: LabelMap) => void) | null,
 }));

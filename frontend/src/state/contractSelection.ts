@@ -48,8 +48,8 @@ function load(): PersistedContractSelection {
 }
 
 // The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
-// filled and never refills (empty forever).
+// subscriptions and screen state all new, while the filling side keeps its already-filled flag and
+// never refills (empty forever).
 export const useContractSelection = moduleState("state/contractSelection#store", () =>
   create<ContractSelectionState>((set, get) => {
   const save = () => {

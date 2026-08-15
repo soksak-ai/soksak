@@ -382,8 +382,8 @@ function diffSessions(prev: SessionsSnapshot, next: SessionsSnapshot): void {
   }
 }
 
-// The record of "already attached" must cross the hot swap boundary — if only this flag disappears, the install
-// is gone while the filling side skips reattaching because it recorded the run (never installed).
+// The "already attached" memory must cross the hot-swap boundary — if only this flag disappears, the
+// installation is gone while the side that filled it treats it as done and never attaches again.
 const startedFlag = moduleState("plugins/hooks#startedFlag.on", () => ({ on: false }));
 
 // Once at app start — installs the store subscriptions (called from initPluginHost).

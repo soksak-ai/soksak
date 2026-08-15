@@ -230,9 +230,9 @@ function load(): PersistedSettings {
   return { ...DEFAULTS, ...known } as PersistedSettings;
 }
 
-// The store is outside the module boundary — a hot swap that replaces it makes registrations,
-// subscriptions, and screen state all new, while the side that filled them treats them as already
-// filled and never refills (empty forever).
+// The store is held outside the module boundary — if a hot swap replaces it, registrations,
+// subscriptions, and screen state all become new, and the filling side treats itself as already
+// done and never fills again (empty forever).
 export const useSettings = moduleState("state/settings#store", () =>
   create<SettingsState>((set, get) => {
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
