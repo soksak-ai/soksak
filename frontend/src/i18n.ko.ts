@@ -647,6 +647,7 @@ export const ko = {
   "msg.fs.watch": "감시를 시작했습니다 — 구독 {n}개",
   "msg.layout.apply": "스페이스 {n}개로 화면을 구성했습니다",
   "msg.layout.transactions": "배치 변경 {n}건",
+  "msg.layout.transition.journal": "배치 위상 {n}개를 기록했습니다",
   "msg.layout.suggest": "배치 {n}개를 제안했습니다",
   "msg.media.proxy.info": "미디어 프록시가 포트 {port} 에서 동작 중입니다",
   "msg.media.proxy.playlist": "프록시 HLS 플레이리스트 URL 을 만들었습니다",

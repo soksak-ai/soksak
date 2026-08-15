@@ -21,6 +21,8 @@ import { beginLayoutMotion, endLayoutMotion } from "../lib/layoutMotion";
 import { CHROME_BANDS } from "../lib/chromeBands";
 import { createRectMotionTracker } from "../lib/layoutRectMotion";
 import { useLayoutDecorationPresentation } from "../lib/layoutDecorationPresentation";
+import { cleanRailLines } from "../lib/railPlacement";
+import { recordRailPhase } from "../lib/railJournal";
 import { useGutterHover } from "../state/gutterHover";
 import { ViewTabs } from "./ViewTabs";
 import { FocusLightingPlane } from "./FocusLightingPlane";
@@ -318,6 +320,28 @@ export const GroupArea = memo(function GroupArea({
   const displayCells = maxCell
     ? [{ group: maxCell.group, rect: FULL_RECT }]
     : cells;
+  // One record per phase, written after the commit so the rail surface count is what the document
+  // holds rather than what this render intended. The three rail claims — the surface gone during a
+  // transition and back exactly once after, a PIN click moving nothing, a FLOW station on the
+  // focused pane's left clean line — are about moments, and a command asked afterwards sees only
+  // the last one.
+  const phaseKey = [
+    traveling ? "traveling" : "settled",
+    railStation,
+    displayCells.map((c) => `${c.group.id}:${c.rect.left},${c.rect.top},${c.rect.width},${c.rect.height}`).join("|"),
+  ].join("\u0000");
+  useEffect(() => {
+    recordRailPhase({
+      phase: traveling ? "traveling" : "settled",
+      station: railStation,
+      cleanLines: cleanRailLines(displayCells.map((c) => c.rect)),
+      cells: displayCells.map((c) => ({ id: c.group.id, rect: c.rect })),
+    });
+    // phaseKey collapses the arrangement into one string: a record per render would write the same
+    // phase many times and the deltas between them would all be zero.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phaseKey]);
+
   // Ref that lets the drag callbacks stay reference-stable (useCallback) while reading the latest cells.
   // (A closure capturing cells directly makes a new function each render → the memo boundary breaks.)
   // Commit effective view visibility (surface active && tab active) — solely owned by the core (lib/viewPark.surfaceShown).

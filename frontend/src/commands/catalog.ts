@@ -15,6 +15,7 @@ import { invoke, frameworkPath } from "../framework";
 import { recordWindowFrames } from "./windowRecorder";
 import { tmsg } from "../i18n";
 import { computeSplitLayout } from "../lib/splitLayout";
+import { railJournal } from "../lib/railJournal";
 import {
   DEFAULT_RAIL_PLACEMENT,
   snapRailStation,
@@ -791,6 +792,21 @@ export function registerCatalog(): void {
         unexpected: [...onScreen.keys()],
       };
     },
+  });
+
+  // The rail contract as numbers. layout.transactions records what the presentation layer
+  // acknowledged; this records what the arrangement was at each phase, which is a different fact
+  // and the one the three rail claims are judged on.
+  register("layout.transition.journal", {
+    description:
+      "Every arrangement phase this window has been through, oldest first. Each record holds the station, the clean lines, every cell rect, how far each pane moved since the previous record, and how many rail surfaces the document held at that moment. Judgement: a transition record has 0 rail surfaces and the record after it has exactly 1; a PIN click leaves dStation 0 and moved empty; a FLOW click leaves the station on the focused pane's left clean line.",
+    triggers: { ko: "레일 전이 저널 위상 스테이션 이동 델타 표면" },
+    params: {},
+    returns:
+      "{ records:[{ sequence, phase:'settled'|'traveling', frame, station, dStation, cleanLines[], cells[].{id,rect}, moved[].{id,dLeft,dTop,dWidth,dHeight}, appeared[], gone[], railSurfaces }] } — moved omits a pane that did not move, so nothing moved is read rather than computed; appeared and gone name panes with no rectangle on one side, because there is no delta against one that did not exist",
+    message: (d) => tmsg("msg.layout.transition.journal", { n: ((d.records as unknown[]) ?? []).length }),
+    examples: ["layout.transition.journal"],
+    handler: () => ({ records: railJournal() }),
   });
 
   register("layout.transactions", {

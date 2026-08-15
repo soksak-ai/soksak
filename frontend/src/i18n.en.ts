@@ -649,6 +649,7 @@ export const en: Record<MsgKey, string> = {
   "msg.fs.watch": "Watching — {n} subscriptions",
   "msg.layout.apply": "Arranged {n} spaces",
   "msg.layout.transactions": "{n} layout change(s)",
+  "msg.layout.transition.journal": "{n} arrangement phases recorded",
   "msg.layout.suggest": "{n} placements suggested",
   "msg.media.proxy.info": "Media proxy is running on port {port}",
   "msg.media.proxy.playlist": "Built the proxied HLS playlist URL",
