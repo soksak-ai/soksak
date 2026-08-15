@@ -10,7 +10,7 @@ import (
 
 // maxBatchKeys is what one delete batch may name.
 //
-// The list is itself an input resource, so the cap sits at the store boundary
+// The list is itself an input resource, so the cap is at the store boundary
 // rather than only at a catalogue: trusting catalogue validation lets an
 // internal call skip the boundary entirely.
 const maxBatchKeys = 4096
@@ -36,7 +36,7 @@ type EntriesResult struct {
 	Entries []Entry `json:"entries"`
 }
 
-// DeleteManyResult says what a batch asked for and what it found.
+// DeleteManyResult reports what a batch requested and what it found.
 type DeleteManyResult struct {
 	Ns        string `json:"ns"`
 	Requested int    `json:"requested"`
@@ -113,7 +113,7 @@ func (kv *KV) Entries(ns string, prefix *string) (EntriesResult, error) {
 	return result, err
 }
 
-// DeleteKey removes one key and says whether it was there. Both answers are
+// DeleteKey removes one key and reports whether it was there. Both answers are
 // ordinary: a delete converges on the same state either way.
 func (kv *KV) DeleteKey(ns, key string) (bool, error) {
 	if err := validateNamespace(ns); err != nil {

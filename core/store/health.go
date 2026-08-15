@@ -35,7 +35,7 @@ func (kv *KV) Verify() []string {
 	if err == nil {
 		return problems
 	}
-	// A full check sweeps the whole store and fails as a whole, so it says
+	// A full check sweeps the whole store and fails as a whole, so it reports
 	// nothing about where. Per-table checks are small enough that most pass,
 	// and what is left is the part that is actually sick.
 	return append([]string{fmt.Sprintf("diagnosis failed: %v", err)}, kv.perTable()...)
@@ -131,7 +131,7 @@ func (kv *KV) Repair() (Repair, error) {
 	outcome := Repair{Before: kv.Verify()}
 
 	// The write-ahead log first: cheapest, with nothing to undo. A log that has
-	// grown carries an index of itself that grows with it, and writes and full
+	// grown has an index of itself that grows with it, and writes and full
 	// checks break on that before anything else. If this heals it, the damage
 	// was never damage.
 	checkpointFailed := kv.exec("PRAGMA wal_checkpoint(TRUNCATE)") != nil

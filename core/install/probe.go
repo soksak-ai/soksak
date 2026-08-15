@@ -20,10 +20,10 @@ type Probe struct {
 //
 // Presence is not working. A half-installed package, a dangling launcher, and
 // an unresolved shared library all leave a file that exists and cannot run, so
-// this observation asks by running rather than by looking.
+// this observation runs the binary rather than inspecting it.
 //
 // A binary that could not be started at all answers ok=false rather than
-// failing. The caller asks one question — does this dependency work — and
+// failing. The caller has one question — does this dependency work — and
 // "absent" and "ran and failed" are the same answer to it.
 //
 // What is deliberately not folded into ok=false is a build with no runner. That
@@ -37,7 +37,7 @@ func probeBinary(bin string, args []string, runner files.Runner) (Probe, error) 
 		return Probe{}, errors.New("probe_binary cannot run anything in this build — set install.Deps.Run")
 	}
 
-	// The argv reaches the runner as values, so there is no shell line and
+	// The argv arrives at the runner as values, so there is no shell line and
 	// nowhere for shell syntax to be interpreted. A bare name is still resolved
 	// against this process's PATH by the operating system — the caller sends an
 	// absolute path whenever it has one, which is the only form whose answer

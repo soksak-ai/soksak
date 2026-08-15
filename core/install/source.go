@@ -51,7 +51,7 @@ func validateDevSource(source string) (string, error) {
 	return source, nil
 }
 
-// rejectLinkedComponents refuses a path that reaches its destination through a
+// rejectLinkedComponents refuses a path that resolves to its destination through a
 // link, and refuses `..` outright.
 //
 // `..` is refused rather than resolved. Resolving it makes the path that was

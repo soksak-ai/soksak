@@ -12,7 +12,7 @@ import (
 // socketPathLimit is what a unix socket address holds.
 //
 // The kernel copies the path into a fixed array — 104 bytes on darwin, 108 on
-// linux — and overrunning it fails with "invalid argument", which says nothing
+// linux — and overrunning it fails with "invalid argument", which states nothing
 // about paths. The lower of the two is used so a home that works here works
 // everywhere this builds.
 const socketPathLimit = 104

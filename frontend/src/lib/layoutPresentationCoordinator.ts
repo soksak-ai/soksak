@@ -89,7 +89,7 @@ export const validateLayoutPresentationStart = (
   return receipt;
 };
 
-/** One owner prepares every external surface before it asks the display producer for one start. */
+/** One owner prepares every external surface before it requests one start from the display producer. */
 export function createLayoutPresentationCoordinator({
   nextDisplay,
 }: {

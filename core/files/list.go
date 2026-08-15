@@ -83,7 +83,7 @@ func resolveDir(path string, home string) (string, error) {
 }
 
 // resolvePath answers the symlink-resolved spelling, falling back to the given
-// one. A path that does not exist cannot be resolved, and that failure belongs
+// one. A path that does not exist cannot be resolved, and that failure is
 // to the caller's stat rather than here.
 func resolvePath(path string) string {
 	if resolved, err := filepath.EvalSymlinks(path); err == nil {
@@ -97,7 +97,7 @@ func resolvePath(path string) string {
 // macOS TCC: a stat inside Desktop, Documents, or Downloads raises a permission
 // prompt, and a plain listing must never raise one. DirEntry.Type() comes from
 // the dirent; Info() is the stat. Only a symlink is stat'd, because the dirent
-// says "symlink" and the tree still needs to know whether it opens.
+// reports "symlink" and the tree still needs whether it opens.
 func describe(root string, entry fs.DirEntry, meta bool) Child {
 	child := Child{Name: entry.Name()}
 	if entry.Type()&fs.ModeSymlink != 0 {

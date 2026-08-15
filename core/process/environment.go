@@ -161,7 +161,7 @@ func (list *environmentList) render() []string {
 //
 // The rule has one owner. A daemon starts children too, and a second copy of
 // this would drift the moment either changed — and the way it drifts is that an
-// internal SOKSAK_* stops being stripped, so a vault master key reaches a child
+// internal SOKSAK_* stops being stripped, so a vault master key enters a child
 // and nobody notices until it is in someone's log.
 //
 // The full request shape stays private: secrets, scrubbing and removals belong

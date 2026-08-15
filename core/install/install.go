@@ -38,7 +38,7 @@ type Deps struct {
 	OS   string
 	Arch string
 
-	// LoginShell is the shell npm_global_dirs asks. Empty refuses that command
+	// LoginShell is the shell npm_global_dirs queries. Empty refuses that command
 	// by name rather than guessing $SHELL, which would tie the answer to
 	// whatever launched this process. The `-l` in the argv is what makes the
 	// answer the user's: the login shell rebuilds PATH from rc/profile, so a
@@ -86,7 +86,7 @@ func Register(registry *control.Registry, deps Deps) {
 			}
 			// Absent and [] are one answer: the caller ran the binary with no
 			// arguments. A probe declaration whose argv is a single word
-			// reaches here with nothing after it.
+			// arrives here with nothing after it.
 			probeArgs, err := control.OptionalArg[[]string](args, "args", nil)
 			if err != nil {
 				return nil, err

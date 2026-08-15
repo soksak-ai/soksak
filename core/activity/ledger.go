@@ -64,13 +64,13 @@ func (ledger *Ledger) ResumeFrom(last uint64) {
 	}
 }
 
-// Len is what this ledger retains, which is nothing: retention belongs to
+// Len is what this ledger retains, which is nothing: retention is
 // whoever owns storage.
 func (ledger *Ledger) Len() int { return 0 }
 
-// RetentionScope says how long an entry is worth keeping.
+// RetentionScope states how long an entry is worth keeping.
 //
-// An entry relayed from elsewhere carries an origin and is low signal. An empty
+// An entry relayed from elsewhere has an origin and is low signal. An empty
 // string is not an origin.
 func RetentionScope(entry Entry) string {
 	var payload struct {

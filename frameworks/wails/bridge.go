@@ -20,7 +20,7 @@ type Bridge struct {
 	host WindowHost
 }
 
-// Emit carries an event to every window. Framework-agnostic in signature, so
+// Emit delivers an event to every window. Framework-agnostic in signature, so
 // the core names an event and a payload and never this package.
 func (bridge *Bridge) Emit(event string, payload any) {
 	if bridge == nil || bridge.app == nil {
@@ -34,7 +34,7 @@ func (bridge *Bridge) Emit(event string, payload any) {
 // The project claim ledger reads this to tell a claim held by a live window
 // from one left by a window that is gone. Answering "unknown" as "live" would
 // keep a closed window's project locked forever; answering it as "gone" hands
-// the project to whoever asks next.
+// the project to the next caller.
 func (bridge *Bridge) Live() []string {
 	if bridge == nil || bridge.host == nil {
 		return nil

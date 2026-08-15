@@ -15,7 +15,7 @@ var folderPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // EnsureDir creates <identity home>/projects/<folder> and answers with it.
 //
-// The identity home, not the user home: a folder the app made lives in the area
+// The identity home, not the user home: a folder the app made is in the area
 // the app manages. This is the one place in this package that wants that home,
 // and passing the wrong one puts a project root inside the app's own tree.
 //

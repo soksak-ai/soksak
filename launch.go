@@ -54,7 +54,7 @@ func launch(resolved identity.Resolved, claim claimHome, run own) error {
 // Started as its own goroutine because Run owns the calling thread from here
 // on. A failure is logged rather than returned: the socket stopping is not a
 // reason to take the windows down, and a caller that finds nothing answering
-// learns that by connecting.
+// finds that by connecting.
 func serveControl(listener net.Listener, registry *control.Registry, identifier string, onStop func(error)) {
 	go func() {
 		if err := control.Serve(listener, registry, identifier); err != nil {

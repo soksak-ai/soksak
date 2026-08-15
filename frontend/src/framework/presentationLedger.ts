@@ -376,7 +376,7 @@ function installCommands(): void {
       if (registered.pendingCheckpointReads.has(key)) {
         throw new Error(tmsg("framework.presentation.checkpointReadPrepared", { checkpointId: registration.checkpointId }));
       }
-      // Producer read starts at registration, not when the harness later asks for the artifact.
+      // Producer read starts at registration, not when the harness later requests the artifact.
       // The core acknowledgement is stamped in the resolution microtask, before unrelated command
       // scheduling can enter the measured latency.
       const result = implementation.readCheckpoint({

@@ -24,7 +24,7 @@ import (
 type Deps struct {
 	// UserHome is the OS user's home. Never identity.Resolved.Home.
 	UserHome string
-	// LoginShell is the shell shell_which asks on unix. Empty refuses that
+	// LoginShell is the shell shell_which queries on unix. Empty refuses that
 	// command by name rather than guessing $SHELL, which would tie the answer
 	// to whatever launched this process. Windows needs none: where.exe takes
 	// the name as an argv element, so there is no shell line to build.

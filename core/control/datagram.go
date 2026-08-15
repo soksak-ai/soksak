@@ -130,7 +130,7 @@ func requestDatagrams(args Args) (any, error) {
 		return nil, fmt.Errorf("sending %d byte(s) to %s: %w", len(payload), destination, err)
 	}
 	// One deadline for the whole collection, set before the first read. The
-	// alternative is a loop that asks whether time has passed, and this package
+	// alternative is a loop that tests whether time has passed, and this package
 	// does not poll.
 	if err := socket.SetReadDeadline(time.Now().Add(time.Duration(window) * time.Millisecond)); err != nil {
 		return nil, fmt.Errorf("arming the %dms collection window: %w", window, err)
@@ -206,8 +206,8 @@ func openDatagramSocket() (net.PacketConn, error) {
 // a no-op the caller could not tell from a working permission check.
 //
 // The rule that is left is the one worth having: a host that resolves to a
-// broadcast address reaches every machine on the segment, and a caller who did
-// not say so almost certainly mistyped. Wake-on-LAN says so.
+// broadcast address is delivered to every machine on the segment, and a caller
+// who did not state that almost certainly mistyped. Wake-on-LAN states it.
 func guardBroadcast(destination *net.UDPAddr, named bool) error {
 	if named {
 		return nil
@@ -240,7 +240,7 @@ func broadcastRefused(destination *net.UDPAddr) error {
 }
 
 // isDirectedBroadcast answers whether target is the broadcast address of one of
-// the networks this host sits on.
+// the networks this host is on.
 //
 // The interfaces are an argument so the rule can be held by a test: a check
 // that could only be exercised against whatever networks the machine happened

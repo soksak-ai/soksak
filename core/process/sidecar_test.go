@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// A command with no scheme is what it says it is. Resolution must not turn an
+// A command with no scheme is what it is spelled as. Resolution must not turn an
 // ordinary program name into a search.
 func TestAPlainCommandPassesThrough(t *testing.T) {
 	for _, command := range []string{"/bin/sh", "claude"} {

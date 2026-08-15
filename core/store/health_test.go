@@ -167,7 +167,7 @@ func TestPlantedDamageIsInvisibleToTheCheapCheckAndNamedByVerify(t *testing.T) {
 	}
 }
 
-// Repair rebuilds the index and says so by showing nothing left, and the
+// Repair rebuilds the index and reports that by showing nothing left, and the
 // records are all still there: it rebuilds from the table, it does not discard.
 func TestRepairRebuildsADesyncedIndex(t *testing.T) {
 	kv := open(t)

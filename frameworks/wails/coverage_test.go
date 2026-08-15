@@ -24,9 +24,9 @@ var invokeCall = regexp.MustCompile(`invoke(?:Command)?[A-Za-z]*<?[^>(]*>?\(\s*"
 // from drifting apart about which commands exist.
 //
 // One registry stops two implementations of one command from disagreeing about
-// arguments. It says nothing about a command that is called and never
-// registered — that gap is invisible until someone reaches the feature, and
-// then it reads as a broken application rather than an unbuilt one.
+// arguments. It does not cover a command that is called and never registered —
+// that gap is invisible until a user opens the feature, and then it reads as a
+// broken application rather than an unbuilt one.
 func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 	called := frontendCalls(t)
 	if len(called) == 0 {
@@ -35,7 +35,7 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 	}
 
 	// The whole command surface, assembled the way the running process
-	// assembles it. This gate lives beside the framework rather than beside the
+	// assembles it. This gate is beside the framework rather than beside the
 	// core because this is the only package that can import both, and a gate
 	// that reads a hand-written list of what the other half serves measures the
 	// list instead of the build.
@@ -143,8 +143,8 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 			"Remove the declaration; it describes the gap, not the history.", uncalled)
 	}
 
-	// Every refusal carries a reason. "unknown command" and "not built" are
-	// different answers, and only the second tells the caller to stop looking.
+	// Every refusal states a reason. "unknown command" and "not built" are
+	// different answers, and only the second one ends the search.
 	var mute []string
 	for name, because := range refused {
 		if strings.TrimSpace(because) == "" {
@@ -169,7 +169,7 @@ func frontendCalls(t *testing.T) []string {
 		if info.IsDir() || !strings.HasSuffix(path, ".ts") && !strings.HasSuffix(path, ".tsx") {
 			return nil
 		}
-		// Tests name commands they mock, which says nothing about what the
+		// Tests name commands they mock, which is not evidence of what the
 		// running application calls.
 		if strings.Contains(path, ".test.") {
 			return nil

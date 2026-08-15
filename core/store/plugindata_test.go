@@ -20,7 +20,7 @@ func TestAnUnwrittenPluginValueIsAbsence(t *testing.T) {
 	}
 }
 
-// A read failure that is not absence carries its reason.
+// A read failure that is not absence states its reason.
 func TestAnUnreadablePluginValueIsAFailure(t *testing.T) {
 	base := t.TempDir()
 	// A directory where the value file should be: present, and not readable as

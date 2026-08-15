@@ -103,7 +103,7 @@ func bridged(t *testing.T) (*control.Registry, *RendererCommands, *page) {
 	return registry, bridge, document
 }
 
-// answerOnce replies to the next request that reaches the page.
+// answerOnce replies to the next request delivered to the page.
 func answerOnce(t *testing.T, registry *control.Registry, document *page, envelope string) {
 	t.Helper()
 	go func() {
@@ -124,7 +124,7 @@ func itoa(value uint64) string {
 }
 
 func TestADeclaredNameAnswersBareAndAddressed(t *testing.T) {
-	// The point of the bridge: a command that only the page knows becomes one
+	// The point of the bridge: a command only the page implements becomes one
 	// entry on the one table, reachable with no window involved.
 	registry, bridge, document := bridged(t)
 	if err := bridge.Declare("main", []string{"ui.tree"}); err != nil {
@@ -498,7 +498,7 @@ func receiptsFor(document *page, window string) int {
 }
 
 func TestEveryDeclarationIsAnswered(t *testing.T) {
-	// A page that reloaded is a new page: it knows nothing about what it holds
+	// A page that reloaded is a new page: it has no record of what it holds
 	// until it is told. Answering only when the table changed would leave a
 	// reloaded window in silence about its own refusals — measured on the
 	// running application 2026-08-15, where reloading the control plane

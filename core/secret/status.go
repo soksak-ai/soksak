@@ -25,11 +25,12 @@ type Status struct {
 	DataKeyIDs  []string `json:"data_key_ids"`
 }
 
-// Backend is the narrower answer the plugin API asks for by that name.
+// Backend is the narrower answer the plugin API requests by that name.
 //
 // It is projected from Status rather than measured a second time: two
-// measurements of "can this host seal" can disagree, and then one command tells
-// a plugin it may store a secret while the other tells the settings panel it
+// measurements of "can this host seal" can disagree, and then one command
+// reports to a plugin that it may store a secret while the other reports to the
+// settings panel that it
 // may not.
 type Backend struct {
 	Backend  string `json:"backend"`

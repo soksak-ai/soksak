@@ -5,14 +5,14 @@ import (
 	"strings"
 )
 
-// Name rules for everything that reaches SQL as an identifier or a path.
+// Name rules for everything that arrives in SQL as an identifier or a path.
 //
 // One rule per name, in one place. Two copies drift, and a drifted rule lets
 // one surface create a name another surface cannot address. A measurement
 // measured exactly that: an import planted a namespace no command could read or
 // delete, because every command validated and the creating path did not.
 
-// A collection reaches an index name (`idx_<cid>_<field>`) and sits beside a
+// A collection produces an index name (`idx_<cid>_<field>`) and is beside a
 // virtual table name, so `[a-z0-9_]` is the whole set. It is disjoint from the
 // namespace set, which allows `-`: a collection therefore cannot collide with a
 // meta key.

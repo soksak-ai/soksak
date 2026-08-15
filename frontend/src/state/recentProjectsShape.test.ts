@@ -9,7 +9,7 @@ describe("recent projects shape", () => {
   });
 
   it("answers with an empty list for anything that is not one", () => {
-    // Whatever a store hands back reaches a renderer that iterates it. The
+    // Whatever a store returns arrives at a renderer that iterates it. The
     // shape is checked where the type is claimed, not where the crash lands.
     //
     // Measured 2026-08-15: the persisted value was `{}` and the first render

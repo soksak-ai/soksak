@@ -17,7 +17,7 @@ var windowGroupFiles = append([]string{
 // readCode returns a file with its comments removed.
 //
 // The prose is excluded deliberately: every rule below is a rule about what the
-// code reaches for, and each of these files explains in a comment why it does
+// code calls, and each of these files explains in a comment why it does
 // not reach for it. Scanning the prose too would make writing down the reason
 // break the gate that protects the reason.
 func readCode(t *testing.T, name string) string {

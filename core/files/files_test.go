@@ -289,7 +289,7 @@ func TestARequiredArgumentSentAsNullIsRefusedRatherThanRead(t *testing.T) {
 	}
 }
 
-// Deps.UserHome is one field in the wiring and the package header says passing
+// Deps.UserHome is one field in the wiring and the package header requires passing
 // the wrong one is a single mistake away. Every command that expands `~` has to
 // be reached through the registry to see that Register hands the home down at
 // all: calling the bodies directly, as the unit tests do, cannot show a handler

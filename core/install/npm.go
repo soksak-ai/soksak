@@ -19,7 +19,7 @@ type NpmDirs struct {
 	LibDir string `json:"lib_dir"`
 }
 
-// npmGlobalDirs asks the user's login shell where npm's global prefix is.
+// npmGlobalDirs queries the user's login shell for npm's global prefix.
 //
 // The login shell is the whole point. A process launched from a desktop
 // environment inherits a PATH that does not include a version manager's shims,

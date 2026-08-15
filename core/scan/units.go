@@ -14,7 +14,7 @@ import (
 //
 // Both file contents are raw text. Validation is the frontend spec's, and it is
 // the only one — a second parser here would accept a manifest the spec refuses,
-// or refuse one it accepts, and only one of the two ever tells the user.
+// or refuse one it accepts, and only one of the two ever reports to the user.
 type Unit struct {
 	Dir      string  `json:"dir"`
 	DirName  string  `json:"dir_name"`

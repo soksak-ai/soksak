@@ -19,7 +19,7 @@ const windowIDBytes = 8
 //
 // crypto/rand rather than math/rand for the same reason a counter is wrong: a
 // seeded generator repeats its sequence, and a repeat here is two windows the
-// host tells apart by map order.
+// host distinguishes by map order.
 //
 // A collision would still be caught rather than believed — createName refuses a
 // generated name that is already held — so this owes uniqueness in practice,

@@ -9,7 +9,7 @@ import (
 // ChangeEvent is what a claim mutation is announced as.
 //
 // A constant rather than a literal at each publisher: spelled out in several
-// places, one publisher eventually reaches nobody, and that absence is not an
+// places, one publisher eventually delivers to nobody, and that absence is not an
 // error — it is a picker that never updates. Measured
 // 2026-08-01: one publisher never sent it at all.
 const ChangeEvent = "project-registry-change"
@@ -44,7 +44,7 @@ type Owner struct {
 // Ledger enforces the single-open rule: one root is open in at most one window,
 // across every window in this process.
 //
-// It lives in memory and is never persisted. A persisted claim survives a crash
+// It is held in memory and is never persisted. A persisted claim survives a crash
 // and makes that project permanently unopenable; a restart is an empty ledger,
 // which is the correct state after a crash.
 //
@@ -87,7 +87,7 @@ func (ledger *Ledger) ownerOf(root string) (string, bool) {
 	return "", false
 }
 
-// Claim takes root for window. The second result says whether the map actually
+// Claim takes root for window. The second result reports whether the map actually
 // changed: notification follows mutation, never the call. Re-announcing an
 // unchanged map makes restore and retry re-read every window at every step, and
 // the real change is lost in that noise.
@@ -200,7 +200,7 @@ func (ledger *Ledger) Owners() []Owner {
 	return owners
 }
 
-// OwnersReply carries the holders under a key.
+// OwnersReply holds the owners under a key.
 //
 // A bare list would be the same JSON as an error that answered nothing, and the
 // caller reads `.owners` — measured 2026-08-15, a bare array left that undefined

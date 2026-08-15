@@ -23,8 +23,8 @@ const maxLineBytes = 1 << 20
 // in a drain rather than a return.
 //
 // announce is called with the very first line and then never again; it is nil
-// for stderr. The first line is where the readiness rule lives, and a line that
-// arrives second cannot be the first one no matter what it says.
+// for stderr. The first line is where the readiness rule applies, and a line
+// that arrives second cannot be the first one no matter what it holds.
 func pump(reader io.ReadCloser, announce func(line string), keep func(line string)) {
 	defer func() { _ = reader.Close() }()
 

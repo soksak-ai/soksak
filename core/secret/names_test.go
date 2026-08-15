@@ -36,7 +36,7 @@ func TestTheNamesCallersUseAreAccepted(t *testing.T) {
 	}
 }
 
-// A namespace never reaches into a namespace that starts with its own letters.
+// A namespace never matches one that starts with its own letters.
 //
 // The prefix ends in the separator, so `a`'s scan cannot pick up `ab`'s rows.
 // Without the separator in the prefix this is a cross-plugin read of what keys
@@ -62,7 +62,7 @@ func TestOneNamespaceNeverPrefixesAnother(t *testing.T) {
 	}
 }
 
-// A refused name is refused before anything is stored, and the refusal says
+// A refused name is refused before anything is stored, and the refusal states
 // which name it was about.
 func TestARefusedAddressNamesTheHalfThatFailed(t *testing.T) {
 	if _, err := address("Core", "k"); err == nil || !strings.Contains(err.Error(), "Core") {

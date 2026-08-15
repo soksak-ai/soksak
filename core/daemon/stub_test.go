@@ -111,7 +111,7 @@ func (child *stubChild) Signal() error {
 		return err
 	}
 	// A signalled process leaves no exit code of its own, which is the whole
-	// reason the status row carries a null rather than a zero.
+	// reason the status row holds a null rather than a zero.
 	child.exit(-1)
 	return nil
 }
@@ -123,7 +123,7 @@ func (child *stubChild) signalled() int {
 }
 
 // say writes lines to the child's stdout. The write only returns once the
-// reader has taken the bytes, so a test that says something and then ends the
+// reader has taken the bytes, so a test that writes something and then ends the
 // child cannot lose the line.
 func (child *stubChild) say(lines ...string) {
 	for _, line := range lines {

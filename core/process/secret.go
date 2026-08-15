@@ -6,10 +6,10 @@ import (
 )
 
 // SecretSource resolves one namespaced key to plaintext. The implementation
-// belongs to whoever holds the vault.
+// is the vault holder's.
 //
 // Resolution is a contract rather than a concrete vault handle because a
-// spawn needs a vault only when it asks for a secret. Wiring the vault into
+// spawn needs a vault only when it requires a secret. Wiring the vault into
 // the spawn itself would tie "start a child" to "this process has a vault".
 type SecretSource interface {
 	Resolve(namespace, key string) (string, error)

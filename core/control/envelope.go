@@ -7,7 +7,7 @@ import (
 
 // Protocol is the wire version this build speaks.
 //
-// A client that asks for a version this build does not have is refused during
+// A client requesting a version this build does not have is refused during
 // the greeting rather than at the first command that behaves differently: a
 // mismatch discovered halfway through a session has already produced answers
 // the caller trusted.
@@ -48,7 +48,7 @@ type Greeting struct {
 	// asked for.
 	Protocol int `json:"protocol"`
 	// Identity names the installation, so a client that found the wrong socket
-	// learns that from the greeting rather than from surprising answers.
+	// receives that at the greeting rather than through surprising answers.
 	Identity string `json:"identity"`
 	// Commands is what this build serves and refuses, with reasons. Sent in the
 	// greeting because a client that must ask separately will act on a name it

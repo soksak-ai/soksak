@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// A host that reached no key store says so, and says it by name rather than by
+// A host with no key store states that, by name rather than by
 // an empty string a reader would take for "did not answer".
 func TestAHostWithNoKeyStoreNamesTheAbsence(t *testing.T) {
 	vault := newVault(Deps{KV: openStore(t)})
@@ -70,7 +70,7 @@ func TestNoRegisteredDataKeysIsAnEmptyList(t *testing.T) {
 	}
 }
 
-// Once app.data registers envelope keys, the status carries them and says a
+// Once app.data registers envelope keys, the status includes them and reports a
 // vault is expected.
 func TestRegisteredDataKeysAreCarried(t *testing.T) {
 	vault := newVault(Deps{

@@ -15,7 +15,7 @@ vi.mock("../../../bindings/github.com/soksak/wails-service-native-compositor/mod
   Snapshot: { createFrom: (value: unknown) => value },
 }));
 
-// jsdom carries no ResizeObserver, and the surface observer watches declared
+// jsdom has no ResizeObserver, and the surface observer observes declared
 // elements for size changes. Supplying it keeps the failure about this file
 // rather than about the environment.
 vi.stubGlobal("ResizeObserver", class {
@@ -44,7 +44,7 @@ describe("the wails adapter's install", () => {
 
   it("commits a view's visibility without throwing, surface or not", async () => {
     await installWailsSurfaces();
-    // A plugin view that lives in the document has no native surface, and
+    // A plugin view inside the document has no native surface, and
     // parking it is the core's ordinary path for every tab.
     await expect(contentViewHost().visible("browser:pan-aaaaaa", false)).resolves.toBeUndefined();
   });

@@ -4,7 +4,7 @@ import "github.com/soksak/soksak-core/core/control"
 
 // Register wires the storage group into the registry.
 //
-// It lives here, beside the rules it registers. There was a claim that it could
+// It is here, beside the rules it registers. There was a claim that it could
 // not: that `core/control` imports this package and the import would therefore
 // cycle. `core/control` imports nothing of this repository — `go list -deps
 // ./core/control` names only itself. What holds a `*store.KV` is `core/boot`,
@@ -16,7 +16,7 @@ func Register(registry *control.Registry, deps Deps) {
 			Name:  command.Name,
 			Owner: control.Owner(command.Owner),
 			// The handler is carried across rather than rewritten: this
-			// translates a type and decides nothing.
+			// translates a type and determines nothing.
 			Handler: func(args control.Args) (any, error) { return command.Handler(args) },
 		})
 	}

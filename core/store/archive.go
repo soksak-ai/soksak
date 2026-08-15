@@ -16,7 +16,7 @@ import (
 // Snapshots: making one, going back to one, and clearing up after one that died
 // halfway.
 
-// BackupResult carries the resolved destination back.
+// BackupResult returns the resolved destination.
 //
 // The path is resolved once and returned rather than recomputed by whoever
 // asked: a default computed on both sides is two processes writing different
@@ -48,7 +48,7 @@ func scratchPath(destination string, pid int) string {
 // file, which data_reclaim takes, and never a truncated backup that looks like
 // a good one.
 //
-// The work file's name carries this process's pid, because a fixed name means
+// The work file's name includes this process's pid, because a fixed name means
 // two writers tread on each other: one cleans up what it reads as crash debris
 // and it is the other's live file.
 //

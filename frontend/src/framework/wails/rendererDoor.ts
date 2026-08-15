@@ -2,7 +2,7 @@
 //
 // The catalogue this window serves is registered inside this page and nowhere
 // else, so until it is declared the only door that reached it was another
-// application instance. This tells the backend what those names are; from then
+// application instance. This declares those names to the backend; from then
 // on they sit on the one registry and `sok ui.tree` resolves without a window.
 //
 // This page never sends its own name. The framework stamps the sending window

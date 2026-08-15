@@ -14,8 +14,8 @@ import (
 // A run-once command is a build or a release step, and its output is held whole
 // so the caller can parse it — release.build finds its summary line in there.
 // Held whole with no bound, a command that loops printing takes the workspace
-// down with it. Nothing above the bound is dropped quietly: the answer carries
-// a line that says the output was cut and by how many lines.
+// down with it. Nothing above the bound is dropped quietly: the answer includes
+// a line stating that the output was cut and by how many lines.
 const maxOnceBytes = 8 << 20
 
 // Once is what one run-to-completion answered.
@@ -76,7 +76,7 @@ func (out *collector) tail(count int) string {
 // code with everything it printed.
 //
 // The deadline is a timer, and the exit is the child being reaped: both arrive
-// as an event this waits on. Nothing here asks repeatedly whether the child is
+// as an event this waits on. Nothing here tests repeatedly whether the child is
 // still there.
 func (supervisor *Supervisor) RunOnce(root, cmd string, env map[string]string, timeout time.Duration) (Once, error) {
 	program, args, err := daemonArgv(supervisor.deps.LoginShell, cmd)

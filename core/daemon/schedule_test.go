@@ -183,7 +183,7 @@ func TestAReconcileJobFiresOnRegistrationAndThenOnlyOnAPoke(t *testing.T) {
 	}
 }
 
-// A poke with no id is "something changed": it reaches the jobs that exist to
+// A poke with no id is "something changed": it fires the jobs that exist to
 // answer that, and leaves a timed job to its own time.
 func TestAPokeWithNoIdReachesOnlyTheReconcileJobs(t *testing.T) {
 	schedule, firer, _, _ := testScheduler(t)

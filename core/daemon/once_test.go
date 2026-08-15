@@ -158,7 +158,7 @@ func TestAnEnvironmentOverrideReachesTheChild(t *testing.T) {
 	}
 }
 
-// Output above the bound is dropped, and the answer says so. Silence there
+// Output above the bound is dropped, and the answer states that. Silence there
 // would let a caller parse a truncated log as a complete one.
 func TestOutputAboveTheBoundIsNamedRatherThanDroppedQuietly(t *testing.T) {
 	supervisor, spawner, _ := testRunner(t)

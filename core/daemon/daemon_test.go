@@ -118,7 +118,7 @@ func TestAHostWithoutTheMeansToStartAProcessRefusesByName(t *testing.T) {
 		}
 		// Asking what is running is answerable with nothing running, and the
 		// answer — nothing — is true. It is a different answer from "nothing
-		// can be started here", which is what the refusal above carries.
+		// can be started here", which is what the refusal above states.
 		for _, name := range []string{commandStop, commandStatus, commandLogs} {
 			if !served[name] {
 				t.Errorf("%s: %s stopped being served, and an empty table is still an answer", one.what, name)
@@ -366,7 +366,7 @@ func TestTheJobRowKeepsTheFieldNamesTheCallerReads(t *testing.T) {
 
 // An option accepted and then not acted on is the failure this group exists to
 // avoid: the caller believes a lease is held, or a timeout is capped, and
-// nothing says otherwise until the work goes wrong.
+// nothing reports otherwise until the work goes wrong.
 func TestAScheduleOptionThisBuildCannotHonourIsRefusedByName(t *testing.T) {
 	deps, _ := fullDeps(t)
 	registry, _ := registered(t, deps)

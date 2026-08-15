@@ -7,7 +7,7 @@ import (
 	"github.com/soksak/soksak-core/core/control"
 )
 
-// project_owners is what the frontend asks before it opens a root: if another
+// project_owners is what the frontend queries before opening a root: if another
 // window already holds it, that window is focused instead of a second one being
 // created. It reads `.owners` off the answer.
 //

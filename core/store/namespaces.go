@@ -15,7 +15,7 @@ type NsRemoval struct {
 	KV          int    `json:"kv"`
 }
 
-// MigrateOutcome says whether a namespace moved, and why not when it did not.
+// MigrateOutcome reports whether a namespace moved, and why not when it did not.
 type MigrateOutcome struct {
 	Migrated bool   `json:"migrated"`
 	Reason   string `json:"reason"`
@@ -50,7 +50,7 @@ func (kv *KV) RemoveNamespace(ns string) (NsRemoval, error) {
 			return fmt.Errorf("store: removing the keys of %s: %w", ns, err)
 		}
 		for _, cid := range cids {
-			// The search table belongs to that collection alone, so it goes
+			// The search table is that collection's alone, so it goes
 			// whole. The expression indexes sit on records, which every
 			// namespace shares, so they are found by name and dropped: one left
 			// behind keeps making another namespace's writes heavy.

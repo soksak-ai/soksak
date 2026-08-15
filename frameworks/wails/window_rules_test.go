@@ -163,7 +163,7 @@ func TestFocusDefaultsToTrue(t *testing.T) {
 	}
 }
 
-// Everything after a '#' never reaches location.search, so boot instructions
+// Everything after a '#' is absent from location.search, so boot instructions
 // carried there vanish with nothing reported anywhere.
 func TestAnInitQueryThatWouldNotSurviveTheURLIsRefused(t *testing.T) {
 	for _, init := range []string{"root=a#b", "#", "?root=a"} {
@@ -226,7 +226,7 @@ func TestTheCentreTruncatesInOneDirection(t *testing.T) {
 	}
 }
 
-// Collapsing a shared name to one row says there is one window, and the caller
+// Collapsing a shared name to one row reports one window, and the caller
 // then cannot tell "I cannot pick which one" from "there is only one".
 func TestCensusFoldsASharedNameIntoOneRowWithTwoHosts(t *testing.T) {
 	folded := foldCensus([]censusRow{
@@ -256,11 +256,11 @@ func TestCascadeOffsetsFromTheSourceAndKeepsTheFreshSize(t *testing.T) {
 }
 
 // Every identifier prefix in this product is exactly three letters, so that the
-// string alone says what kind of thing it names. One letter cannot: "w-" is
+// string alone identifies what kind of thing it names. One letter cannot: "w-" is
 // window, webview and workspace at once, and a reader who has to ask is reading
 // a name that failed at its only job. The frontend issues its own identifiers
 // under the same law (frontend/src/state/ids.ts), and this is the half of it
-// that lives on the host.
+// that is on the host.
 func TestTheWindowNamePrefixIsThreeLetters(t *testing.T) {
 	if got := workspaceWindowPrefix; len(got) != 4 || got[3] != '-' {
 		t.Fatalf("prefix %q is not three letters and a dash", got)

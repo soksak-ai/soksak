@@ -12,7 +12,7 @@ import {
 } from "../plugins/viewRegistry";
 import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { useRegistry } from "../state/registry";
-import { installState, type RegistryEntry } from "../plugins/registry";
+import { installState, isOfficial, type RegistryEntry } from "../plugins/registry";
 import { useSessions } from "../state/sessions";
 import { useSettings } from "../state/settings";
 import { useUi } from "../state/ui";
@@ -213,6 +213,13 @@ function RegistrySection({
     () => [...entries].sort((a, b) => a.id.localeCompare(b.id)),
     [entries],
   );
+  // Which entries come from the official registry. A person deciding whether to
+  // install one needs to know that; the URL the bytes arrive from is not
+  // something they can act on.
+  const official = useMemo(
+    () => new Set(entries.filter((e) => isOfficial(entries, e.unitId)).map((e) => e.unitId)),
+    [entries],
+  );
 
   const stateOf = (e: RegistryEntry) =>
     installState(e, installed[e.id]?.manifest.version, installed[e.id]?.source);
@@ -253,7 +260,17 @@ function RegistrySection({
                 <span className="plugin-row-name">{e.id}</span>
                 <span className="plugin-row-ver">v{e.version}</span>
               </div>
-              <div className="plugin-row-desc">{e.manifest.url}</div>
+              {/* A catalog carries no description: it supplies no display metadata
+                  before the release it points at is verified (catalogLabel). What
+                  it does state is where the entry came from, which is what a
+                  person needs before installing. The download URL was here and is
+                  not user information — it is where the bytes are fetched from,
+                  it cannot be acted on, and it overflowed the panel. */}
+              <div className="plugin-row-desc">
+                {official.has(e.unitId)
+                  ? t("plugin.registry.official")
+                  : t("plugin.registry.thirdParty", { registry: e.registryId })}
+              </div>
               <div className="plugin-row-actions">
                 {st === "available" && (
                   <button type="button" className="dbtn dbtn-acc" disabled={busy} onClick={() => doInstall(e)}>

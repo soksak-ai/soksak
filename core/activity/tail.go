@@ -11,7 +11,7 @@ const DefaultTailSize = 512
 
 // Tail is what a live operator can still see.
 //
-// It is not retention. Retention belongs to whoever owns storage, and the two
+// It is not retention. Retention is storage's, and the two
 // answer different questions: retention is "what happened", this is "what is
 // happening", and the second must keep working in a process with no storage at
 // all — which is exactly the process that most needs to be asked.
@@ -52,7 +52,7 @@ func (tail *Tail) Keep(entry Entry) {
 
 // Recent answers the newest entries first, optionally of certain kinds.
 //
-// Newest first because the reason anyone asks is that something just went
+// Newest first because the reason anyone reads it is that something just went
 // wrong. An empty kinds list means every kind: a caller that filters to nothing
 // wants everything, not silence.
 func (tail *Tail) Recent(kinds []string, limit int) []Entry {

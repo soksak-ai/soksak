@@ -115,7 +115,7 @@ func main() {
 			// fire.
 			Watch:   nil,
 			Spawner: process.OSSpawner{},
-			// This host holds no vault. A spawn that asks for a secret is refused
+			// This host holds no vault. A spawn that requires a secret is refused
 			// by name; handing back an empty value would surface later as the
 			// child's own authentication failure.
 			Secrets: nil,

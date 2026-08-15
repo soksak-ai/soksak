@@ -49,7 +49,7 @@ func TestPresenceAndWorkingAreTwoAnswers(t *testing.T) {
 }
 
 // TestABinaryThatCannotStartIsNotAFailureOfTheCommand keeps "this dependency
-// does not work" an answer rather than an error. The caller asks one question,
+// does not work" an answer rather than an error. The caller has one question,
 // and absent and ran-and-failed are the same answer to it.
 func TestABinaryThatCannotStartIsNotAFailureOfTheCommand(t *testing.T) {
 	probe, err := probeBinary("/opt/bin/absent", nil, &scriptedRunner{err: errors.New("no such file or directory")})

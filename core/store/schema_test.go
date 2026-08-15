@@ -124,7 +124,7 @@ func TestAClosedStoreAnswersByName(t *testing.T) {
 	}
 }
 
-// The store carries the path it was opened at: restore has to swap that file
+// The store holds the path it was opened at: restore has to swap that file
 // and reopen it, and a path recomputed on the other side is a second answer.
 func TestTheStoreKnowsItsOwnPath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "soksak.db")

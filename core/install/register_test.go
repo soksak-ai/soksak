@@ -28,7 +28,7 @@ func arguments(t *testing.T, pairs map[string]any) control.Args {
 
 // TestTheGroupAnswersWhatItClaims pins the table. A command that is registered
 // under a different name than the frontend calls is invisible until a user
-// reaches it, and then it reads as a broken application rather than an unbuilt
+// opens it, and then it reads as a broken application rather than an unbuilt
 // one.
 func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 	registry := control.NewRegistry()
@@ -104,7 +104,7 @@ func TestEveryRefusalNamesWhatBlocksIt(t *testing.T) {
 }
 
 // TestARefusedCommandCarriesItsReasonToTheCaller. The reason has to travel: it
-// reaches a caller as the text of an error, with no file to look in.
+// arrives at a caller as the text of an error, with no file to look in.
 func TestARefusedCommandCarriesItsReasonToTheCaller(t *testing.T) {
 	registry := control.NewRegistry()
 	Register(registry, Deps{})
@@ -113,7 +113,7 @@ func TestARefusedCommandCarriesItsReasonToTheCaller(t *testing.T) {
 	if err == nil {
 		t.Fatal("a refused command answered")
 	}
-	// The error carries the command's own reason, not a generic refusal. The
+	// The error states the command's own reason, not a generic refusal. The
 	// reason is compared to the table so this stays true when the reason
 	// changes.
 	if !strings.Contains(err.Error(), installTransactionBlocked) {

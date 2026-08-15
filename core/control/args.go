@@ -59,7 +59,7 @@ func OptionalArg[T any](args Args, name string, fallback T) (T, error) {
 // through rather than reading into it.
 //
 // Null is refused: a handler passing the document on would write the four bytes
-// "null" where a document belongs.
+// "null" in place of a document.
 func RawArg(args Args, name string) (json.RawMessage, error) {
 	raw, present := args[name]
 	if !present {

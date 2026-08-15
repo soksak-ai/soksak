@@ -120,7 +120,7 @@ func TestABase64WriteAnswersThePathAndTheDecodedLength(t *testing.T) {
 	}
 }
 
-// The answer carries the resolved path so the caller can hand it straight back
+// The answer includes the resolved path so the caller can pass it straight back
 // as a media path; `~/shot.png` would name nothing to a renderer.
 func TestABase64WriteAnswersTheResolvedPath(t *testing.T) {
 	home := t.TempDir()

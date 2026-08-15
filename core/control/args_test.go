@@ -95,7 +95,7 @@ func TestRawArgPassesTheDocumentThrough(t *testing.T) {
 
 func TestRawArgRefusesNull(t *testing.T) {
 	// A handler that passes a document through would write the four bytes
-	// "null" where a document belongs.
+	// "null" in place of a document.
 	if _, err := RawArg(args(t, map[string]string{"ledger": `null`}), "ledger"); err == nil {
 		t.Fatal("null was accepted as a document")
 	}

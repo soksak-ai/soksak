@@ -1,4 +1,4 @@
-// Package project decides what may be a project root, where app-made project
+// Package project determines what may be a project root, where app-made project
 // folders live, which window holds which root, and what a window leaves behind
 // for the next boot.
 //
@@ -15,7 +15,7 @@ import (
 	"path/filepath"
 )
 
-// Verdict says whether a canonical path may be a project root.
+// Verdict reports whether a canonical path may be a project root.
 //
 // It touches no disk: existence and canonicalization are the caller's, so the
 // same rule can be asked from any process and give the same answer.
@@ -41,7 +41,7 @@ func Verdict(canonical string, home string) error {
 // key on it, so two spellings of one directory must not become two projects.
 // Both path and the home must be absolute for that to hold — see below.
 //
-// Symlinks are resolved, not refused. Refusing them belongs to the installer
+// Symlinks are resolved, not refused. Refusing them is the installer's
 // surface, which materializes files in our own tree and has to care that a
 // planted link redirects a write. Here the user is browsing their own disk, and
 // a refusal makes a whole tree with a symlinked work folder unopenable.

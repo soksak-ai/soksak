@@ -4,7 +4,7 @@ import { currentWindow } from "../framework";
 // The single source for multi-window identifiers. Any name that must be unique
 // across the whole application — a browser child webview label, for one — is
 // derived here. View ids are already globally unique (state/ids.ts); a label
-// adds the window name so the value also states which window it belongs to.
+// adds the window name so the value also states which window owns it.
 // Reclaiming a surface and filtering out labels with no parent window read that
 // one value.
 //

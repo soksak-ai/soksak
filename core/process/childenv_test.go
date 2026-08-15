@@ -8,10 +8,10 @@ import (
 // A daemon starts a child too, and it needs the same environment rule this
 // package already owns. A second copy would drift the moment either changed —
 // and the way it drifts is that an internal name stops being stripped, so a
-// vault master key reaches a child.
+// vault master key enters a child.
 //
 // So the rule is lent rather than copied: this package answers, and whoever
-// starts a process asks.
+// starts a process requires.
 func TestTheChildEnvironmentRuleIsLentRatherThanCopied(t *testing.T) {
 	inherited := []string{
 		"PATH=/usr/bin",

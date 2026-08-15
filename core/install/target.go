@@ -7,7 +7,7 @@ import (
 
 // hostUnitTarget names the artifact triple for this host.
 //
-// A unit's release carries one archive per target, and this is the key that
+// A unit's release holds one archive per target, and this is the key that
 // selects among them. An invented key does not fail at selection — it succeeds,
 // downloads, and fails when the binary is executed, which reads as a broken
 // plugin rather than as an unsupported host. So an unknown pair is refused
@@ -18,7 +18,7 @@ import (
 // the two is invisible until a build is cross-compiled.
 //
 // The limit of this table, so the next reader does not find it by shipping a
-// broken install: the vocabulary carries both -gnu and -musl for Linux, and
+// broken install: the vocabulary has both -gnu and -musl for Linux, and
 // (GOOS, GOARCH) cannot tell them apart — a Go binary built with CGO_ENABLED=0
 // links neither. -gnu is named because glibc is what mainstream distributions
 // run. The day a musl distribution exists, the triple stops being derivable
@@ -37,7 +37,7 @@ func hostUnitTarget(goos string, goarch string) (string, error) {
 	// release channel ships one Windows build that arm64 emulates. That is a
 	// statement about a distribution, and this build has no distribution to
 	// make it about. Naming each host for itself is the answer that stays true
-	// when the release channel arrives, whatever it decides to ship.
+	// when the release channel arrives, whatever it publishes.
 	switch goos + "/" + goarch {
 	case "darwin/arm64":
 		return "aarch64-apple-darwin", nil

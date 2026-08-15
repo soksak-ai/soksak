@@ -13,10 +13,10 @@ import (
 // The compositor validates and sequences an inventory, hands it to a backend,
 // and keeps the receipt. It does not keep the inventory: after the commit, the
 // declared rectangles are gone and only the applied ones remain. That makes the
-// composition unjudgeable — an applied frame on its own says where a surface is
-// and nothing about where it was supposed to be.
+// composition unjudgeable — an applied frame on its own gives where a surface
+// is and nothing about where it was supposed to be.
 //
-// Rather than ask the compositor to hold its input, this sits between it and
+// Rather than have the compositor hold its input, this is between it and
 // the real backend. Both halves are in hand in the same call, which is stronger
 // than a getter would be: no second read can arrive from a different moment.
 //
@@ -65,7 +65,7 @@ func (recorder *SurfaceRecorder) Latest() Composition {
 	recorder.mu.Lock()
 	defer recorder.mu.Unlock()
 	// Copied out. The slices are rebuilt on every commit and never mutated in
-	// place, so handing the same headers to a caller that outlives the next
+	// place, so passing the same headers to a caller that outlives the next
 	// commit is safe; the struct copy is what keeps the failure fields from
 	// being read half-updated.
 	return recorder.latest
@@ -74,7 +74,8 @@ func (recorder *SurfaceRecorder) Latest() Composition {
 // pairCommit joins the declaration to the read-back.
 //
 // Paired by surface identity, never by position. Nothing in the backend
-// contract says the applied inventory comes back in the order it was given —
+// contract requires the applied inventory to come back in the order it was
+// given —
 // the compositor sorts it by id after the fact, and the browser backend plans
 // its batch in layer order — so pairing by index would subtract one surface's
 // rectangle from another's and report two displacements that are one surface

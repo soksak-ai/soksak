@@ -1,7 +1,7 @@
 // Command sok drives a running backend from outside it.
 //
 // Everything the application can do, it does through the command registry, and
-// this reaches the same registry over the control socket. So a thing that can
+// this addresses the same registry over the control socket. So a thing that can
 // only be done by clicking is a thing that is not finished — and finding that
 // out is what this is for.
 package main
@@ -153,7 +153,7 @@ func ask(socket string, request control.Request) error {
 		return fmt.Errorf("the answer was not one line of JSON: %w", err)
 	}
 	if !response.Ok {
-		// The exit status carries the verdict so a shell can branch on it, and
+		// The exit status is the verdict so a shell can branch on it, and
 		// the message goes to stderr so a pipeline reading stdout gets nothing
 		// rather than an error it might parse as a result.
 		return fmt.Errorf("%s", response.Error)

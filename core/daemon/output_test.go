@@ -34,7 +34,7 @@ func collected(t *testing.T, write func(io.Writer), announce func(string)) []str
 }
 
 // The readiness rule reads one line and no more. A line that arrives second
-// cannot be the first one, whatever it says.
+// cannot be the first one, whatever it holds.
 func TestOnlyTheFirstLineIsOfferedAsAnAnnouncement(t *testing.T) {
 	var offered []string
 	kept := collected(t,

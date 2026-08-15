@@ -36,7 +36,7 @@ func TestHomeIsDerivedFromTheIdentifierAlone(t *testing.T) {
 		{"com.soksak.app", filepath.Join(base, ".soksak")},
 		{"com.soksak.dev", filepath.Join(base, ".soksak-dev")},
 		{"com.soksak.debug", filepath.Join(base, ".soksak-debug")},
-		// A framework axis never reaches the home: one home, many hosts.
+		// A framework axis never enters the home: one home, many hosts.
 		{"com.soksak.wails.dev", filepath.Join(base, ".soksak-dev")},
 	}
 	for _, want := range cases {

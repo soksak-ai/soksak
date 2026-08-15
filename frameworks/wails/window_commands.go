@@ -27,7 +27,7 @@ type Deps struct {
 	// must be testable with no window at all.
 	Host WindowHost
 	// NewID supplies the opaque, non-reusable half of a workspace name. The
-	// "win-" prefix is this package's rule; the entropy belongs to the process.
+	// "win-" prefix is this package's rule; the entropy is the process's.
 	NewID func() string
 }
 
@@ -141,7 +141,7 @@ func Register(registry *control.Registry, deps Deps) {
 		// flight. Called from here, what dies is the renderer and the caller
 		// survives it, so the entry lands.
 		//
-		// No second trace is added. This host's reload carries no
+		// No second trace is added. This host's reload returns no
 		// acknowledgement, so there is nothing to record arriving, and code
 		// that pretends to leave a mark is worse than none.
 		return nil, deps.Host.Reload(name)
@@ -217,8 +217,8 @@ type censusReply struct {
 // windowFact is one window's placement. The keys match what the layout
 // suggestion reads; a key this host cannot source is absent rather than
 // invented, which is why always-on-top is not here — this framework exposes a
-// setter for it and no getter. The title is readable and lives on the census,
-// where the question "what is this window" is asked.
+// setter for it and no getter. The title is readable and is on the census,
+// which is where "what is this window" is answered.
 type windowFact struct {
 	Label   string `json:"label"`
 	X       int    `json:"x"`
@@ -237,9 +237,9 @@ type windowFact struct {
 	// under another name.
 	ContentW *float64 `json:"contentW"`
 	ContentH *float64 `json:"contentH"`
-	// ViewX..ViewH is where the document's view sits inside the window. When
-	// the document and the window disagree about a size, this says which layer
-	// the difference belongs to.
+	// ViewX..ViewH is where the document's view is inside the window. When
+	// the document and the window disagree about a size, this identifies which
+	// layer the difference is in.
 	ViewX *float64 `json:"viewX"`
 	ViewY *float64 `json:"viewY"`
 	ViewW *float64 `json:"viewW"`
@@ -250,7 +250,7 @@ type windowFact struct {
 	Monitor *int `json:"monitor"`
 }
 
-// monitorsReply is facts only. Which window belongs where is decided elsewhere;
+// monitorsReply is facts only. Which window goes where is determined elsewhere;
 // nothing here proposes a placement.
 type monitorsReply struct {
 	Monitors []Display    `json:"monitors"`
@@ -262,7 +262,7 @@ type monitorsReply struct {
 	// its own physical-bounds conversion on macOS is the identity with a note
 	// that the scaling is unwritten. Numbers alone therefore cannot tell a
 	// caller which space arrived. Device-independent points is what the host
-	// actually reads and writes, and each monitor carries its scale so a caller
+	// actually reads and writes, and each monitor includes its scale so a caller
 	// that needs device pixels can convert once, in the open.
 	Space string `json:"space"`
 }
@@ -353,7 +353,7 @@ func createWindow(deps Deps, args control.Args) (any, error) {
 	positioned := false
 	if rect != nil {
 		requested, positioned = frameOf(rect.X, rect.Y, rect.W, rect.H)
-		// frameOf says "not a frame" for a rect that was never asked for and
+		// frameOf answers "not a frame" for a rect that was never requested and
 		// for one no window can occupy. Only the caller who sent a rect can be
 		// told apart here, and they are told: falling through would cascade the
 		// window to somewhere else and report the request as honoured.
@@ -368,7 +368,7 @@ func createWindow(deps Deps, args control.Args) (any, error) {
 	}
 	if restore != "" {
 		// The name is already held. Creating a second window under it would
-		// leave two that this host tells apart by map order, so a repeated
+		// leave two that this host distinguishes by map order, so a repeated
 		// restore returns the name it already has and creates nothing.
 		return restore, nil
 	}
@@ -415,7 +415,7 @@ func createWindow(deps Deps, args control.Args) (any, error) {
 	return name, nil
 }
 
-// createName decides what the new window is called. The second result is a name
+// createName determines what the new window is called. The second result is a name
 // that already exists, which means create nothing and answer with it.
 func createName(deps Deps, label *string) (name string, held string, err error) {
 	if label != nil {
@@ -425,7 +425,7 @@ func createName(deps Deps, label *string) (name string, held string, err error) 
 		}
 		if isHeld(deps.Host, *label) {
 			// The name is already held. Creating a second window under it would
-			// leave two that this host tells apart by map order, so the request
+			// leave two that this host distinguishes by map order, so the request
 			// answers with the window that exists and opens nothing.
 			return "", *label, nil
 		}
@@ -544,7 +544,7 @@ func isHeld(host WindowHost, name string) bool {
 	return false
 }
 
-// focusedFrame is where the window receiving keys sits. The second result is
+// focusedFrame is where the window receiving keys is. The second result is
 // false when no window has focus, which is a different fact from a window at
 // the origin.
 func focusedFrame(host WindowHost) (Frame, bool) {

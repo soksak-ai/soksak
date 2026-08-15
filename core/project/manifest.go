@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	// ManifestNamespace and ManifestKey are where the restore ledger lives.
+	// ManifestNamespace and ManifestKey are where the restore ledger is stored.
 	//
 	// They have to be the pair the application itself writes. If they drift,
 	// the pruning path deletes a key nobody wrote and the real ledger survives

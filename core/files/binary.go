@@ -11,7 +11,7 @@ import (
 // maxPreviewBytes caps a preview read.
 //
 // Over it the command refuses by name and size rather than answering a prefix:
-// a truncated PNG reaches the decoder and reads as a decoder bug, which sends
+// a truncated PNG arrives at the decoder and reads as a decoder bug, which sends
 // the reader looking in the wrong place.
 const maxPreviewBytes int64 = 40_000_000
 

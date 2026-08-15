@@ -44,7 +44,7 @@
 //     arriving via terminal.onData is ALWAYS noise — a mid-composition poll
 //     artifact or the first jamo of a new word after a space, where _composing
 //     is still false. shouldSkip drops it unconditionally. Legitimate lone-jamo
-//     (the ㅋ in "ㅋㅋㅋ") reaches the pty via _flush() -> onData, bypassing
+//     (the ㅋ in "ㅋㅋㅋ") is delivered to the pty via _flush() -> onData, bypassing
 //     shouldSkip entirely, so nothing is lost.
 //
 //   GUARD 2 (resyllabification echo dedup): at a syllable boundary like
@@ -67,7 +67,7 @@
 //     ALSO synthesizes \x7f via onData — the pty then deletes the already
 //     committed previous char too (two chars vanish per press). _customKey
 //     returns false for keyCode 8 while _pending is non-empty so xterm never
-//     synthesizes the DEL; the native textarea event still reaches the IME, so
+//     synthesizes the DEL; the native textarea event still arrives at the IME, so
 //     deleteContentBackward shrinks the composition. shouldSkip also drops
 //     \x7f / \b while pending as a belt-and-braces fallback. Once composition
 //     empties the next Backspace passes through — exactly one owner at a time.
@@ -149,7 +149,7 @@ export class WebkitImeAddon implements ITerminalAddon {
   // GUARD 3 (post-flush delayed-commit): the syllable just flushed from a
   // keydown terminator. _onInput consumes the matching delayed commit once.
   private _justFlushed = "";
-  // True only while _flush() runs inside _onKeydown, so the flush knows it must
+  // True only while _flush() runs inside _onKeydown, so the flush can tell it must
   // arm GUARD 3 (a standard-path flush from _onInput must not).
   private _flushingFromKeydown = false;
 
@@ -217,13 +217,13 @@ export class WebkitImeAddon implements ITerminalAddon {
     // during composition. But if any path still emits it (a fallback xterm
     // handler, a future xterm version, a test harness), drop it here too while a
     // syllable is pending. Tied to _pending — the moment composition empties the
-    // next Backspace reaches the pty normally, so there is no one-shot state.
+    // next Backspace is delivered to the pty normally, so there is no one-shot state.
     if ((data === "\x7f" || data === "\b") && this._pending !== "") return true;
     // GUARD 1: a single Hangul jamo is ALWAYS noise — drop it regardless of
     // _composing. keydown(229) fires AFTER this onData, so _composing may still
     // be false for the first jamo of a post-space word; an unconditional drop is
     // the only thing that closes the inter-word leak. Legitimate lone-jamo (ㅋ)
-    // reaches the pty via _flush() -> onData, never through this path.
+    // is delivered to the pty via _flush() -> onData, never through this path.
     if (data.length === 1 && isHangulJamo(data)) return true;
     // GUARD 2: resyllabification echo. beforeinput recorded the incoming single
     // Hangul char; drop the matching onData once so the new syllable does not
@@ -282,10 +282,10 @@ export class WebkitImeAddon implements ITerminalAddon {
       }
     }
     // GUARD 4: while a syllable is being composed (_pending is non-empty),
-    // Backspace belongs entirely to the IME. Return false so xterm never
+    // Backspace is entirely the IME's. Return false so xterm never
     // synthesizes \x7f (DEL) via onData — otherwise the pty deletes the already
     // committed previous char while the IME also shrinks the pending syllable
-    // (two chars vanish per press). The native textarea event still reaches
+    // (two chars vanish per press). The native textarea event still arrives at
     // WebKit's IME, which fires deleteContentBackward to shrink/clear the
     // composition (handled by _onKeydown/_onInput). Once _pending is empty the
     // next Backspace must reach the pty normally, so we block only while the
@@ -381,7 +381,7 @@ export class WebkitImeAddon implements ITerminalAddon {
     }
 
     // Any other key ends a non-standard composition: flush it, then let xterm
-    // handle the key normally (no preventDefault) so it reaches onData. Mark the
+    // handle the key normally (no preventDefault) so it arrives at onData. Mark the
     // flush as keydown-originated so GUARD 3 arms for the delayed commit.
     if (this._composing) {
       this._flushingFromKeydown = true;

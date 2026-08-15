@@ -14,10 +14,10 @@ import (
 // The scheduler: a registry command fired at a time, on an interval, or on an
 // event.
 //
-// It sits in this group because a scheduled fire and a daemon are the same
+// It is in this group because a scheduled fire and a daemon are the same
 // question asked twice — what keeps running when nobody is looking — and
 // because the answer to both is that this process does it itself. There is no
-// second process, and nothing here survives a restart: a job lives in memory,
+// second process, and nothing here survives a restart: a job is held in memory,
 // and the caller that wants one back re-registers it when it comes up. That is
 // the caller's contract already ("plugins store their own schedules and re-arm
 // on activate"), and inventing a store here would make two records of one
@@ -47,7 +47,7 @@ type Job struct {
 	// while a fire is in flight.
 	NextAt  *int64 `json:"next_at"`
 	Running bool   `json:"running"`
-	// Concurrency is 1 and says so: one job holds one lease, and a second fire
+	// Concurrency is 1 and is reported as such: one job holds one lease, and a second fire
 	// of the same job waits for the first to finish.
 	Concurrency int `json:"concurrency"`
 	// Owner is the plugin that registered the job, when one did. It is what
@@ -268,7 +268,7 @@ func (schedule *scheduler) run(one *job) {
 
 	one.running = false
 	if schedule.jobs[one.id] != one {
-		// Cancelled or replaced while it ran. Its result belongs to a job that
+		// Cancelled or replaced while it ran. Its result is a job's that
 		// is no longer on the table, and rescheduling it would bring back what
 		// the caller removed.
 		return

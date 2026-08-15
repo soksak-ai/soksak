@@ -7,7 +7,7 @@ import (
 	"syscall"
 )
 
-// This host puts a child in its own process group, so a kill reaches the tree.
+// This host puts a child in its own process group, so a kill covers the tree.
 const (
 	groupHonoured           = true
 	groupNotHonouredBecause = ""

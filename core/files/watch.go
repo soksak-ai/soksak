@@ -27,7 +27,7 @@ const defaultFoldWindow = 250 * time.Millisecond
 // return value from Register because Register answers nothing: without this
 // method a concrete backend would have no way to reach the folding rules.
 //
-// Arm and Disarm are non-recursive by contract. A lazy tree watches only the
+// Arm and Disarm are non-recursive by contract. A lazy tree arms only the
 // directories it has opened, so a huge tree costs one watch per opened folder
 // instead of a recursive watch that floods.
 //
@@ -100,7 +100,7 @@ func (watch *watchers) Watch(path string, home string) (int, error) {
 
 	// The count and the OS watch move together, under one lock. Measured here
 	// with eight consumers arriving at once and a 20 ms arm: releasing the lock
-	// around the Arm let all eight find the count at zero and arm the same path
+	// around the Arm let all eight read the count at zero and arm the same path
 	// eight times, and a refcount only ever disarms once — so seven OS watches
 	// would have outlived every consumer.
 	watch.mu.Lock()
@@ -209,7 +209,7 @@ func (watch *watchers) flush() {
 	if emit == nil {
 		return
 	}
-	// Emitted outside the lock: the sink belongs to whoever owns windows and
+	// Emitted outside the lock: the sink is the window owner's and
 	// may come back through this package.
 	for _, dir := range dirs {
 		emit(dir)
@@ -243,7 +243,7 @@ func parentOf(path string) (string, bool) {
 // Both the key and the reported directory are symlink-resolved, and that is a
 // divergence with a reason: keying raw strings makes the tests
 // canonicalize the fixture to match what FSEvents reports — the rule then
-// lives in the test instead of the code. In production on <local-evidence>, where /var is a
+// is in the test instead of the code. In production on <local-evidence>, where /var is a
 // link to /private/var, that mismatch makes the consumer's `changed === dir`
 // never match.
 func watchKey(path string, home string) (string, error) {

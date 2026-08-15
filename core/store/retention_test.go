@@ -82,7 +82,7 @@ func TestTrimStaysInsideItsScope(t *testing.T) {
 	}
 }
 
-// A cap nothing exceeds deletes nothing, and says so.
+// A cap nothing exceeds deletes nothing, and reports that.
 func TestTrimUnderTheCapDeletesNothing(t *testing.T) {
 	kv := open(t)
 	if _, err := kv.Put("mailbox", "messages", "s", "x1", document(t, `{"n":1}`), 10); err != nil {
@@ -180,7 +180,7 @@ func TestReapReturnsPagesAndTrimDoesNot(t *testing.T) {
 	}
 }
 
-// A trim that asks to keep fewer than no records is refused rather than read.
+// A trim requesting fewer than no records is refused rather than read.
 // The statement takes `count - cap` rows, so -1 empties the scope and answers
 // with how many it took — a caller who meant "no limit" loses everything.
 func TestATrimAskingToKeepLessThanNothingIsRefused(t *testing.T) {

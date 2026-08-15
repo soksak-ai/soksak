@@ -41,7 +41,7 @@ export interface UnitDependency {
   id: string;
   /** Resolved only inside the originating registry. Cross-registry fallback is forbidden.
    *  plugin/kit dependencies declare the author's intended range. sidecar dependencies omit
-   *  range — the signed index decides the installed version and compatibility belongs to the
+   *  range — the signed index fixes the installed version and compatibility is the
    *  interface contract pin, so a unit-version bound here would be invented information. */
   range?: string;
 }

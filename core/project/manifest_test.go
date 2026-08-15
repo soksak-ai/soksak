@@ -106,7 +106,7 @@ func TestTwoWindowsBothSurviveOneLedger(t *testing.T) {
 		t.Errorf("slots = %v, want %v", got, want)
 	}
 	// Spelled out rather than compared to the constants: comparing a constant
-	// against itself passes whatever the constant says, and what it has to say
+	// against itself passes whatever the constant holds, and what it has to hold
 	// is the pair frontend/src/state/coreStore.ts and windowBoot.ts write
 	// (ns "core", key "windows"). Drift there is not an error — the pruning
 	// path deletes a key nobody wrote and the real ledger survives untouched.

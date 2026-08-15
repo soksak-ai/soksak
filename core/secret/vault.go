@@ -30,8 +30,7 @@ type Deps struct {
 	// Nil is a process with nowhere to write, which is not a vault: every
 	// command below is refused by name rather than answering as if it had one.
 	KV *store.KV
-	// KeyStore is the operating system's key store, where this device's key
-	// lives.
+	// KeyStore is the operating system's key store, holding this device's key.
 	//
 	// Nil is a host that reached none. Sealing is then impossible: secret_set
 	// is refused by name and secret_status reports seal_available false. It is
@@ -39,7 +38,7 @@ type Deps struct {
 	// back as though it had been sealed.
 	KeyStore KeyStore
 	// DataKeyIDs answers which envelope keys app.data has registered. That
-	// ledger belongs to the storage group, not this one, so it arrives as a
+	// ledger is the storage group's, not this one's, so it arrives as a
 	// function rather than being read out of a namespace this package would
 	// then own the layout of.
 	//
@@ -57,12 +56,12 @@ type Deps struct {
 // whether the store could be reached.
 type KeyStore interface {
 	// Label names the backend for a caller to read: a fact to report, never a
-	// value to branch on. Empty is not a name and tells a caller nothing.
+	// value to branch on. Empty is not a name and gives a caller nothing.
 	Label() string
 	// DeviceKey answers this device's 32-byte key, creating it on first ask.
 	//
-	// An error from here is shown to a caller, so it says why the store could
-	// not be reached and never carries the key.
+	// An error from here is shown to a caller, so it states why the store could
+	// not be opened and never contains the key.
 	DeviceKey() ([]byte, error)
 }
 
@@ -172,7 +171,7 @@ func (vault *Vault) Set(ns, key, plaintext string) (Sealed, error) {
 	return Sealed{Ns: ns, Key: key, Replaced: replaced}, nil
 }
 
-// Has says whether ns/key is in the vault, without opening it. A key that is
+// Has reports whether ns/key is in the vault, without opening it. A key that is
 // stored can be answered for even on a host that can no longer unseal it.
 func (vault *Vault) Has(ns, key string) (bool, error) {
 	kv, err := vault.storage()
@@ -212,7 +211,7 @@ func (vault *Vault) Keys(ns string) ([]string, error) {
 	return keys, nil
 }
 
-// Delete removes ns/key and says whether it was there. It needs no device key:
+// Delete removes ns/key and reports whether it was there. It needs no device key:
 // a host that can no longer unseal a record must still be able to throw it
 // away.
 func (vault *Vault) Delete(ns, key string) (bool, error) {

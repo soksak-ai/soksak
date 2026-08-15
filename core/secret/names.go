@@ -4,7 +4,7 @@ import "fmt"
 
 // One rule for the two names a secret is addressed by.
 //
-// Every record lives in a single store namespace under the row key
+// Every record is in a single store namespace under the row key
 // `<ns>/<key>`, so `/` is the separator and nothing that could carry one may
 // pass. The character set is the whole defence: with no `/` in either half,
 // `..` has nothing to escape through and one namespace cannot be spelled so

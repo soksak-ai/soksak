@@ -31,7 +31,7 @@ func resolveCommand(home string, command string) (string, error) {
 
 	unit := "soksak-sidecar-" + name
 	components := []string{"sidecars", unit, "dist", unit}
-	// The whole path is named up front so a failure carries where the sidecar
+	// The whole path is named up front so a failure states where the sidecar
 	// was expected, not only the first component that stopped the walk.
 	target := filepath.Join(append([]string{home}, components...)...)
 

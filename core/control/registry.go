@@ -13,7 +13,7 @@ import (
 	"sync"
 )
 
-// Owner says who answers. Core commands are host-independent; framework
+// Owner names who answers. Core commands are host-independent; framework
 // commands need this host's window.
 type Owner string
 
@@ -125,7 +125,7 @@ func (registry *Registry) DeclareUnserved(name, blockedBy string) error {
 }
 
 // Invoke runs a command. An unknown name fails carrying that name, and a
-// declared refusal carries its reason.
+// declared refusal states its reason.
 func (registry *Registry) Invoke(name string, args Args) (any, error) {
 	registry.mu.RLock()
 	command, served := registry.served[name]
@@ -182,10 +182,10 @@ func (registry *Registry) Describe() Table {
 // believed.
 const CallerWindowArgument = "window"
 
-// Caller is what the transport knows about who is asking.
+// Caller is what the transport has about who is calling.
 //
-// The frontend transport knows because the framework tells it which window made
-// the call. The socket knows because whoever holds a 0600 socket may already do
+// The frontend transport has it because the framework stamps which window made
+// the call. The socket has it because whoever holds a 0600 socket may already do
 // anything the application can, so naming a window there is a statement rather
 // than a claim to check.
 type Caller struct {

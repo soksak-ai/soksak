@@ -9,10 +9,10 @@ import (
 )
 
 // What every test in this package needs: a real store and a key store whose
-// answer the test decides.
+// answer the test fixes.
 //
 // The store is the real one rather than a stand-in. The rule under test is that
-// a plaintext never reaches storage, and a fake store would let this package's
+// a plaintext never enters storage, and a fake store would let this package's
 // own idea of what it wrote stand in for what a caller can actually read back.
 
 // fakeKeyStore is one host's key store, with the answer the test chooses.

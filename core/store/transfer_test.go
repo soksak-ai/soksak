@@ -20,7 +20,7 @@ func seeded(t *testing.T) *KV {
 	return kv
 }
 
-// Export then import carries the definition, the record and the key across.
+// Export then import moves the definition, the record and the key across.
 // The stamps are re-made: import is a transfer, not a snapshot — backup and
 // restore are the exact pair.
 func TestExportAndImportCarryTheStoreAcrossAndRestamp(t *testing.T) {
@@ -169,7 +169,7 @@ func TestBlankLinesPassAndBrokenLinesFail(t *testing.T) {
 	}
 }
 
-// Export narrowed to a namespace carries that namespace only.
+// Export narrowed to a namespace includes that namespace only.
 func TestExportNarrowsToTheNamespaceItIsGiven(t *testing.T) {
 	kv := seeded(t)
 	if err := kv.Set("other", "k", "1"); err != nil {

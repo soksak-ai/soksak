@@ -42,7 +42,7 @@ func activateApplication() error {
 // nativeWindowTitle copies a window's title. The caller is on the main thread.
 //
 // The frontend writes its boot progress here, and that channel survives a dead
-// binding path — so a window that answers nothing else still says how far it
+// binding path — so a window that answers nothing else still reports how far it
 // got. The framework only sets titles, so this is the read half.
 func nativeWindowTitle(window unsafe.Pointer) (string, error) {
 	if window == nil {
@@ -72,7 +72,7 @@ func contentSize(window unsafe.Pointer) (float64, float64, error) {
 	return float64(width), float64(height), nil
 }
 
-// webviewFrame answers where the document's view sits inside the window, in
+// webviewFrame answers where the document's view is inside the window, in
 // device-independent points. The caller is on the main thread.
 //
 // A negative size means no such view was found, which is a different answer

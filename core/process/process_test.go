@@ -115,7 +115,7 @@ func TestAHostWithNoSpawnerDeclaresEveryNameUnserved(t *testing.T) {
 
 // The frontend's stream objects arrive here as {} — this framework's
 // createStream is a no-op — so accepting them starts a child whose output
-// reaches nobody while the caller believes it subscribed.
+// is delivered to nobody while the caller believes it subscribed.
 func TestSpawnRefusesCallbackArgumentsAndNamesTheEvent(t *testing.T) {
 	registry, _, spawner, _ := testRegistry(t)
 	for _, name := range []string{"onStdout", "onStderr", "onExit"} {
@@ -236,7 +236,7 @@ func TestListMarshalsEmptyAsAnArray(t *testing.T) {
 	}
 }
 
-// An unowned child carries a null window rather than "", which the consumer
+// An unowned child has a null window rather than "", which the consumer
 // filters on by comparing to a label.
 func TestListCarriesTheTagsTheConsumerFiltersOn(t *testing.T) {
 	registry, _, _, _ := testRegistry(t)

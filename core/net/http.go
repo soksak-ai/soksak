@@ -1,6 +1,6 @@
 // Package net is the bytes that leave this process.
 //
-// It opens no window and holds no framework, so it lives in the core: an HTTP
+// It opens no window and holds no framework, so it is in the core: an HTTP
 // request answers the same whether a window asked or a daemon did.
 package net
 

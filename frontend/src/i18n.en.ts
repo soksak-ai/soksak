@@ -196,6 +196,8 @@ export const en: Record<MsgKey, string> = {
   "plugin.install": "Install",
   "plugin.install.sourcePh": "user/repo · git URL · local path",
   "plugin.install.refPh": "ref (optional)",
+  "plugin.registry.official": "Official registry",
+  "plugin.registry.thirdParty": "{registry} registry — not official",
   "plugin.install.sourceRequired": "Enter an install source",
   "plugin.registry.section": "Available",
   "plugin.registry.update": "Update",

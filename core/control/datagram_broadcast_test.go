@@ -57,7 +57,7 @@ func TestAnOrdinaryAddressIsNotMistakenForABroadcast(t *testing.T) {
 
 func TestAMistypedBroadcastIsRefusedThroughTheRegistry(t *testing.T) {
 	// No datagram leaves: the refusal happens before the socket is opened, so
-	// this test never reaches the local network.
+	// this test never opens the local network.
 	_, err := datagramRegistry(t).Invoke(commandDatagramSend, argsOf(t, map[string]any{
 		"host": "255.255.255.255", "port": 9, "data": []int{0xff},
 	}))
@@ -68,7 +68,7 @@ func TestAMistypedBroadcastIsRefusedThroughTheRegistry(t *testing.T) {
 		t.Errorf("the refusal reads %q", err)
 	}
 
-	// The collection command carries the same rule; a discovery sweep is not a
+	// The collection command applies the same rule; a discovery sweep is not a
 	// smaller decision than a single datagram.
 	if _, err := datagramRegistry(t).Invoke(commandDatagramRequest, argsOf(t, map[string]any{
 		"host": "255.255.255.255", "port": 9, "data": []int{0xff},

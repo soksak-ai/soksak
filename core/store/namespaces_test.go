@@ -123,7 +123,7 @@ func TestMigrationMovesEverythingAndIsIdempotent(t *testing.T) {
 		t.Error("the record is still visible under the old namespace")
 	}
 
-	// The expression index sits on records, whose ns the migration updated, so
+	// The expression index is on records, whose ns the migration updated, so
 	// a filtered query under the new name still rides it.
 	docs, err := kv.Query(QueryRequest{
 		Ns: "plugin-new", Coll: "t", Filter: filterOf(t, `{"issue":"i-1"}`), Desc: true})

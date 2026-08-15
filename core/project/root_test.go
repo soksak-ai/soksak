@@ -131,7 +131,7 @@ func TestTwoSpellingsOfOneHomeAgree(t *testing.T) {
 	}
 }
 
-// Link rejection belongs to the installer surface, which materializes files in
+// Link rejection is the installer surface's, which materializes files in
 // our own tree. This surface is the user browsing their own disk: refusing
 // links makes a symlinked work folder unopenable.
 func TestASymlinkedDirectoryIsAcceptedNotRefused(t *testing.T) {

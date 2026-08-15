@@ -1277,7 +1277,7 @@ export function registerDomCatalog(): void {
  * (`<something>/plugin-view/<middle>/…`) got two things wrong at once: a
  * whole-surface projection spells the same way and was read as a realm
  * (measured 2026-08-08), and the test depended on a framework name in the
- * address's first segment. An address belongs to whoever mints it.
+ * address's first segment. An address is owned by whoever mints it.
  */
 function projectedRealmNode(el: Element): boolean {
   return el instanceof HTMLElement && el.dataset.realm !== undefined;
@@ -1323,10 +1323,10 @@ interface GestureSurface {
  * Which place on which surface a pointer injected into this node goes to.
  *
  * Two cases give the same answer. A content view is itself the surface (the
- * position inside it belongs to the page, so the caller supplies coordinates),
+ * position inside it is the page's, so the caller supplies coordinates),
  * and a projected node is a node from another realm drawn at that position.
  *
- * A projection's position inside its realm is the value it carries. It is not
+ * A projection's position inside its realm is the value it holds. It is not
  * subtracted from host-document geometry: the projection's position in the host
  * is chosen by the host, and the subtraction points at a different coordinate as
  * soon as the realm is scrolled, the container has a border or padding, or the
@@ -1675,7 +1675,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // produced 0 window-open requests). It must be real engine input.
       const surface = gestureSurface(el, addr);
       // A projection with a missing declaration stops here. Falling through to the
-      // host DOM reaches nothing and still answers success.
+      // host DOM matches nothing and still answers success.
       if (surface && "ok" in surface) return surface;
       if (surface) {
         if (!hasContentViewHost()) return noGesturePath(addr);
@@ -1948,7 +1948,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // cannot create hover inside it.
       const surface = gestureSurface(el, addr);
       // A projection with a missing declaration stops here. Falling through to the
-      // host DOM reaches nothing and still answers success.
+      // host DOM matches nothing and still answers success.
       if (surface && "ok" in surface) return surface;
       if (surface) {
         if (!hasContentViewHost()) return noGesturePath(addr);
@@ -2003,7 +2003,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // A check has three answers: passed, violated, and not measurable. Folding
       // three into two makes one of them false. Reporting a check that could not
       // run as passed is a fake GREEN; reporting it as violated sends someone to
-      // fix a defect that was never measured. A check that could not run carries
+      // fix a defect that was never measured. A check that could not run has
       // `answered:false`, and `passed` is false while any check is unanswered.
       const checks: { name: string; ok: boolean; detail: string; answered?: boolean }[] = [];
 
@@ -2717,7 +2717,7 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
       // call.
       const surface = gestureSurface(el, addr);
       // A projection with a missing declaration stops here. Falling through to the
-      // host DOM reaches nothing and still answers success.
+      // host DOM matches nothing and still answers success.
       if (surface && "ok" in surface) return surface;
       if (surface) {
         if (!hasContentViewHost()) return noGesturePath(addr);

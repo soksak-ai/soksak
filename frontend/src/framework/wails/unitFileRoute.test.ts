@@ -1,4 +1,4 @@
-// The route the webview asks on is the route the host answers on.
+// The route the webview requests on is the route the host answers on.
 //
 // Each side states it once, in its own language, and neither compiles against
 // the other. A changed route on one side is not an error anywhere: the request

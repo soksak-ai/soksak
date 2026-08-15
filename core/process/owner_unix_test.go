@@ -128,7 +128,7 @@ func TestAGroupedKillReachesTheGrandchildAndAnUngroupedOneDoesNot(t *testing.T) 
 				sink.waitExit(t)
 				return
 			}
-			// An ungrouped kill reaches the direct child only. The grandchild was
+			// An ungrouped kill is delivered to the direct child only. The grandchild was
 			// never signalled, so it is alive the instant the kill returns —
 			// which is why the group option exists at all.
 			if !running(grandchild) {
@@ -193,7 +193,7 @@ func TestTheChildSeesExactlyTheGivenEnvironment(t *testing.T) {
 	}
 }
 
-// A secret reaches the child's environment and nowhere else: not into the
+// A secret enters the child's environment and nowhere else: not into the
 // returned handle, and not onto the command line where ps would show it.
 func TestASecretReachesTheChildAndNoReturnValue(t *testing.T) {
 	home := t.TempDir()
@@ -278,7 +278,7 @@ func TestAnOrphanedGrandchildKeepsTheEntryVisibleAsNotAlive(t *testing.T) {
 
 // The direct child exits first and a grandchild keeps its stdout. A grouped
 // kill still has to reach that grandchild: it is the only thing holding the
-// stream open, and until it lets go no exit ever reaches the consumer.
+// stream open, and until it is released no exit arrives at the consumer.
 //
 // A process group id cannot be reused while the group still has members, so
 // naming it after the leader was reaped names this tree and no other.

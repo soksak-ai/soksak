@@ -13,7 +13,7 @@ func kept(t *testing.T, tail *Tail, kinds ...string) {
 }
 
 func TestTheNewestEntryComesFirst(t *testing.T) {
-	// The reason anyone asks is that something just went wrong. Oldest-first
+	// The reason anyone reads it is that something just went wrong. Oldest-first
 	// would put the answer at the end of whatever they are reading.
 	tail := NewTail(0)
 	kept(t, tail, "a", "b", "c")

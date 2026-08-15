@@ -90,7 +90,7 @@ func (registry *Registry) Delegated(source string) []string {
 	return out
 }
 
-// ServedLocally says this process answers the name itself, rather than handing
+// ServedLocally reports that this process answers the name itself, rather than passing
 // it on. A delegation asking for it would be refused, and the source deserves
 // to hear which name rather than a verdict about the whole set.
 func (registry *Registry) ServedLocally(name string) bool {

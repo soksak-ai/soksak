@@ -19,7 +19,7 @@ func (vault *recordingVault) Resolve(namespace, key string) (string, error) {
 	return "plain-" + key, nil
 }
 
-// A spawn that needs no secret never asks the vault. If it did, a host without
+// A spawn that needs no secret never opens the vault. If it did, a host without
 // one could start nothing at all.
 func TestASpawnWithoutSecretsNeverAsksTheVault(t *testing.T) {
 	vault := &recordingVault{}
@@ -80,7 +80,7 @@ func TestSecretsWithoutANamespaceAreRefused(t *testing.T) {
 	}
 }
 
-// A host with no vault says so. An empty value would let the child attach with
+// A host with no vault states that. An empty value would let the child attach with
 // an empty token and report the authentication failure as a misconfiguration,
 // leaving the real reason nowhere.
 func TestAHostWithoutAVaultSaysSo(t *testing.T) {

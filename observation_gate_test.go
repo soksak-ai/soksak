@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-// The framework carries an MCP server behind the `mcp` build tag: sixteen tools
+// The framework includes an MCP server behind the `mcp` build tag: sixteen tools
 // for reading and driving the page — dom_query, js_eval, mouse_click,
 // screenshot_dom. It is tempting, and it is not an observation channel here.
 //
@@ -19,7 +19,7 @@ import (
 // identical windows on screen, and the second one was mistaken for a defect in
 // the first — the observation changed what was being observed.
 //
-// This product has one observation surface: the control plane. `sok` reaches
+// This product has one observation surface: the control plane. `sok` addresses
 // the same registry the frontend does, with no window of its own, and it is the
 // surface every gate is written against. A second door that only exists in a
 // debug build would drift from it, and the drift would be discovered by
@@ -117,7 +117,7 @@ func TestTheMCPGateRecognisesHowTheTagIsSwitchedOn(t *testing.T) {
 	}
 }
 
-// A build is not a recipe. The scan above reads what this repository says to
+// A build is not a recipe. The scan above reads what this repository states to
 // do; this reads what it actually produced.
 //
 // Go stamps its build settings into the binary, so a tagged build cannot hide:
@@ -167,7 +167,7 @@ func TestNoBuiltArtefactCarriesTheMCPServer(t *testing.T) {
 	}
 }
 
-// isComment says this line cannot run. A rule that stops the explanation of
+// isComment reports that this line cannot run. A rule that stops the explanation of
 // itself is one somebody eventually deletes rather than obeys.
 func isComment(line string) bool {
 	trimmed := strings.TrimSpace(line)

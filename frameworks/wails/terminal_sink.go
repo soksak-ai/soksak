@@ -10,7 +10,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// One event carries every stream's frames. A backend that invented an event per
+// One event delivers every stream's frames. A backend that invented an event per
 // feature would have the frontend refuse each one it never declared, and the
 // refusal reads as a broken feature — measured 2026-08-15, the terminal emitted
 // terminal:output and the plugin bus refused it by name.
@@ -28,13 +28,13 @@ type TerminalSink struct {
 }
 
 // NewTerminalSink builds the sink over a bridge that Run has not filled yet.
-// Output produced before the application exists reaches nobody, which is the
+// Output produced before the application exists is delivered to nobody, which is the
 // truth rather than a dropped delivery: no window is open to show it.
 func NewTerminalSink(bridge *Bridge, traceInput bool) *TerminalSink {
 	return &TerminalSink{bridge: bridge, traceInput: traceInput}
 }
 
-// EmitStream carries one frame to the receiver the caller passed.
+// EmitStream delivers one frame to the receiver the caller passed.
 //
 // Nothing here is about terminals: the stream id came from the caller and the
 // frame is whatever the backend produced. Any backend that receives a stream

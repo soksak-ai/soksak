@@ -75,8 +75,8 @@ func TestTheRecorderHoldsBothHalvesOfOneCommit(t *testing.T) {
 	}
 }
 
-// The recorder sits on the one path the inventory travels. Changing what it
-// carries would make the composition it reports a description of itself.
+// The recorder is on the one path the inventory takes. Changing what it passes
+// through would make the composition it reports a description of itself.
 func TestTheRecorderPassesTheInventoryThroughUntouched(t *testing.T) {
 	backend := &stubNativeLayer{}
 	recorder := NewSurfaceRecorder(backend)
@@ -142,7 +142,7 @@ func TestAFailedApplyLeavesTheCompositionAndNamesItself(t *testing.T) {
 	}
 }
 
-// Both halves arrive sorted by id, but nothing in the contract says the native
+// Both halves arrive sorted by id, but nothing in the contract requires the native
 // layer must return them in the order it was given. Pairing by position would
 // subtract one surface's frame from another's.
 func TestTheHalvesArePairedByIdentityNotByPosition(t *testing.T) {

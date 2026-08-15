@@ -47,14 +47,14 @@ type Deps struct {
 	//
 	// A function rather than a list, because "what a child may inherit" is a
 	// rule that already has an owner — core/process strips the internal
-	// SOKSAK_* names so a vault master key never reaches a child — and a second
+	// SOKSAK_* names so a vault master key never enters a child — and a second
 	// copy of that rule here would drift from the first the moment either
 	// changed. Nil means this host declared no such rule, and the commands that
 	// start a process are refused by name: handing a daemon this process's own
 	// environment instead is exactly how an internal name leaves the app.
 	Environment func(overrides map[string]string) []string
 	// Now supplies epoch milliseconds. It is what uptime is measured with; nil
-	// is a wiring fault rather than a runtime condition, and Register says so.
+	// is a wiring fault rather than a runtime condition, and Register names it.
 	Now func() int64
 	// After fires a function once a duration has passed, and is what both a
 	// run-once deadline and the scheduler's next wake are. Injected so a test
@@ -64,12 +64,12 @@ type Deps struct {
 	// while it holds the job table, and a fire that came back on the same
 	// goroutine would take that lock a second time and stop the process.
 	After func(time.Duration, func())
-	// Reaper reaches a process this build did not start. Nil means this host
-	// cannot ask what a live pid is running, and daemon_reap is refused by
+	// Reaper ends a process this build did not start. Nil means this host
+	// cannot query what a live pid is running, and daemon_reap is refused by
 	// name — ending a recorded pid without matching it would kill whatever
 	// inherited that number.
 	Reaper Reaper
-	// Announce carries one daemon's row to whoever owns windows, when it names
+	// Announce delivers one daemon's row to the owner of windows, when it names
 	// its socket, when it refuses to, and when it exits. Nil means nobody is
 	// listening, which is what headless is rather than an error.
 	//
@@ -98,7 +98,7 @@ var commandNames = []string{
 }
 
 // Reasons this build refuses. They reach the caller verbatim through the
-// registry, so each says what is missing rather than that something is.
+// registry, so each states what is missing rather than that something is.
 const (
 	noSpawner = "this host was given no spawner and starts no processes, so there is nothing here to make a daemon out of"
 
@@ -211,7 +211,7 @@ func Register(registry *control.Registry, deps Deps) *Supervisor {
 	// Stop, status and logs answer about the table this process holds. With no
 	// spawner the table stays empty and they say so, which is true — "nothing
 	// is running" is a different answer from "nothing can be started here", and
-	// the second one is what the refusal above carries.
+	// the second one is what the refusal above states.
 	serve(commandStop, func(args control.Args) (any, error) {
 		root, err := namedText(commandStop, args, "root")
 		if err != nil {

@@ -14,7 +14,7 @@ type DevelopmentUnit struct {
 	Source string `json:"source"`
 }
 
-// Environment is what the frontend asks for first: which installation is this,
+// Environment is what the frontend requests first: which installation is this,
 // where does it live, and what is it allowed to do.
 type Environment struct {
 	Identity  string `json:"identity"`

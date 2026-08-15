@@ -89,7 +89,7 @@ export function windowManifestEntry(
 
 /** The ledger's slots, or a refusal naming what arrived instead.
  *
- * A ledger that is not one reaches these functions as a TypeError on `.filter`, which says which
+ * A ledger that is not one arrives here as a TypeError on `.filter`, which names which
  * property was missing and nothing about where the value came from. Measured 2026-08-15: every
  * boot of this build died on `e.slots.filter is not a function` and three separate readings of the
  * store could not tell which layer had produced the value.

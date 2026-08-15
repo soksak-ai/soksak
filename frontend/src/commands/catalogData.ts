@@ -1,7 +1,7 @@
 // data.* commands — core surface for the generic data store (core DbState). Exposes
 // backup/restore/export/import, read-only queries, and the kv rows to CLI/MCP.
 // Record mutations (put/delete/define) stay excluded — plugin responsibility. kv IS
-// exposed for writes here because the native plugin runtime reaches the world through
+// exposed for writes here because the native plugin runtime opens the world through
 // the registry only (commands.execute); without a kv surface a runtime plugin has no
 // durable state at all. ns is explicit — callers own their partition, nothing is implied.
 

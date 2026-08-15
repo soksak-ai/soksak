@@ -33,7 +33,7 @@ interface ViewFocusCoordinatorOptions {
  * Keyboard-focus ownership for mounted plugin views.
  *
  * Core owns the destination view and ordering. A provider owns only how its own
- * container commits transient input and reaches its canonical input element.
+ * container commits transient input and settles on its canonical input element.
  * Mounting is never treated as focus intent; only the latest abortable request
  * may focus, so an asynchronously prepared stale view cannot steal focus.
  */

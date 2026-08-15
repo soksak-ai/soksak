@@ -4,7 +4,7 @@ import "sync"
 
 // ringCapacity is how many of a daemon's most recent lines this build keeps.
 //
-// The log lives in memory and nothing is written to disk, which is the contract
+// The log is in memory and nothing is written to disk, which is the contract
 // the catalogue states to the user: a daemon whose output must survive
 // redirects it inside its own command line. 500 is what the caller is promised,
 // and it bounds what a chatty dev server can cost — a daemon printing a line a
@@ -27,7 +27,7 @@ const defaultLines = 100
 type ring struct {
 	mu    sync.Mutex
 	lines []string
-	// start is where the oldest held line sits once the ring has wrapped.
+	// start is the index of the oldest held line once the ring has wrapped.
 	start int
 }
 

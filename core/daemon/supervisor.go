@@ -16,7 +16,7 @@ type Daemon struct {
 	Root string `json:"root"`
 	Name string `json:"name"`
 	PID  int    `json:"pid"`
-	// Running is what this build knows from having waited on the child, never
+	// Running is what this build has from having waited on the child, never
 	// from looking a pid up: the pid it started is the shell's, and the shell
 	// exiting is exactly the event that is being waited on.
 	Running bool `json:"running"`
@@ -26,7 +26,7 @@ type Daemon struct {
 	ExitCode *int `json:"exit_code"`
 	// UptimeMS is how long it has been running, or how long it ran.
 	UptimeMS int64 `json:"uptime_ms"`
-	// Restarts is 0 in this build and says so rather than being left out:
+	// Restarts is 0 in this build and is reported rather than left out:
 	// nothing here restarts a daemon that exited. A caller that wants one
 	// starts it again, which is a decision it makes with the exit code in hand.
 	Restarts int `json:"restarts"`
@@ -60,7 +60,7 @@ type running struct {
 	done chan struct{}
 	// readers is the two pumps. The waiter joins them before it reports the
 	// exit, so a listener that reads the log when a daemon ends sees the line
-	// that says why it ended. The join is safe for the reason core/process
+	// stating why it ended. The join is safe for the reason core/process
 	// gives for killing the group first: with the tree gone, nothing is left
 	// holding the pipe open.
 	readers sync.WaitGroup
@@ -147,7 +147,7 @@ func (supervisor *Supervisor) Start(root, name, cmd string) (int, error) {
 		Dir:  root,
 		Env:  supervisor.deps.Environment(nil),
 		// A daemon is a shell line that starts something else. Without its own
-		// process group a stop reaches the shell and leaves the server it
+		// process group a stop is delivered to the shell and leaves the server it
 		// started holding the port, and the caller is told it stopped.
 		Group: true,
 	})
@@ -155,7 +155,7 @@ func (supervisor *Supervisor) Start(root, name, cmd string) (int, error) {
 		return 0, fmt.Errorf("starting daemon %q under %s: %w", name, root, err)
 	}
 	// Nobody is typing at a daemon. Closing its stdin now means a command that
-	// asks a question reads EOF and gives up, instead of waiting forever for an
+	// prompts for input reads EOF and gives up, instead of waiting forever for an
 	// answer nobody is there to give — and it is the only thing that stops this
 	// process holding one pipe per daemon for as long as it runs.
 	_ = child.Stdin().Close()
@@ -173,7 +173,7 @@ func (supervisor *Supervisor) Start(root, name, cmd string) (int, error) {
 		readiness: Readiness{State: Silent},
 	}
 	// The entry is in the table before any reader runs: a daemon that exits
-	// immediately reaches its exit handler while this function is still
+	// immediately enters its exit handler while this function is still
 	// working, and that handler would otherwise finish a row nothing had added.
 	supervisor.daemons[at] = one
 
@@ -299,7 +299,7 @@ func (supervisor *Supervisor) StopAll() int {
 // Status answers the daemons declared under one project root.
 //
 // Exited daemons stay in the answer until their name is started again, because
-// the exit code is the whole reason a caller asks after a daemon that stopped.
+// the exit code is the whole reason a caller queries a daemon that stopped.
 func (supervisor *Supervisor) Status(root string) []Daemon {
 	supervisor.mu.Lock()
 	held := make([]*running, 0, len(supervisor.daemons))

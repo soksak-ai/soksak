@@ -347,9 +347,9 @@ func TestAFlushedDirectoryIsNotReportedAgainByTheNextBurst(t *testing.T) {
 	}
 }
 
-// Deps.Delay says a zero takes the default, so the wiring does not have to know
+// Deps.Delay states that a zero takes the default, so the wiring does not need
 // the number. Every fixture above passes the window explicitly, so nothing else
-// reaches that branch.
+// enters that branch.
 func TestAZeroDelayTakesTheDefaultFoldWindow(t *testing.T) {
 	backend := &fakeBackend{}
 	sink := &recorder{}
@@ -419,7 +419,7 @@ func TestTheFoldWindowIsTheOneWrittenDown(t *testing.T) {
 }
 
 // Keying raw strings makes the *tests* canonicalize the
-// fixture to match what FSEvents reports — the rule then lives in the test
+// fixture to match what FSEvents reports — the rule is then in the test
 // instead of the code, and on <local-evidence> that mismatch makes `changed === dir` never
 // match in production. Here both the key and the reported directory resolve.
 func TestOnePathTwoSpellingsIsOneWatch(t *testing.T) {
@@ -473,7 +473,7 @@ func TestOnePathTwoSpellingsIsOneWatch(t *testing.T) {
 	}
 }
 
-// The home rule reaches here too, or the tree and the watcher key the same
+// The home rule applies here too, or the tree and the watcher key the same
 // folder differently.
 func TestTheTildeReachesTheWatchKey(t *testing.T) {
 	home := t.TempDir()

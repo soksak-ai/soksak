@@ -34,7 +34,7 @@ type fakeHost struct {
 	// was applied before the window was revealed rather than only that both
 	// happened.
 	calls []string
-	// opensLive says whether a window this host opens gains a native lifetime.
+	// opensLive reports whether a window this host opens gains a native lifetime.
 	// False reproduces a creation that never becomes an address.
 	opensLive bool
 	openErr   error
@@ -265,7 +265,7 @@ var windowCommands = []string{
 	"window_is_key", "window_monitors",
 }
 
-// A window queued ahead of the run loop sits in the registry visible to a
+// A window queued ahead of the run loop is in the registry, visible to a
 // listing and reachable by nothing. Answering "there are no windows" there
 // sends a restore into recreating every one of them.
 func TestEveryCommandRefusesBeforeTheRunLoopStarts(t *testing.T) {
@@ -491,7 +491,7 @@ func TestTheCascadeSourceIsTheFocusedWindow(t *testing.T) {
 	}
 }
 
-// Handing back a name that belongs to somebody else's window hands back
+// Returning a name held by somebody else's window returns
 // somebody else's window.
 func TestAGeneratedNameThatIsAlreadyHeldIsRefused(t *testing.T) {
 	host := startedHost(liveWindow("win-1"))
@@ -531,7 +531,7 @@ func TestTheBootInstructionReachesTheNewWindowsURL(t *testing.T) {
 	}
 }
 
-// The screening rule is tested on its own; this proves the command reaches for
+// The screening rule is tested on its own; this proves the command calls
 // it. Without it a '#' passes and everything after it never arrives at
 // location.search — the window boots empty and no layer reports why.
 func TestABootInstructionThatWouldNotSurviveIsRefusedByTheCommand(t *testing.T) {

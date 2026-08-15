@@ -28,7 +28,7 @@ describe("core store cache", () => {
   });
 
   it("falls back when the cache holds the wrong shape", () => {
-    // The cache lives on the webview origin, not in our store, so another build
+    // The cache is on the webview origin, not in our store, so another build
     // sharing that origin can leave a value of a different shape behind.
     // Measured 2026-08-15: `soksak.recentProjects` held `{}` where an array was
     // expected, and the first render died on `recentAll.filter is not a
@@ -83,7 +83,7 @@ describe("core store cache", () => {
   it("an object missing the fallback's own keys is not that shape", () => {
     // "It is an object" is not a shape. A window manifest is {slots: []}, and a
     // bare {} passes an is-it-an-object check while `.slots` is undefined —
-    // which reaches the consumer as `e.slots.filter is not a function`.
+    // which arrives at the consumer as `e.slots.filter is not a function`.
     //
     // Measured 2026-08-15, all three from one boot of this build:
     //   respawn:error  undefined is not an object (evaluating 'e.slots.filter')
@@ -102,7 +102,7 @@ describe("core store cache", () => {
 
   it("a key present with the wrong kind is not that shape", () => {
     // The key exists and holds the wrong thing, which is worse than missing:
-    // the consumer reaches it and calls a method that is not there.
+    // the consumer opens it and calls a method that is not there.
     const store = makeCoreStore<{ slots: string[] }>({
       ...deps,
       localStorage: storage({ "soksak.windows": `{"slots":"nope"}` }),

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 )
 
-// WriteLedger replaces the ledger and says whether anything changed.
+// WriteLedger replaces the ledger and reports whether anything changed.
 //
 // Sync runs on every plugin state change and mostly writes what is already
 // there, so identical content is left alone: rewriting would churn the mtime

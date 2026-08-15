@@ -3501,6 +3501,10 @@ select.dctl {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* A row never widens its container. Without this an unbreakable token — a URL,
+     a hash — makes the flex line wider than the panel and the panel scrolls
+     sideways, which reads as a clipped screen (measured 2026-08-15). */
+  min-width: 0;
   border: 1px solid var(--bd);
   border-radius: 8px;
   padding: 8px 10px;

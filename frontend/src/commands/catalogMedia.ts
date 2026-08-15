@@ -3,7 +3,7 @@
 // cannot fetch hotlink/CORS-protected media (HLS .m3u8 + binary .ts/fMP4 segments, ranged .mp4). The core
 // runs a loopback HTTP proxy that fetches with caller-supplied headers, streams binary with Range support,
 // and rewrites m3u8 segment/key URLs back through itself with permissive CORS. Zero site knowledge (generic):
-// the caller (plugin) decides which URL + Referer to proxy. Backed by the media_proxy_info core executor.
+// the caller (plugin) selects which URL + Referer to proxy. Backed by the media_proxy_info core executor.
 
 import { invoke } from "../framework";
 import { tmsg } from "../i18n";

@@ -58,7 +58,7 @@ func TestNamespacesDoNotSeeEachOther(t *testing.T) {
 
 func TestNamespaceNamesAreConstrained(t *testing.T) {
 	kv := open(t)
-	// The character set carries no `/`, `.`, or `:`, so a namespace cannot leak
+	// The character set has no `/`, `.`, or `:`, so a namespace cannot leak
 	// into a path or a meta key.
 	for _, bad := range []string{"", "UI", "ui/theme", "ui.theme", "ui:theme", "-ui", "ui theme"} {
 		if err := kv.Set(bad, "k", "1"); err == nil {

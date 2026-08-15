@@ -25,7 +25,7 @@ type Integrity struct {
 	Broken bool `json:"broken"`
 }
 
-// binaryIntegrity reads the two named paths and says which of the three it is.
+// binaryIntegrity reads the two named paths and reports which of the three it is.
 //
 // Both paths arrive as arguments. Deriving them from a home here would make the
 // answer depend on which process asked, and that difference does not arrive as
@@ -51,7 +51,7 @@ func binaryIntegrity(binPath string, libPath string) (Integrity, error) {
 		if !errors.Is(err, fs.ErrNotExist) {
 			return Integrity{}, fmt.Errorf("binary_integrity could not read %s: %w", binPath, err)
 		}
-		// No launcher. The library tree decides between "nothing is installed"
+		// No launcher. The library tree separates "nothing is installed"
 		// and "an install stopped halfway".
 		library, err := libraryStands(libPath)
 		if err != nil {

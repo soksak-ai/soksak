@@ -73,12 +73,13 @@ type Boot struct {
 	// different answer on every platform, so the branch stays with the caller.
 	PidAlive func(pid int) bool
 
-	// Emit carries an event to whoever owns windows. The core decides that
+	// Emit delivers an event to the owner of windows. The core determines that
 	// something changed; delivery needs a host, so the host supplies this.
 	// Nil means nobody is listening, which is what headless is — not an error.
 	Emit func(event string, payload any)
-	// LiveWindows answers which windows exist. The project claim ledger tells a
-	// claim held by a live window from one left behind by a window that closed.
+	// LiveWindows answers which windows exist. The project claim ledger uses it
+	// to separate a claim held by a live window from one left behind by a window
+	// that closed.
 	// Nil answers none, which is the truth with no host.
 	LiveWindows func() []string
 
@@ -89,10 +90,10 @@ type Boot struct {
 	// by name, because a subscription that can never fire is not one.
 	Watch files.Backend
 	// Spawner starts long-lived children. Nil means this host owns none and
-	// says so, rather than answering as if it had.
+	// declares that, rather than answering as if it had.
 	Spawner process.Spawner
 	// Secrets resolves a child's declared secrets. Nil means this host holds no
-	// vault; a spawn that asks for one is refused by name, because an empty
+	// vault; a spawn that requires one is refused by name, because an empty
 	// token turns a missing vault into the child's authentication failure.
 	Secrets process.SecretSource
 	// ProcessSink is where a child's output and exit reach a consumer.
@@ -104,8 +105,8 @@ type Boot struct {
 	// Arch is the processor family, for the same reason.
 	Arch string
 	// Keys is the operating system's key store — Keychain, Credential Manager,
-	// Secret Service. Nil means this host has no key store, and the vault says
-	// so rather than holding secrets somewhere it cannot protect them.
+	// Secret Service. Nil means this host has no key store, and the vault
+	// declares that rather than putting secrets somewhere it cannot protect them.
 	Keys secret.KeyStore
 	// Reaper answers what a live pid is running. A daemon that cannot ask
 	// declares the commands that need it rather than guessing a pid is its own.
@@ -126,7 +127,7 @@ type Wired struct {
 }
 
 // liveWindows adapts the launcher's function to the interface the claim ledger
-// declares. The core asks for a function because a function is what a host can
+// declares. The core takes a function because a function is what a host can
 // supply before it has anything to report.
 type liveWindows func() []string
 
@@ -137,7 +138,7 @@ func (live liveWindows) Live() []string {
 	return live()
 }
 
-// RegisterCore registers the host-independent commands the frontend asks for
+// RegisterCore registers the host-independent commands the frontend calls
 // during boot. Each is answerable with no window, which is what makes headless
 // possible at all.
 func RegisterCore(registry *control.Registry, boot Boot) Wired {
@@ -403,8 +404,8 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 		Announce: func(d daemon.Daemon) { emit("daemon:changed", d) },
 	})
 
-	// What this build does not answer yet, said by name with the reason. A
-	// caller learns "not built" instead of "unknown command".
+	// What this build does not answer yet, named with the reason. A
+	// caller receives "not built" instead of "unknown command".
 	declareUnbuilt(registry)
 
 	return Wired{Claims: claims, Processes: processes}

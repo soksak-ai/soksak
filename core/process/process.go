@@ -31,11 +31,11 @@ type Deps struct {
 	Environment []string
 	// Sink is where a child's output and exit reach a consumer.
 	Sink Sink
-	// Spawner nil means this host starts no children, and says so rather than
-	// answering as if it had.
+	// Spawner nil means this host starts no children, and declares that rather
+	// than answering as if it had.
 	Spawner Spawner
-	// Secrets nil means this host holds no vault. A spawn that asks for none
-	// still works; one that asks for a secret is refused by name.
+	// Secrets nil means this host holds no vault. A spawn that requires none
+	// still works; one that requires a secret is refused by name.
 	Secrets SecretSource
 }
 
@@ -165,7 +165,7 @@ func Register(registry *control.Registry, deps Deps) *Manager {
 	return manager
 }
 
-// callbackArguments are the stream handles the transport carries.
+// callbackArguments are the stream handles the transport delivers.
 //
 // On this framework they arrive as {}: createStream answers a no-op object, so
 // a child accepted with them streams into nothing while the caller believes it
@@ -228,7 +228,7 @@ func spawnRequest(arguments control.Args) (Request, error) {
 }
 
 // required decodes an argument that must be there. Absence is named, so a
-// caller learns which one it forgot rather than watching a default answer.
+// caller is told which one it omitted rather than receiving a default answer.
 //
 // An explicit null is absence too. json.Unmarshal leaves its destination
 // untouched for null and reports no error, so a null that reached the zero

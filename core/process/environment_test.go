@@ -80,7 +80,7 @@ func TestOneInheritedEntryProducesOnlyItselfAndWhatTheRulesAdd(t *testing.T) {
 	}
 }
 
-// Remove and the AI scrub sum. A caller that asks for both gets both, and
+// Remove and the AI scrub sum. A caller requesting both gets both, and
 // neither list has to know about the other.
 func TestRemoveAndTheAIScrubSum(t *testing.T) {
 	inherited := []string{"KEEP=1", "DROP=2"}

@@ -218,17 +218,17 @@ export interface AppFramework {
   /**
    * Remove every native child surface from the current window in one framework-owned commit.
    * Reload and renderer bootstrap call this before their DOM inventory exists. Frameworks whose
-   * content already lives in the DOM complete the lifecycle boundary as an idempotent no-op.
+   * content is already in the DOM complete the lifecycle boundary as an idempotent no-op.
    */
   suspendNativeSurfaces(): Promise<void>;
 
   /**
    * Apply one zoom factor to everything this window shows.
    *
-   * The value has one owner (the `windowZoom` setting); how it reaches the screen does not. Where
-   * content lives in native child webviews, the framework scales the window and its children in
-   * one native call. Where content lives in the DOM as guest elements, the document's own zoom
-   * carries them and each guest is told the same factor.
+   * The value has one owner (the `windowZoom` setting); how it arrives on screen does not. Where
+   * content is in native child webviews, the framework scales the window and its children in
+   * one native call. Where content is in the DOM as guest elements, the document's own zoom
+   * applies to them and each guest receives the same factor.
    *
    * Why it is in the contract: if the core calls one side's command name, the other side **rejects it on
    * every boot** (measured 2026-08-08: `webview_zoom` was rejected on Electron, leaving one reject line in

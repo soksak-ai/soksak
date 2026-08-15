@@ -14,7 +14,7 @@ import (
 // handed.
 //
 // The child inherits this process's environment, which is deliberate and is why
-// the unix argv carries `-l`: the login shell throws that inherited PATH away
+// the unix argv includes `-l`: the login shell discards that inherited PATH
 // and rebuilds it from rc/profile, so a GUI-launched process answers what the
 // user's terminal answers.
 type SystemRunner struct{}

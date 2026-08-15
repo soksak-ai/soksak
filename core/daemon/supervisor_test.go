@@ -86,7 +86,7 @@ func TestStartingADaemonThatIsAlreadyRunningIsRefusedByName(t *testing.T) {
 	}
 }
 
-// One name belongs to one project. Two projects each declaring "dev" is
+// One name is one project's. Two projects each declaring "dev" is
 // ordinary, and refusing the second would make a workspace hold one project.
 func TestTheSameNameInAnotherProjectIsAnotherDaemon(t *testing.T) {
 	supervisor, spawner, _, _ := testSupervisor(t)
@@ -174,7 +174,7 @@ func TestAProjectWithNoDaemonsAnswersWithAnEmptyList(t *testing.T) {
 	}
 }
 
-// The exit code is the whole reason a caller asks after a daemon that stopped.
+// The exit code is the whole reason a caller queries a daemon that stopped.
 func TestAnExitedDaemonKeepsItsCodeInTheStatusTable(t *testing.T) {
 	supervisor, spawner, clock, announced := testSupervisor(t)
 
@@ -387,7 +387,7 @@ func TestLogsForADaemonThatWasNeverStartedFailByName(t *testing.T) {
 }
 
 // A daemon that speaks the control envelope names its socket on its first
-// line, and the announcement reaches the listener. Without the event the only
+// line, and the announcement is delivered to the listener. Without the event the only
 // way to learn a daemon came up is to look again.
 func TestADaemonThatNamesItsSocketIsAnnouncedReady(t *testing.T) {
 	supervisor, spawner, _, announced := testSupervisor(t)
@@ -448,7 +448,7 @@ func TestADaemonThatHasPrintedNothingIsSilentRatherThanMute(t *testing.T) {
 	}
 }
 
-// Nobody is typing at a daemon. A command that asks a question must read EOF
+// Nobody is typing at a daemon. A command that prompts for input must read EOF
 // and give up rather than wait for an answer that cannot come — and an open
 // pipe per daemon is a handle this process holds for as long as it runs.
 func TestADaemonsStdinIsClosedSoAPromptEndsRatherThanHangs(t *testing.T) {

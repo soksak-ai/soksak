@@ -200,6 +200,8 @@ export const ko = {
   "plugin.install.section": "설치",
   "plugin.install": "설치",
   "plugin.install.sourcePh": "user/repo · git URL · 로컬 경로",
+  "plugin.registry.official": "공식 레지스트리",
+  "plugin.registry.thirdParty": "{registry} 레지스트리 — 공식 아님",
   "plugin.install.refPh": "ref(선택)",
   "plugin.install.sourceRequired": "설치 소스를 입력하세요",
   "plugin.registry.section": "설치 가능",

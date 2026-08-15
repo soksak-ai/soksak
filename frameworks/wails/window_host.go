@@ -10,8 +10,8 @@ import "unsafe"
 // process, so every fact these commands need arrives through WindowHost and no
 // vendor type crosses into the rules or the handlers.
 //
-// The contract carries facts and effects, never choices. Which window to act
-// on is the caller's decision; nothing here asks what is current. That is not
+// The contract holds facts and effects, never choices. Which window to act on
+// is the caller's to name; nothing here reads what is current. That is not
 // style: this host's Window.Current() answers with whatever holds focus, which
 // is wrong precisely when a background repaint or a focus-free capture is the
 // thing asking.
@@ -95,17 +95,17 @@ type WindowHost interface {
 	// FitWebview makes the document's view exactly as large as the area it can
 	// be seen in. Called once, after a window exists.
 	FitWebview(name string) error
-	// WebviewRect is where the document's view sits inside the window, in
+	// WebviewRect is where the document's view is inside the window, in
 	// device-independent points.
 	//
 	// Between the window and the document there is a view hierarchy this
 	// application did not build. When those two disagree about a size, this is
-	// what says which of them to correct.
+	// what identifies which of them to correct.
 	WebviewRect(name string) (x, y, width, height float64, err error)
 	// SetBackground paints the window's own colour.
 	//
 	// The document paints transparent, so every unpainted region shows this.
-	// It takes a name because each window carries its own theme: one window
+	// It takes a name because each window has its own theme: one window
 	// captured at registration meant a workspace window's theme repainted the
 	// orchestrator and left itself the framework's default (measured
 	// 2026-08-15 — a dark theme with white panes).
@@ -114,7 +114,7 @@ type WindowHost interface {
 	//
 	// The renderer writes its boot progress into document.title, and that is
 	// the one channel that keeps answering when the binding path is dead — so a
-	// window that answers nothing else still says how far it got. The framework
+	// window that answers nothing else still reports how far it got. The framework
 	// only ever sets titles; without this, the stamp is written and nobody can
 	// read it, which is not an observation.
 	Title(name string) (string, error)

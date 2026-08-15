@@ -13,7 +13,7 @@ type Outcome struct {
 // Runner runs one program to completion.
 //
 // It is an interface because assembling the argv is the rule and spawning is
-// not: spawning belongs to whoever owns processes. That split is what lets
+// not: spawning is the process owner's. That split is what lets
 // every rule here be checked with no shell on the machine.
 //
 // A returned error means the program could not be run at all. A program that
@@ -23,7 +23,7 @@ type Runner interface {
 	Run(program string, args []string) (Outcome, error)
 }
 
-// safeBinaryName says whether a name may be interpolated into a shell line.
+// safeBinaryName reports whether a name may be interpolated into a shell line.
 //
 // Without this check `;`, `$(`, and backticks become shell syntax, and the
 // result is not a refusal but the execution of a different command.

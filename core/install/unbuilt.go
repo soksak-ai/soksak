@@ -7,7 +7,7 @@ package install
 // either.
 //
 // The fact is spelled into each reason below rather than referenced, because
-// the reason travels alone: it reaches a caller as the text of an error, with
+// the reason travels alone: it arrives at a caller as the text of an error, with
 // no file to look in.
 //
 // The loader itself is no longer a blockage. plugin_scan reads unit

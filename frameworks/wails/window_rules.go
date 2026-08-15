@@ -9,11 +9,11 @@ import (
 // The rules that decide what a window is called, where it goes, and which
 // screen owns it.
 //
-// Creating a window belongs to the framework. Deciding what to create does not:
+// Creating a window is the framework's work. Deciding what to create does not:
 // if the name shape drifts, one build's restore manifest cannot read the
 // other's; if the rect verdict drifts, the same restore keeps its position on
-// only one of them. Nothing here creates a window or asks whether one is alive
-// — those are facts held by whoever owns windows.
+// only one of them. Nothing here creates a window or queries whether one is
+// alive — those are facts the owner of windows holds.
 
 // workspaceWindowPrefix marks a workspace window and separates it from the
 // reserved orchestrator name.
@@ -67,7 +67,7 @@ func validWindowName(name string) bool {
 }
 
 // workspaceName turns an opaque identifier into a workspace window name. The
-// prefix is this package's rule; the entropy belongs to whoever supplied the
+// prefix is this package's rule; the entropy comes from whoever supplied the
 // identifier.
 func workspaceName(id string) string {
 	return workspaceWindowPrefix + id
@@ -120,7 +120,7 @@ func frameOf(x, y, w, h *float64) (Frame, bool) {
 // shouldFocus answers whether a new window comes forward. The default is true:
 // a user who opens a window expects it to be the one they are looking at, and a
 // false default makes opening a window look like nothing happened. Only a
-// restore asks for false, so it can bring windows back without taking the
+// restore requests false, so it can bring windows back without taking the
 // focus away from whatever the user is using.
 func shouldFocus(requested *bool) bool {
 	if requested == nil {
@@ -129,11 +129,11 @@ func shouldFocus(requested *bool) bool {
 	return *requested
 }
 
-// checkInitQuery accepts the boot instruction a new window carries in its URL.
+// checkInitQuery accepts the boot instruction a new window receives in its URL.
 //
 // The core never interprets it — the frontend's boot does. It does check that
 // the instruction survives the trip: the query is joined with "?", so a leading
-// "?" produces two, and everything after a "#" never reaches location.search.
+// "?" produces two, and everything after a "#" is absent from location.search.
 // Either way the instruction is dropped with nothing reported anywhere.
 func checkInitQuery(init string) error {
 	if strings.Contains(init, "#") {
@@ -145,7 +145,7 @@ func checkInitQuery(init string) error {
 	return nil
 }
 
-// centreOf is the one point that decides which screen owns a window. The
+// centreOf is the one point that determines which screen owns a window. The
 // remainder is discarded, and two processes only agree about ownership if they
 // discard it the same way.
 func centreOf(frame Frame) (int, int) {
@@ -198,9 +198,9 @@ type censusRow struct {
 	Label   string `json:"label"`
 	Hosts   uint64 `json:"hosts"`
 	Focused bool   `json:"focused"`
-	// Title is what the window says it is. The renderer writes its boot
+	// Title is what the window reports itself as. The renderer writes its boot
 	// progress here, so a window whose bindings never came up still reports how
-	// far it got — and a window rendering the wrong shell says so before anyone
+	// far it got — and a window rendering the wrong shell reports that before anyone
 	// has to look at it.
 	//
 	// Null rather than empty when it cannot be read: a window that was never

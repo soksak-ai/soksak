@@ -24,7 +24,7 @@ export const ID_PREFIX = {
   space: "spc-",
   pane: "pan-",
   tab: "tab-",
-  // A split node also carries an id, and that id is stored and returned in
+  // A split node also has an id, and that id is stored and returned in
   // `state.tree` as part of canonicalLayout. It was once a counter, on the
   // ground that an internal node appears in no address, command or document.
   // That was not true of canonicalLayout.

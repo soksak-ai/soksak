@@ -28,7 +28,7 @@ const (
 //
 // root is the only directory this route reads from. Every other path is
 // refused, including one that starts inside root and climbs out through "..",
-// and one that reaches outside through a symlink. Without that check the route
+// and one that resolves outside through a symlink. Without that check the route
 // is a read of the whole filesystem, addressable by any page in the webview.
 func UnitFiles(root string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -63,7 +63,7 @@ func UnitFiles(root string, next http.Handler) http.Handler {
 //
 // Symlinks are resolved before the containment check, because a link inside
 // root can point anywhere. EvalSymlinks also resolves the root itself: on macOS
-// the home sits under /var, which is a link to /private/var, so an unresolved
+// the home is under /var, which is a link to /private/var, so an unresolved
 // root never contains a resolved path.
 func unitFilePath(root, requested string) (string, error) {
 	if root == "" {

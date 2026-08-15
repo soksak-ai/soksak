@@ -75,7 +75,7 @@ func TestTheDestinationNameCannotEscapeTheThemesDirectory(t *testing.T) {
 		t.Fatalf("writing the source: %v", err)
 	}
 
-	// Spelled so the string still carries the `..`: filepath.Join would clean
+	// Spelled so the string still holds the `..`: filepath.Join would clean
 	// it away and the test would prove nothing.
 	landed, err := installTheme(home, directory+"/sub/../escape.json")
 	if err != nil {

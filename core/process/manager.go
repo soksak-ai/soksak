@@ -174,7 +174,7 @@ func (manager *Manager) Spawn(request Request) (uint32, error) {
 //
 // It reaps the direct child as soon as that child dies, so the ledger stops
 // claiming it is alive even while a grandchild still holds the output pipe.
-// The exit event is not sent here: it belongs at the end of the stream.
+// The exit event is not sent here: its place is the end of the stream.
 func (manager *Manager) await(entry *session) {
 	code, err := entry.child.Wait()
 	entry.code, entry.waitErr = code, err
@@ -363,7 +363,7 @@ func (manager *Manager) reap(entry *session) error {
 //
 // The core holds these processes on a plugin's behalf. Without this surface a
 // child that reclamation failed to reap is invisible from outside, and nobody
-// learns an orphan exists.
+// is told a detached child exists.
 func (manager *Manager) List() []Info {
 	manager.mu.Lock()
 	entries := make([]*session, 0, len(manager.sessions))
@@ -403,7 +403,7 @@ func (manager *Manager) List() []Info {
 //
 // The trigger differs from reaping a destroyed window: the window is alive and
 // only its plugin runtime restarted. The new runtime has spawned nothing yet,
-// so everything left under this label belongs to the previous one.
+// so everything left under this label is the previous one's.
 func (manager *Manager) ReclaimByWindow(label string) (int, error) {
 	if label == "" {
 		return 0, fmt.Errorf("process_reclaim_by_window needs a window label: " +

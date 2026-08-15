@@ -10,7 +10,7 @@ import (
 
 // The record keeps reasons and drops sources.
 //
-// A comment says why a rule exists, with the measurement that produced it. It
+// A comment states why a rule exists, with the measurement that produced it. It
 // does not say which codebase the measurement came from. Those two are easy to
 // write in one sentence — "an earlier build folded every failure into absence" —
 // and the second half is what this gate removes: the repository is the product,
@@ -29,11 +29,11 @@ var attributions = []*regexp.Regexp{
 	regexp.MustCompile(`\bCargo\b`),
 	regexp.MustCompile(`\bcrates/`),
 	// A path into a checkout that is not this one. It cannot be followed, and
-	// it says where the code came from.
+	// it names where the code came from.
 	regexp.MustCompile(`frameworks?/tauri/`),
 }
 
-// scanned is every extension that carries prose a reader will believe.
+// scanned is every extension holding prose a reader will believe.
 var scanned = map[string]bool{
 	".go": true, ".ts": true, ".tsx": true, ".md": true, ".css": true,
 }

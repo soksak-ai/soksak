@@ -51,9 +51,9 @@ type Deps struct {
 	// never taken for crash debris.
 	PID int
 	// PidAlive answers whether a pid is still running. Asking that is a
-	// different question on every platform, so the branch lives in the caller.
+	// different question on every platform, so the branch is the caller's.
 	PidAlive func(pid int) bool
-	// Notify carries a change out. Nil means nobody is listening, which is not
+	// Notify sends a change out. Nil means nobody is listening, which is not
 	// an error: admission and delivery have separate owners.
 	Notify func(Change)
 }

@@ -104,7 +104,7 @@ func TestNoChildIsStattedUnlessMetaIsAsked(t *testing.T) {
 	}
 }
 
-// A symlinked child is the one entry that is stat'd, because the dirent says
+// A symlinked child is the one entry that is stat'd, because the dirent reports
 // "symlink" and the tree needs to know whether it opens.
 func TestASymlinkedChildIsReportedByWhatItPointsAt(t *testing.T) {
 	dir := t.TempDir()

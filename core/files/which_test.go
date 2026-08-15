@@ -7,7 +7,7 @@ import (
 )
 
 // fakeRunner records what it was asked to run and answers what the test set.
-// Nothing here spawns: assembling the argv is the rule, and spawning belongs to
+// Nothing here spawns: assembling the argv is the rule, and spawning is
 // whoever owns processes — which is what lets every rule below be checked with
 // no shell on the machine at all.
 type fakeRunner struct {

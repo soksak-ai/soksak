@@ -1,6 +1,6 @@
 package process
 
-// Delivery says whether a consumer is still there.
+// Delivery reports whether a consumer is still there.
 //
 // The departed answer is the whole reason this is a value and not a void
 // return. A reader that cannot learn its consumer is gone keeps reading
@@ -22,7 +22,7 @@ const (
 type Output struct {
 	ID     uint32 `json:"id"`
 	Stream string `json:"stream"`
-	// DataBase64 carries raw bytes: a child's stdout is not text, and decoding
+	// DataBase64 holds raw bytes: a child's stdout is not text, and decoding
 	// it here would corrupt every non-UTF-8 byte a sidecar frame contains.
 	DataBase64 string `json:"dataBase64"`
 }

@@ -44,7 +44,7 @@ func readTextLimited(path string, offset *int64, home string, limit int64) (Text
 	}
 	info, err := os.Stat(real)
 	if err != nil {
-		// The error already carries the path. Absence is a failure here, unlike
+		// The error already names the path. Absence is a failure here, unlike
 		// scan.Directory: that answers what is installed, where nothing is a
 		// real state; this answers one named file, and an empty document handed
 		// to an editor that then saves erases a file the user believes exists.

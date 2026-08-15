@@ -20,16 +20,16 @@ type Deps struct {
 	// would admit ~ as a project root and put project roots inside the
 	// app-managed area.
 	UserHome string
-	// Manifest is where the restore ledger lives.
+	// Manifest is where the restore ledger is stored.
 	Manifest ManifestStore
 	// Claims is this process's project-claim ledger. The launcher holds it, the
 	// way the key-value store and the activity ledger already are: the host
 	// needs the same ledger to free a window's roots when the window is
 	// destroyed, and to answer who owns what.
 	Claims *Ledger
-	// Changed carries a mutation to the other windows. The core decides when a
-	// change happened; the host decides how it travels, because broadcasting
-	// needs a window.
+	// Changed delivers a mutation to the other windows. The core determines when
+	// a change happened; the host determines how it travels, because
+	// broadcasting needs a window.
 	Changed func(event string, payload any)
 }
 
@@ -64,7 +64,7 @@ func Register(registry *control.Registry, deps Deps) {
 	}
 	if deps.Changed == nil {
 		// A dropped notification is not an error — it is a picker that never
-		// updates, and nothing about that says which part is missing.
+		// updates, and nothing about that identifies which part is missing.
 		panic("project: Deps.Changed is nil; claim mutations would reach no window")
 	}
 

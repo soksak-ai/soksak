@@ -621,7 +621,7 @@ func TestReclaimReapsOnlyThatWindowsChildren(t *testing.T) {
 	}
 }
 
-// A window this manager knows nothing about is nothing to reap, which is not a
+// A window this manager has no record of is nothing to reap, which is not a
 // failure.
 func TestReclaimingAWindowWithNoChildrenIsZero(t *testing.T) {
 	manager, _, _ := testManager(t)

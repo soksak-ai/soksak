@@ -34,7 +34,7 @@ const (
 // struct is safe to print, which is why the key material is not in it.
 type envelope struct {
 	Version int `json:"v"`
-	// DeviceKeyID says which device key wrapped the data key. Without it, a
+	// DeviceKeyID names which device key wrapped the data key. Without it, a
 	// record sealed on another device fails as "authentication failed" and the
 	// caller cannot tell that from a corrupted row.
 	DeviceKeyID string `json:"kek"`
@@ -49,7 +49,7 @@ func deviceKeyID(device material) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-// boundTo is the additional data both layers authenticate. It carries the
+// boundTo is the additional data both layers authenticate. It holds the
 // version so a later format cannot be opened as this one.
 func boundTo(ns, key string) []byte {
 	return fmt.Appendf(nil, "soksak/secret/v%d\x00%s\x00%s", envelopeVersion, ns, key)
@@ -89,7 +89,7 @@ func openBytes(with material, bound []byte, encoded string) ([]byte, error) {
 	}
 	plaintext, err := aead.Open(nil, raw[:aead.NonceSize()], raw[aead.NonceSize():], bound)
 	if err != nil {
-		// The cipher's own message is not passed on. It says nothing a caller
+		// The cipher's own message is not passed on. It states nothing a caller
 		// can act on, and the two facts that matter are named here instead.
 		return nil, fmt.Errorf("secret: the record does not match this device key, or it was moved from the address it was sealed at")
 	}

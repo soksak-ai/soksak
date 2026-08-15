@@ -55,7 +55,7 @@ func TestARecordMovedToAnotherAddressDoesNotOpen(t *testing.T) {
 	}
 }
 
-// A record sealed on another device says so by name. Without the key id the
+// A record sealed on another device is refused by name. Without the key id the
 // same failure reads as a corrupted row, and the operator looks for damage
 // instead of for the key that is missing.
 func TestARecordFromAnotherDeviceNamesBothKeys(t *testing.T) {
@@ -74,7 +74,7 @@ func TestARecordFromAnotherDeviceNamesBothKeys(t *testing.T) {
 }
 
 // A version this build does not write is one it does not read. There is no
-// migration path here; the refusal names both versions so the reader knows
+// migration path here; the refusal names both versions so the reader has
 // which side is old.
 func TestAnotherFormatVersionIsRefusedByName(t *testing.T) {
 	key := device(t, 0x40)

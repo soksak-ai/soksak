@@ -24,7 +24,7 @@ func argsOf(t *testing.T, values map[string]any) Args {
 	return args
 }
 
-// fullDeps is a process that was given everything this group asks for.
+// fullDeps is a process that was given everything this group requires.
 func fullDeps(t *testing.T) Deps {
 	t.Helper()
 	directory := t.TempDir()

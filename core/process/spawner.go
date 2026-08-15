@@ -17,10 +17,10 @@ type Spec struct {
 	// Dir empty means the spawner's own default. An invented directory would
 	// answer a question the caller did not ask.
 	Dir string
-	// Env is complete. It is never nil by the time it reaches os/exec, because
+	// Env is complete. It is never nil by the time it arrives at os/exec, because
 	// a nil Env there means "read this process's environment".
 	Env []string
-	// Group asks for a new process group so a kill can reach the whole tree.
+	// Group requests a new process group so a kill covers the whole tree.
 	Group bool
 }
 

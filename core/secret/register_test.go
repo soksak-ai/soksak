@@ -45,7 +45,7 @@ func describe(registry *control.Registry) (map[string]control.Owner, map[string]
 	return served, refused
 }
 
-// Every name is host-independent, so `sok` reaches the vault with no window.
+// Every name is host-independent, so `sok` addresses the vault with no window.
 func TestTheVaultCommandsAreCoreOwned(t *testing.T) {
 	registry, _, _ := wired(t)
 	served, _ := describe(registry)
@@ -104,7 +104,7 @@ func TestAProcessWithNoStoreRefusesEveryVaultCommand(t *testing.T) {
 	}
 }
 
-// A host that reached no key store cannot seal, and says exactly that. The
+// A host with no key store cannot seal, and states exactly that. The
 // other five still answer: what is stored can be listed, tested for and thrown
 // away by a host that can no longer open it.
 func TestAHostWithNoKeyStoreRefusesOnlySealing(t *testing.T) {
@@ -128,7 +128,7 @@ func TestAHostWithNoKeyStoreRefusesOnlySealing(t *testing.T) {
 		}
 	}
 
-	// Invoking it carries the reason rather than "unknown command".
+	// Invoking it returns the reason rather than "unknown command".
 	_, err := registry.Invoke(commandSet, args(t, map[string]any{"ns": "core", "key": "token", "value": plaintext}))
 	if err == nil || !strings.Contains(err.Error(), "key store") {
 		t.Fatalf("invoking a refused secret_set answered %v", err)
@@ -136,7 +136,7 @@ func TestAHostWithNoKeyStoreRefusesOnlySealing(t *testing.T) {
 }
 
 // The shapes the frontend calls with, through the registry the frontend
-// reaches: set, then has, keys, delete, and has again.
+// covers: set, then has, keys, delete, and has again.
 func TestTheVaultAnswersTheShapesTheFrontendCallsWith(t *testing.T) {
 	registry, _, _ := wired(t)
 	call := func(name string, pairs map[string]any) any {

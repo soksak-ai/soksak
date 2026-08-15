@@ -288,7 +288,7 @@ func TestTheNativeParentIsReportedSeparatelyFromTheSurfaceCount(t *testing.T) {
 
 // One inventory, one writer. A backend command that closes or hides one surface
 // is the second writer NATIVE-LAYER.md refuses: the next full commit reverts
-// it, so the caller watches the surface come back and has no way to know why.
+// it, so the caller sees the surface return with no way to determine why.
 func TestTheCommandsTheInventoryOwnsAreRefusedWithSomewhereToGo(t *testing.T) {
 	registry := surfaceRegistry(t, Composition{}, true)
 

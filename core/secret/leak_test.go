@@ -9,19 +9,19 @@ import (
 	"testing"
 )
 
-// The rule this package exists for: a value that reaches a log line, an error,
+// The rule this package exists for: a value written to a log line, an error,
 // an answer, or a stored row is a leaked value.
 //
 // Injection into a child's environment is the one path out, and it is
 // Resolve's. Everything else may name the address and the reason and nothing
 // more, because every one of those surfaces is somewhere a caller can print.
 
-// mentionsThePlaintext reports where a rendering carries the value.
+// mentionsThePlaintext reports where a rendering contains the value.
 func mentionsThePlaintext(rendered string) bool {
 	return strings.Contains(rendered, plaintext)
 }
 
-// A secret never reaches the database. The store is the real one, so this reads
+// A secret never enters the database. The store is the real one, so this reads
 // what anything else holding the handle would read.
 func TestAStoredSecretIsNotInTheDatabase(t *testing.T) {
 	vault, kv, _ := workingVault(t)
@@ -55,7 +55,7 @@ func TestAStoredSecretIsNotInTheDatabase(t *testing.T) {
 	}
 }
 
-// No command's answer carries the value — not the write that was handed it,
+// No command's answer contains the value — not the write that was handed it,
 // not the listing, not the status.
 func TestNoCommandAnswerCarriesTheValue(t *testing.T) {
 	registry, _, _ := wired(t)
@@ -93,7 +93,7 @@ func TestNoCommandAnswerCarriesTheValue(t *testing.T) {
 	}
 }
 
-// No refusal carries the value. Every one of these is a path that was handed a
+// No refusal contains the value. Every one of these is a path that was handed a
 // plaintext and had to fail; an error is printed far more often than an answer.
 func TestNoRefusalCarriesTheValue(t *testing.T) {
 	kv := openStore(t)

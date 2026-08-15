@@ -5,7 +5,7 @@ import (
 	"github.com/soksak/soksak-core/frameworks/wails"
 )
 
-// processEventSink carries a child's output and exit to the windows.
+// processEventSink delivers a child's output and exit to the windows.
 //
 // Delivery is the sink's answer to "is anyone still reading this", and it is
 // what stops a child producing into nothing. This host can answer it at one

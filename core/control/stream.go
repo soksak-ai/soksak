@@ -37,7 +37,7 @@ type StreamFrame struct {
 
 // StreamBytes is a binary frame.
 //
-// JSON has no byte string, so bytes travel base64 under a field that says so.
+// JSON has no byte string, so bytes travel base64 under a field named for it.
 // Sending them as a bare string would make a receiver guess whether a text
 // frame is text or base64, and it would guess wrong for either one.
 type StreamBytes struct {

@@ -89,7 +89,7 @@ func TestSomethingThatIsNotASocketIsNotDeleted(t *testing.T) {
 }
 
 func TestAnOverlongPathFailsByNameRatherThanByErrno(t *testing.T) {
-	// The kernel answers "invalid argument", which says nothing about paths and
+	// The kernel answers "invalid argument", which states nothing about paths and
 	// sends the reader looking at the wrong thing.
 	path := filepath.Join(shortDir(t), strings.Repeat("d", socketPathLimit), "s.sock")
 

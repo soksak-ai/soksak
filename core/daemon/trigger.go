@@ -9,7 +9,7 @@ import "fmt"
 // the whole persistence model here, since this build stores nothing — compares
 // the two, and a renamed field makes its own record unrecognisable.
 
-// Trigger says when a job fires.
+// Trigger states when a job fires.
 type Trigger struct {
 	// Kind is at, every or reconcile. cron is refused: see check.
 	Kind string `json:"kind"`
@@ -59,7 +59,7 @@ func (trigger Trigger) check() error {
 
 	case triggerCron:
 		// Refused rather than approximated. A cron expression this build read
-		// wrongly would fire at the wrong time for as long as the job lives,
+		// wrongly would fire at the wrong time for as long as the job exists,
 		// and nothing about a job that runs would say it ran at the wrong hour.
 		return fmt.Errorf("this build parses no %q expression (%q), so it cannot say when such a job is due; "+
 			"an %q trigger re-armed after each fire is the shape it can honour", triggerCron, trigger.Expr, triggerEvery)
@@ -90,7 +90,7 @@ func (trigger Trigger) first(now int64) *int64 {
 		return &at
 
 	case triggerReconcile:
-		// The registration scan the caller asks for. After this it waits to be
+		// The registration scan the caller requested. After this it waits to be
 		// poked and never sleeps against a clock.
 		at := now
 		return &at

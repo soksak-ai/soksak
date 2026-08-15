@@ -53,7 +53,7 @@ func TestTheClaimIsReleasedWhenTheApplicationStops(t *testing.T) {
 	}
 }
 
-// A failure from the framework reaches the caller. Swallowing it would leave a
+// A failure from the framework is returned to the caller. Swallowing it would leave a
 // process alive with no window and no way to tell.
 func TestTheFrameworksFailureIsTheLaunchsFailure(t *testing.T) {
 	refused := errors.New("no window")

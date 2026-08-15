@@ -26,7 +26,7 @@ import (
 // Why the first line. It costs the daemon nothing it does not already do, and
 // it arrives on a blocking read, so waiting for it is an event boundary rather
 // than a loop with a sleep in it. A daemon that prints anything else first has
-// spent its announcement, and this build then says it announces nothing rather
+// spent its announcement, and this build then reports that it announces nothing rather
 // than waiting for a line that will never be about a socket.
 //
 // Why an envelope version travels with it. core/control refuses a version
@@ -35,7 +35,7 @@ import (
 // produced answers the caller trusted. The announcement is the earliest moment
 // that check can happen at all.
 
-// State is what this build knows about one daemon's control socket.
+// State is what this build has recorded about one daemon's control socket.
 type State string
 
 const (
@@ -58,10 +58,10 @@ const (
 // Readiness is one daemon's announcement, as this build read it.
 type Readiness struct {
 	State State `json:"state"`
-	// Socket is filled only in Ready. A refused announcement carries none, so
+	// Socket is filled only in Ready. A refused announcement has none, so
 	// nothing can connect to an address this build already rejected.
 	Socket string `json:"socket,omitempty"`
-	// Reason is filled only in Refused, and says what was wrong with the line.
+	// Reason is filled only in Refused, and states what was wrong with the line.
 	Reason string `json:"reason,omitempty"`
 }
 
@@ -77,7 +77,7 @@ type announcement struct {
 	Socket   *string `json:"socket"`
 }
 
-// readAnnouncement decides what a daemon's first line of stdout said about
+// readAnnouncement determines what a daemon's first line of stdout stated about
 // itself. It performs no I/O: the line is the whole evidence.
 func readAnnouncement(line string) Readiness {
 	trimmed := strings.TrimSpace(line)

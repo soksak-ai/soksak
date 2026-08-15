@@ -44,8 +44,8 @@ func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
 	terminalcmd.Register(registry, terminalcmd.Deps{Sessions: deps.Sessions})
 	Register(registry, Deps{Host: deps.Host, NewID: deps.NewID})
 	RegisterCapture(registry, deps.Host)
-	// Each window carries its own theme, so the colour goes to the window that
-	// asked rather than to the one this host happened to capture.
+	// Each window has its own theme, so the colour goes to the window that
+	// requested it rather than to the one this host happened to capture.
 	RegisterBackground(registry, deps.Host)
 	RegisterSurface(registry, SurfaceDeps{
 		Composition:  deps.Composition,

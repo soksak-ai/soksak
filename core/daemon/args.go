@@ -62,12 +62,12 @@ func lineCount(command string, args control.Args) (int, error) {
 	return value, nil
 }
 
-// runSeconds reads the deadline a run-once carries.
+// runSeconds reads the deadline a run-once was given.
 func runSeconds(command string, args control.Args) (time.Duration, error) {
 	raw, present := args["timeoutSecs"]
 	if !present || isNull(raw) {
 		// No invented default. A command with no deadline is one that can hold
-		// the caller forever, and the caller is the one who knows how long its
+		// the caller forever, and only the caller has how long its
 		// build takes.
 		return 0, fmt.Errorf("%s: missing argument %q — a run with no deadline never comes back", command, "timeoutSecs")
 	}

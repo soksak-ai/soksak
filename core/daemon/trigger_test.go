@@ -68,7 +68,7 @@ func TestAnAnchoredIntervalLandsOnTheGrid(t *testing.T) {
 }
 
 // A reconcile job is an event trigger. Firing it at registration is the boot
-// scan the caller asks for; after that it waits to be poked and never sleeps
+// scan the caller requested; after that it waits to be poked and never sleeps
 // against a clock.
 func TestAReconcileTriggerIsDueAtOnceAndThenWaits(t *testing.T) {
 	trigger, err := decodeTrigger(t, `{"kind":"reconcile"}`)

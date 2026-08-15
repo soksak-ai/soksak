@@ -9,7 +9,7 @@ import (
 // The adoption rule: a pid written down by a previous run names a process only
 // for as long as the kernel has not handed that number to somebody else.
 //
-// A pid is a small recycled integer. The record therefore carries the command
+// A pid is a small recycled integer. The record therefore holds the command
 // line the pid was started with, and this build ends a recorded pid only when
 // the live process at that number is still running that command. Without the
 // match, cleaning up after a crash is a lottery on the user's other processes.
@@ -19,11 +19,11 @@ import (
 // entry would report a daemon whose log is permanently empty — a silence the
 // reader would take for a quiet daemon.
 
-// Reaper reaches a process this build did not start.
+// Reaper ends a process this build did not start.
 //
 // Both halves are the host's: reading another process's command line and
 // signalling a tree are answered differently on every platform, so the branch
-// stays with whoever knows which one this is.
+// stays with the caller, which is where the platform is known.
 type Reaper interface {
 	// CommandLine answers what a live pid is running, and whether there is a
 	// live process at all. The two are separate answers: a pid that is gone is
@@ -71,7 +71,7 @@ const (
 	// adoptionEnded: the leftover was still ours, and it is now stopped.
 	adoptionEnded = "ended"
 	// adoptionHeld: it is ours and it is still running, because this build
-	// could not ask about it or could not end it. Reason says which.
+	// could not query it or could not end it. Reason states which.
 	adoptionHeld = "held"
 )
 
@@ -83,8 +83,8 @@ type Adoption struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// adopt matches every recorded pid and ends the ones that are still what the
-// record says.
+// adopt matches every recorded pid and ends the ones that still match the
+// record.
 //
 // The whole batch is read before anything is touched, for the reason the
 // terminal group checks every argument before opening a PTY: a refusal that had

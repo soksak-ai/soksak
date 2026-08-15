@@ -10,7 +10,7 @@ import (
 // cgoFiles is the fixed set of files in this package that import "C".
 //
 // N1 keeps the platform layer to one thin layer: everything that can be pure Go
-// is pure Go, and cgo carries only "apply this batch on the main thread and
+// is pure Go, and cgo does only "apply this batch on the main thread and
 // report the frames that resulted". A new entry here needs a stated reason.
 var cgoFiles = map[string]string{
 	"capture_darwin.go": "the ScreenCaptureKit bridge; the capture itself lives in capture_darwin.m",
@@ -57,7 +57,7 @@ func TestCgoSurfaceIsFixed(t *testing.T) {
 func TestNativeSourceLivesOutsideTheCgoComment(t *testing.T) {
 	// N2. Inside a comment there is no syntax highlighting, no separate
 	// compilation unit, and no way to test the native code on its own terms.
-	// The preamble carries directives and an include of our own header.
+	// The preamble holds directives and an include of our own header.
 	for name := range cgoFiles {
 		source, err := os.ReadFile(name)
 		if err != nil {

@@ -401,7 +401,7 @@ func TestDefineValidatesTheNamespace(t *testing.T) {
 
 // Defining one collection leaves every other collection's indexes standing.
 //
-// The names are found by prefix, and `_` sits between the collection id and the
+// The names are found by prefix, and `_` separates the collection id from the
 // field. Compared as a LIKE pattern that `_` is a wildcard, so collection 1
 // matched — and dropped — collections 10 through 19. Ten collections are what
 // it takes to see it: with fewer, nothing shares a prefix.

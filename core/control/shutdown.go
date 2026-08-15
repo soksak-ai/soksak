@@ -5,13 +5,13 @@ import "fmt"
 // The receipt this process signs before it is allowed to quit.
 //
 // Quitting destroys the channel the answer would come back on, so the caller
-// asks for the receipt first and only then tells the process to go. That makes
-// the receipt the last observation anyone gets: if it says "reaped" while a
+// requests the receipt first and only then stops the process. That makes the
+// receipt the last observation anyone gets: if it states "reaped" while a
 // child is still running, nothing downstream will ever contradict it. So the
 // signature is withheld rather than stamped — a count that cannot be true, or
 // anything still held, is an error naming what remains.
 
-// phaseReaped is the only phase a signed receipt carries. It exists as a
+// phaseReaped is the only phase a signed receipt holds. It exists as a
 // constant so the caller's check and this build's answer are one string.
 const phaseReaped = "reaped"
 
@@ -21,7 +21,7 @@ const phaseReaped = "reaped"
 // Every field is a count of things that no longer exist because this call ran.
 // A host that owns none of a kind reports zero for it, which is true; a host
 // that owns some and does not look reports zero too, which is why the launcher
-// supplies one function that knows about all of them rather than a field per
+// supplies one function covering all of them rather than a field per
 // subsystem that can be left out one at a time.
 type Generation struct {
 	ProcessChildren       int `json:"processChildrenReaped"`

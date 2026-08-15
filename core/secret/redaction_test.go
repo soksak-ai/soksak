@@ -31,7 +31,7 @@ func TestKeyMaterialPrintsAsALabelUnderEveryVerb(t *testing.T) {
 }
 
 // The other way out is JSON, which does not consult a Formatter. A struct that
-// ever carries key material into an answer must not be able to encode it.
+// ever puts key material in an answer must not be able to encode it.
 func TestKeyMaterialEncodesAsALabel(t *testing.T) {
 	encoded, err := json.Marshal(material{bytes: deviceKeyOf(0x40)})
 	if err != nil {
@@ -44,7 +44,7 @@ func TestKeyMaterialEncodesAsALabel(t *testing.T) {
 
 // The vault prints as a vault.
 //
-// fmt cannot call a method on an unexported field, so it reflects into the
+// fmt cannot call a method on an unexported field, so it uses reflection on the
 // cached device key and writes the bytes. The redaction has to sit on the value
 // a host actually holds, which is the one Register hands back.
 func TestTheVaultPrintsAsAVault(t *testing.T) {

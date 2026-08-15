@@ -9,7 +9,7 @@ import (
 // The surface group: what the native composition currently is.
 //
 // The application declares native surfaces in the DOM and never positions them.
-// One delivery carries a complete inventory, and one receipt reports what was
+// One delivery holds a complete inventory, and one receipt reports what was
 // actually applied. Both halves speak CSS points with a top-left origin, so the
 // compositing verdict is a subtraction rather than a conversion — and this file
 // is where the subtraction happens.
@@ -123,7 +123,7 @@ type Composition struct {
 	// Failure is what the native layer said about the most recent attempt that
 	// did not land, empty when the last attempt did land. Without it a
 	// compositor that refuses every new inventory keeps answering with the last
-	// healthy one, and every reading says the layer is fine.
+	// healthy one, and every reading reports the layer as fine.
 	Failure string
 	// FailedSequence is the sequence of that attempt.
 	FailedSequence uint64
@@ -198,7 +198,7 @@ func RegisterSurface(registry *control.Registry, deps SurfaceDeps) {
 // registerInventoryRefusals declares the three names that ask this backend to
 // write one surface.
 //
-// One delivery carries a complete inventory and a second writer is refused
+// One delivery holds a complete inventory and a second writer is refused
 // before anything mutates. A command here that closed or hid a single surface
 // would be that second writer, and it would not even survive: the next full
 // commit reconciles against the declaration and puts the surface straight back.

@@ -10,7 +10,7 @@ import (
 // realDirectory answers a temporary directory with no link anywhere in it.
 //
 // macOS puts the temporary tree behind /var -> /private/var, and this rule
-// refuses a path that reaches its destination through a link. Resolving it here
+// refuses a path that resolves to its destination through a link. Resolving it here
 // is what makes the fixture a directory rather than a link to one; a test that
 // used the unresolved path would be asserting against the platform instead of
 // against the rule.

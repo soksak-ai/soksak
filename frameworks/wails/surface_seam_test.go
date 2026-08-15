@@ -17,8 +17,8 @@ var surfaceGroupFiles = []string{surfaceRuleFile, "surface_recorder.go"}
 // The compositor is a separate module with its own release, and the framework
 // is a vendor. Either one named in the rule file would make the coordinate
 // arithmetic reachable only from inside this application — which is the one
-// place a compositing verdict is least useful, because that is where the bug
-// being hunted lives.
+// place a compositing verdict is least useful, because that is where the defect
+// under investigation is.
 func TestTheCompositionRuleNamesNoModuleUnderneathIt(t *testing.T) {
 	source := readCode(t, surfaceRuleFile)
 	for _, elsewhere := range []string{

@@ -11,7 +11,7 @@ package control
 
 // Deps is what the surrounding process supplies. Every field is something this
 // group refuses to read for itself: a core that called os.Executable would
-// answer where this binary sits rather than which installation asked, and the
+// answer where this binary is rather than which installation called, and the
 // two differ the moment a second copy is running.
 type Deps struct {
 	// Socket is the path this process's control plane listens on, as the

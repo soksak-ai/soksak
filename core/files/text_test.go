@@ -55,7 +55,7 @@ func TestAnOffsetReadsOnlyTheDeltaAndStillReportsTheWholeSize(t *testing.T) {
 
 // A log that was rotated or replaced is shorter than the offset the caller
 // remembers. Answering `truncated` there would leave the caller believing there
-// is more to read forever; the real size is what tells it to start over.
+// is more to read forever; the real size is what ends the loop.
 func TestAnOffsetPastTheEndReadsEmptyWithTheRealSize(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "log")
 	write(t, path, "ab")

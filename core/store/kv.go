@@ -19,7 +19,7 @@ const (
 	deleteSQL = `DELETE FROM kv WHERE ns=? AND k=?`
 )
 
-// A namespace carries no `/`, `.`, or `:`, so it cannot leak into a path or a
+// A namespace has no `/`, `.`, or `:`, so it cannot leak into a path or a
 // meta key.
 var namespacePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 

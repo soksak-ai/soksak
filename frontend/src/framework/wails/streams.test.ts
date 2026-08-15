@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// A stream receiver reaches the backend as an id, and frames addressed to that
+// A stream receiver arrives at the backend as an id, and frames addressed to that
 // id reach it back.
 //
 // The adapter used to answer { onmessage: () => {} } — an object that
@@ -49,7 +49,7 @@ describe("a stream receiver", () => {
   });
 
   it("decodes a binary frame to an ArrayBuffer", () => {
-    // Bytes travel base64 under a field that says so. A bare string would make
+    // Bytes travel base64 under a field named for it. A bare string would make
     // this side guess whether a text frame is text or base64, and it guesses
     // wrong for one of them.
     const stream = createWailsStream<ArrayBuffer>();

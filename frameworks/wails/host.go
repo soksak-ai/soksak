@@ -1,4 +1,4 @@
-// Package wails is the only Go package that knows this framework exists.
+// Package wails is the only Go package that names this framework.
 //
 // Everything above it — the command registry, the workspace rules, the plugins —
 // receives what it needs through injected interfaces and never names a vendor.
@@ -24,10 +24,10 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
-// Options is everything the launcher knows and this package cannot derive.
+// Options is everything the launcher has and this package cannot derive.
 //
 // Assets arrives as a value because embed paths cannot climb out of the
-// directory that declares them; the frontend build lives above this package.
+// directory that declares them; the frontend build is above this package.
 type Options struct {
 	Assets embed.FS
 	// CaptureProbe, when set, captures the window to this path shortly after
@@ -36,7 +36,7 @@ type Options struct {
 	CaptureProbe string
 	// Terminal is the session owner the launcher built. It is registered as a
 	// framework service for its shutdown hook: the children have to be reaped
-	// when the application quits, and only the application knows when that is.
+	// when the application quits, and only the application has that moment.
 	Terminal *terminal.Service
 	// Bridge is the launcher's late-bound half of the host: the core was handed
 	// its Emit and Live before this framework existed, and Run fills it in.
@@ -111,7 +111,7 @@ func Run(options Options) error {
 	// from the first in ways nobody chose.
 	windowTemplate := newWindowTemplate()
 
-	// Built before the run loop, because it subscribes to the event that says
+	// Built before the run loop, because it subscribes to the event marking that
 	// the run loop started. Created afterwards it would never hear it, and every
 	// window command would refuse forever.
 	windowHost := NewWindowHost(app, windowTemplate)
@@ -222,7 +222,7 @@ func Run(options Options) error {
 // This framework's event emit goes to every window, so it cannot carry a
 // request meant for one of them: the same command would run everywhere and only
 // the first answer would be read. Dispatching to the window is the one channel
-// that reaches a single page.
+// that is delivered to a single page.
 //
 // A window with no native lifetime is refused rather than dispatched to,
 // because the dispatch itself returns silently for exactly that window — and a
@@ -263,7 +263,7 @@ func newWindowTemplate() application.WebviewWindowOptions {
 			// background, and the window's colour — which the theme owns —
 			// shows instead.
 			//
-			// This is the only knob that reaches the webview on this platform:
+			// This is the only knob that applies to the webview on this platform:
 			// BackgroundType is read on linux and windows and not here, and
 			// MacBackdropNormal leaves the webview opaque. It also clears the
 			// window's colour, so the host repaints it as soon as the window

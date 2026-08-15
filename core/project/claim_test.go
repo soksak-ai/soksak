@@ -391,7 +391,7 @@ func TestADestroyedWindowIsFreedEvenAfterItsLabelIsGone(t *testing.T) {
 	}
 
 	// Freed means claimable, not merely hidden. A root still in the map answers
-	// Owners with nothing either way, so only a new claim tells the two apart.
+	// Owners with nothing either way, so only a new claim separates the two.
 	live.set("main", "w-2")
 	reply, changed, err := ledger.Claim("/a", "w-2")
 	if err != nil {
@@ -403,7 +403,7 @@ func TestADestroyedWindowIsFreedEvenAfterItsLabelIsGone(t *testing.T) {
 }
 
 // The wire names are the contract with the frontend, and nothing in the process
-// checks them: a publisher spelling the event another way reaches nobody, and
+// checks them: a publisher spelling the event another way delivers to nobody, and
 // that silence is not an error — it is a picker that never updates. Measured
 // 2026-08-01: one publisher never sent it at all.
 // Comparing the constant against itself would pass while it was wrong.

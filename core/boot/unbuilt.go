@@ -7,7 +7,7 @@ import "github.com/soksak/soksak-core/core/control"
 // They are declared rather than left out. A caller that receives "unknown
 // command" cannot tell a feature that is not built from a name it typed wrong,
 // so it investigates settled ground or writes its own imitation of the command.
-// A declared refusal carries the reason, and `state.commands` reports it beside
+// A declared refusal states the reason, and `state.commands` reports it beside
 // what is served.
 //
 // Each entry names what is missing, not which release will bring it: a date is

@@ -1,5 +1,5 @@
 // Package identity derives everything a process needs to know about which
-// installation it belongs to, from one input.
+// installation it is part of, from one input.
 //
 // Nothing here reads the process environment. The caller passes what it read,
 // so the same rules answer the same way in a window, in a headless server, and

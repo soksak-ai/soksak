@@ -243,7 +243,7 @@ func TestPublishingWithNobodyListeningIsNotAFailure(t *testing.T) {
 	}
 }
 
-// A process that supplied no clock cannot stamp a record, and says so rather
+// A process that supplied no clock cannot stamp a record, and states that rather
 // than reading one for itself.
 func TestWithNoClockAStampingCommandRefusesByName(t *testing.T) {
 	home := t.TempDir()

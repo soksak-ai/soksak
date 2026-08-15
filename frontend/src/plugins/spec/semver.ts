@@ -1,6 +1,6 @@
 // SemVer grammar, deterministic dependency-range subset, and precedence.
 // This module has no product or package baseline: each unit owns its version,
-// while repository policy/CI decides which version is current.
+// while repository policy/CI fixes which version is current.
 
 export const MAX_SEMVER_LENGTH = 256;
 const NUMERIC_IDENTIFIER = String.raw`(?:0|[1-9][0-9]*)`;

@@ -25,7 +25,7 @@ type Notice struct {
 	Title  string `json:"title"`
 	Body   string `json:"body"`
 	// DeepLink is what a click runs (soksak[-env]://cmd/<name>). Empty means
-	// this notification carries nothing to run, which is a different fact from
+	// this notification has nothing to run, which is a different fact from
 	// a link that failed to parse — parsing it is the host's, at click time.
 	DeepLink string `json:"deepLink"`
 }
@@ -44,7 +44,7 @@ type shownHandle struct{ last atomic.Uint64 }
 
 func (handle *shownHandle) next() uint64 { return handle.last.Add(1) }
 
-// noticeExtra is the envelope the caller carries a click's destination in.
+// noticeExtra is the envelope a click's destination travels in.
 type noticeExtra struct {
 	DeepLink string `json:"deepLink"`
 }

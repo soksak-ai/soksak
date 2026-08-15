@@ -79,7 +79,7 @@ type RendererRefusal struct {
 // RendererDeclaration is what a window is told about its own declaration.
 //
 // It is delivered rather than returned because the declaration arrives as an
-// event, which carries no answer. Without it a refusal would be silence, and
+// event, which returns no answer. Without it a refusal would be silence, and
 // the page would believe every name it sent is reachable.
 type RendererDeclaration struct {
 	Window string `json:"window"`
@@ -226,8 +226,8 @@ func (r *RendererCommands) Declare(window string, names []string) error {
 	}
 	previous.names = append([]string{}, names...)
 	// A declaration is always answered, even when it changed nothing. The page
-	// that sent it may be a reloaded one, and a reloaded page knows nothing
-	// about what it holds until it is told — measured 2026-08-15: reloading the
+	// that sent it may be a reloaded one, and a reloaded page has no record of
+	// what it holds until it receives one — measured 2026-08-15: reloading the
 	// control plane produced an identical table, no receipt, and a page that
 	// never heard which of its names were refused.
 	previous.told = false
@@ -240,7 +240,7 @@ func (r *RendererCommands) Declare(window string, names []string) error {
 // Withdraw removes a window's names.
 //
 // A window that closed answers nothing, and a caller already waiting on it
-// learns that now rather than at the deadline — the deadline is for a page that
+// receives that now rather than at the deadline — the deadline is for a page that
 // is there and silent, which is a different fact.
 func (r *RendererCommands) Withdraw(window string) error {
 	r.mu.Lock()
@@ -287,7 +287,7 @@ func (r *RendererCommands) Withdraw(window string) error {
 func (r *RendererCommands) reconcileLocked() []RendererDeclaration {
 	// One name, one entry, every window. The window is an argument, the way it
 	// is for window_snapshot and window_set_background — and the way the address
-	// grammar already carries it, since `ui.measure address='win-a/…'` names the
+	// grammar already includes it, since `ui.measure address='win-a/…'` names the
 	// window in the address rather than in the command.
 	//
 	// The rejected shape put the window in the name (`win/main/ui.tree`). It
@@ -398,7 +398,7 @@ func (r *RendererCommands) tell(receipts []RendererDeclaration) error {
 //
 // Which window answers is the caller's to say: named explicitly by an operator
 // who has no window of their own, and stamped by the transport for a page. A
-// caller that says neither is refused rather than routed somewhere plausible —
+// caller that supplies neither is refused rather than routed somewhere plausible —
 // an answer about a window nobody asked about looks exactly like a right one.
 func (r *RendererCommands) forward() func(string, control.Args) (any, error) {
 	return func(name string, args control.Args) (any, error) {
@@ -540,7 +540,7 @@ func rendererResult(window, command string, raw json.RawMessage) (any, error) {
 
 // withoutRouting strips what only this transport reads.
 //
-// `window` chooses which page answers and the stamped caller says where the
+// `window` selects which page answers and the stamped caller records where the
 // request came from; neither is a parameter of any command. A page that
 // validates its parameters — and this one does — refuses the whole call over
 // them.
