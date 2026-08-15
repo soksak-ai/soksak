@@ -5,6 +5,7 @@
 // reasons — a plugin-only management surface separate from the settings modal.
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "../ui/icons/Icon";
 import {
   useViewRegistry,
@@ -160,8 +161,16 @@ export const PluginSidebar = memo(function PluginSidebar({
           <span className="pss-right">{activeTitle}</span>
         </div>
       </div>
-      {/* Manager modal — outside the rail (A5). The dmodal pattern (same as ConfirmCloseModal and friends). */}
-      {managerOpen && (
+      {/* Manager modal — mounted on document.body, not here. The rail's panel
+          declares `will-change: transform` so the compositor keeps host chrome
+          above a plugin's WebGL canvas, and that makes it the containing block
+          of any `position: fixed` descendant. Rendered in place, the overlay's
+          `inset: 0` was the sidebar's box and the card's `left: 50%` was half of
+          it — measured 2026-08-15, the close button sat at x=962.78 on a
+          1200-wide window, outside the frame.
+          The promotion is load-bearing, so the mount point moves instead. Same
+          reason ProgramMenu is a portal. */}
+      {managerOpen && createPortal(
         <div className="dmodal-overlay" onMouseDown={() => setManagerOpen(false)}>
           <div
             className="dmodal-card dmodal-plugin-manager"
@@ -183,7 +192,8 @@ export const PluginSidebar = memo(function PluginSidebar({
               <PluginManager />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -539,7 +549,10 @@ function PluginManager() {
         </>
       )}
 
-      {consentFor && (
+      {/* Both consent modals go to document.body for the same reason the manager
+          does: this component renders inside .sidebar-right, whose compositing
+          promotion makes it the containing block of a fixed descendant. */}
+      {consentFor && createPortal(
         <PluginConsentModal
           plugin={consentFor}
           step={
@@ -553,17 +566,19 @@ function PluginManager() {
           }
           onClose={cancelConsent}
           onConsent={consentNext}
-        />
+        />,
+        document.body,
       )}
 
       {/* Card click = inspection-only detail (permissions, description, access info). Separate from the consent flow — it yields while a consent popup is open. */}
-      {previewFor && !consentFor && (
+      {previewFor && !consentFor && createPortal(
         <PluginConsentModal
           plugin={previewFor}
           preview
           onClose={() => setPreviewFor(null)}
           onConsent={() => setPreviewFor(null)}
-        />
+        />,
+        document.body,
       )}
     </div>
   );
