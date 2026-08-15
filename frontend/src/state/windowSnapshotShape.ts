@@ -1,0 +1,49 @@
+import type { WindowSnapshot } from "./windowPersistence";
+
+// Whether a stored window snapshot is one this build can read.
+//
+// Measured 2026-08-16 after a cold restart: nothing came back. Every snapshot was in the store and
+// the ledger held 23 restorable slots, and the boot facts read
+//   respawn:slots:23:live:1:restorable:23
+//   respawn:error:TypeError: undefined is not an object (evaluating 'a.workspaces.length')
+//
+// Two of those snapshots were written before the project → workspace rename and carry `projects`
+// where this build reads `workspaces`. Reading `.length` on the missing field threw, the throw left
+// the loop, and all twenty-three windows stayed closed — including the twenty-one this build had
+// written itself.
+//
+// One unreadable record costs that record only, and the reason goes in the boot facts. No
+// migration is
+// written: this build does not carry old paths (L11c), and a record it cannot read is left where it
+// is rather than rewritten into a shape its author never meant.
+
+export type SnapshotVerdict =
+  | { ok: true; snapshot: WindowSnapshot }
+  | { ok: false; why: string };
+
+export function readableWindowSnapshot(value: unknown): SnapshotVerdict {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false, why: `a window snapshot is an object, and this is ${describe(value)}` };
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.activeId !== "string") {
+    // Workspaces with none selected is a window with panes and nothing shown, which reads as a
+    // blank screen with content behind it.
+    return { ok: false, why: "a window snapshot names its active workspace in activeId, and this has none" };
+  }
+  if (!Array.isArray(record.workspaces)) {
+    return {
+      ok: false,
+      why: `a window snapshot lists its workspaces in workspaces, and this has ${
+        Array.isArray(record.projects) ? "projects — it predates the rename" : "none"
+      }`,
+    };
+  }
+  return { ok: true, snapshot: { activeId: record.activeId, workspaces: record.workspaces as WindowSnapshot["workspaces"] } };
+}
+
+function describe(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "an array";
+  return typeof value;
+}

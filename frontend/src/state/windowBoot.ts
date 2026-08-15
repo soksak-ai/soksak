@@ -43,6 +43,8 @@ import {
   type WindowSnapshot,
   type WindowManifest,
 } from "./windowPersistence";
+import { readableWindowSnapshot } from "./windowSnapshotShape";
+import { snapshotsToForget } from "./windowSnapshotSweep";
 
 // This window's frame (logical px) — for the manifest rect. On failure the rect is omitted (restore uses the OS default position).
 async function currentFrame(): Promise<
@@ -126,7 +128,16 @@ export async function initWorkspacePersistence(
   let snapshot: SnapshotRead = snapshotUnread();
   let restoredWorkspaces = 0;
   try {
-    const snap = await winStore.hydrate();
+    const hydrated = await winStore.hydrate();
+    const verdict = readableWindowSnapshot(hydrated);
+    if (!verdict.ok) {
+      // Unread rather than empty. Written as 0 it equals a window that was never used, and the
+      // save guard would then open and overwrite a record this build simply cannot read.
+      bootFact(`restore:unreadable:${label}`);
+      console.warn(`[restore] unreadable snapshot for this window: ${verdict.why}`);
+      return false;
+    }
+    const snap = verdict.snapshot;
     snapshot = snapshotRead(snap.workspaces.length);
     bootFact(`restore:hydrated:${snap.workspaces.length}`);
     if (snap.workspaces.length > 0) {
@@ -307,7 +318,28 @@ export async function respawnSavedWindows(): Promise<void> {
       // Absent and empty are separated. Both used to be "0 workspaces", which pruned windows whose snapshot was not
       // yet written or was erased — those windows never open again (back when there was nowhere to roll back, that
       // was outright loss). The only thing pruned is a window the user emptied.
-      const { found, value: snap } = await snapStore.read();
+      // One slot at a time, and one that fails costs itself only. Measured 2026-08-16, a throw
+      // inside this loop left every one of twenty-three windows closed — the boot facts read
+      // respawn:slots:23:live:1:restorable:23 and then an error, and the screen came up empty.
+      let found = false;
+      let snap: WindowSnapshot = EMPTY_WINDOW;
+      try {
+        const read = await snapStore.read();
+        found = read.found;
+        const verdict = readableWindowSnapshot(read.value);
+        if (found && !verdict.ok) {
+          // Left where it is rather than rewritten. This build keeps no old paths (L11c), and a
+          // record it cannot read is not a record it may reshape on its author's behalf.
+          respawnFact(`respawn:unreadable:${slot.label}`);
+          console.warn(`[restore] unreadable snapshot, slot kept: ${slot.label} — ${verdict.why}`);
+          continue;
+        }
+        if (verdict.ok) snap = verdict.snapshot;
+      } catch (e) {
+        respawnFact(`respawn:unread:${slot.label}`);
+        console.error(`[restore] could not read the snapshot for ${slot.label}:`, e);
+        continue;
+      }
       if (!found) {
         // No snapshot — nothing to revive, so it is not opened. The ledger is left untouched, though:
         // not opening recovers on the next boot, but a pruned slot does not come back.
@@ -346,6 +378,9 @@ export async function respawnSavedWindows(): Promise<void> {
         });
     }
     if (pruned) await manifestStore.save(manifest);
+    // The ledger and the live set are both settled by here, so a snapshot no slot names is for a
+    // window that will not come back.
+    await sweepOrphanedSnapshots(manifest.slots.map((slot) => slot.label), live, respawnFact);
     // Restore does not move focus — the logic that forced a jump to the previously focused window is removed. The
     // window active at boot (the orchestrator etc.) stays active. The user calls a window with the focus icon in the window list.
     // First run (0 workspace slots to respawn + 0 recent workspaces) — opens one default workspace workspace window.
@@ -365,6 +400,40 @@ export async function respawnSavedWindows(): Promise<void> {
   } catch (e) {
     respawnFact(`respawn:error:${String(e).slice(0, 100)}`);
     console.error("multi-window respawn failed:", e);
+  }
+}
+
+/**
+ * Forgets the window snapshots no slot names.
+ *
+ * Measured 2026-08-16: the ledger held 3 slots and the store held 24 snapshots. Every run that
+ * opened a window and closed it left its record behind for good, and one leftover — written before
+ * the project → workspace rename — was what crashed the whole restore.
+ *
+ * Runs on the main boot only, after the respawn, so the ledger and the live set are both settled.
+ * A failure here costs nothing: the records stay and the next boot tries again.
+ */
+async function sweepOrphanedSnapshots(
+  slotLabels: readonly string[],
+  live: ReadonlySet<string> | null,
+  fact: (step: string) => void,
+): Promise<void> {
+  // Without a census, every open window reads as absent and the sweep would delete the record of a
+  // window a person is looking at.
+  if (live === null) {
+    fact("sweep:skipped:no-census");
+    return;
+  }
+  try {
+    const keys = (await invoke<string[]>("data_kv_keys", { ns: "core", prefix: null })) ?? [];
+    const forget = snapshotsToForget(keys, slotLabels, [...live]);
+    for (const key of forget) {
+      await invoke("data_kv_delete", { ns: "core", key });
+    }
+    fact(`sweep:forgot:${forget.length}:kept:${keys.length - forget.length}`);
+  } catch (e) {
+    console.error("window snapshot sweep failed:", e);
+    fact("sweep:failed");
   }
 }
 
