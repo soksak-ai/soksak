@@ -1,0 +1,96 @@
+package wails
+
+// Window facts and window effects, behind a contract.
+//
+// The rules in this group must be answerable with no window at all — the same
+// verdict in a window, in a test, and in a headless process. A function that
+// takes the vendor's application handle can never leave the application
+// process, so every fact these commands need arrives through WindowHost and no
+// vendor type crosses into the rules or the handlers.
+//
+// The contract carries facts and effects, never choices. Which window to act
+// on is the caller's decision; nothing here asks what is current. That is not
+// style: this host's Window.Current() answers with whatever holds focus, which
+// is wrong precisely when a background repaint or a focus-free capture is the
+// thing asking.
+
+// Frame is a window rectangle in device-independent points, absolute, with a
+// top-left origin.
+//
+// One space, shared by every command in this group: window_monitors reports it,
+// window_place accepts it, window_create's rect is in it. Two spaces would flip
+// the monitor verdict on a display whose scale differs from its neighbour's.
+// Whole points because that is what this host reads and writes — a fractional
+// frame cannot be applied and would silently round somewhere unnamed.
+type Frame struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+	W int `json:"w"`
+	H int `json:"h"`
+}
+
+// Display is one screen, in the same space as Frame, plus the scale a caller
+// needs to convert to device pixels.
+type Display struct {
+	Index int     `json:"index"`
+	Name  string  `json:"name"`
+	X     int     `json:"x"`
+	Y     int     `json:"y"`
+	W     int     `json:"w"`
+	H     int     `json:"h"`
+	Scale float64 `json:"scale"`
+}
+
+// OpenSpec is everything a new window needs before it exists. It always opens
+// hidden: a window revealed before its final position is applied shows at the
+// OS default spot and then jumps.
+type OpenSpec struct {
+	Name string
+	URL  string
+}
+
+// WindowHost is the source of window facts and the performer of window effects.
+//
+// It is named for windows rather than for the process because host.go already
+// owns the word "host" for the application host this package runs inside.
+type WindowHost interface {
+	// Started reports that the run loop owns the main thread. Every command in
+	// this group refuses before that: a window queued ahead of the run loop is
+	// visible in the registry and reachable by nothing, and dispatching to the
+	// main thread before it exists takes the process down rather than
+	// answering.
+	Started() bool
+	// Names is every window name this process holds, addressable or not. It is
+	// what makes two windows under one name impossible, so it must include a
+	// name whose window no longer answers.
+	Names() []string
+	// Live reports that this name is an address right now — a command sent to
+	// it will reach a native window.
+	Live(name string) bool
+	// Focused reports that this window is the one receiving keys.
+	Focused(name string) bool
+	// Frame reports where the window is. The second result is false when the
+	// window has no native lifetime, because a window with no frame and a
+	// window at the origin are different facts.
+	Frame(name string) (Frame, bool)
+	// Displays is the screen catalogue in catalogue order.
+	Displays() []Display
+	// Open creates the window hidden and returns once it either has a native
+	// lifetime or never will.
+	Open(spec OpenSpec) error
+	// Reveal shows the window. key=false must order it to the front without
+	// taking the keyboard, because a background restore that steals focus is
+	// the exact thing focus:false exists to prevent.
+	Reveal(name string, key bool) error
+	// Discard removes a window that never became an address, so a failed
+	// creation leaves no name behind for the next one to collide with.
+	Discard(name string) error
+	Place(name string, frame Frame) error
+	Focus(name string) error
+	Reload(name string) error
+	Close(name string) error
+	// ActivateApplication brings this application forward. It takes no window:
+	// activation is the application's business, and requiring a window here is
+	// what made the same request fail when a workspace renderer asked for it.
+	ActivateApplication() error
+}

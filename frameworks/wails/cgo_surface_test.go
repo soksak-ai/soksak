@@ -14,6 +14,11 @@ import (
 // report the frames that resulted". A new entry here needs a stated reason.
 var cgoFiles = map[string]string{
 	"capture_darwin.go": "the ScreenCaptureKit bridge; the capture itself lives in capture_darwin.m",
+	// The framework reveals a window only by making it the key window, and
+	// activates the application only through a call current macOS ignores. Both
+	// are two AppKit lines with no Go equivalent, and both live in
+	// window_native_darwin.m.
+	"window_native_darwin.go": "the two window operations this framework has no API for; they live in window_native_darwin.m",
 }
 
 func TestCgoSurfaceIsFixed(t *testing.T) {
@@ -68,7 +73,10 @@ func TestNativeSourceLivesOutsideTheCgoComment(t *testing.T) {
 
 	// The header and implementation the preamble includes must exist, or the
 	// rule is satisfied by having no native code rather than by separating it.
-	for _, name := range []string{"capture_darwin.h", "capture_darwin.m"} {
+	for _, name := range []string{
+		"capture_darwin.h", "capture_darwin.m",
+		"window_native_darwin.h", "window_native_darwin.m",
+	} {
 		if _, err := os.Stat(filepath.Clean(name)); err != nil {
 			t.Errorf("%s is missing: %v", name, err)
 		}

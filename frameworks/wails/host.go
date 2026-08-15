@@ -85,14 +85,11 @@ func Run(options Options) error {
 	})
 	sink.app = app
 
-	// Window-owning commands join the same registry the core filled. One table,
-	// two owners: the split is declared, not enforced by having two tables.
-
-	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		// The control plane's window is named by the product, not numbered by
-		// the framework: the application branches on this name, and a generated
-		// "window-1" would make that branch depend on creation order.
-		Name:   controlPlaneWindow,
+	// One window definition for the whole application. The control plane takes
+	// it under its reserved name; every workspace window is the same window
+	// under a generated one. Two definitions would let the second window differ
+	// from the first in ways nobody chose.
+	windowTemplate := application.WebviewWindowOptions{
 		Title:  windowTitle,
 		Width:  windowWidth,
 		Height: windowHeight,
@@ -108,13 +105,29 @@ func Run(options Options) error {
 		// window_set_background as soon as it is applied, so this is what shows
 		// for the frames before the first paint rather than a second authority.
 		BackgroundColour: application.NewRGB(6, 7, 15),
-		URL:              "/",
-	})
+	}
+
+	// Built before the run loop, because it subscribes to the event that says
+	// the run loop started. Created afterwards it would never hear it, and every
+	// window command would refuse forever.
+	windowHost := NewWindowHost(app, windowTemplate)
+
+	controlPlane := windowTemplate
+	// The control plane's window is named by the product, not numbered by the
+	// framework: the application branches on this name, and a generated
+	// "window-1" would make that branch depend on creation order.
+	controlPlane.Name = controlPlaneWindow
+	controlPlane.URL = "/"
+	window = app.Window.NewWithOptions(controlPlane)
 
 	// Window-owning commands join the same registry the core filled. One table,
 	// two owners: the split is declared, not enforced by having two tables.
 	// They are registered after the window exists, because they hold it.
 	registerWindowCommands(options.Registry, app, window)
+
+	// The workspace window group. It holds no window of its own: it asks the
+	// host, which is why the same rules answer in a test with no application.
+	Register(options.Registry, Deps{Host: windowHost, NewID: newWindowID})
 
 	// A capture probe runs after the window has had a chance to paint, then
 	// exits. It does not depend on the frontend booting, so a capture defect and
