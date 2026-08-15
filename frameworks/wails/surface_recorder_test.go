@@ -20,6 +20,10 @@ type stubNativeLayer struct {
 	saw []compositor.Snapshot
 }
 
+func (backend *stubNativeLayer) Deliver(string, map[string]any) (map[string]any, error) {
+	return nil, nil
+}
+
 func (backend *stubNativeLayer) Apply(_ unsafe.Pointer, snapshot compositor.Snapshot) ([]compositor.AppliedSurface, error) {
 	backend.saw = append(backend.saw, snapshot)
 	if backend.err != nil {

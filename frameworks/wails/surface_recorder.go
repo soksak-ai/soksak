@@ -61,6 +61,15 @@ func (recorder *SurfaceRecorder) Apply(window unsafe.Pointer, snapshot composito
 }
 
 // Latest is the last inventory that landed.
+// Deliver hands a message straight to the real backend.
+//
+// The recorder is a witness to inventories, never a writer, and a message is not an inventory: it
+// changes what a surface shows without changing what was declared. Recording it here would put a
+// second, partly-true account next to the one commit both halves come from.
+func (recorder *SurfaceRecorder) Deliver(id string, message map[string]any) (map[string]any, error) {
+	return recorder.inner.Deliver(id, message)
+}
+
 func (recorder *SurfaceRecorder) Latest() Composition {
 	recorder.mu.Lock()
 	defer recorder.mu.Unlock()

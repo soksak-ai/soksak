@@ -50,8 +50,11 @@ describe("the wails adapter's install", () => {
   });
 
   it("refuses what this host does not do, by name", async () => {
+    // navigate and the other four verbs now travel to the surface that owns them. What is left is
+    // still refused with the method in the message, because a caller that gets one line with no
+    // name cannot tell "not built here" from "broken".
     await installWailsSurfaces();
-    await expect(contentViewHost().navigate("browser:pan-aaaaaa", "https://example.com"))
-      .rejects.toThrow(/navigate/);
+    await expect(contentViewHost().evalJs("browser:pan-aaaaaa", "1"))
+      .rejects.toThrow(/evalJs/);
   });
 });

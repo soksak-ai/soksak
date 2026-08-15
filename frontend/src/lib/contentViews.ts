@@ -59,6 +59,12 @@ export interface ContentViewHost {
   chromePresentationSettled(): Promise<void>;
   history(label: string, delta: number): Promise<void>;
   stop(label: string): Promise<void>;
+  /** What the surface is showing, read from the surface rather than from what was asked of it.
+   *
+   * The address a caller navigated to is a request. A redirect, a load that failed and a load still
+   * running are all invisible in it, and on a screen that has not painted yet the three look the
+   * same. The shape is the surface kind's; core reads no field of it. */
+  pageState(label: string): Promise<Record<string, unknown>>;
   /** Reload — not a re-navigation.
    *
    * Imitating it by navigating to the current URL again adds one more history entry, and a reload
