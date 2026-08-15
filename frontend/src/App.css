@@ -4075,12 +4075,15 @@ select.dctl {
   border-radius: 6px;
 }
 
-/* ── Chrome row height standard — the owner is the single TS source (lib/chromeBands). R4: a size constant comes from one place
-   injects it once. A theme sets size through the R1 padding knobs (--tab-pad/--ws-pad), not through this value, and
-   the height derives from those — which is how a theme sets size without the sidebar and the content drifting apart.
-   (this comment used to read "the theme owns the value", and against docs/tech/UI-GEOMETRY.md R4 that was
-   wrong. No theme has ever set this value — the declaration existed with no owner.)
-   var() collapses when it is undefined, so the :root fallback is stated. */
+/* ── The chrome row height standard. One TS source owns it (lib/chromeBands).
+   R4: a size constant is injected once, from one place. A theme sets size through
+   the R1 padding knobs (--tab-pad, --ws-pad), not through this value, and the
+   height derives from those — which is how a theme sets size without the sidebar
+   and the content drifting apart.
+   This comment used to say the theme owns the value, and that contradicted
+   docs/tech/UI-GEOMETRY.md R4. No theme has ever set it: the declaration existed
+   with no owner.
+   A :root fallback is stated because var() collapses when it is undefined. */
 :root {
   --chrome-row-h: 37px; /* 37 = padding 5 + chip 26 + padding 5 + divider 1 */
   --header-h: 33px; /* Content group header (padding 5 + chip 26 + padding 2) — the fallback for what

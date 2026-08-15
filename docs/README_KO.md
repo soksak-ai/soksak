@@ -49,3 +49,4 @@ Never restate what the schema already enforces, and never invent a constraint th
 | --- | --- |
 | [`tech/ARCHITECTURE.md`](tech/ARCHITECTURE.md) | What the core owns, the four seams a plugin attaches through, principles A1–A9, coupling law C1–C5, one registry with several transports, identity |
 | [`tech/NATIVE-LAYER.md`](tech/NATIVE-LAYER.md) | Why cgo is present, N1–N3, why purego is not used, capture, native surfaces |
+| [`tech/UI-GEOMETRY_KO.md`](tech/UI-GEOMETRY_KO.md) | Bands, boxes, dividers — the alignment rules R1–R5, the border-ownership constitution B1–B8, the layer principle |
