@@ -3,7 +3,7 @@ import {
   installFramework,
   resolveWindowLabel,
   presentWindow,
-  suspendNativeSurfaces,
+  resetNativeSurfaces,
   invoke as bootInvoke,
   emitLocal,
   listen,
@@ -252,7 +252,7 @@ async function boot(): Promise<void> {
   // the old browser shows over the empty pre-restore screen (real incident: Example Domain over an empty window,
   // user measurement 2026-07-27). Early in boot, hide every child of this window — the restore render re-shows
   // only the active views (commitViewVisibility — a new context means an empty map, which guarantees re-publish).
-  await suspendNativeSurfaces();
+  await resetNativeSurfaces();
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <App />,
   );

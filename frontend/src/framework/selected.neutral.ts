@@ -53,7 +53,8 @@ export const selectedFramework: AppFramework = {
   resolveWindowLabel: async () => "",
   install: async () => {},
   presentWindow: async () => {},
-  suspendNativeSurfaces: async () => {},
+  resetNativeSurfaces: async () => {},
+  clearNativeSurfaces: async () => {},
   // The neutral adapter has no screen — there is nowhere to apply a zoom factor, so this does nothing.
   setWindowZoom: async () => {},
   invoke: unsupported,

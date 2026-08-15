@@ -220,7 +220,9 @@ export interface AppFramework {
    * Reload and renderer bootstrap call this before their DOM inventory exists. Frameworks whose
    * content is already in the DOM complete the lifecycle boundary as an idempotent no-op.
    */
-  suspendNativeSurfaces(): Promise<void>;
+  resetNativeSurfaces(): Promise<void>;
+  /** Stop watching and destroy this window's native children — for a window that is about to go. */
+  clearNativeSurfaces(): Promise<void>;
 
   /**
    * Apply one zoom factor to everything this window shows.

@@ -5,7 +5,7 @@
 //
 // The catalog owns the shared resolvers (`windowTarget`, `P`, `notFound`) — redefining them here
 // would fork the same rule per file (omitted label = the addressed target).
-import { invoke, currentWindow, suspendNativeSurfaces, windowByLabel } from "../framework";
+import { invoke, currentWindow, clearNativeSurfaces, windowByLabel } from "../framework";
 import { tmsg } from "../i18n";
 import { register } from "./registry";
 import { notFound } from "./refuse";
@@ -318,7 +318,7 @@ export function registerWindowCatalog(): void {
       // reboot gap (JS blank ~150ms) a ghost window with the previous browser still up is not
       // closed by the boot-prologue hide alone (that hide runs only after the new renderer starts).
       // The hide must complete before the reload.
-      await suspendNativeSurfaces();
+      await clearNativeSurfaces();
       // **The side that observes the destruction writes the record.** A renderer calling
       // `location.reload()` on itself cannot record its own death — activity publishing is
       // fire-and-forget, so it is cut the moment the window dies. Measured (2026-08-01): every

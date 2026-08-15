@@ -136,9 +136,14 @@ export const wailsFramework: AppFramework = {
   // first frame, so this boundary is an idempotent no-op.
   presentWindow: async () => {},
 
-  suspendNativeSurfaces: async () => {
-    const { suspendNativeSurfaces } = await import("./nativeSurfaces");
-    await suspendNativeSurfaces();
+  resetNativeSurfaces: async () => {
+    const { resetNativeSurfaces } = await import("./nativeSurfaces");
+    await resetNativeSurfaces();
+  },
+
+  clearNativeSurfaces: async () => {
+    const { clearNativeSurfaces } = await import("./nativeSurfaces");
+    await clearNativeSurfaces();
   },
 
   setWindowZoom: async (factor) => { WailsWindow.SetZoom(factor); },

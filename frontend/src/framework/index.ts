@@ -54,8 +54,13 @@ export function presentWindow(): Promise<void> {
 }
 
 /** Atomically remove the selected framework's native child-surface inventory. */
-export function suspendNativeSurfaces(): Promise<void> {
-  return framework.suspendNativeSurfaces();
+export function resetNativeSurfaces(): Promise<void> {
+  return framework.resetNativeSurfaces();
+}
+
+/** Stop watching and destroy the selected framework's native child inventory. */
+export function clearNativeSurfaces(): Promise<void> {
+  return framework.clearNativeSurfaces();
 }
 
 // ── Named re-exports — call sites use these without naming a framework ─────────────
