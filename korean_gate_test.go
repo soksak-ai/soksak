@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,27 @@ import (
 // would quietly exempt the next file that happened to match it.
 var koreanBundles = map[string]bool{
 	"frontend/src/i18n.ko.ts": true,
+
+	// The Go side of the same bundle. A messages.go holds one package's sentence
+	// table and nothing else — an EN and a KO string per key — so its Hangul is
+	// the resource, not prose that leaked into code. Named one by one for the
+	// reason above: a */messages.go pattern would exempt the next file that took
+	// the name for something else.
+	"cmd/sok/messages.go":          true,
+	"core/boot/messages.go":        true,
+	"core/control/messages.go":     true,
+	"core/daemon/messages.go":      true,
+	"core/files/messages.go":       true,
+	"core/identity/messages.go":    true,
+	"core/install/messages.go":     true,
+	"core/net/messages.go":         true,
+	"core/process/messages.go":     true,
+	"core/scan/messages.go":        true,
+	"core/secret/messages.go":      true,
+	"core/service/messages.go":     true,
+	"core/store/messages.go":       true,
+	"core/workspace/messages.go":   true,
+	"frameworks/wails/messages.go": true,
 }
 
 // koreanIsData is a file where Hangul is the subject, not prose about it: an IME
@@ -37,19 +59,37 @@ var koreanScanned = map[string]bool{
 	".html": true, ".json": true, ".mjs": true, ".js": true,
 }
 
-// koreanDebt is how many Hangul lines remain outside the two named bundles.
+// koreanTrigger matches the one line where a Korean word is required by the
+// mechanism rather than tolerated by it: the ko field of a command's triggers,
+// which composeTriggers merges into the string an utterance is matched against.
+// A command with no Korean triggers cannot be found by a Korean utterance, so
+// every command a person can reach adds one of these lines.
 //
-// Measured 2026-08-15 and every one of them accounted for: 245 are the KO values
-// of the per-package messages.go tables, which are the Go side of the bundle;
-// 227 are the ko trigger words composeTriggers matches an utterance against; 50
-// are test fixtures — a multibyte boundary, an IME sequence; 9 are the banned
-// vocabulary list in AGENTS.md, which is the rule's own data; 5 are the measured
-// tofu example and the boot screen's pair.
+// It is matched by line, not by file, because these lines sit inside catalog
+// files that are otherwise English. The pattern is the field, not the Hangul —
+// a Korean sentence anywhere else on the line is still counted.
+var koreanTrigger = regexp.MustCompile(`(^|\{)\s*ko:\s*"`)
+
+// koreanDebt is how many Hangul lines remain that no rule accounts for.
 //
-// It is a ratchet: the number may only go down. Anything that raises it is a new
-// sentence in the wrong place. If it falls, lower this and say which category
-// shrank — a floor nobody can explain is not a floor.
-const koreanDebt = 531
+// The count used to fold three different things together — the bundles, the
+// trigger vocabulary, and stray Korean — into one number of 531. That number
+// could not do its job in either direction: it rose whenever a command was
+// added, which is correct work, and it could not say whether a fall came from
+// deleting a Korean comment or from deleting a command.
+//
+// So the two accounted categories were named above and this counts what is
+// left. Measured 2026-08-16 it is 43 lines: 32 in test fixtures, where the
+// Hangul is the subject of the test — a multibyte boundary, an IME sequence, a
+// CJK trigram search term that stops proving anything the moment it is written
+// in English; 7 lines of banned vocabulary in AGENTS.md, which is the rule's
+// own data; 3 in the gates themselves, which have to name what they look for;
+// and 1 IME example in a command's examples list.
+//
+// It is a ratchet: the number may only go down. Anything that raises it is a
+// new sentence in the wrong place. If it falls, lower this and say which
+// category shrank — a floor nobody can explain is not a floor.
+const koreanDebt = 43
 
 func TestKoreanStaysInTheBundles(t *testing.T) {
 	type finding struct {
@@ -87,7 +127,7 @@ func TestKoreanStaysInTheBundles(t *testing.T) {
 		scanned++
 		lines := 0
 		for _, line := range strings.Split(string(body), "\n") {
-			if hasHangul(line) {
+			if hasHangul(line) && !koreanTrigger.MatchString(line) {
 				lines++
 			}
 		}
