@@ -50,5 +50,23 @@ the schema does not back.
 | Document | Contents |
 | --- | --- |
 | [`tech/ARCHITECTURE.md`](tech/ARCHITECTURE.md) | What the core owns, the four seams a plugin attaches through, principles A1–A9, coupling law C1–C5, one registry with several transports, identity |
+| [`tech/NAMING.md`](tech/NAMING.md) | Identifier format and prefixes, natural-key axes, labels, fixtures, public vocabulary, folder names — each with its gate |
 | [`tech/NATIVE-LAYER.md`](tech/NATIVE-LAYER.md) | Why cgo is present, N1–N3, why purego is not used, capture, native surfaces |
+| [`tech/REPO-LAYOUT.md`](tech/REPO-LAYOUT.md) | Which folder declares what, the workspace and the application tree, two binaries, where a document goes |
+| [`tech/IDENTITY.md`](tech/IDENTITY.md) | One derivation for home, socket, CLI name and axis; the core reads no ambient; one backend per home |
+| [`tech/CONTROL-PROTOCOL.md`](tech/CONTROL-PROTOCOL.md) | One line of JSON, the envelope, the greeting that negotiates, the command table, the socket address |
+| [`tech/MESSAGE-PROTOCOL.md`](tech/MESSAGE-PROTOCOL.md) | Request and response shape, progress deltas, correlation by parent id |
+| [`tech/SIDECARS.md`](tech/SIDECARS.md) | A plugin in its own process: one envelope, lifetime, distribution, declaration |
+| [`tech/PLUGIN-CONTRACT.md`](tech/PLUGIN-CONTRACT.md) | What a plugin declares, who owns each definition, the generated contract.json, permissions, and contract ids |
 | [`tech/UI-GEOMETRY.md`](tech/UI-GEOMETRY.md) | Bands, boxes, and which box draws which line — the alignment rules R1–R5, the border-ownership constitution B1–B8, and the layer principle |
+| [`manual/TESTING.md`](manual/TESTING.md) | What `task verify` runs, why gates only increase, red before green, where tests live |
+| [`manual/EVIDENCE.md`](manual/EVIDENCE.md) | A number decides a visual claim, captures take no focus, where evidence is kept, the frame clock |
+| [`manual/AGENT-CONTROL.md`](manual/AGENT-CONTROL.md) | The registry as single source, thin channels, one permission gate, event symmetry, what is visible |
+| [`manual/DEVELOPMENT.md`](manual/DEVELOPMENT.md) | Order of a change, no compatibility layers, deleting failed attempts, reverting, prose |
+
+## Outside this folder
+
+| Document | Contents |
+| --- | --- |
+| [`../AGENTS.md`](../AGENTS.md) | The development discipline. Read before any of these |
+

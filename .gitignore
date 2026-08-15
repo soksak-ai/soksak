@@ -2,6 +2,8 @@
 bin
 frontend/dist
 frontend/node_modules
+# vite writes a cache here when it runs from the module root rather than frontend/.
+node_modules
 build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 .DS_Store
@@ -11,8 +13,5 @@ build/ios/xcode/gen/
 build/android/overlay.json
 build/android/gen/
 
-# Rooted: this is the one directory at the top of the repository, not any
-# directory that happens to be called secret. Without the slash it also swallowed
-# core/secret — the package that holds the vault, which is code and belongs here.
-/secret/
+/local/
 bin/

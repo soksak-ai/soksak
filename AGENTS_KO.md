@@ -392,3 +392,17 @@ become a source file.
 - [ ] Was the branch handled per its lifecycle rule?
 - [ ] If a workaround was used, was it stated?
 - [ ] If a rule was broken, was it reported?
+
+## 9. Project-specific rules
+
+Where it conflicts with the rules above, this one wins. The conflict is reported.
+
+- **Loading order**: this file → [`local/README.md`](local/README.md) → [`docs/README.md`](docs/README.md)
+  → the canonical document for the area (`docs/tech/`) or the procedure (`docs/manual/`). A canonical document beats this file.
+  `local/` is gitignored — a freshly cloned repository does not have it, its absence is normal, and a committed document
+  beats anything in it.
+- **Commit order**: `test:` → `fix:`/`feat:` → `docs:`.
+- **Three transparencies**: every feature exposes command, status, and DOM. Missing any one of them is incomplete.
+- **Capture and Wails MCP are observation tools, not judges.** A numeric command or a test produces pass/fail.
+- **Windows: cgo 0.** N3 of [`docs/tech/NATIVE-LAYER.md`](docs/tech/NATIVE-LAYER.md).
+- **One backend per home.** The socket is claimed before a window is opened or drawn.

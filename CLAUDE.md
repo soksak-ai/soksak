@@ -4,7 +4,7 @@ A bootloader. Procedures and commands are not duplicated here.
 
 ## Loading order
 
-1. [`AGENTS.md`](AGENTS.md) — how to work in this repository
+1. [`AGENTS.md`](AGENTS.md) — the development discipline
 2. [`docs/README.md`](docs/README.md) — the document manifest
 3. The canonical document the manifest points at for the area you are touching
 
