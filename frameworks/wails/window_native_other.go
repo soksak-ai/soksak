@@ -40,3 +40,18 @@ func nativeWindowTitle(unsafe.Pointer) (string, error) { return "", ErrTitleUnsu
 var ErrContentSizeUnsupported = errors.New("reading a window's content size is not implemented on this platform")
 
 func contentSize(unsafe.Pointer) (float64, float64, error) { return 0, 0, ErrContentSizeUnsupported }
+
+// ErrWebviewFrameUnsupported is returned where the document's view cannot be
+// located. Answering the window's own rect would attribute the document's size
+// to the window, which is the question this exists to separate.
+var ErrWebviewFrameUnsupported = errors.New("reading the web view's frame is not implemented on this platform")
+
+func webviewFrame(unsafe.Pointer) (x, y, width, height float64, err error) {
+	return 0, 0, 0, 0, ErrWebviewFrameUnsupported
+}
+
+// ErrFitUnsupported is returned where the view hierarchy cannot be corrected.
+// The overflow is then reported by ui.verify rather than silently tolerated.
+var ErrFitUnsupported = errors.New("fitting the web view to its window is not implemented on this platform")
+
+func fitWebviewToWindow(unsafe.Pointer) error { return ErrFitUnsupported }

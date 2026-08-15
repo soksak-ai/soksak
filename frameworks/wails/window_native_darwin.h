@@ -50,4 +50,31 @@ char *soksakCopyWindowTitle(void *nsWindow);
 // Must be called on the main thread.
 void soksakWindowContentSize(void *nsWindow, double *width, double *height);
 
+// Copy the frame of the view a document actually renders into, in
+// device-independent points.
+//
+// Between the window and the document there is a view hierarchy this
+// application did not build, and a discrepancy between the two has to be
+// attributed to one of them. Measured 2026-08-15: window content 700x500,
+// document 701x501 — and without this the layer responsible could only be
+// guessed at.
+//
+// Must be called on the main thread.
+void soksakWebviewFrame(void *nsWindow, double *x, double *y, double *width, double *height);
+
+// Fit the document's view to the window's content area.
+//
+// The framework creates its content NSView one point smaller than the window
+// (`width-1, height-1`) and then lets autoresizing carry that offset, so the web
+// view ends up one point larger than the area it can be seen in. Measured
+// 2026-08-15: content 999x617, view 1000x618 — the document's last column and
+// row were outside the window, and anything drawn there was invisible rather
+// than absent.
+//
+// Called once per window, after the window exists. Autoresizing keeps the fit
+// afterwards, because the margins it preserves are zero once they start at zero.
+//
+// Must be called on the main thread.
+void soksakFitWebviewToWindow(void *nsWindow);
+
 #endif

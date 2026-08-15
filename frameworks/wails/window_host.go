@@ -92,6 +92,16 @@ type WindowHost interface {
 	// and comparing the two reported a defect that was only two measurements
 	// disagreeing about what they had measured.
 	ContentSize(name string) (width float64, height float64, err error)
+	// FitWebview makes the document's view exactly as large as the area it can
+	// be seen in. Called once, after a window exists.
+	FitWebview(name string) error
+	// WebviewRect is where the document's view sits inside the window, in
+	// device-independent points.
+	//
+	// Between the window and the document there is a view hierarchy this
+	// application did not build. When those two disagree about a size, this is
+	// what says which of them to correct.
+	WebviewRect(name string) (x, y, width, height float64, err error)
 	// SetBackground paints the window's own colour.
 	//
 	// The document paints transparent, so every unpainted region shows this.

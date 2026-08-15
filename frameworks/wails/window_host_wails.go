@@ -123,6 +123,31 @@ func (h *wailsHost) ContentSize(name string) (float64, float64, error) {
 	return width, height, failure
 }
 
+// FitWebview corrects the view hierarchy the framework built. The main thread
+// owns AppKit, so the change is dispatched there.
+func (h *wailsHost) FitWebview(name string) error {
+	window, addressable := h.live(name)
+	if !addressable {
+		return fmt.Errorf("window %s has no native lifetime and holds no view to fit", name)
+	}
+	var failure error
+	native := window.NativeWindow()
+	application.InvokeSync(func() { failure = fitWebviewToWindow(native) })
+	return failure
+}
+
+// WebviewRect reads the document view's frame off the native hierarchy. The
+// main thread owns AppKit, so the read is dispatched there.
+func (h *wailsHost) WebviewRect(name string) (x, y, width, height float64, err error) {
+	window, addressable := h.live(name)
+	if !addressable {
+		return 0, 0, 0, 0, fmt.Errorf("window %s has no native lifetime and holds no view", name)
+	}
+	native := window.NativeWindow()
+	application.InvokeSync(func() { x, y, width, height, err = webviewFrame(native) })
+	return x, y, width, height, err
+}
+
 // SetBackground paints one window. The main thread owns AppKit, so the change
 // is dispatched there.
 func (h *wailsHost) SetBackground(name string, colour string) error {
@@ -193,6 +218,12 @@ func (h *wailsHost) Open(spec OpenSpec) error {
 	if window == nil {
 		return fmt.Errorf("the framework returned no window for %s", spec.Name)
 	}
+	// The framework builds its content view a point smaller than the window and
+	// lets autoresizing carry that offset, so the document ends up a point
+	// larger than the area it can be seen in. Corrected the moment the window
+	// exists; autoresizing keeps the fit afterwards.
+	_ = h.FitWebview(spec.Name)
+
 	// A transparent backdrop clears the window's colour on the way in, so the
 	// template's colour is restored the moment the window exists. Without this
 	// the desktop shows through until the renderer's theme arrives, which is

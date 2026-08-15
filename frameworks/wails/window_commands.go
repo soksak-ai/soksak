@@ -228,6 +228,13 @@ type windowFact struct {
 	// under another name.
 	ContentW *float64 `json:"contentW"`
 	ContentH *float64 `json:"contentH"`
+	// ViewX..ViewH is where the document's view sits inside the window. When
+	// the document and the window disagree about a size, this says which layer
+	// the difference belongs to.
+	ViewX *float64 `json:"viewX"`
+	ViewY *float64 `json:"viewY"`
+	ViewW *float64 `json:"viewW"`
+	ViewH *float64 `json:"viewH"`
 	// Monitor is the index of the display holding this window's centre, or
 	// null. Never zero for a window on no display: that zero cannot be told
 	// apart from "it is on the first display".
@@ -293,6 +300,9 @@ func monitorFacts(host WindowHost) (any, error) {
 		// the frame, which would be a different rectangle wearing this name.
 		if width, height, err := host.ContentSize(name); err == nil {
 			fact.ContentW, fact.ContentH = &width, &height
+		}
+		if x, y, width, height, err := host.WebviewRect(name); err == nil {
+			fact.ViewX, fact.ViewY, fact.ViewW, fact.ViewH = &x, &y, &width, &height
 		}
 		facts = append(facts, fact)
 	}
