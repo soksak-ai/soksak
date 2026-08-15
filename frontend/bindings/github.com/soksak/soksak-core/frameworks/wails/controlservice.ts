@@ -18,6 +18,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 // @ts-ignore: Unused imports
 import * as control$0 from "../../core/control/models.js";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
+
 /**
  * Commands answers with what this build serves and what it refuses, so a
  * caller can tell "not written yet" from "impossible here" without guessing.
@@ -36,9 +40,12 @@ export function Commands(): $CancellablePromise<control$0.Table> {
  * decodes what it needs; encoding on the frontend side instead would double-
  * encode every string (measured 2026-08-15: "core" arrived as "\"core\"").
  */
-export function Invoke(name: string, args: { [_ in string]?: any }): $CancellablePromise<any> {
-    return $Call.ByID(806562942, name, args);
+export function Invoke(name: string, args: { [_ in string]?: any }): $CancellablePromise<$models.Reply> {
+    return $Call.ByID(806562942, name, args).then(($result: any) => {
+        return $$createType1($result);
+    });
 }
 
 // Private type creation functions
 const $$createType0 = control$0.Table.createFrom;
+const $$createType1 = $models.Reply.createFrom;

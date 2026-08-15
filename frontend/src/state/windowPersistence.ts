@@ -87,13 +87,29 @@ export function windowManifestEntry(
   };
 }
 
+/** The ledger's slots, or a refusal naming what arrived instead.
+ *
+ * A ledger that is not one reaches these functions as a TypeError on `.filter`, which says which
+ * property was missing and nothing about where the value came from. Measured 2026-08-15: every
+ * boot of this build died on `e.slots.filter is not a function` and three separate readings of the
+ * store could not tell which layer had produced the value.
+ */
+function slotsOf(manifest: WindowManifest, who: string): ManifestEntry[] {
+  if (!manifest || !Array.isArray(manifest.slots)) {
+    throw new Error(
+      `${who}: the window ledger has no slots — received ${JSON.stringify(manifest)?.slice(0, 160)}`,
+    );
+  }
+  return manifest.slots;
+}
+
 // Upserts this window's entry into the manifest (replaces the slot with the same label, appends
 // when absent). Empty roots removes the slot.
 export function upsertManifest(
   manifest: WindowManifest,
   entry: ManifestEntry,
 ): WindowManifest {
-  const others = manifest.slots.filter((s) => s.label !== entry.label);
+  const others = slotsOf(manifest, "upsertManifest").filter((s) => s.label !== entry.label);
   if (entry.roots.length === 0) return { ...manifest, slots: others };
   return { ...manifest, slots: [...others, entry] };
 }
@@ -109,7 +125,7 @@ export function upsertManifest(
  * searched for and never found on the next boot.
  */
 export function forgetWindow(manifest: WindowManifest, label: string): WindowManifest {
-  const slots = manifest.slots.filter((s) => s.label !== label);
+  const slots = slotsOf(manifest, "forgetWindow").filter((s) => s.label !== label);
   if (slots.length === manifest.slots.length && manifest.focusedLabel !== label) return manifest;
   const next: WindowManifest = { ...manifest, slots };
   if (next.focusedLabel === label) delete next.focusedLabel;
@@ -152,7 +168,7 @@ export function restorableSlots(
   live: ReadonlySet<string> | null,
 ): ManifestEntry[] {
   if (!live) return [];
-  return manifest.slots.filter((s) => s.label !== "main" && !live.has(s.label));
+  return slotsOf(manifest, "restorableSlots").filter((s) => s.label !== "main" && !live.has(s.label));
 }
 
 // Records the last focused window — called on persist when this window has focus (a top-level

@@ -9,7 +9,12 @@
 //    apply. On first run coreStore migrates the ls cache into app.data once (no downtime). Returns
 //    the unsubscribe function.
 
-import { makeCoreStore, type CoreStore, type CoreStoreDeps } from "./coreStore";
+import {
+  makeCoreStore,
+  readBootCache,
+  type CoreStore,
+  type CoreStoreDeps,
+} from "./coreStore";
 
 export interface CoreSync<T> {
   loadSync: () => T;
@@ -50,14 +55,11 @@ export function createCoreSync<T>(opts: {
     }
   };
 
-  const loadSync = (): T => {
-    try {
-      const raw = window.localStorage.getItem(lsKey);
-      return raw == null ? fallback : (JSON.parse(raw) as T);
-    } catch {
-      return fallback;
-    }
-  };
+  // The same reader the store uses. This one existed separately because init(deps) has not run at
+  // module-init time, so there is no store to ask — but a separate reader meant a separate rule,
+  // and this one never looked at the shape. Measured 2026-08-15: every key this glue owns held `{}`
+  // on that origin, and boot read them all as empty values.
+  const loadSync = (): T => readBootCache(window.localStorage, lsKey, fallback);
 
   // Flush the pending authority write now (debounce expiry, flush, unsubscribe). store.save = ls (redundant, harmless) + app.data authority.
   const flush = (): void => {

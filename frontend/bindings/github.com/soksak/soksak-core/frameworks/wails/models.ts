@@ -42,3 +42,36 @@ export class Rect {
         return new Rect($$parsedSource as Partial<Rect>);
     }
 }
+
+/**
+ * Reply is one command's answer, encoded.
+ * 
+ * A string rather than a value because a bare `any` does not survive this
+ * transport intact. Measured 2026-08-15: data_kv_get for a key that does not
+ * exist answered null over the socket and {} here, and the frontend took the {}
+ * for the stored value — three boots died on `slots.filter`, `projects.length`
+ * and `t.map`, all of them that one difference.
+ * 
+ * One registry, several transports is only true if the transports agree about
+ * what a command said. This is where that is made true rather than hoped for.
+ */
+export class Reply {
+    "result": string;
+
+    /** Creates a new Reply instance. */
+    constructor($$source: Partial<Reply> = {}) {
+        if (!("result" in $$source)) {
+            this["result"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Reply instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Reply {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Reply($$parsedSource as Partial<Reply>);
+    }
+}
