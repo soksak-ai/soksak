@@ -144,6 +144,22 @@ func Register(registry *control.Registry, deps Deps) {
 	})
 
 	registry.MustRegister(control.Command{
+		Name:  "project_owners",
+		Owner: control.OwnerCore,
+		Handler: func(control.Args) (any, error) {
+			// Under a key rather than as a bare list. The caller reads `.owners`
+			// before opening a root, so that it can focus the window already
+			// holding it instead of creating a second one — and a bare array
+			// left that undefined, which took the whole boot down on
+			// `t.map is not a function` (measured 2026-08-15).
+			//
+			// A list, never null: "nobody holds anything" and "this build cannot
+			// tell you" must not arrive as the same answer.
+			return OwnersReply{Owners: deps.Claims.Owners()}, nil
+		},
+	})
+
+	registry.MustRegister(control.Command{
 		Name:  "window_manifest_upsert",
 		Owner: control.OwnerCore,
 		Handler: func(callArgs control.Args) (any, error) {

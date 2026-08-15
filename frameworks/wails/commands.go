@@ -61,15 +61,6 @@ func registerWindowCommands(registry *control.Registry, app *application.App, wi
 	})
 
 	registry.MustRegister(control.Command{
-		Name:  "project_owners",
-		Owner: control.OwnerFramework,
-		// Which window holds which project root. The ledger is per-process
-		// mutable state held by whoever owns windows; with one window and no
-		// project opened, nothing is claimed.
-		Handler: func(control.Args) (any, error) { return []any{}, nil },
-	})
-
-	registry.MustRegister(control.Command{
 		Name:  "control_owner_answered",
 		Owner: control.OwnerFramework,
 		// Which commands this host answers, told to whoever routes to it. There

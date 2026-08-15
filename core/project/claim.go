@@ -199,3 +199,12 @@ func (ledger *Ledger) Owners() []Owner {
 	sort.Slice(owners, func(i, j int) bool { return owners[i].Root < owners[j].Root })
 	return owners
 }
+
+// OwnersReply carries the holders under a key.
+//
+// A bare list would be the same JSON as an error that answered nothing, and the
+// caller reads `.owners` — measured 2026-08-15, a bare array left that undefined
+// and the boot died on it.
+type OwnersReply struct {
+	Owners []Owner `json:"owners"`
+}

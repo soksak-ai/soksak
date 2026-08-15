@@ -94,7 +94,6 @@ var unserved = map[string]string{
 	"clipboard_write":        "misc",
 	"clipboard_watch_start":  "misc",
 	"clipboard_watch_stop":   "misc",
-	"cmd_result":             "misc",
 	"download_verify":        "misc",
 	"ipc_hello_info":         "misc",
 	"notify_activate":        "misc",
@@ -221,6 +220,10 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		Sessions:    idleSessions{},
 	})
 	Register(registry, Deps{Host: startedHost(), NewID: counter("1")})
+	// The renderer command bridge registers the one name a page answers with.
+	// A gate that assembled everything but this would read cmd_result as
+	// missing while the running process serves it.
+	RegisterRendererCommands(registry, func(string, string, any) error { return nil })
 
 	served := map[string]bool{}
 	for _, command := range registry.Describe().Commands {
@@ -237,7 +240,7 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 	// handlers a host interface, the way the window group has one.
 	for _, name := range []string{
 		"window_set_background", "cmd_listener_ready", "webview_recovery_consume",
-		"project_owners", "control_owner_answered",
+		"control_owner_answered",
 	} {
 		served[name] = true
 	}
