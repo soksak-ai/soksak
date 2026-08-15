@@ -87,7 +87,6 @@ var unserved = map[string]string{
 	"schedule_poke":     "daemon",
 
 	// Everything else the frontend reaches for.
-	"activity_recent":        "misc",
 	"ai_session_untrack":     "misc",
 	"app_relaunch":           "misc",
 	"app_shutdown_commit":    "misc",

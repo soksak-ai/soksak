@@ -416,8 +416,20 @@ export async function forgetWindowSlot(label: string): Promise<void> {
 //
 // The key includes the framework (frameworkScopedKey) — shared, the two frameworks' control plane windows open
 // stacked on the same spot. The old key (no framework) is read by the first boot and moved to its own key.
+type ControlPlaneFrame = { x: number; y: number; w: number; h: number };
+
+/** Whether the stored value is really a frame. A partial object is not a frame — one missing component arrives at
+ * the framework as undefined, and the refusal from there kills the boot, not just the window. */
+function isFrame(value: unknown): value is ControlPlaneFrame {
+  if (typeof value !== "object" || value === null) return false;
+  const rect = value as Record<string, unknown>;
+  return (["x", "y", "w", "h"] as const).every(
+    (key) => typeof rect[key] === "number" && Number.isFinite(rect[key]),
+  );
+}
+
 export async function initControlPlaneFrame(): Promise<void> {
-  type Frame = { x: number; y: number; w: number; h: number } | null;
+  type Frame = ControlPlaneFrame | null;
   const key = frameworkScopedKey("controlPlaneFrame", frameworkName);
   const store = makeCoreStore<Frame>({
     key,
@@ -434,10 +446,14 @@ export async function initControlPlaneFrame(): Promise<void> {
   try {
     // Adopt the old key when this one is empty — this change alone does not reset the window position.
     const rect = (await store.hydrate()) ?? (await legacyStore.hydrate().catch(() => null));
-    if (rect) {
+    // Used only after checking the stored value has the shape of a frame. Persistence survives across generations,
+    // and a {} or partial object left by an old generation is truthy, so it passes straight through — then
+    // setPosition(undefined) arrives at the framework, and the refusal from there kills the whole boot, not one window
+    // (measured 2026-08-15: "Invalid window call: missing or invalid argument 'x'").
+    if (isFrame(rect)) {
       const win = currentWindow();
-      await win.setPosition(rect.x, rect.y).catch(() => {});
-      await win.setSize(rect.w, rect.h).catch(() => {});
+      await win.setPosition(rect.x, rect.y);
+      await win.setSize(rect.w, rect.h);
     }
   } catch (e) {
     console.error("control plane frame restore failed:", e);

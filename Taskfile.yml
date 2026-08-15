@@ -69,6 +69,19 @@ tasks:
     cmds:
       - task: "{{.GOOS}}:build"
 
+  build:sok:
+    summary: Builds the control-plane client
+    desc: |
+      `sok` is how anything outside the application drives it. It builds from
+      this module so it derives the socket the same way the application does —
+      a second spelling of "where does this installation live" would drift.
+
+      It lands in bin/ beside everything else this repository produces. A copy
+      built into a temporary directory is a copy nobody can rebuild the same
+      way tomorrow.
+    cmds:
+      - go build -o bin/sok ./cmd/sok
+
   package:
     summary: Packages a production build of the application
     cmds:

@@ -96,6 +96,7 @@ func main() {
 		BuildProfile: buildProfile,
 		KV:           kv,
 		Ledger:       activity.NewLedger(),
+		Recent:       activity.NewTail(0),
 		Now:          func() int64 { return time.Now().UnixMilli() },
 
 		UserHome:    userHome,

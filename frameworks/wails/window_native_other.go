@@ -24,3 +24,12 @@ var ErrActivationUnsupported = errors.New("application activation is not impleme
 func orderWindowFrontWithoutKey(unsafe.Pointer) error { return ErrRevealWithoutKeyUnsupported }
 
 func activateApplication() error { return ErrActivationUnsupported }
+
+// ErrTitleUnsupported is returned where the title cannot be read back.
+//
+// The boot stamp the frontend writes there is the observation channel that
+// survives a dead binding path, so an empty string would look like a window
+// that booted silently rather than one nobody can see into.
+var ErrTitleUnsupported = errors.New("reading a window title is not implemented on this platform")
+
+func nativeWindowTitle(unsafe.Pointer) (string, error) { return "", ErrTitleUnsupported }

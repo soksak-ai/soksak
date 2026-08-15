@@ -194,6 +194,14 @@ type censusRow struct {
 	Label   string `json:"label"`
 	Hosts   uint64 `json:"hosts"`
 	Focused bool   `json:"focused"`
+	// Title is what the window says it is. The renderer writes its boot
+	// progress here, so a window whose bindings never came up still reports how
+	// far it got — and a window rendering the wrong shell says so before anyone
+	// has to look at it.
+	//
+	// Null rather than empty when it cannot be read: a window that was never
+	// given a title and one this platform cannot ask are different facts.
+	Title *string `json:"title"`
 }
 
 // foldCensus merges rows that share a name and counts the holders.

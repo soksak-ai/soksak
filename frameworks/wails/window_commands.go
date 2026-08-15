@@ -178,7 +178,15 @@ func Register(registry *control.Registry, deps Deps) {
 		names := heldNames(deps.Host)
 		rows := make([]censusRow, 0, len(names))
 		for _, name := range names {
-			rows = append(rows, censusRow{Label: name, Hosts: 1, Focused: deps.Host.Focused(name)})
+			row := censusRow{Label: name, Hosts: 1, Focused: deps.Host.Focused(name)}
+			// A title this host cannot read leaves the field null rather than
+			// failing the census: the count of windows is the answer here, and
+			// losing it because one window could not be asked would hide the
+			// very thing this command exists to report.
+			if title, err := deps.Host.Title(name); err == nil {
+				row.Title = &title
+			}
+			rows = append(rows, row)
 		}
 		return censusReply{Windows: foldCensus(rows)}, nil
 	})
@@ -199,8 +207,9 @@ type censusReply struct {
 
 // windowFact is one window's placement. The keys match what the layout
 // suggestion reads; a key this host cannot source is absent rather than
-// invented, which is why the window title and always-on-top are not here —
-// this framework exposes setters for both and no getters.
+// invented, which is why always-on-top is not here — this framework exposes a
+// setter for it and no getter. The title is readable and lives on the census,
+// where the question "what is this window" is asked.
 type windowFact struct {
 	Label   string `json:"label"`
 	X       int    `json:"x"`
@@ -379,7 +388,19 @@ func createName(deps Deps, label *string) (name string, held string, err error) 
 				*label, controlPlaneWindow, workspaceWindowPrefix)
 		}
 		if isHeld(deps.Host, *label) {
+			// The name is already held. Creating a second window under it would
+			// leave two that this host tells apart by map order, so the request
+			// answers with the window that exists and opens nothing.
 			return "", *label, nil
+		}
+		if *label == controlPlaneWindow {
+			// The orchestrator is one window or none, and the launcher opens
+			// it. Letting a command open it too makes how many exist depend on
+			// what anyone happened to call — and two of them is not a state
+			// anything downstream is written for.
+			return "", "", fmt.Errorf(
+				"%q is the orchestrator and the launcher opens it; a command may only reopen one that is already there",
+				controlPlaneWindow)
 		}
 		return *label, "", nil
 	}

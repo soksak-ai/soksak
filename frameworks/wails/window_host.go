@@ -75,6 +75,14 @@ type WindowHost interface {
 	Frame(name string) (Frame, bool)
 	// Displays is the screen catalogue in catalogue order.
 	Displays() []Display
+	// Title reports what the window is called on screen.
+	//
+	// The renderer writes its boot progress into document.title, and that is
+	// the one channel that keeps answering when the binding path is dead — so a
+	// window that answers nothing else still says how far it got. The framework
+	// only ever sets titles; without this, the stamp is written and nobody can
+	// read it, which is not an observation.
+	Title(name string) (string, error)
 	// Open creates the window hidden and returns once it either has a native
 	// lifetime or never will.
 	Open(spec OpenSpec) error

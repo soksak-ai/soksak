@@ -2,6 +2,8 @@
 
 #import <AppKit/AppKit.h>
 
+#include <string.h>
+
 void soksakOrderFrontRegardless(void *nsWindow) {
   [(NSWindow *)nsWindow orderFrontRegardless];
 }
@@ -12,4 +14,12 @@ bool soksakActivateApplication(void) {
     return true;
   }
   return false;
+}
+
+char *soksakCopyWindowTitle(void *nsWindow) {
+  NSString *title = [(NSWindow *)nsWindow title];
+  if (title == nil) {
+    return NULL;
+  }
+  return strdup([title UTF8String]);
 }

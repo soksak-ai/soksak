@@ -96,6 +96,25 @@ func (h *wailsHost) Frame(name string) (Frame, bool) {
 	return Frame{X: bounds.X, Y: bounds.Y, W: bounds.Width, H: bounds.Height}, true
 }
 
+// Title reads the window's on-screen name off the native window.
+//
+// The main thread owns AppKit, so the read is dispatched there and waited for.
+// Reading from this goroutine would be a data race against the renderer that
+// writes the stamp — and a raced title is worse than none, because it looks
+// like an answer.
+func (h *wailsHost) Title(name string) (string, error) {
+	window, addressable := h.live(name)
+	if !addressable {
+		return "", fmt.Errorf("window %s has no native lifetime and no title", name)
+	}
+
+	var title string
+	var failure error
+	native := window.NativeWindow()
+	application.InvokeSync(func() { title, failure = nativeWindowTitle(native) })
+	return title, failure
+}
+
 func (h *wailsHost) Displays() []Display {
 	screens := h.app.Screen.GetAll()
 	displays := make([]Display, 0, len(screens))

@@ -21,11 +21,21 @@ const ms = moduleState("lib/webviewLabels#state", () => ({
   cached: null as string | null,
 }));
 export function currentWindowLabel(): string {
-  if (ms.cached !== null) return ms.cached;
+  if (ms.cached) return ms.cached;
   try {
-    ms.cached = currentWindow().label;
+    const label = currentWindow().label;
+    // An empty value is "not resolved yet", not an answer. Caching it leaves the
+    // window without a name for the rest of the session, and that one name is
+    // what separates the orchestrator from a workspace window. Measured
+    // 2026-08-15: the main window logged window-name:main and still drew the
+    // workspace shell, because module top-level code asked once before boot's
+    // async resolution, and that "" became the answer to every later question.
+    if (!label) return "";
+    ms.cached = label;
   } catch {
-    ms.cached = "";
+    // Outside the framework (jsdom) there is no answer. This is also "not yet",
+    // not a window named "".
+    return "";
   }
   return ms.cached;
 }

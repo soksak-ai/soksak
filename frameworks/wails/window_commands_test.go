@@ -19,6 +19,7 @@ type fakeWindow struct {
 	live    bool
 	focused bool
 	frame   Frame
+	title   string
 }
 
 // fakeHost answers window facts with no window anywhere. Its existence is the
@@ -68,6 +69,14 @@ func (h *fakeHost) Names() []string {
 func (h *fakeHost) Live(name string) bool {
 	window := h.find(name)
 	return window != nil && window.live
+}
+
+func (h *fakeHost) Title(name string) (string, error) {
+	window := h.find(name)
+	if window == nil || !window.live {
+		return "", fmt.Errorf("window %s has no native lifetime and no title", name)
+	}
+	return window.title, nil
 }
 
 func (h *fakeHost) Focused(name string) bool {
@@ -155,6 +164,13 @@ func startedHost(windows ...*fakeWindow) *fakeHost {
 
 func liveWindow(name string) *fakeWindow {
 	return &fakeWindow{name: name, live: true, frame: Frame{X: 0, Y: 0, W: 1000, H: 618}}
+}
+
+// deadWindow is a name this process still holds over a window that no longer
+// answers. It exists because that state is what makes two windows under one
+// name possible, so it must stay countable.
+func deadWindow(name string) *fakeWindow {
+	return &fakeWindow{name: name}
 }
 
 // counter hands out identifiers the way the process would, without touching
@@ -1000,5 +1016,113 @@ func remarshal(t *testing.T, value any, into any) {
 	}
 	if err := json.Unmarshal(encoded, into); err != nil {
 		t.Fatalf("decoding %s: %v", encoded, err)
+	}
+}
+
+// The orchestrator is one window or none, and the launcher is the only thing
+// that opens it. A command that could open it too makes "how many are there"
+// depend on what anyone happened to call, and two identical windows is what a
+// user sees when that goes wrong.
+func TestTheControlPlaneWindowIsNotACommandsToCreate(t *testing.T) {
+	host := startedHost()
+	registry := registryFor(t, host, counter("1"))
+
+	_, err := registry.Invoke("window_create", callArgs(t, map[string]any{"label": controlPlaneWindow}))
+	if err == nil {
+		t.Fatal("window_create opened the orchestrator")
+	}
+	if len(host.calls) != 0 {
+		t.Errorf("window_create acted: %v", host.calls)
+	}
+}
+
+// Asking for the one that exists answers with it and creates nothing. A caller
+// that has to check first would race with a caller that did.
+func TestAskingForTheControlPlaneWindowThatExistsIsIdempotent(t *testing.T) {
+	host := startedHost(liveWindow(controlPlaneWindow))
+	registry := registryFor(t, host, counter("1"))
+
+	for range 3 {
+		name, err := registry.Invoke("window_create", callArgs(t, map[string]any{"label": controlPlaneWindow}))
+		if err != nil {
+			t.Fatalf("window_create: %v", err)
+		}
+		if name != controlPlaneWindow {
+			t.Fatalf("answered %v, want the window that is already open", name)
+		}
+	}
+	if len(host.calls) != 0 {
+		t.Errorf("repeating the request opened something: %v", host.calls)
+	}
+}
+
+// A generated name can never be the orchestrator's, whatever the identifier
+// source produces.
+func TestAGeneratedNameIsNeverTheControlPlanes(t *testing.T) {
+	host := startedHost()
+	registry := registryFor(t, host, counter(controlPlaneWindow))
+
+	name, err := registry.Invoke("window_create", nil)
+	if err == nil && name == controlPlaneWindow {
+		t.Fatal("a generated name collided with the orchestrator's")
+	}
+}
+
+// The renderer writes its boot progress into the title, and that channel keeps
+// answering when the binding path is dead. A census that dropped it would leave
+// a window that renders the wrong shell looking exactly like one that renders
+// the right one.
+func TestTheCensusCarriesWhatEachWindowSaysItIs(t *testing.T) {
+	main := liveWindow(controlPlaneWindow)
+	main.title = "boot:render"
+	workspace := liveWindow("w-a")
+	workspace.title = "boot:persist-init"
+	registry := registryFor(t, startedHost(main, workspace), counter("1"))
+
+	reply, err := registry.Invoke("window_census", nil)
+	if err != nil {
+		t.Fatalf("window_census: %v", err)
+	}
+	census, ok := reply.(censusReply)
+	if !ok {
+		t.Fatalf("window_census answered %T", reply)
+	}
+
+	titles := map[string]string{}
+	for _, row := range census.Windows {
+		if row.Title == nil {
+			t.Errorf("%s reported no title", row.Label)
+			continue
+		}
+		titles[row.Label] = *row.Title
+	}
+	if titles[controlPlaneWindow] != "boot:render" {
+		t.Errorf("%s reported %q", controlPlaneWindow, titles[controlPlaneWindow])
+	}
+	if titles["w-a"] != "boot:persist-init" {
+		t.Errorf("w-a reported %q", titles["w-a"])
+	}
+}
+
+// A window that cannot be asked leaves the field null. Empty would be a window
+// that was given no title, which is a different fact — and losing the whole
+// census because one window is unreachable hides the count this command exists
+// to report.
+func TestAWindowWithNoTitleLeavesTheFieldNullAndKeepsTheCount(t *testing.T) {
+	host := startedHost(liveWindow(controlPlaneWindow), deadWindow("w-gone"))
+	registry := registryFor(t, host, counter("1"))
+
+	reply, err := registry.Invoke("window_census", nil)
+	if err != nil {
+		t.Fatalf("window_census: %v", err)
+	}
+	census := reply.(censusReply)
+	if len(census.Windows) != 2 {
+		t.Fatalf("the census reported %d windows, want both held names", len(census.Windows))
+	}
+	for _, row := range census.Windows {
+		if row.Label == "w-gone" && row.Title != nil {
+			t.Errorf("an unreachable window reported the title %q", *row.Title)
+		}
 	}
 }

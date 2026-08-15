@@ -132,7 +132,11 @@ async function boot(): Promise<void> {
   // Read the window name first. This value is cached and becomes the first address segment, so reading it late
   // freezes an empty label first and every later address becomes `win//...` — the creating side and the resolving
   // side then point at different windows, and that mismatch appears only as NOT_EXPOSED (measured 2026-08-15).
-  await resolveWindowLabel();
+  const resolvedLabel = await resolveWindowLabel();
+  // Records what this window resolved itself to be. This one value selects the orchestrator/workspace branch, so
+  // without the record there is no way from outside to ask "why did this window render that shell" —
+  // measured 2026-08-15: the main window rendered the workspace shell, and a person reported the cause from the screen.
+  bootStamp(`window-name:${resolvedLabel}`);
   // The window background follows the theme bg. The root DOM is transparent, so the window supplies the color of
   // unpainted areas; a window stuck at a build-time constant diverges from the theme at every edge — measured
   // 2026-08-15: the theme was light while the window was near black, and the translucent background showed the desktop behind it.
@@ -166,7 +170,10 @@ async function boot(): Promise<void> {
   // and renders the shell only. The shell consumes command and event surfaces alone (same standing as an external client — P13).
   // Command catalog and activity instrumentation are module-level. Respawn (every workspace slot) is handled here too.
   bootStamp("persist-init");
-  if (currentWindowLabel() === "main") {
+  // The branch stands only on a resolved label. If resolveWindowLabel could not read the name it already stopped
+  // above, so at this point label is the name this host actually answered.
+  const windowLabel = currentWindowLabel();
+  if (windowLabel === "main") {
     // The plugin host is not run — the registry is already final, so the readiness gate is released immediately
     // (left locked, an unregistered command sent to this window waits until timeout).
     markCommandHostReady();

@@ -12,3 +12,4 @@ build/android/overlay.json
 build/android/gen/
 
 secret/
+bin/

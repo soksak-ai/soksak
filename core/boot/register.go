@@ -40,6 +40,11 @@ type Boot struct {
 	// window, because a record with a hole where the headless work happened is
 	// worse than no record.
 	Ledger *activity.Ledger
+	// Recent is what a live operator can still see. Separate from Ledger
+	// because admission and retention have separate owners, and separate from
+	// storage because the process that most needs to be asked what just
+	// happened is the one that cannot write.
+	Recent *activity.Tail
 	// Now supplies timestamps. Passed in so the ledger stays testable and the
 	// core keeps reading nothing ambient.
 	Now func() int64
@@ -126,6 +131,20 @@ func (live liveWindows) Live() []string {
 // during boot. Each is answerable with no window, which is what makes headless
 // possible at all.
 func RegisterCore(registry *control.Registry, boot Boot) Wired {
+	if boot.Recent == nil {
+		// A process that was given no tail still keeps one. The alternative is
+		// a build that publishes into nothing and answers "nothing happened",
+		// which is the state this exists to end.
+		boot.Recent = activity.NewTail(0)
+	}
+	if boot.Ledger == nil {
+		boot.Ledger = activity.NewLedger()
+	}
+	if boot.Now == nil {
+		// Zero rather than the wall clock: reading the clock here would make
+		// the core decide "now" for itself, which is the launcher's to supply.
+		boot.Now = func() int64 { return 0 }
+	}
 	registry.MustRegister(control.Command{
 		Name:    "app_environment",
 		Handler: func(control.Args) (any, error) { return app.Describe(boot.Identity, boot.BuildProfile), nil },
@@ -198,7 +217,33 @@ func RegisterCore(registry *control.Registry, boot Boot) Wired {
 			}
 			// The stamped entry is returned so the caller can fan it out. The
 			// halves that need a window are not this command's to perform.
-			return boot.Ledger.Admit(uint64(boot.Now()), kind, source, args["payload"]), nil
+			entry := boot.Ledger.Admit(uint64(boot.Now()), kind, source, args["payload"])
+			// Kept so it can be asked for. Before this, a renderer exception
+			// reached here, was stamped, and was dropped — the only way to read
+			// one was to have a person look at the window.
+			boot.Recent.Keep(entry)
+			return entry, nil
+		},
+	})
+
+	registry.MustRegister(control.Command{
+		Name: "activity_recent",
+		Handler: func(args control.Args) (any, error) {
+			kinds, err := control.OptionalArg[[]string](args, "kinds", nil)
+			if err != nil {
+				return nil, err
+			}
+			limit, err := control.OptionalArg(args, "limit", 0)
+			if err != nil {
+				return nil, err
+			}
+			// A list, never null: "nothing has happened" and "this build cannot
+			// tell you" must not arrive as the same answer.
+			entries := boot.Recent.Recent(kinds, limit)
+			if entries == nil {
+				entries = []activity.Entry{}
+			}
+			return entries, nil
 		},
 	})
 

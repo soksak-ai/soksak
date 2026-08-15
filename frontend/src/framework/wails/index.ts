@@ -6,7 +6,7 @@
 // A command the backend does not serve yet **fails with its name**. A silent no-op makes the
 // caller treat the feature as present and render as if it were.
 
-import { Events, Window as WailsWindow } from "@wailsio/runtime";
+import { Dialogs, Events, Window as WailsWindow } from "@wailsio/runtime";
 import type { EngineProvision } from "@soksak-ai/plugin-spec";
 
 import type {
@@ -29,24 +29,39 @@ const unserved = (what: string) => (): never => {
 // ui.input.click rejected an address emitted by ui.tree with NOT_EXPOSED.
 let currentLabel = "";
 
+/** Boot calls this once. If the name cannot be read it **fails with the name**.
  *
+ * Leaving it empty diverges everything after it silently: the label is the orchestrator/workspace
+ * branch, so an empty value reads as "workspace" and a control-plane window renders the workspace
+ * shell and looks normal. The address also freezes as `win//...`, so the producer and the resolver
+ * point at different windows. Both look like success on screen, so nothing flags that window —
+ * which is why this stops here. */
 export async function resolveWindowLabel(): Promise<string> {
-  try {
-    currentLabel = await WailsWindow.Name();
-  } catch {
-    currentLabel = "";
+  const name = await WailsWindow.Name();
+  if (!name) {
+    throw new Error(
+      "wails adapter: the host answered with no window name; every address and the orchestrator branch derive from it",
+    );
   }
+  currentLabel = name;
   return currentLabel;
 }
 
+// Every window call in this framework is async and a failure arrives as a reject. Without
+// returning that promise the failure never gets to the caller and leaks as an unhandled rejection
+// — the caller's catch matches nothing and execution continues as success.
+//
+// Measured 2026-08-15: a stored frame of {} made SetPosition(undefined, undefined) reject, and the
+// restore path's `.catch(() => {})` did not see it. Boot died entirely and the screen showed one
+// error line — with no record of which call failed or how.
 function windowHandle(label: string): FrameworkWindowHandle {
   const win = label ? WailsWindow.Get(label) : WailsWindow;
   return {
     label,
-    setTitle: async (title) => { win.SetTitle(title); },
-    setSize: async (width, height) => { win.SetSize(width, height); },
-    setPosition: async (x, y) => { win.SetPosition(x, y); },
-    setFocus: async () => { win.Focus(); },
+    setTitle: async (title) => { await win.SetTitle(title); },
+    setSize: async (width, height) => { await win.SetSize(width, height); },
+    setPosition: async (x, y) => { await win.SetPosition(x, y); },
+    setFocus: async () => { await win.Focus(); },
     // Light/dark mode for window chrome is not on this framework's public surface. Treated like
     // an unsupported platform and ignored harmlessly — the contract specifies that.
     setTheme: async () => {},
@@ -54,11 +69,11 @@ function windowHandle(label: string): FrameworkWindowHandle {
     innerPosition: async () => win.Position(),
     outerSize: async () => win.Size(),
     scaleFactor: async () => 1,
-    setPhysicalPosition: async (x, y) => { win.SetPosition(x, y); },
-    setPhysicalSize: async (width, height) => { win.SetSize(width, height); },
-    setAlwaysOnTop: async (on) => { win.SetAlwaysOnTop(on); },
-    maximize: async () => { win.Maximise(); },
-    unmaximize: async () => { win.UnMaximise(); },
+    setPhysicalPosition: async (x, y) => { await win.SetPosition(x, y); },
+    setPhysicalSize: async (width, height) => { await win.SetSize(width, height); },
+    setAlwaysOnTop: async (on) => { await win.SetAlwaysOnTop(on); },
+    maximize: async () => { await win.Maximise(); },
+    unmaximize: async () => { await win.UnMaximise(); },
     onResized: async (cb) => Events.On("window:resized", () => { void win.Size().then(cb); }),
     onMoved: async (cb) => Events.On("window:moved", () => { void win.Position().then(cb); }),
     onDragDrop: async (cb) => Events.On("window:filedrop", (event) => cb(event.data)),
@@ -143,7 +158,22 @@ export const wailsFramework: AppFramework = {
     join: async (...parts) => parts.filter(Boolean).join("/"),
   },
 
-  dialog: { openDirectory: unserved("dialog.openDirectory") },
+  dialog: {
+    // Directory selection is the only entry point for creating a project. While it was unserved,
+    // `+` threw with the name, so this build could not create a project — outside or inside.
+    openDirectory: async (options) => {
+      const chosen = await Dialogs.OpenFile({
+        Title: options?.title,
+        Directory: options?.defaultPath,
+        CanChooseDirectories: true,
+        CanChooseFiles: false,
+        AllowsMultipleSelection: false,
+      });
+      // Cancel returns an empty string. The contract is null, so it is translated here — passing
+      // the empty path through makes the caller attempt a project with no root.
+      return chosen === "" ? null : chosen;
+    },
+  },
 
   notification: {
     isPermissionGranted: unserved("notification.isPermissionGranted"),
