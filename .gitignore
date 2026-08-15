@@ -11,5 +11,8 @@ build/ios/xcode/gen/
 build/android/overlay.json
 build/android/gen/
 
-secret/
+# Rooted: this is the one directory at the top of the repository, not any
+# directory that happens to be called secret. Without the slash it also swallowed
+# core/secret — the package that holds the vault, which is code and belongs here.
+/secret/
 bin/
