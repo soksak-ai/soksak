@@ -45,11 +45,11 @@ func TestInternalSoksakNamesAreStrippedAndTheInterfaceSurvives(t *testing.T) {
 			t.Errorf("%s is internal and must not reach a child", name)
 		}
 	}
-	// SOKSAK_PANE was carried in an earlier build with "the old transitional
+	// SOKSAK_PANE was once carried as "the old transitional
 	// name — removal condition: every session replaced". A fresh build has no
 	// session to carry, and this repository forbids compatibility layers.
 	if _, kept := child["SOKSAK_PANE"]; kept {
-		t.Error("SOKSAK_PANE is an earlier build's transitional name; nothing here carries a session that needs it")
+		t.Error("SOKSAK_PANE is a retired transitional name; nothing here carries a session that needs it")
 	}
 }
 
@@ -106,7 +106,7 @@ func TestRemoveAndTheAIScrubSum(t *testing.T) {
 	}
 }
 
-// An earlier build applied env_remove after env, so a name in both is removed.
+// Removal is applied after set, so a name in both is removed.
 // Keeping that order means one spelling of "unset this" always wins.
 func TestRemoveBeatsSet(t *testing.T) {
 	child := envOf(childEnvironment(environmentRequest{

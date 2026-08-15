@@ -11,7 +11,7 @@ import (
 // defaultFoldWindow is how long changes are collected before a directory is
 // reported.
 //
-// The number is inherited from an earlier build's notify_debouncer_mini and has
+// The number is carried from a debouncing watcher library and has
 // no measurement attached to it. It is kept rather than replaced with an
 // invented one; measuring it is its own investigation. What is new here is that
 // it is *ours*: Go's watchers do not debounce, so the fold is a core rule with
@@ -241,9 +241,9 @@ func parentOf(path string) (string, bool) {
 // watchKey is the identity of a watched directory.
 //
 // Both the key and the reported directory are symlink-resolved, and that is a
-// divergence with a reason: an earlier build keyed raw strings, so its own tests
-// had to canonicalize the fixture to match what FSEvents reported — the rule
-// lived in the test instead of the code. In production on <local-evidence>, where /var is a
+// divergence with a reason: keying raw strings makes the tests
+// canonicalize the fixture to match what FSEvents reports — the rule then
+// lives in the test instead of the code. In production on <local-evidence>, where /var is a
 // link to /private/var, that mismatch makes the consumer's `changed === dir`
 // never match.
 func watchKey(path string, home string) (string, error) {

@@ -26,7 +26,7 @@ func TestChildrenAreFoldersFirstThenCaseInsensitiveByName(t *testing.T) {
 	}
 }
 
-// Rust's sort_by is stable, so an earlier build got tie order for free.
+// A stable sort would give tie order for free.
 // sort.Slice is not, and two readings of one unchanged directory would hand the
 // tree a different order — which redraws as rows jumping with nothing changed.
 // The tie is broken on the raw name so the order is total.

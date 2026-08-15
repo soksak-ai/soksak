@@ -62,7 +62,7 @@ func TestABackupRefusesToOverwrite(t *testing.T) {
 }
 
 // Reclaim removes the work files whose owner is gone, and nothing else. One
-// backup builds a file the size of the store; measured on an earlier build
+// backup builds a file the size of the store; measured
 // (2026-08-08), a dozen of them had accumulated to around 500MB.
 func TestReclaimTakesOnlyTheAbandonedWorkFiles(t *testing.T) {
 	directory := t.TempDir()

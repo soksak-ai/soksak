@@ -26,7 +26,7 @@ var AISessionEnv = [...]string{
 // (vault master key, secret payloads, isolated vault paths, test hooks) and is
 // stripped, so a new internal name is blocked by default.
 //
-// An earlier build also carried SOKSAK_PANE, annotated "the transitional old
+// SOKSAK_PANE was also carried once, annotated "the transitional old
 // name — removal condition: every session replaced". This build starts with no
 // sessions, so the condition is already met.
 var soksakChildAllow = [...]string{
@@ -43,7 +43,7 @@ var soksakChildAllow = [...]string{
 type environmentRequest struct {
 	// Inherited is the environment the launcher read, as "NAME=value".
 	//
-	// An earlier build passed names only, because a Rust Command inherits and
+	// Names only: a child that inherits and
 	// env_remove subtracts. Go has no "inherit minus these": a non-nil Env
 	// replaces everything and a nil one makes os/exec read the ambient. So the
 	// values travel too, and the load-bearing half of the rule survives intact
@@ -58,7 +58,7 @@ type environmentRequest struct {
 	Secrets [][2]string
 }
 
-// childEnvironment applies the environment rules in an earlier build's order:
+// childEnvironment applies the environment rules in this order:
 // inherited minus internal SOKSAK_*, then the injected home, then the caller's
 // entries, then the removals, then the secrets.
 func childEnvironment(request environmentRequest) []string {
@@ -80,7 +80,7 @@ func childEnvironment(request environmentRequest) []string {
 	for _, name := range sortedNames(request.Set) {
 		entries.set(name, request.Set[name])
 	}
-	// Removal runs after Set, as it did in an earlier build: one spelling of
+	// Removal runs after Set: one spelling of
 	// "unset this" always wins, whatever else asked for the name.
 	for _, name := range request.Remove {
 		entries.remove(name)

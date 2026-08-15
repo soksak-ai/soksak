@@ -78,10 +78,10 @@ func TestAResolvingLinkIsPresent(t *testing.T) {
 	}
 }
 
-// TestAPathThatCannotBeReadIsNotAbsence is an earlier build's defect, ported as
+// TestAPathThatCannotBeReadIsNotAbsence pins a measured defect as
 // a test rather than as code.
 //
-// Its Rust original folded every failure of the launcher stat into "not there", so a
+// Folding every failure of the launcher stat into "not there" makes a
 // directory the user cannot traverse reported as an uninstalled tool and the
 // repair offered was a reinstall that could not succeed.
 //

@@ -418,9 +418,9 @@ func TestTheFoldWindowIsTheOneWrittenDown(t *testing.T) {
 	}
 }
 
-// An earlier build keyed raw strings and its *tests* had to canonicalize the
-// fixture to match what FSEvents reported — so the rule lived in the test
-// instead of the code, and on <local-evidence> the mismatch makes `changed === dir` never
+// Keying raw strings makes the *tests* canonicalize the
+// fixture to match what FSEvents reports — the rule then lives in the test
+// instead of the code, and on <local-evidence> that mismatch makes `changed === dir` never
 // match in production. Here both the key and the reported directory resolve.
 func TestOnePathTwoSpellingsIsOneWatch(t *testing.T) {
 	dir := t.TempDir()

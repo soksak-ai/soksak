@@ -17,7 +17,7 @@ func TestAHealthyStoreReportsNothing(t *testing.T) {
 
 // A diagnosis that cannot finish returns a list naming the failure, never an
 // error. Throwing it makes "the store is sick" read as "the command failed" —
-// an earlier build measured exactly that misreading.
+// that misreading was measured exactly.
 func TestADiagnosisThatCannotFinishStillAnswersWithAList(t *testing.T) {
 	kv, err := OpenKV(filepath.Join(t.TempDir(), "soksak.db"))
 	if err != nil {
@@ -103,7 +103,7 @@ func rowCounts(t *testing.T, kv *KV) counts {
 // Damage is planted and measured, not waited for. A gate that only ever sees a
 // healthy store cannot be told apart from a gate with its eyes shut.
 //
-// The shape planted is the one an earlier build met (2026-07-13): a logical
+// The shape planted is the one measured (2026-07-13): a logical
 // disagreement between an index and the table it indexes, not a broken page.
 // The pages are fine, so quick_check passes — and that is why the diagnosis
 // here is the full check. This test asserts both halves, because the cheaper

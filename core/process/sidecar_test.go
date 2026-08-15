@@ -70,7 +70,7 @@ func TestAnInstalledSidecarResolvesToItsStagedBinary(t *testing.T) {
 	}
 }
 
-// A named path wins; nothing slides down a discovery chain. An earlier build
+// A named path wins; nothing slides down a discovery chain. A plain
 // used is_file(), which follows links, so an unnamed location could answer for
 // the named one — a symlink anywhere below the home is refused, by component.
 func TestASymlinkedComponentIsRefusedByName(t *testing.T) {

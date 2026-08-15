@@ -23,7 +23,7 @@ type Deps struct {
 	Home string
 	// Environment is the inherited environment the launcher read, as "K=V".
 	//
-	// An earlier build passed names only, because a Rust Command inherits and
+	// Names only: a child that inherits and
 	// env_remove subtracts. Go has no such subtraction — a non-nil Env replaces
 	// everything and a nil one makes os/exec read the ambient — so the values
 	// travel with the names. The load-bearing half of the rule is untouched:
@@ -165,7 +165,7 @@ func Register(registry *control.Registry, deps Deps) *Manager {
 	return manager
 }
 
-// callbackArguments are the stream handles an earlier build's transport carried.
+// callbackArguments are the stream handles the transport carries.
 //
 // On this framework they arrive as {}: createStream answers a no-op object, so
 // a child accepted with them streams into nothing while the caller believes it
@@ -234,7 +234,7 @@ func spawnRequest(arguments control.Args) (Request, error) {
 // untouched for null and reports no error, so a null that reached the zero
 // value would answer as if the argument had been sent: a null cmd would start
 // the empty program, and a null data would report a write that put no bytes
-// anywhere. An earlier build's transport refused both — a null never decoded
+// anywhere. The transport refuses both — a null never decoded
 // into a non-optional field.
 func required[T any](arguments control.Args, name string) (T, error) {
 	var value T

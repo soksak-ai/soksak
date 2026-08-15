@@ -352,12 +352,12 @@ func TestDeregistrationPrecedesTheExitReceipt(t *testing.T) {
 	}
 }
 
-// ── the deadlock an earlier build measured ────────────────────────────────────
+// ── the measured deadlock ────────────────────────────────────
 
 // A consumer that left ends the pump; the reader then drains so the child never
 // blocks in write, and a kill is not held up by it.
 //
-// The Rust bug was a reader holding the child mutex inside wait(), so a kill
+// The measured bug was a reader holding the child mutex inside wait(), so a kill
 // blocked forever, the child became a zombie and swap ran to 32 GB. Go has no
 // such mutex; the equivalent hazard is a second Wait. Exactly one goroutine per
 // session calls Wait, and the kill path only signals and then observes.

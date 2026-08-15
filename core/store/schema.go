@@ -22,8 +22,8 @@ import (
 // auto_vacuum is applied by the driver before the schema exists, which is the
 // only moment it takes: a store born auto_vacuum=NONE answers every later
 // `PRAGMA auto_vacuum=INCREMENTAL` with success and keeps NONE, and then
-// data_retention_reap's page reclaim silently returns nothing. Measured on the
-// earlier build (2026-07-29): every home whose store was first created from a
+// data_retention_reap's page reclaim silently returns nothing. Measured
+// 2026-07-29: every home whose store was first created from a
 // bare connection was born that way, with no error anywhere.
 //
 // WAL lets a reader in another process run while this one writes, which is what
@@ -32,13 +32,13 @@ import (
 //
 // secure_delete zeroes freed cells instead of leaving them readable in the
 // file. Unlike auto_vacuum it is a per-connection setting, not a property the
-// file is born with — an earlier build called it born-once, and that half of its
+// file is born with — one reading called it born-once, and that half of the
 // reasoning does not survive here. It is kept for what it does, at the cost of
 // writing zeros over what a delete frees.
 //
 // txlock=immediate takes the write lock when a transaction opens rather than on
 // its first write, so a transaction that will write cannot be told to retry
-// halfway through. It carries an earlier build's BEGIN IMMEDIATE.
+// halfway through, so every write transaction opens with BEGIN IMMEDIATE.
 const openParameters = "?_auto_vacuum=INCREMENTAL" +
 	"&_busy_timeout=5000" +
 	"&_journal_mode=WAL" +
@@ -117,7 +117,7 @@ func openDatabase(path string) (*sql.DB, error) {
 	}
 	// One connection, not a pool. SQLite serialises writers rather than
 	// refusing them, so a pool turns one writer into several that queue on each
-	// other; an earlier build measured a process taking `database is locked`
+	// other; a measurement caught a process taking `database is locked`
 	// from its own connections (2026-08-01). The consequence every caller here
 	// obeys: a read inside a transaction goes through that *sql.Tx, because the
 	// connection it would otherwise want is the one the transaction holds.
@@ -161,7 +161,7 @@ func (kv *KV) read(fn func(*sql.DB) error) error {
 
 // write runs fn inside one transaction, and rolls back whatever fn refuses.
 //
-// The transaction is the unit a record and its index share: an earlier build
+// The transaction is the unit a record and its index share. A measurement
 // measured that separate autocommits for the record write and the FTS write
 // left, after a crash between them, a record present with a stale index — and
 // that shows up as wrong search results, not as an error.

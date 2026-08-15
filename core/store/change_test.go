@@ -36,7 +36,7 @@ func TestAChangeThatCannotBePinnedNamesTheWholeStore(t *testing.T) {
 }
 
 // The operation names are constants because more than one process publishes
-// them. Measured on an earlier build (2026-08-01): the app sent `kv_set` and the
+// them. Measured (2026-08-01): the app sent `kv_set` and the
 // daemon sent `kv-set`. Nobody had broken yet, but the first subscriber to look
 // at `op` would behave differently depending on who answered.
 func TestTheOperationNamesAreFixed(t *testing.T) {

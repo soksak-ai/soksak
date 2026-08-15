@@ -29,7 +29,7 @@ type WriteResult struct {
 	Bytes int64  `json:"bytes"`
 }
 
-// mimeByExtension is data, not logic — an earlier build's table, carried over.
+// mimeByExtension is data, not logic.
 // It covers what a preview can render: images, PDF, video, audio.
 var mimeByExtension = map[string]string{
 	".png":  "image/png",
@@ -70,8 +70,8 @@ func mimeFor(path string) string {
 
 // readBase64 reads a file for preview.
 //
-// An earlier build refused to expand `~` here and argued continuity of
-// behaviour. That is backward compatibility, which this repository forbids, and
+// Refusing to expand `~` here and arguing continuity of
+// behaviour would be backward compatibility, which this repository forbids, and
 // a fresh port has no yesterday to be continuous with — so the package has one
 // home rule. A per-command tilde exception surfaces only as a file "missing"
 // that is plainly there.

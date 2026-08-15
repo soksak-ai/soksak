@@ -59,7 +59,7 @@ func TestWindowsFallsBackToUserProfile(t *testing.T) {
 }
 
 func TestResolveReadsTheAmbientOnce(t *testing.T) {
-	// An earlier build read identifier and home separately, so the pair
+	// Reading identifier and home separately makes the pair
 	// ("A home, B identifier") was representable. Resolving once removes the
 	// combination rather than checking for it.
 	resolved := Resolve("com.soksak.dev", Environment{Home: "<local-evidence>/user"})
@@ -103,13 +103,13 @@ func TestMissingIdentifierFailsRatherThanGuessing(t *testing.T) {
 	}
 }
 
-func TestThisInstallationDoesNotShareThePredecessorsHome(t *testing.T) {
+func TestThisInstallationDoesNotShareAnotherHome(t *testing.T) {
 	// Homes are separated by the environment axis alone: a framework axis is
 	// deliberately not part of it, because one home holds one backend and may
 	// have several frontends.
 	//
 	// Measured 2026-08-15: an identifier on the `dev` axis opened
-	// ~/.soksak-dev/soksak.db while an earlier build's sockets were live there.
+	// ~/.soksak-dev/soksak.db while another process held sockets in that directory.
 	// The store is single-writer by design and SQLite does not refuse a second
 	// writer — it serialises — so the collision would have stayed silent.
 	const ours = "com.soksak.wails"

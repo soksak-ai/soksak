@@ -59,7 +59,7 @@ func TestRemovingANamespaceLeavesItsNeighbourUntouched(t *testing.T) {
 	}
 }
 
-// Deletion does not check the syntax of the name. An earlier build measured a
+// Deletion does not check the syntax of the name. A measurement found a
 // namespace that an unvalidated import planted and the delete surface then
 // refused as invalid — a name that got in and could not get out. Deletion only
 // removes what exists, so the syntax rule protects nothing here.

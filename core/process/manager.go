@@ -341,7 +341,7 @@ func (manager *Manager) Kill(id uint32) (bool, error) {
 // release it is the kill it is blocking. Measured 2026-08-15: a 4 MB write to
 // a child that never reads stdin hung Kill and ReapAll for ever. Signalling
 // first kills the child, the write fails with EPIPE, and the lock is free by
-// the time stdin is closed. That order is an earlier build's too: it killed and
+// the time stdin is closed. The same order was measured elsewhere: kill and
 // waited, and let the stdin handle go afterwards.
 func (manager *Manager) reap(entry *session) error {
 	signalErr := entry.child.Signal()
@@ -396,7 +396,7 @@ func (manager *Manager) List() []Info {
 // ReclaimByWindow reaps every child stamped with that label.
 //
 // The label is an argument rather than a framework-injected window. The
-// earlier build's process_reclaim_window expected the host to supply it, so a
+// process_reclaim_window expects the host to supply it, so a
 // windowless process could not serve the command at all (measured 2026-07-30:
 // 39 refusals on the second framework). Here core must answer headlessly, so
 // the caller names the window.

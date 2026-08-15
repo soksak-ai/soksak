@@ -8,7 +8,7 @@ import (
 // Name rules for everything that reaches SQL as an identifier or a path.
 //
 // One rule per name, in one place. Two copies drift, and a drifted rule lets
-// one surface create a name another surface cannot address — an earlier build
+// one surface create a name another surface cannot address. A measurement
 // measured exactly that: an import planted a namespace no command could read or
 // delete, because every command validated and the creating path did not.
 

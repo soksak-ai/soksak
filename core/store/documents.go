@@ -94,7 +94,7 @@ func collectionMeta(q querier, ns, coll string) (*collection, error) {
 // Define declares a collection's indexes and search fields. It is idempotent,
 // and it drops the expression indexes the collection no longer declares —
 // leaving them behind keeps making every other namespace's writes to records
-// heavier, which is the reason an earlier build gives for dropping them when a
+// heavier, which is the reason for dropping them when a
 // namespace is removed but does not apply here.
 func (kv *KV) Define(ns, coll string, indexes, fts []string) error {
 	// A define creates a namespace, so it validates one. Removal does not, and
@@ -203,7 +203,7 @@ func dropUndeclaredIndexes(q querier, cid int64, declared []string) error {
 
 // Put writes one document and its search index in one transaction.
 //
-// An earlier build named the stage a write failed at, because the same wording
+// Naming the stage a write failed at matters, because the same wording
 // came from two stages and tracing became guesswork. That is kept; what is not
 // kept is its retry around `out of memory`, which guarded a C allocator
 // returning NULL under an rlimit. This driver allocates from the Go heap, where

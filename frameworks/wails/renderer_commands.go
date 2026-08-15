@@ -56,8 +56,8 @@ const (
 //
 // Twenty seconds is twice the longest path anyone has measured into this
 // renderer. A command that arrives during boot queues behind the page's own
-// plugin gate (measured 2.46s for 46 plugins, 2026-08-08), and an earlier build
-// capped a socket command at 10s — where a single first command consumed 9.4s
+// plugin gate (measured 2.46s for 46 plugins, 2026-08-08). A 10s cap on a
+// socket command is not enough: one first command consumed 9.4s
 // of an 11.7s boot (measured 2026-08-08). At twice that, a timeout means the
 // page is not answering rather than that it is busy.
 const rendererDeadline = 20 * time.Second

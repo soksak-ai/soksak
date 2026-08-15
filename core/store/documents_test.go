@@ -24,7 +24,7 @@ func fieldOf(t *testing.T, doc json.RawMessage, field string) string {
 	return string(decoded[field])
 }
 
-// A record and its search index are one unit. An earlier build measured that
+// A record and its search index are one unit. A measurement found that
 // writing them in separate autocommits left, after a crash between them, a
 // record present with a stale index — which shows up as a wrong search result,
 // never as an error.
@@ -190,7 +190,7 @@ func TestAQuotedQueryIsSearchedForLiterally(t *testing.T) {
 }
 
 // Redefining with fewer index fields drops the indexes the collection no longer
-// declares. An earlier build left them, and its own namespace removal states why
+// declares. Leaving them is what a namespace removal has to state a reason for
 // that is wrong: an index left behind keeps making another namespace's writes
 // heavy.
 func TestRedefiningDropsTheIndexesNoLongerDeclared(t *testing.T) {
@@ -361,7 +361,7 @@ func TestAFilteredQueryRidesTheDeclaredIndex(t *testing.T) {
 
 // Two writers in one process both get through. One connection serialises them;
 // it does not make one of them fail, which is what an uncapped pool did on the
-// earlier build — a process taking `database is locked` from its own connections.
+// measurement — a process taking `database is locked` from its own connections.
 func TestTwoConcurrentWritersBothSucceed(t *testing.T) {
 	kv := open(t)
 	failures := make(chan error, 2)

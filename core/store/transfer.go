@@ -49,8 +49,8 @@ type keyLine struct {
 // indexes. Keys have no collection, so naming one skips them rather than
 // carrying a namespace's keys under a collection they do not belong to.
 //
-// A row that cannot be encoded fails the export. An earlier build dropped such a
-// row, and the export then looked complete; that is the same shape as an answer
+// A row that cannot be encoded fails the export. Dropping such a
+// row makes the export look complete; that is the same shape as an answer
 // that comes back empty and is read as success.
 func (kv *KV) Export(ns, coll *string) (string, error) {
 	var lines []string
@@ -155,7 +155,7 @@ func appendLine(lines *[]string, value any, what string) error {
 // Import applies JSONL: definitions, then records, then keys, in the order the
 // lines arrive.
 //
-// Every line's namespace is validated. An earlier build measured an unvalidated
+// Every line's namespace is validated. A measurement found an unvalidated
 // import planting `plugin:probe-lane`, and afterwards no command could read it
 // or delete it, because every command validates. A path that creates what the
 // rules forbid means the rules are not rules.
@@ -215,7 +215,7 @@ func (kv *KV) Import(jsonl string, nowMillis int64) (ImportResult, error) {
 			// read side names it — data_kv_entries answers the whole namespace
 			// with an error the moment one row is unreadable — so admitting it
 			// makes every neighbouring key unreadable through a row nobody
-			// asked for. That is an earlier build's lesson in the paragraph
+			// asked for. That is the same rule as the paragraph
 			// above, in the other spelling: what got in must be able to come
 			// back out.
 			if !json.Valid(parsed.Value) {

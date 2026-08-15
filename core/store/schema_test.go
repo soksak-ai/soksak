@@ -10,8 +10,8 @@ import (
 )
 
 // auto_vacuum is stamped into the file header when the store is born; setting
-// it after the first CREATE is ignored and returns no error. Measured on the
-// earlier build (2026-07-29): every home whose store was created from a bare
+// it after the first CREATE is ignored and returns no error. Measured
+// 2026-07-29: every home whose store was created from a bare
 // connection was born auto_vacuum=NONE, and there the reclaim after a reap
 // silently returns zero pages.
 func TestTheStoreIsBornWithIncrementalAutoVacuum(t *testing.T) {
@@ -60,7 +60,7 @@ func TestOpeningCreatesEveryTableTheCommandsRead(t *testing.T) {
 	}
 }
 
-// One connection, not a pool. An earlier build held exactly one write connection
+// One connection, not a pool. Exactly one write connection is held
 // under a mutex on the 2026-08-01 measurement that a store held by value opened
 // a new connection per call and then took `database is locked` from itself. An
 // uncapped database/sql pool reproduces that inside one process.

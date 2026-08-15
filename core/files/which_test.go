@@ -93,10 +93,10 @@ func TestAnUnsafeNameIsRefusedBeforeTheRunnerIsTouched(t *testing.T) {
 		runner := &fakeRunner{}
 		got, err := shellWhich(bad, "/bin/sh", false, runner)
 		if err == nil {
-			// An earlier build answered false here and admitted the conflation
-			// in its own comment: "could not ask" and "not there" became one
-			// value. Both live callers wrap this in catch(() => false), so
-			// nothing regresses by separating them.
+			// Answering false here conflates two facts, as a measured build did
+			// and admitted in its own comment: "could not ask" and "not there"
+			// became one value. Both live callers wrap this in catch(() => false),
+			// so nothing regresses by separating them.
 			t.Errorf("%q was accepted, answering %v", bad, got)
 		}
 		if runner.calls != 0 {
@@ -131,7 +131,7 @@ func TestAZeroExitIsInstalledAndANonZeroExitIsNot(t *testing.T) {
 	}
 }
 
-// An earlier build's unwrap_or(false) means one wrong injected shell path
+// Collapsing the error into false means one wrong injected shell path
 // reports every binary as missing — and that reads as "nothing is installed"
 // rather than as a misconfiguration.
 func TestAShellThatCannotStartIsAnErrorNotAnAbsence(t *testing.T) {

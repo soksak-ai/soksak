@@ -10,8 +10,8 @@ import (
 //
 // A constant rather than a literal at each publisher: spelled out in several
 // places, one publisher eventually reaches nobody, and that absence is not an
-// error — it is a picker that never updates. Measured in an earlier build on
-// 2026-08-01, where one framework never published it at all.
+// error — it is a picker that never updates. Measured
+// 2026-08-01: one publisher never sent it at all.
 const ChangeEvent = "project-registry-change"
 
 // LiveWindows answers the one fact the ledger needs about windows: whether a
@@ -50,7 +50,7 @@ type Owner struct {
 //
 // The launcher constructs one and hands it to both this package and the host,
 // because the host also has to free a window's roots when the window is
-// destroyed. When an earlier build split it per framework, P6 broke across them.
+// destroyed. Split per framework, P6 breaks across the halves.
 type Ledger struct {
 	mu      sync.Mutex
 	owners  map[string]string
@@ -173,8 +173,8 @@ func (ledger *Ledger) ReleaseWindow(window string) []string {
 
 // Owners lists what is held right now, by root, so two readings compare.
 //
-// A claim held by a window that no longer exists is not reported. Measured in
-// an earlier build: a closed project showed as open and selectable, because a
+// A claim held by a window that no longer exists is not reported. Measured:
+// a closed project showed as open and selectable, because a
 // window that never delivered its destruction left the claim standing.
 //
 // Liveness is read once for the whole list, not once per root. Asking per root

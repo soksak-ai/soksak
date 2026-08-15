@@ -32,9 +32,9 @@ func hostUnitTarget(goos string, goarch string) (string, error) {
 	// anyway, and rejected as "unknown target" rather than as "this host has no
 	// artifact" — two different repairs.
 	//
-	// Divergence from an earlier build, recorded 2026-08-15: it answered
-	// x86_64-pc-windows-msvc for every Windows arch, on the ground that its
-	// release channel shipped one Windows build that arm64 emulates. That is a
+	// Recorded 2026-08-15. One shipped answer for this axis is
+	// x86_64-pc-windows-msvc for every Windows arch, on the ground that a
+	// release channel ships one Windows build that arm64 emulates. That is a
 	// statement about a distribution, and this build has no distribution to
 	// make it about. Naming each host for itself is the answer that stays true
 	// when the release channel arrives, whatever it decides to ship.

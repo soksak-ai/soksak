@@ -135,7 +135,7 @@ func TestAStrayNonUTF8ByteWithoutNULStillReads(t *testing.T) {
 	if got.ReadBytes != 5 {
 		t.Errorf("read_bytes = %d, want 5", got.ReadBytes)
 	}
-	// Rust replaced the byte on the way in (from_utf8_lossy); Go keeps it and
+	// A lossy decoder would replace the byte on the way in; this keeps it and
 	// encoding/json substitutes U+FFFD on the way out. The caller sees the same
 	// answer through one pass instead of two — pinned here rather than assumed.
 	encoded, err := json.Marshal(got)
@@ -171,7 +171,7 @@ func TestOverTheLimitReadsThePrefixAndSaysSo(t *testing.T) {
 }
 
 func TestTheTextLimitIsTheOneWrittenDown(t *testing.T) {
-	// An earlier build paired this number with the editor's
+	// This number was paired with the editor's
 	// LARGE_FILE_HEAP_OPERATION_THRESHOLD. That constant no longer exists here
 	// — the editor is a plugin — so only the transport half of the reason
 	// survives, and the number stays in one place.

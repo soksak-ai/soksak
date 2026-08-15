@@ -315,7 +315,7 @@ func TestAMissingRequiredArgumentIsRefusedByName(t *testing.T) {
 }
 
 // The answers that cross the boundary all encode, and none of them encodes to
-// nothing. Measured on an earlier build (2026-08-08): one field that could not
+// nothing. Measured (2026-08-08): one field that could not
 // go to JSON did not drop that field — it made the whole answer `{}`, and the
 // caller read the failure as success.
 func TestEveryAnswerEncodes(t *testing.T) {

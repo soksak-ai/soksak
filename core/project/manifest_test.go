@@ -165,8 +165,8 @@ func TestASlotWithItsKeysInAnotherOrderIsTheSameSlot(t *testing.T) {
 	}
 }
 
-// A window with no workspace has nothing to bring back. Measured in the
-// earlier build on 2026-07-28: after closing every window, one reload of the
+// A window with no workspace has nothing to bring back. Measured
+// 2026-07-28: after closing every window, one reload of the
 // control window revived fifteen of them.
 func TestAWindowWithNoRootsIsPruned(t *testing.T) {
 	backing := &store{}

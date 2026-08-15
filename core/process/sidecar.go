@@ -49,7 +49,7 @@ func resolveCommand(home string, command string) (string, error) {
 			}
 			return "", fmt.Errorf("sidecar %s: %s could not be read: %w", name, path, err)
 		}
-		// A named path wins. An earlier build's is_file() followed links, so an
+		// A named path wins. A plain is-file check follows links, so an
 		// unnamed location could answer for the named one.
 		if read.Mode()&fs.ModeSymlink != 0 {
 			return "", fmt.Errorf("sidecar %s: %s is a symlink — a named path answers for itself or not at all", name, path)

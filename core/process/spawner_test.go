@@ -7,7 +7,7 @@ import (
 
 // A host that cannot honour process groups refuses the option by name.
 //
-// An earlier build guarded the group flag with #[cfg(unix)] and spawned
+// Guarding the group flag by platform and spawning
 // ungrouped everywhere else. That silence is the exact shape of its worst
 // measured bug — grandchildren holding stdout, so a stop was hostage to a
 // sleeping grandchild. A spawn that cannot honour the ownership it was asked

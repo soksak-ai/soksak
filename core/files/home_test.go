@@ -7,9 +7,9 @@ import (
 )
 
 // The home is an argument, and this is the assertion an ambient read cannot
-// pass: one input, two injected homes, two answers. An earlier build's fs.rs
-// header exists to say the user home (`~`) and the identity home
-// (`~/.soksak-wails`) are different values; here main.go already holds both, so
+// pass: one input, two injected homes, two answers. The two homes are
+// different values — the user home (`~`) and the identity home
+// (`~/.soksak-wails`) — and main.go holds both, so
 // the wiring can trivially hand over the wrong one.
 func TestOneInputAndTwoHomesGiveTwoAnswers(t *testing.T) {
 	fromA, err := expand("~/rc", "/homes/a")

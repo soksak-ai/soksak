@@ -92,8 +92,8 @@ func TestNamingACollectionSkipsTheKeys(t *testing.T) {
 	}
 }
 
-// A row that cannot be encoded fails the whole export. An earlier build dropped
-// it, and the export then looked complete — the same failure shape as a
+// A row that cannot be encoded fails the whole export. Dropping
+// it makes the export look complete — the same failure shape as a
 // diagnosis that answers `{}` and is read as success.
 func TestARowThatCannotBeEncodedFailsTheExport(t *testing.T) {
 	kv := open(t)
@@ -112,7 +112,7 @@ func TestARowThatCannotBeEncodedFailsTheExport(t *testing.T) {
 	}
 }
 
-// Every line's namespace is validated. An earlier build measured an unvalidated
+// Every line's namespace is validated. A measurement found an unvalidated
 // import planting `plugin:probe-lane`, after which no command could read or
 // delete it — every command validates. A path that creates what the rules
 // forbid means the rules are not rules.

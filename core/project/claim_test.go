@@ -51,7 +51,7 @@ type step struct {
 
 // claimCases is fixtures/project-claims.json carried over as a table.
 //
-// An earlier build kept it as a file because two implementations had to agree
+// It was a file while two implementations had to agree
 // about one rule. Here there is one implementation, and reading the file across
 // repositories would make this gate depend on a sibling checkout being present.
 // The rules are what travels, not the transport.
@@ -269,7 +269,7 @@ func TestAGhostClaimDoesNotBlockANewOne(t *testing.T) {
 	}
 }
 
-// Measured in an earlier build: a closed project showed as open and selectable.
+// Measured: a closed project showed as open and selectable.
 func TestOwnersListsOnlyLiveWindows(t *testing.T) {
 	live := &windows{}
 	live.set("w-live", "w-dead")
@@ -404,8 +404,8 @@ func TestADestroyedWindowIsFreedEvenAfterItsLabelIsGone(t *testing.T) {
 
 // The wire names are the contract with the frontend, and nothing in the process
 // checks them: a publisher spelling the event another way reaches nobody, and
-// that silence is not an error — it is a picker that never updates. Measured in
-// an earlier build on 2026-08-01, where one framework never published it at all.
+// that silence is not an error — it is a picker that never updates. Measured
+// 2026-08-01: one publisher never sent it at all.
 // Comparing the constant against itself would pass while it was wrong.
 func TestTheWireNamesAreTheOnesTheFrontendReads(t *testing.T) {
 	// frontend/src/state/projectRegistry.ts listens for this name.

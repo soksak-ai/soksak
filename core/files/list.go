@@ -119,8 +119,8 @@ func describe(root string, entry fs.DirEntry, meta bool) Child {
 // sortChildren orders folders first, then by name ignoring case, then by the
 // raw name.
 //
-// That last step is the Go-specific part. Rust's sort_by is stable, so the
-// earlier build's two-key comparison gave ties a settled order for free;
+// That last step is the Go-specific part. A stable sort would give a two-key
+// comparison a settled tie order for free;
 // sort.Slice is not stable, and measured here, ten pairs of names differing
 // only in case came back with one pair swapped and nine kept — so two readings
 // of an unchanged directory hand the tree different orders, which redraws as

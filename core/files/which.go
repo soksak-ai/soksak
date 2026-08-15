@@ -56,8 +56,8 @@ func safeBinaryName(bin string) bool {
 //
 // Windows has no login shell whose rc rebuilds PATH, so there is nothing for
 // `-l` to do and no shell line to build: where.exe takes the name as an argv
-// element, which leaves no place for shell syntax at all. An earlier build
-// handed COMSPEC (cmd.exe) a PowerShell-only `-Command Get-Command` flag, a
+// element, which leaves no place for shell syntax at all. Handing COMSPEC
+// (cmd.exe) a PowerShell-only `-Command Get-Command` flag is a
 // pairing that cannot succeed — so every binary read as missing on Windows.
 func whichArgv(shell string, bin string, windows bool) (string, []string, error) {
 	if !safeBinaryName(bin) {
@@ -75,7 +75,7 @@ func whichArgv(shell string, bin string, windows bool) (string, []string, error)
 // shellWhich answers whether the binary is on the user's PATH.
 //
 // Three answers stay separate. A name that cannot be asked is an error, not
-// false — an earlier build answered false and admitted the conflation in its own
+// false — answering false conflates the two, as a measured build did in its own
 // comment. A shell that cannot start is an error, not false, because one wrong
 // injected path would otherwise report every binary as missing, which reads as
 // "nothing is installed" instead of as a misconfiguration. Only a shell that

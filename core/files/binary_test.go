@@ -152,7 +152,7 @@ func TestAnUndecodablePayloadLeavesNoFileBehind(t *testing.T) {
 	}
 }
 
-// An earlier build refused to expand `~` here and argued continuity of
+// Refusing to expand `~` here would argue continuity of
 // behaviour — backward compatibility, which this repository forbids, and there
 // is no yesterday in a fresh port. One home rule for the whole package.
 func TestTheBinaryReadSeesTheSameTildeAsTheTextRead(t *testing.T) {

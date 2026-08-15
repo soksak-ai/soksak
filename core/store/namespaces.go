@@ -24,7 +24,7 @@ type MigrateOutcome struct {
 // RemoveNamespace removes everything one namespace made: its records, its keys,
 // its collection definitions, its search tables and its expression indexes.
 //
-// The name is not validated here. An earlier build measured a namespace that an
+// The name is not validated here. A measurement found a namespace that an
 // unvalidated import planted — `plugin:probe-lane` — which the delete surface
 // then refused as an invalid name: something that got in and could not get out.
 // Deletion only removes what exists, so the syntax rule protects nothing here.

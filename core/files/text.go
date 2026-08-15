@@ -10,7 +10,7 @@ import (
 
 // textReadLimit caps one text read.
 //
-// An earlier build set this number to match the editor's
+// This number was set to match the editor's
 // LARGE_FILE_HEAP_OPERATION_THRESHOLD and named two reasons: that pairing, and
 // the webview/IPC transport. Half of that is gone — the editor is a plugin here
 // and no such constant exists in this frontend — so the number is kept for the
@@ -90,7 +90,7 @@ func readTextLimited(path string, offset *int64, home string, limit int64) (Text
 
 	read := int64(len(window))
 	return TextData{
-		// The bytes are kept as they are. Rust replaced invalid sequences on
+		// The bytes are kept as they are. Replacing invalid sequences on
 		// the way in; encoding/json substitutes U+FFFD on the way out, so the
 		// caller sees the same answer through one pass instead of two.
 		Content:    string(window),

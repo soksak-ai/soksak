@@ -16,7 +16,7 @@ func filterOf(t *testing.T, text string) map[string]json.RawMessage {
 }
 
 // Go randomises map iteration, so an unsorted builder compiles the same filter
-// into a different statement every call. An earlier build iterated an ordered
+// into a different statement every call. An ordered map iterated
 // map and got this for free. Without it two identical queries are two
 // statements: the prepared-statement cache never hits, and no test can assert
 // on what was built.

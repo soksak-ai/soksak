@@ -13,7 +13,7 @@ package store
 // wrong thing.
 const WholeStore = "*"
 
-// The operation names. Measured on an earlier build (2026-08-01): the app
+// The operation names. Measured (2026-08-01): the app
 // published `kv_set` and the daemon published `kv-set`. Nothing had broken,
 // because subscribers filtered on namespace — but the first one to read `op`
 // would behave differently depending on who answered, and by then nobody would
@@ -44,7 +44,7 @@ type Change struct {
 
 // OpNsMigrate names a namespace being moved onto another name.
 //
-// An earlier build published this one as a bare `"ns-migrate"` literal beside
+// This one was once published as a bare `"ns-migrate"` literal beside
 // the module whose whole reason is that these names are constants — the same
 // drift, one file over, in the other spelling. It is a constant here, and
 // spelled like its siblings.

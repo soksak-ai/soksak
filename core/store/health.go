@@ -10,7 +10,7 @@ import (
 // Diagnosis is the full `PRAGMA integrity_check`, not `quick_check`. quick_check
 // by design does not cross-check indexes against tables, so index corruption
 // walks straight through it — and a store in that state reads fine and only
-// breaks on writes, which an earlier build measured (2026-07-13) as SQLite
+// breaks on writes, which was measured (2026-07-13) as SQLite
 // answering `out of memory` to every insert while every query still worked.
 
 // Repair is what a repair found and what it left.
@@ -27,7 +27,7 @@ type Repair struct {
 //
 // It returns no error, and that is the rule rather than an omission: a
 // diagnosis that cannot finish is a symptom of the damage, and throwing it
-// makes "the store is sick" read as "the command failed" — an earlier build
+// makes "the store is sick" read as "the command failed". A measurement
 // measured that misreading, with `out of memory` taken for machine memory
 // pressure.
 func (kv *KV) Verify() []string {

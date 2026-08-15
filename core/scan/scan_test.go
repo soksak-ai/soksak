@@ -8,9 +8,9 @@ import (
 
 func TestAMissingDirectoryIsAnEmptyList(t *testing.T) {
 	// A read command must not create the directory, and a fresh home meets
-	// absence immediately. An earlier build measured the split on 2026-07-28:
-	// the app answered [] and the daemon answered "os error 2" for one command
-	// name, because only the app had already made its home.
+	// absence immediately. Measured 2026-07-28, the split was visible:
+	// one leg answered [] and the other "os error 2" for the same command
+	// name, because only one of them had already made its home.
 	entries, err := Directory(filepath.Join(t.TempDir(), "never-created"), ".json")
 	if err != nil {
 		t.Fatalf("a missing directory must not be an error: %v", err)

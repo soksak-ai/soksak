@@ -31,9 +31,9 @@ type Integrity struct {
 // answer depend on which process asked, and that difference does not arrive as
 // an error — it arrives as a different verdict about the same machine.
 //
-// A path that cannot be read is an error, never absence. An earlier build folded
-// every failure of the launcher stat into "not there", so a directory the user
-// cannot traverse reported as an uninstalled tool and the repair was a reinstall
+// A path that cannot be read is an error, never absence. Folding
+// every failure of the launcher stat into "not there" makes a directory the user
+// cannot traverse report as an uninstalled tool, and the repair is a reinstall
 // that could not succeed.
 func binaryIntegrity(binPath string, libPath string) (Integrity, error) {
 	if binPath == "" {

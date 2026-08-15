@@ -24,8 +24,8 @@ type Environment struct {
 
 // Resolved is one identity, derived once.
 //
-// An earlier build read the identifier and the home through separate paths, so
-// the pair ("A home, B identifier") was representable and a reconnect could
+// Reading the identifier and the home through separate paths leaves
+// the pair ("A home, B identifier") representable, and a reconnect can
 // land on the wrong one. Deriving both together removes the combination rather
 // than checking for it afterwards.
 type Resolved struct {

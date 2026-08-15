@@ -115,7 +115,7 @@ func scratchOwner(name string) (int, bool) {
 // reclaimScratch removes the work files whose owner is gone.
 //
 // One backup builds a file the size of the store, and if it dies mid-build that
-// size stays. Measured on an earlier build (2026-08-08): a dozen of them, around
+// size stays. Measured (2026-08-08): a dozen of them, around
 // 500MB, in a user's data folder.
 //
 // An owner that cannot be asked about counts as alive. Reading "I cannot tell"

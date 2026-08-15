@@ -95,7 +95,7 @@ var comparisons = map[string]string{
 // Fields are sorted by name first. Go randomises map iteration, so without that
 // the same filter compiles into a different statement on every call: the
 // prepared-statement cache never hits, and nothing can be asserted about what
-// was built. An earlier build iterated an ordered map and never had to say this.
+// was built. An ordered map iterated map and never had to say this.
 //
 // A field that is neither built in nor declared as an index is refused by name.
 // That refusal does two jobs: it keeps every interpolated identifier one a rule

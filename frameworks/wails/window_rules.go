@@ -19,16 +19,20 @@ import (
 // reserved orchestrator name.
 //
 // The identifier after it is opaque and never reused: a closed window's name on
-// a new window makes that window inherit the dead one's restored state. The
-// prefix itself cannot change — an earlier generation used "win-" and the
-// frontend's capability glob still assumes "win-*".
+// a new window makes that window inherit the dead one's restored state.
+//
+// Three letters, like every other identifier prefix in this product. One or two
+// cannot separate the kinds: "w-" reads as window, webview or workspace, and
+// whoever reads the name has to ask which — at which point the name is not
+// telling them what it is. The frontend's capability glob assumes "win-*", so
+// the prefix is also a wire fact and does not change without that changing too.
 const workspaceWindowPrefix = "win-"
 
 // cascadePoints is the offset a fresh window takes from the one that opened it.
 // 28pt is roughly a centimetre (72pt to the inch). Landing exactly on top makes
 // it impossible to see that a window opened at all.
 //
-// An earlier build divided a physical position by the scale factor to get here.
+// Dividing a physical position by the scale factor also gets here.
 // Frames are already device-independent points in this host, so the offset is
 // applied directly and there is no second copy of that arithmetic to drift.
 const cascadePoints = 28
@@ -40,9 +44,9 @@ const cascadePoints = 28
 // frontend assumes, and every command sent to such a window times out rather
 // than failing. And the name becomes the key "window/<name>" in the snapshot
 // store plus a slot key in the restore manifest, so a separator inside it lets
-// one window's snapshot address another namespace's path. An earlier build
-// leaned on the shape of a uuid and on a guard in the frontend for the second
-// rule; a backend that trusts a frontend guard is the half that actually
+// one window's snapshot address another namespace's path. Leaning on
+// the shape of a uuid and on a guard in the frontend for the second
+// rule does not hold: a backend that trusts a frontend guard is the half that
 // creates the unreachable window.
 func validWindowName(name string) bool {
 	if name == controlPlaneWindow {
@@ -79,8 +83,8 @@ func workspaceName(id string) string {
 // window_place answered success having asked for x = 9223372036854775807, which
 // arrives at the platform as -1. The window moves somewhere nobody chose and
 // the placement is reported as done — a failure that is invisible at every
-// layer that could have named it. An earlier build could not have this case: its
-// command took i32/u32 and the decoder refused the number by type.
+// layer that could have named it. A typed decoder does not have this case: a
+// command taking i32/u32 refuses the number by type.
 const frameLimit = 1 << 31
 
 // frameOf reads a requested rectangle. All four components must be present,

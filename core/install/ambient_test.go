@@ -21,7 +21,7 @@ import (
 //
 // The scan parses each file rather than searching its text, because a text
 // search cannot tell a call from the comment that explains why the call is
-// forbidden. An earlier build of this gate could not, so the only way to keep it
+// forbidden. An earlier form of this gate could not, so the only way to keep it
 // green was to stop naming the thing in prose — and a rule whose reason cannot
 // be written down beside it is a rule the next reader deletes.
 func TestNothingHereReadsItsOwnEnvironment(t *testing.T) {

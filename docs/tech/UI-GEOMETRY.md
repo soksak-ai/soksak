@@ -16,12 +16,11 @@ A gate that fails is not a gate to weaken. If the standard itself is wrong, say
 so and correct the standard — silently working around it is the one move this
 document forbids outright.
 
-## Inheritance
+## Scope
 
-These rules were measured in an earlier build over a year of one-pixel defects.
-Each was judged before it landed here: the reason was read, and the rule was
-kept only where the reason is still true on this build. Two are recorded as
-changed, at the end.
+Each rule below carries the measurement that produced it. A rule holds only
+while its reason holds on this build; two rules are recorded as changed at the
+end, with what changed and why.
 
 ---
 
@@ -215,9 +214,9 @@ registering the surface comes first.
 
 A native child webview competes with the main webview's DOM for z-order in the
 OS view hierarchy. Following the framework's default puts every DOM overlay —
-modals, menus, drop indicators, focus rings — underneath it. An earlier build
-worked around that by hiding the browser while an overlay was open. The
-structure here is the inverse:
+modals, menus, drop indicators, focus rings — underneath it. Hiding the browser
+while an overlay is open works around that and costs a repaint of the page every
+time a menu opens. The structure here is the inverse:
 
 1. **Inverted z-order.** A child webview is placed *below* the main webview
    immediately after creation.
@@ -248,11 +247,11 @@ whole stylesheet stands on.
 # Judged, and changed
 
 **Kept, with the reason still true.** R1, R1a, R2, R3, R3a, R4, R5, B1–B8, L.
-None of them depends on the previous framework: they are statements about boxes,
+None of them depends on a particular framework: they are statements about boxes,
 about who owns a line, and about proving a claim with a number.
 
-**Changed — R1a now spans the sidebar.** An earlier build stated the row contract
-for bands standing side by side horizontally. The same argument applies to the
+**Changed — R1a now spans the sidebar.** The row contract first covered only
+bands standing side by side horizontally. The same argument applies to the
 sidebar and content bands facing each other across a vertical seam, and this
 build had them at 33 and 30. The rule is one rule now, and one source answers
 both sides.
