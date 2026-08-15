@@ -16,8 +16,11 @@ import (
 	"github.com/soksak/soksak-core/core/activity"
 	"github.com/soksak/soksak-core/core/app"
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/files"
 	"github.com/soksak/soksak-core/core/identity"
 	corenet "github.com/soksak/soksak-core/core/net"
+	"github.com/soksak/soksak-core/core/process"
+	"github.com/soksak/soksak-core/core/project"
 	"github.com/soksak/soksak-core/core/scan"
 	"github.com/soksak/soksak-core/core/service"
 	"github.com/soksak/soksak-core/core/store"
@@ -39,12 +42,84 @@ type Boot struct {
 	// Now supplies timestamps. Passed in so the ledger stays testable and the
 	// core keeps reading nothing ambient.
 	Now func() int64
+
+	// UserHome is the operating system user's home, which is not Identity.Home.
+	// Several rules need to tell them apart — a project root may sit anywhere
+	// under the first and nowhere under the second.
+	UserHome string
+	// LoginShell is the shell to build a command line with. Empty refuses the
+	// commands that need one by name rather than reading $SHELL, which would
+	// tie the answer to whatever launched this process.
+	LoginShell string
+	// Windows is the platform, as an argument. Reading runtime.GOOS here would
+	// answer what this binary is rather than what the caller asked.
+	Windows bool
+	// PID names this process's work files, so a live owner's file is never
+	// taken for crash debris.
+	PID int
+	// Environment is the environment the launcher inherited, as "K=V". It
+	// travels as values because a Go child either inherits everything or
+	// receives exactly what it is given.
+	Environment []string
+	// PidAlive answers whether a pid is still running. That question has a
+	// different answer on every platform, so the branch stays with the caller.
+	PidAlive func(pid int) bool
+
+	// Emit carries an event to whoever owns windows. The core decides that
+	// something changed; delivery needs a host, so the host supplies this.
+	// Nil means nobody is listening, which is what headless is — not an error.
+	Emit func(event string, payload any)
+	// LiveWindows answers which windows exist. The project claim ledger tells a
+	// claim held by a live window from one left behind by a window that closed.
+	// Nil answers none, which is the truth with no host.
+	LiveWindows func() []string
+
+	// Run starts a process and waits for it. Nil refuses the commands that
+	// shell out, by name.
+	Run files.Runner
+	// Watch is the operating system's filesystem watcher. Nil refuses watch_dir
+	// by name, because a subscription that can never fire is not one.
+	Watch files.Backend
+	// Spawner starts long-lived children. Nil means this host owns none and
+	// says so, rather than answering as if it had.
+	Spawner process.Spawner
+	// Secrets resolves a child's declared secrets. Nil means this host holds no
+	// vault; a spawn that asks for one is refused by name, because an empty
+	// token turns a missing vault into the child's authentication failure.
+	Secrets process.SecretSource
+	// ProcessSink is where a child's output and exit reach a consumer.
+	ProcessSink process.Sink
+}
+
+// Wired is state RegisterCore built that a host needs the same instance of.
+//
+// A host that built its own would answer from a second ledger: releasing a
+// window's projects would free claims nobody was holding while the real ones
+// stayed locked.
+type Wired struct {
+	// Claims is the project claim ledger. The host frees a window's roots when
+	// that window is destroyed.
+	Claims *project.Ledger
+	// Processes owns the running children. The host stops them when it quits.
+	Processes *process.Manager
+}
+
+// liveWindows adapts the launcher's function to the interface the claim ledger
+// declares. The core asks for a function because a function is what a host can
+// supply before it has anything to report.
+type liveWindows func() []string
+
+func (live liveWindows) Live() []string {
+	if live == nil {
+		return nil
+	}
+	return live()
 }
 
 // RegisterCore registers the host-independent commands the frontend asks for
 // during boot. Each is answerable with no window, which is what makes headless
 // possible at all.
-func RegisterCore(registry *control.Registry, boot Boot) {
+func RegisterCore(registry *control.Registry, boot Boot) Wired {
 	registry.MustRegister(control.Command{
 		Name:    "app_environment",
 		Handler: func(control.Args) (any, error) { return app.Describe(boot.Identity, boot.BuildProfile), nil },
@@ -172,4 +247,57 @@ func RegisterCore(registry *control.Registry, boot Boot) {
 			return scan.Directory(filepath.Join(boot.Identity.Home, "plugins"), ".json")
 		},
 	})
+
+	return registerGroups(registry, boot)
+}
+
+// registerGroups joins the ported command groups to the same registry.
+//
+// Each one takes what it needs as values and declares what a missing dependency
+// means, so this reads as a list of what the process has rather than as a list
+// of what it can do.
+func registerGroups(registry *control.Registry, boot Boot) Wired {
+	emit := boot.Emit
+	if emit == nil {
+		// A host with nowhere to deliver is headless, not broken. The commands
+		// still answer; only the fan-out is absent.
+		emit = func(string, any) {}
+	}
+
+	store.Register(registry, store.Deps{
+		KV:        boot.KV,
+		Home:      boot.Identity.Home,
+		NowMillis: boot.Now,
+		PID:       boot.PID,
+		PidAlive:  boot.PidAlive,
+		Notify:    func(change store.Change) { emit("store:change", change) },
+	})
+
+	files.Register(registry, files.Deps{
+		UserHome:   boot.UserHome,
+		LoginShell: boot.LoginShell,
+		Windows:    boot.Windows,
+		Run:        boot.Run,
+		Watch:      boot.Watch,
+		EmitChange: func(dir string) { emit("files:changed", map[string]string{"dir": dir}) },
+	})
+
+	claims := project.NewLedger(liveWindows(boot.LiveWindows))
+	project.Register(registry, project.Deps{
+		Home:     boot.Identity.Home,
+		UserHome: boot.UserHome,
+		Manifest: boot.KV,
+		Claims:   claims,
+		Changed:  emit,
+	})
+
+	processes := process.Register(registry, process.Deps{
+		Home:        boot.Identity.Home,
+		Environment: boot.Environment,
+		Sink:        boot.ProcessSink,
+		Spawner:     boot.Spawner,
+		Secrets:     boot.Secrets,
+	})
+
+	return Wired{Claims: claims, Processes: processes}
 }

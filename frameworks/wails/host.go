@@ -32,6 +32,9 @@ type Options struct {
 	// startup and exits. It is how the capture path is observed without a
 	// working frontend.
 	CaptureProbe string
+	// Bridge is the launcher's late-bound half of the host: the core was handed
+	// its Emit and Live before this framework existed, and Run fills it in.
+	Bridge *Bridge
 	// Registry answers every command this process serves. The host registers
 	// its window-owning commands onto it; everything else was registered by the
 	// launcher, which is what keeps those answerable with no window at all.
@@ -111,6 +114,14 @@ func Run(options Options) error {
 	// the run loop started. Created afterwards it would never hear it, and every
 	// window command would refuse forever.
 	windowHost := NewWindowHost(app, windowTemplate)
+
+	// Filled here, before Run, so that the commands the core registered against
+	// it start answering the moment the application exists rather than at the
+	// first window.
+	if options.Bridge != nil {
+		options.Bridge.app = app
+		options.Bridge.host = windowHost
+	}
 
 	controlPlane := windowTemplate
 	// The control plane's window is named by the product, not numbered by the

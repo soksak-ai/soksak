@@ -10,6 +10,10 @@ import (
 
 	"github.com/soksak/soksak-core/core/boot"
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/files"
+	"github.com/soksak/soksak-core/core/identity"
+	"github.com/soksak/soksak-core/core/process"
+	"github.com/soksak/soksak-core/core/store"
 )
 
 // invokeCall finds the backend commands the frontend calls by name.
@@ -28,17 +32,8 @@ var invokeCall = regexp.MustCompile(`invoke(?:Command)?[A-Za-z]*<?[^>(]*>?\(\s*"
 // be a choice rather than a discovery made by a user.
 var unserved = map[string]string{
 	// Project lifecycle. Nothing about a workspace is reachable without these.
-	"validate_project_root":  "project",
-	"project_release":        "project",
-	"window_manifest_upsert": "project",
 
 	// Files and watching.
-	"read_text_file":  "files",
-	"write_text_file": "files",
-	"watch_dir":       "files",
-	"unwatch_dir":     "files",
-	"list_children":   "files",
-	"shell_which":     "files",
 
 	// Terminal and PTY.
 	"spawn_terminal":         "terminal",
@@ -54,13 +49,7 @@ var unserved = map[string]string{
 	"pty_daemon_upgrade":     "terminal",
 
 	// Child processes.
-	"process_spawn":             "process",
-	"process_kill":              "process",
-	"process_list":              "process",
-	"process_write":             "process",
-	"process_stdin_close":       "process",
-	"process_reclaim_by_window": "process",
-	"cleanup_stale":             "process",
+	"cleanup_stale": "process",
 
 	// Windows.
 	"titlebar_backing": "window",
@@ -71,25 +60,9 @@ var unserved = map[string]string{
 	"webview_visible": "surface",
 
 	// Storage beyond the key-value pairs boot needs.
-	"data_get":             "storage",
-	"data_put":             "storage",
-	"data_delete":          "storage",
-	"data_query":           "storage",
-	"data_search":          "storage",
-	"data_count":           "storage",
-	"data_define":          "storage",
-	"data_migrate_ns":      "storage",
-	"data_restore":         "storage",
-	"data_kv_delete":       "storage",
-	"data_kv_keys":         "storage",
-	"data_retention_reap":  "storage",
-	"data_retention_trim":  "storage",
 	"data_encrypt_status":  "storage",
 	"data_encrypt_rotate":  "storage",
 	"data_encrypt_recover": "storage",
-	"plugin_data_read":     "storage",
-	"plugin_data_write":    "storage",
-	"plugin_data_list":     "storage",
 
 	// Secrets.
 	"secret_set":     "secret",
@@ -143,13 +116,9 @@ var unserved = map[string]string{
 	"ws_close":               "misc",
 
 	// Added by the gate on 2026-08-15.
-	"ensure_project_dir":      "project",
 	"ipc_last_project_window": "project",
-	"project_claim":           "project",
 
 	// Added by the gate on 2026-08-15.
-	"read_file_base64":  "files",
-	"write_file_base64": "files",
 
 	// Added by the gate on 2026-08-15.
 	"pty_pane_pid": "terminal",
@@ -162,21 +131,12 @@ var unserved = map[string]string{
 	"engine_surface_stats": "surface",
 
 	// Added by the gate on 2026-08-15.
-	"data_backup":                  "storage",
 	"data_canary":                  "storage",
 	"data_encrypt_change_recovery": "storage",
 	"data_encrypt_convert":         "storage",
 	"data_encrypt_enable":          "storage",
-	"data_export":                  "storage",
-	"data_import":                  "storage",
-	"data_kv_delete_many":          "storage",
-	"data_kv_entries":              "storage",
 	"data_kv_history":              "storage",
 	"data_kv_undo":                 "storage",
-	"data_ns_remove":               "storage",
-	"data_reclaim":                 "storage",
-	"data_repair":                  "storage",
-	"data_verify":                  "storage",
 
 	// Added by the gate on 2026-08-15.
 	"secret_status": "secret",
@@ -241,7 +201,29 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 	// that reads a hand-written list of what the other half serves measures the
 	// list instead of the build.
 	registry := control.NewRegistry()
-	boot.RegisterCore(registry, boot.Boot{})
+	// A store is opened because several groups refuse by name without one, and
+	// a refusal is not registration — the gate would then read a served command
+	// as missing.
+	home := t.TempDir()
+	kv, err := store.OpenKV(filepath.Join(home, "soksak.db"))
+	if err != nil {
+		t.Fatalf("opening the store: %v", err)
+	}
+	t.Cleanup(func() { _ = kv.Close() })
+
+	boot.RegisterCore(registry, boot.Boot{
+		Identity: identity.Resolve("com.soksak.dev", identity.Environment{Home: home}),
+		KV:       kv,
+		UserHome: t.TempDir(),
+		Now:      func() int64 { return 0 },
+		PidAlive: func(int) bool { return false },
+		Run:      files.SystemRunner{},
+		Spawner:  process.OSSpawner{},
+		// A spawner with nowhere to deliver is refused, so the gate supplies a
+		// consumer that reads and drops. It measures which commands register,
+		// never what they emit.
+		ProcessSink: discardProcessOutput{},
+	})
 	Register(registry, Deps{Host: startedHost(), NewID: counter("1")})
 
 	served := map[string]bool{}
@@ -325,4 +307,16 @@ func frontendCalls(t *testing.T) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// discardProcessOutput is a consumer that is always there and never looks. It
+// exists so this gate can register the spawning commands; nothing here asserts
+// on delivery.
+type discardProcessOutput struct{}
+
+func (discardProcessOutput) EmitProcessOutput(process.Output) process.Delivery {
+	return process.Delivered
+}
+func (discardProcessOutput) EmitProcessExit(process.Exit) process.Delivery {
+	return process.Delivered
 }

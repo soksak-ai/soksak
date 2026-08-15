@@ -24,10 +24,16 @@ func booted(t *testing.T) *control.Registry {
 	t.Cleanup(func() { _ = kv.Close() })
 
 	registry := control.NewRegistry()
+	// No Emit, no LiveWindows, no spawner, no watcher: this is a process with
+	// no host at all, which is the condition the test exists to hold. The
+	// groups that need one declare their refusal rather than failing here.
 	RegisterCore(registry, Boot{
 		Identity:     identity.Resolve("com.soksak.dev", identity.Environment{Home: home}),
 		BuildProfile: "debug",
 		KV:           kv,
+		UserHome:     t.TempDir(),
+		Now:          func() int64 { return 0 },
+		PidAlive:     func(int) bool { return false },
 	})
 	return registry
 }

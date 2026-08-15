@@ -17,7 +17,9 @@ import (
 	"github.com/soksak/soksak-core/core/activity"
 	"github.com/soksak/soksak-core/core/boot"
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/files"
 	"github.com/soksak/soksak-core/core/identity"
+	"github.com/soksak/soksak-core/core/process"
 	"github.com/soksak/soksak-core/core/store"
 	"github.com/soksak/soksak-core/frameworks/wails"
 )
@@ -55,6 +57,10 @@ func main() {
 
 	// The ambient is read here, once, and passed as values. Reading it deeper
 	// would let two parts of the process disagree about which home they are in.
+	userHome := os.Getenv("HOME")
+	if runtime.GOOS == "windows" {
+		userHome = os.Getenv("USERPROFILE")
+	}
 	resolved, err := identity.Require(identifier, identity.Environment{
 		Windows:     runtime.GOOS == "windows",
 		Home:        os.Getenv("HOME"),
@@ -70,6 +76,11 @@ func main() {
 	}
 	defer func() { _ = kv.Close() }()
 
+	// The half of the host that does not exist yet. The registry is filled
+	// before the framework starts, so the commands that need to reach a window
+	// are handed this and Run fills it in.
+	bridge := &wails.Bridge{}
+
 	registry := control.NewRegistry()
 	boot.RegisterCore(registry, boot.Boot{
 		Identity:     resolved,
@@ -77,6 +88,28 @@ func main() {
 		KV:           kv,
 		Ledger:       activity.NewLedger(),
 		Now:          func() int64 { return time.Now().UnixMilli() },
+
+		UserHome:    userHome,
+		LoginShell:  os.Getenv("SHELL"),
+		Windows:     runtime.GOOS == "windows",
+		PID:         os.Getpid(),
+		Environment: os.Environ(),
+		PidAlive:    pidAlive,
+
+		Emit:        bridge.Emit,
+		LiveWindows: bridge.Live,
+
+		Run: files.SystemRunner{},
+		// No filesystem watcher is built into this binary yet, so watch_dir is
+		// refused by name rather than accepting a subscription that can never
+		// fire.
+		Watch:   nil,
+		Spawner: process.OSSpawner{},
+		// This host holds no vault. A spawn that asks for a secret is refused
+		// by name; handing back an empty value would surface later as the
+		// child's own authentication failure.
+		Secrets:     nil,
+		ProcessSink: processEventSink{bridge: bridge},
 	})
 
 	err = wails.Run(wails.Options{
@@ -84,6 +117,7 @@ func main() {
 		TraceTerminalInput: os.Getenv("SOKSAK_TERMINAL_INPUT_TRACE") == "1",
 		CaptureProbe:       os.Getenv("SOKSAK_CAPTURE_PROBE"),
 		Registry:           registry,
+		Bridge:             bridge,
 	})
 	if err != nil {
 		log.Fatal(err)
