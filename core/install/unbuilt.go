@@ -2,18 +2,15 @@ package install
 
 // What blocks this file, measured against this repository on 2026-08-15.
 //
-// noDevDeclaration: unit_source_set is not served in this build. A unit tree
-// that is not declared as a development source is not read by unit_source_list
-// either.
-//
 // The fact is spelled into each reason below rather than referenced, because
 // the reason travels alone: it arrives at a caller as the text of an error, with
 // no file to look in.
 //
-// The loader itself is no longer a blockage. plugin_scan reads unit
-// directories under <home>/plugins as of 2026-08-15 (core/scan.Units), so a
-// committed install is loadable.
-const noDevDeclaration = "this build serves no unit_source_set, so a scaffolded tree cannot be declared as a development source and unit_source_list never reads it"
+// Two blockages are gone. plugin_scan reads unit directories under
+// <home>/plugins as of 2026-08-15 (core/scan.Units), so a committed install is
+// loadable; unit_source_set and unit_source_list write and read the declaration
+// at <home>/config/development-units.json as of the same day, so a working tree
+// can stand in for one.
 
 // unbuilt is what this group refuses, and the fact that blocks each one.
 //
@@ -25,8 +22,9 @@ const noDevDeclaration = "this build serves no unit_source_set, so a scaffolded 
 var unbuilt = []struct{ name, blockedBy string }{
 	{
 		"plugin_scaffold",
-		"scaffolding is half of this command and the declaration is the other half: " + noDevDeclaration +
-			". Serve unit_source_set, then port the scaffold",
+		"unit_source_set now declares a working tree, so the declaration half of this command is " +
+			"served; what is missing is the scaffold itself — the manifest, the entry file and the " +
+			"build script a new unit starts from. Port the scaffold",
 	},
 	{
 		"unit_install_begin",

@@ -260,15 +260,6 @@ func RegisterCore(registry *control.Registry, boot Boot) Wired {
 	})
 
 	registry.MustRegister(control.Command{
-		Name: "unit_source_list",
-		Handler: func(control.Args) (any, error) {
-			// Development units are declared under the home. A fresh home has
-			// none, which is an empty list rather than a failure.
-			return scan.Directory(filepath.Join(boot.Identity.Home, "units"), ".json")
-		},
-	})
-
-	registry.MustRegister(control.Command{
 		Name: "service_ledger_sync",
 		Handler: func(args control.Args) (any, error) {
 			ledger, present := args["ledger"]

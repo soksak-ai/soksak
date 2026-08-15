@@ -121,6 +121,32 @@ func Register(registry *control.Registry, deps Deps) {
 	})
 
 	registry.MustRegister(control.Command{
+		Name: "unit_source_list",
+		Handler: func(control.Args) (any, error) {
+			return readDevSources(deps.Home)
+		},
+	})
+
+	registry.MustRegister(control.Command{
+		Name: "unit_source_set",
+		Handler: func(args control.Args) (any, error) {
+			kind, err := control.Arg[string](args, "kind")
+			if err != nil {
+				return nil, err
+			}
+			id, err := control.Arg[string](args, "id")
+			if err != nil {
+				return nil, err
+			}
+			source, err := control.Arg[string](args, "source")
+			if err != nil {
+				return nil, err
+			}
+			return writeDevSource(deps.Home, DevSource{Kind: kind, ID: id, Source: source})
+		},
+	})
+
+	registry.MustRegister(control.Command{
 		Name: "unit_source_validate",
 		Handler: func(args control.Args) (any, error) {
 			source, err := control.Arg[string](args, "source")

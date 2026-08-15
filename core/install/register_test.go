@@ -46,7 +46,8 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 
 	want := []string{
 		"binary_integrity", "host_unit_target", "npm_global_dirs",
-		"probe_binary", "theme_install", "unit_source_validate",
+		"probe_binary", "theme_install", "unit_source_list", "unit_source_set",
+		"unit_source_validate",
 	}
 	if strings.Join(served, ",") != strings.Join(want, ",") {
 		t.Errorf("served = %v, want %v", served, want)

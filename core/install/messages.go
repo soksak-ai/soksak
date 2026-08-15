@@ -125,4 +125,24 @@ func init() {
 			KO: "host_unit_target 에는 {os}/{arch} 용 아티팩트 triple 이 없습니다",
 		},
 	})
+	i18n.Declare(map[string]i18n.Sentence{
+		// The refusals unit_source_set and unit_source_list answer a caller with.
+		"install.devSource.noHome": {
+			EN: "unit_source_set needs the installation home and this process was not given one — set install.Deps.Home",
+			KO: "unit_source_set 에는 설치 홈이 필요한데 이 프로세스는 받지 못했습니다 — install.Deps.Home 을 넣으십시오",
+		},
+		"install.devSource.kind": {
+			EN: `unit_source_set: {kind} is not a unit kind — it is "plugin", "sidecar" or "kit", and the loader reads a different manifest for each`,
+			KO: `unit_source_set: {kind} 은(는) 유닛 종류가 아닙니다 — "plugin"·"sidecar"·"kit" 중 하나여야 하며, 종류마다 로더가 읽는 매니페스트가 다릅니다`,
+		},
+		"install.devSource.unreadable": {
+			EN: "unit_source_list could not read {path} as a declaration — it exists, so it is not treated as an empty one",
+			KO: "unit_source_list 가 {path} 을(를) 선언으로 읽지 못했습니다 — 파일이 있으므로 빈 선언으로 취급하지 않습니다",
+		},
+		"install.devSource.version": {
+			EN: "unit_source_list: {path} declares version {found} and this build reads {want} — a file from another version is not migrated, because reading it as this shape answers with a source nobody declared",
+			KO: "unit_source_list: {path} 은(는) 버전 {found} 을(를) 선언하고 이 빌드는 {want} 을(를) 읽습니다 — 다른 버전의 파일은 마이그레이션하지 않습니다. 이 모양으로 읽으면 아무도 선언하지 않은 소스를 답하게 됩니다",
+		},
+	})
+
 }
