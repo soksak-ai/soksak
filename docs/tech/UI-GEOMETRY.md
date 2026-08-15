@@ -155,6 +155,11 @@ width to 0 — the point where the declaration stops being true on screen. Every
 resulting cell is checked, because a split redistributes the whole row and the
 cell that runs out of room is usually one nobody named.
 
+The rail counts. It is inserted into the row, so every cell keeps its
+percentage and loses pixels in proportion: the row is the space box less the
+rail's whole width. Measured 2026-08-16, a single pane in a 999px space with
+the rail open was 827px — 999 less 160 of rail and 12 of inset pair.
+
 ---
 
 # B. Border ownership — which box draws which edge
