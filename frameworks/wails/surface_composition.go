@@ -192,7 +192,149 @@ func RegisterSurface(registry *control.Registry, deps SurfaceDeps) {
 		},
 	})
 
+	registry.MustRegister(control.Command{
+		Name:  "surface.composition",
+		Owner: control.OwnerFramework,
+		// Framework-owned for the same reason as engine_surface_stats: a
+		// process with no window applied nothing.
+		Handler: func(control.Args) (any, error) {
+			return compositionJudgementOf(deps.Composition.Latest(), deps.NativeParent()), nil
+		},
+	})
+
 	registerInventoryRefusals(registry)
+}
+
+// compositionJudgement is the answer to "does the screen hold the layout".
+//
+// engine_surface_stats has the same halves per surface. Taking the maximum
+// there would put the rule in each caller, and two callers reading one commit
+// could then disagree about it. It is taken once, here, next to the coordinate
+// system it was measured in.
+type compositionJudgement struct {
+	Sequence uint64 `json:"sequence"`
+	// Coordinates names the frame both halves are in. The declaration is
+	// written by the document in CSS pixels from the top left, and the native
+	// layer reports back in the same frame — a reader who assumes the
+	// platform's own origin subtracts two numbers that are not comparable.
+	Coordinates string `json:"coordinates"`
+	// NativeParentPresent separates "no surfaces because none were declared"
+	// from "no surfaces because there is nothing to attach them to". Both are
+	// worst 0, and one of them is a broken window.
+	NativeParentPresent bool `json:"nativeParentPresent"`
+
+	// Worst is the largest difference between a declared rectangle and the
+	// applied one, over every surface and every component. Exact, with no
+	// tolerance: both halves are the same float64 travelling one commit, so
+	// zero is reachable, and a tolerance chosen without a measurement hides the
+	// first hundredth of a point of the next coordinate bug.
+	Worst     float64            `json:"worst"`
+	Displaced int                `json:"displaced"`
+	Surfaces  []compositionPlace `json:"surfaces"`
+
+	// Unapplied and Undeclared are surfaces with one half. Neither is a
+	// difference — there is no second rectangle to subtract — so folding them
+	// into worst would answer a number for something that has none, and folding
+	// them into zero would call a pane with no surface correct.
+	Unapplied  []string `json:"unapplied"`
+	Undeclared []string `json:"undeclared"`
+
+	// Failure names the most recent attempt that did not land. The compositor
+	// keeps answering with the last inventory that did, so a layer refusing
+	// every new one reports zero difference forever without this.
+	Failure        string `json:"failure,omitempty"`
+	FailedSequence uint64 `json:"failedSequence,omitempty"`
+}
+
+// compositionPlace is one surface with both halves and their difference.
+type compositionPlace struct {
+	ID         string `json:"id"`
+	Kind       string `json:"kind"`
+	Generation uint64 `json:"generation"`
+	Layer      int    `json:"layer"`
+
+	Declared        SurfaceFrame `json:"declared"`
+	DeclaredVisible bool         `json:"declaredVisible"`
+	DeclaredAlpha   float64      `json:"declaredAlpha"`
+
+	Applied        SurfaceFrame `json:"applied"`
+	AppliedVisible bool         `json:"appliedVisible"`
+	AppliedAlpha   float64      `json:"appliedAlpha"`
+
+	Drift SurfaceFrame `json:"drift"`
+	Worst float64      `json:"worst"`
+}
+
+// compositionJudgementOf takes the maximum over one recorded composition.
+func compositionJudgementOf(composition Composition, parentPresent bool) compositionJudgement {
+	// Never nil: a nil slice encodes as null, and a caller reading length on
+	// null gets an error where it asked a question.
+	places := make([]compositionPlace, 0, len(composition.Placements))
+	undeclared := make([]string, 0)
+	unapplied := make([]string, 0, len(composition.Unapplied))
+	unapplied = append(unapplied, composition.Unapplied...)
+
+	worst := 0.0
+	displaced := 0
+	for _, placement := range composition.Placements {
+		if placement.Undeclared {
+			undeclared = append(undeclared, placement.ID)
+			displaced++
+			continue
+		}
+		drift := placement.Drift()
+		here := largestComponent(drift)
+		if here > worst {
+			worst = here
+		}
+		if placement.Displaced() {
+			displaced++
+		}
+		places = append(places, compositionPlace{
+			ID:              placement.ID,
+			Kind:            placement.Kind,
+			Generation:      placement.Generation,
+			Layer:           placement.Layer,
+			Declared:        placement.Declared,
+			DeclaredVisible: placement.DeclaredVisible,
+			DeclaredAlpha:   placement.DeclaredAlpha,
+			Applied:         placement.Applied,
+			AppliedVisible:  placement.AppliedVisible,
+			AppliedAlpha:    placement.AppliedAlpha,
+			Drift:           drift,
+			Worst:           here,
+		})
+	}
+
+	return compositionJudgement{
+		Sequence:            composition.Sequence,
+		Coordinates:         "css-top-left",
+		NativeParentPresent: parentPresent,
+		Worst:               worst,
+		Displaced:           displaced,
+		Surfaces:            places,
+		Unapplied:           unapplied,
+		Undeclared:          undeclared,
+		Failure:             composition.Failure,
+		FailedSequence:      composition.FailedSequence,
+	}
+}
+
+// largestComponent is how far a rectangle is from where it was declared, as one
+// number. Every component counts: a surface that is the right size in the wrong
+// place and one that is the right place in the wrong size are both wrong, and
+// reading only the origin reports the second as correct.
+func largestComponent(drift SurfaceFrame) float64 {
+	worst := 0.0
+	for _, component := range []float64{drift.X, drift.Y, drift.W, drift.H} {
+		if component < 0 {
+			component = -component
+		}
+		if component > worst {
+			worst = component
+		}
+	}
+	return worst
 }
 
 // registerInventoryRefusals declares the three names that ask this backend to
