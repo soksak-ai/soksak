@@ -610,13 +610,13 @@ export function registerWindowCatalog(): void {
 
   register("window.monitors", {
     description:
-      "Monitor and window placement facts (physical px): every monitor's rect/scale/name and every window's rect, focus state, and owning monitor index. Facts only — placement strategy is layout.suggest, execution is window.place (same coordinate space).",
+      "Monitor and window placement facts in device-independent points, declared as `space: \"dip\"` in the payload: every monitor's rect/scale/name and every window's rect, focus state, and owning monitor index. Each monitor carries its scale, so pixels are a multiplication away. Facts only — placement strategy is layout.suggest, execution is window.place (same coordinate space).",
     triggers: {
       ko: "모니터 목록 해상도 창 배치 현황 듀얼 모니터 파악",
     },
     params: {},
     returns:
-      "{ monitors: [{index,name,x,y,w,h,scale}], windows: [{label,title,x,y,w,h,focused,monitor}] }",
+      "{ space: \"dip\", monitors: [{index,name,x,y,w,h,scale}], windows: [{label,x,y,w,h,focused,monitor}] }",
     message: (d) =>
       tmsg("msg.window.monitors", {
         n: ((d.monitors as unknown[]) ?? []).length,
@@ -630,16 +630,16 @@ export function registerWindowCatalog(): void {
 
   register("window.place", {
     description:
-      "Place a window at an exact frame (physical px — the window.monitors coordinate space). Position and size applied once. Use layout.suggest output directly. The OS may clamp frames into the usable area (e.g. below the macOS menu bar) — read back window.monitors for the settled frame.",
+      "Place a window at an exact frame in device-independent points — the window.monitors coordinate space. Position and size applied once. Use layout.suggest output directly. The OS may clamp frames into the usable area (e.g. below the macOS menu bar) — read back window.monitors for the settled frame.",
     triggers: {
       ko: "창 배치 이동 모니터로 옮기기 위치 지정",
     },
     params: {
       label: P.windowLabel,
-      x: { type: "number", description: "Left edge (physical px)", required: true },
-      y: { type: "number", description: "Top edge (physical px)", required: true },
-      w: { type: "number", description: "Width (physical px)", required: true },
-      h: { type: "number", description: "Height (physical px)", required: true },
+      x: { type: "number", description: "Left edge (device-independent points)", required: true },
+      y: { type: "number", description: "Top edge (device-independent points)", required: true },
+      w: { type: "number", description: "Width (device-independent points)", required: true },
+      h: { type: "number", description: "Height (device-independent points)", required: true },
     },
     returns: "{ ok }",
     message: () => tmsg("msg.window.place"),
