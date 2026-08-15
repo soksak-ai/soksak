@@ -60,11 +60,93 @@ export function withReaderLanguage<T>(language: string | null | undefined, run: 
   }
 }
 
+// Plural rules per language, kept because building one is not free and every counted sentence
+// needs it. A caller never chooses a form itself: `n === 1 ? … : …` is right for English, wrong for
+// Korean, which has one form, and wrong differently for Russian and Arabic — which is why I5
+// forbids it.
+const pluralRules = new Map<string, Intl.PluralRules>();
+
+function rulesFor(language: string): Intl.PluralRules {
+  let rules = pluralRules.get(language);
+  if (!rules) {
+    rules = new Intl.PluralRules(language);
+    pluralRules.set(language, rules);
+  }
+  return rules;
+}
+
+/**
+ * Picks one form out of an ICU plural value, and puts the number where `#` is.
+ *
+ *     "{n, plural, one {# pane} other {# panes}}"
+ *
+ * ICU because a bare separator is not safe here: the table already writes prose containing `|`
+ * ("flow | pin", "stroke|fill|both"), and a separator that also appears in sentences turns one of
+ * them into two forms nothing selects.
+ *
+ * A value that is not a plural is itself — most sentences count nothing, and a notation on all of
+ * them would be a thousand places to get wrong.
+ *
+ * No count keeps the value as written. A caller that passes no number is not asking for a form, and
+ * choosing "other" for them turns every uncounted use into the plural sentence.
+ */
+export function selectPluralForm(
+  value: string,
+  language: string,
+  count: number | undefined,
+): string {
+  const head = /^\{\s*(\w+)\s*,\s*plural\s*,/.exec(value);
+  if (!head || !value.endsWith("}")) return value;
+  const forms = pluralBranches(value.slice(head[0].length, -1));
+  if (forms.size === 0) return value;
+  if (count === undefined) {
+    // The first branch as written, so an uncounted read is a sentence rather than a notation.
+    return [...forms.values()][0];
+  }
+  const category = rulesFor(language).select(count);
+  // exact=N wins over the category, which is how ICU writes "no panes" without a rule for it.
+  const chosen = forms.get(`=${count}`) ?? forms.get(category) ?? forms.get("other") ?? [...forms.values()][0];
+  return chosen.split("#").join(String(count));
+}
+
+/** `one {…} other {…}` → the branches, in the order written. */
+function pluralBranches(body: string): Map<string, string> {
+  const branches = new Map<string, string>();
+  const pattern = /(=\d+|\w+)\s*\{/g;
+  for (let match = pattern.exec(body); match; match = pattern.exec(body)) {
+    let depth = 1;
+    let index = pattern.lastIndex;
+    while (index < body.length && depth > 0) {
+      if (body[index] === "{") depth += 1;
+      else if (body[index] === "}") depth -= 1;
+      index += 1;
+    }
+    // An unbalanced branch is a table entry someone mistyped. Taking what is there would answer half
+    // a sentence; leaving it out lets the caller fall through to another branch or to the value.
+    if (depth !== 0) break;
+    branches.set(match[1], body.slice(pattern.lastIndex, index - 1));
+    pattern.lastIndex = index;
+  }
+  return branches;
+}
+
 export function tmsg(key: MsgKey, params?: Record<string, string | number>): string {
   const lang = readerLanguage ?? useSettings.getState().language;
-  let s: string = messages[lang][key] ?? ko[key] ?? key;
+  const stored: string = messages[lang][key] ?? ko[key] ?? key;
+  const count = countIn(params);
+  let s = selectPluralForm(stored, lang, count);
   if (params) for (const k in params) s = s.split(`{${k}}`).join(String(params[k]));
   return s;
+}
+
+/** The number a sentence counts. `count` first, `n` as the name this table already uses. */
+function countIn(params?: Record<string, string | number>): number | undefined {
+  if (!params) return undefined;
+  for (const name of ["count", "n"] as const) {
+    const value = params[name];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return undefined;
 }
 
 // Simple i18n: message key → ko/en. useT() returns a translation function for the current language.
@@ -88,7 +170,10 @@ export function useT(): TFn {
   const lang = useSettings((s) => s.language);
   return useCallback<TFn>(
     (key, params) => {
-      let s: string = messages[lang][key] ?? ko[key] ?? key;
+      // The same rule as tmsg: the forms are in the table and Intl picks one. A component that
+      // chose here would be right for English and wrong for Korean.
+      const stored: string = messages[lang][key] ?? ko[key] ?? key;
+      let s = selectPluralForm(stored, lang, countIn(params));
       if (params) {
         for (const k in params) s = s.replace(`{${k}}`, String(params[k]));
       }
