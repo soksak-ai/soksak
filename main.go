@@ -46,7 +46,7 @@ const buildProfile = "debug"
 //
 // So this build takes its own environment rather than a framework name.
 // Measured 2026-08-15: `com.soksak.dev` opened ~/.soksak-dev/soksak.db while
-// an earlier build's sockets were live in that directory. The store is
+// another process held live sockets in that directory. The store is
 // single-writer by design and SQLite does not refuse a second writer — it
 // serialises — so the collision would have stayed silent.
 const defaultIdentifier = "com.soksak.wails"
@@ -128,7 +128,6 @@ func main() {
 			// assuming a live pid is the child it started.
 			Reaper:      nil,
 			ProcessSink: processEventSink{bridge: bridge},
-			Sessions:    terminalSessions{service: terminals},
 		})
 	}
 
@@ -152,6 +151,7 @@ func main() {
 			Registry:     registry,
 			Bridge:       bridge,
 			Terminal:     terminals,
+			UnitRoot:     filepath.Join(resolved.Home, "plugins"),
 		})
 	})
 	if err != nil {

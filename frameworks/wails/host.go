@@ -7,13 +7,16 @@ package wails
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"time"
 	"unsafe"
 
 	nativebrowser "github.com/soksak/soksak-plugin-browser-native"
 	terminal "github.com/soksak/soksak-plugin-terminal-xterm"
+	terminalplugin "github.com/soksak/soksak-plugin-terminal-xterm"
 	compositor "github.com/soksak/wails-service-native-compositor"
 
 	"github.com/soksak/soksak-core/core/control"
@@ -42,6 +45,11 @@ type Options struct {
 	// its window-owning commands onto it; everything else was registered by the
 	// launcher, which is what keeps those answerable with no window at all.
 	Registry *control.Registry
+	// UnitRoot is the directory holding installed units. The asset server reads
+	// unit files out of it and refuses every path outside it. Empty means this
+	// build serves no unit files, and the route states that rather than
+	// answering 404.
+	UnitRoot string
 }
 
 const (
@@ -70,18 +78,28 @@ func Run(options Options) error {
 
 	browserBackend := nativebrowser.NewBackend()
 
+	// The compositor service, held so the surface commands can read what it
+	// applied. The service list below registers the same value.
+	nativeCompositor := compositor.NewService(nativeWindow, browserBackend)
+
 	app := application.New(application.Options{
 		Name:        appName,
 		Description: appDescription,
 		Services: []application.Service{
 			application.NewService(options.Terminal),
-			application.NewService(compositor.NewService(nativeWindow, browserBackend)),
+			application.NewService(nativeCompositor),
 			application.NewService(nativebrowser.NewService(browserBackend)),
 			application.NewService(NewCaptureService(nativeWindow)),
 			application.NewService(NewControlService(options.Registry)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(options.Assets),
+			// Unit files are not in the embedded FS: they are installed under
+			// the home after this binary was built. The middleware answers that
+			// one route and hands everything else to the embedded handler.
+			Middleware: func(next http.Handler) http.Handler {
+				return UnitFiles(options.UnitRoot, next)
+			},
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
@@ -106,12 +124,20 @@ func Run(options Options) error {
 		options.Bridge.host = windowHost
 	}
 
-	// The renderer command bridge. Registered before any window exists, and
-	// hooked to window creation before the first one is made: a window created
-	// ahead of the hook would never report that it closed, and its names would
-	// stay on the table pointing at a page that is gone.
-	renderer := RegisterRendererCommands(options.Registry, func(target, event string, payload any) error {
-		return dispatchToWindow(app, target, event, payload)
+	// Every command this framework owns, in one call. Registered before any
+	// window exists, and the renderer half is hooked to window creation before
+	// the first one is made: a window created ahead of the hook would never
+	// report that it closed, and its names would stay on the table pointing at
+	// a page that is gone.
+	renderer := RegisterHost(options.Registry, HostDeps{
+		Host:         windowHost,
+		NewID:        newWindowID,
+		Sessions:     terminalplugin.CommandSessions(options.Terminal),
+		Composition:  NewCompositorSource(nativeCompositor),
+		NativeParent: func() bool { return nativeWindow() != nil },
+		Dispatch: func(target, event string, payload any) error {
+			return dispatchToWindow(app, target, event, payload)
+		},
 	})
 	app.Event.On(rendererDeclareEvent, func(event *application.CustomEvent) {
 		// Sender is stamped by the framework, never by the page. A page that
@@ -129,6 +155,14 @@ func Run(options Options) error {
 		created.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
 			if err := renderer.Withdraw(created.Name()); err != nil {
 				log.Printf("renderer commands: %v", err)
+			}
+			// The window that owned these shells is going away, and nothing else
+			// will ask about them: a session keyed to a closed window is a
+			// process with no caller and no way to be reached again.
+			if _, err := options.Registry.Invoke("close_window_terminals", control.Args{
+				"windowLabel": jsonString(created.Name()),
+			}); err != nil {
+				log.Printf("closing the window's terminals: %v", err)
 			}
 		})
 	})
@@ -161,14 +195,6 @@ func Run(options Options) error {
 	// two owners: the split is declared, not enforced by having two tables.
 	// They are registered after the window exists, because they hold it.
 	registerWindowCommands(options.Registry, app, window)
-
-	// The workspace window group. It holds no window of its own: it asks the
-	// host, which is why the same rules answer in a test with no application.
-	Register(options.Registry, Deps{Host: windowHost, NewID: newWindowID})
-	RegisterCapture(options.Registry, windowHost)
-	// Each window carries its own theme, so the colour goes to the window that
-	// asked rather than to the one this host happened to capture.
-	RegisterBackground(options.Registry, windowHost)
 
 	// A capture probe runs after the window has had a chance to paint, then
 	// exits. It does not depend on the frontend booting, so a capture defect and
@@ -252,4 +278,13 @@ func newWindowTemplate() application.WebviewWindowOptions {
 		// window_set_background.
 		BackgroundColour: application.NewRGB(6, 7, 15),
 	}
+}
+
+// jsonString encodes one string argument for a registry call.
+//
+// The registry takes arguments still encoded, so a caller inside this process
+// encodes them the same way the wire does. Marshalling a string cannot fail.
+func jsonString(value string) json.RawMessage {
+	encoded, _ := json.Marshal(value)
+	return encoded
 }

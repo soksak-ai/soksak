@@ -14,138 +14,11 @@ import (
 	"github.com/soksak/soksak-core/core/identity"
 	"github.com/soksak/soksak-core/core/process"
 	"github.com/soksak/soksak-core/core/store"
-	"github.com/soksak/soksak-core/core/terminal"
+	terminalcmd "github.com/soksak/soksak-plugin-terminal-xterm/command"
 )
 
 // invokeCall finds the backend commands the frontend calls by name.
 var invokeCall = regexp.MustCompile(`invoke(?:Command)?[A-Za-z]*<?[^>(]*>?\(\s*"([a-z][a-z0-9_]*)"`)
-
-// unserved is what the frontend calls and this build does not answer yet.
-//
-// Every entry is a feature that fails the moment a user reaches it. The list is
-// here rather than in a document because a document does not fail: while it was
-// only written down, "the boot commands are all served" was true and sounded
-// like the application worked — it did not, and opening a project stopped on
-// the first missing name.
-//
-// Removing an entry is the definition of progress. Adding one is a decision:
-// the frontend now calls something this backend does not answer, and that must
-// be a choice rather than a discovery made by a user.
-var unserved = map[string]string{
-	// Project lifecycle. Nothing about a workspace is reachable without these.
-
-	// Files and watching.
-
-	// Terminal and PTY.
-	"ack_terminal":           "terminal",
-	"pty_read_sealed_screen": "terminal",
-	"pty_sidecar_request":    "terminal",
-	"pty_daemon_status":      "terminal",
-	"pty_daemon_restart":     "terminal",
-	"pty_daemon_upgrade":     "terminal",
-
-	// Child processes.
-	"cleanup_stale": "process",
-
-	// Windows.
-	"titlebar_backing": "window",
-
-	// Native surfaces.
-	"webview_close":   "surface",
-	"webview_recover": "surface",
-	"webview_visible": "surface",
-
-	// Storage beyond the key-value pairs boot needs.
-	"data_encrypt_status":  "storage",
-	"data_encrypt_rotate":  "storage",
-	"data_encrypt_recover": "storage",
-
-	// Secrets.
-	"secret_set": "secret",
-
-	// Sidecars and services.
-	"sidecar_open":     "sidecar",
-	"sidecar_send":     "sidecar",
-	"sidecar_close":    "sidecar",
-	"service_dispatch": "sidecar",
-	"service_bus_push": "sidecar",
-
-	// Daemon and schedule.
-	"daemon_start":    "daemon",
-	"daemon_reap":     "daemon",
-	"daemon_run_once": "daemon",
-
-	// Everything else the frontend reaches for.
-	"ai_session_untrack":     "misc",
-	"app_relaunch":           "misc",
-	"app_shutdown_commit":    "misc",
-	"clipboard_read":         "misc",
-	"clipboard_write":        "misc",
-	"clipboard_watch_start":  "misc",
-	"clipboard_watch_stop":   "misc",
-	"download_verify":        "misc",
-	"ipc_hello_info":         "misc",
-	"notify_activate":        "misc",
-	"plugin_remove":          "misc",
-	"remote_confirm_resolve": "misc",
-	"skill_refresh_spawn":    "misc",
-	"unit_dev_set":           "misc",
-	"unit_dev_remove":        "misc",
-	"update_check":           "misc",
-	"update_apply":           "misc",
-	"verify_and_link":        "misc",
-	"ws_connect":             "misc",
-	"ws_send":                "misc",
-	"ws_close":               "misc",
-
-	// Added by the gate on 2026-08-15.
-	"ipc_last_project_window": "project",
-
-	// Added by the gate on 2026-08-15.
-
-	// Added by the gate on 2026-08-15.
-	"pty_pane_pid": "terminal",
-
-	// Added by the gate on 2026-08-15.
-	"webview_health_query": "window",
-	"webview_list":         "window",
-
-	// Added by the gate on 2026-08-15.
-	"data_canary":                  "storage",
-	"data_encrypt_change_recovery": "storage",
-	"data_encrypt_convert":         "storage",
-	"data_encrypt_enable":          "storage",
-	"data_kv_history":              "storage",
-	"data_kv_undo":                 "storage",
-
-	// Added by the gate on 2026-08-15.
-
-	// Added by the gate on 2026-08-15.
-	"media_proxy_info": "sidecar",
-	"service_status":   "sidecar",
-	"sidecar_dev_new":  "sidecar",
-
-	// Added by the gate on 2026-08-15.
-
-	// Added by the gate on 2026-08-15.
-	"plugin_dev_new":         "install",
-	"plugin_dev_new2":        "install",
-	"unit_install_begin":     "install",
-	"unit_install_commit":    "install",
-	"unit_install_read_utf8": "install",
-	"unit_install_rollback":  "install",
-	"unit_install_stage":     "install",
-
-	// Added by the gate on 2026-08-15.
-
-	// Added by the gate on 2026-08-15.
-	"app_shutdown_prepare": "control",
-	"ipc_cli_dir":          "control",
-	"ipc_socket_path":      "control",
-	"net_udp_request":      "control",
-	"net_udp_send":         "control",
-	"notify_show":          "control",
-}
 
 // TestEveryFrontendCallIsAccountedFor keeps the two halves of the application
 // from drifting apart about which commands exist.
@@ -189,22 +62,23 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		// consumer that reads and drops. It measures which commands register,
 		// never what they emit.
 		ProcessSink: discardProcessOutput{},
-		Sessions:    idleSessions{},
 		OS:          "darwin",
 		Arch:        "arm64",
 	})
-	Register(registry, Deps{Host: startedHost(), NewID: counter("1")})
-	// The surface group reads a composition rather than holding one, so the
-	// gate hands it one that was never committed. Which names register depends
-	// on the dependencies being present, never on what they answer.
-	RegisterSurface(registry, SurfaceDeps{
+	// The same call Run makes. A second list here drifts from that one in both
+	// directions at once and neither side reports it: measured 2026-08-15, this
+	// gate registered the surface group the application never did, and the
+	// application registered capture and background this gate never did. Which
+	// names register depends on the dependencies being present, never on what
+	// they answer, so stubs are enough.
+	RegisterHost(registry, HostDeps{
+		Host:         startedHost(),
+		NewID:        counter("1"),
+		Sessions:     idleSessions{},
 		Composition:  stubComposition{},
 		NativeParent: func() bool { return false },
+		Dispatch:     func(string, string, any) error { return nil },
 	})
-	// The renderer command bridge registers the one name a page answers with.
-	// A gate that assembled everything but this would read cmd_result as
-	// missing while the running process serves it.
-	RegisterRendererCommands(registry, func(string, string, any) error { return nil })
 
 	served := map[string]bool{}
 	for _, command := range registry.Describe().Commands {
@@ -226,12 +100,20 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		served[name] = true
 	}
 
+	// What this build refuses by name, read from the registry rather than from a
+	// second list here. A list in the test can agree with the test while the
+	// running process answers "unknown command" for the same name.
+	refused := map[string]string{}
+	for _, entry := range registry.Describe().Unserved {
+		refused[entry.Name] = entry.BlockedBy
+	}
+
 	var undeclared []string
 	for _, name := range called {
 		if served[name] {
 			continue
 		}
-		if _, declared := unserved[name]; !declared {
+		if _, declared := refused[name]; !declared {
 			undeclared = append(undeclared, name)
 		}
 	}
@@ -239,20 +121,39 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 
 	if len(undeclared) > 0 {
 		t.Errorf("the frontend calls commands this backend neither serves nor declares unserved: %v\n"+
-			"Serve them, or add them to `unserved` with the group they belong to.", undeclared)
+			"Serve them, or declare them unserved with a reason in the group that owns them.", undeclared)
 	}
 
-	// An entry that is now served must leave the list, or the list stops
-	// describing the gap and starts hiding progress.
-	var stale []string
-	for name := range unserved {
-		if served[name] {
-			stale = append(stale, name)
+	// A declared refusal that nobody calls is not a gap. The caller was removed
+	// and the declaration outlived it, so the next reader plans work for a
+	// feature with no consumer.
+	callers := map[string]bool{}
+	for _, name := range called {
+		callers[name] = true
+	}
+	var uncalled []string
+	for name := range refused {
+		if !callers[name] {
+			uncalled = append(uncalled, name)
 		}
 	}
-	sort.Strings(stale)
-	if len(stale) > 0 {
-		t.Errorf("these are served but still listed as unserved: %v", stale)
+	sort.Strings(uncalled)
+	if len(uncalled) > 0 {
+		t.Errorf("these are declared unserved but the frontend no longer calls them: %v\n"+
+			"Remove the declaration; it describes the gap, not the history.", uncalled)
+	}
+
+	// Every refusal carries a reason. "unknown command" and "not built" are
+	// different answers, and only the second tells the caller to stop looking.
+	var mute []string
+	for name, because := range refused {
+		if strings.TrimSpace(because) == "" {
+			mute = append(mute, name)
+		}
+	}
+	sort.Strings(mute)
+	if len(mute) > 0 {
+		t.Errorf("these are refused with no reason: %v", mute)
 	}
 }
 
@@ -310,9 +211,9 @@ func (discardProcessOutput) EmitProcessExit(process.Exit) process.Delivery {
 // depends on an owner being present, never on what it can do.
 type idleSessions struct{}
 
-func (idleSessions) Open(string, uint16, uint16) (terminal.Handle, error) {
-	return terminal.Handle{}, nil
+func (idleSessions) Open(string, string, uint16, uint16) (terminalcmd.Handle, error) {
+	return terminalcmd.Handle{}, nil
 }
-func (idleSessions) Write(terminal.Handle, string) error          { return nil }
-func (idleSessions) Resize(terminal.Handle, uint16, uint16) error { return nil }
-func (idleSessions) Close(terminal.Handle) error                  { return nil }
+func (idleSessions) Write(terminalcmd.Handle, string) error          { return nil }
+func (idleSessions) Resize(terminalcmd.Handle, uint16, uint16) error { return nil }
+func (idleSessions) Close(terminalcmd.Handle) error                  { return nil }
