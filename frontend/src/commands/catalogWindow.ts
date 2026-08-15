@@ -258,7 +258,7 @@ export function registerWindowCatalog(): void {
     handler: async (p) => {
       const label = windowTarget(p);
       const labels = await invoke<string[]>("window_list");
-      if (!labels.includes(label)) return notFound(tmsg("msg.window.notFound", { label }));
+      if (!labels.includes(label)) return notFound("msg.window.notFound", { label });
       // Bring the app forward only for this window — pulling the app forward on a call that named
       // someone else's window is focus theft.
       if (label === currentWindowLabel()) await invoke("window_activate");
@@ -298,7 +298,7 @@ export function registerWindowCatalog(): void {
       const off = p.off === true;
       const label = windowTarget(p);
       const win = await windowByLabel(label);
-      if (!win) return notFound(tmsg("msg.window.notFound", { label }));
+      if (!win) return notFound("msg.window.notFound", { label });
       if (off) await win.unmaximize();
       else await win.maximize();
       return { maximized: !off };
@@ -551,7 +551,7 @@ export function registerWindowCatalog(): void {
       // the addressed target.
       const label = windowTarget(p);
       const labels = await invoke<string[]>("window_list");
-      if (!labels.includes(label)) return notFound(tmsg("msg.window.notFound", { label }));
+      if (!labels.includes(label)) return notFound("msg.window.notFound", { label });
       // A close command also edits the ledger — removing only the window lets the next boot bring
       // it back (forgetWindowSlot). Even on the self-close path this runs before the destruction:
       // after it, this code no longer runs.
@@ -649,7 +649,7 @@ export function registerWindowCatalog(): void {
     handler: async (p) => {
       const label = windowTarget(p);
       const labels = await invoke<string[]>("window_list");
-      if (!labels.includes(label)) return notFound(tmsg("msg.window.notFound", { label }));
+      if (!labels.includes(label)) return notFound("msg.window.notFound", { label });
       await invoke("window_place", { label, x: p.x, y: p.y, w: p.w, h: p.h });
       return {};
     },

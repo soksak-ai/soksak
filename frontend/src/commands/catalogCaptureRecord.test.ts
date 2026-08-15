@@ -11,7 +11,10 @@ vi.mock("../framework", async (importOriginal) => ({
   invoke: vi.fn(),
   frameworkPath: { tempDir: vi.fn(), join: vi.fn() },
 }));
-vi.mock("../i18n", () => ({ tmsg: () => "record" }));
+vi.mock("../i18n", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../i18n")>()),
+  tmsg: () => "record",
+}));
 vi.mock("../lib/contentViews", () => ({
   contentViewHost: vi.fn(),
   hasContentViewHost: () => false,

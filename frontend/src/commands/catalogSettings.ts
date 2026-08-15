@@ -508,7 +508,7 @@ export function registerSettingsCatalog(): void {
     handler: (p) => {
       const s = useTheme.getState();
       const ok2 = s.apply(p.name as string, p.mode as "light" | "dark" | undefined);
-      if (!ok2) return notFound(tmsg("msg.theme.apply.notFound", { name: String(p.name) }));
+      if (!ok2) return notFound("msg.theme.apply.notFound", { name: String(p.name) });
       const cur = useTheme.getState();
       return { name: cur.current, mode: cur.effectiveMode };
     },

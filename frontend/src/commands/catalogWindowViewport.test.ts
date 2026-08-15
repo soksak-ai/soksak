@@ -10,7 +10,10 @@ vi.mock("../framework", async (importOriginal) => ({
   currentWindow: vi.fn(),
   windowByLabel: vi.fn(),
 }));
-vi.mock("../i18n", () => ({ tmsg: () => "window viewport" }));
+vi.mock("../i18n", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../i18n")>()),
+  tmsg: () => "window viewport",
+}));
 vi.mock("../lib/workspaceRoot", () => ({ validateWorkspaceRoot: vi.fn() }));
 vi.mock("../lib/webviewLabels", () => ({
   browserLabelPrefix: vi.fn(),

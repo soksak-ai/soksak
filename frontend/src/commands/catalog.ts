@@ -619,9 +619,9 @@ export function registerCatalog(): void {
     examples: ["layout.arrangement"],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       const solved = projectArrangement(t);
-      if (!solved) return notFound(tmsg("msg.space.notFound"));
+      if (!solved) return notFound("msg.space.notFound");
       const railOpen = t.sidebarOpen;
       return {
         projectId: t.id,
@@ -671,8 +671,8 @@ export function registerCatalog(): void {
     examples: ["layout.verify"],
     handler: async (p, ctx) => {
       const t0 = resolveWorkspace(p, ctx);
-      if (!t0) return notFound(tmsg("msg.workspace.notFound"));
-      if (!projectArrangement(t0)) return notFound(tmsg("msg.space.notFound"));
+      if (!t0) return notFound("msg.workspace.notFound");
+      if (!projectArrangement(t0)) return notFound("msg.space.notFound");
 
       const read = (el: HTMLElement, name: string): number => {
         const raw = getComputedStyle(el).getPropertyValue(name).trim();
@@ -699,9 +699,9 @@ export function registerCatalog(): void {
           requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
         });
         const before = resolveWorkspace(p, ctx);
-        if (!before) return notFound(tmsg("msg.workspace.notFound"));
+        if (!before) return notFound("msg.workspace.notFound");
         const solved = projectArrangement(before);
-        if (!solved) return notFound(tmsg("msg.space.notFound"));
+        if (!solved) return notFound("msg.space.notFound");
         const host = document.querySelector<HTMLElement>(
           `[data-node="layout/space/${before.activeSpaceId}"]`,
         );
@@ -716,7 +716,7 @@ export function registerCatalog(): void {
         attempt = { solved, workspace: before, host, stable };
         if (stable) break;
       }
-      if (!attempt) return notFound(tmsg("msg.workspace.notFound"));
+      if (!attempt) return notFound("msg.workspace.notFound");
       const { solved, workspace: t, host, stable } = attempt;
 
       const spaceId = t.activeSpaceId;
@@ -861,7 +861,7 @@ export function registerCatalog(): void {
     examples: ["state.context"],
     handler: (p, ctx) => {
       const loc = p.tab ? locateTab(p.tab as string) : resolveCtx(ctx);
-      if (!loc) return notFound(tmsg("msg.state.context.unresolved"));
+      if (!loc) return notFound("msg.state.context.unresolved");
       return {
         projectId: loc.workspace.id,
         spaceId: loc.space.id,
@@ -1125,7 +1125,7 @@ export function registerCatalog(): void {
     examples: ["workspace.sidebar.toggle"],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       return withTargets(S().toggleSidebar(t.id), { projectId: t.id });
     },
   });
@@ -1173,7 +1173,7 @@ export function registerCatalog(): void {
     examples: ["workspace.rightbar.toggle", 'workspace.rightbar.toggle \'{"open":true}\''],
     handler: async (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       const result = S().toggleRightSidebar(t.id, p.open as boolean | undefined);
       if (!result.ok) return result;
       await waitForDomCommit(() => {
@@ -1272,7 +1272,7 @@ export function registerCatalog(): void {
     examples: ["sidebar.left.tree"],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       return { projectId: t.id, layout: serializeSidebarLayout(t.leftLayout) };
     },
   });
@@ -1308,7 +1308,7 @@ export function registerCatalog(): void {
     ],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
 
       const mode = p.mode as "flow" | "pin" | undefined;
       const requested = p.station as number | undefined;
@@ -1360,7 +1360,7 @@ export function registerCatalog(): void {
       }
 
       const updated = S().workspaces.find((item) => item.id === t.id);
-      if (!updated) return notFound(tmsg("msg.workspace.notFound"));
+      if (!updated) return notFound("msg.workspace.notFound");
       return {
         projectId: updated.id,
         leftRailPosition: serializeLeftRailPosition(updated),
@@ -1391,7 +1391,7 @@ export function registerCatalog(): void {
     ],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       const zone = p.zone as string;
       const target = p.target as string;
       let drop;
@@ -1429,11 +1429,11 @@ export function registerCatalog(): void {
     ],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       const key = p.viewKey as string;
       const splitId = sidebarSplitIdOf(t.leftLayout, key);
       if (!splitId) {
-        return notFound(tmsg("msg.sidebar.left.resize.notSplit", { key }));
+        return notFound("msg.sidebar.left.resize.notSplit", { key });
       }
       const sizes = p.sizes as number[];
       const r = S().resizeSidebar(t.id, splitId, sizes);
@@ -1451,7 +1451,7 @@ export function registerCatalog(): void {
     examples: ["space.list"],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       return {
         projectId: t.id,
         spaces: t.spaces.map((c) => ({
@@ -1482,7 +1482,7 @@ export function registerCatalog(): void {
     examples: ['space.create \'{"program":"browser"}\''],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       const r = S().addContent(t.id, p.program as Program | undefined);
       if (!r.ok) return r;
       return {
@@ -1508,7 +1508,7 @@ export function registerCatalog(): void {
     examples: ['space.close \'{"space":"spc-d5e6f7"}\''],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       return withTargets(S().closeContent(t.id, p.space as string), {
         projectId: t.id,
         spaceId: p.space as string,
@@ -1529,7 +1529,7 @@ export function registerCatalog(): void {
     examples: ['space.activate \'{"space":"spc-d5e6f7"}\''],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       return withTargets(S().setActiveContent(t.id, p.space as string), {
         projectId: t.id,
         spaceId: p.space as string,
@@ -1581,7 +1581,7 @@ export function registerCatalog(): void {
     ],
     handler: async (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
       const prev = t.activeSpaceId;
       const to = p.to as string;
@@ -1668,7 +1668,7 @@ export function registerCatalog(): void {
     examples: ['space.rename \'{"space":"spc-d5e6f7","title":"build"}\''],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       return withTargets(
         S().renameContent(t.id, p.space as string, p.title as string),
         { projectId: t.id, spaceId: p.space as string },
@@ -1688,12 +1688,12 @@ export function registerCatalog(): void {
     examples: ["pane.list"],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       const c = p.space
         ? t.spaces.find((x) => x.id === p.space)
         : (resolveCtx(ctx)?.space ??
           t.spaces.find((x) => x.id === t.activeSpaceId));
-      if (!c) return notFound(tmsg("msg.space.notFoundId", { id: String(p.space) }));
+      if (!c) return notFound("msg.space.notFoundId", { id: String(p.space) });
       const arrangement =
         c.id === t.activeSpaceId ? projectArrangement(t) : null;
       const out = serializeSpace(
@@ -1826,7 +1826,7 @@ export function registerCatalog(): void {
     examples: ['pane.split \'{"side":"right"}\'', 'pane.split \'{"side":"bottom","program":"browser"}\''],
     handler: async (p, ctx) => {
       const loc = resolvePane(p, ctx);
-      if (!loc) return notFound(tmsg("msg.pane.notFound"));
+      if (!loc) return notFound("msg.pane.notFound");
       const wall = splitFloor(loc.workspace.id, loc.pane.id, p.side as Side);
       if (wall) return wall;
       const r = S().splitWithNewView(
@@ -1867,7 +1867,7 @@ export function registerCatalog(): void {
     examples: ['pane.merge \'{"src":"pan-p2q3r4","dst":"pan-g2h3j4"}\''],
     handler: (p, ctx) => {
       const loc = locatePane(p.src as string) ?? resolvePane(p, ctx);
-      if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.src) }));
+      if (!loc) return notFound("msg.pane.notFoundId", { id: String(p.src) });
       const r = S().moveGroupToGroup(
         loc.workspace.id,
         p.src as string,
@@ -1897,7 +1897,7 @@ export function registerCatalog(): void {
     examples: ['pane.move \'{"src":"pan-p2q3r4","dst":"pan-g2h3j4","zone":"left"}\''],
     handler: (p) => {
       const loc = locatePane(p.src as string);
-      if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.src) }));
+      if (!loc) return notFound("msg.pane.notFoundId", { id: String(p.src) });
       const r = S().moveGroupToGroup(
         loc.workspace.id,
         p.src as string,
@@ -1923,7 +1923,7 @@ export function registerCatalog(): void {
     examples: ['pane.close \'{"pane":"pan-p2q3r4"}\''],
     handler: (p) => {
       const loc = locatePane(p.pane as string);
-      if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.pane) }));
+      if (!loc) return notFound("msg.pane.notFoundId", { id: String(p.pane) });
       return withArrangement(
         loc.workspace.id,
         withTargets(S().closeGroup(loc.workspace.id, p.pane as string), {
@@ -1943,7 +1943,7 @@ export function registerCatalog(): void {
     examples: ['pane.activate \'{"pane":"pan-p2q3r4"}\''],
     handler: (p) => {
       const loc = locatePane(p.pane as string);
-      if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.pane) }));
+      if (!loc) return notFound("msg.pane.notFoundId", { id: String(p.pane) });
       const echo = { paneId: p.pane as string };
       if (!loc.pane.activeTabId)
         return withTargets(S().setActiveGroup(loc.workspace.id, p.pane as string), echo);
@@ -1979,7 +1979,7 @@ export function registerCatalog(): void {
     ],
     handler: (p, ctx) => {
       const loc = resolvePane(p, ctx);
-      if (!loc) return notFound(tmsg("msg.pane.notFound"));
+      if (!loc) return notFound("msg.pane.notFound");
       const edge = p.edge as GutterSide;
       if (!EDGES.includes(edge)) {
         return {
@@ -2000,7 +2000,7 @@ export function registerCatalog(): void {
       const gutter = resolveGutter(layout, loc.pane.id, edge, paneIdOf);
       const current = gutter ? splitSizesOf(layout, gutter.splitId) : null;
       if (!gutter || !current) {
-        return notFound(tmsg("msg.pane.noGutter", { pane: loc.pane.id, edge }));
+        return notFound("msg.pane.noGutter", { pane: loc.pane.id, edge });
       }
       const sizes = [...current];
       const pair = sizes[gutter.index] + sizes[gutter.index + 1];
@@ -2041,7 +2041,7 @@ export function registerCatalog(): void {
     ],
     handler: (p, ctx) => {
       const loc = resolvePane(p, ctx);
-      if (!loc) return notFound(tmsg("msg.pane.notFound"));
+      if (!loc) return notFound("msg.pane.notFound");
       const edge = p.edge as GutterSide;
       if (!EDGES.includes(edge)) {
         return {
@@ -2054,7 +2054,7 @@ export function registerCatalog(): void {
       const gutter = resolveGutter(layout, loc.pane.id, edge, paneIdOf);
       const current = gutter ? splitSizesOf(layout, gutter.splitId) : null;
       if (!gutter || !current) {
-        return notFound(tmsg("msg.pane.noGutter", { pane: loc.pane.id, edge }));
+        return notFound("msg.pane.noGutter", { pane: loc.pane.id, edge });
       }
       const sizes = [...current];
       if (p.all === true) {
@@ -2118,7 +2118,7 @@ export function registerCatalog(): void {
     ],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       const skipped: {
         space: string;
         program: string;
@@ -2217,7 +2217,7 @@ export function registerCatalog(): void {
     examples: ["tab.list"],
     handler: (p, ctx) => {
       const loc = resolvePane(p, ctx);
-      if (!loc) return notFound(tmsg("msg.pane.notFound"));
+      if (!loc) return notFound("msg.pane.notFound");
       return {
         paneId: loc.pane.id,
         activeTabId: loc.pane.activeTabId,
@@ -2245,7 +2245,7 @@ export function registerCatalog(): void {
     examples: ['tab.open \'{"program":"claude"}\''],
     handler: async (p, ctx) => {
       const loc = resolvePane(p, ctx);
-      if (!loc) return notFound(tmsg("msg.pane.notFound"));
+      if (!loc) return notFound("msg.pane.notFound");
       const r = S().addViewToGroup(loc.workspace.id, p.program as Program, loc.pane.id);
       if (!r.ok) return r; // Do not mix mounted into a failure envelope.
       // When the answer is ok, its result must be usable. The state changes immediately but a plugin
@@ -2269,7 +2269,7 @@ export function registerCatalog(): void {
     examples: ['tab.close \'{"tab":"tab-k5m6n7"}\''],
     handler: (p) => {
       const loc = locateTab(p.tab as string);
-      if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
+      if (!loc) return notFound("msg.tab.notFoundId", { id: String(p.tab) });
       return withTargets(S().closeView(loc.workspace.id, p.tab as string), {
         tabId: p.tab as string,
       });
@@ -2286,7 +2286,7 @@ export function registerCatalog(): void {
     examples: ['tab.activate \'{"tab":"tab-k5m6n7"}\''],
     handler: (p) => {
       const loc = locateTab(p.tab as string);
-      if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
+      if (!loc) return notFound("msg.tab.notFoundId", { id: String(p.tab) });
       return withTargets(
         transferViewFocus(activeSessionViewId(), p.tab as string, () =>
           S().setActiveView(loc.workspace.id, p.tab as string),
@@ -2314,7 +2314,7 @@ export function registerCatalog(): void {
     ],
     handler: (p) => {
       const loc = locateTab(p.tab as string);
-      if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
+      if (!loc) return notFound("msg.tab.notFoundId", { id: String(p.tab) });
       return withTargets(
         S().renameView(loc.workspace.id, p.tab as string, p.title as string),
         { tabId: p.tab as string },
@@ -2344,9 +2344,9 @@ export function registerCatalog(): void {
       }
       const loc = p.tab ? locateTab(p.tab as string) : resolveCtx(ctx);
       if (!loc?.tab)
-        return notFound(
-          p.tab ? tmsg("msg.tab.notFoundId", { id: String(p.tab) }) : tmsg("msg.tab.noActive"),
-        );
+        return p.tab
+          ? notFound("msg.tab.notFoundId", { id: String(p.tab) })
+          : notFound("msg.tab.noActive");
       const changesGeometry = loc.space.maximizedTabId !== loc.tab.id;
       const r = S().maximizeView(loc.workspace.id, loc.tab.id);
       if (!r.ok) return r;
@@ -2378,7 +2378,7 @@ export function registerCatalog(): void {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "causeTraceId is required" };
       }
       const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
+      if (!t) return notFound("msg.workspace.notFound");
       const changesGeometry = t.spaces.some((space) => space.id === t.activeSpaceId && space.maximizedTabId !== null);
       const r = S().restoreView(t.id);
       if (!r.ok) return r;
@@ -2405,7 +2405,7 @@ export function registerCatalog(): void {
     examples: ['tab.move \'{"tab":"tab-k5m6n7","dst":"pan-g2h3j4","zone":"right"}\''],
     handler: (p) => {
       const loc = locateTab(p.tab as string);
-      if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
+      if (!loc) return notFound("msg.tab.notFoundId", { id: String(p.tab) });
       const r = S().moveViewToGroup(
         loc.workspace.id,
         p.tab as string,
@@ -2456,9 +2456,9 @@ export function registerCatalog(): void {
     examples: ["term.read", 'term.read \'{"lines":50}\''],
     handler: (p, ctx) => {
       const r = resolveTermTab(p, ctx, terminalContextTab);
-      if (!r) return notFound(tmsg("msg.term.tabNotFound"));
+      if (!r) return notFound("msg.term.tabNotFound");
       const text = r.readBuffer(p.lines as number | undefined);
-      if (text === undefined) return notFound(tmsg("msg.term.notReady", { id: r.tabId }));
+      if (text === undefined) return notFound("msg.term.notReady", { id: r.tabId });
       return { tabId: r.tabId, text };
     },
   });
@@ -2478,9 +2478,9 @@ export function registerCatalog(): void {
     examples: ['term.send \'{"text":"ls\\r"}\'', 'term.send \'{"text":"\\u0003"}\''],
     handler: (p, ctx) => {
       const r = resolveTermTab(p, ctx, terminalContextTab);
-      if (!r) return notFound(tmsg("msg.term.tabNotFound"));
+      if (!r) return notFound("msg.term.tabNotFound");
       if (!r.sendInput(p.text as string))
-        return notFound(tmsg("msg.term.notReady", { id: r.tabId }));
+        return notFound("msg.term.notReady", { id: r.tabId });
       return { tabId: r.tabId };
     },
   });
@@ -2511,9 +2511,9 @@ export function registerCatalog(): void {
     examples: ['term.exec \'{"cmd":"git status"}\''],
     handler: (p, ctx) => {
       const r = resolveTermTab(p, ctx, terminalContextTab);
-      if (!r) return notFound(tmsg("msg.term.tabNotFound"));
+      if (!r) return notFound("msg.term.tabNotFound");
       if (!r.sendInput(`${p.cmd as string}\r`))
-        return notFound(tmsg("msg.term.notReady", { id: r.tabId }));
+        return notFound("msg.term.notReady", { id: r.tabId });
       return { tabId: r.tabId };
     },
   });
@@ -2531,7 +2531,7 @@ export function registerCatalog(): void {
     examples: ["term.cwd"],
     handler: (p, ctx) => {
       const r = resolveTermTab(p, ctx, terminalContextTab);
-      if (!r) return notFound(tmsg("msg.term.tabNotFound"));
+      if (!r) return notFound("msg.term.tabNotFound");
       return { tabId: r.tabId, cwd: r.getCwd() ?? null };
     },
   });

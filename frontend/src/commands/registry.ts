@@ -18,7 +18,7 @@ import {
 } from "../plugins/spec";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { cliName } from "../lib/cliIdentity";
-import { tmsg } from "../i18n";
+import { hasMessage, tmsg, withReaderLanguage, type MsgKey } from "../i18n";
 
 // Parameter spec (JSON-serializable — used as is for CLI/MCP/docs generation).
 export interface ParamSpec {
@@ -1112,6 +1112,9 @@ function validate(
   // When the handler owns the contract (native runtime proxy) there is no declaration, so pass through — the runtime validates.
   if (spec.paramsAuthority === "handler") return null;
   for (const key of Object.keys(params)) {
+    // The transport stamps who is calling and what they read. Neither is a parameter a command
+    // declares, and rejecting them would refuse every call that arrives over the control plane.
+    if (key === CALLER_LANGUAGE || key === CALLER_WINDOW) continue;
     if (!(key in spec.params)) return tmsg("msg.command.paramUnknown", { key });
   }
   for (const [key, p] of Object.entries(spec.params)) {
@@ -1202,6 +1205,25 @@ export async function executeFromPlugin(
   return executeTracked(name, params, ctx, "plugin");
 }
 
+/**
+ * What the caller reads, from the stamp the transport put on the call.
+ *
+ * Absent is a fact: a caller who named no language is not a caller asking for English, and the
+ * window then answers in its own — which is what it did before there was a stamp.
+ */
+function readerOf(params: Record<string, unknown>): string | null {
+  const stamped = params[CALLER_LANGUAGE];
+  return typeof stamped === "string" && stamped ? stamped : null;
+}
+
+// The argument name the control plane stamps. Named here rather than assembled, so this and the Go
+// constant are one string to change together (core/control.CallerLanguageArgument).
+const CALLER_LANGUAGE = "callerLanguage";
+
+// The window a call is made on behalf of (core/control.CallerWindowArgument). Some commands declare
+// it as a parameter of their own and read it; the ones that do not still receive it.
+const CALLER_WINDOW = "window";
+
 async function executeTracked(
   name: string,
   params: Record<string, unknown>,
@@ -1214,7 +1236,7 @@ async function executeTracked(
   const inner = channel === "plugin"
     ? await executePluginInner(name, params, ctx as PluginCommandContext)
     : await executeInner(name, params, ctx);
-  const out = withCommonFields(inner, name, ctx);
+  const out = withReaderLanguage(readerOf(params), () => withCommonFields(inner, name, ctx));
   const finished = Date.now();
   try {
     // Record everything (§5 R2 — every fact is recorded). The only exception = spec.trace === false:
@@ -1411,7 +1433,10 @@ async function executeInner(
       }
     }
     const result = await spec.handler(filled, ctx);
-    return normalizeOutcome(spec, result);
+    // Rendered here, in one synchronous stretch, so the sentence is built for whoever asked. The
+    // scope cannot span the await above: two commands from callers reading different languages
+    // would interleave and each could finish inside the other's scope.
+    return withReaderLanguage(readerOf(params), () => normalizeOutcome(spec, result));
   } catch (e) {
     // The thrown text is engine dialect (§3: message = human sentence, owned by the command). Putting it on the human
     // line makes the receiver read the engine's words as app state — measured: "out of memory" from the store was read
@@ -1453,10 +1478,19 @@ function normalizeOutcome(spec: CommandSpec | undefined, result: unknown): Comma
     return [valid.length ? valid : undefined, restNoHints];
   };
   if (raw.ok === false) {
-    const { ok: _o, code: rc, message: rm, error: re, data: rd, ...rest0 } = raw;
+    const {
+      ok: _o, code: rc, message: rm, error: re, data: rd,
+      messageKey: rk, messageParams: rp, ...rest0
+    } = raw;
     const [svcHints, rest] = takeServiceHints(rest0);
     const code = typeof rc === "string" ? rc : typeof re === "string" ? re : "INTERNAL";
-    const message = typeof rm === "string" ? rm : typeof re === "string" ? re : "error";
+    // A refusal that holds a key is rendered here, where the caller's language has been stamped
+    // onto the call. A handler that formatted the sentence itself picked a language before the
+    // reader was known — measured 2026-08-16, an English caller was answered in Korean.
+    const keyed = typeof rk === "string" && hasMessage(rk)
+      ? tmsg(rk as MsgKey, (rp ?? undefined) as Record<string, string | number> | undefined)
+      : undefined;
+    const message = keyed ?? (typeof rm === "string" ? rm : typeof re === "string" ? re : "error");
     const data = pickData(rest, rd);
     const out: CommandOutcome = { ok: false, code, message };
     if (data) out.data = data;

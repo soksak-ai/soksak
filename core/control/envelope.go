@@ -99,7 +99,16 @@ func Answer(registry *Registry, identity string, request Request) Response {
 	for name, raw := range request.Args {
 		args[name] = raw
 	}
-	result, err := registry.Invoke(request.Command, args)
+	// Stamped so a delegated command answers in the caller's language too. Rendering here covers
+	// only what this process wrote; a window builds its own sentences and cannot see the request.
+	//
+	// The window the caller named is theirs to name over a 0600 socket, so it passes through as
+	// sent rather than being overwritten with nothing.
+	var window string
+	if raw, named := args[CallerWindowArgument]; named {
+		_ = json.Unmarshal(raw, &window)
+	}
+	result, err := registry.InvokeFrom(Caller{Window: window, Language: language}, request.Command, args)
 	if err != nil {
 		// Rendered here, at the edge, because this is the first place with the
 		// reader in hand. A handler that formatted the sentence itself would have

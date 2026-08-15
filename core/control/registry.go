@@ -184,6 +184,16 @@ func (registry *Registry) Describe() Table {
 // believed.
 const CallerWindowArgument = "window"
 
+// CallerLanguageArgument is where a transport stamps what the caller reads.
+//
+// Answer renders this process's own refusals at the edge, where the reader is in hand. A window
+// cannot be rendered there: a delegated command runs in a page with its own display language and
+// no way to learn the caller's. Measured 2026-08-16, an English sok call was answered
+// TARGET_NOT_FOUND with its sentence in Korean.
+//
+// Overwritten by the transport like the window, so a caller who sends it is never believed.
+const CallerLanguageArgument = "callerLanguage"
+
 // Caller is what the transport has about who is calling.
 //
 // The frontend transport has it because the framework stamps which window made
@@ -194,6 +204,11 @@ type Caller struct {
 	// Window is the window this call is made on behalf of. Empty means the
 	// caller named none, and a command that needs one refuses by name.
 	Window string
+	// Language is what this caller reads. Empty means they named none, and a
+	// window then answers in its own — which is what it did before there was a
+	// stamp. Filling in a default here would have every unlabelled caller
+	// silently override a window's own setting.
+	Language i18n.Language
 }
 
 // InvokeFrom runs a command with the caller stamped onto its arguments.
@@ -215,6 +230,15 @@ func (registry *Registry) InvokeFrom(caller Caller, name string, args Args) (any
 			return nil, err
 		}
 		stamped[CallerWindowArgument] = encoded
+	}
+	if caller.Language == "" {
+		delete(stamped, CallerLanguageArgument)
+	} else {
+		encoded, err := json.Marshal(string(caller.Language))
+		if err != nil {
+			return nil, err
+		}
+		stamped[CallerLanguageArgument] = encoded
 	}
 	return registry.Invoke(name, stamped)
 }

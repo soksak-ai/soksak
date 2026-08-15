@@ -10,7 +10,10 @@ vi.mock("../state/theme", () => ({
   useTheme: (select: (state: unknown) => unknown) =>
     select({ spec: { relation: { radius: 12, strokeWidth: 1.5 } } }),
 }));
-vi.mock("../i18n", () => ({ useT: () => () => "LINKED" }));
+vi.mock("../i18n", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../i18n")>()),
+  useT: () => () => "LINKED",
+}));
 
 let observed: ((entries: Array<{ contentRect: DOMRect }>) => void) | undefined;
 class ResizeObserverMock {

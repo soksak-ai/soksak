@@ -15,7 +15,10 @@ vi.mock("../framework", async (importOriginal) => ({
   currentWindow,
   windowByLabel: vi.fn(),
 }));
-vi.mock("../i18n", () => ({ tmsg: () => "resize sequence" }));
+vi.mock("../i18n", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../i18n")>()),
+  tmsg: () => "resize sequence",
+}));
 vi.mock("../lib/workspaceRoot", () => ({ validateWorkspaceRoot: vi.fn() }));
 // Do not imitate the grammar — use the real derivation and replace only the window name with this test's.
 vi.mock("../lib/webviewLabels", async (importOriginal) => {

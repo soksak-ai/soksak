@@ -26,7 +26,12 @@ vi.mock("../state/theme", () => ({
   useTheme: (select: (state: unknown) => unknown) =>
     select({ spec: { relation: { radius: 12, strokeWidth: 1.5 } } }),
 }));
-vi.mock("../i18n", () => ({ useT: () => () => "LINKED" }));
+// Only the translation is replaced. A mock of the whole module has to grow every time i18n gains
+// an export, and the failure then names the mock rather than the change that caused it.
+vi.mock("../i18n", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../i18n")>()),
+  useT: () => () => "LINKED",
+}));
 
 import { RailLinkOverlay } from "./RailLinkOverlay";
 import type { RailRelationState } from "../lib/railArrangement";

@@ -713,7 +713,7 @@ export function registerPluginCatalog(): void {
       const nodes = depNodes();
       if (p.id) {
         const summary = depSummary(resolveShortId(String(p.id)) ?? String(p.id), nodes);
-        if (!summary) return notFound(tmsg("msg.plugin.notFoundId", { id: String(p.id) }));
+        if (!summary) return notFound("msg.plugin.notFoundId", { id: String(p.id) });
         return { ok: true as const, summary };
       }
       return { ok: true as const, issues: versionIssues(nodes) };
@@ -848,7 +848,7 @@ export function registerPluginCatalog(): void {
     handler: (p) => {
       const s = usePlugins.getState();
       const plug = s.plugins[resolveShortId(String(p.id)) ?? String(p.id)];
-      if (!plug) return notFound(tmsg("msg.plugin.notFoundId", { id: String(p.id) }));
+      if (!plug) return notFound("msg.plugin.notFoundId", { id: String(p.id) });
       return consentSummary(plug.manifest, s.plugins);
     },
   });
@@ -882,7 +882,7 @@ export function registerPluginCatalog(): void {
     handler: (p) => {
       const s = usePlugins.getState();
       const pid = resolveShortId(String(p.id)) ?? String(p.id);
-      if (!s.plugins[pid]) return notFound(tmsg("msg.plugin.notFoundId", { id: pid }));
+      if (!s.plugins[pid]) return notFound("msg.plugin.notFoundId", { id: pid });
       const granted = s.grantConsent(pid);
       return { id: pid, granted };
     },
@@ -903,7 +903,7 @@ export function registerPluginCatalog(): void {
     handler: (p) => {
       const s = usePlugins.getState();
       const pid = resolveShortId(String(p.id)) ?? String(p.id);
-      if (!s.plugins[pid]) return notFound(tmsg("msg.plugin.notFoundId", { id: pid }));
+      if (!s.plugins[pid]) return notFound("msg.plugin.notFoundId", { id: pid });
       return { id: pid, pending: pendingConsentChain(pid, s.plugins, s.consents) };
     },
   });
@@ -934,7 +934,7 @@ export function registerPluginCatalog(): void {
         useUi.getState().setConsentPreview(null);
         return { id: "", shown: false };
       }
-      if (!usePlugins.getState().plugins[id]) return notFound(tmsg("msg.plugin.notFoundId", { id }));
+      if (!usePlugins.getState().plugins[id]) return notFound("msg.plugin.notFoundId", { id });
       useUi.getState().setConsentPreview(id);
       return { id, shown: true };
     },
@@ -963,7 +963,7 @@ export function registerPluginCatalog(): void {
     examples: ['plugin.settings.schema \'{"id":"soksak-plugin-<id>"}\''],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
-      if (!plug) return notFound(tmsg("msg.plugin.notFoundId", { id: String(p.id) }));
+      if (!plug) return notFound("msg.plugin.notFoundId", { id: String(p.id) });
       return { id: p.id, configuration: plug.manifest.configuration ?? [] };
     },
   });
@@ -990,7 +990,7 @@ export function registerPluginCatalog(): void {
     ],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
-      if (!plug) return notFound(tmsg("msg.plugin.notFoundId", { id: String(p.id) }));
+      if (!plug) return notFound("msg.plugin.notFoundId", { id: String(p.id) });
       const scope = (p.scope as string | undefined) ?? "effective";
       const target = workspaceScope(p.workspace as string | undefined);
       const root = target?.root;
@@ -1033,7 +1033,7 @@ export function registerPluginCatalog(): void {
     ],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
-      if (!plug) return notFound(tmsg("msg.plugin.notFoundId", { id: String(p.id) }));
+      if (!plug) return notFound("msg.plugin.notFoundId", { id: String(p.id) });
       const setting = configSettingOf(plug.manifest, p.key as string);
       if (!setting) return invalid(tmsg("msg.plugin.settings.keyUndeclared", { key: String(p.key) }));
       const v = validateSettingValue(setting, p.value);
@@ -1077,7 +1077,7 @@ export function registerPluginCatalog(): void {
     examples: ['plugin.settings.reset \'{"id":"soksak-plugin-<id>","key":"defaultAgent"}\''],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
-      if (!plug) return notFound(tmsg("msg.plugin.notFoundId", { id: String(p.id) }));
+      if (!plug) return notFound("msg.plugin.notFoundId", { id: String(p.id) });
       const scope = (p.scope as string | undefined) ?? "global";
       const ps = usePluginSettings.getState();
       const key = p.key as string | undefined;
@@ -1123,7 +1123,7 @@ export function registerPluginCatalog(): void {
       }
       const section = raw ?? "general";
       if (section !== "general" && !usePlugins.getState().plugins[section]) {
-        return notFound(tmsg("msg.plugin.notFoundId", { id: section }));
+        return notFound("msg.plugin.notFoundId", { id: section });
       }
       useUi.getState().setSettingsSection(section);
       return { section };
@@ -1148,7 +1148,7 @@ export function registerPluginCatalog(): void {
     handler: async (p) => {
       if (p.id) {
         const id = resolveShortId(String(p.id)) ?? String(p.id);
-        if (!usePlugins.getState().plugins[id]) return notFound(tmsg("msg.plugin.notFoundId", { id }));
+        if (!usePlugins.getState().plugins[id]) return notFound("msg.plugin.notFoundId", { id });
         return usePlugins.getState().reloadOne(id);
       }
       await usePlugins.getState().reload();
@@ -1189,11 +1189,11 @@ export function registerPluginCatalog(): void {
       const s = useSessions.getState();
       const projectId = (p.workspace as string | undefined) ?? s.activeId;
       const workspace = s.workspaces.find((t) => t.id === projectId);
-      if (!workspace) return notFound(tmsg("msg.workspace.notFoundId", { id: projectId }));
+      if (!workspace) return notFound("msg.workspace.notFoundId", { id: projectId });
       const key = p.viewKey as string;
       const reg = getRegisteredView(key);
       if (!reg) {
-        return notFound(tmsg("msg.plugin.view.notRegistered", { key }));
+        return notFound("msg.plugin.view.notRegistered", { key });
       }
       const placement =
         (p.placement as ViewPlacement | undefined) ?? reg.decl.defaultPlacement;
@@ -1254,7 +1254,7 @@ export function registerPluginCatalog(): void {
       const s = useSessions.getState();
       const projectId = (p.workspace as string | undefined) ?? s.activeId;
       const workspace = s.workspaces.find((t) => t.id === projectId);
-      if (!workspace) return notFound(tmsg("msg.workspace.notFoundId", { id: projectId }));
+      if (!workspace) return notFound("msg.workspace.notFoundId", { id: projectId });
       const key = p.viewKey as string;
       const closed: string[] = [];
       const tabIds: string[] = [];
@@ -1355,7 +1355,7 @@ export function registerPluginCatalog(): void {
     handler: async (p) => {
       const id = p.id as string;
       const plug = usePlugins.getState().plugins[id];
-      if (!plug) return notFound(tmsg("msg.plugin.notFoundId", { id }));
+      if (!plug) return notFound("msg.plugin.notFoundId", { id });
       const c = plug.manifest.contributes;
       // commands: declared (contributes.commands) vs actually registered (the plugin.<id>. prefix in
       // catalogJson).
