@@ -155,3 +155,21 @@ func (list *environmentList) render() []string {
 	}
 	return entries
 }
+
+// ChildEnvironment builds the environment for a process this application
+// starts, for a caller outside this package.
+//
+// The rule has one owner. A daemon starts children too, and a second copy of
+// this would drift the moment either changed — and the way it drifts is that an
+// internal SOKSAK_* stops being stripped, so a vault master key reaches a child
+// and nobody notices until it is in someone's log.
+//
+// The full request shape stays private: secrets, scrubbing and removals belong
+// to the spawn path that has them. This is the plain case — inherit, strip,
+// override — which is what a supervisor starting a long-lived child needs.
+// home is taken rather than inherited: the application propagates its own
+// single truth to every child, so a second spawning process cannot quietly hand
+// down a different one.
+func ChildEnvironment(inherited []string, home string, overrides map[string]string) []string {
+	return childEnvironment(environmentRequest{Inherited: inherited, Home: home, Set: overrides})
+}

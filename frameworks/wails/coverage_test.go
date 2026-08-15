@@ -61,11 +61,7 @@ var unserved = map[string]string{
 	"data_encrypt_recover": "storage",
 
 	// Secrets.
-	"secret_set":     "secret",
-	"secret_has":     "secret",
-	"secret_delete":  "secret",
-	"secret_keys":    "secret",
-	"secret_backend": "secret",
+	"secret_set": "secret",
 
 	// Sidecars and services.
 	"sidecar_open":     "sidecar",
@@ -75,16 +71,9 @@ var unserved = map[string]string{
 	"service_bus_push": "sidecar",
 
 	// Daemon and schedule.
-	"daemon_start":      "daemon",
-	"daemon_stop":       "daemon",
-	"daemon_status":     "daemon",
-	"daemon_logs":       "daemon",
-	"daemon_reap":       "daemon",
-	"daemon_run_once":   "daemon",
-	"schedule_register": "daemon",
-	"schedule_cancel":   "daemon",
-	"schedule_list":     "daemon",
-	"schedule_poke":     "daemon",
+	"daemon_start":    "daemon",
+	"daemon_reap":     "daemon",
+	"daemon_run_once": "daemon",
 
 	// Everything else the frontend reaches for.
 	"ai_session_untrack":     "misc",
@@ -130,7 +119,6 @@ var unserved = map[string]string{
 	"data_kv_undo":                 "storage",
 
 	// Added by the gate on 2026-08-15.
-	"secret_status": "secret",
 
 	// Added by the gate on 2026-08-15.
 	"media_proxy_info": "sidecar",
@@ -138,17 +126,10 @@ var unserved = map[string]string{
 	"sidecar_dev_new":  "sidecar",
 
 	// Added by the gate on 2026-08-15.
-	"schedule_set": "daemon",
 
 	// Added by the gate on 2026-08-15.
-	"binary_integrity":       "install",
-	"host_unit_target":       "install",
-	"npm_global_dirs":        "install",
 	"plugin_dev_new":         "install",
 	"plugin_dev_new2":        "install",
-	"probe_binary":           "install",
-	"theme_install":          "install",
-	"unit_dev_validate_path": "install",
 	"unit_install_begin":     "install",
 	"unit_install_commit":    "install",
 	"unit_install_read_utf8": "install",
@@ -156,12 +137,6 @@ var unserved = map[string]string{
 	"unit_install_stage":     "install",
 
 	// Added by the gate on 2026-08-15.
-	"ai_session_active":  "ai",
-	"ai_session_detect":  "ai",
-	"ai_session_dir":     "ai",
-	"ai_session_find":    "ai",
-	"ai_session_inspect": "ai",
-	"ai_session_lineage": "ai",
 
 	// Added by the gate on 2026-08-15.
 	"app_shutdown_prepare": "control",
@@ -215,6 +190,8 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		// never what they emit.
 		ProcessSink: discardProcessOutput{},
 		Sessions:    idleSessions{},
+		OS:          "darwin",
+		Arch:        "arm64",
 	})
 	Register(registry, Deps{Host: startedHost(), NewID: counter("1")})
 	// The surface group reads a composition rather than holding one, so the

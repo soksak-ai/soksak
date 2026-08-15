@@ -14,14 +14,18 @@ import (
 	"path/filepath"
 
 	"github.com/soksak/soksak-core/core/activity"
+	"github.com/soksak/soksak-core/core/ai"
 	"github.com/soksak/soksak-core/core/app"
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/daemon"
 	"github.com/soksak/soksak-core/core/files"
 	"github.com/soksak/soksak-core/core/identity"
+	"github.com/soksak/soksak-core/core/install"
 	corenet "github.com/soksak/soksak-core/core/net"
 	"github.com/soksak/soksak-core/core/process"
 	"github.com/soksak/soksak-core/core/project"
 	"github.com/soksak/soksak-core/core/scan"
+	"github.com/soksak/soksak-core/core/secret"
 	"github.com/soksak/soksak-core/core/service"
 	"github.com/soksak/soksak-core/core/store"
 	"github.com/soksak/soksak-core/core/terminal"
@@ -95,6 +99,19 @@ type Boot struct {
 	Secrets process.SecretSource
 	// ProcessSink is where a child's output and exit reach a consumer.
 	ProcessSink process.Sink
+	// OS is the operating system this process runs on, as a value. install
+	// reports what was installed and where, and reading runtime.GOOS inside
+	// would answer what this binary is rather than what the caller asked.
+	OS string
+	// Arch is the processor family, for the same reason.
+	Arch string
+	// Keys is the operating system's key store — Keychain, Credential Manager,
+	// Secret Service. Nil means this host has no key store, and the vault says
+	// so rather than holding secrets somewhere it cannot protect them.
+	Keys secret.KeyStore
+	// Reaper answers what a live pid is running. A daemon that cannot ask
+	// declares the commands that need it rather than guessing a pid is its own.
+	Reaper daemon.Reaper
 	// Sessions owns the pseudo-terminals. The launcher builds it, because a
 	// pseudo-terminal needs no window and a terminal only a windowed process
 	// could have would leave this group outside headless for no reason the code
@@ -362,6 +379,40 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 			}
 		}
 	}
+
+	secret.Register(registry, secret.Deps{
+		KV:       boot.KV,
+		KeyStore: boot.Keys,
+	})
+
+	install.Register(registry, install.Deps{
+		Home:       boot.Identity.Home,
+		OS:         boot.OS,
+		Arch:       boot.Arch,
+		LoginShell: boot.LoginShell,
+		Run:        boot.Run,
+	})
+
+	daemon.Register(registry, daemon.Deps{
+		Spawner:    boot.Spawner,
+		LoginShell: boot.LoginShell,
+		Windows:    boot.Windows,
+		Now:        boot.Now,
+		Reaper:     boot.Reaper,
+		// The environment rule has one owner. A second copy here would drift the
+		// moment either changed, and the way it drifts is that an internal
+		// SOKSAK_* stops being stripped — a vault master key in a child's
+		// environment, found later in somebody's log.
+		Environment: func(overrides map[string]string) []string {
+			return process.ChildEnvironment(boot.Environment, boot.Identity.Home, overrides)
+		},
+		Announce: func(d daemon.Daemon) { emit("daemon:changed", d) },
+	})
+
+	ai.Register(registry, ai.Deps{
+		UserHome: boot.UserHome,
+		Lineage:  boot.KV,
+	})
 
 	return Wired{Claims: claims, Processes: processes}
 }

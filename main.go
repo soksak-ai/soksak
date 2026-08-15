@@ -100,6 +100,8 @@ func main() {
 			UserHome:    userHome,
 			LoginShell:  os.Getenv("SHELL"),
 			Windows:     runtime.GOOS == "windows",
+			OS:          runtime.GOOS,
+			Arch:        runtime.GOARCH,
 			PID:         os.Getpid(),
 			Environment: os.Environ(),
 			PidAlive:    pidAlive,
@@ -116,7 +118,15 @@ func main() {
 			// This host holds no vault. A spawn that asks for a secret is refused
 			// by name; handing back an empty value would surface later as the
 			// child's own authentication failure.
-			Secrets:     nil,
+			Secrets: nil,
+			// No operating-system key store is wired into this binary yet, so
+			// the vault refuses by name rather than holding secrets somewhere it
+			// cannot protect them.
+			Keys: nil,
+			// No process inspector either: a daemon that cannot ask what a pid
+			// is running declares the commands that need it, rather than
+			// assuming a live pid is the child it started.
+			Reaper:      nil,
 			ProcessSink: processEventSink{bridge: bridge},
 			Sessions:    terminalSessions{service: terminals},
 		})
