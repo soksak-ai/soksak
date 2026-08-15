@@ -146,7 +146,10 @@ func TestTrigramMatchesACJKSubstring(t *testing.T) {
 	if _, err := kv.Put("mailbox", "messages", "", "x1", document(t, `{"title":"이것은 저장소다"}`), 10); err != nil {
 		t.Fatalf("putting: %v", err)
 	}
-	hits, err := kv.Search("mailbox", "messages", "storage", nil, nil)
+	// The query is Hangul on purpose: this test exists because a trigram index
+	// over CJK has to match a substring that is three codepoints and no bytes
+	// wider. An ASCII query would prove nothing here.
+	hits, err := kv.Search("mailbox", "messages", "저장소", nil, nil)
 	if err != nil {
 		t.Fatalf("searching: %v", err)
 	}
