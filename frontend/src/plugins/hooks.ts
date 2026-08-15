@@ -9,12 +9,6 @@ import { invoke } from "../framework";
 import { safeListen } from "../lib/safeListen";
 import { listenThisWindow } from "../lib/windowEvents";
 import { currentWindowLabel } from "../lib/webviewLabels";
-import {
-  currentSessionOf,
-  isTracking,
-  startSessionTrack,
-  stopSessionTrack,
-} from "../state/sessionLineage";
 import { allGroups, useSessions } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useSettings } from "../state/settings";
@@ -153,10 +147,6 @@ export interface PluginEventMap {
     cwd?: string | null;
     // Exit code (R2 — shell provider OSC133 D;<code>). undefined when absent (no code delivered / non-shell).
     exitCode?: number;
-    // [step ⑤] AI session lineage — if the finished command is claude/codex, its kind and sessionId (null when absent). Written into
-    // the block, the basis for 'continue' after a restore. A non-agent command has both null/undefined (zero load).
-    agentKind?: string | null;
-    sessionId?: string | null;
   };
 }
 
@@ -496,8 +486,6 @@ export function startPluginHooks(): void {
         ...(cwd ? { cwd } : {}),
         lastActivity: Date.now(),
       });
-      const kind = commandLine ? await invoke<string | null>("ai_session_detect", { commandLine }) : null;
-      if (kind === "claude" && cwd) void startSessionTrack(paneId, cwd);
     })();
   });
 
@@ -518,10 +506,6 @@ export function startPluginHooks(): void {
     });
     // shell provider: command end = turn.ended (source shell). Includes the finished command line,
     // cwd and exitCode (R2) for body enrichment.
-    // [step ⑤] If claude was being tracked, the watch tracking value (currentSessionOf) goes into the block — not find polling but
-    // the current session, updated by fs-change throughout the run. After that, watch disarms.
-    const agentKind = isTracking(paneId) ? "claude" : null;
-    const sessionId = currentSessionOf(paneId);
     emitPluginEvent("turn.ended", {
       projectId: info?.id ?? null,
       root: info?.root ?? null,
@@ -530,10 +514,7 @@ export function startPluginHooks(): void {
       command: commandLine ?? null,
       cwd: cwd ?? null,
       exitCode,
-      agentKind,
-      sessionId,
     });
-    if (agentKind === "claude") void stopSessionTrack(paneId);
   });
 
   // idle provider wiring (OFF by default — turned on by the turn.idleDetection command). emit/projectInfo injected (avoids a circular import).

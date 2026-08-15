@@ -8,7 +8,7 @@
 // A contract written down and never read is the same as no contract. But it does not block silently:
 // what was missing must stay on the record by name, or the next person investigates it again.
 import { describe, expect, it } from "vitest";
-import { unmetNeeds } from "@soksak-ai/plugin-spec";
+import { unmetNeeds } from "./spec";
 
 const ELECTRON = {
   chromium: true,

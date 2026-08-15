@@ -10,7 +10,7 @@
 // investigate it again, and so the user reads it as "a surface this framework does not have"
 // rather than "broken".
 
-import { unmetNeeds, type EngineProvision, type PluginManifest } from "@soksak-ai/plugin-spec";
+import { unmetNeeds, type EngineProvision, type PluginManifest } from "./spec";
 
 /**
  * Does it consume an engine-model sidecar — **that alone is a surface requirement.**
