@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 const (
@@ -25,7 +27,7 @@ var namespacePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 func validateNamespace(ns string) error {
 	if !namespacePattern.MatchString(ns) {
-		return fmt.Errorf("store: namespace %q is not lowercase alphanumeric with hyphens", ns)
+		return i18n.Errorf("store.name.namespaceInvalid", map[string]string{"ns": ns})
 	}
 	return nil
 }

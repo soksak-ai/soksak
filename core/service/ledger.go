@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // WriteLedger replaces the ledger and reports whether anything changed.
@@ -23,7 +25,7 @@ func WriteLedger(path string, ledger json.RawMessage) (bool, error) {
 	if !json.Valid(ledger) {
 		// Other processes read this file. Writing something unparseable turns a
 		// bad input here into a failure somewhere else entirely.
-		return false, fmt.Errorf("service: the ledger is not valid JSON")
+		return false, i18n.Errorf("service.ledger.notJSON", nil)
 	}
 
 	var indented bytes.Buffer

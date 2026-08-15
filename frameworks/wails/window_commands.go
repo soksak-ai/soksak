@@ -1,12 +1,12 @@
 package wails
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strconv"
 
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // The window group: create, close, focus, activate, place, reload, list,
@@ -121,7 +121,13 @@ func Register(registry *control.Registry, deps Deps) {
 		}
 		frame, usable := frameOf(&x, &y, &width, &height)
 		if !usable {
-			return nil, fmt.Errorf("window %s: %v,%v %vx%v is not a frame a window can occupy", name, x, y, width, height)
+			return nil, i18n.Errorf("wails.windowPlace.badFrame", map[string]string{
+				"window": name,
+				"x":      fmt.Sprintf("%v", x),
+				"y":      fmt.Sprintf("%v", y),
+				"w":      fmt.Sprintf("%v", width),
+				"h":      fmt.Sprintf("%v", height),
+			})
 		}
 		// Position and size in one application, and no read-back. The OS may
 		// clamp a frame into the usable area, and the caller re-reads
@@ -275,7 +281,7 @@ func monitorFacts(host WindowHost) (any, error) {
 		// A machine holding a window has a screen, so an empty catalogue means
 		// the screens were never enumerated. Answering with an empty list would
 		// make that indistinguishable from a machine with no displays.
-		return nil, errors.New("the screen catalogue is empty; the displays have not been enumerated")
+		return nil, i18n.Errorf("wails.windowMonitors.noDisplays", nil)
 	}
 	catalogue := make([]Display, len(displays))
 	copy(catalogue, displays)
@@ -358,7 +364,7 @@ func createWindow(deps Deps, args control.Args) (any, error) {
 		// told apart here, and they are told: falling through would cascade the
 		// window to somewhere else and report the request as honoured.
 		if !positioned {
-			return nil, fmt.Errorf("window_create: %s is not a frame a window can occupy", showRect(rect))
+			return nil, i18n.Errorf("wails.windowCreate.badFrame", map[string]string{"rect": showRect(rect)})
 		}
 	}
 
@@ -389,7 +395,7 @@ func createWindow(deps Deps, args control.Args) (any, error) {
 	// returns the native window either exists or never will — one read, no
 	// loop, no timeout.
 	if !deps.Host.Live(name) {
-		return nil, rollbackWindow(deps.Host, name, errors.New("it never became an address"))
+		return nil, rollbackWindow(deps.Host, name, i18n.Errorf("wails.windowCreate.noAddress", map[string]string{"window": name}))
 	}
 
 	switch {
@@ -420,8 +426,11 @@ func createWindow(deps Deps, args control.Args) (any, error) {
 func createName(deps Deps, label *string) (name string, held string, err error) {
 	if label != nil {
 		if !validWindowName(*label) {
-			return "", "", fmt.Errorf("window name %q is not addressable: it must be %q or %s<id>",
-				*label, controlPlaneWindow, workspaceWindowPrefix)
+			return "", "", i18n.Errorf("wails.windowCreate.nameNotAddressable", map[string]string{
+				"name":    *label,
+				"control": controlPlaneWindow,
+				"prefix":  workspaceWindowPrefix,
+			})
 		}
 		if isHeld(deps.Host, *label) {
 			// The name is already held. Creating a second window under it would
@@ -443,12 +452,12 @@ func createName(deps Deps, label *string) (name string, held string, err error) 
 
 	generated := workspaceName(deps.NewID())
 	if !validWindowName(generated) {
-		return "", "", fmt.Errorf("the generated window name %q is not addressable", generated)
+		return "", "", i18n.Errorf("wails.windowCreate.generatedNotAddressable", map[string]string{"name": generated})
 	}
 	if isHeld(deps.Host, generated) {
 		// Answering with the existing name would hand the caller somebody
 		// else's window, and creating anyway would leave two under one name.
-		return "", "", fmt.Errorf("the generated window name %s is already held; the identifier source is repeating itself", generated)
+		return "", "", i18n.Errorf("wails.windowCreate.generatedHeld", map[string]string{"name": generated})
 	}
 	return generated, "", nil
 }
@@ -502,7 +511,7 @@ func requireStarted(host WindowHost) error {
 	// loop is in the registry and reachable by nothing, and dispatching to a
 	// main thread that does not exist yet takes the process down rather than
 	// answering.
-	return errors.New("the application run loop has not started")
+	return i18n.Errorf("wails.window.runLoopNotStarted", nil)
 }
 
 // targetWindow resolves the window a command was aimed at.
@@ -515,13 +524,13 @@ func targetWindow(host WindowHost, args control.Args) (string, error) {
 		return "", err
 	}
 	if !isHeld(host, name) {
-		return "", fmt.Errorf("window not found: %s", name)
+		return "", i18n.Errorf("wails.window.notFound", map[string]string{"window": name})
 	}
 	if !host.Live(name) {
 		// This host's close, focus and reload all return silently for a window
 		// with no native lifetime. Passing that through would report having
 		// done something that never happened.
-		return "", fmt.Errorf("window %s has no native lifetime; it answers nothing", name)
+		return "", i18n.Errorf("wails.window.noNativeLifetime", map[string]string{"window": name})
 	}
 	return name, nil
 }

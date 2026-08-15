@@ -20,7 +20,7 @@ export function registerTurnCatalog(): void {
     params: {
       source: {
         type: "string",
-        description: "Signal origin (shell / idle / acp — defaults to acp)",
+        description: tmsg("cmd.turn.signal.param.source"),
       },
       tabId: { type: "string", description: "Related tab id (optional)" },
       project: { type: "string", description: "Project id (optional)" },

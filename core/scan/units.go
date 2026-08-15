@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Unit is one installed unit directory and the two files inside it.
@@ -90,14 +92,14 @@ func Units(base string) ([]Unit, error) {
 // the side that refused.
 func ValidUnitID(id string) error {
 	if id == "" {
-		return fmt.Errorf("unit id is empty; it must match ^[a-z0-9][a-z0-9-]*$")
+		return i18n.Errorf("scan.unitId.empty", nil)
 	}
 	for index, char := range id {
 		lower := char >= 'a' && char <= 'z'
 		digit := char >= '0' && char <= '9'
 		hyphen := char == '-' && index > 0
 		if !lower && !digit && !hyphen {
-			return fmt.Errorf("unit id %q must match ^[a-z0-9][a-z0-9-]*$", id)
+			return i18n.Errorf("scan.unitId.illegal", map[string]string{"id": id})
 		}
 	}
 	return nil
@@ -123,7 +125,7 @@ func RemoveUnit(base, id string) error {
 	dir := filepath.Join(base, id)
 	if _, err := os.Stat(dir); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("no unit is installed at %s", dir)
+			return i18n.Errorf("scan.removeUnit.notInstalled", map[string]string{"dir": dir})
 		}
 		return err
 	}

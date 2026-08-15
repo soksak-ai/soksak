@@ -4,6 +4,7 @@
 // version is the UI rebuild signal.
 
 import { moduleState } from "../lib/moduleState";
+import { tmsg } from "../i18n";
 import { create } from "zustand";
 import { qualifiedViewId, type ContributedView } from "./spec";
 

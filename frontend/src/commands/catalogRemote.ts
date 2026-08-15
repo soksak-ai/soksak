@@ -28,29 +28,29 @@ export function registerRemoteCatalog(): void {
       request_id: {
         type: "number",
         required: true,
-        description: "Sidecar-issued confirm id (the sidecar resolves its PendingConfirms with this).",
+        description: tmsg("cmd.remote.confirm.param.request_id"),
       },
       device_id: {
         type: "string",
         required: true,
-        description: "Requesting remote device label to show.",
+        description: tmsg("cmd.remote.confirm.param.device_id"),
       },
       command: {
         type: "string",
         required: true,
-        description: "Human-readable command summary to show (e.g. pane.close).",
+        description: tmsg("cmd.remote.confirm.param.command"),
       },
       danger: {
         type: "boolean",
-        description: "Always true on this path (destructive only).",
+        description: tmsg("cmd.remote.confirm.param.danger"),
       },
       params: {
         type: "string",
-        description: "Optional params summary string to show.",
+        description: tmsg("cmd.remote.confirm.param.params"),
       },
       ttl_secs: {
         type: "number",
-        description: "Countdown seconds before auto-deny (mirrors sidecar TTL).",
+        description: tmsg("cmd.remote.confirm.param.ttl_secs"),
       },
     },
     returns: "{ approve }",

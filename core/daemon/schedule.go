@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // The scheduler: a registry command fired at a time, on an interval, or on an
@@ -109,7 +110,7 @@ type scheduleRequest struct {
 // register puts one job on the table and answers its id.
 func (schedule *scheduler) register(request scheduleRequest) (string, error) {
 	if request.Command == "" {
-		return "", fmt.Errorf("a schedule fires a registry command and this one names none")
+		return "", i18n.Errorf("daemon.schedule.noCommand", nil)
 	}
 	if err := request.Trigger.check(); err != nil {
 		return "", err
@@ -206,7 +207,7 @@ func (schedule *scheduler) poke(id string) error {
 		if !held {
 			// Answering "done" for a job that is not there would let a caller
 			// believe a reconcile it depends on has been asked for.
-			return fmt.Errorf("no schedule %q is registered here", id)
+			return i18n.Errorf("daemon.schedule.unknown", map[string]string{"id": id})
 		}
 		schedule.start(one)
 		return nil
@@ -402,7 +403,7 @@ func registration(args control.Args) (scheduleRequest, error) {
 
 	raw, present := args["trigger"]
 	if !present || isNull(raw) {
-		return request, fmt.Errorf("%s: missing argument %q", commandScheduleRegister, "trigger")
+		return request, i18n.Errorf("daemon.args.missing", map[string]string{"command": commandScheduleRegister, "name": "trigger"})
 	}
 	if err := json.Unmarshal(raw, &request.Trigger); err != nil {
 		return request, fmt.Errorf("%s: argument %q: %w", commandScheduleRegister, "trigger", err)
@@ -433,20 +434,18 @@ func registration(args control.Args) (scheduleRequest, error) {
 	}
 
 	for _, refusal := range []struct {
-		name   string
-		reason string
+		name string
+		key  string
 	}{
-		{"process_lease", "this build cannot tell which process a fired command started, so it could not hold a lease until that process exited — " +
-			"the lease would be released while the work was still running, which is the one thing the option exists to prevent"},
-		{"timeout_ms", "this build fires a command by calling its handler, and a handler that is running cannot be taken back — " +
-			"a cap here would report a timeout while the work carried on"},
-		{"concurrency", "one job holds one lease here and a second fire waits for the first; there is no other setting to choose"},
-		{"zombie_backstop_ms", "it caps a process lease, and this build holds none"},
+		{"process_lease", "daemon.schedule.noProcessLease"},
+		{"timeout_ms", "daemon.schedule.noTimeout"},
+		{"concurrency", "daemon.schedule.noConcurrency"},
+		{"zombie_backstop_ms", "daemon.schedule.noZombieBackstop"},
 	} {
 		raw, present := args[refusal.name]
 		if present && !isNull(raw) {
-			return request, fmt.Errorf("%s: argument %q asks for something this build does not do: %s",
-				commandScheduleRegister, refusal.name, refusal.reason)
+			return request, i18n.Errorf(refusal.key, map[string]string{
+				"command": commandScheduleRegister, "name": refusal.name})
 		}
 	}
 	return request, nil

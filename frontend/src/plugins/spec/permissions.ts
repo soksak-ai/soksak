@@ -3,6 +3,10 @@
 // opaque sandbox and the native host. The host runs only explicit operations that pass both
 // manifest consent and runtime principal verification.
 // PERMISSION_INFO is the honest disclosure text for the consent screen — caution = highlight it.
+// Its label/detail are getters: each read resolves in the language selected at that moment, so a
+// language change on the open consent screen re-renders with the new text.
+
+import { tmsg } from "../../i18n";
 
 export type PluginPermission =
   // [RULE] UI region permission split — every UI region a plugin touches is clearly distinct and is

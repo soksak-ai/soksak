@@ -1,4 +1,5 @@
 import { invoke } from "../framework";
+import { tmsg } from "../i18n";
 import { moduleState } from "../lib/moduleState";
 import { create } from "zustand";
 import {
@@ -271,7 +272,7 @@ async function registryHttpGet(
     );
   }
   const credential = registryCredentialSlot(descriptor.id);
-  if (!credential) throw new Error("private registry identity is invalid");
+  if (!credential) throw new Error(tmsg("msg.registry.privateIdentityInvalid"));
   return await invoke<{ status: number; headers: Record<string, string>; body: string }>(
     "net_http_request",
     {
@@ -290,7 +291,8 @@ async function registryHttpGet(
 
 async function loadRegistryDocument(descriptor: RegistryDescriptor): Promise<unknown> {
   const response = await registryHttpGet(descriptor, descriptor.indexUrl);
-  if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}`);
+  if (response.status < 200 || response.status >= 300)
+    throw new Error(tmsg("msg.registry.httpStatus", { status: response.status }));
   return JSON.parse(response.body) as unknown;
 }
 
@@ -304,9 +306,10 @@ export async function loadRegistryResourceBytes(
   url: string,
 ): Promise<Uint8Array> {
   const descriptor = useRegistry.getState().registries[registryId]?.descriptor;
-  if (!descriptor) throw new Error(`registry not found: ${registryId}`);
+  if (!descriptor) throw new Error(tmsg("msg.registry.notFound", { id: registryId }));
   const response = await registryHttpGet(descriptor, url);
-  if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}`);
+  if (response.status < 200 || response.status >= 300)
+    throw new Error(tmsg("msg.registry.httpStatus", { status: response.status }));
   return new TextEncoder().encode(response.body);
 }
 
@@ -463,7 +466,7 @@ export const useRegistry = moduleState("state/registry#store", () =>
           const current = get();
           const liveDescriptor = current.registries[descriptor.id]?.descriptor;
           if (!liveDescriptor || !samePublicKey(liveDescriptor.trustedPublicKey, descriptor.trustedPublicKey)) {
-            throw new Error("registry descriptor changed during certification");
+            throw new Error(tmsg("msg.registry.descriptorChanged"));
           }
           const currentHighWater = current.trustRecords[descriptor.id]?.highWater;
           if (sameHighWater(highWater, currentHighWater)) break;

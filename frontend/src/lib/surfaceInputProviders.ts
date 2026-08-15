@@ -9,6 +9,7 @@
 // the core's only job is the lookup point for the owner. With an owner, delivery goes there; without
 // one, it goes to the framework.
 import { moduleState } from "./moduleState";
+import { tmsg } from "../i18n";
 import type { SurfacePointerInput } from "./contentViews";
 
 /** The side that injects pointer input into one surface and answers its state — the contract has the same shape as the framework adapter. */

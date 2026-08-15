@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // folderPattern is the directory-name contract for an app-made project folder.
@@ -26,16 +28,16 @@ func EnsureDir(folder string, identityHome string) (string, error) {
 		// Joining onto "" would create projects/ relative to whatever directory
 		// this process was started in, so the same call would land in a
 		// different tree per process.
-		return "", fmt.Errorf("ensure_project_dir needs the identity home and this process was not given one")
+		return "", i18n.Errorf("project.ensureDir.noIdentityHome", nil)
 	}
 	if !filepath.IsAbs(identityHome) {
 		// A relative one lands in that same different tree per process; only
 		// the empty case is loud about it. And the path returned from here is
 		// handed straight to the root verdict, which judges absolute paths.
-		return "", fmt.Errorf("ensure_project_dir needs an absolute identity home and was given %s", identityHome)
+		return "", i18n.Errorf("project.ensureDir.relativeIdentityHome", map[string]string{"home": identityHome})
 	}
 	if !folderPattern.MatchString(folder) {
-		return "", fmt.Errorf("folder name %q is not a slug: ^[a-z0-9][a-z0-9-]*$", folder)
+		return "", i18n.Errorf("project.ensureDir.notASlug", map[string]string{"folder": folder})
 	}
 
 	dir := filepath.Join(identityHome, "projects", folder)

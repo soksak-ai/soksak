@@ -1,4 +1,5 @@
 import { createStream, invoke } from "../framework";
+import { tmsg } from "../i18n";
 
 export type WindowRecordRequest = {
   dir: string;
@@ -166,13 +167,13 @@ export function recordWindowFrames({
   onFrame,
 }: WindowRecordRequest): WindowRecording {
   if (!validWindowRecordFrames(frames)) {
-    throw new Error(`frames must be between 1 and ${WINDOW_RECORD_MAX_FRAMES}`);
+    throw new Error(tmsg("msg.window.record.framesRange", { max: WINDOW_RECORD_MAX_FRAMES }));
   }
   if (!validWindowRecordIntervalMs(intervalMs)) {
-    throw new Error(`intervalMs must be between 0 and ${WINDOW_RECORD_MAX_INTERVAL_MS}`);
+    throw new Error(tmsg("msg.window.record.intervalRange", { max: WINDOW_RECORD_MAX_INTERVAL_MS }));
   }
   if (maxBytes !== undefined && !validWindowRecordMaxBytes(maxBytes)) {
-    throw new Error(`maxBytes must be between 1 and ${WINDOW_RECORD_MAX_BYTES}`);
+    throw new Error(tmsg("msg.window.record.maxBytesRange", { max: WINDOW_RECORD_MAX_BYTES }));
   }
   if (!validWindowRecordFrameTimeoutMs(frameTimeoutMs)) {
     throw new Error(

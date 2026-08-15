@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // maxPreviewBytes caps a preview read.
@@ -91,10 +94,12 @@ func readBase64Limited(path string, home string, limit int64) (FileData, error) 
 		return FileData{}, fmt.Errorf("read_file_base64: %w", err)
 	}
 	if info.IsDir() || !info.Mode().IsRegular() {
-		return FileData{}, fmt.Errorf("not a file: %s", real)
+		return FileData{}, i18n.Errorf("files.readBase64.notAFile", map[string]string{"path": real})
 	}
 	if info.Size() > limit {
-		return FileData{}, fmt.Errorf("preview limit exceeded: %d bytes", info.Size())
+		return FileData{}, i18n.Errorf("files.readBase64.previewLimit", map[string]string{
+			"bytes": strconv.FormatInt(info.Size(), 10),
+		})
 	}
 	payload, err := os.ReadFile(real)
 	if err != nil {

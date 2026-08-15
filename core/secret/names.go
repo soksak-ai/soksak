@@ -1,6 +1,10 @@
 package secret
 
-import "fmt"
+import (
+	"strconv"
+
+	"github.com/soksak/soksak-core/core/i18n"
+)
 
 // One rule for the two names a secret is addressed by.
 //
@@ -25,7 +29,7 @@ const separator = "/"
 // — and this copy is about the separator, which is this package's alone.
 func validateNamespace(ns string) error {
 	if ns == "" {
-		return fmt.Errorf("secret: a namespace is empty, and a secret without a namespace has no owner")
+		return i18n.Errorf("secret.namespace.empty", nil)
 	}
 	for index, r := range ns {
 		lower := r >= 'a' && r <= 'z'
@@ -34,7 +38,7 @@ func validateNamespace(ns string) error {
 		case lower || digit:
 		case r == '-' && index > 0:
 		default:
-			return fmt.Errorf("secret: namespace %q is not lowercase alphanumeric with hyphens", ns)
+			return i18n.Errorf("secret.namespace.illegal", map[string]string{"ns": ns})
 		}
 	}
 	return nil
@@ -44,13 +48,13 @@ func validateNamespace(ns string) error {
 // `..` are refused by name — the character set alone does not catch them.
 func validateKey(key string) error {
 	if key == "" || key == "." || key == ".." {
-		return fmt.Errorf("secret: key %q is not a name", key)
+		return i18n.Errorf("secret.key.notAName", map[string]string{"key": key})
 	}
 	for _, r := range key {
 		alpha := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
 		digit := r >= '0' && r <= '9'
 		if !alpha && !digit && r != '.' && r != '_' && r != '-' {
-			return fmt.Errorf("secret: key %q holds %q", key, r)
+			return i18n.Errorf("secret.key.illegalCharacter", map[string]string{"key": key, "char": strconv.QuoteRune(r)})
 		}
 	}
 	return nil

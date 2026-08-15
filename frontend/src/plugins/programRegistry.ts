@@ -8,6 +8,7 @@
 import { moduleState } from "../lib/moduleState";
 import { create } from "zustand";
 import type { ContributedProgram, LibraryDep } from "./spec";
+import { tmsg } from "../i18n";
 
 export interface RegisteredProgram {
   pluginId: string;

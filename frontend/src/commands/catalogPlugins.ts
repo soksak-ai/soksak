@@ -152,7 +152,7 @@ export function registerPluginCatalog(): void {
       id: { type: "string", description: "Program id to await", required: true },
       timeoutMs: {
         type: "number",
-        description: "Finite deadline in milliseconds (1..60000, default 20000)",
+        description: tmsg("cmd.program.wait.param.timeoutMs"),
         default: 20_000,
       },
     },
@@ -441,11 +441,11 @@ export function registerPluginCatalog(): void {
     params: {
       registryId: {
         type: "string",
-        description: "Limit results and refresh to one registry id",
+        description: tmsg("cmd.plugin.catalog.param.registryId"),
       },
       refresh: {
         type: "boolean",
-        description: "Refetch the signed live registry before listing (default: certified session state)",
+        description: tmsg("cmd.plugin.catalog.param.refresh"),
       },
     },
     returns:
@@ -506,12 +506,12 @@ export function registerPluginCatalog(): void {
     params: {
       refresh: {
         type: "boolean",
-        description: "Refetch signed live registries before answering",
+        description: tmsg("cmd.command.docs.param.refresh"),
       },
       lang: {
         type: "string",
         enum: ["en", "ko"],
-        description: "Language for human-facing text (default: en)",
+        description: tmsg("cmd.command.docs.param.lang"),
       },
     },
     returns:
@@ -677,7 +677,7 @@ export function registerPluginCatalog(): void {
       id: { type: "string", description: "Plugin id", required: true },
       cascade: {
         type: "boolean",
-        description: "When true, also removes all transitive dependents. Omit to block if any dependents exist.",
+        description: tmsg("cmd.plugin.remove.param.cascade"),
       },
     },
     returns: "{ id, removed: [removed ids …] }",
@@ -727,11 +727,11 @@ export function registerPluginCatalog(): void {
     params: {
       id: {
         type: "string",
-        description: "Version-free public domain contract id.",
+        description: tmsg("cmd.plugin.implementers.param.id"),
       },
       range: {
         type: "string",
-        description: "Supported SemVer range. Optional — omit to discover every version.",
+        description: tmsg("cmd.plugin.implementers.param.range"),
       },
     },
     returns:
@@ -915,7 +915,7 @@ export function registerPluginCatalog(): void {
     params: {
       id: {
         type: "string",
-        description: "Plugin id. Empty string or omit to close the modal.",
+        description: tmsg("cmd.plugin.consent.preview.param.id"),
       },
     },
     returns: "{ id, shown }",
@@ -1137,7 +1137,7 @@ export function registerPluginCatalog(): void {
     params: {
       id: {
         type: "string",
-        description: "Plugin id to reload individually. Omit to rescan the plugins directory and reactivate every plugin.",
+        description: tmsg("cmd.plugin.reload.param.id"),
       },
     },
     returns:
@@ -1172,7 +1172,7 @@ export function registerPluginCatalog(): void {
       },
       placement: {
         type: "string",
-        description: "Where to place the view. Defaults to the view's defaultPlacement.",
+        description: tmsg("cmd.plugin.view.open.param.placement"),
         enum: VIEW_PLACEMENTS,
       },
       project: { type: "string", description: "Project id. Defaults to the active project." },

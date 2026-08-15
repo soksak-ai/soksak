@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Verdict reports whether a canonical path may be a project root.
@@ -24,12 +26,12 @@ func Verdict(canonical string, home string) error {
 		// A root-init policy (git init and the rest, once per project.created)
 		// runs over the whole root. With the home as the root, that policy runs
 		// over every file the user owns.
-		return fmt.Errorf("the home directory cannot be a project root: %s", canonical)
+		return i18n.Errorf("project.root.home", map[string]string{"path": canonical})
 	}
 	if filepath.Dir(canonical) == canonical {
 		// True for "/" and for "C:\\" alike, so the filesystem root is refused
 		// on every platform by one line and no branch on which one we are.
-		return fmt.Errorf("the filesystem root cannot be a project root: %s", canonical)
+		return i18n.Errorf("project.root.filesystemRoot", map[string]string{"path": canonical})
 	}
 	return nil
 }
@@ -50,7 +52,7 @@ func ValidateRoot(path string, userHome string) (string, error) {
 		// Named rather than guessed. A process that reads its own home walks a
 		// different tree, and skipping the check instead would quietly admit
 		// the home itself.
-		return "", fmt.Errorf("validate_project_root needs the user home and this process was not given one")
+		return "", i18n.Errorf("project.validateRoot.noUserHome", nil)
 	}
 
 	if !filepath.IsAbs(userHome) {
@@ -58,7 +60,7 @@ func ValidateRoot(path string, userHome string) (string, error) {
 		// equal the absolute canonical root, so the home comparison would pass
 		// every time instead of failing — the check would be gone and nothing
 		// would say so.
-		return "", fmt.Errorf("validate_project_root needs an absolute user home and was given %s", userHome)
+		return "", i18n.Errorf("project.validateRoot.relativeUserHome", map[string]string{"home": userHome})
 	}
 	if !filepath.IsAbs(path) {
 		// Resolving it against the working directory instead is the one ambient
@@ -66,7 +68,7 @@ func ValidateRoot(path string, userHome string) (string, error) {
 		// one are started in different directories, so the same argument would
 		// name two different roots, and the claim table keys on that string.
 		// Two spellings of one directory then become two projects.
-		return "", fmt.Errorf("a project root must be an absolute path: %s", path)
+		return "", i18n.Errorf("project.validateRoot.relativePath", map[string]string{"path": path})
 	}
 
 	// No tilde expansion, here or anywhere in this package. The home is needed
@@ -74,7 +76,7 @@ func ValidateRoot(path string, userHome string) (string, error) {
 	// things depending on who asked.
 	info, err := os.Stat(path)
 	if err != nil || !info.IsDir() {
-		return "", fmt.Errorf("not a directory: %s", path)
+		return "", i18n.Errorf("project.validateRoot.notDirectory", map[string]string{"path": path})
 	}
 
 	canonical, err := canonicalize(path)

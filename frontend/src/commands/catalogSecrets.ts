@@ -15,13 +15,13 @@ import { tmsg } from "../i18n";
 
 const NS_PARAM = {
   type: "string",
-  description: "Namespace (plugin id or core)",
+  description: tmsg("cmd.secret.param.ns"),
   required: true,
 } as const;
 
 const KEY_PARAM = {
   type: "string",
-  description: "Secret key name (alphanumeric, -, _, .)",
+  description: tmsg("cmd.secret.param.key"),
   required: true,
 } as const;
 
@@ -88,7 +88,7 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.has", {
-    description: "Check whether ns/key exists in the vault without exposing the value (plaintext readback is blocked by the core).",
+    description: tmsg("cmd.secret.has.desc"),
     triggers: { ko: "시크릿 존재 확인 있는지 has 체크" },
     params: { ns: NS_PARAM, key: KEY_PARAM },
     // The answer comes from the owner — identical whichever window runs it (registry.ts windowScoped).
@@ -107,7 +107,7 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.keys", {
-    description: "List the secret key names stored under a namespace (values are never returned). Use to audit what is stored in a namespace.",
+    description: tmsg("cmd.secret.keys.desc"),
     triggers: { ko: "시크릿 목록 키 리스트 조회" },
     params: { ns: NS_PARAM },
     // The answer comes from the owner — identical whichever window runs it (registry.ts windowScoped).
@@ -126,7 +126,7 @@ export function registerSecretsCatalog(): void {
   });
 
   register("secret.remove", {
-    description: "Remove ns/key from the vault (removed=true if the key existed). Rejected when the OS key store is unavailable (no secret service).",
+    description: tmsg("cmd.secret.remove.desc"),
     triggers: { ko: "시크릿 삭제 제거 지우기 delete" },
     params: { ns: NS_PARAM, key: KEY_PARAM },
     returns: "{ removed }",

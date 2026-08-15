@@ -18,6 +18,7 @@ import (
 	"github.com/soksak/soksak-core/core/control"
 	"github.com/soksak/soksak-core/core/daemon"
 	"github.com/soksak/soksak-core/core/files"
+	"github.com/soksak/soksak-core/core/i18n"
 	"github.com/soksak/soksak-core/core/identity"
 	"github.com/soksak/soksak-core/core/install"
 	corenet "github.com/soksak/soksak-core/core/net"
@@ -209,7 +210,7 @@ func RegisterCore(registry *control.Registry, boot Boot) Wired {
 			}
 			raw, present := args["value"]
 			if !present {
-				return nil, fmt.Errorf("missing argument %q", "value")
+				return nil, i18n.Errorf("boot.args.missing", map[string]string{"command": "data_kv_set", "name": "value"})
 			}
 			return nil, boot.KV.Set(ns, key, string(raw))
 		},
@@ -272,7 +273,7 @@ func RegisterCore(registry *control.Registry, boot Boot) Wired {
 		Handler: func(args control.Args) (any, error) {
 			ledger, present := args["ledger"]
 			if !present {
-				return nil, fmt.Errorf("missing argument %q", "ledger")
+				return nil, i18n.Errorf("boot.args.missing", map[string]string{"command": "service_ledger_sync", "name": "ledger"})
 			}
 			// Identical content is left alone, so the file's mtime only moves
 			// when the bindings actually changed.

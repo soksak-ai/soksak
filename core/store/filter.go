@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // The one where-clause builder, shared by data_query and data_count.
@@ -122,7 +124,7 @@ func buildWhere(filter map[string]json.RawMessage, allowed []string) (string, []
 			return "", nil, err
 		}
 		if _, ok := declared[field]; !ok && !isBuiltInField(field) {
-			return "", nil, fmt.Errorf("store: field %q is not declared as an index", field)
+			return "", nil, i18n.Errorf("store.filter.fieldNotIndexed", map[string]string{"field": field})
 		}
 		expression := fieldExpression(field)
 		parsed := readCondition(filter[field])
@@ -133,11 +135,11 @@ func buildWhere(filter map[string]json.RawMessage, allowed []string) (string, []
 			continue
 		}
 		if parsed.Op != "in" {
-			return "", nil, fmt.Errorf("store: unknown operator %q on field %q", parsed.Op, field)
+			return "", nil, i18n.Errorf("store.filter.unknownOperator", map[string]string{"operator": parsed.Op, "field": field})
 		}
 		var members []json.RawMessage
 		if err := json.Unmarshal(parsed.Value, &members); err != nil {
-			return "", nil, fmt.Errorf("store: the `in` value on field %q is not an array", field)
+			return "", nil, i18n.Errorf("store.filter.inValueNotArray", map[string]string{"field": field})
 		}
 		if len(members) == 0 {
 			// The constant false. Collapsing an empty `in` to "no filter" turns
@@ -172,7 +174,7 @@ func orderExpression(order string, allowed []string) (string, error) {
 			}
 		}
 		if !found {
-			return "", fmt.Errorf("store: order field %q is not declared as an index", order)
+			return "", i18n.Errorf("store.order.fieldNotIndexed", map[string]string{"field": order})
 		}
 	}
 	return fieldExpression(order), nil

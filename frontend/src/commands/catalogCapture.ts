@@ -297,7 +297,7 @@ export function registerCaptureCatalog(): void {
     params: {
       anchors: {
         type: "json",
-        description: "Complete declaration: [{address,color,x?,y?}]. Addresses must come from ui.tree; x/y are finite CSS-pixel offsets inside the exposed node.",
+        description: tmsg("cmd.capture.motion-anchors.param.anchors"),
         required: true,
       },
     },
@@ -336,11 +336,11 @@ export function registerCaptureCatalog(): void {
     params: {
       path: {
         type: "string",
-        description: "Output .png path (file mode). Omit to use a temp folder.",
+        description: tmsg("cmd.window.snapshot.param.path"),
       },
       base64: {
         type: "boolean",
-        description: "Return the PNG as base64 instead of writing a file",
+        description: tmsg("cmd.window.snapshot.param.base64"),
       },
       rect: {
         type: "json",
@@ -488,7 +488,7 @@ export function registerCaptureCatalog(): void {
       },
       node: {
         type: "string",
-        description: "Exposed address (ui.tree) — its rect is measured for you",
+        description: tmsg("cmd.window.pixels.param.node"),
       },
       tab: {
         type: "string",
@@ -530,7 +530,7 @@ export function registerCaptureCatalog(): void {
     params: {
       dir: {
         type: "string",
-        description: "Output directory for frames",
+        description: tmsg("cmd.window.record.param.dir"),
         required: true,
       },
       frames: {

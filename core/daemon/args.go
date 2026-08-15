@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Argument decoding for this group.
@@ -31,17 +32,17 @@ func isNull(raw json.RawMessage) bool {
 func namedText(command string, args control.Args, name string) (string, error) {
 	raw, present := args[name]
 	if !present {
-		return "", fmt.Errorf("%s: missing argument %q", command, name)
+		return "", i18n.Errorf("daemon.args.missing", map[string]string{"command": command, "name": name})
 	}
 	if isNull(raw) {
-		return "", fmt.Errorf("%s: argument %q is null; send a value", command, name)
+		return "", i18n.Errorf("daemon.args.null", map[string]string{"command": command, "name": name})
 	}
 	var value string
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return "", fmt.Errorf("%s: argument %q is not text: %w", command, name, err)
 	}
 	if strings.TrimSpace(value) == "" {
-		return "", fmt.Errorf("%s: argument %q is empty — it names nothing", command, name)
+		return "", i18n.Errorf("daemon.args.empty", map[string]string{"command": command, "name": name})
 	}
 	return value, nil
 }
@@ -57,7 +58,12 @@ func lineCount(command string, args control.Args) (int, error) {
 		return 0, fmt.Errorf("%s: argument %q is not a count: %w", command, "lines", err)
 	}
 	if value < 1 {
-		return 0, fmt.Errorf("%s: argument %q is %d — ask for at least one line, or leave it out for %d", command, "lines", value, defaultLines)
+		return 0, i18n.Errorf("daemon.args.lineCountTooLow", map[string]string{
+			"command": command,
+			"name":    "lines",
+			"value":   fmt.Sprint(value),
+			"default": fmt.Sprint(defaultLines),
+		})
 	}
 	return value, nil
 }
@@ -69,14 +75,18 @@ func runSeconds(command string, args control.Args) (time.Duration, error) {
 		// No invented default. A command with no deadline is one that can hold
 		// the caller forever, and only the caller has how long its
 		// build takes.
-		return 0, fmt.Errorf("%s: missing argument %q — a run with no deadline never comes back", command, "timeoutSecs")
+		return 0, i18n.Errorf("daemon.args.missingTimeout", map[string]string{"command": command, "name": "timeoutSecs"})
 	}
 	var seconds float64
 	if err := json.Unmarshal(raw, &seconds); err != nil {
 		return 0, fmt.Errorf("%s: argument %q is not a number of seconds: %w", command, "timeoutSecs", err)
 	}
 	if seconds <= 0 {
-		return 0, fmt.Errorf("%s: argument %q is %v — a deadline that has already passed stops the command before it starts", command, "timeoutSecs", seconds)
+		return 0, i18n.Errorf("daemon.args.deadlinePassed", map[string]string{
+			"command": command,
+			"name":    "timeoutSecs",
+			"value":   fmt.Sprint(seconds),
+		})
 	}
 	return time.Duration(seconds * float64(time.Second)), nil
 }
@@ -95,7 +105,11 @@ func environmentOverrides(command string, args control.Args) (map[string]string,
 	}
 	for name := range overrides {
 		if strings.TrimSpace(name) == "" || strings.Contains(name, "=") {
-			return nil, fmt.Errorf("%s: argument %q carries the name %q — an environment name is not empty and holds no '='", command, "env", name)
+			return nil, i18n.Errorf("daemon.args.environmentName", map[string]string{
+				"command": command,
+				"name":    "env",
+				"entry":   name,
+			})
 		}
 	}
 	return overrides, nil
@@ -105,10 +119,10 @@ func environmentOverrides(command string, args control.Args) (map[string]string,
 func recordedDaemons(command string, args control.Args) ([]Recorded, error) {
 	raw, present := args["entries"]
 	if !present {
-		return nil, fmt.Errorf("%s: missing argument %q", command, "entries")
+		return nil, i18n.Errorf("daemon.args.missing", map[string]string{"command": command, "name": "entries"})
 	}
 	if isNull(raw) {
-		return nil, fmt.Errorf("%s: argument %q is null; send the recorded pairs, or an empty list", command, "entries")
+		return nil, i18n.Errorf("daemon.args.entriesNull", map[string]string{"command": command, "name": "entries"})
 	}
 	var records []Recorded
 	if err := json.Unmarshal(raw, &records); err != nil {
@@ -128,8 +142,7 @@ func refuseRestartPolicy(command string, args control.Args) error {
 	if !present || isNull(raw) {
 		return nil
 	}
-	return fmt.Errorf("%s: argument %q asks for a restart policy and nothing in this build restarts a daemon — "+
-		"its exit code is reported by daemon_status, and starting it again is the caller's call", command, "restart")
+	return i18n.Errorf("daemon.args.restartUnsupported", map[string]string{"command": command, "name": "restart"})
 }
 
 // optionalText reads a string the caller may leave out. The caller spells
@@ -149,7 +162,7 @@ func optionalText(command string, args control.Args, name string) (string, error
 		return "", fmt.Errorf("%s: argument %q is not text: %w", command, name, err)
 	}
 	if strings.TrimSpace(value) == "" {
-		return "", fmt.Errorf("%s: argument %q is empty — send null to leave it unset", command, name)
+		return "", i18n.Errorf("daemon.args.emptyUnset", map[string]string{"command": command, "name": name})
 	}
 	return value, nil
 }
@@ -159,7 +172,7 @@ func optionalText(command string, args control.Args, name string) (string, error
 func epochMillis(command string, args control.Args, name string) (int64, error) {
 	raw, present := args[name]
 	if !present || isNull(raw) {
-		return 0, fmt.Errorf("%s: missing argument %q — a schedule with no moment has none to fire at", command, name)
+		return 0, i18n.Errorf("daemon.args.missingMoment", map[string]string{"command": command, "name": name})
 	}
 	var value int64
 	if err := json.Unmarshal(raw, &value); err != nil {
@@ -169,7 +182,11 @@ func epochMillis(command string, args control.Args, name string) (int64, error) 
 		// Zero is what an unset field decodes to. A schedule at the epoch would
 		// fire at once, which is the opposite of what a caller who lost its
 		// timestamp wanted.
-		return 0, fmt.Errorf("%s: argument %q is %d, which is not a moment — epoch milliseconds are positive", command, name, value)
+		return 0, i18n.Errorf("daemon.args.notAMoment", map[string]string{
+			"command": command,
+			"name":    name,
+			"value":   fmt.Sprint(value),
+		})
 	}
 	return value, nil
 }

@@ -1,9 +1,10 @@
 package wails
 
 import (
-	"fmt"
 	"math"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // The rules that decide what a window is called, where it goes, and which
@@ -137,10 +138,10 @@ func shouldFocus(requested *bool) bool {
 // Either way the instruction is dropped with nothing reported anywhere.
 func checkInitQuery(init string) error {
 	if strings.Contains(init, "#") {
-		return fmt.Errorf("init query contains '#'; everything after it never reaches location.search: %q", init)
+		return i18n.Errorf("wails.windowCreate.initQueryHasHash", map[string]string{"init": init})
 	}
 	if strings.HasPrefix(init, "?") {
-		return fmt.Errorf("init query starts with '?'; it is joined onto the URL with one already: %q", init)
+		return i18n.Errorf("wails.windowCreate.initQueryLeadingMark", map[string]string{"init": init})
 	}
 	return nil
 }

@@ -3,6 +3,8 @@ package store
 import (
 	"fmt"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Name rules for everything that arrives in SQL as an identifier or a path.
@@ -18,11 +20,11 @@ import (
 // meta key.
 func validateCollection(coll string) error {
 	if coll == "" {
-		return fmt.Errorf("store: a collection name is empty")
+		return i18n.Errorf("store.name.collectionEmpty", nil)
 	}
 	for _, r := range coll {
 		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
-			return fmt.Errorf("store: collection %q is not lowercase alphanumeric with underscores", coll)
+			return i18n.Errorf("store.name.collectionInvalid", map[string]string{"name": fmt.Sprintf("%q", coll)})
 		}
 	}
 	return nil
@@ -33,7 +35,7 @@ func validateCollection(coll string) error {
 // and `updated` are real columns and need no declaration.
 func validateField(field string) error {
 	if field == "" {
-		return fmt.Errorf("store: a field name is empty")
+		return i18n.Errorf("store.name.fieldEmpty", nil)
 	}
 	for index, r := range field {
 		alpha := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
@@ -42,7 +44,7 @@ func validateField(field string) error {
 		case alpha || r == '_':
 		case digit && index > 0:
 		default:
-			return fmt.Errorf("store: field %q is not an identifier", field)
+			return i18n.Errorf("store.name.fieldInvalid", map[string]string{"name": fmt.Sprintf("%q", field)})
 		}
 	}
 	return nil
@@ -53,7 +55,7 @@ func validateField(field string) error {
 // is gone before any rule looks for it.
 func validatePluginID(id string) error {
 	if id == "" {
-		return fmt.Errorf("store: a plugin id is empty")
+		return i18n.Errorf("store.name.pluginIdEmpty", nil)
 	}
 	for index, r := range id {
 		lower := r >= 'a' && r <= 'z'
@@ -62,7 +64,7 @@ func validatePluginID(id string) error {
 		case lower || digit:
 		case r == '-' && index > 0:
 		default:
-			return fmt.Errorf("store: plugin id %q is not lowercase alphanumeric with hyphens", id)
+			return i18n.Errorf("store.name.pluginIdInvalid", map[string]string{"id": fmt.Sprintf("%q", id)})
 		}
 	}
 	return nil
@@ -72,13 +74,13 @@ func validatePluginID(id string) error {
 // and `..` are refused by name — the character set alone does not catch them.
 func validatePluginKey(key string) error {
 	if key == "" || key == "." || key == ".." {
-		return fmt.Errorf("store: storage key %q is not a name", key)
+		return i18n.Errorf("store.name.storageKeyInvalid", map[string]string{"key": fmt.Sprintf("%q", key)})
 	}
 	for _, r := range key {
 		alpha := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
 		digit := r >= '0' && r <= '9'
 		if !alpha && !digit && r != '.' && r != '_' && r != '-' {
-			return fmt.Errorf("store: storage key %q holds %q", key, r)
+			return i18n.Errorf("store.name.storageKeyCharacter", map[string]string{"key": fmt.Sprintf("%q", key), "char": fmt.Sprintf("%q", r)})
 		}
 	}
 	return nil

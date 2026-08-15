@@ -3,6 +3,8 @@ package store
 import (
 	"database/sql"
 	"fmt"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Retention: how records leave when nobody deletes them.
@@ -39,7 +41,11 @@ func (kv *KV) Trim(ns, coll, scope string, cap int64) (int, error) {
 		return 0, err
 	}
 	if cap < 0 {
-		return 0, fmt.Errorf("store: a trim of %s/%s asks to keep %d records", ns, coll, cap)
+		return 0, i18n.Errorf("store.trim.negativeCap", map[string]string{
+			"ns":   ns,
+			"coll": coll,
+			"cap":  fmt.Sprint(cap),
+		})
 	}
 	return kv.deleteSelected(ns, coll, trimRowidsSQL, []any{ns, coll, scope, ns, coll, scope, cap})
 }

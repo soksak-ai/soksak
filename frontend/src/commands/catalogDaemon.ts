@@ -271,7 +271,7 @@ export function registerDaemonCatalog(): void {
   });
 
   register("daemon.restart", {
-    description: "Restart a daemon — stop (tree kill or managed stop command) and start again.",
+    description: tmsg("cmd.daemon.restart.desc"),
     triggers: { ko: "데몬 재시작" },
     params: { name: P.name, project: P.project },
     returns: "{ projectId, name, pid }",

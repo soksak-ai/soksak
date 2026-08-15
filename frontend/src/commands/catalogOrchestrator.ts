@@ -34,7 +34,7 @@ export function registerOrchestratorCatalog(): void {
   });
 
   register("orchestrator.stop", {
-    description: "Cancel the in-flight natural-language turn (kills the agent process; the set closes as CANCELLED).",
+    description: tmsg("cmd.orchestrator.stop.desc"),
     triggers: { ko: "중단 멈춰 취소 턴 중지" },
     params: {},
     returns: "{ stopped }",

@@ -18,7 +18,7 @@ export function registerServiceCatalog(): void {
       plugin: {
         type: "string",
         required: false,
-        description: "Plugin id to query one service; omit for all.",
+        description: tmsg("cmd.service.status.param.plugin"),
       },
     },
     // The owner produces the answer — identical in every window (registry.ts windowScoped).

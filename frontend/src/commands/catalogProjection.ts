@@ -35,7 +35,7 @@ export function registerProjectionCatalog(): void {
     params: {
       project: {
         type: "string",
-        description: "Project id (omit for the active project)",
+        description: tmsg("cmd.param.project"),
       },
     },
     returns:
@@ -68,7 +68,7 @@ export function registerProjectionCatalog(): void {
       side: { type: "string", description: '"left" (default) | "right"' },
       project: {
         type: "string",
-        description: "Project id (omit for the active project)",
+        description: tmsg("cmd.param.project"),
       },
     },
     returns: "{ projectId, pins: {left, right} }",
@@ -106,7 +106,7 @@ export function registerProjectionCatalog(): void {
       side: { type: "string", description: '"left" (default) | "right"' },
       project: {
         type: "string",
-        description: "Project id (omit for the active project)",
+        description: tmsg("cmd.param.project"),
       },
     },
     returns: "{ projectId, pins: {left, right} }",
@@ -133,12 +133,12 @@ export function registerProjectionCatalog(): void {
     params: {
       path: {
         type: "string",
-        description: "Absolute file path to open",
+        description: tmsg("cmd.ui.intent.open.param.path"),
         required: true,
       },
       project: {
         type: "string",
-        description: "Project id (omit for the active project)",
+        description: tmsg("cmd.param.project"),
       },
     },
     returns: "{ projectId, paneId, tabId, existing }",

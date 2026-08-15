@@ -5,6 +5,7 @@
 // A listener failure cannot kill the host (§0-4) — try/catch per callback.
 
 import { moduleState } from "../lib/moduleState";
+import { tmsg } from "../i18n";
 import { invoke } from "../framework";
 import { safeListen } from "../lib/safeListen";
 import { listenThisWindow } from "../lib/windowEvents";

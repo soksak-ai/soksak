@@ -8,6 +8,7 @@ import {
   viewLayoutMoves,
 } from "./layoutTransitionHost";
 import { __resetLayoutTransitionJournalForTest } from "./layoutTransitionJournal";
+import { tmsg } from "../i18n";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -233,7 +234,11 @@ describe("layoutTransitionHost", () => {
     });
 
     await expect(prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 120 }]))
-      .rejects.toThrow("layout staged target identity is invalid");
+      // Matched on the sentence the key resolves to, not on one language's
+      // wording: tmsg answers in the current language, and a hardcoded English
+      // expectation fails under the default (ko). The id is left out so the
+      // transaction counter does not have to be known here.
+      .rejects.toThrow(tmsg("layout.transition.stagedTargetInvalid", { transactionId: "" }));
     expect(cancel).toHaveBeenCalledOnce();
   });
 });

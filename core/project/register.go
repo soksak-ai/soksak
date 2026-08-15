@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Deps is what the process supplies. Every one of these is injected because
@@ -203,7 +204,7 @@ func argument[T any](callArgs control.Args, name string) (T, error) {
 	var value T
 	raw, present := callArgs[name]
 	if !present {
-		return value, fmt.Errorf("missing argument %q", name)
+		return value, i18n.Errorf("project.argument.missing", map[string]string{"name": name})
 	}
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return value, fmt.Errorf("argument %q: %w", name, err)

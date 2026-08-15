@@ -15,6 +15,7 @@ import {
   type LayoutPresentationCandidateParticipant,
 } from "../lib/layoutPresentationCandidateCoordinator";
 import { beginLayoutDecorationClearance } from "../lib/layoutDecorationClearance";
+import { tmsg } from "../i18n";
 
 const sameDocumentTimelineMicrosecond = (actual: CSSNumberish | null, expected: number) => (
   typeof actual === "number"
@@ -74,10 +75,10 @@ export const RailGridSurface = forwardRef<RailGridSurfaceHandle, {
           async arm(candidate) {
             const surface = surfaceRef.current;
             if (!surface || !surface.classList.contains("rail-starting")) {
-              throw new Error(`DOM layout candidate is not paused: ${transactionId}`);
+              throw new Error(tmsg("layout.candidate.notPaused", { transactionId }));
             }
             if (candidate.transactionId !== transactionId) {
-              throw new Error(`DOM layout candidate identity changed: ${transactionId}`);
+              throw new Error(tmsg("layout.candidate.identityChanged", { transactionId }));
             }
             if (clearance) {
               const rail = surface.querySelector<HTMLElement>(".sidebar[data-rail-role]");
@@ -95,7 +96,7 @@ export const RailGridSurface = forwardRef<RailGridSurfaceHandle, {
               (animation as CSSAnimation).animationName === "rail-flip-x"
             ));
             if (animations.length === 0) {
-              throw new Error(`DOM layout candidate animations are empty: ${transactionId}`);
+              throw new Error(tmsg("layout.candidate.animationsEmpty", { transactionId }));
             }
             const observedAtUnixUs = presentationNowUnixUs();
             const remainingLeadMs = (candidate.startAtUnixUs - observedAtUnixUs) / 1_000;
@@ -131,7 +132,7 @@ export const RailGridSurface = forwardRef<RailGridSurfaceHandle, {
           },
           async release(candidate) {
             if (!candidateMatches(candidate) || armedAnimations.length === 0) {
-              throw new Error(`DOM layout candidate release identity changed: ${transactionId}`);
+              throw new Error(tmsg("layout.candidate.releaseIdentityChanged", { transactionId }));
             }
             const startTime = presentationDocumentTimeFromWallBridgeUnixUs(
               candidate.documentTimelineBridge.startAtUnixUs,

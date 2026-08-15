@@ -1,6 +1,6 @@
 package wails
 
-import "errors"
+import "github.com/soksak/soksak-core/core/i18n"
 
 // Rect is a window-relative region in CSS points with a top-left origin, the
 // same coordinate contract the DOM and the compositor already share. A zero
@@ -18,6 +18,6 @@ var Whole = Rect{}
 // ErrCaptureUnsupported is returned where no capture backend exists. It names
 // the platform rather than returning empty bytes, so "not implemented here" and
 // "captured nothing" stay distinct answers.
-var ErrCaptureUnsupported = errors.New("window capture is not implemented on this platform")
+var ErrCaptureUnsupported = i18n.Errorf("wails.capture.unsupportedPlatform", nil)
 
 const captureTimeoutMillis = 5000

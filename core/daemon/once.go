@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/soksak/soksak-core/core/i18n"
 	"github.com/soksak/soksak-core/core/process"
 )
 
@@ -146,7 +147,11 @@ func (supervisor *Supervisor) RunOnce(root, cmd string, env map[string]string, t
 		_ = child.Signal()
 		<-ended
 		readers.Wait()
-		return Once{}, fmt.Errorf("%q under %s did not finish within %s and was stopped; its last output was:\n%s",
-			cmd, root, timeout, out.tail(10))
+		return Once{}, i18n.Errorf("daemon.once.timeout", map[string]string{
+			"cmd":     cmd,
+			"root":    root,
+			"timeout": timeout.String(),
+			"tail":    out.tail(10),
+		})
 	}
 }

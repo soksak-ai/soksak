@@ -44,7 +44,7 @@ export function registerSettingsCatalog(): void {
   ] as const;
 
   register("settings.get", {
-    description: "Retrieve all application settings.",
+    description: tmsg("cmd.settings.get.desc"),
     triggers: { ko: "설정 확인 앱 설정 조회 환경설정" },
     params: {},
     returns: "{ <every persisted setting>, iconSets[], theme, themeMode }",
@@ -75,7 +75,7 @@ export function registerSettingsCatalog(): void {
     params: {
       key: {
         type: "string",
-        description: "Setting key",
+        description: tmsg("cmd.settings.set.param.key"),
         enum: SETTING_KEYS,
         required: true,
       },
@@ -205,7 +205,7 @@ export function registerSettingsCatalog(): void {
     params: {
       strategy: {
         type: "string",
-        description: "Placement strategy",
+        description: tmsg("cmd.layout.suggest.param.strategy"),
         enum: ["spread", "grid"],
         default: "spread",
       },
@@ -244,11 +244,11 @@ export function registerSettingsCatalog(): void {
     params: {
       since: {
         type: "number",
-        description: "Return entries with seq greater than this (backfill cursor). Omit for latest.",
+        description: tmsg("cmd.activity.recent.param.since"),
       },
       limit: {
         type: "number",
-        description: "Maximum entries to return (default 200)",
+        description: tmsg("cmd.activity.recent.param.limit"),
         default: 200,
       },
     },
@@ -282,30 +282,30 @@ export function registerSettingsCatalog(): void {
     params: {
       theme: {
         type: "string",
-        description: "Theme name to scan (default: current theme)",
+        description: tmsg("cmd.window.themeScan.param.theme"),
       },
       from: {
         type: "string",
-        description: "Starting mode (default dark)",
+        description: tmsg("cmd.window.themeScan.param.from"),
         enum: ["light", "dark"],
       },
       to: {
         type: "string",
-        description: "Ending mode (default light)",
+        description: tmsg("cmd.window.themeScan.param.to"),
         enum: ["light", "dark"],
       },
       frames: { type: "number", description: "Frames to capture (default 40)" },
       intervalMs: {
         type: "number",
-        description: "Frame interval in ms (default 16 ≈ one display frame)",
+        description: tmsg("cmd.window.themeScan.param.intervalMs"),
       },
       applyAtMs: {
         type: "number",
-        description: "Delay after recording starts before toggling (default 250)",
+        description: tmsg("cmd.window.themeScan.param.applyAtMs"),
       },
       settleMs: {
         type: "number",
-        description: "Settle wait after setting the start mode (default 800)",
+        description: tmsg("cmd.window.themeScan.param.settleMs"),
       },
       skipCapture: {
         type: "boolean",
@@ -495,7 +495,7 @@ export function registerSettingsCatalog(): void {
   });
 
   register("theme.apply", {
-    description: "Apply a theme (replaces all token slots). Omit mode to keep the current mode.",
+    description: tmsg("cmd.theme.apply.desc"),
     triggers: { ko: "테마 적용 테마 바꾸기 다크 모드 라이트 모드 색 테마" },
     params: {
       name: { type: "string", description: "Theme name (see theme.list)", required: true },
@@ -515,7 +515,7 @@ export function registerSettingsCatalog(): void {
   });
 
   register("theme.reload", {
-    description: "Re-scan the external theme directory (~/.soksak/themes) and re-apply the current theme.",
+    description: tmsg("cmd.theme.reload.desc"),
     triggers: { ko: "테마 새로고침 테마 리로드 외부 테마 재스캔" },
     params: {},
     returns: "{ count, rejected }",
@@ -529,7 +529,7 @@ export function registerSettingsCatalog(): void {
   });
 
   register("theme.install", {
-    description: "Install a theme JSON file into ~/.soksak/themes (immediately usable if validation passes).",
+    description: tmsg("cmd.theme.install.desc"),
     triggers: { ko: "테마 설치 테마 추가 외부 테마 설치" },
     params: {
       path: { type: "string", description: "Absolute path to theme .json file", required: true },

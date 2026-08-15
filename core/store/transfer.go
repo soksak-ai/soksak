@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Moving data between stores as text.
@@ -209,7 +211,7 @@ func (kv *KV) Import(jsonl string, nowMillis int64) (ImportResult, error) {
 				return result, fmt.Errorf("store: import line %d is not a value: %w", number, err)
 			}
 			if parsed.Key == "" {
-				return result, fmt.Errorf("store: import line %d names no key", number)
+				return result, i18n.Errorf("store.import.noKey", map[string]string{"line": fmt.Sprint(number)})
 			}
 			// A value that is not JSON is refused here rather than stored. The
 			// read side names it — data_kv_entries answers the whole namespace
@@ -227,7 +229,8 @@ func (kv *KV) Import(jsonl string, nowMillis int64) (ImportResult, error) {
 			}
 			result.KV++
 		default:
-			return result, fmt.Errorf("store: import line %d names an unknown kind %q", number, head.Kind)
+			return result, i18n.Errorf("store.import.unknownKind", map[string]string{
+				"line": fmt.Sprint(number), "kind": head.Kind})
 		}
 	}
 	return result, nil

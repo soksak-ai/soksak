@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // readBuffer is 64 KB, matching a pipe's capacity so one read empties it.
@@ -108,7 +110,7 @@ func NewManager(deps Deps) *Manager {
 // nothing left to remove it.
 func (manager *Manager) Spawn(request Request) (uint32, error) {
 	if manager.deps.Spawner == nil {
-		return 0, fmt.Errorf("process_spawn: this host was given no spawner and starts no children")
+		return 0, i18n.Errorf("process.spawn.noSpawner", nil)
 	}
 	if request.Group {
 		if err := groupRefusal(groupHonoured, groupNotHonouredBecause); err != nil {
@@ -273,12 +275,12 @@ func (manager *Manager) settled(id uint32) <-chan struct{} {
 func (manager *Manager) Write(id uint32, data []byte) error {
 	entry, held := manager.lookup(id)
 	if !held {
-		return fmt.Errorf("process %d: no such process", id)
+		return i18n.Errorf("process.handle.noSuchProcess", map[string]string{"id": fmt.Sprint(id)})
 	}
 	entry.stdinMu.Lock()
 	defer entry.stdinMu.Unlock()
 	if entry.stdin == nil {
-		return fmt.Errorf("process %d: stdin is closed", id)
+		return i18n.Errorf("process.write.stdinClosed", map[string]string{"id": fmt.Sprint(id)})
 	}
 	// The pipe is unbuffered, so the write is the flush.
 	if _, err := entry.stdin.Write(data); err != nil {
@@ -295,7 +297,7 @@ func (manager *Manager) Write(id uint32, data []byte) error {
 func (manager *Manager) CloseStdin(id uint32) error {
 	entry, held := manager.lookup(id)
 	if !held {
-		return fmt.Errorf("process %d: no such process", id)
+		return i18n.Errorf("process.handle.noSuchProcess", map[string]string{"id": fmt.Sprint(id)})
 	}
 	entry.closeStdin()
 	return nil
@@ -406,8 +408,7 @@ func (manager *Manager) List() []Info {
 // so everything left under this label is the previous one's.
 func (manager *Manager) ReclaimByWindow(label string) (int, error) {
 	if label == "" {
-		return 0, fmt.Errorf("process_reclaim_by_window needs a window label: " +
-			"an empty label matches nothing, and a caller that does not know its own label must not spell 'reap everything unowned'")
+		return 0, i18n.Errorf("process.reclaimByWindow.needsLabel", nil)
 	}
 
 	manager.mu.Lock()

@@ -73,7 +73,7 @@ import {
   type PluginPermission,
   type ViewPlacement,
 } from "./spec";
-import { localize } from "../i18n";
+import { localize, tmsg } from "../i18n";
 import { useSettings } from "../state/settings";
 import { usePluginSettings, type SettingValue } from "../state/pluginSettings";
 import { findViewById, useSessions } from "../state/sessions";

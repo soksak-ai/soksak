@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"unsafe"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // CaptureService exposes window capture to anything driving this application.
@@ -24,11 +26,11 @@ func (service *CaptureService) ServiceName() string { return "soksak-capture" }
 
 func (service *CaptureService) target() (unsafe.Pointer, error) {
 	if service.window == nil {
-		return nil, fmt.Errorf("capture has no window source")
+		return nil, i18n.Errorf("wails.capture.noWindowSource", nil)
 	}
 	handle := service.window()
 	if handle == nil {
-		return nil, fmt.Errorf("capture ran before the window existed")
+		return nil, i18n.Errorf("wails.capture.beforeWindow", nil)
 	}
 	return handle, nil
 }
@@ -52,7 +54,7 @@ func (service *CaptureService) SnapshotRegion(path string, rect Rect) (string, e
 		return "", err
 	}
 	if path == "" {
-		return "", fmt.Errorf("capture needs a path to write to")
+		return "", i18n.Errorf("wails.capture.noPath", nil)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", fmt.Errorf("capture could not create %s: %w", filepath.Dir(path), err)

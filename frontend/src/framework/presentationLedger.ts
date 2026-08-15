@@ -11,6 +11,7 @@
 // exist** — answering with an empty ledger makes the caller read 0 frames as "there was no
 // display", which is claiming to have measured what was never measured.
 import { moduleState } from "../lib/moduleState";
+import { tmsg } from "../i18n";
 import { register } from "../commands/registry";
 import {
   PRESENTATION_CLOCK,
@@ -328,7 +329,7 @@ function installCommands(): void {
       traceId: { type: "string", description: "caller-owned finite trace identity", required: true },
       owners: {
         type: "json",
-        description: "array of {viewId,hostId,surfaceId} owner bindings",
+        description: tmsg("cmd.view.presentation.trace.arm.param.owners"),
         required: true,
       },
       maxEvents: {

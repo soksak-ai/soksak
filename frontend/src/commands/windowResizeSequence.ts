@@ -11,6 +11,7 @@ import {
   type WindowRecorder,
   type WindowRecordingReport,
 } from "./windowRecorder";
+import { tmsg } from "../i18n";
 
 // The shapes of size, request, and step are owned by the observation envelope contract. Redeclaring
 // them here would give the observer and the transaction driver two different shapes for one axis.
@@ -62,16 +63,16 @@ async function observeBaseline(
 
 function validateRecording(record: WindowResizeRecording): void {
   if (typeof record.dir !== "string" || record.dir.trim().length === 0) {
-    throw new Error("record.dir must not be empty");
+    throw new Error(tmsg("msg.window.record.dirEmpty"));
   }
   if (!Number.isSafeInteger(record.frames) || record.frames < 1 || record.frames > 600) {
-    throw new Error("record.frames must be a safe integer between 1 and 600");
+    throw new Error(tmsg("msg.window.record.frames"));
   }
   if (!Number.isFinite(record.intervalMs) || record.intervalMs < 0 || record.intervalMs > 1_000) {
-    throw new Error("record.intervalMs must be between 0 and 1000");
+    throw new Error(tmsg("msg.window.record.intervalMs"));
   }
   if (record.maxBytes !== undefined && !validWindowRecordMaxBytes(record.maxBytes)) {
-    throw new Error("record.maxBytes must be a valid window recording byte budget");
+    throw new Error(tmsg("msg.window.record.maxBytes"));
   }
 }
 
@@ -108,14 +109,14 @@ export async function runWindowResizeSequence({
   baseline: ResizeBaselineReport;
   samples: { step: number; size: ResizeSequenceStep; observation: unknown }[];
 }> {
-  if (!Array.isArray(sizes) || sizes.length === 0) throw new Error("sizes must not be empty");
-  if (sizes.length > MAX_STEPS) throw new Error(`sizes supports at most ${MAX_STEPS} steps`);
+  if (!Array.isArray(sizes) || sizes.length === 0) throw new Error(tmsg("msg.window.resizeSequence.sizesEmpty"));
+  if (sizes.length > MAX_STEPS) throw new Error(tmsg("msg.window.resizeSequence.maxSteps", { max: MAX_STEPS }));
   if (!Number.isFinite(intervalMs) || intervalMs < 0 || intervalMs > 1_000) {
-    throw new Error("intervalMs must be between 0 and 1000");
+    throw new Error(tmsg("msg.window.resizeSequence.intervalMs"));
   }
   for (const size of sizes) {
     if (!Number.isFinite(size?.w) || !Number.isFinite(size?.h) || size.w <= 0 || size.h <= 0) {
-      throw new Error(`invalid physical window size: ${JSON.stringify(size)}`);
+      throw new Error(tmsg("msg.window.resizeSequence.invalidSize", { size: JSON.stringify(size) }));
     }
     // The caller declares each step's intent. An unrecognized name cannot be cross-checked by the
     // observation, so it is rejected here — deriving it from the observed geometry would make that

@@ -9,7 +9,7 @@ import { register } from "./registry";
 
 export function registerClipboardCatalog(): void {
   register("clipboard.read", {
-    description: "Read the current text from the system clipboard. Returns an empty string when the clipboard holds non-text content. Use to inspect a command result or the last copied value.",
+    description: tmsg("cmd.clipboard.read.desc"),
     triggers: { ko: "클립보드 읽기 복사내용 붙여넣기확인" },
     params: {},
     // The answer is home-wide, not per-window — same in every window (registry.ts windowScoped).
@@ -25,7 +25,7 @@ export function registerClipboardCatalog(): void {
   });
 
   register("clipboard.write", {
-    description: "Write text to the system clipboard, overwriting existing content. The core suppresses the self-write echo event once to prevent feedback loops.",
+    description: tmsg("cmd.clipboard.write.desc"),
     triggers: { ko: "클립보드 쓰기 복사 클립보드저장" },
     params: {
       text: { type: "string", description: "Text to place in the clipboard", required: true },

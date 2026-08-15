@@ -14,6 +14,7 @@ import (
 	"fmt"
 
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Deps is what the surrounding process supplies. Everything in it is injected;
@@ -222,7 +223,7 @@ func spawnRequest(arguments control.Args) (Request, error) {
 	// empty is a caller naming a label that names nothing, and stamping it
 	// would put the child where no reclaim can reach it.
 	if supplied(arguments, "window") && request.Window == "" {
-		return request, fmt.Errorf("process_spawn: window was given as an empty label — omit it to spawn an unowned child")
+		return request, i18n.Errorf("process.spawn.emptyWindowLabel", nil)
 	}
 	return request, nil
 }
@@ -240,12 +241,12 @@ func required[T any](arguments control.Args, name string) (T, error) {
 	var value T
 	raw, carried := arguments[name]
 	if !carried {
-		return value, fmt.Errorf("missing argument %q", name)
+		return value, i18n.Errorf("process.arg.missing", map[string]string{"name": name})
 	}
 	if isNull(raw) {
 		// Named apart from absence: the caller did send the field, and knowing
 		// that is what turns "I forgot it" into "what I put in it was empty".
-		return value, fmt.Errorf("argument %q is null; omit it or send a value", name)
+		return value, i18n.Errorf("process.arg.null", map[string]string{"name": name})
 	}
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return value, fmt.Errorf("argument %q: %w", name, err)

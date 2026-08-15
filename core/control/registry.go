@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Owner names who answers. Core commands are host-independent; framework
@@ -141,9 +143,9 @@ func (registry *Registry) Invoke(name string, args Args) (any, error) {
 			return elsewhere.forward(name, args)
 		}
 		if declared {
-			return nil, fmt.Errorf("command %s is not served: %s", name, reason)
+			return nil, i18n.Errorf("control.invoke.unserved", map[string]string{"name": name, "reason": reason})
 		}
-		return nil, fmt.Errorf("command %s is not registered", name)
+		return nil, i18n.Errorf("control.invoke.unknown", map[string]string{"name": name})
 	}
 	return command.Handler(args)
 }

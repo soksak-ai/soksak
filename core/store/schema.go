@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/soksak/soksak-core/core/i18n"
+
 	// A pure-Go driver, so Windows stays cgo-free and cross-compiles from any
 	// host. The framework already depends on it.
 	_ "modernc.org/sqlite"
@@ -98,7 +100,7 @@ type KV struct {
 // OpenKV opens the store at path, creating the file and its schema if needed.
 func OpenKV(path string) (*KV, error) {
 	if path == "" {
-		return nil, fmt.Errorf("store: no database path was given")
+		return nil, i18n.Errorf("store.open.noPath", nil)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("store: could not create %s: %w", filepath.Dir(path), err)
@@ -154,7 +156,7 @@ func (kv *KV) read(fn func(*sql.DB) error) error {
 	kv.mu.RLock()
 	defer kv.mu.RUnlock()
 	if kv.db == nil {
-		return fmt.Errorf("store: the store at %s is closed", kv.path)
+		return i18n.Errorf("store.open.closed", map[string]string{"path": kv.path})
 	}
 	return fn(kv.db)
 }

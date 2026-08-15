@@ -8,9 +8,10 @@
 package identity
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 const product = "soksak"
@@ -120,7 +121,7 @@ func Resolve(identifier string, env Environment) Resolved {
 // moment the guess is wrong, and it does so silently.
 func Require(identifier string, env Environment) (Resolved, error) {
 	if identifier == "" {
-		return Resolved{}, fmt.Errorf("identity: no identifier was given, and one is never derived")
+		return Resolved{}, i18n.Errorf("identity.require.noIdentifier", nil)
 	}
 	return Resolve(identifier, env), nil
 }

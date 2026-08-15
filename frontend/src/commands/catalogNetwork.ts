@@ -44,13 +44,13 @@ export function registerNetworkCatalog(): void {
     params: {
       host: {
         type: "string",
-        description: "Target host or broadcast address (e.g. 255.255.255.255)",
+        description: tmsg("cmd.net.udp.send.param.host"),
         required: true,
       },
       port: { type: "number", description: "Target UDP port (e.g. 9)", required: true },
       data: {
         type: "string",
-        description: "Bytes to send as a hex string (e.g. ffffffffffff...)",
+        description: tmsg("cmd.net.udp.send.param.data"),
         required: true,
       },
       broadcast: { type: "boolean", description: "Allow broadcast addresses (255.255.255.255 etc.)" },
@@ -90,7 +90,7 @@ export function registerNetworkCatalog(): void {
     params: {
       host: {
         type: "string",
-        description: "Target host (e.g. 239.255.255.250 for SSDP)",
+        description: tmsg("cmd.net.udp.request.param.host"),
         required: true,
       },
       port: { type: "number", description: "Target port (e.g. 1900 for SSDP)", required: true },
@@ -151,7 +151,7 @@ export function registerNetworkCatalog(): void {
       },
       impersonate: {
         type: "string",
-        description: "Transport backend: \"off\" (default, plain native-tls) or \"chrome\" (browser JA3/JA4 fingerprint via the wreq backend, to pass fingerprint-blocking CDNs). Same response shape, secret/ns/danger gates either way.",
+        description: tmsg("cmd.net.http.request.param.impersonate"),
       },
     },
     // The answer comes from the owner — identical in every window (registry.ts windowScoped).

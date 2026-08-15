@@ -44,7 +44,7 @@ export function registerSystemCatalog(): void {
       framework: {
         type: "string",
         required: false,
-        description: "Quit only this framework (the name app.framework reports). Omitted quits whichever app receives the call.",
+        description: tmsg("cmd.app.shutdown.commit.param.framework"),
       },
     },
     danger: "destructive",

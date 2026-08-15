@@ -15,7 +15,7 @@ export function registerUiCatalog(): void {
     params: {
       rule: {
         type: "string",
-        description: "Rule id or selector substring filter (omit to check all rules)",
+        description: tmsg("cmd.ui.validate.param.rule"),
       },
     },
     returns: "{ pass, rulesActive, elementsChecked, violations: [{rule, selector, index, edge, expected, actual}] }",

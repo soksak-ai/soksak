@@ -104,7 +104,7 @@ export function registerScheduleCatalog(): void {
   });
 
   register("schedule.cancel", {
-    description: "Cancel a pending schedule by id. Returns removed=true if the schedule existed.",
+    description: tmsg("cmd.schedule.cancel.desc"),
     triggers: { ko: "스케줄 취소 삭제 예약취소 cancel" },
     params: { id: { type: "string", description: "Schedule id issued by schedule.set", required: true } },
     // The answer is home-wide, not per-window — same in every window (registry.ts windowScoped).

@@ -1,11 +1,10 @@
 package wails
 
 import (
-	"errors"
-	"fmt"
 	"sync/atomic"
 	"unsafe"
 
+	"github.com/soksak/soksak-core/core/i18n"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -114,7 +113,7 @@ func (h *wailsHost) NativeHandle(name string) unsafe.Pointer {
 func (h *wailsHost) ContentSize(name string) (float64, float64, error) {
 	window, addressable := h.live(name)
 	if !addressable {
-		return 0, 0, fmt.Errorf("window %s has no native lifetime and no content area", name)
+		return 0, 0, i18n.Errorf("wails.host.noContentArea", map[string]string{"window": name})
 	}
 	var width, height float64
 	var failure error
@@ -128,7 +127,7 @@ func (h *wailsHost) ContentSize(name string) (float64, float64, error) {
 func (h *wailsHost) FitWebview(name string) error {
 	window, addressable := h.live(name)
 	if !addressable {
-		return fmt.Errorf("window %s has no native lifetime and holds no view to fit", name)
+		return i18n.Errorf("wails.host.noViewToFit", map[string]string{"window": name})
 	}
 	var failure error
 	native := window.NativeWindow()
@@ -141,7 +140,7 @@ func (h *wailsHost) FitWebview(name string) error {
 func (h *wailsHost) WebviewRect(name string) (x, y, width, height float64, err error) {
 	window, addressable := h.live(name)
 	if !addressable {
-		return 0, 0, 0, 0, fmt.Errorf("window %s has no native lifetime and holds no view", name)
+		return 0, 0, 0, 0, i18n.Errorf("wails.host.noView", map[string]string{"window": name})
 	}
 	native := window.NativeWindow()
 	application.InvokeSync(func() { x, y, width, height, err = webviewFrame(native) })
@@ -153,7 +152,7 @@ func (h *wailsHost) WebviewRect(name string) (x, y, width, height float64, err e
 func (h *wailsHost) SetBackground(name string, colour string) error {
 	window, addressable := h.live(name)
 	if !addressable {
-		return fmt.Errorf("window %s has no native lifetime and cannot be coloured", name)
+		return i18n.Errorf("wails.host.cannotColour", map[string]string{"window": name})
 	}
 	application.InvokeSync(func() { window.SetBackgroundColour(parseColour(colour)) })
 	return nil
@@ -168,7 +167,7 @@ func (h *wailsHost) SetBackground(name string, colour string) error {
 func (h *wailsHost) Title(name string) (string, error) {
 	window, addressable := h.live(name)
 	if !addressable {
-		return "", fmt.Errorf("window %s has no native lifetime and no title", name)
+		return "", i18n.Errorf("wails.host.noTitle", map[string]string{"window": name})
 	}
 
 	var title string
@@ -216,7 +215,7 @@ func (h *wailsHost) Open(spec OpenSpec) error {
 	// will. The caller reads that once; there is nothing to poll for.
 	window := h.app.Window.NewWithOptions(options)
 	if window == nil {
-		return fmt.Errorf("the framework returned no window for %s", spec.Name)
+		return i18n.Errorf("wails.host.noWindowReturned", map[string]string{"window": spec.Name})
 	}
 	// The framework builds its content view a point smaller than the window and
 	// lets autoresizing carry that offset, so the document ends up a point
@@ -235,7 +234,7 @@ func (h *wailsHost) Open(spec OpenSpec) error {
 func (h *wailsHost) Reveal(name string, key bool) error {
 	window, addressable := h.live(name)
 	if !addressable {
-		return fmt.Errorf("window %s cannot be revealed; it has no native lifetime", name)
+		return i18n.Errorf("wails.host.cannotReveal", map[string]string{"window": name})
 	}
 	if key {
 		window.Show()
@@ -258,7 +257,7 @@ func (h *wailsHost) Reveal(name string, key bool) error {
 func (h *wailsHost) Discard(name string) error {
 	window, held := h.app.Window.GetByName(name)
 	if !held {
-		return fmt.Errorf("window %s cannot be withdrawn; this process does not hold it", name)
+		return i18n.Errorf("wails.host.cannotWithdraw", map[string]string{"window": name})
 	}
 	// A window that did reach a native lifetime and failed afterwards is torn
 	// down first; one that never did is silently ignored here, which is what
@@ -274,7 +273,7 @@ func (h *wailsHost) Discard(name string) error {
 func (h *wailsHost) Place(name string, frame Frame) error {
 	window, addressable := h.live(name)
 	if !addressable {
-		return fmt.Errorf("window %s cannot be placed; it has no native lifetime", name)
+		return i18n.Errorf("wails.host.cannotPlace", map[string]string{"window": name})
 	}
 	window.SetBounds(application.Rect{X: frame.X, Y: frame.Y, Width: frame.W, Height: frame.H})
 	return nil
@@ -283,7 +282,7 @@ func (h *wailsHost) Place(name string, frame Frame) error {
 func (h *wailsHost) Focus(name string) error {
 	window, addressable := h.live(name)
 	if !addressable {
-		return fmt.Errorf("window %s cannot be focused; it has no native lifetime", name)
+		return i18n.Errorf("wails.host.cannotFocus", map[string]string{"window": name})
 	}
 	window.Focus()
 	return nil
@@ -292,7 +291,7 @@ func (h *wailsHost) Focus(name string) error {
 func (h *wailsHost) Reload(name string) error {
 	window, addressable := h.live(name)
 	if !addressable {
-		return fmt.Errorf("window %s cannot be reloaded; it has no native lifetime", name)
+		return i18n.Errorf("wails.host.cannotReload", map[string]string{"window": name})
 	}
 	window.Reload()
 	return nil
@@ -301,7 +300,7 @@ func (h *wailsHost) Reload(name string) error {
 func (h *wailsHost) Close(name string) error {
 	window, addressable := h.live(name)
 	if !addressable {
-		return fmt.Errorf("window %s cannot be closed; it has no native lifetime", name)
+		return i18n.Errorf("wails.host.cannotClose", map[string]string{"window": name})
 	}
 	window.Close()
 	return nil
@@ -309,7 +308,7 @@ func (h *wailsHost) Close(name string) error {
 
 func (h *wailsHost) ActivateApplication() error {
 	if !h.started.Load() {
-		return errors.New("the application cannot be activated before its run loop starts")
+		return i18n.Errorf("wails.host.runLoopNotStarted", nil)
 	}
 	var failure error
 	application.InvokeSync(func() { failure = activateApplication() })

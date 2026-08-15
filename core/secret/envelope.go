@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // The envelope rule: a per-record data key seals the value, and the device key
@@ -74,7 +76,7 @@ func sealBytes(with material, bound, plaintext []byte) (string, error) {
 func openBytes(with material, bound []byte, encoded string) ([]byte, error) {
 	raw, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
-		return nil, fmt.Errorf("secret: the record is not base64")
+		return nil, i18n.Errorf("secret.record.notBase64", nil)
 	}
 	block, err := aes.NewCipher(with.bytes)
 	if err != nil {
@@ -85,13 +87,13 @@ func openBytes(with material, bound []byte, encoded string) ([]byte, error) {
 		return nil, fmt.Errorf("secret: the cipher is not usable: %w", err)
 	}
 	if len(raw) < aead.NonceSize() {
-		return nil, fmt.Errorf("secret: the record is %d bytes and holds no nonce", len(raw))
+		return nil, i18n.Errorf("secret.record.noNonce", map[string]string{"bytes": fmt.Sprint(len(raw))})
 	}
 	plaintext, err := aead.Open(nil, raw[:aead.NonceSize()], raw[aead.NonceSize():], bound)
 	if err != nil {
 		// The cipher's own message is not passed on. It states nothing a caller
 		// can act on, and the two facts that matter are named here instead.
-		return nil, fmt.Errorf("secret: the record does not match this device key, or it was moved from the address it was sealed at")
+		return nil, i18n.Errorf("secret.record.wrongKeyOrAddress", nil)
 	}
 	return plaintext, nil
 }
@@ -126,12 +128,13 @@ func open(device material, ns, key string, record envelope) ([]byte, error) {
 	// no migration here: a version this build does not write is one it does not
 	// read.
 	if record.Version != envelopeVersion {
-		return nil, fmt.Errorf("secret: %s/%s is a version %d record and this build writes version %d",
-			ns, key, record.Version, envelopeVersion)
+		return nil, i18n.Errorf("secret.record.otherVersion", map[string]string{
+			"ns": ns, "key": key,
+			"version": fmt.Sprint(record.Version), "writes": fmt.Sprint(envelopeVersion)})
 	}
 	if held := deviceKeyID(device); record.DeviceKeyID != held {
-		return nil, fmt.Errorf("secret: %s/%s was sealed under device key %s and this host holds %s",
-			ns, key, record.DeviceKeyID, held)
+		return nil, i18n.Errorf("secret.record.otherDevice", map[string]string{
+			"ns": ns, "key": key, "sealed": record.DeviceKeyID, "held": held})
 	}
 
 	bound := boundTo(ns, key)
@@ -157,7 +160,7 @@ func encodeRecord(record envelope) (string, error) {
 func decodeRecord(ns, key, stored string) (envelope, error) {
 	var record envelope
 	if err := json.Unmarshal([]byte(stored), &record); err != nil {
-		return record, fmt.Errorf("secret: the record at %s/%s is not a sealed record", ns, key)
+		return record, i18n.Errorf("secret.record.notSealed", map[string]string{"ns": ns, "key": key})
 	}
 	return record, nil
 }

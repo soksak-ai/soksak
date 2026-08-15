@@ -22,7 +22,7 @@ function manifestOf(overrides: Record<string, unknown> = {}): PluginManifest {
       id: "demo",
       name: "Demo",
       version: "1.0.0",
-      description: "Test",
+      description: "Test fixture",
       permissions: [],
       ...overrides,
     },

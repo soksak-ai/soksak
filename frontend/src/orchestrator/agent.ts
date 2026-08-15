@@ -14,6 +14,7 @@
 // refused). The only allowed tool is this app's CLI binary (Bash(<bin>:*), <bin>=sok/sok-dev/sok-debug).
 
 import { moduleState } from "../lib/moduleState";
+import { tmsg } from "../i18n";
 import { createStream, invoke } from "../framework";
 import { safeListen } from "../lib/safeListen";
 import { useSettings } from "../state/settings";

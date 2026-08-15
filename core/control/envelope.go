@@ -3,6 +3,8 @@ package control
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Protocol is the wire version this build speaks.
@@ -28,6 +30,13 @@ type Request struct {
 	// Args are the command's arguments, still encoded. Decoding happens per
 	// command, so this boundary never has to know their shapes.
 	Args map[string]json.RawMessage `json:"args,omitempty"`
+	// Language is the language this caller reads. Empty means the language
+	// agreed in the greeting, and no greeting means English.
+	//
+	// It rides on the request rather than only on the connection because one
+	// process serves several readers: a window, a `sok` invocation and a
+	// sidecar share a build, and the language is the asker's, not the socket's.
+	Language string `json:"language,omitempty"`
 }
 
 // Response is one answer.
@@ -54,6 +63,12 @@ type Greeting struct {
 	// greeting because a client that must ask separately will act on a name it
 	// has not checked.
 	Commands Table `json:"commands"`
+	// Language is what this build will answer in for this session, and
+	// Languages is everything it serves. A client that asked for one this build
+	// does not have is told here, rather than receiving sentences that quietly
+	// stayed English.
+	Language  string   `json:"language"`
+	Languages []string `json:"languages"`
 }
 
 // HelloCommand is the greeting's name. It is reserved: a feature package that
@@ -75,13 +90,21 @@ func Answer(registry *Registry, identity string, request Request) Response {
 		return greet(registry, identity, request)
 	}
 
+	language, err := i18n.ParseLanguage(request.Language)
+	if err != nil {
+		return Response{ID: request.ID, Error: err.Error()}
+	}
+
 	args := make(Args, len(request.Args))
 	for name, raw := range request.Args {
 		args[name] = raw
 	}
 	result, err := registry.Invoke(request.Command, args)
 	if err != nil {
-		return Response{ID: request.ID, Error: err.Error()}
+		// Rendered here, at the edge, because this is the first place with the
+		// reader in hand. A handler that formatted the sentence itself would have
+		// picked a language before the caller was known.
+		return Response{ID: request.ID, Error: i18n.Render(err, language)}
 	}
 	return Response{ID: request.ID, Ok: true, Result: result}
 }
@@ -97,9 +120,19 @@ func greet(registry *Registry, identity string, request Request) Response {
 				"this build speaks protocol %d and the client asked for %d", Protocol, wanted)}
 		}
 	}
+	language, err := i18n.ParseLanguage(request.Language)
+	if err != nil {
+		return Response{ID: request.ID, Error: err.Error()}
+	}
+	served := make([]string, 0, len(i18n.Known()))
+	for _, known := range i18n.Known() {
+		served = append(served, string(known))
+	}
 	return Response{ID: request.ID, Ok: true, Result: Greeting{
-		Protocol: Protocol,
-		Identity: identity,
-		Commands: registry.Describe(),
+		Protocol:  Protocol,
+		Identity:  identity,
+		Commands:  registry.Describe(),
+		Language:  string(language),
+		Languages: served,
 	}}
 }

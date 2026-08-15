@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 const sidecarScheme = "sidecar:"
@@ -26,7 +28,7 @@ func resolveCommand(home string, command string) (string, error) {
 		return "", err
 	}
 	if home == "" {
-		return "", fmt.Errorf("sidecar %s cannot be resolved: this process was given no home", name)
+		return "", i18n.Errorf("process.sidecar.noHome", map[string]string{"name": name})
 	}
 
 	unit := "soksak-sidecar-" + name
@@ -45,20 +47,20 @@ func resolveCommand(home string, command string) (string, error) {
 		read, err := os.Lstat(path)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
-				return "", fmt.Errorf("sidecar %s is not installed at %s: %s is missing — the home needs a staged dist", name, target, path)
+				return "", i18n.Errorf("process.sidecar.notInstalled", map[string]string{"name": name, "target": target, "path": path})
 			}
 			return "", fmt.Errorf("sidecar %s: %s could not be read: %w", name, path, err)
 		}
 		// A named path wins. A plain is-file check follows links, so an
 		// unnamed location could answer for the named one.
 		if read.Mode()&fs.ModeSymlink != 0 {
-			return "", fmt.Errorf("sidecar %s: %s is a symlink — a named path answers for itself or not at all", name, path)
+			return "", i18n.Errorf("process.sidecar.symlink", map[string]string{"name": name, "path": path})
 		}
 		info = read
 	}
 
 	if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("sidecar %s: %s is not a regular file", name, path)
+		return "", i18n.Errorf("process.sidecar.notRegularFile", map[string]string{"name": name, "path": path})
 	}
 	return path, nil
 }
@@ -78,7 +80,7 @@ func checkSidecarName(name string) error {
 		}
 	}
 	if !legal {
-		return fmt.Errorf("sidecar name %q is illegal — it must match ^[a-z0-9][a-z0-9-]*$", name)
+		return i18n.Errorf("process.sidecar.illegalName", map[string]string{"name": name})
 	}
 	return nil
 }

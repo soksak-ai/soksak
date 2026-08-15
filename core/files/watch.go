@@ -6,6 +6,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // defaultFoldWindow is how long changes are collected before a directory is
@@ -88,10 +90,10 @@ func newWatchers(backend Backend, emit func(dir string), fold time.Duration, aft
 // that, so both halves of the delivery path are checked.
 func (watch *watchers) Watch(path string, home string) (int, error) {
 	if watch.backend == nil {
-		return 0, fmt.Errorf("watch_dir has no filesystem watcher in this build — set files.Deps.Watch")
+		return 0, i18n.Errorf("files.watch.noWatcher", nil)
 	}
 	if watch.emit == nil {
-		return 0, fmt.Errorf("watch_dir has nowhere to deliver changes — set files.Deps.EmitChange")
+		return 0, i18n.Errorf("files.watch.noSink", nil)
 	}
 	key, err := watchKey(path, home)
 	if err != nil {
@@ -135,7 +137,7 @@ func (watch *watchers) Watch(path string, home string) (int, error) {
 // rather than allowed to pin the subscription.
 func (watch *watchers) Unwatch(path string, home string) (int, error) {
 	if watch.backend == nil {
-		return 0, fmt.Errorf("watch_dir has no filesystem watcher in this build — set files.Deps.Watch")
+		return 0, i18n.Errorf("files.watch.noWatcher", nil)
 	}
 	key, err := watchKey(path, home)
 	if err != nil {
@@ -250,7 +252,7 @@ func watchKey(path string, home string) (string, error) {
 	if path == "" {
 		// Never silently the home: watch_dir names a directory, and defaulting
 		// would arm a folder nobody asked for and answer a count for it.
-		return "", fmt.Errorf("watch_dir needs a path")
+		return "", i18n.Errorf("files.watch.noPath", nil)
 	}
 	expanded, err := expand(path, home)
 	if err != nil {
@@ -264,7 +266,7 @@ func watchKey(path string, home string) (string, error) {
 		// for a subscription that can never fire, which is the failure this
 		// file exists to refuse: a consumer that believes it registered and
 		// waits forever.
-		return "", fmt.Errorf("watch_dir needs an absolute path, and %q is relative — core reads no working directory to resolve it against", path)
+		return "", i18n.Errorf("files.watch.relativePath", map[string]string{"path": fmt.Sprintf("%q", path)})
 	}
 	return resolvePath(expanded), nil
 }

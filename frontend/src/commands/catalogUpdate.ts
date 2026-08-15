@@ -58,15 +58,15 @@ export function registerUpdateCatalog(): void {
     params: {
       plugins: {
         type: "boolean",
-        description: "Update installed plugin release closures. Default true.",
+        description: tmsg("cmd.update.apply.param.plugins"),
       },
       daemon: {
         type: "boolean",
-        description: "Hot-upgrade the PTY daemon (fd-handoff drain). Default true.",
+        description: tmsg("cmd.update.apply.param.daemon"),
       },
       app: {
         type: "boolean",
-        description: "Update the app body (release channel only). Default true.",
+        description: tmsg("cmd.update.apply.param.app"),
       },
     },
     returns: "{ applied: [{ axis, ... }], skipped: [{ axis, reason }] }",

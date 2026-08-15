@@ -1,3 +1,4 @@
+import { tmsg } from "../i18n";
 import { PRESENTATION_CLOCK, presentationNowUnixMs } from "../lib/presentationClock";
 import { register } from "./registry";
 
@@ -12,7 +13,7 @@ export function registerPresentationClockCatalog(): void {
     params: {
       traceId: {
         type: "string",
-        description: "caller-owned finite presentation correlation identity",
+        description: tmsg("cmd.presentation.clock.acknowledge.param.traceId"),
         required: true,
       },
     },

@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // validateDevSource judges a directory offered as a development source and
@@ -29,10 +31,10 @@ import (
 //   - It exists and is a directory. A source that is a file is not half-valid.
 func validateDevSource(source string) (string, error) {
 	if source == "" {
-		return "", errors.New("unit_source_validate needs source; an empty path names no directory")
+		return "", i18n.Errorf("install.unitSourceValidate.noSource", nil)
 	}
 	if !filepath.IsAbs(source) {
-		return "", fmt.Errorf("unit_source_validate: %s is relative — a development source is an absolute path, because a relative one is resolved against a working directory this process does not have", source)
+		return "", i18n.Errorf("install.unitSourceValidate.relative", map[string]string{"path": source})
 	}
 	if err := rejectLinkedComponents(source); err != nil {
 		return "", err
@@ -41,12 +43,12 @@ func validateDevSource(source string) (string, error) {
 	read, err := os.Stat(source)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return "", fmt.Errorf("unit_source_validate: %s does not exist", source)
+			return "", i18n.Errorf("install.unitSourceValidate.missing", map[string]string{"path": source})
 		}
 		return "", fmt.Errorf("unit_source_validate could not read %s: %w", source, err)
 	}
 	if !read.IsDir() {
-		return "", fmt.Errorf("unit_source_validate: %s is not a directory", source)
+		return "", i18n.Errorf("install.unitSourceValidate.notDirectory", map[string]string{"path": source})
 	}
 	return source, nil
 }
@@ -70,7 +72,7 @@ func rejectLinkedComponents(path string) error {
 
 	for _, component := range pathComponents(path[len(volume):]) {
 		if component == ".." {
-			return fmt.Errorf("unit_source_validate: %s walks through '..' — a development source names where it is, so the path that is judged is the path that is stored", path)
+			return i18n.Errorf("install.unitSourceValidate.parentComponent", map[string]string{"path": path})
 		}
 		walk = filepath.Join(walk, component)
 		read, err := os.Lstat(walk)
@@ -81,7 +83,7 @@ func rejectLinkedComponents(path string) error {
 			return fmt.Errorf("unit_source_validate could not read %s: %w", walk, err)
 		}
 		if read.Mode()&fs.ModeSymlink != 0 {
-			return fmt.Errorf("unit_source_validate: %s is a symlink — a named path answers for itself or not at all", walk)
+			return i18n.Errorf("install.unitSourceValidate.symlink", map[string]string{"path": walk})
 		}
 	}
 	return nil

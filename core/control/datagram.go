@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Raw UDP, which a webview cannot do at all.
@@ -103,14 +105,14 @@ func requestDatagrams(args Args) (any, error) {
 		return nil, err
 	}
 	if window <= 0 {
-		return nil, fmt.Errorf("argument %q is %d; a collection window is at least 1ms", "timeoutMs", window)
+		return nil, i18n.Errorf("control.datagram.windowTooSmall", map[string]string{"name": "timeoutMs", "value": strconv.Itoa(window)})
 	}
 	limit, err := OptionalArg(args, "maxPackets", defaultMaxPackets)
 	if err != nil {
 		return nil, err
 	}
 	if limit <= 0 {
-		return nil, fmt.Errorf("argument %q is %d; a collection holds at least one packet", "maxPackets", limit)
+		return nil, i18n.Errorf("control.datagram.packetLimitTooSmall", map[string]string{"name": "maxPackets", "value": strconv.Itoa(limit)})
 	}
 	broadcast, err := OptionalArg(args, "broadcast", false)
 	if err != nil {
@@ -174,7 +176,7 @@ func requestDatagrams(args Args) (any, error) {
 func datagramFrom(from net.Addr, payload []byte) (Datagram, error) {
 	sender, isUDP := from.(*net.UDPAddr)
 	if !isUDP {
-		return Datagram{}, fmt.Errorf("a reply arrived from %s, which is not a UDP address", from)
+		return Datagram{}, i18n.Errorf("control.datagram.replyNotUDP", map[string]string{"address": from.String()})
 	}
 	data := make([]int, len(payload))
 	for index, value := range payload {
@@ -235,8 +237,10 @@ func guardBroadcast(destination *net.UDPAddr, named bool) error {
 }
 
 func broadcastRefused(destination *net.UDPAddr) error {
-	return fmt.Errorf("%s is a broadcast address and reaches every machine on the segment; send %q:true to mean it",
-		destination.IP, "broadcast")
+	return i18n.Errorf("control.datagram.broadcastRefused", map[string]string{
+		"address": destination.IP.String(),
+		"name":    "broadcast",
+	})
 }
 
 // isDirectedBroadcast answers whether target is the broadcast address of one of
@@ -284,7 +288,7 @@ func datagramDestination(args Args) (*net.UDPAddr, error) {
 		return nil, err
 	}
 	if host == "" {
-		return nil, fmt.Errorf("argument %q is empty; name the host to send to", "host")
+		return nil, i18n.Errorf("control.datagram.hostEmpty", map[string]string{"name": "host"})
 	}
 	port, err := Arg[int](args, "port")
 	if err != nil {
@@ -294,7 +298,7 @@ func datagramDestination(args Args) (*net.UDPAddr, error) {
 	// being bound and nothing at all to a destination, so a send to it leaves
 	// on the wire and is answered by nobody.
 	if port < 1 || port > 65535 {
-		return nil, fmt.Errorf("argument %q is %d; a UDP port is 1..65535", "port", port)
+		return nil, i18n.Errorf("control.datagram.portRange", map[string]string{"name": "port", "value": strconv.Itoa(port)})
 	}
 	destination, err := net.ResolveUDPAddr("udp", net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
@@ -317,7 +321,11 @@ func datagramPayload(args Args) ([]byte, error) {
 	payload := make([]byte, len(values))
 	for index, value := range values {
 		if value < 0 || value > 255 {
-			return nil, fmt.Errorf("argument %q element %d is %d; a byte is 0..255", "data", index, value)
+			return nil, i18n.Errorf("control.datagram.byteRange", map[string]string{
+				"name":  "data",
+				"index": strconv.Itoa(index),
+				"value": strconv.Itoa(value),
+			})
 		}
 		payload[index] = byte(value)
 	}

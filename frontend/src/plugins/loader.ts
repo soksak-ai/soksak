@@ -44,6 +44,7 @@ import { bootFactPayload } from "../lib/bootFact";
 import { enforceEngineNeeds } from "./engineNeeds";
 import { engineProvision } from "../framework";
 import { useSettings } from "../state/settings";
+import { tmsg } from "../i18n";
 import type { PluginManifest } from "./spec";
 
 // Minimum deps for proxy composition — a subset of PluginApiDeps plus locale (label fallback resolution).

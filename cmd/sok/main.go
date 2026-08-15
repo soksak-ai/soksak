@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/i18n"
 	"github.com/soksak/soksak-core/core/identity"
 )
 
@@ -113,7 +114,7 @@ func requestFrom(argv []string) (control.Request, error) {
 	for _, pair := range argv[1:] {
 		key, value, found := strings.Cut(pair, "=")
 		if !found {
-			return control.Request{}, fmt.Errorf("argument %q is not name=value", pair)
+			return control.Request{}, i18n.Errorf("sok.request.notNameValue", map[string]string{"argument": pair})
 		}
 		if json.Valid([]byte(value)) {
 			request.Args[key] = json.RawMessage(value)

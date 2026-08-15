@@ -1,8 +1,9 @@
 package daemon
 
 import (
-	"fmt"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // daemonArgv assembles the command line one daemon runs as.
@@ -26,10 +27,10 @@ import (
 // unserved there rather than starting one that cannot be stopped.
 func daemonArgv(shell string, cmd string) (string, []string, error) {
 	if strings.TrimSpace(cmd) == "" {
-		return "", nil, fmt.Errorf("argument %q is empty — a shell with nothing to run starts and exits at once, and the caller would read that as a daemon that crashed", "cmd")
+		return "", nil, i18n.Errorf("daemon.shell.emptyCommand", map[string]string{"name": "cmd"})
 	}
 	if shell == "" {
-		return "", nil, fmt.Errorf("this process was given no login shell to run a daemon through — set daemon.Deps.LoginShell; reading $SHELL here would tie the answer to whatever launched this process")
+		return "", nil, i18n.Errorf("daemon.shell.noLoginShell", nil)
 	}
 	return shell, []string{"-lc", cmd}, nil
 }

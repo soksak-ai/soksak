@@ -8,7 +8,6 @@ package wails
 import (
 	"embed"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -20,6 +19,7 @@ import (
 	compositor "github.com/soksak/wails-service-native-compositor"
 
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/i18n"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -230,10 +230,10 @@ func Run(options Options) error {
 func dispatchToWindow(app *application.App, target, event string, payload any) error {
 	window, held := app.Window.GetByName(target)
 	if !held {
-		return fmt.Errorf("this process holds no window named %s", target)
+		return i18n.Errorf("wails.dispatch.noSuchWindow", map[string]string{"window": target})
 	}
 	if window.NativeWindow() == nil {
-		return fmt.Errorf("window %s has no native lifetime", target)
+		return i18n.Errorf("wails.dispatch.noNativeLifetime", map[string]string{"window": target})
 	}
 	window.DispatchWailsEvent(&application.CustomEvent{Name: event, Data: payload})
 	return nil

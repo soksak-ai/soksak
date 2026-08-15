@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Collections of documents: define, put, get, delete, query, count, search.
@@ -128,7 +130,7 @@ func (kv *KV) Define(ns, coll string, indexes, fts []string) error {
 			return err
 		}
 		if meta == nil {
-			return fmt.Errorf("store: %s/%s was not there after defining it", ns, coll)
+			return i18n.Errorf("store.define.missingAfterWrite", map[string]string{"ns": ns, "coll": coll})
 		}
 		if len(fts) > 0 {
 			// trigram is what makes a CJK substring findable at all; a word
@@ -217,15 +219,15 @@ func (kv *KV) Put(ns, coll, scope, id string, doc map[string]json.RawMessage, no
 		return "", err
 	}
 	if doc == nil {
-		return "", fmt.Errorf("store: the document for %s/%s is not an object", ns, coll)
+		return "", i18n.Errorf("store.put.documentNotObject", map[string]string{"ns": ns, "coll": coll})
 	}
 	if _, sealed := doc[sealedEnvelopeKey]; sealed {
-		return "", fmt.Errorf(
-			"store: the document for %s/%s carries the reserved key %s, and this build has no vault to open it",
-			ns, coll, sealedEnvelopeKey)
+		return "", i18n.Errorf("store.put.reservedKey", map[string]string{
+			"ns": ns, "coll": coll, "key": sealedEnvelopeKey,
+		})
 	}
 	if id == "" {
-		return "", fmt.Errorf("store: the record for %s/%s has no id", ns, coll)
+		return "", i18n.Errorf("store.put.recordNoID", map[string]string{"ns": ns, "coll": coll})
 	}
 
 	// The canonical id goes into the document, so doc.id always equals the

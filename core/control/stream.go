@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // A stream is a receiver the caller creates and passes as a command argument.
@@ -57,7 +59,7 @@ func Bytes(data []byte) StreamBytes {
 func StreamArg(args Args, name string) (string, error) {
 	raw, present := args[name]
 	if !present {
-		return "", fmt.Errorf("missing argument %q, which must be a stream receiver: {%q: \"<id>\"}", name, streamKey)
+		return "", i18n.Errorf("control.stream.missing", map[string]string{"name": name, "key": streamKey})
 	}
 	var reference struct {
 		ID string `json:"__stream"`
@@ -66,7 +68,7 @@ func StreamArg(args Args, name string) (string, error) {
 		return "", fmt.Errorf("argument %q is not a stream receiver: %w", name, err)
 	}
 	if reference.ID == "" {
-		return "", fmt.Errorf("argument %q carries no %q, so frames have nowhere to go", name, streamKey)
+		return "", i18n.Errorf("control.stream.noID", map[string]string{"name": name, "key": streamKey})
 	}
 	return reference.ID, nil
 }

@@ -1,6 +1,6 @@
 package control
 
-import "fmt"
+import "github.com/soksak/soksak-core/core/i18n"
 
 // A delegated command is answered somewhere this process can reach but does not
 // run: a renderer, a sidecar, a window.
@@ -32,10 +32,10 @@ type delegation struct {
 // and the local one is the one with a test.
 func (registry *Registry) Delegate(source string, owner Owner, names []string, forward func(name string, args Args) (any, error)) error {
 	if source == "" {
-		return fmt.Errorf("control: a delegation needs a source")
+		return i18n.Errorf("control.delegate.noSource", nil)
 	}
 	if forward == nil {
-		return fmt.Errorf("control: delegation %s has no forwarder", source)
+		return i18n.Errorf("control.delegate.noForwarder", map[string]string{"source": source})
 	}
 
 	registry.mu.Lock()
@@ -43,13 +43,13 @@ func (registry *Registry) Delegate(source string, owner Owner, names []string, f
 
 	for _, name := range names {
 		if name == "" {
-			return fmt.Errorf("control: delegation %s named an empty command", source)
+			return i18n.Errorf("control.delegate.emptyCommand", map[string]string{"source": source})
 		}
 		if _, local := registry.served[name]; local {
-			return fmt.Errorf("control: %s cannot delegate %s; this process serves it", source, name)
+			return i18n.Errorf("control.delegate.servedLocally", map[string]string{"source": source, "command": name})
 		}
 		if existing, taken := registry.delegated[name]; taken && existing.source != source {
-			return fmt.Errorf("control: %s cannot delegate %s; %s already does", source, name, existing.source)
+			return i18n.Errorf("control.delegate.alreadyDelegated", map[string]string{"source": source, "command": name, "holder": existing.source})
 		}
 	}
 

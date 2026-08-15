@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // The renderer command bridge: the transport that puts a page's commands on the
@@ -413,8 +414,10 @@ func (r *RendererCommands) forward() func(string, control.Args) (any, error) {
 			}
 		}
 		if window == "" {
-			return nil, fmt.Errorf("%s needs a window: name one of %s, or call from a window",
-				name, strings.Join(r.serving(name), ", "))
+			return nil, i18n.Errorf("wails.renderer.needsWindow", map[string]string{
+				"command": name,
+				"windows": strings.Join(r.serving(name), ", "),
+			})
 		}
 		// The routing arguments are this transport's, not the page's. Passing
 		// them on makes a page refuse a parameter it never declared, which reads
@@ -449,11 +452,13 @@ func (r *RendererCommands) call(window, command string, args control.Args) (any,
 	declared, known := r.windows[window]
 	if !known {
 		r.mu.Unlock()
-		return nil, fmt.Errorf("window %s no longer answers %s", window, command)
+		return nil, i18n.Errorf("wails.renderer.windowGone", map[string]string{
+			"window": window, "command": command})
 	}
 	if !slices.Contains(declared.names, command) {
 		r.mu.Unlock()
-		return nil, fmt.Errorf("window %s does not serve %s", window, command)
+		return nil, i18n.Errorf("wails.renderer.notServed", map[string]string{
+			"window": window, "command": command})
 	}
 	r.nextID++
 	id := r.nextID
@@ -478,7 +483,8 @@ func (r *RendererCommands) call(window, command string, args control.Args) (any,
 		return rendererResult(window, command, answered.result)
 	case <-timer.C:
 		r.forget(id)
-		return nil, fmt.Errorf("window %s did not answer %s within %s", window, command, deadline)
+		return nil, i18n.Errorf("wails.renderer.timedOut", map[string]string{
+			"window": window, "command": command, "deadline": deadline.String()})
 	}
 }
 
@@ -499,7 +505,7 @@ func (r *RendererCommands) answer(id uint64, result json.RawMessage) error {
 		// The deadline already fired, or this id was never handed out. Either
 		// way the page is told: an answer that is being thrown away must not
 		// look to its sender like an answer that arrived.
-		return fmt.Errorf("no request %d is waiting for an answer", id)
+		return i18n.Errorf("wails.renderer.noSuchRequest", map[string]string{"id": fmt.Sprint(id)})
 	}
 	call.answer <- rendererAnswer{result: append(json.RawMessage(nil), result...)}
 	return nil
@@ -519,14 +525,16 @@ func rendererResult(window, command string, raw json.RawMessage) (any, error) {
 	if envelope.Ok == nil {
 		// "It failed" and "it did not say" are different answers, and a missing
 		// verdict read as success would report a refusal as a result.
-		return nil, fmt.Errorf("window %s answered %s without saying whether it succeeded", window, command)
+		return nil, i18n.Errorf("wails.renderer.noVerdict", map[string]string{
+			"window": window, "command": command})
 	}
 	if !*envelope.Ok {
 		// A refusal is a failed command, so it leaves as an error: `sok` exits
 		// non-zero on it and a shell can branch. The page's own code and
 		// message travel with it, because "it failed" alone sends the caller
 		// back to the window to find out why.
-		return nil, fmt.Errorf("window %s refused %s — %s: %s", window, command, envelope.Code, envelope.Message)
+		return nil, i18n.Errorf("wails.renderer.refused", map[string]string{
+			"window": window, "command": command, "code": envelope.Code, "message": envelope.Message})
 	}
 
 	// The whole envelope is the answer, not just its payload: a caller given

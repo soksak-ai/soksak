@@ -1,9 +1,6 @@
 package install
 
-import (
-	"errors"
-	"fmt"
-)
+import "github.com/soksak/soksak-core/core/i18n"
 
 // hostUnitTarget names the artifact triple for this host.
 //
@@ -25,7 +22,7 @@ import (
 // from the pair at all and has to arrive as a value on Deps.
 func hostUnitTarget(goos string, goarch string) (string, error) {
 	if goos == "" || goarch == "" {
-		return "", errors.New("host_unit_target needs the host platform and this process was not given one — set install.Deps.OS and install.Deps.Arch")
+		return "", i18n.Errorf("install.hostUnitTarget.noPlatform", nil)
 	}
 	// The vocabulary is the plugin spec's UNIT_TARGETS; every value below is in
 	// it. A triple that is not in that list would be rejected by the caller
@@ -52,5 +49,5 @@ func hostUnitTarget(goos string, goarch string) (string, error) {
 	case "windows/amd64":
 		return "x86_64-pc-windows-msvc", nil
 	}
-	return "", fmt.Errorf("host_unit_target has no artifact triple for %s/%s", goos, goarch)
+	return "", i18n.Errorf("install.hostUnitTarget.noTriple", map[string]string{"os": goos, "arch": goarch})
 }

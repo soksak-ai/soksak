@@ -6,6 +6,7 @@ import {
   type ArrangementMove,
 } from "./railArrangement";
 import { journalPreparingLayoutTransition } from "./layoutTransitionJournal";
+import { tmsg } from "../i18n";
 import type { LayoutPresentationStart } from "./layoutPresentationCoordinator";
 import type { LayoutPresentationCandidateParticipant } from "./layoutPresentationCandidateCoordinator";
 
@@ -238,11 +239,11 @@ export async function prepareLayoutChange(
         } as PreparedLayoutTransition));
     if (prepared.transactionId !== identity.transactionId) {
       prepared.cancel();
-      throw new Error(`layout transition identity changed: ${identity.transactionId}`);
+      throw new Error(tmsg("layout.transition.identityChanged", { transactionId: identity.transactionId }));
     }
     if (prepared.mode === "snap" && prepared.requiresSharedStart) {
       prepared.cancel();
-      throw new Error(`snap layout cannot require shared start: ${identity.transactionId}`);
+      throw new Error(tmsg("layout.transition.snapSharedStart", { transactionId: identity.transactionId }));
     }
     const targetPattern = /^(direct|pane):[^:\s]+$/;
     if (
@@ -250,7 +251,7 @@ export async function prepareLayoutChange(
       || new Set(prepared.stagedTargets).size !== prepared.stagedTargets.length
     ) {
       prepared.cancel();
-      throw new Error(`layout staged target identity is invalid: ${identity.transactionId}`);
+      throw new Error(tmsg("layout.transition.stagedTargetInvalid", { transactionId: identity.transactionId }));
     }
     return journal.bind(prepared);
   } catch (error) {

@@ -13,6 +13,8 @@ import "C"
 import (
 	"errors"
 	"unsafe"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // CaptureWindow returns PNG bytes of the window, cropped to rect.
@@ -23,7 +25,7 @@ import (
 // image — without a screen-recording grant.
 func CaptureWindow(window unsafe.Pointer, rect Rect) ([]byte, error) {
 	if window == nil {
-		return nil, errors.New("window capture received a nil window")
+		return nil, i18n.Errorf("wails.capture.nilWindow", nil)
 	}
 
 	result := C.soksakCaptureWindow(
@@ -40,7 +42,7 @@ func CaptureWindow(window unsafe.Pointer, rect Rect) ([]byte, error) {
 	if result.png == nil || result.png_len == 0 {
 		// An empty answer is a failure with a missing message, never a
 		// successful empty image.
-		return nil, errors.New("window capture produced no image")
+		return nil, i18n.Errorf("wails.capture.noImage", nil)
 	}
 	return C.GoBytes(unsafe.Pointer(result.png), C.int(result.png_len)), nil
 }

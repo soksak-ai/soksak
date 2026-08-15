@@ -1,8 +1,9 @@
 package process
 
 import (
-	"fmt"
 	"sort"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // SecretSource resolves one namespaced key to plaintext. The implementation
@@ -22,7 +23,7 @@ type SecretSource interface {
 type noVault struct{}
 
 func (noVault) Resolve(namespace, key string) (string, error) {
-	return "", fmt.Errorf("this process has no vault — %s/%s cannot be resolved", namespace, key)
+	return "", i18n.Errorf("process.secret.noVault", map[string]string{"ns": namespace, "key": key})
 }
 
 // resolveSecretEnv turns a secretEnv map (environment name → secret key) into
@@ -39,7 +40,7 @@ func resolveSecretEnv(source SecretSource, namespace string, secretEnv map[strin
 		return nil, nil
 	}
 	if namespace == "" {
-		return nil, fmt.Errorf("secretEnv injection needs ns: a secret without a namespace has no owner")
+		return nil, i18n.Errorf("process.secret.needsNamespace", nil)
 	}
 	if source == nil {
 		source = noVault{}

@@ -13,6 +13,7 @@ import type { EngineProvision } from "../../plugins/spec";
 // side; frameworks/wails/unitassets.go holds the other, and unitFileRoute.test
 // compares the two.
 import { createWailsStream } from "./streams";
+import { tmsg } from "../../i18n";
 
 const UNIT_FILE_ROUTE = "/-/unit-file";
 
@@ -27,7 +28,7 @@ import type {
 
 /** What this host does not answer yet. The error names what is missing. */
 const unserved = (what: string) => (): never => {
-  throw new Error(`wails adapter does not serve ${what} yet`);
+  throw new Error(tmsg("framework.wails.unserved", { what }));
 };
 
 // This window's name. The contract requires a synchronous `label` while the framework returns it
@@ -185,7 +186,7 @@ export const wailsFramework: AppFramework = {
   notification: {
     isPermissionGranted: unserved("notification.isPermissionGranted"),
     requestPermission: unserved("notification.requestPermission"),
-    send: () => { throw new Error("wails adapter does not serve notification.send yet"); },
+    send: () => { throw new Error(tmsg("framework.wails.unserved", { what: "notification.send" })); },
     onAction: unserved("notification.onAction"),
   },
 

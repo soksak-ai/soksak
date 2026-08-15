@@ -642,6 +642,7 @@ const cwdTabOf = (project: Project): string | undefined =>
 // for not being a dev build). HMR runs only under dev identity, so it maps to DEV immediately; a bundle is separated
 // by the app name (getName) — productName encodes the identity as soksak-dev / soksak-debug / soksak.
 function BuildBadge() {
+  const t = useT();
   const [label, setLabel] = useState<string | null>(
     import.meta.env.DEV ? "DEV" : null,
   );

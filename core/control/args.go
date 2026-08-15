@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Go's json package treats null as a no-op for most destinations: the value
@@ -26,10 +28,10 @@ func Arg[T any](args Args, name string) (T, error) {
 	var value T
 	raw, present := args[name]
 	if !present {
-		return value, fmt.Errorf("missing argument %q", name)
+		return value, i18n.Errorf("control.arg.missing", map[string]string{"name": name})
 	}
 	if isNull(raw) {
-		return value, fmt.Errorf("argument %q is null; omit it or send a value", name)
+		return value, i18n.Errorf("control.arg.nullValue", map[string]string{"name": name})
 	}
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return value, fmt.Errorf("argument %q: %w", name, err)
@@ -63,10 +65,10 @@ func OptionalArg[T any](args Args, name string, fallback T) (T, error) {
 func RawArg(args Args, name string) (json.RawMessage, error) {
 	raw, present := args[name]
 	if !present {
-		return nil, fmt.Errorf("missing argument %q", name)
+		return nil, i18n.Errorf("control.arg.missing", map[string]string{"name": name})
 	}
 	if isNull(raw) {
-		return nil, fmt.Errorf("argument %q is null; omit it or send a document", name)
+		return nil, i18n.Errorf("control.arg.nullDocument", map[string]string{"name": name})
 	}
 	return raw, nil
 }

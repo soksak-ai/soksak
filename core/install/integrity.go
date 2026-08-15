@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Integrity is what one installed binary looks like on disk.
@@ -37,10 +39,10 @@ type Integrity struct {
 // that could not succeed.
 func binaryIntegrity(binPath string, libPath string) (Integrity, error) {
 	if binPath == "" {
-		return Integrity{}, errors.New("binary_integrity needs binPath; an empty path would answer about the current directory")
+		return Integrity{}, i18n.Errorf("install.binaryIntegrity.noBinPath", nil)
 	}
 	if libPath == "" {
-		return Integrity{}, errors.New("binary_integrity needs libPath; an empty path would answer about the current directory")
+		return Integrity{}, i18n.Errorf("install.binaryIntegrity.noLibPath", nil)
 	}
 
 	// Lstat, not Stat: the question about the launcher is what the named path

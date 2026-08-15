@@ -4,6 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Reading and clearing a namespace's keys in one pass.
@@ -104,7 +107,7 @@ func (kv *KV) Entries(ns string, prefix *string) (EntriesResult, error) {
 				return fmt.Errorf("store: reading an entry of %s: %w", ns, err)
 			}
 			if !json.Valid([]byte(value)) {
-				return fmt.Errorf("store: the value at %s/%s is not JSON", ns, key)
+				return i18n.Errorf("store.entries.valueNotJSON", map[string]string{"ns": ns, "key": key})
 			}
 			result.Entries = append(result.Entries, Entry{Key: key, Value: json.RawMessage(value)})
 		}
@@ -146,16 +149,19 @@ func (kv *KV) DeleteMany(ns string, keys []string) (DeleteManyResult, error) {
 		return result, err
 	}
 	if len(keys) == 0 {
-		return result, fmt.Errorf("store: a delete batch for %s names no keys", ns)
+		return result, i18n.Errorf("store.deleteMany.noKeys", map[string]string{"ns": ns})
 	}
 	if len(keys) > maxBatchKeys {
-		return result, fmt.Errorf("store: a delete batch names %d keys, and %d is the most", len(keys), maxBatchKeys)
+		return result, i18n.Errorf("store.deleteMany.tooManyKeys", map[string]string{
+			"count": strconv.Itoa(len(keys)),
+			"max":   strconv.Itoa(maxBatchKeys),
+		})
 	}
 	seen := make(map[string]struct{}, len(keys))
 	unique := make([]string, 0, len(keys))
 	for _, key := range keys {
 		if key == "" {
-			return result, fmt.Errorf("store: a delete batch for %s names an empty key", ns)
+			return result, i18n.Errorf("store.deleteMany.emptyKey", map[string]string{"ns": ns})
 		}
 		if _, already := seen[key]; already {
 			continue

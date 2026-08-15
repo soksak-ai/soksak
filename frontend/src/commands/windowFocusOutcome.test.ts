@@ -23,6 +23,7 @@ vi.mock("../lib/webviewLabels", async (importOriginal) => ({
 
 import { registerCatalog } from "./catalog";
 import { execute, getSpec } from "./registry";
+import { tmsg } from "../i18n";
 
 registerCatalog();
 

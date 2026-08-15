@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Spec is one child to start. Everything in it is already resolved: the path
@@ -52,8 +54,7 @@ func groupRefusal(honoured bool, because string) error {
 	if honoured {
 		return nil
 	}
-	return fmt.Errorf("group was asked for and this host cannot honour it: %s — "+
-		"spawning ungrouped instead would leave grandchildren holding the child's stdout after a kill", because)
+	return i18n.Errorf("process.spawn.groupNotHonoured", map[string]string{"because": because})
 }
 
 // OSSpawner starts real processes.

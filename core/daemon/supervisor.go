@@ -3,8 +3,10 @@ package daemon
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 
+	"github.com/soksak/soksak-core/core/i18n"
 	"github.com/soksak/soksak-core/core/process"
 )
 
@@ -137,7 +139,7 @@ func (supervisor *Supervisor) Start(root, name, cmd string) (int, error) {
 			// would fight over the same port, and this table could only reach
 			// the newer one — the first would keep running with nothing left to
 			// stop it by.
-			return 0, fmt.Errorf("daemon %q is already running under %s as pid %d — stop it before starting it again", name, root, pid)
+			return 0, i18n.Errorf("daemon.start.alreadyRunning", map[string]string{"name": name, "root": root, "pid": strconv.Itoa(pid)})
 		}
 	}
 
@@ -332,7 +334,7 @@ func (supervisor *Supervisor) Logs(root, name string, count int) ([]string, erro
 	supervisor.mu.Unlock()
 
 	if !held {
-		return nil, fmt.Errorf("no daemon %q was started under %s in this build", name, root)
+		return nil, i18n.Errorf("daemon.logs.notStarted", map[string]string{"name": name, "root": root})
 	}
 	return one.log.recent(count), nil
 }

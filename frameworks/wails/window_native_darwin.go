@@ -11,8 +11,9 @@ package wails
 import "C"
 
 import (
-	"errors"
 	"unsafe"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // orderWindowFrontWithoutKey brings a window forward and leaves the keyboard
@@ -21,7 +22,7 @@ func orderWindowFrontWithoutKey(window unsafe.Pointer) error {
 	if window == nil {
 		// A nil window here is a window with no native lifetime, and ordering
 		// nothing forward would report a reveal that never happened.
-		return errors.New("a window with no native lifetime cannot be ordered to the front")
+		return i18n.Errorf("wails.window.noNativeLifetimeFront", nil)
 	}
 	C.soksakOrderFrontRegardless(window)
 	return nil
@@ -34,7 +35,7 @@ func activateApplication() error {
 		// Named rather than silently ignored: the caller asked for the
 		// application to come forward, and a quiet success here would be
 		// followed by a window that is in front and receives no keys.
-		return errors.New("this macOS has no supported application activation request")
+		return i18n.Errorf("wails.app.noActivationRequest", nil)
 	}
 	return nil
 }
@@ -46,13 +47,13 @@ func activateApplication() error {
 // got. The framework only sets titles, so this is the read half.
 func nativeWindowTitle(window unsafe.Pointer) (string, error) {
 	if window == nil {
-		return "", errors.New("a window with no native lifetime has no title")
+		return "", i18n.Errorf("wails.window.noNativeLifetimeTitle", nil)
 	}
 	copied := C.soksakCopyWindowTitle(window)
 	if copied == nil {
 		// Distinct from an empty title: one window has never been given a name
 		// and the other was given "".
-		return "", errors.New("the window has no title")
+		return "", i18n.Errorf("wails.window.noTitle", nil)
 	}
 	defer C.free(unsafe.Pointer(copied))
 	return C.GoString(copied), nil
@@ -65,7 +66,7 @@ func nativeWindowTitle(window unsafe.Pointer) (string, error) {
 // truncating it here would answer a size no document ever had.
 func contentSize(window unsafe.Pointer) (float64, float64, error) {
 	if window == nil {
-		return 0, 0, errors.New("a window with no native lifetime has no content area")
+		return 0, 0, i18n.Errorf("wails.window.noNativeLifetimeContent", nil)
 	}
 	var width, height C.double
 	C.soksakWindowContentSize(window, &width, &height)
@@ -79,12 +80,12 @@ func contentSize(window unsafe.Pointer) (float64, float64, error) {
 // from a view of no size.
 func webviewFrame(window unsafe.Pointer) (x, y, width, height float64, err error) {
 	if window == nil {
-		return 0, 0, 0, 0, errors.New("a window with no native lifetime holds no view")
+		return 0, 0, 0, 0, i18n.Errorf("wails.window.noNativeLifetimeView", nil)
 	}
 	var cx, cy, cw, ch C.double
 	C.soksakWebviewFrame(window, &cx, &cy, &cw, &ch)
 	if float64(cw) < 0 {
-		return 0, 0, 0, 0, errors.New("this window holds no web view")
+		return 0, 0, 0, 0, i18n.Errorf("wails.window.noWebView", nil)
 	}
 	return float64(cx), float64(cy), float64(cw), float64(ch), nil
 }
@@ -93,7 +94,7 @@ func webviewFrame(window unsafe.Pointer) (x, y, width, height float64, err error
 // can be seen in. The caller is on the main thread.
 func fitWebviewToWindow(window unsafe.Pointer) error {
 	if window == nil {
-		return errors.New("a window with no native lifetime holds no view to fit")
+		return i18n.Errorf("wails.window.noNativeLifetimeViewToFit", nil)
 	}
 	C.soksakFitWebviewToWindow(window)
 	return nil

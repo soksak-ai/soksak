@@ -3,7 +3,10 @@ package daemon
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // The adoption rule: a pid written down by a previous run names a process only
@@ -50,7 +53,7 @@ func (record *Recorded) UnmarshalJSON(raw []byte) error {
 		return fmt.Errorf("a recorded daemon is the pair [pid, cmd]: %w", err)
 	}
 	if len(pair) != 2 {
-		return fmt.Errorf("a recorded daemon is the pair [pid, cmd] and this one has %d element(s)", len(pair))
+		return i18n.Errorf("daemon.recorded.elementCount", map[string]string{"count": strconv.Itoa(len(pair))})
 	}
 	if err := json.Unmarshal(pair[0], &record.PID); err != nil {
 		return fmt.Errorf("a recorded daemon's pid: %w", err)

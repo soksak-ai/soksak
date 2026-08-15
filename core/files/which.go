@@ -1,6 +1,10 @@
 package files
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/soksak/soksak-core/core/i18n"
+)
 
 // Outcome is what one run answered. Stdout is carried because `command -v`
 // prints the resolved path, even though the verdict below reads only the exit
@@ -61,13 +65,13 @@ func safeBinaryName(bin string) bool {
 // pairing that cannot succeed — so every binary read as missing on Windows.
 func whichArgv(shell string, bin string, windows bool) (string, []string, error) {
 	if !safeBinaryName(bin) {
-		return "", nil, fmt.Errorf("shell_which: %q is not a binary name — only letters, digits, '-', '_' and '.'", bin)
+		return "", nil, i18n.Errorf("files.shellWhich.notABinaryName", map[string]string{"bin": bin})
 	}
 	if windows {
 		return "where.exe", []string{bin}, nil
 	}
 	if shell == "" {
-		return "", nil, fmt.Errorf("shell_which needs a login shell and this process was not given one — set files.Deps.LoginShell")
+		return "", nil, i18n.Errorf("files.shellWhich.noLoginShell", nil)
 	}
 	return shell, []string{"-lc", "command -v " + bin}, nil
 }
@@ -82,7 +86,7 @@ func whichArgv(shell string, bin string, windows bool) (string, []string, error)
 // ran and answered non-zero is false.
 func shellWhich(bin string, shell string, windows bool, runner Runner) (bool, error) {
 	if runner == nil {
-		return false, fmt.Errorf("shell_which cannot run anything in this build — set files.Deps.Run")
+		return false, i18n.Errorf("files.shellWhich.noRunner", nil)
 	}
 	program, args, err := whichArgv(shell, bin, windows)
 	if err != nil {

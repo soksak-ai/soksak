@@ -22,13 +22,13 @@ const kvBroker = (
 
 const NS_PARAM = {
   type: "string",
-  description: "Namespace: plugin id or 'core'",
+  description: tmsg("cmd.data.param.ns"),
   required: true,
 } as const;
 
 const COLL_PARAM = {
   type: "string",
-  description: "Collection name",
+  description: tmsg("cmd.data.param.collection"),
   required: true,
 } as const;
 
@@ -37,7 +37,7 @@ const KV_BATCH_MAX = 4_096;
 export function registerDataCatalog(): void {
   // kv public surface — the only durable path for a native runtime plugin (see file header). ns is required.
   register("data.kv.get", {
-    description: "Read one kv value from a namespace. Returns null when absent.",
+    description: tmsg("cmd.data.kv.get.desc"),
     triggers: { ko: "키값 조회" },
     params: {
       ns: NS_PARAM,
@@ -96,7 +96,7 @@ export function registerDataCatalog(): void {
   });
 
   register("data.kv.delete", {
-    description: "Delete one kv row from a namespace. Deleting an absent key reports deleted:false.",
+    description: tmsg("cmd.data.kv.delete.desc"),
     triggers: { ko: "키값 삭제" },
     params: {
       ns: NS_PARAM,
@@ -129,7 +129,7 @@ export function registerDataCatalog(): void {
   });
 
   register("data.kv.keys", {
-    description: "List kv keys in a namespace, optionally filtered by prefix.",
+    description: tmsg("cmd.data.kv.keys.desc"),
     triggers: { ko: "키 목록" },
     params: {
       ns: NS_PARAM,

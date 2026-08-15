@@ -19,7 +19,7 @@ function demoManifest(): PluginManifest {
       id: "demo",
       name: "Demo",
       version: "0.0.1",
-      description: "Test",
+      description: "Test fixture",
       entry: null,
       permissions: ["commands", "sidecar", "service"],
       sidecars: [{ name: "demo-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", range: ">=0.0.1 <1.0.0" } }],

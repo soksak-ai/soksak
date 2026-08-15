@@ -5,6 +5,7 @@ import (
 	"unsafe"
 
 	"github.com/soksak/soksak-core/core/control"
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // RegisterCapture puts the capture on the registry.
@@ -40,11 +41,11 @@ func RegisterCapture(registry *control.Registry, host WindowHost) {
 			}
 		}
 		if name == "" {
-			return nil, fmt.Errorf("capture needs a window: name one, or call from a window")
+			return nil, i18n.Errorf("wails.capture.needsWindow", nil)
 		}
 		handle := host.NativeHandle(name)
 		if handle == nil {
-			return nil, fmt.Errorf("window %s has no native lifetime and no pixels", name)
+			return nil, i18n.Errorf("wails.capture.noPixels", map[string]string{"window": name})
 		}
 		return NewCaptureService(func() unsafe.Pointer { return handle }), nil
 	}

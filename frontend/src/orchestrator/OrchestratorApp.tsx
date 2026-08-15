@@ -54,6 +54,7 @@ function commandLabel(cmd: string, t: TFn, carried?: unknown): string {
 // the consumer never guesses keys). base64 becomes a data URI immediately; path is lazily loaded
 // through read_file_base64 (on failure it is silently omitted — file deleted, and so on).
 function MediaView({ media, seq, onZoom }: { media: unknown; seq: number; onZoom: (src: string) => void }) {
+  const t = useT();
   const m = media as { kind?: string; base64?: string; path?: string } | undefined;
   const isImage = typeof m?.kind === "string" && m.kind.startsWith("image/");
   const [src, setSrc] = useState<string | null>(null);

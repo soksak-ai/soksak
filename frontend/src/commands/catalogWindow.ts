@@ -31,7 +31,7 @@ import {
 
 export function registerWindowCatalog(): void {
   register("window.info", {
-    description: "Get window screen position, size, and scale factor (for automation validation — outerPosition is physical pixels).",
+    description: tmsg("cmd.window.info.desc"),
     params: {},
     returns: "{ x, y, w, h, scale }",
     message: (d) => tmsg("msg.window.info", { w: Number(d.w), h: Number(d.h) }),
@@ -48,7 +48,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.viewport", {
-    description: "Read the exact native content/main-WKWebView frame and this renderer's DOM viewport/root rectangles in their declared coordinate spaces.",
+    description: tmsg("cmd.window.viewport.desc"),
     params: {},
     returns: "{ window,generation,sequence,trigger,owner,backingScale,coordinateSpace,contentBounds,requestedFrame,mainRootFrame,corrected,matched,events:[{window,generation,sequence,trigger,owner,backingScale,coordinateSpace,contentBounds,requestedFrame,mainRootFrame,corrected,matched}],maxEvents,dom:{innerWidth,innerHeight,devicePixelRatio,documentElement,body},fill:{widthRatio,heightRatio,areaRatio,matched} }",
     message: () => "window viewport receipt",
@@ -121,7 +121,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.move", {
-    description: "Move the window to a screen position in physical pixels (for automation and multi-monitor validation).",
+    description: tmsg("cmd.window.move.desc"),
     params: {
       x: { type: "number", description: "Physical x coordinate", required: true },
       y: { type: "number", description: "Physical y coordinate", required: true },
@@ -136,7 +136,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.resize", {
-    description: "Resize the window to a physical pixel size (for automation and resize-path E2E — drives the native window resize, the same path as edge-drag, which pane.resize does not exercise).",
+    description: tmsg("cmd.window.resize.desc"),
     params: {
       w: { type: "number", description: "Physical width", required: true },
       h: { type: "number", description: "Physical height", required: true },
@@ -156,16 +156,14 @@ export function registerWindowCatalog(): void {
     params: {
       sizes: {
         type: "json",
-        description: "Ordered array of physical pixel sizes: [{w,h,phase?}, ...] (1..120). "
-          + `phase declares what this step is for (${RESIZE_TRANSACTION_PHASES.join("|")}); `
-          + "an observation reports it back beside the geometry it actually measured, so a "
-          + "step whose result contradicts its declared intent is visible. Unknown phase names "
-          + "are refused.",
+        description: tmsg("cmd.window.resizeSequence.param.sizes", {
+          phases: RESIZE_TRANSACTION_PHASES.join("|"),
+        }),
         required: true,
       },
       intervalMs: {
         type: "number",
-        description: "Caller-owned delay between size changes in ms (default 8, 0..1000)",
+        description: tmsg("cmd.window.resizeSequence.param.intervalMs"),
       },
       recordDir: { type: "string", description: "Optional output directory for transition PNGs" },
       recordFrames: { type: "number", description: "Frames to record when recordDir is set (default 64, max 600)" },
@@ -197,17 +195,17 @@ export function registerWindowCatalog(): void {
         const requestedIntervalMs = (p.recordIntervalMs as number | undefined) ?? 16;
         const requestedMaxBytes = p.recordMaxBytes;
         if (recordDir !== undefined && recordDir.trim().length === 0) {
-          throw new Error("recordDir must not be empty");
+          throw new Error(tmsg("msg.window.resizeSequence.recordDirEmpty"));
         }
         if (recordDir !== undefined
           && (!Number.isSafeInteger(requestedFrames) || requestedFrames < 1 || requestedFrames > 600)) {
-          throw new Error("recordFrames must be a safe integer between 1 and 600");
+          throw new Error(tmsg("msg.window.resizeSequence.recordFrames"));
         }
         if (recordDir !== undefined
           && (!Number.isFinite(requestedIntervalMs)
             || requestedIntervalMs < 0
             || requestedIntervalMs > 1_000)) {
-          throw new Error("recordIntervalMs must be between 0 and 1000");
+          throw new Error(tmsg("msg.window.resizeSequence.recordIntervalMs"));
         }
         if (requestedMaxBytes !== undefined && !validWindowRecordMaxBytes(requestedMaxBytes)) {
           throw new Error(
@@ -219,7 +217,7 @@ export function registerWindowCatalog(): void {
           || p.recordIntervalMs !== undefined
           || requestedMaxBytes !== undefined
         )) {
-          throw new Error("recordDir is required when recording options are provided");
+          throw new Error(tmsg("msg.window.resizeSequence.recordDirRequired"));
         }
         const record = recordDir
           ? {
@@ -360,15 +358,15 @@ export function registerWindowCatalog(): void {
     params: {
       root: {
         type: "string",
-        description: "Project root to open in the new window (absolute path).",
+        description: tmsg("cmd.window.open.param.root"),
       },
       alias: {
         type: "string",
-        description: "Display alias for the project tab (defaults to the folder name).",
+        description: tmsg("cmd.window.open.param.alias"),
       },
       shell: {
         type: "string",
-        description: "Shell binary for the project's terminals (defaults to the user shell).",
+        description: tmsg("cmd.window.open.param.shell"),
       },
       mode: {
         type: "string",
@@ -466,7 +464,7 @@ export function registerWindowCatalog(): void {
   });
 
   register("window.list", {
-    description: "List open window labels. Use to discover targets for commands that accept a window argument.",
+    description: tmsg("cmd.window.list.desc"),
     triggers: { ko: "창 목록 윈도우 목록 열린 창" },
     params: {},
     returns: "{ labels }",
@@ -485,7 +483,7 @@ export function registerWindowCatalog(): void {
       label: P.windowLabel,
       apply: {
         type: "boolean",
-        description: "Write the previous generation back (default false = report only).",
+        description: tmsg("cmd.window.restorePrevious.param.apply"),
       },
     },
     returns: "{ found, projects, tabs, applied }",
@@ -577,7 +575,7 @@ export function registerWindowCatalog(): void {
     params: {
       enabled: {
         type: "boolean",
-        description: "Occlusion detection on (default) / off",
+        description: tmsg("cmd.window.occlusion.param.enabled"),
         required: true,
       },
     },

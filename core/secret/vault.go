@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/soksak/soksak-core/core/i18n"
 	"github.com/soksak/soksak-core/core/process"
 	"github.com/soksak/soksak-core/core/store"
 )
@@ -94,7 +95,7 @@ func (vault *Vault) deviceKey() (material, error) {
 		return vault.device, nil
 	}
 	if vault.deps.KeyStore == nil {
-		return material{}, fmt.Errorf("secret: this host was given no key store and holds no device key")
+		return material{}, i18n.Errorf("secret.deviceKey.noKeyStore", nil)
 	}
 	bytes, err := vault.deps.KeyStore.DeviceKey()
 	if err != nil {
@@ -103,8 +104,11 @@ func (vault *Vault) deviceKey() (material, error) {
 	if len(bytes) != deviceKeySize {
 		// The length is named, never the key. A key store that answers with the
 		// wrong size is a host bug, and a caller cannot fix what it cannot see.
-		return material{}, fmt.Errorf("secret: the %s key store answered with a %d-byte device key; %d bytes are required",
-			vault.backendLabel(), len(bytes), deviceKeySize)
+		return material{}, i18n.Errorf("secret.deviceKey.wrongSize", map[string]string{
+			"backend":  vault.backendLabel(),
+			"size":     fmt.Sprint(len(bytes)),
+			"required": fmt.Sprint(deviceKeySize),
+		})
 	}
 	vault.device = material{bytes: bytes}
 	return vault.device, nil
@@ -119,7 +123,7 @@ func (vault *Vault) backendLabel() string {
 
 func (vault *Vault) storage() (*store.KV, error) {
 	if vault.deps.KV == nil {
-		return nil, fmt.Errorf("secret: this process holds no store, and a vault with nowhere to write records is not one")
+		return nil, i18n.Errorf("secret.deps.noStore", nil)
 	}
 	return vault.deps.KV, nil
 }
@@ -251,7 +255,7 @@ func (vault *Vault) Resolve(ns, key string) (string, error) {
 		return "", err
 	}
 	if !found {
-		return "", fmt.Errorf("secret: %s/%s is not in this vault", ns, key)
+		return "", i18n.Errorf("secret.get.notFound", map[string]string{"ns": ns, "key": key})
 	}
 	record, err := decodeRecord(ns, key, stored)
 	if err != nil {

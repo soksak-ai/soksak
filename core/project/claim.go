@@ -1,9 +1,10 @@
 package project
 
 import (
-	"fmt"
 	"sort"
 	"sync"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // ChangeEvent is what a claim mutation is announced as.
@@ -96,12 +97,12 @@ func (ledger *Ledger) ownerOf(root string) (string, bool) {
 // so the caller focuses it.
 func (ledger *Ledger) Claim(root string, window string) (ClaimReply, bool, error) {
 	if root == "" {
-		return ClaimReply{}, false, fmt.Errorf("project_claim needs a root")
+		return ClaimReply{}, false, i18n.Errorf("project.claim.noRoot", nil)
 	}
 	if window == "" {
 		// An owner that cannot be named can never release, so the root would
 		// stay unclaimable for the life of the process.
-		return ClaimReply{}, false, fmt.Errorf("project_claim needs the calling window label")
+		return ClaimReply{}, false, i18n.Errorf("project.claim.noWindowLabel", nil)
 	}
 
 	ledger.mu.Lock()
@@ -124,10 +125,10 @@ func (ledger *Ledger) Claim(root string, window string) (ClaimReply, bool, error
 // once — the close handler, boot, and orchestrator routing all reach here.
 func (ledger *Ledger) Release(root string, window string) (bool, error) {
 	if root == "" {
-		return false, fmt.Errorf("project_release needs a root")
+		return false, i18n.Errorf("project.release.noRoot", nil)
 	}
 	if window == "" {
-		return false, fmt.Errorf("project_release needs the calling window label")
+		return false, i18n.Errorf("project.release.noWindowLabel", nil)
 	}
 
 	ledger.mu.Lock()

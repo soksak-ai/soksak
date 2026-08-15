@@ -26,19 +26,19 @@ export function registerRemoteConfirmDevCatalog(): void {
     params: {
       device_id: {
         type: "string",
-        description: "Requesting device label to show (default iPhone-mock).",
+        description: tmsg("cmd.dev.remoteConfirmMock.param.deviceId"),
       },
       command: {
         type: "string",
-        description: "Command summary to show (default pane.close).",
+        description: tmsg("cmd.dev.remoteConfirmMock.param.command"),
       },
       params: {
         type: "string",
-        description: "Optional params summary string to show.",
+        description: tmsg("cmd.dev.remoteConfirmMock.param.params"),
       },
       ttl_secs: {
         type: "number",
-        description: "Countdown seconds to show (default 120).",
+        description: tmsg("cmd.dev.remoteConfirmMock.param.ttlSecs"),
       },
     },
     returns: "{ request_id }",

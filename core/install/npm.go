@@ -1,11 +1,11 @@
 package install
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/soksak/soksak-core/core/files"
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // NpmDirs is where npm puts globally installed packages.
@@ -35,7 +35,7 @@ func npmGlobalDirs(shell string, goos string, runner files.Runner) (NpmDirs, err
 		return NpmDirs{}, err
 	}
 	if runner == nil {
-		return NpmDirs{}, errors.New("npm_global_dirs cannot run anything in this build — set install.Deps.Run")
+		return NpmDirs{}, i18n.Errorf("install.npm.noRunner", nil)
 	}
 	outcome, err := runner.Run(program, args)
 	if err != nil {
@@ -44,7 +44,7 @@ func npmGlobalDirs(shell string, goos string, runner files.Runner) (NpmDirs, err
 		return NpmDirs{}, fmt.Errorf("npm_global_dirs could not run %s: %w", program, err)
 	}
 	if outcome.ExitCode != 0 {
-		return NpmDirs{}, fmt.Errorf("npm_global_dirs: %s answered %d for `npm prefix -g`; npm is not on the login shell's PATH", program, outcome.ExitCode)
+		return NpmDirs{}, i18n.Errorf("install.npm.exitCode", map[string]string{"program": program, "code": fmt.Sprintf("%d", outcome.ExitCode)})
 	}
 	return npmDirsFromPrefix(outcome.Stdout)
 }
@@ -63,13 +63,13 @@ func npmGlobalDirs(shell string, goos string, runner files.Runner) (NpmDirs, err
 // to be measured on a Windows machine before it can be named here.
 func npmPrefixArgv(shell string, goos string) (string, []string, error) {
 	if goos == "" {
-		return "", nil, errors.New("npm_global_dirs needs the host platform and this process was not given one — set install.Deps.OS")
+		return "", nil, i18n.Errorf("install.npm.noPlatform", nil)
 	}
 	if goos == "windows" {
-		return "", nil, errors.New("npm_global_dirs has no measured Windows layout: npm puts global launchers at <prefix>\\<name>.cmd and packages at <prefix>\\node_modules, so the bin/lib join this command answers would make every installed tool read as missing")
+		return "", nil, i18n.Errorf("install.npm.noWindowsLayout", nil)
 	}
 	if shell == "" {
-		return "", nil, errors.New("npm_global_dirs needs a login shell and this process was not given one — set install.Deps.LoginShell (never $SHELL, which answers about whatever launched this process)")
+		return "", nil, i18n.Errorf("install.npm.noLoginShell", nil)
 	}
 	return shell, []string{"-lc", "npm prefix -g"}, nil
 }
@@ -91,7 +91,7 @@ func npmDirsFromPrefix(stdout string) (NpmDirs, error) {
 		}
 	}
 	if prefix == "" {
-		return NpmDirs{}, errors.New("npm_global_dirs: `npm prefix -g` printed nothing; npm did not answer")
+		return NpmDirs{}, i18n.Errorf("install.npm.emptyPrefix", nil)
 	}
 	return NpmDirs{BinDir: prefix + "/bin", LibDir: prefix + "/lib"}, nil
 }

@@ -1,6 +1,10 @@
 package daemon
 
-import "fmt"
+import (
+	"strconv"
+
+	"github.com/soksak/soksak-core/core/i18n"
+)
 
 // The trigger rules: when a job is next due, in epoch milliseconds.
 //
@@ -35,22 +39,26 @@ const (
 func (trigger Trigger) check() error {
 	switch trigger.Kind {
 	case "":
-		return fmt.Errorf("a trigger names no %q — it is one of %q, %q or %q", "kind", triggerAt, triggerEvery, triggerReconcile)
+		return i18n.Errorf("daemon.trigger.noKind", map[string]string{
+			"field": "kind", "at": triggerAt, "every": triggerEvery, "reconcile": triggerReconcile,
+		})
 
 	case triggerAt:
 		if trigger.At == nil {
-			return fmt.Errorf("an %q trigger carries no %q — there is no moment to fire at", triggerAt, "at")
+			return i18n.Errorf("daemon.trigger.noMoment", map[string]string{"kind": triggerAt, "field": "at"})
 		}
 		return nil
 
 	case triggerEvery:
 		if trigger.EveryMS == nil {
-			return fmt.Errorf("an %q trigger carries no %q — there is no interval to repeat on", triggerEvery, "every_ms")
+			return i18n.Errorf("daemon.trigger.noInterval", map[string]string{"kind": triggerEvery, "field": "every_ms"})
 		}
 		if *trigger.EveryMS <= 0 {
 			// A zero interval is a loop with no gap in it: the job would fire,
 			// finish, and be due again in the same millisecond, forever.
-			return fmt.Errorf("an %q trigger has %q = %d, and an interval is positive", triggerEvery, "every_ms", *trigger.EveryMS)
+			return i18n.Errorf("daemon.trigger.intervalNotPositive", map[string]string{
+				"kind": triggerEvery, "field": "every_ms", "value": strconv.FormatInt(*trigger.EveryMS, 10),
+			})
 		}
 		return nil
 
@@ -61,12 +69,14 @@ func (trigger Trigger) check() error {
 		// Refused rather than approximated. A cron expression this build read
 		// wrongly would fire at the wrong time for as long as the job exists,
 		// and nothing about a job that runs would say it ran at the wrong hour.
-		return fmt.Errorf("this build parses no %q expression (%q), so it cannot say when such a job is due; "+
-			"an %q trigger re-armed after each fire is the shape it can honour", triggerCron, trigger.Expr, triggerEvery)
+		return i18n.Errorf("daemon.trigger.cronUnsupported", map[string]string{
+			"kind": triggerCron, "expr": trigger.Expr, "every": triggerEvery,
+		})
 
 	default:
-		return fmt.Errorf("%q is not a trigger this build knows — it is one of %q, %q or %q",
-			trigger.Kind, triggerAt, triggerEvery, triggerReconcile)
+		return i18n.Errorf("daemon.trigger.unknownKind", map[string]string{
+			"kind": trigger.Kind, "at": triggerAt, "every": triggerEvery, "reconcile": triggerReconcile,
+		})
 	}
 }
 

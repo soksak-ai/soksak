@@ -5,6 +5,7 @@
 import { moduleState } from "../lib/moduleState";
 import { create } from "zustand";
 import { qualifiedViewId, type ContributedFileViewer } from "./spec";
+import { tmsg } from "../i18n";
 
 // Context a file viewer receives. The only channel the core passes in (contract A2) — no store, no layout exposure.
 export interface FileViewerContext {

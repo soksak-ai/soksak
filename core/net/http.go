@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Request is what a caller asked for.
@@ -48,10 +50,10 @@ func Do(ctx context.Context, request Request) (Response, error) {
 		// Substitution reads the vault, and there is no vault yet. Sending the
 		// request with placeholders intact would leak the placeholder and read
 		// as a server-side authentication failure.
-		return Response{}, fmt.Errorf("net: secret substitution is not served yet; no vault is open")
+		return Response{}, i18n.Errorf("net.request.secretSubstitutionUnserved", nil)
 	}
 	if request.Impersonate != "" && request.Impersonate != "off" {
-		return Response{}, fmt.Errorf("net: impersonation %q is not served yet", request.Impersonate)
+		return Response{}, i18n.Errorf("net.request.impersonationUnserved", map[string]string{"name": fmt.Sprintf("%q", request.Impersonate)})
 	}
 
 	parsed, err := url.Parse(request.URL)
@@ -61,10 +63,10 @@ func Do(ctx context.Context, request Request) (Response, error) {
 	// A plugin supplies this URL. Without a scheme check, a capability granted
 	// for the network would also read local files.
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return Response{}, fmt.Errorf("net: scheme %q is not allowed; only http and https", parsed.Scheme)
+		return Response{}, i18n.Errorf("net.request.schemeNotAllowed", map[string]string{"scheme": fmt.Sprintf("%q", parsed.Scheme)})
 	}
 	if parsed.Host == "" {
-		return Response{}, fmt.Errorf("net: %q has no host", request.URL)
+		return Response{}, i18n.Errorf("net.request.noHost", map[string]string{"url": fmt.Sprintf("%q", request.URL)})
 	}
 
 	if len(request.Query) > 0 {

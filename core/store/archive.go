@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Snapshots: making one, going back to one, and clearing up after one that died
@@ -58,10 +60,10 @@ func scratchPath(destination string, pid int) string {
 // processes the destination is what the caller chose.
 func (kv *KV) Backup(destination string, pid int) (BackupResult, error) {
 	if destination == "" {
-		return BackupResult{}, fmt.Errorf("store: a backup needs a destination")
+		return BackupResult{}, i18n.Errorf("store.backup.noDestination", nil)
 	}
 	if _, err := os.Stat(destination); err == nil {
-		return BackupResult{}, fmt.Errorf("store: %s already holds something, and a backup does not overwrite", destination)
+		return BackupResult{}, i18n.Errorf("store.backup.destinationOccupied", map[string]string{"path": destination})
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return BackupResult{}, fmt.Errorf("store: looking at %s: %w", destination, err)
 	}
@@ -179,7 +181,7 @@ func (kv *KV) Restore(candidate string, nowMillis int64) error {
 	kv.mu.Lock()
 	defer kv.mu.Unlock()
 	if kv.db == nil {
-		return fmt.Errorf("store: the store at %s is closed", kv.path)
+		return i18n.Errorf("store.restore.storeClosed", map[string]string{"path": kv.path})
 	}
 	if err := kv.db.Close(); err != nil {
 		return fmt.Errorf("store: could not release %s: %w", kv.path, err)
@@ -238,7 +240,7 @@ func validateCandidate(candidate string) error {
 		return fmt.Errorf("store: the backup at %s cannot be read: %w", candidate, err)
 	}
 	if info.IsDir() {
-		return fmt.Errorf("store: %s is a directory, not a backup", candidate)
+		return i18n.Errorf("store.restore.candidateIsDirectory", map[string]string{"path": candidate})
 	}
 	// Read-only, and its own handle: this must not disturb the store being
 	// replaced, and it must not create anything at the candidate's path.
@@ -254,7 +256,7 @@ func validateCandidate(candidate string) error {
 		return fmt.Errorf("store: %s is not a readable database: %w", candidate, err)
 	}
 	if verdict != "ok" {
-		return fmt.Errorf("store: %s fails its integrity check: %s", candidate, verdict)
+		return i18n.Errorf("store.restore.integrityFailed", map[string]string{"path": candidate, "verdict": verdict})
 	}
 	for _, table := range []string{"records", "kv", "meta_collections"} {
 		var count int
@@ -264,7 +266,7 @@ func validateCandidate(candidate string) error {
 			return fmt.Errorf("store: reading the shape of %s: %w", candidate, err)
 		}
 		if count == 0 {
-			return fmt.Errorf("store: %s is not this store's shape — %s is missing", candidate, table)
+			return i18n.Errorf("store.restore.shapeMismatch", map[string]string{"path": candidate, "table": table})
 		}
 	}
 	return nil

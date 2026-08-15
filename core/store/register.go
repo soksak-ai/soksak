@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync/atomic"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // The command boundary for the storage group.
@@ -65,21 +67,21 @@ var identifierTail atomic.Uint64
 
 func (deps Deps) store() (*KV, error) {
 	if deps.KV == nil {
-		return nil, fmt.Errorf("store: this process holds no database handle")
+		return nil, i18n.Errorf("store.deps.noDatabase", nil)
 	}
 	return deps.KV, nil
 }
 
 func (deps Deps) now() (int64, error) {
 	if deps.NowMillis == nil {
-		return 0, fmt.Errorf("store: this process supplied no clock, and this command stamps what it writes")
+		return 0, i18n.Errorf("store.deps.noClock", nil)
 	}
 	return deps.NowMillis(), nil
 }
 
 func (deps Deps) home() (string, error) {
 	if deps.Home == "" {
-		return "", fmt.Errorf("store: this process supplied no home, and this command answers from one")
+		return "", i18n.Errorf("store.deps.noHome", nil)
 	}
 	return deps.Home, nil
 }
@@ -115,7 +117,7 @@ func required[T any](args Args, name string) (T, error) {
 	var value T
 	raw, present := args[name]
 	if !present {
-		return value, fmt.Errorf("store: missing argument %q", name)
+		return value, i18n.Errorf("store.args.missing", map[string]string{"name": name})
 	}
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return value, fmt.Errorf("store: argument %q: %w", name, err)

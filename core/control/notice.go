@@ -3,6 +3,8 @@ package control
 import (
 	"fmt"
 	"sync/atomic"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // One notification, and who owns which half of it.
@@ -74,7 +76,7 @@ func registerNotice(registry *Registry, deps Deps) {
 				// A notification with no title is a rectangle the user cannot
 				// attribute to anything, and it is indistinguishable on screen
 				// from one this application did not send.
-				return nil, fmt.Errorf("argument %q is empty; a notification says who is speaking", "title")
+				return nil, i18n.Errorf("control.notify.emptyTitle", map[string]string{"name": "title"})
 			}
 			body, err := Arg[string](args, "body")
 			if err != nil {

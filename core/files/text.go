@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // textReadLimit caps one text read.
@@ -51,7 +53,7 @@ func readTextLimited(path string, offset *int64, home string, limit int64) (Text
 		return TextData{}, fmt.Errorf("read_text_file: %w", err)
 	}
 	if info.IsDir() || !info.Mode().IsRegular() {
-		return TextData{}, fmt.Errorf("not a file: %s", real)
+		return TextData{}, i18n.Errorf("files.readText.notAFile", map[string]string{"path": real})
 	}
 	total := info.Size()
 
@@ -85,7 +87,7 @@ func readTextLimited(path string, offset *int64, home string, limit int64) (Text
 		// a stray high byte is ordinary in a legacy encoding, and refusing it
 		// would make an editable file unopenable. The caller branches to
 		// read_file_base64 on this name.
-		return TextData{}, fmt.Errorf("binary file: %s", real)
+		return TextData{}, i18n.Errorf("files.readText.binaryFile", map[string]string{"path": real})
 	}
 
 	read := int64(len(window))

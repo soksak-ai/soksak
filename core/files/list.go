@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Child is one direct entry of a listed directory.
@@ -44,7 +46,7 @@ func listChildren(path string, meta bool, home string) (ChildListing, error) {
 		return ChildListing{}, fmt.Errorf("list_children: %w", err)
 	}
 	if !info.IsDir() {
-		return ChildListing{}, fmt.Errorf("not a directory: %s", root)
+		return ChildListing{}, i18n.Errorf("files.listChildren.notADirectory", map[string]string{"path": root})
 	}
 
 	entries, err := os.ReadDir(root)

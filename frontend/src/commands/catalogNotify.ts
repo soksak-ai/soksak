@@ -18,7 +18,7 @@ export function registerNotifyCatalog(): void {
       body: { type: "string", description: "Notification body text", required: true },
       deepLink: {
         type: "string",
-        description: "Deep link to run when the notification is clicked (soksak[-env]://cmd/<name>)",
+        description: tmsg("cmd.notify.show.param.deepLink"),
         required: false,
       },
     },

@@ -1,11 +1,12 @@
 package install
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // themesDirectory is the one place a theme is loaded from.
@@ -28,13 +29,13 @@ const themesDirectory = "themes"
 // headless one, and that difference does not travel in the answer.
 func installTheme(home string, source string) (string, error) {
 	if home == "" {
-		return "", errors.New("theme_install needs the installation home and this process was not given one — set install.Deps.Home (identity.Resolved.Home, never the OS user home)")
+		return "", i18n.Errorf("install.themeInstall.noHome", nil)
 	}
 	if source == "" {
-		return "", errors.New("theme_install needs path; an empty path names no file")
+		return "", i18n.Errorf("install.themeInstall.noPath", nil)
 	}
 	if !strings.HasSuffix(source, ".json") {
-		return "", fmt.Errorf("theme_install: %s is not a .json theme file", source)
+		return "", i18n.Errorf("install.themeInstall.notJSONFile", map[string]string{"path": source})
 	}
 
 	// The file name is taken from the source and nothing else, so the
@@ -42,7 +43,7 @@ func installTheme(home string, source string) (string, error) {
 	// spelled.
 	name := filepath.Base(source)
 	if name == "." || name == string(filepath.Separator) {
-		return "", fmt.Errorf("theme_install: %s has no file name", source)
+		return "", i18n.Errorf("install.themeInstall.noFileName", map[string]string{"path": source})
 	}
 
 	body, err := os.ReadFile(source)

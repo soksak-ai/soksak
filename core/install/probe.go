@@ -1,9 +1,8 @@
 package install
 
 import (
-	"errors"
-
 	"github.com/soksak/soksak-core/core/files"
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Probe is what running a binary answered.
@@ -31,10 +30,10 @@ type Probe struct {
 // report every dependency on the machine as broken.
 func probeBinary(bin string, args []string, runner files.Runner) (Probe, error) {
 	if bin == "" {
-		return Probe{}, errors.New("probe_binary needs bin; an empty name has nothing to run")
+		return Probe{}, i18n.Errorf("install.probeBinary.noBin", nil)
 	}
 	if runner == nil {
-		return Probe{}, errors.New("probe_binary cannot run anything in this build — set install.Deps.Run")
+		return Probe{}, i18n.Errorf("install.probeBinary.noRunner", nil)
 	}
 
 	// The argv arrives at the runner as values, so there is no shell line and

@@ -7,6 +7,8 @@
 //   - Editing the table = editing the standard. Do not edit it to make a check pass —
 //     if the standard is wrong, correct the matching clause in docs/UI.md first.
 
+import { tmsg } from "../i18n";
+
 export type EdgeName = "top" | "right" | "bottom" | "left";
 export const EDGE_NAMES: readonly EdgeName[] = ["top", "right", "bottom", "left"];
 

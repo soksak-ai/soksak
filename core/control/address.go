@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/soksak/soksak-core/core/i18n"
 )
 
 // Where this installation answers from.
@@ -62,7 +64,7 @@ func clientDirectory(directory, name string) (string, error) {
 		return "", fmt.Errorf("the %s client is not at %s: %w", name, binary, err)
 	}
 	if info.IsDir() {
-		return "", fmt.Errorf("%s is a directory, not the %s client", binary, name)
+		return "", i18n.Errorf("control.address.clientIsDirectory", map[string]string{"path": binary, "name": name})
 	}
 	return directory, nil
 }

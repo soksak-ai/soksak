@@ -2,6 +2,8 @@
 // convention (foreman family, `name: command` lines) exactly and adds no non-standard extension. daemon.add/remove
 // edit the file through this module, so a round trip preserving human-written comments, blank lines and order is the contract.
 
+import { tmsg } from "../i18n";
+
 export interface ProcfileEntry {
   name: string;
   cmd: string;
