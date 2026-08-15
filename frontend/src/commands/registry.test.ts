@@ -477,13 +477,13 @@ describe("execute — common response fields (window, hint)", () => {
 
   it("builds a success hint from data and ctx", async () => {
     reg(TEST_PREFIX + "hint-data", {
-      handler: () => ({ id: "x7" }),
+      handler: () => ({ id: "x-seven" }),
       // The producer builds the command shape only — the central point adds this app's name as the
       // prefix.
       hint: (data) => [{ cmd: `open ${String(data.id)}`, why: "open it next" }],
     });
     const r = await execute(TEST_PREFIX + "hint-data", {}, {});
-    expect(r.hint?.[0].cmd).toBe("sok open x7");
+    expect(r.hint?.[0].cmd).toBe("sok open x-seven");
   });
 
   it("puts the standard hint on a TARGET_NOT_FOUND failure", async () => {

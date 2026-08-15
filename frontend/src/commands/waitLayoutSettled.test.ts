@@ -89,7 +89,7 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
 
   it("does not answer before the content host's real presentation barrier completes", async () => {
     animations([]);
-    document.body.innerHTML = '<div data-content-view-body="b-current"></div>';
+    document.body.innerHTML = '<div data-content-view-body="brw-current"></div>';
     let present!: () => void;
     const barrier = new Promise<void>((resolve) => { present = resolve; });
     const presentationSettled = vi.fn(() => barrier);
@@ -98,7 +98,7 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
     const waiting = waitLayoutSettled().then(() => { done = true; });
     await Promise.resolve();
     expect(done).toBe(false);
-    expect(presentationSettled).toHaveBeenCalledWith(["b-current"]);
+    expect(presentationSettled).toHaveBeenCalledWith(["brw-current"]);
     present();
     await waiting;
     expect(done).toBe(true);
@@ -106,7 +106,7 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
 
   it("does not answer before the content surface and the plugin view presentation barrier both close", async () => {
     animations([]);
-    document.body.innerHTML = '<div data-content-view-body="b-current"></div>';
+    document.body.innerHTML = '<div data-content-view-body="brw-current"></div>';
     let settleContent!: () => void;
     let settlePluginView!: () => void;
     const contentBarrier = new Promise<void>((resolve) => { settleContent = resolve; });
@@ -133,7 +133,7 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
 
     settlePluginView();
     await waiting;
-    expect(contentPresentationSettled).toHaveBeenCalledWith(["b-current"]);
+    expect(contentPresentationSettled).toHaveBeenCalledWith(["brw-current"]);
     expect(pluginViewPresentationSettled).toHaveBeenCalledWith(expect.any(AbortSignal));
     expect(bothArmedBeforeSettlement).toBe(true);
     expect(doneWithPluginViewPending).toBe(false);
@@ -152,7 +152,7 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
         pending = false;
       }),
       presentationPending: vi.fn(() => pending ? [{
-        owner: "view", stage: "presented", labels: ["b-current"],
+        owner: "view", stage: "presented", labels: ["brw-current"],
         startedAtUnixMs: 10, elapsedMs: 7,
       }] : []),
     } as unknown as PluginViewPresentationHost);
@@ -161,7 +161,7 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
     await Promise.resolve();
     expect(layoutSettlementStatus()).toMatchObject({
       presentationPending: [{
-        owner: "view", stage: "presented", labels: ["b-current"], startedAtUnixMs: expect.any(Number),
+        owner: "view", stage: "presented", labels: ["brw-current"], startedAtUnixMs: expect.any(Number),
         elapsedMs: expect.any(Number),
       }],
     });
@@ -213,7 +213,7 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
         }, { once: true });
       })),
       presentationPending: vi.fn(() => pending ? [{
-        owner: "view", stage: "composition-settle", labels: ["pv-1", "b-1"],
+        owner: "view", stage: "composition-settle", labels: ["rlm-1", "brw-1"],
         startedAtUnixMs: 10, elapsedMs: 7,
       }] : []),
     } as unknown as PluginViewPresentationHost);
@@ -223,7 +223,7 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
       code: "TIMEOUT",
       status: {
         presentationPending: [{
-          owner: "view", stage: "composition-settle", labels: ["pv-1", "b-1"],
+          owner: "view", stage: "composition-settle", labels: ["rlm-1", "brw-1"],
         }],
       },
     });
@@ -345,12 +345,12 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
 
   it("a content provider rejection is preserved structured as barrier, label, elapsed and the original error", async () => {
     animations([]);
-    document.body.innerHTML = '<div data-content-view-body="b-current"></div>';
+    document.body.innerHTML = '<div data-content-view-body="brw-current"></div>';
     registerContentViewHost({
       presentationSettled: vi.fn().mockRejectedValue({
         code: "NATIVE_PRESENTATION_REJECTED",
         message: "content surface rejected",
-        data: { label: "b-current", revision: 7 },
+        data: { label: "brw-current", revision: 7 },
       }),
     } as unknown as ContentViewHost);
 
@@ -361,12 +361,12 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
         command: "ui.layout.wait-settled",
         barrier: "content",
         elapsedMs: expect.any(Number),
-        labels: ["b-current"],
+        labels: ["brw-current"],
         providerError: {
           kind: "object",
           code: "NATIVE_PRESENTATION_REJECTED",
           message: "content surface rejected",
-          data: { label: "b-current", revision: 7 },
+          data: { label: "brw-current", revision: 7 },
         },
       },
     });
@@ -379,7 +379,7 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
       presentationSettled: vi.fn().mockRejectedValue({
         code: "INVOKE_ERROR",
         message: "An unknown error occurred",
-        data: { command: "webview_presented", label: "pv-1" },
+        data: { command: "webview_presented", label: "rlm-1" },
       }),
     } as unknown as PluginViewPresentationHost);
 
@@ -395,7 +395,7 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
           kind: "object",
           code: "INVOKE_ERROR",
           message: "An unknown error occurred",
-          data: { command: "webview_presented", label: "pv-1" },
+          data: { command: "webview_presented", label: "rlm-1" },
         },
       },
     });

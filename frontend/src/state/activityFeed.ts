@@ -53,16 +53,10 @@ export function startActivityFeed(): void {
   // remains here is the core domain (turn detection, view management, generic progress relay,
   // registry instrumentation), and those sentences are in core i18n (activity.*).
   onPluginEvent("turn.ended", (p) => {
-    const agentKind = (p as { agentKind?: string | null }).agentKind;
     publish("turn.ended", p.source, {
       paneId: p.paneId,
       command: p.command,
-      agentKind,
-      sessionId: (p as { sessionId?: string | null }).sessionId,
-      message:
-        tmsg("activity.turn.ended") +
-        (agentKind ? ` (${agentKind})` : "") +
-        (p.command ? ` — ${p.command}` : ""),
+      message: tmsg("activity.turn.ended") + (p.command ? ` — ${p.command}` : ""),
     });
   });
   onPluginEvent("view.activated", (p) =>

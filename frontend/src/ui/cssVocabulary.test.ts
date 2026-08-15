@@ -49,7 +49,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BANNED_DOM_MORPHEMES } from "@soksak-ai/plugin-spec";
+import { BANNED_DOM_MORPHEMES } from "../plugins/spec";
 
 /** A comment is not a name — strip comments, then count. */
 const CSS = readFileSync(join(process.cwd(), "src", "App.css"), "utf8").replace(

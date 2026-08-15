@@ -69,7 +69,6 @@ import { registerUpdateCatalog } from "./catalogUpdate";
 import { registerUiCatalog } from "./catalogUi";
 import { registerProjectionCatalog } from "./catalogProjection";
 import { registerDomCatalog } from "./catalogDom";
-import { registerAiSessionCatalog } from "./catalogAiSession";
 import { registerDataCatalog } from "./catalogData";
 import { registerPtySessionCatalog } from "./catalogPtySession";
 import { registerSecretsCatalog } from "./catalogSecrets";
@@ -88,7 +87,6 @@ import {
   waitForLayoutTransaction,
 } from "../lib/layoutTransitionJournal";
 import { registerUnitDevCatalog } from "./catalogUnitDev";
-import { registerReleaseCatalog } from "./catalogRelease";
 import { registerWebviewCatalog } from "./catalogWebview";
 import { registerPresentationClockCatalog } from "./catalogPresentationClock";
 import {
@@ -2411,7 +2409,6 @@ export function registerCatalog(): void {
   registerDataCatalog();
   registerPtySessionCatalog();
   registerSecretsCatalog();
-  registerAiSessionCatalog();
   registerTurnCatalog();
   registerNetworkCatalog();
   registerMediaCatalog();
@@ -2422,7 +2419,6 @@ export function registerCatalog(): void {
   registerFrameworkCatalog();
   registerSystemCatalog();
   registerUnitDevCatalog();
-  registerReleaseCatalog();
   registerWebviewCatalog();
   reportOwnerAnswered();
 }

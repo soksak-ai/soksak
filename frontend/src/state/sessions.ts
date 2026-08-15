@@ -431,7 +431,7 @@ interface SessionsStore {
 // of two windows the same names.
 const newViewId = () => issueId("tab");
 const newGroupId = () => issueId("pane");
-const newSplitId = () => `s${ms.nextSplitId++}`;
+const newSplitId = () => issueId("split");
 const newContentId = () => issueId("space");
 // split id generator (injected into windowSnapshot.deserialize on restore — A2 regenerates split ids).
 export const nextSplitIdGen = (): string => newSplitId();
@@ -449,7 +449,7 @@ export function newIds(): {
     project: issueId("project"),
     view: issueId("tab"),
     group: issueId("pane"),
-    split: `s${ms.nextSplitId}`,
+    split: issueId("split"),
     content: issueId("space"),
   };
 }

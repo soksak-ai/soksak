@@ -29,7 +29,7 @@ beforeEach(() => {
   barriers.content.mockClear();
   barriers.view.mockClear();
   // Labels come from the declaration in the document — inventing them in a mock makes this test measure a different world.
-  document.body.innerHTML = `<div data-content-view-body="b-main-t1"></div>`;
+  document.body.innerHTML = `<div data-content-view-body="brw-main-t1"></div>`;
 });
 
 describe("the settle receipt answers with the confirmation intervals split apart", () => {
@@ -38,7 +38,7 @@ describe("the settle receipt answers with the confirmation intervals split apart
     barriers.view.mockImplementation(async () => { await new Promise((r) => setTimeout(r, 10)); });
     const out = await waitLayoutSettled(4_000);
     expect(out.presentation.content).toMatchObject({
-      owner: "content", status: "settled", elapsedMs: expect.any(Number), labels: ["b-main-t1"],
+      owner: "content", status: "settled", elapsedMs: expect.any(Number), labels: ["brw-main-t1"],
     });
     expect(out.presentation.view).toMatchObject({
       owner: "view", status: "settled", elapsedMs: expect.any(Number), labels: [],
@@ -46,7 +46,7 @@ describe("the settle receipt answers with the confirmation intervals split apart
     expect(out.presentation.content!.elapsedMs).toBeGreaterThanOrEqual(25);
     expect(out.presentation.view!.elapsedMs).toBeGreaterThanOrEqual(8);
     // The reply also lists which surfaces were waited on — without the count, one slow surface and several overlapping ones are indistinguishable.
-    expect(out.presentation.content!.labels).toEqual(["b-main-t1"]);
+    expect(out.presentation.content!.labels).toEqual(["brw-main-t1"]);
   });
 
   it("answers absent rather than 0 when there is no barrier — not measured and 0ms are different facts", async () => {

@@ -419,7 +419,7 @@ export function registerCaptureCatalog(): void {
       const { rect, tabId, restore } = region;
       if (rect || p.base64) {
         const pngBase64 = await invoke<string>(
-          "plugin:webview-capture|snapshot_region",
+          "window_snapshot_region",
           rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
         );
         // A cropped image is also **left at the path the caller named.** Until now, passing rect
@@ -456,7 +456,7 @@ export function registerCaptureCatalog(): void {
           `snapshot-${Date.now()}.png`,
         );
       }
-      const saved = await invoke<string>("plugin:webview-capture|snapshot", {
+      const saved = await invoke<string>("window_snapshot", {
         path,
       });
       // A file capture is declared in media too — the feed reads the path and renders an image, so
@@ -513,7 +513,7 @@ export function registerCaptureCatalog(): void {
       const { rect, tabId, restore } = region;
       try {
         const pngBase64 = await invoke<string>(
-          "plugin:webview-capture|snapshot_region",
+          "window_snapshot_region",
           rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
         );
         return { ...(tabId ? { tabId } : {}), ...(await pixelStats(pngBase64)) };

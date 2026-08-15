@@ -66,6 +66,18 @@ describe("a refusal sentence uses the reader's words", () => {
     expect(leaked.map((r) => `${r.file}: ${r.text.slice(0, 90)}`)).toEqual([]);
   });
 
+  // **No metaphor.** A code comment may sketch an analogy to explain why, but a sentence that goes
+  // to a person states only what is missing and who must do what. Measured 2026-08-15: one refusal
+  // went out as "this slot shows an element inside another screen, but where inside that screen did
+  // not arrive with it". The reader could not tell what to do, and that was this sentence's only job.
+  const METAPHOR = ["비추", "비춘", "실어야", "실린다", "흘려", "흘러", "제자리로", "말해 준다"];
+  it("no metaphor — only what is missing and who must do what", () => {
+    const flowery = messageStrings().filter((row) =>
+      METAPHOR.some((word) => row.text.includes(word)),
+    );
+    expect(flowery.map((r) => `${r.file}: ${r.text.slice(0, 90)}`)).toEqual([]);
+  });
+
   // Ending at "there is no path" leaves the reader assuming their own mistake, so they call the same
   // thing again.
   it("never stops at cannot — names what to call instead", () => {

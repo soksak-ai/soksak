@@ -15,7 +15,7 @@ import {
   type ContractRequirement,
   type PluginPermission,
   type PluginRuntimePrincipal,
-} from "@soksak-ai/plugin-spec";
+} from "../plugins/spec";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { cliName } from "../lib/cliIdentity";
 import { tmsg } from "../i18n";
@@ -175,6 +175,9 @@ export interface CommandSpec {
     | "SURFACE_INPUT_UNAVAILABLE"
     // This address is not a surface — the request asked for a fact only a surface has.
     | "NOT_A_SURFACE"
+    // The projection did not declare the facts manipulation needs — it declared which realm, but not where inside it.
+    // Passing this to the host DOM does nothing and still returns success.
+    | "PROJECTION_UNDECLARED"
   )[];
   // CLI usage examples (for the manual).
   examples?: readonly string[];

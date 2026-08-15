@@ -29,7 +29,7 @@ vi.mock("../lib/contentViews", () => ({
 }));
 vi.mock("../lib/webviewLabels", () => ({
   currentWindowLabel: () => "main",
-  browserLabel: (viewId: string) => `b-main-${viewId}`,
+  browserLabel: (viewId: string) => `brw-main-${viewId}`,
 }));
 const shellWin = vi.hoisted(() => ({
   innerPosition: async () => ({ x: 0, y: 0 }),
