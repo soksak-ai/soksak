@@ -55,17 +55,34 @@ function workspace(): Workspace {
   };
 }
 
-/** Puts the space box on screen at the given size, with the inset the .pane rule consumes. */
-function onScreen(width: number, height: number): void {
+/**
+ * Puts the space box on screen at the given size, with the inset the .pane rule consumes.
+ *
+ * railWidthPx is what the rail takes out of the row. It is put on the pane the same way it is in
+ * the app: as --rail-dw on the pane element, which is the cell's share of the rail width.
+ */
+function onScreen(width: number, height: number, options: { railWidthPx?: number } = {}): void {
   document.body.innerHTML = "";
-  const el = document.createElement("div");
-  el.dataset.node = "layout/space/spc-aaaaaa";
-  el.getBoundingClientRect = () =>
+  const space = document.createElement("div");
+  space.dataset.node = "layout/space/spc-aaaaaa";
+  space.getBoundingClientRect = () =>
     ({ left: 0, top: 0, width, height, right: width, bottom: height, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
-  document.body.append(el);
+  document.body.append(space);
+
+  const rail = options.railWidthPx ?? 0;
+  const vars = new Map<Element, Record<string, string>>();
+  vars.set(space, { "--pane-inset": `${INSET}px` });
+  for (const id of leavesOf(useSessions.getState().workspaces[0].spaces[0].layout).map((p) => p.id)) {
+    const pane = document.createElement("div");
+    pane.dataset.node = `layout/pane/${id}`;
+    pane.dataset.pane = id;
+    // One pane holding the whole row, which is the fixture. Its share of the rail is all of it.
+    vars.set(pane, { "--pane-inset": `${INSET}px`, "--rail-dw": `${-rail}px` });
+    space.append(pane);
+  }
   vi.spyOn(window, "getComputedStyle").mockImplementation(
-    ((): CSSStyleDeclaration =>
-      ({ getPropertyValue: (name: string) => (name === "--pane-inset" ? `${INSET}px` : "") }) as CSSStyleDeclaration),
+    ((el: Element): CSSStyleDeclaration =>
+      ({ getPropertyValue: (name: string) => vars.get(el)?.[name] ?? "" }) as CSSStyleDeclaration),
   );
 }
 
@@ -129,6 +146,27 @@ describe("pane.split refuses a cell it cannot draw", () => {
     expect(paneIds()).toHaveLength(12);
     expect(await execute("pane.split", { pane: paneIds()[0], side: "right", mountTimeoutMs: 0 }, {}))
       .toMatchObject({ ok: false, code: "TOO_SMALL" });
+  });
+
+  it("the rail takes width from the row, and the floor counts it", async () => {
+    // The rail is inserted into the row, so every cell keeps its percentage and loses pixels. A
+    // floor computed from the space box alone therefore reads a row that is 160px wider than the
+    // one on screen, and a cell that spans the station passes the floor and is still clamped to 0.
+    //
+    // Measured 2026-08-16 in the running app: a single pane in a 999px space with the rail open was
+    // 827px wide — 999 minus 160 of rail minus the 12 of inset pair.
+    onScreen(120, 600, { railWidthPx: 60 });
+    // 120 minus 60 of rail leaves 60 for the row. Two cells of 30 against an inset pair of 8 have
+    // 22 of interior each, so this stands.
+    await expect(execute("pane.split", { pane: "pan-aaaaaa", side: "right", mountTimeoutMs: 0 }, {}))
+      .resolves.toMatchObject({ ok: true });
+
+    useSessions.setState({ workspaces: [workspace()], activeId: "wsp-aaaaaa" });
+    onScreen(76, 600, { railWidthPx: 60 });
+    // 76 minus 60 leaves 16, so two cells of 8 have nothing left. Without the rail in the
+    // arithmetic this reads as two cells of 38 and goes through.
+    await expect(execute("pane.split", { pane: "pan-aaaaaa", side: "right", mountTimeoutMs: 0 }, {}))
+      .resolves.toMatchObject({ ok: false, code: "TOO_SMALL" });
   });
 
   it("nothing on screen means the split goes through — the floor is a measurement, not a guess", async () => {

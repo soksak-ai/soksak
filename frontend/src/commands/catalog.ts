@@ -1745,12 +1745,17 @@ export function registerCatalog(): void {
 
     const placeholder = { id: "pan-floor", activeTabId: undefined, tabs: [] } as unknown as Pane;
     const { cells } = computeSplitLayout(splitAtGroup(space.layout, paneId, side, placeholder));
+    // The rail is inserted into the row: every cell keeps its percentage and loses pixels in
+    // proportion, so the row is narrower than the space box by the rail's whole width. Leaving it
+    // out reads a row 160px wider than the one on screen — measured 2026-08-16, a single pane in a
+    // 999px space with the rail open was 827px, which is 999 less 160 of rail and 12 of inset pair.
+    const rowWidth = box.width - railWidthOf(space.layout, host);
     const floor = inset * 2;
     let tightest = Infinity;
     for (const cell of cells) {
       tightest = Math.min(
         tightest,
-        (box.width * cell.rect.width) / 100,
+        (rowWidth * cell.rect.width) / 100,
         (box.height * cell.rect.height) / 100,
       );
     }
@@ -1762,6 +1767,28 @@ export function registerCatalog(): void {
         floor: String(Math.round(floor)),
       }),
     );
+  };
+
+  // What the rail takes out of the row, in pixels, read from a pane that is already drawn.
+  //
+  // A pane holds its own share in --rail-dw, which the projection sets to -(width/100) of the
+  // rail width. Dividing that share back out gives the whole, and every cell in the row loses the
+  // same proportion. Reading it from the pane rather than hunting for the rail element keeps this
+  // from depending on a second node's address.
+  //
+  // Zero when the rail is closed, when no pane is drawn yet, or when the pane's declared width is
+  // zero — all three are "nothing measurable", and guessing a width there would refuse splits that
+  // are fine.
+  const railWidthOf = (layout: PaneNode, host: HTMLElement): number => {
+    for (const cell of computeSplitLayout(layout).cells) {
+      const el = host.querySelector<HTMLElement>(`[data-node="layout/pane/${cell.value.id}"]`);
+      if (!el) continue;
+      const share = Number.parseFloat(getComputedStyle(el).getPropertyValue("--rail-dw"));
+      if (!Number.isFinite(share)) continue;
+      if (share === 0 || cell.rect.width <= 0) continue;
+      return (-share * 100) / cell.rect.width;
+    }
+    return 0;
   };
 
   register("pane.split", {
