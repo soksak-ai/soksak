@@ -52,6 +52,7 @@ the schema does not back.
 
 | Document | Contents |
 | --- | --- |
+| [`tech/GATES.md`](tech/GATES.md) | Which of G0–G5 stand, the command that judges each, and what it answered |
 | [`tech/ARCHITECTURE.md`](tech/ARCHITECTURE.md) | What the core owns, the four seams a plugin attaches through, principles A1–A9, coupling law C1–C5, one registry with several transports, identity |
 | [`tech/NAMING.md`](tech/NAMING.md) | Identifier format and prefixes, natural-key axes, labels, fixtures, public vocabulary, folder names — each with its gate |
 | [`tech/NATIVE-LAYER.md`](tech/NATIVE-LAYER.md) | Why cgo is present, N1–N3, why purego is not used, capture, native surfaces |
