@@ -964,13 +964,23 @@ export function registerDomCatalog(): void {
         };
       }
       const cs = getComputedStyle(el, pseudo);
+      // Answers all four sides and both axes symmetrically. Answering only the vertical axis leaves a
+      // claim about the horizontal sides unprovable by number (R5), and the only path left is a human
+      // looking at the screen — measured 2026-08-15: asked whether the plane had a right outline, this
+      // command answered borderTop/borderBottom only, and someone who knew the spot had to point it out
+      // with a screenshot.
       const style: Record<string, string> = {
         display: cs.display,
+        width: cs.width,
         height: cs.height,
         paddingTop: cs.paddingTop,
+        paddingRight: cs.paddingRight,
         paddingBottom: cs.paddingBottom,
+        paddingLeft: cs.paddingLeft,
         borderTop: cs.borderTopWidth,
+        borderRight: cs.borderRightWidth,
         borderBottom: cs.borderBottomWidth,
+        borderLeft: cs.borderLeftWidth,
         fontSize: cs.fontSize,
         alignItems: cs.alignItems,
         alignSelf: cs.alignSelf,
