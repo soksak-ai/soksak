@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -45,7 +46,7 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 
 	want := []string{
 		"binary_integrity", "host_unit_target", "npm_global_dirs",
-		"probe_binary", "theme_install", "unit_dev_validate_path",
+		"probe_binary", "theme_install", "unit_source_validate",
 	}
 	if strings.Join(served, ",") != strings.Join(want, ",") {
 		t.Errorf("served = %v, want %v", served, want)
@@ -57,7 +58,7 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 	}
 	sort.Strings(refused)
 	wantRefused := []string{
-		"plugin_dev_new", "plugin_dev_new2",
+		"plugin_scaffold",
 		"unit_install_begin", "unit_install_commit", "unit_install_read_utf8",
 		"unit_install_rollback", "unit_install_stage",
 	}
@@ -65,6 +66,14 @@ func TestTheGroupAnswersWhatItClaims(t *testing.T) {
 		t.Errorf("refused = %v, want %v", refused, wantRefused)
 	}
 }
+
+// A command name in this build is snake_case with at least two parts
+// (plugin_scan, unit_install_commit). An unblocking action is an imperative
+// the reader can act on.
+var (
+	commandName      = regexp.MustCompile(`\b[a-z][a-z0-9]*(_[a-z0-9]+)+\b`)
+	unblockingAction = regexp.MustCompile(`\b(Serve|Give|Port|Register|Build)\b`)
+)
 
 // TestEveryRefusalNamesWhatBlocksIt is what keeps a refusal from being a stub
 // with better manners. "Not written yet" and "cannot work here" send a caller
@@ -78,14 +87,17 @@ func TestEveryRefusalNamesWhatBlocksIt(t *testing.T) {
 		if len(entry.BlockedBy) < 40 {
 			t.Errorf("%s: the reason is too short to act on: %q", entry.Name, entry.BlockedBy)
 		}
-		// Every refusal here is blocked by something that has a name in this
-		// build. A reason that names none of them is an opinion.
-		named := strings.Contains(entry.BlockedBy, "plugin_scan") ||
-			strings.Contains(entry.BlockedBy, "unit_dev_set")
-		if !named {
-			t.Errorf("%s: the reason names no command that has to land first: %q", entry.Name, entry.BlockedBy)
+		// Every refusal is blocked by work with a name. A reason that names no
+		// command is an opinion, and the caller cannot look it up.
+		//
+		// The names are matched by shape, not by a list. A list would be a
+		// second copy of what blocks this build, and it goes stale the moment
+		// one of them lands — measured 2026-08-15, the loader was ported and
+		// the list still required its name in reasons that no longer mention it.
+		if !commandName.MatchString(entry.BlockedBy) {
+			t.Errorf("%s: the reason names no command: %q", entry.Name, entry.BlockedBy)
 		}
-		if !strings.Contains(entry.BlockedBy, "Serve") && !strings.Contains(entry.BlockedBy, "Give") {
+		if !unblockingAction.MatchString(entry.BlockedBy) {
 			t.Errorf("%s: the reason does not say what would unblock it: %q", entry.Name, entry.BlockedBy)
 		}
 	}
@@ -101,7 +113,10 @@ func TestARefusedCommandCarriesItsReasonToTheCaller(t *testing.T) {
 	if err == nil {
 		t.Fatal("a refused command answered")
 	}
-	if !strings.Contains(err.Error(), "plugin_scan") {
+	// The error carries the command's own reason, not a generic refusal. The
+	// reason is compared to the table so this stays true when the reason
+	// changes.
+	if !strings.Contains(err.Error(), installTransactionBlocked) {
 		t.Errorf("the error does not carry the blocking fact: %v", err)
 	}
 }
@@ -136,7 +151,7 @@ func TestTheHandlersReadTheArgumentNamesTheFrontendSends(t *testing.T) {
 		{"npm_global_dirs", map[string]any{}, NpmDirs{BinDir: "/opt/homebrew/bin", LibDir: "/opt/homebrew/lib"}},
 		{"host_unit_target", map[string]any{}, "aarch64-apple-darwin"},
 		{"theme_install", map[string]any{"path": source}, filepath.Join(home, "themes", "midnight.json")},
-		{"unit_dev_validate_path", map[string]any{"source": checkout}, checkout},
+		{"unit_source_validate", map[string]any{"source": checkout}, checkout},
 	} {
 		got, err := registry.Invoke(call.name, arguments(t, call.args))
 		if err != nil {

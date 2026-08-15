@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 
 	"github.com/soksak/soksak-core/core/activity"
-	"github.com/soksak/soksak-core/core/ai"
 	"github.com/soksak/soksak-core/core/app"
 	"github.com/soksak/soksak-core/core/control"
 	"github.com/soksak/soksak-core/core/daemon"
@@ -28,7 +27,6 @@ import (
 	"github.com/soksak/soksak-core/core/secret"
 	"github.com/soksak/soksak-core/core/service"
 	"github.com/soksak/soksak-core/core/store"
-	"github.com/soksak/soksak-core/core/terminal"
 )
 
 // Boot is the state a process holds rather than receives per call.
@@ -112,11 +110,6 @@ type Boot struct {
 	// Reaper answers what a live pid is running. A daemon that cannot ask
 	// declares the commands that need it rather than guessing a pid is its own.
 	Reaper daemon.Reaper
-	// Sessions owns the pseudo-terminals. The launcher builds it, because a
-	// pseudo-terminal needs no window and a terminal only a windowed process
-	// could have would leave this group outside headless for no reason the code
-	// requires.
-	Sessions terminal.Sessions
 }
 
 // Wired is state RegisterCore built that a host needs the same instance of.
@@ -265,7 +258,7 @@ func RegisterCore(registry *control.Registry, boot Boot) Wired {
 	})
 
 	registry.MustRegister(control.Command{
-		Name: "unit_dev_list",
+		Name: "unit_source_list",
 		Handler: func(control.Args) (any, error) {
 			// Development units are declared under the home. A fresh home has
 			// none, which is an empty list rather than a failure.
@@ -312,7 +305,21 @@ func RegisterCore(registry *control.Registry, boot Boot) Wired {
 	registry.MustRegister(control.Command{
 		Name: "plugin_scan",
 		Handler: func(control.Args) (any, error) {
-			return scan.Directory(filepath.Join(boot.Identity.Home, "plugins"), ".json")
+			// One unit is one directory holding plugin.json, not one .json
+			// file. Reading files here answered an empty list for every home
+			// that had plugins in it (measured 2026-08-15).
+			return scan.Units(filepath.Join(boot.Identity.Home, "plugins"))
+		},
+	})
+
+	registry.MustRegister(control.Command{
+		Name: "plugin_remove",
+		Handler: func(args control.Args) (any, error) {
+			id, err := control.Arg[string](args, "id")
+			if err != nil {
+				return nil, err
+			}
+			return nil, scan.RemoveUnit(filepath.Join(boot.Identity.Home, "plugins"), id)
 		},
 	})
 
@@ -367,19 +374,6 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 		Secrets:     boot.Secrets,
 	})
 
-	if boot.Sessions != nil {
-		terminal.Register(registry, terminal.Deps{Sessions: boot.Sessions})
-	} else {
-		// A process given no session owner holds no pseudo-terminal. Saying so
-		// is the point: a caller that hears "unknown command" cannot tell that
-		// from a command this build forgot.
-		for _, name := range terminal.CommandNames() {
-			if err := registry.DeclareUnserved(name, "this process was given no session owner and holds no pseudo-terminal"); err != nil {
-				panic(err)
-			}
-		}
-	}
-
 	secret.Register(registry, secret.Deps{
 		KV:       boot.KV,
 		KeyStore: boot.Keys,
@@ -409,10 +403,9 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 		Announce: func(d daemon.Daemon) { emit("daemon:changed", d) },
 	})
 
-	ai.Register(registry, ai.Deps{
-		UserHome: boot.UserHome,
-		Lineage:  boot.KV,
-	})
+	// What this build does not answer yet, said by name with the reason. A
+	// caller learns "not built" instead of "unknown command".
+	declareUnbuilt(registry)
 
 	return Wired{Claims: claims, Processes: processes}
 }
