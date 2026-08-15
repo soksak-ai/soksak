@@ -345,10 +345,20 @@ export function colorsForMode(
 // Native window background = theme bg (layer principle): the root DOM background is transparent (App.css), so
 // the window background is responsible for the color of unpainted areas — it must always match the theme.
 // Outside the Tauri runtime (test jsdom) it is silently ignored.
+// Delivery is injected. If the engine opened the framework door itself, that framework would become the engine's
+// premise, and where there is no window (tests, headless) there would be nothing to call. A missing injection is
+// a harmless absence — with no window there is no window to paint.
+type WindowBackgroundSink = (color: string) => void;
+
+let windowBackgroundSink: WindowBackgroundSink | null = null;
+
+/** The side that has the window registers once at boot. */
+export function setWindowBackgroundSink(sink: WindowBackgroundSink | null): void {
+  windowBackgroundSink = sink;
+}
+
 function syncWindowBackground(bg: string): void {
-  void import("../framework")
-    .then(({ invoke }) => invoke("window_set_background", { color: bg }))
-    .catch(() => {});
+  windowBackgroundSink?.(bg);
 }
 
 export function applyThemeToDom(theme: ThemeSpec, mode: ThemeMode): ThemeMode {

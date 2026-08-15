@@ -7,6 +7,7 @@ import {
   invoke as bootInvoke,
 } from "./framework";
 import { bootFactPayload } from "./lib/bootFact";
+import { setWindowBackgroundSink } from "./theme/engine";
 // Boot error observation (covers the P12 blind spot) — when a render/module error blanks the screen, neither
 // snapshot nor DOM shows the cause. Global errors are published to the activity hub (boot.error) so the boot
 // crash message and stack are readable from socket activity.recent alone. Installed at the very top, before React mounts.
@@ -132,6 +133,12 @@ async function boot(): Promise<void> {
   // freezes an empty label first and every later address becomes `win//...` — the creating side and the resolving
   // side then point at different windows, and that mismatch appears only as NOT_EXPOSED (measured 2026-08-15).
   await resolveWindowLabel();
+  // The window background follows the theme bg. The root DOM is transparent, so the window supplies the color of
+  // unpainted areas; a window stuck at a build-time constant diverges from the theme at every edge — measured
+  // 2026-08-15: the theme was light while the window was near black, and the translucent background showed the desktop behind it.
+  setWindowBackgroundSink((color) => {
+    void bootInvoke("window_set_background", { color });
+  });
   await installFramework();
   bootStamp("enter");
   // Caches this app's CLI name (sok/sok-dev/sok-debug) before the window kind branch — app-global identity, so

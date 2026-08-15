@@ -87,7 +87,6 @@ func Run(options Options) error {
 
 	// Window-owning commands join the same registry the core filled. One table,
 	// two owners: the split is declared, not enforced by having two tables.
-	registerWindowCommands(options.Registry, app)
 
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		// The control plane's window is named by the product, not numbered by
@@ -99,12 +98,23 @@ func Run(options Options) error {
 		Height: windowHeight,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
-			Backdrop:                application.MacBackdropTranslucent,
-			TitleBar:                application.MacTitleBarHiddenInset,
+			// The document paints transparent and the theme owns the colour, so a
+			// translucent backdrop would show the desktop through every unpainted
+			// region and no theme could hold.
+			Backdrop: application.MacBackdropNormal,
+			TitleBar: application.MacTitleBarHiddenInset,
 		},
+		// A starting colour only. The theme publishes the real one through
+		// window_set_background as soon as it is applied, so this is what shows
+		// for the frames before the first paint rather than a second authority.
 		BackgroundColour: application.NewRGB(6, 7, 15),
 		URL:              "/",
 	})
+
+	// Window-owning commands join the same registry the core filled. One table,
+	// two owners: the split is declared, not enforced by having two tables.
+	// They are registered after the window exists, because they hold it.
+	registerWindowCommands(options.Registry, app, window)
 
 	// A capture probe runs after the window has had a chance to paint, then
 	// exits. It does not depend on the frontend booting, so a capture defect and
