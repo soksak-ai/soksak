@@ -10,9 +10,10 @@ import (
 func captureRegistry(t *testing.T) *control.Registry {
 	t.Helper()
 	registry := control.NewRegistry()
-	// No window: these must answer that rather than take the process down, and
-	// this test package has no application to give them one.
-	RegisterCapture(registry, NewCaptureService(nil))
+	// A host whose windows have no native lifetime: these must answer that
+	// rather than take the process down, and this package has no application to
+	// give them one.
+	RegisterCapture(registry, startedHost(liveWindow(controlPlaneWindow)))
 	return registry
 }
 
@@ -44,7 +45,9 @@ func TestCaptureNeedsSomewhereToWrite(t *testing.T) {
 }
 
 func TestCaptureWithNoWindowSaysSoRatherThanCrashing(t *testing.T) {
-	_, err := captureRegistry(t).Invoke("window_snapshot",
+	_, err := captureRegistry(t).InvokeFrom(
+		control.Caller{Window: controlPlaneWindow},
+		"window_snapshot",
 		callArgs(t, map[string]any{"path": "<local-evidence>/does-not-matter.png"}))
 	if err == nil {
 		t.Fatal("a capture with no window succeeded")

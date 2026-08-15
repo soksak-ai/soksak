@@ -2,6 +2,7 @@ package wails
 
 import (
 	"fmt"
+	"unsafe"
 
 	"github.com/soksak/soksak-core/core/control"
 )
@@ -15,9 +16,37 @@ import (
 //
 // Framework-owned: the pixels belong to a window, and a host without one
 // answers that rather than pretending.
-func RegisterCapture(registry *control.Registry, service *CaptureService) {
-	if service == nil {
-		panic("wails: the capture commands need a capture service")
+func RegisterCapture(registry *control.Registry, host WindowHost) {
+	if host == nil {
+		panic("wails: the capture commands need a WindowHost")
+	}
+
+	// Which window's pixels. The caller's own by default, because a window
+	// asking for a snapshot means its own; an outside operator names one,
+	// because it has no window and every window is equally its business.
+	//
+	// Measured 2026-08-15: capture could only reach the window this host
+	// captured at registration, so a theme defect in a workspace window
+	// answered with a picture of the orchestrator.
+	target := func(args control.Args) (*CaptureService, error) {
+		name, err := control.OptionalArg(args, "window", "")
+		if err != nil {
+			return nil, err
+		}
+		if name == "" {
+			name, err = control.OptionalArg(args, control.CallerWindowArgument, "")
+			if err != nil {
+				return nil, err
+			}
+		}
+		if name == "" {
+			return nil, fmt.Errorf("capture needs a window: name one, or call from a window")
+		}
+		handle := host.NativeHandle(name)
+		if handle == nil {
+			return nil, fmt.Errorf("window %s has no native lifetime and no pixels", name)
+		}
+		return NewCaptureService(func() unsafe.Pointer { return handle }), nil
 	}
 
 	registry.MustRegister(control.Command{
@@ -25,6 +54,10 @@ func RegisterCapture(registry *control.Registry, service *CaptureService) {
 		Owner: control.OwnerFramework,
 		Handler: func(args control.Args) (any, error) {
 			path, err := control.Arg[string](args, "path")
+			if err != nil {
+				return nil, err
+			}
+			service, err := target(args)
 			if err != nil {
 				return nil, err
 			}
@@ -43,6 +76,10 @@ func RegisterCapture(registry *control.Registry, service *CaptureService) {
 				return nil, err
 			}
 			rect, err := captureRect(args)
+			if err != nil {
+				return nil, err
+			}
+			service, err := target(args)
 			if err != nil {
 				return nil, err
 			}

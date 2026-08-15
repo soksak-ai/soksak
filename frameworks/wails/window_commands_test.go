@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"github.com/soksak/soksak-core/core/control"
 )
@@ -15,11 +16,12 @@ import (
 // fakeWindow is one window a fake host holds. `live` is what separates a name
 // this process holds from a name a command can reach.
 type fakeWindow struct {
-	name    string
-	live    bool
-	focused bool
-	frame   Frame
-	title   string
+	name       string
+	live       bool
+	focused    bool
+	frame      Frame
+	title      string
+	background string
 }
 
 // fakeHost answers window facts with no window anywhere. Its existence is the
@@ -69,6 +71,27 @@ func (h *fakeHost) Names() []string {
 func (h *fakeHost) Live(name string) bool {
 	window := h.find(name)
 	return window != nil && window.live
+}
+
+// NativeHandle: this package has no application, so no window here has pixels.
+// Capture must answer that rather than pretend.
+func (h *fakeHost) NativeHandle(string) unsafe.Pointer { return nil }
+
+func (h *fakeHost) SetBackground(name string, colour string) error {
+	window := h.find(name)
+	if window == nil || !window.live {
+		return fmt.Errorf("window %s has no native lifetime and cannot be coloured", name)
+	}
+	window.background = colour
+	return nil
+}
+
+// background is what this window was last painted, or "" if never.
+func (h *fakeHost) background(name string) string {
+	if window := h.find(name); window != nil {
+		return window.background
+	}
+	return ""
 }
 
 func (h *fakeHost) Title(name string) (string, error) {

@@ -1,7 +1,6 @@
 package wails
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/soksak/soksak-core/core/control"
@@ -16,33 +15,6 @@ import (
 // pending envelope to resend. The core registry stays answerable headlessly
 // precisely because these are not in it.
 func registerWindowCommands(registry *control.Registry, app *application.App, window application.Window) {
-	registry.MustRegister(control.Command{
-		Name:  "window_set_background",
-		Owner: control.OwnerFramework,
-		Handler: func(args control.Args) (any, error) {
-			raw, present := args["color"]
-			if !present {
-				return nil, fmt.Errorf("missing argument %q", "color")
-			}
-			var colour string
-			if err := json.Unmarshal(raw, &colour); err != nil {
-				return nil, fmt.Errorf("argument %q: %w", "color", err)
-			}
-			// The document paints transparent, so unpainted regions show the
-			// window's own colour. It has to follow the theme or the two
-			// disagree at every edge.
-			//
-			// This is our window, not "the current one": Current() answers with
-			// whatever holds focus, and a capture or a background theme change
-			// happens precisely when focus is elsewhere.
-			if window == nil {
-				return nil, fmt.Errorf("no window to colour")
-			}
-			window.SetBackgroundColour(parseColour(colour))
-			return nil, nil
-		},
-	})
-
 	registry.MustRegister(control.Command{
 		Name:  "cmd_listener_ready",
 		Owner: control.OwnerFramework,

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -96,6 +97,29 @@ func (h *wailsHost) Frame(name string) (Frame, bool) {
 	return Frame{X: bounds.X, Y: bounds.Y, W: bounds.Width, H: bounds.Height}, true
 }
 
+// NativeHandle answers this window's platform handle.
+//
+// nil for a window with no native lifetime, which is the same witness `live`
+// uses — a window that is not an address has no pixels either.
+func (h *wailsHost) NativeHandle(name string) unsafe.Pointer {
+	window, addressable := h.live(name)
+	if !addressable {
+		return nil
+	}
+	return window.NativeWindow()
+}
+
+// SetBackground paints one window. The main thread owns AppKit, so the change
+// is dispatched there.
+func (h *wailsHost) SetBackground(name string, colour string) error {
+	window, addressable := h.live(name)
+	if !addressable {
+		return fmt.Errorf("window %s has no native lifetime and cannot be coloured", name)
+	}
+	application.InvokeSync(func() { window.SetBackgroundColour(parseColour(colour)) })
+	return nil
+}
+
 // Title reads the window's on-screen name off the native window.
 //
 // The main thread owns AppKit, so the read is dispatched there and waited for.
@@ -151,9 +175,15 @@ func (h *wailsHost) Open(spec OpenSpec) error {
 	// This returns once the main thread has acknowledged the window's creation,
 	// so by the time it comes back the native window either exists or never
 	// will. The caller reads that once; there is nothing to poll for.
-	if window := h.app.Window.NewWithOptions(options); window == nil {
+	window := h.app.Window.NewWithOptions(options)
+	if window == nil {
 		return fmt.Errorf("the framework returned no window for %s", spec.Name)
 	}
+	// A transparent backdrop clears the window's colour on the way in, so the
+	// template's colour is restored the moment the window exists. Without this
+	// the desktop shows through until the renderer's theme arrives, which is
+	// several hundred milliseconds of somebody else's wallpaper.
+	window.SetBackgroundColour(options.BackgroundColour)
 	return nil
 }
 

@@ -1,5 +1,7 @@
 package wails
 
+import "unsafe"
+
 // Window facts and window effects, behind a contract.
 //
 // The rules in this group must be answerable with no window at all — the same
@@ -75,6 +77,21 @@ type WindowHost interface {
 	Frame(name string) (Frame, bool)
 	// Displays is the screen catalogue in catalogue order.
 	Displays() []Display
+	// NativeHandle is this window's platform handle, or nil when it has none.
+	//
+	// Capture needs it, and capture that can only reach one window is capture
+	// that cannot show what anyone is asking about: measured 2026-08-15, the
+	// theme was wrong in a workspace window and every snapshot answered with the
+	// orchestrator.
+	NativeHandle(name string) unsafe.Pointer
+	// SetBackground paints the window's own colour.
+	//
+	// The document paints transparent, so every unpainted region shows this.
+	// It takes a name because each window carries its own theme: one window
+	// captured at registration meant a workspace window's theme repainted the
+	// orchestrator and left itself the framework's default (measured
+	// 2026-08-15 — a dark theme with white panes).
+	SetBackground(name string, colour string) error
 	// Title reports what the window is called on screen.
 	//
 	// The renderer writes its boot progress into document.title, and that is

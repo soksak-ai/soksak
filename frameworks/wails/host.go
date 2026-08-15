@@ -7,6 +7,7 @@ package wails
 
 import (
 	"embed"
+	"fmt"
 	"log"
 	"time"
 	"unsafe"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/soksak/soksak-core/core/control"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 // Options is everything the launcher knows and this package cannot derive.
@@ -89,23 +91,7 @@ func Run(options Options) error {
 	// it under its reserved name; every workspace window is the same window
 	// under a generated one. Two definitions would let the second window differ
 	// from the first in ways nobody chose.
-	windowTemplate := application.WebviewWindowOptions{
-		Title:  windowTitle,
-		Width:  windowWidth,
-		Height: windowHeight,
-		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 50,
-			// The document paints transparent and the theme owns the colour, so a
-			// translucent backdrop would show the desktop through every unpainted
-			// region and no theme could hold.
-			Backdrop: application.MacBackdropNormal,
-			TitleBar: application.MacTitleBarHiddenInset,
-		},
-		// A starting colour only. The theme publishes the real one through
-		// window_set_background as soon as it is applied, so this is what shows
-		// for the frames before the first paint rather than a second authority.
-		BackgroundColour: application.NewRGB(6, 7, 15),
-	}
+	windowTemplate := newWindowTemplate()
 
 	// Built before the run loop, because it subscribes to the event that says
 	// the run loop started. Created afterwards it would never hear it, and every
@@ -120,6 +106,33 @@ func Run(options Options) error {
 		options.Bridge.host = windowHost
 	}
 
+	// The renderer command bridge. Registered before any window exists, and
+	// hooked to window creation before the first one is made: a window created
+	// ahead of the hook would never report that it closed, and its names would
+	// stay on the table pointing at a page that is gone.
+	renderer := RegisterRendererCommands(options.Registry, func(target, event string, payload any) error {
+		return dispatchToWindow(app, target, event, payload)
+	})
+	app.Event.On(rendererDeclareEvent, func(event *application.CustomEvent) {
+		// Sender is stamped by the framework, never by the page. A page that
+		// named itself could name another page and take over its commands.
+		if err := renderer.DeclareFrom(event.Sender, event.Data); err != nil {
+			log.Printf("renderer commands: %v", err)
+		}
+	})
+	app.Event.On(rendererWithdrawEvent, func(event *application.CustomEvent) {
+		if err := renderer.Withdraw(event.Sender); err != nil {
+			log.Printf("renderer commands: %v", err)
+		}
+	})
+	app.Window.OnCreate(func(created application.Window) {
+		created.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
+			if err := renderer.Withdraw(created.Name()); err != nil {
+				log.Printf("renderer commands: %v", err)
+			}
+		})
+	})
+
 	controlPlane := windowTemplate
 	// The control plane's window is named by the product, not numbered by the
 	// framework: the application branches on this name, and a generated
@@ -127,6 +140,9 @@ func Run(options Options) error {
 	controlPlane.Name = controlPlaneWindow
 	controlPlane.URL = "/"
 	window = app.Window.NewWithOptions(controlPlane)
+	// The transparent backdrop cleared this window's colour on the way in. The
+	// same restore wailsHost.Open performs, for the one window it does not open.
+	window.SetBackgroundColour(controlPlane.BackgroundColour)
 
 	// Window-owning commands join the same registry the core filled. One table,
 	// two owners: the split is declared, not enforced by having two tables.
@@ -136,7 +152,10 @@ func Run(options Options) error {
 	// The workspace window group. It holds no window of its own: it asks the
 	// host, which is why the same rules answer in a test with no application.
 	Register(options.Registry, Deps{Host: windowHost, NewID: newWindowID})
-	RegisterCapture(options.Registry, NewCaptureService(nativeWindow))
+	RegisterCapture(options.Registry, windowHost)
+	// Each window carries its own theme, so the colour goes to the window that
+	// asked rather than to the one this host happened to capture.
+	RegisterBackground(options.Registry, windowHost)
 
 	// A capture probe runs after the window has had a chance to paint, then
 	// exits. It does not depend on the frontend booting, so a capture defect and
@@ -157,4 +176,67 @@ func Run(options Options) error {
 	}
 
 	return app.Run()
+}
+
+// dispatchToWindow hands one payload to one window's page.
+//
+// This framework's event emit goes to every window, so it cannot carry a
+// request meant for one of them: the same command would run everywhere and only
+// the first answer would be read. Dispatching to the window is the one channel
+// that reaches a single page.
+//
+// A window with no native lifetime is refused rather than dispatched to,
+// because the dispatch itself returns silently for exactly that window — and a
+// request that was never delivered would then wait out its whole deadline.
+func dispatchToWindow(app *application.App, target, event string, payload any) error {
+	window, held := app.Window.GetByName(target)
+	if !held {
+		return fmt.Errorf("this process holds no window named %s", target)
+	}
+	if window.NativeWindow() == nil {
+		return fmt.Errorf("window %s has no native lifetime", target)
+	}
+	window.DispatchWailsEvent(&application.CustomEvent{Name: event, Data: payload})
+	return nil
+}
+
+// newWindowTemplate is the one window definition this application has.
+//
+// The webview is transparent, and that is load-bearing rather than decorative.
+// The stylesheet paints chrome and leaves everything else to the layer beneath,
+// which is how a native child webview can occupy a region of the document at
+// all — an opaque webview has no holes to composite into. With a solid webview
+// the canvas is the engine's own white, and it shows wherever nothing painted:
+// measured 2026-08-15, a dark theme with a white pane body in every workspace
+// window, in all five themes.
+//
+// Transparent is not translucent. Translucent shows the desktop through the
+// window; this shows the window's own colour, which the theme owns.
+func newWindowTemplate() application.WebviewWindowOptions {
+	return application.WebviewWindowOptions{
+		Title:  windowTitle,
+		Width:  windowWidth,
+		Height: windowHeight,
+		Mac: application.MacWindow{
+			InvisibleTitleBarHeight: 50,
+			// Transparent, not Translucent. Translucent blurs the desktop into
+			// the window; this only stops the webview drawing its own
+			// background, and the window's colour — which the theme owns —
+			// shows instead.
+			//
+			// This is the only knob that reaches the webview on this platform:
+			// BackgroundType is read on linux and windows and not here, and
+			// MacBackdropNormal leaves the webview opaque. It also clears the
+			// window's colour, so the host repaints it as soon as the window
+			// exists (see wailsHost.Open).
+			Backdrop: application.MacBackdropTransparent,
+			TitleBar: application.MacTitleBarHiddenInset,
+		},
+		// Read on linux and windows; darwin uses Mac.Backdrop above.
+		BackgroundType: application.BackgroundTypeTransparent,
+		// The colour before the theme arrives — one frame's worth, not a second
+		// authority. Each window replaces it with its own theme through
+		// window_set_background.
+		BackgroundColour: application.NewRGB(6, 7, 15),
+	}
 }
