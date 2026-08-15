@@ -136,6 +136,7 @@ func Run(options Options) error {
 	// The workspace window group. It holds no window of its own: it asks the
 	// host, which is why the same rules answer in a test with no application.
 	Register(options.Registry, Deps{Host: windowHost, NewID: newWindowID})
+	RegisterCapture(options.Registry, NewCaptureService(nativeWindow))
 
 	// A capture probe runs after the window has had a chance to paint, then
 	// exits. It does not depend on the frontend booting, so a capture defect and

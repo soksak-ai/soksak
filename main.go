@@ -122,6 +122,21 @@ func main() {
 		Sessions:    terminalSessions{service: terminals},
 	})
 
+	// The control plane. Everything the application can do is reachable from
+	// outside it, which is what makes a feature verifiable rather than only
+	// clickable. A failure to bind stops the launch: a process running without
+	// one looks identical to a working one until something needs to drive it.
+	listener, err := control.Listen(resolved.Socket)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer func() { _ = listener.Close() }()
+	go func() {
+		if err := control.Serve(listener, registry, resolved.Identifier); err != nil {
+			log.Printf("control plane stopped: %v", err)
+		}
+	}()
+
 	err = wails.Run(wails.Options{
 		Assets:       assets,
 		CaptureProbe: os.Getenv("SOKSAK_CAPTURE_PROBE"),
