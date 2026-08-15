@@ -7,7 +7,14 @@
 // caller treat the feature as present and render as if it were.
 
 import { Dialogs, Events, Window as WailsWindow } from "@wailsio/runtime";
-import type { EngineProvision } from "@soksak-ai/plugin-spec";
+import type { EngineProvision } from "../../plugins/spec";
+
+// The route this host serves unit files on. It is stated in one place on each
+// side; frameworks/wails/unitassets.go holds the other, and unitFileRoute.test
+// compares the two.
+import { createWailsStream } from "./streams";
+
+const UNIT_FILE_ROUTE = "/-/unit-file";
 
 import type {
   AppFramework,
@@ -140,7 +147,7 @@ export const wailsFramework: AppFramework = {
     return invokeCommand<T>(cmd, args);
   },
 
-  createStream: <T,>(): Stream<T> => ({ onmessage: () => {} }),
+  createStream: <T,>(): Stream<T> => createWailsStream<T>(),
 
   listen: async <T,>(event: string, cb: (e: FrameworkEvent<T>) => void): Promise<Unlisten> =>
     Events.On(event, (received) => cb({ payload: received.data as T })),

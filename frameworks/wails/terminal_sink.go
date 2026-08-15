@@ -5,13 +5,17 @@ import (
 	"log"
 
 	terminal "github.com/soksak/soksak-plugin-terminal-xterm"
+
+	"github.com/soksak/soksak-core/core/control"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// The terminal plugin owns PTY bytes and knows nothing about how they reach a
-// window. This sink is the framework half of that contract.
+// One event carries every stream's frames. A backend that invented an event per
+// feature would have the frontend refuse each one it never declared, and the
+// refusal reads as a broken feature — measured 2026-08-15, the terminal emitted
+// terminal:output and the plugin bus refused it by name.
 func init() {
-	application.RegisterEvent[terminal.Output]("terminal:output")
+	application.RegisterEvent[control.StreamFrame](control.StreamEvent)
 }
 
 // TerminalSink is the framework half of that contract. The launcher builds it,
@@ -30,8 +34,13 @@ func NewTerminalSink(bridge *Bridge, traceInput bool) *TerminalSink {
 	return &TerminalSink{bridge: bridge, traceInput: traceInput}
 }
 
-func (sink *TerminalSink) EmitTerminalOutput(output terminal.Output) {
-	sink.bridge.Emit("terminal:output", output)
+// EmitStream carries one frame to the receiver the caller passed.
+//
+// Nothing here is about terminals: the stream id came from the caller and the
+// frame is whatever the backend produced. Any backend that receives a stream
+// argument delivers through this.
+func (sink *TerminalSink) EmitStream(stream string, frame any) {
+	sink.bridge.Emit(control.StreamEvent, control.StreamFrame{Stream: stream, Frame: frame})
 }
 
 // EmitTerminalInputTrace logs one line per keystroke when tracing is on. It is a

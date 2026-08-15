@@ -1,4 +1,4 @@
-import type { EngineProvision } from "@soksak-ai/plugin-spec";
+import type { EngineProvision } from "../plugins/spec";
 // App framework contract — the boundary that hides "which framework does this app run on" from the app.
 //
 // Framework here means Tauri and Electron. Window and webview creation, IPC, native API, and packaging
@@ -118,7 +118,10 @@ export interface AppFramework {
   emitLocal(event: string, payload: unknown): void;
 
   /**
+   * Turn one file of an installed unit into **an address the webview can fetch directly**.
    *
+   * The scope is under `<home>/plugins`. The framework rejects any other path — an address that accepts
+   * an arbitrary path opens the entire filesystem to the webview.
    *
    * Why it is in the contract: the amount moved at boot is the wait, and a value crossing a process
    * boundary is serialized as a string. Measured 2026-08-08 — of a 23.8MB plugin bundle, about 15MB spent
@@ -129,7 +132,7 @@ export interface AppFramework {
    * How the address is built differs per framework, and neither side has the other's method — so it is
    * asked here.
    */
-  assetUrl(path: string): Promise<string>;
+  unitFileUrl(path: string): Promise<string>;
 
   /**
    * The property that marks "dragging this element moves the window" for the framework.

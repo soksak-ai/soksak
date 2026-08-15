@@ -9,7 +9,7 @@
 // unevaluated, it must be absent from the bundle graph.
 
 import type { AppFramework, TitlebarCompositionProvision } from "./contract";
-import type { EngineProvision } from "@soksak-ai/plugin-spec";
+import type { EngineProvision } from "../plugins/spec";
 import { selectedFramework } from "#framework-adapter";
 
 export type {
@@ -112,4 +112,4 @@ export const frameworkName: string = framework.name;
 /** Deliver an event straight to this window's subscribers — name and payload match what the framework emits. */
 export const emitLocal: AppFramework["emitLocal"] = (event, payload) =>
   framework.emitLocal(event, payload);
-export const assetUrl: AppFramework["assetUrl"] = (path) => framework.assetUrl(path);
+export const unitFileUrl: AppFramework["unitFileUrl"] = (path) => framework.unitFileUrl(path);
