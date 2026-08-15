@@ -1,3 +1,6 @@
+import { registerContentViewHost } from "../../lib/contentViews";
+
+import { wailsContentViewHost } from "./contentViews";
 import { startNativeSurfaces } from "./nativeSurfaces";
 
 /**
@@ -7,5 +10,9 @@ import { startNativeSurfaces } from "./nativeSurfaces";
  * and that assumption is wrong sooner or later.
  */
 export async function installWailsSurfaces(): Promise<void> {
+  // The content view implementation goes first. Core commits every tab's visibility through this
+  // implementation (lib/viewPark.commitViewVisibility), so without it the first view open throws
+  // inside render and the whole window goes blank — measured 2026-08-15, exposed nodes 64 → 0.
+  registerContentViewHost(wailsContentViewHost);
   startNativeSurfaces();
 }

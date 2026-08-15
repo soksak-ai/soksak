@@ -1,5 +1,5 @@
 import { nativeSurfaceDOMRuntime, startNativeSurfaceObserver } from "@soksak/wails-service-native-compositor";
-import type { NativeSurfaceCommit } from "@soksak/wails-service-native-compositor";
+import type { NativeSurfaceCommit, NativeSurfaceObserverController } from "@soksak/wails-service-native-compositor";
 
 import * as CompositorService from "../../../bindings/github.com/soksak/wails-service-native-compositor/service";
 import { Snapshot } from "../../../bindings/github.com/soksak/wails-service-native-compositor/models";
@@ -14,7 +14,7 @@ const commit: NativeSurfaceCommit = async (snapshot) => {
   return receipt;
 };
 
-let controller: { stop(): void } | null = null;
+let controller: NativeSurfaceObserverController | null = null;
 
 export function startNativeSurfaces(root: Document = document): void {
   controller?.stop();
@@ -25,4 +25,20 @@ export function startNativeSurfaces(root: Document = document): void {
 export async function suspendNativeSurfaces(): Promise<void> {
   controller?.stop();
   controller = null;
+}
+
+/**
+ * Waits until the declared surfaces are reflected in an actual frame.
+ *
+ * The observer has one writer, and events that arrive during a commit collect into the next full snapshot.
+ * So settled means "the applied sequence has caught up with the declared sequence and nothing is pending" —
+ * decide on a fact that does not exist.
+ */
+export async function nativeSurfacesSettled(): Promise<void> {
+  for (;;) {
+    const status = controller?.status();
+    if (!status) return; // No observer means no surfaces.
+    if (!status.dirty && status.committedSequence >= status.sequence) return;
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
 }

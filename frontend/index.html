@@ -4,14 +4,52 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/wails.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Wails + React + TS</title>
+    <title>soksak</title>
+    <style>
+      /* The boot failure screen. It has to stand before the app stylesheet loads, so it is here. */
+      [data-boot-error] {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 40px;
+        background: #0f1014;
+        color: #e6e6ea;
+        font: 13px/1.6 ui-sans-serif, -apple-system, "Helvetica Neue", sans-serif;
+        text-align: center;
+      }
+      [data-boot-error][data-shown] { display: flex; }
+      [data-boot-error] h1 { margin: 0; font-size: 15px; font-weight: 600; }
+      [data-boot-error] p { margin: 0; max-width: 46ch; color: #9b9ba6; }
+      [data-boot-error] code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: #c9c9d2;
+      }
+    </style>
   </head>
   <body>
     <div class="bg" aria-hidden="true"></div>
     <div id="root"></div>
-    <pre id="boot-error" data-boot-error hidden style="position:fixed;inset:24px;z-index:2147483647;overflow:auto;padding:20px;background:#170b0b;color:#ffb4b4;border:1px solid #ff6b6b;white-space:pre-wrap"></pre>
+    <div data-boot-error role="alert">
+      <h1 data-boot-title></h1>
+      <p data-boot-detail></p>
+      <p><code>sok state.boot</code></p>
+    </div>
     <script>
       (() => {
+        // The two sentences a person reads. The app's key table is not loaded
+        // yet — this screen stands exactly when the bundle failed to load — so
+        // the pair is inline here and selected by the browser's language.
+        const KOREAN = navigator.language.startsWith("ko");
+        const TITLE = KOREAN ? "앱을 시작하지 못했습니다" : "The application did not start";
+        const DETAIL = KOREAN
+          ? "무엇이 막았는지는 아래 명령으로 확인할 수 있습니다."
+          : "The command below reports what stopped it.";
+
         const publish = (value) => {
           // Message and stack together. Some browsers leave the message out of
           // stack, and the report is then "RuntimeError" alone, which diagnoses
@@ -19,17 +57,20 @@
           const message = value instanceof Error
             ? [value.name + ": " + value.message, value.stack].filter(Boolean).join("\n")
             : String(value);
+          // The diagnosis goes to a data attribute and the console. A stack on
+          // screen shows the user what they cannot read and hides what they can.
+          console.error("[boot]", message);
           if (document.documentElement.dataset.bootStatus !== "loading") {
             document.documentElement.dataset.runtimeError = message;
             return;
           }
           document.documentElement.dataset.bootStatus = "failed";
           document.documentElement.dataset.bootError = message;
-          const output = document.querySelector("[data-boot-error]");
-          if (output) {
-            output.hidden = false;
-            output.textContent = `soksak-core bootstrap failed\n\n${message}`;
-          }
+          const screen = document.querySelector("[data-boot-error]");
+          if (!screen) return;
+          screen.querySelector("[data-boot-title]").textContent = TITLE;
+          screen.querySelector("[data-boot-detail]").textContent = DETAIL;
+          screen.dataset.shown = "";
         };
         window.addEventListener("error", (event) => publish(event.error || event.message));
         window.addEventListener("unhandledrejection", (event) => publish(event.reason));
