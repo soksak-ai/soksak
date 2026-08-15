@@ -1,0 +1,310 @@
+package wails
+
+import (
+	"fmt"
+
+	"github.com/soksak/soksak-core/core/control"
+)
+
+// The surface group: what the native composition currently is.
+//
+// The application declares native surfaces in the DOM and never positions them.
+// One delivery carries a complete inventory, and one receipt reports what was
+// actually applied. Both halves speak CSS points with a top-left origin, so the
+// compositing verdict is a subtraction rather than a conversion — and this file
+// is where the subtraction happens.
+//
+// The compositor is registered as a service, which makes it reachable from the
+// page and from nowhere else. A caller outside the process — an agent, a test,
+// a person at a terminal — could not ask what the composition was, so the only
+// available verdict was a screenshot and an opinion about it.
+//
+// Three of this group's four names are refused rather than served, and the
+// refusals are the contract rather than an absence of work: see
+// registerInventoryRefusals.
+
+// SurfaceFrame is one native surface's rectangle in CSS points with a top-left
+// origin — the coordinate contract the declaration and the receipt already
+// share.
+//
+// The keys are w and h rather than width and height because they are the
+// caller's, not this package's: the page reads frame.w and frame.h, and a
+// payload spelling them width and height hands it undefined. Every overflow
+// subtraction downstream then becomes NaN, NaN compares false against the
+// tolerance, and the "is this surface inside the window" check reports a clean
+// pass for a surface drawn hundreds of points off screen.
+type SurfaceFrame struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	W float64 `json:"w"`
+	H float64 `json:"h"`
+}
+
+// Area reports whether this rectangle can hold any pixels at all.
+func (frame SurfaceFrame) Area() bool { return frame.W > 0 && frame.H > 0 }
+
+// SurfacePlacement is one surface at one commit: what the document declared and
+// what the native layer reported back, read in the same instant.
+//
+// Same instant is the whole point. Read from two places at two moments, a live
+// resize turns a correct layer into a drift report and back again depending on
+// which read won — the same defect NATIVE-LAYER.md records for capture, where
+// mixing an earlier window frame with later pixels produced a frame that was
+// never on screen.
+type SurfacePlacement struct {
+	ID         string
+	Kind       string
+	Generation uint64
+	Layer      int
+
+	Declared        SurfaceFrame
+	DeclaredVisible bool
+	DeclaredAlpha   float64
+
+	Applied        SurfaceFrame
+	AppliedVisible bool
+	AppliedAlpha   float64
+
+	// Undeclared marks a surface the native layer holds that the document never
+	// asked for. It is the defect a ledger-only ghost hunt cannot see: the
+	// application walks its own records, so a surface that left the records and
+	// stayed on screen is invisible to every check the application makes.
+	Undeclared bool
+}
+
+// Drift is the applied rectangle minus the declared one, per component.
+//
+// Exact, with no tolerance. Both halves are the same float64 travelling one
+// commit, so zero is reachable; a tolerance chosen without a measurement would
+// be a silent fallback that hides the first hundredth of a point of the next
+// coordinate bug. A caller that wants to forgive a rounding difference has the
+// number and can.
+func (placement SurfacePlacement) Drift() SurfaceFrame {
+	return SurfaceFrame{
+		X: placement.Applied.X - placement.Declared.X,
+		Y: placement.Applied.Y - placement.Declared.Y,
+		W: placement.Applied.W - placement.Declared.W,
+		H: placement.Applied.H - placement.Declared.H,
+	}
+}
+
+// Displaced reports that this surface is not where it was declared to be.
+//
+// A surface with no declaration is always displaced: it cannot match a
+// rectangle that does not exist, and answering false would make an undeclared
+// surface the one thing on the list that looks correct.
+func (placement SurfacePlacement) Displaced() bool {
+	return placement.Undeclared || placement.Drift() != SurfaceFrame{}
+}
+
+// EffectivelyHidden reports that this surface puts no light on the screen.
+//
+// Three ways to arrive there, all read from the applied half: the native layer
+// hid it, it is fully transparent, or it has no area. There is no fourth,
+// inherited way — these surfaces are attached directly to the window's content
+// view, so there is no ancestor to be hidden by.
+func (placement SurfacePlacement) EffectivelyHidden() bool {
+	return !placement.AppliedVisible || placement.AppliedAlpha == 0 || !placement.Applied.Area()
+}
+
+// Composition is the last inventory the native layer accepted.
+type Composition struct {
+	// Sequence is the commit this composition came from. Zero means no
+	// inventory has ever been applied, which is a different answer from an
+	// inventory that was applied and held nothing: one is a window whose panes
+	// declare no native surface, the other is a compositor that has never run.
+	Sequence uint64
+	// Placements is one entry per surface the native layer reported.
+	Placements []SurfacePlacement
+	// Unapplied names the surfaces the document declared and the native layer
+	// did not report back. A count that agreed while the screen did not is what
+	// this list exists to prevent.
+	Unapplied []string
+	// Failure is what the native layer said about the most recent attempt that
+	// did not land, empty when the last attempt did land. Without it a
+	// compositor that refuses every new inventory keeps answering with the last
+	// healthy one, and every reading says the layer is fine.
+	Failure string
+	// FailedSequence is the sequence of that attempt.
+	FailedSequence uint64
+}
+
+// CompositionSource answers with the latest applied inventory.
+//
+// An interface rather than the compositor itself, because the compositor is a
+// separate module with its own release and its own native backend — a rule that
+// names it can only be checked by building the whole application.
+type CompositionSource interface {
+	Latest() Composition
+}
+
+// SurfaceDeps is what the process supplies.
+type SurfaceDeps struct {
+	// Composition is where both halves of one commit were recorded. A nil one
+	// is refused at registration rather than answered around: an empty
+	// composition and a composition nobody is recording are the same payload,
+	// and the caller would read "this window has no native surfaces" for a
+	// window full of them.
+	Composition CompositionSource
+	// NativeParent reports whether the native container these surfaces attach
+	// to exists right now — this host's window content view. A nil one is
+	// refused for the same reason: answering false with nobody to ask makes
+	// "the window is not up yet" and "the window is gone" one answer, and a
+	// caller cannot act on either.
+	NativeParent func() bool
+}
+
+// RegisterSurface adds the surface group to the registry.
+//
+// The name is RegisterSurface rather than Register because this package already
+// has a Register: the window group took it, and this is one Go package.
+//
+// It panics on a missing dependency, matching MustRegister: boot-time
+// registration is a programming fact, and finding it out as a failed command
+// means the one window into the native layer is dark exactly when someone is
+// using it to find out why the screen is wrong.
+func RegisterSurface(registry *control.Registry, deps SurfaceDeps) {
+	if deps.Composition == nil {
+		panic("wails: the surface commands need a composition to read")
+	}
+	if deps.NativeParent == nil {
+		panic("wails: the surface commands need to be able to ask whether the native parent is there")
+	}
+
+	registry.MustRegister(control.Command{
+		Name:  "engine_surface_stats",
+		Owner: control.OwnerFramework,
+		// Framework-owned: a process with no window has no native layer, so
+		// there is no host-independent answer to what it applied.
+		Handler: func(control.Args) (any, error) {
+			return surfaceStatsOf(deps.Composition.Latest(), deps.NativeParent()), nil
+		},
+	})
+
+	registerInventoryRefusals(registry)
+}
+
+// registerInventoryRefusals declares the three names that ask this backend to
+// write one surface.
+//
+// One delivery carries a complete inventory and a second writer is refused
+// before anything mutates. A command here that closed or hid a single surface
+// would be that second writer, and it would not even survive: the next full
+// commit reconciles against the declaration and puts the surface straight back.
+// The caller would watch it return with nothing to read that explains why.
+//
+// Each refusal names the attribute that actually owns the outcome, so a caller
+// receives somewhere to go rather than a dead end.
+func registerInventoryRefusals(registry *control.Registry) {
+	for name, reason := range map[string]string{
+		"webview_close": "a native surface's lifetime is owned by its declaration; " +
+			"remove the element carrying data-native-surface and the next inventory commit destroys it. " +
+			"Closing one from here is a second writer the next commit reverts",
+		"webview_visible": "a native surface's visibility is owned by its declaration; " +
+			"set data-native-visible on the element and the next inventory commit applies it. " +
+			"Hiding one from here is a second writer the next commit reverts",
+		"webview_recover": "nothing in this build records a native surface crash, " +
+			"so there is no breaker state to reset and no per-surface reload to run. " +
+			"Re-declare the surface with a higher data-native-generation to have it rebuilt",
+	} {
+		if err := registry.DeclareUnserved(name, reason); err != nil {
+			panic(fmt.Sprintf("wails: declaring %s unserved: %v", name, err))
+		}
+	}
+}
+
+// surfaceRow is one surface as a caller receives it.
+//
+// The key names are the page's. label rather than id because that is what the
+// page calls a surface on this side; alpha and effectiveAlpha are both carried
+// and are equal here, because these surfaces attach directly to the window's
+// content view and there is no ancestor alpha to multiply through — which is
+// itself the fact worth publishing, rather than dropping a key the page reads.
+type surfaceRow struct {
+	Label      string `json:"label"`
+	Kind       string `json:"kind"`
+	Generation uint64 `json:"generation"`
+	Layer      int    `json:"layer"`
+
+	Hidden            bool    `json:"hidden"`
+	EffectivelyHidden bool    `json:"effectivelyHidden"`
+	Alpha             float64 `json:"alpha"`
+	EffectiveAlpha    float64 `json:"effectiveAlpha"`
+	DeclaredAlpha     float64 `json:"declaredAlpha"`
+	DeclaredVisible   bool    `json:"declaredVisible"`
+
+	// Frame is the applied rectangle — where the surface actually is. The page
+	// judges "inside the window" against this, and judging against the
+	// declaration would compare the layout with itself.
+	Frame      SurfaceFrame `json:"frame"`
+	Declared   SurfaceFrame `json:"declared"`
+	Drift      SurfaceFrame `json:"drift"`
+	Displaced  bool         `json:"displaced"`
+	Undeclared bool         `json:"undeclared"`
+}
+
+// surfaceStats is the whole answer.
+type surfaceStats struct {
+	// Registered and ProviderParentPresent are the page's names for "how many
+	// surfaces the native layer holds" and "is the container they attach to
+	// there". The page falls back to registered:-1 when the read itself fails,
+	// so zero here always means a real, measured zero.
+	Registered            int  `json:"registered"`
+	ProviderParentPresent bool `json:"providerParentPresent"`
+
+	Sequence  uint64       `json:"sequence"`
+	Surfaces  []surfaceRow `json:"surfaces"`
+	Displaced int          `json:"displaced"`
+	Unapplied []string     `json:"unapplied"`
+
+	Failure        string `json:"failure,omitempty"`
+	FailedSequence uint64 `json:"failedSequence,omitempty"`
+}
+
+// surfaceStatsOf turns one recorded composition into the payload.
+func surfaceStatsOf(composition Composition, parentPresent bool) surfaceStats {
+	// Never nil. A nil slice encodes as null, and the page reads
+	// surfaces?.surfaces ?? [] — which turns "the compositor answered null"
+	// into the same empty list as "there are no surfaces".
+	rows := make([]surfaceRow, 0, len(composition.Placements))
+	displaced := 0
+	for _, placement := range composition.Placements {
+		row := surfaceRow{
+			Label:             placement.ID,
+			Kind:              placement.Kind,
+			Generation:        placement.Generation,
+			Layer:             placement.Layer,
+			Hidden:            !placement.AppliedVisible,
+			EffectivelyHidden: placement.EffectivelyHidden(),
+			Alpha:             placement.AppliedAlpha,
+			EffectiveAlpha:    placement.AppliedAlpha,
+			DeclaredAlpha:     placement.DeclaredAlpha,
+			DeclaredVisible:   placement.DeclaredVisible,
+			Frame:             placement.Applied,
+			Declared:          placement.Declared,
+			Drift:             placement.Drift(),
+			Displaced:         placement.Displaced(),
+			Undeclared:        placement.Undeclared,
+		}
+		if row.Displaced {
+			displaced++
+		}
+		rows = append(rows, row)
+	}
+
+	unapplied := composition.Unapplied
+	if unapplied == nil {
+		unapplied = []string{}
+	}
+
+	return surfaceStats{
+		Registered:            len(rows),
+		ProviderParentPresent: parentPresent,
+		Sequence:              composition.Sequence,
+		Surfaces:              rows,
+		Displaced:             displaced,
+		Unapplied:             unapplied,
+		Failure:               composition.Failure,
+		FailedSequence:        composition.FailedSequence,
+	}
+}
