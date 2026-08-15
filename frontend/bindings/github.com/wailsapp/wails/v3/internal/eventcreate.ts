@@ -8,15 +8,15 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as terminal$0 from "../../../../soksak/soksak-plugin-terminal-xterm/models.js";
+import * as control$0 from "../../../../soksak/soksak-core/core/control/models.js";
 
 function configure() {
     Object.freeze(Object.assign($Create.Events, {
-        "terminal:output": $$createType0,
+        "stream": $$createType0,
     }));
 }
 
 // Private type creation functions
-const $$createType0 = terminal$0.Output.createFrom;
+const $$createType0 = control$0.StreamFrame.createFrom;
 
 configure();

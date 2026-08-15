@@ -8,6 +8,7 @@ export {
 
 export {
     AppliedSurface,
+    Committed,
     Frame,
     Receipt,
     Snapshot,

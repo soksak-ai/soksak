@@ -13,8 +13,15 @@ export function Close(handle: $models.Handle): $CancellablePromise<void> {
     return $Call.ByID(170368024, handle);
 }
 
-export function Open(id: string, cols: number, rows: number): $CancellablePromise<$models.Handle> {
-    return $Call.ByID(2123408004, id, cols, rows).then(($result: any) => {
+/**
+ * Open starts a shell for id and sends its bytes to stream.
+ * 
+ * An empty stream opens a shell nobody reads. The caller asked for a process,
+ * not for its output, and that is what a round-trip check over the control
+ * plane does.
+ */
+export function Open(id: string, stream: string, cols: number, rows: number): $CancellablePromise<$models.Handle> {
+    return $Call.ByID(2123408004, id, stream, cols, rows).then(($result: any) => {
         return $$createType0($result);
     });
 }

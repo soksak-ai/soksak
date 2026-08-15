@@ -61,35 +61,6 @@ export class InputTrace {
     }
 }
 
-export class Output {
-    "id": string;
-    "generation": number;
-    "dataBase64": string;
-
-    /** Creates a new Output instance. */
-    constructor($$source: Partial<Output> = {}) {
-        if (!("id" in $$source)) {
-            this["id"] = "";
-        }
-        if (!("generation" in $$source)) {
-            this["generation"] = 0;
-        }
-        if (!("dataBase64" in $$source)) {
-            this["dataBase64"] = "";
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new Output instance from a string or object.
-     */
-    static createFrom($$source: any = {}): Output {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new Output($$parsedSource as Partial<Output>);
-    }
-}
-
 export class Status {
     "id": string;
     "generation": number;

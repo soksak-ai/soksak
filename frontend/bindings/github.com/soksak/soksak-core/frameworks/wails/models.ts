@@ -49,7 +49,7 @@ export class Rect {
  * A string rather than a value because a bare `any` does not survive this
  * transport intact. Measured 2026-08-15: data_kv_get for a key that does not
  * exist answered null over the socket and {} here, and the frontend took the {}
- * for the stored value — three boots died on `slots.filter`, `projects.length`
+ * for the stored value — three boots died on `slots.filter`, `workspaces.length`
  * and `t.map`, all of them that one difference.
  * 
  * One registry, several transports is only true if the transports agree about

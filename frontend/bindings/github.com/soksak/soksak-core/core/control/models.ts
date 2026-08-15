@@ -6,7 +6,7 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
- * Owner says who answers. Core commands are host-independent; framework
+ * Owner names who answers. Core commands are host-independent; framework
  * commands need this host's window.
  */
 export enum Owner {
@@ -45,6 +45,42 @@ export class Served {
     static createFrom($$source: any = {}): Served {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new Served($$parsedSource as Partial<Served>);
+    }
+}
+
+/**
+ * StreamFrame is one frame on its way to a receiver.
+ */
+export class StreamFrame {
+    /**
+     * Stream is the id the caller minted. A receiver reads only its own.
+     */
+    "stream": string;
+
+    /**
+     * Frame is the value. Bytes travel as StreamBytes; anything else is the
+     * value itself.
+     */
+    "frame": any;
+
+    /** Creates a new StreamFrame instance. */
+    constructor($$source: Partial<StreamFrame> = {}) {
+        if (!("stream" in $$source)) {
+            this["stream"] = "";
+        }
+        if (!("frame" in $$source)) {
+            this["frame"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StreamFrame instance from a string or object.
+     */
+    static createFrom($$source: any = {}): StreamFrame {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new StreamFrame($$parsedSource as Partial<StreamFrame>);
     }
 }
 

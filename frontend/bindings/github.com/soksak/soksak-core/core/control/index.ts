@@ -4,6 +4,7 @@
 export {
     Owner,
     Served,
+    StreamFrame,
     Table,
     Unserved
 } from "./models.js";

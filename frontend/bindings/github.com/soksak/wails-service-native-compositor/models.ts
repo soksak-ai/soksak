@@ -50,6 +50,67 @@ export class AppliedSurface {
     }
 }
 
+/**
+ * Declared is the inventory the document asked for on the last accepted commit,
+ * and Applied is what the native layer reported back.
+ * 
+ * Both halves come from one commit. A consumer that measured drift against the
+ * applied half alone would compare a value with itself and read zero every
+ * time; a consumer that read the declared half from the document would be
+ * reading a later frame than the one that was applied.
+ */
+export class Committed {
+    "declared": Snapshot;
+    "applied": Receipt;
+
+    /**
+     * Failure is the backend's reason for the most recent attempt that did not
+     * land, empty when the last attempt landed. Without it a backend that
+     * refuses every new inventory keeps answering with the last healthy one,
+     * and every reading reports a healthy layer.
+     */
+    "failure": string;
+
+    /**
+     * FailedSequence is the sequence of that attempt.
+     */
+    "failedSequence": number;
+
+    /** Creates a new Committed instance. */
+    constructor($$source: Partial<Committed> = {}) {
+        if (!("declared" in $$source)) {
+            this["declared"] = (new Snapshot());
+        }
+        if (!("applied" in $$source)) {
+            this["applied"] = (new Receipt());
+        }
+        if (!("failure" in $$source)) {
+            this["failure"] = "";
+        }
+        if (!("failedSequence" in $$source)) {
+            this["failedSequence"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Committed instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Committed {
+        const $$createField0_0 = $$createType1;
+        const $$createField1_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("declared" in $$parsedSource) {
+            $$parsedSource["declared"] = $$createField0_0($$parsedSource["declared"]);
+        }
+        if ("applied" in $$parsedSource) {
+            $$parsedSource["applied"] = $$createField1_0($$parsedSource["applied"]);
+        }
+        return new Committed($$parsedSource as Partial<Committed>);
+    }
+}
+
 export class Frame {
     "x": number;
     "y": number;
@@ -107,7 +168,7 @@ export class Receipt {
      * Creates a new Receipt instance from a string or object.
      */
     static createFrom($$source: any = {}): Receipt {
-        const $$createField2_0 = $$createType2;
+        const $$createField2_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("surfaces" in $$parsedSource) {
             $$parsedSource["surfaces"] = $$createField2_0($$parsedSource["surfaces"]);
@@ -136,7 +197,7 @@ export class Snapshot {
      * Creates a new Snapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): Snapshot {
-        const $$createField1_0 = $$createType4;
+        const $$createField1_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("surfaces" in $$parsedSource) {
             $$parsedSource["surfaces"] = $$createField1_0($$parsedSource["surfaces"]);
@@ -190,7 +251,7 @@ export class Surface {
      */
     static createFrom($$source: any = {}): Surface {
         const $$createField3_0 = $$createType0;
-        const $$createField7_0 = $$createType5;
+        const $$createField7_0 = $$createType7;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("frame" in $$parsedSource) {
             $$parsedSource["frame"] = $$createField3_0($$parsedSource["frame"]);
@@ -212,14 +273,16 @@ export type SurfaceSource = { [_ in string]?: string };
 
 // Private type creation functions
 const $$createType0 = Frame.createFrom;
-const $$createType1 = AppliedSurface.createFrom;
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = Surface.createFrom;
+const $$createType1 = Snapshot.createFrom;
+const $$createType2 = Receipt.createFrom;
+const $$createType3 = AppliedSurface.createFrom;
 const $$createType4 = $Create.Array($$createType3);
-var $$createType5 = (function $$initCreateType5(...args: any[]): any {
-    if ($$createType5 === $$initCreateType5) {
-        $$createType5 = $$createType6;
+const $$createType5 = Surface.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+var $$createType7 = (function $$initCreateType7(...args: any[]): any {
+    if ($$createType7 === $$initCreateType7) {
+        $$createType7 = $$createType8;
     }
-    return $$createType5(...args);
+    return $$createType7(...args);
 });
-const $$createType6 = $Create.Map($Create.Any, $Create.Any);
+const $$createType8 = $Create.Map($Create.Any, $Create.Any);

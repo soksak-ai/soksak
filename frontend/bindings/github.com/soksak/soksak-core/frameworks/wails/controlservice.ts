@@ -39,7 +39,7 @@ export function Commands(): $CancellablePromise<control$0.Table> {
  * registry is typed per command rather than at this boundary, so each handler
  * decodes what it needs; encoding on the frontend side instead would double-
  * encode every string (measured 2026-08-15: "core" arrived as "\"core\"").
- * The context carries the window that made the call. Taking it is what lets the
+ * The context includes the window that made the call. Taking it is what lets the
  * registry stamp the caller: a window cannot name itself, because a window that
  * could name itself could name another one, and then a command's effect depends
  * on what the renderer claimed rather than on where it ran.

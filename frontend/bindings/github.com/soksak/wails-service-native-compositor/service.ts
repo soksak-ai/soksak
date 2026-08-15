@@ -15,6 +15,29 @@ export function Commit(snapshot: $models.Snapshot): $CancellablePromise<$models.
     });
 }
 
+/**
+ * Deliver forwards a message to the backend that owns a surface.
+ * 
+ * The inventory is the only record of what exists, so a message for an id nobody declared is
+ * refused here. Forwarding it would ask the backend to invent a surface, and a backend that obliges
+ * holds one the compositor does not know about — the undeclared surface a ledger-only check never
+ * sees, because the ledger is what it walks.
+ */
+export function Deliver(id: string, message: { [_ in string]?: any }): $CancellablePromise<{ [_ in string]?: any }> {
+    return $Call.ByID(1390608961, id, message).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+/**
+ * Latest answers both halves of the last commit.
+ */
+export function Latest(): $CancellablePromise<$models.Committed> {
+    return $Call.ByID(2745712171).then(($result: any) => {
+        return $$createType2($result);
+    });
+}
+
 export function Status(): $CancellablePromise<$models.Receipt> {
     return $Call.ByID(2286254498).then(($result: any) => {
         return $$createType0($result);
@@ -23,3 +46,5 @@ export function Status(): $CancellablePromise<$models.Receipt> {
 
 // Private type creation functions
 const $$createType0 = $models.Receipt.createFrom;
+const $$createType1 = $Create.Map($Create.Any, $Create.Any);
+const $$createType2 = $models.Committed.createFrom;
