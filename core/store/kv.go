@@ -8,25 +8,11 @@ package store
 import (
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"time"
-
-	// A pure-Go driver, so Windows stays cgo-free and cross-compiles from any
-	// host. The framework already depends on it.
-	_ "modernc.org/sqlite"
 )
 
 const (
-	schemaSQL = `CREATE TABLE IF NOT EXISTS kv (
-		ns TEXT NOT NULL,
-		k TEXT NOT NULL,
-		v TEXT NOT NULL,
-		updated INTEGER NOT NULL,
-		PRIMARY KEY (ns, k)
-	)`
-
 	selectSQL = `SELECT v FROM kv WHERE ns=? AND k=?`
 	upsertSQL = `INSERT INTO kv(ns,k,v,updated) VALUES(?,?,?,?)
 		ON CONFLICT(ns,k) DO UPDATE SET v=excluded.v, updated=excluded.updated`
@@ -44,33 +30,6 @@ func validateNamespace(ns string) error {
 	return nil
 }
 
-// KV is the key-value store, namespaced per owner.
-type KV struct{ db *sql.DB }
-
-// OpenKV opens the store at path, creating the file and its schema if needed.
-func OpenKV(path string) (*KV, error) {
-	if path == "" {
-		return nil, fmt.Errorf("store: no database path was given")
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return nil, fmt.Errorf("store: could not create %s: %w", filepath.Dir(path), err)
-	}
-
-	// WAL lets readers run while a writer holds the write lock, which is what
-	// makes "cannot write" and "cannot see" different states.
-	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
-	if err != nil {
-		return nil, fmt.Errorf("store: could not open %s: %w", path, err)
-	}
-	if _, err := db.Exec(schemaSQL); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("store: could not create the schema: %w", err)
-	}
-	return &KV{db: db}, nil
-}
-
-func (kv *KV) Close() error { return kv.db.Close() }
-
 // Get reads one value. A key that was never written is absence, not failure:
 // the first read of every setting would otherwise be an error.
 func (kv *KV) Get(ns, key string) (string, bool, error) {
@@ -78,25 +37,44 @@ func (kv *KV) Get(ns, key string) (string, bool, error) {
 		return "", false, err
 	}
 	var value string
-	switch err := kv.db.QueryRow(selectSQL, ns, key).Scan(&value); err {
-	case nil:
-		return value, true, nil
-	case sql.ErrNoRows:
-		return "", false, nil
-	default:
-		return "", false, fmt.Errorf("store: reading %s/%s: %w", ns, key, err)
+	var found bool
+	err := kv.read(func(db *sql.DB) error {
+		switch err := db.QueryRow(selectSQL, ns, key).Scan(&value); err {
+		case nil:
+			found = true
+			return nil
+		case sql.ErrNoRows:
+			return nil
+		default:
+			return fmt.Errorf("store: reading %s/%s: %w", ns, key, err)
+		}
+	})
+	if err != nil {
+		return "", false, err
 	}
+	return value, found, nil
 }
 
 // Set writes one value. The last write for a (namespace, key) is what remains.
+//
+// It reads the clock because its caller — the key-value command in the boot
+// package — has no clock to hand it. Every caller inside this package that was
+// given one uses setAt instead: a stamp taken here is one the caller cannot
+// make the same twice.
 func (kv *KV) Set(ns, key, value string) error {
+	return kv.setAt(ns, key, value, time.Now().UnixMilli())
+}
+
+func (kv *KV) setAt(ns, key, value string, nowMillis int64) error {
 	if err := validateNamespace(ns); err != nil {
 		return err
 	}
-	if _, err := kv.db.Exec(upsertSQL, ns, key, value, time.Now().UnixMilli()); err != nil {
-		return fmt.Errorf("store: writing %s/%s: %w", ns, key, err)
-	}
-	return nil
+	return kv.read(func(db *sql.DB) error {
+		if _, err := db.Exec(upsertSQL, ns, key, value, nowMillis); err != nil {
+			return fmt.Errorf("store: writing %s/%s: %w", ns, key, err)
+		}
+		return nil
+	})
 }
 
 // Delete removes one key. Deleting what is not there converges on the same
@@ -105,8 +83,10 @@ func (kv *KV) Delete(ns, key string) error {
 	if err := validateNamespace(ns); err != nil {
 		return err
 	}
-	if _, err := kv.db.Exec(deleteSQL, ns, key); err != nil {
-		return fmt.Errorf("store: deleting %s/%s: %w", ns, key, err)
-	}
-	return nil
+	return kv.read(func(db *sql.DB) error {
+		if _, err := db.Exec(deleteSQL, ns, key); err != nil {
+			return fmt.Errorf("store: deleting %s/%s: %w", ns, key, err)
+		}
+		return nil
+	})
 }
