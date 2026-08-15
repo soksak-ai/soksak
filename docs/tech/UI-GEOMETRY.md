@@ -122,6 +122,24 @@ margins are symmetric, and only then say it is done. Addresses come from
 `sok ui.tree`, never from a guessed selector — an element that is not exposed
 cannot be measured, and that is the point.
 
+## R5a. The whole layout is one number
+
+`ui.measure` reads one node. A split layout is many, and reading them one at a
+time leaves the subtraction — and the R4 arithmetic it needs — to whoever is
+asking.
+
+`sok layout.verify` does it for the active space: for every pane it answers the
+declared rect (a percentage of the space box), the rect that percentage should
+produce under the R4 rule, the measured viewport rect, and their difference.
+**Judgement: `worst` is 0 within one device pixel.** A pane the arrangement
+names but the screen does not draw comes back in `missing`; a pane on screen
+the arrangement does not name comes back in `unexpected`. Neither is a small
+difference, so neither is reported as one.
+
+The command recomputes the position from the percentage instead of reading it
+back from the element. A verifier that shares the renderer's arithmetic agrees
+with the renderer about everything, including its mistakes.
+
 ---
 
 # B. Border ownership — which box draws which edge
