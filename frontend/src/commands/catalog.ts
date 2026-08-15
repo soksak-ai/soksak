@@ -16,6 +16,7 @@ import { recordWindowFrames } from "./windowRecorder";
 import { tmsg } from "../i18n";
 import { computeSplitLayout } from "../lib/splitLayout";
 import { railJournal } from "../lib/railJournal";
+import { fingerprintOf } from "./stateFingerprint";
 import {
   DEFAULT_RAIL_PLACEMENT,
   snapRailStation,
@@ -598,6 +599,21 @@ export function registerCatalog(): void {
     message: (d) => tmsg("msg.state.tree", { n: ((d.workspaces as unknown[]) ?? []).length }),
     examples: ["state.tree"],
     handler: () => serializeTree(),
+  });
+
+  // What a restore is judged by. state.tree, layout.arrangement and surface.composition each answer
+  // part of what a window holds, and comparing three answers across a restart puts the rule in
+  // whoever is comparing — two people comparing the same restart can then disagree about it.
+  register("state.fingerprint", {
+    description:
+      "One digest of what this window holds — every workspace root, its rail mode, station and clean lines, and every pane rectangle with which one is active. Compare it before and after a restart: equal digests mean the window came back the same. Ids are deliberately not in it, because a restore mints new ones by contract; a root is, because it is the workspace's identity rather than an id.",
+    triggers: { ko: "상태 지문 복원 동형 비교 다이제스트" },
+    params: {},
+    returns:
+      "{ digest, workspaces[].{ root, mode, station, cleanLines[], spaces[].panes[].{rect,active} } } — the parts are carried beside the digest so a mismatch says which one moved",
+    message: (d) => tmsg("msg.state.fingerprint", { digest: String(d.digest) }),
+    examples: ["state.fingerprint"],
+    handler: () => fingerprintOf(serializeTree()),
   });
 
   // The arrangement solve — station, switching and travel distance are a pure function of (grid,

@@ -781,6 +781,7 @@ export const en: Record<MsgKey, string> = {
   "msg.layout.verify": "Layout verified — worst difference {n} px",
   "msg.layout.verify.moving": "Layout in motion — the {n} px difference describes a frame, not the layout",
   "msg.state.tree": "{n} workspaces in the layout",
+  "msg.state.fingerprint": "State fingerprint {digest}",
   "msg.status.query": "{n} tabs reporting status",
   "msg.system.hello": "negotiation — protocol {protocol}, app {version}",
   "msg.term.cwd": "Working directory: {path}",
