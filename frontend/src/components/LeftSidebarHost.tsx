@@ -8,6 +8,7 @@
 import { execute } from "../commands/registry";
 import { gutterOwnerOf } from "../lib/gutterAddress";
 import { beginGesture } from "../lib/gesture";
+import { CHROME_BANDS } from "../lib/chromeBands";
 import {
   memo,
   useCallback,
@@ -45,6 +46,8 @@ import { isComposingEnter } from "../lib/imeKeys";
 import { localize } from "../i18n";
 
 const DRAG_THRESHOLD = 5;
+// Tab row height — the same band as the content header (lib/chromeBands). Measured: before 2026-08-15 this
+// was 30 while content was 33, so the two rows standing side by side were 3px off and looked different per theme.
 export const SIDEBAR_HEADER_PX = CHROME_BANDS.header;
 // The same pane-inset as the content group (per theme) — the sidebar body needs the same padding to align with
 // content row2 (the view tabs); in a content group row2 is pushed by the inset. Same value as GroupArea.PANE_INSET.
@@ -269,6 +272,9 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
 
   return (
     <div className="sidebar-left">
+      {/* Header band — same height as the content header (lib/chromeBands). No plugin fills this
+          slot today, and empty is a legitimate state for this band. */}
+      <div className="sidebar-left-header" data-node="sidebar/header" />
       {/* Projection slots (R1) — the bound view's left sidebar declaration renders here. Coexists with the pin stack (R4). */}
       <ProjectionSlots
         projectId={project.id}
@@ -339,8 +345,11 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
         )}
       </div>
 
-      {footerViews.length > 0 && (
-        <div className="sidebar-left-footer">
+      {/* The frame is the contract and the body is the plugin's share — an empty footer is the frame,
+          not an absence. Made conditional, only a window with no plugin gets a different skeleton, and
+          next to another window it is off by one row (measured 2026-08-15). */}
+      <div className="sidebar-left-footer" data-node="sidebar/footer">
+        {footerViews.length > 0 && (
           <PluginViewHost
             viewKey={footerViews[0].key}
             projectId={project.id}
@@ -348,8 +357,8 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
             region="left"
             paneId={paneId}
           />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 });

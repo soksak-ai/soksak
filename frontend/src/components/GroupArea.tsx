@@ -18,6 +18,7 @@ import {
 } from "../plugins/viewFocus";
 import { armSlotActivation } from "../lib/slotGesture";
 import { beginLayoutMotion, endLayoutMotion } from "../lib/layoutMotion";
+import { CHROME_BANDS } from "../lib/chromeBands";
 import { createRectMotionTracker } from "../lib/layoutRectMotion";
 import { useLayoutDecorationPresentation } from "../lib/layoutDecorationPresentation";
 import { useGutterHover } from "../state/gutterHover";

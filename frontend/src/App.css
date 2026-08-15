@@ -3912,8 +3912,18 @@ select.dctl {
   flex: 1 1 auto;
   min-height: 0;
 }
+/* The header band stands on the same line as the content header. A sidebar with
+   a different height puts the two adjacent rows out of step, and the mismatch
+   looks different in each theme, so it reads as a defect in one of them
+   (measured 2026-08-15: content 33px, sidebar 30px). */
+.sidebar-left-header {
+  flex: 0 0 var(--header-h);
+  border-bottom: 1px solid var(--bd);
+}
+
 .sidebar-left-footer {
-  flex: 0 0 auto;
+  /* The same band as the content footer. It does not shrink when empty — the frame
+   does not depend on its content. */
   flex: 0 0 var(--status-h);
   border-top: 1px solid var(--bd);
   /* Always at the bottom of the sidebar — with no tabs or body above it (an empty
