@@ -20,9 +20,14 @@ import (
 // CaptureWindow returns PNG bytes of the window, cropped to rect.
 //
 // The capture never focuses the window and never fails because something covers
-// it: ScreenCaptureKit reads this process's own shareable content, so the
-// compositor result arrives whole — main webview and native children in one
-// image — without a screen-recording grant.
+// it: ScreenCaptureKit reads this process's own shareable content, so no
+// screen-recording grant is needed.
+//
+// What comes back is this process's own layers. A native child draws in another
+// process and is not in this image — measured 2026-08-16, a browser pane came
+// back flat while the surface itself reported title "Example Domain" and
+// progress 1. CompositeSurfaces finishes the image by asking each surface for
+// its own pixels; this function is the window layer alone.
 func CaptureWindow(window unsafe.Pointer, rect Rect) ([]byte, error) {
 	if window == nil {
 		return nil, i18n.Errorf("wails.capture.nilWindow", nil)

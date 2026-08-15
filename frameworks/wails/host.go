@@ -85,6 +85,14 @@ func Run(options Options) error {
 	// The compositor service, held so the surface commands can read what it
 	// applied. The service list below registers the same value.
 	nativeCompositor := compositor.NewService(nativeWindow, browserBackend)
+	// One reader of the last commit, shared by the surface commands and the capture. Two would
+	// answer from two moments, and the capture would draw a page at a rectangle the numbers say it
+	// is not at.
+	surfaceComposition := NewCompositorSource(nativeCompositor)
+	// One source of surface pixels, shared by the capture service the frontend binds and the one a
+	// command builds per call. Two would mean a capture that composites through one path and not
+	// the other, which is the split this replaces.
+	surfaceImages := NewCompositorImages(surfaceComposition, nativeCompositor.Deliver)
 
 	app := application.New(application.Options{
 		Name:        appName,
@@ -93,7 +101,10 @@ func Run(options Options) error {
 			application.NewService(options.Terminal),
 			application.NewService(nativeCompositor),
 			application.NewService(nativebrowser.NewService(browserBackend)),
-			application.NewService(NewCaptureService(nativeWindow)),
+			// The capture finishes its image with content that draws outside this process. Without
+			// it a browser pane is a flat rectangle in every screenshot while the page behind it
+			// is loading correctly.
+			application.NewService(NewCaptureService(nativeWindow).WithSurfaces(surfaceImages)),
 			application.NewService(NewControlService(options.Registry)),
 		},
 		Assets: application.AssetOptions{
@@ -137,7 +148,8 @@ func Run(options Options) error {
 		Host:         windowHost,
 		NewID:        newWindowID,
 		Sessions:     terminalplugin.CommandSessions(options.Terminal),
-		Composition:  NewCompositorSource(nativeCompositor),
+		Composition:  surfaceComposition,
+		Surfaces:     surfaceImages,
 		NativeParent: func() bool { return nativeWindow() != nil },
 		Dispatch: func(target, event string, payload any) error {
 			return dispatchToWindow(app, target, event, payload)
@@ -208,11 +220,12 @@ func Run(options Options) error {
 		capture := NewCaptureService(nativeWindow)
 		go func() {
 			time.Sleep(3 * time.Second)
-			path, err := capture.Snapshot(target)
+			note, err := capture.Snapshot(target)
 			if err != nil {
 				log.Printf("capture-probe error %v", err)
 			} else {
-				log.Printf("capture-probe wrote %s", path)
+				log.Printf("capture-probe wrote %s (%d of %d surfaces drawn, skipped %v)",
+					note.Path, note.Drawn, note.Surfaces, note.Skipped)
 			}
 			app.Quit()
 		}()

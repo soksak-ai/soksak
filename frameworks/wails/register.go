@@ -20,6 +20,9 @@ type HostDeps struct {
 	Sessions terminalcmd.Sessions
 	// Composition is the applied native inventory the surface commands read.
 	Composition CompositionSource
+	// Surfaces is where a capture gets the pixels of content that draws outside this process.
+	// Absent, a capture is the window layer alone and a native pane comes back flat.
+	Surfaces SurfaceImages
 	// NativeParent reports whether the native container exists right now.
 	NativeParent func() bool
 	// Dispatch delivers one request to one window's page.
@@ -43,7 +46,7 @@ func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
 	renderer := RegisterRendererCommands(registry, deps.Dispatch)
 	terminalcmd.Register(registry, terminalcmd.Deps{Sessions: deps.Sessions})
 	Register(registry, Deps{Host: deps.Host, NewID: deps.NewID})
-	RegisterCapture(registry, deps.Host)
+	RegisterCapture(registry, deps.Host, deps.Surfaces)
 	// Each window has its own theme, so the colour goes to the window that
 	// requested it rather than to the one this host happened to capture.
 	RegisterBackground(registry, deps.Host)
