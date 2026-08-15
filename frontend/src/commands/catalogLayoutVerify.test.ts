@@ -126,7 +126,7 @@ beforeEach(() => {
 });
 
 describe("layout.verify", () => {
-  it("a screen that matches the arrangement reports a difference of 0", async () => {
+  it("a settled screen that matches the arrangement reports a difference of 0", async () => {
     plant([
       { id: "pan-aaaaaa", rect: laidOut(0, 50) },
       { id: "pan-bbbbbb", rect: laidOut(50, 50) },
@@ -136,12 +136,16 @@ describe("layout.verify", () => {
     const data = result.data as {
       worst: number;
       tolerance: number;
+      settled: boolean;
+      inFlight: string[];
       missing: string[];
       unexpected: string[];
       panes: Array<{ id: string; delta: Record<string, number> }>;
     };
     expect(data.worst).toBe(0);
     expect(data.worst).toBeLessThanOrEqual(data.tolerance);
+    expect(data.settled, "nothing is in flight, so the numbers describe the layout").toBe(true);
+    expect(data.inFlight).toEqual([]);
     expect(data.missing).toEqual([]);
     expect(data.unexpected).toEqual([]);
     expect(data.panes.map((p) => p.id)).toEqual(["pan-aaaaaa", "pan-bbbbbb"]);
@@ -191,6 +195,18 @@ describe("layout.verify", () => {
     const data = (await execute("layout.verify", {}, {})).data as { missing: string[]; unexpected: string[] };
     expect(data.missing).toEqual([]);
     expect(data.unexpected).toEqual(["pan-cccccc"]);
+  });
+
+  it("a DOM that does not hold the arrangement answers settled false", async () => {
+    // The numbers are still reported — they are what a reader needs to see the lag — but the answer
+    // states that they describe a DOM built from a different tree, so nobody reads them as a verdict.
+    plant([{ id: "pan-aaaaaa", rect: laidOut(0, 50) }]);
+    const data = (await execute("layout.verify", {}, {})).data as {
+      settled: boolean;
+      missing: string[];
+    };
+    expect(data.settled).toBe(false);
+    expect(data.missing).toEqual(["pan-bbbbbb"]);
   });
 
   it("no space element on screen is NOT_EXPOSED, not a difference of 0", async () => {

@@ -783,6 +783,7 @@ export const ko = {
   "msg.state.context.emptyPane": "빈 칸 {pane} 위치입니다 — 탭이 없습니다",
   "msg.layout.arrangement": "배치 해 — 레일 선 {n}",
   "msg.layout.verify": "레이아웃 대조 — 최대 차이 {n} px",
+  "msg.layout.verify.moving": "레이아웃 이동 중 — {n} px 차이는 레이아웃이 아니라 한 프레임의 값입니다",
   "msg.state.tree": "레이아웃에 워크스페이스 {n}개",
   "msg.status.query": "상태를 보고하는 탭 {n}개",
   "msg.system.hello": "협상 응답 — 프로토콜 {protocol}, 앱 {version}",

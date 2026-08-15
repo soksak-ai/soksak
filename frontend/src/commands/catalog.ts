@@ -658,30 +658,69 @@ export function registerCatalog(): void {
   // declared percentage and compares.
   register("layout.verify", {
     description:
-      "Compare the declared cell rect of every pane in the active space against its measured DOM rect. Declared rects are percentages of the space box; measured rects are viewport pixels. The answer carries both plus their difference in CSS pixels. Judgement: worst = 0 within one device pixel. Panes named by the arrangement but absent from the DOM come back in missing[], panes on screen that the arrangement does not name come back in unexpected[].",
+      "Compare the declared cell rect of every pane in the active space against its measured DOM rect. Declared rects are percentages of the space box; measured rects are viewport pixels. The answer carries both plus their difference in CSS pixels. Judgement: settled is true and worst = 0 within one device pixel. Panes named by the arrangement but absent from the DOM come back in missing[], panes on screen that the arrangement does not name come back in unexpected[]. While a layout transition is open, settled is false and every number describes a frame in motion rather than the layout — wait with layout.transaction.wait and ask again.",
     triggers: { ko: "레이아웃 검증 선언 실측 차이 대조 셀 rect 픽셀" },
     params: { workspace: P.workspace },
     returns:
-      "{ projectId, spaceId, host:{left,top,width,height}, devicePixelRatio, tolerance, worst, panes[].{id,declared:{left,top,width,height},expected:{left,top,width,height},measured:{left,top,width,height},delta:{left,top,width,height},worst}, missing[], unexpected[] }",
-    message: (d) => tmsg("msg.layout.verify", { n: Number(d.worst) }),
+      "{ projectId, spaceId, settled, inFlight[], host:{left,top,width,height}, devicePixelRatio, tolerance, worst, panes[].{id,declared:{left,top,width,height},expected:{left,top,width,height},measured:{left,top,width,height},delta:{left,top,width,height},worst}, missing[], unexpected[] }",
+    message: (d) =>
+      d.settled
+        ? tmsg("msg.layout.verify", { n: Number(d.worst) })
+        : tmsg("msg.layout.verify.moving", { n: Number(d.worst) }),
     errors: ["TARGET_NOT_FOUND", "NOT_EXPOSED"],
     examples: ["layout.verify"],
-    handler: (p, ctx) => {
-      const t = resolveWorkspace(p, ctx);
-      if (!t) return notFound(tmsg("msg.workspace.notFound"));
-      const solved = projectArrangement(t);
-      if (!solved) return notFound(tmsg("msg.space.notFound"));
-
-      const spaceId = t.activeSpaceId;
-      const host = document.querySelector<HTMLElement>(`[data-node="layout/space/${spaceId}"]`);
-      if (!host) return { ok: false, code: "NOT_EXPOSED", message: `layout/space/${spaceId}` };
-      const hostRect = host.getBoundingClientRect();
+    handler: async (p, ctx) => {
+      const t0 = resolveWorkspace(p, ctx);
+      if (!t0) return notFound(tmsg("msg.workspace.notFound"));
+      if (!projectArrangement(t0)) return notFound(tmsg("msg.space.notFound"));
 
       const read = (el: HTMLElement, name: string): number => {
         const raw = getComputedStyle(el).getPropertyValue(name).trim();
         const n = Number.parseFloat(raw);
         return Number.isFinite(n) ? n : 0;
       };
+      const cellIds = (w: Workspace): string =>
+        (projectArrangement(w)?.cells ?? []).map((c) => c.id).sort().join(" ");
+
+      // Measured after a paint, and only trusted when the arrangement did not move while it was being
+      // measured. React commits a split on a later frame than the store update, so a measurement taken
+      // between the two describes a DOM built from an older tree — measured 2026-08-16, verifying
+      // during a burst of splits gave 20.8px of difference and 28 panes counted as missing, all of
+      // which came to 0.013px and 0 once the frame landed. The open-transaction list alone does not
+      // catch that: the transaction closes before the frame is painted.
+      let attempt: {
+        solved: NonNullable<ReturnType<typeof projectArrangement>>;
+        workspace: Workspace;
+        host: HTMLElement;
+        stable: boolean;
+      } | null = null;
+      for (let round = 0; round < 4; round += 1) {
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
+        const before = resolveWorkspace(p, ctx);
+        if (!before) return notFound(tmsg("msg.workspace.notFound"));
+        const solved = projectArrangement(before);
+        if (!solved) return notFound(tmsg("msg.space.notFound"));
+        const host = document.querySelector<HTMLElement>(
+          `[data-node="layout/space/${before.activeSpaceId}"]`,
+        );
+        if (!host) return { ok: false, code: "NOT_EXPOSED", message: `layout/space/${before.activeSpaceId}` };
+        const drawn = [...document.querySelectorAll<HTMLElement>(`[data-node^="layout/pane/"]`)]
+          .filter((el) => host.contains(el) && el.dataset.pane)
+          .map((el) => el.dataset.pane as string)
+          .sort()
+          .join(" ");
+        const after = resolveWorkspace(p, ctx);
+        const stable = !!after && cellIds(before) === cellIds(after) && cellIds(before) === drawn;
+        attempt = { solved, workspace: before, host, stable };
+        if (stable) break;
+      }
+      if (!attempt) return notFound(tmsg("msg.workspace.notFound"));
+      const { solved, workspace: t, host, stable } = attempt;
+
+      const spaceId = t.activeSpaceId;
+      const hostRect = host.getBoundingClientRect();
       // The inset is declared once on the space container and every pane consumes it.
       const inset = read(host, "--pane-inset");
 
@@ -731,9 +770,16 @@ export function registerCatalog(): void {
       }
 
       const dpr = window.devicePixelRatio || 1;
+      // The open transactions are reported alongside, because an unstable answer during one has a
+      // different cause than an unstable answer with none open.
+      const inFlight = layoutTransitionJournal()
+        .filter((entry) => entry.phase === "preparing" || entry.phase === "prepared")
+        .map((entry) => entry.transactionId);
       return {
         projectId: t.id,
         spaceId,
+        settled: stable,
+        inFlight,
         host: { left: hostRect.left, top: hostRect.top, width: hostRect.width, height: hostRect.height },
         devicePixelRatio: dpr,
         // A layout is laid out in CSS pixels and painted on device pixels, so a difference smaller than
