@@ -22,6 +22,7 @@ import (
 	"github.com/soksak/soksak-core/core/process"
 	"github.com/soksak/soksak-core/core/store"
 	"github.com/soksak/soksak-core/frameworks/wails"
+	terminalplugin "github.com/soksak/soksak-plugin-terminal-xterm"
 )
 
 // The frontend build is embedded here because embed paths cannot climb out of
@@ -81,6 +82,14 @@ func main() {
 	// are handed this and Run fills it in.
 	bridge := &wails.Bridge{}
 
+	// The session owner is built here rather than by the host: a PTY needs no
+	// window, and a terminal that only a windowed process could have would put
+	// this group outside headless for no reason the code requires.
+	terminals := terminalplugin.NewService(
+		wails.NewTerminalSink(bridge, os.Getenv("SOKSAK_TERMINAL_INPUT_TRACE") == "1"),
+		terminalplugin.DefaultOptions(),
+	)
+
 	registry := control.NewRegistry()
 	boot.RegisterCore(registry, boot.Boot{
 		Identity:     resolved,
@@ -110,14 +119,15 @@ func main() {
 		// child's own authentication failure.
 		Secrets:     nil,
 		ProcessSink: processEventSink{bridge: bridge},
+		Sessions:    terminalSessions{service: terminals},
 	})
 
 	err = wails.Run(wails.Options{
-		Assets:             assets,
-		TraceTerminalInput: os.Getenv("SOKSAK_TERMINAL_INPUT_TRACE") == "1",
-		CaptureProbe:       os.Getenv("SOKSAK_CAPTURE_PROBE"),
-		Registry:           registry,
-		Bridge:             bridge,
+		Assets:       assets,
+		CaptureProbe: os.Getenv("SOKSAK_CAPTURE_PROBE"),
+		Registry:     registry,
+		Bridge:       bridge,
+		Terminal:     terminals,
 	})
 	if err != nil {
 		log.Fatal(err)

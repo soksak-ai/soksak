@@ -24,6 +24,7 @@ import (
 	"github.com/soksak/soksak-core/core/scan"
 	"github.com/soksak/soksak-core/core/service"
 	"github.com/soksak/soksak-core/core/store"
+	"github.com/soksak/soksak-core/core/terminal"
 )
 
 // Boot is the state a process holds rather than receives per call.
@@ -89,6 +90,11 @@ type Boot struct {
 	Secrets process.SecretSource
 	// ProcessSink is where a child's output and exit reach a consumer.
 	ProcessSink process.Sink
+	// Sessions owns the pseudo-terminals. The launcher builds it, because a
+	// pseudo-terminal needs no window and a terminal only a windowed process
+	// could have would leave this group outside headless for no reason the code
+	// requires.
+	Sessions terminal.Sessions
 }
 
 // Wired is state RegisterCore built that a host needs the same instance of.
@@ -298,6 +304,19 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 		Spawner:     boot.Spawner,
 		Secrets:     boot.Secrets,
 	})
+
+	if boot.Sessions != nil {
+		terminal.Register(registry, terminal.Deps{Sessions: boot.Sessions})
+	} else {
+		// A process given no session owner holds no pseudo-terminal. Saying so
+		// is the point: a caller that hears "unknown command" cannot tell that
+		// from a command this build forgot.
+		for _, name := range terminal.CommandNames() {
+			if err := registry.DeclareUnserved(name, "this process was given no session owner and holds no pseudo-terminal"); err != nil {
+				panic(err)
+			}
+		}
+	}
 
 	return Wired{Claims: claims, Processes: processes}
 }

@@ -14,22 +14,30 @@ func init() {
 	application.RegisterEvent[terminal.Output]("terminal:output")
 }
 
-type terminalEventSink struct {
-	app        *application.App
+// TerminalSink is the framework half of that contract. The launcher builds it,
+// because the session owner it feeds is the launcher's to construct: a PTY
+// needs no window, and a host that owned it would make terminals a thing only a
+// windowed process can have.
+type TerminalSink struct {
+	bridge     *Bridge
 	traceInput bool
 }
 
-func (sink *terminalEventSink) EmitTerminalOutput(output terminal.Output) {
-	if sink.app == nil {
-		return
-	}
-	sink.app.Event.Emit("terminal:output", output)
+// NewTerminalSink builds the sink over a bridge that Run has not filled yet.
+// Output produced before the application exists reaches nobody, which is the
+// truth rather than a dropped delivery: no window is open to show it.
+func NewTerminalSink(bridge *Bridge, traceInput bool) *TerminalSink {
+	return &TerminalSink{bridge: bridge, traceInput: traceInput}
+}
+
+func (sink *TerminalSink) EmitTerminalOutput(output terminal.Output) {
+	sink.bridge.Emit("terminal:output", output)
 }
 
 // EmitTerminalInputTrace logs one line per keystroke when tracing is on. It is a
 // diagnostic channel, not a delivery path, so a marshalling failure is dropped
 // rather than surfaced — the terminal itself is unaffected either way.
-func (sink *terminalEventSink) EmitTerminalInputTrace(handle terminal.Handle, event terminal.InputTrace) {
+func (sink *TerminalSink) EmitTerminalInputTrace(handle terminal.Handle, event terminal.InputTrace) {
 	if !sink.traceInput {
 		return
 	}

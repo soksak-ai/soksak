@@ -14,6 +14,7 @@ import (
 	"github.com/soksak/soksak-core/core/identity"
 	"github.com/soksak/soksak-core/core/process"
 	"github.com/soksak/soksak-core/core/store"
+	"github.com/soksak/soksak-core/core/terminal"
 )
 
 // invokeCall finds the backend commands the frontend calls by name.
@@ -36,12 +37,7 @@ var unserved = map[string]string{
 	// Files and watching.
 
 	// Terminal and PTY.
-	"spawn_terminal":         "terminal",
-	"write_terminal":         "terminal",
-	"resize_terminal":        "terminal",
-	"close_terminal":         "terminal",
 	"ack_terminal":           "terminal",
-	"pty_pane_alive":         "terminal",
 	"pty_read_sealed_screen": "terminal",
 	"pty_sidecar_request":    "terminal",
 	"pty_daemon_status":      "terminal",
@@ -223,6 +219,7 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		// consumer that reads and drops. It measures which commands register,
 		// never what they emit.
 		ProcessSink: discardProcessOutput{},
+		Sessions:    idleSessions{},
 	})
 	Register(registry, Deps{Host: startedHost(), NewID: counter("1")})
 
@@ -230,6 +227,11 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 	for _, command := range registry.Describe().Commands {
 		served[command.Name] = true
 	}
+	// What this cannot see: whether the launcher actually supplies each of those
+	// dependencies. It proves the groups register what they claim; main.go
+	// handing them a real store, spawner and session owner is a separate fact,
+	// and the only witness to it is starting the process.
+	//
 	// The residue: commands whose handlers close over the vendor's App and
 	// Window directly, so there is no seam to hand a stub. Every name here is a
 	// command this gate cannot prove — shrinking the list means giving those
@@ -320,3 +322,14 @@ func (discardProcessOutput) EmitProcessOutput(process.Output) process.Delivery {
 func (discardProcessOutput) EmitProcessExit(process.Exit) process.Delivery {
 	return process.Delivered
 }
+
+// idleSessions is an owner that exists and holds nothing. Which names register
+// depends on an owner being present, never on what it can do.
+type idleSessions struct{}
+
+func (idleSessions) Open(string, uint16, uint16) (terminal.Handle, error) {
+	return terminal.Handle{}, nil
+}
+func (idleSessions) Write(terminal.Handle, string) error          { return nil }
+func (idleSessions) Resize(terminal.Handle, uint16, uint16) error { return nil }
+func (idleSessions) Close(terminal.Handle) error                  { return nil }

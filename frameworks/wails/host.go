@@ -25,13 +25,14 @@ import (
 // directory that declares them; the frontend build lives above this package.
 type Options struct {
 	Assets embed.FS
-	// TraceTerminalInput mirrors raw terminal input to the log. The launcher
-	// reads the environment; this package never does.
-	TraceTerminalInput bool
 	// CaptureProbe, when set, captures the window to this path shortly after
 	// startup and exits. It is how the capture path is observed without a
 	// working frontend.
 	CaptureProbe string
+	// Terminal is the session owner the launcher built. It is registered as a
+	// framework service for its shutdown hook: the children have to be reaped
+	// when the application quits, and only the application knows when that is.
+	Terminal *terminal.Service
 	// Bridge is the launcher's late-bound half of the host: the core was handed
 	// its Emit and Live before this framework existed, and Run fills it in.
 	Bridge *Bridge
@@ -55,8 +56,6 @@ const (
 // Run builds the application, registers the plugin services, opens the first
 // window, and blocks until the application exits.
 func Run(options Options) error {
-	sink := &terminalEventSink{traceInput: options.TraceTerminalInput}
-
 	// The window is captured by reference: the compositor needs a native handle,
 	// and that handle does not exist until the window is created below.
 	var window application.Window
@@ -73,7 +72,7 @@ func Run(options Options) error {
 		Name:        appName,
 		Description: appDescription,
 		Services: []application.Service{
-			application.NewService(terminal.NewService(sink, terminal.DefaultOptions())),
+			application.NewService(options.Terminal),
 			application.NewService(compositor.NewService(nativeWindow, browserBackend)),
 			application.NewService(nativebrowser.NewService(browserBackend)),
 			application.NewService(NewCaptureService(nativeWindow)),
@@ -86,8 +85,6 @@ func Run(options Options) error {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
-	sink.app = app
-
 	// One window definition for the whole application. The control plane takes
 	// it under its reserved name; every workspace window is the same window
 	// under a generated one. Two definitions would let the second window differ
