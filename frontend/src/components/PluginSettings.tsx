@@ -21,6 +21,7 @@ function Control({
   value: SettingValue;
   onChange: (v: SettingValue) => void;
 }) {
+  const t = useT();
   if (setting.type === "boolean") {
     return (
       <button

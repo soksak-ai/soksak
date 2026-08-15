@@ -10,6 +10,7 @@
 // investigate it again, and so the user reads it as "a surface this framework does not have"
 // rather than "broken".
 
+import { tmsg } from "../i18n";
 import { unmetNeeds, type EngineProvision, type PluginManifest } from "./spec";
 
 /**

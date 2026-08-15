@@ -2192,7 +2192,6 @@ export function registerCatalog(): void {
 
   // ----- status (view report replies, R8) -----
   register("status.query", {
-    description:
     description: tmsg("cmd.status.query.desc"),
     triggers: { ko: "상태 조회 뷰 상태 status 조회 무엇이 도는지" },
     params: { tab: P.tab },

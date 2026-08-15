@@ -6,7 +6,6 @@ canonical: self
 
 # Message protocol
 
-Korean edition: [`MESSAGE-PROTOCOL_KO.md`](MESSAGE-PROTOCOL_KO.md). English is canonical.
 
 The shape of every command exchange, whichever transport carries it. The wire itself is
 CONTROL-PROTOCOL.md; this is what travels on it.

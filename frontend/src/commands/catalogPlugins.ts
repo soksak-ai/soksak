@@ -1210,14 +1210,10 @@ export function registerPluginCatalog(): void {
       // to (left rail = projection only). A resident surface is the right rail's job and is not an
       // open target until that renderer exists.
       if (placement === "rail") {
-        return invalid(
         return invalid(tmsg("msg.plugin.view.railNotOpenable", { key }));
-        );
       }
       if (placement === "rail-footer") {
-        return invalid(
         return invalid(tmsg("msg.plugin.view.railFooterNotOpenable", { key }));
-        );
       }
       // content: as a tab of the pane — drag, split, and close behave like any other tab.
       const r = s.openPluginView(

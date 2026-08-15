@@ -35,8 +35,8 @@ describe("iconRegistry", () => {
 
   it("a partial set is refused and names which glyph is missing", () => {
     const partial = { close: LUCIDE_ICONS.close };
-    // Matched on the glyph name the message carries, not on its wording: the
-    // sentence moves into the key table and the name does not.
+    // Matched on the glyph name in the message, not on its wording: the sentence
+    // moves into the key table and the name does not.
     expect(validateIconSetData(partial)).toContain("add");
     expect(validateIconSetData(null)).not.toBeNull();
     expect(

@@ -118,7 +118,7 @@ export function registerSecretsCatalog(): void {
     examples: ['secret.keys \'{"ns":"soksak-plugin-<id>"}\''],
     handler: async (p) => {
       if (typeof p.ns !== "string") {
-        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.data.nsRequired") };
+        return { ok: false as const, code: "INVALID_PARAMS" as const, message: tmsg("msg.secret.nsRequired") };
       }
       const keys = await invoke<string[]>("secret_keys", { ns: p.ns });
       return { keys };

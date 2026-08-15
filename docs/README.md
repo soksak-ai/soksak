@@ -6,7 +6,6 @@ canonical: self
 
 # Document manifest
 
-Korean edition: [`README_KO.md`](README_KO.md). English is canonical.
 
 ## Layout
 
@@ -33,8 +32,12 @@ the conclusion moves into the canonical document and the investigation flips to 
 
 ## Language
 
-English is canonical: `X.md`. Korean is supplementary: `X_KO.md`. Where they differ, English
-wins. Both change in the same commit.
+Every document here is English, and so is everything else in this repository: comments, commit
+messages, identifiers, logs, error codes, test names, API field names (AGENTS 6-1). The one
+exception is the `ko` values of the resource bundles.
+
+The rule used to be an English canon with a Korean edition beside it (`X_KO.md`). It contradicted
+6-1 and it is gone: a reader who opens this repository reads all of it in one language.
 
 ## What belongs here
 
@@ -58,6 +61,7 @@ the schema does not back.
 | [`tech/MESSAGE-PROTOCOL.md`](tech/MESSAGE-PROTOCOL.md) | Request and response shape, progress deltas, correlation by parent id |
 | [`tech/SIDECARS.md`](tech/SIDECARS.md) | A plugin in its own process: one envelope, lifetime, distribution, declaration |
 | [`tech/PLUGIN-CONTRACT.md`](tech/PLUGIN-CONTRACT.md) | What a plugin declares, who owns each definition, the generated contract.json, permissions, and contract ids |
+| [`tech/I18N.md`](tech/I18N.md) | Who reads a sentence decides where it lives, the key table and the Go mechanism, what a test may assert |
 | [`tech/UI-GEOMETRY.md`](tech/UI-GEOMETRY.md) | Bands, boxes, and which box draws which line — the alignment rules R1–R5, the border-ownership constitution B1–B8, and the layer principle |
 | [`manual/TESTING.md`](manual/TESTING.md) | What `task verify` runs, why gates only increase, red before green, where tests live |
 | [`manual/EVIDENCE.md`](manual/EVIDENCE.md) | A number decides a visual claim, captures take no focus, where evidence is kept, the frame clock |

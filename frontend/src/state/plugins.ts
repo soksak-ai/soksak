@@ -38,6 +38,7 @@ import {
   type DepNode,
 } from "../plugins/dependencyGraph";
 import { err, ok, useSessions, type CmdResult } from "./sessions";
+import { tmsg } from "../i18n";
 
 // Installed/dev runtime → dependency graph nodes (from manifest dependencies). Consumed by the resolver.
 function pluginDepNodes(plugins: Record<string, PluginRuntime>): DepNode[] {

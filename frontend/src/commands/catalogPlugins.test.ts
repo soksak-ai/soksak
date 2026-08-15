@@ -15,6 +15,7 @@ vi.mock("../framework", async (importOriginal) => ({
 }));
 
 import { registerPluginCatalog } from "./catalogPlugins";
+import { tmsg } from "../i18n";
 import { execute, getSpec } from "./registry";
 import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { useSessions, type Project, type Tab } from "../state/sessions";

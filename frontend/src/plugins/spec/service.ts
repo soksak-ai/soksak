@@ -2,6 +2,7 @@
 // (PS clauses). parseManifest (spec.ts) is the single judge of the manifest schema — this module is
 // the service axis of that judgement (declaration parsing, PS consistency rules). spec.ts
 // re-exports it.
+import { tmsg } from "../../i18n";
 import {
   SERVICE_CONTRACT_ID_RE,
   type ContractRequirement,
@@ -268,7 +269,7 @@ export function parseSchedules(raw: unknown, errors: string[]): ContributedSched
   raw.forEach((item, i) => {
     const label = `contributes.schedules[${i}]`;
     if (!isRecord(item)) {
-      errors.push(`${label}: not an object`);
+      errors.push(tmsg("plugin.manifest.schedule.shape", { label }));
       return;
     }
     checkKnownKeys(
@@ -396,9 +397,7 @@ export function validateServiceRules(
     }
     const jsBound = m.commands.filter((c) => c.bind !== "service");
     if (jsBound.length > 0) {
-      errors.push(
       errors.push(tmsg("plugin.manifest.entryNull.jsCommands", { n: jsBound.length }));
-      );
     }
     for (const [key, count] of Object.entries(m.codeBoundCounts)) {
       if (count > 0) {

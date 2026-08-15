@@ -3,7 +3,6 @@
 The development discipline for this project. Read it before reading, writing or changing code,
 and before every commit, merge and release.
 
-Korean edition: [`AGENTS_KO.md`](AGENTS_KO.md). English is canonical; both change in one commit.
 
 ## 1. Project variables
 
@@ -318,6 +317,15 @@ watches · learns · decides · reflects
 
 The lists are examples. Personification or poetry is forbidden whether or not it is listed. The
 test: does this sentence state a fact, or set a mood?
+
+Three words this list used to hold are domain terms here and are not banned: **회수** is the
+reclaim of a run generation or a backup working file, **투영** is the projection of a bound view
+into the rail, and **낸다** is what a command does with its answer. Measured 2026-08-15: banning
+them flagged 22 lines across the contract documents and 9 resource bundle values, every one of
+them stating a fact. A word that names a thing this product has is not rhetoric.
+
+Where Korean is left, the register still holds: the bundle values are the only Korean this
+repository keeps (6-1), and a `ko` value sets a mood as easily as a comment did.
 
 ### 6-4. Corrected examples
 

@@ -6,7 +6,6 @@ canonical: self
 
 # Naming
 
-Korean edition: [`NAMING_KO.md`](NAMING_KO.md). English is canonical.
 
 Every rule here has a gate. The gate is named with the rule.
 

@@ -6,7 +6,6 @@ canonical: self
 
 # Agent control
 
-Korean edition: [`AGENT-CONTROL_KO.md`](AGENT-CONTROL_KO.md). English is canonical.
 
 How an agent drives this application, and which surface answers what.
 

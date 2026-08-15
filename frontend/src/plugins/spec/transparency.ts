@@ -25,7 +25,7 @@ export type StaticTransparencyRule =
 
 export interface TransparencyViolation {
   rule: StaticTransparencyRule;
-  detail: string; // Statement of the violation (what, and how many) — placed into the warning or refusal message as is
+  detail: string; // statement of the violation (what, and how many) — used verbatim in the warning or refusal message
 }
 
 // Static rule enforcement table — loader, gates and CLI use this one table. All three rules are

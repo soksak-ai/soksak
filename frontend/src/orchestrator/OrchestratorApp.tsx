@@ -445,7 +445,7 @@ export function OrchestratorApp() {
     if (!out.ok && (out.code === "BUSY" || out.code === "INVALID_PARAMS")) {
       setResult(`${out.code}: ${out.message}`);
     }
-  }, [cmd]);
+  }, [cmd, t]);
 
   return (
     <div className="orch-root" data-node="orch">

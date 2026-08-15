@@ -6,7 +6,6 @@ canonical: self
 
 # Native layer
 
-Korean edition: [`NATIVE-LAYER_KO.md`](NATIVE-LAYER_KO.md). English is canonical.
 
 Rules for the code that touches the platform directly, and for the boundary that
 keeps the rest of the application away from it.

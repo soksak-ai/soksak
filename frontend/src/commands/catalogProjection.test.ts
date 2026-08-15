@@ -12,6 +12,7 @@ vi.mock("../framework", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../framework")>()), invoke: vi.fn(async () => undefined) }));
 
 import { registerProjectionCatalog } from "./catalogProjection";
+import { tmsg } from "../i18n";
 import { execute, getSpec } from "./registry";
 import { useProjection } from "../state/projection";
 import { useSessions, type Project, type Tab } from "../state/sessions";

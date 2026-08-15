@@ -6,7 +6,6 @@ canonical: self
 
 # Identity
 
-Korean edition: [`IDENTITY_KO.md`](IDENTITY_KO.md). English is canonical.
 
 Which installation a process belongs to, and everything that follows from it.
 

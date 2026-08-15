@@ -8,6 +8,7 @@ import {
   type ConsentRecord,
   type PluginRuntime,
 } from "./plugins";
+import { tmsg } from "../i18n";
 import type { PluginManifest } from "../plugins/spec";
 
 function rt(

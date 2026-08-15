@@ -6,7 +6,6 @@ canonical: self
 
 # Evidence
 
-Korean edition: [`EVIDENCE_KO.md`](EVIDENCE_KO.md). English is canonical.
 
 How a visual claim is settled.
 

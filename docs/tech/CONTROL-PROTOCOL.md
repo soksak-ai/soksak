@@ -6,7 +6,6 @@ canonical: self
 
 # Control protocol
 
-Korean edition: [`CONTROL-PROTOCOL_KO.md`](CONTROL-PROTOCOL_KO.md). English is canonical.
 
 How something outside the application reaches it. `cmd/sok` is one such client; nothing about the
 protocol is specific to it.

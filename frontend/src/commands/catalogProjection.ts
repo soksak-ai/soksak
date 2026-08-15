@@ -86,10 +86,7 @@ export function registerProjectionCatalog(): void {
       // The left rail is projection-only for the bound feature (2026-07-22 decision) — there is no user pin axis.
       // Resident (plugin-owned) surfaces remain the right rail's share only.
       if (side === "left") {
-        return err(
-          "INVALID_PARAMS",
         return err("INVALID_PARAMS", tmsg("msg.ui.projection.pin.leftProjectionOnly"));
-        );
       }
       // [temporary] No right pin stack renderer yet — rejected to prevent absorbing a pin with no render (view loss).
       // Removal condition: open this the moment the unit that renders the pins.right stack in PluginSidebar merges.

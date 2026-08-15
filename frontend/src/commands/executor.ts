@@ -5,6 +5,7 @@ import { invoke as frameworkInvoke } from "../framework";
 import { moduleState } from "../lib/moduleState";
 import { invoke } from "../framework";
 import { currentWindowLabel } from "../lib/webviewLabels";
+import { tmsg } from "../i18n";
 import { listenThisWindow } from "../lib/windowEvents";
 import { useSettings } from "../state/settings";
 import { registerCatalog } from "./catalog";

@@ -6,6 +6,7 @@
 
 // Single truth for contract id grammar = spec package contracts.ts (the same regex the schema gate reads).
 // Single truth for the C2 static judgment = spec package transparency.ts (the same functions the gate and the validate CLI read).
+import { tmsg } from "../i18n";
 import {
   C2_STATIC_ENFORCEMENT,
   parseContractProviderRef,

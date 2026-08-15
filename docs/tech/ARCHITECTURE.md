@@ -6,7 +6,6 @@ canonical: self
 
 # Architecture
 
-Korean edition: [`ARCHITECTURE_KO.md`](ARCHITECTURE_KO.md). English is canonical.
 
 The core renders no concrete content. Terminals, browsers, and sidebar bodies
 arrive as plugins, and the core owns the frame, the registries, and the surfaces

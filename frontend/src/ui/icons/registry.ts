@@ -6,6 +6,7 @@ import { moduleState } from "../../lib/moduleState";
 import { create } from "zustand";
 import { ICON_NAMES, type IconGlyph, type IconName, type IconSetData } from "./types";
 import { LUCIDE_ICONS } from "./sets/lucide";
+import { tmsg } from "../../i18n";
 
 export const BUILTIN_ICON_SET = "lucide";
 

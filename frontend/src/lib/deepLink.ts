@@ -6,6 +6,7 @@
 
 import { execute, type CommandContext, type CommandOutcome } from "../commands/registry";
 import { invoke } from "../framework";
+import { tmsg } from "../i18n";
 
 export interface DeepLink {
   command: string;

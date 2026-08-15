@@ -6,7 +6,6 @@ canonical: self
 
 # Sidecars
 
-Korean edition: [`SIDECARS_KO.md`](SIDECARS_KO.md). English is canonical.
 
 A sidecar is a plugin that runs in its own process. This document is the contract; this round
 builds no sidecar.

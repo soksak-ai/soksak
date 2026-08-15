@@ -6,7 +6,6 @@ canonical: self
 
 # Repository layout
 
-Korean edition: [`REPO-LAYOUT_KO.md`](REPO-LAYOUT_KO.md). English is canonical.
 
 A folder name declares who owns what is inside it.
 
@@ -68,5 +67,5 @@ root.
 `docs/tech/` holds contracts. `docs/manual/` holds procedures. `docs/investigations/<topic>/` holds
 hypotheses, and its conclusion moves into a contract when it settles.
 
-Each has an English canonical `X.md` and a Korean `X_KO.md`, changed in the same commit.
+Every one of them is English. Korean lives only in the `ko` values of the resource bundles (AGENTS 6-1).
 `docs/README.md` is the register, and a document that is not in it does not exist.

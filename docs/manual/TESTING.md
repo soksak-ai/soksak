@@ -6,7 +6,6 @@ canonical: self
 
 # Testing
 
-Korean edition: [`TESTING_KO.md`](TESTING_KO.md). English is canonical.
 
 What has to pass, and what a test is for here.
 

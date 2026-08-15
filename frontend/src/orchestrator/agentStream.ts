@@ -3,6 +3,8 @@
 // Shape source: claude CLI --output-format stream-json --include-partial-messages --verbose
 // (verified precedent: the old vtuber claudeCli.ts — same session_id capture, content_block_delta and result contract).
 
+import { tmsg } from "../i18n";
+
 export type AgentEvent =
   // Session identifier (material for --resume continuity). Can arrive repeatedly across lines — the consumer keeps the latest.
   | { kind: "session"; sessionId: string }

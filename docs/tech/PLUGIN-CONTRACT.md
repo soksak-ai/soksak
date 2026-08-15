@@ -6,7 +6,6 @@ canonical: self
 
 # Plugin contract
 
-Korean edition: [`PLUGIN-CONTRACT_KO.md`](PLUGIN-CONTRACT_KO.md). English is canonical.
 
 What a plugin declares, who owns each definition, and which gate checks it.
 

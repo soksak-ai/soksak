@@ -11,6 +11,7 @@
 
 import { dataChangeHealth } from "../state/dataChangeHealth";
 import { activityHealth } from "../state/activityHealth";
+import { tmsg } from "../i18n";
 import { moduleState } from "../lib/moduleState";
 import type { CommandTrace } from "./registry";
 

@@ -684,7 +684,9 @@ describe("parseManifest — exposed DOM nodes(contributes.nodes)", () => {
     const errs = errorsOf(
       base({ contributes: { nodes: [{ id: "submit", description: "Submit" }] } }),
     );
-    expect(errs.some((e) => e.includes('contributes.nodes: "ui"'))).toBe(true);
+    // The field path and the permission name are what a translation keeps; the
+    // order of the words between them is not.
+    expect(errs.some((e) => e.startsWith("contributes.nodes:") && e.includes('"ui"'))).toBe(true);
   });
   it("accepts and parses with the ui permission", () => {
     const { manifest, validation } = parseManifest(

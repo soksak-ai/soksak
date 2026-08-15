@@ -5,15 +5,17 @@
 import { memo, useEffect } from "react";
 import { useNotify, type NotifyBanner } from "../state/notify";
 import { resolveDeepLink } from "../lib/deepLink";
+import { useT } from "../i18n";
 
 const AUTO_DISMISS_MS = 6000;
 
 function BannerCard({ b }: { b: NotifyBanner }) {
   const dismiss = useNotify((s) => s.dismiss);
+  const t = useT();
 
   useEffect(() => {
-    const t = setTimeout(() => dismiss(b.id), AUTO_DISMISS_MS);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => dismiss(b.id), AUTO_DISMISS_MS);
+    return () => clearTimeout(timer);
   }, [b.id, dismiss]);
 
   const go = (deepLink?: string) => {

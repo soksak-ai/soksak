@@ -8,6 +8,7 @@
 //
 // How to read while stopped: ui.snapshot.dom measures every exposed node at that one moment.
 import { useEffect, useState } from "react";
+import { useT } from "../i18n";
 import {
   motionDebugState,
   onMotionDebugChange,
@@ -25,6 +26,7 @@ const SPEEDS: { label: string; scale: number }[] = [
 ];
 
 export function MotionDebug({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const [state, setState] = useState(motionDebugState);
   useEffect(() => onMotionDebugChange(() => setState(motionDebugState())), []);
   useEffect(() => {

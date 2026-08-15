@@ -20,7 +20,6 @@ export function registerRemoteConfirmDevCatalog(): void {
   if (!import.meta.env.DEV) return;
 
   register("dev.remoteConfirmMock", {
-    description:
     description: tmsg("cmd.dev.remoteConfirmMock.desc"),
     triggers: { ko: "원격 confirm mock 데스크톱 confirm 테스트 모달" },
     params: {

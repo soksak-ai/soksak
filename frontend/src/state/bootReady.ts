@@ -1,3 +1,4 @@
+import { tmsg } from "../i18n";
 import { useBootPhase } from "./bootPhase";
 
 /** Bounded barrier that waits for the boot phase ready event without polling. */

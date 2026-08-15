@@ -26,11 +26,7 @@ export function publishActivity(
       // Only a stamp means it landed — a resolved call alone does not prove a ledger record.
       const seq = stampOf(reply);
       if (seq === null) {
-        notePublish(
-          false,
-          Date.now(),
         notePublish(false, Date.now(), tmsg("msg.health.activity.noStamp"));
-        );
         return;
       }
       notePublish(true, Date.now(), undefined, seq, ledgerOf(reply));

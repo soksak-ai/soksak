@@ -6,7 +6,6 @@ canonical: self
 
 # Development
 
-Korean edition: [`DEVELOPMENT_KO.md`](DEVELOPMENT_KO.md). English is canonical.
 
 How work proceeds here. The contracts are in `docs/tech`; this is the procedure around them.
 
