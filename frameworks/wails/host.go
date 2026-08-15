@@ -104,7 +104,7 @@ func Run(options Options) error {
 			// The capture finishes its image with content that draws outside this process. Without
 			// it a browser pane is a flat rectangle in every screenshot while the page behind it
 			// is loading correctly.
-			application.NewService(NewCaptureService(nativeWindow).WithSurfaces(surfaceImages)),
+			application.NewService(NewCaptureService(nativeWindow).withSurfaces(surfaceImages)),
 			application.NewService(NewControlService(options.Registry)),
 		},
 		Assets: application.AssetOptions{

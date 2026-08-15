@@ -36,11 +36,14 @@ func NewCaptureService(window func() unsafe.Pointer) *CaptureService {
 	return &CaptureService{window: window, size: contentSize}
 }
 
-// WithSurfaces names where the capture gets content that draws outside this process.
+// withSurfaces names where the capture gets content that draws outside this process.
 //
 // Separate from the constructor because the compositor is built after the capture service in the
 // host, and because a build with no native surfaces should not have to pass a nil.
-func (service *CaptureService) WithSurfaces(surfaces SurfaceImages) *CaptureService {
+//
+// Unexported: this is composition, not a method a page calls. Exported, the generator would bind
+// it and the page could hand the capture a different source of pixels.
+func (service *CaptureService) withSurfaces(surfaces SurfaceImages) *CaptureService {
 	service.surfaces = surfaces
 	return service
 }
