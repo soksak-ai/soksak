@@ -280,12 +280,12 @@ export function SettingsModal({
             </select>
           </div>
           <div className="drow">
-            <span className="drow-label">{t("settings.projectTabPos")}</span>
+            <span className="drow-label">{t("settings.workspaceTabPos")}</span>
             <select
               className="dctl"
-              value={s.projectTabPosition}
+              value={s.workspaceTabPosition}
               onChange={(e) =>
-                s.setProjectTabPosition(e.target.value as TabPosition)
+                s.setWorkspaceTabPosition(e.target.value as TabPosition)
               }
             >
               <option value="top">{t("position.top")}</option>

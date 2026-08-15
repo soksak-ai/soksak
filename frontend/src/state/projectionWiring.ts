@@ -7,7 +7,7 @@
 //   - startProjectionTracking: session subscription -> focusHistory record/cleanup + projection.changed emit.
 
 import { leavesOf } from "./splitTree";
-import { useSessions, type Project } from "./sessions";
+import { useSessions, type Workspace } from "./sessions";
 import {
   resolveProjection,
   useProjection,
@@ -23,14 +23,14 @@ import { useContractSelection } from "./contractSelection";
 import { emitPluginEvent } from "../plugins/hooks";
 
 // Tail of the active chain (active content view) -> declaration summary. Plugin view = sidebar of the
-// registered decl, file view = sidebar of the responsible fileViewer (§3.1). No view = null (empty project).
+// registered decl, file view = sidebar of the responsible fileViewer (§3.1). No view = null (empty workspace).
 function boundViewInContent(
-  project: Project,
+  workspace: Workspace,
   contentId: string,
   viewId?: string,
 ): BoundView | null {
   const content =
-    project.spaces.find((c) => c.id === contentId) ?? null;
+    workspace.spaces.find((c) => c.id === contentId) ?? null;
   if (!content) return null;
   const groups = leavesOf(content.layout);
   const activeGroup =
@@ -62,11 +62,11 @@ function boundViewInContent(
   };
 }
 
-export function boundViewOf(project: Project): BoundView | null {
+export function boundViewOf(workspace: Workspace): BoundView | null {
   const content =
-    project.spaces.find((c) => c.id === project.activeSpaceId) ??
-    project.spaces[0];
-  return content ? boundViewInContent(project, content.id) : null;
+    workspace.spaces.find((c) => c.id === workspace.activeSpaceId) ??
+    workspace.spaces[0];
+  return content ? boundViewInContent(workspace, content.id) : null;
 }
 
 export function realProjectionDeps(): ProjectionDeps {
@@ -83,12 +83,12 @@ export function realProjectionDeps(): ProjectionDeps {
   };
 }
 
-// Current projection of a project — derived at read time. Missing project = null.
+// Current projection of a workspace — derived at read time. Missing workspace = null.
 export function projectionFor(projectId: string): Projection | null {
-  const tab = useSessions.getState().projects.find((t) => t.id === projectId);
+  const tab = useSessions.getState().workspaces.find((t) => t.id === projectId);
   if (!tab) return null;
   const pins =
-    useProjection.getState().byProject[projectId]?.pins ?? { left: [], right: [] };
+    useProjection.getState().byWorkspace[projectId]?.pins ?? { left: [], right: [] };
   const content =
     tab.spaces.find((c) => c.id === tab.activeSpaceId) ?? tab.spaces[0];
   const lockedId = content?.railBindingTabId;
@@ -99,17 +99,17 @@ export function projectionFor(projectId: string): Projection | null {
 }
 
 // Session subscription — binding observation (R1: includes tab switches inside a group) + history
-// cleanup + project reclaim + events. Once per window (main boot). Returns the unsubscribe function.
+// cleanup + workspace reclaim + events. Once per window (main boot). Returns the unsubscribe function.
 export function startProjectionTracking(): () => void {
-  // Per-project fingerprint — binding, slot resolution, pins. Emit only when the fingerprint changes
+  // Per-workspace fingerprint — binding, slot resolution, pins. Emit only when the fingerprint changes
   // (§4.3: binding/slot/pin change — tab switch inside a group, demote<->promote, pin add/remove).
   const last = new Map<string, string>();
 
-  const sync = (tabs: Project[], opts?: { silent?: boolean }) => {
+  const sync = (tabs: Workspace[], opts?: { silent?: boolean }) => {
     const proj = useProjection.getState();
     const alive = new Set(tabs.map((t) => t.id));
-    for (const pid of Object.keys(proj.byProject)) {
-      if (!alive.has(pid)) proj.dropProject(pid);
+    for (const pid of Object.keys(proj.byWorkspace)) {
+      if (!alive.has(pid)) proj.dropWorkspace(pid);
     }
     for (const pid of [...last.keys()]) {
       if (!alive.has(pid)) last.delete(pid);
@@ -143,7 +143,7 @@ export function startProjectionTracking(): () => void {
         changed.push({ projectId: t.id, viewId: vid });
       }
       // Drop dead views from the succession material (R6).
-      const entry = useProjection.getState().byProject[t.id];
+      const entry = useProjection.getState().byWorkspace[t.id];
       if (entry && entry.focusHistory.length > 0) {
         const ids = new Set<string>();
         for (const c of t.spaces) {
@@ -162,17 +162,17 @@ export function startProjectionTracking(): () => void {
   };
 
   // Boot observation only seeds the fingerprint and emits nothing — restore must not replay as events (R9).
-  sync(useSessions.getState().projects, { silent: true });
-  const offSessions = useSessions.subscribe((s) => sync(s.projects));
+  sync(useSessions.getState().workspaces, { silent: true });
+  const offSessions = useSessions.subscribe((s) => sync(s.workspaces));
   // Registry and contract-selection changes also affect slot resolution (demote<->promote, implementer swap) — same sweep.
   const offRegistry = useViewRegistry.subscribe(() =>
-    sync(useSessions.getState().projects),
+    sync(useSessions.getState().workspaces),
   );
   const offSelection = useContractSelection.subscribe(() =>
-    sync(useSessions.getState().projects),
+    sync(useSessions.getState().workspaces),
   );
   const offProjection = useProjection.subscribe(() =>
-    sync(useSessions.getState().projects),
+    sync(useSessions.getState().workspaces),
   );
   return () => {
     offSessions();

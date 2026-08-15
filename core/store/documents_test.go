@@ -302,10 +302,10 @@ func TestCountAgreesWithTheListItCounts(t *testing.T) {
 // a real scope rather than a wildcard.
 func TestScopeNarrowsOnlyWhenGiven(t *testing.T) {
 	kv := open(t)
-	if _, err := kv.Put("mailbox", "messages", "project-a", "x1", document(t, `{"n":1}`), 10); err != nil {
+	if _, err := kv.Put("mailbox", "messages", "workspace-a", "x1", document(t, `{"n":1}`), 10); err != nil {
 		t.Fatalf("putting: %v", err)
 	}
-	if _, found, _ := kv.GetDocument("mailbox", "messages", "x1", stringPointer("project-b")); found {
+	if _, found, _ := kv.GetDocument("mailbox", "messages", "x1", stringPointer("workspace-b")); found {
 		t.Error("a record answered under another scope")
 	}
 	if _, found, _ := kv.GetDocument("mailbox", "messages", "x1", nil); !found {

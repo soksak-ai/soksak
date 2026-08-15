@@ -8,7 +8,7 @@
 /** What this function counts — it does not restate the snapshot shape (present means counted).
  *
  *  A loose upper bound: writing the real type here would make it a second declaration of the snapshot shape. */
-export type WindowSnapshotLike = { projects?: readonly unknown[] } | null;
+export type WindowSnapshotLike = { workspaces?: readonly unknown[] } | null;
 type SnapshotLike = WindowSnapshotLike;
 
 /** Tab count in the layout tree — reads the **stored shape** (`{t:"l",v:{views}}` / `{t:"s",children}`).
@@ -25,15 +25,15 @@ function tabsIn(node: unknown): number {
 }
 
 /** Size that snapshot holds — a human sees what is coming in before restoring. */
-export function snapshotSize(s: SnapshotLike): { projects: number; spaces: number; tabs: number } {
+export function snapshotSize(s: SnapshotLike): { workspaces: number; spaces: number; tabs: number } {
   // In the stored shape a space is `contents` (not the runtime `spaces`).
-  const projects = (s?.projects ?? []) as readonly { contents?: readonly { layout?: unknown }[] }[];
+  const workspaces = (s?.workspaces ?? []) as readonly { contents?: readonly { layout?: unknown }[] }[];
   let spaces = 0;
   let tabs = 0;
-  for (const p of projects) {
+  for (const p of workspaces) {
     const list = p.contents ?? [];
     spaces += list.length;
     for (const sp of list) tabs += tabsIn(sp.layout);
   }
-  return { projects: projects.length, spaces, tabs };
+  return { workspaces: workspaces.length, spaces, tabs };
 }

@@ -139,10 +139,10 @@ export interface RailCssTransition {
 }
 
 /**
- * Projects both geometries of a FLOW transition under one contract. The source station applies to
+ * Workspaces both geometries of a FLOW transition under one contract. The source station applies to
  * the source rect only, the target station to the target rect only. When the panel arrangement and
  * the rail line change together in the same render, mixing values from different moments makes a
- * source line that was valid cross the target panel, so the caller cannot assemble the two project
+ * source line that was valid cross the target panel, so the caller cannot assemble the two workspace
  * calls separately.
  */
 export function projectRailCssTransition(
@@ -178,7 +178,7 @@ export function projectRailCssSpan(
 
 /** Pixel-based reference mapping (for tests and UI drag math). top/height stay the vertical logical values. */
 /**
- * Projects a cell's percentages into host pixels.
+ * Workspaces a cell's percentages into host pixels.
  *
  * **The host provides the reference width.** The pane area is the host minus the rail only —
  * because the rail is placed *inside* the host. What is placed outside the host (a push sidebar)

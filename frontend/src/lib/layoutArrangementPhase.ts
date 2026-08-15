@@ -19,7 +19,7 @@ const state = moduleState("lib/layoutArrangementPhase#state", () => ({
   facts: new Map<string, LayoutArrangementPhaseFact>(),
 }));
 
-/** Current fact the ProjectPlane phase publishes to the observation surface. One latest entry per owner. */
+/** Current fact the WorkspacePlane phase publishes to the observation surface. One latest entry per owner. */
 export function publishLayoutArrangementPhase(fact: LayoutArrangementPhaseFact): void {
   state.facts.set(fact.ownerKey, structuredClone(fact));
 }

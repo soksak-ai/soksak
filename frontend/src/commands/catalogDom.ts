@@ -216,8 +216,8 @@ function multiDomTraceNow(session: MultiDomTraceSession): number {
 
 function multiDomChromeSnapshot(session: MultiDomTraceSession): MultiDomTraceChrome {
   const anchor = session.targets[0]?.el ?? null;
-  const project = anchor?.closest<HTMLElement>("[data-project-plane]") ?? null;
-  // The trace inventory is ordered rail → pane → slot. The rail is a project-plane sibling
+  const workspace = anchor?.closest<HTMLElement>("[data-workspace-plane]") ?? null;
+  // The trace inventory is ordered rail → pane → slot. The rail is a workspace-plane sibling
   // of the space, so the first address cannot own the space lookup. Resolve it from the exact
   // target set instead; this remains producer-owned and does not query an unrelated active space.
   const space = session.targets
@@ -251,7 +251,7 @@ function multiDomChromeSnapshot(session: MultiDomTraceSession): MultiDomTraceChr
     : [];
   const rail = rails.length === 1 ? rails[0] : null;
   return {
-    projectId: project?.dataset.projectPlane ?? null,
+    projectId: workspace?.dataset.workspacePlane ?? null,
     spaceNode: space?.dataset.node ?? null,
     traveling: space?.dataset.traveling === "true",
     rail: {
@@ -680,16 +680,16 @@ export function collectExposed(): ScannedNode[] {
   }
   // Host chrome — [data-node] outside a view container.
   //
-  // Every project plane is mounted (an inactive one only has its DOM visibility turned off). So a chrome
-  // node inside a plane exists once per project, and without the project axis rail/left resolves to two
-  // (measured). The canonical address includes the project, and only the active plane also gets the
+  // Every workspace plane is mounted (an inactive one only has its DOM visibility turned off). So a chrome
+  // node inside a plane exists once per workspace, and without the workspace axis rail/left resolves to two
+  // (measured). The canonical address includes the workspace, and only the active plane also gets the
   // short alias (the grammar's "omitted = active").
   for (const el of document.querySelectorAll<HTMLElement>("[data-node]")) {
     if (el.closest(VIEW_CONTAINER)) continue; // view-container nodes are collected above
     const nodePath = el.dataset.node ?? "";
     if (!nodePath) continue;
-    const plane = el.closest<HTMLElement>("[data-project-plane]");
-    const proj = plane?.dataset.projectPlane;
+    const plane = el.closest<HTMLElement>("[data-workspace-plane]");
+    const proj = plane?.dataset.workspacePlane;
     if (!proj) {
       out.push({ address: `${win}chrome/${nodePath}`, nodePath, el });
       continue;
@@ -698,7 +698,7 @@ export function collectExposed(): ScannedNode[] {
       address: `${win}proj/${proj}/chrome/${nodePath}`,
       nodePath,
       el,
-      ...(plane?.dataset.projectActive === "1"
+      ...(plane?.dataset.workspaceActive === "1"
         ? { alias: `${win}chrome/${nodePath}` }
         : {}),
     });
@@ -1263,7 +1263,7 @@ export function registerDomCatalog(): void {
 
 /** Reports whether this node is a projection of a node in another realm.
  *
- * A view whose content is a native child webview projects that content's nodes
+ * A view whose content is a native child webview workspaces that content's nodes
  * into the host document: a transparent `<div>` of the same size at the same
  * position, carrying the values in its dataset. Observation works on it —
  * ui.tree finds the node and ui.measure returns its values.

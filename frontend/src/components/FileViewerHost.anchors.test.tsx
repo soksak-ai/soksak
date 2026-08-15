@@ -45,7 +45,7 @@ afterEach(() => {
 describe("FileViewerHost address anchors", () => {
   it("the container exposes an address anchor that includes the tab axis", () => {
     const host = mount(
-      <FileViewerHost path="/x/a.md" projectId="pjt-aaaaaa" root="/x" viewId="tab-cccccc" />,
+      <FileViewerHost path="/x/a.md" projectId="wsp-aaaaaa" root="/x" viewId="tab-cccccc" />,
     );
     const el = host.querySelector(".tab-viewer");
     expect(el?.getAttribute("data-view-addr")).toMatch(/\/tab\/tab-cccccc$/);
@@ -53,10 +53,10 @@ describe("FileViewerHost address anchors", () => {
 
   it("two file views have different baseAddresses — the condition for nodes not leaking into the chrome", () => {
     const a = mount(
-      <FileViewerHost path="/x/a.md" projectId="pjt-aaaaaa" root="/x" viewId="tab-aaaaaa" />,
+      <FileViewerHost path="/x/a.md" projectId="wsp-aaaaaa" root="/x" viewId="tab-aaaaaa" />,
     );
     const b = mount(
-      <FileViewerHost path="/x/b.md" projectId="pjt-aaaaaa" root="/x" viewId="tab-bbbbbb" />,
+      <FileViewerHost path="/x/b.md" projectId="wsp-aaaaaa" root="/x" viewId="tab-bbbbbb" />,
     );
     const addrA = a.querySelector(".tab-viewer")?.getAttribute("data-view-addr");
     const addrB = b.querySelector(".tab-viewer")?.getAttribute("data-view-addr");

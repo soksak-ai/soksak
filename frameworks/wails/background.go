@@ -14,7 +14,7 @@ import (
 // window captured at registration, so a workspace window's theme repainted the
 // orchestrator and left its own panes the framework's default. Measured
 // 2026-08-15 — one dark theme selected, a dark orchestrator, and white panes in
-// the project window.
+// the workspace window.
 func RegisterBackground(registry *control.Registry, host WindowHost) {
 	if host == nil {
 		panic("wails: the background command needs a WindowHost")

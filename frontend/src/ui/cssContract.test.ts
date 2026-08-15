@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { RAIL_TRAVEL_MS } from "../lib/railMotion";
 import {
   focusVeilStackingViolations,
-  projectRailStackingViolations,
+  workspaceRailStackingViolations,
 } from "./focusVeilStacking";
 
 const css = readFileSync(join(process.cwd(), "src", "App.css"), "utf8");
@@ -29,16 +29,16 @@ function rules(): Array<{ selector: string; decls: string }> {
   return out;
 }
 
-// Tab-like box classes (band sibling box contract). The \w- boundary excludes .project-tabs/.project-tab-dot.
-const BAND_ITEM = /\.(tab|tab-add|space-tab-add|project-tab-add|space-tab|project-tab)(?![\w-])/;
+// Tab-like box classes (band sibling box contract). The \w- boundary excludes .workspace-tabs/.workspace-tab-dot.
+const BAND_ITEM = /\.(tab|tab-add|space-tab-add|workspace-tab-add|space-tab|workspace-tab)(?![\w-])/;
 
 // Outside the contract: vertical rail (square chips) and vertical list mode — not horizontal bands.
-const EXEMPT = /\.project-rail|\.space-tabs\.vertical/;
+const EXEMPT = /\.workspace-rail|\.space-tabs\.vertical/;
 
 // Chrome row band (tab/header strip on the horizontal line under the title bar). Only theme standard
 // variables own the height (--chrome-row-h=tab row, --header-h=title bar/view tab row). No hardcoded
-// px. \.project-tabs does not match .space-tabs/.tabs.
-const CHROME_ROW = /\.(ft-header|plugin-side-head|sidebar-left-tabs|space-tabs|project-tabs)(?![\w-])/;
+// px. \.workspace-tabs does not match .space-tabs/.tabs.
+const CHROME_ROW = /\.(ft-header|plugin-side-head|sidebar-left-tabs|space-tabs|workspace-tabs)(?![\w-])/;
 // Allowed standard variables (both theme-owned) — a chrome row height is var() of one of them.
 // Sanctioned row-height tokens — chrome-row (one band row), header (panel/rail header), toolbar
 // (shared two-row grid, theme-owned). Do not invent a row height outside these three.
@@ -167,8 +167,8 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     expect(focusVeilStackingViolations(css)).toEqual([]);
   });
 
-  it("project and rail are global chrome above the DOM browser content stack", () => {
-    expect(projectRailStackingViolations(css)).toEqual([]);
+  it("workspace and rail are global chrome above the DOM browser content stack", () => {
+    expect(workspaceRailStackingViolations(css)).toEqual([]);
   });
 
   it("pins the spot where the rule actually splits — plant a violation and confirm the gate bites", () => {
@@ -248,10 +248,10 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     // Each band strip consumes its own padding variable.
     expect(css).toMatch(/\.tabs \{[^}]*padding: var\(--tab-pad/);
     expect(css).toMatch(/\.space-tabs \{[^}]*padding: var\(--ws-pad/);
-    expect(css).toMatch(/\.project-tabs \{[^}]*padding-block: var\(--ws-pad/);
+    expect(css).toMatch(/\.workspace-tabs \{[^}]*padding-block: var\(--ws-pad/);
     // Block contract that stretches every item.
     expect(css).toMatch(
-      /\.tabs \.tab,\s*\.tabs \.tab-add,\s*\.project-tab,\s*\.space-tab,\s*\.project-tab-add,\s*\.space-tab-add \{[^}]*align-self: stretch/,
+      /\.tabs \.tab,\s*\.tabs \.tab-add,\s*\.workspace-tab,\s*\.space-tab,\s*\.workspace-tab-add,\s*\.space-tab-add \{[^}]*align-self: stretch/,
     );
   });
 
@@ -347,7 +347,7 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     ".rail-add",
     ".plugin-rejected",
     ".space-tab-rename",
-    ".project-tab-rename",
+    ".workspace-tab-rename",
     ".rail-rename",
     ".bv-url",
     ".cmf-input",
@@ -355,7 +355,7 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     ".icon-btn",
     ".drop-ind",
     ".tab", // chip outline (theme variant) — the chip's own closed curve
-    ".project-tab",
+    ".workspace-tab",
     ".space-tab",
     ".dbtn",
     ".rail-chip",

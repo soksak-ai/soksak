@@ -18,7 +18,7 @@ import {
   type SplitSnapshot,
 } from "./splitTree";
 import type { SidebarGroup } from "./sidebarLayout";
-import type { Project, Space, Pane, Tab } from "./sessions";
+import type { Workspace, Space, Pane, Tab } from "./sessions";
 import type { Pins } from "./projection";
 import { DEFAULT_RAIL_PLACEMENT,
   normalizeRailPlacement,
@@ -70,7 +70,7 @@ interface ContentSnapshot {
   layout: SplitSnapshot<ViewGroupSnapshot>;
 }
 
-export interface ProjectSnapshot {
+export interface WorkspaceSnapshot {
   id: string;
   title: string;
   root: string;
@@ -81,7 +81,7 @@ export interface ProjectSnapshot {
   // restore never rewrites a separate line the user placed outside the drag rule (LINE_GROUP_EPS).
   vlNormalized?: true;
   // One-time placement migration marker — while rail migration was withdrawn, serialization wrote an anchor
-  // (pin@0) even for projects with no placement set. The placement in a snapshot without the marker may be that
+  // (pin@0) even for workspaces with no placement set. The placement in a snapshot without the marker may be that
   // era's default, so it is dropped once (removal condition: no marker-less snapshot left in the field).
   railPlacementNormalized?: true;
   sidebarOpen: boolean;
@@ -92,7 +92,7 @@ export interface ProjectSnapshot {
   leftLayout: SplitSnapshot<SidebarGroup>;
   activeContentId: string;
   contents: ContentSnapshot[];
-  // Rail pins (§4.5) — persisted with the project.
+  // Rail pins (§4.5) — persisted with the workspace.
   projection?: { pins: Pins };
 }
 
@@ -144,10 +144,10 @@ const serializeContent = (c: Space): ContentSnapshot => ({
   layout: serializeSplitTree(c.layout, serializeViewGroup), // PaneNode(leaf=Pane)
 });
 
-export function serializeProject(
-  p: Project,
+export function serializeWorkspace(
+  p: Workspace,
   projection?: { pins: Pins },
-): ProjectSnapshot {
+): WorkspaceSnapshot {
   return {
     ...(projection ? { projection } : {}),
     id: p.id,
@@ -235,10 +235,10 @@ const deserializeContent = (
 
 // newSplitId is injected by the caller (sessions) — the split id generator. The caller prevents collision with
 // preserved ids by raising the counter above the preserved maximum after restore (A5).
-export function deserializeProject(
-  s: ProjectSnapshot,
+export function deserializeWorkspace(
+  s: WorkspaceSnapshot,
   newSplitId: () => string,
-): Project {
+): Workspace {
   return {
     id: s.id,
     title: s.title,

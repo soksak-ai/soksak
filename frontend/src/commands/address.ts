@@ -12,7 +12,7 @@
 //   host view:   win/<label>/proj/<root|alias>/<region>/pane/<idx|active>/view/<pluginId.viewId>/tab/<tab-id>/node/<nodePath>
 //   host chrome: win/<label>/proj/<root|alias>/chrome/<chromePath>
 //   region ∈ { left | content | right }
-// Omitted = active: no win = the current window, no proj = the active project, no pane = the
+// Omitted = active: no win = the current window, no proj = the active workspace, no pane = the
 //              active pane, no tab = the only instance of that view key. Idempotent (consistent
 //              against the active values).
 //
@@ -38,7 +38,7 @@ export interface AddressParts {
   // Host chrome path (chrome/...) — when present it excludes the view/node family.
   chrome?: string;
   // View context (when it is not chrome).
-  project?: string; // root/alias (omitted = the active project)
+  workspace?: string; // root/alias (omitted = the active workspace)
   region?: Region; // left|content|right
   pane?: string; // position index or "active" (omitted = the active pane)
   view?: string; // qualifiedViewId(pluginId.viewId)
@@ -70,13 +70,13 @@ export function parseAddress(input: string): AddressParts | { error: string } {
 
   if (i >= segs.length) return fail("no path after win");
 
-  // proj/<id> (optional) — it also comes before chrome. Every project plane is mounted, so a
-  // chrome node inside one exists once per project. Without this axis rail/left resolves to two
+  // proj/<id> (optional) — it also comes before chrome. Every workspace plane is mounted, so a
+  // chrome node inside one exists once per workspace. Without this axis rail/left resolves to two
   // (measured).
   if (segs[i] === "proj") {
     const id = segs[i + 1];
     if (!id) return fail("no proj id");
-    out.project = id; // root/alias allows any character (it can be a path) — taken as one segment only
+    out.workspace = id; // root/alias allows any character (it can be a path) — taken as one segment only
     i += 2;
   }
 
@@ -139,11 +139,11 @@ export function formatAddress(p: AddressParts): string {
   const segs: string[] = [];
   if (p.window) segs.push("win", p.window);
   if (p.chrome) {
-    if (p.project) segs.push("proj", p.project);
+    if (p.workspace) segs.push("proj", p.workspace);
     segs.push("chrome", p.chrome);
     return segs.join("/");
   }
-  if (p.project) segs.push("proj", p.project);
+  if (p.workspace) segs.push("proj", p.workspace);
   if (p.region) segs.push(p.region);
   if (p.pane) segs.push("pane", p.pane);
   if (p.view) segs.push("view", p.view);

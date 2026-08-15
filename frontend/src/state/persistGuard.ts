@@ -17,11 +17,11 @@
 
 /** The snapshot read result. Whether it was read is part of the value, so unread cannot disguise
  *  itself as the number 0. */
-export type SnapshotRead = { read: true; projects: number } | { read: false };
+export type SnapshotRead = { read: true; workspaces: number } | { read: false };
 
-/** Read — the snapshot held this many projects (0 means it really was empty). */
-export function snapshotRead(projects: number): SnapshotRead {
-  return { read: true, projects };
+/** Read — the snapshot held this many workspaces (0 means it really was empty). */
+export function snapshotRead(workspaces: number): SnapshotRead {
+  return { read: true, workspaces };
 }
 
 /** Unread — the store did not answer. What it holds is unknown. */
@@ -33,10 +33,10 @@ export function snapshotUnread(): SnapshotRead {
 export interface PersistFacts {
   /** The result of reading the snapshot at restore time. This is "what was known". */
   snapshot: SnapshotRead;
-  /** The number of projects the restore actually created (after the P6 drop). */
-  restoredProjects: number;
-  /** The number of projects in this window right now. */
-  liveProjects: number;
+  /** The number of workspaces the restore actually created (after the P6 drop). */
+  restoredWorkspaces: number;
+  /** The number of workspaces in this window right now. */
+  liveWorkspaces: number;
 }
 
 /**
@@ -46,7 +46,7 @@ export interface PersistFacts {
  *
  *  1. **Unread.** What would be overwritten is unknown, so nothing is written. That holds even
  *     when this window is full — "it is full, so it is safe" only holds when what lies underneath
- *     is known. The third loss was one project created by the default boot overwriting the three
+ *     is known. The third loss was one workspace created by the default boot overwriting the three
  *     in the snapshot.
  *  2. **Something was known, none of it was recovered, and it is still empty.** That empty state
  *     is not user intent but the trace of a failed restore, and saving it erases what was known.
@@ -56,8 +56,8 @@ export interface PersistFacts {
  */
 export function mayPersist(f: PersistFacts): boolean {
   if (!f.snapshot.read) return false;
-  if (f.snapshot.projects === 0) return true;
-  if (f.restoredProjects > 0 || f.liveProjects > 0) return true;
+  if (f.snapshot.workspaces === 0) return true;
+  if (f.restoredWorkspaces > 0 || f.liveWorkspaces > 0) return true;
   return false;
 }
 
@@ -74,6 +74,6 @@ export function mayPersist(f: PersistFacts): boolean {
  * writing proceeds normally; full means no write (the correct recovery for that window is another
  * restore, not a save).
  */
-export function mayAdoptLateRead(projects: number): boolean {
-  return projects === 0;
+export function mayAdoptLateRead(workspaces: number): boolean {
+  return workspaces === 0;
 }

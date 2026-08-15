@@ -130,7 +130,7 @@ export function registerPluginCatalog(): void {
       // The control plane (main) loads no plugins — the response explains itself so an empty list is
       // not misread as "not installed".
       ...(currentWindowLabel() === "main"
-        ? { note: "control-plane window loads no plugins — query a project window (w-*) or pass --window" }
+        ? { note: "control-plane window loads no plugins — query a workspace window (w-*) or pass --window" }
         : {}),
       programs: listPrograms().map((p) => ({
         id: p.decl.id,
@@ -241,7 +241,7 @@ export function registerPluginCatalog(): void {
     // retried repeatedly).
     const controlPlane = currentWindowLabel() === "main";
     const controlPlaneHint = (): CommandHint[] => [
-      { cmd: "window.projects", why: tmsg("hint.error.pluginControlPlane") },
+      { cmd: "window.workspaces", why: tmsg("hint.error.pluginControlPlane") },
     ];
     // Form (1): plugin.<plugin id>.<command> — decided directly from the id.
     const m = /^plugin\.(soksak-plugin-[a-z0-9-]+)\.(.+)$/.exec(name);
@@ -284,7 +284,7 @@ export function registerPluginCatalog(): void {
         // The control plane (main) loads no plugins — the response explains the reason for the empty
         // list itself.
         ...(currentWindowLabel() === "main"
-          ? { note: "control-plane window loads no plugins — query a project window (w-*) or pass --window" }
+          ? { note: "control-plane window loads no plugins — query a workspace window (w-*) or pass --window" }
           : {}),
         plugins: Object.values(s.plugins).map(serializeRuntime),
         rejected: s.rejected,
@@ -758,7 +758,7 @@ export function registerPluginCatalog(): void {
       // result itself.
       const note =
         currentWindowLabel() === "main"
-          ? { note: "control-plane window loads no plugins — query a project window (w-*) or pass --window" }
+          ? { note: "control-plane window loads no plugins — query a workspace window (w-*) or pass --window" }
           : {};
       if (!hasId && !hasRange) return { ...note, contracts: allContracts(nodes) };
       const installed = usePlugins.getState().plugins;
@@ -940,15 +940,15 @@ export function registerPluginCatalog(): void {
     },
   });
 
-  // Project axis resolution — the settings storage key is root (persistent identity) while the axis
+  // Workspace axis resolution — the settings storage key is root (persistent identity) while the axis
   // the answer names is id. They are different facts, so both are returned and the response splits
-  // them into projectId and projectRoot. Omitted means the active project.
-  const projectScope = (
+  // them into projectId and workspaceRoot. Omitted means the active workspace.
+  const workspaceScope = (
     projectId?: string,
   ): { id: string; root: string } | null => {
     const s = useSessions.getState();
     const id = projectId ?? s.activeId;
-    const found = s.projects.find((t) => t.id === id);
+    const found = s.workspaces.find((t) => t.id === id);
     return found?.root ? { id: found.id, root: found.root } : null;
   };
 
@@ -970,13 +970,13 @@ export function registerPluginCatalog(): void {
 
   register("plugin.settings.get", {
     description:
-      "Read plugin setting values at a given scope. Scope 'effective' (default) merges global defaults with project overrides. Omit key to retrieve all settings at once.",
+      "Read plugin setting values at a given scope. Scope 'effective' (default) merges global defaults with workspace overrides. Omit key to retrieve all settings at once.",
     triggers: { ko: "플러그인 설정 조회 읽기 값 확인" },
     params: {
       id: { type: "string", description: "Plugin id", required: true },
       key: { type: "string", description: "Setting key. Omit to return all settings." },
-      scope: { type: "string", description: "effective (default, merges global+project) | global | project", enum: ["effective", "global", "project"] },
-      project: { type: "string", description: "Project id. Defaults to active project. Applies to project and effective scopes." },
+      scope: { type: "string", description: "effective (default, merges global+workspace) | global | workspace", enum: ["effective", "global", "workspace"] },
+      workspace: { type: "string", description: "Workspace id. Defaults to active workspace. Applies to workspace and effective scopes." },
     },
     returns: "{ id, scope, projectId, values } or { id, scope, projectId, key, value }",
     message: (d) =>
@@ -992,13 +992,13 @@ export function registerPluginCatalog(): void {
       const plug = usePlugins.getState().plugins[p.id as string];
       if (!plug) return notFound(tmsg("msg.plugin.notFoundId", { id: String(p.id) }));
       const scope = (p.scope as string | undefined) ?? "effective";
-      const target = projectScope(p.project as string | undefined);
+      const target = workspaceScope(p.workspace as string | undefined);
       const root = target?.root;
       const ps = usePluginSettings.getState();
       const defs = configDefaults(plug.manifest);
       const one = (key: string) => {
         if (scope === "global") return ps.getGlobal(p.id as string, key);
-        if (scope === "project") return root ? ps.getProject(root, p.id as string, key) : undefined;
+        if (scope === "workspace") return root ? ps.getWorkspace(root, p.id as string, key) : undefined;
         return ps.effective(p.id as string, key, defs[key], root);
       };
       const key = p.key as string | undefined;
@@ -1015,21 +1015,21 @@ export function registerPluginCatalog(): void {
 
   register("plugin.settings.set", {
     description:
-      "Write a plugin setting value after schema validation. Scope defaults to global; use project to override per-project. Validation failures are rejected without saving.",
+      "Write a plugin setting value after schema validation. Scope defaults to global; use workspace to override per-workspace. Validation failures are rejected without saving.",
     triggers: { ko: "플러그인 설정 변경 저장 set 값 지정" },
     params: {
       id: { type: "string", description: "Plugin id", required: true },
       key: { type: "string", description: "Setting key", required: true },
       value: { type: "json", description: "Value to set (boolean | number | string — must match schema type)", required: true },
-      scope: { type: "string", description: "global (default) | project", enum: ["global", "project"] },
-      project: { type: "string", description: "Project id. Defaults to active project. Applies when scope=project." },
+      scope: { type: "string", description: "global (default) | workspace", enum: ["global", "workspace"] },
+      workspace: { type: "string", description: "Workspace id. Defaults to active workspace. Applies when scope=workspace." },
     },
-    returns: "{ id, scope, key, value, projectId?, projectRoot? }",
+    returns: "{ id, scope, key, value, projectId?, workspaceRoot? }",
     message: (d) => tmsg("msg.plugin.settings.set", { key: String(d.key), value: String(d.value) }),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
       'plugin.settings.set \'{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"codex"}\'',
-      'plugin.settings.set \'{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"gemini","scope":"project"}\'',
+      'plugin.settings.set \'{"id":"soksak-plugin-<id>","key":"defaultAgent","value":"gemini","scope":"workspace"}\'',
     ],
     handler: (p) => {
       const plug = usePlugins.getState().plugins[p.id as string];
@@ -1040,17 +1040,17 @@ export function registerPluginCatalog(): void {
       if (!v.ok) return invalid(v.error);
       const scope = (p.scope as string | undefined) ?? "global";
       const ps = usePluginSettings.getState();
-      if (scope === "project") {
-        const target = projectScope(p.project as string | undefined);
-        if (!target) return invalid(tmsg("msg.plugin.settings.projectRootUnresolved"));
-        ps.setProject(target.root, p.id as string, p.key as string, v.value);
+      if (scope === "workspace") {
+        const target = workspaceScope(p.workspace as string | undefined);
+        if (!target) return invalid(tmsg("msg.plugin.settings.workspaceRootUnresolved"));
+        ps.setWorkspace(target.root, p.id as string, p.key as string, v.value);
         return {
           id: p.id,
           scope,
           key: p.key,
           value: v.value,
           projectId: target.id,
-          projectRoot: target.root,
+          workspaceRoot: target.root,
         };
       }
       ps.setGlobal(p.id as string, p.key as string, v.value);
@@ -1065,10 +1065,10 @@ export function registerPluginCatalog(): void {
     params: {
       id: { type: "string", description: "Plugin id", required: true },
       key: { type: "string", description: "Setting key. Omit to reset all settings." },
-      scope: { type: "string", description: "global (default) | project", enum: ["global", "project"] },
-      project: { type: "string", description: "Project id. Defaults to active project. Applies when scope=project." },
+      scope: { type: "string", description: "global (default) | workspace", enum: ["global", "workspace"] },
+      workspace: { type: "string", description: "Workspace id. Defaults to active workspace. Applies when scope=workspace." },
     },
-    returns: "{ id, scope, key, projectId?, projectRoot? }",
+    returns: "{ id, scope, key, projectId?, workspaceRoot? }",
     message: (d) =>
       d.key
         ? tmsg("msg.plugin.settings.reset.one", { key: String(d.key) })
@@ -1081,16 +1081,16 @@ export function registerPluginCatalog(): void {
       const scope = (p.scope as string | undefined) ?? "global";
       const ps = usePluginSettings.getState();
       const key = p.key as string | undefined;
-      if (scope === "project") {
-        const target = projectScope(p.project as string | undefined);
-        if (!target) return invalid(tmsg("msg.plugin.settings.projectRootUnresolved"));
-        ps.resetProject(target.root, p.id as string, key);
+      if (scope === "workspace") {
+        const target = workspaceScope(p.workspace as string | undefined);
+        if (!target) return invalid(tmsg("msg.plugin.settings.workspaceRootUnresolved"));
+        ps.resetWorkspace(target.root, p.id as string, key);
         return {
           id: p.id,
           scope,
           key: key ?? null,
           projectId: target.id,
-          projectRoot: target.root,
+          workspaceRoot: target.root,
         };
       }
       ps.resetGlobal(p.id as string, key);
@@ -1175,7 +1175,7 @@ export function registerPluginCatalog(): void {
         description: tmsg("cmd.plugin.view.open.param.placement"),
         enum: VIEW_PLACEMENTS,
       },
-      project: { type: "string", description: "Project id. Defaults to the active project." },
+      workspace: { type: "string", description: "Workspace id. Defaults to the active workspace." },
     },
     returns:
       "{ viewKey, placement, projectId } (sidebar placements) | { viewKey, placement, projectId, paneId, tabId, existing } (content placement)",
@@ -1187,9 +1187,9 @@ export function registerPluginCatalog(): void {
     ],
     handler: (p) => {
       const s = useSessions.getState();
-      const projectId = (p.project as string | undefined) ?? s.activeId;
-      const project = s.projects.find((t) => t.id === projectId);
-      if (!project) return notFound(tmsg("msg.project.notFoundId", { id: projectId }));
+      const projectId = (p.workspace as string | undefined) ?? s.activeId;
+      const workspace = s.workspaces.find((t) => t.id === projectId);
+      if (!workspace) return notFound(tmsg("msg.workspace.notFoundId", { id: projectId }));
       const key = p.viewKey as string;
       const reg = getRegisteredView(key);
       if (!reg) {
@@ -1244,7 +1244,7 @@ export function registerPluginCatalog(): void {
         description: 'Global view key in the form "<pluginId>.<viewId>"',
         required: true,
       },
-      project: { type: "string", description: "Project id. Defaults to the active project." },
+      workspace: { type: "string", description: "Workspace id. Defaults to the active workspace." },
     },
     returns: "{ viewKey, projectId, closed: [placement list], tabIds: [closed content tab ids] }",
     message: (d) => tmsg("msg.plugin.view.close", { view: String(d.viewKey), n: ((d.closed as unknown[]) ?? []).length }),
@@ -1252,24 +1252,24 @@ export function registerPluginCatalog(): void {
     examples: ['plugin.view.close \'{"viewKey":"soksak-plugin-<id>.<view>"}\''],
     handler: (p) => {
       const s = useSessions.getState();
-      const projectId = (p.project as string | undefined) ?? s.activeId;
-      const project = s.projects.find((t) => t.id === projectId);
-      if (!project) return notFound(tmsg("msg.project.notFoundId", { id: projectId }));
+      const projectId = (p.workspace as string | undefined) ?? s.activeId;
+      const workspace = s.workspaces.find((t) => t.id === projectId);
+      if (!workspace) return notFound(tmsg("msg.workspace.notFoundId", { id: projectId }));
       const key = p.viewKey as string;
       const closed: string[] = [];
       const tabIds: string[] = [];
-      if (project.rightView === key) {
+      if (workspace.rightView === key) {
         s.setRightView(projectId, null);
         closed.push("sidebar-right");
       }
       // The left sidebar is registry-driven (the layout only places) — an individual close reports
       // membership only. The actual removal is handled by reconcileSidebar when the plugin is
       // disabled or unregistered.
-      if (hasSidebarViewKey(project.leftLayout, key)) {
+      if (hasSidebarViewKey(workspace.leftLayout, key)) {
         closed.push("sidebar-left");
       }
       // content placement: closes every tab of this plugin view across all spaces.
-      for (const space of project.spaces) {
+      for (const space of workspace.spaces) {
         for (const g of allGroups(space.layout)) {
           for (const v of g.tabs) {
             if (
@@ -1395,7 +1395,7 @@ export function registerPluginCatalog(): void {
       // Only content-placed views are carried in the sessions layout (setStatus is a no-op for the
       // sidebar), so everything caught here is a content view.
       const observed: ViewStatusObservation[] = [];
-      for (const t of useSessions.getState().projects)
+      for (const t of useSessions.getState().workspaces)
         for (const ca of t.spaces)
           for (const g of allGroups(ca.layout))
             for (const v of g.tabs)

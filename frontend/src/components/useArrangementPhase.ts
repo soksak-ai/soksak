@@ -135,7 +135,7 @@ export function useArrangementPhase<L extends { id: string }>(
     from: Arrangement<L>,
     to: Arrangement<L>,
   ) => Promise<PreparedLayoutTransition>,
-  /** ACK key for the project-scoped layout revision published by the state mutation. */
+  /** ACK key for the workspace-scoped layout revision published by the state mutation. */
   settlementKey?: string,
   domCandidateParticipant?: LayoutPresentationCandidateParticipant,
 ): ArrangementPhase<L> {
@@ -217,7 +217,7 @@ export function useArrangementPhase<L extends { id: string }>(
 
   const currentKey = arrangementKey(current);
   const displayedKey = arrangementKey(phase.displayed);
-  // The store opens a revision, then publishes the new project. The exact token is taken only on a
+  // The store opens a revision, then publishes the new workspace. The exact token is taken only on a
   // render where the external arrangement identity changed, so an internal hook rerender cannot
   // mistake a revision opened after that for one of the same arrangement.
   const settlementIdentity = `${scopeId}\u0000${contentKey}\u0000${currentKey}`;

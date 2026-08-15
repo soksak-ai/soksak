@@ -26,16 +26,16 @@ vi.mock("../framework", async (importOriginal) => ({
 
 import { registerCatalog } from "./catalog";
 import { execute } from "./registry";
-import { useSessions, type PaneNode, type Project, type Pane } from "../state/sessions";
+import { useSessions, type PaneNode, type Workspace, type Pane } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
 
 const pane = (id: string): Pane => ({ id, tabs: [], activeTabId: "" });
 const leaf = (id: string): PaneNode => ({ type: "leaf", value: pane(id) });
 
 /** row[ A | col[ B / C ] | D ] — nesting is required to observe the "nearest axis ancestor" rule. */
-function fixture(): Project {
+function fixture(): Workspace {
   return {
-    id: "pjt-aaaaaa",
+    id: "wsp-aaaaaa",
     title: "P",
     root: "<local-evidence>/pane-gutter",
     sidebarOpen: false,
@@ -73,7 +73,7 @@ function fixture(): Project {
 /** row[ col[ row[ E | F ] / G ] | H ] — two ancestors share the row axis and neither is the last
  *  child. Only this shape observes whether the "nearest ancestor" rule actually holds (picking the
  *  far ancestor leaks E's right onto the gutter between col and H). */
-function nestedRowFixture(): Project {
+function nestedRowFixture(): Workspace {
   const base = fixture();
   return {
     ...base,
@@ -114,17 +114,17 @@ function nestedRowFixture(): Project {
 registerCatalog();
 
 beforeEach(() => {
-  useSessions.setState({ projects: [fixture()], activeId: "pjt-aaaaaa" });
+  useSessions.setState({ workspaces: [fixture()], activeId: "wsp-aaaaaa" });
 });
 
 const sizesOf = (): number[] => {
-  const layout = useSessions.getState().projects[0].spaces[0].layout;
+  const layout = useSessions.getState().workspaces[0].spaces[0].layout;
   if (layout.type !== "split") throw new Error("not a split");
   return layout.sizes;
 };
 
 const innerSizes = (): number[] => {
-  const layout = useSessions.getState().projects[0].spaces[0].layout;
+  const layout = useSessions.getState().workspaces[0].spaces[0].layout;
   if (layout.type !== "split") throw new Error("not a split");
   const inner = layout.children[1];
   if (inner.type !== "split") throw new Error("not a nested split");
@@ -221,13 +221,13 @@ describe("pane.equalize — equalize around a seam", () => {
 
 describe("nearest axis ancestor — when there are two ancestors on the same axis", () => {
   beforeEach(() => {
-    useSessions.setState({ projects: [nestedRowFixture()], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [nestedRowFixture()], activeId: "wsp-aaaaaa" });
   });
 
   it("moves the inner row's seam — it does not leak out to the outer row", async () => {
     const r = await execute("pane.resize", { pane: "pan-e", edge: "right", ratio: 0.25 }, {});
     expect(r.ok).toBe(true);
-    const outer = useSessions.getState().projects[0].spaces[0].layout;
+    const outer = useSessions.getState().workspaces[0].spaces[0].layout;
     if (outer.type !== "split") throw new Error("not a split");
     // The outer row (col | H) must be unchanged — picking the far ancestor changes it here.
     expect(outer.sizes).toEqual([0.7, 0.3]);
@@ -244,7 +244,7 @@ describe("nearest axis ancestor — when there are two ancestors on the same axi
     // different axis and is skipped; in the outer row the col subtree is not last, so that gutter is taken.
     const r = await execute("pane.resize", { pane: "pan-f", edge: "right", ratio: 0.5 }, {});
     expect(r.ok).toBe(true);
-    const outer = useSessions.getState().projects[0].spaces[0].layout;
+    const outer = useSessions.getState().workspaces[0].spaces[0].layout;
     if (outer.type !== "split") throw new Error("not a split");
     expect(outer.sizes).toEqual([0.5, 0.5]);
     // Canonical = first pane in document order touching that gutter: col (vertical) → first child →

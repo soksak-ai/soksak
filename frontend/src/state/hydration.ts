@@ -38,12 +38,12 @@ export const useHydration = moduleState("state/hydration#store", () =>
 );
 
 /** Once right after restore — marks restored views not visible on screen as cold and starts the idle promotion chain.
- *  Visible view = each group's activeViewId in the active content of the active project (several when split). */
+ *  Visible view = each group's activeViewId in the active content of the active workspace (several when split). */
 export function beginRestoreHydration(): void {
   const s = useSessions.getState();
   const cold: string[] = [];
   const activity = new Map<string, number>();
-  for (const t of s.projects) {
+  for (const t of s.workspaces) {
     for (const c of t.spaces) {
       const contentVisible = t.id === s.activeId && c.id === t.activeSpaceId;
       for (const g of allGroups(c.layout)) {

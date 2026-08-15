@@ -1,4 +1,4 @@
-package project
+package workspace
 
 import (
 	"os"
@@ -32,20 +32,20 @@ func resolved(t *testing.T, path string) string {
 
 // A root-init policy runs over the whole tree it is given. With the home as the
 // root, that policy is a policy over every file the user owns.
-func TestTheUserHomeIsNotAProjectRoot(t *testing.T) {
+func TestTheUserHomeIsNotAWorkspaceRoot(t *testing.T) {
 	home := t.TempDir()
 	if got, err := ValidateRoot(home, home); err == nil {
-		t.Fatalf("the home was accepted as a project root: %q", got)
+		t.Fatalf("the home was accepted as a workspace root: %q", got)
 	}
 }
 
-// The returned string is the project's identity and the key every later claim
+// The returned string is the workspace's identity and the key every later claim
 // compares, so it must come back canonical rather than as it was typed.
 func TestADirectoryUnderTheHomeIsAcceptedCanonical(t *testing.T) {
 	home := t.TempDir()
 	work := filepath.Join(home, "work")
 	if err := os.MkdirAll(work, 0o755); err != nil {
-		t.Fatalf("creating the project directory: %v", err)
+		t.Fatalf("creating the workspace directory: %v", err)
 	}
 
 	got, err := ValidateRoot(work, home)
@@ -57,11 +57,11 @@ func TestADirectoryUnderTheHomeIsAcceptedCanonical(t *testing.T) {
 	}
 }
 
-func TestTheFilesystemRootIsNotAProjectRoot(t *testing.T) {
+func TestTheFilesystemRootIsNotAWorkspaceRoot(t *testing.T) {
 	home := t.TempDir()
 	root := filesystemRoot(home)
 	if got, err := ValidateRoot(root, home); err == nil {
-		t.Fatalf("the filesystem root was accepted as a project root: %q", got)
+		t.Fatalf("the filesystem root was accepted as a workspace root: %q", got)
 	}
 }
 
@@ -78,7 +78,7 @@ func TestAFileAndAMissingPathAreRefusedByName(t *testing.T) {
 	for _, path := range []string{file, missing} {
 		_, err := ValidateRoot(path, home)
 		if err == nil {
-			t.Fatalf("%s was accepted as a project root", path)
+			t.Fatalf("%s was accepted as a workspace root", path)
 		}
 		if !strings.Contains(err.Error(), path) {
 			t.Errorf("refusing %s did not name it: %v", path, err)
@@ -92,7 +92,7 @@ func TestWithoutAUserHomeTheVerdictRefusesByName(t *testing.T) {
 	dir := t.TempDir()
 	_, err := ValidateRoot(dir, "")
 	if err == nil {
-		t.Fatal("a process with no user home judged a project root anyway")
+		t.Fatal("a process with no user home judged a workspace root anyway")
 	}
 	// The wording separates this from the refusal a relative home gets. Both
 	// name the user home, so "user home" alone cannot tell whether the
@@ -127,7 +127,7 @@ func TestTwoSpellingsOfOneHomeAgree(t *testing.T) {
 	}
 
 	if got, err := ValidateRoot(real, link); err == nil {
-		t.Fatalf("the home spelled another way was accepted as a project root: %q", got)
+		t.Fatalf("the home spelled another way was accepted as a workspace root: %q", got)
 	}
 }
 
@@ -138,7 +138,7 @@ func TestASymlinkedDirectoryIsAcceptedNotRefused(t *testing.T) {
 	home := t.TempDir()
 	real := filepath.Join(home, "real")
 	if err := os.MkdirAll(real, 0o755); err != nil {
-		t.Fatalf("creating the project directory: %v", err)
+		t.Fatalf("creating the workspace directory: %v", err)
 	}
 	link := filepath.Join(home, "link")
 	if err := os.Symlink(real, link); err != nil {
@@ -147,7 +147,7 @@ func TestASymlinkedDirectoryIsAcceptedNotRefused(t *testing.T) {
 
 	got, err := ValidateRoot(link, home)
 	if err != nil {
-		t.Fatalf("a symlinked project directory was refused: %v", err)
+		t.Fatalf("a symlinked workspace directory was refused: %v", err)
 	}
 	if want := resolved(t, real); got != want {
 		t.Errorf("canonical = %q, want the link resolved to %q", got, want)
@@ -159,7 +159,7 @@ func TestASymlinkedDirectoryIsAcceptedNotRefused(t *testing.T) {
 func TestATildePathIsJudgedLiterally(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, "proj"), 0o755); err != nil {
-		t.Fatalf("creating the project directory: %v", err)
+		t.Fatalf("creating the workspace directory: %v", err)
 	}
 
 	_, err := ValidateRoot("~/proj", home)
@@ -189,15 +189,15 @@ func TestVerdictNeedsNoDisk(t *testing.T) {
 	}
 }
 
-// The canonical string is the project's identity and the key the claim table
+// The canonical string is the workspace's identity and the key the claim table
 // uses. A relative one would be resolved against whichever directory the
 // process was started in, so the app and a headless process would answer with
-// two different roots for one argument — and two roots are two projects.
+// two different roots for one argument — and two roots are two workspaces.
 func TestARelativePathIsRefusedRatherThanResolvedAgainstTheWorkingDirectory(t *testing.T) {
 	home := t.TempDir()
 	work := filepath.Join(home, "work")
 	if err := os.MkdirAll(work, 0o755); err != nil {
-		t.Fatalf("creating the project directory: %v", err)
+		t.Fatalf("creating the workspace directory: %v", err)
 	}
 
 	// Reached from inside the home, "work" names a real directory; the answer
@@ -216,7 +216,7 @@ func TestARelativePathIsRefusedRatherThanResolvedAgainstTheWorkingDirectory(t *t
 func TestARelativeUserHomeIsRefusedRatherThanCompared(t *testing.T) {
 	dir := t.TempDir()
 	if got, err := ValidateRoot(dir, "some/home"); err == nil {
-		t.Fatalf("a relative user home judged a project root anyway: %q", got)
+		t.Fatalf("a relative user home judged a workspace root anyway: %q", got)
 	} else if !strings.Contains(err.Error(), "absolute") {
 		t.Errorf("the refusal did not say what was wrong: %v", err)
 	}

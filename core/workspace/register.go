@@ -1,4 +1,4 @@
-package project
+package workspace
 
 import (
 	"encoding/json"
@@ -13,17 +13,17 @@ import (
 // reading it here would make the same command answer differently depending on
 // which process asked.
 type Deps struct {
-	// Home is the identity home (~/.soksak-wails). Project folders the app
+	// Home is the identity home (~/.soksak-wails). Workspace folders the app
 	// creates live under it.
 	Home string
 	// UserHome is the OS user home (~). It is a different value from Home, and
 	// only the root verdict needs it: judging against the identity home instead
-	// would admit ~ as a project root and put project roots inside the
+	// would admit ~ as a workspace root and put workspace roots inside the
 	// app-managed area.
 	UserHome string
 	// Manifest is where the restore ledger is stored.
 	Manifest ManifestStore
-	// Claims is this process's project-claim ledger. The launcher holds it, the
+	// Claims is this process's workspace-claim ledger. The launcher holds it, the
 	// way the key-value store and the activity ledger already are: the host
 	// needs the same ledger to free a window's roots when the window is
 	// destroyed, and to answer who owns what.
@@ -37,42 +37,42 @@ type Deps struct {
 // Register adds this group's commands.
 //
 // Missing wiring panics naming the field, the same way MustRegister does: it is
-// a programming fact, and finding it when a user opens a project is worse than
+// a programming fact, and finding it when a user opens a workspace is worse than
 // finding it at startup.
 func Register(registry *control.Registry, deps Deps) {
 	// Both homes are required absolute here rather than per call. A relative
 	// one is resolved against the working directory, so the same command lands
 	// in a different tree in the app and in a headless process — an answer,
 	// not an error. Boot is where a caller can still be told which value is
-	// wrong; by the time a user opens a project, nothing names the field.
+	// wrong; by the time a user opens a workspace, nothing names the field.
 	if deps.Home == "" {
-		panic("project: Deps.Home is empty; app-made project folders would land beside the working directory")
+		panic("workspace: Deps.Home is empty; app-made workspace folders would land beside the working directory")
 	}
 	if !filepath.IsAbs(deps.Home) {
-		panic("project: Deps.Home is relative (" + deps.Home + "); app-made project folders would land beside the working directory")
+		panic("workspace: Deps.Home is relative (" + deps.Home + "); app-made workspace folders would land beside the working directory")
 	}
 	if deps.UserHome == "" {
-		panic("project: Deps.UserHome is empty; the root verdict cannot tell a project root from the home")
+		panic("workspace: Deps.UserHome is empty; the root verdict cannot tell a workspace root from the home")
 	}
 	if !filepath.IsAbs(deps.UserHome) {
-		panic("project: Deps.UserHome is relative (" + deps.UserHome + "); it would never equal a canonical root, so the home would pass the verdict")
+		panic("workspace: Deps.UserHome is relative (" + deps.UserHome + "); it would never equal a canonical root, so the home would pass the verdict")
 	}
 	if deps.Manifest == nil {
-		panic("project: Deps.Manifest is nil; window restore slots have nowhere to merge into")
+		panic("workspace: Deps.Manifest is nil; window restore slots have nowhere to merge into")
 	}
 	if deps.Claims == nil {
-		panic("project: Deps.Claims is nil; the single-open rule has no ledger to enforce with")
+		panic("workspace: Deps.Claims is nil; the single-open rule has no ledger to enforce with")
 	}
 	if deps.Changed == nil {
 		// A dropped notification is not an error — it is a picker that never
 		// updates, and nothing about that identifies which part is missing.
-		panic("project: Deps.Changed is nil; claim mutations would reach no window")
+		panic("workspace: Deps.Changed is nil; claim mutations would reach no window")
 	}
 
 	manifest := NewManifestLedger(deps.Manifest)
 
 	registry.MustRegister(control.Command{
-		Name:  "validate_project_root",
+		Name:  "validate_workspace_root",
 		Owner: control.OwnerCore,
 		Handler: func(callArgs control.Args) (any, error) {
 			path, err := argument[string](callArgs, "path")
@@ -84,7 +84,7 @@ func Register(registry *control.Registry, deps Deps) {
 	})
 
 	registry.MustRegister(control.Command{
-		Name:  "ensure_project_dir",
+		Name:  "ensure_workspace_dir",
 		Owner: control.OwnerCore,
 		Handler: func(callArgs control.Args) (any, error) {
 			folder, err := argument[string](callArgs, "folder")
@@ -96,7 +96,7 @@ func Register(registry *control.Registry, deps Deps) {
 	})
 
 	registry.MustRegister(control.Command{
-		Name:  "project_claim",
+		Name:  "workspace_claim",
 		Owner: control.OwnerCore,
 		Handler: func(callArgs control.Args) (any, error) {
 			root, err := argument[string](callArgs, "root")
@@ -122,7 +122,7 @@ func Register(registry *control.Registry, deps Deps) {
 	})
 
 	registry.MustRegister(control.Command{
-		Name:  "project_release",
+		Name:  "workspace_release",
 		Owner: control.OwnerCore,
 		Handler: func(callArgs control.Args) (any, error) {
 			root, err := argument[string](callArgs, "root")
@@ -145,7 +145,7 @@ func Register(registry *control.Registry, deps Deps) {
 	})
 
 	registry.MustRegister(control.Command{
-		Name:  "project_owners",
+		Name:  "workspace_owners",
 		Owner: control.OwnerCore,
 		Handler: func(control.Args) (any, error) {
 			// Under a key rather than as a bare list. The caller reads `.owners`
@@ -180,7 +180,7 @@ func Register(registry *control.Registry, deps Deps) {
 		},
 	})
 
-	// ipc_last_project_window reads a focus ledger, and in this build that
+	// ipc_last_workspace_window reads a focus ledger, and in this build that
 	// ledger has no writer: its writers are window focus and destroy events,
 	// which belong to the window group, and the same ledger answers command
 	// routing. A second copy here would send a turn to a different window than
@@ -191,7 +191,7 @@ func Register(registry *control.Registry, deps Deps) {
 	// would be permanently empty, and a permanent null cannot be told apart
 	// from "the ledger is not wired".
 	if err := registry.DeclareUnserved(
-		"ipc_last_project_window",
+		"ipc_last_workspace_window",
 		"the focus ledger it reads has no writer here: window focus and destroy events belong to the window group, and the same ledger routes commands, so a second copy would pick a different window",
 	); err != nil {
 		panic(err)
@@ -204,7 +204,7 @@ func argument[T any](callArgs control.Args, name string) (T, error) {
 	var value T
 	raw, present := callArgs[name]
 	if !present {
-		return value, i18n.Errorf("project.argument.missing", map[string]string{"name": name})
+		return value, i18n.Errorf("workspace.argument.missing", map[string]string{"name": name})
 	}
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return value, fmt.Errorf("argument %q: %w", name, err)

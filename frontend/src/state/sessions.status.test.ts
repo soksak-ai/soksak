@@ -2,12 +2,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { allGroups, useSessions, type Tab } from "./sessions";
 
-useSessions.getState().bootstrapFirstProject("<local-evidence>/soksak-status-test");
-const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().projects));
+useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-status-test");
+const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
 const pristineActive = useSessions.getState().activeId;
 
 function findView(viewId: string): Tab | undefined {
-  for (const t of useSessions.getState().projects)
+  for (const t of useSessions.getState().workspaces)
     for (const c of t.spaces)
       for (const g of allGroups(c.layout))
         for (const v of g.tabs) if (v.id === viewId) return v;
@@ -16,7 +16,7 @@ function findView(viewId: string): Tab | undefined {
 
 beforeEach(() => {
   useSessions.setState({
-    projects: JSON.parse(JSON.stringify(pristineTabs)),
+    workspaces: JSON.parse(JSON.stringify(pristineTabs)),
     activeId: pristineActive,
   });
 });

@@ -361,9 +361,9 @@ export function transferViewFocus<T>(
 
 export function activeSessionViewId(): string | null {
   const state = useSessions.getState();
-  const project = state.projects.find((item) => item.id === state.activeId);
-  const space = project?.spaces.find(
-    (item) => item.id === project.activeSpaceId,
+  const workspace = state.workspaces.find((item) => item.id === state.activeId);
+  const space = workspace?.spaces.find(
+    (item) => item.id === workspace.activeSpaceId,
   );
   const panel = space
     ? allGroups(space.layout).find((item) => item.id === space.activePaneId)

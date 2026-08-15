@@ -1,4 +1,4 @@
-// Left sidebar host — the sidebar-left view frame. Layout is project.leftLayout (SplitTree<SidebarGroup>).
+// Left sidebar host — the sidebar-left view frame. Layout is workspace.leftLayout (SplitTree<SidebarGroup>).
 // [dedupe] Shares the *same* split machine as the content area (GroupArea) through splitLayout.ts:
 // computeSplitLayout for % coordinate cells, hitTestCells for 5-zone (center/left/right/top/bottom) drops,
 // the same drop-ind/divider visuals. The sidebar is narrow, so a col (vertical) split is natural, but it
@@ -34,7 +34,7 @@ import {
 } from "../plugins/viewRegistry";
 import { ProjectionSlots } from "./ProjectionSlots";
 import { useProjection } from "../state/projection";
-import { useSessions, type Project } from "../state/sessions";
+import { useSessions, type Workspace } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useViewLabels, resolveViewLabel } from "../state/viewLabels";
 import {
@@ -56,11 +56,11 @@ const PANE_INSET: Record<string, number> = { flat: 0, card: 5, floating: 6 };
 // Content zone → sidebar drop (the same 4 directions as content). center = join tabs, left/right = row split,
 // top/bottom = col split.
 export const LeftSidebarHost = memo(function LeftSidebarHost({
-  project,
+  workspace,
   paneId,
   commitProjection,
 }: {
-  project: Project;
+  workspace: Workspace;
   paneId: string;
   commitProjection: boolean;
 }) {
@@ -72,7 +72,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
   // ProjectionSlots above owns the projection slots (which switch with the binding). Pin adoption and legacy
   // auto-pinning are handled by the tracking sweep in projectionWiring.
   const pinnedLeft = useProjection(
-    (s) => s.byProject[project.id]?.pins.left,
+    (s) => s.byWorkspace[workspace.id]?.pins.left,
   );
   const registeredKeys = useMemo(() => {
     // Pin render targets = resident rail views only (②). Non-resident pin records are filtered out (harmless).
@@ -94,11 +94,11 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
 
   // Reconcile against the registered views.
   useEffect(() => {
-    reconcileSidebar(project.id, registeredKeys);
-  }, [project.id, registeredKeys, reconcileSidebar]);
+    reconcileSidebar(workspace.id, registeredKeys);
+  }, [workspace.id, registeredKeys, reconcileSidebar]);
   const layout = useMemo(
-    () => reconcileSidebarLayout(project.leftLayout, registeredKeys),
-    [project.leftLayout, registeredKeys],
+    () => reconcileSidebarLayout(workspace.leftLayout, registeredKeys),
+    [workspace.leftLayout, registeredKeys],
   );
 
   // keep-alive accumulation.
@@ -188,7 +188,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
               void execute(
                 "sidebar.left.move",
                 {
-                  project: project.id,
+                  workspace: workspace.id,
                   viewKey,
                   target: targetKey,
                   zone: h.zone === "center" ? "into" : h.zone,
@@ -198,7 +198,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
             }
           }
         } else {
-          setLeftTab(project.id, viewKey); // Click = switch tab
+          setLeftTab(workspace.id, viewKey); // Click = switch tab
         }
         setDrag(null);
         setHover(null);
@@ -206,7 +206,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [project.id, hitTest, setLeftTab],
+    [workspace.id, hitTest, setLeftTab],
   );
 
   // Divider drag (split ratio). The same logic as the content onGutterDown.
@@ -230,7 +230,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
         // Presentation touches the store directly — it runs every frame, which is no place for a command. This
         // reads the state at that moment rather than subscribing, so it reads outside the hook (a gesture path
         // unrelated to render).
-        useSessions.getState().resizeSidebar(project.id, d.splitId, sizes),
+        useSessions.getState().resizeSidebar(workspace.id, d.splitId, sizes),
       commit: (sizes) => {
         // Address the gutter by name — the internal split id never goes outside (IDENTITY §4).
         const owner = gutterOwnerOf(layout, d.splitId, d.index, cellId);
@@ -238,7 +238,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
         if (key) {
           void execute(
             "sidebar.left.resize",
-            { project: project.id, viewKey: key, sizes },
+            { workspace: workspace.id, viewKey: key, sizes },
             {},
           );
         }
@@ -277,8 +277,8 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
       <div className="sidebar-left-header" data-node="sidebar/header" />
       {/* Projection slots (R1) — the bound view's left sidebar declaration renders here. Coexists with the pin stack (R4). */}
       <ProjectionSlots
-        projectId={project.id}
-        root={project.root}
+        projectId={workspace.id}
+        root={workspace.root}
         paneId={paneId}
         side="left"
         commitProjection={commitProjection}
@@ -313,7 +313,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
           >
             <SidebarLeaf
               group={group}
-              project={project}
+              workspace={workspace}
               paneId={paneId}
               opened={opened}
               dragging={drag}
@@ -352,8 +352,8 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
         {footerViews.length > 0 && (
           <PluginViewHost
             viewKey={footerViews[0].key}
-            projectId={project.id}
-            root={project.root}
+            projectId={workspace.id}
+            root={workspace.root}
             region="left"
             paneId={paneId}
           />
@@ -366,14 +366,14 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
 // One leaf = the tab row (that group's views) + the active view body. keep-alive: opened views stay mounted, display toggles.
 function SidebarLeaf({
   group,
-  project,
+  workspace,
   paneId,
   opened,
   dragging,
   startDrag,
 }: {
   group: SidebarGroup;
-  project: Project;
+  workspace: Workspace;
   paneId: string;
   opened: string[];
   dragging: string | null;
@@ -448,8 +448,8 @@ function SidebarLeaf({
           >
             <PluginViewHost
               viewKey={k}
-              projectId={project.id}
-              root={project.root}
+              projectId={workspace.id}
+              root={workspace.root}
               region="left"
               paneId={paneId}
             />

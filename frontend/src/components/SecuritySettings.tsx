@@ -17,7 +17,7 @@ const BACKEND_LABEL: Record<string, MsgKey> = {
 
 // Settings security section — global sealing state (backend and availability, secret.status) and the
 // scope-limit notice, plus per-scope management (enable encryption, recover, rotate key, change
-// recovery code). Encryption is per scope, so the scope is exposed openly (default = active project
+// recovery code). Encryption is per scope, so the scope is exposed openly (default = active workspace
 // id, editable). The setup modal shows the recovery code once (vault store); this component never
 // holds the code.
 export function SecuritySettings() {

@@ -17,8 +17,8 @@ import {
 import { allGroups, allViews, useSessions, type Tab } from "../state/sessions";
 import { useProgramRegistry } from "../plugins/programRegistry";
 
-useSessions.getState().bootstrapFirstProject("<local-evidence>/soksak-termstatus");
-const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().projects));
+useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-termstatus");
+const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
 const pristineActive = useSessions.getState().activeId;
 
 // Register the terminal program (core terminal removed — addViewToGroup("terminal-xterm") opens the terminal plugin view).
@@ -30,7 +30,7 @@ useProgramRegistry.getState().register("soksak-plugin-terminal-xterm", {
 });
 
 function findView(viewId: string): Tab | undefined {
-  for (const t of useSessions.getState().projects)
+  for (const t of useSessions.getState().workspaces)
     for (const c of t.spaces)
       for (const v of allViews(c.layout)) if (v.id === viewId) return v;
   return undefined;
@@ -38,14 +38,14 @@ function findView(viewId: string): Tab | undefined {
 
 function activeGroupId(): string {
   const s = useSessions.getState();
-  const t = s.projects.find((x) => x.id === s.activeId)!;
+  const t = s.workspaces.find((x) => x.id === s.activeId)!;
   const c = t.spaces.find((x) => x.id === t.activeSpaceId)!;
   return allGroups(c.layout)[0].id;
 }
 
 beforeEach(() => {
   useSessions.setState({
-    projects: JSON.parse(JSON.stringify(pristineTabs)),
+    workspaces: JSON.parse(JSON.stringify(pristineTabs)),
     activeId: pristineActive,
   });
 });

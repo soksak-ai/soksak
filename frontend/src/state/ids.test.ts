@@ -1,8 +1,8 @@
 // Entity id format — `<3-char prefix>-<6-char base32>`.
 //
 // (a) The rule this gate enforces
-//     Every issued entity id matches /^(pjt|spc|pan|tab|spl|shl)-[a-z2-7]{6}$/.
-//     **The prefix is exactly three characters and is 1:1 with the kind** — project=pjt /
+//     Every issued entity id matches /^(wsp|spc|pan|tab|spl|shl)-[a-z2-7]{6}$/.
+//     **The prefix is exactly three characters and is 1:1 with the kind** — workspace=wsp /
 //     space=spc / pane=pan / tab=tab / split=spl / shell session=shl. The string alone must show
 //     what it is, and it must not be a counter so that it is globally unique. Window labels
 //     (`win-<16 hex>`) are issued by the host but follow the same three-character rule.
@@ -10,13 +10,13 @@
 // (b) RED evidence (measured, 2026-07-26)
 //     The issuers in `src/state/sessions.ts` are counters — of the form `v${nextViewId++}`, so
 //     newIds() produces `t2`, `v2`, `g2`, `s1`, `c2`. The prefix is unrelated to the name
-//     (project is `t`, space is `c`), and it reseeds on every run so the same value reappears
+//     (workspace is `t`, space is `c`), and it reseeds on every run so the same value reappears
 //     across windows. So `{"panel":"g5"}` alone cannot determine which g5.
 //
 // (c) The shell query that produced those numbers
 //     $ grep -nE '`[a-z]\$\{next[A-Za-z]*Id' src/state/sessions.ts | wc -l   # → 10
-//       (5 issuers: newViewId, newGroupId, newSplitId, newContentId, project `t${nextProjectId++}`
-//        + 5 previews: project, view, group, split, content in newIds())
+//       (5 issuers: newViewId, newGroupId, newSplitId, newContentId, workspace `t${nextProjectId++}`
+//        + 5 previews: workspace, view, group, split, content in newIds())
 //     $ npx vitest run src/state/ids.test.ts
 //
 // The rule stands without a registry or a window, so the app is not launched. Issued values are
@@ -28,17 +28,17 @@ import { describe, expect, it } from "vitest";
 import { newIds } from "./sessions";
 
 /** Entity id format — a three-character prefix plus 6 base32 (RFC4648 lowercase) characters. */
-const ENTITY_ID = /^(pjt|spc|pan|tab|spl|shl)-[a-z2-7]{6}$/;
+const ENTITY_ID = /^(wsp|spc|pan|tab|spl|shl)-[a-z2-7]{6}$/;
 /** Counter shape — `t1`, `g5`, `v7`. Not globally unique, and the prefix is unrelated to the kind. */
 const COUNTER_ID = /^[a-z]+\d+$/;
 
 /** newIds() axis → the vocabulary entity and its prefix. */
 const ENTITY_AXIS: {
-  axis: "project" | "content" | "group" | "view" | "split";
+  axis: "workspace" | "content" | "group" | "view" | "split";
   name: string;
   prefix: string;
 }[] = [
-  { axis: "project", name: "project", prefix: "pjt" },
+  { axis: "workspace", name: "workspace", prefix: "wsp" },
   { axis: "content", name: "space", prefix: "spc" },
   { axis: "group", name: "pane", prefix: "pan" },
   { axis: "view", name: "tab", prefix: "tab" },

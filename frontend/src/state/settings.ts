@@ -39,8 +39,8 @@ export type RailSeamStyle = "seam" | "edge";
 
 interface SettingsState {
   language: Language;
-  // Project (topmost) tab position. left = a vertical rail to the left of the sidebar.
-  projectTabPosition: TabPosition;
+  // Workspace (topmost) tab position. left = a vertical rail to the left of the sidebar.
+  workspaceTabPosition: TabPosition;
   // Content (workspace) tab position. left = the left vertical strip (reference 138px).
   contentTabPosition: TabPosition;
   // Split panel header mode (default title).
@@ -54,9 +54,9 @@ interface SettingsState {
   iconBox: boolean;
   // Focus group indicator style (shown on the active group when there are 2 or more groups).
   focusIndicator: FocusIndicator;
-  // Default project root to point at on first app open ("" = automatic project1). Saved by the
-  // "default project" checkbox in project settings — consumed by boot (main.tsx).
-  defaultProjectRoot: string;
+  // Default workspace root to point at on first app open ("" = automatic workspace1). Saved by the
+  // "default workspace" checkbox in workspace settings — consumed by boot (main.tsx).
+  defaultWorkspaceRoot: string;
   // Tab close confirmation policy (R6 — warn by default).
   tabCloseConfirm: TabCloseConfirm;
   rightSidebarMode: RightSidebarMode;
@@ -99,7 +99,7 @@ interface SettingsState {
   // perceived latency — default haiku. "" = the agent CLI's own default model.
   orchestratorModel: string;
   setLanguage: (l: Language) => void;
-  setProjectTabPosition: (p: TabPosition) => void;
+  setWorkspaceTabPosition: (p: TabPosition) => void;
   setContentTabPosition: (p: TabPosition) => void;
   setSplitHeaderMode: (m: SplitHeaderMode) => void;
   setRemoteDestructive: (p: DangerPolicy) => void;
@@ -107,7 +107,7 @@ interface SettingsState {
   setIconSet: (id: string) => void;
   setIconBox: (v: boolean) => void;
   setFocusIndicator: (v: FocusIndicator) => void;
-  setDefaultProjectRoot: (root: string) => void;
+  setDefaultWorkspaceRoot: (root: string) => void;
   setTabCloseConfirm: (v: TabCloseConfirm) => void;
   setRightSidebarMode: (v: RightSidebarMode) => void;
   setRailLook: (v: RailLook) => void;
@@ -127,7 +127,7 @@ interface SettingsState {
 
 const DEFAULTS = {
   language: "ko" as Language,
-  projectTabPosition: "top" as TabPosition,
+  workspaceTabPosition: "top" as TabPosition,
   contentTabPosition: "top" as TabPosition,
   splitHeaderMode: "title" as SplitHeaderMode,
   remoteDestructive: "allow" as DangerPolicy,
@@ -135,7 +135,7 @@ const DEFAULTS = {
   iconSet: "lucide",
   iconBox: false,
   focusIndicator: "outline" as FocusIndicator,
-  defaultProjectRoot: "",
+  defaultWorkspaceRoot: "",
   tabCloseConfirm: "warn" as TabCloseConfirm,
   rightSidebarMode: "overlay" as RightSidebarMode,
   railLook: "ground" as RailLook,
@@ -181,7 +181,7 @@ type PersistedSettings = typeof DEFAULTS;
 export function serialize(s: SettingsState): PersistedSettings {
   return {
     language: s.language,
-    projectTabPosition: s.projectTabPosition,
+    workspaceTabPosition: s.workspaceTabPosition,
     contentTabPosition: s.contentTabPosition,
     splitHeaderMode: s.splitHeaderMode,
     remoteDestructive: s.remoteDestructive,
@@ -189,7 +189,7 @@ export function serialize(s: SettingsState): PersistedSettings {
     iconSet: s.iconSet,
     iconBox: s.iconBox,
     focusIndicator: s.focusIndicator,
-    defaultProjectRoot: s.defaultProjectRoot,
+    defaultWorkspaceRoot: s.defaultWorkspaceRoot,
     tabCloseConfirm: s.tabCloseConfirm,
     rightSidebarMode: s.rightSidebarMode,
     railLook: s.railLook,
@@ -252,8 +252,8 @@ export const useSettings = moduleState("state/settings#store", () =>
       set({ language });
       save();
     },
-    setProjectTabPosition: (projectTabPosition) => {
-      set({ projectTabPosition });
+    setWorkspaceTabPosition: (workspaceTabPosition) => {
+      set({ workspaceTabPosition });
       save();
     },
     setContentTabPosition: (contentTabPosition) => {
@@ -284,8 +284,8 @@ export const useSettings = moduleState("state/settings#store", () =>
       set({ focusIndicator });
       save();
     },
-    setDefaultProjectRoot: (defaultProjectRoot) => {
-      set({ defaultProjectRoot });
+    setDefaultWorkspaceRoot: (defaultWorkspaceRoot) => {
+      set({ defaultWorkspaceRoot });
       save();
     },
     setTabCloseConfirm: (tabCloseConfirm) => {

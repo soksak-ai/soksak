@@ -102,7 +102,7 @@ interface StaticModule {
 
 // Adapter from a static view provider (new mount({root,...}) signature) to a viewRegistry provider
 // (old mount(el,ctx)). Teardown is signalled by a per-instance AbortSignal. root=DOM root,
-// projectRoot=project path (renamed from the old ctx.root); the remaining PluginViewContext fields
+// workspaceRoot=workspace path (renamed from the old ctx.root); the remaining PluginViewContext fields
 // (restore, paneId, setBadge, …) pass through unchanged — the B3 restore seam is preserved.
 function adaptStaticView(
   provider: StaticViewProvider,
@@ -116,7 +116,7 @@ function adaptStaticView(
   ) => ({
     ...(vctx ?? {}),
     root: el,
-    projectRoot: (vctx?.root as string | null | undefined) ?? null,
+    workspaceRoot: (vctx?.root as string | null | undefined) ?? null,
     app: appOf(),
     signal,
   });

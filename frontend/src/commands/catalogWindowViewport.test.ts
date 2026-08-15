@@ -11,7 +11,7 @@ vi.mock("../framework", async (importOriginal) => ({
   windowByLabel: vi.fn(),
 }));
 vi.mock("../i18n", () => ({ tmsg: () => "window viewport" }));
-vi.mock("../lib/projectRoot", () => ({ validateProjectRoot: vi.fn() }));
+vi.mock("../lib/workspaceRoot", () => ({ validateWorkspaceRoot: vi.fn() }));
 vi.mock("../lib/webviewLabels", () => ({
   browserLabelPrefix: vi.fn(),
   currentWindowLabel: () => "win-retina",

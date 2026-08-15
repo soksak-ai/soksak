@@ -36,9 +36,9 @@ export const ProjectionSlots = memo(function ProjectionSlots({
   const bootPhase = useBootPhase((st) => st.phase);
   // Subscribes to every resolution input — the active chain (sessions), registration
   // (viewRegistry), pins (projection), active plugins.
-  const tab = useSessions((s) => s.projects.find((x) => x.id === projectId));
+  const tab = useSessions((s) => s.workspaces.find((x) => x.id === projectId));
   const regVersion = useViewRegistry((s) => s.version);
-  const entry = useProjection((s) => s.byProject[projectId]);
+  const entry = useProjection((s) => s.byWorkspace[projectId]);
   const plugins = usePlugins((s) => s.plugins);
   // A change of contract implementation selection also changes slot resolution (A6 — the user
   // swaps the implementation).

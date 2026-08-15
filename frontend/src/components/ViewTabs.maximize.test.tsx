@@ -22,8 +22,8 @@ let host: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
-  useSessions.setState({ projects: [], activeId: "" });
-  useSessions.getState().bootstrapFirstProject("/test/root");
+  useSessions.setState({ workspaces: [], activeId: "" });
+  useSessions.getState().bootstrapFirstWorkspace("/test/root");
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -39,7 +39,7 @@ describe("feature tab maximize", () => {
   // so the two do not diverge. This test therefore builds the catalog and waits for the command
   // to finish.
   it("a tab double click maximizes that feature view", async () => {
-    const base = useSessions.getState().projects[0];
+    const base = useSessions.getState().workspaces[0];
     const content = base.spaces[0];
     const viewId = "v-max";
     const group = {
@@ -55,17 +55,17 @@ describe("feature tab maximize", () => {
         },
       ],
     };
-    const project = {
+    const workspace = {
       ...base,
       spaces: [{ ...content, activePaneId: group.id, layout: splitLeaf(group) }],
     };
-    useSessions.setState({ projects: [project], activeId: project.id });
+    useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
     startExecutor(); // The command catalog — without it the command answers REGISTRY_EMPTY and nothing happens.
 
     act(() => {
       root.render(
         <ViewTabs
-          projectId={project.id}
+          projectId={workspace.id}
           group={group}
           onTabPointerDown={() => {}}
         />,
@@ -82,7 +82,7 @@ describe("feature tab maximize", () => {
       await Promise.resolve();
     });
     expect(
-      useSessions.getState().projects[0].spaces[0].maximizedTabId,
+      useSessions.getState().workspaces[0].spaces[0].maximizedTabId,
     ).toBe(viewId);
   });
 });

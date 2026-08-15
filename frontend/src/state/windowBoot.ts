@@ -1,6 +1,6 @@
 // Workspace persistence boot (A5) — called once by the main.tsx boot. Joins core-kv storage and the sessions store.
-//  1) Restore: hydrate the "window/<label>" snapshot → restoreProjects + reseed when present, otherwise return false
-//     (the caller falls back to bootstrapFirstProject).
+//  1) Restore: hydrate the "window/<label>" snapshot → restoreWorkspaces + reseed when present, otherwise return false
+//     (the caller falls back to bootstrapFirstWorkspace).
 //  2) Autosave: on every sessions change, save the snapshot debounced + upsert the manifest.
 //  3) manifest: upsert this window's (label) slot under the "windows" key.
 //
@@ -19,18 +19,18 @@ import {
 import { noteDataChange } from "./dataChangeHealth";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { makeCoreStore } from "./coreStore";
-import { validateProjectRoot, ensureDefaultProjectRoot } from "../lib/projectRoot";
-import { claimRoots } from "./projectRegistry";
+import { validateWorkspaceRoot, ensureDefaultWorkspaceRoot } from "../lib/workspaceRoot";
+import { claimRoots } from "./workspaceRegistry";
 import { beginRestoreHydration } from "./hydration";
 import { releaseWebviewGcHold } from "../lib/webviewGc";
 import { reseedSessionsSnapshot } from "../plugins/hooks";
 import { useProjection, type Pins } from "./projection";
-import { listRecentProjects } from "./recentProjects";
+import { listRecentWorkspaces } from "./recentWorkspaces";
 import {
   useSessions,
   nextSplitIdGen,
   migrateSpaceTitle,
-  type Project,
+  type Workspace,
 } from "./sessions";
 import {
   snapshotWindow,
@@ -83,7 +83,7 @@ export const coreStoreDeps = {
   localStorage: window.localStorage,
 };
 
-const EMPTY_WINDOW: WindowSnapshot = { activeId: "", projects: [] };
+const EMPTY_WINDOW: WindowSnapshot = { activeId: "", workspaces: [] };
 const EMPTY_MANIFEST: WindowManifest = { slots: [] };
 
 function debounce<A extends unknown[]>(
@@ -124,30 +124,30 @@ export async function initWorkspacePersistence(
   // The read itself can fail (the store's owner is a separate process). That failure must be recorded as unread, not
   // as count 0 — written as 0 it equals "an originally empty window" and the guard opens.
   let snapshot: SnapshotRead = snapshotUnread();
-  let restoredProjects = 0;
+  let restoredWorkspaces = 0;
   try {
     const snap = await winStore.hydrate();
-    snapshot = snapshotRead(snap.projects.length);
-    bootFact(`restore:hydrated:${snap.projects.length}`);
-    if (snap.projects.length > 0) {
-      const { projects, activeId, projections } = restoreWindow(snap, nextSplitIdGen);
+    snapshot = snapshotRead(snap.workspaces.length);
+    bootFact(`restore:hydrated:${snap.workspaces.length}`);
+    if (snap.workspaces.length > 0) {
+      const { workspaces, activeId, projections } = restoreWindow(snap, nextSplitIdGen);
       // root existence check — an absent or invalid root demotes the tab to rootMissing instead of deleting it
       // (no unauthorized deletion). A banner reports it, and a returning path resolves it naturally on the next restore.
       await Promise.all(
-        projects.map(async (t) => {
+        workspaces.map(async (t) => {
           try {
-            await validateProjectRoot(t.root);
+            await validateWorkspaceRoot(t.root);
           } catch {
             t.rootMissing = true;
-            console.warn(`[restore] project root missing — restored as a demoted tab: ${t.root}`);
+            console.warn(`[restore] workspace root missing — restored as a demoted tab: ${t.root}`);
           }
         }),
       );
       // P6 (globally single open): claim every root of this window's snapshot at once. Tabs whose root another
-      // window already holds are dropped in this window (no duplicate window per project — graceful degradation).
-      const denied = await claimRoots(projects.map((t) => t.root));
+      // window already holds are dropped in this window (no duplicate window per workspace — graceful degradation).
+      const denied = await claimRoots(workspaces.map((t) => t.root));
       bootFact(`restore:denied:${denied.size}`);
-      const owned = projects
+      const owned = workspaces
         .filter((t) => !denied.has(t.root))
         // Load-time migration — promotes an old purely numeric space title ("3") to the i18n space title (idempotent;
         // spreadsheet-style naming makes it explicit that it is a space). Titles the user changed are kept (numeric only).
@@ -155,7 +155,7 @@ export async function initWorkspacePersistence(
           ...t,
           spaces: t.spaces.map((c) => ({ ...c, title: migrateSpaceTitle(c.title) })),
         }));
-      for (const t of projects) {
+      for (const t of workspaces) {
         if (denied.has(t.root))
           console.warn(`[P6] restored tab dropped (held by another window): ${t.root}`);
       }
@@ -166,18 +166,18 @@ export async function initWorkspacePersistence(
         // Rail pin restore (§4.5, R9) — seeding before the tracking sweep (guaranteed by the main boot order).
         for (const t of owned) {
           const seed = projections[t.id];
-          if (seed) useProjection.getState().seedProject(t.id, seed);
+          if (seed) useProjection.getState().seedWorkspace(t.id, seed);
         }
-        useSessions.getState().restoreProjects(owned, active);
+        useSessions.getState().restoreWorkspaces(owned, active);
         // Restore is not creation (§5 replay != observation) — reseeds the diff baseline to now, so a restore delta is
-        // never mistaken for project.created (which would auto-run plugin git.init and the like).
+        // never mistaken for workspace.created (which would auto-run plugin git.init and the like).
         reseedSessionsSnapshot();
         // B4 — restore hydration: defers body mount of invisible restored views (spreading concurrent PTY
         // spawn), and an idle chain fills them in lastActivity order. The outer shell appears all at once.
         beginRestoreHydration();
       }
-      restoredProjects = useSessions.getState().projects.length;
-      restored = restoredProjects > 0;
+      restoredWorkspaces = useSessions.getState().workspaces.length;
+      restored = restoredWorkspaces > 0;
     }
     bootFact(`restore:done:${restored}`);
   } catch (e) {
@@ -203,28 +203,28 @@ export async function initWorkspacePersistence(
       bootFact(`persist:blocked:unread:${String(e).slice(0, 80)}`);
       return;
     }
-    if (!mayAdoptLateRead(late.projects.length)) {
+    if (!mayAdoptLateRead(late.workspaces.length)) {
       // The late read came back non-empty — this window has never restored it (persistGuard header).
-      bootFact(`persist:blocked:unrestored:${late.projects.length}`);
+      bootFact(`persist:blocked:unrestored:${late.workspaces.length}`);
       return;
     }
-    snapshot = snapshotRead(late.projects.length);
+    snapshot = snapshotRead(late.workspaces.length);
     bootFact("persist:unblocked:0");
   };
 
   const persistOnce = async (): Promise<void> => {
     await settleUnread();
-    const { projects, activeId } = useSessions.getState();
+    const { workspaces, activeId } = useSessions.getState();
     // The unknown must not overwrite the known — a window whose restore failed entirely, or that could not read the
     // snapshot, does not save. Without this guard, the user's workspace was erased on 2026-08-01 (measured).
-    if (!mayPersist({ snapshot, restoredProjects, liveProjects: projects.length })) {
+    if (!mayPersist({ snapshot, restoredWorkspaces, liveWorkspaces: workspaces.length })) {
       return;
     }
     const projections: Record<string, { pins: Pins }> = {};
-    for (const [pid, e] of Object.entries(useProjection.getState().byProject)) {
+    for (const [pid, e] of Object.entries(useProjection.getState().byWorkspace)) {
       projections[pid] = { pins: e.pins };
     }
-    await persistNow(label, projects, activeId, projections, winStore);
+    await persistNow(label, workspaces, activeId, projections, winStore);
   };
   const doPersist = () => void persistOnce();
   const persist = debounce(doPersist, 400);
@@ -242,20 +242,20 @@ export async function initWorkspacePersistence(
 
 async function persistNow(
   label: string,
-  projects: Project[],
+  workspaces: Workspace[],
   activeId: string,
   projections: Record<string, { pins: Pins }>,
   winStore: ReturnType<typeof makeCoreStore<WindowSnapshot>>,
 ): Promise<void> {
   try {
-    const snap = snapshotWindow(projects, activeId, projections);
+    const snap = snapshotWindow(workspaces, activeId, projections);
     // Keeping the previous value is the store's job (kv_past — for every write, unconditionally).
     // This site once picked out only "losing writes" and kept a copy aside, but then ① a write the picking rule
     // misses has nowhere to roll back to and ② the same fact is stored twice, so updating one returns a wrong value.
     // Whatever this window does, whatever new bug appears, the store has a place to roll back to.
     await winStore.save(snap);
     // Window frame (B2) — respawn brings it back at the same place and size (dual-monitor layout kept).
-    const entry = { ...windowManifestEntry(label, projects, activeId), rect: await currentFrame() };
+    const entry = { ...windowManifestEntry(label, workspaces, activeId), rect: await currentFrame() };
     // The ledger is not read-modify-written. Two frameworks share one home, so writing the whole thing back makes
     // the later write erase the other's slot — it shows up as "after a restart that window does not open".
     // Merging is done by the side holding the store, inside one transaction (window_manifest_upsert).
@@ -304,7 +304,7 @@ export async function respawnSavedWindows(): Promise<void> {
         fallback: EMPTY_WINDOW,
         ...coreStoreDeps,
       });
-      // Absent and empty are separated. Both used to be "0 projects", which pruned windows whose snapshot was not
+      // Absent and empty are separated. Both used to be "0 workspaces", which pruned windows whose snapshot was not
       // yet written or was erased — those windows never open again (back when there was nowhere to roll back, that
       // was outright loss). The only thing pruned is a window the user emptied.
       const { found, value: snap } = await snapStore.read();
@@ -315,7 +315,7 @@ export async function respawnSavedWindows(): Promise<void> {
         console.warn(`[restore] no snapshot — not opened, ledger entry kept: ${slot.label}`);
         continue;
       }
-      if (snap.projects.length === 0) {
+      if (snap.workspaces.length === 0) {
         manifest = upsertManifest(manifest, { ...slot, roots: [] }); // slot removal
         pruned = true;
         respawnFact(`respawn:ghost:${slot.label}`);
@@ -348,14 +348,14 @@ export async function respawnSavedWindows(): Promise<void> {
     if (pruned) await manifestStore.save(manifest);
     // Restore does not move focus — the logic that forced a jump to the previously focused window is removed. The
     // window active at boot (the orchestrator etc.) stays active. The user calls a window with the focus icon in the window list.
-    // First run (0 workspace slots to respawn + 0 recent projects) — opens one default project workspace window.
+    // First run (0 workspace slots to respawn + 0 recent workspaces) — opens one default workspace workspace window.
     // When the user closed every window (recents present), that is respected and nothing is opened.
     const hasSlots = manifest.slots.some((s) => s.label !== "main");
     if (!hasSlots) {
-      const recents = await listRecentProjects().catch(() => []);
+      const recents = await listRecentWorkspaces().catch(() => []);
       if (recents.length === 0) {
         try {
-          const root = await ensureDefaultProjectRoot("project1");
+          const root = await ensureDefaultWorkspaceRoot("workspace1");
           await invoke("window_create", { init: `root=${encodeURIComponent(root)}` });
         } catch (e) {
           console.error("first-run default workspace creation failed:", e);

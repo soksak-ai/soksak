@@ -1,22 +1,22 @@
 // Target echo gate — a command that takes a target axis reports the resolved axis in its answer.
 //
 // (a) The rule this gate enforces
-//   A core command that takes a target axis (project · space · panel/pane · view/tab) as a
+//   A core command that takes a target axis (workspace · space · panel/pane · view/tab) as a
 //   parameter states in returns what that axis resolved to. An omitted axis is filled silently
 //   from "caller context", so if the answer does not state the resolution the caller has no way
 //   to tell where it ran. Verification then goes GREEN on a guess — real incident: a call with
 //   the axis omitted went to "whatever was registered first" and answered success, and a wrong
 //   verification passed across 6 runs.
-//   One echo name per axis: project→projectId · space→spaceId · panel→panelId ·
+//   One echo name per axis: workspace→projectId · space→spaceId · panel→panelId ·
 //   pane→paneId · view→viewId · tab→tabId. If the name varies per axis the comparison itself
 //   becomes impossible.
 //
 // (b) RED evidence (measured, 2026-07-26)
 //   Of the 226 register blocks in src/commands/catalog*.ts, 46 commands take a target axis as a
 //   parameter. 39 of those do not put the resolved axis in returns — 44 axis instances
-//   (project 30 · space 3 · view 6 · pane 5; five commands omit two axes at once).
-//   Example: space.activate takes project·space and answers with neither; panel.split takes
-//   project and answers with panelId·viewId only.
+//   (workspace 30 · space 3 · view 6 · pane 5; five commands omit two axes at once).
+//   Example: space.activate takes workspace·space and answers with neither; panel.split takes
+//   workspace and answers with panelId·viewId only.
 //   The plan (enchanted-waddling-hollerith §5) recorded 35 here but the measurement is 39 — the
 //   plan's number is not reproducible, so the measurement is canonical (R-A6).
 //   The registry cannot be built without the app, so the sources are read instead
@@ -27,7 +27,7 @@
 //
 //   node --input-type=module -e '
 //   import {readdirSync,readFileSync} from "node:fs";
-//   const d="src/commands",A={project:"projectId",space:"spaceId",panel:"panelId",pane:"paneId",view:"viewId",tab:"tabId"};
+//   const d="src/commands",A={workspace:"projectId",space:"spaceId",panel:"panelId",pane:"paneId",view:"viewId",tab:"tabId"};
 //   let n=0,o=[];
 //   for(const f of readdirSync(d).filter(f=>/^catalog.*\.ts$/.test(f)&&!f.includes(".test."))){
 //     const s=readFileSync(d+"/"+f,"utf8"),m=[...s.matchAll(/register\("([^"]+)", \{/g)];
@@ -49,7 +49,7 @@ import { describe, expect, it } from "vitest";
 
 /** Axis name → the echo name required in the answer. One per axis. */
 const AXIS_ECHO = {
-  project: "projectId",
+  workspace: "projectId",
   space: "spaceId",
   panel: "panelId",
   pane: "paneId",
@@ -123,7 +123,7 @@ describe("target echo — a command taking an axis answers what it resolved to",
   });
 
   it("one echo name per axis — returns uses no other spelling of the axis name", () => {
-    // Writing projectId as project_id or pjtId passes the check above but the caller cannot read it.
+    // Writing projectId as workspace_id or pjtId passes the check above but the caller cannot read it.
     const offenders: string[] = [];
     for (const b of AXIS_TAKING) {
       for (const a of axesOf(b)) {

@@ -1,8 +1,8 @@
-// Project daemon commands (daemon.*) — the declaration is the project's Procfile (standard
+// Workspace daemon commands (daemon.*) — the declaration is the workspace's Procfile (standard
 // convention), soksak-specific policy such as autostart and the stop command is in the local DB
 // (app.data core ns), and run/logs/cleanup are in the core singleton (daemon.rs).
 // Security contract: a file committed to the repository never causes "open means run" — autostart
-// starts only what the user allowed through daemon.autostart, at project open (supply-chain attack
+// starts only what the user allowed through daemon.autostart, at workspace open (supply-chain attack
 // path blocked).
 import { invoke } from "../framework";
 import { register, type CommandContext, type CommandHint } from "./registry";
@@ -30,15 +30,15 @@ interface CoreDaemonStatus {
 const NS = "core";
 const policyKey = (root: string) => `daemon/${root}`;
 
-/** Target project of this window — an explicit project id wins, otherwise the active project. Daemon
+/** Target workspace of this window — an explicit workspace id wins, otherwise the active workspace. Daemon
  *  policy and the Procfile are keyed by root while the answer names the resolved id, so both are returned. */
 function resolveTarget(
   params: Record<string, unknown>,
 ): { id: string; root: string } | null {
   const s = useSessions.getState();
-  const t = params.project
-    ? s.projects.find((x) => x.id === params.project)
-    : (s.projects.find((x) => x.id === s.activeId) ?? s.projects[0]);
+  const t = params.workspace
+    ? s.workspaces.find((x) => x.id === params.workspace)
+    : (s.workspaces.find((x) => x.id === s.activeId) ?? s.workspaces[0]);
   return t?.root ? { id: t.id, root: t.root } : null;
 }
 
@@ -82,22 +82,22 @@ async function startOne(root: string, e: ProcfileEntry, policy: DaemonPolicy): P
 }
 
 const P = {
-  project: { type: "string" as const, description: "Project id (omit = active project)" },
+  workspace: { type: "string" as const, description: "Workspace id (omit = active workspace)" },
   name: { type: "string" as const, description: "Daemon name from the Procfile", required: true },
 };
 
-const noProject = () => ({
+const noWorkspace = () => ({
   ok: false as const,
   code: "TARGET_NOT_FOUND",
-  message: tmsg("msg.daemon.noProject"),
+  message: tmsg("msg.daemon.noWorkspace"),
 });
 
 export function registerDaemonCatalog(): void {
   register("daemon.list", {
     description:
-      "List the project's daemons — Procfile declarations merged with runtime state (running/stopped, pid, uptime) and local policy (autostart, managed stop command). A Procfile found in the project is only discovered, never auto-run, until the user allows it with daemon.autostart.",
+      "List the workspace's daemons — Procfile declarations merged with runtime state (running/stopped, pid, uptime) and local policy (autostart, managed stop command). A Procfile found in the workspace is only discovered, never auto-run, until the user allows it with daemon.autostart.",
     triggers: { ko: "데몬 목록 상시 프로세스 서버 목록" },
-    params: { project: P.project },
+    params: { workspace: P.workspace },
     returns:
       "{ projectId, daemons: [{ name, cmd, running, pid?, uptimeMs?, autostart, managed, exitCode? }] }",
     message: (d) => tmsg("msg.daemon.list", { n: ((d.daemons as unknown[]) ?? []).length }),
@@ -116,7 +116,7 @@ export function registerDaemonCatalog(): void {
     },
     handler: async (p) => {
       const target = resolveTarget(p);
-      if (!target) return noProject();
+      if (!target) return noWorkspace();
       const { id: projectId, root } = target;
       const [{ entries }, policy, status] = await Promise.all([
         readProcfile(root),
@@ -142,12 +142,12 @@ export function registerDaemonCatalog(): void {
 
   register("daemon.add", {
     description:
-      "Register a long-running project process (dev server, watcher, database) as a daemon — appends a standard `name: command` line to the project's Procfile. If your project has such a process, register it: with autostart allowed it starts whenever the project opens. Container stacks work too (a foreground `docker compose up` cleans itself up on stop).",
+      "Register a long-running workspace process (dev server, watcher, database) as a daemon — appends a standard `name: command` line to the workspace's Procfile. If your workspace has such a process, register it: with autostart allowed it starts whenever the workspace opens. Container stacks work too (a foreground `docker compose up` cleans itself up on stop).",
     triggers: { ko: "데몬 등록 추가 서버 자동 시작" },
     params: {
       name: P.name,
-      cmd: { type: "string", description: "Shell command to run from the project root", required: true },
-      project: P.project,
+      cmd: { type: "string", description: "Shell command to run from the workspace root", required: true },
+      workspace: P.workspace,
     },
     returns: "{ projectId, name, cmd }",
     message: (d) => tmsg("msg.daemon.add", { name: String(d.name) }),
@@ -162,7 +162,7 @@ export function registerDaemonCatalog(): void {
           ],
     handler: async (p) => {
       const target = resolveTarget(p);
-      if (!target) return noProject();
+      if (!target) return noWorkspace();
       const { id: projectId, root } = target;
       const { text } = await readProcfile(root);
       const next = upsertEntry(text, p.name as string, p.cmd as string);
@@ -174,16 +174,16 @@ export function registerDaemonCatalog(): void {
   register("daemon.remove", {
     danger: "destructive",
     description:
-      "Remove a daemon declaration from the project's Procfile. A running instance is stopped first.",
+      "Remove a daemon declaration from the workspace's Procfile. A running instance is stopped first.",
     triggers: { ko: "데몬 제거 삭제" },
-    params: { name: P.name, project: P.project },
+    params: { name: P.name, workspace: P.workspace },
     returns: "{ projectId, name, removed }",
     message: (d) => tmsg("msg.daemon.remove", { name: String(d.name) }),
     errors: ["TARGET_NOT_FOUND"],
     examples: ["daemon.remove dev"],
     handler: async (p) => {
       const target = resolveTarget(p);
-      if (!target) return noProject();
+      if (!target) return noWorkspace();
       const { id: projectId, root } = target;
       const name = p.name as string;
       await invoke("daemon_stop", { root, name });
@@ -205,7 +205,7 @@ export function registerDaemonCatalog(): void {
     description:
       "Start a declared daemon (omit name = every declared daemon that is not running). Output goes to an in-memory ring buffer — read it with daemon.logs.",
     triggers: { ko: "데몬 시작 서버 시작 기동" },
-    params: { name: { ...P.name, required: false }, project: P.project },
+    params: { name: { ...P.name, required: false }, workspace: P.workspace },
     // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ projectId, started: [{ name, pid }] }",
@@ -221,7 +221,7 @@ export function registerDaemonCatalog(): void {
     },
     handler: async (p) => {
       const target = resolveTarget(p);
-      if (!target) return noProject();
+      if (!target) return noWorkspace();
       const { id: projectId, root } = target;
       const { entries } = await readProcfile(root);
       const policy = await readPolicy(root);
@@ -243,7 +243,7 @@ export function registerDaemonCatalog(): void {
     description:
       "Stop a running daemon (omit name = all). The whole process tree is terminated — SIGTERM first, SIGKILL after a grace period. A managed daemon (one with a stop command set via daemon.set) runs its stop command instead.",
     triggers: { ko: "데몬 정지 서버 정지 중지" },
-    params: { name: { ...P.name, required: false }, project: P.project },
+    params: { name: { ...P.name, required: false }, workspace: P.workspace },
     // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).
     windowScoped: false,
     returns: "{ projectId, stopped: [name] }",
@@ -253,7 +253,7 @@ export function registerDaemonCatalog(): void {
     examples: ["daemon.stop dev", "daemon.stop"],
     handler: async (p) => {
       const target = resolveTarget(p);
-      if (!target) return noProject();
+      if (!target) return noWorkspace();
       const { id: projectId, root } = target;
       const policy = await readPolicy(root);
       const name = p.name as string | undefined;
@@ -273,7 +273,7 @@ export function registerDaemonCatalog(): void {
   register("daemon.restart", {
     description: tmsg("cmd.daemon.restart.desc"),
     triggers: { ko: "데몬 재시작" },
-    params: { name: P.name, project: P.project },
+    params: { name: P.name, workspace: P.workspace },
     returns: "{ projectId, name, pid }",
     message: (d) => tmsg("msg.daemon.restart", { name: String(d.name) }),
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
@@ -281,7 +281,7 @@ export function registerDaemonCatalog(): void {
     handler: async (p, ctx: CommandContext) => {
       void ctx;
       const target = resolveTarget(p);
-      if (!target) return noProject();
+      if (!target) return noWorkspace();
       const { id: projectId, root } = target;
       const name = p.name as string;
       const { entries } = await readProcfile(root);
@@ -304,7 +304,7 @@ export function registerDaemonCatalog(): void {
     params: {
       name: P.name,
       lines: { type: "number", description: "How many recent lines (default 100)" },
-      project: P.project,
+      workspace: P.workspace,
     },
     // The owner fixes the answer — it is the same from any window (registry.ts windowScoped).
     windowScoped: false,
@@ -314,7 +314,7 @@ export function registerDaemonCatalog(): void {
     examples: ["daemon.logs dev", "daemon.logs '{\"name\":\"dev\",\"lines\":300}'"],
     handler: async (p) => {
       const target = resolveTarget(p);
-      if (!target) return noProject();
+      if (!target) return noWorkspace();
       const { id: projectId, root } = target;
       try {
         const lines = (await invoke("daemon_logs", {
@@ -331,12 +331,12 @@ export function registerDaemonCatalog(): void {
 
   register("daemon.autostart", {
     description:
-      "Allow or revoke automatic start when this project opens (omit name = every declared daemon). This is a local, per-machine consent stored outside the repository — a cloned Procfile never runs anything by itself.",
+      "Allow or revoke automatic start when this workspace opens (omit name = every declared daemon). This is a local, per-machine consent stored outside the repository — a cloned Procfile never runs anything by itself.",
     triggers: { ko: "데몬 자동 시작 허용" },
     params: {
       name: { ...P.name, required: false },
-      on: { type: "boolean", description: "true = start when the project opens", required: true },
-      project: P.project,
+      on: { type: "boolean", description: "true = start when the workspace opens", required: true },
+      workspace: P.workspace,
     },
     returns: "{ projectId, autostart: Record<name, boolean> }",
     message: (d) =>
@@ -347,7 +347,7 @@ export function registerDaemonCatalog(): void {
     examples: ["daemon.autostart '{\"name\":\"dev\",\"on\":true}'", "daemon.autostart '{\"on\":true}'"],
     handler: async (p) => {
       const target = resolveTarget(p);
-      if (!target) return noProject();
+      if (!target) return noWorkspace();
       const { id: projectId, root } = target;
       const { entries } = await readProcfile(root);
       const policy = await readPolicy(root);
@@ -368,7 +368,7 @@ export function registerDaemonCatalog(): void {
     params: {
       name: P.name,
       stop: { type: "string", description: "Command that shuts the daemon down (empty string clears it)" },
-      project: P.project,
+      workspace: P.workspace,
     },
     returns: "{ projectId, name, stop? }",
     message: (d) => tmsg("msg.daemon.set", { name: String(d.name) }),
@@ -376,7 +376,7 @@ export function registerDaemonCatalog(): void {
     examples: ["daemon.set '{\"name\":\"db\",\"stop\":\"docker compose down\"}'"],
     handler: async (p) => {
       const target = resolveTarget(p);
-      if (!target) return noProject();
+      if (!target) return noWorkspace();
       const { id: projectId, root } = target;
       const name = p.name as string;
       const { entries } = await readProcfile(root);
@@ -448,8 +448,8 @@ export function registerDaemonCatalog(): void {
   });
 }
 
-/** Project-open hook — reap recorded pids, then autostart only the allowed daemons (security contract). */
-export async function daemonOnProjectOpen(root: string): Promise<void> {
+/** Workspace-open hook — reap recorded pids, then autostart only the allowed daemons (security contract). */
+export async function daemonOnWorkspaceOpen(root: string): Promise<void> {
   try {
     const policy = await readPolicy(root);
     // (1) Reap leftovers from an abnormal exit — matching the command line prevents killing the wrong process.
@@ -465,6 +465,6 @@ export async function daemonOnProjectOpen(root: string): Promise<void> {
       if (policy.autostart?.[e.name]) await startOne(root, e, policy);
     }
   } catch {
-    // A daemon start failure never blocks project open — daemon.list shows the state.
+    // A daemon start failure never blocks workspace open — daemon.list shows the state.
   }
 }

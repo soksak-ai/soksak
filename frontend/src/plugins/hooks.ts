@@ -30,12 +30,12 @@ export interface Disposable {
 }
 
 export interface PluginEventMap {
-  "project.changed": { projectId: string; root: string | null };
-  // A new project was created (right after the root is fixed) — root initialization policy
+  "workspace.changed": { projectId: string; root: string | null };
+  // A new workspace was created (right after the root is fixed) — root initialization policy
   // (git init etc.) is owned by plugins subscribing to this event, not by the core.
-  "project.created": { projectId: string; root: string | null };
+  "workspace.created": { projectId: string; root: string | null };
   // Rail binding changed (sidebar projection §4.3) — on binding view switch (including an active
-  // tab switch inside a group), release, and pin change. viewId=null means no binding (empty project).
+  // tab switch inside a group), release, and pin change. viewId=null means no binding (empty workspace).
   "projection.changed": { projectId: string; viewId: string | null };
   "view.activated": {
     projectId: string;
@@ -99,7 +99,7 @@ export interface PluginEventMap {
   "bookmarks.changed": { bookmarks: Bookmark[] };
   // Terminal command start (OSC 633;E from the shell preexec — command line and cwd included, no polling).
   // [RULE] Per-command domain handling (claude etc.) is owned by plugins subscribing to this event,
-  // not by the core — the same rule as project.created. The core provides only the generic socket
+  // not by the core — the same rule as workspace.created. The core provides only the generic socket
   // and holds no code specific to one plugin (claude etc.) — no tight coupling.
   "command.started": {
     projectId: string | null;
@@ -111,7 +111,7 @@ export interface PluginEventMap {
     pid?: number | null;
   };
   // Terminal command end (OSC 133/633 shell integration detection — no polling). The auto-refresh
-  // trigger for the git view etc. projectId is the project of the pane (null when not found).
+  // trigger for the git view etc. projectId is the workspace of the pane (null when not found).
   // commandLine is set only for a real command with an observed start (shell init byproducts are
   // null — the prompt end fired per pane at boot).
   "command.finished": {
@@ -137,8 +137,8 @@ export interface PluginEventMap {
   };
   "turn.ended": {
     projectId: string | null;
-    // Project root (folder path) — a window-independent stable identifier. The scope key for
-    // consistency across windows on one project (projectId can differ per window, so it is unfit as
+    // Workspace root (folder path) — a window-independent stable identifier. The scope key for
+    // consistency across windows on one workspace (projectId can differ per window, so it is unfit as
     // a scope). Subscribers (the mailbox) scope by root.
     root: string | null;
     paneId: string | null;
@@ -152,8 +152,8 @@ export interface PluginEventMap {
 }
 
 export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
-  "project.changed",
-  "project.created",
+  "workspace.changed",
+  "workspace.created",
   "projection.changed",
   "view.activated",
   "file.opened",
@@ -308,30 +308,30 @@ interface ActiveViewKey {
 
 interface SessionsSnapshot {
   activeProjectId: string;
-  rootByProject: Map<string, string | null>;
+  rootByWorkspace: Map<string, string | null>;
   activeView: ActiveViewKey | null;
-  // Every open file view (any project): viewId → {projectId, path}
+  // Every open file view (any workspace): viewId → {projectId, path}
   fileViews: Map<string, { projectId: string; path: string }>;
 }
 
 function snapshotSessions(s: SessionsState): SessionsSnapshot {
-  const rootByProject = new Map<string, string | null>();
+  const rootByWorkspace = new Map<string, string | null>();
   const fileViews = new Map<string, { projectId: string; path: string }>();
   let activeView: ActiveViewKey | null = null;
-  for (const project of s.projects) {
-    rootByProject.set(project.id, project.root ?? null);
-    for (const content of project.spaces) {
+  for (const workspace of s.workspaces) {
+    rootByWorkspace.set(workspace.id, workspace.root ?? null);
+    for (const content of workspace.spaces) {
       for (const group of allGroups(content.layout)) {
         for (const view of group.tabs) {
           if (view.kind === "file") {
-            fileViews.set(view.id, { projectId: project.id, path: view.path });
+            fileViews.set(view.id, { projectId: workspace.id, path: view.path });
           }
         }
       }
     }
-    if (project.id === s.activeId) {
-      const content = project.spaces.find(
-        (c) => c.id === project.activeSpaceId,
+    if (workspace.id === s.activeId) {
+      const content = workspace.spaces.find(
+        (c) => c.id === workspace.activeSpaceId,
       );
       if (content) {
         const group = allGroups(content.layout).find(
@@ -340,7 +340,7 @@ function snapshotSessions(s: SessionsState): SessionsSnapshot {
         const view = group?.tabs.find((v) => v.id === group.activeTabId);
         if (view) {
           activeView = {
-            projectId: project.id,
+            projectId: workspace.id,
             viewId: view.id,
             kind: view.kind,
             path: view.kind === "file" ? view.path : undefined,
@@ -349,19 +349,19 @@ function snapshotSessions(s: SessionsState): SessionsSnapshot {
       }
     }
   }
-  return { activeProjectId: s.activeId, rootByProject, activeView, fileViews };
+  return { activeProjectId: s.activeId, rootByWorkspace, activeView, fileViews };
 }
 
 function diffSessions(prev: SessionsSnapshot, next: SessionsSnapshot): void {
-  for (const [projectId, root] of next.rootByProject) {
-    if (!prev.rootByProject.has(projectId)) {
-      emitPluginEvent("project.created", { projectId, root: root ?? null });
+  for (const [projectId, root] of next.rootByWorkspace) {
+    if (!prev.rootByWorkspace.has(projectId)) {
+      emitPluginEvent("workspace.created", { projectId, root: root ?? null });
     }
   }
   if (prev.activeProjectId !== next.activeProjectId) {
-    emitPluginEvent("project.changed", {
+    emitPluginEvent("workspace.changed", {
       projectId: next.activeProjectId,
-      root: next.rootByProject.get(next.activeProjectId) ?? null,
+      root: next.rootByWorkspace.get(next.activeProjectId) ?? null,
     });
   }
   const a = prev.activeView;
@@ -413,8 +413,8 @@ export function startPluginHooks(): void {
   };
   useSessions.subscribe(() => scheduleSessionsDiff());
   // Swallow the restore delta (§5 "replay is not observation") — windowBoot calls this right after
-  // boot restore is applied. The source of project.created firing per window, because the diff took
-  // restore-created projects for creation (measured: automatic git.init per window + repeated "OK" readouts).
+  // boot restore is applied. The source of workspace.created firing per window, because the diff took
+  // restore-created workspaces for creation (measured: automatic git.init per window + repeated "OK" readouts).
   reseedSessionsSlot.v = () => {
     prevSessions = snapshotSessions(useSessions.getState());
   };
@@ -476,7 +476,7 @@ export function startPluginHooks(): void {
     void (async () => {
       const pid = await invoke<number | null>("pty_pane_pid", { paneId }).catch(() => null);
       emitPluginEvent("command.started", {
-        projectId: projectOfTab(paneId),
+        projectId: workspaceOfTab(paneId),
         paneId,
         commandLine,
         cwd,
@@ -573,13 +573,13 @@ export function startPluginHooks(): void {
   });
 }
 
-// The project {id, root} of a pane. null when not found. root is a window-independent stable
-// identifier (the turn.ended scope key). id is a window-local UI handle (for project.activate).
+// The workspace {id, root} of a pane. null when not found. root is a window-independent stable
+// identifier (the turn.ended scope key). id is a window-local UI handle (for workspace.activate).
 //
 // The observation substrate's paneId = the sessions view.id of a plugin terminal view (= the paneId
 // passed to app.pty.spawn). The core does not own terminal views (a terminal is a plugin view too).
 function projectInfoOfTab(paneId: string): { id: string; root: string | null } | null {
-  for (const t of useSessions.getState().projects) {
+  for (const t of useSessions.getState().workspaces) {
     for (const c of t.spaces) {
       for (const g of allGroups(c.layout)) {
         for (const v of g.tabs) {
@@ -593,7 +593,7 @@ function projectInfoOfTab(paneId: string): { id: string; root: string | null } |
   return null;
 }
 
-// The project id of a pane (for places that need the id only, e.g. command.started).
-function projectOfTab(paneId: string): string | null {
+// The workspace id of a pane (for places that need the id only, e.g. command.started).
+function workspaceOfTab(paneId: string): string | null {
   return projectInfoOfTab(paneId)?.id ?? null;
 }

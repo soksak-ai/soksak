@@ -14,10 +14,10 @@ const entry = (kind: string, payload: Record<string, unknown>, ts = 1000): Activ
 describe("foldFeed — the conversation set (parentId is the source of truth)", () => {
   it("prompt, child commands and deltas, answer fold into one card (body in seq order)", () => {
     seq = 0;
-    const prompt = entry("chat.prompt", { text: "list the windows", turnId: "pjt-aaaaaa", window: "main" });
-    const delta = entry("command.progress", { command: "orchestrator.ask", delta: "checking", parentId: "pjt-aaaaaa", window: "main" });
-    const child = entry("command.executed", { command: "window.projects", ok: true, parentId: "pjt-aaaaaa", window: "win-abc" });
-    const answer = entry("chat.answer", { text: "three are open", parentId: "pjt-aaaaaa", window: "main" });
+    const prompt = entry("chat.prompt", { text: "list the windows", turnId: "wsp-aaaaaa", window: "main" });
+    const delta = entry("command.progress", { command: "orchestrator.ask", delta: "checking", parentId: "wsp-aaaaaa", window: "main" });
+    const child = entry("command.executed", { command: "window.workspaces", ok: true, parentId: "wsp-aaaaaa", window: "win-abc" });
+    const answer = entry("chat.answer", { text: "three are open", parentId: "wsp-aaaaaa", window: "main" });
     const other = entry("view.activated", { viewId: "tab-aaaaaa", window: "win-abc" });
 
     const items = foldFeed([prompt, delta, child, answer, other]);
@@ -33,14 +33,14 @@ describe("foldFeed — the conversation set (parentId is the source of truth)", 
 
   it("a card with no answer stays open (in progress) — a late child after stop is kept in seq order", () => {
     seq = 0;
-    const prompt = entry("chat.prompt", { text: "x", turnId: "pjt-aaaaaa", window: "main" });
-    const child = entry("command.executed", { command: "ping", ok: true, parentId: "pjt-aaaaaa", window: "main" });
+    const prompt = entry("chat.prompt", { text: "x", turnId: "wsp-aaaaaa", window: "main" });
+    const child = entry("command.executed", { command: "ping", ok: true, parentId: "wsp-aaaaaa", window: "main" });
     const open = foldFeed([prompt, child]);
     expect(open[0].kind).toBe("chat");
     expect((open[0] as { closed: boolean }).closed).toBe(false);
 
-    const answer = entry("chat.answer", { text: "stopped", parentId: "pjt-aaaaaa", ok: false, window: "main" });
-    const late = entry("command.executed", { command: "late.cmd", ok: true, parentId: "pjt-aaaaaa", window: "main" });
+    const answer = entry("chat.answer", { text: "stopped", parentId: "wsp-aaaaaa", ok: false, window: "main" });
+    const late = entry("command.executed", { command: "late.cmd", ok: true, parentId: "wsp-aaaaaa", window: "main" });
     const closed = foldFeed([prompt, child, answer, late]);
     const card = closed[0];
     if (card.kind !== "chat") throw new Error("card expected");
@@ -74,10 +74,10 @@ describe("foldFeed — the legacy heuristic (a delta with no derived correlation
 
   it("a delta with a parentId is excluded from the heuristic (exact correlation wins)", () => {
     seq = 0;
-    const prompt = entry("chat.prompt", { text: "x", turnId: "pjt-aaaaaa", window: "main" });
+    const prompt = entry("chat.prompt", { text: "x", turnId: "wsp-aaaaaa", window: "main" });
     const d = entry(
       "command.progress",
-      { command: "orchestrator.ask", delta: "thinking", parentId: "pjt-aaaaaa", window: "main" },
+      { command: "orchestrator.ask", delta: "thinking", parentId: "wsp-aaaaaa", window: "main" },
       1000,
     );
     // An unrelated run in the same window with an overlapping time window — the heuristic would have folded it into this turn.

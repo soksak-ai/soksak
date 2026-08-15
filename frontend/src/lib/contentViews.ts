@@ -155,8 +155,8 @@ export function contentViewSlotVisible(slot: HTMLElement): boolean {
     const style = current.ownerDocument.defaultView?.getComputedStyle(current);
     if (style?.visibility === "hidden" || style?.display === "none") return false;
     if (
-      current.hasAttribute("data-project-plane") &&
-      current.dataset.projectActive !== "1"
+      current.hasAttribute("data-workspace-plane") &&
+      current.dataset.workspaceActive !== "1"
     ) return false;
   }
   return true;
@@ -169,7 +169,7 @@ export interface ContentViewDomFact {
   computedVisibility: string;
   display: string;
   projectId: string | null;
-  projectActive: boolean;
+  workspaceActive: boolean;
   /**
    * Composition participation this surface declared itself. Without it, the reader infers the view
    * from label syntax, and that inference silently points at someone else's view the day the syntax
@@ -194,7 +194,7 @@ export function contentViewDomFacts(doc: Document = document): ContentViewDomFac
   const out: ContentViewDomFact[] = [];
   for (const el of doc.querySelectorAll<HTMLElement>("[data-content-view]")) {
     const slot = el.closest<HTMLElement>(`[${CONTENT_VIEW_BODY}]`);
-    const project = el.closest<HTMLElement>("[data-project-plane]");
+    const workspace = el.closest<HTMLElement>("[data-workspace-plane]");
     const style = doc.defaultView?.getComputedStyle(el);
     const rect = el.getBoundingClientRect();
     out.push({
@@ -203,8 +203,8 @@ export function contentViewDomFacts(doc: Document = document): ContentViewDomFac
       directVisibility: el.style.visibility,
       computedVisibility: style?.visibility ?? "",
       display: style?.display ?? "",
-      projectId: project?.dataset.projectPlane ?? null,
-      projectActive: project?.dataset.projectActive === "1",
+      projectId: workspace?.dataset.workspacePlane ?? null,
+      workspaceActive: workspace?.dataset.workspaceActive === "1",
       composition: readCompositionParticipant(el),
       opacity: style?.opacity ?? "",
       filter: style?.filter ?? "",

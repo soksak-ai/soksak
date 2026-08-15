@@ -37,13 +37,13 @@ import { setCaptureMotionAnchors } from "./captureMotionAnchors";
  * that slot).
  *
  * A relative address does not find it: the canonical address form is absolute, including window and
- * project (axiom A1), and formatAddress is the single place that assembles it — hand-concatenation
+ * workspace (axiom A1), and formatAddress is the single place that assembles it — hand-concatenation
  * makes two sets of rules.
  */
 function nodeOfTab(projectId: string, viewId: string): string {
   return formatAddress({
     window: currentWindowLabel(),
-    project: projectId,
+    workspace: projectId,
     chrome: `layout/tab/${viewId}`,
   });
 }
@@ -182,15 +182,15 @@ async function resolveRegion(p: Record<string, unknown>): Promise<Region | Refus
       };
     }
     const st = useSessions.getState();
-    const prevSpace = loc.project.activeSpaceId;
+    const prevSpace = loc.workspace.activeSpaceId;
     const prevView = loc.pane.activeTabId;
     if (prevSpace !== loc.space.id || prevView !== loc.tab.id) {
-      st.setActiveContent(loc.project.id, loc.space.id);
-      st.setActiveView(loc.project.id, loc.tab.id);
+      st.setActiveContent(loc.workspace.id, loc.space.id);
+      st.setActiveView(loc.workspace.id, loc.tab.id);
       restore = () => {
         const back = useSessions.getState();
-        if (prevView) back.setActiveView(loc.project.id, prevView);
-        if (prevSpace) back.setActiveContent(loc.project.id, prevSpace);
+        if (prevView) back.setActiveView(loc.workspace.id, prevView);
+        if (prevSpace) back.setActiveContent(loc.workspace.id, prevSpace);
       };
       // Switching moves the layout — the shot must come after the slot is at its final position.
       //
@@ -203,7 +203,7 @@ async function resolveRegion(p: Record<string, unknown>): Promise<Region | Refus
       await settledLayout();
     }
     tabId = loc.tab.id;
-    nodeAddr = nodeOfTab(loc.project.id, loc.tab.id);
+    nodeAddr = nodeOfTab(loc.workspace.id, loc.tab.id);
   }
   // Region named by address — one tab or panel is captured as is, with no hand-computed coordinates.
   // The measuring place is the same as ui.measure (resolveExposed): with two of them, the same

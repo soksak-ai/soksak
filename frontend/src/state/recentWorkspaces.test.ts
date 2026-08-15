@@ -1,8 +1,8 @@
-// Recent project list — pure upsert contract (ordering, dedup, cap). Verified apart from the coreStore persistence wiring.
+// Recent workspace list — pure upsert contract (ordering, dedup, cap). Verified apart from the coreStore persistence wiring.
 import { describe, expect, it } from "vitest";
-import { upsertRecent, RECENT_CAP, type RecentProject } from "./recentProjects";
+import { upsertRecent, RECENT_CAP, type RecentWorkspace } from "./recentWorkspaces";
 
-const e = (root: string, at: number, alias = ""): RecentProject => ({
+const e = (root: string, at: number, alias = ""): RecentWorkspace => ({
   root,
   alias: alias || root.split("/").pop()!,
   lastOpenedAt: at,

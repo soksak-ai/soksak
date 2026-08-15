@@ -82,7 +82,7 @@ export const PluginViewHost = memo(function PluginViewHost({
   // sidebar, default to true.
   surfacePlacement?: PluginViewSurfacePlacement;
 }) {
-  // Absolute address of this view container (baseAddress for node scans). project is a path (slash
+  // Absolute address of this view container (baseAddress for node scans). workspace is a path (slash
   // collision), so the active qualifier is omitted — <region>/view/<viewKey>. Omitted win = current
   // window. Stable segments (region, qualifiedViewId) make it idempotent. ui.tree reads it.
   const viewAddr = formatAddress({

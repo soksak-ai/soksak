@@ -40,11 +40,11 @@ describe("layoutTransitionIntent — adapter prepare ownership before the state 
   it("the call that publishes a revision intent starts the host prepare, and React claims that same promise once", async () => {
     const order: string[] = [];
     const result = prepared("layout-1");
-    registerLayoutTransitionIntentHost("project-1", {
+    registerLayoutTransitionIntentHost("workspace-1", {
       prepare: async ({ ownerKey, revision, from, to }) => {
         order.push("prepare");
         expect({ ownerKey, revision, from: from.station, to: to.station }).toEqual({
-          ownerKey: "project-1",
+          ownerKey: "workspace-1",
           revision: 1,
           from: 0,
           to: 50,
@@ -54,44 +54,44 @@ describe("layoutTransitionIntent — adapter prepare ownership before the state 
     });
 
     expect(publishLayoutTransitionIntent({
-      ownerKey: "project-1",
+      ownerKey: "workspace-1",
       revision: 1,
       from: arrangement(0, "left"),
       to: arrangement(50, "right"),
     })).toBe(true);
     order.push("state-publish");
 
-    const claimed = claimLayoutTransitionIntent("project-1", 1);
+    const claimed = claimLayoutTransitionIntent("workspace-1", 1);
     expect(order).toEqual(["prepare", "state-publish"]);
     await expect(claimed).resolves.toBe(result);
-    expect(claimLayoutTransitionIntent("project-1", 1)).toBeNull();
+    expect(claimLayoutTransitionIntent("workspace-1", 1)).toBeNull();
   });
 
-  it("a replaced host and a stale revision do not mix into the next project transaction", async () => {
+  it("a replaced host and a stale revision do not mix into the next workspace transaction", async () => {
     const old = prepared("layout-old");
     const fresh = prepared("layout-fresh");
-    const dispose = registerLayoutTransitionIntentHost("project-1", {
+    const dispose = registerLayoutTransitionIntentHost("workspace-1", {
       prepare: async () => old,
     });
     expect(publishLayoutTransitionIntent({
-      ownerKey: "project-1",
+      ownerKey: "workspace-1",
       revision: 1,
       from: arrangement(0, "left"),
       to: arrangement(50, "right"),
     })).toBe(true);
     dispose();
-    registerLayoutTransitionIntentHost("project-1", {
+    registerLayoutTransitionIntentHost("workspace-1", {
       prepare: async () => fresh,
     });
     expect(publishLayoutTransitionIntent({
-      ownerKey: "project-1",
+      ownerKey: "workspace-1",
       revision: 2,
       from: arrangement(50, "right"),
       to: arrangement(0, "left"),
     })).toBe(true);
 
-    expect(claimLayoutTransitionIntent("project-1", 1)).toBeNull();
-    await expect(claimLayoutTransitionIntent("project-1", 2)).resolves.toBe(fresh);
+    expect(claimLayoutTransitionIntent("workspace-1", 1)).toBeNull();
+    await expect(claimLayoutTransitionIntent("workspace-1", 2)).resolves.toBe(fresh);
     await Promise.resolve();
     expect(old.cancel).toHaveBeenCalledTimes(1);
   });
@@ -105,24 +105,24 @@ describe("layoutTransitionIntent — adapter prepare ownership before the state 
         resolveFirst = resolve;
       }))
       .mockResolvedValueOnce(second);
-    registerLayoutTransitionIntentHost("project-1", { prepare });
+    registerLayoutTransitionIntentHost("workspace-1", { prepare });
 
     publishLayoutTransitionIntent({
-      ownerKey: "project-1",
+      ownerKey: "workspace-1",
       revision: 1,
       from: arrangement(0, "left"),
       to: arrangement(50, "right"),
     });
-    const claimedFirst = claimLayoutTransitionIntent("project-1", 1);
+    const claimedFirst = claimLayoutTransitionIntent("workspace-1", 1);
     resolveFirst(first);
     await expect(claimedFirst).resolves.toBe(first);
     publishLayoutTransitionIntent({
-      ownerKey: "project-1",
+      ownerKey: "workspace-1",
       revision: 2,
       from: arrangement(50, "right"),
       to: arrangement(0, "left"),
     });
-    const claimedSecond = claimLayoutTransitionIntent("project-1", 2);
+    const claimedSecond = claimLayoutTransitionIntent("workspace-1", 2);
 
     expect(prepare).toHaveBeenCalledTimes(1);
     await Promise.resolve();
@@ -132,11 +132,11 @@ describe("layoutTransitionIntent — adapter prepare ownership before the state 
       ownerKey: string,
       revision: number,
       terminal: { reason: string },
-    ) => boolean)("project-1", 1, { reason: "visual-landing" })).toBe(true);
+    ) => boolean)("workspace-1", 1, { reason: "visual-landing" })).toBe(true);
     expect(layoutTransitionIntentFacts().events.find((event) => (
       event.revision === 1 && event.phase === "finished"
     ))).toMatchObject({
-      ownerKey: "project-1",
+      ownerKey: "workspace-1",
       revision: 1,
       phase: "finished",
       reason: "visual-landing",
@@ -155,21 +155,21 @@ describe("layoutTransitionIntent — adapter prepare ownership before the state 
         signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
       });
     });
-    registerLayoutTransitionIntentHost("project-abort", { prepare });
+    registerLayoutTransitionIntentHost("workspace-abort", { prepare });
 
     publishLayoutTransitionIntent({
-      ownerKey: "project-abort",
+      ownerKey: "workspace-abort",
       revision: 1,
       from: arrangement(0, "left"),
       to: arrangement(50, "right"),
     });
     publishLayoutTransitionIntent({
-      ownerKey: "project-abort",
+      ownerKey: "workspace-abort",
       revision: 2,
       from: arrangement(50, "right"),
       to: arrangement(0, "left"),
     });
-    const latest = claimLayoutTransitionIntent("project-abort", 2);
+    const latest = claimLayoutTransitionIntent("workspace-abort", 2);
     await Promise.resolve();
     await Promise.resolve();
 
@@ -188,22 +188,22 @@ describe("layoutTransitionIntent — adapter prepare ownership before the state 
         signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
       });
     });
-    registerLayoutTransitionIntentHost("project-claimed-abort", { prepare });
+    registerLayoutTransitionIntentHost("workspace-claimed-abort", { prepare });
     publishLayoutTransitionIntent({
-      ownerKey: "project-claimed-abort",
+      ownerKey: "workspace-claimed-abort",
       revision: 1,
       from: arrangement(0, "left"),
       to: arrangement(50, "right"),
     });
-    const stale = claimLayoutTransitionIntent("project-claimed-abort", 1);
+    const stale = claimLayoutTransitionIntent("workspace-claimed-abort", 1);
     void stale?.catch(() => {});
     publishLayoutTransitionIntent({
-      ownerKey: "project-claimed-abort",
+      ownerKey: "workspace-claimed-abort",
       revision: 2,
       from: arrangement(50, "right"),
       to: arrangement(0, "left"),
     });
-    const latest = claimLayoutTransitionIntent("project-claimed-abort", 2);
+    const latest = claimLayoutTransitionIntent("workspace-claimed-abort", 2);
     await Promise.resolve();
     await Promise.resolve();
 
@@ -213,14 +213,14 @@ describe("layoutTransitionIntent — adapter prepare ownership before the state 
     expect(layoutTransitionIntentFacts()).toMatchObject({
       maxEvents: 64,
       owners: [{
-        ownerKey: "project-claimed-abort",
+        ownerKey: "workspace-claimed-abort",
         active: { revision: 2, started: true, prepared: true, claimed: true },
         queued: null,
       }],
       events: expect.arrayContaining([
-        expect.objectContaining({ ownerKey: "project-claimed-abort", revision: 1, phase: "abort-requested" }),
-        expect.objectContaining({ ownerKey: "project-claimed-abort", revision: 1, phase: "finished" }),
-        expect.objectContaining({ ownerKey: "project-claimed-abort", revision: 2, phase: "promoted" }),
+        expect.objectContaining({ ownerKey: "workspace-claimed-abort", revision: 1, phase: "abort-requested" }),
+        expect.objectContaining({ ownerKey: "workspace-claimed-abort", revision: 1, phase: "finished" }),
+        expect.objectContaining({ ownerKey: "workspace-claimed-abort", revision: 2, phase: "promoted" }),
       ]),
     });
   });

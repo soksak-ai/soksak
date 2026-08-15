@@ -7,24 +7,24 @@ import { usePlugins, type PluginRuntime } from "./plugins";
 import { useContractSelection } from "./contractSelection";
 import { parseManifest } from "../plugins/spec";
 
-// Boot model (P3): tabs start empty and main.tsx creates the first project through
-// bootstrapFirstProject — the test prepares t1 the same way, then snapshots.
-useSessions.getState().bootstrapFirstProject("<local-evidence>/soksak-test-root");
+// Boot model (P3): tabs start empty and main.tsx creates the first workspace through
+// bootstrapFirstWorkspace — the test prepares t1 the same way, then snapshots.
+useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-test-root");
 
 // Snapshot of the starting state (data only) — restored before each test.
-const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().projects));
+const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
 const pristineActive = useSessions.getState().activeId;
 
 function activeLayout() {
   const s = useSessions.getState();
-  const t = s.projects.find((x) => x.id === s.activeId)!;
+  const t = s.workspaces.find((x) => x.id === s.activeId)!;
   const c = t.spaces.find((x) => x.id === t.activeSpaceId)!;
   return { t, c, groups: allGroups(c.layout) };
 }
 
 beforeEach(() => {
   useSessions.setState({
-    projects: JSON.parse(JSON.stringify(pristineTabs)),
+    workspaces: JSON.parse(JSON.stringify(pristineTabs)),
     activeId: pristineActive,
   });
 });
@@ -90,7 +90,7 @@ describe("openPluginView", () => {
     expect(a.viewId).not.toBe(b.viewId);
   });
 
-  it("a project that does not exist gives TARGET_NOT_FOUND", () => {
+  it("a workspace that does not exist gives TARGET_NOT_FOUND", () => {
     const r = useSessions
       .getState()
       .openPluginView("ghost", "soksak-plugin-memo", "panel", "Memo");
@@ -202,11 +202,11 @@ describe("addContent — kind=view program", () => {
   });
 });
 
-// Initial program of project.create — addProject takes program and creates a view in the first group.
+// Initial program of workspace.create — addWorkspace takes program and creates a view in the first group.
 // (Reproduces and pins the defect where, after the terminal became a plugin, the command declared
 // program and dropped it, leaving an empty panel (black screen) — omitting it still yields the empty
 // skeleton, as designed.)
-describe("addProject — initial program", () => {
+describe("addWorkspace — initial program", () => {
   it("with program set, the first group gets that program's view and activeViewId, and viewId is returned", () => {
     const dispose = useProgramRegistry.getState().register("soksak-plugin-terminal-xterm", {
       id: "terminal-prog-test",
@@ -215,15 +215,15 @@ describe("addProject — initial program", () => {
       view: "content",
     });
     try {
-      const r = useSessions.getState().addProject({
+      const r = useSessions.getState().addWorkspace({
         alias: "px",
-        root: "<local-evidence>/soksak-test-addproject",
+        root: "<local-evidence>/soksak-test-addworkspace",
         program: "terminal-prog-test",
       });
       expect(r.ok).toBe(true);
       if (!r.ok) return;
       expect(r.viewId).toBeTruthy();
-      const t = useSessions.getState().projects.find((x) => x.id === r.projectId)!;
+      const t = useSessions.getState().workspaces.find((x) => x.id === r.projectId)!;
       const grp = allGroups(t.spaces[0].layout).find((g) => g.id === r.groupId)!;
       expect(grp.activeTabId).toBe(r.viewId);
       const v = grp.tabs.find((x) => x.id === r.viewId)!;
@@ -239,21 +239,21 @@ describe("addProject — initial program", () => {
   });
 
   it("with program omitted, an empty skeleton (0 views, no viewId) — the existing design holds", () => {
-    const r = useSessions.getState().addProject({
+    const r = useSessions.getState().addWorkspace({
       alias: "",
-      root: "<local-evidence>/soksak-test-addproject-empty",
+      root: "<local-evidence>/soksak-test-addworkspace-empty",
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.viewId).toBeUndefined();
-    const t = useSessions.getState().projects.find((x) => x.id === r.projectId)!;
+    const t = useSessions.getState().workspaces.find((x) => x.id === r.projectId)!;
     expect(allViews(t.spaces[0].layout)).toHaveLength(0);
   });
 
   it("an unregistered program degrades to an empty skeleton — makeContent creates no view", () => {
-    const r = useSessions.getState().addProject({
+    const r = useSessions.getState().addWorkspace({
       alias: "",
-      root: "<local-evidence>/soksak-test-addproject-unreg",
+      root: "<local-evidence>/soksak-test-addworkspace-unreg",
       program: "no-such-program",
     });
     expect(r.ok).toBe(true);

@@ -102,12 +102,12 @@ export interface PluginApiDeps {
   // contract id sets only.
   implementsOf?: (pluginId: string) => ContractProviderRef[];
   on: typeof onPluginEvent;
-  currentProject: () => { id: string; root: string | null } | null;
+  currentWorkspace: () => { id: string; root: string | null } | null;
   // Core fs watcher (fs-change) subscription — callback receives the changed parent directory string.
   // Returns the unsubscribe.
   onFsChange: (cb: (dir: string) => void) => () => void;
   // Core data store change (data-change) subscription — the core singleton broadcasts to every window
-  // (multi-window, same-project consistency). app.data.watch filters by ns/coll/scope. Returns the
+  // (multi-window, same-workspace consistency). app.data.watch filters by ns/coll/scope. Returns the
   // unsubscribe. (Precedent: onFsChange.)
   onDataChange: (cb: (e: DataChangeEvent) => void) => () => void;
   // All-window clipboard change (clipboard-change) subscription — callback receives the changed text.
@@ -309,9 +309,9 @@ export interface SoksakPluginApi {
     list: () => Promise<string[]>;
   };
   /** General-purpose embedded data store (core SQLite singleton). DB-agnostic — raw SQL is not exposed.
-   *  The namespace is forced to this plugin id (another plugin's data is invisible). scope = per-project
+   *  The namespace is forced to this plugin id (another plugin's data is invisible). scope = per-workspace
    *  partition (e.g. projectId). watch = all-window change subscription (zero polling,
-   *  multi-window/same-project consistent). "data" permission only. */
+   *  multi-window/same-workspace consistent). "data" permission only. */
   data?: {
     kv: {
       get: (key: string) => Promise<unknown>;
@@ -753,10 +753,10 @@ export interface SoksakPluginApi {
     emit: (topic: string, payload: unknown) => void;
     on: (topic: string, fn: (payload: any) => void) => Disposable;
   };
-  project: {
+  workspace: {
     current: () => { id: string; root: string | null } | null;
   };
-  // User settings for this plugin (manifest configuration declaration). effective = project override ??
+  // User settings for this plugin (manifest configuration declaration). effective = workspace override ??
   // global ?? schema default. Read and subscribe only; the user changes settings from the settings
   // screen or a command.
   settings: {
@@ -1209,7 +1209,7 @@ function createPtyApi(deps: PluginApiDeps, tracker: DisposableTracker) {
         // in the tab record. The plugin does not handle this coordinate; it is the core's.
         legacyPaneId:
           (() => {
-            const t = findViewById(useSessions.getState().projects, paneId);
+            const t = findViewById(useSessions.getState().workspaces, paneId);
             return t && "legacyPaneId" in t ? (t.legacyPaneId ?? null) : null;
           })(),
       }) as Promise<{ paintB64: string } | null>,
@@ -1411,8 +1411,8 @@ export function buildPluginApi(
       },
     },
 
-    project: {
-      current: () => deps.currentProject(),
+    workspace: {
+      current: () => deps.currentWorkspace(),
     },
 
     settings: {
@@ -1421,12 +1421,12 @@ export function buildPluginApi(
         if (!(key in defs)) return undefined; // a key outside the schema is not exposed
         return usePluginSettings
           .getState()
-          .effective(id, key, defs[key], deps.currentProject()?.root ?? undefined);
+          .effective(id, key, defs[key], deps.currentWorkspace()?.root ?? undefined);
       },
       all: () =>
         usePluginSettings
           .getState()
-          .allEffective(id, configDefaults(manifest), deps.currentProject()?.root ?? undefined),
+          .allEffective(id, configDefaults(manifest), deps.currentWorkspace()?.root ?? undefined),
       onChange: (cb) => {
         const fire = () =>
           cb(
@@ -1435,10 +1435,10 @@ export function buildPluginApi(
               .allEffective(
                 id,
                 configDefaults(manifest),
-                deps.currentProject()?.root ?? undefined,
+                deps.currentWorkspace()?.root ?? undefined,
               ),
           );
-        // Re-fires on a value change (global/project override) and on an active-project switch
+        // Re-fires on a value change (global/workspace override) and on an active-workspace switch
         // (different root → different effective).
         const unSettings = usePluginSettings.subscribe(fire);
         const unProject = useSessions.subscribe((s, prev) => {

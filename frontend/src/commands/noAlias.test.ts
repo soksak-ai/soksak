@@ -13,7 +13,7 @@
 //     produces falsehoods. Three of the 6 measured pairs share only the signature while the behavior is opposite
 //     or different:
 //       plugin.enable ≡ plugin.disable            (id*) -> { id, status }
-//       ui.projection.pin ≡ ui.projection.unpin   (project, ref*, side) -> { pins: {left, right} }
+//       ui.projection.pin ≡ ui.projection.unpin   (workspace, ref*, side) -> { pins: {left, right} }
 //       media.proxy.stream ≡ media.proxy.playlist (referer, url*, userAgent) -> { url }
 //     A gate that judges antonyms as "one behavior" cannot reach GREEN (antonyms cannot be merged), and an
 //     unreachable criterion is not kept. So verb equality was put into the verdict.
@@ -25,9 +25,9 @@
 //       params `{ view* }` · returns `{ activePanelId, activeViewId }` match too.
 //       The handler bodies match character for character (locateView → S().closeView).
 //     - editor.open ≡ ui.intent.open (catalog.ts / catalogProjection.ts) — params
-//       `{ path*, project }` · returns `{ viewId, panelId, existing }` match and both end in
+//       `{ path*, workspace }` · returns `{ viewId, panelId, existing }` match and both end in
 //       openFileView. Split across files, it was invisible by eye.
-//     - panel.resize ≡ sidebar.left.resize (catalog.ts) — params `{ project, split*, sizes* }` ·
+//     - panel.resize ≡ sidebar.left.resize (catalog.ts) — params `{ workspace, split*, sizes* }` ·
 //       returns `{}` match. split id has no type, so the signature does not identify which tree it is from.
 //       (Plan §5 recorded 2 pairs — this third pair is added from measurement. R-A6)
 //

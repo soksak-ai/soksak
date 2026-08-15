@@ -25,7 +25,7 @@ describe("layoutSettlement — the revision barrier between state mutation and t
 
   afterEach(__resetLayoutSettlementForTest);
 
-  it("closes only when the latest per-project invalidation is settled", () => {
+  it("closes only when the latest per-workspace invalidation is settled", () => {
     const listener = vi.fn();
     const off = onLayoutSettlement(listener);
     expect(invalidateLayout("t1")).toBe(1);

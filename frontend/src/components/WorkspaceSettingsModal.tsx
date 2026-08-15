@@ -1,4 +1,4 @@
-// Project settings modal — manages every creation-time setting: folder (read-only), alias, identity color, shell.
+// Workspace settings modal — manages every creation-time setting: folder (read-only), alias, identity color, shell.
 // Opened by double-clicking a tab or rail chip (replaces inline rename).
 import { execute } from "../commands/registry";
 import { useEffect, useState } from "react";
@@ -11,7 +11,7 @@ import { useT } from "../i18n";
 import { useDraggableModal } from "./modalDrag";
 
 // Identity color palette — 8 colors with enough contrast as border and text in both light and dark.
-export const PROJECT_COLORS = [
+export const WORKSPACE_COLORS = [
   "#e5534b",
   "#e8883a",
   "#d4a72c",
@@ -24,7 +24,7 @@ export const PROJECT_COLORS = [
 
 const baseName = (p: string) => p.split("/").filter(Boolean).pop() ?? p;
 
-export function ProjectSettingsModal({
+export function WorkspaceSettingsModal({
   projectId,
   onClose,
 }: {
@@ -34,11 +34,11 @@ export function ProjectSettingsModal({
   const t = useT();
   // Overlay registration — blocks mouse pass-through into the browser hole while the modal is up.
   useOverlayActive();
-  const project = useSessions((s) => s.projects.find((x) => x.id === projectId));
-  const defaultProjectRoot = useSettings((s) => s.defaultProjectRoot);
-  const setDefaultProjectRoot = useSettings((s) => s.setDefaultProjectRoot);
-  const [name, setName] = useState(project?.title ?? "");
-  const [shell, setShell] = useState(project?.shell ?? "");
+  const workspace = useSessions((s) => s.workspaces.find((x) => x.id === projectId));
+  const defaultWorkspaceRoot = useSettings((s) => s.defaultWorkspaceRoot);
+  const setDefaultWorkspaceRoot = useSettings((s) => s.setDefaultWorkspaceRoot);
+  const [name, setName] = useState(workspace?.title ?? "");
+  const [shell, setShell] = useState(workspace?.shell ?? "");
   const { cardRef, cardStyle, onHeaderDown } = useDraggableModal();
 
   useEffect(() => {
@@ -52,15 +52,15 @@ export function ProjectSettingsModal({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
-  if (!project) return null;
+  if (!workspace) return null;
 
   // Save through the command — calling the store directly drops observation, normalization, and gates
-  // whole, and becomes a different path from the project.update that CLI and AI call (both stay quiet until they diverge).
+  // whole, and becomes a different path from the workspace.update that CLI and AI call (both stay quiet until they diverge).
   const save = () => {
-    void execute("project.update", {
-      project: projectId,
+    void execute("workspace.update", {
+      workspace: projectId,
       // An empty alias falls back to the folder name (P4 — a display name always exists).
-      title: name.trim() || baseName(project.root),
+      title: name.trim() || baseName(workspace.root),
       shell: shell.trim() || "",
     }, {});
     onClose();
@@ -70,12 +70,12 @@ export function ProjectSettingsModal({
     <div className="dmodal-overlay" onMouseDown={onClose}>
       <div
         ref={cardRef}
-        className="dmodal-card dmodal-project"
+        className="dmodal-card dmodal-workspace"
         style={cardStyle}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="dmodal-head" onMouseDown={onHeaderDown}>
-          <span className="dmodal-title">{t("project.settings")}</span>
+          <span className="dmodal-title">{t("workspace.settings")}</span>
           <span className="dmodal-spacer" />
           <span className="dmodal-grip icon-inline">
             <Icon name="grip" />
@@ -91,21 +91,21 @@ export function ProjectSettingsModal({
 
         <div className="dmodal-body">
           {/* The folder is immutable after creation (terminals and sessions depend on it) — read only.
-              The root always exists (P1) and is the identity of the project (P4). */}
+              The root always exists (P1) and is the identity of the workspace (P4). */}
           <div className="drow">
-            <span className="drow-label">{t("project.folder")}</span>
-            <span className="dctl dctl-static" title={project.root}>
-              {project.root}
+            <span className="drow-label">{t("workspace.folder")}</span>
+            <span className="dctl dctl-static" title={workspace.root}>
+              {workspace.root}
             </span>
           </div>
 
           <div className="drow">
-            <span className="drow-label">{t("project.alias")}</span>
+            <span className="drow-label">{t("workspace.alias")}</span>
             <input
               className="dctl"
               type="text"
               value={name}
-              placeholder={baseName(project.root)}
+              placeholder={baseName(workspace.root)}
               autoFocus
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {
@@ -115,42 +115,42 @@ export function ProjectSettingsModal({
             />
           </div>
 
-          {/* Default project — the app opens on this project (root) the first time.
-              Persisted in settings (defaultProjectRoot) and consumed by boot (main.tsx). Applied at once. */}
+          {/* Default workspace — the app opens on this workspace (root) the first time.
+              Persisted in settings (defaultWorkspaceRoot) and consumed by boot (main.tsx). Applied at once. */}
           <div className="drow">
-            <span className="drow-label">{t("project.default")}</span>
+            <span className="drow-label">{t("workspace.default")}</span>
             <label className="dctl dctl-check">
               <input
                 type="checkbox"
-                checked={defaultProjectRoot === project.root}
+                checked={defaultWorkspaceRoot === workspace.root}
                 onChange={(e) =>
-                  setDefaultProjectRoot(e.target.checked ? project.root : "")
+                  setDefaultWorkspaceRoot(e.target.checked ? workspace.root : "")
                 }
               />
-              <span>{t("project.defaultHint")}</span>
+              <span>{t("workspace.defaultHint")}</span>
             </label>
           </div>
 
           <div className="drow">
-            <span className="drow-label">{t("project.color")}</span>
+            <span className="drow-label">{t("workspace.color")}</span>
             <div className="color-palette">
               {/* The color applies at once (preview = actual) — independent of the save button. */}
               <button
                 type="button"
-                className={`color-swatch color-none${!project.color ? " on" : ""}`}
+                className={`color-swatch color-none${!workspace.color ? " on" : ""}`}
                 title={t("color.default")}
-                onClick={() => void execute("project.color", { project: projectId }, {})}
+                onClick={() => void execute("workspace.color", { workspace: projectId }, {})}
               >
                 <Icon name="none" size="sm" />
               </button>
-              {PROJECT_COLORS.map((c) => (
+              {WORKSPACE_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
-                  className={`color-swatch${project.color === c ? " on" : ""}`}
+                  className={`color-swatch${workspace.color === c ? " on" : ""}`}
                   style={{ background: c }}
                   title={c}
-                  onClick={() => void execute("project.color", { project: projectId, color: c }, {})}
+                  onClick={() => void execute("workspace.color", { workspace: projectId, color: c }, {})}
                 />
               ))}
             </div>

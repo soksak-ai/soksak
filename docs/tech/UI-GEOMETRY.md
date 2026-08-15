@@ -51,7 +51,7 @@ their parities disagreed the item landed on a half pixel — a 28 chip centred i
 
 A theme sets sizes through the padding variable only. `height:` on an item
 selector is refused by the gate (`auto` excepted). The exceptions are the places
-that are not horizontal bands: the square project rail, and vertical tab lists.
+that are not horizontal bands: the square workspace rail, and vertical tab lists.
 
 **Parity.** A band's inside height is even — titlebar 45 − 1 = 44, chrome row
 37 − 1 = 36, group header 33 − 1 = 32. Even padding then yields an even chip,

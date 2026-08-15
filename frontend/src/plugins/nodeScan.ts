@@ -14,7 +14,7 @@ export interface ScannedNode {
   address: string; // Canonical absolute address — unique (address axiom A1)
   nodePath: string; // data-node value
   el: HTMLElement; // The element itself (used directly on resolve)
-  // Short-form alias (the grammar's "omitted = active"). Only chrome of the active project gets
+  // Short-form alias (the grammar's "omitted = active"). Only chrome of the active workspace gets
   // one — the canonical form is always address.
   alias?: string;
 }

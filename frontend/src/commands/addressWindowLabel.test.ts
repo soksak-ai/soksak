@@ -24,7 +24,7 @@ describe("addresses and the window label", () => {
     for (const parts of [
       { window: "main", chrome: "titlebar" },
       { chrome: "titlebar" },
-      { window: "", chrome: "project/add" },
+      { window: "", chrome: "workspace/add" },
     ]) {
       const address = formatAddress(parts);
       expect(parseAddress(address), `parsing ${address}`).not.toHaveProperty("error");

@@ -184,7 +184,7 @@ function discardOwner(ownerKey: string, generation: number): void {
   state.queues.delete(ownerKey);
 }
 
-/** ProjectPlane registers the imperative pre-paint adapter owner of its own project. */
+/** WorkspacePlane registers the imperative pre-paint adapter owner of its own workspace. */
 export function registerLayoutTransitionIntentHost<L extends { id: string }>(
   ownerKey: string,
   host: LayoutTransitionIntentHost<L>,
@@ -208,7 +208,7 @@ export function registerLayoutTransitionIntentHost<L extends { id: string }>(
 }
 
 /**
- * Called by the store mutation owner before publishing a new project. With no active transaction, the
+ * Called by the store mutation owner before publishing a new workspace. With no active transaction, the
  * registered host's prepare starts on this call stack. With one active, only the latest intent starts after the terminal ACK.
  */
 export function publishLayoutTransitionIntent<L extends { id: string }>(

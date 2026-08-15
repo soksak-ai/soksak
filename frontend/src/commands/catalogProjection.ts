@@ -12,10 +12,10 @@ type Side = (typeof SIDES)[number];
 
 import type { CommandContext } from "./registry";
 
-// Target project: explicit param > the calling tab's project (ctx) > active project.
-function targetProject(p: Record<string, unknown>, ctx?: CommandContext): string {
+// Target workspace: explicit param > the calling tab's workspace (ctx) > active workspace.
+function targetWorkspace(p: Record<string, unknown>, ctx?: CommandContext): string {
   return (
-    (p.project as string | undefined) ??
+    (p.workspace as string | undefined) ??
     (ctx?.pane ? projectIdOfView(ctx.pane) ?? undefined : undefined) ??
     useSessions.getState().activeId
   );
@@ -23,19 +23,19 @@ function targetProject(p: Record<string, unknown>, ctx?: CommandContext): string
 
 function pinsOf(projectId: string) {
   return (
-    useProjection.getState().byProject[projectId]?.pins ?? { left: [], right: [] }
+    useProjection.getState().byWorkspace[projectId]?.pins ?? { left: [], right: [] }
   );
 }
 
 export function registerProjectionCatalog(): void {
   register("ui.projection.state", {
     description:
-      "Read the sidebar projection state of a project: the bound content view (binding follows the session active chain — switching the active tab inside a group changes the binding too), resolved left/right rail slots with instanceKey and status (live|degraded|satisfied-by-pin), and pinned refs.",
+      "Read the sidebar projection state of a workspace: the bound content view (binding follows the session active chain — switching the active tab inside a group changes the binding too), resolved left/right rail slots with instanceKey and status (live|degraded|satisfied-by-pin), and pinned refs.",
     triggers: { ko: "투영상태 결부 사이드바상태 레일상태 projection binding rail" },
     params: {
-      project: {
+      workspace: {
         type: "string",
-        description: tmsg("cmd.param.project"),
+        description: tmsg("cmd.param.workspace"),
       },
     },
     returns:
@@ -44,13 +44,13 @@ export function registerProjectionCatalog(): void {
       tmsg("msg.ui.projection.state", {
         view: String((d.binding as { tabId?: string | null })?.tabId ?? "-"),
       }),
-    examples: ["ui.projection.state", 'ui.projection.state \'{"project":"t1"}\''],
+    examples: ["ui.projection.state", 'ui.projection.state \'{"workspace":"t1"}\''],
     handler: (p, ctx) => {
-      const pid = targetProject(p, ctx);
+      const pid = targetWorkspace(p, ctx);
       const proj = projectionFor(pid);
-      if (!proj) return err("TARGET_NOT_FOUND", tmsg("msg.project.notFoundId", { id: pid }));
+      if (!proj) return err("TARGET_NOT_FOUND", tmsg("msg.workspace.notFoundId", { id: pid }));
       const focusHistory =
-        useProjection.getState().byProject[pid]?.focusHistory ?? [];
+        useProjection.getState().byWorkspace[pid]?.focusHistory ?? [];
       return ok({ projectId: pid, ...proj, focusHistory });
     },
   });
@@ -66,18 +66,18 @@ export function registerProjectionCatalog(): void {
         required: true,
       },
       side: { type: "string", description: '"left" (default) | "right"' },
-      project: {
+      workspace: {
         type: "string",
-        description: tmsg("cmd.param.project"),
+        description: tmsg("cmd.param.workspace"),
       },
     },
     returns: "{ projectId, pins: {left, right} }",
     message: () => tmsg("msg.ui.projection.pin"),
     examples: ['ui.projection.pin \'{"ref":"<pluginId>.<viewId>"}\''],
     handler: (p, ctx) => {
-      const pid = targetProject(p, ctx);
-      if (!useSessions.getState().projects.some((t) => t.id === pid)) {
-        return err("TARGET_NOT_FOUND", tmsg("msg.project.notFoundId", { id: pid }));
+      const pid = targetWorkspace(p, ctx);
+      if (!useSessions.getState().workspaces.some((t) => t.id === pid)) {
+        return err("TARGET_NOT_FOUND", tmsg("msg.workspace.notFoundId", { id: pid }));
       }
       const side = ((p.side as string | undefined) ?? "left") as Side;
       if (!SIDES.includes(side)) {
@@ -101,18 +101,18 @@ export function registerProjectionCatalog(): void {
     params: {
       ref: { type: "string", description: "Pinned ref", required: true },
       side: { type: "string", description: '"left" (default) | "right"' },
-      project: {
+      workspace: {
         type: "string",
-        description: tmsg("cmd.param.project"),
+        description: tmsg("cmd.param.workspace"),
       },
     },
     returns: "{ projectId, pins: {left, right} }",
     message: () => tmsg("msg.ui.projection.unpin"),
     examples: ['ui.projection.unpin \'{"ref":"<pluginId>.<viewId>"}\''],
     handler: (p, ctx) => {
-      const pid = targetProject(p, ctx);
-      if (!useSessions.getState().projects.some((t) => t.id === pid)) {
-        return err("TARGET_NOT_FOUND", tmsg("msg.project.notFoundId", { id: pid }));
+      const pid = targetWorkspace(p, ctx);
+      if (!useSessions.getState().workspaces.some((t) => t.id === pid)) {
+        return err("TARGET_NOT_FOUND", tmsg("msg.workspace.notFoundId", { id: pid }));
       }
       const side = ((p.side as string | undefined) ?? "left") as Side;
       if (!SIDES.includes(side)) {
@@ -125,7 +125,7 @@ export function registerProjectionCatalog(): void {
 
   register("ui.intent.open", {
     description:
-      "Open a resource through the binding context (R2): places the view as a tab in the bound pane without replacing existing panes, reusing the existing tab for the same resource (idempotent). The same path the rail's open affordance uses. With no binding (empty project) it places into the active pane.",
+      "Open a resource through the binding context (R2): places the view as a tab in the bound pane without replacing existing panes, reusing the existing tab for the same resource (idempotent). The same path the rail's open affordance uses. With no binding (empty workspace) it places into the active pane.",
     triggers: { ko: "인텐트열기 결부열기 intent open" },
     params: {
       path: {
@@ -133,9 +133,9 @@ export function registerProjectionCatalog(): void {
         description: tmsg("cmd.ui.intent.open.param.path"),
         required: true,
       },
-      project: {
+      workspace: {
         type: "string",
-        description: tmsg("cmd.param.project"),
+        description: tmsg("cmd.param.workspace"),
       },
     },
     returns: "{ projectId, paneId, tabId, existing }",
@@ -155,7 +155,7 @@ export function registerProjectionCatalog(): void {
           message: tmsg("msg.ui.intent.open.pathAbsolute", { path }),
         };
       }
-      const pid = targetProject(p, ctx);
+      const pid = targetWorkspace(p, ctx);
       const r = useSessions.getState().openFileView(pid, path);
       if (!r.ok) return r;
       return { projectId: pid, paneId: r.groupId, tabId: r.viewId, existing: r.existing };

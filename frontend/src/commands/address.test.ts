@@ -18,7 +18,7 @@ describe("parseAddress — structural decomposition", () => {
   it("full view node path", () => {
     expect(ok("win/main/proj/myproj/content/pane/0/view/soksak-plugin-acp-studio.studio/node/submit")).toEqual({
       window: "main",
-      project: "myproj",
+      workspace: "myproj",
       region: "content",
       pane: "0",
       view: "soksak-plugin-acp-studio.studio",

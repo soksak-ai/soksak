@@ -109,23 +109,23 @@ describe("layout transition public journal", () => {
     });
     const prepared = await prepareLayoutMove([]);
     transactionSettlementApi().bindLayoutTransactionSettlement(prepared.transactionId, {
-      ownerKey: "pjt-aaaaaa",
+      ownerKey: "wsp-aaaaaa",
       revision: 8,
     });
     await prepared.commit();
     expect(layoutTransitionJournal()[0]).toMatchObject({
       transactionId: "layout-1",
       phase: "committed",
-      settlement: { ownerKey: "pjt-aaaaaa", revision: 8, status: "pending" },
+      settlement: { ownerKey: "wsp-aaaaaa", revision: 8, status: "pending" },
     });
 
     transactionSettlementApi().finishLayoutTransactionSettlement(prepared.transactionId, {
-      ownerKey: "pjt-aaaaaa",
+      ownerKey: "wsp-aaaaaa",
       revision: 8,
       status: "settled",
     });
     expect(layoutTransitionJournal()[0]).toMatchObject({
-      settlement: { ownerKey: "pjt-aaaaaa", revision: 8, status: "settled" },
+      settlement: { ownerKey: "wsp-aaaaaa", revision: 8, status: "settled" },
     });
   });
 

@@ -44,12 +44,12 @@ describe("AgentStreamParser", () => {
         message: {
           content: [
             { type: "text", text: "running it" },
-            { type: "tool_use", name: "Bash", input: { command: "sok window.projects" } },
+            { type: "tool_use", name: "Bash", input: { command: "sok window.workspaces" } },
           ],
         },
       }),
     );
-    expect(full).toEqual([{ kind: "tool", name: "Bash", detail: "sok window.projects" }]);
+    expect(full).toEqual([{ kind: "tool", name: "Bash", detail: "sok window.workspaces" }]);
   });
 
   it("turns result success and failure into the final event", () => {

@@ -2,27 +2,27 @@
 // serialization.
 //
 // Key model (core ns):
-//  - "window/<label>"  : one window's workspace snapshot (projects[] + activeId). Atomic per window.
+//  - "window/<label>"  : one window's workspace snapshot (workspaces[] + activeId). Atomic per window.
 //  - "windows"         : window-manifest (slot → {label, roots[], activeRoot}). Restart restore skeleton.
 //
 // [RULE] Layout is window-local (window label key). The same root opened in two windows uses two
-// keys, so there is no collision — the project-unique guard blocks that above for now, but the key
+// keys, so there is no collision — the workspace-unique guard blocks that above for now, but the key
 // model already supports multiple windows (decision A).
 // Live status/PTY/webview sessions are not serialized (windowSnapshot excludes them).
 
 import {
-  serializeProject,
-  deserializeProject,
-  type ProjectSnapshot,
+  serializeWorkspace,
+  deserializeWorkspace,
+  type WorkspaceSnapshot,
 } from "./windowSnapshot";
-import type { Project } from "./sessions";
+import type { Workspace } from "./sessions";
 import type { Pins } from "./projection";
 
 export type ProjectionSeed = { pins: Pins };
 
 export interface WindowSnapshot {
   activeId: string;
-  projects: ProjectSnapshot[];
+  workspaces: WorkspaceSnapshot[];
 }
 
 export interface ManifestEntry {
@@ -43,47 +43,47 @@ export interface WindowManifest {
 
 // The window's current sessions state → a serialized snapshot (per window).
 export function snapshotWindow(
-  projects: Project[],
+  workspaces: Workspace[],
   activeId: string,
   projections?: Record<string, ProjectionSeed>,
 ): WindowSnapshot {
   return {
     activeId,
-    projects: projects.map((p) => serializeProject(p, projections?.[p.id])),
+    workspaces: workspaces.map((p) => serializeWorkspace(p, projections?.[p.id])),
   };
 }
 
-// Snapshot → Project[] (split ids are regenerated through the injected newSplitId). The caller
+// Snapshot → Workspace[] (split ids are regenerated through the injected newSplitId). The caller
 // reseeds after restore.
 export function restoreWindow(
   snap: WindowSnapshot,
   newSplitId: () => string,
 ): {
-  projects: Project[];
+  workspaces: Workspace[];
   activeId: string;
   projections: Record<string, ProjectionSeed>;
 } {
-  const projects = snap.projects.map((p) => deserializeProject(p, newSplitId));
-  const activeId = projects.some((t) => t.id === snap.activeId)
+  const workspaces = snap.workspaces.map((p) => deserializeWorkspace(p, newSplitId));
+  const activeId = workspaces.some((t) => t.id === snap.activeId)
     ? snap.activeId
-    : (projects[0]?.id ?? "");
+    : (workspaces[0]?.id ?? "");
   const projections: Record<string, ProjectionSeed> = {};
-  for (const p of snap.projects) {
+  for (const p of snap.workspaces) {
     if (p.projection) projections[p.id] = p.projection;
   }
-  return { projects, activeId, projections };
+  return { workspaces, activeId, projections };
 }
 
 // This window's manifest entry = label + the list of held roots + the active root.
 export function windowManifestEntry(
   label: string,
-  projects: Project[],
+  workspaces: Workspace[],
   activeId: string,
 ): ManifestEntry {
   return {
     label,
-    roots: projects.map((t) => t.root),
-    activeRoot: projects.find((t) => t.id === activeId)?.root ?? null,
+    roots: workspaces.map((t) => t.root),
+    activeRoot: workspaces.find((t) => t.id === activeId)?.root ?? null,
   };
 }
 

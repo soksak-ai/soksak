@@ -1,4 +1,4 @@
-package project
+package workspace
 
 import (
 	"encoding/json"
@@ -7,7 +7,7 @@ import (
 	"github.com/soksak/soksak-core/core/control"
 )
 
-// project_owners is what the frontend queries before opening a root: if another
+// workspace_owners is what the frontend queries before opening a root: if another
 // window already holds it, that window is focused instead of a second one being
 // created. It reads `.owners` off the answer.
 //
@@ -17,9 +17,9 @@ import (
 func TestOwnersAnswersUnderTheKeyTheCallerReads(t *testing.T) {
 	registry, _, _, _ := wired(t)
 
-	reply, err := registry.Invoke("project_owners", nil)
+	reply, err := registry.Invoke("workspace_owners", nil)
 	if err != nil {
-		t.Fatalf("project_owners: %v", err)
+		t.Fatalf("workspace_owners: %v", err)
 	}
 
 	encoded, err := json.Marshal(reply)
@@ -33,7 +33,7 @@ func TestOwnersAnswersUnderTheKeyTheCallerReads(t *testing.T) {
 		t.Fatalf("decoding %s: %v", encoded, err)
 	}
 	if answer.Owners == nil {
-		t.Fatalf("project_owners answered %s, which has no owners key", encoded)
+		t.Fatalf("workspace_owners answered %s, which has no owners key", encoded)
 	}
 }
 
@@ -43,9 +43,9 @@ func TestOwnersAnswersUnderTheKeyTheCallerReads(t *testing.T) {
 func TestOwnersIsAListWhenNobodyHoldsAnything(t *testing.T) {
 	registry, _, _, _ := wired(t)
 
-	reply, err := registry.Invoke("project_owners", nil)
+	reply, err := registry.Invoke("workspace_owners", nil)
 	if err != nil {
-		t.Fatalf("project_owners: %v", err)
+		t.Fatalf("workspace_owners: %v", err)
 	}
 	encoded, _ := json.Marshal(reply)
 	if string(encoded) != `{"owners":[]}` {
@@ -63,13 +63,13 @@ func TestOwnersReportsLiveHoldersOnly(t *testing.T) {
 		t.Fatalf("claim: %v", err)
 	}
 
-	encoded, _ := json.Marshal(mustInvoke(t, registry, "project_owners"))
+	encoded, _ := json.Marshal(mustInvoke(t, registry, "workspace_owners"))
 	if string(encoded) == `{"owners":[]}` {
 		t.Fatalf("a live claim was not reported: %s", encoded)
 	}
 
 	live.set("w-2")
-	encoded, _ = json.Marshal(mustInvoke(t, registry, "project_owners"))
+	encoded, _ = json.Marshal(mustInvoke(t, registry, "workspace_owners"))
 	if string(encoded) != `{"owners":[]}` {
 		t.Errorf("a claim held by a window that closed was reported: %s", encoded)
 	}

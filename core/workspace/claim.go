@@ -1,4 +1,4 @@
-package project
+package workspace
 
 import (
 	"sort"
@@ -13,7 +13,7 @@ import (
 // places, one publisher eventually delivers to nobody, and that absence is not an
 // error — it is a picker that never updates. Measured
 // 2026-08-01: one publisher never sent it at all.
-const ChangeEvent = "project-registry-change"
+const ChangeEvent = "workspace-registry-change"
 
 // LiveWindows answers the one fact the ledger needs about windows: whether a
 // label still names one.
@@ -46,7 +46,7 @@ type Owner struct {
 // across every window in this process.
 //
 // It is held in memory and is never persisted. A persisted claim survives a crash
-// and makes that project permanently unopenable; a restart is an empty ledger,
+// and makes that workspace permanently unopenable; a restart is an empty ledger,
 // which is the correct state after a crash.
 //
 // The launcher constructs one and hands it to both this package and the host,
@@ -62,10 +62,10 @@ type Ledger struct {
 //
 // A ledger with no way to ask whether a window still exists is refused here
 // rather than later: without it, a window that never delivered its destruction
-// leaves a claim that blocks that project until the process restarts.
+// leaves a claim that blocks that workspace until the process restarts.
 func NewLedger(windows LiveWindows) *Ledger {
 	if windows == nil {
-		panic("project: NewLedger needs a way to ask which windows are live")
+		panic("workspace: NewLedger needs a way to ask which windows are live")
 	}
 	return &Ledger{owners: map[string]string{}, windows: windows}
 }
@@ -97,12 +97,12 @@ func (ledger *Ledger) ownerOf(root string) (string, bool) {
 // so the caller focuses it.
 func (ledger *Ledger) Claim(root string, window string) (ClaimReply, bool, error) {
 	if root == "" {
-		return ClaimReply{}, false, i18n.Errorf("project.claim.noRoot", nil)
+		return ClaimReply{}, false, i18n.Errorf("workspace.claim.noRoot", nil)
 	}
 	if window == "" {
 		// An owner that cannot be named can never release, so the root would
 		// stay unclaimable for the life of the process.
-		return ClaimReply{}, false, i18n.Errorf("project.claim.noWindowLabel", nil)
+		return ClaimReply{}, false, i18n.Errorf("workspace.claim.noWindowLabel", nil)
 	}
 
 	ledger.mu.Lock()
@@ -125,10 +125,10 @@ func (ledger *Ledger) Claim(root string, window string) (ClaimReply, bool, error
 // once — the close handler, boot, and orchestrator routing all reach here.
 func (ledger *Ledger) Release(root string, window string) (bool, error) {
 	if root == "" {
-		return false, i18n.Errorf("project.release.noRoot", nil)
+		return false, i18n.Errorf("workspace.release.noRoot", nil)
 	}
 	if window == "" {
-		return false, i18n.Errorf("project.release.noWindowLabel", nil)
+		return false, i18n.Errorf("workspace.release.noWindowLabel", nil)
 	}
 
 	ledger.mu.Lock()
@@ -154,7 +154,7 @@ func (ledger *Ledger) Release(root string, window string) (bool, error) {
 // The caller publishes ChangeEvent when the returned list is not empty. The
 // ledger cannot: broadcasting needs a window, and this package holds none. A
 // freed root that is announced to nobody leaves the other windows' pickers
-// showing a project as open until something unrelated makes them re-read.
+// showing a workspace as open until something unrelated makes them re-read.
 func (ledger *Ledger) ReleaseWindow(window string) []string {
 	ledger.mu.Lock()
 	defer ledger.mu.Unlock()
@@ -175,7 +175,7 @@ func (ledger *Ledger) ReleaseWindow(window string) []string {
 // Owners lists what is held right now, by root, so two readings compare.
 //
 // A claim held by a window that no longer exists is not reported. Measured:
-// a closed project showed as open and selectable, because a
+// a closed workspace showed as open and selectable, because a
 // window that never delivered its destruction left the claim standing.
 //
 // Liveness is read once for the whole list, not once per root. Asking per root

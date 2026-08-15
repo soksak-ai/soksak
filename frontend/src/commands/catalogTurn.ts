@@ -23,8 +23,8 @@ export function registerTurnCatalog(): void {
         description: tmsg("cmd.turn.signal.param.source"),
       },
       tabId: { type: "string", description: "Related tab id (optional)" },
-      project: { type: "string", description: "Project id (optional)" },
-      root: { type: "string", description: "Project root path — scope key used by subscribers to filter events" },
+      workspace: { type: "string", description: "Workspace id (optional)" },
+      root: { type: "string", description: "Workspace root path — scope key used by subscribers to filter events" },
       command: { type: "string", description: "Description of the completed task or command (optional, enriches event body)" },
     },
     returns: "{ emitted, projectId }",
@@ -32,7 +32,7 @@ export function registerTurnCatalog(): void {
     errors: ["INTERNAL"],
     examples: ['turn.signal \'{"source":"acp","root":"/Users/me/proj","command":"claude reply finished"}\''],
     handler: (p) => {
-      const projectId = typeof p.project === "string" ? p.project : null;
+      const projectId = typeof p.workspace === "string" ? p.workspace : null;
       emitPluginEvent("turn.ended", {
         projectId,
         root: typeof p.root === "string" ? p.root : null,

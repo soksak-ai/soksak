@@ -171,7 +171,7 @@ func TestTheCallersArgumentShapesAreAnswered(t *testing.T) {
 	registry, _ := registered(t, deps)
 
 	pid, err := registry.Invoke(commandStart, sent(t,
-		`{"root":"/projects/app","name":"dev","cmd":"npm run dev","restart":null}`))
+		`{"root":"/workspaces/app","name":"dev","cmd":"npm run dev","restart":null}`))
 	if err != nil {
 		t.Fatalf("daemon_start: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestTheCallersArgumentShapesAreAnswered(t *testing.T) {
 		t.Fatalf("daemon_start answered %v, want the pid the catalogue records", pid)
 	}
 
-	rows, err := registry.Invoke(commandStatus, sent(t, `{"root":"/projects/app"}`))
+	rows, err := registry.Invoke(commandStatus, sent(t, `{"root":"/workspaces/app"}`))
 	if err != nil {
 		t.Fatalf("daemon_status: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestTheCallersArgumentShapesAreAnswered(t *testing.T) {
 		t.Fatalf("daemon_status answered %+v", rows)
 	}
 
-	lines, err := registry.Invoke(commandLogs, sent(t, `{"root":"/projects/app","name":"dev","lines":null}`))
+	lines, err := registry.Invoke(commandLogs, sent(t, `{"root":"/workspaces/app","name":"dev","lines":null}`))
 	if err != nil {
 		t.Fatalf("daemon_logs: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestTheCallersArgumentShapesAreAnswered(t *testing.T) {
 		t.Error("daemon_logs answered null")
 	}
 
-	stopped, err := registry.Invoke(commandStop, sent(t, `{"root":"/projects/app","name":null}`))
+	stopped, err := registry.Invoke(commandStop, sent(t, `{"root":"/workspaces/app","name":null}`))
 	if err != nil {
 		t.Fatalf("daemon_stop: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestARunOnceAnswersTheShapeTheReleaseCommandsParse(t *testing.T) {
 	}()
 
 	answer, err := registry.Invoke(commandRunOnce, sent(t,
-		`{"root":"/projects/app","cmd":"node build.mjs","timeoutSecs":180,"env":{"GH_TOKEN":"x"}}`))
+		`{"root":"/workspaces/app","cmd":"node build.mjs","timeoutSecs":180,"env":{"GH_TOKEN":"x"}}`))
 	if err != nil {
 		t.Fatalf("daemon_run_once: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestARestartPolicyIsRefusedRatherThanIgnored(t *testing.T) {
 	registry, _ := registered(t, deps)
 
 	_, err := registry.Invoke(commandStart, sent(t,
-		`{"root":"/projects/app","name":"dev","cmd":"npm run dev","restart":"always"}`))
+		`{"root":"/workspaces/app","name":"dev","cmd":"npm run dev","restart":"always"}`))
 	if err == nil {
 		t.Fatal("a restart policy was accepted and nothing in this build restarts anything")
 	}
@@ -276,7 +276,7 @@ func TestARestartPolicyIsRefusedRatherThanIgnored(t *testing.T) {
 }
 
 // Absent, null and empty are three different answers, and none of them is a
-// project root.
+// workspace root.
 func TestAnArgumentThatNamesNothingIsRefusedByName(t *testing.T) {
 	deps, _ := fullDeps(t)
 	registry, _ := registered(t, deps)
@@ -288,12 +288,12 @@ func TestAnArgumentThatNamesNothingIsRefusedByName(t *testing.T) {
 		{commandStart, `{"name":"dev","cmd":"npm run dev"}`},
 		{commandStart, `{"root":null,"name":"dev","cmd":"npm run dev"}`},
 		{commandStart, `{"root":"","name":"dev","cmd":"npm run dev"}`},
-		{commandStart, `{"root":"/projects/app","name":"dev"}`},
-		{commandStop, `{"root":"/projects/app","name":""}`},
-		{commandLogs, `{"root":"/projects/app","name":"dev","lines":0}`},
-		{commandRunOnce, `{"root":"/projects/app","cmd":"node x.mjs"}`},
-		{commandRunOnce, `{"root":"/projects/app","cmd":"node x.mjs","timeoutSecs":0}`},
-		{commandRunOnce, `{"root":"/projects/app","cmd":"node x.mjs","timeoutSecs":60,"env":{"":"x"}}`},
+		{commandStart, `{"root":"/workspaces/app","name":"dev"}`},
+		{commandStop, `{"root":"/workspaces/app","name":""}`},
+		{commandLogs, `{"root":"/workspaces/app","name":"dev","lines":0}`},
+		{commandRunOnce, `{"root":"/workspaces/app","cmd":"node x.mjs"}`},
+		{commandRunOnce, `{"root":"/workspaces/app","cmd":"node x.mjs","timeoutSecs":0}`},
+		{commandRunOnce, `{"root":"/workspaces/app","cmd":"node x.mjs","timeoutSecs":60,"env":{"":"x"}}`},
 		{commandReap, `{}`},
 		{commandReap, `{"entries":null}`},
 	}

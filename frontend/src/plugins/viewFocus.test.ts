@@ -6,7 +6,7 @@ import type {
 import { ViewFocusCoordinator } from "./viewFocus";
 
 const context = {
-  projectId: "pjt-aaaaaa",
+  projectId: "wsp-aaaaaa",
   root: null,
   paneId: null,
   viewId: null,

@@ -200,22 +200,22 @@ describe("useArrangementPhase", () => {
     const to = solve(twoColumns, "b");
     const intentPrepared = transition("glide");
     const fallback = vi.fn(async () => transition("glide"));
-    registerLayoutTransitionIntentHost("project-intent", {
+    registerLayoutTransitionIntentHost("workspace-intent", {
       prepare: async () => intentPrepared,
     });
     act(() => root.render(
-      <Probe arrangement={at} scopeId={scopeOf(at)} prepareTravel={fallback} settlementKey="project-intent" />,
+      <Probe arrangement={at} scopeId={scopeOf(at)} prepareTravel={fallback} settlementKey="workspace-intent" />,
     ));
-    const revision = invalidateLayout("project-intent");
+    const revision = invalidateLayout("workspace-intent");
     expect(publishLayoutTransitionIntent({
-      ownerKey: "project-intent",
+      ownerKey: "workspace-intent",
       revision,
       from: at,
       to,
     })).toBe(true);
 
     act(() => root.render(
-      <Probe arrangement={to} scopeId={scopeOf(to)} prepareTravel={fallback} settlementKey="project-intent" />,
+      <Probe arrangement={to} scopeId={scopeOf(to)} prepareTravel={fallback} settlementKey="workspace-intent" />,
     ));
     await act(async () => {});
 
@@ -230,34 +230,34 @@ describe("useArrangementPhase", () => {
     const prepare = vi.fn()
       .mockResolvedValueOnce(first)
       .mockResolvedValueOnce(second);
-    registerLayoutTransitionIntentHost("project-serialized", { prepare });
+    registerLayoutTransitionIntentHost("workspace-serialized", { prepare });
     act(() => root.render(
-      <Probe arrangement={at} scopeId={scopeOf(at)} settlementKey="project-serialized" />,
+      <Probe arrangement={at} scopeId={scopeOf(at)} settlementKey="workspace-serialized" />,
     ));
 
-    const firstRevision = invalidateLayout("project-serialized");
+    const firstRevision = invalidateLayout("workspace-serialized");
     publishLayoutTransitionIntent({
-      ownerKey: "project-serialized",
+      ownerKey: "workspace-serialized",
       revision: firstRevision,
       from: at,
       to,
     });
     act(() => root.render(
-      <Probe arrangement={to} scopeId={scopeOf(to)} settlementKey="project-serialized" />,
+      <Probe arrangement={to} scopeId={scopeOf(to)} settlementKey="workspace-serialized" />,
     ));
     await act(async () => {});
     expect(el().dataset.traveling).toBe("1");
     expect(prepare).toHaveBeenCalledTimes(1);
 
-    const secondRevision = invalidateLayout("project-serialized");
+    const secondRevision = invalidateLayout("workspace-serialized");
     publishLayoutTransitionIntent({
-      ownerKey: "project-serialized",
+      ownerKey: "workspace-serialized",
       revision: secondRevision,
       from: to,
       to: at,
     });
     act(() => root.render(
-      <Probe arrangement={at} scopeId={scopeOf(at)} settlementKey="project-serialized" />,
+      <Probe arrangement={at} scopeId={scopeOf(at)} settlementKey="workspace-serialized" />,
     ));
     await act(async () => {});
     expect(prepare).toHaveBeenCalledTimes(1);
@@ -304,24 +304,24 @@ describe("useArrangementPhase", () => {
         arrangement={right}
         scopeId={scopeOf(right)}
         prepareTravel={prepareTravel}
-        settlementKey="project-retry"
+        settlementKey="workspace-retry"
       />,
     ));
 
-    invalidateLayout("project-retry");
+    invalidateLayout("workspace-retry");
     act(() => root.render(
       <Probe
         arrangement={left}
         scopeId={scopeOf(left)}
         prepareTravel={prepareTravel}
-        settlementKey="project-retry"
+        settlementKey="workspace-retry"
       />,
     ));
     await act(async () => {});
     expect(prepareTravel).toHaveBeenCalledTimes(1);
-    expect(layoutSettlementFacts("project-retry").active).toBe(true);
+    expect(layoutSettlementFacts("workspace-retry").active).toBe(true);
     expect(layoutArrangementPhaseFacts()).toEqual([{
-      ownerKey: "project-retry",
+      ownerKey: "workspace-retry",
       current: { focusId: "a", station: left.station, key: expect.any(String) },
       displayed: { focusId: "b", station: right.station, key: expect.any(String) },
       phase: "blocked",
@@ -337,11 +337,11 @@ describe("useArrangementPhase", () => {
         arrangement={right}
         scopeId={scopeOf(right)}
         prepareTravel={prepareTravel}
-        settlementKey="project-retry"
+        settlementKey="workspace-retry"
       />,
     ));
     await act(async () => {});
-    expect(layoutSettlementFacts("project-retry")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("workspace-retry")).toEqual({ active: false, pending: [] });
     expect(layoutArrangementPhaseFacts()[0]).toMatchObject({
       current: { focusId: "b" },
       displayed: { focusId: "b" },
@@ -349,35 +349,35 @@ describe("useArrangementPhase", () => {
       preparationTargetKey: null,
     });
 
-    invalidateLayout("project-retry");
+    invalidateLayout("workspace-retry");
     act(() => root.render(
       <Probe
         arrangement={left}
         scopeId={scopeOf(left)}
         prepareTravel={prepareTravel}
-        settlementKey="project-retry"
+        settlementKey="workspace-retry"
       />,
     ));
     await act(async () => {});
 
     expect(prepareTravel).toHaveBeenCalledTimes(2);
-    expect(layoutSettlementFacts("project-retry")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("workspace-retry")).toEqual({ active: false, pending: [] });
     error.mockRestore();
   });
 
   it("a state commit with unchanged geometry still ACKs the newest layout revision", () => {
     const at = solve(twoColumns, "a");
     act(() => root.render(
-      <Probe arrangement={at} scopeId={scopeOf(at)} settlementKey="project-1" />,
+      <Probe arrangement={at} scopeId={scopeOf(at)} settlementKey="workspace-1" />,
     ));
 
-    invalidateLayout("project-1");
+    invalidateLayout("workspace-1");
     expect(layoutSettlementFacts().active).toBe(true);
 
     // As in PIN mode the geometry signature of the solution is identical, but an external state
     // commit re-renders App.
     act(() => root.render(
-      <Probe arrangement={at} scopeId={scopeOf(at)} settlementKey="project-1" />,
+      <Probe arrangement={at} scopeId={scopeOf(at)} settlementKey="workspace-1" />,
     ));
     expect(layoutSettlementFacts()).toEqual({ active: false, pending: [] });
   });
@@ -539,25 +539,25 @@ describe("useArrangementPhase", () => {
         arrangement={at}
         scopeId={scopeOf(at)}
         prepareTravel={prepareTravel}
-        settlementKey="project-commit"
+        settlementKey="workspace-commit"
       />,
     ));
 
-    invalidateLayout("project-commit");
+    invalidateLayout("workspace-commit");
     act(() => root.render(
       <Probe
         arrangement={to}
         scopeId={scopeOf(to)}
         prepareTravel={prepareTravel}
-        settlementKey="project-commit"
+        settlementKey="workspace-commit"
       />,
     ));
     await act(async () => {});
 
     expect(commit).toHaveBeenCalledTimes(1);
-    expect(layoutSettlementFacts("project-commit").active).toBe(true);
+    expect(layoutSettlementFacts("workspace-commit").active).toBe(true);
     await act(async () => releaseCommit());
-    expect(layoutSettlementFacts("project-commit")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("workspace-commit")).toEqual({ active: false, pending: [] });
   });
 
   it("a committed snap restore settles once, at the exact revision where current/displayed and the presentation commit are closed", async () => {
@@ -581,43 +581,43 @@ describe("useArrangementPhase", () => {
         arrangement={restored}
         scopeId={scopeOf(restored)}
         prepareTravel={prepareTravel}
-        settlementKey="project-restore"
+        settlementKey="workspace-restore"
       />,
     ));
 
-    invalidateLayout("project-restore");
+    invalidateLayout("workspace-restore");
     act(() => root.render(
       <Probe
         arrangement={maximized}
         scopeId={scopeOf(maximized)}
         prepareTravel={prepareTravel}
-        settlementKey="project-restore"
+        settlementKey="workspace-restore"
       />,
     ));
     await act(async () => {});
-    expect(layoutSettlementFacts("project-restore")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("workspace-restore")).toEqual({ active: false, pending: [] });
 
-    invalidateLayout("project-restore");
+    invalidateLayout("workspace-restore");
     act(() => root.render(
       <Probe
         arrangement={restored}
         scopeId={scopeOf(restored)}
         prepareTravel={prepareTravel}
-        settlementKey="project-restore"
+        settlementKey="workspace-restore"
       />,
     ));
     await act(async () => {});
 
     expect(commits).toEqual(["maximize", "restore"]);
     expect(layoutArrangementPhaseFacts()).toEqual([expect.objectContaining({
-      ownerKey: "project-restore",
+      ownerKey: "workspace-restore",
       current: expect.objectContaining({ key: expect.any(String) }),
       displayed: expect.objectContaining({ key: expect.any(String) }),
       phase: "idle",
     })]);
     expect(layoutArrangementPhaseFacts()[0].current.key)
       .toBe(layoutArrangementPhaseFacts()[0].displayed.key);
-    expect(layoutSettlementFacts("project-restore")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("workspace-restore")).toEqual({ active: false, pending: [] });
   });
 
   it("an actual-shaped maximize7→restore8 snap preserves the consumed revision on each terminal row", async () => {
@@ -702,26 +702,26 @@ describe("useArrangementPhase", () => {
         arrangement={restored}
         scopeId={scopeOf(restored)}
         prepareTravel={prepareTravel}
-        settlementKey="project-slow"
+        settlementKey="workspace-slow"
       />,
     ));
 
-    const firstRevision = invalidateLayout("project-slow");
+    const firstRevision = invalidateLayout("workspace-slow");
     act(() => root.render(
       <Probe
         arrangement={maximized}
         scopeId={scopeOf(maximized)}
         prepareTravel={prepareTravel}
-        settlementKey="project-slow"
+        settlementKey="workspace-slow"
       />,
     ));
-    const secondRevision = invalidateLayout("project-slow");
+    const secondRevision = invalidateLayout("workspace-slow");
     await act(async () => finishPrepare(transition("snap")));
 
-    expect(layoutSettlementFacts("project-slow")).toEqual({
+    expect(layoutSettlementFacts("workspace-slow")).toEqual({
       active: true,
       pending: [{
-        key: "project-slow",
+        key: "workspace-slow",
         requested: secondRevision,
         settled: firstRevision,
       }],
@@ -736,34 +736,34 @@ describe("useArrangementPhase", () => {
       arrangement={left}
       scopeId={scopeOf(left)}
       prepareTravel={prepareTravel}
-      settlementKey="project-glide-revisions"
+      settlementKey="workspace-glide-revisions"
     />));
 
-    invalidateLayout("project-glide-revisions");
+    invalidateLayout("workspace-glide-revisions");
     act(() => root.render(<Probe
       arrangement={right}
       scopeId={scopeOf(right)}
       prepareTravel={prepareTravel}
-      settlementKey="project-glide-revisions"
+      settlementKey="workspace-glide-revisions"
     />));
     await act(async () => {});
 
-    invalidateLayout("project-glide-revisions");
+    invalidateLayout("workspace-glide-revisions");
     act(() => root.render(<Probe
       arrangement={left}
       scopeId={scopeOf(left)}
       prepareTravel={prepareTravel}
-      settlementKey="project-glide-revisions"
+      settlementKey="workspace-glide-revisions"
     />));
     await act(async () => vi.advanceTimersByTimeAsync(RAIL_TRAVEL_MS));
 
-    expect(layoutSettlementFacts("project-glide-revisions")).toEqual({
+    expect(layoutSettlementFacts("workspace-glide-revisions")).toEqual({
       active: true,
-      pending: [{ key: "project-glide-revisions", requested: 2, settled: 1 }],
+      pending: [{ key: "workspace-glide-revisions", requested: 2, settled: 1 }],
     });
     await act(async () => {});
     await act(async () => vi.advanceTimersByTimeAsync(RAIL_TRAVEL_MS));
-    expect(layoutSettlementFacts("project-glide-revisions")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("workspace-glide-revisions")).toEqual({ active: false, pending: [] });
   });
 
   it("a glide reveals the DOM after prepare completes and runs commit in that DOM's layout effect", async () => {
@@ -858,16 +858,16 @@ describe("useArrangementPhase", () => {
         arrangement={at}
         scopeId={scopeOf(at)}
         prepareTravel={prepareTravel}
-        settlementKey="project-start-failed"
+        settlementKey="workspace-start-failed"
       />,
     ));
-    invalidateLayout("project-start-failed");
+    invalidateLayout("workspace-start-failed");
     act(() => root.render(
       <Probe
         arrangement={to}
         scopeId={scopeOf(to)}
         prepareTravel={prepareTravel}
-        settlementKey="project-start-failed"
+        settlementKey="workspace-start-failed"
       />,
     ));
     await act(async () => {});
@@ -898,26 +898,26 @@ describe("useArrangementPhase", () => {
       commit: async () => { throw failure; },
     } satisfies PreparedLayoutTransition;
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    registerLayoutTransitionIntentHost("project-commit-failed", {
+    registerLayoutTransitionIntentHost("workspace-commit-failed", {
       prepare: async () => failed,
     });
     act(() => root.render(
-      <Probe arrangement={at} scopeId={scopeOf(at)} settlementKey="project-commit-failed" />,
+      <Probe arrangement={at} scopeId={scopeOf(at)} settlementKey="workspace-commit-failed" />,
     ));
-    const revision = invalidateLayout("project-commit-failed");
+    const revision = invalidateLayout("workspace-commit-failed");
     expect(publishLayoutTransitionIntent({
-      ownerKey: "project-commit-failed",
+      ownerKey: "workspace-commit-failed",
       revision,
       from: at,
       to,
     })).toBe(true);
     act(() => root.render(
-      <Probe arrangement={to} scopeId={scopeOf(to)} settlementKey="project-commit-failed" />,
+      <Probe arrangement={to} scopeId={scopeOf(to)} settlementKey="workspace-commit-failed" />,
     ));
     await act(async () => {});
 
     expect(layoutTransitionIntentFacts().events.find((event) => (
-      event.ownerKey === "project-commit-failed"
+      event.ownerKey === "workspace-commit-failed"
       && event.revision === revision
       && event.phase === "finished"
     ))).toEqual(expect.objectContaining({

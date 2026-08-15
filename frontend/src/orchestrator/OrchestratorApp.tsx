@@ -11,7 +11,7 @@ import { safeListen } from "../lib/safeListen";
 import { currentWindowLabel } from "../lib/webviewLabels";
 import { execute, getSpec } from "../commands/registry";
 import { Icon } from "../ui/icons/Icon";
-import { NewProjectModal, type CreateProjectArgs } from "../components/NewProjectModal";
+import { NewWorkspaceModal, type CreateWorkspaceArgs } from "../components/NewWorkspaceModal";
 import { hasMessage, localize, useT, type MsgKey, type TFn } from "../i18n";
 import { actorKeyOf, foldFeed, itemWindow, type ActivityEntry, type ChatCard } from "./feedFold";
 
@@ -102,13 +102,13 @@ function fmtTime(ms: number): string {
 
 // Renders one activity — a command execution becomes request/response chat bubbles (start and end
 // timestamps shown), everything else a single event line. The window in the meta is displayed as
-// the project name (nameOf). Request arguments (params) are noise, so they stay out of the bubble
+// the workspace name (nameOf). Request arguments (params) are noise, so they stay out of the bubble
 // body and the full payload appears only in title (hover) — the result summary stays in the
 // response bubble.
 function renderEntry(
   e: ActivityEntry,
   nameOf: (win: string) => string,
-  showWho: boolean, // project name only in the "all" view (when filtered it is already in the header)
+  showWho: boolean, // workspace name only in the "all" view (when filtered it is already in the header)
   onToggle: (seq: number) => void, // click: expand the raw JSON
   isExpanded: boolean,
   t: TFn,
@@ -252,16 +252,16 @@ function renderChatCard(
 export function OrchestratorApp() {
   const t = useT();
   const [feed, setFeed] = useState<ActivityEntry[]>([]);
-  // The left side lists all projects (recently opened ∪ currently open). window != null means it is
+  // The left side lists all workspaces (recently opened ∪ currently open). window != null means it is
   // open and has that window.
-  const [projects, setProjects] = useState<{ root: string; name: string; window: string | null }[]>([]);
+  const [workspaces, setWorkspaces] = useState<{ root: string; name: string; window: string | null }[]>([]);
   const [cmd, setCmd] = useState("");
   const [result, setResult] = useState<string>("");
   const [pinned, setPinned] = useState(false); // pin = always-on-top (local to this window, off after reopening)
-  // Feed filter selection — the unit is the project (root). The highlight is keyed by root too:
-  // one window can host several projects, so a per-window highlight looks like multiple
+  // Feed filter selection — the unit is the workspace (root). The highlight is keyed by root too:
+  // one window can host several workspaces, so a per-window highlight looks like multiple
   // simultaneous selections (bug report). Feed events include only the window label, so the filter
-  // runs on the selected project's window.
+  // runs on the selected workspace's window.
   const [selected, setSelected] = useState<{ root: string; window: string } | null>(null);
   const [unread, setUnread] = useState(0); // count of entries that arrived while scrolled up
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set()); // entries (seq) with raw JSON expanded
@@ -303,32 +303,32 @@ export function OrchestratorApp() {
     void invoke("window_focus", { label }).catch(() => {});
   }, []);
 
-  // Window label in the feed meta (w-<uuid>) to a project name — a window label means nothing to a person.
+  // Window label in the feed meta (w-<uuid>) to a workspace name — a window label means nothing to a person.
   const nameOf = useCallback(
     (win: string) =>
       win === currentWindowLabel()
-        ? t("orch.console") // run from this window (the console) — an action of the orchestrator itself, not of a project
-        : (projects.find((p) => p.window === win)?.name ?? win),
-    [projects, t],
+        ? t("orch.console") // run from this window (the console) — an action of the orchestrator itself, not of a workspace
+        : (workspaces.find((p) => p.window === win)?.name ?? win),
+    [workspaces, t],
   );
 
-  // Left project list = recently opened (project.recent) ∪ currently open (project_owners). Open
-  // ones have an owning window. Refreshed automatically on project-registry-change for every
-  // project open/close.
-  const refreshProjects = useCallback(() => {
+  // Left workspace list = recently opened (workspace.recent) ∪ currently open (workspace_owners). Open
+  // ones have an owning window. Refreshed automatically on workspace-registry-change for every
+  // workspace open/close.
+  const refreshWorkspaces = useCallback(() => {
     void (async () => {
       let recents: { root: string; alias?: string }[] = [];
       let owners: { root: string; window: string }[] = [];
       try {
         // Internal query (filling the rail) — not a human intent (§5 origin:"internal", not instrumented).
-        const r = await execute("project.recent", {}, { remote: false, origin: "internal" });
+        const r = await execute("workspace.recent", {}, { remote: false, origin: "internal" });
         if (r.ok) recents = (r.data as { recents?: typeof recents } | undefined)?.recents ?? [];
       } catch {
         /* Ignore — empty list */
       }
       try {
         owners = (
-          await invoke<{ owners: { root: string; window: string }[] }>("project_owners")
+          await invoke<{ owners: { root: string; window: string }[] }>("workspace_owners")
         ).owners;
       } catch {
         /* Ignore */
@@ -343,7 +343,7 @@ export function OrchestratorApp() {
           order.push(r);
         }
       }
-      setProjects(
+      setWorkspaces(
         order.map((root) => ({
           root,
           name: aliasOf.get(root) || root.split("/").filter(Boolean).pop() || root,
@@ -353,17 +353,17 @@ export function OrchestratorApp() {
     })();
   }, []);
 
-  // Clicking an unopened project = open it (create a window at that root; if already open, P6
+  // Clicking an unopened workspace = open it (create a window at that root; if already open, P6
   // focuses that window).
-  const openProject = useCallback((root: string) => {
+  const openWorkspace = useCallback((root: string) => {
     void execute("window.open", { root }, { remote: false }).catch(() => {});
   }, []);
 
-  // Project creation — the control plane is the single surface for open and create (the workspace
+  // Workspace creation — the control plane is the single surface for open and create (the workspace
   // picker is gone). The modal prepares and validates the folder, and this opens a new workspace
   // window at that root.
-  const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const createProject = useCallback(async (args: CreateProjectArgs) => {
+  const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
+  const createWorkspace = useCallback(async (args: CreateWorkspaceArgs) => {
     await execute(
       "window.open",
       { root: args.root, ...(args.alias ? { alias: args.alias } : {}), ...(args.shell ? { shell: args.shell } : {}) },
@@ -372,7 +372,7 @@ export function OrchestratorApp() {
   }, []);
 
   useEffect(() => {
-    // Native title (distinguishes entries in the Dock window list) — same rule as a project window:
+    // Native title (distinguishes entries in the Dock window list) — same rule as a workspace window:
     // name only, no app-name suffix.
     void currentWindow().setTitle(t("orch.title")).catch(() => {});
     // Live subscription after the backfill (cursor) — 0 polling. Subscribe/unsubscribe goes through
@@ -391,15 +391,15 @@ export function OrchestratorApp() {
       });
       if (!atBottomRef.current) setUnread((u) => u + 1); // while scrolled up, accumulate unread
     });
-    // The core broadcasts on every project open/close and owning-window change — the left project
+    // The core broadcasts on every workspace open/close and owning-window change — the left workspace
     // list refreshes automatically.
-    const unReg = safeListen("project-registry-change", refreshProjects);
-    refreshProjects();
+    const unReg = safeListen("workspace-registry-change", refreshWorkspaces);
+    refreshWorkspaces();
     return () => {
       un();
       unReg();
     };
-  }, [refreshProjects]);
+  }, [refreshWorkspaces]);
 
   // On a new item: if at the bottom, keep following. If scrolled up, leave the scroll alone and
   // report through the unread badge (onFeedScroll tracks atBottomRef).
@@ -464,7 +464,7 @@ export function OrchestratorApp() {
       </header>
       <div className="orch-body">
         <section className="orch-map" data-node="orch/map">
-          <h2>{t("orch.projects")}</h2>
+          <h2>{t("orch.workspaces")}</h2>
           {/* "All" = clears the feed filter. It is a filter selection, so it stays in the list (not as a badge to the right of the feed). */}
           <button
             type="button"
@@ -472,9 +472,9 @@ export function OrchestratorApp() {
             data-node="orch/proj/all"
             onClick={() => setSelected(null)}
           >
-            {t("orch.allProjects")}
+            {t("orch.allWorkspaces")}
           </button>
-          {projects.map((p) => {
+          {workspaces.map((p) => {
             const open = p.window !== null;
             return (
               <div
@@ -483,7 +483,7 @@ export function OrchestratorApp() {
                   selected?.root === p.root ? " selected" : ""
                 }`}
               >
-                {/* Label click: an open project filters the feed to its window. A closed one is not opened —
+                {/* Label click: an open workspace filters the feed to its window. A closed one is not opened —
                     opening a window is the job of the right-hand icon alone (a selection must not force a window into existence). */}
                 <button
                   type="button"
@@ -500,8 +500,8 @@ export function OrchestratorApp() {
                   type="button"
                   className="orch-proj-call"
                   data-node={`orch/proj-call/${p.name}`}
-                  title={open ? t("orch.callWindow") : t("orch.openProject")}
-                  onClick={() => (open ? focusWindow(p.window as string) : openProject(p.root))}
+                  title={open ? t("orch.callWindow") : t("orch.openWorkspace")}
+                  onClick={() => (open ? focusWindow(p.window as string) : openWorkspace(p.root))}
                 >
                   <Icon name="arrow-up-right" />
                 </button>
@@ -511,10 +511,10 @@ export function OrchestratorApp() {
           <button
             type="button"
             className="orch-proj-new"
-            data-node="orch/new-project"
-            onClick={() => setNewProjectOpen(true)}
+            data-node="orch/new-workspace"
+            onClick={() => setNewWorkspaceOpen(true)}
           >
-            <Icon name="add" size="sm" /> {t("project.new")}
+            <Icon name="add" size="sm" /> {t("workspace.new")}
           </button>
         </section>
         <section className="orch-feed-wrap">
@@ -523,7 +523,7 @@ export function OrchestratorApp() {
             {selected && (
               <span className="orch-feed-scope">
                 {" — "}
-                {projects.find((p) => p.root === selected.root)?.name ?? selected.window}
+                {workspaces.find((p) => p.root === selected.root)?.name ?? selected.window}
               </span>
             )}
           </h2>
@@ -531,7 +531,7 @@ export function OrchestratorApp() {
             {(() => {
               // Folding runs over the whole feed before filtering (feedFold — parentId is canonical
               // plus a legacy heuristic). Set visibility is decided by the parent: a chat card
-              // (parent window = main = own) stays whole down to its children (w-*) whatever project
+              // (parent window = main = own) stays whole down to its children (w-*) whatever workspace
               // is selected — the set-level extension of "your own actions are always visible".
               const own = currentWindowLabel();
               const items = foldFeed(feed);
@@ -581,8 +581,8 @@ export function OrchestratorApp() {
           )}
         </section>
       </div>
-      {newProjectOpen && (
-        <NewProjectModal onClose={() => setNewProjectOpen(false)} create={createProject} />
+      {newWorkspaceOpen && (
+        <NewWorkspaceModal onClose={() => setNewWorkspaceOpen(false)} create={createWorkspace} />
       )}
       {zoomSrc && (
         <div

@@ -24,7 +24,7 @@ func TestARunOnceAnswersWithItsCodeAndEverythingItPrinted(t *testing.T) {
 		child.exit(0)
 	}()
 
-	once, err := supervisor.RunOnce("/projects/app", "node build.mjs", nil, time.Minute)
+	once, err := supervisor.RunOnce("/workspaces/app", "node build.mjs", nil, time.Minute)
 	if err != nil {
 		t.Fatalf("running: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestAFailedRunAnswersWithItsCodeRatherThanAnError(t *testing.T) {
 		child.exit(3)
 	}()
 
-	once, err := supervisor.RunOnce("/projects/app", "node validate.mjs", nil, time.Minute)
+	once, err := supervisor.RunOnce("/workspaces/app", "node validate.mjs", nil, time.Minute)
 	if err != nil {
 		t.Fatalf("running: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestASignalledRunLeavesNoCodeRatherThanZero(t *testing.T) {
 		child.exit(-1)
 	}()
 
-	once, err := supervisor.RunOnce("/projects/app", "node build.mjs", nil, time.Minute)
+	once, err := supervisor.RunOnce("/workspaces/app", "node build.mjs", nil, time.Minute)
 	if err != nil {
 		t.Fatalf("running: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestASilentRunAnswersWithNoLinesRatherThanNull(t *testing.T) {
 
 	go func() { (<-spawner.appeared).exit(0) }()
 
-	once, err := supervisor.RunOnce("/projects/app", "true", nil, time.Minute)
+	once, err := supervisor.RunOnce("/workspaces/app", "true", nil, time.Minute)
 	if err != nil {
 		t.Fatalf("running: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestARunThatPassedItsDeadlineIsStoppedAndNamed(t *testing.T) {
 		timer.fire()
 	}()
 
-	_, err := supervisor.RunOnce("/projects/app", "node build.mjs", nil, 90*time.Second)
+	_, err := supervisor.RunOnce("/workspaces/app", "node build.mjs", nil, 90*time.Second)
 	if err == nil {
 		t.Fatal("a run that never finished answered as if it had")
 	}
@@ -139,7 +139,7 @@ func TestAnEnvironmentOverrideReachesTheChild(t *testing.T) {
 
 	go func() { (<-spawner.appeared).exit(0) }()
 
-	if _, err := supervisor.RunOnce("/projects/app", "gh release create", map[string]string{"GH_TOKEN": "secret"}, time.Minute); err != nil {
+	if _, err := supervisor.RunOnce("/workspaces/app", "gh release create", map[string]string{"GH_TOKEN": "secret"}, time.Minute); err != nil {
 		t.Fatalf("running: %v", err)
 	}
 
@@ -173,7 +173,7 @@ func TestOutputAboveTheBoundIsNamedRatherThanDroppedQuietly(t *testing.T) {
 		child.exit(0)
 	}()
 
-	once, err := supervisor.RunOnce("/projects/app", "node build.mjs", nil, time.Minute)
+	once, err := supervisor.RunOnce("/workspaces/app", "node build.mjs", nil, time.Minute)
 	if err != nil {
 		t.Fatalf("running: %v", err)
 	}

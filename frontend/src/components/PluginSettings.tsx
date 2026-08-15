@@ -6,11 +6,11 @@ import { localize, useT } from "../i18n";
 import type { ConfigSetting, MapEntry } from "../plugins/spec";
 
 // Plugin settings panel — generates controls from the manifest configuration schema (single source).
-// Scope toggle: global (app-wide) / project (current project override).
+// Scope toggle: global (app-wide) / workspace (current workspace override).
 //  global scope: value = global override ?? default. Editing writes the global.
-//  project scope: value = project ?? global ?? default (effective). Editing writes the project override.
+//  workspace scope: value = workspace ?? global ?? default (effective). Editing writes the workspace override.
 
-type Scope = "global" | "project";
+type Scope = "global" | "workspace";
 
 function Control({
   setting,
@@ -151,26 +151,26 @@ export function PluginSettings({ pluginId }: { pluginId: string }) {
   const plugin = usePlugins((s) => s.plugins[pluginId]);
   // Full subscription — re-render immediately on value change (mounted only while the modal is open).
   const ps = usePluginSettings();
-  const root = useSessions((s) => s.projects.find((x) => x.id === s.activeId)?.root) ?? undefined;
+  const root = useSessions((s) => s.workspaces.find((x) => x.id === s.activeId)?.root) ?? undefined;
   const [scope, setScope] = useState<Scope>("global");
   if (!plugin) return null;
   const schema = plugin.manifest.configuration ?? [];
 
-  const effectiveScope: Scope = scope === "project" && !root ? "global" : scope;
+  const effectiveScope: Scope = scope === "workspace" && !root ? "global" : scope;
   const valueOf = (c: ConfigSetting): SettingValue =>
-    effectiveScope === "project"
+    effectiveScope === "workspace"
       ? ps.effective(pluginId, c.key, c.default, root)
       : ps.getGlobal(pluginId, c.key) ?? c.default;
   const isOverridden = (c: ConfigSetting): boolean =>
-    effectiveScope === "project"
-      ? !!root && ps.getProject(root, pluginId, c.key) !== undefined
+    effectiveScope === "workspace"
+      ? !!root && ps.getWorkspace(root, pluginId, c.key) !== undefined
       : ps.getGlobal(pluginId, c.key) !== undefined;
   const setVal = (c: ConfigSetting, v: SettingValue) => {
-    if (effectiveScope === "project" && root) ps.setProject(root, pluginId, c.key, v);
+    if (effectiveScope === "workspace" && root) ps.setWorkspace(root, pluginId, c.key, v);
     else ps.setGlobal(pluginId, c.key, v);
   };
   const reset = (c: ConfigSetting) => {
-    if (effectiveScope === "project" && root) ps.resetProject(root, pluginId, c.key);
+    if (effectiveScope === "workspace" && root) ps.resetWorkspace(root, pluginId, c.key);
     else ps.resetGlobal(pluginId, c.key);
   };
 
@@ -191,12 +191,12 @@ export function PluginSettings({ pluginId }: { pluginId: string }) {
             </button>
             <button
               type="button"
-              className={effectiveScope === "project" ? "on" : ""}
-              onClick={() => setScope("project")}
+              className={effectiveScope === "workspace" ? "on" : ""}
+              onClick={() => setScope("workspace")}
               disabled={!root}
-              title={root ?? t("settings.scope.noProject")}
+              title={root ?? t("settings.scope.noWorkspace")}
             >
-              {t("settings.scope.project")}
+              {t("settings.scope.workspace")}
             </button>
           </div>
           {schema.map((c) => {

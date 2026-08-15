@@ -1,6 +1,6 @@
-// Package daemon owns the long-running processes a project declares.
+// Package daemon owns the long-running processes a workspace declares.
 //
-// A daemon here is a line a project wrote down — `npm run dev`,
+// A daemon here is a line a workspace wrote down — `npm run dev`,
 // `docker compose up`, a service sidecar — that this build starts, keeps the
 // recent output of, ends, and matches against what a previous run left behind.
 // There is no daemon of this application's own: the process this package starts

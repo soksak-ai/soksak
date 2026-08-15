@@ -41,7 +41,7 @@ function fakeDeps(): PluginApiDeps {
     unregisterCommand: vi.fn(() => true),
     getCommandDanger: () => undefined,
     on: vi.fn(() => ({ dispose: () => {} })),
-    currentProject: () => null,
+    currentWorkspace: () => null,
     onFsChange: () => () => {},
     onDataChange: () => () => {},
     onClipboardChange: () => () => {},
@@ -507,7 +507,7 @@ describe("activatePlugin — static module shape ({controller, commands, views})
     expect(spec.message!({})).toBe("Hello");
   });
 
-  it("passes a {root, projectRoot, restore, signal} context to a static mount (B3 restore seam kept)", async () => {
+  it("passes a {root, workspaceRoot, restore, signal} context to a static mount (B3 restore seam kept)", async () => {
     const mountSpy = vi.fn();
     await activatePlugin(
       {
@@ -523,7 +523,7 @@ describe("activatePlugin — static module shape ({controller, commands, views})
     const reg = useViewRegistry.getState().views["demo.panel"];
     const el = document.createElement("div");
     const viewCtx = {
-      projectId: "pjt-aaaaaa",
+      projectId: "wsp-aaaaaa",
       root: "/proj",
       paneId: null,
       viewId: "tab-aaaaaa",
@@ -539,13 +539,13 @@ describe("activatePlugin — static module shape ({controller, commands, views})
     expect(mountSpy).toHaveBeenCalledOnce();
     const sctx = mountSpy.mock.calls[0][0] as {
       root?: unknown;
-      projectRoot?: unknown;
+      workspaceRoot?: unknown;
       restore?: unknown;
       signal?: unknown;
       app?: unknown;
     };
     expect(sctx.root).toBe(el); // DOM root
-    expect(sctx.projectRoot).toBe("/proj"); // project path (renamed from ctx.root)
+    expect(sctx.workspaceRoot).toBe("/proj"); // workspace path (renamed from ctx.root)
     expect(sctx.restore).toEqual({ cwd: "/proj/sub", state: { url: "https://x" } });
     expect(sctx.signal).toBeInstanceOf(AbortSignal);
     expect(sctx.app).toBeTruthy();

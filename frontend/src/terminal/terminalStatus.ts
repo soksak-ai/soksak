@@ -12,7 +12,7 @@ export function reportTerminalRunning(
   paneId: string,
   commandLine: string,
 ): void {
-  const loc = locateTab(useSessions.getState().projects, paneId);
+  const loc = locateTab(useSessions.getState().workspaces, paneId);
   if (loc)
     useSessions.getState().setViewStatus(loc.projectId, loc.viewId, {
       code: "running",
@@ -21,7 +21,7 @@ export function reportTerminalRunning(
 }
 
 export function clearTerminalRunning(paneId: string): void {
-  const loc = locateTab(useSessions.getState().projects, paneId);
+  const loc = locateTab(useSessions.getState().workspaces, paneId);
   if (loc) useSessions.getState().setViewStatus(loc.projectId, loc.viewId, null);
 }
 

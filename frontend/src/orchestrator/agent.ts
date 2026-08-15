@@ -9,7 +9,7 @@
 // joined by session_id → --resume.
 //
 // The spawn form follows the verified precedent (the old vtuber claudeCli.ts) exactly: login shell -lc
-// wrap (GUI PATH trap), cwd=$HOME (blocks project context leakage), --setting-sources "" (blocks hooks and
+// wrap (GUI PATH trap), cwd=$HOME (blocks workspace context leakage), --setting-sources "" (blocks hooks and
 // plugins, keeps OAuth), --system-prompt (identity replacement — given as a user message, the role is
 // refused). The only allowed tool is this app's CLI binary (Bash(<bin>:*), <bin>=sok/sok-dev/sok-debug).
 
@@ -196,7 +196,7 @@ function buildSystemPrompt(
 ): string {
   const stage = stageWindow
     ? `The default stage window is set by env SOKSAK_WINDOW=${stageWindow} — a sok command with no window runs in that window.`
-    : `No default stage window is set — for a command that handles windows, find the window with \`${sokPath} window.projects\` and target it explicitly with \`${sokPath} --window <label> <command>\`.`;
+    : `No default stage window is set — for a command that handles windows, find the window with \`${sokPath} window.workspaces\` and target it explicitly with \`${sokPath} --window <label> <command>\`.`;
   return [
     "You are the natural-language console agent of the soksak (terminal app) orchestrator. Complete the user's instruction by running sok CLI commands, and report the result to the user in one or two Korean sentences.",
     "",
@@ -248,7 +248,7 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
   // the active window is main, so the user's intent for the stage is "the workspace I was last working in".
   const stageWindow =
     explicitWindow ??
-    (await invoke<string | null>("ipc_last_project_window").catch(() => null)) ??
+    (await invoke<string | null>("ipc_last_workspace_window").catch(() => null)) ??
     undefined;
   const turnId = crypto.randomUUID();
   publishActivity("chat.prompt", "orchestrator", { text, turnId, message: `💬 ${text}` });
@@ -303,8 +303,8 @@ async function askInner(text: string, explicitWindow?: string): Promise<CommandO
     }
     const catalogWindow =
       stageWindow ??
-      (await execute("window.projects", {}, { remote: false, parent: turnId })
-        .then((r) => (r.data as { projects?: { window?: string }[] } | undefined)?.projects?.[0]?.window)
+      (await execute("window.workspaces", {}, { remote: false, parent: turnId })
+        .then((r) => (r.data as { workspaces?: { window?: string }[] } | undefined)?.workspaces?.[0]?.window)
         .catch(() => undefined));
     catalog = compactCatalog(
       await runCapture(

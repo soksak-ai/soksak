@@ -31,7 +31,7 @@ func TestShowCarriesTheClicksDestinationToTheHost(t *testing.T) {
 	answer, err := registry.Invoke(commandNotifyShow, argsOf(t, map[string]any{
 		"title": "deploy finished",
 		"body":  "the prod deploy finished",
-		"extra": map[string]any{"deepLink": "soksak-dev://cmd/window.projects"},
+		"extra": map[string]any{"deepLink": "soksak-dev://cmd/window.workspaces"},
 	}))
 	if err != nil {
 		t.Fatalf("notify_show: %v", err)
@@ -43,7 +43,7 @@ func TestShowCarriesTheClicksDestinationToTheHost(t *testing.T) {
 	if notice.Title != "deploy finished" || notice.Body != "the prod deploy finished" {
 		t.Errorf("the host was handed %+v", notice)
 	}
-	if notice.DeepLink != "soksak-dev://cmd/window.projects" {
+	if notice.DeepLink != "soksak-dev://cmd/window.workspaces" {
 		t.Errorf("deep link = %q", notice.DeepLink)
 	}
 	if notice.Handle == 0 {

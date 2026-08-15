@@ -145,7 +145,7 @@ function emitResizeGesture(active: boolean): void {
 // The canonical address is neither of those.
 
 // memo boundary = content data boundary (principle 2): a store write for content X preserves the object identity of
-// content Y (mapContent), so the GroupArea of another content or project is skipped.
+// content Y (mapContent), so the GroupArea of another content or workspace is skipped.
 export function isViewSurfaceVisible(
   surfaceActive: boolean,
   maximizedId: string | null,
@@ -176,7 +176,7 @@ export const GroupArea = memo(function GroupArea({
   /** Focused panel of the solution the screen draws — dimming follows the same solution as geometry (omitted = canonical active). */
   focusedPaneId?: string | null;
   /** Whether this space (content) is active — used to resolve effective view visibility (space && tab). */
-  // Whether the surface holding this group (project + space) is on screen now — the two upper layers of view visibility.
+  // Whether the surface holding this group (workspace + space) is on screen now — the two upper layers of view visibility.
   surfaceActive?: boolean;
   /** Clean logical line (0..100) of the left rail inserted into the active content panel plane. */
   railStation?: number;
@@ -278,9 +278,9 @@ export const GroupArea = memo(function GroupArea({
   const resizeSplits = useSessions((s) => s.resizeSplits);
   const pushOverlay = useUi((s) => s.pushOverlay);
   const popOverlay = useUi((s) => s.popOverlay);
-  // Project root passed to the plugin view (content placement) host.
-  const projectRoot = useSessions(
-    (s) => s.projects.find((x) => x.id === projectId)?.root ?? null,
+  // Workspace root passed to the plugin view (content placement) host.
+  const workspaceRoot = useSessions(
+    (s) => s.workspaces.find((x) => x.id === projectId)?.root ?? null,
   );
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -444,7 +444,7 @@ export const GroupArea = memo(function GroupArea({
             // group, so focus goes to the resulting groupId.
             if (kind === "view")
               void execute("tab.move", { tab: id, dst: target.groupId, zone: target.zone }, {});
-            else void execute("pane.move", { project: projectId, src: id, dst: target.groupId, zone: target.zone }, {});
+            else void execute("pane.move", { workspace: projectId, src: id, dst: target.groupId, zone: target.zone }, {});
           }
         } else if (kind === "view") {
           transferViewFocus(activeSessionViewId(), id, () =>
@@ -725,7 +725,7 @@ export const GroupArea = memo(function GroupArea({
               <div
                 className="pane-title active"
                 title={t("view.restoreHint")}
-                onDoubleClick={() => void execute("tab.restore", { project: projectId }, {})}
+                onDoubleClick={() => void execute("tab.restore", { workspace: projectId }, {})}
               >
                 <span className="pane-title-icon icon-inline">
                   {active?.kind === "file" ? (
@@ -741,7 +741,7 @@ export const GroupArea = memo(function GroupArea({
                   type="button"
                   className="icon-btn pane-title-btn"
                   title={t("view.restore")}
-                  onClick={() => void execute("tab.restore", { project: projectId }, {})}
+                  onClick={() => void execute("tab.restore", { workspace: projectId }, {})}
                 >
                   <Icon name="minus" size="sm" />
                 </button>
@@ -777,7 +777,7 @@ export const GroupArea = memo(function GroupArea({
                   className="icon-btn pane-title-btn"
                   title={t("panel.split")}
                   onMouseDown={(e) => e.stopPropagation()}
-                  onClick={() => void execute("pane.split", { project: projectId, pane: group.id, side: "right" }, {})}
+                  onClick={() => void execute("pane.split", { workspace: projectId, pane: group.id, side: "right" }, {})}
                 >
                   <Icon name="split" size="sm" />
                 </button>
@@ -858,7 +858,7 @@ export const GroupArea = memo(function GroupArea({
               // For native click resolution (App.tsx native-mousedown → elementFromPoint).
               // The value is the id of the cell (pane) containing this slot — name and value point at the same entity (IDENTITY).
               data-pane={group.id}
-              data-project-id={projectId}
+              data-workspace-id={projectId}
               data-node={`layout/tab/${view.id}`}
               data-wv-geometry-owner
               ref={shown ? rectMotion.ref : undefined}
@@ -891,7 +891,7 @@ export const GroupArea = memo(function GroupArea({
                 <FileViewerHost
                   path={view.path}
                   projectId={projectId}
-                  root={projectRoot}
+                  root={workspaceRoot}
                   viewId={view.id}
                 />
               ) : (
@@ -899,7 +899,7 @@ export const GroupArea = memo(function GroupArea({
                   viewKey={`${view.pluginId}.${view.view}`}
                   viewId={view.id}
                   projectId={projectId}
-                  root={projectRoot}
+                  root={workspaceRoot}
                   region="content"
                   logicalPaneId={group.id}
                   surfacePlacement={viewSurfacePlacement(shown, !!maxCell)}

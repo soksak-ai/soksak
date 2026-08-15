@@ -150,7 +150,7 @@ func refuseRestartPolicy(command string, args control.Args) error {
 // `name: name ?? null`).
 //
 // An empty string is not "not set": it is a variable that never got a value.
-// A daemon_stop with one would address every daemon under a project, and a
+// A daemon_stop with one would address every daemon under a workspace, and a
 // schedule registered with one would be minted a name the caller never sees.
 func optionalText(command string, args control.Args, name string) (string, error) {
 	raw, present := args[name]

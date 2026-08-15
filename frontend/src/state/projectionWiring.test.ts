@@ -17,7 +17,7 @@ import {
   startProjectionTracking,
 } from "./projectionWiring";
 import { useProjection } from "./projection";
-import { useSessions, type Project, type Tab } from "./sessions";
+import { useSessions, type Workspace, type Tab } from "./sessions";
 import { initialSidebarLayout } from "./sidebarLayout";
 import { useViewRegistry, type PluginViewProvider } from "../plugins/viewRegistry";
 import { useFileViewerRegistry } from "../plugins/fileViewerRegistry";
@@ -63,9 +63,9 @@ function pluginView(id: string, pluginId: string, view: string): Tab {
   return { id, kind: "plugin", title: id, pluginId, view };
 }
 
-function tab(tabs: Tab[], activeTabId: string): Project {
+function tab(tabs: Tab[], activeTabId: string): Workspace {
   return {
-    id: "pjt-aaaaaa",
+    id: "wsp-aaaaaa",
     title: "P",
     sidebarOpen: true,
     rightOpen: false,
@@ -88,8 +88,8 @@ beforeEach(() => {
   useViewRegistry.setState({ views: {}, version: 0, badges: {} });
   useFileViewerRegistry.setState({ viewers: {}, version: 0 });
   usePlugins.setState({ plugins: {} });
-  useProjection.setState({ byProject: {} });
-  useSessions.setState({ projects: [], activeId: "" });
+  useProjection.setState({ byWorkspace: {} });
+  useSessions.setState({ workspaces: [], activeId: "" });
 });
 
 describe("boundViewOf — session active chain → BoundView (A8)", () => {
@@ -162,11 +162,11 @@ describe("projectionFor — real deps (contract resolution, rail check, consumes
       decl("tree", { placements: ["rail"], defaultPlacement: "rail" }),
       provider,
     );
-    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
-    const p = projectionFor("pjt-aaaaaa");
+    useSessions.setState({ workspaces: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "wsp-aaaaaa" });
+    const p = projectionFor("wsp-aaaaaa");
     expect(p?.left.slots[0]).toMatchObject({
       resolvedRef: "filetree.tree",
-      instanceKey: "pjt-aaaaaa|filetree.tree",
+      instanceKey: "wsp-aaaaaa|filetree.tree",
       status: "live",
     });
   });
@@ -194,11 +194,11 @@ describe("projectionFor — real deps (contract resolution, rail check, consumes
       decl("tree", { placements: ["rail"], defaultPlacement: "rail" }),
       provider,
     );
-    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
-    expect(projectionFor("pjt-aaaaaa")?.left.slots[0].status).toBe("degraded");
+    useSessions.setState({ workspaces: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "wsp-aaaaaa" });
+    expect(projectionFor("wsp-aaaaaa")?.left.slots[0].status).toBe("degraded");
   });
 
-  it("a project that does not exist → null", () => {
+  it("a workspace that does not exist → null", () => {
     expect(projectionFor("nope")).toBeNull();
   });
 });
@@ -208,17 +208,17 @@ describe("startProjectionTracking — one binding per space", () => {
     useViewRegistry.getState().register("termplug", decl("term"), provider);
     const v1 = pluginView("tab-aaaaaa", "termplug", "term");
     const v2 = pluginView("tab-bbbbbb", "termplug", "term");
-    useSessions.setState({ projects: [tab([v1, v2], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [tab([v1, v2], "tab-aaaaaa")], activeId: "wsp-aaaaaa" });
 
     const events: { projectId: string; viewId: string | null }[] = [];
     const off = onPluginEvent("projection.changed", (e) => void events.push(e));
     const stop = startProjectionTracking();
-    expect(projectionFor("pjt-aaaaaa")?.binding.viewId).toBe("tab-aaaaaa");
+    expect(projectionFor("wsp-aaaaaa")?.binding.viewId).toBe("tab-aaaaaa");
 
     // Switching the active tab inside a group = binding change (A8).
-    const t = useSessions.getState().projects[0];
+    const t = useSessions.getState().workspaces[0];
     useSessions.setState({
-      projects: [
+      workspaces: [
         {
           ...t,
           spaces: [
@@ -231,42 +231,42 @@ describe("startProjectionTracking — one binding per space", () => {
       ],
     });
 
-    expect(projectionFor("pjt-aaaaaa")?.binding.viewId).toBe("tab-bbbbbb");
-    expect(events.some((e) => e.projectId === "pjt-aaaaaa" && e.viewId === "tab-bbbbbb")).toBe(true);
-    expect(useProjection.getState().byProject["pjt-aaaaaa"].focusHistory[0]).toBe("tab-bbbbbb");
+    expect(projectionFor("wsp-aaaaaa")?.binding.viewId).toBe("tab-bbbbbb");
+    expect(events.some((e) => e.projectId === "wsp-aaaaaa" && e.viewId === "tab-bbbbbb")).toBe(true);
+    expect(useProjection.getState().byWorkspace["wsp-aaaaaa"].focusHistory[0]).toBe("tab-bbbbbb");
 
     stop();
     off.dispose();
   });
 
-  it("a view goes away → focusHistory is cleaned, a project goes away → state is reclaimed", () => {
+  it("a view goes away → focusHistory is cleaned, a workspace goes away → state is reclaimed", () => {
     useViewRegistry.getState().register("termplug", decl("term"), provider);
     const v1 = pluginView("tab-aaaaaa", "termplug", "term");
     const v2 = pluginView("tab-bbbbbb", "termplug", "term");
-    useSessions.setState({ projects: [tab([v1, v2], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [tab([v1, v2], "tab-aaaaaa")], activeId: "wsp-aaaaaa" });
     const stop = startProjectionTracking();
 
-    const t = useSessions.getState().projects[0];
+    const t = useSessions.getState().workspaces[0];
     // v2 active → back to v1 → history [v1, v2]
     useSessions.setState({
-      projects: [{ ...t, spaces: [{ ...t.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [v1, v2], activeTabId: "tab-bbbbbb" } } }] }],
+      workspaces: [{ ...t, spaces: [{ ...t.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [v1, v2], activeTabId: "tab-bbbbbb" } } }] }],
     });
-    const t2 = useSessions.getState().projects[0];
+    const t2 = useSessions.getState().workspaces[0];
     useSessions.setState({
-      projects: [{ ...t2, spaces: [{ ...t2.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [v1, v2], activeTabId: "tab-aaaaaa" } } }] }],
+      workspaces: [{ ...t2, spaces: [{ ...t2.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [v1, v2], activeTabId: "tab-aaaaaa" } } }] }],
     });
-    expect(useProjection.getState().byProject["pjt-aaaaaa"].focusHistory).toEqual(["tab-aaaaaa", "tab-bbbbbb"]);
+    expect(useProjection.getState().byWorkspace["wsp-aaaaaa"].focusHistory).toEqual(["tab-aaaaaa", "tab-bbbbbb"]);
 
     // v2 closed → removed from history (R6 material cleanup).
-    const t3 = useSessions.getState().projects[0];
+    const t3 = useSessions.getState().workspaces[0];
     useSessions.setState({
-      projects: [{ ...t3, spaces: [{ ...t3.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [v1], activeTabId: "tab-aaaaaa" } } }] }],
+      workspaces: [{ ...t3, spaces: [{ ...t3.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [v1], activeTabId: "tab-aaaaaa" } } }] }],
     });
-    expect(useProjection.getState().byProject["pjt-aaaaaa"].focusHistory).toEqual(["tab-aaaaaa"]);
+    expect(useProjection.getState().byWorkspace["wsp-aaaaaa"].focusHistory).toEqual(["tab-aaaaaa"]);
 
-    // Project closed → state reclaimed.
-    useSessions.setState({ projects: [], activeId: "" });
-    expect(useProjection.getState().byProject.p1).toBeUndefined();
+    // Workspace closed → state reclaimed.
+    useSessions.setState({ workspaces: [], activeId: "" });
+    expect(useProjection.getState().byWorkspace.p1).toBeUndefined();
     stop();
   });
 });
@@ -286,7 +286,7 @@ describe("projection.changed fingerprint firing (§4.3) — slot resolution chan
       }),
       provider,
     );
-    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "wsp-aaaaaa" });
 
     const events: { projectId: string; viewId: string | null }[] = [];
     const off = onPluginEvent("projection.changed", (e) => void events.push(e));
@@ -299,7 +299,7 @@ describe("projection.changed fingerprint firing (§4.3) — slot resolution chan
       decl("tree", { placements: ["rail"], defaultPlacement: "rail" }),
       provider,
     );
-    expect(events.some((e) => e.projectId === "pjt-aaaaaa" && e.viewId === "tab-aaaaaa")).toBe(true);
+    expect(events.some((e) => e.projectId === "wsp-aaaaaa" && e.viewId === "tab-aaaaaa")).toBe(true);
 
     stop();
     off.dispose();
@@ -312,7 +312,7 @@ describe("R6 succession — on closing the bound view, the most recent surviving
     const vA = pluginView("vA", "termplug", "term");
     const vB = pluginView("vB", "termplug", "term");
     const vC = pluginView("vC", "termplug", "term");
-    const t: Project = {
+    const t: Workspace = {
       ...tab([], ""),
       spaces: [
         {
@@ -332,23 +332,23 @@ describe("R6 succession — on closing the bound view, the most recent surviving
         },
       ],
     };
-    useSessions.setState({ projects: [t], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [t], activeId: "wsp-aaaaaa" });
     const stop = startProjectionTracking();
 
     // Build binding history: A → B → A (active group switch).
     const setActive = (gid: string) => {
-      const cur = useSessions.getState().projects[0];
+      const cur = useSessions.getState().workspaces[0];
       useSessions.setState({
-        projects: [{ ...cur, spaces: [{ ...cur.spaces[0], activePaneId: gid }] }],
+        workspaces: [{ ...cur, spaces: [{ ...cur.spaces[0], activePaneId: gid }] }],
       });
     };
     setActive("pan-bbbbbb"); // bind B
     setActive("pan-aaaaaa"); // bind A
-    expect(useProjection.getState().byProject["pjt-aaaaaa"].focusHistory.slice(0, 2)).toEqual(["vA", "vB"]);
+    expect(useProjection.getState().byWorkspace["wsp-aaaaaa"].focusHistory.slice(0, 2)).toEqual(["vA", "vB"]);
 
-    const r = useSessions.getState().closeView("pjt-aaaaaa", "vA");
+    const r = useSessions.getState().closeView("wsp-aaaaaa", "vA");
     expect(r.ok).toBe(true);
-    const content = useSessions.getState().projects[0].spaces[0];
+    const content = useSessions.getState().workspaces[0].spaces[0];
     expect(content.activePaneId).toBe("pan-bbbbbb"); // R6: most recent survivor = B(g2)
     stop();
   });
@@ -375,16 +375,16 @@ describe("rebinding — the active content view sets the space binding (③)", (
 
     const vA = pluginView("vA", "kanplug", "board");
     const vB = pluginView("vB", "runplug", "runbook");
-    useSessions.setState({ projects: [tab([vA, vB], "vA")], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [tab([vA, vB], "vA")], activeId: "wsp-aaaaaa" });
     const stop = startProjectionTracking();
-    expect(projectionFor("pjt-aaaaaa")?.left.slots[0]?.resolvedRef).toBe("kanplug.tree");
+    expect(projectionFor("wsp-aaaaaa")?.left.slots[0]?.resolvedRef).toBe("kanplug.tree");
 
     // Active tab switch = feature switch → binding and slots replaced.
-    const t = useSessions.getState().projects[0];
+    const t = useSessions.getState().workspaces[0];
     useSessions.setState({
-      projects: [{ ...t, spaces: [{ ...t.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [vA, vB], activeTabId: "vB" } } }] }],
+      workspaces: [{ ...t, spaces: [{ ...t.spaces[0], layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [vA, vB], activeTabId: "vB" } } }] }],
     });
-    expect(projectionFor("pjt-aaaaaa")?.left.slots[0]?.resolvedRef).toBe("runplug.list");
+    expect(projectionFor("wsp-aaaaaa")?.left.slots[0]?.resolvedRef).toBe("runplug.list");
     stop();
   });
 });

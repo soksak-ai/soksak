@@ -28,7 +28,7 @@ function emit(event: LayoutSettlementEvent): void {
   for (const listener of state.listeners) listener(event);
 }
 
-/** Per-project revision published synchronously by any state mutation that changes layout. */
+/** Per-workspace revision published synchronously by any state mutation that changes layout. */
 export function invalidateLayout(key: string): number {
   const revision = (state.requested.get(key) ?? 0) + 1;
   state.requested.set(key, revision);

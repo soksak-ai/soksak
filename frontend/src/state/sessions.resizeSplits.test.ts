@@ -4,7 +4,7 @@ import { computeSplitLayout } from "../lib/splitLayout";
 import {
   useSessions,
   type PaneNode,
-  type Project,
+  type Workspace,
   type Pane,
 } from "./sessions";
 
@@ -29,9 +29,9 @@ function group(id: string, viewId: string): Pane {
 }
 
 // col[top row, bottom row] — a space whose vertical line is cut into two segments.
-function stackedProject(): Project {
-  useSessions.getState().bootstrapFirstProject("/test/root");
-  const base = useSessions.getState().projects[0];
+function stackedWorkspace(): Workspace {
+  useSessions.getState().bootstrapFirstWorkspace("/test/root");
+  const base = useSessions.getState().workspaces[0];
   const layout: SplitTree<Pane> = {
     type: "split",
     id: "s-stack",
@@ -61,21 +61,21 @@ function stackedProject(): Project {
 }
 
 beforeEach(() => {
-  useSessions.setState({ projects: [], activeId: "" });
+  useSessions.setState({ workspaces: [], activeId: "" });
 });
 
 describe("resizeSplits — several splits in one commit", () => {
   it("both segments of one line apply together", () => {
-    const project = stackedProject();
-    useSessions.setState({ projects: [project], activeId: project.id });
+    const workspace = stackedWorkspace();
+    useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
 
-    const result = useSessions.getState().resizeSplits(project.id, [
+    const result = useSessions.getState().resizeSplits(workspace.id, [
       { splitId: "s-top", sizes: [0.6, 0.4] },
       { splitId: "s-bot", sizes: [0.6, 0.4] },
     ]);
 
     expect(result).toEqual({ ok: true });
-    const layout = useSessions.getState().projects[0].spaces[0].layout as Extract<
+    const layout = useSessions.getState().workspaces[0].spaces[0].layout as Extract<
       PaneNode,
       { type: "split" }
     >;
@@ -84,33 +84,33 @@ describe("resizeSplits — several splits in one commit", () => {
   });
 
   it("rejects the whole batch when the final state conflicts with a PIN rail (no change)", () => {
-    const project: Project = {
-      ...stackedProject(),
+    const workspace: Workspace = {
+      ...stackedWorkspace(),
       leftRailPlacement: { mode: "pin", station: 50 },
     };
-    useSessions.setState({ projects: [project], activeId: project.id });
-    const before = useSessions.getState().projects[0];
+    useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
+    const before = useSessions.getState().workspaces[0];
 
-    const result = useSessions.getState().resizeSplits(project.id, [
+    const result = useSessions.getState().resizeSplits(workspace.id, [
       { splitId: "s-top", sizes: [0.6, 0.4] },
       { splitId: "s-bot", sizes: [0.6, 0.4] },
     ]);
 
     expect(result).toMatchObject({ ok: false, code: "LAYOUT_CONFLICT" });
-    expect(useSessions.getState().projects[0]).toBe(before);
+    expect(useSessions.getState().workspaces[0]).toBe(before);
   });
 
   it("answers TARGET_NOT_FOUND when any splitId is absent (no change)", () => {
-    const project = stackedProject();
-    useSessions.setState({ projects: [project], activeId: project.id });
-    const before = useSessions.getState().projects[0];
+    const workspace = stackedWorkspace();
+    useSessions.setState({ workspaces: [workspace], activeId: workspace.id });
+    const before = useSessions.getState().workspaces[0];
 
-    const result = useSessions.getState().resizeSplits(project.id, [
+    const result = useSessions.getState().resizeSplits(workspace.id, [
       { splitId: "s-top", sizes: [0.6, 0.4] },
       { splitId: "s-ghost", sizes: [0.6, 0.4] },
     ]);
 
     expect(result).toMatchObject({ ok: false, code: "TARGET_NOT_FOUND" });
-    expect(useSessions.getState().projects[0]).toBe(before);
+    expect(useSessions.getState().workspaces[0]).toBe(before);
   });
 });

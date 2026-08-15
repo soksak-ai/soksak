@@ -1,6 +1,6 @@
 // Right plugin sidebar — icon rail (registered sidebar-right views + ⚙ manager) plus the active view.
-// keep-alive: a view opened once is kept hidden (display) — a per-project instance (rendered inside
-// App.tsx's project-plane, so the session survives a project switch, same as the app convention).
+// keep-alive: a view opened once is kept hidden (display) — a per-workspace instance (rendered inside
+// App.tsx's workspace-plane, so the session survives a workspace switch, same as the app convention).
 // Manager panel: verified release install, consent, enable/disable, update, remove, rejected
 // reasons — a plugin-only management surface separate from the settings modal.
 
@@ -24,8 +24,8 @@ import { PluginConsentModal } from "./PluginConsentModal";
 import { localize, useT } from "../i18n";
 import { execute } from "../commands/registry";
 
-// memo boundary (principles 2·3): takes the project id only and subscribes to *the fields it uses*
-// (rightView/rightOpen/root) through selectors — taking the whole project object as a prop changes
+// memo boundary (principles 2·3): takes the workspace id only and subscribes to *the fields it uses*
+// (rightView/rightOpen/root) through selectors — taking the whole workspace object as a prop changes
 // identity on an unrelated field change such as activeSpaceId (tab switch) and re-renders. With
 // slice subscriptions it re-renders only when those fields actually change.
 export const PluginSidebar = memo(function PluginSidebar({
@@ -43,12 +43,12 @@ export const PluginSidebar = memo(function PluginSidebar({
   );
   const setRightView = useSessions((s) => s.setRightView);
   const rightView = useSessions(
-    (s) => s.projects.find((x) => x.id === projectId)?.rightView,
+    (s) => s.workspaces.find((x) => x.id === projectId)?.rightView,
   );
   const rightOpen = useSessions(
-    (s) => s.projects.find((x) => x.id === projectId)?.rightOpen ?? false,
+    (s) => s.workspaces.find((x) => x.id === projectId)?.rightOpen ?? false,
   );
-  const root = useSessions((s) => s.projects.find((x) => x.id === projectId)?.root);
+  const root = useSessions((s) => s.workspaces.find((x) => x.id === projectId)?.root);
   const rightMode = useSettings((s) => s.rightSidebarMode);
   const setRightMode = useSettings((s) => s.setRightSidebarMode);
 
@@ -65,7 +65,7 @@ export const PluginSidebar = memo(function PluginSidebar({
     setRightView(projectId, sidebarViews[0]?.key ?? null);
   }, [rightOpen, projectId, rightView, sidebarViews, setRightView]);
 
-  // keep-alive: accumulates the view keys opened once in this project (unregistering drops them).
+  // keep-alive: accumulates the view keys opened once in this workspace (unregistering drops them).
   const openedRef = useRef<Set<string>>(new Set());
   if (rightView) openedRef.current.add(rightView);
   const opened = [...openedRef.current].filter((k) =>
@@ -153,7 +153,7 @@ export const PluginSidebar = memo(function PluginSidebar({
           )}
         </div>
         {/* Bottom status bar — the same visual language as the terminal pane (pane-status):
-            context on the left (project root), current view title on the right. */}
+            context on the left (workspace root), current view title on the right. */}
         <div className="plugin-side-status">
           <span className="pss-left" title={root}>
             {root ?? "—"}

@@ -167,8 +167,8 @@ export const wailsFramework: AppFramework = {
   },
 
   dialog: {
-    // Directory selection is the only entry point for creating a project. While it was unserved,
-    // `+` threw with the name, so this build could not create a project — outside or inside.
+    // Directory selection is the only entry point for creating a workspace. While it was unserved,
+    // `+` threw with the name, so this build could not create a workspace — outside or inside.
     openDirectory: async (options) => {
       const chosen = await Dialogs.OpenFile({
         Title: options?.title,
@@ -178,7 +178,7 @@ export const wailsFramework: AppFramework = {
         AllowsMultipleSelection: false,
       });
       // Cancel returns an empty string. The contract is null, so it is translated here — passing
-      // the empty path through makes the caller attempt a project with no root.
+      // the empty path through makes the caller attempt a workspace with no root.
       return chosen === "" ? null : chosen;
     },
   },

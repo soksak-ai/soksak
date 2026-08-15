@@ -1,47 +1,47 @@
 import { useEffect, useState } from "react";
 import { dialog } from "../framework";
-import { addProjectClaimed } from "../state/projectRegistry";
+import { addWorkspaceClaimed } from "../state/workspaceRegistry";
 import { useOverlayActive } from "../state/ui";
 import { Icon } from "../ui/icons/Icon";
 import { useT } from "../i18n";
 import { useDraggableModal } from "./modalDrag";
 import {
-  ensureDefaultProjectRoot,
+  ensureDefaultWorkspaceRoot,
   FOLDER_NAME_RE,
-  validateProjectRoot,
-} from "../lib/projectRoot";
+  validateWorkspaceRoot,
+} from "../lib/workspaceRoot";
 
-// New project modal — product contract: draggable 460px card,
+// New workspace modal — product contract: draggable 460px card,
 // header (+ icon, ⠿, ✕), row layout.
 //
 // The folder is an explicit choice (no implicit mode). The mode fixes what the input field means:
 //   auto = the input is the "folder name" to create (slug required, not persisted — P4) →
-//     creates and uses ~/.soksak/projects/<folder name>, alias defaults to the folder name.
+//     creates and uses ~/.soksak/workspaces/<folder name>, alias defaults to the folder name.
 //   manual = folder picker (home/root rejected — P2 validation) — the input is the "alias" (free
 //     form, folder name when empty). Persistent identity is the root path itself (P4, the
-//     projectRoot.ts constitution).
+//     workspaceRoot.ts constitution).
 
 const baseName = (p?: string) =>
   p ? (p.split("/").filter(Boolean).pop() ?? p) : "";
 
 type FolderMode = "auto" | "manual";
 
-// create injection: default = add a project tab to this window (workspace). The control plane
+// create injection: default = add a workspace tab to this window (workspace). The control plane
 // (orchestrator) injects creation of a new workspace window instead — the modal owns only folder
 // preparation and validation, and the caller supplies "what gets opened" (one UI for open and
 // create, two consumers).
-export interface CreateProjectArgs {
+export interface CreateWorkspaceArgs {
   alias: string;
   root: string;
   shell?: string;
 }
 
-export function NewProjectModal({
+export function NewWorkspaceModal({
   onClose,
   create: createOverride,
 }: {
   onClose: () => void;
-  create?: (args: CreateProjectArgs) => Promise<void>;
+  create?: (args: CreateWorkspaceArgs) => Promise<void>;
 }) {
   const t = useT();
   // Overlay registration — blocks mouse pass-through in the browser hole while the modal is up.
@@ -70,7 +70,7 @@ export function NewProjectModal({
     setMode("manual");
     try {
       // P2: home (~) and filesystem root (/) rejected — on pass, the canonical path (P5 comparison basis).
-      const canon = await validateProjectRoot(sel);
+      const canon = await validateWorkspaceRoot(sel);
       setRoot(canon);
       setRootError(null);
     } catch (e) {
@@ -88,30 +88,30 @@ export function NewProjectModal({
   const create = async () => {
     if (createDisabled) return; // Second guard behind the disabled button.
     const finalRoot =
-      mode === "auto" ? await ensureDefaultProjectRoot(nameValue) : root!;
+      mode === "auto" ? await ensureDefaultWorkspaceRoot(nameValue) : root!;
     // Root initialization policy (git init and the like) is owned by plugins subscribing to the
-    // project.created event, not by core — this site only creates.
+    // workspace.created event, not by core — this site only creates.
     const args = {
-      alias: nameValue, // Empty falls back to the folder name in makeProject.
+      alias: nameValue, // Empty falls back to the folder name in makeWorkspace.
       root: finalRoot,
       shell: shell.trim() || undefined,
     };
     // P6 (globally single open) gate — if it is open in another window, that window is focused.
     if (createOverride) await createOverride(args);
-    else await addProjectClaimed(args);
+    else await addWorkspaceClaimed(args);
     onClose();
   };
 
   return (
     <div
       className="dmodal-overlay"
-      data-node="modal/project-new"
+      data-node="modal/workspace-new"
       onMouseDown={onClose}
     >
       <div
         ref={cardRef}
-        className="dmodal-card dmodal-project"
-        data-node="modal/project-new/card"
+        className="dmodal-card dmodal-workspace"
+        data-node="modal/workspace-new/card"
         style={cardStyle}
         onMouseDown={(e) => e.stopPropagation()}
       >
@@ -119,7 +119,7 @@ export function NewProjectModal({
           <span className="dmodal-plus icon-inline">
             <Icon name="add" size="sm" />
           </span>
-          <span className="dmodal-title">{t("project.newTitle")}</span>
+          <span className="dmodal-title">{t("workspace.newTitle")}</span>
           <span className="dmodal-spacer" />
           <span className="dmodal-grip icon-inline">
             <Icon name="grip" />
@@ -127,7 +127,7 @@ export function NewProjectModal({
           <button
             type="button"
             className="icon-btn dmodal-close"
-            data-node="modal/project-new/close"
+            data-node="modal/workspace-new/close"
             onClick={onClose}
           >
             <Icon name="close" />
@@ -136,48 +136,48 @@ export function NewProjectModal({
 
         <div className="dmodal-body">
           <div className="drow">
-            <span className="drow-label">{t("project.folder")}</span>
+            <span className="drow-label">{t("workspace.folder")}</span>
             <div className="dseg">
               <button
                 type="button"
                 className={`dbtn dseg-btn${mode === "auto" ? " active" : ""}`}
-                data-node="modal/project-new/folder-auto"
+                data-node="modal/workspace-new/folder-auto"
                 onClick={() => {
                   setMode("auto");
                   setRoot(undefined);
                   setRootError(null);
                 }}
               >
-                {t("project.folderAuto")}
+                {t("workspace.folderAuto")}
               </button>
               <button
                 type="button"
                 className={`dbtn dseg-btn${mode === "manual" ? " active" : ""}`}
-                data-node="modal/project-new/folder-pick"
+                data-node="modal/workspace-new/folder-pick"
                 onClick={pickFolder}
               >
-                {root ? baseName(root) : t("project.pickFolder")}
+                {root ? baseName(root) : t("workspace.pickFolder")}
               </button>
             </div>
           </div>
           {mode === "manual" && root && <div className="dpath">{root}</div>}
           {mode === "manual" && !root && (
             <div className="dpath dpath-err">
-              {rootError ?? t("project.folderRequired")}
+              {rootError ?? t("workspace.folderRequired")}
             </div>
           )}
 
           <div className="drow">
             <span className="drow-label">
-              {mode === "auto" ? t("project.folderName") : t("project.alias")}
+              {mode === "auto" ? t("workspace.folderName") : t("workspace.alias")}
             </span>
             <input
               className="dctl"
-              data-node="modal/project-new/name"
+              data-node="modal/workspace-new/name"
               type="text"
               value={name}
               placeholder={
-                mode === "auto" ? t("project.folderNamePh") : baseName(root)
+                mode === "auto" ? t("workspace.folderNamePh") : baseName(root)
               }
               onChange={(e) => setName(e.target.value)}
             />
@@ -189,8 +189,8 @@ export function NewProjectModal({
               className={`dpath${nameValue && folderInvalid ? " dpath-err" : ""}`}
             >
               {nameValue && folderInvalid
-                ? t("project.folderNameInvalid")
-                : t("project.folderNameHint", { name: nameValue || t("project.folderNamePlaceholder") })}
+                ? t("workspace.folderNameInvalid")
+                : t("workspace.folderNameHint", { name: nameValue || t("workspace.folderNamePlaceholder") })}
             </div>
           ) : null}
 
@@ -198,7 +198,7 @@ export function NewProjectModal({
             <span className="drow-label">{t("settings.shell")}</span>
             <input
               className="dctl dctl-mono"
-              data-node="modal/project-new/shell"
+              data-node="modal/workspace-new/shell"
               type="text"
               list="np-shell-options"
               value={shell}
@@ -218,7 +218,7 @@ export function NewProjectModal({
             <button
               type="button"
               className="dbtn"
-              data-node="modal/project-new/cancel"
+              data-node="modal/workspace-new/cancel"
               onClick={onClose}
             >
               {t("common.cancel")}
@@ -226,11 +226,11 @@ export function NewProjectModal({
             <button
               type="button"
               className="dbtn dbtn-acc"
-              data-node="modal/project-new/create"
+              data-node="modal/workspace-new/create"
               disabled={createDisabled}
               onClick={create}
             >
-              {t("project.create")}
+              {t("workspace.create")}
             </button>
           </div>
         </div>

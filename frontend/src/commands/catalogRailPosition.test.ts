@@ -1,4 +1,4 @@
-// Public surface for left rail position. Rail position is project state, but a client must
+// Public surface for left rail position. Rail position is workspace state, but a client must
 // observe and control it through state.tree and commands without reading store internals.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,7 +14,7 @@ vi.mock("../framework", async (importOriginal) => ({
 
 import { registerCatalog } from "./catalog";
 import { execute } from "./registry";
-import { useSessions, type Project, type Pane } from "../state/sessions";
+import { useSessions, type Workspace, type Pane } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
 import { splitLeaf } from "../state/splitTree";
 import {
@@ -36,11 +36,11 @@ const group = (id: string, viewId?: string): Pane => ({
   activeTabId: viewId ?? "",
 });
 
-function project(
-  placement?: Project["leftRailPlacement"],
-): Project {
+function workspace(
+  placement?: Workspace["leftRailPlacement"],
+): Workspace {
   return {
-    id: "pjt-aaaaaa",
+    id: "wsp-aaaaaa",
     title: "P",
     root: "<local-evidence>/rail-position",
     sidebarOpen: true,
@@ -70,8 +70,8 @@ function project(
 }
 
 /** Layout whose per-row vertical lines do not align — terminal crosses ghostty's left 50. */
-function switchProject(): Project {
-  const base = project({ mode: "flow" });
+function switchWorkspace(): Workspace {
+  const base = workspace({ mode: "flow" });
   return {
     ...base,
     spaces: [
@@ -116,7 +116,7 @@ registerCatalog();
 
 beforeEach(() => {
   __resetLayoutSettlementForTest();
-  useSessions.setState({ projects: [project()], activeId: "pjt-aaaaaa" });
+  useSessions.setState({ workspaces: [workspace()], activeId: "wsp-aaaaaa" });
 });
 
 type Position = {
@@ -150,7 +150,7 @@ describe("sidebar.left.position", () => {
       effectiveStation: 50,
       cleanLines: [0, 50, 100],
     });
-    expect(useSessions.getState().projects[0].leftRailPlacement).toEqual({
+    expect(useSessions.getState().workspaces[0].leftRailPlacement).toEqual({
       mode: "pin",
       station: 50,
     });
@@ -168,7 +168,7 @@ describe("sidebar.left.position", () => {
       station: 50,
       effectiveStation: 50,
     });
-    expect(useSessions.getState().projects[0].leftRailPlacement).toEqual({
+    expect(useSessions.getState().workspaces[0].leftRailPlacement).toEqual({
       mode: "pin",
       station: 50,
     });
@@ -176,8 +176,8 @@ describe("sidebar.left.position", () => {
 
   it("an existing dirty PIN is not silently re-saved — persisted and effective are read apart", async () => {
     useSessions.setState({
-      projects: [project({ mode: "pin", station: 31 })],
-      activeId: "pjt-aaaaaa",
+      workspaces: [workspace({ mode: "pin", station: 31 })],
+      activeId: "wsp-aaaaaa",
     });
 
     const result = await execute("sidebar.left.position", {}, {});
@@ -188,7 +188,7 @@ describe("sidebar.left.position", () => {
       effectiveStation: 50,
       cleanLines: [0, 50, 100],
     });
-    expect(useSessions.getState().projects[0].leftRailPlacement).toEqual({
+    expect(useSessions.getState().workspaces[0].leftRailPlacement).toEqual({
       mode: "pin",
       station: 31,
     });
@@ -196,8 +196,8 @@ describe("sidebar.left.position", () => {
 
   it("a FLOW command removes the pinned station and restores focus following at once", async () => {
     useSessions.setState({
-      projects: [project({ mode: "pin", station: 0 })],
-      activeId: "pjt-aaaaaa",
+      workspaces: [workspace({ mode: "pin", station: 0 })],
+      activeId: "wsp-aaaaaa",
     });
 
     const result = await execute("sidebar.left.position", { mode: "flow" }, {});
@@ -207,15 +207,15 @@ describe("sidebar.left.position", () => {
       effectiveStation: 50,
       cleanLines: [0, 50, 100],
     });
-    expect(useSessions.getState().projects[0].leftRailPlacement).toEqual({
+    expect(useSessions.getState().workspaces[0].leftRailPlacement).toEqual({
       mode: "flow",
     });
   });
 
   it("PIN→FLOW with the same displayed solution opens no settlement revision, only a real station change", async () => {
     useSessions.setState({
-      projects: [project({ mode: "pin", station: 50 })],
-      activeId: "pjt-aaaaaa",
+      workspaces: [workspace({ mode: "pin", station: 50 })],
+      activeId: "wsp-aaaaaa",
     });
 
     const unchanged = await execute("sidebar.left.position", { mode: "flow" }, {});
@@ -224,11 +224,11 @@ describe("sidebar.left.position", () => {
       mode: "flow",
       effectiveStation: 50,
     });
-    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({ active: false, pending: [] });
 
     useSessions.setState({
-      projects: [project({ mode: "pin", station: 0 })],
-      activeId: "pjt-aaaaaa",
+      workspaces: [workspace({ mode: "pin", station: 0 })],
+      activeId: "wsp-aaaaaa",
     });
     const changed = await execute("sidebar.left.position", { mode: "flow" }, {});
     expect(changed.ok).toBe(true);
@@ -236,9 +236,9 @@ describe("sidebar.left.position", () => {
       mode: "flow",
       effectiveStation: 50,
     });
-    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({
+    expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({
       active: true,
-      pending: [{ key: "pjt-aaaaaa", requested: 1, settled: 0 }],
+      pending: [{ key: "wsp-aaaaaa", requested: 1, settled: 0 }],
     });
   });
 
@@ -261,7 +261,7 @@ describe("sidebar.left.position", () => {
 
 describe("state.tree — the solution is a public fact", () => {
   it("exposes a pinned rail relation on the same basis for left, right and non-adjacent", async () => {
-    const withBinding = project({ mode: "pin", station: 0 });
+    const withBinding = workspace({ mode: "pin", station: 0 });
     withBinding.spaces[0] = {
       ...withBinding.spaces[0],
       activePaneId: "pan-bbbbbb",
@@ -277,10 +277,10 @@ describe("state.tree — the solution is a public fact", () => {
         ],
       },
     };
-    useSessions.setState({ projects: [withBinding], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [withBinding], activeId: "wsp-aaaaaa" });
     const detached = await execute("state.tree", {}, {});
-    const relation = (detached.data as { projects: Array<{ spaces: Array<{ railRelation: unknown }> }> })
-      .projects[0].spaces[0].railRelation;
+    const relation = (detached.data as { workspaces: Array<{ spaces: Array<{ railRelation: unknown }> }> })
+      .workspaces[0].spaces[0].railRelation;
     expect(relation).toEqual({
       boundTabId: "tab-bbbbbb",
       boundPaneId: "pan-bbbbbb",
@@ -294,7 +294,7 @@ describe("state.tree — the solution is a public fact", () => {
   });
 
   it("exposes the active tab of the active pane as the effective binding with no explicit one, as the screen does", async () => {
-    const withoutLock = project({ mode: "pin", station: 0 });
+    const withoutLock = workspace({ mode: "pin", station: 0 });
     withoutLock.spaces[0] = {
       ...withoutLock.spaces[0],
       activePaneId: "pan-aaaaaa",
@@ -309,12 +309,12 @@ describe("state.tree — the solution is a public fact", () => {
         ],
       },
     };
-    useSessions.setState({ projects: [withoutLock], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [withoutLock], activeId: "wsp-aaaaaa" });
 
     const tree = await execute("state.tree", {}, {});
     const treeRelation = (tree.data as {
-      projects: Array<{ spaces: Array<{ railRelation: unknown }> }>;
-    }).projects[0].spaces[0].railRelation;
+      workspaces: Array<{ spaces: Array<{ railRelation: unknown }> }>;
+    }).workspaces[0].spaces[0].railRelation;
     const panes = await execute("pane.list", {}, {});
     const paneRelation = (panes.data as { railRelation: unknown }).railRelation;
 
@@ -332,7 +332,7 @@ describe("state.tree — the solution is a public fact", () => {
   });
 
   it("states a none/0 state with no binding and no drawing when the sidebar is closed", async () => {
-    const closed = project({ mode: "pin", station: 0 });
+    const closed = workspace({ mode: "pin", station: 0 });
     closed.sidebarOpen = false;
     closed.spaces[0] = {
       ...closed.spaces[0],
@@ -342,12 +342,12 @@ describe("state.tree — the solution is a public fact", () => {
         value: group("pan-aaaaaa", "tab-aaaaaa"),
       },
     };
-    useSessions.setState({ projects: [closed], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [closed], activeId: "wsp-aaaaaa" });
 
     const tree = await execute("state.tree", {}, {});
     const relation = (tree.data as {
-      projects: Array<{ spaces: Array<{ railRelation: unknown }> }>;
-    }).projects[0].spaces[0].railRelation;
+      workspaces: Array<{ spaces: Array<{ railRelation: unknown }> }>;
+    }).workspaces[0].spaces[0].railRelation;
     expect(relation).toEqual({
       boundTabId: null,
       boundPaneId: null,
@@ -365,7 +365,7 @@ describe("state.tree — the solution is a public fact", () => {
       ["pan-aaaaaa", "tab-aaaaaa", "left"],
       ["pan-bbbbbb", "tab-bbbbbb", "right"],
     ] as const) {
-      const pinned = project({ mode: "pin", station: 50 });
+      const pinned = workspace({ mode: "pin", station: 50 });
       pinned.spaces[0] = {
         ...pinned.spaces[0],
         activePaneId: paneId,
@@ -380,12 +380,12 @@ describe("state.tree — the solution is a public fact", () => {
           ],
         },
       };
-      useSessions.setState({ projects: [pinned], activeId: "pjt-aaaaaa" });
+      useSessions.setState({ workspaces: [pinned], activeId: "wsp-aaaaaa" });
 
       const read = async () => {
         const result = await execute("state.tree", {}, {});
         return (result.data as {
-          projects: Array<{
+          workspaces: Array<{
             leftRailPosition: Position;
             spaces: Array<{
               layout: unknown;
@@ -393,7 +393,7 @@ describe("state.tree — the solution is a public fact", () => {
               railRelation: { side: string; relationId: string };
             }>;
           }>;
-        }).projects[0];
+        }).workspaces[0];
       };
 
       const before = await read();
@@ -404,12 +404,12 @@ describe("state.tree — the solution is a public fact", () => {
       });
       expect(before.spaces[0].railRelation.side).toBe(side);
 
-      expect(useSessions.getState().maximizeView("pjt-aaaaaa", tabId)).toMatchObject({ ok: true });
+      expect(useSessions.getState().maximizeView("wsp-aaaaaa", tabId)).toMatchObject({ ok: true });
       const maximized = await read();
       expect(maximized.spaces[0].railRelation.side).toBe(side);
       expect(maximized.leftRailPosition.station).toBe(50);
 
-      expect(useSessions.getState().restoreView("pjt-aaaaaa")).toMatchObject({ ok: true });
+      expect(useSessions.getState().restoreView("wsp-aaaaaa")).toMatchObject({ ok: true });
       const restored = await read();
       expect(restored.leftRailPosition).toEqual(before.leftRailPosition);
       expect(restored.spaces[0].layout).toEqual(before.spaces[0].layout);
@@ -423,15 +423,15 @@ describe("state.tree — the solution is a public fact", () => {
   });
   it("exposes the position with the same computation as the command query", async () => {
     useSessions.setState({
-      projects: [project({ mode: "pin", station: 31 })],
-      activeId: "pjt-aaaaaa",
+      workspaces: [workspace({ mode: "pin", station: 31 })],
+      activeId: "wsp-aaaaaa",
     });
     const result = await execute("state.tree", {}, {});
     expect(result.ok).toBe(true);
-    const projects = (result.data as {
-      projects: Array<{ leftRailPosition: Position }>;
-    }).projects;
-    expect(projects[0].leftRailPosition).toEqual({
+    const workspaces = (result.data as {
+      workspaces: Array<{ leftRailPosition: Position }>;
+    }).workspaces;
+    expect(workspaces[0].leftRailPosition).toEqual({
       mode: "pin",
       station: 31,
       effectiveStation: 50,
@@ -440,12 +440,12 @@ describe("state.tree — the solution is a public fact", () => {
   });
 
   it("exposes a row-mismatched switch in the displayed layout and panes, and reports the canonical form with it", async () => {
-    const original = switchProject();
-    useSessions.setState({ projects: [original], activeId: original.id });
+    const original = switchWorkspace();
+    useSessions.setState({ workspaces: [original], activeId: original.id });
 
     const result = await execute("state.tree", {}, {});
     const space = (result.data as {
-      projects: Array<{
+      workspaces: Array<{
         leftRailPosition: Position;
         spaces: Array<{
           layout: { children: unknown[] };
@@ -459,7 +459,7 @@ describe("state.tree — the solution is a public fact", () => {
           panes: Array<{ id: string; rect: { left: number } }>;
         }>;
       }>;
-    }).projects[0];
+    }).workspaces[0];
 
     expect(space.leftRailPosition.effectiveStation).toBeCloseTo(100 / 3, 1);
     const first = space.spaces[0];
@@ -473,17 +473,17 @@ describe("state.tree — the solution is a public fact", () => {
     expect(first.panes.find((pane) => pane.id === "ghostty")?.rect.left).toBe(33.3);
     expect(first.panes.find((pane) => pane.id === "design")?.rect.left).toBe(50);
     // The session canonical layout never changes — only the presentation is switched.
-    expect(useSessions.getState().projects[0].spaces[0].layout).toBe(
+    expect(useSessions.getState().workspaces[0].spaces[0].layout).toBe(
       original.spaces[0].layout,
     );
   });
 
   it("maximize exposes the public layout/panes as the real [sidebar|feature] plane too", async () => {
-    const original = switchProject();
-    useSessions.setState({ projects: [original], activeId: original.id });
+    const original = switchWorkspace();
+    useSessions.setState({ workspaces: [original], activeId: original.id });
     // Fixture groups have no views, so set the public state directly and verify serialization only.
     useSessions.setState((s) => ({
-      projects: s.projects.map((t) => ({
+      workspaces: s.workspaces.map((t) => ({
         ...t,
         spaces: t.spaces.map((c) => ({
           ...c,
@@ -495,13 +495,13 @@ describe("state.tree — the solution is a public fact", () => {
 
     const result = await execute("state.tree", {}, {});
     const space = (result.data as {
-      projects: Array<{ spaces: Array<{
+      workspaces: Array<{ spaces: Array<{
         layout: { pane: string };
         canonicalLayout: { children: unknown[] };
         projection: { kind: string; applied: boolean; focusedPaneId: string; swappedPanes: string[] };
         panes: Array<{ id: string; rect: { left: number; top: number; width: number; height: number } }>;
       }> }>;
-    }).projects[0].spaces[0];
+    }).workspaces[0].spaces[0];
     expect(space.layout).toEqual({ pane: "ghostty" });
     expect(space.panes).toEqual([
       { id: "ghostty", rect: { left: 0, top: 0, width: 100, height: 100 }, active: true, activeTabId: "", tabs: [] },

@@ -1,7 +1,7 @@
 // Command catalog — every soksak capability registers as a command (single source of truth).
 // Targeting rules (all commands):
-//   - An explicit target id selects that location (searched across every project); omitting it
-//     uses the caller context (SOKSAK_CALLER_TAB → the pane/space/project of that tab) or the
+//   - An explicit target id selects that location (searched across every workspace); omitting it
+//     uses the caller context (SOKSAK_CALLER_TAB → the pane/space/workspace of that tab) or the
 //     active chain.
 //   - Every mutation returns its result (new id / state after the change) — the caller verifies
 //     from the response alone.
@@ -19,7 +19,7 @@ import {
   snapRailStation,
   type RailPlacement,
 } from "../lib/railPlacement";
-import { listRecentProjects, removeRecentProject } from "../state/recentProjects";
+import { listRecentWorkspaces, removeRecentWorkspace } from "../state/recentWorkspaces";
 import {
   allGroups,
   projectArrangement,
@@ -28,7 +28,7 @@ import {
   type DropZone,
   type PaneNode,
   type Program,
-  type Project,
+  type Workspace,
   type Side,
   type Tab,
   type Pane,
@@ -41,7 +41,7 @@ import {
 } from "../lib/gutterAddress";
 import type { SidebarLayout } from "../state/sidebarLayout";
 import type { SplitTree } from "../state/splitTree";
-import { addProjectClaimed, closeProjectReleased } from "../state/projectRegistry";
+import { addWorkspaceClaimed, closeWorkspaceReleased } from "../state/workspaceRegistry";
 import { getRegisteredProgram, listPrograms } from "../plugins/programRegistry";
 import { resolveTerminalProgram, TERMINAL_CONTRACT } from "../plugins/terminalEngine";
 import {
@@ -90,10 +90,10 @@ import { registerUnitDevCatalog } from "./catalogUnitDev";
 import { registerWebviewCatalog } from "./catalogWebview";
 import { registerPresentationClockCatalog } from "./catalogPresentationClock";
 import {
-  ensureDefaultProjectRoot,
+  ensureDefaultWorkspaceRoot,
   FOLDER_NAME_RE,
-  validateProjectRoot,
-} from "../lib/projectRoot";
+  validateWorkspaceRoot,
+} from "../lib/workspaceRoot";
 import { contentViewHost, hasContentViewHost } from "../lib/contentViews";
 import { waitForDomCommit } from "./waitForDomCommit";
 
@@ -114,7 +114,7 @@ function withTargets(result: object, targets: Record<string, string | undefined>
 function withArrangement(projectId: string, result: object): object {
   const rec = result as Record<string, unknown>;
   if (rec.ok === false || rec.code) return result;
-  const t = useSessions.getState().projects.find((item) => item.id === projectId);
+  const t = useSessions.getState().workspaces.find((item) => item.id === projectId);
   const solved = t ? projectArrangement(t) : null;
   if (!solved) return result;
   return {
@@ -129,7 +129,7 @@ function withArrangement(projectId: string, result: object): object {
 }
 
 export interface Location {
-  project: Project;
+  workspace: Workspace;
   space: Space;
   pane: Pane;
   /** An empty pane (0 tabs) is a valid location with no tab — consumers that require a tab handle the absence. */
@@ -195,16 +195,16 @@ function splitSizesOf(node: PaneNode, splitId: string): number[] | null {
   return null;
 }
 
-// Search every project for the location of a tab id. Terminal targets resolve through this function
+// Search every workspace for the location of a tab id. Terminal targets resolve through this function
 // too — a terminal is a plugin view and its instance is a tab (no core terminal).
 /** Tab location — other catalog files (capture etc.) use this same one (two copies answer different places for one id). */
 export function locateTab(tabId: string): Location | null {
   const s = useSessions.getState();
-  for (const project of s.projects) {
-    for (const space of project.spaces) {
+  for (const workspace of s.workspaces) {
+    for (const space of workspace.spaces) {
       for (const pane of allGroups(space.layout)) {
         const tab = pane.tabs.find((v) => v.id === tabId);
-        if (tab) return { project, space, pane, tab };
+        if (tab) return { workspace, space, pane, tab };
       }
     }
   }
@@ -214,27 +214,27 @@ export function locateTab(tabId: string): Location | null {
 // Location of a pane id (tab = that pane's active tab).
 function locatePane(paneId: string): Location | null {
   const s = useSessions.getState();
-  for (const project of s.projects) {
-    for (const space of project.spaces) {
+  for (const workspace of s.workspaces) {
+    for (const space of workspace.spaces) {
       const pane = allGroups(space.layout).find((g) => g.id === paneId);
       if (pane) {
         const tab =
           pane.tabs.find((v) => v.id === pane.activeTabId) ?? pane.tabs[0];
-        return { project, space, pane, tab };
+        return { workspace, space, pane, tab };
       }
     }
   }
   return null;
 }
 
-// Active chain (active project → active space → active pane → active tab).
+// Active chain (active workspace → active space → active pane → active tab).
 function activeChain(): Location | null {
   const s = useSessions.getState();
-  const project = s.projects.find((t) => t.id === s.activeId);
-  if (!project) return null;
+  const workspace = s.workspaces.find((t) => t.id === s.activeId);
+  if (!workspace) return null;
   const space =
-    project.spaces.find((c) => c.id === project.activeSpaceId) ??
-    project.spaces[0];
+    workspace.spaces.find((c) => c.id === workspace.activeSpaceId) ??
+    workspace.spaces[0];
   if (!space) return null;
   const pane =
     allGroups(space.layout).find((g) => g.id === space.activePaneId) ??
@@ -245,7 +245,7 @@ function activeChain(): Location | null {
   // An empty pane (everything moved or closed) is a valid location too — pane-target commands
   // (tab.open etc.) must keep working, so it is not cut off here; consumers that require a tab handle
   // the absence (no INTERNAL death, measured).
-  return { project, space, pane, tab };
+  return { workspace, space, pane, tab };
 }
 
 // Call context resolution: caller tab ($SOKSAK_CALLER_TAB) first, else the active chain.
@@ -257,19 +257,19 @@ function resolveCtx(ctx: CommandContext): Location | null {
   return activeChain();
 }
 
-// Target project: explicit id > context.
-function resolveProject(
+// Target workspace: explicit id > context.
+function resolveWorkspace(
   params: Record<string, unknown>,
   ctx: CommandContext,
-): Project | null {
-  const id = params.project as string | undefined;
+): Workspace | null {
+  const id = params.workspace as string | undefined;
   if (id) {
-    return useSessions.getState().projects.find((t) => t.id === id) ?? null;
+    return useSessions.getState().workspaces.find((t) => t.id === id) ?? null;
   }
-  return resolveCtx(ctx)?.project ?? null;
+  return resolveCtx(ctx)?.workspace ?? null;
 }
 
-// Target pane: explicit id (searched across every project) > context pane.
+// Target pane: explicit id (searched across every workspace) > context pane.
 function resolvePane(
   params: Record<string, unknown>,
   ctx: CommandContext,
@@ -460,7 +460,7 @@ function serializeSpace(
 // Public facts about the left rail position. The stored PIN station and the station actually applied
 // on the current grid are kept apart. Reading a stale snapshot's dirty PIN does not change the stored
 // value; only an explicit PIN command snaps to a valid line and stores it.
-function serializeLeftRailPosition(t: Project) {
+function serializeLeftRailPosition(t: Workspace) {
   const arrangement = projectArrangement(t);
   const cleanLines = arrangement?.cleanLines ?? [0, 100];
   const placement: RailPlacement = t.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
@@ -479,7 +479,7 @@ function serializeTree() {
   const s = useSessions.getState();
   return {
     activeProjectId: s.activeId,
-    projects: s.projects.map((t) => {
+    workspaces: s.workspaces.map((t) => {
       const leftRailPosition = serializeLeftRailPosition(t);
       const arrangement = projectArrangement(t);
       return {
@@ -533,9 +533,9 @@ export const P = {
     type: "string",
     description: tmsg("cmd.param.windowLabel"),
   },
-  project: {
+  workspace: {
     type: "string",
-    description: tmsg("cmd.param.project"),
+    description: tmsg("cmd.param.workspace"),
   },
   space: { type: "string", description: "Target space tab id" },
   pane: {
@@ -586,11 +586,11 @@ export function registerCatalog(): void {
 
   register("state.tree", {
     description:
-      "Full layout snapshot (address book): all ids and active state across project → space → pane (display rect %) → tab. Each space exposes displayed and canonical stored layouts, projection provenance, and the effective rail relation; each project exposes its effective left-rail position and clean grid lines.",
+      "Full layout snapshot (address book): all ids and active state across workspace → space → pane (display rect %) → tab. Each space exposes displayed and canonical stored layouts, projection provenance, and the effective rail relation; each workspace exposes its effective left-rail position and clean grid lines.",
     params: {},
     returns:
-      "{ activeProjectId, projects[].{ leftRailPosition, spaces[].{ layout, canonicalLayout, projection, railRelation:{boundTabId,boundPaneId,relationId,placement,connected,side:left|right|detached,borderMode:union|independent|none,pathCount:1|2|0}, panes[] } } } — layout/panes are displayed state; canonicalLayout is the stored SplitTree",
-    message: (d) => tmsg("msg.state.tree", { n: ((d.projects as unknown[]) ?? []).length }),
+      "{ activeProjectId, workspaces[].{ leftRailPosition, spaces[].{ layout, canonicalLayout, projection, railRelation:{boundTabId,boundPaneId,relationId,placement,connected,side:left|right|detached,borderMode:union|independent|none,pathCount:1|2|0}, panes[] } } } — layout/panes are displayed state; canonicalLayout is the stored SplitTree",
+    message: (d) => tmsg("msg.state.tree", { n: ((d.workspaces as unknown[]) ?? []).length }),
     examples: ["state.tree"],
     handler: () => serializeTree(),
   });
@@ -607,15 +607,15 @@ export function registerCatalog(): void {
     triggers: {
       ko: "배치 해 레일 스테이션 이동량 스위칭 정렬 계산 확인",
     },
-    params: { project: P.project },
+    params: { workspace: P.workspace },
     returns:
       "{ projectId, spaceId, station, cleanLines[], switched, betweenIds[] (panes stranded between the rail and the focused pane when the rail could not reach it — they do not move, they dim), cells[].{id,rect,railSide} }",
     message: (d) => tmsg("msg.layout.arrangement", { n: Number(d.station) }),
     errors: ["TARGET_NOT_FOUND"],
     examples: ["layout.arrangement"],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       const solved = projectArrangement(t);
       if (!solved) return notFound(tmsg("msg.space.notFound"));
       const railOpen = t.sidebarOpen;
@@ -700,7 +700,7 @@ export function registerCatalog(): void {
 
   register("state.context", {
     description:
-      "Resolve the caller's position: project/space/pane/tab that $SOKSAK_CALLER_TAB belongs to (falls back to active chain when called outside a terminal).",
+      "Resolve the caller's position: workspace/space/pane/tab that $SOKSAK_CALLER_TAB belongs to (falls back to active chain when called outside a terminal).",
     params: { tab: P.tab },
     returns:
       "{ projectId, spaceId, paneId, tabId?, callerTab? } — tabId is absent when the pane is empty; callerTab is the terminal tab this call came from",
@@ -714,7 +714,7 @@ export function registerCatalog(): void {
       const loc = p.tab ? locateTab(p.tab as string) : resolveCtx(ctx);
       if (!loc) return notFound(tmsg("msg.state.context.unresolved"));
       return {
-        projectId: loc.project.id,
+        projectId: loc.workspace.id,
         spaceId: loc.space.id,
         paneId: loc.pane.id,
         // With an empty pane the answer stops at the pane and omits tabId — an empty pane location is a location.
@@ -730,16 +730,16 @@ export function registerCatalog(): void {
     },
   });
 
-  // ----- project -----
-  register("project.list", {
-    description: tmsg("cmd.project.list.desc"),
-    triggers: { ko: "프로젝트 목록 프로젝트 리스트 열린 프로젝트" },
+  // ----- workspace -----
+  register("workspace.list", {
+    description: tmsg("cmd.workspace.list.desc"),
+    triggers: { ko: "워크스페이스 목록 워크스페이스 리스트 열린 워크스페이스" },
     params: {},
-    returns: "{ projects: [{id,title,root,active}] }",
-    message: (d) => tmsg("msg.project.list", { n: ((d.projects as unknown[]) ?? []).length }),
-    examples: ["project.list"],
+    returns: "{ workspaces: [{id,title,root,active}] }",
+    message: (d) => tmsg("msg.workspace.list", { n: ((d.workspaces as unknown[]) ?? []).length }),
+    examples: ["workspace.list"],
     handler: () => ({
-      projects: S().projects.map((t) => ({
+      workspaces: S().workspaces.map((t) => ({
         id: t.id,
         title: t.title,
         root: t.root ?? null,
@@ -748,58 +748,58 @@ export function registerCatalog(): void {
     }),
   });
 
-  register("project.recent", {
+  register("workspace.recent", {
     description:
-      "List recent projects (the cross-window recents feeding the control-plane project map and the project rail): root, alias, last-opened timestamp. Same list from any window (core kv).",
-    triggers: { ko: "최근 프로젝트 목록 최근 연 프로젝트 픽커 레일" },
+      "List recent workspaces (the cross-window recents feeding the control-plane workspace map and the workspace rail): root, alias, last-opened timestamp. Same list from any window (core kv).",
+    triggers: { ko: "최근 워크스페이스 목록 최근 연 워크스페이스 픽커 레일" },
     params: {},
     returns: "{ recents: [{root, alias, lastOpenedAt}] }",
-    message: (d) => tmsg("msg.project.recent", { n: ((d.recents as unknown[]) ?? []).length }),
-    examples: ["project.recent"],
-    handler: async () => ({ recents: await listRecentProjects() }),
+    message: (d) => tmsg("msg.workspace.recent", { n: ((d.recents as unknown[]) ?? []).length }),
+    examples: ["workspace.recent"],
+    handler: async () => ({ recents: await listRecentWorkspaces() }),
   });
 
-  register("project.recent.remove", {
+  register("workspace.recent.remove", {
     description:
-      "Remove a project from the recents list (project map/rail). Does not touch the project on disk — only the recents entry. Idempotent (missing root is a no-op).",
-    triggers: { ko: "최근 프로젝트 제거 최근 목록에서 지우기 잊기" },
+      "Remove a workspace from the recents list (workspace map/rail). Does not touch the workspace on disk — only the recents entry. Idempotent (missing root is a no-op).",
+    triggers: { ko: "최근 워크스페이스 제거 최근 목록에서 지우기 잊기" },
     params: {
-      root: { type: "string", description: "Project root to forget", required: true },
+      root: { type: "string", description: "Workspace root to forget", required: true },
     },
     returns: "{ ok }",
-    message: () => tmsg("msg.project.recent.remove"),
-    examples: ['project.recent.remove \'{"root":"/Users/me/old"}\''],
+    message: () => tmsg("msg.workspace.recent.remove"),
+    examples: ['workspace.recent.remove \'{"root":"/Users/me/old"}\''],
     handler: async (p) => {
-      await removeRecentProject(p.root as string);
+      await removeRecentWorkspace(p.root as string);
       return {};
     },
   });
 
-  register("project.open", {
+  register("workspace.open", {
     description:
-      "Open a project (creates it if it doesn't exist yet). When root is omitted, folder (slug) is required — creates and uses ~/.soksak/projects/<folder>. Home (~) and root (/) are forbidden as root. Duplicate root activates the existing project instead.",
-    triggers: { ko: "프로젝트 만들기 새 프로젝트 프로젝트 생성 열기" },
+      "Open a workspace (creates it if it doesn't exist yet). When root is omitted, folder (slug) is required — creates and uses ~/.soksak/workspaces/<folder>. Home (~) and root (/) are forbidden as root. Duplicate root activates the existing workspace instead.",
+    triggers: { ko: "워크스페이스 만들기 새 워크스페이스 워크스페이스 생성 열기" },
     params: {
-      root: { type: "string", description: "Project root directory (absolute path — home/root forbidden)" },
+      root: { type: "string", description: "Workspace root directory (absolute path — home/root forbidden)" },
       folder: {
         type: "string",
         description:
-          "Required when root is omitted — ^[a-z0-9][a-z0-9-]*$, used as ~/.soksak/projects/<folder>",
+          "Required when root is omitted — ^[a-z0-9][a-z0-9-]*$, used as ~/.soksak/workspaces/<folder>",
       },
       alias: { type: "string", description: "Tab alias (omit = folder name)" },
       program: { ...P.program, description: "Initial view program (omit = empty space tab)" },
       shell: { type: "string", description: "Terminal shell path (omit = global setting → $SHELL)" },
     },
     returns:
-      "{ projectId, spaceId, paneId, tabId, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new project window instead)",
+      "{ projectId, spaceId, paneId, tabId, existing? } | { existingWindow } (already open in another window — focused instead) | { routedWindow } (called on the control-plane window — opened in a new workspace window instead)",
     message: (d) =>
       d.routedWindow
-        ? tmsg("msg.project.open.routed", { window: String(d.routedWindow) })
+        ? tmsg("msg.workspace.open.routed", { window: String(d.routedWindow) })
         : d.existingWindow
-          ? tmsg("msg.project.open.existingWindow")
+          ? tmsg("msg.workspace.open.existingWindow")
           : d.existing
-            ? tmsg("msg.project.open.existing")
-            : tmsg("msg.project.open.created"),
+            ? tmsg("msg.workspace.open.existing")
+            : tmsg("msg.workspace.open.created"),
     errors: ["INVALID_PARAMS"],
     hint: (d) => {
       // Failures go to the standard guidance (only code arrives, with no window fields).
@@ -808,27 +808,27 @@ export function registerCatalog(): void {
       const routed = d.routedWindow as string | undefined;
       if (routed) {
         return [
-          { cmd: `--window ${routed} state.tree`, why: tmsg("hint.flow.project.open.routedContinue") },
-          { cmd: `--window ${routed} layout.apply dev`, why: tmsg("hint.flow.project.open.routedLayout") },
+          { cmd: `--window ${routed} state.tree`, why: tmsg("hint.flow.workspace.open.routedContinue") },
+          { cmd: `--window ${routed} layout.apply dev`, why: tmsg("hint.flow.workspace.open.routedLayout") },
         ];
       }
       // Already open in another window, which was brought to the front — continue in that window.
       const existingWin = d.existingWindow as string | undefined;
       if (existingWin) {
         return [
-          { cmd: `--window ${existingWin} state.tree`, why: tmsg("hint.flow.project.open.existingWindow") },
+          { cmd: `--window ${existingWin} state.tree`, why: tmsg("hint.flow.workspace.open.existingWindow") },
         ];
       }
       // Opened in this window — offer the next moves that dress the screen (possibilities, max 3).
       return [
-        { cmd: "layout.apply dev", why: tmsg("hint.flow.project.open.layout") },
-        { cmd: "window.maximize", why: tmsg("hint.flow.project.open.maximize") },
-        { cmd: "space.create", why: tmsg("hint.flow.project.open.space") },
+        { cmd: "layout.apply dev", why: tmsg("hint.flow.workspace.open.layout") },
+        { cmd: "window.maximize", why: tmsg("hint.flow.workspace.open.maximize") },
+        { cmd: "space.create", why: tmsg("hint.flow.workspace.open.space") },
       ];
     },
     examples: [
-      'project.open \'{"root":"/Users/me/work","program":"claude"}\'',
-      'project.open \'{"folder":"my-project"}\'',
+      'workspace.open \'{"root":"/Users/me/work","program":"claude"}\'',
+      'workspace.open \'{"folder":"my-workspace"}\'',
     ],
     handler: async (p) => {
       let root = p.root as string | undefined;
@@ -836,7 +836,7 @@ export function registerCatalog(): void {
       if (root) {
         // P2: home/root forbidden + normalization (the comparison basis for the P5 duplicate check).
         try {
-          root = await validateProjectRoot(root);
+          root = await validateWorkspaceRoot(root);
         } catch (e) {
           return {
             ok: false as const,
@@ -850,15 +850,15 @@ export function registerCatalog(): void {
           return {
             ok: false as const,
             code: "INVALID_PARAMS" as const,
-            message: tmsg("msg.project.open.folderRequired"),
+            message: tmsg("msg.workspace.open.folderRequired"),
           };
         }
-        root = await ensureDefaultProjectRoot(folder);
+        root = await ensureDefaultWorkspaceRoot(folder);
       }
-      // Root initialization policy (git init etc.) is owned by plugins that subscribe to project.created.
+      // Root initialization policy (git init etc.) is owned by plugins that subscribe to workspace.created.
       // Through the P6 gate (one global open) — if another window owns it, that window is focused and
       // existingWindow is returned.
-      const r = await addProjectClaimed({
+      const r = await addWorkspaceClaimed({
         alias,
         root,
         shell: p.shell as string | undefined,
@@ -875,108 +875,108 @@ export function registerCatalog(): void {
     },
   });
 
-  register("project.close", {
+  register("workspace.close", {
     danger: "destructive",
-    description: tmsg("cmd.project.close.desc"),
-    triggers: { ko: "프로젝트 닫기 프로젝트 제거" },
-    params: { project: { ...P.project, required: true } },
+    description: tmsg("cmd.workspace.close.desc"),
+    triggers: { ko: "워크스페이스 닫기 워크스페이스 제거" },
+    params: { workspace: { ...P.workspace, required: true } },
     returns: "{ activeProjectId }",
-    message: () => tmsg("msg.project.close"),
+    message: () => tmsg("msg.workspace.close"),
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
-    examples: ['project.close \'{"project":"t2"}\''],
-    // P6: release the global claim on a successful close (so another window can open this project).
-    handler: (p) => closeProjectReleased(p.project as string),
+    examples: ['workspace.close \'{"workspace":"t2"}\''],
+    // P6: release the global claim on a successful close (so another window can open this workspace).
+    handler: (p) => closeWorkspaceReleased(p.workspace as string),
   });
 
-  register("project.activate", {
-    description: tmsg("cmd.project.activate.desc"),
-    triggers: { ko: "프로젝트 전환 프로젝트 바꾸기 이동" },
-    params: { project: { ...P.project, required: true } },
+  register("workspace.activate", {
+    description: tmsg("cmd.workspace.activate.desc"),
+    triggers: { ko: "워크스페이스 전환 워크스페이스 바꾸기 이동" },
+    params: { workspace: { ...P.workspace, required: true } },
     returns: "{}",
-    message: () => tmsg("msg.project.activate"),
+    message: () => tmsg("msg.workspace.activate"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['project.activate \'{"project":"t2"}\''],
-    handler: (p) => S().setActive(p.project as string),
+    examples: ['workspace.activate \'{"workspace":"t2"}\''],
+    handler: (p) => S().setActive(p.workspace as string),
   });
 
-  register("project.rename", {
-    description: tmsg("cmd.project.rename.desc"),
-    triggers: { ko: "프로젝트 이름 바꾸기 이름 변경 프로젝트 제목" },
+  register("workspace.rename", {
+    description: tmsg("cmd.workspace.rename.desc"),
+    triggers: { ko: "워크스페이스 이름 바꾸기 이름 변경 워크스페이스 제목" },
     params: {
-      project: { ...P.project, required: true },
-      title: { type: "string", description: "New project name", required: true },
+      workspace: { ...P.workspace, required: true },
+      title: { type: "string", description: "New workspace name", required: true },
     },
     returns: "{ projectId }",
-    message: () => tmsg("msg.project.rename"),
+    message: () => tmsg("msg.workspace.rename"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['project.rename \'{"project":"pjt-a1b2c3","title":"backend"}\''],
+    examples: ['workspace.rename \'{"workspace":"wsp-a1b2c3","title":"backend"}\''],
     handler: (p) =>
-      withTargets(S().renameProject(p.project as string, p.title as string), {
-        projectId: p.project as string,
+      withTargets(S().renameWorkspace(p.workspace as string, p.title as string), {
+        projectId: p.workspace as string,
       }),
   });
 
-  register("project.color", {
-    description: tmsg("cmd.project.color.desc"),
-    triggers: { ko: "프로젝트 색 색상 탭 색깔" },
+  register("workspace.color", {
+    description: tmsg("cmd.workspace.color.desc"),
+    triggers: { ko: "워크스페이스 색 색상 탭 색깔" },
     params: {
-      project: { ...P.project, required: true },
+      workspace: { ...P.workspace, required: true },
       color: {
         type: "string",
-        description: tmsg("cmd.project.color.param.color"),
+        description: tmsg("cmd.workspace.color.param.color"),
       },
     },
     returns: "{ projectId }",
-    message: () => tmsg("msg.project.color"),
+    message: () => tmsg("msg.workspace.color"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ['project.color \'{"project":"pjt-a2b3c4","color":"#4a8fe8"}\''],
+    examples: ['workspace.color \'{"workspace":"wsp-a2b3c4","color":"#4a8fe8"}\''],
     handler: (p) =>
       withTargets(
-        S().setProjectColor(p.project as string, (p.color as string) ?? null),
-        { projectId: p.project as string },
+        S().setWorkspaceColor(p.workspace as string, (p.color as string) ?? null),
+        { projectId: p.workspace as string },
       ),
   });
 
-  register("project.update", {
+  register("workspace.update", {
     description:
-      "Batch-update project settings. Omitted fields are preserved; \"\" removes the override. root is immutable.",
+      "Batch-update workspace settings. Omitted fields are preserved; \"\" removes the override. root is immutable.",
     params: {
-      project: { ...P.project, required: true },
+      workspace: { ...P.workspace, required: true },
       title: { type: "string", description: "Alias (empty string is ignored)" },
       shell: { type: "string", description: 'Terminal shell path ("" = default)' },
       color: { type: "string", description: 'Accent color ("" = remove)' },
     },
     returns: "{ projectId }",
-    message: () => tmsg("msg.project.update"),
+    message: () => tmsg("msg.workspace.update"),
     errors: ["TARGET_NOT_FOUND"],
     examples: [
-      'project.update \'{"project":"pjt-a2b3c4","title":"backend","shell":"/bin/zsh"}\'',
+      'workspace.update \'{"workspace":"wsp-a2b3c4","title":"backend","shell":"/bin/zsh"}\'',
     ],
     handler: (p) =>
       withTargets(
-        S().updateProject(p.project as string, {
+        S().updateWorkspace(p.workspace as string, {
           title: p.title as string | undefined,
           shell: p.shell === undefined ? undefined : (p.shell as string) || null,
           color: p.color === undefined ? undefined : (p.color as string) || null,
         }),
-        { projectId: p.project as string },
+        { projectId: p.workspace as string },
       ),
   });
 
-  register("project.sidebar.toggle", {
-    description: tmsg("cmd.project.sidebar.toggle.desc"),
+  register("workspace.sidebar.toggle", {
+    description: tmsg("cmd.workspace.sidebar.toggle.desc"),
     triggers: { ko: "사이드바 파일트리 열기 닫기 토글" },
-    params: { project: P.project },
+    params: { workspace: P.workspace },
     returns: "{ projectId, sidebarOpen }",
     message: (d) =>
       d.sidebarOpen
-        ? tmsg("msg.project.sidebar.toggle.opened")
-        : tmsg("msg.project.sidebar.toggle.closed"),
+        ? tmsg("msg.workspace.sidebar.toggle.opened")
+        : tmsg("msg.workspace.sidebar.toggle.closed"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["project.sidebar.toggle"],
+    examples: ["workspace.sidebar.toggle"],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       return withTargets(S().toggleSidebar(t.id), { projectId: t.id });
     },
   });
@@ -1008,28 +1008,28 @@ export function registerCatalog(): void {
     },
   });
 
-  register("project.rightbar.toggle", {
-    description: tmsg("cmd.project.rightbar.toggle.desc"),
+  register("workspace.rightbar.toggle", {
+    description: tmsg("cmd.workspace.rightbar.toggle.desc"),
     triggers: { ko: "우측 사이드바 오른쪽 패널 플러그인 바 열기 닫기" },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       open: { type: "boolean", description: "When provided, force open or closed" },
     },
     returns: "{ projectId, rightOpen }",
     message: (d) =>
       d.rightOpen
-        ? tmsg("msg.project.rightbar.toggle.opened")
-        : tmsg("msg.project.rightbar.toggle.closed"),
+        ? tmsg("msg.workspace.rightbar.toggle.opened")
+        : tmsg("msg.workspace.rightbar.toggle.closed"),
     errors: ["TARGET_NOT_FOUND"],
-    examples: ["project.rightbar.toggle", 'project.rightbar.toggle \'{"open":true}\''],
+    examples: ["workspace.rightbar.toggle", 'workspace.rightbar.toggle \'{"open":true}\''],
     handler: async (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       const result = S().toggleRightSidebar(t.id, p.open as boolean | undefined);
       if (!result.ok) return result;
       await waitForDomCommit(() => {
         const sidebar = [...document.querySelectorAll<HTMLElement>('[data-node="sidebar/right"]')]
-          .find((element) => element.closest<HTMLElement>("[data-project-plane]")?.dataset.projectPlane === t.id);
+          .find((element) => element.closest<HTMLElement>("[data-workspace-plane]")?.dataset.workspacePlane === t.id);
         if (!sidebar) return false;
         return sidebar.classList.contains("open") === result.rightOpen
           && (sidebar.getBoundingClientRect().width > 0) === result.rightOpen;
@@ -1116,26 +1116,26 @@ export function registerCatalog(): void {
     description:
       "Return the left sidebar layout tree (SplitTree of tab groups) — direction, sizes, each leaf's viewKeys + active. Source for sidebar.left.move/resize targets, which name a viewKey (the tree's interior nodes have no name).",
     triggers: { ko: "좌측 사이드바 레이아웃 트리 탭 분할 구조" },
-    params: { project: P.project },
+    params: { workspace: P.workspace },
     returns: "{ projectId, layout }",
     message: () => tmsg("msg.sidebar.left.tree"),
     errors: ["TARGET_NOT_FOUND"],
     examples: ["sidebar.left.tree"],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       return { projectId: t.id, layout: serializeSidebarLayout(t.leftLayout) };
     },
   });
 
   register("sidebar.left.position", {
     description:
-      "Read or set the project left rail position mode. Omit mode to query. flow (default) stands the rail at the focused pane's clean left line and travels with focus; pin without station freezes the current effective line; pin with station snaps to the nearest clean full-height grid line. The solved arrangement is what state.tree reports.",
+      "Read or set the workspace left rail position mode. Omit mode to query. flow (default) stands the rail at the focused pane's clean left line and travels with focus; pin without station freezes the current effective line; pin with station snaps to the nearest clean full-height grid line. The solved arrangement is what state.tree reports.",
     triggers: {
       ko: "좌측 사이드바 레일 위치 플로우 포커스 추종 핀 고정 그립 스냅",
     },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       mode: {
         type: "string",
         description: tmsg("cmd.sidebar.left.position.param.mode"),
@@ -1158,8 +1158,8 @@ export function registerCatalog(): void {
       'sidebar.left.position \'{"mode":"flow"}\'',
     ],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
 
       const mode = p.mode as "flow" | "pin" | undefined;
       const requested = p.station as number | undefined;
@@ -1210,8 +1210,8 @@ export function registerCatalog(): void {
         if (!changed.ok) return changed;
       }
 
-      const updated = S().projects.find((item) => item.id === t.id);
-      if (!updated) return notFound(tmsg("msg.project.notFound"));
+      const updated = S().workspaces.find((item) => item.id === t.id);
+      if (!updated) return notFound(tmsg("msg.workspace.notFound"));
       return {
         projectId: updated.id,
         leftRailPosition: serializeLeftRailPosition(updated),
@@ -1224,7 +1224,7 @@ export function registerCatalog(): void {
       "Drag-merge a left sidebar view — into=merge as a tab, left/right=horizontal split, top/bottom=vertical split (same 4 directions as the content area). viewKeys/targets come from sidebar.left.tree.",
     triggers: { ko: "좌측 사이드바 탭 이동 합치기 분할 드래그 머지" },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       viewKey: { type: "string", description: "viewKey to move", required: true },
       target: { type: "string", description: "target viewKey (a view in the target group)", required: true },
       zone: {
@@ -1241,8 +1241,8 @@ export function registerCatalog(): void {
       'sidebar.left.move \'{"viewKey":"soksak-plugin-<id>.<view>","target":"soksak-plugin-<other-id>.<view>","zone":"right"}\'',
     ],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       const zone = p.zone as string;
       const target = p.target as string;
       let drop;
@@ -1264,7 +1264,7 @@ export function registerCatalog(): void {
       "Resize the left sidebar split that holds a view — sizes are parallel to that split's children (sum 1). The tree's interior nodes have no name, so the split is named by one of the views inside it (viewKeys from sidebar.left.tree).",
     triggers: { ko: "좌측 사이드바 분할 비율 크기 조절" },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       viewKey: {
         type: "string",
         description: tmsg("cmd.sidebar.left.resize.param.viewKey"),
@@ -1279,8 +1279,8 @@ export function registerCatalog(): void {
       'sidebar.left.resize \'{"viewKey":"soksak-plugin-<id>.<view>","sizes":[0.6,0.4]}\'',
     ],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       const key = p.viewKey as string;
       const splitId = sidebarSplitIdOf(t.leftLayout, key);
       if (!splitId) {
@@ -1295,14 +1295,14 @@ export function registerCatalog(): void {
   // ----- space -----
   register("space.list", {
     description: tmsg("cmd.space.list.desc"),
-    params: { project: P.project },
+    params: { workspace: P.workspace },
     returns: "{ projectId, spaces: [{id,title,active}] }",
     message: (d) => tmsg("msg.space.list", { n: ((d.spaces as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
     examples: ["space.list"],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       return {
         projectId: t.id,
         spaces: t.spaces.map((c) => ({
@@ -1317,7 +1317,7 @@ export function registerCatalog(): void {
   register("space.create", {
     description: tmsg("cmd.space.create.desc"),
     triggers: { ko: "새 탭 스페이스 탭 추가 새로 열기" },
-    params: { project: P.project, program: P.program },
+    params: { workspace: P.workspace, program: P.program },
     returns: "{ projectId, spaceId, paneId, tabId? }",
     message: () => tmsg("msg.space.create"),
     errors: ["TARGET_NOT_FOUND"],
@@ -1332,8 +1332,8 @@ export function registerCatalog(): void {
     },
     examples: ['space.create \'{"program":"browser"}\''],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       const r = S().addContent(t.id, p.program as Program | undefined);
       if (!r.ok) return r;
       return {
@@ -1350,7 +1350,7 @@ export function registerCatalog(): void {
     description: tmsg("cmd.space.close.desc"),
     triggers: { ko: "탭 닫기 스페이스 닫기" },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       space: { ...P.space, required: true },
     },
     returns: "{ projectId, spaceId(closed), activeSpaceId }",
@@ -1358,8 +1358,8 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND", "LAST_ITEM"],
     examples: ['space.close \'{"space":"spc-d5e6f7"}\''],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       return withTargets(S().closeContent(t.id, p.space as string), {
         projectId: t.id,
         spaceId: p.space as string,
@@ -1371,7 +1371,7 @@ export function registerCatalog(): void {
     description: tmsg("cmd.space.activate.desc"),
     triggers: { ko: "탭 이동 탭 전환 탭 바꾸기" },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       space: { ...P.space, required: true },
     },
     returns: "{ projectId, spaceId }",
@@ -1379,8 +1379,8 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ['space.activate \'{"space":"spc-d5e6f7"}\''],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       return withTargets(S().setActiveContent(t.id, p.space as string), {
         projectId: t.id,
         spaceId: p.space as string,
@@ -1393,7 +1393,7 @@ export function registerCatalog(): void {
       "Measure a space-tab switch as the user sees it: record the switch and report whether the new space lands in a single clean frame or smears across several (jank), via per-frame pixel change in the content area. Detects same-color switches that brightness can't. Restores the original tab. Replaces ad-hoc capture scripts.",
     triggers: { ko: "탭 전환 측정 깜빡임 jank 스페이스 전환 검사 단일프레임" },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       to: { ...P.space, required: true },
       from: {
         type: "string",
@@ -1431,8 +1431,8 @@ export function registerCatalog(): void {
       'space.switchScan \'{"to":"spc-h2j3k4","frames":40}\'',
     ],
     handler: async (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
       const prev = t.activeSpaceId;
       const to = p.to as string;
@@ -1509,7 +1509,7 @@ export function registerCatalog(): void {
   register("space.rename", {
     description: tmsg("cmd.space.rename.desc"),
     params: {
-      project: P.project,
+      workspace: P.workspace,
       space: { ...P.space, required: true },
       title: { type: "string", description: "New name", required: true },
     },
@@ -1518,8 +1518,8 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND"],
     examples: ['space.rename \'{"space":"spc-d5e6f7","title":"build"}\''],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       return withTargets(
         S().renameContent(t.id, p.space as string, p.title as string),
         { projectId: t.id, spaceId: p.space as string },
@@ -1531,15 +1531,15 @@ export function registerCatalog(): void {
   register("pane.list", {
     description:
       "List displayed panes in a space, including rect (%), displayed layout, immutable canonical layout, projection provenance, and the effective rail relation.",
-    params: { project: P.project, space: P.space },
+    params: { workspace: P.workspace, space: P.space },
     returns:
       "{ projectId, spaceId, activePaneId, layout, canonicalLayout, projection, railRelation:{boundTabId,boundPaneId,relationId,placement,connected,side:left|right|detached,borderMode:union|independent|none,pathCount:1|2|0}, panes[] }",
     message: (d) => tmsg("msg.pane.list", { n: ((d.panes as unknown[]) ?? []).length }),
     errors: ["TARGET_NOT_FOUND"],
     examples: ["pane.list"],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       const c = p.space
         ? t.spaces.find((x) => x.id === p.space)
         : (resolveCtx(ctx)?.space ??
@@ -1572,7 +1572,7 @@ export function registerCatalog(): void {
       "Split a pane — add a new pane beside the target on a given side (optionally running a program). Use when arranging the layout or opening something side by side.",
     triggers: { ko: "칸 나누기 분할 화면 분할 옆에 열기 나란히" },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       pane: P.pane,
       side: { ...P.side, required: true },
       program: P.program,
@@ -1604,7 +1604,7 @@ export function registerCatalog(): void {
       const loc = resolvePane(p, ctx);
       if (!loc) return notFound(tmsg("msg.pane.notFound"));
       const r = S().splitWithNewView(
-        loc.project.id,
+        loc.workspace.id,
         loc.pane.id,
         p.side as Side,
         p.program as Program,
@@ -1618,8 +1618,8 @@ export function registerCatalog(): void {
           : 5000;
         ready = timeout > 0 ? await awaitViewMounted(openedViewId, timeout) : false;
       }
-      return withArrangement(loc.project.id, {
-        projectId: loc.project.id,
+      return withArrangement(loc.workspace.id, {
+        projectId: loc.workspace.id,
         paneId: r.groupId,
         tabId: r.viewId,
         ...(ready === undefined ? {} : { mounted: ready }),
@@ -1631,7 +1631,7 @@ export function registerCatalog(): void {
     description: tmsg("cmd.pane.merge.desc"),
     triggers: { ko: "칸 합치기 병합 탭 이동 합병" },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       src: { type: "string", description: "Source pane id", required: true },
       dst: { type: "string", description: "Destination pane id", required: true },
     },
@@ -1643,14 +1643,14 @@ export function registerCatalog(): void {
       const loc = locatePane(p.src as string) ?? resolvePane(p, ctx);
       if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.src) }));
       const r = S().moveGroupToGroup(
-        loc.project.id,
+        loc.workspace.id,
         p.src as string,
         p.dst as string,
         "center",
       );
       if (!r.ok) return r;
-      return withArrangement(loc.project.id, {
-        projectId: loc.project.id,
+      return withArrangement(loc.workspace.id, {
+        projectId: loc.workspace.id,
         paneId: r.groupId,
       });
     },
@@ -1660,7 +1660,7 @@ export function registerCatalog(): void {
     description: tmsg("cmd.pane.move.desc"),
     triggers: { ko: "칸 이동 재배치 위치 옮기기" },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       src: { type: "string", description: "Source pane id", required: true },
       dst: { type: "string", description: "Destination pane id", required: true },
       zone: { ...P.zone, required: true },
@@ -1673,14 +1673,14 @@ export function registerCatalog(): void {
       const loc = locatePane(p.src as string);
       if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.src) }));
       const r = S().moveGroupToGroup(
-        loc.project.id,
+        loc.workspace.id,
         p.src as string,
         p.dst as string,
         p.zone as DropZone,
       );
       if (!r.ok) return r;
-      return withArrangement(loc.project.id, {
-        projectId: loc.project.id,
+      return withArrangement(loc.workspace.id, {
+        projectId: loc.workspace.id,
         paneId: r.groupId,
       });
     },
@@ -1699,8 +1699,8 @@ export function registerCatalog(): void {
       const loc = locatePane(p.pane as string);
       if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.pane) }));
       return withArrangement(
-        loc.project.id,
-        withTargets(S().closeGroup(loc.project.id, p.pane as string), {
+        loc.workspace.id,
+        withTargets(S().closeGroup(loc.workspace.id, p.pane as string), {
           paneId: p.pane as string,
         }),
       );
@@ -1720,10 +1720,10 @@ export function registerCatalog(): void {
       if (!loc) return notFound(tmsg("msg.pane.notFoundId", { id: String(p.pane) }));
       const echo = { paneId: p.pane as string };
       if (!loc.pane.activeTabId)
-        return withTargets(S().setActiveGroup(loc.project.id, p.pane as string), echo);
+        return withTargets(S().setActiveGroup(loc.workspace.id, p.pane as string), echo);
       return withTargets(
         transferViewFocus(activeSessionViewId(), loc.pane.activeTabId, () =>
-          S().setActiveGroup(loc.project.id, p.pane as string),
+          S().setActiveGroup(loc.workspace.id, p.pane as string),
         ),
         echo,
       );
@@ -1783,7 +1783,7 @@ export function registerCatalog(): void {
       // the requested pane is in the trailing slot.
       sizes[gutter.index] = isCanonicalSide(edge) ? pair * ratio : pair * (1 - ratio);
       sizes[gutter.index + 1] = pair - sizes[gutter.index];
-      const r = S().resizeSplit(loc.project.id, gutter.splitId, sizes);
+      const r = S().resizeSplit(loc.workspace.id, gutter.splitId, sizes);
       return r.ok
         ? {
             paneId: loc.pane.id,
@@ -1838,7 +1838,7 @@ export function registerCatalog(): void {
         sizes[gutter.index] = half;
         sizes[gutter.index + 1] = half;
       }
-      const r = S().resizeSplit(loc.project.id, gutter.splitId, sizes);
+      const r = S().resizeSplit(loc.workspace.id, gutter.splitId, sizes);
       return r.ok
         ? {
             paneId: loc.pane.id,
@@ -1866,7 +1866,7 @@ export function registerCatalog(): void {
         description:
           "Named spaces to build (required for facets): [{ title, panes?: [{ program, side? }] }]",
       },
-      project: P.project,
+      workspace: P.workspace,
     },
     returns:
       "{ projectId, spaces: [{ spaceId, title, panes: [{ paneId, program }] }], skipped? } — skipped lists panes dropped because their program is missing",
@@ -1891,8 +1891,8 @@ export function registerCatalog(): void {
       'layout.apply \'{"preset":"facets","spaces":[{"title":"docs","panes":[{"program":"browser"}]}]}\'',
     ],
     handler: (p, ctx) => {
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       const skipped: {
         space: string;
         program: string;
@@ -1945,7 +1945,7 @@ export function registerCatalog(): void {
         const title = typeof spec.title === "string" ? spec.title : "";
         // New space (empty) — created without a program so the first pane is controlled explicitly. Existing spaces are unchanged.
         const created = S().addContent(t.id);
-        if (!created.ok) continue; // Unreachable after the project check — defensive.
+        if (!created.ok) continue; // Unreachable after the workspace check — defensive.
         const spaceId = created.contentId;
         const firstPaneId = created.groupId;
         if (title) S().renameContent(t.id, spaceId, title);
@@ -2020,7 +2020,7 @@ export function registerCatalog(): void {
     handler: async (p, ctx) => {
       const loc = resolvePane(p, ctx);
       if (!loc) return notFound(tmsg("msg.pane.notFound"));
-      const r = S().addViewToGroup(loc.project.id, p.program as Program, loc.pane.id);
+      const r = S().addViewToGroup(loc.workspace.id, p.program as Program, loc.pane.id);
       if (!r.ok) return r; // Do not mix mounted into a failure envelope.
       // When the answer is ok, its result must be usable. The state changes immediately but a plugin
       // view mounts on the next render, so a command sent with this tabId in between finds the plugin
@@ -2044,7 +2044,7 @@ export function registerCatalog(): void {
     handler: (p) => {
       const loc = locateTab(p.tab as string);
       if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
-      return withTargets(S().closeView(loc.project.id, p.tab as string), {
+      return withTargets(S().closeView(loc.workspace.id, p.tab as string), {
         tabId: p.tab as string,
       });
     },
@@ -2063,7 +2063,7 @@ export function registerCatalog(): void {
       if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
       return withTargets(
         transferViewFocus(activeSessionViewId(), p.tab as string, () =>
-          S().setActiveView(loc.project.id, p.tab as string),
+          S().setActiveView(loc.workspace.id, p.tab as string),
         ),
         { tabId: p.tab as string },
       );
@@ -2090,7 +2090,7 @@ export function registerCatalog(): void {
       const loc = locateTab(p.tab as string);
       if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
       return withTargets(
-        S().renameView(loc.project.id, p.tab as string, p.title as string),
+        S().renameView(loc.workspace.id, p.tab as string, p.title as string),
         { tabId: p.tab as string },
       );
     },
@@ -2122,7 +2122,7 @@ export function registerCatalog(): void {
           p.tab ? tmsg("msg.tab.notFoundId", { id: String(p.tab) }) : tmsg("msg.tab.noActive"),
         );
       const changesGeometry = loc.space.maximizedTabId !== loc.tab.id;
-      const r = S().maximizeView(loc.project.id, loc.tab.id);
+      const r = S().maximizeView(loc.workspace.id, loc.tab.id);
       if (!r.ok) return r;
       if (causeTraceId !== undefined && changesGeometry) declareLayoutCause(causeTraceId);
       return {
@@ -2136,7 +2136,7 @@ export function registerCatalog(): void {
     description: tmsg("cmd.tab.restore.desc"),
     triggers: { ko: "최대화 해제 원래대로 레이아웃 복원" },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       causeTraceId: {
         type: "string",
         description: tmsg("cmd.tab.restore.param.causeTraceId"),
@@ -2151,8 +2151,8 @@ export function registerCatalog(): void {
       if (causeTraceId !== undefined && causeTraceId.length === 0) {
         return { ok: false as const, code: "INVALID_PARAMS" as const, message: "causeTraceId is required" };
       }
-      const t = resolveProject(p, ctx);
-      if (!t) return notFound(tmsg("msg.project.notFound"));
+      const t = resolveWorkspace(p, ctx);
+      if (!t) return notFound(tmsg("msg.workspace.notFound"));
       const changesGeometry = t.spaces.some((space) => space.id === t.activeSpaceId && space.maximizedTabId !== null);
       const r = S().restoreView(t.id);
       if (!r.ok) return r;
@@ -2181,7 +2181,7 @@ export function registerCatalog(): void {
       const loc = locateTab(p.tab as string);
       if (!loc) return notFound(tmsg("msg.tab.notFoundId", { id: String(p.tab) }));
       const r = S().moveViewToGroup(
-        loc.project.id,
+        loc.workspace.id,
         p.tab as string,
         p.dst as string,
         p.zone as DropZone,
@@ -2201,7 +2201,7 @@ export function registerCatalog(): void {
     handler: (p) => {
       const only = p.tab as string | undefined;
       const statuses: { tabId: string; code: string; message?: string }[] = [];
-      for (const t of S().projects)
+      for (const t of S().workspaces)
         for (const c of t.spaces)
           for (const g of allGroups(c.layout))
             for (const v of g.tabs)
@@ -2369,10 +2369,10 @@ export function registerCatalog(): void {
   // ----- explorer (file explorer) -----
   register("explorer.list", {
     description:
-      "List direct children of a directory (same view as the file tree). Omit path to use the project root (falls back to HOME).",
+      "List direct children of a directory (same view as the file tree). Omit path to use the workspace root (falls back to HOME).",
     triggers: { ko: "파일 목록 디렉토리 목록 폴더 내용 파일 탐색" },
     params: {
-      project: P.project,
+      workspace: P.workspace,
       path: { type: "string", description: "Absolute directory path" },
     },
     returns: "{ projectId|null, root, children: [{name,dir}] }",
@@ -2380,13 +2380,13 @@ export function registerCatalog(): void {
     errors: ["TARGET_NOT_FOUND", "INTERNAL"],
     examples: ["explorer.list", 'explorer.list \'{"path":"<local-evidence>"}\''],
     handler: async (p, ctx) => {
-      const t = resolveProject(p, ctx);
+      const t = resolveWorkspace(p, ctx);
       const path = (p.path as string) ?? t?.root ?? null;
       const r = await invoke<{ root: string; children: object[] }>(
         "list_children",
         { path },
       );
-      // With an explicit path the answer works without a project (HOME fallback) — so this axis can be null.
+      // With an explicit path the answer works without a workspace (HOME fallback) — so this axis can be null.
       return { projectId: t?.id ?? null, ...r };
     },
   });

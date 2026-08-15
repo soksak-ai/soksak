@@ -24,8 +24,8 @@ export const HOST_CHROME_TOKENS: readonly string[] = [
   // Chrome ownership of those two names is enforced by the core CSS cascade and the cssVocabulary
   // gate, not by the scanner.
   ".pane-tabs",
-  ".project-tabs",
-  ".project-tab",
+  ".workspace-tabs",
+  ".workspace-tab",
   ".ft-header",
   ".plugin-side-head",
   ".titlebar",

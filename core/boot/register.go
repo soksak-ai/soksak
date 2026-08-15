@@ -23,7 +23,7 @@ import (
 	"github.com/soksak/soksak-core/core/install"
 	corenet "github.com/soksak/soksak-core/core/net"
 	"github.com/soksak/soksak-core/core/process"
-	"github.com/soksak/soksak-core/core/project"
+	"github.com/soksak/soksak-core/core/workspace"
 	"github.com/soksak/soksak-core/core/scan"
 	"github.com/soksak/soksak-core/core/secret"
 	"github.com/soksak/soksak-core/core/service"
@@ -53,7 +53,7 @@ type Boot struct {
 	Now func() int64
 
 	// UserHome is the operating system user's home, which is not Identity.Home.
-	// Several rules need to tell them apart — a project root may sit anywhere
+	// Several rules need to tell them apart — a workspace root may sit anywhere
 	// under the first and nowhere under the second.
 	UserHome string
 	// LoginShell is the shell to build a command line with. Empty refuses the
@@ -78,7 +78,7 @@ type Boot struct {
 	// something changed; delivery needs a host, so the host supplies this.
 	// Nil means nobody is listening, which is what headless is — not an error.
 	Emit func(event string, payload any)
-	// LiveWindows answers which windows exist. The project claim ledger uses it
+	// LiveWindows answers which windows exist. The workspace claim ledger uses it
 	// to separate a claim held by a live window from one left behind by a window
 	// that closed.
 	// Nil answers none, which is the truth with no host.
@@ -117,12 +117,12 @@ type Boot struct {
 // Wired is state RegisterCore built that a host needs the same instance of.
 //
 // A host that built its own would answer from a second ledger: releasing a
-// window's projects would free claims nobody was holding while the real ones
+// window's workspaces would free claims nobody was holding while the real ones
 // stayed locked.
 type Wired struct {
-	// Claims is the project claim ledger. The host frees a window's roots when
+	// Claims is the workspace claim ledger. The host frees a window's roots when
 	// that window is destroyed.
-	Claims *project.Ledger
+	Claims *workspace.Ledger
 	// Processes owns the running children. The host stops them when it quits.
 	Processes *process.Manager
 }
@@ -350,8 +350,8 @@ func registerGroups(registry *control.Registry, boot Boot) Wired {
 		EmitChange: func(dir string) { emit("files:changed", map[string]string{"dir": dir}) },
 	})
 
-	claims := project.NewLedger(liveWindows(boot.LiveWindows))
-	project.Register(registry, project.Deps{
+	claims := workspace.NewLedger(liveWindows(boot.LiveWindows))
+	workspace.Register(registry, workspace.Deps{
 		Home:     boot.Identity.Home,
 		UserHome: boot.UserHome,
 		Manifest: boot.KV,

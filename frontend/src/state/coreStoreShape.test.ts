@@ -30,7 +30,7 @@ describe("core store cache", () => {
   it("falls back when the cache holds the wrong shape", () => {
     // The cache is on the webview origin, not in our store, so another build
     // sharing that origin can leave a value of a different shape behind.
-    // Measured 2026-08-15: `soksak.recentProjects` held `{}` where an array was
+    // Measured 2026-08-15: `soksak.recentWorkspaces` held `{}` where an array was
     // expected, and the first render died on `recentAll.filter is not a
     // function` — the shape was never checked, only the parse.
     const store = makeCoreStore<string[]>({
@@ -87,7 +87,7 @@ describe("core store cache", () => {
     //
     // Measured 2026-08-15, all three from one boot of this build:
     //   respawn:error  undefined is not an object (evaluating 'e.slots.filter')
-    //   restore:error  undefined is not an object (evaluating 'e.projects.length')
+    //   restore:error  undefined is not an object (evaluating 'e.workspaces.length')
     //   renderer.error undefined is not an object (evaluating 't.map')
     const store = makeCoreStore<{ slots: string[] }>({
       ...deps,

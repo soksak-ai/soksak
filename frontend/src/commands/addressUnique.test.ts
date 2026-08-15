@@ -63,14 +63,14 @@ describe("A2 no guessing — 0 matches is absent, 2 or more is ambiguous", () =>
   });
 });
 
-describe("A1 uniqueness — chrome addresses stay distinct with every project plane mounted", () => {
-  // RED evidence (measured, 2026-07-26): every project stays mounted to keep its session (inactive ones parked
-  // off screen), so one set of chrome nodes exists per project inside the plane. rail/left, tab/space/0, and
+describe("A1 uniqueness — chrome addresses stay distinct with every workspace plane mounted", () => {
+  // RED evidence (measured, 2026-07-26): every workspace stays mounted to keep its session (inactive ones parked
+  // off screen), so one set of chrome nodes exists per workspace inside the plane. rail/left, tab/space/0, and
   // bodywrap each resolved to two — the same axis as "the sidebar appears twice".
   function plane(projectId: string, active: boolean, nodes: string[]): void {
     const p = document.createElement("div");
-    p.dataset.projectPlane = projectId;
-    if (active) p.dataset.projectActive = "1";
+    p.dataset.workspacePlane = projectId;
+    if (active) p.dataset.workspaceActive = "1";
     for (const n of nodes) {
       const el = document.createElement("div");
       el.setAttribute("data-node", n);
@@ -79,32 +79,32 @@ describe("A1 uniqueness — chrome addresses stay distinct with every project pl
     document.body.appendChild(p);
   }
 
-  it("the canonical address includes the project axis", () => {
+  it("the canonical address includes the workspace axis", () => {
     plane("t1", true, ["rail/left"]);
     plane("t2", false, ["rail/left"]);
     const addrs = collectExposed().map((n) => n.address);
     expect(new Set(addrs).size).toBe(addrs.length);
     // The window prefix is added only when a name exists, so the address may start with `proj/`. What this
-    // check pins down is that the project axis is present, not what precedes it.
+    // check pins down is that the workspace axis is present, not what precedes it.
     expect(addrs.some((a) => a.endsWith("proj/t1/chrome/rail/left"))).toBe(true);
     expect(addrs.some((a) => a.endsWith("proj/t2/chrome/rail/left"))).toBe(true);
   });
 
-  it("the short form resolves to the active project — omitted means active in this syntax", () => {
+  it("the short form resolves to the active workspace — omitted means active in this syntax", () => {
     plane("t1", true, ["rail/left"]);
     plane("t2", false, ["rail/left"]);
     const r = resolveExposed("chrome/rail/left");
     expect("el" in r).toBe(true);
     if ("el" in r) {
-      expect(r.el.closest("[data-project-plane]")?.getAttribute("data-project-plane")).toBe("t1");
+      expect(r.el.closest("[data-workspace-plane]")?.getAttribute("data-workspace-plane")).toBe("t1");
     }
   });
 
-  it("chrome outside a plane (window-global) has no project axis", () => {
+  it("chrome outside a plane (window-global) has no workspace axis", () => {
     const el = document.createElement("div");
     el.setAttribute("data-node", "window/empty");
     document.body.appendChild(el);
-    // What this pins down is that the project axis is **absent**. The window prefix is added only when a name
+    // What this pins down is that the workspace axis is **absent**. The window prefix is added only when a name
     // exists, so the address may start with `chrome/`.
     const addrs = collectExposed().map((n) => n.address);
     expect(addrs.some((a) => a.endsWith("chrome/window/empty"))).toBe(true);

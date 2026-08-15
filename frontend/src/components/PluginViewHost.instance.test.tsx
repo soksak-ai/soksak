@@ -58,7 +58,7 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
         <PluginViewHost
           viewKey="browser.content"
           projectId="p1"
-          root="/project"
+          root="/workspace"
           region="content"
           viewId="tab-1"
         />,
@@ -94,7 +94,7 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
         <PluginViewHost
           viewKey="browser.content"
           projectId="p1"
-          root="/project"
+          root="/workspace"
           region="content"
           viewId="tab-1"
           logicalPaneId="pan-left"
@@ -115,7 +115,7 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
         <PluginViewHost
           viewKey="browser.content"
           projectId="p1"
-          root="/project"
+          root="/workspace"
           region="content"
           viewId="tab-1"
           logicalPaneId="pan-right"
@@ -129,7 +129,7 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
         <PluginViewHost
           viewKey="browser.content"
           projectId="p1"
-          root="/project"
+          root="/workspace"
           region="content"
           viewId="tab-1"
           logicalPaneId="pan-right"
@@ -181,9 +181,9 @@ describe("PluginViewHost — instance lifetime is separate from DOM lifetime", (
       useViewRegistry.getState().register("browser", DECL, {} as never);
       root = createRoot(host);
       root.render(<>
-        <PluginViewHost viewKey="browser.content" projectId="p1" root="/project"
+        <PluginViewHost viewKey="browser.content" projectId="p1" root="/workspace"
           region="content" viewId="actual-left" />
-        <PluginViewHost viewKey="browser.content" projectId="p1" root="/project"
+        <PluginViewHost viewKey="browser.content" projectId="p1" root="/workspace"
           region="content" viewId="actual-right" />
       </>);
     });

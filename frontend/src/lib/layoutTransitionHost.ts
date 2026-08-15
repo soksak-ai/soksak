@@ -116,7 +116,7 @@ export interface LayoutViewGroup {
   panePresentationViewIds: readonly string[];
 }
 
-/** Projects the logical moves of a group layout into CSS px moves per public view identity, exactly once. */
+/** Workspaces the logical moves of a group layout into CSS px moves per public view identity, exactly once. */
 export function viewLayoutMoves(
   moves: readonly ArrangementMove[],
   groups: readonly LayoutViewGroup[],

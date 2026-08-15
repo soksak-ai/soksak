@@ -1,4 +1,4 @@
-package project
+package workspace
 
 import (
 	"encoding/json"
@@ -49,7 +49,7 @@ type step struct {
 	wantReleased bool
 }
 
-// claimCases is fixtures/project-claims.json carried over as a table.
+// claimCases is fixtures/workspace-claims.json carried over as a table.
 //
 // It was a file while two implementations had to agree
 // about one rule. Here there is one implementation, and reading the file across
@@ -243,7 +243,7 @@ func TestWindowDestructionFreesOnlyThatWindow(t *testing.T) {
 
 // A window that never delivered Destroyed (SIGKILL, a label-reuse race) leaves a
 // ghost. Filtering it on the read side alone leaves the write-side symptom
-// standing: that project cannot be opened again until the process restarts.
+// standing: that workspace cannot be opened again until the process restarts.
 func TestAGhostClaimDoesNotBlockANewOne(t *testing.T) {
 	live := &windows{}
 	live.set("w-dead")
@@ -269,7 +269,7 @@ func TestAGhostClaimDoesNotBlockANewOne(t *testing.T) {
 	}
 }
 
-// Measured: a closed project showed as open and selectable.
+// Measured: a closed workspace showed as open and selectable.
 func TestOwnersListsOnlyLiveWindows(t *testing.T) {
 	live := &windows{}
 	live.set("w-live", "w-dead")
@@ -311,7 +311,7 @@ func TestAClaimNeedsBothARootAndAWindowLabel(t *testing.T) {
 	}
 }
 
-// Two windows opening the same project at once is the case the rule exists for.
+// Two windows opening the same workspace at once is the case the rule exists for.
 func TestOneRootHasOneWinnerUnderConcurrency(t *testing.T) {
 	labels := []string{"w-1", "w-2", "w-3", "w-4", "w-5", "w-6", "w-7", "w-8"}
 	live := &windows{}
@@ -361,7 +361,7 @@ func TestOneRootHasOneWinnerUnderConcurrency(t *testing.T) {
 func TestALedgerWithoutAWindowOracleRefusesToExist(t *testing.T) {
 	defer func() {
 		if recovered := recover(); recovered == nil {
-			t.Error("a ledger with no window oracle was built; its ghosts would block projects until restart")
+			t.Error("a ledger with no window oracle was built; its ghosts would block workspaces until restart")
 		}
 	}()
 	NewLedger(nil)
@@ -408,9 +408,9 @@ func TestADestroyedWindowIsFreedEvenAfterItsLabelIsGone(t *testing.T) {
 // 2026-08-01: one publisher never sent it at all.
 // Comparing the constant against itself would pass while it was wrong.
 func TestTheWireNamesAreTheOnesTheFrontendReads(t *testing.T) {
-	// frontend/src/state/projectRegistry.ts listens for this name.
-	if ChangeEvent != "project-registry-change" {
-		t.Errorf("ChangeEvent = %q, want project-registry-change", ChangeEvent)
+	// frontend/src/state/workspaceRegistry.ts listens for this name.
+	if ChangeEvent != "workspace-registry-change" {
+		t.Errorf("ChangeEvent = %q, want workspace-registry-change", ChangeEvent)
 	}
 
 	claimed, err := json.Marshal(ClaimReply{Ok: false, OwnedBy: "w-1"})

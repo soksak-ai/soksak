@@ -24,7 +24,7 @@ export function registerSettingsCatalog(): void {
   // splitHeaderMode is fixed to tab mode (decision 2026-06), so it is excluded from the surface.
   const SETTING_KEYS = [
     "language",
-    "projectTabPosition",
+    "workspaceTabPosition",
     "contentTabPosition",
     "iconSet",
     "iconBox",
@@ -82,7 +82,7 @@ export function registerSettingsCatalog(): void {
       value: {
         type: "json",
         description:
-          "Value — language:ko|en, projectTabPosition:top|left, contentTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, railRelation:tint|moment|stroke (rail-pane relation surface — tint fill only, moment flash on rebind, stroke outline+label), railFill:none|faint (bound-pane background in stroke mode — none is the default, faint is a 1% accent tint), focusDim:boolean (spotlight — every pane dims except the active one), railSeamStyle:seam|edge (how a manufactured FLOW adjacency is marked: seam dashes the inner shared edge, edge dashes the outer right edge), railPullFocused:boolean (FLOW-only blocked-line policy: true minimally swaps a leaf pane to preserve adjacency; false preserves pane order and stops the rail at the nearest clean line. PIN always preserves both the rail station and pane layout), railSolidColor:string (CSS color for a solid relation seam — empty leaves it to the theme), dimIdle:number (0-1 — how far a pane that is not focused sinks), dimBlocked:number (0-1 — how far a pane stranded between the rail and the focused pane sinks; deeper than dimIdle, or being covered is invisible), appFontFamily:string (CSS font-family stack), windowZoom:number (0.5-2.0 — whole-window zoom factor applied to the main webview and every child webview), orchestratorAgent:string (agent CLI command or path the natural-language console spawns), orchestratorModel:string (--model alias for the agent; empty = CLI default)",
+          "Value — language:ko|en, workspaceTabPosition:top|left, contentTabPosition:top|left, iconSet:string (registered set id — unregistered falls back to lucide), iconBox:boolean, focusIndicator:outline|corners, railRelation:tint|moment|stroke (rail-pane relation surface — tint fill only, moment flash on rebind, stroke outline+label), railFill:none|faint (bound-pane background in stroke mode — none is the default, faint is a 1% accent tint), focusDim:boolean (spotlight — every pane dims except the active one), railSeamStyle:seam|edge (how a manufactured FLOW adjacency is marked: seam dashes the inner shared edge, edge dashes the outer right edge), railPullFocused:boolean (FLOW-only blocked-line policy: true minimally swaps a leaf pane to preserve adjacency; false preserves pane order and stops the rail at the nearest clean line. PIN always preserves both the rail station and pane layout), railSolidColor:string (CSS color for a solid relation seam — empty leaves it to the theme), dimIdle:number (0-1 — how far a pane that is not focused sinks), dimBlocked:number (0-1 — how far a pane stranded between the rail and the focused pane sinks; deeper than dimIdle, or being covered is invisible), appFontFamily:string (CSS font-family stack), windowZoom:number (0.5-2.0 — whole-window zoom factor applied to the main webview and every child webview), orchestratorAgent:string (agent CLI command or path the natural-language console spawns), orchestratorModel:string (--model alias for the agent; empty = CLI default)",
         required: true,
       },
     },
@@ -90,7 +90,7 @@ export function registerSettingsCatalog(): void {
     message: (d) => tmsg("msg.settings.set", { key: String(d.key) }),
     errors: ["INVALID_PARAMS"],
     examples: [
-      'settings.set \'{"key":"projectTabPosition","value":"left"}\'',
+      'settings.set \'{"key":"workspaceTabPosition","value":"left"}\'',
       'settings.set \'{"key":"contentTabPosition","value":"left"}\'',
       'settings.set \'{"key":"iconBox","value":true}\'',
     ],
@@ -108,9 +108,9 @@ export function registerSettingsCatalog(): void {
           if (v !== "ko" && v !== "en") return bad("ko|en");
           s.setLanguage(v);
           break;
-        case "projectTabPosition":
+        case "workspaceTabPosition":
           if (v !== "top" && v !== "left") return bad("top|left");
-          s.setProjectTabPosition(v);
+          s.setWorkspaceTabPosition(v);
           break;
         case "contentTabPosition":
           if (v !== "top" && v !== "left") return bad("top|left");
@@ -198,7 +198,7 @@ export function registerSettingsCatalog(): void {
 
   register("layout.suggest", {
     description:
-      "Suggest window placements from current monitor/window facts (pure strategy — nothing moves). strategy spread: orchestrator windows take a monitor free of project windows whole (or the right third alongside on a single monitor); project windows fill their own monitor. strategy grid: tile all windows on the first monitor. Feed each placement to window.place to execute.",
+      "Suggest window placements from current monitor/window facts (pure strategy — nothing moves). strategy spread: orchestrator windows take a monitor free of workspace windows whole (or the right third alongside on a single monitor); workspace windows fill their own monitor. strategy grid: tile all windows on the first monitor. Feed each placement to window.place to execute.",
     triggers: {
       ko: "창 배치 제안 전략 모니터 분배 오케스트레이터 배치",
     },
@@ -212,7 +212,7 @@ export function registerSettingsCatalog(): void {
       roles: {
         type: "json",
         description:
-          'Optional label→role map, e.g. {"main":"orchestrator"} — unlisted windows count as project windows',
+          'Optional label→role map, e.g. {"main":"orchestrator"} — unlisted windows count as workspace windows',
       },
     },
     returns: "{ placements: [{label,monitor,x,y,w,h}] }",
@@ -229,7 +229,7 @@ export function registerSettingsCatalog(): void {
         monitors: facts.monitors,
         windows: facts.windows,
         strategy: (p.strategy as "spread" | "grid") ?? "spread",
-        roles: (p.roles as Record<string, "orchestrator" | "project">) ?? undefined,
+        roles: (p.roles as Record<string, "orchestrator" | "workspace">) ?? undefined,
       });
       return { placements };
     },

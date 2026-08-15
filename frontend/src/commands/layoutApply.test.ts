@@ -42,10 +42,10 @@ const terminalEnginePlugins: Record<string, PluginRuntime> = {
   },
 };
 
-useSessions.getState().bootstrapFirstProject("<local-evidence>/soksak-layout-apply");
+useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-layout-apply");
 registerCatalog();
 
-const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().projects));
+const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
 const pristineActive = useSessions.getState().activeId;
 
 // Browser-class programs are attached and detached per test (to verify the skip path). register
@@ -63,7 +63,7 @@ let unregBrowser: (() => void) | null = null;
 
 beforeEach(() => {
   useSessions.setState({
-    projects: JSON.parse(JSON.stringify(pristineTabs)),
+    workspaces: JSON.parse(JSON.stringify(pristineTabs)),
     activeId: pristineActive,
   });
   // Restores the terminal engine (contract implementation) to enabled — recovery after a test deletes it.
@@ -75,9 +75,9 @@ afterEach(() => {
   unregBrowser = null;
 });
 
-function firstProject() {
+function firstWorkspace() {
   const s = useSessions.getState();
-  return s.projects.find((t) => t.id === s.activeId)!;
+  return s.workspaces.find((t) => t.id === s.activeId)!;
 }
 
 describe("layout.apply", () => {
@@ -161,11 +161,11 @@ describe("layout.apply", () => {
   });
 
   it("does not destroy the existing spaces — it adds a new one", async () => {
-    const before = firstProject().spaces.length; // one space from boot
-    const beforeId = firstProject().spaces[0].id;
+    const before = firstWorkspace().spaces.length; // one space from boot
+    const beforeId = firstWorkspace().spaces[0].id;
     const r = await execute("layout.apply", { preset: "dev" }, {});
     expect(r.ok).toBe(true);
-    const after = firstProject().spaces;
+    const after = firstWorkspace().spaces;
     expect(after.length).toBe(before + 1);
     // The original space remains untouched.
     expect(after.some((c) => c.id === beforeId)).toBe(true);

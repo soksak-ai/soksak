@@ -14,8 +14,8 @@ import { useCloseConfirm } from "./closeConfirm";
 import { allViews, useSessions } from "./sessions";
 import { useSettings } from "./settings";
 
-useSessions.getState().bootstrapFirstProject("<local-evidence>/soksak-closeconfirm");
-const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().projects));
+useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-closeconfirm");
+const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
 const pristineActive = useSessions.getState().activeId;
 
 let seq = 0;
@@ -28,7 +28,7 @@ function mkView(status?: { code: string; message?: string }): string {
 }
 
 function viewExists(viewId: string): boolean {
-  for (const t of useSessions.getState().projects)
+  for (const t of useSessions.getState().workspaces)
     for (const c of t.spaces)
       for (const v of allViews(c.layout)) if (v.id === viewId) return true;
   return false;
@@ -36,7 +36,7 @@ function viewExists(viewId: string): boolean {
 
 beforeEach(() => {
   useSessions.setState({
-    projects: JSON.parse(JSON.stringify(pristineTabs)),
+    workspaces: JSON.parse(JSON.stringify(pristineTabs)),
     activeId: pristineActive,
   });
   useSettings.getState().setTabCloseConfirm("warn");

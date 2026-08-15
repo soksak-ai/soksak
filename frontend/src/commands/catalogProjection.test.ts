@@ -15,7 +15,7 @@ import { registerProjectionCatalog } from "./catalogProjection";
 import { tmsg } from "../i18n";
 import { execute, getSpec } from "./registry";
 import { useProjection } from "../state/projection";
-import { useSessions, type Project, type Tab } from "../state/sessions";
+import { useSessions, type Workspace, type Tab } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
 import { useViewRegistry, type PluginViewProvider } from "../plugins/viewRegistry";
 import type { ContributedView } from "../plugins/spec";
@@ -43,9 +43,9 @@ function pluginView(id: string, pluginId: string, view: string): Tab {
   return { id, kind: "plugin", title: id, pluginId, view };
 }
 
-function tab(tabs: Tab[], activeTabId: string): Project {
+function tab(tabs: Tab[], activeTabId: string): Workspace {
   return {
-    id: "pjt-aaaaaa",
+    id: "wsp-aaaaaa",
     title: "P",
     sidebarOpen: true,
     rightOpen: false,
@@ -66,12 +66,12 @@ function tab(tabs: Tab[], activeTabId: string): Project {
 
 beforeEach(() => {
   useViewRegistry.setState({ views: {}, version: 0, badges: {} });
-  useProjection.setState({ byProject: {} });
-  useSessions.setState({ projects: [], activeId: "" });
+  useProjection.setState({ byWorkspace: {} });
+  useSessions.setState({ workspaces: [], activeId: "" });
 });
 
 describe("ui.projection.state", () => {
-  it("returns the binding, slots and pins of the active project", async () => {
+  it("returns the binding, slots and pins of the active workspace", async () => {
     useViewRegistry.getState().register(
       "termplug",
       decl("term", {
@@ -88,33 +88,33 @@ describe("ui.projection.state", () => {
       decl("tree", { placements: ["rail"], defaultPlacement: "rail" }),
       provider,
     );
-    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "wsp-aaaaaa" });
 
     const r = (await execute("ui.projection.state", {}, {})) as { ok: boolean; code: string; data: Record<string, unknown> };
     expect(r.ok).toBe(true);
     expect(r.data).toMatchObject({
-      projectId: "pjt-aaaaaa",
+      projectId: "wsp-aaaaaa",
       binding: { viewId: "tab-aaaaaa" },
     });
     const left = r.data.left as { slots: { resolvedRef: string; status: string }[] };
     expect(left.slots[0]).toMatchObject({ resolvedRef: "termplug.tree", status: "live" });
   });
 
-  it("a project that does not exist → TARGET_NOT_FOUND", async () => {
-    const r = (await execute("ui.projection.state", { project: "nope" }, {})) as { ok: boolean; code: string };
+  it("a workspace that does not exist → TARGET_NOT_FOUND", async () => {
+    const r = (await execute("ui.projection.state", { workspace: "nope" }, {})) as { ok: boolean; code: string };
     expect(r.ok).toBe(false);
     expect(r.code).toBe("TARGET_NOT_FOUND");
   });
 });
 
 describe("ui.projection.pin / unpin — the left rail is projection only (no pin axis)", () => {
-  it("a left pin is INVALID_PARAMS even for a resident view — the left rail projects a binding only", async () => {
+  it("a left pin is INVALID_PARAMS even for a resident view — the left rail workspaces a binding only", async () => {
     useViewRegistry.getState().register(
       "termplug",
       decl("tree", { placements: ["rail"], defaultPlacement: "rail", resident: true }),
       provider,
     );
-    useSessions.setState({ projects: [tab([], "")], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [tab([], "")], activeId: "wsp-aaaaaa" });
     const r = (await execute("ui.projection.pin", { ref: "termplug.tree" }, {})) as { ok: boolean; code: string; message: string };
     expect(r.ok).toBe(false);
     expect(r.code).toBe("INVALID_PARAMS");
@@ -122,8 +122,8 @@ describe("ui.projection.pin / unpin — the left rail is projection only (no pin
   });
 
   it("unpin stays for cleaning up a leftover pin (an old snapshot) and is idempotent", async () => {
-    useSessions.setState({ projects: [tab([], "")], activeId: "pjt-aaaaaa" });
-    useProjection.getState().pin("pjt-aaaaaa", "left", "gone.tree"); // simulates a leftover old snapshot
+    useSessions.setState({ workspaces: [tab([], "")], activeId: "wsp-aaaaaa" });
+    useProjection.getState().pin("wsp-aaaaaa", "left", "gone.tree"); // simulates a leftover old snapshot
     const r1 = (await execute("ui.projection.unpin", { ref: "gone.tree" }, {})) as { ok: boolean };
     expect(r1.ok).toBe(true);
     const st = (await execute("ui.projection.state", {}, {})) as { data: Record<string, unknown> };
@@ -138,7 +138,7 @@ describe("ui.intent.open — R2 (placement in the binding context, idempotent re
     // The contract is an absolute path (params.path: "Absolute file path"). A relative path that passes
     // persists that string in the tab, and restore wakes it as a dead "No such file or directory" tab
     // (measured 2026-07-26: a tab opened with "README.md" died after restart — found on the user's screen).
-    useSessions.setState({ projects: [tab([], "")], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [tab([], "")], activeId: "wsp-aaaaaa" });
     const r = (await execute("ui.intent.open", { path: "README.md" }, {})) as {
       ok: boolean;
       code?: string;
@@ -148,7 +148,7 @@ describe("ui.intent.open — R2 (placement in the binding context, idempotent re
   });
 
   it("opens a file as a tab in the binding group, and reuses the existing view for the same resource", async () => {
-    useSessions.setState({ projects: [tab([], "")], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [tab([], "")], activeId: "wsp-aaaaaa" });
     const r1 = (await execute("ui.intent.open", { path: "<local-evidence>/p1/a.md" }, {})) as { ok: boolean; data: Record<string, unknown> };
     expect(r1.ok).toBe(true);
     expect(r1.data.existing).toBe(false);
@@ -171,7 +171,7 @@ describe("batch 1 command consistency — right pin refusal, alias pin, expanded
       decl("tree", { placements: ["rail"], defaultPlacement: "rail" }),
       provider,
     );
-    useSessions.setState({ projects: [tab([], "")], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [tab([], "")], activeId: "wsp-aaaaaa" });
     const r = (await execute("ui.projection.pin", { ref: "termplug.tree", side: "right" }, {})) as { ok: boolean; code: string };
     expect(r.ok).toBe(false);
     expect(r.code).toBe("INVALID_PARAMS");
@@ -180,8 +180,8 @@ describe("batch 1 command consistency — right pin refusal, alias pin, expanded
 
   it("state includes binding.groupId, contentId and focusHistory (§4.1)", async () => {
     useViewRegistry.getState().register("termplug", decl("term"), provider);
-    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
-    useProjection.getState().noteBinding("pjt-aaaaaa", "tab-aaaaaa");
+    useSessions.setState({ workspaces: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "wsp-aaaaaa" });
+    useProjection.getState().noteBinding("wsp-aaaaaa", "tab-aaaaaa");
     const r = (await execute("ui.projection.state", {}, {})) as { data: Record<string, unknown> };
     expect(r.data.binding).toMatchObject({ viewId: "tab-aaaaaa", groupId: "pan-aaaaaa", contentId: "spc-aaaaaa" });
     expect(r.data.focusHistory).toEqual(["tab-aaaaaa"]);

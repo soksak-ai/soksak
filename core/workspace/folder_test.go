@@ -1,4 +1,4 @@
-package project
+package workspace
 
 import (
 	"os"
@@ -7,15 +7,15 @@ import (
 	"testing"
 )
 
-// Restore and retry paths call this more than once for one project, so the
+// Restore and retry paths call this more than once for one workspace, so the
 // second call has to be an ordinary answer rather than "it already exists".
-func TestAProjectFolderIsCreatedUnderTheIdentityHomeAndIsIdempotent(t *testing.T) {
+func TestAWorkspaceFolderIsCreatedUnderTheIdentityHomeAndIsIdempotent(t *testing.T) {
 	home := t.TempDir()
-	want := filepath.Join(home, "projects", "my-app")
+	want := filepath.Join(home, "workspaces", "my-app")
 
 	got, err := EnsureDir("my-app", home)
 	if err != nil {
-		t.Fatalf("creating the project folder: %v", err)
+		t.Fatalf("creating the workspace folder: %v", err)
 	}
 	if got != want {
 		t.Errorf("path = %q, want %q", got, want)
@@ -34,7 +34,7 @@ func TestAProjectFolderIsCreatedUnderTheIdentityHomeAndIsIdempotent(t *testing.T
 	}
 }
 
-// A slash lets the argument leave projects/ entirely, which is the reason the
+// A slash lets the argument leave workspaces/ entirely, which is the reason the
 // contract is a slug and not a name.
 func TestAFolderNameThatIsNotASlugIsRefusedWithThePattern(t *testing.T) {
 	home := t.TempDir()
@@ -48,17 +48,17 @@ func TestAFolderNameThatIsNotASlugIsRefusedWithThePattern(t *testing.T) {
 			t.Errorf("refusing %q did not carry the pattern: %v", folder, err)
 		}
 	}
-	if entries, err := os.ReadDir(filepath.Join(home, "projects")); err == nil && len(entries) > 0 {
+	if entries, err := os.ReadDir(filepath.Join(home, "workspaces")); err == nil && len(entries) > 0 {
 		t.Errorf("a refused name still created something: %v", entries)
 	}
 }
 
-// With no identity home this would create projects/ beside whatever directory
+// With no identity home this would create workspaces/ beside whatever directory
 // the process happens to be in, and that is a different tree per process.
 func TestWithoutAnIdentityHomeTheFolderIsRefusedByName(t *testing.T) {
 	_, err := EnsureDir("my-app", "")
 	if err == nil {
-		t.Fatal("a process with no identity home created a project folder anyway")
+		t.Fatal("a process with no identity home created a workspace folder anyway")
 	}
 	if !strings.Contains(err.Error(), "identity home") {
 		t.Errorf("the refusal did not say what to supply: %v", err)
@@ -66,7 +66,7 @@ func TestWithoutAnIdentityHomeTheFolderIsRefusedByName(t *testing.T) {
 }
 
 // The empty case is refused loudly and the relative case lands in exactly the
-// same place — projects/ beside whichever directory the process was started
+// same place — workspaces/ beside whichever directory the process was started
 // in. One of the two being caught is not the rule being kept.
 func TestARelativeIdentityHomeIsRefusedByName(t *testing.T) {
 	// The working directory is moved somewhere disposable first. A relative
@@ -81,7 +81,7 @@ func TestARelativeIdentityHomeIsRefusedByName(t *testing.T) {
 	if !strings.Contains(err.Error(), "absolute") {
 		t.Errorf("the refusal did not say what was wrong: %v", err)
 	}
-	if entries, err := os.ReadDir(filepath.Join("relative", "home", "projects")); err == nil && len(entries) > 0 {
+	if entries, err := os.ReadDir(filepath.Join("relative", "home", "workspaces")); err == nil && len(entries) > 0 {
 		t.Errorf("a refused identity home still created something: %v", entries)
 	}
 }

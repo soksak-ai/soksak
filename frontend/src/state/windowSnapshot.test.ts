@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { serializeProject, deserializeProject } from "./windowSnapshot";
-import type { Project, PaneNode, Tab } from "./sessions";
+import { serializeWorkspace, deserializeWorkspace } from "./windowSnapshot";
+import type { Workspace, PaneNode, Tab } from "./sessions";
 
 // Serialization round-trip — the PaneNode serializeSplitTree path. ids preserved, only split ids regenerated,
 // live status excluded. The invariant: structure, order, sizes, active, and view parameters are preserved. A terminal is a plugin view too.
@@ -14,8 +14,8 @@ const leafOf = (n: PaneNode, i: number) => {
   return c.value;
 };
 
-const project: Project = {
-  id: "pjt-aaaaaa",
+const workspace: Workspace = {
+  id: "wsp-aaaaaa",
   title: "proj",
   root: "/repo",
   shell: "/bin/zsh",
@@ -75,13 +75,13 @@ const project: Project = {
 describe("windowSnapshot round trip", () => {
   it("preserves structure, sizes, active and view params, regenerates only split ids, and does not persist the terminal command", () => {
     sid = 0;
-    const snap = serializeProject(project);
+    const snap = serializeWorkspace(workspace);
     // The split id is not stored in the serialization (regenerated on restore).
     expect(JSON.stringify(snap)).not.toContain("spl-gaaaaa");
     // command (auto-run) is not persisted (A6: a restored terminal does not re-run).
     expect(JSON.stringify(snap)).not.toContain("claude");
 
-    const back = deserializeProject(snap, newSplitId);
+    const back = deserializeWorkspace(snap, newSplitId);
     expect(back.root).toBe("/repo");
     expect(back.title).toBe("proj");
     expect(back.shell).toBe("/bin/zsh");
@@ -125,8 +125,8 @@ describe("windowSnapshot round trip", () => {
 
   it("live status is excluded from serialization", () => {
     sid = 0;
-    const p2: Project = {
-      ...project,
+    const p2: Workspace = {
+      ...workspace,
       spaces: [
         {
           id: "spc-aaaaaa",
@@ -152,9 +152,9 @@ describe("windowSnapshot round trip", () => {
         },
       ],
     };
-    const snap = serializeProject(p2);
+    const snap = serializeWorkspace(p2);
     expect(JSON.stringify(snap)).not.toContain("busy");
-    const back = deserializeProject(snap, newSplitId);
+    const back = deserializeWorkspace(snap, newSplitId);
     const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
     expect(g.tabs[0].status).toBeUndefined();
   });
@@ -162,50 +162,50 @@ describe("windowSnapshot round trip", () => {
 
 describe("left rail FLOW/PIN persistence", () => {
   it("round-trips the position PIN independently from projection ref pins", () => {
-    const snap = serializeProject(project, {
+    const snap = serializeWorkspace(workspace, {
       pins: { left: ["plugin.tree"], right: [] },
     });
     expect(snap.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
     expect(snap.projection?.pins.left).toEqual(["plugin.tree"]);
 
-    const back = deserializeProject(snap, newSplitId);
+    const back = deserializeWorkspace(snap, newSplitId);
     expect(back.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
   });
 
   it("a pin leftover from the retired era is reverted to the default (flow) by one normalization", () => {
-    // While rail migration was withdrawn, serialization wrote pin@0 even for a project with no placement set
-    // (the default at that time). Trusting such a snapshot leaves the restored project anchored forever and the
+    // While rail migration was withdrawn, serialization wrote pin@0 even for a workspace with no placement set
+    // (the default at that time). Trusting such a snapshot leaves the restored workspace anchored forever and the
     // rail does not follow focus — the feature looks silently dead. A snapshot without the marker drops the
     // stored placement once (the same one-shot migration as vlNormalized).
-    const legacy = serializeProject({
-      ...project,
+    const legacy = serializeWorkspace({
+      ...workspace,
       leftRailPlacement: { mode: "pin", station: 0 },
     });
     delete legacy.railPlacementNormalized;
-    expect(deserializeProject(legacy, newSplitId).leftRailPlacement).toEqual({
+    expect(deserializeWorkspace(legacy, newSplitId).leftRailPlacement).toEqual({
       mode: "flow",
     });
   });
 
   it("with the marker present the PIN the user chose is kept as is (one-time guarantee)", () => {
-    const marked = serializeProject({
-      ...project,
+    const marked = serializeWorkspace({
+      ...workspace,
       leftRailPlacement: { mode: "pin", station: 60 },
     });
     expect(marked.railPlacementNormalized).toBe(true);
-    expect(deserializeProject(marked, newSplitId).leftRailPlacement).toEqual({
+    expect(deserializeWorkspace(marked, newSplitId).leftRailPlacement).toEqual({
       mode: "pin",
       station: 60,
     });
   });
 
   it("a snapshot with no placement field restores to the default (flow)", () => {
-    const legacy = serializeProject({
-      ...project,
+    const legacy = serializeWorkspace({
+      ...workspace,
       leftRailPlacement: { mode: "pin", station: 0 },
     });
     delete legacy.leftRailPlacement;
-    expect(deserializeProject(legacy, newSplitId).leftRailPlacement).toEqual({
+    expect(deserializeWorkspace(legacy, newSplitId).leftRailPlacement).toEqual({
       mode: "flow",
     });
   });
@@ -213,8 +213,8 @@ describe("left rail FLOW/PIN persistence", () => {
 
 describe("B3 — cwd/lastActivity persistence round trip", () => {
   it("a plugin view's cwd/lastActivity survives serialize and restore (optional — omitted when absent)", () => {
-    const tab: Project = {
-      ...project,
+    const tab: Workspace = {
+      ...workspace,
       spaces: [
         {
           id: "spc-aaaaaa",
@@ -242,8 +242,8 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
         },
       ],
     };
-    const snap = serializeProject(tab);
-    const back = deserializeProject(snap, newSplitId);
+    const snap = serializeWorkspace(tab);
+    const back = deserializeWorkspace(snap, newSplitId);
     const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
     const v1 = g.tabs.find((v) => v.id === "tab-aaaaaa") as Extract<Tab, { kind: "plugin" }>;
     const v2 = g.tabs.find((v) => v.id === "tab-bbbbbb") as Extract<Tab, { kind: "plugin" }>;
@@ -254,8 +254,8 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
   });
 
   it("a plugin view's state (observed status) and customLabel (user label) survive the round trip", () => {
-    const tab: Project = {
-      ...project,
+    const tab: Workspace = {
+      ...workspace,
       spaces: [
         {
           id: "spc-aaaaaa",
@@ -284,7 +284,7 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
         },
       ],
     };
-    const back = deserializeProject(serializeProject(tab), newSplitId);
+    const back = deserializeWorkspace(serializeWorkspace(tab), newSplitId);
     const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
     const v1 = g.tabs.find((v) => v.id === "tab-aaaaaa") as Extract<Tab, { kind: "plugin" }>;
     const v2 = g.tabs.find((v) => v.id === "tab-bbbbbb") as Extract<Tab, { kind: "plugin" }>;
@@ -303,8 +303,8 @@ describe("restore normalization — one migration per snapshot (the no-vertical-
     type: "leaf",
     value: { id, activeTabId: "", tabs: [] },
   });
-  const torn: Project = {
-    ...project,
+  const torn: Workspace = {
+    ...workspace,
     spaces: [
       {
         id: "spc-aaaaaa",
@@ -335,7 +335,7 @@ describe("restore normalization — one migration per snapshot (the no-vertical-
       },
     ],
   };
-  const rowXs = async (tab: Project): Promise<number[]> => {
+  const rowXs = async (tab: Workspace): Promise<number[]> => {
     const { computeSplitLayout } = await import("../lib/splitLayout");
     return computeSplitLayout(tab.spaces[0].layout)
       .gutters.filter((d) => d.dir === "row")
@@ -345,21 +345,21 @@ describe("restore normalization — one migration per snapshot (the no-vertical-
 
   it("an old snapshot with no marker is healed once, and re-serialization stamps the marker", async () => {
     sid = 0;
-    const legacy = serializeProject(torn);
+    const legacy = serializeWorkspace(torn);
     delete legacy.vlNormalized; // simulate an old snapshot from before the marker
-    const back = deserializeProject(legacy, newSplitId);
+    const back = deserializeWorkspace(legacy, newSplitId);
     const xs = await rowXs(back);
     expect(xs).toHaveLength(2);
     for (const x of xs) expect(x).toBeCloseTo(40.6, 10);
     // Re-serializing the healed state records the marker — every later restore is transform-free.
-    expect(serializeProject(back).vlNormalized).toBe(true);
+    expect(serializeWorkspace(back).vlNormalized).toBe(true);
   });
 
   it("a snapshot with the marker preserves a gap outside the drag rule (0.75~1.5) — restore is isomorphic", async () => {
     sid = 0;
-    const snap = serializeProject(torn);
+    const snap = serializeWorkspace(torn);
     expect(snap.vlNormalized).toBe(true); // serialization always records the marker
-    const back = deserializeProject(snap, newSplitId);
+    const back = deserializeWorkspace(snap, newSplitId);
     const xs = await rowXs(back);
     expect(xs[0]).toBeCloseTo(40.6, 10);
     expect(xs[1]).toBeCloseTo(39.5, 10); // a separate line the user made — not rewritten
@@ -367,22 +367,22 @@ describe("restore normalization — one migration per snapshot (the no-vertical-
 });
 
 describe("projection pin persistence (§4.5) — snapshot round trip", () => {
-  it("a projection put on serializeProject stays in the snapshot and an old snapshot has no such field", async () => {
-    const { serializeProject } = await import("./windowSnapshot");
+  it("a projection put on serializeWorkspace stays in the snapshot and an old snapshot has no such field", async () => {
+    const { serializeWorkspace } = await import("./windowSnapshot");
     const tab = {
-      id: "pjt-iiiiii", title: "P", root: "<local-evidence>/p", sidebarOpen: true, rightOpen: false,
+      id: "wsp-iiiiii", title: "P", root: "<local-evidence>/p", sidebarOpen: true, rightOpen: false,
       rightView: null,
       leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
       activeSpaceId: "spc-aaaaaa",
       spaces: [{ id: "spc-aaaaaa", title: "1", activePaneId: "pan-aaaaaa", layout: { type: "leaf", value: { id: "pan-aaaaaa", tabs: [], activeTabId: "" } } }],
     } as never;
-    const withProj = serializeProject(tab, {
+    const withProj = serializeWorkspace(tab, {
       pins: { left: ["a.t"], right: [] },
     });
     expect(withProj.projection).toEqual({
       pins: { left: ["a.t"], right: [] },
     });
-    const without = serializeProject(tab);
+    const without = serializeWorkspace(tab);
     expect(without).not.toHaveProperty("projection");
   });
 });

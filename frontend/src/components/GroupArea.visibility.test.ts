@@ -106,7 +106,7 @@ describe("content view effective visibility", () => {
     expect(source).toContain("logicalPaneId={group.id}");
   });
 
-  it("a parked project or space surface hides its active tab as well", () => {
+  it("a parked workspace or space surface hides its active tab as well", () => {
     expect(isViewSurfaceVisible(false, null, "v1", "v1")).toBe(false);
   });
 

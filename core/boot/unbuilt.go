@@ -46,7 +46,7 @@ var unbuilt = map[string]string{
 	"service_bus_push": "this build carries no service event bus",
 	"media_proxy_info": "this build runs no media proxy",
 
-	// Daemons a project declares.
+	// Daemons a workspace declares.
 	"daemon_start":    "this build was given no spawner that can own a long-running child",
 	"daemon_reap":     "this build was given no reaper that can ask what a live pid is running",
 	"daemon_run_once": "this build was given no spawner that can run a declared command once",
@@ -68,7 +68,7 @@ var unbuilt = map[string]string{
 	"ipc_socket_path":         "the control plane's address is the launcher's, and it is not published back through a command",
 	"ipc_cli_dir":             "this build installs no CLI directory",
 	"ipc_hello_info":          "the control plane answers system.hello on its own transport, not as a command",
-	"ipc_last_project_window": "this build keeps no per-project window history",
+	"ipc_last_workspace_window": "this build keeps no per-workspace window history",
 
 	// Application lifecycle.
 	"app_relaunch":         "this build cannot relaunch itself; the launcher owns the process",

@@ -202,10 +202,10 @@ export function endJourney(
 // is not interpolated (coordinate contract), so that axis has no observer. To catch the user
 // measurement "a↔b swaps twice" (2026-07-27), the screen fact is what counts, whatever code path
 // wrote the style — MutationObserver sees every inline style transition on the three layers where
-// parking applies (project plane, space plane, tab slot), independent of the writer.
+// parking applies (workspace plane, space plane, tab slot), independent of the writer.
 // A normal swap is exactly 2 tab-layer transitions (outgoing tab visible→parked, incoming tab parked→visible).
 export interface SwapRecord {
-  at: string; // layout/tab/<id> · project/<id> · space-plane
+  at: string; // layout/tab/<id> · workspace/<id> · space-plane
   kind: "park" | "restyle"; // park = parking axis switch, restyle = parking unchanged but another declaration changed
   from: string; // park: visible|parked, restyle: names of the changed declarations (summary)
   to: string;
@@ -239,7 +239,7 @@ const parkedInText = (style: string | null): boolean =>
 const swapName = (el: HTMLElement): string | null => {
   const node = el.dataset.node;
   if (node && node.startsWith("layout/tab/")) return node;
-  if (el.dataset.projectPlane) return `project/${el.dataset.projectPlane}`;
+  if (el.dataset.workspacePlane) return `workspace/${el.dataset.workspacePlane}`;
   if (el.classList.contains("space-plane")) return "space-plane";
   return null;
 };

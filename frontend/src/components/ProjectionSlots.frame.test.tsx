@@ -23,7 +23,7 @@ vi.mock("./PluginViewHost", () => ({
 
 import { ProjectionSlots } from "./ProjectionSlots";
 import { useProjection } from "../state/projection";
-import { useSessions, type Project, type Tab } from "../state/sessions";
+import { useSessions, type Workspace, type Tab } from "../state/sessions";
 import { useSettings } from "../state/settings";
 import { initialSidebarLayout } from "../state/sidebarLayout";
 import { useViewRegistry, type PluginViewProvider } from "../plugins/viewRegistry";
@@ -50,9 +50,9 @@ function pluginView(id: string, pluginId: string, view: string): Tab {
   return { id, kind: "plugin", title: id, pluginId, view };
 }
 
-function tab(tabs: Tab[], activeTabId: string): Project {
+function tab(tabs: Tab[], activeTabId: string): Workspace {
   return {
-    id: "pjt-aaaaaa",
+    id: "wsp-aaaaaa",
     title: "P",
     sidebarOpen: true,
     rightOpen: false,
@@ -68,7 +68,7 @@ function tab(tabs: Tab[], activeTabId: string): Project {
       },
     ],
     activeSpaceId: "spc-aaaaaa",
-  } as unknown as Project;
+  } as unknown as Workspace;
 }
 
 function registerFn(plug: string, content: string, railView: string) {
@@ -95,8 +95,8 @@ let root: Root;
 
 beforeEach(() => {
   useViewRegistry.setState({ views: {}, version: 0, badges: {} });
-  useProjection.setState({ byProject: {} });
-  useSessions.setState({ projects: [], activeId: "" });
+  useProjection.setState({ byWorkspace: {} });
+  useSessions.setState({ workspaces: [], activeId: "" });
   useSettings.setState({ language: "ko" });
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -112,7 +112,7 @@ const render = (commitProjection = true) =>
   act(() => {
     root.render(
       <ProjectionSlots
-        projectId="pjt-aaaaaa"
+        projectId="wsp-aaaaaa"
         root="<local-evidence>/p1"
         paneId={null}
         side="left"
@@ -124,7 +124,7 @@ const render = (commitProjection = true) =>
 describe("rail slot common form (§12)", () => {
   it("a live slot renders as a host header (icon and title) plus a body — only the inside is the feature's", () => {
     registerFn("termplug", "term", "tree");
-    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "wsp-aaaaaa" });
     render();
     const header = host.querySelector<HTMLElement>(".projection-header");
     expect(header).not.toBeNull();
@@ -137,7 +137,7 @@ describe("rail slot common form (§12)", () => {
 
   it("the toggle in the first left slot header switches railLook pane↔ground and persists it", () => {
     registerFn("termplug", "term", "tree");
-    useSessions.setState({ projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "wsp-aaaaaa" });
     render();
     expect(useSettings.getState().railLook).toBe("ground"); // the default = SIDEBAR-CHROME (the design canon)
     const toggle = host.querySelector<HTMLElement>('[data-node="projection/left/look"]');
@@ -152,19 +152,19 @@ describe("rail slot common form (§12)", () => {
     registerFn("termplug", "term", "tree");
     registerFn("kanplug", "board", "nav");
     useSessions.setState({
-      projects: [
+      workspaces: [
         tab(
           [pluginView("tab-aaaaaa", "termplug", "term"), pluginView("tab-bbbbbb", "kanplug", "board")],
           "tab-aaaaaa",
         ),
       ],
-      activeId: "pjt-aaaaaa",
+      activeId: "wsp-aaaaaa",
     });
     render();
     // Active view switch → resolution changes from termplug.tree to kanplug.nav (rebinding).
     act(() => {
       useSessions.setState((s) => ({
-        projects: s.projects.map((t) => ({
+        workspaces: s.workspaces.map((t) => ({
           ...t,
           spaces: t.spaces.map((c) => ({
             ...c,
@@ -184,8 +184,8 @@ describe("host header binding name (§12-①)", () => {
     // the name in the host header is the single place that shows the sidebar's bound view.
     registerFn("termplug", "term", "tree");
     useSessions.setState({
-      projects: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")],
-      activeId: "pjt-aaaaaa",
+      workspaces: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")],
+      activeId: "wsp-aaaaaa",
     });
     render();
     const bound = host.querySelector<HTMLElement>(".projection-bound");
@@ -198,19 +198,19 @@ describe("handover (§12-④)", () => {
     registerFn("termplug", "term", "tree");
     registerFn("kanplug", "board", "nav");
     useSessions.setState({
-      projects: [
+      workspaces: [
         tab(
           [pluginView("tab-aaaaaa", "termplug", "term"), pluginView("tab-bbbbbb", "kanplug", "board")],
           "tab-aaaaaa",
         ),
       ],
-      activeId: "pjt-aaaaaa",
+      activeId: "wsp-aaaaaa",
     });
     render();
     render(false);
     act(() => {
       useSessions.setState((s) => ({
-        projects: s.projects.map((t) => ({
+        workspaces: s.workspaces.map((t) => ({
           ...t,
           spaces: t.spaces.map((c) => ({
             ...c,

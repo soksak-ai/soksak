@@ -16,7 +16,7 @@
 import { moduleState } from "../lib/moduleState";
 import { invoke } from "../framework";
 import { rafThrottle } from "./rafThrottle";
-import { allGroups, useSessions, type Project } from "../state/sessions";
+import { allGroups, useSessions, type Workspace } from "../state/sessions";
 import { usePlugins } from "../state/plugins";
 import { browserLabel, browserLabelPrefix } from "./webviewLabels";
 import { ownsNativeSurfaceFromManifests } from "./nativeSurfaceOwnership";
@@ -29,7 +29,7 @@ export type OwnsSurface = (pluginId: string, viewId: string) => boolean;
 // ownsSurface/labelOf makes unit tests independent of plugin state and of the window namespace
 // (currentWindowLabel).
 export function collectWebviewLabels(
-  tabs: readonly Project[],
+  tabs: readonly Workspace[],
   ownsSurface: OwnsSurface,
   labelOf: (viewId: string) => string = browserLabel,
 ): Set<string> {
@@ -50,7 +50,7 @@ export function collectWebviewLabels(
 }
 
 function liveBrowserLabels(): Set<string> {
-  return collectWebviewLabels(useSessions.getState().projects, ownsNativeSurfaceFromManifests);
+  return collectWebviewLabels(useSessions.getState().workspaces, ownsNativeSurfaceFromManifests);
 }
 
 // The "already attached" record must survive the hot-swap boundary — if only this flag is lost,

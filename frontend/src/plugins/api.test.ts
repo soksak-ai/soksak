@@ -67,7 +67,7 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
     unregisterCommand: vi.fn(() => true),
     getCommandDanger: () => undefined,
     on: vi.fn(() => ({ dispose: () => {} })),
-    currentProject: () => ({ id: "pjt-aaaaaa", root: "/repo" }),
+    currentWorkspace: () => ({ id: "wsp-aaaaaa", root: "/repo" }),
     onFsChange: () => () => {},
     onDataChange: () => () => {},
     onClipboardChange: () => () => {},
@@ -256,14 +256,14 @@ describe("app.pty.registerIo — substrate IO registration", () => {
 });
 
 describe("permission surface gate (§0-2)", () => {
-  it("leaves an undeclared permission surface undefined and keeps events/project always present", () => {
+  it("leaves an undeclared permission surface undefined and keeps events/workspace always present", () => {
     const { api } = buildPluginApi(manifestOf({}), "/d", fakeDeps());
     expect(api.commands).toBeUndefined();
     expect(api.ui).toBeUndefined();
     expect(api.storage).toBeUndefined();
     expect(api.fs).toBeUndefined();
     expect(api.events).toBeDefined();
-    expect(api.project.current()).toEqual({ id: "pjt-aaaaaa", root: "/repo" });
+    expect(api.workspace.current()).toEqual({ id: "wsp-aaaaaa", root: "/repo" });
     expect(api.appVersion).toBe("1.0.0");
     expect(api.pluginId).toBe("demo");
   });

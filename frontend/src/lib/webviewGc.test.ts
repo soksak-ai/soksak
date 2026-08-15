@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 import { collectWebviewLabels, gateAfterConsume, type OwnsSurface } from "./webviewGc";
 import { splitLeaf } from "../state/splitTree";
-import type { Project, Tab, Pane, Space } from "../state/sessions";
+import type { Workspace, Tab, Pane, Space } from "../state/sessions";
 
 // Test label double: independent of the window namespace (currentWindowLabel) — viewId used as-is
 // for b-<id>. Built by string concatenation, not an inline template (the single-truth guard blocks
@@ -36,9 +36,9 @@ function content(views: Tab[]): Space {
   return { id: "spc-aaaaaa", title: "1", layout: splitLeaf(group(views)), activePaneId: "pan-aaaaaa" };
 }
 
-function tab(views: Tab[]): Project {
+function tab(views: Tab[]): Workspace {
   return {
-    id: "pjt-aaaaaa",
+    id: "wsp-aaaaaa",
     title: "p",
     sidebarOpen: false,
     rightOpen: false,
@@ -110,7 +110,7 @@ describe("collectWebviewLabels — label set of webview-owning views, keyed on t
   });
 
   it("collects every owning view spread across spaces and groups", () => {
-    const t: Project = {
+    const t: Workspace = {
       ...tab([pluginView("tab-aaaaaa", "soksak-plugin-browser-native")]),
       spaces: [
         content([pluginView("tab-aaaaaa", "soksak-plugin-browser-native")]),

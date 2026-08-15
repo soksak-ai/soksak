@@ -13,12 +13,12 @@ import { describe, it, expect } from "vitest";
 import { snapshotSize } from "./snapshotGeneration";
 
 // Built in the **stored shape** — the shape serialization actually leaves behind.
-const snap = (projects: number, tabsPerSpace = 1, spacesPerProject = 1) => ({
-  activeId: "pjt-zzzzzz",
-  projects: Array.from({ length: projects }, (_, i) => ({
+const snap = (workspaces: number, tabsPerSpace = 1, spacesPerWorkspace = 1) => ({
+  activeId: "wsp-zzzzzz",
+  workspaces: Array.from({ length: workspaces }, (_, i) => ({
     id: `p${i}`,
     root: `/r${i}`,
-    contents: Array.from({ length: spacesPerProject }, (_, s) => ({
+    contents: Array.from({ length: spacesPerWorkspace }, (_, s) => ({
       id: `s${i}-${s}`,
       layout: {
         t: "l",
@@ -29,21 +29,21 @@ const snap = (projects: number, tabsPerSpace = 1, spacesPerProject = 1) => ({
 });
 
 describe("snapshot size is counted from the stored shape", () => {
-  it("projects, spaces and tabs are counted", () => {
-    expect(snapshotSize(snap(2, 3, 2))).toEqual({ projects: 2, spaces: 4, tabs: 12 });
+  it("workspaces, spaces and tabs are counted", () => {
+    expect(snapshotSize(snap(2, 3, 2))).toEqual({ workspaces: 2, spaces: 4, tabs: 12 });
   });
 
   it("an empty snapshot is 0", () => {
-    expect(snapshotSize(snap(0))).toEqual({ projects: 0, spaces: 0, tabs: 0 });
+    expect(snapshotSize(snap(0))).toEqual({ workspaces: 0, spaces: 0, tabs: 0 });
   });
 
   it("a missing snapshot is 0 too — a throw at the counting site fails the whole undo query", () => {
-    expect(snapshotSize(null)).toEqual({ projects: 0, spaces: 0, tabs: 0 });
+    expect(snapshotSize(null)).toEqual({ workspaces: 0, spaces: 0, tabs: 0 });
   });
 
   it("tabs in a nested split are counted too — reading one level only drops the tabs of a split space", () => {
     const nested = {
-      projects: [
+      workspaces: [
         {
           contents: [
             {
@@ -59,12 +59,12 @@ describe("snapshot size is counted from the stored shape", () => {
         },
       ],
     };
-    expect(snapshotSize(nested)).toEqual({ projects: 1, spaces: 1, tabs: 3 });
+    expect(snapshotSize(nested)).toEqual({ workspaces: 1, spaces: 1, tabs: 3 });
   });
 
   it("the runtime shape is not counted — anything that is not the stored shape is 0", () => {
     // Without this check an implementation that confuses the two shapes passes GREEN (measured: it did).
-    const runtime = { projects: [{ spaces: [{ layout: { type: "leaf", tabs: [1, 2] } }] }] };
-    expect(snapshotSize(runtime)).toEqual({ projects: 1, spaces: 0, tabs: 0 });
+    const runtime = { workspaces: [{ spaces: [{ layout: { type: "leaf", tabs: [1, 2] } }] }] };
+    expect(snapshotSize(runtime)).toEqual({ workspaces: 1, spaces: 0, tabs: 0 });
   });
 });

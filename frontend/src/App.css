@@ -58,14 +58,14 @@
   background: transparent;
 }
 
-/* Tab rows (project and view tabs): the native overlay bar is removed outright.
+/* Tab rows (workspace and view tabs): the native overlay bar is removed outright.
    A macOS overlay scrollbar ignores width, so it is hidden with display:none and
    the row scrolls by trackpad or wheel. */
-.project-tabs,
+.workspace-tabs,
 .tabs {
   scrollbar-width: none;
 }
-.project-tabs::-webkit-scrollbar,
+.workspace-tabs::-webkit-scrollbar,
 .tabs::-webkit-scrollbar {
   display: none;
 }
@@ -151,7 +151,7 @@ body,
   user-select: none;
 }
 
-.project-tabs {
+.workspace-tabs {
   display: flex;
   /* The chrome row standard — the same horizontal line and height as the left
      sidebar tabs (.sidebar-left-tabs) and the right header (.plugin-side-head).
@@ -167,7 +167,7 @@ body,
   overflow: visible;
 }
 
-.project-tab {
+.workspace-tab {
   position: relative;
   display: flex;
   align-items: center;
@@ -180,24 +180,24 @@ body,
   cursor: pointer;
   white-space: nowrap;
 }
-.project-tab.active {
+.workspace-tab.active {
   background: rgba(127, 127, 127, 0.28);
   color: var(--fg);
 }
-.project-tab:hover {
+.workspace-tab:hover {
   background: rgba(127, 127, 127, 0.22);
 }
 /* Close button: the same inline × as a view tab (.icon-btn--mini owns the
      geometry). */
-.project-tab-close {
+.workspace-tab-close {
   opacity: 0.55;
 }
-.project-tab:hover .project-tab-close,
-.project-tab-close:hover {
+.workspace-tab:hover .workspace-tab-close,
+.workspace-tab-close:hover {
   opacity: 1;
   background: var(--inset);
 }
-.project-tab-add {
+.workspace-tab-add {
   border: none;
   background: transparent;
   color: rgba(127, 127, 127, 0.9);
@@ -207,7 +207,7 @@ body,
   padding: 0 6px;
   border-radius: 5px;
 }
-.project-tab-add:hover {
+.workspace-tab-add:hover {
   background: rgba(127, 127, 127, 0.18);
 }
 
@@ -396,7 +396,7 @@ body,
 .settings-row input[type="text"],
 .settings-row input[type="number"],
 
-/* New project modal */
+/* New workspace modal */
 .np-path {
   font-size: 10px;
   opacity: 0.55;
@@ -457,7 +457,7 @@ body,
   background: rgba(127, 127, 127, 0.18);
 }
 
-/* Body row: the project rail (in left mode) plus the terminal stack. */
+/* Body row: the workspace rail (in left mode) plus the terminal stack. */
 .app-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -465,10 +465,10 @@ body,
   flex-direction: row;
 }
 
-/* Left-mode project rail, vertical tabs. Width is inline and set by dragging. */
-.project-rail {
+/* Left-mode workspace rail, vertical tabs. Width is inline and set by dragging. */
+.workspace-rail {
   position: relative;
-  /* Project switching and + are permanent chrome. A DOM browser later in document
+  /* Workspace switching and + are permanent chrome. A DOM browser later in document
      order still does not paint over this rail. Sibling order for a native
      surface belongs to the adapter (B09). */
   z-index: 7;
@@ -483,7 +483,7 @@ body,
 }
 /* The drag handle on the rail/body boundary — an overlay of zero layout width
    (see .sidebar-resizer). The 1px boundary line stays. */
-.project-rail-resizer {
+.workspace-rail-resizer {
   flex: 0 0 auto;
   width: 5px;
   margin-left: -2px;
@@ -493,19 +493,19 @@ body,
   transition: background 0.12s ease;
   z-index: 3;
 }
-.project-rail-resizer:hover,
-.project-rail-resizer:active {
+.workspace-rail-resizer:hover,
+.workspace-rail-resizer:active {
   background: rgba(127, 127, 127, 0.4);
 }
-.project-rail .project-tab {
+.workspace-rail .workspace-tab {
   width: 100%;
 }
 /* The rail clips on overflow, so the close button goes inside the tab, top right. */
-.project-rail .project-tab-close {
+.workspace-rail .workspace-tab-close {
   top: 3px;
   right: 3px;
 }
-.project-rail .project-tab-add {
+.workspace-rail .workspace-tab-add {
   width: 100%;
   height: 24px;
 }
@@ -517,7 +517,7 @@ body,
   min-height: 0;
   overflow: hidden;
 }
-.project-plane {
+.workspace-plane {
   position: absolute;
   inset: 0;
   display: flex;
@@ -1875,9 +1875,9 @@ body,
   background: transparent;
 }
 
-/* ── Workspace-level tabs (.project-tab for a project, .space-tab for content)
+/* ── Workspace-level tabs (.workspace-tab for a workspace, .space-tab for content)
    — SKIN wsA/wsI ── */
-.project-tab,
+.workspace-tab,
 .space-tab {
   padding: 0 12px;
   border-radius: 7px;
@@ -1886,11 +1886,11 @@ body,
   border: 1px solid transparent;
   color: var(--fg2);
 }
-.project-tab:hover,
+.workspace-tab:hover,
 .space-tab:hover {
   background: var(--inset);
 }
-.project-tab.active,
+.workspace-tab.active,
 .space-tab.active {
   font-weight: 600;
   background: var(--card);
@@ -1902,11 +1902,11 @@ body,
 :root[data-tab-shape="pill"] {
   --ws-pad: 4px;
 }
-:root[data-tab-shape="pill"] .project-tab,
+:root[data-tab-shape="pill"] .workspace-tab,
 :root[data-tab-shape="pill"] .space-tab {
   border-radius: 8px;
 }
-:root[data-tab-shape="pill"] .project-tab.active,
+:root[data-tab-shape="pill"] .workspace-tab.active,
 :root[data-tab-shape="pill"] .space-tab.active {
   background: var(--inset);
   border-color: var(--bd);
@@ -1916,7 +1916,7 @@ body,
 :root[data-tab-shape="underline"] {
   --ws-pad: 0px;
 }
-:root[data-tab-shape="underline"] .project-tab,
+:root[data-tab-shape="underline"] .workspace-tab,
 :root[data-tab-shape="underline"] .space-tab {
   padding: 0 3px;
   border-radius: 0;
@@ -1924,12 +1924,12 @@ body,
   border: none;
   border-bottom: 1.5px solid transparent;
 }
-:root[data-tab-shape="underline"] .project-tab:hover,
+:root[data-tab-shape="underline"] .workspace-tab:hover,
 :root[data-tab-shape="underline"] .space-tab:hover {
   background: transparent;
   color: var(--fg);
 }
-:root[data-tab-shape="underline"] .project-tab.active,
+:root[data-tab-shape="underline"] .workspace-tab.active,
 :root[data-tab-shape="underline"] .space-tab.active {
   background: transparent;
   box-shadow: none;
@@ -1939,14 +1939,14 @@ body,
 :root[data-tab-shape="inverse"] {
   --ws-pad: 6px;
 }
-:root[data-tab-shape="inverse"] .project-tab,
+:root[data-tab-shape="inverse"] .workspace-tab,
 :root[data-tab-shape="inverse"] .space-tab {
   padding: 0 10px;
   border-radius: 0;
   font-size: 12.5px;
   border: none;
 }
-:root[data-tab-shape="inverse"] .project-tab.active,
+:root[data-tab-shape="inverse"] .workspace-tab.active,
 :root[data-tab-shape="inverse"] .space-tab.active {
   font-weight: 700;
   background: var(--acc);
@@ -1957,12 +1957,12 @@ body,
 :root[data-tab-shape="round"] {
   --ws-pad: 4px;
 }
-:root[data-tab-shape="round"] .project-tab,
+:root[data-tab-shape="round"] .workspace-tab,
 :root[data-tab-shape="round"] .space-tab {
   padding: 0 14px;
   border-radius: 99px;
 }
-:root[data-tab-shape="round"] .project-tab.active,
+:root[data-tab-shape="round"] .workspace-tab.active,
 :root[data-tab-shape="round"] .space-tab.active {
   background: var(--card);
   border-color: var(--bd);
@@ -2291,7 +2291,7 @@ body,
 }
 
 /* ── Side areas ── */
-.project-rail {
+.workspace-rail {
   background: var(--side);
 }
 
@@ -2381,7 +2381,7 @@ body::after {
   display: flex;
   flex-direction: column;
 }
-.dmodal-project {
+.dmodal-workspace {
   width: 460px;
   top: 120px;
 }
@@ -3009,8 +3009,8 @@ select.dctl {
   text-align: center;
 }
 
-/* ── Project rail (reference 54px): a 34px number chip, a dotted line and + ── */
-.project-rail {
+/* ── Workspace rail (reference 54px): a 34px number chip, a dotted line and + ── */
+.workspace-rail {
   align-items: center;
   gap: 10px;
   padding: 12px 0;
@@ -3041,7 +3041,7 @@ select.dctl {
   max-width: 100%;
 }
 
-/* A read-only value, such as the folder in project settings — it occupies the
+/* A read-only value, such as the folder in workspace settings — it occupies the
    same place as an input but looks uneditable. */
 .dctl-static {
   overflow: hidden;
@@ -3053,9 +3053,9 @@ select.dctl {
   background: transparent;
 }
 
-/* The project's identifying colour dot on the top tab, and the colour palette in
-   the project settings modal. */
-.project-tab-dot {
+/* The workspace's identifying colour dot on the top tab, and the colour palette in
+   the workspace settings modal. */
+.workspace-tab-dot {
   flex: 0 0 auto;
   width: 8px;
   height: 8px;
@@ -3167,7 +3167,7 @@ select.dctl {
 
 /* ── Right plugin sidebar (overlay) ─────────────────────────────────────────
    It is an overlay above the content, not a flex split — toggling it does not
-   resize the body (terminal or editor). It is absolute against .project-plane
+   resize the body (terminal or editor). It is absolute against .workspace-plane
    (position:absolute inset:0). */
 .sidebar-right {
   position: absolute;
@@ -3718,7 +3718,7 @@ select.dctl {
 }
 /* The projection card on the left rail is the same kind of card as a content
    cell (§B4 floating surface). It had neither border nor fill: the two vertical
-   lines were the resizers on either side, .project-rail-resizer and
+   lines were the resizers on either side, .workspace-rail-resizer and
    .sidebar-resizer (measured). Inside and outside the card were therefore exactly
    the same colour, and one 1px line was the only signal of an edge.
    That is why it looked wrong only here. A content cell has a fill (--bg for the
@@ -4011,14 +4011,14 @@ select.dctl {
   height: 16px;
   border-radius: 50%;
 }
-/* The close × in three places: project-tab-close, space-tab-close and
+/* The close × in three places: workspace-tab-close, space-tab-close and
    tab-close. The icon-btn--mini box is 16px, so the glyph inside comes out small
    too. The box is enlarged, and because the lucide x glyph only draws in the
    middle half of its viewBox the svg is made larger than the box so the × reads
    clearly. Opacity beats .icon-btn (0.7) on the same element by one step of
    specificity: 0.85 bare, 100% on hover. All three follow the same rule — leave
    one out and that tab alone stays small. */
-.icon-btn.project-tab-close,
+.icon-btn.workspace-tab-close,
 .icon-btn.space-tab-close,
 .icon-btn.tab-close {
   width: 14px;
@@ -4026,14 +4026,14 @@ select.dctl {
   padding: 0;
   opacity: 0.85;
 }
-.icon-btn.project-tab-close svg,
+.icon-btn.workspace-tab-close svg,
 .icon-btn.space-tab-close svg,
 .icon-btn.tab-close svg {
   width: 18px;
   height: 18px;
 }
-.project-tab:hover .icon-btn.project-tab-close,
-.icon-btn.project-tab-close:hover,
+.workspace-tab:hover .icon-btn.workspace-tab-close,
+.icon-btn.workspace-tab-close:hover,
 .icon-btn.space-tab-close:hover,
 .icon-btn.tab-close:hover {
   opacity: 1;
@@ -4077,9 +4077,9 @@ select.dctl {
      gate enforces it; vertical lists and the rail are the exceptions. */
 .tabs .tab,
 .tabs .tab-add,
-.project-tab,
+.workspace-tab,
 .space-tab,
-.project-tab-add,
+.workspace-tab-add,
 .space-tab-add {
   height: auto;
   align-self: stretch;
@@ -4091,7 +4091,7 @@ select.dctl {
   align-items: stretch;
 }
 .tab-add,
-.project-tab-add,
+.workspace-tab-add,
 .space-tab-add {
   width: auto;
   padding: 0 10px;
@@ -4115,13 +4115,13 @@ select.dctl {
 }
 
 /* ── The chrome row contract (docs/UI.md R1a): single-level bands that are
-   horizontal neighbours — the right header, the left host tabs, the project tabs
+   horizontal neighbours — the right header, the left host tabs, the workspace tabs
    and the content tabs — are one row, and this rule owns the height. An
    individual block must not set height (cssContract R3). */
 .plugin-side-head,
 .sidebar-left-tabs,
 .space-tabs,
-.project-tabs {
+.workspace-tabs {
   height: var(--chrome-row-h, 37px);
 }
 
@@ -4253,7 +4253,7 @@ select.dctl {
   background: rgba(127, 127, 127, 0.18);
 }
 
-/* ── The project picker: the first screen of a window with no projects (P6) ─── */
+/* ── The workspace picker: the first screen of a window with no workspaces (P6) ─ */
 /* The banner for a missing root (B1). The tab stays and the user decides what to
    do with it — nothing is deleted without them. */
 .root-missing-banner {
@@ -4359,7 +4359,7 @@ select.dctl {
   opacity: 0.85;
 }
 
-/* Rail: a project chip belonging to another window — a dotted border and dimming
+/* Rail: a workspace chip belonging to another window — a dotted border and dimming
    separate it from this window's, and a click focuses that window. */
 .rail-chip.other {
   opacity: 0.55;
@@ -4367,7 +4367,7 @@ select.dctl {
 }
 .rail-chip.other:hover { opacity: 0.9; }
 
-/* Rail: a recent project that is not open — quieter than another window's (no
+/* Rail: a recent workspace that is not open — quieter than another window's (no
    dots, dimming only), and a click opens it in this window. */
 .rail-chip.recent { opacity: 0.4; }
 .rail-chip.recent:hover { opacity: 0.85; }
@@ -4424,9 +4424,9 @@ select.dctl {
 /* Pinned (always on top) — colour and background make the state unambiguous. */
 .orch-pin.active { color: var(--acc); background: color-mix(in srgb, var(--acc) 16%, transparent); }
 
-/* The orchestrator's left side is a list of projects, not windows or monitors.
+/* The orchestrator's left side is a list of workspaces, not windows or monitors.
    The label filters the feed; the icon on the right brings the window forward. */
-/* A project entry is one borderless row: a label and an icon on the right.
+/* A workspace entry is one borderless row: a label and an icon on the right.
    Background and colour are the only separation. */
 .orch-proj {
   display: flex;
@@ -4489,7 +4489,7 @@ select.dctl {
 .orch-proj-call:hover { opacity: 1; color: var(--acc); }
 .orch-feed-scope { opacity: 0.7; font-weight: 400; }
 
-/* A project that is not open is dimmed to separate it from an open one. Its
+/* A workspace that is not open is dimmed to separate it from an open one. Its
    label is not selectable (there is no window) and does not open it — only the
    arrow on the right does. The arrow keeps one shape and separates by colour:
    accent on hover when open, neutral brightness when closed. */
@@ -4558,7 +4558,7 @@ select.dctl {
   text-align: center;
 }
 
-/* The bottom of the control plane rail — where a project is created; one surface
+/* The bottom of the control plane rail — where a workspace is created; one surface
    for opening and creating. */
 .orch-proj-new {
   display: flex;

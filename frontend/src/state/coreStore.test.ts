@@ -30,31 +30,31 @@ function harness(initialLs?: Record<string, string>) {
 
 // Missing and empty are different — if the two produce the same value, the consumer deletes an asset.
 //
-// RED evidence (measured 2026-08-01): a window respawn hydrates the snapshot and, on `projects.length === 0`,
+// RED evidence (measured 2026-08-01): a window respawn hydrates the snapshot and, on `workspaces.length === 0`,
 // deletes that window's slot from the ledger. But when the authority was empty, hydrate **wrote the fallback
 // in as the authority**, so a window with no snapshot and a window the user emptied gave the same answer.
 // That window never opens again.
 describe("read: missing and empty are separate answers", () => {
   it("a value in the authority is found", async () => {
     const h = harness();
-    h.remote.set("window/w-1", { projects: [1] });
-    const store = makeCoreStore<{ projects: number[] }>({
+    h.remote.set("window/w-1", { workspaces: [1] });
+    const store = makeCoreStore<{ workspaces: number[] }>({
       key: "window/w-1",
       lsKey: "ls.w1",
-      fallback: { projects: [] },
+      fallback: { workspaces: [] },
       invoke: h.invoke,
       onDataChange: h.onDataChange,
       localStorage: h.localStorage,
     });
-    expect(await store.read()).toEqual({ found: true, value: { projects: [1] } });
+    expect(await store.read()).toEqual({ found: true, value: { workspaces: [1] } });
   });
 
   it("nothing in the authority is not found — the fallback is not returned as if it were the value", async () => {
     const h = harness();
-    const store = makeCoreStore<{ projects: number[] }>({
+    const store = makeCoreStore<{ workspaces: number[] }>({
       key: "window/w-2",
       lsKey: "ls.w2",
-      fallback: { projects: [] },
+      fallback: { workspaces: [] },
       invoke: h.invoke,
       onDataChange: h.onDataChange,
       localStorage: h.localStorage,
@@ -64,10 +64,10 @@ describe("read: missing and empty are separate answers", () => {
 
   it("an empty authority is not filled with an empty value — that would fix missing as fact at that moment", async () => {
     const h = harness();
-    const store = makeCoreStore<{ projects: number[] }>({
+    const store = makeCoreStore<{ workspaces: number[] }>({
       key: "window/w-3",
       lsKey: "ls.w3",
-      fallback: { projects: [] },
+      fallback: { workspaces: [] },
       invoke: h.invoke,
       onDataChange: h.onDataChange,
       localStorage: h.localStorage,
@@ -78,17 +78,17 @@ describe("read: missing and empty are separate answers", () => {
   });
 
   it("content in the cache is moved to the authority — the uninterrupted migration path stays", async () => {
-    const h = harness({ "ls.w4": JSON.stringify({ projects: [7] }) });
-    const store = makeCoreStore<{ projects: number[] }>({
+    const h = harness({ "ls.w4": JSON.stringify({ workspaces: [7] }) });
+    const store = makeCoreStore<{ workspaces: number[] }>({
       key: "window/w-4",
       lsKey: "ls.w4",
-      fallback: { projects: [] },
+      fallback: { workspaces: [] },
       invoke: h.invoke,
       onDataChange: h.onDataChange,
       localStorage: h.localStorage,
     });
-    expect(await store.hydrate()).toEqual({ projects: [7] });
-    expect(h.remote.get("window/w-4")).toEqual({ projects: [7] });
+    expect(await store.hydrate()).toEqual({ workspaces: [7] });
+    expect(h.remote.get("window/w-4")).toEqual({ workspaces: [7] });
   });
 
   it("a failed read throws — an unreadable authority is not folded into missing", async () => {
@@ -97,10 +97,10 @@ describe("read: missing and empty are separate answers", () => {
       if (cmd === "data_kv_get") throw new Error("no owner");
       return undefined;
     });
-    const store = makeCoreStore<{ projects: number[] }>({
+    const store = makeCoreStore<{ workspaces: number[] }>({
       key: "window/w-5",
       lsKey: "ls.w5",
-      fallback: { projects: [] },
+      fallback: { workspaces: [] },
       invoke: h.invoke,
       onDataChange: h.onDataChange,
       localStorage: h.localStorage,

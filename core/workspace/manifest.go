@@ -1,4 +1,4 @@
-package project
+package workspace
 
 import (
 	"encoding/json"
@@ -47,7 +47,7 @@ type ManifestLedger struct {
 
 func NewManifestLedger(store ManifestStore) *ManifestLedger {
 	if store == nil {
-		panic("project: NewManifestLedger needs a store to merge into")
+		panic("workspace: NewManifestLedger needs a store to merge into")
 	}
 	return &ManifestLedger{store: store}
 }
@@ -113,7 +113,7 @@ func (ledger *ManifestLedger) read() (map[string]any, error) {
 	}
 	manifest, isObject := decoded.(map[string]any)
 	if !isObject {
-		return nil, i18n.Errorf("project.manifest.notObject", map[string]string{"type": fmt.Sprintf("%T", decoded)})
+		return nil, i18n.Errorf("workspace.manifest.notObject", map[string]string{"type": fmt.Sprintf("%T", decoded)})
 	}
 	if _, present := manifest["slots"]; !present {
 		// Absence is a shape to establish, not a refusal: the first merge needs
@@ -205,7 +205,7 @@ func SetFocused(manifest map[string]any, label string) bool {
 func slotsOf(manifest map[string]any) ([]any, error) {
 	slots, isList := manifest["slots"].([]any)
 	if !isList {
-		return nil, i18n.Errorf("project.manifest.slotsNotList", map[string]string{"type": fmt.Sprintf("%T", manifest["slots"])})
+		return nil, i18n.Errorf("workspace.manifest.slotsNotList", map[string]string{"type": fmt.Sprintf("%T", manifest["slots"])})
 	}
 	return slots, nil
 }
@@ -215,7 +215,7 @@ func labelOf(entry map[string]any) (string, error) {
 	if !isText || label == "" {
 		// A slot with no label can never be matched again, so it can never be
 		// replaced or pruned.
-		return "", i18n.Errorf("project.manifest.entryNoLabel", map[string]string{"label": fmt.Sprintf("%v", entry["label"])})
+		return "", i18n.Errorf("workspace.manifest.entryNoLabel", map[string]string{"label": fmt.Sprintf("%v", entry["label"])})
 	}
 	return label, nil
 }

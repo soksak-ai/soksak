@@ -25,14 +25,14 @@ describe("data.kv.entries", () => {
   it("answers the prefix key/value snapshot in one call, in the same public shape", async () => {
     invoke.mockResolvedValue({
       ns: "core",
-      entries: [{ key: "window/w-1", value: { projects: [] } }],
+      entries: [{ key: "window/w-1", value: { workspaces: [] } }],
     });
 
     const out = await execute("data.kv.entries", { ns: "core", prefix: "window" }, {});
 
     expect(out).toMatchObject({
       ok: true,
-      data: { ns: "core", entries: [{ key: "window/w-1", value: { projects: [] } }] },
+      data: { ns: "core", entries: [{ key: "window/w-1", value: { workspaces: [] } }] },
     });
     expect(invoke).toHaveBeenCalledOnce();
     expect(invoke).toHaveBeenCalledWith("data_kv_entries", { ns: "core", prefix: "window" });

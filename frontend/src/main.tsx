@@ -42,10 +42,10 @@ import { initPluginHost } from "./plugins/host";
 import { initNotify } from "./lib/notify";
 import { currentWindowLabel } from "./lib/webviewLabels";
 import { onBootCacheDiscarded } from "./state/coreStore";
-import { claimRoots } from "./state/projectRegistry";
-import { recordRecentProject } from "./state/recentProjects";
+import { claimRoots } from "./state/workspaceRegistry";
+import { recordRecentWorkspace } from "./state/recentWorkspaces";
 import { useSessions } from "./state/sessions";
-import { daemonOnProjectOpen } from "./commands/catalogDaemon";
+import { daemonOnWorkspaceOpen } from "./commands/catalogDaemon";
 import { initSkillRefresh } from "./state/skillRefresh";
 import { startProjectionTracking } from "./state/projectionWiring";
 import {
@@ -90,12 +90,12 @@ startTerminalStatusBridge();
 // Activity feed (A1) — publishes this window's event and registry execution instrumentation to the core hub (P12).
 startActivityFeed();
 
-// Boot (P3): prepare the first project root (~/.soksak/projects/project1), then render —
-// a project without a root cannot exist (P1), so the app starts after the root is ready.
+// Boot (P3): prepare the first workspace root (~/.soksak/workspaces/workspace1), then render —
+// a workspace without a root cannot exist (P1), so the app starts after the root is ready.
 // Order guarantee: the plugin host (re-activating consented plugins) comes first — events
-// (project.created etc.) must fire after listeners are registered, or they are lost
-// (the cause of the incident where the first project's git init was lost in a new environment).
-// Render proceeds even on failure (0 projects = the exception state of boot failure alone, reason to the console).
+// (workspace.created etc.) must fire after listeners are registered, or they are lost
+// (the cause of the incident where the first workspace's git init was lost in a new environment).
+// Render proceeds even on failure (0 workspaces = the exception state of boot failure alone, reason to the console).
 // Boot step stamps — the observation surface for blank-screen diagnosis. ① document.title (IPC-independent — while
 // the webview is alive it is readable from outside as the CGWindowList window name) ② activity hub boot.step (over
 // IPC — persisting to records proves IPC is alive). The difference between the two channels is the verdict: title advancing alone means IPC is dead.
@@ -244,7 +244,7 @@ async function boot(): Promise<void> {
   // The screen comes first — queueing the first paint behind plugin activation (measured 2.46s of a 2.5s boot —
   // 46 sequential) leaves the person looking at an empty window for that time. The layout skeleton renders without
   // plugins (unregistered view = placeholder contract, PluginViewHost), and slots fill as activations arrive.
-  // The ordering contract is unchanged: restore (firing project.created) still comes after the plugin host —
+  // The ordering contract is unchanged: restore (firing workspace.created) still comes after the plugin host —
   // no recurrence of the incident where firing before listener registration lost events (git init never ran).
   beginBootPluginEventBuffer(); // boot-window fires go to a queue — flush at the end of boot (after every subscriber is in place)
   useBootPhase.getState().setPhase("restoring");
@@ -265,7 +265,7 @@ async function boot(): Promise<void> {
   installInputObserver(); // input fire observation (gesture→activation causal chain)
   // Programmatic open (window.new{root}) — the window creator passes boot instructions as a URL query
   // (the only channel across per-window JS context isolation). An instruction outranks restore: the user intent is
-  // "that project in this window". On claim failure (create↔boot race) it degrades to empty state (the notice points at the orchestrator).
+  // "that workspace in this window". On claim failure (create↔boot race) it degrades to empty state (the notice points at the orchestrator).
   const bootParams = new URLSearchParams(window.location.search);
   const initRoot = bootParams.get("root");
   if (initRoot) {
@@ -284,22 +284,22 @@ async function boot(): Promise<void> {
       if (!denied.has(initRoot)) {
         const initAlias = bootParams.get("alias") ?? "";
         const initShell = bootParams.get("shell") ?? undefined;
-        useSessions.getState().bootstrapFirstProject(initRoot, {
+        useSessions.getState().bootstrapFirstWorkspace(initRoot, {
           alias: initAlias,
           shell: initShell,
         });
-        void recordRecentProject(initRoot, initAlias); // recent list (explicit open)
+        void recordRecentWorkspace(initRoot, initAlias); // recent list (explicit open)
       } else {
-        console.warn(`[P6] the instructed project is open in another window — degraded to empty state: ${initRoot}`);
+        console.warn(`[P6] the instructed workspace is open in another window — degraded to empty state: ${initRoot}`);
       }
     } catch (e) {
-      console.error("instructed project boot failed:", e);
+      console.error("instructed workspace boot failed:", e);
     }
   }
   // Restores the persisted workspace (layout, tabs, splits) first (A5). With a restore present, default boot is skipped.
-  // The restore's roots are paths validated in the previous session — if absent, that project view opens empty and
+  // The restore's roots are paths validated in the previous session — if absent, that workspace view opens empty and
   // the user cleans it up (no fs validation here blocks the whole restore). The autosave subscription starts here too.
-  // (With a tab already created from initRoot, restoreProjects is an idempotent no-op — only the autosave subscription starts.)
+  // (With a tab already created from initRoot, restoreWorkspaces is an idempotent no-op — only the autosave subscription starts.)
   try {
     await initWorkspacePersistence();
   } catch (e) {
@@ -338,14 +338,14 @@ async function boot(): Promise<void> {
   } catch (e) {
     console.error("notification/deep-link init failed:", e);
   }
-  // Native window title = active project (Dock window list and Mission Control distinction — measured: every window
+  // Native window title = active workspace (Dock window list and Mission Control distinction — measured: every window
   // showed the same app name). A display-only subscription, unrelated to autosave.
   void initWindowTitle();
-  // Project daemon open hook — after reclaiming recorded leftover pids, auto-starts only the daemons the user allowed
+  // Workspace daemon open hook — after reclaiming recorded leftover pids, auto-starts only the daemons the user allowed
   // (finding a Procfile alone runs nothing — security contract). A failure does not block boot.
   {
-    const root = useSessions.getState().projects.find((t) => t.id === useSessions.getState().activeId)?.root;
-    if (root) void daemonOnProjectOpen(root);
+    const root = useSessions.getState().workspaces.find((t) => t.id === useSessions.getState().activeId)?.root;
+    if (root) void daemonOnWorkspaceOpen(root);
   }
   // Skill write-through — regenerates SKILL.md when the active plugin set changes (P8).
   initSkillRefresh();

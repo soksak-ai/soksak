@@ -257,11 +257,11 @@ export const BORDER_RULES: readonly BorderRule[] = [
     note: tmsg("msg.ui.border.pluginRailRight"),
   },
   {
-    id: "project-rail-right",
-    selector: ".project-rail",
+    id: "workspace-rail-right",
+    selector: ".workspace-rail",
     kind: "edges",
     edges: { right: "bd" },
-    note: tmsg("msg.ui.border.projectRailRight"),
+    note: tmsg("msg.ui.border.workspaceRailRight"),
   },
 
   // ── B2 panel inner line — the chrome band owns the body-side edge, tone bd-soft ──
@@ -299,7 +299,7 @@ export const BORDER_RULES: readonly BorderRule[] = [
   // ── B6 boundary tool no-ownership assertion ───────────────────────────────
   {
     id: "resizer-no-line",
-    selector: ".sidebar-resizer, .sidebar-right-resizer, .project-rail-resizer",
+    selector: ".sidebar-resizer, .sidebar-right-resizer, .workspace-rail-resizer",
     kind: "edges",
     edges: { top: "none", right: "none", bottom: "none", left: "none" },
     note: tmsg("msg.ui.border.resizerNoLine"),

@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   viewDisplayTitle,
   webviewDisplayName,
-  type Project,
+  type Workspace,
   type Tab,
 } from "./sessions";
 
@@ -23,7 +23,7 @@ const browser = (viewId: string, title: string, customLabel?: string): Tab => ({
   view: "content",
 });
 
-const tab = (id: string, tabs: Tab[]): Project => ({
+const tab = (id: string, tabs: Tab[]): Workspace => ({
   id,
   title: id,
   sidebarOpen: false,
@@ -54,17 +54,17 @@ describe("viewDisplayTitle", () => {
 
 describe("webviewDisplayName", () => {
   it("a browser label of this window resolves to the tab display name", () => {
-    const tabs = [tab("pjt-aaaaaa", [browser("tab-cccccc", "GitHub")])];
+    const tabs = [tab("wsp-aaaaaa", [browser("tab-cccccc", "GitHub")])];
     expect(webviewDisplayName("brw--tab-cccccc", tabs)).toBe("GitHub");
   });
 
   it("uses customLabel when there is one", () => {
-    const tabs = [tab("pjt-aaaaaa", [browser("tab-cccccc", "GitHub", "Work browser")])];
+    const tabs = [tab("wsp-aaaaaa", [browser("tab-cccccc", "GitHub", "Work browser")])];
     expect(webviewDisplayName("brw--tab-cccccc", tabs)).toBe("Work browser");
   });
 
   it("with no matching view the label stays as it is", () => {
-    const tabs = [tab("pjt-aaaaaa", [browser("tab-cccccc", "GitHub")])];
+    const tabs = [tab("wsp-aaaaaa", [browser("tab-cccccc", "GitHub")])];
     expect(webviewDisplayName("brw--tab-iiiiii", tabs)).toBe("brw--tab-iiiiii");
   });
 

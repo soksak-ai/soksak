@@ -23,7 +23,7 @@ interface CloseConfirmState {
 }
 
 function findView(projectId: string, viewId: string): Tab | undefined {
-  const t = useSessions.getState().projects.find((x) => x.id === projectId);
+  const t = useSessions.getState().workspaces.find((x) => x.id === projectId);
   if (!t) return undefined;
   for (const c of t.spaces)
     for (const v of allViews(c.layout)) if (v.id === viewId) return v;
@@ -34,7 +34,7 @@ function findContent(
   projectId: string,
   contentId: string,
 ): Space | undefined {
-  const t = useSessions.getState().projects.find((x) => x.id === projectId);
+  const t = useSessions.getState().workspaces.find((x) => x.id === projectId);
   return t?.spaces.find((c) => c.id === contentId);
 }
 

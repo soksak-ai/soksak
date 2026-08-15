@@ -8,8 +8,8 @@ vi.mock("../framework", async (importOriginal) => ({
   currentWindow: vi.fn(),
   windowByLabel: vi.fn(),
 }));
-vi.mock("../lib/projectRoot", () => ({
-  validateProjectRoot: async (root: string) => root,
+vi.mock("../lib/workspaceRoot", () => ({
+  validateWorkspaceRoot: async (root: string) => root,
 }));
 vi.mock("../lib/webviewLabels", () => ({
   browserLabelPrefix: (label: string) => ["b", label, ""].join("-"),
@@ -33,7 +33,7 @@ it("window.open forwards focus:false to the native window contract so automation
   expect(getSpec("window.open")?.params.focus).toMatchObject({ type: "boolean" });
 
   invoke.mockImplementation(async (command: string) => {
-    if (command === "project_owners") return { owners: [] };
+    if (command === "workspace_owners") return { owners: [] };
     if (command === "window_create") return "win-test";
     throw new Error(`unexpected invoke: ${command}`);
   });

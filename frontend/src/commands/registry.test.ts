@@ -606,7 +606,7 @@ describe("base syntax — positional argument {_}", () => {
   it("maps the positional onto a declared primary regardless of required, and omitting it still works", async () => {
     register(TEST_PREFIX + "pos4", {
       description: "primary positional",
-      params: { name: { type: "string", description: "" }, project: { type: "string", description: "" } },
+      params: { name: { type: "string", description: "" }, workspace: { type: "string", description: "" } },
       returns: "{}",
       message: () => "",
       primary: "name",

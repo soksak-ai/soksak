@@ -1,7 +1,7 @@
 // Sidebar projection core (plans/sidebar-projection-spec.md §4·R1~R7).
 // Pane focus determines the rail position only. Space owns the projection content binding:
 //   - Store: focusHistory (succession material) and pins.
-//     Keyed per project (R7: scope = window × project).
+//     Keyed per workspace (R7: scope = window × workspace).
 //   - Resolution: resolveProjection, a pure derivation — sidebar declaration of the bound view
 //     → rail slot.
 // Wiring (the real deps: viewRegistry, contractResolve, plugins) is injected at the consumption
@@ -18,7 +18,7 @@ export interface ProjectionSlot {
   source: string;
   resolvedRef: string | null; // "<pluginId>.<viewId>" — may be null when degraded
   instance: SidebarInstance;
-  // Instance identity (A9): shared=(project|ref), per-view=(project|ref|viewId). degraded=null.
+  // Instance identity (A9): shared=(workspace|ref), per-view=(workspace|ref|viewId). degraded=null.
   instanceKey: string | null;
   status: SlotStatus;
 }
@@ -176,13 +176,13 @@ export function resolveProjection(
 
 const HISTORY_CAP = 50;
 
-interface ProjectEntry {
+interface WorkspaceEntry {
   focusHistory: string[]; // Most recent first. Session local (§4.5 — not restored)
-  pins: Pins; // Persisted with the project (§4.5)
+  pins: Pins; // Persisted with the workspace (§4.5)
 }
 
 interface ProjectionStore {
-  byProject: Record<string, ProjectEntry>;
+  byWorkspace: Record<string, WorkspaceEntry>;
   // Record a binding observation — the consumption point calls this on every active-chain change (most-recent-first dedupe).
   noteBinding(projectId: string, viewId: string): void;
   // View closed — removed from the succession material (R6).
@@ -191,17 +191,17 @@ interface ProjectionStore {
   pin(projectId: string, side: "left" | "right", ref: string): void;
   unpin(projectId: string, side: "left" | "right", ref: string): void;
   // Restore seeding (§4.5·R9) — a snapshot's pins are planted only when absent (never clobber live state).
-  seedProject(projectId: string, entry: { pins: Pins }): void;
-  // Project closed — state reclaimed.
-  dropProject(projectId: string): void;
+  seedWorkspace(projectId: string, entry: { pins: Pins }): void;
+  // Workspace closed — state reclaimed.
+  dropWorkspace(projectId: string): void;
 }
 
-const emptyEntry = (): ProjectEntry => ({
+const emptyEntry = (): WorkspaceEntry => ({
   focusHistory: [],
   pins: { left: [], right: [] },
 });
 
-function withPin(entry: ProjectEntry, side: "left" | "right", ref: string): ProjectEntry {
+function withPin(entry: WorkspaceEntry, side: "left" | "right", ref: string): WorkspaceEntry {
   if (entry.pins[side].includes(ref)) return entry;
   return {
     ...entry,
@@ -214,28 +214,28 @@ function withPin(entry: ProjectEntry, side: "left" | "right", ref: string): Proj
 // filled and never refills (empty forever).
 export const useProjection = moduleState("state/projection#store", () =>
   create<ProjectionStore>((set) => ({
-  byProject: {},
+  byWorkspace: {},
 
   noteBinding: (projectId, viewId) =>
     set((s) => {
-      const entry = s.byProject[projectId] ?? emptyEntry();
+      const entry = s.byWorkspace[projectId] ?? emptyEntry();
       if (entry.focusHistory[0] === viewId) return s;
       const focusHistory = [
         viewId,
         ...entry.focusHistory.filter((v) => v !== viewId),
       ].slice(0, HISTORY_CAP);
       return {
-        byProject: { ...s.byProject, [projectId]: { ...entry, focusHistory } },
+        byWorkspace: { ...s.byWorkspace, [projectId]: { ...entry, focusHistory } },
       };
     }),
 
   forgetView: (projectId, viewId) =>
     set((s) => {
-      const entry = s.byProject[projectId];
+      const entry = s.byWorkspace[projectId];
       if (!entry || !entry.focusHistory.includes(viewId)) return s;
       return {
-        byProject: {
-          ...s.byProject,
+        byWorkspace: {
+          ...s.byWorkspace,
           [projectId]: {
             ...entry,
             focusHistory: entry.focusHistory.filter((v) => v !== viewId),
@@ -246,19 +246,19 @@ export const useProjection = moduleState("state/projection#store", () =>
 
   pin: (projectId, side, ref) =>
     set((s) => {
-      const entry = s.byProject[projectId] ?? emptyEntry();
+      const entry = s.byWorkspace[projectId] ?? emptyEntry();
       const next = withPin(entry, side, ref);
-      if (next === entry && s.byProject[projectId]) return s; // Idempotent.
-      return { byProject: { ...s.byProject, [projectId]: next } };
+      if (next === entry && s.byWorkspace[projectId]) return s; // Idempotent.
+      return { byWorkspace: { ...s.byWorkspace, [projectId]: next } };
     }),
 
   unpin: (projectId, side, ref) =>
     set((s) => {
-      const entry = s.byProject[projectId];
+      const entry = s.byWorkspace[projectId];
       if (!entry || !entry.pins[side].includes(ref)) return s; // Idempotent.
       return {
-        byProject: {
-          ...s.byProject,
+        byWorkspace: {
+          ...s.byWorkspace,
           [projectId]: {
             ...entry,
             pins: { ...entry.pins, [side]: entry.pins[side].filter((r) => r !== ref) },
@@ -267,12 +267,12 @@ export const useProjection = moduleState("state/projection#store", () =>
       };
     }),
 
-  seedProject: (projectId, entry) =>
+  seedWorkspace: (projectId, entry) =>
     set((s) => {
-      if (s.byProject[projectId]) return s; // Live state wins — restore only seeds the first time.
+      if (s.byWorkspace[projectId]) return s; // Live state wins — restore only seeds the first time.
       return {
-        byProject: {
-          ...s.byProject,
+        byWorkspace: {
+          ...s.byWorkspace,
           [projectId]: {
             focusHistory: [],
             pins: { left: [...entry.pins.left], right: [...entry.pins.right] },
@@ -281,12 +281,12 @@ export const useProjection = moduleState("state/projection#store", () =>
       };
     }),
 
-  dropProject: (projectId) =>
+  dropWorkspace: (projectId) =>
     set((s) => {
-      if (!s.byProject[projectId]) return s;
-      const byProject = { ...s.byProject };
-      delete byProject[projectId];
-      return { byProject };
+      if (!s.byWorkspace[projectId]) return s;
+      const byWorkspace = { ...s.byWorkspace };
+      delete byWorkspace[projectId];
+      return { byWorkspace };
     }),
 })),
 );

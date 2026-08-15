@@ -39,8 +39,8 @@ type Daemon struct {
 	Readiness Readiness `json:"readiness"`
 }
 
-// key is what a daemon is named by. A name is unique inside one project and
-// nowhere else — two projects each declare a "dev".
+// key is what a daemon is named by. A name is unique inside one workspace and
+// nowhere else — two workspaces each declare a "dev".
 type key struct {
 	root string
 	name string
@@ -298,7 +298,7 @@ func (supervisor *Supervisor) StopAll() int {
 	return ended
 }
 
-// Status answers the daemons declared under one project root.
+// Status answers the daemons declared under one workspace root.
 //
 // Exited daemons stay in the answer until their name is started again, because
 // the exit code is the whole reason a caller queries a daemon that stopped.

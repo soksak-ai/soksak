@@ -27,29 +27,29 @@ useProgramRegistry
     title: { en: "Terminal", ko: "터미널" },
   } as ContributedProgram);
 
-useSessions.getState().bootstrapFirstProject("<local-evidence>/soksak-emptypanel");
+useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-emptypanel");
 registerCatalog();
-const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().projects));
+const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
 const pristineActive = useSessions.getState().activeId;
 
 beforeEach(() => {
   useSessions.setState({
-    projects: JSON.parse(JSON.stringify(pristineTabs)),
+    workspaces: JSON.parse(JSON.stringify(pristineTabs)),
     activeId: pristineActive,
   });
 });
 
 /** Make the active pane of the active space hold 0 tabs (repro of the measured state). */
 function emptyActivePane(): void {
-  const projects = structuredClone(useSessions.getState().projects);
-  const project = projects.find((t) => t.id === useSessions.getState().activeId)!;
+  const workspaces = structuredClone(useSessions.getState().workspaces);
+  const workspace = workspaces.find((t) => t.id === useSessions.getState().activeId)!;
   const space =
-    project.spaces.find((c) => c.id === project.activeSpaceId) ?? project.spaces[0];
+    workspace.spaces.find((c) => c.id === workspace.activeSpaceId) ?? workspace.spaces[0];
   const panes = allGroups(space.layout);
   const g = panes.find((x) => x.id === space.activePaneId) ?? panes[0];
   g.tabs = [];
   g.activeTabId = "";
-  useSessions.setState({ projects });
+  useSessions.setState({ workspaces });
 }
 
 /** Repro of a normal chain — open one tab in the active pane (bootstrap creates no tab in the test environment). */

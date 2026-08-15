@@ -84,7 +84,7 @@ func TestAPidThatIsGoneIsSaidToBeGoneRatherThanEnded(t *testing.T) {
 }
 
 // One entry this build could not act on must not silently read as done, and
-// must not stop the others either: the caller is cleaning up a whole project.
+// must not stop the others either: the caller is cleaning up a whole workspace.
 func TestOneUnreachableLeftoverIsReportedAndTheRestAreStillReaped(t *testing.T) {
 	reaper := &stubReaper{
 		live:     map[int]string{11: "sh -lc npm run dev", 12: "sh -lc npm run api"},

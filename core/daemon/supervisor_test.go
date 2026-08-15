@@ -29,17 +29,17 @@ func waitFor(t *testing.T, announced chan Daemon) Daemon {
 	}
 }
 
-func TestADaemonRunsItsLineFromTheProjectRoot(t *testing.T) {
+func TestADaemonRunsItsLineFromTheWorkspaceRoot(t *testing.T) {
 	supervisor, spawner, _, _ := testSupervisor(t)
 
-	pid, err := supervisor.Start("/projects/app", "dev", "npm run dev")
+	pid, err := supervisor.Start("/workspaces/app", "dev", "npm run dev")
 	if err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 
 	spec := spawner.started()[0]
-	if spec.Dir != "/projects/app" {
-		t.Errorf("Dir = %q, want the project root — a daemon started anywhere else builds the wrong tree", spec.Dir)
+	if spec.Dir != "/workspaces/app" {
+		t.Errorf("Dir = %q, want the workspace root — a daemon started anywhere else builds the wrong tree", spec.Dir)
 	}
 	if spec.Args[len(spec.Args)-1] != "npm run dev" {
 		t.Errorf("args = %q, want the declared line whole", spec.Args)
@@ -57,7 +57,7 @@ func TestADaemonRunsItsLineFromTheProjectRoot(t *testing.T) {
 func TestADaemonReceivesTheHostsEnvironmentRatherThanThisProcessOwn(t *testing.T) {
 	supervisor, spawner, _, _ := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 
@@ -73,11 +73,11 @@ func TestADaemonReceivesTheHostsEnvironmentRatherThanThisProcessOwn(t *testing.T
 func TestStartingADaemonThatIsAlreadyRunningIsRefusedByName(t *testing.T) {
 	supervisor, _, _, _ := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 
-	_, err := supervisor.Start("/projects/app", "dev", "npm run dev")
+	_, err := supervisor.Start("/workspaces/app", "dev", "npm run dev")
 	if err == nil {
 		t.Fatal("a second copy started; the two would fight over the port and this table could only reach one")
 	}
@@ -86,15 +86,15 @@ func TestStartingADaemonThatIsAlreadyRunningIsRefusedByName(t *testing.T) {
 	}
 }
 
-// One name is one project's. Two projects each declaring "dev" is
-// ordinary, and refusing the second would make a workspace hold one project.
+// One name is one workspace's. Two workspaces each declaring "dev" is
+// ordinary, and refusing the second would make a workspace hold one workspace.
 func TestTheSameNameInAnotherProjectIsAnotherDaemon(t *testing.T) {
 	supervisor, spawner, _, _ := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/a", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/a", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting the first: %v", err)
 	}
-	if _, err := supervisor.Start("/projects/b", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/b", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting the second: %v", err)
 	}
 	if len(spawner.started()) != 2 {
@@ -105,13 +105,13 @@ func TestTheSameNameInAnotherProjectIsAnotherDaemon(t *testing.T) {
 func TestADaemonThatExitedCanBeStartedAgain(t *testing.T) {
 	supervisor, spawner, _, announced := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 	spawner.child(0).exit(1)
 	waitFor(t, announced)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting again after it exited: %v", err)
 	}
 }
@@ -121,29 +121,29 @@ func TestAFailedSpawnFailsCarryingTheDaemonAndTheRoot(t *testing.T) {
 	deps, _ := testDeps(spawner, &stubClock{}, &stubTimer{})
 	supervisor := newSupervisor(deps)
 
-	_, err := supervisor.Start("/projects/app", "dev", "npm run dev")
+	_, err := supervisor.Start("/workspaces/app", "dev", "npm run dev")
 	if err == nil {
 		t.Fatal("a spawn that failed answered with a pid")
 	}
-	if !strings.Contains(err.Error(), "dev") || !strings.Contains(err.Error(), "/projects/app") {
-		t.Errorf("the failure %q names neither the daemon nor the project", err)
+	if !strings.Contains(err.Error(), "dev") || !strings.Contains(err.Error(), "/workspaces/app") {
+		t.Errorf("the failure %q names neither the daemon nor the workspace", err)
 	}
 }
 
-func TestStatusReportsWhatIsRunningUnderOneProject(t *testing.T) {
+func TestStatusReportsWhatIsRunningUnderOneWorkspace(t *testing.T) {
 	supervisor, _, clock, _ := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
-	if _, err := supervisor.Start("/projects/other", "api", "npm run api"); err != nil {
+	if _, err := supervisor.Start("/workspaces/other", "api", "npm run api"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 	clock.advance(4_000)
 
-	rows := supervisor.Status("/projects/app")
+	rows := supervisor.Status("/workspaces/app")
 	if len(rows) != 1 {
-		t.Fatalf("status = %+v, want only this project's daemon", rows)
+		t.Fatalf("status = %+v, want only this workspace's daemon", rows)
 	}
 	if !rows[0].Running {
 		t.Error("a running daemon reported as stopped")
@@ -159,13 +159,13 @@ func TestStatusReportsWhatIsRunningUnderOneProject(t *testing.T) {
 	}
 }
 
-// A project nobody started anything under answers with an empty list. Nil
+// A workspace nobody started anything under answers with an empty list. Nil
 // arrives as JSON null, and "no daemons are running" would then read the same
 // as "this build cannot tell you".
-func TestAProjectWithNoDaemonsAnswersWithAnEmptyList(t *testing.T) {
+func TestAWorkspaceWithNoDaemonsAnswersWithAnEmptyList(t *testing.T) {
 	supervisor, _, _, _ := testSupervisor(t)
 
-	rows := supervisor.Status("/projects/none")
+	rows := supervisor.Status("/workspaces/none")
 	if rows == nil {
 		t.Fatal("status answered nil")
 	}
@@ -178,7 +178,7 @@ func TestAProjectWithNoDaemonsAnswersWithAnEmptyList(t *testing.T) {
 func TestAnExitedDaemonKeepsItsCodeInTheStatusTable(t *testing.T) {
 	supervisor, spawner, clock, announced := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 	clock.advance(2_000)
@@ -186,7 +186,7 @@ func TestAnExitedDaemonKeepsItsCodeInTheStatusTable(t *testing.T) {
 	waitFor(t, announced)
 	clock.advance(9_000)
 
-	rows := supervisor.Status("/projects/app")
+	rows := supervisor.Status("/workspaces/app")
 	if len(rows) != 1 {
 		t.Fatalf("the exited daemon left the table: %+v", rows)
 	}
@@ -206,15 +206,15 @@ func TestAnExitedDaemonKeepsItsCodeInTheStatusTable(t *testing.T) {
 func TestASignalledDaemonLeavesNoExitCodeRatherThanZero(t *testing.T) {
 	supervisor, _, _, announced := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
-	if _, err := supervisor.Stop("/projects/app", "dev"); err != nil {
+	if _, err := supervisor.Stop("/workspaces/app", "dev"); err != nil {
 		t.Fatalf("stopping: %v", err)
 	}
 	waitFor(t, announced)
 
-	rows := supervisor.Status("/projects/app")
+	rows := supervisor.Status("/workspaces/app")
 	if rows[0].ExitCode != nil {
 		t.Fatalf("exit_code = %d after a kill; a signalled process left no code of its own", *rows[0].ExitCode)
 	}
@@ -223,14 +223,14 @@ func TestASignalledDaemonLeavesNoExitCodeRatherThanZero(t *testing.T) {
 func TestStopEndsOneNamedDaemonAndLeavesTheRest(t *testing.T) {
 	supervisor, spawner, _, _ := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
-	if _, err := supervisor.Start("/projects/app", "api", "npm run api"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "api", "npm run api"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 
-	stopped, err := supervisor.Stop("/projects/app", "dev")
+	stopped, err := supervisor.Stop("/workspaces/app", "dev")
 	if err != nil {
 		t.Fatalf("stopping: %v", err)
 	}
@@ -242,27 +242,27 @@ func TestStopEndsOneNamedDaemonAndLeavesTheRest(t *testing.T) {
 	}
 }
 
-func TestStopWithNoNameEndsEveryDaemonUnderTheProject(t *testing.T) {
+func TestStopWithNoNameEndsEveryDaemonUnderTheWorkspace(t *testing.T) {
 	supervisor, _, _, _ := testSupervisor(t)
 
 	for _, name := range []string{"dev", "api"} {
-		if _, err := supervisor.Start("/projects/app", name, "npm run "+name); err != nil {
+		if _, err := supervisor.Start("/workspaces/app", name, "npm run "+name); err != nil {
 			t.Fatalf("starting %s: %v", name, err)
 		}
 	}
-	if _, err := supervisor.Start("/projects/other", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/other", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting elsewhere: %v", err)
 	}
 
-	stopped, err := supervisor.Stop("/projects/app", "")
+	stopped, err := supervisor.Stop("/workspaces/app", "")
 	if err != nil {
 		t.Fatalf("stopping: %v", err)
 	}
 	if len(stopped) != 2 {
-		t.Fatalf("stopped = %q, want both of this project's daemons", stopped)
+		t.Fatalf("stopped = %q, want both of this workspace's daemons", stopped)
 	}
-	if rows := supervisor.Status("/projects/other"); !rows[0].Running {
-		t.Error("another project's daemon was stopped")
+	if rows := supervisor.Status("/workspaces/other"); !rows[0].Running {
+		t.Error("another workspace's daemon was stopped")
 	}
 }
 
@@ -271,13 +271,13 @@ func TestStopWithNoNameEndsEveryDaemonUnderTheProject(t *testing.T) {
 func TestStopAnswersOnlyWithWhatItActuallyEnded(t *testing.T) {
 	supervisor, spawner, _, announced := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 	spawner.child(0).exit(0)
 	waitFor(t, announced)
 
-	stopped, err := supervisor.Stop("/projects/app", "")
+	stopped, err := supervisor.Stop("/workspaces/app", "")
 	if err != nil {
 		t.Fatalf("stopping: %v", err)
 	}
@@ -291,10 +291,10 @@ func TestStopAnswersOnlyWithWhatItActuallyEnded(t *testing.T) {
 func TestStopReturnsOnlyOnceTheChildIsReaped(t *testing.T) {
 	supervisor, spawner, _, _ := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
-	if _, err := supervisor.Stop("/projects/app", "dev"); err != nil {
+	if _, err := supervisor.Stop("/workspaces/app", "dev"); err != nil {
 		t.Fatalf("stopping: %v", err)
 	}
 
@@ -303,7 +303,7 @@ func TestStopReturnsOnlyOnceTheChildIsReaped(t *testing.T) {
 	default:
 		t.Fatal("stop answered while the child was still running")
 	}
-	if rows := supervisor.Status("/projects/app"); rows[0].Running {
+	if rows := supervisor.Status("/workspaces/app"); rows[0].Running {
 		t.Error("stop answered before the table knew the daemon had ended")
 	}
 }
@@ -311,14 +311,14 @@ func TestStopReturnsOnlyOnceTheChildIsReaped(t *testing.T) {
 func TestADaemonThatCouldNotBeStoppedIsNamedRatherThanReportedStopped(t *testing.T) {
 	supervisor, spawner, _, _ := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 	spawner.child(0).mu.Lock()
 	spawner.child(0).signalErr = errors.New("operation not permitted")
 	spawner.child(0).mu.Unlock()
 
-	_, err := supervisor.Stop("/projects/app", "dev")
+	_, err := supervisor.Stop("/workspaces/app", "dev")
 	if err == nil {
 		t.Fatal("a daemon that could not be signalled was reported as stopped")
 	}
@@ -330,15 +330,15 @@ func TestADaemonThatCouldNotBeStoppedIsNamedRatherThanReportedStopped(t *testing
 	spawner.child(0).mu.Unlock()
 }
 
-func TestStopAllEndsEveryProjectsDaemons(t *testing.T) {
+func TestStopAllEndsEveryWorkspacesDaemons(t *testing.T) {
 	spawner := &stubSpawner{}
 	deps, _ := testDeps(spawner, &stubClock{}, &stubTimer{})
 	supervisor := newSupervisor(deps)
 
-	if _, err := supervisor.Start("/projects/a", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/a", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
-	if _, err := supervisor.Start("/projects/b", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/b", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 
@@ -350,7 +350,7 @@ func TestStopAllEndsEveryProjectsDaemons(t *testing.T) {
 func TestLogsAnswerTheDaemonsRecentOutput(t *testing.T) {
 	supervisor, spawner, _, announced := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 	spawner.child(0).say("compiling", "ready in 300ms")
@@ -358,7 +358,7 @@ func TestLogsAnswerTheDaemonsRecentOutput(t *testing.T) {
 	spawner.child(0).exit(0)
 	waitFor(t, announced)
 
-	lines, err := supervisor.Logs("/projects/app", "dev", 100)
+	lines, err := supervisor.Logs("/workspaces/app", "dev", 100)
 	if err != nil {
 		t.Fatalf("reading the log: %v", err)
 	}
@@ -377,12 +377,12 @@ func TestLogsAnswerTheDaemonsRecentOutput(t *testing.T) {
 func TestLogsForADaemonThatWasNeverStartedFailByName(t *testing.T) {
 	supervisor, _, _, _ := testSupervisor(t)
 
-	_, err := supervisor.Logs("/projects/app", "typo", 100)
+	_, err := supervisor.Logs("/workspaces/app", "typo", 100)
 	if err == nil {
 		t.Fatal("an unknown daemon answered with a log")
 	}
-	if !strings.Contains(err.Error(), "typo") || !strings.Contains(err.Error(), "/projects/app") {
-		t.Errorf("the failure %q names neither the daemon nor the project", err)
+	if !strings.Contains(err.Error(), "typo") || !strings.Contains(err.Error(), "/workspaces/app") {
+		t.Errorf("the failure %q names neither the daemon nor the workspace", err)
 	}
 }
 
@@ -392,7 +392,7 @@ func TestLogsForADaemonThatWasNeverStartedFailByName(t *testing.T) {
 func TestADaemonThatNamesItsSocketIsAnnouncedReady(t *testing.T) {
 	supervisor, spawner, _, announced := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "db", "sidecar:db-studio"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "db", "sidecar:db-studio"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 	spawner.child(0).say(announcementLine("<local-evidence>/soksak/db.sock"))
@@ -404,11 +404,11 @@ func TestADaemonThatNamesItsSocketIsAnnouncedReady(t *testing.T) {
 	if row.Readiness.Socket != "<local-evidence>/soksak/db.sock" {
 		t.Errorf("socket = %q, want what the daemon said", row.Readiness.Socket)
 	}
-	if row.Name != "db" || row.Root != "/projects/app" {
+	if row.Name != "db" || row.Root != "/workspaces/app" {
 		t.Errorf("the announcement %+v does not say which daemon it is about", row)
 	}
 
-	rows := supervisor.Status("/projects/app")
+	rows := supervisor.Status("/workspaces/app")
 	if rows[0].Readiness.Socket != "<local-evidence>/soksak/db.sock" {
 		t.Errorf("status readiness = %+v, want the same answer the event carried", rows[0].Readiness)
 	}
@@ -419,7 +419,7 @@ func TestADaemonThatNamesItsSocketIsAnnouncedReady(t *testing.T) {
 func TestADaemonWithOrdinaryOutputAnnouncesNothing(t *testing.T) {
 	supervisor, spawner, _, announced := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 	spawner.child(0).say("listening on http://localhost:5173")
@@ -439,11 +439,11 @@ func TestADaemonWithOrdinaryOutputAnnouncesNothing(t *testing.T) {
 func TestADaemonThatHasPrintedNothingIsSilentRatherThanMute(t *testing.T) {
 	supervisor, _, _, _ := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 
-	if state := supervisor.Status("/projects/app")[0].Readiness.State; state != Silent {
+	if state := supervisor.Status("/workspaces/app")[0].Readiness.State; state != Silent {
 		t.Fatalf("readiness = %q, want %q", state, Silent)
 	}
 }
@@ -454,7 +454,7 @@ func TestADaemonThatHasPrintedNothingIsSilentRatherThanMute(t *testing.T) {
 func TestADaemonsStdinIsClosedSoAPromptEndsRatherThanHangs(t *testing.T) {
 	supervisor, spawner, _, _ := testSupervisor(t)
 
-	if _, err := supervisor.Start("/projects/app", "dev", "npm run dev"); err != nil {
+	if _, err := supervisor.Start("/workspaces/app", "dev", "npm run dev"); err != nil {
 		t.Fatalf("starting: %v", err)
 	}
 

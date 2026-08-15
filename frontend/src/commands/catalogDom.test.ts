@@ -226,7 +226,7 @@ describe("ui.tree/ui.measure — public DOM node instance identity", () => {
   it("ui.tree returns every data-* a node declares as the public dataset", async () => {
     mountNode(
       `<button data-node="btn" data-composition-kind="slot" data-view-id="view-a" `
-      + `data-topology-path="project-a/pane-a/view-a" data-visible="true">x</button>`,
+      + `data-topology-path="workspace-a/pane-a/view-a" data-visible="true">x</button>`,
     );
 
     const result = await execute("ui.tree", {}, {});
@@ -238,7 +238,7 @@ describe("ui.tree/ui.measure — public DOM node instance identity", () => {
       node: "btn",
       compositionKind: "slot",
       viewId: "view-a",
-      topologyPath: "project-a/pane-a/view-a",
+      topologyPath: "workspace-a/pane-a/view-a",
       visible: "true",
     });
     expect(getSpec("ui.tree")?.returns).toContain("dataset");
@@ -486,7 +486,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
 
   it("every display sample keeps the dynamic presence and live element identity of rail, structural frame, and focus boundary at the same instant", async () => {
     document.body.innerHTML = `
-      <div data-project-plane="project-a" data-project-active="1">
+      <div data-workspace-plane="workspace-a" data-workspace-active="1">
         <div class="content">
           <div class="sidebar" data-node="rail/left" data-rail-role="resting"></div>
           <div class="rail-link-overlay" data-node="relation/rail/space-a" data-bound-pane="pane-a" data-rail="0,0,10,500" data-box="10,20,300,400">
@@ -504,7 +504,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
       </div>`;
     const address = "win/main/content/view/test.v/node/slot";
     const armed = await execute("ui.trace.multi.start", {
-      addresses: ["win/main/proj/project-a/chrome/rail/left", address],
+      addresses: ["win/main/proj/workspace-a/chrome/rail/left", address],
       maxMs: 5_000,
       producers: { interval: false },
     }, {});
@@ -516,7 +516,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
       data: {
         samples: [expect.objectContaining({
           chrome: {
-            projectId: "project-a",
+            projectId: "workspace-a",
             spaceNode: "layout/space/space-a",
             traveling: true,
             rail: {
@@ -574,7 +574,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
 
   it("keeps another content's painted rail out of the moving content's rail inventory", async () => {
     document.body.innerHTML = `
-      <div data-project-plane="project-a" data-project-active="1">
+      <div data-workspace-plane="workspace-a" data-workspace-active="1">
         <div class="content" data-content="inactive">
           <div class="sidebar" data-node="rail/left" data-rail-role="resting"></div>
         </div>
@@ -599,7 +599,7 @@ describe("ui.trace.multi — ledger of the public DOM participants in one tick",
     expect(result.ok).toBe(true);
     const sample = (result.data as { samples: Array<{ chrome: Record<string, unknown> }> }).samples[0];
     expect(sample.chrome).toMatchObject({
-      projectId: "project-a",
+      projectId: "workspace-a",
       spaceNode: "layout/space/space-a",
       traveling: true,
       rail: { count: 0, role: null, visibility: null, nodeIdentity: null },
@@ -1852,9 +1852,9 @@ describe("ui.input.click — phase split (makes the mid-gesture state verifiable
     // together, an ancestor with a transparent background drops out of the chain and "who is on top" differs per
     // consumer (the spot where a harness just writes target in). closest cannot cross the shadow boundary, so it climbs to the host.
     const outer = document.createElement("div");
-    outer.dataset.node = "modal/project-new";
+    outer.dataset.node = "modal/workspace-new";
     const card = document.createElement("div");
-    card.dataset.node = "modal/project-new/card";
+    card.dataset.node = "modal/workspace-new/card";
     const shadowHost = document.createElement("div");
     const sr = shadowHost.attachShadow({ mode: "open" });
     const icon = document.createElement("span"); // no data-node of its own
@@ -1868,7 +1868,7 @@ describe("ui.input.click — phase split (makes the mid-gesture state verifiable
       const r = await execute("ui.hit", { x: 5, y: 5 }, {});
       expect(r.ok).toBe(true);
       const d = r.data as { owners?: string[] };
-      expect(d.owners).toEqual(["modal/project-new/card", "modal/project-new"]);
+      expect(d.owners).toEqual(["modal/workspace-new/card", "modal/workspace-new"]);
     } finally {
       Object.defineProperty(document, "elementFromPoint", { value: orig, configurable: true });
     }

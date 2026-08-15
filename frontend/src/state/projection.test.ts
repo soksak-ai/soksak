@@ -181,7 +181,7 @@ describe("resolveProjection — slot resolution (R1·R5)", () => {
 
 describe("useProjection store — focusHistory and pins (user-owned state only)", () => {
   beforeEach(() => {
-    useProjection.setState({ byProject: {} });
+    useProjection.setState({ byWorkspace: {} });
   });
 
   it("noteBinding — most-recent-first dedupe", () => {
@@ -189,7 +189,7 @@ describe("useProjection store — focusHistory and pins (user-owned state only)"
     s.noteBinding(P, "v1");
     s.noteBinding(P, "v2");
     s.noteBinding(P, "v1");
-    expect(useProjection.getState().byProject[P].focusHistory).toEqual(["v1", "v2"]);
+    expect(useProjection.getState().byWorkspace[P].focusHistory).toEqual(["v1", "v2"]);
   });
 
   it("forgetView — a closed view is removed from the history (R6 succession material cleanup)", () => {
@@ -197,7 +197,7 @@ describe("useProjection store — focusHistory and pins (user-owned state only)"
     s.noteBinding(P, "v1");
     s.noteBinding(P, "v2");
     s.forgetView(P, "v2");
-    expect(useProjection.getState().byProject[P].focusHistory).toEqual(["v1"]);
+    expect(useProjection.getState().byWorkspace[P].focusHistory).toEqual(["v1"]);
   });
 
   it("pin/unpin — idempotent, left and right independent", () => {
@@ -205,36 +205,36 @@ describe("useProjection store — focusHistory and pins (user-owned state only)"
     s.pin(P, "left", "filetree.tree");
     s.pin(P, "left", "filetree.tree"); // idempotent
     s.pin(P, "right", "picker.selections");
-    expect(useProjection.getState().byProject[P].pins).toEqual({
+    expect(useProjection.getState().byWorkspace[P].pins).toEqual({
       left: ["filetree.tree"],
       right: ["picker.selections"],
     });
     s.unpin(P, "left", "filetree.tree");
     s.unpin(P, "left", "filetree.tree"); // idempotent
-    expect(useProjection.getState().byProject[P].pins.left).toEqual([]);
+    expect(useProjection.getState().byWorkspace[P].pins.left).toEqual([]);
   });
 
-  it("dropProject — state is reclaimed when the project closes", () => {
+  it("dropWorkspace — state is reclaimed when the workspace closes", () => {
     const s = useProjection.getState();
     s.noteBinding(P, "v1");
-    s.dropProject(P);
-    expect(useProjection.getState().byProject[P]).toBeUndefined();
+    s.dropWorkspace(P);
+    expect(useProjection.getState().byWorkspace[P]).toBeUndefined();
   });
 });
 
 
-describe("seedProject — restore seeding (§4.5·R9)", () => {
+describe("seedWorkspace — restore seeding (§4.5·R9)", () => {
   beforeEach(() => {
-    useProjection.setState({ byProject: {} });
+    useProjection.setState({ byWorkspace: {} });
   });
 
   it("seeds only when absent (never clobber live state), restores pins and seen", () => {
     const s = useProjection.getState();
-    s.seedProject(P, { pins: { left: ["a.t"], right: [] } });
-    expect(useProjection.getState().byProject[P].pins.left).toEqual(["a.t"]);
+    s.seedWorkspace(P, { pins: { left: ["a.t"], right: [] } });
+    expect(useProjection.getState().byWorkspace[P].pins.left).toEqual(["a.t"]);
     // Already present → no-op
-    s.seedProject(P, { pins: { left: ["x.y"], right: [] } });
-    expect(useProjection.getState().byProject[P].pins.left).toEqual(["a.t"]);
+    s.seedWorkspace(P, { pins: { left: ["x.y"], right: [] } });
+    expect(useProjection.getState().byWorkspace[P].pins.left).toEqual(["a.t"]);
   });
 
 });

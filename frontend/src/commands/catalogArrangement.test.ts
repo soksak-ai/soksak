@@ -15,7 +15,7 @@ vi.mock("../framework", async (importOriginal) => ({
 
 import { registerCatalog } from "./catalog";
 import { execute, getSpec } from "./registry";
-import { projectArrangement, useSessions, type Project, type Pane } from "../state/sessions";
+import { projectArrangement, useSessions, type Workspace, type Pane } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
 import { splitLeaf } from "../state/splitTree";
 import {
@@ -48,9 +48,9 @@ const group = (id: string): Pane => ({
   ],
 });
 
-function project(activePaneId: string): Project {
+function workspace(activePaneId: string): Workspace {
   return {
-    id: "pjt-aaaaaa",
+    id: "wsp-aaaaaa",
     title: "P",
     root: "<local-evidence>/arrangement",
     sidebarOpen: true,
@@ -83,22 +83,22 @@ beforeEach(() => {
   __resetLayoutTransitionJournalForTest();
   __resetLayoutSettlementForTest();
   __resetLayoutTransitionIntentForTest();
-  useSessions.setState({ projects: [project("pan-bbbbbb")], activeId: "pjt-aaaaaa" });
+  useSessions.setState({ workspaces: [workspace("pan-bbbbbb")], activeId: "wsp-aaaaaa" });
 });
 
 describe("layout.arrangement", () => {
   it("tab.maximize opens the exact geometry revision before publishing and its transaction consumes the cause", async () => {
     const pinned = {
-      ...project("pan-bbbbbb"),
+      ...workspace("pan-bbbbbb"),
       leftRailPlacement: { mode: "pin" as const, station: 50 },
     };
-    useSessions.setState({ projects: [pinned], activeId: pinned.id });
+    useSessions.setState({ workspaces: [pinned], activeId: pinned.id });
     const before = projectArrangement(pinned)!;
     const published: Array<{ active: boolean; requested: number; station: number; cells: number }> = [];
     const unsubscribe = useSessions.subscribe((state, previous) => {
-      if (state.projects[0] === previous.projects[0]) return;
-      const facts = layoutSettlementFacts("pjt-aaaaaa");
-      const arrangement = projectArrangement(state.projects[0])!;
+      if (state.workspaces[0] === previous.workspaces[0]) return;
+      const facts = layoutSettlementFacts("wsp-aaaaaa");
+      const arrangement = projectArrangement(state.workspaces[0])!;
       published.push({
         active: facts.active,
         requested: facts.pending[0]?.requested ?? 0,
@@ -115,7 +115,7 @@ describe("layout.arrangement", () => {
     expect(result).toMatchObject({ ok: true, data: { tabId: "tab-aaaaaa" } });
     expect(published).toEqual([{ active: true, requested: 1, station: 100, cells: 1 }]);
 
-    const after = projectArrangement(useSessions.getState().projects[0])!;
+    const after = projectArrangement(useSessions.getState().workspaces[0])!;
     // **Projection snap is for native surfaces.** Listing every view of a reshaped cell as a
     // participant requests that the framework re-place panes that CSS already follows — those panes are
     // already in position, and the request leaves only a one-frame mismatch. So only the native
@@ -137,17 +137,17 @@ describe("layout.arrangement", () => {
   });
 
   it("tab.restore opens one geometry revision from station 100 back to the two-pane station 50 layout", async () => {
-    const pinned = project("pan-aaaaaa");
+    const pinned = workspace("pan-aaaaaa");
     pinned.leftRailPlacement = { mode: "pin", station: 50 };
     pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "tab-aaaaaa" };
-    useSessions.setState({ projects: [pinned], activeId: pinned.id });
+    useSessions.setState({ workspaces: [pinned], activeId: pinned.id });
     expect(projectArrangement(pinned)).toMatchObject({ station: 100, cells: [{ id: "pan-aaaaaa" }] });
 
     const published: Array<{ active: boolean; requested: number; station: number; cells: number }> = [];
     const unsubscribe = useSessions.subscribe((state, previous) => {
-      if (state.projects[0] === previous.projects[0]) return;
-      const facts = layoutSettlementFacts("pjt-aaaaaa");
-      const arrangement = projectArrangement(state.projects[0])!;
+      if (state.workspaces[0] === previous.workspaces[0]) return;
+      const facts = layoutSettlementFacts("wsp-aaaaaa");
+      const arrangement = projectArrangement(state.workspaces[0])!;
       published.push({
         active: facts.active,
         requested: facts.pending[0]?.requested ?? 0,
@@ -155,23 +155,23 @@ describe("layout.arrangement", () => {
         cells: arrangement.cells.length,
       });
     });
-    expect(await execute("tab.restore", { project: "pjt-aaaaaa" }, {}))
+    expect(await execute("tab.restore", { workspace: "wsp-aaaaaa" }, {}))
       .toMatchObject({ ok: true, data: { tabId: "tab-aaaaaa" } });
     unsubscribe();
     expect(published).toEqual([{ active: true, requested: 1, station: 50, cells: 2 }]);
   });
 
   it("tab maximize no-op and missing targets do not open layout revisions", async () => {
-    const pinned = project("pan-aaaaaa");
+    const pinned = workspace("pan-aaaaaa");
     pinned.leftRailPlacement = { mode: "pin", station: 50 };
     pinned.spaces[0] = { ...pinned.spaces[0], maximizedTabId: "tab-aaaaaa" };
-    useSessions.setState({ projects: [pinned], activeId: pinned.id });
+    useSessions.setState({ workspaces: [pinned], activeId: pinned.id });
 
     expect(await execute("tab.maximize", { tab: "tab-aaaaaa", causeTraceId: "b08/no-op" }, {}))
       .toMatchObject({ ok: true });
     expect(await execute("tab.maximize", { tab: "missing", causeTraceId: "b08/missing" }, {}))
       .toMatchObject({ ok: false, code: "TARGET_NOT_FOUND" });
-    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({ active: false, pending: [] });
     await (await prepareLayoutMove([{ viewId: "tab-aaaaaa", dx: 1 }])).commit();
     expect((await execute("layout.transactions", {}, {})).data).toMatchObject({
       entries: [expect.not.objectContaining({ causeTraceId: expect.any(String) })],
@@ -204,12 +204,12 @@ describe("layout.arrangement", () => {
   });
 
   it("tab.restore binds the caller cause of the geometry revision to the exact transaction", async () => {
-    const maximized = project("pan-aaaaaa");
+    const maximized = workspace("pan-aaaaaa");
     maximized.spaces[0] = { ...maximized.spaces[0], maximizedTabId: "tab-aaaaaa" };
-    useSessions.setState({ projects: [maximized], activeId: maximized.id });
+    useSessions.setState({ workspaces: [maximized], activeId: maximized.id });
 
     expect(await execute("tab.restore", {
-      project: "pjt-aaaaaa",
+      workspace: "wsp-aaaaaa",
       causeTraceId: "b08/restore/revision8",
     }, {})).toMatchObject({
       ok: true,
@@ -299,7 +299,7 @@ describe("layout.arrangement", () => {
   it("exposes the solver answer unchanged — command and screen use the same computation", async () => {
     const result = await execute("layout.arrangement", {}, {});
     expect(result.ok).toBe(true);
-    const solved = projectArrangement(useSessions.getState().projects[0])!;
+    const solved = projectArrangement(useSessions.getState().workspaces[0])!;
     const data = result.data as {
       station: number;
       switched: boolean;
@@ -316,27 +316,27 @@ describe("layout.arrangement", () => {
     const at = (await execute("layout.arrangement", {}, {})) as { data?: { station: number } };
     expect(at.data?.station).toBe(50); // g2 focus
 
-    useSessions.getState().setActiveGroup("pjt-aaaaaa", "pan-aaaaaa");
+    useSessions.getState().setActiveGroup("wsp-aaaaaa", "pan-aaaaaa");
     const moved = (await execute("layout.arrangement", {}, {})) as { data?: { station: number } };
     expect(moved.data?.station).toBe(0);
   });
 
-  it("tab.activate on another pane publishes synchronously the layout revision ProjectPlane ACKs", async () => {
-    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
+  it("tab.activate on another pane publishes synchronously the layout revision WorkspacePlane ACKs", async () => {
+    expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({ active: false, pending: [] });
 
     await expect(execute("tab.activate", { tab: "tab-aaaaaa" }, {})).resolves.toMatchObject({
       ok: true,
       data: { tabId: "tab-aaaaaa" },
     });
 
-    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({
+    expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({
       active: true,
-      pending: [{ key: "pjt-aaaaaa", requested: 1, settled: 0 }],
+      pending: [{ key: "wsp-aaaaaa", requested: 1, settled: 0 }],
     });
   });
 
   it("a tab switch inside the same pane and a failed activation open no geometry revision", async () => {
-    const fixture = project("pan-bbbbbb");
+    const fixture = workspace("pan-bbbbbb");
     const g2 = fixture.spaces[0].layout.type === "split"
       ? fixture.spaces[0].layout.children[1]
       : null;
@@ -348,7 +348,7 @@ describe("layout.arrangement", () => {
       pluginId: "fixture",
       view: "content",
     });
-    useSessions.setState({ projects: [fixture], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [fixture], activeId: "wsp-aaaaaa" });
 
     await expect(execute("tab.activate", { tab: "v-g2-second" }, {})).resolves.toMatchObject({
       ok: true,
@@ -357,33 +357,33 @@ describe("layout.arrangement", () => {
       ok: false,
       code: "TARGET_NOT_FOUND",
     });
-    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({ active: false, pending: [] });
   });
 
   it("cross-pane activation under PIN changes focus only and opens no geometry revision", async () => {
-    const fixture = project("pan-bbbbbb");
+    const fixture = workspace("pan-bbbbbb");
     fixture.leftRailPlacement = { mode: "pin", station: 50 };
-    useSessions.setState({ projects: [fixture], activeId: "pjt-aaaaaa" });
+    useSessions.setState({ workspaces: [fixture], activeId: "wsp-aaaaaa" });
 
     await expect(execute("tab.activate", { tab: "tab-aaaaaa" }, {})).resolves.toMatchObject({ ok: true });
-    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({ active: false, pending: [] });
   });
 
   it("pane.activate under FLOW also opens exactly one geometry revision", async () => {
     await expect(execute("pane.activate", { pane: "pan-aaaaaa" }, {})).resolves.toMatchObject({ ok: true });
-    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({
+    expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({
       active: true,
-      pending: [{ key: "pjt-aaaaaa", requested: 1, settled: 0 }],
+      pending: [{ key: "wsp-aaaaaa", requested: 1, settled: 0 }],
     });
   });
 
-  it("the geometry revision is open before the store subscriber renders the new ProjectPlane", async () => {
+  it("the geometry revision is open before the store subscriber renders the new WorkspacePlane", async () => {
     const observed: ReturnType<typeof layoutSettlementFacts>[] = [];
     const unsubscribe = useSessions.subscribe(() => {
-      observed.push(layoutSettlementFacts("pjt-aaaaaa"));
-      // The same ACK boundary as ProjectPlane's layout effect. If the revision opens after the
+      observed.push(layoutSettlementFacts("wsp-aaaaaa"));
+      // The same ACK boundary as WorkspacePlane's layout effect. If the revision opens after the
       // store publish, this ACK closes an empty ledger and the real revision stays pending forever.
-      settleLayout("pjt-aaaaaa", requestedLayoutRevision("pjt-aaaaaa"));
+      settleLayout("wsp-aaaaaa", requestedLayoutRevision("wsp-aaaaaa"));
     });
     try {
       await expect(execute("tab.activate", { tab: "tab-aaaaaa" }, {})).resolves.toMatchObject({ ok: true });
@@ -393,14 +393,14 @@ describe("layout.arrangement", () => {
 
     expect(observed[0]).toEqual({
       active: true,
-      pending: [{ key: "pjt-aaaaaa", requested: 1, settled: 0 }],
+      pending: [{ key: "wsp-aaaaaa", requested: 1, settled: 0 }],
     });
-    expect(layoutSettlementFacts("pjt-aaaaaa")).toEqual({ active: false, pending: [] });
+    expect(layoutSettlementFacts("wsp-aaaaaa")).toEqual({ active: false, pending: [] });
   });
 
-  it("a FLOW geometry intent starts the adapter prepare before the new project subscriber", async () => {
+  it("a FLOW geometry intent starts the adapter prepare before the new workspace subscriber", async () => {
     const order: string[] = [];
-    registerLayoutTransitionIntentHost("pjt-aaaaaa", {
+    registerLayoutTransitionIntentHost("wsp-aaaaaa", {
       prepare: async () => {
         order.push("prepare");
         return {
@@ -422,7 +422,7 @@ describe("layout.arrangement", () => {
     }
 
     expect(order.slice(0, 2)).toEqual(["prepare", "state-publish"]);
-    await expect(claimLayoutTransitionIntent("pjt-aaaaaa", 1)).resolves.toMatchObject({
+    await expect(claimLayoutTransitionIntent("wsp-aaaaaa", 1)).resolves.toMatchObject({
       transactionId: "layout-intent",
     });
   });
@@ -431,7 +431,7 @@ describe("layout.arrangement", () => {
     const before = (await execute("layout.arrangement", {}, {})) as {
       data?: { cells: Array<{ id: string; railSide: string; rect: { width: number } }> };
     };
-    useSessions.getState().setActiveGroup("pjt-aaaaaa", "pan-aaaaaa");
+    useSessions.getState().setActiveGroup("wsp-aaaaaa", "pan-aaaaaa");
     const after = (await execute("layout.arrangement", {}, {})) as {
       data?: { cells: Array<{ id: string; railSide: string; rect: { width: number } }> };
     };

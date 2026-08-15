@@ -17,8 +17,8 @@ describe("ptyObservation — OSC 7 cwd", () => {
   it("preserves a percent-encoded, non-ASCII path across the round trip", () => {
     const cwds: string[] = [];
     const p = createPtyObservationParser({ onCwd: (c) => cwds.push(c) });
-    p.write(`\x1b]7;file://host${encodeURI("<local-evidence>/my project/héllo")}\x07`);
-    expect(cwds).toEqual(["<local-evidence>/my project/héllo"]);
+    p.write(`\x1b]7;file://host${encodeURI("<local-evidence>/my workspace/héllo")}\x07`);
+    expect(cwds).toEqual(["<local-evidence>/my workspace/héllo"]);
   });
 
   it("a repeated cwd notifies nothing; only a change does", () => {

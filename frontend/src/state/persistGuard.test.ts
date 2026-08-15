@@ -19,31 +19,31 @@ import { mayPersist, mayAdoptLateRead, snapshotRead, snapshotUnread } from "./pe
 describe("a failed restore blocks the persist", () => {
   it("there was something to restore and none of it came back — do not persist", () => {
     expect(
-      mayPersist({ snapshot: snapshotRead(3), restoredProjects: 0, liveProjects: 0 }),
+      mayPersist({ snapshot: snapshotRead(3), restoredWorkspaces: 0, liveWorkspaces: 0 }),
     ).toBe(false);
   });
 
   it("the user closed everything — persist; the restore succeeded and the emptying came after", () => {
     expect(
-      mayPersist({ snapshot: snapshotRead(3), restoredProjects: 3, liveProjects: 0 }),
+      mayPersist({ snapshot: snapshotRead(3), restoredWorkspaces: 3, liveWorkspaces: 0 }),
     ).toBe(true);
   });
 
   it("a window that started from an empty snapshot — persist; there is nothing to overwrite", () => {
     expect(
-      mayPersist({ snapshot: snapshotRead(0), restoredProjects: 0, liveProjects: 0 }),
+      mayPersist({ snapshot: snapshotRead(0), restoredWorkspaces: 0, liveWorkspaces: 0 }),
     ).toBe(true);
   });
 
   it("only part came back — persist; a drop is the rule (P6), not a failure", () => {
     expect(
-      mayPersist({ snapshot: snapshotRead(3), restoredProjects: 1, liveProjects: 1 }),
+      mayPersist({ snapshot: snapshotRead(3), restoredWorkspaces: 1, liveWorkspaces: 1 }),
     ).toBe(true);
   });
 
-  it("a project is present now — persist; whatever filled it, there is no overwrite risk", () => {
+  it("a workspace is present now — persist; whatever filled it, there is no overwrite risk", () => {
     expect(
-      mayPersist({ snapshot: snapshotRead(3), restoredProjects: 0, liveProjects: 2 }),
+      mayPersist({ snapshot: snapshotRead(3), restoredWorkspaces: 0, liveWorkspaces: 2 }),
     ).toBe(true);
   });
 });
@@ -51,16 +51,16 @@ describe("a failed restore blocks the persist", () => {
 describe("unread is not empty", () => {
   it("the snapshot was unreadable — do not persist; what would be overwritten is unknown", () => {
     expect(
-      mayPersist({ snapshot: snapshotUnread(), restoredProjects: 0, liveProjects: 0 }),
+      mayPersist({ snapshot: snapshotUnread(), restoredWorkspaces: 0, liveWorkspaces: 0 }),
     ).toBe(false);
   });
 
   it("unread — do not persist even when the window is full now; what is underneath is unknown", () => {
-    // Shape of the third loss: the read failed, the window put up one project from the default
+    // Shape of the third loss: the read failed, the window put up one workspace from the default
     // boot, and that one overwrote three. "Non-empty now, so it is safe" holds only for a
     // window that read the snapshot.
     expect(
-      mayPersist({ snapshot: snapshotUnread(), restoredProjects: 0, liveProjects: 2 }),
+      mayPersist({ snapshot: snapshotUnread(), restoredWorkspaces: 0, liveWorkspaces: 2 }),
     ).toBe(false);
   });
 
@@ -68,8 +68,8 @@ describe("unread is not empty", () => {
     const unread = snapshotUnread();
     const empty = snapshotRead(0);
     expect(unread).not.toEqual(empty);
-    expect(mayPersist({ snapshot: unread, restoredProjects: 0, liveProjects: 0 })).toBe(false);
-    expect(mayPersist({ snapshot: empty, restoredProjects: 0, liveProjects: 0 })).toBe(true);
+    expect(mayPersist({ snapshot: unread, restoredWorkspaces: 0, liveWorkspaces: 0 })).toBe(false);
+    expect(mayPersist({ snapshot: empty, restoredWorkspaces: 0, liveWorkspaces: 0 })).toBe(true);
   });
 });
 
@@ -86,6 +86,6 @@ describe("a late read is adopted only when it is empty", () => {
   it("not adopted — the persist stays blocked; a late read does not bypass the guard", () => {
     const late = 3;
     const snapshot = mayAdoptLateRead(late) ? snapshotRead(late) : snapshotUnread();
-    expect(mayPersist({ snapshot, restoredProjects: 0, liveProjects: 1 })).toBe(false);
+    expect(mayPersist({ snapshot, restoredWorkspaces: 0, liveWorkspaces: 1 })).toBe(false);
   });
 });

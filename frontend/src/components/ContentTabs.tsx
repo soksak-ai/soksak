@@ -3,22 +3,22 @@ import { execute } from "../commands/registry";
 import { isComposingEnter } from "../lib/imeKeys";
 import { Icon } from "../ui/icons/Icon";
 import { ProgramMenu } from "./ProgramMenu";
-import { type Program, type Project } from "../state/sessions";
+import { type Program, type Workspace } from "../state/sessions";
 import { useCloseConfirm } from "../state/closeConfirm";
 import { useProgramRegistry } from "../plugins/programRegistry";
 import { useT } from "../i18n";
 
 // Content tab bar (middle of the three-column layout). Switches between independent content
-// areas (split grids) inside one project.
+// areas (split grids) inside one workspace.
 // Auto numbering 1,2,3,… + rename (double click) + close + `+` menu (terminal / agent ▸
 // Claude·Codex / browser — new content with the selected program).
 
-// memo boundary (principle 2): a store write for another project does not re-render this.
+// memo boundary (principle 2): a store write for another workspace does not re-render this.
 export const ContentTabs = memo(function ContentTabs({
-  project,
+  workspace,
   vertical = false,
 }: {
-  project: Project;
+  workspace: Workspace;
   vertical?: boolean;
 }) {
   const t = useT();
@@ -31,7 +31,7 @@ export const ContentTabs = memo(function ContentTabs({
   );
 
   const commit = (id: string, raw: string, fallback: string) => {
-    void execute("space.rename", { project: project.id, space: id, title: raw.trim() || fallback }, {});
+    void execute("space.rename", { workspace: workspace.id, space: id, title: raw.trim() || fallback }, {});
     setEditingId(null);
   };
 
@@ -50,18 +50,18 @@ export const ContentTabs = memo(function ContentTabs({
   // be read from outside, tracing the cause turns into guessing. Same path as the space.create
   // the CLI and AI call, or the two diverge.
   const pick = (program: Program) => {
-    void execute("space.create", { project: project.id, program }, {});
+    void execute("space.create", { workspace: workspace.id, program }, {});
     setMenuPos(null);
   };
 
   return (
     <div className={`space-tabs${vertical ? " vertical" : ""}`}>
-      {project.spaces.map((c, idx) => (
+      {workspace.spaces.map((c, idx) => (
         <div
           key={c.id}
-          className={`space-tab${c.id === project.activeSpaceId ? " active" : ""}${editingId === c.id ? " editing" : ""}`}
+          className={`space-tab${c.id === workspace.activeSpaceId ? " active" : ""}${editingId === c.id ? " editing" : ""}`}
           data-node={`tab/space/${idx}`}
-          onClick={() => void execute("space.activate", { project: project.id, space: c.id }, {})}
+          onClick={() => void execute("space.activate", { workspace: workspace.id, space: c.id }, {})}
           onDoubleClick={() => setEditingId(c.id)}
           title={c.title}
         >
@@ -83,7 +83,7 @@ export const ContentTabs = memo(function ContentTabs({
           ) : (
             <span className="space-tab-title">{c.title}</span>
           )}
-          {project.spaces.length > 1 && editingId !== c.id && (
+          {workspace.spaces.length > 1 && editingId !== c.id && (
             <button
               type="button"
               className="icon-btn icon-btn--mini space-tab-close"
@@ -91,7 +91,7 @@ export const ContentTabs = memo(function ContentTabs({
               title={t("space.close")}
               onClick={(e) => {
                 e.stopPropagation();
-                requestCloseContent(project.id, c.id);
+                requestCloseContent(workspace.id, c.id);
               }}
             >
               <Icon name="close" size="md" />

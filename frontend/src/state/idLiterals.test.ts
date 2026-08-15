@@ -84,8 +84,8 @@ describe("fixture ids have the shape the product actually issues", () => {
 
   it("the two shapes this gate separates actually differ — the rule checks itself", () => {
     expect(COUNTER.test("t1")).toBe(true);
-    expect(COUNTER.test("pjt-aaaaaa")).toBe(false);
-    expect(ISSUED.test("pjt-aaaaaa")).toBe(true);
+    expect(COUNTER.test("wsp-aaaaaa")).toBe(false);
+    expect(ISSUED.test("wsp-aaaaaa")).toBe(true);
     expect(ISSUED.test("t1")).toBe(false);
     // A two-letter prefix is not the issued shape — exactly what this rule blocks.
     expect(ISSUED.test("sh-aaaaaa")).toBe(false);

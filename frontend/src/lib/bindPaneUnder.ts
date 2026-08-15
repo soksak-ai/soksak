@@ -16,8 +16,8 @@ export function bindPaneUnder(el: Element | null): void {
   const projectId = slot?.dataset.projectId;
   if (!groupId || !projectId) return;
   const state = useSessions.getState();
-  const project = state.projects.find((item) => item.id === projectId);
-  const space = project?.spaces.find((item) => item.id === project.activeSpaceId);
+  const workspace = state.workspaces.find((item) => item.id === projectId);
+  const space = workspace?.spaces.find((item) => item.id === workspace.activeSpaceId);
   const group = space ? allGroups(space.layout).find((item) => item.id === groupId) : null;
   const targetViewId = group?.activeTabId;
   if (targetViewId) {

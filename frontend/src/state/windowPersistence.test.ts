@@ -7,7 +7,7 @@ import {
   upsertManifest,
   type WindowManifest,
 } from "./windowPersistence";
-import type { Project, PaneNode } from "./sessions";
+import type { Workspace, PaneNode } from "./sessions";
 
 let sid = 0;
 const newSplitId = () => `S${++sid}`;
@@ -23,7 +23,7 @@ const leafGroup = (gid: string, vid: string): PaneNode => ({
   },
 });
 
-const proj = (id: string, root: string): Project => ({
+const proj = (id: string, root: string): Workspace => ({
   id,
   title: id,
   root,
@@ -36,34 +36,34 @@ const proj = (id: string, root: string): Project => ({
 });
 
 describe("snapshot/restore round trip per window", () => {
-  it("projects and activeId are preserved", () => {
+  it("workspaces and activeId are preserved", () => {
     sid = 0;
-    const projects = [proj("pjt-aaaaaa", "/a"), proj("pjt-bbbbbb", "/b")];
-    const snap = snapshotWindow(projects, "pjt-bbbbbb");
+    const workspaces = [proj("wsp-aaaaaa", "/a"), proj("wsp-bbbbbb", "/b")];
+    const snap = snapshotWindow(workspaces, "wsp-bbbbbb");
     const back = restoreWindow(snap, newSplitId);
-    expect(back.activeId).toBe("pjt-bbbbbb");
-    expect(back.projects.map((t) => t.root)).toEqual(["/a", "/b"]);
-    expect(back.projects.map((t) => t.id)).toEqual(["pjt-aaaaaa", "pjt-bbbbbb"]);
+    expect(back.activeId).toBe("wsp-bbbbbb");
+    expect(back.workspaces.map((t) => t.root)).toEqual(["/a", "/b"]);
+    expect(back.workspaces.map((t) => t.id)).toEqual(["wsp-aaaaaa", "wsp-bbbbbb"]);
   });
 
-  it("an activeId absent from the restored set falls back to the first project", () => {
+  it("an activeId absent from the restored set falls back to the first workspace", () => {
     sid = 0;
-    const snap = snapshotWindow([proj("pjt-aaaaaa", "/a")], "tZ");
-    expect(restoreWindow(snap, newSplitId).activeId).toBe("pjt-aaaaaa");
+    const snap = snapshotWindow([proj("wsp-aaaaaa", "/a")], "tZ");
+    expect(restoreWindow(snap, newSplitId).activeId).toBe("wsp-aaaaaa");
   });
 
   it("an empty window restores empty", () => {
     const snap = snapshotWindow([], "");
     const back = restoreWindow(snap, newSplitId);
-    expect(back.projects).toEqual([]);
+    expect(back.workspaces).toEqual([]);
     expect(back.activeId).toBe("");
   });
 });
 
 describe("windowManifestEntry", () => {
   it("label + roots + activeRoot", () => {
-    const projects = [proj("pjt-aaaaaa", "/a"), proj("pjt-bbbbbb", "/b")];
-    expect(windowManifestEntry("main", projects, "pjt-bbbbbb")).toEqual({
+    const workspaces = [proj("wsp-aaaaaa", "/a"), proj("wsp-bbbbbb", "/b")];
+    expect(windowManifestEntry("main", workspaces, "wsp-bbbbbb")).toEqual({
       label: "main",
       roots: ["/a", "/b"],
       activeRoot: "/b",

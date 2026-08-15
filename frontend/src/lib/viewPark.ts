@@ -14,15 +14,15 @@ import { browserLabel } from "./webviewLabels";
 import { parkedStyle } from "./layerPark";
 import type { PluginViewSurfacePlacement } from "../plugins/viewPresentationHost";
 
-// Whether a view is actually visible — true **only when all three layers are true**: the project is
-// active, that space is active within the project, and that view is the active tab within the
+// Whether a view is actually visible — true **only when all three layers are true**: the workspace is
+// active, that space is active within the workspace, and that view is the active tab within the
 // space. Miss one layer and the core receives "visible" for an invisible view and leaves the native
 // child (browser webview, engine surface) on screen — that was exactly the defect where the
-// previous project's browser stayed up after a project switch (missing project layer).
+// previous workspace's browser stayed up after a workspace switch (missing workspace layer).
 // CSS hides these layers separately, but the native layer is outside CSS, so the judgment is
 // collected into one expression.
-export function surfaceShown(projectActive: boolean, spaceActive: boolean, tabActive: boolean): boolean {
-  return projectActive && spaceActive && tabActive;
+export function surfaceShown(workspaceActive: boolean, spaceActive: boolean, tabActive: boolean): boolean {
+  return workspaceActive && spaceActive && tabActive;
 }
 
 /**

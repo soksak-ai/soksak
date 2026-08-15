@@ -475,7 +475,7 @@ export interface LibraryDep {
 // Plugin configuration schema — single source of truth for user configuration options. UI (auto
 // controls), stored defaults, validation, CLI/MCP, and docs all derive from this declaration
 // (declarative configuration schema). Harmless (declarative) → no permission needed. Storage has
-// two layers, global (app-wide) and per-project override (effective = project ?? global ?? default).
+// two layers, global (app-wide) and per-workspace override (effective = workspace ?? global ?? default).
 // list = string list, map = key-value pair list (a two-column mapping table such as source→mirror).
 // The settings modal renders both with per-row add/delete — for variable lists/mappings the four
 // scalar types cannot draw.
@@ -557,7 +557,7 @@ export interface PluginManifest {
   // (implementation-agnostic), and everything outside is rejected. Pinning an implementation id
   // through dependencies is the L1 name-pin, forbidden for new coupling.
   consumes?: ContractRequirement[];
-  // User configuration schema (optional). Global + per-project override. Harmless (declarative) →
+  // User configuration schema (optional). Global + per-workspace override. Harmless (declarative) →
   // no permission needed.
   configuration?: ConfigSetting[];
   permissions: PluginPermission[];

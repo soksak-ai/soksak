@@ -10,7 +10,7 @@ import (
 // The document paints transparent, so every unpainted region shows the window's
 // own colour. A window that cannot colour itself shows the framework's default
 // through the whole workspace — measured 2026-08-15: the orchestrator was dark
-// and the project window's panes were white, with one dark theme selected.
+// and the workspace window's panes were white, with one dark theme selected.
 //
 // The colour must reach the window that asked. This host had one window
 // captured at registration, so a workspace window's theme repainted the

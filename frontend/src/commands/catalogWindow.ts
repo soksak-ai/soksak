@@ -10,7 +10,7 @@ import { tmsg } from "../i18n";
 import { register } from "./registry";
 import { notFound } from "./refuse";
 import { currentWindowLabel } from "../lib/webviewLabels";
-import { validateProjectRoot } from "../lib/projectRoot";
+import { validateWorkspaceRoot } from "../lib/workspaceRoot";
 import { forgetWindowSlot } from "../state/windowBoot";
 import {
   snapshotSize,
@@ -353,8 +353,8 @@ export function registerWindowCatalog(): void {
   // ── Multi-window ─────────────────────────────────────────────────────────
   register("window.open", {
     description:
-      "Open a new project window for a project root (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). root is required unless mode orchestrator, which brings the control plane (main) forward instead — opening and creating projects live there; empty project windows do not exist.",
-    triggers: { ko: "새 창 창 열기 새 윈도우 프로젝트 새 창 오케스트레이터 창" },
+      "Open a new workspace window for a workspace root (P6: if the root is already open in some window, no window is created — that window is focused and returned as existingWindow). root is required unless mode orchestrator, which brings the control plane (main) forward instead — opening and creating workspaces live there; empty workspace windows do not exist.",
+    triggers: { ko: "새 창 창 열기 새 윈도우 워크스페이스 새 창 오케스트레이터 창" },
     params: {
       root: {
         type: "string",
@@ -421,7 +421,7 @@ export function registerWindowCatalog(): void {
         await invoke("window_create", { label: "main" });
         return { label: "main" };
       }
-      // Empty workspace windows do not exist — opening and creating projects is a control plane
+      // Empty workspace windows do not exist — opening and creating workspaces is a control plane
       // (main) surface.
       if (!p.root) {
         return {
@@ -432,7 +432,7 @@ export function registerWindowCatalog(): void {
       }
       let root: string;
       try {
-        root = await validateProjectRoot(p.root as string);
+        root = await validateWorkspaceRoot(p.root as string);
       } catch (e) {
         return {
           ok: false as const,
@@ -444,7 +444,7 @@ export function registerWindowCatalog(): void {
       // (zero duplicate windows). The race between check and create is finally enforced by the new
       // window's boot claim (on failure it degrades to an empty state).
       const owners = await invoke<{ owners: { root: string; window: string }[] }>(
-        "project_owners",
+        "workspace_owners",
       );
       const owner = owners.owners.find((o) => o.root === root)?.window;
       if (owner) {
@@ -486,11 +486,11 @@ export function registerWindowCatalog(): void {
         description: tmsg("cmd.window.restorePrevious.param.apply"),
       },
     },
-    returns: "{ found, projects, tabs, applied }",
+    returns: "{ found, workspaces, tabs, applied }",
     message: (d) =>
       d.found
         ? tmsg("msg.window.restorePrevious.found", {
-            n: Number(d.projects ?? 0),
+            n: Number(d.workspaces ?? 0),
             applied: String(d.applied),
           })
         : tmsg("msg.window.restorePrevious.none"),
@@ -504,7 +504,7 @@ export function registerWindowCatalog(): void {
       // on every write, so there is no retention condition to decide here.
       const past = await invoke<WindowSnapshotLike[]>("data_kv_history", { ns: "core", key });
       const prev = past?.[0] ?? null;
-      if (!prev) return { found: false, projects: 0, tabs: 0, applied: false };
+      if (!prev) return { found: false, workspaces: 0, tabs: 0, applied: false };
       const size = snapshotSize(prev);
       if (p.apply !== true) return { found: true, ...size, applied: false };
       // Undo is also a write, so the current value is pushed into the past — a wrong undo can be
@@ -514,24 +514,24 @@ export function registerWindowCatalog(): void {
     },
   });
 
-  register("window.projects", {
+  register("window.workspaces", {
     description:
-      "Map open windows to the project each one hosts (root path + name + window label). The meaning layer over window.list — use it first to pick the right window before targeting commands with --window. Same answer from any window (process-wide registry).",
-    triggers: { ko: "창 프로젝트 매핑 어느 창 프로젝트 열림 창별 프로젝트" },
+      "Map open windows to the workspace each one hosts (root path + name + window label). The meaning layer over window.list — use it first to pick the right window before targeting commands with --window. Same answer from any window (process-wide registry).",
+    triggers: { ko: "창 워크스페이스 매핑 어느 창 워크스페이스 열림 창별 워크스페이스" },
     params: {},
-    returns: "{ projects: [{ root, name, window }] }",
-    message: (d) => tmsg("msg.window.projects", { n: ((d.projects as unknown[]) ?? []).length }),
-    examples: ["window.projects"],
+    returns: "{ workspaces: [{ root, name, window }] }",
+    message: (d) => tmsg("msg.window.workspaces", { n: ((d.workspaces as unknown[]) ?? []).length }),
+    examples: ["window.workspaces"],
     handler: async () => {
       const owners = await invoke<{ owners: { root: string; window: string }[] }>(
-        "project_owners",
+        "workspace_owners",
       );
-      const projects = owners.owners.map((o) => ({
+      const workspaces = owners.owners.map((o) => ({
         root: o.root,
         name: o.root.split("/").filter(Boolean).pop() ?? o.root,
         window: o.window,
       }));
-      return { projects };
+      return { workspaces };
     },
   });
 

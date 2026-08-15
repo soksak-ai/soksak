@@ -31,10 +31,10 @@ func (bridge *Bridge) Emit(event string, payload any) {
 
 // Live answers the windows that currently exist.
 //
-// The project claim ledger reads this to tell a claim held by a live window
+// The workspace claim ledger reads this to tell a claim held by a live window
 // from one left by a window that is gone. Answering "unknown" as "live" would
-// keep a closed window's project locked forever; answering it as "gone" hands
-// the project to the next caller.
+// keep a closed window's workspace locked forever; answering it as "gone" hands
+// the workspace to the next caller.
 func (bridge *Bridge) Live() []string {
 	if bridge == nil || bridge.host == nil {
 		return nil

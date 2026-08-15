@@ -43,7 +43,7 @@ describe("capture motion anchors", () => {
     const host = document.createElement("div");
     document.body.append(host);
     setCaptureMotionAnchors(document, [
-      { address: "modal/project-new", color: "#ff00ff", host, x: 24, y: 80 },
+      { address: "modal/workspace-new", color: "#ff00ff", host, x: 24, y: 80 },
     ]);
 
     const anchor = document.querySelector<HTMLElement>(`[${CAPTURE_MOTION_ANCHOR_ATTR}]`);

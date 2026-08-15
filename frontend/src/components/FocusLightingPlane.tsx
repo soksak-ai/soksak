@@ -32,7 +32,7 @@ export function FocusLightingPlane({
   exempt,
   content,
 }: {
-  /** Stable space identity that identifies the lighting plane one-to-one within a project. */
+  /** Stable space identity that identifies the lighting plane one-to-one within a workspace. */
   scopeId: string;
   baseAmount: number;
   focused?: LightingRegion;

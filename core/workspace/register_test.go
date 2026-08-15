@@ -1,4 +1,4 @@
-package project
+package workspace
 
 import (
 	"encoding/json"
@@ -52,7 +52,7 @@ func wired(t *testing.T) (*control.Registry, Deps, *broadcast, *windows) {
 
 // None of these needs a window: the calling label arrives as an argument, which
 // is what keeps them answerable with no window at all.
-func TestTheProjectCommandsAreCoreOwned(t *testing.T) {
+func TestTheWorkspaceCommandsAreCoreOwned(t *testing.T) {
 	registry, _, _, _ := wired(t)
 
 	owners := map[string]control.Owner{}
@@ -60,8 +60,8 @@ func TestTheProjectCommandsAreCoreOwned(t *testing.T) {
 		owners[command.Name] = command.Owner
 	}
 	for _, name := range []string{
-		"validate_project_root", "ensure_project_dir",
-		"project_claim", "project_release", "window_manifest_upsert",
+		"validate_workspace_root", "ensure_workspace_dir",
+		"workspace_claim", "workspace_release", "window_manifest_upsert",
 	} {
 		owner, served := owners[name]
 		if !served {
@@ -82,12 +82,12 @@ func TestEachCommandNamesTheArgumentItIsMissing(t *testing.T) {
 		args     map[string]any
 		argument string
 	}{
-		{"validate_project_root", map[string]any{}, "path"},
-		{"ensure_project_dir", map[string]any{}, "folder"},
-		{"project_claim", map[string]any{"window": "w-1"}, "root"},
-		{"project_claim", map[string]any{"root": "/p"}, "window"},
-		{"project_release", map[string]any{"window": "w-1"}, "root"},
-		{"project_release", map[string]any{"root": "/p"}, "window"},
+		{"validate_workspace_root", map[string]any{}, "path"},
+		{"ensure_workspace_dir", map[string]any{}, "folder"},
+		{"workspace_claim", map[string]any{"window": "w-1"}, "root"},
+		{"workspace_claim", map[string]any{"root": "/p"}, "window"},
+		{"workspace_release", map[string]any{"window": "w-1"}, "root"},
+		{"workspace_release", map[string]any{"root": "/p"}, "window"},
 		{"window_manifest_upsert", map[string]any{"focused": true}, "entry"},
 	} {
 		_, err := registry.Invoke(missing.command, args(t, missing.args))
@@ -96,7 +96,7 @@ func TestEachCommandNamesTheArgumentItIsMissing(t *testing.T) {
 			continue
 		}
 		// The phrasing, not just the word. Every one of these arguments is
-		// also named by the refusal further in — "a project root must be an
+		// also named by the refusal further in — "a workspace root must be an
 		// absolute path" holds "path" — so a handler that silently substituted
 		// the zero value would pass a test that only looked for the name.
 		if want := fmt.Sprintf("missing argument %q", missing.argument); !strings.Contains(err.Error(), want) {
@@ -111,7 +111,7 @@ func TestEachCommandNamesTheArgumentItIsMissing(t *testing.T) {
 func TestAClaimWithNoWindowIsNotGuessed(t *testing.T) {
 	registry, deps, _, _ := wired(t)
 
-	if _, err := registry.Invoke("project_claim", args(t, map[string]any{"root": "/p"})); err == nil {
+	if _, err := registry.Invoke("workspace_claim", args(t, map[string]any{"root": "/p"})); err == nil {
 		t.Fatal("a claim with no calling window was accepted")
 	}
 	if owners := deps.Claims.Owners(); len(owners) != 0 {
@@ -122,26 +122,26 @@ func TestAClaimWithNoWindowIsNotGuessed(t *testing.T) {
 func TestValidateAndEnsureAnswerThroughTheRegistry(t *testing.T) {
 	registry, deps, _, _ := wired(t)
 
-	made, err := registry.Invoke("ensure_project_dir", args(t, map[string]any{"folder": "my-app"}))
+	made, err := registry.Invoke("ensure_workspace_dir", args(t, map[string]any{"folder": "my-app"}))
 	if err != nil {
-		t.Fatalf("ensure_project_dir: %v", err)
+		t.Fatalf("ensure_workspace_dir: %v", err)
 	}
-	if want := filepath.Join(deps.Home, "projects", "my-app"); made != want {
-		t.Errorf("ensure_project_dir = %v, want %q", made, want)
+	if want := filepath.Join(deps.Home, "workspaces", "my-app"); made != want {
+		t.Errorf("ensure_workspace_dir = %v, want %q", made, want)
 	}
 
 	// The identity home holds app-made folders; the user home is what the root
-	// verdict compares against. Mixing them puts a project root inside the
+	// verdict compares against. Mixing them puts a workspace root inside the
 	// app-managed area.
-	if _, err := registry.Invoke("validate_project_root", args(t, map[string]any{"path": deps.UserHome})); err == nil {
-		t.Error("the user home was accepted as a project root")
+	if _, err := registry.Invoke("validate_workspace_root", args(t, map[string]any{"path": deps.UserHome})); err == nil {
+		t.Error("the user home was accepted as a workspace root")
 	}
-	got, err := registry.Invoke("validate_project_root", args(t, map[string]any{"path": made}))
+	got, err := registry.Invoke("validate_workspace_root", args(t, map[string]any{"path": made}))
 	if err != nil {
-		t.Fatalf("validate_project_root on an app-made folder: %v", err)
+		t.Fatalf("validate_workspace_root on an app-made folder: %v", err)
 	}
 	if got == "" {
-		t.Error("validate_project_root answered with nothing")
+		t.Error("validate_workspace_root answered with nothing")
 	}
 }
 
@@ -151,7 +151,7 @@ func TestValidateAndEnsureAnswerThroughTheRegistry(t *testing.T) {
 func TestOnlyMutationsAreBroadcast(t *testing.T) {
 	registry, _, sent, _ := wired(t)
 
-	first, err := registry.Invoke("project_claim", args(t, map[string]any{"root": "/p", "window": "w-1"}))
+	first, err := registry.Invoke("workspace_claim", args(t, map[string]any{"root": "/p", "window": "w-1"}))
 	if err != nil {
 		t.Fatalf("claiming: %v", err)
 	}
@@ -162,10 +162,10 @@ func TestOnlyMutationsAreBroadcast(t *testing.T) {
 		t.Fatalf("events = %v, want one %s", sent.events, ChangeEvent)
 	}
 
-	if _, err := registry.Invoke("project_claim", args(t, map[string]any{"root": "/p", "window": "w-1"})); err != nil {
+	if _, err := registry.Invoke("workspace_claim", args(t, map[string]any{"root": "/p", "window": "w-1"})); err != nil {
 		t.Fatalf("re-claiming: %v", err)
 	}
-	refused, err := registry.Invoke("project_claim", args(t, map[string]any{"root": "/p", "window": "w-2"}))
+	refused, err := registry.Invoke("workspace_claim", args(t, map[string]any{"root": "/p", "window": "w-2"}))
 	if err != nil {
 		t.Fatalf("a conflicting claim answered with an error: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestOnlyMutationsAreBroadcast(t *testing.T) {
 	}
 
 	// A non-owner cannot release, and nothing is announced.
-	nonOwner, err := registry.Invoke("project_release", args(t, map[string]any{"root": "/p", "window": "w-2"}))
+	nonOwner, err := registry.Invoke("workspace_release", args(t, map[string]any{"root": "/p", "window": "w-2"}))
 	if err != nil {
 		t.Fatalf("a non-owner release answered with an error: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestOnlyMutationsAreBroadcast(t *testing.T) {
 		t.Errorf("events = %v, want still one", sent.events)
 	}
 
-	owner, err := registry.Invoke("project_release", args(t, map[string]any{"root": "/p", "window": "w-1"}))
+	owner, err := registry.Invoke("workspace_release", args(t, map[string]any{"root": "/p", "window": "w-1"}))
 	if err != nil {
 		t.Fatalf("the owner's release: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestOnlyMutationsAreBroadcast(t *testing.T) {
 func TestReleasingAnUnclaimedRootIsNotAFailure(t *testing.T) {
 	registry, _, sent, _ := wired(t)
 
-	reply, err := registry.Invoke("project_release", args(t, map[string]any{"root": "/nope", "window": "w-1"}))
+	reply, err := registry.Invoke("workspace_release", args(t, map[string]any{"root": "/nope", "window": "w-1"}))
 	if err != nil {
 		t.Fatalf("releasing a root nobody claimed: %v", err)
 	}
@@ -245,12 +245,12 @@ func TestTheManifestUpsertAnswersWhetherItChanged(t *testing.T) {
 // window, main, which is the control plane and never a workspace, so the ledger
 // would be permanently empty and "not wired" would be indistinguishable from
 // "no workspace window" — and the orchestrator routes a turn on that value.
-func TestTheLastProjectWindowIsRefusedWithItsReason(t *testing.T) {
+func TestTheLastWorkspaceWindowIsRefusedWithItsReason(t *testing.T) {
 	registry, _, _, _ := wired(t)
 
-	answer, err := registry.Invoke("ipc_last_project_window", control.Args{})
+	answer, err := registry.Invoke("ipc_last_workspace_window", control.Args{})
 	if err == nil {
-		t.Fatalf("ipc_last_project_window answered %v", answer)
+		t.Fatalf("ipc_last_workspace_window answered %v", answer)
 	}
 	if !strings.Contains(err.Error(), "focus ledger") {
 		t.Errorf("the refusal did not carry its reason: %v", err)
@@ -258,7 +258,7 @@ func TestTheLastProjectWindowIsRefusedWithItsReason(t *testing.T) {
 	table := registry.Describe()
 	found := false
 	for _, entry := range table.Unserved {
-		if entry.Name == "ipc_last_project_window" {
+		if entry.Name == "ipc_last_workspace_window" {
 			found = true
 		}
 	}
@@ -268,7 +268,7 @@ func TestTheLastProjectWindowIsRefusedWithItsReason(t *testing.T) {
 }
 
 // Boot-time wiring is a programming fact. Discovering it when a user opens a
-// project is worse than discovering it at startup.
+// workspace is worse than discovering it at startup.
 func TestRegisterRefusesIncompleteWiring(t *testing.T) {
 	complete := func() Deps {
 		live := &windows{}

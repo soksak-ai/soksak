@@ -80,10 +80,10 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
     expect(done).toBe(true);
   });
 
-  it("a pending revision unrelated to the current project does not block settlement of the current window", async () => {
+  it("a pending revision unrelated to the current workspace does not block settlement of the current window", async () => {
     animations([]);
-    invalidateLayout("inactive-project");
-    const result = await waitLayoutSettled(4_000, "active-project");
+    invalidateLayout("inactive-workspace");
+    const result = await waitLayoutSettled(4_000, "active-workspace");
     expect(result.waitedMs).toBeGreaterThanOrEqual(0);
   });
 
@@ -297,19 +297,19 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
     } as unknown as PluginViewPresentationHost);
 
     let done = false;
-    const waiting = waitLayoutSettled(4_000, "project-a").then(() => { done = true; });
+    const waiting = waitLayoutSettled(4_000, "workspace-a").then(() => { done = true; });
     await Promise.resolve();
-    const revision = invalidateLayout("project-a");
+    const revision = invalidateLayout("workspace-a");
     settleOld();
     for (let index = 0; index < 6; index += 1) await Promise.resolve();
     expect(done).toBe(false);
 
-    settleLayout("project-a", revision);
+    settleLayout("workspace-a", revision);
     await waiting;
     expect(presentationSettled).toHaveBeenCalledTimes(2);
   });
 
-  it("a layout settlement edge of another project does not change the barrier generation of the current window", async () => {
+  it("a layout settlement edge of another workspace does not change the barrier generation of the current window", async () => {
     animations([]);
     let settleBarrier!: () => void;
     const barrier = new Promise<void>((resolve) => { settleBarrier = resolve; });
@@ -318,10 +318,10 @@ describe("waitLayoutSettled — event-driven layout transaction barrier", () => 
       mount: vi.fn(), presentationSettled,
     } as unknown as PluginViewPresentationHost);
 
-    const waiting = waitLayoutSettled(4_000, "project-a");
+    const waiting = waitLayoutSettled(4_000, "workspace-a");
     await Promise.resolve();
-    const revision = invalidateLayout("project-b");
-    settleLayout("project-b", revision);
+    const revision = invalidateLayout("workspace-b");
+    settleLayout("workspace-b", revision);
     settleBarrier();
     await waiting;
 

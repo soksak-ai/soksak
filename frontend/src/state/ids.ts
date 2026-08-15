@@ -20,7 +20,7 @@
  *  key `window/<name>` in the snapshot store. It is listed here so that one
  *  table covers every prefix and no two kinds can take the same one. */
 export const ID_PREFIX = {
-  project: "pjt-",
+  workspace: "wsp-",
   space: "spc-",
   pane: "pan-",
   tab: "tab-",
@@ -81,8 +81,8 @@ function randomBody(): string {
 export function issueId(kind: IssuedKind): string {
   const body = randomBody();
   switch (kind) {
-    case "project":
-      return `pjt-${body}`;
+    case "workspace":
+      return `wsp-${body}`;
     case "space":
       return `spc-${body}`;
     case "pane":

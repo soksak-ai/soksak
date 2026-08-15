@@ -26,7 +26,7 @@ value names different things in two places.
 
 | Kind | Prefix | Issuer |
 | --- | --- | --- |
-| project | `pjt-` | `frontend/src/state/ids.ts` |
+| workspace | `wsp-` | `frontend/src/state/ids.ts` |
 | space | `spc-` | same |
 | pane | `pan-` | same |
 | tab | `tab-` | same |

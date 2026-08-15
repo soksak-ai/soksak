@@ -2,7 +2,7 @@
 //
 // (a) What this gate enforces (standard §1-4d scope rule)
 //     The id format standard (`<prefix>-<base32 6>`) applies only to **layout entities + shell sessions**.
-//       layout entities : project(`pjt-`) · space(`spc-`) · pane(`pan-`) · tab(`tab-`)
+//       layout entities : workspace(`wsp-`) · space(`spc-`) · pane(`pan-`) · tab(`tab-`)
 //       shell session   : pty.session(`sh-`)
 //     window is absent from that table — `win-<uuid4>` stays as is and the core issues it (§1-1).
 //     Every other axis (schedule · secret · data.kv · data.encrypt · registry · daemon · theme ·
@@ -24,7 +24,7 @@
 // (c) The shell queries that produced those counts (from the repo root)
 //     ls src/state/ids.ts
 //       → No such file or directory                                     (0 issuers)
-//     grep -rnE '`(pjt|spc|pan|tab|sh)-\$\{' src/state src/commands | wc -l
+//     grep -rnE '`(wsp|spc|pan|tab|sh)-\$\{' src/state src/commands | wc -l
 //       → 0                                                (0 prefixed issuance sites)
 //     grep -rnE '`[a-z]{1,5}-\$\{' src/state src/commands | grep -v '\.test\.' | wc -l
 //       → 0                                      (no prefixed issuance in production)
@@ -46,7 +46,7 @@ const SCANNED_DIRS = [__dirname, join(__dirname, "..", "commands")];
 /** Every prefix the table declares. `win-` is issued by the host, not by
  *  issueId, and it is listed so that one table covers every prefix. */
 const IN_SCOPE: Record<string, string> = {
-  project: "pjt-",
+  workspace: "wsp-",
   space: "spc-",
   pane: "pan-",
   tab: "tab-",
@@ -56,7 +56,7 @@ const IN_SCOPE: Record<string, string> = {
 };
 
 /** Prefixes issued in this module. `win-` is absent: the host issues it. */
-const ISSUED_HERE = new Set(["pjt", "spc", "pan", "tab", "spl", "shl"]);
+const ISSUED_HERE = new Set(["wsp", "spc", "pan", "tab", "spl", "shl"]);
 
 /** §1-4d ② axes that keep a natural key — issuing a prefixed id here is a violation. */
 const NATURAL_KEY_AXES = [
@@ -129,7 +129,7 @@ function issuerSource(): string {
   return existsSync(ISSUER) ? readFileSync(ISSUER, "utf8") : "";
 }
 
-/** Reads the entity→prefix table from `export const ID_PREFIX = { project: "pjt-", ... }`. */
+/** Reads the entity→prefix table from `export const ID_PREFIX = { workspace: "wsp-", ... }`. */
 function declaredPrefixTable(): Record<string, string> {
   const src = issuerSource();
   const block = /export const ID_PREFIX[^{]*\{([\s\S]*?)\}/.exec(src);

@@ -10,8 +10,8 @@ import {
   useState,
 } from "react";
 import { listenThisWindow } from "./lib/windowEvents";
-import { addProjectClaimed, closeProjectReleased, useOtherWindowProjects } from "./state/projectRegistry";
-import { removeRecentProject, useRecentProjects } from "./state/recentProjects";
+import { addWorkspaceClaimed, closeWorkspaceReleased, useOtherWindowWorkspaces } from "./state/workspaceRegistry";
+import { removeRecentWorkspace, useRecentWorkspaces } from "./state/recentWorkspaces";
 import { rafThrottle } from "./lib/rafThrottle";
 import { railEdgeWidths } from "./ui/railEdges";
 import { parkedStyle } from "./lib/layerPark";
@@ -35,10 +35,10 @@ import { RailLinkOverlay } from "./components/RailLinkOverlay";
 import { PluginSidebar } from "./components/PluginSidebar";
 import { ContentTabs } from "./components/ContentTabs";
 import { GroupArea, HEADER_PX, PANE_INSET } from "./components/GroupArea";
-import { NewProjectModal } from "./components/NewProjectModal";
-import { ProjectSettingsModal } from "./components/ProjectSettingsModal";
+import { NewWorkspaceModal } from "./components/NewWorkspaceModal";
+import { WorkspaceSettingsModal } from "./components/WorkspaceSettingsModal";
 import { Icon } from "./ui/icons/Icon";
-import { validateProjectRoot } from "./lib/projectRoot";
+import { validateWorkspaceRoot } from "./lib/workspaceRoot";
 // Wordmark logo — fill inherits currentColor, so it tracks the theme automatically (static trusted asset).
 import logoRaw from "./assets/soksak_logo.svg?raw";
 import { SettingsModal } from "./components/SettingsModal";
@@ -61,7 +61,7 @@ import {
   projectArrangement,
   useSessions,
   webviewDisplayName,
-  type Project,
+  type Workspace,
   type Pane,
 } from "./state/sessions";
 import {
@@ -96,7 +96,7 @@ const shellEscape = (p: string) => p.replace(/[^A-Za-z0-9_./@%+:,=-]/g, "\\$&");
 
 // Pass GroupArea only the public media facts the manifest owns. GroupArea does not read inside the
 // framework or the plugin registry; it picks the travel visual owner from this identity set.
-const nativeSurfaceViewIds = (content: Project["spaces"][number]): string[] => (
+const nativeSurfaceViewIds = (content: Workspace["spaces"][number]): string[] => (
   allGroups(content.layout).flatMap((group) => group.tabs
     .filter((view) => view.kind === "plugin"
       && ownsNativeSurfaceFromManifests(view.pluginId, view.view))
@@ -111,8 +111,8 @@ const SIDEBAR_DEFAULT = 320;
 const RIGHT_MIN = 200;
 const RIGHT_MAX = 640;
 const RIGHT_DEFAULT = 300;
-// Left project rail width.
-// Product layout contract: project rail default 54px, drag 44–110px.
+// Left workspace rail width.
+// Product layout contract: workspace rail default 54px, drag 44–110px.
 const RAIL_MIN = 44;
 const RAIL_MAX = 110;
 const RAIL_DEFAULT = 54;
@@ -130,7 +130,7 @@ function useResizableWidth(
     const v = Number(localStorage.getItem(key));
     return v >= min && v <= max ? v : def;
   });
-  // begin is reference-stable (useCallback) — passing it as a prop into the memoized ProjectPlane
+  // begin is reference-stable (useCallback) — passing it as a prop into the memoized WorkspacePlane
   // does not break the boundary (principle 2). The current width is read from a ref.
   const wRef = useRef(w);
   wRef.current = w;
@@ -169,13 +169,13 @@ function useResizableWidth(
   return [w, begin] as const;
 }
 
-// Body of one project (left sidebar + content + right plugin sidebar).
-// memo boundary = project data boundary (principle 2, docs/PERFORMANCE.md): a store write for project X
-// preserves the object identity of project Y (mapProject), so the Y subtree does not re-render.
+// Body of one workspace (left sidebar + content + right plugin sidebar).
+// memo boundary = workspace data boundary (principle 2, docs/PERFORMANCE.md): a store write for workspace X
+// preserves the object identity of workspace Y (mapWorkspace), so the Y subtree does not re-render.
 // Every prop must be reference- or value-stable — no custom comparator.
-const ProjectPlane = memo(function ProjectPlane({
-  project,
-  isActiveProject,
+const WorkspacePlane = memo(function WorkspacePlane({
+  workspace,
+  isActiveWorkspace,
   sidebarW,
   rightW,
   rightMode,
@@ -183,8 +183,8 @@ const ProjectPlane = memo(function ProjectPlane({
   startResize,
   startRightResize,
 }: {
-  project: Project;
-  isActiveProject: boolean;
+  workspace: Workspace;
+  isActiveWorkspace: boolean;
   sidebarW: number;
   rightW: number;
   rightMode: RightSidebarMode;
@@ -196,19 +196,19 @@ const ProjectPlane = memo(function ProjectPlane({
   const setLeftRailPlacement = useSessions((s) => s.setLeftRailPlacement);
   const railPlaneRef = useRef<HTMLDivElement>(null);
   const railGridSurfaceRef = useRef<RailGridSurfaceHandle>(null);
-  const placement = project.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
+  const placement = workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
   const activeContent =
-    project.spaces.find((content) => content.id === project.activeSpaceId) ??
-    project.spaces[0];
+    workspace.spaces.find((content) => content.id === workspace.activeSpaceId) ??
+    workspace.spaces[0];
   const decoration = useLayoutDecorationPresentation(
-    `${project.id}/${activeContent?.id ?? "none"}`,
+    `${workspace.id}/${activeContent?.id ?? "none"}`,
   );
   // Fall back to the last settled value so station does not collapse to 0 on an unresolved focus render.
   const lastStationRef = useRef(0);
   // The solver solves the arrangement — single truth for station, layout, produced adjacency and move amounts (never recompute).
   // **Subscribe** to the attach mode and pass it down — reading it through getState skips the redraw when the setting changes.
   const railPullFocused = useSettings((s) => s.railPullFocused);
-  const solved = projectArrangement(project, lastStationRef.current, railPullFocused);
+  const solved = projectArrangement(workspace, lastStationRef.current, railPullFocused);
   lastStationRef.current = solved?.station ?? 0;
   const railGeometryScope = railGeometryScopeId(
     activeContent?.id,
@@ -247,16 +247,16 @@ const ProjectPlane = memo(function ProjectPlane({
         to,
         groups,
         hostWidth,
-        project.sidebarOpen ? sidebarW : 0,
+        workspace.sidebarOpen ? sidebarW : 0,
       ), signal);
     },
-    [project.sidebarOpen, sidebarW],
+    [workspace.sidebarOpen, sidebarW],
   );
   useLayoutEffect(
-    () => registerLayoutTransitionIntentHost<Pane>(project.id, {
+    () => registerLayoutTransitionIntentHost<Pane>(workspace.id, {
       prepare: ({ from, to }, signal) => prepareArrangementTravel(from, to, signal),
     }),
-    [project.id, prepareArrangementTravel],
+    [workspace.id, prepareArrangementTravel],
   );
   const phase = useArrangementPhase(
     solved,
@@ -264,7 +264,7 @@ const ProjectPlane = memo(function ProjectPlane({
     contentKey,
     undefined,
     prepareArrangementTravel,
-    project.id,
+    workspace.id,
     railGridSurfaceRef.current?.candidateParticipant,
   );
   const arrangement = phase.displayed;
@@ -281,7 +281,7 @@ const ProjectPlane = memo(function ProjectPlane({
         destination: solved,
         bindingTabId: activeContent.railBindingTabId,
         placement: placement.mode,
-        railOpen: project.sidebarOpen,
+        railOpen: workspace.sidebarOpen,
         station: renderedStation,
       })
     : null;
@@ -337,16 +337,16 @@ const ProjectPlane = memo(function ProjectPlane({
   // Pin = anchor at the current position / unpin = follow focus (flow). Attaching the rail to the function tab is the default.
   const toggleRailPin = useCallback(() => {
     setLeftRailPlacement(
-      project.id,
+      workspace.id,
       placement.mode === "pin"
         ? { mode: "flow" }
         : { mode: "pin", station: effectiveStation },
     );
-  }, [effectiveStation, placement.mode, project.id, setLeftRailPlacement]);
+  }, [effectiveStation, placement.mode, workspace.id, setLeftRailPlacement]);
 
   const startRailStationDrag = useCallback(
     (e: React.MouseEvent) => {
-      if (e.button !== 0 || !project.sidebarOpen) return;
+      if (e.button !== 0 || !workspace.sidebarOpen) return;
       e.preventDefault();
       e.stopPropagation();
       const plane = railPlaneRef.current;
@@ -377,7 +377,7 @@ const ProjectPlane = memo(function ProjectPlane({
         setDragStation(null);
         // A drag landing is not a travel phase — sync the display reference point to the pointer position.
         phase.rebase();
-        setLeftRailPlacement(project.id, { mode: "pin", station: next });
+        setLeftRailPlacement(workspace.id, { mode: "pin", station: next });
       };
       // A hand drag is a layout motion phase too — it gets the same signals as automatic travel (hole clipping, native follow).
       beginLayoutMotion("move", undefined, "station-drag");
@@ -389,8 +389,8 @@ const ProjectPlane = memo(function ProjectPlane({
     [
       effectiveStation,
       phase.rebase,
-      project.id,
-      project.sidebarOpen,
+      workspace.id,
+      workspace.sidebarOpen,
       railCleanLines,
       setLeftRailPlacement,
       sidebarW,
@@ -407,14 +407,14 @@ const ProjectPlane = memo(function ProjectPlane({
   // breaks and the whole grid teleports (2) a surface returning from parking is not re-snapped to the final anchor and
   // lags one beat (measured by the user: choosing another tab in a panel with several browser tabs looks off and flickers).
   useLayoutEffect(() => {
-    emitPluginEvent("layout.reflow", { activeSpaceId: project.activeSpaceId });
+    emitPluginEvent("layout.reflow", { activeSpaceId: workspace.activeSpaceId });
   }, [
     contentKey,
     activeContent?.activePaneId,
     activeContent?.maximizedTabId,
-    project.activeSpaceId,
-    project.sidebarOpen,
-    isActiveProject,
+    workspace.activeSpaceId,
+    workspace.sidebarOpen,
+    isActiveWorkspace,
     renderedStation,
     railTraveling,
     sidebarW,
@@ -422,26 +422,26 @@ const ProjectPlane = memo(function ProjectPlane({
   ]);
   return (
     <div
-      className="project-plane"
-      // Anchor of address axiom A1 — the chrome nodes inside this plane exist once per project.
-      // The address must include the project for rail/left to resolve to exactly one (collectExposed reads it).
-      data-project-plane={project.id}
-      data-project-active={isActiveProject ? "1" : undefined}
-      // An inactive project is hidden by ordinary DOM visibility rather than unmounted. Visibility of surfaces outside
+      className="workspace-plane"
+      // Anchor of address axiom A1 — the chrome nodes inside this plane exist once per workspace.
+      // The address must include the workspace for rail/left to resolve to exactly one (collectExposed reads it).
+      data-workspace-plane={workspace.id}
+      data-workspace-active={isActiveWorkspace ? "1" : undefined}
+      // An inactive workspace is hidden by ordinary DOM visibility rather than unmounted. Visibility of surfaces outside
       // the document is the separate responsibility of the framework consuming the view.parked/content-view host contract.
-      style={parkedStyle(isActiveProject)}
+      style={parkedStyle(isActiveWorkspace)}
     >
       {/* The upper content tabs stay outside the rail; only the selected panel grid shares a coordinate system with the rail. */}
       <div
         className={`content${contentTabPosition === "left" ? " space-tabs-left" : ""}`}
       >
-        {project.rootMissing && (
+        {workspace.rootMissing && (
           <div className="root-missing-banner" data-node="banner/root-missing">
-            {t("project.rootMissing", { root: project.root })}
+            {t("workspace.rootMissing", { root: workspace.root })}
           </div>
         )}
         <ContentTabs
-          project={project}
+          workspace={workspace}
           vertical={contentTabPosition === "left"}
         />
         <RailGridSurface
@@ -500,16 +500,16 @@ const ProjectPlane = memo(function ProjectPlane({
                   style={
                     {
                       left: `calc(${rail.station}% - ${(sidebarW * rail.station) / 100}px)`,
-                      width: project.sidebarOpen ? sidebarW : 0,
+                      width: workspace.sidebarOpen ? sidebarW : 0,
                       borderLeftWidth: railEdgeWidths(
                         railLook,
-                        project.sidebarOpen,
+                        workspace.sidebarOpen,
                         rail.station,
                         paneStyle,
                       ).left,
                       borderRightWidth: railEdgeWidths(
                         railLook,
-                        project.sidebarOpen,
+                        workspace.sidebarOpen,
                         rail.station,
                         paneStyle,
                       ).right,
@@ -517,11 +517,11 @@ const ProjectPlane = memo(function ProjectPlane({
                   }
                 >
                   <LeftSidebarHost
-                    project={project}
-                    paneId={cwdTabOf(project) ?? ""}
+                    workspace={workspace}
+                    paneId={cwdTabOf(workspace) ?? ""}
                     commitProjection={!arrangementPending}
                   />
-                  {project.sidebarOpen && (
+                  {workspace.sidebarOpen && (
                     <div className="left-rail-controls">
                       <button
                         type="button"
@@ -540,7 +540,7 @@ const ProjectPlane = memo(function ProjectPlane({
                       </button>
                     </div>
                   )}
-                  {project.sidebarOpen && (
+                  {workspace.sidebarOpen && (
                     <div
                       className="sidebar-resizer"
                       data-wv-occlusion="sidebar-resizer"
@@ -552,8 +552,8 @@ const ProjectPlane = memo(function ProjectPlane({
             </div>
           }
         >
-          {project.spaces.map((c) => {
-            const isActiveContent = c.id === project.activeSpaceId;
+          {workspace.spaces.map((c) => {
+            const isActiveContent = c.id === workspace.activeSpaceId;
             return (
               <div
                 key={c.id}
@@ -563,9 +563,9 @@ const ProjectPlane = memo(function ProjectPlane({
               >
                 <GroupArea
                   content={c}
-                  projectId={project.id}
+                  projectId={workspace.id}
                   nativeSurfaceViewIds={nativeSurfaceViewIds(c)}
-                  surfaceActive={isActiveProject && isActiveContent}
+                  surfaceActive={isActiveWorkspace && isActiveContent}
                   // The solution determines the arrangement — inactive content keeps its canonical layout (no rail).
                   // Cells blocked by how far the rail could not go — they do not move, but must dim to show which panel is active.
                   //
@@ -594,7 +594,7 @@ const ProjectPlane = memo(function ProjectPlane({
                   // The maximize fact comes from the **same solution** as station — mixing them makes the render throw.
                   displayMaximizedId={isActiveContent ? (arrangement?.maximizedId ?? null) : undefined}
                   railWidthPx={
-                    isActiveContent && project.sidebarOpen ? sidebarW : 0
+                    isActiveContent && workspace.sidebarOpen ? sidebarW : 0
                   }
                 />
               </div>
@@ -604,7 +604,7 @@ const ProjectPlane = memo(function ProjectPlane({
       </div>
 
       {/* Right plugin sidebar (⌥⌘B). Closed = width 0 (not unmounted — keep-alive). */}
-      {project.rightOpen && (
+      {workspace.rightOpen && (
         <div
           className="sidebar-right-resizer"
           data-node="sidebar/right/resizer"
@@ -615,26 +615,26 @@ const ProjectPlane = memo(function ProjectPlane({
         />
       )}
       <div
-        className={`sidebar-right${project.rightOpen ? " open" : ""}${rightMode === "push" ? " push" : ""}`}
+        className={`sidebar-right${workspace.rightOpen ? " open" : ""}${rightMode === "push" ? " push" : ""}`}
         data-node="sidebar/right"
         data-wv-occlusion="sidebar-right"
         data-focus-lighting="exempt"
         style={{
-          width: project.rightOpen ? rightW : 0,
-          borderLeftWidth: project.rightOpen ? 1 : 0,
+          width: workspace.rightOpen ? rightW : 0,
+          borderLeftWidth: workspace.rightOpen ? 1 : 0,
         }}
       >
-        <PluginSidebar projectId={project.id} />
+        <PluginSidebar projectId={workspace.id} />
       </div>
     </div>
   );
 });
 
-// The terminal pane the project sidebar (file tree) follows (= the current cwd source). The pure resolver is
+// The terminal pane the workspace sidebar (file tree) follows (= the current cwd source). The pure resolver is
 // sessions.cwdTabOf — here it is called with the PTY observation predicate (hasPtyObservation) injected.
 // No core/plugin terminal distinction — any view driving the PTY substrate (one that has an observation) is followed.
-const cwdTabOf = (project: Project): string | undefined =>
-  resolveCwdTab(project, hasPtyObservation);
+const cwdTabOf = (workspace: Workspace): string | undefined =>
+  resolveCwdTab(workspace, hasPtyObservation);
 
 // Build identity badge: DEV (dev identity) / DEBUG (debug bundle soksak-debug) / none (release).
 // The axis is identity, not the load mode (HMR or bundle). It used to be "DEV only when HMR", so a bundle build with
@@ -704,7 +704,7 @@ function WebviewHealthBadges() {
   const t = useT();
   // The badge is a user surface — resolve the tab display name instead of the raw label (b-<window>-<viewId>)
   // (webviewDisplayName). Identification (key, data-node, recover argument) keeps the label — the machine path is unchanged.
-  const projects = useSessions((s) => s.projects);
+  const workspaces = useSessions((s) => s.workspaces);
   const [openLabels, setOpenLabels] = useState<string[]>([]);
   useEffect(() => {
     return listenThisWindow<{ label: string; state: string }>(
@@ -727,7 +727,7 @@ function WebviewHealthBadges() {
       {openLabels.map((label) => (
         <div key={label} className="webview-health-badge">
           <span>
-            {t("webview.exhausted", { label: webviewDisplayName(label, projects) })}
+            {t("webview.exhausted", { label: webviewDisplayName(label, workspaces) })}
           </span>
           <button
             type="button"
@@ -759,7 +759,7 @@ function App() {
   const t = useT();
   const settingsSection = useUi((s) => s.settingsSection);
   const setSettingsSection = useUi((s) => s.setSettingsSection);
-  const projectTabPosition = useSettings((s) => s.projectTabPosition);
+  const workspaceTabPosition = useSettings((s) => s.workspaceTabPosition);
   const contentTabPosition = useSettings((s) => s.contentTabPosition);
   const rightSidebarMode = useSettings((s) => s.rightSidebarMode);
 
@@ -789,7 +789,7 @@ function App() {
   // Remote destructive confirm wiring (phone-link safety model) — connect what the core emits
   // ("remote-confirm-request") to the store queue, and the decision sink to remote_confirm_resolve (the desktop is the single authority). Once at boot.
   useEffect(() => wireRemoteConfirm(), []);
-  // The active project/space/pane/tab chain and the real keyboard focus are one contract.
+  // The active workspace/space/pane/tab chain and the real keyboard focus are one contract.
   // Do not autofocus on mount; pass only the latest active view intent to the provider.
   useEffect(() => startViewFocusSync(), []);
   // Ghost hold recovery — blocks a lost mouseup from a window-activating click from spreading into a terminal drag selection.
@@ -842,19 +842,19 @@ function App() {
 
   // Minimal subscription principle (docs/PERFORMANCE.md 1): per-field and per-action selectors only — no bare hook.
   // A zustand action is a stable reference fixed at create(), so an action selector causes no re-render.
-  const projects = useSessions((s) => s.projects);
+  const workspaces = useSessions((s) => s.workspaces);
   const activeId = useSessions((s) => s.activeId);
   const setActive = useSessions((s) => s.setActive);
   const toggleSidebar = useSessions((s) => s.toggleSidebar);
   const toggleRightSidebar = useSessions((s) => s.toggleRightSidebar);
   const addViewToGroup = useSessions((s) => s.addViewToGroup);
   const closeView = useSessions((s) => s.closeView);
-  // Target project id for the project settings modal (name/color).
-  const [projectSettingsFor, setProjectSettingsFor] = useState<string | null>(
+  // Target workspace id for the workspace settings modal (name/color).
+  const [workspaceSettingsFor, setWorkspaceSettingsFor] = useState<string | null>(
     null,
   );
-  const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const activeProject = projects.find((t) => t.id === activeId);
+  const [newWorkspaceOpen, setNewWorkspaceOpen] = useState(false);
+  const activeWorkspace = workspaces.find((t) => t.id === activeId);
 
   // The spawn options provider is registered by the main.tsx boot (before render) — an effect (after
   // mount) runs later than the first spawn from a child pane ref, which was the latent cause of the
@@ -873,11 +873,11 @@ function App() {
     RAIL_MIN,
     RAIL_MAX,
   );
-  // The project tab rail is app chrome outside ProjectSurface. A top↔left swap and a rail width change also alter the
+  // The workspace tab rail is app chrome outside WorkspaceSurface. A top↔left swap and a rail width change also alter the
   // inner content slot geometry, so that commit is declared as the shared reflow event.
   useAppChromeLayoutReflow(
-    [projectTabPosition, railW].join(":"),
-    activeProject?.activeSpaceId ?? null,
+    [workspaceTabPosition, railW].join(":"),
+    activeWorkspace?.activeSpaceId ?? null,
   );
   const [rightW, startRightResize] = useResizableWidth(
     "rightSidebarW",
@@ -893,7 +893,7 @@ function App() {
   // full size (the old webview width clamp workaround was removed — see browser.rs).
   // In push mode the sidebar takes space in flow (content and webview are already narrower) → no overlay hole needed.
   const rightRect =
-    activeProject?.rightOpen && rightSidebarMode !== "push" ? rightW : 0;
+    activeWorkspace?.rightOpen && rightSidebarMode !== "push" ? rightW : 0;
   useLayoutEffect(() => {
     // Opening, closing and widening the sidebar is **the layout being laid out again** — publish that fact. What to
     // do with it is up to the listener (a framework with surfaces outside the document resends its hole list, and a
@@ -904,7 +904,7 @@ function App() {
     //
     // Notify on the frame *after* the layout commits — before rAF the sidebar width is not applied yet and the
     // measurer reads the old rect.
-    const notify = () => emitPluginEvent("layout.reflow", { activeSpaceId: activeProject?.activeSpaceId ?? null });
+    const notify = () => emitPluginEvent("layout.reflow", { activeSpaceId: activeWorkspace?.activeSpaceId ?? null });
     const raf = requestAnimationFrame(notify);
     // A window resize also moves the sidebar rect (right edge fixed, height) — notify again.
     const onWinResize = () => requestAnimationFrame(notify);
@@ -920,7 +920,7 @@ function App() {
   // The core does not own terminal theming or session disposal — the terminal plugin applies app theme tokens to its
   // own view's xterm theme and cleans up the PTY session itself on view unmount (PluginViewHost).
 
-  // Keyboard shortcuts (capture phase → ahead of xterm). Relative to the active view of the active project.
+  // Keyboard shortcuts (capture phase → ahead of xterm). Relative to the active view of the active workspace.
   // ⌘D split left/right / ⌘⇧D split top/bottom / ⌘W close view (pane→view) / ⌘T new terminal / ⌘B sidebar.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -938,23 +938,23 @@ function App() {
         return;
       }
       if (!e.metaKey) return;
-      // ⌘N new window (independent workspace) — project-independent, so handled first.
+      // ⌘N new window (independent workspace) — workspace-independent, so handled first.
       if (key === "n" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         invoke("window_create").catch((err) => console.error("new window failed:", err));
         return;
       }
       const s = useSessions.getState();
-      const project = s.projects.find((t) => t.id === s.activeId);
-      if (!project) return;
+      const workspace = s.workspaces.find((t) => t.id === s.activeId);
+      if (!workspace) return;
       const content =
-        project.spaces.find((c) => c.id === project.activeSpaceId) ??
-        project.spaces[0];
+        workspace.spaces.find((c) => c.id === workspace.activeSpaceId) ??
+        workspace.spaces[0];
       if (!content) return;
       // ⌥⌘B right plugin sidebar. With ⌥ the e.key is a composed character ("∫"), so the check uses e.code.
       if (e.altKey && !e.shiftKey && e.code === "KeyB") {
         e.preventDefault();
-        toggleRightSidebar(project.id);
+        toggleRightSidebar(workspace.id);
         return;
       }
       const groups = allGroups(content.layout);
@@ -964,23 +964,23 @@ function App() {
       if (key === "w" && !e.shiftKey) {
         // ⌘W closes the active view (core terminal pane splitting removed — view-level close only).
         e.preventDefault();
-        if (view) closeView(project.id, view.id);
+        if (view) closeView(workspace.id, view.id);
       } else if (key === "t" && !e.shiftKey) {
         e.preventDefault();
         // ⌘T = new terminal tab. The core names no specific engine — it opens the configured terminal engine (contract resolution).
         // With no active terminal engine it opens nothing (no stray empty tabs — ⌘T means terminal only).
         const terminalProgram = resolveTerminalProgram();
-        if (terminalProgram) addViewToGroup(project.id, terminalProgram);
+        if (terminalProgram) addViewToGroup(workspace.id, terminalProgram);
       } else if (key === "b" && !e.shiftKey) {
         e.preventDefault();
-        toggleSidebar(project.id);
+        toggleSidebar(workspace.id);
       }
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [closeView, addViewToGroup, toggleSidebar, toggleRightSidebar]);
 
-  // File drag and drop: injects escaped paths into the active project's terminal pane (plugin terminal, PTY substrate).
+  // File drag and drop: injects escaped paths into the active workspace's terminal pane (plugin terminal, PTY substrate).
   // The core does not own the terminal host div, so it sends through the substrate IO (getPtyIo).
   useEffect(() => {
     const unlisten = currentWindow().onDragDrop((e) => {
@@ -989,7 +989,7 @@ function App() {
       const { paths } = event.payload;
       if (!paths || paths.length === 0) return;
       const s = useSessions.getState();
-      const proj = s.projects.find((t) => t.id === s.activeId);
+      const proj = s.workspaces.find((t) => t.id === s.activeId);
       const paneId = proj ? cwdTabOf(proj) : undefined;
       if (!paneId) return;
       getPtyIo(paneId)?.sendInput(paths.map(shellEscape).join(" "));
@@ -999,29 +999,29 @@ function App() {
     };
   }, []);
 
-  // Project tab list (the same markup is reused for the horizontal top and vertical left placements).
-  // Double click = project settings modal (name + identifying color — replaces inline rename).
-  const projectTabsList = (
+  // Workspace tab list (the same markup is reused for the horizontal top and vertical left placements).
+  // Double click = workspace settings modal (name + identifying color — replaces inline rename).
+  const workspaceTabsList = (
     <>
-      {projects.map((proj) => (
+      {workspaces.map((proj) => (
         <div
           key={proj.id}
-          className={`project-tab${proj.id === activeId ? " active" : ""}`}
+          className={`workspace-tab${proj.id === activeId ? " active" : ""}`}
           onClick={() => setActive(proj.id)}
-          onDoubleClick={() => setProjectSettingsFor(proj.id)}
+          onDoubleClick={() => setWorkspaceSettingsFor(proj.id)}
         >
           {proj.color && (
-            <span className="project-tab-dot" style={{ background: proj.color }} />
+            <span className="workspace-tab-dot" style={{ background: proj.color }} />
           )}
-          <span className="project-tab-title">{proj.title}</span>
-          {projects.length > 1 && (
+          <span className="workspace-tab-title">{proj.title}</span>
+          {workspaces.length > 1 && (
             <button
               type="button"
-              className="icon-btn icon-btn--mini project-tab-close"
-              title={t("project.close")}
+              className="icon-btn icon-btn--mini workspace-tab-close"
+              title={t("workspace.close")}
               onClick={(e) => {
                 e.stopPropagation();
-                void closeProjectReleased(proj.id); // P6: a successful close releases the global claim
+                void closeWorkspaceReleased(proj.id); // P6: a successful close releases the global claim
               }}
             >
               <Icon name="close" size="md" />
@@ -1031,10 +1031,10 @@ function App() {
       ))}
       <button
         type="button"
-        className="icon-btn project-tab-add"
-        data-node="project/add"
-        title={t("project.new")}
-        onClick={() => setNewProjectOpen(true)}
+        className="icon-btn workspace-tab-add"
+        data-node="workspace/add"
+        title={t("workspace.new")}
+        onClick={() => setNewWorkspaceOpen(true)}
       >
         <Icon name="add" />
       </button>
@@ -1042,19 +1042,19 @@ function App() {
   );
 
   // Left rail: chip width tracks the rail width (adaptive). Labels ellipsize; shrunk to the minimum width (RAIL_MIN)
-  // only the first character shows (no ellipsis). Double click = project settings (name/color), right click = close.
+  // only the first character shows (no ellipsis). Double click = workspace settings (name/color), right click = close.
   const railAtMin = railW <= RAIL_MIN;
-  const otherProjects = useOtherWindowProjects();
-  const recentAll = useRecentProjects();
+  const otherWorkspaces = useOtherWindowWorkspaces();
+  const recentAll = useRecentWorkspaces();
   // Recents open nowhere = all recents − this window's roots − other windows' roots.
   const openRoots = new Set([
-    ...projects.map((p) => p.root),
-    ...otherProjects.map((o) => o.root),
+    ...workspaces.map((p) => p.root),
+    ...otherWorkspaces.map((o) => o.root),
   ]);
   const recentClosed = recentAll.filter((r) => !openRoots.has(r.root));
-  const projectRailList = (
+  const workspaceRailList = (
     <>
-      {projects.map((proj) => (
+      {workspaces.map((proj) => (
         <div
           key={proj.id}
           className={`rail-chip${proj.id === activeId ? " active" : ""}`}
@@ -1065,10 +1065,10 @@ function App() {
               : undefined
           }
           onClick={() => setActive(proj.id)}
-          onDoubleClick={() => setProjectSettingsFor(proj.id)}
+          onDoubleClick={() => setWorkspaceSettingsFor(proj.id)}
           onContextMenu={(e) => {
             e.preventDefault();
-            if (projects.length > 1) void closeProjectReleased(proj.id); // P6 release included
+            if (workspaces.length > 1) void closeWorkspaceReleased(proj.id); // P6 release included
           }}
         >
           <span className="rail-chip-label">
@@ -1076,17 +1076,17 @@ function App() {
           </span>
         </div>
       ))}
-      {/* Projects of other windows (the global registry) — every project is listed in one list (after
+      {/* Workspaces of other windows (the global registry) — every workspace is listed in one list (after
           mine, before "+" — the user-fixed order s,p,+). Dotted and damped styles mark the distinction.
           Click = focus the owning window (P6: move instead of a duplicate open). */}
-      {otherProjects.map((o) => {
+      {otherWorkspaces.map((o) => {
         const name = o.root.split("/").filter(Boolean).pop() ?? o.root;
         return (
           <div
             key={o.root}
             className="rail-chip other"
             data-node={`rail/other/${name}`}
-            title={t("project.otherWindow", { window: o.window, root: o.root })}
+            title={t("workspace.otherWindow", { window: o.window, root: o.root })}
             onClick={() => void invoke("window_focus", { label: o.window })}
           >
             <span className="rail-chip-label">
@@ -1095,7 +1095,7 @@ function App() {
           </div>
         );
       })}
-      {/* Recent projects open in no window — offered as rail buttons.
+      {/* Recent workspaces open in no window — offered as rail buttons.
           Click = open in this window (through the P6 gate). A lost root self-heals out of the list by removal. */}
       {recentClosed.map((r) => {
         const name = r.alias || (r.root.split("/").filter(Boolean).pop() ?? r.root);
@@ -1104,17 +1104,17 @@ function App() {
             key={r.root}
             className="rail-chip recent"
             data-node={`rail/recent/${name}`}
-            title={t("project.recentOpen", { root: r.root })}
+            title={t("workspace.recentOpen", { root: r.root })}
             onClick={() => {
               void (async () => {
                 try {
-                  await validateProjectRoot(r.root);
+                  await validateWorkspaceRoot(r.root);
                 } catch {
-                  console.warn(`recent project root missing — removed from the list: ${r.root}`);
-                  void removeRecentProject(r.root);
+                  console.warn(`recent workspace root missing — removed from the list: ${r.root}`);
+                  void removeRecentWorkspace(r.root);
                   return;
                 }
-                await addProjectClaimed({ root: r.root, alias: r.alias });
+                await addWorkspaceClaimed({ root: r.root, alias: r.alias });
               })();
             }}
           >
@@ -1128,8 +1128,8 @@ function App() {
         type="button"
         className="rail-add"
         data-node="rail/add"
-        title={t("project.new")}
-        onClick={() => setNewProjectOpen(true)}
+        title={t("workspace.new")}
+        onClick={() => setNewWorkspaceOpen(true)}
       >
         <Icon name="add" size="lg" />
       </button>
@@ -1138,7 +1138,7 @@ function App() {
 
   return (
     <div className="app-root">
-      {/* Overlay titlebar: logo (fixed at the front) + project tabs. Dragging the empty area moves the window. */}
+      {/* Overlay titlebar: logo (fixed at the front) + workspace tabs. Dragging the empty area moves the window. */}
       <div className="titlebar" data-node="titlebar" {...dragRegion}>
         {/* The logo is fixed right after the traffic lights (82px) — tabs always stack after the logo.
             pointer-events:none keeps it from intercepting the window drag. */}
@@ -1147,35 +1147,35 @@ function App() {
           aria-hidden
           dangerouslySetInnerHTML={{ __html: logoRaw }}
         />
-        {/* Build identity badge (DEV=HMR / DEBUG=debug bundle) — fixed right after the logo. Project
+        {/* Build identity badge (DEV=HMR / DEBUG=debug bundle) — fixed right after the logo. Workspace
             tabs (top mode) stack after it. Release (soksak) has no badge. */}
         <BuildBadge />
-        {projectTabPosition === "top" ? (
-          <div className="project-tabs" {...dragRegion}>
-            {projectTabsList}
+        {workspaceTabPosition === "top" ? (
+          <div className="workspace-tabs" {...dragRegion}>
+            {workspaceTabsList}
           </div>
         ) : (
           /* Left mode: the titlebar has no tabs, only the drag region (tabs move to the left rail). */
-          <div className="project-tabs" {...dragRegion} />
+          <div className="workspace-tabs" {...dragRegion} />
         )}
         <div className="titlebar-right">
           <PluginHeaderActions />
           <button
             type="button"
-            className={`icon-btn sidebar-toggle${activeProject?.sidebarOpen ? " active" : ""}`}
+            className={`icon-btn sidebar-toggle${activeWorkspace?.sidebarOpen ? " active" : ""}`}
             title={t("sidebar.toggle")}
             aria-label={t("sidebar.toggle")}
-            onClick={() => activeProject && toggleSidebar(activeProject.id)}
+            onClick={() => activeWorkspace && toggleSidebar(activeWorkspace.id)}
           >
             <Icon name="panel-left" />
           </button>
           <button
             type="button"
-            className={`icon-btn sidebar-toggle${activeProject?.rightOpen ? " active" : ""}`}
+            className={`icon-btn sidebar-toggle${activeWorkspace?.rightOpen ? " active" : ""}`}
             title={t("plugin.sidebar.toggle")}
             aria-label={t("plugin.sidebar.toggle")}
             onClick={() =>
-              activeProject && toggleRightSidebar(activeProject.id)
+              activeWorkspace && toggleRightSidebar(activeWorkspace.id)
             }
           >
             <Icon name="panel-right" />
@@ -1220,13 +1220,13 @@ function App() {
         />
       )}
       <ConsentPreviewHost />
-      {newProjectOpen && (
-        <NewProjectModal onClose={() => setNewProjectOpen(false)} />
+      {newWorkspaceOpen && (
+        <NewWorkspaceModal onClose={() => setNewWorkspaceOpen(false)} />
       )}
-      {projectSettingsFor && (
-        <ProjectSettingsModal
-          projectId={projectSettingsFor}
-          onClose={() => setProjectSettingsFor(null)}
+      {workspaceSettingsFor && (
+        <WorkspaceSettingsModal
+          projectId={workspaceSettingsFor}
+          onClose={() => setWorkspaceSettingsFor(null)}
         />
       )}
       <ConfirmCloseModal />
@@ -1234,35 +1234,35 @@ function App() {
       <RecoverySetupModal />
       <RecoveryEnterModal />
 
-      {/* Body: in left mode, a vertical project rail + the content row. */}
-      <div className={`app-body${projectTabPosition === "left" ? " with-rail" : ""}`}>
-        {projectTabPosition === "left" && (
+      {/* Body: in left mode, a vertical workspace rail + the content row. */}
+      <div className={`app-body${workspaceTabPosition === "left" ? " with-rail" : ""}`}>
+        {workspaceTabPosition === "left" && (
           <>
-            <div className="project-rail" style={{ width: railW }}>
-              {projectRailList}
+            <div className="workspace-rail" style={{ width: railW }}>
+              {workspaceRailList}
             </div>
             <div
-              className="project-rail-resizer"
+              className="workspace-rail-resizer"
               onMouseDown={startRailResize}
               title={t("sidebar.resize")}
             />
           </>
         )}
-        {/* Zero projects = an exception state only (P6 degradation, a restore drop) — open and create are
+        {/* Zero workspaces = an exception state only (P6 degradation, a restore drop) — open and create are
             control-plane surfaces. An empty workspace window has no create path (window.new requires root),
             so only the notice remains. */}
-        {projects.length === 0 && (
+        {workspaces.length === 0 && (
           <div className="window-empty" data-node="window/empty">
             {t("window.empty")}
           </div>
         )}
-        {/* Every project is mounted to keep its session (an inactive one is hidden by visibility). */}
+        {/* Every workspace is mounted to keep its session (an inactive one is hidden by visibility). */}
         <div className="terminal-stack">
-          {projects.map((project) => (
-            <ProjectPlane
-              key={project.id}
-              project={project}
-              isActiveProject={project.id === activeId}
+          {workspaces.map((workspace) => (
+            <WorkspacePlane
+              key={workspace.id}
+              workspace={workspace}
+              isActiveWorkspace={workspace.id === activeId}
               sidebarW={sidebarW}
               rightW={rightW}
               rightMode={rightSidebarMode}

@@ -1,4 +1,4 @@
-// Procfile parser and serializer (pure) — single truth for project daemon declarations. Follows the standard
+// Procfile parser and serializer (pure) — single truth for workspace daemon declarations. Follows the standard
 // convention (foreman family, `name: command` lines) exactly and adds no non-standard extension. daemon.add/remove
 // edit the file through this module, so a round trip preserving human-written comments, blank lines and order is the contract.
 

@@ -39,8 +39,8 @@ export interface SuggestInput {
   //         exists), on a single monitor the right 1/3 side by side. A workspace takes its own monitor whole.
   // grid:   all windows in an even grid on the first monitor(tiling for observation).
   strategy: "spread" | "grid";
-  // Window role(optional) — label→role. An unspecified window counts as project.
-  roles?: Record<string, "orchestrator" | "project">;
+  // Window role(optional) — label→role. An unspecified window counts as workspace.
+  roles?: Record<string, "orchestrator" | "workspace">;
 }
 
 export function suggestLayout(input: SuggestInput): Placement[] {

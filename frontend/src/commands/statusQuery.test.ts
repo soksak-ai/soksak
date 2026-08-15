@@ -14,9 +14,9 @@ import { registerCatalog } from "./catalog";
 import { execute } from "./registry";
 import { useSessions } from "../state/sessions";
 
-useSessions.getState().bootstrapFirstProject("<local-evidence>/soksak-statusquery");
+useSessions.getState().bootstrapFirstWorkspace("<local-evidence>/soksak-statusquery");
 registerCatalog();
-const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().projects));
+const pristineTabs = JSON.parse(JSON.stringify(useSessions.getState().workspaces));
 const pristineActive = useSessions.getState().activeId;
 
 let seq = 0;
@@ -31,7 +31,7 @@ type StatusRes = { statuses: { tabId: string; code: string; message?: string }[]
 
 beforeEach(() => {
   useSessions.setState({
-    projects: JSON.parse(JSON.stringify(pristineTabs)),
+    workspaces: JSON.parse(JSON.stringify(pristineTabs)),
     activeId: pristineActive,
   });
 });

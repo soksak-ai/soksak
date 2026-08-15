@@ -1,13 +1,13 @@
-// Single truth for effective view visibility — visible only when all three layers (project, space,
+// Single truth for effective view visibility — visible only when all three layers (workspace, space,
 // tab) are true.
-// Reason for RED: the project layer was missing, so a view of an inactive project was reported to
-// the core as "visible" and that project's native browser webview stayed on screen after the
+// Reason for RED: the workspace layer was missing, so a view of an inactive workspace was reported to
+// the core as "visible" and that workspace's native browser webview stayed on screen after the
 // switch (measured snapshot).
 import { describe, expect, it, vi } from "vitest";
 import { surfaceShown, viewSurfacePlacement, viewSurfaceStyle } from "./viewPark";
 
 describe("effective view visibility — all three layers", () => {
-  it("an inactive project is not visible even when the space and the tab are active", () => {
+  it("an inactive workspace is not visible even when the space and the tab are active", () => {
     expect(surfaceShown(false, true, true)).toBe(false);
   });
 
@@ -62,9 +62,9 @@ describe("viewSurfaceStyle — exclusive (maximize) composition contract", () =>
 
   it("the maximize target uses the same display style as an ordinary active slot", () => {
     expect(viewSurfaceStyle(true, true).display).toBeUndefined();
-    // A visible child declares no visibility and inherits the ancestor project/space visibility.
+    // A visible child declares no visibility and inherits the ancestor workspace/space visibility.
     // Writing `visible` directly re-reveals the child under a hidden ancestor per the CSS rule, so
-    // the active tab surface of an inactive project covers the screen.
+    // the active tab surface of an inactive workspace covers the screen.
     expect(viewSurfaceStyle(true, true).visibility).toBeUndefined();
   });
 });

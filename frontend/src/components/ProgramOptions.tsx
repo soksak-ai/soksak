@@ -1,8 +1,8 @@
 import { useProgramRegistry } from "../plugins/programRegistry";
 import { localize, useT } from "../i18n";
 
-// Single truth for the program <option> list — shared by settings, new project, and
-// project settings. Every entry comes from plugin registration (no built-ins, §2.6; groups are optgroup).
+// Single truth for the program <option> list — shared by settings, new workspace, and
+// workspace settings. Every entry comes from plugin registration (no built-ins, §2.6; groups are optgroup).
 // An unregistered current value (plugin inactive) gets its own option so the value is not lost —
 // same fallback shape as the terminal view (isomorphic with the icon set's lucide fallback).
 export function ProgramOptions({ current }: { current?: string }) {

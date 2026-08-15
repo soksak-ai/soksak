@@ -25,7 +25,7 @@ afterEach(() => {
   delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
 });
 
-it("publishes a reflow right after the commit when app chrome geometry outside ProjectSurface changes, such as the project tab position", () => {
+it("publishes a reflow right after the commit when app chrome geometry outside WorkspaceSurface changes, such as the workspace tab position", () => {
   const seen: Array<string | null> = [];
   const off = onPluginEvent("layout.reflow", (payload) => seen.push(payload.activeSpaceId));
   try {

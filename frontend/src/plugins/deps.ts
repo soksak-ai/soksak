@@ -50,15 +50,15 @@ export function defaultPluginDeps(appVersion: string): PluginApiDeps {
     implementsOf: (pluginId) =>
       manifestImplements(usePlugins.getState().plugins[pluginId]?.manifest),
     on: onPluginEvent,
-    currentProject: () => {
+    currentWorkspace: () => {
       const s = useSessions.getState();
-      const project = s.projects.find((t) => t.id === s.activeId);
-      return project ? { id: project.id, root: project.root ?? null } : null;
+      const workspace = s.workspaces.find((t) => t.id === s.activeId);
+      return workspace ? { id: workspace.id, root: workspace.root ?? null } : null;
     },
     // fs-change subscription (core watcher, no polling) → callback with the changed parent directory string. Return = unsubscribe.
     onFsChange: (cb) => subscribe<string>("fs-change", cb),
     // data-change (core DbState change) subscribed in every window — the cross-window channel for
-    // app.data.watch. Global listen (a broadcast at the framework boundary), so a change in any window arrives at all windows (consistent within the same project).
+    // app.data.watch. Global listen (a broadcast at the framework boundary), so a change in any window arrives at all windows (consistent within the same workspace).
     onDataChange: (cb) => subscribe<DataChangeEvent>("data-change", cb),
     // clipboard-change (core native watcher — Win/X11/Wayland events, macOS changeCount polling)
     // subscribed in every window → callback with the changed text.

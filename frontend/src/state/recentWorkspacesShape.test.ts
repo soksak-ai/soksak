@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { asRecentProjects } from "./recentProjects";
+import { asRecentWorkspaces } from "./recentWorkspaces";
 
-describe("recent projects shape", () => {
+describe("recent workspaces shape", () => {
   it("keeps a well-formed list", () => {
     const list = [{ root: "/a", alias: "a", lastOpenedAt: 1 }];
-    expect(asRecentProjects(list)).toEqual(list);
+    expect(asRecentWorkspaces(list)).toEqual(list);
   });
 
   it("answers with an empty list for anything that is not one", () => {
@@ -16,14 +16,14 @@ describe("recent projects shape", () => {
     // died on `recentAll.filter is not a function`, which named the consumer
     // rather than the value.
     for (const wrong of [{}, null, undefined, "list", 7, true]) {
-      expect(asRecentProjects(wrong)).toEqual([]);
+      expect(asRecentWorkspaces(wrong)).toEqual([]);
     }
   });
 
   it("drops entries without a root", () => {
-    // A root is the identity of a project. An entry without one cannot be
+    // A root is the identity of a workspace. An entry without one cannot be
     // matched, opened, or removed, so carrying it only defers the failure.
     const mixed = [{ root: "/a", alias: "a", lastOpenedAt: 1 }, { alias: "b" }, null];
-    expect(asRecentProjects(mixed)).toEqual([{ root: "/a", alias: "a", lastOpenedAt: 1 }]);
+    expect(asRecentWorkspaces(mixed)).toEqual([{ root: "/a", alias: "a", lastOpenedAt: 1 }]);
   });
 });

@@ -45,17 +45,17 @@ import { publishLayoutTransitionIntent } from "../lib/layoutTransitionIntent";
 import { computeSplitLayout } from "../lib/splitLayout";
 
 // Three-level structure:
-//   - Top = Project: its own sidebar (file tree) + spaces
+//   - Top = Workspace: its own sidebar (file tree) + spaces
 //   - Space = layout tree (PaneNode): recursive left/right/top/bottom splits.
 //       Each leaf = Pane (own header + active tab). Split, move, merge by drag or command.
 //   - Tab = file (viewer plugin) / plugin (terminal, browser, editor — the core owns no terminal).
-// Inactive projects/spaces/tabs are hidden rather than unmounted, which keeps the sessions
+// Inactive workspaces/spaces/tabs are hidden rather than unmounted, which keeps the sessions
 // (PTY/editor/webview) intact.
 //
 // Design rules (the base of the AI command interface):
 //   - Every mutating action returns CmdResult — created id and post-change state (verifiable).
 //   - No silent failure — an impossible operation returns a structured error ({code, message}).
-//   - Targeting searches the whole project, not only the active space (arbitrary position targeting).
+//   - Targeting searches the whole workspace, not only the active space (arbitrary position targeting).
 //   - When the requested intent already holds, return idempotent success (ok).
 
 // ── Result types ─────────────────────────────────────────────────────────────
@@ -183,14 +183,14 @@ export type Side = "left" | "right" | "top" | "bottom";
 // plugin-registered program ids (programRegistry). An unregistered id falls back to the terminal.
 export type Program = string;
 
-// Content tab: an independent content area inside one project (split grid). Several per project,
+// Content tab: an independent content area inside one workspace (split grid). Several per workspace,
 // switchable. Program autorun is handled by the terminal view autorun (generalized per view).
 export interface Space {
   id: string;
   title: string; // 1,2,3,… (renameable)
   layout: PaneNode; // group (split) tree
   activePaneId: string;
-  // The single sidebar-owning view this space projects. Independent of panel focus, persisted in
+  // The single sidebar-owning view this space workspaces. Independent of panel focus, persisted in
   // the snapshot.
   railBindingTabId?: string;
   // Maximized view (fills the whole content area). The layout tree is unchanged — display override
@@ -198,7 +198,7 @@ export interface Space {
   maximizedTabId?: string;
 }
 
-export interface Project {
+export interface Workspace {
   id: string;
   title: string; // alias
   sidebarOpen: boolean;
@@ -212,25 +212,25 @@ export interface Project {
   // (tab bundle + vertical split + active). The same drag-merge as the content area. Reconciled
   // against registration changes (LeftSidebarHost).
   leftLayout: SidebarLayout;
-  // Project root directory (P1 root required — projectRoot.ts constitution). Identity = this path
+  // Workspace root directory (P1 root required — workspaceRoot.ts constitution). Identity = this path
   // (P4). The terminal start location and the basis for the file tree and git.
   root: string;
   // On restore, root is absent from the filesystem (volatile — excluded from serialization). Keep
   // the tabs, report it with a banner, and let the user clean up (no unauthorized delete — B1
   // consistency). Resolved on the next restart restore once the path is back.
   rootMissing?: boolean;
-  // Terminal shell of the project (unset falls back to the global setting shell → system $SHELL).
+  // Terminal shell of the workspace (unset falls back to the global setting shell → system $SHELL).
   shell?: string;
-  // Project identity color (rail chip/tab accent). Unset falls back to the theme default.
+  // Workspace identity color (rail chip/tab accent). Unset falls back to the theme default.
   color?: string;
   // Content tabs + the active one.
   spaces: Space[];
   activeSpaceId: string;
 }
 
-export interface NewProjectOpts {
+export interface NewWorkspaceOpts {
   alias: string;
-  root: string; // P1 — the caller has already validated and normalized this path (validateProjectRoot)
+  root: string; // P1 — the caller has already validated and normalized this path (validateWorkspaceRoot)
   shell?: string; // undefined = follow the global setting
   // Initial view program of the first content. Omitted = empty skeleton (same as the makeContent
   // contract).
@@ -245,28 +245,28 @@ export interface NewViewIds {
 }
 
 interface SessionsStore {
-  projects: Project[]; // open projects
+  workspaces: Workspace[]; // open workspaces
   activeId: string;
 
-  // Project level
-  // Once at boot: create the first project (t1/"P1") at the default root — main.tsx only (P3).
-  bootstrapFirstProject: (root: string, opts?: { alias?: string; shell?: string }) => void;
+  // Workspace level
+  // Once at boot: create the first workspace (t1/"P1") at the default root — main.tsx only (P3).
+  bootstrapFirstWorkspace: (root: string, opts?: { alias?: string; shell?: string }) => void;
   // Restore the persisted layout (A5) — the main.tsx boot deserializes the snapshot and injects it
   // whole. Exclusive with bootstrap: use this when a restore exists, bootstrap otherwise. reseed is
   // the caller's job (persistence).
-  restoreProjects: (projects: Project[], activeId: string) => void;
-  addProject: (
-    opts: NewProjectOpts,
+  restoreWorkspaces: (workspaces: Workspace[], activeId: string) => void;
+  addWorkspace: (
+    opts: NewWorkspaceOpts,
   ) => CmdResult<
     { projectId: string; contentId: string; groupId: string; existing?: true } & Partial<NewViewIds>
   >;
   closeTab: (id: string) => CmdResult<{ activeProjectId: string }>;
   setActive: (id: string) => CmdResult;
-  renameProject: (id: string, title: string) => CmdResult;
-  // Set the project identity color (null = remove).
-  setProjectColor: (id: string, color: string | null) => CmdResult;
-  // Bulk project settings change (undefined = keep, null = remove → default). root is immutable.
-  updateProject: (
+  renameWorkspace: (id: string, title: string) => CmdResult;
+  // Set the workspace identity color (null = remove).
+  setWorkspaceColor: (id: string, color: string | null) => CmdResult;
+  // Bulk workspace settings change (undefined = keep, null = remove → default). root is immutable.
+  updateWorkspace: (
     id: string,
     patch: {
       title?: string;
@@ -299,7 +299,7 @@ interface SessionsStore {
   // Adjust the sidebar split ratio (handle drag/command).
   resizeSidebar: (id: string, splitId: string, sizes: number[]) => CmdResult;
 
-  // Content tab level. With program given, use that program (+ menu); otherwise the project then
+  // Content tab level. With program given, use that program (+ menu); otherwise the workspace then
   // global setting.
   addContent: (
     projectId: string,
@@ -381,7 +381,7 @@ interface SessionsStore {
   renameView: (projectId: string, viewId: string, label: string) => CmdResult<{ label: string }>;
   // View runtime observations (B3) — cwd (OSC observation), lastActivity (event-based), state
   // (plugin-observed state). undefined = keep.
-  // projectId may be null: when the event has no project, search every tab for the view
+  // projectId may be null: when the event has no workspace, search every tab for the view
   // (pane→view mapping stays stable).
   setViewRuntime: (
     projectId: string | null,
@@ -439,14 +439,14 @@ export const nextSplitIdGen = (): string => newSplitId();
 // Non-destructive preview of the issue format — for diagnostics and gates. Issue is random, so the
 // contract is the format, not the value.
 export function newIds(): {
-  project: string;
+  workspace: string;
   view: string;
   group: string;
   split: string;
   content: string;
 } {
   return {
-    project: issueId("project"),
+    workspace: issueId("workspace"),
     view: issueId("tab"),
     group: issueId("pane"),
     split: issueId("split"),
@@ -687,7 +687,7 @@ function maximizedGroupId(content: Space): string | null {
  * the last settled value).
  */
 export function projectArrangement(
-  project: Project,
+  workspace: Workspace,
   fallbackStation = 0,
   /**
    * How to attach — **the caller supplies it.**
@@ -703,14 +703,14 @@ export function projectArrangement(
   pullFocused = useSettings.getState().railPullFocused,
 ): Arrangement<Pane> | null {
   const content =
-    project.spaces.find((item) => item.id === project.activeSpaceId) ??
-    project.spaces[0];
+    workspace.spaces.find((item) => item.id === workspace.activeSpaceId) ??
+    workspace.spaces[0];
   if (!content) return null;
   return solveArrangement<Pane>({
     layout: content.layout,
     focusId: content.activePaneId,
-    placement: project.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT,
-    railOpen: project.sidebarOpen,
+    placement: workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT,
+    railOpen: workspace.sidebarOpen,
     // Maximize is not a move on top of the underlying split but an atomic switch to the single
     // [rail | feature] plane. The filling panel is the group holding the maximized view — not the
     // active group. The two can diverge (double-clicking a tab of another group does exactly that),
@@ -725,9 +725,9 @@ export function projectArrangement(
 
 /** Whether an active-chain change alters the actual display geometry. Opening a revision on focus
  * identity alone makes even a no-move activation such as PIN create a barrier; skipping the revision
- * without this comparison leaves the FLOW ProjectPlane on the old display solution. The layout
+ * without this comparison leaves the FLOW WorkspacePlane on the old display solution. The layout
  * solver and the movement solver are the only judges. */
-function openProjectArrangementTransition(before: Project, after: Project): boolean {
+function openProjectArrangementTransition(before: Workspace, after: Workspace): boolean {
   const from = projectArrangement(before);
   const to = projectArrangement(after);
   if (!from || !to) return false;
@@ -742,12 +742,12 @@ function openProjectArrangementTransition(before: Project, after: Project): bool
   return true;
 }
 
-function leftRailLayoutConflict(project: Project): CmdErr | null {
-  const placement = project.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
+function leftRailLayoutConflict(workspace: Workspace): CmdErr | null {
+  const placement = workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
   if (placement.mode !== "pin") return null;
   const content =
-    project.spaces.find((item) => item.id === project.activeSpaceId) ??
-    project.spaces[0];
+    workspace.spaces.find((item) => item.id === workspace.activeSpaceId) ??
+    workspace.spaces[0];
   // PIN validity is judged against the split tree, the persisted canonical form. Maximize is a
   // temporary projection on top of it and folds the clean line to [0,100], but rejecting the stored
   // station on that basis would make maximize itself impossible under PIN. Real split/move/resize do
@@ -774,17 +774,17 @@ function ptyKeyOfTab(v: Tab, hasPty: (id: string) => boolean): string | undefine
   return hasPty(v.id) ? v.id : undefined;
 }
 
-// Terminal pane the project sidebar (file tree) takes the current cwd from. A pure resolver — it
+// Terminal pane the workspace sidebar (file tree) takes the current cwd from. A pure resolver — it
 // takes the PTY observation predicate (hasPty) as an injection, so it works for any plugin terminal
 // (generic). If the active (focused) view of the active group of the active content is a terminal,
 // that pane; otherwise the pane of any terminal view.
 export function cwdTabOf(
-  project: Project,
+  workspace: Workspace,
   hasPty: (id: string) => boolean,
 ): string | undefined {
   const content =
-    project.spaces.find((c) => c.id === project.activeSpaceId) ??
-    project.spaces[0];
+    workspace.spaces.find((c) => c.id === workspace.activeSpaceId) ??
+    workspace.spaces[0];
   if (!content) return undefined;
   const groups = allGroups(content.layout);
   const activeGroup =
@@ -812,9 +812,9 @@ export function viewDisplayTitle(v: Tab): string {
   return v.customLabel ?? v.title;
 }
 
-// Search every project of this window for the view record with viewId. null when absent.
-export function findViewById(projects: Project[], viewId: string): Tab | null {
-  for (const t of projects)
+// Search every workspace of this window for the view record with viewId. null when absent.
+export function findViewById(workspaces: Workspace[], viewId: string): Tab | null {
+  for (const t of workspaces)
     for (const c of t.spaces)
       for (const v of allViews(c.layout)) if (v.id === viewId) return v;
   return null;
@@ -824,19 +824,19 @@ export function findViewById(projects: Project[], viewId: string): Tab | null {
 // browser view of this window (b-<window>-<viewId>) it resolves to the tab display name; with no
 // matching view it keeps the label as is (for a webview with no human name the identifier is the
 // only fact).
-export function webviewDisplayName(label: string, projects: Project[]): string {
+export function webviewDisplayName(label: string, workspaces: Workspace[]): string {
   const viewId = browserViewIdFromLabel(label);
-  const v = viewId ? findViewById(projects, viewId) : null;
+  const v = viewId ? findViewById(workspaces, viewId) : null;
   return v ? viewDisplayTitle(v) : label;
 }
 
 // {projectId, viewId} of paneId (= plugin terminal view.id) (M5 — for the terminal status bridge).
 // null when absent.
 export function locateTab(
-  projects: Project[],
+  workspaces: Workspace[],
   paneId: string,
 ): { projectId: string; viewId: string } | null {
-  for (const t of projects)
+  for (const t of workspaces)
     for (const c of t.spaces)
       for (const v of allViews(c.layout))
         if (v.id === paneId) return { projectId: t.id, viewId: v.id };
@@ -845,28 +845,28 @@ export function locateTab(
 
 // ── Search/transform helpers ─────────────────────────────────────────────────
 
-function mapProject(
-  projects: Project[],
+function mapWorkspace(
+  workspaces: Workspace[],
   projectId: string,
-  fn: (t: Project) => Project,
-): Project[] {
-  return projects.map((t) => (t.id === projectId ? fn(t) : t));
+  fn: (t: Workspace) => Workspace,
+): Workspace[] {
+  return workspaces.map((t) => (t.id === projectId ? fn(t) : t));
 }
 
-function activeContentOf(t: Project): Space | undefined {
+function activeContentOf(t: Workspace): Space | undefined {
   return t.spaces.find((c) => c.id === t.activeSpaceId);
 }
 
-// Search the whole project for the content holding a group/view (arbitrary position targeting).
+// Search the whole workspace for the content holding a group/view (arbitrary position targeting).
 function contentOfGroup(
-  t: Project,
+  t: Workspace,
   groupId: string,
 ): Space | undefined {
   return t.spaces.find((c) => hasGroup(c.layout, groupId));
 }
 
 function contentOfView(
-  t: Project,
+  t: Workspace,
   viewId: string,
 ): Space | undefined {
   return t.spaces.find((c) =>
@@ -875,20 +875,20 @@ function contentOfView(
 }
 
 function mapContent(
-  t: Project,
+  t: Workspace,
   contentId: string,
   fn: (c: Space) => Space,
-): Project {
+): Workspace {
   return {
     ...t,
     spaces: t.spaces.map((c) => (c.id === contentId ? fn(c) : c)),
   };
 }
 
-// Project holding a view id (terminal panes included — pane = terminal view) — the single utility
+// Workspace holding a view id (terminal panes included — pane = terminal view) — the single utility
 // for caller context (ctx.pane) routing. null when absent.
 export function projectIdOfView(viewId: string): string | null {
-  for (const t of useSessions.getState().projects) {
+  for (const t of useSessions.getState().workspaces) {
     for (const c of t.spaces) {
       if (allViews(c.layout).some((v) => v.id === viewId)) return t.id;
     }
@@ -899,10 +899,10 @@ export function projectIdOfView(viewId: string): string | null {
 // Transform a view in whichever content holds it (mounted views of hidden content included —
 // dirty/mode/focus etc.).
 function mapViewEverywhere(
-  t: Project,
+  t: Workspace,
   viewId: string,
   fn: (v: Tab) => Tab,
-): Project {
+): Workspace {
   return {
     ...t,
     spaces: t.spaces.map((c) => ({
@@ -930,7 +930,7 @@ export function migrateSpaceTitle(title: string): string {
   return /^\d+$/.test(title.trim()) ? tmsg("space.autoTitle", { n: title.trim() }) : title;
 }
 
-function makeProject(id: string, opts: NewProjectOpts): Project {
+function makeWorkspace(id: string, opts: NewWorkspaceOpts): Workspace {
   const c = makeContent(tmsg("space.autoTitle", { n: 1 }), opts.program);
   const alias = opts.alias.trim() || baseName(opts.root);
   return {
@@ -949,40 +949,40 @@ function makeProject(id: string, opts: NewProjectOpts): Project {
 }
 
 // Frequently used error.
-const noProject = (id: string): CmdErr =>
-  err("TARGET_NOT_FOUND", tmsg("project.notFound", { id }));
+const noWorkspace = (id: string): CmdErr =>
+  err("TARGET_NOT_FOUND", tmsg("workspace.notFound", { id }));
 
 // The store is outside the module boundary — if a hot swap replaced it, registration, subscription,
 // and screen state would all become new, while the filling side treats the fill as already done and
 // never refills (empty forever).
 export const useSessions = moduleState("state/sessions#store", () =>
   create<SessionsStore>((set, get) => ({
-  // The boot (main.tsx) prepares the default root (~/.soksak/projects/project1) and then creates the
-  // first project through bootstrapFirstProject (P3) — that happens before render, so the
-  // zero-project state never appears on screen (an exception state of boot failure only).
-  projects: [],
+  // The boot (main.tsx) prepares the default root (~/.soksak/workspaces/workspace1) and then creates the
+  // first workspace through bootstrapFirstWorkspace (P3) — that happens before render, so the
+  // zero-workspace state never appears on screen (an exception state of boot failure only).
+  workspaces: [],
   activeId: "",
 
-  bootstrapFirstProject: (root, opts) => {
-    if (get().projects.length > 0) return; // idempotent — boot only, once
-    // Automatic project1 is "P1"; otherwise the default display name is the folder name — an alias
+  bootstrapFirstWorkspace: (root, opts) => {
+    if (get().workspaces.length > 0) return; // idempotent — boot only, once
+    // Automatic workspace1 is "P1"; otherwise the default display name is the folder name — an alias
     // set by the creator (control plane) wins (init query alias).
-    const alias = opts?.alias || (baseName(root) === "project1" ? "P1" : "");
-    const t = makeProject("t1", { alias, root, shell: opts?.shell });
-    set({ projects: [t], activeId: "t1" });
+    const alias = opts?.alias || (baseName(root) === "workspace1" ? "P1" : "");
+    const t = makeWorkspace("t1", { alias, root, shell: opts?.shell });
+    set({ workspaces: [t], activeId: "t1" });
   },
 
-  restoreProjects: (projects, activeId) => {
-    if (get().projects.length > 0) return; // idempotent — boot only, once (exclusive with bootstrap)
-    if (projects.length === 0) return; // an empty restore is ignored (boot falls back to bootstrap)
-    const active = projects.some((t) => t.id === activeId) ? activeId : projects[0].id;
-    set({ projects, activeId: active });
+  restoreWorkspaces: (workspaces, activeId) => {
+    if (get().workspaces.length > 0) return; // idempotent — boot only, once (exclusive with bootstrap)
+    if (workspaces.length === 0) return; // an empty restore is ignored (boot falls back to bootstrap)
+    const active = workspaces.some((t) => t.id === activeId) ? activeId : workspaces[0].id;
+    set({ workspaces, activeId: active });
   },
 
-  addProject: (opts) => {
-    // P5 no duplicates — when a project with the same root exists (normalization is the caller's
-    // job), activate that project and report existing (openFileView pattern).
-    const dup = get().projects.find((t) => t.root === opts.root);
+  addWorkspace: (opts) => {
+    // P5 no duplicates — when a workspace with the same root exists (normalization is the caller's
+    // job), activate that workspace and report existing (openFileView pattern).
+    const dup = get().workspaces.find((t) => t.root === opts.root);
     if (dup) {
       set({ activeId: dup.id });
       const c = dup.spaces.find((x) => x.id === dup.activeSpaceId)!;
@@ -996,9 +996,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
         existing: true,
       });
     }
-    const id = issueId("project");
-    const t = makeProject(id, opts);
-    set((s) => ({ projects: [...s.projects, t], activeId: id }));
+    const id = issueId("workspace");
+    const t = makeWorkspace(id, opts);
+    set((s) => ({ workspaces: [...s.workspaces, t], activeId: id }));
     const c = t.spaces[0];
     const g = allGroups(c.layout)[0];
     const v = g.tabs[0];
@@ -1011,52 +1011,52 @@ export const useSessions = moduleState("state/sessions#store", () =>
   },
 
   closeTab: (id) => {
-    let r: CmdResult<{ activeProjectId: string }> = noProject(id);
+    let r: CmdResult<{ activeProjectId: string }> = noWorkspace(id);
     set((s) => {
-      if (!s.projects.some((t) => t.id === id)) return s;
-      if (s.projects.length <= 1) {
-        r = err("LAST_ITEM", tmsg("project.lastCannotClose"));
+      if (!s.workspaces.some((t) => t.id === id)) return s;
+      if (s.workspaces.length <= 1) {
+        r = err("LAST_ITEM", tmsg("workspace.lastCannotClose"));
         return s;
       }
-      const idx = s.projects.findIndex((t) => t.id === id);
-      const projects = s.projects.filter((t) => t.id !== id);
+      const idx = s.workspaces.findIndex((t) => t.id === id);
+      const workspaces = s.workspaces.filter((t) => t.id !== id);
       let activeId = s.activeId;
       if (activeId === id) {
-        activeId = (projects[idx] ?? projects[idx - 1] ?? projects[0]).id;
+        activeId = (workspaces[idx] ?? workspaces[idx - 1] ?? workspaces[0]).id;
       }
       r = ok({ activeProjectId: activeId });
-      return { projects, activeId };
+      return { workspaces, activeId };
     });
     return r;
   },
 
   setActive: (id) => {
-    let r: CmdResult = noProject(id);
+    let r: CmdResult = noWorkspace(id);
     set((s) => {
-      if (!s.projects.some((t) => t.id === id)) return s;
+      if (!s.workspaces.some((t) => t.id === id)) return s;
       r = ok({});
       return s.activeId === id ? s : { activeId: id };
     });
     return r;
   },
 
-  renameProject: (id, title) => {
-    let r: CmdResult = noProject(id);
+  renameWorkspace: (id, title) => {
+    let r: CmdResult = noWorkspace(id);
     set((s) => {
-      if (!s.projects.some((t) => t.id === id)) return s;
+      if (!s.workspaces.some((t) => t.id === id)) return s;
       r = ok({});
-      return { projects: s.projects.map((t) => (t.id === id ? { ...t, title } : t)) };
+      return { workspaces: s.workspaces.map((t) => (t.id === id ? { ...t, title } : t)) };
     });
     return r;
   },
 
-  setProjectColor: (id, color) => {
-    let r: CmdResult = noProject(id);
+  setWorkspaceColor: (id, color) => {
+    let r: CmdResult = noWorkspace(id);
     set((s) => {
-      if (!s.projects.some((t) => t.id === id)) return s;
+      if (!s.workspaces.some((t) => t.id === id)) return s;
       r = ok({});
       return {
-        projects: s.projects.map((t) =>
+        workspaces: s.workspaces.map((t) =>
           t.id === id ? { ...t, color: color ?? undefined } : t,
         ),
       };
@@ -1064,13 +1064,13 @@ export const useSessions = moduleState("state/sessions#store", () =>
     return r;
   },
 
-  updateProject: (id, patch) => {
-    let r: CmdResult = noProject(id);
+  updateWorkspace: (id, patch) => {
+    let r: CmdResult = noWorkspace(id);
     set((s) => {
-      if (!s.projects.some((t) => t.id === id)) return s;
+      if (!s.workspaces.some((t) => t.id === id)) return s;
       r = ok({});
       return {
-        projects: s.projects.map((t) => {
+        workspaces: s.workspaces.map((t) => {
           if (t.id !== id) return t;
           const next = { ...t };
           // Ignore an empty title (keeps the invariant that a title is never empty).
@@ -1091,13 +1091,13 @@ export const useSessions = moduleState("state/sessions#store", () =>
   },
 
   toggleSidebar: (id) => {
-    let r: CmdResult<{ sidebarOpen: boolean }> = noProject(id);
+    let r: CmdResult<{ sidebarOpen: boolean }> = noWorkspace(id);
     set((s) => {
-      const t = s.projects.find((x) => x.id === id);
+      const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
       r = ok({ sidebarOpen: !t.sidebarOpen });
       return {
-        projects: s.projects.map((x) =>
+        workspaces: s.workspaces.map((x) =>
           x.id === id ? { ...x, sidebarOpen: !x.sidebarOpen } : x,
         ),
       };
@@ -1106,7 +1106,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
   },
 
   setLeftRailPlacement: (id, placement) => {
-    let r: CmdResult<{ placement: RailPlacement }> = noProject(id);
+    let r: CmdResult<{ placement: RailPlacement }> = noWorkspace(id);
     if (
       placement.mode === "pin" &&
       (!Number.isFinite(placement.station) ||
@@ -1116,9 +1116,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
       return err("INVALID_PARAMS", tmsg("layout.rail.stationRange"));
     }
     set((s) => {
-      const project = s.projects.find((item) => item.id === id);
-      if (!project) return s;
-      const current = project.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
+      const workspace = s.workspaces.find((item) => item.id === id);
+      if (!workspace) return s;
+      const current = workspace.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT;
       if (
         current.mode === placement.mode &&
         (current.mode === "flow" ||
@@ -1127,8 +1127,8 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = ok({ placement: current });
         return s;
       }
-      const nextProject = { ...project, leftRailPlacement: placement };
-      const conflict = leftRailLayoutConflict(nextProject);
+      const nextWorkspace = { ...workspace, leftRailPlacement: placement };
+      const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = err(
           "INVALID_PARAMS",
@@ -1140,10 +1140,10 @@ export const useSessions = moduleState("state/sessions#store", () =>
       r = ok({ placement });
       // Even with a different persisted mode, an identical resolved station/cells/topology leaves
       // the display owner nothing to do. When the actual display solution does change, open a
-      // revision before the ProjectPlane publish so that render consumes the exact revision.
-      openProjectArrangementTransition(project, nextProject);
+      // revision before the WorkspacePlane publish so that render consumes the exact revision.
+      openProjectArrangementTransition(workspace, nextWorkspace);
       return {
-        projects: s.projects.map((item) =>
+        workspaces: s.workspaces.map((item) =>
           item.id === id ? { ...item, leftRailPlacement: placement } : item,
         ),
       };
@@ -1152,38 +1152,38 @@ export const useSessions = moduleState("state/sessions#store", () =>
   },
 
   toggleRightSidebar: (id, open) => {
-    let r: CmdResult<{ rightOpen: boolean }> = noProject(id);
+    let r: CmdResult<{ rightOpen: boolean }> = noWorkspace(id);
     set((s) => {
-      const t = s.projects.find((x) => x.id === id);
+      const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
       const rightOpen = open ?? !t.rightOpen;
       r = ok({ rightOpen });
       if (rightOpen === t.rightOpen) return s; // idempotent
       return {
-        projects: s.projects.map((x) => (x.id === id ? { ...x, rightOpen } : x)),
+        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, rightOpen } : x)),
       };
     });
     return r;
   },
 
   setRightView: (id, view) => {
-    let r: CmdResult<{ rightView: string | null }> = noProject(id);
+    let r: CmdResult<{ rightView: string | null }> = noWorkspace(id);
     set((s) => {
-      const t = s.projects.find((x) => x.id === id);
+      const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
       r = ok({ rightView: view });
       if (t.rightView === view) return s;
       return {
-        projects: s.projects.map((x) => (x.id === id ? { ...x, rightView: view } : x)),
+        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, rightView: view } : x)),
       };
     });
     return r;
   },
 
   setLeftTab: (id, viewKey) => {
-    let r: CmdResult<{ leftTab: string }> = noProject(id);
+    let r: CmdResult<{ leftTab: string }> = noWorkspace(id);
     set((s) => {
-      const t = s.projects.find((x) => x.id === id);
+      const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
       if (!hasSidebarView(t.leftLayout, viewKey)) {
         r = err("TARGET_NOT_FOUND", tmsg("sidebar.view.notFound", { viewKey }));
@@ -1197,7 +1197,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
           : g,
       );
       return {
-        projects: s.projects.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
+        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
       };
     });
     return r;
@@ -1205,20 +1205,20 @@ export const useSessions = moduleState("state/sessions#store", () =>
 
   reconcileSidebar: (id, registeredKeys) => {
     set((s) => {
-      const t = s.projects.find((x) => x.id === id);
+      const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
       const next = reconcileSidebarLayout(t.leftLayout, registeredKeys);
       if (next === t.leftLayout) return s; // no change (reference kept — prevents an endless reconcile)
       return {
-        projects: s.projects.map((x) => (x.id === id ? { ...x, leftLayout: next } : x)),
+        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, leftLayout: next } : x)),
       };
     });
   },
 
   moveSidebarView: (id, viewKey, drop) => {
-    let r: CmdResult = noProject(id);
+    let r: CmdResult = noWorkspace(id);
     set((s) => {
-      const t = s.projects.find((x) => x.id === id);
+      const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
       if (!hasSidebarView(t.leftLayout, viewKey)) {
         r = err("TARGET_NOT_FOUND", tmsg("sidebar.view.notFound", { viewKey }));
@@ -1227,16 +1227,16 @@ export const useSessions = moduleState("state/sessions#store", () =>
       const leftLayout = moveSidebarViewT(t.leftLayout, viewKey, drop, newSplitId);
       r = ok({});
       return {
-        projects: s.projects.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
+        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
       };
     });
     return r;
   },
 
   resizeSidebar: (id, splitId, sizes) => {
-    let r: CmdResult = noProject(id);
+    let r: CmdResult = noWorkspace(id);
     set((s) => {
-      const t = s.projects.find((x) => x.id === id);
+      const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
       if (!findSplitTree(t.leftLayout, splitId)) {
         r = err("TARGET_NOT_FOUND", tmsg("sidebar.split.notFound", { splitId }));
@@ -1245,7 +1245,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       r = ok({});
       const leftLayout = resizeSplitTree(t.leftLayout, splitId, sizes);
       return {
-        projects: s.projects.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
+        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
       };
     });
     return r;
@@ -1254,37 +1254,37 @@ export const useSessions = moduleState("state/sessions#store", () =>
   addContent: (projectId, program) => {
     let r: CmdResult<
       { contentId: string; groupId: string } & Partial<NewViewIds>
-    > = noProject(projectId);
+    > = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const nextNum =
         Math.max(0, ...t.spaces.map((c) => spaceAutoNum(c.title))) + 1;
       const c = makeContent(tmsg("space.autoTitle", { n: nextNum }), program);
       const g = allGroups(c.layout)[0];
       const v = g.tabs[0];
-      const nextProject = {
+      const nextWorkspace = {
         ...t,
         spaces: [...t.spaces, c],
         activeSpaceId: c.id,
       };
-      const conflict = leftRailLayoutConflict(nextProject);
+      const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = conflict;
         return s;
       }
       r = ok({ contentId: c.id, groupId: g.id, ...(v ? idsOfView(v) : {}) });
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
   },
 
   closeContent: (projectId, contentId) => {
-    let r: CmdResult<{ activeSpaceId: string }> = noProject(projectId);
+    let r: CmdResult<{ activeSpaceId: string }> = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const idx = t.spaces.findIndex((c) => c.id === contentId);
       if (idx === -1) {
@@ -1300,24 +1300,24 @@ export const useSessions = moduleState("state/sessions#store", () =>
       if (activeSpaceId === contentId) {
         activeSpaceId = (spaces[idx] ?? spaces[idx - 1] ?? spaces[0]).id;
       }
-      const nextProject = { ...t, spaces, activeSpaceId };
-      const conflict = leftRailLayoutConflict(nextProject);
+      const nextWorkspace = { ...t, spaces, activeSpaceId };
+      const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = conflict;
         return s;
       }
       r = ok({ activeSpaceId });
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
   },
 
   setActiveContent: (projectId, contentId) => {
-    let r: CmdResult = noProject(projectId);
+    let r: CmdResult = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       if (!t.spaces.some((c) => c.id === contentId)) {
         r = err("TARGET_NOT_FOUND", tmsg("space.notFound", { id: contentId }));
@@ -1327,24 +1327,24 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = ok({});
         return s; // already active (prevents a needless re-render)
       }
-      const nextProject = { ...t, activeSpaceId: contentId };
-      const conflict = leftRailLayoutConflict(nextProject);
+      const nextWorkspace = { ...t, activeSpaceId: contentId };
+      const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = conflict;
         return s;
       }
       r = ok({});
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
   },
 
   renameContent: (projectId, contentId, title) => {
-    let r: CmdResult = noProject(projectId);
+    let r: CmdResult = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       if (!t.spaces.some((c) => c.id === contentId)) {
         r = err("TARGET_NOT_FOUND", tmsg("space.notFound", { id: contentId }));
@@ -1352,7 +1352,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       }
       r = ok({});
       return {
-        projects: mapProject(s.projects, projectId, (x) =>
+        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
           mapContent(x, contentId, (c) => ({ ...c, title })),
         ),
       };
@@ -1361,11 +1361,11 @@ export const useSessions = moduleState("state/sessions#store", () =>
   },
 
   bindContentRail: (projectId, contentId, viewId) => {
-    let r: CmdResult<{ viewId: string }> = noProject(projectId);
+    let r: CmdResult<{ viewId: string }> = noWorkspace(projectId);
     set((s) => {
-      const project = s.projects.find((item) => item.id === projectId);
-      const content = project?.spaces.find((item) => item.id === contentId);
-      if (!project || !content) {
+      const workspace = s.workspaces.find((item) => item.id === projectId);
+      const content = workspace?.spaces.find((item) => item.id === contentId);
+      if (!workspace || !content) {
         r = err("TARGET_NOT_FOUND", tmsg("space.notFound", { id: contentId }));
         return s;
       }
@@ -1383,7 +1383,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       }
       r = ok({ viewId });
       return {
-        projects: mapProject(s.projects, projectId, (item) => ({
+        workspaces: mapWorkspace(s.workspaces, projectId, (item) => ({
           ...item,
           spaces: item.spaces.map((candidate) =>
             candidate.id === contentId
@@ -1397,9 +1397,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
   },
 
   addViewToGroup: (projectId, program, groupId, opts) => {
-    let r: CmdResult<{ groupId: string } & NewViewIds> = noProject(projectId);
+    let r: CmdResult<{ groupId: string } & NewViewIds> = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       // Target group: an explicit id (searched across all content) or the active group of the
       // active content.
@@ -1425,7 +1425,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       }
       r = ok({ groupId: target, ...idsOfView(v) });
       return {
-        projects: mapProject(s.projects, projectId, (x) =>
+        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
           mapContent(x, content.id, (c) => ({
             ...c,
             layout: mapGroupNode(c.layout, target, (g) => ({
@@ -1443,9 +1443,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
 
   openFileView: (projectId, path) => {
     let r: CmdResult<{ viewId: string; groupId: string; existing: boolean }> =
-      noProject(projectId);
+      noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const content = activeContentOf(t);
       if (!content) return s;
@@ -1458,7 +1458,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
         if (!grp) return s;
         r = ok({ viewId: existing.id, groupId: grp.id, existing: true });
         return {
-          projects: mapProject(s.projects, projectId, (x) =>
+          workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
             mapContent(x, content.id, (c) => ({
               ...c,
               layout: mapGroupNode(c.layout, grp.id, (g) => ({
@@ -1479,7 +1479,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       };
       r = ok({ viewId: v.id, groupId: content.activePaneId, existing: false });
       return {
-        projects: mapProject(s.projects, projectId, (x) =>
+        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
           mapContent(x, content.id, (c) => ({
             ...c,
             layout: mapGroupNode(c.layout, c.activePaneId, (g) => ({
@@ -1496,9 +1496,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
 
   openPluginView: (projectId, pluginId, view, title) => {
     let r: CmdResult<{ viewId: string; groupId: string; existing: boolean }> =
-      noProject(projectId);
+      noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const content = activeContentOf(t);
       if (!content) return s;
@@ -1511,7 +1511,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
         if (!grp) return s;
         r = ok({ viewId: existing.id, groupId: grp.id, existing: true });
         return {
-          projects: mapProject(s.projects, projectId, (x) =>
+          workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
             mapContent(x, content.id, (c) => ({
               ...c,
               layout: mapGroupNode(c.layout, grp.id, (g) => ({
@@ -1532,7 +1532,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       };
       r = ok({ viewId: v.id, groupId: content.activePaneId, existing: false });
       return {
-        projects: mapProject(s.projects, projectId, (x) =>
+        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
           mapContent(x, content.id, (c) => ({
             ...c,
             layout: mapGroupNode(c.layout, c.activePaneId, (g) => ({
@@ -1549,9 +1549,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
 
   closeView: (projectId, viewId) => {
     let r: CmdResult<{ activePaneId: string; activeTabId: string }> =
-      noProject(projectId);
+      noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const content = contentOfView(t, viewId);
       if (!content) {
@@ -1562,7 +1562,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       // and group stay (pure skeleton: an empty tab is a legitimate state). This holds both for the
       // last view of a single leaf group and for the case where one side of a split is an empty
       // group so removeView cleans the empty groups up and the whole tree empties (removeView →
-      // tree=null). Leave the closed view's group empty. Do not mistake tree=null for "no project"
+      // tree=null). Leave the closed view's group empty. Do not mistake tree=null for "no workspace"
       // (the r initial-value trap).
       const grp = findGroupOfView(content.layout, viewId);
       const { tree } = removeView(content.layout, viewId);
@@ -1571,20 +1571,20 @@ export const useSessions = moduleState("state/sessions#store", () =>
           ...content,
           layout: splitLeaf({ ...grp!, tabs: [], activeTabId: "" }),
         });
-        const nextProject = mapContent(t, content.id, () => next);
-        const conflict = leftRailLayoutConflict(nextProject);
+        const nextWorkspace = mapContent(t, content.id, () => next);
+        const conflict = leftRailLayoutConflict(nextWorkspace);
         if (conflict) {
           r = conflict;
           return s;
         }
         r = ok({ activePaneId: next.activePaneId, activeTabId: "" });
         return {
-          projects: mapProject(s.projects, projectId, () => nextProject),
+          workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
         };
       }
       let next = normalizeActiveGroupC({ ...content, layout: tree });
       // R6 succession (plans/sidebar-projection-spec.md) — when the closed view was the bound view
-      // of this project (the end of the active chain), move the binding back to the most recent
+      // of this workspace (the end of the active chain), move the binding back to the most recent
       // surviving view in the focusHistory of the same space. The adjacent tab is the next fallback
       // (the default succession of removeView above already did that).
       const wasBound =
@@ -1593,7 +1593,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
         grp?.activeTabId === viewId;
       if (wasBound) {
         const history =
-          useProjection.getState().byProject[projectId]?.focusHistory ?? [];
+          useProjection.getState().byWorkspace[projectId]?.focusHistory ?? [];
         for (const hv of history) {
           if (hv === viewId) continue;
           const hg = findGroupOfView(next.layout, hv);
@@ -1611,8 +1611,8 @@ export const useSessions = moduleState("state/sessions#store", () =>
         }
       }
       const activeGroup = findGroup(next.layout, next.activePaneId);
-      const nextProject = mapContent(t, content.id, () => next);
-      const conflict = leftRailLayoutConflict(nextProject);
+      const nextWorkspace = mapContent(t, content.id, () => next);
+      const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = conflict;
         return s;
@@ -1622,7 +1622,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
         activeTabId: activeGroup?.activeTabId ?? "",
       });
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
@@ -1630,9 +1630,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
 
   setActiveView: (projectId, viewId) => {
     noteActivation("setActiveView", viewId); // activation ledger — call count and call path (observation)
-    let r: CmdResult = noProject(projectId);
+    let r: CmdResult = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const content = contentOfView(t, viewId);
       if (!content) {
@@ -1641,7 +1641,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       }
       const grp = findGroupOfView(content.layout, viewId);
       if (!grp) return s;
-      const nextProject = mapContent(t, content.id, (c) => ({
+      const nextWorkspace = mapContent(t, content.id, (c) => ({
         ...c,
         layout: mapGroupNode(c.layout, grp.id, (g) => ({
           ...g,
@@ -1649,13 +1649,13 @@ export const useSessions = moduleState("state/sessions#store", () =>
         })),
         activePaneId: grp.id,
       }));
-      openProjectArrangementTransition(t, nextProject);
+      openProjectArrangementTransition(t, nextWorkspace);
       r = ok({});
-      // The ProjectPlane adapter starts preparing the exact revision before the new project
+      // The WorkspacePlane adapter starts preparing the exact revision before the new workspace
       // subscriber. The React layout commit does not reopen this transaction; it claims the same
       // revision promise.
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
@@ -1663,9 +1663,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
 
   setActiveGroup: (projectId, groupId) => {
     noteActivation("setActiveGroup", groupId); // activation ledger (observation)
-    let r: CmdResult = noProject(projectId);
+    let r: CmdResult = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const content = contentOfGroup(t, groupId);
       if (!content) {
@@ -1680,31 +1680,31 @@ export const useSessions = moduleState("state/sessions#store", () =>
         r = ok({});
         return s;
       }
-      const nextProject = {
+      const nextWorkspace = {
         ...mapContent(t, content.id, (c) => ({
           ...c,
           activePaneId: groupId,
         })),
         activeSpaceId: content.id,
       };
-      const conflict = leftRailLayoutConflict(nextProject);
+      const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = conflict;
         return s;
       }
-      openProjectArrangementTransition(t, nextProject);
+      openProjectArrangementTransition(t, nextWorkspace);
       r = ok({});
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
   },
 
   maximizeView: (projectId, viewId) => {
-    let r: CmdResult<{ viewId: string }> = noProject(projectId);
+    let r: CmdResult<{ viewId: string }> = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const content = contentOfView(t, viewId);
       if (!content) {
@@ -1713,7 +1713,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       }
       const grp = findGroupOfView(content.layout, viewId);
       if (!grp) return s;
-      const nextProject = {
+      const nextWorkspace = {
         ...mapContent(t, content.id, (c) => ({
             ...c,
             maximizedTabId: viewId,
@@ -1726,45 +1726,45 @@ export const useSessions = moduleState("state/sessions#store", () =>
           })),
         activeSpaceId: content.id,
       };
-      const conflict = leftRailLayoutConflict(nextProject);
+      const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = conflict;
         return s;
       }
-      openProjectArrangementTransition(t, nextProject);
+      openProjectArrangementTransition(t, nextWorkspace);
       r = ok({ viewId });
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
   },
 
   restoreView: (projectId) => {
-    let r: CmdResult<{ viewId: string | null }> = noProject(projectId);
+    let r: CmdResult<{ viewId: string | null }> = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const content = t.spaces.find((c) => c.id === t.activeSpaceId);
       if (!content) return s;
       r = ok({ viewId: content.maximizedTabId ?? null });
       if (!content.maximizedTabId) return s;
-      const nextProject = mapContent(t, content.id, (c) => ({
+      const nextWorkspace = mapContent(t, content.id, (c) => ({
         ...c,
         maximizedTabId: undefined,
       }));
-      openProjectArrangementTransition(t, nextProject);
+      openProjectArrangementTransition(t, nextWorkspace);
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
   },
 
   setFileMode: (projectId, viewId, mode) => {
-    let r: CmdResult = noProject(projectId);
+    let r: CmdResult = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       if (!contentOfView(t, viewId)) {
         r = err("TARGET_NOT_FOUND", tmsg("view.notFound", { viewId }));
@@ -1772,7 +1772,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       }
       r = ok({});
       return {
-        projects: mapProject(s.projects, projectId, (x) =>
+        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
           mapViewEverywhere(x, viewId, (v) =>
             v.kind === "file" ? { ...v, mode } : v,
           ),
@@ -1792,25 +1792,25 @@ export const useSessions = moduleState("state/sessions#store", () =>
   setViewRuntime: (projectId, viewId, patch) => {
     set((s) => {
       const targets = projectId
-        ? s.projects.filter((t) => t.id === projectId)
-        : s.projects.filter((t) => contentOfView(t, viewId));
+        ? s.workspaces.filter((t) => t.id === projectId)
+        : s.workspaces.filter((t) => contentOfView(t, viewId));
       if (targets.length === 0) return s;
-      let projects = s.projects;
+      let workspaces = s.workspaces;
       for (const t of targets) {
-        projects = mapProject(projects, t.id, (x) =>
+        workspaces = mapWorkspace(workspaces, t.id, (x) =>
           mapViewEverywhere(x, viewId, (v) =>
             v.kind === "plugin" ? { ...v, ...patch } : v,
           ),
         );
       }
-      return { projects };
+      return { workspaces };
     });
   },
 
   setViewStatus: (projectId, viewId, status) => {
-    let r: CmdResult = noProject(projectId);
+    let r: CmdResult = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       if (!contentOfView(t, viewId)) {
         r = err("TARGET_NOT_FOUND", tmsg("view.notFound", { viewId }));
@@ -1818,7 +1818,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       }
       r = ok({});
       return {
-        projects: mapProject(s.projects, projectId, (x) =>
+        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
           mapViewEverywhere(x, viewId, (v) => ({
             ...v,
             status: status ?? undefined,
@@ -1835,7 +1835,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
     const trimmed = title.trim();
     if (!trimmed) return;
     set((s) => ({
-      projects: mapProject(s.projects, projectId, (x) =>
+      workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
         mapViewEverywhere(x, viewId, (v) => ({ ...v, title: trimmed })),
       ),
     }));
@@ -1844,7 +1844,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
   setViewIcon: (projectId, viewId, icon) => {
     const trimmed = icon.trim();
     set((s) => ({
-      projects: mapProject(s.projects, projectId, (x) =>
+      workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
         mapViewEverywhere(x, viewId, (v) => {
           if (v.kind !== "plugin") return v;
           if (!trimmed) {
@@ -1864,7 +1864,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       tmsg("view.notFound", { viewId }),
     );
     set((s) => ({
-      projects: mapProject(s.projects, projectId, (x) =>
+      workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
         mapViewEverywhere(x, viewId, (v) => {
           r = ok({ label: trimmed });
           if (!trimmed) {
@@ -1879,9 +1879,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
   },
 
   moveViewToGroup: (projectId, viewId, targetGroupId, zone) => {
-    let r: CmdResult<{ groupId: string }> = noProject(projectId);
+    let r: CmdResult<{ groupId: string }> = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const content = contentOfView(t, viewId);
       if (!content) {
@@ -1918,15 +1918,15 @@ export const useSessions = moduleState("state/sessions#store", () =>
           })),
           activePaneId: targetGroupId,
         });
-        const nextProject = mapContent(t, content.id, () => nextContent);
-        const conflict = leftRailLayoutConflict(nextProject);
+        const nextWorkspace = mapContent(t, content.id, () => nextContent);
+        const conflict = leftRailLayoutConflict(nextWorkspace);
         if (conflict) {
           r = conflict;
           return s;
         }
         r = ok({ groupId: targetGroupId });
         return {
-          projects: mapProject(s.projects, projectId, () => nextProject),
+          workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
         };
       }
 
@@ -1943,24 +1943,24 @@ export const useSessions = moduleState("state/sessions#store", () =>
         layout: splitAtGroup(tree, targetGroupId, zone, fresh),
         activePaneId: fresh.id,
       });
-      const nextProject = mapContent(t, content.id, () => nextContent);
-      const conflict = leftRailLayoutConflict(nextProject);
+      const nextWorkspace = mapContent(t, content.id, () => nextContent);
+      const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = conflict;
         return s;
       }
       r = ok({ groupId: fresh.id });
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
   },
 
   closeGroup: (projectId, groupId) => {
-    let r: CmdResult<{ activePaneId: string }> = noProject(projectId);
+    let r: CmdResult<{ activePaneId: string }> = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const content = contentOfGroup(t, groupId);
       if (!content) {
@@ -1974,24 +1974,24 @@ export const useSessions = moduleState("state/sessions#store", () =>
       const { tree } = removeGroup(content.layout, groupId);
       if (!tree) return s;
       const next = normalizeActiveGroupC({ ...content, layout: tree });
-      const nextProject = mapContent(t, content.id, () => next);
-      const conflict = leftRailLayoutConflict(nextProject);
+      const nextWorkspace = mapContent(t, content.id, () => next);
+      const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = conflict;
         return s;
       }
       r = ok({ activePaneId: next.activePaneId });
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
   },
 
   moveGroupToGroup: (projectId, sourceGroupId, targetGroupId, zone) => {
-    let r: CmdResult<{ groupId: string }> = noProject(projectId);
+    let r: CmdResult<{ groupId: string }> = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const content = contentOfGroup(t, sourceGroupId);
       if (!content) {
@@ -2029,15 +2029,15 @@ export const useSessions = moduleState("state/sessions#store", () =>
           })),
           activePaneId: targetGroupId,
         });
-        const nextProject = mapContent(t, content.id, () => nextContent);
-        const conflict = leftRailLayoutConflict(nextProject);
+        const nextWorkspace = mapContent(t, content.id, () => nextContent);
+        const conflict = leftRailLayoutConflict(nextWorkspace);
         if (conflict) {
           r = conflict;
           return s;
         }
         r = ok({ groupId: targetGroupId });
         return {
-          projects: mapProject(s.projects, projectId, () => nextProject),
+          workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
         };
       }
       // Relocate the whole group beside target (same id and views kept → no body remount).
@@ -2046,15 +2046,15 @@ export const useSessions = moduleState("state/sessions#store", () =>
         layout: splitAtGroup(tree, targetGroupId, zone, source),
         activePaneId: source.id,
       });
-      const nextProject = mapContent(t, content.id, () => nextContent);
-      const conflict = leftRailLayoutConflict(nextProject);
+      const nextWorkspace = mapContent(t, content.id, () => nextContent);
+      const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = conflict;
         return s;
       }
       r = ok({ groupId: source.id });
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
@@ -2064,9 +2064,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
     get().resizeSplits(projectId, [{ splitId, sizes }]),
 
   resizeSplits: (projectId, updates) => {
-    let r: CmdResult = noProject(projectId);
+    let r: CmdResult = noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       if (updates.length === 0) {
         r = ok({});
@@ -2084,21 +2084,21 @@ export const useSessions = moduleState("state/sessions#store", () =>
         );
         return s;
       }
-      const nextProject = mapContent(t, content.id, (c) => ({
+      const nextWorkspace = mapContent(t, content.id, (c) => ({
         ...c,
         layout: updates.reduce(
           (layout, u) => mapSplitNode(layout, u.splitId, u.sizes),
           c.layout,
         ),
       }));
-      const conflict = leftRailLayoutConflict(nextProject);
+      const conflict = leftRailLayoutConflict(nextWorkspace);
       if (conflict) {
         r = conflict;
         return s;
       }
       r = ok({});
       return {
-        projects: mapProject(s.projects, projectId, () => nextProject),
+        workspaces: mapWorkspace(s.workspaces, projectId, () => nextWorkspace),
       };
     });
     return r;
@@ -2106,9 +2106,9 @@ export const useSessions = moduleState("state/sessions#store", () =>
 
   splitWithNewView: (projectId, targetGroupId, side, program) => {
     let r: CmdResult<{ groupId: string } & Partial<NewViewIds>> =
-      noProject(projectId);
+      noWorkspace(projectId);
     set((s) => {
-      const t = s.projects.find((x) => x.id === projectId);
+      const t = s.workspaces.find((x) => x.id === projectId);
       if (!t) return s;
       const content = contentOfGroup(t, targetGroupId);
       if (!content) {
@@ -2121,7 +2121,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       const fresh = makeGroup(v ?? undefined);
       r = ok({ groupId: fresh.id, ...(v ? idsOfView(v) : {}) });
       return {
-        projects: mapProject(s.projects, projectId, (x) =>
+        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
           mapContent(x, content.id, (c) =>
             normalizeActiveGroupC({
               ...c,

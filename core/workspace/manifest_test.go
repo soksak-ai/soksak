@@ -1,4 +1,4 @@
-package project
+package workspace
 
 import (
 	"encoding/json"

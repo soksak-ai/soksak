@@ -1,7 +1,7 @@
 // locateTab — tab id (the key the plugin passed to app.pty.spawn) → {projectId, viewId}. Pure function.
 // The parameter name paneId is the old name on the plugin contract surface and stays for now (docs/NAMING.md migration table).
 import { describe, expect, it } from "vitest";
-import { locateTab, type Project, type Tab } from "./sessions";
+import { locateTab, type Workspace, type Tab } from "./sessions";
 
 // Plugin terminal view: PTY key = tab id (single key since the core terminal was removed).
 const term = (viewId: string): Tab => ({
@@ -12,7 +12,7 @@ const term = (viewId: string): Tab => ({
   view: "content",
 });
 
-const tab = (id: string, tabs: Tab[]): Project => ({
+const tab = (id: string, tabs: Tab[]): Workspace => ({
   id,
   title: id,
   sidebarOpen: false,
@@ -36,17 +36,17 @@ const tab = (id: string, tabs: Tab[]): Project => ({
 
 describe("locateTab", () => {
   it("finds that terminal tab by tab id", () => {
-    const tabs = [tab("pjt-aaaaaa", [term("tab-aaaaaa")])];
-    expect(locateTab(tabs, "tab-aaaaaa")).toEqual({ projectId: "pjt-aaaaaa", viewId: "tab-aaaaaa" });
+    const tabs = [tab("wsp-aaaaaa", [term("tab-aaaaaa")])];
+    expect(locateTab(tabs, "tab-aaaaaa")).toEqual({ projectId: "wsp-aaaaaa", viewId: "tab-aaaaaa" });
   });
 
   it("finds the matching view.id among several views", () => {
-    const tabs = [tab("pjt-aaaaaa", [term("tab-aaaaaa"), term("tab-bbbbbb")])];
-    expect(locateTab(tabs, "tab-bbbbbb")).toEqual({ projectId: "pjt-aaaaaa", viewId: "tab-bbbbbb" });
+    const tabs = [tab("wsp-aaaaaa", [term("tab-aaaaaa"), term("tab-bbbbbb")])];
+    expect(locateTab(tabs, "tab-bbbbbb")).toEqual({ projectId: "wsp-aaaaaa", viewId: "tab-bbbbbb" });
   });
 
   it("a tab that is not there is null", () => {
-    const tabs = [tab("pjt-aaaaaa", [term("tab-aaaaaa")])];
+    const tabs = [tab("wsp-aaaaaa", [term("tab-aaaaaa")])];
     expect(locateTab(tabs, "nope")).toBeNull();
   });
 });

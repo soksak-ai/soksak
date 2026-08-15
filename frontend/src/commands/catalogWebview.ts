@@ -56,7 +56,7 @@ export function registerWebviewCatalog(): void {
       const windows = await invoke<string[]>("window_list").catch(() => [] as string[]);
       const orphans = orphanBrowserLabels(labels, windows);
       const viewIds = new Set<string>();
-      for (const t of useSessions.getState().projects)
+      for (const t of useSessions.getState().workspaces)
         for (const c of t.spaces) for (const v of allViews(c.layout)) viewIds.add(v.id);
       const ghosts = mine.filter((l) => {
         const v = browserViewIdFromLabel(l);

@@ -23,11 +23,11 @@ describe("parseDeepLink", () => {
 
 describe("buildDeepLink ↔ parseDeepLink round trip", () => {
   it("parsing a built URL gives the same values, with types preserved", () => {
-    const url = buildDeepLink("mailbox.open", { id: "mail-42", project: "projA", n: 2 });
-    expect(url).toBe("soksak://cmd/mailbox.open?id=mail-42&project=projA&n=2");
+    const url = buildDeepLink("mailbox.open", { id: "mail-42", workspace: "projA", n: 2 });
+    expect(url).toBe("soksak://cmd/mailbox.open?id=mail-42&workspace=projA&n=2");
     expect(parseDeepLink(url)).toEqual({
       command: "mailbox.open",
-      params: { id: "mail-42", project: "projA", n: 2 },
+      params: { id: "mail-42", workspace: "projA", n: 2 },
     });
   });
 
@@ -39,7 +39,7 @@ describe("buildDeepLink ↔ parseDeepLink round trip", () => {
 describe("resolveDeepLink", () => {
   it("a valid link activates first, then runs the command with the remote:true gate", async () => {
     const calls: unknown[] = [];
-    const out = await resolveDeepLink("soksak://cmd/mailbox.open?id=mail-42&project=projA", {
+    const out = await resolveDeepLink("soksak://cmd/mailbox.open?id=mail-42&workspace=projA", {
       execute: async (name, params, ctx) => {
         calls.push({ name, params, ctx });
         return { ok: true, code: "OK", message: "ok" };
@@ -52,7 +52,7 @@ describe("resolveDeepLink", () => {
     expect(calls[0]).toBe("activate"); // the app is activated before the run
     expect(calls[1]).toEqual({
       name: "mailbox.open",
-      params: { id: "mail-42", project: "projA" },
+      params: { id: "mail-42", workspace: "projA" },
       ctx: { remote: true },
     });
   });

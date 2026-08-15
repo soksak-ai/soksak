@@ -28,17 +28,17 @@ describe("startPluginHooks — sessions diff coalescing", () => {
 
     const events: Ev[] = [];
     const subs = (
-      ["project.changed", "view.activated", "file.opened", "file.closed"] as const
+      ["workspace.changed", "view.activated", "file.opened", "file.closed"] as const
     ).map((e) =>
       onPluginEvent(e, (payload) => events.push({ event: e, payload })),
     );
 
     const s = useSessions.getState();
-    const created = s.addProject({ alias: "perf", root: "<local-evidence>/perf-test" });
+    const created = s.addWorkspace({ alias: "perf", root: "<local-evidence>/perf-test" });
     expect(created.ok).toBe(true);
 
-    if (!created.ok) throw new Error("addProject failed");
-    // Inside one synchronous burst: add project + split + resize storm (120 times) + open file.
+    if (!created.ok) throw new Error("addWorkspace failed");
+    // Inside one synchronous burst: add workspace + split + resize storm (120 times) + open file.
     const projectId = created.projectId;
     const split = useSessions
       .getState()
@@ -46,7 +46,7 @@ describe("startPluginHooks — sessions diff coalescing", () => {
     expect(split.ok).toBe(true);
 
     // Find the split node id and run the resize storm.
-    const tab = useSessions.getState().projects.find((t) => t.id === projectId)!;
+    const tab = useSessions.getState().workspaces.find((t) => t.id === projectId)!;
     const content = tab.spaces[0];
     const splitId =
       content.layout.type === "split" ? content.layout.id : null;
@@ -66,11 +66,11 @@ describe("startPluginHooks — sessions diff coalescing", () => {
 
     await flush(); // drain the microtask, giving one coalesced diff
 
-    // Semantics preserved: 1 project activation change + 1 file open + 1 view activation.
+    // Semantics preserved: 1 workspace activation change + 1 file open + 1 view activation.
     // The 120 resizes produce no events at all.
     const byEvent = (e: keyof PluginEventMap) =>
       events.filter((x) => x.event === e);
-    expect(byEvent("project.changed").length).toBe(1);
+    expect(byEvent("workspace.changed").length).toBe(1);
     expect(byEvent("file.opened").length).toBe(1);
     expect(byEvent("file.opened")[0].payload).toMatchObject({
       path: "<local-evidence>/perf-test/a.txt",
@@ -97,13 +97,13 @@ describe("startPluginHooks — sessions diff coalescing", () => {
 
     const created = useSessions
       .getState()
-      // P5 (no duplicate root) — the root must differ from the first test for a new project to be created.
-      .addProject({ alias: "perf2", root: "<local-evidence>/perf-test-2" });
+      // P5 (no duplicate root) — the root must differ from the first test for a new workspace to be created.
+      .addWorkspace({ alias: "perf2", root: "<local-evidence>/perf-test-2" });
     expect(created.ok).toBe(true);
-    await flush(); // drain the project-added event first
+    await flush(); // drain the workspace-added event first
     events.length = 0;
 
-    const tab = useSessions.getState().projects.find((t) => t.title === "perf2")!;
+    const tab = useSessions.getState().workspaces.find((t) => t.title === "perf2")!;
     const opened = useSessions
       .getState()
       .openFileView(tab.id, "<local-evidence>/perf-test/b.txt");

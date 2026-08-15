@@ -1,6 +1,6 @@
 // Layer law for the left rail and the tabview work plane, established from the CSS text.
 // The left rail moves below the work plane; lighting exclusion is owned by exact mask geometry.
-// Right sidebar/modal/global chrome is owned by projectRailStackingViolations/B09, not by this law.
+// Right sidebar/modal/global chrome is owned by workspaceRailStackingViolations/B09, not by this law.
 
 interface CssRule {
   selector: string;
@@ -70,7 +70,7 @@ const RAIL_PLANE = ".left-rail-plane";
 const VEIL_PLANE = ".focus-lighting-plane";
 const SPACE_PLANE = ".space-plane";
 const RELATION_OVERLAY = ".rail-link-overlay";
-const PROJECT_RAIL = ".project-rail";
+const WORKSPACE_RAIL = ".workspace-rail";
 const CONTENT_STACK = ".terminal-stack";
 
 function boxFact(css: string, selector: string): PlaneFact | null {
@@ -90,18 +90,18 @@ function boxFact(css: string, selector: string): PlaneFact | null {
   return found ? fact : null;
 }
 
-/** Project + rail is permanent chrome above the browser content stack of the same DOM document. */
-export function projectRailStackingViolations(css: string): string[] {
+/** Workspace + rail is permanent chrome above the browser content stack of the same DOM document. */
+export function workspaceRailStackingViolations(css: string): string[] {
   const violations: string[] = [];
-  const rail = boxFact(css, PROJECT_RAIL);
+  const rail = boxFact(css, WORKSPACE_RAIL);
   const content = boxFact(css, CONTENT_STACK);
-  if (!rail) return [`${PROJECT_RAIL}: not declared`];
+  if (!rail) return [`${WORKSPACE_RAIL}: not declared`];
   if (!content) return [`${CONTENT_STACK}: not declared`];
-  if (!rail.positioned) violations.push(`${PROJECT_RAIL}: not positioned`);
-  if (rail.zIndex === null) violations.push(`${PROJECT_RAIL}: no z-index`);
+  if (!rail.positioned) violations.push(`${WORKSPACE_RAIL}: not positioned`);
+  if (rail.zIndex === null) violations.push(`${WORKSPACE_RAIL}: no z-index`);
   const contentRank = content.zIndex ?? (content.positioned ? 0 : -0.5);
   if (rail.zIndex !== null && rail.zIndex <= contentRank) {
-    violations.push(`${PROJECT_RAIL}: z-index ${rail.zIndex} <= ${CONTENT_STACK} ${contentRank}`);
+    violations.push(`${WORKSPACE_RAIL}: z-index ${rail.zIndex} <= ${CONTENT_STACK} ${contentRank}`);
   }
   return violations;
 }

@@ -1,7 +1,7 @@
 // cwdTabOf picks, generically, the terminal tab the file tree follows. Terminal detection uses only the
 // injected hasPty(id) predicate (plugin terminal = view.id). No hardcoded pluginId or kind.
 import { describe, expect, it } from "vitest";
-import { cwdTabOf, type Project, type Tab } from "./sessions";
+import { cwdTabOf, type Workspace, type Tab } from "./sessions";
 
 const plugin = (viewId: string, pluginId: string, view: string): Tab => ({
   id: viewId,
@@ -20,9 +20,9 @@ const file = (viewId: string, path: string): Tab => ({
 });
 
 // Tabs in a single group (g1); the active tab = activeTabId (defaults to the first tab).
-const tab = (tabs: Tab[], activeTabId?: string): Project => ({
-  id: "pjt-aaaaaa",
-  title: "pjt-aaaaaa",
+const tab = (tabs: Tab[], activeTabId?: string): Workspace => ({
+  id: "wsp-aaaaaa",
+  title: "wsp-aaaaaa",
   sidebarOpen: false,
   rightOpen: false,
   rightView: null,

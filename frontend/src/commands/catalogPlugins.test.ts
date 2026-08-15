@@ -18,7 +18,7 @@ import { registerPluginCatalog } from "./catalogPlugins";
 import { tmsg } from "../i18n";
 import { execute, getSpec } from "./registry";
 import { usePlugins, type PluginRuntime } from "../state/plugins";
-import { useSessions, type Project, type Tab } from "../state/sessions";
+import { useSessions, type Workspace, type Tab } from "../state/sessions";
 import { parseManifest, type PluginManifest } from "../plugins/spec";
 import { useProgramRegistry } from "../plugins/programRegistry";
 
@@ -44,9 +44,9 @@ function runtimeOf(manifest: PluginManifest): PluginRuntime {
 }
 
 // Minimal tab holding plugin view instances in one content area (fills only the paths the handler reads).
-function tabWith(tabs: Tab[]): Project {
+function tabWith(tabs: Tab[]): Workspace {
   return {
-    id: "pjt-aaaaaa",
+    id: "wsp-aaaaaa",
     spaces: [
       {
         id: "spc-aaaaaa",
@@ -56,7 +56,7 @@ function tabWith(tabs: Tab[]): Project {
       },
     ],
     activeSpaceId: "spc-aaaaaa",
-  } as unknown as Project;
+  } as unknown as Workspace;
 }
 
 const pluginView = (over: Partial<Tab> & { id: string; pluginId: string; view: string }): Tab =>
@@ -69,12 +69,12 @@ beforeAll(() => {
 beforeEach(() => {
   invoke.mockClear();
   usePlugins.setState({ plugins: {} });
-  useSessions.setState({ projects: [] });
+  useSessions.setState({ workspaces: [] });
 });
 
 afterEach(() => {
   usePlugins.setState({ plugins: {} });
-  useSessions.setState({ projects: [] });
+  useSessions.setState({ workspaces: [] });
 });
 
 describe("plugin.conformance registration (discoverability)", () => {
@@ -141,7 +141,7 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["idle", "busy"])) } });
     // Two content view instances: v1 does not report status (declared → violation), v2 reports a declared code.
     useSessions.setState({
-      projects: [
+      workspaces: [
         tabWith([
           pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas" }),
           pluginView({ id: "tab-bbbbbb", pluginId: id, view: "canvas", status: { code: "idle" } }),
@@ -164,7 +164,7 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
     const id = "demo";
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["running"])) } });
     useSessions.setState({
-      projects: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas", status: { code: "running" } })])],
+      workspaces: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas", status: { code: "running" } })])],
     });
 
     const r = await execute("plugin.conformance", { id }, {});
@@ -179,7 +179,7 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
     const id = "demo";
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, [])) } });
     useSessions.setState({
-      projects: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas" })])],
+      workspaces: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas" })])],
     });
 
     const r = await execute("plugin.conformance", { id }, {});
@@ -194,7 +194,7 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
     const id = "demo";
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, undefined)) } });
     useSessions.setState({
-      projects: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas", status: { code: "idle" } })])],
+      workspaces: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas", status: { code: "idle" } })])],
     });
 
     const r = await execute("plugin.conformance", { id }, {});
@@ -208,7 +208,7 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
     const id = "demo";
     usePlugins.setState({ plugins: { [id]: runtimeOf(declaredManifest(id, ["ready"])) } });
     useSessions.setState({
-      projects: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas", status: { code: "wat" } })])],
+      workspaces: [tabWith([pluginView({ id: "tab-aaaaaa", pluginId: id, view: "canvas", status: { code: "wat" } })])],
     });
 
     const r = await execute("plugin.conformance", { id }, {});
@@ -298,7 +298,7 @@ describe("plugin.view.open — a rail placement is not an open target (left rail
       },
       { mount: () => {} },
     );
-    useSessions.setState({ projects: [tabWith([])], activeId: "pjt-aaaaaa" } as never);
+    useSessions.setState({ workspaces: [tabWith([])], activeId: "wsp-aaaaaa" } as never);
     const r = (await execute("plugin.view.open", { viewKey: "railplug.tree" }, {})) as {
       ok: boolean;
       code: string;
