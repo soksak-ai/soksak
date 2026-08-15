@@ -1,5 +1,5 @@
 // File viewer registry — the single store of renderers routed by extension when a file opens as content.
-// Engine neutral (contract A13): the core only matches and hosts. The render engine (CodeMirror/Monaco/media)
+// Engine neutral (contract A13): the core only matches and hosts. The render engine
 // is plugin owned — provider.mount draws into the container directly (same shape as viewRegistry). version is the UI rebuild signal.
 
 import { moduleState } from "../lib/moduleState";

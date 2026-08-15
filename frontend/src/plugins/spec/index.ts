@@ -21,10 +21,10 @@
 // 6. Implementation and placement are orthogonal. The manifest declares static contributions and
 //    placement, and the runtime module provider map matches exactly. Only the host owns the actual
 //    slot, visibility, and input-enabled state.
-// 7. The core does not own the content render engine (engine-neutral A13). Editor (CodeMirror/
-//    Monaco), terminal (xterm), and browser (webview) are replaceable plugin choices. The core
-//    exposes raw primitives only (file IO, PTY, webview hosting, content slot) and holds no
-//    engine-specific capability.
+// 7. The core does not own the content render engine (engine-neutral A13). The editor, the
+//    terminal and the browser are replaceable plugin choices. The core exposes raw primitives
+//    only (file IO, PTY, webview hosting, content slot) and holds no engine-specific
+//    capability.
 // 8. Standards do not move. When a test/validation standard is not met, fix the code. When the
 //    standard itself is wrong, record it as an open question and correct it instead of lowering it.
 //
@@ -338,7 +338,7 @@ export interface ContributedIconSet {
 
 // File viewer — the renderer routed by extension when a file opens as content (editor = code/text,
 // media = image/video…). Engine-neutral (A13): the core does matching and hosting only; the render
-// engine (CodeMirror/Monaco/…) is owned by the plugin. The runtime module fileViewers map
+// engine is owned by the plugin. The runtime module fileViewers map
 // exact-matches the declared ids (both undeclared and missing are rejected, §0-3).
 export interface ContributedFileViewer {
   id: string; // unique within the plugin. Global key is "<pluginId>.<id>"
@@ -400,11 +400,11 @@ export interface ContributedProgram {
   // Same-path entries group into a submenu (merged across plugins, by display language).
   path?: LocalizedText;
   // Behavior: view = opens a view as a content tab (+view). The core does not own the terminal view —
-  // a terminal is a plugin view too (soksak-plugin-terminal-xterm.content). So kind collapses to view alone.
+  // a terminal is a plugin view too. So kind collapses to view alone.
   kind: "view";
   view: string; // view id to open (contributes.views[].id). Without viewPlugin it is a view of this plugin.
   // View-owning plugin (cross-plugin reference) — set when opening another plugin's view (e.g. an
-  // agent program opens the content view of soksak-plugin-terminal-xterm). Unset = this plugin.
+  // agent program opens another plugin's content view). Unset = this plugin.
   viewPlugin?: string;
   // Reference the view by contract (contract alternative to viewPlugin, C3 L2) — discover the
   // implementation by contract id instead of pinning a plugin id (implementation-agnostic). The core

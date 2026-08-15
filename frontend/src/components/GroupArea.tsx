@@ -832,7 +832,7 @@ export const GroupArea = memo(function GroupArea({
         ))}
 
       {/* ── Persistent body layer: keyed by viewId → no remount on a move. This layer alone has a
-          legitimate reason to position (a CodeMirror or terminal session survives a move between
+          legitimate reason to position (an editor or terminal session survives a move between
           groups). Body area coordinates are computed by CSS rules (cell variables + size variables). ── */}
       {cells.flatMap(({ group, rect }) =>
         group.tabs.map((view) => {

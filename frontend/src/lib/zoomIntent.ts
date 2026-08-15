@@ -74,7 +74,7 @@ const defaultDeps: ZoomDeps = {
  *
  * Two names: the canonical one is --tab-font-size (vocabulary standard — an instance is a tab), and
  * the old name --view-font-size is written with the same value. This variable is a contract surface
- * published by docs/PLUGIN-CONTRACT.md and a plugin declaring the old name (editor-codemirror)
+ * published by docs/PLUGIN-CONTRACT.md and a plugin declaring the old name
  * already exists — writing only one of them kills zoom in that view. Reads prefer the new name and
  * fall back to the old one (covers a plugin that supplied the initial value inline).
  * Removal condition: every plugin declaring this variable migrates to --tab-font-size (verified by

@@ -170,19 +170,6 @@ export function serializeProject(
 
 // ── deserialize (only split id regenerated; other ids and active references kept) ──
 
-// Saved-session migration — replaces the old pluginId in a pre-rename snapshot with the new id. Without this
-// hook, restoring an old snapshot after a rename silently degrades to an unresolved view (the drawing provider
-// "<old id>.content" is gone). The view id (content by convention) is not a rename target and stays as is.
-// [removal condition] Drop an entry once snapshots holding the old id are gone from the field (re-saved with the new id).
-const LEGACY_PLUGIN_IDS: Record<string, string> = {
-  // Terminal seam normalization (NAMING §4) — old id without an engine name → new id with the engine name (xterm).
-  "soksak-plugin-terminal": "soksak-plugin-terminal-xterm",
-};
-
-function migratePluginId(id: string): string {
-  return LEGACY_PLUGIN_IDS[id] ?? id;
-}
-
 function deserializeView(s: ViewSnapshot, _newSplitId: () => string): Tab {
   switch (s.kind) {
     case "file":
@@ -202,7 +189,7 @@ function deserializeView(s: ViewSnapshot, _newSplitId: () => string): Tab {
         title: s.title,
         ...(s.customLabel ? { customLabel: s.customLabel } : {}),
         ...(s.icon ? { icon: s.icon } : {}),
-        pluginId: migratePluginId(s.pluginId),
+        pluginId: s.pluginId,
         view: s.view,
         ...(s.cwd ? { cwd: s.cwd } : {}),
         ...(s.lastActivity ? { lastActivity: s.lastActivity } : {}),

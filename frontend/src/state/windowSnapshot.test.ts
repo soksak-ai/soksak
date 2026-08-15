@@ -296,45 +296,6 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
   });
 });
 
-describe("saved session migration — terminal rename (soksak-plugin-terminal → -xterm)", () => {
-  it("a snapshot with the old pluginId restores under the new id (the view id is unchanged)", () => {
-    sid = 0;
-    const legacy: Project = {
-      ...project,
-      spaces: [
-        {
-          id: "spc-aaaaaa",
-          title: "1",
-          activePaneId: "pan-aaaaaa",
-          layout: {
-            type: "leaf",
-            value: {
-              id: "pan-aaaaaa",
-              activeTabId: "tab-aaaaaa",
-              tabs: [
-                {
-                  id: "tab-aaaaaa",
-                  kind: "plugin",
-                  title: "T",
-                  pluginId: "soksak-plugin-terminal", // the old id, before the rename
-                  view: "content",
-                },
-              ],
-            },
-          },
-        },
-      ],
-    };
-    // Serialization stores the old id as is — migration happens at deserialize time.
-    const snap = serializeProject(legacy);
-    const back = deserializeProject(snap, newSplitId);
-    const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
-    const term = g.tabs[0] as Extract<Tab, { kind: "plugin" }>;
-    expect(term.pluginId).toBe("soksak-plugin-terminal-xterm");
-    expect(term.view).toBe("content"); // the view id (content by convention) is not part of the rename
-  });
-});
-
 describe("restore normalization — one migration per snapshot (the no-vertical-split proposition)", () => {
   // 40.6/39.5 — the 1.1 gap is outside the drag grouping rule (0.75), so new code can legitimately produce two
   // separate lines, and it is inside the legacy healing range (1.5), so an old snapshot without the marker snaps.

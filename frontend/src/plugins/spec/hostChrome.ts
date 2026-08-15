@@ -19,7 +19,7 @@ export const HOST_CHROME_TOKENS: readonly string[] = [
   ".view-tabs",
   ".view-tab",
   // `.tab` and `.tabs` are not listed here — this scanner is a heuristic and cannot distinguish a
-  // JS property access (`this.tab()`, real in xterm.js) from a CSS selector, so it false-positives
+  // JS property access (`this.tab()`) from a CSS selector, so it false-positives
   // on valid bundles (real incident 2026-07-26: terminal plugin activation was rejected outright).
   // Chrome ownership of those two names is enforced by the core CSS cascade and the cssVocabulary
   // gate, not by the scanner.
