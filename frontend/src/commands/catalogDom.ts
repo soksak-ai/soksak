@@ -20,6 +20,7 @@ import { contentViewHost, hasContentViewHost, type SurfacePointerInput } from ".
 import { surfaceInputProvider } from "../lib/surfaceInputProviders";
 import { surfacesOutsideWindow, type SurfaceFrameFact } from "../lib/surfaceInsideWindow";
 import { parseAddress, isParseError } from "./address";
+import { lightingRegionsIn } from "./focusLighting";
 import { scanNodes, type ScannedNode } from "../plugins/nodeScan";
 import { register } from "./registry";
 import { tmsg } from "../i18n";
@@ -1132,7 +1133,7 @@ export function registerDomCatalog(): void {
     triggers: { ko: "키보드 포커스 소유자 활성 뷰 포커스 상태 창키 커서" },
     params: {},
     returns:
-      "{ requestedTabId, mounted, delivered, activeTabId, realms:[{ realm, focused, node }], settled, windowFocused, activeElement:{ tag, dataNode, className, ancestors } }",
+      "{ requestedTabId, mounted, delivered, activeTabId, realms:[{ realm, focused, node }], settled, windowFocused, activeElement:{ tag, dataNode, className, ancestors }, lighting:{ scope, base, aperture, cutouts[], exempt[], blocked[] } — each region is { node, target, rect:{x,y,w,h} }; aperture null means nothing is focused, which is a real state }",
     message: (d) =>
       tmsg("msg.ui.focus.state", {
         view: String(d.activeTabId ?? "none"),
@@ -1175,6 +1176,10 @@ export function registerDomCatalog(): void {
         delivered: request.delivered,
         activeTabId,
         realms,
+        // Where the light is, as addresses. Whether the lighting dims the right pane is a visual
+        // question with a numeric answer — the aperture's address is the focused pane's — and
+        // without this the only way to ask it was to look at a picture, which is not a judgement (L6).
+        lighting: lightingRegionsIn(document),
         settled:
           request.delivered && request.requestedViewId === activeTabId,
         // When the window is not key, a widget paints no focus mark — an axis independent of settled.
