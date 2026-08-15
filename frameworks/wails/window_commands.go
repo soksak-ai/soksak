@@ -217,6 +217,17 @@ type windowFact struct {
 	W       int    `json:"w"`
 	H       int    `json:"h"`
 	Focused bool   `json:"focused"`
+	// ContentW and ContentH are the area a document occupies, with this
+	// window's own chrome subtracted. Separate from W and H because they are a
+	// different rectangle: measured 2026-08-15, the frame answered 999x617
+	// while the document was 1000x618, and a caller comparing its own size
+	// against W reported a discrepancy that was only the two disagreeing about
+	// what they had measured.
+	//
+	// Null when this platform cannot answer, rather than repeating the frame
+	// under another name.
+	ContentW *float64 `json:"contentW"`
+	ContentH *float64 `json:"contentH"`
 	// Monitor is the index of the display holding this window's centre, or
 	// null. Never zero for a window on no display: that zero cannot be told
 	// apart from "it is on the first display".
@@ -269,7 +280,7 @@ func monitorFacts(host WindowHost) (any, error) {
 			// the origin with no size would put a phantom on the first display.
 			continue
 		}
-		facts = append(facts, windowFact{
+		fact := windowFact{
 			Label:   name,
 			X:       frame.X,
 			Y:       frame.Y,
@@ -277,7 +288,13 @@ func monitorFacts(host WindowHost) (any, error) {
 			H:       frame.H,
 			Focused: host.Focused(name),
 			Monitor: monitorOf(frame, catalogue),
-		})
+		}
+		// A platform that cannot answer leaves these null rather than repeating
+		// the frame, which would be a different rectangle wearing this name.
+		if width, height, err := host.ContentSize(name); err == nil {
+			fact.ContentW, fact.ContentH = &width, &height
+		}
+		facts = append(facts, fact)
 	}
 	return monitorsReply{Monitors: catalogue, Windows: facts, Space: dipSpace}, nil
 }

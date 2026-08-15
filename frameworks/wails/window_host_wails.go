@@ -109,6 +109,20 @@ func (h *wailsHost) NativeHandle(name string) unsafe.Pointer {
 	return window.NativeWindow()
 }
 
+// ContentSize reads the window's content rect off the native window. The main
+// thread owns AppKit, so the read is dispatched there.
+func (h *wailsHost) ContentSize(name string) (float64, float64, error) {
+	window, addressable := h.live(name)
+	if !addressable {
+		return 0, 0, fmt.Errorf("window %s has no native lifetime and no content area", name)
+	}
+	var width, height float64
+	var failure error
+	native := window.NativeWindow()
+	application.InvokeSync(func() { width, height, failure = contentSize(native) })
+	return width, height, failure
+}
+
 // SetBackground paints one window. The main thread owns AppKit, so the change
 // is dispatched there.
 func (h *wailsHost) SetBackground(name string, colour string) error {

@@ -57,3 +57,17 @@ func nativeWindowTitle(window unsafe.Pointer) (string, error) {
 	defer C.free(unsafe.Pointer(copied))
 	return C.GoString(copied), nil
 }
+
+// contentSize answers the area a document occupies, in device-independent
+// points. The caller is on the main thread.
+//
+// Fractional: a window on a scaled display has a fractional content size, and
+// truncating it here would answer a size no document ever had.
+func contentSize(window unsafe.Pointer) (float64, float64, error) {
+	if window == nil {
+		return 0, 0, errors.New("a window with no native lifetime has no content area")
+	}
+	var width, height C.double
+	C.soksakWindowContentSize(window, &width, &height)
+	return float64(width), float64(height), nil
+}

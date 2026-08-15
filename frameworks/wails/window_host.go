@@ -84,6 +84,14 @@ type WindowHost interface {
 	// theme was wrong in a workspace window and every snapshot answered with the
 	// orchestrator.
 	NativeHandle(name string) unsafe.Pointer
+	// ContentSize is the area a document occupies, in device-independent points,
+	// with the window's own chrome subtracted.
+	//
+	// Separate from Frame because they are different rectangles. Measured
+	// 2026-08-15: the frame answered 999x617 while the document was 1000x618,
+	// and comparing the two reported a defect that was only two measurements
+	// disagreeing about what they had measured.
+	ContentSize(name string) (width float64, height float64, err error)
 	// SetBackground paints the window's own colour.
 	//
 	// The document paints transparent, so every unpainted region shows this.

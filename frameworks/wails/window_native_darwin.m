@@ -23,3 +23,10 @@ char *soksakCopyWindowTitle(void *nsWindow) {
   }
   return strdup([title UTF8String]);
 }
+
+void soksakWindowContentSize(void *nsWindow, double *width, double *height) {
+  NSWindow *window = (NSWindow *)nsWindow;
+  NSRect content = [window contentRectForFrameRect:[window frame]];
+  *width = content.size.width;
+  *height = content.size.height;
+}

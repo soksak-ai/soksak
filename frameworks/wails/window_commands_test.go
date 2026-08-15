@@ -77,6 +77,16 @@ func (h *fakeHost) Live(name string) bool {
 // Capture must answer that rather than pretend.
 func (h *fakeHost) NativeHandle(string) unsafe.Pointer { return nil }
 
+// ContentSize: this package has no application, so a window here has no content
+// area. The commands must answer that rather than invent a size.
+func (h *fakeHost) ContentSize(name string) (float64, float64, error) {
+	window := h.find(name)
+	if window == nil || !window.live {
+		return 0, 0, fmt.Errorf("window %s has no native lifetime and no content area", name)
+	}
+	return float64(window.frame.W), float64(window.frame.H), nil
+}
+
 func (h *fakeHost) SetBackground(name string, colour string) error {
 	window := h.find(name)
 	if window == nil || !window.live {

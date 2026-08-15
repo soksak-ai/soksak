@@ -33,3 +33,10 @@ func activateApplication() error { return ErrActivationUnsupported }
 var ErrTitleUnsupported = errors.New("reading a window title is not implemented on this platform")
 
 func nativeWindowTitle(unsafe.Pointer) (string, error) { return "", ErrTitleUnsupported }
+
+// ErrContentSizeUnsupported is returned where the content rect cannot be read
+// back. Answering the frame instead would be a different rectangle wearing this
+// one's name.
+var ErrContentSizeUnsupported = errors.New("reading a window's content size is not implemented on this platform")
+
+func contentSize(unsafe.Pointer) (float64, float64, error) { return 0, 0, ErrContentSizeUnsupported }

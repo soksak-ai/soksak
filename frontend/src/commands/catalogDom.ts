@@ -2067,6 +2067,52 @@ function clickStimulusReceipt<T extends Record<string, unknown>>(
         });
       }
 
+      // Whether the document fits the window. A mismatch clips the right and bottom by that difference,
+      // and any line drawn there is invisible — the screen looks identical to "no line was drawn", but
+      // the cause is different.
+      //
+      // Measured 2026-08-15: window 999, document 1000. The plane's right edge sat 1px outside the
+      // viewport, and overlapping with flat not drawing a frame it looked like a single symptom.
+      //
+      // The window size is asked of the framework. A document checking itself against its own size
+      // always passes.
+      try {
+        const monitors = await invoke<{
+          windows?: { label?: string; contentW?: number | null; contentH?: number | null }[];
+        }>("window_monitors");
+        const label = currentWindowLabel();
+        const mine = (monitors?.windows ?? []).find((row) => row.label === label);
+        const root = document.documentElement;
+        // Compared against the content rect. The window frame (w/h) is a different rect that includes
+        // chrome, so comparing against it reports only the fact that the two measurements measured
+        // different things as a defect.
+        if (!mine || typeof mine.contentW !== "number" || typeof mine.contentH !== "number") {
+          checks.push({
+            name: "viewport-fits-window",
+            ok: false,
+            detail: `the framework did not report this window's content size (${label})`,
+          });
+        } else {
+          const overflowX = root.clientWidth - mine.contentW;
+          const overflowY = root.clientHeight - mine.contentH;
+          checks.push({
+            name: "viewport-fits-window",
+            ok: overflowX <= 0 && overflowY <= 0,
+            detail:
+              overflowX <= 0 && overflowY <= 0
+                ? `document ${root.clientWidth}×${root.clientHeight} fits the content area ${mine.contentW}×${mine.contentH}`
+                : `document is larger than the content area — clipped by ${overflowX}px across and ${overflowY}px down` +
+                  ` (document ${root.clientWidth}×${root.clientHeight}, content ${mine.contentW}×${mine.contentH})`,
+          });
+        }
+      } catch (error) {
+        checks.push({
+          name: "viewport-fits-window",
+          ok: false,
+          detail: `window geometry unreadable: ${error instanceof Error ? error.message : String(error)}`,
+        });
+      }
+
       const failed = checks.filter((c) => !c.ok);
       // The verdict is passed in the payload — ok is a reserved envelope key, so putting it here gets it
       // swallowed and the caller reads "the command ran" as "the check passed" (the check itself becomes
