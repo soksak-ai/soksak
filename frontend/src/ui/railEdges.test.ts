@@ -18,8 +18,8 @@ describe("railEdgeWidths", () => {
     // has no counterpart surface to divide from, and the OS window frame already covers that border
     // (§B2a) — measured 2026-08-15: rail left x=0 was drawn, panel right x=1000 was not.
     expect(railEdgeWidths("ground", true, 50, "flat")).toEqual({ left: 1, right: 1 });
-    expect(railEdgeWidths("ground", true, 0, "flat")).toEqual({ left: 1, right: 1 });
-    expect(railEdgeWidths("ground", true, 100, "flat")).toEqual({ left: 1, right: 1 });
+    expect(railEdgeWidths("ground", true, 0, "flat")).toEqual({ left: 0, right: 1 });
+    expect(railEdgeWidths("ground", true, 100, "flat")).toEqual({ left: 1, right: 0 });
   });
 
   it("pane: 1px on both sides for an inner station, 0 on the outer edge — independent of paneStyle", () => {

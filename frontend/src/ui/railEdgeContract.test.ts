@@ -77,7 +77,9 @@ describe("rail vertical borders — contract ≡ implementation", () => {
   it("the rules exist (if they vanish from the contract table this suite guards nothing)", () => {
     expect(RAIL_RULES.map((r) => r.id).sort()).toEqual([
       "rail-ground-delegates",
-      "rail-ground-owns-flat",
+      "rail-ground-flat-station-end",
+      "rail-ground-flat-station-inner",
+      "rail-ground-flat-station-start",
       "rail-pane-station-end",
       "rail-pane-station-inner",
       "rail-pane-station-start",

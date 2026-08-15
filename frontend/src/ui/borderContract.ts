@@ -175,15 +175,44 @@ export const BORDER_RULES: readonly BorderRule[] = [
   // Axes: railLook (class rail-ground/rail-pane) × paneStyle × station (data-station).
   {
     id: "rail-ground-delegates",
-    selector: ".sidebar.rail-ground",
+    selector:
+      '.sidebar.rail-ground[data-station="0"], .sidebar.rail-ground[data-station="100"], .sidebar.rail-ground:not([data-station="0"]):not([data-station="100"])',
     kind: "edges",
     edges: { left: "none", right: "none" },
     when: { paneStyle: ["card", "floating"] },
     note: tmsg("msg.ui.border.railGroundDelegates"),
   },
+  // The ground rail follows the station law too — the same law rail-pane already wrote down:
+  // "an edge station omits the outer edge and owns only the body side".
+  //
+  // Previously flat owned both edges unconditionally, on the grounds that "there is no neighbor
+  // card outline, so delegation does not hold". That argument holds only for a **seam between
+  // surfaces**. At the window's outer edge there is nothing to divide from, and the OS window
+  // frame already draws the boundary there (§B2a).
+  //
+  // Measured 2026-08-15 (flat, window width 1000): the rail's left x=0 was drawn and the pane's
+  // right x=1000 was not. Two surfaces treated the same kind of edge differently and the validator
+  // passed both — the contract approved two contradictory conclusions at once (§B8-3).
   {
-    id: "rail-ground-owns-flat",
-    selector: ".sidebar.rail-ground",
+    id: "rail-ground-flat-station-start",
+    selector: '.sidebar.rail-ground[data-station="0"]',
+    kind: "edges",
+    edges: { left: "none", right: "bd" },
+    when: { paneStyle: ["flat"] },
+    note: tmsg("msg.ui.border.railGroundFlatStationStart"),
+  },
+  {
+    id: "rail-ground-flat-station-end",
+    selector: '.sidebar.rail-ground[data-station="100"]',
+    kind: "edges",
+    edges: { left: "bd", right: "none" },
+    when: { paneStyle: ["flat"] },
+    note: tmsg("msg.ui.border.stationEndMirror"),
+  },
+  {
+    id: "rail-ground-flat-station-inner",
+    selector:
+      '.sidebar.rail-ground:not([data-station="0"]):not([data-station="100"])',
     kind: "edges",
     edges: { left: "bd", right: "bd" },
     when: { paneStyle: ["flat"] },

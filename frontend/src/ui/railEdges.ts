@@ -23,8 +23,10 @@ export function railEdgeWidths(
   paneStyle: PaneStyle,
 ): { left: number; right: number } {
   if (!open) return { left: 0, right: 0 };
+  // An edge station omits its outer side — §B2a, independent of look.
+  const inner = { left: station > 0 ? 1 : 0, right: station < 100 ? 1 : 0 };
   if (look === "ground") {
-    return paneStyle === "flat" ? { left: 1, right: 1 } : { left: 0, right: 0 };
+    return paneStyle === "flat" ? inner : { left: 0, right: 0 };
   }
-  return { left: station > 0 ? 1 : 0, right: station < 100 ? 1 : 0 };
+  return inner;
 }
