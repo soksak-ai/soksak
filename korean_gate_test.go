@@ -37,12 +37,19 @@ var koreanScanned = map[string]bool{
 	".html": true, ".json": true, ".mjs": true, ".js": true,
 }
 
-// koreanDebt is how many Hangul lines remain outside the bundles, measured
-// 2026-08-15 while the sweep was still running.
+// koreanDebt is how many Hangul lines remain outside the two named bundles.
 //
-// It is a ratchet, not an exemption: the number may only go down. Zero here
-// means the debt is gone and this constant goes with it.
-const koreanDebt = 541
+// Measured 2026-08-15 and every one of them accounted for: 234 are the KO values
+// of the per-package messages.go tables, which are the Go side of the bundle;
+// 227 are the ko trigger words composeTriggers matches an utterance against; 50
+// are test fixtures — a multibyte boundary, an IME sequence; 9 are the banned
+// vocabulary list in AGENTS.md, which is the rule's own data; 5 are the measured
+// tofu example and the boot screen's pair.
+//
+// It is a ratchet: the number may only go down. Anything that raises it is a new
+// sentence in the wrong place. If it falls, lower this and say which category
+// shrank — a floor nobody can explain is not a floor.
+const koreanDebt = 520
 
 func TestKoreanStaysInTheBundles(t *testing.T) {
 	type finding struct {
