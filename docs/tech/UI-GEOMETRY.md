@@ -140,6 +140,21 @@ The command recomputes the position from the percentage instead of reading it
 back from the element. A verifier that shares the renderer's arithmetic agrees
 with the renderer about everything, including its mistakes.
 
+**Read `settled` first.** A pane in a layout transition is interpolated toward
+where it is going, so during one every number describes a frame and not the
+layout. The answer carries `settled` and the open transaction ids rather than
+leaving that to memory — measured 2026-08-16, verifying between rapid splits
+gave differences above 100px and 32 panes counted as missing, all of which came
+to 0.013px and 0 once the transitions closed. Wait with
+`sok layout.transaction.wait` and ask again.
+
+A cell smaller than the chrome that has to fit in it is refused, not drawn:
+`pane.split` answers `TOO_SMALL` with the measurement and the floor. The floor
+is the inset pair, below which the cell has no interior and CSS clamps the
+width to 0 — the point where the declaration stops being true on screen. Every
+resulting cell is checked, because a split redistributes the whole row and the
+cell that runs out of room is usually one nobody named.
+
 ---
 
 # B. Border ownership — which box draws which edge
