@@ -1,7 +1,12 @@
 version: '3'
 
 vars:
-  APP_NAME: "app"
+  # This repository produces two binaries and no others: the application and the
+  # client that drives it from outside. A generic "app" left bin/ holding four
+  # names for one program — app, app-mcp, app.dev.app, soksak-app — and the one
+  # carrying the framework's MCP server was taken for the real application on
+  # screen (measured 2026-08-15).
+  APP_NAME: "soksak"
   BIN_DIR: "bin"
   PACKAGE_MANAGER: pnpm
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
@@ -68,6 +73,24 @@ tasks:
     summary: Builds the application
     cmds:
       - task: "{{.GOOS}}:build"
+
+  clean:
+    summary: Removes build artefacts this repository does not produce
+    desc: |
+      bin/ holds exactly two things: soksak and sok. Anything else there is left
+      over from a build that no longer exists, and a stale application binary is
+      not inert — it launches, opens a window, and is taken for the current one.
+
+      Measured 2026-08-15: a stale binary carrying the framework's debug server
+      put a second window on screen that was read as a defect in the first.
+    cmds:
+      - |
+        for stale in bin/*; do
+          case "$(basename "$stale")" in
+            soksak|sok) ;;
+            *) echo "removing $stale"; rm -rf "$stale" ;;
+          esac
+        done
 
   build:sok:
     summary: Builds the control-plane client

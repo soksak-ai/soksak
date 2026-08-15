@@ -9,6 +9,7 @@ package main
 import (
 	"embed"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -123,27 +124,20 @@ func main() {
 		Sessions:    terminalSessions{service: terminals},
 	})
 
-	// The control plane. Everything the application can do is reachable from
-	// outside it, which is what makes a feature verifiable rather than only
-	// clickable. A failure to bind stops the launch: a process running without
-	// one looks identical to a working one until something needs to drive it.
-	listener, err := control.Listen(resolved.Socket)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() { _ = listener.Close() }()
-	go func() {
-		if err := control.Serve(listener, registry, resolved.Identifier); err != nil {
+	// The home is claimed before anything is drawn — see launch. Everything this
+	// application can do is reachable from outside it, which is what makes a
+	// feature verifiable rather than only clickable.
+	err = launch(resolved, control.Listen, func(listener net.Listener) error {
+		serveControl(listener, registry, resolved.Identifier, func(err error) {
 			log.Printf("control plane stopped: %v", err)
-		}
-	}()
-
-	err = wails.Run(wails.Options{
-		Assets:       assets,
-		CaptureProbe: os.Getenv("SOKSAK_CAPTURE_PROBE"),
-		Registry:     registry,
-		Bridge:       bridge,
-		Terminal:     terminals,
+		})
+		return wails.Run(wails.Options{
+			Assets:       assets,
+			CaptureProbe: os.Getenv("SOKSAK_CAPTURE_PROBE"),
+			Registry:     registry,
+			Bridge:       bridge,
+			Terminal:     terminals,
+		})
 	})
 	if err != nil {
 		log.Fatal(err)

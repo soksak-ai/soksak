@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -27,6 +28,11 @@ var enablesMCP = regexp.MustCompile(`(-tags[= ]|tags:\s*|BUILD_TAGS[=:]\s*)["']?
 
 // Directories that are not this product's to legislate: the vendored framework
 // is upstream's, and the rest are build outputs.
+//
+// bin is excluded from the source scan and checked separately below. Measured
+// 2026-08-15: this gate passed while bin/app-mcp sat in the tree, built with
+// -tags=production,mcp — a gate that reads only the recipe and never the meal
+// clears the exact violation it exists to stop.
 var notOurs = map[string]bool{
 	".git": true, "node_modules": true, "dist": true, "bin": true,
 	"framework": true, "evidence": true,
@@ -46,7 +52,10 @@ func TestNothingInThisRepositoryEnablesTheMCPServer(t *testing.T) {
 			return nil
 		}
 		switch filepath.Ext(path) {
-		case ".go", ".yml", ".yaml", ".md", ".json", ".sh", ".toml":
+		// Markdown is left out on purpose: prose describes this rule, and a gate
+		// that cannot tell an explanation from an instruction is one someone
+		// eventually silences.
+		case ".go", ".yml", ".yaml", ".json", ".sh", ".toml":
 		default:
 			return nil
 		}
@@ -59,9 +68,10 @@ func TestNothingInThisRepositoryEnablesTheMCPServer(t *testing.T) {
 			return err
 		}
 		for _, line := range strings.Split(string(source), "\n") {
-			if enablesMCP.MatchString(line) {
-				found = append(found, path+": "+strings.TrimSpace(line))
+			if isComment(line) || !enablesMCP.MatchString(line) {
+				continue
 			}
+			found = append(found, path+": "+strings.TrimSpace(line))
 		}
 		return nil
 	})
@@ -105,4 +115,63 @@ func TestTheMCPGateRecognisesHowTheTagIsSwitchedOn(t *testing.T) {
 			t.Errorf("the gate objects to something harmless: %s", line)
 		}
 	}
+}
+
+// A build is not a recipe. The scan above reads what this repository says to
+// do; this reads what it actually produced.
+//
+// Go stamps its build settings into the binary, so a tagged build cannot hide:
+// `go version -m` reports `-tags=production,mcp` for exactly the artefact that
+// puts a second window on screen.
+func TestNoBuiltArtefactCarriesTheMCPServer(t *testing.T) {
+	entries, err := os.ReadDir("bin")
+	if os.IsNotExist(err) {
+		// Nothing built yet is not a violation.
+		return
+	}
+	if err != nil {
+		t.Fatalf("reading bin: %v", err)
+	}
+
+	var tagged []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		path := filepath.Join("bin", entry.Name())
+		info, err := entry.Info()
+		if err != nil || info.Mode()&0o111 == 0 {
+			continue
+		}
+		settings, err := exec.Command("go", "version", "-m", path).Output()
+		if err != nil {
+			// Not a Go binary, or unreadable. Neither is this gate's business.
+			continue
+		}
+		for _, line := range strings.Split(string(settings), "\n") {
+			if !strings.Contains(line, "-tags=") {
+				continue
+			}
+			for _, tag := range strings.Split(strings.TrimSpace(strings.SplitN(line, "-tags=", 2)[1]), ",") {
+				if tag == "mcp" {
+					tagged = append(tagged, path+" ("+strings.TrimSpace(line)+")")
+				}
+			}
+		}
+	}
+
+	if len(tagged) > 0 {
+		t.Errorf("these built artefacts carry the framework's MCP server:\n  %s\n\n"+
+			"Delete them. Each one opens a second copy of this application, and a second copy on\n"+
+			"screen is mistaken for the first — measured 2026-08-15, twice.", strings.Join(tagged, "\n  "))
+	}
+}
+
+// isComment says this line cannot run. A rule that stops the explanation of
+// itself is one somebody eventually deletes rather than obeys.
+func isComment(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.HasPrefix(trimmed, "#") ||
+		strings.HasPrefix(trimmed, "//") ||
+		strings.HasPrefix(trimmed, "*")
 }
