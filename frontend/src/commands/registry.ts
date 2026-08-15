@@ -789,6 +789,45 @@ function snapshotCommandSpec(spec: CommandSpec, broker: CommandBrokerSpec | unde
   return Object.freeze(stored);
 }
 
+// Who is told when the set of commands this window answers changes.
+//
+// The backend holds a delegation table built from a declaration this page sends. Sent once at the
+// end of boot, it goes stale the moment a plugin is enabled afterwards: measured 2026-08-16, a
+// plugin command the window answered was refused by the socket as not registered, while
+// plugin.conformance counted it. §3.5 has one registry, and a window registry that disagrees with
+// the backend's delegation is two.
+//
+// A signal rather than a call at each site, because the sites are the plugin lifecycle in three
+// places and whoever adds a fourth would have to know to send it.
+const registryWatchers = new Set<() => void>();
+let noticeScheduled = false;
+
+/** Subscribe to registry changes. Returns the unsubscribe. */
+export function onRegistryChange(listener: () => void): () => void {
+  registryWatchers.add(listener);
+  return () => registryWatchers.delete(listener);
+}
+
+// Collapsed into one microtask. A plugin registers every command it declares in a row, and one
+// notice per command would have the backend rebuild its delegation table as many times as the
+// plugin has commands — each declaration being the whole catalogue anyway.
+function noticeRegistryChange(): void {
+  if (noticeScheduled || registryWatchers.size === 0) return;
+  noticeScheduled = true;
+  queueMicrotask(() => {
+    noticeScheduled = false;
+    for (const listener of [...registryWatchers]) {
+      try {
+        listener();
+      } catch (e) {
+        // One watcher's failure is not the others'. Chaining them would make the second failure
+        // depend on the first with nothing reporting that it did.
+        console.error("[registry] a change listener failed:", e);
+      }
+    }
+  });
+}
+
 export function register(name: string, spec: CommandSpec): void {
   // Re-registering the same name is a programming error — Map overwrites silently and turns the earlier registration
   // into dead code (real case: duplicate window.focus). Surface it as an error at once. A legitimate replacement calls unregister first.
@@ -798,11 +837,16 @@ export function register(name: string, spec: CommandSpec): void {
   const broker = spec.broker ? certifyBrokerSpec(name, spec) : undefined;
   const stored = snapshotCommandSpec(spec, broker);
   registry.set(name, stored);
+  noticeRegistryChange();
 }
 
 // Unregister — for the plugin lifecycle (disable/remove) only. True when it existed.
 export function unregister(name: string): boolean {
-  return registry.delete(name);
+  // A name that was never there changes nothing, and announcing it would have the backend rebuild
+  // its table for a no-op.
+  if (!registry.delete(name)) return false;
+  noticeRegistryChange();
+  return true;
 }
 
 // The name was not found — but there are two **reasons** it was not. Blurring them hides the cause from the outside.

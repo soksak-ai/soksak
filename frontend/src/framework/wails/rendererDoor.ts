@@ -67,5 +67,21 @@ export async function installRendererDoor(options: RendererDoorOptions): Promise
     void options.emit(RENDERER_WITHDRAW_EVENT, {});
   });
 
+  await declareRendererCommands(options);
+}
+
+/**
+ * Sends this window's catalogue again, without installing anything.
+ *
+ * Called whenever the set of commands changes — a plugin enabled, disabled or reloaded. Repeating
+ * installRendererDoor instead would add a second receipt listener and a second pagehide hook every
+ * time, and the withdrawal would then be sent as many times as the page had re-declared.
+ *
+ * The declaration is a whole catalogue and the backend replaces what a window held, so sending it
+ * twice with nothing changed costs a rebuild and changes nothing.
+ */
+export async function declareRendererCommands(
+  options: Pick<RendererDoorOptions, "emit" | "names">,
+): Promise<void> {
   await options.emit(RENDERER_DECLARE_EVENT, { names: options.names() });
 }

@@ -30,9 +30,10 @@ if (typeof window !== "undefined") {
 }
 import App from "./App";
 import { markCommandHostReady, startExecutor } from "./commands/executor";
-import { catalogJson, execute } from "./commands/registry";
+import { catalogJson, execute, onRegistryChange } from "./commands/registry";
 import { installControlDoor } from "./framework/wails/controlDoor";
 import {
+  declareRendererCommands,
   installRendererDoor,
   type RendererDeclaration,
 } from "./framework/wails/rendererDoor";
@@ -116,9 +117,32 @@ function bootStamp(step: string): void {
 // Declares the commands this window answers to the backend registry — that is how `sok ui.tree` works with no window.
 // Called after the command host is ready: reading before that declares a catalog missing every plugin command,
 // and a missing name looks like "no such command" from outside.
+// The catalogue this window answers, as the backend has to receive it.
+const declaredNames = () => catalogJson().map((entry) => entry.name);
+
+/**
+ * Keeps the backend's delegation table equal to this window's registry.
+ *
+ * The declaration used to be sent only at the end of boot, so a plugin enabled afterwards
+ * registered a command the window answered and the socket refused — measured 2026-08-16, with
+ * plugin.conformance counting the command as registered while sok called it unknown. §3.5 has one
+ * registry; two that disagree is the drift it forbids.
+ *
+ * Subscribed rather than called at each lifecycle site, so the fourth site nobody has written yet
+ * cannot forget.
+ */
+function followRegistryWithDeclaration(): void {
+  onRegistryChange(() => {
+    void declareRendererCommands({
+      emit: (event, payload) => emitLocal(event, payload),
+      names: declaredNames,
+    }).catch((e) => console.error("re-declaring the command catalogue failed:", e));
+  });
+}
+
 async function declareCommandsToBackend(): Promise<void> {
   await installRendererDoor({
-    names: () => catalogJson().map((entry) => entry.name),
+    names: declaredNames,
     emit: (event, payload) => emitLocal(event, payload),
     listen: async (event, handler) => {
       await listen<RendererDeclaration>(event, (received) => handler(received.payload));
@@ -221,6 +245,7 @@ async function boot(): Promise<void> {
     markCommandHostReady();
     try {
       await declareCommandsToBackend();
+      followRegistryWithDeclaration();
     } catch (e) {
       console.error("command catalog declaration failed:", e);
     }
@@ -329,6 +354,7 @@ async function boot(): Promise<void> {
   markCommandHostReady();
   try {
     await declareCommandsToBackend();
+    followRegistryWithDeclaration();
   } catch (e) {
     console.error("command catalog declaration failed:", e);
   }
