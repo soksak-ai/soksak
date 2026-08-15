@@ -1,4 +1,4 @@
-package control
+package boot
 
 import (
 	"os"
@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/soksak/soksak-core/core/control"
 )
 
 // invokeCall finds the backend commands the frontend calls by name.
@@ -242,7 +244,7 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		t.Fatal("no invoke calls were found; the scan root is wrong")
 	}
 
-	registry := NewRegistry()
+	registry := control.NewRegistry()
 	RegisterCore(registry, Boot{})
 	served := map[string]bool{}
 	for _, command := range registry.Describe().Commands {

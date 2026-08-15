@@ -1,9 +1,11 @@
-package control
+package boot
 
 import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
+
+	"github.com/soksak/soksak-core/core/control"
 
 	"github.com/soksak/soksak-core/core/identity"
 	"github.com/soksak/soksak-core/core/store"
@@ -12,7 +14,7 @@ import (
 // booted builds the same registry the application builds, with no window
 // anywhere. Everything registered here must answer headlessly, which is what
 // makes a second host — or no host — possible at all.
-func booted(t *testing.T) *Registry {
+func booted(t *testing.T) *control.Registry {
 	t.Helper()
 	home := t.TempDir()
 	kv, err := store.OpenKV(filepath.Join(home, "soksak.db"))
@@ -21,7 +23,7 @@ func booted(t *testing.T) *Registry {
 	}
 	t.Cleanup(func() { _ = kv.Close() })
 
-	registry := NewRegistry()
+	registry := control.NewRegistry()
 	RegisterCore(registry, Boot{
 		Identity:     identity.Resolve("com.soksak.dev", identity.Environment{Home: home}),
 		BuildProfile: "debug",
@@ -30,9 +32,9 @@ func booted(t *testing.T) *Registry {
 	return registry
 }
 
-func args(t *testing.T, pairs map[string]any) Args {
+func args(t *testing.T, pairs map[string]any) control.Args {
 	t.Helper()
-	out := Args{}
+	out := control.Args{}
 	for name, value := range pairs {
 		encoded, err := json.Marshal(value)
 		if err != nil {
@@ -130,7 +132,7 @@ func TestTheTableSeparatesCoreFromFramework(t *testing.T) {
 	for _, command := range table.Commands {
 		// Everything registered here is host-independent. A framework-owned
 		// entry appearing in this set would mean the split had leaked.
-		if command.Owner != OwnerCore {
+		if command.Owner != control.OwnerCore {
 			t.Errorf("%s is owned by %q in the core registration", command.Name, command.Owner)
 		}
 	}

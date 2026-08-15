@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/soksak/soksak-core/core/activity"
+	"github.com/soksak/soksak-core/core/boot"
 	"github.com/soksak/soksak-core/core/control"
 	"github.com/soksak/soksak-core/core/identity"
 	"github.com/soksak/soksak-core/core/store"
@@ -70,7 +71,7 @@ func main() {
 	defer func() { _ = kv.Close() }()
 
 	registry := control.NewRegistry()
-	control.RegisterCore(registry, control.Boot{
+	boot.RegisterCore(registry, boot.Boot{
 		Identity:     resolved,
 		BuildProfile: buildProfile,
 		KV:           kv,

@@ -1,4 +1,11 @@
-package control
+// Package boot is the backend's composition root: the one place that names every
+// feature package and joins them to the registry.
+//
+// It exists so control stays a registry and nothing else. A registry that
+// imports the features it holds cannot be imported by them, and every feature
+// needs it — that cycle is what this package breaks. The frontend's src/boot
+// plays the same part on the other side.
+package boot
 
 import (
 	"context"
@@ -8,6 +15,7 @@ import (
 
 	"github.com/soksak/soksak-core/core/activity"
 	"github.com/soksak/soksak-core/core/app"
+	"github.com/soksak/soksak-core/core/control"
 	"github.com/soksak/soksak-core/core/identity"
 	corenet "github.com/soksak/soksak-core/core/net"
 	"github.com/soksak/soksak-core/core/scan"
@@ -33,40 +41,28 @@ type Boot struct {
 	Now func() int64
 }
 
-func arg[T any](args Args, name string) (T, error) {
-	var value T
-	raw, present := args[name]
-	if !present {
-		return value, fmt.Errorf("missing argument %q", name)
-	}
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return value, fmt.Errorf("argument %q: %w", name, err)
-	}
-	return value, nil
-}
-
 // RegisterCore registers the host-independent commands the frontend asks for
 // during boot. Each is answerable with no window, which is what makes headless
 // possible at all.
-func RegisterCore(registry *Registry, boot Boot) {
-	registry.MustRegister(Command{
+func RegisterCore(registry *control.Registry, boot Boot) {
+	registry.MustRegister(control.Command{
 		Name:    "app_environment",
-		Handler: func(Args) (any, error) { return app.Describe(boot.Identity, boot.BuildProfile), nil },
+		Handler: func(control.Args) (any, error) { return app.Describe(boot.Identity, boot.BuildProfile), nil },
 	})
 
-	registry.MustRegister(Command{
+	registry.MustRegister(control.Command{
 		Name:    "app_is_release",
-		Handler: func(Args) (any, error) { return boot.Identity.Release, nil },
+		Handler: func(control.Args) (any, error) { return boot.Identity.Release, nil },
 	})
 
-	registry.MustRegister(Command{
+	registry.MustRegister(control.Command{
 		Name: "data_kv_get",
-		Handler: func(args Args) (any, error) {
-			ns, err := arg[string](args, "ns")
+		Handler: func(args control.Args) (any, error) {
+			ns, err := control.Arg[string](args, "ns")
 			if err != nil {
 				return nil, err
 			}
-			key, err := arg[string](args, "key")
+			key, err := control.Arg[string](args, "key")
 			if err != nil {
 				return nil, err
 			}
@@ -89,14 +85,14 @@ func RegisterCore(registry *Registry, boot Boot) {
 		},
 	})
 
-	registry.MustRegister(Command{
+	registry.MustRegister(control.Command{
 		Name: "data_kv_set",
-		Handler: func(args Args) (any, error) {
-			ns, err := arg[string](args, "ns")
+		Handler: func(args control.Args) (any, error) {
+			ns, err := control.Arg[string](args, "ns")
 			if err != nil {
 				return nil, err
 			}
-			key, err := arg[string](args, "key")
+			key, err := control.Arg[string](args, "key")
 			if err != nil {
 				return nil, err
 			}
@@ -108,14 +104,14 @@ func RegisterCore(registry *Registry, boot Boot) {
 		},
 	})
 
-	registry.MustRegister(Command{
+	registry.MustRegister(control.Command{
 		Name: "activity_publish",
-		Handler: func(args Args) (any, error) {
-			kind, err := arg[string](args, "kind")
+		Handler: func(args control.Args) (any, error) {
+			kind, err := control.Arg[string](args, "kind")
 			if err != nil {
 				return nil, err
 			}
-			source, err := arg[string](args, "source")
+			source, err := control.Arg[string](args, "source")
 			if err != nil {
 				return nil, err
 			}
@@ -125,18 +121,18 @@ func RegisterCore(registry *Registry, boot Boot) {
 		},
 	})
 
-	registry.MustRegister(Command{
+	registry.MustRegister(control.Command{
 		Name: "unit_dev_list",
-		Handler: func(Args) (any, error) {
+		Handler: func(control.Args) (any, error) {
 			// Development units are declared under the home. A fresh home has
 			// none, which is an empty list rather than a failure.
 			return scan.Directory(filepath.Join(boot.Identity.Home, "units"), ".json")
 		},
 	})
 
-	registry.MustRegister(Command{
+	registry.MustRegister(control.Command{
 		Name: "service_ledger_sync",
-		Handler: func(args Args) (any, error) {
+		Handler: func(args control.Args) (any, error) {
 			ledger, present := args["ledger"]
 			if !present {
 				return nil, fmt.Errorf("missing argument %q", "ledger")
@@ -148,9 +144,9 @@ func RegisterCore(registry *Registry, boot Boot) {
 		},
 	})
 
-	registry.MustRegister(Command{
+	registry.MustRegister(control.Command{
 		Name: "net_http_request",
-		Handler: func(args Args) (any, error) {
+		Handler: func(args control.Args) (any, error) {
 			var request corenet.Request
 			encoded, err := json.Marshal(map[string]json.RawMessage(args))
 			if err != nil {
@@ -163,16 +159,16 @@ func RegisterCore(registry *Registry, boot Boot) {
 		},
 	})
 
-	registry.MustRegister(Command{
+	registry.MustRegister(control.Command{
 		Name: "themes_scan",
-		Handler: func(Args) (any, error) {
+		Handler: func(control.Args) (any, error) {
 			return scan.Directory(filepath.Join(boot.Identity.Home, "themes"), ".json")
 		},
 	})
 
-	registry.MustRegister(Command{
+	registry.MustRegister(control.Command{
 		Name: "plugin_scan",
-		Handler: func(Args) (any, error) {
+		Handler: func(control.Args) (any, error) {
 			return scan.Directory(filepath.Join(boot.Identity.Home, "plugins"), ".json")
 		},
 	})
