@@ -3,7 +3,6 @@ package wails
 import (
 	"strings"
 	"testing"
-	"unsafe"
 
 	"github.com/soksak/soksak-core/core/control"
 )
@@ -63,40 +62,6 @@ func TestARegionCaptureDoesNotNeedAPathToAnswer(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "path") {
 		t.Errorf("a region capture was refused for want of a path: %v", err)
-	}
-}
-
-// A native surface is drawn into a region capture too.
-//
-// A region was taken from the window layer alone, so a browser pane cropped to
-// its own rectangle came back flat — the one capture a person wants when the
-// question is what that page shows. The frames are in window points and the
-// image covers the region, so each one is translated into the crop.
-func TestARegionHoldsTheSurfacesInsideIt(t *testing.T) {
-	window := solidPNG(t, 100, 100, background)
-	surfaces := stubSurfaces{placed: []SurfacePixels{
-		// The crop is 100,100 → 200,200 in window points. This surface fills it.
-		{ID: "brw-inside", Frame: SurfaceFrame{X: 100, Y: 100, W: 100, H: 100}},
-		{ID: "brw-elsewhere", Frame: SurfaceFrame{X: 0, Y: 0, W: 50, H: 50}},
-	}, png: map[string][]byte{
-		"brw-inside":    solidPNG(t, 100, 100, pageInk),
-		"brw-elsewhere": solidPNG(t, 50, 50, pageInk),
-	}}
-	region := Rect{X: 100, Y: 100, Width: 100, Height: 100}
-
-	composite, note := captureOf(t, surfaces, 400, 400).finish(unsafe.Pointer(&window), window, region)
-
-	if got := at(t, decode(t, composite), 50, 50); got != pageInk {
-		t.Errorf("the surface filling the region is %v, not its page", got)
-	}
-	if note.Drawn != 1 {
-		t.Errorf("one surface is inside the region and %d were drawn", note.Drawn)
-	}
-	if len(note.Skipped) != 1 || !strings.Contains(note.Skipped[0], "brw-elsewhere") {
-		t.Fatalf("the surface outside the region must be named: %v", note.Skipped)
-	}
-	if !strings.Contains(note.Skipped[0], "region") {
-		t.Errorf("the reason must travel with the name: %q", note.Skipped[0])
 	}
 }
 

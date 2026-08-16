@@ -12,7 +12,7 @@ import (
 const surfaceRuleFile = "surface_composition.go"
 
 // surfaceGroupFiles is everything this group owns.
-var surfaceGroupFiles = []string{surfaceRuleFile, "surface_recorder.go"}
+var surfaceGroupFiles = []string{surfaceRuleFile, "composition_source.go"}
 
 // The compositor is a separate module with its own release, and the framework
 // is a vendor. Either one named in the rule file would make the coordinate

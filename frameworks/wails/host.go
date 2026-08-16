@@ -97,10 +97,6 @@ func Run(options Options) error {
 	// answer from two moments, and the capture would draw a page at a rectangle the numbers say it
 	// is not at.
 	surfaceComposition := NewCompositorSource(nativeCompositor)
-	// One source of surface pixels, shared by the capture service the frontend binds and the one a
-	// command builds per call. Two would mean a capture that composites through one path and not
-	// the other, which is the split this replaces.
-	surfaceImages := NewCompositorImages(surfaceComposition, nativeCompositor.Deliver)
 
 	app := application.New(application.Options{
 		Name:        appName,
@@ -117,7 +113,7 @@ func Run(options Options) error {
 			// names the window it is a capture of.
 			application.NewService(NewCaptureService(controlPlaneWindow, func() unsafe.Pointer {
 				return nativeWindow(controlPlaneWindow)
-			}).withSurfaces(surfaceImages)),
+			})),
 			application.NewService(NewControlService(options.Registry)),
 		},
 		Assets: application.AssetOptions{
@@ -162,7 +158,6 @@ func Run(options Options) error {
 		NewID:       newWindowID,
 		Sessions:    terminalplugin.CommandSessions(options.Terminal),
 		Composition: surfaceComposition,
-		Surfaces:    surfaceImages,
 		Frames: func(stream string, frame any) {
 			options.Bridge.Emit(control.StreamEvent, control.StreamFrame{Stream: stream, Frame: frame})
 		},
@@ -242,8 +237,7 @@ func Run(options Options) error {
 			if err != nil {
 				log.Printf("capture-probe error %v", err)
 			} else {
-				log.Printf("capture-probe wrote %s (%d of %d surfaces drawn, skipped %v)",
-					note.Path, note.Drawn, note.Surfaces, note.Skipped)
+				log.Printf("capture-probe wrote %s", note.Path)
 			}
 			app.Quit()
 		}()

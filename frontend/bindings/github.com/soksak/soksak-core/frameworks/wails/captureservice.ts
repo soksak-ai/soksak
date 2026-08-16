@@ -44,10 +44,8 @@ export function PixelsAt(path: string, rect: $models.Rect): $CancellablePromise<
 /**
  * Record captures Frames frames of this service's window into Dir.
  * 
- * Each frame goes through the same path as a single capture, so a native
- * surface is composited into every one of them. A recording of a browser pane
- * that came back flat would be the defect the single capture already fixed,
- * arriving 600 times.
+ * Each frame goes through the same path as a single capture: the window's own
+ * pixels, with nothing drawn into them.
  */
 export function Record(request: $models.RecordRequest): $CancellablePromise<$models.RecordReport> {
     return $Call.ByID(83833308, request).then(($result: any) => {

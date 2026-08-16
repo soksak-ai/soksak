@@ -13,7 +13,7 @@ func captureRegistry(t *testing.T) *control.Registry {
 	// A host whose windows have no native lifetime: these must answer that
 	// rather than take the process down, and this package has no application to
 	// give them one.
-	RegisterCapture(registry, startedHost(liveWindow(controlPlaneWindow)), nil, nil)
+	RegisterCapture(registry, startedHost(liveWindow(controlPlaneWindow)), nil)
 	return registry
 }
 

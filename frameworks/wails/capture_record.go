@@ -67,17 +67,12 @@ type RecordReport struct {
 	Frames    int    `json:"frames"`
 	Bytes     int64  `json:"bytes"`
 	Stopped   string `json:"stopped,omitempty"`
-	// Note is what the last frame drew, so a burst of empty panes states the
-	// reason once rather than leaving it to be read out of the pixels.
-	Note CaptureNote `json:"note"`
 }
 
 // Record captures Frames frames of this service's window into Dir.
 //
-// Each frame goes through the same path as a single capture, so a native
-// surface is composited into every one of them. A recording of a browser pane
-// that came back flat would be the defect the single capture already fixed,
-// arriving 600 times.
+// Each frame goes through the same path as a single capture: the window's own
+// pixels, with nothing drawn into them.
 func (service *CaptureService) Record(request RecordRequest) (RecordReport, error) {
 	if request.Dir == "" {
 		return RecordReport{}, fmt.Errorf("a recording needs a directory to write its frames into")
@@ -130,9 +125,6 @@ func (service *CaptureService) Record(request RecordRequest) (RecordReport, erro
 			report.Stopped = fmt.Sprintf("frame %d could not be captured: %v", frame, err)
 			return report, nil
 		}
-		png, note := service.finish(handle, png, request.Region)
-		report.Note = note
-
 		// Checked before the file is written, so an over-budget frame leaves
 		// nothing behind and the count matches what is on disk.
 		if request.MaxBytes > 0 && report.Bytes+int64(len(png)) > request.MaxBytes {

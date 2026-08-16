@@ -6,40 +6,18 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
- * CaptureNote is what a capture contains, beside the file.
+ * CaptureNote is what a capture contains, beside the image.
  * 
- * A capture that quietly left a pane empty is the defect this whole path exists to remove, so the
- * answer states how many surfaces it drew and why any were left out. Without it a caller looking
- * at a flat rectangle cannot tell a page that failed to load from a composite that never ran.
+ * The path is answered rather than assumed, so a caller reads where the file
+ * landed instead of guessing it went where it asked.
  */
 export class CaptureNote {
     "path": string;
-
-    /**
-     * Surfaces is how many native surfaces the inventory held at capture time.
-     */
-    "surfaces": number;
-
-    /**
-     * Drawn is how many of them were drawn into the image.
-     */
-    "drawn": number;
-
-    /**
-     * Skipped names each one that was not, with the reason.
-     */
-    "skipped"?: string[];
 
     /** Creates a new CaptureNote instance. */
     constructor($$source: Partial<CaptureNote> = {}) {
         if (!("path" in $$source)) {
             this["path"] = "";
-        }
-        if (!("surfaces" in $$source)) {
-            this["surfaces"] = 0;
-        }
-        if (!("drawn" in $$source)) {
-            this["drawn"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -49,11 +27,7 @@ export class CaptureNote {
      * Creates a new CaptureNote instance from a string or object.
      */
     static createFrom($$source: any = {}): CaptureNote {
-        const $$createField3_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("skipped" in $$parsedSource) {
-            $$parsedSource["skipped"] = $$createField3_0($$parsedSource["skipped"]);
-        }
         return new CaptureNote($$parsedSource as Partial<CaptureNote>);
     }
 }
@@ -86,7 +60,7 @@ export class CapturePixels {
      * Creates a new CapturePixels instance from a string or object.
      */
     static createFrom($$source: any = {}): CapturePixels {
-        const $$createField1_0 = $$createType1;
+        const $$createField1_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("note" in $$parsedSource) {
             $$parsedSource["note"] = $$createField1_0($$parsedSource["note"]);
@@ -109,12 +83,6 @@ export class RecordReport {
     "bytes": number;
     "stopped"?: string;
 
-    /**
-     * Note is what the last frame drew, so a burst of empty panes states the
-     * reason once rather than leaving it to be read out of the pixels.
-     */
-    "note": CaptureNote;
-
     /** Creates a new RecordReport instance. */
     constructor($$source: Partial<RecordReport> = {}) {
         if (!("dir" in $$source)) {
@@ -129,9 +97,6 @@ export class RecordReport {
         if (!("bytes" in $$source)) {
             this["bytes"] = 0;
         }
-        if (!("note" in $$source)) {
-            this["note"] = (new CaptureNote());
-        }
 
         Object.assign(this, $$source);
     }
@@ -140,11 +105,7 @@ export class RecordReport {
      * Creates a new RecordReport instance from a string or object.
      */
     static createFrom($$source: any = {}): RecordReport {
-        const $$createField5_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("note" in $$parsedSource) {
-            $$parsedSource["note"] = $$createField5_0($$parsedSource["note"]);
-        }
         return new RecordReport($$parsedSource as Partial<RecordReport>);
     }
 }
@@ -220,7 +181,7 @@ export class RecordRequest {
      * Creates a new RecordRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): RecordRequest {
-        const $$createField4_0 = $$createType2;
+        const $$createField4_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("Region" in $$parsedSource) {
             $$parsedSource["Region"] = $$createField4_0($$parsedSource["Region"]);
@@ -301,6 +262,5 @@ export class Reply {
 }
 
 // Private type creation functions
-const $$createType0 = $Create.Array($Create.Any);
-const $$createType1 = CaptureNote.createFrom;
-const $$createType2 = Rect.createFrom;
+const $$createType0 = CaptureNote.createFrom;
+const $$createType1 = Rect.createFrom;

@@ -97,19 +97,3 @@ func TestACompositionIsTheWindowsOwn(t *testing.T) {
 	}
 }
 
-// A capture draws the surfaces of the window it is a capture of.
-//
-// The composite finishes a window's image with content that draws outside the
-// process. Reading every window's surfaces put the workspace window's browser
-// into a picture of the orchestrator and into a picture of the workspace window
-// alike — so the screenshot showed a browser in the very window whose pane was
-// empty, which is the reading that made the defect invisible for a day.
-func TestACapturesSurfacesAreTheWindowsOwn(t *testing.T) {
-	service, _, _ := twoWindowCompositor(t)
-	images := NewCompositorImages(NewCompositorSource(service), service.Deliver)
-
-	placed := images.Placed("main")
-	if len(placed) != 1 || placed[0].ID != "srf-orchestrator" {
-		t.Fatalf("a capture of main must hold main's surfaces only: %+v", placed)
-	}
-}

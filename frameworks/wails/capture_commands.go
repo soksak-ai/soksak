@@ -17,15 +17,11 @@ import (
 //
 // Framework-owned: the pixels belong to a window, and a host without one
 // answers that rather than pretending.
-// The surfaces argument is where a capture gets content that draws outside this process. A build
-// with none passes nil, and the capture is then the window layer alone — which is what every
-// capture was before native surfaces existed.
 //
-// It has to arrive here. A capture service built per call holds only the window it was handed,
-// while the one built at composition holds the compositor; measured 2026-08-16, that split left
-// every command-driven capture reporting 0 surfaces while surface.composition reported 1, and a
-// browser pane was a flat rectangle in every screenshot.
-func RegisterCapture(registry *control.Registry, host WindowHost, surfaces SurfaceImages, frames StreamSink) {
+// The image is the window's own pixels. Nothing is drawn into it here: a ScreenCaptureKit capture
+// of this process's window already holds every native child (docs/tech/NATIVE-LAYER.md, Capture),
+// re-measured 2026-08-16 with the compositing path off.
+func RegisterCapture(registry *control.Registry, host WindowHost, frames StreamSink) {
 	if host == nil {
 		panic("wails: the capture commands need a WindowHost")
 	}
@@ -55,7 +51,7 @@ func RegisterCapture(registry *control.Registry, host WindowHost, surfaces Surfa
 		if handle == nil {
 			return nil, i18n.Errorf("wails.capture.noPixels", map[string]string{"window": name})
 		}
-		return NewCaptureService(name, func() unsafe.Pointer { return handle }).withSurfaces(surfaces), nil
+		return NewCaptureService(name, func() unsafe.Pointer { return handle }), nil
 	}
 
 	registry.MustRegister(control.Command{
