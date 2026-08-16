@@ -33,7 +33,7 @@ const setOf = (id: string): SectionSet | undefined =>
  *  region is settled — the link, or the fixed choice — because the set names no region itself.
  *  Refused by name rather than dropped: a section that vanished silently reads as the plugin
  *  failing. */
-function refuseUnplaced(set: SectionSet, region: Region): string | null {
+export function refuseUnplaced(set: SectionSet, region: Region): string | null {
   const placed = new Set(viewsForPlacement(region).map((v) => v.key));
   const foreign = set.sections.filter((k) => !placed.has(k));
   if (foreign.length === 0) return null;
