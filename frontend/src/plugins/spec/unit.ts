@@ -42,15 +42,29 @@ export type UnitTarget = (typeof UNIT_TARGETS)[number];
 export const ARTIFACT_FORMATS = ["tar.gz", "tgz"] as const;
 export type ArtifactFormat = (typeof ARTIFACT_FORMATS)[number];
 
-// The core's spec version, stamped into every envelope the core defines.
-//
-// There were seven names for it until 2026-08-16 — soksak-spec-release@0.0.1,
-// soksak-spec-registry@0.0.1, one per unit kind and so on — all defined here, all moving together at
-// 0.0.1, and each announcing in its own value which document it was. The document is known from
-// where the field appears: a release manifest's `spec` is the release format, a plugin manifest's is
-// the manifest format. The core has one spec, and this is its version.
+// The core's spec version, stamped into every envelope the core defines — the runtime transport and
+// nothing else. For a document the core reads, the stamp is the publisher's, below.
 export const CORE_SPEC = "0.0.1" as const;
 export type CoreSpec = typeof CORE_SPEC;
+
+// The stamps on the four documents the core reads and does not publish.
+//
+// These were folded into CORE_SPEC on 2026-08-16, on the reasoning that a field's place already
+// identifies its document. On the wire it does not: a release manifest is fetched alone by URL, and
+// `spec` is its only identification. Measured the same day against what is served — the index, a
+// release manifest, both conformance reports and a packaged plugin manifest all stamped with the
+// names below — so the fold made 54 published units unreadable at four layers at once.
+//
+// A per-plugin format — `soksak-spec-plugin-terminal` — was an invention and stays deleted. These
+// four are formats, one per document kind, and the publisher owns each.
+export const RELEASE_SPEC = "soksak-spec-release@0.0.1" as const;
+export const REGISTRY_SPEC = "soksak-spec-registry@0.0.1" as const;
+export const CONFORMANCE_REPORT_SPEC = "soksak-spec-conformance@0.0.1" as const;
+export const UNIT_SPEC_BY_KIND = {
+  kit: "soksak-spec-kit@0.0.1",
+  plugin: "soksak-spec-plugin@0.0.1",
+  sidecar: "soksak-spec-sidecar@0.0.1",
+} as const satisfies Record<UnitKind, string>;
 
 export function isUnitKind(value: unknown): value is UnitKind {
   return typeof value === "string" && (UNIT_KINDS as readonly string[]).includes(value);

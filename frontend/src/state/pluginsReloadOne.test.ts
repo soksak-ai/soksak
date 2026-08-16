@@ -55,7 +55,7 @@ import { parseManifest } from "../plugins/spec";
 
 function manifestJson(commands: string[]): Record<string, unknown> {
   return {
-    spec: "0.0.1",
+    spec: "soksak-spec-plugin@0.0.1",
     id: ID,
     name: "Demo",
     version: "1.0.0",
@@ -107,7 +107,7 @@ describe("reloadOne — a reload by id reads the manifest from disk again", () =
   });
 
   it("a malformed file answers with the refusal reason instead of silently starting on the old manifest", async () => {
-    onDisk = { spec: "0.0.1", id: ID }; // required fields missing
+    onDisk = { spec: "soksak-spec-plugin@0.0.1", id: ID }; // required fields missing
 
     const r = await usePlugins.getState().reloadOne(ID);
     expect(r.ok).toBe(false);

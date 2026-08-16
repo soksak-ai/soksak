@@ -7,7 +7,9 @@ import {
 } from "./contracts";
 import { type PlatformParseResult, type UnitReleaseManifest } from "./release";
 import {
-  CORE_SPEC,
+  CONFORMANCE_REPORT_SPEC,
+  RELEASE_SPEC,
+  UNIT_SPEC_BY_KIND,
   SHA256_RE,
   STRICT_SEMVER_RE,
   UNIT_ID_RE,
@@ -37,7 +39,7 @@ export interface ConformanceValidator {
 }
 
 export interface ConformanceReport {
-  spec: typeof CORE_SPEC;
+  spec: typeof CONFORMANCE_REPORT_SPEC;
   subject: ConformanceSubject;
   contract: PlatformConformanceContract | ContractProviderRef;
   result: "passed";
@@ -61,14 +63,16 @@ function strictObject(
   return raw;
 }
 
-export type PlatformConformanceContract = typeof CORE_SPEC;
+export type PlatformConformanceContract =
+  | typeof RELEASE_SPEC
+  | (typeof UNIT_SPEC_BY_KIND)[UnitKind];
 
 function isPlatformConformanceContract(value: unknown): value is PlatformConformanceContract {
   return typeof value === "string" && (
-    value === CORE_SPEC ||
-    value === CORE_SPEC ||
-    value === CORE_SPEC ||
-    value === CORE_SPEC
+    value === RELEASE_SPEC ||
+    value === UNIT_SPEC_BY_KIND.kit ||
+    value === UNIT_SPEC_BY_KIND.plugin ||
+    value === UNIT_SPEC_BY_KIND.sidecar
   );
 }
 
@@ -80,9 +84,10 @@ export function conformanceContractKey(
     : `domain\u0000${contractProviderKey(contract)}`;
 }
 
-// The one spec a unit is conformant against — the core's, whatever kind the unit is.
-export function requiredConformanceContracts(): PlatformConformanceContract[] {
-  return [CORE_SPEC];
+// What a unit answers for: the release format it ships in, and the manifest format of its kind.
+// Measured against what is published — every unit in the index has exactly these two reports.
+export function requiredConformanceContracts(kind: UnitKind): PlatformConformanceContract[] {
+  return [RELEASE_SPEC, UNIT_SPEC_BY_KIND[kind]].sort();
 }
 
 export function parseConformanceReport(raw: unknown): PlatformParseResult<ConformanceReport> {
@@ -95,8 +100,8 @@ export function parseConformanceReport(raw: unknown): PlatformParseResult<Confor
     errors,
   );
   if (!value) return { ok: false, errors };
-  if (value.spec !== CORE_SPEC) {
-    errors.push(`conformance.spec: ${CORE_SPEC} required`);
+  if (value.spec !== CONFORMANCE_REPORT_SPEC) {
+    errors.push(`conformance.spec: ${CONFORMANCE_REPORT_SPEC} required`);
   }
   let contract: PlatformConformanceContract | ContractProviderRef | null = null;
   if (isPlatformConformanceContract(value.contract)) {
@@ -182,7 +187,7 @@ export function parseConformanceReport(raw: unknown): PlatformParseResult<Confor
   return {
     ok: true,
     value: {
-      spec: CORE_SPEC,
+      spec: value.spec as typeof CONFORMANCE_REPORT_SPEC,
       subject,
       contract,
       result: "passed",

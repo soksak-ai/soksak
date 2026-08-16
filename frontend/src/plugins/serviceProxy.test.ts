@@ -15,7 +15,7 @@ import {
 function demoManifest(): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "0.0.1",
+      spec: "soksak-spec-plugin@0.0.1",
       id: "demo",
       name: "Demo",
       version: "0.0.1",
@@ -149,7 +149,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
   it('declaring the "secrets" permission derives vaultEnv (PS9 — env: the vault injection target)', () => {
     const { manifest, validation } = parseManifest(
       {
-        spec: "0.0.1",
+        spec: "soksak-spec-plugin@0.0.1",
         id: "vaulted",
         name: "Vaulted",
         version: "1.0.0",
@@ -175,7 +175,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
   it("a manifest with no service does not enter the ledger", () => {
     const { manifest } = parseManifest(
       {
-        spec: "0.0.1",
+        spec: "soksak-spec-plugin@0.0.1",
         id: "plain",
         name: "Plain",
         version: "1.0.0",
@@ -259,7 +259,7 @@ describe("registerBusBridge — window bus to core bridge (PS15)", () => {
     const h = harness();
     const { manifest } = parseManifest(
       {
-        spec: "0.0.1",
+        spec: "soksak-spec-plugin@0.0.1",
         id: "plain",
         name: "Plain",
         version: "1.0.0",

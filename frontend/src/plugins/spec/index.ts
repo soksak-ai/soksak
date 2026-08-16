@@ -70,7 +70,7 @@ export * from "./service";
 // semver comparison utilities. Single source: semver.ts (public API re-exported here).
 import { SEMVER_RE } from "./semver";
 export * from "./semver";
-import { UNIT_ID_RE, CORE_SPEC, isUnitDependencyRange } from "./unit";
+import { UNIT_ID_RE, UNIT_SPEC_BY_KIND, isUnitDependencyRange } from "./unit";
 export * from "./unit";
 export * from "./release";
 export * from "./conformanceWire";
@@ -283,7 +283,7 @@ export function programPathSegments(path: string): string[] {
 
 // ── §3 Manifest ──────────────────────────────────────────────────────────────
 
-export const SPEC_VERSION = CORE_SPEC;
+export const SPEC_VERSION = UNIT_SPEC_BY_KIND.plugin;
 export const DEFAULT_ENTRY = "main.js";
 
 // External CLI/library dependency — an external tool the plugin runs as a process (npm global CLI
@@ -1505,7 +1505,7 @@ export function parseManifest(
   if (errors.length > 0) return reject();
   return {
     manifest: {
-      spec: SPEC_VERSION,
+      spec: raw.spec as typeof SPEC_VERSION,
       id: (raw.id as string).trim(),
       name: normalizeText(raw.name as LocalizedText),
       version: (raw.version as string).trim(),

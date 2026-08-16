@@ -400,20 +400,37 @@ func TestTheCoreAnswersNoMediaType(t *testing.T) {
 
 // The core holds no second identity namespace (C3, C4).
 //
-// A plugin is identified by its plugin id. There was a parallel one until
-// 2026-08-16 — `soksak-spec-<kind>-<domain>` contract ids that a provider
-// declared and a consumer asked for, so either side could be swapped. Not one
-// contract ever had both sides declared, the id was a second name for what the
-// plugin id already names, and it leaked into the core as a constant for ⌘T.
+// A plugin is identified by its plugin id. There was a parallel one until 2026-08-16 —
+// `soksak-spec-<kind>-<domain>` contract ids that a provider declared and a consumer asked for, so
+// either side could be swapped. Not one contract ever had both sides declared, the id was a second
+// name for what the plugin id already names, and it leaked into the core as a constant for ⌘T.
 //
-// What remains is the core's own spec version, `CORE_SPEC`, stamped into the
-// envelopes the core defines. It is a version, not a name to meet at, and there
-// is one of it. Seven names for it stood here — a release spec, a registry spec,
-// one per unit kind — each announcing in its own value which document it was,
-// while the field's place already said so.
+// Four stamps remain, one per document the core reads and does not publish, plus one per unit kind.
+// They were deleted the same day on the reasoning that a field's place already identifies its
+// document. On the wire it does not: a release manifest arrives alone by URL and `spec` is the only
+// thing in it that identifies the format. Measured against what is served — the index, a release
+// manifest, both conformance reports and a packaged plugin manifest — the deletion made 54 published
+// units unreadable at four layers.
+//
+// So the rule is not that the names are gone. It is that they are formats, declared in one file, and
+// none of them names a plugin or a domain: `soksak-spec-plugin@` is the manifest format every plugin
+// shares, and `soksak-spec-plugin-terminal@` would be a format for one of them (C1).
+var specStampHome = filepath.Join("frontend", "src", "plugins", "spec", "unit.ts")
+
+var declaredSpecStamps = map[string]bool{
+	"soksak-spec-release":     true,
+	"soksak-spec-registry":    true,
+	"soksak-spec-conformance": true,
+	"soksak-spec-kit":         true,
+	"soksak-spec-plugin":      true,
+	"soksak-spec-sidecar":     true,
+}
+
 func TestTheCoreHoldsNoSecondIdentityNamespace(t *testing.T) {
 	spec := regexp.MustCompile(`soksak-spec-[a-z0-9-]+`)
-	var found []string
+	var scattered []string
+	var invented []string
+	declared := map[string]bool{}
 	scanned := 0
 
 	for _, root := range []string{filepath.Join("frontend", "src"), "core", "frameworks"} {
@@ -439,9 +456,18 @@ func TestTheCoreHoldsNoSecondIdentityNamespace(t *testing.T) {
 				return readErr
 			}
 			scanned++
+			home := path == specStampHome
 			for index, line := range strings.Split(stripComments(string(body)), "\n") {
 				for _, name := range spec.FindAllString(line, -1) {
-					found = append(found, clean+":"+itoa(index+1)+" "+name)
+					where := clean + ":" + itoa(index+1) + " " + name
+					if !home {
+						scattered = append(scattered, where)
+						continue
+					}
+					declared[name] = true
+					if !declaredSpecStamps[name] {
+						invented = append(invented, where)
+					}
 				}
 			}
 			return nil
@@ -453,9 +479,22 @@ func TestTheCoreHoldsNoSecondIdentityNamespace(t *testing.T) {
 	if scanned == 0 {
 		t.Fatal("no core source was scanned; the roots are wrong")
 	}
-	if len(found) > 0 {
-		t.Errorf("the core holds a second identity namespace in %d places:\n%s\n"+
-			"A plugin is named by its plugin id, and the core's own format version is CORE_SPEC.",
-			len(found), strings.Join(found, "\n"))
+	if len(scattered) > 0 {
+		t.Errorf("a spec stamp stands outside %s in %d places:\n%s\n"+
+			"Declare it there and import it. A stamp written twice is two answers about one document.",
+			specStampHome, len(scattered), strings.Join(scattered, "\n"))
+	}
+	if len(invented) > 0 {
+		t.Errorf("%d spec stamps are not formats the core reads:\n%s\n"+
+			"A stamp is the format of a document, one per document kind. A plugin is named by its "+
+			"plugin id, and a format for one plugin is a second name for it (C1).",
+			len(invented), strings.Join(invented, "\n"))
+	}
+	for name := range declaredSpecStamps {
+		if !declared[name] {
+			t.Errorf("%s is declared here but no longer in %s.\n"+
+				"It stamps a document that is published today — deleting it makes that document "+
+				"unreadable. Measure what is served before removing it.", name, specStampHome)
+		}
 	}
 }

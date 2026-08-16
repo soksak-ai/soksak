@@ -24,7 +24,7 @@ import { useProgramRegistry } from "../plugins/programRegistry";
 function manifestOf(id: string, overrides: Record<string, unknown> = {}): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "0.0.1",
+      spec: "soksak-spec-plugin@0.0.1",
       id,
       name: "Demo",
       version: "1.0.0",

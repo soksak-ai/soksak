@@ -15,7 +15,7 @@ import {
 } from "./release";
 import { semverCompare, semverSatisfies } from "./semver";
 import {
-  CORE_SPEC,
+  REGISTRY_SPEC,
   SHA256_RE,
   UNIT_ID_RE,
   githubReleaseAssetBelongsTo,
@@ -28,7 +28,15 @@ import {
 import { checkKnownKeys, isRecord } from "./util";
 import type { ContractProviderRef } from "./contracts";
 
-export const REGISTRY_WIRE_SPEC = CORE_SPEC;
+// The stamp the registry puts on its own index.
+//
+// The core's spec is the core's (C4) and this was tied to it, so renaming the core renamed a field
+// in a document the core does not publish. Measured on 2026-08-16: the served index answered
+// `official -> INVALID_INDEX: registry.spec: 0.0.1 required` and the catalogue was empty — 54 units
+// unreadable because of one line in this repository.
+//
+// The registry publishes the index and stamps it. This build reads that stamp and never assigns it.
+export const REGISTRY_WIRE_SPEC = REGISTRY_SPEC;
 
 export interface RegistryIntegrityReference {
   url: string;
@@ -223,7 +231,9 @@ export function parseRegistryPayload(raw: unknown): PlatformParseResult<Registry
   return {
     ok: true,
     value: {
-      spec: REGISTRY_WIRE_SPEC,
+      // The document's own stamp, not this build's. `canonicalRegistryPayload` re-serializes it for
+      // the Ed25519 check, so a substituted value verifies bytes nobody signed.
+      spec: value.spec as typeof REGISTRY_WIRE_SPEC,
       registryId: value.registryId as string,
       sequence: value.sequence as number,
       issuedAt: value.issuedAt as string,
@@ -639,7 +649,7 @@ export async function verifyRegistryUnitRelease(
   const contractKeys = reports.map((report) => conformanceContractKey(report.contract));
   if (new Set(contractKeys).size !== contractKeys.length) errors.push("duplicate conformance contracts forbidden");
   const required = new Map<string, ConformanceReport["contract"]>(
-    requiredConformanceContracts().map((contract) => [conformanceContractKey(contract), contract] as const),
+    requiredConformanceContracts(release.kind).map((contract) => [conformanceContractKey(contract), contract] as const),
   );
   if (release.kind === "sidecar") {
     for (const artifact of release.artifacts) {

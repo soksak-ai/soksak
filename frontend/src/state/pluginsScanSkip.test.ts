@@ -37,7 +37,7 @@ import { usePlugins } from "./plugins";
 
 function goodManifest(id: string): string {
   return JSON.stringify({
-    spec: "0.0.1",
+    spec: "soksak-spec-plugin@0.0.1",
     id,
     name: "good",
     version: "1.0.0",
