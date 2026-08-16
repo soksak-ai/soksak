@@ -112,6 +112,10 @@ func (service *CaptureService) Record(request RecordRequest) (RecordReport, erro
 	if err != nil {
 		return RecordReport{}, err
 	}
+	// Held once for the whole burst. Per frame, the resume wait is paid on every
+	// one of them and the window is handed back to the throttle between each
+	// pair — which is the gap a recording exists to look at.
+	defer service.holdRendering(handle)()
 
 	report := RecordReport{Dir: request.Dir, Requested: request.Frames}
 	for frame := 0; frame < request.Frames; frame++ {

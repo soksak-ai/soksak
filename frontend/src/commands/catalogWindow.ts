@@ -585,8 +585,12 @@ export function registerWindowCatalog(): void {
     examples: ['window.occlusion \'{"enabled":false}\''],
     handler: async (p) => {
       const enabled = !!p.enabled;
-      const webviews = await invoke<number>("plugin:webview-capture|set_occlusion", { enabled });
-      return { occlusion: enabled, webviews };
+      // The host's own switch. This invoked a command of the preceding implementation's plugin,
+      // which this host never served, so every call answered INTERNAL and the throttle stayed on
+      // (measured 2026-08-16). Every capture already holds it off for its own duration; this is
+      // for watching a covered window over time, where the throttle stops the updates being
+      // watched.
+      return await invoke<{ occlusion: boolean; webviews: number }>("window_occlusion", { enabled });
     },
   });
 

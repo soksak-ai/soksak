@@ -14,6 +14,11 @@ import (
 // report the frames that resulted". A new entry here needs a stated reason.
 var cgoFiles = map[string]string{
 	"capture_darwin.go": "the ScreenCaptureKit bridge; the capture itself lives in capture_darwin.m",
+	// The rendering throttle is a private AppKit selector on WKWebView, looked
+	// up by name because it is private. There is no Go equivalent and no public
+	// one either. The walk of the window's web views is in
+	// capture_occlusion_darwin.m.
+	"capture_occlusion_darwin.go": "the occlusion-detection switch a capture holds off; it lives in capture_occlusion_darwin.m",
 	// The framework reveals a window only by making it the key window, and
 	// activates the application only through a call current macOS ignores. Both
 	// are two AppKit lines with no Go equivalent, and both live in

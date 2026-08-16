@@ -102,6 +102,38 @@ func RegisterCapture(registry *control.Registry, host WindowHost, surfaces Surfa
 	})
 
 	registry.MustRegister(control.Command{
+		Name:  "window_occlusion",
+		Owner: control.OwnerFramework,
+		// Every capture holds this off for its own duration and puts it back, so
+		// this command is for the case a capture cannot cover: a person or an
+		// agent watching a covered window over time, where the throttle would
+		// stop the very updates being watched.
+		//
+		// The answer is how many web views were reached, not whether it worked.
+		// A window holds the application's own view and one per native surface,
+		// and reaching the first alone leaves every browser pane throttled while
+		// the caller reads a clean result.
+		Handler: func(args control.Args) (any, error) {
+			enabled, err := control.Arg[bool](args, "enabled")
+			if err != nil {
+				return nil, err
+			}
+			service, err := target(args)
+			if err != nil {
+				return nil, err
+			}
+			handle, err := service.target()
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{
+				"occlusion": enabled,
+				"webviews":  service.occlusion(handle, enabled),
+			}, nil
+		},
+	})
+
+	registry.MustRegister(control.Command{
 		Name:  "window_record",
 		Owner: control.OwnerFramework,
 		// The same window axis and the same region axis as a single capture, so

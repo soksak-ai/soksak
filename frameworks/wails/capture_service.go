@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 	"unsafe"
 
 	"github.com/soksak/soksak-core/core/i18n"
@@ -36,6 +37,9 @@ type CaptureService struct {
 	// frames announces one recorded frame once its file is complete. Nil sends nothing, which is
 	// what a caller that passed no receiver asked for.
 	frames func(index int)
+	// occlusion turns the window's rendering throttle off or on and answers how many web views it
+	// reached. Injected so the hold-and-restore rule is provable with no window.
+	occlusion func(window unsafe.Pointer, enabled bool) int
 }
 
 // SurfaceImages is where a capture gets the pixels of content that is not in the document.
@@ -50,7 +54,13 @@ type SurfaceImages interface {
 }
 
 func NewCaptureService(name string, window func() unsafe.Pointer) *CaptureService {
-	return &CaptureService{name: name, window: window, size: contentSize, capture: CaptureWindow}
+	return &CaptureService{
+		name:      name,
+		window:    window,
+		size:      contentSize,
+		capture:   CaptureWindow,
+		occlusion: setWindowOcclusionDetection,
+	}
 }
 
 // withSurfaces names where the capture gets content that draws outside this process.
@@ -176,6 +186,7 @@ func (service *CaptureService) SnapshotRegion(path string, rect Rect) (CaptureNo
 	if err != nil {
 		return CaptureNote{}, err
 	}
+	defer service.holdRendering(handle)()
 	png, err := service.capture(handle, rect)
 	if err != nil {
 		return CaptureNote{}, err
@@ -222,6 +233,7 @@ func (service *CaptureService) PixelsAt(path string, rect Rect) (CapturePixels, 
 	if err != nil {
 		return CapturePixels{}, err
 	}
+	defer service.holdRendering(handle)()
 	png, err := service.capture(handle, rect)
 	if err != nil {
 		return CapturePixels{}, err
@@ -245,4 +257,35 @@ func writeCapture(path string, png []byte) error {
 		return fmt.Errorf("capture could not write %s: %w", path, err)
 	}
 	return nil
+}
+
+// occlusionResumeMillis is how long rendering is given to come back after the
+// throttle is lifted.
+//
+// A web view that was covered has not drawn since; captured in the same instant
+// the switch is flipped, the image is still the stale frame the throttle left
+// there. The value is the contract-conforming implementation's, which is runtime-verified
+// on this platform (tauri-plugin-webview-capture, "How occluded capture
+// works").
+const occlusionResumeMillis = 200
+
+// holdRendering turns the window's throttle off for the length of a capture and
+// answers the work to put it back.
+//
+// Always paired, and the caller defers the release: a capture that failed is
+// exactly the case where nobody is watching, and a window left with detection
+// off draws forever at a battery cost nobody asked for.
+//
+// A build that reached no web view waits for nothing. The wait is the price of
+// having actually changed something, and paying it where nothing changed makes
+// every capture on a platform with no such throttle 200ms slower.
+func (service *CaptureService) holdRendering(handle unsafe.Pointer) func() {
+	if service.occlusion == nil {
+		return func() {}
+	}
+	if service.occlusion(handle, false) == 0 {
+		return func() {}
+	}
+	time.Sleep(occlusionResumeMillis * time.Millisecond)
+	return func() { service.occlusion(handle, true) }
 }
