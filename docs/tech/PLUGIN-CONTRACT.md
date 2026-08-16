@@ -79,8 +79,10 @@ declared, checked at the call boundary.
 swapped without knowing the other. All forty-seven sample plugins carried one, forty-two of which
 stand beside nothing: a convenience for the few was a rule for everyone.
 
-Two plugins that do a similar job are built by copying, and the copies drift apart in time. That is
-accepted (C3a). A shared spec would force a rule onto the parts that genuinely differ — chromium and
+What a separated spec buys is one author writing several implementations at once and keeping them
+level — a first-party circumstance, not a property of the platform. In general each feature owns its
+spec, and two plugins that do a similar job are built by copying, the copies drifting apart in time.
+That is accepted (C3a). A shared spec would force a rule onto the parts that genuinely differ — chromium and
 a platform webview do not expose the same things — and the drift would then be everyone's.
 
 ## P6. Permissions are declarations, not isolation

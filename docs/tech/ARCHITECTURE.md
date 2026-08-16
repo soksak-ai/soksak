@@ -132,6 +132,12 @@ All of these are hard.
   Whoever needs a thing names the plugin (C3). Substituting one implementation
   for another by declaration is the convenience being given up, knowingly.
 
+  **Who a separated spec is for.** The gain is one author writing several
+  implementations at once — the same hand building a terminal and a browser twice
+  over, keeping them level. That is a first-party circumstance, not a property of
+  the platform, and a rule written from it charges every other plugin for a
+  convenience it never asked for. In general each feature owns its spec.
+
   **A plugin holds its own spec, and the consequence is accepted here rather than
   discovered later.** Building something like an existing plugin means copying it,
   and the copies drift apart in time — a fix lands in one and not the other, and
