@@ -64,10 +64,10 @@ var unbuilt = map[string]string{
 	"update_apply":           "this build has no updater",
 
 	// The control plane's own facts that need a running listener to answer.
-	"ipc_hello_info":          "the control plane answers system.hello on its own transport, not as a command",
+	"ipc_hello_info": "the control plane answers system.hello on its own transport, not as a command",
 
 	// Application lifecycle.
-	"app_relaunch":         "this build cannot relaunch itself; the launcher owns the process",
+	"app_relaunch": "this build cannot relaunch itself; the launcher owns the process",
 
 	// Desktop integrations the host has not been given.
 	"clipboard_read":        "this host was given no clipboard bridge",

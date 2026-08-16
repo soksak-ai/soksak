@@ -5,22 +5,6 @@ import (
 	"strings"
 )
 
-// AISessionEnv is the canonical list of AI session context variables.
-//
-// A child that inherits these (claude and friends) recognises itself as an
-// agent inside an agent, and its session identification goes wrong: transcript
-// attribution and the nesting guard both key off them.
-var AISessionEnv = [...]string{
-	"CLAUDECODE",
-	"CLAUDE_CODE_SESSION_ID",
-	"CLAUDE_CODE_ENTRYPOINT",
-	"CLAUDE_CODE_CHILD_SESSION",
-	"CLAUDE_CODE_VERSION",
-	"CLAUDE_CODE_EXECPATH",
-	"CODEX_COMPANION_SESSION_ID",
-	"AI_AGENT",
-}
-
 // soksakChildAllow is the SOKSAK_* interface a child is entitled to — the
 // handles it talks back to the app through. Every other SOKSAK_* is internal
 // (vault master key, secret payloads, isolated vault paths, test hooks) and is
@@ -52,7 +36,6 @@ type environmentRequest struct {
 	Home      string
 	Set       map[string]string
 	Remove    []string
-	ScrubAI   bool
 	// Secrets are resolved plaintext, appended last so a secret beats a plain
 	// entry of the same name.
 	Secrets [][2]string
@@ -84,11 +67,6 @@ func childEnvironment(request environmentRequest) []string {
 	// "unset this" always wins, whatever else asked for the name.
 	for _, name := range request.Remove {
 		entries.remove(name)
-	}
-	if request.ScrubAI {
-		for _, name := range AISessionEnv {
-			entries.remove(name)
-		}
 	}
 	for _, secret := range request.Secrets {
 		entries.set(secret[0], secret[1])

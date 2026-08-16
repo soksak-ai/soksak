@@ -354,10 +354,9 @@ export interface ContributedNode {
 
 // Domain skill bundled with this plugin (declarative, single). Presence = self-description that
 // "there is system procedure knowledge a per-command description cannot teach" (docs/I18N.md §5).
-// `sok skill install` installs the SKILL.md of a plugin holding this declaration uniformly into
-// .claude/skills/<id> and .agents/skills/<id> — the core holds no hardcoded plugin list (same
-// manifest declaration pattern as contributes.commands/views/nodes). The plugin repo is the single
-// source of the skill content.
+// The declaration names a file in the plugin's own repository, which is the single source of the
+// content. Where a skill is installed to is not decided here and no command in this build installs
+// one — the sentence that stood here named one vendor's directory as the destination.
 export interface ContributedSkill {
   path: string; // SKILL.md path relative to the plugin directory (e.g. "skill/SKILL.md"). Directory escape (..) forbidden.
 }

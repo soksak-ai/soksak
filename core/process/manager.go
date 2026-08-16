@@ -31,13 +31,12 @@ type Request struct {
 	Cmd  string
 	Args []string
 	// Cwd empty means the spawner's own default rather than an invented one.
-	Cwd        string
-	Env        map[string]string
-	EnvRemove  []string
-	ScrubAIEnv bool
-	Group      bool
-	Namespace  string
-	SecretEnv  map[string]string
+	Cwd       string
+	Env       map[string]string
+	EnvRemove []string
+	Group     bool
+	Namespace string
+	SecretEnv map[string]string
 	// Window empty means unowned. It is never a matchable key: reclamation
 	// refuses an empty label, so no reclaim can ever name these children.
 	Window string
@@ -137,7 +136,6 @@ func (manager *Manager) Spawn(request Request) (uint32, error) {
 			Home:      manager.deps.Home,
 			Set:       request.Env,
 			Remove:    request.EnvRemove,
-			ScrubAI:   request.ScrubAIEnv,
 			Secrets:   secrets,
 		}),
 		Group: request.Group,

@@ -141,6 +141,28 @@ host-owned or something every plugin would write again.
 
 `fixture.*`, `d.fixture` and `resolver.fixture.*` appear only inside test files and ship in no build.
 
+### 7. A vendor's environment, and three comments naming a product
+
+Found on a second pass, after the first six were done and the question "so the code has no features
+at all?" was asked rather than assumed.
+
+`core/process/environment.go` held `AISessionEnv` — six `CLAUDE_CODE_*` variables, a `CODEX_*` and
+`AI_AGENT` — scrubbed from a child's environment when a caller passed `scrubAiEnv`. No caller passed
+it: the orchestrator agent was the only one, and it left with entry 2. Removed with its parameter,
+its manager field and its decode.
+
+Three comments named one product where the code named none: a shell-escape rule "for Claude Code"
+whose code left with the drop handler, a step-⑤ session watch this file no longer performs, and
+`.claude/skills/<id>` as where a skill installs — a path no command in this build writes.
+
+The domain-word list now holds vendor names as well as content kinds. `soksak-plugin-<x>` was caught
+by the plugin scan; a vendor's name was not, and it arrives as an environment variable, a spawn form
+or a directory.
+
+`core/files/binary.go` keeps its mime table and its size cap — a plugin reading a file needs both —
+but they were framed as "what a **preview** can render" and `maxPreviewBytes`, shaped and named for
+the viewer that left. The mechanism is the same; the framing was the residue.
+
 ## What is left, named
 
 - `frameworks/wails/register.go` types `HostDeps.Sessions` as `terminalcmd.Sessions`, and

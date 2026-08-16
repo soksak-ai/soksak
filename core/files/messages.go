@@ -12,9 +12,9 @@ func init() {
 			EN: "not a file: {path}",
 			KO: "파일이 아닙니다: {path}",
 		},
-		"files.readBase64.previewLimit": {
-			EN: "preview limit exceeded: {bytes} bytes",
-			KO: "미리보기 한도를 넘었습니다: {bytes} 바이트",
+		"files.readBase64.sizeLimit": {
+			EN: "read limit exceeded: {bytes} bytes",
+			KO: "읽기 한도를 넘었습니다: {bytes} 바이트",
 		},
 	})
 }

@@ -204,9 +204,6 @@ func spawnRequest(arguments control.Args) (Request, error) {
 	if request.EnvRemove, err = optional[[]string](arguments, "envRemove"); err != nil {
 		return request, err
 	}
-	if request.ScrubAIEnv, err = optional[bool](arguments, "scrubAiEnv"); err != nil {
-		return request, err
-	}
 	if request.Group, err = optional[bool](arguments, "group"); err != nil {
 		return request, err
 	}

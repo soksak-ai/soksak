@@ -190,6 +190,17 @@ var domainWord = map[string]string{
 	"conpty":     "one platform's PTY implementation — the terminal plugin's concern on Windows",
 	"osc7":       "a shell integration sequence; what a byte from a shell means belongs to the plugin reading it",
 	"osc133":     "a shell integration sequence",
+	// A product, not a kind of content — the same coupling read from the other
+	// side. `soksak-plugin-<x>` is caught by pluginName above; a vendor's name is
+	// not, and it arrives as an environment variable, a spawn form or a directory. Measured 2026-08-16: `AISessionEnv` listed six CLAUDE_CODE_* and
+	// one CODEX_* variable, driving a scrub nothing called, and a comment named
+	// `.claude/skills` as where a skill installs.
+	"claude_code": "one agent product's environment",
+	"claudecode":  "one agent product's environment",
+	"codex_":      "one agent product's environment",
+	".claude/":    "one agent product's directory",
+	"chatgpt":     "one product",
+	"copilot":     "one product",
 }
 
 // domainAllowed is a place a domain word appears and is not the coupling, with

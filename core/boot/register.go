@@ -23,11 +23,11 @@ import (
 	"github.com/soksak/soksak-core/core/install"
 	corenet "github.com/soksak/soksak-core/core/net"
 	"github.com/soksak/soksak-core/core/process"
-	"github.com/soksak/soksak-core/core/workspace"
 	"github.com/soksak/soksak-core/core/scan"
 	"github.com/soksak/soksak-core/core/secret"
 	"github.com/soksak/soksak-core/core/service"
 	"github.com/soksak/soksak-core/core/store"
+	"github.com/soksak/soksak-core/core/workspace"
 )
 
 // Boot is the state a process holds rather than receives per call.

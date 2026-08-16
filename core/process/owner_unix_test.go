@@ -169,25 +169,26 @@ func TestClosingStdinUnblocksAChildReadingToTheEnd(t *testing.T) {
 	}
 }
 
-// The environment a child gets is the one that was passed in, plus only what
-// the rules add. Reading it back through the child is the proof.
+// The environment a child gets is the one that was passed in, plus only what the
+// rules add. Reading it back through the child is the proof: SOKSAK_HOME is
+// added, an unnamed variable survives, a named one is removed, and an internal
+// SOKSAK_* never crosses.
 func TestTheChildSeesExactlyTheGivenEnvironment(t *testing.T) {
 	home := t.TempDir()
 	manager, sink := realManager(t, Deps{
 		Home:        home,
-		Environment: []string{"PATH=/bin:/usr/bin", "CLAUDECODE=1", "DROPME=1", "SOKSAK_VAULT_KEY=master"},
+		Environment: []string{"PATH=/bin:/usr/bin", "KEEPME=1", "DROPME=1", "SOKSAK_VAULT_KEY=master"},
 	})
 	if _, err := manager.Spawn(Request{
-		Cmd:        "/bin/sh",
-		Args:       []string{"-c", `printf '%s|%s|%s|%s' "$SOKSAK_HOME" "$CLAUDECODE" "$DROPME" "$SOKSAK_VAULT_KEY"`},
-		EnvRemove:  []string{"DROPME"},
-		ScrubAIEnv: true,
+		Cmd:       "/bin/sh",
+		Args:      []string{"-c", `printf '%s|%s|%s|%s' "$SOKSAK_HOME" "$KEEPME" "$DROPME" "$SOKSAK_VAULT_KEY"`},
+		EnvRemove: []string{"DROPME"},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	sink.waitExit(t)
 
-	want := home + "|||"
+	want := home + "|1||"
 	if got := strings.Join(sink.recorded()[:1], ""); got != "stdout:"+want {
 		t.Fatalf("the child read %q, want %q", got, "stdout:"+want)
 	}

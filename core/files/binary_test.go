@@ -90,8 +90,8 @@ func TestOverThePreviewLimitIsRefusedByTheSize(t *testing.T) {
 }
 
 func TestThePreviewLimitIsTheOneWrittenDown(t *testing.T) {
-	if maxPreviewBytes != 40_000_000 {
-		t.Errorf("maxPreviewBytes = %d", maxPreviewBytes)
+	if maxReadBytes != 40_000_000 {
+		t.Errorf("maxReadBytes = %d", maxReadBytes)
 	}
 }
 

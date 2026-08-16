@@ -11,12 +11,12 @@ import (
 	"github.com/soksak/soksak-core/core/i18n"
 )
 
-// maxPreviewBytes caps a preview read.
+// maxReadBytes caps one base64 read.
 //
 // Over it the command refuses by name and size rather than answering a prefix:
 // a truncated PNG arrives at the decoder and reads as a decoder bug, which sends
 // the reader looking in the wrong place.
-const maxPreviewBytes int64 = 40_000_000
+const maxReadBytes int64 = 40_000_000
 
 // FileData is one binary read, as the caller receives it. The frontend builds a
 // data URL from the pair, so the mime has to arrive with the bytes.
@@ -33,7 +33,11 @@ type WriteResult struct {
 }
 
 // mimeByExtension is data, not logic.
-// It covers what a preview can render: images, PDF, video, audio.
+//
+// It answers for the extensions measured to arrive here and falls back to
+// application/octet-stream for the rest, so a caller is never told nothing. The
+// list was curated for what one removed viewer drew; adding an extension is one
+// line and no rule changes with it.
 var mimeByExtension = map[string]string{
 	".png":  "image/png",
 	".jpg":  "image/jpeg",
@@ -71,7 +75,7 @@ func mimeFor(path string) string {
 	return "application/octet-stream"
 }
 
-// readBase64 reads a file for preview.
+// readBase64 reads a file as bytes, with the media type its extension names.
 //
 // Refusing to expand `~` here and arguing continuity of
 // behaviour would be backward compatibility, which this repository forbids, and
@@ -79,7 +83,7 @@ func mimeFor(path string) string {
 // home rule. A per-command tilde exception surfaces only as a file "missing"
 // that is plainly there.
 func readBase64(path string, home string) (FileData, error) {
-	return readBase64Limited(path, home, maxPreviewBytes)
+	return readBase64Limited(path, home, maxReadBytes)
 }
 
 // readBase64Limited is readBase64 with the cap as a value, so the cap is
@@ -97,7 +101,7 @@ func readBase64Limited(path string, home string, limit int64) (FileData, error) 
 		return FileData{}, i18n.Errorf("files.readBase64.notAFile", map[string]string{"path": real})
 	}
 	if info.Size() > limit {
-		return FileData{}, i18n.Errorf("files.readBase64.previewLimit", map[string]string{
+		return FileData{}, i18n.Errorf("files.readBase64.sizeLimit", map[string]string{
 			"bytes": strconv.FormatInt(info.Size(), 10),
 		})
 	}

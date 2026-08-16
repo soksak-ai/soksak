@@ -80,32 +80,6 @@ func TestOneInheritedEntryProducesOnlyItselfAndWhatTheRulesAdd(t *testing.T) {
 	}
 }
 
-// Remove and the AI scrub sum. A caller requesting both gets both, and
-// neither list has to know about the other.
-func TestRemoveAndTheAIScrubSum(t *testing.T) {
-	inherited := []string{"KEEP=1", "DROP=2"}
-	for _, name := range AISessionEnv {
-		inherited = append(inherited, name+"=set")
-	}
-	child := envOf(childEnvironment(environmentRequest{
-		Inherited: inherited,
-		Home:      "/home",
-		Remove:    []string{"DROP"},
-		ScrubAI:   true,
-	}))
-	if _, kept := child["KEEP"]; !kept {
-		t.Error("an unnamed variable is not removed")
-	}
-	if _, kept := child["DROP"]; kept {
-		t.Error("Remove did not remove DROP")
-	}
-	for _, name := range AISessionEnv {
-		if _, kept := child[name]; kept {
-			t.Errorf("%s is AI session context: a child inheriting it reports itself as an agent inside an agent", name)
-		}
-	}
-}
-
 // Removal is applied after set, so a name in both is removed.
 // Keeping that order means one spelling of "unset this" always wins.
 func TestRemoveBeatsSet(t *testing.T) {

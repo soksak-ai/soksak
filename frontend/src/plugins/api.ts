@@ -476,8 +476,8 @@ export interface SoksakPluginApi {
       commandLine: string;
       cwd: string | null;
     }[];
-    /** Inject raw input into the pane's terminal PTY (typing into the running program — a claude prompt,
-     *  for example). Enter is "\r". False before it is ready. "terminal:write" permission only. */
+    /** Inject raw input into the pane's terminal PTY — typing into whatever program is running.
+     *  Enter is "\r". False before it is ready. "terminal:write" permission only. */
     sendText?: (paneId: string, text: string) => boolean;
     /** Screen text of the pane terminal (last `lines` lines; default is the whole viewport plus
      *  scrollback). undefined before it is ready. "terminal:read" permission only. For live TUI stream
@@ -1613,7 +1613,7 @@ export function buildPluginApi(
               useIconRegistry.getState().unregister(globalId),
             );
           },
-          // Status bar item bound to a paneId (claude-GUI's "gui" and such). The id is namespaced by
+          // Status bar item bound to a paneId. The id is namespaced by
           // plugin to avoid collisions. Calling again with the same id replaces it (updating the active
           // toggle). Returns the unsubscribe.
           // [RULE] The status bar is a different area from content views ("ui") → requires the

@@ -96,9 +96,9 @@ export interface PluginEventMap {
     attempt: number | null;
   };
   // Terminal command start (OSC 633;E from the shell preexec — command line and cwd included, no polling).
-  // [RULE] Per-command domain handling (claude etc.) is owned by plugins subscribing to this event,
+  // [RULE] Per-command domain handling is owned by plugins subscribing to this event,
   // not by the core — the same rule as workspace.created. The core provides only the generic socket
-  // and holds no code specific to one plugin (claude etc.) — no tight coupling.
+  // and holds no code specific to one plugin — no tight coupling.
   "command.started": {
     projectId: string | null;
     paneId: string;
@@ -431,13 +431,11 @@ export function startPluginHooks(): void {
     });
   }
 
-  // Terminal command start → plugin event (a generic socket — claude-GUI etc. subscribe). A discrete event.
+  // Terminal command start → plugin event. A discrete event, and a generic socket: the core
+  // publishes what the decoder saw and reads nothing into it.
   subscribeAnyCommandStarted((paneId, commandLine, cwd) => {
     // [R2] Best-effort capture of the foreground pid of the command that just started, emitted with it
     // (the command/pid/sessionId triple).
-    // [step ⑤] For a claude run, arm a watch on that cwd session directory — /clear and /resume
-    // transitions during the run are observed as fs-change events (not polling). detect is a single
-    // core truth, once per command.
     void (async () => {
       const pid = await invoke<number | null>("pty_pane_pid", { paneId }).catch(() => null);
       emitPluginEvent("command.started", {

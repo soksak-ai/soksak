@@ -82,10 +82,6 @@ import { registerLayoutTransitionIntentHost } from "./lib/layoutTransitionIntent
 import { ownsNativeSurfaceFromManifests } from "./lib/nativeSurfaceOwnership";
 import "./App.css";
 
-// Make a file path safe for both the shell and Claude Code: backslash-escape everything except
-// alphanumerics and safe characters (spaces included). The result ends with an unquoted extension
-// such as ...img.png, which matches both Claude Code's image extension regex and the shell.
-
 // Pass GroupArea only the public media facts the manifest owns. GroupArea does not read inside the
 // framework or the plugin registry; it picks the travel visual owner from this identity set.
 const nativeSurfaceViewIds = (content: Workspace["spaces"][number]): string[] => (
