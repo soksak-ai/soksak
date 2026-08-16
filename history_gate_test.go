@@ -90,3 +90,67 @@ func TestTheCoreDoesNotKnowWhatBackMeans(t *testing.T) {
 			len(found), strings.Join(found, "\n"))
 	}
 }
+
+// The core writes down no surface kind (C1).
+//
+// A surface label is `<kind>.<window>.<view>` (NAMING N3). The window field is the core's — it is what makes
+// the value unique across windows — and the kind is the word of whoever declared the surface. A
+// core holding one can only find the surfaces of the plugin it was written against, and a second
+// kind of surface gets a label from nowhere.
+//
+// Measured 2026-08-16: the core held `brw-`, minted a browser's identifier and handed it back
+// through `app.webview.label(viewId)`. The plugin asked the core what it was called.
+//
+// Comments are stripped: the measurement above has to be writable down next to the rule.
+var surfaceKindWords = regexp.MustCompile(`\bbrw\b|"brw-|'brw-|` + "`brw-")
+
+func TestTheCoreWritesDownNoSurfaceKind(t *testing.T) {
+	var found []string
+	scanned := 0
+
+	for _, root := range []string{filepath.Join("frontend", "src"), "core", "frameworks"} {
+		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				if skippedTrees[info.Name()] {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !scannedCode[filepath.Ext(path)] {
+				return nil
+			}
+			clean := filepath.ToSlash(path)
+			// A test may write a kind: it is standing in for a plugin, and a fixture whose label
+			// had no kind would not be a label any plugin produces.
+			if strings.Contains(clean, ".test.") || strings.HasSuffix(clean, "_test.go") {
+				return nil
+			}
+			body, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			scanned++
+			for index, line := range strings.Split(withoutComments(string(body)), "\n") {
+				if word := surfaceKindWords.FindString(line); word != "" {
+					found = append(found, clean+":"+itoa(index+1)+" "+word)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("scanning %s: %v", root, err)
+		}
+	}
+	if scanned == 0 {
+		t.Fatal("no core source was scanned; the roots are wrong")
+	}
+	if len(found) > 0 {
+		t.Errorf("the core writes down a surface kind in %d places:\n%s\n"+
+			"The shape is the core's and the kind is the declarer's. Take the kind from the caller, "+
+			"or read the label off the declaration (lib/surfaceLabels.ts).",
+			len(found), strings.Join(found, "\n"))
+	}
+}
