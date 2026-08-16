@@ -99,9 +99,11 @@ All of these are hard.
   standard that is itself wrong changes in the open, with the evidence and the
   tests in the same commit.
 
-- **C6.** Common goes in the core, a feature never does — and the boundary is
-  decided by three questions, not by taste. A capability belongs to the core
-  when **all three** hold:
+- **C6.** Common goes in the core, a feature never does. **A feature is code
+  that holds an opinion about what content means or how it should behave.** That
+  is the whole test, and the three questions below are how it is applied.
+
+  Two are necessary — fail either and it belongs to a plugin:
 
   1. **It is named after no domain.** `app.data`, `app.pty`, `ui.input` name a
      mechanism. `bookmark`, `favicon`, `tabstrip` name one kind of content, and
@@ -109,13 +111,27 @@ All of these are hard.
   2. **A plugin that never heard of the first consumer can use it unchanged.**
      A store keyed by namespace serves a browser and a mail client equally. A
      store that holds `{ url, title }` serves one of them.
-  3. **It cannot cross the plugin boundary.** A PTY's kernel object and a
-     platform webview are the core's because the process that owns the window
-     owns them. Anything a plugin *could* hold, a plugin holds.
 
-  Fail any one and it belongs to a plugin. Passing all three is the only reason
-  the core takes work off a plugin, and that is the point of taking it: every
-  plugin would otherwise write the same thing, differently.
+  Then one of these is the reason it is in the core at all:
+
+  3. **Either it cannot cross the plugin boundary** — a PTY's kernel object, a
+     platform webview, the window's pixels; the process that owns the window
+     owns them — **or every plugin would otherwise reinvent it**, and reinvent
+     it differently. A byte-stream parser for OSC 7/133/633 crosses fine and is
+     still the core's: it decodes a protocol and decides nothing, and three
+     plugins reading PTY output would each write it again.
+
+  Question three was stated as necessary until it was applied, on the same day.
+  Read that way it ejects every pure computation the core is made of — the
+  layout solver, the address parser, the digest — because each of them *could*
+  sit in a plugin. It is a sufficient reason, not a required one, and the
+  corrected form gives the same verdict on all six entries of the census while
+  keeping the utilities where they belong.
+
+  The line between the two is the opinion. Parsing OSC 133 is decoding.
+  "An output gap of 800ms means the turn ended" is an opinion. "A saved page is
+  a url and a title" is an opinion. "A file tab has a code mode and a preview
+  mode" is an opinion. Opinions are what a plugin exists to have.
 
   The failure mode this closes is the pleasant one. A feature reaches the core
   because the core is where it is easiest to write — one store, one command

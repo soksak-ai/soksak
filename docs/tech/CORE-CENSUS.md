@@ -6,10 +6,9 @@ canonical: docs/tech/ARCHITECTURE.md
 
 # Core census — every surface, judged by C6
 
-Taken 2026-08-16 over `frontend/src`, `core`, `frameworks`. **The core holds no feature.** This
-enumerates what is in it and puts each entry to C6's three questions: named after no domain, usable
-by a plugin that never heard of the first consumer, impossible across the plugin boundary. Fail one
-and it belongs to a plugin.
+Taken 2026-08-16 over `frontend/src`, `core`, `frameworks`. **The core holds no feature**, and a
+feature is code that holds an opinion about what content means or how it should behave. This
+enumerates what is in the core and puts each entry to C6.
 
 A verdict here is a decision, not an observation. Where the answer is REMOVE, the entry names the
 work and `GATES.md` carries it until it is gone.
@@ -33,9 +32,10 @@ the status bar, the snapshot writer and its restorer, the plugin event bridge. B
 `FileViewerHost.tsx` and `fileViewerRegistry.ts` (212 lines), about 300 lines of `.fv-*` stylesheet,
 and `explorer.list`.
 
-Fails question one — "file" is one kind of content — and question two: a browser and a terminal
-already reach the screen as `kind: "plugin"`, and a file viewer is the same shape. The second code
-path exists for one content kind and no other.
+Fails question one — "file" is one kind of content — and carries opinions: that a file has a code
+mode and a preview mode, that unsaved is a status a tab shows. A browser and a terminal already
+reach the screen as `kind: "plugin"`, and a file viewer is the same shape. The second code path
+exists for one content kind and no other.
 
 **Goes to:** a file-viewer plugin, mounting as a plugin view. The core keeps the slot and the
 registry seam it already has for every other view.
@@ -47,8 +47,9 @@ by spawning the agent CLI named in settings, and `agent.ts` states the spawn for
 product. A natural-language console is content: it has a conversation, a feed, and an opinion about
 what an answer looks like.
 
-Fails question one and question three — a plugin can spawn a process through `app.pty` and publish
-through the activity stream, so nothing here needs the core's address space.
+Fails question one, and it is opinion end to end — what a turn is, what an answer looks like, which
+CLI performs it. A plugin can spawn a process through `app.pty` and publish through the activity
+stream, so nothing here needs the core's address space.
 
 **Goes to:** an orchestrator plugin. The core keeps the activity stream, the command registry and
 the parent-id correlation, which every plugin uses.
@@ -63,16 +64,18 @@ the parent-id correlation, which every plugin uses.
   the registry.
 - `GroupStatusBar` shows a terminal's cwd in its own branch.
 
-`app.pty` stays: a PTY's kernel object cannot cross the boundary (question three). Everything above
-is a rule about what the bytes mean, and that crosses fine.
+`app.pty` stays — the kernel object cannot cross the boundary. So does `terminal/ptyObservation.ts`,
+the OSC 7/133/633 byte-stream parser: it decodes a protocol and decides nothing, and every plugin
+reading PTY output would otherwise write it again. What leaves is the opinion built on top of it —
+that a gap means a turn ended, that a running command should read as a view's status line.
 
 **Goes to:** the terminal plugin, which registers its own commands and reports its own status.
 
 ### 4. `media.proxy.*` — a mechanism wearing a content kind's name
 
 A loopback HTTP proxy that fetches with caller-supplied headers and rewrites playlist URLs. The
-mechanism passes all three questions; the name fails the first, and the m3u8 rewriting is one
-format's rule.
+proxy is a mechanism and stays; the name fails question one, and the m3u8 rewriting is one format's
+rule — an opinion about what a playlist is.
 
 **Becomes:** `net.proxy.*`, with the format-specific rewriting in the plugin that needs it.
 
@@ -91,7 +94,8 @@ spawns a PTY reads it. It served a start-program tool that no longer exists.
 
 ## KEEP — a mechanism every plugin would otherwise reinvent
 
-Each passes all three questions.
+Each is named after no domain, usable by a plugin that never heard of the first consumer, and either
+host-owned or something every plugin would write again.
 
 | Surface | Why it is the core's |
 | --- | --- |
@@ -100,7 +104,7 @@ Each passes all three questions.
 | `data.*` (23), `secret.*` (6) | Storage keyed by namespace. Serves a browser and a mail client alike. |
 | `window.*` (19), `pane.*` (8), `layout.*` (7), `space.*` (5), `sidebar.*` (5), `tab.*` (10) | The frame itself — the one thing the core is. |
 | `workspace.*` (11), `state.*` (5) | A workspace is a root path and a tree, not a content kind. |
-| `pty.*` (9) | Question three: the kernel object belongs to the process that owns the window. |
+| `pty.*` (9), `terminal/ptyObservation.ts` | The kernel object belongs to the process that owns the window; the OSC parser decodes a protocol and decides nothing. |
 | `daemon.*` (9), `process.*`, `service.*`, `schedule.*` (5) | Declared processes and their supervision. |
 | `net.*` (6), `fs.*`, `clipboard.*`, `notify.*`, `media.proxy` after renaming | Host capabilities with no window. |
 | `webview.*` (3), `framework.*` (4), `system.*` | The substrate this build runs on. |
