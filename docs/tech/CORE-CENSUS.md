@@ -262,11 +262,17 @@ opens with a live shell, and the browser draws.
 - A workspace record no longer carries `shell`, and no core surface names a shell.
 - **A plugin cannot declare a keybinding.** ⌘T is the frame's own shortcut and names nothing, so it
   stays; a plugin that wants its own has no way to ask, and nothing needs one yet.
+- **The sidebar is empty and always has been.** The core owns the rail — position, travel,
+  projection, pins (G4) — and no plugin draws in it. `ui.projection.state` answers one slot,
+  `soksak-plugin-file-tree.tree`, `degraded`. That plugin does not exist: the slot named a contract
+  nobody implemented until entry 10, and the id it names now was written while converting the
+  declaration. A1 requires a content view to declare a left slot, so the declaration cannot simply
+  go; what it points at is unsettled.
 - **Nobody installs a missing binary.** The core publishes `program.missing` and `library.missing`
   with the exact command; no plugin subscribes, so a person reads the stream and runs it.
 
-## The pattern in all six
+## The pattern in all ten
 
 Every entry above reached the core because the core was where it was easiest to write — the store,
 the command table and the stylesheet were already there. Nothing about any of them looks wrong in
-place. The cost appears only at the second plugin of that kind, which can use none of it.
+place. What it costs shows at the second plugin of that kind, which can use none of it.
