@@ -72,8 +72,6 @@ var unbuilt = map[string]string{
 
 	// Application lifecycle.
 	"app_relaunch":         "this build cannot relaunch itself; the launcher owns the process",
-	"app_shutdown_prepare": "this build quits without a prepare phase",
-	"app_shutdown_commit":  "this build quits without a commit phase",
 
 	// Desktop integrations the host has not been given.
 	"clipboard_read":        "this host was given no clipboard bridge",

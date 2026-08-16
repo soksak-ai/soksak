@@ -162,10 +162,22 @@ func Run(options Options) error {
 			options.Bridge.Emit(control.StreamEvent, control.StreamFrame{Stream: stream, Frame: frame})
 		},
 		NativeParent: func(name string) bool { return nativeWindow(name) != nil },
+		// Quitting is two calls: reap and answer, then quit once the answer has
+		// been delivered. Both halves were declared unserved with the reason
+		// "this build quits without a prepare phase", which was false — the two
+		// services below have drained and reaped on shutdown all along. The phase
+		// existed and had no command, so the only way to quit was to kill the
+		// process, and killing it skips the drain the phase exists for.
+		Reaper: hostReaper{
+			shells:   options.Terminal.Reap,
+			surfaces: nativeCompositor.Drain,
+		},
+		Quit: app.Quit,
 		Dispatch: func(target, event string, payload any) error {
 			return dispatchToWindow(app, target, event, payload)
 		},
 	})
+
 	app.Event.On(rendererDeclareEvent, func(event *application.CustomEvent) {
 		// Sender is stamped by the framework, never by the page. A page that
 		// named itself could name another page and take over its commands.

@@ -26,6 +26,23 @@ export function Open(id: string, stream: string, cols: number, rows: number): $C
     });
 }
 
+/**
+ * Reap closes every session this service holds and answers how many it closed.
+ * 
+ * The count is this service's own — nothing else knows how many sessions it
+ * held — and it is what `app_shutdown_prepare` puts in the receipt a caller
+ * checks before the process goes away. A shutdown that reaped correctly and
+ * reported nothing could not be part of that receipt, so the one command that
+ * quits the application was declared unserved (measured 2026-08-16: `sok
+ * app.shutdown.commit` answered INTERNAL).
+ * 
+ * Idempotent, and a second call answers zero rather than the first count: a
+ * number that repeated itself would report work that did not happen.
+ */
+export function Reap(): $CancellablePromise<number> {
+    return $Call.ByID(3248855604);
+}
+
 export function Resize(handle: $models.Handle, cols: number, rows: number): $CancellablePromise<void> {
     return $Call.ByID(2168070844, handle, cols, rows);
 }

@@ -40,6 +40,29 @@ export function Deliver(id: string, message: { [_ in string]?: any }): $Cancella
 }
 
 /**
+ * Drain takes every surface down and answers how many came down, how many are
+ * still held, and what stopped it.
+ * 
+ * Two numbers because they are two claims. "Four came down" and "none are left"
+ * are different facts, and the second is the one that matters: a surface still
+ * held when the process exits is a native child outliving its parent. A drain
+ * that worked and reported nothing could not be part of the receipt
+ * `app_shutdown_prepare` answers, which is why the command that quits the
+ * application was declared unserved (measured 2026-08-16: `sok
+ * app.shutdown.commit` answered INTERNAL).
+ * 
+ * Idempotent, and a second call answers zero: a count that repeated itself
+ * would report work that did not happen.
+ * 
+ * Every window is emptied, and a window that held nothing needs no window
+ * handle to be emptied — a drain that refused on an already-closed window would
+ * leave the windows after it in the map still holding surfaces.
+ */
+export function Drain(): $CancellablePromise<[number, number]> {
+    return $Call.ByID(2355865250);
+}
+
+/**
  * Latest answers one window's last commit as a composition.
  * 
  * Per window. One window's inventory is no answer about another's: a

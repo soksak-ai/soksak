@@ -23,6 +23,12 @@ type HostDeps struct {
 	// Frames delivers stream frames to a receiver the caller passed. Nil sends
 	// nothing, which is a build with no event bus rather than a silent drop.
 	Frames StreamSink
+	// Reaper is what this host takes down before it quits, and Quit ends the
+	// process. Both arrive here rather than being registered beside RegisterHost,
+	// because a group registered elsewhere is one the coverage gate and the
+	// application disagree about.
+	Reaper Reaper
+	Quit   func()
 	// NativeParent reports whether the named window's native container exists
 	// right now.
 	NativeParent func(window string) bool
@@ -48,6 +54,7 @@ func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
 	terminalcmd.Register(registry, terminalcmd.Deps{Sessions: deps.Sessions})
 	Register(registry, Deps{Host: deps.Host, NewID: deps.NewID})
 	RegisterCapture(registry, deps.Host, deps.Frames)
+	RegisterShutdown(registry, ShutdownDeps{Reaper: deps.Reaper, Quit: deps.Quit})
 	// The readings over a recording need no window, so they answer in a process
 	// with none — a recording outlives the session it was taken in.
 	RegisterAnalyze(registry)

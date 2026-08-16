@@ -78,6 +78,8 @@ func TestEveryFrontendCallIsAccountedFor(t *testing.T) {
 		Composition:  stubComposition{},
 		NativeParent: func(string) bool { return false },
 		Dispatch:     func(string, string, any) error { return nil },
+		Reaper:       idleReaper{},
+		Quit:         func() {},
 	})
 
 	served := map[string]bool{}
@@ -217,3 +219,11 @@ func (idleSessions) Open(string, string, uint16, uint16) (terminalcmd.Handle, er
 func (idleSessions) Write(terminalcmd.Handle, string) error          { return nil }
 func (idleSessions) Resize(terminalcmd.Handle, uint16, uint16) error { return nil }
 func (idleSessions) Close(terminalcmd.Handle) error                  { return nil }
+
+// idleReaper is a host with nothing to take down. Which names register depends
+// on the dependencies being present, never on what they answer.
+type idleReaper struct{}
+
+func (idleReaper) ReapShells() int { return 0 }
+
+func (idleReaper) DrainSurfaces() (int, int, error) { return 0, 0, nil }
