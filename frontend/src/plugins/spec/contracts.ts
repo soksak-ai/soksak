@@ -22,9 +22,9 @@ export const CONTRACT_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 // A sidecar's interface is a contract like any other — one shape, kept as its own name so the call
 // sites read as what they check rather than as a coincidence.
 export const SIDECAR_CONTRACT_ID_RE = CONTRACT_ID_RE;
-// The service protocol is the core's own, and its id is a platform string rather than a name two
-// plugins meet at.
-export const SERVICE_CONTRACT_ID_RE = /^soksak-spec-service(?:-[a-z0-9][a-z0-9-]*)?$/;
+// A service interface is a name like any other (C4). The core requires a sidecar to speak one; which
+// one is the plugin's declaration, not a string the core spells out.
+export const SERVICE_CONTRACT_ID_RE = CONTRACT_ID_RE;
 
 export interface ContractProviderRef {
   id: string;

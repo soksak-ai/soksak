@@ -15,7 +15,6 @@ import { useSettings } from "../state/settings";
 import { useViewRegistry, getRegisteredView } from "../plugins/viewRegistry";
 import { usePlugins } from "../state/plugins";
 import { useBootPhase } from "../state/bootPhase";
-import { useContractSelection } from "../state/contractSelection";
 import { localize, useT } from "../i18n";
 
 export const ProjectionSlots = memo(function ProjectionSlots({
@@ -42,11 +41,10 @@ export const ProjectionSlots = memo(function ProjectionSlots({
   const plugins = usePlugins((s) => s.plugins);
   // A change of contract implementation selection also changes slot resolution (A6 — the user
   // swaps the implementation).
-  const selection = useContractSelection((s) => s.selected);
   const proj = useMemo(
     () => projectionFor(projectId),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [projectId, tab, regVersion, entry, plugins, selection],
+    [projectId, tab, regVersion, entry, plugins],
   );
 
   // keep-alive accumulation: instanceKey → resolvedRef.

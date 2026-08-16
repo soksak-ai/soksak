@@ -67,20 +67,18 @@ These are the four attachment seams of `ARCHITECTURE.md` in manifest form: a pro
 `kind` the skeleton routes to, a view declares a slot, a command registers once and is reachable
 through every transport, and a permission gates a capability.
 
-## P5. A contract is declared by the plugin that implements it
+## P5. A plugin's spec is the plugin's, and the core's is the core's
 
-`implements` and `consumes` name a contract id. The implementing plugin owns the definition; a
-consumer pins `id@range`. A contract id is a plain name (C4) — the field it appears in says what it
-is, and the core names no contract it does not define, so nothing has to tell one from a plugin id
-by its spelling.
+There is no place that collects specs. The core defines its own formats and stamps `CORE_SPEC` into
+them; a plugin's manifest is that plugin's spec, and the plugin id names it.
 
-The definition is not a separate repository. It belongs to whoever implements it, for the same
-reason the manifest format belongs to the core: the implementation is the authority, and a copy
-elsewhere drifts from it.
+A plugin that needs another declares it in `dependencies`. That is the whole coupling: one identity,
+declared, checked at the call boundary.
 
-A shared repository becomes necessary when one contract has implementations in two languages — a Go
-sidecar and a TypeScript plugin speaking the same wire — because then no single implementation can
-hold the definition. That has not happened yet.
+`implements` and `consumes` stood here until 2026-08-16, naming an interface so either side could be
+swapped without knowing the other. Not one interface ever had both sides declared, and the id was a
+second name for what the plugin id already names. When two implementations of one thing exist, the
+mechanism gets designed then, against that case.
 
 ## P6. Permissions are declarations, not isolation
 

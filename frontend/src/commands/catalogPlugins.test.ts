@@ -25,7 +25,7 @@ import { useProgramRegistry } from "../plugins/programRegistry";
 function manifestOf(id: string, overrides: Record<string, unknown> = {}): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-spec-plugin@0.0.1",
+      spec: "0.0.1",
       id,
       name: "Demo",
       version: "1.0.0",
@@ -227,7 +227,7 @@ describe("plugin.conformance — C2 static rules (command-surface, view-nodes)",
     const manifest = manifestOf(id, {
       permissions: ["ui"],
       contributes: {
-        views: [{ id: "image", title: { en: "Image", ko: "Image" }, icon: "file", placements: ["content"], sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } }],
+        views: [{ id: "image", title: { en: "Image", ko: "Image" }, icon: "file", placements: ["content"], sidebar: { left: [{ plugin: "soksak-plugin-file-tree", view: "tree", instance: "shared" }] } }],
       },
     });
     usePlugins.setState({ plugins: { [id]: runtimeOf(manifest) } });
@@ -319,28 +319,3 @@ describe("plugin.view.open — a rail placement is not an open target (left rail
 // harness) used a hand-written table of plugin ids — that table needs an edit whenever a plugin is
 // added, and it diverges silently whenever a plugin changes its contract.
 // Measured 2026-08-07: that silent divergence killed engine execution with a `traceId must be number` rejection.
-describe("plugin.list emits the contract implementation declaration", () => {
-  it("answers the manifest implements as is", async () => {
-    const id = "soksak-plugin-demo";
-    usePlugins.setState({
-      plugins: {
-        [id]: runtimeOf(manifestOf(id, {
-          implements: [{ id: "soksak-spec-plugin-browser", version: "0.0.1" }],
-        })),
-      },
-    });
-    const answer = await execute("plugin.list", {}, {});
-    const entry = (answer.data as { plugins: { id: string; implements: unknown }[] })
-      .plugins.find((p) => p.id === id);
-    expect(entry!.implements).toEqual([{ id: "soksak-spec-plugin-browser", version: "0.0.1" }]);
-  });
-
-  it("a plugin that declares no contract gets an empty list — nothing absent is invented", async () => {
-    const id = "soksak-plugin-plain";
-    usePlugins.setState({ plugins: { [id]: runtimeOf(manifestOf(id)) } });
-    const answer = await execute("plugin.list", {}, {});
-    const entry = (answer.data as { plugins: { id: string; implements: unknown }[] })
-      .plugins.find((p) => p.id === id);
-    expect(entry!.implements).toEqual([]);
-  });
-});

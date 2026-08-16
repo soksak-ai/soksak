@@ -58,11 +58,8 @@ import { EVENT_PERMISSIONS } from "./hooks";
 import type { IconSetData } from "../ui/icons/types";
 import {
   configDefaults,
-  contractRequirementSatisfiedBy,
   pluginCommandName,
   qualifiedViewId,
-  type ContractProviderRef,
-  type ContractRequirement,
   type PluginManifest,
   type PluginPermission,
   type ViewPlacement,
@@ -94,7 +91,6 @@ export interface PluginApiDeps {
   // Contracts the target plugin declared (manifest implements) — used for the contract-pin decision at
   // the call boundary. The core does not identify implementations by name here either: it compares
   // contract id sets only.
-  implementsOf?: (pluginId: string) => ContractProviderRef[];
   on: typeof onPluginEvent;
   currentWorkspace: () => { id: string; root: string | null } | null;
   // Core fs watcher (fs-change) subscription — callback receives the changed parent directory string.
@@ -874,22 +870,19 @@ export function targetPluginId(name: string): string | null {
 //     axis.
 // Neither one = denied. The boundary itself is unchanged; what changes is what gets declared (name →
 // contract).
+// One route across the plugin boundary: a declared dependency.
+//
+// A second route stood beside it until 2026-08-16 — a consumed contract the target implemented, so
+// that any implementation would do. Not one contract ever had both sides declared, and the id was a
+// second name for what the plugin id already names (C3, C4).
 function crossPluginDenyReason(
   selfId: string,
   dependencies: Record<string, string> | undefined,
   commandName: string,
-  consumes?: ContractRequirement[],
-  implementsOf?: (pluginId: string) => ContractProviderRef[],
 ): string | null {
   const target = targetPluginId(commandName);
   if (target === null || target === selfId) return null;
   if (target in (dependencies ?? {})) return null;
-  const wanted = consumes ?? [];
-  if (wanted.length > 0 && implementsOf) {
-    const provided = implementsOf(target);
-    if (wanted.some((requirement) =>
-      provided.some((provider) => contractRequirementSatisfiedBy(requirement, provider)))) return null;
-  }
   return tmsg("plugin.call.undeclaredDependency", { target, command: commandName });
 }
 
@@ -1365,8 +1358,6 @@ export function buildPluginApi(
       id,
       manifest.dependencies,
       name,
-      manifest.consumes,
-      deps.implementsOf,
     );
     if (crossDeny) {
       return denied(crossDeny);
@@ -1829,8 +1820,6 @@ export function buildPluginApi(
               id,
               manifest.dependencies,
               job.command,
-              manifest.consumes,
-              deps.implementsOf,
             );
             if (crossDeny) {
               return Promise.reject(new Error(crossDeny));

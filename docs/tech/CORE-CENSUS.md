@@ -219,30 +219,40 @@ Gate: `TestTheCoreNamesOnlyItsOwnSpecs` lists the six ids this repository define
 other `soksak-spec-` literal. It caught one more on the way in — a `plugin.implementers` example
 naming `soksak-spec-plugin-git`, a contract nobody implements. The example reads the registry now.
 
-### 10. A contract id wore a prefix that served a scanner
+### 10. A second identity for what the plugin id already names
 
-Raised as a question — a plugin's spec does not need `xxxx-xxx-xxx-spec`, it is just a spec.
+Raised as a question and then stated plainly: a plugin has a spec, and there is no stage that
+collects specs. The core has the core's spec; a plugin has the plugin's.
 
-Two different things wore one prefix. `soksak-spec-release@0.0.1` and its siblings stamp an
-envelope's **format version**: the core reads and writes them, they are recorded in files on disk,
-and they are not names two plugins meet at. `soksak-spec-plugin-browser` and
-`soksak-spec-plugin-sidebar-file-tree` are **interface names** — what a provider and a consumer meet
-at, with no version in the id.
+Three things existed where one was needed.
 
-The written reason for the prefix on the second kind was that a scanner could then tell a contract id
-from a plugin id in core sources (PLUGIN-CONTRACT P5, as it stood). A rule shaped to suit a scanner
-is the scanner writing the rule, and entry 9's gate had already made the confusion impossible: the
-core names no contract it does not define, so no contract id appears in core sources at all.
+**Interface ids.** `implements` and `consumes` named a contract a provider offered and a consumer
+asked for, so either side could be swapped without knowing the other. Measured: `browser` had a
+provider and no consumer, `sidebar-file-tree` two consumers and no provider — not one interface ever
+had both sides. The id duplicated the plugin id, and the core ended up holding one as a constant
+(entry 9). Removed: the fields, the grammar, discovery, selection, resolution,
+`ContractEngineSettings`, `plugin.implementers`, the activation-boundary enforcement, and the
+installer's provider axis. A plugin that needs another names it in `dependencies` — one route across
+the boundary, and the call gate checks that one thing.
 
-C4 now reads: a contract id is a plain name, `^[a-z0-9][a-z0-9-]*$`. `browser`.
-`sidebar-file-tree`. The kind is out of the name too — whether a plugin or a sidecar provides a thing
-is the provider's business, and a consumer that had to know would be coupled to the implementation
-(C3), so the three kind-specific grammars became one.
+A sidebar slot named a contract; it names a plugin and a view. A program had `viewContract` beside
+`viewPlugin` — two ways to say one thing — and keeps `viewPlugin`.
 
-Format version stamps keep their prefix, stated as the different namespace they are.
+**Seven names for the core's own format.** `soksak-spec-release@0.0.1`, `-registry@`, one per unit
+kind, and so on: all defined in one file, all moving together at `0.0.1`, each announcing in its own
+value which document it was while the field's place already said so. One `CORE_SPEC` now, and a
+manifest says `"spec": "0.0.1"`.
 
-Measured on a running build: `plugin.implementers` answers `{ id: "browser", version: "0.0.1" }` with
-its implementer, conformance reports no violation, and the page draws.
+**The prefix itself.** The reason written down for it was that a scanner could tell a contract id
+from a plugin id in core sources — a rule shaped to suit a scanner. Gone with the thing it named.
+
+Nothing was swappable, so nothing stopped being swappable. The machinery had no traffic through it.
+A mechanism for choosing between two implementations gets built when there are two.
+
+Gate: `TestTheCoreHoldsNoSecondIdentityNamespace` refuses any `soksak-spec-` literal in core sources.
+
+Measured on a running build: both plugins enable with no error, `ui.validate` passes, a terminal
+opens with a live shell, and the browser draws.
 
 ## What is left, named
 

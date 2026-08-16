@@ -41,12 +41,9 @@ export interface BoundView {
 }
 
 export interface ProjectionDeps {
-  // Contract → active implementer pluginId (null when there are none). Wired to contractResolve.resolveContractImplementer.
-  resolveContract(req: { id: string; range: string }): string | null;
   // Is the global view key registered with rail placement — the verdict for resolution failure (unregistered, inactive, not rail).
   isRailView(key: string): boolean;
   // The owner plugin's consumed contract ids — the contract-pin gate (§3.2).
-  consumesOf(pluginId: string): string[];
 }
 
 export interface Pins {
@@ -87,16 +84,13 @@ function resolveSlot(
     source = `self:${resolvedRef}`;
     live = deps.isRailView(resolvedRef);
   } else {
-    const contract = slot.contract as string;
-    source = `contract:${contract}`;
-    // Contract-pin gate (§3.2): a reference without a consumes declaration is refused → degraded.
-    if (deps.consumesOf(owner).includes(contract)) {
-      const impl = deps.resolveContract({ id: contract, range: slot.range as string });
-      if (impl) {
-        resolvedRef = `${impl}.${slot.view as string}`;
-        live = deps.isRailView(resolvedRef);
-      }
-    }
+    // Another plugin's view, named. A slot held a contract address until 2026-08-16 and resolved an
+    // implementation through discovery; the interface id was a second identity for what the plugin
+    // id already names (C3, C4), and not one contract ever had both sides.
+    const plugin = slot.plugin as string;
+    resolvedRef = `${plugin}.${slot.view as string}`;
+    source = `plugin:${resolvedRef}`;
+    live = deps.isRailView(resolvedRef);
   }
 
   if (!live) {

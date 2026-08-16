@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  C2_ENFORCEMENT,
-  C3_ENFORCEMENT,
   gateContribution,
-  implementsViolations,
   missingRegistrations,
   nodeConformance,
   partitionEnforcement,
@@ -228,93 +225,6 @@ describe("partitionTransparency — enforcement-mode classification", () => {
     ).toEqual({ blocking: [v[0]], warn: [v[1]] });
   });
 
-  it("pin of the current legislation table — all four blocking (view-status promoted after the momentary-unreported rule was dropped and live undeclared=0 was measured)", () => {
-    expect(C2_ENFORCEMENT).toEqual({
-      "command-surface": "blocking",
-      "view-nodes": "blocking",
-      "content-view-status": "blocking",
-      "view-status": "blocking",
-    });
-  });
-});
-
-// implementsViolations — generic checks on the implements declaration of composition law C3
-// (L2 contract-pin). Defining and verifying the surface a contract demands is the contract owner's
-// (the plugin's) job — the core only checks that the declaration itself holds:
-//   ① implements-shape: not an array of strings ② implements-grammar: contract id grammar
-//   (NAMING §8) violated ③ implements-duplicate: the same contract declared twice.
-describe("implementsViolations — generic checks on the C3 implements declaration", () => {
-  it("no declaration (undefined) → no violation — the L2 contract-pin is opt-in", () => {
-    expect(implementsViolations(undefined)).toEqual([]);
-  });
-
-  it("a valid declaration → no violation", () => {
-    expect(
-      implementsViolations([
-        { id: "fixture-notes", version: "0.0.1" },
-        { id: "fixture-board", version: "0.0.1" },
-      ]),
-    ).toEqual([]);
-  });
-
-  it("not an array → implements-shape; the other checks have no item and stay silent", () => {
-    expect(implementsViolations("fixture-notes@0.0.1").map((v) => v.rule)).toEqual([
-      "implements-shape",
-    ]);
-  });
-
-  it("a non-object item → implements-shape, and the object items are still checked", () => {
-    const v = implementsViolations([{ id: "fixture-notes", version: "0.0.1" }, 7]);
-    expect(v.map((x) => x.rule)).toEqual(["implements-shape"]);
-  });
-
-  it("an item breaking the grammar → implements-grammar, listing every offending id", () => {
-    // An id a name cannot be, and a version a SemVer cannot be.
-    const v = implementsViolations([
-      { id: "Fixture-Notes", version: "0.0.1" },
-      { id: "fixture-board", version: "bad" },
-    ]);
-    expect(v.map((x) => x.rule)).toEqual(["implements-grammar"]);
-    expect(v[0].detail).toContain("0");
-    expect(v[0].detail).toContain("1");
-  });
-
-  it("a duplicate declaration → implements-duplicate", () => {
-    const v = implementsViolations([
-      { id: "fixture-notes", version: "0.0.1" },
-      { id: "fixture-notes", version: "0.0.1" },
-    ]);
-    expect(v.map((x) => x.rule)).toEqual(["implements-duplicate"]);
-    expect(v[0].detail).toContain("fixture-notes");
-  });
-
-  it("multiple violations are all reported — none hidden", () => {
-    const v = implementsViolations([
-      7,
-      { id: "-bad", version: "0.0.1" },
-      { id: "fixture-notes", version: "0.0.1" },
-      { id: "fixture-notes", version: "0.0.1" },
-    ]);
-    expect(v.map((x) => x.rule)).toEqual([
-      "implements-shape",
-      "implements-grammar",
-      "implements-duplicate",
-    ]);
-  });
-});
-
-// C3 enforcement mode — same shape as C2 (starts at warn). Promotion to blocking requires a
-// sustained measured 0 violations across installed plugins after the schema lands, plus an
-// explicit re-legislation commit (C4·C5). Editing this table forces the pin test below to change
-// with it.
-describe("C3_ENFORCEMENT·partitionEnforcement — enforcement mode", () => {
-  it("pin of the current legislation table — all three blocking (promoted after installed plugins measured 0 declarations = 0 violations)", () => {
-    expect(C3_ENFORCEMENT).toEqual({
-      "implements-shape": "blocking",
-      "implements-grammar": "blocking",
-      "implements-duplicate": "blocking",
-    });
-  });
 
   it("partitionEnforcement classifies blocking/warn by the injected table", () => {
     const v = [

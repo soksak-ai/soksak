@@ -51,11 +51,8 @@
 // Contract id grammar (C3 L2 contract-pin). Single source: contracts.ts — CONTRACT_ID_RE, validateImplements.
 import {
   SIDECAR_CONTRACT_ID_RE,
-  type ContractProviderRef,
   type ContractRequirement,
   parseContractRequirement,
-  validateConsumes,
-  validateImplements,
 } from "./contracts";
 export * from "./contracts";
 // plugin service (third form) declaration axis. Single source: service.ts (norm docs/PLUGIN-SERVICE.md).
@@ -73,7 +70,7 @@ export * from "./service";
 // semver comparison utilities. Single source: semver.ts (public API re-exported here).
 import { SEMVER_RE } from "./semver";
 export * from "./semver";
-import { UNIT_ID_RE, UNIT_SPEC_BY_KIND, isUnitDependencyRange } from "./unit";
+import { UNIT_ID_RE, CORE_SPEC, isUnitDependencyRange } from "./unit";
 export * from "./unit";
 export * from "./release";
 export * from "./conformanceWire";
@@ -156,12 +153,15 @@ export type SidebarTemplate = "stack" | "tabs";
 
 export interface SidebarSlot {
   ref?: string; // "self.<viewId>" — a rail view of this plugin
-  contract?: string; // contract id (cross-plugin reference)
-  range?: string; // semver range — required together with contract
-  // View id to open in the implementation — required together with contract. Same pattern as the
-  // program viewContract+view pairing: the view id is part of the contract convention and the
-  // consumer declares it (the core does not hardcode view ids).
-  view?: string;
+  // Another plugin's rail view, named: its id and the view inside it.
+  //
+  // It was a contract address — {contract, range, view} — until 2026-08-16, so that a slot could
+  // accept any implementation of an interface. Not one contract ever had both a provider and a
+  // consumer, and the interface id was a second identity for what the plugin id already names
+  // (C3, C4). A slot names a plugin; if two implementations of one thing ever exist, that is the
+  // day to design a choice between them.
+  plugin?: string;
+  view?: string; // required together with plugin
   instance: SidebarInstance;
 }
 
@@ -185,18 +185,15 @@ function parseSidebarSlot(
     return null;
   }
   for (const k of Object.keys(raw)) {
-    if (!["ref", "contract", "range", "view", "instance"].includes(k)) {
+    if (!["ref", "plugin", "view", "instance"].includes(k)) {
       errors.push(`${label}: unknown key "${k}"`);
       return null;
     }
   }
   const hasRef = raw.ref !== undefined;
-  const hasContract =
-    raw.contract !== undefined || raw.range !== undefined || raw.view !== undefined;
-  if (hasRef === hasContract) {
-    errors.push(
-      `${label}: exactly one of ref("self.<viewId>") or {contract, range}`,
-    );
+  const hasOther = raw.plugin !== undefined || raw.view !== undefined;
+  if (hasRef === hasOther) {
+    errors.push(`${label}: exactly one of ref("self.<viewId>") or {plugin, view}`);
     return null;
   }
   if (
@@ -209,27 +206,23 @@ function parseSidebarSlot(
   const instance = raw.instance as SidebarInstance;
   if (hasRef) {
     if (typeof raw.ref !== "string" || !SIDEBAR_SELF_REF_RE.test(raw.ref)) {
-      errors.push(
-        `${label}: ref must be "self.<viewId>" — no name-pin to another plugin, cross-plugin reference uses the contract address ({contract, range})`,
-      );
+      errors.push(`${label}: ref must be "self.<viewId>" — another plugin's view is {plugin, view}`);
       return null;
     }
     return { ref: raw.ref, instance };
   }
-  // Contract address — same grammar as consumes (single source = contracts.ts parseContractRequirement).
-  const req = parseContractRequirement(
-    { id: raw.contract, range: raw.range },
-    label,
-    errors,
-  );
-  if (!req) return null;
+  // Another plugin's view, by both names.
+  if (typeof raw.plugin !== "string" || !PLUGIN_ID_RE.test(raw.plugin)) {
+    errors.push(`${label}: plugin must be a plugin id (^soksak-plugin-[a-z0-9][a-z0-9-]*$)`);
+    return null;
+  }
   if (typeof raw.view !== "string" || !VIEW_ID_RE.test(raw.view)) {
     errors.push(
-      `${label}: view must be the view id to open in the implementation (^[a-z0-9][a-z0-9-]*$) — required together with contract`,
+      `${label}: view must be a view id in that plugin (^[a-z0-9][a-z0-9-]*$) — required together with plugin`,
     );
     return null;
   }
-  return { contract: req.id, range: req.range, view: raw.view, instance };
+  return { plugin: raw.plugin, view: raw.view, instance };
 }
 
 function parseSidebarDecl(
@@ -400,7 +393,6 @@ export interface ContributedProgram {
   // implementation by contract id instead of pinning a plugin id (implementation-agnostic). The core
   // picks one implementation from user settings and opens that plugin's view (the view id above,
   // content by convention). Mutually exclusive with viewPlugin (name-pin) — declaring both is forbidden.
-  viewContract?: ContractRequirement;
   // Autorun command passed to the opened view (agent program: the terminal view runs it once on the
   // PTY at mount). A generic channel independent of view kind (PluginViewContext.command) — only the
   // terminal view autoruns it.
@@ -421,7 +413,7 @@ export function programPathSegments(path: string): string[] {
 
 // ── §3 Manifest ──────────────────────────────────────────────────────────────
 
-export const SPEC_VERSION = UNIT_SPEC_BY_KIND.plugin;
+export const SPEC_VERSION = CORE_SPEC;
 export const DEFAULT_ENTRY = "main.js";
 
 // External CLI/library dependency — an external tool the plugin runs as a process (npm global CLI
@@ -535,18 +527,12 @@ export interface PluginManifest {
   // references a resident binary in sidecars[], interface is the wire contract id (PS5, PS6).
   // Requires the "service" permission.
   service?: ServiceDecl;
-  // Contracts this plugin implements (C3 L2 contract-pin) — each entry is an exact
-  // `{ id, version }` provider. Declaration = discovery target: consumers discover by contract id
-  // only (implementation-agnostic). Do not pin the implementing pluginId (L1 name-pin — forbidden
-  // for new coupling). A version bump takes a per-major id — @2 does not replace @1 (C4).
-  // Canonical grammar and meaning = contracts.ts + NAMING §8.
-  implements?: ContractProviderRef[];
-  // Contracts this plugin calls (consumer axis of the C3 L2 contract-pin). Symmetric to implements —
-  // what is declared is the contract, not the implementation. The core cross-plugin call boundary is
-  // enforced from this: declaring a contract permits calling any implementation of it
-  // (implementation-agnostic), and everything outside is rejected. Pinning an implementation id
-  // through dependencies is the L1 name-pin, forbidden for new coupling.
-  consumes?: ContractRequirement[];
+  // A plugin this one needs is named in `dependencies`. There is no second identity for it.
+  //
+  // `implements` and `consumes` stood here until 2026-08-16, naming an interface a provider offered
+  // and a consumer asked for, so that either side could be swapped. Not one interface ever had both
+  // sides declared, and the id was a second name for what the plugin id already names (C3, C4). If
+  // two implementations of one thing ever exist, that is the day to design a choice between them.
   // User configuration schema (optional). Global + per-workspace override. Harmless (declarative) →
   // no permission needed.
   configuration?: ConfigSetting[];
@@ -1031,14 +1017,6 @@ export function parseManifest(
 
   // service: plugin service declaration (optional) — format in service.ts, cross-checks after contributes parsing.
   const service = parseServiceDecl(raw.service, errors);
-
-  // implements: contract implementation declaration (optional) — L2 contract-pin. contracts.ts is
-  // the single source for grammar and duplicate validation.
-  const implementsIds = validateImplements(raw.implements, errors);
-  // consumes: contract consumption declaration (optional) — the contract-pin axis of the call
-  // boundary. Unlike dependencies, which writes an implementation id, it writes contract ids only
-  // (implementation-agnostic).
-  const consumesIds = validateConsumes(raw.consumes, errors);
 
   // configuration: user settings schema (optional). key/type/default consistency + enum/enumLabels/
   // min/max validation. Single source of truth — UI, stored defaults, and CLI/MCP all derive from it.
@@ -1539,7 +1517,7 @@ export function parseManifest(
       programs = parseEntries(c.programs, {
         label: "contributes.programs",
         required: ["id", "title", "kind"],
-        optional: ["path", "command", "view", "viewPlugin", "viewContract", "ensure"],
+        optional: ["path", "command", "view", "viewPlugin", "ensure"],
         parse: (v, errs) => {
           if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
             errs.push("contributes.programs: id must be ^[a-z0-9][a-z0-9-]*$");
@@ -1603,19 +1581,6 @@ export function parseManifest(
               `contributes.programs["${id}"].viewPlugin: plugin id format (^[a-z0-9][a-z0-9-]*$) required`,
             );
             return null;
-          }
-          // viewContract (contract-pin view reference, C3 L2) — optional, contract id format
-          // (NAMING §8). viewPlugin pins a plugin id (name-pin) while viewContract discovers by
-          // contract — the two are mutually exclusive.
-          let viewContract: ContractRequirement | undefined;
-          if (v.viewContract !== undefined) {
-            const parsed = parseContractRequirement(
-              v.viewContract,
-              `contributes.programs["${id}"].viewContract`,
-              errs,
-            );
-            if (!parsed) return null;
-            viewContract = parsed;
           }
           if (v.viewPlugin !== undefined && v.viewContract !== undefined) {
             errs.push(
@@ -1684,7 +1649,6 @@ export function parseManifest(
             view: (v.view as string).trim(),
             ...(path !== undefined ? { path } : {}),
             ...(v.viewPlugin !== undefined ? { viewPlugin: (v.viewPlugin as string).trim() } : {}),
-            ...(viewContract !== undefined ? { viewContract } : {}),
             ...(v.command !== undefined ? { command: (v.command as string).trim() } : {}),
             ...(ensure !== undefined ? { ensure } : {}),
           };
@@ -1761,8 +1725,6 @@ export function parseManifest(
       ...(raw.requiresEngine === "chromium" ? { requiresEngine: "chromium" as const } : {}),
       ...(raw.requiresNativeChildWebview === true ? { requiresNativeChildWebview: true } : {}),
       ...(service !== undefined ? { service } : {}),
-      ...(implementsIds.length > 0 ? { implements: implementsIds } : {}),
-      ...(consumesIds.length > 0 ? { consumes: consumesIds } : {}),
       ...(configuration.length > 0 ? { configuration } : {}),
       permissions,
       contributes: {

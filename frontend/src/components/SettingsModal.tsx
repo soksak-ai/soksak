@@ -2,7 +2,6 @@ import { applyWindowZoom } from "../lib/zoomIntent";
 import { useEffect, useState } from "react";
 import { usePlugins } from "../state/plugins";
 import { PluginSettings } from "./PluginSettings";
-import { ContractEngineSettings } from "./ContractEngineSettings";
 import { SecuritySettings } from "./SecuritySettings";
 import {
   useSettings,
@@ -329,7 +328,6 @@ export function SettingsModal({
           {/* Per-contract implementation picker (generic, contract-agnostic) — exposed automatically only
               for contracts with 2 or more enabled implementations. The core privileges no contract
               (for example soksak-spec-plugin-terminal → xterm/ghostty). */}
-          <ContractEngineSettings />
 
           <div className="dsec">{t("settings.permission")}</div>
           <div className="drow">

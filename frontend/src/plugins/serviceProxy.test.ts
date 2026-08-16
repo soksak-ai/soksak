@@ -3,7 +3,7 @@
 // (no mock registry).
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { execute, register, unregister } from "../commands/registry";
-import { parseManifest, SERVICE_CONTRACT_REQUIREMENT, type PluginManifest } from "./spec";
+import { parseManifest, SERVICE_CONTRACT_REQUIREMENT_RANGE, type PluginManifest } from "./spec";
 import {
   buildBindLedger,
   registerBusBridge,
@@ -15,7 +15,7 @@ import {
 function demoManifest(): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-spec-plugin@0.0.1",
+      spec: "0.0.1",
       id: "demo",
       name: "Demo",
       version: "0.0.1",
@@ -25,7 +25,7 @@ function demoManifest(): PluginManifest {
       sidecars: [{ name: "demo-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", range: ">=0.0.1 <1.0.0" } }],
       service: {
         sidecar: "demo-svc",
-        interface: SERVICE_CONTRACT_REQUIREMENT,
+        interface: { id: "vault", range: SERVICE_CONTRACT_REQUIREMENT_RANGE },
         subscribe: ["bus:kanban:changed"],
       },
       contributes: {
@@ -132,7 +132,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
         {
           plugin: "demo",
           sidecar: "demo-svc",
-          interface: SERVICE_CONTRACT_REQUIREMENT,
+          interface: { id: "vault", range: SERVICE_CONTRACT_REQUIREMENT_RANGE },
           ops: ["run"],
           subscribe: ["bus:kanban:changed"],
           schedules: [
@@ -149,7 +149,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
   it('declaring the "secrets" permission derives vaultEnv (PS9 — env: the vault injection target)', () => {
     const { manifest, validation } = parseManifest(
       {
-        spec: "soksak-spec-plugin@0.0.1",
+        spec: "0.0.1",
         id: "vaulted",
         name: "Vaulted",
         version: "1.0.0",
@@ -157,7 +157,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
         entry: null,
         permissions: ["commands", "sidecar", "service", "secrets"],
         sidecars: [{ name: "vaulted-svc", interface: { id: "soksak-spec-sidecar-fixture-wire", range: ">=0.0.1 <1.0.0" } }],
-        service: { sidecar: "vaulted-svc", interface: SERVICE_CONTRACT_REQUIREMENT, subscribe: [] },
+        service: { sidecar: "vaulted-svc", interface: { id: "vault", range: SERVICE_CONTRACT_REQUIREMENT_RANGE }, subscribe: [] },
         contributes: {
           commands: [
             { name: "run", title: { en: "Run", ko: "Run (ko)" }, bind: "service", description: "Run." },
@@ -175,7 +175,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
   it("a manifest with no service does not enter the ledger", () => {
     const { manifest } = parseManifest(
       {
-        spec: "soksak-spec-plugin@0.0.1",
+        spec: "0.0.1",
         id: "plain",
         name: "Plain",
         version: "1.0.0",
@@ -199,7 +199,7 @@ describe("buildBindLedger — ledger derivation (PS9, PS14)", () => {
       ledger: expect.objectContaining({
         services: [
           expect.objectContaining({
-            interface: SERVICE_CONTRACT_REQUIREMENT,
+            interface: { id: "vault", range: SERVICE_CONTRACT_REQUIREMENT_RANGE },
           }),
         ],
       }),
@@ -259,7 +259,7 @@ describe("registerBusBridge — window bus to core bridge (PS15)", () => {
     const h = harness();
     const { manifest } = parseManifest(
       {
-        spec: "soksak-spec-plugin@0.0.1",
+        spec: "0.0.1",
         id: "plain",
         name: "Plain",
         version: "1.0.0",

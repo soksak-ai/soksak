@@ -21,18 +21,12 @@ import {
 import { useProgramRegistry } from "./programRegistry";
 import {
   C2_ENFORCEMENT,
-  C3_ENFORCEMENT,
-  implementsViolations,
   missingRegistrations,
-  partitionEnforcement,
   partitionTransparency,
   transparencyViolations,
-  type EnforcementMode,
-  type ImplementsRule,
   type TransparencyMode,
   type TransparencyRule,
 } from "./conformance";
-import { rawImplements } from "./contractDiscovery";
 import {
   registerBusBridge,
   registerServiceProxies,
@@ -329,30 +323,6 @@ export function enforceTransparency(
   }
 }
 
-// Activation-boundary enforcement of the implements generic check of composition law C3 (L2 contract
-// pin) — the same grain as C2.
-// A blocking rule violation refuses activation (throw); a warn rule violation warns (zero
-// concealment). Single truth for the modes = C3_ENFORCEMENT.
-// Verifying the surfaces each contract requires is the contract owner's job — this looks only at the
-// declaration itself (shape, syntax, duplication).
-export function enforceImplements(
-  manifest: PluginManifest,
-  enforcement: Readonly<Record<ImplementsRule, EnforcementMode>> = C3_ENFORCEMENT,
-): void {
-  const violations = implementsViolations(rawImplements(manifest));
-  const { blocking, warn } = partitionEnforcement(violations, enforcement);
-  for (const v of warn) {
-    console.warn(`[plugin:${manifest.id}] C3 ${v.rule}: ${v.detail}`);
-  }
-  if (blocking.length > 0) {
-    throw new Error(
-      tmsg("plugin.implements.c3Violation", {
-        id: manifest.id,
-        violations: blocking.map((v) => `${v.rule} — ${v.detail}`).join("; "),
-      }),
-    );
-  }
-}
 
 // Module + manifest → active instance. On activate failure, every registration is reclaimed, then throw.
 export async function activatePlugin(
@@ -374,10 +344,6 @@ export async function activatePlugin(
   // [C2] Three transparency rules — the manifest static rules run before registration (a blocking
   // violation creates nothing).
   enforceTransparency(manifest);
-  // [C3] L2 contract pin — the generic check of the implements declaration (shape, syntax,
-  // duplication) runs at the same boundary.
-  enforceImplements(manifest);
-
   const { api, tracker, registered } = buildPluginApi(manifest, dir, deps, entrySource);
 
   // Declarative contributions apply automatically: programs need data only (no code binding) — the
@@ -476,7 +442,6 @@ export async function activateContractPlugin(
   // [C2]/[C3] — enforced at the same boundary whether or not there is an entry (the transparency
   // gate applies unchanged, PS4).
   enforceTransparency(manifest);
-  enforceImplements(manifest);
 
   const { tracker, registered } = buildPluginApi(manifest, dir, deps);
   for (const p of manifest.contributes.programs) {

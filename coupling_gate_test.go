@@ -398,31 +398,20 @@ func TestTheCoreAnswersNoMediaType(t *testing.T) {
 	}
 }
 
-// coreOwnedSpecs are the contract ids this repository defines, and the only
-// `soksak-spec-` names its sources may hold (PLUGIN-CONTRACT P5).
+// The core holds no second identity namespace (C3, C4).
 //
-// A contract's definition is owned by whoever implements it. The core naming
-// another's is the same coupling as naming the plugin, one level up: the core
-// then fixes which interface an affordance targets, and a second interface for
-// the same job needs an edit here.
+// A plugin is identified by its plugin id. There was a parallel one until
+// 2026-08-16 — `soksak-spec-<kind>-<domain>` contract ids that a provider
+// declared and a consumer asked for, so either side could be swapped. Not one
+// contract ever had both sides declared, the id was a second name for what the
+// plugin id already names, and it leaked into the core as a constant for ⌘T.
 //
-// Measured 2026-08-16: `plugins/terminalEngine.ts` held
-// `soksak-spec-plugin-terminal` for ⌘T, for two install-command paths and for a
-// `layout.apply dev` preset. The generic machinery beside it — discovery,
-// selection, resolution — never names one and did not change.
-var coreOwnedSpecs = map[string]string{
-	"soksak-spec-plugin":      "the plugin API this core defines and hosts",
-	"soksak-spec-release":     "the release envelope this core reads",
-	"soksak-spec-registry":    "the registry index this core reads",
-	"soksak-spec-kit":         "the kit envelope this core reads",
-	"soksak-spec-conformance": "the conformance report this core produces",
-	"soksak-spec-sidecar":     "the sidecar envelope this core speaks",
-	"soksak-spec-service":     "the service protocol this core requires of a sidecar",
-
-	"soksak-spec-plugin-runtime": "the runtime wire this core hosts a plugin over",
-}
-
-func TestTheCoreNamesOnlyItsOwnSpecs(t *testing.T) {
+// What remains is the core's own spec version, `CORE_SPEC`, stamped into the
+// envelopes the core defines. It is a version, not a name to meet at, and there
+// is one of it. Seven names for it stood here — a release spec, a registry spec,
+// one per unit kind — each announcing in its own value which document it was,
+// while the field's place already said so.
+func TestTheCoreHoldsNoSecondIdentityNamespace(t *testing.T) {
 	spec := regexp.MustCompile(`soksak-spec-[a-z0-9-]+`)
 	var found []string
 	scanned := 0
@@ -452,13 +441,6 @@ func TestTheCoreNamesOnlyItsOwnSpecs(t *testing.T) {
 			scanned++
 			for index, line := range strings.Split(stripComments(string(body)), "\n") {
 				for _, name := range spec.FindAllString(line, -1) {
-					// A trailing dash is the shape regexes' prefix form
-					// (`soksak-spec-sidecar-<name>`), which is C4 being enforced
-					// rather than one contract being named.
-					name = strings.TrimSuffix(name, "-")
-					if _, own := coreOwnedSpecs[name]; own {
-						continue
-					}
 					found = append(found, clean+":"+itoa(index+1)+" "+name)
 				}
 			}
@@ -472,19 +454,8 @@ func TestTheCoreNamesOnlyItsOwnSpecs(t *testing.T) {
 		t.Fatal("no core source was scanned; the roots are wrong")
 	}
 	if len(found) > 0 {
-		t.Errorf("the core names a contract it does not define, in %d places:\n%s\n"+
-			"Take the name out. A contract belongs to whoever implements it, and the core "+
-			"resolves one only when a caller hands it over (PLUGIN-CONTRACT P5).",
+		t.Errorf("the core holds a second identity namespace in %d places:\n%s\n"+
+			"A plugin is named by its plugin id, and the core's own format version is CORE_SPEC.",
 			len(found), strings.Join(found, "\n"))
-	}
-}
-
-// A core-owned spec entry outliving the id it excuses is the same rot as an
-// unexplained allowlist: the next file to write that name inherits a pass.
-func TestEveryCoreOwnedSpecIsStillNamed(t *testing.T) {
-	for name, reason := range coreOwnedSpecs {
-		if strings.TrimSpace(reason) == "" {
-			t.Errorf("%s is listed as core-owned for no stated reason", name)
-		}
 	}
 }

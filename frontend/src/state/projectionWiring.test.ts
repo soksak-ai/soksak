@@ -25,7 +25,6 @@ import { onPluginEvent } from "../plugins/hooks";
 import { parseManifest, type ContributedView } from "../plugins/spec";
 
 const provider: PluginViewProvider = { mount: () => {} };
-const TREE_CONTRACT = "soksak-spec-plugin-sidebar-file-tree";
 
 function decl(id: string, over: Partial<ContributedView> = {}): ContributedView {
   return {
@@ -45,7 +44,7 @@ function decl(id: string, over: Partial<ContributedView> = {}): ContributedView 
 function runtime(raw: Record<string, unknown>): PluginRuntime {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-spec-plugin@0.0.1",
+      spec: "0.0.1",
       name: "F",
       version: "0.0.1",
       description: "fixture",
@@ -121,15 +120,15 @@ describe("projectionFor — real deps (contract resolution, rail check, consumes
   it("a contract slot resolves live to the active implementation's rail view", () => {
     usePlugins.setState({
       plugins: {
-        termplug: runtime({ id: "termplug", consumes: [{ id: TREE_CONTRACT, range: "^0.0.1" }] }),
-        filetree: runtime({ id: "filetree", implements: [{ id: TREE_CONTRACT, version: "0.0.1" }] }),
+        termplug: runtime({ id: "termplug" }),
+        filetree: runtime({ id: "filetree" }),
       },
     });
     useViewRegistry.getState().register(
       "termplug",
       decl("term", {
         sidebar: {
-          left: [{ contract: TREE_CONTRACT, range: "^0.0.1", view: "tree", instance: "shared" }],
+          left: [{ plugin: "filetree", view: "tree", instance: "shared" }],
           right: [],
           template: "stack",
         },
@@ -150,32 +149,6 @@ describe("projectionFor — real deps (contract resolution, rail check, consumes
     });
   });
 
-  it("with consumes undeclared the same setup is degraded (contract-pin gate)", () => {
-    usePlugins.setState({
-      plugins: {
-        termplug: runtime({ id: "termplug" }),
-        filetree: runtime({ id: "filetree", implements: [{ id: TREE_CONTRACT, version: "0.0.1" }] }),
-      },
-    });
-    useViewRegistry.getState().register(
-      "termplug",
-      decl("term", {
-        sidebar: {
-          left: [{ contract: TREE_CONTRACT, range: "^0.0.1", view: "tree", instance: "shared" }],
-          right: [],
-          template: "stack",
-        },
-      }),
-      provider,
-    );
-    useViewRegistry.getState().register(
-      "filetree",
-      decl("tree", { placements: ["rail"], defaultPlacement: "rail" }),
-      provider,
-    );
-    useSessions.setState({ workspaces: [tab([pluginView("tab-aaaaaa", "termplug", "term")], "tab-aaaaaa")], activeId: "wsp-aaaaaa" });
-    expect(projectionFor("wsp-aaaaaa")?.left.slots[0].status).toBe("degraded");
-  });
 
   it("a workspace that does not exist → null", () => {
     expect(projectionFor("nope")).toBeNull();

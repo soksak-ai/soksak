@@ -6,7 +6,6 @@ import {
   activatePlugin,
   deactivateAll,
   deactivateById,
-  enforceImplements,
   enforceTransparency,
   isActive,
   setActive,
@@ -18,7 +17,7 @@ import { useViewRegistry } from "./viewRegistry";
 function manifestOf(overrides: Record<string, unknown> = {}): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-spec-plugin@0.0.1",
+      spec: "0.0.1",
       id: "demo",
       name: "Demo",
       version: "1.0.0",
@@ -230,47 +229,6 @@ describe("enforceTransparency — blocking mode (injected table)", () => {
 // C3 (L2 contract pin) implements generic check enforced at the activation boundary — same shape as
 // C2 (current table all blocking). parseManifest does not handle implements yet (the schema is
 // plugin-spec's job) — attach the field after parsing and validate it.
-describe("enforceImplements — C3 implements at the activation boundary", () => {
-  const withImplements = (value: unknown) =>
-    Object.assign(manifestOf(), { implements: value });
-
-  it("refuses a declaration that violates the grammar (promoted to blocking)", async () => {
-    await expect(
-      activatePlugin(
-        { activate: () => {} },
-        withImplements([{ id: "Not A Contract", version: "0.0.1" }]),
-        "/d",
-        fakeDeps(),
-      ),
-    ).rejects.toThrow(/C3.*implements-grammar/);
-  });
-
-  it("emits no C3 warning for a valid declaration or no declaration", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    await activatePlugin(
-      { activate: () => {} },
-      withImplements([{ id: "fixture-notes", version: "0.0.1" }]),
-      "/d",
-      fakeDeps(),
-    );
-    await activatePlugin({ activate: () => {} }, manifestOf(), "/d", fakeDeps());
-    expect(warn).not.toHaveBeenCalledWith(expect.stringContaining("C3 "));
-    warn.mockRestore();
-  });
-
-  it("throws on a blocking rule violation (activation refused — mechanism verified with an injected table)", () => {
-    expect(() =>
-      enforceImplements(withImplements([
-        { id: "fixture-notes", version: "0.0.1" },
-        { id: "fixture-notes", version: "0.0.1" },
-      ]), {
-        "implements-shape": "blocking",
-        "implements-grammar": "blocking",
-        "implements-duplicate": "blocking",
-      }),
-    ).toThrow(/C3/);
-  });
-});
 
 describe("activatePlugin — entry point resolution", () => {
   it("supports a named export activate", async () => {

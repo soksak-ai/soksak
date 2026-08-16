@@ -9,8 +9,6 @@
 import { tmsg } from "../i18n";
 import {
   C2_STATIC_ENFORCEMENT,
-  parseContractProviderRef,
-  type ContractProviderRef,
   type EnforcementMode,
   type StaticTransparencyRule,
 } from "./spec";
@@ -153,76 +151,6 @@ export function partitionTransparency(
   enforcement: Readonly<Record<TransparencyRule, TransparencyMode>> = C2_ENFORCEMENT,
 ): { blocking: TransparencyViolation[]; warn: TransparencyViolation[] } {
   return partitionEnforcement(violations, enforcement);
-}
-
-// ── Composite law C3 — L2 contract pin: generic check of the implements declaration ────────────
-// The manifest implements: [{ id: "soksak-spec-<kind>-<domain>", version }] is this plugin's declaration of
-// the contracts it implements, and consumers discover implementations by contract id (contractDiscovery —
-// implementation-agnostic). Defining and verifying the surfaces a contract requires (which command/view must
-// exist) is the contract owner's (the plugin's) job — the core has no information about any contract (C1), so
-// it checks only that the declaration itself is well formed, generically: shape, grammar (NAMING §8), duplicates.
-// Re-legislation history: 2026-07-11 started at warn (new axis) → 2026-07-11 promoted to blocking — after the
-// schema landing (P0.5), 0 violations measured on installed bundles (0 plugins declare implements, and L2 is
-// opt-in, so no declaration is legal).
-// Later relaxation or re-promotion happens only through an explicit re-legislation commit (C4, C5). The pin test forces a companion revision.
-
-export type ImplementsRule =
-  | "implements-shape"
-  | "implements-grammar"
-  | "implements-duplicate";
-
-export const C3_ENFORCEMENT: Readonly<Record<ImplementsRule, EnforcementMode>> = {
-  "implements-shape": "blocking",
-  "implements-grammar": "blocking",
-  "implements-duplicate": "blocking",
-};
-
-export interface ImplementsViolation {
-  rule: ImplementsRule;
-  detail: string; // Statement of the violation — placed into the warning or refusal message as is
-}
-
-// implements raw value (rawImplements) → violation list. undefined = no declaration (legal — L2 is opt-in).
-// Non-string entries are reported as a shape violation while the grammar and duplicate checks continue on the string entries (0 concealment).
-export function implementsViolations(raw: unknown): ImplementsViolation[] {
-  if (raw === undefined) return [];
-  if (!Array.isArray(raw)) {
-    return [{ rule: "implements-shape", detail: `implements is not an array (${typeof raw})` }];
-  }
-  const out: ImplementsViolation[] = [];
-  const nonObjects = raw.filter((value) => typeof value !== "object" || value === null || Array.isArray(value));
-  if (nonObjects.length > 0) {
-    out.push({
-      rule: "implements-shape",
-      detail: `non-object entries ${nonObjects.length} — implements requires { id, version } providers`,
-    });
-  }
-  const entries = raw.filter((value): value is Record<string, unknown> =>
-    typeof value === "object" && value !== null && !Array.isArray(value));
-  const providers: ContractProviderRef[] = [];
-  const invalid: number[] = [];
-  entries.forEach((entry, index) => {
-    const errors: string[] = [];
-    const parsed = parseContractProviderRef(entry, `implements[${index}]`, errors);
-    if (parsed) providers.push(parsed);
-    else invalid.push(index);
-  });
-  if (invalid.length > 0) {
-    out.push({
-      rule: "implements-grammar",
-      detail: `invalid { id, version } provider entries: ${invalid.join(", ")}`,
-    });
-  }
-  const seen = new Set<string>();
-  const dup = new Set<string>();
-  for (const provider of providers) {
-    if (seen.has(provider.id)) dup.add(provider.id);
-    seen.add(provider.id);
-  }
-  if (dup.size > 0) {
-    out.push({ rule: "implements-duplicate", detail: `duplicate declarations: ${[...dup].join(", ")}` });
-  }
-  return out;
 }
 
 // declared ≡ actual diagnostic for nodes. actual = data-node in the DOM (nodePath from scanNodes).

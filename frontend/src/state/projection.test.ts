@@ -13,9 +13,7 @@ const P = "proj-1";
 
 function deps(over: Partial<ProjectionDeps> = {}): ProjectionDeps {
   return {
-    resolveContract: () => null,
     isRailView: () => false,
-    consumesOf: () => [],
     ...over,
   };
 }
@@ -89,76 +87,25 @@ describe("resolveProjection — slot resolution (R1·R5)", () => {
     expect(p.left.slots[0].instanceKey).toBeNull();
   });
 
-  it("contract slot — an undeclared consumes is degraded even with an implementation present (contract-pin gate)", () => {
+  // A slot naming another plugin's view is live when that view is registered, and degraded when it
+  // is not. It held a contract address until 2026-08-16 and resolved an implementation through
+  // discovery; the interface id was a second name for what the plugin id already names.
+  it("a named view that is not registered is degraded, and one that is is live", () => {
     const sb: ContributedSidebar = {
-      left: [
-        { contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" },
-      ],
+      left: [{ plugin: "soksak-plugin-file-tree", view: "tree", instance: "shared" }],
       right: [],
       template: "stack",
     };
-    const p = resolveProjection(
+    const none = resolveProjection(P, bound(sb), NO_PINS, deps({ isRailView: () => false }));
+    expect(none.left.slots[0].status).toBe("degraded");
+    const live = resolveProjection(
       P,
       bound(sb),
       NO_PINS,
-      deps({
-        resolveContract: () => "filetree",
-        isRailView: () => true,
-        consumesOf: () => [], // undeclared
-      }),
+      deps({ isRailView: (ref) => ref === "soksak-plugin-file-tree.tree" }),
     );
-    expect(p.left.slots[0].status).toBe("degraded");
-  });
-
-  it("contract slot — zero active implementations is degraded, one is live (resolvedRef=implementation.view)", () => {
-    const sb: ContributedSidebar = {
-      left: [
-        { contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" },
-      ],
-      right: [],
-      template: "stack",
-    };
-    const consumes = () => ["soksak-spec-plugin-sidebar-file-tree"];
-    const none = resolveProjection(
-      P, bound(sb), NO_PINS,
-      deps({ resolveContract: () => null, isRailView: () => true, consumesOf: consumes }),
-    );
-    expect(none.left.slots[0].status).toBe("degraded");
-    const live = resolveProjection(
-      P, bound(sb), NO_PINS,
-      deps({
-        resolveContract: (req) =>
-          req.id === "soksak-spec-plugin-sidebar-file-tree" ? "filetree" : null,
-        isRailView: (k) => k === "filetree.tree",
-        consumesOf: consumes,
-      }),
-    );
-    expect(live.left.slots[0]).toMatchObject({
-      source: "contract:soksak-spec-plugin-sidebar-file-tree",
-      resolvedRef: "filetree.tree",
-      instanceKey: `${P}|filetree.tree`,
-      status: "live",
-    });
-  });
-
-  it("pin absorption (R4) — a shared live slot whose ref is pinned becomes satisfied-by-pin, per-view ignores pins", () => {
-    const sb: ContributedSidebar = {
-      left: [
-        { ref: "self.tree", instance: "shared" },
-        { ref: "self.blocks", instance: "per-view" },
-      ],
-      right: [],
-      template: "stack",
-    };
-    const p = resolveProjection(
-      P,
-      bound(sb, "v2"),
-      { left: ["termplug.tree", "termplug.blocks"], right: [] },
-      deps({ isRailView: () => true }),
-    );
-    expect(p.left.slots[0].status).toBe("satisfied-by-pin");
-    expect(p.left.slots[0].instanceKey).toBe(`${P}|termplug.tree`); // the pin renders the same instance
-    expect(p.left.slots[1].status).toBe("live"); // per-view is not absorbed
+    expect(live.left.slots[0].status).toBe("live");
+    expect(live.left.slots[0].resolvedRef).toBe("soksak-plugin-file-tree.tree");
   });
 
   it("a right declaration resolves, and one slot means template=single", () => {

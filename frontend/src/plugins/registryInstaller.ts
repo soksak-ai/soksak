@@ -10,7 +10,6 @@ import {
   verifyPluginRuntimeDependencyProjection,
   verifyRegistryUnitRelease,
   type CertifiedRegistryIndex,
-  type ContractProviderRef,
   type RegistryUnitIdentity,
   type RegistryUnitIndexEntry,
   type UnitReleaseArtifact,
@@ -61,7 +60,6 @@ export interface VerifiedInstallUnit extends RegistryUnitIdentity {
   artifactUrl: string;
   artifactSha256: string;
   stagedHandle: string;
-  providers: readonly ContractProviderRef[];
 }
 
 export type RegistryInstallFailureCode =
@@ -200,14 +198,20 @@ function verifyStagingEvidence(
   if (errors.length > 0) throw new InstallFailure("UNSAFE_EXTRACTION", errors);
 }
 
-async function pluginProviders(
+
+// The staged plugin manifest is parsed and checked against the release it arrived in.
+//
+// It also answered the contracts the plugin implements until 2026-08-16, and that answer rode into
+// the release verification. The manifest declares no interface any more (C3, C4); the version match
+// and the dependency projection are what this checks, and both are about the release itself.
+async function verifyStagedPluginManifest(
   stager: RegistryArtifactStager,
   transactionId: string,
   staged: StagedRegistryArtifact,
   release: UnitReleaseManifest,
   artifact: UnitReleaseArtifact,
-): Promise<readonly ContractProviderRef[]> {
-  if (release.kind !== "plugin" || artifact.entrypoint.kind !== "plugin") return [];
+): Promise<void> {
+  if (release.kind !== "plugin" || artifact.entrypoint.kind !== "plugin") return;
   let raw: unknown;
   try {
     raw = JSON.parse(await stager.readUtf8(
@@ -236,7 +240,6 @@ async function pluginProviders(
   if (!projection.ok) {
     throw new InstallFailure("PLUGIN_MANIFEST_INVALID", projection.errors);
   }
-  return parsed.manifest.implements ?? [];
 }
 
 function topologicalOrder(
@@ -435,7 +438,7 @@ export async function installRegistryClosure(
         artifact,
       });
       verifyStagingEvidence(staged, artifact);
-      const providers = await pluginProviders(
+      await verifyStagedPluginManifest(
         request.artifacts,
         transactionId,
         staged,
@@ -448,7 +451,6 @@ export async function installRegistryClosure(
         identity(entry),
         envelope.manifestBytes,
         reports,
-        providers,
       );
       if (!certifiedRelease.ok) {
         throw new InstallFailure("RELEASE_VERIFICATION_FAILED", certifiedRelease.errors);
@@ -462,7 +464,6 @@ export async function installRegistryClosure(
         artifactUrl: artifact.url,
         artifactSha256: artifact.sha256,
         stagedHandle: staged.handle,
-        providers: Object.freeze([...providers]),
       }));
     }
     const committed = await request.artifacts.commit(transactionId, verifiedUnits);

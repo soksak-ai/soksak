@@ -15,7 +15,6 @@ import {
   VIEW_PLACEMENTS,
   configDefaults,
   configSettingOf,
-  parseContractRequirement,
   validateSettingValue,
   type ViewPlacement,
 } from "../plugins/spec";
@@ -27,15 +26,7 @@ import {
   versionIssues,
   type DepNode,
 } from "../plugins/dependencyGraph";
-import {
-  allContracts,
-  implementersOf,
-  implementersOfId,
-  manifestImplements,
-  rawImplements,
-  type ImplementsNode,
-} from "../plugins/contractDiscovery";
-import { implementsViolations, executedCommandNames, unresolvedCommandCalls } from "../plugins/conformance";
+import { executedCommandNames, unresolvedCommandCalls } from "../plugins/conformance";
 import { register, catalogJson, setUnknownCommandResolver, type CommandHint } from "./registry";
 import { notFound } from "./refuse";
 import { collectExposed } from "./catalogDom";
@@ -72,25 +63,7 @@ function depNodes(): DepNode[] {
   }));
 }
 
-// Installed/dev runtime → contract discovery node (based on manifest implements). The runtime
-// registration surface of the L2 contract pin (C3) — discovery queries run against these nodes only
-// (no implementer discrimination).
-function implementsNodes(): ImplementsNode[] {
-  return Object.values(usePlugins.getState().plugins).map((p) => ({
-    id: p.manifest.id,
-    implements: manifestImplements(p.manifest),
-  }));
-}
 
-// A contract id for an example line — the first one a plugin declares, and "<contract>" when none
-// does. The registry answers; no id is written down here.
-function declaredContractId(): string {
-  for (const node of implementsNodes()) {
-    const first = node.implements[0];
-    if (first) return first.id;
-  }
-  return "<contract>";
-}
 
 const invalid = (what: string) => ({
   ok: false as const,
@@ -115,10 +88,6 @@ function serializeRuntime(p: PluginRuntime) {
       placements: v.placements,
     })),
     commands: p.manifest.contributes.commands.map((c) => c.name),
-    // A contract implementation declaration is a fact of the manifest. Without emitting it there is
-    // nowhere to query "who implements this contract", and consumers end up with a hand-written table
-    // of plugin ids — that table diverges silently.
-    implements: manifestImplements(p.manifest),
     dir: p.dir,
   };
 }
@@ -729,76 +698,6 @@ export function registerPluginCatalog(): void {
     },
   });
 
-  register("plugin.implementers", {
-    description:
-      "Find plugins whose exact {id, version} provider declaration implements a domain contract. Pass id alone to discover every implementer regardless of version; add range to filter by SemVer. Omit both to list exact provider evidence. Domain ids never embed a version.",
-    triggers: { ko: "플러그인 계약 구현체 발견 구현 스펙 컨트랙트" },
-    params: {
-      id: {
-        type: "string",
-        description: tmsg("cmd.plugin.implementers.param.id"),
-      },
-      range: {
-        type: "string",
-        description: tmsg("cmd.plugin.implementers.param.range"),
-      },
-    },
-    returns:
-      "{ contract, implementers: [{id, version, status}] } (contract given) | { contracts: [{contract, implementers}] } (omitted)",
-    message: (d) =>
-      d.requirement !== undefined
-        ? tmsg("msg.plugin.implementers", {
-            n: ((d.implementers as unknown[]) ?? []).length,
-            contract: JSON.stringify(d.requirement),
-          })
-        : tmsg("msg.plugin.implementers.all", {
-            n: ((d.contracts as unknown[]) ?? []).length,
-          }),
-    errors: ["INVALID_PARAMS"],
-    // The example names whatever a plugin declares here, and "<contract>" when none does. A written
-    // id would be the core naming a contract it does not define (PLUGIN-CONTRACT P5), and the one
-    // written here named a contract nobody implements.
-    examples: [
-      "plugin.implementers",
-      `plugin.implementers '{"id":"${declaredContractId()}","range":"0.0.1"}'`,
-    ],
-    handler: (p) => {
-      const nodes = implementsNodes();
-      const hasId = p.id !== undefined;
-      const hasRange = p.range !== undefined;
-      // The control plane (main) loads no plugins — the response explains the reason for the empty
-      // result itself.
-      const note =
-        currentWindowLabel() === "main"
-          ? { note: "control-plane window loads no plugins — query a workspace window (w-*) or pass --window" }
-          : {};
-      if (!hasId && !hasRange) return { ...note, contracts: allContracts(nodes) };
-      const installed = usePlugins.getState().plugins;
-      const toImplementer = (id: string) => ({
-        id,
-        version: installed[id].manifest.version,
-        status: installed[id].status,
-      });
-      // id alone = identity discovery — the call boundary enforces version compatibility through the
-      // manifest, so range matching is skipped.
-      if (hasId && !hasRange) {
-        const id = String(p.id);
-        return { ...note, requirement: { id }, implementers: implementersOfId(id, nodes).map(toImplementer) };
-      }
-      const requirementErrors: string[] = [];
-      const requirement = parseContractRequirement(
-        { id: p.id, range: p.range },
-        "plugin.implementers",
-        requirementErrors,
-      );
-      if (!requirement) return invalid(requirementErrors.join("; "));
-      return {
-        ...note,
-        requirement,
-        implementers: implementersOf(requirement, nodes).map(toImplementer),
-      };
-    },
-  });
 
   register("plugin.enable", {
     description:
@@ -1459,10 +1358,6 @@ export function registerPluginCatalog(): void {
         // implements (C3 L2): verifying the surfaces a contract requires is the contract owner's job
         // — the core reports only the validity of the declaration (shape, syntax, duplication),
         // generically. Implementer lookup is plugin.implementers.
-        implements: {
-          declared: manifestImplements(plug.manifest),
-          violations: implementsViolations(rawImplements(plug.manifest)),
-        },
         // This plugin's judgment for the three C2 transparency rules — the three static rules plus
         // runtime (view-status, declared≡reported).
         // The headless static scan is scripts/gates/c2-transparency-scan.mjs; declared≡reported is

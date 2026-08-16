@@ -15,7 +15,7 @@ import {
 } from "./release";
 import { semverCompare, semverSatisfies } from "./semver";
 import {
-  REGISTRY_SPEC,
+  CORE_SPEC,
   SHA256_RE,
   UNIT_ID_RE,
   githubReleaseAssetBelongsTo,
@@ -28,7 +28,7 @@ import {
 import { checkKnownKeys, isRecord } from "./util";
 import type { ContractProviderRef } from "./contracts";
 
-export const REGISTRY_WIRE_SPEC = REGISTRY_SPEC;
+export const REGISTRY_WIRE_SPEC = CORE_SPEC;
 
 export interface RegistryIntegrityReference {
   url: string;
@@ -639,7 +639,7 @@ export async function verifyRegistryUnitRelease(
   const contractKeys = reports.map((report) => conformanceContractKey(report.contract));
   if (new Set(contractKeys).size !== contractKeys.length) errors.push("duplicate conformance contracts forbidden");
   const required = new Map<string, ConformanceReport["contract"]>(
-    requiredConformanceContracts(release.kind).map((contract) => [conformanceContractKey(contract), contract] as const),
+    requiredConformanceContracts().map((contract) => [conformanceContractKey(contract), contract] as const),
   );
   if (release.kind === "sidecar") {
     for (const artifact of release.artifacts) {

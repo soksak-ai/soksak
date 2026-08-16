@@ -20,7 +20,7 @@ let devReadable = true;
 
 function manifest(version: string): string {
   return JSON.stringify({
-    spec: "soksak-spec-plugin@0.0.1",
+    spec: "0.0.1",
     id: ID,
     name: "Weather",
     version,

@@ -9,7 +9,7 @@ import {
 import {
   ANY_TARGET,
   GIT_COMMIT_RE,
-  RELEASE_SPEC,
+  CORE_SPEC,
   SHA256_RE,
   UNIT_ID_RE,
   githubReleaseAssetBelongsTo,
@@ -79,7 +79,7 @@ export interface UnitReleaseArtifact {
 }
 
 export interface UnitReleaseManifest {
-  spec: typeof RELEASE_SPEC;
+  spec: typeof CORE_SPEC;
   kind: UnitKind;
   id: string;
   version: string;
@@ -311,7 +311,7 @@ export function parseReleaseManifest(raw: unknown): PlatformParseResult<UnitRele
     errors,
   );
   if (!value) return { ok: false, errors };
-  if (value.spec !== RELEASE_SPEC) errors.push(`release.spec: ${RELEASE_SPEC} required`);
+  if (value.spec !== CORE_SPEC) errors.push(`release.spec: ${CORE_SPEC} required`);
   if (!isUnitKind(value.kind)) errors.push("release.kind: kit|plugin|sidecar required");
   if (typeof value.id !== "string" || !UNIT_ID_RE.test(value.id)) errors.push("release.id: flat unit id required");
   if (!isStrictSemver(value.version)) errors.push("release.version: strict semantic version required");
@@ -334,7 +334,7 @@ export function parseReleaseManifest(raw: unknown): PlatformParseResult<UnitRele
   return {
     ok: true,
     value: {
-      spec: RELEASE_SPEC,
+      spec: CORE_SPEC,
       kind,
       id,
       version: value.version as string,

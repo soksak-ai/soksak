@@ -1,5 +1,5 @@
 {
-  "specVersion": "soksak-spec-plugin@0.0.1",
+  "specVersion": "0.0.1",
   "idPattern": "^soksak-plugin-[a-z0-9]+(-[a-z0-9]+)*$",
   "permissions": [
     "clipboard:read",

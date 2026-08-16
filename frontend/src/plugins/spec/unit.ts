@@ -42,24 +42,15 @@ export type UnitTarget = (typeof UNIT_TARGETS)[number];
 export const ARTIFACT_FORMATS = ["tar.gz", "tgz"] as const;
 export type ArtifactFormat = (typeof ARTIFACT_FORMATS)[number];
 
-export const RELEASE_SPEC = "soksak-spec-release@0.0.1" as const;
-export const REGISTRY_SPEC = "soksak-spec-registry@0.0.1" as const;
-export const CONFORMANCE_REPORT_SPEC = "soksak-spec-conformance@0.0.1" as const;
-export const UNIT_SPEC_BY_KIND = {
-  kit: "soksak-spec-kit@0.0.1",
-  plugin: "soksak-spec-plugin@0.0.1",
-  sidecar: "soksak-spec-sidecar@0.0.1",
-} as const satisfies Record<UnitKind, string>;
-
-export const PLATFORM_SCHEMA_IDS = [
-  CONFORMANCE_REPORT_SPEC,
-  REGISTRY_SPEC,
-  RELEASE_SPEC,
-  UNIT_SPEC_BY_KIND.kit,
-  UNIT_SPEC_BY_KIND.plugin,
-  UNIT_SPEC_BY_KIND.sidecar,
-] as const;
-export type PlatformSchemaId = (typeof PLATFORM_SCHEMA_IDS)[number];
+// The core's spec version, stamped into every envelope the core defines.
+//
+// There were seven names for it until 2026-08-16 — soksak-spec-release@0.0.1,
+// soksak-spec-registry@0.0.1, one per unit kind and so on — all defined here, all moving together at
+// 0.0.1, and each announcing in its own value which document it was. The document is known from
+// where the field appears: a release manifest's `spec` is the release format, a plugin manifest's is
+// the manifest format. The core has one spec, and this is its version.
+export const CORE_SPEC = "0.0.1" as const;
+export type CoreSpec = typeof CORE_SPEC;
 
 export function isUnitKind(value: unknown): value is UnitKind {
   return typeof value === "string" && (UNIT_KINDS as readonly string[]).includes(value);

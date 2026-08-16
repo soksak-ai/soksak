@@ -7,7 +7,10 @@
  * only the small set of mechanisms needed to cross a runtime boundary.
  */
 
-export const PLUGIN_RUNTIME_WIRE_SPEC = "soksak-spec-plugin-runtime@0.0.1";
+// The core's own spec version — one value, stamped into every envelope the core defines.
+import { CORE_SPEC } from "./unit";
+
+export const PLUGIN_RUNTIME_WIRE_SPEC = CORE_SPEC;
 export const PLUGIN_RUNTIME_BOOTSTRAP_SPEC = PLUGIN_RUNTIME_WIRE_SPEC;
 export const PLUGIN_RUNTIME_CONFORMANCE_SPEC = PLUGIN_RUNTIME_WIRE_SPEC;
 

@@ -730,27 +730,6 @@ describe("parseManifest — programs contribution(§2.6)", () => {
     expect(errs.some((e) => e.includes("viewPlugin"))).toBe(true);
   });
 
-  it("viewContract(contract pin) passes with the contract id format(implementation-agnostic view reference)", () => {
-    const { manifest, validation } = parseManifest(
-      base({
-        permissions: ["programs"],
-        contributes: {
-          programs: [
-            { id: "claude", title: "Claude", kind: "view", view: "content", viewContract: { id: "soksak-spec-plugin-terminal", range: ">=0.0.1 <1.0.0" }, command: "claude" },
-          ],
-        },
-      }),
-      "demo",
-    );
-    expect(validation.errors).toEqual([]);
-    expect(manifest?.contributes.programs[0]).toMatchObject({
-      viewContract: { id: "soksak-spec-plugin-terminal", range: ">=0.0.1 <1.0.0" },
-      view: "content",
-      command: "claude",
-    });
-    // viewPlugin is not pinned(discovery is by contract only).
-    expect((manifest?.contributes.programs[0] as { viewPlugin?: string }).viewPlugin).toBeUndefined();
-  });
 
   it("viewContract contract id syntax violation → rejected(soksak-spec-<kind>-<domain>@<major>)", () => {
     const errs = errorsOf(
@@ -1021,11 +1000,11 @@ describe("parseManifest — sidebar projection contract(§3.1)", () => {
       },
     });
 
-  it("accepts a contract address and a self reference, normalizes defaults(right=[], template=stack)", () => {
+  it("accepts a named view and a self reference, normalizes defaults(right=[], template=stack)", () => {
     const { manifest, validation } = parseManifest(
       withSidebar({
         left: [
-          { contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" },
+          { plugin: "soksak-plugin-file-tree", view: "tree", instance: "shared" },
           { ref: "self.blocks", instance: "per-view" },
         ],
       }),
@@ -1035,7 +1014,7 @@ describe("parseManifest — sidebar projection contract(§3.1)", () => {
     const term = manifest?.contributes.views.find((v) => v.id === "term");
     expect(term?.sidebar).toEqual({
       left: [
-        { contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" },
+        { plugin: "soksak-plugin-file-tree", view: "tree", instance: "shared" },
         { ref: "self.blocks", instance: "per-view" },
       ],
       right: [],

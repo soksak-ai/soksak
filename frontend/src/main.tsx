@@ -62,7 +62,6 @@ import { beginBootPluginEventBuffer, flushBootPluginEvents } from "./plugins/hoo
 import { useBootPhase } from "./state/bootPhase";
 import { initViewLabelsPersistence } from "./state/viewLabels";
 import { initSettingsPersistence } from "./state/settings";
-import { initContractSelectionPersistence } from "./state/contractSelection";
 import { initThemePersistence } from "./state/theme";
 import { initPluginSettingsPersistence } from "./state/pluginSettings";
 import { initPluginsPersistence } from "./state/plugins";
@@ -218,7 +217,6 @@ async function boot(): Promise<void> {
   // cache — here it starts app.data hydrate + subscription to other windows' changes. Before the plugin host (which consumes enabledIds).
   try {
     initSettingsPersistence(coreStoreDeps);
-    initContractSelectionPersistence(coreStoreDeps);
     initThemePersistence(coreStoreDeps);
     initPluginSettingsPersistence(coreStoreDeps);
     initPluginsPersistence(coreStoreDeps);

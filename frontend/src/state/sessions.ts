@@ -18,7 +18,6 @@ import {
   autorunCommandOf,
   getRegisteredProgram,
 } from "../plugins/programRegistry";
-import { resolveContractImplementer } from "../plugins/contractResolve";
 import { localize, tmsg } from "../i18n";
 import {
   type SplitTree,
@@ -483,16 +482,11 @@ function newViewFor(
   if (!reg || !reg.decl.view) return null;
   // command priority: caller-supplied (opts) > program declaration (autorun).
   const command = opts?.command ?? autorunCommandOf(reg.decl);
-  // viewContract (contract-pin) = the implementation is chosen from user settings (the core has no
-  // contract semantics — lookup only). The view id opens exactly as the program declares it (content
-  // by convention) — the core does not hardcode view ids. Zero active implementations cannot create
-  // a view (null → empty group).
-  if (reg.decl.viewContract) {
-    const impl = resolveContractImplementer(reg.decl.viewContract);
-    if (!impl) return null;
-    return newPluginViewFor(impl, reg.decl.view, localize(reg.decl.title), command);
-  }
   // viewPlugin set = that plugin's view (cross-plugin), unset = the program's own plugin.
+  //
+  // A `viewContract` stood beside it until 2026-08-16 — the same reference through an interface id,
+  // resolved from a user setting. Two ways to say one thing, one of them a second identity for what
+  // the plugin id already names (C3, C4).
   const pluginId = reg.decl.viewPlugin ?? reg.pluginId;
   return newPluginViewFor(pluginId, reg.decl.view, localize(reg.decl.title), command);
 }

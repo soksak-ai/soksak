@@ -15,10 +15,7 @@ import {
   type Projection,
   type ProjectionDeps,
 } from "./projection";
-import { usePlugins } from "./plugins";
 import { getRegisteredView, useViewRegistry } from "../plugins/viewRegistry";
-import { resolveContractImplementer } from "../plugins/contractResolve";
-import { useContractSelection } from "./contractSelection";
 import { emitPluginEvent } from "../plugins/hooks";
 
 // Tail of the active chain (active content view) -> declaration summary. Plugin view = sidebar of the
@@ -60,14 +57,9 @@ export function boundViewOf(workspace: Workspace): BoundView | null {
 
 export function realProjectionDeps(): ProjectionDeps {
   return {
-    resolveContract: (req) => resolveContractImplementer(req),
     isRailView: (key) => {
       const reg = getRegisteredView(key);
       return !!reg && reg.decl.placements.includes("rail");
-    },
-    consumesOf: (pluginId) => {
-      const p = usePlugins.getState().plugins[pluginId];
-      return (p?.manifest.consumes ?? []).map((c) => c.id);
     },
   };
 }
@@ -157,16 +149,12 @@ export function startProjectionTracking(): () => void {
   const offRegistry = useViewRegistry.subscribe(() =>
     sync(useSessions.getState().workspaces),
   );
-  const offSelection = useContractSelection.subscribe(() =>
-    sync(useSessions.getState().workspaces),
-  );
   const offProjection = useProjection.subscribe(() =>
     sync(useSessions.getState().workspaces),
   );
   return () => {
     offSessions();
     offRegistry();
-    offSelection();
     offProjection();
   };
 }

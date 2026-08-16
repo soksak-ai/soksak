@@ -40,7 +40,7 @@ import {
 function manifestOf(overrides: Record<string, unknown>): PluginManifest {
   const { manifest, validation } = parseManifest(
     {
-      spec: "soksak-spec-plugin@0.0.1",
+      spec: "0.0.1",
       id: "demo",
       name: "Demo",
       version: "1.0.0",
@@ -911,23 +911,13 @@ describe("cross-plugin dependency gate (executeGated and scheduler.register, §d
     expect(d.execute).toHaveBeenCalledWith("plugin.other-plugin.foo", {}, {});
   });
 
-  it("passes a call to an implementation of a consumed contract, with no declaration of the implementation id", async () => {
-    const d = fakeDeps({ implementsOf: (pid) => (pid === "board-x" ? [{ id: "soksak-spec-plugin-issue-board", version: "0.0.1" }] : []) });
+  it("rejects a call to a plugin that is not a declared dependency", async () => {
+    // One route across the boundary. A consumed contract the target implemented was a second route
+    // until 2026-08-16, and the interface id was a second name for what the plugin id already names.
     const { api } = buildPluginApi(
-      manifestOf({ permissions: ["commands"], consumes: [{ id: "soksak-spec-plugin-issue-board", range: ">=0.0.1 <1.0.0" }] }),
+      manifestOf({ permissions: ["commands"] }),
       "/d",
-      d,
-    );
-    const out = await api.commands!.execute("plugin.board-x.card.upsert");
-    expect(out).toEqual({ ok: true, code: "OK", message: "ok" });
-  });
-
-  it("rejects a call to a plugin that does not implement the consumed contract", async () => {
-    const d = fakeDeps({ implementsOf: () => [] });
-    const { api } = buildPluginApi(
-      manifestOf({ permissions: ["commands"], consumes: [{ id: "soksak-spec-plugin-issue-board", range: ">=0.0.1 <1.0.0" }] }),
-      "/d",
-      d,
+      fakeDeps(),
     );
     const out = await api.commands!.execute("plugin.other-plugin.foo");
     expect(out.ok).toBe(false);

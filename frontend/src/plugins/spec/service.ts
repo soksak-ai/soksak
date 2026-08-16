@@ -18,10 +18,10 @@ import {
 // The plugin service wire contract (PS5, PS6). A contract id starts with
 // "soksak-spec-", so it never collides with a plugin id (soksak-plugin-<name>);
 // the C1 scan looks for plugin id tokens in core sources and skips contract ids.
-export const SERVICE_CONTRACT_REQUIREMENT: ContractRequirement = Object.freeze({
-  id: "soksak-spec-service",
-  range: "0.0.1",
-});
+// The service interface a sidecar declares. The core requires the declaration and reads the name
+// from it — it held "soksak-spec-service" here until 2026-08-16, which is the core naming an
+// interface (C3, C4).
+export const SERVICE_CONTRACT_REQUIREMENT_RANGE = "0.0.1";
 
 // Command parameter spec — isomorphic to the core registry ParamSpec (src/commands/registry.ts).
 // A bind:"service" command declares the full spec as manifest data (PS3) — the proxy registration
