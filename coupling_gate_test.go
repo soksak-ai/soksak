@@ -21,8 +21,13 @@ import (
 // file. Both are gone; this keeps them gone.
 //
 // The composition root is not the core. main.go names the plugins it wires,
-// which is what a composition root is for, and frameworks/ is the host. Neither
-// is scanned.
+// which is what a composition root is for, and it is not scanned.
+//
+// frameworks/ IS scanned. It was exempt as "the host", and that exemption is
+// how a browser feature reached this repository: the host held the rule that
+// decided which content view event a moved property became, including whether
+// a step backwards existed (measured 2026-08-16). Wiring a plugin is one line
+// and it is allowed by file below; holding a plugin's rule is not.
 var (
 	pluginName = regexp.MustCompile(`soksak-plugin-[a-z0-9]+(-[a-z0-9]+)*`)
 	engineName = regexp.MustCompile(`(?i)@xterm/|xterm\.js|codemirror|monaco-editor`)
@@ -35,12 +40,29 @@ var couplingAllowed = map[string]string{
 	"soksak-plugin-registry": "the discovery index every plugin is listed in, not a plugin",
 }
 
+// couplingWiring is a file in frameworks/ that may name a plugin, and why.
+//
+// Two of these are debts, said so here rather than left to be discovered. A
+// debt with a reason written next to it is a thing someone can pay; an
+// unexplained exemption is the shape the browser rule hid inside.
+var couplingWiring = map[string]string{
+	"frameworks/wails/host.go": "the Wails host's composition root — it constructs the plugins this " +
+		"binary ships with and hands each one what it needs. Every line here is a construction or a " +
+		"hand-off; a rule about what a plugin's data means belongs to the plugin.",
+	"frameworks/wails/register.go": "DEBT: HostDeps.Sessions is typed terminalcmd.Sessions. The " +
+		"interface is the plugin's, so a second terminal plugin needs a second field. The core owns " +
+		"no session contract yet for it to be typed against.",
+	"frameworks/wails/terminal_sink.go": "DEBT: EmitTerminalInputTrace takes terminal.Handle and " +
+		"terminal.InputTrace. EmitStream beside it names nothing and is the shape the trace should " +
+		"take; the core owns no trace contract yet.",
+}
+
 func TestTheCoreNamesNoPluginAndNoEngine(t *testing.T) {
 	var plugins []string
 	var engines []string
 	scanned := 0
 
-	for _, root := range []string{filepath.Join("frontend", "src"), "core"} {
+	for _, root := range []string{filepath.Join("frontend", "src"), "core", "frameworks"} {
 		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
@@ -65,9 +87,13 @@ func TestTheCoreNamesNoPluginAndNoEngine(t *testing.T) {
 				return readErr
 			}
 			scanned++
+			_, wiring := couplingWiring[clean]
 			for index, line := range strings.Split(string(body), "\n") {
 				for _, name := range pluginName.FindAllString(line, -1) {
 					if _, allowed := couplingAllowed[name]; allowed {
+						continue
+					}
+					if wiring {
 						continue
 					}
 					plugins = append(plugins, clean+":"+itoa(index+1)+" "+name)
@@ -95,5 +121,33 @@ func TestTheCoreNamesNoPluginAndNoEngine(t *testing.T) {
 		t.Errorf("the core names a rendering engine in %d places:\n%s\n"+
 			"The engine belongs to the plugin that renders with it.",
 			len(engines), strings.Join(engines, "\n"))
+	}
+}
+
+// An exemption outliving the file it excuses is how an allowlist stops meaning
+// anything (C5). The list is checked against the tree, not trusted.
+func TestEveryWiringExemptionStillHasAFile(t *testing.T) {
+	for path, reason := range couplingWiring {
+		if strings.TrimSpace(reason) == "" {
+			t.Errorf("%s is exempt for no stated reason", path)
+		}
+		if _, err := os.Stat(filepath.FromSlash(path)); err != nil {
+			t.Errorf("%s is exempt and does not exist: %v\nTake the entry out.", path, err)
+		}
+	}
+}
+
+// An exemption that excuses nothing is the same defect from the other side: the
+// file stopped naming a plugin and the entry stayed, so the next file to be
+// added under that path inherits a pass nobody granted it.
+func TestEveryWiringExemptionStillExcusesSomething(t *testing.T) {
+	for path := range couplingWiring {
+		body, err := os.ReadFile(filepath.FromSlash(path))
+		if err != nil {
+			continue // the test above reports this
+		}
+		if !pluginName.Match(body) {
+			t.Errorf("%s names no plugin and is still exempt.\nTake the entry out.", path)
+		}
 	}
 }

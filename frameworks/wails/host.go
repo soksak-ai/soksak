@@ -80,7 +80,7 @@ func Run(options Options) error {
 	// What a surface's page does becomes the events the page already listens for. Without this the
 	// address a person sees never moves off the one the pane was declared with, and the back button
 	// is enabled by nothing.
-	nativebrowser.ReportPagesTo(PublishPageReport(options.Bridge.Emit))
+	nativebrowser.PublishPagesTo(options.Bridge.Emit)
 
 	// The compositor service, held so the surface commands can read what it
 	// applied. The service list below registers the same value.

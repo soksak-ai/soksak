@@ -21,13 +21,6 @@ import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
 import { beginLayoutMotion, endLayoutMotion } from "./lib/layoutMotion";
 import { startViewFocusSync } from "./plugins/viewFocus";
-import { bindPaneUnder } from "./lib/bindPaneUnder";
-import { browserViewIdFromLabel } from "./lib/webviewLabels";
-import {
-  CONTENT_VIEW_EVENT,
-  activatedLabelOf,
-  relayFrameworkContentViewEvents,
-} from "./lib/contentViewEvents";
 import { LeftSidebarHost } from "./components/LeftSidebarHost";
 import { RailGridSurface, type RailGridSurfaceHandle } from "./components/RailGridSurface";
 import { useLayoutDecorationPresentation } from "./lib/layoutDecorationPresentation";
@@ -805,36 +798,20 @@ function App() {
   useEffect(() => {
     document.documentElement.style.setProperty("--app-font", appFontFamily);
   }, [appFontFamily]);
-  // The fact that a content view took focus → point at the cell under it.
+  // Not wired: the fact that a content view took focus.
   //
-  // **A click inside a guest never arrives at the host.** A content view is a separate process, so its mousedown does not
-  // cross into this document — pressing the browser therefore did not move the binding (measured 2026-08-02).
-  // The only fact the host receives then is that **that element took focus**.
+  // **A click inside a guest never arrives at the host.** A native surface draws in another process,
+  // so its mousedown does not cross into this document — pressing the browser does not move the
+  // binding. The only fact the host can receive is that the surface took focus, which is
+  // CONTENT_VIEW_EVENT.activated.
   //
-  // Do not borrow the OS (A27). The framework emits that fact under the contract's name, and whether it arrives by
-  // coordinates or by this event, the **same function** (lib/bindPaneUnder) is called — split paths get fixed on one
-  // side only and that divergence is silent. The coordinate path is wired by that framework itself
-  // (its adapter's install) — what is here is the path shared by both frameworks.
-  useEffect(() => {
-    // Re-emit what the framework reported through its handle in the contract's shape — a contract written down
-    // and called by nobody is the same as no contract.
-    const offRelay = relayFrameworkContentViewEvents((name, cb) =>
-      listenThisWindow<Record<string, unknown>>(name, (e) => cb(e.payload)),
-    );
-    const offViewFocus = listenThisWindow<{ id: number }>(CONTENT_VIEW_EVENT.activated, (e) => {
-      // Turning the handle (webContents id) into the fact (the label) is the seam's job — the app uses labels only.
-      const label = activatedLabelOf(e.payload?.id);
-      const viewId = label ? browserViewIdFromLabel(label) : null;
-      const slot = viewId
-        ? document.querySelector<HTMLElement>(`[data-node="layout/tab/${viewId}"]`)
-        : null;
-      bindPaneUnder(slot);
-    });
-    return () => {
-      offViewFocus();
-      offRelay();
-    };
-  }, []);
+  // Nothing emits it on this build (measured 2026-08-16: no Go source names it). What stood here was
+  // a listener that resolved the payload through `getWebContentsId`, a method of the tag the
+  // preceding implementation ran on and of no element here — so it resolved nothing, every time,
+  // silently. A listener that cannot succeed reads from outside exactly like a working feature, so
+  // it is gone rather than kept.
+  //
+  // The plugin that owns the surface is the one that can see the click. Do not borrow the OS (A27).
 
   // The gutter highlight bar is not drawn here — a DOM highlight being covered by a surface is a matter for the
   // framework whose content is outside the document, and that framework subscribes to the hover state and draws it
