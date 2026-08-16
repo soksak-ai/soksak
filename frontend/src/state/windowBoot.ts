@@ -45,6 +45,7 @@ import {
 } from "./windowPersistence";
 import { readableWindowSnapshot } from "./windowSnapshotShape";
 import { snapshotsToForget } from "./windowSnapshotSweep";
+import { onWindowPersist } from "./windowPersistRequest";
 
 // This window's frame (logical px) — for the manifest rect. On failure the rect is omitted (restore uses the OS default position).
 async function currentFrame(): Promise<
@@ -243,6 +244,15 @@ export async function initWorkspacePersistence(
   // Pin and seen changes also trigger a save (§4.5) — coalesced by the same debounce.
   useProjection.subscribe(persist);
   window.addEventListener("pagehide", doPersist);
+  // And on demand, awaited. `pagehide` fires as the process is going and the write is asynchronous,
+  // so on that path alone the record raced the exit and lost. Quitting waits for it.
+  onWindowPersist(persistOnce);
+  // Once now, because the subscriptions above only catch what changes after them. A workspace
+  // created during this boot — every workspace window has one — changed sessions before there was
+  // anything subscribed, so a window opened and left alone had no record at all: measured
+  // 2026-08-16, an isolated home held no `windows` ledger and no `window/<label>` snapshot after a
+  // workspace window was opened and the application quit, and the window did not come back.
+  void persistOnce();
   // Window move/resize also triggers a save (B2 rect) — it is not a sessions change, so the subscription above misses it.
   // Native event based (zero polling), coalesced by the same debounce.
   void currentWindow().onMoved(persist);

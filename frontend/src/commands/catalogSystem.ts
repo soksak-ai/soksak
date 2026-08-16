@@ -7,6 +7,7 @@
 import { engineProvision, framework, frameworkName, invoke } from "../framework";
 import { tmsg } from "../i18n";
 import { register } from "./registry";
+import { persistWindowNow } from "../state/windowPersistRequest";
 
 export function registerSystemCatalog(): void {
   register("system.hello", {
@@ -69,6 +70,11 @@ export function registerSystemCatalog(): void {
       if (wanted !== null && wanted !== frameworkName) {
         return { quit: false, framework: frameworkName };
       }
+      // This window's record first, and awaited. It is written asynchronously and the reap below
+      // ends the process, so a save started and not waited for loses the race — measured
+      // 2026-08-16: a workspace window opened and quit left no ledger and no snapshot, and the
+      // window did not come back with nothing reporting why.
+      await persistWindowNow();
       const receipt = await invoke<{
         phase: string;
         reaped: boolean;
