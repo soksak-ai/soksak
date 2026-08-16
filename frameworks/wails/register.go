@@ -48,6 +48,9 @@ func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
 	terminalcmd.Register(registry, terminalcmd.Deps{Sessions: deps.Sessions})
 	Register(registry, Deps{Host: deps.Host, NewID: deps.NewID})
 	RegisterCapture(registry, deps.Host, deps.Frames)
+	// The readings over a recording need no window, so they answer in a process
+	// with none — a recording outlives the session it was taken in.
+	RegisterAnalyze(registry)
 	// Each window has its own theme, so the colour goes to the window that
 	// requested it rather than to the one this host happened to capture.
 	RegisterBackground(registry, deps.Host)
