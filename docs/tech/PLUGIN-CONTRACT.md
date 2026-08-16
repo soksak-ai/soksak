@@ -76,9 +76,12 @@ A plugin that needs another declares it in `dependencies`. That is the whole cou
 declared, checked at the call boundary.
 
 `implements` and `consumes` stood here until 2026-08-16, naming an interface so either side could be
-swapped without knowing the other. Not one interface ever had both sides declared, and the id was a
-second name for what the plugin id already names. When two implementations of one thing exist, the
-mechanism gets designed then, against that case.
+swapped without knowing the other. All forty-seven sample plugins carried one, forty-two of which
+stand beside nothing: a convenience for the few was a rule for everyone.
+
+Two plugins that do a similar job are built by copying, and the copies drift apart in time. That is
+accepted (C3a). A shared spec would force a rule onto the parts that genuinely differ — chromium and
+a platform webview do not expose the same things — and the drift would then be everyone's.
 
 ## P6. Permissions are declarations, not isolation
 

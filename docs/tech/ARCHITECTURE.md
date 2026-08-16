@@ -132,6 +132,18 @@ All of these are hard.
   Whoever needs a thing names the plugin (C3). Substituting one implementation
   for another by declaration is the convenience being given up, knowingly.
 
+  **A plugin holds its own spec, and the consequence is accepted here rather than
+  discovered later.** Building something like an existing plugin means copying it,
+  and the copies drift apart in time — a fix lands in one and not the other, and
+  after long enough two plugins that began identical answer differently. That is
+  the price, and it is paid because the alternative charges every plugin for the
+  few that stand beside another: a shared spec forces a rule onto the parts that
+  genuinely differ, and it did so to forty-seven of them.
+
+  Nothing gates drift, because nothing can: two plugins are two plugins. What is
+  gated is the core holding another's spec, which is the part that would make the
+  drift the core's problem.
+
 - **C4.** The core has one spec and a plugin has its own. `CORE_SPEC` is the
   version the core stamps into every envelope it defines — a manifest, a release,
   a registry index, a conformance report. A plugin's manifest is that plugin's
