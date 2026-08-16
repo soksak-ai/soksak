@@ -154,6 +154,18 @@ type Region = {
   restore: (() => void) | null;
 };
 
+/**
+ * What a region capture answers: the image, and what went into it.
+ *
+ * The note is not decoration. An empty pane in a capture has two causes that look identical —
+ * the window declared no surface, or it declared one and nothing was painted — and `surfaces`,
+ * `drawn` and `skipped` are where that difference is written down.
+ */
+type CaptureAnswer = {
+  png: string;
+  note: { surfaces: number; drawn: number; skipped?: string[]; path?: string };
+};
+
 type Refusal = { ok: false; code: string; message: string };
 
 const isRefusal = (v: Region | Refusal): v is Refusal => "ok" in v;
@@ -219,11 +231,18 @@ async function resolveRegion(p: Record<string, unknown>): Promise<Region | Refus
     // fractional while capture works only on integer pixels, so passing it unfolded is refused as an
     // "empty/invalid crop rect" (measured 2026-07-31). Two sets of folding rules put the capture and
     // the stand-in at different positions.
+    // `margin` widens the crop around the node, in CSS points, clamped to the window.
+    //
+    // A node captured to its own edges answers what it looks like and nothing about where it is.
+    // The questions a capture of one element is asked — is it clipped, is something over it, is it
+    // aligned with the thing beside it — are all about its surroundings, and the answer is a
+    // picture that holds them.
+    const margin = Math.max(0, Number(p.margin ?? 0));
     const cropped = surfaceRectOf({
-      left: r.left,
-      top: r.top,
-      right: r.right,
-      bottom: r.bottom,
+      left: Math.max(0, r.left - margin),
+      top: Math.max(0, r.top - margin),
+      right: Math.min(window.innerWidth, r.right + margin),
+      bottom: Math.min(window.innerHeight, r.bottom + margin),
     });
     if (cropped.w < 1 || cropped.h < 1) {
       restore?.();
@@ -357,6 +376,11 @@ export function registerCaptureCatalog(): void {
         description:
           "Content tab id to capture. Inactive tabs are parked offscreen, so this activates the tab (and its space) for the shot and restores what was active afterwards.",
       },
+      margin: {
+        type: "number",
+        description:
+          "Points of surroundings to keep around a node or tab crop (default 0), clamped to the window. A node captured to its own edges shows what it looks like and nothing about where it is — whether it is clipped, covered, or aligned with what is beside it are all questions about its surroundings.",
+      },
       settle: SETTLE_PARAM,
     },
     returns:
@@ -418,10 +442,14 @@ export function registerCaptureCatalog(): void {
       if (isRefusal(region)) return region;
       const { rect, tabId, restore } = region;
       if (rect || p.base64) {
-        const pngBase64 = await invoke<string>(
+        // The answer is the image and the statement of what went into it. A capture that drew
+        // none of the window's surfaces looks exactly like one that had none to draw, and the
+        // note is the only place that difference is written down.
+        const shot = await invoke<CaptureAnswer>(
           "window_snapshot_region",
           rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
         );
+        const pngBase64 = shot.png;
         // A cropped image is also **left at the path the caller named.** Until now, passing rect
         // ignored path entirely and answered base64 only: the caller got ok:true and there was no
         // file (measured 2026-07-31). Cropping and saving are separate axes and compose freely.
@@ -436,6 +464,7 @@ export function registerCaptureCatalog(): void {
             ...(tabId ? { tabId } : {}),
             saved: w.path,
             bytes: w.bytes,
+            note: shot.note,
             media: { kind: "image/png", path: w.path },
           };
         }
@@ -444,6 +473,7 @@ export function registerCaptureCatalog(): void {
         restore?.();
         return {
           ...(tabId ? { tabId } : {}),
+          note: shot.note,
           media: { kind: "image/png", base64: pngBase64 },
         };
       }
@@ -512,11 +542,15 @@ export function registerCaptureCatalog(): void {
       if (isRefusal(region)) return region;
       const { rect, tabId, restore } = region;
       try {
-        const pngBase64 = await invoke<string>(
+        // The answer is the image and the statement of what went into it. A capture that drew
+        // none of the window's surfaces looks exactly like one that had none to draw, and the
+        // note is the only place that difference is written down.
+        const shot = await invoke<CaptureAnswer>(
           "window_snapshot_region",
           rect ? { x: rect.x, y: rect.y, w: rect.w, h: rect.h } : {},
         );
-        return { ...(tabId ? { tabId } : {}), ...(await pixelStats(pngBase64)) };
+        const pngBase64 = shot.png;
+        return { ...(tabId ? { tabId } : {}), note: shot.note, ...(await pixelStats(pngBase64)) };
       } finally {
         restore?.();
       }

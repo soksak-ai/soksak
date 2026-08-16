@@ -44,6 +44,16 @@ type SurfaceFrame struct {
 // Area reports whether this rectangle can hold any pixels at all.
 func (frame SurfaceFrame) Area() bool { return frame.W > 0 && frame.H > 0 }
 
+// Overlaps reports whether this rectangle puts any pixels inside other.
+//
+// Touching edges do not overlap: a surface whose right edge is the crop's left
+// edge contributes no column, and drawing it would place a zero-width image the
+// composite would have to special-case anyway.
+func (frame SurfaceFrame) Overlaps(other SurfaceFrame) bool {
+	return frame.X < other.X+other.W && other.X < frame.X+frame.W &&
+		frame.Y < other.Y+other.H && other.Y < frame.Y+frame.H
+}
+
 // SurfacePlacement is one surface at one commit: what the document declared and
 // what the native layer reported back, read in the same instant.
 //

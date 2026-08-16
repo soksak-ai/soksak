@@ -28,8 +28,10 @@ beforeEach(() => {
   vi.mocked(createStream).mockClear();
   vi.mocked(createStream).mockReturnValue(readyStream as never);
   vi.mocked(invoke).mockImplementation(async (command, args) => {
-    if (command !== "plugin:webview-capture|record") return undefined;
-    return args?.frames;
+    if (command !== "window_record") return undefined;
+    // The host answers a report, not a bare count: what landed on disk is not always what was
+    // asked for, and the reason travels with the number.
+    return { frames: args?.frames };
   });
 });
 
@@ -49,7 +51,7 @@ it("one shared record contract stores a finite frame sequence", async () => {
   expect(frames).toBe(2);
   expect(observed).toEqual([0, 1]);
   expect(vi.mocked(invoke)).toHaveBeenCalledOnce();
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("plugin:webview-capture|record", {
+  expect(vi.mocked(invoke)).toHaveBeenCalledWith("window_record", {
     dir: "<local-evidence>/framework-neutral-record",
     frames: 2,
     intervalMs: 0,
@@ -69,7 +71,7 @@ it("the storage budget reaches the producer unchanged, with no framework branch,
   readyStream.onmessage(0);
   await expect(recording.ready).resolves.toBeUndefined();
   await expect(recording).resolves.toBe(1);
-  expect(vi.mocked(invoke)).toHaveBeenCalledWith("plugin:webview-capture|record", {
+  expect(vi.mocked(invoke)).toHaveBeenCalledWith("window_record", {
     dir: "<local-evidence>/framework-neutral-budget-record",
     frames: 1,
     intervalMs: 0,
@@ -93,7 +95,7 @@ it("every framework call states the shared producer deadline", async () => {
   readyStream.onmessage(0);
   await defaultRecording;
   expect(vi.mocked(invoke)).toHaveBeenLastCalledWith(
-    "plugin:webview-capture|record",
+    "window_record",
     expect.objectContaining({ frameTimeoutMs: WINDOW_RECORD_DEFAULT_FRAME_TIMEOUT_MS }),
   );
 
@@ -106,7 +108,7 @@ it("every framework call states the shared producer deadline", async () => {
   readyStream.onmessage(0);
   await explicitRecording;
   expect(vi.mocked(invoke)).toHaveBeenLastCalledWith(
-    "plugin:webview-capture|record",
+    "window_record",
     expect.objectContaining({ frameTimeoutMs: 25 }),
   );
 });
@@ -139,7 +141,7 @@ it("the shared recorder does not alter frames or intervalMs and rejects strictly
 it("callers use only the shared recorder and never call the framework record directly", () => {
   for (const file of ["catalog.ts", "catalogCapture.ts", "catalogDom.ts", "catalogSettings.ts"]) {
     const source = readFileSync(join(__dirname, file), "utf8");
-    expect(source, file).not.toContain("plugin:webview-capture|record");
+    expect(source, file).not.toContain("window_record");
   }
 });
 
@@ -251,14 +253,18 @@ it("a recorder with no ready contract is not reported as a baseline success", as
 });
 
 it("the raw recorder also attaches a final rejection consumer before it returns", async () => {
-  const source = Promise.reject(new Error("capture failed"));
-  const sourceCatch = source.catch.bind(source);
-  vi.spyOn(source, "catch").mockImplementation((onRejected) => {
-    const finished = sourceCatch(onRejected);
-    vi.spyOn(finished, "catch");
-    return finished;
-  });
-  vi.mocked(invoke).mockReturnValueOnce(source as never);
+  // The consumer is judged by what it prevents, not by its place in the chain.
+  // Spying the producer's own catch tied this to one arrangement of the chain: reading the frame
+  // count off the report adds a link, and the test failed while the contract held. What matters is
+  // that a caller who starts a recording and does not await it immediately never sees an
+  // unhandledrejection.
+  const unhandled: unknown[] = [];
+  const onUnhandled = (event: PromiseRejectionEvent) => {
+    event.preventDefault();
+    unhandled.push(event.reason);
+  };
+  window.addEventListener("unhandledrejection", onUnhandled);
+  vi.mocked(invoke).mockReturnValueOnce(Promise.reject(new Error("capture failed")) as never);
 
   const recording = recordWindowFrames({
     dir: "/evidence/raw-rejection",
@@ -266,7 +272,12 @@ it("the raw recorder also attaches a final rejection consumer before it returns"
     intervalMs: 0,
   });
 
-  expect(vi.mocked(recording.catch)).toHaveBeenCalledOnce();
+  // A full turn of the microtask queue and a macrotask, which is when an unconsumed rejection
+  // would be reported.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  window.removeEventListener("unhandledrejection", onUnhandled);
+  expect(unhandled).toEqual([]);
+
   await expect(recording.ready).rejects.toThrow("capture failed");
   await expect(recording).rejects.toThrow("capture failed");
 });

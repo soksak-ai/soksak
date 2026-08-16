@@ -25,7 +25,7 @@ import (
 // while the one built at composition holds the compositor; measured 2026-08-16, that split left
 // every command-driven capture reporting 0 surfaces while surface.composition reported 1, and a
 // browser pane was a flat rectangle in every screenshot.
-func RegisterCapture(registry *control.Registry, host WindowHost, surfaces SurfaceImages) {
+func RegisterCapture(registry *control.Registry, host WindowHost, surfaces SurfaceImages, frames StreamSink) {
 	if host == nil {
 		panic("wails: the capture commands need a WindowHost")
 	}
@@ -79,8 +79,13 @@ func RegisterCapture(registry *control.Registry, host WindowHost, surfaces Surfa
 	registry.MustRegister(control.Command{
 		Name:  "window_snapshot_region",
 		Owner: control.OwnerFramework,
+		// The image comes back rather than going to a file, because the callers
+		// that crop are measuring: a tab capture hands the bytes to a writer of
+		// its own, and a pixel measurement never wants a file at all. A path is
+		// therefore optional, and given, the file is written as well as answered
+		// — the two are separate axes and compose freely.
 		Handler: func(args control.Args) (any, error) {
-			path, err := control.Arg[string](args, "path")
+			path, err := control.OptionalArg(args, "path", "")
 			if err != nil {
 				return nil, err
 			}
@@ -92,20 +97,94 @@ func RegisterCapture(registry *control.Registry, host WindowHost, surfaces Surfa
 			if err != nil {
 				return nil, err
 			}
-			return service.SnapshotRegion(path, rect)
+			return service.PixelsAt(path, rect)
+		},
+	})
+
+	registry.MustRegister(control.Command{
+		Name:  "window_record",
+		Owner: control.OwnerFramework,
+		// The same window axis and the same region axis as a single capture, so
+		// a burst of the whole window and a burst of one tab are one command
+		// with a different rect. A separate recording command would resolve the
+		// region a second way, and the day the two disagree the recording is of
+		// somewhere else than the snapshot beside it.
+		Handler: func(args control.Args) (any, error) {
+			dir, err := control.Arg[string](args, "dir")
+			if err != nil {
+				return nil, err
+			}
+			count, err := control.Arg[float64](args, "frames")
+			if err != nil {
+				return nil, err
+			}
+			interval, err := control.OptionalArg(args, "intervalMs", float64(0))
+			if err != nil {
+				return nil, err
+			}
+			maxBytes, err := control.OptionalArg(args, "maxBytes", float64(0))
+			if err != nil {
+				return nil, err
+			}
+			frameTimeout, err := control.OptionalArg(args, "frameTimeoutMs", float64(0))
+			if err != nil {
+				return nil, err
+			}
+			rect, err := captureRect(args)
+			if err != nil {
+				return nil, err
+			}
+			service, err := target(args)
+			if err != nil {
+				return nil, err
+			}
+			// A receiver is optional. The frames land on disk either way; without one
+			// a caller reads the count in the report instead of a clock.
+			if stream, streamErr := control.StreamArg(args, "onFrame"); streamErr == nil && frames != nil {
+				service.frames = func(index int) { frames(stream, index) }
+			}
+			return service.Record(RecordRequest{
+				Dir:            dir,
+				Frames:         int(count),
+				IntervalMs:     int(interval),
+				MaxBytes:       int64(maxBytes),
+				Region:         rect,
+				FrameTimeoutMs: int(frameTimeout),
+			})
 		},
 	})
 }
 
 // captureRect reads a window-relative rect in CSS points.
 //
+// The keys are x, y, w and h because they are the caller's, not this package's:
+// the page measures a node and hands over w and h, the same spelling a surface
+// frame already travels in. Reading width and height here made every region
+// caller — a tab capture, a pixel measurement, a recording — fail on a missing
+// argument, and the answer they received named neither the key nor the command
+// (measured 2026-08-16 on the running application: INTERNAL, three times).
+//
+// No region at all is the whole window: that is how the callers ask for one.
+// A region half named is a mistake rather than a request, because the component
+// left out would decode as zero — a legitimate origin and an impossible size.
+//
 // A region of zero area is refused rather than quietly widened to the whole
 // window: those are different requests, and a caller who asked for a region and
 // received the window would compare the wrong pixels.
 func captureRect(args control.Args) (Rect, error) {
+	named := 0
+	for _, name := range []string{"x", "y", "w", "h"} {
+		if _, given := args[name]; given {
+			named++
+		}
+	}
+	if named == 0 {
+		return Whole, nil
+	}
+
 	var rect Rect
 	for name, into := range map[string]*float64{
-		"x": &rect.X, "y": &rect.Y, "width": &rect.Width, "height": &rect.Height,
+		"x": &rect.X, "y": &rect.Y, "w": &rect.Width, "h": &rect.Height,
 	} {
 		value, err := control.Arg[float64](args, name)
 		if err != nil {

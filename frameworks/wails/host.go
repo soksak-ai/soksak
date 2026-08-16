@@ -158,11 +158,14 @@ func Run(options Options) error {
 	// report that it closed, and its names would stay on the table pointing at
 	// a page that is gone.
 	renderer := RegisterHost(options.Registry, HostDeps{
-		Host:         windowHost,
-		NewID:        newWindowID,
-		Sessions:     terminalplugin.CommandSessions(options.Terminal),
-		Composition:  surfaceComposition,
-		Surfaces:     surfaceImages,
+		Host:        windowHost,
+		NewID:       newWindowID,
+		Sessions:    terminalplugin.CommandSessions(options.Terminal),
+		Composition: surfaceComposition,
+		Surfaces:    surfaceImages,
+		Frames: func(stream string, frame any) {
+			options.Bridge.Emit(control.StreamEvent, control.StreamFrame{Stream: stream, Frame: frame})
+		},
 		NativeParent: func(name string) bool { return nativeWindow(name) != nil },
 		Dispatch: func(target, event string, payload any) error {
 			return dispatchToWindow(app, target, event, payload)

@@ -13,7 +13,7 @@ func captureRegistry(t *testing.T) *control.Registry {
 	// A host whose windows have no native lifetime: these must answer that
 	// rather than take the process down, and this package has no application to
 	// give them one.
-	RegisterCapture(registry, startedHost(liveWindow(controlPlaneWindow)), nil)
+	RegisterCapture(registry, startedHost(liveWindow(controlPlaneWindow)), nil, nil)
 	return registry
 }
 
@@ -61,9 +61,9 @@ func TestARegionOfNoAreaIsRefusedRatherThanWidened(t *testing.T) {
 	// Zero would reach the capture as Whole. A caller who asked for a region
 	// and received the window compares the wrong pixels and believes them.
 	for _, rect := range []map[string]any{
-		{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "width": 0, "height": 100},
-		{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "width": 100, "height": 0},
-		{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "width": -5, "height": 100},
+		{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "w": 0, "h": 100},
+		{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "w": 100, "h": 0},
+		{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "w": -5, "h": 100},
 	} {
 		_, err := captureRegistry(t).Invoke("window_snapshot_region", callArgs(t, rect))
 		if err == nil {
@@ -80,11 +80,11 @@ func TestARegionNeedsEveryComponent(t *testing.T) {
 	// A missing component would decode as zero, which is a legitimate origin
 	// and an impossible size — so it is named instead.
 	_, err := captureRegistry(t).Invoke("window_snapshot_region",
-		callArgs(t, map[string]any{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "width": 100}))
+		callArgs(t, map[string]any{"path": "<local-evidence>/x.png", "x": 0, "y": 0, "w": 100}))
 	if err == nil {
 		t.Fatal("a region missing its height was accepted")
 	}
-	if !strings.Contains(err.Error(), "height") {
+	if !strings.Contains(err.Error(), "h") {
 		t.Errorf("the refusal did not name the missing component: %v", err)
 	}
 }

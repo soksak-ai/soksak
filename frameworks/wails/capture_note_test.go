@@ -78,10 +78,10 @@ func TestACaptureThatCompositedNothingSaysWhich(t *testing.T) {
 		surfaces int
 	}{
 		{
-			what:    "a region",
-			service: captureOf(t, stubSurfaces{placed: []SurfacePixels{{ID: "brw-1", Frame: SurfaceFrame{W: 10, H: 10}}}}, 100, 100),
+			what:    "a region holding no surface",
+			service: captureOf(t, stubSurfaces{placed: []SurfacePixels{{ID: "brw-1", Frame: SurfaceFrame{X: 500, Y: 500, W: 10, H: 10}}}}, 100, 100),
 			rect:    Rect{X: 0, Y: 0, Width: 10, Height: 10},
-			mustSay: "region",
+			mustSay: "outside the captured region",
 		},
 		{
 			what:    "a build with no surface source",

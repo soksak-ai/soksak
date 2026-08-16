@@ -96,6 +96,140 @@ export class CapturePixels {
 }
 
 /**
+ * RecordReport is what a burst left behind.
+ * 
+ * Frames is what landed on disk, which is not always what was asked for, and
+ * Stopped is why when they differ. A count with no reason next to it makes a
+ * short recording and a complete one the same answer.
+ */
+export class RecordReport {
+    "dir": string;
+    "requested": number;
+    "frames": number;
+    "bytes": number;
+    "stopped"?: string;
+
+    /**
+     * Note is what the last frame drew, so a burst of empty panes states the
+     * reason once rather than leaving it to be read out of the pixels.
+     */
+    "note": CaptureNote;
+
+    /** Creates a new RecordReport instance. */
+    constructor($$source: Partial<RecordReport> = {}) {
+        if (!("dir" in $$source)) {
+            this["dir"] = "";
+        }
+        if (!("requested" in $$source)) {
+            this["requested"] = 0;
+        }
+        if (!("frames" in $$source)) {
+            this["frames"] = 0;
+        }
+        if (!("bytes" in $$source)) {
+            this["bytes"] = 0;
+        }
+        if (!("note" in $$source)) {
+            this["note"] = (new CaptureNote());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RecordReport instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RecordReport {
+        const $$createField5_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("note" in $$parsedSource) {
+            $$parsedSource["note"] = $$createField5_0($$parsedSource["note"]);
+        }
+        return new RecordReport($$parsedSource as Partial<RecordReport>);
+    }
+}
+
+/**
+ * RecordRequest is one burst.
+ */
+export class RecordRequest {
+    /**
+     * Dir holds the frames. It is created if it is not there.
+     */
+    "Dir": string;
+
+    /**
+     * Frames is how many to take, 1 through recordMaxFrames.
+     */
+    "Frames": number;
+
+    /**
+     * IntervalMs is the wait between them, 0 through recordMaxIntervalMs. Zero
+     * is as fast as the capture answers, which is a legitimate request.
+     */
+    "IntervalMs": number;
+
+    /**
+     * MaxBytes is a cumulative ceiling on encoded frame bytes, 0 for none. The
+     * frame that would cross it is not written, and the ones before it stay.
+     */
+    "MaxBytes": number;
+
+    /**
+     * Region is the part of the window each frame holds. The zero value is the
+     * whole window.
+     */
+    "Region": Rect;
+
+    /**
+     * FrameTimeoutMs bounds one frame's grab, 1 through recordMaxFrameTimeoutMs.
+     * Zero takes the default.
+     * 
+     * A grab that never comes back would hold the whole burst, and a recording
+     * that stops at frame 3 of 600 with no reason is indistinguishable from one
+     * nobody started. After the deadline the receiver is detached, so a late
+     * frame cannot write a file out of order.
+     */
+    "FrameTimeoutMs": number;
+
+    /** Creates a new RecordRequest instance. */
+    constructor($$source: Partial<RecordRequest> = {}) {
+        if (!("Dir" in $$source)) {
+            this["Dir"] = "";
+        }
+        if (!("Frames" in $$source)) {
+            this["Frames"] = 0;
+        }
+        if (!("IntervalMs" in $$source)) {
+            this["IntervalMs"] = 0;
+        }
+        if (!("MaxBytes" in $$source)) {
+            this["MaxBytes"] = 0;
+        }
+        if (!("Region" in $$source)) {
+            this["Region"] = (new Rect());
+        }
+        if (!("FrameTimeoutMs" in $$source)) {
+            this["FrameTimeoutMs"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RecordRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RecordRequest {
+        const $$createField4_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("Region" in $$parsedSource) {
+            $$parsedSource["Region"] = $$createField4_0($$parsedSource["Region"]);
+        }
+        return new RecordRequest($$parsedSource as Partial<RecordRequest>);
+    }
+}
+
+/**
  * Rect is a window-relative region in CSS points with a top-left origin, the
  * same coordinate contract the DOM and the compositor already share. A zero
  * rect means the whole window.
@@ -169,3 +303,4 @@ export class Reply {
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = CaptureNote.createFrom;
+const $$createType2 = Rect.createFrom;

@@ -29,6 +29,13 @@ type CaptureService struct {
 	// size answers the window's content size in points, which is the scale the surface frames are
 	// drawn at. Injected so the composite is testable with no window.
 	size func(unsafe.Pointer) (float64, float64, error)
+	// capture grabs one frame of the window. Injected for the same reason as size: a burst of
+	// frames is a loop with a budget and a stopping rule, and none of that needs a display to be
+	// judged.
+	capture func(unsafe.Pointer, Rect) ([]byte, error)
+	// frames announces one recorded frame once its file is complete. Nil sends nothing, which is
+	// what a caller that passed no receiver asked for.
+	frames func(index int)
 }
 
 // SurfaceImages is where a capture gets the pixels of content that is not in the document.
@@ -43,7 +50,7 @@ type SurfaceImages interface {
 }
 
 func NewCaptureService(name string, window func() unsafe.Pointer) *CaptureService {
-	return &CaptureService{name: name, window: window, size: contentSize}
+	return &CaptureService{name: name, window: window, size: contentSize, capture: CaptureWindow}
 }
 
 // withSurfaces names where the capture gets content that draws outside this process.
@@ -87,33 +94,42 @@ func (service *CaptureService) finish(handle unsafe.Pointer, windowPNG []byte, r
 		note.Skipped = append(note.Skipped, "this build draws no native surfaces into a capture")
 		return windowPNG, note
 	}
-	// A cropped capture would need every frame translated into the crop, and the one caller that
-	// crops is measuring a region of chrome. Compositing only the whole window keeps the
-	// arithmetic in one place.
-	if rect != Whole {
-		note.Skipped = append(note.Skipped, "a region is captured from the window layer alone; native surfaces are composited into the whole window only")
-		return windowPNG, note
-	}
 	placed := service.surfaces.Placed(service.name)
 	// Every surface this window holds, drawn or not. A count of the drawable ones alone answers
 	// zero for a window whose only pane is hidden, which is the same answer as a window with no
 	// pane — one of those is an empty rectangle a person is looking at.
 	note.Surfaces = len(placed)
+
+	// The image covers the region, and a surface frame is in window points, so each one is
+	// translated into the crop. A region was captured from the window layer alone before this,
+	// which made a browser pane cropped to its own rectangle come back flat — the one capture a
+	// person wants when the question is what that page shows.
+	width, height := rect.Width, rect.Height
+	if rect == Whole {
+		var err error
+		if width, height, err = service.size(handle); err != nil {
+			note.Skipped = append(note.Skipped, "the window size is unreadable: "+err.Error())
+			return windowPNG, note
+		}
+	}
+
 	lit := make([]SurfacePixels, 0, len(placed))
 	for _, surface := range placed {
 		if surface.Dark != "" {
 			note.Skipped = append(note.Skipped, surface.ID+": "+surface.Dark)
 			continue
 		}
-		lit = append(lit, surface)
+		framed := surface
+		framed.Frame.X -= rect.X
+		framed.Frame.Y -= rect.Y
+		if !framed.Frame.Overlaps(SurfaceFrame{W: width, H: height}) {
+			note.Skipped = append(note.Skipped, surface.ID+": it is outside the captured region")
+			continue
+		}
+		lit = append(lit, framed)
 	}
 	placed = lit
 	if len(placed) == 0 {
-		return windowPNG, note
-	}
-	width, height, err := service.size(handle)
-	if err != nil {
-		note.Skipped = append(note.Skipped, "the window size is unreadable: "+err.Error())
 		return windowPNG, note
 	}
 	composite, err := CompositeSurfaces(windowPNG, width, height, placed, func(id string) ([]byte, error) {
@@ -160,7 +176,7 @@ func (service *CaptureService) SnapshotRegion(path string, rect Rect) (CaptureNo
 	if err != nil {
 		return CaptureNote{}, err
 	}
-	png, err := CaptureWindow(handle, rect)
+	png, err := service.capture(handle, rect)
 	if err != nil {
 		return CaptureNote{}, err
 	}
@@ -192,14 +208,41 @@ type CapturePixels struct {
 // Pixels answers with a base64 PNG instead of touching the disk, for callers
 // that only want to look.
 func (service *CaptureService) Pixels(rect Rect) (CapturePixels, error) {
+	return service.PixelsAt("", rect)
+}
+
+// PixelsAt captures a region and, given a path, leaves the file there too.
+//
+// Cropping and saving are separate axes. A caller that named a path once
+// received base64 and no file, and one that wanted only to measure was refused
+// for want of a path it had no use for — so both are answered here and neither
+// is required.
+func (service *CaptureService) PixelsAt(path string, rect Rect) (CapturePixels, error) {
 	handle, err := service.target()
 	if err != nil {
 		return CapturePixels{}, err
 	}
-	png, err := CaptureWindow(handle, rect)
+	png, err := service.capture(handle, rect)
 	if err != nil {
 		return CapturePixels{}, err
 	}
 	composite, note := service.finish(handle, png, rect)
+	if path != "" {
+		if err := writeCapture(path, composite); err != nil {
+			return CapturePixels{}, err
+		}
+		note.Path = path
+	}
 	return CapturePixels{PNG: base64.StdEncoding.EncodeToString(composite), Note: note}, nil
+}
+
+// writeCapture puts one capture on disk, creating the directory it names.
+func writeCapture(path string, png []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("capture could not create %s: %w", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, png, 0o644); err != nil {
+		return fmt.Errorf("capture could not write %s: %w", path, err)
+	}
+	return nil
 }

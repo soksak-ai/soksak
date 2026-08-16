@@ -199,13 +199,20 @@ export function recordWindowFrames({
       resolveReady();
     }
   };
-  const finished = invoke<number>("plugin:webview-capture|record", {
+  // The host's own recording. It invoked a command of the preceding implementation's plugin, which
+  // this host never served, so every recording answered INTERNAL and no frame was ever written
+  // (measured 2026-08-16). The frame count that comes back is what landed on disk, which is not
+  // always what was asked for — the report names why when they differ.
+  const finished = invoke<{ frames: number; stopped?: string }>("window_record", {
     dir,
     frames,
     intervalMs,
     ...(maxBytes === undefined ? {} : { maxBytes }),
     frameTimeoutMs,
     onFrame: frameEvents,
+    // The rejection consumer is attached to the producer itself, before the count is read off the
+    // report. Reading first puts a promise in between, and the readiness rejection then arrives at
+    // a handler nobody installed — an unhandledrejection instead of a recording that failed.
   }).catch((error) => {
     if (!settled) {
       settled = true;
@@ -217,5 +224,9 @@ export function recordWindowFrames({
   // keep a producer failure in that window from becoming an unhandledrejection, the original final
   // is kept and only a rejection consumer is attached immediately.
   finished.catch(() => {});
-  return Object.assign(finished, { ready });
+  // The caller's value is the frame count, and the count is what landed on disk. `stopped` on the
+  // report names why that differs from what was asked for.
+  const counted = finished.then((report) => report.frames);
+  counted.catch(() => {});
+  return Object.assign(counted, { ready });
 }

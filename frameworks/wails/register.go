@@ -23,6 +23,9 @@ type HostDeps struct {
 	// Surfaces is where a capture gets the pixels of content that draws outside this process.
 	// Absent, a capture is the window layer alone and a native pane comes back flat.
 	Surfaces SurfaceImages
+	// Frames delivers stream frames to a receiver the caller passed. Nil sends
+	// nothing, which is a build with no event bus rather than a silent drop.
+	Frames StreamSink
 	// NativeParent reports whether the named window's native container exists
 	// right now.
 	NativeParent func(window string) bool
@@ -47,7 +50,7 @@ func RegisterHost(registry *control.Registry, deps HostDeps) *RendererCommands {
 	renderer := RegisterRendererCommands(registry, deps.Dispatch)
 	terminalcmd.Register(registry, terminalcmd.Deps{Sessions: deps.Sessions})
 	Register(registry, Deps{Host: deps.Host, NewID: deps.NewID})
-	RegisterCapture(registry, deps.Host, deps.Surfaces)
+	RegisterCapture(registry, deps.Host, deps.Surfaces, deps.Frames)
 	// Each window has its own theme, so the colour goes to the window that
 	// requested it rather than to the one this host happened to capture.
 	RegisterBackground(registry, deps.Host)

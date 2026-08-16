@@ -28,6 +28,34 @@ export function Pixels(rect: $models.Rect): $CancellablePromise<$models.CaptureP
 }
 
 /**
+ * PixelsAt captures a region and, given a path, leaves the file there too.
+ * 
+ * Cropping and saving are separate axes. A caller that named a path once
+ * received base64 and no file, and one that wanted only to measure was refused
+ * for want of a path it had no use for — so both are answered here and neither
+ * is required.
+ */
+export function PixelsAt(path: string, rect: $models.Rect): $CancellablePromise<$models.CapturePixels> {
+    return $Call.ByID(1662812009, path, rect).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
+/**
+ * Record captures Frames frames of this service's window into Dir.
+ * 
+ * Each frame goes through the same path as a single capture, so a native
+ * surface is composited into every one of them. A recording of a browser pane
+ * that came back flat would be the defect the single capture already fixed,
+ * arriving 600 times.
+ */
+export function Record(request: $models.RecordRequest): $CancellablePromise<$models.RecordReport> {
+    return $Call.ByID(83833308, request).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+/**
  * Snapshot writes a PNG of the whole window and answers with where it landed.
  * 
  * The path is returned rather than assumed, so a caller verifies from the
@@ -35,7 +63,7 @@ export function Pixels(rect: $models.Rect): $CancellablePromise<$models.CaptureP
  */
 export function Snapshot(path: string): $CancellablePromise<$models.CaptureNote> {
     return $Call.ByID(3039522845, path).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType2($result);
     });
 }
 
@@ -44,10 +72,11 @@ export function Snapshot(path: string): $CancellablePromise<$models.CaptureNote>
  */
 export function SnapshotRegion(path: string, rect: $models.Rect): $CancellablePromise<$models.CaptureNote> {
     return $Call.ByID(3826199269, path, rect).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType2($result);
     });
 }
 
 // Private type creation functions
 const $$createType0 = $models.CapturePixels.createFrom;
-const $$createType1 = $models.CaptureNote.createFrom;
+const $$createType1 = $models.RecordReport.createFrom;
+const $$createType2 = $models.CaptureNote.createFrom;
