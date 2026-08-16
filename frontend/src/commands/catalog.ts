@@ -59,7 +59,6 @@ import { currentWindowLabel } from "../lib/webviewLabels";
 import { awaitViewMounted } from "../plugins/viewFocus";
 import { useViewLabels } from "../state/viewLabels";
 import { hasPtyObservation } from "../terminal/ptyObservationStore";
-import { resolveTermTab } from "./termResolve";
 import { computeLayout } from "../components/GroupArea";
 import {
   resolveEffectiveRailRelation,
@@ -284,27 +283,6 @@ function resolvePane(
   return resolveCtx(ctx);
 }
 
-// Context-based terminal tab resolution for term.* (when tab is omitted) — injected into resolveTermTab.
-// A terminal = an instance of a view with PTY observation (a plugin terminal, its instance is a tab).
-// Order: caller tab > active tab > first terminal tab in the same space. The substrate predicate
-// (hasPtyObservation) makes the judgement generic (zero core lock-in).
-function terminalContextTab(
-  _params: Record<string, unknown>,
-  ctx: CommandContext,
-): { tabId: string } | null {
-  if (ctx.pane && hasPtyObservation(ctx.pane)) return { tabId: ctx.pane };
-  const loc = activeChain();
-  if (!loc) return null;
-  if (loc.tab && hasPtyObservation(loc.tab.id)) {
-    return { tabId: loc.tab.id };
-  }
-  for (const g of allGroups(loc.space.layout)) {
-    for (const v of g.tabs) {
-      if (hasPtyObservation(v.id)) return { tabId: v.id };
-    }
-  }
-  return null;
-}
 
 // Browser-family program id resolution (layout.apply dev preset). Programs are all plugin
 // contributions, so the core has no notion of browser kinds (zero lock-in) — identification is by
@@ -2465,101 +2443,6 @@ export function registerCatalog(): void {
                   message: v.status.message,
                 });
       return { statuses };
-    },
-  });
-
-  // ----- term (terminal I/O — the AI's read and write surface) -----
-  register("term.read", {
-    description:
-      "Read terminal screen and scrollback text (TUI shows current screen only). Use to check command output.",
-    triggers: { ko: "터미널 읽기 출력 확인 결과 보기" },
-    params: {
-      tab: { ...P.tab, description: "Target terminal tab id (omit = caller's context tab)" },
-      lines: { type: "number", description: "Last N lines only (omit = all)" },
-    },
-    returns: "{ tabId, text }",
-    message: (d) => tmsg("msg.term.read", { n: String(d.text ?? "").length }),
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ["term.read", 'term.read \'{"lines":50}\''],
-    handler: (p, ctx) => {
-      const r = resolveTermTab(p, ctx, terminalContextTab);
-      if (!r) return notFound("msg.term.tabNotFound");
-      const text = r.readBuffer(p.lines as number | undefined);
-      if (text === undefined) return notFound("msg.term.notReady", { id: r.tabId });
-      return { tabId: r.tabId, text };
-    },
-  });
-
-  register("term.send", {
-    danger: "inject",
-    description:
-      "Inject raw key input into a terminal (for TUI control). Pass control characters via JSON escapes: \\r=Enter, \\u0003=^C, \\u001b[A=↑.",
-    triggers: { ko: "터미널 입력 키 주입 TUI 조작 키 보내기" },
-    params: {
-      tab: { ...P.tab, description: "Target terminal tab id (omit = caller's context tab)" },
-      text: { type: "string", description: "Bytes to inject (escapes allowed)", required: true },
-    },
-    returns: "{ tabId }",
-    message: () => tmsg("msg.term.send"),
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ['term.send \'{"text":"ls\\r"}\'', 'term.send \'{"text":"\\u0003"}\''],
-    handler: (p, ctx) => {
-      const r = resolveTermTab(p, ctx, terminalContextTab);
-      if (!r) return notFound("msg.term.tabNotFound");
-      if (!r.sendInput(p.text as string))
-        return notFound("msg.term.notReady", { id: r.tabId });
-      return { tabId: r.tabId };
-    },
-  });
-
-  register("term.exec", {
-    danger: "inject",
-    description:
-      "Execute a shell command in a terminal (sends the text plus Enter). Returns immediately — it does not wait for the command to finish, so read the output a moment later with term.read.",
-    triggers: { ko: "명령 실행 터미널 실행 셸 실행 커맨드 실행" },
-    params: {
-      tab: { ...P.tab, description: "Target terminal tab id (omit = caller's context tab)" },
-      cmd: { type: "string", description: "Shell command to run", required: true },
-    },
-    returns: "{ tabId }",
-    message: () => tmsg("msg.term.exec"),
-    errors: ["TARGET_NOT_FOUND"],
-    hint: (d) => {
-      if (d.code) return [];
-      // exec returns immediately — read that tab shortly after to check the output.
-      const tab = d.tabId as string | undefined;
-      return [
-        {
-          cmd: tab ? `term.read '{"tab":"${tab}"}'` : "term.read",
-          why: tmsg("hint.flow.term.exec.read"),
-        },
-      ];
-    },
-    examples: ['term.exec \'{"cmd":"git status"}\''],
-    handler: (p, ctx) => {
-      const r = resolveTermTab(p, ctx, terminalContextTab);
-      if (!r) return notFound("msg.term.tabNotFound");
-      if (!r.sendInput(`${p.cmd as string}\r`))
-        return notFound("msg.term.notReady", { id: r.tabId });
-      return { tabId: r.tabId };
-    },
-  });
-
-  register("term.cwd", {
-    description: tmsg("cmd.term.cwd.desc"),
-    triggers: { ko: "현재 디렉토리 cwd 작업 폴더 터미널 경로" },
-    params: {
-      tab: { ...P.tab, description: "Target terminal tab id (omit = caller's context tab)" },
-    },
-    returns: "{ tabId, cwd|null }",
-    message: (d) =>
-      d.cwd ? tmsg("msg.term.cwd.path", { path: String(d.cwd) }) : tmsg("msg.term.cwd.none"),
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ["term.cwd"],
-    handler: (p, ctx) => {
-      const r = resolveTermTab(p, ctx, terminalContextTab);
-      if (!r) return notFound("msg.term.tabNotFound");
-      return { tabId: r.tabId, cwd: r.getCwd() ?? null };
     },
   });
 

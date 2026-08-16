@@ -193,6 +193,10 @@ export interface PluginInvocation {
   origin?: string;
   /** Correlation parent (conversation turn id) — when present, this run is part of that turn's set. */
   parent?: string;
+  /** The pane the call came from, when the caller had one. What "the one in front of me" resolves
+   *  against — absent means the caller named no pane, and a handler that needs one refuses rather
+   *  than picking. */
+  pane?: string;
   /** Nested run that inherits the parent context — use this for command calls inside a handler. */
   execute: (
     name: string,
@@ -1544,6 +1548,12 @@ export function buildPluginApi(
                 spec.handler(params, {
                   origin: ctx?.origin,
                   parent: ctx?.parent,
+                  // The pane the call came from. A core command has always had it; without it here a
+                  // plugin cannot answer "the one in front of me" and the core ends up keeping a
+                  // command that resolves the caller's pane on the plugin's behalf — which is how
+                  // term.* stayed in the core (CORE-CENSUS 3). Named after no domain: a browser's
+                  // navigate wants the caller's pane exactly as much as a terminal's read does.
+                  pane: ctx?.pane,
                   execute: (n, p) =>
                     executeGated(n, p, { origin: ctx?.origin, parent: ctx?.parent }),
                 }),

@@ -67,7 +67,6 @@ import { initThemePersistence } from "./state/theme";
 import { initPluginSettingsPersistence } from "./state/pluginSettings";
 import { initPluginsPersistence } from "./state/plugins";
 import { initRegistryPersistence } from "./state/registry";
-import { startTerminalStatusBridge } from "./terminal/terminalStatus";
 import { startActivityFeed } from "./state/activityFeed";
 import { OrchestratorApp } from "./orchestrator/OrchestratorApp";
 import "./assets/fonts.css";
@@ -86,7 +85,6 @@ installControlDoor({ scope: globalThis as never, execute, catalog: catalogJson }
 // Reclaims browser child webviews left after the parent window closed (invariant check — event-driven, no polling).
 startWebviewGc();
 // Terminal foreground command (shell integration OSC event) → that view's running status (M5, no polling).
-startTerminalStatusBridge();
 // Activity feed (A1) — publishes this window's event and registry execution instrumentation to the core hub (P12).
 startActivityFeed();
 

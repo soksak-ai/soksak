@@ -1,74 +1,41 @@
 import { memo, useEffect, useState } from "react";
-import { getCwdOfHost, subscribeCwd } from "../terminal/ptyBridge";
-import { hasPtyObservation } from "../terminal/ptyObservationStore";
-import { Icon } from "../ui/icons/Icon";
-import type { Tab, Pane } from "../state/sessions";
-import { useT } from "../i18n";
+import type { Pane } from "../state/sessions";
 import {
   statusBarItemsForTab,
   subscribeStatusBarItems,
   type StatusBarItem,
 } from "../ui/statusBarItems";
 
-// Status bar at the bottom of a split pane (group). Active view info:
-//   - terminal: current working directory (cwd, subscribed to shell integration events — no polling)
-//   - file: path + dirty flag + code/preview mode
+// Status bar at the bottom of a split pane (group).
+//
+// It places what plugins registered for the active view and reads nothing. The core drew two of
+// these itself until 2026-08-16 — a terminal's working directory, a file's path and mode — each
+// behind a branch on the content kind, which is a rule about what content means (C6). The
+// registry was already there; only these two went around it.
 
-function TerminalStatus({ paneId }: { paneId: string }) {
-  const t = useT();
-  const [cwd, setCwd] = useState<string | undefined>(() => getCwdOfHost(paneId));
-  useEffect(() => {
-    setCwd(getCwdOfHost(paneId));
-    return subscribeCwd(paneId, setCwd);
-  }, [paneId]);
-  // Subscribe to the plugin status bar items bound to this pane (e.g. "gui" from claude-GUI).
-  const [items, setItems] = useState<StatusBarItem[]>(() =>
-    statusBarItemsForTab(paneId),
-  );
-  useEffect(() => {
-    const update = () => setItems(statusBarItemsForTab(paneId));
-    update();
-    return subscribeStatusBarItems(update);
-  }, [paneId]);
+function Item({ item }: { item: StatusBarItem }) {
+  const className = `pane-status-item${item.active ? " active" : ""}`;
+  // A reading is not a button. Rendering one as a button that does nothing offers an action that is
+  // not there, and a pointer that changes shape over it is the report of that offer.
+  if (!item.onClick) {
+    return (
+      <span className={className} title={item.title}>
+        {item.label}
+      </span>
+    );
+  }
   return (
-    <>
-      <span className="pane-status-left" title={cwd}>
-        {cwd ?? "~"}
-      </span>
-      <span className="pane-status-right">
-        {items.map((it) => (
-          <button
-            key={it.id}
-            type="button"
-            className={`pane-status-item${it.active ? " active" : ""}`}
-            title={it.title}
-            onClick={(e) => {
-              e.stopPropagation();
-              it.onClick();
-            }}
-          >
-            {it.label}
-          </button>
-        ))}
-        {items.length > 0 && <span className="pane-status-sep">|</span>}
-        {t("view.terminal")}
-      </span>
-    </>
-  );
-}
-
-function FileStatus({ view }: { view: Extract<Tab, { kind: "file" }> }) {
-  const t = useT();
-  return (
-    <>
-      <span className="pane-status-left" title={view.path}>
-        {view.path}
-      </span>
-      <span className="pane-status-right icon-inline" style={{ gap: 4 }}>
-        {view.status?.code === "dirty" && <Icon name="dirty" size="xs" />}
-        {view.mode === "code" ? t("viewer.code") : t("viewer.preview")}
-      </span>
-    </>
+    <button
+      type="button"
+      className={className}
+      title={item.title}
+      onClick={(e) => {
+        e.stopPropagation();
+        item.onClick?.();
+      }}
+    >
+      {item.label}
+    </button>
   );
 }
 
@@ -78,16 +45,29 @@ export const GroupStatusBar = memo(function GroupStatusBar({
 }: {
   group: Pane;
 }) {
-  const active = group.tabs.find((v) => v.id === group.activeTabId);
-  // Terminal = a plugin view with a PTY observation (view.id = paneId). cwd and status bar items key off the substrate.
-  const isTerminal = active != null && hasPtyObservation(active.id);
+  const activeId = group.activeTabId ?? "";
+  const [items, setItems] = useState<StatusBarItem[]>(() =>
+    statusBarItemsForTab(activeId),
+  );
+  useEffect(() => {
+    const update = () => setItems(statusBarItemsForTab(activeId));
+    update();
+    return subscribeStatusBarItems(update);
+  }, [activeId]);
+  const left = items.filter((it) => it.side === "left");
+  const right = items.filter((it) => it.side !== "left");
   return (
     <div className="pane-status">
-      {isTerminal ? (
-        <TerminalStatus paneId={active.id} />
-      ) : active?.kind === "file" ? (
-        <FileStatus view={active} />
-      ) : null}
+      <span className="pane-status-left">
+        {left.map((it) => (
+          <Item key={it.id} item={it} />
+        ))}
+      </span>
+      <span className="pane-status-right">
+        {right.map((it) => (
+          <Item key={it.id} item={it} />
+        ))}
+      </span>
     </div>
   );
 });

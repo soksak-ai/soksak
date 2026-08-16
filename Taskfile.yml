@@ -121,6 +121,41 @@ tasks:
     cmds:
       - go build -o bin/sok ./cmd/sok
 
+  install:plugins:
+    summary: Puts the sibling plugins in the home this build runs against
+    desc: |
+      A plugin is read from the installation's home, not from its source tree.
+      Without this step a plugin change cannot be run: the source is edited, the
+      bundle is rebuilt, and the application keeps loading the copy that was
+      placed by hand — with the manifest it had that day.
+
+      Measured 2026-08-16. Four commands were moved out of the core into the
+      terminal plugin, the plugin's own tests passed, and the running build kept
+      answering with the two it had before. `plugin.conformance` named the cause
+      — `declared: [clear, send]` — because it reads the installed manifest,
+      which is the right thing for it to read.
+
+      Each plugin builds its own bundle and both files are copied whole. The
+      marker states where the copy came from, so an installed tree can be told
+      apart from a published one.
+    cmds:
+      - for:
+          [
+            "../soksak-plugins/soksak-plugin-browser-native",
+            "../soksak-plugins/soksak-plugin-terminal-xterm",
+          ]
+        cmd: |
+          set -e
+          name="$(basename "{{.ITEM}}")"
+          home="${SOKSAK_HOME:-$HOME/.soksak-wails}"
+          if [ -f "{{.ITEM}}/frontend/build.mjs" ]; then
+            (cd "{{.ITEM}}/frontend" && node build.mjs)
+          fi
+          mkdir -p "$home/plugins/$name"
+          cp "{{.ITEM}}/main.js" "{{.ITEM}}/plugin.json" "$home/plugins/$name/"
+          printf '{"version":"0.0.1","source":"local"}' > "$home/plugins/$name/.soksak.json"
+          echo "installed $name into $home/plugins"
+
   package:
     summary: Packages a production build of the application
     cmds:

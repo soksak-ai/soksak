@@ -15,7 +15,7 @@ import { removeRecentWorkspace, useRecentWorkspaces } from "./state/recentWorksp
 import { rafThrottle } from "./lib/rafThrottle";
 import { railEdgeWidths } from "./ui/railEdges";
 import { parkedStyle } from "./lib/layerPark";
-import { emitPluginEvent } from "./plugins/hooks";
+import { emitPathsDropped, emitPluginEvent } from "./plugins/hooks";
 import { resolveTerminalProgram } from "./plugins/terminalEngine";
 import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
@@ -63,7 +63,7 @@ import {
   type RightSidebarMode,
 } from "./state/settings";
 import { useTheme } from "./state/theme";
-import { getPtyIo, hasPtyObservation } from "./terminal/ptyObservationStore";
+import { hasPtyObservation } from "./terminal/ptyObservationStore";
 import {
   DEFAULT_RAIL_PLACEMENT,
   railStationFromLeftPx,
@@ -85,7 +85,6 @@ import "./App.css";
 // Make a file path safe for both the shell and Claude Code: backslash-escape everything except
 // alphanumerics and safe characters (spaces included). The result ends with an unquoted extension
 // such as ...img.png, which matches both Claude Code's image extension regex and the shell.
-const shellEscape = (p: string) => p.replace(/[^A-Za-z0-9_./@%+:,=-]/g, "\\$&");
 
 // Pass GroupArea only the public media facts the manifest owns. GroupArea does not read inside the
 // framework or the plugin registry; it picks the travel visual owner from this identity set.
@@ -957,8 +956,12 @@ function App() {
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [closeView, addViewToGroup, toggleSidebar, toggleRightSidebar]);
 
-  // File drag and drop: injects escaped paths into the active workspace's terminal pane (plugin terminal, PTY substrate).
-  // The core does not own the terminal host div, so it sends through the substrate IO (getPtyIo).
+  // Paths dropped on this window are published. What a drop means is not settled here.
+  //
+  // The core typed them into the active terminal, shell-escaped — which is a decision about what a
+  // drop is for, and it belonged to whichever plugin was drawing that pane (CORE-CENSUS 3). A
+  // subscriber that wants the old behaviour writes it; one that wants to open an editor writes
+  // that instead, and both can be installed at once.
   useEffect(() => {
     const unlisten = currentWindow().onDragDrop((e) => {
       const event = e as { payload: { type: string; paths?: string[] } };
@@ -967,9 +970,11 @@ function App() {
       if (!paths || paths.length === 0) return;
       const s = useSessions.getState();
       const proj = s.workspaces.find((t) => t.id === s.activeId);
-      const paneId = proj ? cwdTabOf(proj) : undefined;
-      if (!paneId) return;
-      getPtyIo(paneId)?.sendInput(paths.map(shellEscape).join(" "));
+      emitPathsDropped({
+        projectId: proj?.id ?? null,
+        paneId: proj ? (cwdTabOf(proj) ?? null) : null,
+        paths,
+      });
     });
     return () => {
       unlisten.then((off) => off()).catch(() => {});

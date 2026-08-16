@@ -1,15 +1,19 @@
 // Generic status bar item registry (plugin socket). A plugin registers a status bar item
-// (label + click handler) bound to a paneId, and the status bar of the group whose active
-// terminal is that pane (GroupStatusBar) renders it. The core does not interpret an item's
-// purpose — domains such as claude-GUI are entirely plugin-owned (same decoupled principle
-// as command.started and data-pane-id).
+// (label, optional click handler) bound to a view, and the status bar of the group showing that
+// view renders it. The core interprets nothing — it places what it is given and reads no meaning
+// into any of it.
+//
+// Everything in the bar arrives this way. Until 2026-08-16 the core drew two of them itself: a
+// terminal's working directory on the left, a file's path with its code/preview mode on the right,
+// each behind its own branch on the content kind. A third kind of content had no way in, and the
+// two that were there could not be changed by the plugins that owned them (CORE-CENSUS 3).
 
 import { moduleState } from "../lib/moduleState";
 
 export interface StatusBarItem {
-  /** Registration id (unregister/update key). Usually "<plugin>:<paneId>". */
+  /** Registration id (unregister/update key). Usually "<plugin>:<viewId>". */
   id: string;
-  /** Terminal pane this item is shown on. */
+  /** View this item is shown on. */
   paneId: string;
   /** Display text. */
   label: string;
@@ -17,8 +21,10 @@ export interface StatusBarItem {
   title?: string;
   /** Active (toggle on) state — true renders in the accent color. Update by re-registering with the same id. */
   active?: boolean;
-  /** Click action. */
-  onClick: () => void;
+  /** Which end of the bar. Position only — the core reads no meaning into the side. Default "right". */
+  side?: "left" | "right";
+  /** Click action. Omitted = the item is a reading, not a control. */
+  onClick?: () => void;
 }
 
 const items = moduleState(

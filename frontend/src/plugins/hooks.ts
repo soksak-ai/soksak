@@ -42,6 +42,10 @@ export interface PluginEventMap {
     kind: string;
     path?: string;
   };
+  /** Paths dropped on this window. The core places no meaning on a drop: a terminal plugin types
+   *  them, an editor plugin opens them, and both may be listening. paneId is the workspace's
+   *  cwd-tracking pane when there is one — where "here" is, for a subscriber that wants it. */
+  "paths.dropped": { projectId: string | null; paneId: string | null; paths: string[] };
   "file.opened": { projectId: string; viewId: string; path: string };
   "file.closed": { projectId: string; viewId: string; path: string };
   "file.saved": { projectId: string; viewId: string; path: string };
@@ -154,6 +158,7 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "workspace.created",
   "projection.changed",
   "view.activated",
+  "paths.dropped",
   "file.opened",
   "file.closed",
   "file.saved",
@@ -277,6 +282,10 @@ export function emitPluginEvent<K extends keyof PluginEventMap>(
 }
 
 // Called once on a successful FileViewer save (save success cannot be told from store signals alone).
+export function emitPathsDropped(payload: PluginEventMap["paths.dropped"]): void {
+  emitPluginEvent("paths.dropped", payload);
+}
+
 export function emitFileSaved(payload: PluginEventMap["file.saved"]): void {
   emitPluginEvent("file.saved", payload);
 }
