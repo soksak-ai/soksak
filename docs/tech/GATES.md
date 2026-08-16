@@ -153,3 +153,17 @@ Written here so it is not rediscovered (L2).
   visible. What no reading covers is surface against surface — two native
   rectangles in one window, where `presence` and `misparented` both answer about
   the window rather than about the order inside it.
+- **A blank browser after a restart is reported and not reproduced.** A person
+  reported 2026-08-17 that a restart comes up with the page empty until
+  something else happens. Nine cold starts that day, read at t+2s, t+3s, t+4s,
+  t+7s and out to t+16s, had every browser surface declared and applied visible
+  and the page painted. The first attempt to reproduce it did fail — against a
+  reading that parsed the wrong answer shape, before `CONTROL-PROTOCOL.md` C2a —
+  so that attempt says nothing. It stays open with no reproduction.
+- **A command that answers nothing has no reading.** `workspace.region.toggle`
+  twice did not answer inside the client's 20 seconds while every other command
+  did. Every await in that handler is bounded now — `waitForDomCommit` at 2s,
+  `nativeSurfacesSettled` at 5s — and 23 consecutive runs of both running-build
+  gates since have been clean. What is still missing is a reading for "the
+  renderer took the request and has not answered": the client's timeout is the
+  only evidence, and it names the command rather than what it is waiting on.
