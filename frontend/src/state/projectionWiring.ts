@@ -42,16 +42,13 @@ function boundViewInContent(
     : group?.tabs.find((v) => v.id === group.activeTabId);
   if (!view) return null;
   const ctx = { groupId: group?.id ?? null, contentId: content.id };
-  if (view.kind === "plugin") {
-    const reg = getRegisteredView(`${view.pluginId}.${view.view}`);
-    return {
-      viewId: view.id,
-      ...ctx,
-      ownerPluginId: view.pluginId,
-      sidebar: reg?.decl.sidebar ?? null,
-    };
-  }
-  return { viewId: view.id, ...ctx, ownerPluginId: "", sidebar: null };
+  const reg = getRegisteredView(`${view.pluginId}.${view.view}`);
+  return {
+    viewId: view.id,
+    ...ctx,
+    ownerPluginId: view.pluginId,
+    sidebar: reg?.decl.sidebar ?? null,
+  };
 }
 
 export function boundViewOf(workspace: Workspace): BoundView | null {

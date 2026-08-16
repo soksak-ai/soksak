@@ -123,9 +123,10 @@ export interface TabStatus {
 // title is the content fact (file name, page <title> — kept current by setViewTitle), customLabel is
 // user intent (view.rename). Display prefers customLabel — the same rule as sidebar viewLabels
 // (default = fact, override = user intent only). An empty override is not stored.
+// One shape, because there is one kind of content view: a plugin's. PluginViewHost draws the
+// provider of the global key "<pluginId>.<view>", and close, move and drag are the same for any of
+// them. `kind` is kept because it is written into every snapshot; it holds one value.
 export type Tab =
-  // Plugin view (content placement) — PluginViewHost draws the provider of the global key
-  // "<pluginId>.<view>". Close/move/drag are the same as any view (view id generic).
   | {
       id: string;
       kind: "plugin";
@@ -1443,7 +1444,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       if (!content) return s;
       // When the same plugin view is already open, activate that group/view (reuse).
       const existing = allViews(content.layout).find(
-        (v) => v.kind === "plugin" && v.pluginId === pluginId && v.view === view,
+        (v) => v.pluginId === pluginId && v.view === view,
       );
       if (existing) {
         const grp = findGroupOfView(content.layout, existing.id);
@@ -1718,9 +1719,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
       let workspaces = s.workspaces;
       for (const t of targets) {
         workspaces = mapWorkspace(workspaces, t.id, (x) =>
-          mapViewEverywhere(x, viewId, (v) =>
-            v.kind === "plugin" ? { ...v, ...patch } : v,
-          ),
+          mapViewEverywhere(x, viewId, (v) => ({ ...v, ...patch })),
         );
       }
       return { workspaces };

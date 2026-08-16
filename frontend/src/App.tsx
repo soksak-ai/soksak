@@ -90,8 +90,7 @@ import "./App.css";
 // framework or the plugin registry; it picks the travel visual owner from this identity set.
 const nativeSurfaceViewIds = (content: Workspace["spaces"][number]): string[] => (
   allGroups(content.layout).flatMap((group) => group.tabs
-    .filter((view) => view.kind === "plugin"
-      && ownsNativeSurfaceFromManifests(view.pluginId, view.view))
+    .filter((view) => ownsNativeSurfaceFromManifests(view.pluginId, view.view))
     .map((view) => view.id))
 );
 
@@ -230,7 +229,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
         id: group.id,
         viewIds: group.tabs.map((view) => view.id),
         panePresentationViewIds: group.tabs
-          .filter((view) => view.id === group.activeTabId && view.kind === "plugin"
+          .filter((view) => view.id === group.activeTabId
             && ownsNativeSurfaceFromManifests(view.pluginId, view.view))
           .map((view) => view.id),
       }));
