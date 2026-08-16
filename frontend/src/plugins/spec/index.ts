@@ -155,7 +155,7 @@ export interface ContributedView {
   id: string; // unique within the plugin. Global key is "<pluginId>.<id>"
   title: LocalizedText;
   icon: string; // short glyph for the icon rail (1-2 characters or an emoji). v1 has no SVG support
-  placements: ViewPlacement[]; // parse default ["rail"]
+  placements: ViewPlacement[]; // parse default ["left"]
   defaultPlacement: ViewPlacement; // parse default placements[0]
   // A native layer under the content view (embedded webview etc.) must show through — the core
   // treats that cell as a transparent hole. Declared by browser-like views (child webview embed);

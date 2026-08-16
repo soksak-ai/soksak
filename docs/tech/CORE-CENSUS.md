@@ -285,16 +285,15 @@ line (`projection.degraded.unresolved`) is gone, because there is no provider to
 **Nothing is placed left or right yet.** No plugin declares those regions, so both sidebars are empty
 frames.
 
-Each plugin defines its own sections. A terminal may declare a file tree, a daemon list and a TUI
-state; an editor may declare a file tree of its own; a browser may declare bookmarks. A plugin that
-draws nothing in the centre and only a section on the left is equally valid — `sidebarOnly.test.ts`
-holds that shape.
+**A section is a plugin** (A2a). A file tree, a daemon list, bookmarks, a terminal — each is its own
+plugin declaring the region it is placed in, and no plugin provides another's section. A plugin with
+only a left view and nothing in the centre is the ordinary case, not a special one:
+`sidebarOnly.test.ts` holds that shape.
 
-**The mechanism does not decide which.** A section is a view with a region declared, and who declares
-it is the author's choice, not a rule here. Two plugins declaring a file tree each is two sections,
-and one plugin declaring it for everyone is one; both are the same mechanism.
-
-Which pane a section follows arrives at mount as view context, so a section names no plugin.
+**What appears with what is a separate question, and the workspace answers it** (A2a). A manifest
+declares a region and no companion; which sections are open, split or tabbed and in what order is the
+workspace's state, arranged by the person and restored with the workspace. Which pane a section
+follows arrives at mount as view context, so a section names no plugin either.
 
 ## What is left, named
 

@@ -64,6 +64,16 @@ All of these are hard.
   declared what belonged in the sidebar beside it — a view about content, which
   is the one thing A1 forbids.
 - **A2.** View context is the only channel into a view. No core store, no layout tree.
+- **A2a.** A section is a plugin. A file tree, a daemon list, bookmarks, a
+  terminal — each is its own plugin declaring the region it is placed in, and no
+  plugin provides another's section.
+
+  **What appears with what is a separate question, and the workspace answers it.**
+  A manifest declares a region and no companion; which sections are open, in
+  which region, split or tabbed and in what order, is the workspace's state —
+  arranged by the person, persisted with the workspace, restored with it
+  (`leftLayout`, and the same for the right). A plugin cannot say what it appears
+  beside, and the core does not decide either.
 - **A3.** General capabilities only. A capability named after one consumer is lock-in.
 - **A4.** No core lock-in. Adding a content subsystem costs the core zero edits.
 - **A5.** The schema is the single source of truth. Prose adds only what a schema
