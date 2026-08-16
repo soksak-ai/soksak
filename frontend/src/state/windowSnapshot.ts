@@ -25,7 +25,6 @@ import { DEFAULT_RAIL_PLACEMENT,
   type RailPlacement,
 } from "../lib/railPlacement";
 import { normalizeVerticalLines } from "./verticalLines";
-import { issueId, type IssuedKind } from "./ids";
 
 // ── Snapshot types ───────────────────────────────────────────────────────────
 
@@ -200,75 +199,31 @@ function deserializeView(s: ViewSnapshot, _newSplitId: () => string): Tab {
   }
 }
 
-/**
- * The identifiers one restored workspace takes, and the table that keeps its references pointing
- * at them.
- *
- * RESTORE R3 — ids are minted again, and that is the contract. `state.fingerprint`, the one number
- * a restore is judged by, holds no id: a workspace is identified across a restart by its root
- * (V1), and a window name is issued fresh at every open.
- *
- * Only split ids were minted until 2026-08-16. Everything else was carried across verbatim, so
- * `t1` — a counter with no prefix, from before the issuer existed — was the workspace id of three
- * separate window snapshots at once, months after nothing could mint it. A store is where a
- * retired shape outlives the code that made it, and this was the way in.
- *
- * A reference to something that was never minted is left as it was rather than blanked. An empty
- * string is a legitimate "nothing is active", and turning an unknown reference into one would hide
- * a snapshot this build did not understand instead of leaving it visible.
- */
-interface RestoreIds {
-  take(kind: IssuedKind, stored: string): string;
-  follow(stored: string): string;
-}
-
-function restoreIds(): RestoreIds {
-  const minted = new Map<string, string>();
-  return {
-    take(kind, stored) {
-      const fresh = issueId(kind);
-      if (stored) minted.set(stored, fresh);
-      return fresh;
-    },
-    follow(stored) {
-      return minted.get(stored) ?? stored;
-    },
-  };
-}
-
 const deserializeViewGroup = (
   s: ViewGroupSnapshot,
   newSplitId: () => string,
-  mint: RestoreIds,
-): Pane => {
-  // The tabs first, so the reference below names an id that has been minted.
-  const tabs = s.views.map((v) => ({ ...deserializeView(v, newSplitId), id: mint.take("tab", v.id) }));
-  return {
-    id: mint.take("pane", s.id),
-    activeTabId: mint.follow(s.activeViewId),
-    tabs,
-  };
-};
+): Pane => ({
+  id: s.id,
+  activeTabId: s.activeViewId,
+  tabs: s.views.map((v) => deserializeView(v, newSplitId)),
+});
 
 const deserializeContent = (
   s: ContentSnapshot,
   newSplitId: () => string,
   normalize: boolean,
-  mint: RestoreIds,
 ): Space => {
-  // The tree first, for the same reason: every reference below is read after the id it names has
-  // been minted.
   const layout = deserializeSplitTree(
     s.layout,
-    (g) => deserializeViewGroup(g, newSplitId, mint),
+    (g) => deserializeViewGroup(g, newSplitId),
     newSplitId,
   );
   return {
-    id: mint.take("space", s.id),
+    id: s.id,
     title: s.title,
-    activePaneId: mint.follow(s.activeGroupId),
-    ...(s.railBindingViewId ? { railBindingTabId: mint.follow(s.railBindingViewId) } : {}),
-    ...(s.maximizedViewId ? { maximizedTabId: mint.follow(s.maximizedViewId) } : {}),
+    activePaneId: s.activeGroupId,
+    ...(s.railBindingViewId ? { railBindingTabId: s.railBindingViewId } : {}),
+    ...(s.maximizedViewId ? { maximizedTabId: s.maximizedViewId } : {}),
     // One migration per snapshot (the vertical no-split proposition) — only an old snapshot without the
     // vlNormalized marker is healed by snapping vertical lines fragmented before companion drag (e.g. top 40.6 /
     // bottom 39.5) to the x of the topmost segment. A restore with the marker is identity — it does not rewrite
@@ -284,12 +239,8 @@ export function deserializeWorkspace(
   s: WorkspaceSnapshot,
   newSplitId: () => string,
 ): Workspace {
-  const mint = restoreIds();
-  // The spaces first: `activeSpaceId` below names one of them, and an object literal evaluates its
-  // properties in source order.
-  const spaces = s.contents.map((c) => deserializeContent(c, newSplitId, !s.vlNormalized, mint));
   return {
-    id: issueId("workspace"),
+    id: s.id,
     title: s.title,
     root: s.root,
     ...(s.shell ? { shell: s.shell } : {}),
@@ -304,7 +255,9 @@ export function deserializeWorkspace(
     rightOpen: s.rightOpen,
     rightView: s.rightView,
     leftLayout: deserializeSplitTree(s.leftLayout, (g) => g, newSplitId),
-    activeSpaceId: mint.follow(s.activeContentId),
-    spaces,
+    activeSpaceId: s.activeContentId,
+    spaces: s.contents.map((c) =>
+      deserializeContent(c, newSplitId, !s.vlNormalized),
+    ),
   };
 }

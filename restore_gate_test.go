@@ -63,9 +63,9 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 	gate.start()
 	window := gate.openWorkspace()
 
-	// The ids before, so the equality below is read against names that actually
-	// changed. A digest that matched because nothing moved would prove nothing
-	// about R3.
+	// The ids before, so the equality below is read beside the names that have to
+	// come back with it. The digest alone would pass a build that renamed
+	// everything.
 	before := gate.ids(window)
 	first := gate.digest(window)
 
@@ -85,14 +85,17 @@ func TestTheDigestSurvivesARestart(t *testing.T) {
 	if first != second {
 		t.Errorf("the digest moved across a restart: %s then %s", first, second)
 	}
-	// R3 — every id is minted again. Without this the gate would pass on a build
-	// that carried the names across, which is the defect the digest cannot see.
+	// R3 — the identifiers are kept. A terminal session's key is the window label
+	// and the pane id, so a pane that came back under a new name cannot reattach
+	// to the shell it had. The digest cannot see that: state.fingerprint holds no
+	// id, which is correct for the shape it judges and is why this is checked
+	// beside it rather than through it.
 	if len(before) == 0 {
 		t.Fatal("the restored window holds no ids to compare")
 	}
 	for id := range before {
-		if after[id] {
-			t.Errorf("%s survived the restart; RESTORE R3 mints every id again", id)
+		if !after[id] {
+			t.Errorf("%s did not survive the restart; a pane id is half a session's key", id)
 		}
 	}
 }

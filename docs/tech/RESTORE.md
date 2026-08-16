@@ -84,45 +84,39 @@ A snapshot that could not be read is reported unread. Written as 0 workspaces it
 equals a window that was never used, and the save guard then opens and
 overwrites a record this build simply could not parse.
 
-## R3. Every id is minted again, and that is the contract
+## R3. Every identifier is kept
 
-An identifier is a name for one run. A restore rebuilds the workspace, its
-spaces, its panes, its tabs and its split nodes under freshly issued names, and
-rewrites every reference between them so nothing points at a name that is gone.
+An identifier is issued to be unique, and it is kept so that state can hang off
+it. A terminal session's key is `windowLabel + "|" + paneId`
+(`soksak-plugin-terminal-xterm`, `command/session.go` — `paneKey`): a pane that
+came back under a new id cannot reattach to the shell it had. The session is
+still running, still holding its scrollback and its working directory, and
+nothing addresses it any more.
 
-Anything judging a restore therefore judges the shape, not the names — which is
-why `state.fingerprint` holds no id. A workspace is identified across a restart
-by its **root** (V1), a window by the key `window/<label>`, and the ledger names
-its slots by root as well.
+The same holds for anything else keyed by a pane, a view or a workspace —
+plugin state, an address a person or an agent wrote down, a projection seed.
+Keeping the id is what makes those durable.
 
-Only split ids were minted until 2026-08-16; everything else was carried across
-verbatim. That is how `t1` — a counter with no prefix, from before the issuer
-existed — was the workspace id of three separate window snapshots at once,
-months after nothing could mint it. A store is where a retired shape outlives
-the code that made it, and reuse was the way in.
+**With no exception.** The split node was the one this build minted again, on the
+ground that nothing references it — and it was not in the snapshot at all,
+measured 2026-08-16, nor in `state.tree` or `ui.tree`. That left one kind of id
+whose name a restore changed, so a reader had to know which kind it was holding
+before it could tell whether the name would still be there. One rule is worth
+more than an exception nobody can act on, and the id costs one field.
 
-Minting the workspace alone would be worse than minting none. A native surface
-label pairs a window name with a view id, the window name is issued fresh at
-every open, and a stale view id beside it makes one value with two lifetimes.
+Uniqueness and durability are not in tension here. They were only in tension
+while an id was a counter — `t1` was the workspace id of three separate window
+snapshots at once because a counter restarts at the same value, not because it
+was kept. An identifier from the issuer (N1: six base32 characters from
+`crypto.getRandomValues`) stays unique for as long as it is kept.
 
-**A stored id is not repaired, it is replaced.** A snapshot this build cannot
-read is left where it is (R1); an id it can read is still not the name the
-restored thing takes.
+Measured 2026-08-16, and this is why it is written down: a change that minted
+every id on restore passed the digest check and broke the reattach key.
+`state.fingerprint` holds no id — that is correct for what it judges, which is
+the shape of the layout — so the digest cannot see this and is not the whole
+verdict.
 
-Two references outlive the names and are rewritten with them, because each fails
-quietly if it is not: the **active workspace** — matched on the stored name it
-falls through to the first workspace every time, and a person finds the wrong
-one open — and the **projection seed**, which keyed by the stored name seeds a
-workspace that does not exist, so a pinned rail comes back unpinned.
-
-Measured 2026-08-16 on the running application, one restart of a three-pane
-layout: every id changed (`pan-672zkd` → `pan-76o76o`, `spc-rspwsl` →
-`spc-wmx7kp`, and `t1` gone for good) and `state.fingerprint` answered
-`b2745219` both times.
-
-Gate: `frontend/src/state/restoreMintsIds.test.ts` — every id minted, every
-reference following. `frontend/src/state/windowPersistence.test.ts` holds the
-two references above.
+Gate: `frontend/src/state/restoreKeepsIds.test.ts`.
 
 ---
 
@@ -168,24 +162,10 @@ next.
 
 # K. Known, and not fixed
 
-- **K1. Records from before two retired shapes are still in this developer's
-  store.** Two window snapshots predate the project → workspace rename, and one
-  slot is labelled `w-9c38739854301c21` — the one-letter window prefix N1
-  retired, which `validWindowName` no longer accepts.
-
-  All three are reported by name and left alone. Measured 2026-08-16, one boot:
-  `respawn:spawned:win-8ed56cd7d9305935`,
-  `respawn:unreadable:win-a2824af5b4a84873`,
-  `respawn:unreadable:w-9c38739854301c21`. Each costs its own record and nothing
-  else (R1), and the slot stays rather than being deleted on its author's
-  behalf.
-
-  No migration is written: L11c says old paths are deleted rather than bridged,
-  and a personal store is not a reason to add one. A fresh install has none of
-  them. This is different from R3 — an id inside a snapshot is replaced on the
-  way in because it names nothing outside that snapshot, while a window label
-  **is** the store key and cannot be replaced without losing the record it
-  keys.
+- **K1. Records from before the rename are still in this developer's store.**
+  They are skipped by name and left alone. No migration is written: L11c says
+  old paths are deleted rather than bridged, and a personal store is not a
+  reason to add one. A fresh install has none of them.
 - **Native surfaces are not part of the fingerprint.** `surface.composition` is
   judged on its own (NATIVE-SURFACES V1) and a surface is rebuilt from its
   declaration after the panes come back, so it is a consequence of the layout

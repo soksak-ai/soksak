@@ -129,7 +129,15 @@ export function insertBeside<L>(
 
 export type SplitSnapshot<S> =
   | { t: "l"; v: S }
-  | { t: "s"; dir: "row" | "col"; sizes: number[]; children: SplitSnapshot<S>[] };
+  | {
+      t: "s";
+      /** Optional only for a record written before the id was stored. Every save
+       *  since 2026-08-16 writes it, so it is absent on old snapshots alone. */
+      id?: string;
+      dir: "row" | "col";
+      sizes: number[];
+      children: SplitSnapshot<S>[];
+    };
 
 export function serializeSplitTree<L, S>(
   node: SplitTree<L>,
@@ -138,6 +146,12 @@ export function serializeSplitTree<L, S>(
   if (node.type === "leaf") return { t: "l", v: serializeLeaf(node.value) };
   return {
     t: "s",
+    // The split id is stored like every other. It was omitted on the ground that
+    // it is referenced nowhere, which left one kind of id whose name a restore
+    // changed — so a reader had to know which kind it was holding before it
+    // could tell whether the name would still be there. One rule is worth more
+    // than an exception nobody can act on (NAMING N2a).
+    id: node.id,
     dir: node.dir,
     sizes: node.sizes,
     children: node.children.map((c) => serializeSplitTree(c, serializeLeaf)),
@@ -152,7 +166,10 @@ export function deserializeSplitTree<L, S>(
   if (snap.t === "l") return { type: "leaf", value: deserializeLeaf(snap.v) };
   return {
     type: "split",
-    id: newSplitId(),
+    // The stored name, or a fresh one for a record written before it was stored.
+    // Minting there is not a fallback that hides anything: the tree is the same
+    // either way, and the next save writes the name down.
+    id: snap.id ?? newSplitId(),
     dir: snap.dir,
     sizes: snap.sizes,
     children: snap.children.map((c) =>

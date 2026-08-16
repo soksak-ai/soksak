@@ -77,32 +77,37 @@ user-chosen name or an `(ns, key)` pair, which already identifies the entry.
 Gate: `idScope.test.ts` reads both tables from `ids.ts`. It fails when an axis appears in both,
 and when a prefixed identifier is issued outside the issuer.
 
-### N2a. Identity across a restart is the natural key, never an issued id
+### N2a. An identifier is kept, and a natural key is what a lookup uses
 
-An issued id is a handle inside one run. What identifies a thing across a restart is the key that
-already means something: a workspace is its **root path**, a window is the store key
-`window/<label>`, an axis in N2 is its own `(ns, key)`.
+Two rules, and neither replaces the other.
 
-This is not a preference, it is what the code already rests on. The window ledger stores `roots[]`
-and `activeRoot`; P5 refuses a duplicate workspace by `t.root === opts.root`; P6 claims global
-single-open with `claimRoots(workspaces.map(t => t.root))`; `state.fingerprint` — the one number a
-restore is judged by — holds no id at all. Idempotence and one-window-per-project are secured by
-the root, and were never secured by an id.
+**An identifier is kept.** It is issued to be unique and it survives a restart,
+because state hangs off it: a terminal session's key is
+`windowLabel + "|" + paneId`, so a pane that came back under a new id cannot
+reattach to the shell it had (`docs/tech/RESTORE.md` R3). Keeping it is not in
+tension with uniqueness — a counter collides because it restarts, not because it
+is kept, and `t1` was the workspace id of three separate window snapshots at once
+for that reason. An N1 body from `crypto.getRandomValues` stays unique for as long
+as it is held.
 
-So anything that must outlive a restart is keyed by the natural key, or carried inside the record
-it belongs to. Measured 2026-08-16, every case in this build: a tab's custom label travels inside
-the snapshot on its own node; a sidebar label is keyed `<pluginId>.<viewName>`; a projection seed is
-inside the snapshot and follows its workspace. No stored value anywhere in the store referenced a
-layout id from outside the snapshot that issued it.
+**A lookup uses the natural key.** Finding a thing by what it *is* does not go
+through an id: the window ledger stores `roots[]` and `activeRoot`, P5 refuses a
+duplicate workspace by `t.root === opts.root`, P6 claims global single-open with
+`claimRoots(workspaces.map(t => t.root))`, and `state.fingerprint` hashes the
+root rather than the name. That is what makes opening a project idempotent —
+asking twice for one root answers the workspace that already holds it.
 
-An id used as a durable key is not merely redundant — it stops being unique. `t1` was the workspace
-id of three separate window snapshots at the same time, because a value carried across restarts is
-issued once and copied for ever after.
+So: the id addresses, the natural key identifies. A product that used only the
+id could not answer "is this project already open"; one that used only the
+natural key would have nothing for a session to hang on.
 
-Gate: `frontend/src/state/restoreMintsIds.test.ts` — a restore mints every id again and rewrites
-every reference, which is only safe because of this rule and would break loudly if something durable
-were keyed by one. `restore_gate_test.go` runs it against the real binaries: every id changes across
-a restart and the digest does not.
+Every kind, with no exception: workspace, space, pane, tab and split node alike.
+An exception means a reader has to know which kind it is holding before it can
+tell whether the name will still be there, and the split node's — it was not
+serialized at all — bought nothing for that cost.
+
+Gates: `frontend/src/state/restoreKeepsIds.test.ts`, `restore_gate_test.go` (the
+same against the real binaries, across a real quit and restart).
 
 ## N3. Composite identifiers
 

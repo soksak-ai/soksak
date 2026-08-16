@@ -143,14 +143,15 @@ describe("insertBeside", () => {
 });
 
 describe("serialize/deserialize round trip", () => {
-  it("structure, order, sizes and leaf values survive; split ids are regenerated", () => {
+  it("structure, order, sizes, leaf values and the split ids all survive", () => {
     const t = split("OLD-a", "row", [0.7, 0.3], [
       splitLeaf("p1"),
       split("OLD-b", "col", [0.4, 0.6], [splitLeaf("p2"), splitLeaf("p3")]),
     ]);
     const snap = serializeSplitTree(t, (v) => v);
-    // Serialization holds no split id (regenerated on load).
-    expect(JSON.stringify(snap)).not.toContain("OLD-");
+    // The serialization holds the split id like every other (NAMING N2a). It was
+    // omitted, which left one kind of id whose name a restore changed.
+    expect(JSON.stringify(snap)).toContain("OLD-a");
     n = 100;
     const back = deserializeSplitTree(snap, (s) => s, newId);
     // Structure, order, sizes, and leaves identical
@@ -160,9 +161,8 @@ describe("serialize/deserialize round trip", () => {
     expect(bs.sizes).toEqual([0.7, 0.3]);
     const inner = bs.children[1] as Extract<SplitTree<string>, { type: "split" }>;
     expect(inner.sizes).toEqual([0.4, 0.6]);
-    // Ids are newly generated (not OLD-)
-    expect(bs.id).not.toBe("OLD-a");
-    expect(bs.id.startsWith("s")).toBe(true);
+    expect(bs.id).toBe("OLD-a");
+    expect(inner.id).toBe("OLD-b");
   });
 
   it("the leaf converters map the payload (L→S, S→L)", () => {
