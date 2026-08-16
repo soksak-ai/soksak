@@ -73,7 +73,10 @@ const workspace: Workspace = {
 };
 
 describe("windowSnapshot round trip", () => {
-  it("preserves structure, sizes, active and view params, regenerates only split ids, and does not persist the terminal command", () => {
+  // Structure, sizes, active references and view params survive; every identifier is minted
+  // again (RESTORE R3), so the assertions below name things by position and check that each
+  // reference points at the id the restore issued for it.
+  it("preserves structure, sizes, active and view params, mints every id again, and does not persist the terminal command", () => {
     sid = 0;
     const snap = serializeWorkspace(workspace);
     // The split id is not stored in the serialization (regenerated on restore).
@@ -87,13 +90,14 @@ describe("windowSnapshot round trip", () => {
     expect(back.shell).toBe("/bin/zsh");
     expect(back.sidebarOpen).toBe(true);
     expect(back.leftRailPlacement).toEqual({ mode: "pin", station: 60 });
-    expect(back.activeSpaceId).toBe("spc-aaaaaa");
+    expect(back.activeSpaceId).toBe(back.spaces[0]!.id);
 
     const c = back.spaces[0];
-    expect(c.id).toBe("spc-aaaaaa");
+    expect(c.id).not.toBe("spc-aaaaaa"); // minted again
+    expect(c.id).toMatch(/^spc-[a-z2-7]{6}$/);
     expect(c.title).toBe("build");
-    expect(c.activePaneId).toBe("pan-bbbbbb");
-    expect(c.railBindingTabId).toBe("tab-aaaaaa");
+    expect(c.activePaneId).toBe(leafOf(c.layout, 1).id);
+    expect(c.railBindingTabId).toBe(leafOf(c.layout, 0).tabs[0]!.id);
 
     const gl = c.layout as Extract<PaneNode, { type: "split" }>;
     expect(gl.dir).toBe("row");
@@ -101,8 +105,9 @@ describe("windowSnapshot round trip", () => {
     expect(gl.id).not.toBe("spl-gaaaaa"); // split id regenerated
 
     const g1 = leafOf(c.layout, 0);
-    expect(g1.id).toBe("pan-aaaaaa");
-    expect(g1.activeTabId).toBe("tab-aaaaaa");
+    expect(g1.id).not.toBe("pan-aaaaaa"); // minted again
+    expect(g1.id).toMatch(/^pan-[a-z2-7]{6}$/);
+    expect(g1.activeTabId).toBe(g1.tabs[0]!.id);
     const term = g1.tabs[0] as Extract<Tab, { kind: "plugin" }>;
     expect(term.kind).toBe("plugin");
     expect(term.pluginId).toBe("soksak-plugin-terminal-xterm");
@@ -245,8 +250,10 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
     const snap = serializeWorkspace(tab);
     const back = deserializeWorkspace(snap, newSplitId);
     const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
-    const v1 = g.tabs.find((v) => v.id === "tab-aaaaaa") as Extract<Tab, { kind: "plugin" }>;
-    const v2 = g.tabs.find((v) => v.id === "tab-bbbbbb") as Extract<Tab, { kind: "plugin" }>;
+    // By position. Every id is minted again on restore (RESTORE R3), so a lookup by the stored name
+    // finds nothing — and the tab order is what the round trip preserves.
+    const v1 = g.tabs[0] as Extract<Tab, { kind: "plugin" }>;
+    const v2 = g.tabs[1] as Extract<Tab, { kind: "plugin" }>;
     expect(v1.cwd).toBe("<local-evidence>/somewhere");
     expect(v1.lastActivity).toBe(1234567890);
     expect(v2.cwd).toBeUndefined();
@@ -286,8 +293,10 @@ describe("B3 — cwd/lastActivity persistence round trip", () => {
     };
     const back = deserializeWorkspace(serializeWorkspace(tab), newSplitId);
     const g = (back.spaces[0].layout as Extract<PaneNode, { type: "leaf" }>).value;
-    const v1 = g.tabs.find((v) => v.id === "tab-aaaaaa") as Extract<Tab, { kind: "plugin" }>;
-    const v2 = g.tabs.find((v) => v.id === "tab-bbbbbb") as Extract<Tab, { kind: "plugin" }>;
+    // By position. Every id is minted again on restore (RESTORE R3), so a lookup by the stored name
+    // finds nothing — and the tab order is what the round trip preserves.
+    const v1 = g.tabs[0] as Extract<Tab, { kind: "plugin" }>;
+    const v2 = g.tabs[1] as Extract<Tab, { kind: "plugin" }>;
     expect(v1.state).toEqual({ url: "https://naver.com/" });
     expect(v1.customLabel).toBe("My browser");
     expect(v1.icon).toBe("https://naver.com/favicon.ico");

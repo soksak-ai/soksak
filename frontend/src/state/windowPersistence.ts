@@ -64,13 +64,21 @@ export function restoreWindow(
   projections: Record<string, ProjectionSeed>;
 } {
   const workspaces = snap.workspaces.map((p) => deserializeWorkspace(p, newSplitId));
-  const activeId = workspaces.some((t) => t.id === snap.activeId)
-    ? snap.activeId
-    : (workspaces[0]?.id ?? "");
+  // Every id is minted again (RESTORE R3), so the stored active name matches nothing in the list.
+  // The workspace that was active is found by position — the order is what the round trip
+  // preserves — and its new id is the one everything downstream uses. Matching on the stored name
+  // would fall through to the first workspace every time, and a person would find the wrong
+  // workspace open with nothing reporting it.
+  const wasActive = snap.workspaces.findIndex((p) => p.id === snap.activeId);
+  const activeId = workspaces[wasActive >= 0 ? wasActive : 0]?.id ?? "";
+  // The projection seed is keyed by the id its workspace now holds. Keyed by the stored one it
+  // names a workspace that does not exist, and a pinned rail comes back unpinned with no fault
+  // anywhere.
   const projections: Record<string, ProjectionSeed> = {};
-  for (const p of snap.workspaces) {
-    if (p.projection) projections[p.id] = p.projection;
-  }
+  snap.workspaces.forEach((p, index) => {
+    const restored = workspaces[index];
+    if (p.projection && restored) projections[restored.id] = p.projection;
+  });
   return { workspaces, activeId, projections };
 }
 

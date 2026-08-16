@@ -84,10 +84,45 @@ A snapshot that could not be read is reported unread. Written as 0 workspaces it
 equals a window that was never used, and the save guard then opens and
 overwrites a record this build simply could not parse.
 
-## R3. Ids are minted again, and that is the contract
+## R3. Every id is minted again, and that is the contract
 
-A restore does not carry split ids across. Anything judging a restore therefore
-judges the shape, not the names — which is why `state.fingerprint` holds no id.
+An identifier is a name for one run. A restore rebuilds the workspace, its
+spaces, its panes, its tabs and its split nodes under freshly issued names, and
+rewrites every reference between them so nothing points at a name that is gone.
+
+Anything judging a restore therefore judges the shape, not the names — which is
+why `state.fingerprint` holds no id. A workspace is identified across a restart
+by its **root** (V1), a window by the key `window/<label>`, and the ledger names
+its slots by root as well.
+
+Only split ids were minted until 2026-08-16; everything else was carried across
+verbatim. That is how `t1` — a counter with no prefix, from before the issuer
+existed — was the workspace id of three separate window snapshots at once,
+months after nothing could mint it. A store is where a retired shape outlives
+the code that made it, and reuse was the way in.
+
+Minting the workspace alone would be worse than minting none. A native surface
+label pairs a window name with a view id, the window name is issued fresh at
+every open, and a stale view id beside it makes one value with two lifetimes.
+
+**A stored id is not repaired, it is replaced.** A snapshot this build cannot
+read is left where it is (R1); an id it can read is still not the name the
+restored thing takes.
+
+Two references outlive the names and are rewritten with them, because each fails
+quietly if it is not: the **active workspace** — matched on the stored name it
+falls through to the first workspace every time, and a person finds the wrong
+one open — and the **projection seed**, which keyed by the stored name seeds a
+workspace that does not exist, so a pinned rail comes back unpinned.
+
+Measured 2026-08-16 on the running application, one restart of a three-pane
+layout: every id changed (`pan-672zkd` → `pan-76o76o`, `spc-rspwsl` →
+`spc-wmx7kp`, and `t1` gone for good) and `state.fingerprint` answered
+`b2745219` both times.
+
+Gate: `frontend/src/state/restoreMintsIds.test.ts` — every id minted, every
+reference following. `frontend/src/state/windowPersistence.test.ts` holds the
+two references above.
 
 ---
 
@@ -123,10 +158,24 @@ next.
 
 # K. Known, and not fixed
 
-- **K1. Records from before the rename are still in this developer's store.**
-  They are skipped by name and left alone. No migration is written: L11c says
-  old paths are deleted rather than bridged, and a personal store is not a
-  reason to add one. A fresh install has none of them.
+- **K1. Records from before two retired shapes are still in this developer's
+  store.** Two window snapshots predate the project → workspace rename, and one
+  slot is labelled `w-9c38739854301c21` — the one-letter window prefix N1
+  retired, which `validWindowName` no longer accepts.
+
+  All three are reported by name and left alone. Measured 2026-08-16, one boot:
+  `respawn:spawned:win-8ed56cd7d9305935`,
+  `respawn:unreadable:win-a2824af5b4a84873`,
+  `respawn:unreadable:w-9c38739854301c21`. Each costs its own record and nothing
+  else (R1), and the slot stays rather than being deleted on its author's
+  behalf.
+
+  No migration is written: L11c says old paths are deleted rather than bridged,
+  and a personal store is not a reason to add one. A fresh install has none of
+  them. This is different from R3 — an id inside a snapshot is replaced on the
+  way in because it names nothing outside that snapshot, while a window label
+  **is** the store key and cannot be replaced without losing the record it
+  keys.
 - **Native surfaces are not part of the fingerprint.** `surface.composition` is
   judged on its own (NATIVE-SURFACES V1) and a surface is rebuilt from its
   declaration after the panes come back, so it is a consequence of the layout

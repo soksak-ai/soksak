@@ -41,15 +41,20 @@ describe("snapshot/restore round trip per window", () => {
     const workspaces = [proj("wsp-aaaaaa", "/a"), proj("wsp-bbbbbb", "/b")];
     const snap = snapshotWindow(workspaces, "wsp-bbbbbb");
     const back = restoreWindow(snap, newSplitId);
-    expect(back.activeId).toBe("wsp-bbbbbb");
+    // The roots survive; the ids are minted again (RESTORE R3) and the active one follows the
+    // workspace that was active rather than the name it had.
     expect(back.workspaces.map((t) => t.root)).toEqual(["/a", "/b"]);
-    expect(back.workspaces.map((t) => t.id)).toEqual(["wsp-aaaaaa", "wsp-bbbbbb"]);
+    expect(back.workspaces.map((t) => t.id)).not.toEqual(["wsp-aaaaaa", "wsp-bbbbbb"]);
+    for (const t of back.workspaces) expect(t.id).toMatch(/^wsp-[a-z2-7]{6}$/);
+    expect(back.activeId).toBe(back.workspaces[1]!.id);
+    expect(back.workspaces.find((t) => t.id === back.activeId)?.root).toBe("/b");
   });
 
   it("an activeId absent from the restored set falls back to the first workspace", () => {
     sid = 0;
-    const snap = snapshotWindow([proj("wsp-aaaaaa", "/a")], "tZ");
-    expect(restoreWindow(snap, newSplitId).activeId).toBe("wsp-aaaaaa");
+    const snap = snapshotWindow([proj("wsp-aaaaaa", "/a")], "wsp-zzzzzz");
+    const back = restoreWindow(snap, newSplitId);
+    expect(back.activeId).toBe(back.workspaces[0]!.id);
   });
 
   it("an empty window restores empty", () => {
@@ -112,5 +117,43 @@ describe("manifest rect and focused (B2 multi-window restore)", () => {
     expect(m.focusedLabel).toBe("main");
     m = setManifestFocused(m, "win-1");
     expect(m.focusedLabel).toBe("win-1");
+  });
+});
+
+// What follows the minting, and what would break silently if it did not.
+//
+// Every id is minted again on restore (RESTORE R3). Two values name a workspace
+// by id and are read after the minting, so each is a way for a restore to come
+// back subtly wrong with nothing reporting it:
+//
+//   the active workspace — matched on the stored name it falls through to the
+//   first workspace every time, and a person finds the wrong one open;
+//   the projection seed — keyed by the stored name it seeds a workspace that
+//   does not exist, and a pinned rail comes back unpinned.
+describe("the references that outlive the names", () => {
+  it("opens the workspace that was active, not the first one", () => {
+    sid = 0;
+    const snap = snapshotWindow(
+      [proj("wsp-aaaaaa", "/a"), proj("wsp-bbbbbb", "/b"), proj("wsp-cccccc", "/c")],
+      "wsp-cccccc",
+    );
+    const back = restoreWindow(snap, newSplitId);
+    expect(back.workspaces.find((t) => t.id === back.activeId)?.root).toBe("/c");
+  });
+
+  it("seeds the projection on the workspace that carried it", () => {
+    sid = 0;
+    const snap = snapshotWindow(
+      [proj("wsp-aaaaaa", "/a"), proj("wsp-bbbbbb", "/b")],
+      "wsp-aaaaaa",
+    );
+    // The seed as the store holds it: on the second workspace, under the name that workspace had.
+    snap.workspaces[1]!.projection = { mode: "pin", station: 60 } as never;
+
+    const back = restoreWindow(snap, newSplitId);
+    const seeded = Object.keys(back.projections);
+    expect(seeded).toHaveLength(1);
+    // The seed names a workspace in the restored list, and it is the one that held it.
+    expect(back.workspaces.find((t) => t.id === seeded[0])?.root).toBe("/b");
   });
 });
