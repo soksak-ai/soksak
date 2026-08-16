@@ -19,8 +19,7 @@ const workspace: Workspace = {
   sidebarOpen: true,
   leftRailPlacement: { mode: "pin", station: 60 },
   rightOpen: false,
-  rightView: null,
-  leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
+  sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
   activeSpaceId: "spc-aaaaaa",
   spaces: [
     {

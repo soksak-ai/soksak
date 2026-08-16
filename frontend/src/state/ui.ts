@@ -26,6 +26,12 @@ interface UiState {
   // Settings modal — null = closed, "general" = preferences, otherwise plugin id (deep link). Channel for the sidebar "Settings" shortcut.
   settingsSection: string | null;
   setSettingsSection: (s: string | null) => void;
+
+  // The plugin manager, which is a modal and not a region's content. It hung off the right rail's ⚙
+  // until 2026-08-16, so deleting that rail would have left no way to reach it — and a surface with
+  // no way in is a surface that is gone. It opens from `plugin.manager` and from settings.
+  pluginManagerOpen: boolean;
+  setPluginManagerOpen: (open: boolean) => void;
 }
 
 // The store is outside the module boundary — a hot swap replacing it makes registration,
@@ -38,6 +44,8 @@ export const useUi = moduleState("state/ui#store", () =>
   setConsentPreview: (id) => set({ consentPreviewId: id }),
   settingsSection: null,
   setSettingsSection: (s) => set({ settingsSection: s }),
+  pluginManagerOpen: false,
+  setPluginManagerOpen: (open) => set({ pluginManagerOpen: open }),
   pushOverlay: () => set((s) => ({ overlayCount: s.overlayCount + 1 })),
   popOverlay: () => set((s) => ({ overlayCount: Math.max(0, s.overlayCount - 1) })),
 })),

@@ -20,11 +20,11 @@ import { startPointerOrderRepair } from "./lib/pointerOrderRepair";
 import { isPrimaryModifier, routeZoom } from "./lib/zoomIntent";
 import { beginLayoutMotion, endLayoutMotion } from "./lib/layoutMotion";
 import { startViewFocusSync } from "./plugins/viewFocus";
-import { LeftSidebarHost } from "./components/LeftSidebarHost";
+import { SectionSetHost } from "./components/SectionSetHost";
 import { RailGridSurface, type RailGridSurfaceHandle } from "./components/RailGridSurface";
 import { useLayoutDecorationPresentation } from "./lib/layoutDecorationPresentation";
 import { RailLinkOverlay } from "./components/RailLinkOverlay";
-import { PluginSidebar } from "./components/PluginSidebar";
+import { PluginManagerModal } from "./components/PluginManagerModal";
 import { ContentTabs } from "./components/ContentTabs";
 import { GroupArea, HEADER_PX, PANE_INSET } from "./components/GroupArea";
 import { NewWorkspaceModal } from "./components/NewWorkspaceModal";
@@ -515,7 +515,8 @@ const WorkspacePlane = memo(function WorkspacePlane({
                     } as React.CSSProperties
                   }
                 >
-                  <LeftSidebarHost
+                  <SectionSetHost
+                    region="left"
                     workspace={workspace}
                     paneId={cwdTabOf(workspace) ?? ""}
                     focusedPluginId={focusedPluginId}
@@ -623,7 +624,12 @@ const WorkspacePlane = memo(function WorkspacePlane({
           borderLeftWidth: workspace.rightOpen ? 1 : 0,
         }}
       >
-        <PluginSidebar projectId={workspace.id} />
+        <SectionSetHost
+          region="right"
+          workspace={workspace}
+          paneId={cwdTabOf(workspace) ?? ""}
+          focusedPluginId={focusedPluginId}
+        />
       </div>
     </div>
   );
@@ -1213,6 +1219,7 @@ function App() {
         />
       )}
       <ConsentPreviewHost />
+      <PluginManagerModal />
       {newWorkspaceOpen && (
         <NewWorkspaceModal onClose={() => setNewWorkspaceOpen(false)} />
       )}

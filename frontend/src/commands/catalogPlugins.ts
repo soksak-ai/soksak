@@ -1164,15 +1164,14 @@ export function registerPluginCatalog(): void {
       const key = p.viewKey as string;
       const closed: string[] = [];
       const tabIds: string[] = [];
-      if (workspace.rightView === key) {
-        s.setRightView(projectId, null);
-        closed.push("sidebar-right");
-      }
-      // The left sidebar is registry-driven (the layout only places) — an individual close reports
-      // membership only. The actual removal is handled by reconcileSidebar when the plugin is
-      // disabled or unregistered.
-      if (hasSidebarViewKey(workspace.leftLayout, key)) {
-        closed.push("sidebar-left");
+      // A region's sidebar is registry-driven (the layout only places) — an individual close
+      // reports membership only. The actual removal is handled by reconcileSidebar when the plugin
+      // is disabled or unregistered. Both regions answer the same way: the right held one active
+      // view of its own until 2026-08-16 and had to be closed separately.
+      for (const region of ["left", "right"] as const) {
+        if (hasSidebarViewKey(workspace.sidebarLayouts[region], key)) {
+          closed.push(`sidebar-${region}`);
+        }
       }
       // content placement: closes every tab of this plugin view across all spaces.
       for (const space of workspace.spaces) {

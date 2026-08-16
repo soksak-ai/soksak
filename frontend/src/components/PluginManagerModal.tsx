@@ -1,160 +1,33 @@
-// Right plugin sidebar — icon rail (registered sidebar-right views + ⚙ manager) plus the active view.
-// keep-alive: a view opened once is kept hidden (display) — a per-workspace instance (rendered inside
-// App.tsx's workspace-plane, so the session survives a workspace switch, same as the app convention).
-// Manager panel: verified release install, consent, enable/disable, update, remove, rejected
-// reasons — a plugin-only management surface separate from the settings modal.
+// The plugin manager — verified release install, consent, enable/disable, update, remove, and the
+// reasons a plugin was refused. A modal, mounted on document.body.
+//
+// It hung off the right sidebar's icon rail until 2026-08-16, together with a rail of every view
+// placed right and a single active `rightView`. That was the right region carrying a rule of its
+// own: `sections.link ... region=right` answered OK and the screen never changed, and unlinking
+// changed nothing either (measured on the running build). A2a — a region is a place, and the
+// workspace arranges what stands in it — so the region draws the standing set like the left, and
+// what is left here is the manager.
+//
+// It opens from `plugin.manager` and from the settings modal. A surface with no way in is gone.
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "../ui/icons/Icon";
-import {
-  useViewRegistry,
-  viewsForPlacement,
-} from "../plugins/viewRegistry";
 import { usePlugins, type PluginRuntime } from "../state/plugins";
 import { useRegistry } from "../state/registry";
 import { installState, isOfficial, type RegistryEntry } from "../plugins/registry";
-import { useSessions } from "../state/sessions";
-import { useSettings } from "../state/settings";
 import { useUi } from "../state/ui";
-import { PluginViewHost } from "./PluginViewHost";
-import { ViewBadge } from "./ViewBadge";
 import { PluginConsentModal } from "./PluginConsentModal";
 import { localize, useT } from "../i18n";
 import { execute } from "../commands/registry";
 
-// memo boundary (principles 2·3): takes the workspace id only and subscribes to *the fields it uses*
-// (rightView/rightOpen/root) through selectors — taking the whole workspace object as a prop changes
-// identity on an unrelated field change such as activeSpaceId (tab switch) and re-renders. With
-// slice subscriptions it re-renders only when those fields actually change.
-export const PluginSidebar = memo(function PluginSidebar({
-  projectId,
-}: {
-  projectId: string;
-}) {
+export function PluginManagerModal() {
   const t = useT();
-  const version = useViewRegistry((s) => s.version);
-  // Every view a plugin placed on the right. It listed rail-placed views carrying a `resident` flag
-  // until 2026-08-16 — the right side borrowing the left's placement, with a flag standing in for a
-  // region. `right` is a region now, and a plugin declares it.
-  const sidebarViews = useMemo(
-    () => viewsForPlacement("right"),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [version],
-  );
-  const setRightView = useSessions((s) => s.setRightView);
-  const rightView = useSessions(
-    (s) => s.workspaces.find((x) => x.id === projectId)?.rightView,
-  );
-  const rightOpen = useSessions(
-    (s) => s.workspaces.find((x) => x.id === projectId)?.rightOpen ?? false,
-  );
-  const root = useSessions((s) => s.workspaces.find((x) => x.id === projectId)?.root);
-  const rightMode = useSettings((s) => s.rightSidebarMode);
-  const setRightMode = useSettings((s) => s.setRightSidebarMode);
-
-  // The manager panel moved to a modal outside the rail (A5 — removes core hardcoding of rail content).
-  const [managerOpen, setManagerOpen] = useState(false);
-
-  // Open with no selection, or with a vanished view, falls back to the first registered view. An
-  // old session's "manager" value is resolved here too (no longer a valid view, so it resets to the
-  // first view or null).
-  useEffect(() => {
-    if (!rightOpen) return;
-    const valid = sidebarViews.some((v) => v.key === rightView);
-    if (rightView && valid) return;
-    setRightView(projectId, sidebarViews[0]?.key ?? null);
-  }, [rightOpen, projectId, rightView, sidebarViews, setRightView]);
-
-  // keep-alive: accumulates the view keys opened once in this workspace (unregistering drops them).
-  const openedRef = useRef<Set<string>>(new Set());
-  if (rightView) openedRef.current.add(rightView);
-  const opened = [...openedRef.current].filter((k) =>
-    sidebarViews.some((v) => v.key === k),
-  );
-
-  const activeTitleRaw = sidebarViews.find((v) => v.key === rightView)?.view
-    .decl.title;
-  const activeTitle = activeTitleRaw ? localize(activeTitleRaw) : "";
+  const managerOpen = useUi((s) => s.pluginManagerOpen);
+  const setManagerOpen = useUi((s) => s.setPluginManagerOpen);
 
   return (
-    <div className="plugin-side">
-      <div className="plugin-rail">
-        {sidebarViews.map(({ key, view }) => (
-          <button
-            key={key}
-            type="button"
-            className={`icon-btn icon-btn--boxed plugin-rail-btn${rightView === key ? " active" : ""}`}
-            title={localize(view.decl.title)}
-            onClick={() => setRightView(projectId, key)}
-          >
-            {/* Plugin icon = the string declared in the manifest (external contract) — displayed as is. */}
-            {view.decl.icon}
-            <ViewBadge viewKey={key} />
-          </button>
-        ))}
-        <div className="plugin-rail-spacer" />
-        {/* Push — switches the right sidebar between overlay and push (taking up space). Directly above the settings button. */}
-        <button
-          type="button"
-          className={`icon-btn icon-btn--boxed plugin-rail-btn${rightMode === "push" ? " active" : ""}`}
-          title={rightMode === "push" ? t("plugin.sidebar.overlay") : t("plugin.sidebar.push")}
-          data-node="plugin-sidebar-push"
-          onClick={() =>
-            setRightMode(rightMode === "push" ? "overlay" : "push")
-          }
-        >
-          <Icon name="panel-right" />
-        </button>
-        <button
-          type="button"
-          className={`icon-btn icon-btn--boxed plugin-rail-btn${managerOpen ? " active" : ""}`}
-          title={t("plugin.manager")}
-          data-node="plugin-manager-tab"
-          onClick={() => setManagerOpen(true)}
-        >
-          <Icon name="settings" />
-        </button>
-      </div>
-      <div className="plugin-side-main">
-        <div className="plugin-side-head">{activeTitle}</div>
-        <div className="plugin-side-body">
-          {opened.map((k) => (
-            <div
-              key={k}
-              className="sidebar-right-body"
-              style={{ display: rightView === k ? "flex" : "none" }}
-            >
-              <PluginViewHost
-                viewKey={k}
-                projectId={projectId}
-                root={root ?? null}
-                region="right"
-              />
-            </div>
-          ))}
-          {opened.length === 0 && (
-            <div className="plugin-side-empty">
-              <div>{t("plugin.empty")}</div>
-              <button
-                type="button"
-                className="dbtn"
-                onClick={() => setManagerOpen(true)}
-              >
-                {t("plugin.manager.open")}
-              </button>
-            </div>
-          )}
-        </div>
-        {/* Bottom status bar — the same visual language as the terminal pane (pane-status):
-            context on the left (workspace root), current view title on the right. */}
-        <div className="plugin-side-status">
-          <span className="pss-left" title={root}>
-            {root ?? "—"}
-          </span>
-          <span className="pss-right">{activeTitle}</span>
-        </div>
-      </div>
+    <>
       {/* Manager modal — mounted on document.body, not here. The rail's panel
           declares `will-change: transform` so the compositor keeps host chrome
           above a plugin's WebGL canvas, and that makes it the containing block
@@ -189,9 +62,9 @@ export const PluginSidebar = memo(function PluginSidebar({
         </div>,
         document.body,
       )}
-    </div>
+    </>
   );
-});
+}
 
 // ── Manager panel ───────────────────────────────────────────────────────────
 

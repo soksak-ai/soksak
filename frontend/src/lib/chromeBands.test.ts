@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 import { CHROME_BANDS } from "./chromeBands";
 import { HEADER_PX } from "../components/GroupArea";
-import { SIDEBAR_HEADER_PX } from "../components/LeftSidebarHost";
+import { SIDEBAR_HEADER_PX } from "../components/SectionSetHost";
 
 // Within one window the header has one height and the footer has one height. When the sidebar and
 // the content use different values, the bands of the two regions run side by side one pixel apart,

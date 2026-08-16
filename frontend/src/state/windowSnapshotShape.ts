@@ -74,7 +74,8 @@ function splitWithNoID(workspaces: unknown[]): string | null {
       if (space === null || typeof space !== "object") continue;
       walk((space as Record<string, unknown>).layout, name);
     }
-    walk(held.leftLayout, name);
+    const layouts = (held.sidebarLayouts as Record<string, unknown>) ?? {};
+    for (const layout of Object.values(layouts)) walk(layout, name);
   }
   return found;
 }

@@ -17,8 +17,8 @@ import {
   deserializeSplitTree,
   type SplitSnapshot,
 } from "./splitTree";
-import type { SidebarGroup } from "./sidebarLayout";
-import type { Workspace, Space, Pane, Tab } from "./sessions";
+import { initialSidebarLayout, type SidebarGroup, type SidebarLayout } from "./sidebarLayout";
+import type { Workspace, Space, Pane, Tab, SidebarRegion } from "./sessions";
 import { DEFAULT_RAIL_PLACEMENT,
   normalizeRailPlacement,
   type RailPlacement,
@@ -78,8 +78,9 @@ export interface WorkspaceSnapshot {
   // Rail frame position PIN.
   leftRailPlacement?: RailPlacement;
   rightOpen: boolean;
-  rightView: string | null;
-  leftLayout: SplitSnapshot<SidebarGroup>;
+  // One arrangement per region. The right held a single active view and drew an icon rail of
+  // everything placed there until 2026-08-16 — a region with a rule of its own (A2a).
+  sidebarLayouts: Record<SidebarRegion, SplitSnapshot<SidebarGroup>>;
   activeContentId: string;
   contents: ContentSnapshot[];
   // Rail pins (§4.5) — persisted with the workspace.
@@ -135,9 +136,11 @@ export function serializeWorkspace(p: Workspace): WorkspaceSnapshot {
     sidebarOpen: p.sidebarOpen,
     leftRailPlacement: p.leftRailPlacement ?? DEFAULT_RAIL_PLACEMENT,
     rightOpen: p.rightOpen,
-    rightView: p.rightView,
     // Sidebar layout (SplitTree<SidebarGroup>) — the leaf payload is plain JSON.
-    leftLayout: serializeSplitTree(p.leftLayout, (g) => g),
+    sidebarLayouts: {
+      left: serializeSplitTree(p.sidebarLayouts.left, (g) => g),
+      right: serializeSplitTree(p.sidebarLayouts.right, (g) => g),
+    },
     activeContentId: p.activeSpaceId,
     contents: p.spaces.map(serializeContent),
   };
@@ -188,6 +191,22 @@ const deserializeContent = (s: ContentSnapshot, normalize: boolean): Space => {
   };
 };
 
+/** One region's stored arrangement, or an empty one.
+ *
+ *  A stored field of another shape costs that field, not the window (RESTORE R1). The workspace held
+ *  one arrangement for the left and a single active view for the right until 2026-08-17; a snapshot
+ *  written before that threw here, and with it went the panes, the tabs and the roots of every
+ *  workspace in the window — measured, every command answered `No such workspace`. The arrangement
+ *  of a region is presentation, and losing it costs the arrangement. */
+function sidebarLayoutOf(stored: SplitSnapshot<SidebarGroup> | undefined): SidebarLayout {
+  if (!stored) return initialSidebarLayout([]);
+  try {
+    return deserializeSplitTree(stored, (g) => g);
+  } catch {
+    return initialSidebarLayout([]);
+  }
+}
+
 export function deserializeWorkspace(s: WorkspaceSnapshot): Workspace {
   return {
     id: s.id,
@@ -202,8 +221,10 @@ export function deserializeWorkspace(s: WorkspaceSnapshot): Workspace {
       ? normalizeRailPlacement(s.leftRailPlacement)
       : DEFAULT_RAIL_PLACEMENT,
     rightOpen: s.rightOpen,
-    rightView: s.rightView,
-    leftLayout: deserializeSplitTree(s.leftLayout, (g) => g),
+    sidebarLayouts: {
+      left: sidebarLayoutOf(s.sidebarLayouts?.left),
+      right: sidebarLayoutOf(s.sidebarLayouts?.right),
+    },
     activeSpaceId: s.activeContentId,
     spaces: s.contents.map((c) => deserializeContent(c, !s.vlNormalized)),
   };

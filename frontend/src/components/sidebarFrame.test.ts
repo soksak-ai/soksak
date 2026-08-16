@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const host = readFileSync(resolve(import.meta.dirname, "LeftSidebarHost.tsx"), "utf8");
+const host = readFileSync(resolve(import.meta.dirname, "SectionSetHost.tsx"), "utf8");
 const css = readFileSync(resolve(import.meta.dirname, "../App.css"), "utf8");
 
 // The sidebar frame is a contract, and what goes inside it is the plugin's part. If the frame depends on the

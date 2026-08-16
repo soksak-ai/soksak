@@ -46,8 +46,7 @@ function workspace(
     sidebarOpen: true,
     ...(placement ? { leftRailPlacement: placement } : {}),
     rightOpen: false,
-    rightView: null,
-    leftLayout: initialSidebarLayout([]),
+    sidebarLayouts: { left: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     spaces: [
       {
         id: "spc-aaaaaa",

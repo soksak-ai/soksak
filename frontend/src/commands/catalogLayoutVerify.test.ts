@@ -42,8 +42,7 @@ function workspace(): Workspace {
     sidebarOpen: false,
     leftRailPlacement: { mode: "flow" },
     rightOpen: false,
-    rightView: null,
-    leftLayout: initialSidebarLayout([]),
+    sidebarLayouts: { left: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     spaces: [
       {
         id: "spc-aaaaaa",

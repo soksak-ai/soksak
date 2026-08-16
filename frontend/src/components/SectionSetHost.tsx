@@ -33,7 +33,7 @@ import {
   getRegisteredView,
 } from "../plugins/viewRegistry";
 import { useSectionSets } from "../state/sectionSets";
-import { useSessions, type Workspace } from "../state/sessions";
+import { useSessions, type Workspace, type SidebarRegion } from "../state/sessions";
 import { useTheme } from "../state/theme";
 import { useViewLabels, resolveViewLabel } from "../state/viewLabels";
 import {
@@ -54,11 +54,14 @@ const PANE_INSET: Record<string, number> = { flat: 0, card: 5, floating: 6 };
 
 // Content zone → sidebar drop (the same 4 directions as content). center = join tabs, left/right = row split,
 // top/bottom = col split.
-export const LeftSidebarHost = memo(function LeftSidebarHost({
+export const SectionSetHost = memo(function SectionSetHost({
+  region,
   workspace,
   paneId,
   focusedPluginId,
 }: {
+  /** Which region this host draws. The set names none — the link or the fixed choice settles it. */
+  region: SidebarRegion;
   workspace: Workspace;
   paneId: string;
   /** The plugin of the focused centre view — what `individual` reads. null = none focused. */
@@ -78,21 +81,23 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
   const standing = useSectionSets((s) => (s.mode === "fixed" ? s.fixed : s.byPlugin[focusedPluginId ?? ""]));
   const sets = useSectionSets((s) => s.sets);
   const registeredKeys = useMemo(() => {
-    const placed = new Set(viewsForPlacement("left").map((v) => v.key));
-    const set = standing ? sets.find((x) => x.id === standing.set) : undefined;
+    if (!standing || standing.region !== region) return [];
+    const placed = new Set(viewsForPlacement(region).map((v) => v.key));
+    const set = sets.find((x) => x.id === standing.set);
     return (set?.sections ?? []).filter((k) => placed.has(k));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, standing, sets]);
+  }, [version, standing, sets, region]);
   const reconcileSidebar = useSessions((s) => s.reconcileSidebar);
-  const setLeftTab = useSessions((s) => s.setLeftTab);
+  const setSidebarTab = useSessions((s) => s.setSidebarTab);
+  const stored = workspace.sidebarLayouts[region];
 
   // Reconcile against the registered views.
   useEffect(() => {
-    reconcileSidebar(workspace.id, registeredKeys);
-  }, [workspace.id, registeredKeys, reconcileSidebar]);
+    reconcileSidebar(workspace.id, region, registeredKeys);
+  }, [workspace.id, region, registeredKeys, reconcileSidebar]);
   const layout = useMemo(
-    () => reconcileSidebarLayout(workspace.leftLayout, registeredKeys),
-    [workspace.leftLayout, registeredKeys],
+    () => reconcileSidebarLayout(stored, registeredKeys),
+    [stored, registeredKeys],
   );
 
   // keep-alive accumulation.
@@ -192,7 +197,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
             }
           }
         } else {
-          setLeftTab(workspace.id, viewKey); // Click = switch tab
+          setSidebarTab(workspace.id, region, viewKey); // Click = switch tab
         }
         setDrag(null);
         setHover(null);
@@ -200,7 +205,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
       window.addEventListener("mousemove", onMove);
       window.addEventListener("mouseup", onUp);
     },
-    [workspace.id, hitTest, setLeftTab],
+    [workspace.id, region, hitTest, setSidebarTab],
   );
 
   // Divider drag (split ratio). The same logic as the content onGutterDown.
@@ -224,7 +229,7 @@ export const LeftSidebarHost = memo(function LeftSidebarHost({
         // Presentation touches the store directly — it runs every frame, which is no place for a command. This
         // reads the state at that moment rather than subscribing, so it reads outside the hook (a gesture path
         // unrelated to render).
-        useSessions.getState().resizeSidebar(workspace.id, d.splitId, sizes),
+        useSessions.getState().resizeSidebar(workspace.id, region, d.splitId, sizes),
       commit: (sizes) => {
         // Address the gutter by name — the internal split id never goes outside (IDENTITY §4).
         const owner = gutterOwnerOf(layout, d.splitId, d.index, cellId);

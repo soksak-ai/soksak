@@ -30,8 +30,7 @@ const tab = (id: string, tabs: Tab[]): Workspace => ({
   title: id,
   sidebarOpen: false,
   rightOpen: false,
-  rightView: null,
-  leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
+  sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
   root: "/r",
   spaces: [
     {

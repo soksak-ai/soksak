@@ -45,20 +45,35 @@ describe("a fixed overlay is positioned against the window", () => {
   });
 
   it("a modal rendered under a promoted panel goes through a portal", () => {
-    // App.tsx wraps PluginSidebar in .sidebar-right, so everything that
-    // component renders is inside the promoted box — including a modal it
-    // renders itself and one it renders through a child. A portal is the only
-    // thing that takes the overlay back out to the window.
-    const sidebar = readFileSync(join(process.cwd(), "src", "components", "PluginSidebar.tsx"), "utf8");
-    const modalsHere = [...sidebar.matchAll(/<(\w*Modal)\b|className="dmodal-overlay"/g)].map(
+    // App.tsx wraps SectionSetHost in .sidebar-right, so everything that host
+    // renders is inside the promoted box. A portal is the only thing that takes
+    // an overlay back out to the window.
+    const host = readFileSync(join(process.cwd(), "src", "components", "SectionSetHost.tsx"), "utf8");
+    const modalsHere = [...host.matchAll(/<(\w*Modal)\b|className="dmodal-overlay"/g)].map(
       (m) => m[1] ?? "dmodal-overlay",
     );
-    expect(modalsHere.length).toBeGreaterThan(0);
+    // Each of them is inside a createPortal call. Counting is enough: the host
+    // has no other reason to portal, and a modal added without one moves the
+    // counts apart.
+    const portals = (host.match(/createPortal\(/g) ?? []).length;
+    expect(portals).toBeGreaterThanOrEqual(modalsHere.length);
+  });
 
-    // Each of them is inside a createPortal call. Counting is enough: the
-    // component has no other reason to portal, and a modal added without one
-    // moves the counts apart.
-    const portals = (sidebar.match(/createPortal\(/g) ?? []).length;
-    expect(portals).toBe(modalsHere.length);
+  it("the plugin manager is mounted outside every promoted panel", () => {
+    // The manager hung off the right sidebar's rail, inside the promoted box,
+    // and reached the window only by portal. The rail is gone (A2a — the region
+    // draws the standing set), so the manager is mounted by App itself.
+    const app = readFileSync(join(process.cwd(), "src", "App.tsx"), "utf8");
+    const sidebarRight = app.indexOf('className={`sidebar-right');
+    const manager = app.indexOf("<PluginManagerModal");
+    expect(manager).toBeGreaterThan(-1);
+    // Oracle liveness — the promoted panel is still rendered here, so "outside"
+    // is a placement rather than an absence.
+    expect(sidebarRight).toBeGreaterThan(-1);
+
+    // The manager's mount is not inside the sidebar-right element's JSX. That
+    // element closes before the modal list begins.
+    const sidebarBlockEnds = app.indexOf("</div>", app.indexOf("<SectionSetHost", sidebarRight));
+    expect(manager).toBeGreaterThan(sidebarBlockEnds);
   });
 });

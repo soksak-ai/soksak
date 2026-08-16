@@ -40,8 +40,7 @@ function fixture(): Workspace {
     root: "<local-evidence>/pane-gutter",
     sidebarOpen: false,
     rightOpen: false,
-    rightView: null,
-    leftLayout: initialSidebarLayout([]),
+    sidebarLayouts: { left: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     spaces: [
       {
         id: "spc-aaaaaa",

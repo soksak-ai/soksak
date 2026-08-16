@@ -56,8 +56,7 @@ function workspace(activePaneId: string): Workspace {
     sidebarOpen: true,
     leftRailPlacement: { mode: "flow" },
     rightOpen: false,
-    rightView: null,
-    leftLayout: initialSidebarLayout([]),
+    sidebarLayouts: { left: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     spaces: [
       {
         id: "spc-aaaaaa",

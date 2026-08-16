@@ -39,6 +39,7 @@ import {
   type Tab,
   type Pane,
   type CmdErr,
+  type SidebarRegion,
 } from "../state/sessions";
 import {
   canonicalGutter,
@@ -166,7 +167,7 @@ function gutterEcho(
 }
 
 // The split that directly wraps the leaf holding that viewKey — interior nodes of the sidebar tree
-// have no name, so the split to adjust is named by the view inside it (sidebar.left.resize). A leaf
+// have no name, so the split to adjust is named by the view inside it (sidebar.resize). A leaf
 // root has no split (null).
 function sidebarSplitIdOf(layout: SidebarLayout, viewKey: string): string | null {
   const walk = (node: SidebarLayout, parentId: string | null): string | null => {
@@ -311,7 +312,7 @@ function serializeTab(v: Tab) {
 
 // Serialization of the split structure (shared by the pane tree and the sidebar tree). Interior nodes
 // are not real things, so they have no name — only dir/sizes and nested children, no id. Commands
-// that manipulate gutters (pane.resize, pane.equalize, sidebar.left.resize) name a gutter by leaf, so
+// that manipulate gutters (pane.resize, pane.equalize, sidebar.resize) name a gutter by leaf, so
 // an interior node is never named (IDENTITY §4).
 function serializeSplitStructure<L>(
   node: SplitTree<L>,
@@ -1245,19 +1246,28 @@ export function registerCatalog(): void {
     },
   });
 
-  register("sidebar.left.tree", {
+  register("sidebar.tree", {
     description:
-      "Return the left sidebar layout tree (SplitTree of tab groups) — direction, sizes, each leaf's viewKeys + active. Source for sidebar.left.move/resize targets, which name a viewKey (the tree's interior nodes have no name).",
-    triggers: { ko: "좌측 사이드바 레이아웃 트리 탭 분할 구조" },
-    params: { workspace: P.workspace },
-    returns: "{ projectId, layout }",
-    message: () => tmsg("msg.sidebar.left.tree"),
-    errors: ["TARGET_NOT_FOUND"],
-    examples: ["sidebar.left.tree"],
+      "Return a region's sidebar layout tree (SplitTree of tab groups) — direction, sizes, each leaf's viewKeys + active. Source for sidebar.move/resize targets, which name a viewKey (the tree's interior nodes have no name).",
+    triggers: { ko: "사이드바 레이아웃 트리 탭 분할 구조" },
+    params: {
+      workspace: P.workspace,
+      region: {
+        type: "string",
+        enum: ["left", "right"],
+        description: tmsg("cmd.sidebar.param.region"),
+        required: true,
+      },
+    },
+    returns: "{ projectId, region, layout }",
+    message: () => tmsg("msg.sidebar.tree"),
+    errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
+    examples: ['sidebar.tree \'{"region":"left"}\''],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
       if (!t) return notFound("msg.workspace.notFound");
-      return { projectId: t.id, layout: serializeSidebarLayout(t.leftLayout) };
+      const region = p.region as SidebarRegion;
+      return { projectId: t.id, region, layout: serializeSidebarLayout(t.sidebarLayouts[region]) };
     },
   });
 
@@ -1352,26 +1362,32 @@ export function registerCatalog(): void {
     },
   });
 
-  register("sidebar.left.move", {
+  register("sidebar.move", {
     description:
       "Drag-merge a left sidebar view — into=merge as a tab, left/right=horizontal split, top/bottom=vertical split (same 4 directions as the content area). viewKeys/targets come from sidebar.left.tree.",
     triggers: { ko: "좌측 사이드바 탭 이동 합치기 분할 드래그 머지" },
     params: {
       workspace: P.workspace,
+      region: {
+        type: "string",
+        enum: ["left", "right"],
+        description: tmsg("cmd.sidebar.param.region"),
+        required: true,
+      },
       viewKey: { type: "string", description: "viewKey to move", required: true },
       target: { type: "string", description: "target viewKey (a view in the target group)", required: true },
       zone: {
         type: "string",
-        description: tmsg("cmd.sidebar.left.move.param.zone"),
+        description: tmsg("cmd.sidebar.move.param.zone"),
         enum: ["into", "left", "right", "top", "bottom"],
         required: true,
       },
     },
     returns: "{ projectId }",
-    message: () => tmsg("msg.sidebar.left.move"),
+    message: () => tmsg("msg.sidebar.move"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sidebar.left.move \'{"viewKey":"soksak-plugin-<id>.<view>","target":"soksak-plugin-<other-id>.<view>","zone":"right"}\'',
+      'sidebar.move \'{"region":"left","viewKey":"soksak-plugin-<id>.<view>","target":"soksak-plugin-<other-id>.<view>","zone":"right"}\'',
     ],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
@@ -1386,41 +1402,48 @@ export function registerCatalog(): void {
         drop = { type: "split" as const, targetKey: target, dir: "col" as const, before: zone === "top" };
       else
         return { ok: false as const, code: "INVALID_PARAMS", message: "zone: into | left | right | top | bottom" };
-      return withTargets(S().moveSidebarView(t.id, p.viewKey as string, drop), {
+      return withTargets(S().moveSidebarView(t.id, p.region as SidebarRegion, p.viewKey as string, drop), {
         projectId: t.id,
       });
     },
   });
 
-  register("sidebar.left.resize", {
+  register("sidebar.resize", {
     description:
       "Resize the left sidebar split that holds a view — sizes are parallel to that split's children (sum 1). The tree's interior nodes have no name, so the split is named by one of the views inside it (viewKeys from sidebar.left.tree).",
     triggers: { ko: "좌측 사이드바 분할 비율 크기 조절" },
     params: {
       workspace: P.workspace,
+      region: {
+        type: "string",
+        enum: ["left", "right"],
+        description: tmsg("cmd.sidebar.param.region"),
+        required: true,
+      },
       viewKey: {
         type: "string",
-        description: tmsg("cmd.sidebar.left.resize.param.viewKey"),
+        description: tmsg("cmd.sidebar.resize.param.viewKey"),
         required: true,
       },
       sizes: { type: "number[]", description: "Ratio per child, sum 1", required: true },
     },
     returns: "{ projectId, sizes }",
-    message: () => tmsg("msg.sidebar.left.resize"),
+    message: () => tmsg("msg.sidebar.resize"),
     errors: ["TARGET_NOT_FOUND", "INVALID_PARAMS"],
     examples: [
-      'sidebar.left.resize \'{"viewKey":"soksak-plugin-<id>.<view>","sizes":[0.6,0.4]}\'',
+      'sidebar.resize \'{"region":"left","viewKey":"soksak-plugin-<id>.<view>","sizes":[0.6,0.4]}\'',
     ],
     handler: (p, ctx) => {
       const t = resolveWorkspace(p, ctx);
       if (!t) return notFound("msg.workspace.notFound");
       const key = p.viewKey as string;
-      const splitId = sidebarSplitIdOf(t.leftLayout, key);
+      const region = p.region as SidebarRegion;
+      const splitId = sidebarSplitIdOf(t.sidebarLayouts[region], key);
       if (!splitId) {
-        return notFound("msg.sidebar.left.resize.notSplit", { key });
+        return notFound("msg.sidebar.resize.notSplit", { key });
       }
       const sizes = p.sizes as number[];
-      const r = S().resizeSidebar(t.id, splitId, sizes);
+      const r = S().resizeSidebar(t.id, region, splitId, sizes);
       return r.ok ? { projectId: t.id, sizes } : r;
     },
   });

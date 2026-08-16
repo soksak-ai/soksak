@@ -31,8 +31,7 @@ const proj = (id: string, root: string): Workspace => ({
   root,
   sidebarOpen: true,
   rightOpen: false,
-  rightView: null,
-  leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
+  sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
   activeSpaceId: "spc-aaaaaa",
   spaces: [{ id: "spc-aaaaaa", title: "1", activePaneId: "pan-aaaaaa", layout: leafGroup("pan-aaaaaa", "tab-aaaaaa") }],
 });

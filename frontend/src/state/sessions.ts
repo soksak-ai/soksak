@@ -194,6 +194,22 @@ export interface Space {
   maximizedTabId?: string;
 }
 
+/** A window region a set can stand in. Centre holds panes, not sections. */
+export type SidebarRegion = "left" | "right";
+
+/** One region's layout replaced, the rest of the workspace untouched. Written in one place so a
+ *  region cannot be updated by a path that forgets the other. */
+function withSidebarLayout(
+  workspaces: Workspace[],
+  id: string,
+  region: SidebarRegion,
+  layout: SidebarLayout,
+): Workspace[] {
+  return workspaces.map((x) =>
+    x.id === id ? { ...x, sidebarLayouts: { ...x.sidebarLayouts, [region]: layout } } : x,
+  );
+}
+
 export interface Workspace {
   id: string;
   title: string; // alias
@@ -201,13 +217,17 @@ export interface Workspace {
   // Position mode of the left rail frame. A separate axis from the projection ref pin (the content
   // inside the rail). Absence in old snapshots and test fixtures is read as FLOW.
   leftRailPlacement?: RailPlacement;
-  // Right plugin sidebar: open + active view ("<pluginId>.<viewId>" | "manager" | null).
+  // Right region: open or not. What stands in it is the section set, the same as the left.
   rightOpen: boolean;
-  rightView: string | null;
-  // Left sidebar layout (B2) — SplitTree<SidebarGroup>. Placement of registered sidebar-left views
-  // (tab bundle + vertical split + active). The same drag-merge as the content area. Reconciled
-  // against registration changes (LeftSidebarHost).
-  leftLayout: SidebarLayout;
+  // How the sections of the set standing in each region are arranged (B2) — SplitTree<SidebarGroup>,
+  // tab bundle + split + active, the same drag-merge as the content area. Reconciled against
+  // registration changes by the host.
+  //
+  // One shape for both regions. The right held a single `rightView` and an icon rail of every view
+  // placed there until 2026-08-16 — a region with a rule of its own, so `sections.link region=right`
+  // answered OK and the screen never changed (measured). A2a: a region is a place, and the workspace
+  // arranges what stands in it.
+  sidebarLayouts: Record<SidebarRegion, SidebarLayout>;
   // Workspace root directory (P1 root required — workspaceRoot.ts constitution). Identity = this path
   // (P4). The terminal start location and the basis for the file tree and git.
   root: string;
@@ -276,20 +296,29 @@ interface SessionsStore {
     id: string,
     open?: boolean,
   ) => CmdResult<{ rightOpen: boolean }>;
-  setRightView: (
+  // Sidebar active tab — make viewKey the active one in the leaf group that holds it.
+  setSidebarTab: (
     id: string,
-    view: string | null,
-  ) => CmdResult<{ rightView: string | null }>;
-  // Left sidebar active tab — make viewKey the active one in the leaf group that holds it.
-  // (Replaces the old setLeftTab.)
-  setLeftTab: (id: string, viewKey: string) => CmdResult<{ leftTab: string }>;
-  // Reconcile with registered sidebar-left views (LeftSidebarHost calls it on render). set only on
+    region: SidebarRegion,
+    viewKey: string,
+  ) => CmdResult<{ sidebarTab: string }>;
+  // Reconcile with the registered views of that region (the host calls it on render). set only on
   // change.
-  reconcileSidebar: (id: string, registeredKeys: string[]) => void;
+  reconcileSidebar: (id: string, region: SidebarRegion, registeredKeys: string[]) => void;
   // Sidebar view drag-merge (into = join tabs, split = vertical separation).
-  moveSidebarView: (id: string, viewKey: string, drop: SidebarDrop) => CmdResult;
+  moveSidebarView: (
+    id: string,
+    region: SidebarRegion,
+    viewKey: string,
+    drop: SidebarDrop,
+  ) => CmdResult;
   // Adjust the sidebar split ratio (handle drag/command).
-  resizeSidebar: (id: string, splitId: string, sizes: number[]) => CmdResult;
+  resizeSidebar: (
+    id: string,
+    region: SidebarRegion,
+    splitId: string,
+    sizes: number[],
+  ) => CmdResult;
 
   // Content tab level. With program given, use that program (+ menu); otherwise the workspace then
   // global setting.
@@ -922,8 +951,7 @@ function makeWorkspace(id: string, opts: NewWorkspaceOpts): Workspace {
     sidebarOpen: true,
     leftRailPlacement: DEFAULT_RAIL_PLACEMENT, // flow — the rail attaches to the focused panel
     rightOpen: false,
-    rightView: null,
-    leftLayout: initialSidebarLayout([]),
+    sidebarLayouts: { left: initialSidebarLayout([]), right: initialSidebarLayout([]) },
     root: opts.root,
     spaces: [c],
     activeSpaceId: c.id,
@@ -1150,87 +1178,66 @@ export const useSessions = moduleState("state/sessions#store", () =>
     return r;
   },
 
-  setRightView: (id, view) => {
-    let r: CmdResult<{ rightView: string | null }> = noWorkspace(id);
+  setSidebarTab: (id, region, viewKey) => {
+    let r: CmdResult<{ sidebarTab: string }> = noWorkspace(id);
     set((s) => {
       const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
-      r = ok({ rightView: view });
-      if (t.rightView === view) return s;
-      return {
-        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, rightView: view } : x)),
-      };
-    });
-    return r;
-  },
-
-  setLeftTab: (id, viewKey) => {
-    let r: CmdResult<{ leftTab: string }> = noWorkspace(id);
-    set((s) => {
-      const t = s.workspaces.find((x) => x.id === id);
-      if (!t) return s;
-      if (!hasSidebarView(t.leftLayout, viewKey)) {
+      if (!hasSidebarView(t.sidebarLayouts[region], viewKey)) {
         r = err("TARGET_NOT_FOUND", tmsg("sidebar.view.notFound", { viewKey }));
         return s;
       }
-      r = ok({ leftTab: viewKey });
+      r = ok({ sidebarTab: viewKey });
       // Make viewKey the active one only in the leaf group that holds it (other leaves unchanged).
-      const leftLayout = mapLeaves(t.leftLayout, (g) =>
+      const next = mapLeaves(t.sidebarLayouts[region], (g) =>
         g.viewKeys.includes(viewKey) && g.activeViewKey !== viewKey
           ? { ...g, activeViewKey: viewKey }
           : g,
       );
-      return {
-        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
-      };
+      return { workspaces: withSidebarLayout(s.workspaces, id, region, next) };
     });
     return r;
   },
 
-  reconcileSidebar: (id, registeredKeys) => {
+  reconcileSidebar: (id, region, registeredKeys) => {
     set((s) => {
       const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
-      const next = reconcileSidebarLayout(t.leftLayout, registeredKeys);
-      if (next === t.leftLayout) return s; // no change (reference kept — prevents an endless reconcile)
-      return {
-        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, leftLayout: next } : x)),
-      };
+      const next = reconcileSidebarLayout(t.sidebarLayouts[region], registeredKeys);
+      // No change keeps the reference — a new one every render is an endless reconcile.
+      if (next === t.sidebarLayouts[region]) return s;
+      return { workspaces: withSidebarLayout(s.workspaces, id, region, next) };
     });
   },
 
-  moveSidebarView: (id, viewKey, drop) => {
+  moveSidebarView: (id, region, viewKey, drop) => {
     let r: CmdResult = noWorkspace(id);
     set((s) => {
       const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
-      if (!hasSidebarView(t.leftLayout, viewKey)) {
+      if (!hasSidebarView(t.sidebarLayouts[region], viewKey)) {
         r = err("TARGET_NOT_FOUND", tmsg("sidebar.view.notFound", { viewKey }));
         return s;
       }
-      const leftLayout = moveSidebarViewT(t.leftLayout, viewKey, drop, newSplitId);
+      const next = moveSidebarViewT(t.sidebarLayouts[region], viewKey, drop, newSplitId);
       r = ok({});
-      return {
-        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
-      };
+      return { workspaces: withSidebarLayout(s.workspaces, id, region, next) };
     });
     return r;
   },
 
-  resizeSidebar: (id, splitId, sizes) => {
+  resizeSidebar: (id, region, splitId, sizes) => {
     let r: CmdResult = noWorkspace(id);
     set((s) => {
       const t = s.workspaces.find((x) => x.id === id);
       if (!t) return s;
-      if (!findSplitTree(t.leftLayout, splitId)) {
+      if (!findSplitTree(t.sidebarLayouts[region], splitId)) {
         r = err("TARGET_NOT_FOUND", tmsg("sidebar.split.notFound", { splitId }));
         return s;
       }
       r = ok({});
-      const leftLayout = resizeSplitTree(t.leftLayout, splitId, sizes);
-      return {
-        workspaces: s.workspaces.map((x) => (x.id === id ? { ...x, leftLayout } : x)),
-      };
+      const next = resizeSplitTree(t.sidebarLayouts[region], splitId, sizes);
+      return { workspaces: withSidebarLayout(s.workspaces, id, region, next) };
     });
     return r;
   },

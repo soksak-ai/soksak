@@ -25,8 +25,7 @@ const tab = (tabs: Tab[], activeTabId?: string): Workspace => ({
   title: "wsp-aaaaaa",
   sidebarOpen: false,
   rightOpen: false,
-  rightView: null,
-  leftLayout: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } },
+  sidebarLayouts: { left: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } }, right: { type: "leaf", value: { viewKeys: [], activeViewKey: "" } } },
   root: "/r",
   spaces: [
     {
