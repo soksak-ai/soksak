@@ -72,8 +72,17 @@ All of these are hard.
   A manifest declares a region and no companion; which sections are open, in
   which region, split or tabbed and in what order, is the workspace's state —
   arranged by the person, persisted with the workspace, restored with it
-  (`leftLayout`, and the same for the right). A plugin cannot say what it appears
-  beside, and the core does not decide either.
+  (`leftLayout`). A plugin cannot say what it appears beside, and the core does
+  not decide either.
+
+  **The right region does not follow this yet.** Measured on the running build
+  2026-08-16: `sections.link ... region=right` answered OK, and removing the link
+  again changed nothing on screen. The right region draws every view placed there
+  as an icon rail with one active view (`rightView`), which is the rule A2a
+  replaced on the left. Two regions, two rules — the section set is composed and
+  linked, and the right reads neither. Closing it means the workspace holding a
+  layout per region rather than `leftLayout` plus a single `rightView`, a
+  region-generic host, and the rail's removal.
 - **A3.** General capabilities only. A capability named after one consumer is lock-in.
 - **A4.** No core lock-in. Adding a content subsystem costs the core zero edits.
 - **A5.** The schema is the single source of truth. Prose adds only what a schema
