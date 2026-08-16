@@ -13,10 +13,10 @@ const plugin = (viewId: string, pluginId: string, view: string): Tab => ({
 
 const file = (viewId: string, path: string): Tab => ({
   id: viewId,
-  kind: "file",
-  title: "F",
-  path,
-  mode: "code",
+  kind: "plugin",
+  title: path,
+  pluginId: "plg-editor",
+  view: "content",
 });
 
 // Tabs in a single group (g1); the active tab = activeTabId (defaults to the first tab).

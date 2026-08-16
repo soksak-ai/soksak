@@ -1,4 +1,8 @@
-// Sidebar projection command surface (plans/sidebar-projection-spec.md §4.2) — ui.projection.* / ui.intent.open.
+// Sidebar projection command surface — ui.projection.*.
+//
+// `ui.intent.open` stood here until 2026-08-16: it opened a path as a file tab, which was the core's
+// second content kind and no plugin ever provided a viewer for it (CORE-CENSUS 1). Opening a thing
+// by naming it is the work of whichever plugin claims that kind of thing.
 // Registered at the end of registerCatalog() (catalog split — catalogUi precedent).
 
 import { tmsg } from "../i18n";
@@ -123,42 +127,4 @@ export function registerProjectionCatalog(): void {
     },
   });
 
-  register("ui.intent.open", {
-    description:
-      "Open a resource through the binding context (R2): places the view as a tab in the bound pane without replacing existing panes, reusing the existing tab for the same resource (idempotent). The same path the rail's open affordance uses. With no binding (empty workspace) it places into the active pane.",
-    triggers: { ko: "인텐트열기 결부열기 intent open" },
-    params: {
-      path: {
-        type: "string",
-        description: tmsg("cmd.ui.intent.open.param.path"),
-        required: true,
-      },
-      workspace: {
-        type: "string",
-        description: tmsg("cmd.param.workspace"),
-      },
-    },
-    returns: "{ projectId, paneId, tabId, existing }",
-    message: (d) =>
-      tmsg(d.existing ? "msg.ui.intent.open.existing" : "msg.ui.intent.open"),
-    examples: ['ui.intent.open \'{"path":"/work/notes/plan.md"}\''],
-    handler: (p, ctx) => {
-      const path = p.path as string;
-      // Absolute paths only — the boundary enforces the contract as written. Which root a relative
-      // path resolves against differs per context; accepting one silently here persists that string
-      // in the tab, and restore wakes a dead "No such file or directory" tab (measured: a tab opened
-      // with "README.md" died after restart).
-      if (!path.startsWith("/")) {
-        return {
-          ok: false as const,
-          code: "INVALID_PARAMS" as const,
-          message: tmsg("msg.ui.intent.open.pathAbsolute", { path }),
-        };
-      }
-      const pid = targetWorkspace(p, ctx);
-      const r = useSessions.getState().openFileView(pid, path);
-      if (!r.ok) return r;
-      return { projectId: pid, paneId: r.groupId, tabId: r.viewId, existing: r.existing };
-    },
-  });
 }

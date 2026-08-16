@@ -7,7 +7,7 @@
 // truth).
 //
 // Three static rules:
-//   ① command-surface     has capability (views/programs/fileViewers/overlays) ∧ commands=0 → violation
+//   ① command-surface     has capability (views/programs/overlays) ∧ commands=0 → violation
 //   ② view-nodes          render surface (views/overlays)>0 ∧ nodes=0 → violation (no ui.tree)
 //      The view-nodes rule covers view and overlay DOM together.
 //   ③ content-view-status a content view with no status declaration → violation (a stateless view
@@ -52,7 +52,6 @@ export interface TransparencyContributes {
   views: readonly TransparencyView[];
   overlays: readonly unknown[];
   commands: readonly unknown[];
-  fileViewers: readonly unknown[];
   programs: readonly unknown[];
   nodes: readonly unknown[];
 }
@@ -74,12 +73,12 @@ export function transparencyViolations(
 ): TransparencyViolation[] {
   const out: TransparencyViolation[] = [];
   if (
-    (c.views.length > 0 || c.programs.length > 0 || c.fileViewers.length > 0 || c.overlays.length > 0) &&
+    (c.views.length > 0 || c.programs.length > 0 || c.overlays.length > 0) &&
     c.commands.length === 0
   ) {
     out.push({
       rule: "command-surface",
-      detail: `capability declared (views=${c.views.length}, programs=${c.programs.length}, fileViewers=${c.fileViewers.length}, overlays=${c.overlays.length}) but commands=0`,
+      detail: `capability declared (views=${c.views.length}, programs=${c.programs.length}, overlays=${c.overlays.length}) but commands=0`,
     });
   }
   if ((c.views.length > 0 || c.overlays.length > 0) && c.nodes.length === 0) {

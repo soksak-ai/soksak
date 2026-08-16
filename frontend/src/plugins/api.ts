@@ -34,10 +34,6 @@ import {
   useViewRegistry,
   type PluginViewProvider,
 } from "./viewRegistry";
-import {
-  useFileViewerRegistry,
-  type FileViewerProvider,
-} from "./fileViewerRegistry";
 import { useIconRegistry, validateIconSetData } from "../ui/icons/registry";
 import {
   registerStatusBarItem,
@@ -274,13 +270,6 @@ export interface SoksakPluginApi {
   };
   ui?: {
     registerView: (viewId: string, provider: PluginViewProvider) => Disposable;
-    /** Register a per-extension file viewer (contributes.fileViewers declaration required). When the
-     *  core opens a file as content it mounts the matching viewer's provider (engine-neutral A13 — the
-     *  render engine is the plugin's). Returns the unsubscribe. */
-    registerFileViewer: (
-      viewerId: string,
-      provider: FileViewerProvider,
-    ) => Disposable;
     openView: (
       viewId: string,
       placement?: ViewPlacement,
@@ -1331,7 +1320,6 @@ export function buildPluginApi(
   registered: {
     commands: Set<string>;
     views: Set<string>;
-    fileViewers: Set<string>;
     iconSets: Set<string>;
   };
 } {
@@ -1341,7 +1329,6 @@ export function buildPluginApi(
   const registered = {
     commands: new Set<string>(),
     views: new Set<string>(),
-    fileViewers: new Set<string>(),
     iconSets: new Set<string>(),
   };
   const id = manifest.id;
@@ -1589,20 +1576,7 @@ export function buildPluginApi(
               .register(id, decl, registeredProvider);
             return tracker.wrap(remove);
           },
-          registerFileViewer: (viewerId, provider) => {
-            const decl = gateContribution({
-              contributesKey: "fileViewers",
-              noun: tmsg("plugin.contrib.noun.fileViewer"),
-              id: viewerId,
-              declared: manifest.contributes.fileViewers,
-              idOf: (f) => f.id,
-            });
-            registered.fileViewers.add(viewerId);
-            const remove = useFileViewerRegistry
-              .getState()
-              .register(id, decl, provider);
-            return tracker.wrap(remove);
-          },
+
           // Delegates to the placement command (plugin.view.open — registered at M_P5).
           openView: (viewId, placement) =>
             deps.execute(

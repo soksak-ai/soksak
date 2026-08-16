@@ -340,15 +340,6 @@ export interface ContributedIconSet {
 // media = image/video…). Engine-neutral (A13): the core does matching and hosting only; the render
 // engine is owned by the plugin. The runtime module fileViewers map
 // exact-matches the declared ids (both undeclared and missing are rejected, §0-3).
-export interface ContributedFileViewer {
-  id: string; // unique within the plugin. Global key is "<pluginId>.<id>"
-  extensions: string[]; // extensions handled (no dot). "*" = fallback when no more specific match exists
-  priority?: number; // higher value wins on overlap (default 0). Equal priority uses registration order
-  // Sidebar projection declaration (§2.5) — when a file panel is bound, this viewer's declaration is
-  // the projection basis. Absence = runtime downgrade (R5). The core names no specific plugin as
-  // the default (A5).
-  sidebar?: ContributedSidebar;
-}
 
 // DOM exposed node — declaration of the element "kinds" a plugin exposes inside its own view to the
 // outside (address click/measure). Same pattern as command exposure: declaring it prints it on the
@@ -568,7 +559,6 @@ export interface PluginManifest {
     headerActions: ContributedHeaderAction[]; // ui:titlebar + commands, host-declarative command binding
     statusItems: ContributedStatusItem[]; // ui:statusbar + commands, host-declarative command binding
     iconSets: ContributedIconSet[]; // requires the "ui" permission
-    fileViewers: ContributedFileViewer[]; // requires the "ui" permission — per-extension content viewer (A13 engine-neutral)
     programs: ContributedProgram[]; // requires the "programs" permission
     // Event topics this plugin publishes (informational — discoverability). No runtime enforcement
     // (bus/events work unchanged). An open catalog so other plugin authors can see subscribable
@@ -676,7 +666,6 @@ const SIDECAR_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 // A sidecar interface is a contract requirement `{ id, range }` as well — validated with
 // CONTRACT_ID_RE, no separate regex. The wire axis collapses to one contract id grammar (NAMING §8).
 const COMMAND_NAME_RE = /^[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
-const EXT_RE = /^[a-z0-9]+$/;
 // SEMVER_RE, semverGte, semverSatisfies moved to semver.ts (re-exported above) — single source moved.
 // ── §4 Validation ────────────────────────────────────────────────────────────
 // isRecord, isNonEmptyString, checkKnownKeys, checkDuplicates moved to util.ts (internal shared).
@@ -1217,7 +1206,6 @@ export function parseManifest(
   let headerActions: ContributedHeaderAction[] = [];
   let statusItems: ContributedStatusItem[] = [];
   let iconSets: ContributedIconSet[] = [];
-  let fileViewers: ContributedFileViewer[] = [];
   let nodes: ContributedNode[] = [];
   let programs: ContributedProgram[] = [];
   let events: string[] = [];
@@ -1232,7 +1220,7 @@ export function parseManifest(
         c,
         [
           "views", "commands", "overlays", "headerActions", "statusItems", "iconSets",
-          "fileViewers", "nodes", "programs", "events", "skill", "schedules",
+          "nodes", "programs", "events", "skill", "schedules",
         ],
         "contributes",
         errors,
@@ -1474,62 +1462,6 @@ export function parseManifest(
         errors.push('contributes.iconSets: declare the "ui" permission');
       }
 
-      // File viewers (declaration) — id regex and duplicate rejection, extensions validation
-      // ("*" fallback allowed), "ui" permission required.
-      fileViewers = parseEntries(c.fileViewers, {
-        label: "contributes.fileViewers",
-        required: ["id", "extensions"],
-        optional: ["priority", "sidebar"],
-        parse: (v, errs) => {
-          if (!isNonEmptyString(v.id) || !VIEW_ID_RE.test(v.id)) {
-            errs.push("contributes.fileViewers: id must be ^[a-z0-9][a-z0-9-]*$");
-            return null;
-          }
-          if (
-            !Array.isArray(v.extensions) ||
-            v.extensions.length === 0 ||
-            v.extensions.some(
-              (e) => typeof e !== "string" || (e !== "*" && !EXT_RE.test(e)),
-            )
-          ) {
-            errs.push(
-              `contributes.fileViewers["${v.id}"].extensions: non-empty array of extensions (no dot) or "*" (fallback)`,
-            );
-            return null;
-          }
-          if (v.priority !== undefined && typeof v.priority !== "number") {
-            errs.push(`contributes.fileViewers["${v.id}"].priority: number`);
-            return null;
-          }
-          let sidebar: ContributedSidebar | undefined;
-          if (v.sidebar !== undefined) {
-            const sb = parseSidebarDecl(
-              v.sidebar,
-              `contributes.fileViewers["${v.id}"].sidebar`,
-              errs,
-            );
-            if (!sb) return null;
-            sidebar = sb;
-          }
-          if (sidebar === undefined) {
-            errs.push(
-              `contributes.fileViewers["${v.id}"]: sidebar.left declaration required (A1) — the projection basis when a file panel is bound`,
-            );
-            return null;
-          }
-          return {
-            id: v.id.trim(),
-            extensions: v.extensions as string[],
-            ...(typeof v.priority === "number" ? { priority: v.priority } : {}),
-            ...(sidebar !== undefined ? { sidebar } : {}),
-          };
-        },
-      }, errors);
-      checkDuplicates(fileViewers.map((v) => v.id), "contributes.fileViewers.id", errors);
-      if (fileViewers.length > 0 && !has("ui")) {
-        errors.push('contributes.fileViewers: declare the "ui" permission');
-      }
-
       // sidebar self-reference consistency (§3.1) — the target view must be declared and must
       // support rail placement.
       {
@@ -1554,9 +1486,6 @@ export function parseManifest(
         };
         for (const v of views) {
           checkSelfRefs(v.sidebar, `contributes.views["${v.id}"].sidebar`);
-        }
-        for (const f of fileViewers) {
-          checkSelfRefs(f.sidebar, `contributes.fileViewers["${f.id}"].sidebar`);
         }
       }
 
@@ -1801,7 +1730,6 @@ export function parseManifest(
         views: views.length,
         overlays: overlays.length,
         nodes: nodes.length,
-        fileViewers: fileViewers.length,
         iconSets: iconSets.length,
       },
       sidecarNames: sidecars.map((s) => s.name),
@@ -1840,7 +1768,7 @@ export function parseManifest(
       permissions,
       contributes: {
         views, commands, overlays, headerActions, statusItems,
-        iconSets, fileViewers, nodes, programs, events,
+        iconSets, nodes, programs, events,
         ...(skill ? { skill } : {}),
         ...(schedules.length > 0 ? { schedules } : {}),
       },

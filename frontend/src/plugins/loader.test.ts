@@ -125,21 +125,6 @@ describe("activatePlugin — transparency rules (manifest static) at the activat
     ).rejects.toThrow(/C2.*command-surface/);
   });
 
-  it("fileViewers>0 and commands=0 refuses activation (a file viewer alone is still a capability)", async () => {
-    await expect(
-      activatePlugin(
-        { activate: () => {} },
-        manifestOf({
-          permissions: ["ui"],
-          contributes: {
-            fileViewers: [{ id: "image", extensions: ["png", "jpg"], sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } }],
-          },
-        }),
-        "/d",
-        fakeDeps(),
-      ),
-    ).rejects.toThrow(/C2.*command-surface/);
-  });
 
   it("views>0 and nodes=0 refuses activation as a C2 view-nodes violation (blocking)", async () => {
     await expect(

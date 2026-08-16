@@ -78,7 +78,6 @@ import { registerPtySessionCatalog } from "./catalogPtySession";
 import { registerSecretsCatalog } from "./catalogSecrets";
 import { registerTurnCatalog } from "./catalogTurn";
 import { registerNetworkCatalog } from "./catalogNetwork";
-import { registerMediaCatalog } from "./catalogMedia";
 import { registerClipboardCatalog } from "./catalogClipboard";
 import { registerNotifyCatalog } from "./catalogNotify";
 import { registerScheduleCatalog } from "./catalogSchedule";
@@ -262,7 +261,7 @@ function resolveCtx(ctx: CommandContext): Location | null {
 }
 
 // Target workspace: explicit id > context.
-function resolveWorkspace(
+export function resolveWorkspace(
   params: Record<string, unknown>,
   ctx: CommandContext,
 ): Workspace | null {
@@ -308,17 +307,6 @@ function findBrowserProgram(): string | undefined {
 // ── Serialization (state.tree) ────────────────────────────────────────────────
 
 function serializeTab(v: Tab) {
-  if (v.kind === "file") {
-    return {
-      id: v.id,
-      kind: v.kind,
-      title: v.title,
-      customLabel: v.customLabel,
-      path: v.path,
-      mode: v.mode,
-      dirty: v.status?.code === "dirty",
-    };
-  }
   return {
     id: v.id,
     kind: v.kind,
@@ -2446,34 +2434,7 @@ export function registerCatalog(): void {
     },
   });
 
-  // ui.intent.open is the only command that opens a file (it resolves placement from the binding
-  // context too). Closing is tab.close — a file tab is a tab.
-
   // ----- explorer (file explorer) -----
-  register("explorer.list", {
-    description:
-      "List direct children of a directory (same view as the file tree). Omit path to use the workspace root (falls back to HOME).",
-    triggers: { ko: "파일 목록 디렉토리 목록 폴더 내용 파일 탐색" },
-    params: {
-      workspace: P.workspace,
-      path: { type: "string", description: "Absolute directory path" },
-    },
-    returns: "{ projectId|null, root, children: [{name,dir}] }",
-    message: (d) => tmsg("msg.explorer.list", { n: ((d.children as unknown[]) ?? []).length }),
-    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
-    examples: ["explorer.list", 'explorer.list \'{"path":"<local-evidence>"}\''],
-    handler: async (p, ctx) => {
-      const t = resolveWorkspace(p, ctx);
-      const path = (p.path as string) ?? t?.root ?? null;
-      const r = await invoke<{ root: string; children: object[] }>(
-        "list_children",
-        { path },
-      );
-      // With an explicit path the answer works without a workspace (HOME fallback) — so this axis can be null.
-      return { projectId: t?.id ?? null, ...r };
-    },
-  });
-
   // ----- Delegated catalogs (split into files — the single truth is the same registry) -----
   registerFsWatchCatalog();
   registerHealthCatalog();
@@ -2491,7 +2452,6 @@ export function registerCatalog(): void {
   registerSecretsCatalog();
   registerTurnCatalog();
   registerNetworkCatalog();
-  registerMediaCatalog();
   registerClipboardCatalog();
   registerNotifyCatalog();
   registerScheduleCatalog();

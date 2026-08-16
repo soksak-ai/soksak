@@ -144,13 +144,11 @@ export const ViewTabs = memo(function ViewTabs({
             // and a double click or the button there restores it.
             onDoubleClick={() => void execute("tab.maximize", { tab: v.id }, {})}
             title={
-              v.kind === "file" ? v.path : `${v.pluginId}.${v.view}`
+              `${v.pluginId}.${v.view}`
             }
           >
             <span className="tab-icon icon-inline">
-              {v.kind === "file" ? (
-                <Icon name="file" size="sm" />
-              ) : v.icon ? (
+              {v.icon ? (
                 // Content fact icon — a setIcon report takes precedence over the manifest icon.
                 <TabIcon
                   viewId={v.id}
@@ -165,8 +163,8 @@ export const ViewTabs = memo(function ViewTabs({
               )}
             </span>
             <span className="tab-title">{viewDisplayTitle(v)}</span>
-            {v.kind === "file" && v.status?.code === "dirty" && (
-              <span className="tab-dirty" title={t("viewer.unsaved")}>
+            {v.status?.code === "dirty" && (
+              <span className="tab-dirty" title={t("view.unsaved")}>
                 <Icon name="dirty" size="xs" />
               </span>
             )}

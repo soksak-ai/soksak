@@ -245,66 +245,6 @@ describe("parseManifest — accept", () => {
   });
 });
 
-describe("parseManifest — fileViewers(A13)", () => {
-  it("accepts id+extensions(+optional priority, '*' fallback), passes with the ui permission", () => {
-    const { manifest, validation } = parseManifest(
-      base({
-        permissions: ["ui"],
-        contributes: {
-          fileViewers: [
-            { id: "code", extensions: ["ts", "*"], priority: 5, sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } },
-            { id: "img", extensions: ["png"], sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } },
-          ],
-        },
-      }),
-      "demo",
-    );
-    expect(validation.ok).toBe(true);
-    const SB = {
-      left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }],
-      right: [],
-      template: "stack",
-    };
-    expect(manifest?.contributes.fileViewers).toEqual([
-      { id: "code", extensions: ["ts", "*"], priority: 5, sidebar: SB },
-      { id: "img", extensions: ["png"], sidebar: SB },
-    ]);
-  });
-
-  it("rejects an undeclared ui permission", () => {
-    const errs = errorsOf(
-      base({ contributes: { fileViewers: [{ id: "code", extensions: ["ts"], sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } }] } }),
-    );
-    expect(errs.some((e) => e.includes('"ui"'))).toBe(true);
-  });
-
-  it("rejects empty extensions, a bad extension, a non-number priority", () => {
-    expect(
-      errorsOf(base({ permissions: ["ui"], contributes: { fileViewers: [{ id: "a", extensions: [] }] } })).length,
-    ).toBeGreaterThan(0);
-    expect(
-      errorsOf(base({ permissions: ["ui"], contributes: { fileViewers: [{ id: "a", extensions: ["."] }] } })).length,
-    ).toBeGreaterThan(0);
-    expect(
-      errorsOf(base({ permissions: ["ui"], contributes: { fileViewers: [{ id: "a", extensions: ["ts"], priority: "hi" }] } })).length,
-    ).toBeGreaterThan(0);
-  });
-
-  it("rejects a duplicate id", () => {
-    const errs = errorsOf(
-      base({
-        permissions: ["ui"],
-        contributes: {
-          fileViewers: [
-            { id: "dup", extensions: ["ts"], sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } },
-            { id: "dup", extensions: ["js"], sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } },
-          ],
-        },
-      }),
-    );
-    expect(errs.some((e) => e.includes("fileViewers.id"))).toBe(true);
-  });
-});
 
 describe("parseManifest — reject(required fields)", () => {
   it("rejects a non-object", () => {
@@ -1119,29 +1059,6 @@ describe("parseManifest — sidebar projection contract(§3.1)", () => {
     ).toEqual([]);
   });
 
-  it("accepts a sidebar declaration on a fileViewer", () => {
-    const { manifest, validation } = parseManifest(
-      base({
-        permissions: ["ui"],
-        contributes: {
-          fileViewers: [
-            {
-              id: "code",
-              extensions: ["ts"],
-              sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] },
-            },
-          ],
-        },
-      }),
-      "demo",
-    );
-    expect(validation.errors).toEqual([]);
-    expect(manifest?.contributes.fileViewers[0].sidebar).toEqual({
-      left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }],
-      right: [],
-      template: "stack",
-    });
-  });
 
   it("decoration flag — default false, true accepted, non-boolean rejected", () => {
     const on = parseManifest(

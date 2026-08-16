@@ -240,7 +240,7 @@ describe("what the gate counts is pinned first", () => {
   it("commands were actually read — an empty set does not pass as a pass", () => {
     expect(ALL.length).toBeGreaterThan(200);
     expect(NAMES.has("tab.close")).toBe(true);
-    expect(NAMES.has("ui.intent.open")).toBe(true);
+    expect(NAMES.has("fs.list")).toBe(true);
   });
 
   it("signatures were actually read — a silently empty parse reports 0 duplicates", () => {

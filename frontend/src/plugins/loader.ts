@@ -278,7 +278,6 @@ function reportDeclaredButNotRegistered(
   registered: {
     commands: Set<string>;
     views: Set<string>;
-    fileViewers: Set<string>;
     iconSets: Set<string>;
   },
 ): void {
@@ -287,7 +286,6 @@ function reportDeclaredButNotRegistered(
     [
       ["commands", c.commands.map((x) => x.name), registered.commands],
       ["views", c.views.map((x) => x.id), registered.views],
-      ["fileViewers", c.fileViewers.map((x) => x.id), registered.fileViewers],
       ["iconSets", c.iconSets.map((x) => x.id), registered.iconSets],
     ] as const
   )

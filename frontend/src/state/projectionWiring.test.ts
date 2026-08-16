@@ -20,7 +20,6 @@ import { useProjection } from "./projection";
 import { useSessions, type Workspace, type Tab } from "./sessions";
 import { initialSidebarLayout } from "./sidebarLayout";
 import { useViewRegistry, type PluginViewProvider } from "../plugins/viewRegistry";
-import { useFileViewerRegistry } from "../plugins/fileViewerRegistry";
 import { usePlugins, type PluginRuntime } from "./plugins";
 import { onPluginEvent } from "../plugins/hooks";
 import { parseManifest, type ContributedView } from "../plugins/spec";
@@ -86,7 +85,6 @@ function tab(tabs: Tab[], activeTabId: string): Workspace {
 
 beforeEach(() => {
   useViewRegistry.setState({ views: {}, version: 0, badges: {} });
-  useFileViewerRegistry.setState({ viewers: {}, version: 0 });
   usePlugins.setState({ plugins: {} });
   useProjection.setState({ byWorkspace: {} });
   useSessions.setState({ workspaces: [], activeId: "" });
@@ -111,28 +109,9 @@ describe("boundViewOf — session active chain → BoundView (A8)", () => {
     expect(bound?.sidebar?.left[0]).toMatchObject({ ref: "self.tree" });
   });
 
-  it("file view: the owning fileViewer's sidebar declaration comes through (§3.1)", () => {
-    useFileViewerRegistry.getState().register(
-      "edplug",
-      {
-        id: "code",
-        extensions: ["ts"],
-        sidebar: {
-          left: [{ ref: "self.outline", instance: "shared" }],
-          right: [],
-          template: "stack",
-        },
-      },
-      { mount: () => {} },
-    );
-    const fileView: Tab = { id: "tab-bbbbbb", kind: "file", title: "b.ts", path: "/a/b.ts", mode: "code" };
-    const bound = boundViewOf(tab([fileView], "tab-bbbbbb"));
-    expect(bound).toMatchObject({ viewId: "tab-bbbbbb", ownerPluginId: "edplug" });
-    expect(bound?.sidebar?.left[0]).toMatchObject({ ref: "self.outline" });
-  });
 
-  it("a file view with no owning viewer → no declaration (null sidebar)", () => {
-    const fileView: Tab = { id: "tab-cccccc", kind: "file", title: "x.zzz", path: "/x.zzz", mode: "code" };
+  it("a view whose plugin declares no sidebar → no declaration (null sidebar)", () => {
+    const fileView: Tab = { id: "tab-cccccc", kind: "plugin", title: "x.zzz", pluginId: "plg-none", view: "content" };
     const bound = boundViewOf(tab([fileView], "tab-cccccc"));
     expect(bound?.sidebar).toBeNull();
   });

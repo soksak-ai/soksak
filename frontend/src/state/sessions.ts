@@ -114,22 +114,16 @@ export interface TabStatus {
   message?: string;
 }
 
-// Content view: file (viewer plugin), plugin (content placement — terminal, browser, editor all here).
-// The core does not own the terminal view (a terminal is a plugin view too).
+// Content view: one kind, and it is a plugin's.
+//
+// There were two until 2026-08-16 — a "file" arm carrying a path and a code/preview mode, branched
+// on in eighteen places. No plugin ever declared a viewer for it, so it opened a tab that resolved
+// to nothing, and it was a second code path for one kind of content (CORE-CENSUS 1). A file is drawn
+// the way a page and a shell are: by a plugin view.
 // title is the content fact (file name, page <title> — kept current by setViewTitle), customLabel is
 // user intent (view.rename). Display prefers customLabel — the same rule as sidebar viewLabels
 // (default = fact, override = user intent only). An empty override is not stored.
 export type Tab =
-  | {
-      id: string;
-      kind: "file";
-      title: string;
-      customLabel?: string;
-      path: string; // absolute path
-      mode: "code" | "preview";
-      // Unsaved is expressed as status.code "dirty" (R5) — no separate dirty flag (no double truth).
-      status?: TabStatus;
-    }
   // Plugin view (content placement) — PluginViewHost draws the provider of the global key
   // "<pluginId>.<view>". Close/move/drag are the same as any view (view id generic).
   | {
@@ -334,11 +328,7 @@ interface SessionsStore {
     projectId: string,
     groupId: string,
   ) => CmdResult<{ activePaneId: string }>;
-  openFileView: (
-    projectId: string,
-    path: string,
-  ) => CmdResult<{ viewId: string; groupId: string; existing: boolean }>;
-  // Open a plugin view as a content tab (duplicate key = pluginId+view, symmetric to openFileView).
+  // Open a plugin view as a content tab (duplicate key = pluginId+view).
   openPluginView: (
     projectId: string,
     pluginId: string,
@@ -358,11 +348,6 @@ interface SessionsStore {
     viewId: string,
   ) => CmdResult<{ viewId: string }>;
   restoreView: (projectId: string) => CmdResult<{ viewId: string | null }>;
-  setFileMode: (
-    projectId: string,
-    viewId: string,
-    mode: "code" | "preview",
-  ) => CmdResult;
   setFileDirty: (projectId: string, viewId: string, dirty: boolean) => CmdResult;
   // View status report (R1) — null reclaims it (R4). Common to every view kind.
   setViewStatus: (
@@ -989,7 +974,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
 
   addWorkspace: (opts) => {
     // P5 no duplicates — when a workspace with the same root exists (normalization is the caller's
-    // job), activate that workspace and report existing (openFileView pattern).
+    // job), activate that workspace and report existing.
     const dup = get().workspaces.find((t) => t.root === opts.root);
     if (dup) {
       set({ activeId: dup.id });
@@ -1446,58 +1431,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
     return r;
   },
 
-  openFileView: (projectId, path) => {
-    let r: CmdResult<{ viewId: string; groupId: string; existing: boolean }> =
-      noWorkspace(projectId);
-    set((s) => {
-      const t = s.workspaces.find((x) => x.id === projectId);
-      if (!t) return s;
-      const content = activeContentOf(t);
-      if (!content) return s;
-      // When the same file is already open, activate that group/view (reuse).
-      const existing = allViews(content.layout).find(
-        (v) => v.kind === "file" && v.path === path,
-      );
-      if (existing) {
-        const grp = findGroupOfView(content.layout, existing.id);
-        if (!grp) return s;
-        r = ok({ viewId: existing.id, groupId: grp.id, existing: true });
-        return {
-          workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
-            mapContent(x, content.id, (c) => ({
-              ...c,
-              layout: mapGroupNode(c.layout, grp.id, (g) => ({
-                ...g,
-                activeTabId: existing.id,
-              })),
-              activePaneId: grp.id,
-            })),
-          ),
-        };
-      }
-      const v: Tab = {
-        id: newViewId(),
-        kind: "file",
-        title: baseName(path),
-        path,
-        mode: "code",
-      };
-      r = ok({ viewId: v.id, groupId: content.activePaneId, existing: false });
-      return {
-        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
-          mapContent(x, content.id, (c) => ({
-            ...c,
-            layout: mapGroupNode(c.layout, c.activePaneId, (g) => ({
-              ...g,
-              tabs: [...g.tabs, v],
-              activeTabId: v.id,
-            })),
-          })),
-        ),
-      };
-    });
-    return r;
-  },
+
 
   openPluginView: (projectId, pluginId, view, title) => {
     let r: CmdResult<{ viewId: string; groupId: string; existing: boolean }> =
@@ -1766,26 +1700,7 @@ export const useSessions = moduleState("state/sessions#store", () =>
     return r;
   },
 
-  setFileMode: (projectId, viewId, mode) => {
-    let r: CmdResult = noWorkspace(projectId);
-    set((s) => {
-      const t = s.workspaces.find((x) => x.id === projectId);
-      if (!t) return s;
-      if (!contentOfView(t, viewId)) {
-        r = err("TARGET_NOT_FOUND", tmsg("view.notFound", { viewId }));
-        return s;
-      }
-      r = ok({});
-      return {
-        workspaces: mapWorkspace(s.workspaces, projectId, (x) =>
-          mapViewEverywhere(x, viewId, (v) =>
-            v.kind === "file" ? { ...v, mode } : v,
-          ),
-        ),
-      };
-    });
-    return r;
-  },
+
 
   // An unsaved file is unified into status.code "dirty" (R5 — double truth removed). Delegates to
   // setViewStatus.

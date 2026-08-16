@@ -31,14 +31,6 @@ import { normalizeVerticalLines } from "./verticalLines";
 type ViewSnapshot =
   | {
       id: string;
-      kind: "file";
-      title: string;
-      customLabel?: string;
-      path: string;
-      mode: "code" | "preview";
-    }
-  | {
-      id: string;
       kind: "plugin";
       title: string;
       // User-set tab label (view.rename) — persisted because it is user intent. Optional (old-snapshot compatible).
@@ -99,15 +91,6 @@ export interface WorkspaceSnapshot {
 
 function serializeView(v: Tab): ViewSnapshot {
   switch (v.kind) {
-    case "file":
-      return {
-        id: v.id,
-        kind: "file",
-        title: v.title,
-        ...(v.customLabel ? { customLabel: v.customLabel } : {}),
-        path: v.path,
-        mode: v.mode,
-      };
     case "plugin":
       // command (autorun) is not persisted — a restored terminal does not re-run the command (A6: a live PTY
       // cannot be restored and re-running has side effects). Autorun happens only on a fresh open.
@@ -170,15 +153,6 @@ export function serializeWorkspace(
 
 function deserializeView(s: ViewSnapshot): Tab {
   switch (s.kind) {
-    case "file":
-      return {
-        id: s.id,
-        kind: "file",
-        title: s.title,
-        ...(s.customLabel ? { customLabel: s.customLabel } : {}),
-        path: s.path,
-        mode: s.mode,
-      };
     case "plugin":
       // command is not restored — a restored terminal does not re-run the command (A6).
       return {

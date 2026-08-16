@@ -8,7 +8,6 @@ import { pendingConsentChain, usePlugins, type PluginRuntime } from "../state/pl
 import { allGroups, useSessions } from "../state/sessions";
 import { hasSidebarView as hasSidebarViewKey } from "../state/sidebarLayout";
 import { getRegisteredView, registeredViewIds } from "../plugins/viewRegistry";
-import { registeredFileViewerIds } from "../plugins/fileViewerRegistry";
 import { registeredIconSetIds } from "../ui/icons/registry";
 import { getRegisteredProgram, listPrograms, useProgramRegistry } from "../plugins/programRegistry";
 import { localize, tmsg } from "../i18n";
@@ -1379,10 +1378,8 @@ export function registerPluginCatalog(): void {
       //   blocks undeclared, so actual ⊆ declared — only missing (declared but not registered) is
       //   possible, and there is no orphan.
       const declaredViews = c.views.map((x) => x.id);
-      const declaredFv = c.fileViewers.map((x) => x.id);
       const declaredIcons = c.iconSets.map((x) => x.id);
       const regViews = registeredViewIds(id);
-      const regFv = registeredFileViewerIds(id);
       const regIcons = registeredIconSetIds(id);
       // ── Runtime judgment surface of composition law C2 (three transparency rules) ──────────────
       // The three static rules are judged from the manifest; view-status can be judged only on a
@@ -1435,11 +1432,6 @@ export function registerPluginCatalog(): void {
           declared: declaredViews,
           registered: regViews,
           missing: missingRegistrations(declaredViews, regViews),
-        },
-        fileViewers: {
-          declared: declaredFv,
-          registered: regFv,
-          missing: missingRegistrations(declaredFv, regFv),
         },
         iconSets: {
           declared: declaredIcons,

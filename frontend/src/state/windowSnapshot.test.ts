@@ -57,7 +57,7 @@ const workspace: Workspace = {
               id: "pan-bbbbbb",
               activeTabId: "tab-cccccc",
               tabs: [
-                { id: "tab-bbbbbb", kind: "file", title: "a.ts", path: "/repo/a.ts", mode: "code" },
+                { id: "tab-bbbbbb", kind: "plugin", title: "a.ts", pluginId: "plg-editor", view: "content" },
                 { id: "tab-cccccc", kind: "plugin", title: "B", pluginId: "soksak-plugin-browser-native", view: "content" },
                 { id: "tab-dddddd", kind: "plugin", title: "ERD", pluginId: "soksak-plugin-erd", view: "studio" },
               ],
@@ -106,10 +106,10 @@ describe("windowSnapshot round trip", () => {
     expect(term.command).toBeUndefined();
 
     const g2 = leafOf(c.layout, 1);
-    expect(g2.tabs.map((v) => v.kind)).toEqual(["file", "plugin", "plugin"]);
-    const file = g2.tabs[0] as Extract<Tab, { kind: "file" }>;
-    expect(file.path).toBe("/repo/a.ts");
-    expect(file.mode).toBe("code");
+    expect(g2.tabs.map((v) => v.kind)).toEqual(["plugin", "plugin", "plugin"]);
+    const file = g2.tabs[0] as Extract<Tab, { kind: "plugin" }>;
+    expect(file.pluginId).toBe("plg-editor");
+    expect(file.view).toBe("content");
     const webview = g2.tabs[1] as Extract<Tab, { kind: "plugin" }>;
     expect(webview.pluginId).toBe("soksak-plugin-browser-native");
     expect(webview.view).toBe("content");

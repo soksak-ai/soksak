@@ -220,12 +220,14 @@ describe("plugin.conformance — C2 view-status (runtime verdict, viewStatusConf
 });
 
 describe("plugin.conformance — C2 static rules (command-surface, view-nodes)", () => {
-  it("file viewer only and command=0 → command-surface in c2.violations", async () => {
+  // A capability with no command is unreachable from outside (C2). The case was written against a
+  // file viewer until 2026-08-16; the rule is about capability-with-no-command, and a view is one.
+  it("a view only and command=0 → command-surface in c2.violations", async () => {
     const id = "viewer";
     const manifest = manifestOf(id, {
       permissions: ["ui"],
       contributes: {
-        fileViewers: [{ id: "image", extensions: ["png"], sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } }],
+        views: [{ id: "image", title: { en: "Image", ko: "Image" }, icon: "file", placements: ["content"], sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } }],
       },
     });
     usePlugins.setState({ plugins: { [id]: runtimeOf(manifest) } });

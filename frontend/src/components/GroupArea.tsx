@@ -9,7 +9,6 @@ import {
   viewSurfaceStyle,
 } from "../lib/viewPark";
 import { Icon } from "../ui/icons/Icon";
-import { FileViewerHost } from "./FileViewerHost";
 import { GroupStatusBar } from "./GroupStatusBar";
 import { PluginViewHost } from "./PluginViewHost";
 import {
@@ -752,11 +751,7 @@ export const GroupArea = memo(function GroupArea({
                 onDoubleClick={() => void execute("tab.restore", { workspace: projectId }, {})}
               >
                 <span className="pane-title-icon icon-inline">
-                  {active?.kind === "file" ? (
-                    <Icon name="file" size="sm" />
-                  ) : (
-                    <Icon name="plugin" size="sm" />
-                  )}
+                  <Icon name="plugin" size="sm" />
                 </span>
                 <span className="pane-title-name">
                   {titleOf(active)}
@@ -787,11 +782,7 @@ export const GroupArea = memo(function GroupArea({
                 onMouseDown={startDrag("group", group.id)}
               >
                 <span className="pane-title-icon icon-inline">
-                  {active?.kind === "file" ? (
-                    <Icon name="file" size="sm" />
-                  ) : (
-                    <Icon name="plugin" size="sm" />
-                  )}
+                  <Icon name="plugin" size="sm" />
                 </span>
                 <span className="pane-title-name">
                   {titleOf(active)}
@@ -911,14 +902,7 @@ export const GroupArea = memo(function GroupArea({
                 });
               }}
             >
-              {!hydrated ? null : view.kind === "file" ? (
-                <FileViewerHost
-                  path={view.path}
-                  projectId={projectId}
-                  root={workspaceRoot}
-                  viewId={view.id}
-                />
-              ) : (
+              {!hydrated ? null : (
                 <PluginViewHost
                   viewKey={`${view.pluginId}.${view.view}`}
                   viewId={view.id}

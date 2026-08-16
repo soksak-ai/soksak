@@ -9,10 +9,10 @@ import type { Tab, TabStatus, Space } from "./sessions";
 // Test view/content factories — only status differs.
 const fileView = (status?: TabStatus, id = "tab-aaaaaa"): Tab => ({
   id,
-  kind: "file",
+  kind: "plugin",
   title: "a.ts",
-  path: "/a.ts",
-  mode: "code",
+  pluginId: "plg-editor",
+  view: "content",
   status,
 });
 

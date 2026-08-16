@@ -1,7 +1,7 @@
 // Plugin events — the single channel that notifies plugins of host state changes.
 // Implementation rule: subscribe to the sessions and theme stores and synthesize the diff.
 // No emit is injected into existing store code (surgical — the only explicit emit is
-// emitFileSaved at the FileViewer save-success point).
+
 // A listener failure cannot kill the host (§0-4) — try/catch per callback.
 
 import { moduleState } from "../lib/moduleState";
@@ -46,9 +46,6 @@ export interface PluginEventMap {
    *  them, an editor plugin opens them, and both may be listening. paneId is the workspace's
    *  cwd-tracking pane when there is one — where "here" is, for a subscriber that wants it. */
   "paths.dropped": { projectId: string | null; paneId: string | null; paths: string[] };
-  "file.opened": { projectId: string; viewId: string; path: string };
-  "file.closed": { projectId: string; viewId: string; path: string };
-  "file.saved": { projectId: string; viewId: string; path: string };
   "theme.changed": { name: string; mode: "light" | "dark" };
   // Progress delta (MESSAGE-PROTOCOL §2) — sidecar events and AI thinking, published by the consuming plugin.
   "command.progress": { command?: string; delta?: unknown; source?: string };
@@ -159,9 +156,6 @@ export const PLUGIN_EVENTS: readonly (keyof PluginEventMap)[] = [
   "projection.changed",
   "view.activated",
   "paths.dropped",
-  "file.opened",
-  "file.closed",
-  "file.saved",
   "theme.changed",
   "locale.changed",
   "app.focus",
@@ -286,10 +280,6 @@ export function emitPathsDropped(payload: PluginEventMap["paths.dropped"]): void
   emitPluginEvent("paths.dropped", payload);
 }
 
-export function emitFileSaved(payload: PluginEventMap["file.saved"]): void {
-  emitPluginEvent("file.saved", payload);
-}
-
 // Re-seed the sessions diff baseline to now right after boot restore is applied — restore is not creation (§5).
 // startPluginHooks injects the real implementation (a call before that is a no-op — a window without
 // hooks has no diff either). The injection point must cross the hot-swap boundary — if only this slot
@@ -317,24 +307,13 @@ interface SessionsSnapshot {
   rootByWorkspace: Map<string, string | null>;
   activeView: ActiveViewKey | null;
   // Every open file view (any workspace): viewId → {projectId, path}
-  fileViews: Map<string, { projectId: string; path: string }>;
 }
 
 function snapshotSessions(s: SessionsState): SessionsSnapshot {
   const rootByWorkspace = new Map<string, string | null>();
-  const fileViews = new Map<string, { projectId: string; path: string }>();
   let activeView: ActiveViewKey | null = null;
   for (const workspace of s.workspaces) {
     rootByWorkspace.set(workspace.id, workspace.root ?? null);
-    for (const content of workspace.spaces) {
-      for (const group of allGroups(content.layout)) {
-        for (const view of group.tabs) {
-          if (view.kind === "file") {
-            fileViews.set(view.id, { projectId: workspace.id, path: view.path });
-          }
-        }
-      }
-    }
     if (workspace.id === s.activeId) {
       const content = workspace.spaces.find(
         (c) => c.id === workspace.activeSpaceId,
@@ -349,13 +328,12 @@ function snapshotSessions(s: SessionsState): SessionsSnapshot {
             projectId: workspace.id,
             viewId: view.id,
             kind: view.kind,
-            path: view.kind === "file" ? view.path : undefined,
           };
         }
       }
     }
   }
-  return { activeProjectId: s.activeId, rootByWorkspace, activeView, fileViews };
+  return { activeProjectId: s.activeId, rootByWorkspace, activeView };
 }
 
 function diffSessions(prev: SessionsSnapshot, next: SessionsSnapshot): void {
@@ -376,16 +354,6 @@ function diffSessions(prev: SessionsSnapshot, next: SessionsSnapshot): void {
     emitPluginEvent("view.activated", b);
     // B3 — activation is activity too (the basis for last-used time and hydration priority).
     useSessions.getState().setViewRuntime(b.projectId, b.viewId, { lastActivity: Date.now() });
-  }
-  for (const [viewId, info] of next.fileViews) {
-    if (!prev.fileViews.has(viewId)) {
-      emitPluginEvent("file.opened", { viewId, ...info });
-    }
-  }
-  for (const [viewId, info] of prev.fileViews) {
-    if (!next.fileViews.has(viewId)) {
-      emitPluginEvent("file.closed", { viewId, ...info });
-    }
   }
 }
 

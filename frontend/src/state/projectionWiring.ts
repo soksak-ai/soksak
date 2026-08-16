@@ -17,7 +17,6 @@ import {
 } from "./projection";
 import { usePlugins } from "./plugins";
 import { getRegisteredView, useViewRegistry } from "../plugins/viewRegistry";
-import { resolveFileViewer } from "../plugins/fileViewerRegistry";
 import { resolveContractImplementer } from "../plugins/contractResolve";
 import { useContractSelection } from "./contractSelection";
 import { emitPluginEvent } from "../plugins/hooks";
@@ -52,14 +51,7 @@ function boundViewInContent(
       sidebar: reg?.decl.sidebar ?? null,
     };
   }
-  const viewer = resolveFileViewer(view.path);
-  if (!viewer) return { viewId: view.id, ...ctx, ownerPluginId: "", sidebar: null };
-  return {
-    viewId: view.id,
-    ...ctx,
-    ownerPluginId: viewer.pluginId,
-    sidebar: viewer.decl.sidebar ?? null,
-  };
+  return { viewId: view.id, ...ctx, ownerPluginId: "", sidebar: null };
 }
 
 export function boundViewOf(workspace: Workspace): BoundView | null {

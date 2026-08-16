@@ -28,10 +28,6 @@ import {
 import { parseManifest, type PluginManifest } from "./spec";
 import { useViewRegistry } from "./viewRegistry";
 import {
-  useFileViewerRegistry,
-  resolveFileViewer,
-} from "./fileViewerRegistry";
-import {
   registerPtyIo,
   resetPtyObservationStoreForTest,
 } from "../terminal/ptyObservationStore";
@@ -81,7 +77,6 @@ function fakeDeps(overrides: Partial<PluginApiDeps> = {}): PluginApiDeps {
 
 beforeEach(() => {
   useViewRegistry.setState({ views: {}, version: 0 });
-  useFileViewerRegistry.setState({ viewers: {}, version: 0 });
   __resetContentViewHostForTest();
 });
 
@@ -157,29 +152,6 @@ describe("fs.url (local file to webview load URL — core standard, idempotent)"
   });
 });
 
-describe("file viewer registration (registerFileViewer — undeclared is rejected, A13)", () => {
-  it("registers under the ui permission with a contributes.fileViewers declaration, and resolve matches", () => {
-    const m = manifestOf({
-      permissions: ["ui"],
-      contributes: { fileViewers: [{ id: "code", extensions: ["ts", "*"], sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } }] },
-    });
-    const { api } = buildPluginApi(m, "/d", fakeDeps());
-    const d = api.ui?.registerFileViewer?.("code", { mount() {} });
-    expect(d).toBeDefined();
-    expect(resolveFileViewer("/x.ts")?.pluginId).toBe("demo");
-  });
-
-  it("throws when registering an undeclared file viewer", () => {
-    const m = manifestOf({
-      permissions: ["ui"],
-      contributes: { fileViewers: [{ id: "code", extensions: ["ts"], sidebar: { left: [{ contract: "soksak-spec-plugin-sidebar-file-tree", range: "^0.0.1", view: "tree", instance: "shared" }] } }] },
-    });
-    const { api } = buildPluginApi(m, "/d", fakeDeps());
-    expect(() =>
-      api.ui?.registerFileViewer?.("nope", { mount() {} }),
-    ).toThrow();
-  });
-});
 
 describe("terminal cwd surface (A13 raw — terminal permission)", () => {
   it("delegates getCwd/onCwd/onCommandFinished to deps under the terminal permission", () => {

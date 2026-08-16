@@ -44,7 +44,6 @@ var unbuilt = map[string]string{
 	"service_dispatch": "this build hosts no service sidecars to dispatch to",
 	"service_status":   "this build hosts no service sidecars to report on",
 	"service_bus_push": "this build carries no service event bus",
-	"media_proxy_info": "this build runs no media proxy",
 
 	// Daemons a workspace declares.
 	"daemon_start":    "this build was given no spawner that can own a long-running child",

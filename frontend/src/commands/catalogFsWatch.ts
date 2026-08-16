@@ -1,13 +1,39 @@
-// fs.watch/fs.unwatch — generic path watch commands (the core takes the path only, never the content, W8 M1).
+// fs.* — the file surface: what is in a directory, and when a directory changes. The core takes the
+// path only, never the content (W8 M1).
+//
+// `fs.list` was `explorer.list` until 2026-08-16. Reading a directory is a mechanism; an explorer is
+// a panel, and a panel is a plugin's (C6).
 // OS-native events (0 polling), non-recursive, per-path refcount dedup — many windows, plugins, and agents
 // watching one path still make 1 OS watch; release happens only at the last consumer. Changes emit fs-change.
 // Registered at the end of registerCatalog() (catalog split — keeps catalog.ts from bloating, as in catalogGit).
 
 import { invoke } from "../framework";
 import { tmsg } from "../i18n";
+import { P, resolveWorkspace } from "./catalog";
 import { register } from "./registry";
 
 export function registerFsWatchCatalog(): void {
+  register("fs.list", {
+    description:
+      "List the direct children of a directory. Omit path to use the workspace root, and the user's home when there is none.",
+    triggers: { ko: "파일 목록 디렉토리 목록 폴더 내용" },
+    params: {
+      workspace: P.workspace,
+      path: { type: "string", description: "Absolute directory path" },
+    },
+    returns: "{ projectId|null, root, children: [{name,dir}] }",
+    message: (d) => tmsg("msg.fs.list", { n: ((d.children as unknown[]) ?? []).length }),
+    errors: ["TARGET_NOT_FOUND", "INTERNAL"],
+    examples: ["fs.list", 'fs.list \'{"path":"<local-evidence>"}\''],
+    handler: async (p, ctx) => {
+      const t = resolveWorkspace(p, ctx);
+      const path = (p.path as string) ?? t?.root ?? null;
+      const r = await invoke<{ root: string; children: object[] }>("list_children", { path });
+      // With an explicit path the answer stands without a workspace, so this axis can be null.
+      return { projectId: t?.id ?? null, ...r };
+    },
+  });
+
   register("fs.watch", {
     description:
       "Watch a directory for changes using OS-native file events (non-recursive, no polling). Changes emit the fs-change event with the changed directory. Watches are reference-counted per path — pair every fs.watch with a matching fs.unwatch.",

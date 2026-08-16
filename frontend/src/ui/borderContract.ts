@@ -324,20 +324,6 @@ export const BORDER_RULES: readonly BorderRule[] = [
   },
 
   // ── Panel inner auxiliary bands (B2, tone bd-soft) ────────────────────────
-  {
-    id: "fv-toolbar-bottom",
-    selector: ".fv-toolbar",
-    kind: "edges",
-    edges: { bottom: "bd-soft" },
-    note: tmsg("msg.ui.border.fvToolbarBottom"),
-  },
-  {
-    id: "fv-banner-bottom",
-    selector: ".fv-banner",
-    kind: "edges",
-    edges: { bottom: "bd-soft" },
-    note: tmsg("msg.ui.border.fvBannerBottom"),
-  },
 
   // ── Vertical-mode content tabs (settings-conditional — 0 matches skips naturally) ──
   {

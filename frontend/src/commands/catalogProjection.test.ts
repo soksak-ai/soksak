@@ -1,4 +1,4 @@
-// ui.projection.* / ui.intent.open command contract (§4.2·R2·R4).
+// ui.projection.* command contract (§4.2·R4).
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mem = new Map<string, string>();
@@ -13,7 +13,7 @@ vi.mock("../framework", async (importOriginal) => ({
 
 import { registerProjectionCatalog } from "./catalogProjection";
 import { tmsg } from "../i18n";
-import { execute, getSpec } from "./registry";
+import { execute } from "./registry";
 import { useProjection } from "../state/projection";
 import { useSessions, type Workspace, type Tab } from "../state/sessions";
 import { initialSidebarLayout } from "../state/sidebarLayout";
@@ -133,36 +133,6 @@ describe("ui.projection.pin / unpin — the left rail is projection only (no pin
   });
 });
 
-describe("ui.intent.open — R2 (placement in the binding context, idempotent reuse)", () => {
-  it("refuses a relative path at the boundary — accepted silently it persists as a dead tab (measured RED)", async () => {
-    // The contract is an absolute path (params.path: "Absolute file path"). A relative path that passes
-    // persists that string in the tab, and restore wakes it as a dead "No such file or directory" tab
-    // (measured 2026-07-26: a tab opened with "README.md" died after restart — found on the user's screen).
-    useSessions.setState({ workspaces: [tab([], "")], activeId: "wsp-aaaaaa" });
-    const r = (await execute("ui.intent.open", { path: "README.md" }, {})) as {
-      ok: boolean;
-      code?: string;
-    };
-    expect(r.ok).toBe(false);
-    expect(r.code).toBe("INVALID_PARAMS");
-  });
-
-  it("opens a file as a tab in the binding group, and reuses the existing view for the same resource", async () => {
-    useSessions.setState({ workspaces: [tab([], "")], activeId: "wsp-aaaaaa" });
-    const r1 = (await execute("ui.intent.open", { path: "<local-evidence>/p1/a.md" }, {})) as { ok: boolean; data: Record<string, unknown> };
-    expect(r1.ok).toBe(true);
-    expect(r1.data.existing).toBe(false);
-    const r2 = (await execute("ui.intent.open", { path: "<local-evidence>/p1/a.md" }, {})) as { ok: boolean; data: Record<string, unknown> };
-    expect(r2.ok).toBe(true);
-    expect(r2.data.existing).toBe(true);
-    expect(r2.data.viewId).toBe(r1.data.viewId);
-  });
-
-  it("spec (getSpec) — path is declared as a required parameter", () => {
-    const spec = getSpec("ui.intent.open")!;
-    expect(spec.params.path?.required).toBe(true);
-  });
-});
 
 describe("batch 1 command consistency — right pin refusal, alias pin, expanded state", () => {
   it('a side:"right" pin is INVALID_PARAMS until the right pin stack renderer exists', async () => {

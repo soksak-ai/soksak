@@ -28,7 +28,7 @@ describe("startPluginHooks — sessions diff coalescing", () => {
 
     const events: Ev[] = [];
     const subs = (
-      ["workspace.changed", "view.activated", "file.opened", "file.closed"] as const
+      ["workspace.changed", "view.activated"] as const
     ).map((e) =>
       onPluginEvent(e, (payload) => events.push({ event: e, payload })),
     );
@@ -58,7 +58,7 @@ describe("startPluginHooks — sessions diff coalescing", () => {
 
     const opened = useSessions
       .getState()
-      .openFileView(projectId, "<local-evidence>/perf-test/a.txt");
+      .openPluginView(projectId, "plg-editor", "content", "a.txt");
     expect(opened.ok).toBe(true);
 
     // Still before the microtask — 0 events (a diff per write would already have fired many).
@@ -66,17 +66,12 @@ describe("startPluginHooks — sessions diff coalescing", () => {
 
     await flush(); // drain the microtask, giving one coalesced diff
 
-    // Semantics preserved: 1 workspace activation change + 1 file open + 1 view activation.
+    // Semantics preserved: 1 workspace activation change + 1 view activation.
     // The 120 resizes produce no events at all.
     const byEvent = (e: keyof PluginEventMap) =>
       events.filter((x) => x.event === e);
     expect(byEvent("workspace.changed").length).toBe(1);
-    expect(byEvent("file.opened").length).toBe(1);
-    expect(byEvent("file.opened")[0].payload).toMatchObject({
-      path: "<local-evidence>/perf-test/a.txt",
-    });
     expect(byEvent("view.activated").length).toBe(1);
-    expect(byEvent("file.closed").length).toBe(0);
 
     // No duplicate firing on a further yield.
     events.length = 0;
@@ -86,13 +81,13 @@ describe("startPluginHooks — sessions diff coalescing", () => {
     for (const d of subs) d.dispose();
   });
 
-  it("writes in separate bursts each produce a diff — an open and a close in different bursts both fire", async () => {
+  it("writes in separate bursts each produce a diff — two activations in different bursts both fire", async () => {
     const events: Ev[] = [];
-    const subOpen = onPluginEvent("file.opened", (p) =>
-      events.push({ event: "file.opened", payload: p }),
+    const subOpen = onPluginEvent("view.activated", (p) =>
+      events.push({ event: "view.activated", payload: p }),
     );
-    const subClose = onPluginEvent("file.closed", (p) =>
-      events.push({ event: "file.closed", payload: p }),
+    const subClose = onPluginEvent("workspace.changed", (p) =>
+      events.push({ event: "workspace.changed", payload: p }),
     );
 
     const created = useSessions
@@ -106,16 +101,20 @@ describe("startPluginHooks — sessions diff coalescing", () => {
     const tab = useSessions.getState().workspaces.find((t) => t.title === "perf2")!;
     const opened = useSessions
       .getState()
-      .openFileView(tab.id, "<local-evidence>/perf-test/b.txt");
+      .openPluginView(tab.id, "plg-editor", "content", "b.txt");
     expect(opened.ok).toBe(true);
     await flush();
-    expect(events.filter((e) => e.event === "file.opened").length).toBe(1);
+    expect(events.filter((e) => e.event === "view.activated").length).toBe(1);
 
-    if (opened.ok) {
-      useSessions.getState().closeView(tab.id, opened.viewId);
-    }
+    events.length = 0;
+    // A second burst: another view opens and becomes active. One burst, one diff — what the test is
+    // about is the burst boundary, not which event rides on it.
+    const second = useSessions
+      .getState()
+      .openPluginView(tab.id, "plg-editor", "preview", "c.txt");
+    expect(second.ok).toBe(true);
     await flush();
-    expect(events.filter((e) => e.event === "file.closed").length).toBe(1);
+    expect(events.filter((e) => e.event === "view.activated").length).toBe(1);
 
     subOpen.dispose();
     subClose.dispose();

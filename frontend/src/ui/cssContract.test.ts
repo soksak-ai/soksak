@@ -214,16 +214,24 @@ describe("UI alignment constitution gate (docs/UI.md)", () => {
     }
   });
 
-  it("toolbar row contract: the core toolbar (.fv-toolbar) consumes theme tokens — no reinvented dimensions", () => {
+  it("toolbar row contract: the tokens exist, and every toolbar in the sheet consumes them", () => {
     // Feature top bars each invented their own dimensions and the grid drifted (measured: browser,
-    // editor, and kanban rows all differed). Contract: a toolbar is optional, but where it exists it
-    // consumes var(--toolbar-h)/var(--toolbar-pad-x). The core built-in surface (file viewer) is the
-    // first conformer.
-    const rule = rules().find((r) => r.selector.split(",").some((s2) => s2.trim() === ".fv-toolbar"));
-    expect(rule).toBeTruthy();
-    expect(rule!.decls).toMatch(/height:\s*var\(--toolbar-h\)/);
-    expect(rule!.decls).toMatch(/padding:\s*0\s*var\(--toolbar-pad-x\)/);
-    expect(rule!.decls).not.toMatch(/height:\s*\d/);
+    // editor, and kanban rows all differed). Contract: a toolbar is optional, but where one exists
+    // it consumes var(--toolbar-h)/var(--toolbar-pad-x).
+    //
+    // The conformer used to be the core's own file viewer toolbar. The core draws no content
+    // toolbar now (CORE-CENSUS 1), so what is checked is the contract itself: the tokens are
+    // defined for a plugin to consume, and anything in this sheet calling itself a toolbar obeys.
+    expect(css).toMatch(/--toolbar-h\s*:/);
+    expect(css).toMatch(/--toolbar-pad-x\s*:/);
+    const toolbars = rules().filter((r) =>
+      r.selector.split(",").some((s2) => /-toolbar$/.test(s2.trim())),
+    );
+    for (const rule of toolbars) {
+      expect(rule.decls).toMatch(/height:\s*var\(--toolbar-h\)/);
+      expect(rule.decls).toMatch(/padding:\s*0\s*var\(--toolbar-pad-x\)/);
+      expect(rule.decls).not.toMatch(/height:\s*\d/);
+    }
   });
 
   it("R1: no dead variable (--tab-h/--ws-tab-h) left behind — the contract variable is padding only", () => {

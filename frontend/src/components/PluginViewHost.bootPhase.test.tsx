@@ -10,9 +10,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import { PluginViewHost } from "./PluginViewHost";
-import { FileViewerHost } from "./FileViewerHost";
 import { useViewRegistry } from "../plugins/viewRegistry";
-import { useFileViewerRegistry } from "../plugins/fileViewerRegistry";
 import { useBootPhase } from "../state/bootPhase";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -70,21 +68,4 @@ describe("PluginViewHost — the three boot phases of an unregistered view", () 
     expect(host.querySelector(".plugin-empty")).not.toBeNull();
   });
 
-  it("the file view (FileViewerHost) holds the same contract — the editor slot is loading during boot too", () => {
-    // RED evidence (user measurement 2026-07-27): during boot a file tab showed "no plugin view" —
-    // an indicator that reads as an error must appear only on a real fault (unregistered after
-    // activation completed).
-    useFileViewerRegistry.setState({ viewers: {}, version: 0 });
-    act(() => useBootPhase.setState({ phase: "activating" }));
-    root = createRoot(host);
-    act(() => {
-      root!.render(
-        <FileViewerHost path="<local-evidence>/x.md" projectId="p1" root={null} viewId="v1" />,
-      );
-    });
-    expect(host.querySelector(".plugin-loading")).not.toBeNull();
-    expect(host.querySelector(".plugin-empty")).toBeNull();
-    act(() => useBootPhase.setState({ phase: "ready" }));
-    expect(host.querySelector(".plugin-empty")).not.toBeNull();
-  });
 });
