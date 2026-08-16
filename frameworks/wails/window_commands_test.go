@@ -34,6 +34,10 @@ type fakeHost struct {
 	// was applied before the window was revealed rather than only that both
 	// happened.
 	calls []string
+	// presence is what each window answers about being on screen, by name. A name
+	// with no entry answers Known false, which is a host that cannot read rather
+	// than a window that is hidden.
+	presence map[string]WindowPresence
 	// opensLive reports whether a window this host opens gains a native lifetime.
 	// False reproduces a creation that never becomes an address.
 	opensLive bool
@@ -75,6 +79,11 @@ func (h *fakeHost) Live(name string) bool {
 
 // NativeHandle: this package has no application, so no window here has pixels.
 // Capture must answer that rather than pretend.
+// A window with no native lifetime puts no light on the screen, and Known is
+// false: the fake has nothing to read, which is not the same as reading that
+// nothing is visible.
+func (h *fakeHost) Presence(name string) WindowPresence { return h.presence[name] }
+
 func (h *fakeHost) NativeHandle(string) unsafe.Pointer { return nil }
 
 // ContentSize: this package has no application, so a window here has no content

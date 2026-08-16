@@ -77,4 +77,28 @@ void soksakWebviewFrame(void *nsWindow, double *x, double *y, double *width, dou
 // Must be called on the main thread.
 void soksakFitWebviewToWindow(void *nsWindow);
 
+
+// SoksakWindowPresence is whether a window is putting light on the screen right now.
+//
+// Frame, size and the surface inventory all describe a window that may be behind another
+// application, minimised, or never ordered in. Every one of those reads correct while nobody can
+// see the window, so "where it is" and "whether it is there" are separate questions and this
+// answers the second (measured 2026-08-16: two windows both answered a frame on the display and
+// neither answer said which one a person was looking at).
+//
+// principal is AppKit's main window — the application's chief one, which is not always the one
+// receiving keys. occluded is AppKit's own word too: the window is on screen and something is over
+// it. It is false for
+// a window that is not visible at all — that is what visible is for.
+typedef struct {
+  bool visible;
+  bool key;
+  bool principal;
+  bool miniaturized;
+  bool occluded;
+  double alpha;
+} SoksakWindowPresence;
+
+SoksakWindowPresence soksakWindowPresence(void *nsWindow);
+
 #endif

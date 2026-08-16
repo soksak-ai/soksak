@@ -79,3 +79,19 @@ void soksakFitWebviewToWindow(void *nsWindow) {
     [pending addObjectsFromArray:[view subviews]];
   }
 }
+
+SoksakWindowPresence soksakWindowPresence(void *nsWindow) {
+    SoksakWindowPresence out = {false, false, false, false, false, 0};
+    if (nsWindow == NULL) return out;
+    NSWindow *window = (NSWindow *)nsWindow;
+    out.visible = window.isVisible;
+    out.key = window.isKeyWindow;
+    out.principal = window.isMainWindow;
+    out.miniaturized = window.isMiniaturized;
+    // Occluded is only meaningful for a window that is on screen; AppKit reports the bit as clear
+    // for a hidden window too, and reading that as "covered" would make an unopened window and a
+    // covered one the same answer.
+    out.occluded = window.isVisible && (window.occlusionState & NSWindowOcclusionStateVisible) == 0;
+    out.alpha = window.alphaValue;
+    return out;
+}

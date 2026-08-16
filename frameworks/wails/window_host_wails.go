@@ -314,3 +314,15 @@ func (h *wailsHost) ActivateApplication() error {
 	application.InvokeSync(func() { failure = activateApplication() })
 	return failure
 }
+
+// Presence reads the window's own state off the native window. The main thread
+// owns AppKit, so the read is dispatched there.
+func (h *wailsHost) Presence(name string) WindowPresence {
+	native := h.NativeHandle(name)
+	if native == nil {
+		return WindowPresence{}
+	}
+	var out WindowPresence
+	application.InvokeSync(func() { out = windowPresence(native) })
+	return out
+}

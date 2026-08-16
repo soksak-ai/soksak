@@ -241,8 +241,11 @@ type windowFact struct {
 	//
 	// Null when this platform cannot answer, rather than repeating the frame
 	// under another name.
-	ContentW *float64 `json:"contentW"`
-	ContentH *float64 `json:"contentH"`
+	// Presence is whether this window is putting light on the screen right now.
+	// Every rectangle above describes a window a person may not be able to see.
+	Presence WindowPresence `json:"presence"`
+	ContentW *float64       `json:"contentW"`
+	ContentH *float64       `json:"contentH"`
 	// ViewX..ViewH is where the document's view is inside the window. When
 	// the document and the window disagree about a size, this identifies which
 	// layer the difference is in.
@@ -303,13 +306,14 @@ func monitorFacts(host WindowHost) (any, error) {
 			continue
 		}
 		fact := windowFact{
-			Label:   name,
-			X:       frame.X,
-			Y:       frame.Y,
-			W:       frame.W,
-			H:       frame.H,
-			Focused: host.Focused(name),
-			Monitor: monitorOf(frame, catalogue),
+			Label:    name,
+			X:        frame.X,
+			Y:        frame.Y,
+			W:        frame.W,
+			H:        frame.H,
+			Focused:  host.Focused(name),
+			Presence: host.Presence(name),
+			Monitor:  monitorOf(frame, catalogue),
 		}
 		// A platform that cannot answer leaves these null rather than repeating
 		// the frame, which would be a different rectangle wearing this name.

@@ -99,3 +99,21 @@ func fitWebviewToWindow(window unsafe.Pointer) error {
 	C.soksakFitWebviewToWindow(window)
 	return nil
 }
+
+// windowPresence reads whether this window is putting light on the screen. The
+// caller is on the main thread.
+func windowPresence(window unsafe.Pointer) WindowPresence {
+	if window == nil {
+		return WindowPresence{}
+	}
+	read := C.soksakWindowPresence(window)
+	return WindowPresence{
+		Known:        true,
+		Visible:      bool(read.visible),
+		Key:          bool(read.key),
+		Main:         bool(read.principal),
+		Miniaturized: bool(read.miniaturized),
+		Occluded:     bool(read.occluded),
+		Alpha:        float64(read.alpha),
+	}
+}

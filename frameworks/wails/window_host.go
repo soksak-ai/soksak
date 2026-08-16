@@ -77,6 +77,14 @@ type WindowHost interface {
 	Frame(name string) (Frame, bool)
 	// Displays is the screen catalogue in catalogue order.
 	Displays() []Display
+	// Presence is whether this window is putting light on the screen right now.
+	//
+	// A frame is where a window would be, not whether a person can
+	// see it: a window behind another application, minimised, or never ordered in
+	// answers the same rectangle as one in front. Measured 2026-08-16, two windows
+	// answered a frame on the display and a healthy surface inventory each, and
+	// nothing in either answer named the one being looked at.
+	Presence(name string) WindowPresence
 	// NativeHandle is this window's platform handle, or nil when it has none.
 	//
 	// Capture needs it, and capture that can only reach one window is capture
