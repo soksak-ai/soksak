@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // A running build reports nothing wrong about itself.
@@ -52,6 +54,15 @@ func TestARunningBuildReportsNothingWrong(t *testing.T) {
 	// The border contract, over what is actually on screen.
 	if pass, violations := gate.borderContract(window); !pass {
 		t.Errorf("the border contract failed: %s", violations)
+	}
+
+	// The catalogue. Every registry answers a status and an error, and nothing has ever read either:
+	// a stamp renamed in this repository made the served index unreadable and `task verify` stayed
+	// green while 54 published units were invisible.
+	if unreadable := gate.unreadableRegistries(window); len(unreadable) > 0 {
+		t.Errorf("the build cannot read %d registries:\n%s\n"+
+			"A registry that does not read is a catalogue nobody can install from.",
+			len(unreadable), strings.Join(unreadable, "\n"))
 	}
 
 	// The activity ledger. A publish that never lands means every observation above is blind.
@@ -128,22 +139,72 @@ func (gate *quietGate) borderContract(window string) (bool, string) {
 	return answer.Data.Pass, strings.Join(parts, "\n")
 }
 
+// A ledger with no attempt yet is unconfirmed, not healthy — `activityHealth` states this — and the
+// gate read it before the first publish landed on 1 run in 5, failing with an empty reason. So it
+// waits for the ledger to have answered at all, and a ledger that never answers fails as itself.
 func (gate *quietGate) activityHealthy(window string) (bool, string) {
+	gate.t.Helper()
+	var a struct {
+		Healthy            bool   `json:"healthy"`
+		OK                 int    `json:"ok"`
+		Attempts           int    `json:"attempts"`
+		ConsecutiveFailure int    `json:"consecutiveFailures"`
+		StampRegressions   int    `json:"stampRegressions"`
+		LedgerSwitches     int    `json:"ledgerSwitches"`
+		LastError          string `json:"lastError"`
+	}
+	for attempt := 0; attempt < 50; attempt++ {
+		var answer struct {
+			Data struct {
+				Activity json.RawMessage `json:"activity"`
+			} `json:"data"`
+		}
+		out := gate.run("state.health", "window="+window)
+		if err := json.Unmarshal([]byte(out), &answer); err != nil {
+			gate.t.Fatalf("state.health: %v\n%s", err, out)
+		}
+		if err := json.Unmarshal(answer.Data.Activity, &a); err != nil {
+			gate.t.Fatalf("state.health activity: %v\n%s", err, out)
+		}
+		if a.Attempts > 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if a.Attempts == 0 {
+		return false, "the ledger was never written to, so nothing observed here was recorded"
+	}
+	return a.Healthy, a.LastError + " (ok " + strconv.Itoa(a.OK) + " of " + strconv.Itoa(a.Attempts) +
+		" attempts, " + strconv.Itoa(a.ConsecutiveFailure) + " consecutive failures, " +
+		strconv.Itoa(a.StampRegressions) + " stamp regressions, " + strconv.Itoa(a.LedgerSwitches) + " ledger switches)"
+}
+
+func (gate *quietGate) unreadableRegistries(window string) []string {
 	gate.t.Helper()
 	var answer struct {
 		Data struct {
-			Activity struct {
-				Healthy   bool   `json:"healthy"`
-				Attempts  int    `json:"attempts"`
-				Failed    int    `json:"failed"`
-				LastError string `json:"lastError"`
-			} `json:"activity"`
+			Registries []struct {
+				ID        string `json:"id"`
+				Status    string `json:"status"`
+				UnitCount int    `json:"unitCount"`
+				Error     string `json:"error"`
+			} `json:"registries"`
 		} `json:"data"`
 	}
-	out := gate.run("state.health", "window="+window)
+	out := gate.run("plugin.catalog", "window="+window, "refresh=true")
 	if err := json.Unmarshal([]byte(out), &answer); err != nil {
-		gate.t.Fatalf("state.health: %v\n%s", err, out)
+		gate.t.Fatalf("plugin.catalog: %v\n%s", err, out)
 	}
-	a := answer.Data.Activity
-	return a.Healthy, a.LastError
+	// No registries at all reads as nothing wrong, which is how a gate passes over an empty answer.
+	if len(answer.Data.Registries) == 0 {
+		return []string{"  no registries are configured, so there is nothing to install from"}
+	}
+	var found []string
+	for _, r := range answer.Data.Registries {
+		if r.Status == "live" && r.UnitCount > 0 {
+			continue
+		}
+		found = append(found, "  "+r.ID+" -> "+r.Status+" ("+r.Error+"), "+strconv.Itoa(r.UnitCount)+" units")
+	}
+	return found
 }

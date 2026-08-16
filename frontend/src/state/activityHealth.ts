@@ -28,11 +28,15 @@ interface Counters {
   /** Last admission stamp received (seq). Comparing it with the hub ledger seq separates who stamped it. */
   lastStamp: number;
   /**
-   * How many times the stamp went backwards — ledger seq increases monotonically (the id is
-   * `a{seq:016}`, so lexical order is time order). Going backwards means the answering ledger
-   * changed or the resume point was lost, and admission then **overwrites** existing rows
-   * (PERSIST_SQL uses ON CONFLICT DO UPDATE). Silent destruction of the past, so it must surface
-   * under a name.
+   * How many times one seq was admitted twice. Ledger seq increases monotonically (the id is
+   * `a{seq:016}`, so lexical order is time order), so a repeat means the answering ledger changed or
+   * the resume point was lost, and the second admission **overwrites** the first row (PERSIST_SQL
+   * uses ON CONFLICT DO UPDATE). Silent destruction of the past, so it must surface under a name.
+   *
+   * A stamp below the highest is not this. `publishActivity` fires with `void invoke(...)`, so
+   * several publishes are in flight and their replies arrive in the hub's answering order, not its
+   * admission order — measured 2026-08-16, 2 runs in 12 counted a regression with 15 of 15 admitted
+   * and nothing overwritten. The window cannot order replies, so it does not judge order.
    */
   stampRegressions: number;
   /**
@@ -86,6 +90,13 @@ export function ledgerOf(reply: unknown): string {
   return typeof l === "string" ? l : "";
 }
 
+/** How many admission stamps are held to detect a repeat. */
+const ADMITTED_KEPT = 512;
+
+// In the same bag as the counters: a reload that resets one and not the other reports a repeat for
+// a seq that was only ever admitted once.
+const admitted = moduleState<Set<number>>("state/activityHealth#admitted", () => new Set<number>());
+
 /** Record the result of one publish. Success clears consecutive failures but not past failures. */
 export function notePublish(
   ok: boolean,
@@ -97,10 +108,15 @@ export function notePublish(
   counters.attempts += 1;
   if (ok) {
     if (stamp !== undefined) {
-      if (counters.lastStamp > 0 && stamp < counters.lastStamp) {
+      if (admitted.has(stamp)) {
         counters.stampRegressions += 1;
+      } else {
+        admitted.add(stamp);
+        // Bounded: a resume-point loss re-issues seqs from where it restarted, so the repeat lands
+        // within a few admissions. Holding every seq of a long session is unbounded for no reading.
+        if (admitted.size > ADMITTED_KEPT) admitted.delete(admitted.values().next().value as number);
       }
-      counters.lastStamp = stamp;
+      if (stamp > counters.lastStamp) counters.lastStamp = stamp;
     }
     if (ledger === undefined || ledger === "") {
       counters.unnamedLedger += 1;

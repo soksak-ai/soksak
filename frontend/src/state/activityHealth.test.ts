@@ -31,6 +31,36 @@ describe("activity publish health — no silent failure", () => {
     expect(h.healthy).toBe(true);
   });
 
+  // Replies arrive in the order the hub answers, not the order it admitted.
+  //
+  // `publishActivity` fires with `void invoke(...)`, so several publishes are in flight at once and
+  // their `.then` handlers run in arrival order. Comparing each stamp with the previous one read
+  // that reordering as the ledger going backwards: the running-build gate failed on 2 runs in 12
+  // with `ok 15 of 15 attempts, 1 stamp regressions`, and nothing was destroyed on any of them.
+  //
+  // What the counter is for stays: an admission that overwrites a row already written. That is a seq
+  // arriving twice, which no reordering produces.
+  it("two replies arriving out of order are not a regression", async () => {
+    const m = await import("./activityHealth");
+    m.notePublish(true, 1000, undefined, 11, "/home/a/data/soksak.db");
+    m.notePublish(true, 1001, undefined, 10, "/home/a/data/soksak.db");
+
+    const h = m.activityHealth();
+    expect(h.stampRegressions).toBe(0);
+    expect(h.healthy).toBe(true);
+  });
+
+  it("a seq admitted twice is a regression — the second write overwrites the first", async () => {
+    const m = await import("./activityHealth");
+    m.notePublish(true, 1000, undefined, 10, "/home/a/data/soksak.db");
+    m.notePublish(true, 1001, undefined, 11, "/home/a/data/soksak.db");
+    m.notePublish(true, 1002, undefined, 10, "/home/a/data/soksak.db");
+
+    const h = m.activityHealth();
+    expect(h.stampRegressions).toBe(1);
+    expect(h.healthy).toBe(false);
+  });
+
   it("a failure records the consecutive failure count and the reason", async () => {
     const m = await import("./activityHealth");
     m.notePublish(true, 1000);
