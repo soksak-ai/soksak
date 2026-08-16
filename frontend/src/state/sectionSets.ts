@@ -155,6 +155,20 @@ export const useSectionSets = moduleState("state/sectionSets#store", () =>
   }),
 );
 
+/** Whether a region is present: the person has it open and a set stands there.
+ *
+ *  A region open with nothing in it reserves its width and draws nothing, which reads as a view that
+ *  failed. The left asked this and the right did not until 2026-08-17, so the right stood empty in
+ *  every capture of that day. One rule, both regions, one place.
+ */
+export function regionPresent(
+  open: boolean,
+  region: Region,
+  focusedPluginId: string | null,
+): boolean {
+  return open && standingSet(region, focusedPluginId) !== null;
+}
+
 /** The set standing in a region, given the plugin of the focused view. null = none stands, and then
  *  the region is not drawn: composing nothing and reserving width for it is a hole on the screen. */
 export function standingSet(region: Region, focusedPluginId: string | null): SectionSet | null {

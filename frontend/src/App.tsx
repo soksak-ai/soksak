@@ -79,7 +79,7 @@ import { prepareLayoutChange, viewLayoutChange } from "./lib/layoutTransitionHos
 import { registerLayoutTransitionIntentHost } from "./lib/layoutTransitionIntent";
 import { ownsNativeSurfaceFromManifests } from "./lib/nativeSurfaceOwnership";
 import { useAddTabIntent } from "./state/addTabIntent";
-import { useSectionSets } from "./state/sectionSets";
+import { regionPresent, useSectionSets } from "./state/sectionSets";
 import "./App.css";
 
 // Pass GroupArea only the public media facts the manifest owns. GroupArea does not read inside the
@@ -188,19 +188,20 @@ const WorkspacePlane = memo(function WorkspacePlane({
   //
   // A plugin with no link has no sidebar at all — not an empty one. Composing nothing and reserving
   // width for it leaves a hole on the screen, and a person reads that as a view that failed to draw.
-  const focusedPluginId = useMemo(() => {
-    const space = workspace.spaces.find((c) => c.id === workspace.activeSpaceId);
-    if (!space) return null;
-    const group = allGroups(space.layout).find((g) => g.id === space.activePaneId);
-    const view = group?.tabs.find((v) => v.id === group.activeTabId);
-    return view?.pluginId ?? null;
-  }, [workspace.spaces, workspace.activeSpaceId]);
-  const leftStands = useSectionSets(
-    (s) =>
-      (s.mode === "fixed" ? s.fixed : s.byPlugin[focusedPluginId ?? ""])?.region === "left",
+  const focusedPluginId = useMemo(() => focusedPluginOf(workspace), [workspace]);
+  // Where the standing set stands, if one does. Read once for both regions: the left asked this and
+  // the right did not until 2026-08-17, so the right opened with nothing in it and reserved its
+  // width — the hole this rule exists to prevent, and the empty strip in every capture of that day.
+  // Re-read when the sets change, not only when the workspace does.
+  const sectionsVersion = useSectionSets((s) => s.sets.length + Object.keys(s.byPlugin).length);
+  const leftOpen = useMemo(
+    () => regionPresent(workspace.regionOpen.left, "left", focusedPluginId),
+    [workspace.regionOpen.left, focusedPluginId, sectionsVersion],
   );
-  // The left region is present when the person has it open **and** a set stands there.
-  const leftOpen = workspace.regionOpen.left && leftStands;
+  const rightPresent = useMemo(
+    () => regionPresent(workspace.regionOpen.right, "right", focusedPluginId),
+    [workspace.regionOpen.right, focusedPluginId, sectionsVersion],
+  );
 
   const activeContent =
     workspace.spaces.find((content) => content.id === workspace.activeSpaceId) ??
@@ -606,7 +607,7 @@ const WorkspacePlane = memo(function WorkspacePlane({
       </div>
 
       {/* Right plugin sidebar (⌥⌘B). Closed = width 0 (not unmounted — keep-alive). */}
-      {workspace.regionOpen.right && (
+      {rightPresent && (
         <div
           className="sidebar-right-resizer"
           data-node="sidebar/right/resizer"
@@ -617,15 +618,15 @@ const WorkspacePlane = memo(function WorkspacePlane({
         />
       )}
       <div
-        className={`sidebar-right${workspace.regionOpen.right ? " open" : ""}${rightMode === "push" ? " push" : ""}`}
+        className={`sidebar-right${rightPresent ? " open" : ""}${rightMode === "push" ? " push" : ""}`}
         data-node="sidebar/right"
         data-region="right"
         data-region-open={String(workspace.regionOpen.right)}
         data-wv-occlusion="sidebar-right"
         data-focus-lighting="exempt"
         style={{
-          width: workspace.regionOpen.right ? rightW : 0,
-          borderLeftWidth: workspace.regionOpen.right ? 1 : 0,
+          width: rightPresent ? rightW : 0,
+          borderLeftWidth: rightPresent ? 1 : 0,
         }}
       >
         <SectionSetHost
@@ -764,6 +765,17 @@ function WebviewHealthBadges() {
   );
 }
 
+/** The plugin of the view a workspace is focused on — what `individual` reads. Two readers: the
+ *  plane that draws a region, and the hole reported for the surface underneath it. */
+function focusedPluginOf(workspace: Workspace | null | undefined): string | null {
+  if (!workspace) return null;
+  const space = workspace.spaces.find((c) => c.id === workspace.activeSpaceId);
+  if (!space) return null;
+  const group = allGroups(space.layout).find((g) => g.id === space.activePaneId);
+  const view = group?.tabs.find((v) => v.id === group.activeTabId);
+  return view?.pluginId ?? null;
+}
+
 function App() {
   const t = useT();
   const settingsSection = useUi((s) => s.settingsSection);
@@ -884,8 +896,21 @@ function App() {
   // clicks in that area from leaking to the browser below; the DOM (sidebar) receives them. The webview stays
   // full size (the old webview width clamp workaround was removed — see browser.rs).
   // In push mode the sidebar takes space in flow (content and webview are already narrower) → no overlay hole needed.
-  const rightRect =
-    activeWorkspace?.regionOpen.right && rightSidebarMode !== "push" ? rightW : 0;
+  // The same presence rule as the plane draws by. A hole reported for a region that is open with
+  // nothing standing in it takes clicks away from the surface underneath for a strip nobody sees.
+  const activeFocusedPlugin = useMemo(
+    () => focusedPluginOf(activeWorkspace),
+    [activeWorkspace],
+  );
+  const activeSections = useSectionSets((s) => s.sets.length + Object.keys(s.byPlugin).length);
+  const rightRect = useMemo(
+    () =>
+      regionPresent(activeWorkspace?.regionOpen.right ?? false, "right", activeFocusedPlugin) &&
+      rightSidebarMode !== "push"
+        ? rightW
+        : 0,
+    [activeWorkspace, activeFocusedPlugin, activeSections, rightSidebarMode, rightW],
+  );
   useLayoutEffect(() => {
     // Opening, closing and widening the sidebar is **the layout being laid out again** — publish that fact. What to
     // do with it is up to the listener (a framework with surfaces outside the document resends its hole list, and a

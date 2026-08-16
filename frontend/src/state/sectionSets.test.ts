@@ -63,6 +63,21 @@ describe("section sets — who stands where", () => {
     expect(m.standingSet("left", "plg-a")).toBeNull();
   });
 
+  // A region open with nothing in it reserves its width and draws nothing, which reads as a view
+  // that failed to draw. The left asked this and the right did not until 2026-08-17.
+  it("a region is present only when it is open and a set stands there", async () => {
+    const m = await load();
+    const set = m.useSectionSets.getState().create("work");
+    m.useSectionSets.getState().link("plg-a", { set: set.id, region: "right" });
+
+    expect(m.regionPresent(true, "right", "plg-a")).toBe(true);
+    // Open, and nothing stands: no width for a region a person cannot see anything in.
+    expect(m.regionPresent(true, "left", "plg-a")).toBe(false);
+    expect(m.regionPresent(true, "right", "plg-b")).toBe(false);
+    // Standing, and the person closed it.
+    expect(m.regionPresent(false, "right", "plg-a")).toBe(false);
+  });
+
   it("removing a set takes its links with it", async () => {
     const m = await load();
     const set = m.useSectionSets.getState().create("work");

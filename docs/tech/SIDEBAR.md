@@ -56,6 +56,18 @@ that is a settled state rather than a missing one. No hardcoded body and no
 stub: a placeholder is a plugin the core wrote, which is the lock-in A1 exists
 to prevent.
 
+## S4. A region is present when it is open and a set stands in it
+
+Both terms, both regions, one function — `regionPresent` in `state/sectionSets.ts`. A region a
+person opened with nothing linked to it reserves its width and draws nothing, and a strip of
+reserved nothing reads as a view that failed to draw.
+
+The left asked both terms and the right asked only whether it was open, so the right stood empty
+whenever it had been opened once — measured 2026-08-17, visible as a dark strip in every capture of
+that day. Two readers now share the rule: the plane that draws the region, and the hole reported to
+the native hit test for the surface underneath it, which would otherwise take clicks away from that
+surface for a strip nobody sees.
+
 ---
 
 # T. Travel
