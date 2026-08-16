@@ -150,6 +150,12 @@ All of these are hard.
   gated is the core holding another's spec, which is the part that would make the
   drift the core's problem.
 
+  **Where two are meant to match, the hand that writes them keeps them level.**
+  Three browsers behave alike because one author built them to a standard and
+  directed each to the same result — not because an interface made them. That is
+  a discipline held while writing, and it costs the platform nothing; a mechanism
+  in its place would charge every plugin for it.
+
 - **C4.** The core has one spec and a plugin has its own. `CORE_SPEC` is the
   version the core stamps into every envelope it defines — a manifest, a release,
   a registry index, a conformance report. A plugin's manifest is that plugin's
